@@ -48,6 +48,7 @@ type API = "contracts" :> ContractsAPI
 
 -- | /contracts sub-API
 type ContractsAPI = GetContractsAPI
+               :<|> PostContractsAPI
                :<|> Capture "contractId" TxOutRef :> ContractAPI
 
 -- | GET /contracts sub-API
@@ -57,6 +58,19 @@ type GetContractsResponse = WithLink "contract" ContractHeader
 
 instance HasNamedLink ContractHeader API "contract" where
   namedLink _ _ ContractHeader{..} = safeLink
+    api
+    (Proxy @("contracts" :> Capture "contractId" TxOutRef :> GetContractAPI))
+    contractId
+
+-- | POST /contracts sub-API
+type PostContractsAPI
+  =  ReqBody '[JSON] PostContractsRequest
+  :> PostTxAPI (Post '[JSON] PostContractsResponse)
+
+type PostContractsResponse = WithLink "contract" UnsignedCreateTx
+
+instance HasNamedLink UnsignedCreateTx API "contract" where
+  namedLink _ _ UnsignedCreateTx{..} = safeLink
     api
     (Proxy @("contracts" :> Capture "contractId" TxOutRef :> GetContractAPI))
     contractId
@@ -90,6 +104,12 @@ type PaginatedGet rangeFields resource
 -- | Helper type for describing the response type of generic paginated APIs
 type PaginatedResponse fields resource =
   Headers (Header "Total-Count" Int ': PageHeaders fields resource) [resource]
+
+type PostTxAPI api
+  =  Header' '[Required, Strict] "X-Change-Address" Address
+  :> Header "X-Address" (CommaList Address)
+  :> Header "X-Collateral-UTxO" (CommaList TxOutRef)
+  :> api
 
 class HasNamedLink a api (name :: Symbol) where
   namedLink :: Proxy api -> Proxy name -> a -> Link

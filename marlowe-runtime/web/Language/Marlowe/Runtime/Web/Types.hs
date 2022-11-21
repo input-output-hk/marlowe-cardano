@@ -2,6 +2,7 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 -- | This module defines the request and response types in the Marlowe Runtime
 -- | Web API.
@@ -12,12 +13,15 @@ module Language.Marlowe.Runtime.Web.Types
 import Control.Lens hiding ((.=))
 import Control.Monad ((<=<))
 import Data.Aeson
-import Data.Aeson.Types (parseFail)
+import Data.Aeson.KeyMap (toMap)
+import Data.Aeson.Types (Parser, parseFail)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import Data.ByteString.Base16 (decodeBase16, encodeBase16)
+import Data.Char (isSpace)
 import Data.Foldable (fold)
 import Data.Map (Map)
+import qualified Data.Map as Map
 import Data.OpenApi
   ( HasType(..)
   , NamedSchema(..)
@@ -25,21 +29,24 @@ import Data.OpenApi
   , ToParamSchema
   , ToSchema
   , declareSchema
-  , description
   , enum_
   , example
   , pattern
   , toParamSchema
   )
+import qualified Data.OpenApi as OpenApi
 import Data.OpenApi.Schema (ToSchema(..))
+import qualified Data.Set as Set
 import Data.String (IsString(..))
-import Data.Text (intercalate, splitOn)
+import Data.Text (Text, intercalate, splitOn)
 import qualified Data.Text as T
 import Data.Text.Encoding (encodeUtf8)
 import Data.Word (Word16, Word64)
+import GHC.Exts (IsList)
 import GHC.Generics (Generic)
 import qualified Language.Marlowe.Core.V1.Semantics.Types as Semantics
 import Language.Marlowe.Runtime.Web.Orphans ()
+import Network.URI (parseURI)
 import Servant
 import Servant.Pagination (HasPagination(..))
 
@@ -88,8 +95,36 @@ hasLength l bytes
 instance ToSchema TxId where
   declareNamedSchema _ = pure $ NamedSchema (Just "TxId") $ mempty
     & type_ ?~ OpenApiString
-    & description ?~ "The hex-encoded identifier of a Cardano transaction"
+    & OpenApi.description ?~ "The hex-encoded identifier of a Cardano transaction"
     & pattern ?~ "^[a-fA-F0-9]{64}$"
+
+newtype Address = Address { unAddress :: T.Text }
+  deriving (Eq, Ord, Generic)
+  deriving newtype (Show, ToHttpApiData, FromHttpApiData, ToJSON, FromJSON)
+
+instance ToSchema Address where
+  declareNamedSchema _ = pure $ NamedSchema (Just "Address") $ mempty
+    & type_ ?~ OpenApiString
+    & OpenApi.description ?~ "A cardano address"
+    & example ?~ "addr1w94f8ywk4fg672xasahtk4t9k6w3aql943uxz5rt62d4dvq8evxaf"
+
+newtype CommaList a = CommaList { unCommaList :: [a] }
+  deriving (Eq, Ord, Generic, Functor)
+  deriving newtype (Show, ToJSON, FromJSON, IsList)
+
+instance ToSchema a => ToSchema (CommaList a)
+
+instance ToHttpApiData a => ToHttpApiData (CommaList a) where
+  toUrlPiece = T.intercalate "," . fmap toUrlPiece . unCommaList
+  toQueryParam = T.intercalate "," . fmap toQueryParam . unCommaList
+
+instance FromHttpApiData a => FromHttpApiData (CommaList a) where
+  parseUrlPiece = fmap CommaList
+    . traverse (parseUrlPiece . T.dropWhileEnd isSpace . T.dropWhile isSpace)
+    . T.splitOn ","
+  parseQueryParam = fmap CommaList
+    . traverse (parseQueryParam . T.dropWhileEnd isSpace . T.dropWhile isSpace)
+    . T.splitOn ","
 
 newtype PolicyId = PolicyId { unPolicyId :: ByteString }
   deriving (Eq, Ord, Generic)
@@ -98,7 +133,7 @@ newtype PolicyId = PolicyId { unPolicyId :: ByteString }
 instance ToSchema PolicyId where
   declareNamedSchema _ = pure $ NamedSchema (Just "PolicyId") $ mempty
     & type_ ?~ OpenApiString
-    & description ?~ "The hex-encoded minting policy ID for a native Cardano token"
+    & OpenApi.description ?~ "The hex-encoded minting policy ID for a native Cardano token"
     & pattern ?~ "^[a-fA-F0-9]*$"
 
 data TxOutRef = TxOutRef
@@ -124,7 +159,7 @@ instance ToSchema TxOutRef where
 instance ToParamSchema TxOutRef where
   toParamSchema _ = mempty
     & type_ ?~ OpenApiString
-    & description ?~ "A reference to a transaction output with a transaction ID and index."
+    & OpenApi.description ?~ "A reference to a transaction output with a transaction ID and index."
     & pattern ?~ "^[a-fA-F0-9]{64}#[0-9]+$"
     & example ?~ "98d601c9307dd43307cf68a03aad0086d4e07a789b66919ccf9f7f7676577eb7#1"
 
@@ -154,7 +189,7 @@ instance FromHttpApiData MarloweVersion where
 instance ToSchema MarloweVersion where
   declareNamedSchema _ = pure $ NamedSchema (Just "MarloweVersion") $ mempty
     & type_ ?~ OpenApiString
-    & description ?~ "A version of the Marlowe language."
+    & OpenApi.description ?~ "A version of the Marlowe language."
     & enum_ ?~ ["v1"]
 
 data ContractState = ContractState
@@ -195,7 +230,7 @@ newtype Metadata = Metadata { unMetadata :: Value }
 
 instance ToSchema Metadata where
   declareNamedSchema _ = pure $ NamedSchema (Just "Metadata") $ mempty
-    & description ?~ "An arbitrary JSON value for storage in a metadata key"
+    & OpenApi.description ?~ "An arbitrary JSON value for storage in a metadata key"
 
 data TxHeader = TxHeader
   { contractId :: TxOutRef
@@ -229,7 +264,7 @@ instance ToSchema TxStatus where
     $ mempty
       & type_ ?~ OpenApiString
       & enum_ ?~ ["unsigned", "submitted", "confirmed"]
-      & description ?~ "A header of the status of a transaction on the local node."
+      & OpenApi.description ?~ "A header of the status of a transaction on the local node."
 
 data BlockHeader = BlockHeader
   { slotNo :: Word64
@@ -239,3 +274,112 @@ data BlockHeader = BlockHeader
 
 instance ToJSON BlockHeader
 instance ToSchema BlockHeader
+
+data UnsignedCreateTx = UnsignedCreateTx
+  { contractId :: TxOutRef
+  , unsignedTx :: Base16
+  } deriving (Show, Eq, Ord, Generic)
+
+instance ToJSON UnsignedCreateTx
+instance ToSchema UnsignedCreateTx
+
+data PostContractsRequest = PostContractsRequest
+  { metadata :: Map Word64 Metadata
+  , version :: MarloweVersion
+  , roles :: Maybe RolesConfig
+  , contract :: Semantics.Contract
+  , minUTxODeposit :: Word64
+  } deriving (Show, Eq, Ord, Generic)
+
+instance FromJSON PostContractsRequest
+instance ToJSON PostContractsRequest
+
+data RolesConfig
+  = UsePolicy PolicyId
+  | Mint (Map Text RoleTokenConfig)
+  deriving (Show, Eq, Ord, Generic)
+
+instance FromJSON RolesConfig where
+  parseJSON (String s) = UsePolicy <$> parseJSON (String s)
+  parseJSON value = Mint <$> parseJSON value
+
+instance ToJSON RolesConfig where
+  toJSON (UsePolicy policy) = toJSON policy
+  toJSON (Mint configs) = toJSON configs
+
+data RoleTokenConfig
+  = RoleTokenSimple Address
+  | RoleTokenAdvanced Address TokenMetadata
+  deriving (Show, Eq, Ord, Generic)
+
+instance FromJSON RoleTokenConfig where
+  parseJSON (String s) = pure $ RoleTokenSimple $ Address s
+  parseJSON value = withObject
+    "RoleTokenConfig"
+    (\obj -> RoleTokenAdvanced <$> obj .: "address" <*> obj .: "metadata")
+    value
+
+instance ToJSON RoleTokenConfig where
+  toJSON (RoleTokenSimple address) = toJSON address
+  toJSON (RoleTokenAdvanced address config) = object
+    [ ("address", toJSON address)
+    , ("metadata", toJSON config)
+    ]
+
+data TokenMetadata = TokenMetadata
+  { name :: Text
+  , image :: URI
+  , mediaType :: Maybe Text
+  , description :: Maybe Text
+  , files :: Maybe [TokenMetadataFile]
+  , otherProperties :: Map Key Metadata
+  } deriving (Show, Eq, Ord, Generic)
+
+instance FromJSON TokenMetadata where
+  parseJSON = withObject "TokenMetadata" \obj -> do
+    imageJSON <- obj .: "image"
+    TokenMetadata
+      <$> obj .: "name"
+      <*> uriFromJSON imageJSON
+      <*> obj .:? "mediaType"
+      <*> obj .:? "description"
+      <*> obj .:? "files"
+      <*> pure (Metadata <$> Map.withoutKeys (toMap obj) (Set.fromList ["name", "image", "mediaType", "description", "files"]))
+
+instance ToJSON TokenMetadata where
+  toJSON TokenMetadata{..} = object $
+    [ ("name", toJSON name)
+    , ("image", uriToJSON image)
+    , ("mediaType", toJSON mediaType)
+    , ("description", toJSON description)
+    , ("files", toJSON files)
+    ] <> (fmap . fmap) unMetadata (Map.toList otherProperties)
+
+data TokenMetadataFile = TokenMetadataFile
+  { name :: Text
+  , src :: URI
+  , mediaType :: Text
+  , otherProperties :: Map Key Metadata
+  } deriving (Show, Eq, Ord, Generic)
+
+instance FromJSON TokenMetadataFile where
+  parseJSON = withObject "TokenMetadataFile" \obj -> do
+    srcJSON <- obj .: "src"
+    TokenMetadataFile
+      <$> obj .: "name"
+      <*> uriFromJSON srcJSON
+      <*> obj .: "mediaType"
+      <*> pure (Metadata <$> Map.withoutKeys (toMap obj) (Set.fromList ["name", "src", "mediaType"]))
+
+instance ToJSON TokenMetadataFile where
+  toJSON TokenMetadataFile{..} = object $
+    [ ("name", toJSON name)
+    , ("src", uriToJSON src)
+    , ("mediaType", toJSON mediaType)
+    ] <> (fmap . fmap) unMetadata (Map.toList otherProperties)
+
+uriFromJSON :: Value -> Parser URI
+uriFromJSON = withText "URI" $ maybe (parseFail "invalid URI") pure . parseURI . T.unpack
+
+uriToJSON :: URI -> Value
+uriToJSON = String . T.pack . show

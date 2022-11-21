@@ -29,6 +29,7 @@ import Control.Monad.Reader (runReaderT)
 import Data.Void (Void)
 import Language.Marlowe.Protocol.HeaderSync.Client (MarloweHeaderSyncClient)
 import Language.Marlowe.Protocol.Sync.Client (MarloweSyncClient)
+import Language.Marlowe.Runtime.Transaction.Api (MarloweTxCommand)
 import qualified Language.Marlowe.Runtime.Web as Web
 import Language.Marlowe.Runtime.Web.Server.ContractHeaderIndexer
   ( ContractHeaderIndexer(..)
@@ -42,7 +43,9 @@ import Language.Marlowe.Runtime.Web.Server.Monad (AppEnv(..), AppM(..))
 import qualified Language.Marlowe.Runtime.Web.Server.OpenAPI as OpenAPI
 import Language.Marlowe.Runtime.Web.Server.REST (ApiSelector)
 import qualified Language.Marlowe.Runtime.Web.Server.REST as REST
+import Language.Marlowe.Runtime.Web.Server.TxClient (TxClient(..), TxClientDependencies(..), mkTxClient)
 import Network.Protocol.Driver (RunClient)
+import Network.Protocol.Job.Client (JobClient)
 import Observe.Event (EventBackend, hoistEventBackend, narrowEventBackend)
 import Observe.Event.BackendModification (modifyEventBackend, setAncestor)
 import Observe.Event.DSL (SelectorField(Inject), SelectorSpec(SelectorSpec))
@@ -90,6 +93,7 @@ data ServerDependencies r = ServerDependencies
   , runApplication :: Application -> IO ()
   , runMarloweHeaderSyncClient :: RunClient IO MarloweHeaderSyncClient
   , runMarloweSyncClient :: RunClient IO MarloweSyncClient
+  , runTxJobClient :: RunClient IO (JobClient MarloweTxCommand)
   , eventBackend :: EventBackend IO r ServerSelector
   }
 
@@ -118,11 +122,15 @@ mkServer ServerDependencies{..} = do
     { runMarloweSyncClient
     , eventBackend = narrowEventBackend History eventBackend
     }
+  TxClient{..} <- mkTxClient TxClientDependencies
+    { runTxJobClient
+    }
   let
     env = AppEnv
       { _loadContractHeaders = loadContractHeaders
       , _loadContract = loadContract
       , _loadTransactions = loadTransactions
+      , _createContract = createContract
       }
     httpBackend = hoistEventBackend liftIO $ narrowEventBackend Api eventBackend
     app' = application (narrowEventBackend Http eventBackend) $

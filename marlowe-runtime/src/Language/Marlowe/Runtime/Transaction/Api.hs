@@ -24,17 +24,7 @@ module Language.Marlowe.Runtime.Transaction.Api
   , mkNFTMetadata
   ) where
 
-import Cardano.Api
-  ( AsType(..)
-  , BabbageEra
-  , SerialiseAsRawBytes(serialiseToRawBytes)
-  , Tx
-  , TxBody
-  , deserialiseFromCBOR
-  , deserialiseFromRawBytes
-  , serialiseToCBOR
-  )
-import Cardano.Api.Shelley (StakeCredential(..))
+import Cardano.Api (AsType(..), BabbageEra, Tx, TxBody, deserialiseFromCBOR, serialiseToCBOR)
 import Data.Binary (Binary, Get, get, getWord8, put)
 import Data.Binary.Put (Put, putWord8)
 import Data.ByteString (ByteString)
@@ -56,6 +46,7 @@ import Language.Marlowe.Runtime.ChainSync.Api
   , PlutusScript
   , PolicyId
   , ScriptHash
+  , StakeCredential
   , TokenName
   , TransactionMetadata
   , TxId
@@ -221,17 +212,7 @@ instance Command MarloweTxCommand where
 
   putCommand = \case
     Create mStakeCredential version walletAddresses roles metadata minAda contract -> do
-      case mStakeCredential of
-        Nothing -> putWord8 0x01
-        Just credential -> do
-          putWord8 0x02
-          case credential of
-            StakeCredentialByKey stakeKeyHash -> do
-              putWord8 0x01
-              put $ serialiseToRawBytes stakeKeyHash
-            StakeCredentialByScript scriptHash -> do
-              putWord8 0x02
-              put $ serialiseToRawBytes scriptHash
+      put mStakeCredential
       put walletAddresses
       put roles
       put metadata
@@ -251,24 +232,7 @@ instance Command MarloweTxCommand where
 
   getCommand = \case
     TagCreate version -> do
-      mStakeCredentialTag <- getWord8
-      mStakeCredential <- case mStakeCredentialTag of
-        0x01 -> pure Nothing
-        0x02 -> Just <$> do
-          stakeCredentialTag <- getWord8
-          case stakeCredentialTag  of
-            0x01 -> do
-              bytes <- get
-              case deserialiseFromRawBytes (AsHash AsStakeKey) bytes of
-                Nothing -> fail "invalid stake key hash bytes"
-                Just stakeKeyHash -> pure $ StakeCredentialByKey stakeKeyHash
-            0x02 -> do
-              bytes <- get
-              case deserialiseFromRawBytes AsScriptHash bytes of
-                Nothing -> fail "invalid stake key hash bytes"
-                Just scriptHash -> pure $ StakeCredentialByScript scriptHash
-            _ -> fail $ "Invalid stake credential tag " <> show stakeCredentialTag
-        _ -> fail $ "Invalid Maybe tag " <> show mStakeCredentialTag
+      mStakeCredential <- get
       walletAddresses <- get
       roles <- get
       metadata <- get
