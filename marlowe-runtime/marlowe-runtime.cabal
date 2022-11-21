@@ -174,8 +174,11 @@ executable cip30-demo
     Paths_marlowe_runtime
   build-depends:
       base >= 4.9 && < 5
+    , text
+    , aeson
     , blaze-markup
     , yesod
+    , yesod-core
     , shakespeare
 
 executable marlowe
