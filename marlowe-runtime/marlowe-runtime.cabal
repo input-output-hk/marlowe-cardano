@@ -116,6 +116,7 @@ library
     , marlowe
     , marlowe-chain-sync
     , marlowe-protocols
+    , monad-control
     , newtype-generics
     , one-line-aeson-text
     , ouroboros-consensus
@@ -130,6 +131,7 @@ library
     , these
     , time
     , transformers
+    , transformers-base
     , typed-protocols
     , witherable
 
@@ -161,6 +163,73 @@ library config
     , prelude-safeenum
     , text
     , split
+
+library web
+  import: lang
+  hs-source-dirs: web
+  exposed-modules:
+    Language.Marlowe.Runtime.Web
+  other-modules:
+    Language.Marlowe.Runtime.Web.API
+    Language.Marlowe.Runtime.Web.Types
+  build-depends:
+      base >= 4.9 && < 5
+    , aeson
+    , base16
+    , bytestring
+    , containers
+    , lens
+    , marlowe
+    , marlowe-runtime
+    , openapi3
+    , servant
+    , servant-pagination
+    , servant-server
+    , servant-openapi3
+    , text
+
+library web-server
+  import: lang
+  hs-source-dirs: web-server
+  exposed-modules:
+    Language.Marlowe.Runtime.Web.Server
+  other-modules:
+    Language.Marlowe.Runtime.Web.Server.DTO
+    Language.Marlowe.Runtime.Web.Server.Monad
+    Language.Marlowe.Runtime.Web.Server.OpenAPI
+    Language.Marlowe.Runtime.Web.Server.ContractHeaderIndexer
+    Language.Marlowe.Runtime.Web.Server.REST
+    Language.Marlowe.Runtime.Web.Server.REST.Contracts
+  build-depends:
+      base >= 4.9 && < 5
+    , aeson
+    , async
+    , bytestring
+    , cardano-api
+    , containers
+    , eventuo11y
+    , eventuo11y-dsl
+    , eventuo11y-json
+    , eventuo11y-batteries
+    , exceptions
+    , lens
+    , marlowe-protocols
+    , marlowe-runtime:web
+    , marlowe-runtime
+    , marlowe-chain-sync
+    , monad-control
+    , mtl
+    , openapi3
+    , servant
+    , servant-server
+    , servant-openapi3
+    , servant-pagination
+    , stm
+    , stm-delay
+    , transformers
+    , transformers-base
+    , typed-protocols
+    , wai
 
 executable cip30-demo
   import: lang
@@ -331,6 +400,31 @@ executable marlowe-tx
     , wl-pprint
   ghc-options: -threaded
 
+executable marlowe-web-server
+  import: lang
+  hs-source-dirs: web-server-app
+  main-is: Main.hs
+  other-modules:
+    Options
+    Paths_marlowe_runtime
+  autogen-modules:
+    Paths_marlowe_runtime
+  build-depends:
+      base >= 4.9 && < 5
+    , bytestring
+    , eventuo11y-json
+    , exceptions
+    , marlowe-protocols
+    , marlowe-runtime:config
+    , marlowe-runtime:web-server
+    , marlowe-runtime
+    , network
+    , optparse-applicative
+    , stm
+    , typed-protocols
+    , warp
+  ghc-options: -threaded
+
 test-suite marlowe-runtime-test
   import: lang
   hs-source-dirs: test
@@ -369,4 +463,24 @@ test-suite marlowe-runtime-test
     , time
     , transformers
   build-tool-depends: hspec-discover:hspec-discover
+  ghc-options: -threaded
+
+test-suite web-server-test
+  import: lang
+  hs-source-dirs: web-server-test
+  type: exitcode-stdio-1.0
+  main-is: Spec.hs
+  other-modules:
+    Paths_marlowe_runtime
+  build-depends:
+      base >= 4.9 && < 5
+    , aeson
+    , bytestring
+    , hspec
+    , marlowe-runtime:web
+    , openapi3
+    , QuickCheck
+    , regex-posix
+    , servant-openapi3
+    , text
   ghc-options: -threaded

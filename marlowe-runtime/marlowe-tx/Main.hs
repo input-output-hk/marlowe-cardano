@@ -7,7 +7,6 @@ import qualified Colog
 import Control.Concurrent.STM (atomically)
 import Control.Exception (bracket, bracketOnError, throwIO)
 import Control.Monad.IO.Class (liftIO)
-import qualified Data.ByteString.Lazy as LB
 import Data.Either (fromRight)
 import Data.Void (Void)
 import Language.Marlowe.Protocol.Sync.Client (MarloweSyncClient, marloweSyncClientPeer)
@@ -27,10 +26,9 @@ import Language.Marlowe.Runtime.Logging (mkLogger)
 import Language.Marlowe.Runtime.Transaction.Query (LoadMarloweContext, LoadWalletContext)
 import qualified Language.Marlowe.Runtime.Transaction.Query as Query
 import Language.Marlowe.Runtime.Transaction.Server
-  (RunTransactionServer(..), TransactionServer(..), TransactionServerDependencies(..), WorkerM, mkTransactionServer)
+  (TransactionServer(..), TransactionServerDependencies(..), mkTransactionServer)
 import qualified Language.Marlowe.Runtime.Transaction.Submit as Submit
-import Network.Channel (Channel, hoistChannel, socketAsChannel)
-import Network.Protocol.Driver (mkDriver)
+import Network.Protocol.Driver (acceptRunServerPeerOverSocket, runClientPeerOverSocket)
 import Network.Protocol.Job.Client (JobClient, jobClientPeer)
 import Network.Protocol.Job.Codec (codecJob)
 import Network.Protocol.Job.Server (jobServerPeer)
@@ -41,13 +39,10 @@ import Network.Socket
   , AddrInfoFlag(..)
   , HostName
   , PortNumber
-  , SockAddr
   , SocketOption(..)
   , SocketType(..)
-  , accept
   , bind
   , close
-  , connect
   , defaultHints
   , getAddrInfo
   , listen
@@ -57,7 +52,6 @@ import Network.Socket
   , withFdSocket
   , withSocketsDo
   )
-import Network.TypedProtocol (runPeerWithDriver, startDState)
 import Options.Applicative
   ( auto
   , execParser
@@ -96,40 +90,22 @@ run Options{..} = withSocketsDo do
     Colog.withBackgroundLogger Colog.defCapacity mainLogAction \logAction -> do
       {- Setup Dependencies -}
       let
-        acceptRunTransactionServer = do
-          (conn, _ :: SockAddr) <- accept socket
-
-          let
-            chan :: Channel WorkerM LB.ByteString
-            chan = hoistChannel liftIO $ socketAsChannel conn
-            driver = mkDriver (liftIO . throwIO) codecJob chan
-          pure $ RunTransactionServer \server -> do
-            let peer = jobServerPeer server
-            fst <$> runPeerWithDriver driver peer (startDState driver)
+        acceptRunTransactionServer = acceptRunServerPeerOverSocket (liftIO . throwIO) socket codecJob jobServerPeer
 
         runHistorySyncClient :: MarloweSyncClient IO a -> IO a
         runHistorySyncClient client = do
-          historySyncAddr <- head <$> getAddrInfo (Just clientHints) (Just historyHost) (Just $ show historySyncPort)
-          bracket (openClient historySyncAddr) close \historySyncSocket -> do
-            let driver = mkDriver throwIO codecMarloweSync $ socketAsChannel historySyncSocket
-            let peer = marloweSyncClientPeer client
-            fst <$> runPeerWithDriver driver peer (startDState driver)
+          addr' <- head <$> getAddrInfo (Just clientHints) (Just historyHost) (Just $ show historySyncPort)
+          runClientPeerOverSocket throwIO addr' codecMarloweSync marloweSyncClientPeer client
 
         connectToChainSeek :: RuntimeChainSeekClient IO a -> IO a
         connectToChainSeek client = do
-          chainSeekAddr <- head <$> getAddrInfo (Just clientHints) (Just chainSeekHost) (Just $ show chainSeekPort)
-          bracket (openClient chainSeekAddr) close \chainSeekSocket -> do
-            let driver = mkDriver throwIO runtimeChainSeekCodec $ socketAsChannel chainSeekSocket
-            let peer = chainSeekClientPeer Genesis client
-            fst <$> runPeerWithDriver driver peer (startDState driver)
+          addr' <- head <$> getAddrInfo (Just clientHints) (Just chainSeekHost) (Just $ show chainSeekPort)
+          runClientPeerOverSocket throwIO addr' runtimeChainSeekCodec (chainSeekClientPeer Genesis) client
 
         runChainSyncJobClient :: JobClient ChainSyncCommand IO a -> IO a
         runChainSyncJobClient client = do
-          chainSeekAddr <- head <$> getAddrInfo (Just clientHints) (Just chainSeekHost) (Just $ show chainSeekCommandPort)
-          bracket (openClient chainSeekAddr) close \chainSeekSocket -> do
-            let driver = mkDriver throwIO codecJob $ socketAsChannel chainSeekSocket
-            let peer = jobClientPeer client
-            fst <$> runPeerWithDriver driver peer (startDState driver)
+          addr' <- head <$> getAddrInfo (Just clientHints) (Just chainSeekHost) (Just $ show chainSeekCommandPort)
+          runClientPeerOverSocket throwIO addr' codecJob jobClientPeer client
 
       let mkSubmitJob = Submit.mkSubmitJob Submit.SubmitJobDependencies{..}
       let
@@ -161,19 +137,11 @@ run Options{..} = withSocketsDo do
     queryChainSync :: ChainSyncQuery Void e a -> IO a
     queryChainSync query = do
       addr <- head <$> getAddrInfo (Just clientHints) (Just chainSeekHost) (Just $ show chainSeekQueryPort)
-      bracket (openClient addr) close \socket -> do
-        let driver = mkDriver throwIO codecQuery $ socketAsChannel socket
-        let client = liftQuery query
-        let peer = queryClientPeer client
-        result <- fst <$> runPeerWithDriver driver peer (startDState driver)
-        pure $ fromRight (error "failed to query chain seek server") result
+      result <- runClientPeerOverSocket throwIO addr codecQuery queryClientPeer $ liftQuery query
+      pure $ fromRight (error "failed to query chain seek server") result
 
     runGetUTxOsQuery :: GetUTxOsQuery -> IO UTxOs
     runGetUTxOsQuery getUTxOsQuery = queryChainSync (GetUTxOs getUTxOsQuery)
-
-    openClient addr = bracketOnError (openSocket addr) close \sock -> do
-      connect sock $ addrAddress addr
-      pure sock
 
 data Options = Options
   { chainSeekPort      :: PortNumber

@@ -71,6 +71,8 @@ let
       network.nodeConfig.ByronGenesisFile
       "--genesis-config-file-hash"
       network.nodeConfig.ByronGenesisHash
+      "--host"
+      "0.0.0.0"
     ];
 
     ports = map toString [
@@ -130,7 +132,7 @@ let
 
     # TODO: Multiple networks on same pq or multiple pqs
     # TODO: ensure sqitch
-    services.chainseekd-preview = chainseekd-service networks.preview;
+    services.chainseekd-preprod = chainseekd-service networks.preprod;
 
     services.node-preprod = node-service networks.preprod;
     volumes.shared-preprod = null;

@@ -14,12 +14,13 @@ import Control.Exception (SomeException, catch)
 import Data.Void (Void, absurd)
 import Language.Marlowe.Runtime.ChainSync.Api (PolicyId)
 import Language.Marlowe.Runtime.Discovery.Api
+import Network.Protocol.Driver (RunServer(..))
 import Network.Protocol.Query.Server
 import Network.Protocol.Query.Types
 import Numeric.Natural (Natural)
 import System.IO (hPutStrLn, stderr)
 
-newtype RunQueryServer m = RunQueryServer (forall a. QueryServer DiscoveryQuery m a -> m a)
+type RunQueryServer m = RunServer m (QueryServer DiscoveryQuery)
 
 data DiscoveryQueryServerDependencies = DiscoveryQueryServerDependencies
   { acceptRunQueryServer :: IO (RunQueryServer IO)
@@ -59,7 +60,7 @@ newtype Worker = Worker
 mkWorker :: WorkerDependencies -> STM Worker
 mkWorker WorkerDependencies{..} =
   let
-    RunQueryServer run = runQueryServer
+    RunServer run = runQueryServer
   in
     pure Worker { runWorker = run server }
 

@@ -7,6 +7,8 @@
 {-# LANGUAGE RecursiveDo #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE ViewPatterns #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
+{-# LANGUAGE TypeFamilies #-}
 
 
 module Language.Marlowe.Runtime.Transaction.Server
@@ -40,9 +42,12 @@ import Control.Concurrent.STM (STM, atomically, modifyTVar, newEmptyTMVar, newTV
 import Control.Error.Util (hoistMaybe, noteT)
 import Control.Exception (SomeException, catch)
 import Control.Monad (when)
+import Control.Monad.Base (MonadBase(..))
 import Control.Monad.IO.Class (MonadIO(liftIO))
 import Control.Monad.Trans.Class (lift)
+import Control.Monad.Trans.Control (MonadBaseControl(..))
 import Control.Monad.Trans.Except (ExceptT(..), except, runExceptT, withExceptT)
+import Control.Monad.Trans.Reader (ReaderT(..))
 import qualified Data.Aeson as A
 import qualified Data.Aeson.OneLine as O
 import Data.Bifunctor (first)
@@ -78,6 +83,7 @@ import qualified Language.Marlowe.Runtime.Transaction.Constraints as Constraints
 import Language.Marlowe.Runtime.Transaction.Query
   (LoadMarloweContext, LoadWalletContext, lookupMarloweScriptUtxo, lookupPayoutScriptUtxo)
 import Language.Marlowe.Runtime.Transaction.Submit (SubmitJob(..), SubmitJobStatus(..))
+import Network.Protocol.Driver (RunServer(..))
 import Network.Protocol.Job.Server
   (JobServer(..), ServerStAttach(..), ServerStAwait(..), ServerStCmd(..), ServerStInit(..), hoistAttach, hoistCmd)
 import Ouroboros.Consensus.BlockchainTime (SystemStart)
@@ -85,10 +91,10 @@ import System.Exit (die)
 import System.IO (hPutStrLn, stderr)
 import Unsafe.Coerce (unsafeCoerce)
 
-newtype RunTransactionServer m = RunTransactionServer (forall a. JobServer MarloweTxCommand m a -> m a)
+type RunTransactionServer m = RunServer m (JobServer MarloweTxCommand)
 
 data TransactionServerDependencies = TransactionServerDependencies
-  { acceptRunTransactionServer :: IO (RunTransactionServer WorkerM)
+  { acceptRunTransactionServer :: WorkerM (RunTransactionServer WorkerM)
   , mkSubmitJob :: Tx BabbageEra -> STM SubmitJob
   , loadWalletContext :: LoadWalletContext
   , loadMarloweContext :: LoadMarloweContext
@@ -107,7 +113,7 @@ mkTransactionServer TransactionServerDependencies{..} = do
     getSubmitJob txId = Map.lookup txId <$> readTVar submitJobsVar
     trackSubmitJob txId = modifyTVar submitJobsVar . Map.insert txId
     runTransactionServer = do
-      runServer <- acceptRunTransactionServer
+      runServer <- Colog.usingLoggerT logAction acceptRunTransactionServer
       Worker{..} <- atomically $ mkWorker WorkerDependencies {..}
       runConcurrently $
         Concurrently (Colog.usingLoggerT logAction runWorker `catch` catchWorker) *> Concurrently runTransactionServer
@@ -131,6 +137,15 @@ type AppLogAction = Colog.LogAction IO Colog.Message
 
 type WorkerM = Colog.LoggerT Colog.Message IO
 
+instance MonadBase IO WorkerM where
+  liftBase = liftIO
+
+instance MonadBaseControl IO WorkerM where
+  type StM WorkerM a = a
+  liftBaseWith withRunInBase = Colog.LoggerT $ ReaderT \logAction -> do
+    liftIO $ withRunInBase \(Colog.LoggerT r) -> runReaderT r logAction
+  restoreM = pure
+
 newtype Worker = Worker
   { runWorker :: WorkerM ()
   }
@@ -138,7 +153,7 @@ newtype Worker = Worker
 mkWorker :: WorkerDependencies -> STM Worker
 mkWorker WorkerDependencies{..} =
   let
-    RunTransactionServer run = runServer
+    RunServer run = runServer
   in
     pure Worker { runWorker = run server }
 

@@ -29,9 +29,10 @@ import Language.Marlowe.Runtime.ChainSync.Api
 import Language.Marlowe.Runtime.ChainSync.Database (MoveClient(..), MoveResult(..))
 import Network.Protocol.ChainSeek.Server
   (ChainSeekServer(..), ServerStHandshake(..), ServerStIdle(..), ServerStInit(..), ServerStNext(..))
+import Network.Protocol.Driver (RunServer(..))
 import System.IO (stderr)
 
-newtype RunChainSeekServer m = RunChainSeekServer (forall a. RuntimeChainSeekServer m a -> IO a)
+type RunChainSeekServer m = RunServer m RuntimeChainSeekServer
 
 data ChainSyncServerDependencies = ChainSyncServerDependencies
   { acceptRunChainSeekServer :: IO (RunChainSeekServer IO)
@@ -76,7 +77,7 @@ newtype Worker = Worker
 mkWorker :: WorkerDependencies -> STM Worker
 mkWorker WorkerDependencies{..} = do
   let
-    RunChainSeekServer runServer = runChainSeekServer
+    RunServer runServer = runChainSeekServer
     runWorker = void $ runServer server
 
     server = ChainSeekServer $ pure stInit

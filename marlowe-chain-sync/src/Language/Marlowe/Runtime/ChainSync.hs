@@ -24,7 +24,7 @@ import Language.Marlowe.Runtime.ChainSync.NodeClient
 import Language.Marlowe.Runtime.ChainSync.QueryServer
   (ChainSyncQueryServer(..), ChainSyncQueryServerDependencies(..), RunQueryServer, mkChainSyncQueryServer)
 import Language.Marlowe.Runtime.ChainSync.Server
-  (ChainSyncServer(..), ChainSyncServerDependencies(..), RunChainSeekServer(..), mkChainSyncServer)
+  (ChainSyncServer(..), ChainSyncServerDependencies(..), RunChainSeekServer, mkChainSyncServer)
 import Language.Marlowe.Runtime.ChainSync.Store (ChainStore(..), ChainStoreDependencies(..), mkChainStore)
 import Ouroboros.Network.Protocol.LocalStateQuery.Type (AcquireFailure)
 import Ouroboros.Network.Protocol.LocalTxSubmission.Client (SubmitResult)

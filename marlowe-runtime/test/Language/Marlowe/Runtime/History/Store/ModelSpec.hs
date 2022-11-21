@@ -47,8 +47,11 @@ modelFromScript = snd
   . foldl' (\store event -> withSome event mkStep store) ([], emptyHistoryStore)
   . unHistoryScript
 
+pickRootSuchThat :: (HistoryRoot -> Bool) -> HistoryStoreModel -> Gen (ContractId, HistoryRoot)
+pickRootSuchThat p = elements . filter (p . snd) . getRoots
+
 pickRoot :: HistoryStoreModel -> Gen (ContractId, HistoryRoot)
-pickRoot = elements . getRoots
+pickRoot = pickRootSuchThat $ const True
 
 genIntersectionBlocks :: HistoryStoreModel -> HistoryRoot -> Gen [BlockHeader]
 genIntersectionBlocks store root = oneof
@@ -61,6 +64,9 @@ genIntersectionBlocks store root = oneof
 
 genPoint :: HistoryStoreModel -> Gen ChainPoint
 genPoint = elements . (Genesis :) . fmap At . getBlocks
+
+hasSteps :: HistoryRoot -> Bool
+hasSteps (HistoryRoot _ _ _ steps _ _) = not $ null steps
 
 spec :: Spec
 spec = do
@@ -103,11 +109,9 @@ spec = do
     pure $ findCreateStep contractId store === Just (block, SomeCreateStep version createStep)
 
   -- This property specifies that finding the next steps from genesis for a contract that exists succeeds.
-  prop "getRoot / getNextSteps Genesis" \store -> not (null $ getRoots store) ==> do
-    (contractId, HistoryRoot version block _ steps _ _) <- pickRoot store
-    pure case steps of
-      [] -> discard
-      _  -> findNextSteps contractId Genesis store === FindNext block (SomeContractSteps version steps)
+  prop "getRoot / getNextSteps Genesis" \store -> any (hasSteps . snd) (getRoots store) ==> do
+    (contractId, HistoryRoot version block _ steps _ _) <- pickRootSuchThat hasSteps store
+    pure $ findNextSteps contractId Genesis store === FindNext block (SomeContractSteps version steps)
 
   -- This property specifies that when next steps are found, the block must be
   -- bigger than the block provided.

@@ -69,7 +69,10 @@ library
     , binary
     , bytestring
     , hashable
+    , lifted-base
+    , monad-control
     , network
     , template-haskell
     , text
+    , transformers-base
     , typed-protocols

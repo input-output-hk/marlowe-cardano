@@ -14,11 +14,12 @@ import Control.Concurrent.STM (STM, atomically)
 import Control.Exception (SomeException, catch)
 import Data.Void (Void)
 import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncCommand(..))
+import Network.Protocol.Driver (RunServer(..))
 import Network.Protocol.Job.Server
 import Ouroboros.Network.Protocol.LocalTxSubmission.Client (SubmitResult(..))
 import System.IO (hPutStrLn, stderr)
 
-newtype RunJobServer m = RunJobServer (forall a. JobServer ChainSyncCommand m a -> IO a)
+type RunJobServer m = RunServer m (JobServer ChainSyncCommand)
 
 data ChainSyncJobServerDependencies = ChainSyncJobServerDependencies
   { acceptRunJobServer :: IO (RunJobServer IO)
@@ -62,7 +63,7 @@ newtype Worker = Worker
 mkWorker :: WorkerDependencies -> STM Worker
 mkWorker WorkerDependencies{..} =
   let
-    RunJobServer run = runJobServer
+    RunServer run = runJobServer
   in
     pure Worker { runWorker = run server }
   where

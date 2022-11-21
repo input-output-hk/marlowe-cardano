@@ -1,10 +1,12 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE RankNTypes #-}
+
 module Language.Marlowe.Runtime.CLI.Command
   where
 
 import Control.Concurrent.STM (STM)
 import Control.Exception (Exception, SomeException, catch, throw)
+import Control.Exception.Base (throwIO)
 import Control.Monad.Trans.Reader (runReaderT)
 import qualified Data.ByteString.Lazy as LB
 import Data.Foldable (asum)
@@ -27,10 +29,11 @@ import Language.Marlowe.Runtime.CLI.Command.Rm (RmCommand, rmCommandParser, runR
 import Language.Marlowe.Runtime.CLI.Command.Submit (SubmitCommand, runSubmitCommand, submitCommandParser)
 import Language.Marlowe.Runtime.CLI.Command.Tx (TxCommand)
 import Language.Marlowe.Runtime.CLI.Command.Withdraw (WithdrawCommand, runWithdrawCommand, withdrawCommandParser)
-import Language.Marlowe.Runtime.CLI.Env (Env(..), RunClient, runClientPeerOverSocket)
+import Language.Marlowe.Runtime.CLI.Env (Env(..))
 import Language.Marlowe.Runtime.CLI.Monad (CLI, runCLI)
 import Language.Marlowe.Runtime.CLI.Option (optParserWithEnvDefault)
 import qualified Language.Marlowe.Runtime.CLI.Option as O
+import Network.Protocol.Driver (RunClient, runClientPeerOverSocket)
 import Network.Protocol.Job.Client (jobClientPeer)
 import Network.Protocol.Job.Codec (codecJob)
 import Network.Protocol.Query.Client (queryClientPeer)
@@ -157,7 +160,7 @@ runClientPeerOverSocket'
   -> RunClient IO client
 runClientPeerOverSocket' errMsg addr codec clientToPeer client = do
   let
-    run = runClientPeerOverSocket addr codec clientToPeer client
+    run = runClientPeerOverSocket throwIO addr codec clientToPeer client
   run `catch` \(err :: SomeException)-> do
     hPutStrLn stderr errMsg
     throw err

@@ -15,10 +15,11 @@ import Data.Map (Map)
 import qualified Data.Map as Map
 import Language.Marlowe.Runtime.Core.Api
 import Language.Marlowe.Runtime.History.Api
+import Network.Protocol.Driver (RunServer(..))
 import Network.Protocol.Job.Server (liftCommandHandler)
 import System.IO (hPutStrLn, stderr)
 
-newtype RunJobServer m = RunJobServer (forall a. RuntimeHistoryJobServer m a -> IO a)
+type RunJobServer m = RunServer m RuntimeHistoryJobServer
 
 data HistoryJobServerDependencies = HistoryJobServerDependencies
   { acceptRunJobServer    :: IO (RunJobServer IO)
@@ -58,7 +59,7 @@ newtype Worker = Worker
 mkWorker :: WorkerDependencies -> STM Worker
 mkWorker WorkerDependencies{..} =
   let
-    RunJobServer run = runJobServer
+    RunServer run = runJobServer
   in
     pure Worker { runWorker = run server }
 
