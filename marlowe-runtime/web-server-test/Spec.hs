@@ -94,7 +94,7 @@ instance Arbitrary Web.Base16 where
 instance (HasNamedLink a Web.API name, Arbitrary a) => Arbitrary (Web.WithLink name a) where
   arbitrary = oneof
     [ Web.OmitLink <$> arbitrary
-    , Web.IncludeLink Web.api (Proxy @name) <$> arbitrary
+    , Web.IncludeLink (Proxy @name) <$> arbitrary
     ]
   shrink (Web.OmitLink a) = Web.OmitLink <$> shrink a
-  shrink (Web.IncludeLink api n a) = [Web.OmitLink a] <> (Web.IncludeLink api n <$> shrink a)
+  shrink (Web.IncludeLink n a) = [Web.OmitLink a] <> (Web.IncludeLink n <$> shrink a)

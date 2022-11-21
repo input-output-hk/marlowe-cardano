@@ -71,7 +71,7 @@ get eb ranges = withEvent eb Get \ev -> do
     Just headers -> do
       let headers' = toDTO headers
       addField ev $ ContractHeaders headers'
-      let response = IncludeLink api (Proxy @"contract") <$> headers'
+      let response = IncludeLink (Proxy @"contract") <$> headers'
       addHeader (length headers) <$> returnRange range response
 
 getOne
@@ -86,4 +86,4 @@ getOne eb contractId = withEvent eb GetOne \ev -> do
     Just contractRecord -> do
       let contractState = toDTO contractRecord
       addField ev $ GetResult contractState
-      pure $ IncludeLink api (Proxy @"transactions") contractState
+      pure $ IncludeLink (Proxy @"transactions") contractState

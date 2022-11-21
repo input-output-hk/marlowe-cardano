@@ -1,18 +1,41 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
-
-{-# OPTIONS_GHC -Wno-orphans #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 -- | This module specifies the Marlowe Runtime Web API as a Servant API type.
 
 module Language.Marlowe.Runtime.Web.API
   where
 
+import Control.Lens hiding ((.=))
+import Data.Aeson
+import Data.OpenApi
+  ( Definitions
+  , NamedSchema(..)
+  , OpenApiType(..)
+  , Referenced(..)
+  , Schema
+  , ToSchema
+  , declareNamedSchema
+  , declareSchemaRef
+  , properties
+  , required
+  , type_
+  )
+import Data.OpenApi.Declare (Declare)
+import Data.String (IsString(..))
+import Data.Typeable (Typeable)
+import GHC.Base (Symbol)
+import GHC.Exts (IsList(..))
+import GHC.Show (showSpace)
+import GHC.TypeLits (KnownSymbol, symbolVal)
 import Language.Marlowe.Runtime.Web.Types
 import Servant
 import Servant.Pagination
@@ -67,3 +90,94 @@ type PaginatedGet rangeFields resource
 -- | Helper type for describing the response type of generic paginated APIs
 type PaginatedResponse fields resource =
   Headers (Header "Total-Count" Int ': PageHeaders fields resource) [resource]
+
+class HasNamedLink a api (name :: Symbol) where
+  namedLink :: Proxy api -> Proxy name -> a -> Link
+
+data WithLink (name :: Symbol) a where
+  IncludeLink :: Proxy name -> a -> WithLink name a
+  OmitLink :: a -> WithLink name a
+
+deriving instance Typeable (WithLink name a)
+
+instance (Show a, KnownSymbol name) => Show (WithLink name a) where
+  showsPrec p (IncludeLink name a) = showParen (p >= 11)
+    ( showString "IncludeLink (Proxy @"
+    . showSpace
+    . showsPrec 11 (symbolVal name)
+    . showString ")"
+    . showSpace
+    . showsPrec 11 a
+    )
+  showsPrec p (OmitLink a) = showParen (p >= 11)
+    ( showString "OmitLink"
+    . showSpace
+    . showsPrec 11 a
+    )
+
+class ToJSONWithLinks a where
+  toJSONWithLinks :: a -> ([(String, Link)], Value)
+
+instance {-# OVERLAPPING #-}
+  ( HasNamedLink a API name
+  , ToJSONWithLinks a
+  , KnownSymbol name
+  ) => ToJSONWithLinks (WithLink name a) where
+  toJSONWithLinks (IncludeLink name a) = (link : links, value)
+    where
+      (links, value) = toJSONWithLinks a
+      link = (symbolVal name, namedLink api name a)
+  toJSONWithLinks (OmitLink a) = toJSONWithLinks a
+
+instance {-# OVERLAPPING #-} ToJSON a => ToJSONWithLinks a where
+  toJSONWithLinks a = ([], toJSON a)
+
+instance
+  ( HasNamedLink a API name
+  , ToJSONWithLinks a
+  , KnownSymbol name
+  ) => ToJSON (WithLink name a) where
+  toJSON = toJSON' . toJSONWithLinks
+    where
+      toJSON' (links, value) = object
+        [ "resource" .= value
+        , "links" .= object (bimap fromString (toJSON . show . linkURI) <$> links)
+        ]
+
+instance HasPagination resource field => HasPagination (WithLink name resource) field where
+  type RangeType (WithLink name resource) field = RangeType resource field
+  getFieldValue p (IncludeLink _ resource) = getFieldValue p resource
+  getFieldValue p (OmitLink resource) = getFieldValue p resource
+
+class ToSchemaWithLinks a where
+  declareNamedSchemaWithLinks :: Proxy a -> Declare (Definitions Schema) ([String], Referenced Schema)
+
+instance {-# OVERLAPPING #-}
+  ( ToSchemaWithLinks a
+  , KnownSymbol name
+  ) => ToSchemaWithLinks (WithLink name a) where
+  declareNamedSchemaWithLinks _  = do
+    (links, namedSchema) <- declareNamedSchemaWithLinks (Proxy @a)
+    pure (symbolVal (Proxy @name) : links, namedSchema)
+
+instance {-# OVERLAPPING #-} ToSchema a => ToSchemaWithLinks a where
+  declareNamedSchemaWithLinks p = ([],) <$> declareSchemaRef p
+
+instance
+  ( Typeable a
+  , ToSchemaWithLinks a
+  , KnownSymbol name
+  ) => ToSchema (WithLink name a) where
+  declareNamedSchema _  = do
+    (links, schema) <- declareNamedSchemaWithLinks (Proxy @(WithLink name a))
+    stringSchema <- declareSchemaRef (Proxy @String)
+    pure $ NamedSchema Nothing $ mempty
+      & type_ ?~ OpenApiObject
+      & required .~ ["resource", "links"]
+      & properties .~
+          [ ("resource", schema)
+          , ( "links", Inline $ mempty
+                & type_ ?~ OpenApiObject
+                & properties .~ fromList ((,stringSchema) . fromString <$> links)
+            )
+          ]
