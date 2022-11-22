@@ -9,6 +9,7 @@
 module Language.Marlowe.Runtime.Transaction.Api
   ( ApplyInputsConstraintsBuildupError(..)
   , ApplyInputsError(..)
+  , ContractCreationRecord(..)
   , CreateBuildupError(..)
   , CreateError(..)
   , JobId(..)
@@ -25,7 +26,7 @@ module Language.Marlowe.Runtime.Transaction.Api
   , mkNFTMetadata
   ) where
 
-import Cardano.Api (AsType(..), BabbageEra, Tx, TxBody, deserialiseFromCBOR, serialiseToCBOR)
+import Cardano.Api (AsType(..), BabbageEra, IsCardanoEra, Tx, TxBody, cardanoEra, deserialiseFromCBOR, serialiseToCBOR)
 import Data.Binary (Binary, Get, get, getWord8, put)
 import Data.Binary.Put (Put, putWord8)
 import Data.ByteString (ByteString)
@@ -37,10 +38,13 @@ import Data.Set (Set)
 import Data.Time (UTCTime)
 import Data.Type.Equality (type (:~:)(Refl))
 import Data.Void (Void, absurd)
+import Data.Word (Word64)
 import GHC.Generics (Generic)
 import GHC.Natural (Natural)
+import Language.Marlowe.Runtime.Cardano.Api (cardanoEraToAsType)
 import Language.Marlowe.Runtime.ChainSync.Api
   ( Address
+  , Assets
   , BlockHeader
   , Lovelace
   , Metadata
@@ -83,6 +87,49 @@ data RoleTokensConfig
   deriving stock (Show, Eq, Ord, Generic)
   deriving anyclass (Binary)
 
+data ContractCreationRecord era v = ContractCreationRecord
+  { contractId :: ContractId
+  , rolesCurrency :: PolicyId
+  , metadata :: Map Word64 Metadata
+  , marloweScriptHash :: ScriptHash
+  , marloweScriptAddress :: Address
+  , payoutScriptHash :: ScriptHash
+  , payoutScriptAddress :: Address
+  , version :: MarloweVersion v
+  , datum :: Datum v
+  , assets :: Assets
+  , txBody :: TxBody era
+  }
+
+deriving instance Show (ContractCreationRecord BabbageEra 'V1)
+deriving instance Eq (ContractCreationRecord BabbageEra 'V1)
+
+instance IsCardanoEra era => Binary (ContractCreationRecord era 'V1) where
+  put ContractCreationRecord{..} = do
+    put contractId
+    put rolesCurrency
+    put metadata
+    put marloweScriptHash
+    put marloweScriptAddress
+    put payoutScriptHash
+    put payoutScriptAddress
+    putDatum MarloweV1 datum
+    put assets
+    putTxBody txBody
+  get = do
+    contractId <- get
+    rolesCurrency <- get
+    metadata <- get
+    marloweScriptHash <- get
+    marloweScriptAddress <- get
+    payoutScriptHash <- get
+    payoutScriptAddress <- get
+    datum <- getDatum MarloweV1
+    assets <- get
+    txBody <- getTxBody
+    let version = MarloweV1
+    pure ContractCreationRecord{..}
+
 -- | The low-level runtime API for building and submitting transactions.
 data MarloweTxCommand status err result where
   -- | Construct a transaction that starts a new Marlowe contract. The
@@ -104,10 +151,7 @@ data MarloweTxCommand status err result where
     -- ^ Min Lovelace which should be used for the contract output.
     -> Contract v
     -- ^ The contract to run
-    -> MarloweTxCommand Void (CreateError v)
-        ( ContractId -- The ID of the contract (tx output that carries the datum)
-        , TxBody BabbageEra -- The unsigned tx body, to be signed by a wallet.
-        )
+    -> MarloweTxCommand Void (CreateError v) (ContractCreationRecord BabbageEra v)
 
   -- | Construct a transaction that advances an active Marlowe contract by
   -- applying a sequence of inputs. The resulting, unsigned transaction can be
@@ -161,7 +205,7 @@ data MarloweTxCommand status err result where
 
 instance Command MarloweTxCommand where
   data Tag MarloweTxCommand status err result where
-    TagCreate :: MarloweVersion v -> Tag MarloweTxCommand Void (CreateError v) (ContractId, TxBody BabbageEra)
+    TagCreate :: MarloweVersion v -> Tag MarloweTxCommand Void (CreateError v) (ContractCreationRecord BabbageEra v)
     TagApplyInputs :: MarloweVersion v -> Tag MarloweTxCommand Void (ApplyInputsError v) (TxBody BabbageEra)
     TagWithdraw :: MarloweVersion v -> Tag MarloweTxCommand Void (WithdrawError v) (TxBody BabbageEra)
     TagSubmit :: Tag MarloweTxCommand SubmitStatus SubmitError BlockHeader
@@ -299,24 +343,24 @@ instance Command MarloweTxCommand where
     TagSubmit -> get
 
   putResult = \case
-    TagCreate _ -> \(contractId, txBody) -> put contractId *> putTxBody txBody
+    TagCreate MarloweV1 -> put
     TagApplyInputs _ -> putTxBody
     TagWithdraw _ -> putTxBody
     TagSubmit -> put
 
   getResult = \case
-    TagCreate _ -> (,) <$> get <*> getTxBody
+    TagCreate MarloweV1 -> get
     TagApplyInputs _ -> getTxBody
     TagWithdraw _ -> getTxBody
     TagSubmit -> get
 
-putTxBody :: TxBody BabbageEra -> Put
+putTxBody :: IsCardanoEra era => TxBody era -> Put
 putTxBody = put . serialiseToCBOR
 
-getTxBody :: Get (TxBody BabbageEra)
+getTxBody :: forall era. IsCardanoEra era => Get (TxBody era)
 getTxBody = do
   bytes <- get @ByteString
-  case deserialiseFromCBOR (AsTxBody AsBabbage) bytes of
+  case deserialiseFromCBOR (AsTxBody $ cardanoEraToAsType $ cardanoEra @era) bytes of
     Left err     -> fail $ show err
     Right txBody -> pure txBody
 

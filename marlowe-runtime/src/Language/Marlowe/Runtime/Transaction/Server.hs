@@ -65,6 +65,7 @@ import Language.Marlowe.Runtime.Core.ScriptRegistry (getCurrentScripts, marloweS
 import qualified Language.Marlowe.Runtime.Core.ScriptRegistry as Registry
 import Language.Marlowe.Runtime.Transaction.Api
   ( ApplyInputsError(..)
+  , ContractCreationRecord(..)
   , CreateError(..)
   , JobId(..)
   , MarloweTxCommand(..)
@@ -235,12 +236,13 @@ execCreate
   -> TransactionMetadata
   -> Chain.Lovelace
   -> Contract v
-  -> WorkerM (ServerStCmd MarloweTxCommand Void (CreateError v) (ContractId, TxBody BabbageEra) WorkerM ())
+  -> WorkerM (ServerStCmd MarloweTxCommand Void (CreateError v) (ContractCreationRecord BabbageEra v) WorkerM ())
 execCreate solveConstraints loadWalletContext networkId mStakeCredential version addresses roleTokens metadata minAda contract = execExceptT do
   walletContext <- liftIO $ loadWalletContext addresses
   lift . Colog.logDebug . O.renderValue . A.toJSON $ walletContext
   mCardanoStakeCredential <- except $ traverse (note CreateToCardanoError . toCardanoStakeCredential) mStakeCredential
-  constraints <- except $ buildCreateConstraints version walletContext roleTokens metadata minAda contract
+  ((datum, assets, rolesCurrency), constraints) <- except
+    $ buildCreateConstraints version walletContext roleTokens metadata minAda contract
   let
     scripts@Registry.MarloweScripts{..} = Registry.getCurrentScripts version
     stakeReference = maybe NoStakeAddress StakeAddressByValue mCardanoStakeCredential
@@ -272,7 +274,19 @@ execCreate solveConstraints loadWalletContext networkId mStakeCredential version
   txBody <- except
     $ first CreateConstraintError
     $ solveConstraints version marloweContext walletContext constraints
-  pure (ContractId $ findMarloweOutput mCardanoStakeCredential txBody, txBody)
+  pure ContractCreationRecord
+    { contractId = ContractId $ findMarloweOutput mCardanoStakeCredential txBody
+    , rolesCurrency
+    , metadata = Chain.unTransactionMetadata metadata
+    , txBody
+    , marloweScriptHash = Constraints.marloweScriptHash marloweContext
+    , marloweScriptAddress = Constraints.marloweAddress marloweContext
+    , payoutScriptHash = Constraints.payoutScriptHash marloweContext
+    , payoutScriptAddress = Constraints.payoutAddress marloweContext
+    , version
+    , datum
+    , assets
+    }
   where
   findMarloweOutput mCardanoStakeCredential = \case
     body@(TxBody TxBodyContent{..}) -> Chain.TxOutRef (fromCardanoTxId $ getTxId body)
