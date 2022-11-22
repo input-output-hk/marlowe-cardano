@@ -1,6 +1,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
 
@@ -23,15 +24,22 @@ import Data.Foldable (fold)
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.OpenApi
-  ( HasType(..)
+  ( AdditionalProperties(..)
+  , HasType(..)
   , NamedSchema(..)
   , OpenApiType(..)
+  , Referenced(..)
   , ToParamSchema
   , ToSchema
+  , additionalProperties
   , declareSchema
+  , declareSchemaRef
   , enum_
   , example
+  , oneOf
   , pattern
+  , properties
+  , required
   , toParamSchema
   )
 import qualified Data.OpenApi as OpenApi
@@ -103,7 +111,10 @@ newtype Address = Address { unAddress :: T.Text }
   deriving newtype (Show, ToHttpApiData, FromHttpApiData, ToJSON, FromJSON)
 
 instance ToSchema Address where
-  declareNamedSchema _ = pure $ NamedSchema (Just "Address") $ mempty
+  declareNamedSchema = pure . NamedSchema (Just "Address") . toParamSchema
+
+instance ToParamSchema Address where
+  toParamSchema _ = mempty
     & type_ ?~ OpenApiString
     & OpenApi.description ?~ "A cardano address"
     & example ?~ "addr1w94f8ywk4fg672xasahtk4t9k6w3aql943uxz5rt62d4dvq8evxaf"
@@ -111,6 +122,11 @@ instance ToSchema Address where
 newtype CommaList a = CommaList { unCommaList :: [a] }
   deriving (Eq, Ord, Generic, Functor)
   deriving newtype (Show, ToJSON, FromJSON, IsList)
+
+instance ToParamSchema (CommaList a) where
+  toParamSchema _ = mempty
+    & type_ ?~ OpenApiString
+    & OpenApi.description ?~ "A comma-separated list of values"
 
 instance ToSchema a => ToSchema (CommaList a)
 
@@ -275,13 +291,44 @@ data BlockHeader = BlockHeader
 instance ToJSON BlockHeader
 instance ToSchema BlockHeader
 
-data UnsignedCreateTx = UnsignedCreateTx
+data CreateTxBody = CreateTxBody
   { contractId :: TxOutRef
-  , unsignedTx :: Base16
+  , txBody :: TextEnvelope
   } deriving (Show, Eq, Ord, Generic)
 
-instance ToJSON UnsignedCreateTx
-instance ToSchema UnsignedCreateTx
+instance ToJSON CreateTxBody
+instance ToSchema CreateTxBody
+
+data TextEnvelope = TextEnvelope
+  { teType :: Text
+  , teDescription :: Text
+  , teCborHex :: Base16
+  } deriving (Show, Eq, Ord, Generic)
+
+instance ToJSON TextEnvelope where
+  toJSON TextEnvelope{..} = object
+    [ ("type", toJSON teType)
+    , ("description", toJSON teDescription)
+    , ("cborHex", toJSON teCborHex)
+    ]
+
+instance FromJSON TextEnvelope where
+  parseJSON = withObject "TextEnvelope" \obj -> TextEnvelope
+    <$> obj .: "type"
+    <*> obj .: "description"
+    <*> obj .: "cborHex"
+
+instance ToSchema TextEnvelope where
+  declareNamedSchema _ = do
+    textSchema <- declareSchemaRef (Proxy @Text)
+    pure $ NamedSchema (Just "TextEnvelope") $ mempty
+      & type_ ?~ OpenApiObject
+      & required .~ ["type", "description", "cborHex"]
+      & properties .~
+          [ ("type", textSchema)
+          , ("description", textSchema)
+          , ("cborHex", textSchema)
+          ]
 
 data PostContractsRequest = PostContractsRequest
   { metadata :: Map Word64 Metadata
@@ -293,6 +340,7 @@ data PostContractsRequest = PostContractsRequest
 
 instance FromJSON PostContractsRequest
 instance ToJSON PostContractsRequest
+instance ToSchema PostContractsRequest
 
 data RolesConfig
   = UsePolicy PolicyId
@@ -306,6 +354,13 @@ instance FromJSON RolesConfig where
 instance ToJSON RolesConfig where
   toJSON (UsePolicy policy) = toJSON policy
   toJSON (Mint configs) = toJSON configs
+
+instance ToSchema RolesConfig where
+  declareNamedSchema _ = do
+    policySchema <- declareSchemaRef (Proxy @PolicyId)
+    mintSchema <- declareSchemaRef (Proxy @(Map Text RoleTokenConfig))
+    pure $ NamedSchema (Just "RolesConfig") $ mempty
+      & oneOf ?~ [policySchema, mintSchema]
 
 data RoleTokenConfig
   = RoleTokenSimple Address
@@ -325,6 +380,21 @@ instance ToJSON RoleTokenConfig where
     [ ("address", toJSON address)
     , ("metadata", toJSON config)
     ]
+
+instance ToSchema RoleTokenConfig where
+  declareNamedSchema _ = do
+    simpleSchema <- declareSchemaRef (Proxy @Address)
+    metadataSchema <- declareSchemaRef (Proxy @TokenMetadata)
+    let
+      advancedSchema = mempty
+        & type_ ?~ OpenApiObject
+        & required .~ ["address", "metadata"]
+        & properties .~
+            [ ("address", simpleSchema)
+            , ("metadata", metadataSchema)
+            ]
+    pure $ NamedSchema (Just "RoleTokenConfig") $ mempty
+      & oneOf ?~ [simpleSchema, Inline advancedSchema]
 
 data TokenMetadata = TokenMetadata
   { name :: Text
@@ -355,6 +425,23 @@ instance ToJSON TokenMetadata where
     , ("files", toJSON files)
     ] <> (fmap . fmap) unMetadata (Map.toList otherProperties)
 
+instance ToSchema TokenMetadata where
+  declareNamedSchema _ = do
+    stringSchema <- declareSchemaRef (Proxy @Text)
+    filesSchema <- declareSchemaRef (Proxy @[TokenMetadataFile])
+    pure $ NamedSchema (Just "TokenMetadata") $ mempty
+      & type_ ?~ OpenApiObject
+      & OpenApi.description ?~ "Metadata for an NFT, as described by https://cips.cardano.org/cips/cip25/"
+      & required .~ ["name", "image"]
+      & properties .~
+          [ ("name", stringSchema)
+          , ("image", stringSchema)
+          , ("mediaType", stringSchema)
+          , ("description", stringSchema)
+          , ("files", filesSchema)
+          ]
+      & additionalProperties ?~ AdditionalPropertiesAllowed True
+
 data TokenMetadataFile = TokenMetadataFile
   { name :: Text
   , src :: URI
@@ -377,6 +464,19 @@ instance ToJSON TokenMetadataFile where
     , ("src", uriToJSON src)
     , ("mediaType", toJSON mediaType)
     ] <> (fmap . fmap) unMetadata (Map.toList otherProperties)
+
+instance ToSchema TokenMetadataFile where
+  declareNamedSchema _ = do
+    stringSchema <- declareSchemaRef (Proxy @Text)
+    pure $ NamedSchema (Just "TokenMetadataFile") $ mempty
+      & type_ ?~ OpenApiObject
+      & required .~ ["name", "image", "mediaType"]
+      & properties .~
+          [ ("name", stringSchema)
+          , ("image", stringSchema)
+          , ("mediaType", stringSchema)
+          ]
+      & additionalProperties ?~ AdditionalPropertiesAllowed True
 
 uriFromJSON :: Value -> Parser URI
 uriFromJSON = withText "URI" $ maybe (parseFail "invalid URI") pure . parseURI . T.unpack

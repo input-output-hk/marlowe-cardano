@@ -4,9 +4,9 @@ module Language.Marlowe.Runtime.Web.Server.TxClient
 
 import Cardano.Api (BabbageEra, TxBody)
 import Control.Concurrent.STM (STM)
-import Language.Marlowe.Runtime.ChainSync.Api (Lovelace, PolicyId, StakeCredential, TransactionMetadata)
+import Language.Marlowe.Runtime.ChainSync.Api (Lovelace, StakeCredential, TransactionMetadata)
 import Language.Marlowe.Runtime.Core.Api (Contract, ContractId, MarloweVersion)
-import Language.Marlowe.Runtime.Transaction.Api (CreateError, MarloweTxCommand(Create), Mint, WalletAddresses)
+import Language.Marlowe.Runtime.Transaction.Api (CreateError, MarloweTxCommand(..), RoleTokensConfig, WalletAddresses)
 import Network.Protocol.Driver (RunClient)
 import Network.Protocol.Job.Client
 
@@ -19,7 +19,7 @@ type CreateContract m
    . Maybe StakeCredential
   -> MarloweVersion v
   -> WalletAddresses
-  -> Maybe (Either PolicyId Mint)
+  -> RoleTokensConfig
   -> TransactionMetadata
   -> Lovelace
   -> Contract v

@@ -11,14 +11,35 @@ module Language.Marlowe.Runtime.Web.Server.DTO
 
 import Language.Marlowe.Runtime.Discovery.Api
 
-import Cardano.Api (metadataValueToJsonNoSchema)
+import Cardano.Api
+  ( AsType(AsTxBody)
+  , IsCardanoEra(cardanoEra)
+  , TextEnvelope(..)
+  , TextEnvelopeType(..)
+  , TxBody
+  , deserialiseFromTextEnvelope
+  , metadataValueToJsonNoSchema
+  , serialiseToTextEnvelope
+  )
+import Cardano.Api.SerialiseTextEnvelope (TextEnvelopeDescr(..))
+import Control.Arrow (second)
+import Control.Error.Util (hush)
+import Control.Monad ((<=<))
 import Control.Monad.Except (MonadError, throwError)
+import Data.Aeson (ToJSON(toJSON))
+import Data.Bifunctor (bimap)
 import Data.Coerce (coerce)
+import Data.List.NonEmpty (NonEmpty(..))
 import Data.Map (Map)
+import qualified Data.Map as Map
+import Data.Maybe (fromMaybe)
+import Data.String (fromString)
+import Data.Text (Text)
+import qualified Data.Text as T
 import Data.Word (Word16, Word64)
 import qualified Language.Marlowe.Core.V1.Semantics as Sem
 import qualified Language.Marlowe.Core.V1.Semantics.Types as Sem
-import Language.Marlowe.Runtime.Cardano.Api (toCardanoMetadata)
+import Language.Marlowe.Runtime.Cardano.Api (cardanoEraToAsType, toCardanoMetadata)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Core.Api
   ( ContractId(..)
@@ -30,6 +51,7 @@ import Language.Marlowe.Runtime.Core.Api
   )
 import Language.Marlowe.Runtime.History.Api (CreateStep(..))
 import Language.Marlowe.Runtime.Plutus.V2.Api (fromPlutusCurrencySymbol)
+import Language.Marlowe.Runtime.Transaction.Api (Mint(..), NFTMetadata, RoleTokensConfig(..), mkMint, mkNFTMetadata)
 import qualified Language.Marlowe.Runtime.Web as Web
 
 -- | A class that states a type has a DTO representation.
@@ -65,6 +87,15 @@ instance FromDTO a => FromDTO [a] where
 
 instance ToDTO a => ToDTO [a] where
   toDTO = fmap toDTO
+
+instance HasDTO (a, b) where
+  type DTO (a, b) = (DTO a, DTO b)
+
+instance (FromDTO a, FromDTO b) => FromDTO (a, b) where
+  fromDTO (a, b) = (,) <$> fromDTO a <*> fromDTO b
+
+instance (ToDTO a, ToDTO b) => ToDTO (a, b) where
+  toDTO (a, b) = (toDTO a, toDTO b)
 
 instance HasDTO (Maybe a) where
   type DTO (Maybe a) = Maybe (DTO a)
@@ -113,6 +144,9 @@ instance HasDTO SomeMarloweVersion where
 instance ToDTO SomeMarloweVersion where
   toDTO (SomeMarloweVersion MarloweV1) = Web.V1
 
+instance FromDTO SomeMarloweVersion where
+  fromDTO Web.V1 = pure $ SomeMarloweVersion MarloweV1
+
 instance HasDTO Chain.TxOutRef where
   type DTO Chain.TxOutRef = Web.TxOutRef
 
@@ -142,6 +176,9 @@ instance HasDTO Chain.PolicyId where
 instance ToDTO Chain.PolicyId where
   toDTO = coerce
 
+instance FromDTO Chain.PolicyId where
+  fromDTO = Just . coerce
+
 instance HasDTO Chain.TxIx where
   type DTO Chain.TxIx = Word16
 
@@ -156,6 +193,18 @@ instance HasDTO Chain.Metadata where
 
 instance ToDTO Chain.Metadata where
   toDTO = Web.Metadata . metadataValueToJsonNoSchema . toCardanoMetadata
+
+instance FromDTO Chain.Metadata where
+  fromDTO = Chain.fromJSONEncodedMetadata . Web.unMetadata
+
+instance HasDTO Chain.TransactionMetadata where
+  type DTO Chain.TransactionMetadata = Map Word64 Web.Metadata
+
+instance ToDTO Chain.TransactionMetadata where
+  toDTO = toDTO . Chain.unTransactionMetadata
+
+instance FromDTO Chain.TransactionMetadata where
+  fromDTO = fmap Chain.TransactionMetadata . fromDTO
 
 instance HasDTO Chain.SlotNo where
   type DTO Chain.SlotNo = Word64
@@ -220,3 +269,85 @@ instance ToDTO SomeTransaction where
       , block = Just $ toDTO blockHeader
       , utxo = toDTO . utxo <$> scriptOutput output
       }
+
+instance HasDTO Chain.Address where
+  type DTO Chain.Address = Web.Address
+
+instance ToDTO Chain.Address where
+  toDTO address = Web.Address $ fromMaybe (T.pack $ show address) $ Chain.toBech32 address
+
+instance FromDTO Chain.Address where
+  fromDTO = Chain.fromBech32 . Web.unAddress
+
+instance HasDTO (TxBody era) where
+  type DTO (TxBody era) = Web.TextEnvelope
+
+instance IsCardanoEra era => ToDTO (TxBody era) where
+  toDTO = toDTO . serialiseToTextEnvelope Nothing
+
+instance IsCardanoEra era => FromDTO (TxBody era) where
+  fromDTO = hush . deserialiseFromTextEnvelope asType <=< fromDTO
+    where
+      asType = AsTxBody $ cardanoEraToAsType $ cardanoEra @era
+
+instance HasDTO TextEnvelope where
+  type DTO TextEnvelope = Web.TextEnvelope
+
+instance ToDTO TextEnvelope where
+  toDTO TextEnvelope
+    { teType = TextEnvelopeType teType
+    , teDescription = TextEnvelopeDescr teDescription
+    , teRawCBOR
+    } = Web.TextEnvelope
+      { teType = T.pack teType
+      , teDescription = T.pack teDescription
+      , teCborHex = Web.Base16 teRawCBOR
+      }
+
+instance FromDTO TextEnvelope where
+  fromDTO Web.TextEnvelope
+    { teType
+    , teDescription
+    , teCborHex
+    } = Just TextEnvelope
+      { teType = TextEnvelopeType $ T.unpack teType
+      , teDescription = TextEnvelopeDescr $ T.unpack teDescription
+      , teRawCBOR = Web.unBase16 teCborHex
+      }
+
+instance HasDTO RoleTokensConfig where
+  type DTO RoleTokensConfig = Maybe Web.RolesConfig
+
+instance FromDTO RoleTokensConfig where
+  fromDTO = \case
+    Nothing -> pure RoleTokensNone
+    Just (Web.UsePolicy policy) -> RoleTokensUsePolicy <$> fromDTO policy
+    Just (Web.Mint mint) -> RoleTokensMint <$> fromDTO mint
+
+instance HasDTO Mint where
+  type DTO Mint = Map Text Web.RoleTokenConfig
+
+instance FromDTO Mint where
+  fromDTO = fmap mkMint
+    . traverse (sequence . bimap tokenNameToText convertConfig)
+    <=< toNonEmpty
+    . Map.toList
+    where
+      convertConfig = \case
+        Web.RoleTokenSimple address -> (,Left 1) <$> fromDTO address
+        Web.RoleTokenAdvanced address metadata -> curry (second $ Right . Just)
+          <$> fromDTO address
+          <*> fromDTO metadata
+
+instance HasDTO NFTMetadata where
+  type DTO NFTMetadata = Web.TokenMetadata
+
+instance FromDTO NFTMetadata where
+  fromDTO = mkNFTMetadata <=< Chain.fromJSONEncodedMetadata . toJSON
+
+tokenNameToText :: Text -> Chain.TokenName
+tokenNameToText = Chain.TokenName . fromString . T.unpack
+
+toNonEmpty :: [a] -> Maybe (NonEmpty a)
+toNonEmpty [] = Nothing
+toNonEmpty (a : as) = Just $ a :| as

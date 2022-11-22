@@ -67,10 +67,10 @@ type PostContractsAPI
   =  ReqBody '[JSON] PostContractsRequest
   :> PostTxAPI (Post '[JSON] PostContractsResponse)
 
-type PostContractsResponse = WithLink "contract" UnsignedCreateTx
+type PostContractsResponse = WithLink "contract" CreateTxBody
 
-instance HasNamedLink UnsignedCreateTx API "contract" where
-  namedLink _ _ UnsignedCreateTx{..} = safeLink
+instance HasNamedLink CreateTxBody API "contract" where
+  namedLink _ _ CreateTxBody{..} = safeLink
     api
     (Proxy @("contracts" :> Capture "contractId" TxOutRef :> GetContractAPI))
     contractId

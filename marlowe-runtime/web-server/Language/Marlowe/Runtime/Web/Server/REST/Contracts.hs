@@ -11,6 +11,7 @@ module Language.Marlowe.Runtime.Web.Server.REST.Contracts
 
 import Data.Foldable (traverse_)
 import Data.Maybe (fromMaybe)
+import qualified Data.Set as Set
 import Language.Marlowe.Runtime.ChainSync.Api (Lovelace(..))
 import Language.Marlowe.Runtime.Core.Api (MarloweVersion(..), SomeMarloweVersion(..))
 import Language.Marlowe.Runtime.Transaction.Api
@@ -47,7 +48,7 @@ compile $ SelectorSpec "contracts"
       , "addresses" ≔ ''Addresses
       , "collateral" ≔ ''TxOutRefs
       , ["post", "error"] ≔ ''String
-      , ["post", "response"] ≔ ''UnsignedCreateTx
+      , ["post", "response"] ≔ ''CreateTxBody
       ]
   , ["get", "one"] ≔ FieldSpec ["get", "one"]
       [ ["get", "id"] ≔ ''TxOutRef
@@ -77,8 +78,8 @@ post eb req@PostContractsRequest{..} changeAddressDTO mAddresses mCollateralUtxo
   traverse_ (addField ev . Collateral) mCollateralUtxos
   SomeMarloweVersion v@MarloweV1  <- fromDTOThrow err400 version
   changeAddress <- fromDTOThrow err400 changeAddressDTO
-  extraAddresses <- maybe mempty (fromDTOThrow err400) mAddresses
-  collateralUtxos <- maybe mempty (fromDTOThrow err400) mCollateralUtxos
+  extraAddresses <- Set.fromList <$> fromDTOThrow err400 (maybe [] unCommaList mAddresses)
+  collateralUtxos <- Set.fromList <$> fromDTOThrow err400 (maybe [] unCommaList mCollateralUtxos)
   roles' <- fromDTOThrow err400 roles
   metadata' <- fromDTOThrow err400 metadata
   createContract Nothing v WalletAddresses{..} roles' metadata' (Lovelace minUTxODeposit) contract >>= \case
@@ -103,10 +104,12 @@ post eb req@PostContractsRequest{..} changeAddressDTO mAddresses mCollateralUtxo
         CreateBuildupFailed MintingUtxoSelectionFailed -> throwError err400
         CreateBuildupFailed (AddressDecodingFailed _) -> throwError err500
         CreateBuildupFailed (MintingScriptDecodingFailed _) -> throwError err500
+        CreateToCardanoError -> throwError err400
     Right (contractId, txBody) -> do
-      let response = toDTO (contractId, txBody)
-      addField ev $ PostResponse response
-      pure $ IncludeLink (Proxy @"contract") response
+      let (contractId', txBody') = toDTO (contractId, txBody)
+      let body = CreateTxBody contractId' txBody'
+      addField ev $ PostResponse body
+      pure $ IncludeLink (Proxy @"contract") body
 
 get
   :: EventBackend (AppM r) r ContractsSelector

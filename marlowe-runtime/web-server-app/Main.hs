@@ -17,6 +17,8 @@ import Language.Marlowe.Protocol.Sync.Client (marloweSyncClientPeer)
 import Language.Marlowe.Protocol.Sync.Codec (codecMarloweSync)
 import Language.Marlowe.Runtime.Web.Server
 import Network.Protocol.Driver (runClientPeerOverSocket)
+import Network.Protocol.Job.Client (jobClientPeer)
+import Network.Protocol.Job.Codec (codecJob)
 import Network.Socket (AddrInfo(..), HostName, PortNumber, SocketType(..), defaultHints, getAddrInfo)
 import Network.Wai.Handler.Warp (run)
 import Observe.Event.Render.JSON (DefaultRenderSelectorJSON(defaultRenderSelectorJSON))
@@ -36,6 +38,7 @@ optionsToServerDependencies :: Options -> IO (ServerDependencies JSONRef)
 optionsToServerDependencies Options{..} = do
   discoverySyncAddr <- resolve discoveryHost discoverySyncPort
   historySyncAddr <- resolve historyHost historySyncPort
+  txCommandAddr <- resolve txHost txCommandPort
   eventBackend <- simpleJsonStderrBackend defaultRenderSelectorJSON
   pure ServerDependencies
     { openAPIEnabled
@@ -50,6 +53,11 @@ optionsToServerDependencies Options{..} = do
         historySyncAddr
         codecMarloweSync
         marloweSyncClientPeer
+    , runTxJobClient = runClientPeerOverSocket
+        throwIO
+        txCommandAddr
+        codecJob
+        jobClientPeer
     , eventBackend
     }
 
