@@ -78,6 +78,7 @@ import Language.Marlowe.Runtime.Transaction.Api
   , CreateError(..)
   , Mint(unMint)
   , NFTMetadata(unNFTMetadata)
+  , RoleTokensConfig(..)
   , WithdrawError
   )
 import Language.Marlowe.Runtime.Transaction.Constraints
@@ -119,7 +120,7 @@ buildCreateConstraints
   :: forall v
    . MarloweVersion v -- ^ The Marlowe version to build the transaction for.
   -> WalletContext  -- ^ The wallet used to mint tokens.
-  -> Maybe (Either PolicyId Mint) -- ^ The initial distribution of the role tokens.
+  -> RoleTokensConfig  -- ^ The initial distribution of the role tokens.
   -> TransactionMetadata -- ^ Extra metadata to add to the transaction.
   -> Lovelace -- ^ Min Lovelace value which should be used on the Marlowe output.
   -> Contract v -- ^ The contract being instantiated.
@@ -131,7 +132,7 @@ buildCreateConstraints version walletCtx roles metadata minAda contract = case v
 -- instantiates a contract.
 buildCreateConstraintsV1
   :: WalletContext  -- ^ The wallet used to mint tokens.
-  -> Maybe (Either PolicyId Mint) -- ^ The initial distribution of the role tokens.
+  -> RoleTokensConfig -- ^ The initial distribution of the role tokens.
   -> TransactionMetadata -- ^ Extra metadata to add to the transaction.
   -> Lovelace -- ^ Min Lovelace value which should be used on the Marlowe output.
   -> Contract 'V1 -- ^ The contract being instantiated.
@@ -151,7 +152,7 @@ buildCreateConstraintsV1 walletCtx roles metadata minAda contract = do
   sendMarloweOutput policyId
   where
     nftsMetadata = case roles of
-      Just (Right (Map.toList . unMint -> minting)) -> do
+      RoleTokensMint (Map.toList . unMint -> minting) -> do
         let
           tokensMetadata = catMaybes $ minting <&> \case
             (tokenName, (_, Right (Just (unNFTMetadata -> nftMetadata)))) -> do
@@ -205,8 +206,8 @@ buildCreateConstraintsV1 walletCtx roles metadata minAda contract = do
     -- Role token distribution constraints
     mintRoleTokens :: TxConstraintsBuilderM (CreateError 'V1) 'V1 PolicyId
     mintRoleTokens = case roles of
-      Just (Left policyId) -> pure policyId
-      Just (Right (unMint -> minting)) -> do
+      RoleTokensUsePolicy policyId -> pure policyId
+      RoleTokensMint (unMint -> minting) -> do
         let
           WalletContext { availableUtxos } = walletCtx
           txLovelaceRequirementEstimate = adaAsset $
@@ -245,7 +246,7 @@ buildCreateConstraintsV1 walletCtx roles metadata minAda contract = do
         for_ (Map.toList minting) \(tokenName, (address, _)) ->
           tell $ mustMintRoleToken txOutRef witness (AssetId policyId tokenName) address
         pure policyId
-      Nothing -> do
+      RoleTokensNone -> do
         let
           -- We use ADA currency symbol as a placeholder which
           -- carries really no semantics in this context.

@@ -5,13 +5,12 @@ module Language.Marlowe.Runtime.CLI.Command.Create
   where
 
 import qualified Cardano.Api as C
-import Control.Error (MaybeT(MaybeT, runMaybeT))
 import Control.Error.Util (hoistMaybe, noteT)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Except (ExceptT(ExceptT), throwE)
 import Data.Aeson (toJSON)
 import qualified Data.Aeson as A
-import Data.Bifunctor (Bifunctor(first, second))
+import Data.Bifunctor (first)
 import Data.List.NonEmpty (NonEmpty)
 import Data.Map (Map)
 import qualified Data.Map as Map
@@ -38,7 +37,7 @@ import Language.Marlowe.Runtime.Core.Api
   , MarloweVersionTag(V1)
   , SomeMarloweVersion(SomeMarloweVersion)
   )
-import Language.Marlowe.Runtime.Transaction.Api (CreateError, MarloweTxCommand(Create), Mint, mkMint)
+import Language.Marlowe.Runtime.Transaction.Api (CreateError, MarloweTxCommand(Create), RoleTokensConfig(..), mkMint)
 import Options.Applicative
 import Options.Applicative.NonEmpty (some1)
 import Text.Read (readMaybe)
@@ -154,15 +153,13 @@ createCommandParser = info (txCommandParser parser) $ progDesc "Create a new Mar
 runCreateCommand :: TxCommand CreateCommand -> CLI ()
 runCreateCommand TxCommand { walletAddresses, signingMethod, metadataFile, subCommand=CreateCommand{..}} = case marloweVersion of
   SomeMarloweVersion MarloweV1 -> runCLIExceptT do
-    minting' <- runMaybeT do
-      roles' <- MaybeT $ pure roles
-      case roles' of
-        MintSimple tokens -> do
-          let
-            toNFT addr = (addr, Left 1)
-          pure $ Right . mkMint . fmap (second toNFT) $ tokens
-        UseExistingPolicyId policyId -> pure . Left $ policyId
-        MintConfig _ -> MaybeT $ throwE (RolesConfigNotSupportedYet roles')
+    minting' <- case roles of
+      Nothing -> pure RoleTokensNone
+      Just (MintSimple tokens) -> do
+        let toNFT addr = (addr, Left 1)
+        pure $ RoleTokensMint $ mkMint $ fmap toNFT <$> tokens
+      Just (UseExistingPolicyId policyId) -> pure $ RoleTokensUsePolicy policyId
+      Just roles'@(MintConfig _) -> throwE (RolesConfigNotSupportedYet roles')
     ContractId contractId <- run MarloweV1 minting'
     liftIO . print $ A.encode (A.object [("contractId", toJSON . renderTxOutRef $ contractId)])
   where
@@ -181,7 +178,7 @@ runCreateCommand TxCommand { walletAddresses, signingMethod, metadataFile, subCo
         noteT (MetadataDecodingFailed Nothing) $ hoistMaybe (fromJSONEncodedTransactionMetadata metadataJSON)
       Nothing -> pure mempty
 
-    run :: MarloweVersion v -> Maybe (Either PolicyId Mint) -> ExceptT (CreateCommandError v) CLI ContractId
+    run :: MarloweVersion v -> RoleTokensConfig -> ExceptT (CreateCommandError v) CLI ContractId
     run version rolesDistribution  = do
       contract <- readContract version
       metadata <- readMetadata
@@ -192,4 +189,3 @@ runCreateCommand TxCommand { walletAddresses, signingMethod, metadataFile, subCo
         Manual outputFile -> do
           ExceptT $ liftIO $ first TransactionFileWriteFailed <$> C.writeFileTextEnvelope outputFile Nothing transaction
           pure contractId
-

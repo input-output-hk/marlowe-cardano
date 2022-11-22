@@ -16,6 +16,7 @@ module Language.Marlowe.Runtime.Transaction.Api
   , MarloweTxCommand(..)
   , Mint(unMint)
   , NFTMetadata(unNFTMetadata)
+  , RoleTokensConfig(..)
   , SubmitError(..)
   , SubmitStatus(..)
   , WalletAddresses(..)
@@ -60,7 +61,7 @@ import Network.Protocol.Job.Types (Command(..), SomeTag(..))
 
 -- CIP-25 metadata
 newtype NFTMetadata = NFTMetadata { unNFTMetadata :: Metadata }
-  deriving stock (Eq, Ord, Generic)
+  deriving stock (Show, Eq, Ord, Generic)
   deriving newtype (Binary)
 
 -- FIXME: Validate the metadata format
@@ -69,11 +70,18 @@ mkNFTMetadata = Just . NFTMetadata
 
 -- | Non empty mint request.
 newtype Mint = Mint { unMint :: Map TokenName (Address, Either Natural (Maybe NFTMetadata)) }
-  deriving stock (Eq, Ord, Generic)
+  deriving stock (Show, Eq, Ord, Generic)
   deriving newtype (Binary, Semigroup, Monoid)
 
 mkMint :: NonEmpty (TokenName, (Address, Either Natural (Maybe NFTMetadata))) -> Mint
 mkMint = Mint . Map.fromList . NonEmpty.toList
+
+data RoleTokensConfig
+  = RoleTokensNone
+  | RoleTokensUsePolicy PolicyId
+  | RoleTokensMint Mint
+  deriving stock (Show, Eq, Ord, Generic)
+  deriving anyclass (Binary)
 
 -- | The low-level runtime API for building and submitting transactions.
 data MarloweTxCommand status err result where
@@ -88,8 +96,8 @@ data MarloweTxCommand status err result where
     -- ^ The Marlowe version to use
     -> WalletAddresses
     -- ^ The wallet addresses to use when constructing the transaction
-    -> Maybe (Either PolicyId Mint)
-    -- ^ The initial distribution of role tokens
+    -> RoleTokensConfig
+    -- ^ How to initialize role tokens
     -> TransactionMetadata
     -- ^ Optional metadata to attach to the transaction
     -> Lovelace
@@ -323,6 +331,7 @@ data CreateError v
   = CreateConstraintError (ConstraintError v)
   | CreateLoadMarloweContextFailed LoadMarloweContextError
   | CreateBuildupFailed CreateBuildupError
+  | CreateToCardanoError
   deriving (Generic)
 
 data CreateBuildupError
