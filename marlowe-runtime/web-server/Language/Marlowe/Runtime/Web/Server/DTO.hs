@@ -9,8 +9,6 @@
 module Language.Marlowe.Runtime.Web.Server.DTO
   where
 
-import Language.Marlowe.Runtime.Discovery.Api
-
 import Cardano.Api
   ( AsType(AsTxBody)
   , IsCardanoEra(cardanoEra)
@@ -49,10 +47,12 @@ import Language.Marlowe.Runtime.Core.Api
   , TransactionOutput(..)
   , TransactionScriptOutput(..)
   )
+import qualified Language.Marlowe.Runtime.Discovery.Api as Discovery
 import Language.Marlowe.Runtime.History.Api (CreateStep(..))
 import Language.Marlowe.Runtime.Plutus.V2.Api (fromPlutusCurrencySymbol)
-import Language.Marlowe.Runtime.Transaction.Api (Mint(..), NFTMetadata, RoleTokensConfig(..), mkMint, mkNFTMetadata)
+import qualified Language.Marlowe.Runtime.Transaction.Api as Tx
 import qualified Language.Marlowe.Runtime.Web as Web
+import Language.Marlowe.Runtime.Web.Server.TxClient (TempContract(..))
 
 -- | A class that states a type has a DTO representation.
 class HasDTO a where
@@ -97,6 +97,15 @@ instance (FromDTO a, FromDTO b) => FromDTO (a, b) where
 instance (ToDTO a, ToDTO b) => ToDTO (a, b) where
   toDTO (a, b) = (toDTO a, toDTO b)
 
+instance HasDTO (Either a b) where
+  type DTO (Either a b) = Either (DTO a) (DTO b)
+
+instance (FromDTO a, FromDTO b) => FromDTO (Either a b) where
+  fromDTO = either (fmap Left . fromDTO) (fmap Right . fromDTO)
+
+instance (ToDTO a, ToDTO b) => ToDTO (Either a b) where
+  toDTO = either (Left . toDTO) (Right . toDTO)
+
 instance HasDTO (Maybe a) where
   type DTO (Maybe a) = Maybe (DTO a)
 
@@ -106,11 +115,11 @@ instance ToDTO a => ToDTO (Maybe a) where
 instance FromDTO a => FromDTO (Maybe a) where
   fromDTO = traverse fromDTO
 
-instance HasDTO ContractHeader where
-  type DTO ContractHeader = Web.ContractHeader
+instance HasDTO Discovery.ContractHeader where
+  type DTO Discovery.ContractHeader = Web.ContractHeader
 
-instance ToDTO ContractHeader where
-  toDTO ContractHeader{..} = Web.ContractHeader
+instance ToDTO Discovery.ContractHeader where
+  toDTO Discovery.ContractHeader{..} = Web.ContractHeader
     { contractId = toDTO contractId
     , roleTokenMintingPolicyId = toDTO rolesCurrency
     , version = toDTO marloweVersion
@@ -255,7 +264,38 @@ instance ToDTO ContractRecord where
       , currentContract = maybe Sem.Close (Sem.marloweContract . datum) output
       , state = Sem.marloweState . datum <$> output
       , utxo = toDTO . utxo <$> output
+      , txBody = Nothing
       }
+
+instance HasDTO (Tx.ContractCreationRecord era v) where
+  type DTO (Tx.ContractCreationRecord era v) = Web.ContractState
+
+instance IsCardanoEra era => ToDTO (Tx.ContractCreationRecord era v) where
+  toDTO Tx.ContractCreationRecord{..} =
+    Web.ContractState
+      { contractId = toDTO contractId
+      , roleTokenMintingPolicyId = toDTO rolesCurrency
+      , version = case version of
+          MarloweV1 -> Web.V1
+      , metadata = toDTO metadata
+      , status = Web.Unsigned
+      , block = Nothing
+      , initialContract = case version of
+          MarloweV1 -> Sem.marloweContract datum
+      , currentContract = case version of
+          MarloweV1 -> Sem.marloweContract datum
+      , state = case version of
+          MarloweV1 -> Just $ Sem.marloweState datum
+      , utxo = Nothing
+      , txBody = Just $ toDTO txBody
+      }
+
+instance HasDTO TempContract where
+  type DTO TempContract = Web.ContractState
+
+instance ToDTO TempContract where
+  toDTO = \case
+    Created contract -> toDTO contract
 
 instance HasDTO SomeTransaction where
   type DTO SomeTransaction = Web.TxHeader
@@ -315,20 +355,20 @@ instance FromDTO TextEnvelope where
       , teRawCBOR = Web.unBase16 teCborHex
       }
 
-instance HasDTO RoleTokensConfig where
-  type DTO RoleTokensConfig = Maybe Web.RolesConfig
+instance HasDTO Tx.RoleTokensConfig where
+  type DTO Tx.RoleTokensConfig = Maybe Web.RolesConfig
 
-instance FromDTO RoleTokensConfig where
+instance FromDTO Tx.RoleTokensConfig where
   fromDTO = \case
-    Nothing -> pure RoleTokensNone
-    Just (Web.UsePolicy policy) -> RoleTokensUsePolicy <$> fromDTO policy
-    Just (Web.Mint mint) -> RoleTokensMint <$> fromDTO mint
+    Nothing -> pure Tx.RoleTokensNone
+    Just (Web.UsePolicy policy) -> Tx.RoleTokensUsePolicy <$> fromDTO policy
+    Just (Web.Mint mint) -> Tx.RoleTokensMint <$> fromDTO mint
 
-instance HasDTO Mint where
-  type DTO Mint = Map Text Web.RoleTokenConfig
+instance HasDTO Tx.Mint where
+  type DTO Tx.Mint = Map Text Web.RoleTokenConfig
 
-instance FromDTO Mint where
-  fromDTO = fmap mkMint
+instance FromDTO Tx.Mint where
+  fromDTO = fmap Tx.mkMint
     . traverse (sequence . bimap tokenNameToText convertConfig)
     <=< toNonEmpty
     . Map.toList
@@ -339,11 +379,11 @@ instance FromDTO Mint where
           <$> fromDTO address
           <*> fromDTO metadata
 
-instance HasDTO NFTMetadata where
-  type DTO NFTMetadata = Web.TokenMetadata
+instance HasDTO Tx.NFTMetadata where
+  type DTO Tx.NFTMetadata = Web.TokenMetadata
 
-instance FromDTO NFTMetadata where
-  fromDTO = mkNFTMetadata <=< Chain.fromJSONEncodedMetadata . toJSON
+instance FromDTO Tx.NFTMetadata where
+  fromDTO = Tx.mkNFTMetadata <=< Chain.fromJSONEncodedMetadata . toJSON
 
 tokenNameToText :: Text -> Chain.TokenName
 tokenNameToText = Chain.TokenName . fromString . T.unpack

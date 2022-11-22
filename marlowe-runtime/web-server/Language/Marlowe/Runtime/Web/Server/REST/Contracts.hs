@@ -15,7 +15,12 @@ import qualified Data.Set as Set
 import Language.Marlowe.Runtime.ChainSync.Api (Lovelace(..))
 import Language.Marlowe.Runtime.Core.Api (MarloweVersion(..), SomeMarloweVersion(..))
 import Language.Marlowe.Runtime.Transaction.Api
-  (CreateBuildupError(..), CreateError(..), LoadMarloweContextError(..), WalletAddresses(..))
+  ( ContractCreationRecord(..)
+  , CreateBuildupError(..)
+  , CreateError(..)
+  , LoadMarloweContextError(..)
+  , WalletAddresses(..)
+  )
 import Language.Marlowe.Runtime.Transaction.Constraints (ConstraintError(..))
 import Language.Marlowe.Runtime.Web
 import Language.Marlowe.Runtime.Web.Server.DTO
@@ -105,7 +110,7 @@ post eb req@PostContractsRequest{..} changeAddressDTO mAddresses mCollateralUtxo
         CreateBuildupFailed (AddressDecodingFailed _) -> throwError err500
         CreateBuildupFailed (MintingScriptDecodingFailed _) -> throwError err500
         CreateToCardanoError -> throwError err400
-    Right (contractId, txBody) -> do
+    Right ContractCreationRecord{contractId, txBody} -> do
       let (contractId', txBody') = toDTO (contractId, txBody)
       let body = CreateTxBody contractId' txBody'
       addField ev $ PostResponse body
@@ -127,10 +132,13 @@ get eb ranges = withEvent eb Get \ev -> do
   loadContractHeaders startFrom rangeLimit rangeOffset rangeOrder >>= \case
     Nothing -> throwError err416
     Just headers -> do
-      let headers' = toDTO headers
+      let headers' = either toContractHeader id <$> toDTO headers
       addField ev $ ContractHeaders headers'
       let response = IncludeLink (Proxy @"contract") <$> headers'
       addHeader (length headers) <$> returnRange range response
+
+toContractHeader :: ContractState -> ContractHeader
+toContractHeader ContractState{..} = ContractHeader{..}
 
 contractServer
   :: EventBackend (AppM r) r ContractsSelector
@@ -148,7 +156,9 @@ getOne eb contractId = withEvent eb GetOne \ev -> do
   contractId' <- fromDTOThrow err400 contractId
   loadContract (setAncestor $ reference ev) contractId' >>= \case
     Nothing -> throwError err404
-    Just contractRecord -> do
-      let contractState = toDTO contractRecord
+    Just result -> do
+      let contractState = either toDTO toDTO result
       addField ev $ GetResult contractState
-      pure $ IncludeLink (Proxy @"transactions") contractState
+      pure case result of
+        Left _ -> OmitLink contractState
+        Right _ -> IncludeLink (Proxy @"transactions") contractState

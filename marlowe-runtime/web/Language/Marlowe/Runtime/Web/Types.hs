@@ -219,6 +219,7 @@ data ContractState = ContractState
   , currentContract :: Semantics.Contract
   , state :: Maybe Semantics.State
   , utxo :: Maybe TxOutRef
+  , txBody :: Maybe TextEnvelope
   } deriving (Show, Eq, Generic)
 
 instance ToJSON ContractState

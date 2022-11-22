@@ -114,16 +114,18 @@ newtype Server = Server
 
 mkServer :: ServerDependencies r -> STM Server
 mkServer ServerDependencies{..} = do
+  TxClient{..} <- mkTxClient TxClientDependencies
+    { runTxJobClient
+    }
   ContractHeaderIndexer{..} <- mkContractHeaderIndexer ContractHeaderIndexerDependencies
     { runMarloweHeaderSyncClient
+    , getTempContracts
     , eventBackend = narrowEventBackend ContractIndexer eventBackend
     }
   HistoryClient{..} <- mkHistoryClient HistoryClientDependencies
     { runMarloweSyncClient
+    , lookupTempContract
     , eventBackend = narrowEventBackend History eventBackend
-    }
-  TxClient{..} <- mkTxClient TxClientDependencies
-    { runTxJobClient
     }
   let
     env = AppEnv
