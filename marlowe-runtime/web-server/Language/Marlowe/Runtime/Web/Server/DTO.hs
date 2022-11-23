@@ -17,6 +17,7 @@ import Cardano.Api
   , TextEnvelopeType(..)
   , TxBody
   , deserialiseFromTextEnvelope
+  , getTxId
   , metadataValueToJsonNoSchema
   , serialiseToTextEnvelope
   )
@@ -38,7 +39,7 @@ import qualified Data.Text as T
 import Data.Word (Word16, Word64)
 import qualified Language.Marlowe.Core.V1.Semantics as Sem
 import qualified Language.Marlowe.Core.V1.Semantics.Types as Sem
-import Language.Marlowe.Runtime.Cardano.Api (cardanoEraToAsType, toCardanoMetadata)
+import Language.Marlowe.Runtime.Cardano.Api (cardanoEraToAsType, fromCardanoTxId, toCardanoMetadata)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Core.Api
   ( ContractId(..)
@@ -288,6 +289,19 @@ instance IsCardanoEra era => ToDTO (Tx.ContractCreated era v) where
           MarloweV1 -> Just $ Sem.marloweState datum
       , utxo = Nothing
       , txBody = Just $ toDTO txBody
+      }
+
+instance HasDTO (Tx.InputsApplied era v) where
+  type DTO (Tx.InputsApplied era v) = Web.TxHeader
+
+instance ToDTO (Tx.InputsApplied era v) where
+  toDTO Tx.InputsApplied{..} =
+    Web.TxHeader
+      { contractId = toDTO contractId
+      , transactionId = toDTO $ fromCardanoTxId $ getTxId txBody
+      , status = Web.Unsigned
+      , block = Nothing
+      , utxo = Nothing
       }
 
 instance HasDTO SomeTransaction where

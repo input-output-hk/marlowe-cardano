@@ -121,6 +121,7 @@ server = proc ServerDependencies{..} -> do
   HistoryClient{..} <- historyClient -< HistoryClientDependencies
     { runMarloweSyncClient
     , lookupTempContract
+    , getTempTransactions
     , eventBackend = narrowEventBackend History eventBackend
     }
   let

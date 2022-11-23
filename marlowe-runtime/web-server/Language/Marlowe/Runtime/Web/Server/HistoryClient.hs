@@ -6,6 +6,7 @@
 module Language.Marlowe.Runtime.Web.Server.HistoryClient
   where
 
+import Cardano.Api (getTxId)
 import Control.Arrow (arr)
 import Control.Concurrent.Component
 import Control.Concurrent.STM (STM, atomically)
@@ -14,14 +15,15 @@ import Data.List (sortOn)
 import Data.Maybe (isNothing, listToMaybe, mapMaybe)
 import Data.Void (Void)
 import Language.Marlowe.Protocol.Sync.Client
+import Language.Marlowe.Runtime.Cardano.Api (fromCardanoTxId)
 import Language.Marlowe.Runtime.ChainSync.Api (TxId)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Core.Api
   (ContractId, MarloweVersion, Transaction(..), TransactionOutput(..), TransactionScriptOutput)
 import Language.Marlowe.Runtime.History.Api (ContractStep(..), CreateStep(..))
-import Language.Marlowe.Runtime.Transaction.Api (ContractCreated)
+import Language.Marlowe.Runtime.Transaction.Api (ContractCreated, InputsApplied(InputsApplied, txBody))
 import Language.Marlowe.Runtime.Web.Server.DTO (ContractRecord(..), SomeTransaction(..))
-import Language.Marlowe.Runtime.Web.Server.TxClient (TempTx)
+import Language.Marlowe.Runtime.Web.Server.TxClient (TempTx(..))
 import Language.Marlowe.Runtime.Web.Server.Util (applyRangeToAscList)
 import Observe.Event (EventBackend, addField, withEvent)
 import Observe.Event.BackendModification (EventBackendModifiers, modifyEventBackend)
@@ -48,6 +50,7 @@ compile $ SelectorSpec ["history", "client"]
 data HistoryClientDependencies r = HistoryClientDependencies
   { runMarloweSyncClient :: forall a. MarloweSyncClient IO a -> IO a
   , lookupTempContract :: ContractId -> STM (Maybe (TempTx ContractCreated))
+  , getTempTransactions :: ContractId -> STM [TempTx InputsApplied]
   , eventBackend :: EventBackend IO r HistoryClientSelector
   }
 
@@ -71,7 +74,7 @@ type LoadTransactions r m
   -> Int -- ^ Limit: the maximum number of contract headers to load.
   -> Int -- ^ Offset: how many contract headers after the initial one to skip.
   -> RangeOrder -- ^ Whether to load an ascending or descending list.
-  -> m (Either LoadContractHeadersError [SomeTransaction]) -- ^ Nothing if the initial ID is not found
+  -> m (Either LoadContractHeadersError [Either (TempTx InputsApplied) SomeTransaction])
 
 -- | Public API of the HistoryClient
 data HistoryClient r = HistoryClient
@@ -86,12 +89,20 @@ historyClient = arr \HistoryClientDependencies{..} -> HistoryClient
       case result of
         Nothing -> atomically $ fmap Left <$> lookupTempContract contractId
         Just contract -> pure $ Just $ Right contract
-  , loadTransactions = \mods contractId startFrom limit offset order ->
-      (note InitialTransactionNotFound . applyRangeToAscList transactionId' startFrom limit offset order =<<)
-        <$> runMarloweSyncClient (loadTransactionsClient (modifyEventBackend mods eventBackend) contractId)
+  , loadTransactions = \mods contractId startFrom limit offset order -> do
+      tempTxs <- atomically $ getTempTransactions contractId
+      txs <- runMarloweSyncClient (loadTransactionsClient (modifyEventBackend mods eventBackend) contractId)
+      let
+        allTxs = do
+          txs' <- txs
+          pure $ (Right <$> txs') <> (Left <$> tempTxs)
+      pure
+        $ note InitialTransactionNotFound . applyRangeToAscList transactionId' startFrom limit offset order
+        =<< allTxs
   }
   where
-    transactionId' (SomeTransaction _ Transaction{..}) = transactionId
+    transactionId' (Left (Created InputsApplied{..})) = fromCardanoTxId $ getTxId txBody
+    transactionId' (Right (SomeTransaction _ Transaction{..})) = transactionId
 
 loadContractClient
   :: EventBackend IO r HistoryClientSelector

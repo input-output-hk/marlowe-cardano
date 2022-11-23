@@ -9,6 +9,7 @@ module Language.Marlowe.Runtime.Web.Server.TxClient
 import Cardano.Api (BabbageEra, getTxId)
 import Control.Concurrent.Component
 import Control.Concurrent.STM (STM, atomically, modifyTVar, newTVar, readTVar)
+import Control.Monad ((<=<))
 import Data.Foldable (for_)
 import qualified Data.Map as Map
 import Data.Time (UTCTime)
@@ -62,7 +63,7 @@ data TxClient = TxClient
   , lookupTempContract :: ContractId -> STM (Maybe (TempTx ContractCreated))
   , getTempContracts :: STM [TempTx ContractCreated]
   , lookupTempTransaction :: ContractId -> TxId -> STM (Maybe (TempTx InputsApplied))
-  , getTempTransactions :: STM [TempTx InputsApplied]
+  , getTempTransactions :: ContractId -> STM [TempTx InputsApplied]
   }
 
 txClient :: Component IO TxClientDependencies TxClient
@@ -83,13 +84,15 @@ txClient = component \TxClientDependencies{..} -> do
         response <- runTxJobClient
           $ liftCommand
           $ ApplyInputs version addresses contractId invalidBefore invalidHereafter inputs
-        for_ response \application@InputsApplied{txBody} -> atomically
-          $ modifyTVar tempTransactions
-          $ Map.insert (contractId, fromCardanoTxId $ getTxId txBody)
-          $ Created application
+        for_ response \application@InputsApplied{txBody} -> do
+          let txId = fromCardanoTxId $ getTxId txBody
+          let tempTx = Created application
+          atomically
+            $ modifyTVar tempTransactions
+            $ Map.alter (Just . maybe (Map.singleton txId tempTx) (Map.insert txId tempTx)) contractId
         pure response
     , lookupTempContract = \contractId -> Map.lookup contractId <$> readTVar tempContracts
     , getTempContracts = fmap snd . Map.toAscList <$> readTVar tempContracts
-    , lookupTempTransaction = \contractId txId -> Map.lookup (contractId, txId) <$> readTVar tempTransactions
-    , getTempTransactions = fmap snd . Map.toAscList <$> readTVar tempTransactions
+    , lookupTempTransaction = \contractId txId -> (Map.lookup txId <=< Map.lookup contractId) <$> readTVar tempTransactions
+    , getTempTransactions = \contractId -> fmap snd . foldMap Map.toList . Map.lookup contractId <$> readTVar tempTransactions
     }
