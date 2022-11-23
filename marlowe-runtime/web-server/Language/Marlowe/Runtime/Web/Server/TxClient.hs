@@ -1,18 +1,37 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE KindSignatures #-}
+{-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 module Language.Marlowe.Runtime.Web.Server.TxClient
   where
 
-import Cardano.Api (BabbageEra, getTxId)
+import Cardano.Api (BabbageEra, Tx, getTxId)
+import Control.Category ((<<<))
+import Control.Concurrent.Async (concurrently_)
 import Control.Concurrent.Component
-import Control.Concurrent.STM (STM, atomically, modifyTVar, newTVar, readTVar)
-import Control.Monad ((<=<))
+import Control.Concurrent.STM
+  ( STM
+  , atomically
+  , modifyTVar
+  , newEmptyTMVar
+  , newTQueue
+  , newTVar
+  , putTMVar
+  , readTQueue
+  , readTVar
+  , takeTMVar
+  , writeTQueue
+  )
+import Control.Concurrent.STM.Delay (newDelay, waitDelay)
+import Control.Exception (SomeException, try)
+import Control.Monad (when, (<=<))
 import Data.Foldable (for_)
 import qualified Data.Map as Map
 import Data.Time (UTCTime)
+import Data.Void (Void)
 import Language.Marlowe.Runtime.Cardano.Api (fromCardanoTxId)
 import Language.Marlowe.Runtime.ChainSync.Api (Lovelace, StakeCredential, TransactionMetadata, TxId)
 import Language.Marlowe.Runtime.Core.Api (Contract, ContractId, MarloweVersion, MarloweVersionTag, Redeemer)
@@ -23,13 +42,28 @@ import Language.Marlowe.Runtime.Transaction.Api
   , InputsApplied(..)
   , MarloweTxCommand(..)
   , RoleTokensConfig
+  , SubmitError
+  , SubmitStatus(..)
   , WalletAddresses
   )
 import Network.Protocol.Driver (RunClient)
 import Network.Protocol.Job.Client
+import Observe.Event (EventBackend, addField, reference, withEvent)
+import Observe.Event.BackendModification (EventBackendModifiers, modifyEventBackend, setAncestor)
+import Observe.Event.DSL (SelectorSpec(..))
+import Observe.Event.Render.JSON.DSL.Compile (compile)
+import Observe.Event.Syntax ((≔))
 
-newtype TxClientDependencies = TxClientDependencies
+compile $ SelectorSpec ["tx", "client"]
+  [ ["submit", "tx"] ≔ ''Void
+  , ["submit", "success"] ≔ ''Void
+  , ["submit", "fail"] ≔ ''String
+  , ["submit", "await"] ≔ ''String
+  ]
+
+data TxClientDependencies r = TxClientDependencies
   { runTxJobClient :: RunClient IO (JobClient MarloweTxCommand)
+  , eventBackend :: EventBackend IO r TxClientSelector
   }
 
 type CreateContract m
@@ -55,24 +89,70 @@ type ApplyInputs m
 
 data TempTxStatus = Unsigned | Submitted
 
+type Submit r m
+   = forall r'
+   . EventBackendModifiers r r'
+  -> Tx BabbageEra
+  -> m (Maybe SubmitError)
+
 data TempTx (tx :: * -> MarloweVersionTag -> *) where
   TempTx :: MarloweVersion v -> TempTxStatus -> tx BabbageEra v -> TempTx tx
 
 -- | Public API of the TxClient
-data TxClient = TxClient
+data TxClient r = TxClient
   { createContract :: CreateContract IO
   , applyInputs :: ApplyInputs IO
+  , submitContract :: ContractId -> Submit r IO
   , lookupTempContract :: ContractId -> STM (Maybe (TempTx ContractCreated))
   , getTempContracts :: STM [TempTx ContractCreated]
   , lookupTempTransaction :: ContractId -> TxId -> STM (Maybe (TempTx InputsApplied))
   , getTempTransactions :: ContractId -> STM [TempTx InputsApplied]
   }
 
-txClient :: Component IO TxClientDependencies TxClient
+data SomeEventBackendModifiers r = forall r'. SomeEventBackendModifiers (EventBackendModifiers r r')
+
+txClient :: forall r. Component IO (TxClientDependencies r) (TxClient r)
 txClient = component \TxClientDependencies{..} -> do
   tempContracts <- newTVar mempty
   tempTransactions <- newTVar mempty
-  pure $ pure TxClient
+  submitContractQueue <- newTQueue
+
+  let
+    runSubmitContract contractId tx sender (SomeEventBackendModifiers mods) = do
+      let
+        eb = modifyEventBackend mods eventBackend
+        cmd = Submit tx
+        client = JobClient $ pure $ SendMsgExec cmd $ clientCmd True
+        clientCmd report = ClientStCmd
+          { recvMsgFail = \err -> withEvent eb SubmitFail \ev -> do
+              addField ev $ show err
+              atomically do
+                when report $ putTMVar sender $ Just err
+                modifyTVar tempContracts $ Map.update (Just . toUnsigned) contractId
+          , recvMsgSucceed = \_ -> withEvent eb SubmitSuccess \_ -> do
+              atomically do
+                modifyTVar tempContracts $ Map.delete contractId
+                when report $ putTMVar sender Nothing
+          , recvMsgAwait = \status _ -> withEvent eb SubmitAwait \ev -> do
+              addField ev $ show status
+              report' <- case status of
+                Accepted -> do
+                  when report $ atomically do
+                    putTMVar sender Nothing
+                    modifyTVar tempContracts $ Map.update (Just . toSubmitted) contractId
+                  pure False
+                _ -> pure report
+              delay <- newDelay 1_000_000
+              atomically $ waitDelay delay
+              pure $ SendMsgPoll $ clientCmd report'
+          }
+      runTxJobClient client
+
+    runTxClient = do
+      (contractId, tx, sender, mods) <- atomically $ readTQueue submitContractQueue
+      concurrently_ (try @SomeException $ runSubmitContract contractId tx sender mods) runTxClient
+
+  pure (runTxClient, TxClient
     { createContract = \stakeCredential version addresses roles metadata minUTxODeposit contract -> do
         response <- runTxJobClient
           $ liftCommand
@@ -93,8 +173,20 @@ txClient = component \TxClientDependencies{..} -> do
             $ modifyTVar tempTransactions
             $ Map.alter (Just . maybe (Map.singleton txId tempTx) (Map.insert txId tempTx)) contractId
         pure response
+    , submitContract = \contractId mods tx -> withEvent (modifyEventBackend mods eventBackend) SubmitTx \ev -> do
+        sender <- atomically do
+          sender <- newEmptyTMVar
+          writeTQueue submitContractQueue (contractId, tx, sender, SomeEventBackendModifiers $ setAncestor (reference ev) <<< mods)
+          pure sender
+        atomically $ takeTMVar sender
     , lookupTempContract = \contractId -> Map.lookup contractId <$> readTVar tempContracts
     , getTempContracts = fmap snd . Map.toAscList <$> readTVar tempContracts
     , lookupTempTransaction = \contractId txId -> (Map.lookup txId <=< Map.lookup contractId) <$> readTVar tempTransactions
     , getTempTransactions = \contractId -> fmap snd . foldMap Map.toList . Map.lookup contractId <$> readTVar tempTransactions
-    }
+    })
+
+toSubmitted :: TempTx tx -> TempTx tx
+toSubmitted (TempTx v _ tx) = TempTx v Submitted tx
+
+toUnsigned :: TempTx tx -> TempTx tx
+toUnsigned (TempTx v _ tx) = TempTx v Unsigned tx

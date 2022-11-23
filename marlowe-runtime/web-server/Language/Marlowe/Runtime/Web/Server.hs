@@ -43,7 +43,7 @@ import Language.Marlowe.Runtime.Web.Server.Monad (AppEnv(..), AppM(..))
 import qualified Language.Marlowe.Runtime.Web.Server.OpenAPI as OpenAPI
 import Language.Marlowe.Runtime.Web.Server.REST (ApiSelector)
 import qualified Language.Marlowe.Runtime.Web.Server.REST as REST
-import Language.Marlowe.Runtime.Web.Server.TxClient (TxClient(..), TxClientDependencies(..), txClient)
+import Language.Marlowe.Runtime.Web.Server.TxClient (TxClient(..), TxClientDependencies(..), TxClientSelector, txClient)
 import Network.Protocol.Driver (RunClient)
 import Network.Protocol.Job.Client (JobClient)
 import Observe.Event (EventBackend, hoistEventBackend, narrowEventBackend)
@@ -85,7 +85,8 @@ compile $ SelectorSpec "server"
   , "http" ≔ Inject ''ServeRequest
   , "api" ≔ Inject ''ApiSelector
   , ["contract", "indexer"] ≔ Inject ''ContractHeaderIndexerSelector
-  , ["history"] ≔ Inject ''HistoryClientSelector
+  , "history" ≔ Inject ''HistoryClientSelector
+  , "tx" ≔ Inject ''TxClientSelector
   ]
 
 data ServerDependencies r = ServerDependencies
@@ -112,6 +113,7 @@ server :: Component IO (ServerDependencies r) ()
 server = proc ServerDependencies{..} -> do
   TxClient{..} <- txClient -< TxClientDependencies
     { runTxJobClient
+    , eventBackend = narrowEventBackend Tx eventBackend
     }
   ContractHeaderIndexer{..} <- contractHeaderIndexer -< ContractHeaderIndexerDependencies
     { runMarloweHeaderSyncClient
@@ -131,6 +133,7 @@ server = proc ServerDependencies{..} -> do
       , _loadTransactions = loadTransactions
       , _createContract = createContract
       , _applyInputs = applyInputs
+      , _submitContract = submitContract
       }
     httpBackend = hoistEventBackend liftIO $ narrowEventBackend Api eventBackend
     app' = application (narrowEventBackend Http eventBackend) $

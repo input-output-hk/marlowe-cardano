@@ -9,6 +9,8 @@
 module Language.Marlowe.Runtime.Web.Server.REST.Contracts
   where
 
+import Cardano.Api (AsType(..), deserialiseFromTextEnvelope)
+import qualified Cardano.Api.SerialiseTextEnvelope as Cardano
 import Data.Foldable (traverse_)
 import Data.Maybe (fromMaybe)
 import qualified Data.Set as Set
@@ -19,7 +21,8 @@ import Language.Marlowe.Runtime.Transaction.Api
 import Language.Marlowe.Runtime.Transaction.Constraints (ConstraintError(..))
 import Language.Marlowe.Runtime.Web
 import Language.Marlowe.Runtime.Web.Server.DTO
-import Language.Marlowe.Runtime.Web.Server.Monad (AppM, createContract, loadContract, loadContractHeaders)
+import Language.Marlowe.Runtime.Web.Server.Monad
+  (AppM, createContract, loadContract, loadContractHeaders, submitContract)
 import qualified Language.Marlowe.Runtime.Web.Server.REST.Transactions as Transactions
 import Observe.Event (EventBackend, addField, reference, withEvent)
 import Observe.Event.Backend (narrowEventBackend)
@@ -53,6 +56,10 @@ compile $ SelectorSpec "contracts"
   , ["get", "one"] ≔ FieldSpec ["get", "one"]
       [ ["get", "id"] ≔ ''TxOutRef
       , ["get", "result"] ≔ ''ContractState
+      ]
+  , "put" ≔ FieldSpec "put"
+      [ "body" ≔ ''Cardano.TextEnvelope
+      , "error" ≔ ''String
       ]
   , "transactions" ≔ Inject ''Transactions.TransactionsSelector
   ]
@@ -140,6 +147,7 @@ contractServer
   -> TxOutRef
   -> ServerT ContractAPI (AppM r)
 contractServer eb contractId = getOne eb contractId
+                          :<|> put eb contractId
                           :<|> Transactions.server (narrowEventBackend Transactions eb) contractId
 
 getOne
@@ -157,3 +165,19 @@ getOne eb contractId = withEvent eb GetOne \ev -> do
       pure case result of
         Left _ -> OmitLink contractState
         Right _ -> IncludeLink (Proxy @"transactions") contractState
+
+put
+  :: EventBackend (AppM r) r ContractsSelector
+  -> TxOutRef
+  -> TextEnvelope
+  -> AppM r NoContent
+put eb contractId body = withEvent eb Put \ev -> do
+  contractId' <- fromDTOThrow err400 contractId
+  textEnvelope <- fromDTOThrow err400 body
+  addField ev $ Body textEnvelope
+  tx <- either (const $ throwError err400) pure $ deserialiseFromTextEnvelope (AsTx AsBabbage) textEnvelope
+  submitContract contractId' (setAncestor $ reference ev) tx >>= \case
+    Nothing -> pure NoContent
+    Just err -> do
+      addField ev $ Error $ show err
+      throwError err403

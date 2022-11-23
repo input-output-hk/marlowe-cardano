@@ -65,7 +65,7 @@ instance HasNamedLink ContractHeader API "contract" where
 -- | POST /contracts sub-API
 type PostContractsAPI
   =  ReqBody '[JSON] PostContractsRequest
-  :> PostTxAPI (Post '[JSON] PostContractsResponse)
+  :> PostTxAPI (PostCreated '[JSON] PostContractsResponse)
 
 type PostContractsResponse = WithLink "contract" CreateTxBody
 
@@ -77,6 +77,7 @@ instance HasNamedLink CreateTxBody API "contract" where
 
 -- | /contracts/:contractId sup-API
 type ContractAPI = GetContractAPI
+              :<|> PutContractAPI
               :<|> "transactions" :> TransactionsAPI
 
 -- | GET /contracts/:contractId sub-API
@@ -90,6 +91,9 @@ instance HasNamedLink ContractState API "transactions" where
     (Proxy @("contracts" :> Capture "contractId" TxOutRef :> "transactions" :> GetTransactionsAPI))
     contractId
 
+-- | PUT /contracts/:contractId sub-API
+type PutContractAPI = ReqBody '[JSON] TextEnvelope :> PutAccepted '[JSON] NoContent
+
 -- | /contracts/:contractId/transactions sup-API
 type TransactionsAPI = GetTransactionsAPI
                   :<|> PostTransactionsAPI
@@ -97,7 +101,7 @@ type TransactionsAPI = GetTransactionsAPI
 -- | POST /contracts/:contractId/transactions sub-API
 type PostTransactionsAPI
   =  ReqBody '[JSON] PostTransactionsRequest
-  :> PostTxAPI (Post '[JSON] PostTransactionsResponse)
+  :> PostTxAPI (PostCreated '[JSON] PostTransactionsResponse)
 
 type PostTransactionsResponse = ApplyInputsTxBody
 
