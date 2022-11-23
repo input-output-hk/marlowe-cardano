@@ -80,8 +80,20 @@ instance Arbitrary Web.PostContractsRequest where
     <*> arbitrary
   shrink = genericShrink
 
+instance Arbitrary Web.PostTransactionsRequest where
+  arbitrary = Web.PostTransactionsRequest
+    <$> arbitrary
+    <*> arbitrary
+    <*> arbitrary
+    <*> arbitrary
+  shrink = genericShrink
+
 instance Arbitrary Web.CreateTxBody where
   arbitrary = Web.CreateTxBody <$> arbitrary <*> arbitrary
+  shrink = genericShrink
+
+instance Arbitrary Web.ApplyInputsTxBody where
+  arbitrary = Web.ApplyInputsTxBody <$> arbitrary <*> arbitrary <*> arbitrary
   shrink = genericShrink
 
 instance Arbitrary Web.MarloweVersion where

@@ -17,7 +17,7 @@ import Control.Category ((>>>))
 import Control.Error (note)
 import Control.Monad ((<=<), (>=>))
 import Control.Monad.Trans.Class (lift)
-import Control.Monad.Trans.Writer (WriterT(runWriterT), execWriterT, tell)
+import Control.Monad.Trans.Writer (WriterT(runWriterT), tell)
 import Data.Bifunctor (bimap, first)
 import Data.Foldable (for_, traverse_)
 import Data.Function (on)
@@ -250,6 +250,8 @@ buildCreateConstraintsV1 walletCtx roles metadata minAda contract = do
           uselessRolePolicyId  = PolicyId . PV2.fromBuiltin . PV2.unCurrencySymbol $ PV2.adaSymbol
         pure uselessRolePolicyId
 
+type ApplyResults v = (UTCTime, UTCTime, Maybe (Assets, Datum v))
+
 -- applies an input to a contract.
 buildApplyInputsConstraints
   :: SystemStart
@@ -261,7 +263,7 @@ buildApplyInputsConstraints
                    -- If not specified, this is computed from the the timeouts
                    -- in the contract.
   -> Redeemer v -- ^ The inputs to apply to the contract.
-  -> Either (ApplyInputsError v) (TxConstraints v)
+  -> Either (ApplyInputsError v) (ApplyResults v, TxConstraints v)
 buildApplyInputsConstraints systemStart eraHistory version marloweOutput invalidBefore invalidHereafter redeemer =
   case version of
     MarloweV1 -> buildApplyInputsConstraintsV1 systemStart eraHistory marloweOutput invalidBefore invalidHereafter redeemer
@@ -275,8 +277,8 @@ buildApplyInputsConstraintsV1
   -> UTCTime -- ^ The minimum bound of the validity interval (inclusive).
   -> Maybe UTCTime -- ^ The maximum bound of the validity interval (exclusive).
   -> Redeemer 'V1 -- ^ The inputs to apply to the contract.
-  -> Either (ApplyInputsError 'V1) (TxConstraints 'V1)
-buildApplyInputsConstraintsV1 systemStart eraHistory marloweOutput invalidBefore invalidHereafter redeemer = execWriterT do
+  -> Either (ApplyInputsError 'V1) (ApplyResults 'V1, TxConstraints 'V1)
+buildApplyInputsConstraintsV1 systemStart eraHistory marloweOutput invalidBefore invalidHereafter redeemer = runWriterT do
   let
     TransactionScriptOutput _ _ _ datum = marloweOutput
     V1.MarloweData params state contract = datum
@@ -321,11 +323,12 @@ buildApplyInputsConstraintsV1 systemStart eraHistory marloweOutput invalidBefore
 
   -- Construct outputs constraints.
   -- Require Marlowe output if the contract is not closed.
-  for_ possibleContinuation \(state'@V1.State { accounts }, contract') -> do
+  output <- for possibleContinuation \(state'@V1.State { accounts }, contract') -> do
       let
         datum' = V1.MarloweData params state' contract'
         assets = moneyToAssets $ V1.totalBalance accounts
       tell $ mustSendMarloweOutput assets datum'
+      pure (assets, datum')
 
   -- For every payment require an output either to the role
   -- payout script or directly to the party address.
@@ -351,6 +354,8 @@ buildApplyInputsConstraintsV1 systemStart eraHistory marloweOutput invalidBefore
     case marloweMerkleizedContinuation input of
       Just cont -> tell $ mustSendMerkleizedContinuationOutput cont
       Nothing -> pure ()
+
+  pure (posixTimeToUTCTime $ fst txInterval, posixTimeToUTCTime $ snd txInterval, output)
 
   where
     marloweMerkleizedContinuation (V1.NormalInput _) = Nothing

@@ -19,8 +19,9 @@ import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Core.Api
   (ContractId, MarloweVersion, Transaction(..), TransactionOutput(..), TransactionScriptOutput)
 import Language.Marlowe.Runtime.History.Api (ContractStep(..), CreateStep(..))
+import Language.Marlowe.Runtime.Transaction.Api (ContractCreated)
 import Language.Marlowe.Runtime.Web.Server.DTO (ContractRecord(..), SomeTransaction(..))
-import Language.Marlowe.Runtime.Web.Server.TxClient (TempContract)
+import Language.Marlowe.Runtime.Web.Server.TxClient (TempTx)
 import Language.Marlowe.Runtime.Web.Server.Util (applyRangeToAscList)
 import Observe.Event (EventBackend, addField, withEvent)
 import Observe.Event.BackendModification (EventBackendModifiers, modifyEventBackend)
@@ -46,7 +47,7 @@ compile $ SelectorSpec ["history", "client"]
 
 data HistoryClientDependencies r = HistoryClientDependencies
   { runMarloweSyncClient :: forall a. MarloweSyncClient IO a -> IO a
-  , lookupTempContract :: ContractId -> STM (Maybe TempContract)
+  , lookupTempContract :: ContractId -> STM (Maybe (TempTx ContractCreated))
   , eventBackend :: EventBackend IO r HistoryClientSelector
   }
 
@@ -55,7 +56,7 @@ type LoadContract r m
    = forall r'
    . EventBackendModifiers r r'
   -> ContractId               -- ^ ID of the contract to load
-  -> m (Maybe (Either TempContract ContractRecord)) -- ^ Nothing if the ID is not found
+  -> m (Maybe (Either (TempTx ContractCreated) ContractRecord)) -- ^ Nothing if the ID is not found
 
 data LoadContractHeadersError
   = ContractNotFound

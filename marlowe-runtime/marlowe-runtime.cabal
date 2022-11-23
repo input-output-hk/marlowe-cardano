@@ -238,6 +238,7 @@ library web-server
     , stm
     , stm-delay
     , text
+    , time
     , transformers
     , transformers-base
     , typed-protocols

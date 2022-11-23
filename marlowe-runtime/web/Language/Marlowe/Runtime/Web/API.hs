@@ -92,6 +92,14 @@ instance HasNamedLink ContractState API "transactions" where
 
 -- | /contracts/:contractId/transactions sup-API
 type TransactionsAPI = GetTransactionsAPI
+                  :<|> PostTransactionsAPI
+
+-- | POST /contracts/:contractId/transactions sub-API
+type PostTransactionsAPI
+  =  ReqBody '[JSON] PostTransactionsRequest
+  :> PostTxAPI (Post '[JSON] PostTransactionsResponse)
+
+type PostTransactionsResponse = ApplyInputsTxBody
 
 -- | GET /contracts/:contractId/transactions sup-API
 type GetTransactionsAPI = PaginatedGet '["transactionId"] TxHeader

@@ -129,6 +129,7 @@ server = proc ServerDependencies{..} -> do
       , _loadContract = loadContract
       , _loadTransactions = loadTransactions
       , _createContract = createContract
+      , _applyInputs = applyInputs
       }
     httpBackend = hoistEventBackend liftIO $ narrowEventBackend Api eventBackend
     app' = application (narrowEventBackend Http eventBackend) $

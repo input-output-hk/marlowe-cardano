@@ -1,4 +1,5 @@
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE TypeFamilies #-}
 
 -- | This module defines the data-transfer object (DTO) translation layer for
@@ -52,7 +53,6 @@ import Language.Marlowe.Runtime.History.Api (CreateStep(..))
 import Language.Marlowe.Runtime.Plutus.V2.Api (fromPlutusCurrencySymbol)
 import qualified Language.Marlowe.Runtime.Transaction.Api as Tx
 import qualified Language.Marlowe.Runtime.Web as Web
-import Language.Marlowe.Runtime.Web.Server.TxClient (TempContract(..))
 
 -- | A class that states a type has a DTO representation.
 class HasDTO a where
@@ -289,13 +289,6 @@ instance IsCardanoEra era => ToDTO (Tx.ContractCreated era v) where
       , utxo = Nothing
       , txBody = Just $ toDTO txBody
       }
-
-instance HasDTO TempContract where
-  type DTO TempContract = Web.ContractState
-
-instance ToDTO TempContract where
-  toDTO = \case
-    Created contract -> toDTO contract
 
 instance HasDTO SomeTransaction where
   type DTO SomeTransaction = Web.TxHeader

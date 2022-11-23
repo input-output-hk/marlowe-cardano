@@ -441,7 +441,7 @@ instance ToSchema Input where
         , ("continuation_hash", stringSchema)
         ]
       objInputSchema props desc merkle = Inline $ mempty @Schema
-        & type_ ?~ OpenApiString
+        & type_ ?~ OpenApiObject
         & description ?~ (desc <> if merkle then " and provide the continuation of the contract" else "")
         & required .~ (fst <$> allProps)
         & properties .~ fromList allProps
