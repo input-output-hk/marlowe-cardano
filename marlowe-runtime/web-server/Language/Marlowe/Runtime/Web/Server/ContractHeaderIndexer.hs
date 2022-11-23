@@ -131,8 +131,7 @@ mkContractHeaderIndexer ContractHeaderIndexerDependencies{..} = do
           $ fmap snd . Map.toAscList . snd =<< IntMap.toAscList contracts
     }
 
--- Updates the state variables of the indexer to exclude values after a
--- particular chain point.
+-- Updates the state of the indexer to exclude values after a particular chain point.
 rollback
   :: TVar (IntMap (Map ContractId ContractHeader))
   -> Chain.ChainPoint
@@ -145,8 +144,7 @@ rollback contractsTVar = \case
   Chain.At Chain.BlockHeader{..} ->
     modifyTVar contractsTVar $ IntMap.filterWithKey (\k _ -> k <= fromIntegral slotNo)
 
--- Updates the start variables of the indexer to include new headers at a new
--- block.
+-- Updates the state of the indexer to include new headers at a new block.
 addNewContractHeaders
   :: TVar (IntMap (Map ContractId ContractHeader))
   -> Chain.BlockHeader
