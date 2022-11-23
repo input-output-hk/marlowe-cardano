@@ -11,6 +11,7 @@
 module Language.Marlowe.Runtime.Web.Server.ContractHeaderIndexer
   where
 
+import Control.Concurrent.Component
 import Control.Concurrent.STM
 import Control.Concurrent.STM.Delay (newDelay, waitDelay)
 import Data.Functor (void)
@@ -70,14 +71,13 @@ type LoadContractHeaders m
   -> m (Maybe [Either TempContract ContractHeader]) -- ^ Nothing if the initial ID is not found
 
 -- | Public API of the ContractHeaderIndexer
-data ContractHeaderIndexer = ContractHeaderIndexer
-  { runContractHeaderIndexer :: IO () -- ^ Run the indexer process
-  , loadContractHeaders :: LoadContractHeaders IO -- ^ Load contract headers from the indexer.
+newtype ContractHeaderIndexer = ContractHeaderIndexer
+  { loadContractHeaders :: LoadContractHeaders IO -- ^ Load contract headers from the indexer.
   }
 
 -- | Create a new contract header indexer.
-mkContractHeaderIndexer :: ContractHeaderIndexerDependencies r -> STM ContractHeaderIndexer
-mkContractHeaderIndexer ContractHeaderIndexerDependencies{..} = do
+contractHeaderIndexer :: Component IO (ContractHeaderIndexerDependencies r) ContractHeaderIndexer
+contractHeaderIndexer = component \ContractHeaderIndexerDependencies{..} -> do
   -- State variable that stores contract headers in a nested map. The outer
   -- IntMap indexes collections of contract headers by slot number, and the
   -- inner map indexes the contract headers for that slot by contract ID. This
@@ -123,9 +123,8 @@ mkContractHeaderIndexer ContractHeaderIndexerDependencies{..} = do
             waitDelay delay
             pure $ SendMsgPoll clientNext
       }
-  pure ContractHeaderIndexer
-    { runContractHeaderIndexer = runMarloweHeaderSyncClient client
-    , loadContractHeaders = \startFrom limit offset order -> atomically do
+  pure (runMarloweHeaderSyncClient client, ContractHeaderIndexer
+    { loadContractHeaders = \startFrom limit offset order -> atomically do
         -- Wait until we are in sync.
         readTMVar inSync
         contracts <- readTVar contractsTVar
@@ -138,7 +137,7 @@ mkContractHeaderIndexer ContractHeaderIndexerDependencies{..} = do
         pure
           $ applyRangeToAscList getContractId startFrom limit offset order
           $ (Right <$> contractsList) <> (Left <$> tempContracts)
-    }
+    })
 
 -- Updates the state of the indexer to exclude values after a particular chain point.
 rollback

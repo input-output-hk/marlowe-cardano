@@ -211,6 +211,7 @@ library web-server
       base >= 4.9 && < 5
     , aeson
     , async
+    , async-components
     , bytestring
     , cardano-api
     , containers
@@ -417,6 +418,7 @@ executable marlowe-web-server
     Paths_marlowe_runtime
   build-depends:
       base >= 4.9 && < 5
+    , async-components
     , bytestring
     , eventuo11y-json
     , exceptions

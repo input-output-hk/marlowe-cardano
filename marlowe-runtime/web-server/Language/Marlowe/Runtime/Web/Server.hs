@@ -1,3 +1,4 @@
+{-# LANGUAGE Arrows #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
@@ -15,15 +16,14 @@
 
 module Language.Marlowe.Runtime.Web.Server
   ( APIWithOpenAPI
-  , Server(..)
   , ServerDependencies(..)
   , app
-  , mkServer
+  , server
   , serverWithOpenAPI
   ) where
 
-import Control.Concurrent.Async (mapConcurrently_)
-import Control.Concurrent.STM (STM)
+import qualified Control.Arrow as Arrow
+import Control.Concurrent.Component
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Reader (runReaderT)
 import Data.Void (Void)
@@ -35,15 +35,15 @@ import Language.Marlowe.Runtime.Web.Server.ContractHeaderIndexer
   ( ContractHeaderIndexer(..)
   , ContractHeaderIndexerDependencies(..)
   , ContractHeaderIndexerSelector
-  , mkContractHeaderIndexer
+  , contractHeaderIndexer
   )
 import Language.Marlowe.Runtime.Web.Server.HistoryClient
-  (HistoryClient(..), HistoryClientDependencies(..), HistoryClientSelector, mkHistoryClient)
+  (HistoryClient(..), HistoryClientDependencies(..), HistoryClientSelector, historyClient)
 import Language.Marlowe.Runtime.Web.Server.Monad (AppEnv(..), AppM(..))
 import qualified Language.Marlowe.Runtime.Web.Server.OpenAPI as OpenAPI
 import Language.Marlowe.Runtime.Web.Server.REST (ApiSelector)
 import qualified Language.Marlowe.Runtime.Web.Server.REST as REST
-import Language.Marlowe.Runtime.Web.Server.TxClient (TxClient(..), TxClientDependencies(..), mkTxClient)
+import Language.Marlowe.Runtime.Web.Server.TxClient (TxClient(..), TxClientDependencies(..), txClient)
 import Network.Protocol.Driver (RunClient)
 import Network.Protocol.Job.Client (JobClient)
 import Observe.Event (EventBackend, hoistEventBackend, narrowEventBackend)
@@ -97,10 +97,6 @@ data ServerDependencies r = ServerDependencies
   , eventBackend :: EventBackend IO r ServerSelector
   }
 
-newtype Server = Server
-  { runServer :: IO ()
-  }
-
 {- Architecture notes:
     The web server runs multiple parallel worker processes. If any of them crash,
     the whole application crashes.
@@ -112,17 +108,17 @@ newtype Server = Server
     process having its own event backend injected via its parameters.
 -}
 
-mkServer :: ServerDependencies r -> STM Server
-mkServer ServerDependencies{..} = do
-  TxClient{..} <- mkTxClient TxClientDependencies
+server :: Component IO (ServerDependencies r) ()
+server = proc ServerDependencies{..} -> do
+  TxClient{..} <- txClient -< TxClientDependencies
     { runTxJobClient
     }
-  ContractHeaderIndexer{..} <- mkContractHeaderIndexer ContractHeaderIndexerDependencies
+  ContractHeaderIndexer{..} <- contractHeaderIndexer -< ContractHeaderIndexerDependencies
     { runMarloweHeaderSyncClient
     , getTempContracts
     , eventBackend = narrowEventBackend ContractIndexer eventBackend
     }
-  HistoryClient{..} <- mkHistoryClient HistoryClientDependencies
+  HistoryClient{..} <- historyClient -< HistoryClientDependencies
     { runMarloweSyncClient
     , lookupTempContract
     , eventBackend = narrowEventBackend History eventBackend
@@ -137,9 +133,4 @@ mkServer ServerDependencies{..} = do
     httpBackend = hoistEventBackend liftIO $ narrowEventBackend Api eventBackend
     app' = application (narrowEventBackend Http eventBackend) $
       app openAPIEnabled env . (`modifyEventBackend`  httpBackend) . setAncestor
-  pure Server
-    { runServer = mapConcurrently_ @[] id
-        [ runApplication app'
-        , runContractHeaderIndexer
-        ]
-    }
+  Arrow.app -< (component_ runApplication, app')
