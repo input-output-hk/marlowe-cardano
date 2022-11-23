@@ -10,7 +10,7 @@ import qualified Data.Map as Map
 import Language.Marlowe.Runtime.ChainSync.Api (Lovelace, StakeCredential, TransactionMetadata)
 import Language.Marlowe.Runtime.Core.Api (Contract, ContractId, MarloweVersion)
 import Language.Marlowe.Runtime.Transaction.Api
-  (ContractCreationRecord(..), CreateError, MarloweTxCommand(..), RoleTokensConfig, WalletAddresses)
+  (ContractCreated(..), CreateError, MarloweTxCommand(..), RoleTokensConfig, WalletAddresses)
 import Network.Protocol.Driver (RunClient)
 import Network.Protocol.Job.Client
 
@@ -27,10 +27,10 @@ type CreateContract m
   -> TransactionMetadata
   -> Lovelace
   -> Contract v
-  -> m (Either (CreateError v) (ContractCreationRecord BabbageEra v))
+  -> m (Either (CreateError v) (ContractCreated BabbageEra v))
 
 data TempContract where
-  Created :: ContractCreationRecord BabbageEra v -> TempContract
+  Created :: ContractCreated BabbageEra v -> TempContract
 
 -- | Public API of the TxClient
 data TxClient = TxClient

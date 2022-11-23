@@ -38,7 +38,7 @@ import Language.Marlowe.Runtime.Core.Api
   , SomeMarloweVersion(SomeMarloweVersion)
   )
 import Language.Marlowe.Runtime.Transaction.Api
-  (ContractCreationRecord(..), CreateError, MarloweTxCommand(Create), RoleTokensConfig(..), mkMint)
+  (ContractCreated(..), CreateError, MarloweTxCommand(Create), RoleTokensConfig(..), mkMint)
 import Options.Applicative
 import Options.Applicative.NonEmpty (some1)
 import Text.Read (readMaybe)
@@ -185,7 +185,7 @@ runCreateCommand TxCommand { walletAddresses, signingMethod, metadataFile, subCo
       metadata <- readMetadata
       let
         cmd = Create Nothing version walletAddresses rolesDistribution metadata minUTxO contract
-      ContractCreationRecord{contractId,txBody} <- ExceptT $ first CreateFailed <$> runTxCommand cmd
+      ContractCreated{contractId,txBody} <- ExceptT $ first CreateFailed <$> runTxCommand cmd
       case signingMethod of
         Manual outputFile -> do
           ExceptT $ liftIO $ first TransactionFileWriteFailed <$> C.writeFileTextEnvelope outputFile Nothing txBody

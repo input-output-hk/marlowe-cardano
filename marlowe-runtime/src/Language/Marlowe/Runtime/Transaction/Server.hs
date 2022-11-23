@@ -65,7 +65,7 @@ import Language.Marlowe.Runtime.Core.ScriptRegistry (getCurrentScripts, marloweS
 import qualified Language.Marlowe.Runtime.Core.ScriptRegistry as Registry
 import Language.Marlowe.Runtime.Transaction.Api
   ( ApplyInputsError(..)
-  , ContractCreationRecord(..)
+  , ContractCreated(..)
   , CreateError(..)
   , JobId(..)
   , MarloweTxCommand(..)
@@ -236,7 +236,7 @@ execCreate
   -> TransactionMetadata
   -> Chain.Lovelace
   -> Contract v
-  -> WorkerM (ServerStCmd MarloweTxCommand Void (CreateError v) (ContractCreationRecord BabbageEra v) WorkerM ())
+  -> WorkerM (ServerStCmd MarloweTxCommand Void (CreateError v) (ContractCreated BabbageEra v) WorkerM ())
 execCreate solveConstraints loadWalletContext networkId mStakeCredential version addresses roleTokens metadata minAda contract = execExceptT do
   walletContext <- liftIO $ loadWalletContext addresses
   lift . Colog.logDebug . O.renderValue . A.toJSON $ walletContext
@@ -274,7 +274,7 @@ execCreate solveConstraints loadWalletContext networkId mStakeCredential version
   txBody <- except
     $ first CreateConstraintError
     $ solveConstraints version marloweContext walletContext constraints
-  pure ContractCreationRecord
+  pure ContractCreated
     { contractId = ContractId $ findMarloweOutput mCardanoStakeCredential txBody
     , rolesCurrency
     , metadata = Chain.unTransactionMetadata metadata

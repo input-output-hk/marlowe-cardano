@@ -132,7 +132,7 @@ mkContractHeaderIndexer ContractHeaderIndexerDependencies{..} = do
         let contractsList = fmap snd . Map.toAscList . snd =<< IntMap.toAscList contracts
         let
           getContractId = \case
-            Left (Created Tx.ContractCreationRecord{..}) -> contractId
+            Left (Created Tx.ContractCreated{..}) -> contractId
             Right ContractHeader{..} -> contractId
         tempContracts <- getTempContracts
         pure

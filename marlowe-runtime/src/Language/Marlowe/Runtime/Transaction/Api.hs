@@ -9,7 +9,7 @@
 module Language.Marlowe.Runtime.Transaction.Api
   ( ApplyInputsConstraintsBuildupError(..)
   , ApplyInputsError(..)
-  , ContractCreationRecord(..)
+  , ContractCreated(..)
   , CreateBuildupError(..)
   , CreateError(..)
   , JobId(..)
@@ -87,7 +87,7 @@ data RoleTokensConfig
   deriving stock (Show, Eq, Ord, Generic)
   deriving anyclass (Binary)
 
-data ContractCreationRecord era v = ContractCreationRecord
+data ContractCreated era v = ContractCreated
   { contractId :: ContractId
   , rolesCurrency :: PolicyId
   , metadata :: Map Word64 Metadata
@@ -101,11 +101,11 @@ data ContractCreationRecord era v = ContractCreationRecord
   , txBody :: TxBody era
   }
 
-deriving instance Show (ContractCreationRecord BabbageEra 'V1)
-deriving instance Eq (ContractCreationRecord BabbageEra 'V1)
+deriving instance Show (ContractCreated BabbageEra 'V1)
+deriving instance Eq (ContractCreated BabbageEra 'V1)
 
-instance IsCardanoEra era => Binary (ContractCreationRecord era 'V1) where
-  put ContractCreationRecord{..} = do
+instance IsCardanoEra era => Binary (ContractCreated era 'V1) where
+  put ContractCreated{..} = do
     put contractId
     put rolesCurrency
     put metadata
@@ -128,7 +128,7 @@ instance IsCardanoEra era => Binary (ContractCreationRecord era 'V1) where
     assets <- get
     txBody <- getTxBody
     let version = MarloweV1
-    pure ContractCreationRecord{..}
+    pure ContractCreated{..}
 
 -- | The low-level runtime API for building and submitting transactions.
 data MarloweTxCommand status err result where
@@ -151,7 +151,7 @@ data MarloweTxCommand status err result where
     -- ^ Min Lovelace which should be used for the contract output.
     -> Contract v
     -- ^ The contract to run
-    -> MarloweTxCommand Void (CreateError v) (ContractCreationRecord BabbageEra v)
+    -> MarloweTxCommand Void (CreateError v) (ContractCreated BabbageEra v)
 
   -- | Construct a transaction that advances an active Marlowe contract by
   -- applying a sequence of inputs. The resulting, unsigned transaction can be
@@ -205,7 +205,7 @@ data MarloweTxCommand status err result where
 
 instance Command MarloweTxCommand where
   data Tag MarloweTxCommand status err result where
-    TagCreate :: MarloweVersion v -> Tag MarloweTxCommand Void (CreateError v) (ContractCreationRecord BabbageEra v)
+    TagCreate :: MarloweVersion v -> Tag MarloweTxCommand Void (CreateError v) (ContractCreated BabbageEra v)
     TagApplyInputs :: MarloweVersion v -> Tag MarloweTxCommand Void (ApplyInputsError v) (TxBody BabbageEra)
     TagWithdraw :: MarloweVersion v -> Tag MarloweTxCommand Void (WithdrawError v) (TxBody BabbageEra)
     TagSubmit :: Tag MarloweTxCommand SubmitStatus SubmitError BlockHeader

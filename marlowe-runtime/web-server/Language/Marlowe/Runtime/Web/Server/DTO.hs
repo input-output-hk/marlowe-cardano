@@ -267,11 +267,11 @@ instance ToDTO ContractRecord where
       , txBody = Nothing
       }
 
-instance HasDTO (Tx.ContractCreationRecord era v) where
-  type DTO (Tx.ContractCreationRecord era v) = Web.ContractState
+instance HasDTO (Tx.ContractCreated era v) where
+  type DTO (Tx.ContractCreated era v) = Web.ContractState
 
-instance IsCardanoEra era => ToDTO (Tx.ContractCreationRecord era v) where
-  toDTO Tx.ContractCreationRecord{..} =
+instance IsCardanoEra era => ToDTO (Tx.ContractCreated era v) where
+  toDTO Tx.ContractCreated{..} =
     Web.ContractState
       { contractId = toDTO contractId
       , roleTokenMintingPolicyId = toDTO rolesCurrency

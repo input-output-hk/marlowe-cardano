@@ -15,12 +15,7 @@ import qualified Data.Set as Set
 import Language.Marlowe.Runtime.ChainSync.Api (Lovelace(..))
 import Language.Marlowe.Runtime.Core.Api (MarloweVersion(..), SomeMarloweVersion(..))
 import Language.Marlowe.Runtime.Transaction.Api
-  ( ContractCreationRecord(..)
-  , CreateBuildupError(..)
-  , CreateError(..)
-  , LoadMarloweContextError(..)
-  , WalletAddresses(..)
-  )
+  (ContractCreated(..), CreateBuildupError(..), CreateError(..), LoadMarloweContextError(..), WalletAddresses(..))
 import Language.Marlowe.Runtime.Transaction.Constraints (ConstraintError(..))
 import Language.Marlowe.Runtime.Web
 import Language.Marlowe.Runtime.Web.Server.DTO
@@ -110,7 +105,7 @@ post eb req@PostContractsRequest{..} changeAddressDTO mAddresses mCollateralUtxo
         CreateBuildupFailed (AddressDecodingFailed _) -> throwError err500
         CreateBuildupFailed (MintingScriptDecodingFailed _) -> throwError err500
         CreateToCardanoError -> throwError err400
-    Right ContractCreationRecord{contractId, txBody} -> do
+    Right ContractCreated{contractId, txBody} -> do
       let (contractId', txBody') = toDTO (contractId, txBody)
       let body = CreateTxBody contractId' txBody'
       addField ev $ PostResponse body
