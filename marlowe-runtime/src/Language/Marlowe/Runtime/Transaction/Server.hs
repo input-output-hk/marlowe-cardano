@@ -40,7 +40,7 @@ import Control.Concurrent.Async (Concurrently(..))
 import Control.Concurrent.Component
 import Control.Concurrent.STM (STM, atomically, modifyTVar, newEmptyTMVar, newTVar, putTMVar, readTMVar, readTVar)
 import Control.Error.Util (hoistMaybe, note, noteT)
-import Control.Exception (SomeException, catch)
+import Control.Exception (Exception(displayException), SomeException, catch)
 import Control.Monad (when)
 import Control.Monad.Base (MonadBase(..))
 import Control.Monad.IO.Class (MonadIO(liftIO))
@@ -388,13 +388,13 @@ execSubmit mkSubmitJob trackSubmitJob tx = liftIO do
   (submitJob, exVar) <- atomically do
     exVar <- newEmptyTMVar
     submitJob <- mkSubmitJob tx
-    let getExceptionStatus = Failed SubmitException <$ readTMVar exVar
+    let getExceptionStatus = Failed . SubmitException <$> readTMVar exVar
     let submitJob' = submitJob { submitJobStatus = getExceptionStatus <|> submitJobStatus submitJob }
     trackSubmitJob txId submitJob'
     pure (submitJob', exVar)
   -- Run the job in a new thread
   _ <- forkFinally (runSubmitJob submitJob) \case
-    Left ex -> atomically $ putTMVar exVar ex
+    Left ex -> atomically $ putTMVar exVar $ displayException ex
     _ -> pure ()
   -- Make a new server and run it in IO.
   hoistCmd (liftIO . atomically) <$> atomically (submitJobServerCmd (JobIdSubmit txId) submitJob)
