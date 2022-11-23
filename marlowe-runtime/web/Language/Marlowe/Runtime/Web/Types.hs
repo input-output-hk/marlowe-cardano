@@ -471,10 +471,10 @@ instance ToSchema TokenMetadataFile where
     stringSchema <- declareSchemaRef (Proxy @Text)
     pure $ NamedSchema (Just "TokenMetadataFile") $ mempty
       & type_ ?~ OpenApiObject
-      & required .~ ["name", "image", "mediaType"]
+      & required .~ ["name", "src", "mediaType"]
       & properties .~
           [ ("name", stringSchema)
-          , ("image", stringSchema)
+          , ("src", stringSchema)
           , ("mediaType", stringSchema)
           ]
       & additionalProperties ?~ AdditionalPropertiesAllowed True

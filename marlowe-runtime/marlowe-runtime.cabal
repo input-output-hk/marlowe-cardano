@@ -483,12 +483,14 @@ test-suite web-server-test
     , aeson
     , bytestring
     , hspec
+    , network-arbitrary
     , marlowe
     , marlowe-runtime:web
     , marlowe-runtime:web-server
     , marlowe-test
     , openapi3
     , QuickCheck
+    , quickcheck-instances
     , regex-posix
     , servant-openapi3
     , text
