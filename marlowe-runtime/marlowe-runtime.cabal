@@ -190,6 +190,7 @@ library web
     , servant-server
     , servant-openapi3
     , text
+    , time
 
 library web-server
   import: lang

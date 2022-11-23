@@ -49,6 +49,7 @@ import Data.String (IsString(..))
 import Data.Text (Text, intercalate, splitOn)
 import qualified Data.Text as T
 import Data.Text.Encoding (encodeUtf8)
+import Data.Time (UTCTime)
 import Data.Word (Word16, Word64)
 import GHC.Exts (IsList)
 import GHC.Generics (Generic)
@@ -484,3 +485,23 @@ uriFromJSON = withText "URI" $ maybe (parseFail "invalid URI") pure . parseURI .
 
 uriToJSON :: URI -> Value
 uriToJSON = String . T.pack . show
+
+data PostTransactionsRequest = PostTransactionsRequest
+  { version :: MarloweVersion
+  , invalidBefore :: Maybe UTCTime
+  , invalidHereafter :: Maybe UTCTime
+  , inputs :: [Semantics.Input]
+  } deriving (Show, Eq, Generic)
+
+instance FromJSON PostTransactionsRequest
+instance ToJSON PostTransactionsRequest
+instance ToSchema PostTransactionsRequest
+
+data ApplyInputsTxBody = ApplyInputsTxBody
+  { contractId :: TxOutRef
+  , transactionId :: TxId
+  , txBody :: TextEnvelope
+  } deriving (Show, Eq, Ord, Generic)
+
+instance ToJSON ApplyInputsTxBody
+instance ToSchema ApplyInputsTxBody
