@@ -172,6 +172,7 @@
             (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
             (hsPkgs."cardano-api" or (errorHandler.buildDepError "cardano-api"))
             (hsPkgs."containers" or (errorHandler.buildDepError "containers"))
+            (hsPkgs."errors" or (errorHandler.buildDepError "errors"))
             (hsPkgs."eventuo11y" or (errorHandler.buildDepError "eventuo11y"))
             (hsPkgs."eventuo11y-dsl" or (errorHandler.buildDepError "eventuo11y-dsl"))
             (hsPkgs."eventuo11y-json" or (errorHandler.buildDepError "eventuo11y-json"))
@@ -207,7 +208,9 @@
             "Language/Marlowe/Runtime/Web/Server/HistoryClient"
             "Language/Marlowe/Runtime/Web/Server/REST"
             "Language/Marlowe/Runtime/Web/Server/REST/Contracts"
+            "Language/Marlowe/Runtime/Web/Server/REST/Transactions"
             "Language/Marlowe/Runtime/Web/Server"
+            "Language/Marlowe/Runtime/Web/Server/Util"
             ];
           hsSourceDirs = [ "web-server" ];
           };

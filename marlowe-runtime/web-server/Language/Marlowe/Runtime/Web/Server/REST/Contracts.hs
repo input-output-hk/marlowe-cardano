@@ -14,9 +14,11 @@ import Data.Maybe (fromMaybe)
 import Language.Marlowe.Runtime.Web
 import Language.Marlowe.Runtime.Web.Server.DTO
 import Language.Marlowe.Runtime.Web.Server.Monad (AppM, loadContract, loadContractHeaders)
+import qualified Language.Marlowe.Runtime.Web.Server.REST.Transactions as Transactions
 import Observe.Event (EventBackend, addField, reference, withEvent)
+import Observe.Event.Backend (narrowEventBackend)
 import Observe.Event.BackendModification (setAncestor)
-import Observe.Event.DSL (FieldSpec(..), SelectorSpec(..))
+import Observe.Event.DSL (FieldSpec(..), SelectorField(Inject), SelectorSpec(..))
 import Observe.Event.Render.JSON.DSL.Compile (compile)
 import Observe.Event.Syntax ((≔))
 import Servant
@@ -36,6 +38,7 @@ compile $ SelectorSpec "contracts"
       [ ["get", "id"] ≔ ''TxOutRef
       , ["get", "result"] ≔ ''ContractState
       ]
+  , "transactions" ≔ Inject ''Transactions.TransactionsSelector
   ]
 
 server
@@ -47,7 +50,8 @@ contractServer
   :: EventBackend (AppM r) r ContractsSelector
   -> TxOutRef
   -> ServerT ContractAPI (AppM r)
-contractServer = getOne
+contractServer eb contractId = getOne eb contractId
+                          :<|> Transactions.server (narrowEventBackend Transactions eb) contractId
 
 get
   :: EventBackend (AppM r) r ContractsSelector
@@ -67,13 +71,13 @@ get eb ranges = withEvent eb Get \ev -> do
     Just headers -> do
       let headers' = toDTO headers
       addField ev $ ContractHeaders headers'
-      let response = IncludeLink api (Proxy @"contract") <$> headers'
+      let response = IncludeLink (Proxy @"contract") <$> headers'
       addHeader (length headers) <$> returnRange range response
 
 getOne
   :: EventBackend (AppM r) r ContractsSelector
   -> TxOutRef
-  -> AppM r ContractState
+  -> AppM r GetContractResponse
 getOne eb contractId = withEvent eb GetOne \ev -> do
   addField ev $ GetId contractId
   contractId' <- fromDTOThrow err400 contractId
@@ -82,4 +86,4 @@ getOne eb contractId = withEvent eb GetOne \ev -> do
     Just contractRecord -> do
       let contractState = toDTO contractRecord
       addField ev $ GetResult contractState
-      pure contractState
+      pure $ IncludeLink (Proxy @"transactions") contractState

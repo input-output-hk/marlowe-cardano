@@ -1,15 +1,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE GADTs #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE OverloadedLists #-}
-{-# LANGUAGE PolyKinds #-}
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE StrictData #-}
 {-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE TypeOperators #-}
-{-# LANGUAGE UndecidableInstances #-}
 
 -- | This module defines the request and response types in the Marlowe Runtime
 -- | Web API.
@@ -27,136 +19,29 @@ import Data.ByteString.Base16 (decodeBase16, encodeBase16)
 import Data.Foldable (fold)
 import Data.Map (Map)
 import Data.OpenApi
-  ( Definitions
-  , HasType(..)
+  ( HasType(..)
   , NamedSchema(..)
   , OpenApiType(..)
-  , Referenced(Inline)
-  , Schema
   , ToParamSchema
   , ToSchema
   , declareSchema
-  , declareSchemaRef
   , description
   , enum_
   , example
   , pattern
-  , properties
-  , required
   , toParamSchema
   )
-import Data.OpenApi.Declare (Declare)
 import Data.OpenApi.Schema (ToSchema(..))
 import Data.String (IsString(..))
 import Data.Text (intercalate, splitOn)
 import qualified Data.Text as T
 import Data.Text.Encoding (encodeUtf8)
-import Data.Typeable (Typeable)
 import Data.Word (Word16, Word64)
-import GHC.Base (Symbol)
-import GHC.Exts (IsList(fromList))
 import GHC.Generics (Generic)
-import GHC.Show (showSpace)
-import GHC.TypeLits (KnownSymbol, symbolVal)
 import qualified Language.Marlowe.Core.V1.Semantics.Types as Semantics
 import Language.Marlowe.Runtime.Web.Orphans ()
 import Servant
 import Servant.Pagination (HasPagination(..))
-
-class HasNamedLink a api (name :: Symbol) where
-  namedLink :: Proxy api -> Proxy name -> a -> Link
-
-data WithLink (name :: Symbol) a where
-  IncludeLink
-    :: HasNamedLink a api name
-    => Proxy api
-    -> Proxy name
-    -> a
-    -> WithLink name a
-  OmitLink :: a -> WithLink name a
-
-deriving instance Typeable (WithLink name a)
-
-instance (Show a, KnownSymbol name) => Show (WithLink name a) where
-  showsPrec p (IncludeLink _ name a) = showParen (p >= 11)
-    ( showString "IncludeLink _ (Proxy @"
-    . showSpace
-    . showsPrec 11 (symbolVal name)
-    . showString ")"
-    . showSpace
-    . showsPrec 11 a
-    )
-  showsPrec p (OmitLink a) = showParen (p >= 11)
-    ( showString "OmitLink"
-    . showSpace
-    . showsPrec 11 a
-    )
-
-class ToJSONWithLinks a where
-  toJSONWithLinks :: a -> ([(String, Link)], Value)
-
-instance {-# OVERLAPPING #-}
-  ( ToJSONWithLinks a
-  , KnownSymbol name
-  ) => ToJSONWithLinks (WithLink name a) where
-  toJSONWithLinks (IncludeLink api name a) = (link : links, value)
-    where
-      (links, value) = toJSONWithLinks a
-      link = (symbolVal name, namedLink api name a)
-  toJSONWithLinks (OmitLink a) = toJSONWithLinks a
-
-instance {-# OVERLAPPING #-} ToJSON a => ToJSONWithLinks a where
-  toJSONWithLinks a = ([], toJSON a)
-
-instance
-  ( ToJSONWithLinks a
-  , KnownSymbol name
-  ) => ToJSON (WithLink name a) where
-  toJSON = toJSON' . toJSONWithLinks
-    where
-      toJSON' (links, value) = object
-        [ "resource" .= value
-        , "links" .= object (bimap fromString (toJSON . show . linkURI) <$> links)
-        ]
-
-instance HasPagination resource field => HasPagination (WithLink name resource) field where
-  type RangeType (WithLink name resource) field = RangeType resource field
-  getFieldValue p (IncludeLink _ _ resource) = getFieldValue p resource
-  getFieldValue p (OmitLink resource) = getFieldValue p resource
-
-class ToSchemaWithLinks a where
-  declareNamedSchemaWithLinks :: Proxy a -> Declare (Definitions Schema) ([String], Referenced Schema)
-
-instance {-# OVERLAPPING #-}
-  ( ToSchemaWithLinks a
-  , KnownSymbol name
-  ) => ToSchemaWithLinks (WithLink name a) where
-  declareNamedSchemaWithLinks _  = do
-    (links, namedSchema) <- declareNamedSchemaWithLinks (Proxy @a)
-    pure (symbolVal (Proxy @name) : links, namedSchema)
-
-instance {-# OVERLAPPING #-} ToSchema a => ToSchemaWithLinks a where
-  declareNamedSchemaWithLinks p = ([],) <$> declareSchemaRef p
-
-instance
-  ( Typeable a
-  , ToSchemaWithLinks a
-  , KnownSymbol name
-  ) => ToSchema (WithLink name a) where
-  declareNamedSchema _  = do
-    (links, schema) <- declareNamedSchemaWithLinks (Proxy @(WithLink name a))
-    stringSchema <- declareSchemaRef (Proxy @String)
-    pure $ NamedSchema Nothing $ mempty
-      & type_ ?~ OpenApiObject
-      & required .~ ["resource", "links"]
-      & properties .~
-          [ ("resource", schema)
-          , ( "links", Inline $ mempty
-                & type_ ?~ OpenApiObject
-                & properties .~ fromList ((,stringSchema) . fromString <$> links)
-            )
-          ]
-
 
 -- | A newtype for Base16 decoding and encoding ByteStrings
 newtype Base16 = Base16 { unBase16 :: ByteString }
@@ -311,6 +196,21 @@ newtype Metadata = Metadata { unMetadata :: Value }
 instance ToSchema Metadata where
   declareNamedSchema _ = pure $ NamedSchema (Just "Metadata") $ mempty
     & description ?~ "An arbitrary JSON value for storage in a metadata key"
+
+data TxHeader = TxHeader
+  { contractId :: TxOutRef
+  , transactionId :: TxId
+  , status :: TxStatus
+  , block :: Maybe BlockHeader
+  , utxo :: Maybe TxOutRef
+  } deriving (Show, Eq, Ord, Generic)
+
+instance ToJSON TxHeader
+instance ToSchema TxHeader
+
+instance HasPagination TxHeader "transactionId" where
+  type RangeType TxHeader "transactionId" = TxId
+  getFieldValue _ TxHeader{..} = transactionId
 
 data TxStatus
   = Unsigned
