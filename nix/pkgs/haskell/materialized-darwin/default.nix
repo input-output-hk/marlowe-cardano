@@ -29,6 +29,7 @@
         "crypto-cipher-types".revision = (((hackage."crypto-cipher-types")."0.0.9").revisions).default;
         "pretty".revision = (((hackage."pretty")."1.1.3.6").revisions).default;
         "haskell-src-exts".revision = (((hackage."haskell-src-exts")."1.23.1").revisions).default;
+        "network-arbitrary".revision = (((hackage."network-arbitrary")."0.7.0.0").revisions).default;
         "data-textual".revision = (((hackage."data-textual")."0.3.0.3").revisions).default;
         "secp256k1-haskell".revision = (((hackage."secp256k1-haskell")."0.6.1").revisions).default;
         "cborg".revision = (((hackage."cborg")."0.2.8.0").revisions).default;
@@ -1426,6 +1427,7 @@
           "markdown-unlit".components.library.planned = lib.mkOverride 900 true;
           "genvalidity-scientific".components.library.planned = lib.mkOverride 900 true;
           "StateVar".components.library.planned = lib.mkOverride 900 true;
+          "network-arbitrary".components.library.planned = lib.mkOverride 900 true;
           "libBF".components.exes."bf-test".planned = lib.mkOverride 900 true;
           "cardano-node".components.exes."cardano-node".planned = lib.mkOverride 900 true;
           "marlowe-protocols".components.library.planned = lib.mkOverride 900 true;
