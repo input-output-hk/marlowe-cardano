@@ -91,7 +91,7 @@ instance Arbitrary Web.BlockHeader where
 instance Arbitrary Web.Base16 where
   arbitrary = Web.Base16 . BS.pack <$> listOf arbitrary
 
-instance (HasNamedLink a Web.API name, Arbitrary a) => Arbitrary (Web.WithLink name a) where
+instance Arbitrary a => Arbitrary (Web.WithLink name a) where
   arbitrary = oneof
     [ Web.OmitLink <$> arbitrary
     , Web.IncludeLink (Proxy @name) <$> arbitrary
