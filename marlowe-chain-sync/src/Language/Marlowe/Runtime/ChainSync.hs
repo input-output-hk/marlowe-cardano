@@ -20,8 +20,7 @@ import Language.Marlowe.Runtime.ChainSync.JobServer
 import Language.Marlowe.Runtime.ChainSync.NodeClient (CostModel, NodeClient(..), NodeClientDependencies(..), nodeClient)
 import Language.Marlowe.Runtime.ChainSync.QueryServer
   (ChainSyncQueryServerDependencies(..), RunQueryServer, chainSyncQueryServer)
-import Language.Marlowe.Runtime.ChainSync.Server
-  (ChainSyncServerDependencies(..), RunChainSeekServer, chainSyncServer)
+import Language.Marlowe.Runtime.ChainSync.Server (ChainSyncServerDependencies(..), RunChainSeekServer, chainSyncServer)
 import Language.Marlowe.Runtime.ChainSync.Store (ChainStore(..), ChainStoreDependencies(..), chainStore)
 import Ouroboros.Network.Protocol.LocalStateQuery.Type (AcquireFailure)
 import Ouroboros.Network.Protocol.LocalTxSubmission.Client (SubmitResult)
