@@ -4,6 +4,7 @@ module Language.Marlowe.Runtime.Web.Server.TxClient
   where
 
 import Cardano.Api (BabbageEra)
+import Control.Concurrent.Component
 import Control.Concurrent.STM (STM, atomically, modifyTVar, newTVar, readTVar)
 import Data.Foldable (for_)
 import qualified Data.Map as Map
@@ -39,10 +40,10 @@ data TxClient = TxClient
   , getTempContracts :: STM [TempContract]
   }
 
-mkTxClient :: TxClientDependencies -> STM TxClient
-mkTxClient TxClientDependencies{..} = do
+txClient :: Component IO TxClientDependencies TxClient
+txClient = component \TxClientDependencies{..} -> do
   tempContracts <- newTVar mempty
-  pure TxClient
+  pure $ pure TxClient
     { createContract = \stakeCredential version addresses roles metadata minUTxODeposit contract -> do
         response <- runTxJobClient
           $ liftCommand

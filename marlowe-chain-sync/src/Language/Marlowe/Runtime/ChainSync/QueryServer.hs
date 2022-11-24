@@ -22,9 +22,7 @@ import Cardano.Api
   , toEraInMode
   )
 import qualified Cardano.Api as Cardano
-import Control.Concurrent.Async (Concurrently(Concurrently, runConcurrently))
-import Control.Concurrent.STM (STM, atomically)
-import Control.Exception (SomeException, catch)
+import Control.Concurrent.Component
 import Control.Monad.Trans.Except (ExceptT(ExceptT), except, runExceptT, throwE, withExceptT)
 import Data.Bifunctor (bimap, first)
 import Data.Void (Void, absurd)
@@ -49,22 +47,14 @@ data ChainSyncQueryServerDependencies = ChainSyncQueryServerDependencies
   , getUTxOs :: !(Database.GetUTxOs IO)
   }
 
-newtype ChainSyncQueryServer = ChainSyncQueryServer
-  { runChainSyncQueryServer :: IO Void
-  }
-
-mkChainSyncQueryServer :: ChainSyncQueryServerDependencies -> STM ChainSyncQueryServer
-mkChainSyncQueryServer ChainSyncQueryServerDependencies{..} = do
-  let
-    runChainSyncQueryServer = do
+chainSyncQueryServer :: Component IO ChainSyncQueryServerDependencies ()
+chainSyncQueryServer = serverComponent
+  worker
+  (hPutStrLn stderr . ("Query worker crashed with exception: " <>) . show)
+  (hPutStrLn stderr "Query client terminated normally")
+  \ChainSyncQueryServerDependencies{..} -> do
       runQueryServer <- acceptRunQueryServer
-      Worker{..} <- atomically $ mkWorker WorkerDependencies {..}
-      runConcurrently $
-        Concurrently (runWorker `catch` catchWorker) *> Concurrently runChainSyncQueryServer
-  pure $ ChainSyncQueryServer { runChainSyncQueryServer }
-
-catchWorker :: SomeException -> IO ()
-catchWorker = hPutStrLn stderr . ("Query worker crashed with exception: " <>) . show
+      pure WorkerDependencies {..}
 
 data WorkerDependencies = WorkerDependencies
   { runQueryServer      :: RunQueryServer IO
@@ -76,18 +66,11 @@ data WorkerDependencies = WorkerDependencies
   , getUTxOs :: !(Database.GetUTxOs IO)
   }
 
-newtype Worker = Worker
-  { runWorker :: IO ()
-  }
-
-mkWorker :: WorkerDependencies -> STM Worker
-mkWorker WorkerDependencies{..} =
+worker :: Component IO WorkerDependencies ()
+worker = component_ \WorkerDependencies{..} -> do
   let
     RunServer run = runQueryServer
-  in
-    pure Worker { runWorker = run server }
 
-  where
     server :: QueryServer ChainSyncQuery IO ()
     server = QueryServer $ pure $ ServerStInit \case
       GetSlotConfig        -> queryGenesisParameters extractSlotConfig
@@ -139,3 +122,4 @@ mkWorker WorkerDependencies{..} =
       withExceptT (const ()) $ except result
 
     extractSlotConfig GenesisParameters{..} = SlotConfig protocolParamSystemStart protocolParamSlotLength
+  run server

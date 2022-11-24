@@ -104,6 +104,7 @@ library
       base >= 4.9 && < 5
     , aeson
     , async
+    , async-components
     , base16
     , binary
     , cardano-api
@@ -210,6 +211,7 @@ library web-server
       base >= 4.9 && < 5
     , aeson
     , async
+    , async-components
     , bytestring
     , cardano-api
     , containers
@@ -280,7 +282,6 @@ executable marlowe
       aeson
     , base >= 4.9 && < 5
     , ansi-terminal
-    , async
     , base16
     , bytestring
     , cardano-api
@@ -332,7 +333,7 @@ executable marlowe-history
   build-depends:
       base >= 4.9 && < 5
     , ansi-terminal
-    , async
+    , async-components
     , base16
     , containers
     , marlowe
@@ -358,7 +359,7 @@ executable marlowe-discovery
   build-depends:
       base >= 4.9 && < 5
     , ansi-terminal
-    , async
+    , async-components
     , base16
     , containers
     , marlowe
@@ -383,8 +384,8 @@ executable marlowe-tx
     Paths_marlowe_runtime
   build-depends:
       ansi-terminal
-    , async
     , base >= 4.9 && < 5
+    , async-components
     , base16
     , bytestring
     , cardano-api
@@ -417,6 +418,7 @@ executable marlowe-web-server
     Paths_marlowe_runtime
   build-depends:
       base >= 4.9 && < 5
+    , async-components
     , bytestring
     , eventuo11y-json
     , exceptions
@@ -449,6 +451,7 @@ test-suite marlowe-runtime-test
   build-depends:
       base >= 4.9 && < 5
     , async
+    , async-components
     , bytestring
     , cardano-api
     , cardano-api:gen

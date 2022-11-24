@@ -1,13 +1,12 @@
 module Main
   where
 
-import Control.Concurrent.STM (atomically)
+import Control.Concurrent.Component
 import Control.Exception (bracket, bracketOnError, throwIO)
-import Data.Void (vacuous)
 import Language.Marlowe.Protocol.HeaderSync.Codec (codecMarloweHeaderSync)
 import Language.Marlowe.Protocol.HeaderSync.Server (marloweHeaderSyncServerPeer)
 import Language.Marlowe.Runtime.ChainSync.Api (RuntimeChainSeekClient, WithGenesis(..), runtimeChainSeekCodec)
-import Language.Marlowe.Runtime.Discovery (Discovery(..), DiscoveryDependencies(..), mkDiscovery)
+import Language.Marlowe.Runtime.Discovery (DiscoveryDependencies(..), discovery)
 import Network.Protocol.ChainSeek.Client (chainSeekClientPeer)
 import Network.Protocol.Driver (acceptRunServerPeerOverSocket, runClientPeerOverSocket)
 import Network.Protocol.Query.Codec (codecQuery)
@@ -68,8 +67,7 @@ run Options{..} = withSocketsDo do
         acceptRunQueryServer = acceptRunServerPeerOverSocket throwIO querySocket codecQuery queryServerPeer
         acceptRunSyncServer = acceptRunServerPeerOverSocket throwIO syncSocket codecMarloweHeaderSync marloweHeaderSyncServerPeer
       let pageSize = 1024 -- TODO move to config with a default
-      Discovery{..} <- atomically $ mkDiscovery DiscoveryDependencies{..}
-      vacuous runDiscovery
+      runComponent_ discovery DiscoveryDependencies{..}
   where
     openServer addr = bracketOnError (openSocket addr) close \socket -> do
       setSocketOption socket ReuseAddr 1

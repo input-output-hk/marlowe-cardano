@@ -9,7 +9,7 @@
 module Main
   where
 
-import Control.Concurrent.STM (atomically)
+import Control.Concurrent.Component (runComponent_)
 import Control.Exception (throwIO)
 import Language.Marlowe.Protocol.HeaderSync.Client (marloweHeaderSyncClientPeer)
 import Language.Marlowe.Protocol.HeaderSync.Codec (codecMarloweHeaderSync)
@@ -31,8 +31,7 @@ main = hSetBuffering stdout LineBuffering
   >> hSetBuffering stderr LineBuffering
   >> getOptions
   >>= optionsToServerDependencies
-  >>= atomically . mkServer
-  >>= runServer
+  >>= runComponent_ server
 
 optionsToServerDependencies :: Options -> IO (ServerDependencies JSONRef)
 optionsToServerDependencies Options{..} = do

@@ -36,6 +36,7 @@
           (hsPkgs."base" or (errorHandler.buildDepError "base"))
           (hsPkgs."aeson" or (errorHandler.buildDepError "aeson"))
           (hsPkgs."async" or (errorHandler.buildDepError "async"))
+          (hsPkgs."async-components" or (errorHandler.buildDepError "async-components"))
           (hsPkgs."base16" or (errorHandler.buildDepError "base16"))
           (hsPkgs."binary" or (errorHandler.buildDepError "binary"))
           (hsPkgs."cardano-api" or (errorHandler.buildDepError "cardano-api"))
@@ -170,6 +171,7 @@
             (hsPkgs."base" or (errorHandler.buildDepError "base"))
             (hsPkgs."aeson" or (errorHandler.buildDepError "aeson"))
             (hsPkgs."async" or (errorHandler.buildDepError "async"))
+            (hsPkgs."async-components" or (errorHandler.buildDepError "async-components"))
             (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
             (hsPkgs."cardano-api" or (errorHandler.buildDepError "cardano-api"))
             (hsPkgs."containers" or (errorHandler.buildDepError "containers"))
@@ -237,7 +239,6 @@
             (hsPkgs."aeson" or (errorHandler.buildDepError "aeson"))
             (hsPkgs."base" or (errorHandler.buildDepError "base"))
             (hsPkgs."ansi-terminal" or (errorHandler.buildDepError "ansi-terminal"))
-            (hsPkgs."async" or (errorHandler.buildDepError "async"))
             (hsPkgs."base16" or (errorHandler.buildDepError "base16"))
             (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
             (hsPkgs."cardano-api" or (errorHandler.buildDepError "cardano-api"))
@@ -300,7 +301,7 @@
           depends = [
             (hsPkgs."base" or (errorHandler.buildDepError "base"))
             (hsPkgs."ansi-terminal" or (errorHandler.buildDepError "ansi-terminal"))
-            (hsPkgs."async" or (errorHandler.buildDepError "async"))
+            (hsPkgs."async-components" or (errorHandler.buildDepError "async-components"))
             (hsPkgs."base16" or (errorHandler.buildDepError "base16"))
             (hsPkgs."containers" or (errorHandler.buildDepError "containers"))
             (hsPkgs."marlowe" or (errorHandler.buildDepError "marlowe"))
@@ -325,7 +326,7 @@
           depends = [
             (hsPkgs."base" or (errorHandler.buildDepError "base"))
             (hsPkgs."ansi-terminal" or (errorHandler.buildDepError "ansi-terminal"))
-            (hsPkgs."async" or (errorHandler.buildDepError "async"))
+            (hsPkgs."async-components" or (errorHandler.buildDepError "async-components"))
             (hsPkgs."base16" or (errorHandler.buildDepError "base16"))
             (hsPkgs."containers" or (errorHandler.buildDepError "containers"))
             (hsPkgs."marlowe" or (errorHandler.buildDepError "marlowe"))
@@ -349,8 +350,8 @@
         "marlowe-tx" = {
           depends = [
             (hsPkgs."ansi-terminal" or (errorHandler.buildDepError "ansi-terminal"))
-            (hsPkgs."async" or (errorHandler.buildDepError "async"))
             (hsPkgs."base" or (errorHandler.buildDepError "base"))
+            (hsPkgs."async-components" or (errorHandler.buildDepError "async-components"))
             (hsPkgs."base16" or (errorHandler.buildDepError "base16"))
             (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
             (hsPkgs."cardano-api" or (errorHandler.buildDepError "cardano-api"))
@@ -381,6 +382,7 @@
         "marlowe-web-server" = {
           depends = [
             (hsPkgs."base" or (errorHandler.buildDepError "base"))
+            (hsPkgs."async-components" or (errorHandler.buildDepError "async-components"))
             (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
             (hsPkgs."eventuo11y-json" or (errorHandler.buildDepError "eventuo11y-json"))
             (hsPkgs."exceptions" or (errorHandler.buildDepError "exceptions"))
@@ -407,6 +409,7 @@
           depends = [
             (hsPkgs."base" or (errorHandler.buildDepError "base"))
             (hsPkgs."async" or (errorHandler.buildDepError "async"))
+            (hsPkgs."async-components" or (errorHandler.buildDepError "async-components"))
             (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
             (hsPkgs."cardano-api" or (errorHandler.buildDepError "cardano-api"))
             (hsPkgs."cardano-api".components.sublibs.gen or (errorHandler.buildDepError "cardano-api:gen"))

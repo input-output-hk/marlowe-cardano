@@ -2,14 +2,15 @@ module Language.Marlowe.Runtime.ChainSync.Store
   ( ChainStore(..)
   , ChainStoreDependencies(..)
   , Changes(..)
-  , mkChainStore
+  , chainStore
   ) where
 
 import Cardano.Api (ChainPoint(..), ChainTip(..), SlotNo(..))
 import Cardano.Api.Shelley (Hash(..))
+import Control.Concurrent.Component
 import Control.Concurrent.STM (STM, atomically, newTVar, readTVar, writeTVar)
 import Control.Concurrent.STM.Delay (Delay, newDelay, waitDelay)
-import Control.Monad (guard, when)
+import Control.Monad (guard, unless, when)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Maybe (MaybeT(..))
 import Data.ByteString.Base16 (encodeBase16)
@@ -18,8 +19,8 @@ import Data.Foldable (for_, traverse_)
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import Data.Time (NominalDiffTime, UTCTime, addUTCTime, diffUTCTime, getCurrentTime, nominalDiffTimeToSeconds)
-import Data.Void (Void)
-import Language.Marlowe.Runtime.ChainSync.Database (CommitBlocks(..), CommitRollback(..))
+import Language.Marlowe.Runtime.ChainSync.Database
+import Language.Marlowe.Runtime.ChainSync.Genesis (GenesisBlock)
 import Language.Marlowe.Runtime.ChainSync.NodeClient (Changes(..), isEmptyChanges)
 import Prelude hiding (filter)
 import System.IO (stderr)
@@ -31,17 +32,19 @@ data ChainStoreDependencies = ChainStoreDependencies
   , commitBlocks   :: !(CommitBlocks IO)   -- ^ How to commit blocks in bulk in the database backend
   , rateLimit      :: !NominalDiffTime     -- ^ The minimum time between database writes
   , getChanges     :: !(STM Changes)       -- ^ A source of changes to commit
+  , getGenesisBlock :: !(GetGenesisBlock IO)
+  , genesisBlock :: !GenesisBlock
+  , commitGenesisBlock :: !(CommitGenesisBlock IO)
   }
 
 -- | Public API of the ChainStore component
-data ChainStore = ChainStore
-  { runChainStore :: !(IO Void)        -- ^ Run the chain store in IO
-  , localTip      :: !(STM ChainTip) -- ^ Action to read the current (local) chain tip
+newtype ChainStore = ChainStore
+  { localTip      :: STM ChainTip -- ^ Action to read the current (local) chain tip
   }
 
 -- | Create a ChainStore component.
-mkChainStore :: ChainStoreDependencies -> STM ChainStore
-mkChainStore ChainStoreDependencies{..} = do
+chainStore :: Component IO ChainStoreDependencies ChainStore
+chainStore = component \ChainStoreDependencies{..} -> do
   localTipVar <- newTVar ChainTipAtGenesis
   let
     awaitChanges :: Maybe Delay -> STM Changes
@@ -53,8 +56,14 @@ mkChainStore ChainStoreDependencies{..} = do
       guard $ not $ isEmptyChanges changes
       pure changes
 
-    runChainStore :: IO Void
-    runChainStore = go Nothing
+    runChainStore :: IO ()
+    runChainStore = do
+      mDbGenesisBlock <- runGetGenesisBlock getGenesisBlock
+      case mDbGenesisBlock of
+        Just dbGenesisBlock -> unless (dbGenesisBlock == genesisBlock) do
+          fail "Existing genesis block does not match computed genesis block"
+        Nothing -> runCommitGenesisBlock commitGenesisBlock genesisBlock
+      go Nothing
       where
         go lastWrite = do
           delay <- wither computeDelay lastWrite
@@ -105,4 +114,4 @@ mkChainStore ChainStoreDependencies{..} = do
 
     localTip = readTVar localTipVar
 
-  pure $ ChainStore { runChainStore, localTip }
+  pure (runChainStore, ChainStore { localTip })

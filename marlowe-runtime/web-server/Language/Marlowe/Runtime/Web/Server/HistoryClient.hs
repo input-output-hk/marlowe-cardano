@@ -6,6 +6,8 @@
 module Language.Marlowe.Runtime.Web.Server.HistoryClient
   where
 
+import Control.Arrow (arr)
+import Control.Concurrent.Component
 import Control.Concurrent.STM (STM, atomically)
 import Control.Error (note)
 import Data.List (sortOn)
@@ -76,8 +78,8 @@ data HistoryClient r = HistoryClient
   , loadTransactions :: LoadTransactions r IO -- ^ Load transactions for a contract from the indexer.
   }
 
-mkHistoryClient :: HistoryClientDependencies r -> STM (HistoryClient r)
-mkHistoryClient HistoryClientDependencies{..} = pure HistoryClient
+historyClient :: Component IO (HistoryClientDependencies r) (HistoryClient r)
+historyClient = arr \HistoryClientDependencies{..} -> HistoryClient
   { loadContract = \mods contractId -> do
       result <- runMarloweSyncClient $ loadContractClient (modifyEventBackend mods eventBackend) contractId
       case result of

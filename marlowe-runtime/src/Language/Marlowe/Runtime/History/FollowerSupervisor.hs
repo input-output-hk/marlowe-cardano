@@ -3,7 +3,8 @@
 module Language.Marlowe.Runtime.History.FollowerSupervisor
   where
 
-import Control.Concurrent.Async (Concurrently(Concurrently, runConcurrently))
+import Control.Concurrent.Async (Concurrently(..))
+import Control.Concurrent.Component
 import Control.Concurrent.STM (STM, atomically, modifyTVar, newTVar, readTVar, writeTVar)
 import Control.Monad (guard, mfilter, when, (<=<))
 import Data.Foldable (sequenceA_)
@@ -38,11 +39,10 @@ data FollowerSupervisor = FollowerSupervisor
   , stopFollowingContract :: ContractId -> STM Bool
   , followerStatuses      :: STM (Map ContractId FollowerStatus)
   , changes               :: STM (Map ContractId UpdateContract)
-  , runFollowerSupervisor :: IO ()
   }
 
-mkFollowerSupervisor :: FollowerSupervisorDependencies -> STM FollowerSupervisor
-mkFollowerSupervisor FollowerSupervisorDependencies{..} = do
+followerSupervisor :: Component IO FollowerSupervisorDependencies FollowerSupervisor
+followerSupervisor = component \FollowerSupervisorDependencies{..} -> do
   followersVar <- newTVar Map.empty
   followerActivationsVar <- newTVar Map.empty
   seenVar <- newTVar Set.empty
@@ -153,4 +153,4 @@ mkFollowerSupervisor FollowerSupervisorDependencies{..} = do
         $ sequenceA_
         $ Concurrently <$> (runFollowerSupervisor : (uncurry runFollowerWithCleanup <$> newFollowers))
 
-  pure FollowerSupervisor {..}
+  pure (runFollowerSupervisor, FollowerSupervisor {..})

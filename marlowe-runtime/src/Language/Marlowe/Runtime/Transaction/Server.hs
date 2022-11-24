@@ -36,6 +36,7 @@ import qualified Colog
 import Control.Applicative ((<|>))
 import Control.Concurrent (forkFinally)
 import Control.Concurrent.Async (Concurrently(..))
+import Control.Concurrent.Component
 import Control.Concurrent.STM (STM, atomically, modifyTVar, newEmptyTMVar, newTVar, putTMVar, readTMVar, readTVar)
 import Control.Error.Util (hoistMaybe, note, noteT)
 import Control.Exception (SomeException, catch)
@@ -101,12 +102,8 @@ data TransactionServerDependencies = TransactionServerDependencies
   , queryChainSync :: forall e a. ChainSyncQuery Void e a -> IO a
   }
 
-newtype TransactionServer = TransactionServer
-  { runTransactionServer :: IO ()
-  }
-
-mkTransactionServer :: TransactionServerDependencies -> STM TransactionServer
-mkTransactionServer TransactionServerDependencies{..} = do
+transactionServer :: Component IO TransactionServerDependencies ()
+transactionServer = component \TransactionServerDependencies{..} -> do
   submitJobsVar <- newTVar mempty
   let
     getSubmitJob txId = Map.lookup txId <$> readTVar submitJobsVar
@@ -116,7 +113,7 @@ mkTransactionServer TransactionServerDependencies{..} = do
       Worker{..} <- atomically $ mkWorker WorkerDependencies {..}
       runConcurrently $
         Concurrently (Colog.usingLoggerT logAction runWorker `catch` catchWorker) *> Concurrently runTransactionServer
-  pure $ TransactionServer { runTransactionServer }
+  pure (runTransactionServer, ())
 
 catchWorker :: SomeException -> IO ()
 catchWorker = hPutStrLn stderr . ("Job worker crashed with exception: " <>) . show
