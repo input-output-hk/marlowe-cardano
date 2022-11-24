@@ -17,7 +17,7 @@ import Control.Category ((>>>))
 import Control.Error (note)
 import Control.Monad ((<=<), (>=>))
 import Control.Monad.Trans.Class (lift)
-import Control.Monad.Trans.Writer (WriterT(runWriterT), tell)
+import Control.Monad.Trans.Writer (WriterT(runWriterT), execWriterT, tell)
 import Data.Bifunctor (bimap, first)
 import Data.Foldable (for_, traverse_)
 import Data.Function (on)
@@ -421,9 +421,6 @@ buildApplyInputsConstraintsV1 systemStart eraHistory marloweOutput invalidBefore
 
 -- | Creates a set of Tx constraints that are used to build a transaction that
 -- withdraws payments from a payout validator.
-
-execWriterT :: WriterT (TxConstraints v0) (Either (ApplyInputsError 'V1)) () -> Either (ApplyInputsError 'V1) (TxConstraints 'V1)
-execWriterT = error "not implemented"
 buildWithdrawConstraints
   :: MarloweVersion v -- ^ The Marlowe version to build the transaction for.
   -> PayoutDatum v -- ^ The role token from which to withdraw funds.
