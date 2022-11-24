@@ -171,6 +171,7 @@
             (hsPkgs."base" or (errorHandler.buildDepError "base"))
             (hsPkgs."aeson" or (errorHandler.buildDepError "aeson"))
             (hsPkgs."async" or (errorHandler.buildDepError "async"))
+            (hsPkgs."async-components" or (errorHandler.buildDepError "async-components"))
             (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
             (hsPkgs."cardano-api" or (errorHandler.buildDepError "cardano-api"))
             (hsPkgs."containers" or (errorHandler.buildDepError "containers"))
@@ -381,6 +382,7 @@
         "marlowe-web-server" = {
           depends = [
             (hsPkgs."base" or (errorHandler.buildDepError "base"))
+            (hsPkgs."async-components" or (errorHandler.buildDepError "async-components"))
             (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
             (hsPkgs."eventuo11y-json" or (errorHandler.buildDepError "eventuo11y-json"))
             (hsPkgs."exceptions" or (errorHandler.buildDepError "exceptions"))
