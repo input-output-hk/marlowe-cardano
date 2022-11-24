@@ -15,7 +15,7 @@ import Data.Foldable (fold)
 import Data.List (find)
 import Data.Map (Map)
 import qualified Data.Map as Map
-import Data.Maybe (fromJust, mapMaybe)
+import Data.Maybe (fromJust, isJust, mapMaybe)
 import qualified Data.Set as Set
 import Data.Traversable (for)
 import Data.Word (Word32)
@@ -216,7 +216,8 @@ mustSendMarloweOutputViolations MarloweV1 MarloweContext{..} TxConstraints{..} T
         Nothing -> ["No output found to Marlowe address"]
         Just txOut -> fold
           [ check (extractValue txOut == assets) "Wrong assets sent to Marlowe Address."
-          , check (extractDatum txOut == Just (toChainDatum MarloweV1 datum)) "Wrong assets sent to Marlowe Address."
+          , check (extractDatum txOut == Just (toChainDatum MarloweV1 datum))
+              $ (if isJust $ extractDatum txOut then "Wrong" else "No") <> " datum sent to Marlowe Address."
           ]
 
 mustSendMerkleizedContinuationOutputViolations
