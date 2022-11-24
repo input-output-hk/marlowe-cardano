@@ -1,6 +1,8 @@
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 -- | This module defines the data-transfer object (DTO) translation layer for
 -- the web server. DTOs are the types served by the API, which notably include
@@ -54,6 +56,7 @@ import Language.Marlowe.Runtime.History.Api (CreateStep(..))
 import Language.Marlowe.Runtime.Plutus.V2.Api (fromPlutusCurrencySymbol)
 import qualified Language.Marlowe.Runtime.Transaction.Api as Tx
 import qualified Language.Marlowe.Runtime.Web as Web
+import Language.Marlowe.Runtime.Web.Server.TxClient (TempTx(..), TempTxStatus(..))
 
 -- | A class that states a type has a DTO representation.
 class HasDTO a where
@@ -64,9 +67,17 @@ class HasDTO a where
 class HasDTO a => ToDTO a where
   toDTO :: a -> DTO a
 
+-- | States that a type can be encoded as a DTO given a tx status.
+class HasDTO a => ToDTOWithTxStatus a where
+  toDTOWithTxStatus :: TempTxStatus -> a -> DTO a
+
 -- | States that a type can be decoded from a DTO.
 class HasDTO a => FromDTO a where
   fromDTO :: DTO a -> Maybe a
+
+-- | States that a type can be encoded as a DTO given a tx status.
+class HasDTO a => FromDTOWithTxStatus a where
+  fromDTOWithTxStatus :: DTO a -> Maybe (TempTxStatus, a)
 
 fromDTOThrow :: (MonadError e m, FromDTO a) => e -> DTO a -> m a
 fromDTOThrow e = maybe (throwError e) pure . fromDTO
@@ -268,18 +279,42 @@ instance ToDTO ContractRecord where
       , txBody = Nothing
       }
 
+instance HasDTO TempTxStatus where
+  type DTO TempTxStatus = Web.TxStatus
+
+instance ToDTO TempTxStatus where
+  toDTO Unsigned = Web.Unsigned
+  toDTO Submitted = Web.Submitted
+
+instance FromDTO TempTxStatus where
+  fromDTO Web.Unsigned = Just Unsigned
+  fromDTO Web.Submitted = Just Submitted
+  fromDTO _ = Nothing
+
+instance HasDTO (TempTx Tx.ContractCreated) where
+  type DTO (TempTx Tx.ContractCreated) = Web.ContractState
+
+instance ToDTO (TempTx Tx.ContractCreated) where
+  toDTO (TempTx _ status tx) = toDTOWithTxStatus status tx
+
+instance HasDTO (TempTx Tx.InputsApplied) where
+  type DTO (TempTx Tx.InputsApplied) = Web.TxHeader
+
+instance ToDTO (TempTx Tx.InputsApplied) where
+  toDTO (TempTx _ status tx) = toDTOWithTxStatus status tx
+
 instance HasDTO (Tx.ContractCreated era v) where
   type DTO (Tx.ContractCreated era v) = Web.ContractState
 
-instance IsCardanoEra era => ToDTO (Tx.ContractCreated era v) where
-  toDTO Tx.ContractCreated{..} =
+instance IsCardanoEra era => ToDTOWithTxStatus (Tx.ContractCreated era v) where
+  toDTOWithTxStatus status Tx.ContractCreated{..} =
     Web.ContractState
       { contractId = toDTO contractId
       , roleTokenMintingPolicyId = toDTO rolesCurrency
       , version = case version of
           MarloweV1 -> Web.V1
       , metadata = toDTO metadata
-      , status = Web.Unsigned
+      , status = toDTO status
       , block = Nothing
       , initialContract = case version of
           MarloweV1 -> Sem.marloweContract datum
@@ -288,18 +323,20 @@ instance IsCardanoEra era => ToDTO (Tx.ContractCreated era v) where
       , state = case version of
           MarloweV1 -> Just $ Sem.marloweState datum
       , utxo = Nothing
-      , txBody = Just $ toDTO txBody
+      , txBody = case status of
+          Unsigned -> Just $ toDTO txBody
+          Submitted -> Nothing
       }
 
 instance HasDTO (Tx.InputsApplied era v) where
   type DTO (Tx.InputsApplied era v) = Web.TxHeader
 
-instance ToDTO (Tx.InputsApplied era v) where
-  toDTO Tx.InputsApplied{..} =
+instance ToDTOWithTxStatus (Tx.InputsApplied era v) where
+  toDTOWithTxStatus status Tx.InputsApplied{..} =
     Web.TxHeader
       { contractId = toDTO contractId
       , transactionId = toDTO $ fromCardanoTxId $ getTxId txBody
-      , status = Web.Unsigned
+      , status = toDTO status
       , block = Nothing
       , utxo = Nothing
       }

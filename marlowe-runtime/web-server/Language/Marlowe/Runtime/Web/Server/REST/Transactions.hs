@@ -27,7 +27,6 @@ import Language.Marlowe.Runtime.Web
 import Language.Marlowe.Runtime.Web.Server.DTO
 import Language.Marlowe.Runtime.Web.Server.HistoryClient (LoadContractHeadersError(..))
 import Language.Marlowe.Runtime.Web.Server.Monad (AppM, applyInputs, loadTransactions)
-import Language.Marlowe.Runtime.Web.Server.TxClient (TempTx(..))
 import Observe.Event (EventBackend, addField, reference, withEvent)
 import Observe.Event.BackendModification (setAncestor)
 import Observe.Event.DSL (FieldSpec(..), SelectorSpec(..))
@@ -86,12 +85,9 @@ get eb contractId ranges = withEvent eb Get \ev -> do
     Left ContractNotFound -> throwError err404
     Left InitialTransactionNotFound -> throwError err416
     Right headers -> do
-      let headers' = either tempTxToDTO toDTO <$> headers
+      let headers' = either id id <$> toDTO headers
       addField ev $ TxHeaders headers'
       addHeader (length headers) <$> returnRange range headers'
-
-tempTxToDTO :: TempTx InputsApplied -> TxHeader
-tempTxToDTO (Created a) = toDTO a
 
 post
   :: EventBackend (AppM r) r TransactionsSelector

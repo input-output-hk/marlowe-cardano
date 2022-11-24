@@ -21,7 +21,6 @@ import Language.Marlowe.Runtime.Web
 import Language.Marlowe.Runtime.Web.Server.DTO
 import Language.Marlowe.Runtime.Web.Server.Monad (AppM, createContract, loadContract, loadContractHeaders)
 import qualified Language.Marlowe.Runtime.Web.Server.REST.Transactions as Transactions
-import Language.Marlowe.Runtime.Web.Server.TxClient (TempTx(Created))
 import Observe.Event (EventBackend, addField, reference, withEvent)
 import Observe.Event.Backend (narrowEventBackend)
 import Observe.Event.BackendModification (setAncestor)
@@ -128,13 +127,10 @@ get eb ranges = withEvent eb Get \ev -> do
   loadContractHeaders startFrom rangeLimit rangeOffset rangeOrder >>= \case
     Nothing -> throwError err416
     Just headers -> do
-      let headers' = either (toContractHeader . tempTxToDTO) toDTO <$> headers
+      let headers' = either toContractHeader id <$> toDTO headers
       addField ev $ ContractHeaders headers'
       let response = IncludeLink (Proxy @"contract") <$> headers'
       addHeader (length headers) <$> returnRange range response
-
-tempTxToDTO :: TempTx ContractCreated -> ContractState
-tempTxToDTO (Created a) = toDTO a
 
 toContractHeader :: ContractState -> ContractHeader
 toContractHeader ContractState{..} = ContractHeader{..}
@@ -156,7 +152,7 @@ getOne eb contractId = withEvent eb GetOne \ev -> do
   loadContract (setAncestor $ reference ev) contractId' >>= \case
     Nothing -> throwError err404
     Just result -> do
-      let contractState = either tempTxToDTO toDTO result
+      let contractState = either toDTO toDTO result
       addField ev $ GetResult contractState
       pure case result of
         Left _ -> OmitLink contractState

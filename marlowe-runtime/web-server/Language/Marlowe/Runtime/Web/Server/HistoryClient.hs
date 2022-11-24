@@ -101,7 +101,7 @@ historyClient = arr \HistoryClientDependencies{..} -> HistoryClient
         =<< allTxs
   }
   where
-    transactionId' (Left (Created InputsApplied{..})) = fromCardanoTxId $ getTxId txBody
+    transactionId' (Left (TempTx _ _ InputsApplied{..})) = fromCardanoTxId $ getTxId txBody
     transactionId' (Right (SomeTransaction _ Transaction{..})) = transactionId
 
 loadContractClient

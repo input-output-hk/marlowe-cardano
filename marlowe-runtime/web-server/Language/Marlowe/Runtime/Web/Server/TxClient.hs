@@ -53,8 +53,10 @@ type ApplyInputs m
   -> Redeemer v
   -> m (Either (ApplyInputsError v) (InputsApplied BabbageEra v))
 
+data TempTxStatus = Unsigned | Submitted
+
 data TempTx (tx :: * -> MarloweVersionTag -> *) where
-  Created :: tx BabbageEra v -> TempTx tx
+  TempTx :: MarloweVersion v -> TempTxStatus -> tx BabbageEra v -> TempTx tx
 
 -- | Public API of the TxClient
 data TxClient = TxClient
@@ -78,7 +80,7 @@ txClient = component \TxClientDependencies{..} -> do
         for_ response \creation@ContractCreated{contractId} -> atomically
           $ modifyTVar tempContracts
           $ Map.insert contractId
-          $ Created creation
+          $ TempTx version Unsigned creation
         pure response
     , applyInputs = \version addresses contractId invalidBefore invalidHereafter inputs -> do
         response <- runTxJobClient
@@ -86,7 +88,7 @@ txClient = component \TxClientDependencies{..} -> do
           $ ApplyInputs version addresses contractId invalidBefore invalidHereafter inputs
         for_ response \application@InputsApplied{txBody} -> do
           let txId = fromCardanoTxId $ getTxId txBody
-          let tempTx = Created application
+          let tempTx = TempTx version Unsigned application
           atomically
             $ modifyTVar tempTransactions
             $ Map.alter (Just . maybe (Map.singleton txId tempTx) (Map.insert txId tempTx)) contractId
