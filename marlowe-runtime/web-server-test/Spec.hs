@@ -1,23 +1,28 @@
-{-# OPTIONS_GHC -Wno-orphans #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE UndecidableInstances #-}
+
+{-# OPTIONS_GHC -Wno-orphans #-}
 
 module Main
   where
 
 import Control.Monad (replicateM)
 import Data.Aeson (Value(Null))
+import qualified Data.Aeson as Aeson
 import qualified Data.ByteString as BS
 import Data.OpenApi hiding (version)
 import Data.Proxy
+import Data.String (IsString(fromString))
 import Data.Text (Text)
 import qualified Data.Text as T
-import Language.Marlowe.Runtime.Web (HasNamedLink)
 import qualified Language.Marlowe.Runtime.Web as Web
+import Network.Arbitrary ()
 import Servant.OpenApi
 import Spec.Marlowe.Semantics.Arbitrary ()
 import Test.Hspec (Spec, describe, hspec)
-import Test.QuickCheck (Arbitrary(..), elements, listOf, oneof, resize)
+import Test.QuickCheck (Arbitrary(..), elements, genericShrink, listOf, oneof, resize)
+import Test.QuickCheck.Gen (suchThat)
+import Test.QuickCheck.Instances ()
 import Text.Regex.Posix ((=~))
 
 main :: IO ()
@@ -34,7 +39,7 @@ instance Arbitrary Web.ContractHeader where
   arbitrary = Web.ContractHeader
     <$> arbitrary
     <*> arbitrary
-    <*> pure Web.V1
+    <*> arbitrary
     <*> arbitrary
     <*> arbitrary
     <*> arbitrary
@@ -48,23 +53,78 @@ instance Arbitrary Web.TxHeader where
     <*> arbitrary
 
 instance Arbitrary Web.ContractState where
-  -- size of 6 will result in a 1-layer deep contract being generated (this is
-  -- all we care about for the purposes of schema checking).
-  arbitrary = resize 6 $ Web.ContractState
+  arbitrary = Web.ContractState
     <$> arbitrary
     <*> arbitrary
-    <*> pure Web.V1
     <*> arbitrary
     <*> arbitrary
     <*> arbitrary
     <*> arbitrary
+    -- size of 6 will result in a 1-layer deep contract being generated (this is
+    -- all we care about for the purposes of schema checking).
+    <*> resize 6 arbitrary
+    <*> resize 6 arbitrary
     <*> arbitrary
     <*> arbitrary
     <*> arbitrary
-  shrink cs = [ cs { Web.initialContract = x } | x <- shrink $ Web.initialContract cs ]
-           <> [ cs { Web.currentContract = x } | x <- shrink $ Web.currentContract cs ]
-           <> [ cs { Web.state = x } | x <- shrink $ Web.state cs ]
+  shrink = genericShrink
 
+instance Arbitrary Web.PostContractsRequest where
+  arbitrary = Web.PostContractsRequest
+    <$> arbitrary
+    <*> arbitrary
+    <*> arbitrary
+    -- size of 6 will result in a 1-layer deep contract being generated (this is
+    -- all we care about for the purposes of schema checking).
+    <*> resize 6 arbitrary
+    <*> arbitrary
+  shrink = genericShrink
+
+instance Arbitrary Web.CreateTxBody where
+  arbitrary = Web.CreateTxBody <$> arbitrary <*> arbitrary
+  shrink = genericShrink
+
+instance Arbitrary Web.MarloweVersion where
+  arbitrary = pure Web.V1
+
+instance Arbitrary Web.RolesConfig where
+  arbitrary = oneof
+    [ Web.UsePolicy <$> arbitrary
+    , Web.Mint <$> arbitrary
+    ]
+  shrink = genericShrink
+
+instance Arbitrary Web.RoleTokenConfig where
+  arbitrary = oneof
+    [ Web.RoleTokenSimple <$> arbitrary
+    , Web.RoleTokenAdvanced <$> arbitrary <*> arbitrary
+    ]
+  shrink = genericShrink
+
+instance Arbitrary Web.TokenMetadata where
+  arbitrary = Web.TokenMetadata
+    <$> arbitrary
+    <*> arbitrary
+    <*> arbitrary
+    <*> arbitrary
+    <*> arbitrary
+    <*> arbitrary
+  shrink = genericShrink
+
+instance Arbitrary Aeson.Key where
+  arbitrary = fromString <$> arbitrary `suchThat` (not . null)
+
+instance Arbitrary Web.TokenMetadataFile where
+  arbitrary = Web.TokenMetadataFile <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
+  shrink = genericShrink
+
+instance Arbitrary Web.Address where
+  arbitrary = Web.Address <$> arbitrary
+  shrink = genericShrink
+
+instance Arbitrary Web.TextEnvelope where
+  arbitrary = Web.TextEnvelope <$> arbitrary <*> arbitrary <*> arbitrary
+  shrink = genericShrink
 
 instance Arbitrary Web.TxOutRef where
   arbitrary = Web.TxOutRef <$> arbitrary <*> arbitrary
@@ -91,7 +151,7 @@ instance Arbitrary Web.BlockHeader where
 instance Arbitrary Web.Base16 where
   arbitrary = Web.Base16 . BS.pack <$> listOf arbitrary
 
-instance (HasNamedLink a Web.API name, Arbitrary a) => Arbitrary (Web.WithLink name a) where
+instance Arbitrary a => Arbitrary (Web.WithLink name a) where
   arbitrary = oneof
     [ Web.OmitLink <$> arbitrary
     , Web.IncludeLink (Proxy @name) <$> arbitrary

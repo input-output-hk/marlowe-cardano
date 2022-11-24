@@ -17,7 +17,7 @@ import Control.Category ((>>>))
 import Control.Error (note)
 import Control.Monad ((<=<), (>=>))
 import Control.Monad.Trans.Class (lift)
-import Control.Monad.Trans.Writer (WriterT, execWriterT, tell)
+import Control.Monad.Trans.Writer (WriterT(runWriterT), execWriterT, tell)
 import Data.Bifunctor (bimap, first)
 import Data.Foldable (for_, traverse_)
 import Data.Function (on)
@@ -36,31 +36,23 @@ import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
 import qualified Language.Marlowe.Core.V1.Semantics.Types.Address as V1
 import Language.Marlowe.Runtime.Cardano.Api (plutusScriptHash, toCardanoAddressAny, toCardanoPlutusScript)
 import Language.Marlowe.Runtime.ChainSync.Api
-  ( Address(Address)
-  , AssetId(AssetId)
-  , Assets(Assets)
-  , Lovelace(Lovelace)
-  , Metadata(MetadataBytes, MetadataMap)
-  , PaymentKeyHash(PaymentKeyHash)
-  , PolicyId(PolicyId)
-  , ScriptHash(unScriptHash)
-  , TokenName(unTokenName)
-  , TransactionMetadata(TransactionMetadata, unTransactionMetadata)
-  , TransactionOutput(TransactionOutput)
+  ( Address(..)
+  , AssetId(..)
+  , Assets(..)
+  , Lovelace(..)
+  , Metadata(..)
+  , PaymentKeyHash(..)
+  , PolicyId(..)
+  , ScriptHash(..)
+  , TokenName(..)
+  , TransactionMetadata(..)
+  , TransactionOutput(..)
   , UTxO(UTxO)
   , toUTxOsList
   )
 import qualified Language.Marlowe.Runtime.ChainSync.Api as CS
 import Language.Marlowe.Runtime.Core.Api
-  ( Contract
-  , IsMarloweVersion(Datum)
-  , MarloweVersion(MarloweV1)
-  , MarloweVersionTag(V1)
-  , PayoutDatum
-  , Redeemer
-  , TransactionScriptOutput(TransactionScriptOutput)
-  , withMarloweVersion
-  )
+  (IsMarloweVersion(..), MarloweVersion(..), MarloweVersionTag(..), TransactionScriptOutput(..), withMarloweVersion)
 import Language.Marlowe.Runtime.Plutus.V2.Api
   ( fromPlutusCurrencySymbol
   , fromPlutusScript
@@ -78,6 +70,7 @@ import Language.Marlowe.Runtime.Transaction.Api
   , CreateError(..)
   , Mint(unMint)
   , NFTMetadata(unNFTMetadata)
+  , RoleTokensConfig(..)
   , WithdrawError
   )
 import Language.Marlowe.Runtime.Transaction.Constraints
@@ -110,8 +103,9 @@ minAdaPerTokenOutput  = Lovelace 10_000
 
 type TxConstraintsBuilderM err v a = WriterT (TxConstraints v) (Either err) a
 
-execTxConstraintsBuilder :: MarloweVersion v -> TxConstraintsBuilderM err v a -> Either err (TxConstraints v)
-execTxConstraintsBuilder v = execWriterT . withMarloweVersion v
+runTxConstraintsBuilder
+  :: MarloweVersion v -> TxConstraintsBuilderM err v a -> Either err (a, TxConstraints v)
+runTxConstraintsBuilder v = runWriterT . withMarloweVersion v
 
 -- | Creates a set of Tx constraints that are used to build a transaction that
 -- instantiates a contract.
@@ -119,23 +113,23 @@ buildCreateConstraints
   :: forall v
    . MarloweVersion v -- ^ The Marlowe version to build the transaction for.
   -> WalletContext  -- ^ The wallet used to mint tokens.
-  -> Maybe (Either PolicyId Mint) -- ^ The initial distribution of the role tokens.
+  -> RoleTokensConfig  -- ^ The initial distribution of the role tokens.
   -> TransactionMetadata -- ^ Extra metadata to add to the transaction.
   -> Lovelace -- ^ Min Lovelace value which should be used on the Marlowe output.
   -> Contract v -- ^ The contract being instantiated.
-  -> Either (CreateError v) (TxConstraints v)
+  -> Either (CreateError v) ((Datum v, Assets, PolicyId), TxConstraints v)
 buildCreateConstraints version walletCtx roles metadata minAda contract = case version of
-  MarloweV1 -> execTxConstraintsBuilder version $ buildCreateConstraintsV1 walletCtx roles metadata minAda contract
+  MarloweV1 -> runTxConstraintsBuilder version $ buildCreateConstraintsV1 walletCtx roles metadata minAda contract
 
 -- | Creates a set of Tx constraints that are used to build a transaction that
 -- instantiates a contract.
 buildCreateConstraintsV1
   :: WalletContext  -- ^ The wallet used to mint tokens.
-  -> Maybe (Either PolicyId Mint) -- ^ The initial distribution of the role tokens.
+  -> RoleTokensConfig -- ^ The initial distribution of the role tokens.
   -> TransactionMetadata -- ^ Extra metadata to add to the transaction.
   -> Lovelace -- ^ Min Lovelace value which should be used on the Marlowe output.
   -> Contract 'V1 -- ^ The contract being instantiated.
-  -> TxConstraintsBuilderM (CreateError 'V1) 'V1 ()
+  -> TxConstraintsBuilderM (CreateError 'V1) 'V1 (Datum 'V1, Assets, PolicyId)
 buildCreateConstraintsV1 walletCtx roles metadata minAda contract = do
   -- Tx body constraints.
   let
@@ -148,10 +142,12 @@ buildCreateConstraintsV1 walletCtx roles metadata minAda contract = do
   policyId <- mintRoleTokens
 
   -- Marlowe script output.
-  sendMarloweOutput policyId
+  (datum, assets) <- sendMarloweOutput policyId
+
+  pure (datum, assets, policyId)
   where
     nftsMetadata = case roles of
-      Just (Right (Map.toList . unMint -> minting)) -> do
+      RoleTokensMint (Map.toList . unMint -> minting) -> do
         let
           tokensMetadata = catMaybes $ minting <&> \case
             (tokenName, (_, Right (Just (unNFTMetadata -> nftMetadata)))) -> do
@@ -169,7 +165,9 @@ buildCreateConstraintsV1 walletCtx roles metadata minAda contract = do
 
     sendMarloweOutput policyId = do
       datum <- mkMarloweDatum policyId
-      tell $ mustSendMarloweOutput (adaAsset minAda) datum
+      let assets = adaAsset minAda
+      tell $ mustSendMarloweOutput assets datum
+      pure (datum, assets)
 
     mkMarloweDatum :: PolicyId -> TxConstraintsBuilderM (CreateError 'V1) 'V1 (Datum 'V1)
     mkMarloweDatum policyId = do
@@ -205,8 +203,8 @@ buildCreateConstraintsV1 walletCtx roles metadata minAda contract = do
     -- Role token distribution constraints
     mintRoleTokens :: TxConstraintsBuilderM (CreateError 'V1) 'V1 PolicyId
     mintRoleTokens = case roles of
-      Just (Left policyId) -> pure policyId
-      Just (Right (unMint -> minting)) -> do
+      RoleTokensUsePolicy policyId -> pure policyId
+      RoleTokensMint (unMint -> minting) -> do
         let
           WalletContext { availableUtxos } = walletCtx
           txLovelaceRequirementEstimate = adaAsset $
@@ -245,7 +243,7 @@ buildCreateConstraintsV1 walletCtx roles metadata minAda contract = do
         for_ (Map.toList minting) \(tokenName, (address, _)) ->
           tell $ mustMintRoleToken txOutRef witness (AssetId policyId tokenName) address
         pure policyId
-      Nothing -> do
+      RoleTokensNone -> do
         let
           -- We use ADA currency symbol as a placeholder which
           -- carries really no semantics in this context.
@@ -295,7 +293,7 @@ buildApplyInputsConstraintsV1 systemStart eraHistory marloweOutput invalidBefore
 
   -- Construct inputs constraints.
   -- Consume UTXOs containing Marlowe script.
-  tell $ mustConsumeMarloweOutput invalidBefore' invalidHereafter' redeemer
+  tell $ mustConsumeMarloweOutput @'V1 invalidBefore' invalidHereafter' redeemer
 
   -- Consume UTXOs containing all necessary role tokens and send them back.
   for_ requiredParties $ traverse_ $ \case

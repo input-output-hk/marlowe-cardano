@@ -148,6 +148,7 @@
             (hsPkgs."lens" or (errorHandler.buildDepError "lens"))
             (hsPkgs."marlowe" or (errorHandler.buildDepError "marlowe"))
             (hsPkgs."marlowe-runtime" or (errorHandler.buildDepError "marlowe-runtime"))
+            (hsPkgs."network-uri" or (errorHandler.buildDepError "network-uri"))
             (hsPkgs."openapi3" or (errorHandler.buildDepError "openapi3"))
             (hsPkgs."servant" or (errorHandler.buildDepError "servant"))
             (hsPkgs."servant-pagination" or (errorHandler.buildDepError "servant-pagination"))
@@ -209,6 +210,7 @@
             "Language/Marlowe/Runtime/Web/Server/REST"
             "Language/Marlowe/Runtime/Web/Server/REST/Contracts"
             "Language/Marlowe/Runtime/Web/Server/REST/Transactions"
+            "Language/Marlowe/Runtime/Web/Server/TxClient"
             "Language/Marlowe/Runtime/Web/Server"
             "Language/Marlowe/Runtime/Web/Server/Util"
             ];
@@ -449,12 +451,14 @@
             (hsPkgs."aeson" or (errorHandler.buildDepError "aeson"))
             (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
             (hsPkgs."hspec" or (errorHandler.buildDepError "hspec"))
+            (hsPkgs."network-arbitrary" or (errorHandler.buildDepError "network-arbitrary"))
             (hsPkgs."marlowe" or (errorHandler.buildDepError "marlowe"))
             (hsPkgs."marlowe-runtime".components.sublibs.web or (errorHandler.buildDepError "marlowe-runtime:web"))
             (hsPkgs."marlowe-runtime".components.sublibs.web-server or (errorHandler.buildDepError "marlowe-runtime:web-server"))
             (hsPkgs."marlowe-test" or (errorHandler.buildDepError "marlowe-test"))
             (hsPkgs."openapi3" or (errorHandler.buildDepError "openapi3"))
             (hsPkgs."QuickCheck" or (errorHandler.buildDepError "QuickCheck"))
+            (hsPkgs."quickcheck-instances" or (errorHandler.buildDepError "quickcheck-instances"))
             (hsPkgs."regex-posix" or (errorHandler.buildDepError "regex-posix"))
             (hsPkgs."servant-openapi3" or (errorHandler.buildDepError "servant-openapi3"))
             (hsPkgs."text" or (errorHandler.buildDepError "text"))

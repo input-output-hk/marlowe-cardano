@@ -12,6 +12,8 @@ data Options = Options
   , discoverySyncPort :: PortNumber
   , historyHost :: HostName
   , historySyncPort :: PortNumber
+  , txHost :: HostName
+  , txCommandPort :: PortNumber
   , port :: PortNumber
   , openAPIEnabled :: Bool
   }
@@ -25,6 +27,8 @@ getOptions = do
   discoverySyncPortParser <- O.optParserWithEnvDefault O.discoverySyncPort
   historyHostParser <- O.optParserWithEnvDefault O.historyHost
   historySyncPortParser <- O.optParserWithEnvDefault O.historySyncPort
+  txHostParser <- O.optParserWithEnvDefault O.txHost
+  txCommandPortParser <- O.optParserWithEnvDefault O.txCommandPort
   portParser <- O.optParserWithEnvDefault portOption
   let
     openAPIParser = flag False True $ mconcat
@@ -38,6 +42,8 @@ getOptions = do
       <*> discoverySyncPortParser
       <*> historyHostParser
       <*> historySyncPortParser
+      <*> txHostParser
+      <*> txCommandPortParser
       <*> portParser
       <*> openAPIParser
     infoMod = mconcat

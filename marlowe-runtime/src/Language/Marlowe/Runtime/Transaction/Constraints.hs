@@ -320,8 +320,7 @@ instance Core.IsMarloweVersion v => Monoid (TxConstraints v) where
 
 -- | Errors that can occur when trying to solve the constraints.
 data ConstraintError v
-  = ConstraintError
-  | MintingUtxoNotFound Chain.TxOutRef
+  = MintingUtxoNotFound Chain.TxOutRef
   | RoleTokenNotFound Chain.AssetId
   | ToCardanoError
   | MissingMarloweInput
@@ -891,7 +890,7 @@ solveInitialTxBodyContent protocol marloweVersion MarloweContext{..} WalletConte
     , txCertificates = C.TxCertificatesNone
     , txUpdateProposal = C.TxUpdateProposalNone
     -- , txMintValue
-    , txMintValue = logD ("END values for the new tx body") txMintValue
+    , txMintValue = logD "END values for the new tx body" txMintValue
     , txScriptValidity = C.TxScriptValidityNone
     }
   where
