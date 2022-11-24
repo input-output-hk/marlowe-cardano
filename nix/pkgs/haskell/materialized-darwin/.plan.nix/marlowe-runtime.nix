@@ -159,6 +159,7 @@
           modules = [
             "Language/Marlowe/Runtime/Web/API"
             "Language/Marlowe/Runtime/Web/Types"
+            "Language/Marlowe/Runtime/Web/Orphans"
             "Language/Marlowe/Runtime/Web"
             ];
           hsSourceDirs = [ "web" ];
@@ -171,12 +172,14 @@
             (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
             (hsPkgs."cardano-api" or (errorHandler.buildDepError "cardano-api"))
             (hsPkgs."containers" or (errorHandler.buildDepError "containers"))
+            (hsPkgs."errors" or (errorHandler.buildDepError "errors"))
             (hsPkgs."eventuo11y" or (errorHandler.buildDepError "eventuo11y"))
             (hsPkgs."eventuo11y-dsl" or (errorHandler.buildDepError "eventuo11y-dsl"))
             (hsPkgs."eventuo11y-json" or (errorHandler.buildDepError "eventuo11y-json"))
             (hsPkgs."eventuo11y-batteries" or (errorHandler.buildDepError "eventuo11y-batteries"))
             (hsPkgs."exceptions" or (errorHandler.buildDepError "exceptions"))
             (hsPkgs."lens" or (errorHandler.buildDepError "lens"))
+            (hsPkgs."marlowe" or (errorHandler.buildDepError "marlowe"))
             (hsPkgs."marlowe-protocols" or (errorHandler.buildDepError "marlowe-protocols"))
             (hsPkgs."marlowe-runtime".components.sublibs.web or (errorHandler.buildDepError "marlowe-runtime:web"))
             (hsPkgs."marlowe-runtime" or (errorHandler.buildDepError "marlowe-runtime"))
@@ -190,6 +193,7 @@
             (hsPkgs."servant-pagination" or (errorHandler.buildDepError "servant-pagination"))
             (hsPkgs."stm" or (errorHandler.buildDepError "stm"))
             (hsPkgs."stm-delay" or (errorHandler.buildDepError "stm-delay"))
+            (hsPkgs."text" or (errorHandler.buildDepError "text"))
             (hsPkgs."transformers" or (errorHandler.buildDepError "transformers"))
             (hsPkgs."transformers-base" or (errorHandler.buildDepError "transformers-base"))
             (hsPkgs."typed-protocols" or (errorHandler.buildDepError "typed-protocols"))
@@ -201,9 +205,12 @@
             "Language/Marlowe/Runtime/Web/Server/Monad"
             "Language/Marlowe/Runtime/Web/Server/OpenAPI"
             "Language/Marlowe/Runtime/Web/Server/ContractHeaderIndexer"
+            "Language/Marlowe/Runtime/Web/Server/HistoryClient"
             "Language/Marlowe/Runtime/Web/Server/REST"
             "Language/Marlowe/Runtime/Web/Server/REST/Contracts"
+            "Language/Marlowe/Runtime/Web/Server/REST/Transactions"
             "Language/Marlowe/Runtime/Web/Server"
+            "Language/Marlowe/Runtime/Web/Server/Util"
             ];
           hsSourceDirs = [ "web-server" ];
           };
@@ -442,7 +449,10 @@
             (hsPkgs."aeson" or (errorHandler.buildDepError "aeson"))
             (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
             (hsPkgs."hspec" or (errorHandler.buildDepError "hspec"))
+            (hsPkgs."marlowe" or (errorHandler.buildDepError "marlowe"))
             (hsPkgs."marlowe-runtime".components.sublibs.web or (errorHandler.buildDepError "marlowe-runtime:web"))
+            (hsPkgs."marlowe-runtime".components.sublibs.web-server or (errorHandler.buildDepError "marlowe-runtime:web-server"))
+            (hsPkgs."marlowe-test" or (errorHandler.buildDepError "marlowe-test"))
             (hsPkgs."openapi3" or (errorHandler.buildDepError "openapi3"))
             (hsPkgs."QuickCheck" or (errorHandler.buildDepError "QuickCheck"))
             (hsPkgs."regex-posix" or (errorHandler.buildDepError "regex-posix"))

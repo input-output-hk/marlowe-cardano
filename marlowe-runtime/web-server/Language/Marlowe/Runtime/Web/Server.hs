@@ -28,6 +28,7 @@ import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Reader (runReaderT)
 import Data.Void (Void)
 import Language.Marlowe.Protocol.HeaderSync.Client (MarloweHeaderSyncClient)
+import Language.Marlowe.Protocol.Sync.Client (MarloweSyncClient)
 import qualified Language.Marlowe.Runtime.Web as Web
 import Language.Marlowe.Runtime.Web.Server.ContractHeaderIndexer
   ( ContractHeaderIndexer(..)
@@ -35,13 +36,15 @@ import Language.Marlowe.Runtime.Web.Server.ContractHeaderIndexer
   , ContractHeaderIndexerSelector
   , mkContractHeaderIndexer
   )
+import Language.Marlowe.Runtime.Web.Server.HistoryClient
+  (HistoryClient(..), HistoryClientDependencies(..), HistoryClientSelector, mkHistoryClient)
 import Language.Marlowe.Runtime.Web.Server.Monad (AppEnv(..), AppM(..))
 import qualified Language.Marlowe.Runtime.Web.Server.OpenAPI as OpenAPI
 import Language.Marlowe.Runtime.Web.Server.REST (ApiSelector)
 import qualified Language.Marlowe.Runtime.Web.Server.REST as REST
 import Network.Protocol.Driver (RunClient)
 import Observe.Event (EventBackend, hoistEventBackend, narrowEventBackend)
-import Observe.Event.BackendModification (EventBackendModifiers, setAncestor)
+import Observe.Event.BackendModification (modifyEventBackend, setAncestor)
 import Observe.Event.DSL (SelectorField(Inject), SelectorSpec(SelectorSpec))
 import Observe.Event.Render.JSON (DefaultRenderSelectorJSON(..))
 import Observe.Event.Render.JSON.DSL.Compile (compile)
@@ -55,22 +58,21 @@ apiWithOpenApi :: Proxy APIWithOpenAPI
 apiWithOpenApi = Proxy
 
 serverWithOpenAPI
-  :: EventBackend AppM r ApiSelector
-  -> EventBackendModifiers r r'
-  -> ServerT APIWithOpenAPI AppM
-serverWithOpenAPI eventBackend mods = OpenAPI.server :<|> REST.server eventBackend mods
+  :: EventBackend (AppM r) r ApiSelector
+  -> ServerT APIWithOpenAPI (AppM r)
+serverWithOpenAPI eb = OpenAPI.server :<|> REST.server eb
 
 serveAppM
   :: HasServer api '[]
   => Proxy api
-  -> AppEnv
-  -> ServerT api AppM
+  -> AppEnv r
+  -> ServerT api (AppM r)
   -> Application
 serveAppM api env = serve api . hoistServer api (flip runReaderT env . runAppM)
 
-app :: Bool -> AppEnv -> EventBackend AppM r ApiSelector -> EventBackendModifiers r r' -> Application
-app True env eventBackend = serveAppM apiWithOpenApi env . serverWithOpenAPI eventBackend
-app False env eventBackend = serveAppM Web.api env . REST.server eventBackend
+app :: Bool -> AppEnv r -> EventBackend (AppM r) r ApiSelector -> Application
+app True env = serveAppM apiWithOpenApi env . serverWithOpenAPI
+app False env = serveAppM Web.api env . REST.server
 
 instance DefaultRenderSelectorJSON ServeRequest where
   defaultRenderSelectorJSON = renderServeRequest
@@ -80,12 +82,14 @@ compile $ SelectorSpec "server"
   , "http" ≔ Inject ''ServeRequest
   , "api" ≔ Inject ''ApiSelector
   , ["contract", "indexer"] ≔ Inject ''ContractHeaderIndexerSelector
+  , ["history"] ≔ Inject ''HistoryClientSelector
   ]
 
 data ServerDependencies r = ServerDependencies
   { openAPIEnabled :: Bool
   , runApplication :: Application -> IO ()
   , runMarloweHeaderSyncClient :: RunClient IO MarloweHeaderSyncClient
+  , runMarloweSyncClient :: RunClient IO MarloweSyncClient
   , eventBackend :: EventBackend IO r ServerSelector
   }
 
@@ -110,12 +114,19 @@ mkServer ServerDependencies{..} = do
     { runMarloweHeaderSyncClient
     , eventBackend = narrowEventBackend ContractIndexer eventBackend
     }
+  HistoryClient{..} <- mkHistoryClient HistoryClientDependencies
+    { runMarloweSyncClient
+    , eventBackend = narrowEventBackend History eventBackend
+    }
   let
     env = AppEnv
       { _loadContractHeaders = loadContractHeaders
+      , _loadContract = loadContract
+      , _loadTransactions = loadTransactions
       }
     httpBackend = hoistEventBackend liftIO $ narrowEventBackend Api eventBackend
-    app' = application (narrowEventBackend Http eventBackend) $ app openAPIEnabled env httpBackend . setAncestor
+    app' = application (narrowEventBackend Http eventBackend) $
+      app openAPIEnabled env . (`modifyEventBackend`  httpBackend) . setAncestor
   pure Server
     { runServer = mapConcurrently_ @[] id
         [ runApplication app'

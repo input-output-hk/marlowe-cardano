@@ -1,7 +1,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE StrictData #-}
 {-# LANGUAGE TypeFamilies #-}
 
 -- | This module defines the request and response types in the Marlowe Runtime
@@ -10,7 +9,7 @@
 module Language.Marlowe.Runtime.Web.Types
   where
 
-import Control.Lens
+import Control.Lens hiding ((.=))
 import Control.Monad ((<=<))
 import Data.Aeson
 import Data.Aeson.Types (parseFail)
@@ -20,18 +19,17 @@ import Data.ByteString.Base16 (decodeBase16, encodeBase16)
 import Data.Foldable (fold)
 import Data.Map (Map)
 import Data.OpenApi
-  ( HasType(type_)
+  ( HasType(..)
   , NamedSchema(..)
-  , OpenApiType(OpenApiString)
-  , Referenced(Inline)
+  , OpenApiType(..)
+  , ToParamSchema
   , ToSchema
   , declareSchema
-  , declareSchemaRef
   , description
   , enum_
   , example
-  , oneOf
   , pattern
+  , toParamSchema
   )
 import Data.OpenApi.Schema (ToSchema(..))
 import Data.String (IsString(..))
@@ -40,6 +38,8 @@ import qualified Data.Text as T
 import Data.Text.Encoding (encodeUtf8)
 import Data.Word (Word16, Word64)
 import GHC.Generics (Generic)
+import qualified Language.Marlowe.Core.V1.Semantics.Types as Semantics
+import Language.Marlowe.Runtime.Web.Orphans ()
 import Servant
 import Servant.Pagination (HasPagination(..))
 
@@ -107,23 +107,26 @@ data TxOutRef = TxOutRef
   } deriving (Show, Eq, Ord, Generic)
 
 instance FromHttpApiData TxOutRef where
-  parseUrlPiece t = case splitOn ":" t of
+  parseUrlPiece t = case splitOn "#" t of
     [idText, ixText] -> TxOutRef <$> parseUrlPiece idText <*> parseUrlPiece ixText
-    _ -> Left "Expected [a-fA-F0-9]{64}:[0-9]+"
+    _ -> Left "Expected [a-fA-F0-9]{64}#[0-9]+"
 
 instance ToHttpApiData TxOutRef where
-  toUrlPiece TxOutRef{..} = toUrlPiece txId <> ":" <> toUrlPiece txIx
+  toUrlPiece TxOutRef{..} = toUrlPiece txId <> "#" <> toUrlPiece txIx
 
 instance FromJSON TxOutRef where
   parseJSON =
     withText "TxOutRef" $ either (parseFail . T.unpack) pure . parseUrlPiece
 
 instance ToSchema TxOutRef where
-  declareNamedSchema _ = pure $ NamedSchema (Just "TxOutRef") $ mempty
+  declareNamedSchema proxy = pure $ NamedSchema (Just "TxOutRef") $ toParamSchema proxy
+
+instance ToParamSchema TxOutRef where
+  toParamSchema _ = mempty
     & type_ ?~ OpenApiString
     & description ?~ "A reference to a transaction output with a transaction ID and index."
-    & pattern ?~ "^[a-fA-F0-9]{64}:[0-9]+$"
-    & example ?~ "98d601c9307dd43307cf68a03aad0086d4e07a789b66919ccf9f7f7676577eb7:1"
+    & pattern ?~ "^[a-fA-F0-9]{64}#[0-9]+$"
+    & example ?~ "98d601c9307dd43307cf68a03aad0086d4e07a789b66919ccf9f7f7676577eb7#1"
 
 instance ToJSON TxOutRef where
   toJSON = String . toUrlPiece
@@ -143,7 +146,7 @@ instance ToHttpApiData MarloweVersion where
 
 instance FromHttpApiData MarloweVersion where
   parseUrlPiece "v1" = Right V1
-  parseUrlPiece _ = Left $ fold
+  parseUrlPiece _ = Left $ fold @[]
     [ "expected one of "
     , intercalate "; " ["v1"]
     ]
@@ -154,12 +157,29 @@ instance ToSchema MarloweVersion where
     & description ?~ "A version of the Marlowe language."
     & enum_ ?~ ["v1"]
 
+data ContractState = ContractState
+  { contractId :: TxOutRef
+  , roleTokenMintingPolicyId :: PolicyId
+  , version :: MarloweVersion
+  , metadata :: Map Word64 Metadata
+  , status :: TxStatus
+  , block :: Maybe BlockHeader
+  , initialContract :: Semantics.Contract
+  , currentContract :: Semantics.Contract
+  , state :: Maybe Semantics.State
+  , utxo :: Maybe TxOutRef
+  } deriving (Show, Eq, Generic)
+
+instance ToJSON ContractState
+instance ToSchema ContractState
+
 data ContractHeader = ContractHeader
   { contractId :: TxOutRef
   , roleTokenMintingPolicyId :: PolicyId
   , version :: MarloweVersion
   , metadata :: Map Word64 Metadata
-  , status :: TxStatusHeader
+  , status :: TxStatus
+  , block :: Maybe BlockHeader
   } deriving (Show, Eq, Ord, Generic)
 
 instance ToJSON ContractHeader
@@ -177,26 +197,38 @@ instance ToSchema Metadata where
   declareNamedSchema _ = pure $ NamedSchema (Just "Metadata") $ mempty
     & description ?~ "An arbitrary JSON value for storage in a metadata key"
 
-data TxStatusHeader
+data TxHeader = TxHeader
+  { contractId :: TxOutRef
+  , transactionId :: TxId
+  , status :: TxStatus
+  , block :: Maybe BlockHeader
+  , utxo :: Maybe TxOutRef
+  } deriving (Show, Eq, Ord, Generic)
+
+instance ToJSON TxHeader
+instance ToSchema TxHeader
+
+instance HasPagination TxHeader "transactionId" where
+  type RangeType TxHeader "transactionId" = TxId
+  getFieldValue _ TxHeader{..} = transactionId
+
+data TxStatus
   = Unsigned
   | Submitted
-  | Confirmed BlockHeader
+  | Confirmed
   deriving (Show, Eq, Ord)
 
-instance ToJSON TxStatusHeader where
+instance ToJSON TxStatus where
   toJSON Unsigned = String "unsigned"
   toJSON Submitted = String "submitted"
-  toJSON (Confirmed blockHeader) = toJSON blockHeader
+  toJSON Confirmed = String "confirmed"
 
-instance ToSchema TxStatusHeader where
-  declareNamedSchema _ = do
-    let
-      strSchema = mempty
-        & type_ ?~ OpenApiString
-        & enum_ ?~ ["unsigned", "submitted"]
-    blockHeaderSchema <- declareSchemaRef $ Proxy @BlockHeader
-    pure $ NamedSchema (Just "TxStatusHeader") $ mempty
-      & oneOf ?~ [Inline strSchema, blockHeaderSchema]
+instance ToSchema TxStatus where
+  declareNamedSchema _ = pure
+    $ NamedSchema (Just "TxStatusHeader")
+    $ mempty
+      & type_ ?~ OpenApiString
+      & enum_ ?~ ["unsigned", "submitted", "confirmed"]
       & description ?~ "A header of the status of a transaction on the local node."
 
 data BlockHeader = BlockHeader

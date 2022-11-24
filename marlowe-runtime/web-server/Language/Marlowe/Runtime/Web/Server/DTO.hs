@@ -1,3 +1,4 @@
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE TypeFamilies #-}
 
 -- | This module defines the data-transfer object (DTO) translation layer for
@@ -11,12 +12,24 @@ module Language.Marlowe.Runtime.Web.Server.DTO
 import Language.Marlowe.Runtime.Discovery.Api
 
 import Cardano.Api (metadataValueToJsonNoSchema)
+import Control.Monad.Except (MonadError, throwError)
 import Data.Coerce (coerce)
 import Data.Map (Map)
 import Data.Word (Word16, Word64)
+import qualified Language.Marlowe.Core.V1.Semantics as Sem
+import qualified Language.Marlowe.Core.V1.Semantics.Types as Sem
 import Language.Marlowe.Runtime.Cardano.Api (toCardanoMetadata)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
-import Language.Marlowe.Runtime.Core.Api (ContractId(..), MarloweVersion(MarloweV1), SomeMarloweVersion(..))
+import Language.Marlowe.Runtime.Core.Api
+  ( ContractId(..)
+  , MarloweVersion(..)
+  , SomeMarloweVersion(..)
+  , Transaction(..)
+  , TransactionOutput(..)
+  , TransactionScriptOutput(..)
+  )
+import Language.Marlowe.Runtime.History.Api (CreateStep(..))
+import Language.Marlowe.Runtime.Plutus.V2.Api (fromPlutusCurrencySymbol)
 import qualified Language.Marlowe.Runtime.Web as Web
 
 -- | A class that states a type has a DTO representation.
@@ -32,8 +45,14 @@ class HasDTO a => ToDTO a where
 class HasDTO a => FromDTO a where
   fromDTO :: DTO a -> Maybe a
 
+fromDTOThrow :: (MonadError e m, FromDTO a) => e -> DTO a -> m a
+fromDTOThrow e = maybe (throwError e) pure . fromDTO
+
 instance HasDTO (Map k a) where
   type DTO (Map k a) = Map k (DTO a)
+
+instance FromDTO a => FromDTO (Map k a) where
+  fromDTO = traverse fromDTO
 
 instance ToDTO a => ToDTO (Map k a) where
   toDTO = fmap toDTO
@@ -41,8 +60,20 @@ instance ToDTO a => ToDTO (Map k a) where
 instance HasDTO [a] where
   type DTO [a] = [DTO a]
 
+instance FromDTO a => FromDTO [a] where
+  fromDTO = traverse fromDTO
+
 instance ToDTO a => ToDTO [a] where
   toDTO = fmap toDTO
+
+instance HasDTO (Maybe a) where
+  type DTO (Maybe a) = Maybe (DTO a)
+
+instance ToDTO a => ToDTO (Maybe a) where
+  toDTO = fmap toDTO
+
+instance FromDTO a => FromDTO (Maybe a) where
+  fromDTO = traverse fromDTO
 
 instance HasDTO ContractHeader where
   type DTO ContractHeader = Web.ContractHeader
@@ -53,7 +84,8 @@ instance ToDTO ContractHeader where
     , roleTokenMintingPolicyId = toDTO rolesCurrency
     , version = toDTO marloweVersion
     , metadata = toDTO metadata
-    , status = Web.Confirmed $ toDTO blockHeader
+    , status = Web.Confirmed
+    , block = Just $ toDTO blockHeader
     }
 
 instance HasDTO Chain.BlockHeader where
@@ -142,3 +174,49 @@ instance HasDTO Chain.BlockHeaderHash where
 
 instance ToDTO Chain.BlockHeaderHash where
   toDTO = coerce
+
+data ContractRecord = forall v. ContractRecord
+  (MarloweVersion v)
+  ContractId
+  Chain.BlockHeader
+  (CreateStep v)
+  (Maybe (TransactionScriptOutput v))
+
+data SomeTransaction = forall v. SomeTransaction
+  (MarloweVersion v)
+  (Transaction v)
+
+instance HasDTO ContractRecord where
+  type DTO ContractRecord = Web.ContractState
+
+instance ToDTO ContractRecord where
+  toDTO (ContractRecord MarloweV1 contractId block CreateStep{..} output) =
+    Web.ContractState
+      { contractId = toDTO contractId
+      , roleTokenMintingPolicyId = toDTO
+          $ fromPlutusCurrencySymbol
+          $ Sem.rolesCurrency
+          $ Sem.marloweParams
+          $ datum createOutput
+      , version = Web.V1
+      , metadata = mempty -- TODO
+      , status = Web.Confirmed
+      , block = Just $ toDTO block
+      , initialContract = Sem.marloweContract $ datum createOutput
+      , currentContract = maybe Sem.Close (Sem.marloweContract . datum) output
+      , state = Sem.marloweState . datum <$> output
+      , utxo = toDTO . utxo <$> output
+      }
+
+instance HasDTO SomeTransaction where
+  type DTO SomeTransaction = Web.TxHeader
+
+instance ToDTO SomeTransaction where
+  toDTO (SomeTransaction MarloweV1 Transaction{..}) =
+    Web.TxHeader
+      { contractId = toDTO contractId
+      , transactionId = toDTO transactionId
+      , status = Web.Confirmed
+      , block = Just $ toDTO blockHeader
+      , utxo = toDTO . utxo <$> scriptOutput output
+      }

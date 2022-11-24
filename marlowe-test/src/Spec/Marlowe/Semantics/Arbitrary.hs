@@ -17,6 +17,7 @@
 {-# LANGUAGE RecordWildCards #-}
 
 {-# OPTIONS_GHC -fno-warn-orphans #-}
+{-# LANGUAGE BlockArguments #-}
 
 
 module Spec.Marlowe.Semantics.Arbitrary
@@ -90,7 +91,7 @@ import Plutus.V2.Ledger.Api
 import PlutusTx.Builtins (BuiltinByteString, appendByteString, lengthOfByteString, sliceByteString)
 import Spec.Marlowe.Semantics.Golden (GoldenTransaction, goldenContracts, goldenTransactions)
 import Test.Tasty.QuickCheck
-  (Arbitrary(..), Gen, chooseInteger, elements, frequency, listOf, shrinkList, suchThat, vectorOf)
+  (Arbitrary(..), Gen, chooseInteger, elements, frequency, listOf, shrinkList, sized, suchThat, vectorOf)
 
 import qualified Plutus.V2.Ledger.Api as Ledger (Address(..))
 import qualified PlutusTx.AssocMap as AM (Map, delete, empty, fromList, keys, toList)
@@ -947,7 +948,7 @@ arbitraryContractSized = arbitraryContractWeighted . (`replicate` defaultContrac
 
 
 instance SemiArbitrary Contract where
-  semiArbitrary = arbitraryContractSized 5
+  semiArbitrary context = sized \size -> arbitraryContractSized (min size 100 `div` 20) context -- Keep tests from growing too large to execute by capping the maximum contract depth at 5
 
 
 -- | Generate a random association map.

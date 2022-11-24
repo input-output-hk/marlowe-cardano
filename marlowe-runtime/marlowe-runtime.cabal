@@ -172,6 +172,7 @@ library web
   other-modules:
     Language.Marlowe.Runtime.Web.API
     Language.Marlowe.Runtime.Web.Types
+    Language.Marlowe.Runtime.Web.Orphans
   build-depends:
       base >= 4.9 && < 5
     , aeson
@@ -193,13 +194,16 @@ library web-server
   hs-source-dirs: web-server
   exposed-modules:
     Language.Marlowe.Runtime.Web.Server
+    Language.Marlowe.Runtime.Web.Server.Util
   other-modules:
     Language.Marlowe.Runtime.Web.Server.DTO
     Language.Marlowe.Runtime.Web.Server.Monad
     Language.Marlowe.Runtime.Web.Server.OpenAPI
     Language.Marlowe.Runtime.Web.Server.ContractHeaderIndexer
+    Language.Marlowe.Runtime.Web.Server.HistoryClient
     Language.Marlowe.Runtime.Web.Server.REST
     Language.Marlowe.Runtime.Web.Server.REST.Contracts
+    Language.Marlowe.Runtime.Web.Server.REST.Transactions
   build-depends:
       base >= 4.9 && < 5
     , aeson
@@ -207,12 +211,14 @@ library web-server
     , bytestring
     , cardano-api
     , containers
+    , errors
     , eventuo11y
     , eventuo11y-dsl
     , eventuo11y-json
     , eventuo11y-batteries
     , exceptions
     , lens
+    , marlowe
     , marlowe-protocols
     , marlowe-runtime:web
     , marlowe-runtime
@@ -226,6 +232,7 @@ library web-server
     , servant-pagination
     , stm
     , stm-delay
+    , text
     , transformers
     , transformers-base
     , typed-protocols
@@ -477,7 +484,10 @@ test-suite web-server-test
     , aeson
     , bytestring
     , hspec
+    , marlowe
     , marlowe-runtime:web
+    , marlowe-runtime:web-server
+    , marlowe-test
     , openapi3
     , QuickCheck
     , regex-posix
