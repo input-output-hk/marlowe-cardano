@@ -17,8 +17,7 @@ import Cardano.Api.Byron (toByronRequiresNetworkMagic)
 import qualified Cardano.Chain.Genesis as Byron
 import Cardano.Crypto (abstractHashToBytes, decodeAbstractHash)
 import Control.Concurrent.Component
-import Control.Concurrent.STM (atomically, modifyTVar, newTVarIO, readTVar)
-import Control.Exception (bracket, bracketOnError, finally, throwIO)
+import Control.Exception (bracket, bracketOnError, throwIO)
 import Control.Monad ((<=<))
 import Control.Monad.Trans.Except (ExceptT(ExceptT), runExceptT, withExceptT)
 import Data.String (IsString(fromString))
