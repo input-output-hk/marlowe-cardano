@@ -9,6 +9,7 @@
 module Language.Marlowe.Runtime.Transaction.Api
   ( ApplyInputsConstraintsBuildupError(..)
   , ApplyInputsError(..)
+  , ContractCreated(..)
   , CreateBuildupError(..)
   , CreateError(..)
   , JobId(..)
@@ -16,6 +17,7 @@ module Language.Marlowe.Runtime.Transaction.Api
   , MarloweTxCommand(..)
   , Mint(unMint)
   , NFTMetadata(unNFTMetadata)
+  , RoleTokensConfig(..)
   , SubmitError(..)
   , SubmitStatus(..)
   , WalletAddresses(..)
@@ -24,17 +26,7 @@ module Language.Marlowe.Runtime.Transaction.Api
   , mkNFTMetadata
   ) where
 
-import Cardano.Api
-  ( AsType(..)
-  , BabbageEra
-  , SerialiseAsRawBytes(serialiseToRawBytes)
-  , Tx
-  , TxBody
-  , deserialiseFromCBOR
-  , deserialiseFromRawBytes
-  , serialiseToCBOR
-  )
-import Cardano.Api.Shelley (StakeCredential(..))
+import Cardano.Api (AsType(..), BabbageEra, IsCardanoEra, Tx, TxBody, cardanoEra, deserialiseFromCBOR, serialiseToCBOR)
 import Data.Binary (Binary, Get, get, getWord8, put)
 import Data.Binary.Put (Put, putWord8)
 import Data.ByteString (ByteString)
@@ -46,16 +38,20 @@ import Data.Set (Set)
 import Data.Time (UTCTime)
 import Data.Type.Equality (type (:~:)(Refl))
 import Data.Void (Void, absurd)
+import Data.Word (Word64)
 import GHC.Generics (Generic)
 import GHC.Natural (Natural)
+import Language.Marlowe.Runtime.Cardano.Api (cardanoEraToAsType)
 import Language.Marlowe.Runtime.ChainSync.Api
   ( Address
+  , Assets
   , BlockHeader
   , Lovelace
   , Metadata
   , PlutusScript
   , PolicyId
   , ScriptHash
+  , StakeCredential
   , TokenName
   , TransactionMetadata
   , TxId
@@ -69,7 +65,7 @@ import Network.Protocol.Job.Types (Command(..), SomeTag(..))
 
 -- CIP-25 metadata
 newtype NFTMetadata = NFTMetadata { unNFTMetadata :: Metadata }
-  deriving stock (Eq, Ord, Generic)
+  deriving stock (Show, Eq, Ord, Generic)
   deriving newtype (Binary)
 
 -- FIXME: Validate the metadata format
@@ -78,11 +74,61 @@ mkNFTMetadata = Just . NFTMetadata
 
 -- | Non empty mint request.
 newtype Mint = Mint { unMint :: Map TokenName (Address, Either Natural (Maybe NFTMetadata)) }
-  deriving stock (Eq, Ord, Generic)
+  deriving stock (Show, Eq, Ord, Generic)
   deriving newtype (Binary, Semigroup, Monoid)
 
 mkMint :: NonEmpty (TokenName, (Address, Either Natural (Maybe NFTMetadata))) -> Mint
 mkMint = Mint . Map.fromList . NonEmpty.toList
+
+data RoleTokensConfig
+  = RoleTokensNone
+  | RoleTokensUsePolicy PolicyId
+  | RoleTokensMint Mint
+  deriving stock (Show, Eq, Ord, Generic)
+  deriving anyclass (Binary)
+
+data ContractCreated era v = ContractCreated
+  { contractId :: ContractId
+  , rolesCurrency :: PolicyId
+  , metadata :: Map Word64 Metadata
+  , marloweScriptHash :: ScriptHash
+  , marloweScriptAddress :: Address
+  , payoutScriptHash :: ScriptHash
+  , payoutScriptAddress :: Address
+  , version :: MarloweVersion v
+  , datum :: Datum v
+  , assets :: Assets
+  , txBody :: TxBody era
+  }
+
+deriving instance Show (ContractCreated BabbageEra 'V1)
+deriving instance Eq (ContractCreated BabbageEra 'V1)
+
+instance IsCardanoEra era => Binary (ContractCreated era 'V1) where
+  put ContractCreated{..} = do
+    put contractId
+    put rolesCurrency
+    put metadata
+    put marloweScriptHash
+    put marloweScriptAddress
+    put payoutScriptHash
+    put payoutScriptAddress
+    putDatum MarloweV1 datum
+    put assets
+    putTxBody txBody
+  get = do
+    contractId <- get
+    rolesCurrency <- get
+    metadata <- get
+    marloweScriptHash <- get
+    marloweScriptAddress <- get
+    payoutScriptHash <- get
+    payoutScriptAddress <- get
+    datum <- getDatum MarloweV1
+    assets <- get
+    txBody <- getTxBody
+    let version = MarloweV1
+    pure ContractCreated{..}
 
 -- | The low-level runtime API for building and submitting transactions.
 data MarloweTxCommand status err result where
@@ -97,18 +143,15 @@ data MarloweTxCommand status err result where
     -- ^ The Marlowe version to use
     -> WalletAddresses
     -- ^ The wallet addresses to use when constructing the transaction
-    -> Maybe (Either PolicyId Mint)
-    -- ^ The initial distribution of role tokens
+    -> RoleTokensConfig
+    -- ^ How to initialize role tokens
     -> TransactionMetadata
     -- ^ Optional metadata to attach to the transaction
     -> Lovelace
     -- ^ Min Lovelace which should be used for the contract output.
     -> Contract v
     -- ^ The contract to run
-    -> MarloweTxCommand Void (CreateError v)
-        ( ContractId -- The ID of the contract (tx output that carries the datum)
-        , TxBody BabbageEra -- The unsigned tx body, to be signed by a wallet.
-        )
+    -> MarloweTxCommand Void (CreateError v) (ContractCreated BabbageEra v)
 
   -- | Construct a transaction that advances an active Marlowe contract by
   -- applying a sequence of inputs. The resulting, unsigned transaction can be
@@ -162,7 +205,7 @@ data MarloweTxCommand status err result where
 
 instance Command MarloweTxCommand where
   data Tag MarloweTxCommand status err result where
-    TagCreate :: MarloweVersion v -> Tag MarloweTxCommand Void (CreateError v) (ContractId, TxBody BabbageEra)
+    TagCreate :: MarloweVersion v -> Tag MarloweTxCommand Void (CreateError v) (ContractCreated BabbageEra v)
     TagApplyInputs :: MarloweVersion v -> Tag MarloweTxCommand Void (ApplyInputsError v) (TxBody BabbageEra)
     TagWithdraw :: MarloweVersion v -> Tag MarloweTxCommand Void (WithdrawError v) (TxBody BabbageEra)
     TagSubmit :: Tag MarloweTxCommand SubmitStatus SubmitError BlockHeader
@@ -221,17 +264,7 @@ instance Command MarloweTxCommand where
 
   putCommand = \case
     Create mStakeCredential version walletAddresses roles metadata minAda contract -> do
-      case mStakeCredential of
-        Nothing -> putWord8 0x01
-        Just credential -> do
-          putWord8 0x02
-          case credential of
-            StakeCredentialByKey stakeKeyHash -> do
-              putWord8 0x01
-              put $ serialiseToRawBytes stakeKeyHash
-            StakeCredentialByScript scriptHash -> do
-              putWord8 0x02
-              put $ serialiseToRawBytes scriptHash
+      put mStakeCredential
       put walletAddresses
       put roles
       put metadata
@@ -251,24 +284,7 @@ instance Command MarloweTxCommand where
 
   getCommand = \case
     TagCreate version -> do
-      mStakeCredentialTag <- getWord8
-      mStakeCredential <- case mStakeCredentialTag of
-        0x01 -> pure Nothing
-        0x02 -> Just <$> do
-          stakeCredentialTag <- getWord8
-          case stakeCredentialTag  of
-            0x01 -> do
-              bytes <- get
-              case deserialiseFromRawBytes (AsHash AsStakeKey) bytes of
-                Nothing -> fail "invalid stake key hash bytes"
-                Just stakeKeyHash -> pure $ StakeCredentialByKey stakeKeyHash
-            0x02 -> do
-              bytes <- get
-              case deserialiseFromRawBytes AsScriptHash bytes of
-                Nothing -> fail "invalid stake key hash bytes"
-                Just scriptHash -> pure $ StakeCredentialByScript scriptHash
-            _ -> fail $ "Invalid stake credential tag " <> show stakeCredentialTag
-        _ -> fail $ "Invalid Maybe tag " <> show mStakeCredentialTag
+      mStakeCredential <- get
       walletAddresses <- get
       roles <- get
       metadata <- get
@@ -327,24 +343,24 @@ instance Command MarloweTxCommand where
     TagSubmit -> get
 
   putResult = \case
-    TagCreate _ -> \(contractId, txBody) -> put contractId *> putTxBody txBody
+    TagCreate MarloweV1 -> put
     TagApplyInputs _ -> putTxBody
     TagWithdraw _ -> putTxBody
     TagSubmit -> put
 
   getResult = \case
-    TagCreate _ -> (,) <$> get <*> getTxBody
+    TagCreate MarloweV1 -> get
     TagApplyInputs _ -> getTxBody
     TagWithdraw _ -> getTxBody
     TagSubmit -> get
 
-putTxBody :: TxBody BabbageEra -> Put
+putTxBody :: IsCardanoEra era => TxBody era -> Put
 putTxBody = put . serialiseToCBOR
 
-getTxBody :: Get (TxBody BabbageEra)
+getTxBody :: forall era. IsCardanoEra era => Get (TxBody era)
 getTxBody = do
   bytes <- get @ByteString
-  case deserialiseFromCBOR (AsTxBody AsBabbage) bytes of
+  case deserialiseFromCBOR (AsTxBody $ cardanoEraToAsType $ cardanoEra @era) bytes of
     Left err     -> fail $ show err
     Right txBody -> pure txBody
 
@@ -359,6 +375,7 @@ data CreateError v
   = CreateConstraintError (ConstraintError v)
   | CreateLoadMarloweContextFailed LoadMarloweContextError
   | CreateBuildupFailed CreateBuildupError
+  | CreateToCardanoError
   deriving (Generic)
 
 data CreateBuildupError

@@ -6,7 +6,7 @@
 module Language.Marlowe.Runtime.Web.Server.HistoryClient
   where
 
-import Control.Concurrent.STM (STM)
+import Control.Concurrent.STM (STM, atomically)
 import Control.Error (note)
 import Data.List (sortOn)
 import Data.Maybe (isNothing, listToMaybe, mapMaybe)
@@ -18,6 +18,7 @@ import Language.Marlowe.Runtime.Core.Api
   (ContractId, MarloweVersion, Transaction(..), TransactionOutput(..), TransactionScriptOutput)
 import Language.Marlowe.Runtime.History.Api (ContractStep(..), CreateStep(..))
 import Language.Marlowe.Runtime.Web.Server.DTO (ContractRecord(..), SomeTransaction(..))
+import Language.Marlowe.Runtime.Web.Server.TxClient (TempContract)
 import Language.Marlowe.Runtime.Web.Server.Util (applyRangeToAscList)
 import Observe.Event (EventBackend, addField, withEvent)
 import Observe.Event.BackendModification (EventBackendModifiers, modifyEventBackend)
@@ -43,6 +44,7 @@ compile $ SelectorSpec ["history", "client"]
 
 data HistoryClientDependencies r = HistoryClientDependencies
   { runMarloweSyncClient :: forall a. MarloweSyncClient IO a -> IO a
+  , lookupTempContract :: ContractId -> STM (Maybe TempContract)
   , eventBackend :: EventBackend IO r HistoryClientSelector
   }
 
@@ -51,7 +53,7 @@ type LoadContract r m
    = forall r'
    . EventBackendModifiers r r'
   -> ContractId               -- ^ ID of the contract to load
-  -> m (Maybe ContractRecord) -- ^ Nothing if the ID is not found
+  -> m (Maybe (Either TempContract ContractRecord)) -- ^ Nothing if the ID is not found
 
 data LoadContractHeadersError
   = ContractNotFound
@@ -76,8 +78,11 @@ data HistoryClient r = HistoryClient
 
 mkHistoryClient :: HistoryClientDependencies r -> STM (HistoryClient r)
 mkHistoryClient HistoryClientDependencies{..} = pure HistoryClient
-  { loadContract = \mods ->
-      runMarloweSyncClient . loadContractClient (modifyEventBackend mods eventBackend)
+  { loadContract = \mods contractId -> do
+      result <- runMarloweSyncClient $ loadContractClient (modifyEventBackend mods eventBackend) contractId
+      case result of
+        Nothing -> atomically $ fmap Left <$> lookupTempContract contractId
+        Just contract -> pure $ Just $ Right contract
   , loadTransactions = \mods contractId startFrom limit offset order ->
       (note InitialTransactionNotFound . applyRangeToAscList transactionId' startFrom limit offset order =<<)
         <$> runMarloweSyncClient (loadTransactionsClient (modifyEventBackend mods eventBackend) contractId)

@@ -10,7 +10,6 @@
 {-# OPTIONS_GHC -Wno-orphans #-}
 {-# LANGUAGE TypeFamilies #-}
 
-
 module Language.Marlowe.Runtime.Transaction.Server
   where
 
@@ -25,7 +24,6 @@ import Cardano.Api
   , PaymentCredential(..)
   , ShelleyBasedEra(..)
   , StakeAddressReference(..)
-  , StakeCredential
   , Tx
   , TxBody(..)
   , TxBodyContent(..)
@@ -39,7 +37,7 @@ import Control.Applicative ((<|>))
 import Control.Concurrent (forkFinally)
 import Control.Concurrent.Async (Concurrently(..))
 import Control.Concurrent.STM (STM, atomically, modifyTVar, newEmptyTMVar, newTVar, putTMVar, readTMVar, readTVar)
-import Control.Error.Util (hoistMaybe, noteT)
+import Control.Error.Util (hoistMaybe, note, noteT)
 import Control.Exception (SomeException, catch)
 import Control.Monad (when)
 import Control.Monad.Base (MonadBase(..))
@@ -57,9 +55,9 @@ import Data.Maybe (fromJust)
 import Data.Time (UTCTime, getCurrentTime)
 import Data.Void (Void)
 import Language.Marlowe.Runtime.Cardano.Api
-  (fromCardanoAddressInEra, fromCardanoTxId, toCardanoPaymentCredential, toCardanoScriptHash)
+  (fromCardanoAddressInEra, fromCardanoTxId, toCardanoPaymentCredential, toCardanoScriptHash, toCardanoStakeCredential)
 import Language.Marlowe.Runtime.ChainSync.Api
-  (BlockHeader, ChainSyncQuery(..), Credential(..), PolicyId, TokenName, TransactionMetadata, TxId(..))
+  (BlockHeader, ChainSyncQuery(..), Credential(..), TokenName, TransactionMetadata, TxId(..))
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Core.Api
   (Contract, ContractId(..), MarloweVersion(MarloweV1), Payout(Payout, datum), Redeemer, withMarloweVersion)
@@ -67,10 +65,11 @@ import Language.Marlowe.Runtime.Core.ScriptRegistry (getCurrentScripts, marloweS
 import qualified Language.Marlowe.Runtime.Core.ScriptRegistry as Registry
 import Language.Marlowe.Runtime.Transaction.Api
   ( ApplyInputsError(..)
+  , ContractCreated(..)
   , CreateError(..)
   , JobId(..)
   , MarloweTxCommand(..)
-  , Mint
+  , RoleTokensConfig
   , SubmitError(..)
   , SubmitStatus(..)
   , WalletAddresses(..)
@@ -230,21 +229,23 @@ execCreate
   :: SolveConstraints
   -> LoadWalletContext
   -> NetworkId
-  -> Maybe StakeCredential
+  -> Maybe Chain.StakeCredential
   -> MarloweVersion v
   -> WalletAddresses
-  -> Maybe (Either PolicyId Mint)
+  -> RoleTokensConfig
   -> TransactionMetadata
   -> Chain.Lovelace
   -> Contract v
-  -> WorkerM (ServerStCmd MarloweTxCommand Void (CreateError v) (ContractId, TxBody BabbageEra) WorkerM ())
+  -> WorkerM (ServerStCmd MarloweTxCommand Void (CreateError v) (ContractCreated BabbageEra v) WorkerM ())
 execCreate solveConstraints loadWalletContext networkId mStakeCredential version addresses roleTokens metadata minAda contract = execExceptT do
   walletContext <- liftIO $ loadWalletContext addresses
   lift . Colog.logDebug . O.renderValue . A.toJSON $ walletContext
-  constraints <- except $ buildCreateConstraints version walletContext roleTokens metadata minAda contract
+  mCardanoStakeCredential <- except $ traverse (note CreateToCardanoError . toCardanoStakeCredential) mStakeCredential
+  ((datum, assets, rolesCurrency), constraints) <- except
+    $ buildCreateConstraints version walletContext roleTokens metadata minAda contract
   let
     scripts@Registry.MarloweScripts{..} = Registry.getCurrentScripts version
-    stakeReference = maybe NoStakeAddress StakeAddressByValue mStakeCredential
+    stakeReference = maybe NoStakeAddress StakeAddressByValue mCardanoStakeCredential
     marloweAddress = fromCardanoAddressInEra BabbageEra
       $ AddressInEra (ShelleyAddressInEra ShelleyBasedEraBabbage)
       $ makeShelleyAddress
@@ -273,9 +274,21 @@ execCreate solveConstraints loadWalletContext networkId mStakeCredential version
   txBody <- except
     $ first CreateConstraintError
     $ solveConstraints version marloweContext walletContext constraints
-  pure (ContractId $ findMarloweOutput txBody, txBody)
+  pure ContractCreated
+    { contractId = ContractId $ findMarloweOutput mCardanoStakeCredential txBody
+    , rolesCurrency
+    , metadata = Chain.unTransactionMetadata metadata
+    , txBody
+    , marloweScriptHash = Constraints.marloweScriptHash marloweContext
+    , marloweScriptAddress = Constraints.marloweAddress marloweContext
+    , payoutScriptHash = Constraints.payoutScriptHash marloweContext
+    , payoutScriptAddress = Constraints.payoutAddress marloweContext
+    , version
+    , datum
+    , assets
+    }
   where
-  findMarloweOutput = \case
+  findMarloweOutput mCardanoStakeCredential = \case
     body@(TxBody TxBodyContent{..}) -> Chain.TxOutRef (fromCardanoTxId $ getTxId body)
       $ fst
       $ fromJust
@@ -287,7 +300,7 @@ execCreate solveConstraints loadWalletContext networkId mStakeCredential version
         $ marloweScript
         $ getCurrentScripts version
       scriptAddress = makeShelleyAddress networkId (PaymentCredentialByScript scriptHash)
-        $ maybe NoStakeAddress StakeAddressByValue mStakeCredential
+        $ maybe NoStakeAddress StakeAddressByValue mCardanoStakeCredential
       isToCurrentScriptAddress (TxOut (AddressInEra (ShelleyAddressInEra ShelleyBasedEraBabbage) address) _ _ _) = address == scriptAddress
       isToCurrentScriptAddress _ = False
 
