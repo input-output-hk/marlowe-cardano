@@ -5,10 +5,34 @@
 {-# LANGUAGE RankNTypes #-}
 
 module Language.Marlowe.Runtime.Transaction.Constraints
-  where
+  ( ConstraintError(..)
+  , MarloweContext(..)
+  , MarloweInputConstraints(..)
+  , MarloweOutputConstraints(..)
+  , RoleTokenConstraints(..)
+  , SolveConstraints
+  , TxConstraints(..)
+  , WalletContext(..)
+  , adjustTxForMinUtxo
+  , balanceTx
+  , mustConsumeMarloweOutput
+  , mustConsumePayouts
+  , mustMintRoleToken
+  , mustPayToAddress
+  , mustPayToRole
+  , mustSendMarloweOutput
+  , mustSendMerkleizedContinuationOutput
+  , mustSpendRoleToken
+  , requiresMetadata
+  , requiresSignature
+  , selectCoins
+  , solveConstraints
+  , solveInitialTxBodyContent
+  ) where
 
 import qualified Cardano.Api as C
 import qualified Cardano.Api.Shelley as C
+import Control.Error (note)
 import Control.Monad (forM, unless, when)
 import Data.Aeson (ToJSON)
 import Data.Binary (Binary)
@@ -18,9 +42,9 @@ import Data.Functor ((<&>))
 import Data.List (delete, find, minimumBy, nub)
 import qualified Data.List.NonEmpty as NE (NonEmpty(..), toList)
 import Data.Map (Map)
-import qualified Data.Map as Map (fromSet, keysSet, lookup, mapWithKey, member, null, singleton, toList, unionWith)
+import qualified Data.Map as Map (fromSet, keysSet, mapWithKey, member, null, singleton, toList, unionWith)
 import qualified Data.Map.Strict as SMap (fromList, toList)
-import Data.Maybe (fromMaybe, mapMaybe, maybeToList)
+import Data.Maybe (mapMaybe, maybeToList)
 import Data.Monoid (First(..), getFirst)
 import Data.Set (Set)
 import qualified Data.Set as Set (fromAscList, null, singleton, toAscList, toList, union)
@@ -59,7 +83,7 @@ import Witherable (wither)
 --   Be advised: logging in pure code with trace is subject to lazy eval and may never show up!
 logD :: String -> a -> a
 -- logD = trace  -- Logging "active"
-logD = flip const  -- Logging "inactive", uncomment this to disable logging without removing log code
+logD = const id -- Logging "inactive", uncomment this to disable logging without removing log code
 
 -- | Describes a set of Marlowe-specific conditions that a transaction must satisfy.
 data TxConstraints v = TxConstraints
@@ -171,7 +195,7 @@ mustSendMarloweOutput assets datum =
 
 -- | Require the transaction to send an output which contains datum with
 -- the merkleized continuation. `MarloweTxInput` redeemer only references the continuation
--- through hash but the actual continuation is embeded in the datum of other dedicated for that
+-- through hash but the actual continuation is embedded in the datum of other dedicated for that
 -- purpose output.
 --
 -- Requires that:
@@ -199,26 +223,9 @@ mustSendMerkleizedContinuationOutput contract =
 --   1. fromCardano (total role txBody `subValue` total role txBody') == assets
 --   2. The transaction sends an output to a script address.
 --   3. The datum of the output in rule 2 is equal to the role.
---   4. The transaction consumes an output from a marlowe script address.
---   5. The script address in rule 1 is the payout script address associated
---      with the marlowe script address in rule 2.
 mustPayToRole :: Core.IsMarloweVersion v => Chain.Assets -> Core.PayoutDatum v -> TxConstraints v
 mustPayToRole assets datum =
   mempty { payToRoles = Map.singleton datum assets }
-
--- | Get the total amount required to be paid to the given address.
-getTotalForAddress :: Chain.Address -> TxConstraints v -> Chain.Assets
-getTotalForAddress address = fromMaybe mempty . Map.lookup address . payToAddresses
-
--- | Get the total amount required to be paid to the given role.
-getTotalForRole
-  :: forall v
-   . Core.IsMarloweVersion v
-  => Core.PayoutDatum v
-  -> TxConstraints v
-  -> Chain.Assets
-getTotalForRole role = case Core.marloweVersion @v of
-  Core.MarloweV1 -> fromMaybe mempty . Map.lookup role . payToRoles
 
 data MarloweInputConstraints v
   = MarloweInputConstraintsNone
@@ -242,14 +249,8 @@ instance Monoid (MarloweInputConstraints v) where
 --   1. The input at the Marlowe Script Address for the contract is consumed.
 --   2. The input in rule 1 includes the given redeemer.
 --   3. The validity range of the transaction matches the given min and max
---      validity bounds (converted to slots).
---   4. The input in rule 1 comes from one of the marlowe script addresses
---      associated with marlowe version v.
---   5. All other inputs do not come from a script address.
---   6. If 'computeTransaction' returns 'Close' for the previous datum and the redeemer,
---      there are no outputs to any Marlowe script address.
---   7. Otherwise, there is an output to the same address as the input with the
---      correct datum and assets.
+--      validity bounds.
+--   4. All other inputs do not come from a script address.
 mustConsumeMarloweOutput :: Core.IsMarloweVersion v => C.SlotNo -> C.SlotNo -> Core.Redeemer v -> TxConstraints v
 mustConsumeMarloweOutput invalidBefore invalidHereafter inputs =
   mempty { marloweInputConstraints = MarloweInput invalidBefore invalidHereafter inputs }
@@ -260,13 +261,6 @@ mustConsumeMarloweOutput invalidBefore invalidHereafter inputs =
 -- Requires that:
 --   1. At least one UTXO is consumed that bears the correct payout datum.
 --   2. All such inputs that satisfy rule 1 come from the same address.
---   3. The address from rule 2 exists in the set of payout validator
---      addresses associated with marlowe version v.
---   4. For all inputs i that do not satisfy rule 1, the address of i does
---      not exist in the set of payout script addresses associated with
---      Marlowe version v.
---   5. For all inputs i, the address of i does not exist in the set of
---      Marlowe script addresses associated with Marlowe version v.
 mustConsumePayouts :: Core.IsMarloweVersion v => Core.PayoutDatum v -> TxConstraints v
 mustConsumePayouts payoutDatum = mempty { payoutInputConstraints = Set.singleton payoutDatum }
 
@@ -360,6 +354,8 @@ data MarloweContext v = MarloweContext
   , marloweScriptHash :: Chain.ScriptHash
   , payoutScriptHash :: Chain.ScriptHash
   }
+
+deriving instance Show (MarloweContext 'V1)
 
 type SolveConstraints
    = forall v
@@ -854,25 +850,6 @@ solveInitialTxBodyContent protocol marloweVersion MarloweContext{..} WalletConte
   txValidityRange <- solveTxValidityRange
   txExtraKeyWits <- solveTxExtraKeyWits
   txMintValue <- solveTxMintValue
-  -- pure C.TxBodyContent
-  --   { txIns
-  --   , txInsCollateral = C.TxInsCollateralNone
-  --   , txInsReference
-  --   , txOuts
-  --   , txTotalCollateral = C.TxTotalCollateralNone
-  --   , txReturnCollateral = C.TxReturnCollateralNone
-  --   , txFee = C.TxFeeExplicit C.TxFeesExplicitInBabbageEra 0
-  --   , txValidityRange
-  --   , txMetadata
-  --   , txAuxScripts = C.TxAuxScriptsNone
-  --   , txExtraKeyWits
-  --   , txProtocolParams = C.BuildTxWith $ Just protocol
-  --   , txWithdrawals = C.TxWithdrawalsNone
-  --   , txCertificates = C.TxCertificatesNone
-  --   , txUpdateProposal = C.TxUpdateProposalNone
-  --   , txMintValue
-  --   , txScriptValidity = C.TxScriptValidityNone
-  --   }
   pure C.TxBodyContent
     { txIns = logD ("BEGIN values for the new tx body\nsolveInitialTxBodyContent txIns: " <> show txIns) txIns
     , txInsCollateral = C.TxInsCollateralNone
@@ -889,7 +866,6 @@ solveInitialTxBodyContent protocol marloweVersion MarloweContext{..} WalletConte
     , txWithdrawals = C.TxWithdrawalsNone
     , txCertificates = C.TxCertificatesNone
     , txUpdateProposal = C.TxUpdateProposalNone
-    -- , txMintValue
     , txMintValue = logD "END values for the new tx body" txMintValue
     , txScriptValidity = C.TxScriptValidityNone
     }
@@ -1095,6 +1071,3 @@ solveInitialTxBodyContent protocol marloweVersion MarloweContext{..} WalletConte
           $ C.BuildTxWith
           $ Map.fromSet (const witness) policyIds
       _ -> pure C.TxMintNone
-
-note :: a -> Maybe b -> Either a b
-note e = maybe (Left e) Right

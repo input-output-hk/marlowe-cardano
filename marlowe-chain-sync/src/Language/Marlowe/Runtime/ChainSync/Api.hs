@@ -119,6 +119,7 @@ import Data.Bifunctor (bimap)
 import Data.Binary (Binary(..), Get, Put, get, getWord8, put, putWord8)
 import Data.ByteString (ByteString)
 import Data.ByteString.Base16 (decodeBase16, encodeBase16)
+import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Lazy as LBS
 import Data.Function (on)
 import Data.Functor (($>))
@@ -439,8 +440,10 @@ newtype PolicyId = PolicyId { unPolicyId :: ByteString }
 
 newtype TokenName = TokenName { unTokenName :: ByteString }
   deriving stock (Eq, Ord, Generic)
-  deriving newtype (Binary)
-  deriving (IsString, Show, ToJSON) via Base16
+  deriving newtype (Show, IsString, Binary)
+
+instance ToJSON TokenName where
+  toJSON = Aeson.String . T.pack . BS.unpack . unTokenName
 
 newtype Quantity = Quantity { unQuantity :: Word64 }
   deriving stock (Show, Eq, Ord, Generic)
