@@ -260,6 +260,11 @@ executable cip30-demo
     , yesod
     , yesod-core
     , shakespeare
+    , network
+    , cardano-api
+    , marlowe-protocols
+    , marlowe-runtime
+    , marlowe-chain-sync
 
 executable marlowe
   import: lang
