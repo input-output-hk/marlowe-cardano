@@ -8,9 +8,8 @@
 module Language.Marlowe.Runtime.History.QueryServer
   where
 
-import Control.Concurrent.Async (Concurrently(Concurrently, runConcurrently))
+import Control.Concurrent.Component
 import Control.Concurrent.STM (STM, atomically)
-import Control.Exception (SomeException, catch)
 import Data.Bifunctor (bimap)
 import Data.Map (Map)
 import qualified Data.Map as Map
@@ -33,22 +32,14 @@ data HistoryQueryServerDependencies = HistoryQueryServerDependencies
   , followerPageSize     :: Natural
   }
 
-newtype HistoryQueryServer = HistoryQueryServer
-  { runHistoryQueryServer :: IO ()
-  }
-
-mkHistoryQueryServer :: HistoryQueryServerDependencies -> STM HistoryQueryServer
-mkHistoryQueryServer HistoryQueryServerDependencies{..} = do
-  let
-    runHistoryQueryServer = do
+historyQueryServer :: Component IO HistoryQueryServerDependencies ()
+historyQueryServer = serverComponent
+  worker
+  (hPutStrLn stderr . ("Query worker crashed with exception: " <>) . show)
+  (hPutStrLn stderr "Query client terminated normally")
+  \HistoryQueryServerDependencies{..} -> do
       runQueryServer <- acceptRunQueryServer
-      Worker{..} <- atomically $ mkWorker WorkerDependencies {..}
-      runConcurrently $
-        Concurrently (runWorker `catch` catchWorker) *> Concurrently runHistoryQueryServer
-  pure $ HistoryQueryServer { runHistoryQueryServer }
-
-catchWorker :: SomeException -> IO ()
-catchWorker = hPutStrLn stderr . ("Query worker crashed with exception: " <>) . show
+      pure WorkerDependencies {..}
 
 data WorkerDependencies = WorkerDependencies
   { runQueryServer   :: RunQueryServer IO
@@ -56,22 +47,16 @@ data WorkerDependencies = WorkerDependencies
   , followerPageSize :: Natural
   }
 
-newtype Worker = Worker
-  { runWorker :: IO ()
-  }
-
-mkWorker :: WorkerDependencies -> STM Worker
-mkWorker WorkerDependencies{..} =
+worker :: Component IO WorkerDependencies ()
+worker = component_ \WorkerDependencies{..} -> do
   let
     RunServer run = runQueryServer
-  in
-    pure Worker { runWorker = run server }
 
-  where
     server :: RuntimeHistoryQueryServer IO ()
     server = QueryServer $ pure $ ServerStInit \case
       GetFollowedContracts  -> getFollowedContractsServer followerPageSize followerStatuses
       GetStatuses contractIds -> getStatusesServer contractIds followerStatuses
+  run server
 
 getFollowedContractsServer
   :: Natural

@@ -73,7 +73,7 @@ library
   build-depends:
       base >= 4.9 && < 5
     , aeson
-    , async
+    , async-components
     , base16
     , binary
     , bytestring
@@ -121,6 +121,7 @@ executable chainseekd
   build-depends:
       base >= 4.9 && < 5
     , aeson
+    , async-components
     , base16
     , bytestring
     , cardano-api

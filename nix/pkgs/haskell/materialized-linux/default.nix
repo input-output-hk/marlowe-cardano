@@ -835,6 +835,7 @@
         small-steps = ./.plan.nix/small-steps.nix;
         plutus-script-utils = ./.plan.nix/plutus-script-utils.nix;
         marlowe-protocols-test = ./.plan.nix/marlowe-protocols-test.nix;
+        async-components = ./.plan.nix/async-components.nix;
         ouroboros-network-framework = ./.plan.nix/ouroboros-network-framework.nix;
         orphans-deriving-via = ./.plan.nix/orphans-deriving-via.nix;
         marlowe-chain-sync = ./.plan.nix/marlowe-chain-sync.nix;
@@ -1001,6 +1002,7 @@
             flags = { "defer-plugin-errors" = lib.mkOverride 900 false; };
             };
           "marlowe-protocols-test" = { flags = {}; };
+          "async-components" = { flags = {}; };
           "ouroboros-network-framework" = { flags = {}; };
           "orphans-deriving-via" = {
             flags = { "development" = lib.mkOverride 900 false; };
@@ -1453,6 +1455,7 @@
           "natural-arithmetic".components.library.planned = lib.mkOverride 900 true;
           "secp256k1-haskell".components.library.planned = lib.mkOverride 900 true;
           "bech32".components.library.planned = lib.mkOverride 900 true;
+          "async-components".components.library.planned = lib.mkOverride 900 true;
           "ghc".components.library.planned = lib.mkOverride 900 true;
           "th-expand-syns".components.library.planned = lib.mkOverride 900 true;
           "postgresql-syntax".components.library.planned = lib.mkOverride 900 true;

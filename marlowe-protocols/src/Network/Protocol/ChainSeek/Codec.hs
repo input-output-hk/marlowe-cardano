@@ -17,7 +17,6 @@ import Data.Type.Equality (type (:~:)(Refl))
 import Network.Protocol.ChainSeek.Types
 import Network.Protocol.Codec (DeserializeError, GetMessage, PutMessage, binaryCodec)
 import Network.TypedProtocol.Codec
-import Unsafe.Coerce (unsafeCoerce)
 
 codecChainSeek
   :: forall query point tip m
@@ -51,14 +50,14 @@ codecChainSeek = binaryCodec putMsg getMsg
 
     putMsg (ServerAgency (TokNext tag _)) (MsgRejectQuery err tip) = do
         putWord8 0x05
-        putTag $ coerceTag tag
-        putErr (coerceTag tag) err
+        putTag tag
+        putErr tag err
         put tip
 
     putMsg (ServerAgency (TokNext tag _)) (MsgRollForward result pos tip) = do
         putWord8 0x06
-        putTag $ coerceTag tag
-        putResult (coerceTag tag) result
+        putTag tag
+        putResult tag result
         put pos
         put tip
 
@@ -91,7 +90,7 @@ codecChainSeek = binaryCodec putMsg getMsg
 
         (0x05, ServerAgency (TokNext qtag _)) -> do
           SomeTag qtag' :: SomeTag query <- getTag
-          case tagEq (coerceTag qtag) qtag' of
+          case tagEq qtag qtag' of
             Nothing -> fail "decoded query tag does not match expected query tag"
             Just (Refl, Refl) -> do
               err <- getErr qtag'
@@ -100,7 +99,7 @@ codecChainSeek = binaryCodec putMsg getMsg
 
         (0x06, ServerAgency (TokNext qtag _)) -> do
           SomeTag qtag' :: SomeTag query <- getTag
-          case tagEq (coerceTag qtag) qtag' of
+          case tagEq qtag qtag' of
             Nothing -> fail "decoded query tag does not match expected query tag"
             Just (Refl, Refl) -> do
               result <- getResult qtag'
@@ -121,9 +120,3 @@ codecChainSeek = binaryCodec putMsg getMsg
 
         _ -> fail $ "Unexpected tag " <> show tag
 
-    -- Unfortunately, the poly-kinded query parameter doesn't play nicely with
-    -- the `PeerHasAgency` type and it gets confused, thinking that 'query1'
-    -- and 'query' are unrelated types. So we have to coerce them (they will
-    -- absolutely be the same type constructor though).
-    coerceTag :: forall query1 err result. Tag query1 err result -> Tag query err result
-    coerceTag = unsafeCoerce

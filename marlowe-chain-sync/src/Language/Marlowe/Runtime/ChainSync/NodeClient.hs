@@ -8,7 +8,7 @@ module Language.Marlowe.Runtime.ChainSync.NodeClient
   , NodeClient(..)
   , NodeClientDependencies(..)
   , isEmptyChanges
-  , mkNodeClient
+  , nodeClient
   , toEmptyChanges
   ) where
 
@@ -40,6 +40,7 @@ import Cardano.Api.ChainSync.ClientPipelined
   , runPipelineDecision
   )
 import Control.Arrow ((&&&))
+import Control.Concurrent.Component
 import Control.Concurrent.STM (STM, TVar, atomically, modifyTVar, newTVar, readTVar, writeTVar)
 import Control.Monad (guard)
 import Data.List (sortOn)
@@ -101,14 +102,13 @@ data NodeClientDependencies = NodeClientDependencies
   }
 
 -- | The public API of the NodeClient component.
-data NodeClient = NodeClient
-  { runNodeClient :: !(IO ())       -- ^ Run the component in IO.
-  , getChanges    :: !(STM Changes) -- ^ An STM action that atomically reads and clears the current change set.
+newtype NodeClient = NodeClient
+  { getChanges    :: STM Changes -- ^ An STM action that atomically reads and clears the current change set.
   }
 
 -- | Create a new NodeClient component.
-mkNodeClient :: NodeClientDependencies -> STM NodeClient
-mkNodeClient NodeClientDependencies{..} = do
+nodeClient :: Component IO NodeClientDependencies NodeClient
+nodeClient = component \NodeClientDependencies{..} -> do
   changesVar <- newTVar emptyChanges
 
   let
@@ -130,7 +130,7 @@ mkNodeClient NodeClientDependencies{..} = do
       , localStateQueryClient   = Nothing
       }
 
-  pure NodeClient { runNodeClient, getChanges }
+  pure (runNodeClient, NodeClient { getChanges })
 
 blockHeaderToBlockNo :: BlockHeader -> BlockNo
 blockHeaderToBlockNo (BlockHeader _ _ blockNo) = blockNo

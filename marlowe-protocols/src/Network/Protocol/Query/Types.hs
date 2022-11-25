@@ -91,10 +91,10 @@ instance Protocol (Query query) where
 
   data ClientHasAgency st where
     TokInit :: ClientHasAgency 'StInit
-    TokPage :: Tag query delimiter err results -> ClientHasAgency ('StPage delimiter err results)
+    TokPage :: Tag query delimiter err results -> ClientHasAgency ('StPage delimiter err results :: Query query)
 
   data ServerHasAgency st where
-    TokNext :: TokNextKind k -> Tag query delimiter err results -> ServerHasAgency ('StNext k delimiter err results)
+    TokNext :: TokNextKind k -> Tag query delimiter err results -> ServerHasAgency ('StNext k delimiter err results :: Query query)
 
   data NobodyHasAgency st where
     TokDone :: NobodyHasAgency 'StDone

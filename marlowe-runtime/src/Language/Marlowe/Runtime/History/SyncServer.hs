@@ -8,9 +8,8 @@
 module Language.Marlowe.Runtime.History.SyncServer
   where
 
-import Control.Concurrent.Async (Concurrently(Concurrently, runConcurrently))
+import Control.Concurrent.Component
 import Control.Concurrent.STM (STM, atomically, retry)
-import Control.Exception (SomeException, catch)
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Language.Marlowe.Protocol.Sync.Server
@@ -32,22 +31,14 @@ data HistorySyncServerDependencies = HistorySyncServerDependencies
   , followerStatuses    :: STM (Map ContractId FollowerStatus)
   }
 
-newtype HistorySyncServer = HistorySyncServer
-  { runHistorySyncServer :: IO ()
-  }
-
-mkHistorySyncServer :: HistorySyncServerDependencies -> STM HistorySyncServer
-mkHistorySyncServer HistorySyncServerDependencies{..} = do
-  let
-    runHistorySyncServer = do
+historySyncServer :: Component IO HistorySyncServerDependencies ()
+historySyncServer = serverComponent
+  worker
+  (hPutStrLn stderr . ("Sync worker crashed with exception: " <>) . show)
+  (hPutStrLn stderr "Sync client terminated normally")
+  \HistorySyncServerDependencies{..} -> do
       runSyncServer <- acceptRunSyncServer
-      Worker{..} <- atomically $ mkWorker WorkerDependencies {..}
-      runConcurrently $
-        Concurrently (runWorker `catch` catchWorker) *> Concurrently runHistorySyncServer
-  pure $ HistorySyncServer { runHistorySyncServer }
-
-catchWorker :: SomeException -> IO ()
-catchWorker = hPutStrLn stderr . ("Sync worker crashed with exception: " <>) . show
+      pure WorkerDependencies {..}
 
 data WorkerDependencies = WorkerDependencies
   { runSyncServer     :: RunSyncServer IO
@@ -58,18 +49,11 @@ data WorkerDependencies = WorkerDependencies
   , followerStatuses  :: STM (Map ContractId FollowerStatus)
   }
 
-newtype Worker = Worker
-  { runWorker :: IO ()
-  }
-
-mkWorker :: WorkerDependencies -> STM Worker
-mkWorker WorkerDependencies{..} =
+worker :: Component IO WorkerDependencies ()
+worker = component_ \WorkerDependencies{..} -> do
   let
     RunServer run = runSyncServer
-  in
-    pure Worker { runWorker = run server }
 
-  where
     server :: MarloweSyncServer IO ()
     server = MarloweSyncServer $ pure $ ServerStInit
       { recvMsgFollowContract = followServer
@@ -126,3 +110,5 @@ mkWorker WorkerDependencies{..} =
             At False -> pure $ SendMsgWait $ waitServer contractId version blockHeader requestedAt lastUpdated
       , recvMsgCancel = pure $ idleServer contractId version blockHeader
       }
+
+  run server

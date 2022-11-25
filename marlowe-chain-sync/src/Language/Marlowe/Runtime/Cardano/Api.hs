@@ -251,7 +251,7 @@ assetsToCardanoValue Assets{..} = fold <$> sequence
 
 assetsFromCardanoValue :: C.Value -> Assets
 assetsFromCardanoValue value = Assets
-  { ada = maybe 0 fromCardanoLovelace $ C.valueToLovelace value
+  { ada = fromCardanoLovelace $ C.selectLovelace value
   , tokens = tokensFromCardanoValue value
   }
 
