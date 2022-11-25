@@ -93,8 +93,8 @@ contractHeaderIndexer = component \ContractHeaderIndexerDependencies{..} -> do
     -- (e.g. a running instance of marlowe-discovery).
     client = MarloweHeaderSyncClient $ pure clientIdle
     -- When Idle, always request the next set of headers.
-    clientIdle = SendMsgRequestNext clientNext
-    clientNext = ClientStNext
+    clientIdle = SendMsgRequestNext $ clientNext True
+    clientNext logWait = ClientStNext
       -- Handle new headers by updating the sate variables
       { recvMsgNewHeaders = \block contracts -> withEvent eventBackend NewHeaders \ev -> do
           addField ev $ SlotNo $ Chain.unSlotNo $ Chain.slotNo block
@@ -115,14 +115,17 @@ contractHeaderIndexer = component \ContractHeaderIndexerDependencies{..} -> do
               atomically $ rollback contractsTVar point
           pure clientIdle
       -- When told to wait, wait for 1 second then poll the server again.
-      , recvMsgWait = withEvent eventBackend Wait \_ -> do
-          delay <- newDelay 1_000_000 -- 1 second
-          atomically do
-            -- Waiting means we are caught up to the tip. Unblock queries by
-            -- putting a value the inSync TMVar.
-            void $ tryPutTMVar inSync ()
-            waitDelay delay
-            pure $ SendMsgPoll clientNext
+      , recvMsgWait = do
+          let
+            go = do
+              delay <- newDelay 1_000_000 -- 1 second
+              atomically do
+                -- Waiting means we are caught up to the tip. Unblock queries by
+                -- putting a value the inSync TMVar.
+                void $ tryPutTMVar inSync ()
+                waitDelay delay
+                pure $ SendMsgPoll $ clientNext False
+          if logWait then withEvent eventBackend Wait (const go) else go
       }
   pure (runMarloweHeaderSyncClient client, ContractHeaderIndexer
     { loadContractHeaders = \startFrom limit offset order -> atomically do
