@@ -12,6 +12,7 @@ import Control.Arrow ((&&&))
 import Control.Concurrent.Component
 import Control.Concurrent.STM (STM, atomically, modifyTVar, newTVar, readTVar, readTVarIO, writeTVar)
 import Control.Monad (forever, guard, mfilter, (<=<))
+import Data.Aeson (ToJSON)
 import Data.Foldable (asum, fold)
 import Data.Function (on)
 import Data.List (groupBy, sortOn)
@@ -19,17 +20,25 @@ import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Set (Set)
 import qualified Data.Set as Set
+import GHC.Generics (Generic)
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainPoint, PolicyId, WithGenesis(..))
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Discovery.Api (ContractHeader(..))
 import Language.Marlowe.Runtime.Discovery.Chain (ChainEvent(..))
-import Observe.Event (EventBackend)
+import Observe.Event (EventBackend, addField, withEvent)
 import Observe.Event.DSL (SelectorSpec(SelectorSpec))
 import Observe.Event.Render.JSON.DSL.Compile (compile)
 import Observe.Event.Syntax ((≔))
 
+data ChangesSummary = ChangesSummary
+  { headerCount :: !Int
+  , rollbackTo :: !(Maybe Chain.ChainPoint)
+  }
+  deriving stock (Show, Eq, Generic)
+  deriving anyclass (ToJSON)
+
 compile $ SelectorSpec ["discovery", "store"]
-  [ "todo" ≔ ''()
+  [ "save" ≔ ''ChangesSummary
   ]
 
 data DiscoveryStoreDependencies r = DiscoveryStoreDependencies
@@ -48,6 +57,12 @@ data Changes = Changes
   { headers :: !(Map Chain.BlockHeader (Set ContractHeader))
   , rollbackTo :: !(Maybe Chain.ChainPoint)
   } deriving (Show, Eq)
+
+summarizeChanges :: Changes -> ChangesSummary
+summarizeChanges Changes{..} = ChangesSummary
+  { headerCount = sum $ length <$> headers
+  , rollbackTo
+  }
 
 instance Semigroup Changes where
   c1 <> Changes{..} = c1' { headers = Map.unionWith (<>) headers1 headers }
@@ -127,22 +142,25 @@ worker = component \WorkerDependencies{..} -> do
       atomically do
         writeTVar blocksVar mempty
         writeTVar roleTokenIndex mempty
-      forever $ atomically do
-        Changes{..} <- mfilter (not . isEmptyChanges) changes
-        modifyBlocks \blocks ->
-          let
-            blocks' = case rollbackTo of
-              Nothing -> blocks
-              Just Genesis -> Rollback Genesis <$ blocks
-              Just (At blockHeader) ->
-                let
-                  (smaller, atBlock, larger) = Map.splitLookup blockHeader blocks
-                in
-                  smaller
-                    <> foldMap (Map.singleton blockHeader) atBlock
-                    <> (Rollback (At blockHeader) <$ larger)
-          in
-            Map.union blocks' $ fmap (Block . Set.toList) headers
+      forever $ withEvent eventBackend Save \ev -> do
+        summary <- atomically do
+          ch@Changes{..} <- mfilter (not . isEmptyChanges) changes
+          modifyBlocks \blocks ->
+            let
+              blocks' = case rollbackTo of
+                Nothing -> blocks
+                Just Genesis -> Rollback Genesis <$ blocks
+                Just (At blockHeader) ->
+                  let
+                    (smaller, atBlock, larger) = Map.splitLookup blockHeader blocks
+                  in
+                    smaller
+                      <> foldMap (Map.singleton blockHeader) atBlock
+                      <> (Rollback (At blockHeader) <$ larger)
+            in
+              Map.union blocks' $ fmap (Block . Set.toList) headers
+          pure $ summarizeChanges ch
+        addField ev summary
 
   pure (runDiscoveryStore, DiscoveryStore
     { getHeaders = (snd <=< Map.toAscList . fmap extractHeaders) <$> readTVarIO blocksVar
