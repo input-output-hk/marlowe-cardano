@@ -6,15 +6,12 @@
 module Language.Marlowe.Runtime.Discovery.Chain
   where
 
-import Control.Applicative ((<|>))
 import Control.Concurrent.Component
-import Control.Concurrent.STM (STM, atomically, modifyTVar, newTVar, readTVar, writeTVar)
+import Control.Concurrent.STM (STM, atomically, newTQueue, readTQueue, writeTQueue)
 import Control.Monad (guard)
 import Data.Coerce (coerce)
 import Data.Crosswalk (crosswalk)
-import Data.Foldable (asum, fold, for_)
-import Data.Map (Map)
-import qualified Data.Map as Map
+import Data.Foldable (fold, for_)
 import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.Text (Text)
@@ -51,44 +48,18 @@ compile $ SelectorSpec ["discovery", "chain", "client"]
   , ["roll", "backward"] ≔ ''Chain.ChainPoint
   ]
 
-data Changes = Changes
-  { headers :: !(Map Chain.BlockHeader (Set ContractHeader))
-  , rollbackTo :: !(Maybe Chain.ChainPoint)
-  } deriving (Show, Eq)
-
-instance Semigroup Changes where
-  c1 <> Changes{..} = c1' { headers = Map.unionWith (<>) headers1 headers }
-    where
-      c1'@Changes{headers=headers1} = maybe c1 (flip applyRollback c1) rollbackTo
-
-instance Monoid Changes where
-  mempty = Changes Map.empty Nothing
-
-isEmptyChanges :: Changes -> Bool
-isEmptyChanges (Changes headers Nothing) = null $ fold headers
-isEmptyChanges _ = False
-
-applyRollback :: Chain.ChainPoint -> Changes -> Changes
-applyRollback Chain.Genesis _ = Changes mempty $ Just Chain.Genesis
-applyRollback (Chain.At blockHeader@Chain.BlockHeader{slotNo}) Changes{..} = Changes
-  { headers = headers'
-  , rollbackTo = asum @[]
-      [ guard (Map.null headers') *> (min (Just (Chain.At blockHeader)) rollbackTo <|> Just (Chain.At blockHeader))
-      , rollbackTo
-      ]
-  }
-  where
-    headers' = Map.filterWithKey (const . isNotRolledBack) headers
-    isNotRolledBack = not . Chain.isAfter slotNo
+data ChainEvent
+  = RolledForward Chain.BlockHeader (Set ContractHeader)
+  | RolledBackward Chain.ChainPoint
 
 data DiscoveryChainClientDependencies r = DiscoveryChainClientDependencies
   { connectToChainSeek :: RunClient IO Chain.RuntimeChainSeekClient
   , eventBackend :: EventBackend IO r DiscoveryChainClientSelector
   }
 
-discoveryChainClient :: Component IO (DiscoveryChainClientDependencies r) (STM Changes)
+discoveryChainClient :: Component IO (DiscoveryChainClientDependencies r) (STM ChainEvent)
 discoveryChainClient = component \DiscoveryChainClientDependencies{..} -> do
-  changesVar <- newTVar mempty
+  queue <- newTQueue
   let
     clientInit = Chain.SendMsgRequestHandshake Chain.moveSchema clientHandshake
     clientHandshake = Chain.ClientStHandshake
@@ -118,12 +89,13 @@ discoveryChainClient = component \DiscoveryChainClientDependencies{..} -> do
             addField ev $ Block block
             addField ev $ Tip tip
             addField ev $ Results txs
-            atomically $ for_ (fmap fold $ crosswalk (extractHeaders block) $ Set.toList txs) \headers ->
-              modifyTVar changesVar (<> mempty { headers = Map.singleton block headers})
+            atomically
+              $ for_ (fmap fold $ crosswalk (extractHeaders block) $ Set.toList txs)
+              $ writeTQueue queue . RolledForward block
             pure clientIdle
       , recvMsgRollBackward = \point _ -> withEvent eventBackend RollBackward \ev -> do
           addField ev point
-          atomically $ modifyTVar changesVar (<> mempty { rollbackTo = Just point })
+          atomically $ writeTQueue queue $ RolledBackward point
           pure clientIdle
       }
 
@@ -133,10 +105,7 @@ discoveryChainClient = component \DiscoveryChainClientDependencies{..} -> do
         connectToChainSeek $ Chain.ChainSeekClient do
           finalize ev
           pure clientInit
-    , do
-        changes <- readTVar changesVar
-        writeTVar changesVar mempty
-        pure changes
+    , readTQueue queue
     )
 
 extractHeaders :: Chain.BlockHeader -> Chain.Transaction -> Maybe (Set ContractHeader)

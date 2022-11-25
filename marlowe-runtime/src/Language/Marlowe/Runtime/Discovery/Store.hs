@@ -1,3 +1,5 @@
+{-# LANGUAGE Arrows #-}
+{-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE TemplateHaskell #-}
@@ -5,18 +7,22 @@
 module Language.Marlowe.Runtime.Discovery.Store
   where
 
+import Control.Applicative ((<|>))
 import Control.Arrow ((&&&))
 import Control.Concurrent.Component
-import Control.Concurrent.STM (STM, atomically, newTVar, readTVar, readTVarIO, writeTVar)
-import Control.Monad (forever, mfilter, (<=<))
-import Data.Foldable (fold)
+import Control.Concurrent.STM (STM, atomically, modifyTVar, newTVar, readTVar, readTVarIO, writeTVar)
+import Control.Monad (forever, guard, mfilter, (<=<))
+import Data.Foldable (asum, fold)
 import Data.Function (on)
 import Data.List (groupBy, sortOn)
+import Data.Map (Map)
 import qualified Data.Map as Map
+import Data.Set (Set)
 import qualified Data.Set as Set
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainPoint, PolicyId, WithGenesis(..))
+import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Discovery.Api (ContractHeader(..))
-import Language.Marlowe.Runtime.Discovery.Chain (Changes(..), isEmptyChanges)
+import Language.Marlowe.Runtime.Discovery.Chain (ChainEvent(..))
 import Observe.Event (EventBackend)
 import Observe.Event.DSL (SelectorSpec(SelectorSpec))
 import Observe.Event.Render.JSON.DSL.Compile (compile)
@@ -27,7 +33,7 @@ compile $ SelectorSpec ["discovery", "store"]
   ]
 
 data DiscoveryStoreDependencies r = DiscoveryStoreDependencies
-  { changes :: STM Changes
+  { chainEvents :: STM ChainEvent
   , eventBackend :: EventBackend IO r DiscoveryStoreSelector
   }
 
@@ -38,12 +44,70 @@ data DiscoveryStore = DiscoveryStore
   , getIntersect :: [BlockHeader] -> IO (Maybe BlockHeader)
   }
 
+data Changes = Changes
+  { headers :: !(Map Chain.BlockHeader (Set ContractHeader))
+  , rollbackTo :: !(Maybe Chain.ChainPoint)
+  } deriving (Show, Eq)
+
+instance Semigroup Changes where
+  c1 <> Changes{..} = c1' { headers = Map.unionWith (<>) headers1 headers }
+    where
+      c1'@Changes{headers=headers1} = maybe c1 (flip applyRollback c1) rollbackTo
+
+instance Monoid Changes where
+  mempty = Changes Map.empty Nothing
+
+isEmptyChanges :: Changes -> Bool
+isEmptyChanges (Changes headers Nothing) = null $ fold headers
+isEmptyChanges _ = False
+
+applyRollback :: Chain.ChainPoint -> Changes -> Changes
+applyRollback Chain.Genesis _ = Changes mempty $ Just Chain.Genesis
+applyRollback (Chain.At blockHeader@Chain.BlockHeader{slotNo}) Changes{..} = Changes
+  { headers = headers'
+  , rollbackTo = asum @[]
+      [ guard (Map.null headers') *> (min (Just (Chain.At blockHeader)) rollbackTo <|> Just (Chain.At blockHeader))
+      , rollbackTo
+      ]
+  }
+  where
+    headers' = Map.filterWithKey (const . isNotRolledBack) headers
+    isNotRolledBack = not . Chain.isAfter slotNo
+
 data BlockData
   = Rollback ChainPoint
   | Block [ContractHeader]
 
 discoveryStore :: Component IO (DiscoveryStoreDependencies r) DiscoveryStore
-discoveryStore = component \DiscoveryStoreDependencies{..} -> do
+discoveryStore = proc DiscoveryStoreDependencies{..} -> do
+  changes <- eventAggregator -< chainEvents
+  worker -< WorkerDependencies{..}
+
+eventAggregator :: Component IO (STM ChainEvent) (STM Changes)
+eventAggregator = component \chainEvents -> do
+  changesVar <- newTVar mempty
+  let
+    runAggregator = forever $ atomically do
+      chainEvent <- chainEvents
+      modifyTVar changesVar (<> eventToChanges chainEvent)
+    getChanges = do
+      changes <- readTVar changesVar
+      writeTVar changesVar mempty
+      pure changes
+  pure (runAggregator, getChanges)
+
+eventToChanges :: ChainEvent -> Changes
+eventToChanges = \case
+  RolledForward block headers -> mempty { headers = Map.singleton block headers }
+  RolledBackward point -> mempty { rollbackTo = Just point }
+
+data WorkerDependencies r = WorkerDependencies
+  { changes :: STM Changes
+  , eventBackend :: EventBackend IO r DiscoveryStoreSelector
+  }
+
+worker :: Component IO (WorkerDependencies r) DiscoveryStore
+worker = component \WorkerDependencies{..} -> do
   blocksVar <- newTVar mempty
   roleTokenIndex <- newTVar mempty
   let

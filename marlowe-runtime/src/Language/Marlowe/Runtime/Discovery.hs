@@ -44,7 +44,7 @@ discovery = proc DiscoveryDependencies
   , pageSize
   , eventBackend = rootBackend
   } -> do
-    changes <- discoveryChainClient -<
+    chainEvents <- discoveryChainClient -<
       let eventBackend = narrowEventBackend ChainClient rootBackend in DiscoveryChainClientDependencies{..}
     DiscoveryStore{..} <- discoveryStore -<
       let eventBackend = narrowEventBackend Store rootBackend in DiscoveryStoreDependencies{..}
