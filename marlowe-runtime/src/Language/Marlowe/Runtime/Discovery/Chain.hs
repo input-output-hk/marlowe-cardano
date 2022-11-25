@@ -10,27 +10,45 @@ import Control.Applicative ((<|>))
 import Control.Concurrent.Component
 import Control.Concurrent.STM (STM, atomically, modifyTVar, newTVar, readTVar, writeTVar)
 import Control.Monad (guard)
+import Data.Coerce (coerce)
 import Data.Crosswalk (crosswalk)
 import Data.Foldable (asum, fold, for_)
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Set (Set)
 import qualified Data.Set as Set
+import Data.Text (Text)
+import Data.Void (Void)
 import qualified Language.Marlowe.Core.V1.Semantics as V1
+import Language.Marlowe.Runtime.ChainSync.Api (FindTxsToError)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Core.Api
   (ContractId(..), MarloweVersion(..), SomeMarloweVersion(..), fromChainDatum, withSomeMarloweVersion)
 import Language.Marlowe.Runtime.Core.ScriptRegistry (MarloweScripts(..), getMarloweVersion, getScripts)
 import Language.Marlowe.Runtime.Discovery.Api (ContractHeader(..))
 import Network.Protocol.Driver (RunClient)
-import Observe.Event (EventBackend)
-import Observe.Event.DSL (SelectorSpec(..))
+import Observe.Event (EventBackend, addField, finalize, newEvent, withEvent)
+import Observe.Event.DSL (FieldSpec(..), SelectorSpec(..))
 import Observe.Event.Render.JSON.DSL.Compile (compile)
 import Observe.Event.Syntax ((≔))
 import qualified Plutus.V1.Ledger.Api as P
 
+type Versions = [Text]
+type TransactionSet = Set Chain.Transaction
+
 compile $ SelectorSpec ["discovery", "chain", "client"]
-  [ "todo" ≔ ''()
+  [ "connect" ≔ ''Void
+  , ["handshake", "failed"] ≔ ''Versions
+  , ["handshake", "confirmed"] ≔ ''Void
+  , "wait" ≔ ''Void
+  , ["query", "rejected"] ≔ ''FindTxsToError
+  , ["roll", "forward", "to", "genesis"] ≔ ''Void
+  , ["roll", "forward"] ≔ FieldSpec ["roll", "forward"]
+      [ "block" ≔ ''Chain.BlockHeader
+      , "tip" ≔ ''Chain.ChainPoint
+      , "results" ≔ ''TransactionSet
+      ]
+  , ["roll", "backward"] ≔ ''Chain.ChainPoint
   ]
 
 data Changes = Changes
@@ -74,35 +92,47 @@ discoveryChainClient = component \DiscoveryChainClientDependencies{..} -> do
   let
     clientInit = Chain.SendMsgRequestHandshake Chain.moveSchema clientHandshake
     clientHandshake = Chain.ClientStHandshake
-      { recvMsgHandshakeRejected = \versions -> error
-          $ "ChainSeek handshake failed. Requested schema version "
-          <> show Chain.moveSchema
-          <> ", requires "
-          <> show versions
-          <> "."
-      , recvMsgHandshakeConfirmed = pure clientIdle
+      { recvMsgHandshakeRejected = \versions -> withEvent eventBackend HandshakeFailed \ev -> do
+          addField ev $ coerce versions
+          error
+            $ "ChainSeek handshake failed. Requested schema version "
+            <> show Chain.moveSchema
+            <> ", requires "
+            <> show versions
+            <> "."
+      , recvMsgHandshakeConfirmed = withEvent eventBackend HandshakeConfirmed $ const $ pure clientIdle
       }
 
     clientIdle = Chain.SendMsgQueryNext
-      (Chain.FindTxsTo $ Set.map Chain.ScriptCredential marloweScriptHashes)
-      clientNext
-      (pure clientNext)
+      (Chain.FindTxsTo $ Set.map Chain.ScriptCredential marloweScriptHashes) clientNext do
+        withEvent eventBackend Wait $ const $ pure clientNext
 
     clientNext = Chain.ClientStNext
-      { recvMsgQueryRejected = \_ _ -> pure clientIdle
+      { recvMsgQueryRejected = \err _ -> withEvent eventBackend QueryRejected \ev -> do
+          addField ev err
+          pure clientIdle
       , recvMsgRollForward = \txs -> \case
-          Chain.Genesis -> error "Roll forward to Genesis"
-          Chain.At block -> \_ -> do
+          Chain.Genesis -> \_ ->
+            withEvent eventBackend RollForwardToGenesis $ const $ error "Roll forward to Genesis"
+          Chain.At block -> \tip -> withEvent eventBackend RollForward \ev -> do
+            addField ev $ Block block
+            addField ev $ Tip tip
+            addField ev $ Results txs
             atomically $ for_ (fmap fold $ crosswalk (extractHeaders block) $ Set.toList txs) \headers ->
               modifyTVar changesVar (<> mempty { headers = Map.singleton block headers})
             pure clientIdle
-      , recvMsgRollBackward = \point _ -> do
+      , recvMsgRollBackward = \point _ -> withEvent eventBackend RollBackward \ev -> do
+          addField ev point
           atomically $ modifyTVar changesVar (<> mempty { rollbackTo = Just point })
           pure clientIdle
       }
 
   pure
-    ( connectToChainSeek $ Chain.ChainSeekClient $ pure clientInit
+    ( do
+        ev <- newEvent eventBackend Connect
+        connectToChainSeek $ Chain.ChainSeekClient do
+          finalize ev
+          pure clientInit
     , do
         changes <- readTVar changesVar
         writeTVar changesVar mempty

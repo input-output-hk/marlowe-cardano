@@ -53,7 +53,6 @@ import GHC.Generics (Generic)
 import Language.Marlowe.Runtime.Cardano.Api
   ( fromCardanoAddressInEra
   , toCardanoAddressInEra
-  , toCardanoMetadata
   , toCardanoPaymentKeyHash
   , toCardanoPolicyId
   , toCardanoScriptData
@@ -1050,7 +1049,7 @@ solveInitialTxBodyContent protocol marloweVersion MarloweContext{..} WalletConte
     txMetadata :: C.TxMetadataInEra C.BabbageEra
     txMetadata
       | Map.null metadataConstraints = C.TxMetadataNone
-      | otherwise = C.TxMetadataInEra C.TxMetadataInBabbageEra $ C.TxMetadata $ toCardanoMetadata <$> metadataConstraints
+      | otherwise = C.TxMetadataInEra C.TxMetadataInBabbageEra $ C.TxMetadata $ Chain.toCardanoMetadata <$> metadataConstraints
 
     solveTxExtraKeyWits :: Either (ConstraintError v) (C.TxExtraKeyWitnesses C.BabbageEra)
     solveTxExtraKeyWits

@@ -442,7 +442,7 @@ requiresMetadataViolations MarloweV1 TxConstraints{..} TxBodyContent{..} = do
       TxMetadataInEra _ (TxMetadata md) -> Map.lookup idx md
   (("idx" <> show idx <> ": ") <>) <$> fold
     [ check
-      (metadata == Just (toCardanoMetadata value))
+      (metadata == Just (Chain.toCardanoMetadata value))
       ("Expected " <> show value <> " got " <> show metadata)
     ]
 
