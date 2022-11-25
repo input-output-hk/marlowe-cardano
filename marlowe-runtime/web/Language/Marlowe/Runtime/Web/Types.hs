@@ -102,7 +102,10 @@ hasLength l bytes
   | otherwise = Left $ "Expected " <> T.pack (show l) <> " bytes"
 
 instance ToSchema TxId where
-  declareNamedSchema _ = pure $ NamedSchema (Just "TxId") $ mempty
+  declareNamedSchema = pure . NamedSchema (Just "TxId") . toParamSchema
+
+instance ToParamSchema TxId where
+  toParamSchema _ = mempty
     & type_ ?~ OpenApiString
     & OpenApi.description ?~ "The hex-encoded identifier of a Cardano transaction"
     & pattern ?~ "^[a-fA-F0-9]{64}$"
@@ -260,6 +263,27 @@ data TxHeader = TxHeader
 
 instance ToJSON TxHeader
 instance ToSchema TxHeader
+
+data Tx = Tx
+  { contractId :: TxOutRef
+  , transactionId :: TxId
+  , status :: TxStatus
+  , block :: Maybe BlockHeader
+  , inputUtxo :: TxOutRef
+  , inputContract :: Semantics.Contract
+  , inputState :: Semantics.State
+  , inputs :: [Semantics.Input]
+  , outputUtxo :: Maybe TxOutRef
+  , outputContract :: Maybe Semantics.Contract
+  , outputState :: Maybe Semantics.State
+  , consumingTx :: Maybe TxId
+  , invalidBefore :: UTCTime
+  , invalidHereafter :: UTCTime
+  , txBody :: Maybe TextEnvelope
+  } deriving (Show, Eq, Generic)
+
+instance ToJSON Tx
+instance ToSchema Tx
 
 instance HasPagination TxHeader "transactionId" where
   type RangeType TxHeader "transactionId" = TxId

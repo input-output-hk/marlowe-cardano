@@ -25,8 +25,8 @@ import Language.Marlowe.Runtime.Transaction.Api
 import Language.Marlowe.Runtime.Transaction.Constraints (ConstraintError(..))
 import Language.Marlowe.Runtime.Web
 import Language.Marlowe.Runtime.Web.Server.DTO
-import Language.Marlowe.Runtime.Web.Server.HistoryClient (LoadContractHeadersError(..))
-import Language.Marlowe.Runtime.Web.Server.Monad (AppM, applyInputs, loadTransactions)
+import Language.Marlowe.Runtime.Web.Server.HistoryClient (LoadTxError(..))
+import Language.Marlowe.Runtime.Web.Server.Monad (AppM, applyInputs, loadTransaction, loadTransactions)
 import Observe.Event (EventBackend, addField, reference, withEvent)
 import Observe.Event.BackendModification (setAncestor)
 import Observe.Event.DSL (FieldSpec(..), SelectorSpec(..))
@@ -56,19 +56,26 @@ compile $ SelectorSpec "transactions"
       , ["post", "error"] ≔ ''String
       , ["post", "response"] ≔ ''ApplyInputsTxBody
       ]
+  , ["get", "one"] ≔ FieldSpec ["get", "one"]
+      [ ["get", "one", "contract", "id"] ≔ ''TxOutRef
+      , ["get", "tx", "id"] ≔ ''TxId
+      , ["get", "result"] ≔ ''Tx
+      ]
   ]
 
 server
   :: EventBackend (AppM r) r TransactionsSelector
   -> TxOutRef
   -> ServerT TransactionsAPI (AppM r)
-server eb contractId = get eb contractId :<|> post eb contractId
+server eb contractId = get eb contractId
+                  :<|> post eb contractId
+                  :<|> transactionServer eb contractId
 
 get
   :: EventBackend (AppM r) r TransactionsSelector
   -> TxOutRef
-  -> Maybe (Ranges '["transactionId"] TxHeader)
-  -> AppM r (PaginatedResponse '["transactionId"] TxHeader)
+  -> Maybe (Ranges '["transactionId"] GetTransactionsResponse)
+  -> AppM r (PaginatedResponse '["transactionId"] GetTransactionsResponse)
 get eb contractId ranges = withEvent eb Get \ev -> do
   let
     range :: Range "transactionId" TxId
@@ -83,11 +90,20 @@ get eb contractId ranges = withEvent eb Get \ev -> do
   let mods = setAncestor $ reference ev
   loadTransactions mods contractId' startFrom rangeLimit rangeOffset rangeOrder >>= \case
     Left ContractNotFound -> throwError err404
-    Left InitialTransactionNotFound -> throwError err416
+    Left TxNotFound -> throwError err416
     Right headers -> do
-      let headers' = either id id <$> toDTO headers
+      let headers' = either toTxHeader id <$> toDTO headers
       addField ev $ TxHeaders headers'
-      addHeader (length headers) . fmap ListObject <$> returnRange range headers'
+      addHeader (length headers) . fmap ListObject <$> returnRange range (IncludeLink (Proxy @"transaction") <$> headers')
+
+toTxHeader :: Tx -> TxHeader
+toTxHeader Tx{..} = TxHeader
+  { contractId
+  , transactionId
+  , status
+  , block
+  , utxo = outputUtxo
+  }
 
 post
   :: EventBackend (AppM r) r TransactionsSelector
@@ -135,4 +151,23 @@ post eb contractId req@PostTransactionsRequest{..} changeAddressDTO mAddresses m
       let txId = toDTO $ fromCardanoTxId $ getTxId txBody
       let body = ApplyInputsTxBody contractId txId txBody'
       addField ev $ PostResponse body
-      pure body
+      pure $ IncludeLink (Proxy @"transaction") body
+
+transactionServer
+  :: EventBackend (AppM r) r TransactionsSelector
+  -> TxOutRef
+  -> TxId
+  -> AppM r GetTransactionResponse
+transactionServer eb contractId txId = withEvent eb GetOne \ev -> do
+  addField ev $ GetOneContractId contractId
+  addField ev $ GetTxId txId
+  contractId' <- fromDTOThrow err400 contractId
+  txId' <- fromDTOThrow err400 txId
+  loadTransaction (setAncestor $ reference ev) contractId' txId' >>= \case
+    Nothing -> throwError err404
+    Just result -> do
+      let contractState = either toDTO toDTO result
+      addField ev $ GetResult contractState
+      pure
+        $ IncludeLink (Proxy @"previous")
+        $ IncludeLink (Proxy @"next") contractState

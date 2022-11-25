@@ -1,5 +1,6 @@
 {-# LANGUAGE Arrows #-}
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedLists #-}
@@ -22,7 +23,6 @@ module Language.Marlowe.Runtime.Web.Server
   , serverWithOpenAPI
   ) where
 
-import qualified Control.Arrow as Arrow
 import Control.Concurrent.Component
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Reader (runReaderT)
@@ -123,19 +123,35 @@ server = proc ServerDependencies{..} -> do
   HistoryClient{..} <- historyClient -< HistoryClientDependencies
     { runMarloweSyncClient
     , lookupTempContract
+    , lookupTempTransaction
     , getTempTransactions
     , eventBackend = narrowEventBackend History eventBackend
     }
-  let
-    env = AppEnv
-      { _loadContractHeaders = loadContractHeaders
-      , _loadContract = loadContract
-      , _loadTransactions = loadTransactions
-      , _createContract = createContract
-      , _applyInputs = applyInputs
-      , _submitContract = submitContract
-      }
-    httpBackend = hoistEventBackend liftIO $ narrowEventBackend Api eventBackend
-    app' = application (narrowEventBackend Http eventBackend) $
-      app openAPIEnabled env . (`modifyEventBackend`  httpBackend) . setAncestor
-  Arrow.app -< (component_ runApplication, app')
+  webServer -< WebServerDependencies
+    { env = AppEnv
+        { _loadContractHeaders = loadContractHeaders
+        , _loadContract = loadContract
+        , _loadTransactions = loadTransactions
+        , _loadTransaction = loadTransaction
+        , _createContract = createContract
+        , _applyInputs = applyInputs
+        , _submitContract = submitContract
+        }
+    , eventBackend
+    , openAPIEnabled
+    , runApplication
+    }
+
+data WebServerDependencies r = WebServerDependencies
+  { env :: AppEnv r
+  , eventBackend :: EventBackend IO r ServerSelector
+  , openAPIEnabled :: Bool
+  , runApplication :: Application -> IO ()
+  }
+
+webServer :: Component IO (WebServerDependencies r) ()
+webServer = component_ \WebServerDependencies{..} -> do
+  let httpBackend = hoistEventBackend liftIO $ narrowEventBackend Api eventBackend
+  runApplication
+    $ application (narrowEventBackend Http eventBackend)
+    $ app openAPIEnabled env . (`modifyEventBackend`  httpBackend) . setAncestor
