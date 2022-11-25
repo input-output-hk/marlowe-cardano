@@ -278,6 +278,44 @@ instance ToDTO ContractRecord where
       , txBody = Nothing
       }
 
+data TxRecord = forall v. TxRecord
+  { version :: MarloweVersion v
+  , tx :: Transaction v
+  , input :: TransactionScriptOutput v
+  , consumingTx :: Maybe Chain.TxId
+  }
+
+instance HasDTO TxRecord where
+  type DTO TxRecord = Web.Tx
+
+instance ToDTO TxRecord where
+  toDTO TxRecord{..} =
+    Web.Tx
+      { contractId = toDTO contractId
+      , transactionId = toDTO transactionId
+      , status = Web.Confirmed
+      , block = Just $ toDTO blockHeader
+      , inputUtxo = toDTO $ utxo input
+      , inputContract = case version of
+          MarloweV1 -> Sem.marloweContract $ datum input
+      , inputState = case version of
+          MarloweV1 -> Sem.marloweState $ datum input
+      , inputs = case version of
+          MarloweV1 -> redeemer
+      , outputUtxo = toDTO $ utxo <$> scriptOutput
+      , outputContract = case version of
+          MarloweV1 -> Sem.marloweContract . datum <$> scriptOutput
+      , outputState = case version of
+          MarloweV1 -> Sem.marloweState . datum <$> scriptOutput
+      , consumingTx = toDTO consumingTx
+      , invalidBefore = validityLowerBound
+      , invalidHereafter = validityUpperBound
+      , txBody = Nothing
+      }
+    where
+      Transaction{..} = tx
+      TransactionOutput{..} = output
+
 instance HasDTO TempTxStatus where
   type DTO TempTxStatus = Web.TxStatus
 
@@ -297,7 +335,7 @@ instance ToDTO (TempTx Tx.ContractCreated) where
   toDTO (TempTx _ status tx) = toDTOWithTxStatus status tx
 
 instance HasDTO (TempTx Tx.InputsApplied) where
-  type DTO (TempTx Tx.InputsApplied) = Web.TxHeader
+  type DTO (TempTx Tx.InputsApplied) = Web.Tx
 
 instance ToDTO (TempTx Tx.InputsApplied) where
   toDTO (TempTx _ status tx) = toDTOWithTxStatus status tx
@@ -328,16 +366,33 @@ instance IsCardanoEra era => ToDTOWithTxStatus (Tx.ContractCreated era v) where
       }
 
 instance HasDTO (Tx.InputsApplied era v) where
-  type DTO (Tx.InputsApplied era v) = Web.TxHeader
+  type DTO (Tx.InputsApplied era v) = Web.Tx
 
-instance ToDTOWithTxStatus (Tx.InputsApplied era v) where
+instance IsCardanoEra era => ToDTOWithTxStatus (Tx.InputsApplied era v) where
   toDTOWithTxStatus status Tx.InputsApplied{..} =
-    Web.TxHeader
+    Web.Tx
       { contractId = toDTO contractId
       , transactionId = toDTO $ fromCardanoTxId $ getTxId txBody
       , status = toDTO status
       , block = Nothing
-      , utxo = Nothing
+      , inputUtxo = toDTO $ utxo input
+      , inputContract = case version of
+          MarloweV1 -> Sem.marloweContract $ datum input
+      , inputState = case version of
+          MarloweV1 -> Sem.marloweState $ datum input
+      , inputs = case version of
+          MarloweV1 -> inputs
+      , outputUtxo = toDTO $ utxo <$> output
+      , outputContract = case version of
+          MarloweV1 -> Sem.marloweContract . datum <$> output
+      , outputState = case version of
+          MarloweV1 -> Sem.marloweState . datum <$> output
+      , consumingTx = Nothing
+      , invalidBefore = invalidBefore
+      , invalidHereafter = invalidHereafter
+      , txBody = case status of
+          Unsigned -> Just $ toDTO txBody
+          Submitted -> Nothing
       }
 
 instance HasDTO SomeTransaction where
