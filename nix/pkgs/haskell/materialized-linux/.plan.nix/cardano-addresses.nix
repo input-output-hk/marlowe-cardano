@@ -125,11 +125,11 @@
       };
     } // {
     src = (pkgs.lib).mkDefault (pkgs.fetchgit {
-      url = "21";
+      url = "1";
       rev = "minimal";
       sha256 = "";
       }) // {
-      url = "21";
+      url = "1";
       rev = "minimal";
       sha256 = "";
       };

@@ -17,6 +17,7 @@
 , actus-tests
 , source-repo-override
 , evalSystem
+, CHaP
 }:
 let
   r-packages = with rPackages; [ R tidyverse dplyr stringr MASS plotly shiny shinyjs purrr ];
@@ -35,6 +36,7 @@ let
       else builtins.error "Don't have materialized files for this platform";
     # If true, we check that the generated files are correct. Set in the CI so we don't make mistakes.
     inherit checkMaterialization source-repo-override;
+    inputMap = { "https://input-output-hk.github.io/cardano-haskell-packages" = CHaP; };
     modules = [
       ({ pkgs, ... }: lib.mkIf (pkgs.stdenv.hostPlatform != pkgs.stdenv.buildPlatform) {
         packages = {
@@ -45,9 +47,6 @@ let
           marlowe-cli.package.buildable = false;
           plutus-ledger.package.buildable = false;
           plutus-tx-plugin.package.buildable = false;
-          # These need R
-          plutus-core.components.benchmarks.cost-model-test.buildable = lib.mkForce false;
-          plutus-core.components.benchmarks.update-cost-model.buildable = lib.mkForce false;
         };
       })
       ({ pkgs, config, ... }: {
