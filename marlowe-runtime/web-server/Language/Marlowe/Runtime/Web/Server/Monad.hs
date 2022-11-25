@@ -16,6 +16,7 @@ import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Reader (MonadReader, ReaderT, asks)
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Data.Coerce (coerce)
+import Language.Marlowe.Runtime.ChainSync.Api (TxId)
 import Language.Marlowe.Runtime.Core.Api (ContractId)
 import Language.Marlowe.Runtime.Web.Server.ContractHeaderIndexer (LoadContractHeaders)
 import Language.Marlowe.Runtime.Web.Server.HistoryClient (LoadContract, LoadTransaction, LoadTransactions)
@@ -55,6 +56,7 @@ data AppEnv r = AppEnv
   , _createContract :: CreateContract IO
   , _applyInputs :: ApplyInputs IO
   , _submitContract :: ContractId -> Submit r IO
+  , _submitTransaction :: ContractId -> TxId -> Submit r IO
   }
 
 -- | Load a list of contract headers.
@@ -98,3 +100,9 @@ submitContract :: ContractId -> Submit r (AppM r)
 submitContract contractId mods tx = do
   submit <- asks _submitContract
   liftIO $ submit contractId mods tx
+
+-- | Submit an apply inputs transaction to the node
+submitTransaction :: ContractId -> TxId -> Submit r (AppM r)
+submitTransaction contractId txId mods tx = do
+  submit <- asks _submitTransaction
+  liftIO $ submit contractId txId mods tx

@@ -14,6 +14,7 @@ import Control.Concurrent.Async (concurrently_)
 import Control.Concurrent.Component
 import Control.Concurrent.STM
   ( STM
+  , TVar
   , atomically
   , modifyTVar
   , newEmptyTMVar
@@ -103,6 +104,7 @@ data TxClient r = TxClient
   { createContract :: CreateContract IO
   , applyInputs :: ApplyInputs IO
   , submitContract :: ContractId -> Submit r IO
+  , submitTransaction :: ContractId -> TxId -> Submit r IO
   , lookupTempContract :: ContractId -> STM (Maybe (TempTx ContractCreated))
   , getTempContracts :: STM [TempTx ContractCreated]
   , lookupTempTransaction :: ContractId -> TxId -> STM (Maybe (TempTx InputsApplied))
@@ -111,14 +113,30 @@ data TxClient r = TxClient
 
 data SomeEventBackendModifiers r = forall r'. SomeEventBackendModifiers (EventBackendModifiers r r')
 
+-- Basically a lens to the actual map of temp txs to modify within a structure.
+-- For example, tempTransactions is a (Map ContractId (Map TxId (TempTx InputsApplie))),
+-- so to apply the given map modification to the inner map, we provide
+-- \update -> Map.update (Just . update txId) contractId
+type WithMapUpdate k tx a
+   = (k -> Map.Map k (TempTx tx) -> Map.Map k (TempTx tx)) -- ^ Takes a function that, given a key in a map, modifies a map of temp txs
+  -> (a -> a)                                              -- ^ And turns it into a function that modifies values of some type a
+
+-- Pack a TVar of a's with a lens for modifying some inner map in the TVar and
+-- existentialize the type parameters.
+data SomeTVarWithMapUpdate = forall k tx a. Ord k => SomeTVarWithMapUpdate (TVar a) (WithMapUpdate k tx a)
+
 txClient :: forall r. Component IO (TxClientDependencies r) (TxClient r)
 txClient = component \TxClientDependencies{..} -> do
   tempContracts <- newTVar mempty
   tempTransactions <- newTVar mempty
-  submitContractQueue <- newTQueue
+  submitQueue <- newTQueue
 
   let
-    runSubmitContract contractId tx sender (SomeEventBackendModifiers mods) = do
+    runSubmitGeneric
+      (SomeTVarWithMapUpdate tempVar updateTemp)
+      tx
+      sender
+      (SomeEventBackendModifiers mods) = do
       let
         eb = modifyEventBackend mods eventBackend
         cmd = Submit tx
@@ -128,10 +146,10 @@ txClient = component \TxClientDependencies{..} -> do
               addField ev $ show err
               atomically do
                 when report $ putTMVar sender $ Just err
-                modifyTVar tempContracts $ Map.update (Just . toUnsigned) contractId
+                modifyTVar tempVar $ updateTemp $ Map.update (Just . toUnsigned)
           , recvMsgSucceed = \_ -> withEvent eb SubmitSuccess \_ -> do
               atomically do
-                modifyTVar tempContracts $ Map.delete contractId
+                modifyTVar tempVar $ updateTemp Map.delete
                 when report $ putTMVar sender Nothing
           , recvMsgAwait = \status _ -> withEvent eb SubmitAwait \ev -> do
               addField ev $ show status
@@ -139,7 +157,7 @@ txClient = component \TxClientDependencies{..} -> do
                 Accepted -> do
                   when report $ atomically do
                     putTMVar sender Nothing
-                    modifyTVar tempContracts $ Map.update (Just . toSubmitted) contractId
+                    modifyTVar tempVar $ updateTemp $ Map.update (Just . toSubmitted)
                   pure False
                 _ -> pure report
               delay <- newDelay 1_000_000
@@ -148,9 +166,24 @@ txClient = component \TxClientDependencies{..} -> do
           }
       runTxJobClient client
 
+    genericSubmit
+      :: SomeTVarWithMapUpdate
+      -> EventBackendModifiers r r'
+      -> Tx BabbageEra
+      -> IO (Maybe SubmitError)
+    genericSubmit tVarWithUpdate mods tx =
+      withEvent (modifyEventBackend mods eventBackend) SubmitTx \ev -> do
+        sender <- atomically do
+          sender <- newEmptyTMVar
+          writeTQueue submitQueue (tVarWithUpdate, tx, sender, SomeEventBackendModifiers $ setAncestor (reference ev) <<< mods)
+          pure sender
+        atomically $ takeTMVar sender
+
     runTxClient = do
-      (contractId, tx, sender, mods) <- atomically $ readTQueue submitContractQueue
-      concurrently_ (try @SomeException $ runSubmitContract contractId tx sender mods) runTxClient
+      (tVarWithUpdate, tx, sender, mods) <- atomically $ readTQueue submitQueue
+      concurrently_
+        (try @SomeException $ runSubmitGeneric tVarWithUpdate tx sender mods)
+        runTxClient
 
   pure (runTxClient, TxClient
     { createContract = \stakeCredential version addresses roles metadata minUTxODeposit contract -> do
@@ -173,12 +206,8 @@ txClient = component \TxClientDependencies{..} -> do
             $ modifyTVar tempTransactions
             $ Map.alter (Just . maybe (Map.singleton txId tempTx) (Map.insert txId tempTx)) contractId
         pure response
-    , submitContract = \contractId mods tx -> withEvent (modifyEventBackend mods eventBackend) SubmitTx \ev -> do
-        sender <- atomically do
-          sender <- newEmptyTMVar
-          writeTQueue submitContractQueue (contractId, tx, sender, SomeEventBackendModifiers $ setAncestor (reference ev) <<< mods)
-          pure sender
-        atomically $ takeTMVar sender
+    , submitContract = \contractId -> genericSubmit $ SomeTVarWithMapUpdate tempContracts ($ contractId)
+    , submitTransaction = \contractId txId -> genericSubmit $ SomeTVarWithMapUpdate tempTransactions \update -> Map.update (Just . update txId) contractId
     , lookupTempContract = \contractId -> Map.lookup contractId <$> readTVar tempContracts
     , getTempContracts = fmap snd . Map.toAscList <$> readTVar tempContracts
     , lookupTempTransaction = \contractId txId -> (Map.lookup txId <=< Map.lookup contractId) <$> readTVar tempTransactions
