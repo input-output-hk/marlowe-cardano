@@ -2,8 +2,10 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE EmptyCase #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE StrictData #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 module Language.Marlowe.Runtime.Discovery.SyncServer
   where
@@ -13,17 +15,26 @@ import Language.Marlowe.Protocol.HeaderSync.Server
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainPoint, WithGenesis(..))
 import Language.Marlowe.Runtime.Discovery.Api
 import Network.Protocol.Driver (RunServer(..))
+import Observe.Event (EventBackend)
+import Observe.Event.DSL (SelectorSpec(..))
+import Observe.Event.Render.JSON.DSL.Compile (compile)
+import Observe.Event.Syntax ((≔))
 import System.IO (hPutStrLn, stderr)
+
+compile $ SelectorSpec ["discovery", "sync", "server"]
+  [ "todo" ≔ ''()
+  ]
 
 type RunSyncServer m = RunServer m MarloweHeaderSyncServer
 
-data DiscoverySyncServerDependencies = DiscoverySyncServerDependencies
+data DiscoverySyncServerDependencies r = DiscoverySyncServerDependencies
   { acceptRunSyncServer :: IO (RunSyncServer IO)
   , getNextHeaders :: ChainPoint -> IO (Maybe (Either ChainPoint (BlockHeader, [ContractHeader])))
   , getIntersect :: [BlockHeader] -> IO (Maybe BlockHeader)
+  , eventBackend :: EventBackend IO r DiscoverySyncServerSelector
   }
 
-discoverySyncServer :: Component IO DiscoverySyncServerDependencies ()
+discoverySyncServer :: Component IO (DiscoverySyncServerDependencies r) ()
 discoverySyncServer = serverComponent
   worker
   (hPutStrLn stderr . ("Sync worker crashed with exception: " <>) . show)

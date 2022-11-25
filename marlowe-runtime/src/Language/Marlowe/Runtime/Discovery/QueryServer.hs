@@ -2,8 +2,10 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE EmptyCase #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE StrictData #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 module Language.Marlowe.Runtime.Discovery.QueryServer
   where
@@ -16,18 +18,27 @@ import Network.Protocol.Driver (RunServer(..))
 import Network.Protocol.Query.Server
 import Network.Protocol.Query.Types
 import Numeric.Natural (Natural)
+import Observe.Event (EventBackend)
+import Observe.Event.DSL (SelectorSpec(..))
+import Observe.Event.Render.JSON.DSL.Compile (compile)
+import Observe.Event.Syntax ((≔))
 import System.IO (hPutStrLn, stderr)
+
+compile $ SelectorSpec ["discovery", "query", "server"]
+  [ "todo" ≔ ''()
+  ]
 
 type RunQueryServer m = RunServer m (QueryServer DiscoveryQuery)
 
-data DiscoveryQueryServerDependencies = DiscoveryQueryServerDependencies
+data DiscoveryQueryServerDependencies r = DiscoveryQueryServerDependencies
   { acceptRunQueryServer :: IO (RunQueryServer IO)
   , getHeaders :: IO [ContractHeader]
   , getHeadersByRoleTokenCurrency :: PolicyId -> IO [ContractHeader]
   , pageSize :: Natural
+  , eventBackend :: EventBackend IO r DiscoveryQueryServerSelector
   }
 
-discoveryQueryServer :: Component IO DiscoveryQueryServerDependencies ()
+discoveryQueryServer :: Component IO (DiscoveryQueryServerDependencies r) ()
 discoveryQueryServer = serverComponent
   worker
   (hPutStrLn stderr . ("Query worker crashed with exception: " <>) . show)

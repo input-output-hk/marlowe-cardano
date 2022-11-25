@@ -116,6 +116,9 @@ library
     , bytestring
     , containers
     , errors
+    , eventuo11y
+    , eventuo11y-dsl
+    , eventuo11y-json
     , marlowe
     , marlowe-chain-sync
     , marlowe-protocols
@@ -366,6 +369,7 @@ executable marlowe-discovery
     , async-components
     , base16
     , containers
+    , eventuo11y-json
     , marlowe
     , marlowe-protocols
     , marlowe-runtime

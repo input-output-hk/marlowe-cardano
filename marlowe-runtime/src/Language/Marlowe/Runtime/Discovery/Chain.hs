@@ -1,5 +1,7 @@
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 module Language.Marlowe.Runtime.Discovery.Chain
   where
@@ -21,7 +23,15 @@ import Language.Marlowe.Runtime.Core.Api
 import Language.Marlowe.Runtime.Core.ScriptRegistry (MarloweScripts(..), getMarloweVersion, getScripts)
 import Language.Marlowe.Runtime.Discovery.Api (ContractHeader(..))
 import Network.Protocol.Driver (RunClient)
+import Observe.Event (EventBackend)
+import Observe.Event.DSL (SelectorSpec(..))
+import Observe.Event.Render.JSON.DSL.Compile (compile)
+import Observe.Event.Syntax ((≔))
 import qualified Plutus.V1.Ledger.Api as P
+
+compile $ SelectorSpec ["discovery", "chain", "client"]
+  [ "todo" ≔ ''()
+  ]
 
 data Changes = Changes
   { headers :: !(Map Chain.BlockHeader (Set ContractHeader))
@@ -44,7 +54,7 @@ applyRollback :: Chain.ChainPoint -> Changes -> Changes
 applyRollback Chain.Genesis _ = Changes mempty $ Just Chain.Genesis
 applyRollback (Chain.At blockHeader@Chain.BlockHeader{slotNo}) Changes{..} = Changes
   { headers = headers'
-  , rollbackTo = asum
+  , rollbackTo = asum @[]
       [ guard (Map.null headers') *> (min (Just (Chain.At blockHeader)) rollbackTo <|> Just (Chain.At blockHeader))
       , rollbackTo
       ]
@@ -53,11 +63,12 @@ applyRollback (Chain.At blockHeader@Chain.BlockHeader{slotNo}) Changes{..} = Cha
     headers' = Map.filterWithKey (const . isNotRolledBack) headers
     isNotRolledBack = not . Chain.isAfter slotNo
 
-newtype DiscoveryChainClientDependencies = DiscoveryChainClientDependencies
+data DiscoveryChainClientDependencies r = DiscoveryChainClientDependencies
   { connectToChainSeek :: RunClient IO Chain.RuntimeChainSeekClient
+  , eventBackend :: EventBackend IO r DiscoveryChainClientSelector
   }
 
-discoveryChainClient :: Component IO DiscoveryChainClientDependencies (STM Changes)
+discoveryChainClient :: Component IO (DiscoveryChainClientDependencies r) (STM Changes)
 discoveryChainClient = component \DiscoveryChainClientDependencies{..} -> do
   changesVar <- newTVar mempty
   let
@@ -134,4 +145,4 @@ extractHeaders blockHeader Chain.Transaction{..} =
         }
 
 marloweScriptHashes :: Set Chain.ScriptHash
-marloweScriptHashes = Set.map marloweScript $ foldMap (withSomeMarloweVersion getScripts) [minBound..maxBound]
+marloweScriptHashes = Set.map marloweScript $ foldMap @[] (withSomeMarloweVersion getScripts) [minBound..maxBound]

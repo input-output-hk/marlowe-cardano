@@ -29,6 +29,8 @@ import Network.Socket
   , withFdSocket
   , withSocketsDo
   )
+import Observe.Event.Render.JSON (DefaultRenderSelectorJSON(defaultRenderSelectorJSON))
+import Observe.Event.Render.JSON.Handle (simpleJsonStderrBackend)
 import Options.Applicative
   ( auto
   , execParser
@@ -67,6 +69,7 @@ run Options{..} = withSocketsDo do
         acceptRunQueryServer = acceptRunServerPeerOverSocket throwIO querySocket codecQuery queryServerPeer
         acceptRunSyncServer = acceptRunServerPeerOverSocket throwIO syncSocket codecMarloweHeaderSync marloweHeaderSyncServerPeer
       let pageSize = 1024 -- TODO move to config with a default
+      eventBackend <- simpleJsonStderrBackend defaultRenderSelectorJSON
       runComponent_ discovery DiscoveryDependencies{..}
   where
     openServer addr = bracketOnError (openSocket addr) close \socket -> do

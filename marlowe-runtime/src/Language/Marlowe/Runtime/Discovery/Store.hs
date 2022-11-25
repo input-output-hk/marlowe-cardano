@@ -1,3 +1,7 @@
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE OverloadedLists #-}
+{-# LANGUAGE TemplateHaskell #-}
+
 module Language.Marlowe.Runtime.Discovery.Store
   where
 
@@ -13,9 +17,18 @@ import qualified Data.Set as Set
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainPoint, PolicyId, WithGenesis(..))
 import Language.Marlowe.Runtime.Discovery.Api (ContractHeader(..))
 import Language.Marlowe.Runtime.Discovery.Chain (Changes(..), isEmptyChanges)
+import Observe.Event (EventBackend)
+import Observe.Event.DSL (SelectorSpec(SelectorSpec))
+import Observe.Event.Render.JSON.DSL.Compile (compile)
+import Observe.Event.Syntax ((≔))
 
-newtype DiscoveryStoreDependencies = DiscoveryStoreDependencies
+compile $ SelectorSpec ["discovery", "store"]
+  [ "todo" ≔ ''()
+  ]
+
+data DiscoveryStoreDependencies r = DiscoveryStoreDependencies
   { changes :: STM Changes
+  , eventBackend :: EventBackend IO r DiscoveryStoreSelector
   }
 
 data DiscoveryStore = DiscoveryStore
@@ -29,7 +42,7 @@ data BlockData
   = Rollback ChainPoint
   | Block [ContractHeader]
 
-discoveryStore :: Component IO DiscoveryStoreDependencies DiscoveryStore
+discoveryStore :: Component IO (DiscoveryStoreDependencies r) DiscoveryStore
 discoveryStore = component \DiscoveryStoreDependencies{..} -> do
   blocksVar <- newTVar mempty
   roleTokenIndex <- newTVar mempty
