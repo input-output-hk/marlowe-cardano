@@ -141,7 +141,7 @@ get eb ranges = withEvent eb Get \ev -> do
       let headers' = either toContractHeader id <$> toDTO headers
       addField ev $ ContractHeaders headers'
       let response = IncludeLink (Proxy @"contract") <$> headers'
-      addHeader (length headers) <$> returnRange range response
+      addHeader (length headers) . fmap ListObject <$> returnRange range response
 
 toContractHeader :: ContractState -> ContractHeader
 toContractHeader ContractState{..} = ContractHeader{..}

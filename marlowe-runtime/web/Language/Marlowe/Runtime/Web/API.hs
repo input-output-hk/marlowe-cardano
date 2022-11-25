@@ -34,6 +34,7 @@ import Data.String (IsString(..))
 import Data.Typeable (Typeable)
 import GHC.Base (Symbol)
 import GHC.Exts (IsList(..))
+import GHC.Generics (Generic)
 import GHC.Show (showSpace)
 import GHC.TypeLits (KnownSymbol, symbolVal)
 import Language.Marlowe.Runtime.Web.Types
@@ -115,7 +116,14 @@ type PaginatedGet rangeFields resource
 
 -- | Helper type for describing the response type of generic paginated APIs
 type PaginatedResponse fields resource =
-  Headers (Header "Total-Count" Int ': PageHeaders fields resource) [resource]
+  Headers (Header "Total-Count" Int ': PageHeaders fields resource) (ListObject resource)
+
+newtype ListObject a = ListObject { results :: [a] }
+  deriving (Eq, Show, Ord, Functor, Generic)
+
+instance ToJSON a => ToJSON (ListObject a)
+instance FromJSON a => FromJSON (ListObject a)
+instance ToSchema a => ToSchema (ListObject a)
 
 type PostTxAPI api
   =  Header' '[Required, Strict] "X-Change-Address" Address
