@@ -471,6 +471,7 @@ test-suite marlowe-runtime-test
     , plutus-ledger-api
     , QuickCheck
     , hedgehog-quickcheck
+    , quickcheck-instances
     , some
     , stm
     , tasty
