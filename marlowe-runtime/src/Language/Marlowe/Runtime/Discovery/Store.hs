@@ -46,10 +46,16 @@ data DiscoveryStoreDependencies r = DiscoveryStoreDependencies
   , eventBackend :: EventBackend IO r DiscoveryStoreSelector
   }
 
+data NextHeaders
+  = Wait
+  | RollBackward ChainPoint
+  | RollForward BlockHeader [ContractHeader]
+
+
 data DiscoveryStore = DiscoveryStore
   { getHeaders :: IO [ContractHeader]
   , getHeadersByRoleTokenCurrency :: PolicyId -> IO [ContractHeader]
-  , getNextHeaders :: ChainPoint -> IO (Maybe (Either ChainPoint (BlockHeader, [ContractHeader])))
+  , getNextHeaders :: ChainPoint -> IO NextHeaders
   , getIntersect :: [BlockHeader] -> IO (Maybe BlockHeader)
   }
 
@@ -168,23 +174,26 @@ worker = component \WorkerDependencies{..} -> do
     , getNextHeaders = \point -> do
         blocks <- readTVarIO blocksVar
         pure case point of
-          Genesis -> do
-            (blockHeader, blockData) <- fst <$> Map.minViewWithKey blocks
-            pure case blockData of
-              Rollback point' -> Left point'
-              Block headers -> Right (blockHeader, headers)
+          Genesis -> case Map.minViewWithKey blocks of
+            Nothing -> Wait
+            Just ((blockHeader, blockData), _) -> case blockData of
+              Rollback point' -> RollBackward point'
+              Block headers -> RollForward blockHeader headers
           At blockHeader -> case Map.lookup blockHeader blocks of
-            Nothing -> Just $ Left Genesis
+            Nothing -> RollBackward Genesis
             Just blockData ->
               case blockData of
-                Rollback point' -> pure $ Left point'
-                _ -> Right <$> do
-                  let (_, blocks') = Map.split blockHeader blocks
+                Rollback point' -> RollBackward point'
+                _ ->
                   let
+                    (_, blocks') = Map.split blockHeader blocks
                     filtered = flip Map.mapMaybe blocks' \case
                       Block hs -> Just hs
                       _ -> Nothing
-                  fst <$> Map.minViewWithKey filtered
+                  in
+                    case Map.minViewWithKey filtered of
+                      Nothing -> Wait
+                      Just ((blockHeader', headers), _) -> RollForward blockHeader' headers
     , getIntersect = \headers -> fmap fst
         . Set.maxView
         . Set.intersection (Set.fromList headers)

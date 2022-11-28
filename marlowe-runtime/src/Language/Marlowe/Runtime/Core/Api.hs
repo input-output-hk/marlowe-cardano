@@ -57,6 +57,9 @@ parseContractId = fmap ContractId . parseTxOutRef . T.pack
 renderContractId :: ContractId -> Text
 renderContractId = renderTxOutRef . unContractId
 
+instance ToJSON ContractId where
+  toJSON = String . renderContractId
+
 data MarloweVersionTag
   = V1
 

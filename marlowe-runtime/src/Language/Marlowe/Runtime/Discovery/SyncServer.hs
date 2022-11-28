@@ -13,7 +13,7 @@ module Language.Marlowe.Runtime.Discovery.SyncServer
 import Control.Concurrent.Component
 import Language.Marlowe.Protocol.HeaderSync.Server
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainPoint, WithGenesis(..))
-import Language.Marlowe.Runtime.Discovery.Api
+import Language.Marlowe.Runtime.Discovery.Store (NextHeaders(..))
 import Network.Protocol.Driver (RunServer(..))
 import Observe.Event (EventBackend)
 import Observe.Event.DSL (SelectorSpec(..))
@@ -29,7 +29,7 @@ type RunSyncServer m = RunServer m MarloweHeaderSyncServer
 
 data DiscoverySyncServerDependencies r = DiscoverySyncServerDependencies
   { acceptRunSyncServer :: IO (RunSyncServer IO)
-  , getNextHeaders :: ChainPoint -> IO (Maybe (Either ChainPoint (BlockHeader, [ContractHeader])))
+  , getNextHeaders :: ChainPoint -> IO NextHeaders
   , getIntersect :: [BlockHeader] -> IO (Maybe BlockHeader)
   , eventBackend :: EventBackend IO r DiscoverySyncServerSelector
   }
@@ -45,7 +45,7 @@ discoverySyncServer = serverComponent
 
 data WorkerDependencies = WorkerDependencies
   { runSyncServer     :: RunSyncServer IO
-  , getNextHeaders :: ChainPoint -> IO (Maybe (Either ChainPoint (BlockHeader, [ContractHeader])))
+  , getNextHeaders :: ChainPoint -> IO NextHeaders
   , getIntersect :: [BlockHeader] -> IO (Maybe BlockHeader)
   }
 
@@ -79,9 +79,9 @@ worker = component_ \WorkerDependencies{..} -> do
     nextServer point = do
       result <- getNextHeaders point
       pure case result of
-        Nothing -> SendMsgWait $ waitServer point
-        Just (Left point') -> SendMsgRollBackward point' $ idleServer point'
-        Just (Right (block, headers)) -> SendMsgNewHeaders block headers $ idleServer $ At block
+        Wait -> SendMsgWait $ waitServer point
+        RollBackward point' -> SendMsgRollBackward point' $ idleServer point'
+        RollForward block headers -> SendMsgNewHeaders block headers $ idleServer $ At block
 
     waitServer :: ChainPoint -> ServerStWait IO ()
     waitServer point = ServerStWait

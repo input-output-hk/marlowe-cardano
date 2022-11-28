@@ -11,7 +11,7 @@ import Control.Concurrent.STM (STM, atomically, newTQueue, readTQueue, writeTQue
 import Control.Monad (guard)
 import Data.Coerce (coerce)
 import Data.Crosswalk (crosswalk)
-import Data.Foldable (fold, for_)
+import Data.Foldable (fold, traverse_)
 import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.Text (Text)
@@ -31,7 +31,7 @@ import Observe.Event.Syntax ((≔))
 import qualified Plutus.V1.Ledger.Api as P
 
 type Versions = [Text]
-type TransactionSet = Set Chain.Transaction
+type ContractIds = Set ContractId
 
 compile $ SelectorSpec ["discovery", "chain", "client"]
   [ "connect" ≔ ''Void
@@ -43,7 +43,7 @@ compile $ SelectorSpec ["discovery", "chain", "client"]
   , ["roll", "forward"] ≔ FieldSpec ["roll", "forward"]
       [ "block" ≔ ''Chain.BlockHeader
       , "tip" ≔ ''Chain.ChainPoint
-      , "results" ≔ ''TransactionSet
+      , ["new", "headers"] ≔ ''ContractIds
       ]
   , ["roll", "backward"] ≔ ''Chain.ChainPoint
   ]
@@ -88,10 +88,9 @@ discoveryChainClient = component \DiscoveryChainClientDependencies{..} -> do
           Chain.At block -> \tip -> withEvent eventBackend RollForward \ev -> do
             addField ev $ Block block
             addField ev $ Tip tip
-            addField ev $ Results txs
-            atomically
-              $ for_ (fmap fold $ crosswalk (extractHeaders block) $ Set.toList txs)
-              $ writeTQueue queue . RolledForward block
+            let mNewHeaders = fmap fold $ crosswalk (extractHeaders block) $ Set.toList txs
+            addField ev $ NewHeaders $ Set.map contractId $ fold mNewHeaders
+            atomically $ traverse_ (writeTQueue queue . RolledForward block) mNewHeaders
             pure clientIdle
       , recvMsgRollBackward = \point _ -> withEvent eventBackend RollBackward \ev -> do
           addField ev point
