@@ -1,5 +1,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE EmptyDataDeriving #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
@@ -12,6 +13,7 @@ module Language.Marlowe.Runtime.Transaction.Api
   , ContractCreated(..)
   , CreateBuildupError(..)
   , CreateError(..)
+  , InputsApplied(..)
   , JobId(..)
   , LoadMarloweContextError(..)
   , MarloweTxCommand(..)
@@ -130,6 +132,40 @@ instance IsCardanoEra era => Binary (ContractCreated era 'V1) where
     let version = MarloweV1
     pure ContractCreated{..}
 
+data InputsApplied era v = InputsApplied
+  { version :: MarloweVersion v
+  , contractId :: ContractId
+  , input :: TransactionScriptOutput v
+  , output :: Maybe (TransactionScriptOutput v)
+  , invalidBefore :: UTCTime
+  , invalidHereafter :: UTCTime
+  , inputs :: Redeemer v
+  , txBody :: TxBody era
+  }
+
+deriving instance Show (InputsApplied BabbageEra 'V1)
+deriving instance Eq (InputsApplied BabbageEra 'V1)
+
+instance IsCardanoEra era => Binary (InputsApplied era 'V1) where
+  put InputsApplied{..} = do
+    put contractId
+    put input
+    put output
+    putUTCTime invalidBefore
+    putUTCTime invalidHereafter
+    putRedeemer MarloweV1 inputs
+    putTxBody txBody
+  get = do
+    let version = MarloweV1
+    contractId <- get
+    input <- get
+    output <- get
+    invalidBefore <- getUTCTime
+    invalidHereafter <- getUTCTime
+    inputs <- getRedeemer MarloweV1
+    txBody <- getTxBody
+    pure InputsApplied{..}
+
 -- | The low-level runtime API for building and submitting transactions.
 data MarloweTxCommand status err result where
   -- | Construct a transaction that starts a new Marlowe contract. The
@@ -172,9 +208,7 @@ data MarloweTxCommand status err result where
     -- is computed from the contract.
     -> Redeemer v
     -- ^ The inputs to apply.
-    -> MarloweTxCommand Void (ApplyInputsError v)
-        ( TxBody BabbageEra -- The unsigned tx body, to be signed by a wallet.
-        )
+    -> MarloweTxCommand Void (ApplyInputsError v) (InputsApplied BabbageEra v)
 
   -- | Construct a transaction that withdraws available assets from an active
   -- Marlowe contract for a set of roles in the contract. The resulting,
@@ -206,7 +240,7 @@ data MarloweTxCommand status err result where
 instance Command MarloweTxCommand where
   data Tag MarloweTxCommand status err result where
     TagCreate :: MarloweVersion v -> Tag MarloweTxCommand Void (CreateError v) (ContractCreated BabbageEra v)
-    TagApplyInputs :: MarloweVersion v -> Tag MarloweTxCommand Void (ApplyInputsError v) (TxBody BabbageEra)
+    TagApplyInputs :: MarloweVersion v -> Tag MarloweTxCommand Void (ApplyInputsError v) (InputsApplied BabbageEra v)
     TagWithdraw :: MarloweVersion v -> Tag MarloweTxCommand Void (WithdrawError v) (TxBody BabbageEra)
     TagSubmit :: Tag MarloweTxCommand SubmitStatus SubmitError BlockHeader
 
@@ -344,13 +378,13 @@ instance Command MarloweTxCommand where
 
   putResult = \case
     TagCreate MarloweV1 -> put
-    TagApplyInputs _ -> putTxBody
+    TagApplyInputs MarloweV1 -> put
     TagWithdraw _ -> putTxBody
     TagSubmit -> put
 
   getResult = \case
     TagCreate MarloweV1 -> get
-    TagApplyInputs _ -> getTxBody
+    TagApplyInputs MarloweV1 -> get
     TagWithdraw _ -> getTxBody
     TagSubmit -> get
 

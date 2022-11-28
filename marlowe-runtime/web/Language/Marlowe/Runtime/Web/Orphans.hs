@@ -8,6 +8,8 @@ module Language.Marlowe.Runtime.Web.Orphans
 import Control.Lens hiding (both, from, to)
 import Data.OpenApi hiding (value)
 import Data.Proxy (Proxy(Proxy))
+import Data.Text (Text)
+import GHC.Exts (IsList(fromList))
 import Language.Marlowe.Core.V1.Semantics.Types
 
 data Address
@@ -413,3 +415,45 @@ instance ToSchema State where
       & description ?~ "The on-chain state of a Marlowe contract."
       & required .~ fmap fst [accounts, choices, boundValues, minTime]
       & properties .~ [accounts, choices, boundValues, minTime]
+
+instance ToSchema Input where
+  declareNamedSchema _ = do
+    contractSchema <- declareSchemaRef $ Proxy @Contract
+    partySchema <- declareSchemaRef $ Proxy @Party
+    tokenSchema <- declareSchemaRef $ Proxy @Token
+    integerSchema <- declareSchemaRef $ Proxy @Integer
+    stringSchema <- declareSchemaRef $ Proxy @String
+    choiceIdSchema <- declareSchemaRef $ Proxy @ChoiceId
+    let
+      depositProperties, choiceProperties, merkleProperties :: [(Text, Referenced Schema)]
+      depositProperties =
+        [ ("input_from_party", partySchema)
+        , ("that_deposits", integerSchema)
+        , ("of_token", tokenSchema)
+        , ("into_account", partySchema)
+        ]
+      choiceProperties =
+        [ ("input_that_chooses_num", integerSchema)
+        , ("for_choice_id", choiceIdSchema)
+        ]
+      merkleProperties =
+        [ ("merkleized_continuation", contractSchema)
+        , ("continuation_hash", stringSchema)
+        ]
+      objInputSchema props desc merkle = Inline $ mempty @Schema
+        & type_ ?~ OpenApiObject
+        & description ?~ (desc <> if merkle then " and provide the continuation of the contract" else "")
+        & required .~ (fst <$> allProps)
+        & properties .~ fromList allProps
+        where
+          allProps = props <> if merkle then merkleProperties else []
+      depositSchema = objInputSchema depositProperties "Deposit funds into an account in a contract"
+      choiceSchema = objInputSchema choiceProperties "Make a choice in a contract"
+      notifySchema True = objInputSchema [] "Notify a contract to check a condition" True
+      notifySchema False = Inline $ mempty
+        & type_ ?~ OpenApiString
+        & description ?~ "Notify a contract to check a condition"
+        & enum_ ?~ ["input_notify"]
+    pure $ NamedSchema (Just "Input") $ mempty
+      & description ?~ "An input to a Marlowe transaction"
+      & oneOf ?~ ([notifySchema, choiceSchema, depositSchema] <*> [True, False])

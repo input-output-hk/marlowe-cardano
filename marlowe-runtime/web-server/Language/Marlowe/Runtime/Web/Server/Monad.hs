@@ -18,7 +18,7 @@ import Control.Monad.Trans.Control (MonadBaseControl)
 import Data.Coerce (coerce)
 import Language.Marlowe.Runtime.Web.Server.ContractHeaderIndexer (LoadContractHeaders)
 import Language.Marlowe.Runtime.Web.Server.HistoryClient (LoadContract, LoadTransactions)
-import Language.Marlowe.Runtime.Web.Server.TxClient (CreateContract)
+import Language.Marlowe.Runtime.Web.Server.TxClient (ApplyInputs, CreateContract)
 import Servant
 
 newtype AppM r a = AppM { runAppM :: ReaderT (AppEnv r) Handler a }
@@ -51,6 +51,7 @@ data AppEnv r = AppEnv
   , _loadContract :: LoadContract r IO
   , _loadTransactions :: LoadTransactions r IO
   , _createContract :: CreateContract IO
+  , _applyInputs :: ApplyInputs IO
   }
 
 -- | Load a list of contract headers.
@@ -76,3 +77,9 @@ createContract :: CreateContract (AppM r)
 createContract stakeCredential version addresses roles metadata minUTxODeposit contract = do
   create <- asks _createContract
   liftIO $ create stakeCredential version addresses roles metadata minUTxODeposit contract
+
+-- | Load a list of transactions for a contract.
+applyInputs :: ApplyInputs (AppM r)
+applyInputs version addresses contractId invalidBefore invalidHereafter inputs = do
+  apply <- asks _applyInputs
+  liftIO $ apply version addresses contractId invalidBefore invalidHereafter inputs

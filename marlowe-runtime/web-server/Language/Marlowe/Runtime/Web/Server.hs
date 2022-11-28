@@ -121,6 +121,7 @@ server = proc ServerDependencies{..} -> do
   HistoryClient{..} <- historyClient -< HistoryClientDependencies
     { runMarloweSyncClient
     , lookupTempContract
+    , getTempTransactions
     , eventBackend = narrowEventBackend History eventBackend
     }
   let
@@ -129,6 +130,7 @@ server = proc ServerDependencies{..} -> do
       , _loadContract = loadContract
       , _loadTransactions = loadTransactions
       , _createContract = createContract
+      , _applyInputs = applyInputs
       }
     httpBackend = hoistEventBackend liftIO $ narrowEventBackend Api eventBackend
     app' = application (narrowEventBackend Http eventBackend) $
