@@ -52,6 +52,13 @@ instance Arbitrary Web.TxHeader where
     <*> arbitrary
     <*> arbitrary
 
+instance Arbitrary Web.Withdrawal where
+  arbitrary = Web.Withdrawal
+    <$> arbitrary
+    <*> arbitrary
+    <*> arbitrary
+    <*> arbitrary
+
 instance Arbitrary Web.ContractState where
   arbitrary = Web.ContractState
     <$> arbitrary

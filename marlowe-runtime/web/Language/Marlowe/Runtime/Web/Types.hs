@@ -295,6 +295,20 @@ data TxStatus
   | Confirmed
   deriving (Show, Eq, Ord)
 
+data Withdrawal = Withdrawal
+  { contractId :: TxOutRef
+  , withdrawalId :: TxId
+  , status :: TxStatus
+  , block :: Maybe BlockHeader
+  } deriving (Show, Eq, Ord, Generic)
+
+instance ToJSON Withdrawal
+instance ToSchema Withdrawal
+
+instance HasPagination Withdrawal "withdrawalId" where
+  type RangeType Withdrawal "withdrawalId" = TxId
+  getFieldValue _ Withdrawal{..} = withdrawalId
+
 instance ToJSON TxStatus where
   toJSON Unsigned = String "unsigned"
   toJSON Submitted = String "submitted"

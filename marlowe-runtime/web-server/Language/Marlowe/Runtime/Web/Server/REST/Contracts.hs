@@ -26,6 +26,7 @@ import Language.Marlowe.Runtime.Web.Server.DTO
 import Language.Marlowe.Runtime.Web.Server.Monad
   (AppM, createContract, loadContract, loadContractHeaders, submitContract)
 import qualified Language.Marlowe.Runtime.Web.Server.REST.Transactions as Transactions
+import qualified Language.Marlowe.Runtime.Web.Server.REST.Withdrawals as Withdrawals
 import Language.Marlowe.Runtime.Web.Server.TxClient (TempTx(TempTx), TempTxStatus(Unsigned))
 import Observe.Event (EventBackend, addField, reference, withEvent)
 import Observe.Event.Backend (narrowEventBackend)
@@ -66,6 +67,7 @@ compile $ SelectorSpec "contracts"
       , "error" ≔ ''String
       ]
   , "transactions" ≔ Inject ''Transactions.TransactionsSelector
+  , "withdrawals" ≔ Inject ''Withdrawals.WithdrawalsSelector
   ]
 
 server
@@ -153,6 +155,7 @@ contractServer
 contractServer eb contractId = getOne eb contractId
                           :<|> put eb contractId
                           :<|> Transactions.server (narrowEventBackend Transactions eb) contractId
+                          :<|> Withdrawals.server (narrowEventBackend Withdrawals eb) contractId
 
 getOne
   :: EventBackend (AppM r) r ContractsSelector

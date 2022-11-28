@@ -132,6 +132,7 @@ server = proc ServerDependencies{..} -> do
         { _loadContractHeaders = loadContractHeaders
         , _loadContract = loadContract
         , _loadTransactions = loadTransactions
+        , _loadWithdrawals = loadWithdrawals
         , _loadTransaction = loadTransaction
         , _createContract = createContract
         , _applyInputs = applyInputs

@@ -12,7 +12,7 @@ import Control.Concurrent.Component
 import Control.Concurrent.STM (STM, atomically)
 import Control.Error (note)
 import Data.Foldable (foldlM)
-import Data.List (sortOn)
+import Data.List (sort, sortOn)
 import Data.List.NonEmpty (NonEmpty((:|)))
 import qualified Data.List.NonEmpty as NE
 import Data.Maybe (isNothing, listToMaybe, mapMaybe)
@@ -23,7 +23,7 @@ import Language.Marlowe.Runtime.ChainSync.Api (TxId)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Core.Api
   (ContractId, MarloweVersion, Transaction(..), TransactionOutput(..), TransactionScriptOutput)
-import Language.Marlowe.Runtime.History.Api (ContractStep(..), CreateStep(..))
+import Language.Marlowe.Runtime.History.Api (ContractStep(..), CreateStep(..), RedeemStep(..))
 import Language.Marlowe.Runtime.Transaction.Api (ContractCreated, InputsApplied(InputsApplied, txBody))
 import Language.Marlowe.Runtime.Web.Server.DTO (ContractRecord(..), SomeTransaction(..))
 import qualified Language.Marlowe.Runtime.Web.Server.DTO as TxRecord (TxRecord(..))
@@ -49,6 +49,12 @@ compile $ SelectorSpec ["history", "client"]
   , ["load", "transactions", "roll", "backward"] ≔ ''String
   , ["load", "transactions", "roll", "back", "creation"] ≔ ''Void
   , ["load", "transactions", "wait"] ≔ ''Void
+  , ["load", "withdrawals", "not", "found"] ≔ ''Void
+  , ["load", "withdrawals", "found"] ≔ ''String
+  , ["load", "withdrawals", "roll", "forward"] ≔ ''String
+  , ["load", "withdrawals", "roll", "backward"] ≔ ''String
+  , ["load", "withdrawals", "roll", "back", "creation"] ≔ ''Void
+  , ["load", "withdrawals", "wait"] ≔ ''Void
   , ["load", "tx", "not", "found"] ≔ ''Void
   , ["load", "tx", "contract", "found"] ≔ ''String
   , ["load", "tx", "roll", "forward"] ≔ FieldSpec ["load", "tx", "roll", "forward"]
@@ -87,11 +93,22 @@ type LoadTransactions r m
    = forall r'
    . EventBackendModifiers r r'
   -> ContractId -- ^ ID of the contract to load transactions for.
-  -> Maybe TxId -- ^ ID of the contract to start from.
-  -> Int -- ^ Limit: the maximum number of contract headers to load.
-  -> Int -- ^ Offset: how many contract headers after the initial one to skip.
+  -> Maybe TxId -- ^ ID of the transaction to start from.
+  -> Int -- ^ Limit: the maximum number of transactions to load.
+  -> Int -- ^ Offset: how many transactions after the initial one to skip.
   -> RangeOrder -- ^ Whether to load an ascending or descending list.
   -> m (Either LoadTxError [Either (TempTx InputsApplied) SomeTransaction])
+
+-- | Signature for a delegate that loads a list of withdrawals for a contract.
+type LoadWithdrawals r m
+   = forall r'
+   . EventBackendModifiers r r'
+  -> ContractId -- ^ ID of the contract to load transactions for.
+  -> Maybe TxId -- ^ ID of the withdrawal to start from.
+  -> Int -- ^ Limit: the maximum number of withdrawals to load.
+  -> Int -- ^ Offset: how many withdrawals after the initial one to skip.
+  -> RangeOrder -- ^ Whether to load an ascending or descending list.
+  -> m (Either LoadTxError [(Chain.BlockHeader, TxId)])
 
 -- | Signature for a delegate that loads a transaction for a contract.
 type LoadTransaction r m
@@ -105,6 +122,7 @@ type LoadTransaction r m
 data HistoryClient r = HistoryClient
   { loadContract :: LoadContract r IO -- ^ Load contract headers from the indexer.
   , loadTransactions :: LoadTransactions r IO -- ^ Load transactions for a contract from the indexer.
+  , loadWithdrawals :: LoadWithdrawals r IO -- ^ Load withdrawals for a contract
   , loadTransaction :: LoadTransaction r IO -- ^ Load a transaction for a contract
   }
 
@@ -130,6 +148,11 @@ historyClient = arr \HistoryClientDependencies{..} -> HistoryClient
       pure
         $ note TxNotFound . applyRangeToAscList transactionId' startFrom limit offset order
         =<< allTxs
+  , loadWithdrawals = \mods contractId startFrom limit offset order -> do
+      withdrawals <- runMarloweSyncClient (loadWithdrawalsClient (modifyEventBackend mods eventBackend) contractId)
+      pure
+        $ note TxNotFound . applyRangeToAscList snd startFrom limit offset order
+        =<< withdrawals
   }
   where
     transactionId' (Left (TempTx _ _ InputsApplied{..})) = fromCardanoTxId $ getTxId txBody
@@ -238,6 +261,50 @@ loadTransactionsClient eb contractId = MarloweSyncClient $ pure clientInit
             $ Right
             $ SomeTransaction version
             <$> transactions
+      }
+
+loadWithdrawalsClient
+  :: EventBackend IO r HistoryClientSelector
+  -> ContractId
+  -> MarloweSyncClient IO (Either LoadTxError [(Chain.BlockHeader, TxId)])
+loadWithdrawalsClient eb contractId = MarloweSyncClient $ pure clientInit
+  where
+    clientInit = SendMsgFollowContract contractId ClientStFollow
+      { recvMsgContractNotFound =
+          withEvent eb LoadWithdrawalsNotFound $ const $ pure $ Left ContractNotFound
+      , recvMsgContractFound = \block version _ ->
+          withEvent eb LoadWithdrawalsFound \ev -> do
+            addField ev $ show block
+            pure $ clientIdle version []
+      }
+
+    clientIdle
+      :: MarloweVersion v
+      -> [(Chain.BlockHeader, TxId)]
+      -> ClientStIdle v IO (Either LoadTxError [(Chain.BlockHeader, TxId)])
+    clientIdle version withdrawals = SendMsgRequestNext ClientStNext
+      { recvMsgRollForward = \block steps ->
+          withEvent eb LoadWithdrawalsRollForward \ev -> do
+            addField ev $ show block
+            let
+              extractWithdrawal = \case
+                RedeemPayout RedeemStep{..} -> Just redeemingTx
+                _ -> Nothing
+              newWithdrawals = (block,) <$> sort (mapMaybe extractWithdrawal steps)
+            pure $ clientIdle version (withdrawals <> newWithdrawals)
+      , recvMsgRollBackward = \block ->
+          withEvent eb LoadWithdrawalsRollBackward \ev -> do
+            addField ev $ show block
+            pure $ clientIdle version $ takeWhile ((<= block) . fst) withdrawals
+      , recvMsgRollBackCreation =
+          withEvent eb LoadWithdrawalsRollBackCreation $ const $ pure $ Left ContractNotFound
+      , recvMsgWait = do
+          withEvent eb LoadWithdrawalsWait
+            $ const
+            $ pure
+            $ SendMsgCancel
+            $ SendMsgDone
+            $ Right withdrawals
       }
 
 loadTransactionClient

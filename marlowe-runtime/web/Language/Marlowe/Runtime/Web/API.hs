@@ -82,6 +82,7 @@ instance HasNamedLink CreateTxBody API "contract" where
 type ContractAPI = GetContractAPI
               :<|> PutSignedTxAPI
               :<|> "transactions" :> TransactionsAPI
+              :<|> "withdrawals" :> WithdrawalsAPI
 
 -- | GET /contracts/:contractId sub-API
 type GetContractAPI = Get '[JSON] GetContractResponse
@@ -168,6 +169,14 @@ instance HasNamedLink Tx API "next" where
     ))
     contractId
     <$> consumingTx
+
+-- | /contracts/:contractId/withdrawals sup-API
+type WithdrawalsAPI = GetWithdrawalsAPI
+
+-- | GET /contracts/:contractId/transactions sup-API
+type GetWithdrawalsAPI = PaginatedGet '["withdrawalId"] GetWithdrawalsResponse
+
+type GetWithdrawalsResponse = Withdrawal
 
 -- | Helper type for defining generic paginated GET endpoints
 type PaginatedGet rangeFields resource

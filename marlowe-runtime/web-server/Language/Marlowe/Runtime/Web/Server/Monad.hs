@@ -19,7 +19,8 @@ import Data.Coerce (coerce)
 import Language.Marlowe.Runtime.ChainSync.Api (TxId)
 import Language.Marlowe.Runtime.Core.Api (ContractId)
 import Language.Marlowe.Runtime.Web.Server.ContractHeaderIndexer (LoadContractHeaders)
-import Language.Marlowe.Runtime.Web.Server.HistoryClient (LoadContract, LoadTransaction, LoadTransactions)
+import Language.Marlowe.Runtime.Web.Server.HistoryClient
+  (LoadContract, LoadTransaction, LoadTransactions, LoadWithdrawals)
 import Language.Marlowe.Runtime.Web.Server.TxClient (ApplyInputs, CreateContract, Submit)
 import Servant
 
@@ -52,6 +53,7 @@ data AppEnv r = AppEnv
   { _loadContractHeaders :: LoadContractHeaders IO
   , _loadContract :: LoadContract r IO
   , _loadTransactions :: LoadTransactions r IO
+  , _loadWithdrawals :: LoadWithdrawals r IO
   , _loadTransaction :: LoadTransaction r IO
   , _createContract :: CreateContract IO
   , _applyInputs :: ApplyInputs IO
@@ -75,6 +77,12 @@ loadContract mods contractId = do
 loadTransactions :: LoadTransactions r (AppM r)
 loadTransactions mods contractId startFrom limit offset order = do
   load <- asks _loadTransactions
+  liftIO $ load mods contractId startFrom limit offset order
+
+-- | Load a list of withdrawals for a contract.
+loadWithdrawals :: LoadWithdrawals r (AppM r)
+loadWithdrawals mods contractId startFrom limit offset order = do
+  load <- asks _loadWithdrawals
   liftIO $ load mods contractId startFrom limit offset order
 
 -- | Load a transaction for a contract.
