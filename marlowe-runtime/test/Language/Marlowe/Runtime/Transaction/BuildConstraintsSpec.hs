@@ -22,7 +22,7 @@ import Gen.Cardano.Api.Typed (genAddressShelley)
 import qualified Language.Marlowe.Core.V1.Semantics as Semantics
 import qualified Language.Marlowe.Core.V1.Semantics.Types as Semantics
 import Language.Marlowe.Runtime.Cardano.Api (fromCardanoAddressAny, fromCardanoMetadata)
-import Language.Marlowe.Runtime.ChainSync.Api (Lovelace, TransactionMetadata, toUTxOsList)
+import Language.Marlowe.Runtime.ChainSync.Api (Lovelace, TransactionMetadata(unTransactionMetadata), toUTxOsList)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Core.Api (Contract, Datum, MarloweVersion(..), MarloweVersionTag(..))
 import qualified Language.Marlowe.Runtime.Core.Api as Core.Api
@@ -32,7 +32,12 @@ import qualified Language.Marlowe.Runtime.Transaction.Api as Transaction.Api
 import Language.Marlowe.Runtime.Transaction.BuildConstraints (buildCreateConstraints)
 import qualified Language.Marlowe.Runtime.Transaction.BuildConstraints as BuildConstraints
 import Language.Marlowe.Runtime.Transaction.Constraints
-  (MarloweOutputConstraints(..), RoleTokenConstraints(..), TxConstraints(..), WalletContext(..))
+  ( MarloweInputConstraints(..)
+  , MarloweOutputConstraints(..)
+  , RoleTokenConstraints(..)
+  , TxConstraints(..)
+  , WalletContext(..)
+  )
 import qualified Language.Marlowe.Runtime.Transaction.Constraints as TxConstraints
 import Language.Marlowe.Runtime.Transaction.ConstraintsSpec (genRole, genTransactionOutput, genTxOutRef, shrinkAssets)
 import Spec.Marlowe.Semantics.Arbitrary ()
@@ -84,6 +89,41 @@ createSpec = focus $ Hspec.describe "buildCreateConstraints" do
       mAssets = extractMarloweAssets <$> result
     in case version args of
       MarloweV1 -> (fmap (fromPlutusValue . Semantics.totalBalance . Semantics.accounts . Semantics.marloweState) <$> mDatum) === mAssets
+      :: Property
+  Hspec.QuickCheck.prop "Doesn't send any payments to addresses" \(SomeCreateArgs args) ->
+    let result = payToAddresses <$> runBuildCreateConstraints args
+    in case version args of
+      MarloweV1 -> result === Right mempty
+      :: Property
+  Hspec.QuickCheck.prop "Doesn't send any payments to roles" \(SomeCreateArgs args) ->
+    let result = payToRoles <$> runBuildCreateConstraints args
+    in case version args of
+      MarloweV1 -> result === Right mempty
+      :: Property
+  Hspec.QuickCheck.prop "Doesn't consume any roles" \(SomeCreateArgs args) ->
+    let result = payoutInputConstraints <$> runBuildCreateConstraints args
+    in case version args of
+      MarloweV1 -> result === Right mempty
+      :: Property
+  Hspec.QuickCheck.prop "Doesn't consume a marlowe input" \(SomeCreateArgs args) ->
+    let result = marloweInputConstraints <$> runBuildCreateConstraints args
+    in case version args of
+      MarloweV1 -> result === Right MarloweInputConstraintsNone
+      :: Property
+  Hspec.QuickCheck.prop "Doesn't send merkleized continuations" \(SomeCreateArgs args) ->
+    let result = merkleizedContinuationsConstraints <$> runBuildCreateConstraints args
+    in case version args of
+      MarloweV1 -> result === Right mempty
+      :: Property
+  Hspec.QuickCheck.prop "Doesn't require extra signatures" \(SomeCreateArgs args) ->
+    let result = signatureConstraints <$> runBuildCreateConstraints args
+    in case version args of
+      MarloweV1 -> result === Right mempty
+      :: Property
+  Hspec.QuickCheck.prop "Writes the correct metadata" \(SomeCreateArgs args) ->
+    let result = metadataConstraints <$> runBuildCreateConstraints args
+    in case version args of
+      MarloweV1 -> result === Right (unTransactionMetadata $ metadata args)
       :: Property
 
   where
