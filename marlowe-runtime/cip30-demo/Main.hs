@@ -8,9 +8,10 @@ module Main
 
 import Cardano.Api (BabbageEra)
 import Control.Exception (throwIO)
-import Data.Aeson ((.:))
 import qualified Data.Aeson as Aeson
+import qualified Data.Aeson.Types as Aeson.Types
 import Data.Text (Text)
+import GHC.Generics (Generic)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as ChainSync.Api
 import qualified Language.Marlowe.Runtime.Core.Api as Core.Api
 import qualified Language.Marlowe.Runtime.Transaction.Api as Transaction.Api
@@ -37,17 +38,16 @@ newtype WalletName = WalletName String
     , Blaze.ToMarkup
     )
 
-newtype PostWalletCreateRequestDTO = PostWalletCreateRequestDTO { source :: Text }
-  deriving Show
+data PostWalletCreateRequestDTO = PostWalletCreateRequestDTO
+  { version :: Core.Api.SomeMarloweVersion
+  , source :: Aeson.Value
+  }
+  deriving (Show, Generic, Aeson.FromJSON)
 
 data PostWalletCreateResponseDTO = PostWalletCreateResponseDTO
   { unsignedTransaction :: Text
   , contractId :: Text
   }
-
-instance Aeson.FromJSON PostWalletCreateRequestDTO where
-  parseJSON = Aeson.withObject "PostWalletCreateRequestDTO" \o ->
-    PostWalletCreateRequestDTO <$> o .: "source"
 
 Yesod.mkYesod "CIP30" [Yesod.parseRoutes|
 /                   HomeR         GET
@@ -93,10 +93,14 @@ getWalletCreateR walletName = Yesod.defaultLayout do
       const contractSource = document.getElementById('contractSource')
       const postContractSource = document.getElementById('postContractSource')
       postContractSource.addEventListener("click", async () => {
+        const body = {
+          version: "v1"
+          source: JSON.parse(contractSource.value)
+        }
         const options = {
           method: "POST",
           headers: { "Content-Type": "application/json;charset=utf-8" },
-          body: JSON.stringify({ source: contractSource.value })
+          body: JSON.stringify(body)
         }
         console.log(options)
         const response = await fetch("/#{walletName}/create", options)
@@ -113,6 +117,12 @@ DONE steal from
   DONE optionsToServerDependencies
   DONE txClient
 DOING put it all together
+  DONE JSON -> V1.Contract
+    contractFromJSON :: MarloweVersion v -> Value -> Parser (Contract v)
+    parseEither :: (a -> Parser b) -> a -> Either String b
+    withSomeMarloweVersion :: (forall v. MarloweVersion v -> r) -> SomeMarloweVersion -> r
+  DOING get all the other parameters required for creating a contract
+  TODO return the contract creation result to the client and handle it
 TODO clean up code
 TODO manual testing
   TODO host name and port number for tx commands
@@ -137,19 +147,36 @@ createContract ::
   -> ChainSync.Api.Lovelace
   -> Core.Api.Contract v
   -> IO (Either (Transaction.Api.CreateError v) (Transaction.Api.ContractCreated BabbageEra v))
-createContract hostName portNumber stakeCredential version addresses roles metadata minUTxODeposit contract =
+createContract hostName portNumber stakeCredential version addresses roles metadata minUTxODeposit =
   runTxJobClient hostName portNumber
-    $ JobClient.liftCommand
-    $ Transaction.Api.Create stakeCredential version addresses roles metadata minUTxODeposit contract
+    . JobClient.liftCommand
+    . Transaction.Api.Create stakeCredential version addresses roles metadata minUTxODeposit
 
 postWalletCreateR :: WalletName -> Handler (Yesod.Core.Types.JSONResponse Text)
 postWalletCreateR _ = do
-  Yesod.liftIO $ putStrLn "hey ho"
-  Yesod.liftIO . print @PostWalletCreateRequestDTO =<< Yesod.requireCheckJsonBody
+  postWalletCreateRequestDTO :: PostWalletCreateRequestDTO <- Yesod.requireCheckJsonBody
+  Yesod.liftIO $ withSomeMarloweVersion (version postWalletCreateRequestDTO) \v -> do
+    let contract = parseContractFromJSON v (source postWalletCreateRequestDTO)
+    _ <- createContract
+          undefined
+          undefined
+          undefined
+          v
+          undefined
+          undefined
+          undefined
+          undefined
+          contract
+    putStrLn "hey"
   pure $ Yesod.Core.Types.JSONResponse "lol"
+  where
+    withSomeMarloweVersion :: Core.Api.SomeMarloweVersion -> (forall v. Core.Api.MarloweVersion v -> r) -> r
+    withSomeMarloweVersion x f = Core.Api.withSomeMarloweVersion f x
+
+    parseContractFromJSON :: Core.Api.MarloweVersion v -> Aeson.Value -> Core.Api.Contract v
+    parseContractFromJSON version = either error id . Aeson.Types.parseEither (Core.Api.contractFromJSON version)
 
 main :: IO ()
 main = do
   putStrLn "Listening on port 8000..."
   Yesod.warp 8000 CIP30
-  putStrLn "Done!"
