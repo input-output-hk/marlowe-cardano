@@ -50,6 +50,8 @@ data NextHeaders
   = Wait
   | RollBackward ChainPoint
   | RollForward BlockHeader [ContractHeader]
+  deriving stock (Show, Eq, Generic)
+  deriving anyclass (ToJSON)
 
 
 data DiscoveryStore = DiscoveryStore

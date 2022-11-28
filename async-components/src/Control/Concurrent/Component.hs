@@ -128,19 +128,30 @@ serverComponent
   -> m ()
   -> (a -> m b)
   -> Component m a ()
-serverComponent worker onWorkerError onWorkerTerminated accept = component_ \a ->
+serverComponent worker onWorkerError onWorkerTerminated accept =
+  serverComponentWith worker (const onWorkerError) (const onWorkerTerminated) (fmap ((),) . accept)
+
+serverComponentWith
+  :: forall m r a b
+   . MonadBaseControl IO m
+  => Component m b ()
+  -> (r -> SomeException -> m ())
+  -> (r -> m ())
+  -> (a -> m (r, b))
+  -> Component m a ()
+serverComponentWith worker onWorkerError onWorkerTerminated accept = component_ \a ->
   let
     run :: m ()
     run = do
-      b <- accept a
+      (r, b) <- accept a
       withComponent_ worker b \aworker ->
         withAsync run \aserver -> do
           result <- waitEitherCatch aworker aserver
           case result of
             Right (Left ex) -> liftBase $ throwIO ex
             Right (Right x) -> pure x
-            Left (Left ex)  -> onWorkerError ex
-            Left (Right ())  -> onWorkerTerminated
+            Left (Left ex)  -> onWorkerError r ex
+            Left (Right ())  -> onWorkerTerminated r
           wait aserver
  in
     run

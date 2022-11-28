@@ -204,6 +204,9 @@ withMarloweVersion :: MarloweVersion v -> (IsMarloweVersion v => a) -> a
 withMarloweVersion = \case
   MarloweV1 -> id
 
+instance ToJSON SomeMarloweVersion where
+  toJSON (SomeMarloweVersion v) = toJSON v
+
 instance ToJSON (MarloweVersion v) where
   toJSON = String . \case
     MarloweV1 -> "v1"

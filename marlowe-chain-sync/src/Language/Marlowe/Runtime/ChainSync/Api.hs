@@ -523,7 +523,7 @@ fromCardanoStakeKeyHash = StakeKeyHash . Cardano.serialiseToRawBytes
 
 newtype ScriptHash = ScriptHash { unScriptHash :: ByteString }
   deriving stock (Eq, Ord, Generic)
-  deriving (IsString, Show) via Base16
+  deriving (IsString, Show, ToJSON) via Base16
   deriving anyclass (Binary)
 
 policyIdToScriptHash :: PolicyId -> ScriptHash

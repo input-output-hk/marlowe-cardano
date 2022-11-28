@@ -4,6 +4,7 @@
 module Language.Marlowe.Runtime.Discovery.Api
   where
 
+import Data.Aeson (ToJSON)
 import Data.Binary (Binary, get, getWord8, put, putWord8)
 import Data.Map (Map)
 import Data.Type.Equality (type (:~:)(Refl))
@@ -34,6 +35,8 @@ data ContractHeader = ContractHeader
   , blockHeader :: BlockHeader
   -- ^ The header of the block in which the contract instance was published.
   } deriving (Show, Eq, Ord, Generic, Binary)
+
+instance ToJSON ContractHeader
 
 -- | The queries supported by the discovery service.
 data DiscoveryQuery delimiter err result where
