@@ -26,6 +26,7 @@ import Language.Marlowe.Runtime.ChainSync.Api (Lovelace, TransactionMetadata, to
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Core.Api (Contract, Datum, MarloweVersion(..), MarloweVersionTag(..))
 import qualified Language.Marlowe.Runtime.Core.Api as Core.Api
+import Language.Marlowe.Runtime.Plutus.V2.Api (fromPlutusValue)
 import Language.Marlowe.Runtime.Transaction.Api (CreateError, RoleTokensConfig(..), mkMint, unMint)
 import qualified Language.Marlowe.Runtime.Transaction.Api as Transaction.Api
 import Language.Marlowe.Runtime.Transaction.BuildConstraints (buildCreateConstraints)
@@ -77,15 +78,13 @@ createSpec = focus $ Hspec.describe "buildCreateConstraints" do
           :: Property
       _ -> discard
   Hspec.QuickCheck.prop "total balance == marlowe output assets" \(SomeCreateArgs args) ->
-    case roleTokensConfig args of
-      RoleTokensMint mint ->
-        let
-          result = extractSentRoleTokens <$> runBuildCreateConstraints args
-          expected = fst <$> unMint mint
-        in case version args of
-          MarloweV1 -> result === Right expected
-          :: Property
-      _ -> discard
+    let
+      result = runBuildCreateConstraints args
+      mDatum = extractMarloweDatum <$> result
+      mAssets = extractMarloweAssets <$> result
+    in case version args of
+      MarloweV1 -> (fmap (fromPlutusValue . Semantics.totalBalance . Semantics.accounts . Semantics.marloweState) <$> mDatum) === mAssets
+      :: Property
 
   where
     emptyStateProp :: (Eq a, Show a) => String -> (CreateArgs 'V1 -> Semantics.State -> a) -> Spec
