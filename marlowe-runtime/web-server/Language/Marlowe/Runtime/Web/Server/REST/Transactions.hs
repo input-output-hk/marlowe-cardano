@@ -87,7 +87,7 @@ get eb contractId ranges = withEvent eb Get \ev -> do
     Right headers -> do
       let headers' = either id id <$> toDTO headers
       addField ev $ TxHeaders headers'
-      addHeader (length headers) <$> returnRange range headers'
+      addHeader (length headers) . fmap ListObject <$> returnRange range headers'
 
 post
   :: EventBackend (AppM r) r TransactionsSelector

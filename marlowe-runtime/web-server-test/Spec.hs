@@ -134,6 +134,10 @@ instance Arbitrary Web.Address where
   arbitrary = Web.Address <$> arbitrary
   shrink = genericShrink
 
+instance Arbitrary a => Arbitrary (Web.ListObject a) where
+  arbitrary = Web.ListObject <$> arbitrary
+  shrink = genericShrink
+
 instance Arbitrary Web.TextEnvelope where
   arbitrary = Web.TextEnvelope <$> arbitrary <*> arbitrary <*> arbitrary
   shrink = genericShrink

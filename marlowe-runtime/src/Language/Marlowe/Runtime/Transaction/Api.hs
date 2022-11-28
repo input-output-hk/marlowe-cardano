@@ -463,7 +463,7 @@ data LoadMarloweContextError
   deriving anyclass Binary
 
 data SubmitError
-  = SubmitException
+  = SubmitException String
   | SubmitFailed String -- should be from show TxValidationErrorInMode
   | TxDiscarded
   deriving (Eq, Show, Generic, Binary)

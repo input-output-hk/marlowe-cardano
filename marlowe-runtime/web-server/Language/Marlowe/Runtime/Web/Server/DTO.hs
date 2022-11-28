@@ -40,7 +40,6 @@ import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Word (Word16, Word64)
 import qualified Language.Marlowe.Core.V1.Semantics as Sem
-import qualified Language.Marlowe.Core.V1.Semantics.Types as Sem
 import Language.Marlowe.Runtime.Cardano.Api (cardanoEraToAsType, fromCardanoTxId, toCardanoMetadata)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Core.Api
@@ -273,7 +272,7 @@ instance ToDTO ContractRecord where
       , status = Web.Confirmed
       , block = Just $ toDTO block
       , initialContract = Sem.marloweContract $ datum createOutput
-      , currentContract = maybe Sem.Close (Sem.marloweContract . datum) output
+      , currentContract = Sem.marloweContract . datum <$> output
       , state = Sem.marloweState . datum <$> output
       , utxo = toDTO . utxo <$> output
       , txBody = Nothing
@@ -319,7 +318,7 @@ instance IsCardanoEra era => ToDTOWithTxStatus (Tx.ContractCreated era v) where
       , initialContract = case version of
           MarloweV1 -> Sem.marloweContract datum
       , currentContract = case version of
-          MarloweV1 -> Sem.marloweContract datum
+          MarloweV1 -> Just $ Sem.marloweContract datum
       , state = case version of
           MarloweV1 -> Just $ Sem.marloweState datum
       , utxo = Nothing

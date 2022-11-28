@@ -217,7 +217,7 @@ data ContractState = ContractState
   , status :: TxStatus
   , block :: Maybe BlockHeader
   , initialContract :: Semantics.Contract
-  , currentContract :: Semantics.Contract
+  , currentContract :: Maybe Semantics.Contract
   , state :: Maybe Semantics.State
   , utxo :: Maybe TxOutRef
   , txBody :: Maybe TextEnvelope
