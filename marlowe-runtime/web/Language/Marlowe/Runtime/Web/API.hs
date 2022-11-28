@@ -87,12 +87,18 @@ type ContractAPI = GetContractAPI
 -- | GET /contracts/:contractId sub-API
 type GetContractAPI = Get '[JSON] GetContractResponse
 
-type GetContractResponse = WithLink "transactions" ContractState
+type GetContractResponse = WithLink "withdrawals" (WithLink "transactions" ContractState)
 
 instance HasNamedLink ContractState API "transactions" where
   namedLink _ _ ContractState{..} = guard (status == Confirmed) $> safeLink
     api
     (Proxy @("contracts" :> Capture "contractId" TxOutRef :> "transactions" :> GetTransactionsAPI))
+    contractId
+
+instance HasNamedLink ContractState API "withdrawals" where
+  namedLink _ _ ContractState{..} = guard (status == Confirmed) $> safeLink
+    api
+    (Proxy @("contracts" :> Capture "contractId" TxOutRef :> "withdrawals" :> GetWithdrawalsAPI))
     contractId
 
 -- | /contracts/:contractId/transactions sup-API
