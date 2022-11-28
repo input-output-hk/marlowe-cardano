@@ -55,7 +55,8 @@ Yesod.mkYesod "CIP30" [Yesod.parseRoutes|
 /#WalletName/create WalletCreateR GET POST
 |]
 
-instance Yesod CIP30
+instance Yesod CIP30 where
+  makeSessionBackend _ = pure Nothing
 
 getHomeR :: Handler Yesod.Html
 getHomeR = Yesod.defaultLayout do
