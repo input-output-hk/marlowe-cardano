@@ -69,6 +69,27 @@ instance Arbitrary Web.ContractState where
     <*> arbitrary
   shrink = genericShrink
 
+instance Arbitrary Web.Tx where
+  arbitrary = Web.Tx
+    <$> arbitrary
+    <*> arbitrary
+    <*> arbitrary
+    <*> arbitrary
+    <*> arbitrary
+    -- size of 6 will result in a 1-layer deep contract being generated (this is
+    -- all we care about for the purposes of schema checking).
+    <*> resize 6 arbitrary
+    <*> arbitrary
+    <*> arbitrary
+    <*> arbitrary
+    <*> resize 6 arbitrary
+    <*> arbitrary
+    <*> arbitrary
+    <*> arbitrary
+    <*> arbitrary
+    <*> arbitrary
+  shrink = genericShrink
+
 instance Arbitrary Web.PostContractsRequest where
   arbitrary = Web.PostContractsRequest
     <$> arbitrary

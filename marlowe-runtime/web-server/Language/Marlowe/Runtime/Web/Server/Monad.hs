@@ -18,7 +18,7 @@ import Control.Monad.Trans.Control (MonadBaseControl)
 import Data.Coerce (coerce)
 import Language.Marlowe.Runtime.Core.Api (ContractId)
 import Language.Marlowe.Runtime.Web.Server.ContractHeaderIndexer (LoadContractHeaders)
-import Language.Marlowe.Runtime.Web.Server.HistoryClient (LoadContract, LoadTransactions)
+import Language.Marlowe.Runtime.Web.Server.HistoryClient (LoadContract, LoadTransaction, LoadTransactions)
 import Language.Marlowe.Runtime.Web.Server.TxClient (ApplyInputs, CreateContract, Submit)
 import Servant
 
@@ -51,6 +51,7 @@ data AppEnv r = AppEnv
   { _loadContractHeaders :: LoadContractHeaders IO
   , _loadContract :: LoadContract r IO
   , _loadTransactions :: LoadTransactions r IO
+  , _loadTransaction :: LoadTransaction r IO
   , _createContract :: CreateContract IO
   , _applyInputs :: ApplyInputs IO
   , _submitContract :: ContractId -> Submit r IO
@@ -73,6 +74,12 @@ loadTransactions :: LoadTransactions r (AppM r)
 loadTransactions mods contractId startFrom limit offset order = do
   load <- asks _loadTransactions
   liftIO $ load mods contractId startFrom limit offset order
+
+-- | Load a transaction for a contract.
+loadTransaction :: LoadTransaction r (AppM r)
+loadTransaction mods contractId txId = do
+  load <- asks _loadTransaction
+  liftIO $ load mods contractId txId
 
 -- | Create a contract.
 createContract :: CreateContract (AppM r)
