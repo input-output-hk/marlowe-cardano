@@ -293,13 +293,13 @@ loadTransactionClient eb contractId txId = MarloweSyncClient $ pure clientInit
       -> IO (SeekTx v)
     stepSeekTx ev seekTx = \case
       ApplyTransaction newTx -> case seekTx of
-        SeekTx prevOutputs@(prevOutput :| prevOutputs')
+        SeekTx prevOutputs
           | txId == transactionId newTx -> do
               addField ev $ FoundTx $ show txId
               pure $ SeekConsuming prevOutputs newTx
           | otherwise -> pure case scriptOutput $ output newTx of
               Nothing -> seekTx
-              Just scriptOutput -> SeekTx $ (blockHeader newTx, scriptOutput) :| prevOutput : prevOutputs'
+              Just scriptOutput -> SeekTx $ (blockHeader newTx, scriptOutput) <| prevOutputs
         SeekConsuming prevOutputs tx -> do
           addField ev $ FoundConsumer $ show $ transactionId newTx
           pure $ Done prevOutputs tx (blockHeader newTx) $ transactionId newTx
