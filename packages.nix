@@ -18,6 +18,7 @@ rec {
   inherit (haskell.packages.marlowe-runtime.components.exes) marlowe-history;
   inherit (haskell.packages.marlowe-runtime.components.exes) marlowe-discovery;
   inherit (haskell.packages.marlowe-runtime.components.exes) marlowe-tx;
+  inherit (haskell.packages.marlowe-runtime.components.exes) marlowe-web-server;
   marlowe-rt = haskell.packages.marlowe-runtime.components.exes.marlowe;
 
   network = pkgs.networks.${networkNixName};

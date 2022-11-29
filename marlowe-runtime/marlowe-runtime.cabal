@@ -194,6 +194,7 @@ library web
 
 library web-server
   import: lang
+  visibility: public
   hs-source-dirs: web-server
   exposed-modules:
     Language.Marlowe.Runtime.Web.Server
