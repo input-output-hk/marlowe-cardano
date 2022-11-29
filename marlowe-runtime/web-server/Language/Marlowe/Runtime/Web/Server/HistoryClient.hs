@@ -13,7 +13,7 @@ import Control.Concurrent.STM (STM, atomically)
 import Control.Error (note)
 import Data.Foldable (foldlM)
 import Data.List (sortOn)
-import Data.List.NonEmpty (NonEmpty((:|)), (<|))
+import Data.List.NonEmpty (NonEmpty, (<|))
 import qualified Data.List.NonEmpty as NE
 import Data.Maybe (isNothing, listToMaybe, mapMaybe)
 import Data.Void (Void)
