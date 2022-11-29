@@ -13,7 +13,7 @@ import Control.Concurrent.STM (STM, atomically)
 import Control.Error (note)
 import Data.Foldable (foldlM)
 import Data.List (sortOn)
-import Data.List.NonEmpty (NonEmpty((:|)))
+import Data.List.NonEmpty (NonEmpty((:|)), (<|))
 import qualified Data.List.NonEmpty as NE
 import Data.Maybe (isNothing, listToMaybe, mapMaybe)
 import Data.Void (Void)
@@ -320,7 +320,7 @@ loadTransactionClient eb contractId txId = MarloweSyncClient $ pure clientInit
       -> SeekTx v
       -> IO (SeekTx v)
     rollbackStepTx ev block = \case
-      SeekTx prevOutputs ->pure $ SeekTx $ rollbackPrevOutputs block prevOutputs
+      SeekTx prevOutputs -> pure $ SeekTx $ rollbackPrevOutputs block prevOutputs
       SeekConsuming prevOutputs tx
         | block < blockHeader tx -> do
             addField ev $ LostTx $ show $ transactionId tx
