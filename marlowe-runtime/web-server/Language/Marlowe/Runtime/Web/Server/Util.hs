@@ -1,6 +1,7 @@
 module Language.Marlowe.Runtime.Web.Server.Util
   where
 
+import Data.Function (on)
 import qualified Data.List as List
 import Servant.Pagination (RangeOrder(..))
 
@@ -17,3 +18,4 @@ applyRangeToAscList getField startFrom limit offset order =
     . case order of
         RangeDesc -> reverse
         RangeAsc -> id
+    . List.nubBy (on (==) getField)

@@ -9,6 +9,9 @@
 module Language.Marlowe.Runtime.Web.Server.REST.Contracts
   where
 
+import Cardano.Api (AsType(..), deserialiseFromTextEnvelope, getTxBody)
+import qualified Cardano.Api.SerialiseTextEnvelope as Cardano
+import Control.Monad (unless)
 import Data.Foldable (traverse_)
 import Data.Maybe (fromMaybe)
 import qualified Data.Set as Set
@@ -16,11 +19,14 @@ import Language.Marlowe.Runtime.ChainSync.Api (Lovelace(..))
 import Language.Marlowe.Runtime.Core.Api (MarloweVersion(..), SomeMarloweVersion(..))
 import Language.Marlowe.Runtime.Transaction.Api
   (ContractCreated(..), CreateBuildupError(..), CreateError(..), LoadMarloweContextError(..), WalletAddresses(..))
+import qualified Language.Marlowe.Runtime.Transaction.Api as Tx
 import Language.Marlowe.Runtime.Transaction.Constraints (ConstraintError(..))
-import Language.Marlowe.Runtime.Web
+import Language.Marlowe.Runtime.Web hiding (Unsigned)
 import Language.Marlowe.Runtime.Web.Server.DTO
-import Language.Marlowe.Runtime.Web.Server.Monad (AppM, createContract, loadContract, loadContractHeaders)
+import Language.Marlowe.Runtime.Web.Server.Monad
+  (AppM, createContract, loadContract, loadContractHeaders, submitContract)
 import qualified Language.Marlowe.Runtime.Web.Server.REST.Transactions as Transactions
+import Language.Marlowe.Runtime.Web.Server.TxClient (TempTx(TempTx), TempTxStatus(Unsigned))
 import Observe.Event (EventBackend, addField, reference, withEvent)
 import Observe.Event.Backend (narrowEventBackend)
 import Observe.Event.BackendModification (setAncestor)
@@ -53,6 +59,11 @@ compile $ SelectorSpec "contracts"
   , ["get", "one"] ≔ FieldSpec ["get", "one"]
       [ ["get", "id"] ≔ ''TxOutRef
       , ["get", "result"] ≔ ''ContractState
+      ]
+  , "put" ≔ FieldSpec "put"
+      [ ["put", "id"] ≔ ''TxOutRef
+      , "body" ≔ ''Cardano.TextEnvelope
+      , "error" ≔ ''String
       ]
   , "transactions" ≔ Inject ''Transactions.TransactionsSelector
   ]
@@ -130,7 +141,7 @@ get eb ranges = withEvent eb Get \ev -> do
       let headers' = either toContractHeader id <$> toDTO headers
       addField ev $ ContractHeaders headers'
       let response = IncludeLink (Proxy @"contract") <$> headers'
-      addHeader (length headers) <$> returnRange range response
+      addHeader (length headers) . fmap ListObject <$> returnRange range response
 
 toContractHeader :: ContractState -> ContractHeader
 toContractHeader ContractState{..} = ContractHeader{..}
@@ -140,6 +151,7 @@ contractServer
   -> TxOutRef
   -> ServerT ContractAPI (AppM r)
 contractServer eb contractId = getOne eb contractId
+                          :<|> put eb contractId
                           :<|> Transactions.server (narrowEventBackend Transactions eb) contractId
 
 getOne
@@ -157,3 +169,25 @@ getOne eb contractId = withEvent eb GetOne \ev -> do
       pure case result of
         Left _ -> OmitLink contractState
         Right _ -> IncludeLink (Proxy @"transactions") contractState
+
+put
+  :: EventBackend (AppM r) r ContractsSelector
+  -> TxOutRef
+  -> TextEnvelope
+  -> AppM r NoContent
+put eb contractId body = withEvent eb Put \ev -> do
+  addField ev $ PutId contractId
+  contractId' <- fromDTOThrow err400 contractId
+  loadContract (setAncestor $ reference ev) contractId' >>= \case
+    Nothing -> throwError err404
+    Just (Left (TempTx _ Unsigned Tx.ContractCreated{txBody})) -> do
+      textEnvelope <- fromDTOThrow err400 body
+      addField ev $ Body textEnvelope
+      tx <- either (const $ throwError err400) pure $ deserialiseFromTextEnvelope (AsTx AsBabbage) textEnvelope
+      unless (getTxBody tx == txBody) $ throwError err400
+      submitContract contractId' (setAncestor $ reference ev) tx >>= \case
+        Nothing -> pure NoContent
+        Just err -> do
+          addField ev $ Error $ show err
+          throwError err403
+    Just _  -> throwError err409

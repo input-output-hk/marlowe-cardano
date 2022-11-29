@@ -25,6 +25,7 @@ import Language.Marlowe.Protocol.HeaderSync.Client
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Core.Api (ContractId)
 import Language.Marlowe.Runtime.Discovery.Api
+import Language.Marlowe.Runtime.Transaction.Api (ContractCreated)
 import qualified Language.Marlowe.Runtime.Transaction.Api as Tx
 import qualified Language.Marlowe.Runtime.Web as Web
 import Language.Marlowe.Runtime.Web.Server.DTO (toDTO)
@@ -58,7 +59,7 @@ compile $ SelectorSpec ["contract", "header", "indexer"]
 -- | Dependencies for the a ContractHeaderIndexer
 data ContractHeaderIndexerDependencies r = ContractHeaderIndexerDependencies
   { runMarloweHeaderSyncClient :: RunClient IO MarloweHeaderSyncClient
-  , getTempContracts :: STM [TempContract]
+  , getTempContracts :: STM [TempTx ContractCreated]
   , eventBackend :: EventBackend IO r ContractHeaderIndexerSelector
   }
 
@@ -68,7 +69,7 @@ type LoadContractHeaders m
   -> Int -- ^ Limit: the maximum number of contract headers to load.
   -> Int -- ^ Offset: how many contract headers after the initial one to skip.
   -> RangeOrder -- ^ Whether to load an ascending or descending list.
-  -> m (Maybe [Either TempContract ContractHeader]) -- ^ Nothing if the initial ID is not found
+  -> m (Maybe [Either (TempTx ContractCreated) ContractHeader]) -- ^ Nothing if the initial ID is not found
 
 -- | Public API of the ContractHeaderIndexer
 newtype ContractHeaderIndexer = ContractHeaderIndexer
@@ -131,7 +132,7 @@ contractHeaderIndexer = component \ContractHeaderIndexerDependencies{..} -> do
         let contractsList = fmap snd . Map.toAscList . snd =<< IntMap.toAscList contracts
         let
           getContractId = \case
-            Left (Created Tx.ContractCreated{..}) -> contractId
+            Left (TempTx _ _ Tx.ContractCreated{..}) -> contractId
             Right ContractHeader{..} -> contractId
         tempContracts <- getTempContracts
         pure

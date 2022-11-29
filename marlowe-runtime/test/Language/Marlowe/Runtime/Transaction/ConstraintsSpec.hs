@@ -6,16 +6,21 @@ module Language.Marlowe.Runtime.Transaction.ConstraintsSpec
   where
 
 import Cardano.Api
-import Cardano.Api.Shelley (PlutusScriptOrReferenceInput(PScript))
+import Cardano.Api.Shelley
+  (PlutusScriptOrReferenceInput(PScript), ProtocolParameters(..), ReferenceScript(ReferenceScriptNone))
 import Control.Applicative (Alternative)
 import Control.Error (note)
 import Control.Monad (guard)
+import Data.ByteString (ByteString)
+import qualified Data.ByteString as BS
 import Data.Either (fromLeft)
 import Data.Foldable (fold)
 import Data.List (find)
 import Data.Map (Map)
 import qualified Data.Map as Map
-import Data.Maybe (fromJust, isJust, mapMaybe)
+import Data.Maybe (catMaybes, fromJust, isJust, mapMaybe)
+import Data.Monoid (First(..), getFirst)
+import Data.Ratio ((%))
 import qualified Data.Set as Set
 import Data.Traversable (for)
 import Data.Word (Word32)
@@ -28,6 +33,7 @@ import Gen.Cardano.Api.Typed
   , genProtocolParameters
   , genScriptData
   , genScriptHash
+  , genTxBodyContent
   , genValueForTxOut
   , genVerificationKey
   )
@@ -55,6 +61,7 @@ import Test.Hspec
 import Test.Hspec.QuickCheck
 import Test.QuickCheck hiding (shrinkMap)
 import Test.QuickCheck.Hedgehog (hedgehog)
+import Text.Printf (printf)
 
 spec :: Spec
 spec = do
@@ -86,6 +93,98 @@ spec = do
         $ counterexample walletContextStr
         $ counterexample (show utxos)
         $ either (const theProperty) (flip counterexample theProperty . show) result
+
+  describe "adjustTxForMinUtxo" do
+    prop "Marlowe output is NOT adjusted" do
+      marloweScriptHash <- hedgehog genScriptHash
+      let
+        marloweAddressCardano = AddressInEra (ShelleyAddressInEra ShelleyBasedEraBabbage)
+          $ makeShelleyAddress Mainnet (PaymentCredentialByScript marloweScriptHash) NoStakeAddress
+        marloweAddressChain = fromCardanoAddressInEra BabbageEra marloweAddressCardano
+
+        getValueAtAddress :: Chain.Address -> [TxOut CtxTx BabbageEra] -> Maybe (TxOutValue BabbageEra)
+        getValueAtAddress targetAddress txos = getFirst . mconcat . map (First
+          . (\(TxOut addressInEra txOutValue _ _) ->
+              if fromCardanoAddressInEra BabbageEra addressInEra == targetAddress
+                then Just txOutValue
+                else Nothing))
+          $ txos
+
+      txBodyContent <- do
+        txBC <- hedgehog $ genTxBodyContent BabbageEra
+        lovelaceAmount <- (2_000_000 +) <$> suchThat arbitrary (> 0)
+        pure $ txBC { txOuts =
+          [ TxOut
+              marloweAddressCardano
+              (lovelaceToTxOutValue $ Lovelace lovelaceAmount)
+              TxOutDatumNone
+              ReferenceScriptNone
+          ] }
+
+      let
+        actual = (getValueAtAddress marloweAddressChain . txOuts)
+          <$> adjustTxForMinUtxo protocolTestnet marloweAddressChain txBodyContent
+        expected :: Either (ConstraintError 'V1) (Maybe (TxOutValue BabbageEra))
+          = Right $ getValueAtAddress marloweAddressChain $ txOuts txBodyContent
+
+      pure $ actual `shouldBe` expected
+
+    prop "all outputs satisfy Cardano API minimum UTxO requirements" do
+      marloweScriptHash <- hedgehog genScriptHash
+
+      let
+        scriptAddress hash = fromCardanoAddressAny
+          $ AddressShelley
+          $ makeShelleyAddress Mainnet (PaymentCredentialByScript hash) NoStakeAddress
+        marloweAddress = scriptAddress marloweScriptHash
+
+        valueMeetsMinimumReq :: TxOut CtxTx BabbageEra -> Maybe String
+        valueMeetsMinimumReq txout@(TxOut _ txOrigValue _ _) =
+          case calculateMinimumUTxO ShelleyBasedEraBabbage txout protocolTestnet of
+            Right minValueFromApi ->
+              if origAda >= (selectLovelace minValueFromApi)
+                then Nothing
+                else Just $ printf "Value %s is lower than minimum value %s"
+                      (show origAda) (show $ selectLovelace minValueFromApi)
+            Left exception -> Just $ show exception
+            where
+              origAda = selectLovelace . txOutValueToValue $ txOrigValue
+
+      txBodyContent <- hedgehog $ genTxBodyContent BabbageEra
+
+      pure $ case adjustTxForMinUtxo protocolTestnet marloweAddress txBodyContent of
+        Right newTxBodyContent -> do
+          let errors = catMaybes $ map valueMeetsMinimumReq $ txOuts newTxBodyContent
+          if null errors
+            then pure ()
+            else expectationFailure $ unlines $ "Minimum UTxO requirements not met:" : errors
+        Left (msgFromAdjustment :: ConstraintError 'V1) -> expectationFailure $ show msgFromAdjustment
+
+    prop "all outputs are at least half an ADA" do
+      marloweScriptHash <- hedgehog genScriptHash
+
+      let
+        scriptAddress hash = fromCardanoAddressAny
+          $ AddressShelley
+          $ makeShelleyAddress Mainnet (PaymentCredentialByScript hash) NoStakeAddress
+        marloweAddress = scriptAddress marloweScriptHash
+
+        valueIsAtLeastHalfAnAda :: TxOut CtxTx BabbageEra -> Maybe String
+        valueIsAtLeastHalfAnAda (TxOut _ txOrigValue _ _) =
+          if origAda >= Lovelace 500_000
+            then Nothing
+            else Just $ printf "An output is %s but should be at least 500_000 Lovelace" (show origAda)
+          where origAda = selectLovelace . txOutValueToValue $ txOrigValue
+
+      txBodyContent <- hedgehog $ genTxBodyContent BabbageEra
+
+      pure $ case adjustTxForMinUtxo protocolTestnet marloweAddress txBodyContent of
+        Right newTxBodyContent -> do
+          let errors = catMaybes $ map valueIsAtLeastHalfAnAda $ txOuts newTxBodyContent
+          if null errors
+            then pure ()
+            else expectationFailure $ unlines $ "Minimum UTxO requirements not met:" : errors
+        Left (msgFromAdjustment :: ConstraintError 'V1) -> expectationFailure $ show msgFromAdjustment
 
 violations :: MarloweVersion v -> MarloweContext v -> Chain.UTxOs -> TxConstraints v -> TxBodyContent BuildTx BabbageEra -> [String]
 violations marloweVersion marloweContext utxos constraints txBodyContent = fold
@@ -733,3 +832,39 @@ extractAddress (TxOut addr _ _ _) = fromCardanoAddressInEra BabbageEra addr
 
 extractDatum :: TxOut CtxTx BabbageEra -> Maybe Chain.Datum
 extractDatum (TxOut _ _ txOutDatum _) = snd $ fromCardanoTxOutDatum txOutDatum
+
+byteStringGen :: Gen ByteString
+byteStringGen = BS.pack <$> arbitrary
+
+protocolTestnet :: ProtocolParameters
+protocolTestnet = ProtocolParameters
+  { protocolParamProtocolVersion = (8,0)
+  , protocolParamDecentralization = Nothing
+  , protocolParamExtraPraosEntropy = Nothing
+  , protocolParamMaxBlockHeaderSize = 1100
+  , protocolParamMaxBlockBodySize = 90112
+  , protocolParamMaxTxSize = 16384
+  , protocolParamTxFeeFixed = 155381
+  , protocolParamTxFeePerByte = 44
+  , protocolParamMinUTxOValue = Nothing
+  , protocolParamStakeAddressDeposit = Lovelace 2000000
+  , protocolParamStakePoolDeposit = Lovelace 500000000
+  , protocolParamMinPoolCost = Lovelace 340000000
+  , protocolParamPoolRetireMaxEpoch = EpochNo 18
+  , protocolParamStakePoolTargetNum = 500
+  , protocolParamPoolPledgeInfluence = 3 % 10
+  , protocolParamMonetaryExpansion = 3 % 1000
+  , protocolParamTreasuryCut = 1 % 5
+  , protocolParamUTxOCostPerWord = Nothing
+  , protocolParamCostModels = Map.fromList []
+  , protocolParamPrices = Just (ExecutionUnitPrices {priceExecutionSteps = 721 % 10000000
+  , priceExecutionMemory = 577 % 10000})
+  , protocolParamMaxTxExUnits = Just (ExecutionUnits {executionSteps = 10000000000
+  , executionMemory = 14000000})
+  , protocolParamMaxBlockExUnits = Just (ExecutionUnits {executionSteps = 40000000000
+  , executionMemory = 62000000})
+  , protocolParamMaxValueSize = Just 5000
+  , protocolParamCollateralPercent = Just 150
+  , protocolParamMaxCollateralInputs = Just 3
+  , protocolParamUTxOCostPerByte = Just (Lovelace 4310)
+  }

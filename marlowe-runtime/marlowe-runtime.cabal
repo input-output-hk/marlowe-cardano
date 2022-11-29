@@ -190,6 +190,7 @@ library web
     , servant-server
     , servant-openapi3
     , text
+    , time
 
 library web-server
   import: lang
@@ -237,6 +238,7 @@ library web-server
     , stm
     , stm-delay
     , text
+    , time
     , transformers
     , transformers-base
     , typed-protocols
@@ -476,6 +478,7 @@ test-suite marlowe-runtime-test
     , plutus-tx
     , plutus-ledger-api
     , QuickCheck
+    , hedgehog-quickcheck
     , some
     , stm
     , tasty

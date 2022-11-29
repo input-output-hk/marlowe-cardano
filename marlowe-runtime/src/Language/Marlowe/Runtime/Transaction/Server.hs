@@ -20,14 +20,15 @@ import Cardano.Api
   , CardanoEra(BabbageEra)
   , CardanoMode
   , EraHistory
+  , IsCardanoEra
   , NetworkId(..)
-  , PaymentCredential(..)
   , ShelleyBasedEra(..)
   , StakeAddressReference(..)
   , Tx
   , TxBody(..)
   , TxBodyContent(..)
   , TxOut(..)
+  , cardanoEra
   , getTxBody
   , getTxId
   , makeShelleyAddress
@@ -39,7 +40,7 @@ import Control.Concurrent.Async (Concurrently(..))
 import Control.Concurrent.Component
 import Control.Concurrent.STM (STM, atomically, modifyTVar, newEmptyTMVar, newTVar, putTMVar, readTMVar, readTVar)
 import Control.Error.Util (hoistMaybe, note, noteT)
-import Control.Exception (SomeException, catch)
+import Control.Exception (Exception(displayException), SomeException, catch)
 import Control.Monad (when)
 import Control.Monad.Base (MonadBase(..))
 import Control.Monad.IO.Class (MonadIO(liftIO))
@@ -56,18 +57,26 @@ import Data.Maybe (fromJust)
 import Data.Time (UTCTime, getCurrentTime)
 import Data.Void (Void)
 import Language.Marlowe.Runtime.Cardano.Api
-  (fromCardanoAddressInEra, fromCardanoTxId, toCardanoPaymentCredential, toCardanoScriptHash, toCardanoStakeCredential)
+  (fromCardanoAddressInEra, fromCardanoTxId, toCardanoPaymentCredential, toCardanoStakeCredential)
 import Language.Marlowe.Runtime.ChainSync.Api
   (BlockHeader, ChainSyncQuery(..), Credential(..), TokenName, TransactionMetadata, TxId(..))
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Core.Api
-  (Contract, ContractId(..), MarloweVersion(MarloweV1), Payout(Payout, datum), Redeemer, withMarloweVersion)
-import Language.Marlowe.Runtime.Core.ScriptRegistry (getCurrentScripts, marloweScript)
+  ( Contract
+  , ContractId(..)
+  , MarloweVersion(MarloweV1)
+  , Payout(Payout, datum)
+  , Redeemer
+  , TransactionScriptOutput(..)
+  , withMarloweVersion
+  )
+import Language.Marlowe.Runtime.Core.ScriptRegistry (marloweScript)
 import qualified Language.Marlowe.Runtime.Core.ScriptRegistry as Registry
 import Language.Marlowe.Runtime.Transaction.Api
   ( ApplyInputsError(..)
   , ContractCreated(..)
   , CreateError(..)
+  , InputsApplied(..)
   , JobId(..)
   , MarloweTxCommand(..)
   , RoleTokensConfig
@@ -271,35 +280,29 @@ execCreate solveConstraints loadWalletContext networkId mStakeCredential version
   txBody <- except
     $ first CreateConstraintError
     $ solveConstraints version marloweContext walletContext constraints
+  let marloweScriptAddress = Constraints.marloweAddress marloweContext
   pure ContractCreated
-    { contractId = ContractId $ findMarloweOutput mCardanoStakeCredential txBody
+    { contractId = ContractId $ fromJust $ findMarloweOutput marloweAddress txBody
     , rolesCurrency
     , metadata = Chain.unTransactionMetadata metadata
     , txBody
     , marloweScriptHash = Constraints.marloweScriptHash marloweContext
-    , marloweScriptAddress = Constraints.marloweAddress marloweContext
+    , marloweScriptAddress
     , payoutScriptHash = Constraints.payoutScriptHash marloweContext
     , payoutScriptAddress = Constraints.payoutAddress marloweContext
     , version
     , datum
     , assets
     }
+
+findMarloweOutput :: forall era. IsCardanoEra era => Chain.Address -> TxBody era -> Maybe Chain.TxOutRef
+findMarloweOutput address = \case
+  body@(TxBody TxBodyContent{..}) -> fmap (Chain.TxOutRef (fromCardanoTxId $ getTxId body) . fst)
+    $ find (isToCurrentScriptAddress . snd)
+    $ zip [0..] txOuts
   where
-  findMarloweOutput mCardanoStakeCredential = \case
-    body@(TxBody TxBodyContent{..}) -> Chain.TxOutRef (fromCardanoTxId $ getTxId body)
-      $ fst
-      $ fromJust
-      $ find (isToCurrentScriptAddress . snd)
-      $ zip [0..] txOuts
-    where
-      scriptHash = fromJust
-        $ toCardanoScriptHash
-        $ marloweScript
-        $ getCurrentScripts version
-      scriptAddress = makeShelleyAddress networkId (PaymentCredentialByScript scriptHash)
-        $ maybe NoStakeAddress StakeAddressByValue mCardanoStakeCredential
-      isToCurrentScriptAddress (TxOut (AddressInEra (ShelleyAddressInEra ShelleyBasedEraBabbage) address) _ _ _) = address == scriptAddress
-      isToCurrentScriptAddress _ = False
+    isToCurrentScriptAddress (TxOut address' _ _ _) =
+      address == fromCardanoAddressInEra (cardanoEra @era) address'
 
 execApplyInputs
   :: SystemStart
@@ -313,7 +316,7 @@ execApplyInputs
   -> Maybe UTCTime
   -> Maybe UTCTime
   -> Redeemer v
-  -> WorkerM (ServerStCmd MarloweTxCommand Void (ApplyInputsError v) (TxBody BabbageEra) WorkerM ())
+  -> WorkerM (ServerStCmd MarloweTxCommand Void (ApplyInputsError v) (InputsApplied BabbageEra v) WorkerM ())
 execApplyInputs
   systemStart
   eraHistory
@@ -323,27 +326,32 @@ execApplyInputs
   version
   addresses
   contractId
-  invalidBefore
-  invalidHereafter
+  invalidBefore'
+  invalidHereafter'
   inputs = execExceptT do
     marloweContext@MarloweContext{..} <- withExceptT ApplyInputsLoadMarloweContextFailed
       $ ExceptT
       $ liftIO $ loadMarloweContext version contractId
-    invalidBefore' <- liftIO $ maybe getCurrentTime pure invalidBefore
+    invalidBefore'' <- liftIO $ maybe getCurrentTime pure invalidBefore'
     scriptOutput' <- except $ maybe (Left ScriptOutputNotFound) Right scriptOutput
-    constraints <- except $ buildApplyInputsConstraints
+    ((invalidBefore, invalidHereafter, mAssetsAndDatum), constraints) <-
+      except $ buildApplyInputsConstraints
         systemStart
         eraHistory
         version
         scriptOutput'
-        invalidBefore'
-        invalidHereafter
+        invalidBefore''
+        invalidHereafter'
         inputs
     walletContext <- liftIO $ loadWalletContext addresses
     lift . Colog.logDebug . O.renderValue . A.toJSON $ walletContext
-    except
+    txBody <- except
       $ first ApplyInputsConstraintError
       $ solveConstraints version marloweContext walletContext constraints
+    let input = scriptOutput'
+    let buildOutput (assets, datum) utxo = TransactionScriptOutput marloweAddress assets utxo datum
+    let output = buildOutput <$> mAssetsAndDatum <*> findMarloweOutput marloweAddress txBody
+    pure InputsApplied{..}
 
 execWithdraw
   :: SolveConstraints
@@ -380,13 +388,13 @@ execSubmit mkSubmitJob trackSubmitJob tx = liftIO do
   (submitJob, exVar) <- atomically do
     exVar <- newEmptyTMVar
     submitJob <- mkSubmitJob tx
-    let getExceptionStatus = Failed SubmitException <$ readTMVar exVar
+    let getExceptionStatus = Failed . SubmitException <$> readTMVar exVar
     let submitJob' = submitJob { submitJobStatus = getExceptionStatus <|> submitJobStatus submitJob }
     trackSubmitJob txId submitJob'
     pure (submitJob', exVar)
   -- Run the job in a new thread
   _ <- forkFinally (runSubmitJob submitJob) \case
-    Left ex -> atomically $ putTMVar exVar ex
+    Left ex -> atomically $ putTMVar exVar $ displayException ex
     _ -> pure ()
   -- Make a new server and run it in IO.
   hoistCmd (liftIO . atomically) <$> atomically (submitJobServerCmd (JobIdSubmit txId) submitJob)

@@ -34,6 +34,7 @@ import Data.String (IsString(..))
 import Data.Typeable (Typeable)
 import GHC.Base (Symbol)
 import GHC.Exts (IsList(..))
+import GHC.Generics (Generic)
 import GHC.Show (showSpace)
 import GHC.TypeLits (KnownSymbol, symbolVal)
 import Language.Marlowe.Runtime.Web.Types
@@ -65,7 +66,7 @@ instance HasNamedLink ContractHeader API "contract" where
 -- | POST /contracts sub-API
 type PostContractsAPI
   =  ReqBody '[JSON] PostContractsRequest
-  :> PostTxAPI (Post '[JSON] PostContractsResponse)
+  :> PostTxAPI (PostCreated '[JSON] PostContractsResponse)
 
 type PostContractsResponse = WithLink "contract" CreateTxBody
 
@@ -77,6 +78,7 @@ instance HasNamedLink CreateTxBody API "contract" where
 
 -- | /contracts/:contractId sup-API
 type ContractAPI = GetContractAPI
+              :<|> PutContractAPI
               :<|> "transactions" :> TransactionsAPI
 
 -- | GET /contracts/:contractId sub-API
@@ -90,8 +92,19 @@ instance HasNamedLink ContractState API "transactions" where
     (Proxy @("contracts" :> Capture "contractId" TxOutRef :> "transactions" :> GetTransactionsAPI))
     contractId
 
+-- | PUT /contracts/:contractId sub-API
+type PutContractAPI = ReqBody '[JSON] TextEnvelope :> PutAccepted '[JSON] NoContent
+
 -- | /contracts/:contractId/transactions sup-API
 type TransactionsAPI = GetTransactionsAPI
+                  :<|> PostTransactionsAPI
+
+-- | POST /contracts/:contractId/transactions sub-API
+type PostTransactionsAPI
+  =  ReqBody '[JSON] PostTransactionsRequest
+  :> PostTxAPI (PostCreated '[JSON] PostTransactionsResponse)
+
+type PostTransactionsResponse = ApplyInputsTxBody
 
 -- | GET /contracts/:contractId/transactions sup-API
 type GetTransactionsAPI = PaginatedGet '["transactionId"] TxHeader
@@ -103,7 +116,14 @@ type PaginatedGet rangeFields resource
 
 -- | Helper type for describing the response type of generic paginated APIs
 type PaginatedResponse fields resource =
-  Headers (Header "Total-Count" Int ': PageHeaders fields resource) [resource]
+  Headers (Header "Total-Count" Int ': PageHeaders fields resource) (ListObject resource)
+
+newtype ListObject a = ListObject { results :: [a] }
+  deriving (Eq, Show, Ord, Functor, Generic)
+
+instance ToJSON a => ToJSON (ListObject a)
+instance FromJSON a => FromJSON (ListObject a)
+instance ToSchema a => ToSchema (ListObject a)
 
 type PostTxAPI api
   =  Header' '[Required, Strict] "X-Change-Address" Address

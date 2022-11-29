@@ -25,7 +25,7 @@ import Language.Marlowe.Runtime.CLI.Option (txOutRefParser)
 import Language.Marlowe.Runtime.ChainSync.Api (unPolicyId)
 import Language.Marlowe.Runtime.Core.Api
   (ContractId(..), IsMarloweVersion(..), MarloweVersion(MarloweV1), MarloweVersionTag(..))
-import Language.Marlowe.Runtime.Transaction.Api (ApplyInputsError, MarloweTxCommand(ApplyInputs))
+import Language.Marlowe.Runtime.Transaction.Api (ApplyInputsError, InputsApplied(..), MarloweTxCommand(ApplyInputs))
 import qualified Language.Marlowe.Util as V1
 import Options.Applicative
 import qualified Plutus.V1.Ledger.Api as P
@@ -217,7 +217,7 @@ runApplyCommand TxCommand { walletAddresses, signingMethod, subCommand=V1ApplyCo
     validityUpperBound'= posixTimeToUTCTime <$> validityUpperBound
 
     cmd = ApplyInputs MarloweV1 walletAddresses contractId validityLowerBound' validityUpperBound' inputs'
-  txBody <- ExceptT $ first ApplyFailed <$> runTxCommand cmd
+  InputsApplied{txBody} <- ExceptT $ first ApplyFailed <$> runTxCommand cmd
   case signingMethod of
     Manual outputFile -> do
       ExceptT $ liftIO $ first TransactionFileWriteFailed <$> C.writeFileTextEnvelope outputFile Nothing txBody

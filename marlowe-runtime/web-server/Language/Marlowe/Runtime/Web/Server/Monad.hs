@@ -16,9 +16,10 @@ import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Reader (MonadReader, ReaderT, asks)
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Data.Coerce (coerce)
+import Language.Marlowe.Runtime.Core.Api (ContractId)
 import Language.Marlowe.Runtime.Web.Server.ContractHeaderIndexer (LoadContractHeaders)
 import Language.Marlowe.Runtime.Web.Server.HistoryClient (LoadContract, LoadTransactions)
-import Language.Marlowe.Runtime.Web.Server.TxClient (CreateContract)
+import Language.Marlowe.Runtime.Web.Server.TxClient (ApplyInputs, CreateContract, Submit)
 import Servant
 
 newtype AppM r a = AppM { runAppM :: ReaderT (AppEnv r) Handler a }
@@ -51,6 +52,8 @@ data AppEnv r = AppEnv
   , _loadContract :: LoadContract r IO
   , _loadTransactions :: LoadTransactions r IO
   , _createContract :: CreateContract IO
+  , _applyInputs :: ApplyInputs IO
+  , _submitContract :: ContractId -> Submit r IO
   }
 
 -- | Load a list of contract headers.
@@ -71,8 +74,20 @@ loadTransactions mods contractId startFrom limit offset order = do
   load <- asks _loadTransactions
   liftIO $ load mods contractId startFrom limit offset order
 
--- | Load a list of transactions for a contract.
+-- | Create a contract.
 createContract :: CreateContract (AppM r)
 createContract stakeCredential version addresses roles metadata minUTxODeposit contract = do
   create <- asks _createContract
   liftIO $ create stakeCredential version addresses roles metadata minUTxODeposit contract
+
+-- | Apply inputs to a contract.
+applyInputs :: ApplyInputs (AppM r)
+applyInputs version addresses contractId invalidBefore invalidHereafter inputs = do
+  apply <- asks _applyInputs
+  liftIO $ apply version addresses contractId invalidBefore invalidHereafter inputs
+
+-- | Submit a contract creation transaction to the node
+submitContract :: ContractId -> Submit r (AppM r)
+submitContract contractId mods tx = do
+  submit <- asks _submitContract
+  liftIO $ submit contractId mods tx
