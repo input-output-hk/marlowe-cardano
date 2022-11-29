@@ -95,6 +95,7 @@ library
     , ouroboros-consensus-shelley
     , ouroboros-network
     , parallel
+    , plutus-tx
     , plutus-ledger-api
     , profunctors
     , serialise

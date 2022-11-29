@@ -15,10 +15,10 @@ import qualified Cardano.Ledger.BaseTypes as CL (Network(..))
 import Control.Arrow (Arrow((***)))
 import Control.Category ((>>>))
 import Control.Error (note)
-import Control.Monad ((<=<), (>=>))
+import Control.Monad ((>=>))
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Writer (WriterT(runWriterT), tell)
-import Data.Bifunctor (bimap, first)
+import Data.Bifunctor (first)
 import Data.Foldable (for_, traverse_)
 import Data.Function (on)
 import Data.Functor ((<&>))
@@ -54,9 +54,9 @@ import qualified Language.Marlowe.Runtime.ChainSync.Api as CS
 import Language.Marlowe.Runtime.Core.Api
   (IsMarloweVersion(..), MarloweVersion(..), MarloweVersionTag(..), TransactionScriptOutput(..), withMarloweVersion)
 import Language.Marlowe.Runtime.Plutus.V2.Api
-  ( fromPlutusCurrencySymbol
-  , fromPlutusScript
-  , fromPlutusTokenName
+  ( fromPlutusScript
+  , fromPlutusValue
+  , toAssetId
   , toPlutusAddress
   , toPlutusCurrencySymbol
   , toPlutusTokenName
@@ -326,7 +326,7 @@ buildApplyInputsConstraintsV1 systemStart eraHistory marloweOutput invalidBefore
   output <- for possibleContinuation \(state'@V1.State { accounts }, contract') -> do
       let
         datum' = V1.MarloweData params state' contract'
-        assets = moneyToAssets $ V1.totalBalance accounts
+        assets = fromPlutusValue $ V1.totalBalance accounts
       tell $ mustSendMarloweOutput assets datum'
       pure (assets, datum')
 
@@ -368,31 +368,6 @@ buildApplyInputsConstraintsV1 systemStart eraHistory marloweOutput invalidBefore
       V1.IDeposit _ party _ _         -> Just party
       V1.IChoice (V1.ChoiceId _ party) _ -> Just party
       V1.INotify                      -> Nothing
-
-    moneyToAssets :: V1.Money -> Assets
-    moneyToAssets = Assets <$> moneyToLovelace <*> moneyToTokens
-
-    moneyToLovelace :: V1.Money -> Lovelace
-    moneyToLovelace = Lovelace . maybe 0 fromIntegral . (AM.lookup "" <=< AM.lookup "") . P.getValue
-
-    toAssetId cs role = do
-      let
-        policyId = fromPlutusCurrencySymbol cs
-        tokenName = fromPlutusTokenName role
-      CS.AssetId policyId tokenName
-
-    moneyToTokens :: V1.Money -> CS.Tokens
-    moneyToTokens = CS.Tokens
-      . Map.fromList
-      . fmap
-          ( bimap (uncurry toAssetId) fromIntegral
-          . assocLeft
-          )
-      . (traverse AM.toList <=< AM.toList)
-      . AM.delete ""
-      . P.getValue
-
-    assocLeft (a, (b, c)) = ((a, b), c)
 
     EraHistory _ interpreter = eraHistory
 
