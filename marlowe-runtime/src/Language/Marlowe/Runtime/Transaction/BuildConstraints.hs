@@ -24,13 +24,11 @@ import Data.Function (on)
 import Data.Functor ((<&>))
 import Data.List (find, sortBy)
 import qualified Data.Map.Strict as Map
-import Data.Maybe (catMaybes, fromMaybe, listToMaybe, maybeToList)
-import Data.Semigroup (Max(..))
+import Data.Maybe (catMaybes, listToMaybe, maybeToList)
 import qualified Data.Set as Set
 import Data.Time (UTCTime, nominalDiffTimeToSeconds, secondsToNominalDiffTime)
 import Data.Time.Clock.POSIX (posixSecondsToUTCTime, utcTimeToPOSIXSeconds)
 import Data.Traversable (for)
-import Data.Word (Word64)
 import GHC.Base (Alternative((<|>)))
 import GHC.Natural (Natural)
 import qualified Language.Marlowe.Core.V1.Semantics as V1
@@ -93,11 +91,22 @@ import Language.Marlowe.Runtime.Transaction.Constraints
 import qualified Language.Marlowe.Runtime.Transaction.Constraints as TxConstraints
 import Ouroboros.Consensus.BlockchainTime (SystemStart, fromRelativeTime, toRelativeTime)
 import Ouroboros.Consensus.HardFork.History
-  (Bound(..), EraEnd(..), EraSummary(..), PastHorizonException(..), interpretQuery, slotToWallclock, wallclockToSlot)
+  ( Bound(..)
+  , EraEnd(..)
+  , EraSummary(..)
+  , Interpreter
+  , PastHorizonException(..)
+  , Summary(..)
+  , interpretQuery
+  , slotToWallclock
+  , wallclockToSlot
+  )
+import Ouroboros.Consensus.Util.Counting (NonEmpty(..))
 import qualified Ouroboros.Network.Block as O
 import qualified Plutus.V2.Ledger.Api as P
 import qualified Plutus.V2.Ledger.Api as PV2
 import qualified PlutusTx.AssocMap as AM
+import Unsafe.Coerce (unsafeCoerce)
 
 maxFees :: Lovelace
 maxFees = Lovelace 2_170_000
@@ -301,21 +310,11 @@ buildApplyInputsConstraintsV1 systemStart eraHistory marloweOutput tipSlot inval
   lift $ unless (invalidBefore' <= tipSlot') $ Left $ ValidityLowerBoundTooHigh tipSlot $ fromCardanoSlotNo invalidBefore'
 
   invalidHereafter' <- lift case invalidHereafter of
-    Nothing -> do
-      let
-        contractTimeout = fromMaybe
-          -- This is a hack to force a slot conversion failure so we can
-          -- recover the max safe slot value from the error. Unfortunately,
-          -- EraHistory is opaque outside of internal ouroboros modules, so we
-          -- can't inspect it directly.
-          --
-          -- If anyone else knows of a way to get this information directly,
-          -- please refactor this!
-          (posixSecondsToUTCTime $ fromIntegral $ maxBound @Word64)
-          (nextMarloweTimeout contract)
-      case utcTimeToSlotNo' contractTimeout of
-        Right slot -> pure slot
-        Left ex -> getMaxSlotFromPastHorizonException ex
+    Nothing -> pure case nextMarloweTimeout contract of
+      Nothing -> maxSafeSlot
+      Just nextTimeout -> case utcTimeToSlotNo' nextTimeout of
+        Right slot -> slot
+        _ -> maxSafeSlot
     Just t -> utcTimeToSlotNo t
 
   -- Construct inputs constraints.
@@ -430,15 +429,24 @@ buildApplyInputsConstraintsV1 systemStart eraHistory marloweOutput tipSlot inval
     nextMarloweTimeout (V1.Let _ _ c) = nextMarloweTimeout c
     nextMarloweTimeout (V1.Assert _ c) = nextMarloweTimeout c
 
-getMaxSlotFromPastHorizonException :: forall v. PastHorizonException -> Either (ApplyInputsError v) O.SlotNo
-getMaxSlotFromPastHorizonException ex@PastHorizon{..} =
-  note (SlotConversionFailed $ show ex) $ fmap getMax $ foldMap (fmap Max . maybeBoundSlot) pastHorizonSummary
-  where
-  maybeBoundSlot :: EraSummary -> Maybe O.SlotNo
-  maybeBoundSlot EraSummary{..} = case eraEnd of
-    EraUnbounded -> Nothing
-    EraEnd Bound{..} -> Just (O.SlotNo $ O.unSlotNo boundSlot - 1) -- subtract 1 because the bound slot is exclusive
+    maxSafeSlot :: O.SlotNo
+    maxSafeSlot = getMaxSafeSlotFromSummary $ unInterpreter interpreter
 
+    unInterpreter :: Interpreter xs -> Summary xs
+    unInterpreter = unsafeCoerce -- Interpreter xs is a newtype wrapper around Summary xs.
+                                 -- Unfortunately, the provided query language is not able to extract the max safe slot,
+                                 -- So we have to reach unsafely into the internals to get
+                                 -- it ourselves. https://input-output-hk.github.io/ouroboros-network/ouroboros-consensus/Ouroboros-Consensus-HardFork-History-Qry.html#t:Interpreter
+
+    getMaxSafeSlotFromSummary :: Summary xs -> O.SlotNo
+    getMaxSafeSlotFromSummary (Summary eras) = case eras of
+      NonEmptyOne era -> getMaxSafeSlotFromEraSummary era
+      NonEmptyCons _ eras' -> getMaxSafeSlotFromSummary (Summary eras')
+
+    getMaxSafeSlotFromEraSummary :: EraSummary -> O.SlotNo
+    getMaxSafeSlotFromEraSummary EraSummary{..} = case eraEnd of
+      EraEnd Bound{..} -> O.SlotNo $ O.unSlotNo boundSlot - 1 -- subtract 1 because the era end bound is exclusive
+      EraUnbounded -> maxBound
 
 -- | Creates a set of Tx constraints that are used to build a transaction that
 -- withdraws payments from a payout validator.
