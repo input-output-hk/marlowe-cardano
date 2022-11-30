@@ -11,12 +11,14 @@ import Data.Foldable (sequenceA_)
 import Data.Map (Map)
 import qualified Data.Map as Map
 import qualified Data.Set as Set
-import Language.Marlowe.Runtime.ChainSync.Api (RuntimeChainSeekClient, SlotConfig)
+import Data.Void (Void)
+import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncQuery, RuntimeChainSeekClient)
 import Language.Marlowe.Runtime.Core.Api (ContractId)
 import Language.Marlowe.Runtime.History.Api (FollowerStatus(..))
 import Language.Marlowe.Runtime.History.Follower
   (Follower(..), FollowerDependencies(..), SomeContractChanges, mkFollower)
 import qualified Language.Marlowe.Runtime.History.Follower as Follower
+import Network.Protocol.Driver (RunClient)
 import Witherable (Witherable(wither))
 
 data FollowerActivation
@@ -24,8 +26,8 @@ data FollowerActivation
   | Activate
 
 data FollowerSupervisorDependencies = FollowerSupervisorDependencies
-  { connectToChainSeek :: forall a. RuntimeChainSeekClient IO a -> IO a
-  , slotConfig         :: SlotConfig
+  { connectToChainSeek :: RunClient IO RuntimeChainSeekClient
+  , queryChainSeek     :: forall e a. ChainSyncQuery Void e a -> IO (Either e a)
   , securityParameter  :: Int
   }
 

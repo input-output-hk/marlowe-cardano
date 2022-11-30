@@ -60,6 +60,7 @@ data ExtractMarloweTransactionError
   | NoPayoutDatum TxOutRef
   | InvalidPayoutDatum TxOutRef
   | InvalidValidityRange
+  | SlotConversionFailed
   deriving stock (Show, Eq, Ord, Generic)
   deriving anyclass Binary
 

@@ -26,7 +26,7 @@ import Control.Concurrent.Component
 import Control.Monad.Trans.Except (ExceptT(ExceptT), except, runExceptT, throwE, withExceptT)
 import Data.Bifunctor (first)
 import Data.Void (Void, absurd)
-import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncQuery(..), SlotConfig(..))
+import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncQuery(..))
 import qualified Language.Marlowe.Runtime.ChainSync.Database as Database
 import Network.Protocol.Driver (RunServer(..))
 import Network.Protocol.Query.Server (QueryServer(..), ServerStInit(..), ServerStNext(..), ServerStPage(..))
@@ -72,7 +72,6 @@ worker = component_ \WorkerDependencies{..} -> do
 
     server :: QueryServer ChainSyncQuery IO ()
     server = QueryServer $ pure $ ServerStInit \case
-      GetSlotConfig        -> queryGenesisParameters extractSlotConfig
       GetSecurityParameter -> queryGenesisParameters protocolParamSecurity
       GetNetworkId -> queryGenesisParameters protocolParamNetworkId
       GetProtocolParameters -> toServerStNext <$> queryShelley (const QueryProtocolParameters)
@@ -119,6 +118,4 @@ worker = component_ \WorkerDependencies{..} -> do
         $ QueryInEra eraInMode
         $ QueryInShelleyBasedEra shelleyBasedEra $ query shelleyBasedEra
       withExceptT (const ()) $ except result
-
-    extractSlotConfig GenesisParameters{..} = SlotConfig protocolParamSystemStart protocolParamSlotLength
   run server
