@@ -24,11 +24,13 @@ import Data.Function (on)
 import Data.Functor ((<&>))
 import Data.List (find, sortBy)
 import qualified Data.Map.Strict as Map
-import Data.Maybe (catMaybes, listToMaybe, maybeToList)
+import Data.Maybe (catMaybes, fromMaybe, listToMaybe, maybeToList)
+import Data.Semigroup (Max(..))
 import qualified Data.Set as Set
 import Data.Time (UTCTime, nominalDiffTimeToSeconds, secondsToNominalDiffTime)
 import Data.Time.Clock.POSIX (posixSecondsToUTCTime, utcTimeToPOSIXSeconds)
 import Data.Traversable (for)
+import Data.Word (Word64)
 import GHC.Base (Alternative((<|>)))
 import GHC.Natural (Natural)
 import qualified Language.Marlowe.Core.V1.Semantics as V1
@@ -90,7 +92,8 @@ import Language.Marlowe.Runtime.Transaction.Constraints
   )
 import qualified Language.Marlowe.Runtime.Transaction.Constraints as TxConstraints
 import Ouroboros.Consensus.BlockchainTime (SystemStart, fromRelativeTime, toRelativeTime)
-import Ouroboros.Consensus.HardFork.History (interpretQuery, slotToWallclock, wallclockToSlot)
+import Ouroboros.Consensus.HardFork.History
+  (Bound(..), EraEnd(..), EraSummary(..), PastHorizonException(..), interpretQuery, slotToWallclock, wallclockToSlot)
 import qualified Ouroboros.Network.Block as O
 import qualified Plutus.V2.Ledger.Api as P
 import qualified Plutus.V2.Ledger.Api as PV2
@@ -297,9 +300,23 @@ buildApplyInputsConstraintsV1 systemStart eraHistory marloweOutput tipSlot inval
 
   lift $ unless (invalidBefore' <= tipSlot') $ Left $ ValidityLowerBoundTooHigh tipSlot $ fromCardanoSlotNo invalidBefore'
 
-  invalidHereafter' <- lift $ do
-    ib <- note (ApplyInputsConstraintsBuildupFailed UnableToDetermineTransactionTimeout) $ invalidHereafter <|> nextMarloweTimeout contract
-    utcTimeToSlotNo ib
+  invalidHereafter' <- lift case invalidHereafter of
+    Nothing -> do
+      let
+        contractTimeout = fromMaybe
+          -- This is a hack to force a slot conversion failure so we can
+          -- recover the max safe slot value from the error. Unfortunately,
+          -- EraHistory is opaque outside of internal ouroboros modules, so we
+          -- can't inspect it directly.
+          --
+          -- If anyone else knows of a way to get this information directly,
+          -- please refactor this!
+          (posixSecondsToUTCTime $ fromIntegral $ maxBound @Word64)
+          (nextMarloweTimeout contract)
+      case utcTimeToSlotNo' contractTimeout of
+        Right slot -> pure slot
+        Left ex -> getMaxSlotFromPastHorizonException ex
+    Just t -> utcTimeToSlotNo t
 
   -- Construct inputs constraints.
   -- Consume UTXOs containing Marlowe script.
@@ -381,10 +398,13 @@ buildApplyInputsConstraintsV1 systemStart eraHistory marloweOutput tipSlot inval
 
     -- Calculate slot number which contains a given timestamp
     utcTimeToSlotNo :: UTCTime -> Either (ApplyInputsError 'V1) C.SlotNo
-    utcTimeToSlotNo time = do
+    utcTimeToSlotNo = first (SlotConversionFailed . show) . utcTimeToSlotNo'
+
+    -- Calculate slot number which contains a given timestamp
+    utcTimeToSlotNo' :: UTCTime -> Either PastHorizonException C.SlotNo
+    utcTimeToSlotNo' time = do
       let relativeTime = toRelativeTime systemStart time
-      (slotNo, _, _) <- first (SlotConversionFailed . show)
-        $ interpretQuery interpreter
+      (slotNo, _, _) <- interpretQuery interpreter
         $ wallclockToSlot relativeTime
       pure $ C.SlotNo $ O.unSlotNo slotNo
 
@@ -404,11 +424,25 @@ buildApplyInputsConstraintsV1 systemStart eraHistory marloweOutput tipSlot inval
 
     nextMarloweTimeout :: V1.Contract -> Maybe UTCTime
     nextMarloweTimeout (V1.When _ timeout _) = Just $ posixTimeToUTCTime timeout
-    nextMarloweTimeout _ = Nothing
+    nextMarloweTimeout V1.Close = Nothing
+    nextMarloweTimeout (V1.Pay _ _ _ _ c) = nextMarloweTimeout c
+    nextMarloweTimeout (V1.If _ c1 c2) = on min nextMarloweTimeout c1 c2
+    nextMarloweTimeout (V1.Let _ _ c) = nextMarloweTimeout c
+    nextMarloweTimeout (V1.Assert _ c) = nextMarloweTimeout c
+
+getMaxSlotFromPastHorizonException :: forall v. PastHorizonException -> Either (ApplyInputsError v) O.SlotNo
+getMaxSlotFromPastHorizonException ex@PastHorizon{..} =
+  note (SlotConversionFailed $ show ex) $ fmap getMax $ foldMap (fmap Max . maybeBoundSlot) pastHorizonSummary
+  where
+  maybeBoundSlot :: EraSummary -> Maybe O.SlotNo
+  maybeBoundSlot EraSummary{..} = case eraEnd of
+    EraUnbounded -> Nothing
+    EraEnd Bound{..} -> Just (O.SlotNo $ O.unSlotNo boundSlot - 1) -- subtract 1 because the bound slot is exclusive
 
 
 -- | Creates a set of Tx constraints that are used to build a transaction that
 -- withdraws payments from a payout validator.
+
 buildWithdrawConstraints
   :: MarloweVersion v -- ^ The Marlowe version to build the transaction for.
   -> PayoutDatum v -- ^ The role token from which to withdraw funds.

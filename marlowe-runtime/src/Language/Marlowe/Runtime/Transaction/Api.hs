@@ -53,7 +53,7 @@ import Language.Marlowe.Runtime.ChainSync.Api
   , PlutusScript
   , PolicyId
   , ScriptHash
-  , SlotNo(SlotNo)
+  , SlotNo
   , StakeCredential
   , TokenName
   , TransactionMetadata
