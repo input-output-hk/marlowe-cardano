@@ -11,7 +11,10 @@ import Control.Arrow (arr)
 import Control.Concurrent.Component
 import Control.Concurrent.STM (STM, atomically)
 import Control.Error (note)
+import Data.Foldable (foldlM)
 import Data.List (sortOn)
+import Data.List.NonEmpty (NonEmpty, (<|))
+import qualified Data.List.NonEmpty as NE
 import Data.Maybe (isNothing, listToMaybe, mapMaybe)
 import Data.Void (Void)
 import Language.Marlowe.Protocol.Sync.Client
@@ -23,11 +26,12 @@ import Language.Marlowe.Runtime.Core.Api
 import Language.Marlowe.Runtime.History.Api (ContractStep(..), CreateStep(..))
 import Language.Marlowe.Runtime.Transaction.Api (ContractCreated, InputsApplied(InputsApplied, txBody))
 import Language.Marlowe.Runtime.Web.Server.DTO (ContractRecord(..), SomeTransaction(..))
+import qualified Language.Marlowe.Runtime.Web.Server.DTO as TxRecord (TxRecord(..))
 import Language.Marlowe.Runtime.Web.Server.TxClient (TempTx(..))
 import Language.Marlowe.Runtime.Web.Server.Util (applyRangeToAscList)
-import Observe.Event (EventBackend, addField, withEvent)
+import Observe.Event (Event, EventBackend, addField, withEvent)
 import Observe.Event.BackendModification (EventBackendModifiers, modifyEventBackend)
-import Observe.Event.DSL (SelectorSpec(..))
+import Observe.Event.DSL (FieldSpec(..), SelectorSpec(..))
 import Observe.Event.Render.JSON.DSL.Compile (compile)
 import Observe.Event.Syntax ((≔))
 import Servant.Pagination
@@ -45,11 +49,24 @@ compile $ SelectorSpec ["history", "client"]
   , ["load", "transactions", "roll", "backward"] ≔ ''String
   , ["load", "transactions", "roll", "back", "creation"] ≔ ''Void
   , ["load", "transactions", "wait"] ≔ ''Void
+  , ["load", "tx", "not", "found"] ≔ ''Void
+  , ["load", "tx", "contract", "found"] ≔ ''String
+  , ["load", "tx", "roll", "forward"] ≔ FieldSpec ["load", "tx", "roll", "forward"]
+      [ ["found", "tx"] ≔ ''String
+      , ["found", "consumer"] ≔ ''String
+      ]
+  , ["load", "tx", "roll", "backward"] ≔ FieldSpec ["load", "tx", "roll", "backward"]
+      [ ["lost", "tx"] ≔ ''String
+      , ["lost", "consumer"] ≔ ''String
+      ]
+  , ["load", "tx", "roll", "back", "creation"] ≔ ''Void
+  , ["load", "tx", "wait"] ≔ ''Void
   ]
 
 data HistoryClientDependencies r = HistoryClientDependencies
   { runMarloweSyncClient :: forall a. MarloweSyncClient IO a -> IO a
   , lookupTempContract :: ContractId -> STM (Maybe (TempTx ContractCreated))
+  , lookupTempTransaction :: ContractId -> TxId -> STM (Maybe (TempTx InputsApplied))
   , getTempTransactions :: ContractId -> STM [TempTx InputsApplied]
   , eventBackend :: EventBackend IO r HistoryClientSelector
   }
@@ -61,9 +78,9 @@ type LoadContract r m
   -> ContractId               -- ^ ID of the contract to load
   -> m (Maybe (Either (TempTx ContractCreated) ContractRecord)) -- ^ Nothing if the ID is not found
 
-data LoadContractHeadersError
+data LoadTxError
   = ContractNotFound
-  | InitialTransactionNotFound
+  | TxNotFound
 
 -- | Signature for a delegate that loads a list of transactions for a contract.
 type LoadTransactions r m
@@ -74,12 +91,21 @@ type LoadTransactions r m
   -> Int -- ^ Limit: the maximum number of contract headers to load.
   -> Int -- ^ Offset: how many contract headers after the initial one to skip.
   -> RangeOrder -- ^ Whether to load an ascending or descending list.
-  -> m (Either LoadContractHeadersError [Either (TempTx InputsApplied) SomeTransaction])
+  -> m (Either LoadTxError [Either (TempTx InputsApplied) SomeTransaction])
+
+-- | Signature for a delegate that loads a transaction for a contract.
+type LoadTransaction r m
+   = forall r'
+   . EventBackendModifiers r r'
+  -> ContractId -- ^ ID of the contract to load transactions for.
+  -> TxId -- ^ ID of the transaction to load.
+  -> m (Maybe (Either (TempTx InputsApplied) TxRecord.TxRecord))
 
 -- | Public API of the HistoryClient
 data HistoryClient r = HistoryClient
   { loadContract :: LoadContract r IO -- ^ Load contract headers from the indexer.
   , loadTransactions :: LoadTransactions r IO -- ^ Load transactions for a contract from the indexer.
+  , loadTransaction :: LoadTransaction r IO -- ^ Load a transaction for a contract
   }
 
 historyClient :: Component IO (HistoryClientDependencies r) (HistoryClient r)
@@ -89,6 +115,11 @@ historyClient = arr \HistoryClientDependencies{..} -> HistoryClient
       case result of
         Nothing -> atomically $ fmap Left <$> lookupTempContract contractId
         Just contract -> pure $ Just $ Right contract
+  , loadTransaction = \mods contractId txId -> do
+      result <- runMarloweSyncClient $ loadTransactionClient (modifyEventBackend mods eventBackend) contractId txId
+      case result of
+        Nothing -> atomically $ fmap Left <$> lookupTempTransaction contractId txId
+        Just contract -> pure $ Just $ Right contract
   , loadTransactions = \mods contractId startFrom limit offset order -> do
       tempTxs <- atomically $ getTempTransactions contractId
       txs <- runMarloweSyncClient (loadTransactionsClient (modifyEventBackend mods eventBackend) contractId)
@@ -97,7 +128,7 @@ historyClient = arr \HistoryClientDependencies{..} -> HistoryClient
           txs' <- txs
           pure $ (Right <$> txs') <> (Left <$> tempTxs)
       pure
-        $ note InitialTransactionNotFound . applyRangeToAscList transactionId' startFrom limit offset order
+        $ note TxNotFound . applyRangeToAscList transactionId' startFrom limit offset order
         =<< allTxs
   }
   where
@@ -163,7 +194,7 @@ loadContractClient eb contractId = MarloweSyncClient $ pure clientInit
 loadTransactionsClient
   :: EventBackend IO r HistoryClientSelector
   -> ContractId
-  -> MarloweSyncClient IO (Either LoadContractHeadersError [SomeTransaction])
+  -> MarloweSyncClient IO (Either LoadTxError [SomeTransaction])
 loadTransactionsClient eb contractId = MarloweSyncClient $ pure clientInit
   where
     clientInit = SendMsgFollowContract contractId ClientStFollow
@@ -178,7 +209,7 @@ loadTransactionsClient eb contractId = MarloweSyncClient $ pure clientInit
     clientIdle
       :: MarloweVersion v
       -> [Transaction v]
-      -> ClientStIdle v IO (Either LoadContractHeadersError [SomeTransaction])
+      -> ClientStIdle v IO (Either LoadTxError [SomeTransaction])
     clientIdle version transactions = SendMsgRequestNext ClientStNext
       { recvMsgRollForward = \block steps ->
           withEvent eb LoadTransactionsRollForward \ev -> do
@@ -208,3 +239,106 @@ loadTransactionsClient eb contractId = MarloweSyncClient $ pure clientInit
             $ SomeTransaction version
             <$> transactions
       }
+
+loadTransactionClient
+  :: EventBackend IO r' HistoryClientSelector
+  -> ContractId
+  -> TxId
+  -> MarloweSyncClient IO (Maybe TxRecord.TxRecord)
+loadTransactionClient eb contractId txId = MarloweSyncClient $ pure clientInit
+  where
+    clientInit = SendMsgFollowContract contractId ClientStFollow
+      { recvMsgContractNotFound =
+          withEvent eb LoadTxNotFound $ const $ pure Nothing
+      , recvMsgContractFound = \block version CreateStep{..} ->
+          withEvent eb LoadTxContractFound \ev -> do
+            addField ev $ show block
+            pure $ clientIdle version $ SeekTx $ pure (block, createOutput)
+      }
+
+    clientIdle :: MarloweVersion v -> SeekTx v -> ClientStIdle v IO (Maybe TxRecord.TxRecord)
+    clientIdle version seekTx = SendMsgRequestNext ClientStNext
+      { recvMsgRollForward = \_ steps ->
+          withEvent eb LoadTxRollForward \ev -> do
+            seekTx' <- foldlM (stepSeekTx ev) seekTx steps
+            pure case seekTx' of
+              Done prevScriptOutputs' tx _ consumingTx -> SendMsgDone
+                $ Just
+                $ mkTxRecord version (snd $ NE.head prevScriptOutputs') tx
+                $ Just consumingTx
+              _ -> clientIdle version seekTx'
+      , recvMsgRollBackward = \block ->
+          withEvent eb LoadTxRollBackward \ev -> do
+            clientIdle version <$> rollbackStepTx ev block seekTx
+      , recvMsgRollBackCreation =
+          withEvent eb LoadTxRollBackCreation $ const $ pure Nothing
+      , recvMsgWait = do
+          withEvent eb LoadTxWait
+            $ const
+            $ pure
+            $ SendMsgCancel
+            $ SendMsgDone
+            $ case seekTx of
+              Done prevScriptOutputs' tx _ consumingTx ->
+                Just $ mkTxRecord version (snd $ NE.head prevScriptOutputs') tx $ Just consumingTx
+              SeekConsuming prevScriptOutputs' tx ->
+                Just $ mkTxRecord version (snd $ NE.head prevScriptOutputs') tx Nothing
+              _ -> Nothing
+      }
+
+    stepSeekTx
+      :: Event IO r HistoryClientSelector LoadTxRollForwardField
+      -> SeekTx v
+      -> ContractStep v
+      -> IO (SeekTx v)
+    stepSeekTx ev seekTx = \case
+      ApplyTransaction newTx -> case seekTx of
+        SeekTx prevOutputs
+          | txId == transactionId newTx -> do
+              addField ev $ FoundTx $ show txId
+              pure $ SeekConsuming prevOutputs newTx
+          | otherwise -> pure case scriptOutput $ output newTx of
+              Nothing -> seekTx
+              Just scriptOutput -> SeekTx $ (blockHeader newTx, scriptOutput) <| prevOutputs
+        SeekConsuming prevOutputs tx -> do
+          addField ev $ FoundConsumer $ show $ transactionId newTx
+          pure $ Done prevOutputs tx (blockHeader newTx) $ transactionId newTx
+        _ -> pure seekTx
+      _ -> pure seekTx
+
+    mkTxRecord
+      :: MarloweVersion v
+      -> TransactionScriptOutput v
+      -> Transaction v
+      -> Maybe TxId
+      -> TxRecord.TxRecord
+    mkTxRecord version input tx consumingTx = TxRecord.TxRecord{..}
+
+    rollbackStepTx
+      :: Event IO r HistoryClientSelector LoadTxRollBackwardField
+      -> Chain.BlockHeader
+      -> SeekTx v
+      -> IO (SeekTx v)
+    rollbackStepTx ev block = \case
+      SeekTx prevOutputs -> pure $ SeekTx $ rollbackPrevOutputs block prevOutputs
+      SeekConsuming prevOutputs tx
+        | block < blockHeader tx -> do
+            addField ev $ LostTx $ show $ transactionId tx
+            rollbackStepTx ev block $ SeekTx prevOutputs
+        | otherwise -> pure $ SeekConsuming prevOutputs tx
+      Done prevOutputs tx blockConsumed consumingTx
+        | block < blockConsumed -> do
+            addField ev $ LostConsumer $ show consumingTx
+            rollbackStepTx ev block $ SeekConsuming prevOutputs tx
+        | otherwise -> pure $ Done prevOutputs tx blockConsumed consumingTx
+
+    rollbackPrevOutputs
+      :: Chain.BlockHeader
+      -> NonEmpty (Chain.BlockHeader, TransactionScriptOutput v)
+      -> NonEmpty (Chain.BlockHeader, TransactionScriptOutput v)
+    rollbackPrevOutputs block = NE.fromList . dropWhile ((block <) . fst) . NE.toList
+
+data SeekTx v
+  = SeekTx (NonEmpty (Chain.BlockHeader, TransactionScriptOutput v))
+  | SeekConsuming (NonEmpty (Chain.BlockHeader, TransactionScriptOutput v)) (Transaction v)
+  | Done (NonEmpty (Chain.BlockHeader, TransactionScriptOutput v)) (Transaction v) Chain.BlockHeader TxId

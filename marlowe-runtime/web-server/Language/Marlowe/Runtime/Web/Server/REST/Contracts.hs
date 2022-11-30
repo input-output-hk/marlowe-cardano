@@ -166,9 +166,7 @@ getOne eb contractId = withEvent eb GetOne \ev -> do
     Just result -> do
       let contractState = either toDTO toDTO result
       addField ev $ GetResult contractState
-      pure case result of
-        Left _ -> OmitLink contractState
-        Right _ -> IncludeLink (Proxy @"transactions") contractState
+      pure $ IncludeLink (Proxy @"transactions") contractState
 
 put
   :: EventBackend (AppM r) r ContractsSelector

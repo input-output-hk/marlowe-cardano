@@ -7,6 +7,8 @@ module Language.Marlowe.Runtime.Plutus.V2.Api
   , fromPlutusTokenName
   , fromPlutusTxOutRef
   , fromPlutusValidatorHash
+  , fromPlutusValue
+  , toAssetId
   , toPlutusAddress
   , toPlutusCurrencySymbol
   , toPlutusScript
@@ -20,21 +22,28 @@ import qualified Cardano.Api.Byron as C
 import qualified Cardano.Api.Shelley as C
 import Cardano.Chain.Common (addrToBase58)
 import Codec.Serialise (deserialise, serialise)
-import Control.Monad ((>=>))
+import Control.Monad ((<=<), (>=>))
+import Data.Bifunctor (bimap)
 import Data.ByteString.Lazy (fromStrict, toStrict)
 import Data.ByteString.Short (ShortByteString, fromShort, toShort)
+import qualified Data.Map as Map
 import Language.Marlowe.Runtime.Cardano.Api (toCardanoAddressAny, toCardanoPlutusScript)
 import Language.Marlowe.Runtime.ChainSync.Api
   ( Address
+  , AssetId(..)
+  , Assets(..)
+  , Lovelace(..)
   , PlutusScript(..)
   , PolicyId(PolicyId)
   , ScriptHash(..)
   , TokenName(TokenName)
+  , Tokens(..)
   , TxId(TxId)
   , TxIx(TxIx)
   , TxOutRef(TxOutRef)
   )
 import qualified Plutus.V2.Ledger.Api as PV2
+import qualified PlutusTx.AssocMap as AM
 
 toPlutusAddress :: Address -> Maybe PV2.Address
 toPlutusAddress = toCardanoAddressAny >=> \case
@@ -115,3 +124,28 @@ toPlutusCurrencySymbol (PolicyId bs) = PV2.CurrencySymbol . PV2.toBuiltin $ bs
 fromPlutusCurrencySymbol :: PV2.CurrencySymbol -> PolicyId
 fromPlutusCurrencySymbol (PV2.CurrencySymbol bs) = PolicyId . PV2.fromBuiltin $ bs
 
+fromPlutusValue :: PV2.Value -> Assets
+fromPlutusValue = Assets <$> valueToLovelace <*> valueToTokens
+
+valueToLovelace :: PV2.Value -> Lovelace
+valueToLovelace = Lovelace . maybe 0 fromIntegral . (AM.lookup "" <=< AM.lookup "") . PV2.getValue
+
+valueToTokens :: PV2.Value -> Tokens
+valueToTokens = Tokens
+  . Map.fromList
+  . fmap
+      ( bimap (uncurry toAssetId) fromIntegral
+      . assocLeft
+      )
+  . (traverse AM.toList <=< AM.toList)
+  . AM.delete ""
+  . PV2.getValue
+  where
+  assocLeft (a, (b, c)) = ((a, b), c)
+
+toAssetId :: PV2.CurrencySymbol -> PV2.TokenName -> AssetId
+toAssetId cs role =
+  let
+    policyId = fromPlutusCurrencySymbol cs
+    tokenName = fromPlutusTokenName role
+   in AssetId policyId tokenName

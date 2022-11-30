@@ -15,7 +15,9 @@ module Language.Marlowe.Runtime.Web.API
   where
 
 import Control.Lens hiding ((.=))
+import Control.Monad (guard)
 import Data.Aeson
+import Data.Functor (($>))
 import Data.OpenApi
   ( Definitions
   , NamedSchema(..)
@@ -58,7 +60,7 @@ type GetContractsAPI = PaginatedGet '["contractId"] GetContractsResponse
 type GetContractsResponse = WithLink "contract" ContractHeader
 
 instance HasNamedLink ContractHeader API "contract" where
-  namedLink _ _ ContractHeader{..} = safeLink
+  namedLink _ _ ContractHeader{..} = Just $ safeLink
     api
     (Proxy @("contracts" :> Capture "contractId" TxOutRef :> GetContractAPI))
     contractId
@@ -71,7 +73,7 @@ type PostContractsAPI
 type PostContractsResponse = WithLink "contract" CreateTxBody
 
 instance HasNamedLink CreateTxBody API "contract" where
-  namedLink _ _ CreateTxBody{..} = safeLink
+  namedLink _ _ CreateTxBody{..} = Just $ safeLink
     api
     (Proxy @("contracts" :> Capture "contractId" TxOutRef :> GetContractAPI))
     contractId
@@ -87,7 +89,7 @@ type GetContractAPI = Get '[JSON] GetContractResponse
 type GetContractResponse = WithLink "transactions" ContractState
 
 instance HasNamedLink ContractState API "transactions" where
-  namedLink _ _ ContractState{..} = safeLink
+  namedLink _ _ ContractState{..} = guard (status == Confirmed) $> safeLink
     api
     (Proxy @("contracts" :> Capture "contractId" TxOutRef :> "transactions" :> GetTransactionsAPI))
     contractId
@@ -98,16 +100,74 @@ type PutContractAPI = ReqBody '[JSON] TextEnvelope :> PutAccepted '[JSON] NoCont
 -- | /contracts/:contractId/transactions sup-API
 type TransactionsAPI = GetTransactionsAPI
                   :<|> PostTransactionsAPI
+                  :<|> Capture "transactionId" TxId :> TransactionAPI
 
 -- | POST /contracts/:contractId/transactions sub-API
 type PostTransactionsAPI
   =  ReqBody '[JSON] PostTransactionsRequest
   :> PostTxAPI (PostCreated '[JSON] PostTransactionsResponse)
 
-type PostTransactionsResponse = ApplyInputsTxBody
+type PostTransactionsResponse = WithLink "transaction" ApplyInputsTxBody
+
+instance HasNamedLink ApplyInputsTxBody API "transaction" where
+  namedLink _ _ ApplyInputsTxBody{..} = Just $ safeLink
+    api
+    (Proxy @("contracts"
+          :> Capture "contractId" TxOutRef
+          :> "transactions"
+          :> Capture "transactionId" TxId
+          :> GetTransactionAPI
+    ))
+    contractId
+    transactionId
 
 -- | GET /contracts/:contractId/transactions sup-API
-type GetTransactionsAPI = PaginatedGet '["transactionId"] TxHeader
+type GetTransactionsAPI = PaginatedGet '["transactionId"] GetTransactionsResponse
+
+type GetTransactionsResponse = WithLink "transaction" TxHeader
+
+instance HasNamedLink TxHeader API "transaction" where
+  namedLink _ _ TxHeader{..} = Just $ safeLink
+    api
+    (Proxy @("contracts"
+          :> Capture "contractId" TxOutRef
+          :> "transactions"
+          :> Capture "transactionId" TxId
+          :> GetTransactionAPI
+    ))
+    contractId
+    transactionId
+
+-- | /contracts/:contractId/transactions/:transactionId sup-API
+type TransactionAPI = GetTransactionAPI
+
+-- | GET /contracts/:contractId/transactions/:transactionId sub-API
+type GetTransactionAPI = Get '[JSON] GetTransactionResponse
+
+type GetTransactionResponse = WithLink "previous" (WithLink "next" Tx)
+
+instance HasNamedLink Tx API "previous" where
+  namedLink _ _ Tx{..} = guard (inputUtxo /= contractId) $> safeLink
+    api
+    (Proxy @("contracts"
+          :> Capture "contractId" TxOutRef
+          :> "transactions"
+          :> Capture "transactionId" TxId
+          :> GetTransactionAPI
+    ))
+    contractId
+    (txId inputUtxo)
+
+instance HasNamedLink Tx API "next" where
+  namedLink _ _ Tx{..} = safeLink api
+    (Proxy @("contracts"
+          :> Capture "contractId" TxOutRef
+          :> "transactions"
+          :> Capture "transactionId" TxId
+          :> GetTransactionAPI
+    ))
+    contractId
+    <$> consumingTx
 
 -- | Helper type for defining generic paginated GET endpoints
 type PaginatedGet rangeFields resource
@@ -132,7 +192,12 @@ type PostTxAPI api
   :> api
 
 class HasNamedLink a api (name :: Symbol) where
-  namedLink :: Proxy api -> Proxy name -> a -> Link
+  namedLink :: Proxy api -> Proxy name -> a -> Maybe Link
+
+instance HasNamedLink a api name => HasNamedLink (WithLink name' a) api name where
+  namedLink api' name = \case
+    IncludeLink _ a -> namedLink api' name a
+    OmitLink a -> namedLink api' name a
 
 data WithLink (name :: Symbol) a where
   IncludeLink :: Proxy name -> a -> WithLink name a
@@ -163,10 +228,10 @@ instance {-# OVERLAPPING #-}
   , ToJSONWithLinks a
   , KnownSymbol name
   ) => ToJSONWithLinks (WithLink name a) where
-  toJSONWithLinks (IncludeLink name a) = (link : links, value)
+  toJSONWithLinks (IncludeLink name a) = (maybe links (: links) link, value)
     where
       (links, value) = toJSONWithLinks a
-      link = (symbolVal name, namedLink api name a)
+      link = (symbolVal name,) <$> namedLink api name a
   toJSONWithLinks (OmitLink a) = toJSONWithLinks a
 
 instance {-# OVERLAPPING #-} ToJSON a => ToJSONWithLinks a where
