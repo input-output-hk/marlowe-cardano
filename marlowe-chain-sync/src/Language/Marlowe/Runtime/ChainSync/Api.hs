@@ -616,6 +616,9 @@ data Move err result where
   -- addresses with the requested credentials.
   FindTxsTo :: Set Credential -> Move FindTxsToError (Set Transaction)
 
+  -- | Advances to the tip block. Waits if already at the tip.
+  AdvanceToTip :: Move Void ()
+
 mkSchemaVersion "moveSchema" ''Move
 
 deriving instance Show (Move err result)
@@ -646,6 +649,7 @@ instance Query Move where
     TagFindTx :: Tag Move TxError Transaction
     TagFindConsumingTxs :: Tag Move (Map TxOutRef UTxOError) (Map TxOutRef Transaction)
     TagFindTxsTo :: Tag Move FindTxsToError (Set Transaction)
+    TagAdvanceToTip :: Tag Move Void ()
 
   tagFromQuery = \case
     Fork m1 m2         -> TagFork (tagFromQuery m1) (tagFromQuery m2)
@@ -656,6 +660,7 @@ instance Query Move where
     FindTx _ _         -> TagFindTx
     FindConsumingTxs _ -> TagFindConsumingTxs
     FindTxsTo _        -> TagFindTxsTo
+    AdvanceToTip       -> TagAdvanceToTip
 
   tagEq = curry \case
     (TagFork m1 m2, TagFork m3 m4)           ->
@@ -680,6 +685,8 @@ instance Query Move where
     (TagFindConsumingTxs, _)                  -> Nothing
     (TagFindTxsTo, TagFindTxsTo)                   -> Just (Refl, Refl)
     (TagFindTxsTo, _)                           -> Nothing
+    (TagAdvanceToTip, TagAdvanceToTip)                   -> Just (Refl, Refl)
+    (TagAdvanceToTip, _)                           -> Nothing
 
   putTag = \case
     TagFork t1 t2 -> do
@@ -693,6 +700,7 @@ instance Query Move where
     TagFindTx -> putWord8 0x06
     TagFindConsumingTxs -> putWord8 0x07
     TagFindTxsTo -> putWord8 0x08
+    TagAdvanceToTip -> putWord8 0x09
 
   putQuery = \case
     Fork m1 m2 -> do
@@ -705,6 +713,7 @@ instance Query Move where
     FindTx txId wait -> put txId *> put wait
     FindConsumingTxs utxos -> put utxos
     FindTxsTo credentials -> put credentials
+    AdvanceToTip -> mempty
 
   getTag = do
     tag <- getWord8
@@ -720,6 +729,7 @@ instance Query Move where
       0x06 -> pure $ SomeTag TagFindTx
       0x07 -> pure $ SomeTag TagFindConsumingTxs
       0x08 -> pure $ SomeTag TagFindTxsTo
+      0x09 -> pure $ SomeTag TagAdvanceToTip
       _ -> fail $ "Invalid move tag " <> show tag
 
   getQuery = \case
@@ -731,6 +741,7 @@ instance Query Move where
     TagFindTx           -> FindTx <$> get <*> get
     TagFindConsumingTxs -> FindConsumingTxs <$> get
     TagFindTxsTo        -> FindTxsTo <$> get
+    TagAdvanceToTip     -> pure AdvanceToTip
 
   putResult = \case
     TagFork t1 t2 -> \case
@@ -751,6 +762,7 @@ instance Query Move where
     TagIntersect -> mempty
     TagFindConsumingTxs -> put
     TagFindTxsTo -> put
+    TagAdvanceToTip -> mempty
 
   getResult = \case
     TagFork t1 t2    -> do
@@ -767,6 +779,7 @@ instance Query Move where
     TagIntersect -> get
     TagFindConsumingTxs -> get
     TagFindTxsTo -> get
+    TagAdvanceToTip -> get
 
   putErr = \case
     TagFork t1 t2 -> \case
@@ -787,6 +800,7 @@ instance Query Move where
     TagIntersect -> put
     TagFindConsumingTxs -> put
     TagFindTxsTo -> put
+    TagAdvanceToTip -> put
 
   getErr = \case
     TagFork t1 t2    -> do
@@ -803,6 +817,7 @@ instance Query Move where
     TagIntersect -> get
     TagFindConsumingTxs -> get
     TagFindTxsTo -> get
+    TagAdvanceToTip -> get
 
 slotToUTCTime :: SlotConfig -> SlotNo -> UTCTime
 slotToUTCTime SlotConfig{..} slot = addUTCTime (slotLength * fromIntegral slot) slotZeroTime
