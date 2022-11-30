@@ -1,5 +1,6 @@
 { sqitchPg, runCommand, writeShellScriptBin, writeText, lib, glibcLocales, nix, git, networks, su-exec }:
 let
+  network = networks.preprod;
   run-sqitch = writeShellScriptBin "run-sqitch" ''
     export PATH="$PATH:${lib.makeBinPath [ sqitchPg ]}"
     export LOCALE_ARCHIVE="${glibcLocales}/lib/locale/locale-archive"
@@ -26,7 +27,7 @@ let
     ln -sv ${run-local-service "chainseekd"}/bin/run-chainseekd $out
   '';
 
-  node-service = network: {
+  node-service = {
     image = "inputoutput/cardano-node:1.35.3-configs";
 
     environment = [
@@ -34,31 +35,31 @@ let
     ];
 
     volumes = [
-      # TODO should be possible to do this with one shared volume, alas the image doesn't let you override the socket path
-      "shared-${network.name}:/ipc"
-      "node-${network.name}-db:/opt/cardano/data"
+      "shared:/ipc"
+      "node-db:/opt/cardano/data"
     ];
   };
 
-  chainseekd-service = network: {
+  dev-service = {
     image = "alpine:3.16.2";
-
     volumes = [
       "./:/src"
       "/nix:/nix"
       "\${HOME}/.cabal:\${HOME}/.cabal"
       "${symlinks}:/exec"
-      "shared-${network.name}:/ipc"
+      "shared:/ipc"
       "/etc/passwd:/etc/passwd:ro"
       "/etc/group:/etc/group:ro"
     ];
-
     environment = [
       "CABAL_DIR=\${HOME}/.cabal"
       "REAL_USER=\${USER}"
       "REAL_HOME=\${HOME}"
     ];
+    restart = "unless-stopped";
+  };
 
+  chainseekd-service = dev-service // {
     command = [
       "/exec/run-chainseekd"
       "--testnet-magic"
@@ -74,14 +75,22 @@ let
       "--host"
       "0.0.0.0"
     ];
-
     ports = map toString [
       3715
       3716
       3720
     ];
-
-    restart = "unless-stopped";
+    healthcheck = {
+      test = "netstat -tulpn | grep LISTEN | grep 3715";
+      interval = "5s";
+      timeout = "5s";
+      retries = 30;
+    };
+    depends_on = {
+      postgres = {
+        condition = "service_healthy";
+      };
+    };
   };
 
   spec = {
@@ -130,17 +139,12 @@ let
 
     volumes.postgres = null;
 
-    # TODO: Multiple networks on same pq or multiple pqs
     # TODO: ensure sqitch
-    services.chainseekd-preprod = chainseekd-service networks.preprod;
+    services.chainseekd = chainseekd-service;
 
-    services.node-preprod = node-service networks.preprod;
-    volumes.shared-preprod = null;
-    volumes.node-preprod-db = null;
-
-    services.node-preview = node-service networks.preview;
-    volumes.shared-preview = null;
-    volumes.node-preview-db = null;
+    services.node = node-service;
+    volumes.shared = null;
+    volumes.node-db = null;
   };
 in
 writeText "compose.yaml" (builtins.toJSON spec)
