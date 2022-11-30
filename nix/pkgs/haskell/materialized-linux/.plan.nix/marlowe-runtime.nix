@@ -100,8 +100,10 @@
           "Language/Marlowe/Runtime/Plutus/V2/Scripts/MarloweV1/RoleTokensPolicy"
           "Language/Marlowe/Runtime/Plutus/V2/Scripts/MarloweV1/RoleTokensPolicy/Types"
           "Language/Marlowe/Runtime/Plutus/V2/Scripts"
+          "Language/Marlowe/Runtime/Transaction"
           "Language/Marlowe/Runtime/Transaction/Api"
           "Language/Marlowe/Runtime/Transaction/BuildConstraints"
+          "Language/Marlowe/Runtime/Transaction/Chain"
           "Language/Marlowe/Runtime/Transaction/Constraints"
           "Language/Marlowe/Runtime/Transaction/Query"
           "Language/Marlowe/Runtime/Transaction/Server"
@@ -425,6 +427,8 @@
             (hsPkgs."marlowe-protocols-test" or (errorHandler.buildDepError "marlowe-protocols-test"))
             (hsPkgs."marlowe-runtime" or (errorHandler.buildDepError "marlowe-runtime"))
             (hsPkgs."marlowe-test" or (errorHandler.buildDepError "marlowe-test"))
+            (hsPkgs."ouroboros-consensus" or (errorHandler.buildDepError "ouroboros-consensus"))
+            (hsPkgs."ouroboros-network" or (errorHandler.buildDepError "ouroboros-network"))
             (hsPkgs."plutus-tx" or (errorHandler.buildDepError "plutus-tx"))
             (hsPkgs."plutus-ledger-api" or (errorHandler.buildDepError "plutus-ledger-api"))
             (hsPkgs."QuickCheck" or (errorHandler.buildDepError "QuickCheck"))
