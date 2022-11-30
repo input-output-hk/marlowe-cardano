@@ -469,6 +469,8 @@ test-suite marlowe-runtime-test
     , marlowe-protocols-test
     , marlowe-runtime
     , marlowe-test
+    , ouroboros-consensus
+    , ouroboros-network
     , plutus-tx
     , plutus-ledger-api
     , QuickCheck

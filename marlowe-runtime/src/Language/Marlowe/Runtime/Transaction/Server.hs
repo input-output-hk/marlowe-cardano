@@ -98,7 +98,6 @@ import Network.Protocol.Job.Server
 import Ouroboros.Consensus.BlockchainTime (SystemStart)
 import System.Exit (die)
 import System.IO (hPutStrLn, stderr)
-import Unsafe.Coerce (unsafeCoerce)
 
 type RunTransactionServer m = RunServer m (JobServer MarloweTxCommand)
 
@@ -200,7 +199,7 @@ mkWorker WorkerDependencies{..} =
             ApplyInputs version addresses contractId invalidBefore invalidHereafter redeemer ->
               withMarloweVersion version $ execApplyInputs
                 getTip
-                (unsafeCoerce systemStart) -- TODO fix this when the imports are not messed up anymore
+                systemStart
                 eraHistory
                 solveConstraints
                 loadWalletContext

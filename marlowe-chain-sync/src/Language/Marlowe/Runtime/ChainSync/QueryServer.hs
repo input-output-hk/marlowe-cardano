@@ -24,7 +24,7 @@ import Cardano.Api
 import qualified Cardano.Api as Cardano
 import Control.Concurrent.Component
 import Control.Monad.Trans.Except (ExceptT(ExceptT), except, runExceptT, throwE, withExceptT)
-import Data.Bifunctor (bimap, first)
+import Data.Bifunctor (first)
 import Data.Void (Void, absurd)
 import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncQuery(..), SlotConfig(..))
 import qualified Language.Marlowe.Runtime.ChainSync.Database as Database
@@ -33,7 +33,6 @@ import Network.Protocol.Query.Server (QueryServer(..), ServerStInit(..), ServerS
 import Network.Protocol.Query.Types (StNextKind(..))
 import Ouroboros.Network.Protocol.LocalStateQuery.Type (AcquireFailure)
 import System.IO (hPutStrLn, stderr)
-import Unsafe.Coerce (unsafeCoerce)
 
 type RunQueryServer m = RunServer m (QueryServer ChainSyncQuery)
 
@@ -78,7 +77,7 @@ worker = component_ \WorkerDependencies{..} -> do
       GetNetworkId -> queryGenesisParameters protocolParamNetworkId
       GetProtocolParameters -> toServerStNext <$> queryShelley (const QueryProtocolParameters)
       GetSystemStart ->
-        toServerStNext . bimap (const ()) unsafeCoerce <$> queryLocalNodeState Nothing QuerySystemStart
+        toServerStNext . first (const ()) <$> queryLocalNodeState Nothing QuerySystemStart
       GetEraHistory ->
         toServerStNext . first (const ()) <$> queryLocalNodeState Nothing (QueryEraHistory CardanoModeIsMultiEra)
       GetUTxOs utxosQuery -> do

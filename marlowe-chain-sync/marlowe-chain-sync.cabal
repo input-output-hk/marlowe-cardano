@@ -68,7 +68,6 @@ library
     Language.Marlowe.Runtime.ChainSync.Store
     Language.Marlowe.Runtime.ChainSync.Api
     Language.Marlowe.Runtime.Plutus.V2.Api
-    Language.Marlowe.Runtime.SystemStart
   other-modules:
   build-depends:
       base >= 4.9 && < 5
@@ -92,6 +91,7 @@ library
     , hasql-th
     , hasql-transaction
     , marlowe-protocols
+    , ouroboros-consensus
     , ouroboros-consensus-shelley
     , ouroboros-network
     , parallel

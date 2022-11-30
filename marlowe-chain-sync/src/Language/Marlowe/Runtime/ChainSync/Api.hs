@@ -149,7 +149,6 @@ import Data.Void (Void, absurd)
 import Data.Word (Word16, Word64)
 import GHC.Generics (Generic)
 import GHC.Natural (Natural)
-import Language.Marlowe.Runtime.SystemStart (SystemStart(..))
 import Network.Protocol.ChainSeek.Client
 import Network.Protocol.ChainSeek.Codec
 import Network.Protocol.ChainSeek.Server
@@ -158,6 +157,7 @@ import Network.Protocol.ChainSeek.Types
 import qualified Network.Protocol.Job.Types as Job
 import qualified Network.Protocol.Query.Types as Query
 import Network.TypedProtocol.Codec (Codec)
+import Ouroboros.Consensus.BlockchainTime (SystemStart(..))
 import qualified Plutus.V1.Ledger.Api as Plutus
 import Text.Read (readMaybe)
 
