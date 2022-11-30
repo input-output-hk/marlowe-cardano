@@ -25,6 +25,10 @@ let
     mkdir -p $out
     ln -sv ${run-sqitch}/bin/run-sqitch $out
     ln -sv ${run-local-service "chainseekd"}/bin/run-chainseekd $out
+    ln -sv ${run-local-service "marlowe-history"}/bin/run-marlowe-history $out
+    ln -sv ${run-local-service "marlowe-discovery"}/bin/run-marlowe-discovery $out
+    ln -sv ${run-local-service "marlowe-tx"}/bin/run-marlowe-tx $out
+    ln -sv ${run-local-service "marlowe-web-server"}/bin/run-marlowe-web-server $out
   '';
 
   node-service = {
@@ -93,6 +97,122 @@ let
     };
   };
 
+  history-service = dev-service // {
+    command = [
+      "/exec/run-marlowe-history"
+      "--chain-seek-host"
+      "chainseekd"
+      "--host"
+      "0.0.0.0"
+    ];
+    ports = map toString [
+      3717
+      3718
+      3719
+    ];
+    healthcheck = {
+      test = "netstat -tulpn | grep LISTEN | grep 3717";
+      interval = "5s";
+      timeout = "5s";
+      retries = 30;
+    };
+    depends_on = {
+      chainseekd = {
+        condition = "service_healthy";
+      };
+    };
+  };
+
+  discovery-service = dev-service // {
+    command = [
+      "/exec/run-marlowe-discovery"
+      "--chain-seek-host"
+      "chainseekd"
+      "--host"
+      "0.0.0.0"
+    ];
+    ports = map toString [
+      3721
+      3722
+    ];
+    healthcheck = {
+      test = "netstat -tulpn | grep LISTEN | grep 3721";
+      interval = "5s";
+      timeout = "5s";
+      retries = 30;
+    };
+    depends_on = {
+      chainseekd = {
+        condition = "service_healthy";
+      };
+      marlowe-history = {
+        condition = "service_healthy";
+      };
+    };
+  };
+
+  tx-service = dev-service // {
+    command = [
+      "/exec/run-marlowe-tx"
+      "--chain-seek-host"
+      "chainseekd"
+      "--history-host"
+      "marlowe-history"
+      "--host"
+      "0.0.0.0"
+    ];
+    ports = map toString [
+      3723
+    ];
+    healthcheck = {
+      test = "netstat -tulpn | grep LISTEN | grep 3723";
+      interval = "5s";
+      timeout = "5s";
+      retries = 30;
+    };
+    depends_on = {
+      chainseekd = {
+        condition = "service_healthy";
+      };
+      marlowe-history = {
+        condition = "service_healthy";
+      };
+    };
+  };
+
+  web-service = dev-service // {
+    command = [
+      "/exec/run-marlowe-web-server"
+      "--history-host"
+      "marlowe-history"
+      "--discovery-host"
+      "marlowe-discovery"
+      "--tx-host"
+      "marlowe-tx"
+      "--enable-open-api"
+    ];
+    ports = map toString [
+      8080
+    ];
+    healthcheck = {
+      test = "netstat -tulpn | grep LISTEN | grep 8080";
+      interval = "5s";
+      timeout = "5s";
+      retries = 30;
+    };
+    depends_on = {
+      marlowe-history = {
+        condition = "service_healthy";
+      };
+      marlowe-discovery = {
+        condition = "service_healthy";
+      };
+      marlowe-tx = {
+        condition = "service_healthy";
+      };
+    };
+  };
+
   spec = {
     services.postgres = {
       image = "postgres:11.5-alpine";
@@ -141,6 +261,10 @@ let
 
     # TODO: ensure sqitch
     services.chainseekd = chainseekd-service;
+    services.marlowe-history = history-service;
+    services.marlowe-discovery = discovery-service;
+    services.marlowe-tx = tx-service;
+    services.web = web-service;
 
     services.node = node-service;
     volumes.shared = null;
