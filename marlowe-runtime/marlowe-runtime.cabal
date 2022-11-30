@@ -94,8 +94,10 @@ library
     Language.Marlowe.Runtime.Plutus.V2.Scripts.MarloweV1.RoleTokensPolicy
     Language.Marlowe.Runtime.Plutus.V2.Scripts.MarloweV1.RoleTokensPolicy.Types
     Language.Marlowe.Runtime.Plutus.V2.Scripts
+    Language.Marlowe.Runtime.Transaction
     Language.Marlowe.Runtime.Transaction.Api
     Language.Marlowe.Runtime.Transaction.BuildConstraints
+    Language.Marlowe.Runtime.Transaction.Chain
     Language.Marlowe.Runtime.Transaction.Constraints
     Language.Marlowe.Runtime.Transaction.Query
     Language.Marlowe.Runtime.Transaction.Server

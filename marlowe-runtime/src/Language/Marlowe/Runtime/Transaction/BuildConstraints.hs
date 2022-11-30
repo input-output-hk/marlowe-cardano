@@ -15,7 +15,7 @@ import qualified Cardano.Ledger.BaseTypes as CL (Network(..))
 import Control.Arrow (Arrow((***)))
 import Control.Category ((>>>))
 import Control.Error (note)
-import Control.Monad ((>=>))
+import Control.Monad (unless, (>=>))
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Writer (WriterT(runWriterT), tell)
 import Data.Bifunctor (first)
@@ -34,7 +34,8 @@ import GHC.Natural (Natural)
 import qualified Language.Marlowe.Core.V1.Semantics as V1
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
 import qualified Language.Marlowe.Core.V1.Semantics.Types.Address as V1
-import Language.Marlowe.Runtime.Cardano.Api (plutusScriptHash, toCardanoAddressAny, toCardanoPlutusScript)
+import Language.Marlowe.Runtime.Cardano.Api
+  (fromCardanoSlotNo, plutusScriptHash, toCardanoAddressAny, toCardanoPlutusScript, toCardanoSlotNo)
 import Language.Marlowe.Runtime.ChainSync.Api
   ( Address(..)
   , AssetId(..)
@@ -44,6 +45,7 @@ import Language.Marlowe.Runtime.ChainSync.Api
   , PaymentKeyHash(..)
   , PolicyId(..)
   , ScriptHash(..)
+  , SlotNo
   , TokenName(..)
   , TransactionMetadata(..)
   , TransactionOutput(..)
@@ -258,15 +260,16 @@ buildApplyInputsConstraints
   -> EraHistory CardanoMode -- ^ The era history for converting times to slots.
   -> MarloweVersion v -- ^ The Marlowe version to build the transaction for.
   -> TransactionScriptOutput v -- ^ The previous script output for the contract
-  -> UTCTime -- ^ The minimum bound of the validity interval (inclusive).
+  -> SlotNo -- ^ The current tip slot
+  -> Maybe UTCTime -- ^ The minimum bound of the validity interval (inclusive).
   -> Maybe UTCTime -- ^ The maximum bound of the validity interval (exclusive).
                    -- If not specified, this is computed from the the timeouts
                    -- in the contract.
   -> Redeemer v -- ^ The inputs to apply to the contract.
   -> Either (ApplyInputsError v) (ApplyResults v, TxConstraints v)
-buildApplyInputsConstraints systemStart eraHistory version marloweOutput invalidBefore invalidHereafter redeemer =
+buildApplyInputsConstraints systemStart eraHistory version marloweOutput tipSlot invalidBefore invalidHereafter redeemer =
   case version of
-    MarloweV1 -> buildApplyInputsConstraintsV1 systemStart eraHistory marloweOutput invalidBefore invalidHereafter redeemer
+    MarloweV1 -> buildApplyInputsConstraintsV1 systemStart eraHistory marloweOutput tipSlot invalidBefore invalidHereafter redeemer
 
 -- | Creates a set of Tx constraints that are used to build a transaction that
 -- applies an input to a contract.
@@ -274,11 +277,12 @@ buildApplyInputsConstraintsV1
   :: SystemStart
   -> EraHistory CardanoMode -- ^ The era history for converting times to slots.
   -> TransactionScriptOutput 'V1 -- ^ The previous script output for the contract with raw TxOut.
-  -> UTCTime -- ^ The minimum bound of the validity interval (inclusive).
+  -> SlotNo
+  -> Maybe UTCTime -- ^ The minimum bound of the validity interval (inclusive).
   -> Maybe UTCTime -- ^ The maximum bound of the validity interval (exclusive).
   -> Redeemer 'V1 -- ^ The inputs to apply to the contract.
   -> Either (ApplyInputsError 'V1) (ApplyResults 'V1, TxConstraints 'V1)
-buildApplyInputsConstraintsV1 systemStart eraHistory marloweOutput invalidBefore invalidHereafter redeemer = runWriterT do
+buildApplyInputsConstraintsV1 systemStart eraHistory marloweOutput tipSlot invalidBefore invalidHereafter redeemer = runWriterT do
   let
     TransactionScriptOutput _ _ _ datum = marloweOutput
     V1.MarloweData params state contract = datum
@@ -287,7 +291,11 @@ buildApplyInputsConstraintsV1 systemStart eraHistory marloweOutput invalidBefore
     requiredParties = Set.fromList $ for redeemer $ marloweInputParty >>> maybeToList
     roleAssetId = toAssetId currencySymbol
 
-  invalidBefore' <- lift $ utcTimeToSlotNo invalidBefore
+    tipSlot' = toCardanoSlotNo tipSlot
+
+  invalidBefore' <- lift $ maybe (pure tipSlot') utcTimeToSlotNo invalidBefore
+
+  lift $ unless (invalidBefore' <= tipSlot') $ Left $ ValidityLowerBoundTooHigh tipSlot $ fromCardanoSlotNo invalidBefore'
 
   invalidHereafter' <- lift $ do
     ib <- note (ApplyInputsConstraintsBuildupFailed UnableToDetermineTransactionTimeout) $ invalidHereafter <|> nextMarloweTimeout contract
