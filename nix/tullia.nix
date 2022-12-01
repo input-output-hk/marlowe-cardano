@@ -17,22 +17,25 @@ let
   repository = "input-output-hk/marlowe-cardano";
   ciTaskTopAttr = "ciJobs";
 
-in rec {
+in
+rec {
 
-  tasks.ci = {config, lib, ...}: {
-      preset = {
-        nix.enable = true;
+  tasks.ci = { config, lib, ... }: {
+    preset = {
+      nix.enable = true;
 
-        github.status = {
-          enable = config.actionRun.facts != {};
-          inherit repository;
-          revision = config.preset.github.lib.readRevision ciInputName null;
-        };
+      github.status = {
+        enable = config.actionRun.facts != { };
+        inherit repository;
+        revision = config.preset.github.lib.readRevision ciInputName null;
       };
+    };
 
-      command.text = let
+    command.text =
+      let
         flakeUrl = ''github:${repository}/"$(${lib.escapeShellArg config.preset.github.status.revision})"'';
-      in config.preset.github.status.lib.reportBulk {
+      in
+      config.preset.github.status.lib.reportBulk {
         bulk.text = ''
           echo '["x86_64-linux", "x86_64-darwin"]' | nix-systems -i
         '';
@@ -40,14 +43,14 @@ in rec {
         skippedDescription = lib.escapeShellArg "No nix builder available for this platform";
       };
 
-      # some hydra jobs run NixOS tests
-      env.NIX_CONFIG = ''
-        extra-system-features = kvm
-      '';
+    # some hydra jobs run NixOS tests
+    env.NIX_CONFIG = ''
+      extra-system-features = kvm
+    '';
 
-      memory = 1024 * 32;
-      nomad.resources.cpu = 10000;
-    };
+    memory = 1024 * 32;
+    nomad.resources.cpu = 10000;
+  };
 
   actions = {
     "marlowe-cardano/ci" = {
