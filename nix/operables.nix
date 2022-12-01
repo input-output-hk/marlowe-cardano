@@ -1,15 +1,32 @@
 { inputs }:
 let
-  inherit (inputs) std nixpkgs self;
+  inherit (inputs) self std nixpkgs bitte-cells;
   inherit (self) packages;
   inherit (nixpkgs.legacyPackages) sqitchPg;
+  inherit (inputs.bitte-cells._utils.packages) srvaddr;
+
+  # Ensure this path only changes when sqitch.plan file is updated
+  sqitch-plan = (builtins.path {
+    path = self;
+    name = "marlowe-chain-sync-sqitch-plan";
+    filter = path: type:
+      path == "${self}/marlowe-chain-sync" ||
+      path == "${self}/marlowe-chain-sync/sqitch.plan";
+  }) + "/marlowe-chain-sync/sqitch.plan";
 in {
   chainseekd = std.lib.ops.mkOperable {
     package = packages.chainseekd;
-    runtimeInputs = [ sqitchPg ];
+    runtimeInputs = [ sqitchPg srvaddr ];
     runtimeScript = ''
+      if [ -n "''${MASTER_REPLICA_SRV_DNS:-}" ]; then
+        # Find DB_HOST when running on bitte cluster with patroni
+        eval "$(srvaddr -env PSQL="$MASTER_REPLICA_SRV_DNS")"
+        # produces: PSQL_ADDR0=domain:port; PSQL_HOST0=domain; PSQL_PORT0=port
+        DB_HOST=$PSQL_ADDR0
+      fi
+
       DATABASE_URI=postgresql://$DB_USER:$DB_PASS@$DB_HOST/$DB_NAME
-      sqitch --target "$DATABASE_URI" --plan-file ${self}/marlowe-chain-sync/sqitch.plan
+      sqitch deploy --target "$DATABASE_URI" --plan-file ${sqitch-plan}
       ${packages.chainseekd}/bin/chainseekd \
         --host "$HOST" \
         --port-number "$PORT" \

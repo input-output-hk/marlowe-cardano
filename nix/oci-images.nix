@@ -4,7 +4,7 @@ let
   inherit (self) operables;
 
   mkImage = name: std.lib.ops.mkStandardOCI {
-    name = "registry.ci.iog.io/dapps-world-${name}";
+    name = "docker.com/inputoutput/${name}";
     operable = operables.${name};
     debug = true;
   };
