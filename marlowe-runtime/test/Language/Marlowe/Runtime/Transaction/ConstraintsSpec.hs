@@ -186,6 +186,35 @@ spec = do
             else expectationFailure $ unlines $ "Minimum UTxO requirements not met:" : errors
         Left (msgFromAdjustment :: ConstraintError 'V1) -> expectationFailure $ show msgFromAdjustment
 
+  describe "selectCoins" do
+    focus $ prop "added inputs satisfy min utxo" \(SomeTxConstraints marloweVersion constraints) -> do
+      protocol <- hedgehog genProtocolParameters
+      marloweContext <- genMarloweContext marloweVersion constraints
+      walletContext <- genWalletContext marloweVersion constraints
+
+      let
+        valueMeetsMinimumReq :: TxOut CtxTx BabbageEra -> Maybe String
+        valueMeetsMinimumReq txout@(TxOut _ txOrigValue _ _) =
+          case calculateMinimumUTxO ShelleyBasedEraBabbage txout protocolTestnet of
+            Right minValueFromApi ->
+              if origAda >= (selectLovelace minValueFromApi)
+                then Nothing
+                else Just $ printf "Value %s is lower than minimum value %s"
+                      (show origAda) (show $ selectLovelace minValueFromApi)
+            Left exception -> Just $ show exception
+            where
+              origAda = selectLovelace . txOutValueToValue $ txOrigValue
+
+      txBodyContent <- hedgehog $ genTxBodyContent BabbageEra
+      pure $ case selectCoins protocol marloweVersion marloweContext walletContext txBodyContent of
+        Right newTxBodyContent -> do
+          let errors = catMaybes $ map valueMeetsMinimumReq $ txOuts newTxBodyContent
+          if null errors
+            then pure ()
+            else expectationFailure $ unlines $ "Minimum UTxO requirements not met:" : errors
+        Left msgFromAdjustment -> case marloweVersion of
+          MarloweV1 -> expectationFailure $ show msgFromAdjustment
+
 violations :: MarloweVersion v -> MarloweContext v -> Chain.UTxOs -> TxConstraints v -> TxBodyContent BuildTx BabbageEra -> [String]
 violations marloweVersion marloweContext utxos constraints txBodyContent = fold
   [ ("mustMintRoleToken: " <>) <$> mustMintRoleTokenViolations marloweVersion constraints txBodyContent
