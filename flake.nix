@@ -117,7 +117,7 @@
           supportedSystems = [ system ];
         };
       }
-      // tullia.fromSimple system (import ./nix/tullia.nix self system)
+      // tullia.fromSimple system (import ./nix/tullia.nix)
     )) // {
       hydraJobs = import ./hydra-jobs.nix {
         inherit inputs;
