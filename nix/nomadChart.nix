@@ -9,7 +9,6 @@ let
   ociNamer = oci: builtins.unsafeDiscardStringContext "${oci.imageName}:${oci.imageTag}";
 in
   {
-    environment,
     jobname ? "runtime",
     namespace,
     datacenters ? ["us-east-1" "eu-central-1" "eu-west-1"],
@@ -40,10 +39,10 @@ in
           #   attribute = "\${meta.cardano}";
           #   operator = "is_set";
           # }
-          {
-            operator = "distinct_hosts";
-            value = "true";
-          }
+          # {
+          #   operator = "distinct_hosts";
+          #   value = "true";
+          # }
         ];
         spread = [{attribute = "\${node.datacenter}";}];
         # ----------
@@ -136,19 +135,7 @@ in
 
                     template =
                        _utils.nomadFragments.workload-identity-vault {inherit vaultPkiPath;}
-                      ++ _utils.nomadFragments.workload-identity-vault-consul {inherit consulRolePath;}
-                      ++ [
-                        {
-                          change_mode = "restart";
-                          data = "{{- with secret \"kv/data/marlowe-runtime/${environment}\" }}{{ .Data.data.pgPass }}{{ end -}}";
-                          env = "DB_USER";
-                        }
-                        {
-                          change_mode = "restart";
-                          data = "{{- with secret \"kv/data/marlowe-runtime/${environment}\" }}{{ .Data.data.pgUser }}{{ end -}}";
-                          env = "DB_PASS";
-                        }
-                      ];
+                      ++ _utils.nomadFragments.workload-identity-vault-consul {inherit consulRolePath;};
 
                     config.image = ociNamer oci-images.chainseekd;
                     config.ports = ["http"];
@@ -171,6 +158,7 @@ in
                   };
                   marlowe-history = {
                     env = {
+                      HOST = "127.0.0.1";
                       PORT = 9080;
                       QUERY_PORT = 9081;
                       SYNC_PORT = 9082;
@@ -196,8 +184,9 @@ in
                   marlowe-discovery = {
                     env = {
                       HOST = "127.0.0.1";
-                      QUERY_PORT = 9081;
-                      SYNC_PORT = 9082;
+                      PORT = 10081;
+                      QUERY_PORT = 10082;
+                      SYNC_PORT = 10083;
                       CHAINSEEKD_HOST = "127.0.0.1";
                       CHAINSEEKD_PORT = chainseekd.env.PORT;
                       CHAINSEEKD_QUERY_PORT = chainseekd.env.QUERY_PORT;
@@ -220,14 +209,17 @@ in
                   marlowe-tx = {
                     env = {
                       HOST = "127.0.0.1";
-                      PORT = 10080;
+                      PORT = 11080;
                       CHAINSEEKD_HOST = "127.0.0.1";
                       CHAINSEEKD_PORT = chainseekd.env.PORT;
                       CHAINSEEKD_QUERY_PORT = chainseekd.env.QUERY_PORT;
                       CHAINSEEKD_COMMAND_PORT = chainseekd.env.JOB_PORT;
+                      HISTORY_HOST = "127.0.0.1";
+                      HISTORY_SYNC_PORT = marlowe-history.env.SYNC_PORT;
+
                     };
 
-                    config.image = ociNamer oci-images.marlowe-discovery;
+                    config.image = ociNamer oci-images.marlowe-tx;
                     config.ports = ["http"];
                     user = "0:0";
                     driver = "docker";

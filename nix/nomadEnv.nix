@@ -10,17 +10,16 @@ let
 
   mkRuntimeJob = environment:
     let
-      jobname = "runtime-${environment}";
+      jobname = "marlowe-runtime-${environment}";
     in
     data-merge.merge
       (
         self.nomadChart (
           {
             inherit jobname;
-            environment = environment;
             namespace = "marlowe";
             nodeClass = "marlowe";
-            domain = "marlowe-${jobname}.${baseDomain}";
+            domain = "${jobname}.${baseDomain}";
             scaling = 3;
           }
         )
@@ -31,29 +30,38 @@ let
             # env.ENVIRONMENT = "testnet";
             # env.DEBUG_SLEEP = 6000;
             env = {
-              LEDGER_SLOT = cardano.environments.${environment}.usePeersFromLedgerAfterSlot;
               ENVIRONMENT = environment;
-              DATA_DIR = "/persist/node-${environment}";
-              LOCAL_ROOTS_SRV_DNS = "_marlowe-${jobname}-node._tcp.service.consul";
+              DATA_DIR = "/persist/${jobname}";
+              LOCAL_ROOTS_SRV_DNS = "_${jobname}-node._tcp.service.consul";
               PUBLIC_ROOTS_SRV_DNS = "_${environment}-node._tcp.service.consul";
-            };
-            resources = {
-              memory = 10000;
             };
           };
           chainseekd = {
             env = {
               DB_NAME = "${environment}_chainseek";
-              GENESIS_CONFIG = "/persist/node-${environment}/config/custom/byron-genesis.json";
+              GENESIS_CONFIG = "/persist/${jobname}/config/custom/byron-genesis.json";
               GENESIS_HASH = cardano.environments.${environment}.nodeConfig.ByronGenesisHash;
-              DB_HOST = "_infra-database._master.service.us-east-1.consul";
+              MASTER_REPLICA_SRV_DNS = "_infra-database._master.service.us-east-1.consul";
             };
+            template = data-merge.append [
+              {
+                change_mode = "restart";
+                data = ''
+                  {{- with secret "kv/data/chainseek/${environment}" }}
+                  DB_USER={{ .Data.data.pgUser }}
+                  DB_PASS={{ .Data.data.pgPass }}
+                  {{ end -}}
+                '';
+                destination = "/secrets/db-secrets.env";
+                env = true;
+              }
+            ];
           };
         };
       };
 in
 {
-  runtime-preprod = mkRuntimeJob "preprod";
-  runtime-preview = mkRuntimeJob "preview";
-  runtime-mainnet = mkRuntimeJob "mainnet";
+  marlowe-runtime-preprod = mkRuntimeJob "preprod";
+  marlowe-runtime-preview = mkRuntimeJob "preview";
+  marlowe-runtime-mainnet = mkRuntimeJob "mainnet";
 }
