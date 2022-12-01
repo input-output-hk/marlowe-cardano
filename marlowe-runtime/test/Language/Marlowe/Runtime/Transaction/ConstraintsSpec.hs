@@ -28,6 +28,7 @@ import GHC.Word (Word64)
 import Gen.Cardano.Api.Metadata (genTxMetadataValue)
 import Gen.Cardano.Api.Typed
   ( genAddressByron
+  , genAddressInEra
   , genAddressShelley
   , genPlutusScript
   , genProtocolParameters
@@ -185,6 +186,75 @@ spec = do
             then pure ()
             else expectationFailure $ unlines $ "Minimum UTxO requirements not met:" : errors
         Left (msgFromAdjustment :: ConstraintError 'V1) -> expectationFailure $ show msgFromAdjustment
+
+  describe "selectCoins" do
+    focus $ prop "added inputs satisfy min utxo" \(SomeTxConstraints marloweVersion constraints) -> do
+      let
+        genAssets :: Gen Chain.Assets
+        genAssets  = do
+          lovelaceAmount <- (2_000_000 +) <$> suchThat arbitrary (> 0)
+          pure (Chain.Assets (fromCardanoLovelace $ Lovelace lovelaceAmount) $ Chain.Tokens Map.empty)
+        genUtxos :: Gen Chain.UTxOs
+        genUtxos = extra
+          where
+            extra = fold <$> listOf do
+              txOutRef <- genTxOutRef
+              -- txOut <- genTransactionOutput genAddress
+              stubAddress <- genAddress
+              assets <- genAssets
+              let
+                txOut = Chain.TransactionOutput
+                  stubAddress
+                  assets
+                  Nothing
+                  Nothing
+
+              pure $ Chain.UTxOs $ Map.singleton txOutRef txOut
+
+      protocol <- hedgehog genProtocolParameters
+      marloweContext <- genMarloweContext marloweVersion constraints
+      (utxos, txOutRefs) <- case marloweVersion of
+        MarloweV1 -> (,) <$> genUtxos <*> genTxOutRef
+
+      walletContext <- do
+        wc <- genWalletContext marloweVersion constraints
+        pure $ wc { availableUtxos = utxos, collateralUtxos = Set.singleton txOutRefs}
+
+      let
+        valueMeetsMinimumReq :: TxOut CtxTx BabbageEra -> Maybe String
+        valueMeetsMinimumReq txout@(TxOut _ txOrigValue _ _) =
+          case calculateMinimumUTxO ShelleyBasedEraBabbage txout protocolTestnet of
+            Right minValueFromApi ->
+              if origAda >= selectLovelace minValueFromApi
+                then Nothing
+                else Just $ printf "Value %s is lower than minimum value %s"
+                      (show origAda) (show $ selectLovelace minValueFromApi)
+            Left exception -> Just $ show exception
+            where
+              origAda = selectLovelace . txOutValueToValue $ txOrigValue
+
+      txBodyContent <- do
+        stubAddress <- hedgehog $ genAddressInEra BabbageEra
+        assets <- genAssets
+
+        txBC <- hedgehog $ genTxBodyContent BabbageEra
+        pure $ txBC { txOuts =
+          [ TxOut
+              stubAddress
+              assets
+              TxOutDatumNone
+              ReferenceScriptNone
+          ] }
+
+
+      pure $ case selectCoins protocol marloweVersion marloweContext walletContext txBodyContent of
+        Right newTxBodyContent -> do
+          let errors = catMaybes $ map valueMeetsMinimumReq $ txOuts newTxBodyContent
+          if null errors
+            then pure ()
+            else expectationFailure $ unlines $ "Minimum UTxO requirements not met:" : errors
+        Left msgFromAdjustment -> case marloweVersion of
+          MarloweV1 -> expectationFailure $ show msgFromAdjustment
 
 violations :: MarloweVersion v -> MarloweContext v -> Chain.UTxOs -> TxConstraints v -> TxBodyContent BuildTx BabbageEra -> [String]
 violations marloweVersion marloweContext utxos constraints txBodyContent = fold
