@@ -336,7 +336,13 @@ buildApplyInputsConstraintsV1 systemStart eraHistory marloweOutput tipSlot inval
 
   -- Apply inputs.
   let slotNoToPOSIXTime = fmap utcToPOSIXTime . slotStart
-  txInterval <- lift $ (,) <$> slotNoToPOSIXTime invalidBefore' <*> slotNoToPOSIXTime invalidHereafter'
+  txInterval <- lift $ (,)
+    <$> slotNoToPOSIXTime invalidBefore'
+    -- We subtract 1 here because invalidHereafter' is the first invalid slot.
+    -- However, the Marlowe Semantics time interval upper bound is the last
+    -- valid millisecond. So we subtract 1 millisecond from the start of the
+    -- first invalid slot to get the last millisecond in the last valid slot.
+    <*> (subtract 1 <$> slotNoToPOSIXTime invalidHereafter')
   let transactionInput = V1.TransactionInput { txInterval, txInputs = redeemer }
   (possibleContinuation, payments) <- case V1.computeTransaction transactionInput state contract of
      V1.Error err -> lift $ Left $ ApplyInputsConstraintsBuildupFailed (MarloweComputeTransactionFailed $ show err)
