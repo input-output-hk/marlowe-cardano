@@ -229,7 +229,7 @@ performMoveWithRollbackCheck :: Api.ChainPoint -> Api.Move err result -> Transac
 performMoveWithRollbackCheck point move = do
   tip <- getTip
   getRollbackPoint >>= \case
-    Nothing -> performMove move point >>= \case
+    Nothing -> performMove tip move point >>= \case
       MoveAbort err            -> pure $ Reject err tip
       MoveArrive point' result -> pure $ RollForward result point' tip
       MoveWait                 -> pure $ Wait tip
@@ -274,9 +274,9 @@ data PerformMoveResult err result
   | MoveAbort err
   | MoveArrive Api.BlockHeader result
 
-performMove :: Api.Move err result -> Api.ChainPoint -> Transaction (PerformMoveResult err result)
-performMove = \case
-  Api.Fork left right           -> performFork left right
+performMove :: Api.ChainPoint -> Api.Move err result -> Api.ChainPoint -> Transaction (PerformMoveResult err result)
+performMove tip = \case
+  Api.Fork left right           -> performFork tip left right
   Api.AdvanceSlots slots        -> performAdvanceSlots slots
   Api.AdvanceBlocks blocks      -> performAdvanceBlocks blocks
   Api.FindConsumingTx txOutRef  -> performFindConsumingTx txOutRef
@@ -284,11 +284,16 @@ performMove = \case
   Api.Intersect points          -> performIntersect points
   Api.FindConsumingTxs txOutRef -> performFindConsumingTxs txOutRef
   Api.FindTxsTo credentials     -> performFindTxsTo credentials
+  Api.AdvanceToTip              -> \point -> pure case tip of
+    Api.Genesis -> MoveWait
+    Api.At tipBlock
+      | point == tip -> MoveWait
+      | otherwise -> MoveArrive tipBlock ()
 
-performFork :: Api.Move err1 result1 -> Api.Move err2 result2 -> Api.ChainPoint -> Transaction (PerformMoveResult (These err1 err2) (These result1 result2))
-performFork left right point = do
-  leftMoveResult <- performMove left point
-  rightMoveResult <- performMove right point
+performFork :: Api.ChainPoint -> Api.Move err1 result1 -> Api.Move err2 result2 -> Api.ChainPoint -> Transaction (PerformMoveResult (These err1 err2) (These result1 result2))
+performFork tip left right point = do
+  leftMoveResult <- performMove tip left point
+  rightMoveResult <- performMove tip right point
   let
     alignResults leftHeader leftResult rightHeader rightResult = case compare leftHeader rightHeader of
       EQ -> MoveArrive leftHeader $ These leftResult rightResult
@@ -1116,7 +1121,7 @@ commitBlocks = CommitBlocks \blocks ->
           )
         , newTxs AS
           ( INSERT INTO chain.tx (id, blockId, slotNo, validityLowerBound, validityUpperBound, metadataKey1564, isValid)
-            SELECT tx.id, tx.blockId, tx.slotNo, tx.validityUpperBound, tx.validityUpperBound, tx.metadataKey1564, tx.isValid
+            SELECT tx.id, tx.blockId, tx.slotNo, tx.validityLowerBound, tx.validityUpperBound, tx.metadataKey1564, tx.isValid
             FROM   txInputs AS tx
           )
         , txOutInputs (txId, txIx, slotNo, address, lovelace, datumHash, datumBytes, isCollateral) AS

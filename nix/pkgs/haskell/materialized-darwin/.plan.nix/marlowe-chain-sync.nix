@@ -54,6 +54,7 @@
           (hsPkgs."hasql-th" or (errorHandler.buildDepError "hasql-th"))
           (hsPkgs."hasql-transaction" or (errorHandler.buildDepError "hasql-transaction"))
           (hsPkgs."marlowe-protocols" or (errorHandler.buildDepError "marlowe-protocols"))
+          (hsPkgs."ouroboros-consensus" or (errorHandler.buildDepError "ouroboros-consensus"))
           (hsPkgs."ouroboros-consensus-shelley" or (errorHandler.buildDepError "ouroboros-consensus-shelley"))
           (hsPkgs."ouroboros-network" or (errorHandler.buildDepError "ouroboros-network"))
           (hsPkgs."parallel" or (errorHandler.buildDepError "parallel"))
@@ -87,7 +88,6 @@
           "Language/Marlowe/Runtime/ChainSync/Store"
           "Language/Marlowe/Runtime/ChainSync/Api"
           "Language/Marlowe/Runtime/Plutus/V2/Api"
-          "Language/Marlowe/Runtime/SystemStart"
           ];
         hsSourceDirs = [ "src" ];
         };

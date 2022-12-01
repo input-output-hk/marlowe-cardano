@@ -8,21 +8,23 @@ module Language.Marlowe.Runtime.History
   where
 
 import Control.Concurrent.Component
-import Language.Marlowe.Runtime.ChainSync.Api (RuntimeChainSeekClient, SlotConfig)
+import Data.Void (Void)
+import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncQuery, RuntimeChainSeekClient)
 import Language.Marlowe.Runtime.History.FollowerSupervisor
 import Language.Marlowe.Runtime.History.JobServer
 import Language.Marlowe.Runtime.History.QueryServer
 import Language.Marlowe.Runtime.History.Store
   (HistoryQueries, HistoryStore(..), HistoryStoreDependencies(..), historyStore)
 import Language.Marlowe.Runtime.History.SyncServer (HistorySyncServerDependencies(..), RunSyncServer, historySyncServer)
+import Network.Protocol.Driver (RunClient)
 import Numeric.Natural (Natural)
 
 data HistoryDependencies = HistoryDependencies
   { acceptRunJobServer   :: IO (RunJobServer IO)
   , acceptRunQueryServer :: IO (RunQueryServer IO)
-  , connectToChainSeek   :: forall a. RuntimeChainSeekClient IO a -> IO a
+  , connectToChainSeek   :: RunClient IO RuntimeChainSeekClient
   , followerPageSize     :: Natural
-  , slotConfig           :: SlotConfig
+  , queryChainSeek       :: forall e a. ChainSyncQuery Void e a -> IO (Either e a)
   , securityParameter    :: Int
   , acceptRunSyncServer  :: IO (RunSyncServer IO)
   , historyQueries       :: HistoryQueries IO

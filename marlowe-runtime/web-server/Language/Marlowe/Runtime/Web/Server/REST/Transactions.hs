@@ -157,6 +157,8 @@ post eb contractId req@PostTransactionsRequest{..} changeAddressDTO mAddresses m
         ApplyInputsConstraintsBuildupFailed (MarloweComputeTransactionFailed _) -> throwError err400
         ApplyInputsConstraintsBuildupFailed UnableToDetermineTransactionTimeout -> throwError err400
         SlotConversionFailed _ -> throwError err400
+        TipAtGenesis -> throwError err500
+        ValidityLowerBoundTooHigh _ _ -> throwError err400
     Right InputsApplied{txBody} -> do
       let txBody' = toDTO txBody
       let txId = toDTO $ fromCardanoTxId $ getTxId txBody

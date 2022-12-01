@@ -54,7 +54,7 @@ import Data.Bifunctor (first)
 import Data.List (find)
 import qualified Data.Map as Map
 import Data.Maybe (fromJust)
-import Data.Time (UTCTime, getCurrentTime)
+import Data.Time (UTCTime)
 import Data.Void (Void)
 import Language.Marlowe.Runtime.Cardano.Api
   (fromCardanoAddressInEra, fromCardanoTxId, toCardanoPaymentCredential, toCardanoStakeCredential)
@@ -98,7 +98,6 @@ import Network.Protocol.Job.Server
 import Ouroboros.Consensus.BlockchainTime (SystemStart)
 import System.Exit (die)
 import System.IO (hPutStrLn, stderr)
-import Unsafe.Coerce (unsafeCoerce)
 
 type RunTransactionServer m = RunServer m (JobServer MarloweTxCommand)
 
@@ -109,6 +108,7 @@ data TransactionServerDependencies = TransactionServerDependencies
   , loadMarloweContext :: LoadMarloweContext
   , logAction :: AppLogAction
   , queryChainSync :: forall e a. ChainSyncQuery Void e a -> IO a
+  , getTip :: STM Chain.ChainPoint
   }
 
 transactionServer :: Component IO TransactionServerDependencies ()
@@ -136,6 +136,7 @@ data WorkerDependencies = WorkerDependencies
   , loadMarloweContext :: LoadMarloweContext
   , logAction :: AppLogAction
   , queryChainSync :: forall e a. ChainSyncQuery Void e a -> IO a
+  , getTip :: STM Chain.ChainPoint
   }
 
 type AppLogAction = Colog.LogAction IO Colog.Message
@@ -197,7 +198,8 @@ mkWorker WorkerDependencies{..} =
                 contract
             ApplyInputs version addresses contractId invalidBefore invalidHereafter redeemer ->
               withMarloweVersion version $ execApplyInputs
-                (unsafeCoerce systemStart) -- TODO fix this when the imports are not messed up anymore
+                getTip
+                systemStart
                 eraHistory
                 solveConstraints
                 loadWalletContext
@@ -305,7 +307,8 @@ findMarloweOutput address = \case
       address == fromCardanoAddressInEra (cardanoEra @era) address'
 
 execApplyInputs
-  :: SystemStart
+  :: STM Chain.ChainPoint
+  -> SystemStart
   -> EraHistory CardanoMode
   -> SolveConstraints
   -> LoadWalletContext
@@ -318,6 +321,7 @@ execApplyInputs
   -> Redeemer v
   -> WorkerM (ServerStCmd MarloweTxCommand Void (ApplyInputsError v) (InputsApplied BabbageEra v) WorkerM ())
 execApplyInputs
+  getTip
   systemStart
   eraHistory
   solveConstraints
@@ -332,7 +336,10 @@ execApplyInputs
     marloweContext@MarloweContext{..} <- withExceptT ApplyInputsLoadMarloweContextFailed
       $ ExceptT
       $ liftIO $ loadMarloweContext version contractId
-    invalidBefore'' <- liftIO $ maybe getCurrentTime pure invalidBefore'
+    tip <- liftIO $ atomically getTip
+    tipSlot <- except case tip of
+      Chain.Genesis -> Left TipAtGenesis
+      Chain.At Chain.BlockHeader{..} -> Right slotNo
     scriptOutput' <- except $ maybe (Left ScriptOutputNotFound) Right scriptOutput
     ((invalidBefore, invalidHereafter, mAssetsAndDatum), constraints) <-
       except $ buildApplyInputsConstraints
@@ -340,7 +347,8 @@ execApplyInputs
         eraHistory
         version
         scriptOutput'
-        invalidBefore''
+        tipSlot
+        invalidBefore'
         invalidHereafter'
         inputs
     walletContext <- liftIO $ loadWalletContext addresses

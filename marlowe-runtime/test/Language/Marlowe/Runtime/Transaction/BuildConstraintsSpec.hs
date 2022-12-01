@@ -41,7 +41,7 @@ import Language.Marlowe.Runtime.Transaction.Constraints
 import qualified Language.Marlowe.Runtime.Transaction.Constraints as TxConstraints
 import Language.Marlowe.Runtime.Transaction.ConstraintsSpec (genRole, genTransactionOutput, genTxOutRef, shrinkAssets)
 import Spec.Marlowe.Semantics.Arbitrary ()
-import Test.Hspec (Spec, focus, shouldBe)
+import Test.Hspec (Spec, shouldBe)
 import qualified Test.Hspec as Hspec
 import qualified Test.Hspec.QuickCheck as Hspec.QuickCheck
 import Test.QuickCheck (Arbitrary(..), Property, discard, genericShrink, listOf1, oneof, suchThat, (===))
@@ -58,7 +58,7 @@ spec = do
   withdrawSpec
 
 createSpec :: Spec
-createSpec = focus $ Hspec.describe "buildCreateConstraints" do
+createSpec = Hspec.describe "buildCreateConstraints" do
   emptyStateProp "writes state with empty choices to marlowe output" $ const Semantics.choices
   emptyStateProp "writes state with empty bound values to marlowe output" $ const Semantics.boundValues
   emptyStateProp "writes state with min time 0 to marlowe output" $ const Semantics.minTime
