@@ -35,9 +35,6 @@ let
   haskell-language-server-wrapper = pkgs.writeShellScriptBin "haskell-language-server-wrapper" ''${haskell-language-server}/bin/haskell-language-server "$@"'';
   hie-bios = exeFromExtras "hie-bios";
 
-  # These are needed to pull the cardano-cli and cardano-node in the nix develop shell.
-  inherit (haskell.project.hsPkgs.cardano-cli.components.exes) cardano-cli;
-  inherit (haskell.project.hsPkgs.cardano-node.components.exes) cardano-node;
   inherit (haskell.project.hsPkgs.cardano-addresses-cli.components.exes) cardano-address;
 
   #
@@ -94,7 +91,7 @@ in
 {
   inherit sphinx-markdown-tables sphinxemoji sphinxcontrib-haddock;
   inherit nix-pre-commit-hooks;
-  inherit haskell cabal-install stylish-haskell hlint haskell-language-server haskell-language-server-wrapper hie-bios cardano-address cardano-cli cardano-node;
+  inherit haskell cabal-install stylish-haskell hlint haskell-language-server haskell-language-server-wrapper hie-bios cardano-address;
   inherit fixStylishHaskell writeShellScriptBinInRepoRoot;
   inherit plutus-haddock-combined;
   inherit lib;

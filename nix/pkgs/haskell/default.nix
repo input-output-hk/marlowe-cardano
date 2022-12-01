@@ -43,6 +43,7 @@ let
       inherit deferPluginErrors;
       inherit actus-tests;
       inherit source-repo-override;
+      inherit (inputs) CHaP;
     };
   project = baseProject { deferPluginErrors = false; };
   # The same as above, but this time with we defer plugin errors so that we

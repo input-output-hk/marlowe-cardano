@@ -36,6 +36,10 @@
     cardano-world = {
       url = "github:input-output-hk/cardano-world";
     };
+    CHaP = {
+      url = "github:input-output-hk/cardano-haskell-packages?ref=repo";
+      flake = false;
+    };
     plutus-core = {
       url = "github:input-output-hk/plutus";
       flake = false;

@@ -17,6 +17,7 @@
 , actus-tests
 , source-repo-override
 , evalSystem
+, CHaP
 }:
 let
   r-packages = with rPackages; [ R tidyverse dplyr stringr MASS plotly shiny shinyjs purrr ];
@@ -35,6 +36,7 @@ let
       else builtins.error "Don't have materialized files for this platform";
     # If true, we check that the generated files are correct. Set in the CI so we don't make mistakes.
     inherit checkMaterialization source-repo-override;
+    inputMap = { "https://input-output-hk.github.io/cardano-haskell-packages" = CHaP; };
     modules = [
       ({ pkgs, ... }: lib.mkIf (pkgs.stdenv.hostPlatform != pkgs.stdenv.buildPlatform) {
         packages = {
@@ -45,9 +47,6 @@ let
           marlowe-cli.package.buildable = false;
           plutus-ledger.package.buildable = false;
           plutus-tx-plugin.package.buildable = false;
-          # These need R
-          plutus-core.components.benchmarks.cost-model-test.buildable = lib.mkForce false;
-          plutus-core.components.benchmarks.update-cost-model.buildable = lib.mkForce false;
         };
       })
       ({ pkgs, config, ... }: {
@@ -135,23 +134,20 @@ let
               platforms = lib.platforms.linux;
             };
 
-            plutus-pab.components.tests.plutus-pab-test-full-long-running = {
-              platforms = lib.platforms.linux;
-            };
-
             # Broken due to warnings, unclear why the setting that fixes this for the build doesn't work here.
             iohk-monitoring.doHaddock = false;
 
             # Werror everything. This is a pain, see https://github.com/input-output-hk/haskell.nix/issues/519
-            plutus-core.ghcOptions = [ "-Werror" "-Wno-unused-packages" "-Wno-name-shadowing" ];
+            async-components.ghcOptions = [ "-Werror" ];
             marlowe.ghcOptions = [ "-Werror" ];
-            marlowe-symbolic.ghcOptions = [ "-Werror" ];
             marlowe-actus.ghcOptions = [ "-Werror" ];
-            marlowe-contract.ghcOptions = [ "-Werror" ];
-            plutus-ledger.ghcOptions = [ "-Werror" ];
-            plutus-tx.ghcOptions = [ "-Werror" ];
-            plutus-tx-plugin.ghcOptions = [ "-Werror" ];
-            plutus-doc.ghcOptions = [ "-Werror" ];
+            marlowe-chain-sync.ghcOptions = [ "-Werror" ];
+            marlowe-cli.ghcOptions = [ "-Werror" ];
+            marlowe-contracts.ghcOptions = [ "-Werror" ];
+            marlowe-protocols.ghcOptions = [ "-Werror" ];
+            marlowe-protocols-test.ghcOptions = [ "-Werror" ];
+            marlowe-runtime.ghcOptions = [ "-Werror" ];
+            marlowe-test.ghcOptions = [ "-Werror" ];
 
             # External package settings
 
