@@ -80,7 +80,7 @@ instance HasNamedLink CreateTxBody API "contract" where
 
 -- | /contracts/:contractId sup-API
 type ContractAPI = GetContractAPI
-              :<|> PutContractAPI
+              :<|> PutSignedTxAPI
               :<|> "transactions" :> TransactionsAPI
 
 -- | GET /contracts/:contractId sub-API
@@ -93,9 +93,6 @@ instance HasNamedLink ContractState API "transactions" where
     api
     (Proxy @("contracts" :> Capture "contractId" TxOutRef :> "transactions" :> GetTransactionsAPI))
     contractId
-
--- | PUT /contracts/:contractId sub-API
-type PutContractAPI = ReqBody '[JSON] TextEnvelope :> PutAccepted '[JSON] NoContent
 
 -- | /contracts/:contractId/transactions sup-API
 type TransactionsAPI = GetTransactionsAPI
@@ -140,11 +137,14 @@ instance HasNamedLink TxHeader API "transaction" where
 
 -- | /contracts/:contractId/transactions/:transactionId sup-API
 type TransactionAPI = GetTransactionAPI
+                 :<|> PutSignedTxAPI
 
 -- | GET /contracts/:contractId/transactions/:transactionId sub-API
 type GetTransactionAPI = Get '[JSON] GetTransactionResponse
 
 type GetTransactionResponse = WithLink "previous" (WithLink "next" Tx)
+
+type PutSignedTxAPI = ReqBody '[JSON] TextEnvelope :> PutAccepted '[JSON] NoContent
 
 instance HasNamedLink Tx API "previous" where
   namedLink _ _ Tx{..} = guard (inputUtxo /= contractId) $> safeLink

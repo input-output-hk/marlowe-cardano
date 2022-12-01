@@ -136,6 +136,7 @@ server = proc ServerDependencies{..} -> do
         , _createContract = createContract
         , _applyInputs = applyInputs
         , _submitContract = submitContract
+        , _submitTransaction = submitTransaction
         }
     , eventBackend
     , openAPIEnabled

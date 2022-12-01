@@ -9,7 +9,9 @@
 module Language.Marlowe.Runtime.Web.Server.REST.Transactions
   where
 
-import Cardano.Api (getTxId)
+import Cardano.Api (AsType(..), deserialiseFromTextEnvelope, getTxBody, getTxId)
+import qualified Cardano.Api.SerialiseTextEnvelope as Cardano
+import Control.Monad (unless)
 import Data.Foldable (traverse_)
 import Data.Maybe (fromMaybe)
 import qualified Data.Set as Set
@@ -22,11 +24,14 @@ import Language.Marlowe.Runtime.Transaction.Api
   , LoadMarloweContextError(..)
   , WalletAddresses(..)
   )
+import qualified Language.Marlowe.Runtime.Transaction.Api as Tx
 import Language.Marlowe.Runtime.Transaction.Constraints (ConstraintError(..))
-import Language.Marlowe.Runtime.Web
+import Language.Marlowe.Runtime.Web hiding (Unsigned)
 import Language.Marlowe.Runtime.Web.Server.DTO
 import Language.Marlowe.Runtime.Web.Server.HistoryClient (LoadTxError(..))
-import Language.Marlowe.Runtime.Web.Server.Monad (AppM, applyInputs, loadTransaction, loadTransactions)
+import Language.Marlowe.Runtime.Web.Server.Monad
+  (AppM, applyInputs, loadTransaction, loadTransactions, submitTransaction)
+import Language.Marlowe.Runtime.Web.Server.TxClient (TempTx(TempTx), TempTxStatus(..))
 import Observe.Event (EventBackend, addField, reference, withEvent)
 import Observe.Event.BackendModification (setAncestor)
 import Observe.Event.DSL (FieldSpec(..), SelectorSpec(..))
@@ -60,6 +65,12 @@ compile $ SelectorSpec "transactions"
       [ ["get", "one", "contract", "id"] ≔ ''TxOutRef
       , ["get", "tx", "id"] ≔ ''TxId
       , ["get", "result"] ≔ ''Tx
+      ]
+  , "put" ≔ FieldSpec "put"
+      [ ["put", "contract", "id"] ≔ ''TxOutRef
+      , ["put", "tx", "id"] ≔ ''TxId
+      , "body" ≔ ''Cardano.TextEnvelope
+      , "error" ≔ ''String
       ]
   ]
 
@@ -157,8 +168,16 @@ transactionServer
   :: EventBackend (AppM r) r TransactionsSelector
   -> TxOutRef
   -> TxId
+  -> ServerT TransactionAPI (AppM r)
+transactionServer eb contractId txId = getOne eb contractId txId
+                                  :<|> put eb contractId txId
+
+getOne
+  :: EventBackend (AppM r) r TransactionsSelector
+  -> TxOutRef
+  -> TxId
   -> AppM r GetTransactionResponse
-transactionServer eb contractId txId = withEvent eb GetOne \ev -> do
+getOne eb contractId txId = withEvent eb GetOne \ev -> do
   addField ev $ GetOneContractId contractId
   addField ev $ GetTxId txId
   contractId' <- fromDTOThrow err400 contractId
@@ -171,3 +190,28 @@ transactionServer eb contractId txId = withEvent eb GetOne \ev -> do
       pure
         $ IncludeLink (Proxy @"previous")
         $ IncludeLink (Proxy @"next") contractState
+
+put
+  :: EventBackend (AppM r) r TransactionsSelector
+  -> TxOutRef
+  -> TxId
+  -> TextEnvelope
+  -> AppM r NoContent
+put eb contractId txId body = withEvent eb Put \ev -> do
+  addField ev $ PutContractId contractId
+  addField ev $ PutTxId txId
+  contractId' <- fromDTOThrow err400 contractId
+  txId' <- fromDTOThrow err400 txId
+  loadTransaction (setAncestor $ reference ev) contractId' txId' >>= \case
+    Nothing -> throwError err404
+    Just (Left (TempTx _ Unsigned Tx.InputsApplied{txBody})) -> do
+      textEnvelope <- fromDTOThrow err400 body
+      addField ev $ Body textEnvelope
+      tx <- either (const $ throwError err400) pure $ deserialiseFromTextEnvelope (AsTx AsBabbage) textEnvelope
+      unless (getTxBody tx == txBody) $ throwError err400
+      submitTransaction contractId' txId' (setAncestor $ reference ev) tx >>= \case
+        Nothing -> pure NoContent
+        Just err -> do
+          addField ev $ Error $ show err
+          throwError err403
+    Just _  -> throwError err409
