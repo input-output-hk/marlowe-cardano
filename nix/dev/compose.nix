@@ -32,7 +32,7 @@ let
   '';
 
   node-service = {
-    image = "inputoutput/cardano-node:1.35.3-configs";
+    image = "inputoutput/cardano-node:1.35.4";
 
     environment = [
       "NETWORK=${network.name}"
