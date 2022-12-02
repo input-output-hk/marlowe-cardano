@@ -177,6 +177,15 @@ Furthermore, let `marloweValidatorHash :: ValidatorHash` be the hash of the Marl
 The validation fails (via returning `False` for `validationResult` or via the throwing of an error) if any of the following constraints does not hold. Fundamentally, all failures in Plutus are calls to `error` and all successes are returns of `()`. The typed Plutus validators obscure this distinction slightly by using `Bool` as the return type.
 
 
+#### *Constraint 0.* Input to contract
+
+The input present in the redeemer and script context is the input provided to the semantics computation.
+```haskell
+marloweInput ∪ txInfoValidRange (scriptContextTxInfo scriptContext) ∪ txInfoData (scriptContextTxInfo scriptContext) ≅ transactionInput
+```
+This is a congruence because `marloweInput` contains the input (perhaps including the Merkle hash of the contract's continuation) and `txInfoValidRange` of the script context contains the validity interval for the transaction, whereas `transactionInput` contains both. Additionally, any continued contract is present in `txInfoData` of the script context, whereas it is directly present in any `MerkleizedInput` of `transactionInput`. Also note that the script context may, in principle, contain an open, closed, or half-open/half-closed time interval, but Marlowe semantics requires a closed time interval.
+
+
 #### *Constraint 1.* Typed validation
 
 The datum, redeemer, and script context deserialize to the correct types.
@@ -184,7 +193,7 @@ The datum, redeemer, and script context deserialize to the correct types.
 Let `datum :: BuiltinData` and `redeemer :: BuiltinData` be the datum and redeemer in the script witness for spending the Marlowe UTxO, and let `scriptContext' :: BuiltinData` be the script context data.
 ```haskell
 fromBuiltinData datum          ≡ (Just marloweData   :: Maybe MarloweData)
-fromBuiltinData redeemer       ≡ (Just markloweInput :: Maybe MarloweInput)
+fromBuiltinData redeemer       ≡ (Just marloweInput :: Maybe MarloweInput)
 fromBuiltinData scriptContext' ≡ (Just scriptContext :: Maybe ScriptContext)
 ```
 
