@@ -42,7 +42,7 @@ newtype WalletName = WalletName String
 
 data PostWalletCreateRequestDTO = PostWalletCreateRequestDTO
   { version :: ()
-  , source :: Aeson.Value
+  , source :: V1.Contract
   -- , walletAddresses :: Transaction.Api.WalletAddresses
   }
   deriving (Show, Generic, Aeson.FromJSON)
@@ -127,8 +127,8 @@ DOING put it all together
   DOING get all the other parameters required for creating a contract
     DONE get hostName and portName as command line arguments
     DONE hard code marlowe v1
-    DOING require json to be V1.Contract
-    TODO get wallet addresses from wallet in client
+    DONE require json to be V1.Contract
+    DOING get wallet addresses from wallet in client
   TODO return the contract creation result to the client and handle it
 TODO clean up code
 TODO manual testing
@@ -169,12 +169,9 @@ postWalletCreateR _ = do
           hostName
           portNumber
           undefined
-          (parseContractFromJSON  (source postWalletCreateRequestDTO))
+          (source postWalletCreateRequestDTO)
     putStrLn "hey"
   pure $ Yesod.Core.Types.JSONResponse "lol"
-  where
-    parseContractFromJSON :: Aeson.Value -> V1.Contract
-    parseContractFromJSON = either error id . Aeson.Types.parseEither (Core.Api.contractFromJSON Core.Api.MarloweV1)
 
 main :: IO ()
 main = do
