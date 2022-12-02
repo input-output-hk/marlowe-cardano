@@ -1,3 +1,4 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TemplateHaskell #-}
@@ -12,7 +13,7 @@ import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.Types as Aeson.Types
 import Data.Text (Text)
 import GHC.Generics (Generic)
-import qualified Language.Marlowe.Runtime.ChainSync.Api as ChainSync.Api
+import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
 import qualified Language.Marlowe.Runtime.Core.Api as Core.Api
 import qualified Language.Marlowe.Runtime.Transaction.Api as Transaction.Api
 import Network.Protocol.Driver (RunClient, runClientPeerOverSocket)
@@ -21,13 +22,14 @@ import qualified Network.Protocol.Job.Client as JobClient
 import Network.Protocol.Job.Codec (codecJob)
 import Network.Socket (SocketType(..))
 import qualified Network.Socket as Socket
+import System.Environment (getArgs)
 import qualified Text.Blaze as Blaze
 import Text.Julius (juliusFile)
 import Yesod (Yesod)
 import qualified Yesod
 import qualified Yesod.Core.Types
 
-data CIP30 = CIP30
+data CIP30 = CIP30 Socket.HostName Socket.PortNumber
 
 newtype WalletName = WalletName String
   deriving newtype
@@ -39,8 +41,9 @@ newtype WalletName = WalletName String
     )
 
 data PostWalletCreateRequestDTO = PostWalletCreateRequestDTO
-  { version :: Core.Api.SomeMarloweVersion
+  { version :: ()
   , source :: Aeson.Value
+  -- , walletAddresses :: Transaction.Api.WalletAddresses
   }
   deriving (Show, Generic, Aeson.FromJSON)
 
@@ -122,6 +125,10 @@ DOING put it all together
     parseEither :: (a -> Parser b) -> a -> Either String b
     withSomeMarloweVersion :: (forall v. MarloweVersion v -> r) -> SomeMarloweVersion -> r
   DOING get all the other parameters required for creating a contract
+    DONE get hostName and portName as command line arguments
+    DONE hard code marlowe v1
+    DOING require json to be V1.Contract
+    TODO get wallet addresses from wallet in client
   TODO return the contract creation result to the client and handle it
 TODO clean up code
 TODO manual testing
@@ -139,44 +146,38 @@ runTxJobClient hostName (show -> portNumber) jobclient = do
 createContract ::
      Socket.HostName
   -> Socket.PortNumber
-  -> Maybe ChainSync.Api.StakeCredential
-  -> Core.Api.MarloweVersion v
   -> Transaction.Api.WalletAddresses
-  -> Transaction.Api.RoleTokensConfig
-  -> ChainSync.Api.TransactionMetadata
-  -> ChainSync.Api.Lovelace
-  -> Core.Api.Contract v
-  -> IO (Either (Transaction.Api.CreateError v) (Transaction.Api.ContractCreated BabbageEra v))
-createContract hostName portNumber stakeCredential version addresses roles metadata minUTxODeposit =
+  -> V1.Contract
+  -> IO (Either (Transaction.Api.CreateError 'Core.Api.V1) (Transaction.Api.ContractCreated BabbageEra 'Core.Api.V1))
+createContract hostName portNumber addresses =
   runTxJobClient hostName portNumber
     . JobClient.liftCommand
-    . Transaction.Api.Create stakeCredential version addresses roles metadata minUTxODeposit
+    . Transaction.Api.Create
+        Nothing
+        Core.Api.MarloweV1
+        addresses
+        Transaction.Api.RoleTokensNone
+        mempty
+        2_000_000
 
 postWalletCreateR :: WalletName -> Handler (Yesod.Core.Types.JSONResponse Text)
 postWalletCreateR _ = do
+  CIP30 hostName portNumber <- Yesod.getYesod
   postWalletCreateRequestDTO :: PostWalletCreateRequestDTO <- Yesod.requireCheckJsonBody
-  Yesod.liftIO $ withSomeMarloweVersion (version postWalletCreateRequestDTO) \v -> do
-    let contract = parseContractFromJSON v (source postWalletCreateRequestDTO)
+  Yesod.liftIO do
     _ <- createContract
+          hostName
+          portNumber
           undefined
-          undefined
-          undefined
-          v
-          undefined
-          undefined
-          undefined
-          undefined
-          contract
+          (parseContractFromJSON  (source postWalletCreateRequestDTO))
     putStrLn "hey"
   pure $ Yesod.Core.Types.JSONResponse "lol"
   where
-    withSomeMarloweVersion :: Core.Api.SomeMarloweVersion -> (forall v. Core.Api.MarloweVersion v -> r) -> r
-    withSomeMarloweVersion x f = Core.Api.withSomeMarloweVersion f x
-
-    parseContractFromJSON :: Core.Api.MarloweVersion v -> Aeson.Value -> Core.Api.Contract v
-    parseContractFromJSON version = either error id . Aeson.Types.parseEither (Core.Api.contractFromJSON version)
+    parseContractFromJSON :: Aeson.Value -> V1.Contract
+    parseContractFromJSON = either error id . Aeson.Types.parseEither (Core.Api.contractFromJSON Core.Api.MarloweV1)
 
 main :: IO ()
 main = do
+  [hostName :: Socket.HostName, read -> portNumber :: Socket.PortNumber] <- getArgs
   putStrLn "Listening on port 8000..."
-  Yesod.warp 8000 CIP30
+  Yesod.warp 8000 (CIP30 hostName portNumber)

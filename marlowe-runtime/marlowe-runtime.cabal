@@ -264,6 +264,7 @@ executable cip30-demo
     , shakespeare
     , network
     , cardano-api
+    , marlowe
     , marlowe-protocols
     , marlowe-runtime
     , marlowe-chain-sync
