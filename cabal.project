@@ -10,9 +10,18 @@ repository cardano-haskell-packages
     d4a35cd3121aa00d18544bb0ac01c3e1691d618f462c46129271bccf39f7e8ee
 
 -- run `nix flake lock --update-input hackage` after updating this index-state.
-index-state: 2022-10-29T00:00:00Z
+index-state: 2022-11-14T00:20:02Z
 -- run `nix flake lock --update-input CHaP` after updating this index-state.
-index-state: cardano-haskell-packages 2022-10-21T00:00:00Z
+index-state: cardano-haskell-packages 2022-11-17T04:56:26Z
+
+package cardano-ledger-alonzo
+  optimization: False
+package ouroboros-consensus-shelley
+  optimization: False
+package ouroboros-consensus-cardano
+  optimization: False
+package cardano-api
+  optimization: False
 
 -- with-compiler: ghc-8.10.7
 
@@ -75,33 +84,51 @@ package marlowe-protocols
 package marlowe-runtime
   ghc-options: -Werror
 
+-- TODO remove all these constraints when packages specify their own constraints
 constraints:
     algebraic-graphs < 0.7
+  , HSOpenSSL >= 0.11.7.2
+  , Win32-network >= 0.1.0.0
   , base-deriving-via == 0.1.0.0
   , bimap >= 0.4.0
-  , bimap >= 0.4.0
+  , byron-spec-chain == 0.1.0.0
+  , byron-spec-ledger == 0.1.0.0
+  , cardano-api == 1.35.4
   , cardano-binary == 1.5.0
   , cardano-binary-test == 1.3.0
-  , cardano-crypto-class == 2.0.0
-  , cardano-crypto-praos == 2.0.0
-  , cardano-crypto-tests == 2.0.0
+  , cardano-crypto == 1.1.1
+  , cardano-crypto-class == 2.0.0.0.1
+  , cardano-crypto-praos == 2.0.0.0.1
+  , cardano-crypto-tests == 2.0.0.0.1
   , cardano-crypto-wrapper == 1.3.0
+  , cardano-data == 0.1.0.0
+  , cardano-ledger-alonzo == 0.1.0.0
+  , cardano-ledger-babbage == 0.1.0.0
+  , cardano-ledger-byron-test == 1.3.0
+  , cardano-ledger-core == 0.1.0.0
+  , cardano-ledger-shelley == 0.1.0.0
+  , cardano-ledger-shelley-ma == 0.1.0.0
   , cardano-prelude == 0.1.0.0
+  , cardano-protocol-tpraos == 0.1.0.0
   , cardano-slotting == 0.1.0.0
   , hasql < 1.6
+  , heapwords == 0.1.0.1
   , hedgehog >= 1.0
-  , HSOpenSSL >= 0.11.7.2
   , libsystemd-journal >= 1.4.4
   , measures == 0.1.0.0
   , network >= 3.1.1.0
   , orphans-deriving-via == 0.1.0.0
-  , plutus-core == 1.0.0.0
+  , ouroboros-consensus-cardano == 0.1.0.0
+  , ouroboros-consensus-protocol == 0.1.0.0
+  , ouroboros-consensus-shelley == 0.1.0.0
+  , plutus-core == 1.0.0.1
   , plutus-ghc-stub == 8.6.5
-  , plutus-ledger-api == 1.0.0.0
+  , plutus-ledger-api == 1.0.0.1
   , plutus-tx == 1.0.0.0
   , plutus-tx-plugin == 1.0.0.0
   , prettyprinter-configurable == 0.1.0.0
   , protolude < 0.3.1
+  , small-steps == 0.1.0.0
   , strict-containers == 0.1.0.0
   , systemd >= 2.3.0
   , word-array == 0.1.0.0

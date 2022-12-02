@@ -22,6 +22,7 @@ import Cardano.Api
   , toEraInMode
   )
 import qualified Cardano.Api as Cardano
+import Cardano.Api.Shelley (AcquiringFailure)
 import Control.Concurrent.Component
 import Control.Monad.Trans.Except (ExceptT(ExceptT), except, runExceptT, throwE, withExceptT)
 import Data.Bifunctor (first)
@@ -31,7 +32,6 @@ import qualified Language.Marlowe.Runtime.ChainSync.Database as Database
 import Network.Protocol.Driver (RunServer(..))
 import Network.Protocol.Query.Server (QueryServer(..), ServerStInit(..), ServerStNext(..), ServerStPage(..))
 import Network.Protocol.Query.Types (StNextKind(..))
-import Ouroboros.Network.Protocol.LocalStateQuery.Type (AcquireFailure)
 import System.IO (hPutStrLn, stderr)
 
 type RunQueryServer m = RunServer m (QueryServer ChainSyncQuery)
@@ -42,7 +42,7 @@ data ChainSyncQueryServerDependencies = ChainSyncQueryServerDependencies
       :: forall result
        . Maybe Cardano.ChainPoint
       -> QueryInMode CardanoMode result
-      -> IO (Either AcquireFailure result)
+      -> IO (Either AcquiringFailure result)
   , getUTxOs :: !(Database.GetUTxOs IO)
   }
 
@@ -61,7 +61,7 @@ data WorkerDependencies = WorkerDependencies
       :: forall result
        . Maybe Cardano.ChainPoint
       -> QueryInMode CardanoMode result
-      -> IO (Either AcquireFailure result)
+      -> IO (Either AcquiringFailure result)
   , getUTxOs :: !(Database.GetUTxOs IO)
   }
 

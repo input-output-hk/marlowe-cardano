@@ -11,6 +11,7 @@ module Language.Marlowe.Runtime.ChainSync
 
 import Cardano.Api (CardanoEra, CardanoMode, LocalNodeClientProtocolsInMode, Tx, TxValidationErrorInMode)
 import qualified Cardano.Api as Cardano
+import Cardano.Api.Shelley (AcquiringFailure)
 import Control.Concurrent.Component
 import Data.Time (NominalDiffTime)
 import Language.Marlowe.Runtime.ChainSync.Database (DatabaseQueries(..))
@@ -22,7 +23,6 @@ import Language.Marlowe.Runtime.ChainSync.QueryServer
   (ChainSyncQueryServerDependencies(..), RunQueryServer, chainSyncQueryServer)
 import Language.Marlowe.Runtime.ChainSync.Server (ChainSyncServerDependencies(..), RunChainSeekServer, chainSyncServer)
 import Language.Marlowe.Runtime.ChainSync.Store (ChainStore(..), ChainStoreDependencies(..), chainStore)
-import Ouroboros.Network.Protocol.LocalStateQuery.Type (AcquireFailure)
 import Ouroboros.Network.Protocol.LocalTxSubmission.Client (SubmitResult)
 
 data ChainSyncDependencies = ChainSyncDependencies
@@ -39,7 +39,7 @@ data ChainSyncDependencies = ChainSyncDependencies
       :: forall result
        . Maybe Cardano.ChainPoint
       -> Cardano.QueryInMode CardanoMode result
-      -> IO (Either AcquireFailure result)
+      -> IO (Either AcquiringFailure result)
   , submitTxToNodeLocal
       :: forall era
        . CardanoEra era
