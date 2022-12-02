@@ -36,6 +36,10 @@
     cardano-world = {
       url = "github:input-output-hk/cardano-world";
     };
+    CHaP = {
+      url = "github:input-output-hk/cardano-haskell-packages?ref=repo";
+      flake = false;
+    };
     plutus-core = {
       url = "github:input-output-hk/plutus";
       flake = false;
@@ -48,9 +52,12 @@
       url = "github:michaelpj/sphinxcontrib-haddock";
       flake = false;
     };
+    tullia = {
+      url = "github:input-output-hk/tullia";
+    };
   };
 
-  outputs = { self, flake-utils, ... }@inputs:
+  outputs = { self, flake-utils, tullia, ... }@inputs:
     let
       systems = [ "x86_64-linux" "x86_64-darwin" ];
     in
@@ -104,7 +111,14 @@
           inherit system;
           packages = packagesProf;
         };
-      })) // {
+
+        # Export ciJobs for tullia to parse
+        ciJobs = self.hydraJobs {
+          supportedSystems = [ system ];
+        };
+      }
+      // tullia.fromSimple system (import ./nix/tullia.nix)
+    )) // {
       hydraJobs = import ./hydra-jobs.nix {
         inherit inputs;
         inherit (self) internal;

@@ -41,7 +41,6 @@ module Language.Marlowe.Runtime.ChainSync.Api
   , RuntimeChainSeekCodec
   , RuntimeChainSeekServer
   , ScriptHash(..)
-  , SlotConfig(..)
   , SlotNo(..)
   , StakeCredential(..)
   , StakeKeyHash(..)
@@ -78,7 +77,6 @@ module Language.Marlowe.Runtime.ChainSync.Api
   , putUTCTime
   , renderTxOutRef
   , runtimeChainSeekCodec
-  , slotToUTCTime
   , stakeReference
   , toBech32
   , toCardanoAddress
@@ -132,15 +130,7 @@ import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Text.Encoding (encodeUtf8)
 import Data.These (These(..))
-import Data.Time
-  ( NominalDiffTime
-  , UTCTime(..)
-  , addUTCTime
-  , diffTimeToPicoseconds
-  , nominalDiffTimeToSeconds
-  , picosecondsToDiffTime
-  , secondsToNominalDiffTime
-  )
+import Data.Time (UTCTime(..), diffTimeToPicoseconds, picosecondsToDiffTime)
 import Data.Time.Calendar.OrdinalDate (fromOrdinalDateValid, toOrdinalDate)
 import Data.Traversable (for)
 import Data.Type.Equality (type (:~:)(Refl))
@@ -149,7 +139,6 @@ import Data.Void (Void, absurd)
 import Data.Word (Word16, Word64)
 import GHC.Generics (Generic)
 import GHC.Natural (Natural)
-import Language.Marlowe.Runtime.SystemStart (SystemStart(..))
 import Network.Protocol.ChainSeek.Client
 import Network.Protocol.ChainSeek.Codec
 import Network.Protocol.ChainSeek.Server
@@ -158,6 +147,7 @@ import Network.Protocol.ChainSeek.Types
 import qualified Network.Protocol.Job.Types as Job
 import qualified Network.Protocol.Query.Types as Query
 import Network.TypedProtocol.Codec (Codec)
+import Ouroboros.Consensus.BlockchainTime (SystemStart(..))
 import qualified Plutus.V1.Ledger.Api as Plutus
 import Text.Read (readMaybe)
 
@@ -616,6 +606,9 @@ data Move err result where
   -- addresses with the requested credentials.
   FindTxsTo :: Set Credential -> Move FindTxsToError (Set Transaction)
 
+  -- | Advances to the tip block. Waits if already at the tip.
+  AdvanceToTip :: Move Void ()
+
 mkSchemaVersion "moveSchema" ''Move
 
 deriving instance Show (Move err result)
@@ -646,6 +639,7 @@ instance Query Move where
     TagFindTx :: Tag Move TxError Transaction
     TagFindConsumingTxs :: Tag Move (Map TxOutRef UTxOError) (Map TxOutRef Transaction)
     TagFindTxsTo :: Tag Move FindTxsToError (Set Transaction)
+    TagAdvanceToTip :: Tag Move Void ()
 
   tagFromQuery = \case
     Fork m1 m2         -> TagFork (tagFromQuery m1) (tagFromQuery m2)
@@ -656,6 +650,7 @@ instance Query Move where
     FindTx _ _         -> TagFindTx
     FindConsumingTxs _ -> TagFindConsumingTxs
     FindTxsTo _        -> TagFindTxsTo
+    AdvanceToTip       -> TagAdvanceToTip
 
   tagEq = curry \case
     (TagFork m1 m2, TagFork m3 m4)           ->
@@ -680,6 +675,8 @@ instance Query Move where
     (TagFindConsumingTxs, _)                  -> Nothing
     (TagFindTxsTo, TagFindTxsTo)                   -> Just (Refl, Refl)
     (TagFindTxsTo, _)                           -> Nothing
+    (TagAdvanceToTip, TagAdvanceToTip)                   -> Just (Refl, Refl)
+    (TagAdvanceToTip, _)                           -> Nothing
 
   putTag = \case
     TagFork t1 t2 -> do
@@ -693,6 +690,7 @@ instance Query Move where
     TagFindTx -> putWord8 0x06
     TagFindConsumingTxs -> putWord8 0x07
     TagFindTxsTo -> putWord8 0x08
+    TagAdvanceToTip -> putWord8 0x09
 
   putQuery = \case
     Fork m1 m2 -> do
@@ -705,6 +703,7 @@ instance Query Move where
     FindTx txId wait -> put txId *> put wait
     FindConsumingTxs utxos -> put utxos
     FindTxsTo credentials -> put credentials
+    AdvanceToTip -> mempty
 
   getTag = do
     tag <- getWord8
@@ -720,6 +719,7 @@ instance Query Move where
       0x06 -> pure $ SomeTag TagFindTx
       0x07 -> pure $ SomeTag TagFindConsumingTxs
       0x08 -> pure $ SomeTag TagFindTxsTo
+      0x09 -> pure $ SomeTag TagAdvanceToTip
       _ -> fail $ "Invalid move tag " <> show tag
 
   getQuery = \case
@@ -731,6 +731,7 @@ instance Query Move where
     TagFindTx           -> FindTx <$> get <*> get
     TagFindConsumingTxs -> FindConsumingTxs <$> get
     TagFindTxsTo        -> FindTxsTo <$> get
+    TagAdvanceToTip     -> pure AdvanceToTip
 
   putResult = \case
     TagFork t1 t2 -> \case
@@ -751,6 +752,7 @@ instance Query Move where
     TagIntersect -> mempty
     TagFindConsumingTxs -> put
     TagFindTxsTo -> put
+    TagAdvanceToTip -> mempty
 
   getResult = \case
     TagFork t1 t2    -> do
@@ -767,6 +769,7 @@ instance Query Move where
     TagIntersect -> get
     TagFindConsumingTxs -> get
     TagFindTxsTo -> get
+    TagAdvanceToTip -> get
 
   putErr = \case
     TagFork t1 t2 -> \case
@@ -787,6 +790,7 @@ instance Query Move where
     TagIntersect -> put
     TagFindConsumingTxs -> put
     TagFindTxsTo -> put
+    TagAdvanceToTip -> put
 
   getErr = \case
     TagFork t1 t2    -> do
@@ -803,15 +807,7 @@ instance Query Move where
     TagIntersect -> get
     TagFindConsumingTxs -> get
     TagFindTxsTo -> get
-
-slotToUTCTime :: SlotConfig -> SlotNo -> UTCTime
-slotToUTCTime SlotConfig{..} slot = addUTCTime (slotLength * fromIntegral slot) slotZeroTime
-
-data SlotConfig = SlotConfig
-  { slotZeroTime :: UTCTime
-  , slotLength   :: NominalDiffTime
-  }
-  deriving stock (Show, Eq, Ord, Generic)
+    TagAdvanceToTip -> get
 
 putUTCTime :: UTCTime -> Put
 putUTCTime UTCTime{..} = do
@@ -829,12 +825,6 @@ getUTCTime  = do
     Nothing -> fail "Invalid ISO 8601 ordinal date"
     Just a  -> pure a
   pure UTCTime{..}
-
-instance Binary SlotConfig where
-  put SlotConfig{..} = do
-    putUTCTime slotZeroTime
-    put $ nominalDiffTimeToSeconds slotLength
-  get = SlotConfig <$> getUTCTime <*> (secondsToNominalDiffTime <$> get)
 
 data GetUTxOsQuery
   = GetUTxOsAtAddresses (Set Address)
@@ -862,7 +852,6 @@ toUTxOTuple :: UTxO -> (TxOutRef, TransactionOutput)
 toUTxOTuple (UTxO txOutRef transactionOutput) = (txOutRef, transactionOutput)
 
 data ChainSyncQuery delimiter err result where
-  GetSlotConfig :: ChainSyncQuery Void () SlotConfig
   GetSecurityParameter :: ChainSyncQuery Void () Int
   GetNetworkId :: ChainSyncQuery Void () NetworkId
   GetProtocolParameters :: ChainSyncQuery Void () ProtocolParameters
@@ -872,15 +861,12 @@ data ChainSyncQuery delimiter err result where
 
 instance Query.IsQuery ChainSyncQuery where
   data Tag ChainSyncQuery delimiter err result where
-    TagGetSlotConfig :: Query.Tag ChainSyncQuery Void () SlotConfig
     TagGetSecurityParameter :: Query.Tag ChainSyncQuery Void () Int
     TagGetNetworkId :: Query.Tag ChainSyncQuery Void () NetworkId
     TagGetProtocolParameters :: Query.Tag ChainSyncQuery Void () ProtocolParameters
     TagGetSystemStart :: Query.Tag ChainSyncQuery Void () SystemStart
     TagGetEraHistory :: Query.Tag ChainSyncQuery Void () (EraHistory CardanoMode)
     TagGetUTxOs :: Query.Tag ChainSyncQuery Void () UTxOs
-  tagEq TagGetSlotConfig TagGetSlotConfig               = Just (Refl, Refl, Refl)
-  tagEq TagGetSlotConfig _                              = Nothing
   tagEq TagGetSecurityParameter TagGetSecurityParameter = Just (Refl, Refl, Refl)
   tagEq TagGetSecurityParameter _                       = Nothing
   tagEq TagGetNetworkId TagGetNetworkId = Just (Refl, Refl, Refl)
@@ -894,26 +880,23 @@ instance Query.IsQuery ChainSyncQuery where
   tagEq TagGetUTxOs TagGetUTxOs = Just (Refl, Refl, Refl)
   tagEq TagGetUTxOs _ = Nothing
   putTag = \case
-    TagGetSlotConfig        -> putWord8 0x01
-    TagGetSecurityParameter -> putWord8 0x02
-    TagGetNetworkId -> putWord8 0x03
-    TagGetProtocolParameters -> putWord8 0x04
-    TagGetSystemStart -> putWord8 0x05
-    TagGetEraHistory -> putWord8 0x06
-    TagGetUTxOs -> putWord8 0x07
+    TagGetSecurityParameter -> putWord8 0x01
+    TagGetNetworkId -> putWord8 0x02
+    TagGetProtocolParameters -> putWord8 0x03
+    TagGetSystemStart -> putWord8 0x04
+    TagGetEraHistory -> putWord8 0x05
+    TagGetUTxOs -> putWord8 0x06
   getTag = do
     word <- getWord8
     case word of
-      0x01 -> pure $ Query.SomeTag TagGetSlotConfig
-      0x02 -> pure $ Query.SomeTag TagGetSecurityParameter
-      0x03 -> pure $ Query.SomeTag TagGetNetworkId
-      0x04 -> pure $ Query.SomeTag TagGetProtocolParameters
-      0x05 -> pure $ Query.SomeTag TagGetSystemStart
-      0x06 -> pure $ Query.SomeTag TagGetEraHistory
-      0x07 -> pure $ Query.SomeTag TagGetUTxOs
+      0x01 -> pure $ Query.SomeTag TagGetSecurityParameter
+      0x02 -> pure $ Query.SomeTag TagGetNetworkId
+      0x03 -> pure $ Query.SomeTag TagGetProtocolParameters
+      0x04 -> pure $ Query.SomeTag TagGetSystemStart
+      0x05 -> pure $ Query.SomeTag TagGetEraHistory
+      0x06 -> pure $ Query.SomeTag TagGetUTxOs
       _    -> fail "Invalid ChainSyncQuery tag"
   putQuery = \case
-    GetSlotConfig        -> mempty
     GetSecurityParameter -> mempty
     GetNetworkId -> mempty
     GetProtocolParameters -> mempty
@@ -926,7 +909,6 @@ instance Query.IsQuery ChainSyncQuery where
       putWord8 0x02
       put txOutRefs
   getQuery = \case
-    TagGetSlotConfig        -> pure GetSlotConfig
     TagGetSecurityParameter -> pure GetSecurityParameter
     TagGetNetworkId -> pure GetNetworkId
     TagGetProtocolParameters -> pure GetProtocolParameters
@@ -943,7 +925,6 @@ instance Query.IsQuery ChainSyncQuery where
           pure $ GetUTxOsForTxOutRefs txOutRefs
         _    -> fail "Invalid GetUTxOsQuery tag"
   putDelimiter = \case
-    TagGetSlotConfig        -> absurd
     TagGetSecurityParameter -> absurd
     TagGetNetworkId -> absurd
     TagGetProtocolParameters -> absurd
@@ -951,7 +932,6 @@ instance Query.IsQuery ChainSyncQuery where
     TagGetEraHistory -> absurd
     TagGetUTxOs -> absurd
   getDelimiter = \case
-    TagGetSlotConfig        -> fail "no delimiter defined"
     TagGetSecurityParameter -> fail "no delimiter defined"
     TagGetNetworkId -> fail "no delimiter defined"
     TagGetProtocolParameters -> fail "no delimiter defined"
@@ -959,7 +939,6 @@ instance Query.IsQuery ChainSyncQuery where
     TagGetEraHistory -> fail "no delimiter defined"
     TagGetUTxOs -> fail "no delimiter defined"
   putErr = \case
-    TagGetSlotConfig        -> put
     TagGetSecurityParameter -> put
     TagGetNetworkId -> put
     TagGetProtocolParameters -> put
@@ -967,7 +946,6 @@ instance Query.IsQuery ChainSyncQuery where
     TagGetEraHistory -> put
     TagGetUTxOs -> put
   getErr = \case
-    TagGetSlotConfig        -> get
     TagGetSecurityParameter -> get
     TagGetNetworkId -> get
     TagGetProtocolParameters -> get
@@ -975,7 +953,6 @@ instance Query.IsQuery ChainSyncQuery where
     TagGetEraHistory -> get
     TagGetUTxOs -> get
   putResult = \case
-    TagGetSlotConfig        -> put
     TagGetSecurityParameter -> put
     TagGetNetworkId -> put . \case
       Mainnet -> Nothing
@@ -987,7 +964,6 @@ instance Query.IsQuery ChainSyncQuery where
       SystemStart start -> putUTCTime start
     TagGetUTxOs -> put
   getResult = \case
-    TagGetSlotConfig        -> get
     TagGetSecurityParameter -> get
     TagGetNetworkId -> maybe Mainnet (Testnet . NetworkMagic) <$> get
     TagGetProtocolParameters -> do
@@ -1003,7 +979,6 @@ instance Query.IsQuery ChainSyncQuery where
     TagGetSystemStart -> SystemStart <$> getUTCTime
     TagGetUTxOs -> get
   tagFromQuery = \case
-    GetSlotConfig        -> TagGetSlotConfig
     GetSecurityParameter -> TagGetSecurityParameter
     GetNetworkId -> TagGetNetworkId
     GetProtocolParameters -> TagGetProtocolParameters

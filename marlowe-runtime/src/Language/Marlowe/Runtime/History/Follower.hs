@@ -20,6 +20,7 @@ module Language.Marlowe.Runtime.History.Follower
   , mkFollower
   ) where
 
+import Cardano.Api (CardanoMode, EraHistory(EraHistory))
 import Control.Applicative ((<|>))
 import Control.Concurrent.Async (Concurrently(..))
 import Control.Concurrent.STM
@@ -41,6 +42,7 @@ import Language.Marlowe.Runtime.ChainSync.Api
   ( BlockHeader
   , ChainPoint
   , ChainSeekClient(..)
+  , ChainSyncQuery(..)
   , ClientStHandshake(..)
   , ClientStIdle(..)
   , ClientStInit(..)
@@ -48,13 +50,11 @@ import Language.Marlowe.Runtime.ChainSync.Api
   , Move(..)
   , RuntimeChainSeekClient
   , ScriptHash(..)
-  , SlotConfig
   , TxOutRef(..)
   , UTxOError
   , WithGenesis(..)
   , isAfter
   , moveSchema
-  , slotToUTCTime
   )
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Core.Api
@@ -72,6 +72,10 @@ import Language.Marlowe.Runtime.Core.Api
   )
 import Language.Marlowe.Runtime.Core.ScriptRegistry (MarloweScripts(..), getMarloweVersion)
 import Language.Marlowe.Runtime.History.Api
+import Network.Protocol.Driver (RunClient)
+import Ouroboros.Consensus.BlockchainTime (SystemStart, fromRelativeTime)
+import Ouroboros.Consensus.HardFork.History (interpretQuery, slotToWallclock)
+import qualified Ouroboros.Network.Block as O
 
 data ContractChanges v = ContractChanges
   { steps      :: Map Chain.BlockHeader [ContractStep v]
@@ -128,8 +132,8 @@ applyRollback (At blockHeader@Chain.BlockHeader{slotNo}) ContractChanges{..} = C
 
 data FollowerDependencies = FollowerDependencies
   { contractId         :: ContractId
-  , connectToChainSeek :: forall a. RuntimeChainSeekClient IO a -> IO a
-  , slotConfig         :: SlotConfig
+  , connectToChainSeek :: RunClient IO RuntimeChainSeekClient
+  , queryChainSeek     :: forall e a. ChainSyncQuery Void e a -> IO (Either e a)
   , securityParameter  :: Int
   }
 
@@ -182,6 +186,12 @@ mkFollower deps@FollowerDependencies{..} = do
               let payouts = mempty
               let scriptOutput = createOutput
               let previousState = Nothing
+              eraHistory <- queryChainSeek GetEraHistory >>= \case
+                Left _ -> error "Failed to query era history"
+                Right eh -> pure eh
+              systemStart <- queryChainSeek GetSystemStart >>= \case
+                Left _ -> error "Failed to query system start"
+                Right start -> pure start
               followContract blockHeader FollowerContext{..} FollowerState{..}
       , recvMsgRollBackward = \_ _ -> error "Rolled back from genesis"
       }
@@ -215,7 +225,8 @@ data FollowerContext v = FollowerContext
   , changesVar          :: TVar (ContractChanges v)
   , statusVar           :: TVar FollowerStatus
   , payoutValidatorHash :: ScriptHash
-  , slotConfig          :: SlotConfig
+  , systemStart         :: SystemStart
+  , eraHistory          :: EraHistory CardanoMode
   , securityParameter   :: Int
   }
 
@@ -470,7 +481,7 @@ processScriptTx blockHeader FollowerContext{..} FollowerState{..} tx = do
   let TransactionScriptOutput scriptAddress _  utxo _ = scriptOutput
   marloweTx@Transaction{output} <- lift
     $ first ExtractMarloweTransactionFailed
-    $ extractMarloweTransaction version slotConfig contractId scriptAddress payoutValidatorHash utxo blockHeader tx
+    $ extractMarloweTransaction version systemStart eraHistory contractId scriptAddress payoutValidatorHash utxo blockHeader tx
   tellStep blockHeader $ ApplyTransaction marloweTx
   pure output
 
@@ -483,7 +494,8 @@ tellStep blockHeader step = tell ContractChanges
 
 extractMarloweTransaction
   :: MarloweVersion v
-  -> SlotConfig
+  -> SystemStart
+  -> EraHistory CardanoMode
   -> ContractId
   -> Chain.Address
   -> Chain.ScriptHash
@@ -491,7 +503,7 @@ extractMarloweTransaction
   -> BlockHeader
   -> Chain.Transaction
   -> Either ExtractMarloweTransactionError (Transaction v)
-extractMarloweTransaction version slotConfig contractId scriptAddress payoutValidatorHash consumedUTxO blockHeader Chain.Transaction{..} = do
+extractMarloweTransaction version systemStart eraHistory contractId scriptAddress payoutValidatorHash consumedUTxO blockHeader Chain.Transaction{..} = do
   let transactionId = txId
   Chain.TransactionInput { redeemer = mRedeemer } <-
     note TxInNotFound $ find (consumesUTxO consumedUTxO) inputs
@@ -500,8 +512,8 @@ extractMarloweTransaction version slotConfig contractId scriptAddress payoutVali
   (minSlot, maxSlot) <- case validityRange of
     Chain.MinMaxBound minSlot maxSlot -> pure (minSlot, maxSlot)
     _                                 -> Left InvalidValidityRange
-  let validityLowerBound = slotToUTCTime slotConfig minSlot
-  let validityUpperBound = slotToUTCTime slotConfig maxSlot
+  validityLowerBound <- slotStartTime minSlot
+  validityUpperBound <- slotStartTime maxSlot
   scriptOutput <- runMaybeT do
     (ix, Chain.TransactionOutput{ assets, datum = mDatum }) <-
       hoistMaybe $ find (isToAddress scriptAddress . snd) $ zip [0..] outputs
@@ -522,6 +534,14 @@ extractMarloweTransaction version slotConfig contractId scriptAddress payoutVali
     pure $ Payout address assets payoutDatum
   let output = TransactionOutput{..}
   pure Transaction{..}
+  where
+    EraHistory _ interpreter = eraHistory
+    slotStartTime (Chain.SlotNo slotNo) = do
+      (relativeTime, _) <- first (const SlotConversionFailed)
+        $ interpretQuery interpreter
+        $ slotToWallclock
+        $ O.SlotNo slotNo
+      pure $ fromRelativeTime systemStart relativeTime
 
 isToScriptHash :: Chain.ScriptHash -> Chain.TransactionOutput -> Bool
 isToScriptHash toScriptHash Chain.TransactionOutput{..} = case Chain.paymentCredential address of

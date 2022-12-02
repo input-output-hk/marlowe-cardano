@@ -69,7 +69,7 @@ import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Core.Api (MarloweVersionTag(..), TransactionScriptOutput(utxo))
 import qualified Language.Marlowe.Runtime.Core.Api as Core
 import Language.Marlowe.Runtime.Core.ScriptRegistry (ReferenceScriptUtxo(..))
-import qualified Language.Marlowe.Runtime.SystemStart as Cx (SystemStart, makeTransactionBodyAutoBalance)
+import Ouroboros.Consensus.BlockchainTime (SystemStart)
 import qualified Plutus.V2.Ledger.Api as P
 import Witherable (wither)
 
@@ -368,7 +368,7 @@ type SolveConstraints
 -- | Given a set of constraints and the context of a wallet, produces a
 -- balanced, unsigned transaction that satisfies the constraints.
 solveConstraints
-  :: Cx.SystemStart
+  :: SystemStart
   -> C.EraHistory C.CardanoMode
   -> C.ProtocolParameters
   -> SolveConstraints
@@ -695,7 +695,7 @@ selectCoins protocol marloweVersion marloweCtx walletCtx@WalletContext{..} txBod
 balanceTx
   :: forall v
   .  C.EraInMode C.BabbageEra C.CardanoMode
-  -> Cx.SystemStart
+  -> SystemStart
   -> C.EraHistory C.CardanoMode
   -> C.ProtocolParameters
   -> Core.MarloweVersion v
@@ -732,7 +732,7 @@ balanceTx era systemStart eraHistory protocol marloweVersion marloweCtx walletCt
         -- Recompute execution units with full set of UTxOs, including change.
         buildTxBodyContent = C.TxBodyContent{..} { C.txOuts = mkChangeTxOut changeValue : txOuts }
         dummyTxOut =
-          Cx.makeTransactionBodyAutoBalance
+          C.makeTransactionBodyAutoBalance
             era
             systemStart
             eraHistory

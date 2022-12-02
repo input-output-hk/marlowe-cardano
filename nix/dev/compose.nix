@@ -1,5 +1,6 @@
 { sqitchPg, runCommand, writeShellScriptBin, writeText, lib, glibcLocales, nix, git, networks, su-exec }:
 let
+  network = networks.preprod;
   run-sqitch = writeShellScriptBin "run-sqitch" ''
     export PATH="$PATH:${lib.makeBinPath [ sqitchPg ]}"
     export LOCALE_ARCHIVE="${glibcLocales}/lib/locale/locale-archive"
@@ -24,9 +25,13 @@ let
     mkdir -p $out
     ln -sv ${run-sqitch}/bin/run-sqitch $out
     ln -sv ${run-local-service "chainseekd"}/bin/run-chainseekd $out
+    ln -sv ${run-local-service "marlowe-history"}/bin/run-marlowe-history $out
+    ln -sv ${run-local-service "marlowe-discovery"}/bin/run-marlowe-discovery $out
+    ln -sv ${run-local-service "marlowe-tx"}/bin/run-marlowe-tx $out
+    ln -sv ${run-local-service "marlowe-web-server"}/bin/run-marlowe-web-server $out
   '';
 
-  node-service = network: {
+  node-service = {
     image = "inputoutput/cardano-node:1.35.3-configs";
 
     environment = [
@@ -34,31 +39,31 @@ let
     ];
 
     volumes = [
-      # TODO should be possible to do this with one shared volume, alas the image doesn't let you override the socket path
-      "shared-${network.name}:/ipc"
-      "node-${network.name}-db:/opt/cardano/data"
+      "shared:/ipc"
+      "node-db:/opt/cardano/data"
     ];
   };
 
-  chainseekd-service = network: {
+  dev-service = {
     image = "alpine:3.16.2";
-
     volumes = [
       "./:/src"
       "/nix:/nix"
       "\${HOME}/.cabal:\${HOME}/.cabal"
       "${symlinks}:/exec"
-      "shared-${network.name}:/ipc"
+      "shared:/ipc"
       "/etc/passwd:/etc/passwd:ro"
       "/etc/group:/etc/group:ro"
     ];
-
     environment = [
       "CABAL_DIR=\${HOME}/.cabal"
       "REAL_USER=\${USER}"
       "REAL_HOME=\${HOME}"
     ];
+    restart = "unless-stopped";
+  };
 
+  chainseekd-service = dev-service // {
     command = [
       "/exec/run-chainseekd"
       "--testnet-magic"
@@ -74,14 +79,138 @@ let
       "--host"
       "0.0.0.0"
     ];
-
     ports = map toString [
       3715
       3716
       3720
     ];
+    healthcheck = {
+      test = "netstat -tulpn | grep LISTEN | grep 3715";
+      interval = "5s";
+      timeout = "5s";
+      retries = 30;
+    };
+    depends_on = {
+      postgres = {
+        condition = "service_healthy";
+      };
+    };
+  };
 
-    restart = "unless-stopped";
+  history-service = dev-service // {
+    command = [
+      "/exec/run-marlowe-history"
+      "--chain-seek-host"
+      "chainseekd"
+      "--host"
+      "0.0.0.0"
+    ];
+    ports = map toString [
+      3717
+      3718
+      3719
+    ];
+    healthcheck = {
+      test = "netstat -tulpn | grep LISTEN | grep 3717";
+      interval = "5s";
+      timeout = "5s";
+      retries = 30;
+    };
+    depends_on = {
+      chainseekd = {
+        condition = "service_healthy";
+      };
+    };
+  };
+
+  discovery-service = dev-service // {
+    command = [
+      "/exec/run-marlowe-discovery"
+      "--chain-seek-host"
+      "chainseekd"
+      "--host"
+      "0.0.0.0"
+    ];
+    ports = map toString [
+      3721
+      3722
+    ];
+    healthcheck = {
+      test = "netstat -tulpn | grep LISTEN | grep 3721";
+      interval = "5s";
+      timeout = "5s";
+      retries = 30;
+    };
+    depends_on = {
+      chainseekd = {
+        condition = "service_healthy";
+      };
+      marlowe-history = {
+        condition = "service_healthy";
+      };
+    };
+  };
+
+  tx-service = dev-service // {
+    command = [
+      "/exec/run-marlowe-tx"
+      "--chain-seek-host"
+      "chainseekd"
+      "--history-host"
+      "marlowe-history"
+      "--host"
+      "0.0.0.0"
+    ];
+    ports = map toString [
+      3723
+    ];
+    healthcheck = {
+      test = "netstat -tulpn | grep LISTEN | grep 3723";
+      interval = "5s";
+      timeout = "5s";
+      retries = 30;
+    };
+    depends_on = {
+      chainseekd = {
+        condition = "service_healthy";
+      };
+      marlowe-history = {
+        condition = "service_healthy";
+      };
+    };
+  };
+
+  web-service = dev-service // {
+    command = [
+      "/exec/run-marlowe-web-server"
+      "--history-host"
+      "marlowe-history"
+      "--discovery-host"
+      "marlowe-discovery"
+      "--tx-host"
+      "marlowe-tx"
+      "--enable-open-api"
+    ];
+    ports = map toString [
+      8080
+    ];
+    healthcheck = {
+      test = "netstat -tulpn | grep LISTEN | grep 8080";
+      interval = "5s";
+      timeout = "5s";
+      retries = 30;
+    };
+    depends_on = {
+      marlowe-history = {
+        condition = "service_healthy";
+      };
+      marlowe-discovery = {
+        condition = "service_healthy";
+      };
+      marlowe-tx = {
+        condition = "service_healthy";
+      };
+    };
   };
 
   spec = {
@@ -130,17 +259,16 @@ let
 
     volumes.postgres = null;
 
-    # TODO: Multiple networks on same pq or multiple pqs
     # TODO: ensure sqitch
-    services.chainseekd-preprod = chainseekd-service networks.preprod;
+    services.chainseekd = chainseekd-service;
+    services.marlowe-history = history-service;
+    services.marlowe-discovery = discovery-service;
+    services.marlowe-tx = tx-service;
+    services.web = web-service;
 
-    services.node-preprod = node-service networks.preprod;
-    volumes.shared-preprod = null;
-    volumes.node-preprod-db = null;
-
-    services.node-preview = node-service networks.preview;
-    volumes.shared-preview = null;
-    volumes.node-preview-db = null;
+    services.node = node-service;
+    volumes.shared = null;
+    volumes.node-db = null;
   };
 in
 writeText "compose.yaml" (builtins.toJSON spec)

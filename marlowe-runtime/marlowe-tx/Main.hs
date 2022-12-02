@@ -23,9 +23,9 @@ import Language.Marlowe.Runtime.ChainSync.Api
   , runtimeChainSeekCodec
   )
 import Language.Marlowe.Runtime.Logging (mkLogger)
+import Language.Marlowe.Runtime.Transaction (TransactionDependencies(..), transaction)
 import Language.Marlowe.Runtime.Transaction.Query (LoadMarloweContext, LoadWalletContext)
 import qualified Language.Marlowe.Runtime.Transaction.Query as Query
-import Language.Marlowe.Runtime.Transaction.Server (TransactionServerDependencies(..), transactionServer)
 import qualified Language.Marlowe.Runtime.Transaction.Submit as Submit
 import Network.Protocol.Driver (acceptRunServerPeerOverSocket, runClientPeerOverSocket)
 import Network.Protocol.Job.Client (JobClient, jobClientPeer)
@@ -116,7 +116,7 @@ run Options{..} = withSocketsDo do
         loadWalletContext :: LoadWalletContext
         loadWalletContext = Query.loadWalletContext runGetUTxOsQuery
 
-      runComponent_ transactionServer TransactionServerDependencies{..}
+      runComponent_ transaction TransactionDependencies{..}
   where
     openServer addr = bracketOnError (openSocket addr) close \socket -> do
       setSocketOption socket ReuseAddr 1

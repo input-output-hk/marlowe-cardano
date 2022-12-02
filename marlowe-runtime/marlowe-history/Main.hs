@@ -72,7 +72,6 @@ run Options{..} = withSocketsDo do
   bracket (openServer jobAddr) close \jobSocket ->
     bracket (openServer queryAddr) close \querySocket -> do
       bracket (openServer syncAddr) close \syncSocket -> do
-        slotConfig <- queryChainSync GetSlotConfig
         securityParameter <- queryChainSync GetSecurityParameter
         let
 
@@ -99,11 +98,13 @@ run Options{..} = withSocketsDo do
       let hints = defaultHints { addrFlags = [AI_PASSIVE], addrSocketType = Stream }
       head <$> getAddrInfo (Just hints) (Just host) (Just $ show p)
 
-    queryChainSync :: ChainSyncQuery Void e a -> IO a
-    queryChainSync query = do
+    queryChainSeek :: ChainSyncQuery Void e a -> IO (Either e a)
+    queryChainSeek query = do
       addr <- head <$> getAddrInfo (Just clientHints) (Just chainSeekHost) (Just $ show chainSeekQueryPort)
-      result <- runClientPeerOverSocket throwIO addr codecQuery queryClientPeer $ liftQuery query
-      pure $ fromRight (error "failed to query chain seek server") result
+      runClientPeerOverSocket throwIO addr codecQuery queryClientPeer $ liftQuery query
+
+    queryChainSync :: ChainSyncQuery Void e a -> IO a
+    queryChainSync = fmap (fromRight $ error "failed to query chain seek server") . queryChainSeek
 
 data Options = Options
   { chainSeekPort      :: PortNumber

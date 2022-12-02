@@ -2,10 +2,10 @@
 , packages
 }:
 let
-  inherit (packages) pkgs marlowe docs marlowe-cli chainseekd marlowe-history marlowe-discovery marlowe-tx marlowe-rt dev-scripts network;
+  inherit (packages) pkgs marlowe docs marlowe-cli dev-scripts network;
   inherit (dev-scripts) nix-flakes-alias start-cardano-node run-chainseekd;
   inherit (pkgs) stdenv lib utillinux python3 nixpkgs-fmt writeShellScriptBin networks;
-  inherit (marlowe) haskell cabal-install stylish-haskell sphinxcontrib-haddock sphinx-markdown-tables sphinxemoji nix-pre-commit-hooks cardano-address cardano-cli cardano-node;
+  inherit (marlowe) haskell cabal-install stylish-haskell sphinxcontrib-haddock sphinx-markdown-tables sphinxemoji nix-pre-commit-hooks cardano-address;
   inherit (marlowe) writeShellScriptBinInRepoRoot;
 
   set-xdg = ''
@@ -115,6 +115,8 @@ let
     # Can't run on darwin without Linux builds set up or if it's in hydra...
     nix run .#refresh-compose
   '';
+  cardano-cli = pkgs.cardano.packages.cardano-cli;
+  cardano-node = pkgs.cardano.packages.cardano-node;
 
   defaultShell = haskell.project.shellFor {
     buildInputs = devToolsInputs ++ (with marlowe; [
@@ -187,8 +189,15 @@ let
       marloweCore = develShell { buildInputs = marloweCoreBuildInputs; name = "core"; packages = cmps: [ cmps.marlowe ]; };
     };
 in
-defaultShell // {
+(defaultShell // {
   marlowe-actus = develShells.marloweActus;
   marlowe-cli = develShells.marloweCli;
   marlowe-core = develShells.marloweCore;
-}
+}).overrideAttrs (attrs: attrs // {
+  # The shell should never depend on any of our Haskell packages, which can
+  # sometimes happen by accident. we only specify Marlowe because it is the
+  # most downstream package.
+  disallowedRequisites = [
+    haskell.packages.marlowe.components.library
+  ];
+})

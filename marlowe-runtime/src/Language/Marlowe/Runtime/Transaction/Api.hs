@@ -53,6 +53,7 @@ import Language.Marlowe.Runtime.ChainSync.Api
   , PlutusScript
   , PolicyId
   , ScriptHash
+  , SlotNo
   , StakeCredential
   , TokenName
   , TransactionMetadata
@@ -429,6 +430,8 @@ data ApplyInputsError v
   | ApplyInputsLoadMarloweContextFailed LoadMarloweContextError
   | ApplyInputsConstraintsBuildupFailed ApplyInputsConstraintsBuildupError
   | SlotConversionFailed String
+  | TipAtGenesis
+  | ValidityLowerBoundTooHigh SlotNo SlotNo
 
 deriving instance Eq (ApplyInputsError 'V1)
 deriving instance Show (ApplyInputsError 'V1)

@@ -37,6 +37,8 @@ If you find yourself building GHC, STOP and fix the cache.
 
 The main documentation for the whole Plutus ecosystem is located https://plutus.readthedocs.io/en/latest/[here].
 
+An index of key documentation for Marlowe development is located at https://developers.cardano.org/docs/smart-contracts/marlowe/#resources-for-developing-and-deploying-marlowe-contracts.
+
 == Working with the project
 
 === How to submit an issue
@@ -138,7 +140,7 @@ To set up the cache:
 . On non-NixOS, edit `/etc/nix/nix.conf` and add the following lines:
 +
 ----
-substituters        = https://hydra.iohk.io https://iohk.cachix.org https://cache.nixos.org/
+substituters        = https://cache.iog.io https://iohk.cachix.org https://cache.nixos.org/
 trusted-public-keys = hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ= iohk.cachix.org-1:DpRUyj7h7V830dp/i6Nti+NEO2/nhblbov/8MW7Rqoo= cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=
 ----
 +
@@ -151,7 +153,7 @@ You must be a https://nixos.org/nix/manual/#ssec-multi-user[trusted user] to do 
 +
 ----
 nix.settings = {
-  substituters        = [ "https://hydra.iohk.io" "https://iohk.cachix.org" ];
+  substituters        = [ "https://cache.iog.io" "https://iohk.cachix.org" ];
   trusted-public-keys = [ "hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ=" "iohk.cachix.org-1:DpRUyj7h7V830dp/i6Nti+NEO2/nhblbov/8MW7Rqoo=" ];
 };
 ----
@@ -205,15 +207,19 @@ Running `nix run .#re-up` will refresh `compose.yaml` if need be and then restar
 
 Services currently included:
 
-* `chainseekd-preview`: `chainseekd` for the `preview` network
-* `node-preview`: A node for the `preview` network
-* `node-preprod`: A node for the `preprod` network
+* `chainseekd`: `chainseekd` for the `preprod` network
+* `node`: A node for the `preprod` network
 * `postgres`: A postgres instance, for chainseekd state.
+* `marlowe-history`: A `marlowe-history` instance.
+* `marlowe-discovery`: A `marlowe-discovery` instance.
+* `marlowe-tx`: A `marlowe-tx` instance.
+* `web`: A `marlowe-web-server` instance.
 
 The following commands may be useful:
 
 * `docker compose exec postgres /exec/run-sqitch`: Run the sqitch migrations for the chain-sync database.
-* `docker compose port`, e.g. `docker compose port chainseekd-preview 3715` will show the local port that maps to port `3715` for the `chainseekd-preview` service
+* `docker compose exec postgres psql -U postgres -d chain`: Run psql in the `chain` database.
+* `docker compose port`, e.g. `docker compose port web 8080` will show the local port that maps to port `8080` for the `web` service
 
 == Licensing
 

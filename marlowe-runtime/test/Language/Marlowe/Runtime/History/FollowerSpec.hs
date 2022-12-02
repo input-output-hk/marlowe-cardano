@@ -8,6 +8,7 @@ module Language.Marlowe.Runtime.History.FollowerSpec
   ( spec
   ) where
 
+import Cardano.Api (ConsensusMode(..), EraHistory(EraHistory))
 import Control.Concurrent.Async (concurrently)
 import Control.Concurrent.STM (atomically, newEmptyTMVar, putTMVar, takeTMVar)
 import Control.Exception (Exception, catch, throwIO)
@@ -17,9 +18,10 @@ import Control.Monad.Trans.Reader (ReaderT(runReaderT), ask)
 import Data.Functor (void)
 import qualified Data.Map as Map
 import Data.Maybe (fromJust)
+import Data.SOP.Strict (K(..), NP(..))
 import qualified Data.Set as Set
-import Data.Time (secondsToNominalDiffTime)
 import Data.Time.Clock.POSIX (posixSecondsToUTCTime)
+import Data.Void (Void)
 import Language.Marlowe (POSIXTime(..))
 import qualified Language.Marlowe.Core.V1.Semantics as V1
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
@@ -27,9 +29,9 @@ import Language.Marlowe.Runtime.ChainSync.Api
   ( AssetId(AssetId)
   , ChainPoint
   , ChainSeekClient
+  , ChainSyncQuery
   , Move(..)
   , ScriptHash(..)
-  , SlotConfig(..)
   , TransactionOutput(address)
   , TxError(..)
   , TxId
@@ -54,6 +56,10 @@ import Language.Marlowe.Runtime.Core.Api
 import Language.Marlowe.Runtime.Core.ScriptRegistry (MarloweScripts(..), currentV1Scripts)
 import Language.Marlowe.Runtime.History.Api
 import Language.Marlowe.Runtime.History.Follower
+import Ouroboros.Consensus.BlockchainTime (RelativeTime(..), SystemStart(..), mkSlotLength)
+import Ouroboros.Consensus.HardFork.History
+  (Bound(..), EraEnd(..), EraParams(..), EraSummary(..), SafeZone(..), mkInterpreter, summaryWithExactly)
+import Ouroboros.Consensus.Util.Counting (Exactly(..))
 import qualified Plutus.V1.Ledger.Value as Plutus
 import qualified PlutusTx.AssocMap as AMap
 import Test.Hspec (Expectation, Spec, it, shouldBe)
@@ -1088,10 +1094,47 @@ runFollowerTest script = do
         case mb of
           Just b  -> pure b
           Nothing -> throwIO HaltException
+      eraParams = EraParams
+        { eraEpochSize = 1
+        , eraSlotLength = mkSlotLength 1
+        , eraSafeZone = UnsafeIndefiniteSafeZone
+        }
+      oneSecondBound i = Bound
+        { boundTime = RelativeTime $ fromInteger i
+        , boundSlot = fromInteger i
+        , boundEpoch = fromInteger i
+        }
+      oneSecondEraSummary i = EraSummary
+        { eraStart = oneSecondBound i
+        , eraEnd = EraEnd $ oneSecondBound $ i + 1
+        , eraParams
+        }
+      unboundedEraSummary i = EraSummary
+        { eraStart = oneSecondBound i
+        , eraEnd = EraUnbounded
+        , eraParams
+        }
+      queryChainSeek :: ChainSyncQuery Void e a -> IO (Either e a)
+      queryChainSeek = \case
+        Chain.GetSecurityParameter -> pure $ Left ()
+        Chain.GetNetworkId -> pure $ Left ()
+        Chain.GetProtocolParameters -> pure $ Left ()
+        Chain.GetSystemStart -> pure $ Right $ SystemStart $ posixSecondsToUTCTime 0
+        Chain.GetEraHistory -> pure
+          $ Right
+          $ EraHistory CardanoMode
+          $ mkInterpreter
+          $ summaryWithExactly
+          $ Exactly
+          $  K (oneSecondEraSummary 0) -- Byron lasted 1 second
+          :* K (oneSecondEraSummary 1) -- Shelley lasted 1 second
+          :* K (oneSecondEraSummary 2) -- Allegra lasted 1 second
+          :* K (oneSecondEraSummary 3) -- Mary lasted 1 second
+          :* K (oneSecondEraSummary 4) -- Alonzo lasted 1 second
+          :* K (unboundedEraSummary 5) -- Babbage never ends
+          :* Nil
+        Chain.GetUTxOs _ -> pure $ Left ()
     let contractId = testContractId
-    let slotZeroTime = posixSecondsToUTCTime 0
-    let slotLength = secondsToNominalDiffTime 1
-    let slotConfig = SlotConfig{..}
     let securityParameter = 2160
     follower <- mkFollower FollowerDependencies{..}
     pure (resultVar, follower)

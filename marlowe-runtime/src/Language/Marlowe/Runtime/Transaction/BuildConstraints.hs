@@ -15,7 +15,7 @@ import qualified Cardano.Ledger.BaseTypes as CL (Network(..))
 import Control.Arrow (Arrow((***)))
 import Control.Category ((>>>))
 import Control.Error (note)
-import Control.Monad ((>=>))
+import Control.Monad (unless, (>=>))
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Writer (WriterT(runWriterT), tell)
 import Data.Bifunctor (first)
@@ -34,7 +34,8 @@ import GHC.Natural (Natural)
 import qualified Language.Marlowe.Core.V1.Semantics as V1
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
 import qualified Language.Marlowe.Core.V1.Semantics.Types.Address as V1
-import Language.Marlowe.Runtime.Cardano.Api (plutusScriptHash, toCardanoAddressAny, toCardanoPlutusScript)
+import Language.Marlowe.Runtime.Cardano.Api
+  (fromCardanoSlotNo, plutusScriptHash, toCardanoAddressAny, toCardanoPlutusScript, toCardanoSlotNo)
 import Language.Marlowe.Runtime.ChainSync.Api
   ( Address(..)
   , AssetId(..)
@@ -44,6 +45,7 @@ import Language.Marlowe.Runtime.ChainSync.Api
   , PaymentKeyHash(..)
   , PolicyId(..)
   , ScriptHash(..)
+  , SlotNo
   , TokenName(..)
   , TransactionMetadata(..)
   , TransactionOutput(..)
@@ -88,11 +90,23 @@ import Language.Marlowe.Runtime.Transaction.Constraints
   )
 import qualified Language.Marlowe.Runtime.Transaction.Constraints as TxConstraints
 import Ouroboros.Consensus.BlockchainTime (SystemStart, fromRelativeTime, toRelativeTime)
-import Ouroboros.Consensus.HardFork.History (interpretQuery, slotToWallclock, wallclockToSlot)
+import Ouroboros.Consensus.HardFork.History
+  ( Bound(..)
+  , EraEnd(..)
+  , EraSummary(..)
+  , Interpreter
+  , PastHorizonException(..)
+  , Summary(..)
+  , interpretQuery
+  , slotToWallclock
+  , wallclockToSlot
+  )
+import Ouroboros.Consensus.Util.Counting (NonEmpty(..))
 import qualified Ouroboros.Network.Block as O
 import qualified Plutus.V2.Ledger.Api as P
 import qualified Plutus.V2.Ledger.Api as PV2
 import qualified PlutusTx.AssocMap as AM
+import Unsafe.Coerce (unsafeCoerce)
 
 maxFees :: Lovelace
 maxFees = Lovelace 2_170_000
@@ -258,15 +272,16 @@ buildApplyInputsConstraints
   -> EraHistory CardanoMode -- ^ The era history for converting times to slots.
   -> MarloweVersion v -- ^ The Marlowe version to build the transaction for.
   -> TransactionScriptOutput v -- ^ The previous script output for the contract
-  -> UTCTime -- ^ The minimum bound of the validity interval (inclusive).
+  -> SlotNo -- ^ The current tip slot
+  -> Maybe UTCTime -- ^ The minimum bound of the validity interval (inclusive).
   -> Maybe UTCTime -- ^ The maximum bound of the validity interval (exclusive).
                    -- If not specified, this is computed from the the timeouts
                    -- in the contract.
   -> Redeemer v -- ^ The inputs to apply to the contract.
   -> Either (ApplyInputsError v) (ApplyResults v, TxConstraints v)
-buildApplyInputsConstraints systemStart eraHistory version marloweOutput invalidBefore invalidHereafter redeemer =
+buildApplyInputsConstraints systemStart eraHistory version marloweOutput tipSlot invalidBefore invalidHereafter redeemer =
   case version of
-    MarloweV1 -> buildApplyInputsConstraintsV1 systemStart eraHistory marloweOutput invalidBefore invalidHereafter redeemer
+    MarloweV1 -> buildApplyInputsConstraintsV1 systemStart eraHistory marloweOutput tipSlot invalidBefore invalidHereafter redeemer
 
 -- | Creates a set of Tx constraints that are used to build a transaction that
 -- applies an input to a contract.
@@ -274,11 +289,12 @@ buildApplyInputsConstraintsV1
   :: SystemStart
   -> EraHistory CardanoMode -- ^ The era history for converting times to slots.
   -> TransactionScriptOutput 'V1 -- ^ The previous script output for the contract with raw TxOut.
-  -> UTCTime -- ^ The minimum bound of the validity interval (inclusive).
+  -> SlotNo
+  -> Maybe UTCTime -- ^ The minimum bound of the validity interval (inclusive).
   -> Maybe UTCTime -- ^ The maximum bound of the validity interval (exclusive).
   -> Redeemer 'V1 -- ^ The inputs to apply to the contract.
   -> Either (ApplyInputsError 'V1) (ApplyResults 'V1, TxConstraints 'V1)
-buildApplyInputsConstraintsV1 systemStart eraHistory marloweOutput invalidBefore invalidHereafter redeemer = runWriterT do
+buildApplyInputsConstraintsV1 systemStart eraHistory marloweOutput tipSlot invalidBefore invalidHereafter redeemer = runWriterT do
   let
     TransactionScriptOutput _ _ _ datum = marloweOutput
     V1.MarloweData params state contract = datum
@@ -287,11 +303,19 @@ buildApplyInputsConstraintsV1 systemStart eraHistory marloweOutput invalidBefore
     requiredParties = Set.fromList $ for redeemer $ marloweInputParty >>> maybeToList
     roleAssetId = toAssetId currencySymbol
 
-  invalidBefore' <- lift $ utcTimeToSlotNo invalidBefore
+    tipSlot' = toCardanoSlotNo tipSlot
 
-  invalidHereafter' <- lift $ do
-    ib <- note (ApplyInputsConstraintsBuildupFailed UnableToDetermineTransactionTimeout) $ invalidHereafter <|> nextMarloweTimeout contract
-    utcTimeToSlotNo ib
+  invalidBefore' <- lift $ maybe (pure tipSlot') utcTimeToSlotNo invalidBefore
+
+  lift $ unless (invalidBefore' <= tipSlot') $ Left $ ValidityLowerBoundTooHigh tipSlot $ fromCardanoSlotNo invalidBefore'
+
+  invalidHereafter' <- lift case invalidHereafter of
+    Nothing -> pure case nextMarloweTimeout contract of
+      Nothing -> maxSafeSlot
+      Just nextTimeout -> case utcTimeToSlotNo' nextTimeout of
+        Right slot -> slot
+        _ -> maxSafeSlot
+    Just t -> utcTimeToSlotNo t
 
   -- Construct inputs constraints.
   -- Consume UTXOs containing Marlowe script.
@@ -312,7 +336,13 @@ buildApplyInputsConstraintsV1 systemStart eraHistory marloweOutput invalidBefore
 
   -- Apply inputs.
   let slotNoToPOSIXTime = fmap utcToPOSIXTime . slotStart
-  txInterval <- lift $ (,) <$> slotNoToPOSIXTime invalidBefore' <*> slotNoToPOSIXTime invalidHereafter'
+  txInterval <- lift $ (,)
+    <$> slotNoToPOSIXTime invalidBefore'
+    -- We subtract 1 here because invalidHereafter' is the first invalid slot.
+    -- However, the Marlowe Semantics time interval upper bound is the last
+    -- valid millisecond. So we subtract 1 millisecond from the start of the
+    -- first invalid slot to get the last millisecond in the last valid slot.
+    <*> (subtract 1 <$> slotNoToPOSIXTime invalidHereafter')
   let transactionInput = V1.TransactionInput { txInterval, txInputs = redeemer }
   (possibleContinuation, payments) <- case V1.computeTransaction transactionInput state contract of
      V1.Error err -> lift $ Left $ ApplyInputsConstraintsBuildupFailed (MarloweComputeTransactionFailed $ show err)
@@ -373,10 +403,13 @@ buildApplyInputsConstraintsV1 systemStart eraHistory marloweOutput invalidBefore
 
     -- Calculate slot number which contains a given timestamp
     utcTimeToSlotNo :: UTCTime -> Either (ApplyInputsError 'V1) C.SlotNo
-    utcTimeToSlotNo time = do
+    utcTimeToSlotNo = first (SlotConversionFailed . show) . utcTimeToSlotNo'
+
+    -- Calculate slot number which contains a given timestamp
+    utcTimeToSlotNo' :: UTCTime -> Either PastHorizonException C.SlotNo
+    utcTimeToSlotNo' time = do
       let relativeTime = toRelativeTime systemStart time
-      (slotNo, _, _) <- first (SlotConversionFailed . show)
-        $ interpretQuery interpreter
+      (slotNo, _, _) <- interpretQuery interpreter
         $ wallclockToSlot relativeTime
       pure $ C.SlotNo $ O.unSlotNo slotNo
 
@@ -396,11 +429,34 @@ buildApplyInputsConstraintsV1 systemStart eraHistory marloweOutput invalidBefore
 
     nextMarloweTimeout :: V1.Contract -> Maybe UTCTime
     nextMarloweTimeout (V1.When _ timeout _) = Just $ posixTimeToUTCTime timeout
-    nextMarloweTimeout _ = Nothing
+    nextMarloweTimeout V1.Close = Nothing
+    nextMarloweTimeout (V1.Pay _ _ _ _ c) = nextMarloweTimeout c
+    nextMarloweTimeout (V1.If _ c1 c2) = on min nextMarloweTimeout c1 c2
+    nextMarloweTimeout (V1.Let _ _ c) = nextMarloweTimeout c
+    nextMarloweTimeout (V1.Assert _ c) = nextMarloweTimeout c
 
+    maxSafeSlot :: O.SlotNo
+    maxSafeSlot = getMaxSafeSlotFromSummary $ unInterpreter interpreter
+
+    unInterpreter :: Interpreter xs -> Summary xs
+    unInterpreter = unsafeCoerce -- Interpreter xs is a newtype wrapper around Summary xs.
+                                 -- Unfortunately, the provided query language is not able to extract the max safe slot,
+                                 -- So we have to reach unsafely into the internals to get
+                                 -- it ourselves. https://input-output-hk.github.io/ouroboros-network/ouroboros-consensus/Ouroboros-Consensus-HardFork-History-Qry.html#t:Interpreter
+
+    getMaxSafeSlotFromSummary :: Summary xs -> O.SlotNo
+    getMaxSafeSlotFromSummary (Summary eras) = case eras of
+      NonEmptyOne era -> getMaxSafeSlotFromEraSummary era
+      NonEmptyCons _ eras' -> getMaxSafeSlotFromSummary (Summary eras')
+
+    getMaxSafeSlotFromEraSummary :: EraSummary -> O.SlotNo
+    getMaxSafeSlotFromEraSummary EraSummary{..} = case eraEnd of
+      EraEnd Bound{..} -> O.SlotNo $ O.unSlotNo boundSlot - 1 -- subtract 1 because the era end bound is exclusive
+      EraUnbounded -> maxBound
 
 -- | Creates a set of Tx constraints that are used to build a transaction that
 -- withdraws payments from a payout validator.
+
 buildWithdrawConstraints
   :: MarloweVersion v -- ^ The Marlowe version to build the transaction for.
   -> PayoutDatum v -- ^ The role token from which to withdraw funds.
