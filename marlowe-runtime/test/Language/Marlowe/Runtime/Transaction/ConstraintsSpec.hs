@@ -194,7 +194,16 @@ spec = do
           where
             extra = fold <$> listOf do
               txOutRef <- genTxOutRef
-              txOut <- genTransactionOutput genAddress
+              -- txOut <- genTransactionOutput genAddress
+              stubAddress <- genAddress
+              lovelaceAmount <- (2_000_000 +) <$> suchThat arbitrary (> 0)
+              let
+                txOut = Chain.TransactionOutput
+                  stubAddress
+                  (Chain.Assets (fromCardanoLovelace lovelaceAmount) $ Chain.Tokens Map.empty)
+                  Nothing
+                  Nothing
+
               pure $ Chain.UTxOs $ Map.singleton txOutRef txOut
 
       protocol <- hedgehog genProtocolParameters
