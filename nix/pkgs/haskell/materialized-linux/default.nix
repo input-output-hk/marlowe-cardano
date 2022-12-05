@@ -33,7 +33,6 @@
         "cardano-binary".flags.development = false;
         "network-arbitrary".revision = (((hackage."network-arbitrary")."0.7.0.0").revisions).default;
         "data-textual".revision = (((hackage."data-textual")."0.3.0.3").revisions).default;
-        "secp256k1-haskell".revision = (((hackage."secp256k1-haskell")."0.6.1").revisions).default;
         "cborg".revision = (((hackage."cborg")."0.2.8.0").revisions).default;
         "cborg".flags.optimize-gmp = true;
         "regex-posix".revision = (((hackage."regex-posix")."0.96.0.1").revisions).default;
@@ -164,7 +163,7 @@
         "ouroboros-consensus-shelley".flags.asserts = false;
         "appar".revision = (((hackage."appar")."0.1.8").revisions).default;
         "extra".revision = (((hackage."extra")."1.7.12").revisions).default;
-        "plutus-ledger-api".revision = (((hackage."plutus-ledger-api")."1.0.0.0").revisions).default;
+        "plutus-ledger-api".revision = (((hackage."plutus-ledger-api")."1.0.0.1").revisions).default;
         "asn1-types".revision = (((hackage."asn1-types")."0.3.4").revisions).default;
         "base-compat".revision = (((hackage."base-compat")."0.12.2").revisions).default;
         "string-conversions".revision = (((hackage."string-conversions")."0.4.0.1").revisions).default;
@@ -255,7 +254,7 @@
         "silently".revision = (((hackage."silently")."1.2.5.3").revisions).default;
         "monad-logger".revision = (((hackage."monad-logger")."0.3.37").revisions).default;
         "monad-logger".flags.template_haskell = true;
-        "cardano-crypto-praos".revision = (((hackage."cardano-crypto-praos")."2.0.0").revisions).default;
+        "cardano-crypto-praos".revision = (((hackage."cardano-crypto-praos")."2.0.0.0.1").revisions).default;
         "cardano-crypto-praos".flags.external-libsodium-vrf = true;
         "cardano-crypto-praos".flags.development = false;
         "parsec".revision = (((hackage."parsec")."3.1.14.0").revisions).default;
@@ -313,8 +312,8 @@
         "splitmix".flags.optimised-mixer = false;
         "gray-code".revision = (((hackage."gray-code")."0.3.1").revisions).default;
         "recv".revision = (((hackage."recv")."0.0.0").revisions).default;
-        "vector-map".revision = (((hackage."vector-map")."0.1.0.0").revisions).default;
-        "cardano-crypto-tests".revision = (((hackage."cardano-crypto-tests")."2.0.0").revisions).default;
+        "vector-map".revision = (((hackage."vector-map")."0.1.1.2").revisions).default;
+        "cardano-crypto-tests".revision = (((hackage."cardano-crypto-tests")."2.0.0.0.1").revisions).default;
         "cardano-crypto-tests".flags.secp256k1-support = true;
         "cardano-crypto-tests".flags.development = false;
         "file-embed".revision = (((hackage."file-embed")."0.0.15.0").revisions).default;
@@ -378,8 +377,8 @@
         "byron-spec-chain".revision = (((hackage."byron-spec-chain")."0.1.0.0").revisions).default;
         "haskell-lexer".revision = (((hackage."haskell-lexer")."1.1").revisions).default;
         "microlens".revision = (((hackage."microlens")."0.4.13.0").revisions).default;
-        "monoidal-synchronisation".revision = (((hackage."monoidal-synchronisation")."0.1.0.0").revisions).default;
-        "cardano-crypto-class".revision = (((hackage."cardano-crypto-class")."2.0.0").revisions).default;
+        "monoidal-synchronisation".revision = (((hackage."monoidal-synchronisation")."0.1.0.1").revisions).default;
+        "cardano-crypto-class".revision = (((hackage."cardano-crypto-class")."2.0.0.0.1").revisions).default;
         "cardano-crypto-class".flags.secp256k1-support = true;
         "cardano-crypto-class".flags.development = false;
         "bytestring-tree-builder".revision = (((hackage."bytestring-tree-builder")."0.2.7.10").revisions).default;
@@ -600,7 +599,7 @@
         "servant-client-core".revision = (((hackage."servant-client-core")."0.19").revisions).default;
         "directory".revision = (((hackage."directory")."1.3.6.0").revisions).default;
         "concurrent-output".revision = (((hackage."concurrent-output")."1.10.16").revisions).default;
-        "typed-protocols-examples".revision = (((hackage."typed-protocols-examples")."0.1.0.0").revisions).default;
+        "typed-protocols-examples".revision = (((hackage."typed-protocols-examples")."0.1.0.1").revisions).default;
         "small-steps".revision = (((hackage."small-steps")."0.1.0.0").revisions).default;
         "small-steps".flags.sts_assert = false;
         "exceptions".revision = (((hackage."exceptions")."0.10.4").revisions).default;
@@ -613,7 +612,7 @@
         "ouroboros-network-testing".flags.nightly = false;
         "half".revision = (((hackage."half")."0.3.1").revisions).default;
         "co-log".revision = (((hackage."co-log")."0.4.0.1").revisions).default;
-        "goblins".revision = (((hackage."goblins")."0.2.0.0").revisions).default;
+        "goblins".revision = (((hackage."goblins")."0.2.0.1").revisions).default;
         "goblins".flags.development = false;
         "optparse-applicative".revision = (((hackage."optparse-applicative")."0.17.0.0").revisions).default;
         "optparse-applicative".flags.process = true;
@@ -646,7 +645,7 @@
         "monad-control".revision = (((hackage."monad-control")."1.0.3.1").revisions).default;
         "semialign".revision = (((hackage."semialign")."1.2.0.1").revisions).default;
         "semialign".flags.semigroupoids = true;
-        "plutus-core".revision = (((hackage."plutus-core")."1.0.0.0").revisions).default;
+        "plutus-core".revision = (((hackage."plutus-core")."1.0.0.1").revisions).default;
         "wai-app-static".revision = (((hackage."wai-app-static")."3.1.7.4").revisions).default;
         "wai-app-static".flags.cryptonite = true;
         "wai-app-static".flags.print = false;
@@ -725,7 +724,7 @@
         "criterion".revision = (((hackage."criterion")."1.6.0.0").revisions).default;
         "criterion".flags.embed-data-files = false;
         "criterion".flags.fast = false;
-        "cardano-api".revision = (((hackage."cardano-api")."1.35.3").revisions).default;
+        "cardano-api".revision = (((hackage."cardano-api")."1.35.4").revisions).default;
         "base16".revision = (((hackage."base16")."0.3.2.0").revisions).default;
         "readable".revision = (((hackage."readable")."0.3.1").revisions).default;
         "Only".revision = (((hackage."Only")."0.1").revisions).default;
@@ -749,7 +748,7 @@
         "integer-gmp".revision = (((hackage."integer-gmp")."1.0.3.0").revisions).default;
         "byteable".revision = (((hackage."byteable")."0.1.1").revisions).default;
         "prelude-safeenum".revision = (((hackage."prelude-safeenum")."0.1.1.3").revisions).default;
-        "non-integral".revision = (((hackage."non-integral")."0.1.0.0").revisions).default;
+        "non-integral".revision = (((hackage."non-integral")."0.1.1.2").revisions).default;
         "cmdargs".revision = (((hackage."cmdargs")."0.10.21").revisions).default;
         "cmdargs".flags.quotation = true;
         "cmdargs".flags.testprog = false;
@@ -1223,7 +1222,6 @@
           "io-streams-haproxy".components.library.planned = lib.mkOverride 900 true;
           "cardano-api".components.library.planned = lib.mkOverride 900 true;
           "natural-arithmetic".components.library.planned = lib.mkOverride 900 true;
-          "secp256k1-haskell".components.library.planned = lib.mkOverride 900 true;
           "bech32".components.library.planned = lib.mkOverride 900 true;
           "async-components".components.library.planned = lib.mkOverride 900 true;
           "ghc".components.library.planned = lib.mkOverride 900 true;

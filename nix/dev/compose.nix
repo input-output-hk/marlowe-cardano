@@ -1,6 +1,6 @@
 { sqitchPg, runCommand, writeShellScriptBin, writeText, lib, glibcLocales, nix, git, networks, su-exec }:
 let
-  network = networks.preprod;
+  network = networks.preview;
   run-sqitch = writeShellScriptBin "run-sqitch" ''
     export PATH="$PATH:${lib.makeBinPath [ sqitchPg ]}"
     export LOCALE_ARCHIVE="${glibcLocales}/lib/locale/locale-archive"
@@ -32,7 +32,7 @@ let
   '';
 
   node-service = {
-    image = "inputoutput/cardano-node:1.35.3-configs";
+    image = "inputoutput/cardano-node:1.35.4";
 
     environment = [
       "NETWORK=${network.name}"
