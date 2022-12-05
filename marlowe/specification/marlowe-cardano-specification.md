@@ -183,7 +183,7 @@ The input present in the redeemer and script context is the input provided to th
 ```haskell
 marloweInput ∪ txInfoValidRange (scriptContextTxInfo scriptContext) ∪ txInfoData (scriptContextTxInfo scriptContext) ≅ transactionInput
 ```
-This is a congruence because `marloweInput` contains the input (perhaps including the Merkle hash of the contract's continuation) and `txInfoValidRange` of the script context contains the validity interval for the transaction, whereas `transactionInput` contains both. Additionally, any continued contract is present in `txInfoData` of the script context, whereas it is directly present in any `MerkleizedInput` of `transactionInput`. Also note that the script context may, in principle, contain an open, closed, or half-open/half-closed time interval, but Marlowe semantics requires a closed time interval.
+This is a congruence because `marloweInput` contains the input (perhaps including the Merkle hash of the contract's continuation) and the `txInfoValidRange` of the script context contains the validity interval for the transaction, whereas the `transactionInput` contains both. Any merkleized contract continuation is present in the `txInfoData` of the script context, whereas it is directly present in any `MerkleizedInput` of `transactionInput`. Also note that the script context may, in principle, contain an open, closed, or half-open/half-closed time interval, but Marlowe semantics requires a closed time interval.
 
 
 #### *Constraint 1.* Typed validation
