@@ -45,6 +45,7 @@ data ChainSyncDependencies = ChainSyncDependencies
        . CardanoEra era
       -> Tx era
       -> IO (SubmitResult (TxValidationErrorInMode CardanoMode))
+  , securityParam :: !Int
   }
 
 chainSync :: Component IO ChainSyncDependencies ()

@@ -38,11 +38,8 @@ hoistCommitGenesisBlock transformation = CommitGenesisBlock . fmap transformatio
 
 -- Queries
 
-newtype GetHeaderAtPoint m = GetHeaderAtPoint
-  { runGetHeaderAtPoint :: ChainPoint -> m (WithOrigin BlockHeader) }
-
 newtype GetIntersectionPoints m = GetIntersectionPoints
-  { runGetIntersectionPoints :: m [ChainPoint] }
+  { runGetIntersectionPoints :: m [WithOrigin BlockHeader] }
 
 newtype GetGenesisBlock m = GetGenesisBlock
   { runGetGenesisBlock :: m (Maybe GenesisBlock) }
@@ -58,9 +55,6 @@ data MoveResult err result
 
 newtype MoveClient m = MoveClient
   { runMoveClient :: forall err result. Api.ChainPoint -> Api.Move err result -> m (MoveResult err result) }
-
-hoistGetHeaderAtPoint :: (forall a. m a -> n a) -> GetHeaderAtPoint m -> GetHeaderAtPoint n
-hoistGetHeaderAtPoint transformation = GetHeaderAtPoint . fmap transformation . runGetHeaderAtPoint
 
 hoistGetIntersectionPoints :: (forall a. m a -> n a) -> GetIntersectionPoints m -> GetIntersectionPoints n
 hoistGetIntersectionPoints transformation = GetIntersectionPoints . transformation . runGetIntersectionPoints
@@ -82,7 +76,6 @@ data DatabaseQueries m = DatabaseQueries
   { commitRollback        :: !(CommitRollback m)
   , commitBlocks          :: !(CommitBlocks m)
   , commitGenesisBlock    :: !(CommitGenesisBlock m)
-  , getHeaderAtPoint      :: !(GetHeaderAtPoint m)
   , getIntersectionPoints :: !(GetIntersectionPoints m)
   , getGenesisBlock       :: !(GetGenesisBlock m)
   , getUTxOs              :: !(GetUTxOs m)
@@ -94,7 +87,6 @@ hoistDatabaseQueries transformation DatabaseQueries{..} = DatabaseQueries
   { commitBlocks = hoistCommitBlocks transformation commitBlocks
   , commitGenesisBlock = hoistCommitGenesisBlock transformation commitGenesisBlock
   , commitRollback = hoistCommitRollback transformation commitRollback
-  , getHeaderAtPoint = hoistGetHeaderAtPoint transformation getHeaderAtPoint
   , getIntersectionPoints = hoistGetIntersectionPoints transformation getIntersectionPoints
   , getGenesisBlock = hoistGetGenesisBlock transformation getGenesisBlock
   , getUTxOs = hoistGetUTxOs transformation getUTxOs
