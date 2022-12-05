@@ -259,6 +259,7 @@ executable cip30-demo
   build-depends:
       base >= 4.9 && < 5
     , text
+    , containers
     , aeson
     , blaze-markup
     , yesod

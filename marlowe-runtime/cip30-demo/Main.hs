@@ -10,10 +10,12 @@ module Main
 import Cardano.Api (BabbageEra)
 import Control.Exception (throwIO)
 import qualified Data.Aeson as Aeson
-import qualified Data.Aeson.Types as Aeson.Types
+import qualified Data.Maybe as Maybe
+import Data.Set (Set)
 import Data.Text (Text)
 import GHC.Generics (Generic)
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
+import qualified Language.Marlowe.Runtime.ChainSync.Api as ChainSync.Api
 import qualified Language.Marlowe.Runtime.Core.Api as Core.Api
 import qualified Language.Marlowe.Runtime.Transaction.Api as Transaction.Api
 import Network.Protocol.Driver (RunClient, runClientPeerOverSocket)
@@ -40,10 +42,31 @@ newtype WalletName = WalletName String
     , Blaze.ToMarkup
     )
 
+newtype AddressDTO = AddressDTO ChainSync.Api.Address
+  deriving (Show, Eq, Ord)
+
+instance Aeson.FromJSON AddressDTO where
+  parseJSON = Aeson.withText "Address" $ pure . AddressDTO . Maybe.fromJust . ChainSync.Api.fromBech32
+
+newtype TxOutRefDTO = TxOutRefDTO ChainSync.Api.TxOutRef
+  deriving (Show, Eq, Ord)
+
+instance Aeson.FromJSON TxOutRefDTO where
+  parseJSON = Aeson.withText "TxOutRef" $ pure . TxOutRefDTO . Maybe.fromJust . ChainSync.Api.parseTxOutRef
+
+data WalletAddressesDTO = WalletAddressesDTO
+  { changeAddress :: AddressDTO
+  , extraAddresses :: Set AddressDTO
+  , collateralUtxos :: Set TxOutRefDTO
+  }
+  deriving (Show, Generic, Aeson.FromJSON)
+
+unWalletAddressesDTO :: WalletAddressesDTO -> Transaction.Api.WalletAddresses
+unWalletAddressesDTO WalletAddressesDTO {} = undefined
+
 data PostWalletCreateRequestDTO = PostWalletCreateRequestDTO
-  { version :: ()
-  , source :: V1.Contract
-  -- , walletAddresses :: Transaction.Api.WalletAddresses
+  { source :: V1.Contract
+  , walletAddresses :: WalletAddressesDTO
   }
   deriving (Show, Generic, Aeson.FromJSON)
 
