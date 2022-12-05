@@ -30,7 +30,7 @@ import qualified Language.Marlowe.Runtime.Web.Server.DTO as TxRecord (TxRecord(.
 import Language.Marlowe.Runtime.Web.Server.TxClient (TempTx(..))
 import Language.Marlowe.Runtime.Web.Server.Util (applyRangeToAscList)
 import Observe.Event (Event, EventBackend, addField, withEvent)
-import Observe.Event.BackendModification (EventBackendModifiers, modifyEventBackend)
+import Observe.Event.BackendModification (EventBackendModifier, modifyEventBackend)
 import Observe.Event.DSL (FieldSpec(..), SelectorSpec(..))
 import Observe.Event.Render.JSON.DSL.Compile (compile)
 import Observe.Event.Syntax ((≔))
@@ -73,8 +73,7 @@ data HistoryClientDependencies r = HistoryClientDependencies
 
 -- | Signature for a delegate that loads the state of a single contract.
 type LoadContract r m
-   = forall r'
-   . EventBackendModifiers r r'
+   = [EventBackendModifier r]
   -> ContractId               -- ^ ID of the contract to load
   -> m (Maybe (Either (TempTx ContractCreated) ContractRecord)) -- ^ Nothing if the ID is not found
 
@@ -84,8 +83,7 @@ data LoadTxError
 
 -- | Signature for a delegate that loads a list of transactions for a contract.
 type LoadTransactions r m
-   = forall r'
-   . EventBackendModifiers r r'
+   = [EventBackendModifier r]
   -> ContractId -- ^ ID of the contract to load transactions for.
   -> Maybe TxId -- ^ ID of the contract to start from.
   -> Int -- ^ Limit: the maximum number of contract headers to load.
@@ -95,8 +93,7 @@ type LoadTransactions r m
 
 -- | Signature for a delegate that loads a transaction for a contract.
 type LoadTransaction r m
-   = forall r'
-   . EventBackendModifiers r r'
+   = [EventBackendModifier r]
   -> ContractId -- ^ ID of the contract to load transactions for.
   -> TxId -- ^ ID of the transaction to load.
   -> m (Maybe (Either (TempTx InputsApplied) TxRecord.TxRecord))
