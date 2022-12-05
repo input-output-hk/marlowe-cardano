@@ -96,7 +96,6 @@ import Data.Profunctor (rmap)
 import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.Text (Text)
-import qualified Data.Text as T
 import Data.These (These(..))
 import Data.Vector (Vector)
 import qualified Data.Vector as V
@@ -116,7 +115,6 @@ import Language.Marlowe.Runtime.ChainSync.Database
   , CommitRollback(..)
   , DatabaseQueries(DatabaseQueries)
   , GetGenesisBlock(..)
-  , GetHeaderAtPoint(..)
   , GetIntersectionPoints(..)
   , GetUTxOs(GetUTxOs)
   , MoveClient(..)
@@ -125,7 +123,6 @@ import Language.Marlowe.Runtime.ChainSync.Database
   , hoistCommitGenesisBlock
   , hoistCommitRollback
   , hoistGetGenesisBlock
-  , hoistGetHeaderAtPoint
   , hoistGetIntersectionPoints
   , hoistGetUTxOs
   , hoistMoveClient
@@ -141,7 +138,6 @@ databaseQueries genesisBlock = DatabaseQueries
   (hoistCommitRollback (TS.transaction TS.ReadCommitted TS.Write) $ commitRollback genesisBlock)
   (hoistCommitBlocks (TS.transaction TS.ReadCommitted TS.Write) commitBlocks)
   (hoistCommitGenesisBlock (TS.transaction TS.ReadCommitted TS.Write) commitGenesisBlock)
-  (hoistGetHeaderAtPoint (TS.transaction TS.ReadCommitted TS.Read) getHeaderAtPoint)
   (hoistGetIntersectionPoints (TS.transaction TS.ReadCommitted TS.Read) getIntersectionPoints)
   (hoistGetGenesisBlock (TS.transaction TS.ReadCommitted TS.Read) getGenesisBlock)
   (hoistGetUTxOs (TS.transaction TS.ReadCommitted TS.Read) getUTxOs)
@@ -175,24 +171,6 @@ getGenesisBlock = GetGenesisBlock $ HT.statement () $ refineResult (decodeResult
       <*> pure (fromIntegral lovelace)
       <*> decodeAddressAny address
 
--- GetHeaderAtPoint
-
-getHeaderAtPoint :: GetHeaderAtPoint Transaction
-getHeaderAtPoint = GetHeaderAtPoint \case
-  ChainPointAtGenesis -> pure Origin
-  point@(ChainPoint slotNo hash) ->
-    HT.statement (slotNoToParam slotNo, headerHashToParam hash) $ refineResult decodeResults
-      [maybeStatement|
-        SELECT block.blockNo :: bigint
-          FROM chain.block AS block
-        WHERE block.slotNo = $1 :: bigint
-          AND block.id     = $2 :: bytea
-      |]
-    where
-      decodeResults :: Maybe Int64 -> Either Text (WithOrigin BlockHeader)
-      decodeResults Nothing        = Left $ "No block found at " <> T.pack (show point)
-      decodeResults (Just blockNo) = Right $ At $ BlockHeader slotNo hash $ BlockNo $ fromIntegral blockNo
-
 decodeTxId :: ByteString -> Either Text TxId
 decodeTxId txId = case deserialiseFromRawBytes AsTxId txId of
   Nothing    -> Left $ "Invalid TxId bytes: " <> encodeBase16 txId
@@ -208,17 +186,22 @@ decodeAddressAny address = case deserialiseFromRawBytes AsAddressAny address of
 getIntersectionPoints :: GetIntersectionPoints Transaction
 getIntersectionPoints = GetIntersectionPoints $ HT.statement () $ rmap decodeResults
   [vectorStatement|
-    SELECT slotNo :: bigint, id :: bytea
+    SELECT slotNo :: bigint, id :: bytea, blockNo :: bigint
     FROM   chain.block
     WHERE  rollbackToBlock IS NULL
     ORDER BY slotNo DESC LIMIT 2160
   |]
   where
-    decodeResults :: Vector (Int64, ByteString) -> [ChainPoint]
+    decodeResults :: Vector (Int64, ByteString, Int64) -> [WithOrigin BlockHeader]
     decodeResults = fmap decodeResult . V.toList
 
-    decodeResult :: (Int64, ByteString) -> ChainPoint
-    decodeResult (slotNo, hash) = ChainPoint (SlotNo $ fromIntegral slotNo) (HeaderHash $ toShort hash)
+    decodeResult :: (Int64, ByteString, Int64) -> WithOrigin BlockHeader
+    decodeResult (slotNo, hash, blockNo)
+      | slotNo < 0 = Origin
+      | otherwise = At $ BlockHeader
+          (SlotNo $ fromIntegral slotNo)
+          (HeaderHash $ toShort hash)
+          (BlockNo $ fromIntegral blockNo)
 
 -- MoveClient
 
@@ -794,11 +777,11 @@ getUTxOs = GetUTxOs $ fmap Api.UTxOs . \case
              , asset.name :: bytea?
              , assetOut.quantity :: bigint?
           FROM chain.txOut         AS txOut
-          LEFT JOIN chain.txIn     AS txIn     ON txIn.txoutid = txOut.txId AND txIn.txoutix = txOut.txIx
+          LEFT JOIN chain.txIn     AS txIn     ON txIn.txOutId = txOut.txId AND txIn.txOutIx = txOut.txIx
           LEFT JOIN chain.assetOut AS assetOut ON assetOut.txOutId = txOut.txId AND assetOut.txOutIx = txOut.txIx
           LEFT JOIN chain.asset    AS asset    ON asset.id = assetOut.assetId
          WHERE (txOut.txId, txOut.txTx) = ANY(unnest ($1 :: bytea[], $2 :: smallint[]))
-           AND txIn.txinid IS NULL
+           AND txIn.txInId IS NULL
          ORDER BY txIx
       |] (Fold foldRow mempty id)
   GetUTxOsAtAddresses addresses -> do
@@ -820,10 +803,10 @@ getUTxOs = GetUTxOs $ fmap Api.UTxOs . \case
              , assetOut.quantity :: bigint?
           FROM chain.txOut         AS txOut
           JOIN addresses           AS addr     ON addr.address = txOut.address AND CAST(MD5(addr.address) AS uuid) = CAST(MD5(txOut.address) AS uuid)
-          LEFT JOIN chain.txIn     AS txIn     ON txIn.txoutid = txOut.txId AND txIn.txoutix = txOut.txIx
+          LEFT JOIN chain.txIn     AS txIn     ON txIn.txOutId = txOut.txId AND txIn.txOutIx = txOut.txIx
           LEFT JOIN chain.assetOut AS assetOut ON assetOut.txOutId = txOut.txId AND assetOut.txOutIx = txOut.txIx
           LEFT JOIN chain.asset    AS asset    ON asset.id = assetOut.assetId
-         WHERE txIn.txinid IS NULL
+         WHERE txIn.txInId IS NULL
          ORDER BY txIx
       |] (Fold foldRow mempty id)
   where
