@@ -188,16 +188,30 @@ spec = do
 
   describe "selectCoins" do
     focus $ prop "added inputs satisfy min utxo" \(SomeTxConstraints marloweVersion constraints) -> do
+      let
+        genUtxos :: Gen Chain.UTxOs
+        genUtxos = extra
+          where
+            extra = fold <$> listOf do
+              txOutRef <- genTxOutRef
+              txOut <- genTransactionOutput genAddress
+              pure $ Chain.UTxOs $ Map.singleton txOutRef txOut
+
       protocol <- hedgehog genProtocolParameters
       marloweContext <- genMarloweContext marloweVersion constraints
-      walletContext <- genWalletContext marloweVersion constraints
+      (utxos, txOutRefs) <- case marloweVersion of
+        MarloweV1 -> (,) <$> genUtxos <*> genTxOutRef
+
+      walletContext <- do
+        wc <- genWalletContext marloweVersion constraints
+        pure $ wc { availableUtxos = utxos, collateralUtxos = Set.singleton txOutRefs}
 
       let
         valueMeetsMinimumReq :: TxOut CtxTx BabbageEra -> Maybe String
         valueMeetsMinimumReq txout@(TxOut _ txOrigValue _ _) =
           case calculateMinimumUTxO ShelleyBasedEraBabbage txout protocolTestnet of
             Right minValueFromApi ->
-              if origAda >= (selectLovelace minValueFromApi)
+              if origAda >= selectLovelace minValueFromApi
                 then Nothing
                 else Just $ printf "Value %s is lower than minimum value %s"
                       (show origAda) (show $ selectLovelace minValueFromApi)
