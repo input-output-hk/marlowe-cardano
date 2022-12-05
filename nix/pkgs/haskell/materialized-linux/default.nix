@@ -17,7 +17,6 @@
         "postgresql-binary".revision = (((hackage."postgresql-binary")."0.12.5").revisions).default;
         "ouroboros-network-framework".revision = (((hackage."ouroboros-network-framework")."0.1.0.0").revisions).default;
         "natural-transformation".revision = (((hackage."natural-transformation")."0.4").revisions).default;
-        "eventuo11y-json".revision = (((hackage."eventuo11y-json")."0.1.0.0").revisions).default;
         "happy".revision = (((hackage."happy")."1.20.0").revisions).default;
         "blaze-textual".revision = (((hackage."blaze-textual")."0.2.2.1").revisions).default;
         "blaze-textual".flags.integer-simple = false;
@@ -396,7 +395,6 @@
         "email-validate".revision = (((hackage."email-validate")."2.3.2.16").revisions).default;
         "wl-pprint-annotated".revision = (((hackage."wl-pprint-annotated")."0.1.0.1").revisions).default;
         "data-default-instances-old-locale".revision = (((hackage."data-default-instances-old-locale")."0.0.1").revisions).default;
-        "eventuo11y-batteries".revision = (((hackage."eventuo11y-batteries")."0.2.1.1").revisions).default;
         "text-builder".revision = (((hackage."text-builder")."0.6.7").revisions).default;
         "unix-bytestring".revision = (((hackage."unix-bytestring")."0.3.7.8").revisions).default;
         "canonical-json".revision = (((hackage."canonical-json")."0.6.0.1").revisions).default;
@@ -482,7 +480,6 @@
         "network-info".revision = (((hackage."network-info")."0.2.1").revisions).default;
         "errors".revision = (((hackage."errors")."2.3.0").revisions).default;
         "formatting".revision = (((hackage."formatting")."6.3.7").revisions).default;
-        "eventuo11y".revision = (((hackage."eventuo11y")."0.5.0.0").revisions).default;
         "async".revision = (((hackage."async")."2.2.4").revisions).default;
         "async".flags.bench = false;
         "word8".revision = (((hackage."word8")."0.1.3").revisions).default;
@@ -713,7 +710,6 @@
         "hedgehog".revision = (((hackage."hedgehog")."1.2").revisions).default;
         "microlens-th".revision = (((hackage."microlens-th")."0.4.3.10").revisions).default;
         "blaze-builder".revision = (((hackage."blaze-builder")."0.4.2.2").revisions).default;
-        "eventuo11y-dsl".revision = (((hackage."eventuo11y-dsl")."0.1.0.0").revisions).default;
         "generic-deriving".revision = (((hackage."generic-deriving")."1.14.2").revisions).default;
         "generic-deriving".flags.base-4-9 = true;
         "warp".revision = (((hackage."warp")."3.3.23").revisions).default;
@@ -856,6 +852,8 @@
         marlowe = ./.plan.nix/marlowe.nix;
         plutus-ledger = ./.plan.nix/plutus-ledger.nix;
         marlowe-protocols = ./.plan.nix/marlowe-protocols.nix;
+        eventuo11y = ./.plan.nix/eventuo11y.nix;
+        eventuo11y-batteries = ./.plan.nix/eventuo11y-batteries.nix;
         cardano-addresses = ./.plan.nix/cardano-addresses.nix;
         cardano-addresses-cli = ./.plan.nix/cardano-addresses-cli.nix;
         plutus-script-utils = ./.plan.nix/plutus-script-utils.nix;
@@ -869,7 +867,9 @@
         marlowe-runtime = ./.plan.nix/marlowe-runtime.nix;
         marlowe-contracts = ./.plan.nix/marlowe-contracts.nix;
         marlowe-actus = ./.plan.nix/marlowe-actus.nix;
+        eventuo11y-dsl = ./.plan.nix/eventuo11y-dsl.nix;
         aeson-via-serialise = ./.plan.nix/aeson-via-serialise.nix;
+        eventuo11y-json = ./.plan.nix/eventuo11y-json.nix;
         plutus-ledger-slot = ./.plan.nix/plutus-ledger-slot.nix;
         };
       };
@@ -889,6 +889,8 @@
             flags = { "defer-plugin-errors" = lib.mkOverride 900 false; };
             };
           "marlowe-protocols" = { flags = {}; };
+          "eventuo11y" = { flags = {}; };
+          "eventuo11y-batteries" = { flags = {}; };
           "cardano-addresses" = {
             flags = { "release" = lib.mkOverride 900 false; };
             };
@@ -925,7 +927,9 @@
           "marlowe-actus" = {
             flags = { "defer-plugin-errors" = lib.mkOverride 900 false; };
             };
+          "eventuo11y-dsl" = { flags = {}; };
           "aeson-via-serialise" = { flags = {}; };
+          "eventuo11y-json" = { flags = {}; };
           "plutus-ledger-slot" = {
             flags = { "defer-plugin-errors" = lib.mkOverride 900 false; };
             };
