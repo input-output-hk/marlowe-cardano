@@ -224,20 +224,6 @@
           };
         };
       exes = {
-        "cip30-demo" = {
-          depends = [
-            (hsPkgs."base" or (errorHandler.buildDepError "base"))
-            (hsPkgs."blaze-markup" or (errorHandler.buildDepError "blaze-markup"))
-            (hsPkgs."yesod" or (errorHandler.buildDepError "yesod"))
-            (hsPkgs."shakespeare" or (errorHandler.buildDepError "shakespeare"))
-            ];
-          buildable = true;
-          modules = [ "Paths_marlowe_runtime" ];
-          hsSourceDirs = [ "cip30-demo" ];
-          mainPath = [
-            "Main.hs"
-            ] ++ (pkgs.lib).optional (flags.defer-plugin-errors) "";
-          };
         "marlowe" = {
           depends = [
             (hsPkgs."aeson" or (errorHandler.buildDepError "aeson"))
