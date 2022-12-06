@@ -340,6 +340,7 @@ executable marlowe-tx
     , async-components
     , co-log
     , co-log-core
+    , eventuo11y
     , marlowe-protocols
     , marlowe-runtime
     , marlowe-runtime:config

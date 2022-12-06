@@ -112,7 +112,7 @@ import qualified Cardano.Ledger.BaseTypes as Base
 import Cardano.Ledger.Credential (ptrCertIx, ptrSlotNo, ptrTxIx)
 import Codec.Serialise (deserialiseOrFail, serialise)
 import Control.Monad (guard, (>=>))
-import Data.Aeson (ToJSON, ToJSONKey, toJSON)
+import Data.Aeson (ToJSON, ToJSONKey, Value(..), object, toJSON, (.=))
 import qualified Data.Aeson as A
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.KeyMap as KeyMap
@@ -142,6 +142,7 @@ import Data.Void (Void, absurd)
 import Data.Word (Word16, Word64)
 import GHC.Generics (Generic)
 import GHC.Natural (Natural)
+import GHC.Show (showSpace)
 import Network.Protocol.ChainSeek.Client
 import Network.Protocol.ChainSeek.Codec
 import Network.Protocol.ChainSeek.Server
@@ -492,7 +493,7 @@ data Credential
   = PaymentKeyCredential PaymentKeyHash
   | ScriptCredential ScriptHash
   deriving stock (Show, Eq, Ord, Generic)
-  deriving anyclass Binary
+  deriving anyclass (Binary, ToJSON)
 
 data StakeCredential
   = StakeKeyCredential StakeKeyHash
@@ -508,7 +509,7 @@ fromCardanoPaymentCredential = \case
 newtype PaymentKeyHash = PaymentKeyHash { unPaymentKeyHash :: ByteString }
   deriving stock (Eq, Ord, Generic)
   deriving newtype (Binary)
-  deriving (IsString, Show) via Base16
+  deriving (IsString, Show, ToJSON) via Base16
 
 newtype StakeKeyHash = StakeKeyHash { unStakeKeyHash :: ByteString }
   deriving stock (Eq, Ord, Generic)
@@ -564,7 +565,7 @@ data TxError
   = TxNotFound
   | TxInPast BlockHeader
   deriving stock (Show, Eq, Ord, Generic)
-  deriving anyclass (Binary)
+  deriving anyclass (Binary, ToJSON)
 
 -- | Reasons a 'FindTxsTo' request can be rejected.
 data FindTxsToError
@@ -577,12 +578,12 @@ data UTxOError
   = UTxONotFound
   | UTxOSpent TxId
   deriving stock (Show, Eq, Ord, Generic)
-  deriving anyclass (Binary)
+  deriving anyclass (Binary, ToJSON)
 
 -- | Reasons an 'Intersect' request can be rejected.
 data IntersectError = IntersectionNotFound
   deriving stock (Show, Eq, Ord, Generic)
-  deriving anyclass (Binary)
+  deriving anyclass (Binary, ToJSON)
 
 -- | The 'query' type for the Marlowe Chain Sync.
 data Move err result where
@@ -628,6 +629,77 @@ mkSchemaVersion "moveSchema" ''Move
 deriving instance Show (Move err result)
 deriving instance Eq (Move err result)
 deriving instance Ord (Move err result)
+
+instance QueryToJSON Move where
+  queryToJSON = \case
+    Fork m1 m2 -> object
+      [ "fork" .= object
+        [ "query1" .= queryToJSON m1
+        , "query2" .= queryToJSON m2
+        ]
+      ]
+    AdvanceSlots offset -> object [ "advanceSlots" .= toJSON offset ]
+    AdvanceBlocks offset -> object [ "advanceBlocks" .= toJSON offset ]
+    Intersect blocks -> object [ "intersect" .= toJSON blocks ]
+    FindConsumingTx ref -> object [ "findConsumingTx" .= toJSON ref ]
+    FindConsumingTxs refs -> object [ "findConsumingTxs" .= toJSON refs ]
+    FindTx txId wait -> object
+      [ "findTx" .= object
+        [ "txId" .= toJSON txId
+        , "wait" .= toJSON wait
+        ]
+      ]
+    FindTxsTo c -> object [ "findTxsTo" .= toJSON c ]
+    AdvanceToTip -> String "advanceToTip"
+  errToJSON = \case
+    TagFork m1 m2 -> toJSON . bimap (errToJSON m1) (errToJSON m2)
+    TagAdvanceSlots -> toJSON
+    TagAdvanceBlocks -> toJSON
+    TagIntersect -> toJSON
+    TagFindConsumingTx -> toJSON
+    TagFindConsumingTxs -> toJSON
+    TagFindTx -> toJSON
+    TagFindTxsTo -> toJSON
+    TagAdvanceToTip -> toJSON
+  resultToJSON = \case
+    TagFork m1 m2 -> toJSON . bimap (resultToJSON m1) (resultToJSON m2)
+    TagAdvanceSlots -> toJSON
+    TagAdvanceBlocks -> toJSON
+    TagIntersect -> toJSON
+    TagFindConsumingTx -> toJSON
+    TagFindConsumingTxs -> toJSON
+    TagFindTx -> toJSON
+    TagFindTxsTo -> toJSON
+    TagAdvanceToTip -> toJSON
+
+showsPrecThese :: Int -> (Int -> a -> ShowS) -> (Int -> b -> ShowS) -> These a b -> ShowS
+showsPrecThese p showsPrecA showsPrecB = showParen (p >= 11) . \case
+  This a -> (showString "This" . showSpace . showsPrecA 11 a)
+  That b -> (showString "That" . showSpace . showsPrecB 11 b)
+  These a b -> (showString "These" . showSpace . showsPrecA 11 a . showSpace . showsPrecB 11 b)
+
+instance ShowQuery Move where
+  showsPrecQuery = showsPrec
+  showsPrecErr p = \case
+    TagFork m1 m2 -> showsPrecThese p (flip showsPrecErr m1) (flip showsPrecErr m2)
+    TagAdvanceSlots -> showsPrec p
+    TagAdvanceBlocks -> showsPrec p
+    TagIntersect -> showsPrec p
+    TagFindConsumingTx -> showsPrec p
+    TagFindConsumingTxs -> showsPrec p
+    TagFindTx -> showsPrec p
+    TagFindTxsTo -> showsPrec p
+    TagAdvanceToTip -> showsPrec p
+  showsPrecResult p = \case
+    TagFork m1 m2 -> showsPrecThese p (flip showsPrecResult m1) (flip showsPrecResult m2)
+    TagAdvanceSlots -> showsPrec p
+    TagAdvanceBlocks -> showsPrec p
+    TagIntersect -> showsPrec p
+    TagFindConsumingTx -> showsPrec p
+    TagFindConsumingTxs -> showsPrec p
+    TagFindTx -> showsPrec p
+    TagFindTxsTo -> showsPrec p
+    TagAdvanceToTip -> showsPrec p
 
 type RuntimeChainSeek = ChainSeek Move ChainPoint ChainPoint
 

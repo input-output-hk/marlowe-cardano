@@ -1,11 +1,14 @@
 {-# LANGUAGE GADTs #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
 
 module Main
   where
 
+import Colog (LoggerT)
 import qualified Colog
 import Control.Concurrent.Component
 import Control.Exception (bracket, bracketOnError, throwIO)
+import Control.Monad.Cleanup (MonadCleanup)
 import Control.Monad.IO.Class (liftIO)
 import Data.Either (fromRight)
 import Data.Void (Void)
@@ -74,6 +77,8 @@ main = run =<< getOptions
 
 clientHints :: AddrInfo
 clientHints = defaultHints { addrSocketType = Stream }
+
+deriving newtype instance MonadCleanup m => MonadCleanup (LoggerT msg m)
 
 run :: Options -> IO ()
 run Options{..} = withSocketsDo do
