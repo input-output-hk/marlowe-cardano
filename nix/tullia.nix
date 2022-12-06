@@ -37,7 +37,10 @@ rec {
       in
       config.preset.github.status.lib.reportBulk {
         bulk.text = ''
-          echo '["x86_64-linux", "x86_64-darwin"]' | nix-systems -i
+          nix eval .#ciJobs --apply __attrNames --json | # all systems the flake declares
+          nix-systems -i | # figure out which the current machine is able to build
+          jq 'with_entries(select(.value))' # only keep those we can build
+
         '';
         each.text = ''nix build -L ${flakeUrl}#${lib.escapeShellArg ciTaskTopAttr}."$1".required'';
         skippedDescription = lib.escapeShellArg "No nix builder available for this platform";
