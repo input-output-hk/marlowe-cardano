@@ -40,7 +40,7 @@ import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Word (Word16, Word64)
 import qualified Language.Marlowe.Core.V1.Semantics as Sem
-import Language.Marlowe.Runtime.Cardano.Api (cardanoEraToAsType, fromCardanoTxId, toCardanoMetadata)
+import Language.Marlowe.Runtime.Cardano.Api (cardanoEraToAsType, fromCardanoTxId)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Core.Api
   ( ContractId(..)
@@ -212,7 +212,7 @@ instance HasDTO Chain.Metadata where
   type DTO Chain.Metadata = Web.Metadata
 
 instance ToDTO Chain.Metadata where
-  toDTO = Web.Metadata . metadataValueToJsonNoSchema . toCardanoMetadata
+  toDTO = Web.Metadata . metadataValueToJsonNoSchema . Chain.toCardanoMetadata
 
 instance FromDTO Chain.Metadata where
   fromDTO = Chain.fromJSONEncodedMetadata . Web.unMetadata
