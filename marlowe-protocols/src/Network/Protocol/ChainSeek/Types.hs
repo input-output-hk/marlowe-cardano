@@ -1,7 +1,9 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE EmptyCase #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE PolyKinds #-}
+{-# LANGUAGE QuantifiedConstraints #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
 
@@ -10,13 +12,16 @@
 module Network.Protocol.ChainSeek.Types
   where
 
+import Data.Aeson (ToJSON(..), Value(..), object, (.=))
 import Data.Binary (Binary(..), Get, Put)
 import Data.Kind (Type)
 import Data.String (IsString)
 import Data.Text (Text)
 import qualified Data.Text.Encoding as T
 import Data.Type.Equality (type (:~:))
-import Network.TypedProtocol (Protocol(..))
+import GHC.Show (showSpace)
+import Network.Protocol.Driver (MessageToJSON(..), ShowMessage(..))
+import Network.TypedProtocol (PeerHasAgency(..), Protocol(..))
 
 data SomeTag q = forall err result. SomeTag (Tag q err result)
 
@@ -32,6 +37,16 @@ class Query (q :: * -> * -> *) where
   getErr :: Tag q err result -> Get err
   putResult :: Tag q err result -> result -> Put
   getResult :: Tag q err result -> Get result
+
+class Query q => QueryToJSON (q :: * -> * -> *) where
+  queryToJSON :: q err result -> Value
+  errToJSON :: Tag q err result -> err -> Value
+  resultToJSON :: Tag q err result -> result -> Value
+
+class Query q => ShowQuery (q :: * -> * -> *) where
+  showsPrecQuery :: Int -> q err result -> ShowS
+  showsPrecErr :: Int -> Tag q err result -> err -> ShowS
+  showsPrecResult :: Int -> Tag q err result -> result -> ShowS
 
 -- | The type of states in the protocol.
 data ChainSeek (query :: Type -> Type -> Type) point tip where
@@ -68,7 +83,7 @@ data StNextKind
 -- | Schema version used for
 newtype SchemaVersion = SchemaVersion Text
   deriving stock (Show, Eq, Ord)
-  deriving newtype (IsString)
+  deriving newtype (IsString, ToJSON)
 
 instance Binary SchemaVersion where
   put (SchemaVersion v) = put $ T.encodeUtf8 v
@@ -166,3 +181,97 @@ instance Protocol (ChainSeek query point tip) where
 data TokNextKind (k :: StNextKind) where
   TokCanAwait :: TokNextKind 'StCanAwait
   TokMustReply :: TokNextKind 'StMustReply
+
+instance
+  ( ShowQuery query
+  , Show tip
+  , Show point
+  ) => ShowMessage (ChainSeek query point tip) where
+  showsPrecMessage p = \case
+    ClientAgency TokInit -> \case
+      MsgRequestHandshake version -> showParen (p >= 11)
+        ( showString "MsgRequestHandshake"
+        . showSpace
+        . showsPrec 11 version
+        )
+    ClientAgency TokIdle -> \case
+      MsgQueryNext query -> showParen (p >= 11)
+        ( showString "MsgQueryNext"
+        . showSpace
+        . showsPrecQuery 11 query
+        )
+      MsgDone -> showString "MsgDone"
+    ClientAgency TokPing -> \case
+      MsgPong -> showString "MsgPong"
+    ServerAgency TokHandshake -> \case
+      MsgConfirmHandshake -> showString "MsgConfirmHandshake"
+      MsgRejectHandshake versions -> showParen (p >= 11)
+        ( showString "MsgRejectHandshake"
+        . showSpace
+        . showsPrec 11 versions
+        )
+    ServerAgency (TokNext tag _) -> \case
+      MsgRejectQuery err tip -> showParen (p >= 11)
+        ( showString "MsgRejectQuery"
+        . showSpace
+        . showsPrecErr 11 tag err
+        . showSpace
+        . showsPrec 11 tip
+        )
+      MsgRollForward result point tip -> showParen (p >= 11)
+        ( showString "MsgRollForward"
+        . showSpace
+        . showsPrecResult 11 tag result
+        . showSpace
+        . showsPrec 11 point
+        . showSpace
+        . showsPrec 11 tip
+        )
+      MsgRollBackward point tip -> showParen (p >= 11)
+        ( showString "MsgRollBackward"
+        . showSpace
+        . showsPrec 11 point
+        . showSpace
+        . showsPrec 11 tip
+        )
+      MsgWait -> showString "MsgWait"
+      MsgPing -> showString "MsgPing"
+
+instance
+  ( QueryToJSON query
+  , ToJSON tip
+  , ToJSON point
+  ) => MessageToJSON (ChainSeek query point tip) where
+  messageToJSON = \case
+    ClientAgency TokInit -> \case
+      MsgRequestHandshake version -> object [ "requestHandshake" .= toJSON version ]
+    ClientAgency TokIdle -> \case
+      MsgQueryNext query -> object [ "queryNext" .= queryToJSON query ]
+      MsgDone -> String "done"
+    ClientAgency TokPing -> \case
+      MsgPong -> String "pong"
+    ServerAgency TokHandshake -> \case
+      MsgConfirmHandshake -> String "confirmHandshake"
+      MsgRejectHandshake versions -> object [ "rejectHandshake" .= toJSON versions ]
+    ServerAgency (TokNext tag _) -> \case
+      MsgRejectQuery err tip -> object
+        [ "rejectQuery" .= object
+            [ "error" .= errToJSON tag err
+            , "tip" .= toJSON tip
+            ]
+        ]
+      MsgRollForward result point tip -> object
+        [ "rollForward" .= object
+            [ "result" .= resultToJSON tag result
+            , "point" .= toJSON point
+            , "tip" .= toJSON tip
+            ]
+        ]
+      MsgRollBackward point tip -> object
+        [ "rollBackward" .= object
+            [ "point" .= toJSON point
+            , "tip" .= toJSON tip
+            ]
+        ]
+      MsgWait -> String "wait"
+      MsgPing -> String "ping"
