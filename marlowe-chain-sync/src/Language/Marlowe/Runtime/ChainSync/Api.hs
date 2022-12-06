@@ -80,6 +80,7 @@ module Language.Marlowe.Runtime.ChainSync.Api
   , stakeReference
   , toBech32
   , toCardanoAddress
+  , toCardanoMetadata
   , toDatum
   , toPlutusData
   , toRedeemer
@@ -99,9 +100,11 @@ import Cardano.Api
   , Tx
   , deserialiseFromBech32
   , deserialiseFromCBOR
+  , metadataValueToJsonNoSchema
   , serialiseToBech32
   , serialiseToCBOR
   )
+import qualified Cardano.Api as C
 import qualified Cardano.Api as Cardano
 import Cardano.Api.Shelley (ProtocolParameters)
 import qualified Cardano.Api.Shelley as Cardano
@@ -154,7 +157,7 @@ import Text.Read (readMaybe)
 -- | Extends a type with a "Genesis" member.
 data WithGenesis a = Genesis | At a
   deriving stock (Show, Eq, Ord, Functor, Generic)
-  deriving anyclass (Binary)
+  deriving anyclass (Binary, ToJSON)
 
 -- | A point in the chain, identified by a slot number, block header hash, and
 -- block number.
@@ -167,7 +170,7 @@ data BlockHeader = BlockHeader
   , blockNo    :: !BlockNo         -- ^ The ordinal number of this block.
   }
   deriving stock (Show, Eq, Ord, Generic)
-  deriving anyclass (Binary)
+  deriving anyclass (Binary, ToJSON)
 
 isAfter :: SlotNo -> BlockHeader -> Bool
 isAfter s BlockHeader{..} = slotNo > s
@@ -182,7 +185,7 @@ data Transaction = Transaction
   , mintedTokens  :: !Tokens                 -- ^ Tokens minted by the transaction.
   }
   deriving stock (Show, Eq, Ord, Generic)
-  deriving anyclass (Binary)
+  deriving anyclass (Binary, ToJSON)
 
 -- | A validity range for a transaction
 data ValidityRange
@@ -191,7 +194,7 @@ data ValidityRange
   | MaxBound SlotNo           -- ^ The transaction is only valid before a specific slot.
   | MinMaxBound SlotNo SlotNo -- ^ The transaction is only valid between two slots.
   deriving stock (Show, Eq, Ord, Generic)
-  deriving anyclass (Binary)
+  deriving anyclass (Binary, ToJSON)
 
 
 -- Encodes `transaction_metadatum`:
@@ -204,6 +207,17 @@ data Metadata
   | MetadataText Text
   deriving stock (Show, Eq, Ord, Generic)
   deriving anyclass (Binary)
+
+instance ToJSON Metadata where
+  toJSON = metadataValueToJsonNoSchema . toCardanoMetadata
+
+toCardanoMetadata :: Metadata -> C.TxMetadataValue
+toCardanoMetadata = \case
+  MetadataMap ms -> C.TxMetaMap $ bimap toCardanoMetadata toCardanoMetadata <$> ms
+  MetadataList ds -> C.TxMetaList $ toCardanoMetadata <$> ds
+  MetadataNumber i -> C.TxMetaNumber i
+  MetadataBytes bs -> C.TxMetaBytes bs
+  MetadataText bs -> C.TxMetaText bs
 
 -- Handle convenient `JSON` based encoding for a subset of `Metadata`
 -- type domain.
@@ -244,7 +258,7 @@ data TransactionInput = TransactionInput
   , redeemer   :: !(Maybe Redeemer) -- ^ The script redeemer datum for this input (if one was provided).
   }
   deriving stock (Show, Eq, Ord, Generic)
-  deriving anyclass (Binary)
+  deriving anyclass (Binary, ToJSON)
 
 -- | An output of a transaction.
 data TransactionOutput = TransactionOutput
@@ -259,7 +273,7 @@ data TransactionOutput = TransactionOutput
 -- | A script datum that is used to spend the output of a script tx.
 newtype Redeemer = Redeemer { unRedeemer :: Datum }
   deriving stock (Show, Eq, Ord, Generic)
-  deriving newtype (Binary)
+  deriving newtype (Binary, ToJSON)
 
 -- | A datum as a sum-of-products.
 data Datum
@@ -405,16 +419,16 @@ renderTxOutRef TxOutRef{..} = mconcat
 
 newtype SlotNo = SlotNo { unSlotNo :: Word64 }
   deriving stock (Show, Eq, Ord, Generic)
-  deriving newtype (Num, Integral, Real, Enum, Bounded, Binary)
+  deriving newtype (Num, Integral, Real, Enum, Bounded, Binary, ToJSON)
 
 newtype BlockNo = BlockNo { unBlockNo :: Word64 }
   deriving stock (Show, Eq, Ord, Generic)
-  deriving newtype (Num, Integral, Real, Enum, Bounded, Binary)
+  deriving newtype (Num, Integral, Real, Enum, Bounded, Binary, ToJSON)
 
 newtype BlockHeaderHash = BlockHeaderHash { unBlockHeaderHash :: ByteString }
   deriving stock (Eq, Ord, Generic)
   deriving newtype (Binary)
-  deriving (IsString, Show) via Base16
+  deriving (IsString, Show, ToJSON) via Base16
 
 data AssetId = AssetId
   { policyId  :: !PolicyId
@@ -509,7 +523,7 @@ fromCardanoStakeKeyHash = StakeKeyHash . Cardano.serialiseToRawBytes
 
 newtype ScriptHash = ScriptHash { unScriptHash :: ByteString }
   deriving stock (Eq, Ord, Generic)
-  deriving (IsString, Show) via Base16
+  deriving (IsString, Show, ToJSON) via Base16
   deriving anyclass (Binary)
 
 policyIdToScriptHash :: PolicyId -> ScriptHash
@@ -556,7 +570,7 @@ data TxError
 data FindTxsToError
   = NoAddresses
   deriving stock (Show, Eq, Ord, Generic)
-  deriving anyclass (Binary)
+  deriving anyclass (Binary, ToJSON)
 
 -- | Reasons a 'FindConsumingTx' request can be rejected.
 data UTxOError
