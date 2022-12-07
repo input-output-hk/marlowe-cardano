@@ -166,6 +166,7 @@
         nomadChart = import ./nix/nomadChart.nix {
           inputs = std.deSystemize system inputs;
         };
+
         nomadEnv = let
           envData = import ./nix/nomadEnv.nix {
             inputs = std.deSystemize system inputs;
