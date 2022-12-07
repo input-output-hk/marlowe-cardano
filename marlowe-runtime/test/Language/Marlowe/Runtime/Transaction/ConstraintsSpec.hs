@@ -28,7 +28,6 @@ import GHC.Word (Word64)
 import Gen.Cardano.Api.Metadata (genTxMetadataValue)
 import Gen.Cardano.Api.Typed
   ( genAddressByron
-  , genAddressInEra
   , genAddressShelley
   , genPlutusScript
   , genProtocolParameters
@@ -191,27 +190,19 @@ spec = do
     focus $ prop "added inputs satisfy min utxo" \(SomeTxConstraints marloweVersion constraints) -> do
       let
         genAssets :: Gen Chain.Assets
-        genAssets  = do
+        genAssets = do
           lovelaceAmount <- (2_000_000 +) <$> suchThat arbitrary (> 0)
           pure (Chain.Assets (fromCardanoLovelace $ Lovelace lovelaceAmount) $ Chain.Tokens Map.empty)
+
         genUtxos :: Gen Chain.UTxOs
-        genUtxos = extra
-          where
-            extra = fold <$> listOf do
-              txOutRef <- genTxOutRef
-              -- txOut <- genTransactionOutput genAddress
-              stubAddress <- genAddress
-              assets <- genAssets
-              let
-                txOut = Chain.TransactionOutput
-                  stubAddress
-                  assets
-                  Nothing
-                  Nothing
+        genUtxos = do
+          txOutRef <- genTxOutRef
+          stubAddress <- genAddress
+          assets <- genAssets
+          let
+            txOut = Chain.TransactionOutput stubAddress assets Nothing Nothing
+          pure $ Chain.UTxOs $ Map.singleton txOutRef txOut
 
-              pure $ Chain.UTxOs $ Map.singleton txOutRef txOut
-
-      protocol <- hedgehog genProtocolParameters
       marloweContext <- genMarloweContext marloweVersion constraints
       (utxos, txOutRefs) <- case marloweVersion of
         MarloweV1 -> (,) <$> genUtxos <*> genTxOutRef
@@ -234,8 +225,9 @@ spec = do
               origAda = selectLovelace . txOutValueToValue $ txOrigValue
 
       txBodyContent <- do
-        stubAddress <- hedgehog $ genAddressInEra BabbageEra
-        assets <- genAssets
+        stubAddress <- AddressInEra (ShelleyAddressInEra ShelleyBasedEraBabbage)
+          <$> hedgehog genAddressShelley
+        assets <- lovelaceToTxOutValue . Lovelace . (2_000_000 +) <$> suchThat arbitrary (> 0)
 
         txBC <- hedgehog $ genTxBodyContent BabbageEra
         pure $ txBC { txOuts =
@@ -246,8 +238,7 @@ spec = do
               ReferenceScriptNone
           ] }
 
-
-      pure $ case selectCoins protocol marloweVersion marloweContext walletContext txBodyContent of
+      pure $ case selectCoins protocolTestnet marloweVersion marloweContext walletContext txBodyContent of
         Right newTxBodyContent -> do
           let errors = catMaybes $ map valueMeetsMinimumReq $ txOuts newTxBodyContent
           if null errors
