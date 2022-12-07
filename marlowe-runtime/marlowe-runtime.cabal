@@ -63,6 +63,9 @@ common lang
 library
   import: lang
   hs-source-dirs:   src
+  -- Unfortunately, we need to disable this because plutus-tx-plugin is a
+  -- dependency, and GHC doesn't acknowledge that.
+  ghc-options: -Wno-unused-packages
   exposed-modules:
     Language.Marlowe.Protocol.HeaderSync.Client
     Language.Marlowe.Protocol.HeaderSync.Codec
@@ -126,6 +129,7 @@ library
     , ouroboros-network
     , plutus-ledger-api
     , plutus-tx
+    , plutus-tx-plugin
     , semialign
     , stm
     , text
