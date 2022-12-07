@@ -18,8 +18,7 @@ module Network.Protocol.Query.Types
 import Data.Aeson (Value(..), object, (.=))
 import Data.Binary (Get, Put)
 import Data.Type.Equality (type (:~:))
-import GHC.Show (showSpace)
-import Network.Protocol.Driver (MessageToJSON(..), ShowMessage(..))
+import Network.Protocol.Driver (MessageToJSON(..))
 import Network.TypedProtocol
 
 data SomeTag q = forall delimiter err result. SomeTag (Tag q delimiter err result)
@@ -44,12 +43,6 @@ class IsQuery q => QueryToJSON q where
   errToJSON :: Tag q delimiter err result -> err -> Value
   resultToJSON :: Tag q delimiter err result -> result -> Value
   delimiterToJSON :: Tag q delimiter err result -> delimiter -> Value
-
-class IsQuery q => ShowQuery q where
-  showsPrecQuery :: Int -> q delimiter err result -> ShowS
-  showsPrecErr :: Int -> Tag q delimiter err result -> err -> ShowS
-  showsPrecResult :: Int -> Tag q delimiter err result -> result -> ShowS
-  showsPrecDelimiter :: Int -> Tag q delimiter err result -> delimiter -> ShowS
 
 -- | A state kind for the query protocol.
 data Query (query :: * -> * -> * -> *) where
@@ -140,38 +133,3 @@ instance QueryToJSON query => MessageToJSON (Query query) where
             , "next" .= (delimiterToJSON tag <$> d)
             ]
         ]
-
-instance ShowQuery query => ShowMessage (Query query) where
-  showsPrecMessage p = \case
-    ClientAgency TokInit -> \case
-      MsgRequest q -> showParen (p >= 11)
-        ( showString "MsgRequest"
-        . showSpace
-        . showsPrecQuery 11 q
-        )
-    ClientAgency (TokPage tag) -> \case
-      MsgRequestNext d -> showParen (p >= 11)
-        ( showString "MsgRequestNext"
-        . showSpace
-        . showsPrecDelimiter 11 tag d
-        )
-      MsgDone -> showString "MsgDone"
-    ServerAgency (TokNext _ tag)-> \case
-      MsgReject err -> showParen (p >= 11)
-        ( showString "MsgReject"
-        . showSpace
-        . showsPrecErr 11 tag err
-        )
-      MsgNextPage results d -> showParen (p >= 11)
-        ( showString "MsgNextPage"
-        . showSpace
-        . showsPrecResult 11 tag results
-        . showSpace
-        . case d of
-            Nothing -> showString "Nothing"
-            Just d' -> showParen True
-              ( showString "Just"
-              . showSpace
-              . showsPrecDelimiter 11 tag d'
-              )
-        )

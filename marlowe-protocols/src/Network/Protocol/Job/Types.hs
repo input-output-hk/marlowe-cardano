@@ -20,8 +20,7 @@ import Data.Aeson (Value(..), object, (.=))
 import Data.Binary (Put)
 import Data.Binary.Get (Get)
 import Data.Type.Equality (type (:~:))
-import GHC.Show (showSpace)
-import Network.Protocol.Driver (MessageToJSON(..), ShowMessage(..))
+import Network.Protocol.Driver (MessageToJSON(..))
 import Network.TypedProtocol
 
 data SomeTag cmd = forall status err result. SomeTag (Tag cmd status err result)
@@ -65,13 +64,6 @@ class Command cmd => CommandToJSON cmd where
   errToJSON :: Tag cmd status err result -> err -> Value
   resultToJSON :: Tag cmd status err result -> result -> Value
   statusToJSON :: Tag cmd status err result -> status -> Value
-
-class Command cmd => ShowCommand cmd where
-  showsPrecCommand :: Int -> cmd status err result -> ShowS
-  showsPrecJobId :: Int -> JobId cmd status err result -> ShowS
-  showsPrecErr :: Int -> Tag cmd status err result -> err -> ShowS
-  showsPrecResult :: Int -> Tag cmd status err result -> result -> ShowS
-  showsPrecStatus :: Int -> Tag cmd status err result -> status -> ShowS
 
 -- | A state kind for the job protocol.
 data Job (cmd :: * -> * -> * -> *) where
@@ -183,41 +175,3 @@ instance CommandToJSON cmd => MessageToJSON (Job cmd) where
     ServerAgency (TokAttach _) -> String . \case
       MsgAttached -> "attached"
       MsgAttachFailed -> "attachFailed"
-
-instance ShowCommand cmd => ShowMessage (Job cmd) where
-  showsPrecMessage p = \case
-    ClientAgency TokInit -> \case
-      MsgExec cmd -> showParen (p >= 11)
-        ( showString "MsgExec"
-        . showSpace
-        . showsPrecCommand 11 cmd
-        )
-      MsgAttach jobId -> showParen (p >= 11)
-        ( showString "MsgAttach"
-        . showSpace
-        . showsPrecJobId 11 jobId
-        )
-    ClientAgency (TokAwait _) -> showString . \case
-      MsgPoll -> "MsgPoll"
-      MsgDetach -> "MsgDetach"
-    ServerAgency (TokCmd tag) -> \case
-      MsgFail err -> showParen (p >= 11)
-        ( showString "MsgFail"
-        . showSpace
-        . showsPrecErr 11 tag err
-        )
-      MsgSucceed result -> showParen (p >= 11)
-        ( showString "MsgSucceed"
-        . showSpace
-        . showsPrecResult 11 tag result
-        )
-      MsgAwait status jobId -> showParen (p >= 11)
-        ( showString "MsgFail"
-        . showSpace
-        . showsPrecStatus 11 tag status
-        . showSpace
-        . showsPrecJobId 11 jobId
-        )
-    ServerAgency (TokAttach _)-> showString . \case
-        MsgAttachFailed -> "MsgAttachFailed"
-        MsgAttached -> "MsgAttached"

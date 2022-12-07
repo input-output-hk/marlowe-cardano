@@ -18,7 +18,6 @@ import Data.Aeson (Value, toJSON)
 import Data.ByteString.Lazy (ByteString)
 import Data.ByteString.Lazy.Base16 (encodeBase16)
 import Data.Void (Void, absurd)
-import GHC.Show (showSpace)
 import Network.Channel (Channel(..), hoistChannel, socketAsChannel)
 import Network.Socket (AddrInfo, SockAddr, Socket, addrAddress, close, connect, openSocket)
 import Network.Socket.Address (accept)
@@ -33,9 +32,6 @@ import Observe.Event.Render.JSON (DefaultRenderFieldJSON(..), DefaultRenderSelec
 class MessageToJSON ps where
   messageToJSON :: PeerHasAgency pr (st :: ps) -> Message ps st st' -> Value
 
-class ShowMessage ps where
-  showsPrecMessage :: Int -> PeerHasAgency pr (st :: ps) -> Message ps st st' -> ShowS
-
 data DriverSelector ps f where
   Send :: DriverSelector ps (SendField ps)
   Recv :: DriverSelector ps (RecvField ps)
@@ -47,35 +43,10 @@ data MessageWithAgency ps st st' = forall pr. MessageWithAgency (PeerHasAgency p
 data SendField ps where
   SendMessage :: PeerHasAgency pr st -> Message ps (st :: ps) (st' :: ps) -> SendField ps
 
-instance ShowMessage ps => Show (SendField ps) where
-  showsPrec p (SendMessage pa msg) = showParen (p >= 11)
-    ( showString "SendMessage"
-    . showSpace
-    . showsPrecMessage 11 pa msg
-    )
-
 data RecvField ps where
   StateBefore :: Maybe ByteString -> RecvField ps
   StateAfter :: Maybe ByteString -> RecvField ps
   RecvMessage :: PeerHasAgency pr st -> Message ps (st :: ps) (st' :: ps) -> RecvField ps
-
-instance ShowMessage ps => Show (RecvField ps) where
-  showsPrec p = showParen (p >= 11) . \case
-    RecvMessage pa msg ->
-      ( showString "RecvMessage"
-      . showSpace
-      . showsPrecMessage 11 pa msg
-      )
-    StateBefore state ->
-      ( showString "StateBefore"
-      . showSpace
-      . showsPrec 11 (encodeBase16 <$> state)
-      )
-    StateAfter state ->
-      ( showString "StateAfter"
-      . showSpace
-      . showsPrec 11 (encodeBase16 <$> state)
-      )
 
 instance MessageToJSON ps => DefaultRenderSelectorJSON (DriverSelector ps) where
   defaultRenderSelectorJSON = \case

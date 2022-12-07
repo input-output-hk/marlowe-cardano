@@ -142,7 +142,6 @@ import Data.Void (Void, absurd)
 import Data.Word (Word16, Word64)
 import GHC.Generics (Generic)
 import GHC.Natural (Natural)
-import GHC.Show (showSpace)
 import Network.Protocol.ChainSeek.Client
 import Network.Protocol.ChainSeek.Codec
 import Network.Protocol.ChainSeek.Server
@@ -671,35 +670,6 @@ instance QueryToJSON Move where
     TagFindTx -> toJSON
     TagFindTxsTo -> toJSON
     TagAdvanceToTip -> toJSON
-
-showsPrecThese :: Int -> (Int -> a -> ShowS) -> (Int -> b -> ShowS) -> These a b -> ShowS
-showsPrecThese p showsPrecA showsPrecB = showParen (p >= 11) . \case
-  This a -> (showString "This" . showSpace . showsPrecA 11 a)
-  That b -> (showString "That" . showSpace . showsPrecB 11 b)
-  These a b -> (showString "These" . showSpace . showsPrecA 11 a . showSpace . showsPrecB 11 b)
-
-instance ShowQuery Move where
-  showsPrecQuery = showsPrec
-  showsPrecErr p = \case
-    TagFork m1 m2 -> showsPrecThese p (flip showsPrecErr m1) (flip showsPrecErr m2)
-    TagAdvanceSlots -> showsPrec p
-    TagAdvanceBlocks -> showsPrec p
-    TagIntersect -> showsPrec p
-    TagFindConsumingTx -> showsPrec p
-    TagFindConsumingTxs -> showsPrec p
-    TagFindTx -> showsPrec p
-    TagFindTxsTo -> showsPrec p
-    TagAdvanceToTip -> showsPrec p
-  showsPrecResult p = \case
-    TagFork m1 m2 -> showsPrecThese p (flip showsPrecResult m1) (flip showsPrecResult m2)
-    TagAdvanceSlots -> showsPrec p
-    TagAdvanceBlocks -> showsPrec p
-    TagIntersect -> showsPrec p
-    TagFindConsumingTx -> showsPrec p
-    TagFindConsumingTxs -> showsPrec p
-    TagFindTx -> showsPrec p
-    TagFindTxsTo -> showsPrec p
-    TagAdvanceToTip -> showsPrec p
 
 type RuntimeChainSeek = ChainSeek Move ChainPoint ChainPoint
 

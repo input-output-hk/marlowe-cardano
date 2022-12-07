@@ -19,8 +19,7 @@ import Data.String (IsString)
 import Data.Text (Text)
 import qualified Data.Text.Encoding as T
 import Data.Type.Equality (type (:~:))
-import GHC.Show (showSpace)
-import Network.Protocol.Driver (MessageToJSON(..), ShowMessage(..))
+import Network.Protocol.Driver (MessageToJSON(..))
 import Network.TypedProtocol (PeerHasAgency(..), Protocol(..))
 
 data SomeTag q = forall err result. SomeTag (Tag q err result)
@@ -42,11 +41,6 @@ class Query q => QueryToJSON (q :: * -> * -> *) where
   queryToJSON :: q err result -> Value
   errToJSON :: Tag q err result -> err -> Value
   resultToJSON :: Tag q err result -> result -> Value
-
-class Query q => ShowQuery (q :: * -> * -> *) where
-  showsPrecQuery :: Int -> q err result -> ShowS
-  showsPrecErr :: Int -> Tag q err result -> err -> ShowS
-  showsPrecResult :: Int -> Tag q err result -> result -> ShowS
 
 -- | The type of states in the protocol.
 data ChainSeek (query :: Type -> Type -> Type) point tip where
@@ -181,61 +175,6 @@ instance Protocol (ChainSeek query point tip) where
 data TokNextKind (k :: StNextKind) where
   TokCanAwait :: TokNextKind 'StCanAwait
   TokMustReply :: TokNextKind 'StMustReply
-
-instance
-  ( ShowQuery query
-  , Show tip
-  , Show point
-  ) => ShowMessage (ChainSeek query point tip) where
-  showsPrecMessage p = \case
-    ClientAgency TokInit -> \case
-      MsgRequestHandshake version -> showParen (p >= 11)
-        ( showString "MsgRequestHandshake"
-        . showSpace
-        . showsPrec 11 version
-        )
-    ClientAgency TokIdle -> \case
-      MsgQueryNext query -> showParen (p >= 11)
-        ( showString "MsgQueryNext"
-        . showSpace
-        . showsPrecQuery 11 query
-        )
-      MsgDone -> showString "MsgDone"
-    ClientAgency TokPing -> \case
-      MsgPong -> showString "MsgPong"
-    ServerAgency TokHandshake -> \case
-      MsgConfirmHandshake -> showString "MsgConfirmHandshake"
-      MsgRejectHandshake versions -> showParen (p >= 11)
-        ( showString "MsgRejectHandshake"
-        . showSpace
-        . showsPrec 11 versions
-        )
-    ServerAgency (TokNext tag _) -> \case
-      MsgRejectQuery err tip -> showParen (p >= 11)
-        ( showString "MsgRejectQuery"
-        . showSpace
-        . showsPrecErr 11 tag err
-        . showSpace
-        . showsPrec 11 tip
-        )
-      MsgRollForward result point tip -> showParen (p >= 11)
-        ( showString "MsgRollForward"
-        . showSpace
-        . showsPrecResult 11 tag result
-        . showSpace
-        . showsPrec 11 point
-        . showSpace
-        . showsPrec 11 tip
-        )
-      MsgRollBackward point tip -> showParen (p >= 11)
-        ( showString "MsgRollBackward"
-        . showSpace
-        . showsPrec 11 point
-        . showSpace
-        . showsPrec 11 tip
-        )
-      MsgWait -> showString "MsgWait"
-      MsgPing -> showString "MsgPing"
 
 instance
   ( QueryToJSON query
