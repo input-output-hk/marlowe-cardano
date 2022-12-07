@@ -55,7 +55,12 @@ let
       "/nix:/nix"
       # Hard-coding linux because this won't work on Mac anyway.
       # TODO find a setup that works on MacOS
-      "./dist-newstyle/build/x86_64-linux/ghc-8.10.7:/build"
+      {
+        type = "bind";
+        source = "./dist-newstyle/build/x86_64-linux/ghc-8.10.7";
+        target = "/build";
+        read_only = true;
+      }
       "${symlinks}:/exec"
       "shared:/ipc"
     ];
