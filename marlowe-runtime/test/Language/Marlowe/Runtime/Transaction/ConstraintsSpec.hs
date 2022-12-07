@@ -28,6 +28,7 @@ import GHC.Word (Word64)
 import Gen.Cardano.Api.Metadata (genTxMetadataValue)
 import Gen.Cardano.Api.Typed
   ( genAddressByron
+  , genAddressInEra
   , genAddressShelley
   , genPlutusScript
   , genProtocolParameters
@@ -189,6 +190,10 @@ spec = do
   describe "selectCoins" do
     focus $ prop "added inputs satisfy min utxo" \(SomeTxConstraints marloweVersion constraints) -> do
       let
+        genAssets :: Gen Chain.Assets
+        genAssets  = do
+          lovelaceAmount <- (2_000_000 +) <$> suchThat arbitrary (> 0)
+          pure (Chain.Assets (fromCardanoLovelace $ Lovelace lovelaceAmount) $ Chain.Tokens Map.empty)
         genUtxos :: Gen Chain.UTxOs
         genUtxos = extra
           where
@@ -196,11 +201,11 @@ spec = do
               txOutRef <- genTxOutRef
               -- txOut <- genTransactionOutput genAddress
               stubAddress <- genAddress
-              lovelaceAmount <- (2_000_000 +) <$> suchThat arbitrary (> 0)
+              assets <- genAssets
               let
                 txOut = Chain.TransactionOutput
                   stubAddress
-                  (Chain.Assets (fromCardanoLovelace lovelaceAmount) $ Chain.Tokens Map.empty)
+                  assets
                   Nothing
                   Nothing
 
@@ -228,7 +233,20 @@ spec = do
             where
               origAda = selectLovelace . txOutValueToValue $ txOrigValue
 
-      txBodyContent <- hedgehog $ genTxBodyContent BabbageEra
+      txBodyContent <- do
+        stubAddress <- hedgehog $ genAddressInEra BabbageEra
+        assets <- genAssets
+
+        txBC <- hedgehog $ genTxBodyContent BabbageEra
+        pure $ txBC { txOuts =
+          [ TxOut
+              stubAddress
+              assets
+              TxOutDatumNone
+              ReferenceScriptNone
+          ] }
+
+
       pure $ case selectCoins protocol marloweVersion marloweContext walletContext txBodyContent of
         Right newTxBodyContent -> do
           let errors = catMaybes $ map valueMeetsMinimumReq $ txOuts newTxBodyContent
