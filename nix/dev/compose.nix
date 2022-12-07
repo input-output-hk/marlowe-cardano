@@ -12,7 +12,7 @@ let
     set -e
     PROG=${lib.escapeShellArg prog}
     PKG=${lib.escapeShellArg project}-${lib.escapeShellArg version}
-    BIN=/build/$PKG/x/$PROG/noopt/build/$PROG/$PROG
+    BIN=/build/$PKG/x/$PROG/build/$PROG/$PROG
     exec -a $PROG $BIN "$@"
   '';
 
