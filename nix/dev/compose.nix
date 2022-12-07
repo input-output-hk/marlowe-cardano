@@ -48,6 +48,7 @@ let
   };
 
   dev-service = { ports, depends_on, command }: {
+    inherit command;
     image = "alpine:3.16.2";
     volumes = [
       "./:/src"
