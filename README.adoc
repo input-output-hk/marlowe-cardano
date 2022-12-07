@@ -199,9 +199,9 @@ There are other attributes defined in link:./packages.nix[`packages.nix`].
 There is a `docker compose` setup designed to give a local developer mode of the marlowe runtime components,
 configured in link:./nix/dev/compose.nix[`compose.nix`].
 
-On Linux, `compose.yaml` will be automatically set up for the user when entering `nix develop`. On any system,
-`nix run .#refresh-compose` will update `compose.yaml`, but a Linux builder will be required if any changes to
-`compose.nix` are not yet cached in Hydra.
+Currently, this only supports Linux systems.
+
+On Linux, `compose.yaml` will be automatically set up for the user when entering `nix develop`.
 
 Running `nix run .#re-up` will refresh `compose.yaml` if need be and then restart any services which have changed.
 

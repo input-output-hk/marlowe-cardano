@@ -1,4 +1,4 @@
-{ sqitchPg, runCommand, writeShellScriptBin, writeText, lib, glibcLocales, nix, git, networks, su-exec }:
+{ sqitchPg, runCommand, writeShellScriptBin, writeText, lib, glibcLocales, networks }:
 let
   network = networks.preview;
   run-sqitch = writeShellScriptBin "run-sqitch" ''
@@ -8,27 +8,22 @@ let
     exec sqitch deploy
   '';
 
-  # TODO Fix "configuration changed" when swapping from inside and outside container
-  run-local-service = prog: writeShellScriptBin "run-${prog}" ''
-    export PATH="${lib.makeBinPath [ nix git su-exec ]}:$PATH"
-    export NIX_CONFIG="experimental-features = flakes nix-command"
-    export NIX_REMOTE=daemon
-
-    chown $REAL_USER $REAL_HOME
-
-    cd /src
-    su-exec $REAL_USER nix develop --command -- bash -c "cabal build ${lib.escapeShellArg prog} && cabal list-bin ${lib.escapeShellArg prog} >/tmp/bin"
-    exec -a ${lib.escapeShellArg prog} "$(cat /tmp/bin)" "$@"
+  run-local-service = project: version: prog: writeShellScriptBin "run-${prog}" ''
+    set -e
+    PROG=${lib.escapeShellArg prog}
+    PKG=${lib.escapeShellArg project}-${lib.escapeShellArg version}
+    BIN=/build/$PKG/x/$PROG/build/$PROG/$PROG
+    exec -a $PROG $BIN "$@"
   '';
 
   symlinks = runCommand "symlinks" { } ''
     mkdir -p $out
     ln -sv ${run-sqitch}/bin/run-sqitch $out
-    ln -sv ${run-local-service "chainseekd"}/bin/run-chainseekd $out
-    ln -sv ${run-local-service "marlowe-history"}/bin/run-marlowe-history $out
-    ln -sv ${run-local-service "marlowe-discovery"}/bin/run-marlowe-discovery $out
-    ln -sv ${run-local-service "marlowe-tx"}/bin/run-marlowe-tx $out
-    ln -sv ${run-local-service "marlowe-web-server"}/bin/run-marlowe-web-server $out
+    ln -sv ${run-local-service "marlowe-chain-sync" "0.0.0.0" "chainseekd"}/bin/run-chainseekd $out
+    ln -sv ${run-local-service "marlowe-runtime" "0.0.0.0" "marlowe-history"}/bin/run-marlowe-history $out
+    ln -sv ${run-local-service "marlowe-runtime" "0.0.0.0" "marlowe-discovery"}/bin/run-marlowe-discovery $out
+    ln -sv ${run-local-service "marlowe-runtime" "0.0.0.0" "marlowe-tx"}/bin/run-marlowe-tx $out
+    ln -sv ${run-local-service "marlowe-runtime" "0.0.0.0" "marlowe-web-server"}/bin/run-marlowe-web-server $out
   '';
 
   node-service = {
@@ -42,18 +37,27 @@ let
       "shared:/ipc"
       "node-db:/opt/cardano/data"
     ];
+
+    # This should be in the dockerfile
+    healthcheck = {
+      test = "socat -u OPEN:/dev/null UNIX-CONNECT:/ipc/node.socket";
+      interval = "10s";
+      timeout = "5s";
+      retries = 5;
+    };
   };
 
-  dev-service = {
+  dev-service = { ports, depends_on, command }: {
+    inherit command;
     image = "alpine:3.16.2";
     volumes = [
       "./:/src"
       "/nix:/nix"
-      "\${HOME}/.cabal:\${HOME}/.cabal"
+      # Hard-coding linux because this won't work on Mac anyway.
+      # TODO find a setup that works on MacOS
+      "./dist-newstyle/build/x86_64-linux/ghc-8.10.7:/build"
       "${symlinks}:/exec"
       "shared:/ipc"
-      "/etc/passwd:/etc/passwd:ro"
-      "/etc/group:/etc/group:ro"
     ];
     environment = [
       "CABAL_DIR=\${HOME}/.cabal"
@@ -61,9 +65,19 @@ let
       "REAL_HOME=\${HOME}"
     ];
     restart = "unless-stopped";
+    ports = map toString ports;
+    healthcheck = {
+      test = "netstat -tulpn | grep LISTEN | grep ${toString (builtins.head ports)}";
+      interval = "10s";
+      timeout = "5s";
+      retries = 5;
+    };
+    depends_on = lib.genAttrs depends_on (_: { condition = "service_healthy"; });
   };
 
-  chainseekd-service = dev-service // {
+  chainseekd-service = dev-service {
+    ports = [ 3715 3716 3720 ];
+    depends_on = [ "postgres" "node" ];
     command = [
       "/exec/run-chainseekd"
       "--testnet-magic"
@@ -79,25 +93,11 @@ let
       "--host"
       "0.0.0.0"
     ];
-    ports = map toString [
-      3715
-      3716
-      3720
-    ];
-    healthcheck = {
-      test = "netstat -tulpn | grep LISTEN | grep 3715";
-      interval = "5s";
-      timeout = "5s";
-      retries = 30;
-    };
-    depends_on = {
-      postgres = {
-        condition = "service_healthy";
-      };
-    };
   };
 
-  history-service = dev-service // {
+  history-service = dev-service {
+    ports = [ 3717 3718 3719 ];
+    depends_on = [ "chainseekd" ];
     command = [
       "/exec/run-marlowe-history"
       "--chain-seek-host"
@@ -105,25 +105,11 @@ let
       "--host"
       "0.0.0.0"
     ];
-    ports = map toString [
-      3717
-      3718
-      3719
-    ];
-    healthcheck = {
-      test = "netstat -tulpn | grep LISTEN | grep 3717";
-      interval = "5s";
-      timeout = "5s";
-      retries = 30;
-    };
-    depends_on = {
-      chainseekd = {
-        condition = "service_healthy";
-      };
-    };
   };
 
-  discovery-service = dev-service // {
+  discovery-service = dev-service {
+    ports = [ 3721 3722 ];
+    depends_on = [ "chainseekd" ];
     command = [
       "/exec/run-marlowe-discovery"
       "--chain-seek-host"
@@ -131,27 +117,11 @@ let
       "--host"
       "0.0.0.0"
     ];
-    ports = map toString [
-      3721
-      3722
-    ];
-    healthcheck = {
-      test = "netstat -tulpn | grep LISTEN | grep 3721";
-      interval = "5s";
-      timeout = "5s";
-      retries = 30;
-    };
-    depends_on = {
-      chainseekd = {
-        condition = "service_healthy";
-      };
-      marlowe-history = {
-        condition = "service_healthy";
-      };
-    };
   };
 
-  tx-service = dev-service // {
+  tx-service = dev-service {
+    ports = [ 3723 ];
+    depends_on = [ "chainseekd" "marlowe-history" ];
     command = [
       "/exec/run-marlowe-tx"
       "--chain-seek-host"
@@ -161,26 +131,11 @@ let
       "--host"
       "0.0.0.0"
     ];
-    ports = map toString [
-      3723
-    ];
-    healthcheck = {
-      test = "netstat -tulpn | grep LISTEN | grep 3723";
-      interval = "5s";
-      timeout = "5s";
-      retries = 30;
-    };
-    depends_on = {
-      chainseekd = {
-        condition = "service_healthy";
-      };
-      marlowe-history = {
-        condition = "service_healthy";
-      };
-    };
   };
 
-  web-service = dev-service // {
+  web-service = dev-service {
+    ports = [ 8080 ];
+    depends_on = [ "marlowe-history" "marlowe-discovery" "marlowe-tx" ];
     command = [
       "/exec/run-marlowe-web-server"
       "--history-host"
@@ -191,26 +146,6 @@ let
       "marlowe-tx"
       "--enable-open-api"
     ];
-    ports = map toString [
-      8080
-    ];
-    healthcheck = {
-      test = "netstat -tulpn | grep LISTEN | grep 8080";
-      interval = "5s";
-      timeout = "5s";
-      retries = 30;
-    };
-    depends_on = {
-      marlowe-history = {
-        condition = "service_healthy";
-      };
-      marlowe-discovery = {
-        condition = "service_healthy";
-      };
-      marlowe-tx = {
-        condition = "service_healthy";
-      };
-    };
   };
 
   spec = {

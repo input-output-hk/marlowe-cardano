@@ -54,7 +54,7 @@ common lang
     TypeApplications
     TupleSections
   ghc-options:
-    -Wall -Wnoncanonical-monad-instances
+    -Wall -Wnoncanonical-monad-instances -Wunused-packages
     -Wincomplete-uni-patterns -Wincomplete-record-updates
     -Wredundant-constraints -Widentities
   if flag(defer-plugin-errors)
@@ -126,9 +126,7 @@ library
     , ouroboros-network
     , plutus-ledger-api
     , plutus-tx
-    , plutus-tx-plugin
     , semialign
-    , some
     , stm
     , text
     , these
@@ -147,7 +145,6 @@ library logging
       base >= 4.9 && < 5
     , co-log
     , co-log-core
-    , text
 
 library config
   import: lang
@@ -156,14 +153,11 @@ library config
     Language.Marlowe.Runtime.CLI.Option
   build-depends:
       base >= 4.9 && < 5
-    , aeson
     , co-log
     , marlowe-chain-sync
-    , marlowe-runtime
     , network
-    , marlowe-runtime:logging
+    , marlowe-runtime
     , optparse-applicative
-    , prelude-safeenum
     , text
     , split
 
@@ -184,13 +178,11 @@ library web
     , containers
     , lens
     , marlowe
-    , marlowe-runtime
     , network-uri
     , openapi3
     , servant
     , servant-pagination
     , servant-server
-    , servant-openapi3
     , text
     , time
 
@@ -215,7 +207,6 @@ library web-server
     , aeson
     , async
     , async-components
-    , bytestring
     , cardano-api
     , containers
     , errors
@@ -243,7 +234,6 @@ library web-server
     , time
     , transformers
     , transformers-base
-    , typed-protocols
     , wai
 
 executable marlowe
@@ -280,7 +270,6 @@ executable marlowe
     , marlowe-protocols
     , marlowe-runtime
     , marlowe-runtime:config
-    , marlowe-runtime:logging
     , monad-control
     , network
     , plutus-ledger-api
@@ -297,19 +286,6 @@ executable marlowe
   if !os(windows)
     build-depends: unix
 
-executable marlowed
-  import: lang
-  hs-source-dirs:   app
-  main-is: Main.hs
-  other-modules:
-    Paths_marlowe_runtime
-  autogen-modules:
-    Paths_marlowe_runtime
-  build-depends:
-      base >= 4.9 && < 5
-    , marlowe-runtime
-  ghc-options: -threaded
-
 executable marlowe-history
   import: lang
   hs-source-dirs:   marlowe-history
@@ -320,20 +296,13 @@ executable marlowe-history
     Paths_marlowe_runtime
   build-depends:
       base >= 4.9 && < 5
-    , ansi-terminal
     , async-components
-    , base16
-    , containers
-    , marlowe
     , marlowe-protocols
     , marlowe-runtime
     , marlowe-chain-sync
     , network
-    , typed-protocols
     , optparse-applicative
     , stm
-    , text
-    , wl-pprint
   ghc-options: -threaded
 
 executable marlowe-discovery
@@ -346,20 +315,12 @@ executable marlowe-discovery
     Paths_marlowe_runtime
   build-depends:
       base >= 4.9 && < 5
-    , ansi-terminal
     , async-components
-    , base16
-    , containers
-    , marlowe
     , marlowe-protocols
     , marlowe-runtime
     , marlowe-chain-sync
     , network
-    , typed-protocols
     , optparse-applicative
-    , stm
-    , text
-    , wl-pprint
   ghc-options: -threaded
 
 executable marlowe-tx
@@ -371,16 +332,10 @@ executable marlowe-tx
   autogen-modules:
     Paths_marlowe_runtime
   build-depends:
-      ansi-terminal
-    , base >= 4.9 && < 5
+    base >= 4.9 && < 5
     , async-components
-    , base16
-    , bytestring
-    , cardano-api
-    , containers
     , co-log
     , co-log-core
-    , marlowe
     , marlowe-protocols
     , marlowe-runtime
     , marlowe-runtime:config
@@ -388,11 +343,6 @@ executable marlowe-tx
     , marlowe-chain-sync
     , network
     , optparse-applicative
-    , one-line-aeson-text
-    , stm
-    , text
-    , typed-protocols
-    , wl-pprint
   ghc-options: -threaded
 
 executable marlowe-web-server
@@ -407,17 +357,13 @@ executable marlowe-web-server
   build-depends:
       base >= 4.9 && < 5
     , async-components
-    , bytestring
     , eventuo11y-json
-    , exceptions
     , marlowe-protocols
     , marlowe-runtime:config
     , marlowe-runtime:web-server
     , marlowe-runtime
     , network
     , optparse-applicative
-    , stm
-    , typed-protocols
     , warp
   ghc-options: -threaded
 
@@ -454,7 +400,6 @@ test-suite marlowe-runtime-test
     , marlowe-runtime
     , marlowe-test
     , ouroboros-consensus
-    , ouroboros-network
     , plutus-tx
     , plutus-ledger-api
     , QuickCheck
@@ -462,9 +407,6 @@ test-suite marlowe-runtime-test
     , quickcheck-instances
     , some
     , stm
-    , tasty
-    , tasty-hunit
-    , tasty-quickcheck
     , time
     , transformers
   build-tool-depends: hspec-discover:hspec-discover
@@ -483,9 +425,7 @@ test-suite web-server-test
     , bytestring
     , hspec
     , network-arbitrary
-    , marlowe
     , marlowe-runtime:web
-    , marlowe-runtime:web-server
     , marlowe-test
     , openapi3
     , QuickCheck
