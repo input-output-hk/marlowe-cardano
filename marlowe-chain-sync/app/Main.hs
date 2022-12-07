@@ -8,12 +8,7 @@ import Cardano.Api
   , ConsensusModeParams(..)
   , EpochSlots(..)
   , EraInMode(..)
-  , GenesisParameters(..)
   , LocalNodeConnectInfo(..)
-  , QueryInEra(..)
-  , QueryInMode(..)
-  , QueryInShelleyBasedEra(..)
-  , ShelleyBasedEra(..)
   , TxInMode(..)
   , queryNodeLocalState
   )
@@ -25,7 +20,6 @@ import Control.Concurrent.Component
 import Control.Exception (bracket, bracketOnError, throwIO)
 import Control.Monad ((<=<))
 import Control.Monad.Trans.Except (ExceptT(ExceptT), runExceptT, withExceptT)
-import Data.Either (fromRight)
 import Data.String (IsString(fromString))
 import Data.Text (unpack)
 import Data.Time (secondsToNominalDiffTime)
@@ -80,10 +74,6 @@ run Options{..} = withSocketsDo do
             (Byron.mkConfigFromFile (toByronRequiresNetworkMagic networkId) genesisConfigFile hash)
         (hash, genesisConfig) <- either (fail . unpack) pure genesisConfigResult
         let genesisBlock = computeByronGenesisBlock (abstractHashToBytes hash) genesisConfig
-        genesisParams <- fmap (fromRight (error "era mismatch") . fromRight (error "failed to load genesis params"))
-          $ queryNodeLocalState localNodeConnectInfo Nothing
-          $ QueryInEra BabbageEraInCardanoMode
-          $ QueryInShelleyBasedEra ShelleyBasedEraBabbage QueryGenesisParameters
         runComponent_ chainSync ChainSyncDependencies
           { connectToLocalNode = Cardano.connectToLocalNode localNodeConnectInfo
           , databaseQueries = hoistDatabaseQueries
@@ -104,7 +94,6 @@ run Options{..} = withSocketsDo do
               BabbageEra -> BabbageEraInCardanoMode
           , maxCost
           , costModel
-          , securityParam = protocolParamSecurity genesisParams
           }
   where
     throwUsageError (ConnectionError err)                       = error $ show err

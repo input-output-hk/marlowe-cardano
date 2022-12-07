@@ -77,7 +77,6 @@ package marlowe-runtime
 
 -- These settings only affect local builds with cabal (i.e. not Nix builds),
 -- where compilation speed is more important than runtime performance.
-optimization: False
 package cardano-api
   optimization: False
 package cardano-ledger-alonzo
