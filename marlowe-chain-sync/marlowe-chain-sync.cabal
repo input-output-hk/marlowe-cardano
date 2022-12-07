@@ -46,7 +46,7 @@ common lang
     TypeApplications
     TupleSections
   ghc-options:
-    -Wall -Wnoncanonical-monad-instances
+    -Wall -Wnoncanonical-monad-instances -Wunused-packages
     -Wincomplete-uni-patterns -Wincomplete-record-updates
     -Wredundant-constraints -Widentities
 
@@ -83,7 +83,6 @@ library
     , cardano-ledger-babbage
     , cardano-ledger-alonzo
     , cardano-ledger-core
-    , cardano-ledger-shelley
     , containers
     , foldl
     , hasql
@@ -91,14 +90,11 @@ library
     , hasql-transaction
     , marlowe-protocols
     , ouroboros-consensus
-    , ouroboros-consensus-shelley
     , ouroboros-network
-    , parallel
     , plutus-tx
     , plutus-ledger-api
     , profunctors
     , serialise
-    , split
     , stm
     , stm-delay
     , text
@@ -121,10 +117,7 @@ executable chainseekd
     Paths_marlowe_chain_sync
   build-depends:
       base >= 4.9 && < 5
-    , aeson
     , async-components
-    , base16
-    , bytestring
     , cardano-api
     , cardano-crypto-wrapper
     , cardano-ledger-byron
@@ -136,11 +129,9 @@ executable chainseekd
     , network
     , optparse-applicative
     , ouroboros-network
-    , stm
     , text
     , time
     , transformers
-    , typed-protocols
 
 executable example-client
   import: lang
@@ -155,12 +146,8 @@ executable example-client
     Paths_marlowe_chain_sync
   build-depends:
       base >= 4.9 && < 5
-    , bytestring
-    , cardano-api
     , marlowe-chain-sync
     , marlowe-protocols
     , network
     , optparse-applicative
-    , text
-    , these
     , typed-protocols

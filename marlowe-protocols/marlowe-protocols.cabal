@@ -43,7 +43,7 @@ library
     TypeApplications
     TupleSections
   ghc-options:
-    -Wall -Wnoncanonical-monad-instances
+    -Wall -Wnoncanonical-monad-instances -Wunused-packages
     -Wincomplete-uni-patterns -Wincomplete-record-updates
     -Wredundant-constraints -Widentities
   exposed-modules:
@@ -65,7 +65,6 @@ library
     Network.Protocol.Codec
   build-depends:
       base >= 4.9 && < 5
-    , async
     , binary
     , bytestring
     , hashable

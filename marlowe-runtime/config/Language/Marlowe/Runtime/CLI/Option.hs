@@ -1,4 +1,5 @@
 {-# LANGUAGE DataKinds #-}
+
 module Language.Marlowe.Runtime.CLI.Option
   where
 
