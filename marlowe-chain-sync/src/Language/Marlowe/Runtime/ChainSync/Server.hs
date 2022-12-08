@@ -13,8 +13,6 @@ import Control.Concurrent.STM (STM, atomically)
 import Control.Monad (guard)
 import Data.ByteString.Short (toShort)
 import Data.Functor (void)
-import qualified Data.Text as T
-import Data.Text.IO (hPutStrLn)
 import Language.Marlowe.Runtime.ChainSync.Api
   ( BlockHeader(BlockHeader)
   , BlockHeaderHash(unBlockHeaderHash)
@@ -28,7 +26,6 @@ import Language.Marlowe.Runtime.ChainSync.Database (MoveClient(..), MoveResult(.
 import Network.Protocol.ChainSeek.Server
   (ChainSeekServer(..), ServerStHandshake(..), ServerStIdle(..), ServerStInit(..), ServerStNext(..))
 import Network.Protocol.Driver (RunServer(..))
-import System.IO (stderr)
 
 type RunChainSeekServer m = RunServer m RuntimeChainSeekServer
 
@@ -39,14 +36,9 @@ data ChainSyncServerDependencies = ChainSyncServerDependencies
   }
 
 chainSyncServer :: Component IO ChainSyncServerDependencies ()
-chainSyncServer = serverComponent
-  worker
-  (\ex -> hPutStrLn stderr $ "Lost client with exception " <> T.pack (show ex))
-  (hPutStrLn stderr "Client terminated normally")
-  \ChainSyncServerDependencies{..} -> do
-      runChainSeekServer <- acceptRunChainSeekServer
-      hPutStrLn stderr "New client connected"
-      pure WorkerDependencies{..}
+chainSyncServer = serverComponent worker mempty mempty \ChainSyncServerDependencies{..} -> do
+  runChainSeekServer <- acceptRunChainSeekServer
+  pure WorkerDependencies{..}
 
 data WorkerDependencies = WorkerDependencies
   { runChainSeekServer :: !(RunChainSeekServer IO)

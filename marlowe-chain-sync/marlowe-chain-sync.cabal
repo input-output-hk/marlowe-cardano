@@ -111,16 +111,21 @@ executable chainseekd
   hs-source-dirs:   app
   main-is: Main.hs
   other-modules:
+    Logging
     Options
     Paths_marlowe_chain_sync
   autogen-modules:
     Paths_marlowe_chain_sync
   build-depends:
       base >= 4.9 && < 5
+    , aeson
     , async-components
     , cardano-api
     , cardano-crypto-wrapper
     , cardano-ledger-byron
+    , containers
+    , eventuo11y
+    , eventuo11y-json
     , hasql
     -- Consider removing the hasql < 1.6 constraint in cabal.project if updating hasql-pool
     , hasql-pool < 0.6
@@ -129,9 +134,12 @@ executable chainseekd
     , network
     , optparse-applicative
     , ouroboros-network
+    , stm
     , text
     , time
     , transformers
+    , transformers-base
+    , uuid
 
 executable example-client
   import: lang

@@ -184,7 +184,7 @@ acceptRunServerPeerOverSocket
 acceptRunServerPeerOverSocket = acceptRunServerPeerOverSocketWithLogging $ noopEventBackend ()
 
 data AcceptSocketDriverSelector ps f where
-  Connected :: AcceptSocketDriverSelector ps SockAddr
+  Connected :: AcceptSocketDriverSelector ps Void
   Disconnected :: AcceptSocketDriverSelector ps Void
   ServerDriverEvent :: DriverSelector ps f -> AcceptSocketDriverSelector ps f
 
@@ -203,19 +203,17 @@ acceptRunServerPeerOverSocketWithLogging
   -> ToPeer server protocol peer st m
   -> m (RunServer m server)
 acceptRunServerPeerOverSocketWithLogging eventBackend throwImpl socket codec toPeer = do
-  (conn, addr) <- liftBase $ accept socket
+  (conn, _ :: SockAddr) <- liftBase $ accept socket
   (eventBackend', ref) <- withEvent eventBackend Connected \ev -> do
-    addField ev addr
     pure (subEventBackend ServerDriverEvent ev, reference ev)
   let
     driver = logDriver eventBackend'
       $ mkDriver throwImpl codec
       $ hoistChannel liftBase
       $ socketAsChannel conn
-  pure $ RunServer \server -> do
-    result <- try @_ @SomeException do
-      let peer = toPeer server
-      fst <$> runPeerWithDriver driver peer (startDState driver)
+  pure $ RunServer \server -> mask \restore -> do
+    let peer = toPeer server
+    result <- try @_ @SomeException $ restore $ fst <$> runPeerWithDriver driver peer (startDState driver)
     withEvent eventBackend Disconnected \ev -> do
       addParent ev ref
       either throw pure result

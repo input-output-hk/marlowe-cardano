@@ -16,6 +16,8 @@ import qualified Cardano.Api as Cardano
 import Cardano.Api.Byron (toByronRequiresNetworkMagic)
 import qualified Cardano.Chain.Genesis as Byron
 import Cardano.Crypto (abstractHashToBytes, decodeAbstractHash)
+import Control.Arrow (arr)
+import Control.Category ((<<<))
 import Control.Concurrent.Component
 import Control.Exception (bracket, bracketOnError, throwIO)
 import Control.Monad ((<=<))
@@ -31,8 +33,9 @@ import Language.Marlowe.Runtime.ChainSync.Api (WithGenesis(..), codecChainSeek)
 import Language.Marlowe.Runtime.ChainSync.Database (hoistDatabaseQueries)
 import qualified Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL as PostgreSQL
 import Language.Marlowe.Runtime.ChainSync.Genesis (computeByronGenesisBlock)
+import Logging (RootSelector(ChainSeekServer), logger)
 import Network.Protocol.ChainSeek.Server (chainSeekServerPeer)
-import Network.Protocol.Driver (acceptRunServerPeerOverSocket)
+import Network.Protocol.Driver (acceptRunServerPeerOverSocket, acceptRunServerPeerOverSocketWithLogging)
 import Network.Protocol.Job.Codec (codecJob)
 import Network.Protocol.Job.Server (jobServerPeer)
 import Network.Protocol.Query.Codec (codecQuery)
@@ -53,6 +56,7 @@ import Network.Socket
   , withFdSocket
   , withSocketsDo
   )
+import Observe.Event (narrowEventBackend)
 import Options (Options(..), getOptions)
 
 main :: IO ()
@@ -74,27 +78,36 @@ run Options{..} = withSocketsDo do
             (Byron.mkConfigFromFile (toByronRequiresNetworkMagic networkId) genesisConfigFile hash)
         (hash, genesisConfig) <- either (fail . unpack) pure genesisConfigResult
         let genesisBlock = computeByronGenesisBlock (abstractHashToBytes hash) genesisConfig
-        runComponent_ chainSync ChainSyncDependencies
-          { connectToLocalNode = Cardano.connectToLocalNode localNodeConnectInfo
-          , databaseQueries = hoistDatabaseQueries
-              (either throwUsageError pure <=< Pool.use pool)
-              (PostgreSQL.databaseQueries genesisBlock)
-          , persistRateLimit
-          , genesisBlock
-          , acceptRunChainSeekServer = acceptRunServerPeerOverSocket throwIO chainSeekSocket codecChainSeek (chainSeekServerPeer Genesis)
-          , acceptRunQueryServer = acceptRunServerPeerOverSocket throwIO querySocket codecQuery queryServerPeer
-          , acceptRunJobServer = acceptRunServerPeerOverSocket throwIO commandSocket codecJob jobServerPeer
-          , queryLocalNodeState = queryNodeLocalState localNodeConnectInfo
-          , submitTxToNodeLocal = \era tx -> Cardano.submitTxToNodeLocal localNodeConnectInfo $ TxInMode tx case era of
-              ByronEra -> ByronEraInCardanoMode
-              ShelleyEra -> ShelleyEraInCardanoMode
-              AllegraEra -> AllegraEraInCardanoMode
-              MaryEra -> MaryEraInCardanoMode
-              AlonzoEra -> AlonzoEraInCardanoMode
-              BabbageEra -> BabbageEraInCardanoMode
-          , maxCost
-          , costModel
-          }
+        let
+          chainSyncDependencies eventBackend = ChainSyncDependencies
+            { connectToLocalNode = Cardano.connectToLocalNode localNodeConnectInfo
+            , databaseQueries = hoistDatabaseQueries
+                (either throwUsageError pure <=< Pool.use pool)
+                (PostgreSQL.databaseQueries genesisBlock)
+            , persistRateLimit
+            , genesisBlock
+            , acceptRunChainSeekServer = acceptRunServerPeerOverSocketWithLogging
+                (narrowEventBackend ChainSeekServer eventBackend)
+                throwIO
+                chainSeekSocket
+                codecChainSeek
+                (chainSeekServerPeer Genesis)
+            , acceptRunQueryServer = acceptRunServerPeerOverSocket throwIO querySocket codecQuery queryServerPeer
+            , acceptRunJobServer = acceptRunServerPeerOverSocket throwIO commandSocket codecJob jobServerPeer
+            , queryLocalNodeState = queryNodeLocalState localNodeConnectInfo
+            , submitTxToNodeLocal = \era tx -> Cardano.submitTxToNodeLocal localNodeConnectInfo $ TxInMode tx case era of
+                ByronEra -> ByronEraInCardanoMode
+                ShelleyEra -> ShelleyEraInCardanoMode
+                AllegraEra -> AllegraEraInCardanoMode
+                MaryEra -> MaryEraInCardanoMode
+                AlonzoEra -> AlonzoEraInCardanoMode
+                BabbageEra -> BabbageEraInCardanoMode
+            , maxCost
+            , costModel
+            }
+          loggerDependencies = ()
+          appComponent = chainSync <<< arr chainSyncDependencies <<< logger
+        runComponent_ appComponent loggerDependencies
   where
     throwUsageError (ConnectionError err)                       = error $ show err
     throwUsageError (SessionError (Session.QueryError _ _ err)) = error $ show err
