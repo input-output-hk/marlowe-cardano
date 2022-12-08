@@ -147,6 +147,7 @@ import Network.Protocol.ChainSeek.Codec
 import Network.Protocol.ChainSeek.Server
 import Network.Protocol.ChainSeek.TH (mkSchemaVersion)
 import Network.Protocol.ChainSeek.Types
+import Network.Protocol.Job.Types (CommandToJSON)
 import qualified Network.Protocol.Job.Types as Job
 import qualified Network.Protocol.Query.Types as Query
 import Network.TypedProtocol.Codec (Codec)
@@ -915,6 +916,46 @@ data ChainSyncQuery delimiter err result where
   GetEraHistory :: ChainSyncQuery Void () (EraHistory CardanoMode)
   GetUTxOs :: GetUTxOsQuery -> ChainSyncQuery Void () UTxOs
 
+instance Query.QueryToJSON ChainSyncQuery where
+  queryToJSON = \case
+    GetSecurityParameter -> String "get-security-parameter"
+    GetNetworkId -> String "get-network-id"
+    GetProtocolParameters -> String "get-protocol-parameters"
+    GetSystemStart -> String "get-system-start"
+    GetEraHistory -> String "get-era-history"
+    GetUTxOs subQuery -> object
+      [ "get-utxos" .= case subQuery of
+          GetUTxOsAtAddresses addresses -> object
+            [ "at-address" .= addresses
+            ]
+          GetUTxOsForTxOutRefs txOutRefs -> object
+            [ "for-tx-out-refs" .= txOutRefs
+            ]
+      ]
+  errToJSON = \case
+    TagGetSecurityParameter -> toJSON
+    TagGetNetworkId -> toJSON
+    TagGetProtocolParameters -> toJSON
+    TagGetSystemStart -> toJSON
+    TagGetEraHistory -> toJSON
+    TagGetUTxOs -> toJSON
+  resultToJSON = \case
+    TagGetSecurityParameter -> toJSON
+    TagGetNetworkId -> \case
+      Mainnet -> String "mainnet"
+      Testnet (NetworkMagic n) -> object ["testnet" .= n]
+    TagGetProtocolParameters -> toJSON
+    TagGetSystemStart -> toJSON
+    TagGetEraHistory -> const $ String "<era-history>"
+    TagGetUTxOs -> toJSON
+  delimiterToJSON = \case
+    TagGetSecurityParameter -> toJSON
+    TagGetNetworkId -> toJSON
+    TagGetProtocolParameters -> toJSON
+    TagGetSystemStart -> toJSON
+    TagGetEraHistory -> toJSON
+    TagGetUTxOs -> toJSON
+
 instance Query.IsQuery ChainSyncQuery where
   data Tag ChainSyncQuery delimiter err result where
     TagGetSecurityParameter :: Query.Tag ChainSyncQuery Void () Int
@@ -1044,6 +1085,17 @@ instance Query.IsQuery ChainSyncQuery where
 
 data ChainSyncCommand status err result where
   SubmitTx :: ScriptDataSupportedInEra era -> Tx era -> ChainSyncCommand Void String ()
+
+instance CommandToJSON ChainSyncCommand where
+  commandToJSON = \case
+    SubmitTx _ tx -> object [ "submit-tx" .= show tx ]
+  jobIdToJSON = \case
+  errToJSON = \case
+    TagSubmitTx _ -> toJSON
+  resultToJSON = \case
+    TagSubmitTx _ -> toJSON
+  statusToJSON = \case
+    TagSubmitTx _ -> toJSON
 
 instance Job.Command ChainSyncCommand where
   data Tag ChainSyncCommand status err result where

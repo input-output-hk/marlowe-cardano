@@ -49,8 +49,10 @@ import Data.Time (UTCTime, diffUTCTime, getCurrentTime)
 import Data.UUID (UUID)
 import Data.UUID.V4 (nextRandom)
 import Data.Void (absurd)
-import Language.Marlowe.Runtime.ChainSync.Api (RuntimeChainSeek)
+import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncCommand, ChainSyncQuery, RuntimeChainSeek)
 import Network.Protocol.Driver (AcceptSocketDriverSelector(..), DriverSelector(..), RecvField(..), SendField(..))
+import Network.Protocol.Job.Types (Job)
+import Network.Protocol.Query.Types (Query)
 import Observe.Event
 import Observe.Event.Backend
 import Observe.Event.Render.JSON (DefaultRenderSelectorJSON(..), RenderFieldJSON, RenderSelectorJSON)
@@ -61,11 +63,15 @@ import System.IO (stderr)
 
 data RootSelector f where
   ChainSeekServer :: AcceptSocketDriverSelector RuntimeChainSeek f -> RootSelector f
+  QueryServer :: AcceptSocketDriverSelector (Query ChainSyncQuery) f -> RootSelector f
+  JobServer :: AcceptSocketDriverSelector (Job ChainSyncCommand) f -> RootSelector f
   ReloadConfig :: RootSelector (Either String LogConfig)
 
 instance DefaultRenderSelectorJSON RootSelector where
   defaultRenderSelectorJSON = \case
     ChainSeekServer sel -> first ("chain-seek." <>) $ defaultRenderSelectorJSON sel
+    QueryServer sel -> first ("query." <>) $ defaultRenderSelectorJSON sel
+    JobServer sel -> first ("job." <>) $ defaultRenderSelectorJSON sel
     ReloadConfig -> ("reload-log-config", ("config",) . toJSON)
 
 logger :: Component IO FilePath (EventBackend IO (Maybe UUID) RootSelector)
@@ -116,6 +122,14 @@ defaultLogConfig :: LogConfig
 defaultLogConfig = LogConfig $ Just <$> Map.fromList
   [ ("chain-seek.connected", mempty)
   , ("chain-seek.disconnected", mempty)
+  , ("query.connected", mempty)
+  , ("query.disconnected", mempty)
+  , ("query.send", Map.singleton "message" True)
+  , ("query.recv", Map.singleton "message" True)
+  , ("job.connected", mempty)
+  , ("job.disconnected", mempty)
+  , ("job.send", Map.singleton "message" True)
+  , ("job.recv", Map.singleton "message" True)
   , ("reload-log-config", Map.singleton "config" True)
   ]
 
@@ -127,15 +141,17 @@ logAppender = component \config -> do
 
 filterRoot :: RootSelector f -> STM LogConfig -> IO (Maybe (f -> IO Bool))
 filterRoot = \case
-  ChainSeekServer sel -> filterChainSeekServer "chain-seek" sel
+  ChainSeekServer sel -> filterAcceptSocketDriver "chain-seek" sel
+  QueryServer sel -> filterAcceptSocketDriver "query" sel
+  JobServer sel -> filterAcceptSocketDriver "job" sel
   ReloadConfig -> mkEventPredicate "" "reload-log-config" (const "config")
 
-filterChainSeekServer
+filterAcceptSocketDriver
   :: Key
-  -> AcceptSocketDriverSelector RuntimeChainSeek f
+  -> AcceptSocketDriverSelector ps f
   -> STM LogConfig
   -> IO (Maybe (f -> IO Bool))
-filterChainSeekServer prefix = \case
+filterAcceptSocketDriver prefix = \case
   Connected -> mkEventPredicate prefix "connected" absurd
   Disconnected -> mkEventPredicate prefix "disconnected" absurd
   ServerDriverEvent sel -> filterServerDriverEvent prefix sel
