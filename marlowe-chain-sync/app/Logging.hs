@@ -7,6 +7,7 @@
 module Logging
   where
 
+import Cardano.Api (ChainPoint(..), ChainTip(..))
 import Control.Arrow (returnA)
 import Control.Concurrent (threadDelay)
 import Control.Concurrent.Component
@@ -31,7 +32,7 @@ import Control.Concurrent.STM
 import Control.Exception (Exception(displayException), SomeException, try)
 import Control.Monad (forever, guard, join, mfilter, unless)
 import Control.Monad.Base (MonadBase(..))
-import Data.Aeson (FromJSON(..), Key, Object, ToJSON(..), Value(..), eitherDecodeFileStrict', withObject)
+import Data.Aeson (FromJSON(..), Key, Object, ToJSON(..), Value(..), eitherDecodeFileStrict', object, withObject, (.=))
 import Data.Aeson.Key (toText)
 import qualified Data.Aeson.KeyMap as KeyMap
 import Data.Aeson.Text (encodeToLazyText)
@@ -49,7 +50,11 @@ import Data.Time (UTCTime, diffUTCTime, getCurrentTime)
 import Data.UUID (UUID)
 import Data.UUID.V4 (nextRandom)
 import Data.Void (absurd)
+import Language.Marlowe.Runtime.Cardano.Api
+  (fromCardanoBlockHeader, fromCardanoBlockHeaderHash, fromCardanoBlockNo, fromCardanoSlotNo)
+import Language.Marlowe.Runtime.ChainSync (ChainSyncSelector(..))
 import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncCommand, ChainSyncQuery, RuntimeChainSeek)
+import qualified Language.Marlowe.Runtime.ChainSync.NodeClient as NodeClient
 import Network.Protocol.Driver (AcceptSocketDriverSelector(..), DriverSelector(..), RecvField(..), SendField(..))
 import Network.Protocol.Job.Types (Job)
 import Network.Protocol.Query.Types (Query)
@@ -65,6 +70,7 @@ data RootSelector f where
   ChainSeekServer :: AcceptSocketDriverSelector RuntimeChainSeek f -> RootSelector f
   QueryServer :: AcceptSocketDriverSelector (Query ChainSyncQuery) f -> RootSelector f
   JobServer :: AcceptSocketDriverSelector (Job ChainSyncCommand) f -> RootSelector f
+  App :: ChainSyncSelector f -> RootSelector f
   ReloadConfig :: RootSelector (Either String LogConfig)
 
 instance DefaultRenderSelectorJSON RootSelector where
@@ -72,7 +78,50 @@ instance DefaultRenderSelectorJSON RootSelector where
     ChainSeekServer sel -> first ("chain-seek." <>) $ defaultRenderSelectorJSON sel
     QueryServer sel -> first ("query." <>) $ defaultRenderSelectorJSON sel
     JobServer sel -> first ("job." <>) $ defaultRenderSelectorJSON sel
+    App sel -> renderChainSyncSelectorJSON sel
     ReloadConfig -> ("reload-log-config", ("config",) . toJSON)
+
+renderChainSyncSelectorJSON :: RenderSelectorJSON ChainSyncSelector
+renderChainSyncSelectorJSON = \case
+  NodeClientEvent sel -> first ("node-client." <>) $ renderNodeClientSelectorJSON sel
+
+renderNodeClientSelectorJSON :: RenderSelectorJSON NodeClient.NodeClientSelector
+renderNodeClientSelectorJSON = \case
+  NodeClient.Connect -> ("connect", absurd)
+  NodeClient.Intersect -> ("intersect", \points -> ("points", toJSON $ pointToJSON <$> points))
+  NodeClient.IntersectFound -> ("intersect-found", \point -> ("point", pointToJSON point))
+  NodeClient.IntersectNotFound -> ("intersect-not-found", absurd)
+  NodeClient.RollForward ->
+    ( "roll-forward"
+    , \case
+        NodeClient.RollForwardBlock header -> ("block-header", toJSON $ fromCardanoBlockHeader header)
+        NodeClient.RollForwardTip tip -> ("tip", tipToJSON tip)
+        NodeClient.RollForwardNewCost cost -> ("new-cost", toJSON cost)
+    )
+  NodeClient.RollBackward ->
+    ( "roll-backward"
+    , \case
+        NodeClient.RollBackwardPoint point -> ("point", pointToJSON point)
+        NodeClient.RollBackwardTip tip -> ("tip", tipToJSON tip)
+        NodeClient.RollBackwardNewCost cost -> ("new-cost", toJSON cost)
+    )
+
+pointToJSON :: ChainPoint -> Value
+pointToJSON = \case
+  ChainPointAtGenesis -> String "genesis"
+  ChainPoint slotNo hash -> object
+    [ "slotNo" .= fromCardanoSlotNo slotNo
+    , "hash" .= fromCardanoBlockHeaderHash hash
+    ]
+
+tipToJSON :: ChainTip -> Value
+tipToJSON = \case
+  ChainTipAtGenesis -> String "genesis"
+  ChainTip slotNo hash blockNo -> object
+    [ "slotNo" .= fromCardanoSlotNo slotNo
+    , "hash" .= fromCardanoBlockHeaderHash hash
+    , "blockNo" .= fromCardanoBlockNo blockNo
+    ]
 
 logger :: Component IO FilePath (EventBackend IO (Maybe UUID) RootSelector)
 logger = proc configFile -> do
@@ -131,6 +180,11 @@ defaultLogConfig = LogConfig $ Just <$> Map.fromList
   , ("job.send", Map.singleton "message" True)
   , ("job.recv", Map.singleton "message" True)
   , ("reload-log-config", Map.singleton "config" True)
+  , ("node-client.connect", mempty)
+  , ("node-client.intersect", mempty)
+  , ("node-client.intersect-found", Map.singleton "point" True)
+  , ("node-client.intersect-not-found", mempty)
+  , ("node-client.roll-backward", Map.fromList [("point", True), ("tip", True)])
   ]
 
 logAppender :: Component IO (STM LogConfig) (EventBackend IO (Maybe UUID) RootSelector)
@@ -144,6 +198,7 @@ filterRoot = \case
   ChainSeekServer sel -> filterAcceptSocketDriver "chain-seek" sel
   QueryServer sel -> filterAcceptSocketDriver "query" sel
   JobServer sel -> filterAcceptSocketDriver "job" sel
+  App sel -> filterChainSync sel
   ReloadConfig -> mkEventPredicate "" "reload-log-config" (const "config")
 
 filterAcceptSocketDriver
@@ -164,6 +219,29 @@ filterServerDriverEvent prefix = \case
     RecvMessage _ _ -> "message"
     StateBefore _ -> "stateBefore"
     StateAfter _ -> "stateAfter"
+
+filterChainSync :: ChainSyncSelector f -> STM LogConfig -> IO (Maybe (f -> IO Bool))
+filterChainSync = \case
+  NodeClientEvent sel -> filterNodeClient "node-client" sel
+
+filterNodeClient
+  :: Key
+  -> NodeClient.NodeClientSelector f
+  -> STM LogConfig
+  -> IO (Maybe (f -> IO Bool))
+filterNodeClient prefix = \case
+  NodeClient.Connect -> mkEventPredicate prefix "connect" absurd
+  NodeClient.Intersect -> mkEventPredicate prefix "intersect" $ const "points"
+  NodeClient.IntersectFound -> mkEventPredicate prefix "intersect-found" $ const "point"
+  NodeClient.IntersectNotFound -> mkEventPredicate prefix "intersect-not-found" absurd
+  NodeClient.RollForward -> mkEventPredicate prefix "roll-forward" \case
+    NodeClient.RollForwardBlock _ -> "block-header"
+    NodeClient.RollForwardTip _ -> "tip"
+    NodeClient.RollForwardNewCost _ -> "new-cost"
+  NodeClient.RollBackward -> mkEventPredicate prefix "roll-backward" \case
+    NodeClient.RollBackwardPoint _ -> "point"
+    NodeClient.RollBackwardTip _ -> "tip"
+    NodeClient.RollBackwardNewCost _ -> "new-cost"
 
 prepend :: Key -> Key -> Key
 prepend prefix key = if T.null $ toText prefix then key else prefix <> "." <> key

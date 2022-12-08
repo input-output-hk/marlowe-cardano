@@ -84,6 +84,7 @@ library
     , cardano-ledger-alonzo
     , cardano-ledger-core
     , containers
+    , eventuo11y
     , foldl
     , hasql
     , hasql-th

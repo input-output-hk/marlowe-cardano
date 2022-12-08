@@ -33,7 +33,7 @@ import Language.Marlowe.Runtime.ChainSync.Api (WithGenesis(..), codecChainSeek)
 import Language.Marlowe.Runtime.ChainSync.Database (hoistDatabaseQueries)
 import qualified Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL as PostgreSQL
 import Language.Marlowe.Runtime.ChainSync.Genesis (computeByronGenesisBlock)
-import Logging (RootSelector(ChainSeekServer), logger)
+import Logging (RootSelector(..), logger)
 import Network.Protocol.ChainSeek.Server (chainSeekServerPeer)
 import Network.Protocol.Driver (acceptRunServerPeerOverSocket, acceptRunServerPeerOverSocketWithLogging)
 import Network.Protocol.Job.Codec (codecJob)
@@ -104,6 +104,7 @@ run Options{..} = withSocketsDo do
                 BabbageEra -> BabbageEraInCardanoMode
             , maxCost
             , costModel
+            , eventBackend = narrowEventBackend App eventBackend
             }
           loggerDependencies = "./chainseekd.log.config"
           appComponent = chainSync <<< arr chainSyncDependencies <<< logger
