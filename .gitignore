@@ -120,3 +120,4 @@ plutus-pab/test-node/alonzo-purple/db
 treasury
 
 compose.yaml
+*.log.config

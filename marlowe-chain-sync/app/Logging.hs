@@ -7,6 +7,8 @@
 module Logging
   where
 
+import Control.Arrow (returnA)
+import Control.Concurrent (threadDelay)
 import Control.Concurrent.Component
 import Control.Concurrent.STM
   ( STM
@@ -24,11 +26,13 @@ import Control.Concurrent.STM
   , tryPutTMVar
   , tryReadTMVar
   , writeTQueue
+  , writeTVar
   )
-import Control.Exception (Exception(displayException), SomeException)
-import Control.Monad (guard, mfilter, unless)
+import Control.Exception (Exception(displayException), SomeException, try)
+import Control.Monad (forever, guard, join, mfilter, unless)
 import Control.Monad.Base (MonadBase(..))
-import Data.Aeson (Key, Object, Value(..), toJSON)
+import Data.Aeson (FromJSON(..), Key, Object, ToJSON(..), Value(..), eitherDecodeFileStrict', withObject)
+import Data.Aeson.Key (toText)
 import qualified Data.Aeson.KeyMap as KeyMap
 import Data.Aeson.Text (encodeToLazyText)
 import Data.Bifunctor (Bifunctor(first))
@@ -36,32 +40,130 @@ import Data.Foldable (asum, traverse_)
 import Data.Functor (void)
 import Data.Map (Map)
 import qualified Data.Map as Map
-import Data.Maybe (catMaybes, isJust)
+import Data.Maybe (catMaybes, fromMaybe, isJust)
 import Data.Set (Set)
 import qualified Data.Set as Set
+import qualified Data.Text as T
 import qualified Data.Text.Lazy.IO as LB
 import Data.Time (UTCTime, diffUTCTime, getCurrentTime)
 import Data.UUID (UUID)
 import Data.UUID.V4 (nextRandom)
+import Data.Void (absurd)
 import Language.Marlowe.Runtime.ChainSync.Api (RuntimeChainSeek)
-import Network.Protocol.Driver (AcceptSocketDriverSelector)
+import Network.Protocol.Driver (AcceptSocketDriverSelector(..), DriverSelector(..), RecvField(..), SendField(..))
 import Observe.Event
 import Observe.Event.Backend
 import Observe.Event.Render.JSON (DefaultRenderSelectorJSON(..), RenderFieldJSON, RenderSelectorJSON)
+import System.Directory (canonicalizePath)
+import System.FSNotify (Event(..), EventIsDirectory(..), watchDir, withManager)
+import System.FilePath.Posix (dropFileName)
 import System.IO (stderr)
 
 data RootSelector f where
   ChainSeekServer :: AcceptSocketDriverSelector RuntimeChainSeek f -> RootSelector f
+  ReloadConfig :: RootSelector (Either String LogConfig)
 
 instance DefaultRenderSelectorJSON RootSelector where
   defaultRenderSelectorJSON = \case
     ChainSeekServer sel -> first ("chain-seek." <>) $ defaultRenderSelectorJSON sel
+    ReloadConfig -> ("reload-log-config", ("config",) . toJSON)
 
-logger :: Component IO () (EventBackend IO UUID RootSelector)
-logger = component \_ -> do
+logger :: Component IO FilePath (EventBackend IO (Maybe UUID) RootSelector)
+logger = proc configFile -> do
+  rec
+    readConfig <- configWatcher -< (eventBackend, configFile)
+    eventBackend <- logAppender -< readConfig
+  returnA -< eventBackend
+
+newtype LogConfig = LogConfig (Map Key (Maybe (Map Key Bool)))
+  deriving newtype (Semigroup, Monoid)
+
+instance FromJSON LogConfig where
+  parseJSON = fmap LogConfig . withObject "LogConfig" (traverse parseSelectorConfig . KeyMap.toMap)
+    where
+      parseSelectorConfig = \case
+        Bool False -> pure Nothing
+        Bool True -> pure $ Just mempty
+        val -> Just <$> parseJSON val
+
+instance ToJSON LogConfig where
+  toJSON (LogConfig config) = toJSON $ maybe (toJSON False) toJSON <$> config
+
+configWatcher :: Component IO (EventBackend IO r RootSelector, FilePath) (STM LogConfig)
+configWatcher = component \(eventBackend, configFile) -> do
+  configVar <- newTVar defaultLogConfig
+  let
+    runConfigWatcher = do
+      configFile' <- canonicalizePath configFile
+      forever $ void $ try @SomeException $ withManager \manager -> do
+        let dir = dropFileName configFile'
+        let
+          predicate = \case
+            Added path _ IsFile -> path == configFile'
+            Modified path _ IsFile -> path == configFile'
+            Removed path _ IsFile -> path == configFile'
+            _ -> False
+          reloadConfig = void $ try @SomeException $ withEvent eventBackend ReloadConfig \ev -> do
+            newConfig <- fmap (either (Left . displayException) id) . try @IOError $ eitherDecodeFileStrict' configFile
+            addField ev newConfig
+            traverse_ (atomically . writeTVar configVar . (<> defaultLogConfig)) newConfig
+        reloadConfig
+        _ <- watchDir manager dir predicate $ const reloadConfig
+        forever $ threadDelay 1_000_000_000_000
+  pure (runConfigWatcher, readTVar configVar)
+
+defaultLogConfig :: LogConfig
+defaultLogConfig = LogConfig $ Just <$> Map.fromList
+  [ ("chain-seek.connected", mempty)
+  , ("chain-seek.disconnected", mempty)
+  , ("reload-log-config", Map.singleton "config" True)
+  ]
+
+logAppender :: Component IO (STM LogConfig) (EventBackend IO (Maybe UUID) RootSelector)
+logAppender = component \config -> do
   (pullEmitters, eventBackend) <- proxyEventBackend newOnceFlagMVar nextRandom
-  let filteredEventBackend = eventBackend
+  let filteredEventBackend = filterEventBackendM (flip filterRoot config) eventBackend
   pure (runLogger defaultRenderSelectorJSON pullEmitters, filteredEventBackend)
+
+filterRoot :: RootSelector f -> STM LogConfig -> IO (Maybe (f -> IO Bool))
+filterRoot = \case
+  ChainSeekServer sel -> filterChainSeekServer "chain-seek" sel
+  ReloadConfig -> mkEventPredicate "" "reload-log-config" (const "config")
+
+filterChainSeekServer
+  :: Key
+  -> AcceptSocketDriverSelector RuntimeChainSeek f
+  -> STM LogConfig
+  -> IO (Maybe (f -> IO Bool))
+filterChainSeekServer prefix = \case
+  Connected -> mkEventPredicate prefix "connected" absurd
+  Disconnected -> mkEventPredicate prefix "disconnected" absurd
+  ServerDriverEvent sel -> filterServerDriverEvent prefix sel
+
+filterServerDriverEvent :: Key -> DriverSelector ps f -> STM LogConfig -> IO (Maybe (f -> IO Bool))
+filterServerDriverEvent prefix = \case
+  Send -> mkEventPredicate prefix "send" \case
+    SendMessage _ _ -> "message"
+  Recv -> mkEventPredicate prefix "recv" \case
+    RecvMessage _ _ -> "message"
+    StateBefore _ -> "stateBefore"
+    StateAfter _ -> "stateAfter"
+
+prepend :: Key -> Key -> Key
+prepend prefix key = if T.null $ toText prefix then key else prefix <> "." <> key
+
+mkEventPredicate :: Key -> Key -> (f -> Key) -> STM LogConfig -> IO (Maybe (f -> IO Bool))
+mkEventPredicate prefix key fieldKey readConfig = do
+  let key' = prepend prefix key
+  LogConfig config <- atomically readConfig
+  pure do
+    _ <- join $ Map.lookup key' config
+    pure \field -> atomically do
+      -- read again, as it may have changed
+      LogConfig config' <- readConfig
+      pure case Map.lookup key' config' of
+        Just (Just fieldConfig) -> fromMaybe False $ Map.lookup (fieldKey field) fieldConfig
+        _ -> False
 
 data JSONEventState s = forall f. JSONEventState
   { emitter :: SelectorEmitter UUID s f

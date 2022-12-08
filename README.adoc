@@ -221,7 +221,7 @@ The following commands may be useful:
 * `docker compose exec postgres psql -U postgres -d chain`: Run psql in the `chain` database.
 * `docker compose port`, e.g. `docker compose port web 8080` will show the local port that maps to port `8080` for the `web` service
 
-Accessing the node socket:
+=== Accessing the node socket:
 
 The node socket file lives inside a Docker volume. Because it is created by the
 container, it is owned by root, and needs elevated permissions (via `sudo`) to
@@ -235,11 +235,11 @@ maps to the volume (one-liner: `docker volume inspect marlowe-cardano_shared | j
 
 To use this with `cardano-cli`:
 
-```bash
+----
 export CARDANO_NODE_SOCKET_PATH=$(docker volume inspect marlowe-cardano_shared | jq -r '.[].Mountpoint')
 # -E passes the current environment to sudo
 sudo -E cardano-cli ...
-```
+----
 
 == Licensing
 

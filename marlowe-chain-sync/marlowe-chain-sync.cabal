@@ -124,6 +124,9 @@ executable chainseekd
     , cardano-crypto-wrapper
     , cardano-ledger-byron
     , containers
+    , directory
+    , filepath
+    , fsnotify
     , eventuo11y
     , eventuo11y-json
     , hasql

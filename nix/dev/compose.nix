@@ -12,7 +12,10 @@ let
     set -e
     PROG=${lib.escapeShellArg prog}
     PKG=${lib.escapeShellArg project}-${lib.escapeShellArg version}
-    BIN=/build/$PKG/x/$PROG/build/$PROG/$PROG
+    cd /src
+    # Hard-coding linux because this won't work on Mac anyway.
+    # TODO find a setup that works on MacOS
+    BIN=./dist-newstyle/build/x86_64-linux/ghc-8.10.7/$PKG/x/$PROG/build/$PROG/$PROG
     exec -a $PROG $BIN "$@"
   '';
 
@@ -53,14 +56,6 @@ let
     volumes = [
       "./:/src"
       "/nix:/nix"
-      # Hard-coding linux because this won't work on Mac anyway.
-      # TODO find a setup that works on MacOS
-      {
-        type = "bind";
-        source = "./dist-newstyle/build/x86_64-linux/ghc-8.10.7";
-        target = "/build";
-        read_only = true;
-      }
       "${symlinks}:/exec"
       "shared:/ipc"
     ];

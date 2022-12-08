@@ -190,7 +190,7 @@ data AcceptSocketDriverSelector ps f where
 
 instance MessageToJSON ps => DefaultRenderSelectorJSON (AcceptSocketDriverSelector ps) where
   defaultRenderSelectorJSON = \case
-    Connected -> ("connected", \addr -> ("address", toJSON $ show addr))
+    Connected -> ("connected", absurd)
     Disconnected -> ("disconnected", absurd)
     ServerDriverEvent ev -> defaultRenderSelectorJSON ev
 

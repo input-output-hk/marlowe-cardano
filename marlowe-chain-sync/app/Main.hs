@@ -105,7 +105,7 @@ run Options{..} = withSocketsDo do
             , maxCost
             , costModel
             }
-          loggerDependencies = ()
+          loggerDependencies = "./chainseekd.log.config"
           appComponent = chainSync <<< arr chainSyncDependencies <<< logger
         runComponent_ appComponent loggerDependencies
   where
