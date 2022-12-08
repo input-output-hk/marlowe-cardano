@@ -1,33 +1,43 @@
+{-# LANGUAGE GADTs #-}
 module Language.Marlowe.Runtime.ChainSync.Store
   ( ChainStore(..)
   , ChainStoreDependencies(..)
+  , ChainStoreSelector(..)
   , Changes(..)
+  , SaveField(..)
   , chainStore
   ) where
 
-import Cardano.Api (ChainPoint(..), ChainTip(..), SlotNo(..))
-import Cardano.Api.Shelley (Hash(..))
+import Cardano.Api (ChainPoint(..), ChainTip(..))
 import Control.Concurrent.Component
 import Control.Concurrent.STM (STM, atomically, newTVar, readTVar, writeTVar)
 import Control.Concurrent.STM.Delay (Delay, newDelay, waitDelay)
 import Control.Monad (guard, unless, when)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Maybe (MaybeT(..))
-import Data.ByteString.Base16 (encodeBase16)
-import Data.ByteString.Short (fromShort)
 import Data.Foldable (for_, traverse_)
-import qualified Data.Text as T
-import qualified Data.Text.IO as T
 import Data.Time (NominalDiffTime, UTCTime, addUTCTime, diffUTCTime, getCurrentTime, nominalDiffTimeToSeconds)
+import Data.Void (Void)
 import Language.Marlowe.Runtime.ChainSync.Database
 import Language.Marlowe.Runtime.ChainSync.Genesis (GenesisBlock)
 import Language.Marlowe.Runtime.ChainSync.NodeClient (Changes(..), isEmptyChanges)
+import Observe.Event (EventBackend, addField, withEvent)
 import Prelude hiding (filter)
-import System.IO (stderr)
 import Witherable (Witherable(..))
 
+data ChainStoreSelector f where
+  CheckGenesisBlock :: ChainStoreSelector Void
+  Save :: ChainStoreSelector SaveField
+
+data SaveField
+  = RollbackPoint ChainPoint
+  | BlockCount Int
+  | LocalTip ChainTip
+  | RemoteTip ChainTip
+  | TxCount Int
+
 -- | Set of dependencies required by the ChainStore
-data ChainStoreDependencies = ChainStoreDependencies
+data ChainStoreDependencies r = ChainStoreDependencies
   { commitRollback :: !(CommitRollback IO) -- ^ How to persist rollbacks in the database backend
   , commitBlocks   :: !(CommitBlocks IO)   -- ^ How to commit blocks in bulk in the database backend
   , rateLimit      :: !NominalDiffTime     -- ^ The minimum time between database writes
@@ -35,6 +45,7 @@ data ChainStoreDependencies = ChainStoreDependencies
   , getGenesisBlock :: !(GetGenesisBlock IO)
   , genesisBlock :: !GenesisBlock
   , commitGenesisBlock :: !(CommitGenesisBlock IO)
+  , eventBackend :: EventBackend IO r ChainStoreSelector
   }
 
 -- | Public API of the ChainStore component
@@ -43,7 +54,7 @@ newtype ChainStore = ChainStore
   }
 
 -- | Create a ChainStore component.
-chainStore :: Component IO ChainStoreDependencies ChainStore
+chainStore :: Component IO (ChainStoreDependencies r) ChainStore
 chainStore = component \ChainStoreDependencies{..} -> do
   localTipVar <- newTVar ChainTipAtGenesis
   let
@@ -58,49 +69,28 @@ chainStore = component \ChainStoreDependencies{..} -> do
 
     runChainStore :: IO ()
     runChainStore = do
-      mDbGenesisBlock <- runGetGenesisBlock getGenesisBlock
-      case mDbGenesisBlock of
-        Just dbGenesisBlock -> unless (dbGenesisBlock == genesisBlock) do
-          fail "Existing genesis block does not match computed genesis block"
-        Nothing -> runCommitGenesisBlock commitGenesisBlock genesisBlock
+      withEvent eventBackend CheckGenesisBlock \_ -> do
+        mDbGenesisBlock <- runGetGenesisBlock getGenesisBlock
+        case mDbGenesisBlock of
+          Just dbGenesisBlock -> unless (dbGenesisBlock == genesisBlock) do
+            fail "Existing genesis block does not match computed genesis block"
+          Nothing -> runCommitGenesisBlock commitGenesisBlock genesisBlock
       go Nothing
       where
         go lastWrite = do
           delay <- wither computeDelay lastWrite
           Changes{..} <- atomically $ awaitChanges delay
-          for_ changesRollback \point -> do
-            case point of
-              ChainPointAtGenesis -> T.hPutStrLn stderr "Rolling back to Genesis"
-              ChainPoint (SlotNo slot) (HeaderHash hash) -> T.hPutStrLn stderr $ T.intercalate " "
-                [ "Rolling back to block"
-                , encodeBase16 $ fromShort hash
-                , "at slot"
-                , T.pack $ show slot
-                ]
-            runCommitRollback commitRollback point
-          when (changesBlockCount > 0) do
-            T.hPutStrLn stderr $ mconcat
-              [ "Saving "
-              , T.pack $ show changesBlockCount
-              , " blocks, "
-              , T.pack $ show changesTxCount
-              , " transactions. New tip: "
-              , case changesLocalTip of
-                  ChainTipAtGenesis -> "Genesis"
-                  ChainTip (SlotNo slot) (HeaderHash hash) _ -> T.intercalate " "
-                    [ "block"
-                    , encodeBase16 $ fromShort hash
-                    , "at slot"
-                    , T.pack $ show slot
-                    ]
-              , " (node tip: "
-              , case changesTip of
-                  ChainTipAtGenesis           -> "Genesis"
-                  ChainTip (SlotNo slot) _  _ -> T.pack $ show slot
-              , ")"
-              ]
-            runCommitBlocks commitBlocks changesBlocks
-            atomically $ writeTVar localTipVar changesLocalTip
+          withEvent eventBackend Save \ev -> do
+            for_ changesRollback \point -> do
+              addField ev $ RollbackPoint point
+              runCommitRollback commitRollback point
+            when (changesBlockCount > 0) do
+              addField ev $ BlockCount changesBlockCount
+              addField ev $ TxCount changesTxCount
+              addField ev $ LocalTip changesLocalTip
+              addField ev $ RemoteTip changesTip
+              runCommitBlocks commitBlocks changesBlocks
+              atomically $ writeTVar localTipVar changesLocalTip
           go . Just =<< getCurrentTime
 
     computeDelay :: UTCTime -> IO (Maybe Delay)

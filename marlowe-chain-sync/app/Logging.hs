@@ -55,6 +55,7 @@ import Language.Marlowe.Runtime.Cardano.Api
 import Language.Marlowe.Runtime.ChainSync (ChainSyncSelector(..))
 import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncCommand, ChainSyncQuery, RuntimeChainSeek)
 import qualified Language.Marlowe.Runtime.ChainSync.NodeClient as NodeClient
+import qualified Language.Marlowe.Runtime.ChainSync.Store as ChainStore
 import Network.Protocol.Driver (AcceptSocketDriverSelector(..), DriverSelector(..), RecvField(..), SendField(..))
 import Network.Protocol.Job.Types (Job)
 import Network.Protocol.Query.Types (Query)
@@ -84,6 +85,7 @@ instance DefaultRenderSelectorJSON RootSelector where
 renderChainSyncSelectorJSON :: RenderSelectorJSON ChainSyncSelector
 renderChainSyncSelectorJSON = \case
   NodeClientEvent sel -> first ("node-client." <>) $ renderNodeClientSelectorJSON sel
+  ChainStoreEvent sel -> first ("chain-store." <>) $ renderChainStoreSelectorJSON sel
 
 renderNodeClientSelectorJSON :: RenderSelectorJSON NodeClient.NodeClientSelector
 renderNodeClientSelectorJSON = \case
@@ -104,6 +106,19 @@ renderNodeClientSelectorJSON = \case
         NodeClient.RollBackwardPoint point -> ("point", pointToJSON point)
         NodeClient.RollBackwardTip tip -> ("tip", tipToJSON tip)
         NodeClient.RollBackwardNewCost cost -> ("new-cost", toJSON cost)
+    )
+
+renderChainStoreSelectorJSON :: RenderSelectorJSON ChainStore.ChainStoreSelector
+renderChainStoreSelectorJSON = \case
+  ChainStore.CheckGenesisBlock -> ("check-genesis-block", absurd)
+  ChainStore.Save ->
+    ( "save"
+    , \case
+      ChainStore.RollbackPoint point -> ("rollback-point", pointToJSON point)
+      ChainStore.BlockCount count -> ("block-count", toJSON count)
+      ChainStore.LocalTip tip -> ("local-tip", tipToJSON tip)
+      ChainStore.RemoteTip tip -> ("remote-tip", tipToJSON tip)
+      ChainStore.TxCount count -> ("tx-count", toJSON count)
     )
 
 pointToJSON :: ChainPoint -> Value
@@ -185,6 +200,15 @@ defaultLogConfig = LogConfig $ Just <$> Map.fromList
   , ("node-client.intersect-found", Map.singleton "point" True)
   , ("node-client.intersect-not-found", mempty)
   , ("node-client.roll-backward", Map.fromList [("point", True), ("tip", True)])
+  , ("chain-store.check-genesis-block", mempty)
+  , ("chain-store.save", Map.fromList
+      [ ("rollback-point", True)
+      , ("block-count", True)
+      , ("local-tip", True)
+      , ("remote-tip", True)
+      , ("tx-count", True)
+      ]
+    )
   ]
 
 logAppender :: Component IO (STM LogConfig) (EventBackend IO (Maybe UUID) RootSelector)
@@ -223,6 +247,7 @@ filterServerDriverEvent prefix = \case
 filterChainSync :: ChainSyncSelector f -> STM LogConfig -> IO (Maybe (f -> IO Bool))
 filterChainSync = \case
   NodeClientEvent sel -> filterNodeClient "node-client" sel
+  ChainStoreEvent sel -> filterChainStore "chain-store" sel
 
 filterNodeClient
   :: Key
@@ -242,6 +267,20 @@ filterNodeClient prefix = \case
     NodeClient.RollBackwardPoint _ -> "point"
     NodeClient.RollBackwardTip _ -> "tip"
     NodeClient.RollBackwardNewCost _ -> "new-cost"
+
+filterChainStore
+  :: Key
+  -> ChainStore.ChainStoreSelector f
+  -> STM LogConfig
+  -> IO (Maybe (f -> IO Bool))
+filterChainStore prefix = \case
+  ChainStore.CheckGenesisBlock -> mkEventPredicate prefix "check-genesis-block" absurd
+  ChainStore.Save -> mkEventPredicate prefix "save" \case
+    ChainStore.RollbackPoint _ -> "rollback-point"
+    ChainStore.BlockCount _ -> "block-count"
+    ChainStore.LocalTip _ -> "local-tip"
+    ChainStore.RemoteTip _ -> "remote-tip"
+    ChainStore.TxCount _ -> "tx-count"
 
 prepend :: Key -> Key -> Key
 prepend prefix key = if T.null $ toText prefix then key else prefix <> "." <> key
