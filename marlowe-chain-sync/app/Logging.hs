@@ -138,26 +138,14 @@ tipToJSON = \case
     , "blockNo" .= fromCardanoBlockNo blockNo
     ]
 
-logger :: Component IO FilePath (EventBackend IO (Maybe UUID) RootSelector)
-logger = proc configFile -> do
-  rec
-    readConfig <- configWatcher -< (eventBackend, configFile)
-    eventBackend <- logAppender -< readConfig
-  returnA -< eventBackend
-
-newtype LogConfig = LogConfig (Map Key (Maybe (Map Key Bool)))
-  deriving newtype (Semigroup, Monoid)
-
-instance FromJSON LogConfig where
-  parseJSON = fmap LogConfig . withObject "LogConfig" (traverse parseSelectorConfig . KeyMap.toMap)
-    where
-      parseSelectorConfig = \case
-        Bool False -> pure Nothing
-        Bool True -> pure $ Just mempty
-        val -> Just <$> parseJSON val
-
-instance ToJSON LogConfig where
-  toJSON (LogConfig config) = toJSON $ maybe (toJSON False) toJSON <$> config
+logger :: Component IO (Maybe FilePath) (EventBackend IO (Maybe UUID) RootSelector)
+logger = proc mConfigFile -> case mConfigFile of
+  Nothing -> logAppender -< (pure defaultLogConfig)
+  Just configFile -> do
+    rec
+      readConfig <- configWatcher -< (eventBackend, configFile)
+      eventBackend <- logAppender -< readConfig
+    returnA -< eventBackend
 
 configWatcher :: Component IO (EventBackend IO r RootSelector, FilePath) (STM LogConfig)
 configWatcher = component \(eventBackend, configFile) -> do
@@ -282,6 +270,29 @@ filterChainStore prefix = \case
     ChainStore.RemoteTip _ -> "remote-tip"
     ChainStore.TxCount _ -> "tx-count"
 
+-- TODO push below definitions upstream
+newtype LogConfig = LogConfig (Map Key (Maybe (Map Key Bool)))
+
+instance Semigroup LogConfig where
+  LogConfig a <> LogConfig b = LogConfig $ Map.unionWith appendFieldConfig a b
+    where
+      appendFieldConfig Nothing _ = Nothing
+      appendFieldConfig fa fb = fa <> fb
+
+instance Monoid LogConfig where
+  mempty = LogConfig mempty
+
+instance FromJSON LogConfig where
+  parseJSON = fmap LogConfig . withObject "LogConfig" (traverse parseSelectorConfig . KeyMap.toMap)
+    where
+      parseSelectorConfig = \case
+        Bool False -> pure Nothing
+        Bool True -> pure $ Just mempty
+        val -> Just <$> parseJSON val
+
+instance ToJSON LogConfig where
+  toJSON (LogConfig config) = toJSON $ maybe (toJSON False) toJSON <$> config
+
 prepend :: Key -> Key -> Key
 prepend prefix key = if T.null $ toText prefix then key else prefix <> "." <> key
 
@@ -370,7 +381,6 @@ runLogger renderSelectorJSON pullEmitters = loop mempty
       JSONEventState emitter key renderFieldJSON <$> newTVar mempty <*> newTVar mempty <*> newTVar mempty
 
 
--- TODO push below definitions upstream
 filterEventBackend
   :: Monad m
   => (forall f. s f -> Maybe (f -> Bool))

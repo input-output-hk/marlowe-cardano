@@ -106,7 +106,7 @@ run Options{..} = withSocketsDo do
             , costModel
             , eventBackend = narrowEventBackend App eventBackend
             }
-          loggerDependencies = "./chainseekd.log.config"
+          loggerDependencies = logConfigFile
           appComponent = chainSync <<< arr chainSyncDependencies <<< logger
         runComponent_ appComponent loggerDependencies
   where
