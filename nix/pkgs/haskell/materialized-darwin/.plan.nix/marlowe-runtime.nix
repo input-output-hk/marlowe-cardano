@@ -306,6 +306,7 @@
             (hsPkgs."async-components" or (errorHandler.buildDepError "async-components"))
             (hsPkgs."co-log" or (errorHandler.buildDepError "co-log"))
             (hsPkgs."co-log-core" or (errorHandler.buildDepError "co-log-core"))
+            (hsPkgs."eventuo11y" or (errorHandler.buildDepError "eventuo11y"))
             (hsPkgs."marlowe-protocols" or (errorHandler.buildDepError "marlowe-protocols"))
             (hsPkgs."marlowe-runtime" or (errorHandler.buildDepError "marlowe-runtime"))
             (hsPkgs."marlowe-runtime".components.sublibs.config or (errorHandler.buildDepError "marlowe-runtime:config"))

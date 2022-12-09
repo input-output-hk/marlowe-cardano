@@ -34,8 +34,12 @@
       "library" = {
         depends = [
           (hsPkgs."base" or (errorHandler.buildDepError "base"))
+          (hsPkgs."aeson" or (errorHandler.buildDepError "aeson"))
+          (hsPkgs."base16" or (errorHandler.buildDepError "base16"))
           (hsPkgs."binary" or (errorHandler.buildDepError "binary"))
           (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
+          (hsPkgs."eventuo11y" or (errorHandler.buildDepError "eventuo11y"))
+          (hsPkgs."eventuo11y-json" or (errorHandler.buildDepError "eventuo11y-json"))
           (hsPkgs."hashable" or (errorHandler.buildDepError "hashable"))
           (hsPkgs."lifted-base" or (errorHandler.buildDepError "lifted-base"))
           (hsPkgs."monad-control" or (errorHandler.buildDepError "monad-control"))
