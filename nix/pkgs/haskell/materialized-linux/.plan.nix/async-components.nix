@@ -10,8 +10,8 @@
   {
     flags = {};
     package = {
-      specVersion = "2.4";
-      identifier = { name = "async-components"; version = "0.0.0.0"; };
+      specVersion = "3.0";
+      identifier = { name = "async-components"; version = "0.1.0.0"; };
       license = "Apache-2.0";
       copyright = "";
       maintainer = "jamie.bertram@iohk.io";

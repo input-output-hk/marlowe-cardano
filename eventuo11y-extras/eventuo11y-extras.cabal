@@ -1,8 +1,8 @@
 cabal-version: 3.0
-name: async-components
+name: eventuo11y-extras
 version: 0.1.0.0
 synopsis:
-  Async components for building concurrent server processes.
+  O11y helpers for Malowe Runtime and other Marlowe processes
 bug-reports: https://github.com/input-output-hk/marlowe-cardano/issues
 license: Apache-2.0
 author: Jamie Bertram
@@ -16,7 +16,7 @@ license-files:
 source-repository head
   type: git
   location: https://github.com/input-output-hk/marlowe-cardano
-  subdir: async-components
+  subdir: eventuo11y-extras
 
 library
   default-language: Haskell2010
@@ -47,10 +47,22 @@ library
     -Wincomplete-uni-patterns -Wincomplete-record-updates
     -Wredundant-constraints -Widentities
   exposed-modules:
-    Control.Concurrent.Component
+    Observe.Event.Backend.Extra
+    Observe.Event.Component
   build-depends:
       base >= 4.9 && < 5
-    , lifted-async
+    , aeson
+    , async-components
+    , containers
+    , directory
+    , eventuo11y
+    , eventuo11y-json
+    , filepath
+    , fsnotify
+    , lifted-base
     , monad-control
+    , some
     , stm
+    , text
+    , time
     , transformers-base

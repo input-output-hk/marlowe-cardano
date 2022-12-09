@@ -1,4 +1,5 @@
 {-# LANGUAGE GADTs #-}
+
 module Main
   where
 
@@ -24,7 +25,9 @@ import Control.Monad ((<=<))
 import Control.Monad.Trans.Except (ExceptT(ExceptT), runExceptT, withExceptT)
 import Data.String (IsString(fromString))
 import Data.Text (unpack)
+import qualified Data.Text.Lazy.IO as TL
 import Data.Time (secondsToNominalDiffTime)
+import Data.UUID.V4 (nextRandom)
 import Hasql.Pool (UsageError(..))
 import qualified Hasql.Pool as Pool
 import qualified Hasql.Session as Session
@@ -33,7 +36,7 @@ import Language.Marlowe.Runtime.ChainSync.Api (WithGenesis(..), codecChainSeek)
 import Language.Marlowe.Runtime.ChainSync.Database (hoistDatabaseQueries)
 import qualified Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL as PostgreSQL
 import Language.Marlowe.Runtime.ChainSync.Genesis (computeByronGenesisBlock)
-import Logging (RootSelector(..), logger)
+import Logging (RootSelector(..), getRootSelectorConfig)
 import Network.Protocol.ChainSeek.Server (chainSeekServerPeer)
 import Network.Protocol.Driver (acceptRunServerPeerOverSocket, acceptRunServerPeerOverSocketWithLogging)
 import Network.Protocol.Job.Codec (codecJob)
@@ -57,7 +60,10 @@ import Network.Socket
   , withSocketsDo
   )
 import Observe.Event (narrowEventBackend)
+import Observe.Event.Backend (newOnceFlagMVar)
+import Observe.Event.Component (LoggerDependencies(..), logger)
 import Options (Options(..), getOptions)
+import System.IO (stderr)
 
 main :: IO ()
 main = run =<< getOptions "0.0.0.0"
@@ -106,7 +112,14 @@ run Options{..} = withSocketsDo do
             , costModel
             , eventBackend = narrowEventBackend App eventBackend
             }
-          loggerDependencies = logConfigFile
+          loggerDependencies = LoggerDependencies
+            { configFilePath = logConfigFile
+            , getSelectorConfig = getRootSelectorConfig
+            , newRef = nextRandom
+            , newOnceFlag = newOnceFlagMVar
+            , writeText = TL.hPutStr stderr
+            , injectConfigWatcherSelector = ConfigWatcher
+            }
           appComponent = chainSync <<< arr chainSyncDependencies <<< logger
         runComponent_ appComponent loggerDependencies
   where

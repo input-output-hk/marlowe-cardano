@@ -39,7 +39,7 @@
           (hsPkgs."binary" or (errorHandler.buildDepError "binary"))
           (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
           (hsPkgs."eventuo11y" or (errorHandler.buildDepError "eventuo11y"))
-          (hsPkgs."eventuo11y-json" or (errorHandler.buildDepError "eventuo11y-json"))
+          (hsPkgs."eventuo11y-extras" or (errorHandler.buildDepError "eventuo11y-extras"))
           (hsPkgs."hashable" or (errorHandler.buildDepError "hashable"))
           (hsPkgs."lifted-base" or (errorHandler.buildDepError "lifted-base"))
           (hsPkgs."monad-control" or (errorHandler.buildDepError "monad-control"))

@@ -17,7 +17,7 @@ import Control.Monad.Trans.Control (MonadBaseControl)
 import Data.Aeson (Value, toJSON)
 import Data.ByteString.Lazy (ByteString)
 import Data.ByteString.Lazy.Base16 (encodeBase16)
-import Data.Void (Void, absurd)
+import Data.Void (Void)
 import Network.Channel (Channel(..), hoistChannel, socketAsChannel)
 import Network.Socket (AddrInfo, SockAddr, Socket, addrAddress, close, connect, openSocket)
 import Network.Socket.Address (accept)
@@ -27,7 +27,7 @@ import Network.TypedProtocol.Driver (Driver(..))
 import Observe.Event (addField, addParent, narrowEventBackend, reference, subEventBackend, withEvent)
 import Observe.Event.Backend (EventBackend, noopEventBackend)
 import Observe.Event.BackendModification (modifyEventBackend, setAncestor)
-import Observe.Event.Render.JSON (DefaultRenderFieldJSON(..), DefaultRenderSelectorJSON(..))
+import Observe.Event.Component (FieldConfig(..), GetSelectorConfig, SelectorConfig(..), SomeJSON(..), absurdFieldConfig)
 
 class MessageToJSON ps where
   messageToJSON :: PeerHasAgency pr (st :: ps) -> Message ps st st' -> Value
@@ -48,20 +48,28 @@ data RecvField ps where
   StateAfter :: Maybe ByteString -> RecvField ps
   RecvMessage :: PeerHasAgency pr st -> Message ps (st :: ps) (st' :: ps) -> RecvField ps
 
-instance MessageToJSON ps => DefaultRenderSelectorJSON (DriverSelector ps) where
-  defaultRenderSelectorJSON = \case
-    Send -> ("send", defaultRenderFieldJSON)
-    Recv -> ("recv", defaultRenderFieldJSON)
-
-instance MessageToJSON ps => DefaultRenderFieldJSON (SendField ps) where
-  defaultRenderFieldJSON = \case
-    SendMessage pa msg -> ("message", messageToJSON pa msg)
-
-instance MessageToJSON ps => DefaultRenderFieldJSON (RecvField ps) where
-  defaultRenderFieldJSON = \case
-    StateAfter state -> ("stateAfter", toBase16JSON state)
-    StateBefore state -> ("stateBefore", toBase16JSON state)
-    RecvMessage pa msg -> ("message", messageToJSON pa msg)
+getDriverSelectorConfig :: MessageToJSON ps => Bool -> GetSelectorConfig (DriverSelector ps)
+getDriverSelectorConfig defaultEnabled = \case
+  Send -> SelectorConfig "send" defaultEnabled FieldConfig
+    { fieldKey = const "message"
+    , fieldDefaultEnabled = const True
+    , toSomeJSON = \case
+        SendMessage pa msg -> SomeJSON $ messageToJSON pa msg
+    }
+  Recv -> SelectorConfig "recv" defaultEnabled FieldConfig
+    { fieldKey = \case
+        StateBefore _ -> "state-before"
+        StateAfter _ -> "state-after"
+        RecvMessage _ _ -> "message"
+    , fieldDefaultEnabled = \case
+        StateBefore _ -> False
+        StateAfter _ -> False
+        RecvMessage _ _ -> True
+    , toSomeJSON = \case
+        StateAfter state -> SomeJSON $ toBase16JSON state
+        StateBefore state -> SomeJSON $ toBase16JSON state
+        RecvMessage pa msg -> SomeJSON $ messageToJSON pa msg
+    }
 
 toBase16JSON :: Maybe ByteString -> Value
 toBase16JSON = toJSON . fmap encodeBase16
@@ -138,12 +146,6 @@ data ConnectSocketDriverSelector ps f where
   Disconnect :: ConnectSocketDriverSelector ps Void
   ClientDriverEvent :: DriverSelector ps f -> ConnectSocketDriverSelector ps f
 
-instance MessageToJSON ps => DefaultRenderSelectorJSON (ConnectSocketDriverSelector ps) where
-  defaultRenderSelectorJSON = \case
-    Connect -> ("connect", \addr -> ("address", toJSON $ show addr))
-    Disconnect -> ("disconnect", absurd)
-    ClientDriverEvent ev -> defaultRenderSelectorJSON ev
-
 runClientPeerOverSocketWithLogging
   :: (MonadBaseControl IO m, MonadCleanup m)
   => EventBackend m r (ConnectSocketDriverSelector protocol)
@@ -188,11 +190,20 @@ data AcceptSocketDriverSelector ps f where
   Disconnected :: AcceptSocketDriverSelector ps Void
   ServerDriverEvent :: DriverSelector ps f -> AcceptSocketDriverSelector ps f
 
-instance MessageToJSON ps => DefaultRenderSelectorJSON (AcceptSocketDriverSelector ps) where
-  defaultRenderSelectorJSON = \case
-    Connected -> ("connected", absurd)
-    Disconnected -> ("disconnected", absurd)
-    ServerDriverEvent ev -> defaultRenderSelectorJSON ev
+data AcceptSocketDriverSelectorConfigOptions = AcceptSocketDriverSelectorConfigOptions
+  { enableConnected :: Bool
+  , enableDisconnected :: Bool
+  , enableServerDriverEvent :: Bool
+  }
+
+getAcceptSocketDriverSelectorConfig
+  :: MessageToJSON ps
+  => AcceptSocketDriverSelectorConfigOptions
+  -> GetSelectorConfig (AcceptSocketDriverSelector ps)
+getAcceptSocketDriverSelectorConfig AcceptSocketDriverSelectorConfigOptions{..} = \case
+  Connected -> SelectorConfig "connected" enableConnected absurdFieldConfig
+  Disconnected -> SelectorConfig "disconnected" enableDisconnected absurdFieldConfig
+  ServerDriverEvent sel -> getDriverSelectorConfig enableServerDriverEvent sel
 
 acceptRunServerPeerOverSocketWithLogging
   :: (MonadBaseControl IO m, MonadCleanup m)

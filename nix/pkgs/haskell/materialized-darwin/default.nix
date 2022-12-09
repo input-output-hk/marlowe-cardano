@@ -817,6 +817,7 @@
         eventuo11y = ./.plan.nix/eventuo11y.nix;
         eventuo11y-batteries = ./.plan.nix/eventuo11y-batteries.nix;
         cardano-addresses = ./.plan.nix/cardano-addresses.nix;
+        eventuo11y-extras = ./.plan.nix/eventuo11y-extras.nix;
         cardano-addresses-cli = ./.plan.nix/cardano-addresses-cli.nix;
         plutus-script-utils = ./.plan.nix/plutus-script-utils.nix;
         marlowe-protocols-test = ./.plan.nix/marlowe-protocols-test.nix;
@@ -856,6 +857,7 @@
           "cardano-addresses" = {
             flags = { "release" = lib.mkOverride 900 false; };
             };
+          "eventuo11y-extras" = { flags = {}; };
           "cardano-addresses-cli" = {
             flags = { "release" = lib.mkOverride 900 false; };
             };
@@ -925,6 +927,7 @@
           "bin".components.library.planned = lib.mkOverride 900 true;
           "th-orphans".components.library.planned = lib.mkOverride 900 true;
           "tracer-transformers".components.exes."tracer-transfomers-example1".planned = lib.mkOverride 900 true;
+          "eventuo11y-extras".components.library.planned = lib.mkOverride 900 true;
           "markdown-unlit".components.exes."markdown-unlit".planned = lib.mkOverride 900 true;
           "freer-extras".components.library.planned = lib.mkOverride 900 true;
           "megaparsec".components.library.planned = lib.mkOverride 900 true;

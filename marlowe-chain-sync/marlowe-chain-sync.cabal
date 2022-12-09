@@ -124,12 +124,8 @@ executable chainseekd
     , cardano-api
     , cardano-crypto-wrapper
     , cardano-ledger-byron
-    , containers
-    , directory
-    , filepath
-    , fsnotify
     , eventuo11y
-    , eventuo11y-json
+    , eventuo11y-extras
     , hasql
     -- Consider removing the hasql < 1.6 constraint in cabal.project if updating hasql-pool
     , hasql-pool < 0.6
@@ -138,11 +134,9 @@ executable chainseekd
     , network
     , optparse-applicative
     , ouroboros-network
-    , stm
     , text
     , time
     , transformers
-    , transformers-base
     , uuid
 
 executable example-client

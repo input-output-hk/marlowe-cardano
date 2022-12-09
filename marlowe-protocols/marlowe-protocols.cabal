@@ -70,7 +70,7 @@ library
     , binary
     , bytestring
     , eventuo11y
-    , eventuo11y-json
+    , eventuo11y-extras
     , hashable
     , lifted-base
     , monad-control
