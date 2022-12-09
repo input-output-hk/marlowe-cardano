@@ -5,10 +5,12 @@
 module Language.Marlowe.Protocol.Sync.Types
   where
 
+import Data.Aeson (Key, ToJSON, Value(..), object, (.=))
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader)
-import Language.Marlowe.Runtime.Core.Api (ContractId, MarloweVersion, MarloweVersionTag)
+import Language.Marlowe.Runtime.Core.Api (ContractId, MarloweVersion(..), MarloweVersionTag)
 import Language.Marlowe.Runtime.History.Api
-import Network.TypedProtocol (Protocol(..))
+import Network.Protocol.Driver (MessageToJSON(..))
+import Network.TypedProtocol (PeerHasAgency(..), Protocol(..))
 
 data MarloweSync where
   StInit :: MarloweSync
@@ -84,3 +86,40 @@ instance Protocol MarloweSync where
   exclusionLemma_NobodyAndClientHaveAgency TokDone = \case
 
   exclusionLemma_NobodyAndServerHaveAgency TokDone = \case
+
+instance MessageToJSON MarloweSync where
+  messageToJSON = \case
+    ClientAgency TokInit -> \case
+      MsgFollowContract contractId -> msgObject "follow-contract" contractId
+      MsgIntersect contractId MarloweV1 headers -> msgObject "intersect" $ object
+        [ "contract-id" .= contractId
+        , "version" .= String "v1"
+        , "block-headers" .= headers
+        ]
+    ClientAgency (TokIdle _) -> \case
+      MsgDone -> String "done"
+      MsgRequestNext -> String "request-next"
+    ClientAgency (TokWait _) -> \case
+      MsgPoll -> String "poll"
+      MsgCancel -> String "cancel"
+    ServerAgency TokFollow -> \case
+      MsgContractNotFound -> String "contract-not-found"
+      MsgContractFound blockHeader MarloweV1 createStep -> msgObject "contract-found" $ object
+        [ "block-header" .= blockHeader
+        , "version" .= String "v1"
+        , "create-step" .= createStep
+        ]
+    ServerAgency (TokNext MarloweV1) -> \case
+      MsgRollForward blockHeader steps -> msgObject "roll-forward" $ object
+        [ "block-header" .= blockHeader
+        , "steps" .= steps
+        ]
+      MsgRollBackward blockHeader -> msgObject "roll-backward" blockHeader
+      MsgRollBackCreation -> String "roll-back-creation"
+      MsgWait -> String "wait"
+    ServerAgency (TokIntersect _) -> \case
+      MsgIntersectFound blockHeader -> msgObject "intersect-found" blockHeader
+      MsgIntersectNotFound -> String "intersect-not-found"
+
+msgObject :: ToJSON a => Key -> a -> Value
+msgObject key a = object [key .= a]

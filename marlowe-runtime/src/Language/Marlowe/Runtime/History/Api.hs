@@ -7,6 +7,7 @@
 module Language.Marlowe.Runtime.History.Api
   where
 
+import Data.Aeson (ToJSON, Value(..), object, toJSON, (.=))
 import Data.Binary (Binary, get, getWord8, put, putWord8)
 import qualified Data.ByteString.Lazy as LBS
 import Data.Map (Map)
@@ -38,7 +39,7 @@ data ContractHistoryError
   | PayoutUTxONotFound Chain.TxOutRef
   | CreateTxRolledBack
   deriving stock (Show, Eq, Ord, Generic)
-  deriving anyclass Binary
+  deriving anyclass (Binary, ToJSON)
 
 data ExtractCreationError
   = TxIxNotFound
@@ -49,7 +50,7 @@ data ExtractCreationError
   | InvalidCreateDatum
   | NotCreationTransaction
   deriving stock (Show, Eq, Ord, Generic)
-  deriving anyclass Binary
+  deriving anyclass (Binary, ToJSON)
 
 data ExtractMarloweTransactionError
   = TxInNotFound
@@ -62,7 +63,7 @@ data ExtractMarloweTransactionError
   | InvalidValidityRange
   | SlotConversionFailed
   deriving stock (Show, Eq, Ord, Generic)
-  deriving anyclass Binary
+  deriving anyclass (Binary, ToJSON)
 
 data FollowerStatus
   = Pending
@@ -71,15 +72,16 @@ data FollowerStatus
   | Finished SomeMarloweVersion
   | Failed ContractHistoryError
   deriving (Eq, Ord, Show, Generic)
-  deriving anyclass Binary
+  deriving anyclass (Binary, ToJSON)
 
 data CreateStep v = CreateStep
   { createOutput :: TransactionScriptOutput v
   , payoutValidatorHash :: ScriptHash
-  }
+  } deriving (Generic)
 
 deriving instance Show (CreateStep 'V1)
 deriving instance Eq (CreateStep 'V1)
+instance ToJSON (CreateStep 'V1)
 
 data SomeCreateStep = forall v. SomeCreateStep (MarloweVersion v) (CreateStep v)
 
@@ -99,10 +101,11 @@ data RedeemStep v = RedeemStep
   { utxo        :: TxOutRef
   , redeemingTx :: TxId
   , datum       :: PayoutDatum v
-  }
+  } deriving Generic
 
 deriving instance Show (RedeemStep 'V1)
 deriving instance Eq (RedeemStep 'V1)
+instance ToJSON (RedeemStep 'V1)
 
 instance Binary (RedeemStep 'V1) where
   put RedeemStep{..} = do
@@ -114,16 +117,31 @@ instance Binary (RedeemStep 'V1) where
 data ContractStep v
   = ApplyTransaction (Transaction v)
   | RedeemPayout (RedeemStep v)
-  -- TODO add TimeoutElapsed
   deriving (Generic)
 
 deriving instance Show (ContractStep 'V1)
 deriving instance Eq (ContractStep 'V1)
 instance Binary (ContractStep 'V1)
+instance ToJSON (ContractStep 'V1)
 
 data HistoryCommand status err result where
   FollowContract :: ContractId -> HistoryCommand Void ContractHistoryError Bool
   StopFollowingContract :: ContractId -> HistoryCommand Void Void Bool
+
+instance CommandToJSON HistoryCommand where
+  commandToJSON = \case
+    FollowContract contractId -> object [ "follow-contract" .= contractId ]
+    StopFollowingContract contractId -> object [ "stop-following-contract" .= contractId ]
+  jobIdToJSON = \case
+  errToJSON = \case
+    TagFollowContract -> toJSON
+    TagStopFollowingContract -> toJSON
+  resultToJSON = \case
+    TagFollowContract -> toJSON
+    TagStopFollowingContract -> toJSON
+  statusToJSON = \case
+    TagFollowContract -> toJSON
+    TagStopFollowingContract -> toJSON
 
 instance Command HistoryCommand where
   data JobId HistoryCommand status err result where
@@ -216,6 +234,20 @@ data SomeHistory = forall v. SomeHistory (MarloweVersion v) (History v)
 data HistoryQuery delimiter err results where
   GetFollowedContracts :: HistoryQuery ContractId Void (Map ContractId FollowerStatus)
   GetStatuses :: Set ContractId -> HistoryQuery Void Void (Map ContractId FollowerStatus)
+
+instance Query.QueryToJSON HistoryQuery where
+  queryToJSON = \case
+    GetFollowedContracts -> String "get-followed-contracts"
+    GetStatuses contractIds -> object [ "get-statuses" .= contractIds ]
+  errToJSON = \case
+    TagGetFollowedContracts -> toJSON
+    TagGetStatuses -> toJSON
+  resultToJSON = \case
+    TagGetFollowedContracts -> toJSON
+    TagGetStatuses -> toJSON
+  delimiterToJSON = \case
+    TagGetFollowedContracts -> toJSON
+    TagGetStatuses -> toJSON
 
 instance Query.IsQuery HistoryQuery where
   data Tag HistoryQuery delimiter err result where

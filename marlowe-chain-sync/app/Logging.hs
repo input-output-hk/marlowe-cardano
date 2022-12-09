@@ -18,7 +18,7 @@ import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncCommand, ChainSyncQuery,
 import qualified Language.Marlowe.Runtime.ChainSync.NodeClient as NodeClient
 import qualified Language.Marlowe.Runtime.ChainSync.Store as ChainStore
 import Network.Protocol.Driver
-  (AcceptSocketDriverSelector(..), AcceptSocketDriverSelectorConfigOptions(..), getAcceptSocketDriverSelectorConfig)
+  (AcceptSocketDriverSelector(..), SocketDriverConfigOptions(..), getAcceptSocketDriverSelectorConfig)
 import Network.Protocol.Job.Types (Job)
 import Network.Protocol.Query.Types (Query)
 import Observe.Event.Component
@@ -50,22 +50,22 @@ getRootSelectorConfig = \case
   ConfigWatcher ReloadConfig -> SelectorConfig "reload-log-config" True
     $ singletonFieldConfig "config" True
 
-chainSeekConfig :: AcceptSocketDriverSelectorConfigOptions
-chainSeekConfig = AcceptSocketDriverSelectorConfigOptions
+chainSeekConfig :: SocketDriverConfigOptions
+chainSeekConfig = SocketDriverConfigOptions
   { enableConnected = True
   , enableDisconnected = True
   , enableServerDriverEvent = False
   }
 
-queryConfig :: AcceptSocketDriverSelectorConfigOptions
-queryConfig = AcceptSocketDriverSelectorConfigOptions
+queryConfig :: SocketDriverConfigOptions
+queryConfig = SocketDriverConfigOptions
   { enableConnected = True
   , enableDisconnected = True
   , enableServerDriverEvent = True
   }
 
-jobConfig :: AcceptSocketDriverSelectorConfigOptions
-jobConfig = AcceptSocketDriverSelectorConfigOptions
+jobConfig :: SocketDriverConfigOptions
+jobConfig = SocketDriverConfigOptions
   { enableConnected = True
   , enableDisconnected = True
   , enableServerDriverEvent = True

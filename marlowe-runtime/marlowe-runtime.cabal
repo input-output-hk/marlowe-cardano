@@ -295,12 +295,17 @@ executable marlowe-history
   hs-source-dirs:   marlowe-history
   main-is: Main.hs
   other-modules:
+    Logging
     Paths_marlowe_runtime
   autogen-modules:
     Paths_marlowe_runtime
   build-depends:
       base >= 4.9 && < 5
     , async-components
+    , eventuo11y
+    , eventuo11y-extras
+    , text
+    , uuid
     , marlowe-protocols
     , marlowe-runtime
     , marlowe-chain-sync

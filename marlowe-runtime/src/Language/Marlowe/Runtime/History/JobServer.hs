@@ -16,7 +16,6 @@ import Language.Marlowe.Runtime.Core.Api
 import Language.Marlowe.Runtime.History.Api
 import Network.Protocol.Driver (RunServer(..))
 import Network.Protocol.Job.Server (liftCommandHandler)
-import System.IO (hPutStrLn, stderr)
 
 type RunJobServer m = RunServer m RuntimeHistoryJobServer
 
@@ -28,13 +27,9 @@ data HistoryJobServerDependencies = HistoryJobServerDependencies
   }
 
 historyJobServer :: Component IO HistoryJobServerDependencies ()
-historyJobServer = serverComponent
-  worker
-  (hPutStrLn stderr . ("Job worker crashed with exception: " <>) . show)
-  (hPutStrLn stderr "Job client terminated normally")
-  \HistoryJobServerDependencies{..} -> do
-      runJobServer <- acceptRunJobServer
-      pure WorkerDependencies {..}
+historyJobServer = serverComponent worker mempty mempty \HistoryJobServerDependencies{..} -> do
+  runJobServer <- acceptRunJobServer
+  pure WorkerDependencies {..}
 
 data WorkerDependencies = WorkerDependencies
   { runJobServer          :: RunJobServer IO
