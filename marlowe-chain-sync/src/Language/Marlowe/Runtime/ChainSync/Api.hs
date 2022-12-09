@@ -80,6 +80,7 @@ module Language.Marlowe.Runtime.ChainSync.Api
   , stakeReference
   , toBech32
   , toCardanoAddress
+  , toCardanoMetadata
   , toDatum
   , toPlutusData
   , toRedeemer
@@ -99,9 +100,11 @@ import Cardano.Api
   , Tx
   , deserialiseFromBech32
   , deserialiseFromCBOR
+  , metadataValueToJsonNoSchema
   , serialiseToBech32
   , serialiseToCBOR
   )
+import qualified Cardano.Api as C
 import qualified Cardano.Api as Cardano
 import Cardano.Api.Shelley (ProtocolParameters)
 import qualified Cardano.Api.Shelley as Cardano
@@ -109,7 +112,7 @@ import qualified Cardano.Ledger.BaseTypes as Base
 import Cardano.Ledger.Credential (ptrCertIx, ptrSlotNo, ptrTxIx)
 import Codec.Serialise (deserialiseOrFail, serialise)
 import Control.Monad (guard, (>=>))
-import Data.Aeson (ToJSON, ToJSONKey, toJSON)
+import Data.Aeson (ToJSON, ToJSONKey, Value(..), object, toJSON, (.=))
 import qualified Data.Aeson as A
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.KeyMap as KeyMap
@@ -144,6 +147,7 @@ import Network.Protocol.ChainSeek.Codec
 import Network.Protocol.ChainSeek.Server
 import Network.Protocol.ChainSeek.TH (mkSchemaVersion)
 import Network.Protocol.ChainSeek.Types
+import Network.Protocol.Job.Types (CommandToJSON)
 import qualified Network.Protocol.Job.Types as Job
 import qualified Network.Protocol.Query.Types as Query
 import Network.TypedProtocol.Codec (Codec)
@@ -154,7 +158,7 @@ import Text.Read (readMaybe)
 -- | Extends a type with a "Genesis" member.
 data WithGenesis a = Genesis | At a
   deriving stock (Show, Eq, Ord, Functor, Generic)
-  deriving anyclass (Binary)
+  deriving anyclass (Binary, ToJSON)
 
 -- | A point in the chain, identified by a slot number, block header hash, and
 -- block number.
@@ -167,7 +171,7 @@ data BlockHeader = BlockHeader
   , blockNo    :: !BlockNo         -- ^ The ordinal number of this block.
   }
   deriving stock (Show, Eq, Ord, Generic)
-  deriving anyclass (Binary)
+  deriving anyclass (Binary, ToJSON)
 
 isAfter :: SlotNo -> BlockHeader -> Bool
 isAfter s BlockHeader{..} = slotNo > s
@@ -182,7 +186,7 @@ data Transaction = Transaction
   , mintedTokens  :: !Tokens                 -- ^ Tokens minted by the transaction.
   }
   deriving stock (Show, Eq, Ord, Generic)
-  deriving anyclass (Binary)
+  deriving anyclass (Binary, ToJSON)
 
 -- | A validity range for a transaction
 data ValidityRange
@@ -191,7 +195,7 @@ data ValidityRange
   | MaxBound SlotNo           -- ^ The transaction is only valid before a specific slot.
   | MinMaxBound SlotNo SlotNo -- ^ The transaction is only valid between two slots.
   deriving stock (Show, Eq, Ord, Generic)
-  deriving anyclass (Binary)
+  deriving anyclass (Binary, ToJSON)
 
 
 -- Encodes `transaction_metadatum`:
@@ -204,6 +208,17 @@ data Metadata
   | MetadataText Text
   deriving stock (Show, Eq, Ord, Generic)
   deriving anyclass (Binary)
+
+instance ToJSON Metadata where
+  toJSON = metadataValueToJsonNoSchema . toCardanoMetadata
+
+toCardanoMetadata :: Metadata -> C.TxMetadataValue
+toCardanoMetadata = \case
+  MetadataMap ms -> C.TxMetaMap $ bimap toCardanoMetadata toCardanoMetadata <$> ms
+  MetadataList ds -> C.TxMetaList $ toCardanoMetadata <$> ds
+  MetadataNumber i -> C.TxMetaNumber i
+  MetadataBytes bs -> C.TxMetaBytes bs
+  MetadataText bs -> C.TxMetaText bs
 
 -- Handle convenient `JSON` based encoding for a subset of `Metadata`
 -- type domain.
@@ -244,7 +259,7 @@ data TransactionInput = TransactionInput
   , redeemer   :: !(Maybe Redeemer) -- ^ The script redeemer datum for this input (if one was provided).
   }
   deriving stock (Show, Eq, Ord, Generic)
-  deriving anyclass (Binary)
+  deriving anyclass (Binary, ToJSON)
 
 -- | An output of a transaction.
 data TransactionOutput = TransactionOutput
@@ -259,7 +274,7 @@ data TransactionOutput = TransactionOutput
 -- | A script datum that is used to spend the output of a script tx.
 newtype Redeemer = Redeemer { unRedeemer :: Datum }
   deriving stock (Show, Eq, Ord, Generic)
-  deriving newtype (Binary)
+  deriving newtype (Binary, ToJSON)
 
 -- | A datum as a sum-of-products.
 data Datum
@@ -405,16 +420,16 @@ renderTxOutRef TxOutRef{..} = mconcat
 
 newtype SlotNo = SlotNo { unSlotNo :: Word64 }
   deriving stock (Show, Eq, Ord, Generic)
-  deriving newtype (Num, Integral, Real, Enum, Bounded, Binary)
+  deriving newtype (Num, Integral, Real, Enum, Bounded, Binary, ToJSON)
 
 newtype BlockNo = BlockNo { unBlockNo :: Word64 }
   deriving stock (Show, Eq, Ord, Generic)
-  deriving newtype (Num, Integral, Real, Enum, Bounded, Binary)
+  deriving newtype (Num, Integral, Real, Enum, Bounded, Binary, ToJSON)
 
 newtype BlockHeaderHash = BlockHeaderHash { unBlockHeaderHash :: ByteString }
   deriving stock (Eq, Ord, Generic)
   deriving newtype (Binary)
-  deriving (IsString, Show) via Base16
+  deriving (IsString, Show, ToJSON) via Base16
 
 data AssetId = AssetId
   { policyId  :: !PolicyId
@@ -478,7 +493,7 @@ data Credential
   = PaymentKeyCredential PaymentKeyHash
   | ScriptCredential ScriptHash
   deriving stock (Show, Eq, Ord, Generic)
-  deriving anyclass Binary
+  deriving anyclass (Binary, ToJSON)
 
 data StakeCredential
   = StakeKeyCredential StakeKeyHash
@@ -494,7 +509,7 @@ fromCardanoPaymentCredential = \case
 newtype PaymentKeyHash = PaymentKeyHash { unPaymentKeyHash :: ByteString }
   deriving stock (Eq, Ord, Generic)
   deriving newtype (Binary)
-  deriving (IsString, Show) via Base16
+  deriving (IsString, Show, ToJSON) via Base16
 
 newtype StakeKeyHash = StakeKeyHash { unStakeKeyHash :: ByteString }
   deriving stock (Eq, Ord, Generic)
@@ -509,7 +524,7 @@ fromCardanoStakeKeyHash = StakeKeyHash . Cardano.serialiseToRawBytes
 
 newtype ScriptHash = ScriptHash { unScriptHash :: ByteString }
   deriving stock (Eq, Ord, Generic)
-  deriving (IsString, Show) via Base16
+  deriving (IsString, Show, ToJSON) via Base16
   deriving anyclass (Binary)
 
 policyIdToScriptHash :: PolicyId -> ScriptHash
@@ -550,25 +565,25 @@ data TxError
   = TxNotFound
   | TxInPast BlockHeader
   deriving stock (Show, Eq, Ord, Generic)
-  deriving anyclass (Binary)
+  deriving anyclass (Binary, ToJSON)
 
 -- | Reasons a 'FindTxsTo' request can be rejected.
 data FindTxsToError
   = NoAddresses
   deriving stock (Show, Eq, Ord, Generic)
-  deriving anyclass (Binary)
+  deriving anyclass (Binary, ToJSON)
 
 -- | Reasons a 'FindConsumingTx' request can be rejected.
 data UTxOError
   = UTxONotFound
   | UTxOSpent TxId
   deriving stock (Show, Eq, Ord, Generic)
-  deriving anyclass (Binary)
+  deriving anyclass (Binary, ToJSON)
 
 -- | Reasons an 'Intersect' request can be rejected.
 data IntersectError = IntersectionNotFound
   deriving stock (Show, Eq, Ord, Generic)
-  deriving anyclass (Binary)
+  deriving anyclass (Binary, ToJSON)
 
 -- | The 'query' type for the Marlowe Chain Sync.
 data Move err result where
@@ -614,6 +629,48 @@ mkSchemaVersion "moveSchema" ''Move
 deriving instance Show (Move err result)
 deriving instance Eq (Move err result)
 deriving instance Ord (Move err result)
+
+instance QueryToJSON Move where
+  queryToJSON = \case
+    Fork m1 m2 -> object
+      [ "fork" .= object
+        [ "query1" .= queryToJSON m1
+        , "query2" .= queryToJSON m2
+        ]
+      ]
+    AdvanceSlots offset -> object [ "advanceSlots" .= toJSON offset ]
+    AdvanceBlocks offset -> object [ "advanceBlocks" .= toJSON offset ]
+    Intersect blocks -> object [ "intersect" .= toJSON blocks ]
+    FindConsumingTx ref -> object [ "findConsumingTx" .= toJSON ref ]
+    FindConsumingTxs refs -> object [ "findConsumingTxs" .= toJSON refs ]
+    FindTx txId wait -> object
+      [ "findTx" .= object
+        [ "txId" .= toJSON txId
+        , "wait" .= toJSON wait
+        ]
+      ]
+    FindTxsTo c -> object [ "findTxsTo" .= toJSON c ]
+    AdvanceToTip -> String "advanceToTip"
+  errToJSON = \case
+    TagFork m1 m2 -> toJSON . bimap (errToJSON m1) (errToJSON m2)
+    TagAdvanceSlots -> toJSON
+    TagAdvanceBlocks -> toJSON
+    TagIntersect -> toJSON
+    TagFindConsumingTx -> toJSON
+    TagFindConsumingTxs -> toJSON
+    TagFindTx -> toJSON
+    TagFindTxsTo -> toJSON
+    TagAdvanceToTip -> toJSON
+  resultToJSON = \case
+    TagFork m1 m2 -> toJSON . bimap (resultToJSON m1) (resultToJSON m2)
+    TagAdvanceSlots -> toJSON
+    TagAdvanceBlocks -> toJSON
+    TagIntersect -> toJSON
+    TagFindConsumingTx -> toJSON
+    TagFindConsumingTxs -> toJSON
+    TagFindTx -> toJSON
+    TagFindTxsTo -> toJSON
+    TagAdvanceToTip -> toJSON
 
 type RuntimeChainSeek = ChainSeek Move ChainPoint ChainPoint
 
@@ -859,6 +916,46 @@ data ChainSyncQuery delimiter err result where
   GetEraHistory :: ChainSyncQuery Void () (EraHistory CardanoMode)
   GetUTxOs :: GetUTxOsQuery -> ChainSyncQuery Void () UTxOs
 
+instance Query.QueryToJSON ChainSyncQuery where
+  queryToJSON = \case
+    GetSecurityParameter -> String "get-security-parameter"
+    GetNetworkId -> String "get-network-id"
+    GetProtocolParameters -> String "get-protocol-parameters"
+    GetSystemStart -> String "get-system-start"
+    GetEraHistory -> String "get-era-history"
+    GetUTxOs subQuery -> object
+      [ "get-utxos" .= case subQuery of
+          GetUTxOsAtAddresses addresses -> object
+            [ "at-address" .= addresses
+            ]
+          GetUTxOsForTxOutRefs txOutRefs -> object
+            [ "for-tx-out-refs" .= txOutRefs
+            ]
+      ]
+  errToJSON = \case
+    TagGetSecurityParameter -> toJSON
+    TagGetNetworkId -> toJSON
+    TagGetProtocolParameters -> toJSON
+    TagGetSystemStart -> toJSON
+    TagGetEraHistory -> toJSON
+    TagGetUTxOs -> toJSON
+  resultToJSON = \case
+    TagGetSecurityParameter -> toJSON
+    TagGetNetworkId -> \case
+      Mainnet -> String "mainnet"
+      Testnet (NetworkMagic n) -> object ["testnet" .= n]
+    TagGetProtocolParameters -> toJSON
+    TagGetSystemStart -> toJSON
+    TagGetEraHistory -> const $ String "<era-history>"
+    TagGetUTxOs -> toJSON
+  delimiterToJSON = \case
+    TagGetSecurityParameter -> toJSON
+    TagGetNetworkId -> toJSON
+    TagGetProtocolParameters -> toJSON
+    TagGetSystemStart -> toJSON
+    TagGetEraHistory -> toJSON
+    TagGetUTxOs -> toJSON
+
 instance Query.IsQuery ChainSyncQuery where
   data Tag ChainSyncQuery delimiter err result where
     TagGetSecurityParameter :: Query.Tag ChainSyncQuery Void () Int
@@ -988,6 +1085,17 @@ instance Query.IsQuery ChainSyncQuery where
 
 data ChainSyncCommand status err result where
   SubmitTx :: ScriptDataSupportedInEra era -> Tx era -> ChainSyncCommand Void String ()
+
+instance CommandToJSON ChainSyncCommand where
+  commandToJSON = \case
+    SubmitTx _ tx -> object [ "submit-tx" .= show tx ]
+  jobIdToJSON = \case
+  errToJSON = \case
+    TagSubmitTx _ -> toJSON
+  resultToJSON = \case
+    TagSubmitTx _ -> toJSON
+  statusToJSON = \case
+    TagSubmitTx _ -> toJSON
 
 instance Job.Command ChainSyncCommand where
   data Tag ChainSyncCommand status err result where

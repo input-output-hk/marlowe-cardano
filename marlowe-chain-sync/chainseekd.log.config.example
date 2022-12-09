@@ -1,0 +1,51 @@
+{
+  "chain-seek.connected": true,
+  "chain-seek.disconnected": true,
+  "chain-seek.send": false,
+  "chain-seek.recv": false,
+  "query.connected": true,
+  "query.disconnected": true,
+  "query.send": {
+    "message": true
+  },
+  "query.recv": {
+    "message": true,
+    "stateBefore": false,
+    "stateAfter": false
+  },
+  "job.connected": true,
+  "job.disconnected": true,
+  "job.send": {
+    "message": true
+  },
+  "job.recv": {
+    "message": true,
+    "stateBefore": false,
+    "stateAfter": false
+  },
+  "reload-log-config": {
+    "config": true
+  },
+  "node-client.connect": true,
+  "node-client.intersect": {
+    "points": false
+  },
+  "node-client.intersect-found": {
+    "point": true
+  },
+  "node-client.intersect-not-found": true,
+  "node-client.roll-forward": false,
+  "node-client.roll-backward": {
+    "point": true,
+    "tip": true,
+    "new-cost": true
+  },
+  "chain-store.check-genesis-block": true,
+  "chain-store.save": {
+    "rollback-point": true,
+    "block-count": true,
+    "local-tip": true,
+    "remote-tip": true,
+    "tx-count": true
+  }
+}

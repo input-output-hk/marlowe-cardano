@@ -18,6 +18,7 @@ index-state: cardano-haskell-packages 2022-11-17T04:56:26Z
 
 packages:
   async-components
+  eventuo11y-extras
   marlowe
   marlowe-actus
   marlowe-chain-sync
@@ -219,4 +220,15 @@ source-repository-package
     plutus-script-utils
     plutus-ledger
     freer-extras
+
+source-repository-package
+  type: git
+  location: https://github.com/shlevy/eventuo11y
+  tag: 3fdae6cb5ea3a6e9e87ca4a3e71ab39caa211bd1
+  --sha256: 0jvrhdvzv395qg2bxncs4ikw5jjc3dbml00hr4lr3r0mi9g6xh9w
+  subdir:
+    eventuo11y-batteries
+    eventuo11y-dsl
+    eventuo11y-json
+    .
 

@@ -32,7 +32,6 @@ import qualified Language.Marlowe.Runtime.ChainSync.Database as Database
 import Network.Protocol.Driver (RunServer(..))
 import Network.Protocol.Query.Server (QueryServer(..), ServerStInit(..), ServerStNext(..), ServerStPage(..))
 import Network.Protocol.Query.Types (StNextKind(..))
-import System.IO (hPutStrLn, stderr)
 
 type RunQueryServer m = RunServer m (QueryServer ChainSyncQuery)
 
@@ -47,13 +46,9 @@ data ChainSyncQueryServerDependencies = ChainSyncQueryServerDependencies
   }
 
 chainSyncQueryServer :: Component IO ChainSyncQueryServerDependencies ()
-chainSyncQueryServer = serverComponent
-  worker
-  (hPutStrLn stderr . ("Query worker crashed with exception: " <>) . show)
-  (hPutStrLn stderr "Query client terminated normally")
-  \ChainSyncQueryServerDependencies{..} -> do
-      runQueryServer <- acceptRunQueryServer
-      pure WorkerDependencies {..}
+chainSyncQueryServer = serverComponent worker mempty mempty \ChainSyncQueryServerDependencies{..} -> do
+  runQueryServer <- acceptRunQueryServer
+  pure WorkerDependencies {..}
 
 data WorkerDependencies = WorkerDependencies
   { runQueryServer      :: RunQueryServer IO

@@ -14,7 +14,6 @@ import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncCommand(..))
 import Network.Protocol.Driver (RunServer(..))
 import Network.Protocol.Job.Server
 import Ouroboros.Network.Protocol.LocalTxSubmission.Client (SubmitResult(..))
-import System.IO (hPutStrLn, stderr)
 
 type RunJobServer m = RunServer m (JobServer ChainSyncCommand)
 
@@ -28,13 +27,9 @@ data ChainSyncJobServerDependencies = ChainSyncJobServerDependencies
   }
 
 chainSyncJobServer :: Component IO ChainSyncJobServerDependencies ()
-chainSyncJobServer = serverComponent
-  worker
-  (hPutStrLn stderr . ("Job worker crashed with exception: " <>) . show)
-  (hPutStrLn stderr "Job client terminated normally")
-  \ChainSyncJobServerDependencies{..} -> do
-      runJobServer <- acceptRunJobServer
-      pure WorkerDependencies {..}
+chainSyncJobServer = serverComponent worker mempty mempty \ChainSyncJobServerDependencies{..} -> do
+  runJobServer <- acceptRunJobServer
+  pure WorkerDependencies {..}
 
 data WorkerDependencies = WorkerDependencies
   { runJobServer      :: RunJobServer IO

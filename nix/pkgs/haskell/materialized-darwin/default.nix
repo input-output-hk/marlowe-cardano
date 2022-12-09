@@ -17,7 +17,6 @@
         "postgresql-binary".revision = (((hackage."postgresql-binary")."0.12.5").revisions).default;
         "ouroboros-network-framework".revision = (((hackage."ouroboros-network-framework")."0.1.0.0").revisions).default;
         "natural-transformation".revision = (((hackage."natural-transformation")."0.4").revisions).default;
-        "eventuo11y-json".revision = (((hackage."eventuo11y-json")."0.1.0.0").revisions).default;
         "happy".revision = (((hackage."happy")."1.20.0").revisions).default;
         "blaze-textual".revision = (((hackage."blaze-textual")."0.2.2.1").revisions).default;
         "blaze-textual".flags.integer-simple = false;
@@ -376,7 +375,6 @@
         "primitive-addr".revision = (((hackage."primitive-addr")."0.1.0.2").revisions).default;
         "wl-pprint-annotated".revision = (((hackage."wl-pprint-annotated")."0.1.0.1").revisions).default;
         "data-default-instances-old-locale".revision = (((hackage."data-default-instances-old-locale")."0.0.1").revisions).default;
-        "eventuo11y-batteries".revision = (((hackage."eventuo11y-batteries")."0.2.1.1").revisions).default;
         "text-builder".revision = (((hackage."text-builder")."0.6.7").revisions).default;
         "unix-bytestring".revision = (((hackage."unix-bytestring")."0.3.7.8").revisions).default;
         "canonical-json".revision = (((hackage."canonical-json")."0.6.0.1").revisions).default;
@@ -459,7 +457,6 @@
         "network-info".revision = (((hackage."network-info")."0.2.1").revisions).default;
         "errors".revision = (((hackage."errors")."2.3.0").revisions).default;
         "formatting".revision = (((hackage."formatting")."6.3.7").revisions).default;
-        "eventuo11y".revision = (((hackage."eventuo11y")."0.5.0.0").revisions).default;
         "async".revision = (((hackage."async")."2.2.4").revisions).default;
         "async".flags.bench = false;
         "word8".revision = (((hackage."word8")."0.1.3").revisions).default;
@@ -483,6 +480,7 @@
         "cereal".revision = (((hackage."cereal")."0.5.8.3").revisions).default;
         "cereal".flags.bytestring-builder = false;
         "utf8-string".revision = (((hackage."utf8-string")."1.0.2").revisions).default;
+        "fsnotify".revision = (((hackage."fsnotify")."0.4.1.0").revisions).default;
         "streaming-binary".revision = (((hackage."streaming-binary")."0.2.2.0").revisions).default;
         "vector-th-unbox".revision = (((hackage."vector-th-unbox")."0.2.2").revisions).default;
         "megaparsec".revision = (((hackage."megaparsec")."9.2.1").revisions).default;
@@ -633,6 +631,7 @@
         "direct-sqlite".flags.json1 = true;
         "byteslice".revision = (((hackage."byteslice")."0.2.7.0").revisions).default;
         "byteslice".flags.avoid-rawmemchr = true;
+        "hfsevents".revision = (((hackage."hfsevents")."0.1.6").revisions).default;
         "blaze-markup".revision = (((hackage."blaze-markup")."0.8.2.8").revisions).default;
         "cardano-ledger-byron-test".revision = (((hackage."cardano-ledger-byron-test")."1.3.0").revisions).default;
         "ghci".revision = (((hackage."ghci")."8.10.7").revisions).default;
@@ -684,7 +683,6 @@
         "hedgehog".revision = (((hackage."hedgehog")."1.2").revisions).default;
         "microlens-th".revision = (((hackage."microlens-th")."0.4.3.10").revisions).default;
         "blaze-builder".revision = (((hackage."blaze-builder")."0.4.2.2").revisions).default;
-        "eventuo11y-dsl".revision = (((hackage."eventuo11y-dsl")."0.1.0.0").revisions).default;
         "generic-deriving".revision = (((hackage."generic-deriving")."1.14.2").revisions).default;
         "generic-deriving".flags.base-4-9 = true;
         "warp".revision = (((hackage."warp")."3.3.23").revisions).default;
@@ -816,7 +814,10 @@
         marlowe = ./.plan.nix/marlowe.nix;
         plutus-ledger = ./.plan.nix/plutus-ledger.nix;
         marlowe-protocols = ./.plan.nix/marlowe-protocols.nix;
+        eventuo11y = ./.plan.nix/eventuo11y.nix;
+        eventuo11y-batteries = ./.plan.nix/eventuo11y-batteries.nix;
         cardano-addresses = ./.plan.nix/cardano-addresses.nix;
+        eventuo11y-extras = ./.plan.nix/eventuo11y-extras.nix;
         cardano-addresses-cli = ./.plan.nix/cardano-addresses-cli.nix;
         plutus-script-utils = ./.plan.nix/plutus-script-utils.nix;
         marlowe-protocols-test = ./.plan.nix/marlowe-protocols-test.nix;
@@ -829,7 +830,9 @@
         marlowe-runtime = ./.plan.nix/marlowe-runtime.nix;
         marlowe-contracts = ./.plan.nix/marlowe-contracts.nix;
         marlowe-actus = ./.plan.nix/marlowe-actus.nix;
+        eventuo11y-dsl = ./.plan.nix/eventuo11y-dsl.nix;
         aeson-via-serialise = ./.plan.nix/aeson-via-serialise.nix;
+        eventuo11y-json = ./.plan.nix/eventuo11y-json.nix;
         plutus-ledger-slot = ./.plan.nix/plutus-ledger-slot.nix;
         };
       };
@@ -849,9 +852,12 @@
             flags = { "defer-plugin-errors" = lib.mkOverride 900 false; };
             };
           "marlowe-protocols" = { flags = {}; };
+          "eventuo11y" = { flags = {}; };
+          "eventuo11y-batteries" = { flags = {}; };
           "cardano-addresses" = {
             flags = { "release" = lib.mkOverride 900 false; };
             };
+          "eventuo11y-extras" = { flags = {}; };
           "cardano-addresses-cli" = {
             flags = { "release" = lib.mkOverride 900 false; };
             };
@@ -885,7 +891,9 @@
           "marlowe-actus" = {
             flags = { "defer-plugin-errors" = lib.mkOverride 900 false; };
             };
+          "eventuo11y-dsl" = { flags = {}; };
           "aeson-via-serialise" = { flags = {}; };
+          "eventuo11y-json" = { flags = {}; };
           "plutus-ledger-slot" = {
             flags = { "defer-plugin-errors" = lib.mkOverride 900 false; };
             };
@@ -919,6 +927,7 @@
           "bin".components.library.planned = lib.mkOverride 900 true;
           "th-orphans".components.library.planned = lib.mkOverride 900 true;
           "tracer-transformers".components.exes."tracer-transfomers-example1".planned = lib.mkOverride 900 true;
+          "eventuo11y-extras".components.library.planned = lib.mkOverride 900 true;
           "markdown-unlit".components.exes."markdown-unlit".planned = lib.mkOverride 900 true;
           "freer-extras".components.library.planned = lib.mkOverride 900 true;
           "megaparsec".components.library.planned = lib.mkOverride 900 true;
@@ -1210,6 +1219,7 @@
           "byron-spec-ledger".components.library.planned = lib.mkOverride 900 true;
           "yaml".components.library.planned = lib.mkOverride 900 true;
           "ouroboros-consensus".components.library.planned = lib.mkOverride 900 true;
+          "fsnotify".components.library.planned = lib.mkOverride 900 true;
           "indexed-traversable".components.library.planned = lib.mkOverride 900 true;
           "network-uri".components.library.planned = lib.mkOverride 900 true;
           "servant-pagination".components.library.planned = lib.mkOverride 900 true;
@@ -1326,6 +1336,7 @@
           "natural-transformation".components.library.planned = lib.mkOverride 900 true;
           "wl-pprint-annotated".components.library.planned = lib.mkOverride 900 true;
           "marlowe-cli".components.library.planned = lib.mkOverride 900 true;
+          "hfsevents".components.library.planned = lib.mkOverride 900 true;
           "hasql-pool".components.library.planned = lib.mkOverride 900 true;
           "wai-logger".components.library.planned = lib.mkOverride 900 true;
           "th-compat".components.library.planned = lib.mkOverride 900 true;

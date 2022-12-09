@@ -9,7 +9,6 @@ module Language.Marlowe.Runtime.Web.Server.TxClient
   where
 
 import Cardano.Api (BabbageEra, Tx, getTxId)
-import Control.Category ((<<<))
 import Control.Concurrent.Async (concurrently_)
 import Control.Concurrent.Component
 import Control.Concurrent.STM
@@ -50,7 +49,7 @@ import Language.Marlowe.Runtime.Transaction.Api
 import Network.Protocol.Driver (RunClient)
 import Network.Protocol.Job.Client
 import Observe.Event (EventBackend, addField, reference, withEvent)
-import Observe.Event.BackendModification (EventBackendModifiers, modifyEventBackend, setAncestor)
+import Observe.Event.BackendModification (EventBackendModifier, modifyEventBackend, setAncestor)
 import Observe.Event.DSL (SelectorSpec(..))
 import Observe.Event.Render.JSON.DSL.Compile (compile)
 import Observe.Event.Syntax ((≔))
@@ -91,8 +90,7 @@ type ApplyInputs m
 data TempTxStatus = Unsigned | Submitted
 
 type Submit r m
-   = forall r'
-   . EventBackendModifiers r r'
+   = [EventBackendModifier r]
   -> Tx BabbageEra
   -> m (Maybe SubmitError)
 
@@ -111,10 +109,8 @@ data TxClient r = TxClient
   , getTempTransactions :: ContractId -> STM [TempTx InputsApplied]
   }
 
-data SomeEventBackendModifiers r = forall r'. SomeEventBackendModifiers (EventBackendModifiers r r')
-
 -- Basically a lens to the actual map of temp txs to modify within a structure.
--- For example, tempTransactions is a (Map ContractId (Map TxId (TempTx InputsApplie))),
+-- For example, tempTransactions is a (Map ContractId (Map TxId (TempTx InputsApplied))),
 -- so to apply the given map modification to the inner map, we provide
 -- \update -> Map.update (Just . update txId) contractId
 type WithMapUpdate k tx a
@@ -136,7 +132,7 @@ txClient = component \TxClientDependencies{..} -> do
       (SomeTVarWithMapUpdate tempVar updateTemp)
       tx
       sender
-      (SomeEventBackendModifiers mods) = do
+      mods = do
       let
         eb = modifyEventBackend mods eventBackend
         cmd = Submit tx
@@ -168,14 +164,14 @@ txClient = component \TxClientDependencies{..} -> do
 
     genericSubmit
       :: SomeTVarWithMapUpdate
-      -> EventBackendModifiers r r'
+      -> [EventBackendModifier r]
       -> Tx BabbageEra
       -> IO (Maybe SubmitError)
     genericSubmit tVarWithUpdate mods tx =
       withEvent (modifyEventBackend mods eventBackend) SubmitTx \ev -> do
         sender <- atomically do
           sender <- newEmptyTMVar
-          writeTQueue submitQueue (tVarWithUpdate, tx, sender, SomeEventBackendModifiers $ setAncestor (reference ev) <<< mods)
+          writeTQueue submitQueue (tVarWithUpdate, tx, sender, setAncestor (reference ev) <> mods)
           pure sender
         atomically $ takeTMVar sender
 

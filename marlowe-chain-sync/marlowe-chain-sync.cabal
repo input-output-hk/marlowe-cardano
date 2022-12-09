@@ -84,6 +84,7 @@ library
     , cardano-ledger-alonzo
     , cardano-ledger-core
     , containers
+    , eventuo11y
     , foldl
     , hasql
     , hasql-th
@@ -111,16 +112,20 @@ executable chainseekd
   hs-source-dirs:   app
   main-is: Main.hs
   other-modules:
+    Logging
     Options
     Paths_marlowe_chain_sync
   autogen-modules:
     Paths_marlowe_chain_sync
   build-depends:
       base >= 4.9 && < 5
+    , aeson
     , async-components
     , cardano-api
     , cardano-crypto-wrapper
     , cardano-ledger-byron
+    , eventuo11y
+    , eventuo11y-extras
     , hasql
     -- Consider removing the hasql < 1.6 constraint in cabal.project if updating hasql-pool
     , hasql-pool < 0.6
@@ -132,6 +137,7 @@ executable chainseekd
     , text
     , time
     , transformers
+    , uuid
 
 executable example-client
   import: lang

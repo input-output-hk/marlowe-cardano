@@ -24,6 +24,7 @@ data Options = Options
   , commandPort       :: !PortNumber
   , costModel         :: !CostModel
   , maxCost           :: !Int
+  , logConfigFile     :: !(Maybe FilePath)
   } deriving (Show, Eq)
 
 getOptions :: String -> IO Options
@@ -105,6 +106,7 @@ parseOptions defaultNetworkId defaultSocketPath defaultDatabaseUri defaultHost d
               <*> jobPortOption
               <*> costModelParser
               <*> maxCostParser
+              <*> logConfigFileParser
           )
       where
         versionOption :: O.Parser (a -> a)
@@ -237,6 +239,16 @@ parseOptions defaultNetworkId defaultSocketPath defaultDatabaseUri defaultHost d
           , O.help "The maximum number of cost units that can be batched when persisting blocks. If the cost of the current batch would exceed this value, the chain sync client will wait until the current batch is persisted before requesting another block."
           , O.showDefault
           ]
+
+        logConfigFileParser :: O.Parser (Maybe FilePath)
+        logConfigFileParser = O.optional $ O.strOption options
+          where
+            options :: O.Mod O.OptionFields FilePath
+            options = mconcat
+              [ O.long "log-config-file"
+              , O.metavar "FILE_PATH"
+              , O.help "Path to the log configuration JSON file."
+              ]
 
     infoMod :: O.InfoMod Options
     infoMod = mconcat

@@ -15,8 +15,10 @@
 module Network.Protocol.Query.Types
   where
 
+import Data.Aeson (Value(..), object, (.=))
 import Data.Binary (Get, Put)
 import Data.Type.Equality (type (:~:))
+import Network.Protocol.Driver (MessageToJSON(..))
 import Network.TypedProtocol
 
 data SomeTag q = forall delimiter err result. SomeTag (Tag q delimiter err result)
@@ -35,6 +37,12 @@ class IsQuery (q :: * -> * -> * -> *) where
   getErr :: Tag q delimiter err result -> Get err
   putResult :: Tag q delimiter err result -> result -> Put
   getResult :: Tag q delimiter err result -> Get result
+
+class IsQuery q => QueryToJSON q where
+  queryToJSON :: q delimiter err result -> Value
+  errToJSON :: Tag q delimiter err result -> err -> Value
+  resultToJSON :: Tag q delimiter err result -> result -> Value
+  delimiterToJSON :: Tag q delimiter err result -> delimiter -> Value
 
 -- | A state kind for the query protocol.
 data Query (query :: * -> * -> * -> *) where
@@ -109,3 +117,19 @@ instance Protocol (Query query) where
 data TokNextKind k where
   TokCanReject :: TokNextKind 'CanReject
   TokMustReply :: TokNextKind 'MustReply
+
+instance QueryToJSON query => MessageToJSON (Query query) where
+  messageToJSON = \case
+    ClientAgency TokInit -> \case
+      MsgRequest q -> object [ "request" .= queryToJSON q ]
+    ClientAgency (TokPage tag) -> \case
+      MsgRequestNext d -> object [ "delimiter" .= delimiterToJSON tag d ]
+      MsgDone -> String "done"
+    ServerAgency (TokNext _ tag)-> \case
+      MsgReject err -> object [ "reject" .= errToJSON tag err ]
+      MsgNextPage results d -> object
+        [ "reject" .= object
+            [ "results" .= resultToJSON tag results
+            , "next" .= (delimiterToJSON tag <$> d)
+            ]
+        ]

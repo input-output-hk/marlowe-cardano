@@ -53,7 +53,6 @@ import GHC.Generics (Generic)
 import Language.Marlowe.Runtime.Cardano.Api
   ( fromCardanoAddressInEra
   , toCardanoAddressInEra
-  , toCardanoMetadata
   , toCardanoPaymentKeyHash
   , toCardanoPolicyId
   , toCardanoScriptData
@@ -64,7 +63,7 @@ import Language.Marlowe.Runtime.Cardano.Api
   , toCardanoTxOutValue
   , tokensToCardanoValue
   )
-import Language.Marlowe.Runtime.ChainSync.Api (lookupUTxO, toUTxOTuple, toUTxOsList)
+import Language.Marlowe.Runtime.ChainSync.Api (lookupUTxO, toCardanoMetadata, toUTxOTuple, toUTxOsList)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Core.Api (MarloweVersionTag(..), TransactionScriptOutput(utxo))
 import qualified Language.Marlowe.Runtime.Core.Api as Core

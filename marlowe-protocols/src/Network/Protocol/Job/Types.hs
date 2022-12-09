@@ -16,9 +16,11 @@
 module Network.Protocol.Job.Types
   where
 
+import Data.Aeson (Value(..), object, (.=))
 import Data.Binary (Put)
 import Data.Binary.Get (Get)
 import Data.Type.Equality (type (:~:))
+import Network.Protocol.Driver (MessageToJSON(..))
 import Network.TypedProtocol
 
 data SomeTag cmd = forall status err result. SomeTag (Tag cmd status err result)
@@ -55,6 +57,13 @@ class Command (cmd :: * -> * -> * -> *) where
   getErr :: Tag cmd status err result -> Get err
   putResult :: Tag cmd status err result -> result -> Put
   getResult :: Tag cmd status err result -> Get result
+
+class Command cmd => CommandToJSON cmd where
+  commandToJSON :: cmd status err result -> Value
+  jobIdToJSON :: JobId cmd status err result -> Value
+  errToJSON :: Tag cmd status err result -> err -> Value
+  resultToJSON :: Tag cmd status err result -> result -> Value
+  statusToJSON :: Tag cmd status err result -> status -> Value
 
 -- | A state kind for the job protocol.
 data Job (cmd :: * -> * -> * -> *) where
@@ -145,3 +154,24 @@ instance Protocol (Job cmd) where
   exclusionLemma_NobodyAndClientHaveAgency TokDone = \case
 
   exclusionLemma_NobodyAndServerHaveAgency TokDone = \case
+
+instance CommandToJSON cmd => MessageToJSON (Job cmd) where
+  messageToJSON = \case
+    ClientAgency TokInit -> \case
+      MsgExec cmd -> object [ "exec" .= commandToJSON cmd ]
+      MsgAttach jobId -> object [ "attach" .= jobIdToJSON jobId ]
+    ClientAgency (TokAwait _) -> String . \case
+      MsgPoll -> "poll"
+      MsgDetach -> "detach"
+    ServerAgency (TokCmd tag)-> \case
+      MsgFail err -> object [ "fail" .= errToJSON tag err ]
+      MsgSucceed result -> object [ "reject" .= resultToJSON tag result ]
+      MsgAwait status jobId -> object
+        [ "await" .= object
+            [ "status" .= statusToJSON tag status
+            , "jobId" .= jobIdToJSON jobId
+            ]
+        ]
+    ServerAgency (TokAttach _) -> String . \case
+      MsgAttached -> "attached"
+      MsgAttachFailed -> "attachFailed"

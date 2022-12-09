@@ -65,8 +65,12 @@ library
     Network.Protocol.Codec
   build-depends:
       base >= 4.9 && < 5
+    , aeson
+    , base16
     , binary
     , bytestring
+    , eventuo11y
+    , eventuo11y-extras
     , hashable
     , lifted-base
     , monad-control

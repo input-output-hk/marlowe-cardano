@@ -48,6 +48,7 @@
           (hsPkgs."cardano-ledger-alonzo" or (errorHandler.buildDepError "cardano-ledger-alonzo"))
           (hsPkgs."cardano-ledger-core" or (errorHandler.buildDepError "cardano-ledger-core"))
           (hsPkgs."containers" or (errorHandler.buildDepError "containers"))
+          (hsPkgs."eventuo11y" or (errorHandler.buildDepError "eventuo11y"))
           (hsPkgs."foldl" or (errorHandler.buildDepError "foldl"))
           (hsPkgs."hasql" or (errorHandler.buildDepError "hasql"))
           (hsPkgs."hasql-th" or (errorHandler.buildDepError "hasql-th"))
@@ -91,10 +92,13 @@
         "chainseekd" = {
           depends = [
             (hsPkgs."base" or (errorHandler.buildDepError "base"))
+            (hsPkgs."aeson" or (errorHandler.buildDepError "aeson"))
             (hsPkgs."async-components" or (errorHandler.buildDepError "async-components"))
             (hsPkgs."cardano-api" or (errorHandler.buildDepError "cardano-api"))
             (hsPkgs."cardano-crypto-wrapper" or (errorHandler.buildDepError "cardano-crypto-wrapper"))
             (hsPkgs."cardano-ledger-byron" or (errorHandler.buildDepError "cardano-ledger-byron"))
+            (hsPkgs."eventuo11y" or (errorHandler.buildDepError "eventuo11y"))
+            (hsPkgs."eventuo11y-extras" or (errorHandler.buildDepError "eventuo11y-extras"))
             (hsPkgs."hasql" or (errorHandler.buildDepError "hasql"))
             (hsPkgs."hasql-pool" or (errorHandler.buildDepError "hasql-pool"))
             (hsPkgs."marlowe-chain-sync" or (errorHandler.buildDepError "marlowe-chain-sync"))
@@ -105,9 +109,10 @@
             (hsPkgs."text" or (errorHandler.buildDepError "text"))
             (hsPkgs."time" or (errorHandler.buildDepError "time"))
             (hsPkgs."transformers" or (errorHandler.buildDepError "transformers"))
+            (hsPkgs."uuid" or (errorHandler.buildDepError "uuid"))
             ];
           buildable = true;
-          modules = [ "Options" "Paths_marlowe_chain_sync" ];
+          modules = [ "Logging" "Options" "Paths_marlowe_chain_sync" ];
           hsSourceDirs = [ "app" ];
           mainPath = [ "Main.hs" ];
           };
