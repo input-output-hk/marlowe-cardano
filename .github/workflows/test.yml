@@ -14,10 +14,10 @@ on:
       - shlevy
   workflow_call:
 jobs:
-  nix-instantiate:
+  build-and-test:
     strategy:
       matrix:
-        os: [ubuntu-latest]
+        os: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v3
@@ -34,29 +34,8 @@ jobs:
         with:
           name: ${{ env.CACHE_NAME }}
           authToken: "${{ secrets.CACHIX_AUTH_TOKEN }}"
-      - run: nix-instantiate release.nix --arg checkMaterialization true --arg supportedSystems '[ builtins.currentSystem ]' --restrict-eval -I .
-  nix-code-formatting:
-    strategy:
-      matrix:
-        os: [ubuntu-latest]
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v3
-      - uses: cachix/install-nix-action@v18
-        with:
-          nix_path: nixpkgs=channel:nixos-unstable
-          install_url: https://releases.nixos.org/nix/nix-2.8.1/install
-          extra_nix_config: |
-            allowed-uris = ${{ env.ALLOWED_URIS }}
-            trusted-public-keys = ${{ env.TRUSTED_PUBLIC_KEYS }}
-            substituters = ${{ env.SUBSTITUTERS }}
-            experimental-features = nix-command flakes
-      - uses: cachix/cachix-action@v12
-        with:
-          name: ${{ env.CACHE_NAME }}
-          authToken: "${{ secrets.CACHIX_AUTH_TOKEN }}"
-      - run: nix build .#tests.nixpkgsFmt .#tests.prettier .#tests.shellcheck .#tests.stylishHaskell
-  check-for-updates:
+      - run: nix build -L .#required
+  check-materialized:
     strategy:
       matrix:
         os: [ubuntu-latest]

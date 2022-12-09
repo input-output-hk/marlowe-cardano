@@ -11,6 +11,7 @@
 }:
 let
   pkgs = inputs.nixpkgs.legacyPackages.${evalSystem};
+  inherit (pkgs) lib;
   # If hydra passed us a plutus-apps checkout, we want to override the
   # plutus-apps used by haskell.nix
   source-repo-override = if plutus-apps == null then { } else {
@@ -54,8 +55,13 @@ let
   # ci.nix is a set of attributes that work fine as jobs (albeit in a slightly different structure, the platform comes
   # first), but we mainly just need to get rid of some extra attributes.
   ciJobsets = stripAttrsForHydra (filterDerivations ci);
+  ciJobsetList = lib.collect lib.isDerivation ci;
+
 in
 traceNames "" (ciJobsets // {
-  required = derivationAggregate "required-marlowe" ciJobsets;
+  required = pkgs.releaseTools.aggregate {
+    name = "required-marlowe";
+    constituents = ciJobsetList;
+  };
   forceNewEval = pkgs.writeText "forceNewEval" (marlowe-cardano.rev or (marlowe-cardano.shortRev or "local"));
 })

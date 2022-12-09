@@ -68,7 +68,9 @@
         packagesProf = self.internal.packagesFun { inherit system; enableHaskellProfiling = true; };
       in
       {
-        inherit packages;
+        packages = packages // {
+          required = self.ciJobs.${system}.required;
+        };
 
         apps = rec {
           updateMaterialized = {
