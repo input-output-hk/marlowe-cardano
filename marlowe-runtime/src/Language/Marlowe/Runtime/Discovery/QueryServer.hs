@@ -16,7 +16,6 @@ import Network.Protocol.Driver (RunServer(..))
 import Network.Protocol.Query.Server
 import Network.Protocol.Query.Types
 import Numeric.Natural (Natural)
-import System.IO (hPutStrLn, stderr)
 
 type RunQueryServer m = RunServer m (QueryServer DiscoveryQuery)
 
@@ -28,13 +27,9 @@ data DiscoveryQueryServerDependencies = DiscoveryQueryServerDependencies
   }
 
 discoveryQueryServer :: Component IO DiscoveryQueryServerDependencies ()
-discoveryQueryServer = serverComponent
-  worker
-  (hPutStrLn stderr . ("Query worker crashed with exception: " <>) . show)
-  (hPutStrLn stderr "Query client terminated normally")
-  \DiscoveryQueryServerDependencies{..} -> do
-      runQueryServer <- acceptRunQueryServer
-      pure WorkerDependencies {..}
+discoveryQueryServer = serverComponent worker \DiscoveryQueryServerDependencies{..} -> do
+  runQueryServer <- acceptRunQueryServer
+  pure WorkerDependencies {..}
 
 data WorkerDependencies = WorkerDependencies
   { runQueryServer   :: RunQueryServer IO

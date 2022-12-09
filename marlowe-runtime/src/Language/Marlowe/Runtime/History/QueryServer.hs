@@ -32,7 +32,7 @@ data HistoryQueryServerDependencies = HistoryQueryServerDependencies
   }
 
 historyQueryServer :: Component IO HistoryQueryServerDependencies ()
-historyQueryServer = serverComponent worker mempty mempty \HistoryQueryServerDependencies{..} -> do
+historyQueryServer = serverComponent worker \HistoryQueryServerDependencies{..} -> do
   runQueryServer <- acceptRunQueryServer
   pure WorkerDependencies {..}
 

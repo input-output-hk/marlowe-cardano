@@ -13,7 +13,6 @@ import Language.Marlowe.Protocol.HeaderSync.Server
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainPoint, WithGenesis(..))
 import Language.Marlowe.Runtime.Discovery.Api
 import Network.Protocol.Driver (RunServer(..))
-import System.IO (hPutStrLn, stderr)
 
 type RunSyncServer m = RunServer m MarloweHeaderSyncServer
 
@@ -24,13 +23,9 @@ data DiscoverySyncServerDependencies = DiscoverySyncServerDependencies
   }
 
 discoverySyncServer :: Component IO DiscoverySyncServerDependencies ()
-discoverySyncServer = serverComponent
-  worker
-  (hPutStrLn stderr . ("Sync worker crashed with exception: " <>) . show)
-  (hPutStrLn stderr "Sync client terminated normally")
-  \DiscoverySyncServerDependencies{..} -> do
-      runSyncServer <- acceptRunSyncServer
-      pure WorkerDependencies {..}
+discoverySyncServer = serverComponent worker \DiscoverySyncServerDependencies{..} -> do
+  runSyncServer <- acceptRunSyncServer
+  pure WorkerDependencies {..}
 
 data WorkerDependencies = WorkerDependencies
   { runSyncServer     :: RunSyncServer IO

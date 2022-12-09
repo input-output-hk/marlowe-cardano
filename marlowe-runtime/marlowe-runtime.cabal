@@ -342,6 +342,7 @@ executable marlowe-tx
   hs-source-dirs:   marlowe-tx
   main-is: Main.hs
   other-modules:
+    Logging
     Paths_marlowe_runtime
   autogen-modules:
     Paths_marlowe_runtime
@@ -351,13 +352,16 @@ executable marlowe-tx
     , co-log
     , co-log-core
     , eventuo11y
+    , eventuo11y-extras
+    , marlowe-chain-sync
     , marlowe-protocols
     , marlowe-runtime
     , marlowe-runtime:config
     , marlowe-runtime:logging
-    , marlowe-chain-sync
     , network
     , optparse-applicative
+    , text
+    , uuid
   ghc-options: -threaded
 
 executable marlowe-web-server

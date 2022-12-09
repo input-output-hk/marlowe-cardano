@@ -31,7 +31,7 @@ data HistorySyncServerDependencies = HistorySyncServerDependencies
   }
 
 historySyncServer :: Component IO HistorySyncServerDependencies ()
-historySyncServer = serverComponent worker mempty mempty \HistorySyncServerDependencies{..} -> do
+historySyncServer = serverComponent worker \HistorySyncServerDependencies{..} -> do
   runSyncServer <- acceptRunSyncServer
   pure WorkerDependencies {..}
 

@@ -46,7 +46,7 @@ data ChainSyncQueryServerDependencies = ChainSyncQueryServerDependencies
   }
 
 chainSyncQueryServer :: Component IO ChainSyncQueryServerDependencies ()
-chainSyncQueryServer = serverComponent worker mempty mempty \ChainSyncQueryServerDependencies{..} -> do
+chainSyncQueryServer = serverComponent worker \ChainSyncQueryServerDependencies{..} -> do
   runQueryServer <- acceptRunQueryServer
   pure WorkerDependencies {..}
 

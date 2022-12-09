@@ -27,7 +27,7 @@ data HistoryJobServerDependencies = HistoryJobServerDependencies
   }
 
 historyJobServer :: Component IO HistoryJobServerDependencies ()
-historyJobServer = serverComponent worker mempty mempty \HistoryJobServerDependencies{..} -> do
+historyJobServer = serverComponent worker \HistoryJobServerDependencies{..} -> do
   runJobServer <- acceptRunJobServer
   pure WorkerDependencies {..}
 

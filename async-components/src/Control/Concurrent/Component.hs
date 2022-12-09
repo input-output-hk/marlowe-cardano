@@ -7,14 +7,16 @@ module Control.Concurrent.Component
 import Control.Applicative (liftA2)
 import Control.Arrow
 import Control.Category
-import Control.Concurrent.Async.Lifted (Async, Concurrently(..), wait, waitCatchSTM, waitEitherCatch, withAsync)
+import Control.Concurrent.Async.Lifted (Async, Concurrently(..), waitCatchSTM, withAsync)
 import Control.Concurrent.STM
-import Control.Exception (SomeException, throwIO)
+import Control.Exception.Base (SomeException)
+import Control.Exception.Lifted (try)
 import Control.Monad (join)
 import Control.Monad.Base (MonadBase(liftBase))
 import Control.Monad.IO.Class (MonadIO(liftIO))
 import Control.Monad.Trans.Control (MonadBaseControl(StM))
 import qualified Data.Bifunctor as B
+import Data.Functor (void)
 import Prelude hiding ((.))
 
 newtype Component m a b = Component { unComponent :: a -> STM (Concurrently m (), b) }
@@ -98,6 +100,11 @@ supervisor_ c = Component \a -> do
         Right _ -> pure $ pure ()
   pure (Concurrently $ runWithRetry run, ())
 
+suppressErrors :: MonadBaseControl IO m => Component m a b -> Component m a b
+suppressErrors c = Component \a -> do
+  (Concurrently run, b) <- unComponent c a
+  pure (Concurrently $ void $ try @_ @SomeException run, b)
+
 runComponent :: Component m a b -> a -> STM (m (), b)
 runComponent c a = do
   (run, b) <- unComponent c a
@@ -120,27 +127,7 @@ component run = Component $ (fmap . B.first) Concurrently . run
 component_ :: (a -> m ()) -> Component m a ()
 component_ = component . fmap (pure . (,()))
 
-serverComponent
-  :: forall m a b
-   . MonadBaseControl IO m
-  => Component m b ()
-  -> (SomeException -> m ())
-  -> m ()
-  -> (a -> m b)
-  -> Component m a ()
-serverComponent worker onWorkerError onWorkerTerminated accept = component_ \a ->
-  let
-    run :: m ()
-    run = do
-      b <- accept a
-      withComponent_ worker b \aworker ->
-        withAsync run \aserver -> do
-          result <- waitEitherCatch aworker aserver
-          case result of
-            Right (Left ex) -> liftBase $ throwIO ex
-            Right (Right x) -> pure x
-            Left (Left ex)  -> onWorkerError ex
-            Left (Right ())  -> onWorkerTerminated
-          wait aserver
- in
-    run
+serverComponent :: forall m a b . MonadBaseControl IO m => Component m b () -> (a -> m b) -> Component m a ()
+serverComponent worker accept = component_ \a -> do
+  b <- accept a
+  runComponent_ (void $ suppressErrors worker *** serverComponent worker accept) (b, a)

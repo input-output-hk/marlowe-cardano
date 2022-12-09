@@ -106,6 +106,8 @@ let
       "chainseekd"
       "--host"
       "0.0.0.0"
+      "--log-config-file"
+      "./marlowe-history.log.config"
     ];
   };
 
@@ -118,6 +120,8 @@ let
       "chainseekd"
       "--host"
       "0.0.0.0"
+      "--log-config-file"
+      "./marlowe-discovery.log.config"
     ];
   };
 
@@ -132,6 +136,8 @@ let
       "marlowe-history"
       "--host"
       "0.0.0.0"
+      "--log-config-file"
+      "./marlowe-tx.log.config"
     ];
   };
 
