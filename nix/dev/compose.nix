@@ -92,6 +92,8 @@ let
       network.nodeConfig.ByronGenesisHash
       "--host"
       "0.0.0.0"
+      "--log-config-file"
+      "./chainseekd.log.config"
     ];
   };
 
