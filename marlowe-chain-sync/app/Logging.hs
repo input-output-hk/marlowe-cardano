@@ -76,35 +76,6 @@ getChainSyncSelectorConfig = \case
   NodeClientEvent sel -> prependKey "node-client" $ getNodeClientSelectorConfig sel
   ChainStoreEvent sel -> prependKey "chain-store" $ getChainStoreSelectorConfig sel
 
--- defaultLogConfig :: LogConfig
--- defaultLogConfig = LogConfig $ Just <$> Map.fromList
---   [ ("chain-seek.connected", mempty)
---   , ("chain-seek.disconnected", mempty)
---   , ("query.connected", mempty)
---   , ("query.disconnected", mempty)
---   , ("query.send", Map.singleton "message" True)
---   , ("query.recv", Map.singleton "message" True)
---   , ("job.connected", mempty)
---   , ("job.disconnected", mempty)
---   , ("job.send", Map.singleton "message" True)
---   , ("job.recv", Map.singleton "message" True)
---   , ("reload-log-config", Map.singleton "config" True)
---   , ("node-client.connect", mempty)
---   , ("node-client.intersect", mempty)
---   , ("node-client.intersect-found", Map.singleton "point" True)
---   , ("node-client.intersect-not-found", mempty)
---   , ("node-client.roll-backward", Map.fromList [("point", True), ("tip", True)])
---   , ("chain-store.check-genesis-block", mempty)
---   , ("chain-store.save", Map.fromList
---       [ ("rollback-point", True)
---       , ("block-count", True)
---       , ("local-tip", True)
---       , ("remote-tip", True)
---       , ("tx-count", True)
---       ]
---     )
---   ]
-
 getNodeClientSelectorConfig :: GetSelectorConfig NodeClient.NodeClientSelector
 getNodeClientSelectorConfig = \case
   NodeClient.Connect -> SelectorConfig "connect" True absurdFieldConfig
