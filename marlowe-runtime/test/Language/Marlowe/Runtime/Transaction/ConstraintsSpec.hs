@@ -191,7 +191,7 @@ spec = do
       let
         genAssets :: Gen Chain.Assets
         genAssets = do
-          lovelaceAmount <- (2_000_000 +) <$> suchThat arbitrary (> 0)
+          lovelaceAmount <- (100_000_000 +) <$> suchThat arbitrary (> 0)
           pure (Chain.Assets (fromCardanoLovelace $ Lovelace lovelaceAmount) $ Chain.Tokens Map.empty)
 
         genUtxos :: Gen Chain.UTxOs
@@ -227,7 +227,7 @@ spec = do
       txBodyContent <- do
         stubAddress <- AddressInEra (ShelleyAddressInEra ShelleyBasedEraBabbage)
           <$> hedgehog genAddressShelley
-        assets <- lovelaceToTxOutValue . Lovelace . (2_000_000 +) <$> suchThat arbitrary (> 0)
+        assets <- lovelaceToTxOutValue . Lovelace . (10_000_000 +) <$> suchThat arbitrary (> 0)
 
         txBC <- hedgehog $ genTxBodyContent BabbageEra
         pure $ txBC { txOuts =
