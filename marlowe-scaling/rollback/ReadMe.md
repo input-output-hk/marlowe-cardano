@@ -1,6 +1,6 @@
 # Podman Scripts for Creating Rollbacks on a Cardano Test Network
 
-The podman scripts in this folder enable the creation of rollbacks in a Cardano testnet. The network consist of nine stakepool nodes, six of them in cluster "a" and three of them in cluster "b". When the network is started, all nine nodes are in communication and maintain consensus. A script is provided to disconnect the topology of the nodes into the two clusters, which then evolve their separate consensi. Another script reconnects the topology, forcing global consensus unless so many out-of-consensus blocks have been produced (controlled by the security parameter) that the fork is permanent. Rootless containers are used, so no `root` privilege is needed to run the nodes.
+The podman scripts in this folder enable the creation of rollbacks in a Cardano testnet. The network consists of nine stakepool nodes, six of them in cluster "a" and three of them in cluster "b". When the network is started, all nine nodes are in communication and maintain consensus. A script is provided to disconnect the topology of the nodes into the two clusters, which then evolve their separate consensi. Another script reconnects the topology, forcing global consensus unless so many out-of-consensus blocks have been produced (controlled by the security parameter) that the fork is permanent. Rootless containers are used, so no `root` privilege is needed to run the services.
 
 One can test the effects of rollback on Cardano applications by breaking the consensus, submitting conflicting transactions, and then restoring consensus.
 
@@ -14,6 +14,7 @@ The scripts require the following tools:
 - `jq`
 - `sed`
 - `bash`
+- `cardano-cli`
 
 The scripts have been tested under NixOS 22.11.
 
@@ -33,7 +34,7 @@ The scripts create a pod `rollback` with two services `cluster-a` and `cluster-b
 
 - `rollback_ipc` volume
     - `node-spo-?.socket` are the sockets for the nine nodes.
-    - `config/*.{json,yaml}` are the configuration files for the nodes.
+    - `config/{{byron,shelley,alonzo}-genesis.json,configuration.yaml}` are the configuration files for the nodes.
     - `config/topology.json` is the topology of the fully-connected nodes.
     - `config/topology{a,b}.json` are the topologies of the "a" and "b" clusters.
 - `rollback_db` volume
@@ -107,7 +108,7 @@ podman start -a cluster-b
 
 ### Monitoring
 
-Run the script `./watch-cluster-a.sh` or `./watch-cluster-b.sh` to view the tip of the clusters. It is often convenient to run this is separate terminal windows. They should display output like the following:
+Run the scripts `./watch-cluster-a.sh` and `./watch-cluster-b.sh` to view the tip of the clusters. It is often convenient to run these in separate terminal windows. They should display output like the following:
 
 ```console
 Every 2.0s: cardano-cli query tip --testnet-magic 1564 | jq '{cluster:"a",tip:.}' | json2yaml    oryx: Sun Dec 11 10:58:32 2022
@@ -122,7 +123,7 @@ tip:
   syncProgress: '100.00'
 ```
 
-If the clusters are in global consensus, then the same block hash will be displayed for both.
+If the clusters are in global consensus, then the same block hash will be displayed for both clusters.
 
 
 ### Funding
@@ -154,7 +155,9 @@ Separate node sockets are provided for clusters "a" and "b":
 -  `cluster-a.socket`
 -  `cluster-b.socket`
 
-When the nodes are in global consensus, it does not matter which socket one connects external tools to, but when the consensus is fragmented, these two sockets provide access to the separate clusters. (One can also access the sockets for the 9 nodes in the volume `rollback_ipc`.)
+The testnet magic is `1564`.
+
+When the nodes are in global consensus, it does not matter which socket one connects external tools to, but when the consensus is fragmented, these two sockets provide access to the separate clusters. (One can also access the sockets for the nine nodes in the volume `rollback_ipc`.)
 
 One can test the effects of rollback on Cardano applications by breaking the consensus, submitting conflicting transactions, and then restoring consensus. Use the sockets for the two clusters when orchestrating test scenarios.
 
@@ -169,7 +172,12 @@ So long as neither cluster has produced more than `securityParam` number of bloc
 
 Once again, this may take a few moments. Transactions made on one cluster, but not on the other, *may* be rolled back. Note that a transaction made on a rolled-back fork may be placed back in the memory pool and re-executed on the main branch of the blockchain. However, if different transactions on the two clusters consume the *same UTxO*, then one will be rolled back permanently and the other will appear on the main branch of the blockchain.
 
-Because cluster "a" contains 6 nodes and cluster 'b" contains 3 nodes, there is a higher probability that transactions on cluster "a" will survive if there are conflicting transactions on the two clusters, but this is not guaranteed.
+Because cluster "a" contains six nodes and cluster 'b" contains three nodes, there is a higher probability that transactions on cluster "a" will survive if there are conflicting transactions on the two clusters, but this is not guaranteed.
+
+
+## Shutdown
+
+You can shut down the nodes with the `podman-compose down` command. The nodes can be restarted with `podman-compose up`.
 
 
 ## Cleanup
