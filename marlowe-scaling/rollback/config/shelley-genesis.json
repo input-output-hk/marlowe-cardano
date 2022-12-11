@@ -1,6 +1,6 @@
 {
-    "activeSlotsCoeff": 0.1,
-    "epochLength": 3600,
+    "activeSlotsCoeff": 0.2,
+    "epochLength": 21600,
     "genDelegs": {
         "65d0fd2f673600f798addac8df3d782dff6ba3dc2b69f2bd1cfce454": {
             "delegate": "20beddf4ac65cb32dd1f45100ff1cd3a278cae447d47b05588c361be",
@@ -63,7 +63,7 @@
         "rho": 0.1,
         "tau": 0.1
     },
-    "securityParam": 10,
+    "securityParam": 300,
     "slotLength": 1.0,
     "slotsPerKESPeriod": 129600,
     "staking": {
