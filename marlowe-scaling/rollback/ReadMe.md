@@ -4,6 +4,8 @@ The podman scripts in this folder enable the creation of rollbacks in a Cardano 
 
 One can test the effects of rollback on Cardano applications by breaking the consensus, submitting conflicting transactions, and then restoring consensus.
 
+A [video demonstrating induced rollbacks on a Cardano network](https://youtu.be/VNa2kORVctM) uses these scripts.
+
 
 ## Prerequisites
 
