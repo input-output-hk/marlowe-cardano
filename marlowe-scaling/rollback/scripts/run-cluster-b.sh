@@ -11,7 +11,7 @@ DATA=/data
 
 mode="$(cat ${IPC}/mode)"
 
-for i in `seq 6 9`
+for i in $(seq 6 9)
 do
   cardano-node run \
     --database-path                   "${DATA}/node-spo-${i}.db" \
@@ -24,7 +24,7 @@ do
     --byron-signing-key               "${CONFIG}/node-spo-${i}/byron-delegate.key" \
     --shelley-operational-certificate "${CONFIG}/node-spo-${i}/opcert.cert" \
     --host-addr                       0.0.0.0 \
-    --port                            "$(cat ${CONFIG}/node-spo-${i}/port)" \
+    --port                            "$(cat "${CONFIG}/node-spo-${i}/port")" \
     >& "${DATA}/node-spo-${i}.log" &
 done
 wait
