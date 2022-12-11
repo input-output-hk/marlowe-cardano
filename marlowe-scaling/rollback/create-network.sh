@@ -2,4 +2,6 @@
 
 set -eo pipefail
 
-podman network create --disable-dns --subnet "$(cat CIDR)" rollback
+ROLLBACK_ROOT="$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")"
+
+podman network create --disable-dns --subnet $(cat "${ROLLBACK_ROOT}/CIDR") rollback

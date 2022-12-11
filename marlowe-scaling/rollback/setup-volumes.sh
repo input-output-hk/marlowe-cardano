@@ -2,6 +2,8 @@
 
 set -eo pipefail
 
+ROLLBACK_ROOT="$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")"
+
 
 IPC="$(podman volume inspect rollback_ipc | jq -r '.[0].Mountpoint')"
 echo full > "${IPC}/mode"
@@ -9,15 +11,15 @@ echo full > "${IPC}/mode"
 
 CONFIG="${IPC}/config"
 mkdir -p "${CONFIG}"
-cp -pr config/* "${CONFIG}/"
+cp -pr "${ROLLBACK_ROOT}"/config/* "${CONFIG}/"
 
 for i in `seq 1 5`
 do
-  cat cluster-a.ip > "${CONFIG}/node-spo-${i}/host"
+  cat "${ROLLBACK_ROOT}/cluster-a.ip" > "${CONFIG}/node-spo-${i}/host"
 done
 for i in `seq 6 9`
 do
-  cat cluster-b.ip > "${CONFIG}/node-spo-${i}/host"
+  cat "${ROLLBACK_ROOT}/cluster-b.ip" > "${CONFIG}/node-spo-${i}/host"
 done
 
 echo '{"Producers": [' > "${CONFIG}/topology.json"
@@ -55,4 +57,4 @@ sed -i -e "s/2022-11-30T21:17:23/$(date -d @${START_TIME} -u +%FT%T)/" "${CONFIG
 
 
 DATA="$(podman volume inspect rollback_db | jq -r '.[0].Mountpoint')"
-cp -p scripts/run-*.sh "${DATA}/"
+cp -p "${ROLLBACK_ROOT}"/scripts/run-*.sh "${DATA}/"
