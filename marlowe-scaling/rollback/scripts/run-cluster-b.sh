@@ -11,7 +11,7 @@ DATA=/data
 
 mode="$(cat ${IPC}/mode)"
 
-for i in $(seq 6 9)
+for i in $(seq 7 9)
 do
   cardano-node run \
     --database-path                   "${DATA}/node-spo-${i}.db" \

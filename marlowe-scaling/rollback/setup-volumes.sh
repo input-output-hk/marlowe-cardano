@@ -14,11 +14,11 @@ mkdir -p "${CONFIG}"
 cp -pr "${ROLLBACK_ROOT}"/config/* "${CONFIG}/"
 chmod go-rwx "${CONFIG}"/node-spo-?/*.skey
 
-for i in $(seq 1 5)
+for i in $(seq 1 6)
 do
   cat "${ROLLBACK_ROOT}/cluster-a.ip" > "${CONFIG}/node-spo-${i}/host"
 done
-for i in $(seq 6 9)
+for i in $(seq 7 9)
 do
   cat "${ROLLBACK_ROOT}/cluster-b.ip" > "${CONFIG}/node-spo-${i}/host"
 done
@@ -34,21 +34,21 @@ do
 done
 echo ']}' >> "${CONFIG}/topology.json"
 
-jq 'del(.Producers[5,6,7,8])' "${CONFIG}/topology.json" > "${CONFIG}/topology-a.json"
-jq 'del(.Producers[0,1,2,3,4])' "${CONFIG}/topology.json" > "${CONFIG}/topology-b.json"
+jq 'del(.Producers[6,7,8])' "${CONFIG}/topology.json" > "${CONFIG}/topology-a.json"
+jq 'del(.Producers[0,1,2,3,4,5])' "${CONFIG}/topology.json" > "${CONFIG}/topology-b.json"
 
 for i in $(seq 1 9)
 do
   jq 'del(.Producers['$((i-1))'])' "${CONFIG}/topology.json" > "${CONFIG}/node-spo-${i}/topology-full.json"
 done
 
-for i in $(seq 1 5)
+for i in $(seq 1 6)
 do
   jq 'del(.Producers['$((i-1))'])' "${CONFIG}/topology-a.json" > "${CONFIG}/node-spo-${i}/topology-frag.json"
 done
-for i in $(seq 6 9)
+for i in $(seq 7 9)
 do
-  jq 'del(.Producers['$((i-6))'])' "${CONFIG}/topology-b.json" > "${CONFIG}/node-spo-${i}/topology-frag.json"
+  jq 'del(.Producers['$((i-7))'])' "${CONFIG}/topology-b.json" > "${CONFIG}/node-spo-${i}/topology-frag.json"
 done
 
 
