@@ -6,6 +6,8 @@ One can test the effects of rollback on Cardano applications by breaking the con
 
 A [video demonstrating induced rollbacks on a Cardano network](https://youtu.be/VNa2kORVctM) uses these scripts.
 
+Also see the [`cardano-node` workbench](https://github.com/input-output-hk/cardano-node/blob/master/CONTRIBUTING.rst#workbench-a-local-cluster-playground).
+
 
 ## Prerequisites
 
