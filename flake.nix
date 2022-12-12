@@ -101,6 +101,31 @@
               docker compose up --detach
             '').outPath;
           };
+
+          chainseekd = {
+            type = "app";
+            program = "${packages.chainseekd}/bin/chainseekd";
+          };
+
+          marlowe-history = {
+            type = "app";
+            program = "${packages.marlowe-history}/bin/marlowe-history";
+          };
+
+          marlowe-discovery = {
+            type = "app";
+            program = "${packages.marlowe-discovery}/bin/marlowe-discovery";
+          };
+
+          marlowe-tx = {
+            type = "app";
+            program = "${packages.marlowe-tx}/bin/marlowe-tx";
+          };
+
+          marlowe = {
+            type = "app";
+            program = "${packages.marlowe-rt}/bin/marlowe-rt";
+          };
         };
 
         devShells.default = import ./dev-shell.nix {
