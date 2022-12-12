@@ -23,26 +23,25 @@ Provided that Nix is already installed, first clone the [marlowe-cardano](https:
 git clone https://github.com/input-output-hk/marlowe-cardano.git
 ```
 
-Entering a Nix development shell will trigger a build of the of the backend components: can be built using the `nix-build` command.
+The backend components are available from the Nix Flake as apps. Note the `--`
+separating the arguments from the command.
 ```console
 $ cd marlowe-cardano
 
-$ nix develop
-
-$ which chainseekd marlowe-history marlowe-discovery marlowe-tx
-/nix/store/nxsbjx9il9bxacvqga3g0i0srxw3mw7z-marlowe-chain-sync-exe-chainseekd-0.0.0.0/bin/chainseekd
-/nix/store/5r7pwjlxwyvkbg920bfba7r4ynda1zag-marlowe-runtime-exe-marlowe-history-0.0.0.0/bin/marlowe-history
-/nix/store/2n4hy4cd8929b0acfnhjcfi76vhz0idq-marlowe-runtime-exe-marlowe-discovery-0.0.0.0/bin/marlowe-discovery
-/nix/store/ydr8kzzbjav1hvyg231k0rm3h5scpshb-marlowe-runtime-exe-marlowe-tx-0.0.0.0/bin/marlowe-tx
+$ nix run .#chainseekd -- --help
+$ nix run .#marlowe-history -- --help
+$ nix run .#marlowe-discovery -- --help
+$ nix run .#marlowe-tx -- --help
+$ nix run .#marlowe -- --help
 ```
 
-For convenience, several Cardano tools and other utilities are also built and available in the development shell.
+For convenience, several Cardano tools and other utilities are built and available in the development shell.
 ```console
 $ which cardano-node cardano-cli cardano-address sqitch
-/nix/store/n7kq07hwybc1jjrgby99jpagc9bv9l2l-cardano-node-exe-cardano-node-1.35.3/bin/cardano-node
-/nix/store/d6wadhy8v10xh8wh4vp97xj525dy6j8l-cardano-cli-exe-cardano-cli-1.35.3/bin/cardano-cli
-/nix/store/mynrw54yci7cy2mgqshk8q67a1hl4djg-cardano-addresses-cli-exe-cardano-address-3.11.0/bin/cardano-address
-/nix/store/3r9khb9rd94mfgx78zkll8dlnd3jzfwf-sqitch-pg-1.1.0/bin/sqitch
+/nix/store/...-cardano-node-exe-cardano-node-.../bin/cardano-node
+/nix/store/...-cardano-cli-exe-cardano-cli-.../bin/cardano-cli
+/nix/store/...-cardano-addresses-cli-exe-cardano-address-.../bin/cardano-address
+/nix/store/...-sqitch-pg-.../bin/sqitch
 ```
 
 ## Configuring the Backend Services
