@@ -33,23 +33,16 @@ import Cardano.Api
   , getTxId
   , makeShelleyAddress
   )
-import qualified Colog
 import Control.Applicative ((<|>))
 import Control.Concurrent (forkFinally)
-import Control.Concurrent.Async (Concurrently(..))
 import Control.Concurrent.Component
 import Control.Concurrent.STM (STM, atomically, modifyTVar, newEmptyTMVar, newTVar, putTMVar, readTMVar, readTVar)
 import Control.Error.Util (hoistMaybe, note, noteT)
-import Control.Exception (Exception(displayException), SomeException, catch)
+import Control.Exception (Exception(..))
 import Control.Monad (when)
-import Control.Monad.Base (MonadBase(..))
 import Control.Monad.IO.Class (MonadIO(liftIO))
 import Control.Monad.Trans.Class (lift)
-import Control.Monad.Trans.Control (MonadBaseControl(..))
 import Control.Monad.Trans.Except (ExceptT(..), except, runExceptT, withExceptT)
-import Control.Monad.Trans.Reader (ReaderT(..))
-import qualified Data.Aeson as A
-import qualified Data.Aeson.OneLine as O
 import Data.Bifunctor (first)
 import Data.List (find)
 import qualified Data.Map as Map
@@ -97,77 +90,50 @@ import Network.Protocol.Job.Server
   (JobServer(..), ServerStAttach(..), ServerStAwait(..), ServerStCmd(..), ServerStInit(..), hoistAttach, hoistCmd)
 import Ouroboros.Consensus.BlockchainTime (SystemStart)
 import System.Exit (die)
-import System.IO (hPutStrLn, stderr)
+
+data TransactionServerSelector f where
 
 type RunTransactionServer m = RunServer m (JobServer MarloweTxCommand)
 
 data TransactionServerDependencies = TransactionServerDependencies
-  { acceptRunTransactionServer :: WorkerM (RunTransactionServer WorkerM)
+  { acceptRunTransactionServer :: IO (RunTransactionServer IO)
   , mkSubmitJob :: Tx BabbageEra -> STM SubmitJob
   , loadWalletContext :: LoadWalletContext
   , loadMarloweContext :: LoadMarloweContext
-  , logAction :: AppLogAction
   , queryChainSync :: forall e a. ChainSyncQuery Void e a -> IO a
   , getTip :: STM Chain.ChainPoint
   }
 
 transactionServer :: Component IO TransactionServerDependencies ()
-transactionServer = component \TransactionServerDependencies{..} -> do
+transactionServer = serverComponentWithSetup worker \TransactionServerDependencies{..} -> do
   submitJobsVar <- newTVar mempty
   let
     getSubmitJob txId = Map.lookup txId <$> readTVar submitJobsVar
     trackSubmitJob txId = modifyTVar submitJobsVar . Map.insert txId
-    runTransactionServer = do
-      runServer <- Colog.usingLoggerT logAction acceptRunTransactionServer
-      Worker{..} <- atomically $ mkWorker WorkerDependencies {..}
-      runConcurrently $
-        Concurrently (Colog.usingLoggerT logAction runWorker `catch` catchWorker) *> Concurrently runTransactionServer
-  pure (runTransactionServer, ())
-
-catchWorker :: SomeException -> IO ()
-catchWorker = hPutStrLn stderr . ("Job worker crashed with exception: " <>) . show
+  pure do
+    runServer <- acceptRunTransactionServer
+    pure WorkerDependencies {..}
 
 data WorkerDependencies = WorkerDependencies
-  { runServer :: RunTransactionServer WorkerM
+  { runServer :: RunTransactionServer IO
   , getSubmitJob :: TxId -> STM (Maybe SubmitJob)
   , trackSubmitJob :: TxId -> SubmitJob -> STM ()
   , mkSubmitJob :: Tx BabbageEra -> STM SubmitJob
   , loadWalletContext :: LoadWalletContext
   , loadMarloweContext :: LoadMarloweContext
-  , logAction :: AppLogAction
   , queryChainSync :: forall e a. ChainSyncQuery Void e a -> IO a
   , getTip :: STM Chain.ChainPoint
   }
 
-type AppLogAction = Colog.LogAction IO Colog.Message
-
-type WorkerM = Colog.LoggerT Colog.Message IO
-
-instance MonadBase IO WorkerM where
-  liftBase = liftIO
-
-instance MonadBaseControl IO WorkerM where
-  type StM WorkerM a = a
-  liftBaseWith withRunInBase = Colog.LoggerT $ ReaderT \logAction -> do
-    liftIO $ withRunInBase \(Colog.LoggerT r) -> runReaderT r logAction
-  restoreM = pure
-
-newtype Worker = Worker
-  { runWorker :: WorkerM ()
-  }
-
-mkWorker :: WorkerDependencies -> STM Worker
-mkWorker WorkerDependencies{..} =
+worker :: Component IO WorkerDependencies ()
+worker = component_ \WorkerDependencies{..} -> do
   let
     RunServer run = runServer
-  in
-    pure Worker { runWorker = run server }
 
-  where
-    server :: JobServer MarloweTxCommand WorkerM ()
+    server :: JobServer MarloweTxCommand IO ()
     server = JobServer $ pure serverInit
 
-    serverInit :: ServerStInit MarloweTxCommand WorkerM ()
+    serverInit :: ServerStInit MarloweTxCommand IO ()
     serverInit = ServerStInit
       { recvMsgExec = \command -> do
           systemStart <- liftIO $ queryChainSync GetSystemStart
@@ -225,11 +191,12 @@ mkWorker WorkerDependencies{..} =
           jobId@(JobIdSubmit txId) ->
             attachSubmit jobId $ getSubmitJob txId
       }
+  run server
 
 attachSubmit
   :: JobId MarloweTxCommand SubmitStatus SubmitError BlockHeader
   -> STM (Maybe SubmitJob)
-  -> WorkerM (ServerStAttach MarloweTxCommand SubmitStatus SubmitError BlockHeader WorkerM ())
+  -> IO (ServerStAttach MarloweTxCommand SubmitStatus SubmitError BlockHeader IO ())
 attachSubmit jobId getSubmitJob =
   liftIO $ atomically $ fmap (hoistAttach $ liftIO . atomically) <$> submitJobServerAttach jobId =<< getSubmitJob
 
@@ -244,10 +211,9 @@ execCreate
   -> TransactionMetadata
   -> Chain.Lovelace
   -> Contract v
-  -> WorkerM (ServerStCmd MarloweTxCommand Void (CreateError v) (ContractCreated BabbageEra v) WorkerM ())
+  -> IO (ServerStCmd MarloweTxCommand Void (CreateError v) (ContractCreated BabbageEra v) IO ())
 execCreate solveConstraints loadWalletContext networkId mStakeCredential version addresses roleTokens metadata minAda contract = execExceptT do
   walletContext <- liftIO $ loadWalletContext addresses
-  lift . Colog.logDebug . O.renderValue . A.toJSON $ walletContext
   mCardanoStakeCredential <- except $ traverse (note CreateToCardanoError . toCardanoStakeCredential) mStakeCredential
   ((datum, assets, rolesCurrency), constraints) <- except
     $ buildCreateConstraints version walletContext roleTokens metadata minAda contract
@@ -319,7 +285,7 @@ execApplyInputs
   -> Maybe UTCTime
   -> Maybe UTCTime
   -> Redeemer v
-  -> WorkerM (ServerStCmd MarloweTxCommand Void (ApplyInputsError v) (InputsApplied BabbageEra v) WorkerM ())
+  -> IO (ServerStCmd MarloweTxCommand Void (ApplyInputsError v) (InputsApplied BabbageEra v) IO ())
 execApplyInputs
   getTip
   systemStart
@@ -352,7 +318,6 @@ execApplyInputs
         invalidHereafter'
         inputs
     walletContext <- liftIO $ loadWalletContext addresses
-    lift . Colog.logDebug . O.renderValue . A.toJSON $ walletContext
     txBody <- except
       $ first ApplyInputsConstraintError
       $ solveConstraints version marloweContext walletContext constraints
@@ -369,7 +334,7 @@ execWithdraw
   -> WalletAddresses
   -> ContractId
   -> TokenName
-  -> WorkerM (ServerStCmd MarloweTxCommand Void (WithdrawError v) (TxBody BabbageEra) WorkerM ())
+  -> IO (ServerStCmd MarloweTxCommand Void (WithdrawError v) (TxBody BabbageEra) IO ())
 execWithdraw solveConstraints loadWalletContext loadMarloweContext version addresses contractId roleToken = liftIO $ execExceptT $ case version of
   MarloweV1 -> do
     marloweContext@MarloweContext{payoutOutputs=Map.elems -> payouts} <- withExceptT WithdrawLoadMarloweContextFailed
@@ -390,7 +355,7 @@ execSubmit
   :: (Tx BabbageEra -> STM SubmitJob)
   -> (TxId -> SubmitJob -> STM ())
   -> Tx BabbageEra
-  -> WorkerM (ServerStCmd MarloweTxCommand SubmitStatus SubmitError BlockHeader WorkerM ())
+  -> IO (ServerStCmd MarloweTxCommand SubmitStatus SubmitError BlockHeader IO ())
 execSubmit mkSubmitJob trackSubmitJob tx = liftIO do
   let txId = fromCardanoTxId $ getTxId $ getTxBody tx
   (submitJob, exVar) <- atomically do

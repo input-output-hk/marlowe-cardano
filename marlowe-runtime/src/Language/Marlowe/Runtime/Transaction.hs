@@ -18,11 +18,10 @@ import Network.Protocol.Driver (RunClient)
 
 data TransactionDependencies = TransactionDependencies
   { connectToChainSeek :: RunClient IO RuntimeChainSeekClient
-  , acceptRunTransactionServer :: WorkerM (RunTransactionServer WorkerM)
+  , acceptRunTransactionServer :: IO (RunTransactionServer IO)
   , mkSubmitJob :: Tx BabbageEra -> STM SubmitJob
   , loadWalletContext :: LoadWalletContext
   , loadMarloweContext :: LoadMarloweContext
-  , logAction :: AppLogAction
   , queryChainSync :: forall e a. ChainSyncQuery Void e a -> IO a
   }
 

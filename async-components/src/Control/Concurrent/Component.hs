@@ -128,6 +128,18 @@ component_ :: (a -> m ()) -> Component m a ()
 component_ = component . fmap (pure . (,()))
 
 serverComponent :: forall m a b . MonadBaseControl IO m => Component m b () -> (a -> m b) -> Component m a ()
-serverComponent worker accept = component_ \a -> do
-  b <- accept a
-  runComponent_ (void $ suppressErrors worker *** serverComponent worker accept) (b, a)
+serverComponent worker = serverComponentWithSetup worker . (pure .)
+
+serverComponentWithSetup
+  :: forall m a b
+   . MonadBaseControl IO m
+  => Component m b ()
+  -> (a -> STM (m b))
+  -> Component m a ()
+serverComponentWithSetup worker mkAccept = component \a -> do
+  accept <- mkAccept a
+  let
+    run = do
+      b <- accept
+      runComponent_ (void $ suppressErrors worker) b *> run
+  pure (run, ())

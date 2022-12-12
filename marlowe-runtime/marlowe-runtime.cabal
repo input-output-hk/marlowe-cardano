@@ -114,8 +114,6 @@ library
     , binary
     , cardano-api
     , cardano-ledger-core
-    , co-log
-    , co-log-core
     , bytestring
     , containers
     , errors
@@ -140,16 +138,6 @@ library
     , typed-protocols
     , witherable
 
-library logging
-  import: lang
-  hs-source-dirs: logging
-  exposed-modules:
-    Language.Marlowe.Runtime.Logging
-  build-depends:
-      base >= 4.9 && < 5
-    , co-log
-    , co-log-core
-
 library config
   import: lang
   hs-source-dirs: config
@@ -157,7 +145,6 @@ library config
     Language.Marlowe.Runtime.CLI.Option
   build-depends:
       base >= 4.9 && < 5
-    , co-log
     , marlowe-chain-sync
     , network
     , marlowe-runtime
@@ -349,15 +336,11 @@ executable marlowe-tx
   build-depends:
     base >= 4.9 && < 5
     , async-components
-    , co-log
-    , co-log-core
     , eventuo11y
     , eventuo11y-extras
     , marlowe-chain-sync
     , marlowe-protocols
     , marlowe-runtime
-    , marlowe-runtime:config
-    , marlowe-runtime:logging
     , network
     , optparse-applicative
     , text
