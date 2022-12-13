@@ -18,7 +18,7 @@ import Data.Foldable (fold)
 import Data.List (find)
 import Data.Map (Map)
 import qualified Data.Map as Map
-import Data.Maybe (catMaybes, fromJust, isJust, mapMaybe)
+import Data.Maybe (fromJust, isJust, mapMaybe)
 import Data.Monoid (First(..), getFirst)
 import Data.Ratio ((%))
 import qualified Data.Set as Set
@@ -103,12 +103,12 @@ spec = do
         marloweAddressChain = fromCardanoAddressInEra BabbageEra marloweAddressCardano
 
         getValueAtAddress :: Chain.Address -> [TxOut CtxTx BabbageEra] -> Maybe (TxOutValue BabbageEra)
-        getValueAtAddress targetAddress txos = getFirst . mconcat . map (First
+        getValueAtAddress targetAddress txOuts = getFirst . mconcat . map (First
           . (\(TxOut addressInEra txOutValue _ _) ->
               if fromCardanoAddressInEra BabbageEra addressInEra == targetAddress
                 then Just txOutValue
                 else Nothing))
-          $ txos
+          $ txOuts
 
       txBodyContent <- do
         txBC <- hedgehog $ genTxBodyContent BabbageEra
@@ -122,7 +122,7 @@ spec = do
           ] }
 
       let
-        actual = (getValueAtAddress marloweAddressChain . txOuts)
+        actual = getValueAtAddress marloweAddressChain . txOuts
           <$> adjustTxForMinUtxo protocolTestnet marloweAddressChain txBodyContent
         expected :: Either (ConstraintError 'V1) (Maybe (TxOutValue BabbageEra))
           = Right $ getValueAtAddress marloweAddressChain $ txOuts txBodyContent
@@ -139,10 +139,10 @@ spec = do
         marloweAddress = scriptAddress marloweScriptHash
 
         valueMeetsMinimumReq :: TxOut CtxTx BabbageEra -> Maybe String
-        valueMeetsMinimumReq txout@(TxOut _ txOrigValue _ _) =
-          case calculateMinimumUTxO ShelleyBasedEraBabbage txout protocolTestnet of
+        valueMeetsMinimumReq txOut@(TxOut _ txOrigValue _ _) =
+          case calculateMinimumUTxO ShelleyBasedEraBabbage txOut protocolTestnet of
             Right minValueFromApi ->
-              if origAda >= (selectLovelace minValueFromApi)
+              if origAda >= selectLovelace minValueFromApi
                 then Nothing
                 else Just $ printf "Value %s is lower than minimum value %s"
                       (show origAda) (show $ selectLovelace minValueFromApi)
@@ -154,7 +154,7 @@ spec = do
 
       pure $ case adjustTxForMinUtxo protocolTestnet marloweAddress txBodyContent of
         Right newTxBodyContent -> do
-          let errors = catMaybes $ map valueMeetsMinimumReq $ txOuts newTxBodyContent
+          let errors = mapMaybe valueMeetsMinimumReq $ txOuts newTxBodyContent
           if null errors
             then pure ()
             else expectationFailure $ unlines $ "Minimum UTxO requirements not met:" : errors
@@ -180,7 +180,7 @@ spec = do
 
       pure $ case adjustTxForMinUtxo protocolTestnet marloweAddress txBodyContent of
         Right newTxBodyContent -> do
-          let errors = catMaybes $ map valueIsAtLeastHalfAnAda $ txOuts newTxBodyContent
+          let errors = mapMaybe valueIsAtLeastHalfAnAda $ txOuts newTxBodyContent
           if null errors
             then pure ()
             else expectationFailure $ unlines $ "Minimum UTxO requirements not met:" : errors
@@ -856,7 +856,7 @@ protocolTestnet = ProtocolParameters
   , protocolParamMonetaryExpansion = 3 % 1000
   , protocolParamTreasuryCut = 1 % 5
   , protocolParamUTxOCostPerWord = Nothing
-  , protocolParamCostModels = Map.fromList []
+  , protocolParamCostModels = Map.empty
   , protocolParamPrices = Just (ExecutionUnitPrices {priceExecutionSteps = 721 % 10000000
   , priceExecutionMemory = 577 % 10000})
   , protocolParamMaxTxExUnits = Just (ExecutionUnits {executionSteps = 10000000000
