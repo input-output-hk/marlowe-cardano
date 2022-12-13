@@ -196,12 +196,7 @@ library tx-api
 library tx
   import: lang
   hs-source-dirs:   tx
-  -- Needed to suppress the erroneous warning about plutus-tx-plugin not being
-  -- needed.
-  ghc-options: -Wno-unused-packages
   exposed-modules:
-    Language.Marlowe.Runtime.Plutus.V2.Scripts.MarloweV1.RoleTokensPolicy
-    Language.Marlowe.Runtime.Plutus.V2.Scripts.MarloweV1.RoleTokensPolicy.Types
     Language.Marlowe.Runtime.Transaction
     Language.Marlowe.Runtime.Transaction.BuildConstraints
     Language.Marlowe.Runtime.Transaction.Chain
@@ -214,10 +209,8 @@ library tx
     , aeson
     , async
     , async-components
-    , binary
     , cardano-api
     , cardano-ledger-core
-    , bytestring
     , containers
     , errors
     , eventuo11y
@@ -227,19 +220,33 @@ library tx
     , marlowe-protocols
     , marlowe-runtime
     , marlowe-runtime:history-api
+    , marlowe-runtime:plutus-scripts
     , marlowe-runtime:tx-api
-    , newtype-generics
     , ouroboros-consensus
     , ouroboros-network
     , plutus-ledger-api
     , plutus-tx
-    , plutus-tx-plugin
     , semialign
     , stm
-    , text
     , time
     , transformers
     , witherable
+
+library plutus-scripts
+  import: lang
+  hs-source-dirs:   plutus-scripts
+  -- Needed to suppress the erroneous warning about plutus-tx-plugin not being
+  -- needed.
+  ghc-options: -Wno-unused-packages
+  exposed-modules:
+    Language.Marlowe.Runtime.Plutus.V2.Scripts.MarloweV1.RoleTokensPolicy
+    Language.Marlowe.Runtime.Plutus.V2.Scripts.MarloweV1.RoleTokensPolicy.Types
+  build-depends:
+      base >= 4.9 && < 5
+    , newtype-generics
+    , plutus-ledger-api
+    , plutus-tx
+    , plutus-tx-plugin
 
 library config
   import: lang
