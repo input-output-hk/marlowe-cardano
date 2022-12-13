@@ -82,16 +82,31 @@ library
     , text
     , time
 
-library history
+library history-api
   import: lang
-  hs-source-dirs:   history
+  hs-source-dirs:   history-api
   exposed-modules:
     Language.Marlowe.Protocol.Sync.Client
     Language.Marlowe.Protocol.Sync.Codec
     Language.Marlowe.Protocol.Sync.Server
     Language.Marlowe.Protocol.Sync.Types
-    Language.Marlowe.Runtime.History
     Language.Marlowe.Runtime.History.Api
+  build-depends:
+      base >= 4.9 && < 5
+    , aeson
+    , binary
+    , bytestring
+    , containers
+    , marlowe-chain-sync
+    , marlowe-protocols
+    , marlowe-runtime
+    , typed-protocols
+
+library history
+  import: lang
+  hs-source-dirs:   history
+  exposed-modules:
+    Language.Marlowe.Runtime.History
     Language.Marlowe.Runtime.History.Follower
     Language.Marlowe.Runtime.History.FollowerSupervisor
     Language.Marlowe.Runtime.History.JobServer
@@ -102,9 +117,73 @@ library history
     Language.Marlowe.Runtime.History.SyncServer
   build-depends:
       base >= 4.9 && < 5
-    , aeson
     , async
     , async-components
+    , cardano-api
+    , containers
+    , marlowe-chain-sync
+    , marlowe-protocols
+    , marlowe-runtime
+    , marlowe-runtime:history-api
+    , ouroboros-consensus
+    , ouroboros-network
+    , semialign
+    , stm
+    , these
+    , transformers
+    , witherable
+
+library discovery-api
+  import: lang
+  hs-source-dirs:   discovery-api
+  exposed-modules:
+    Language.Marlowe.Protocol.HeaderSync.Client
+    Language.Marlowe.Protocol.HeaderSync.Codec
+    Language.Marlowe.Protocol.HeaderSync.Server
+    Language.Marlowe.Protocol.HeaderSync.Types
+    Language.Marlowe.Runtime.Discovery.Api
+  build-depends:
+      base >= 4.9 && < 5
+    , aeson
+    , binary
+    , bytestring
+    , containers
+    , marlowe-chain-sync
+    , marlowe-protocols
+    , marlowe-runtime
+    , typed-protocols
+
+library discovery
+  import: lang
+  hs-source-dirs:   discovery
+  exposed-modules:
+    Language.Marlowe.Runtime.Discovery
+    Language.Marlowe.Runtime.Discovery.Chain
+    Language.Marlowe.Runtime.Discovery.Store
+    Language.Marlowe.Runtime.Discovery.QueryServer
+    Language.Marlowe.Runtime.Discovery.SyncServer
+  build-depends:
+      base >= 4.9 && < 5
+    , async-components
+    , containers
+    , marlowe
+    , marlowe-chain-sync
+    , marlowe-protocols
+    , marlowe-runtime
+    , marlowe-runtime:discovery-api
+    , plutus-ledger-api
+    , plutus-tx
+    , semialign
+    , stm
+
+library tx-api
+  import: lang
+  hs-source-dirs:   tx-api
+  exposed-modules:
+    Language.Marlowe.Runtime.Transaction.Api
+  build-depends:
+      base >= 4.9 && < 5
+    , aeson
     , binary
     , cardano-api
     , bytestring
@@ -112,45 +191,7 @@ library history
     , marlowe-chain-sync
     , marlowe-protocols
     , marlowe-runtime
-    , ouroboros-consensus
-    , ouroboros-network
-    , semialign
-    , stm
-    , these
-    , transformers
-    , typed-protocols
-    , witherable
-
-library discovery
-  import: lang
-  hs-source-dirs:   discovery
-  exposed-modules:
-    Language.Marlowe.Protocol.HeaderSync.Client
-    Language.Marlowe.Protocol.HeaderSync.Codec
-    Language.Marlowe.Protocol.HeaderSync.Server
-    Language.Marlowe.Protocol.HeaderSync.Types
-    Language.Marlowe.Runtime.Discovery
-    Language.Marlowe.Runtime.Discovery.Api
-    Language.Marlowe.Runtime.Discovery.Chain
-    Language.Marlowe.Runtime.Discovery.Store
-    Language.Marlowe.Runtime.Discovery.QueryServer
-    Language.Marlowe.Runtime.Discovery.SyncServer
-  build-depends:
-      base >= 4.9 && < 5
-    , aeson
-    , async-components
-    , binary
-    , bytestring
-    , containers
-    , marlowe
-    , marlowe-chain-sync
-    , marlowe-protocols
-    , marlowe-runtime
-    , plutus-ledger-api
-    , plutus-tx
-    , semialign
-    , stm
-    , typed-protocols
+    , time
 
 library tx
   import: lang
@@ -164,7 +205,6 @@ library tx
     Language.Marlowe.Runtime.Plutus.V2.Scripts.MarloweV1.RoleTokensPolicy.Types
     Language.Marlowe.Runtime.Plutus.V2.Scripts
     Language.Marlowe.Runtime.Transaction
-    Language.Marlowe.Runtime.Transaction.Api
     Language.Marlowe.Runtime.Transaction.BuildConstraints
     Language.Marlowe.Runtime.Transaction.Chain
     Language.Marlowe.Runtime.Transaction.Constraints
@@ -188,7 +228,8 @@ library tx
     , marlowe-chain-sync:plutus-compat
     , marlowe-protocols
     , marlowe-runtime
-    , marlowe-runtime:history
+    , marlowe-runtime:history-api
+    , marlowe-runtime:tx-api
     , newtype-generics
     , ouroboros-consensus
     , ouroboros-network
@@ -275,9 +316,9 @@ library web-server
     , marlowe-protocols
     , marlowe-runtime:web
     , marlowe-runtime
-    , marlowe-runtime:discovery
-    , marlowe-runtime:history
-    , marlowe-runtime:tx
+    , marlowe-runtime:discovery-api
+    , marlowe-runtime:history-api
+    , marlowe-runtime:tx-api
     , marlowe-chain-sync
     , marlowe-chain-sync:plutus-compat
     , monad-control
@@ -329,9 +370,9 @@ executable marlowe
     , marlowe-protocols
     , marlowe-runtime
     , marlowe-runtime:config
-    , marlowe-runtime:tx
-    , marlowe-runtime:history
-    , marlowe-runtime:discovery
+    , marlowe-runtime:tx-api
+    , marlowe-runtime:history-api
+    , marlowe-runtime:discovery-api
     , monad-control
     , network
     , plutus-ledger-api
@@ -365,6 +406,7 @@ executable marlowe-history
     , marlowe-chain-sync
     , marlowe-protocols
     , marlowe-runtime:history
+    , marlowe-runtime:history-api
     , network
     , optparse-applicative
     , stm
@@ -389,6 +431,7 @@ executable marlowe-discovery
     , marlowe-chain-sync
     , marlowe-protocols
     , marlowe-runtime:discovery
+    , marlowe-runtime:discovery-api
     , network
     , optparse-applicative
     , text
@@ -413,8 +456,9 @@ executable marlowe-tx
     , marlowe-chain-sync
     , marlowe-protocols
     , marlowe-runtime
-    , marlowe-runtime:history
+    , marlowe-runtime:history-api
     , marlowe-runtime:tx
+    , marlowe-runtime:tx-api
     , network
     , optparse-applicative
     , text
@@ -437,8 +481,8 @@ executable marlowe-web-server
     , marlowe-protocols
     , marlowe-runtime:config
     , marlowe-runtime:web-server
-    , marlowe-runtime:discovery
-    , marlowe-runtime:history
+    , marlowe-runtime:discovery-api
+    , marlowe-runtime:history-api
     , network
     , optparse-applicative
     , warp
@@ -477,7 +521,9 @@ test-suite marlowe-runtime-test
     , marlowe-protocols-test
     , marlowe-runtime
     , marlowe-runtime:history
+    , marlowe-runtime:history-api
     , marlowe-runtime:tx
+    , marlowe-runtime:tx-api
     , marlowe-test
     , ouroboros-consensus
     , plutus-tx

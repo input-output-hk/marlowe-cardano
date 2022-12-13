@@ -35,7 +35,6 @@ import qualified Cardano.Api.Shelley as C
 import Control.Error (note)
 import Control.Monad (forM, unless, when)
 import Data.Aeson (ToJSON)
-import Data.Binary (Binary)
 import Data.Crosswalk (Crosswalk(sequenceL))
 import Data.Function (on)
 import Data.Functor ((<&>))
@@ -68,6 +67,7 @@ import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Core.Api (MarloweVersionTag(..), TransactionScriptOutput(utxo))
 import qualified Language.Marlowe.Runtime.Core.Api as Core
 import Language.Marlowe.Runtime.Core.ScriptRegistry (ReferenceScriptUtxo(..))
+import Language.Marlowe.Runtime.Transaction.Api (ConstraintError(..))
 import Ouroboros.Consensus.BlockchainTime (SystemStart)
 import qualified Plutus.V2.Ledger.Api as P
 import Witherable (wither)
@@ -310,23 +310,6 @@ instance Core.IsMarloweVersion v => Monoid (TxConstraints v) where
       , signatureConstraints = mempty
       , metadataConstraints = mempty
       }
-
--- | Errors that can occur when trying to solve the constraints.
-data ConstraintError v
-  = MintingUtxoNotFound Chain.TxOutRef
-  | RoleTokenNotFound Chain.AssetId
-  | ToCardanoError
-  | MissingMarloweInput
-  | PayoutInputNotFound (Core.PayoutDatum v)
-  | CalculateMinUtxoFailed String
-  | CoinSelectionFailed String
-  | BalancingError String
-  deriving (Generic)
-
-deriving instance Eq (ConstraintError 'V1)
-deriving instance Show (ConstraintError 'V1)
-deriving instance Binary (ConstraintError 'V1)
-deriving instance ToJSON (ConstraintError 'V1)
 
 -- | Data from a wallet needed to solve the constraints.
 data WalletContext = WalletContext
