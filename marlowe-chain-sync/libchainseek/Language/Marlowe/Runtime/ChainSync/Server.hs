@@ -2,27 +2,16 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE EmptyCase #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE StrictData #-}
 
 module Language.Marlowe.Runtime.ChainSync.Server
   where
 
-import qualified Cardano.Api as Cardano
-import qualified Cardano.Api.Shelley as Cardano
+import Control.Concurrent (threadDelay)
 import Control.Concurrent.Component
-import Control.Concurrent.STM (STM, atomically)
-import Control.Monad (guard)
-import Data.ByteString.Short (toShort)
 import Data.Functor (void)
-import Language.Marlowe.Runtime.ChainSync.Api
-  ( BlockHeader(BlockHeader)
-  , BlockHeaderHash(unBlockHeaderHash)
-  , ChainPoint
-  , Move
-  , RuntimeChainSeekServer
-  , WithGenesis(..)
-  , moveSchema
-  )
-import Language.Marlowe.Runtime.ChainSync.Database (MoveClient(..), MoveResult(..))
+import Language.Marlowe.Runtime.ChainSync.Api (ChainPoint, Move, RuntimeChainSeekServer, WithGenesis(..), moveSchema)
+import Language.Marlowe.Runtime.ChainSync.Database (GetTip(..), MoveClient(..), MoveResult(..))
 import Network.Protocol.ChainSeek.Server
   (ChainSeekServer(..), ServerStHandshake(..), ServerStIdle(..), ServerStInit(..), ServerStNext(..))
 import Network.Protocol.Driver (RunServer(..))
@@ -31,8 +20,8 @@ type RunChainSeekServer m = RunServer m RuntimeChainSeekServer
 
 data ChainSyncServerDependencies = ChainSyncServerDependencies
   { acceptRunChainSeekServer :: IO (RunChainSeekServer IO)
-  , moveClient               :: !(MoveClient IO)
-  , localTip                 :: !(STM Cardano.ChainTip)
+  , moveClient :: MoveClient IO
+  , getTip :: GetTip IO
   }
 
 chainSyncServer :: Component IO ChainSyncServerDependencies ()
@@ -41,9 +30,9 @@ chainSyncServer = serverComponent worker \ChainSyncServerDependencies{..} -> do
   pure WorkerDependencies{..}
 
 data WorkerDependencies = WorkerDependencies
-  { runChainSeekServer :: !(RunChainSeekServer IO)
-  , moveClient         :: !(MoveClient IO)
-  , localTip           :: !(STM Cardano.ChainTip)
+  { runChainSeekServer :: RunChainSeekServer IO
+  , moveClient :: MoveClient IO
+  , getTip :: GetTip IO
   }
 
 worker :: Component IO WorkerDependencies ()
@@ -63,17 +52,11 @@ worker = component_ \WorkerDependencies{..} -> do
       { recvMsgQueryNext = \query -> do
           let
             goWait lastTip = do
-              atomically $ awaitTipChange case lastTip of
-                Genesis -> Cardano.ChainTipAtGenesis
-                At (BlockHeader slotNo hash blockNo) -> Cardano.ChainTip
-                  (Cardano.SlotNo $ fromIntegral slotNo)
-                  (Cardano.HeaderHash $ toShort $ unBlockHeaderHash hash)
-                  (Cardano.BlockNo $ fromIntegral blockNo)
-              pure $ SendMsgPing $ pollQuery goWait
-
-            awaitTipChange lastTip = do
-              newTip <- localTip
-              guard $ lastTip /= newTip
+              threadDelay 1_000_000
+              newTip <- runGetTip getTip
+              if newTip /= lastTip
+                then pure $ SendMsgPing $ pollQuery goWait
+                else goWait lastTip
 
             pollQuery onWait = do
               qResult <- runMoveClient moveClient pos query

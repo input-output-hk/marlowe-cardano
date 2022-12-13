@@ -86,12 +86,38 @@ library libchainseek
     Language.Marlowe.Runtime.ChainSync
     Language.Marlowe.Runtime.ChainSync.Database
     Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL
-    Language.Marlowe.Runtime.ChainSync.Genesis
     Language.Marlowe.Runtime.ChainSync.JobServer
-    Language.Marlowe.Runtime.ChainSync.NodeClient
     Language.Marlowe.Runtime.ChainSync.Server
     Language.Marlowe.Runtime.ChainSync.QueryServer
-    Language.Marlowe.Runtime.ChainSync.Store
+  other-modules:
+  build-depends:
+      base >= 4.9 && < 5
+    , async-components
+    , bytestring
+    , cardano-api
+    , cardano-binary
+    , containers
+    , foldl
+    , hasql
+    , hasql-th
+    , hasql-transaction
+    , marlowe-chain-sync
+    , marlowe-protocols
+    , ouroboros-network
+    , these
+    , transformers
+    , vector
+
+library chain-indexer
+  import: lang
+  hs-source-dirs:   chain-indexer
+  exposed-modules:
+    Language.Marlowe.Runtime.ChainIndexer
+    Language.Marlowe.Runtime.ChainIndexer.Database
+    Language.Marlowe.Runtime.ChainIndexer.Database.PostgreSQL
+    Language.Marlowe.Runtime.ChainIndexer.Genesis
+    Language.Marlowe.Runtime.ChainIndexer.NodeClient
+    Language.Marlowe.Runtime.ChainIndexer.Store
   other-modules:
   build-depends:
       base >= 4.9 && < 5
@@ -107,18 +133,14 @@ library libchainseek
     , cardano-ledger-alonzo
     , containers
     , eventuo11y
-    , foldl
     , hasql
     , hasql-th
     , hasql-transaction
-    , marlowe-chain-sync
-    , marlowe-protocols
     , ouroboros-network
     , profunctors
     , stm
     , stm-delay
     , text
-    , these
     , time
     , transformers
     , typed-protocols
@@ -143,10 +165,10 @@ library plutus-compat
     , plutus-ledger-api
     , serialise
 
-executable chainseekd
+executable marlowe-chain-indexer
   import: lang
   ghc-options: -threaded
-  hs-source-dirs:   chainseekd
+  hs-source-dirs:   marlowe-chain-indexer
   main-is: Main.hs
   other-modules:
     Logging
@@ -167,6 +189,36 @@ executable chainseekd
     -- Consider removing the hasql < 1.6 constraint in cabal.project if updating hasql-pool
     , hasql-pool < 0.6
     , marlowe-chain-sync
+    , marlowe-chain-sync:chain-indexer
+    , optparse-applicative
+    , ouroboros-network
+    , text
+    , time
+    , transformers
+    , uuid
+
+executable chainseekd
+  import: lang
+  ghc-options: -threaded
+  hs-source-dirs:   chainseekd
+  main-is: Main.hs
+  other-modules:
+    Logging
+    Options
+    Paths_marlowe_chain_sync
+  autogen-modules:
+    Paths_marlowe_chain_sync
+  build-depends:
+      base >= 4.9 && < 5
+    , async-components
+    , cardano-api
+    , cardano-ledger-byron
+    , eventuo11y
+    , eventuo11y-extras
+    , hasql
+    -- Consider removing the hasql < 1.6 constraint in cabal.project if updating hasql-pool
+    , hasql-pool < 0.6
+    , marlowe-chain-sync
     , marlowe-chain-sync:libchainseek
     , marlowe-protocols
     , network
@@ -174,7 +226,6 @@ executable chainseekd
     , ouroboros-network
     , text
     , time
-    , transformers
     , uuid
 
 executable example-client

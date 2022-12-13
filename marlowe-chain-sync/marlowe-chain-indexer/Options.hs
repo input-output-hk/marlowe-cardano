@@ -6,7 +6,7 @@ module Options
 import Cardano.Api (NetworkId(..), NetworkMagic(..))
 import Data.Maybe (fromMaybe)
 import Data.Text (Text)
-import Network.Socket (HostName, PortNumber)
+import Language.Marlowe.Runtime.ChainIndexer.NodeClient (CostModel(..))
 import qualified Options.Applicative as O
 import System.Environment (lookupEnv)
 import Text.Read (readMaybe)
@@ -17,10 +17,8 @@ data Options = Options
   , databaseUri       :: !String
   , genesisConfigHash :: !Text
   , genesisConfigFile :: !FilePath
-  , host              :: !HostName
-  , port              :: !PortNumber
-  , queryPort         :: !PortNumber
-  , commandPort       :: !PortNumber
+  , costModel         :: !CostModel
+  , maxCost           :: !Int
   , logConfigFile     :: !(Maybe FilePath)
   } deriving (Show, Eq)
 
@@ -29,11 +27,7 @@ getOptions version = do
   defaultNetworkId <- O.value . fromMaybe Mainnet <$> readNetworkId
   defaultSocketPath <- maybe mempty O.value <$> readSocketPath
   defaultDatabaseUri <- maybe mempty O.value <$> readDatabaseUri
-  defaultHost <- O.value . fromMaybe "127.0.0.1" <$> readHost
-  defaultPort <- O.value . fromMaybe 3715 <$> readPort
-  defaultQueryPort <- O.value . fromMaybe 3716 <$> readQueryPort
-  defaultJobPort <- O.value . fromMaybe 3720 <$> readJobPort
-  O.execParser $ parseOptions defaultNetworkId defaultSocketPath defaultDatabaseUri defaultHost defaultPort defaultQueryPort defaultJobPort version
+  O.execParser $ parseOptions defaultNetworkId defaultSocketPath defaultDatabaseUri version
   where
     readNetworkId :: IO (Maybe NetworkId)
     readNetworkId = do
@@ -54,39 +48,13 @@ getOptions version = do
         Just "" -> Nothing
         _       -> value
 
-    readHost :: IO (Maybe HostName)
-    readHost = do
-      value <- lookupEnv "CHAIN_SYNC_HOST"
-      pure case value of
-        Just "" -> Nothing
-        _       -> value
-
-    readPort :: IO (Maybe PortNumber)
-    readPort = do
-      value <- lookupEnv "CHAIN_SYNC_PORT"
-      pure $ readMaybe =<< value
-
-    readQueryPort :: IO (Maybe PortNumber)
-    readQueryPort = do
-      value <- lookupEnv "CHAIN_SYNC_QUERY_PORT"
-      pure $ readMaybe =<< value
-
-    readJobPort :: IO (Maybe PortNumber)
-    readJobPort = do
-      value <- lookupEnv "CHAIN_SYNC_JOB_PORT"
-      pure $ readMaybe =<< value
-
 parseOptions
   :: O.Mod O.OptionFields NetworkId
   -> O.Mod O.OptionFields FilePath
   -> O.Mod O.OptionFields String
-  -> O.Mod O.OptionFields HostName
-  -> O.Mod O.OptionFields PortNumber
-  -> O.Mod O.OptionFields PortNumber
-  -> O.Mod O.OptionFields PortNumber
   -> String
   -> O.ParserInfo Options
-parseOptions defaultNetworkId defaultSocketPath defaultDatabaseUri defaultHost defaultPort defaultQueryPort defaultJobPort version = O.info parser infoMod
+parseOptions defaultNetworkId defaultSocketPath defaultDatabaseUri version = O.info parser infoMod
   where
     parser :: O.Parser Options
     parser = O.helper
@@ -97,10 +65,8 @@ parseOptions defaultNetworkId defaultSocketPath defaultDatabaseUri defaultHost d
               <*> databaseUriOption
               <*> genesisConfigHashOption
               <*> genesisConfigFileOption
-              <*> hostOption
-              <*> portOption
-              <*> queryPortOption
-              <*> jobPortOption
+              <*> costModelParser
+              <*> maxCostParser
               <*> logConfigFileParser
           )
       where
@@ -168,40 +134,33 @@ parseOptions defaultNetworkId defaultSocketPath defaultDatabaseUri defaultHost d
               , O.help "Testnet network ID magic. Defaults to the CARDANO_TESTNET_MAGIC environment variable."
               ]
 
-        portOption :: O.Parser PortNumber
-        portOption = O.option O.auto $ mconcat
-          [ O.long "port-number"
-          , defaultPort
-          , O.metavar "PORT_NUMBER"
-          , O.help "The port number to serve the chain seek protocol on."
+        costModelParser :: O.Parser CostModel
+        costModelParser = CostModel <$> blockCostParser <*> txCostParser
+
+        blockCostParser :: O.Parser Int
+        blockCostParser = O.option O.auto $ mconcat
+          [ O.long "block-cost"
+          , O.value 1
+          , O.metavar "COST_UNITS"
+          , O.help "The number of cost units to associate with persisting a block when computing the cost model."
           , O.showDefault
           ]
 
-        queryPortOption :: O.Parser PortNumber
-        queryPortOption = O.option O.auto $ mconcat
-          [ O.long "query-port-number"
-          , defaultQueryPort
-          , O.metavar "PORT_NUMBER"
-          , O.help "The port number to serve the query protocol on."
+        txCostParser :: O.Parser Int
+        txCostParser = O.option O.auto $ mconcat
+          [ O.long "tx-cost"
+          , O.value 10
+          , O.metavar "COST_UNITS"
+          , O.help "The number of cost units to associate with persisting a transaction when computing the cost model."
           , O.showDefault
           ]
 
-        jobPortOption :: O.Parser PortNumber
-        jobPortOption = O.option O.auto $ mconcat
-          [ O.long "job-port-number"
-          , defaultJobPort
-          , O.metavar "PORT_NUMBER"
-          , O.help "The port number to serve the job protocol on."
-          , O.showDefault
-          ]
-
-        hostOption :: O.Parser HostName
-        hostOption = O.strOption $ mconcat
-          [ O.long "host"
-          , O.short 'h'
-          , defaultHost
-          , O.metavar "HOST_NAME"
-          , O.help "The hostname to serve the chain seek protocol on."
+        maxCostParser :: O.Parser Int
+        maxCostParser = O.option O.auto $ mconcat
+          [ O.long "max-cost"
+          , O.value 100_000
+          , O.metavar "COST_UNITS"
+          , O.help "The maximum number of cost units that can be batched when persisting blocks. If the cost of the current batch would exceed this value, the chain sync client will wait until the current batch is persisted before requesting another block."
           , O.showDefault
           ]
 
