@@ -20,12 +20,12 @@ import Language.Marlowe.Runtime.Core.Api (MarloweVersion(..), SomeMarloweVersion
 import Language.Marlowe.Runtime.Transaction.Api
   ( ApplyInputsConstraintsBuildupError(..)
   , ApplyInputsError(..)
+  , ConstraintError(..)
   , InputsApplied(..)
   , LoadMarloweContextError(..)
   , WalletAddresses(..)
   )
 import qualified Language.Marlowe.Runtime.Transaction.Api as Tx
-import Language.Marlowe.Runtime.Transaction.Constraints (ConstraintError(..))
 import Language.Marlowe.Runtime.Web hiding (Unsigned)
 import Language.Marlowe.Runtime.Web.Server.DTO
 import Language.Marlowe.Runtime.Web.Server.HistoryClient (LoadTxError(..))

@@ -21,8 +21,6 @@ import qualified PlutusTx
 import PlutusTx.AssocMap as AssocMap
 import PlutusTx.Prelude
 
-import Language.Marlowe.Runtime.Plutus.V2.Contexts (missingFromOutputsValue)
-import Language.Marlowe.Runtime.Plutus.V2.Scripts (wrapMintingPolicy)
 import qualified Plutus.V2.Ledger.Api as PV2
 import Plutus.V2.Ledger.Contexts as PV2
 -- I was forced to extract types to a submodule
@@ -76,6 +74,14 @@ validateBurning context = do
     -- Allow only burning here
     allBurned = missingFromOutputsValue ownCurrency context
 
+{-# INLINEABLE missingFromOutputsValue #-}
+missingFromOutputsValue :: PV2.CurrencySymbol -> PV2.ScriptContext -> Bool
+missingFromOutputsValue currencySymbol PV2.ScriptContext { scriptContextTxInfo} = do
+  let
+    PV2.TxInfo { txInfoOutputs } = scriptContextTxInfo
+    missingFromOutputValue PV2.TxOut{ txOutValue } = isNothing . AssocMap.lookup currencySymbol . PV2.getValue $ txOutValue
+  all missingFromOutputValue txInfoOutputs
+
 policy :: RoleTokens -> PV2.TxOutRef -> PV2.MintingPolicy
 policy roleTokens txOutRef = do
   let
@@ -85,3 +91,20 @@ policy roleTokens txOutRef = do
       `PlutusTx.applyCode` PlutusTx.liftCode roleTokensHash
       `PlutusTx.applyCode` PlutusTx.liftCode txOutRef
 
+-- Extracted from plutus-ledger
+
+-- | Signature of an untyped minting policy script.
+type MintingPolicyFn = BuiltinData -> BuiltinData -> ()
+
+-- | Turns typed function into a minting policy which can be used
+-- on the chain.
+{-# INLINEABLE wrapMintingPolicy #-}
+wrapMintingPolicy ::
+  (PV2.UnsafeFromData redeemer, PV2.UnsafeFromData context) =>
+  (redeemer -> context -> Bool) ->
+  MintingPolicyFn
+wrapMintingPolicy f r c =
+  PlutusTx.Prelude.check (f redeemer context)
+ where
+  redeemer = PV2.unsafeFromBuiltinData r
+  context = PV2.unsafeFromBuiltinData c

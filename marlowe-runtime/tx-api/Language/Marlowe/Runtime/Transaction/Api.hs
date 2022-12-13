@@ -10,6 +10,7 @@
 module Language.Marlowe.Runtime.Transaction.Api
   ( ApplyInputsConstraintsBuildupError(..)
   , ApplyInputsError(..)
+  , ConstraintError(..)
   , ContractCreated(..)
   , CreateBuildupError(..)
   , CreateError(..)
@@ -57,6 +58,7 @@ import GHC.Natural (Natural)
 import Language.Marlowe.Runtime.Cardano.Api (cardanoEraToAsType)
 import Language.Marlowe.Runtime.ChainSync.Api
   ( Address
+  , AssetId
   , Assets
   , BlockHeader
   , Lovelace
@@ -74,7 +76,6 @@ import Language.Marlowe.Runtime.ChainSync.Api
   , putUTCTime
   )
 import Language.Marlowe.Runtime.Core.Api
-import Language.Marlowe.Runtime.Transaction.Constraints (ConstraintError)
 import Network.Protocol.Job.Types
 
 -- CIP-25 metadata
@@ -492,6 +493,23 @@ data WalletAddresses = WalletAddresses
   , collateralUtxos :: Set TxOutRef
   }
   deriving (Eq, Show, Generic, Binary, ToJSON)
+
+-- | Errors that can occur when trying to solve the constraints.
+data ConstraintError v
+  = MintingUtxoNotFound TxOutRef
+  | RoleTokenNotFound AssetId
+  | ToCardanoError
+  | MissingMarloweInput
+  | PayoutInputNotFound (PayoutDatum v)
+  | CalculateMinUtxoFailed String
+  | CoinSelectionFailed String
+  | BalancingError String
+  deriving (Generic)
+
+deriving instance Eq (ConstraintError 'V1)
+deriving instance Show (ConstraintError 'V1)
+deriving instance Binary (ConstraintError 'V1)
+deriving instance ToJSON (ConstraintError 'V1)
 
 data CreateError v
   = CreateConstraintError (ConstraintError v)
