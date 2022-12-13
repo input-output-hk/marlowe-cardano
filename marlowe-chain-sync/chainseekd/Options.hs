@@ -5,7 +5,6 @@ module Options
 
 import Cardano.Api (NetworkId(..), NetworkMagic(..))
 import Data.Maybe (fromMaybe)
-import Data.Text (Text)
 import Network.Socket (HostName, PortNumber)
 import qualified Options.Applicative as O
 import System.Environment (lookupEnv)
@@ -15,8 +14,6 @@ data Options = Options
   { nodeSocket        :: !FilePath
   , networkId         :: !NetworkId
   , databaseUri       :: !String
-  , genesisConfigHash :: !Text
-  , genesisConfigFile :: !FilePath
   , host              :: !HostName
   , port              :: !PortNumber
   , queryPort         :: !PortNumber
@@ -95,8 +92,6 @@ parseOptions defaultNetworkId defaultSocketPath defaultDatabaseUri defaultHost d
               <$> socketPathOption
               <*> networkIdOption
               <*> databaseUriOption
-              <*> genesisConfigHashOption
-              <*> genesisConfigFileOption
               <*> hostOption
               <*> portOption
               <*> queryPortOption
@@ -131,26 +126,6 @@ parseOptions defaultNetworkId defaultSocketPath defaultDatabaseUri defaultHost d
               , O.metavar "DATABASE_URI"
               , defaultDatabaseUri
               , O.help "URI of the database where the chain information is saved."
-              ]
-
-        genesisConfigFileOption :: O.Parser String
-        genesisConfigFileOption = O.strOption options
-          where
-            options :: O.Mod O.OptionFields FilePath
-            options = mconcat
-              [ O.long "genesis-config-file"
-              , O.metavar "CONFIG_FILE"
-              , O.help "Path to the Byron Genesis Config JSON File."
-              ]
-
-        genesisConfigHashOption :: O.Parser Text
-        genesisConfigHashOption = O.strOption options
-          where
-            options :: O.Mod O.OptionFields Text
-            options = mconcat
-              [ O.long "genesis-config-file-hash"
-              , O.metavar "CONFIG_HASH"
-              , O.help "Hash of the Byron Genesis Config JSON file."
               ]
 
         networkIdOption :: O.Parser NetworkId
