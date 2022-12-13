@@ -15,17 +15,19 @@ import Language.Marlowe.Runtime.Transaction.Query (LoadMarloweContext, LoadWalle
 import Language.Marlowe.Runtime.Transaction.Server
 import Language.Marlowe.Runtime.Transaction.Submit (SubmitJob)
 import Network.Protocol.Driver (RunClient)
+import Observe.Event (EventBackend)
 
-data TransactionDependencies = TransactionDependencies
+data TransactionDependencies r = TransactionDependencies
   { connectToChainSeek :: RunClient IO RuntimeChainSeekClient
   , acceptRunTransactionServer :: IO (RunTransactionServer IO)
   , mkSubmitJob :: Tx BabbageEra -> STM SubmitJob
-  , loadWalletContext :: LoadWalletContext
-  , loadMarloweContext :: LoadMarloweContext
+  , loadWalletContext :: LoadWalletContext r
+  , loadMarloweContext :: LoadMarloweContext r
   , queryChainSync :: forall e a. ChainSyncQuery Void e a -> IO a
+  , eventBackend :: EventBackend IO r TransactionServerSelector
   }
 
-transaction :: Component IO TransactionDependencies ()
+transaction :: Component IO (TransactionDependencies r) ()
 transaction = proc TransactionDependencies{..} -> do
   getTip <- transactionChainClient -< TransactionChainClientDependencies{..}
   transactionServer -< TransactionServerDependencies{..}

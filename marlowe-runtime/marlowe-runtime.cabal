@@ -117,6 +117,7 @@ library
     , bytestring
     , containers
     , errors
+    , eventuo11y
     , marlowe
     , marlowe-chain-sync
     , marlowe-protocols
@@ -336,6 +337,7 @@ executable marlowe-tx
   build-depends:
     base >= 4.9 && < 5
     , async-components
+    , cardano-api
     , eventuo11y
     , eventuo11y-extras
     , marlowe-chain-sync

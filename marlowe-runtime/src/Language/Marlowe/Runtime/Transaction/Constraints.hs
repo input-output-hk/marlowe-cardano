@@ -353,9 +353,10 @@ data MarloweContext v = MarloweContext
   , payoutScriptUTxO :: ReferenceScriptUtxo
   , marloweScriptHash :: Chain.ScriptHash
   , payoutScriptHash :: Chain.ScriptHash
-  }
+  } deriving Generic
 
 deriving instance Show (MarloweContext 'V1)
+deriving instance ToJSON (MarloweContext 'V1)
 
 type SolveConstraints
    = forall v

@@ -13,52 +13,96 @@ import Data.List (scanl')
 import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Map as Map
+import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.Type.Equality (testEquality, type (:~:)(Refl))
+import Data.Void (Void)
 import Language.Marlowe.Protocol.Sync.Client
 import Language.Marlowe.Runtime.Cardano.Api
-import Language.Marlowe.Runtime.ChainSync.Api (Credential(..), GetUTxOsQuery(..), UTxOs(..), paymentCredential)
+import Language.Marlowe.Runtime.ChainSync.Api
+  (Address, BlockHeader, Credential(..), GetUTxOsQuery(..), ScriptHash, TxOutRef, UTxOs(..), paymentCredential)
 import Language.Marlowe.Runtime.Core.Api
 import Language.Marlowe.Runtime.Core.ScriptRegistry (MarloweScripts(..), ReferenceScriptUtxo, getScripts)
 import Language.Marlowe.Runtime.History.Api
 import Language.Marlowe.Runtime.Transaction.Api
 import Language.Marlowe.Runtime.Transaction.Constraints
 import qualified Language.Marlowe.Runtime.Transaction.Constraints as Constraints
+import Observe.Event (EventBackend, addField, withEvent)
 
-type LoadWalletContext = WalletAddresses -> IO WalletContext
+data LoadWalletContextSelector f where
+  LoadWalletContext :: LoadWalletContextSelector LoadWalletContextField
 
-type LoadMarloweContext = forall v
-   . MarloweVersion v
+data LoadWalletContextField
+  = ForAddresses (Set Address)
+  | WalletContextLoaded WalletContext
+
+data LoadMarloweContextSelector f where
+  ContractNotFound :: LoadMarloweContextSelector Void
+  ContractFound :: LoadMarloweContextSelector ContractFoundField
+  ContractTipFound :: MarloweVersion v -> LoadMarloweContextSelector (MarloweContext v)
+
+data LoadMarloweContextField where
+  DesiredVersion :: MarloweVersion v -> LoadMarloweContextField
+  Contract :: ContractId -> LoadMarloweContextField
+
+data ContractFoundField where
+  ActualVersion :: MarloweVersion v -> ContractFoundField
+  MarloweScriptAddress :: Address -> ContractFoundField
+  PayoutScriptHash :: ScriptHash -> ContractFoundField
+  ContractUTxO :: TxOutRef -> ContractFoundField
+
+type LoadWalletContext r
+   = EventBackend IO r LoadWalletContextSelector
+  -> WalletAddresses
+  -> IO WalletContext
+
+type LoadMarloweContext r
+   = forall v
+   . EventBackend IO r LoadMarloweContextSelector
+  -> MarloweVersion v
   -> ContractId
   -> IO (Either LoadMarloweContextError (MarloweContext v))
 
-loadWalletContext :: (GetUTxOsQuery -> IO UTxOs) -> LoadWalletContext
-loadWalletContext runQuery WalletAddresses{..} = do
-  availableUtxos@(UTxOs (Map.keys -> txOutRefs)) <- runQuery $ GetUTxOsAtAddresses (Set.insert changeAddress extraAddresses)
-  let
-    collateralUtxos' = Set.filter (flip elem txOutRefs) collateralUtxos
-  pure $ WalletContext
-    { availableUtxos=availableUtxos
-    , collateralUtxos=collateralUtxos'
-    , changeAddress=changeAddress
-    }
+loadWalletContext :: (GetUTxOsQuery -> IO UTxOs) -> LoadWalletContext r
+loadWalletContext runQuery eventBackend WalletAddresses{..} =
+  withEvent eventBackend LoadWalletContext \ev -> do
+    let addresses = Set.insert changeAddress extraAddresses
+    addField ev $ ForAddresses addresses
+    availableUtxos@(UTxOs (Map.keys -> txOutRefs)) <- runQuery $ GetUTxOsAtAddresses addresses
+    let
+      collateralUtxos' = Set.filter (flip elem txOutRefs) collateralUtxos
+      walletContext = WalletContext
+        { availableUtxos=availableUtxos
+        , collateralUtxos=collateralUtxos'
+        , changeAddress=changeAddress
+        }
+    addField ev $ WalletContextLoaded walletContext
+    pure walletContext
 
 -- | Loads the current MarloweContext for a contract by its ID.
 loadMarloweContext
   :: C.NetworkId
   -> (forall a. MarloweSyncClient IO a -> IO a)
-  -> LoadMarloweContext
-loadMarloweContext networkId runClient desiredVersion contractId = runClient client
+  -> LoadMarloweContext r
+loadMarloweContext networkId runClient eventBackend desiredVersion contractId = runClient client
   where
-    client = MarloweSyncClient $ pure clientInit
+    client = MarloweSyncClient . pure $ clientInit
     -- Start by following the contract
     clientInit = SendMsgFollowContract contractId clientFollow
 
     clientFollow = ClientStFollow
       -- If the contract isn't found, return an error
-      { recvMsgContractNotFound = pure $ Left LoadMarloweContextErrorNotFound
+      { recvMsgContractNotFound = withEvent eventBackend ContractNotFound
+          $ const
+          $ pure
+          $ Left LoadMarloweContextErrorNotFound
       -- Otherwise,
-      , recvMsgContractFound = \blockHeader actualVersion CreateStep{..} ->
+      , recvMsgContractFound = \blockHeader actualVersion CreateStep{..} -> withEvent eventBackend ContractFound \ev -> do
+          addField ev $ ActualVersion actualVersion
+          addField ev $ PayoutScriptHash payoutValidatorHash
+          let TransactionScriptOutput scriptAddress _ utxo _ = createOutput
+          addField ev $ MarloweScriptAddress scriptAddress
+          addField ev $ ContractUTxO utxo
           -- Otherwise, check the desired version matches the actual one
           either (pure . SendMsgDone . Left) pure case testEquality desiredVersion actualVersion of
             Nothing -> pure
@@ -72,7 +116,6 @@ loadMarloweContext networkId runClient desiredVersion contractId = runClient cli
                 $ SendMsgDone
                 $ Left LoadMarloweContextToCardanoError
               Just payoutScriptHash -> do
-                let TransactionScriptOutput scriptAddress _ _ _ = createOutput
                 let
                   payoutAddress = fromCardanoAddressInEra C.BabbageEra
                     $ C.AddressInEra (C.ShelleyAddressInEra C.ShelleyBasedEraBabbage)
@@ -80,7 +123,7 @@ loadMarloweContext networkId runClient desiredVersion contractId = runClient cli
                         networkId
                         (C.PaymentCredentialByScript payoutScriptHash)
                         C.NoStakeAddress
-                let scripts = getScripts actualVersion
+                  scripts = getScripts actualVersion
                 marloweScriptHash <- maybe (Left $ InvalidScriptAddress scriptAddress) Right do
                   credential <- paymentCredential scriptAddress
                   case credential of
@@ -92,7 +135,7 @@ loadMarloweContext networkId runClient desiredVersion contractId = runClient cli
                   Just marloweScripts -> Right marloweScripts
                 marloweScriptUTxO <- lookupMarloweScriptUtxo networkId marloweScripts
                 payoutScriptUTxO <- lookupPayoutScriptUtxo networkId marloweScripts
-                pure $ clientIdle $ pure
+                pure $ clientIdle actualVersion $ pure
                   ( blockHeader
                   , MarloweContext
                       { marloweAddress = scriptAddress
@@ -110,33 +153,49 @@ loadMarloweContext networkId runClient desiredVersion contractId = runClient cli
         }
 
     -- Request the next steps in the contract
-    clientIdle = SendMsgRequestNext . clientNext
-    clientNext contexts = ClientStNext
+    clientIdle
+      :: MarloweVersion v
+      -> NonEmpty (BlockHeader, MarloweContext v)
+      -> ClientStIdle v IO (Either LoadMarloweContextError (MarloweContext v))
+    clientIdle version = SendMsgRequestNext . clientNext version
+
+    clientNext
+      :: MarloweVersion v
+      -> NonEmpty (BlockHeader, MarloweContext v)
+      -> ClientStNext v IO (Either LoadMarloweContextError (MarloweContext v))
+    clientNext version contexts = ClientStNext
       -- If the creation event was rolled back, return an error
       { recvMsgRollBackCreation =
           (pure :: forall a. a -> IO a) $ Left LoadMarloweContextErrorNotFound
       -- Handle rollbacks
       , recvMsgRollBackward =
-          pure . handleRollback contexts
+          pure . handleRollback version contexts
       -- Handle new steps
       , recvMsgRollForward = \blockHeader ->
-          pure . clientIdle . appendSteps contexts blockHeader
+          pure . clientIdle version . appendSteps contexts blockHeader
       -- If we are told to wait (because there are no more steps to send),
       -- we've reached the tip of the contract. Return the most recent
       -- accumulated context.
-      , recvMsgWait =
-          pure $ SendMsgCancel $ SendMsgDone $ Right $ snd $ NE.head contexts
+      , recvMsgWait = withEvent eventBackend (ContractTipFound version) \ev -> do
+          let context = snd $ NE.head contexts
+          addField ev context
+          pure $ SendMsgCancel $ SendMsgDone $ Right context
       }
 
-    handleRollback contexts@((blockHeader, _) :| contexts') rollbackBlock
+    handleRollback
+      :: MarloweVersion v
+      -> NonEmpty (BlockHeader, MarloweContext v)
+      -> BlockHeader
+      -> ClientStIdle v IO (Either LoadMarloweContextError (MarloweContext v))
+    handleRollback version contexts@((blockHeader, _) :| contexts') rollbackBlock
       -- If the latest block is after the rollback block
       | blockHeader > rollbackBlock = case contexts' of
           -- And the previous contexts is non-empty, keep rolling back
-          s : ss -> handleRollback (s :| ss) rollbackBlock
+          s : ss -> handleRollback version (s :| ss) rollbackBlock
           -- And the previous contexts is empty, return an error
           [] -> SendMsgDone $ Left LoadMarloweContextErrorNotFound
       -- Otherwise, resume from this block.
-      | otherwise = clientIdle contexts
+      | otherwise = clientIdle version contexts
 
     appendSteps contexts@((_, prevContext) :| _) blockHeader steps =
       prependList

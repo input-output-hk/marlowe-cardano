@@ -85,10 +85,10 @@ run Options{..} = withSocketsDo do
   bracket (openServer addr) close \socket -> do
     {- Setup Dependencies -}
     let
-      transactionDependencies eventBackend =
+      transactionDependencies rootEventBackend =
         let
           acceptRunTransactionServer = acceptRunServerPeerOverSocketWithLogging
-            (narrowEventBackend Server eventBackend)
+            (narrowEventBackend Server rootEventBackend)
             throwIO
             socket
             codecJob
@@ -98,7 +98,7 @@ run Options{..} = withSocketsDo do
           runHistorySyncClient client = do
             addr' <- head <$> getAddrInfo (Just clientHints) (Just historyHost) (Just $ show historySyncPort)
             runClientPeerOverSocketWithLogging
-              (narrowEventBackend HistoryClient eventBackend)
+              (narrowEventBackend HistoryClient rootEventBackend)
               throwIO
               addr'
               codecMarloweSync
@@ -109,7 +109,7 @@ run Options{..} = withSocketsDo do
           connectToChainSeek client = do
             addr' <- head <$> getAddrInfo (Just clientHints) (Just chainSeekHost) (Just $ show chainSeekPort)
             runClientPeerOverSocketWithLogging
-              (narrowEventBackend ChainSeekClient eventBackend)
+              (narrowEventBackend ChainSeekClient rootEventBackend)
               throwIO
               addr'
               runtimeChainSeekCodec
@@ -120,7 +120,7 @@ run Options{..} = withSocketsDo do
           runChainSyncJobClient client = do
             addr' <- head <$> getAddrInfo (Just clientHints) (Just chainSeekHost) (Just $ show chainSeekCommandPort)
             runClientPeerOverSocketWithLogging
-              (narrowEventBackend ChainSyncJobClient eventBackend)
+              (narrowEventBackend ChainSyncJobClient rootEventBackend)
               throwIO
               addr'
               codecJob
@@ -131,7 +131,7 @@ run Options{..} = withSocketsDo do
           queryChainSync query = do
             addr' <- head <$> getAddrInfo (Just clientHints) (Just chainSeekHost) (Just $ show chainSeekQueryPort)
             result <- runClientPeerOverSocketWithLogging
-              (narrowEventBackend ChainSyncQueryClient eventBackend)
+              (narrowEventBackend ChainSyncQueryClient rootEventBackend)
               throwIO
               addr'
               codecQuery
@@ -141,16 +141,18 @@ run Options{..} = withSocketsDo do
 
           mkSubmitJob = Submit.mkSubmitJob Submit.SubmitJobDependencies{..}
 
-          loadMarloweContext :: LoadMarloweContext
-          loadMarloweContext version contractId = do
+          loadMarloweContext :: LoadMarloweContext r
+          loadMarloweContext eb version contractId = do
             networkId <- queryChainSync GetNetworkId
-            Query.loadMarloweContext networkId runHistorySyncClient version contractId
+            Query.loadMarloweContext networkId runHistorySyncClient eb version contractId
 
           runGetUTxOsQuery :: GetUTxOsQuery -> IO UTxOs
           runGetUTxOsQuery getUTxOsQuery = queryChainSync (GetUTxOs getUTxOsQuery)
 
-          loadWalletContext :: LoadWalletContext
+          loadWalletContext :: LoadWalletContext r
           loadWalletContext = Query.loadWalletContext runGetUTxOsQuery
+
+          eventBackend = narrowEventBackend App rootEventBackend
         in TransactionDependencies{..}
       appComponent = transaction <<< arr transactionDependencies <<< logger
     runComponent_ appComponent LoggerDependencies
