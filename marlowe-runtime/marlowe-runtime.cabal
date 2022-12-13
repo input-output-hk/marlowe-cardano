@@ -63,26 +63,33 @@ common lang
 library
   import: lang
   hs-source-dirs:   src
-  -- Unfortunately, we need to disable this because plutus-tx-plugin is a
-  -- dependency, and GHC doesn't acknowledge that.
-  ghc-options: -Wno-unused-packages
   exposed-modules:
-    Language.Marlowe.Protocol.HeaderSync.Client
-    Language.Marlowe.Protocol.HeaderSync.Codec
-    Language.Marlowe.Protocol.HeaderSync.Server
-    Language.Marlowe.Protocol.HeaderSync.Types
+    Language.Marlowe.Runtime.Core.Api
+    Language.Marlowe.Runtime.Core.ScriptRegistry
+  build-depends:
+      base >= 4.9 && < 5
+    , aeson
+    , base16
+    , binary
+    , cardano-api
+    , bytestring
+    , containers
+    , marlowe
+    , marlowe-chain-sync
+    , ouroboros-network
+    , plutus-ledger-api
+    , plutus-tx
+    , text
+    , time
+
+library history
+  import: lang
+  hs-source-dirs:   history
+  exposed-modules:
     Language.Marlowe.Protocol.Sync.Client
     Language.Marlowe.Protocol.Sync.Codec
     Language.Marlowe.Protocol.Sync.Server
     Language.Marlowe.Protocol.Sync.Types
-    Language.Marlowe.Runtime.Core.Api
-    Language.Marlowe.Runtime.Core.ScriptRegistry
-    Language.Marlowe.Runtime.Discovery
-    Language.Marlowe.Runtime.Discovery.Api
-    Language.Marlowe.Runtime.Discovery.Chain
-    Language.Marlowe.Runtime.Discovery.Store
-    Language.Marlowe.Runtime.Discovery.QueryServer
-    Language.Marlowe.Runtime.Discovery.SyncServer
     Language.Marlowe.Runtime.History
     Language.Marlowe.Runtime.History.Api
     Language.Marlowe.Runtime.History.Follower
@@ -93,6 +100,65 @@ library
     Language.Marlowe.Runtime.History.Store.Memory
     Language.Marlowe.Runtime.History.Store.Model
     Language.Marlowe.Runtime.History.SyncServer
+  build-depends:
+      base >= 4.9 && < 5
+    , aeson
+    , async
+    , async-components
+    , binary
+    , cardano-api
+    , bytestring
+    , containers
+    , marlowe-chain-sync
+    , marlowe-protocols
+    , marlowe-runtime
+    , ouroboros-consensus
+    , ouroboros-network
+    , semialign
+    , stm
+    , these
+    , transformers
+    , typed-protocols
+    , witherable
+
+library discovery
+  import: lang
+  hs-source-dirs:   discovery
+  exposed-modules:
+    Language.Marlowe.Protocol.HeaderSync.Client
+    Language.Marlowe.Protocol.HeaderSync.Codec
+    Language.Marlowe.Protocol.HeaderSync.Server
+    Language.Marlowe.Protocol.HeaderSync.Types
+    Language.Marlowe.Runtime.Discovery
+    Language.Marlowe.Runtime.Discovery.Api
+    Language.Marlowe.Runtime.Discovery.Chain
+    Language.Marlowe.Runtime.Discovery.Store
+    Language.Marlowe.Runtime.Discovery.QueryServer
+    Language.Marlowe.Runtime.Discovery.SyncServer
+  build-depends:
+      base >= 4.9 && < 5
+    , aeson
+    , async-components
+    , binary
+    , bytestring
+    , containers
+    , marlowe
+    , marlowe-chain-sync
+    , marlowe-protocols
+    , marlowe-runtime
+    , plutus-ledger-api
+    , plutus-tx
+    , semialign
+    , stm
+    , typed-protocols
+
+library tx
+  import: lang
+  hs-source-dirs:   tx
+  -- Needed to suppress the erroneous warning about plutus-tx-plugin not being
+  -- needed.
+  ghc-options: -Wno-unused-packages
+  exposed-modules:
     Language.Marlowe.Runtime.Plutus.V2.Contexts
     Language.Marlowe.Runtime.Plutus.V2.Scripts.MarloweV1.RoleTokensPolicy
     Language.Marlowe.Runtime.Plutus.V2.Scripts.MarloweV1.RoleTokensPolicy.Types
@@ -110,7 +176,6 @@ library
     , aeson
     , async
     , async-components
-    , base16
     , binary
     , cardano-api
     , cardano-ledger-core
@@ -122,9 +187,9 @@ library
     , marlowe-chain-sync
     , marlowe-chain-sync:plutus-compat
     , marlowe-protocols
-    , monad-control
+    , marlowe-runtime
+    , marlowe-runtime:history
     , newtype-generics
-    , one-line-aeson-text
     , ouroboros-consensus
     , ouroboros-network
     , plutus-ledger-api
@@ -133,11 +198,8 @@ library
     , semialign
     , stm
     , text
-    , these
     , time
     , transformers
-    , transformers-base
-    , typed-protocols
     , witherable
 
 library config
@@ -213,6 +275,9 @@ library web-server
     , marlowe-protocols
     , marlowe-runtime:web
     , marlowe-runtime
+    , marlowe-runtime:discovery
+    , marlowe-runtime:history
+    , marlowe-runtime:tx
     , marlowe-chain-sync
     , marlowe-chain-sync:plutus-compat
     , monad-control
@@ -264,6 +329,9 @@ executable marlowe
     , marlowe-protocols
     , marlowe-runtime
     , marlowe-runtime:config
+    , marlowe-runtime:tx
+    , marlowe-runtime:history
+    , marlowe-runtime:discovery
     , monad-control
     , network
     , plutus-ledger-api
@@ -296,7 +364,7 @@ executable marlowe-history
     , eventuo11y-extras
     , marlowe-chain-sync
     , marlowe-protocols
-    , marlowe-runtime
+    , marlowe-runtime:history
     , network
     , optparse-applicative
     , stm
@@ -320,7 +388,7 @@ executable marlowe-discovery
     , eventuo11y-extras
     , marlowe-chain-sync
     , marlowe-protocols
-    , marlowe-runtime
+    , marlowe-runtime:discovery
     , network
     , optparse-applicative
     , text
@@ -345,6 +413,8 @@ executable marlowe-tx
     , marlowe-chain-sync
     , marlowe-protocols
     , marlowe-runtime
+    , marlowe-runtime:history
+    , marlowe-runtime:tx
     , network
     , optparse-applicative
     , text
@@ -367,7 +437,8 @@ executable marlowe-web-server
     , marlowe-protocols
     , marlowe-runtime:config
     , marlowe-runtime:web-server
-    , marlowe-runtime
+    , marlowe-runtime:discovery
+    , marlowe-runtime:history
     , network
     , optparse-applicative
     , warp
@@ -405,6 +476,8 @@ test-suite marlowe-runtime-test
     , marlowe-protocols
     , marlowe-protocols-test
     , marlowe-runtime
+    , marlowe-runtime:history
+    , marlowe-runtime:tx
     , marlowe-test
     , ouroboros-consensus
     , plutus-tx
