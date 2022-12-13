@@ -107,6 +107,11 @@
             program = "${packages.chainseekd}/bin/chainseekd";
           };
 
+          marlowe-chain-indexer = {
+            type = "app";
+            program = "${packages.marlowe-chain-indexer}/bin/marlowe-chain-indexer";
+          };
+
           marlowe-history = {
             type = "app";
             program = "${packages.marlowe-history}/bin/marlowe-history";
