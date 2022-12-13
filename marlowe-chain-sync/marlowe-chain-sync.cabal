@@ -1,4 +1,4 @@
-cabal-version: 2.4
+cabal-version: 3.0
 name: marlowe-chain-sync
 version: 0.0.0.0
 synopsis:
@@ -52,10 +52,37 @@ common lang
 
 library
   import: lang
-  hs-source-dirs:   src
+  hs-source-dirs:   api
   exposed-modules:
     Language.Marlowe.Runtime.Cardano.Api
     Language.Marlowe.Runtime.Cardano.Feature
+    Language.Marlowe.Runtime.ChainSync.Api
+  other-modules:
+  build-depends:
+      base >= 4.9 && < 5
+    , aeson
+    , base16
+    , binary
+    , bytestring
+    , cardano-api
+    , cardano-ledger-core
+    , containers
+    , marlowe-protocols
+    , ouroboros-consensus
+    , ouroboros-network
+    , plutus-tx
+    , plutus-ledger-api
+    , serialise
+    , text
+    , these
+    , time
+    , typed-protocols
+    , vector
+
+library libchainseek
+  import: lang
+  hs-source-dirs:   src
+  exposed-modules:
     Language.Marlowe.Runtime.ChainSync
     Language.Marlowe.Runtime.ChainSync.Database
     Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL
@@ -65,15 +92,11 @@ library
     Language.Marlowe.Runtime.ChainSync.Server
     Language.Marlowe.Runtime.ChainSync.QueryServer
     Language.Marlowe.Runtime.ChainSync.Store
-    Language.Marlowe.Runtime.ChainSync.Api
-    Language.Marlowe.Runtime.Plutus.V2.Api
   other-modules:
   build-depends:
       base >= 4.9 && < 5
-    , aeson
     , async-components
     , base16
-    , binary
     , bytestring
     , cborg
     , cardano-api
@@ -82,20 +105,16 @@ library
     , cardano-ledger-byron
     , cardano-ledger-babbage
     , cardano-ledger-alonzo
-    , cardano-ledger-core
     , containers
     , eventuo11y
     , foldl
     , hasql
     , hasql-th
     , hasql-transaction
+    , marlowe-chain-sync
     , marlowe-protocols
-    , ouroboros-consensus
     , ouroboros-network
-    , plutus-tx
-    , plutus-ledger-api
     , profunctors
-    , serialise
     , stm
     , stm-delay
     , text
@@ -105,6 +124,24 @@ library
     , typed-protocols
     , vector
     , witherable
+
+library plutus-compat
+  import: lang
+  hs-source-dirs:   plutus-compat
+  visibility: public
+  exposed-modules:
+    Language.Marlowe.Runtime.Plutus.V2.Api
+  other-modules:
+  build-depends:
+      base >= 4.9 && < 5
+    , bytestring
+    , cardano-api
+    , cardano-ledger-byron
+    , containers
+    , marlowe-chain-sync
+    , plutus-tx
+    , plutus-ledger-api
+    , serialise
 
 executable chainseekd
   import: lang
@@ -130,6 +167,7 @@ executable chainseekd
     -- Consider removing the hasql < 1.6 constraint in cabal.project if updating hasql-pool
     , hasql-pool < 0.6
     , marlowe-chain-sync
+    , marlowe-chain-sync:libchainseek
     , marlowe-protocols
     , network
     , optparse-applicative

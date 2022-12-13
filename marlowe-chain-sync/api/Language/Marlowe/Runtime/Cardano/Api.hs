@@ -20,10 +20,10 @@ import Data.ByteString.Short (fromShort, toShort)
 import Data.Data (Proxy(Proxy))
 import Data.Foldable (fold)
 import qualified Data.Map as Map
+import Data.Maybe (mapMaybe)
 import GHC.Base (Alternative((<|>)))
 import Language.Marlowe.Runtime.Cardano.Feature
 import Language.Marlowe.Runtime.ChainSync.Api
-import Witherable (mapMaybe)
 
 toCardanoBlockHeader :: BlockHeader -> C.BlockHeader
 toCardanoBlockHeader BlockHeader{..} =

@@ -120,6 +120,7 @@ library
     , eventuo11y
     , marlowe
     , marlowe-chain-sync
+    , marlowe-chain-sync:plutus-compat
     , marlowe-protocols
     , monad-control
     , newtype-generics
@@ -213,6 +214,7 @@ library web-server
     , marlowe-runtime:web
     , marlowe-runtime
     , marlowe-chain-sync
+    , marlowe-chain-sync:plutus-compat
     , monad-control
     , mtl
     , openapi3
@@ -399,6 +401,7 @@ test-suite marlowe-runtime-test
     , hspec
     , marlowe
     , marlowe-chain-sync
+    , marlowe-chain-sync:plutus-compat
     , marlowe-protocols
     , marlowe-protocols-test
     , marlowe-runtime
