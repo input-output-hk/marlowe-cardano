@@ -2,28 +2,24 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE EmptyCase #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE StrictData #-}
 
 module Language.Marlowe.Runtime.ChainSync.Server
   where
 
-import qualified Cardano.Api as Cardano
 import Control.Concurrent.Component
-import Control.Concurrent.STM (STM, atomically)
 import Data.Functor (void, (<&>))
-import Language.Marlowe.Runtime.Cardano.Api (fromCardanoBlockHeader)
-import Language.Marlowe.Runtime.ChainSync.Api
-  (ChainPoint, Move, RuntimeChainSeekServer, ServerStPoll(..), WithGenesis(..), moveSchema)
-import Language.Marlowe.Runtime.ChainSync.Database (MoveClient(..), MoveResult(..))
+import Language.Marlowe.Runtime.ChainSync.Api (ChainPoint, Move, RuntimeChainSeekServer, WithGenesis(..), moveSchema)
+import Language.Marlowe.Runtime.ChainSync.Database (GetTip(..), MoveClient(..), MoveResult(..))
 import Network.Protocol.ChainSeek.Server
-  (ChainSeekServer(..), ServerStHandshake(..), ServerStIdle(..), ServerStInit(..), ServerStNext(..))
 import Network.Protocol.Driver (RunServer(..))
 
 type RunChainSeekServer m = RunServer m RuntimeChainSeekServer
 
 data ChainSyncServerDependencies = ChainSyncServerDependencies
   { acceptRunChainSeekServer :: IO (RunChainSeekServer IO)
-  , moveClient               :: !(MoveClient IO)
-  , localTip                 :: !(STM Cardano.ChainTip)
+  , moveClient :: MoveClient IO
+  , getTip :: GetTip IO
   }
 
 chainSyncServer :: Component IO ChainSyncServerDependencies ()
@@ -32,9 +28,9 @@ chainSyncServer = serverComponent worker \ChainSyncServerDependencies{..} -> do
   pure WorkerDependencies{..}
 
 data WorkerDependencies = WorkerDependencies
-  { runChainSeekServer :: !(RunChainSeekServer IO)
-  , moveClient         :: !(MoveClient IO)
-  , localTip           :: !(STM Cardano.ChainTip)
+  { runChainSeekServer :: RunChainSeekServer IO
+  , moveClient :: MoveClient IO
+  , getTip :: GetTip IO
   }
 
 worker :: Component IO WorkerDependencies ()
@@ -65,9 +61,7 @@ worker = component_ \WorkerDependencies{..} -> do
     stPoll :: Move err result -> ChainPoint -> ChainPoint -> ServerStPoll Move err result ChainPoint ChainPoint IO ()
     stPoll move pos tip = ServerStPoll
       { recvMsgPoll = do
-          newTip <- atomically localTip <&> \case
-            Cardano.ChainTipAtGenesis -> Genesis
-            Cardano.ChainTip slotNo hash blockNo -> At $ fromCardanoBlockHeader $ Cardano.BlockHeader slotNo hash blockNo
+          newTip <- runGetTip getTip
           if tip /= newTip
             then stNext pos move
             else pure $ SendMsgWait $ pure $ stPoll move pos tip

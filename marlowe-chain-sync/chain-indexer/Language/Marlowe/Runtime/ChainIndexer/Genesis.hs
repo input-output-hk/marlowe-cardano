@@ -1,4 +1,4 @@
-module Language.Marlowe.Runtime.ChainSync.Genesis
+module Language.Marlowe.Runtime.ChainIndexer.Genesis
   ( GenesisBlock(..)
   , GenesisTx(..)
   , computeByronGenesisBlock

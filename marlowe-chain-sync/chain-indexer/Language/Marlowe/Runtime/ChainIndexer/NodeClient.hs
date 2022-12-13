@@ -2,7 +2,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE TupleSections #-}
 
-module Language.Marlowe.Runtime.ChainSync.NodeClient
+module Language.Marlowe.Runtime.ChainIndexer.NodeClient
   ( Changes(..)
   , CostModel(..)
   , NodeClient(..)
@@ -52,7 +52,7 @@ import Data.List (sortOn)
 import Data.Maybe (mapMaybe)
 import Data.Ord (Down(..))
 import Data.Void (Void)
-import Language.Marlowe.Runtime.ChainSync.Database (CardanoBlock, GetIntersectionPoints(..))
+import Language.Marlowe.Runtime.ChainIndexer.Database (CardanoBlock, GetIntersectionPoints(..))
 import Observe.Event (EventBackend, addField, failEvent, finalize, newEvent, withEvent)
 import Ouroboros.Network.Point (WithOrigin(..))
 

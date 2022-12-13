@@ -14,18 +14,12 @@ import Cardano.Api
   , queryNodeLocalState
   )
 import qualified Cardano.Api as Cardano
-import Cardano.Api.Byron (toByronRequiresNetworkMagic)
-import qualified Cardano.Chain.Genesis as Byron
-import Cardano.Crypto (abstractHashToBytes, decodeAbstractHash)
 import Control.Arrow (arr)
 import Control.Category ((<<<))
 import Control.Concurrent.Component
 import Control.Exception (bracket, bracketOnError, throwIO)
 import Control.Monad ((<=<))
-import Control.Monad.Trans.Except (ExceptT(ExceptT), runExceptT, withExceptT)
 import Data.String (IsString(fromString))
-import Data.Text (unpack)
-import qualified Data.Text as T
 import qualified Data.Text.Lazy.IO as TL
 import Data.Time (secondsToNominalDiffTime)
 import Data.UUID.V4 (nextRandom)
@@ -36,7 +30,6 @@ import Language.Marlowe.Runtime.ChainSync (ChainSyncDependencies(..), chainSync)
 import Language.Marlowe.Runtime.ChainSync.Api (WithGenesis(..), codecChainSeek)
 import Language.Marlowe.Runtime.ChainSync.Database (hoistDatabaseQueries)
 import qualified Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL as PostgreSQL
-import Language.Marlowe.Runtime.ChainSync.Genesis (computeByronGenesisBlock)
 import Logging (RootSelector(..), getRootSelectorConfig)
 import Network.Protocol.ChainSeek.Server (chainSeekServerPeer)
 import Network.Protocol.Driver (acceptRunServerPeerOverSocket, acceptRunServerPeerOverSocketWithLogging)
@@ -78,21 +71,11 @@ run Options{..} = withSocketsDo do
     bracket (open queryAddr) close \querySocket -> do
       bracket (open commandAddr) close \commandSocket -> do
         pool <- Pool.acquire (100, secondsToNominalDiffTime 5, fromString databaseUri)
-        genesisConfigResult <- runExceptT do
-          hash <- ExceptT $ pure $ decodeAbstractHash genesisConfigHash
-          (hash,) <$> withExceptT
-            (mappend "failed to read byron genesis file: " . T.pack . show)
-            (Byron.mkConfigFromFile (toByronRequiresNetworkMagic networkId) genesisConfigFile hash)
-        (hash, genesisConfig) <- either (fail . unpack) pure genesisConfigResult
-        let genesisBlock = computeByronGenesisBlock (abstractHashToBytes hash) genesisConfig
         let
           chainSyncDependencies eventBackend = ChainSyncDependencies
-            { connectToLocalNode = Cardano.connectToLocalNode localNodeConnectInfo
-            , databaseQueries = hoistDatabaseQueries
+            { databaseQueries = hoistDatabaseQueries
                 (either throwUsageError pure <=< Pool.use pool)
-                (PostgreSQL.databaseQueries genesisBlock)
-            , persistRateLimit
-            , genesisBlock
+                PostgreSQL.databaseQueries
             , acceptRunChainSeekServer = acceptRunServerPeerOverSocketWithLogging
                 (narrowEventBackend ChainSeekServer eventBackend)
                 throwIO
@@ -109,9 +92,6 @@ run Options{..} = withSocketsDo do
                 MaryEra -> MaryEraInCardanoMode
                 AlonzoEra -> AlonzoEraInCardanoMode
                 BabbageEra -> BabbageEraInCardanoMode
-            , maxCost
-            , costModel
-            , eventBackend = narrowEventBackend App eventBackend
             }
           loggerDependencies = LoggerDependencies
             { configFilePath = logConfigFile
@@ -134,8 +114,6 @@ run Options{..} = withSocketsDo do
       , localNodeNetworkId = networkId
       , localNodeSocketPath = nodeSocket
       }
-
-    persistRateLimit = secondsToNominalDiffTime 1
 
     resolve p = do
       let hints = defaultHints { addrFlags = [AI_PASSIVE], addrSocketType = Stream }
