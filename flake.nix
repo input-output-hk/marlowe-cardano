@@ -124,7 +124,7 @@
 
           marlowe = {
             type = "app";
-            program = "${packages.marlowe-rt}/bin/marlowe-rt";
+            program = "${packages.marlowe-rt}/bin/marlowe";
           };
         };
 
