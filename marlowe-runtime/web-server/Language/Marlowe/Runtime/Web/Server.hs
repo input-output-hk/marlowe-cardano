@@ -44,9 +44,10 @@ import qualified Language.Marlowe.Runtime.Web.Server.OpenAPI as OpenAPI
 import Language.Marlowe.Runtime.Web.Server.REST (ApiSelector)
 import qualified Language.Marlowe.Runtime.Web.Server.REST as REST
 import Language.Marlowe.Runtime.Web.Server.TxClient (TxClient(..), TxClientDependencies(..), TxClientSelector, txClient)
+import qualified Network.HTTP.Types as HTTP
 import Network.Protocol.Driver (RunClient)
 import Network.Protocol.Job.Client (JobClient)
-import Network.Wai.Middleware.Cors (simpleCors)
+import qualified Network.Wai as WAI
 import Observe.Event (EventBackend, hoistEventBackend, narrowEventBackend)
 import Observe.Event.BackendModification (modifyEventBackend, setAncestor)
 import Observe.Event.DSL (SelectorField(Inject), SelectorSpec(SelectorSpec))
@@ -54,7 +55,7 @@ import Observe.Event.Render.JSON (DefaultRenderSelectorJSON(..))
 import Observe.Event.Render.JSON.DSL.Compile (compile)
 import Observe.Event.Syntax ((≔))
 import Observe.Event.Wai (ServeRequest, application, renderServeRequest)
-import Servant hiding (Server)
+import Servant hiding (Server, respond)
 
 type APIWithOpenAPI = OpenAPI.API :<|>  Web.API
 
@@ -74,20 +75,26 @@ serveAppM
   -> Application
 serveAppM api env = serve api . hoistServer api (flip runReaderT env . runAppM)
 
-app :: Bool -> Bool -> AppEnv r -> EventBackend (AppM r) r ApiSelector -> Application
-app True _ env = do
-  let doServe = serveAppM apiWithOpenApi env . serverWithOpenAPI
-  simpleCors . doServe
-  -- if accessControlAllowOriginAll
-  --   then simpleCors . doServe
-  --   else doServe
+addHeaders :: HTTP.ResponseHeaders -> WAI.Middleware
+addHeaders hdrs webApp req respond = webApp req $ \response -> do
+    let (st, headers, streamHandle) = WAI.responseToStream response
+    streamHandle $ \streamBody ->
+        respond $ WAI.responseStream st (headers <> hdrs) streamBody
 
-app False _ env = do
-  let doServe = serveAppM Web.api env . REST.server
-  simpleCors . doServe
-  --if accessControlAllowOriginAll
-  --  then simpleCors . doServe
-  --  else doServe
+addCorsHeader :: WAI.Middleware
+addCorsHeader = addHeaders [("Access-Control-Allow-Origin", "*")]
+
+corsMiddleware :: Bool -> WAI.Middleware
+corsMiddleware accessControlAllowOriginAll =
+  if accessControlAllowOriginAll
+  then addCorsHeader
+  else id
+
+app :: Bool -> Bool -> AppEnv r -> EventBackend (AppM r) r ApiSelector -> Application
+app True accessControlAllowOriginAll env = do
+  corsMiddleware accessControlAllowOriginAll . serveAppM apiWithOpenApi env . serverWithOpenAPI
+app False accessControlAllowOriginAll env = do
+  corsMiddleware accessControlAllowOriginAll . serveAppM Web.api env . REST.server
 
 instance DefaultRenderSelectorJSON ServeRequest where
   defaultRenderSelectorJSON = renderServeRequest

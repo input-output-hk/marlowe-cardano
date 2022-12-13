@@ -316,6 +316,7 @@ library web-server
     , eventuo11y-json
     , eventuo11y-batteries
     , exceptions
+    , http-types
     , lens
     , marlowe
     , marlowe-protocols
@@ -340,7 +341,6 @@ library web-server
     , transformers
     , transformers-base
     , wai
-    , wai-cors
 
 executable marlowe
   import: lang
