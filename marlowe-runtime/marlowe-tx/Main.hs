@@ -1,20 +1,17 @@
 {-# LANGUAGE GADTs #-}
-{-# OPTIONS_GHC -Wno-orphans #-}
 
 module Main
   where
 
-import Colog (LoggerT)
-import qualified Colog
+import Control.Arrow (arr, (<<<))
 import Control.Concurrent.Component
 import Control.Exception (bracket, bracketOnError, throwIO)
-import Control.Monad.Cleanup (MonadCleanup)
-import Control.Monad.IO.Class (liftIO)
 import Data.Either (fromRight)
+import qualified Data.Text.Lazy.IO as TL
+import Data.UUID.V4 (nextRandom)
 import Data.Void (Void)
 import Language.Marlowe.Protocol.Sync.Client (MarloweSyncClient, marloweSyncClientPeer)
 import Language.Marlowe.Protocol.Sync.Codec (codecMarloweSync)
-import Language.Marlowe.Runtime.CLI.Option (Verbosity(LogLevel, Silent), verbosityParser)
 import Language.Marlowe.Runtime.ChainSync.Api
   ( ChainSyncCommand
   , ChainSyncQuery(..)
@@ -25,12 +22,12 @@ import Language.Marlowe.Runtime.ChainSync.Api
   , chainSeekClientPeer
   , runtimeChainSeekCodec
   )
-import Language.Marlowe.Runtime.Logging (mkLogger)
 import Language.Marlowe.Runtime.Transaction (TransactionDependencies(..), transaction)
 import Language.Marlowe.Runtime.Transaction.Query (LoadMarloweContext, LoadWalletContext)
 import qualified Language.Marlowe.Runtime.Transaction.Query as Query
 import qualified Language.Marlowe.Runtime.Transaction.Submit as Submit
-import Network.Protocol.Driver (acceptRunServerPeerOverSocket, runClientPeerOverSocket)
+import Logging (RootSelector(..), getRootSelectorConfig)
+import Network.Protocol.Driver (acceptRunServerPeerOverSocketWithLogging, runClientPeerOverSocketWithLogging)
 import Network.Protocol.Job.Client (JobClient, jobClientPeer)
 import Network.Protocol.Job.Codec (codecJob)
 import Network.Protocol.Job.Server (jobServerPeer)
@@ -54,6 +51,8 @@ import Network.Socket
   , withFdSocket
   , withSocketsDo
   )
+import Observe.Event.Backend (narrowEventBackend, newOnceFlagMVar)
+import Observe.Event.Component (LoggerDependencies(..), logger)
 import Options.Applicative
   ( auto
   , execParser
@@ -65,12 +64,14 @@ import Options.Applicative
   , long
   , metavar
   , option
+  , optional
   , progDesc
   , short
   , showDefault
   , strOption
   , value
   )
+import System.IO (stderr)
 
 main :: IO ()
 main = run =<< getOptions
@@ -78,50 +79,90 @@ main = run =<< getOptions
 clientHints :: AddrInfo
 clientHints = defaultHints { addrSocketType = Stream }
 
-deriving newtype instance MonadCleanup m => MonadCleanup (LoggerT msg m)
-
 run :: Options -> IO ()
 run Options{..} = withSocketsDo do
   addr <- resolve port
-
-  let
-    mainLogAction :: Colog.LogAction IO Colog.Message
-    mainLogAction = mkLogger $ case verbosity of
-      Silent -> Nothing
-      LogLevel severity -> Just severity
-
   bracket (openServer addr) close \socket -> do
-    Colog.withBackgroundLogger Colog.defCapacity mainLogAction \logAction -> do
-      {- Setup Dependencies -}
-      let
-        acceptRunTransactionServer = acceptRunServerPeerOverSocket (liftIO . throwIO) socket codecJob jobServerPeer
+    {- Setup Dependencies -}
+    let
+      transactionDependencies rootEventBackend =
+        let
+          acceptRunTransactionServer = acceptRunServerPeerOverSocketWithLogging
+            (narrowEventBackend Server rootEventBackend)
+            throwIO
+            socket
+            codecJob
+            jobServerPeer
 
-        runHistorySyncClient :: MarloweSyncClient IO a -> IO a
-        runHistorySyncClient client = do
-          addr' <- head <$> getAddrInfo (Just clientHints) (Just historyHost) (Just $ show historySyncPort)
-          runClientPeerOverSocket throwIO addr' codecMarloweSync marloweSyncClientPeer client
+          runHistorySyncClient :: MarloweSyncClient IO a -> IO a
+          runHistorySyncClient client = do
+            addr' <- head <$> getAddrInfo (Just clientHints) (Just historyHost) (Just $ show historySyncPort)
+            runClientPeerOverSocketWithLogging
+              (narrowEventBackend HistoryClient rootEventBackend)
+              throwIO
+              addr'
+              codecMarloweSync
+              marloweSyncClientPeer
+              client
 
-        connectToChainSeek :: RuntimeChainSeekClient IO a -> IO a
-        connectToChainSeek client = do
-          addr' <- head <$> getAddrInfo (Just clientHints) (Just chainSeekHost) (Just $ show chainSeekPort)
-          runClientPeerOverSocket throwIO addr' runtimeChainSeekCodec (chainSeekClientPeer Genesis) client
+          connectToChainSeek :: RuntimeChainSeekClient IO a -> IO a
+          connectToChainSeek client = do
+            addr' <- head <$> getAddrInfo (Just clientHints) (Just chainSeekHost) (Just $ show chainSeekPort)
+            runClientPeerOverSocketWithLogging
+              (narrowEventBackend ChainSeekClient rootEventBackend)
+              throwIO
+              addr'
+              runtimeChainSeekCodec
+              (chainSeekClientPeer Genesis)
+              client
 
-        runChainSyncJobClient :: JobClient ChainSyncCommand IO a -> IO a
-        runChainSyncJobClient client = do
-          addr' <- head <$> getAddrInfo (Just clientHints) (Just chainSeekHost) (Just $ show chainSeekCommandPort)
-          runClientPeerOverSocket throwIO addr' codecJob jobClientPeer client
+          runChainSyncJobClient :: JobClient ChainSyncCommand IO a -> IO a
+          runChainSyncJobClient client = do
+            addr' <- head <$> getAddrInfo (Just clientHints) (Just chainSeekHost) (Just $ show chainSeekCommandPort)
+            runClientPeerOverSocketWithLogging
+              (narrowEventBackend ChainSyncJobClient rootEventBackend)
+              throwIO
+              addr'
+              codecJob
+              jobClientPeer
+              client
 
-      let mkSubmitJob = Submit.mkSubmitJob Submit.SubmitJobDependencies{..}
-      let
-        loadMarloweContext :: LoadMarloweContext
-        loadMarloweContext version contractId = do
-          networkId <- queryChainSync GetNetworkId
-          Query.loadMarloweContext networkId runHistorySyncClient version contractId
+          queryChainSync :: ChainSyncQuery Void e a -> IO a
+          queryChainSync query = do
+            addr' <- head <$> getAddrInfo (Just clientHints) (Just chainSeekHost) (Just $ show chainSeekQueryPort)
+            result <- runClientPeerOverSocketWithLogging
+              (narrowEventBackend ChainSyncQueryClient rootEventBackend)
+              throwIO
+              addr'
+              codecQuery
+              queryClientPeer
+              (liftQuery query)
+            pure $ fromRight (error "failed to query chain seek server") result
 
-        loadWalletContext :: LoadWalletContext
-        loadWalletContext = Query.loadWalletContext runGetUTxOsQuery
+          mkSubmitJob = Submit.mkSubmitJob Submit.SubmitJobDependencies{..}
 
-      runComponent_ transaction TransactionDependencies{..}
+          loadMarloweContext :: LoadMarloweContext r
+          loadMarloweContext eb version contractId = do
+            networkId <- queryChainSync GetNetworkId
+            Query.loadMarloweContext networkId runHistorySyncClient eb version contractId
+
+          runGetUTxOsQuery :: GetUTxOsQuery -> IO UTxOs
+          runGetUTxOsQuery getUTxOsQuery = queryChainSync (GetUTxOs getUTxOsQuery)
+
+          loadWalletContext :: LoadWalletContext r
+          loadWalletContext = Query.loadWalletContext runGetUTxOsQuery
+
+          eventBackend = narrowEventBackend App rootEventBackend
+        in TransactionDependencies{..}
+      appComponent = transaction <<< arr transactionDependencies <<< logger
+    runComponent_ appComponent LoggerDependencies
+      { configFilePath = logConfigFile
+      , getSelectorConfig = getRootSelectorConfig
+      , newRef = nextRandom
+      , newOnceFlag = newOnceFlagMVar
+      , writeText = TL.hPutStr stderr
+      , injectConfigWatcherSelector = ConfigWatcher
+      }
   where
     openServer addr = bracketOnError (openSocket addr) close \socket -> do
       setSocketOption socket ReuseAddr 1
@@ -134,15 +175,6 @@ run Options{..} = withSocketsDo do
       let hints = defaultHints { addrFlags = [AI_PASSIVE], addrSocketType = Stream }
       head <$> getAddrInfo (Just hints) (Just host) (Just $ show p)
 
-    queryChainSync :: ChainSyncQuery Void e a -> IO a
-    queryChainSync query = do
-      addr <- head <$> getAddrInfo (Just clientHints) (Just chainSeekHost) (Just $ show chainSeekQueryPort)
-      result <- runClientPeerOverSocket throwIO addr codecQuery queryClientPeer $ liftQuery query
-      pure $ fromRight (error "failed to query chain seek server") result
-
-    runGetUTxOsQuery :: GetUTxOsQuery -> IO UTxOs
-    runGetUTxOsQuery getUTxOsQuery = queryChainSync (GetUTxOs getUTxOsQuery)
-
 data Options = Options
   { chainSeekPort      :: PortNumber
   , chainSeekQueryPort :: PortNumber
@@ -152,7 +184,7 @@ data Options = Options
   , host               :: HostName
   , historySyncPort :: PortNumber
   , historyHost :: HostName
-  , verbosity  :: Verbosity
+  , logConfigFile  :: Maybe FilePath
   }
 
 getOptions :: IO Options
@@ -167,7 +199,7 @@ getOptions = execParser $ info (helper <*> parser) infoMod
       <*> hostParser
       <*> historySyncPortParser
       <*> historyHostParser
-      <*> verbosityParser (LogLevel Colog.Error)
+      <*> logConfigFileParser
 
     chainSeekPortParser = option auto $ mconcat
       [ long "chain-seek-port-number"
@@ -232,6 +264,12 @@ getOptions = execParser $ info (helper <*> parser) infoMod
       , metavar "HOST_NAME"
       , help "The host name of the history server."
       , showDefault
+      ]
+
+    logConfigFileParser = optional $ strOption $ mconcat
+      [ long "log-config-file"
+      , metavar "FILE_PATH"
+      , help "The logging configuration JSON file."
       ]
 
     infoMod = mconcat

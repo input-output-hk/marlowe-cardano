@@ -51,6 +51,7 @@ library
   build-depends:
       base >= 4.9 && < 5
     , lifted-async
+    , lifted-base
     , monad-control
     , stm
     , transformers-base

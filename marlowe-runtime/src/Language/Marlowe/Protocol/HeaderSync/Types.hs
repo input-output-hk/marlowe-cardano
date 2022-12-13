@@ -5,9 +5,11 @@
 module Language.Marlowe.Protocol.HeaderSync.Types
   where
 
+import Data.Aeson (Value(..), object, (.=))
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainPoint)
 import Language.Marlowe.Runtime.Discovery.Api (ContractHeader)
-import Network.TypedProtocol (Protocol(..))
+import Network.Protocol.Driver (MessageToJSON(..))
+import Network.TypedProtocol (PeerHasAgency(..), Protocol(..))
 
 data MarloweHeaderSync where
   StIdle :: MarloweHeaderSync
@@ -66,3 +68,25 @@ instance Protocol MarloweHeaderSync where
   exclusionLemma_NobodyAndClientHaveAgency TokDone = \case
 
   exclusionLemma_NobodyAndServerHaveAgency TokDone = \case
+
+instance MessageToJSON MarloweHeaderSync where
+  messageToJSON = \case
+    ClientAgency TokIdle -> \case
+      MsgDone -> String "done"
+      MsgRequestNext -> String "request-next"
+      MsgIntersect headers -> object [ "intersect" .= headers ]
+    ClientAgency TokWait -> \case
+      MsgPoll -> String "poll"
+      MsgCancel -> String "cancel"
+    ServerAgency TokNext -> \case
+      MsgNewHeaders blockHeader headers -> object
+        [ "new-headers" .= object
+          [ "block-header" .= blockHeader
+          , "contract-headers" .= headers
+          ]
+        ]
+      MsgRollBackward blockHeader -> object [ "roll-backward" .= blockHeader ]
+      MsgWait -> String "wait"
+    ServerAgency TokIntersect -> \case
+      MsgIntersectFound blockHeader -> object [ "intersect-found" .= blockHeader ]
+      MsgIntersectNotFound -> String "intersect-not-found"

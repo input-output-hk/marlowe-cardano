@@ -190,7 +190,7 @@ data AcceptSocketDriverSelector ps f where
   Disconnected :: AcceptSocketDriverSelector ps Void
   ServerDriverEvent :: DriverSelector ps f -> AcceptSocketDriverSelector ps f
 
-data AcceptSocketDriverSelectorConfigOptions = AcceptSocketDriverSelectorConfigOptions
+data SocketDriverConfigOptions = SocketDriverConfigOptions
   { enableConnected :: Bool
   , enableDisconnected :: Bool
   , enableServerDriverEvent :: Bool
@@ -198,12 +198,21 @@ data AcceptSocketDriverSelectorConfigOptions = AcceptSocketDriverSelectorConfigO
 
 getAcceptSocketDriverSelectorConfig
   :: MessageToJSON ps
-  => AcceptSocketDriverSelectorConfigOptions
+  => SocketDriverConfigOptions
   -> GetSelectorConfig (AcceptSocketDriverSelector ps)
-getAcceptSocketDriverSelectorConfig AcceptSocketDriverSelectorConfigOptions{..} = \case
+getAcceptSocketDriverSelectorConfig SocketDriverConfigOptions{..} = \case
   Connected -> SelectorConfig "connected" enableConnected absurdFieldConfig
   Disconnected -> SelectorConfig "disconnected" enableDisconnected absurdFieldConfig
   ServerDriverEvent sel -> getDriverSelectorConfig enableServerDriverEvent sel
+
+getConnectSocketDriverSelectorConfig
+  :: MessageToJSON ps
+  => SocketDriverConfigOptions
+  -> GetSelectorConfig (ConnectSocketDriverSelector ps)
+getConnectSocketDriverSelectorConfig SocketDriverConfigOptions{..} = \case
+  Connect -> SelectorConfig "connect" enableConnected absurdFieldConfig
+  Disconnect -> SelectorConfig "disconnect" enableDisconnected absurdFieldConfig
+  ClientDriverEvent sel -> getDriverSelectorConfig enableServerDriverEvent sel
 
 acceptRunServerPeerOverSocketWithLogging
   :: (MonadBaseControl IO m, MonadCleanup m)

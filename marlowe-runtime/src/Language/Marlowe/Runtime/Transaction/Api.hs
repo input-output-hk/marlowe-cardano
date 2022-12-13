@@ -28,7 +28,18 @@ module Language.Marlowe.Runtime.Transaction.Api
   , mkNFTMetadata
   ) where
 
-import Cardano.Api (AsType(..), BabbageEra, IsCardanoEra, Tx, TxBody, cardanoEra, deserialiseFromCBOR, serialiseToCBOR)
+import Cardano.Api
+  ( AsType(..)
+  , BabbageEra
+  , IsCardanoEra
+  , Tx
+  , TxBody
+  , cardanoEra
+  , deserialiseFromCBOR
+  , serialiseToCBOR
+  , serialiseToTextEnvelope
+  )
+import Data.Aeson (ToJSON(..), object, (.=))
 import Data.Binary (Binary, Get, get, getWord8, put)
 import Data.Binary.Put (Put, putWord8)
 import Data.ByteString (ByteString)
@@ -64,12 +75,12 @@ import Language.Marlowe.Runtime.ChainSync.Api
   )
 import Language.Marlowe.Runtime.Core.Api
 import Language.Marlowe.Runtime.Transaction.Constraints (ConstraintError)
-import Network.Protocol.Job.Types (Command(..), SomeTag(..))
+import Network.Protocol.Job.Types
 
 -- CIP-25 metadata
 newtype NFTMetadata = NFTMetadata { unNFTMetadata :: Metadata }
   deriving stock (Show, Eq, Ord, Generic)
-  deriving newtype (Binary)
+  deriving newtype (Binary, ToJSON)
 
 -- FIXME: Validate the metadata format
 mkNFTMetadata :: Metadata -> Maybe NFTMetadata
@@ -78,7 +89,7 @@ mkNFTMetadata = Just . NFTMetadata
 -- | Non empty mint request.
 newtype Mint = Mint { unMint :: Map TokenName (Address, Either Natural (Maybe NFTMetadata)) }
   deriving stock (Show, Eq, Ord, Generic)
-  deriving newtype (Binary, Semigroup, Monoid)
+  deriving newtype (Binary, Semigroup, Monoid, ToJSON)
 
 mkMint :: NonEmpty (TokenName, (Address, Either Natural (Maybe NFTMetadata))) -> Mint
 mkMint = Mint . Map.fromList . NonEmpty.toList
@@ -88,7 +99,7 @@ data RoleTokensConfig
   | RoleTokensUsePolicy PolicyId
   | RoleTokensMint Mint
   deriving stock (Show, Eq, Ord, Generic)
-  deriving anyclass (Binary)
+  deriving anyclass (Binary, ToJSON)
 
 data ContractCreated era v = ContractCreated
   { contractId :: ContractId
@@ -106,6 +117,20 @@ data ContractCreated era v = ContractCreated
 
 deriving instance Show (ContractCreated BabbageEra 'V1)
 deriving instance Eq (ContractCreated BabbageEra 'V1)
+
+instance IsCardanoEra era => ToJSON (ContractCreated era 'V1) where
+  toJSON ContractCreated{..} = object
+    [ "contract-id" .= contractId
+    , "roles-currency" .= rolesCurrency
+    , "metadata" .= metadata
+    , "marlowe-script-hash" .= marloweScriptHash
+    , "marlowe-script-address" .= marloweScriptAddress
+    , "payout-script-hash" .= payoutScriptHash
+    , "payout-script-address" .= payoutScriptAddress
+    , "datum" .= datum
+    , "assets" .= assets
+    , "tx-body" .= serialiseToTextEnvelope Nothing txBody
+    ]
 
 instance IsCardanoEra era => Binary (ContractCreated era 'V1) where
   put ContractCreated{..} = do
@@ -166,6 +191,17 @@ instance IsCardanoEra era => Binary (InputsApplied era 'V1) where
     inputs <- getRedeemer MarloweV1
     txBody <- getTxBody
     pure InputsApplied{..}
+
+instance IsCardanoEra era => ToJSON (InputsApplied era 'V1) where
+  toJSON InputsApplied{..} = object
+    [ "contract-id" .= contractId
+    , "input" .= input
+    , "output" .= output
+    , "invalid-before" .= invalidBefore
+    , "invalid-hereafter" .= invalidHereafter
+    , "inputs" .= inputs
+    , "tx-body" .= serialiseToTextEnvelope Nothing txBody
+    ]
 
 -- | The low-level runtime API for building and submitting transactions.
 data MarloweTxCommand status err result where
@@ -237,6 +273,57 @@ data MarloweTxCommand status err result where
         SubmitStatus -- This job reports the status of the tx submission, which can take some time.
         SubmitError
         BlockHeader  -- The block header of the block this transaction was added to.
+
+instance CommandToJSON MarloweTxCommand where
+  commandToJSON = \case
+    Create mStakeCredential version walletAddresses roles metadata minAda contract -> object
+      [ "create" .= object
+          [ "stake-credential" .= mStakeCredential
+          , "wallet-addresses" .= walletAddresses
+          , "roles" .= roles
+          , "metadata" .= metadata
+          , "min-ada-deposit" .= minAda
+          , "contract" .= contractToJSON version contract
+          , "version" .= version
+          ]
+      ]
+    ApplyInputs MarloweV1 walletAddresses contractId invalidBefore invalidHereafter redeemer -> object
+      [ "apply-inputs" .= object
+          [ "wallet-addresses" .= walletAddresses
+          , "contract-id" .= contractId
+          , "invalid-before" .= invalidBefore
+          , "invalid-hereafter" .= invalidHereafter
+          , "redeemer" .= toJSON redeemer
+          , "version" .= MarloweV1
+          ]
+      ]
+    Withdraw version walletAddresses contractId tokenName -> object
+      [ "withdraw" .= object
+          [ "wallet-addresses" .= walletAddresses
+          , "contract-id" .= contractId
+          , "token-name" .= tokenName
+          , "version" .= version
+          ]
+      ]
+    Submit tx -> object [ "submit" .= serialiseToTextEnvelope Nothing tx ]
+  jobIdToJSON = \case
+    JobIdSubmit i -> object [ "submit" .= i ]
+  errToJSON = \case
+    TagCreate MarloweV1 -> toJSON
+    TagApplyInputs MarloweV1 -> toJSON
+    TagWithdraw MarloweV1 -> toJSON
+    TagSubmit -> toJSON
+  resultToJSON = \case
+    TagCreate MarloweV1 -> toJSON
+    TagApplyInputs MarloweV1 -> toJSON
+    TagWithdraw MarloweV1 -> toJSON . serialiseToTextEnvelope Nothing
+    TagSubmit -> toJSON
+  statusToJSON = \case
+    TagCreate _ -> toJSON
+    TagApplyInputs _ -> toJSON
+    TagWithdraw _ -> toJSON
+    TagSubmit -> toJSON
+
 
 instance Command MarloweTxCommand where
   data Tag MarloweTxCommand status err result where
@@ -404,7 +491,7 @@ data WalletAddresses = WalletAddresses
   , extraAddresses :: Set Address
   , collateralUtxos :: Set TxOutRef
   }
-  deriving (Eq, Show, Generic, Binary)
+  deriving (Eq, Show, Generic, Binary, ToJSON)
 
 data CreateError v
   = CreateConstraintError (ConstraintError v)
@@ -413,16 +500,17 @@ data CreateError v
   | CreateToCardanoError
   deriving (Generic)
 
+deriving instance Eq (CreateError 'V1)
+deriving instance Show (CreateError 'V1)
+instance Binary (CreateError 'V1)
+instance ToJSON (CreateError 'V1)
+
 data CreateBuildupError
   = MintingUtxoSelectionFailed
   | AddressDecodingFailed Address
   | MintingScriptDecodingFailed PlutusScript
   deriving (Eq, Show, Generic)
-  deriving anyclass Binary
-
-deriving instance Eq (CreateError 'V1)
-deriving instance Show (CreateError 'V1)
-instance Binary (CreateError 'V1)
+  deriving anyclass (Binary, ToJSON)
 
 data ApplyInputsError v
   = ApplyInputsConstraintError (ConstraintError v)
@@ -437,12 +525,13 @@ deriving instance Eq (ApplyInputsError 'V1)
 deriving instance Show (ApplyInputsError 'V1)
 deriving instance Generic (ApplyInputsError 'V1)
 instance Binary (ApplyInputsError 'V1)
+instance ToJSON (ApplyInputsError 'V1)
 
 data ApplyInputsConstraintsBuildupError
   = MarloweComputeTransactionFailed String
   | UnableToDetermineTransactionTimeout
   deriving (Eq, Show, Generic)
-  deriving anyclass Binary
+  deriving anyclass (Binary, ToJSON)
 
 data WithdrawError v
   = WithdrawConstraintError (ConstraintError v)
@@ -453,6 +542,7 @@ data WithdrawError v
 deriving instance Eq (WithdrawError 'V1)
 deriving instance Show (WithdrawError 'V1)
 instance Binary (WithdrawError 'V1)
+instance ToJSON (WithdrawError 'V1)
 
 data LoadMarloweContextError
   = LoadMarloweContextErrorNotFound
@@ -463,15 +553,15 @@ data LoadMarloweContextError
   | InvalidScriptAddress Address
   | UnknownMarloweScript ScriptHash
   deriving (Eq, Show, Ord, Generic)
-  deriving anyclass Binary
+  deriving anyclass (Binary, ToJSON)
 
 data SubmitError
   = SubmitException String
   | SubmitFailed String -- should be from show TxValidationErrorInMode
   | TxDiscarded
-  deriving (Eq, Show, Generic, Binary)
+  deriving (Eq, Show, Generic, Binary, ToJSON)
 
 data SubmitStatus
   = Submitting
   | Accepted
-  deriving (Eq, Show, Generic, Binary)
+  deriving (Eq, Show, Generic, Binary, ToJSON)

@@ -12,8 +12,8 @@
 module Language.Marlowe.Runtime.Core.Api
   where
 
-import Data.Aeson (FromJSON(..), Result(..), ToJSON(..), Value(..), eitherDecode, encode)
-import Data.Aeson.Types (Parser, parse, parseFail)
+import Data.Aeson (FromJSON(..), Result(..), ToJSON(..), ToJSONKey(toJSONKey), Value(..), eitherDecode, encode)
+import Data.Aeson.Types (Parser, parse, parseFail, toJSONKeyText)
 import Data.Binary (Binary(..), Get, Put)
 import Data.Binary.Get (getWord32be)
 import Data.Binary.Put (putWord32be)
@@ -50,6 +50,12 @@ newtype ContractId = ContractId { unContractId :: TxOutRef }
   deriving stock (Show, Eq, Ord, Generic)
   deriving newtype (IsString)
   deriving anyclass (Binary)
+
+instance ToJSON ContractId where
+  toJSON = String . renderContractId
+
+instance ToJSONKey ContractId where
+  toJSONKey = toJSONKeyText renderContractId
 
 parseContractId :: String -> Maybe ContractId
 parseContractId = fmap ContractId . parseTxOutRef . T.pack
@@ -100,10 +106,11 @@ data Transaction v = Transaction
   , validityUpperBound :: UTCTime
   , redeemer           :: Redeemer v
   , output             :: TransactionOutput v
-  }
+  } deriving Generic
 
 deriving instance Show (Transaction 'V1)
 deriving instance Eq (Transaction 'V1)
+instance ToJSON (Transaction 'V1)
 
 instance Binary (Transaction 'V1) where
   put Transaction{..} = do
@@ -126,10 +133,11 @@ instance Binary (Transaction 'V1) where
 data TransactionOutput v = TransactionOutput
   { payouts      :: Map Chain.TxOutRef (Payout v)
   , scriptOutput :: Maybe (TransactionScriptOutput v)
-  }
+  } deriving Generic
 
 deriving instance Show (TransactionOutput 'V1)
 deriving instance Eq (TransactionOutput 'V1)
+instance ToJSON (TransactionOutput 'V1)
 
 instance Binary (TransactionOutput 'V1) where
   put TransactionOutput{..} = do
@@ -141,10 +149,11 @@ data Payout v = Payout
   { address :: Chain.Address
   , assets :: Chain.Assets
   , datum :: PayoutDatum v
-  }
+  } deriving Generic
 
 deriving instance Show (Payout 'V1)
 deriving instance Eq (Payout 'V1)
+instance ToJSON (Payout 'V1)
 
 instance Binary (Payout 'V1) where
   put Payout{..} = do
@@ -158,10 +167,11 @@ data TransactionScriptOutput v = TransactionScriptOutput
   , assets :: Chain.Assets
   , utxo  :: TxOutRef
   , datum :: Datum v
-  }
+  } deriving Generic
 
 deriving instance Show (TransactionScriptOutput 'V1)
 deriving instance Eq (TransactionScriptOutput 'V1)
+instance ToJSON (TransactionScriptOutput 'V1)
 
 instance Binary (TransactionScriptOutput 'V1) where
   put TransactionScriptOutput{..} = do
@@ -204,6 +214,9 @@ withMarloweVersion = \case
 instance ToJSON (MarloweVersion v) where
   toJSON = String . \case
     MarloweV1 -> "v1"
+
+instance ToJSON SomeMarloweVersion where
+  toJSON (SomeMarloweVersion v) = toJSON v
 
 instance FromJSON SomeMarloweVersion where
   parseJSON json = do

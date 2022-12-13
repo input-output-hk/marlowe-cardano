@@ -56,7 +56,6 @@ library
     , containers
     , directory
     , eventuo11y
-    , eventuo11y-json
     , filepath
     , fsnotify
     , lifted-base

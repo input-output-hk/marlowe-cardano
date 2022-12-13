@@ -116,6 +116,7 @@ import Data.Aeson (ToJSON, ToJSONKey, Value(..), object, toJSON, (.=))
 import qualified Data.Aeson as A
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.KeyMap as KeyMap
+import Data.Aeson.Types (toJSONKeyText)
 import Data.Bifunctor (bimap)
 import Data.Binary (Binary(..), Get, Put, get, getWord8, put, putWord8)
 import Data.ByteString (ByteString)
@@ -240,7 +241,7 @@ fromJSONEncodedMetadata = \case
 newtype TransactionMetadata = TransactionMetadata { unTransactionMetadata :: Map Word64 Metadata }
   deriving (Show, Eq, Ord, Generic)
   deriving newtype (Semigroup, Monoid)
-  deriving anyclass (Binary)
+  deriving anyclass (Binary, ToJSON)
 
 fromJSONEncodedTransactionMetadata :: A.Value -> Maybe TransactionMetadata
 fromJSONEncodedTransactionMetadata = \case
@@ -447,6 +448,9 @@ newtype TokenName = TokenName { unTokenName :: ByteString }
   deriving stock (Eq, Ord, Generic)
   deriving newtype (Show, IsString, Binary)
 
+instance ToJSONKey TokenName where
+  toJSONKey = toJSONKeyText $ T.pack . BS.unpack . unTokenName
+
 instance ToJSON TokenName where
   toJSON = Aeson.String . T.pack . BS.unpack . unTokenName
 
@@ -499,7 +503,7 @@ data StakeCredential
   = StakeKeyCredential StakeKeyHash
   | StakeScriptCredential ScriptHash
   deriving stock (Show, Eq, Ord, Generic)
-  deriving anyclass Binary
+  deriving anyclass (Binary, ToJSON)
 
 fromCardanoPaymentCredential :: Cardano.PaymentCredential -> Credential
 fromCardanoPaymentCredential = \case
@@ -514,7 +518,7 @@ newtype PaymentKeyHash = PaymentKeyHash { unPaymentKeyHash :: ByteString }
 newtype StakeKeyHash = StakeKeyHash { unStakeKeyHash :: ByteString }
   deriving stock (Eq, Ord, Generic)
   deriving newtype (Binary)
-  deriving (IsString, Show) via Base16
+  deriving (IsString, Show, ToJSON) via Base16
 
 fromCardanoPaymentKeyHash :: Cardano.Hash Cardano.PaymentKey -> PaymentKeyHash
 fromCardanoPaymentKeyHash = PaymentKeyHash . Cardano.serialiseToRawBytes
@@ -535,7 +539,7 @@ fromCardanoScriptHash = ScriptHash . Cardano.serialiseToRawBytes
 
 newtype PlutusScript = PlutusScript { unPlutusScript :: ByteString }
   deriving stock (Eq, Ord, Generic)
-  deriving (IsString, Show) via Base16
+  deriving (IsString, Show, ToJSON) via Base16
   deriving anyclass (Binary)
 
 data StakeReference

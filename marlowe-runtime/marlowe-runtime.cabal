@@ -114,11 +114,10 @@ library
     , binary
     , cardano-api
     , cardano-ledger-core
-    , co-log
-    , co-log-core
     , bytestring
     , containers
     , errors
+    , eventuo11y
     , marlowe
     , marlowe-chain-sync
     , marlowe-protocols
@@ -140,16 +139,6 @@ library
     , typed-protocols
     , witherable
 
-library logging
-  import: lang
-  hs-source-dirs: logging
-  exposed-modules:
-    Language.Marlowe.Runtime.Logging
-  build-depends:
-      base >= 4.9 && < 5
-    , co-log
-    , co-log-core
-
 library config
   import: lang
   hs-source-dirs: config
@@ -157,7 +146,6 @@ library config
     Language.Marlowe.Runtime.CLI.Option
   build-depends:
       base >= 4.9 && < 5
-    , co-log
     , marlowe-chain-sync
     , network
     , marlowe-runtime
@@ -295,18 +283,23 @@ executable marlowe-history
   hs-source-dirs:   marlowe-history
   main-is: Main.hs
   other-modules:
+    Logging
     Paths_marlowe_runtime
   autogen-modules:
     Paths_marlowe_runtime
   build-depends:
       base >= 4.9 && < 5
     , async-components
+    , eventuo11y
+    , eventuo11y-extras
+    , marlowe-chain-sync
     , marlowe-protocols
     , marlowe-runtime
-    , marlowe-chain-sync
     , network
     , optparse-applicative
     , stm
+    , text
+    , uuid
   ghc-options: -threaded
 
 executable marlowe-discovery
@@ -314,17 +307,22 @@ executable marlowe-discovery
   hs-source-dirs:   marlowe-discovery
   main-is: Main.hs
   other-modules:
+    Logging
     Paths_marlowe_runtime
   autogen-modules:
     Paths_marlowe_runtime
   build-depends:
       base >= 4.9 && < 5
     , async-components
+    , eventuo11y
+    , eventuo11y-extras
+    , marlowe-chain-sync
     , marlowe-protocols
     , marlowe-runtime
-    , marlowe-chain-sync
     , network
     , optparse-applicative
+    , text
+    , uuid
   ghc-options: -threaded
 
 executable marlowe-tx
@@ -332,22 +330,23 @@ executable marlowe-tx
   hs-source-dirs:   marlowe-tx
   main-is: Main.hs
   other-modules:
+    Logging
     Paths_marlowe_runtime
   autogen-modules:
     Paths_marlowe_runtime
   build-depends:
     base >= 4.9 && < 5
     , async-components
-    , co-log
-    , co-log-core
+    , cardano-api
     , eventuo11y
+    , eventuo11y-extras
+    , marlowe-chain-sync
     , marlowe-protocols
     , marlowe-runtime
-    , marlowe-runtime:config
-    , marlowe-runtime:logging
-    , marlowe-chain-sync
     , network
     , optparse-applicative
+    , text
+    , uuid
   ghc-options: -threaded
 
 executable marlowe-web-server

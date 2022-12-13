@@ -1,4 +1,6 @@
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE RankNTypes #-}
+
 module Language.Marlowe.Runtime.Transaction.Submit
   where
 

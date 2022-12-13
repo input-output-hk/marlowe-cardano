@@ -326,6 +326,7 @@ data ConstraintError v
 deriving instance Eq (ConstraintError 'V1)
 deriving instance Show (ConstraintError 'V1)
 deriving instance Binary (ConstraintError 'V1)
+deriving instance ToJSON (ConstraintError 'V1)
 
 -- | Data from a wallet needed to solve the constraints.
 data WalletContext = WalletContext
@@ -352,9 +353,10 @@ data MarloweContext v = MarloweContext
   , payoutScriptUTxO :: ReferenceScriptUtxo
   , marloweScriptHash :: Chain.ScriptHash
   , payoutScriptHash :: Chain.ScriptHash
-  }
+  } deriving Generic
 
 deriving instance Show (MarloweContext 'V1)
+deriving instance ToJSON (MarloweContext 'V1)
 
 type SolveConstraints
    = forall v

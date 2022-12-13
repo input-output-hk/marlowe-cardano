@@ -5,6 +5,7 @@ module Language.Marlowe.Runtime.Core.ScriptRegistry
   where
 
 import Cardano.Api (AsType(..), NetworkId(..), NetworkMagic(..), PlutusScript, PlutusScriptV2, SerialiseAsCBOR(..))
+import Data.Aeson (ToJSON(..))
 import Data.ByteString (ByteString)
 import Data.ByteString.Base16 (decodeBase16)
 import Data.Foldable (asum)
@@ -30,6 +31,9 @@ data ReferenceScriptUtxo = ReferenceScriptUtxo
   , txOut :: Chain.TransactionOutput
   , script :: PlutusScript PlutusScriptV2
   } deriving (Show, Eq, Ord)
+
+instance ToJSON ReferenceScriptUtxo where
+  toJSON ReferenceScriptUtxo{..} = toJSON txOutRef
 
 -- | A set of script hashes for a marlowe version.
 data MarloweScripts = MarloweScripts

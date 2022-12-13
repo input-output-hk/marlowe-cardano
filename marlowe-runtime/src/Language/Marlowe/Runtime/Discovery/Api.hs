@@ -4,6 +4,7 @@
 module Language.Marlowe.Runtime.Discovery.Api
   where
 
+import Data.Aeson (ToJSON(..), Value(..), object, (.=))
 import Data.Binary (Binary, get, getWord8, put, putWord8)
 import Data.Map (Map)
 import Data.Type.Equality (type (:~:)(Refl))
@@ -12,7 +13,7 @@ import Data.Word (Word64)
 import GHC.Generics (Generic)
 import Language.Marlowe.Runtime.ChainSync.Api (Address, BlockHeader, Metadata, PolicyId, ScriptHash)
 import Language.Marlowe.Runtime.Core.Api (ContractId, SomeMarloweVersion)
-import Network.Protocol.Query.Types (IsQuery(..), SomeTag(..))
+import Network.Protocol.Query.Types (IsQuery(..), QueryToJSON(..), SomeTag(..))
 
 -- | A Marlowe contract header is a compact structure that contains all the
 -- significant metadata related to a Marlowe Contract on chain.
@@ -35,6 +36,8 @@ data ContractHeader = ContractHeader
   -- ^ The header of the block in which the contract instance was published.
   } deriving (Show, Eq, Ord, Generic, Binary)
 
+instance ToJSON ContractHeader
+
 -- | The queries supported by the discovery service.
 data DiscoveryQuery delimiter err result where
   -- | Query the full list of contract headers. Results are delivered in pages
@@ -43,6 +46,20 @@ data DiscoveryQuery delimiter err result where
   -- | Query all contract headers that use the given minting policy ID for role
   -- tokens.
   GetContractHeadersByRoleTokenCurrency :: PolicyId -> DiscoveryQuery Void Void [ContractHeader]
+
+instance QueryToJSON DiscoveryQuery where
+  queryToJSON = \case
+    GetContractHeaders -> String "get-contract-headers"
+    GetContractHeadersByRoleTokenCurrency policyId -> object [ "get-contract-headers-by-policy-id" .= policyId ]
+  errToJSON = \case
+    TagGetContractHeaders -> toJSON
+    TagGetContractHeadersByRoleTokenCurrency -> toJSON
+  resultToJSON = \case
+    TagGetContractHeaders -> toJSON
+    TagGetContractHeadersByRoleTokenCurrency -> toJSON
+  delimiterToJSON = \case
+    TagGetContractHeaders -> toJSON
+    TagGetContractHeadersByRoleTokenCurrency -> toJSON
 
 instance IsQuery DiscoveryQuery where
   data Tag DiscoveryQuery delimiter err result where

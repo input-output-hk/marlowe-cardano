@@ -18,7 +18,6 @@ import Language.Marlowe.Runtime.Core.Api
 import Language.Marlowe.Runtime.History.Api
 import Language.Marlowe.Runtime.History.Store (GetNextStepsResponse(..))
 import Network.Protocol.Driver (RunServer(..))
-import System.IO (hPutStrLn, stderr)
 
 type RunSyncServer m = RunServer m MarloweSyncServer
 
@@ -32,13 +31,9 @@ data HistorySyncServerDependencies = HistorySyncServerDependencies
   }
 
 historySyncServer :: Component IO HistorySyncServerDependencies ()
-historySyncServer = serverComponent
-  worker
-  (hPutStrLn stderr . ("Sync worker crashed with exception: " <>) . show)
-  (hPutStrLn stderr "Sync client terminated normally")
-  \HistorySyncServerDependencies{..} -> do
-      runSyncServer <- acceptRunSyncServer
-      pure WorkerDependencies {..}
+historySyncServer = serverComponent worker \HistorySyncServerDependencies{..} -> do
+  runSyncServer <- acceptRunSyncServer
+  pure WorkerDependencies {..}
 
 data WorkerDependencies = WorkerDependencies
   { runSyncServer     :: RunSyncServer IO

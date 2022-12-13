@@ -22,7 +22,6 @@ import Network.Protocol.Driver (RunServer(..))
 import Network.Protocol.Query.Server
 import Network.Protocol.Query.Types
 import Numeric.Natural (Natural)
-import System.IO (hPutStrLn, stderr)
 
 type RunQueryServer m = RunServer m RuntimeHistoryQueryServer
 
@@ -33,13 +32,9 @@ data HistoryQueryServerDependencies = HistoryQueryServerDependencies
   }
 
 historyQueryServer :: Component IO HistoryQueryServerDependencies ()
-historyQueryServer = serverComponent
-  worker
-  (hPutStrLn stderr . ("Query worker crashed with exception: " <>) . show)
-  (hPutStrLn stderr "Query client terminated normally")
-  \HistoryQueryServerDependencies{..} -> do
-      runQueryServer <- acceptRunQueryServer
-      pure WorkerDependencies {..}
+historyQueryServer = serverComponent worker \HistoryQueryServerDependencies{..} -> do
+  runQueryServer <- acceptRunQueryServer
+  pure WorkerDependencies {..}
 
 data WorkerDependencies = WorkerDependencies
   { runQueryServer   :: RunQueryServer IO

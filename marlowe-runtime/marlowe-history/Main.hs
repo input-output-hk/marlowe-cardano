@@ -3,10 +3,13 @@
 module Main
   where
 
+import Control.Arrow (arr, (<<<))
 import Control.Concurrent.Component
 import Control.Concurrent.STM (atomically)
 import Control.Exception (bracket, bracketOnError, throwIO)
 import Data.Either (fromRight)
+import qualified Data.Text.Lazy.IO as TL
+import Data.UUID.V4 (nextRandom)
 import Data.Void (Void)
 import Language.Marlowe.Protocol.Sync.Codec (codecMarloweSync)
 import Language.Marlowe.Protocol.Sync.Server (marloweSyncServerPeer)
@@ -16,8 +19,10 @@ import Language.Marlowe.Runtime.History (HistoryDependencies(..), history)
 import Language.Marlowe.Runtime.History.Api (historyJobCodec, historyQueryCodec)
 import Language.Marlowe.Runtime.History.Store (hoistHistoryQueries)
 import Language.Marlowe.Runtime.History.Store.Memory (mkHistoryQueriesInMemory)
+import Logging (RootSelector(..), getRootSelectorConfig)
 import Network.Protocol.ChainSeek.Client (chainSeekClientPeer)
-import Network.Protocol.Driver (acceptRunServerPeerOverSocket, runClientPeerOverSocket)
+import Network.Protocol.Driver
+  (acceptRunServerPeerOverSocketWithLogging, runClientPeerOverSocket, runClientPeerOverSocketWithLogging)
 import Network.Protocol.Job.Server (jobServerPeer)
 import Network.Protocol.Query.Client (liftQuery, queryClientPeer)
 import Network.Protocol.Query.Codec (codecQuery)
@@ -40,6 +45,8 @@ import Network.Socket
   , withFdSocket
   , withSocketsDo
   )
+import Observe.Event.Backend (narrowEventBackend, newOnceFlagMVar)
+import Observe.Event.Component (LoggerDependencies(..), logger)
 import Options.Applicative
   ( auto
   , execParser
@@ -51,12 +58,14 @@ import Options.Applicative
   , long
   , metavar
   , option
+  , optional
   , progDesc
   , short
   , showDefault
   , strOption
   , value
   )
+import System.IO (stderr)
 
 main :: IO ()
 main = run =<< getOptions
@@ -73,19 +82,49 @@ run Options{..} = withSocketsDo do
     bracket (openServer queryAddr) close \querySocket -> do
       bracket (openServer syncAddr) close \syncSocket -> do
         securityParameter <- queryChainSync GetSecurityParameter
-        let
-
-          connectToChainSeek :: forall a. RuntimeChainSeekClient IO a -> IO a
-          connectToChainSeek client = do
-            addr' <- head <$> getAddrInfo (Just clientHints) (Just chainSeekHost) (Just $ show chainSeekPort)
-            runClientPeerOverSocket throwIO addr' runtimeChainSeekCodec (chainSeekClientPeer Genesis) client
-
-          acceptRunJobServer = acceptRunServerPeerOverSocket throwIO jobSocket historyJobCodec jobServerPeer
-          acceptRunQueryServer = acceptRunServerPeerOverSocket throwIO querySocket historyQueryCodec queryServerPeer
-          acceptRunSyncServer = acceptRunServerPeerOverSocket throwIO syncSocket codecMarloweSync marloweSyncServerPeer
         let followerPageSize = 1024 -- TODO move to config with a default
         historyQueries <- atomically $ hoistHistoryQueries atomically <$> mkHistoryQueriesInMemory
-        runComponent_ history HistoryDependencies{..}
+        let
+          historyDependencies eventBackend =
+            let
+              connectToChainSeek :: forall a. RuntimeChainSeekClient IO a -> IO a
+              connectToChainSeek client = do
+                addr' <- head <$> getAddrInfo (Just clientHints) (Just chainSeekHost) (Just $ show chainSeekPort)
+                runClientPeerOverSocketWithLogging
+                  (narrowEventBackend ChainSeekClient eventBackend)
+                  throwIO
+                  addr'
+                  runtimeChainSeekCodec
+                  (chainSeekClientPeer Genesis)
+                  client
+              acceptRunJobServer = acceptRunServerPeerOverSocketWithLogging
+                (narrowEventBackend JobServer eventBackend)
+                throwIO
+                jobSocket
+                historyJobCodec
+                jobServerPeer
+              acceptRunQueryServer = acceptRunServerPeerOverSocketWithLogging
+                (narrowEventBackend QueryServer eventBackend)
+                throwIO
+                querySocket
+                historyQueryCodec
+                queryServerPeer
+              acceptRunSyncServer = acceptRunServerPeerOverSocketWithLogging
+                (narrowEventBackend SyncServer eventBackend)
+                throwIO
+                syncSocket
+                codecMarloweSync
+                marloweSyncServerPeer
+             in HistoryDependencies{..}
+        let appComponent = history <<< arr historyDependencies <<< logger
+        runComponent_ appComponent LoggerDependencies
+          { configFilePath = logConfigFile
+          , getSelectorConfig = getRootSelectorConfig
+          , newRef = nextRandom
+          , newOnceFlag = newOnceFlagMVar
+          , writeText = TL.hPutStr stderr
+          , injectConfigWatcherSelector = ConfigWatcher
+          }
   where
     openServer addr = bracketOnError (openSocket addr) close \socket -> do
       setSocketOption socket ReuseAddr 1
@@ -114,6 +153,7 @@ data Options = Options
   , syncPort           :: PortNumber
   , chainSeekHost      :: HostName
   , host               :: HostName
+  , logConfigFile      :: Maybe FilePath
   }
 
 getOptions :: IO Options
@@ -127,6 +167,7 @@ getOptions = execParser $ info (helper <*> parser) infoMod
       <*> syncPortParser
       <*> chainSeekHostParser
       <*> hostParser
+      <*> logConfigFileParser
 
     chainSeekPortParser = option auto $ mconcat
       [ long "chain-seek-port-number"
@@ -183,6 +224,12 @@ getOptions = execParser $ info (helper <*> parser) infoMod
       , metavar "HOST_NAME"
       , help "The host name to run the history server on."
       , showDefault
+      ]
+
+    logConfigFileParser = optional $ strOption $ mconcat
+      [ long "log-config-file"
+      , metavar "FILE_PATH"
+      , help "The logging configuration JSON file."
       ]
 
     infoMod = mconcat

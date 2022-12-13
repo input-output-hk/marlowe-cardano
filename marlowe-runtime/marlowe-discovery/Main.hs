@@ -1,14 +1,18 @@
 module Main
   where
 
+import Control.Arrow (arr, (<<<))
 import Control.Concurrent.Component
 import Control.Exception (bracket, bracketOnError, throwIO)
+import qualified Data.Text.Lazy.IO as TL
+import Data.UUID.V4 (nextRandom)
 import Language.Marlowe.Protocol.HeaderSync.Codec (codecMarloweHeaderSync)
 import Language.Marlowe.Protocol.HeaderSync.Server (marloweHeaderSyncServerPeer)
 import Language.Marlowe.Runtime.ChainSync.Api (RuntimeChainSeekClient, WithGenesis(..), runtimeChainSeekCodec)
 import Language.Marlowe.Runtime.Discovery (DiscoveryDependencies(..), discovery)
+import Logging (RootSelector(..), getRootSelectorConfig)
 import Network.Protocol.ChainSeek.Client (chainSeekClientPeer)
-import Network.Protocol.Driver (acceptRunServerPeerOverSocket, runClientPeerOverSocket)
+import Network.Protocol.Driver (acceptRunServerPeerOverSocketWithLogging, runClientPeerOverSocketWithLogging)
 import Network.Protocol.Query.Codec (codecQuery)
 import Network.Protocol.Query.Server (queryServerPeer)
 import Network.Socket
@@ -29,6 +33,8 @@ import Network.Socket
   , withFdSocket
   , withSocketsDo
   )
+import Observe.Event.Backend (narrowEventBackend, newOnceFlagMVar)
+import Observe.Event.Component (LoggerDependencies(..), logger)
 import Options.Applicative
   ( auto
   , execParser
@@ -40,12 +46,14 @@ import Options.Applicative
   , long
   , metavar
   , option
+  , optional
   , progDesc
   , short
   , showDefault
   , strOption
   , value
   )
+import System.IO (stderr)
 
 main :: IO ()
 main = run =<< getOptions
@@ -60,14 +68,41 @@ run Options{..} = withSocketsDo do
   bracket (openServer queryAddr) close \querySocket -> do
     bracket (openServer syncAddr) close \syncSocket -> do
       let
-        connectToChainSeek :: forall a. RuntimeChainSeekClient IO a -> IO a
-        connectToChainSeek client = do
-          addr' <- head <$> getAddrInfo (Just clientHints) (Just chainSeekHost) (Just $ show chainSeekPort)
-          runClientPeerOverSocket throwIO addr' runtimeChainSeekCodec (chainSeekClientPeer Genesis) client
-        acceptRunQueryServer = acceptRunServerPeerOverSocket throwIO querySocket codecQuery queryServerPeer
-        acceptRunSyncServer = acceptRunServerPeerOverSocket throwIO syncSocket codecMarloweHeaderSync marloweHeaderSyncServerPeer
-      let pageSize = 1024 -- TODO move to config with a default
-      runComponent_ discovery DiscoveryDependencies{..}
+        pageSize = 1024 -- TODO move to config with a default
+        discoveryDependencies eventBackend =
+          let
+            connectToChainSeek :: forall a. RuntimeChainSeekClient IO a -> IO a
+            connectToChainSeek client = do
+              addr' <- head <$> getAddrInfo (Just clientHints) (Just chainSeekHost) (Just $ show chainSeekPort)
+              runClientPeerOverSocketWithLogging
+                (narrowEventBackend ChainSeekClient eventBackend)
+                throwIO
+                addr'
+                runtimeChainSeekCodec
+                (chainSeekClientPeer Genesis)
+                client
+            acceptRunQueryServer = acceptRunServerPeerOverSocketWithLogging
+              (narrowEventBackend QueryServer eventBackend)
+              throwIO
+              querySocket
+              codecQuery
+              queryServerPeer
+            acceptRunSyncServer = acceptRunServerPeerOverSocketWithLogging
+              (narrowEventBackend SyncServer eventBackend)
+              throwIO
+              syncSocket
+              codecMarloweHeaderSync
+              marloweHeaderSyncServerPeer
+          in DiscoveryDependencies{..}
+        appComponent = discovery <<< arr discoveryDependencies <<< logger
+      runComponent_ appComponent LoggerDependencies
+        { configFilePath = logConfigFile
+        , getSelectorConfig = getRootSelectorConfig
+        , newRef = nextRandom
+        , newOnceFlag = newOnceFlagMVar
+        , writeText = TL.hPutStr stderr
+        , injectConfigWatcherSelector = ConfigWatcher
+        }
   where
     openServer addr = bracketOnError (openSocket addr) close \socket -> do
       setSocketOption socket ReuseAddr 1
@@ -87,6 +122,7 @@ data Options = Options
   , syncPort           :: PortNumber
   , chainSeekHost      :: HostName
   , host               :: HostName
+  , logConfigFile      :: Maybe FilePath
   }
 
 getOptions :: IO Options
@@ -99,6 +135,7 @@ getOptions = execParser $ info (helper <*> parser) infoMod
       <*> syncPortParser
       <*> chainSeekHostParser
       <*> hostParser
+      <*> logConfigFileParser
 
     chainSeekPortParser = option auto $ mconcat
       [ long "chain-seek-port-number"
@@ -147,6 +184,12 @@ getOptions = execParser $ info (helper <*> parser) infoMod
       , metavar "HOST_NAME"
       , help "The host name to run the discovery server on."
       , showDefault
+      ]
+
+    logConfigFileParser = optional $ strOption $ mconcat
+      [ long "log-config-file"
+      , metavar "FILE_PATH"
+      , help "The logging configuration JSON file."
       ]
 
     infoMod = mconcat

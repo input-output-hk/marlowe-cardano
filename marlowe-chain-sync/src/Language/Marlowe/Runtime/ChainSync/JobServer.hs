@@ -27,7 +27,7 @@ data ChainSyncJobServerDependencies = ChainSyncJobServerDependencies
   }
 
 chainSyncJobServer :: Component IO ChainSyncJobServerDependencies ()
-chainSyncJobServer = serverComponent worker mempty mempty \ChainSyncJobServerDependencies{..} -> do
+chainSyncJobServer = serverComponent worker \ChainSyncJobServerDependencies{..} -> do
   runJobServer <- acceptRunJobServer
   pure WorkerDependencies {..}
 

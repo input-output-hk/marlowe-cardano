@@ -36,7 +36,7 @@ data ChainSyncServerDependencies = ChainSyncServerDependencies
   }
 
 chainSyncServer :: Component IO ChainSyncServerDependencies ()
-chainSyncServer = serverComponent worker mempty mempty \ChainSyncServerDependencies{..} -> do
+chainSyncServer = serverComponent worker \ChainSyncServerDependencies{..} -> do
   runChainSeekServer <- acceptRunChainSeekServer
   pure WorkerDependencies{..}
 
