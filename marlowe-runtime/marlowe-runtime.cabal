@@ -200,10 +200,8 @@ library tx
   -- needed.
   ghc-options: -Wno-unused-packages
   exposed-modules:
-    Language.Marlowe.Runtime.Plutus.V2.Contexts
     Language.Marlowe.Runtime.Plutus.V2.Scripts.MarloweV1.RoleTokensPolicy
     Language.Marlowe.Runtime.Plutus.V2.Scripts.MarloweV1.RoleTokensPolicy.Types
-    Language.Marlowe.Runtime.Plutus.V2.Scripts
     Language.Marlowe.Runtime.Transaction
     Language.Marlowe.Runtime.Transaction.BuildConstraints
     Language.Marlowe.Runtime.Transaction.Chain
