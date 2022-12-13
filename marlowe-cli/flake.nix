@@ -36,9 +36,9 @@
           extraPackages = p: [
             local.marlowe-cli
             local.marlowe-rt
-            local.marlowe.cardano-address
-            local.marlowe.cardano-node
-            local.marlowe.cardano-cli
+            # local.pkgs.cardano.packages.cardano-address
+            # local.pkgs.cardano.packages.cardano-node
+            local.pkgs.cardano.packages.cardano-cli
             p.z3
             p.coreutils
             p.curl
