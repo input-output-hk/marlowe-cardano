@@ -146,7 +146,7 @@ library plutus-compat
 executable chainseekd
   import: lang
   ghc-options: -threaded
-  hs-source-dirs:   app
+  hs-source-dirs:   chainseekd
   main-is: Main.hs
   other-modules:
     Logging

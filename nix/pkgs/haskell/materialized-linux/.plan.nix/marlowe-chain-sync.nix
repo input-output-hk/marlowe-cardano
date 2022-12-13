@@ -152,7 +152,7 @@
             ];
           buildable = true;
           modules = [ "Logging" "Options" "Paths_marlowe_chain_sync" ];
-          hsSourceDirs = [ "app" ];
+          hsSourceDirs = [ "chainseekd" ];
           mainPath = [ "Main.hs" ];
           };
         "example-client" = {
