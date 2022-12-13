@@ -14,7 +14,7 @@ on:
       - shlevy
   workflow_call:
 jobs:
-  check-for-updates:
+  check-materialization:
     strategy:
       matrix:
         os: [ubuntu-latest]
