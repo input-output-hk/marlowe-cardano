@@ -25,6 +25,7 @@ import Control.Monad ((<=<))
 import Control.Monad.Trans.Except (ExceptT(ExceptT), runExceptT, withExceptT)
 import Data.String (IsString(fromString))
 import Data.Text (unpack)
+import qualified Data.Text as T
 import qualified Data.Text.Lazy.IO as TL
 import Data.Time (secondsToNominalDiffTime)
 import Data.UUID.V4 (nextRandom)
@@ -80,7 +81,7 @@ run Options{..} = withSocketsDo do
         genesisConfigResult <- runExceptT do
           hash <- ExceptT $ pure $ decodeAbstractHash genesisConfigHash
           (hash,) <$> withExceptT
-            (const "failed to read byron genesis file")
+            (mappend "failed to read byron genesis file: " . T.pack . show)
             (Byron.mkConfigFromFile (toByronRequiresNetworkMagic networkId) genesisConfigFile hash)
         (hash, genesisConfig) <- either (fail . unpack) pure genesisConfigResult
         let genesisBlock = computeByronGenesisBlock (abstractHashToBytes hash) genesisConfig
