@@ -551,8 +551,8 @@ selectCoins protocol marloweVersion marloweCtx walletCtx@WalletContext{..} txBod
 
     -- Find the net additional input that is needed; the extra input we need to find, worst case
     targetSelectionValue :: C.Value
-    targetSelectionValue = outputsFromBody <> fee <> minUtxo <> C.negateValue inputsFromBody <> C.negateValue mintValue
-    -- targetSelectionValue = logD ("selectCoins outputsFromBody: " <> show outputsFromBody) outputsFromBody <> logD ("selectCoins fee: " <> show fee) fee <> logD ("selectCoins minUtxo: " <> show minUtxo) minUtxo <> logD ("selectCoins inputsFromBody (subtracted): " <> show inputsFromBody) (C.negateValue inputsFromBody <> C.negateValue mintValue)
+    -- targetSelectionValue = outputsFromBody <> fee <> minUtxo <> C.negateValue inputsFromBody <> C.negateValue mintValue
+    targetSelectionValue = logD ("selectCoins outputsFromBody: " <> show outputsFromBody) outputsFromBody <> logD ("selectCoins fee: " <> show fee) fee <> logD ("selectCoins minUtxo: " <> show minUtxo) minUtxo <> logD ("selectCoins inputsFromBody (subtracted): " <> show inputsFromBody) (C.negateValue inputsFromBody <> C.negateValue mintValue)
 
     -- Remove the lovelace from a value.
     deleteLovelace :: C.Value -> C.Value
