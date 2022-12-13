@@ -340,6 +340,7 @@ library web-server
     , transformers
     , transformers-base
     , wai
+    , wai-cors
 
 executable marlowe
   import: lang

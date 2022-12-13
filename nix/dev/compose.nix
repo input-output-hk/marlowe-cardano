@@ -153,6 +153,7 @@ let
       "--tx-host"
       "marlowe-tx"
       "--enable-open-api"
+      "--access-control-allow-origin-all"
     ];
   };
 

@@ -16,6 +16,7 @@ data Options = Options
   , txCommandPort :: PortNumber
   , port :: PortNumber
   , openAPIEnabled :: Bool
+  , accessControlAllowOriginAll :: Bool
   }
 
 portOption :: O.CliOption OptionFields PortNumber
@@ -37,6 +38,12 @@ getOptions = do
       , help "Serve the OpenAPI specification at /openapi.json"
       , showDefault
       ]
+    accessControlAllowOriginAllParser = flag False True $ mconcat
+      [ long "access-control-allow-origin-all"
+      , short 'a'
+      , help "Add 'Access-Control-Allow-Origin: *' header"
+      , showDefault
+      ]
     parser = Options
       <$> discoveryHostParser
       <*> discoverySyncPortParser
@@ -46,6 +53,7 @@ getOptions = do
       <*> txCommandPortParser
       <*> portParser
       <*> openAPIParser
+      <*> accessControlAllowOriginAllParser
     infoMod = mconcat
       [ fullDesc
       , progDesc "Web server for the Marlowe Runtime REST API"
