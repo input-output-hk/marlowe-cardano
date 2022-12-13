@@ -28,10 +28,16 @@ You should run `sqitch deploy` whenever you pull new commits, as there may be
 new migrations that need to be run. For a detailed guide to writing and
 managing migrations, please read https://sqitch.org/docs/manual/sqitchtutorial/.
 
-To run the chain sync server, you can use the `run-chainseekd` command.
-Alternatively, you can directly invoke `cabal run chainseekd` inside this
-directory to provide custom command line parameters. The manual can be read by
-running `./man docs/marlowe-chain-sync.1`.
+The Marlowe chain sync consists of two processes: `marlowe-chain-indexer`, and
+`chainseekd`. This split is for scalability purposes. `marlowe-chain-indexer`
+copies blocks and transactions into the database and `chainseekd` serves the
+Chain Seek Protocol, backed by the database.
+
+To run the chain indexer process, you can use `nix run .#marlowe-chain-indexer`.
+Alternatively, you can directly invoke `cabal run marlowe-chain-indexer`.
+
+To run the chain seek server, you can use `nix run .#chainseekd`.
+Alternatively, you can directly invoke `cabal run chainseekd`.
 
 ### Adding a new query
 

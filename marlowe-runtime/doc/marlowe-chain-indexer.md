@@ -1,18 +1,17 @@
-# Chain Seek Daemon
+# Chain Indexer Daemon
 
-The `chainseekd` executable provides services for querying the blockchain for information that may relate to Marlowe contracts.
+The `marlowe-chain-indexer` executable follows a local blockchain node and writes the blocks and transactions to a database.
 
 ```console
-chainseekd : a chain seek server for the Marlowe Runtime.
+marlowe-chain-indexer : a chain indexer for the Marlowe Runtime.
 
-Usage: chainseekd [--version] (-s|--socket-path SOCKET_FILE) 
+Usage: marlowe-chain-indexer [--version] (-s|--socket-path SOCKET_FILE) 
                   [-m|--testnet-magic INTEGER] (-d|--database-uri DATABASE_URI)
-                  [-h|--host HOST_NAME] 
-                  [--port-number PORT_NUMBER] [--query-port-number PORT_NUMBER] 
-                  [--job-port-number PORT_NUMBER] [--block-cost COST_UNITS] 
+                  --genesis-config-file-hash CONFIG_HASH
+                  --genesis-config-file CONFIG_FILE [--block-cost COST_UNITS]
                   [--tx-cost COST_UNITS] [--max-cost COST_UNITS]
 
-  Chain seek server for Marlowe Runtime.
+  Chain indexer for Marlowe Runtime.
 
 Available options:
   -h,--help                Show this help text
@@ -26,17 +25,10 @@ Available options:
   -d,--database-uri DATABASE_URI
                            URI of the database where the chain information is
                            saved.
-  -h,--host HOST_NAME      The hostname to serve the chain seek protocol on.
-                           (default: "127.0.0.1")
-  --port-number PORT_NUMBER
-                           The port number to serve the chain seek protocol on.
-                           (default: 3715)
-  --query-port-number PORT_NUMBER
-                           The port number to serve the query protocol on.
-                           (default: 3716)
-  --job-port-number PORT_NUMBER
-                           The port number to serve the job protocol on.
-                           (default: 3720)
+  --genesis-config-file-hash CONFIG_HASH
+                           Hash of the Byron Genesis Config JSON file.
+  --genesis-config-file CONFIG_FILE
+                           Path to the Byron Genesis Config JSON File.
   --block-cost COST_UNITS  The number of cost units to associate with persisting
                            a block when computing the cost model. (default: 1)
   --tx-cost COST_UNITS     The number of cost units to associate with persisting

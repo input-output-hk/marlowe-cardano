@@ -72,7 +72,7 @@ parseOptions defaultNetworkId defaultSocketPath defaultDatabaseUri version = O.i
       where
         versionOption :: O.Parser (a -> a)
         versionOption = O.infoOption
-          ("chainseekd " <> version)
+          ("marlowe-chain-indexer " <> version)
           (O.long "version" <> O.help "Show version.")
 
         socketPathOption :: O.Parser FilePath
@@ -177,6 +177,6 @@ parseOptions defaultNetworkId defaultSocketPath defaultDatabaseUri version = O.i
     infoMod :: O.InfoMod Options
     infoMod = mconcat
       [ O.fullDesc
-      , O.progDesc "Chain seek server for Marlowe Runtime."
-      , O.header "chainseekd : a chain seek server for the Marlowe Runtime."
+      , O.progDesc "Chain indexer for Marlowe Runtime."
+      , O.header "marlowe-chain-indexer : a chain indexer for the Marlowe Runtime."
       ]
