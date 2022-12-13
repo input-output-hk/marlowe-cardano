@@ -39,7 +39,6 @@
           (hsPkgs."containers" or (errorHandler.buildDepError "containers"))
           (hsPkgs."directory" or (errorHandler.buildDepError "directory"))
           (hsPkgs."eventuo11y" or (errorHandler.buildDepError "eventuo11y"))
-          (hsPkgs."eventuo11y-json" or (errorHandler.buildDepError "eventuo11y-json"))
           (hsPkgs."filepath" or (errorHandler.buildDepError "filepath"))
           (hsPkgs."fsnotify" or (errorHandler.buildDepError "fsnotify"))
           (hsPkgs."lifted-base" or (errorHandler.buildDepError "lifted-base"))
