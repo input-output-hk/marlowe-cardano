@@ -1218,6 +1218,7 @@
           "dictionary-sharing".components.library.planned = lib.mkOverride 900 true;
           "time-units".components.library.planned = lib.mkOverride 900 true;
           "microlens-th".components.library.planned = lib.mkOverride 900 true;
+          "marlowe-chain-sync".components.sublibs."chain-indexer".planned = lib.mkOverride 900 true;
           "text-builder-dev".components.library.planned = lib.mkOverride 900 true;
           "tasty-hunit".components.library.planned = lib.mkOverride 900 true;
           "split".components.library.planned = lib.mkOverride 900 true;
@@ -1349,6 +1350,7 @@
           "plutus-core".components.exes."pir".planned = lib.mkOverride 900 true;
           "marlowe-runtime".components.sublibs."tx-api".planned = lib.mkOverride 900 true;
           "plutus-tx-plugin".components.library.planned = lib.mkOverride 900 true;
+          "marlowe-chain-sync".components.exes."marlowe-chain-indexer".planned = lib.mkOverride 900 true;
           "iohk-monitoring".components.library.planned = lib.mkOverride 900 true;
           "unbounded-delays".components.library.planned = lib.mkOverride 900 true;
           "protolude".components.library.planned = lib.mkOverride 900 true;

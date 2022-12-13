@@ -52,7 +52,7 @@ common lang
 
 library
   import: lang
-  hs-source-dirs:   api
+  hs-source-dirs:   src
   exposed-modules:
     Language.Marlowe.Runtime.Cardano.Api
     Language.Marlowe.Runtime.Cardano.Feature
@@ -81,7 +81,7 @@ library
 
 library libchainseek
   import: lang
-  hs-source-dirs:   src
+  hs-source-dirs:   libchainseek
   exposed-modules:
     Language.Marlowe.Runtime.ChainSync
     Language.Marlowe.Runtime.ChainSync.Database
