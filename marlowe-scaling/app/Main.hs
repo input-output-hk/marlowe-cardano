@@ -14,9 +14,10 @@ module Main
   ) where
 
 
+import Control.Concurrent (myThreadId)
 import Control.Concurrent.Async (mapConcurrently)
 import Control.Monad (replicateM_, void)
-import Control.Monad.Except (MonadError, MonadIO, liftIO, runExceptT, throwError)
+import Control.Monad.Except (MonadIO, liftIO, runExceptT, throwError)
 import Data.List.Split (chunksOf)
 import Data.Time.Clock (nominalDiffTimeToSeconds)
 import Language.Marlowe.Core.V1.Semantics.Types
@@ -33,10 +34,15 @@ import Language.Marlowe.Core.V1.Semantics.Types
   , Value(ChoiceValue)
   )
 import Language.Marlowe.Core.V1.Semantics.Types.Address (deserialiseAddress)
-import Language.Marlowe.Runtime.ChainSync.Api (Address(unAddress), TxId, TxIx(..), TxOutRef(..), fromBech32)
-import Language.Marlowe.Runtime.Client (handle)
+import Language.Marlowe.Runtime.ChainSync.Api (Address(unAddress), TxId, fromBech32)
+import Language.Marlowe.Runtime.Client (App, handleWithEvents)
 import Language.Marlowe.Runtime.Client.Types (Config, MarloweRequest(..), MarloweResponse(..))
-import Language.Marlowe.Runtime.Core.Api (ContractId(unContractId), MarloweVersionTag(V1))
+import Language.Marlowe.Runtime.Core.Api (ContractId, MarloweVersionTag(V1))
+import Observe.Event (EventBackend, addField, hoistEventBackend, withEvent)
+import Observe.Event.Dynamic (DynamicEventSelector(..))
+import Observe.Event.Render.JSON (DefaultRenderSelectorJSON(defaultRenderSelectorJSON))
+import Observe.Event.Render.JSON.Handle (JSONRef, simpleJsonStderrBackend)
+import Observe.Event.Syntax ((≔))
 import Plutus.V2.Ledger.Api (POSIXTime(..))
 import System.Environment (getArgs)
 import System.Random (randomRIO)
@@ -44,7 +50,7 @@ import System.Random (randomRIO)
 import qualified Cardano.Api as C
 import qualified Data.Aeson as A (ToJSON, encode)
 import qualified Data.ByteString.Lazy.Char8 as LBS8 (unpack)
-import qualified Data.Text as T (pack)
+import qualified Data.Text as T (Text, pack)
 import qualified Data.Time.Clock.POSIX as P (getPOSIXTime)
 
 
@@ -94,38 +100,40 @@ randomInputs = (<$> randomRIO (1_000_000, 2_000_000)) . makeInputs
 
 
 runScenario
-  :: MonadError String m
-  => MonadIO m
-  => Config
+  :: EventBackend App JSONRef DynamicEventSelector
+  -> Config
   -> Address
   -> C.SigningKey C.PaymentExtendedKey
   -> Contract
   -> [InputContent]
-  -> m ContractId
-runScenario config address key contract inputs =
+  -> App ContractId
+runScenario eventBackend config address key contract inputs =
   do
     let
       unexpected response = throwError $ "Unexpected response: " <> show' response
       transact request =
-        do
-          (contractId, body) <-
-            handle' config request
-              $ \case
-                Body{..} -> pure (resContractId, resTransactionBody)
-                response -> unexpected response
-          tx <-
-            handle' config (Sign body [] [key])
-              $ \case
-                Tx{..}   -> pure resTransaction
-                response -> unexpected response
-          txId' <-
-            handle' config (Submit tx)
-              $ \case
-                TxId{..} -> pure resTransactionId
-                response -> unexpected response
-          liftIO $ putStrLn $ "ContractId = " <> (init . tail . show) (txId $ unContractId contractId) <> "#" <> show (unTxIx . txIx $ unContractId contractId) <> " > TxId = " <> (init . tail . show) txId'
-          waitForConfirmation config txId'
-          pure contractId
+        withEvent eventBackend (DynamicEventSelector "Transact")
+          $ \event ->
+            do
+              threadId <- liftIO myThreadId
+              addField event $ ("threadId" :: T.Text) ≔ show threadId
+              (contractId, body) <-
+                handle' eventBackend config request
+                  $ \case
+                    Body{..} -> pure (resContractId, resTransactionBody)
+                    response -> unexpected response
+              tx <-
+                handle' eventBackend config (Sign body [] [key])
+                  $ \case
+                    Tx{..}   -> pure resTransaction
+                    response -> unexpected response
+              txId' <-
+                handle' eventBackend config (Submit tx)
+                  $ \case
+                    TxId{..} -> pure resTransactionId
+                    response -> unexpected response
+              waitForConfirmation eventBackend config txId'
+              pure contractId
     contractId <- transact $ Create contract mempty 1_500_000 mempty address mempty
     mapM_ (\input -> transact $ Apply contractId [NormalInput input] Nothing Nothing mempty address mempty) inputs
     pure contractId
@@ -136,27 +144,23 @@ show' = LBS8.unpack . A.encode
 
 
 handle'
-  :: MonadError String m
-  => MonadIO m
-  => Config
+  :: EventBackend App JSONRef DynamicEventSelector
+  -> Config
   -> MarloweRequest 'V1
-  -> (MarloweResponse 'V1 -> m a)
-  -> m a
-handle' config request extract =
-  liftIO (handle request config)
-    >>= \case
-      Right response -> extract response
-      Left message   -> throwError message
+  -> (MarloweResponse 'V1 -> App a)
+  -> App a
+handle' eventBackend config request extract =
+  extract =<< handleWithEvents eventBackend config request
+
 
 
 waitForConfirmation
-  :: MonadError String m
-  => MonadIO m
-  => Config
+  :: EventBackend App JSONRef DynamicEventSelector
+  -> Config
   -> TxId
-  -> m ()
-waitForConfirmation config txId =
-  handle' config (Wait txId)
+  -> App ()
+waitForConfirmation eventBackend config txId =
+  handle' eventBackend config (Wait txId)
     $ \case
       TxId{} -> pure ()
       response -> throwError $ "Unexpected response: " <> show' response
@@ -167,13 +171,12 @@ currentTime = POSIXTime . floor . (* 1000) . nominalDiffTimeToSeconds <$> liftIO
 
 
 runOne
-  :: MonadError String m
-  => MonadIO m
-  => Config
+  :: EventBackend App JSONRef DynamicEventSelector
+  -> Config
   -> Address
   -> C.SigningKey C.PaymentExtendedKey
-  -> m ContractId
-runOne config address key =
+  -> App ContractId
+runOne eventBackend config address key =
   do
     now <- currentTime
     party <-
@@ -181,14 +184,15 @@ runOne config address key =
         Just address' -> pure $ uncurry Address address'
         Nothing       -> throwError "Address conversion failed."
     let
-      contract = makeContract (now + 1 * 15 * 60 * 1000) party
+      contract = makeContract (now + 15 * 60 * 1000) party
     inputs <- randomInputs party
-    runScenario config address key contract inputs
+    runScenario eventBackend config address key contract inputs
 
 
 main :: IO ()
 main =
    do
+     eventBackend <- hoistEventBackend liftIO <$> simpleJsonStderrBackend defaultRenderSelectorJSON
      configFilename : countText : addressKeyEntries <- getArgs
      config <- read <$> readFile configFilename
      let
@@ -205,5 +209,5 @@ main =
          ]
      void
        $ mapConcurrently
-         (\(address, key) -> replicateM_ count $ print =<< runExceptT (runOne config address key))
+         (\(address, key) -> replicateM_ count $ print =<< runExceptT (runOne eventBackend config address key))
          addressKeys
