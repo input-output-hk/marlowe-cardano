@@ -56,5 +56,5 @@ withTimeout
   -> IO (Either String a)
   -> IO (Either String a)
 withTimeout timeout action =
-  either (const $ Left "x") id
+  either (const $ Left "Operation timed out.") id
     <$> threadDelay (timeout * 1_000_000) `race` action

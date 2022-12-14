@@ -7,7 +7,6 @@ module Language.Marlowe.Runtime.Client.Submit
 
 
 import Data.Bifunctor (second)
-import Debug.Trace
 import Language.Marlowe.Runtime.Cardano.Api (fromCardanoTxId)
 import Language.Marlowe.Runtime.ChainSync.Api
   (ChainSyncCommand(SubmitTx), Move(FindTx), TxId, WithGenesis(..), moveSchema)
@@ -38,16 +37,16 @@ waitForTx txId =
     clientInit = SendMsgRequestHandshake moveSchema ClientStHandshake
       { recvMsgHandshakeRejected = \_ ->
           pure $ Left "Chain seek schema version mismatch."
-      , recvMsgHandshakeConfirmed = trace "THERE" $ pure clientIdle
+      , recvMsgHandshakeConfirmed = pure clientIdle
       }
-    clientIdle = SendMsgQueryNext (trace "HERE" $ FindTx txId True) clientNext (pure clientNext)
+    clientIdle = SendMsgQueryNext (FindTx txId True) clientNext (pure clientNext)
     clientNext = ClientStNext
       { recvMsgQueryRejected = \err _ ->
           pure $ SendMsgDone $ Left $ "Chain seek rejected query: " <> show err <> "."
       , recvMsgRollBackward = \_ _ -> pure clientIdle
       , recvMsgRollForward = \_ point _ -> case point of
           Genesis -> pure $ SendMsgDone $ Left  "Chain seek rolled forward to genesis."
-          At _    -> pure $ SendMsgDone $ trace "WHERE" $ Right txId
+          At _    -> pure $ SendMsgDone $ Right txId
       }
   in
     runChainSeekClient runSyncClient

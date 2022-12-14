@@ -51,9 +51,9 @@ executable marlowe-scaling
   hs-source-dirs    : app
   build-depends     : base >= 4.9 && < 5
                     , aeson
+                    , async
                     , bytestring
                     , cardano-api
-                    , data-default
                     , marlowe
                     , marlowe-chain-sync
                     , marlowe-runtime
@@ -61,6 +61,8 @@ executable marlowe-scaling
                     , mtl
                     , plutus-ledger-api
                     , random
+                    , split
+                    , text
                     , time
   ghc-options       : -Wall
                       -Wnoncanonical-monad-instances
