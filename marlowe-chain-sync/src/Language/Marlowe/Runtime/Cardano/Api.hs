@@ -99,14 +99,6 @@ fromCardanoScriptData = \case
   C.ScriptDataNumber i -> I i
   C.ScriptDataBytes bs -> B bs
 
-fromCardanoMetadata :: C.TxMetadataValue -> Metadata
-fromCardanoMetadata = \case
-  C.TxMetaMap ds -> MetadataMap $ bimap fromCardanoMetadata fromCardanoMetadata <$> ds
-  C.TxMetaList ds -> MetadataList $ fromCardanoMetadata <$> ds
-  C.TxMetaNumber i -> MetadataNumber i
-  C.TxMetaBytes bs -> MetadataBytes bs
-  C.TxMetaText t -> MetadataText t
-
 toCardanoPaymentCredential :: Credential -> Maybe C.PaymentCredential
 toCardanoPaymentCredential = \case
   PaymentKeyCredential pkh -> C.PaymentCredentialByKey <$> toCardanoPaymentKeyHash pkh

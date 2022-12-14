@@ -2,6 +2,7 @@
 {-# LANGUAGE EmptyCase #-}
 {-# LANGUAGE EmptyDataDeriving #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE StrictData #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE ViewPatterns #-}
@@ -60,7 +61,9 @@ module Language.Marlowe.Runtime.ChainSync.Api
   , ValidityRange(..)
   , WithGenesis(..)
   , fromBech32
+  , fromCardanoMetadata
   , fromCardanoStakeAddressPointer
+  , fromCardanoTxMetadata
   , fromDatum
   , fromJSONEncodedMetadata
   , fromJSONEncodedTransactionMetadata
@@ -80,6 +83,7 @@ module Language.Marlowe.Runtime.ChainSync.Api
   , toBech32
   , toCardanoAddress
   , toCardanoMetadata
+  , toCardanoTxMetadata
   , toDatum
   , toPlutusData
   , toRedeemer
@@ -165,9 +169,9 @@ type ChainPoint = WithGenesis BlockHeader
 
 -- | A block header, consisting of a slot number, a hash, and a block number.
 data BlockHeader = BlockHeader
-  { slotNo     :: !SlotNo          -- ^ The slot number when this block was produced.
-  , headerHash :: !BlockHeaderHash -- ^ The hash of this block's header.
-  , blockNo    :: !BlockNo         -- ^ The ordinal number of this block.
+  { slotNo     :: SlotNo          -- ^ The slot number when this block was produced.
+  , headerHash :: BlockHeaderHash -- ^ The hash of this block's header.
+  , blockNo    :: BlockNo         -- ^ The ordinal number of this block.
   }
   deriving stock (Show, Eq, Ord, Generic)
   deriving anyclass (Binary, ToJSON)
@@ -177,12 +181,12 @@ isAfter s BlockHeader{..} = slotNo > s
 
 -- | A transaction body
 data Transaction = Transaction
-  { txId          :: !TxId                   -- ^ The hash of this transaction.
-  , validityRange :: !ValidityRange          -- ^ The range of slots during which this transaction is valid.
-  , metadata      :: !(Maybe Metadata)       -- ^ The metadata of this transaction (only includes Marlowe-relevant metadata).
-  , inputs        :: !(Set TransactionInput) -- ^ The inputs consumed by the transaction
-  , outputs       :: ![TransactionOutput]    -- ^ The outputs produced by the transaction.
-  , mintedTokens  :: !Tokens                 -- ^ Tokens minted by the transaction.
+  { txId          :: TxId                   -- ^ The hash of this transaction.
+  , validityRange :: ValidityRange          -- ^ The range of slots during which this transaction is valid.
+  , metadata      :: TransactionMetadata -- ^ The metadata of this transaction
+  , inputs        :: Set TransactionInput -- ^ The inputs consumed by the transaction
+  , outputs       :: [TransactionOutput]    -- ^ The outputs produced by the transaction.
+  , mintedTokens  :: Tokens                 -- ^ Tokens minted by the transaction.
   }
   deriving stock (Show, Eq, Ord, Generic)
   deriving anyclass (Binary, ToJSON)
@@ -219,6 +223,14 @@ toCardanoMetadata = \case
   MetadataBytes bs -> C.TxMetaBytes bs
   MetadataText bs -> C.TxMetaText bs
 
+fromCardanoMetadata :: C.TxMetadataValue -> Metadata
+fromCardanoMetadata = \case
+  C.TxMetaMap ms -> MetadataMap $ bimap fromCardanoMetadata fromCardanoMetadata <$> ms
+  C.TxMetaList ds -> MetadataList $ fromCardanoMetadata <$> ds
+  C.TxMetaNumber i -> MetadataNumber i
+  C.TxMetaBytes bs -> MetadataBytes bs
+  C.TxMetaText bs -> MetadataText bs
+
 -- Handle convenient `JSON` based encoding for a subset of `Metadata`
 -- type domain.
 -- It is not an implementation of a possible `fromJSON` method.
@@ -249,23 +261,30 @@ fromJSONEncodedTransactionMetadata = \case
     pure (label, value')
   _ -> Nothing
 
+
+toCardanoTxMetadata :: TransactionMetadata -> C.TxMetadata
+toCardanoTxMetadata (TransactionMetadata metadata) = C.TxMetadata $ toCardanoMetadata <$> metadata
+
+fromCardanoTxMetadata :: C.TxMetadata -> TransactionMetadata
+fromCardanoTxMetadata (C.TxMetadata metadata) = TransactionMetadata $ fromCardanoMetadata <$> metadata
+
 -- | An input of a transaction.
 data TransactionInput = TransactionInput
-  { txId       :: !TxId             -- ^ The txId of the TransactionOutput this input consumes.
-  , txIx       :: !TxIx             -- ^ The txIx of the TransactionOutput this input consumes.
-  , address    :: !Address          -- ^ The address of the TransactionOutput this input consumes.
-  , datumBytes :: !(Maybe Datum)    -- ^ The script datum for this input
-  , redeemer   :: !(Maybe Redeemer) -- ^ The script redeemer datum for this input (if one was provided).
+  { txId       :: TxId             -- ^ The txId of the TransactionOutput this input consumes.
+  , txIx       :: TxIx             -- ^ The txIx of the TransactionOutput this input consumes.
+  , address    :: Address          -- ^ The address of the TransactionOutput this input consumes.
+  , datumBytes :: Maybe Datum    -- ^ The script datum for this input
+  , redeemer   :: Maybe Redeemer -- ^ The script redeemer datum for this input (if one was provided).
   }
   deriving stock (Show, Eq, Ord, Generic)
   deriving anyclass (Binary, ToJSON)
 
 -- | An output of a transaction.
 data TransactionOutput = TransactionOutput
-  { address   :: !Address           -- ^ The address that receives the assets of this output.
-  , assets    :: !Assets            -- ^ The assets this output produces.
-  , datumHash :: !(Maybe DatumHash) -- ^ The hash of the script datum associated with this output.
-  , datum     :: !(Maybe Datum)     -- ^ The script datum associated with this output.
+  { address   :: Address           -- ^ The address that receives the assets of this output.
+  , assets    :: Assets            -- ^ The assets this output produces.
+  , datumHash :: Maybe DatumHash -- ^ The hash of the script datum associated with this output.
+  , datum     :: Maybe Datum     -- ^ The script datum associated with this output.
   }
   deriving stock (Show, Eq, Ord, Generic)
   deriving anyclass (Binary, ToJSON)
@@ -333,8 +352,8 @@ toPlutusData (B b)         = Plutus.B b
 
 -- | A collection of assets transferred by a transaction output.
 data Assets = Assets
-  { ada    :: !Lovelace -- ^ The ADA sent by the tx output.
-  , tokens :: !Tokens   -- ^ Additional tokens sent by the tx output.
+  { ada    :: Lovelace -- ^ The ADA sent by the tx output.
+  , tokens :: Tokens   -- ^ Additional tokens sent by the tx output.
   }
   deriving stock (Show, Eq, Generic)
   deriving anyclass (Binary, ToJSON)
@@ -394,8 +413,8 @@ newtype CertIx = CertIx { unCertIx :: Word64 }
   deriving newtype (Num, Integral, Real, Enum, Bounded, Binary)
 
 data TxOutRef = TxOutRef
-  { txId :: !TxId
-  , txIx :: !TxIx
+  { txId :: TxId
+  , txIx :: TxIx
   }
   deriving stock (Show, Eq, Ord, Generic)
   deriving anyclass (Binary, ToJSON, ToJSONKey)
@@ -431,8 +450,8 @@ newtype BlockHeaderHash = BlockHeaderHash { unBlockHeaderHash :: ByteString }
   deriving (IsString, Show, ToJSON) via Base16
 
 data AssetId = AssetId
-  { policyId  :: !PolicyId
-  , tokenName :: !TokenName
+  { policyId  :: PolicyId
+  , tokenName :: TokenName
   }
   deriving stock (Show, Eq, Ord, Generic)
   deriving anyclass (Binary, ToJSON, ToJSONKey)
@@ -1018,11 +1037,9 @@ instance Query.IsQuery ChainSyncQuery where
       word <- getWord8
       GetUTxOs <$> case word of
         0x01 -> do
-          addresses <- get
-          pure $ GetUTxOsAtAddresses addresses
+          GetUTxOsAtAddresses <$> get
         0x02 -> do
-          txOutRefs <- get
-          pure $ GetUTxOsForTxOutRefs txOutRefs
+          GetUTxOsForTxOutRefs <$> get
         _    -> fail "Invalid GetUTxOsQuery tag"
   putDelimiter = \case
     TagGetSecurityParameter -> absurd
