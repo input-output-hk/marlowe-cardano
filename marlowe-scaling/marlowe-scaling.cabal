@@ -29,6 +29,9 @@ library
                     , marlowe
                     , marlowe-chain-sync
                     , marlowe-protocols
+                    , marlowe-runtime:discovery-api
+                    , marlowe-runtime:history-api
+                    , marlowe-runtime:tx-api
                     , marlowe-runtime
                     , monad-control
                     , network
