@@ -8,10 +8,11 @@ import Control.Applicative (liftA2)
 import Control.Arrow
 import Control.Category
 import Control.Concurrent.Async.Lifted (Async, Concurrently(..), waitCatchSTM, withAsync)
+import Control.Concurrent.Lifted (fork)
 import Control.Concurrent.STM
 import Control.Exception.Base (SomeException)
 import Control.Exception.Lifted (try)
-import Control.Monad (join)
+import Control.Monad (forever, join)
 import Control.Monad.Base (MonadBase(liftBase))
 import Control.Monad.IO.Class (MonadIO(liftIO))
 import Control.Monad.Trans.Control (MonadBaseControl(StM))
@@ -139,7 +140,7 @@ serverComponentWithSetup
 serverComponentWithSetup worker mkAccept = component \a -> do
   accept <- mkAccept a
   let
-    run = do
+    run = forever do
       b <- accept
-      runComponent_ (void $ suppressErrors worker) b *> run
+      void $ fork $ runComponent_ (suppressErrors worker) b
   pure (run, ())
