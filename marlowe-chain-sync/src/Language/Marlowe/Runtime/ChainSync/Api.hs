@@ -62,7 +62,9 @@ module Language.Marlowe.Runtime.ChainSync.Api
   , ValidityRange(..)
   , WithGenesis(..)
   , fromBech32
+  , fromCardanoMetadata
   , fromCardanoStakeAddressPointer
+  , fromCardanoTxMetadata
   , fromDatum
   , fromJSONEncodedMetadata
   , fromJSONEncodedTransactionMetadata
@@ -223,6 +225,14 @@ toCardanoMetadata = \case
   MetadataBytes bs -> C.TxMetaBytes bs
   MetadataText bs -> C.TxMetaText bs
 
+fromCardanoMetadata :: C.TxMetadataValue -> Metadata
+fromCardanoMetadata = \case
+  C.TxMetaMap ms -> MetadataMap $ bimap fromCardanoMetadata fromCardanoMetadata <$> ms
+  C.TxMetaList ds -> MetadataList $ fromCardanoMetadata <$> ds
+  C.TxMetaNumber i -> MetadataNumber i
+  C.TxMetaBytes bs -> MetadataBytes bs
+  C.TxMetaText bs -> MetadataText bs
+
 -- Handle convenient `JSON` based encoding for a subset of `Metadata`
 -- type domain.
 -- It is not an implementation of a possible `fromJSON` method.
@@ -256,6 +266,9 @@ fromJSONEncodedTransactionMetadata = \case
 
 toCardanoTxMetadata :: TransactionMetadata -> C.TxMetadata
 toCardanoTxMetadata (TransactionMetadata metadata) = C.TxMetadata $ toCardanoMetadata <$> metadata
+
+fromCardanoTxMetadata :: C.TxMetadata -> TransactionMetadata
+fromCardanoTxMetadata (C.TxMetadata metadata) = TransactionMetadata $ fromCardanoMetadata <$> metadata
 
 -- | An input of a transaction.
 data TransactionInput = TransactionInput
