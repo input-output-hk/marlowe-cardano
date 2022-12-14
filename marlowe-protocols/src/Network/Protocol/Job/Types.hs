@@ -165,7 +165,7 @@ instance CommandToJSON cmd => MessageToJSON (Job cmd) where
       MsgDetach -> "detach"
     ServerAgency (TokCmd tag)-> \case
       MsgFail err -> object [ "fail" .= errToJSON tag err ]
-      MsgSucceed result -> object [ "reject" .= resultToJSON tag result ]
+      MsgSucceed result -> object [ "succeed" .= resultToJSON tag result ]
       MsgAwait status jobId -> object
         [ "await" .= object
             [ "status" .= statusToJSON tag status

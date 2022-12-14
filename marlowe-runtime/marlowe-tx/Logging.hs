@@ -108,13 +108,21 @@ getLoadMarloweContextSelectorConfig = \case
     }
 
 buildTxFieldConfig :: FieldConfig BuildTxField
-buildTxFieldConfig = error "not implemented"
+buildTxFieldConfig = FieldConfig
+  { fieldKey = \case
+      Constraints _ _ -> "constraints"
+      ResultingTxBody _ -> "tx-body"
+  , fieldDefaultEnabled = const True
+  , toSomeJSON = \case
+      Constraints MarloweV1 constraints -> SomeJSON $ show constraints
+      ResultingTxBody txBody -> SomeJSON $ show txBody
+  }
 
 chainSeekConfig :: SocketDriverConfigOptions
 chainSeekConfig = SocketDriverConfigOptions
   { enableConnected = True
   , enableDisconnected = True
-  , enableServerDriverEvent = False
+  , enableServerDriverEvent = True
   }
 
 chainSyncJobConfig :: SocketDriverConfigOptions
