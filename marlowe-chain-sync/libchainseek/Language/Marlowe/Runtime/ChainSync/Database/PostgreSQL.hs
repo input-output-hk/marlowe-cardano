@@ -51,6 +51,7 @@ import Hasql.Session (Session)
 import Hasql.TH (foldStatement, maybeStatement, singletonStatement)
 import qualified Hasql.Transaction as HT
 import qualified Hasql.Transaction.Sessions as TS
+import Language.Marlowe.Runtime.Cardano.Feature (hush)
 import Language.Marlowe.Runtime.ChainSync.Api
 import Language.Marlowe.Runtime.ChainSync.Database
   ( DatabaseQueries(DatabaseQueries)
@@ -186,7 +187,7 @@ performFindConsumingTx TxOutRef{..} point = do
            , tx.id :: bytea?
            , tx.validityLowerBound :: bigint?
            , tx.validityUpperBound :: bigint?
-           , tx.metadataKey1564 :: bytea?
+           , tx.metadata :: bytea?
            , asset.policyId :: bytea?
            , asset.name :: bytea?
            , assetMint.quantity :: bigint?
@@ -229,7 +230,7 @@ performFindConsumingTx TxOutRef{..} point = do
       , Just spendingTxId
       , validityLowerBound
       , validityUpperBound
-      , _
+      , mMetadata
       , policyId
       , tokenName
       , quantity
@@ -241,7 +242,7 @@ performFindConsumingTx TxOutRef{..} point = do
               (Just lb, Nothing) -> MinBound $ decodeSlotNo lb
               (Nothing, Just ub) -> MaxBound $ decodeSlotNo ub
               (Just lb, Just ub) -> MinMaxBound (decodeSlotNo lb) $ decodeSlotNo ub
-          , metadata = Nothing
+          , metadata = maybe mempty fromCardanoTxMetadata $ decodeMetadata =<< mMetadata
           , inputs = Set.empty
           , outputs = []
           , mintedTokens = decodeTokens policyId tokenName quantity
@@ -378,7 +379,7 @@ performFindTxsTo credentials point = do
       , Just txId
       , validityLowerBound
       , validityUpperBound
-      , _
+      , mMetadata
       , policyId
       , tokenName
       , quantity
@@ -390,7 +391,7 @@ performFindTxsTo credentials point = do
               (Just lb, Nothing) -> MinBound $ decodeSlotNo lb
               (Nothing, Just ub) -> MaxBound $ decodeSlotNo ub
               (Just lb, Just ub) -> MinMaxBound (decodeSlotNo lb) $ decodeSlotNo ub
-          , metadata = Nothing
+          , metadata = maybe mempty fromCardanoTxMetadata $ decodeMetadata =<< mMetadata
           , inputs = Set.empty
           , outputs = []
           , mintedTokens = decodeTokens policyId tokenName quantity
@@ -448,7 +449,7 @@ performFindTx txId wait point = do
       , Just spendingTxId
       , validityLowerBound
       , validityUpperBound
-      , _
+      , mMetadata
       , policyId
       , tokenName
       , quantity
@@ -460,7 +461,7 @@ performFindTx txId wait point = do
               (Just lb, Nothing) -> MinBound $ decodeSlotNo lb
               (Nothing, Just ub) -> MaxBound $ decodeSlotNo ub
               (Just lb, Just ub) -> MinMaxBound (decodeSlotNo lb) $ decodeSlotNo ub
-          , metadata = Nothing
+          , metadata = maybe mempty fromCardanoTxMetadata $ decodeMetadata =<< mMetadata
           , inputs = Set.empty
           , outputs = []
           , mintedTokens = decodeTokens policyId tokenName quantity
@@ -808,3 +809,6 @@ pointSlot (At BlockHeader{..}) = fromIntegral slotNo
 decodeAdvance :: Maybe (Int64, ByteString, Int64) -> PerformMoveResult err ()
 decodeAdvance Nothing    = MoveWait
 decodeAdvance (Just row) = MoveArrive (decodeBlockHeader row) ()
+
+decodeMetadata :: ByteString -> Maybe C.TxMetadata
+decodeMetadata = hush . C.deserialiseFromCBOR C.AsTxMetadata

@@ -57,7 +57,6 @@ import Cardano.Api
   , TxIn(..)
   , TxInsCollateral(..)
   , TxIx(..)
-  , TxMetadata(..)
   , TxMetadataInEra(..)
   , TxMintValue(..)
   , TxOut(..)
@@ -83,7 +82,6 @@ import qualified Data.ByteString as BS
 import Data.ByteString.Base16 (encodeBase16)
 import Data.ByteString.Short (fromShort, toShort)
 import Data.Int (Int16, Int64)
-import qualified Data.Map as Map
 import Data.Profunctor (rmap)
 import qualified Data.Set as Set
 import Data.Text (Text)
@@ -274,7 +272,7 @@ data TxRow = TxRow
   , slotNo             :: !Int64
   , validityLowerBound :: !(Maybe Int64)
   , validityUpperBound :: !(Maybe Int64)
-  , metadataKey1564    :: !(Maybe ByteString)
+  , metadata    :: !(Maybe ByteString)
   , isValid            :: !Bool
   }
 
@@ -368,12 +366,12 @@ commitBlocks = CommitBlocks \blocks ->
               FROM blockInputs AS input
              WHERE chain.block.id = input.id AND chain.block.slotNo = input.blockNo
           )
-        , txInputs (id, blockId, slotNo, validityLowerBound, validityUpperBound, metadataKey1564, isValid) AS
+        , txInputs (id, blockId, slotNo, validityLowerBound, validityUpperBound, metadata, isValid) AS
           ( SELECT * FROM UNNEST ($4 :: bytea[], $5 :: bytea[], $6 :: bigint[], $7 :: bigint?[], $8 :: bigint?[], $9 :: bytea?[], $10 :: boolean[])
           )
         , newTxs AS
-          ( INSERT INTO chain.tx (id, blockId, slotNo, validityLowerBound, validityUpperBound, metadataKey1564, isValid)
-            SELECT tx.id, tx.blockId, tx.slotNo, tx.validityLowerBound, tx.validityUpperBound, tx.metadataKey1564, tx.isValid
+          ( INSERT INTO chain.tx (id, blockId, slotNo, validityLowerBound, validityUpperBound, metadata, isValid)
+            SELECT tx.id, tx.blockId, tx.slotNo, tx.validityLowerBound, tx.validityUpperBound, tx.metadata, tx.isValid
             FROM   txInputs AS tx
           )
         , txOutInputs (txId, txIx, slotNo, address, lovelace, datumHash, datumBytes, isCollateral) AS
@@ -457,7 +455,7 @@ commitBlocks = CommitBlocks \blocks ->
       , V.fromList $ (\TxRow{..} -> slotNo) <$> txRows
       , V.fromList $ validityLowerBound <$> txRows
       , V.fromList $ validityUpperBound <$> txRows
-      , V.fromList $ metadataKey1564 <$> txRows
+      , V.fromList $ metadata <$> txRows
       , V.fromList $ isValid <$> txRows
 
       , V.fromList $ (\TxOutRow{..} -> txId) <$> txOutRows
@@ -509,11 +507,9 @@ commitBlocks = CommitBlocks \blocks ->
             , validityUpperBound = case snd txValidityRange of
                 TxValidityNoUpperBound _    -> Nothing
                 TxValidityUpperBound _ slot -> Just $ slotNoToParam slot
-            , metadataKey1564 = case txMetadata of
+            , metadata = case txMetadata of
                 TxMetadataNone                          -> Nothing
-                TxMetadataInEra _ (TxMetadata metadata) -> do
-                  value <- Map.lookup 1564 metadata
-                  pure $ serialiseToCBOR $ TxMetadata $ Map.singleton 1564 value
+                TxMetadataInEra _ metadata -> Just $ serialiseToCBOR metadata
             , isValid = case txScriptValidity of
                 TxScriptValidity _ ScriptInvalid -> False
                 _                                -> True
