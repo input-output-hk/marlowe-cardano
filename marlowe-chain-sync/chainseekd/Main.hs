@@ -32,7 +32,7 @@ import Language.Marlowe.Runtime.ChainSync.Database (hoistDatabaseQueries)
 import qualified Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL as PostgreSQL
 import Logging (RootSelector(..), getRootSelectorConfig)
 import Network.Protocol.ChainSeek.Server (chainSeekServerPeer)
-import Network.Protocol.Driver (acceptRunServerPeerOverSocket, acceptRunServerPeerOverSocketWithLogging)
+import Network.Protocol.Driver (acceptRunServerPeerOverSocketWithLogging)
 import Network.Protocol.Job.Codec (codecJob)
 import Network.Protocol.Job.Server (jobServerPeer)
 import Network.Protocol.Query.Codec (codecQuery)
@@ -82,8 +82,18 @@ run Options{..} = withSocketsDo do
                 chainSeekSocket
                 codecChainSeek
                 (chainSeekServerPeer Genesis)
-            , acceptRunQueryServer = acceptRunServerPeerOverSocket throwIO querySocket codecQuery queryServerPeer
-            , acceptRunJobServer = acceptRunServerPeerOverSocket throwIO commandSocket codecJob jobServerPeer
+            , acceptRunQueryServer = acceptRunServerPeerOverSocketWithLogging
+                (narrowEventBackend QueryServer eventBackend)
+                throwIO
+                querySocket
+                codecQuery
+                queryServerPeer
+            , acceptRunJobServer = acceptRunServerPeerOverSocketWithLogging
+                (narrowEventBackend JobServer eventBackend)
+                throwIO
+                commandSocket
+                codecJob
+                jobServerPeer
             , queryLocalNodeState = queryNodeLocalState localNodeConnectInfo
             , submitTxToNodeLocal = \era tx -> Cardano.submitTxToNodeLocal localNodeConnectInfo $ TxInMode tx case era of
                 ByronEra -> ByronEraInCardanoMode
