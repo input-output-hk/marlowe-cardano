@@ -96,10 +96,15 @@ library history-api
     , aeson
     , binary
     , bytestring
+    , cardano-api
     , containers
+    , errors
     , marlowe-chain-sync
     , marlowe-protocols
     , marlowe-runtime
+    , ouroboros-consensus
+    , ouroboros-network
+    , transformers
     , typed-protocols
   visibility: public
 
@@ -126,8 +131,6 @@ library history
     , marlowe-protocols
     , marlowe-runtime
     , marlowe-runtime:history-api
-    , ouroboros-consensus
-    , ouroboros-network
     , semialign
     , stm
     , these
@@ -193,6 +196,7 @@ library tx-api
     , marlowe-chain-sync
     , marlowe-protocols
     , marlowe-runtime
+    , marlowe-runtime:history-api
     , time
   visibility: public
 

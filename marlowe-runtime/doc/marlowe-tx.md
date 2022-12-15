@@ -9,8 +9,7 @@ Usage: marlowe-tx [--chain-seek-port-number PORT_NUMBER]
                   [--chain-seek-query-port-number PORT_NUMBER] 
                   [--chain-seek-command-port-number PORT_NUMBER] 
                   [--chain-seek-host HOST_NAME] [--command-port PORT_NUMBER] 
-                  [-h|--host HOST_NAME] [--history-sync-port PORT_NUMBER] 
-                  [--history-host HOST_NAME] [--log-level LOG_LEVEL | --silent]
+                  [-h|--host HOST_NAME]
 
   Marlowe runtime transaction creation server
 
@@ -33,12 +32,4 @@ Available options:
                            (default: 3723)
   -h,--host HOST_NAME      The host name to run the tx server on.
                            (default: "127.0.0.1")
-  --history-sync-port PORT_NUMBER
-                           The port number of the history sync server.
-                           (default: 3719)
-  --history-host HOST_NAME The host name of the history server.
-                           (default: "127.0.0.1")
-  --log-level LOG_LEVEL    Log everything up including the given level:
-                           [DEBUG|INFO|WARNING|ERROR]
-  --silent                 Suppress all logs.
 ```

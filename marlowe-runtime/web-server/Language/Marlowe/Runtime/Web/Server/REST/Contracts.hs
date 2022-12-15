@@ -112,11 +112,12 @@ post eb req@PostContractsRequest{..} changeAddressDTO mAddresses mCollateralUtxo
         CreateConstraintError (BalancingError _) -> throwError err500
         CreateLoadMarloweContextFailed LoadMarloweContextErrorNotFound -> throwError err404
         CreateLoadMarloweContextFailed (LoadMarloweContextErrorVersionMismatch _) -> throwError err400
+        CreateLoadMarloweContextFailed (HandshakeFailed _) -> throwError err500
         CreateLoadMarloweContextFailed LoadMarloweContextToCardanoError -> throwError err500
         CreateLoadMarloweContextFailed (MarloweScriptNotPublished _) -> throwError err500
         CreateLoadMarloweContextFailed (PayoutScriptNotPublished _) -> throwError err500
-        CreateLoadMarloweContextFailed (InvalidScriptAddress _) -> throwError err500
-        CreateLoadMarloweContextFailed (UnknownMarloweScript _) -> throwError err500
+        CreateLoadMarloweContextFailed (ExtractCreationError _) -> throwError err500
+        CreateLoadMarloweContextFailed (ExtractMarloweTransactionError _) -> throwError err500
         CreateBuildupFailed MintingUtxoSelectionFailed -> throwError err400
         CreateBuildupFailed (AddressDecodingFailed _) -> throwError err500
         CreateBuildupFailed (MintingScriptDecodingFailed _) -> throwError err500

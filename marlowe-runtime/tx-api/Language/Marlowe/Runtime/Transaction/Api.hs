@@ -65,6 +65,7 @@ import Language.Marlowe.Runtime.ChainSync.Api
   , Metadata
   , PlutusScript
   , PolicyId
+  , SchemaVersion
   , ScriptHash
   , SlotNo
   , StakeCredential
@@ -76,6 +77,7 @@ import Language.Marlowe.Runtime.ChainSync.Api
   , putUTCTime
   )
 import Language.Marlowe.Runtime.Core.Api
+import Language.Marlowe.Runtime.History.Api (ExtractCreationError, ExtractMarloweTransactionError)
 import Network.Protocol.Job.Types
 
 -- CIP-25 metadata
@@ -568,8 +570,9 @@ data LoadMarloweContextError
   | LoadMarloweContextToCardanoError
   | MarloweScriptNotPublished ScriptHash
   | PayoutScriptNotPublished ScriptHash
-  | InvalidScriptAddress Address
-  | UnknownMarloweScript ScriptHash
+  | ExtractCreationError ExtractCreationError
+  | ExtractMarloweTransactionError ExtractMarloweTransactionError
+  | HandshakeFailed [SchemaVersion]
   deriving (Eq, Show, Ord, Generic)
   deriving anyclass (Binary, ToJSON)
 

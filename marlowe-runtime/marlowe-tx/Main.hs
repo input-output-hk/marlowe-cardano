@@ -10,8 +10,6 @@ import Data.Either (fromRight)
 import qualified Data.Text.Lazy.IO as TL
 import Data.UUID.V4 (nextRandom)
 import Data.Void (Void)
-import Language.Marlowe.Protocol.Sync.Client (MarloweSyncClient, marloweSyncClientPeer)
-import Language.Marlowe.Protocol.Sync.Codec (codecMarloweSync)
 import Language.Marlowe.Runtime.ChainSync.Api
   ( ChainSyncCommand
   , ChainSyncQuery(..)
@@ -27,11 +25,11 @@ import Language.Marlowe.Runtime.Transaction.Query (LoadMarloweContext, LoadWalle
 import qualified Language.Marlowe.Runtime.Transaction.Query as Query
 import qualified Language.Marlowe.Runtime.Transaction.Submit as Submit
 import Logging (RootSelector(..), getRootSelectorConfig)
-import Network.Protocol.Driver (acceptRunServerPeerOverSocketWithLogging, runClientPeerOverSocketWithLogging)
+import Network.Protocol.Driver (RunClient, acceptRunServerPeerOverSocketWithLogging, runClientPeerOverSocketWithLogging)
 import Network.Protocol.Job.Client (JobClient, jobClientPeer)
 import Network.Protocol.Job.Codec (codecJob)
 import Network.Protocol.Job.Server (jobServerPeer)
-import Network.Protocol.Query.Client (liftQuery, queryClientPeer)
+import Network.Protocol.Query.Client (QueryClient, liftQuery, queryClientPeer)
 import Network.Protocol.Query.Codec (codecQuery)
 import Network.Socket
   ( AddrInfo(..)
@@ -94,18 +92,7 @@ run Options{..} = withSocketsDo do
             codecJob
             jobServerPeer
 
-          runHistorySyncClient :: MarloweSyncClient IO a -> IO a
-          runHistorySyncClient client = do
-            addr' <- head <$> getAddrInfo (Just clientHints) (Just historyHost) (Just $ show historySyncPort)
-            runClientPeerOverSocketWithLogging
-              (narrowEventBackend HistoryClient rootEventBackend)
-              throwIO
-              addr'
-              codecMarloweSync
-              marloweSyncClientPeer
-              client
-
-          connectToChainSeek :: RuntimeChainSeekClient IO a -> IO a
+          connectToChainSeek :: RunClient IO RuntimeChainSeekClient
           connectToChainSeek client = do
             addr' <- head <$> getAddrInfo (Just clientHints) (Just chainSeekHost) (Just $ show chainSeekPort)
             runClientPeerOverSocketWithLogging
@@ -116,7 +103,7 @@ run Options{..} = withSocketsDo do
               (chainSeekClientPeer Genesis)
               client
 
-          runChainSyncJobClient :: JobClient ChainSyncCommand IO a -> IO a
+          runChainSyncJobClient :: RunClient IO (JobClient ChainSyncCommand)
           runChainSyncJobClient client = do
             addr' <- head <$> getAddrInfo (Just clientHints) (Just chainSeekHost) (Just $ show chainSeekCommandPort)
             runClientPeerOverSocketWithLogging
@@ -127,24 +114,26 @@ run Options{..} = withSocketsDo do
               jobClientPeer
               client
 
-          queryChainSync :: ChainSyncQuery Void e a -> IO a
-          queryChainSync query = do
+          runChainSyncQueryClient :: RunClient IO (QueryClient ChainSyncQuery)
+          runChainSyncQueryClient client = do
             addr' <- head <$> getAddrInfo (Just clientHints) (Just chainSeekHost) (Just $ show chainSeekQueryPort)
-            result <- runClientPeerOverSocketWithLogging
+            runClientPeerOverSocketWithLogging
               (narrowEventBackend ChainSyncQueryClient rootEventBackend)
               throwIO
               addr'
               codecQuery
               queryClientPeer
-              (liftQuery query)
-            pure $ fromRight (error "failed to query chain seek server") result
+              client
+
+          queryChainSync :: ChainSyncQuery Void e a -> IO a
+          queryChainSync = fmap (fromRight $ error "failed to query chain seek server") . runChainSyncQueryClient . liftQuery
 
           mkSubmitJob = Submit.mkSubmitJob Submit.SubmitJobDependencies{..}
 
           loadMarloweContext :: LoadMarloweContext r
           loadMarloweContext eb version contractId = do
             networkId <- queryChainSync GetNetworkId
-            Query.loadMarloweContext networkId runHistorySyncClient eb version contractId
+            Query.loadMarloweContext networkId connectToChainSeek runChainSyncQueryClient eb version contractId
 
           runGetUTxOsQuery :: GetUTxOsQuery -> IO UTxOs
           runGetUTxOsQuery getUTxOsQuery = queryChainSync (GetUTxOs getUTxOsQuery)
@@ -182,8 +171,6 @@ data Options = Options
   , chainSeekHost      :: HostName
   , port               :: PortNumber
   , host               :: HostName
-  , historySyncPort :: PortNumber
-  , historyHost :: HostName
   , logConfigFile  :: Maybe FilePath
   }
 
@@ -197,8 +184,6 @@ getOptions = execParser $ info (helper <*> parser) infoMod
       <*> chainSeekHostParser
       <*> portParser
       <*> hostParser
-      <*> historySyncPortParser
-      <*> historyHostParser
       <*> logConfigFileParser
 
     chainSeekPortParser = option auto $ mconcat
@@ -247,22 +232,6 @@ getOptions = execParser $ info (helper <*> parser) infoMod
       , value "127.0.0.1"
       , metavar "HOST_NAME"
       , help "The host name to run the tx server on."
-      , showDefault
-      ]
-
-    historySyncPortParser = option auto $ mconcat
-      [ long "history-sync-port"
-      , value 3719
-      , metavar "PORT_NUMBER"
-      , help "The port number of the history sync server."
-      , showDefault
-      ]
-
-    historyHostParser = strOption $ mconcat
-      [ long "history-host"
-      , value "127.0.0.1"
-      , metavar "HOST_NAME"
-      , help "The host name of the history server."
       , showDefault
       ]
 

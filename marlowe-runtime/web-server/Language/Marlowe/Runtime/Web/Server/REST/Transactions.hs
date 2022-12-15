@@ -149,11 +149,12 @@ post eb contractId req@PostTransactionsRequest{..} changeAddressDTO mAddresses m
         ScriptOutputNotFound -> throwError err400
         ApplyInputsLoadMarloweContextFailed LoadMarloweContextErrorNotFound -> throwError err404
         ApplyInputsLoadMarloweContextFailed (LoadMarloweContextErrorVersionMismatch _) -> throwError err400
+        ApplyInputsLoadMarloweContextFailed (HandshakeFailed _) -> throwError err500
         ApplyInputsLoadMarloweContextFailed LoadMarloweContextToCardanoError -> throwError err500
         ApplyInputsLoadMarloweContextFailed (MarloweScriptNotPublished _) -> throwError err500
         ApplyInputsLoadMarloweContextFailed (PayoutScriptNotPublished _) -> throwError err500
-        ApplyInputsLoadMarloweContextFailed (InvalidScriptAddress _) -> throwError err500
-        ApplyInputsLoadMarloweContextFailed (UnknownMarloweScript _) -> throwError err500
+        ApplyInputsLoadMarloweContextFailed (ExtractCreationError _) -> throwError err500
+        ApplyInputsLoadMarloweContextFailed (ExtractMarloweTransactionError _) -> throwError err500
         ApplyInputsConstraintsBuildupFailed (MarloweComputeTransactionFailed _) -> throwError err400
         ApplyInputsConstraintsBuildupFailed UnableToDetermineTransactionTimeout -> throwError err400
         SlotConversionFailed _ -> throwError err400
