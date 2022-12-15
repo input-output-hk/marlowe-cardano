@@ -240,6 +240,8 @@ data MarloweTxCommand status err result where
     -- ^ The wallet addresses to use when constructing the transaction
     -> ContractId
     -- ^ The ID of the contract to apply the inputs to.
+    -> TransactionMetadata
+    -- ^ Optional metadata to attach to the transaction
     -> Maybe UTCTime
     -- ^ The "invalid before" bound of the validity interval. If omitted, this
     -- is computed from the contract.
@@ -290,10 +292,11 @@ instance CommandToJSON MarloweTxCommand where
           , "version" .= version
           ]
       ]
-    ApplyInputs MarloweV1 walletAddresses contractId invalidBefore invalidHereafter redeemer -> object
+    ApplyInputs MarloweV1 walletAddresses contractId metadata invalidBefore invalidHereafter redeemer -> object
       [ "apply-inputs" .= object
           [ "wallet-addresses" .= walletAddresses
           , "contract-id" .= contractId
+          , "metadata" .= metadata
           , "invalid-before" .= invalidBefore
           , "invalid-hereafter" .= invalidHereafter
           , "redeemer" .= toJSON redeemer
@@ -340,7 +343,7 @@ instance Command MarloweTxCommand where
 
   tagFromCommand = \case
     Create _ version _ _ _ _ _ -> TagCreate version
-    ApplyInputs version _ _ _ _ _ -> TagApplyInputs version
+    ApplyInputs version _ _ _ _ _ _ -> TagApplyInputs version
     Withdraw version _ _ _        -> TagWithdraw version
     Submit _                -> TagSubmit
 
@@ -395,9 +398,10 @@ instance Command MarloweTxCommand where
       put metadata
       put minAda
       putContract version contract
-    ApplyInputs version walletAddresses contractId invalidBefore invalidHereafter redeemer -> do
+    ApplyInputs version walletAddresses contractId metadata invalidBefore invalidHereafter redeemer -> do
       put walletAddresses
       put contractId
+      put metadata
       maybe (putWord8 0) (\t -> putWord8 1 *> putUTCTime t) invalidBefore
       maybe (putWord8 0) (\t -> putWord8 1 *> putUTCTime t) invalidHereafter
       putRedeemer version redeemer
@@ -420,6 +424,7 @@ instance Command MarloweTxCommand where
     TagApplyInputs version -> do
       walletAddresses <- get
       contractId <- get
+      metadata <- get
       invalidBefore <- getWord8 >>= \case
         0 -> pure Nothing
         1 -> Just <$> getUTCTime
@@ -429,7 +434,7 @@ instance Command MarloweTxCommand where
         1 -> Just <$> getUTCTime
         t -> fail $ "Invalid Maybe tag: " <> show t
       redeemer <- getRedeemer version
-      pure $ ApplyInputs version walletAddresses contractId invalidBefore invalidHereafter redeemer
+      pure $ ApplyInputs version walletAddresses contractId metadata invalidBefore invalidHereafter redeemer
 
     TagWithdraw version -> do
       walletAddresses <- get

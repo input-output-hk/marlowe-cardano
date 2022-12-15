@@ -193,7 +193,7 @@ worker = component_ \WorkerDependencies{..} -> do
                 metadata
                 minAda
                 contract
-            ApplyInputs version addresses contractId invalidBefore invalidHereafter redeemer ->
+            ApplyInputs version addresses contractId metadata invalidBefore invalidHereafter redeemer ->
               withSubEvent ev ExecApplyInputs \ev' -> withMarloweVersion version $ execApplyInputs
                 ev'
                 getTip
@@ -205,6 +205,7 @@ worker = component_ \WorkerDependencies{..} -> do
                 version
                 addresses
                 contractId
+                metadata
                 invalidBefore
                 invalidHereafter
                 redeemer
@@ -316,6 +317,7 @@ execApplyInputs
   -> MarloweVersion v
   -> WalletAddresses
   -> ContractId
+  -> TransactionMetadata
   -> Maybe UTCTime
   -> Maybe UTCTime
   -> Redeemer v
@@ -331,6 +333,7 @@ execApplyInputs
   version
   addresses
   contractId
+  metadata
   invalidBefore'
   invalidHereafter'
   inputs = execExceptT do
@@ -349,6 +352,7 @@ execApplyInputs
         version
         scriptOutput'
         tipSlot
+        metadata
         invalidBefore'
         invalidHereafter'
         inputs

@@ -91,9 +91,9 @@ createContract stakeCredential version addresses roles metadata minUTxODeposit c
 
 -- | Apply inputs to a contract.
 applyInputs :: ApplyInputs (AppM r)
-applyInputs version addresses contractId invalidBefore invalidHereafter inputs = do
+applyInputs version addresses contractId metadata invalidBefore invalidHereafter inputs = do
   apply <- asks _applyInputs
-  liftIO $ apply version addresses contractId invalidBefore invalidHereafter inputs
+  liftIO $ apply version addresses contractId metadata invalidBefore invalidHereafter inputs
 
 -- | Submit a contract creation transaction to the node
 submitContract :: ContractId -> Submit r (AppM r)

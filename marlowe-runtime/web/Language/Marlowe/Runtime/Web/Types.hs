@@ -512,6 +512,7 @@ uriToJSON = String . T.pack . show
 
 data PostTransactionsRequest = PostTransactionsRequest
   { version :: MarloweVersion
+  , metadata :: Map Word64 Metadata
   , invalidBefore :: Maybe UTCTime
   , invalidHereafter :: Maybe UTCTime
   , inputs :: [Semantics.Input]

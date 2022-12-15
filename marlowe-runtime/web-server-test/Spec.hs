@@ -107,6 +107,7 @@ instance Arbitrary Web.PostTransactionsRequest where
     <*> arbitrary
     <*> arbitrary
     <*> arbitrary
+    <*> arbitrary
   shrink = genericShrink
 
 instance Arbitrary Web.CreateTxBody where
