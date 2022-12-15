@@ -293,6 +293,7 @@ instance ToDTO TxRecord where
     Web.Tx
       { contractId = toDTO contractId
       , transactionId = toDTO transactionId
+      , metadata = toDTO metadata
       , status = Web.Confirmed
       , block = Just $ toDTO blockHeader
       , inputUtxo = toDTO $ utxo input
@@ -373,6 +374,7 @@ instance IsCardanoEra era => ToDTOWithTxStatus (Tx.InputsApplied era v) where
     Web.Tx
       { contractId = toDTO contractId
       , transactionId = toDTO $ fromCardanoTxId $ getTxId txBody
+      , metadata = toDTO metadata
       , status = toDTO status
       , block = Nothing
       , inputUtxo = toDTO $ utxo input
@@ -403,6 +405,7 @@ instance ToDTO SomeTransaction where
     Web.TxHeader
       { contractId = toDTO contractId
       , transactionId = toDTO transactionId
+      , metadata = toDTO metadata
       , status = Web.Confirmed
       , block = Just $ toDTO blockHeader
       , utxo = toDTO . utxo <$> scriptOutput output

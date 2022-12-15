@@ -164,6 +164,7 @@ instance IsCardanoEra era => Binary (ContractCreated era 'V1) where
 data InputsApplied era v = InputsApplied
   { version :: MarloweVersion v
   , contractId :: ContractId
+  , metadata :: TransactionMetadata
   , input :: TransactionScriptOutput v
   , output :: Maybe (TransactionScriptOutput v)
   , invalidBefore :: UTCTime
@@ -178,6 +179,7 @@ deriving instance Eq (InputsApplied BabbageEra 'V1)
 instance IsCardanoEra era => Binary (InputsApplied era 'V1) where
   put InputsApplied{..} = do
     put contractId
+    put metadata
     put input
     put output
     putUTCTime invalidBefore
@@ -187,6 +189,7 @@ instance IsCardanoEra era => Binary (InputsApplied era 'V1) where
   get = do
     let version = MarloweV1
     contractId <- get
+    metadata <- get
     input <- get
     output <- get
     invalidBefore <- getUTCTime

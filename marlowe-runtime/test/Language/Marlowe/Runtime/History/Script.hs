@@ -344,6 +344,7 @@ genApplyInputsV1 payoutAddress blockHeader contractId TransactionScriptOutput{..
     output <- applyInputsV1 address payoutAddress vLow vHigh transactionId inputs datum
     pure $ ApplyInputs MarloweV1 $ Transaction
       { contractId
+      , metadata = mempty
       , transactionId
       , blockHeader
       , validityLowerBound = posixSecondsToUTCTime $ secondsToNominalDiffTime $ fromIntegral vLow / 1000

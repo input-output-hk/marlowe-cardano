@@ -111,6 +111,7 @@ toTxHeader :: Tx -> TxHeader
 toTxHeader Tx{..} = TxHeader
   { contractId
   , transactionId
+  , metadata
   , status
   , block
   , utxo = outputUtxo
