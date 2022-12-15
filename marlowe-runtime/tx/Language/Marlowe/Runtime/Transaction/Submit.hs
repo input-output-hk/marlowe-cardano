@@ -9,6 +9,7 @@ import qualified Cardano.Api as C
 import Control.Concurrent (threadDelay)
 import Control.Concurrent.Async (race)
 import Control.Concurrent.STM (STM, atomically, newTVar, readTVar, writeTVar)
+import Data.Functor (($>))
 import Language.Marlowe.Runtime.ChainSync.Api
 import Language.Marlowe.Runtime.Transaction.Api (SubmitError(..), SubmitStatus(..))
 import Network.Protocol.Job.Client (JobClient, liftCommand)
@@ -64,7 +65,7 @@ doSubmit SubmitJobDependencies{..} tellStatus era tx= do
               error "chainseekd schema version mismatch"
           , recvMsgHandshakeConfirmed = pure clientIdle
           }
-        clientIdle = SendMsgQueryNext (FindTx txId True) clientNext (pure clientNext)
+        clientIdle = SendMsgQueryNext (FindTx txId True) clientNext
         clientNext = ClientStNext
           { recvMsgQueryRejected = \err _ ->
               error $ "chainseekd rejected query: " <> show err
@@ -72,4 +73,5 @@ doSubmit SubmitJobDependencies{..} tellStatus era tx= do
           , recvMsgRollForward = \_ point _ -> case point of
               Genesis -> error "chainseekd rolled forward to genesis"
               At block -> pure $ SendMsgDone block
+          , recvMsgWait = threadDelay 1_000_000 $> SendMsgPoll clientNext
           }

@@ -1,6 +1,8 @@
 module SkippingBlocks
   where
 
+import Control.Concurrent (threadDelay)
+import Data.Functor (($>))
 import Data.Void (absurd)
 import Language.Marlowe.Runtime.ChainSync.Api
 
@@ -19,12 +21,13 @@ client = ChainSeekClient stInit
 
     stIdle stepSize = do
       putStrLn $ "Advancing " <> show stepSize <> " block(s)"
-      pure $ SendMsgQueryNext (AdvanceBlocks stepSize) stNext $ pure stNext
+      pure $ SendMsgQueryNext (AdvanceBlocks stepSize) stNext
 
     stNext = ClientStNext
       { recvMsgQueryRejected = absurd
       , recvMsgRollForward = const handleNewPoint
       , recvMsgRollBackward = handleNewPoint
+      , recvMsgWait = threadDelay 1_000_000 $> SendMsgPoll stNext
       }
 
     handleNewPoint point tip = do

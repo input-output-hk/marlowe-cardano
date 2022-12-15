@@ -48,13 +48,13 @@ codecChainSeek = binaryCodec putMsg getMsg
        putWord8 0x03
        put supportedVersions
 
-    putMsg (ServerAgency (TokNext tag _)) (MsgRejectQuery err tip) = do
+    putMsg (ServerAgency (TokNext tag)) (MsgRejectQuery err tip) = do
         putWord8 0x05
         putTag tag
         putErr tag err
         put tip
 
-    putMsg (ServerAgency (TokNext tag _)) (MsgRollForward result pos tip) = do
+    putMsg (ServerAgency (TokNext tag)) (MsgRollForward result pos tip) = do
         putWord8 0x06
         putTag tag
         putResult tag result
@@ -68,9 +68,9 @@ codecChainSeek = binaryCodec putMsg getMsg
 
     putMsg (ServerAgency TokNext{}) MsgWait = putWord8 0x08
 
-    putMsg (ServerAgency TokNext{}) MsgPing = putWord8 0x0a
+    putMsg (ClientAgency TokPoll) MsgPoll = putWord8 0x0a
 
-    putMsg (ClientAgency TokPing) MsgPong = putWord8 0x0b
+    putMsg (ClientAgency TokPoll) MsgCancel = putWord8 0x0b
 
     getMsg :: GetMessage (ChainSeek query point tip)
     getMsg tok      = do
@@ -88,7 +88,7 @@ codecChainSeek = binaryCodec putMsg getMsg
 
         (0x03, ServerAgency TokHandshake) -> SomeMessage . MsgRejectHandshake <$> get
 
-        (0x05, ServerAgency (TokNext qtag _)) -> do
+        (0x05, ServerAgency (TokNext qtag)) -> do
           SomeTag qtag' :: SomeTag query <- getTag
           case tagEq qtag qtag' of
             Nothing -> fail "decoded query tag does not match expected query tag"
@@ -97,7 +97,7 @@ codecChainSeek = binaryCodec putMsg getMsg
               tip <- get
               pure $ SomeMessage $ MsgRejectQuery err tip
 
-        (0x06, ServerAgency (TokNext qtag _)) -> do
+        (0x06, ServerAgency (TokNext qtag)) -> do
           SomeTag qtag' :: SomeTag query <- getTag
           case tagEq qtag qtag' of
             Nothing -> fail "decoded query tag does not match expected query tag"
@@ -107,16 +107,15 @@ codecChainSeek = binaryCodec putMsg getMsg
               tip <- get
               pure $ SomeMessage $ MsgRollForward result point tip
 
-        (0x07, ServerAgency (TokNext _ _)) -> do
+        (0x07, ServerAgency (TokNext _)) -> do
           point <- get
           tip <- get
           pure $ SomeMessage $ MsgRollBackward point tip
 
-        (0x08, ServerAgency (TokNext _ TokCanAwait)) -> pure $ SomeMessage MsgWait
+        (0x08, ServerAgency (TokNext _)) -> pure $ SomeMessage MsgWait
 
-        (0x0a, ServerAgency (TokNext _ TokMustReply)) -> pure $ SomeMessage MsgPing
+        (0x0a, ClientAgency TokPoll) -> pure $ SomeMessage MsgPoll
 
-        (0x0b, ClientAgency TokPing) -> pure $ SomeMessage MsgPong
+        (0x0b, ClientAgency TokPoll) -> pure $ SomeMessage MsgCancel
 
         _ -> fail $ "Unexpected tag " <> show tag
-
