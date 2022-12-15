@@ -249,9 +249,8 @@ fromJSONEncodedMetadata = \case
 -- Encodes `transaction_metadata`:
 -- https://github.com/input-output-hk/cardano-ledger/blob/node/1.35.3/eras/shelley/test-suite/cddl-files/shelley.cddl#L212
 newtype TransactionMetadata = TransactionMetadata { unTransactionMetadata :: Map Word64 Metadata }
-  deriving (Show, Eq, Ord, Generic)
-  deriving newtype (Semigroup, Monoid)
-  deriving anyclass (Binary, ToJSON)
+  deriving (Show, Eq, Ord)
+  deriving newtype (Semigroup, Monoid, Binary, ToJSON)
 
 fromJSONEncodedTransactionMetadata :: A.Value -> Maybe TransactionMetadata
 fromJSONEncodedTransactionMetadata = \case
@@ -841,14 +840,14 @@ instance Query Move where
         0x02 -> That <$> getResult t2
         0x03 -> These <$> getResult t1 <*> getResult t2
         _    -> fail $ "Invalid align result tag " <> show tag
-    TagAdvanceSlots -> get
-    TagAdvanceBlocks -> get
+    TagAdvanceSlots -> pure ()
+    TagAdvanceBlocks -> pure ()
     TagFindConsumingTx -> get
     TagFindTx -> get
-    TagIntersect -> get
+    TagIntersect -> pure ()
     TagFindConsumingTxs -> get
     TagFindTxsTo -> get
-    TagAdvanceToTip -> get
+    TagAdvanceToTip -> pure ()
 
   putErr = \case
     TagFork t1 t2 -> \case

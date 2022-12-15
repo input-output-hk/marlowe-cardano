@@ -323,7 +323,7 @@ performFindTxsTo credentials point = do
            , tx.id :: bytea?
            , tx.validityLowerBound :: bigint?
            , tx.validityUpperBound :: bigint?
-           , tx.metadataKey1564 :: bytea?
+           , tx.metadata :: bytea?
            , asset.policyId :: bytea?
            , asset.name :: bytea?
            , assetMint.quantity :: bigint?
@@ -409,7 +409,7 @@ performFindTx txId wait point = do
            , tx.id :: bytea?
            , tx.validityLowerBound :: bigint?
            , tx.validityUpperBound :: bigint?
-           , tx.metadataKey1564 :: bytea?
+           , tx.metadata :: bytea?
            , asset.policyId :: bytea?
            , asset.name :: bytea?
            , assetMint.quantity :: bigint?
@@ -720,7 +720,7 @@ type ReadTxRow =
   , Maybe ByteString -- Tx id
   , Maybe Int64      -- Tx validityLowerBound
   , Maybe Int64      -- Tx validityUpperBound
-  , Maybe ByteString -- Tx metadataKey1564
+  , Maybe ByteString -- Tx metadata
 
   , Maybe ByteString -- Tx minted Token's PolicyId
   , Maybe ByteString -- Tx minted Token's TokenName
