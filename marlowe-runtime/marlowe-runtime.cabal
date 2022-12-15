@@ -316,6 +316,7 @@ library web-server
     , eventuo11y-json
     , eventuo11y-batteries
     , exceptions
+    , http-types
     , lens
     , marlowe
     , marlowe-protocols

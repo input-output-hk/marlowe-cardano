@@ -41,6 +41,7 @@ optionsToServerDependencies Options{..} = do
   eventBackend <- simpleJsonStderrBackend defaultRenderSelectorJSON
   pure ServerDependencies
     { openAPIEnabled
+    , accessControlAllowOriginAll
     , runApplication = run $ fromIntegral port
     , runMarloweHeaderSyncClient = runClientPeerOverSocket
         throwIO

@@ -44,8 +44,10 @@ import qualified Language.Marlowe.Runtime.Web.Server.OpenAPI as OpenAPI
 import Language.Marlowe.Runtime.Web.Server.REST (ApiSelector)
 import qualified Language.Marlowe.Runtime.Web.Server.REST as REST
 import Language.Marlowe.Runtime.Web.Server.TxClient (TxClient(..), TxClientDependencies(..), TxClientSelector, txClient)
+import qualified Network.HTTP.Types as HTTP
 import Network.Protocol.Driver (RunClient)
 import Network.Protocol.Job.Client (JobClient)
+import qualified Network.Wai as WAI
 import Observe.Event (EventBackend, hoistEventBackend, narrowEventBackend)
 import Observe.Event.BackendModification (modifyEventBackend, setAncestor)
 import Observe.Event.DSL (SelectorField(Inject), SelectorSpec(SelectorSpec))
@@ -53,7 +55,7 @@ import Observe.Event.Render.JSON (DefaultRenderSelectorJSON(..))
 import Observe.Event.Render.JSON.DSL.Compile (compile)
 import Observe.Event.Syntax ((≔))
 import Observe.Event.Wai (ServeRequest, application, renderServeRequest)
-import Servant hiding (Server)
+import Servant hiding (Server, respond)
 
 type APIWithOpenAPI = OpenAPI.API :<|>  Web.API
 
@@ -73,9 +75,26 @@ serveAppM
   -> Application
 serveAppM api env = serve api . hoistServer api (flip runReaderT env . runAppM)
 
-app :: Bool -> AppEnv r -> EventBackend (AppM r) r ApiSelector -> Application
-app True env = serveAppM apiWithOpenApi env . serverWithOpenAPI
-app False env = serveAppM Web.api env . REST.server
+addHeaders :: HTTP.ResponseHeaders -> WAI.Middleware
+addHeaders hdrs webApp req respond = webApp req $ \response -> do
+    let (st, headers, streamHandle) = WAI.responseToStream response
+    streamHandle $ \streamBody ->
+        respond $ WAI.responseStream st (headers <> hdrs) streamBody
+
+addCorsHeader :: WAI.Middleware
+addCorsHeader = addHeaders [("Access-Control-Allow-Origin", "*")]
+
+corsMiddleware :: Bool -> WAI.Middleware
+corsMiddleware accessControlAllowOriginAll =
+  if accessControlAllowOriginAll
+  then addCorsHeader
+  else id
+
+app :: Bool -> Bool -> AppEnv r -> EventBackend (AppM r) r ApiSelector -> Application
+app True accessControlAllowOriginAll env = do
+  corsMiddleware accessControlAllowOriginAll . serveAppM apiWithOpenApi env . serverWithOpenAPI
+app False accessControlAllowOriginAll env = do
+  corsMiddleware accessControlAllowOriginAll . serveAppM Web.api env . REST.server
 
 instance DefaultRenderSelectorJSON ServeRequest where
   defaultRenderSelectorJSON = renderServeRequest
@@ -91,6 +110,7 @@ compile $ SelectorSpec "server"
 
 data ServerDependencies r = ServerDependencies
   { openAPIEnabled :: Bool
+  , accessControlAllowOriginAll :: Bool
   , runApplication :: Application -> IO ()
   , runMarloweHeaderSyncClient :: RunClient IO MarloweHeaderSyncClient
   , runMarloweSyncClient :: RunClient IO MarloweSyncClient
@@ -140,6 +160,7 @@ server = proc ServerDependencies{..} -> do
         }
     , eventBackend
     , openAPIEnabled
+    , accessControlAllowOriginAll
     , runApplication
     }
 
@@ -147,6 +168,7 @@ data WebServerDependencies r = WebServerDependencies
   { env :: AppEnv r
   , eventBackend :: EventBackend IO r ServerSelector
   , openAPIEnabled :: Bool
+  , accessControlAllowOriginAll :: Bool
   , runApplication :: Application -> IO ()
   }
 
@@ -155,4 +177,4 @@ webServer = component_ \WebServerDependencies{..} -> do
   let httpBackend = hoistEventBackend liftIO $ narrowEventBackend Api eventBackend
   runApplication
     $ application (narrowEventBackend Http eventBackend)
-    $ app openAPIEnabled env . (`modifyEventBackend`  httpBackend) . setAncestor
+    $ app openAPIEnabled accessControlAllowOriginAll env . (`modifyEventBackend`  httpBackend) . setAncestor
