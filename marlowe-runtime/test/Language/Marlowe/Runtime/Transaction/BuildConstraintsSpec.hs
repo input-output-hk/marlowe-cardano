@@ -21,7 +21,7 @@ import Gen.Cardano.Api.Metadata (genTxMetadata)
 import Gen.Cardano.Api.Typed (genAddressShelley)
 import qualified Language.Marlowe.Core.V1.Semantics as Semantics
 import qualified Language.Marlowe.Core.V1.Semantics.Types as Semantics
-import Language.Marlowe.Runtime.Cardano.Api (fromCardanoAddressAny, fromCardanoMetadata)
+import Language.Marlowe.Runtime.Cardano.Api (fromCardanoAddressAny)
 import Language.Marlowe.Runtime.ChainSync.Api (Lovelace, TransactionMetadata(unTransactionMetadata), toUTxOsList)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Core.Api (Contract, Datum, MarloweVersion(..), MarloweVersionTag(..))
@@ -208,7 +208,7 @@ instance Arbitrary RoleTokensConfig where
     RoleTokensMint _ -> [RoleTokensNone]
 
 instance Arbitrary Chain.TransactionMetadata where
-  arbitrary = hedgehog $ Chain.TransactionMetadata . fmap fromCardanoMetadata . unTxMetadata <$> genTxMetadata
+  arbitrary = hedgehog $ Chain.TransactionMetadata . fmap Chain.fromCardanoMetadata . unTxMetadata <$> genTxMetadata
 
 unTxMetadata :: TxMetadata -> Map Word64 TxMetadataValue
 unTxMetadata (TxMetadata m) = m

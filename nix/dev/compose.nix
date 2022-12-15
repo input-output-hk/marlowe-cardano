@@ -22,6 +22,7 @@ let
   symlinks = runCommand "symlinks" { } ''
     mkdir -p $out
     ln -sv ${run-sqitch}/bin/run-sqitch $out
+    ln -sv ${run-local-service "marlowe-chain-sync" "0.0.0.0" "marlowe-chain-indexer"}/bin/run-marlowe-chain-indexer $out
     ln -sv ${run-local-service "marlowe-chain-sync" "0.0.0.0" "chainseekd"}/bin/run-chainseekd $out
     ln -sv ${run-local-service "marlowe-runtime" "0.0.0.0" "marlowe-history"}/bin/run-marlowe-history $out
     ln -sv ${run-local-service "marlowe-runtime" "0.0.0.0" "marlowe-discovery"}/bin/run-marlowe-discovery $out
@@ -59,11 +60,6 @@ let
       "${symlinks}:/exec"
       "shared:/ipc"
     ];
-    environment = [
-      "CABAL_DIR=\${HOME}/.cabal"
-      "REAL_USER=\${USER}"
-      "REAL_HOME=\${HOME}"
-    ];
     restart = "unless-stopped";
     ports = map toString ports;
     healthcheck = {
@@ -73,6 +69,36 @@ let
       retries = 5;
     };
     depends_on = lib.genAttrs depends_on (_: { condition = "service_healthy"; });
+  };
+
+  chain-indexer-service = {
+    image = "alpine:3.16.2";
+    volumes = [
+      "./:/src"
+      "/nix:/nix"
+      "${symlinks}:/exec"
+      "shared:/ipc"
+    ];
+    restart = "unless-stopped";
+    depends_on = {
+      "postgres" = { condition = "service_healthy"; };
+      "node" = { condition = "service_healthy"; };
+    };
+    command = [
+      "/exec/run-marlowe-chain-indexer"
+      "--testnet-magic"
+      (builtins.toString network.magic)
+      "--socket-path"
+      "/ipc/node.socket"
+      "--database-uri"
+      "postgresql://postgres@postgres/chain"
+      "--genesis-config-file"
+      network.nodeConfig.ByronGenesisFile
+      "--genesis-config-file-hash"
+      network.nodeConfig.ByronGenesisHash
+      "--log-config-file"
+      "./marlowe-chain-indexer.log.config"
+    ];
   };
 
   chainseekd-service = dev-service {
@@ -86,10 +112,6 @@ let
       "/ipc/node.socket"
       "--database-uri"
       "postgresql://postgres@postgres/chain"
-      "--genesis-config-file"
-      network.nodeConfig.ByronGenesisFile
-      "--genesis-config-file-hash"
-      network.nodeConfig.ByronGenesisHash
       "--host"
       "0.0.0.0"
       "--log-config-file"
@@ -203,6 +225,8 @@ let
 
     volumes.postgres = null;
 
+    # TODO: ensure sqitch
+    services.marlowe-chain-indexer = chain-indexer-service;
     # TODO: ensure sqitch
     services.chainseekd = chainseekd-service;
     services.marlowe-history = history-service;

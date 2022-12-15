@@ -563,7 +563,7 @@ genRedeemer = do
   txInputs <$> arbitraryValidInput state contract
 
 genMetadata :: Gen Chain.Metadata
-genMetadata = hedgehog $ fromCardanoMetadata <$> genTxMetadataValue
+genMetadata = hedgehog $ Chain.fromCardanoMetadata <$> genTxMetadataValue
 
 genPaymentKeyHash :: Gen Chain.PaymentKeyHash
 genPaymentKeyHash = hedgehog $ fromCardanoPaymentKeyHash . verificationKeyHash <$> genVerificationKey AsPaymentKey

@@ -72,6 +72,7 @@ max_pred_locks_per_transaction = 256
 Start the backend services in the following order.
 - PostgreSQL
 - Cardano Node
+- `marlowe-chain-indexer`
 - `chainseekd`
 - `marlowe-history`
 - `marlowe-discovery`
@@ -83,8 +84,6 @@ Start the backend services in the following order.
 See the [help page](chainseekd.md) for all of the command-line options for `chainseekd`. The port numbers have sensible default values that are consistent with the other Marlowe Runtime services, but one needs to specify a few options explicitly:
 - `--socket-path` for the filesystem path to the Cardano node's socket.
 - `--database-uri` for the location and name of the PostgreSQL database.
-- `--genesis-config-file` for the filesystem path to the genesis file used by the Cardano node.
-- `--genesis-config-file-hash` for the hash of the gensis file.
 
 A typical invocation of `chainseekd` will be like something along the following lines:
 ```console
@@ -92,11 +91,30 @@ $ sqitch deploy
 
 $ chainseekd \
     --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-    --database-uri postgresql://postgresql@0.0.0.0/chain \                     
+    --database-uri postgresql://postgresql@0.0.0.0/chain
+```
+The `sqitch deploy` command handles database creation and migration, so it is only necessary to run that on new installations or after upgrading `chainseekd`.
+
+
+### Marlowe Chain Indexer Daemon
+
+See the [help page](marlowe-chain-indexer.md) for all of the command-line options for `marlowe-chain-indexer`. One needs to specify a few options explicitly:
+- `--socket-path` for the filesystem path to the Cardano node's socket.
+- `--database-uri` for the location and name of the PostgreSQL database.
+- `--genesis-config-file` for the filesystem path to the genesis file used by the Cardano node.
+- `--genesis-config-file-hash` for the hash of the genesis file.
+
+A typical invocation of `marlowe-chain-indexer` will be like something along the following lines:
+```console
+$ sqitch deploy
+
+$ marlowe-chain-indexer \
+    --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+    --database-uri postgresql://postgresql@0.0.0.0/chain \
     --genesis-config-file byron-genesis.json \ 
     --genesis-config-file-hash 5f20df933584822601f9e3f8c024eb5eb252fe8cefb24d1317dc3d432e940ebb
 ```
-The `sqitch deploy` command handles database creation and migration, so it is only necessary to run that on new installations or after upgrading `chainseekd`.
+The `sqitch deploy` command handles database creation and migration, so it is only necessary to run that on new installations or after upgrading `marlowe-chain-indexer`.
 
 
 ### Marlowe History

@@ -1,7 +1,7 @@
 {-# LANGUAGE GADTs #-}
-module Language.Marlowe.Runtime.ChainSync.Store
-  ( ChainStore(..)
-  , ChainStoreDependencies(..)
+
+module Language.Marlowe.Runtime.ChainIndexer.Store
+  ( ChainStoreDependencies(..)
   , ChainStoreSelector(..)
   , Changes(..)
   , SaveField(..)
@@ -10,7 +10,7 @@ module Language.Marlowe.Runtime.ChainSync.Store
 
 import Cardano.Api (ChainPoint(..), ChainTip(..))
 import Control.Concurrent.Component
-import Control.Concurrent.STM (STM, atomically, newTVar, readTVar, writeTVar)
+import Control.Concurrent.STM (STM, atomically)
 import Control.Concurrent.STM.Delay (Delay, newDelay, waitDelay)
 import Control.Monad (guard, unless, when)
 import Control.Monad.Trans.Class (lift)
@@ -18,9 +18,9 @@ import Control.Monad.Trans.Maybe (MaybeT(..))
 import Data.Foldable (for_, traverse_)
 import Data.Time (NominalDiffTime, UTCTime, addUTCTime, diffUTCTime, getCurrentTime, nominalDiffTimeToSeconds)
 import Data.Void (Void)
-import Language.Marlowe.Runtime.ChainSync.Database
-import Language.Marlowe.Runtime.ChainSync.Genesis (GenesisBlock)
-import Language.Marlowe.Runtime.ChainSync.NodeClient (Changes(..), isEmptyChanges)
+import Language.Marlowe.Runtime.ChainIndexer.Database
+import Language.Marlowe.Runtime.ChainIndexer.Genesis (GenesisBlock)
+import Language.Marlowe.Runtime.ChainIndexer.NodeClient (Changes(..), isEmptyChanges)
 import Observe.Event (EventBackend, addField, withEvent)
 import Prelude hiding (filter)
 import Witherable (Witherable(..))
@@ -48,15 +48,9 @@ data ChainStoreDependencies r = ChainStoreDependencies
   , eventBackend :: EventBackend IO r ChainStoreSelector
   }
 
--- | Public API of the ChainStore component
-newtype ChainStore = ChainStore
-  { localTip      :: STM ChainTip -- ^ Action to read the current (local) chain tip
-  }
-
 -- | Create a ChainStore component.
-chainStore :: Component IO (ChainStoreDependencies r) ChainStore
-chainStore = component \ChainStoreDependencies{..} -> do
-  localTipVar <- newTVar ChainTipAtGenesis
+chainStore :: Component IO (ChainStoreDependencies r) ()
+chainStore = component_ \ChainStoreDependencies{..} -> do
   let
     awaitChanges :: Maybe Delay -> STM Changes
     awaitChanges delay = do
@@ -90,7 +84,6 @@ chainStore = component \ChainStoreDependencies{..} -> do
               addField ev $ LocalTip changesLocalTip
               addField ev $ RemoteTip changesTip
               runCommitBlocks commitBlocks changesBlocks
-              atomically $ writeTVar localTipVar changesLocalTip
           go . Just =<< getCurrentTime
 
     computeDelay :: UTCTime -> IO (Maybe Delay)
@@ -102,6 +95,4 @@ chainStore = component \ChainStoreDependencies{..} -> do
       let delayMicroseconds = floor $ 1_000_000 * nominalDiffTimeToSeconds delay
       lift $ newDelay delayMicroseconds
 
-    localTip = readTVar localTipVar
-
-  pure (runChainStore, ChainStore { localTip })
+  runChainStore

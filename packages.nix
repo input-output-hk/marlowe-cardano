@@ -14,10 +14,8 @@ rec {
   inherit (marlowe) cardano-node cardano-cli;
 
   inherit (haskell.packages.marlowe-cli.components.exes) marlowe-cli;
-  inherit (haskell.packages.marlowe-chain-sync.components.exes) chainseekd;
-  inherit (haskell.packages.marlowe-runtime.components.exes) marlowe-history;
-  inherit (haskell.packages.marlowe-runtime.components.exes) marlowe-discovery;
-  inherit (haskell.packages.marlowe-runtime.components.exes) marlowe-tx;
+  inherit (haskell.packages.marlowe-chain-sync.components.exes) chainseekd marlowe-chain-indexer;
+  inherit (haskell.packages.marlowe-runtime.components.exes) marlowe-history marlowe-discovery marlowe-tx;
   marlowe-rt = haskell.packages.marlowe-runtime.components.exes.marlowe;
 
   network = pkgs.networks.${networkNixName};

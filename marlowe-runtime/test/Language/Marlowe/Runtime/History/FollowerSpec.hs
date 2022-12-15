@@ -147,7 +147,7 @@ createTx =
   let
     txId = createTxId
     validityRange = Chain.Unbounded
-    metadata = Nothing
+    metadata = mempty
     inputs = mempty
     outputs = [creationOutput]
     mintedTokens = Chain.Tokens mempty
@@ -194,7 +194,7 @@ closeTx =
   let
     txId = closeTxId
     validityRange = Chain.MinMaxBound 0 100
-    metadata = Nothing
+    metadata = mempty
     inputs = Set.singleton closeTxIn
     outputs = []
     mintedTokens = Chain.Tokens mempty
@@ -222,7 +222,7 @@ applyInputsTx =
   let
     txId = applyInputsTxId
     validityRange = Chain.MinMaxBound 0 100
-    metadata = Nothing
+    metadata = mempty
     inputs = Set.singleton applyInputsTxIn
     outputs = [applyInputsOutput]
     mintedTokens = Chain.Tokens mempty
@@ -284,7 +284,7 @@ redeemPayoutTx =
   let
     txId = redeemPayoutTxId
     validityRange = Chain.Unbounded
-    metadata = Nothing
+    metadata = mempty
     inputs = Set.singleton redeemPayoutTxIn
     outputs = [redeemPayoutOutput]
     mintedTokens = Chain.Tokens mempty
@@ -319,7 +319,7 @@ close2Tx =
   let
     txId = close2TxId
     validityRange = Chain.MinMaxBound 0 100
-    metadata = Nothing
+    metadata = mempty
     inputs = Set.singleton close2TxIn
     outputs = []
     mintedTokens = Chain.Tokens mempty

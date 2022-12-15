@@ -1,12 +1,11 @@
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE StrictData #-}
 
-module Language.Marlowe.Runtime.ChainSync.Database
+module Language.Marlowe.Runtime.ChainIndexer.Database
   where
 
 import Cardano.Api (BlockHeader, BlockInMode, CardanoMode, ChainPoint(..), TxInMode)
-import Language.Marlowe.Runtime.ChainSync.Api (GetUTxOsQuery)
-import qualified Language.Marlowe.Runtime.ChainSync.Api as Api
-import Language.Marlowe.Runtime.ChainSync.Genesis (GenesisBlock(..))
+import Language.Marlowe.Runtime.ChainIndexer.Genesis (GenesisBlock(..))
 import Ouroboros.Network.Point (WithOrigin)
 
 type CardanoBlock = BlockInMode CardanoMode
@@ -44,42 +43,20 @@ newtype GetIntersectionPoints m = GetIntersectionPoints
 newtype GetGenesisBlock m = GetGenesisBlock
   { runGetGenesisBlock :: m (Maybe GenesisBlock) }
 
-newtype GetUTxOs m = GetUTxOs
-  { runGetUTxOs :: GetUTxOsQuery -> m Api.UTxOs }
-
-data MoveResult err result
-  = RollForward result Api.BlockHeader Api.ChainPoint
-  | RollBack Api.ChainPoint Api.ChainPoint
-  | Reject err Api.ChainPoint
-  | Wait Api.ChainPoint
-
-newtype MoveClient m = MoveClient
-  { runMoveClient :: forall err result. Api.ChainPoint -> Api.Move err result -> m (MoveResult err result) }
-
 hoistGetIntersectionPoints :: (forall a. m a -> n a) -> GetIntersectionPoints m -> GetIntersectionPoints n
 hoistGetIntersectionPoints transformation = GetIntersectionPoints . transformation . runGetIntersectionPoints
 
 hoistGetGenesisBlock :: (forall a. m a -> n a) -> GetGenesisBlock m -> GetGenesisBlock n
 hoistGetGenesisBlock transformation = GetGenesisBlock . transformation . runGetGenesisBlock
 
-hoistGetUTxOs :: (forall a. m a -> n a) -> GetUTxOs m -> GetUTxOs n
-hoistGetUTxOs transformation = GetUTxOs . fmap transformation . runGetUTxOs
-
-hoistMoveClient :: (forall a. m a -> n a) -> MoveClient m -> MoveClient n
-hoistMoveClient transformation (MoveClient runMoveClient) =
-  MoveClient $ fmap transformation . runMoveClient
-
-
 -- Bundles
 
 data DatabaseQueries m = DatabaseQueries
-  { commitRollback        :: !(CommitRollback m)
-  , commitBlocks          :: !(CommitBlocks m)
-  , commitGenesisBlock    :: !(CommitGenesisBlock m)
-  , getIntersectionPoints :: !(GetIntersectionPoints m)
-  , getGenesisBlock       :: !(GetGenesisBlock m)
-  , getUTxOs              :: !(GetUTxOs m)
-  , moveClient            :: !(MoveClient m)
+  { commitRollback :: CommitRollback m
+  , commitBlocks :: CommitBlocks m
+  , commitGenesisBlock :: CommitGenesisBlock m
+  , getIntersectionPoints :: GetIntersectionPoints m
+  , getGenesisBlock :: GetGenesisBlock m
   }
 
 hoistDatabaseQueries :: (forall a. m a -> n a) -> DatabaseQueries m -> DatabaseQueries n
@@ -89,6 +66,4 @@ hoistDatabaseQueries transformation DatabaseQueries{..} = DatabaseQueries
   , commitRollback = hoistCommitRollback transformation commitRollback
   , getIntersectionPoints = hoistGetIntersectionPoints transformation getIntersectionPoints
   , getGenesisBlock = hoistGetGenesisBlock transformation getGenesisBlock
-  , getUTxOs = hoistGetUTxOs transformation getUTxOs
-  , moveClient = hoistMoveClient transformation moveClient
   }

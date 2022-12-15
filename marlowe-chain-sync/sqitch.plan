@@ -10,3 +10,4 @@ partition [appschema] 2022-07-25T20:26:08Z Jamie Bertram <jamie.bertram@iohk.io>
 initial_partition [partition block tx] 2022-07-25T20:49:31Z Jamie Bertram <jamie.bertram@iohk.io> # Adds partition creation function
 md5address [tx] 2022-08-26T15:54:39Z Jamie Bertram <jamie.bertram@iohk.io> # Change address index to MD5 hash
 split-address [md5address] 2022-09-30T18:50:49Z Jamie Bertram <jamie.bertram@iohk.io> # Split addresses into their constituent parts
+rename-metadata [tx] 2022-12-14T13:38:23Z Jamie Bertram <jamie.bertram@iohk.io> # Rename metadataKey1564 column
