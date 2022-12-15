@@ -57,7 +57,7 @@ data ServerStIdle query point tip m a = ServerStIdle
   { recvMsgQueryNext
     :: forall err result
      . query err result
-    -> m (ServerStNext query err result point tip 'StCanAwait m a)
+    -> m (ServerStNext query err result point tip m a)
   , recvMsgDone :: m a
   }
 
@@ -67,14 +67,14 @@ data ServerStIdle query point tip m a = ServerStIdle
 -- * A query rejection response
 -- * A roll forward response
 -- * A roll backward response
-data ServerStNext query err result point tip (k :: StNextKind) m a where
+data ServerStNext query err result point tip m a where
 
   -- | Reject the query with an error message.
   SendMsgQueryRejected
     :: err
     -> tip
     -> m (ServerStIdle query point tip m a)
-    -> ServerStNext query err result point tip k m a
+    -> ServerStNext query err result point tip m a
 
   -- | Send a query response and advance the client to a new point in the
   -- chain.
@@ -83,24 +83,31 @@ data ServerStNext query err result point tip (k :: StNextKind) m a where
     -> point
     -> tip
     -> m (ServerStIdle query point tip m a)
-    -> ServerStNext query err result point tip k m a
+    -> ServerStNext query err result point tip m a
 
   -- | Roll the client back to a previous point.
   SendMsgRollBackward
     :: point
     -> tip
     -> m (ServerStIdle query point tip m a)
-    -> ServerStNext query err result point tip k m a
+    -> ServerStNext query err result point tip m a
 
   -- | Tell the client to wait
   SendMsgWait
-    :: m (ServerStNext query err result point tip 'StMustReply m a)
-    -> ServerStNext query err result point tip 'StCanAwait m a
+    :: m (ServerStPoll query err result point tip m a)
+    -> ServerStNext query err result point tip m a
 
-  -- | Check if the client is still waiting
-  SendMsgPing
-    :: m (ServerStNext query err result point tip 'StMustReply m a)
-    -> ServerStNext query err result point tip 'StMustReply m a
+-- | In the `StPoll` protocol state, the server does not have agency. Instead,
+-- it is waiting to handle either:
+--
+-- * A poll message
+-- * A cancel poll message
+--
+-- It must be prepared to handle either.
+data ServerStPoll query err result point tip m a = ServerStPoll
+  { recvMsgPoll :: m (ServerStNext query err result point tip m a)
+  , recvMsgCancel :: m (ServerStIdle query point tip m a)
+  }
 
 -- | Transform the query, point, and tip types in the server.
 mapChainSeekServer
@@ -128,14 +135,22 @@ mapChainSeekServer cmapQuery mapPoint mapTip =
       }
 
     mapNext
-      :: forall err result k
-       . ServerStNext query err result point tip k m a
-       -> ServerStNext query' err result point' tip' k m a
+      :: forall err result
+       . ServerStNext query err result point tip m a
+       -> ServerStNext query' err result point' tip' m a
     mapNext (SendMsgQueryRejected err tip idle) = SendMsgQueryRejected err (mapTip tip) $ mapIdle <$> idle
     mapNext (SendMsgRollForward result point tip idle) = SendMsgRollForward result (mapPoint point) (mapTip tip) $ mapIdle <$> idle
     mapNext (SendMsgRollBackward point tip idle) = SendMsgRollBackward (mapPoint point) (mapTip tip) $ mapIdle <$> idle
-    mapNext (SendMsgWait mnext) = SendMsgWait $ mapNext <$> mnext
-    mapNext (SendMsgPing mnext) = SendMsgPing $ mapNext <$> mnext
+    mapNext (SendMsgWait mnext) = SendMsgWait $ mapPoll <$> mnext
+
+    mapPoll
+      :: forall err result
+       . ServerStPoll query err result point tip m a
+       -> ServerStPoll query' err result point' tip' m a
+    mapPoll ServerStPoll{..} = ServerStPoll
+      { recvMsgPoll = fmap mapNext recvMsgPoll
+      , recvMsgCancel = fmap mapIdle recvMsgCancel
+      }
 
 -- | Change the underlying monad with a natural transformation.
 hoistChainSeekServer
@@ -162,14 +177,22 @@ hoistChainSeekServer f =
       }
 
     hoistNext
-      :: forall err result k
-       . ServerStNext query err result point tip k m a
-       -> ServerStNext query err result point tip k n a
+      :: forall err result
+       . ServerStNext query err result point tip m a
+       -> ServerStNext query err result point tip n a
     hoistNext (SendMsgQueryRejected err tip idle)        = SendMsgQueryRejected err tip $ f $ hoistIdle <$> idle
     hoistNext (SendMsgRollForward result point tip idle) = SendMsgRollForward result point tip $ f $ hoistIdle <$> idle
     hoistNext (SendMsgRollBackward point tip idle)       = SendMsgRollBackward point tip $ f $ hoistIdle <$> idle
-    hoistNext (SendMsgWait mnext)                        = SendMsgWait $ f $ hoistNext <$> mnext
-    hoistNext (SendMsgPing mnext)                        = SendMsgPing $ f $ hoistNext <$> mnext
+    hoistNext (SendMsgWait mnext)                        = SendMsgWait $ f $ hoistPoll <$> mnext
+
+    hoistPoll
+      :: forall err result
+       . ServerStPoll query err result point tip m a
+       -> ServerStPoll query err result point tip n a
+    hoistPoll ServerStPoll{..} = ServerStPoll
+      { recvMsgPoll =  f $ fmap hoistNext recvMsgPoll
+      , recvMsgCancel = f $ fmap hoistIdle recvMsgCancel
+      }
 
 -- | Interpret the server as a 'typed-protocols' 'Peer'.
 chainSeekServerPeer
@@ -178,8 +201,8 @@ chainSeekServerPeer
   => point
   -> ChainSeekServer query point tip m a
   -> Peer (ChainSeek query point tip) 'AsServer 'StInit m a
-chainSeekServerPeer initialPoint (ChainSeekServer mclient) =
-  Effect $ peerInit <$> mclient
+chainSeekServerPeer initialPoint (ChainSeekServer mClient) =
+  Effect $ peerInit <$> mClient
   where
   peerInit
     :: ServerStInit query point tip m a
@@ -193,10 +216,10 @@ chainSeekServerPeer initialPoint (ChainSeekServer mclient) =
   peerHandshake = \case
     SendMsgHandshakeRejected versions ma ->
       Yield (ServerAgency TokHandshake) (MsgRejectHandshake versions) $
-      Done TokFault ma
-    SendMsgHandshakeConfirmed midle ->
+      Done TokDone ma
+    SendMsgHandshakeConfirmed mIdle ->
       Yield (ServerAgency TokHandshake) MsgConfirmHandshake $
-      peerIdle initialPoint midle
+      peerIdle initialPoint mIdle
 
   peerIdle
     :: point
@@ -211,27 +234,33 @@ chainSeekServerPeer initialPoint (ChainSeekServer mclient) =
   peerIdle_ pos ServerStIdle{..} =
     Await (ClientAgency TokIdle) \case
       MsgQueryNext query -> Effect
-        $ fmap (peerNext TokCanAwait pos query)
+        $ fmap (peerNext pos query)
         $ recvMsgQueryNext query
       MsgDone -> Effect $ Done TokDone <$> recvMsgDone
 
   peerNext
-    :: forall err result wait
-     . TokNextKind wait
-    -> point
+    :: forall err result
+     . point
     -> query err result
-    -> ServerStNext query err result point tip wait m a
-    -> Peer (ChainSeek query point tip) 'AsServer ('StNext err result wait) m a
-  peerNext tok pos query = \case
-    SendMsgQueryRejected err tip midle       -> yield pos (MsgRejectQuery err tip) midle
-    SendMsgRollForward result pos' tip midle -> yield pos' (MsgRollForward result pos' tip) midle
-    SendMsgRollBackward pos' tip midle       -> yield pos' (MsgRollBackward pos' tip) midle
-    SendMsgWait mnext                    ->
-      Yield (ServerAgency (TokNext (tagFromQuery query) TokCanAwait)) MsgWait $
-      Effect $ peerNext TokMustReply pos query <$> mnext
-    SendMsgPing mnext                        ->
-      Yield (ServerAgency (TokNext (tagFromQuery query) TokMustReply)) MsgPing $
-      Await (ClientAgency TokPing) \MsgPong ->
-      Effect $ peerNext TokMustReply pos query <$> mnext
+    -> ServerStNext query err result point tip m a
+    -> Peer (ChainSeek query point tip) 'AsServer ('StNext err result) m a
+  peerNext pos query = \case
+    SendMsgQueryRejected err tip mIdle       -> yield pos (MsgRejectQuery err tip) mIdle
+    SendMsgRollForward result pos' tip mIdle -> yield pos' (MsgRollForward result pos' tip) mIdle
+    SendMsgRollBackward pos' tip mIdle       -> yield pos' (MsgRollBackward pos' tip) mIdle
+    SendMsgWait mPoll                    ->
+      Yield (ServerAgency (TokNext (tagFromQuery query))) MsgWait $
+      Effect $ peerPoll pos query <$> mPoll
     where
-      yield pos' msg = Yield (ServerAgency (TokNext (tagFromQuery query) tok)) msg . peerIdle pos'
+      yield pos' msg = Yield (ServerAgency (TokNext (tagFromQuery query))) msg . peerIdle pos'
+
+  peerPoll
+    :: forall err result
+     . point
+    -> query err result
+    -> ServerStPoll query err result point tip m a
+    -> Peer (ChainSeek query point tip) 'AsServer ('StPoll err result) m a
+  peerPoll pos query ServerStPoll{..} =
+    Await (ClientAgency TokPoll) \case
+      MsgPoll -> Effect $ fmap (peerNext pos query) recvMsgPoll
+      MsgCancel -> Effect $ fmap (peerIdle_ pos) recvMsgCancel

@@ -5,11 +5,13 @@ module Language.Marlowe.Runtime.Discovery.Chain
   where
 
 import Control.Applicative ((<|>))
+import Control.Concurrent (threadDelay)
 import Control.Concurrent.Component
 import Control.Concurrent.STM (STM, atomically, modifyTVar, newTVar, readTVar, writeTVar)
 import Control.Monad (guard)
 import Data.Crosswalk (crosswalk)
 import Data.Foldable (asum, fold, for_)
+import Data.Functor (($>))
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Set (Set)
@@ -75,7 +77,6 @@ discoveryChainClient = component \DiscoveryChainClientDependencies{..} -> do
     clientIdle = Chain.SendMsgQueryNext
       (Chain.FindTxsTo $ Set.map Chain.ScriptCredential marloweScriptHashes)
       clientNext
-      (pure clientNext)
 
     clientNext = Chain.ClientStNext
       { recvMsgQueryRejected = \_ _ -> pure clientIdle
@@ -88,6 +89,7 @@ discoveryChainClient = component \DiscoveryChainClientDependencies{..} -> do
       , recvMsgRollBackward = \point _ -> do
           atomically $ modifyTVar changesVar (<> mempty { rollbackTo = Just point })
           pure clientIdle
+      , recvMsgWait = threadDelay 1_000_000 $> Chain.SendMsgPoll clientNext
       }
 
   pure

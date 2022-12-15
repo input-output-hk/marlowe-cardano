@@ -57,22 +57,14 @@ data ChainSeek (query :: Type -> Type -> Type) point tip where
   -- a response, and the server is preparing to send a response. The server can
   -- respond immediately or it can send a 'Wait' message followed by a response
   -- at some point in the future.
-  StNext :: err -> result -> StNextKind -> ChainSeek query point tip
+  StNext :: err -> result -> ChainSeek query point tip
 
   -- | The server has sent a ping to the client to determine if it is still
   -- connected and is waiting for a pong.
-  StPing :: err -> result -> ChainSeek query point tip
+  StPoll :: err -> result -> ChainSeek query point tip
 
-  -- | The failed state of the protocol.
-  StFault :: ChainSeek query point tip
-
-  -- | The normal terminal state of the protocol.
+  -- | The terminal state of the protocol.
   StDone :: ChainSeek query point tip
-
--- | Sub-states of 'StNext'.
-data StNextKind
-  = StCanAwait  -- ^ The server can send a 'Wait' message or a response
-  | StMustReply -- ^ The server must send a reply, having sent a 'Wait'.
 
 -- | Schema version used for
 newtype SchemaVersion = SchemaVersion Text
@@ -106,75 +98,68 @@ instance Protocol (ChainSeek query point tip) where
     -- | Reject the handshake.
     MsgRejectHandshake :: [SchemaVersion] -> Message (ChainSeek query point tip)
       'StHandshake
-      'StFault
+      'StDone
 
     -- | Request the next matching result for the given query from the client's
     -- position.
     MsgQueryNext :: query err result -> Message (ChainSeek query point tip)
       'StIdle
-      ('StNext err result 'StCanAwait)
+      ('StNext err result)
 
     -- | Reject a query with an error message.
     MsgRejectQuery :: err -> tip -> Message (ChainSeek query point tip)
-      ('StNext err result wait)
+      ('StNext err result)
       'StIdle
 
     -- | Send a response to a query and roll the client forward to a new point.
     MsgRollForward :: result -> point -> tip -> Message (ChainSeek query point tip)
-      ('StNext err result wait)
+      ('StNext err result)
       'StIdle
 
     -- | Roll the client backward.
     MsgRollBackward :: point -> tip -> Message (ChainSeek query point tip)
-      ('StNext err result wait)
+      ('StNext err result)
       'StIdle
 
     -- | Inform the client they must wait indefinitely to receive a reply.
     MsgWait :: Message (ChainSeek query point tip)
-      ('StNext err result 'StCanAwait)
-      ('StNext err result 'StMustReply)
+      ('StNext err result)
+      ('StPoll err result)
 
     -- | End the protocol
     MsgDone :: Message (ChainSeek query point tip)
       'StIdle
       'StDone
 
-    -- | Check if the client is still waiting.
-    MsgPing :: Message (ChainSeek query point tip)
-      ('StNext err result 'StMustReply)
-      ('StPing err result)
+    -- | Ask the server if there have been any updates.
+    MsgPoll :: Message (ChainSeek query point tip)
+      ('StPoll err result)
+      ('StNext err result)
 
-    -- | Reassure the server we are still waiting.
-    MsgPong :: Message (ChainSeek query point tip)
-      ('StPing err result)
-      ('StNext err result 'StMustReply)
+    -- | Cancel the polling loop.
+    MsgCancel :: Message (ChainSeek query point tip)
+      ('StPoll err result)
+      'StIdle
 
   data ClientHasAgency st where
     TokInit :: ClientHasAgency 'StInit
     TokIdle :: ClientHasAgency 'StIdle
-    TokPing :: ClientHasAgency ('StPing err result)
+    TokPoll :: ClientHasAgency ('StPoll err result)
 
   data ServerHasAgency st where
     TokHandshake :: ServerHasAgency 'StHandshake
-    TokNext :: Tag query err result -> TokNextKind k -> ServerHasAgency ('StNext err result k :: ChainSeek query point tip)
+    TokNext :: Tag query err result -> ServerHasAgency ('StNext err result :: ChainSeek query point tip)
 
   data NobodyHasAgency st where
-    TokFault :: NobodyHasAgency 'StFault
     TokDone :: NobodyHasAgency 'StDone
 
   exclusionLemma_ClientAndServerHaveAgency TokInit = \case
   exclusionLemma_ClientAndServerHaveAgency TokIdle = \case
-  exclusionLemma_ClientAndServerHaveAgency TokPing = \case
+  exclusionLemma_ClientAndServerHaveAgency TokPoll = \case
 
-  exclusionLemma_NobodyAndClientHaveAgency TokFault = \case
   exclusionLemma_NobodyAndClientHaveAgency TokDone  = \case
 
-  exclusionLemma_NobodyAndServerHaveAgency TokFault = \case
   exclusionLemma_NobodyAndServerHaveAgency TokDone  = \case
-
-data TokNextKind (k :: StNextKind) where
-  TokCanAwait :: TokNextKind 'StCanAwait
-  TokMustReply :: TokNextKind 'StMustReply
 
 instance
   ( QueryToJSON query
@@ -187,12 +172,13 @@ instance
     ClientAgency TokIdle -> \case
       MsgQueryNext query -> object [ "queryNext" .= queryToJSON query ]
       MsgDone -> String "done"
-    ClientAgency TokPing -> \case
-      MsgPong -> String "pong"
+    ClientAgency TokPoll -> \case
+      MsgPoll -> String "poll"
+      MsgCancel -> String "cancel"
     ServerAgency TokHandshake -> \case
       MsgConfirmHandshake -> String "confirmHandshake"
       MsgRejectHandshake versions -> object [ "rejectHandshake" .= toJSON versions ]
-    ServerAgency (TokNext tag _) -> \case
+    ServerAgency (TokNext tag) -> \case
       MsgRejectQuery err tip -> object
         [ "rejectQuery" .= object
             [ "error" .= errToJSON tag err
@@ -213,4 +199,3 @@ instance
             ]
         ]
       MsgWait -> String "wait"
-      MsgPing -> String "ping"

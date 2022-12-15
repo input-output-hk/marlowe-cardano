@@ -95,6 +95,8 @@ let
     pkgs.docker-compose
     pkgs.sqitchPg
     pkgs.postgresql
+    pkgs.json2yaml
+    pkgs.yaml2json
   ]);
 
   defaultShellHook = ''

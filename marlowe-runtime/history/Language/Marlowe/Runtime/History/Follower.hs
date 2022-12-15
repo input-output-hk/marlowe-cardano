@@ -22,6 +22,7 @@ module Language.Marlowe.Runtime.History.Follower
 
 import Cardano.Api (CardanoMode, EraHistory(EraHistory))
 import Control.Applicative ((<|>))
+import Control.Concurrent (threadDelay)
 import Control.Concurrent.Async (Concurrently(..))
 import Control.Concurrent.STM
   (STM, TVar, atomically, modifyTVar, newEmptyTMVar, newTVar, readTVar, takeTMVar, tryPutTMVar, tryTakeTMVar, writeTVar)
@@ -31,7 +32,7 @@ import Control.Monad.Trans.Maybe (MaybeT(..))
 import Control.Monad.Trans.Writer.CPS (WriterT, execWriterT, runWriterT, tell)
 import Data.Bifunctor (first)
 import Data.Foldable (asum, find, fold, for_)
-import Data.Functor (void)
+import Data.Functor (void, ($>))
 import Data.Map (Map)
 import qualified Data.Map as Map
 import qualified Data.Set as Set
@@ -47,6 +48,7 @@ import Language.Marlowe.Runtime.ChainSync.Api
   , ClientStIdle(..)
   , ClientStInit(..)
   , ClientStNext(..)
+  , ClientStPoll(..)
   , Move(..)
   , RuntimeChainSeekClient
   , ScriptHash(..)
@@ -161,7 +163,7 @@ mkFollower deps@FollowerDependencies{..} = do
 
     findContract = do
       let move = FindTx (txId $ unContractId contractId) False
-      pure $ SendMsgQueryNext move handleContract (pure handleContract)
+      pure $ SendMsgQueryNext move handleContract
 
     handleContract = ClientStNext
       { recvMsgQueryRejected = \err _ -> failWith $ FindTxFailed err
@@ -194,6 +196,7 @@ mkFollower deps@FollowerDependencies{..} = do
                 Right start -> pure start
               followContract blockHeader FollowerContext{..} FollowerState{..}
       , recvMsgRollBackward = \_ _ -> error "Rolled back from genesis"
+      , recvMsgWait = threadDelay 1_000_000 $> SendMsgPoll handleContract
       }
 
   pure Follower
@@ -286,10 +289,12 @@ sendMsgQueryNext
   -> query err result
   -> ClientStNext query err result point tip IO a
   -> ClientStIdle query point tip IO a
-sendMsgQueryNext FollowerContext{..} move next =
-  SendMsgQueryNext move next do
-    atomically $ writeTVar statusVar $ Waiting $ SomeMarloweVersion version
-    pure next
+sendMsgQueryNext FollowerContext{..} move next@ClientStNext{..} =
+  SendMsgQueryNext move next
+    { recvMsgWait = do
+        atomically $ writeTVar statusVar $ Waiting $ SomeMarloweVersion version
+        recvMsgWait
+    }
 
 followContract
   :: BlockHeader
@@ -340,6 +345,7 @@ followNext previousBlockHeader context@FollowerContext{..} state@FollowerState{.
         At blockHeader -> rollbackPreviousState blockHeader context previousState
       atomically $ modifyTVar changesVar $ applyRollback point
       pure next
+  , recvMsgWait = threadDelay 1_000_000 $> SendMsgPoll (followNext previousBlockHeader context state)
   }
   where
     scriptUTxO = let TransactionScriptOutput{..} = scriptOutput in utxo
@@ -365,6 +371,7 @@ followNextRetire context@FollowerContext{..} state = ClientStNext
   { recvMsgQueryRejected = absurd
   , recvMsgRollForward = \_ _ _ -> pure $ SendMsgDone $ Right $ SomeMarloweVersion version
   , recvMsgRollBackward = \point _ -> followNextHandleRollback point context state
+  , recvMsgWait = threadDelay 1_000_000 $> SendMsgPoll (followNextRetire context state)
   }
 
 followNextPayout
@@ -386,6 +393,7 @@ followNextPayout previousBlockHeader context@FollowerContext{..} state@FollowerS
               , payouts = Map.withoutKeys payouts $ Map.keysSet txs
               }
   , recvMsgRollBackward = \point _ -> followNextHandleRollback point context state
+  , recvMsgWait = threadDelay 1_000_000 $> SendMsgPoll (followNextPayout previousBlockHeader context state)
   }
 
 followNextHandleRollback

@@ -44,8 +44,7 @@ data ClientStIdle query point tip m a where
   -- | Send a query and handle the response.
   SendMsgQueryNext
     :: query err result                                -- ^ The query
-    -> ClientStNext query err result point tip m a     -- ^ A handler for when the server responds immediately
-    -> m (ClientStNext query err result point tip m a) -- ^ A handler for when the server indicates the client will need to wait for a response
+    -> ClientStNext query err result point tip m a     -- ^ A handler for the server response
     -> ClientStIdle query point tip m a
 
   -- | Send a termination message
@@ -63,18 +62,25 @@ data ClientStNext query err result point tip m a = ClientStNext
   { recvMsgQueryRejected :: err -> tip -> m (ClientStIdle query point tip m a)
   , recvMsgRollForward   :: result -> point -> tip -> m (ClientStIdle query point tip m a)
   , recvMsgRollBackward  :: point -> tip -> m (ClientStIdle query point tip m a)
+  , recvMsgWait          :: m (ClientStPoll query err result point tip m a)
   }
 
-mapClientStNext
-  :: (err' -> err)
-  -> (result' -> result)
-  -> ClientStNext q err result point tip m a
-  -> ClientStNext q err' result' point tip m a
-mapClientStNext cmapErr cmapResult ClientStNext{..} = ClientStNext
-  { recvMsgQueryRejected = recvMsgQueryRejected . cmapErr
-  , recvMsgRollForward = recvMsgRollForward . cmapResult
-  , recvMsgRollBackward
-  }
+-- | In the `StPoll` protocol state, the client has agency. It must send
+-- either:
+--
+-- * A poll message
+-- * A cancel message
+data ClientStPoll query err result point tip m a where
+
+  -- | Send a query and handle the response.
+  SendMsgPoll
+    :: ClientStNext query err result point tip m a     -- ^ A handler for the server response
+    -> ClientStPoll query err result point tip m a
+
+  -- | Send a termination message
+  SendMsgCancel
+    :: ClientStIdle query point tip m a     -- ^ A handler for the server response
+    -> ClientStPoll query err result point tip m a
 
 -- | Transform the query, point, and tip types in the client.
 mapChainSeekClient
@@ -96,8 +102,8 @@ mapChainSeekClient mapQuery cmapPoint cmapTip ChainSeekClient{..} =
       , recvMsgHandshakeConfirmed = mapIdle <$> recvMsgHandshakeConfirmed
       }
 
-    mapIdle (SendMsgQueryNext q next next') = SendMsgQueryNext (mapQuery q) (mapNext next) (mapNext <$> next')
-    mapIdle (SendMsgDone a)                 = SendMsgDone a
+    mapIdle (SendMsgQueryNext q next) = SendMsgQueryNext (mapQuery q) (mapNext next)
+    mapIdle (SendMsgDone a) = SendMsgDone a
 
     mapNext
       :: forall err result
@@ -107,7 +113,16 @@ mapChainSeekClient mapQuery cmapPoint cmapTip ChainSeekClient{..} =
       { recvMsgQueryRejected = \err tip -> mapIdle <$> recvMsgQueryRejected err (cmapTip tip)
       , recvMsgRollForward = \result point tip -> mapIdle <$> recvMsgRollForward result (cmapPoint point) (cmapTip tip)
       , recvMsgRollBackward = \point tip -> mapIdle <$> recvMsgRollBackward (cmapPoint point) (cmapTip tip)
+      , recvMsgWait = mapPoll <$> recvMsgWait
       }
+
+    mapPoll
+      :: forall err result
+       . ClientStPoll query err result point tip m a
+       -> ClientStPoll query' err result point' tip' m a
+    mapPoll = \case
+      SendMsgPoll next -> SendMsgPoll $ mapNext next
+      SendMsgCancel idle -> SendMsgCancel $ mapIdle idle
 
 -- | Change the underlying monad with a natural transformation.
 hoistChainSeekClient
@@ -130,8 +145,8 @@ hoistChainSeekClient f ChainSeekClient{..} =
       }
 
     hoistIdle :: ClientStIdle query point tip m a -> ClientStIdle query point tip n a
-    hoistIdle (SendMsgQueryNext q next next') = SendMsgQueryNext q (hoistNext next) (f $ hoistNext <$> next')
-    hoistIdle (SendMsgDone a)                 = SendMsgDone a
+    hoistIdle (SendMsgQueryNext q next) = SendMsgQueryNext q (hoistNext next)
+    hoistIdle (SendMsgDone a) = SendMsgDone a
 
     hoistNext
       :: forall err result
@@ -141,7 +156,16 @@ hoistChainSeekClient f ChainSeekClient{..} =
       { recvMsgQueryRejected = \err tip -> f $ hoistIdle <$> recvMsgQueryRejected err tip
       , recvMsgRollForward = \result point tip -> f $ hoistIdle <$> recvMsgRollForward result point tip
       , recvMsgRollBackward = \point tip -> f $ hoistIdle <$> recvMsgRollBackward point tip
+      , recvMsgWait = f $ hoistPoll <$> recvMsgWait
       }
+
+    hoistPoll
+      :: forall err result
+       . ClientStPoll query err result point tip m a
+       -> ClientStPoll query err result point tip n a
+    hoistPoll = \case
+      SendMsgPoll next -> SendMsgPoll $ hoistNext next
+      SendMsgCancel idle -> SendMsgCancel $ hoistIdle idle
 
 -- | Interpret the client as a 'typed-protocols' 'Peer'.
 chainSeekClientPeer
@@ -150,8 +174,8 @@ chainSeekClientPeer
   => point
   -> ChainSeekClient query point tip m a
   -> Peer (ChainSeek query point tip) 'AsClient 'StInit m a
-chainSeekClientPeer initialPoint (ChainSeekClient mclient) =
-  Effect $ peerInit <$> mclient
+chainSeekClientPeer initialPoint (ChainSeekClient mClient) =
+  Effect $ peerInit <$> mClient
   where
   peerInit
     :: ClientStInit query point tip m a
@@ -164,7 +188,7 @@ chainSeekClientPeer initialPoint (ChainSeekClient mclient) =
     -> Peer (ChainSeek query point tip) 'AsClient 'StHandshake m a
   peerHandshake ClientStHandshake{..} =
     Await (ServerAgency TokHandshake) \case
-      MsgRejectHandshake versions -> Effect $ Done TokFault <$> recvMsgHandshakeRejected versions
+      MsgRejectHandshake versions -> Effect $ Done TokDone <$> recvMsgHandshakeRejected versions
       MsgConfirmHandshake         -> peerIdle initialPoint recvMsgHandshakeConfirmed
 
   peerIdle
@@ -178,26 +202,30 @@ chainSeekClientPeer initialPoint (ChainSeekClient mclient) =
     -> ClientStIdle query point tip m a
     -> Peer (ChainSeek query point tip) 'AsClient 'StIdle m a
   peerIdle_ pos = \case
-    SendMsgQueryNext query ClientStNext{..} waitNext ->
-      Yield (ClientAgency TokIdle) (MsgQueryNext query) $
-      Await (ServerAgency (TokNext (tagFromQuery query) TokCanAwait)) \case
-        MsgRejectQuery err tip         -> peerIdle pos $ recvMsgQueryRejected err tip
-        MsgRollForward result pos' tip -> peerIdle pos' $ recvMsgRollForward result pos' tip
-        MsgRollBackward pos' tip       -> peerIdle pos' $ recvMsgRollBackward pos' tip
-        MsgWait                        -> peerWait pos query waitNext
-
+    SendMsgQueryNext query next ->
+      Yield (ClientAgency TokIdle) (MsgQueryNext query) $ peerNext pos query next
     SendMsgDone a -> Yield (ClientAgency TokIdle) MsgDone (Done TokDone a)
 
-  peerWait
-    :: forall err result
-     . point
+  peerNext
+    :: point
     -> query err result
-    -> m (ClientStNext query err result point tip m a)
-    -> Peer (ChainSeek query point tip) 'AsClient ('StNext err result 'StMustReply) m a
-  peerWait pos query mnext = Effect do
-    next@ClientStNext{..} <- mnext
-    pure $ Await (ServerAgency (TokNext (tagFromQuery query) TokMustReply)) \case
+    -> ClientStNext query err result point tip m a
+    -> Peer (ChainSeek query point tip) 'AsClient ('StNext err result) m a
+  peerNext pos query ClientStNext{..} =
+    Await (ServerAgency (TokNext (tagFromQuery query))) \case
       MsgRejectQuery err tip         -> peerIdle pos $ recvMsgQueryRejected err tip
       MsgRollForward result pos' tip -> peerIdle pos' $ recvMsgRollForward result pos' tip
       MsgRollBackward pos' tip       -> peerIdle pos' $ recvMsgRollBackward pos' tip
-      MsgPing                        -> Yield (ClientAgency TokPing) MsgPong $ peerWait pos query $ pure next
+      MsgWait                        -> peerPoll pos query recvMsgWait
+
+  peerPoll
+    :: forall err result
+     . point
+    -> query err result
+    -> m (ClientStPoll query err result point tip m a)
+    -> Peer (ChainSeek query point tip) 'AsClient ('StPoll err result) m a
+  peerPoll pos query mnext = Effect do
+    poll <- mnext
+    pure case poll of
+      SendMsgPoll next -> Yield (ClientAgency TokPoll) MsgPoll $ peerNext pos query next
+      SendMsgCancel idle -> Yield (ClientAgency TokPoll) MsgCancel $ peerIdle_ pos idle

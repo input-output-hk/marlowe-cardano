@@ -7,21 +7,12 @@ module Language.Marlowe.Runtime.ChainSync.Server
   where
 
 import qualified Cardano.Api as Cardano
-import qualified Cardano.Api.Shelley as Cardano
 import Control.Concurrent.Component
 import Control.Concurrent.STM (STM, atomically)
-import Control.Monad (guard)
-import Data.ByteString.Short (toShort)
-import Data.Functor (void)
+import Data.Functor (void, (<&>))
+import Language.Marlowe.Runtime.Cardano.Api (fromCardanoBlockHeader)
 import Language.Marlowe.Runtime.ChainSync.Api
-  ( BlockHeader(BlockHeader)
-  , BlockHeaderHash(unBlockHeaderHash)
-  , ChainPoint
-  , Move
-  , RuntimeChainSeekServer
-  , WithGenesis(..)
-  , moveSchema
-  )
+  (ChainPoint, Move, RuntimeChainSeekServer, ServerStPoll(..), WithGenesis(..), moveSchema)
 import Language.Marlowe.Runtime.ChainSync.Database (MoveClient(..), MoveResult(..))
 import Network.Protocol.ChainSeek.Server
   (ChainSeekServer(..), ServerStHandshake(..), ServerStIdle(..), ServerStInit(..), ServerStNext(..))
@@ -60,31 +51,27 @@ worker = component_ \WorkerDependencies{..} -> do
 
     stIdle :: ChainPoint -> IO (ServerStIdle Move ChainPoint ChainPoint IO ())
     stIdle pos = pure ServerStIdle
-      { recvMsgQueryNext = \query -> do
-          let
-            goWait lastTip = do
-              atomically $ awaitTipChange case lastTip of
-                Genesis -> Cardano.ChainTipAtGenesis
-                At (BlockHeader slotNo hash blockNo) -> Cardano.ChainTip
-                  (Cardano.SlotNo $ fromIntegral slotNo)
-                  (Cardano.HeaderHash $ toShort $ unBlockHeaderHash hash)
-                  (Cardano.BlockNo $ fromIntegral blockNo)
-              pure $ SendMsgPing $ pollQuery goWait
-
-            awaitTipChange lastTip = do
-              newTip <- localTip
-              guard $ lastTip /= newTip
-
-            pollQuery onWait = do
-              qResult <- runMoveClient moveClient pos query
-              case qResult of
-                RollForward result pos' tip -> pure $ SendMsgRollForward result (At pos') tip $ stIdle $ At pos'
-                RollBack pos' tip           -> pure $ SendMsgRollBackward pos' tip $ stIdle pos'
-                Reject err tip              -> pure $ SendMsgQueryRejected err tip $ stIdle pos
-                Wait tip                    -> onWait tip
-
-          pollQuery $ pure . SendMsgWait . goWait
+      { recvMsgQueryNext = stNext pos
       , recvMsgDone = pure ()
+      }
+
+    stNext :: ChainPoint -> Move err result -> IO (ServerStNext Move err result ChainPoint ChainPoint IO ())
+    stNext pos move = runMoveClient moveClient pos move <&> \case
+      RollForward result pos' tip -> SendMsgRollForward result (At pos') tip $ stIdle $ At pos'
+      RollBack pos' tip           -> SendMsgRollBackward pos' tip $ stIdle pos'
+      Reject err tip              -> SendMsgQueryRejected err tip $ stIdle pos
+      Wait tip                    -> SendMsgWait $ pure $ stPoll move pos tip
+
+    stPoll :: Move err result -> ChainPoint -> ChainPoint -> ServerStPoll Move err result ChainPoint ChainPoint IO ()
+    stPoll move pos tip = ServerStPoll
+      { recvMsgPoll = do
+          newTip <- atomically localTip <&> \case
+            Cardano.ChainTipAtGenesis -> Genesis
+            Cardano.ChainTip slotNo hash blockNo -> At $ fromCardanoBlockHeader $ Cardano.BlockHeader slotNo hash blockNo
+          if tip /= newTip
+            then stNext pos move
+            else pure $ SendMsgWait $ pure $ stPoll move pos tip
+      , recvMsgCancel = stIdle pos
       }
 
   runWorker

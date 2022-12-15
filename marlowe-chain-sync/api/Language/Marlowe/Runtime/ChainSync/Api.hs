@@ -2,7 +2,6 @@
 {-# LANGUAGE EmptyCase #-}
 {-# LANGUAGE EmptyDataDeriving #-}
 {-# LANGUAGE GADTs #-}
-{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE ViewPatterns #-}
@@ -146,7 +145,6 @@ import GHC.Natural (Natural)
 import Network.Protocol.ChainSeek.Client
 import Network.Protocol.ChainSeek.Codec
 import Network.Protocol.ChainSeek.Server
-import Network.Protocol.ChainSeek.TH (mkSchemaVersion)
 import Network.Protocol.ChainSeek.Types
 import Network.Protocol.Job.Types (CommandToJSON)
 import qualified Network.Protocol.Job.Types as Job
@@ -628,7 +626,8 @@ data Move err result where
   -- | Advances to the tip block. Waits if already at the tip.
   AdvanceToTip :: Move Void ()
 
-mkSchemaVersion "moveSchema" ''Move
+moveSchema :: SchemaVersion
+moveSchema = SchemaVersion "move_unsafe"
 
 deriving instance Show (Move err result)
 deriving instance Eq (Move err result)
