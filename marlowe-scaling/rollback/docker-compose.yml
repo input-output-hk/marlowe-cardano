@@ -1,0 +1,43 @@
+version: "4.3"
+
+services:
+
+  cluster-a:
+    container_name: cluster-a
+    image: inputoutput/cardano-node:${CARDANO_NODE_VERSION:-1.35.4}
+    entrypoint:
+      - /data/run-cluster-a.sh
+    volumes:
+      - db:/data
+      - ipc:/ipc
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "200k"
+        max-file: "10"
+    networks:
+      - rollback
+
+  cluster-b:
+    container_name: cluster-b
+    image: inputoutput/cardano-node:${CARDANO_NODE_VERSION:-1.35.4}
+    entrypoint:
+      - /data/run-cluster-b.sh
+    volumes:
+      - db:/data
+      - ipc:/ipc
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "200k"
+        max-file: "10"
+    networks:
+      - rollback
+
+volumes:
+  db:
+  ipc:
+
+networks:
+  rollback:
+    external: true
