@@ -101,6 +101,7 @@ library history-api
     , marlowe-protocols
     , marlowe-runtime
     , typed-protocols
+  visibility: public
 
 library history
   import: lang
@@ -152,6 +153,7 @@ library discovery-api
     , marlowe-protocols
     , marlowe-runtime
     , typed-protocols
+  visibility: public
 
 library discovery
   import: lang
@@ -192,6 +194,7 @@ library tx-api
     , marlowe-protocols
     , marlowe-runtime
     , time
+  visibility: public
 
 library tx
   import: lang
@@ -247,6 +250,7 @@ library plutus-scripts
     , plutus-ledger-api
     , plutus-tx
     , plutus-tx-plugin
+  visibility: public
 
 library config
   import: lang

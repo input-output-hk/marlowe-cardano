@@ -812,6 +812,7 @@
         marlowe-actus = ./.plan.nix/marlowe-actus.nix;
         eventuo11y-dsl = ./.plan.nix/eventuo11y-dsl.nix;
         aeson-via-serialise = ./.plan.nix/aeson-via-serialise.nix;
+        marlowe-scaling = ./.plan.nix/marlowe-scaling.nix;
         eventuo11y-json = ./.plan.nix/eventuo11y-json.nix;
         plutus-ledger-slot = ./.plan.nix/plutus-ledger-slot.nix;
         };
@@ -873,6 +874,7 @@
             };
           "eventuo11y-dsl" = { flags = {}; };
           "aeson-via-serialise" = { flags = {}; };
+          "marlowe-scaling" = { flags = {}; };
           "eventuo11y-json" = { flags = {}; };
           "plutus-ledger-slot" = {
             flags = { "defer-plugin-errors" = lib.mkOverride 900 false; };
@@ -1031,6 +1033,7 @@
           "quickcheck-instances".components.library.planned = lib.mkOverride 900 true;
           "servant-client-core".components.library.planned = lib.mkOverride 900 true;
           "mersenne-random-pure64".components.library.planned = lib.mkOverride 900 true;
+          "marlowe-scaling".components.exes."marlowe-scaling".planned = lib.mkOverride 900 true;
           "js-chart".components.library.planned = lib.mkOverride 900 true;
           "template-haskell-compat-v0208".components.library.planned = lib.mkOverride 900 true;
           "marlowe-runtime".components.sublibs."history".planned = lib.mkOverride 900 true;
@@ -1308,6 +1311,7 @@
           "wai-logger".components.library.planned = lib.mkOverride 900 true;
           "th-compat".components.library.planned = lib.mkOverride 900 true;
           "cardano-crypto".components.library.planned = lib.mkOverride 900 true;
+          "marlowe-scaling".components.library.planned = lib.mkOverride 900 true;
           "bytestring-strict-builder".components.library.planned = lib.mkOverride 900 true;
           "ordered-containers".components.library.planned = lib.mkOverride 900 true;
           "hpc".components.library.planned = lib.mkOverride 900 true;

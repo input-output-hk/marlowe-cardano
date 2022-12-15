@@ -28,6 +28,7 @@ packages:
   marlowe-protocols-test
   marlowe-runtime
   marlowe-test
+  marlowe-scaling
 
   libs/aeson-via-serialise
   libs/base16-aeson
