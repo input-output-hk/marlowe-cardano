@@ -160,7 +160,7 @@ waitForConfirmation
   -> TxId
   -> App ()
 waitForConfirmation eventBackend config txId =
-  handle' eventBackend config (Wait txId)
+  handle' eventBackend config (Wait txId 1)
     $ \case
       TxId{} -> pure ()
       response -> throwError $ "Unexpected response: " <> show' response

@@ -180,6 +180,7 @@ data MarloweRequest v =
     }
   | Wait
     { reqTransactionId :: TxId
+    , reqPollingSeconds :: Int
     }
 
 
@@ -234,6 +235,7 @@ instance A.FromJSON (MarloweRequest 'V1) where
                         pure Submit{..}
             "wait" -> do
                         reqTransactionId <- fromString <$> o A..: "txId"
+                        reqPollingSeconds <- o A..: "pollingSeconds"
                         pure Wait{..}
             request -> fail $ "Invalid request: " <> request <> "."
 
@@ -299,6 +301,7 @@ instance A.ToJSON (MarloweRequest 'V1) where
     A.object
       [ "request" A..= ("wait" :: String)
       , "txId" A..= reqTransactionId
+      , "pollingSeconds" A..= reqPollingSeconds
       ]
 
 

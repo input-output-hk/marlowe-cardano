@@ -73,7 +73,7 @@ handle config request =
           Withdraw{..} -> second (uncurry mkBody) <$> buildWithdrawal MarloweV1 reqContractId reqRole reqAddresses reqChange reqCollateral
           Sign{..} -> pure . Right . uncurry Tx $ sign reqTransactionBody reqPaymentKeys reqPaymentExtendedKeys
           Submit{..} -> second TxId <$> submit reqTransaction
-          Wait{..} -> second TxId <$> waitForTx reqTransactionId
+          Wait{..} -> second TxId <$> waitForTx reqPollingSeconds reqTransactionId
     withTimeout (timeoutSeconds config)
       $ runClientWithConfig config run
       `catch` \(err :: SomeException) -> pure . Left $ show err
