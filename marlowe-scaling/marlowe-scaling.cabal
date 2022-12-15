@@ -26,9 +26,6 @@ library
                     , cardano-api
                     , containers
                     , data-default
-                    , eventuo11y
-                    , eventuo11y-dsl
-                    , eventuo11y-json
                     , marlowe
                     , marlowe-chain-sync
                     , marlowe-protocols
@@ -37,7 +34,6 @@ library
                     , marlowe-runtime:tx-api
                     , marlowe-runtime
                     , monad-control
-                    , mtl
                     , network
                     , text
                     , time

@@ -17,7 +17,7 @@ module Main
 import Control.Concurrent (myThreadId)
 import Control.Concurrent.Async (mapConcurrently)
 import Control.Monad (replicateM_, void)
-import Control.Monad.Except (MonadIO, liftIO, runExceptT, throwError)
+import Control.Monad.Except (ExceptT(..), MonadIO, liftIO, runExceptT, throwError)
 import Data.List.Split (chunksOf)
 import Data.Time.Clock (nominalDiffTimeToSeconds)
 import Language.Marlowe.Core.V1.Semantics.Types
@@ -35,11 +35,11 @@ import Language.Marlowe.Core.V1.Semantics.Types
   )
 import Language.Marlowe.Core.V1.Semantics.Types.Address (deserialiseAddress)
 import Language.Marlowe.Runtime.ChainSync.Api (Address(unAddress), TxId, fromBech32)
-import Language.Marlowe.Runtime.Client (App, handleWithEvents)
+import Language.Marlowe.Runtime.Client (handle)
 import Language.Marlowe.Runtime.Client.Types (Config, MarloweRequest(..), MarloweResponse(..))
 import Language.Marlowe.Runtime.Core.Api (ContractId, MarloweVersionTag(V1))
-import Observe.Event (EventBackend, addField, hoistEventBackend, withEvent)
-import Observe.Event.Dynamic (DynamicEventSelector(..))
+import Observe.Event (EventBackend, addField, hoistEvent, hoistEventBackend, withEvent, withSubEvent)
+import Observe.Event.Dynamic (DynamicEvent, DynamicEventSelector(..))
 import Observe.Event.Render.JSON (DefaultRenderSelectorJSON(defaultRenderSelectorJSON))
 import Observe.Event.Render.JSON.Handle (JSONRef, simpleJsonStderrBackend)
 import Observe.Event.Syntax ((≔))
@@ -99,40 +99,41 @@ randomInputs
 randomInputs = (<$> randomRIO (1_000_000, 2_000_000)) . makeInputs
 
 
+type App = ExceptT String IO
+
+
 runScenario
-  :: EventBackend App JSONRef DynamicEventSelector
+  :: DynamicEvent App JSONRef
   -> Config
   -> Address
   -> C.SigningKey C.PaymentExtendedKey
   -> Contract
   -> [InputContent]
   -> App ContractId
-runScenario eventBackend config address key contract inputs =
+runScenario event config address key contract inputs =
   do
     let
       unexpected response = throwError $ "Unexpected response: " <> show' response
       transact request =
-        withEvent eventBackend (DynamicEventSelector "Transact")
-          $ \event ->
+        withSubEvent event (DynamicEventSelector "Transact")
+          $ \subEvent ->
             do
-              threadId <- liftIO myThreadId
-              addField event $ ("threadId" :: T.Text) ≔ show threadId
               (contractId, body) <-
-                handle' eventBackend config request
+                handleWithEvents subEvent "Build" config request
                   $ \case
                     Body{..} -> pure (resContractId, resTransactionBody)
                     response -> unexpected response
               tx <-
-                handle' eventBackend config (Sign body [] [key])
+                handleWithEvents subEvent "Sign" config (Sign body [] [key])
                   $ \case
                     Tx{..}   -> pure resTransaction
                     response -> unexpected response
               txId' <-
-                handle' eventBackend config (Submit tx)
+                handleWithEvents subEvent "Submit" config (Submit tx)
                   $ \case
                     TxId{..} -> pure resTransactionId
                     response -> unexpected response
-              waitForConfirmation eventBackend config txId'
+              waitForConfirmation subEvent config txId'
               pure contractId
     contractId <- transact $ Create contract mempty 1_500_000 mempty address mempty
     mapM_ (\input -> transact $ Apply contractId [NormalInput input] Nothing Nothing mempty address mempty) inputs
@@ -143,24 +144,30 @@ show' :: A.ToJSON a => a -> String
 show' = LBS8.unpack . A.encode
 
 
-handle'
-  :: EventBackend App JSONRef DynamicEventSelector
+handleWithEvents
+  :: DynamicEvent App JSONRef
+  -> T.Text
   -> Config
   -> MarloweRequest 'V1
   -> (MarloweResponse 'V1 -> App a)
   -> App a
-handle' eventBackend config request extract =
-  extract =<< handleWithEvents eventBackend config request
-
+handleWithEvents event name config request extract =
+  withSubEvent event (DynamicEventSelector name)
+    $ \subEvent ->
+      do
+        addField subEvent $ ("request" :: T.Text) ≔ request
+        response <- ExceptT $ handle config request
+        addField subEvent $ ("response" :: T.Text) ≔ response
+        extract response
 
 
 waitForConfirmation
-  :: EventBackend App JSONRef DynamicEventSelector
+  :: DynamicEvent App JSONRef
   -> Config
   -> TxId
   -> App ()
-waitForConfirmation eventBackend config txId =
-  handle' eventBackend config (Wait txId 1)
+waitForConfirmation event config txId =
+  handleWithEvents event "Confirm" config (Wait txId 1)
     $ \case
       TxId{} -> pure ()
       response -> throwError $ "Unexpected response: " <> show' response
@@ -171,22 +178,34 @@ currentTime = POSIXTime . floor . (* 1000) . nominalDiffTimeToSeconds <$> liftIO
 
 
 runOne
-  :: EventBackend App JSONRef DynamicEventSelector
+  :: EventBackend IO JSONRef DynamicEventSelector
   -> Config
   -> Address
   -> C.SigningKey C.PaymentExtendedKey
-  -> App ContractId
+  -> IO ()
 runOne eventBackend config address key =
-  do
-    now <- currentTime
-    party <-
-      case deserialiseAddress $ unAddress address of
-        Just address' -> pure $ uncurry Address address'
-        Nothing       -> throwError "Address conversion failed."
-    let
-      contract = makeContract (now + 15 * 60 * 1000) party
-    inputs <- randomInputs party
-    runScenario eventBackend config address key contract inputs
+  withEvent eventBackend (DynamicEventSelector "Contract")
+    $ \event ->
+      do
+        threadId <- myThreadId
+        addField event $ ("threadId" :: T.Text) ≔ show threadId
+        let
+          event' = hoistEvent liftIO event
+        result <-
+          runExceptT
+            $ do
+              now <- currentTime
+              party <-
+                case deserialiseAddress $ unAddress address of
+                  Just address' -> pure $ uncurry Address address'
+                  Nothing       -> throwError "Address conversion failed."
+              let
+                contract = makeContract (now + 15 * 60 * 1000) party
+              inputs <- randomInputs party
+              runScenario event' config address key contract inputs
+        case result of
+          Right contractId -> addField event $ ("success" :: T.Text) ≔ contractId
+          Left message     -> addField event $ ("failure" :: T.Text) ≔ message
 
 
 main :: IO ()
@@ -209,5 +228,5 @@ main =
          ]
      void
        $ mapConcurrently
-         (\(address, key) -> replicateM_ count $ print =<< runExceptT (runOne eventBackend config address key))
+         (\(address, key) -> replicateM_ count $ runOne eventBackend config address key)
          addressKeys

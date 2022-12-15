@@ -9,16 +9,13 @@
 
 
 module Language.Marlowe.Runtime.Client
-  ( App
-  , handle
-  , handleWithEvents
+  ( handle
   ) where
 
 
 import Control.Concurrent (threadDelay)
 import Control.Concurrent.Async (race)
 import Control.Exception (SomeException, catch)
-import Control.Monad.Except (ExceptT(..))
 import Data.Bifunctor (second)
 import Language.Marlowe.Runtime.Client.Build (buildApplication, buildCreation, buildWithdrawal)
 import Language.Marlowe.Runtime.Client.List
@@ -28,30 +25,6 @@ import Language.Marlowe.Runtime.Client.Sign (sign)
 import Language.Marlowe.Runtime.Client.Submit (submit, waitForTx)
 import Language.Marlowe.Runtime.Client.Types (Config(timeoutSeconds), MarloweRequest(..), MarloweResponse(..), mkBody)
 import Language.Marlowe.Runtime.Core.Api (MarloweVersion(MarloweV1), MarloweVersionTag(V1))
-import Observe.Event (EventBackend, addField, withEvent)
-import Observe.Event.Dynamic (DynamicEventSelector(..))
-import Observe.Event.Render.JSON.Handle (JSONRef)
-import Observe.Event.Syntax ((≔))
-
-import qualified Data.Text as T (Text)
-
-
-type App = ExceptT String IO
-
-
-handleWithEvents
-  :: EventBackend App JSONRef DynamicEventSelector
-  -> Config
-  -> MarloweRequest 'V1
-  -> App (MarloweResponse 'V1)
-handleWithEvents eventBackend config request =
-  withEvent eventBackend (DynamicEventSelector "Handle")
-    $ \event ->
-      do
-        addField event $ ("request" :: T.Text) ≔ request
-        response <- ExceptT $ handle config request
-        addField event $ ("response" :: T.Text) ≔ response
-        pure response
 
 
 handle
