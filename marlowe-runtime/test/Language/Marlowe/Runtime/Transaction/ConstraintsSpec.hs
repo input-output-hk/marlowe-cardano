@@ -200,7 +200,7 @@ spec = do
 
       let
         extractCollat :: TxBodyContent BuildTx BabbageEra -> [Chain.Assets]
-        extractCollat txBC = map Chain.assets $ selectedCollat
+        extractCollat txBC = map Chain.assets selectedCollat
           where
             -- Extract the [(TxOutRef, TransactionOutput)] from the walletContext
             utT = map Chain.toUTxOTuple . Chain.toUTxOsList . availableUtxos $ walletContext
@@ -253,13 +253,13 @@ spec = do
         walletCtxSufficient :: Bool
         walletCtxSufficient = allAdaOnly && anyCoversFee
           where
-            allAssets = map Chain.assets . map snd . map Chain.toUTxOTuple . Chain.toUTxOsList . availableUtxos $ walletContext
+            allAssets = map (Chain.assets . snd . Chain.toUTxOTuple) . Chain.toUTxOsList . availableUtxos $ walletContext
             onlyAdas = filter (isRight . assetsAdaOnly) allAssets
             allAdaOnly = not . null $ onlyAdas
             anyCoversFee = any ((>= fee) . Chain.ada) onlyAdas
 
         singleUtxo :: [Chain.Assets] -> Either String Chain.Assets
-        singleUtxo (as : []) = Right as
+        singleUtxo [as] = Right as
         singleUtxo l = Left $ "Collateral is not exactly one utxo" <> show l
 
         assetsAdaOnly :: Chain.Assets -> Either String Chain.Lovelace
@@ -280,10 +280,10 @@ spec = do
           $ selectCoins protocolTestnet marloweVersion marloweContext walletContext emptyTxBodyContent
 
       pure $ case (walletCtxSufficient, selectResult) of
-        (True , Right _) -> (traceM "case 1") >> (pure ())
-        (False, Right _) -> (traceM "case 2") >> (expectationFailure "selection should have failed")
-        (True , Left selFailedMsg) -> (traceM "case 3") >> (selFailedMsg `shouldBe` "success expected")
-        (False, Left selFailedMsg) -> (traceM "case 4") >> (selFailedMsg `shouldSatisfy` (isPrefixOf "CoinSelectionFailed \"No collateral found in"))
+        (True , Right _) -> traceM "case 1" >> pure ()
+        (False, Right _) -> traceM "case 2" >> expectationFailure "selection should have failed"
+        (True , Left selFailedMsg) -> traceM "case 3" >> (selFailedMsg `shouldBe` "success expected")
+        (False, Left selFailedMsg) -> traceM "case 4" >> (selFailedMsg `shouldSatisfy` isPrefixOf "CoinSelectionFailed \"No collateral found in")
 
       -- pure $ case selectCoins protocolTestnet marloweVersion marloweContext walletContext txBodyContent of
       --   Right newTxBodyContent -> do  -- coin selection succeeded
