@@ -5,7 +5,7 @@ let
     export PATH="$PATH:${lib.makeBinPath [ sqitchPg ]}"
     export LOCALE_ARCHIVE="${glibcLocales}/lib/locale/locale-archive"
     cd /src/marlowe-chain-sync
-    exec sqitch deploy
+    exec sqitch deploy "$@"
   '';
 
   run-local-service = project: version: prog: writeShellScriptBin "run-${prog}" ''
@@ -99,11 +99,15 @@ let
       "--log-config-file"
       "./marlowe-chain-indexer.log.config"
     ];
+    healthcheck = {
+      test = "/exec/run-sqitch -h postgres";
+      retries = 0;
+    };
   };
 
   chainseekd-service = dev-service {
     ports = [ 3715 3716 3720 ];
-    depends_on = [ "postgres" "node" ];
+    depends_on = [ "postgres" "node" "marlowe-chain-indexer" ];
     command = [
       "/exec/run-chainseekd"
       "--testnet-magic"
