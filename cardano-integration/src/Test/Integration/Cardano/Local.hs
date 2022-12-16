@@ -11,6 +11,8 @@ module Test.Integration.Cardano.Local
   , withLocalTestnet'
   ) where
 
+import Control.Concurrent (threadDelay)
+import Control.Concurrent.Async (mapConcurrently_, race_)
 import Control.Exception (Exception)
 import Control.Exception.Lifted (SomeException, catch)
 import Control.Monad.Base (MonadBase)
@@ -21,6 +23,7 @@ import Control.Monad.Trans.Resource (MonadResource, MonadThrow(throwM), MonadUnl
 import Data.Aeson (object, toJSON, (.=))
 import qualified Data.Aeson.KeyMap as KM
 import Data.Functor (void, (<&>))
+import Data.List (isInfixOf)
 import Data.Maybe (fromJust)
 import Data.Time (UTCTime, addUTCTime, getCurrentTime, nominalDiffTimeToSeconds, secondsToNominalDiffTime)
 import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
@@ -205,6 +208,8 @@ startLocalTestnet options@LocalTestnetOptions{..} = do
 
   network <- setupNetwork workspace byronGenesisDir shelleyGenesisDir
   spoNodes <- traverse (setupSpoNode workspace options network logsDir socketDir byronGenesisDir shelleyGenesisDir) [1..numSpoNodes]
+
+  liftIO $ mapConcurrently_ assertChainExtended spoNodes
 
   pure LocalTestnet{..}
 
@@ -399,3 +404,14 @@ setupSpoNode workspace LocalTestnetOptions{..} Network{..} logsDir socketDir byr
   let stdin = fromJust mStdin
 
   pure SpoNode{..}
+
+assertChainExtended :: SpoNode -> IO ()
+assertChainExtended SpoNode{..} = race_ waitForChainExtendedMessage do
+  threadDelay 90_000_000
+  fail $ "SPO Node " <> show nodeName <> " failed to start"
+  where
+    waitForChainExtendedMessage = do
+      logs <- readFile stdoutLogs
+      if "Chain extended, new tip:" `isInfixOf` logs
+        then pure ()
+        else threadDelay 1000 *> waitForChainExtendedMessage

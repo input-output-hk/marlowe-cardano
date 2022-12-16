@@ -54,8 +54,8 @@ library
   build-depends:
       base >= 4.9 && < 5
     , aeson
+    , async
     , bytestring
-    , containers
     , directory
     , filepath
     , lifted-base
