@@ -35,7 +35,18 @@ import Language.Marlowe (POSIXTime(..))
 import Language.Marlowe.Protocol.Sync.Client (MarloweSyncClient)
 import Language.Marlowe.Runtime.Cardano.Api (fromCardanoTxId)
 import Language.Marlowe.Runtime.ChainSync.Api
-  (Address, ChainSyncCommand, Lovelace(..), RuntimeChainSeekClient, TokenName, TxId, TxOutRef, fromBech32, toBech32)
+  ( Address
+  , ChainSyncCommand
+  , Lovelace(..)
+  , RuntimeChainSeekClient
+  , TokenName
+  , TransactionMetadata
+  , TxId
+  , TxOutRef
+  , fromBech32
+  , fromJSONEncodedTransactionMetadata
+  , toBech32
+  )
 import Language.Marlowe.Runtime.Core.Api
   ( ContractId
   , IsMarloweVersion(Contract, Redeemer)
@@ -146,8 +157,8 @@ data MarloweRequest v =
     { reqContract :: Contract v
     , reqRoles :: M.Map TokenName Address
     , reqMinUtxo :: Lovelace
-    -- TODO: Add staking.
-    -- TODO: Add metadata.
+--  , reqStakeAddress :: Maybe StakeCredential
+    , reqMetadata :: TransactionMetadata
     , reqAddresses :: [Address]
     , reqChange :: Address
     , reqCollateral :: [TxOutRef]
@@ -157,7 +168,7 @@ data MarloweRequest v =
     , reqInputs :: Redeemer v
     , reqValidityLowerBound :: Maybe POSIXTime
     , reqValidityUpperBound :: Maybe POSIXTime
-    -- TODO: Add metadata.
+    , reqMetadata :: TransactionMetadata
     , reqAddresses :: [Address]
     , reqChange :: Address
     , reqCollateral :: [TxOutRef]
@@ -165,7 +176,6 @@ data MarloweRequest v =
   | Withdraw
     { reqContractId :: ContractId
     , reqRole :: TokenName
-    -- TODO: Add metadata.
     , reqAddresses :: [Address]
     , reqChange :: Address
     , reqCollateral :: [TxOutRef]
@@ -205,6 +215,7 @@ instance A.FromJSON (MarloweRequest 'V1) where
                           reqContract <- o A..: "contract"
                           reqRoles <- M.mapKeys fromString . M.map fromString <$> (o A..: "roles" :: A.Parser (M.Map String String))
                           reqMinUtxo <- Lovelace <$> o A..: "minUtxo"
+                          reqMetadata <- metadataFromJSON =<< o A..: "metadata"
                           reqAddresses <- mapM addressFromJSON =<< o A..: "addresses"
                           reqChange <- addressFromJSON =<< o A..: "change"
                           reqCollateral <- fmap fromString <$> o A..: "collateral"
@@ -214,6 +225,7 @@ instance A.FromJSON (MarloweRequest 'V1) where
                          reqInputs <- o A..: "inputs"
                          reqValidityLowerBound <- Just . POSIXTime <$> o A..: "validityLowerBound"
                          reqValidityUpperBound <- Just . POSIXTime <$> o A..: "validityUpperBound"
+                         reqMetadata <- metadataFromJSON =<< o A..: "metadata"
                          reqAddresses <- mapM addressFromJSON =<< o A..: "addresses"
                          reqChange <- addressFromJSON =<< o A..: "change"
                          reqCollateral <- fmap fromString <$> o A..: "collateral"
@@ -261,8 +273,9 @@ instance A.ToJSON (MarloweRequest 'V1) where
     A.object
       [ "request" A..= ("create" :: String)
       , "contract" A..= reqContract
-      , "minUtxo" A..= unLovelace reqMinUtxo
       , "roles" A..= M.mapKeys show reqRoles
+      , "minUtxo" A..= unLovelace reqMinUtxo
+      , "metadata" A..= reqMetadata
       , "addresses" A..= fmap addressToJSON reqAddresses
       , "change" A..= addressToJSON reqChange
       , "collateral" A..= reqCollateral
@@ -273,6 +286,7 @@ instance A.ToJSON (MarloweRequest 'V1) where
       , "inputs" A..= reqInputs
       , "validityLowerBound" A..= fmap getPOSIXTime reqValidityLowerBound
       , "validityUpperBound" A..= fmap getPOSIXTime reqValidityUpperBound
+      , "metadata" A..= reqMetadata
       , "addresses" A..= fmap addressToJSON reqAddresses
       , "change" A..= addressToJSON reqChange
       , "collateral" A..= reqCollateral
@@ -443,3 +457,7 @@ addressFromJSON = maybe (A.parseFail "Failed decoding Bech32 address.") pure . f
 
 addressToJSON :: Address -> A.Value
 addressToJSON = maybe (error "Failed encoding Bech32 address.") A.String . toBech32
+
+
+metadataFromJSON :: A.Value -> A.Parser TransactionMetadata
+metadataFromJSON = maybe (A.parseFail "Failed decoding transaction metadata.") pure . fromJSONEncodedTransactionMetadata

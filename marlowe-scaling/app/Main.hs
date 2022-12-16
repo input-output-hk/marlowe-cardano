@@ -135,8 +135,8 @@ runScenario event config address key contract inputs =
                     response -> unexpected response
               waitForConfirmation subEvent config txId'
               pure contractId
-    contractId <- transact $ Create contract mempty 1_500_000 mempty address mempty
-    mapM_ (\input -> transact $ Apply contractId [NormalInput input] Nothing Nothing mempty address mempty) inputs
+    contractId <- transact $ Create contract mempty 1_500_000 mempty mempty address mempty
+    mapM_ (\input -> transact $ Apply contractId [NormalInput input] Nothing Nothing mempty mempty address mempty) inputs
     pure contractId
 
 

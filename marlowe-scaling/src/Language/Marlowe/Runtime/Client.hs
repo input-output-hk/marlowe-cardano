@@ -41,8 +41,8 @@ handle config request =
           Follow{..} -> fmap FollowResult <$> followContract reqContractId
           Unfollow{..} -> fmap FollowResult <$> unfollowContract reqContractId
           Get{..} -> fmap (uncurry Info) <$> getContract reqContractId
-          Create{..} -> second (uncurry mkBody) <$> buildCreation MarloweV1 reqContract reqRoles reqMinUtxo reqAddresses reqChange reqCollateral
-          Apply{..} -> second (uncurry mkBody) <$> buildApplication MarloweV1 reqContractId reqInputs reqValidityLowerBound reqValidityUpperBound reqAddresses reqChange reqCollateral
+          Create{..} -> second (uncurry mkBody) <$> buildCreation MarloweV1 reqContract reqRoles reqMinUtxo reqMetadata reqAddresses reqChange reqCollateral
+          Apply{..} -> second (uncurry mkBody) <$> buildApplication MarloweV1 reqContractId reqInputs reqValidityLowerBound reqValidityUpperBound reqMetadata reqAddresses reqChange reqCollateral
           Withdraw{..} -> second (uncurry mkBody) <$> buildWithdrawal MarloweV1 reqContractId reqRole reqAddresses reqChange reqCollateral
           Sign{..} -> pure . Right . uncurry Tx $ sign reqTransactionBody reqPaymentKeys reqPaymentExtendedKeys
           Submit{..} -> second TxId <$> submit reqTransaction

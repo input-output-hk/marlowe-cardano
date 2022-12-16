@@ -18,7 +18,7 @@ import Data.Time (UTCTime, secondsToNominalDiffTime)
 import Data.Time.Clock.POSIX (posixSecondsToUTCTime)
 import Data.Void (Void)
 import Language.Marlowe (POSIXTime(..))
-import Language.Marlowe.Runtime.ChainSync.Api (Address, Lovelace(..), TokenName, TxOutRef)
+import Language.Marlowe.Runtime.ChainSync.Api (Address, Lovelace(..), TokenName, TransactionMetadata, TxOutRef)
 import Language.Marlowe.Runtime.Client.Run (runJobClient)
 import Language.Marlowe.Runtime.Client.Types (Client, Services(..))
 import Language.Marlowe.Runtime.Core.Api (ContractId, IsMarloweVersion(..), MarloweVersion)
@@ -47,11 +47,12 @@ buildCreation
   -> Contract v
   -> M.Map TokenName Address
   -> Lovelace
+  -> TransactionMetadata
   -> [Address]
   -> Address
   -> [TxOutRef]
   -> Client (Either String (ContractId, C.TxBody C.BabbageEra))
-buildCreation version' contract roles minUtxo =
+buildCreation version' contract roles minUtxo metadata' =
   let
     roles' =
       if M.null roles
@@ -59,7 +60,7 @@ buildCreation version' contract roles minUtxo =
         else RoleTokensMint . mkMint . fmap (second (, Left 1)) . NE.fromList . M.toList $ roles
   in
     build show (\ContractCreated{..} -> (contractId, txBody))
-      $ \w -> Create Nothing version' w roles' mempty minUtxo contract
+      $ \w -> Create Nothing version' w roles' metadata' minUtxo contract
 
 
 buildApplication
@@ -69,13 +70,14 @@ buildApplication
   -> Redeemer v
   -> Maybe POSIXTime
   -> Maybe POSIXTime
+  -> TransactionMetadata
   -> [Address]
   -> Address
   -> [TxOutRef]
   -> Client (Either String (ContractId, C.TxBody C.BabbageEra))
-buildApplication version' contractId' redeemer lower upper =
+buildApplication version' contractId' redeemer lower upper metadata' =
   build show (\InputsApplied{..} -> (contractId, txBody))
-    $ \w -> ApplyInputs version' w contractId' mempty (utcTime <$> lower) (utcTime <$> upper) redeemer
+    $ \w -> ApplyInputs version' w contractId' metadata' (utcTime <$> lower) (utcTime <$> upper) redeemer
 
 
 buildWithdrawal
