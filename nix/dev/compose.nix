@@ -149,13 +149,11 @@ let
 
   tx-service = dev-service {
     ports = [ 3723 ];
-    depends_on = [ "chainseekd" "marlowe-history" ];
+    depends_on = [ "chainseekd" ];
     command = [
       "/exec/run-marlowe-tx"
       "--chain-seek-host"
       "chainseekd"
-      "--history-host"
-      "marlowe-history"
       "--host"
       "0.0.0.0"
       "--log-config-file"

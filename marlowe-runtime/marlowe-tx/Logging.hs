@@ -86,6 +86,8 @@ getAppSelectorConfig = \case
 
 getLoadMarloweContextSelectorConfig :: GetSelectorConfig Q.LoadMarloweContextSelector
 getLoadMarloweContextSelectorConfig = \case
+  Q.ExtractCreationFailed -> SelectorConfig "extract-creation-failed" True $ singletonFieldConfig "error" True
+  Q.ExtractMarloweTransactionFailed -> SelectorConfig "extract-transaction-failed" True $ singletonFieldConfig "error" True
   Q.ContractNotFound -> SelectorConfig "contract-not-found" True absurdFieldConfig
   Q.ContractFound -> SelectorConfig "contract-found" True FieldConfig
     { fieldKey = \case
