@@ -21,9 +21,9 @@ import Control.Monad.Trans.Writer (WriterT(runWriterT), tell)
 import Data.Bifunctor (first)
 import Data.Foldable (for_, traverse_)
 import Data.Function (on)
-import Data.Functor ((<&>))
+import Data.Functor (void, (<&>))
 import Data.List (find, sortBy)
-import qualified Data.Map.Strict as Map
+import qualified Data.Map as Map
 import Data.Maybe (catMaybes, listToMaybe, maybeToList)
 import qualified Data.Set as Set
 import Data.Time (UTCTime, nominalDiffTimeToSeconds, secondsToNominalDiffTime)
@@ -273,15 +273,16 @@ buildApplyInputsConstraints
   -> MarloweVersion v -- ^ The Marlowe version to build the transaction for.
   -> TransactionScriptOutput v -- ^ The previous script output for the contract
   -> SlotNo -- ^ The current tip slot
+  -> TransactionMetadata -- ^ Metadata to attach to the transaction
   -> Maybe UTCTime -- ^ The minimum bound of the validity interval (inclusive).
   -> Maybe UTCTime -- ^ The maximum bound of the validity interval (exclusive).
                    -- If not specified, this is computed from the the timeouts
                    -- in the contract.
   -> Redeemer v -- ^ The inputs to apply to the contract.
   -> Either (ApplyInputsError v) (ApplyResults v, TxConstraints v)
-buildApplyInputsConstraints systemStart eraHistory version marloweOutput tipSlot invalidBefore invalidHereafter redeemer =
+buildApplyInputsConstraints systemStart eraHistory version marloweOutput tipSlot metadata invalidBefore invalidHereafter redeemer =
   case version of
-    MarloweV1 -> buildApplyInputsConstraintsV1 systemStart eraHistory marloweOutput tipSlot invalidBefore invalidHereafter redeemer
+    MarloweV1 -> buildApplyInputsConstraintsV1 systemStart eraHistory marloweOutput tipSlot metadata invalidBefore invalidHereafter redeemer
 
 -- | Creates a set of Tx constraints that are used to build a transaction that
 -- applies an input to a contract.
@@ -290,11 +291,12 @@ buildApplyInputsConstraintsV1
   -> EraHistory CardanoMode -- ^ The era history for converting times to slots.
   -> TransactionScriptOutput 'V1 -- ^ The previous script output for the contract with raw TxOut.
   -> SlotNo
+  -> TransactionMetadata -- ^ Metadata to attach to the transaction
   -> Maybe UTCTime -- ^ The minimum bound of the validity interval (inclusive).
   -> Maybe UTCTime -- ^ The maximum bound of the validity interval (exclusive).
   -> Redeemer 'V1 -- ^ The inputs to apply to the contract.
   -> Either (ApplyInputsError 'V1) (ApplyResults 'V1, TxConstraints 'V1)
-buildApplyInputsConstraintsV1 systemStart eraHistory marloweOutput tipSlot invalidBefore invalidHereafter redeemer = runWriterT do
+buildApplyInputsConstraintsV1 systemStart eraHistory marloweOutput tipSlot metadata invalidBefore invalidHereafter redeemer = runWriterT do
   let
     TransactionScriptOutput _ _ _ datum = marloweOutput
     V1.MarloweData params state contract = datum
@@ -333,6 +335,9 @@ buildApplyInputsConstraintsV1 systemStart eraHistory marloweOutput tipSlot inval
         tell $ requiresSignature $ PaymentKeyHash $ P.fromBuiltin pkh
       _ -> pure ()
     _ -> pure ()
+
+  -- Require transaction metadata for all specified keys
+  void $ Map.traverseWithKey (fmap tell . requiresMetadata) $ unTransactionMetadata metadata
 
   -- Apply inputs.
   let slotNoToPOSIXTime = fmap utcToPOSIXTime . slotStart

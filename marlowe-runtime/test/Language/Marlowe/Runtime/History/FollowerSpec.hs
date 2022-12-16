@@ -675,6 +675,7 @@ checkRollbackToCreationWithInputs = do
             { steps = Map.singleton block2
                 [ ApplyTransaction Transaction
                     { transactionId = let Chain.Transaction{..} = applyInputsTx in txId
+                    , metadata = mempty
                     , contractId = testContractId
                     , blockHeader = block2
                     , validityLowerBound = posixSecondsToUTCTime 0
@@ -717,6 +718,7 @@ checkRollbackToCreationClosed = do
                 [ ApplyTransaction Transaction
                     { transactionId = let Chain.Transaction{..} = closeTx in txId
                     , contractId = testContractId
+                    , metadata = mempty
                     , blockHeader = block2
                     , validityLowerBound = posixSecondsToUTCTime 0
                     , validityUpperBound = posixSecondsToUTCTime 100
@@ -747,6 +749,7 @@ checkRollbackToTransaction = do
                 [ ApplyTransaction Transaction
                     { transactionId = let Chain.Transaction{..} = applyInputsTx in txId
                     , contractId = testContractId
+                    , metadata = mempty
                     , blockHeader = block2
                     , validityLowerBound = posixSecondsToUTCTime 0
                     , validityUpperBound = posixSecondsToUTCTime 100
@@ -770,6 +773,7 @@ checkRollbackToTransaction = do
                 [ ApplyTransaction Transaction
                     { transactionId = close2TxId
                     , contractId = testContractId
+                    , metadata = mempty
                     , blockHeader = block3
                     , validityLowerBound = posixSecondsToUTCTime 0
                     , validityUpperBound = posixSecondsToUTCTime 100
@@ -796,6 +800,7 @@ checkCloseTransaction = do
                 [ ApplyTransaction Transaction
                     { transactionId = let Chain.Transaction{..} = closeTx in txId
                     , contractId = testContractId
+                    , metadata = mempty
                     , blockHeader = block2
                     , validityLowerBound = posixSecondsToUTCTime 0
                     , validityUpperBound = posixSecondsToUTCTime 100
@@ -822,6 +827,7 @@ checkNonCloseTransaction = do
                 [ ApplyTransaction Transaction
                     { transactionId = let Chain.Transaction{..} = applyInputsTx in txId
                     , contractId = testContractId
+                    , metadata = mempty
                     , blockHeader = block2
                     , validityLowerBound = posixSecondsToUTCTime 0
                     , validityUpperBound = posixSecondsToUTCTime 100
@@ -852,6 +858,7 @@ checkPayoutOpenRedeemedBefore = do
                 [ ApplyTransaction Transaction
                     { transactionId = let Chain.Transaction{..} = applyInputsTx in txId
                     , contractId = testContractId
+                    , metadata = mempty
                     , blockHeader = block2
                     , validityLowerBound = posixSecondsToUTCTime 0
                     , validityUpperBound = posixSecondsToUTCTime 100
@@ -890,6 +897,7 @@ checkPayoutOpenRedeemedBefore = do
                 [ ApplyTransaction Transaction
                     { transactionId = close2TxId
                     , contractId = testContractId
+                    , metadata = mempty
                     , blockHeader = block4
                     , validityLowerBound = posixSecondsToUTCTime 0
                     , validityUpperBound = posixSecondsToUTCTime 100
@@ -933,6 +941,7 @@ checkPayoutOpenRedeemedAfter = do
                 [ ApplyTransaction Transaction
                     { transactionId = let Chain.Transaction{..} = applyInputsTx in txId
                     , contractId = testContractId
+                    , metadata = mempty
                     , blockHeader = block2
                     , validityLowerBound = posixSecondsToUTCTime 0
                     , validityUpperBound = posixSecondsToUTCTime 100
@@ -956,6 +965,7 @@ checkPayoutOpenRedeemedAfter = do
                 [ ApplyTransaction Transaction
                     { transactionId = close2TxId
                     , contractId = testContractId
+                    , metadata = mempty
                     , blockHeader = block3
                     , validityLowerBound = posixSecondsToUTCTime 0
                     , validityUpperBound = posixSecondsToUTCTime 100
@@ -997,6 +1007,7 @@ checkPayoutOpenRedeemedTogether = do
                 [ ApplyTransaction Transaction
                     { transactionId = let Chain.Transaction{..} = applyInputsTx in txId
                     , contractId = testContractId
+                    , metadata = mempty
                     , blockHeader = block2
                     , validityLowerBound = posixSecondsToUTCTime 0
                     , validityUpperBound = posixSecondsToUTCTime 100
@@ -1025,6 +1036,7 @@ checkPayoutOpenRedeemedTogether = do
                 , ApplyTransaction Transaction
                     { transactionId = close2TxId
                     , contractId = testContractId
+                    , metadata = mempty
                     , blockHeader = block3
                     , validityLowerBound = posixSecondsToUTCTime 0
                     , validityUpperBound = posixSecondsToUTCTime 100

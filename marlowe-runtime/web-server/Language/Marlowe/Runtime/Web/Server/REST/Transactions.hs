@@ -111,6 +111,7 @@ toTxHeader :: Tx -> TxHeader
 toTxHeader Tx{..} = TxHeader
   { contractId
   , transactionId
+  , metadata
   , status
   , block
   , utxo = outputUtxo
@@ -134,7 +135,8 @@ post eb contractId req@PostTransactionsRequest{..} changeAddressDTO mAddresses m
   extraAddresses <- Set.fromList <$> fromDTOThrow err400 (maybe [] unCommaList mAddresses)
   collateralUtxos <- Set.fromList <$> fromDTOThrow err400 (maybe [] unCommaList mCollateralUtxos)
   contractId' <- fromDTOThrow err400 contractId
-  applyInputs v WalletAddresses{..} contractId' invalidBefore invalidHereafter inputs >>= \case
+  metadata' <- fromDTOThrow err400 metadata
+  applyInputs v WalletAddresses{..} contractId' metadata' invalidBefore invalidHereafter inputs >>= \case
     Left err -> do
       addField ev $ PostError $ show err
       case err of

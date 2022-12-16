@@ -2,6 +2,7 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedLists #-}
+{-# LANGUAGE StrictData #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
 
@@ -256,6 +257,7 @@ instance ToSchema Metadata where
 data TxHeader = TxHeader
   { contractId :: TxOutRef
   , transactionId :: TxId
+  , metadata :: Map Word64 Metadata
   , status :: TxStatus
   , block :: Maybe BlockHeader
   , utxo :: Maybe TxOutRef
@@ -267,6 +269,7 @@ instance ToSchema TxHeader
 data Tx = Tx
   { contractId :: TxOutRef
   , transactionId :: TxId
+  , metadata :: Map Word64 Metadata
   , status :: TxStatus
   , block :: Maybe BlockHeader
   , inputUtxo :: TxOutRef
@@ -512,6 +515,7 @@ uriToJSON = String . T.pack . show
 
 data PostTransactionsRequest = PostTransactionsRequest
   { version :: MarloweVersion
+  , metadata :: Map Word64 Metadata
   , invalidBefore :: Maybe UTCTime
   , invalidHereafter :: Maybe UTCTime
   , inputs :: [Semantics.Input]

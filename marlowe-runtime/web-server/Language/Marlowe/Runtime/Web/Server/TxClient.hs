@@ -82,6 +82,7 @@ type ApplyInputs m
    . MarloweVersion v
   -> WalletAddresses
   -> ContractId
+  -> TransactionMetadata
   -> Maybe UTCTime
   -> Maybe UTCTime
   -> Redeemer v
@@ -191,10 +192,10 @@ txClient = component \TxClientDependencies{..} -> do
           $ Map.insert contractId
           $ TempTx version Unsigned creation
         pure response
-    , applyInputs = \version addresses contractId invalidBefore invalidHereafter inputs -> do
+    , applyInputs = \version addresses contractId metadata invalidBefore invalidHereafter inputs -> do
         response <- runTxJobClient
           $ liftCommand
-          $ ApplyInputs version addresses contractId invalidBefore invalidHereafter inputs
+          $ ApplyInputs version addresses contractId metadata invalidBefore invalidHereafter inputs
         for_ response \application@InputsApplied{txBody} -> do
           let txId = fromCardanoTxId $ getTxId txBody
           let tempTx = TempTx version Unsigned application

@@ -5,6 +5,7 @@
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE StrictData #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeFamilyDependencies #-}
 {-# LANGUAGE TypeOperators #-}
@@ -99,13 +100,14 @@ instance IsMarloweVersion 'V1 where
   marloweVersion = MarloweV1
 
 data Transaction v = Transaction
-  { transactionId      :: TxId
-  , contractId         :: ContractId
-  , blockHeader        :: BlockHeader
+  { transactionId :: TxId
+  , contractId :: ContractId
+  , metadata :: Chain.TransactionMetadata
+  , blockHeader :: BlockHeader
   , validityLowerBound :: UTCTime
   , validityUpperBound :: UTCTime
-  , redeemer           :: Redeemer v
-  , output             :: TransactionOutput v
+  , redeemer :: Redeemer v
+  , output :: TransactionOutput v
   } deriving Generic
 
 deriving instance Show (Transaction 'V1)
@@ -116,6 +118,7 @@ instance Binary (Transaction 'V1) where
   put Transaction{..} = do
     put transactionId
     put contractId
+    put metadata
     put blockHeader
     putUTCTime validityLowerBound
     putUTCTime validityUpperBound
@@ -123,6 +126,7 @@ instance Binary (Transaction 'V1) where
     put output
   get = Transaction
     <$> get
+    <*> get
     <*> get
     <*> get
     <*> getUTCTime

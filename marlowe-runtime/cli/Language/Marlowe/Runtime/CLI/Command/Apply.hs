@@ -7,6 +7,8 @@ module Language.Marlowe.Runtime.CLI.Command.Apply
   where
 
 import qualified Cardano.Api as C
+import Control.Error (noteT)
+import Control.Error.Util (hoistMaybe)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Except (ExceptT(ExceptT), throwE)
 import Data.Aeson (toJSON)
@@ -16,13 +18,15 @@ import Data.ByteString (ByteString)
 import qualified Data.Text as T
 import Data.Time (UTCTime, secondsToNominalDiffTime)
 import Data.Time.Clock.POSIX (posixSecondsToUTCTime)
+import qualified Data.Yaml as Yaml
+import Data.Yaml.Aeson (decodeFileEither)
 import Language.Marlowe (POSIXTime(..))
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
 import qualified Language.Marlowe.Core.V1.Semantics.Types.Address as V1
 import Language.Marlowe.Runtime.CLI.Command.Tx (SigningMethod(Manual), TxCommand(..), txCommandParser)
 import Language.Marlowe.Runtime.CLI.Monad (CLI, runCLIExceptT, runTxCommand)
 import Language.Marlowe.Runtime.CLI.Option (txOutRefParser)
-import Language.Marlowe.Runtime.ChainSync.Api (unPolicyId)
+import Language.Marlowe.Runtime.ChainSync.Api (TransactionMetadata, fromJSONEncodedTransactionMetadata, unPolicyId)
 import Language.Marlowe.Runtime.Core.Api
   (ContractId(..), IsMarloweVersion(..), MarloweVersion(MarloweV1), MarloweVersionTag(..))
 import Language.Marlowe.Runtime.Transaction.Api (ApplyInputsError, InputsApplied(..), MarloweTxCommand(ApplyInputs))
@@ -41,6 +45,7 @@ data ApplyCommandError v
   = ApplyFailed (ApplyInputsError v)
   | PlainInputsSupportedOnly (ContractInputs v)
   | TransactionFileWriteFailed (C.FileError ())
+  | MetadataDecodingFailed (Maybe Yaml.ParseException)
 
 deriving instance Show (ApplyCommandError 'V1)
 
@@ -208,15 +213,16 @@ readRole :: ReadM V1.Party
 readRole = V1.Role . P.TokenName <$> str
 
 runApplyCommand :: TxCommand ApplyCommand -> CLI ()
-runApplyCommand TxCommand { walletAddresses, signingMethod, subCommand=V1ApplyCommand{..}} = runCLIExceptT do
+runApplyCommand TxCommand { walletAddresses, signingMethod, metadataFile, subCommand=V1ApplyCommand{..}} = runCLIExceptT do
   inputs' <- case inputs of
     ContractInputsByValue redeemer -> pure redeemer
     _ -> throwE (PlainInputsSupportedOnly inputs)
+  metadata <- readMetadata
   let
     validityLowerBound'= posixTimeToUTCTime <$> validityLowerBound
     validityUpperBound'= posixTimeToUTCTime <$> validityUpperBound
 
-    cmd = ApplyInputs MarloweV1 walletAddresses contractId validityLowerBound' validityUpperBound' inputs'
+    cmd = ApplyInputs MarloweV1 walletAddresses contractId metadata validityLowerBound' validityUpperBound' inputs'
   InputsApplied{txBody} <- ExceptT $ first ApplyFailed <$> runTxCommand cmd
   case signingMethod of
     Manual outputFile -> do
@@ -229,3 +235,10 @@ runApplyCommand TxCommand { walletAddresses, signingMethod, subCommand=V1ApplyCo
   where
     posixTimeToUTCTime :: POSIXTime -> UTCTime
     posixTimeToUTCTime (POSIXTime t) = posixSecondsToUTCTime $ secondsToNominalDiffTime $ fromInteger t / 1000
+
+    readMetadata :: ExceptT (ApplyCommandError v) CLI TransactionMetadata
+    readMetadata = case metadataFile of
+      Just filePath -> do
+        metadataJSON <- ExceptT $ liftIO $ first (MetadataDecodingFailed . Just) <$> decodeFileEither filePath
+        noteT (MetadataDecodingFailed Nothing) $ hoistMaybe (fromJSONEncodedTransactionMetadata metadataJSON)
+      Nothing -> pure mempty
