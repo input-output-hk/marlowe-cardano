@@ -1,5 +1,3 @@
-
-
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -77,7 +75,7 @@ buildApplication
   -> Client (Either String (ContractId, C.TxBody C.BabbageEra))
 buildApplication version' contractId' redeemer lower upper =
   build show (\InputsApplied{..} -> (contractId, txBody))
-    $ \w -> ApplyInputs version' w contractId' (utcTime <$> lower) (utcTime <$> upper) redeemer
+    $ \w -> ApplyInputs version' w contractId' mempty (utcTime <$> lower) (utcTime <$> upper) redeemer
 
 
 buildWithdrawal
