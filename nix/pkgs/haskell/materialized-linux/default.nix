@@ -815,6 +815,7 @@
         marlowe-contracts = ./.plan.nix/marlowe-contracts.nix;
         marlowe-actus = ./.plan.nix/marlowe-actus.nix;
         eventuo11y-dsl = ./.plan.nix/eventuo11y-dsl.nix;
+        cardano-integration = ./.plan.nix/cardano-integration.nix;
         aeson-via-serialise = ./.plan.nix/aeson-via-serialise.nix;
         marlowe-scaling = ./.plan.nix/marlowe-scaling.nix;
         eventuo11y-json = ./.plan.nix/eventuo11y-json.nix;
@@ -877,6 +878,7 @@
             flags = { "defer-plugin-errors" = lib.mkOverride 900 false; };
             };
           "eventuo11y-dsl" = { flags = {}; };
+          "cardano-integration" = { flags = {}; };
           "aeson-via-serialise" = { flags = {}; };
           "marlowe-scaling" = { flags = {}; };
           "eventuo11y-json" = { flags = {}; };
@@ -965,6 +967,7 @@
           "typerep-map".components.sublibs."typerep-extra-impls".planned = lib.mkOverride 900 true;
           "plutus-tx".components.sublibs."plutus-tx-testlib".planned = lib.mkOverride 900 true;
           "Cabal".components.library.planned = lib.mkOverride 900 true;
+          "cardano-integration".components.library.planned = lib.mkOverride 900 true;
           "reflection".components.library.planned = lib.mkOverride 900 true;
           "marlowe-runtime".components.sublibs."history-api".planned = lib.mkOverride 900 true;
           "Unique".components.library.planned = lib.mkOverride 900 true;
@@ -1204,6 +1207,7 @@
           "Stream".components.library.planned = lib.mkOverride 900 true;
           "criterion".components.library.planned = lib.mkOverride 900 true;
           "katip".components.library.planned = lib.mkOverride 900 true;
+          "cardano-integration".components.exes."testbed".planned = lib.mkOverride 900 true;
           "marlowe-protocols-test".components.library.planned = lib.mkOverride 900 true;
           "hasql".components.library.planned = lib.mkOverride 900 true;
           "wai-logger".components.setup.planned = lib.mkOverride 900 true;

@@ -139,6 +139,8 @@ let
 
             # Werror everything. This is a pain, see https://github.com/input-output-hk/haskell.nix/issues/519
             async-components.ghcOptions = [ "-Werror" ];
+            cardano-integration.ghcOptions = [ "-Werror" ];
+            eventuo11y-extras.ghcOptions = [ "-Werror" ];
             marlowe.ghcOptions = [ "-Werror" ];
             marlowe-actus.ghcOptions = [ "-Werror" ];
             marlowe-chain-sync.ghcOptions = [ "-Werror" ];
