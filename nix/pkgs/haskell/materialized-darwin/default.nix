@@ -502,6 +502,9 @@
         "hsc2hs".flags.in-ghc-tree = false;
         "data-default-instances-containers".revision = (((hackage."data-default-instances-containers")."0.0.1").revisions).default;
         "flat".revision = (((hackage."flat")."0.4.4.0.0.0.0.2").revisions).default;
+        "base-unicode-symbols".revision = (((hackage."base-unicode-symbols")."0.2.4.2").revisions).default;
+        "base-unicode-symbols".flags.base-4-8 = true;
+        "base-unicode-symbols".flags.old-base = false;
         "uri-encode".revision = (((hackage."uri-encode")."1.5.0.7").revisions).default;
         "uri-encode".flags.tools = false;
         "uri-encode".flags.network-uri = true;
@@ -579,6 +582,7 @@
         "bech32".flags.static = false;
         "bech32".flags.release = false;
         "lifted-base".revision = (((hackage."lifted-base")."0.2.3.12").revisions).default;
+        "wai-cors".revision = (((hackage."wai-cors")."0.2.7").revisions).default;
         "clock".revision = (((hackage."clock")."0.8.3").revisions).default;
         "clock".flags.llvm = false;
         "th-expand-syns".revision = (((hackage."th-expand-syns")."0.4.10.0").revisions).default;
@@ -1354,6 +1358,7 @@
           "plutus-core".components.exes."pir".planned = lib.mkOverride 900 true;
           "marlowe-runtime".components.sublibs."tx-api".planned = lib.mkOverride 900 true;
           "plutus-tx-plugin".components.library.planned = lib.mkOverride 900 true;
+          "base-unicode-symbols".components.library.planned = lib.mkOverride 900 true;
           "marlowe-chain-sync".components.exes."marlowe-chain-indexer".planned = lib.mkOverride 900 true;
           "iohk-monitoring".components.library.planned = lib.mkOverride 900 true;
           "unbounded-delays".components.library.planned = lib.mkOverride 900 true;
@@ -1436,6 +1441,7 @@
           "base58-bytestring".components.library.planned = lib.mkOverride 900 true;
           "basement".components.library.planned = lib.mkOverride 900 true;
           "optparse-applicative".components.library.planned = lib.mkOverride 900 true;
+          "wai-cors".components.library.planned = lib.mkOverride 900 true;
           "network-mux".components.exes."cardano-ping".planned = lib.mkOverride 900 true;
           "aeson".components.library.planned = lib.mkOverride 900 true;
           "ekg-core".components.library.planned = lib.mkOverride 900 true;
