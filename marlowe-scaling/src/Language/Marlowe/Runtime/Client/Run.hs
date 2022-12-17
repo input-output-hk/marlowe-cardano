@@ -83,7 +83,7 @@ runClientWithConfig
   :: Config
   -> Client a
   -> IO a
-runClientWithConfig Config{..} lambda = do
+runClientWithConfig Config{..} client = do
   chainSeekAddr <- resolve chainSeekHost chainSeekPort
   syncCommandAddr <- resolve chainSeekHost chainSeekCommandPort
   historyJobAddr <- resolve historyHost historyCommandPort
@@ -91,7 +91,7 @@ runClientWithConfig Config{..} lambda = do
   historySyncAddr <- resolve historyHost historySyncPort
   discoveryQueryAddr <- resolve discoveryHost discoveryQueryPort
   txJobAddr <- resolve txHost txCommandPort
-  runReaderT (runClient lambda) Services
+  runReaderT (runClient client) Services
     { runSyncClient = runClientPeerOverSocket chainSeekAddr codecChainSeek (chainSeekClientPeer Genesis)
     , runSyncCommandClient = runClientPeerOverSocket syncCommandAddr codecJob jobClientPeer
     , runHistoryJobClient = runClientPeerOverSocket historyJobAddr codecJob jobClientPeer
