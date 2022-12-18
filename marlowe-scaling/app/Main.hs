@@ -3,7 +3,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -122,17 +121,17 @@ runScenario event config address key contract inputs =
               (contractId, body) <-
                 handleWithEvents subEvent "Build" config request
                   $ \case
-                    Body{..} -> pure (resContractId, resTransactionBody)
+                    Body{..} -> pure (resContractId, resTxBody)
                     response -> unexpected response
               tx <-
                 handleWithEvents subEvent "Sign" config (Sign body [] [key])
                   $ \case
-                    Tx{..}   -> pure resTransaction
+                    Tx{..}   -> pure resTx
                     response -> unexpected response
               txId' <-
                 handleWithEvents subEvent "Submit" config (Submit tx)
                   $ \case
-                    TxId{..} -> pure resTransactionId
+                    TxId{..} -> pure resTxId
                     response -> unexpected response
               handleWithEvents subEvent "Confirm" config (Wait txId' 1)
                 $ \case

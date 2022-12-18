@@ -1,7 +1,6 @@
 
 
 {-# LANGUAGE DataKinds #-}
-{-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -17,6 +16,7 @@ import Control.Concurrent (threadDelay)
 import Control.Concurrent.Async (race)
 import Control.Exception (SomeException, catch)
 import Data.Bifunctor (second)
+import Data.Either (fromRight)
 import Language.Marlowe.Runtime.Client.Build (buildApplication, buildCreation, buildWithdrawal)
 import Language.Marlowe.Runtime.Client.List
   (allContracts, followContract, followedContracts, getContract, unfollowContract)
@@ -44,9 +44,9 @@ handle config request =
           Create{..} -> second (uncurry mkBody) <$> buildCreation MarloweV1 reqContract reqRoles reqMinUtxo reqMetadata reqAddresses reqChange reqCollateral
           Apply{..} -> second (uncurry mkBody) <$> buildApplication MarloweV1 reqContractId reqInputs reqValidityLowerBound reqValidityUpperBound reqMetadata reqAddresses reqChange reqCollateral
           Withdraw{..} -> second (uncurry mkBody) <$> buildWithdrawal MarloweV1 reqContractId reqRole reqAddresses reqChange reqCollateral
-          Sign{..} -> pure . Right . uncurry Tx $ sign reqTransactionBody reqPaymentKeys reqPaymentExtendedKeys
-          Submit{..} -> second TxId <$> submit reqTransaction
-          Wait{..} -> second TxId <$> waitForTx reqPollingSeconds reqTransactionId
+          Sign{..} -> pure . Right . uncurry Tx $ sign reqTxBody reqPaymentKeys reqPaymentExtendedKeys
+          Submit{..} -> second TxId <$> submit reqTx
+          Wait{..} -> second TxInfo <$> waitForTx reqPollingSeconds reqTxId
     withTimeout (timeoutSeconds config)
       $ runClientWithConfig config run
       `catch` \(err :: SomeException) -> pure . Left $ show err
@@ -57,5 +57,5 @@ withTimeout
   -> IO (Either String a)
   -> IO (Either String a)
 withTimeout timeout action =
-  either (const $ Left "Operation timed out.") id
+  fromRight (Left "Operation timed out.")
     <$> threadDelay (timeout * 1_000_000) `race` action

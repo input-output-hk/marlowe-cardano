@@ -14,7 +14,7 @@ import Data.Bifunctor (second)
 import Data.Functor (($>))
 import Language.Marlowe.Runtime.Cardano.Api (fromCardanoTxId)
 import Language.Marlowe.Runtime.ChainSync.Api
-  (ChainSyncCommand(SubmitTx), Move(FindTx), TxId, WithGenesis(..), moveSchema)
+  (ChainSyncCommand(SubmitTx), Move(FindTx), Transaction, TxId, WithGenesis(..), moveSchema)
 import Language.Marlowe.Runtime.Client.Run (runChainSeekClient, runJobClient)
 import Language.Marlowe.Runtime.Client.Types (Client, Services(..))
 import Network.Protocol.ChainSeek.Client
@@ -43,7 +43,7 @@ submit tx =
 waitForTx
   :: Int
   -> TxId
-  -> Client (Either String TxId)
+  -> Client (Either String Transaction)
 waitForTx pollingFrequency txId =
   let
     clientInit = SendMsgRequestHandshake moveSchema ClientStHandshake
@@ -57,10 +57,10 @@ waitForTx pollingFrequency txId =
           pure $ SendMsgDone $ Left $ "Chain seek rejected query: " <> show err <> "."
       , recvMsgWait = liftIO (threadDelay $ pollingFrequency * 1_000_000) $> SendMsgPoll clientNext
       , recvMsgRollBackward = \_ _ -> pure clientIdle
-      , recvMsgRollForward = \_ point _ -> case point of
+      , recvMsgRollForward = \tx point _ -> case point of
           Genesis -> pure $ SendMsgDone $ Left  "Chain seek rolled forward to genesis."
 
-          At _    -> pure $ SendMsgDone $ Right txId
+          At _    -> pure $ SendMsgDone $ Right tx
       }
   in
     runChainSeekClient runSyncClient

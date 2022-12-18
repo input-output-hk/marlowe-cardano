@@ -83,6 +83,7 @@ import qualified Data.Aeson.Types as A
   (FromJSON(parseJSON), Parser, ToJSON(toJSON), Value(String), object, parseFail, withObject, (.:), (.=))
 import qualified Data.Map.Strict as M (Map, map, mapKeys)
 import qualified Data.Text as T (Text)
+import qualified Language.Marlowe.Runtime.ChainSync.Api as CS (Transaction)
 
 
 data Config =
@@ -181,15 +182,15 @@ data MarloweRequest v =
     , reqCollateral :: [TxOutRef]
     }
   | Sign
-    { reqTransactionBody :: C.TxBody C.BabbageEra
+    { reqTxBody :: C.TxBody C.BabbageEra
     , reqPaymentKeys :: [C.SigningKey C.PaymentKey]
     , reqPaymentExtendedKeys :: [C.SigningKey C.PaymentExtendedKey]
     }
   | Submit
-    { reqTransaction :: C.Tx C.BabbageEra
+    { reqTx :: C.Tx C.BabbageEra
     }
   | Wait
-    { reqTransactionId :: TxId
+    { reqTxId :: TxId
     , reqPollingSeconds :: Int
     }
 
@@ -238,15 +239,15 @@ instance A.FromJSON (MarloweRequest 'V1) where
                             reqCollateral <- fmap fromString <$> o A..: "collateral"
                             pure Withdraw{..}
             "sign" -> do
-                        reqTransactionBody <- textEnvelopeFromJSON (C.AsTxBody C.AsBabbageEra) =<< o A..: "body"
+                        reqTxBody <- textEnvelopeFromJSON (C.AsTxBody C.AsBabbageEra) =<< o A..: "body"
                         reqPaymentKeys <- mapM (textEnvelopeFromJSON $ C.AsSigningKey C.AsPaymentKey) =<< o A..: "paymentKeys"
                         reqPaymentExtendedKeys <- mapM (textEnvelopeFromJSON $ C.AsSigningKey C.AsPaymentExtendedKey) =<< o A..: "paymentExtendedKeys"
                         pure Sign{..}
             "submit" -> do
-                        reqTransaction <- textEnvelopeFromJSON (C.AsTx C.AsBabbageEra) =<< o A..: "tx"
+                        reqTx <- textEnvelopeFromJSON (C.AsTx C.AsBabbageEra) =<< o A..: "tx"
                         pure Submit{..}
             "wait" -> do
-                        reqTransactionId <- fromString <$> o A..: "txId"
+                        reqTxId <- fromString <$> o A..: "txId"
                         reqPollingSeconds <- o A..: "pollingSeconds"
                         pure Wait{..}
             request -> fail $ "Invalid request: " <> request <> "."
@@ -302,19 +303,19 @@ instance A.ToJSON (MarloweRequest 'V1) where
   toJSON Sign{..} =
     A.object
       [ "request" A..= ("sign" :: String)
-      , "body" A..= textEnvelopeToJSON reqTransactionBody
+      , "body" A..= textEnvelopeToJSON reqTxBody
       , "paymentKeys" A..= fmap textEnvelopeToJSON reqPaymentKeys
       , "paymentExtendedKeys" A..= fmap textEnvelopeToJSON reqPaymentExtendedKeys
       ]
   toJSON Submit{..} =
     A.object
       [ "request" A..= ("submit" :: String)
-      , "tx" A..= textEnvelopeToJSON reqTransaction
+      , "tx" A..= textEnvelopeToJSON reqTx
       ]
   toJSON Wait{..} =
     A.object
       [ "request" A..= ("wait" :: String)
-      , "txId" A..= reqTransactionId
+      , "txId" A..= reqTxId
       , "pollingSeconds" A..= reqPollingSeconds
       ]
 
@@ -332,15 +333,19 @@ data MarloweResponse v =
     }
   | Body
     { resContractId :: ContractId
-    , resTransactionId :: TxId
-    , resTransactionBody :: C.TxBody C.BabbageEra
+    , resTxId :: TxId
+    , resTxBody :: C.TxBody C.BabbageEra
     }
   | Tx
-    { resTransactionId :: TxId
-    , resTransaction :: C.Tx C.BabbageEra
+    { resTxId :: TxId
+    , resTx :: C.Tx C.BabbageEra
     }
   | TxId
-    { resTransactionId :: TxId
+    { resTxId :: TxId
+    }
+  | TxInfo
+    {
+      resTransaction :: CS.Transaction
     }
 
 
@@ -365,19 +370,24 @@ instance A.ToJSON (MarloweResponse 'V1) where
     A.object
       [ "response" A..= ("body" :: String)
       , "contractId" A..= renderContractId resContractId
-      , "txId" A..= C.getTxId resTransactionBody
-      , "body" A..= textEnvelopeToJSON resTransactionBody
+      , "txId" A..= C.getTxId resTxBody
+      , "body" A..= textEnvelopeToJSON resTxBody
       ]
   toJSON Tx{..} =
     A.object
       [ "response" A..= ("tx" :: String)
-      , "txId" A..= resTransactionId
-      , "tx" A..= textEnvelopeToJSON resTransaction
+      , "txId" A..= resTxId
+      , "tx" A..= textEnvelopeToJSON resTx
       ]
   toJSON TxId{..} =
     A.object
       [ "response" A..= ("txId" :: String)
-      , "txId" A..= resTransactionId
+      , "txId" A..= resTxId
+      ]
+  toJSON TxInfo{..} =
+    A.object
+      [ "reponse" A..= ("txInfo" :: String)
+      , "transaction" A..= resTransaction
       ]
 
 
@@ -444,9 +454,9 @@ textEnvelopeToJSON x =
 
 
 mkBody :: ContractId -> C.TxBody C.BabbageEra -> MarloweResponse v
-mkBody resContractId resTransactionBody =
+mkBody resContractId resTxBody =
   let
-    resTransactionId = fromCardanoTxId $ C.getTxId resTransactionBody
+    resTxId = fromCardanoTxId $ C.getTxId resTxBody
   in
     Body{..}
 
