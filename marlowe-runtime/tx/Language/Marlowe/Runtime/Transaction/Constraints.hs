@@ -452,7 +452,9 @@ findMinUtxo protocol (chAddress, mbDatum, origValue) =
   do
     let
       atLeastHalfAnAda :: C.Value
-      atLeastHalfAnAda = origValue <> C.lovelaceToValue (maximum [500_000, C.selectLovelace origValue] - C.selectLovelace origValue)
+      -- FIXME Found what looks like the same value being added and then subtracted from this computation
+      -- atLeastHalfAnAda = origValue <> C.lovelaceToValue (maximum [500_000, C.selectLovelace origValue] - C.selectLovelace origValue)
+      atLeastHalfAnAda = C.lovelaceToValue (maximum [500_000, C.selectLovelace origValue])
       datum = maybe C.TxOutDatumNone
         (C.TxOutDatumInTx C.ScriptDataInBabbageEra . C.fromPlutusData . P.toData)
         $ Core.fromChainDatum Core.MarloweV1 =<< mbDatum
@@ -552,7 +554,8 @@ selectCoins protocol marloweVersion marloweCtx walletCtx@WalletContext{..} txBod
     -- Find the net additional input that is needed; the extra input we need to find, worst case
     targetSelectionValue :: C.Value
     -- targetSelectionValue = outputsFromBody <> fee <> minUtxo <> C.negateValue inputsFromBody <> C.negateValue mintValue
-    targetSelectionValue = logD ("selectCoins outputsFromBody: " <> show outputsFromBody) outputsFromBody <> logD ("selectCoins fee: " <> show fee) fee <> logD ("selectCoins minUtxo: " <> show minUtxo) minUtxo <> logD ("selectCoins inputsFromBody (subtracted): " <> show inputsFromBody) (C.negateValue inputsFromBody <> C.negateValue mintValue)
+    targetSelectionValue = outputsFromBody <> logD ("selectCoins fee: " <> show fee) fee <> logD ("selectCoins minUtxo: " <> show minUtxo) minUtxo <> (C.negateValue inputsFromBody <> C.negateValue mintValue)
+    -- targetSelectionValue = logD ("selectCoins outputsFromBody: " <> show outputsFromBody) outputsFromBody <> logD ("selectCoins fee: " <> show fee) fee <> logD ("selectCoins minUtxo: " <> show minUtxo) minUtxo <> logD ("selectCoins inputsFromBody (subtracted): " <> show inputsFromBody) (C.negateValue inputsFromBody <> C.negateValue mintValue)
 
     -- Remove the lovelace from a value.
     deleteLovelace :: C.Value -> C.Value
