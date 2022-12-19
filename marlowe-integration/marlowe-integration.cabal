@@ -79,15 +79,3 @@ library
     , time
     , transformers
 
-executable testbed
-  hs-source-dirs: testbed
-  main-is: Main.hs
-  other-modules:
-    Paths_marlowe_integration
-  autogen-modules:
-    Paths_marlowe_integration
-  build-depends:
-      base >= 4.9 && < 5
-    , cardano-integration
-    , marlowe-integration
-
