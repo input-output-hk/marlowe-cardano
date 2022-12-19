@@ -1046,7 +1046,6 @@
           "call-stack".components.library.planned = lib.mkOverride 900 true;
           "unix-bytestring".components.library.planned = lib.mkOverride 900 true;
           "marlowe-protocols".components.tests."marlowe-protocols-test".planned = lib.mkOverride 900 true;
-          "shakespeare".components.library.planned = lib.mkOverride 900 true;
           "async-timer".components.library.planned = lib.mkOverride 900 true;
           "optics-core".components.library.planned = lib.mkOverride 900 true;
           "hint".components.library.planned = lib.mkOverride 900 true;
