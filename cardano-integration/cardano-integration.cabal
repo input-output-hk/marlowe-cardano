@@ -63,9 +63,11 @@ library
     , process
     , random
     , resourcet
+    , text
     , time
     , transformers
     , transformers-base
+    , unliftio
     , uuid
     , yaml
 

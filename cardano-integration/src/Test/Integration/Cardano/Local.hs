@@ -13,20 +13,24 @@ module Test.Integration.Cardano.Local
 
 import Control.Concurrent (threadDelay)
 import Control.Concurrent.Async (mapConcurrently_, race_)
-import Control.Exception (Exception)
+import Control.Exception (Exception(displayException), throw)
 import Control.Exception.Lifted (SomeException, catch)
 import Control.Monad.Base (MonadBase)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Monad.Trans.Resource (MonadResource, MonadThrow(throwM), MonadUnliftIO)
-import Data.Aeson (object, toJSON, (.=))
+import Data.Aeson (ToJSON, object, toJSON, (.=))
 import qualified Data.Aeson.KeyMap as KM
 import Data.Functor (void, (<&>))
 import Data.List (isInfixOf)
 import Data.Maybe (fromJust)
+import qualified Data.Text as T
+import qualified Data.Text.Encoding as T
 import Data.Time (UTCTime, addUTCTime, getCurrentTime, nominalDiffTimeToSeconds, secondsToNominalDiffTime)
 import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
+import qualified Data.Yaml.Aeson as YAML
+import GHC.Generics (Generic)
 import System.FilePath ((</>))
 import System.IO (Handle, IOMode(..), hClose, openFile)
 import System.Process (CreateProcess(..), ProcessHandle, StdStream(..), cleanupProcess, createProcess, proc)
@@ -45,6 +49,7 @@ import Test.Integration.Workspace
   )
 import qualified Test.Integration.Workspace as W
 import Text.Printf (printf)
+import UnliftIO.Exception (catchAny)
 import UnliftIO.Resource (allocate, runResourceT, unprotect)
 
 data LocalTestnetOptions = LocalTestnetOptions
@@ -68,17 +73,23 @@ data LocalTestnet = LocalTestnet
 data PaymentKeyPair = PaymentKeyPair
   { paymentSKey :: FilePath
   , paymentVKey :: FilePath
-  } deriving (Show, Eq, Ord)
+  } deriving (Show, Eq, Ord, Generic)
+
+instance ToJSON PaymentKeyPair
 
 data StakingKeyPair = StakingKeyPair
   { stakingSKey :: FilePath
   , stakingVKey :: FilePath
-  } deriving (Show, Eq, Ord)
+  } deriving (Show, Eq, Ord, Generic)
+
+instance ToJSON StakingKeyPair
 
 data Delegator = Delegator
   { paymentKeyPair :: PaymentKeyPair
   , stakingKeyPair :: StakingKeyPair
-  } deriving (Show, Eq, Ord)
+  } deriving (Show, Eq, Ord, Generic)
+
+instance ToJSON Delegator
 
 data SpoNode = SpoNode
   { byronDelegateKey :: FilePath
@@ -108,8 +119,9 @@ data Network = Network
   , byronGenesisJson :: FilePath
   , shelleyGenesisJson :: FilePath
   , alonzoGenesisJson :: FilePath
-  } deriving (Show, Eq, Ord)
+  } deriving (Show, Eq, Ord, Generic)
 
+instance ToJSON Network
 
 defaultOptions :: LocalTestnetOptions
 defaultOptions = LocalTestnetOptions
@@ -141,8 +153,10 @@ data TestnetException = TestnetException
   , spoNodeRecords :: [SpoNodeRecord]
   , wallets :: [PaymentKeyPair]
   , delegators :: [Delegator]
-  , exception :: SomeException
-  } deriving (Show)
+  , exception :: String
+  } deriving (Generic)
+
+instance ToJSON TestnetException
 
 data SpoNodeRecord = SpoNodeRecord
   { byronDelegateKey :: FilePath
@@ -163,55 +177,68 @@ data SpoNodeRecord = SpoNodeRecord
   , topology :: FilePath
   , vrfSKey :: FilePath
   , vrfVKey :: FilePath
-  } deriving (Show, Eq, Ord)
+  } deriving (Show, Eq, Ord, Generic)
+
+instance ToJSON SpoNodeRecord
+
+instance Show TestnetException where
+  show = T.unpack . T.decodeUtf8 . YAML.encode
 
 instance Exception TestnetException where
 
 -- | Whenever an exception occurs, this function will decorate it with
 -- information about the local testnet.
 rethrowAsTestnetException :: (MonadBase IO m, MonadIO m, MonadThrow m) => LocalTestnet -> SomeException -> m a
-rethrowAsTestnetException LocalTestnet{..} exception = do
+rethrowAsTestnetException LocalTestnet{..} ex = do
+  -- prevent workspace from being cleaned up for diagnosing errors.
   void $ unprotect $ W.releaseKey workspace
   let spoNodeRecords = spoNodes <&> \SpoNode{..} -> SpoNodeRecord{..}
+  let exception = displayException ex
   throwM TestnetException{..}
 
-startLocalTestnet :: MonadResource m => LocalTestnetOptions -> m LocalTestnet
+startLocalTestnet :: (MonadResource m, MonadUnliftIO m) => LocalTestnetOptions -> m LocalTestnet
 startLocalTestnet options@LocalTestnetOptions{..} = do
   workspace <- createWorkspace "local-testnet"
-  testnetMagic <- randomRIO (1000, 2000)
-  socketDir <- createWorkspaceDir workspace "socket"
-  logsDir <- createWorkspaceDir workspace "logs"
+  catchAny
+    do
+      testnetMagic <- randomRIO (1000, 2000)
+      socketDir <- createWorkspaceDir workspace "socket"
+      logsDir <- createWorkspaceDir workspace "logs"
 
-  currentTime <- liftIO getCurrentTime
-  -- Add time to execute the CLI commands to set everything up
-  let startTime = addUTCTime (secondsToNominalDiffTime 15) currentTime
+      currentTime <- liftIO getCurrentTime
+      -- Add time to execute the CLI commands to set everything up
+      let startTime = addUTCTime (secondsToNominalDiffTime 15) currentTime
 
-  byronGenesisDir <- createByronGenesis workspace startTime testnetMagic options
-  shelleyGenesisDir <- createShelleyGenesisStaked workspace testnetMagic options
+      byronGenesisDir <- createByronGenesis workspace startTime testnetMagic options
+      shelleyGenesisDir <- createShelleyGenesisStaked workspace testnetMagic options
 
-  let
-    wallets = [1..numWallets] <&> \n -> PaymentKeyPair
-      { paymentSKey = shelleyGenesisDir </> "utxos" </> "utxo" <> show n <> ".skey"
-      , paymentVKey = shelleyGenesisDir </> "utxos" </> "utxo" <> show n <> ".vkey"
-      }
+      let
+        wallets = [1..numWallets] <&> \n -> PaymentKeyPair
+          { paymentSKey = shelleyGenesisDir </> "utxos" </> "utxo" <> show n <> ".skey"
+          , paymentVKey = shelleyGenesisDir </> "utxos" </> "utxo" <> show n <> ".vkey"
+          }
 
-    delegators = [1..numDelegators] <&> \n -> Delegator
-      { paymentKeyPair = PaymentKeyPair
-        { paymentSKey = shelleyGenesisDir </> "stake-delegator-keys" </> "payment" <> show n <> ".skey"
-        , paymentVKey = shelleyGenesisDir </> "stake-delegator-keys" </> "payment" <> show n <> ".vkey"
-        }
-      , stakingKeyPair = StakingKeyPair
-        { stakingSKey = shelleyGenesisDir </> "stake-delegator-keys" </> "staking" <> show n <> ".skey"
-        , stakingVKey = shelleyGenesisDir </> "stake-delegator-keys" </> "staking" <> show n <> ".vkey"
-        }
-      }
+        delegators = [1..numDelegators] <&> \n -> Delegator
+          { paymentKeyPair = PaymentKeyPair
+            { paymentSKey = shelleyGenesisDir </> "stake-delegator-keys" </> "payment" <> show n <> ".skey"
+            , paymentVKey = shelleyGenesisDir </> "stake-delegator-keys" </> "payment" <> show n <> ".vkey"
+            }
+          , stakingKeyPair = StakingKeyPair
+            { stakingSKey = shelleyGenesisDir </> "stake-delegator-keys" </> "staking" <> show n <> ".skey"
+            , stakingVKey = shelleyGenesisDir </> "stake-delegator-keys" </> "staking" <> show n <> ".vkey"
+            }
+          }
 
-  network <- setupNetwork workspace byronGenesisDir shelleyGenesisDir
-  spoNodes <- traverse (setupSpoNode workspace options network logsDir socketDir byronGenesisDir shelleyGenesisDir) [1..numSpoNodes]
+      network <- setupNetwork workspace byronGenesisDir shelleyGenesisDir
+      spoNodes <- traverse (setupSpoNode workspace options network logsDir socketDir byronGenesisDir shelleyGenesisDir) [1..numSpoNodes]
 
-  liftIO $ mapConcurrently_ assertChainExtended spoNodes
+      liftIO $ mapConcurrently_ assertChainExtended spoNodes
 
-  pure LocalTestnet{..}
+      pure LocalTestnet{..}
+    \e -> do
+      -- prevent workspace from being cleaned up for diagnosing errors.
+      _ <- unprotect $ W.releaseKey workspace
+      throw e
 
 createByronGenesis :: MonadIO m => Workspace -> UTCTime -> Int -> LocalTestnetOptions -> m FilePath
 createByronGenesis workspace startTime testnetMagic LocalTestnetOptions{..} = do
