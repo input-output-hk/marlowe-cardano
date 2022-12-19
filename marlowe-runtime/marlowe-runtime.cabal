@@ -137,6 +137,7 @@ library history
     , these
     , transformers
     , witherable
+  visibility: public
 
 library discovery-api
   import: lang
@@ -182,6 +183,7 @@ library discovery
     , plutus-tx
     , semialign
     , stm
+  visibility: public
 
 library tx-api
   import: lang
@@ -241,6 +243,7 @@ library tx
     , time
     , transformers
     , witherable
+  visibility: public
 
 library plutus-scripts
   import: lang

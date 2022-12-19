@@ -108,6 +108,7 @@ library libchainseek
     , these
     , transformers
     , vector
+  visibility: public
 
 library chain-indexer
   import: lang
@@ -148,6 +149,7 @@ library chain-indexer
     , typed-protocols
     , vector
     , witherable
+  visibility: public
 
 library plutus-compat
   import: lang
