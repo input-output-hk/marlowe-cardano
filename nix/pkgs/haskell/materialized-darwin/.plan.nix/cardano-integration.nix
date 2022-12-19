@@ -62,14 +62,14 @@
         hsSourceDirs = [ "src" ];
         };
       exes = {
-        "testbed" = {
+        "create-testnet" = {
           depends = [
             (hsPkgs."base" or (errorHandler.buildDepError "base"))
             (hsPkgs."cardano-integration" or (errorHandler.buildDepError "cardano-integration"))
             ];
           buildable = true;
           modules = [ "Paths_cardano_integration" ];
-          hsSourceDirs = [ "testbed" ];
+          hsSourceDirs = [ "create-testnet" ];
           mainPath = [ "Main.hs" ];
           };
         };

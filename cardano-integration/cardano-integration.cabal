@@ -71,8 +71,8 @@ library
     , uuid
     , yaml
 
-executable testbed
-  hs-source-dirs: testbed
+executable create-testnet
+  hs-source-dirs: create-testnet
   main-is: Main.hs
   other-modules:
     Paths_cardano_integration
