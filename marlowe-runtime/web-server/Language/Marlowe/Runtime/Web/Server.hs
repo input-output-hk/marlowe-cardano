@@ -44,10 +44,10 @@ import qualified Language.Marlowe.Runtime.Web.Server.OpenAPI as OpenAPI
 import Language.Marlowe.Runtime.Web.Server.REST (ApiSelector)
 import qualified Language.Marlowe.Runtime.Web.Server.REST as REST
 import Language.Marlowe.Runtime.Web.Server.TxClient (TxClient(..), TxClientDependencies(..), TxClientSelector, txClient)
-import qualified Network.HTTP.Types as HTTP
 import Network.Protocol.Driver (RunClient)
 import Network.Protocol.Job.Client (JobClient)
 import qualified Network.Wai as WAI
+import Network.Wai.Middleware.Cors (CorsResourcePolicy(..), cors, simpleCorsResourcePolicy)
 import Observe.Event (EventBackend, hoistEventBackend, narrowEventBackend)
 import Observe.Event.BackendModification (modifyEventBackend, setAncestor)
 import Observe.Event.DSL (SelectorField(Inject), SelectorSpec(SelectorSpec))
@@ -75,19 +75,17 @@ serveAppM
   -> Application
 serveAppM api env = serve api . hoistServer api (flip runReaderT env . runAppM)
 
-addHeaders :: HTTP.ResponseHeaders -> WAI.Middleware
-addHeaders hdrs webApp req respond = webApp req $ \response -> do
-    let (st, headers, streamHandle) = WAI.responseToStream response
-    streamHandle $ \streamBody ->
-        respond $ WAI.responseStream st (headers <> hdrs) streamBody
-
-addCorsHeader :: WAI.Middleware
-addCorsHeader = addHeaders [("Access-Control-Allow-Origin", "*")]
-
 corsMiddleware :: Bool -> WAI.Middleware
 corsMiddleware accessControlAllowOriginAll =
   if accessControlAllowOriginAll
-  then addCorsHeader
+  then do
+    let
+      policy = simpleCorsResourcePolicy
+        { corsRequestHeaders = ["Content-Type", "Range", "Accept"]
+        , corsExposedHeaders = Just ["*"]
+        , corsMethods = ["GET", "POST", "PUT", "OPTIONS", "DELETE"]
+        }
+    cors (const $ Just policy)
   else id
 
 app :: Bool -> Bool -> AppEnv r -> EventBackend (AppM r) r ApiSelector -> Application

@@ -314,6 +314,7 @@
             (hsPkgs."transformers" or (errorHandler.buildDepError "transformers"))
             (hsPkgs."transformers-base" or (errorHandler.buildDepError "transformers-base"))
             (hsPkgs."wai" or (errorHandler.buildDepError "wai"))
+            (hsPkgs."wai-cors" or (errorHandler.buildDepError "wai-cors"))
             ];
           buildable = true;
           modules = [
