@@ -6,8 +6,9 @@ module Main
 import Control.Concurrent (threadDelay)
 import Data.Functor (void)
 import Test.Integration.Cardano (withLocalTestnet)
+import Test.Integration.Marlowe (withLocalMarloweRuntime)
 
 main :: IO ()
-main = withLocalTestnet $ const do
-  putStrLn "Testnet started, press enter to exit"
+main = withLocalTestnet $ withLocalMarloweRuntime \runtime -> do
+  putStrLn "Local Marlowe Runtime started, press enter to exit"
   void getLine

@@ -39,10 +39,16 @@ import Control.Concurrent.STM (STM, atomically)
 import Control.Exception (bracket, throwIO)
 import Control.Monad ((<=<))
 import Control.Monad.Trans.Except (runExceptT)
+import Data.ByteString (ByteString)
+import qualified Data.ByteString.Char8 as BS
 import Data.Either (fromRight)
+import Data.Maybe (fromMaybe)
 import Data.String (fromString)
 import Data.Time.Clock (secondsToNominalDiffTime)
 import Data.Void (Void)
+import Data.Word (Word16)
+import Database.PostgreSQL.LibPQ (connectdb, errorMessage, exec, finish, resultErrorMessage)
+import Hasql.Connection (settings)
 import qualified Hasql.Pool as Pool
 import qualified Hasql.Session as Session
 import Language.Marlowe.Protocol.HeaderSync.Client (MarloweHeaderSyncClient, marloweHeaderSyncClientPeer)
@@ -97,8 +103,14 @@ import Network.Protocol.Query.Types (Query)
 import Observe.Event (EventBackend, narrowEventBackend)
 import Observe.Event.Backend (noopEventBackend)
 import Ouroboros.Network.Protocol.LocalTxSubmission.Type (SubmitResult)
+import System.Environment (lookupEnv)
+import System.Exit (ExitCode(..))
+import System.Process (readCreateProcessWithExitCode)
+import qualified System.Process as SP
 import Test.Integration.Cardano
 import qualified Test.Integration.Cardano as SpoNode (SpoNode(..))
+import Test.Integration.Workspace (Workspace(workspaceId))
+import Text.Read (readMaybe)
 
 data MarloweRuntime = MarloweRuntime
   { runDiscoveryQueryClient :: RunClient IO (QueryClient DiscoveryQuery)
@@ -110,46 +122,117 @@ data MarloweRuntime = MarloweRuntime
   , testnet :: LocalTestnet
   }
 
-withLocalMarloweRuntime :: String -> (MarloweRuntime -> IO ()) -> LocalTestnet -> IO ()
-withLocalMarloweRuntime databaseUri test testnet@LocalTestnet{..} = bracket acquirePool Pool.release \pool -> do
-  let rootEventBackend = noopEventBackend () -- TODO move Logging code to libs and reuse here to write logs to workspace file.
-  Channels{..} <- atomically $ setupChannels rootEventBackend
-  historyQueries <- hoistHistoryQueries atomically <$> atomically mkHistoryQueriesInMemory
-  let localConsensusModeParams = CardanoModeParams $ EpochSlots 500
-  let localNodeNetworkId = Testnet $ NetworkMagic $ fromIntegral testnetMagic
-  let localNodeSocketPath = SpoNode.socket . head $ spoNodes
-  let localNodeConnectInfo = LocalNodeConnectInfo{..}
-  genesisConfigResult <- runExceptT . Byron.readGenesisData $ byronGenesisJson network
-  (genesisData, genesisHash) <- case genesisConfigResult of
-    Left e -> fail $ show e
-    Right a -> pure a
-  let
-    connectToChainSeek :: RunClient IO RuntimeChainSeekClient
-    connectToChainSeek = runChainSeekClient
+withLocalMarloweRuntime :: (MarloweRuntime -> IO ()) -> LocalTestnet -> IO ()
+withLocalMarloweRuntime test testnet = do
+  databaseHost <- lookupEnv "MARLOWE_RT_TEST_DB_HOST"
+  databasePort <- lookupEnv "MARLOWE_RT_TEST_DB_PORT"
+  databaseUser <- lookupEnv "MARLOWE_RT_TEST_DB_USER"
+  databasePassword <- lookupEnv "MARLOWE_RT_TEST_DB_PASSWORD"
+  tempDatabase <- lookupEnv "MARLOWE_RT_TEST_TEMP_DB"
+  withLocalMarloweRuntime'
+    (maybe "127.0.0.1" fromString databaseHost)
+    (fromMaybe 5432 $ readMaybe =<< databasePort)
+    (maybe "postgres" fromString databaseUser)
+    (maybe "" fromString databasePassword)
+    (maybe "template1" fromString tempDatabase)
+    test
+    testnet
 
-    byronGenesisConfig = Byron.Config
-      genesisData
-      genesisHash
-      (Byron.toByronRequiresNetworkMagic localNodeNetworkId)
-      defaultUTxOConfiguration
+withLocalMarloweRuntime'
+  :: ByteString
+  -> Word16
+  -> ByteString
+  -> ByteString
+  -> ByteString
+  -> (MarloweRuntime -> IO ())
+  -> LocalTestnet
+  -> IO ()
+withLocalMarloweRuntime' databaseHost databasePort databaseUser databasePassword tempDatabase test testnet@LocalTestnet{..} =
+  bracket createDatabase cleanupDatabase \dbName -> do
+    migrateDatabase dbName
+    let connectionString = settings databaseHost databasePort databaseUser databasePassword dbName
+    let acquirePool = Pool.acquire (100, secondsToNominalDiffTime 5, connectionString)
+    bracket acquirePool Pool.release \pool -> do
+      let rootEventBackend = noopEventBackend () -- TODO move Logging code to libs and reuse here to write logs to workspace file.
+      Channels{..} <- atomically $ setupChannels rootEventBackend
+      historyQueries <- hoistHistoryQueries atomically <$> atomically mkHistoryQueriesInMemory
+      let localConsensusModeParams = CardanoModeParams $ EpochSlots 500
+      let localNodeNetworkId = Testnet $ NetworkMagic $ fromIntegral testnetMagic
+      let localNodeSocketPath = SpoNode.socket . head $ spoNodes
+      let localNodeConnectInfo = LocalNodeConnectInfo{..}
+      genesisConfigResult <- runExceptT . Byron.readGenesisData $ byronGenesisJson network
+      (genesisData, genesisHash) <- case genesisConfigResult of
+        Left e -> fail $ show e
+        Right a -> pure a
+      let
+        connectToChainSeek :: RunClient IO RuntimeChainSeekClient
+        connectToChainSeek = runChainSeekClient
 
-    genesisBlock = computeByronGenesisBlock
-      (abstractHashToBytes $ Byron.unGenesisHash genesisHash)
-      byronGenesisConfig
+        byronGenesisConfig = Byron.Config
+          genesisData
+          genesisHash
+          (Byron.toByronRequiresNetworkMagic localNodeNetworkId)
+          defaultUTxOConfiguration
 
-    chainIndexerDatabaseQueries = ChainIndexer.hoistDatabaseQueries
-      (either throwUsageError pure <=< Pool.use pool)
-      (ChainIndexer.databaseQueries genesisBlock)
-    chainSeekDatabaseQueries = ChainSync.hoistDatabaseQueries
-      (either throwUsageError pure <=< Pool.use pool)
-      ChainSync.databaseQueries
+        genesisBlock = computeByronGenesisBlock
+          (abstractHashToBytes $ Byron.unGenesisHash genesisHash)
+          byronGenesisConfig
 
-  let mkSubmitJob = Submit.mkSubmitJob SubmitJobDependencies{..}
-  race_ (runComponent_ runtime RuntimeDependencies{..}) $ test MarloweRuntime{..}
+        chainIndexerDatabaseQueries = ChainIndexer.hoistDatabaseQueries
+          (either throwUsageError pure <=< Pool.use pool)
+          (ChainIndexer.databaseQueries genesisBlock)
+        chainSeekDatabaseQueries = ChainSync.hoistDatabaseQueries
+          (either throwUsageError pure <=< Pool.use pool)
+          ChainSync.databaseQueries
+
+      let mkSubmitJob = Submit.mkSubmitJob SubmitJobDependencies{..}
+      race_ (runComponent_ runtime RuntimeDependencies{..}) $ test MarloweRuntime{..}
   where
-    acquirePool = Pool.acquire (100, secondsToNominalDiffTime 5, fromString databaseUri)
     throwUsageError (Pool.ConnectionError err)                       = error $ show err
     throwUsageError (Pool.SessionError (Session.QueryError _ _ err)) = error $ show err
+
+    rootConnectionString = settings databaseHost databasePort databaseUser databasePassword tempDatabase
+
+    checkResult connection = \case
+      Nothing -> do
+        msg <- errorMessage connection
+        fail $ "Fatal database error: " <> show msg
+      Just r -> do
+        resultErrorMessage r >>= \case
+          Nothing -> pure ()
+          Just "" -> pure ()
+          Just msg -> fail $ "Error creating database: " <> show msg
+
+    createDatabase = do
+      connection <- connectdb rootConnectionString
+      let dbName = fromString $ "chain_test_" <> show (workspaceId workspace)
+      result1 <- exec connection $ "CREATE DATABASE \"" <> dbName <> "\"" <> ";"
+      result2 <- exec connection $ "GRANT ALL PRIVILEGES ON DATABASE \"" <> dbName <> "\" TO " <> databaseUser <> ";"
+      checkResult connection result1
+      checkResult connection result2
+      finish connection
+      pure dbName
+
+    cleanupDatabase dbName = do
+      connection <- connectdb rootConnectionString
+      result <- exec connection $ "DROP DATABASE \"" <> dbName <> "\";"
+      checkResult connection result
+      finish connection
+
+    migrateDatabase dbName = do
+      (exitCode, _, stderr) <- flip readCreateProcessWithExitCode "" $ (SP.proc "sqitch"
+        [ "deploy"
+        , "-h", BS.unpack databaseHost
+        , "-p", show databasePort
+        , "-u", BS.unpack databaseUser
+        , "-d", BS.unpack dbName
+        ])
+        { SP.cwd = Just "./marlowe-chain-sync"
+        }
+      case exitCode of
+        ExitFailure _ -> fail $ "sqitch failed: \n" <> stderr
+        ExitSuccess -> pure ()
+
 
 data RuntimeSelector f where
   ChainSeekClientEvent :: ConnectSocketDriverSelector RuntimeChainSeek f -> RuntimeSelector f

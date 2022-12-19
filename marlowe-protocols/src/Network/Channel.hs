@@ -2,7 +2,7 @@
 module Network.Channel
   where
 
-import Control.Concurrent.STM (STM, newTChan, tryReadTChan, writeTChan)
+import Control.Concurrent.STM (STM, newTChan, readTChan, writeTChan)
 import Control.Monad (mfilter, (>=>))
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as LBS
@@ -76,17 +76,21 @@ effectChannel onSend onRecv Channel{..} = Channel
   , recv = recv >>= \ma -> onRecv ma $> ma
   }
 
-channelPair :: STM (Channel STM a, Channel STM a)
+channelPair :: STM ((Channel STM a, STM ()), (Channel STM a, STM ()))
 channelPair = do
   ch1 <- newTChan
   ch2 <- newTChan
   pure
-    ( Channel
-      { send = writeTChan ch1
-      , recv = tryReadTChan ch2
-      }
-    , Channel
-      { send = writeTChan ch2
-      , recv = tryReadTChan ch1
-      }
+    ( ( Channel
+        { send = writeTChan ch1 . Just
+        , recv = readTChan ch2
+        }
+      , writeTChan ch1 Nothing
+      )
+    , ( Channel
+        { send = writeTChan ch2 . Just
+        , recv = readTChan ch1
+        }
+      , writeTChan ch2 Nothing
+      )
     )

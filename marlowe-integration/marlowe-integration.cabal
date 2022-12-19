@@ -53,6 +53,7 @@ library
       base >= 4.9 && < 5
     , async
     , async-components
+    , bytestring
     , cardano-api
     , cardano-crypto-wrapper
     , cardano-ledger-byron
@@ -71,6 +72,8 @@ library
     , marlowe-runtime:tx-api
     , marlowe-protocols
     , ouroboros-network
+    , postgresql-libpq
+    , process
     , stm
     , text
     , time
@@ -85,5 +88,6 @@ executable testbed
     Paths_marlowe_integration
   build-depends:
       base >= 4.9 && < 5
+    , cardano-integration
     , marlowe-integration
 

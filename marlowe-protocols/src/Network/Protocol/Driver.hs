@@ -259,7 +259,7 @@ clientServerPair serverEventBackend clientEventBackend throwImpl codec serverToP
   serverChannelQueue <- newTQueue
   let
     acceptRunServer = do
-      channel <- liftBase $ atomically $ readTQueue serverChannelQueue
+      (channel, closeAction) <- liftBase $ atomically $ readTQueue serverChannelQueue
       (eventBackend', ref) <- withEvent serverEventBackend Connected \ev -> do
         pure (subEventBackend ServerDriverEvent ev, reference ev)
       let
@@ -271,10 +271,11 @@ clientServerPair serverEventBackend clientEventBackend throwImpl codec serverToP
         result <- try @_ @SomeException $ restore $ fst <$> runPeerWithDriver driver peer (startDState driver)
         withEvent serverEventBackend Disconnected \ev -> do
           addParent ev ref
+          liftBase $ atomically closeAction
           either throw pure result
     runClient :: RunClient m client
     runClient client = mask \restore -> do
-      (ref, channel) <- withEvent clientEventBackend Connect \ev -> liftBase $ atomically do
+      (ref, (channel, closeAction)) <- withEvent clientEventBackend Connect \ev -> liftBase $ atomically do
         (clientChannel, serverChannel) <- channelPair
         writeTQueue serverChannelQueue serverChannel
         pure (reference ev, clientChannel)
@@ -290,6 +291,7 @@ clientServerPair serverEventBackend clientEventBackend throwImpl codec serverToP
         $ fst <$> runPeerWithDriver driver peer (startDState driver)
       withEvent clientEventBackend Disconnect \ev -> do
         addParent ev ref
+        liftBase $ atomically closeAction
         either throw pure result
   pure ClientServerPair{..}
 
