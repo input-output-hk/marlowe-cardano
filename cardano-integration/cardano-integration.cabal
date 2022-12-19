@@ -1,0 +1,84 @@
+cabal-version: 3.0
+name: cardano-integration
+version: 0.1.0.0
+synopsis:
+  Run integration tests in the context of a Cardano network
+bug-reports: https://github.com/input-output-hk/marlowe-cardano/issues
+license: Apache-2.0
+author: Jamie Bertram
+maintainer: jamie.bertram@iohk.io
+stability: experimental
+category: Language
+license-files:
+  LICENSE
+  NOTICE
+
+source-repository head
+  type: git
+  location: https://github.com/input-output-hk/marlowe-cardano
+  subdir: cardano-integration
+
+library
+  default-language: Haskell2010
+  hs-source-dirs:   src
+  default-extensions:
+    BlockArguments
+    DeriveAnyClass
+    DeriveFoldable
+    DeriveFunctor
+    DeriveGeneric
+    DeriveLift
+    DeriveTraversable
+    DerivingStrategies
+    DerivingVia
+    ExplicitForAll
+    GeneralizedNewtypeDeriving
+    LambdaCase
+    NamedFieldPuns
+    NumericUnderscores
+    OverloadedStrings
+    RecordWildCards
+    ScopedTypeVariables
+    StandaloneDeriving
+    TypeApplications
+    TupleSections
+  ghc-options:
+    -Wall -Wnoncanonical-monad-instances -Wunused-packages
+    -Wincomplete-uni-patterns -Wincomplete-record-updates
+    -Wredundant-constraints -Widentities
+  exposed-modules:
+    Test.Integration.Cardano
+    Test.Integration.Cardano.Local
+    Test.Integration.Cardano.Process
+    Test.Integration.Workspace
+  build-depends:
+      base >= 4.9 && < 5
+    , aeson
+    , async
+    , bytestring
+    , directory
+    , filepath
+    , lifted-base
+    , monad-control
+    , process
+    , random
+    , resourcet
+    , text
+    , time
+    , transformers
+    , transformers-base
+    , unliftio
+    , uuid
+    , yaml
+
+executable create-testnet
+  hs-source-dirs: create-testnet
+  main-is: Main.hs
+  other-modules:
+    Paths_cardano_integration
+  autogen-modules:
+    Paths_cardano_integration
+  build-depends:
+      base >= 4.9 && < 5
+    , cardano-integration
+

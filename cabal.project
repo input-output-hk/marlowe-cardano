@@ -18,6 +18,7 @@ index-state: cardano-haskell-packages 2022-11-17T04:56:26Z
 
 packages:
   async-components
+  cardano-integration
   eventuo11y-extras
   marlowe
   marlowe-actus
@@ -75,6 +76,12 @@ package marlowe-protocols
   ghc-options: -Werror
 
 package marlowe-runtime
+  ghc-options: -Werror
+
+package cardano-integration
+  ghc-options: -Werror
+
+package eventuo11y-extras
   ghc-options: -Werror
 
 -- These settings only affect local builds with cabal (i.e. not Nix builds),
