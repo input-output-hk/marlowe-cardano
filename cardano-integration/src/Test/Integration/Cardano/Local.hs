@@ -3,9 +3,15 @@
 {-# LANGUAGE StrictData #-}
 
 module Test.Integration.Cardano.Local
-  ( LocalTestnet(..)
+  ( Delegator(..)
+  , LocalTestnet(..)
   , LocalTestnetOptions(..)
   , Network(..)
+  , PaymentKeyPair(..)
+  , SpoNode(..)
+  , SpoNodeRecord(..)
+  , StakingKeyPair(..)
+  , TestnetException(..)
   , defaultOptions
   , withLocalTestnet
   , withLocalTestnet'
@@ -54,7 +60,7 @@ import UnliftIO.Resource (allocate, runResourceT, unprotect)
 
 data LocalTestnetOptions = LocalTestnetOptions
   { slotDuration :: Int
-  , securityParam :: Int
+  , securityParameter :: Int
   , numSpoNodes :: Int
   , numDelegators :: Int
   , numWallets :: Int
@@ -68,6 +74,7 @@ data LocalTestnet = LocalTestnet
   , testnetMagic :: Int
   , wallets :: [PaymentKeyPair]
   , workspace :: Workspace
+  , securityParameter :: Int
   }
 
 data PaymentKeyPair = PaymentKeyPair
@@ -126,7 +133,7 @@ instance ToJSON Network
 defaultOptions :: LocalTestnetOptions
 defaultOptions = LocalTestnetOptions
   { slotDuration = 1000
-  , securityParam = 10
+  , securityParameter = 10
   , numSpoNodes = 3
   , numDelegators = 3
   , numWallets = 3
@@ -229,7 +236,7 @@ startLocalTestnet options@LocalTestnetOptions{..} = do
             }
           }
 
-      network <- setupNetwork workspace byronGenesisDir shelleyGenesisDir
+      network <- setupNetwork workspace options byronGenesisDir shelleyGenesisDir
       spoNodes <- traverse (setupSpoNode workspace options network logsDir socketDir byronGenesisDir shelleyGenesisDir) [1..numSpoNodes]
 
       liftIO $ mapConcurrently_ assertChainExtended spoNodes
@@ -270,7 +277,7 @@ createByronGenesis workspace startTime testnetMagic LocalTestnetOptions{..} = do
     [ "byron", "genesis", "genesis"
     , "--protocol-magic", show testnetMagic
     , "--start-time", show @Int $ floor $ nominalDiffTimeToSeconds $ utcTimeToPOSIXSeconds startTime
-    , "--k", show securityParam
+    , "--k", show securityParameter
     , "--n-poor-addresses", "0"
     , "--n-delegate-addresses", show numSpoNodes
     , "--total-balance", show totalBalance
@@ -329,17 +336,17 @@ createShelleyGenesisStaked workspace testnetMagic LocalTestnetOptions{..} = do
 
   pure shelleyGenesisDirInWorkspace
 
-setupNetwork :: MonadIO m => Workspace -> FilePath -> FilePath -> m Network
-setupNetwork workspace byronGenesisDir shelleyGenesisDir = do
+setupNetwork :: MonadIO m => Workspace -> LocalTestnetOptions -> FilePath -> FilePath -> m Network
+setupNetwork workspace LocalTestnetOptions{..} byronGenesisDir shelleyGenesisDir = do
   configurationYaml <- moveToWorkspace workspace (shelleyGenesisDir </> "configuration.yaml") "configuration.yaml"
   byronGenesisJson <- moveToWorkspace workspace (byronGenesisDir </> "genesis.json") "genesis/byron/genesis.json"
   shelleyGenesisJson <- moveToWorkspace workspace (shelleyGenesisDir </> "genesis.json") "genesis/shelley/genesis.json"
   alonzoGenesisJson <- moveToWorkspace workspace (shelleyGenesisDir </> "genesis.alonzo.json") "genesis/shelley/genesis.alonzo.json"
 
   rewriteJSONFile shelleyGenesisJson
-    ( KM.insert "slotLength"             (toJSON @Double 0.1)
+    ( KM.insert "slotLength"             (toJSON @Double (fromIntegral slotDuration / 1000))
     . KM.insert "activeSlotsCoeff"       (toJSON @Double 0.1)
-    . KM.insert "securityParam"          (toJSON @Int 10)
+    . KM.insert "securityParam"          (toJSON @Int securityParameter)
     . KM.insert "epochLength"            (toJSON @Int 500)
     . KM.insert "maxLovelaceSupply"      (toJSON @Int 1000000000000)
     . KM.insert "minFeeA"                (toJSON @Int 44)
