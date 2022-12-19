@@ -18,6 +18,7 @@ import Data.Foldable (fold)
 import Data.List (find, isPrefixOf)
 import Data.Map (Map)
 import qualified Data.Map as Map
+import qualified Data.Map.Strict as SMap (toList)
 import Data.Maybe (fromJust, isJust, mapMaybe)
 import Data.Monoid (First(..), getFirst)
 import Data.Ratio ((%))
@@ -62,8 +63,6 @@ import Test.Hspec.QuickCheck
 import Test.QuickCheck hiding (shrinkMap)
 import Test.QuickCheck.Hedgehog (hedgehog)
 import Text.Printf (printf)
-
-import Debug.Trace
 
 spec :: Spec
 spec = do
@@ -189,16 +188,26 @@ spec = do
         Left (msgFromAdjustment :: ConstraintError 'V1) -> expectationFailure $ show msgFromAdjustment
 
   describe "selectCoins" do
-    -- focus $ prop "insufficient wallet funds should never succeed" \(SomeTxConstraints marloweVersion constraints) -> do
-    --   marloweContext <- genSimpleMarloweContext marloweVersion constraints
+    prop "sufficient collateral is selected if possible" \(SomeTxConstraints marloweVersion constraints) -> do
+      -- This test is broadly doing this:
+      -- - Start with an empty tx body
+      -- - and an empty (as possible) Marlowe context
+      -- - In an emtpy wallet context (we can use arbitrary instance to generate utxos to spend)
+      -- - Perform coin selection
+      -- - Only look at collateral
+      -- - Looking for a pure ADA utxo that's 2x the fee (protocol maximum fee)
+      -- - If it's selecting collat that has a native token, that's failure, not supposed to do that
 
-    focus $ prop "our first simple test (rename this)" \(SomeTxConstraints marloweVersion constraints) -> do
       marloweContext <- genSimpleMarloweContext marloweVersion constraints
-      -- FIXME We can only get two of the four cases at the end of this function if we use 10ADA or 0ADA below, and neither in the same run. Not thrilled with this and not sure how to tune the generator to make the ranges we need. May break this prop into 2 or even 4.
-      walletContext <- genSimpleWalletContext marloweVersion constraints 10_000_000
-      -- walletContext <- genSimpleWalletContext marloweVersion constraints 0
+
+      -- We MUST dictate the distribution of wallet context assets, default
+      -- generation only tests with empty wallets!
+      maxLovelace <- choose (0, 40_000_000)
+      walletContext <- genWalletWithAsset marloweVersion constraints maxLovelace
 
       let
+        chAddress :: AddressInEra BabbageEra
+        chAddress = anyAddressInShelleyBasedEra . fromJust $ Chain.toCardanoAddress $ changeAddress walletContext
         extractCollat :: TxBodyContent BuildTx BabbageEra -> [Chain.Assets]
         extractCollat txBC = map Chain.assets selectedCollat
           where
@@ -224,39 +233,68 @@ spec = do
             selectedCollat = map snd
               . filter (\(txOutRef, _) -> any (txInEqTxOutRef txOutRef) selectedTxIns) $ utT
 
-          -- map toUTxOTuple . toUTxOsList . availableUtxos $ walletContext
-        -- filter the walletContext collateralUtxos by comparing the
-        -- We have TxBodyContent txInsCollateral :: TxInsCollateral
-        -- We want WalletContext availableUtxos
+        fee :: ProtocolParameters -> Lovelace
+        fee ProtocolParameters{..} = 2 * (txFee + round executionFee)
+          where
+            txFee :: Lovelace
+            txFee = fromIntegral $ protocolParamTxFeeFixed + protocolParamTxFeePerByte
+              * protocolParamMaxTxSize
 
-      -- Start with an empty tx body
-      -- and an empty (as possible) Marlowe context
-      -- In an emtpy wallet context:
-      --   can use arbitrary instance to generate utxos to spend
-      -- Ask it to perform coin selection
-      -- Only look at collateral
-      -- - Pure ADA utxo that's 2x the fee (protocol maximum fee)
-      -- - If it's selecting collat that has a native token, that's failure, not supposed to do that
+            executionFee :: Rational
+            executionFee =
+              case (protocolParamPrices, protocolParamMaxTxExUnits) of
+                (Just ExecutionUnitPrices{..}, Just ExecutionUnits{..})
+                  -> priceExecutionSteps * fromIntegral executionSteps
+                      + priceExecutionMemory * fromIntegral executionMemory
+                _ -> 0
 
+        findMinUtxo :: ProtocolParameters -> AddressInEra BabbageEra -> Value -> Value
+        findMinUtxo protocol chAddress' origValue =
+          do
+            let
+              atLeastHalfAnAda :: Value
+              atLeastHalfAnAda = lovelaceToValue (maximum [500_000, selectLovelace origValue])
 
-        -- Getting the fixed fee from the canned protocol parameters in this
-        -- file (which are the params used by the preview testnet), and
-        -- converting that value to a Chain.Lovelace
-        fee :: Chain.Lovelace
-        fee =
-          fromCardanoLovelace  -- Convert that Cardano Lovelace into a Chain Lovelace
-          . fromIntegral  -- Turn this Natural into a Cardano Lovelace
-          . (2 *)  -- Double it like we do in coin selection
-          . protocolParamTxFeeFixed $ protocolTestnet  -- The field from protocol params
+              dummyTxOut = TxOut
+                chAddress' (TxOutValue MultiAssetInBabbageEra atLeastHalfAnAda)
+                TxOutDatumNone ReferenceScriptNone
+            case calculateMinimumUTxO ShelleyBasedEraBabbage dummyTxOut protocol of
+               Right minValue -> minValue
+               Left _ -> undefined
+
+        -- Extract the value of a UTxO
+        txOutToValue :: TxOut CtxTx BabbageEra -> Value
+        txOutToValue (TxOut _ value _ _) = txOutValueToValue value
+
+        -- Convert chain UTxOs to Cardano API ones.
+        convertUtxo :: (Chain.TxOutRef, Chain.TransactionOutput) -> Maybe (TxOut ctx BabbageEra)
+        convertUtxo (_, transactionOutput) =
+          toCardanoTxOut' MultiAssetInBabbageEra transactionOutput Nothing
+
+        -- All utxos that are spendable from either the Marlowe context or wallet context
+        -- False means not including the reference utxo
+        utxos :: [TxOut CtxTx BabbageEra]
+        utxos = mapMaybe convertUtxo (SMap.toList . Chain.unUTxOs . availableUtxos $ walletContext)
+
+        -- Compute the value of all available UTxOs
+        universe :: Value
+        universe = foldMap txOutToValue utxos
+
+        minUtxo = findMinUtxo protocolTestnet chAddress universe
+               <> findMinUtxo protocolTestnet chAddress mempty
 
         --walletContext has sufficient collateral ADA
         walletCtxSufficient :: Bool
         walletCtxSufficient = allAdaOnly && anyCoversFee
           where
-            allAssets = map (Chain.assets . snd . Chain.toUTxOTuple) . Chain.toUTxOsList . availableUtxos $ walletContext
+            allAssets = map (Chain.assets . snd . Chain.toUTxOTuple)
+              . Chain.toUTxOsList . availableUtxos $ walletContext
             onlyAdas = filter (isRight . assetsAdaOnly) allAssets
             allAdaOnly = not . null $ onlyAdas
-            anyCoversFee = any ((>= fee) . Chain.ada) onlyAdas
+            fee' = fee protocolTestnet
+            minUtxo' = selectLovelace minUtxo
+            targetLovelace = fromCardanoLovelace $ fee' <> minUtxo'
+            anyCoversFee = any ((>= targetLovelace) . Chain.ada) onlyAdas
 
         singleUtxo :: [Chain.Assets] -> Either String Chain.Assets
         singleUtxo [as] = Right as
@@ -269,103 +307,25 @@ spec = do
 
         adaCollatIsSufficient :: Chain.Lovelace -> Either String ()
         adaCollatIsSufficient lovelace
-          | lovelace >= fee = Right ()
-          | otherwise = Left $ "Collateral doesn't cover the fees. collat: " <> show lovelace <> "  fees: " <> show fee
+          | lovelace >= (fromCardanoLovelace $ fee protocolTestnet) = Right ()
+          | otherwise = Left $ "Collateral doesn't cover the fees. collat: "
+              <> show lovelace <> "  fees: " <> show (fee protocolTestnet)
 
         -- Function to convert the Left side of the Either from (ConstraintError v) to String
         selectResult :: Either String ()
         selectResult = either
           (\ce -> case marloweVersion of MarloweV1 -> Left . show $ ce)
           (\txBC -> singleUtxo (extractCollat txBC) >>= assetsAdaOnly >>= adaCollatIsSufficient)
-          $ selectCoins protocolTestnet marloweVersion marloweContext walletContext emptyTxBodyContent
+          $ selectCoins protocolTestnet marloweVersion marloweContext
+              walletContext emptyTxBodyContent
 
       pure $ case (walletCtxSufficient, selectResult) of
-        (True , Right _) -> traceM "case 1" >> pure ()
-        (False, Right _) -> traceM "case 2" >> expectationFailure "selection should have failed"
-        (True , Left selFailedMsg) -> traceM "case 3" >> (selFailedMsg `shouldBe` "success expected")
-        (False, Left selFailedMsg) -> traceM "case 4" >> (selFailedMsg `shouldSatisfy` isPrefixOf "CoinSelectionFailed \"No collateral found in")
-
-      -- pure $ case selectCoins protocolTestnet marloweVersion marloweContext walletContext txBodyContent of
-      --   Right newTxBodyContent -> do  -- coin selection succeeded
-      --     -- if we have sufficient collat: pass
-      --     -- else: fail
-      --     let checkResult = pure (extractCollat newTxBodyContent) >>= singleUtxo >>= assetsAdaOnly
-      --     case checkResult of
-      --       Right _ -> pure ()
-      --       Left msg -> expectationFailure msg
-      --   Left msgFromAdjustment -> case marloweVersion of  -- coin selection failed
-      --     MarloweV1 -> expectationFailure $ show msgFromAdjustment
-
-  -- describe "selectCoins" do
-  --   prop "added inputs satisfy min utxo" \(SomeTxConstraints marloweVersion constraints) -> do
-  --     let
-  --       genAssets :: Gen Chain.Assets
-  --       genAssets = do
-  --         lovelaceAmount <- (100_000_000 +) <$> suchThat arbitrary (> 0)
-  --         pure (Chain.Assets (fromCardanoLovelace $ Lovelace lovelaceAmount) $ Chain.Tokens Map.empty)
-
-  --       genUtxos :: Gen Chain.UTxOs
-  --       genUtxos = do
-  --         txOutRef <- genTxOutRef
-  --         stubAddress <- genAddress
-  --         assets <- genAssets
-  --         let
-  --           txOut = Chain.TransactionOutput stubAddress assets Nothing Nothing
-  --         pure $ Chain.UTxOs $ Map.singleton txOutRef txOut
-
-  --     marloweContext <- genMarloweContext marloweVersion constraints
-  --     (utxos, txOutRefs) <- case marloweVersion of
-  --       MarloweV1 -> (,) <$> genUtxos <*> genTxOutRef
-
-  --     walletContext <- do
-  --       wc <- genWalletContext marloweVersion constraints
-  --       pure $ wc { availableUtxos = utxos, collateralUtxos = Set.singleton txOutRefs}
-
-  --     let
-  --       valueMeetsMinimumReq :: TxOut CtxTx BabbageEra -> Maybe String
-  --       valueMeetsMinimumReq txout@(TxOut _ txOrigValue _ _) =
-  --         case calculateMinimumUTxO ShelleyBasedEraBabbage txout protocolTestnet of
-  --           Right minValueFromApi ->
-  --             if origAda >= selectLovelace minValueFromApi
-  --               then Nothing
-  --               else Just $ printf "Value %s is lower than minimum value %s"
-  --                     (show origAda) (show $ selectLovelace minValueFromApi)
-  --           Left exception -> Just $ show exception
-  --           where
-  --             origAda = selectLovelace . txOutValueToValue $ txOrigValue
-
-  --     -- Start with an empty tx body
-  --     -- and an empty (as possible) Marlowe context
-  --     -- In an emtpy wallet context:
-  --     --   can use arbitrary instance to generate utxos to spend
-  --     -- Ask it to perform coin selection
-  --     -- Only look at collateral
-  --     -- - Pure ADA utxo that's 2x the fee (protocol maximum fee)
-  --     -- - If it's selecting collat that has a native token, that's failure, not supposed to do that
-  --     txBodyContent <- hedgehog $ genTxBodyContent BabbageEra
-
-  --     -- txBodyContent <- do
-  --     --   stubAddress <- AddressInEra (ShelleyAddressInEra ShelleyBasedEraBabbage)
-  --     --     <$> hedgehog genAddressShelley
-  --     --   assets <- lovelaceToTxOutValue . Lovelace . (10_000_000 +) <$> suchThat arbitrary (> 0)
-
-  --     --   txBC <- hedgehog $ genTxBodyContent BabbageEra
-  --     --   pure $ txBC { txOuts =
-  --     --     [ TxOut
-  --     --         stubAddress
-  --     --         assets
-  --     --         TxOutDatumNone
-  --     --         ReferenceScriptNone
-  --     --     ] }
-
-  --     pure $ case selectCoins protocolTestnet marloweVersion marloweContext walletContext txBodyContent of
-  --       Right newTxBodyContent -> do
-  --         let errors = catMaybes $ map valueMeetsMinimumReq $ txOuts newTxBodyContent
-  --         if null errors
-  --           then pure ()
-  --           else expectationFailure $ unlines $ "Minimum UTxO requirements not met:" : errors
-  --       Left msgFromAdjustment -> case marloweVersion of
-  --         MarloweV1 -> expectationFailure $ show msgFromAdjustment
+        (True , Right _) -> label "Wallet has funds, selection succeeded" True
+        (False, Right _) -> counterexample "Selection should have failed" False
+        (True , Left selFailedMsg) ->
+          counterexample ("Selection shouldn't have failed\n" <> selFailedMsg) False
+        (False, Left selFailedMsg) -> label "Wallet does not have funds, selection failed"
+          $ selFailedMsg `shouldSatisfy` isPrefixOf "CoinSelectionFailed"
 
 -- A simple Marlowe context with no assets to spend
 genSimpleMarloweContext :: MarloweVersion v -> TxConstraints v -> Gen (MarloweContext w)
@@ -379,24 +339,22 @@ genSimpleMarloweContext marloweVersion constraints = do
     }
 
 -- Generate a random amount and add the specified amount of Lovelace to it
-genAdaOnlyAssets :: Lovelace -> Gen Chain.Assets
-genAdaOnlyAssets minimumLovelace = do
-  addlLovelaceAmount <- suchThat arbitrary (> 0)
-  pure $ Chain.Assets
-    (fromCardanoLovelace $ minimumLovelace <> Lovelace addlLovelaceAmount)
-    (Chain.Tokens Map.empty)
+genAdaOnlyAssets :: Integer -> Chain.Assets
+genAdaOnlyAssets maxLovelace = Chain.Assets
+  (fromCardanoLovelace $ Lovelace maxLovelace)
+  (Chain.Tokens Map.empty)
 
 -- The simplest wallet context:
 --   availableUtxos = A single ADA-only Utxo
 --   collateralUtxos = A set containing the one Utxo from above
 --   changeAddress = any valid address
-genSimpleWalletContext :: MarloweVersion v -> TxConstraints v -> Lovelace -> Gen WalletContext
-genSimpleWalletContext marloweVersion constraints minimumLovelace = do
+genWalletWithAsset :: MarloweVersion v -> TxConstraints v -> Integer -> Gen WalletContext
+genWalletWithAsset marloweVersion constraints minLovelace = do
   wc <- genWalletContext marloweVersion constraints
   txOutRef <- genTxOutRef
   stubAddress <- genAddress
-  assets <- genAdaOnlyAssets minimumLovelace
   let
+    assets = genAdaOnlyAssets minLovelace
     txOut = Chain.TransactionOutput stubAddress assets Nothing Nothing
     utxos = Chain.UTxOs $ Map.singleton txOutRef txOut
   pure $ wc { availableUtxos = utxos, collateralUtxos = Set.singleton txOutRef }
