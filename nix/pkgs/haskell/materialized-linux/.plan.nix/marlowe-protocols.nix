@@ -44,6 +44,7 @@
           (hsPkgs."lifted-base" or (errorHandler.buildDepError "lifted-base"))
           (hsPkgs."monad-control" or (errorHandler.buildDepError "monad-control"))
           (hsPkgs."network" or (errorHandler.buildDepError "network"))
+          (hsPkgs."stm" or (errorHandler.buildDepError "stm"))
           (hsPkgs."template-haskell" or (errorHandler.buildDepError "template-haskell"))
           (hsPkgs."text" or (errorHandler.buildDepError "text"))
           (hsPkgs."transformers-base" or (errorHandler.buildDepError "transformers-base"))

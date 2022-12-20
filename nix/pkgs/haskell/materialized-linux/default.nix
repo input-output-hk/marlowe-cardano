@@ -803,6 +803,7 @@
     {
       packages = {
         base16-aeson = ./.plan.nix/base16-aeson.nix;
+        marlowe-integration = ./.plan.nix/marlowe-integration.nix;
         freer-extras = ./.plan.nix/freer-extras.nix;
         marlowe-apps = ./.plan.nix/marlowe-apps.nix;
         plutus-ledger-aeson = ./.plan.nix/plutus-ledger-aeson.nix;
@@ -837,6 +838,7 @@
       {
         packages = {
           "base16-aeson" = { flags = {}; };
+          "marlowe-integration" = { flags = {}; };
           "freer-extras" = { flags = {}; };
           "marlowe-apps" = { flags = {}; };
           "plutus-ledger-aeson" = {
@@ -1042,6 +1044,7 @@
           "time-manager".components.library.planned = lib.mkOverride 900 true;
           "snap-core".components.library.planned = lib.mkOverride 900 true;
           "ghc-prim".components.library.planned = lib.mkOverride 900 true;
+          "marlowe-integration".components.library.planned = lib.mkOverride 900 true;
           "postgresql-libpq".components.setup.planned = lib.mkOverride 900 true;
           "HUnit".components.library.planned = lib.mkOverride 900 true;
           "some".components.library.planned = lib.mkOverride 900 true;

@@ -95,6 +95,7 @@
         "chain-indexer" = {
           depends = [
             (hsPkgs."base" or (errorHandler.buildDepError "base"))
+            (hsPkgs."aeson" or (errorHandler.buildDepError "aeson"))
             (hsPkgs."async-components" or (errorHandler.buildDepError "async-components"))
             (hsPkgs."base16" or (errorHandler.buildDepError "base16"))
             (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
@@ -107,9 +108,11 @@
             (hsPkgs."cardano-ledger-alonzo" or (errorHandler.buildDepError "cardano-ledger-alonzo"))
             (hsPkgs."containers" or (errorHandler.buildDepError "containers"))
             (hsPkgs."eventuo11y" or (errorHandler.buildDepError "eventuo11y"))
+            (hsPkgs."eventuo11y-extras" or (errorHandler.buildDepError "eventuo11y-extras"))
             (hsPkgs."hasql" or (errorHandler.buildDepError "hasql"))
             (hsPkgs."hasql-th" or (errorHandler.buildDepError "hasql-th"))
             (hsPkgs."hasql-transaction" or (errorHandler.buildDepError "hasql-transaction"))
+            (hsPkgs."marlowe-chain-sync" or (errorHandler.buildDepError "marlowe-chain-sync"))
             (hsPkgs."ouroboros-network" or (errorHandler.buildDepError "ouroboros-network"))
             (hsPkgs."profunctors" or (errorHandler.buildDepError "profunctors"))
             (hsPkgs."stm" or (errorHandler.buildDepError "stm"))
@@ -153,7 +156,6 @@
         "marlowe-chain-indexer" = {
           depends = [
             (hsPkgs."base" or (errorHandler.buildDepError "base"))
-            (hsPkgs."aeson" or (errorHandler.buildDepError "aeson"))
             (hsPkgs."async-components" or (errorHandler.buildDepError "async-components"))
             (hsPkgs."cardano-api" or (errorHandler.buildDepError "cardano-api"))
             (hsPkgs."cardano-crypto-wrapper" or (errorHandler.buildDepError "cardano-crypto-wrapper"))
@@ -162,7 +164,6 @@
             (hsPkgs."eventuo11y-extras" or (errorHandler.buildDepError "eventuo11y-extras"))
             (hsPkgs."hasql" or (errorHandler.buildDepError "hasql"))
             (hsPkgs."hasql-pool" or (errorHandler.buildDepError "hasql-pool"))
-            (hsPkgs."marlowe-chain-sync" or (errorHandler.buildDepError "marlowe-chain-sync"))
             (hsPkgs."marlowe-chain-sync".components.sublibs.chain-indexer or (errorHandler.buildDepError "marlowe-chain-sync:chain-indexer"))
             (hsPkgs."optparse-applicative" or (errorHandler.buildDepError "optparse-applicative"))
             (hsPkgs."ouroboros-network" or (errorHandler.buildDepError "ouroboros-network"))
