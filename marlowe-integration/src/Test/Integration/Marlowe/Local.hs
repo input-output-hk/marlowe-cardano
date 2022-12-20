@@ -53,9 +53,9 @@ import Data.UUID.V4 (nextRandom)
 import Data.Void (Void)
 import Data.Word (Word16)
 import Database.PostgreSQL.LibPQ (connectdb, errorMessage, exec, finish, resultErrorMessage)
+import Debug.Trace (traceM)
 import Hasql.Connection (settings)
 import qualified Hasql.Pool as Pool
-import qualified Hasql.Session as Session
 import Language.Marlowe.Protocol.HeaderSync.Client (MarloweHeaderSyncClient, marloweHeaderSyncClientPeer)
 import Language.Marlowe.Protocol.HeaderSync.Codec (codecMarloweHeaderSync)
 import Language.Marlowe.Protocol.HeaderSync.Server (MarloweHeaderSyncServer, marloweHeaderSyncServerPeer)
@@ -113,7 +113,7 @@ import Observe.Event.Component
 import Ouroboros.Network.Protocol.LocalTxSubmission.Type (SubmitResult)
 import System.Environment (lookupEnv)
 import System.Exit (ExitCode(..))
-import System.IO (IOMode(WriteMode))
+import System.IO (BufferMode(..), IOMode(..), hSetBuffering)
 import System.Process (readCreateProcessWithExitCode)
 import qualified System.Process as SP
 import Test.Integration.Cardano
@@ -156,60 +156,59 @@ withLocalMarloweRuntime'
   -> LocalTestnetOptions
   -> (MarloweRuntime -> IO ())
   -> IO ()
-withLocalMarloweRuntime' databaseHost databasePort databaseUser databasePassword tempDatabase options test = withLocalTestnet' options \testnet@LocalTestnet{..} -> runResourceT do
-  (_, dbName) <- allocate (createDatabase workspace) cleanupDatabase
-  liftIO $ migrateDatabase dbName
-  let connectionString = settings databaseHost databasePort databaseUser databasePassword dbName
-  let acquirePool = Pool.acquire (100, secondsToNominalDiffTime 5, connectionString)
-  (_, pool) <- allocate acquirePool Pool.release
-  logFileHandle <- openWorkspaceFile workspace "logs/runtime.log" WriteMode
-  (Concurrently runLogger, rootEventBackend) <- liftIO $ atomically $ unComponent logger LoggerDependencies
-    { configFilePath = Just $ resolveWorkspacePath workspace "runtime.log.config"
-    , getSelectorConfig = getRuntimeSelectorConfig
-    , newRef = nextRandom
-    , newOnceFlag = newOnceFlagMVar
-    , writeText = TL.hPutStrLn logFileHandle
-    , injectConfigWatcherSelector = ConfigWatcher
-    }
-  Channels{..} <- liftIO $ atomically $ setupChannels rootEventBackend
-  historyQueries <- liftIO $ hoistHistoryQueries atomically <$> atomically mkHistoryQueriesInMemory
-  let localConsensusModeParams = CardanoModeParams $ EpochSlots 500
-  let localNodeNetworkId = Testnet $ NetworkMagic $ fromIntegral testnetMagic
-  let localNodeSocketPath = SpoNode.socket . head $ spoNodes
-  let localNodeConnectInfo = LocalNodeConnectInfo{..}
-  genesisConfigResult <- runExceptT . Byron.readGenesisData $ byronGenesisJson network
-  (genesisData, genesisHash) <- case genesisConfigResult of
-    Left e -> fail $ show e
-    Right a -> pure a
-  let
-    connectToChainSeek :: RunClient IO RuntimeChainSeekClient
-    connectToChainSeek = runChainSeekClient
+withLocalMarloweRuntime' databaseHost databasePort databaseUser databasePassword tempDatabase options test =
+  withLocalTestnet' options \testnet@LocalTestnet{..} -> runResourceT do
+    (_, dbName) <- allocate (createDatabase workspace) cleanupDatabase
+    liftIO $ migrateDatabase dbName
+    let connectionString = settings databaseHost databasePort databaseUser databasePassword dbName
+    let acquirePool = Pool.acquire (100, secondsToNominalDiffTime 5, connectionString)
+    (_, pool) <- allocate acquirePool Pool.release
+    logFileHandle <- openWorkspaceFile workspace "logs/runtime.log" WriteMode
+    liftIO $ hSetBuffering logFileHandle LineBuffering
+    (Concurrently runLogger, rootEventBackend) <- liftIO $ atomically $ unComponent logger LoggerDependencies
+      { configFilePath = Just $ resolveWorkspacePath workspace "runtime.log.config"
+      , getSelectorConfig = getRuntimeSelectorConfig
+      , newRef = nextRandom
+      , newOnceFlag = newOnceFlagMVar
+      , writeText = TL.hPutStrLn logFileHandle
+      , injectConfigWatcherSelector = ConfigWatcher
+      }
+    Channels{..} <- liftIO $ atomically $ setupChannels rootEventBackend
+    historyQueries <- liftIO $ hoistHistoryQueries atomically <$> atomically mkHistoryQueriesInMemory
+    let localConsensusModeParams = CardanoModeParams $ EpochSlots 500
+    let localNodeNetworkId = Testnet $ NetworkMagic $ fromIntegral testnetMagic
+    let localNodeSocketPath = SpoNode.socket . head $ spoNodes
+    let localNodeConnectInfo = LocalNodeConnectInfo{..}
+    genesisConfigResult <- runExceptT . Byron.readGenesisData $ byronGenesisJson network
+    (genesisData, genesisHash) <- case genesisConfigResult of
+      Left e -> fail $ show e
+      Right a -> pure a
+    let
+      connectToChainSeek :: RunClient IO RuntimeChainSeekClient
+      connectToChainSeek = runChainSeekClient
 
-    byronGenesisConfig = Byron.Config
-      genesisData
-      genesisHash
-      (Byron.toByronRequiresNetworkMagic localNodeNetworkId)
-      defaultUTxOConfiguration
+      byronGenesisConfig = Byron.Config
+        genesisData
+        genesisHash
+        (Byron.toByronRequiresNetworkMagic localNodeNetworkId)
+        defaultUTxOConfiguration
 
-    genesisBlock = computeByronGenesisBlock
-      (abstractHashToBytes $ Byron.unGenesisHash genesisHash)
-      byronGenesisConfig
+      genesisBlock = computeByronGenesisBlock
+        (abstractHashToBytes $ Byron.unGenesisHash genesisHash)
+        byronGenesisConfig
 
-    chainIndexerDatabaseQueries = ChainIndexer.hoistDatabaseQueries
-      (either throwUsageError pure <=< Pool.use pool)
-      (ChainIndexer.databaseQueries genesisBlock)
-    chainSeekDatabaseQueries = ChainSync.hoistDatabaseQueries
-      (either throwUsageError pure <=< Pool.use pool)
-      ChainSync.databaseQueries
+      chainIndexerDatabaseQueries = ChainIndexer.hoistDatabaseQueries
+        (either (fail . show) pure <=< Pool.use pool)
+        (ChainIndexer.databaseQueries genesisBlock)
+      chainSeekDatabaseQueries = ChainSync.hoistDatabaseQueries
+        (either (fail . show) pure <=< Pool.use pool)
+        ChainSync.databaseQueries
 
-  let mkSubmitJob = Submit.mkSubmitJob SubmitJobDependencies{..}
-  liftIO
-    $ race_ (concurrently_ (runComponent_ runtime RuntimeDependencies{..}) runLogger)
-    $ test MarloweRuntime{..}
+    let mkSubmitJob = Submit.mkSubmitJob SubmitJobDependencies{..}
+    liftIO $ runComponent_ runtime RuntimeDependencies{..}
+      `race_` runLogger
+      `race_` test MarloweRuntime{..}
   where
-    throwUsageError (Pool.ConnectionError err)                       = error $ show err
-    throwUsageError (Pool.SessionError (Session.QueryError _ _ err)) = error $ show err
-
     rootConnectionString = settings databaseHost databasePort databaseUser databasePassword tempDatabase
 
     checkResult connection = \case
