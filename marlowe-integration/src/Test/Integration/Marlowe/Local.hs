@@ -33,18 +33,23 @@ import Cardano.Api.Shelley (AcquiringFailure)
 import qualified Cardano.Chain.Genesis as Byron
 import Cardano.Chain.UTxO (defaultUTxOConfiguration)
 import Cardano.Crypto (abstractHashToBytes)
-import Control.Concurrent.Async (race_)
+import Control.Concurrent.Async (concurrently_, race_)
+import Control.Concurrent.Async.Lifted (Concurrently(..))
 import Control.Concurrent.Component
 import Control.Concurrent.STM (STM, atomically)
-import Control.Exception (bracket, throwIO)
+import Control.Exception (throwIO)
 import Control.Monad ((<=<))
+import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Except (runExceptT)
+import Control.Monad.Trans.Resource (allocate, runResourceT)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as BS
 import Data.Either (fromRight)
 import Data.Maybe (fromMaybe)
 import Data.String (fromString)
+import qualified Data.Text.Lazy.IO as TL
 import Data.Time.Clock (secondsToNominalDiffTime)
+import Data.UUID.V4 (nextRandom)
 import Data.Void (Void)
 import Data.Word (Word16)
 import Database.PostgreSQL.LibPQ (connectdb, errorMessage, exec, finish, resultErrorMessage)
@@ -59,7 +64,8 @@ import Language.Marlowe.Protocol.Sync.Client (MarloweSyncClient, marloweSyncClie
 import Language.Marlowe.Protocol.Sync.Codec (codecMarloweSync)
 import Language.Marlowe.Protocol.Sync.Server (MarloweSyncServer, marloweSyncServerPeer)
 import Language.Marlowe.Protocol.Sync.Types (MarloweSync)
-import Language.Marlowe.Runtime.ChainIndexer (ChainIndexerDependencies(..), ChainIndexerSelector, chainIndexer)
+import Language.Marlowe.Runtime.ChainIndexer
+  (ChainIndexerDependencies(..), ChainIndexerSelector, chainIndexer, getChainIndexerSelectorConfig)
 import qualified Language.Marlowe.Runtime.ChainIndexer.Database as ChainIndexer
 import qualified Language.Marlowe.Runtime.ChainIndexer.Database.PostgreSQL as ChainIndexer
 import Language.Marlowe.Runtime.ChainIndexer.Genesis (GenesisBlock, computeByronGenesisBlock)
@@ -101,15 +107,18 @@ import Network.Protocol.Query.Codec (codecQuery)
 import Network.Protocol.Query.Server (QueryServer, queryServerPeer)
 import Network.Protocol.Query.Types (Query)
 import Observe.Event (EventBackend, narrowEventBackend)
-import Observe.Event.Backend (noopEventBackend)
+import Observe.Event.Backend (newOnceFlagMVar)
+import Observe.Event.Component
+  (ConfigWatcherSelector(..), LoggerDependencies(..), SelectorConfig(..), logger, prependKey, singletonFieldConfig)
 import Ouroboros.Network.Protocol.LocalTxSubmission.Type (SubmitResult)
 import System.Environment (lookupEnv)
 import System.Exit (ExitCode(..))
+import System.IO (IOMode(WriteMode))
 import System.Process (readCreateProcessWithExitCode)
 import qualified System.Process as SP
 import Test.Integration.Cardano
 import qualified Test.Integration.Cardano as SpoNode (SpoNode(..))
-import Test.Integration.Workspace (Workspace(workspaceId))
+import Test.Integration.Workspace (Workspace(workspaceId), openWorkspaceFile, resolveWorkspacePath)
 import Text.Read (readMaybe)
 
 data MarloweRuntime = MarloweRuntime
@@ -122,8 +131,8 @@ data MarloweRuntime = MarloweRuntime
   , testnet :: LocalTestnet
   }
 
-withLocalMarloweRuntime :: (MarloweRuntime -> IO ()) -> LocalTestnet -> IO ()
-withLocalMarloweRuntime test testnet = do
+withLocalMarloweRuntime :: (MarloweRuntime -> IO ()) -> IO ()
+withLocalMarloweRuntime test = do
   databaseHost <- lookupEnv "MARLOWE_RT_TEST_DB_HOST"
   databasePort <- lookupEnv "MARLOWE_RT_TEST_DB_PORT"
   databaseUser <- lookupEnv "MARLOWE_RT_TEST_DB_USER"
@@ -135,8 +144,8 @@ withLocalMarloweRuntime test testnet = do
     (maybe "postgres" fromString databaseUser)
     (maybe "" fromString databasePassword)
     (maybe "template1" fromString tempDatabase)
+    defaultOptions
     test
-    testnet
 
 withLocalMarloweRuntime'
   :: ByteString
@@ -144,49 +153,59 @@ withLocalMarloweRuntime'
   -> ByteString
   -> ByteString
   -> ByteString
+  -> LocalTestnetOptions
   -> (MarloweRuntime -> IO ())
-  -> LocalTestnet
   -> IO ()
-withLocalMarloweRuntime' databaseHost databasePort databaseUser databasePassword tempDatabase test testnet@LocalTestnet{..} =
-  bracket createDatabase cleanupDatabase \dbName -> do
-    migrateDatabase dbName
-    let connectionString = settings databaseHost databasePort databaseUser databasePassword dbName
-    let acquirePool = Pool.acquire (100, secondsToNominalDiffTime 5, connectionString)
-    bracket acquirePool Pool.release \pool -> do
-      let rootEventBackend = noopEventBackend () -- TODO move Logging code to libs and reuse here to write logs to workspace file.
-      Channels{..} <- atomically $ setupChannels rootEventBackend
-      historyQueries <- hoistHistoryQueries atomically <$> atomically mkHistoryQueriesInMemory
-      let localConsensusModeParams = CardanoModeParams $ EpochSlots 500
-      let localNodeNetworkId = Testnet $ NetworkMagic $ fromIntegral testnetMagic
-      let localNodeSocketPath = SpoNode.socket . head $ spoNodes
-      let localNodeConnectInfo = LocalNodeConnectInfo{..}
-      genesisConfigResult <- runExceptT . Byron.readGenesisData $ byronGenesisJson network
-      (genesisData, genesisHash) <- case genesisConfigResult of
-        Left e -> fail $ show e
-        Right a -> pure a
-      let
-        connectToChainSeek :: RunClient IO RuntimeChainSeekClient
-        connectToChainSeek = runChainSeekClient
+withLocalMarloweRuntime' databaseHost databasePort databaseUser databasePassword tempDatabase options test = withLocalTestnet' options \testnet@LocalTestnet{..} -> runResourceT do
+  (_, dbName) <- allocate (createDatabase workspace) cleanupDatabase
+  liftIO $ migrateDatabase dbName
+  let connectionString = settings databaseHost databasePort databaseUser databasePassword dbName
+  let acquirePool = Pool.acquire (100, secondsToNominalDiffTime 5, connectionString)
+  (_, pool) <- allocate acquirePool Pool.release
+  logFileHandle <- openWorkspaceFile workspace "logs/runtime.log" WriteMode
+  (Concurrently runLogger, rootEventBackend) <- liftIO $ atomically $ unComponent logger LoggerDependencies
+    { configFilePath = Just $ resolveWorkspacePath workspace "runtime.log.config"
+    , getSelectorConfig = getRuntimeSelectorConfig
+    , newRef = nextRandom
+    , newOnceFlag = newOnceFlagMVar
+    , writeText = TL.hPutStrLn logFileHandle
+    , injectConfigWatcherSelector = ConfigWatcher
+    }
+  Channels{..} <- liftIO $ atomically $ setupChannels rootEventBackend
+  historyQueries <- liftIO $ hoistHistoryQueries atomically <$> atomically mkHistoryQueriesInMemory
+  let localConsensusModeParams = CardanoModeParams $ EpochSlots 500
+  let localNodeNetworkId = Testnet $ NetworkMagic $ fromIntegral testnetMagic
+  let localNodeSocketPath = SpoNode.socket . head $ spoNodes
+  let localNodeConnectInfo = LocalNodeConnectInfo{..}
+  genesisConfigResult <- runExceptT . Byron.readGenesisData $ byronGenesisJson network
+  (genesisData, genesisHash) <- case genesisConfigResult of
+    Left e -> fail $ show e
+    Right a -> pure a
+  let
+    connectToChainSeek :: RunClient IO RuntimeChainSeekClient
+    connectToChainSeek = runChainSeekClient
 
-        byronGenesisConfig = Byron.Config
-          genesisData
-          genesisHash
-          (Byron.toByronRequiresNetworkMagic localNodeNetworkId)
-          defaultUTxOConfiguration
+    byronGenesisConfig = Byron.Config
+      genesisData
+      genesisHash
+      (Byron.toByronRequiresNetworkMagic localNodeNetworkId)
+      defaultUTxOConfiguration
 
-        genesisBlock = computeByronGenesisBlock
-          (abstractHashToBytes $ Byron.unGenesisHash genesisHash)
-          byronGenesisConfig
+    genesisBlock = computeByronGenesisBlock
+      (abstractHashToBytes $ Byron.unGenesisHash genesisHash)
+      byronGenesisConfig
 
-        chainIndexerDatabaseQueries = ChainIndexer.hoistDatabaseQueries
-          (either throwUsageError pure <=< Pool.use pool)
-          (ChainIndexer.databaseQueries genesisBlock)
-        chainSeekDatabaseQueries = ChainSync.hoistDatabaseQueries
-          (either throwUsageError pure <=< Pool.use pool)
-          ChainSync.databaseQueries
+    chainIndexerDatabaseQueries = ChainIndexer.hoistDatabaseQueries
+      (either throwUsageError pure <=< Pool.use pool)
+      (ChainIndexer.databaseQueries genesisBlock)
+    chainSeekDatabaseQueries = ChainSync.hoistDatabaseQueries
+      (either throwUsageError pure <=< Pool.use pool)
+      ChainSync.databaseQueries
 
-      let mkSubmitJob = Submit.mkSubmitJob SubmitJobDependencies{..}
-      race_ (runComponent_ runtime RuntimeDependencies{..}) $ test MarloweRuntime{..}
+  let mkSubmitJob = Submit.mkSubmitJob SubmitJobDependencies{..}
+  liftIO
+    $ race_ (concurrently_ (runComponent_ runtime RuntimeDependencies{..}) runLogger)
+    $ test MarloweRuntime{..}
   where
     throwUsageError (Pool.ConnectionError err)                       = error $ show err
     throwUsageError (Pool.SessionError (Session.QueryError _ _ err)) = error $ show err
@@ -203,7 +222,7 @@ withLocalMarloweRuntime' databaseHost databasePort databaseUser databasePassword
           Just "" -> pure ()
           Just msg -> fail $ "Error creating database: " <> show msg
 
-    createDatabase = do
+    createDatabase workspace = do
       connection <- connectdb rootConnectionString
       let dbName = fromString $ "chain_test_" <> show (workspaceId workspace)
       result1 <- exec connection $ "CREATE DATABASE \"" <> dbName <> "\"" <> ";"
@@ -233,7 +252,6 @@ withLocalMarloweRuntime' databaseHost databasePort databaseUser databasePassword
         ExitFailure _ -> fail $ "sqitch failed: \n" <> stderr
         ExitSuccess -> pure ()
 
-
 data RuntimeSelector f where
   ChainSeekClientEvent :: ConnectSocketDriverSelector RuntimeChainSeek f -> RuntimeSelector f
   ChainSeekServerEvent :: AcceptSocketDriverSelector RuntimeChainSeek f -> RuntimeSelector f
@@ -255,6 +273,7 @@ data RuntimeSelector f where
   TxJobServerEvent :: AcceptSocketDriverSelector (Job MarloweTxCommand) f -> RuntimeSelector f
   TxEvent :: TransactionServerSelector f -> RuntimeSelector f
   ChainIndexerEvent :: ChainIndexerSelector f -> RuntimeSelector f
+  ConfigWatcher :: ConfigWatcherSelector f -> RuntimeSelector f
 
 data RuntimeDependencies r = RuntimeDependencies
   { acceptRunChainSeekServer :: IO (RunServer IO RuntimeChainSeekServer)
@@ -446,3 +465,35 @@ setupChannels eventBackend = do
     jobServerPeer
     jobClientPeer
   pure Channels{..}
+
+getRuntimeSelectorConfig :: RuntimeSelector f -> SelectorConfig f
+getRuntimeSelectorConfig = \case
+  ChainSeekClientEvent sel -> prependKey "chain-seek.client" $ getConnectSocketDriverSelectorConfig socketDriverConfig sel
+  ChainSeekServerEvent sel -> prependKey "chain-seek.server" $ getAcceptSocketDriverSelectorConfig socketDriverConfig sel
+  ChainSyncJobClientEvent sel -> prependKey "chain-sync-job.client" $ getConnectSocketDriverSelectorConfig socketDriverConfig sel
+  ChainSyncJobServerEvent sel -> prependKey "chain-sync-job.server" $ getAcceptSocketDriverSelectorConfig socketDriverConfig sel
+  ChainSyncQueryClientEvent sel -> prependKey "chain-sync-query.client" $ getConnectSocketDriverSelectorConfig socketDriverConfig sel
+  ChainSyncQueryServerEvent sel -> prependKey "chain-sync-query.server" $ getAcceptSocketDriverSelectorConfig socketDriverConfig sel
+  DiscoveryQueryClientEvent sel -> prependKey "discovery-query.client" $ getConnectSocketDriverSelectorConfig socketDriverConfig sel
+  DiscoveryQueryServerEvent sel -> prependKey "discovery-query.server" $ getAcceptSocketDriverSelectorConfig socketDriverConfig sel
+  DiscoverySyncClientEvent sel -> prependKey "discovery-job.client" $ getConnectSocketDriverSelectorConfig socketDriverConfig sel
+  DiscoverySyncServerEvent sel -> prependKey "discovery-job.server" $ getAcceptSocketDriverSelectorConfig socketDriverConfig sel
+  HistoryJobClientEvent sel -> prependKey "history-sync.client" $ getConnectSocketDriverSelectorConfig socketDriverConfig sel
+  HistoryJobServerEvent sel -> prependKey "history-sync.server" $ getAcceptSocketDriverSelectorConfig socketDriverConfig sel
+  HistoryQueryClientEvent sel -> prependKey "history-query.client" $ getConnectSocketDriverSelectorConfig socketDriverConfig sel
+  HistoryQueryServerEvent sel -> prependKey "history-query.server" $ getAcceptSocketDriverSelectorConfig socketDriverConfig sel
+  HistorySyncClientEvent sel -> prependKey "history-sync.client" $ getConnectSocketDriverSelectorConfig socketDriverConfig sel
+  HistorySyncServerEvent sel -> prependKey "history-sync.server" $ getAcceptSocketDriverSelectorConfig socketDriverConfig sel
+  TxJobClientEvent sel -> prependKey "tx-job.client" $ getConnectSocketDriverSelectorConfig socketDriverConfig sel
+  TxJobServerEvent sel -> prependKey "tx-job.server" $ getAcceptSocketDriverSelectorConfig socketDriverConfig sel
+  TxEvent sel -> prependKey "marlowe-tx" $ getTransactionSererSelectorConfig sel
+  ChainIndexerEvent sel -> prependKey "marlowe-chain-indexer" $ getChainIndexerSelectorConfig sel
+  ConfigWatcher ReloadConfig -> SelectorConfig "reload-log-config" True
+    $ singletonFieldConfig "config" True
+
+socketDriverConfig :: SocketDriverConfigOptions
+socketDriverConfig = SocketDriverConfigOptions
+  { enableConnected = True
+  , enableDisconnected = True
+  , enableServerDriverEvent = True
+  }

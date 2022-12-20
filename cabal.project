@@ -79,6 +79,9 @@ package marlowe-protocols
 package marlowe-runtime
   ghc-options: -Werror
 
+package marlowe-integration
+  ghc-options: -Werror
+
 package cardano-integration
   ghc-options: -Werror
 

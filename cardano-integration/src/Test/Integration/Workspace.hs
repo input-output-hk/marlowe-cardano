@@ -4,6 +4,7 @@ module Test.Integration.Workspace
   , createWorkspace
   , createWorkspaceDir
   , moveToWorkspace
+  , openWorkspaceFile
   , resolveWorkspacePath
   , rewriteJSONFile
   , rewriteYAMLFile
@@ -21,7 +22,8 @@ import Data.UUID.V4 (nextRandom)
 import qualified Data.Yaml as YAML
 import System.Directory (copyFile, createDirectoryIfMissing, removeDirectoryRecursive, renameFile)
 import System.FilePath (takeDirectory, (</>))
-import UnliftIO.Resource (MonadResource, ReleaseKey)
+import System.IO (Handle, IOMode, hClose, openFile)
+import UnliftIO.Resource (MonadResource, ReleaseKey, allocate)
 
 data Workspace = Workspace
   { workspaceId :: UUID
@@ -39,6 +41,13 @@ createWorkspace workspaceName = do
 
 resolveWorkspacePath :: Workspace -> FilePath -> FilePath
 resolveWorkspacePath Workspace{..} = (workspaceDir </>)
+
+openWorkspaceFile :: MonadResource m => Workspace -> FilePath -> IOMode -> m Handle
+openWorkspaceFile workspace file mode = do
+  let path = resolveWorkspacePath workspace file
+  let dir = takeDirectory path
+  liftIO $ createDirectoryIfMissing True dir
+  snd <$> allocate (openFile path mode) hClose
 
 createWorkspaceDir :: MonadIO m => Workspace -> FilePath -> m FilePath
 createWorkspaceDir workspace dirName = do

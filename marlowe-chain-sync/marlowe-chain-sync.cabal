@@ -124,6 +124,7 @@ library chain-indexer
   other-modules:
   build-depends:
       base >= 4.9 && < 5
+    , aeson
     , async-components
     , base16
     , bytestring
@@ -136,9 +137,11 @@ library chain-indexer
     , cardano-ledger-alonzo
     , containers
     , eventuo11y
+    , eventuo11y-extras
     , hasql
     , hasql-th
     , hasql-transaction
+    , marlowe-chain-sync
     , ouroboros-network
     , profunctors
     , stm
@@ -182,7 +185,6 @@ executable marlowe-chain-indexer
     Paths_marlowe_chain_sync
   build-depends:
       base >= 4.9 && < 5
-    , aeson
     , async-components
     , cardano-api
     , cardano-crypto-wrapper
@@ -192,7 +194,6 @@ executable marlowe-chain-indexer
     , hasql
     -- Consider removing the hasql < 1.6 constraint in cabal.project if updating hasql-pool
     , hasql-pool < 0.6
-    , marlowe-chain-sync
     , marlowe-chain-sync:chain-indexer
     , optparse-applicative
     , ouroboros-network

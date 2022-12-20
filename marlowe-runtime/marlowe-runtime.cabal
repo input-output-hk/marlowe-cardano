@@ -226,6 +226,7 @@ library tx
     , containers
     , errors
     , eventuo11y
+    , eventuo11y-extras
     , marlowe
     , marlowe-chain-sync
     , marlowe-chain-sync:plutus-compat
@@ -240,6 +241,7 @@ library tx
     , plutus-tx
     , semialign
     , stm
+    , text
     , time
     , transformers
     , witherable

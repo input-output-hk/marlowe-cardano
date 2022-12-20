@@ -56,26 +56,30 @@ library
     , bytestring
     , cardano-api
     , cardano-crypto-wrapper
-    , cardano-ledger-byron
     , cardano-integration
+    , cardano-ledger-byron
     , eventuo11y
+    , eventuo11y-extras
     , hasql
     , hasql-pool
+    , lifted-async
     , marlowe-chain-sync
     , marlowe-chain-sync:chain-indexer
     , marlowe-chain-sync:libchainseek
+    , marlowe-protocols
     , marlowe-runtime:discovery
     , marlowe-runtime:discovery-api
     , marlowe-runtime:history
     , marlowe-runtime:history-api
     , marlowe-runtime:tx
     , marlowe-runtime:tx-api
-    , marlowe-protocols
     , ouroboros-network
     , postgresql-libpq
     , process
+    , resourcet
     , stm
     , text
     , time
     , transformers
+    , uuid
 
