@@ -7,6 +7,9 @@
 
 module Test.Integration.Marlowe.Local
   ( MarloweRuntime(..)
+  , module Test.Integration.Cardano
+  , module Test.Integration.Workspace
+  , defaultMarloweRuntimeOptions
   , withLocalMarloweRuntime
   ) where
 
@@ -117,7 +120,7 @@ import System.Process (readCreateProcessWithExitCode)
 import qualified System.Process as SP
 import Test.Integration.Cardano
 import qualified Test.Integration.Cardano as SpoNode (SpoNode(..))
-import Test.Integration.Workspace (Workspace(workspaceId), openWorkspaceFile, resolveWorkspacePath)
+import Test.Integration.Workspace
 import Text.Read (readMaybe)
 import UnliftIO (MonadUnliftIO, withRunInIO)
 
