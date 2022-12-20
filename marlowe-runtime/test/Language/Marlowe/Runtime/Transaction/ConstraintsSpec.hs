@@ -187,16 +187,17 @@ spec = do
             else expectationFailure $ unlines $ "Minimum UTxO requirements not met:" : errors
         Left (msgFromAdjustment :: ConstraintError 'V1) -> expectationFailure $ show msgFromAdjustment
 
-  -- Start with an empty tx body
-  -- and an empty (as possible) Marlowe context
-  -- In an emtpy wallet context:
-  --   can use arbitrary instance to generate utxos to spend
-  -- Ask it to perform coin selection
-  -- Only look at collateral
-  -- - Pure ADA utxo that's 2x the fee (protocol maximum fee)
-  -- - If it's selecting collat that has a native token, that's failure, not supposed to do that
   describe "selectCoins" do
-    focus $ prop "correct collateral is selected if possible" \(SomeTxConstraints marloweVersion constraints) -> do
+    prop "correct collateral is selected if possible" \(SomeTxConstraints marloweVersion constraints) -> do
+      -- This test is broadly doing this:
+      -- - Start with an empty tx body
+      -- - and an empty (as possible) Marlowe context
+      -- - In an emtpy wallet context (we can use arbitrary instance to generate utxos to spend)
+      -- - Perform coin selection
+      -- - Only look at collateral
+      -- - Looking for a pure ADA utxo that's 2x the fee (protocol maximum fee)
+      -- - If it's selecting collat that has a native token, that's failure, not supposed to do that
+
       marloweContext <- genSimpleMarloweContext marloweVersion constraints
       maxLovelace <- choose (0, 40_000_000)
       walletContext <- genSimpleWalletContext marloweVersion constraints maxLovelace
@@ -230,18 +231,19 @@ spec = do
               . filter (\(txOutRef, _) -> any (txInEqTxOutRef txOutRef) selectedTxIns) $ utT
 
         fee :: ProtocolParameters -> Lovelace
-        fee ProtocolParameters{..} =
-          let
+        fee ProtocolParameters{..} = 2 * (txFee + round executionFee)
+          where
             txFee :: Lovelace
-            txFee = fromIntegral $ protocolParamTxFeeFixed + protocolParamTxFeePerByte * protocolParamMaxTxSize
+            txFee = fromIntegral $ protocolParamTxFeeFixed + protocolParamTxFeePerByte
+              * protocolParamMaxTxSize
+
             executionFee :: Rational
             executionFee =
               case (protocolParamPrices, protocolParamMaxTxExUnits) of
                 (Just ExecutionUnitPrices{..}, Just ExecutionUnits{..})
-                  -> priceExecutionSteps  * fromIntegral executionSteps + priceExecutionMemory * fromIntegral executionMemory
+                  -> priceExecutionSteps * fromIntegral executionSteps
+                      + priceExecutionMemory * fromIntegral executionMemory
                 _ -> 0
-          in
-            2 * (txFee + round executionFee)
 
         findMinUtxo :: ProtocolParameters -> AddressInEra BabbageEra -> Value -> Value
         findMinUtxo protocol chAddress' origValue =
@@ -282,15 +284,14 @@ spec = do
         walletCtxSufficient :: Bool
         walletCtxSufficient = allAdaOnly && anyCoversFee
           where
-            allAssets = map (Chain.assets . snd . Chain.toUTxOTuple) . Chain.toUTxOsList . availableUtxos $ walletContext
+            allAssets = map (Chain.assets . snd . Chain.toUTxOTuple)
+              . Chain.toUTxOsList . availableUtxos $ walletContext
             onlyAdas = filter (isRight . assetsAdaOnly) allAssets
             allAdaOnly = not . null $ onlyAdas
             fee' = fee protocolTestnet
             minUtxo' = selectLovelace minUtxo
             targetLovelace = fromCardanoLovelace $ fee' <> minUtxo'
-            -- targetLovelace = fromCardanoLovelace $ fee' <> trace ("test fee: " <> show fee' <> "\ntest minUtxo: " <> show minUtxo') minUtxo'
             anyCoversFee = any ((>= targetLovelace) . Chain.ada) onlyAdas
-            -- anyCoversFee = any ((>= trace ("test targetLovelace: " <> show targetLovelace) targetLovelace) . Chain.ada) $ trace ("test wallet onlyAdas: " <> show onlyAdas) onlyAdas
 
         singleUtxo :: [Chain.Assets] -> Either String Chain.Assets
         singleUtxo [as] = Right as
@@ -304,20 +305,24 @@ spec = do
         adaCollatIsSufficient :: Chain.Lovelace -> Either String ()
         adaCollatIsSufficient lovelace
           | lovelace >= (fromCardanoLovelace $ fee protocolTestnet) = Right ()
-          | otherwise = Left $ "Collateral doesn't cover the fees. collat: " <> show lovelace <> "  fees: " <> show (fee protocolTestnet)
+          | otherwise = Left $ "Collateral doesn't cover the fees. collat: "
+              <> show lovelace <> "  fees: " <> show (fee protocolTestnet)
 
         -- Function to convert the Left side of the Either from (ConstraintError v) to String
         selectResult :: Either String ()
         selectResult = either
           (\ce -> case marloweVersion of MarloweV1 -> Left . show $ ce)
           (\txBC -> singleUtxo (extractCollat txBC) >>= assetsAdaOnly >>= adaCollatIsSufficient)
-          $ selectCoins protocolTestnet marloweVersion marloweContext walletContext emptyTxBodyContent
+          $ selectCoins protocolTestnet marloweVersion marloweContext
+              walletContext emptyTxBodyContent
 
       pure $ case (walletCtxSufficient, selectResult) of
         (True , Right _) -> label "Wallet has funds, selection succeeded" True
         (False, Right _) -> counterexample "Selection should have failed" False
-        (True , Left selFailedMsg) -> counterexample ("Selection shouldn't have failed\n" <> selFailedMsg) False
-        (False, Left selFailedMsg) -> label "Wallet does not have funds, selection failed" $ selFailedMsg `shouldSatisfy` isPrefixOf "CoinSelectionFailed"
+        (True , Left selFailedMsg) ->
+          counterexample ("Selection shouldn't have failed\n" <> selFailedMsg) False
+        (False, Left selFailedMsg) -> label "Wallet does not have funds, selection failed"
+          $ selFailedMsg `shouldSatisfy` isPrefixOf "CoinSelectionFailed"
 
 -- A simple Marlowe context with no assets to spend
 genSimpleMarloweContext :: MarloweVersion v -> TxConstraints v -> Gen (MarloweContext w)
