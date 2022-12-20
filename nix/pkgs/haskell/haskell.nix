@@ -146,6 +146,7 @@ let
             marlowe-chain-sync.ghcOptions = [ "-Werror" ];
             marlowe-cli.ghcOptions = [ "-Werror" ];
             marlowe-contracts.ghcOptions = [ "-Werror" ];
+            marlowe-integration.ghcOptions = [ "-Werror" ];
             marlowe-protocols.ghcOptions = [ "-Werror" ];
             marlowe-protocols-test.ghcOptions = [ "-Werror" ];
             marlowe-runtime.ghcOptions = [ "-Werror" ];

@@ -475,12 +475,10 @@ executable marlowe-tx
   build-depends:
     base >= 4.9 && < 5
     , async-components
-    , cardano-api
     , eventuo11y
     , eventuo11y-extras
     , marlowe-chain-sync
     , marlowe-protocols
-    , marlowe-runtime
     , marlowe-runtime:history-api
     , marlowe-runtime:tx
     , marlowe-runtime:tx-api
