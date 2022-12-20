@@ -13,6 +13,7 @@ import Control.Category ((<<<))
 import Control.Concurrent.Component
 import Control.Monad ((<=<))
 import Control.Monad.Trans.Except (ExceptT(ExceptT), runExceptT, withExceptT)
+import Data.Functor (void)
 import Data.String (IsString(fromString))
 import Data.Text (unpack)
 import qualified Data.Text as T
@@ -67,7 +68,7 @@ run Options{..} = do
       , injectConfigWatcherSelector = ConfigWatcher
       }
     appComponent = chainIndexer <<< arr chainIndexerDependencies <<< logger
-  runComponent_ appComponent loggerDependencies
+  runComponent_ (void appComponent) loggerDependencies
   where
     throwUsageError (ConnectionError err)                       = error $ show err
     throwUsageError (SessionError (Session.QueryError _ _ err)) = error $ show err

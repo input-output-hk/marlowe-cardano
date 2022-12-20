@@ -33,7 +33,7 @@ import Cardano.Api.Shelley (AcquiringFailure)
 import qualified Cardano.Chain.Genesis as Byron
 import Cardano.Chain.UTxO (defaultUTxOConfiguration)
 import Cardano.Crypto (abstractHashToBytes)
-import Control.Concurrent.Async (concurrently_, race_)
+import Control.Concurrent.Async (race_)
 import Control.Concurrent.Async.Lifted (Concurrently(..))
 import Control.Concurrent.Component
 import Control.Concurrent.STM (STM, atomically)
@@ -298,6 +298,11 @@ data RuntimeDependencies r = RuntimeDependencies
   , securityParameter :: Int
   }
 
+waitUntilReady :: Component IO a b -> Component IO (STM (), a) b
+waitUntilReady c = Component \(ready, a) -> do
+  (run, b) <- unComponent c a
+  pure (Concurrently $ atomically ready *> runConcurrently run, b)
+
 runtime :: Component IO (RuntimeDependencies r) ()
 runtime = proc RuntimeDependencies{..} -> do
   let
@@ -306,7 +311,7 @@ runtime = proc RuntimeDependencies{..} -> do
 
     LocalNodeConnectInfo{..} = localNodeConnectInfo
 
-  chainIndexer -<
+  chainIndexerReady <- chainIndexer -<
     let
       maxCost = 100_000
       costModel = CostModel 1 10
@@ -317,7 +322,7 @@ runtime = proc RuntimeDependencies{..} -> do
      in
       ChainIndexerDependencies{..}
 
-  chainSync -<
+  waitUntilReady chainSync -< (chainIndexerReady,)
     let
       acceptRunJobServer = acceptRunChainSyncJobServer
       acceptRunQueryServer = acceptRunChainSyncQueryServer
@@ -337,7 +342,7 @@ runtime = proc RuntimeDependencies{..} -> do
      in
       ChainSyncDependencies{..}
 
-  history -<
+  waitUntilReady history -< (chainIndexerReady,)
     let
       acceptRunJobServer = acceptRunHistoryJobServer
       acceptRunQueryServer = acceptRunHistoryQueryServer
@@ -350,7 +355,7 @@ runtime = proc RuntimeDependencies{..} -> do
     in
       HistoryDependencies{..}
 
-  discovery -<
+  waitUntilReady discovery -< (chainIndexerReady,)
     let
       acceptRunQueryServer = acceptRunDiscoveryQueryServer
       acceptRunSyncServer = acceptRunDiscoverySyncServer
@@ -358,7 +363,7 @@ runtime = proc RuntimeDependencies{..} -> do
     in
       DiscoveryDependencies{..}
 
-  transaction -<
+  waitUntilReady transaction -< (chainIndexerReady,)
     let
       acceptRunTransactionServer = acceptRunTxJobServer
 

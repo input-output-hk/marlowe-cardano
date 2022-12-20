@@ -10,14 +10,14 @@ module Language.Marlowe.Runtime.ChainIndexer.Store
 
 import Cardano.Api (ChainPoint(..), ChainTip(..))
 import Control.Concurrent.Component
-import Control.Concurrent.STM (STM, atomically)
+import Control.Concurrent.STM (STM, atomically, newEmptyTMVar, putTMVar, readTMVar)
 import Control.Concurrent.STM.Delay (Delay, newDelay, waitDelay)
 import Control.Monad (guard, unless, when)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Maybe (MaybeT(..))
 import Data.Foldable (for_, traverse_)
+import Data.Maybe (isJust)
 import Data.Time (NominalDiffTime, UTCTime, addUTCTime, diffUTCTime, getCurrentTime, nominalDiffTimeToSeconds)
-import Data.Void (Void)
 import Language.Marlowe.Runtime.ChainIndexer.Database
 import Language.Marlowe.Runtime.ChainIndexer.Genesis (GenesisBlock)
 import Language.Marlowe.Runtime.ChainIndexer.NodeClient (Changes(..), isEmptyChanges)
@@ -26,7 +26,7 @@ import Prelude hiding (filter)
 import Witherable (Witherable(..))
 
 data ChainStoreSelector f where
-  CheckGenesisBlock :: ChainStoreSelector Void
+  CheckGenesisBlock :: ChainStoreSelector Bool
   Save :: ChainStoreSelector SaveField
 
 data SaveField
@@ -49,8 +49,9 @@ data ChainStoreDependencies r = ChainStoreDependencies
   }
 
 -- | Create a ChainStore component.
-chainStore :: Component IO (ChainStoreDependencies r) ()
-chainStore = component_ \ChainStoreDependencies{..} -> do
+chainStore :: Component IO (ChainStoreDependencies r) (STM ())
+chainStore = component \ChainStoreDependencies{..} -> do
+  genesisReadyVar <- newEmptyTMVar
   let
     awaitChanges :: Maybe Delay -> STM Changes
     awaitChanges delay = do
@@ -63,12 +64,14 @@ chainStore = component_ \ChainStoreDependencies{..} -> do
 
     runChainStore :: IO ()
     runChainStore = do
-      withEvent eventBackend CheckGenesisBlock \_ -> do
+      withEvent eventBackend CheckGenesisBlock \ev -> do
         mDbGenesisBlock <- runGetGenesisBlock getGenesisBlock
+        addField ev $ isJust mDbGenesisBlock
         case mDbGenesisBlock of
           Just dbGenesisBlock -> unless (dbGenesisBlock == genesisBlock) do
             fail "Existing genesis block does not match computed genesis block"
           Nothing -> runCommitGenesisBlock commitGenesisBlock genesisBlock
+      atomically $ putTMVar genesisReadyVar ()
       go Nothing
       where
         go lastWrite = do
@@ -95,4 +98,4 @@ chainStore = component_ \ChainStoreDependencies{..} -> do
       let delayMicroseconds = floor $ 1_000_000 * nominalDiffTimeToSeconds delay
       lift $ newDelay delayMicroseconds
 
-  runChainStore
+  pure (runChainStore, readTMVar genesisReadyVar)

@@ -13,6 +13,7 @@ module Language.Marlowe.Runtime.ChainIndexer
 
 import Cardano.Api (CardanoMode, ChainPoint(..), ChainTip(..), LocalNodeClientProtocolsInMode)
 import Control.Concurrent.Component
+import Control.Concurrent.STM (STM)
 import Data.Aeson (Value(..), object, (.=))
 import Data.Time (NominalDiffTime)
 import Language.Marlowe.Runtime.Cardano.Api
@@ -38,6 +39,7 @@ import Observe.Event.Component
   , SomeJSON(..)
   , absurdFieldConfig
   , prependKey
+  , singletonFieldConfig
   , singletonFieldConfigWith
   )
 
@@ -55,7 +57,7 @@ data ChainIndexerDependencies r = ChainIndexerDependencies
   , eventBackend          :: !(EventBackend IO r ChainIndexerSelector)
   }
 
-chainIndexer :: Component IO (ChainIndexerDependencies r) ()
+chainIndexer :: Component IO (ChainIndexerDependencies r) (STM ())
 chainIndexer = proc ChainIndexerDependencies{..} -> do
   let DatabaseQueries{..} = databaseQueries
   NodeClient{..} <- nodeClient -< NodeClientDependencies
@@ -121,7 +123,8 @@ getNodeClientSelectorConfig = \case
 
 getChainStoreSelectorConfig :: GetSelectorConfig ChainStoreSelector
 getChainStoreSelectorConfig = \case
-  CheckGenesisBlock -> SelectorConfig "check-genesis-block" True absurdFieldConfig
+  CheckGenesisBlock -> SelectorConfig "check-genesis-block" True
+    $ singletonFieldConfig "genesis-block-exists" True
   Save -> SelectorConfig "save" True FieldConfig
     { fieldKey = \case
         RollbackPoint _ -> "rollback-point"
