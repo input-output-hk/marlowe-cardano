@@ -1,4 +1,5 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE TemplateHaskell #-}
@@ -12,9 +13,13 @@ module Language.Marlowe.Runtime.Web.Server.REST.Contracts
 import Cardano.Api (AsType(..), deserialiseFromTextEnvelope, getTxBody)
 import qualified Cardano.Api.SerialiseTextEnvelope as Cardano
 import Control.Monad (unless)
+import Control.Monad.Except (MonadError)
+import qualified Data.ByteString.Lazy as BL
 import Data.Foldable (traverse_)
 import Data.Maybe (fromMaybe)
 import qualified Data.Set as Set
+import Data.Text.Lazy (pack)
+import Data.Text.Lazy.Encoding (encodeUtf8)
 import Language.Marlowe.Runtime.ChainSync.Api (Lovelace(..))
 import Language.Marlowe.Runtime.Core.Api (MarloweVersion(..), SomeMarloweVersion(..))
 import Language.Marlowe.Runtime.Transaction.Api
@@ -80,6 +85,9 @@ server eb = get eb
        :<|> post eb
        :<|> contractServer eb
 
+fromDTOThrow' :: (MonadError ServerError m, FromDTO a) => BL.ByteString -> ServerError -> DTO a -> m a
+fromDTOThrow' reason err = fromDTOThrow (err { errBody = reason })
+
 post
   :: EventBackend (AppM r) r ContractsSelector
   -> PostContractsRequest
@@ -92,36 +100,40 @@ post eb req@PostContractsRequest{..} changeAddressDTO mAddresses mCollateralUtxo
   addField ev $ ChangeAddress changeAddressDTO
   traverse_ (addField ev . Addresses) mAddresses
   traverse_ (addField ev . Collateral) mCollateralUtxos
-  SomeMarloweVersion v@MarloweV1  <- fromDTOThrow err400 version
-  changeAddress <- fromDTOThrow err400 changeAddressDTO
-  extraAddresses <- Set.fromList <$> fromDTOThrow err400 (maybe [] unCommaList mAddresses)
-  collateralUtxos <- Set.fromList <$> fromDTOThrow err400 (maybe [] unCommaList mCollateralUtxos)
-  roles' <- fromDTOThrow err400 roles
-  metadata' <- fromDTOThrow err400 metadata
+  SomeMarloweVersion v@MarloweV1  <- fromDTOThrow' "Version decoding failed" err400 version
+  changeAddress <- fromDTOThrow' "Change address decoding failed" err400 changeAddressDTO
+  extraAddresses <- Set.fromList <$> fromDTOThrow' "Address decoding failed" err400 (maybe [] unCommaList mAddresses)
+  collateralUtxos <- Set.fromList <$> fromDTOThrow' "Collateral UTxO decoding failed" err400 (maybe [] unCommaList mCollateralUtxos)
+  roles' <- fromDTOThrow' "Roles decoding failed" err400 roles
+  metadata' <- fromDTOThrow' "Metadata decoding failed" err400 metadata
   createContract Nothing v WalletAddresses{..} roles' metadata' (Lovelace minUTxODeposit) contract >>= \case
     Left err -> do
+      let
+        err400' = err400 { errBody=encodeUtf8 . pack $ show err}
+        err404' = err400 { errBody=encodeUtf8 . pack $ show err}
+        err500' = err500 { errBody=encodeUtf8 . pack $ show err}
       addField ev $ PostError $ show err
       case err of
-        CreateConstraintError (MintingUtxoNotFound _) -> throwError err500
+        CreateConstraintError (MintingUtxoNotFound _) -> throwError err500'
         CreateConstraintError (RoleTokenNotFound _) -> throwError err403
-        CreateConstraintError ToCardanoError -> throwError err500
-        CreateConstraintError MissingMarloweInput -> throwError err500
-        CreateConstraintError (PayoutInputNotFound _) -> throwError err500
-        CreateConstraintError (CalculateMinUtxoFailed _) -> throwError err500
-        CreateConstraintError (CoinSelectionFailed _) -> throwError err400
-        CreateConstraintError (BalancingError _) -> throwError err500
-        CreateLoadMarloweContextFailed LoadMarloweContextErrorNotFound -> throwError err404
-        CreateLoadMarloweContextFailed (LoadMarloweContextErrorVersionMismatch _) -> throwError err400
-        CreateLoadMarloweContextFailed (HandshakeFailed _) -> throwError err500
-        CreateLoadMarloweContextFailed LoadMarloweContextToCardanoError -> throwError err500
-        CreateLoadMarloweContextFailed (MarloweScriptNotPublished _) -> throwError err500
-        CreateLoadMarloweContextFailed (PayoutScriptNotPublished _) -> throwError err500
-        CreateLoadMarloweContextFailed (ExtractCreationError _) -> throwError err500
-        CreateLoadMarloweContextFailed (ExtractMarloweTransactionError _) -> throwError err500
-        CreateBuildupFailed MintingUtxoSelectionFailed -> throwError err400
-        CreateBuildupFailed (AddressDecodingFailed _) -> throwError err500
-        CreateBuildupFailed (MintingScriptDecodingFailed _) -> throwError err500
-        CreateToCardanoError -> throwError err400
+        CreateConstraintError ToCardanoError -> throwError err500'
+        CreateConstraintError MissingMarloweInput -> throwError err500'
+        CreateConstraintError (PayoutInputNotFound _) -> throwError err500'
+        CreateConstraintError (CalculateMinUtxoFailed _) -> throwError err500'
+        CreateConstraintError (CoinSelectionFailed _) -> throwError err400'
+        CreateConstraintError (BalancingError _) -> throwError err500'
+        CreateLoadMarloweContextFailed LoadMarloweContextErrorNotFound -> throwError err404'
+        CreateLoadMarloweContextFailed (LoadMarloweContextErrorVersionMismatch _) -> throwError err400'
+        CreateLoadMarloweContextFailed (HandshakeFailed _) -> throwError err500'
+        CreateLoadMarloweContextFailed LoadMarloweContextToCardanoError -> throwError err500'
+        CreateLoadMarloweContextFailed (MarloweScriptNotPublished _) -> throwError err500'
+        CreateLoadMarloweContextFailed (PayoutScriptNotPublished _) -> throwError err500'
+        CreateLoadMarloweContextFailed (ExtractCreationError _) -> throwError err500'
+        CreateLoadMarloweContextFailed (ExtractMarloweTransactionError _) -> throwError err500'
+        CreateBuildupFailed MintingUtxoSelectionFailed -> throwError err400'
+        CreateBuildupFailed (AddressDecodingFailed _) -> throwError err500'
+        CreateBuildupFailed (MintingScriptDecodingFailed _) -> throwError err500'
+        CreateToCardanoError -> throwError err400'
     Right ContractCreated{contractId, txBody} -> do
       let (contractId', txBody') = toDTO (contractId, txBody)
       let body = CreateTxBody contractId' txBody'

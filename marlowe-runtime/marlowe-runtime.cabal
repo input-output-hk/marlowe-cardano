@@ -398,6 +398,7 @@ library web-server
     , aeson
     , async
     , async-components
+    , bytestring
     , cardano-api
     , containers
     , errors
