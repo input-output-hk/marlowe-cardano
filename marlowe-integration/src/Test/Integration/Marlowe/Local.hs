@@ -138,6 +138,7 @@ data MarloweRuntimeOptions = MarloweRuntimeOptions
   , databaseUser :: ByteString
   , databasePassword :: ByteString
   , tempDatabase :: ByteString
+  , localTestnetOptions :: LocalTestnetOptions
   }
 
 defaultMarloweRuntimeOptions :: IO MarloweRuntimeOptions
@@ -153,20 +154,16 @@ defaultMarloweRuntimeOptions = do
     (maybe "postgres" fromString databaseUser)
     (maybe "" fromString databasePassword)
     (maybe "template1" fromString tempDatabase)
+    defaultOptions
 
 withLocalMarloweRuntime :: MonadUnliftIO m => (MarloweRuntime -> m ()) -> m ()
 withLocalMarloweRuntime test = do
   options <- liftIO defaultMarloweRuntimeOptions
-  withLocalMarloweRuntime' options defaultOptions test
+  withLocalMarloweRuntime' options test
 
-withLocalMarloweRuntime'
-  :: MonadUnliftIO m
-  => MarloweRuntimeOptions
-  -> LocalTestnetOptions
-  -> (MarloweRuntime -> m ())
-  -> m ()
-withLocalMarloweRuntime' MarloweRuntimeOptions{..} options test = withRunInIO \runInIO ->
-  withLocalTestnet' options \testnet@LocalTestnet{..} -> runResourceT do
+withLocalMarloweRuntime' :: MonadUnliftIO m => MarloweRuntimeOptions -> (MarloweRuntime -> m ()) -> m ()
+withLocalMarloweRuntime' MarloweRuntimeOptions{..} test = withRunInIO \runInIO ->
+  withLocalTestnet' localTestnetOptions \testnet@LocalTestnet{..} -> runResourceT do
     (_, dbName) <- allocate (createDatabase workspace) cleanupDatabase
     liftIO $ migrateDatabase dbName
     let connectionString = settings databaseHost databasePort databaseUser databasePassword dbName
