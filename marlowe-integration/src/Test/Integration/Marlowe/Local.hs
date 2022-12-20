@@ -53,7 +53,6 @@ import Data.UUID.V4 (nextRandom)
 import Data.Void (Void)
 import Data.Word (Word16)
 import Database.PostgreSQL.LibPQ (connectdb, errorMessage, exec, finish, resultErrorMessage)
-import Debug.Trace (traceM)
 import Hasql.Connection (settings)
 import qualified Hasql.Pool as Pool
 import Language.Marlowe.Protocol.HeaderSync.Client (MarloweHeaderSyncClient, marloweHeaderSyncClientPeer)
@@ -120,6 +119,7 @@ import Test.Integration.Cardano
 import qualified Test.Integration.Cardano as SpoNode (SpoNode(..))
 import Test.Integration.Workspace (Workspace(workspaceId), openWorkspaceFile, resolveWorkspacePath)
 import Text.Read (readMaybe)
+import UnliftIO (MonadUnliftIO, withRunInIO)
 
 data MarloweRuntime = MarloweRuntime
   { runDiscoveryQueryClient :: RunClient IO (QueryClient DiscoveryQuery)
@@ -131,32 +131,40 @@ data MarloweRuntime = MarloweRuntime
   , testnet :: LocalTestnet
   }
 
-withLocalMarloweRuntime :: (MarloweRuntime -> IO ()) -> IO ()
-withLocalMarloweRuntime test = do
+data MarloweRuntimeOptions = MarloweRuntimeOptions
+  { databaseHost :: ByteString
+  , databasePort :: Word16
+  , databaseUser :: ByteString
+  , databasePassword :: ByteString
+  , tempDatabase :: ByteString
+  }
+
+defaultMarloweRuntimeOptions :: IO MarloweRuntimeOptions
+defaultMarloweRuntimeOptions = do
   databaseHost <- lookupEnv "MARLOWE_RT_TEST_DB_HOST"
   databasePort <- lookupEnv "MARLOWE_RT_TEST_DB_PORT"
   databaseUser <- lookupEnv "MARLOWE_RT_TEST_DB_USER"
   databasePassword <- lookupEnv "MARLOWE_RT_TEST_DB_PASSWORD"
   tempDatabase <- lookupEnv "MARLOWE_RT_TEST_TEMP_DB"
-  withLocalMarloweRuntime'
+  pure $ MarloweRuntimeOptions
     (maybe "127.0.0.1" fromString databaseHost)
     (fromMaybe 5432 $ readMaybe =<< databasePort)
     (maybe "postgres" fromString databaseUser)
     (maybe "" fromString databasePassword)
     (maybe "template1" fromString tempDatabase)
-    defaultOptions
-    test
+
+withLocalMarloweRuntime :: MonadUnliftIO m => (MarloweRuntime -> m ()) -> m ()
+withLocalMarloweRuntime test = do
+  options <- liftIO defaultMarloweRuntimeOptions
+  withLocalMarloweRuntime' options defaultOptions test
 
 withLocalMarloweRuntime'
-  :: ByteString
-  -> Word16
-  -> ByteString
-  -> ByteString
-  -> ByteString
+  :: MonadUnliftIO m
+  => MarloweRuntimeOptions
   -> LocalTestnetOptions
-  -> (MarloweRuntime -> IO ())
-  -> IO ()
-withLocalMarloweRuntime' databaseHost databasePort databaseUser databasePassword tempDatabase options test =
+  -> (MarloweRuntime -> m ())
+  -> m ()
+withLocalMarloweRuntime' MarloweRuntimeOptions{..} options test = withRunInIO \runInIO ->
   withLocalTestnet' options \testnet@LocalTestnet{..} -> runResourceT do
     (_, dbName) <- allocate (createDatabase workspace) cleanupDatabase
     liftIO $ migrateDatabase dbName
@@ -207,7 +215,7 @@ withLocalMarloweRuntime' databaseHost databasePort databaseUser databasePassword
     let mkSubmitJob = Submit.mkSubmitJob SubmitJobDependencies{..}
     liftIO $ runComponent_ runtime RuntimeDependencies{..}
       `race_` runLogger
-      `race_` test MarloweRuntime{..}
+      `race_` runInIO (test MarloweRuntime{..})
   where
     rootConnectionString = settings databaseHost databasePort databaseUser databasePassword tempDatabase
 
