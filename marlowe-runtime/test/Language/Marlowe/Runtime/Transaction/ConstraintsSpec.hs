@@ -64,8 +64,6 @@ import Test.QuickCheck hiding (shrinkMap)
 import Test.QuickCheck.Hedgehog (hedgehog)
 import Text.Printf (printf)
 
-import Debug.Trace
-
 spec :: Spec
 spec = do
   describe "solveInitialTxBodyContent" do
@@ -200,9 +198,8 @@ spec = do
   describe "selectCoins" do
     focus $ prop "correct collateral is selected if possible" \(SomeTxConstraints marloweVersion constraints) -> do
       marloweContext <- genSimpleMarloweContext marloweVersion constraints
-      -- FIXME Pick one of these
-      -- walletContext <- genWalletContext marloweVersion constraints
-      walletContext <- genSimpleWalletContext marloweVersion constraints 10_000_000
+      maxLovelace <- choose (0, 40_000_000)
+      walletContext <- genSimpleWalletContext marloweVersion constraints maxLovelace
 
       let
         chAddress :: AddressInEra BabbageEra
@@ -317,10 +314,10 @@ spec = do
           $ selectCoins protocolTestnet marloweVersion marloweContext walletContext emptyTxBodyContent
 
       pure $ case (walletCtxSufficient, selectResult) of
-        (True , Right _) -> traceM "case 1" >> pure ()
-        (False, Right _) -> traceM "case 2" >> expectationFailure "selection should have failed"
-        (True , Left selFailedMsg) -> traceM "case 3" >> (selFailedMsg `shouldBe` "success expected")
-        (False, Left selFailedMsg) -> traceM "case 4" >> (selFailedMsg `shouldSatisfy` isPrefixOf "CoinSelectionFailed")
+        (True , Right _) -> label "Wallet has funds, selection succeeded" True
+        (False, Right _) -> counterexample "Selection should have failed" False
+        (True , Left selFailedMsg) -> counterexample ("Selection shouldn't have failed\n" <> selFailedMsg) False
+        (False, Left selFailedMsg) -> label "Wallet does not have funds, selection failed" $ selFailedMsg `shouldSatisfy` isPrefixOf "CoinSelectionFailed"
 
 -- A simple Marlowe context with no assets to spend
 genSimpleMarloweContext :: MarloweVersion v -> TxConstraints v -> Gen (MarloweContext w)
@@ -334,12 +331,10 @@ genSimpleMarloweContext marloweVersion constraints = do
     }
 
 -- Generate a random amount and add the specified amount of Lovelace to it
-genAdaOnlyAssets :: Integer -> Gen Chain.Assets
--- FIXME Fix this unused argument
-genAdaOnlyAssets _maxLovelace = Chain.Assets
-  -- <$> (fromCardanoLovelace . Lovelace <$> choose (0, maxLovelace))
-  <$> (fromCardanoLovelace . Lovelace <$> choose (0, 11_000_000))
-  <*> (pure $ Chain.Tokens Map.empty)
+genAdaOnlyAssets :: Integer -> Chain.Assets
+genAdaOnlyAssets maxLovelace = Chain.Assets
+  (fromCardanoLovelace $ Lovelace maxLovelace)
+  (Chain.Tokens Map.empty)
 
 -- The simplest wallet context:
 --   availableUtxos = A single ADA-only Utxo
@@ -350,8 +345,8 @@ genSimpleWalletContext marloweVersion constraints minLovelace = do
   wc <- genWalletContext marloweVersion constraints
   txOutRef <- genTxOutRef
   stubAddress <- genAddress
-  assets <- genAdaOnlyAssets minLovelace
   let
+    assets = genAdaOnlyAssets minLovelace
     txOut = Chain.TransactionOutput stubAddress assets Nothing Nothing
     utxos = Chain.UTxOs $ Map.singleton txOutRef txOut
   pure $ wc { availableUtxos = utxos, collateralUtxos = Set.singleton txOutRef }
