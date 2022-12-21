@@ -9,7 +9,6 @@ module Test.Integration.Cardano.Local
   , Network(..)
   , PaymentKeyPair(..)
   , SpoNode(..)
-  , SpoNodeRecord(..)
   , StakingKeyPair(..)
   , TestnetException(..)
   , defaultOptions
@@ -26,8 +25,10 @@ import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Monad.Trans.Resource (MonadResource, MonadThrow(throwM), MonadUnliftIO)
-import Data.Aeson (ToJSON, object, toJSON, (.=))
+import Data.Aeson (FromJSON, Key, Result(..), ToJSON, fromJSON, object, toJSON, (.=))
+import Data.Aeson.KeyMap (KeyMap)
 import qualified Data.Aeson.KeyMap as KM
+import Data.Aeson.Types (Value)
 import Data.Functor (void, (<&>))
 import Data.List (isInfixOf)
 import Data.Maybe (fromJust)
@@ -155,41 +156,14 @@ withLocalTestnet' options test = runResourceT do
   lift $ test testnet `catch` rethrowAsTestnetException testnet
 
 data TestnetException = TestnetException
-  { testnetMagic :: Int
-  , network :: Network
-  , spoNodeRecords :: [SpoNodeRecord]
-  , wallets :: [PaymentKeyPair]
-  , delegators :: [Delegator]
+  { workspace :: FilePath
   , exception :: String
   } deriving (Generic)
 
 instance ToJSON TestnetException
 
-data SpoNodeRecord = SpoNodeRecord
-  { byronDelegateKey :: FilePath
-  , byronDelegationCert :: FilePath
-  , coldSKey :: FilePath
-  , coldVKey :: FilePath
-  , db :: FilePath
-  , kesSKey :: FilePath
-  , kesVKey :: FilePath
-  , nodeName :: String
-  , opcert :: FilePath
-  , port :: Int
-  , socket :: FilePath
-  , stakingRewardSKey :: FilePath
-  , stakingRewardVKey :: FilePath
-  , stderrLogs :: FilePath
-  , stdoutLogs :: FilePath
-  , topology :: FilePath
-  , vrfSKey :: FilePath
-  , vrfVKey :: FilePath
-  } deriving (Show, Eq, Ord, Generic)
-
-instance ToJSON SpoNodeRecord
-
 instance Show TestnetException where
-  show = T.unpack . T.decodeUtf8 . YAML.encode
+  show = T.unpack . T.decodeUtf8 . YAML.encode . object . pure . ("TestnetException" .=)
 
 instance Exception TestnetException where
 
@@ -199,9 +173,8 @@ rethrowAsTestnetException :: (MonadBase IO m, MonadIO m, MonadThrow m) => LocalT
 rethrowAsTestnetException LocalTestnet{..} ex = do
   -- prevent workspace from being cleaned up for diagnosing errors.
   void $ unprotect $ W.releaseKey workspace
-  let spoNodeRecords = spoNodes <&> \SpoNode{..} -> SpoNodeRecord{..}
   let exception = displayException ex
-  throwM TestnetException{..}
+  throwM $ TestnetException (workspaceDir workspace) exception
 
 startLocalTestnet :: (MonadResource m, MonadUnliftIO m) => LocalTestnetOptions -> m LocalTestnet
 startLocalTestnet options@LocalTestnetOptions{..} = do
