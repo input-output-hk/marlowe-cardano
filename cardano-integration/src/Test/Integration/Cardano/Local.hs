@@ -221,8 +221,8 @@ startLocalTestnet options@LocalTestnetOptions{..} = do
 
       let
         wallets = [1..numWallets] <&> \n -> PaymentKeyPair
-          { paymentSKey = shelleyGenesisDir </> "utxos" </> "utxo" <> show n <> ".skey"
-          , paymentVKey = shelleyGenesisDir </> "utxos" </> "utxo" <> show n <> ".vkey"
+          { paymentSKey = shelleyGenesisDir </> "utxo-keys" </> "utxo" <> show n <> ".skey"
+          , paymentVKey = shelleyGenesisDir </> "utxo-keys" </> "utxo" <> show n <> ".vkey"
           }
 
         delegators = [1..numDelegators] <&> \n -> Delegator
