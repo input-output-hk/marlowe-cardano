@@ -322,17 +322,26 @@ setupNetwork workspace LocalTestnetOptions{..} byronGenesisDir shelleyGenesisDir
     . KM.insert "securityParam"          (toJSON @Int securityParameter)
     . KM.insert "epochLength"            (toJSON @Int 500)
     . KM.insert "maxLovelaceSupply"      (toJSON @Int 1000000000000)
-    . KM.insert "minFeeA"                (toJSON @Int 44)
-    . KM.insert "minFeeB"                (toJSON @Int 155381)
-    . KM.insert "minUTxOValue"           (toJSON @Int 1000000)
-    . KM.insert "decentralisationParam"  (toJSON @Double 0.7)
-    . KM.insert "major"                  (toJSON @Int 7)
-    . KM.insert "rho"                    (toJSON @Double 0.1)
-    . KM.insert "tau"                    (toJSON @Double 0.1)
     . KM.insert "updateQuorum"           (toJSON @Int 2)
+    . updateKeyMap "protocolParams"
+      ( KM.insert "minFeeA"                (toJSON @Int 44)
+      . KM.insert "minFeeB"                (toJSON @Int 155381)
+      . KM.insert "minUTxOValue"           (toJSON @Int 1000000)
+      . KM.insert "decentralisationParam"  (toJSON @Double 0.7)
+      . KM.insert "rho"                    (toJSON @Double 0.1)
+      . KM.insert "tau"                    (toJSON @Double 0.1)
+      . updateKeyMap "protocolVersion"     (KM.insert "major" (toJSON @Int 7))
+      )
     )
 
   pure Network{..}
+
+updateKeyMap :: (FromJSON a, ToJSON b) => Key -> (a -> b) -> KeyMap Value -> KeyMap Value
+updateKeyMap key f km = case KM.lookup key km of
+  Nothing -> km
+  Just v -> case fromJSON v of
+    Success a -> KM.insert key (toJSON $ f a) km
+    _ -> km
 
 setupSpoNode
   :: MonadResource m
