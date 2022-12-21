@@ -146,3 +146,17 @@ liftQuery = QueryClient . pure . ($ next) . SendMsgRequest
       { recvMsgNextPage = const . pure . SendMsgDone . Right
       , recvMsgReject = pure . Left
       }
+
+-- | Create a client that runs a query that can have multiple pages by
+-- enumerating through all the pages and appending the results.
+liftFoldQuery :: (Monad m, Monoid results) => query delimiter err results -> QueryClient query m (Either err results)
+liftFoldQuery = QueryClient . pure . ($ next) . SendMsgRequest
+  where
+    next = ClientStNextCanReject
+      { recvMsgNextPage = handleNext mempty
+      , recvMsgReject = pure . Left
+      }
+    handleNext agg results Nothing = pure $ SendMsgDone $ Right $ agg <> results
+    handleNext agg results (Just d) = pure $ SendMsgRequestNext d ClientStNext
+      { recvMsgNextPage = handleNext (agg <> results)
+      }
