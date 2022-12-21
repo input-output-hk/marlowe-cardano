@@ -13,9 +13,11 @@ module Test.Integration.Marlowe.Script
   , Wallet
   , accountPayee
   , allocateWallet
+  , applyInput
   , applyInputs
   , assert
   , assertMsg
+  , buildV1ApplyInputs
   , buildV1Contract
   , byAddress
   , byRole
@@ -53,9 +55,9 @@ import Cardano.Api
   , BabbageEra
   , CardanoEra(..)
   , CtxTx
-  , MultiAssetSupportedInEra(MultiAssetInBabbageEra)
+  , MultiAssetSupportedInEra(..)
   , ShelleyBasedEra(..)
-  , ShelleyWitnessSigningKey(WitnessPaymentKey)
+  , ShelleyWitnessSigningKey(..)
   , Tx
   , TxBody(..)
   , TxBodyContent(..)
@@ -609,15 +611,23 @@ choice choiceId = pure . V1.Choice choiceId
 notify :: V1.Observation -> V1ContractBuilder V1.Action
 notify = pure . V1.Notify
 
+-- applying inputs
+
+buildV1ApplyInputs :: V1ApplyInputsBuilder -> BuildApplyInputs 'V1
+buildV1ApplyInputs = BuildV1ApplyInputs
+
+applyInput :: V1.InputContent -> V1ApplyInputsBuilder
+applyInput inputContent = V1ApplyInputsBuilder $ tell ([inputContent], Nothing, Nothing, mempty)
+
 -- Querying wallets
 
 getSigningKey :: Wallet -> MarloweScript ShelleyWitnessSigningKey
 getSigningKey Wallet{..} = do
   textEnvelope <- liftIO $ fromJust <$> decodeFileStrict (paymentSKey walletPaymentKeyPair)
   pure
-    $ WitnessPaymentKey
+    $ WitnessGenesisUTxOKey
     $ fromRight (error "Failed to parse signing key")
-    $ deserialiseFromTextEnvelope (AsSigningKey AsPaymentKey) textEnvelope
+    $ deserialiseFromTextEnvelope (AsSigningKey AsGenesisUTxOKey) textEnvelope
 
 getWalletAddresses :: Wallet -> MarloweScript WalletAddresses
 getWalletAddresses wallet = do
@@ -634,7 +644,7 @@ getAddressIO :: MonadIO m => Wallet -> m Address
 getAddressIO Wallet{..} = fromString <$> execCli
   [ "address", "build"
   , "--payment-verification-key-file", paymentVKey walletPaymentKeyPair
-  , "--testnetMagic", "1" -- the testnetMagic doesn't actually matter. All that matters is that it's testnet and not mainnet.
+  , "--testnet-magic", "1" -- the testnetMagic doesn't actually matter. All that matters is that it's testnet and not mainnet.
   ]
 
 getPaymentKeyHashIO :: MonadIO m => Wallet -> m PaymentKeyHash
@@ -647,7 +657,7 @@ getWalletBalance :: Wallet -> MarloweScript Assets
 getWalletBalance = error "not implemented"
 
 getContracts :: Wallet -> MarloweScript [Some ContractRef]
-getContracts wallet = error "not implemented"
+getContracts _ = error "not implemented"
 
 -- Querying contracts
 
@@ -696,7 +706,7 @@ getContractState ContractRef{..} = MarloweScript do
       }
 
 getContractBalance :: forall v. Wallet -> ContractRef v -> MarloweScript Assets
-getContractBalance wallet = maybe (pure mempty) extractAllocatedBalance <=< getContractDatum
+getContractBalance _ = maybe (pure mempty) extractAllocatedBalance <=< getContractDatum
   where
     extractAllocatedBalance :: Datum v -> MarloweScript Assets
     extractAllocatedBalance = error "not implemented"

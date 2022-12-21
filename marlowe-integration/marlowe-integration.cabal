@@ -125,13 +125,4 @@ executable marlowe-integration-example
   main-is: Main.hs
   build-depends:
       base >= 4.9 && < 5
-    , aeson
-    , cardano-api
-    , marlowe
-    , marlowe-chain-sync
     , marlowe-integration
-    , marlowe-protocols
-    , marlowe-runtime
-    , marlowe-runtime:tx-api
-    , text
-
