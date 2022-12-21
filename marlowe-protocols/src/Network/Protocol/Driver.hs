@@ -12,6 +12,7 @@ module Network.Protocol.Driver
 
 import Control.Concurrent.STM (STM, atomically, newTQueue, readTQueue)
 import Control.Concurrent.STM.TQueue (writeTQueue)
+import Control.Exception (Exception)
 import Control.Exception.Lifted (SomeException, bracketOnError, mask, throw, try)
 import Control.Monad.Base (MonadBase(liftBase))
 import Control.Monad.Cleanup (MonadCleanup)
@@ -245,12 +246,18 @@ data ClientServerPair m server client = ClientServerPair
   , runClient :: RunClient m client
   }
 
+newtype ServerException e = ServerException e deriving (Show)
+newtype ClientException e = ClientException e deriving (Show)
+
+instance Exception e => Exception (ServerException e)
+instance Exception e => Exception (ClientException e)
+
 clientServerPair
   :: forall protocol ex server client serverPeer clientPeer m st r
-   . (MonadBaseControl IO m, MonadCleanup m)
+   . (MonadBaseControl IO m, MonadCleanup m, Exception ex)
   => EventBackend m r (AcceptSocketDriverSelector protocol)
   -> EventBackend m r (ConnectSocketDriverSelector protocol)
-  -> (forall x. ex -> m x)
+  -> (forall e x. Exception e => e -> m x)
   -> Codec protocol ex m ByteString
   -> ToPeer server protocol serverPeer st m
   -> ToPeer client protocol clientPeer st m
@@ -258,7 +265,7 @@ clientServerPair
 clientServerPair serverEventBackend clientEventBackend throwImpl codec serverToPeer clientToPeer = do
   serverChannelQueue <- newTQueue
   let
-    acceptRunServer = do
+    acceptRunServer = mask \_ -> do
       (channel, closeAction) <- liftBase $ atomically $ readTQueue serverChannelQueue
       (eventBackend', ref) <- withEvent serverEventBackend Connected \ev -> do
         pure (subEventBackend ServerDriverEvent ev, reference ev)
@@ -272,7 +279,7 @@ clientServerPair serverEventBackend clientEventBackend throwImpl codec serverToP
         withEvent serverEventBackend Disconnected \ev -> do
           addParent ev ref
           liftBase $ atomically closeAction
-          either throw pure result
+          either (throwImpl . ServerException) pure result
     runClient :: RunClient m client
     runClient client = mask \restore -> do
       (ref, (channel, closeAction)) <- withEvent clientEventBackend Connect \ev -> liftBase $ atomically do
@@ -292,7 +299,7 @@ clientServerPair serverEventBackend clientEventBackend throwImpl codec serverToP
       withEvent clientEventBackend Disconnect \ev -> do
         addParent ev ref
         liftBase $ atomically closeAction
-        either throw pure result
+        either (throwImpl . ClientException) pure result
   pure ClientServerPair{..}
 
 

@@ -123,7 +123,9 @@ import Text.Read (readMaybe)
 import UnliftIO (MonadUnliftIO, withRunInIO)
 
 data MarloweRuntime = MarloweRuntime
-  { runDiscoveryQueryClient :: RunClient IO (QueryClient DiscoveryQuery)
+  { runChainSyncQueryClient :: RunClient IO (QueryClient ChainSyncQuery)
+  , runChainSeekClient :: RunClient IO RuntimeChainSeekClient
+  , runDiscoveryQueryClient :: RunClient IO (QueryClient DiscoveryQuery)
   , runDiscoverySyncClient :: RunClient IO MarloweHeaderSyncClient
   , runHistoryJobClient :: RunClient IO (JobClient HistoryCommand)
   , runHistoryQueryClient :: RunClient IO (QueryClient HistoryQuery)
