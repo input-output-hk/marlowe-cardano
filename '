@@ -1,0 +1,187 @@
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE EmptyDataDeriving #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+
+module Test.Integration.Marlowe.Script
+  ( Commands
+  , ContractRef
+  , ContractState(..)
+  , MarloweScript
+  , Party
+  , allocateParty
+  , applyInputs
+  , create
+  , getContract
+  , getContractAllocatedBalance
+  , getContractBalance
+  , getContractDatum
+  , getContractState
+  , getContractTotalBalance
+  , getContracts
+  , getPartyBalance
+  , runMarloweScript
+  , submit
+  , withdraw
+  ) where
+
+import Control.Exception (Exception, throwIO)
+import Control.Monad (when)
+import Control.Monad.Error.Class (MonadError(throwError))
+import Control.Monad.IO.Class (MonadIO)
+import Control.Monad.Reader.Class (asks)
+import Control.Monad.State.Class (gets, modify)
+import Control.Monad.Trans.Except (ExceptT, runExceptT)
+import Control.Monad.Trans.RWS (RWST(..))
+import Data.Foldable (fold)
+import Data.Functor ((<&>))
+import Data.Map (Map)
+import qualified Data.Map as Map
+import Data.Some (Some)
+import Data.Text (Text)
+import Data.Time (UTCTime)
+import qualified Language.Marlowe.Core.V1.Semantics as V1
+import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
+import Language.Marlowe.Runtime.ChainSync.Api (Assets, BlockHeader, TokenName, TransactionMetadata)
+import Language.Marlowe.Runtime.Core.Api
+  (Contract, ContractId, Datum, MarloweVersion(MarloweV1), MarloweVersionTag(..), Redeemer, TransactionScriptOutput(..))
+import Test.Integration.Marlowe.Local hiding (TestnetException(..))
+
+newtype MarloweScript a = MarloweScript
+  { unMarloweScript :: ExceptT ScriptFailure (RWST MarloweRuntime () ScriptState IO) a
+  } deriving newtype (Functor, Applicative, Monad, MonadIO)
+
+data ContractRef v = ContractRef
+  { version :: MarloweVersion v
+  , contractId :: ContractId
+  }
+
+data ContractState v
+  = Closed BlockHeader
+  | Active BlockHeader (TransactionScriptOutput v)
+
+data BuildContract v where
+  BuildV1Contract :: BuildContract 'V1
+
+data BuildApplyInputs v where
+  BuildV1ApplyInputs :: BuildApplyInputs 'V1
+
+data Commands a where
+  CreateCommand :: BuildContract v -> Commands (ContractRef v)
+  ApplyInputsCommand :: ContractRef v -> BuildApplyInputs v -> Commands ()
+  WithdrawCommand :: ContractRef v -> TokenName -> Commands Assets
+  MapCommands :: (a -> b) -> Commands a -> Commands b
+  ApCommands :: Commands (a -> b) -> Commands a -> Commands b
+  PureCommands :: a -> Commands a
+
+instance Functor Commands where
+  fmap = MapCommands
+
+instance Applicative Commands where
+  pure = PureCommands
+  (<*>) = ApCommands
+
+data Party = Party
+  { partyName :: Text
+  , partyWallet :: PaymentKeyPair
+  } deriving (Show, Eq, Ord)
+
+data ScriptFailure
+  = OutOfWallets Text Int
+  deriving (Eq)
+
+instance Show ScriptFailure where
+  show = \case
+    OutOfWallets name maxWallets -> "Unable to allocate party "
+      <> show name
+      <> ", maximum number of wallets reached ("
+      <> show maxWallets
+      <> "). Configure your testnet with more wallets to create more paries."
+
+instance Exception ScriptFailure
+
+newtype ScriptState = ScriptState
+  { partyCount :: Int
+  }
+
+-- Running scripts
+
+runMarloweScript :: MarloweScript a -> MarloweRuntime -> IO a
+runMarloweScript script runtime = do
+  let rwst = runExceptT $ unMarloweScript script
+  (result, _, _) <- runRWST rwst runtime initialState
+  either throwIO pure result
+
+initialState :: ScriptState
+initialState = ScriptState
+  { partyCount = 0
+  }
+
+-- Party management
+
+allocateParty :: Text -> MarloweScript Party
+allocateParty partyName = MarloweScript do
+  ws <- asks $ wallets . testnet
+  count <- gets partyCount
+  when (count >= length ws) $ throwError $ OutOfWallets partyName $ length ws
+  let partyIndex = count + 1
+  modify \s -> s { partyCount = partyIndex }
+  pure Party
+    { partyName
+    , partyWallet = ws !! partyIndex
+    }
+
+-- Running Commands
+
+submit :: Party -> Commands a -> MarloweScript a
+submit = error "not implemented"
+
+create :: BuildContract v -> Commands (ContractRef v)
+create = CreateCommand
+
+applyInputs :: ContractRef v -> BuildApplyInputs v -> Commands ()
+applyInputs = ApplyInputsCommand
+
+withdraw :: ContractRef v -> TokenName -> Commands Assets
+withdraw = WithdrawCommand
+
+-- Querying wallets
+
+getPartyBalance :: Party -> MarloweScript Assets
+getPartyBalance = error "not implemented"
+
+getContracts :: Party -> MarloweScript [Some ContractRef]
+getContracts = error "not implemented"
+
+-- Querying contracts
+
+getContractState :: ContractRef v -> MarloweScript (ContractState v)
+getContractState = error "not implemented"
+
+getContractAllocatedBalance :: ContractRef v -> MarloweScript (Map Party Assets)
+getContractAllocatedBalance = error "not implemented"
+
+getContractBalance :: Party -> ContractRef v -> MarloweScript Assets
+getContractBalance party = fmap (fold . Map.lookup party) . getContractAllocatedBalance
+
+getContractTotalBalance :: ContractRef v -> MarloweScript Assets
+getContractTotalBalance ref = getContractState ref <&> \case
+  Closed _ -> mempty
+  Active _ TransactionScriptOutput{..} -> assets
+
+getContract :: ContractRef v -> MarloweScript (Contract v)
+getContract ref = getContractState ref <&> \case
+  Closed _ -> case version ref of
+    MarloweV1 -> V1.Close
+  Active _ TransactionScriptOutput{..} -> case version ref of
+    MarloweV1 -> V1.marloweContract datum
+
+getContractDatum :: ContractRef v -> MarloweScript (Maybe (Datum v))
+getContractDatum ref = getContractState ref <&> \case
+  Closed _ -> Nothing
+  Active _ TransactionScriptOutput{..} -> Just datum
+
+getContractLastUpdateBlock :: ContractRef v -> MarloweScript BlockHeader
+getContractLastUpdateBlock ref = getContractState ref <&> \case
+  Closed block -> block
+  Active block _ -> block

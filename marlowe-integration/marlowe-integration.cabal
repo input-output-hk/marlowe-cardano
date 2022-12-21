@@ -49,6 +49,7 @@ library
   exposed-modules:
     Test.Integration.Marlowe
     Test.Integration.Marlowe.Local
+    Test.Integration.Marlowe.Script
   build-depends:
       base >= 4.9 && < 5
     , aeson
@@ -66,6 +67,7 @@ library
     , hasql-pool
     , lifted-async
     , marlowe-cli
+    , marlowe
     , marlowe-chain-sync
     , marlowe-chain-sync:chain-indexer
     , marlowe-chain-sync:libchainseek
@@ -77,10 +79,14 @@ library
     , marlowe-runtime:history-api
     , marlowe-runtime:tx
     , marlowe-runtime:tx-api
+    , mtl
     , ouroboros-network
+    , plutus-ledger-api
+    , plutus-script-utils
     , postgresql-libpq
     , process
     , resourcet
+    , some
     , stm
     , text
     , time

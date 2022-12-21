@@ -7,6 +7,7 @@
 
 module Test.Integration.Marlowe.Local
   ( MarloweRuntime(..)
+  , MarloweRuntimeOptions(..)
   , module Test.Integration.Cardano
   , defaultMarloweRuntimeOptions
   , withLocalMarloweRuntime
