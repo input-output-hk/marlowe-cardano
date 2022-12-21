@@ -199,8 +199,11 @@ spec = do
       -- - If it's selecting collat that has a native token, that's failure, not supposed to do that
 
       marloweContext <- genSimpleMarloweContext marloweVersion constraints
+
+      -- We MUST dictate the distribution of wallet context assets, default
+      -- generation only tests with empty wallets!
       maxLovelace <- choose (0, 40_000_000)
-      walletContext <- genSimpleWalletContext marloweVersion constraints maxLovelace
+      walletContext <- genWalletWithAsset marloweVersion constraints maxLovelace
 
       let
         chAddress :: AddressInEra BabbageEra
@@ -345,8 +348,8 @@ genAdaOnlyAssets maxLovelace = Chain.Assets
 --   availableUtxos = A single ADA-only Utxo
 --   collateralUtxos = A set containing the one Utxo from above
 --   changeAddress = any valid address
-genSimpleWalletContext :: MarloweVersion v -> TxConstraints v -> Integer -> Gen WalletContext
-genSimpleWalletContext marloweVersion constraints minLovelace = do
+genWalletWithAsset :: MarloweVersion v -> TxConstraints v -> Integer -> Gen WalletContext
+genWalletWithAsset marloweVersion constraints minLovelace = do
   wc <- genWalletContext marloweVersion constraints
   txOutRef <- genTxOutRef
   stubAddress <- genAddress
