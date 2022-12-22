@@ -327,6 +327,68 @@ spec = do
         (False, Left selFailedMsg) -> label "Wallet does not have funds, selection failed"
           $ selFailedMsg `shouldSatisfy` isPrefixOf "CoinSelectionFailed"
 
+    prop "selectCoins should increase the number of outputs by either 0 or exactly 1" \(SomeTxConstraints marloweVersion constraints) -> do
+      marloweContext <- genSimpleMarloweContext marloweVersion constraints
+
+      let
+        -- Generate a wallet that always has a pure ADA value of 7 and a value
+        -- with a minimum ADA plus zero or more "nuisance" tokens
+        genWalletWithNuisance :: MarloweVersion v -> TxConstraints v -> Word64 -> Gen WalletContext
+        genWalletWithNuisance marloweVersion' constraints' minLovelace = do
+          wc <- genWalletContext marloweVersion' constraints'
+          adaTxOutRef <- genTxOutRef
+          nuisTxOutRef <- genTxOutRef
+          someAddress <- genAddress
+          let lovelaceToAdd = Chain.Assets (Chain.Lovelace minLovelace) (Chain.Tokens Map.empty)
+          nuisAssets <- (lovelaceToAdd <>) <$> genOutAssets
+          let
+            adaAssets = Chain.Assets (Chain.Lovelace 7_000_000) (Chain.Tokens Map.empty)
+            adaTxOut = Chain.TransactionOutput someAddress adaAssets Nothing Nothing
+            nuisTxOut = Chain.TransactionOutput someAddress nuisAssets Nothing Nothing
+            utxos = Chain.UTxOs $ Map.fromList [(adaTxOutRef, adaTxOut), (nuisTxOutRef, nuisTxOut)]
+          pure $ wc { availableUtxos = utxos, collateralUtxos = Set.singleton adaTxOutRef }
+
+      -- Generate wallet contexts with and without nuisance tokens
+      walletContext <- genWalletWithNuisance marloweVersion constraints 1_000_000_000
+
+      -- Simulate constraints specifying the tx must cover a 500ADA output
+      -- after coin selection. This exists to force selection to consume the
+      -- 1000ADA input in the wallet (above).
+      txBodyContentBefore <- do
+        addr <- hedgehog $ AddressInEra (ShelleyAddressInEra ShelleyBasedEraBabbage) <$> genAddressShelley
+        pure $ emptyTxBodyContent { txOuts =
+          [ TxOut
+              addr
+              (lovelaceToTxOutValue $ Lovelace 500_000_000)
+              TxOutDatumNone
+              ReferenceScriptNone
+          ] }
+
+      let
+        -- Get a non-ADA asset count from a wallet context
+        nonAdaCountWalletCtx :: WalletContext -> Int
+        nonAdaCountWalletCtx = length . filter (not . Map.null)
+          . map (Chain.unTokens . Chain.tokens . Chain.assets . Chain.transactionOutput)
+          . Chain.toUTxOsList . availableUtxos
+
+        -- Function to convert the Left side of the Either from (ConstraintError v) to String
+        selectResult :: Either String (TxBodyContent BuildTx BabbageEra)
+        selectResult = either
+          (\ce -> case marloweVersion of MarloweV1 -> Left . show $ ce)
+          Right
+          $ selectCoins protocolTestnet marloweVersion marloweContext
+              walletContext txBodyContentBefore
+
+      pure $ case selectResult of
+        Right txBodyContentAfter -> do
+          let
+            txOutsBefore = length . txOuts $ txBodyContentBefore
+            txOutsAfter = length . txOuts $ txBodyContentAfter
+            walletCt = nonAdaCountWalletCtx walletContext
+          label (printf "outputs: wallet %d, tx before %d, tx after %d" walletCt txOutsBefore txOutsAfter)
+            $ txOutsAfter `shouldBe` (txOutsBefore + walletCt)
+        Left selFailedMsg -> counterexample ("selection failed: " <> selFailedMsg) False
+
 -- A simple Marlowe context with no assets to spend
 genSimpleMarloweContext :: MarloweVersion v -> TxConstraints v -> Gen (MarloweContext w)
 genSimpleMarloweContext marloweVersion constraints = do
