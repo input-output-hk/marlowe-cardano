@@ -47,12 +47,12 @@ import Control.Concurrent.Async (race_)
 import Control.Concurrent.Async.Lifted (Concurrently(..))
 import Control.Concurrent.Component
 import Control.Concurrent.STM (STM, atomically)
-import Control.Exception (throwIO)
+import Control.Exception (onException, throwIO)
 import Control.Monad ((<=<))
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Except (runExceptT)
 import Control.Monad.Trans.Reader (runReaderT)
-import Control.Monad.Trans.Resource (allocate, runResourceT)
+import Control.Monad.Trans.Resource (allocate, runResourceT, unprotect)
 import Data.Aeson (eitherDecodeFileStrict)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as BS
@@ -204,7 +204,7 @@ withLocalMarloweRuntime' MarloweRuntimeOptions{..} test = withRunInIO \runInIO -
     let localNodeSocketPath = SpoNode.socket . head $ spoNodes
     let localNodeConnectInfo = LocalNodeConnectInfo{..}
     marloweScripts <- liftIO $ publishCurrentScripts testnet localNodeConnectInfo
-    (_, dbName) <- allocate (createDatabase workspace) cleanupDatabase
+    (dbReleaseKey, dbName) <- allocate (createDatabase workspace) cleanupDatabase
     liftIO $ migrateDatabase dbName
     let connectionString = settings databaseHost databasePort databaseUser databasePassword dbName
     let acquirePool = Pool.acquire (100, secondsToNominalDiffTime 5, connectionString)
@@ -249,9 +249,12 @@ withLocalMarloweRuntime' MarloweRuntimeOptions{..} test = withRunInIO \runInIO -
         ChainSync.databaseQueries
 
     let mkSubmitJob = Submit.mkSubmitJob SubmitJobDependencies{..}
-    liftIO $ runComponent_ runtime RuntimeDependencies{..}
-      `race_` runLogger
-      `race_` runInIO (test MarloweRuntime{..})
+    liftIO $ onException
+      ( runComponent_ runtime RuntimeDependencies{..}
+        `race_` runLogger
+        `race_` runInIO (test MarloweRuntime{..})
+      )
+      (unprotect dbReleaseKey)
   where
     rootConnectionString = settings databaseHost databasePort databaseUser databasePassword tempDatabase
 
