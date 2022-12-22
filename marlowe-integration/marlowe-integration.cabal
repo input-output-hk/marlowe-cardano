@@ -51,6 +51,7 @@ library
     Test.Integration.Marlowe.Local
   build-depends:
       base >= 4.9 && < 5
+    , aeson
     , async
     , async-components
     , bytestring
@@ -58,15 +59,18 @@ library
     , cardano-crypto-wrapper
     , cardano-integration
     , cardano-ledger-byron
+    , containers
     , eventuo11y
     , eventuo11y-extras
     , hasql
     , hasql-pool
     , lifted-async
+    , marlowe-cli
     , marlowe-chain-sync
     , marlowe-chain-sync:chain-indexer
     , marlowe-chain-sync:libchainseek
     , marlowe-protocols
+    , marlowe-runtime
     , marlowe-runtime:discovery
     , marlowe-runtime:discovery-api
     , marlowe-runtime:history

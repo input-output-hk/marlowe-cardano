@@ -20,7 +20,7 @@ import qualified Language.Marlowe.Core.V1.Semantics as V1
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Core.Api
   (ContractId(..), MarloweVersion(..), SomeMarloweVersion(..), fromChainDatum, withSomeMarloweVersion)
-import Language.Marlowe.Runtime.Core.ScriptRegistry (MarloweScripts(..), getMarloweVersion, getScripts)
+import Language.Marlowe.Runtime.Core.ScriptRegistry (MarloweScripts(..))
 import Language.Marlowe.Runtime.Discovery.Api (ContractHeader(..))
 import Network.Protocol.Driver (RunClient)
 import qualified Plutus.V1.Ledger.Api as P
@@ -55,8 +55,10 @@ applyRollback (Chain.At blockHeader@Chain.BlockHeader{slotNo}) Changes{..} = Cha
     headers' = Map.filterWithKey (const . isNotRolledBack) headers
     isNotRolledBack = not . Chain.isAfter slotNo
 
-newtype DiscoveryChainClientDependencies = DiscoveryChainClientDependencies
+data DiscoveryChainClientDependencies = DiscoveryChainClientDependencies
   { connectToChainSeek :: RunClient IO Chain.RuntimeChainSeekClient
+  , getMarloweVersion :: Chain.ScriptHash -> Maybe (SomeMarloweVersion, MarloweScripts)
+  , getScripts :: forall v. MarloweVersion v -> Set MarloweScripts
   }
 
 discoveryChainClient :: Component IO DiscoveryChainClientDependencies (STM Changes)
@@ -75,7 +77,7 @@ discoveryChainClient = component \DiscoveryChainClientDependencies{..} -> do
       }
 
     clientIdle = Chain.SendMsgQueryNext
-      (Chain.FindTxsTo $ Set.map Chain.ScriptCredential marloweScriptHashes)
+      (Chain.FindTxsTo $ Set.map Chain.ScriptCredential $ marloweScriptHashes getScripts)
       clientNext
 
     clientNext = Chain.ClientStNext
@@ -83,7 +85,7 @@ discoveryChainClient = component \DiscoveryChainClientDependencies{..} -> do
       , recvMsgRollForward = \txs -> \case
           Chain.Genesis -> error "Roll forward to Genesis"
           Chain.At block -> \_ -> do
-            atomically $ for_ (fmap fold $ crosswalk (extractHeaders block) $ Set.toList txs) \headers ->
+            atomically $ for_ (fmap fold $ crosswalk (extractHeaders getMarloweVersion getScripts block) $ Set.toList txs) \headers ->
               modifyTVar changesVar (<> mempty { headers = Map.singleton block headers})
             pure clientIdle
       , recvMsgRollBackward = \point _ -> do
@@ -100,12 +102,17 @@ discoveryChainClient = component \DiscoveryChainClientDependencies{..} -> do
         pure changes
     )
 
-extractHeaders :: Chain.BlockHeader -> Chain.Transaction -> Maybe (Set ContractHeader)
-extractHeaders blockHeader Chain.Transaction{..} =
+extractHeaders
+  :: (Chain.ScriptHash -> Maybe (SomeMarloweVersion, MarloweScripts))
+  -> (forall v. MarloweVersion v -> Set MarloweScripts)
+  -> Chain.BlockHeader
+  -> Chain.Transaction
+  -> Maybe (Set ContractHeader)
+extractHeaders getMarloweVersion getScripts blockHeader Chain.Transaction{..} =
   Set.fromList <$> crosswalk (uncurry extractHeader) (zip [0..] outputs)
   where
     isMarloweAddress address = case Chain.paymentCredential address of
-      Just (Chain.ScriptCredential hash) -> Set.member hash marloweScriptHashes
+      Just (Chain.ScriptCredential hash) -> Set.member hash $ marloweScriptHashes getScripts
       _ -> False
     isMarloweInput Chain.TransactionInput{address} = isMarloweAddress address
     hasMarloweInput = any isMarloweInput inputs
@@ -135,5 +142,5 @@ extractHeaders blockHeader Chain.Transaction{..} =
         , blockHeader
         }
 
-marloweScriptHashes :: Set Chain.ScriptHash
-marloweScriptHashes = Set.map marloweScript $ foldMap (withSomeMarloweVersion getScripts) [minBound..maxBound]
+marloweScriptHashes :: (forall v. MarloweVersion v -> Set MarloweScripts) -> Set Chain.ScriptHash
+marloweScriptHashes getScripts = Set.map marloweScript $ foldMap (withSomeMarloweVersion getScripts) [minBound..maxBound]

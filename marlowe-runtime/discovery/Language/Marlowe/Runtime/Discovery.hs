@@ -5,7 +5,10 @@ module Language.Marlowe.Runtime.Discovery
   where
 
 import Control.Concurrent.Component
+import Data.Set (Set)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
+import Language.Marlowe.Runtime.Core.Api (MarloweVersion, SomeMarloweVersion)
+import Language.Marlowe.Runtime.Core.ScriptRegistry (MarloweScripts)
 import Language.Marlowe.Runtime.Discovery.Chain
 import Language.Marlowe.Runtime.Discovery.QueryServer
 import Language.Marlowe.Runtime.Discovery.Store
@@ -18,6 +21,8 @@ data DiscoveryDependencies = DiscoveryDependencies
   , acceptRunQueryServer :: IO (RunQueryServer IO)
   , connectToChainSeek :: RunClient IO Chain.RuntimeChainSeekClient
   , pageSize :: Natural
+  , getMarloweVersion :: Chain.ScriptHash -> Maybe (SomeMarloweVersion, MarloweScripts)
+  , getScripts :: forall v. MarloweVersion v -> Set MarloweScripts
   }
 
 discovery :: Component IO DiscoveryDependencies ()

@@ -13,21 +13,27 @@ module Test.Integration.Marlowe.Local
   ) where
 
 import Cardano.Api
-  ( BabbageEra
+  ( AsType(..)
+  , BabbageEra
   , CardanoEra(..)
   , CardanoMode
   , ChainPoint
-  , ConsensusModeParams(CardanoModeParams)
-  , EpochSlots(EpochSlots)
+  , ConsensusModeParams(..)
+  , EpochSlots(..)
   , EraInMode(..)
   , LocalNodeConnectInfo(..)
   , NetworkId(..)
   , NetworkMagic(..)
   , QueryInMode
+  , ScriptDataSupportedInEra(ScriptDataInBabbageEra)
+  , StakeAddressReference(..)
   , Tx
   , TxInMode(..)
   , TxValidationErrorInMode
+  , deserialiseFromBech32
+  , deserialiseFromTextEnvelope
   , queryNodeLocalState
+  , shelleyAddressInEra
   )
 import qualified Cardano.Api as Cardano
 import qualified Cardano.Api.Byron as Byron
@@ -43,12 +49,19 @@ import Control.Exception (throwIO)
 import Control.Monad ((<=<))
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Except (runExceptT)
+import Control.Monad.Trans.Reader (runReaderT)
 import Control.Monad.Trans.Resource (allocate, runResourceT)
+import Data.Aeson (eitherDecodeFileStrict)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as BS
 import Data.Either (fromRight)
-import Data.Maybe (fromMaybe)
+import Data.Functor (void)
+import qualified Data.Map as Map
+import Data.Maybe (fromJust, fromMaybe)
+import Data.Set (Set)
+import qualified Data.Set as Set
 import Data.String (fromString)
+import qualified Data.Text as T
 import qualified Data.Text.Lazy.IO as TL
 import Data.Time.Clock (secondsToNominalDiffTime)
 import Data.UUID.V4 (nextRandom)
@@ -57,6 +70,17 @@ import Data.Word (Word16)
 import Database.PostgreSQL.LibPQ (connectdb, errorMessage, exec, finish, resultErrorMessage)
 import Hasql.Connection (settings)
 import qualified Hasql.Pool as Pool
+import Language.Marlowe.CLI.Transaction (buildPublishingImpl, submitBody)
+import Language.Marlowe.CLI.Types
+  ( CliEnv(..)
+  , MarlowePlutusVersion
+  , PrintStats(..)
+  , PublishMarloweScripts(..)
+  , PublishScript(..)
+  , PublishingStrategy(..)
+  , ValidatorInfo(..)
+  , defaultCoinSelectionStrategy
+  )
 import Language.Marlowe.Protocol.HeaderSync.Client (MarloweHeaderSyncClient, marloweHeaderSyncClientPeer)
 import Language.Marlowe.Protocol.HeaderSync.Codec (codecMarloweHeaderSync)
 import Language.Marlowe.Protocol.HeaderSync.Server (MarloweHeaderSyncServer, marloweHeaderSyncServerPeer)
@@ -65,6 +89,8 @@ import Language.Marlowe.Protocol.Sync.Client (MarloweSyncClient, marloweSyncClie
 import Language.Marlowe.Protocol.Sync.Codec (codecMarloweSync)
 import Language.Marlowe.Protocol.Sync.Server (MarloweSyncServer, marloweSyncServerPeer)
 import Language.Marlowe.Protocol.Sync.Types (MarloweSync)
+import Language.Marlowe.Runtime.Cardano.Api
+  (fromCardanoAddressInEra, fromCardanoLovelace, fromCardanoScriptHash, fromCardanoTxIn)
 import Language.Marlowe.Runtime.ChainIndexer
   (ChainIndexerDependencies(..), ChainIndexerSelector, chainIndexer, getChainIndexerSelectorConfig)
 import qualified Language.Marlowe.Runtime.ChainIndexer.Database as ChainIndexer
@@ -73,15 +99,19 @@ import Language.Marlowe.Runtime.ChainIndexer.Genesis (GenesisBlock, computeByron
 import Language.Marlowe.Runtime.ChainIndexer.NodeClient (CostModel(CostModel))
 import Language.Marlowe.Runtime.ChainSync (ChainSyncDependencies(..), chainSync)
 import Language.Marlowe.Runtime.ChainSync.Api
-  ( ChainSyncCommand
-  , ChainSyncQuery(GetUTxOs)
+  ( Assets(..)
+  , ChainSyncCommand
+  , ChainSyncQuery(..)
   , RuntimeChainSeek
   , RuntimeChainSeekClient
   , RuntimeChainSeekServer
-  , WithGenesis(Genesis)
+  , TransactionOutput(..)
+  , WithGenesis(..)
   )
 import qualified Language.Marlowe.Runtime.ChainSync.Database as ChainSync
 import qualified Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL as ChainSync
+import Language.Marlowe.Runtime.Core.Api (MarloweVersion(..), SomeMarloweVersion(..))
+import Language.Marlowe.Runtime.Core.ScriptRegistry (MarloweScripts(..), ReferenceScriptUtxo(..))
 import Language.Marlowe.Runtime.Discovery
 import Language.Marlowe.Runtime.Discovery.Api (DiscoveryQuery)
 import Language.Marlowe.Runtime.History
@@ -166,6 +196,11 @@ withLocalMarloweRuntime test = do
 withLocalMarloweRuntime' :: MonadUnliftIO m => MarloweRuntimeOptions -> (MarloweRuntime -> m ()) -> m ()
 withLocalMarloweRuntime' MarloweRuntimeOptions{..} test = withRunInIO \runInIO ->
   withLocalTestnet' localTestnetOptions \testnet@LocalTestnet{..} -> runResourceT do
+    let localConsensusModeParams = CardanoModeParams $ EpochSlots 500
+    let localNodeNetworkId = Testnet $ NetworkMagic $ fromIntegral testnetMagic
+    let localNodeSocketPath = SpoNode.socket . head $ spoNodes
+    let localNodeConnectInfo = LocalNodeConnectInfo{..}
+    marloweScripts <- liftIO $ publishCurrentScripts testnet localNodeConnectInfo
     (_, dbName) <- allocate (createDatabase workspace) cleanupDatabase
     liftIO $ migrateDatabase dbName
     let connectionString = settings databaseHost databasePort databaseUser databasePassword dbName
@@ -183,10 +218,6 @@ withLocalMarloweRuntime' MarloweRuntimeOptions{..} test = withRunInIO \runInIO -
       }
     Channels{..} <- liftIO $ atomically $ setupChannels rootEventBackend
     historyQueries <- liftIO $ hoistHistoryQueries atomically <$> atomically mkHistoryQueriesInMemory
-    let localConsensusModeParams = CardanoModeParams $ EpochSlots 500
-    let localNodeNetworkId = Testnet $ NetworkMagic $ fromIntegral testnetMagic
-    let localNodeSocketPath = SpoNode.socket . head $ spoNodes
-    let localNodeConnectInfo = LocalNodeConnectInfo{..}
     genesisConfigResult <- runExceptT . Byron.readGenesisData $ byronGenesisJson network
     (genesisData, genesisHash) <- case genesisConfigResult of
       Left e -> fail $ show e
@@ -259,6 +290,73 @@ withLocalMarloweRuntime' MarloweRuntimeOptions{..} test = withRunInIO \runInIO -
         ExitFailure _ -> fail $ "sqitch failed: \n" <> stderr
         ExitSuccess -> pure ()
 
+publishCurrentScripts :: LocalTestnet -> LocalNodeConnectInfo CardanoMode -> IO MarloweScripts
+publishCurrentScripts LocalTestnet{..} localNodeConnectInfo = do
+  let Delegator{..} = head delegators
+  let PaymentKeyPair{..} = paymentKeyPair
+  let StakingKeyPair{..} = stakingKeyPair
+  signingKey <- Left
+      . either (error . show) id
+      . deserialiseFromTextEnvelope (AsSigningKey AsPaymentKey)
+      . either error id
+    <$> eitherDecodeFileStrict paymentSKey
+  changeAddress <-
+    either (error . show) shelleyAddressInEra
+        . deserialiseFromBech32 (AsAddress AsShelleyAddr)
+        . T.pack
+      <$> execCli
+        [ "address", "build"
+        , "--payment-verification-key-file", paymentVKey
+        , "--stake-verification-key-file", stakingVKey
+        , "--testnet-magic", show testnetMagic
+        ]
+  let publishingStrategy = PublishPermanently NoStakeAddress
+  let coinSelectionStrategy = defaultCoinSelectionStrategy
+  publishScripts <- either throwIO pure =<< runExceptT do
+    flip runReaderT (CliEnv ScriptDataInBabbageEra) do
+      (txBody, publishScripts) <- buildPublishingImpl
+        localNodeConnectInfo
+        signingKey
+        Nothing
+        changeAddress
+        publishingStrategy
+        coinSelectionStrategy
+        (PrintStats False)
+      void $ submitBody localNodeConnectInfo txBody [signingKey] 30
+      pure publishScripts
+  pure $ toMarloweScripts testnetMagic publishScripts
+
+toMarloweScripts :: Int -> PublishMarloweScripts MarlowePlutusVersion BabbageEra -> MarloweScripts
+toMarloweScripts testnetMagic PublishMarloweScripts{..} = MarloweScripts{..}
+  where
+    marloweValidatorInfo = psReferenceValidator pmsMarloweScript
+    payoutValidatorInfo = psReferenceValidator pmsRolePayoutScript
+    marloweScript = fromCardanoScriptHash $ viHash marloweValidatorInfo
+    payoutScript = fromCardanoScriptHash $ viHash payoutValidatorInfo
+    networkId = Testnet $ NetworkMagic $ fromIntegral testnetMagic
+    marloweReferenceScriptUTxO = ReferenceScriptUtxo
+      { txOutRef = fromCardanoTxIn $ fromJust $ viTxIn marloweValidatorInfo
+      , txOut = TransactionOutput
+        { address = fromCardanoAddressInEra BabbageEra $ psPublisher pmsMarloweScript
+        , assets = Assets (fromCardanoLovelace $ psMinAda pmsMarloweScript) mempty
+        , datumHash = Nothing
+        , datum = Nothing
+        }
+      , script = viScript marloweValidatorInfo
+      }
+    payoutReferenceScriptUTxO = ReferenceScriptUtxo
+      { txOutRef = fromCardanoTxIn $ fromJust $ viTxIn payoutValidatorInfo
+      , txOut = TransactionOutput
+        { address = fromCardanoAddressInEra BabbageEra $ psPublisher pmsRolePayoutScript
+        , assets = Assets (fromCardanoLovelace $ psMinAda pmsRolePayoutScript) mempty
+        , datumHash = Nothing
+        , datum = Nothing
+        }
+      , script = viScript payoutValidatorInfo
+      }
+    marloweScriptUTxOs = Map.singleton networkId marloweReferenceScriptUTxO
+    payoutScriptUTxOs = Map.singleton networkId payoutReferenceScriptUTxO
+
 data RuntimeSelector f where
   ChainSeekClientEvent :: ConnectSocketDriverSelector RuntimeChainSeek f -> RuntimeSelector f
   ChainSeekServerEvent :: AcceptSocketDriverSelector RuntimeChainSeek f -> RuntimeSelector f
@@ -303,6 +401,7 @@ data RuntimeDependencies r = RuntimeDependencies
   , runChainSyncJobClient :: RunClient IO (JobClient ChainSyncCommand)
   , runChainSyncQueryClient :: RunClient IO (QueryClient ChainSyncQuery)
   , securityParameter :: Int
+  , marloweScripts :: MarloweScripts
   }
 
 waitUntilReady :: Component IO a b -> Component IO (STM (), a) b
@@ -315,6 +414,18 @@ runtime = proc RuntimeDependencies{..} -> do
   let
     connectToChainSeek :: RunClient IO RuntimeChainSeekClient
     connectToChainSeek = runChainSeekClient
+
+    MarloweScripts{..} = marloweScripts
+
+    getMarloweVersion scriptHash
+      | scriptHash == marloweScript = Just (SomeMarloweVersion MarloweV1, marloweScripts)
+      | otherwise = Nothing
+
+    getScripts :: MarloweVersion v -> Set MarloweScripts
+    getScripts MarloweV1 = Set.singleton marloweScripts
+
+    getCurrentScripts :: MarloweVersion v -> MarloweScripts
+    getCurrentScripts MarloweV1 = marloweScripts
 
     LocalNodeConnectInfo{..} = localNodeConnectInfo
 
@@ -384,7 +495,7 @@ runtime = proc RuntimeDependencies{..} -> do
       networkId = localNodeNetworkId
 
       loadMarloweContext :: LoadMarloweContext r
-      loadMarloweContext = Query.loadMarloweContext networkId connectToChainSeek runChainSyncQueryClient
+      loadMarloweContext = Query.loadMarloweContext getScripts networkId connectToChainSeek runChainSyncQueryClient
 
       eventBackend = narrowEventBackend TxEvent rootEventBackend
     in

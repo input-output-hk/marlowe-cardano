@@ -64,8 +64,7 @@ import Language.Marlowe.Runtime.Core.Api
   , TransactionScriptOutput(..)
   , withMarloweVersion
   )
-import Language.Marlowe.Runtime.Core.ScriptRegistry (marloweScript)
-import qualified Language.Marlowe.Runtime.Core.ScriptRegistry as Registry
+import Language.Marlowe.Runtime.Core.ScriptRegistry (MarloweScripts(..))
 import Language.Marlowe.Runtime.Transaction.Api
   ( ApplyInputsError(..)
   , ContractCreated(..)
@@ -127,6 +126,7 @@ data TransactionServerDependencies r = TransactionServerDependencies
   , queryChainSync :: forall e a. ChainSyncQuery Void e a -> IO a
   , getTip :: STM Chain.ChainPoint
   , eventBackend :: EventBackend IO r TransactionServerSelector
+  , getCurrentScripts :: forall v. MarloweVersion v -> MarloweScripts
   }
 
 transactionServer :: Component IO (TransactionServerDependencies r) ()
@@ -149,6 +149,7 @@ data WorkerDependencies r = WorkerDependencies
   , queryChainSync :: forall e a. ChainSyncQuery Void e a -> IO a
   , getTip :: STM Chain.ChainPoint
   , eventBackend :: EventBackend IO r TransactionServerSelector
+  , getCurrentScripts :: forall v. MarloweVersion v -> MarloweScripts
   }
 
 worker :: Component IO (WorkerDependencies r) ()
@@ -182,6 +183,7 @@ worker = component_ \WorkerDependencies{..} -> do
           case command of
             Create mStakeCredential version addresses roles metadata minAda contract ->
               withSubEvent ev ExecCreate \ev' -> execCreate
+                getCurrentScripts
                 ev'
                 solveConstraints
                 loadWalletContext
@@ -234,7 +236,8 @@ attachSubmit jobId getSubmitJob =
   liftIO $ atomically $ fmap (hoistAttach $ liftIO . atomically) <$> submitJobServerAttach jobId =<< getSubmitJob
 
 execCreate
-  :: Event IO r TransactionServerSelector BuildTxField
+  :: (MarloweVersion v -> MarloweScripts)
+  -> Event IO r TransactionServerSelector BuildTxField
   -> SolveConstraints
   -> LoadWalletContext r
   -> NetworkId
@@ -246,13 +249,13 @@ execCreate
   -> Chain.Lovelace
   -> Contract v
   -> IO (ServerStCmd MarloweTxCommand Void (CreateError v) (ContractCreated BabbageEra v) IO ())
-execCreate ev solveConstraints loadWalletContext networkId mStakeCredential version addresses roleTokens metadata minAda contract = execExceptT do
+execCreate getCurrentScripts ev solveConstraints loadWalletContext networkId mStakeCredential version addresses roleTokens metadata minAda contract = execExceptT do
   walletContext <- liftIO $ loadWalletContext (subEventBackend LoadWalletContext ev) addresses
   mCardanoStakeCredential <- except $ traverse (note CreateToCardanoError . toCardanoStakeCredential) mStakeCredential
   ((datum, assets, rolesCurrency), constraints) <- except
     $ buildCreateConstraints version walletContext roleTokens metadata minAda contract
   let
-    scripts@Registry.MarloweScripts{..} = Registry.getCurrentScripts version
+    scripts@MarloweScripts{..} = getCurrentScripts version
     stakeReference = maybe NoStakeAddress StakeAddressByValue mCardanoStakeCredential
     marloweAddress = fromCardanoAddressInEra BabbageEra
       $ AddressInEra (ShelleyAddressInEra ShelleyBasedEraBabbage)

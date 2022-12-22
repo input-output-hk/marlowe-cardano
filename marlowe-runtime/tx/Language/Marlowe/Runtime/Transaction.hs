@@ -14,6 +14,7 @@ import Data.Text (Text)
 import Data.Void
 import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncQuery, RuntimeChainSeekClient)
 import Language.Marlowe.Runtime.Core.Api (MarloweVersion(..))
+import Language.Marlowe.Runtime.Core.ScriptRegistry (MarloweScripts)
 import Language.Marlowe.Runtime.Transaction.Chain
 import Language.Marlowe.Runtime.Transaction.Query (LoadMarloweContext, LoadWalletContext)
 import qualified Language.Marlowe.Runtime.Transaction.Query as Q
@@ -39,6 +40,7 @@ data TransactionDependencies r = TransactionDependencies
   , loadMarloweContext :: LoadMarloweContext r
   , queryChainSync :: forall e a. ChainSyncQuery Void e a -> IO a
   , eventBackend :: EventBackend IO r TransactionServerSelector
+  , getCurrentScripts :: forall v. MarloweVersion v -> MarloweScripts
   }
 
 transaction :: Component IO (TransactionDependencies r) ()
