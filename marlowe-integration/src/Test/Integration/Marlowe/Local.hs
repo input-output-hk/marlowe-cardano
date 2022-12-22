@@ -28,10 +28,12 @@ import Cardano.Api
   , ScriptDataSupportedInEra(ScriptDataInBabbageEra)
   , StakeAddressReference(..)
   , Tx
+  , TxBody
   , TxInMode(..)
   , TxValidationErrorInMode
   , deserialiseFromBech32
   , deserialiseFromTextEnvelope
+  , getTxId
   , queryNodeLocalState
   , shelleyAddressInEra
   )
@@ -57,7 +59,7 @@ import qualified Data.ByteString.Char8 as BS
 import Data.Either (fromRight)
 import Data.Functor (void)
 import qualified Data.Map as Map
-import Data.Maybe (fromJust, fromMaybe)
+import Data.Maybe (fromMaybe)
 import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.String (fromString)
@@ -106,6 +108,7 @@ import Language.Marlowe.Runtime.ChainSync.Api
   , RuntimeChainSeekClient
   , RuntimeChainSeekServer
   , TransactionOutput(..)
+  , TxOutRef(TxOutRef)
   , WithGenesis(..)
   )
 import qualified Language.Marlowe.Runtime.ChainSync.Database as ChainSync
@@ -314,7 +317,7 @@ publishCurrentScripts LocalTestnet{..} localNodeConnectInfo = do
         ]
   let publishingStrategy = PublishPermanently NoStakeAddress
   let coinSelectionStrategy = defaultCoinSelectionStrategy
-  publishScripts <- either throwIO pure =<< runExceptT do
+  either throwIO pure =<< runExceptT do
     flip runReaderT (CliEnv ScriptDataInBabbageEra) do
       (txBody, publishScripts) <- buildPublishingImpl
         localNodeConnectInfo
@@ -325,19 +328,21 @@ publishCurrentScripts LocalTestnet{..} localNodeConnectInfo = do
         coinSelectionStrategy
         (PrintStats False)
       void $ submitBody localNodeConnectInfo txBody [signingKey] 30
-      pure publishScripts
-  pure $ toMarloweScripts testnetMagic publishScripts
+      pure $ toMarloweScripts testnetMagic txBody publishScripts
 
-toMarloweScripts :: Int -> PublishMarloweScripts MarlowePlutusVersion BabbageEra -> MarloweScripts
-toMarloweScripts testnetMagic PublishMarloweScripts{..} = MarloweScripts{..}
+toMarloweScripts :: Int -> TxBody BabbageEra -> PublishMarloweScripts MarlowePlutusVersion BabbageEra -> MarloweScripts
+toMarloweScripts testnetMagic txBody PublishMarloweScripts{..} = MarloweScripts{..}
   where
     marloweValidatorInfo = psReferenceValidator pmsMarloweScript
     payoutValidatorInfo = psReferenceValidator pmsRolePayoutScript
     marloweScript = fromCardanoScriptHash $ viHash marloweValidatorInfo
     payoutScript = fromCardanoScriptHash $ viHash payoutValidatorInfo
     networkId = Testnet $ NetworkMagic $ fromIntegral testnetMagic
+    publishTxId = fromCardanoTxId $ getTxId txBody
+    marloweTxOutRef = TxOutRef publishTxId 1
+    payoutTxOutRef = TxOutRef publishTxId 2
     marloweReferenceScriptUTxO = ReferenceScriptUtxo
-      { txOutRef = fromCardanoTxIn $ fromJust $ viTxIn marloweValidatorInfo
+      { txOutRef = marloweTxOutRef
       , txOut = TransactionOutput
         { address = fromCardanoAddressInEra BabbageEra $ psPublisher pmsMarloweScript
         , assets = Assets (fromCardanoLovelace $ psMinAda pmsMarloweScript) mempty
@@ -347,7 +352,7 @@ toMarloweScripts testnetMagic PublishMarloweScripts{..} = MarloweScripts{..}
       , script = viScript marloweValidatorInfo
       }
     payoutReferenceScriptUTxO = ReferenceScriptUtxo
-      { txOutRef = fromCardanoTxIn $ fromJust $ viTxIn payoutValidatorInfo
+      { txOutRef = payoutTxOutRef
       , txOut = TransactionOutput
         { address = fromCardanoAddressInEra BabbageEra $ psPublisher pmsRolePayoutScript
         , assets = Assets (fromCardanoLovelace $ psMinAda pmsRolePayoutScript) mempty
