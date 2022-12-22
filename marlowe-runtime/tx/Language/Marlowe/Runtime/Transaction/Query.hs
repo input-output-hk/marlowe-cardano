@@ -97,12 +97,13 @@ loadWalletContext runQuery eventBackend WalletAddresses{..} =
   withEvent eventBackend LoadWalletContext \ev -> do
     let addresses = Set.insert changeAddress extraAddresses
     addField ev $ ForAddresses addresses
-    availableUtxos@(UTxOs (Map.keysSet -> txOutRefs)) <- runQuery $ GetUTxOsAtAddresses addresses
+    availableUtxos@(UTxOs (Map.keys -> txOutRefs)) <- runQuery $ GetUTxOsAtAddresses addresses
     let
+      collateralUtxos' = Set.filter (flip elem txOutRefs) collateralUtxos
       walletContext = WalletContext
-        { availableUtxos = availableUtxos
-        , collateralUtxos = if Set.null collateralUtxos then txOutRefs else Set.intersection collateralUtxos txOutRefs
-        , changeAddress = changeAddress
+        { availableUtxos=availableUtxos
+        , collateralUtxos=collateralUtxos'
+        , changeAddress=changeAddress
         }
     addField ev $ WalletContextLoaded walletContext
     pure walletContext
