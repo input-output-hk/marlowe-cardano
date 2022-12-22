@@ -8,18 +8,22 @@ import Data.Either (fromRight)
 import Data.Maybe (fromJust)
 import qualified Data.Text as T
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
-import Language.Marlowe.Runtime.ChainSync.Api (Address, fromBech32)
+import Language.Marlowe.Runtime.ChainSync.Api (Address, fromBech32, toBech32)
 import Language.Marlowe.Runtime.Core.Api (MarloweVersion(..))
 import Language.Marlowe.Runtime.Transaction.Api
   (ContractCreated(..), InputsApplied(..), MarloweTxCommand(..), RoleTokensConfig(..), WalletAddresses(..))
 import Network.Protocol.Job.Client (liftCommand, liftCommandWait)
 import Test.Integration.Marlowe
+import qualified Test.Integration.Marlowe as M (LocalTestnet(..))
 
 main :: IO ()
 main = withLocalMarloweRuntime \MarloweRuntime{..} -> do
+  putStr "Workspace: "
+  putStrLn $ workspaceDir $ M.workspace testnet
+
   (address, signingKey) <- getFirstWallet testnet
-  putStrLn "Loaded wallet: "
-  print address
+  putStr "Loaded wallet: "
+  print $ fromJust $ toBech32 address
 
   let walletAddresses = WalletAddresses address mempty mempty
 
@@ -29,7 +33,7 @@ main = withLocalMarloweRuntime \MarloweRuntime{..} -> do
     walletAddresses
     RoleTokensNone
     mempty
-    1_000_000
+    2_000_000
     V1.Close
 
   ContractCreated{..} <- case createContractResult of
@@ -46,7 +50,7 @@ main = withLocalMarloweRuntime \MarloweRuntime{..} -> do
     Left err -> fail $ show err
     Right b -> pure b
 
-  putStrLn "Created block: "
+  putStr "Created block: "
   print createdBlock
 
   closeResult <- runTxJobClient $ liftCommand $ ApplyInputs
@@ -72,7 +76,7 @@ main = withLocalMarloweRuntime \MarloweRuntime{..} -> do
     Left err -> fail $ show err
     Right b -> pure b
 
-  putStrLn "Closed block: "
+  putStr "Closed block: "
   print closedBlock
 
 getFirstWallet :: LocalTestnet -> IO (Address, ShelleyWitnessSigningKey)
