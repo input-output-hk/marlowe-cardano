@@ -95,6 +95,7 @@ import Language.Marlowe.Runtime.Cardano.Api
   (fromCardanoAddressInEra, fromCardanoLovelace, fromCardanoScriptHash, fromCardanoTxId)
 import Language.Marlowe.Runtime.ChainIndexer
   (ChainIndexerDependencies(..), ChainIndexerSelector, chainIndexer, getChainIndexerSelectorConfig)
+import Language.Marlowe.Runtime.ChainIndexer.Database (CommitGenesisBlock(..), DatabaseQueries(..))
 import qualified Language.Marlowe.Runtime.ChainIndexer.Database as ChainIndexer
 import qualified Language.Marlowe.Runtime.ChainIndexer.Database.PostgreSQL as ChainIndexer
 import Language.Marlowe.Runtime.ChainIndexer.Genesis (GenesisBlock, computeGenesisBlock)
@@ -249,12 +250,17 @@ withLocalMarloweRuntime' MarloweRuntimeOptions{..} test = withRunInIO \runInIO -
         ChainSync.databaseQueries
 
     let mkSubmitJob = Submit.mkSubmitJob SubmitJobDependencies{..}
-    liftIO $ onException
-      ( runComponent_ runtime RuntimeDependencies{..}
-        `race_` runLogger
-        `race_` runInIO (test MarloweRuntime{..})
-      )
-      (unprotect dbReleaseKey)
+
+    -- Persist the genesis block before starting the services so that they
+    -- exist already and no database queries fail.
+    liftIO do
+      runCommitGenesisBlock (commitGenesisBlock chainIndexerDatabaseQueries) genesisBlock
+      onException
+        ( runComponent_ runtime RuntimeDependencies{..}
+          `race_` runLogger
+          `race_` runInIO (test MarloweRuntime{..})
+        )
+        (unprotect dbReleaseKey)
   where
     rootConnectionString = settings databaseHost databasePort databaseUser databasePassword tempDatabase
 
@@ -414,11 +420,6 @@ data RuntimeDependencies r = RuntimeDependencies
   , marloweScripts :: MarloweScripts
   }
 
-waitUntilReady :: Component IO a b -> Component IO (STM (), a) b
-waitUntilReady c = Component \(ready, a) -> do
-  (run, b) <- unComponent c a
-  pure (Concurrently $ atomically ready *> runConcurrently run, b)
-
 runtime :: Component IO (RuntimeDependencies r) ()
 runtime = proc RuntimeDependencies{..} -> do
   let
@@ -439,7 +440,7 @@ runtime = proc RuntimeDependencies{..} -> do
 
     LocalNodeConnectInfo{..} = localNodeConnectInfo
 
-  chainIndexerReady <- chainIndexer -<
+  chainIndexer -<
     let
       maxCost = 100_000
       costModel = CostModel 1 10
@@ -450,7 +451,7 @@ runtime = proc RuntimeDependencies{..} -> do
      in
       ChainIndexerDependencies{..}
 
-  waitUntilReady chainSync -< (chainIndexerReady,)
+  chainSync -<
     let
       acceptRunJobServer = acceptRunChainSyncJobServer
       acceptRunQueryServer = acceptRunChainSyncQueryServer
@@ -470,7 +471,7 @@ runtime = proc RuntimeDependencies{..} -> do
      in
       ChainSyncDependencies{..}
 
-  waitUntilReady history -< (chainIndexerReady,)
+  history -<
     let
       acceptRunJobServer = acceptRunHistoryJobServer
       acceptRunQueryServer = acceptRunHistoryQueryServer
@@ -483,7 +484,7 @@ runtime = proc RuntimeDependencies{..} -> do
     in
       HistoryDependencies{..}
 
-  waitUntilReady discovery -< (chainIndexerReady,)
+  discovery -<
     let
       acceptRunQueryServer = acceptRunDiscoveryQueryServer
       acceptRunSyncServer = acceptRunDiscoverySyncServer
@@ -491,7 +492,7 @@ runtime = proc RuntimeDependencies{..} -> do
     in
       DiscoveryDependencies{..}
 
-  waitUntilReady transaction -< (chainIndexerReady,)
+  transaction -<
     let
       acceptRunTransactionServer = acceptRunTxJobServer
 

@@ -13,7 +13,6 @@ module Language.Marlowe.Runtime.ChainIndexer
 
 import Cardano.Api (CardanoMode, ChainPoint(..), ChainTip(..), LocalNodeClientProtocolsInMode)
 import Control.Concurrent.Component
-import Control.Concurrent.STM (STM)
 import Data.Aeson (Value(..), object, (.=))
 import Data.Time (NominalDiffTime)
 import Language.Marlowe.Runtime.Cardano.Api
@@ -57,7 +56,7 @@ data ChainIndexerDependencies r = ChainIndexerDependencies
   , eventBackend          :: !(EventBackend IO r ChainIndexerSelector)
   }
 
-chainIndexer :: Component IO (ChainIndexerDependencies r) (STM ())
+chainIndexer :: Component IO (ChainIndexerDependencies r) ()
 chainIndexer = proc ChainIndexerDependencies{..} -> do
   let DatabaseQueries{..} = databaseQueries
   NodeClient{..} <- nodeClient -< NodeClientDependencies

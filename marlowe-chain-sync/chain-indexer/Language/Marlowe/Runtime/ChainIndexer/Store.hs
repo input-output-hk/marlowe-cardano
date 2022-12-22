@@ -10,7 +10,7 @@ module Language.Marlowe.Runtime.ChainIndexer.Store
 
 import Cardano.Api (ChainPoint(..), ChainTip(..))
 import Control.Concurrent.Component
-import Control.Concurrent.STM (STM, atomically, newEmptyTMVar, putTMVar, readTMVar)
+import Control.Concurrent.STM (STM, atomically)
 import Control.Concurrent.STM.Delay (Delay, newDelay, waitDelay)
 import Control.Monad (guard, unless, when)
 import Control.Monad.Trans.Class (lift)
@@ -49,9 +49,8 @@ data ChainStoreDependencies r = ChainStoreDependencies
   }
 
 -- | Create a ChainStore component.
-chainStore :: Component IO (ChainStoreDependencies r) (STM ())
-chainStore = component \ChainStoreDependencies{..} -> do
-  genesisReadyVar <- newEmptyTMVar
+chainStore :: Component IO (ChainStoreDependencies r) ()
+chainStore = component_ \ChainStoreDependencies{..} -> do
   let
     awaitChanges :: Maybe Delay -> STM Changes
     awaitChanges delay = do
@@ -71,7 +70,6 @@ chainStore = component \ChainStoreDependencies{..} -> do
           Just dbGenesisBlock -> unless (dbGenesisBlock == genesisBlock) do
             fail "Existing genesis block does not match computed genesis block"
           Nothing -> runCommitGenesisBlock commitGenesisBlock genesisBlock
-      atomically $ putTMVar genesisReadyVar ()
       go Nothing
       where
         go lastWrite = do
@@ -98,4 +96,4 @@ chainStore = component \ChainStoreDependencies{..} -> do
       let delayMicroseconds = floor $ 1_000_000 * nominalDiffTimeToSeconds delay
       lift $ newDelay delayMicroseconds
 
-  pure (runChainStore, readTMVar genesisReadyVar)
+  runChainStore
