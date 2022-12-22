@@ -3,7 +3,7 @@
 }:
 let
   inherit (packages) pkgs marlowe docs marlowe-cli dev-scripts network;
-  inherit (dev-scripts) nix-flakes-alias start-cardano-node run-chainseekd;
+  inherit (dev-scripts) nix-flakes-alias start-cardano-node;
   inherit (pkgs) stdenv lib utillinux python3 nixpkgs-fmt writeShellScriptBin networks;
   inherit (marlowe) haskell cabal-install stylish-haskell sphinxcontrib-haddock sphinx-markdown-tables sphinxemoji nix-pre-commit-hooks cardano-address;
   inherit (marlowe) writeShellScriptBinInRepoRoot;
@@ -127,7 +127,6 @@ let
       cardano-cli
       cardano-node
       marlowe-cli
-      run-chainseekd
       start-cardano-node
       sphinxTools
       pkgs.docker-compose

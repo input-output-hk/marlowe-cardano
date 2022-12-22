@@ -132,9 +132,11 @@ library chain-indexer
     , cardano-api
     , cardano-binary
     , cardano-crypto-wrapper
-    , cardano-ledger-byron
-    , cardano-ledger-babbage
     , cardano-ledger-alonzo
+    , cardano-ledger-babbage
+    , cardano-ledger-byron
+    , cardano-ledger-core
+    , cardano-ledger-shelley
     , containers
     , eventuo11y
     , eventuo11y-extras
@@ -185,6 +187,7 @@ executable marlowe-chain-indexer
     Paths_marlowe_chain_sync
   build-depends:
       base >= 4.9 && < 5
+    , aeson
     , async-components
     , cardano-api
     , cardano-crypto-wrapper

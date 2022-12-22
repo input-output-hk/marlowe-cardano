@@ -90,12 +90,12 @@ import Language.Marlowe.Protocol.Sync.Codec (codecMarloweSync)
 import Language.Marlowe.Protocol.Sync.Server (MarloweSyncServer, marloweSyncServerPeer)
 import Language.Marlowe.Protocol.Sync.Types (MarloweSync)
 import Language.Marlowe.Runtime.Cardano.Api
-  (fromCardanoAddressInEra, fromCardanoLovelace, fromCardanoScriptHash, fromCardanoTxIn)
+  (fromCardanoAddressInEra, fromCardanoLovelace, fromCardanoScriptHash, fromCardanoTxId)
 import Language.Marlowe.Runtime.ChainIndexer
   (ChainIndexerDependencies(..), ChainIndexerSelector, chainIndexer, getChainIndexerSelectorConfig)
 import qualified Language.Marlowe.Runtime.ChainIndexer.Database as ChainIndexer
 import qualified Language.Marlowe.Runtime.ChainIndexer.Database.PostgreSQL as ChainIndexer
-import Language.Marlowe.Runtime.ChainIndexer.Genesis (GenesisBlock, computeByronGenesisBlock)
+import Language.Marlowe.Runtime.ChainIndexer.Genesis (GenesisBlock, computeGenesisBlock)
 import Language.Marlowe.Runtime.ChainIndexer.NodeClient (CostModel(CostModel))
 import Language.Marlowe.Runtime.ChainSync (ChainSyncDependencies(..), chainSync)
 import Language.Marlowe.Runtime.ChainSync.Api
@@ -222,6 +222,7 @@ withLocalMarloweRuntime' MarloweRuntimeOptions{..} test = withRunInIO \runInIO -
     (genesisData, genesisHash) <- case genesisConfigResult of
       Left e -> fail $ show e
       Right a -> pure a
+    shelleyGenesisConfig <- liftIO $ either error id <$> eitherDecodeFileStrict (shelleyGenesisJson network)
     let
       connectToChainSeek :: RunClient IO RuntimeChainSeekClient
       connectToChainSeek = runChainSeekClient
@@ -232,9 +233,10 @@ withLocalMarloweRuntime' MarloweRuntimeOptions{..} test = withRunInIO \runInIO -
         (Byron.toByronRequiresNetworkMagic localNodeNetworkId)
         defaultUTxOConfiguration
 
-      genesisBlock = computeByronGenesisBlock
+      genesisBlock = computeGenesisBlock
         (abstractHashToBytes $ Byron.unGenesisHash genesisHash)
         byronGenesisConfig
+        shelleyGenesisConfig
 
       chainIndexerDatabaseQueries = ChainIndexer.hoistDatabaseQueries
         (either (fail . show) pure <=< Pool.use pool)

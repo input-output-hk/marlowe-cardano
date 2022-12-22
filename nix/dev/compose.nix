@@ -96,6 +96,8 @@ let
       network.nodeConfig.ByronGenesisFile
       "--genesis-config-file-hash"
       network.nodeConfig.ByronGenesisHash
+      "--shelley-genesis-config-file"
+      network.nodeConfig.ShelleyGenesisFile
       "--log-config-file"
       "./marlowe-chain-indexer.log.config"
     ];

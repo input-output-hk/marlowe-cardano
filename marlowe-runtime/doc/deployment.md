@@ -102,6 +102,7 @@ See the [help page](marlowe-chain-indexer.md) for all of the command-line option
 - `--socket-path` for the filesystem path to the Cardano node's socket.
 - `--database-uri` for the location and name of the PostgreSQL database.
 - `--genesis-config-file` for the filesystem path to the genesis file used by the Cardano node.
+- `--shelley-genesis-config-file` for the filesystem path to the shelley genesis file used by the Cardano node.
 - `--genesis-config-file-hash` for the hash of the genesis file.
 
 A typical invocation of `marlowe-chain-indexer` will be like something along the following lines:
@@ -111,7 +112,8 @@ $ sqitch deploy
 $ marlowe-chain-indexer \
     --socket-path "$CARDANO_NODE_SOCKET_PATH" \
     --database-uri postgresql://postgresql@0.0.0.0/chain \
-    --genesis-config-file byron-genesis.json \ 
+    --genesis-config-file byron-genesis.json \
+    --shelley-genesis-config-file shelley-genesis.json \
     --genesis-config-file-hash 5f20df933584822601f9e3f8c024eb5eb252fe8cefb24d1317dc3d432e940ebb
 ```
 The `sqitch deploy` command handles database creation and migration, so it is only necessary to run that on new installations or after upgrading `marlowe-chain-indexer`.

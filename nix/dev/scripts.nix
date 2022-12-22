@@ -47,16 +47,6 @@ let
     };
   };
 
-  run-chainseekd = writeShellScriptBinInRepoRoot "run-chainseekd" ''
-    cd marlowe-chain-sync
-    cabal run chainseekd -- \
-      --testnet-magic ${builtins.toString network.magic} \
-      --socket-path ${devNetworkConfig.node.socket-path} \
-      --database-uri postgresql://postgres@0.0.0.0/chain \
-      --genesis-config-file ${network.nodeConfig.ByronGenesisFile} \
-      --genesis-config-file-hash ${network.nodeConfig.ByronGenesisHash}
-  '';
-
   start-cardano-node = writeShellScriptBinInRepoRoot "start-cardano-node" ''
     echo "socket path = ${devNetworkConfig.node.socket-path}"
     export DATA_DIR=${devNetworkConfig.node.database-path}
@@ -81,7 +71,7 @@ let
 
 in
 {
-  inherit nix-flakes-alias run-chainseekd start-cardano-node;
+  inherit nix-flakes-alias start-cardano-node;
 
   updateMaterialized = writeShellScriptBinInRepoRoot "updateMaterialized" ''
     # comment to appease nixpkgs-fmt

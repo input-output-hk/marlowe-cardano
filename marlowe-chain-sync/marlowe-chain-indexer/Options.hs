@@ -17,6 +17,7 @@ data Options = Options
   , databaseUri       :: !String
   , genesisConfigHash :: !Text
   , genesisConfigFile :: !FilePath
+  , shelleyGenesisFile :: !FilePath
   , costModel         :: !CostModel
   , maxCost           :: !Int
   , logConfigFile     :: !(Maybe FilePath)
@@ -65,6 +66,7 @@ parseOptions defaultNetworkId defaultSocketPath defaultDatabaseUri version = O.i
               <*> databaseUriOption
               <*> genesisConfigHashOption
               <*> genesisConfigFileOption
+              <*> shelleyGenesisFileOption
               <*> costModelParser
               <*> maxCostParser
               <*> logConfigFileParser
@@ -97,6 +99,16 @@ parseOptions defaultNetworkId defaultSocketPath defaultDatabaseUri version = O.i
               , O.metavar "DATABASE_URI"
               , defaultDatabaseUri
               , O.help "URI of the database where the chain information is saved."
+              ]
+
+        shelleyGenesisFileOption :: O.Parser String
+        shelleyGenesisFileOption = O.strOption options
+          where
+            options :: O.Mod O.OptionFields FilePath
+            options = mconcat
+              [ O.long "shelley-genesis-config-file"
+              , O.metavar "CONFIG_FILE"
+              , O.help "Path to the Shelley Genesis Config JSON File."
               ]
 
         genesisConfigFileOption :: O.Parser String
