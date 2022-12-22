@@ -11,6 +11,7 @@ Marlowe's design and safety enables the deployment of a variety of powerful smar
 - [Summary of Capabilities](#summary-of-capabilities)
 - [Examples of Types of Contracts Well-Suited to Marlowe on Cardano](#examples-of-types-of-contracts-well-suited-to-marlowe-on-cardano)
 - [Limitations Imposed by the Marlowe Language](#limitations-imposed-by-the-marlowe-language)
+- [Limitations in Marlowe Playground](#limitations-in-marlowe-playground)
 - [Limitations Imposed by the Cardano Blockchain](#limitations-imposed-by-the-cardano-blockchain)
 	- [One Marlowe Contract per Transaction](#one-marlowe-contract-per-transaction)
 	- [Limitations Due to Native Token Names on Cardano](#limitations-due-to-native-token-names-on-cardano)
@@ -87,6 +88,11 @@ The safety-first principle used in the design of the [Marlowe domain-specific la
 - Timeouts must be numeric constants.
 - Only `Case` continuations may be merkleized.
 The [Faustus programming language](https://www.uwyo.edu/wabl/faustus.html) relaxes some of the limitations above, yet it compiles to safe Marlowe.
+
+
+## Limitations in Marlowe Playground
+
+[Marlowe Playground](https://play.marlowe-finance.io/) currently lacks the capabilities to construct, display, or simulate merkleized Marlowe contracts. Large contracts containing many terms also pose difficulties for the Playground: simulating a large contract may exceed the computing resource limits in the server for Marlowe Playground. Similarly, static analysis of large Marlowe contracts typically exceeds the resources of the Playground. For example, static analysis of auctions involving many parties may take tens or hundreds of minutes. 
 
 
 ## Limitations Imposed by the Cardano Blockchain
