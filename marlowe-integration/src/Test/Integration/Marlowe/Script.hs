@@ -9,9 +9,12 @@ module Test.Integration.Marlowe.Script
   , ContractRef
   , ContractState(..)
   , MarloweScript
+  , Party
+  , PartyType(..)
   , V1ContractBuilder
   , Wallet
-  , accountPayee
+  , adaIsDeposited
+  , allocateParty
   , allocateWallet
   , applyInput
   , applyInputs
@@ -19,13 +22,14 @@ module Test.Integration.Marlowe.Script
   , assertMsg
   , buildV1ApplyInputs
   , buildV1Contract
-  , byAddress
-  , byRole
-  , choice
+  , buildV1Contract_
+  , choiceIsMade
+  , choose
   , close
   , create
   , depositAda
   , depositToken
+  , enumChoiceIsMade
   , getAddress
   , getAllContracts
   , getContract
@@ -37,14 +41,18 @@ module Test.Integration.Marlowe.Script
   , getPaymentKeyHash
   , getWalletBalance
   , if_
+  , isNotified
   , let_
+  , mkChoiceId
   , notify
-  , partyPayee
   , payAda
   , payToken
   , runMarloweScript
   , submit
   , submit'
+  , toAccount
+  , toParty
+  , tokenIsDeposited
   , when_
   , withMetadata
   , withdraw
@@ -79,10 +87,9 @@ import Control.Monad.Reader (ask)
 import Control.Monad.Reader.Class (asks)
 import Control.Monad.State.Class (gets, modify)
 import Control.Monad.Trans.Except (ExceptT(..), runExceptT)
-import Control.Monad.Trans.RWS (RWST(..))
-import Control.Monad.Trans.Writer (Writer, execWriter)
+import Control.Monad.Trans.RWS (RWS, RWST(..), execRWS)
 import Control.Monad.Writer (tell)
-import Data.Aeson (decodeFileStrict)
+import Data.Aeson (eitherDecodeFileStrict)
 import Data.Bifunctor (first)
 import Data.ByteString (ByteString)
 import Data.Either (fromRight)
@@ -126,6 +133,7 @@ import Language.Marlowe.Runtime.ChainSync.Api
   , TokenName
   , Tokens(..)
   , TransactionMetadata(..)
+  , fromBech32
   , unTokenName
   )
 import Language.Marlowe.Runtime.Core.Api
@@ -176,8 +184,8 @@ data ContractState v
   = Closed
   | Active (TransactionScriptOutput v)
 
-data BuildContract v where
-  BuildV1Contract :: V1ContractBuilder V1.Contract -> BuildContract 'V1
+data BuildContract v a where
+  BuildV1Contract :: V1ContractBuilder (V1.Contract, a) -> BuildContract 'V1 a
 
 type V1ContractBuilderW =
   ( Map TokenName Wallet -- Role assignments
@@ -191,7 +199,7 @@ newtype V1ContractBuilder a = V1ContractBuilder
   } deriving newtype (Functor, Applicative, Monad)
 
 data BuildApplyInputs v where
-  BuildV1ApplyInputs :: V1ApplyInputsBuilder -> BuildApplyInputs 'V1
+  BuildV1ApplyInputs :: Party 'V1 -> V1ApplyInputsBuilder -> BuildApplyInputs 'V1
 
 type V1ApplyInputsBuilderW =
   ( [V1.InputContent] -- inputs to apply
@@ -201,13 +209,13 @@ type V1ApplyInputsBuilderW =
   )
 
 newtype V1ApplyInputsBuilder' a = V1ApplyInputsBuilder
-  { runV1ApplyInputsBuilder :: Writer V1ApplyInputsBuilderW a
+  { runV1ApplyInputsBuilder :: RWS (Party 'V1) V1ApplyInputsBuilderW () a
   } deriving newtype (Functor, Applicative, Monad)
 
 type V1ApplyInputsBuilder = V1ApplyInputsBuilder' ()
 
 data Commands a where
-  CreateCommand :: Text -> BuildContract v -> Commands (ContractRef v)
+  CreateCommand :: Text -> BuildContract v a -> Commands (ContractRef v, a)
   ApplyInputsCommand :: ContractRef v -> BuildApplyInputs v -> Commands ()
   WithdrawCommand :: ContractRef v -> TokenName -> Commands Assets
   MapCommands :: (a -> b) -> Commands a -> Commands b
@@ -291,11 +299,10 @@ allocateWallet walletName = MarloweScript do
   ws <- asks $ wallets . testnet
   count <- gets walletCount
   when (count >= length ws) $ throwError $ OutOfWallets walletName $ length ws
-  let walletIndex = count + 1
-  modify \s -> s { walletCount = walletIndex }
+  modify \s -> s { walletCount = count + 1 }
   pure Wallet
     { walletName
-    , walletPaymentKeyPair = ws !! walletIndex
+    , walletPaymentKeyPair = ws !! count
     }
 
 -- Commands
@@ -315,7 +322,7 @@ commandsToTxBodies :: UTCTime -> Wallet -> Commands a -> MarloweScript ([TxBody 
 commandsToTxBodies time wallet = \case
   CreateCommand contractName (BuildV1Contract builder) -> do
     MarloweRuntime{..} <- MarloweScript ask
-    (contract, (), (roles, continuations, nativeTokens, metadata)) <- liftIO $ runRWST (runBuildV1Contract builder) time ()
+    ((contract, a), (), (roles, continuations, nativeTokens, metadata)) <- liftIO $ runRWST (runBuildV1Contract builder) time ()
     MarloweScript $ modify \state -> state { v1Continuations = v1Continuations state <> continuations }
     protocolParameters <- liftIO
       $ fromRight (error "failed to load protocol parameters from chain seek")
@@ -344,16 +351,18 @@ commandsToTxBodies time wallet = \case
       walletAddresses
       roleTokensConfig
       metadata
-      minLovelace
+      (minLovelace + 1_000_000)
       contract
     case result of
       Left err -> MarloweScript $ throwError $ CreateFailed contractName contractVersion err
       Right ContractCreated{contractId, txBody, rolesCurrency = roleTokenPolicy} ->
-        pure ([txBody], ContractRef{..})
+        pure ([txBody], (ContractRef{..}, a))
 
-  ApplyInputsCommand ref@ContractRef{..} (BuildV1ApplyInputs builder) -> do
+  ApplyInputsCommand ref@ContractRef{..} (BuildV1ApplyInputs party builder) -> do
     MarloweRuntime{..} <- MarloweScript ask
-    let (inputs, invalidBefore, invalidHereafter, metadata) = execWriter $ runV1ApplyInputsBuilder builder
+    let
+      ((), (inputs, invalidBefore, invalidHereafter, metadata)) =
+        execRWS (runV1ApplyInputsBuilder builder) party ()
     let invalidBefore' = getMax <$> invalidBefore
     let invalidHereafter' = getMin <$> invalidHereafter
     inputs' <- merkleizeV1Inputs ref invalidBefore' invalidHereafter' inputs
@@ -481,7 +490,7 @@ submitTx tx = do
     Left err -> MarloweScript $ throwError $ SubmitFailed err
     Right block -> pure block
 
-create :: Text -> BuildContract v -> Commands (ContractRef v)
+create :: Text -> BuildContract v a -> Commands (ContractRef v, a)
 create = CreateCommand
 
 applyInputs :: ContractRef v -> BuildApplyInputs v -> Commands ()
@@ -492,8 +501,12 @@ withdraw = WithdrawCommand
 
 -- Building contracts
 
-data Account v where
-  V1Account :: V1.AccountId -> Account 'V1
+data PartyType
+  = ByAddress
+  | ByRole TokenName
+
+data Party v where
+  V1Party :: V1.AccountId -> Party 'V1
 
 data Payee v where
   V1Payee :: V1.Payee -> Payee 'V1
@@ -502,46 +515,48 @@ withMetadata :: Word64 -> Metadata -> V1ContractBuilder ()
 withMetadata key metadata = V1ContractBuilder do
   tell (mempty, mempty, mempty, TransactionMetadata $ Map.singleton key metadata)
 
-byAddress :: Wallet -> V1ContractBuilder (Account 'V1)
-byAddress wallet = V1ContractBuilder do
-  paymentKeyHash <- getPaymentKeyHashIO wallet
-  let credential = PV2.PubKeyCredential $ PV2.PubKeyHash $ PV2.toBuiltin $ unPaymentKeyHash paymentKeyHash
-  pure $ V1Account $ V1.Address V1.testnet $ PV2.Address credential Nothing
+allocateParty :: Wallet -> PartyType -> V1ContractBuilder (Party 'V1)
+allocateParty wallet = \case
+  ByAddress -> V1ContractBuilder do
+    paymentKeyHash <- getPaymentKeyHashIO wallet
+    let credential = PV2.PubKeyCredential $ PV2.PubKeyHash $ PV2.toBuiltin $ unPaymentKeyHash paymentKeyHash
+    pure $ V1Party $ V1.Address V1.testnet $ PV2.Address credential Nothing
+  ByRole role -> V1ContractBuilder do
+    tell (Map.singleton role wallet, mempty, mempty, mempty)
+    pure $ V1Party $ V1.Role $ PV2.TokenName $ PV2.toBuiltin $ unTokenName role
 
-byRole :: Wallet -> TokenName -> V1ContractBuilder (Account 'V1)
-byRole wallet role = V1ContractBuilder do
-  tell (Map.singleton role wallet, mempty, mempty, mempty)
-  pure $ V1Account $ V1.Role $ PV2.TokenName $ PV2.toBuiltin $ unTokenName role
+toParty :: Party v -> Payee v
+toParty (V1Party party) = V1Payee $ V1.Party party
 
-partyPayee :: Account v -> Payee v
-partyPayee (V1Account account) = V1Payee $ V1.Party account
+toAccount :: Party v -> Payee v
+toAccount (V1Party party) = V1Payee $ V1.Account party
 
-accountPayee :: Account v -> Payee v
-accountPayee (V1Account account) = V1Payee $ V1.Account account
+buildV1Contract_ :: V1ContractBuilder V1.Contract -> BuildContract 'V1 ()
+buildV1Contract_ = buildV1Contract . fmap (,())
 
-buildV1Contract :: V1ContractBuilder V1.Contract -> BuildContract 'V1
+buildV1Contract :: V1ContractBuilder (V1.Contract, a) -> BuildContract 'V1 a
 buildV1Contract = BuildV1Contract
 
 close :: V1ContractBuilder V1.Contract
 close = pure V1.Close
 
 payAda
-  :: Account 'V1
+  :: Party 'V1
   -> Payee 'V1
   -> V1.Value V1.Observation
   -> V1ContractBuilder V1.Contract
   -> V1ContractBuilder V1.Contract
-payAda (V1Account accountId) (V1Payee payee) value =
+payAda (V1Party accountId) (V1Payee payee) value =
   fmap $ V1.Pay accountId payee (V1.Token "" "") value
 
 payToken
-  :: Account 'V1
+  :: Party 'V1
   -> Payee 'V1
   -> AssetId
   -> V1.Value V1.Observation
   -> V1ContractBuilder V1.Contract
   -> V1ContractBuilder V1.Contract
-payToken (V1Account accountId) (V1Payee payee) AssetId{..} value =
+payToken (V1Party accountId) (V1Payee payee) AssetId{..} value =
   fmap $ V1.Pay
     accountId
     payee
@@ -585,16 +600,16 @@ let_
   -> V1ContractBuilder V1.Contract
 let_ valueId = fmap . V1.Let valueId
 
-depositAda :: Account 'V1 -> Account 'V1 -> V1.Value V1.Observation -> V1ContractBuilder V1.Action
-depositAda (V1Account account) (V1Account party) = pure . V1.Deposit account party (V1.Token "" "")
+adaIsDeposited :: Party 'V1 -> Party 'V1 -> V1.Value V1.Observation -> V1ContractBuilder V1.Action
+adaIsDeposited (V1Party account) (V1Party party) = pure . V1.Deposit account party (V1.Token "" "")
 
-depositToken
-  :: Account 'V1
-  -> Account 'V1
+tokenIsDeposited
+  :: Party 'V1
+  -> Party 'V1
   -> AssetId
   -> V1.Value V1.Observation
   -> V1ContractBuilder V1.Action
-depositToken (V1Account account) (V1Account party) AssetId{..} value = V1ContractBuilder do
+tokenIsDeposited (V1Party account) (V1Party party) AssetId{..} value = V1ContractBuilder do
   tell (mempty, mempty, Set.singleton AssetId{..}, mempty)
   pure $ V1.Deposit
     account
@@ -605,25 +620,56 @@ depositToken (V1Account account) (V1Account party) AssetId{..} value = V1Contrac
     )
     value
 
-choice :: V1.ChoiceId -> [V1.Bound] -> V1ContractBuilder V1.Action
-choice choiceId = pure . V1.Choice choiceId
+enumChoiceIsMade :: V1.ChoiceId -> Integer -> V1ContractBuilder V1.Action
+enumChoiceIsMade choiceId i = choiceIsMade choiceId [V1.Bound i i]
 
-notify :: V1.Observation -> V1ContractBuilder V1.Action
-notify = pure . V1.Notify
+choiceIsMade :: V1.ChoiceId -> [V1.Bound] -> V1ContractBuilder V1.Action
+choiceIsMade choiceId = pure . V1.Choice choiceId
+
+mkChoiceId :: String -> Party v -> V1.ChoiceId
+mkChoiceId name (V1Party party) = V1.ChoiceId (fromString name) party
+
+isNotified :: V1.Observation -> V1ContractBuilder V1.Action
+isNotified = pure . V1.Notify
 
 -- applying inputs
 
-buildV1ApplyInputs :: V1ApplyInputsBuilder -> BuildApplyInputs 'V1
+buildV1ApplyInputs :: Party 'V1 -> V1ApplyInputsBuilder -> BuildApplyInputs 'V1
 buildV1ApplyInputs = BuildV1ApplyInputs
 
 applyInput :: V1.InputContent -> V1ApplyInputsBuilder
 applyInput inputContent = V1ApplyInputsBuilder $ tell ([inputContent], Nothing, Nothing, mempty)
 
+depositAda :: Party 'V1 -> Integer -> V1ApplyInputsBuilder
+depositAda (V1Party account) value = do
+  (V1Party party) <- V1ApplyInputsBuilder ask
+  applyInput $ V1.IDeposit account party (V1.Token "" "") value
+
+depositToken :: Party 'V1 -> AssetId -> Integer -> V1ApplyInputsBuilder
+depositToken (V1Party account) AssetId{..} value = do
+  (V1Party party) <- V1ApplyInputsBuilder ask
+  applyInput $ V1.IDeposit
+    account
+    party
+    ( V1.Token
+      (PV2.CurrencySymbol $ PV2.toBuiltin $ unPolicyId policyId)
+      (PV2.TokenName $ PV2.toBuiltin $ unTokenName tokenName)
+    )
+    value
+
+choose :: String -> Integer -> V1ApplyInputsBuilder
+choose choiceName chosenNum = do
+  (V1Party party) <- V1ApplyInputsBuilder ask
+  applyInput $ V1.IChoice (V1.ChoiceId (fromString choiceName) party) chosenNum
+
+notify :: V1ApplyInputsBuilder
+notify = applyInput V1.INotify
+
 -- Querying wallets
 
 getSigningKey :: Wallet -> MarloweScript ShelleyWitnessSigningKey
 getSigningKey Wallet{..} = do
-  textEnvelope <- liftIO $ fromJust <$> decodeFileStrict (paymentSKey walletPaymentKeyPair)
+  textEnvelope <- liftIO $ either error id <$> eitherDecodeFileStrict (paymentSKey walletPaymentKeyPair)
   pure
     $ WitnessGenesisUTxOKey
     $ fromRight (error "Failed to parse signing key")
@@ -641,14 +687,14 @@ getPaymentKeyHash :: Wallet -> MarloweScript PaymentKeyHash
 getPaymentKeyHash = MarloweScript . getPaymentKeyHashIO
 
 getAddressIO :: MonadIO m => Wallet -> m Address
-getAddressIO Wallet{..} = fromString <$> execCli
+getAddressIO Wallet{..} = fromJust . fromBech32 . T.pack <$> execCli
   [ "address", "build"
   , "--payment-verification-key-file", paymentVKey walletPaymentKeyPair
   , "--testnet-magic", "1" -- the testnetMagic doesn't actually matter. All that matters is that it's testnet and not mainnet.
   ]
 
 getPaymentKeyHashIO :: MonadIO m => Wallet -> m PaymentKeyHash
-getPaymentKeyHashIO Wallet{..} = fromString <$> execCli
+getPaymentKeyHashIO Wallet{..} = fromString . T.unpack . T.strip . T.pack <$> execCli
   [ "address", "key-hash"
   , "--payment-verification-key-file", paymentVKey walletPaymentKeyPair
   ]

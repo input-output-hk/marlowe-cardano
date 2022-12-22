@@ -125,4 +125,5 @@ executable marlowe-integration-example
   main-is: Main.hs
   build-depends:
       base >= 4.9 && < 5
+    , marlowe
     , marlowe-integration
