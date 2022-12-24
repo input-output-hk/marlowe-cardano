@@ -35,7 +35,18 @@ import Language.Marlowe (POSIXTime(..))
 import Language.Marlowe.Protocol.Sync.Client (MarloweSyncClient)
 import Language.Marlowe.Runtime.Cardano.Api (fromCardanoTxId)
 import Language.Marlowe.Runtime.ChainSync.Api
-  (Address, ChainSyncCommand, Lovelace(..), RuntimeChainSeekClient, TokenName, TxId, TxOutRef, fromBech32, toBech32)
+  ( Address
+  , ChainSyncCommand
+  , Lovelace(..)
+  , RuntimeChainSeekClient
+  , TokenName
+  , TransactionMetadata
+  , TxId
+  , TxOutRef
+  , fromBech32
+  , fromJSONEncodedTransactionMetadata
+  , toBech32
+  )
 import Language.Marlowe.Runtime.Core.Api
   ( ContractId
   , IsMarloweVersion(Contract, Redeemer)
@@ -72,6 +83,7 @@ import qualified Data.Aeson.Types as A
   (FromJSON(parseJSON), Parser, ToJSON(toJSON), Value(String), object, parseFail, withObject, (.:), (.=))
 import qualified Data.Map.Strict as M (Map, map, mapKeys)
 import qualified Data.Text as T (Text)
+import qualified Language.Marlowe.Runtime.ChainSync.Api as CS (Transaction)
 
 
 data Config =
@@ -146,8 +158,8 @@ data MarloweRequest v =
     { reqContract :: Contract v
     , reqRoles :: M.Map TokenName Address
     , reqMinUtxo :: Lovelace
-    -- TODO: Add staking.
-    -- TODO: Add metadata.
+--  , reqStakeAddress :: Maybe StakeCredential
+    , reqMetadata :: TransactionMetadata
     , reqAddresses :: [Address]
     , reqChange :: Address
     , reqCollateral :: [TxOutRef]
@@ -157,7 +169,7 @@ data MarloweRequest v =
     , reqInputs :: Redeemer v
     , reqValidityLowerBound :: Maybe POSIXTime
     , reqValidityUpperBound :: Maybe POSIXTime
-    -- TODO: Add metadata.
+    , reqMetadata :: TransactionMetadata
     , reqAddresses :: [Address]
     , reqChange :: Address
     , reqCollateral :: [TxOutRef]
@@ -165,21 +177,20 @@ data MarloweRequest v =
   | Withdraw
     { reqContractId :: ContractId
     , reqRole :: TokenName
-    -- TODO: Add metadata.
     , reqAddresses :: [Address]
     , reqChange :: Address
     , reqCollateral :: [TxOutRef]
     }
   | Sign
-    { reqTransactionBody :: C.TxBody C.BabbageEra
+    { reqTxBody :: C.TxBody C.BabbageEra
     , reqPaymentKeys :: [C.SigningKey C.PaymentKey]
     , reqPaymentExtendedKeys :: [C.SigningKey C.PaymentExtendedKey]
     }
   | Submit
-    { reqTransaction :: C.Tx C.BabbageEra
+    { reqTx :: C.Tx C.BabbageEra
     }
   | Wait
-    { reqTransactionId :: TxId
+    { reqTxId :: TxId
     , reqPollingSeconds :: Int
     }
 
@@ -205,6 +216,7 @@ instance A.FromJSON (MarloweRequest 'V1) where
                           reqContract <- o A..: "contract"
                           reqRoles <- M.mapKeys fromString . M.map fromString <$> (o A..: "roles" :: A.Parser (M.Map String String))
                           reqMinUtxo <- Lovelace <$> o A..: "minUtxo"
+                          reqMetadata <- metadataFromJSON =<< o A..: "metadata"
                           reqAddresses <- mapM addressFromJSON =<< o A..: "addresses"
                           reqChange <- addressFromJSON =<< o A..: "change"
                           reqCollateral <- fmap fromString <$> o A..: "collateral"
@@ -214,6 +226,7 @@ instance A.FromJSON (MarloweRequest 'V1) where
                          reqInputs <- o A..: "inputs"
                          reqValidityLowerBound <- Just . POSIXTime <$> o A..: "validityLowerBound"
                          reqValidityUpperBound <- Just . POSIXTime <$> o A..: "validityUpperBound"
+                         reqMetadata <- metadataFromJSON =<< o A..: "metadata"
                          reqAddresses <- mapM addressFromJSON =<< o A..: "addresses"
                          reqChange <- addressFromJSON =<< o A..: "change"
                          reqCollateral <- fmap fromString <$> o A..: "collateral"
@@ -226,15 +239,15 @@ instance A.FromJSON (MarloweRequest 'V1) where
                             reqCollateral <- fmap fromString <$> o A..: "collateral"
                             pure Withdraw{..}
             "sign" -> do
-                        reqTransactionBody <- textEnvelopeFromJSON (C.AsTxBody C.AsBabbageEra) =<< o A..: "body"
+                        reqTxBody <- textEnvelopeFromJSON (C.AsTxBody C.AsBabbageEra) =<< o A..: "body"
                         reqPaymentKeys <- mapM (textEnvelopeFromJSON $ C.AsSigningKey C.AsPaymentKey) =<< o A..: "paymentKeys"
                         reqPaymentExtendedKeys <- mapM (textEnvelopeFromJSON $ C.AsSigningKey C.AsPaymentExtendedKey) =<< o A..: "paymentExtendedKeys"
                         pure Sign{..}
             "submit" -> do
-                        reqTransaction <- textEnvelopeFromJSON (C.AsTx C.AsBabbageEra) =<< o A..: "tx"
+                        reqTx <- textEnvelopeFromJSON (C.AsTx C.AsBabbageEra) =<< o A..: "tx"
                         pure Submit{..}
             "wait" -> do
-                        reqTransactionId <- fromString <$> o A..: "txId"
+                        reqTxId <- fromString <$> o A..: "txId"
                         reqPollingSeconds <- o A..: "pollingSeconds"
                         pure Wait{..}
             request -> fail $ "Invalid request: " <> request <> "."
@@ -261,8 +274,9 @@ instance A.ToJSON (MarloweRequest 'V1) where
     A.object
       [ "request" A..= ("create" :: String)
       , "contract" A..= reqContract
-      , "minUtxo" A..= unLovelace reqMinUtxo
       , "roles" A..= M.mapKeys show reqRoles
+      , "minUtxo" A..= unLovelace reqMinUtxo
+      , "metadata" A..= reqMetadata
       , "addresses" A..= fmap addressToJSON reqAddresses
       , "change" A..= addressToJSON reqChange
       , "collateral" A..= reqCollateral
@@ -273,6 +287,7 @@ instance A.ToJSON (MarloweRequest 'V1) where
       , "inputs" A..= reqInputs
       , "validityLowerBound" A..= fmap getPOSIXTime reqValidityLowerBound
       , "validityUpperBound" A..= fmap getPOSIXTime reqValidityUpperBound
+      , "metadata" A..= reqMetadata
       , "addresses" A..= fmap addressToJSON reqAddresses
       , "change" A..= addressToJSON reqChange
       , "collateral" A..= reqCollateral
@@ -288,19 +303,19 @@ instance A.ToJSON (MarloweRequest 'V1) where
   toJSON Sign{..} =
     A.object
       [ "request" A..= ("sign" :: String)
-      , "body" A..= textEnvelopeToJSON reqTransactionBody
+      , "body" A..= textEnvelopeToJSON reqTxBody
       , "paymentKeys" A..= fmap textEnvelopeToJSON reqPaymentKeys
       , "paymentExtendedKeys" A..= fmap textEnvelopeToJSON reqPaymentExtendedKeys
       ]
   toJSON Submit{..} =
     A.object
       [ "request" A..= ("submit" :: String)
-      , "tx" A..= textEnvelopeToJSON reqTransaction
+      , "tx" A..= textEnvelopeToJSON reqTx
       ]
   toJSON Wait{..} =
     A.object
       [ "request" A..= ("wait" :: String)
-      , "txId" A..= reqTransactionId
+      , "txId" A..= reqTxId
       , "pollingSeconds" A..= reqPollingSeconds
       ]
 
@@ -318,15 +333,19 @@ data MarloweResponse v =
     }
   | Body
     { resContractId :: ContractId
-    , resTransactionId :: TxId
-    , resTransactionBody :: C.TxBody C.BabbageEra
+    , resTxId :: TxId
+    , resTxBody :: C.TxBody C.BabbageEra
     }
   | Tx
-    { resTransactionId :: TxId
-    , resTransaction :: C.Tx C.BabbageEra
+    { resTxId :: TxId
+    , resTx :: C.Tx C.BabbageEra
     }
   | TxId
-    { resTransactionId :: TxId
+    { resTxId :: TxId
+    }
+  | TxInfo
+    {
+      resTransaction :: CS.Transaction
     }
 
 
@@ -351,19 +370,24 @@ instance A.ToJSON (MarloweResponse 'V1) where
     A.object
       [ "response" A..= ("body" :: String)
       , "contractId" A..= renderContractId resContractId
-      , "txId" A..= C.getTxId resTransactionBody
-      , "body" A..= textEnvelopeToJSON resTransactionBody
+      , "txId" A..= C.getTxId resTxBody
+      , "body" A..= textEnvelopeToJSON resTxBody
       ]
   toJSON Tx{..} =
     A.object
       [ "response" A..= ("tx" :: String)
-      , "txId" A..= resTransactionId
-      , "tx" A..= textEnvelopeToJSON resTransaction
+      , "txId" A..= resTxId
+      , "tx" A..= textEnvelopeToJSON resTx
       ]
   toJSON TxId{..} =
     A.object
       [ "response" A..= ("txId" :: String)
-      , "txId" A..= resTransactionId
+      , "txId" A..= resTxId
+      ]
+  toJSON TxInfo{..} =
+    A.object
+      [ "reponse" A..= ("txInfo" :: String)
+      , "transaction" A..= resTransaction
       ]
 
 
@@ -430,9 +454,9 @@ textEnvelopeToJSON x =
 
 
 mkBody :: ContractId -> C.TxBody C.BabbageEra -> MarloweResponse v
-mkBody resContractId resTransactionBody =
+mkBody resContractId resTxBody =
   let
-    resTransactionId = fromCardanoTxId $ C.getTxId resTransactionBody
+    resTxId = fromCardanoTxId $ C.getTxId resTxBody
   in
     Body{..}
 
@@ -443,3 +467,7 @@ addressFromJSON = maybe (A.parseFail "Failed decoding Bech32 address.") pure . f
 
 addressToJSON :: Address -> A.Value
 addressToJSON = maybe (error "Failed encoding Bech32 address.") A.String . toBech32
+
+
+metadataFromJSON :: A.Value -> A.Parser TransactionMetadata
+metadataFromJSON = maybe (A.parseFail "Failed decoding transaction metadata.") pure . fromJSONEncodedTransactionMetadata
