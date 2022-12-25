@@ -97,13 +97,18 @@
           depends = [
             (hsPkgs."base" or (errorHandler.buildDepError "base"))
             (hsPkgs."aeson" or (errorHandler.buildDepError "aeson"))
+            (hsPkgs."http-client" or (errorHandler.buildDepError "http-client"))
             (hsPkgs."http-client-tls" or (errorHandler.buildDepError "http-client-tls"))
             (hsPkgs."servant" or (errorHandler.buildDepError "servant"))
             (hsPkgs."servant-client" or (errorHandler.buildDepError "servant-client"))
             (hsPkgs."text" or (errorHandler.buildDepError "text"))
             ];
           buildable = true;
-          modules = [ "Sofr" ];
+          modules = [
+            "Network/Oracle"
+            "Network/Oracle/CoinGecko"
+            "Network/Oracle/Sofr"
+            ];
           hsSourceDirs = [ "oracle" ];
           mainPath = [ "Main.hs" ];
           };
