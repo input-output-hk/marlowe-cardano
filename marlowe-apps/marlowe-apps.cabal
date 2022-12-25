@@ -51,7 +51,7 @@ library
 
 executable marlowe-scaling
   main-is           : Main.hs
-  hs-source-dirs    : app
+  hs-source-dirs    : scaling
   build-depends     : base >= 4.9 && < 5
                     , aeson
                     , async
@@ -70,6 +70,25 @@ executable marlowe-scaling
                     , split
                     , text
                     , time
+  ghc-options       : -Wall
+                      -Wnoncanonical-monad-instances
+                      -Wincomplete-uni-patterns
+                      -Wincomplete-record-updates
+                      -Wredundant-constraints
+                      -Widentities
+                      -Wunused-packages
+  default-language  : Haskell2010
+
+executable marlowe-oracle
+  main-is           : Main.hs
+  hs-source-dirs    : oracle
+  other-modules     : Sofr
+  build-depends     : base >= 4.9 && < 5
+                    , aeson
+                    , http-client-tls
+                    , servant
+                    , servant-client
+                    , text
   ghc-options       : -Wall
                       -Wnoncanonical-monad-instances
                       -Wincomplete-uni-patterns

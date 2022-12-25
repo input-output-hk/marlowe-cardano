@@ -90,7 +90,21 @@
             (hsPkgs."time" or (errorHandler.buildDepError "time"))
             ];
           buildable = true;
-          hsSourceDirs = [ "app" ];
+          hsSourceDirs = [ "scaling" ];
+          mainPath = [ "Main.hs" ];
+          };
+        "marlowe-oracle" = {
+          depends = [
+            (hsPkgs."base" or (errorHandler.buildDepError "base"))
+            (hsPkgs."aeson" or (errorHandler.buildDepError "aeson"))
+            (hsPkgs."http-client-tls" or (errorHandler.buildDepError "http-client-tls"))
+            (hsPkgs."servant" or (errorHandler.buildDepError "servant"))
+            (hsPkgs."servant-client" or (errorHandler.buildDepError "servant-client"))
+            (hsPkgs."text" or (errorHandler.buildDepError "text"))
+            ];
+          buildable = true;
+          modules = [ "Sofr" ];
+          hsSourceDirs = [ "oracle" ];
           mainPath = [ "Main.hs" ];
           };
         };
