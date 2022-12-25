@@ -141,7 +141,7 @@
         "temporary".revision = (((hackage."temporary")."1.3").revisions).default;
         "katip".revision = (((hackage."katip")."0.8.7.2").revisions).default;
         "katip".flags.lib-werror = false;
-        "hasql-pool".revision = (((hackage."hasql-pool")."0.5.2.1").revisions).default;
+        "hasql-pool".revision = (((hackage."hasql-pool")."0.5.2.2").revisions).default;
         "comonad".revision = (((hackage."comonad")."5.0.8").revisions).default;
         "comonad".flags.containers = true;
         "comonad".flags.distributive = true;
@@ -591,7 +591,8 @@
         "prettyprinter".flags.buildreadme = false;
         "prettyprinter".flags.text = true;
         "hostname".revision = (((hackage."hostname")."1.0").revisions).default;
-        "resource-pool".revision = (((hackage."resource-pool")."0.3.1.0").revisions).default;
+        "resource-pool".revision = (((hackage."resource-pool")."0.2.3.2").revisions).default;
+        "resource-pool".flags.developer = false;
         "cardano-protocol-tpraos".revision = (((hackage."cardano-protocol-tpraos")."0.1.0.0").revisions).default;
         "simple-sendfile".revision = (((hackage."simple-sendfile")."0.2.30").revisions).default;
         "simple-sendfile".flags.allow-bsd = true;
@@ -654,6 +655,7 @@
         "composition-prelude".flags.development = false;
         "th-utilities".revision = (((hackage."th-utilities")."0.2.5.0").revisions).default;
         "quiet".revision = (((hackage."quiet")."0.2").revisions).default;
+        "base-prelude".revision = (((hackage."base-prelude")."1.6.1").revisions).default;
         "transformers-except".revision = (((hackage."transformers-except")."0.1.2").revisions).default;
         "ansi-terminal".revision = (((hackage."ansi-terminal")."0.11.3").revisions).default;
         "ansi-terminal".flags.example = false;
@@ -1216,6 +1218,7 @@
           "code-page".components.library.planned = lib.mkOverride 900 true;
           "ouroboros-consensus-byron".components.library.planned = lib.mkOverride 900 true;
           "hedgehog-quickcheck".components.library.planned = lib.mkOverride 900 true;
+          "base-prelude".components.library.planned = lib.mkOverride 900 true;
           "eventuo11y-dsl".components.library.planned = lib.mkOverride 900 true;
           "memory".components.library.planned = lib.mkOverride 900 true;
           "pem".components.library.planned = lib.mkOverride 900 true;
