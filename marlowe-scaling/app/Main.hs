@@ -135,7 +135,7 @@ runScenario event config address key contract inputs =
                     response -> unexpected response
               handleWithEvents subEvent "Confirm" config (Wait txId' 1)
                 $ \case
-                  TxId{}   -> pure ()
+                  TxInfo{} -> pure ()
                   response -> unexpected response
               pure contractId
     contractId <- transact $ Create contract mempty 1_500_000 mempty mempty address mempty
