@@ -11,7 +11,7 @@
     flags = {};
     package = {
       specVersion = "3.0";
-      identifier = { name = "marlowe-scaling"; version = "0.1.0.0"; };
+      identifier = { name = "marlowe-apps"; version = "0.2.0.0"; };
       license = "Apache-2.0";
       copyright = "";
       maintainer = "Brian W Bush <brian.bush@iohk.io>";
@@ -57,13 +57,13 @@
           ];
         buildable = true;
         modules = [
-          "Language/Marlowe/Runtime/Client"
-          "Language/Marlowe/Runtime/Client/Build"
-          "Language/Marlowe/Runtime/Client/List"
-          "Language/Marlowe/Runtime/Client/Run"
-          "Language/Marlowe/Runtime/Client/Sign"
-          "Language/Marlowe/Runtime/Client/Submit"
-          "Language/Marlowe/Runtime/Client/Types"
+          "Language/Marlowe/Runtime/App"
+          "Language/Marlowe/Runtime/App/Build"
+          "Language/Marlowe/Runtime/App/List"
+          "Language/Marlowe/Runtime/App/Run"
+          "Language/Marlowe/Runtime/App/Sign"
+          "Language/Marlowe/Runtime/App/Submit"
+          "Language/Marlowe/Runtime/App/Types"
           ];
         hsSourceDirs = [ "src" ];
         };
@@ -79,9 +79,9 @@
             (hsPkgs."eventuo11y-dsl" or (errorHandler.buildDepError "eventuo11y-dsl"))
             (hsPkgs."eventuo11y-json" or (errorHandler.buildDepError "eventuo11y-json"))
             (hsPkgs."marlowe" or (errorHandler.buildDepError "marlowe"))
+            (hsPkgs."marlowe-apps" or (errorHandler.buildDepError "marlowe-apps"))
             (hsPkgs."marlowe-chain-sync" or (errorHandler.buildDepError "marlowe-chain-sync"))
             (hsPkgs."marlowe-runtime" or (errorHandler.buildDepError "marlowe-runtime"))
-            (hsPkgs."marlowe-scaling" or (errorHandler.buildDepError "marlowe-scaling"))
             (hsPkgs."mtl" or (errorHandler.buildDepError "mtl"))
             (hsPkgs."plutus-ledger-api" or (errorHandler.buildDepError "plutus-ledger-api"))
             (hsPkgs."random" or (errorHandler.buildDepError "random"))
@@ -95,4 +95,4 @@
           };
         };
       };
-    } // rec { src = (pkgs.lib).mkDefault ../marlowe-scaling; }
+    } // rec { src = (pkgs.lib).mkDefault ../marlowe-apps; }

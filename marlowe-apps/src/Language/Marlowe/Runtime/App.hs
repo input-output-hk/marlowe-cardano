@@ -7,7 +7,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 
-module Language.Marlowe.Runtime.Client
+module Language.Marlowe.Runtime.App
   ( handle
   ) where
 
@@ -17,13 +17,13 @@ import Control.Concurrent.Async (race)
 import Control.Exception (SomeException, catch)
 import Data.Bifunctor (second)
 import Data.Either (fromRight)
-import Language.Marlowe.Runtime.Client.Build (buildApplication, buildCreation, buildWithdrawal)
-import Language.Marlowe.Runtime.Client.List
+import Language.Marlowe.Runtime.App.Build (buildApplication, buildCreation, buildWithdrawal)
+import Language.Marlowe.Runtime.App.List
   (allContracts, followContract, followedContracts, getContract, unfollowContract)
-import Language.Marlowe.Runtime.Client.Run (runClientWithConfig)
-import Language.Marlowe.Runtime.Client.Sign (sign)
-import Language.Marlowe.Runtime.Client.Submit (submit, waitForTx)
-import Language.Marlowe.Runtime.Client.Types (Config(timeoutSeconds), MarloweRequest(..), MarloweResponse(..), mkBody)
+import Language.Marlowe.Runtime.App.Run (runClientWithConfig)
+import Language.Marlowe.Runtime.App.Sign (sign)
+import Language.Marlowe.Runtime.App.Submit (submit, waitForTx)
+import Language.Marlowe.Runtime.App.Types (Config(timeoutSeconds), MarloweRequest(..), MarloweResponse(..), mkBody)
 import Language.Marlowe.Runtime.Core.Api (MarloweVersion(MarloweV1), MarloweVersionTag(V1))
 
 

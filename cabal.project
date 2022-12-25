@@ -22,6 +22,7 @@ packages:
   eventuo11y-extras
   marlowe
   marlowe-actus
+  marlowe-apps
   marlowe-chain-sync
   marlowe-cli
   marlowe-contracts
@@ -29,7 +30,6 @@ packages:
   marlowe-protocols-test
   marlowe-runtime
   marlowe-test
-  marlowe-scaling
 
   libs/aeson-via-serialise
   libs/base16-aeson

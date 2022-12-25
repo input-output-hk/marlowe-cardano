@@ -1,6 +1,6 @@
 cabal-version      : 3.0
-name               : marlowe-scaling
-version            : 0.1.0.0
+name               : marlowe-apps
+version            : 0.2.0.0
 synopsis           : Scalable creation of Marlowe transactions.
 license            : Apache-2.0
 license-file       : LICENSE
@@ -11,13 +11,13 @@ build-type         : Simple
 extra-source-files : ReadMe.md
 
 library
-  exposed-modules   : Language.Marlowe.Runtime.Client
-                      Language.Marlowe.Runtime.Client.Build
-                      Language.Marlowe.Runtime.Client.List
-                      Language.Marlowe.Runtime.Client.Run
-                      Language.Marlowe.Runtime.Client.Sign
-                      Language.Marlowe.Runtime.Client.Submit
-                      Language.Marlowe.Runtime.Client.Types
+  exposed-modules   : Language.Marlowe.Runtime.App
+                      Language.Marlowe.Runtime.App.Build
+                      Language.Marlowe.Runtime.App.List
+                      Language.Marlowe.Runtime.App.Run
+                      Language.Marlowe.Runtime.App.Sign
+                      Language.Marlowe.Runtime.App.Submit
+                      Language.Marlowe.Runtime.App.Types
   hs-source-dirs    : src
   build-depends     : base >= 4.9 && < 5
                     , aeson
@@ -61,9 +61,9 @@ executable marlowe-scaling
                     , eventuo11y-dsl
                     , eventuo11y-json
                     , marlowe
+                    , marlowe-apps
                     , marlowe-chain-sync
                     , marlowe-runtime
-                    , marlowe-scaling
                     , mtl
                     , plutus-ledger-api
                     , random

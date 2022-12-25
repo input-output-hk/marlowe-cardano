@@ -1,6 +1,6 @@
 
 
-module Language.Marlowe.Runtime.Client.Sign
+module Language.Marlowe.Runtime.App.Sign
   ( sign
   ) where
 

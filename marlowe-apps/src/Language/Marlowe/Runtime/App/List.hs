@@ -5,7 +5,7 @@
 {-# LANGUAGE TypeFamilies #-}
 
 
-module Language.Marlowe.Runtime.Client.List
+module Language.Marlowe.Runtime.App.List
   ( allContracts
   , followContract
   , followedContracts
@@ -17,8 +17,8 @@ module Language.Marlowe.Runtime.Client.List
 import Data.Bifunctor (first)
 import Data.Type.Equality ((:~:)(Refl))
 import Data.Void (Void, absurd)
-import Language.Marlowe.Runtime.Client.Run (runJobClient, runMarloweSyncClient, runQueryClient)
-import Language.Marlowe.Runtime.Client.Types (Client, Services(..))
+import Language.Marlowe.Runtime.App.Run (runJobClient, runMarloweSyncClient, runQueryClient)
+import Language.Marlowe.Runtime.App.Types (Client, Services(..))
 import Language.Marlowe.Runtime.Core.Api (ContractId, IsMarloweVersion(..), MarloweVersion, assertVersionsEqual)
 import Language.Marlowe.Runtime.Discovery.Api (ContractHeader(contractId), DiscoveryQuery(..))
 import Language.Marlowe.Runtime.History.Api (ContractStep, CreateStep, HistoryCommand(..), HistoryQuery(..))

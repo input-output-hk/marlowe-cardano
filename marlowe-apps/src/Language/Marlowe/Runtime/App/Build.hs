@@ -6,7 +6,7 @@
 {-# LANGUAGE TypeFamilies #-}
 
 
-module Language.Marlowe.Runtime.Client.Build
+module Language.Marlowe.Runtime.App.Build
   ( buildApplication
   , buildCreation
   , buildWithdrawal
@@ -18,9 +18,9 @@ import Data.Time (UTCTime, secondsToNominalDiffTime)
 import Data.Time.Clock.POSIX (posixSecondsToUTCTime)
 import Data.Void (Void)
 import Language.Marlowe (POSIXTime(..))
+import Language.Marlowe.Runtime.App.Run (runJobClient)
+import Language.Marlowe.Runtime.App.Types (Client, Services(..))
 import Language.Marlowe.Runtime.ChainSync.Api (Address, Lovelace(..), TokenName, TransactionMetadata, TxOutRef)
-import Language.Marlowe.Runtime.Client.Run (runJobClient)
-import Language.Marlowe.Runtime.Client.Types (Client, Services(..))
 import Language.Marlowe.Runtime.Core.Api (ContractId, IsMarloweVersion(..), MarloweVersion)
 import Language.Marlowe.Runtime.Transaction.Api
   ( ApplyInputsError

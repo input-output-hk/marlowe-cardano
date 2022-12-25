@@ -12,7 +12,7 @@
 {-# LANGUAGE UndecidableInstances #-}
 
 
-module Language.Marlowe.Runtime.Client.Types
+module Language.Marlowe.Runtime.App.Types
   ( Client(..)
   , Config(..)
   , MarloweRequest(..)

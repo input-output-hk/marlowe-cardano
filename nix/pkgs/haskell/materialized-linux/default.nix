@@ -141,7 +141,7 @@
         "temporary".revision = (((hackage."temporary")."1.3").revisions).default;
         "katip".revision = (((hackage."katip")."0.8.7.2").revisions).default;
         "katip".flags.lib-werror = false;
-        "hasql-pool".revision = (((hackage."hasql-pool")."0.5.2.2").revisions).default;
+        "hasql-pool".revision = (((hackage."hasql-pool")."0.5.2.1").revisions).default;
         "comonad".revision = (((hackage."comonad")."5.0.8").revisions).default;
         "comonad".flags.containers = true;
         "comonad".flags.distributive = true;
@@ -592,8 +592,7 @@
         "prettyprinter".flags.buildreadme = false;
         "prettyprinter".flags.text = true;
         "hostname".revision = (((hackage."hostname")."1.0").revisions).default;
-        "resource-pool".revision = (((hackage."resource-pool")."0.2.3.2").revisions).default;
-        "resource-pool".flags.developer = false;
+        "resource-pool".revision = (((hackage."resource-pool")."0.3.1.0").revisions).default;
         "cardano-protocol-tpraos".revision = (((hackage."cardano-protocol-tpraos")."0.1.0.0").revisions).default;
         "simple-sendfile".revision = (((hackage."simple-sendfile")."0.2.30").revisions).default;
         "simple-sendfile".flags.allow-bsd = true;
@@ -655,7 +654,6 @@
         "composition-prelude".flags.development = false;
         "th-utilities".revision = (((hackage."th-utilities")."0.2.5.0").revisions).default;
         "quiet".revision = (((hackage."quiet")."0.2").revisions).default;
-        "base-prelude".revision = (((hackage."base-prelude")."1.6.1").revisions).default;
         "transformers-except".revision = (((hackage."transformers-except")."0.1.2").revisions).default;
         "ansi-terminal".revision = (((hackage."ansi-terminal")."0.11.3").revisions).default;
         "ansi-terminal".flags.example = false;
@@ -794,6 +792,7 @@
       packages = {
         base16-aeson = ./.plan.nix/base16-aeson.nix;
         freer-extras = ./.plan.nix/freer-extras.nix;
+        marlowe-apps = ./.plan.nix/marlowe-apps.nix;
         plutus-ledger-aeson = ./.plan.nix/plutus-ledger-aeson.nix;
         marlowe = ./.plan.nix/marlowe.nix;
         plutus-ledger = ./.plan.nix/plutus-ledger.nix;
@@ -817,7 +816,6 @@
         eventuo11y-dsl = ./.plan.nix/eventuo11y-dsl.nix;
         cardano-integration = ./.plan.nix/cardano-integration.nix;
         aeson-via-serialise = ./.plan.nix/aeson-via-serialise.nix;
-        marlowe-scaling = ./.plan.nix/marlowe-scaling.nix;
         eventuo11y-json = ./.plan.nix/eventuo11y-json.nix;
         plutus-ledger-slot = ./.plan.nix/plutus-ledger-slot.nix;
         };
@@ -828,6 +826,7 @@
         packages = {
           "base16-aeson" = { flags = {}; };
           "freer-extras" = { flags = {}; };
+          "marlowe-apps" = { flags = {}; };
           "plutus-ledger-aeson" = {
             flags = { "defer-plugin-errors" = lib.mkOverride 900 false; };
             };
@@ -880,7 +879,6 @@
           "eventuo11y-dsl" = { flags = {}; };
           "cardano-integration" = { flags = {}; };
           "aeson-via-serialise" = { flags = {}; };
-          "marlowe-scaling" = { flags = {}; };
           "eventuo11y-json" = { flags = {}; };
           "plutus-ledger-slot" = {
             flags = { "defer-plugin-errors" = lib.mkOverride 900 false; };
@@ -1041,7 +1039,6 @@
           "quickcheck-instances".components.library.planned = lib.mkOverride 900 true;
           "servant-client-core".components.library.planned = lib.mkOverride 900 true;
           "mersenne-random-pure64".components.library.planned = lib.mkOverride 900 true;
-          "marlowe-scaling".components.exes."marlowe-scaling".planned = lib.mkOverride 900 true;
           "js-chart".components.library.planned = lib.mkOverride 900 true;
           "template-haskell-compat-v0208".components.library.planned = lib.mkOverride 900 true;
           "marlowe-runtime".components.sublibs."history".planned = lib.mkOverride 900 true;
@@ -1208,6 +1205,7 @@
           "Stream".components.library.planned = lib.mkOverride 900 true;
           "criterion".components.library.planned = lib.mkOverride 900 true;
           "katip".components.library.planned = lib.mkOverride 900 true;
+          "marlowe-apps".components.exes."marlowe-scaling".planned = lib.mkOverride 900 true;
           "marlowe-protocols-test".components.library.planned = lib.mkOverride 900 true;
           "hasql".components.library.planned = lib.mkOverride 900 true;
           "wai-logger".components.setup.planned = lib.mkOverride 900 true;
@@ -1218,7 +1216,6 @@
           "code-page".components.library.planned = lib.mkOverride 900 true;
           "ouroboros-consensus-byron".components.library.planned = lib.mkOverride 900 true;
           "hedgehog-quickcheck".components.library.planned = lib.mkOverride 900 true;
-          "base-prelude".components.library.planned = lib.mkOverride 900 true;
           "eventuo11y-dsl".components.library.planned = lib.mkOverride 900 true;
           "memory".components.library.planned = lib.mkOverride 900 true;
           "pem".components.library.planned = lib.mkOverride 900 true;
@@ -1250,6 +1247,7 @@
           "sbv".components.library.planned = lib.mkOverride 900 true;
           "cardano-binary".components.library.planned = lib.mkOverride 900 true;
           "text-short".components.library.planned = lib.mkOverride 900 true;
+          "marlowe-apps".components.library.planned = lib.mkOverride 900 true;
           "haskell-src-exts".components.library.planned = lib.mkOverride 900 true;
           "entropy".components.library.planned = lib.mkOverride 900 true;
           "assoc".components.library.planned = lib.mkOverride 900 true;
@@ -1319,7 +1317,6 @@
           "wai-logger".components.library.planned = lib.mkOverride 900 true;
           "th-compat".components.library.planned = lib.mkOverride 900 true;
           "cardano-crypto".components.library.planned = lib.mkOverride 900 true;
-          "marlowe-scaling".components.library.planned = lib.mkOverride 900 true;
           "bytestring-strict-builder".components.library.planned = lib.mkOverride 900 true;
           "ordered-containers".components.library.planned = lib.mkOverride 900 true;
           "hpc".components.library.planned = lib.mkOverride 900 true;

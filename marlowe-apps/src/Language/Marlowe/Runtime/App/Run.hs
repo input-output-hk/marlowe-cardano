@@ -8,7 +8,7 @@
 {-# LANGUAGE UndecidableInstances #-}
 
 
-module Language.Marlowe.Runtime.Client.Run
+module Language.Marlowe.Runtime.App.Run
   ( runChainSeekClient
   , runClientWithConfig
   , runJobClient
@@ -23,8 +23,8 @@ import Control.Monad.Trans.Reader (ReaderT(..), ask)
 import Data.ByteString.Lazy (ByteString)
 import Language.Marlowe.Protocol.Sync.Client (MarloweSyncClient, hoistMarloweSyncClient, marloweSyncClientPeer)
 import Language.Marlowe.Protocol.Sync.Codec (codecMarloweSync)
+import Language.Marlowe.Runtime.App.Types (Client(..), Config(..), RunClient, Services(..))
 import Language.Marlowe.Runtime.ChainSync.Api (RuntimeChainSeekClient, WithGenesis(Genesis))
-import Language.Marlowe.Runtime.Client.Types (Client(..), Config(..), RunClient, Services(..))
 import Network.Channel (socketAsChannel)
 import Network.Protocol.ChainSeek.Client (chainSeekClientPeer, hoistChainSeekClient)
 import Network.Protocol.ChainSeek.Codec (codecChainSeek)

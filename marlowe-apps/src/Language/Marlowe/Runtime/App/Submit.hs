@@ -2,7 +2,7 @@
 {-# LANGUAGE NumericUnderscores #-}
 
 
-module Language.Marlowe.Runtime.Client.Submit
+module Language.Marlowe.Runtime.App.Submit
   ( submit
   , waitForTx
   ) where
@@ -12,11 +12,11 @@ import Control.Concurrent (threadDelay)
 import Control.Monad.IO.Class (liftIO)
 import Data.Bifunctor (second)
 import Data.Functor (($>))
+import Language.Marlowe.Runtime.App.Run (runChainSeekClient, runJobClient)
+import Language.Marlowe.Runtime.App.Types (Client, Services(..))
 import Language.Marlowe.Runtime.Cardano.Api (fromCardanoTxId)
 import Language.Marlowe.Runtime.ChainSync.Api
   (ChainSyncCommand(SubmitTx), Move(FindTx), Transaction, TxId, WithGenesis(..), moveSchema)
-import Language.Marlowe.Runtime.Client.Run (runChainSeekClient, runJobClient)
-import Language.Marlowe.Runtime.Client.Types (Client, Services(..))
 import Network.Protocol.ChainSeek.Client
   ( ChainSeekClient(ChainSeekClient)
   , ClientStHandshake(..)
