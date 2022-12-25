@@ -1,13 +1,12 @@
 
 
 {-# LANGUAGE DataKinds #-}
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TypeOperators #-}
 
 
-module Sofr
+module Network.Oracle.Sofr
   ( ReferenceRate(..)
   , ReferenceRates(..)
   , SofrApi
@@ -22,10 +21,21 @@ module Sofr
 import Data.Aeson (FromJSON(parseJSON), withObject, (.:))
 import Data.Proxy (Proxy(Proxy))
 import Data.Text (Text)
-import Network.HTTP.Client.TLS (newTlsManager)
+import Network.HTTP.Client (Manager)
 import Servant.API (Get, JSON, (:>))
 import Servant.Client (ClientEnv, ClientM, client, mkClientEnv, parseBaseUrl, runClientM)
 
+
+
+nyfrbEnv :: Manager -> IO ClientEnv
+nyfrbEnv manager = mkClientEnv manager <$> parseBaseUrl "https://markets.newyorkfed.org"
+
+
+type SofrApi = "api" :> "rates" :> "secured" :> "sofr" :> "last" :> "1.json" :> Get '[JSON] ReferenceRates
+
+
+sofrApi :: Proxy SofrApi
+sofrApi = Proxy
 
 
 newtype ReferenceRates = ReferenceRates {referenceRates :: [ReferenceRate]}
@@ -33,20 +43,6 @@ newtype ReferenceRates = ReferenceRates {referenceRates :: [ReferenceRate]}
 
 instance FromJSON ReferenceRates where
   parseJSON = withObject "ReferenceRates" $ fmap ReferenceRates . (.: "refRates")
-
-
-nyfrbEnv :: IO ClientEnv
-nyfrbEnv =
-  mkClientEnv
-    <$> newTlsManager
-    <*> parseBaseUrl "https://markets.newyorkfed.org"
-
-
-type SofrApi = "api/rates/secured/sofr/last/1.json" :> Get '[JSON] ReferenceRates
-
-
-sofrApi :: Proxy SofrApi
-sofrApi = Proxy
 
 
 data ReferenceRate =
@@ -96,9 +92,4 @@ getSofrBasisPoints =
 
 
 fetchSofrBasisPoints :: ClientEnv -> IO (Either String Integer)
-fetchSofrBasisPoints env =
-  runClientM getSofrBasisPoints env
-    >>= \case
-      Right (Right rate)   -> pure $ Right rate
-      Right (Left message) -> pure $ Left message
-      Left message         -> pure . Left $ show message
+fetchSofrBasisPoints =  fmap (either (Left . show) id) . runClientM getSofrBasisPoints

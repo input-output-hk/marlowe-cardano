@@ -1,5 +1,6 @@
 
 
+{-# LANGUAGE OverloadedStrings #-}
 
 
 module Main
@@ -7,12 +8,13 @@ module Main
   ) where
 
 
-import Sofr
-
+import Network.HTTP.Client.TLS (newTlsManager)
+import Network.Oracle (makeOracle, readOracle)
+import System.Environment (getArgs)
 
 main :: IO ()
 main =
   do
-    env <- nyfrbEnv
-    rate <- fetchSofrBasisPoints env
-    print rate
+    manager <- newTlsManager
+    oracleEnv <- makeOracle manager
+    print =<< mapM (readOracle oracleEnv . read) =<< getArgs

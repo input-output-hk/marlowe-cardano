@@ -82,9 +82,12 @@ executable marlowe-scaling
 executable marlowe-oracle
   main-is           : Main.hs
   hs-source-dirs    : oracle
-  other-modules     : Sofr
+  other-modules     : Network.Oracle
+                      Network.Oracle.CoinGecko
+                      Network.Oracle.Sofr
   build-depends     : base >= 4.9 && < 5
                     , aeson
+                    , http-client
                     , http-client-tls
                     , servant
                     , servant-client
