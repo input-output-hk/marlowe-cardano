@@ -12,6 +12,7 @@ module Language.Marlowe.Runtime.App.Run
   ( runChainSeekClient
   , runClientWithConfig
   , runJobClient
+  , runMarloweHeaderSyncClient
   , runMarloweSyncClient
   , runQueryClient
   ) where
@@ -21,6 +22,9 @@ import Control.Exception (Exception, bracket, bracketOnError, throwIO)
 import Control.Monad.Trans.Control (liftBaseWith)
 import Control.Monad.Trans.Reader (ReaderT(..), ask)
 import Data.ByteString.Lazy (ByteString)
+import Language.Marlowe.Protocol.HeaderSync.Client
+  (MarloweHeaderSyncClient, hoistMarloweHeaderSyncClient, marloweHeaderSyncClientPeer)
+import Language.Marlowe.Protocol.HeaderSync.Codec (codecMarloweHeaderSync)
 import Language.Marlowe.Protocol.Sync.Client (MarloweSyncClient, hoistMarloweSyncClient, marloweSyncClientPeer)
 import Language.Marlowe.Protocol.Sync.Codec (codecMarloweSync)
 import Language.Marlowe.Runtime.App.Types (Client(..), Config(..), RunClient, Services(..))
@@ -69,6 +73,16 @@ runQueryClient query client =
     liftBaseWith $ \runInBase -> query services $ hoistQueryClient runInBase client
 
 
+runMarloweHeaderSyncClient
+  :: (Services IO -> MarloweHeaderSyncClient IO a -> IO a)
+  -> MarloweHeaderSyncClient Client a
+  -> Client a
+runMarloweHeaderSyncClient sync client =
+  do
+    services <- Client ask
+    liftBaseWith $ \runInBase -> sync services $ hoistMarloweHeaderSyncClient runInBase client
+
+
 runMarloweSyncClient
   :: (Services IO -> MarloweSyncClient IO a -> IO a)
   -> MarloweSyncClient Client a
@@ -90,6 +104,7 @@ runClientWithConfig Config{..} client = do
   historyQueryAddr <- resolve historyHost historyQueryPort
   historySyncAddr <- resolve historyHost historySyncPort
   discoveryQueryAddr <- resolve discoveryHost discoveryQueryPort
+  discoverySyncAddr <- resolve discoveryHost discoverySyncPort
   txJobAddr <- resolve txHost txCommandPort
   runReaderT (runClient client) Services
     { runSyncClient = runClientPeerOverSocket chainSeekAddr codecChainSeek (chainSeekClientPeer Genesis)
@@ -99,6 +114,7 @@ runClientWithConfig Config{..} client = do
     , runHistorySyncClient = runClientPeerOverSocket historySyncAddr codecMarloweSync marloweSyncClientPeer
     , runTxJobClient = runClientPeerOverSocket txJobAddr codecJob jobClientPeer
     , runDiscoveryQueryClient = runClientPeerOverSocket discoveryQueryAddr codecQuery queryClientPeer
+    , runDiscoverySyncClient = runClientPeerOverSocket discoverySyncAddr codecMarloweHeaderSync marloweHeaderSyncClientPeer
     }
   where
     resolve host port =

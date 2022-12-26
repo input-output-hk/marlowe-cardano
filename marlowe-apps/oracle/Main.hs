@@ -17,6 +17,7 @@ import Language.Marlowe.Runtime.App.Stream
 import Network.HTTP.Client.TLS (newTlsManager)
 import Network.Oracle (makeOracle, readOracle)
 import System.Environment (getArgs)
+import System.IO (hPutStrLn, stderr)
 
 
 main :: IO ()
@@ -35,7 +36,9 @@ mainStream =
   do
     config <- read <$> readFile "preprod.config"
     channel <- newTChanIO
-    void . forkIO $ runClientWithConfig config $ streamAllContracts channel
+    void . forkIO
+      $ either (hPutStrLn stderr) pure
+      =<< runClientWithConfig config (streamAllContracts channel)
     forever $ threadDelay 100000 >> atomically (readTChan channel) >>= print
 
 

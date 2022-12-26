@@ -1,6 +1,7 @@
 
 
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
 
@@ -14,54 +15,42 @@ import Control.Concurrent.STM (atomically)
 import Control.Concurrent.STM.TChan (TChan, writeTChan)
 import Control.Monad.IO.Class (liftIO)
 import Data.Maybe (mapMaybe)
-import Data.Void (Void, absurd)
-import Language.Marlowe.Runtime.App.Run (runQueryClient)
+import Language.Marlowe.Runtime.App.Run (runMarloweHeaderSyncClient)
 import Language.Marlowe.Runtime.App.Types (Client, Services(..))
 import Language.Marlowe.Runtime.Core.Api (ContractId)
-import Language.Marlowe.Runtime.Discovery.Api (ContractHeader(contractId), DiscoveryQuery(..))
-import System.IO (hPutStrLn, stderr)
+import Language.Marlowe.Runtime.Discovery.Api (ContractHeader(contractId))
 
-import qualified Network.Protocol.Query.Client as Query
-  ( ClientStInit(SendMsgRequest)
-  , ClientStNext(ClientStNext)
-  , ClientStNextCanReject(..)
-  , ClientStPage(..)
-  , QueryClient(QueryClient)
-  )
+import qualified Language.Marlowe.Protocol.HeaderSync.Client as Sync
 
 
-streamAllContracts :: TChan ContractId -> Client ()
-streamAllContracts =
-  streamQuery GetContractHeaders runDiscoveryQueryClient True
-    $ Just . contractId
+streamAllContracts
+  :: TChan ContractId
+  -> Client (Either String ())
+streamAllContracts = streamContractHeaders $ Just . contractId
 
 
-streamQuery
-  :: query () Void [result]
-  -> (Services IO -> Query.QueryClient query IO () -> IO ())
-  -> Bool
-  -> (result -> Maybe a)
+streamContractHeaders
+  :: (ContractHeader -> Maybe a)
   -> TChan a
-  -> Client ()
-streamQuery query run follow extract channel =
+  -> Client (Either String ())
+streamContractHeaders extract channel =
   let
-    handleNextPage results nextPage =
-      do
-        liftIO . atomically
-          . mapM_ (writeTChan channel)
-          $ mapMaybe extract results
-        case nextPage of
-          Nothing -> if follow
-                       then do
-                              liftIO $ hPutStrLn stderr "WAITING" >> threadDelay 10000000 >> hPutStrLn stderr "REQUESTING"
-                              pure $ () `Query.SendMsgRequestNext` Query.ClientStNext handleNextPage
-                       else pure $ Query.SendMsgDone ()
-          Just () -> pure $ () `Query.SendMsgRequestNext` Query.ClientStNext handleNextPage
+    clientIdle = Sync.SendMsgRequestNext clientNext
+    clientWait = Sync.SendMsgPoll clientNext
+    clientNext =
+      Sync.ClientStNext
+      {
+        Sync.recvMsgNewHeaders = \_ results -> do
+                                                 liftIO . atomically
+                                                   . mapM_ (writeTChan channel)
+                                                   $ mapMaybe extract results
+                                                 pure clientIdle
+      , Sync.recvMsgRollBackward = const $ pure clientIdle
+      , Sync.recvMsgWait = clientWait <$ liftIO (threadDelay 5_000_000)
+      }
   in
-    runQueryClient run
-      . Query.QueryClient
-      . pure
-      $ Query.SendMsgRequest query Query.ClientStNextCanReject
-        { Query.recvMsgReject = absurd
-        , Query.recvMsgNextPage = handleNextPage
-        }
+    runMarloweHeaderSyncClient runDiscoverySyncClient
+      . Sync.MarloweHeaderSyncClient
+      $ pure clientIdle
+
+

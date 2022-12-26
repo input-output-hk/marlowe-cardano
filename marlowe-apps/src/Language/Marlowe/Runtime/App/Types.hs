@@ -32,6 +32,7 @@ import Control.Monad.Trans.Reader (ReaderT(..))
 import Data.Default (Default(..))
 import Data.String (fromString)
 import Language.Marlowe (POSIXTime(..))
+import Language.Marlowe.Protocol.HeaderSync.Client (MarloweHeaderSyncClient)
 import Language.Marlowe.Protocol.Sync.Client (MarloweSyncClient)
 import Language.Marlowe.Runtime.Cardano.Api (fromCardanoTxId)
 import Language.Marlowe.Runtime.ChainSync.Api
@@ -97,6 +98,7 @@ data Config =
   , historySyncPort :: PortNumber
   , discoveryHost :: HostName
   , discoveryQueryPort :: PortNumber
+  , discoverySyncPort :: PortNumber
   , txHost :: HostName
   , txCommandPort :: PortNumber
   , timeoutSeconds :: Int
@@ -115,6 +117,7 @@ instance Default Config where
     , historySyncPort = 3719
     , discoveryHost = "127.0.0.1"
     , discoveryQueryPort = 3721
+    , discoverySyncPort = 3722
     , txHost = "127.0.0.1"
     , txCommandPort = 3723
     , timeoutSeconds = 120
@@ -128,6 +131,7 @@ data Services m =
   , runHistoryJobClient :: RunClient m (JobClient HistoryCommand)
   , runHistoryQueryClient :: RunClient m (QueryClient HistoryQuery)
   , runHistorySyncClient :: RunClient m MarloweSyncClient
+  , runDiscoverySyncClient :: RunClient m MarloweHeaderSyncClient
   , runDiscoveryQueryClient :: RunClient m (QueryClient DiscoveryQuery)
   , runTxJobClient :: RunClient m (JobClient MarloweTxCommand)
   }
