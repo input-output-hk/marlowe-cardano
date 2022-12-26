@@ -21,8 +21,8 @@ import Network.Oracle (makeOracle, readOracle)
 import System.Environment (getArgs)
 import System.IO (hPutStrLn, stderr)
 
-import qualified Data.Aeson as A
-import qualified Data.ByteString.Lazy.Char8 as LBS8
+import qualified Data.Aeson as A (encode)
+import qualified Data.ByteString.Lazy.Char8 as LBS8 (putStrLn)
 
 
 main :: IO ()
@@ -43,7 +43,7 @@ mainStreamContractIds =
     config <- read <$> readFile "preprod.config"
     channel <- newTChanIO
     void . forkIO
-      $ either (hPutStrLn stderr) (const $ hPutStrLn stderr "FINISHED")
+      $ either (hPutStrLn stderr) pure
       =<< runClientWithConfig config (streamAllContractIds channel)
     forever $ threadDelay 100000 >> atomically (readTChan channel) >>= print
 
@@ -54,9 +54,8 @@ mainStreamContractSteps =
     config <- read <$> readFile "preprod.config"
     channel <- newTChanIO :: IO (TChan (ContractStream 'V1))
     void . forkIO
-      . (>> hPutStrLn stderr "FINISHED")
       . runClientWithConfig config
-      $ streamAllContractSteps "dcb12614fc428b0a93ee9f11f345b248c49e11d5742f5550a82c4894740eb85a#1" channel
+      $ streamAllContractSteps "11e07e45f099e47d8729efc13622256ef88b9201ab0ea24b7395f3b26129ccca#1" channel
     forever $ threadDelay 100000 >> atomically (readTChan channel) >>= LBS8.putStrLn . A.encode
 
 

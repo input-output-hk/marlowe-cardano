@@ -1,7 +1,6 @@
 
 
 {-# LANGUAGE DataKinds #-}
-{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -19,15 +18,22 @@ import Control.Concurrent.STM (atomically)
 import Control.Concurrent.STM.TChan (TChan, writeTChan)
 import Control.Monad.IO.Class (liftIO)
 import Data.Aeson (ToJSON(..), object, (.=))
-import Data.Maybe (mapMaybe)
+import Data.Maybe (isNothing, mapMaybe)
 import Data.Type.Equality ((:~:)(Refl))
 import Language.Marlowe.Runtime.App.Run (runMarloweHeaderSyncClient, runMarloweSyncClient)
 import Language.Marlowe.Runtime.App.Types (Client, Services(..))
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader)
 import Language.Marlowe.Runtime.Core.Api
-  (ContractId, IsMarloweVersion(..), MarloweVersion, MarloweVersionTag(V1), assertVersionsEqual)
+  ( ContractId
+  , IsMarloweVersion(..)
+  , MarloweVersion
+  , MarloweVersionTag(V1)
+  , Transaction(Transaction, output)
+  , TransactionOutput(TransactionOutput, scriptOutput)
+  , assertVersionsEqual
+  )
 import Language.Marlowe.Runtime.Discovery.Api (ContractHeader(contractId))
-import Language.Marlowe.Runtime.History.Api (ContractStep, CreateStep)
+import Language.Marlowe.Runtime.History.Api (ContractStep(ApplyTransaction), CreateStep)
 
 import qualified Language.Marlowe.Protocol.HeaderSync.Client as HS
 import qualified Language.Marlowe.Protocol.Sync.Client as CS
@@ -85,7 +91,7 @@ data ContractStream v =
   | ContractStreamFinish
     {
       csContractId :: ContractId
-    , csFinish :: Either String ()
+    , csFinish :: Either String Bool -- Either an error message or an indication whether the contract closed.
     }
 
 instance ToJSON (ContractStream 'V1) where
@@ -123,17 +129,23 @@ streamAllContractSteps
   => ContractId
   -> TChan (ContractStream v)
   -> Client ()
-streamAllContractSteps = streamContractSteps $ const True
+streamAllContractSteps = streamContractSteps True $ const True
+
+
+hasClosed :: ContractStep v -> Bool
+hasClosed (ApplyTransaction Transaction{output=TransactionOutput{..}}) = isNothing scriptOutput
+hasClosed  _ = False
 
 
 streamContractSteps
   :: forall v
   .  IsMarloweVersion v
-  => (Either (CreateStep v) (ContractStep v) -> Bool)
+  => Bool
+  -> (Either (CreateStep v) (ContractStep v) -> Bool)
   -> ContractId
   -> TChan (ContractStream v)
   -> Client ()
-streamContractSteps accept csContractId channel =
+streamContractSteps finishOnClose accept csContractId channel =
   let
     clientInit =
       CS.SendMsgFollowContract csContractId
@@ -155,7 +167,7 @@ streamContractSteps accept csContractId channel =
                                liftIO . atomically
                                  . writeTChan channel
                                  . ContractStreamFinish csContractId
-                                 $ Right ()
+                                 $ Right False
                                pure $ CS.SendMsgDone ()
         }
     clientIdle = CS.SendMsgRequestNext . clientNext
@@ -181,12 +193,19 @@ streamContractSteps accept csContractId channel =
             . mapM_ (\csContractStep -> writeTChan channel ContractStreamContinued{..})
             $ fst <$> takeWhile snd (zip steps acceptances)
           if and acceptances
-            then pure $ clientIdle version
+            then if finishOnClose && any hasClosed steps
+                   then do
+                          liftIO . atomically
+                            . writeTChan channel
+                            . ContractStreamFinish csContractId
+                            $ Right True
+                          pure $ CS.SendMsgDone ()
+                   else pure $ clientIdle version
             else do
                    liftIO . atomically
                      . writeTChan channel
                      . ContractStreamFinish csContractId
-                     $ Right ()
+                     $ Right False
                    pure $ CS.SendMsgDone ()
       , CS.recvMsgWait = clientWait version <$ liftIO (threadDelay 5_000_000)
       }
