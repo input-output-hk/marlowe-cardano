@@ -48,6 +48,7 @@
           (hsPkgs."marlowe-runtime".components.sublibs.tx-api or (errorHandler.buildDepError "marlowe-runtime:tx-api"))
           (hsPkgs."marlowe-runtime" or (errorHandler.buildDepError "marlowe-runtime"))
           (hsPkgs."monad-control" or (errorHandler.buildDepError "monad-control"))
+          (hsPkgs."multiplate" or (errorHandler.buildDepError "multiplate"))
           (hsPkgs."network" or (errorHandler.buildDepError "network"))
           (hsPkgs."stm" or (errorHandler.buildDepError "stm"))
           (hsPkgs."text" or (errorHandler.buildDepError "text"))
@@ -58,6 +59,7 @@
           ];
         buildable = true;
         modules = [
+          "Language/Marlowe/Core/V1/Plate"
           "Language/Marlowe/Runtime/App"
           "Language/Marlowe/Runtime/App/Build"
           "Language/Marlowe/Runtime/App/List"

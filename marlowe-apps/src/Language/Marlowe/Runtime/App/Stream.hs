@@ -10,7 +10,13 @@
 
 
 module Language.Marlowe.Runtime.App.Stream
-  where
+  ( ContractStream(..)
+  , hasClosed
+  , streamAllContractIds
+  , streamAllContractSteps
+  , streamContractHeaders
+  , streamContractSteps
+  ) where
 
 
 import Control.Concurrent (threadDelay)
@@ -36,7 +42,19 @@ import Language.Marlowe.Runtime.Discovery.Api (ContractHeader(contractId))
 import Language.Marlowe.Runtime.History.Api (ContractStep(ApplyTransaction), CreateStep)
 
 import qualified Language.Marlowe.Protocol.HeaderSync.Client as HS
+  ( ClientStIdle(SendMsgRequestNext)
+  , ClientStNext(..)
+  , ClientStWait(SendMsgPoll)
+  , MarloweHeaderSyncClient(MarloweHeaderSyncClient)
+  )
 import qualified Language.Marlowe.Protocol.Sync.Client as CS
+  ( ClientStFollow(ClientStFollow, recvMsgContractFound, recvMsgContractNotFound)
+  , ClientStIdle(SendMsgDone, SendMsgRequestNext)
+  , ClientStInit(SendMsgFollowContract)
+  , ClientStNext(..)
+  , ClientStWait(SendMsgPoll)
+  , MarloweSyncClient(MarloweSyncClient)
+  )
 
 
 streamAllContractIds
@@ -91,7 +109,7 @@ data ContractStream v =
   | ContractStreamFinish
     {
       csContractId :: ContractId
-    , csFinish :: Either String Bool -- Either an error message or an indication whether the contract closed.
+    , csFinish :: Either String Bool  -- ^ Either an error message or an indication whether the contract closed.
     }
 
 instance ToJSON (ContractStream 'V1) where

@@ -11,7 +11,8 @@ build-type         : Simple
 extra-source-files : ReadMe.md
 
 library
-  exposed-modules   : Language.Marlowe.Runtime.App
+  exposed-modules   : Language.Marlowe.Core.V1.Plate
+                      Language.Marlowe.Runtime.App
                       Language.Marlowe.Runtime.App.Build
                       Language.Marlowe.Runtime.App.List
                       Language.Marlowe.Runtime.App.Run
@@ -35,6 +36,7 @@ library
                     , marlowe-runtime:tx-api
                     , marlowe-runtime
                     , monad-control
+                    , multiplate
                     , network
                     , stm
                     , text
