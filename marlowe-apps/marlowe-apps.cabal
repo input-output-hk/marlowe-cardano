@@ -16,6 +16,7 @@ library
                       Language.Marlowe.Runtime.App.List
                       Language.Marlowe.Runtime.App.Run
                       Language.Marlowe.Runtime.App.Sign
+                      Language.Marlowe.Runtime.App.Stream
                       Language.Marlowe.Runtime.App.Submit
                       Language.Marlowe.Runtime.App.Types
   hs-source-dirs    : src
@@ -35,6 +36,7 @@ library
                     , marlowe-runtime
                     , monad-control
                     , network
+                    , stm
                     , text
                     , time
                     , transformers
@@ -89,8 +91,10 @@ executable marlowe-oracle
                     , aeson
                     , http-client
                     , http-client-tls
+                    , marlowe-apps
                     , servant
                     , servant-client
+                    , stm
                     , text
   ghc-options       : -Wall
                       -Wnoncanonical-monad-instances

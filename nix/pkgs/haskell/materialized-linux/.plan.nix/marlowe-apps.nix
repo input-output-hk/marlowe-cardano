@@ -49,6 +49,7 @@
           (hsPkgs."marlowe-runtime" or (errorHandler.buildDepError "marlowe-runtime"))
           (hsPkgs."monad-control" or (errorHandler.buildDepError "monad-control"))
           (hsPkgs."network" or (errorHandler.buildDepError "network"))
+          (hsPkgs."stm" or (errorHandler.buildDepError "stm"))
           (hsPkgs."text" or (errorHandler.buildDepError "text"))
           (hsPkgs."time" or (errorHandler.buildDepError "time"))
           (hsPkgs."transformers" or (errorHandler.buildDepError "transformers"))
@@ -62,6 +63,7 @@
           "Language/Marlowe/Runtime/App/List"
           "Language/Marlowe/Runtime/App/Run"
           "Language/Marlowe/Runtime/App/Sign"
+          "Language/Marlowe/Runtime/App/Stream"
           "Language/Marlowe/Runtime/App/Submit"
           "Language/Marlowe/Runtime/App/Types"
           ];
@@ -99,8 +101,10 @@
             (hsPkgs."aeson" or (errorHandler.buildDepError "aeson"))
             (hsPkgs."http-client" or (errorHandler.buildDepError "http-client"))
             (hsPkgs."http-client-tls" or (errorHandler.buildDepError "http-client-tls"))
+            (hsPkgs."marlowe-apps" or (errorHandler.buildDepError "marlowe-apps"))
             (hsPkgs."servant" or (errorHandler.buildDepError "servant"))
             (hsPkgs."servant-client" or (errorHandler.buildDepError "servant-client"))
+            (hsPkgs."stm" or (errorHandler.buildDepError "stm"))
             (hsPkgs."text" or (errorHandler.buildDepError "text"))
             ];
           buildable = true;

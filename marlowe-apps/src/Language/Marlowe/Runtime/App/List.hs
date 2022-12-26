@@ -90,11 +90,11 @@ followCommand
   => (ContractId -> HistoryCommand Void e Bool)
   -> ContractId
   -> Client (Either String Bool)
-followCommand command contractId' =
+followCommand command =
   fmap (first show)
     . runJobClient runHistoryJobClient
     . liftCommand
-    $ command contractId'
+    . command
 
 
 getContract

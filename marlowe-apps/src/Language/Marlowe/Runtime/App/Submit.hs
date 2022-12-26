@@ -59,7 +59,6 @@ waitForTx pollingFrequency txId =
       , recvMsgRollBackward = \_ _ -> pure clientIdle
       , recvMsgRollForward = \tx point _ -> case point of
           Genesis -> pure $ SendMsgDone $ Left  "Chain seek rolled forward to genesis."
-
           At _    -> pure $ SendMsgDone $ Right tx
       }
   in
