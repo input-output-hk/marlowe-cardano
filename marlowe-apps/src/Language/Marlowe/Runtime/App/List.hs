@@ -104,20 +104,28 @@ getContract
   -> Client (Either String (CreateStep v, [ContractStep v]))
 getContract contractId' =
   let
-    next version create previous = Sync.ClientStNext
-      { Sync.recvMsgRollBackCreation = pure $ Left "Creation transaction was rolled back."
+    stNext version create previous =
+      Sync.ClientStNext
+      {
+        Sync.recvMsgRollBackCreation = pure $ Left "Creation transaction was rolled back."
       , Sync.recvMsgRollBackward = const . pure . Sync.SendMsgDone $ Left "Input application was rolled back."
-      , Sync.recvMsgRollForward = \_ steps -> do
-          pure . Sync.SendMsgRequestNext $ next version create (previous <> steps)
-      , Sync.recvMsgWait = pure . Sync.SendMsgCancel . Sync.SendMsgDone $ Right (create, previous)
+      , Sync.recvMsgRollForward = \_ steps -> pure
+                                                . Sync.SendMsgRequestNext
+                                                . stNext version create
+                                                $ previous <> steps
+      , Sync.recvMsgWait = pure
+                             . Sync.SendMsgCancel
+                             . Sync.SendMsgDone
+                             $ Right (create, previous)
       }
   in
     runMarloweSyncClient runHistorySyncClient
       . Sync.MarloweSyncClient
       . pure
       $ Sync.SendMsgFollowContract contractId' Sync.ClientStFollow
-        { Sync.recvMsgContractNotFound = pure $ Left "Contract not found."
-        , Sync.recvMsgContractFound = \_ version create -> do
+        {
+          Sync.recvMsgContractNotFound = pure $ Left "Contract not found."
+        , Sync.recvMsgContractFound = \_ version create ->
             case version `assertVersionsEqual` (marloweVersion :: MarloweVersion v) of
-              Refl ->  pure . Sync.SendMsgRequestNext $ next version create mempty
+              Refl -> pure . Sync.SendMsgRequestNext $ stNext version create mempty
         }

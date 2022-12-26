@@ -89,9 +89,11 @@ executable marlowe-oracle
                       Network.Oracle.Sofr
   build-depends     : base >= 4.9 && < 5
                     , aeson
+                    , bytestring
                     , http-client
                     , http-client-tls
                     , marlowe-apps
+                    , marlowe-runtime
                     , servant
                     , servant-client
                     , stm
