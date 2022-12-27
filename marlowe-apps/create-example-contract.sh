@@ -42,7 +42,7 @@ EOI
 
 echo "Address: $ADDRESS"
 echo "Symbol: $SYMBOL"
-echo "Timeout: $TIMEOUT = $(date -d @$(($TIMEOUT / SLOTLENGTH)))"
+echo "Timeout: $TIMEOUT = $(date -d @$((TIMEOUT / SLOTLENGTH)))"
 
 
 "$MARLOWE_BIN/marlowe" create \
