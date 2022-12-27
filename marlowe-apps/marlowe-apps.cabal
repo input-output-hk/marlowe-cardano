@@ -19,6 +19,7 @@ library
                       Language.Marlowe.Runtime.App.Stream
                       Language.Marlowe.Runtime.App.Submit
                       Language.Marlowe.Runtime.App.Types
+                      Language.Marlowe.Runtime.App.Transact
   hs-source-dirs    : src
   build-depends     : base >= 4.9 && < 5
                     , aeson
@@ -27,6 +28,9 @@ library
                     , cardano-api
                     , containers
                     , data-default
+                    , eventuo11y
+                    , eventuo11y-dsl
+                    , eventuo11y-json
                     , marlowe
                     , marlowe-chain-sync
                     , marlowe-protocols
@@ -35,6 +39,7 @@ library
                     , marlowe-runtime:tx-api
                     , marlowe-runtime
                     , monad-control
+                    , mtl
                     , network
                     , stm
                     , text
@@ -55,9 +60,7 @@ executable marlowe-scaling
   main-is           : Main.hs
   hs-source-dirs    : scaling
   build-depends     : base >= 4.9 && < 5
-                    , aeson
                     , async
-                    , bytestring
                     , cardano-api
                     , eventuo11y
                     , eventuo11y-dsl

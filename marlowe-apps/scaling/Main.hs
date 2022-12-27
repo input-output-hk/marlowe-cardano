@@ -16,7 +16,7 @@ module Main
 import Control.Concurrent (myThreadId)
 import Control.Concurrent.Async (mapConcurrently)
 import Control.Monad (replicateM_, void)
-import Control.Monad.Except (ExceptT(..), MonadIO, liftIO, runExceptT, throwError)
+import Control.Monad.Except (MonadIO, liftIO, runExceptT, throwError)
 import Data.List.Split (chunksOf)
 import Data.Time.Clock (nominalDiffTimeToSeconds)
 import Language.Marlowe.Core.V1.Semantics.Types
@@ -33,11 +33,11 @@ import Language.Marlowe.Core.V1.Semantics.Types
   , Value(ChoiceValue)
   )
 import Language.Marlowe.Core.V1.Semantics.Types.Address (deserialiseAddress)
-import Language.Marlowe.Runtime.App (handle)
-import Language.Marlowe.Runtime.App.Types (Config, MarloweRequest(..), MarloweResponse(..))
+import Language.Marlowe.Runtime.App.Transact
+import Language.Marlowe.Runtime.App.Types (Config)
 import Language.Marlowe.Runtime.ChainSync.Api (Address(unAddress), fromBech32)
-import Language.Marlowe.Runtime.Core.Api (ContractId, MarloweVersionTag(V1))
-import Observe.Event (EventBackend, addField, hoistEvent, hoistEventBackend, withEvent, withSubEvent)
+import Language.Marlowe.Runtime.Core.Api (ContractId)
+import Observe.Event (EventBackend, addField, hoistEvent, hoistEventBackend, withEvent)
 import Observe.Event.Dynamic (DynamicEvent, DynamicEventSelector(..))
 import Observe.Event.Render.JSON (DefaultRenderSelectorJSON(defaultRenderSelectorJSON))
 import Observe.Event.Render.JSON.Handle (JSONRef, simpleJsonStderrBackend)
@@ -47,8 +47,6 @@ import System.Environment (getArgs)
 import System.Random (randomRIO)
 
 import qualified Cardano.Api as C
-import qualified Data.Aeson as A (encode)
-import qualified Data.ByteString.Lazy.Char8 as LBS8 (unpack)
 import qualified Data.Text as T (Text, pack)
 import qualified Data.Time.Clock.POSIX as P (getPOSIXTime)
 
@@ -98,9 +96,6 @@ randomInputs
 randomInputs = (<$> randomRIO (1_000_000, 2_000_000)) . makeInputs
 
 
-type App = ExceptT String IO
-
-
 runScenario
   :: DynamicEvent App JSONRef
   -> Config
@@ -110,54 +105,7 @@ runScenario
   -> [InputContent]
   -> App ContractId
 runScenario event config address key contract inputs =
-  do
-    let
-      show' = LBS8.unpack . A.encode
-      unexpected response = throwError $ "Unexpected response: " <> show' response
-      transact request =
-        withSubEvent event (DynamicEventSelector "Transact")
-          $ \subEvent ->
-            do
-              (contractId, body) <-
-                handleWithEvents subEvent "Build" config request
-                  $ \case
-                    Body{..} -> pure (resContractId, resTxBody)
-                    response -> unexpected response
-              tx <-
-                handleWithEvents subEvent "Sign" config (Sign body [] [key])
-                  $ \case
-                    Tx{..}   -> pure resTx
-                    response -> unexpected response
-              txId' <-
-                handleWithEvents subEvent "Submit" config (Submit tx)
-                  $ \case
-                    TxId{..} -> pure resTxId
-                    response -> unexpected response
-              handleWithEvents subEvent "Confirm" config (Wait txId' 1)
-                $ \case
-                  TxInfo{} -> pure ()
-                  response -> unexpected response
-              pure contractId
-    contractId <- transact $ Create contract mempty 1_500_000 mempty mempty address mempty
-    mapM_ (\input -> transact $ Apply contractId [NormalInput input] Nothing Nothing mempty mempty address mempty) inputs
-    pure contractId
-
-
-handleWithEvents
-  :: DynamicEvent App JSONRef
-  -> T.Text
-  -> Config
-  -> MarloweRequest 'V1
-  -> (MarloweResponse 'V1 -> App a)
-  -> App a
-handleWithEvents event name config request extract =
-  withSubEvent event (DynamicEventSelector name)
-    $ \subEvent ->
-      do
-        addField subEvent $ ("request" :: T.Text) ≔ request
-        response <- ExceptT $ handle config request
-        addField subEvent $ ("response" :: T.Text) ≔ response
-        extract response
+  runWithEvents event config address key contract (pure . NormalInput <$> inputs) 1_500_000
 
 
 currentTime :: MonadIO m => m POSIXTime

@@ -13,7 +13,8 @@
 
 
 module Language.Marlowe.Runtime.App.Types
-  ( Client(..)
+  ( App
+  , Client(..)
   , Config(..)
   , MarloweRequest(..)
   , MarloweResponse(..)
@@ -25,6 +26,7 @@ module Language.Marlowe.Runtime.App.Types
 
 import Control.Applicative (Alternative)
 import Control.Monad.Base (MonadBase)
+import Control.Monad.Except (ExceptT)
 import Control.Monad.Fix (MonadFix)
 import Control.Monad.IO.Class (MonadIO(..))
 import Control.Monad.Trans.Control (MonadBaseControl)
@@ -85,6 +87,9 @@ import qualified Data.Aeson.Types as A
 import qualified Data.Map.Strict as M (Map, map, mapKeys)
 import qualified Data.Text as T (Text)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as CS (Transaction)
+
+
+type App = ExceptT String IO
 
 
 data Config =
