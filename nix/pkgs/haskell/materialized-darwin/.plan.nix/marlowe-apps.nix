@@ -48,7 +48,6 @@
           (hsPkgs."marlowe-runtime".components.sublibs.tx-api or (errorHandler.buildDepError "marlowe-runtime:tx-api"))
           (hsPkgs."marlowe-runtime" or (errorHandler.buildDepError "marlowe-runtime"))
           (hsPkgs."monad-control" or (errorHandler.buildDepError "monad-control"))
-          (hsPkgs."multiplate" or (errorHandler.buildDepError "multiplate"))
           (hsPkgs."network" or (errorHandler.buildDepError "network"))
           (hsPkgs."stm" or (errorHandler.buildDepError "stm"))
           (hsPkgs."text" or (errorHandler.buildDepError "text"))
@@ -59,7 +58,6 @@
           ];
         buildable = true;
         modules = [
-          "Language/Marlowe/Core/V1/Plate"
           "Language/Marlowe/Runtime/App"
           "Language/Marlowe/Runtime/App/Build"
           "Language/Marlowe/Runtime/App/List"
@@ -102,10 +100,15 @@
             (hsPkgs."base" or (errorHandler.buildDepError "base"))
             (hsPkgs."aeson" or (errorHandler.buildDepError "aeson"))
             (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
+            (hsPkgs."cardano-api" or (errorHandler.buildDepError "cardano-api"))
+            (hsPkgs."extra" or (errorHandler.buildDepError "extra"))
             (hsPkgs."http-client" or (errorHandler.buildDepError "http-client"))
             (hsPkgs."http-client-tls" or (errorHandler.buildDepError "http-client-tls"))
+            (hsPkgs."marlowe" or (errorHandler.buildDepError "marlowe"))
             (hsPkgs."marlowe-apps" or (errorHandler.buildDepError "marlowe-apps"))
+            (hsPkgs."marlowe-chain-sync" or (errorHandler.buildDepError "marlowe-chain-sync"))
             (hsPkgs."marlowe-runtime" or (errorHandler.buildDepError "marlowe-runtime"))
+            (hsPkgs."plutus-ledger-api" or (errorHandler.buildDepError "plutus-ledger-api"))
             (hsPkgs."servant" or (errorHandler.buildDepError "servant"))
             (hsPkgs."servant-client" or (errorHandler.buildDepError "servant-client"))
             (hsPkgs."stm" or (errorHandler.buildDepError "stm"))
@@ -113,6 +116,7 @@
             ];
           buildable = true;
           modules = [
+            "Language/Marlowe/Oracle"
             "Network/Oracle"
             "Network/Oracle/CoinGecko"
             "Network/Oracle/Sofr"

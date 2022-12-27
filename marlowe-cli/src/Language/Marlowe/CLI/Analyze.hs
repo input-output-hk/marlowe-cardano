@@ -37,7 +37,6 @@ import Data.Aeson (object, (.=))
 import Data.Bifunctor (bimap)
 import Data.Foldable (toList)
 import Data.Function (on)
-import Data.Generics.Multiplate (Multiplate(..), foldFor, preorderFold, purePlate)
 import Data.List (maximumBy, nub, nubBy, (\\))
 import Data.Maybe (catMaybes)
 import Data.String (IsString(..))
@@ -60,6 +59,7 @@ import Language.Marlowe.CLI.Types
   , validatorInfoScriptOrReference
   , withShelleyBasedEra
   )
+import Language.Marlowe.Core.V1.Plate
 import Language.Marlowe.Core.V1.Semantics
   ( MarloweData(MarloweData, marloweContract, marloweParams, marloweState)
   , MarloweParams(..)
@@ -70,18 +70,14 @@ import Language.Marlowe.Core.V1.Semantics
   , totalBalance
   )
 import Language.Marlowe.Core.V1.Semantics.Types
-  ( Action(..)
-  , Case(..)
-  , ChoiceId(ChoiceId)
+  ( ChoiceId(ChoiceId)
   , Contract(..)
   , Input(MerkleizedInput)
   , InputContent(IChoice, IDeposit)
-  , Observation(AndObs, ChoseSomething, NotObs, OrObs, ValueEQ, ValueGE, ValueGT, ValueLE, ValueLT)
   , Party(Address, Role)
-  , Payee(Account, Party)
+  , Payee(Party)
   , State(..)
   , Token(..)
-  , Value(AddValue, AvailableMoney, ChoiceValue, Cond, DivValue, MulValue, NegValue, SubValue)
   , getInputContent
   )
 import Language.Marlowe.Core.V1.Semantics.Types.Address (mainnet)
@@ -97,9 +93,8 @@ import qualified Data.Aeson.Types as A (Pair)
 import qualified Data.ByteString as BS (length)
 import qualified Data.ByteString.Char8 as BS8 (putStr)
 import qualified Data.ByteString.Short as SBS (ShortByteString)
-import qualified Data.Functor.Constant as F (Constant(..))
-import qualified Data.Map.Strict as M (foldr, lookup, null)
-import qualified Data.Set as S (Set, empty, filter, map, member, singleton, size, union)
+import qualified Data.Map.Strict as M (lookup, null)
+import qualified Data.Set as S (Set, filter, map, member, size)
 import qualified Data.Yaml as Y (encode)
 import qualified Ledger.Tx.CardanoAPI as P (toCardanoAddressInEra, toCardanoValue)
 import qualified Plutus.ApiCommon as P (LedgerPlutusVersion(PlutusV2), evaluateScriptCounting)
@@ -277,19 +272,19 @@ invalidRole P.TokenName{..} = P.lengthOfByteString unTokenName > 32
 -- | Check that all tokens are valid.
 checkTokens :: ContractInstance lang era  -- ^ The bundle of contract information.
             -> A.Value                    -- ^ A report on token validity.
-checkTokens ci =
+checkTokens ContractInstance{..} =
   putJson "Tokens"
     [
-      "Invalid tokens" .= invalidToken `S.filter` extractFromContract ci
+      "Invalid tokens" .= invalidToken `S.filter` extractAllWithContinuations ciContract ciContinuations
     ]
 
 
 -- | Check that all roles are valid.
 checkRoles :: ContractInstance lang era  -- ^ The bundle of contract information.
            -> A.Value                    -- ^ Action to print a report on role-name validity.
-checkRoles ci =
+checkRoles ContractInstance{..} =
   let
-    roles = extractFromContract ci
+    roles = extractAllWithContinuations ciContract ciContinuations
   in
     putJson "Role names"
       [
@@ -308,11 +303,11 @@ checkMaximumValue Api.ProtocolParameters{protocolParamMaxValueSize=Just maxValue
   let
     (size, worst) =
       case info of
-        Right transactions -> let
-                                measure tx@(Transaction _ contract _ _) = [(computeValueSize $ extractAll contract, Just tx)]
-                              in
-                                maximumBy (compare `on` fst) $ foldMap measure transactions
-        Left ci            -> (computeValueSize $ extractFromContract ci, Nothing)
+        Right transactions        -> let
+                                       measure tx@(Transaction _ contract _ _) = [(computeValueSize $ extractAll contract, Just tx)]
+                                     in
+                                       maximumBy (compare `on` fst) $ foldMap measure transactions
+        Left ContractInstance{..} -> (computeValueSize $ extractAllWithContinuations ciContract ciContinuations, Nothing)
   in
     pure
       $ putJson "Maximum value"
@@ -376,12 +371,12 @@ checkMinimumUtxo era protocol info verbose =
           liftCli $ Api.calculateMinimumUTxO Api.shelleyBasedEra out protocol
     (value, worst) <-
       case info of
-        Right transactions -> let
-                               measure tx@(Transaction _ contract _ _) = pure . (, Just tx) <$> compute (extractAll contract)
-                             in
-                               (maximumBy (compare `on` (Api.selectLovelace . fst)) :: [(Api.Value, Maybe Transaction)] -> (Api.Value, Maybe Transaction))
-                                 <$> foldTransactionsM measure transactions
-        Left ci           -> fmap (, Nothing) . compute $ extractFromContract ci
+        Right transactions        -> let
+                                      measure tx@(Transaction _ contract _ _) = pure . (, Just tx) <$> compute (extractAll contract)
+                                    in
+                                      (maximumBy (compare `on` (Api.selectLovelace . fst)) :: [(Api.Value, Maybe Transaction)] -> (Api.Value, Maybe Transaction))
+                                        <$> foldTransactionsM measure transactions
+        Left ContractInstance{..} -> fmap (, Nothing) . compute $ extractAllWithContinuations ciContract ciContinuations
     pure
       $ putJson "Minimum UTxO"
       $ [
@@ -808,125 +803,6 @@ checkTransactionSize era protocol ContractInstance{..} (Transaction marloweState
     let
       tx = Api.signShelleyTransaction body keys
     pure . BS.length $ Api.serialiseToCBOR tx
-
-
--- | A mutltiplate for a Marlowe contract.
-data MarlowePlate f =
-  MarlowePlate
-  {
-    contractPlate :: Contract -> f Contract
-  , casePlate :: Case Contract -> f (Case Contract)
-  , actionPlate :: Action -> f Action
-  , valuePlate :: Value Observation -> f (Value Observation)
-  , observationPlate :: Observation -> f Observation
-  }
-
-instance Multiplate MarlowePlate where
-  multiplate child =
-    let
-      buildContract Close = pure Close
-      buildContract (Pay a p t v c) = Pay a p t <$> valuePlate child v <*> contractPlate child c
-      buildContract (If o c c') = If <$> observationPlate child o <*> contractPlate child c <*> contractPlate child c'
-      buildContract (When cs t c) = When <$> sequenceA (casePlate child <$> cs) <*> pure t <*> contractPlate child c
-      buildContract (Let i v c) = Let i <$> valuePlate child v <*> contractPlate child c
-      buildContract (Assert o c) = Assert <$> observationPlate child o <*> contractPlate child c
-      buildCase (Case a c) = Case <$> actionPlate child a <*> contractPlate child c
-      buildCase (MerkleizedCase a h) = MerkleizedCase <$> actionPlate child a <*> pure h
-      buildAction (Deposit a p t v) = Deposit a p t <$> valuePlate child v
-      buildAction (Notify o) = Notify <$> observationPlate child o
-      buildAction x = pure x
-      buildValue (NegValue x) = NegValue <$> valuePlate child x
-      buildValue (AddValue x y) = AddValue <$> valuePlate child x <*> valuePlate child y
-      buildValue (SubValue x y) = SubValue <$> valuePlate child x <*> valuePlate child y
-      buildValue (MulValue x y) = MulValue <$> valuePlate child x <*> valuePlate child y
-      buildValue (DivValue x y) = DivValue <$> valuePlate child x <*> valuePlate child y
-      buildValue (Cond o x y) = Cond <$> observationPlate child o <*> valuePlate child x <*> valuePlate child y
-      buildValue x = pure x
-      buildObservation (AndObs x y) = AndObs <$> observationPlate child x <*> observationPlate child y
-      buildObservation (OrObs x y) = OrObs <$> observationPlate child x <*> observationPlate child y
-      buildObservation (NotObs x) = NotObs <$> observationPlate child x
-      buildObservation (ValueGE x y) = ValueGE <$> valuePlate child x <*> valuePlate child y
-      buildObservation (ValueGT x y) = ValueGT <$> valuePlate child x <*> valuePlate child y
-      buildObservation (ValueLT x y) = ValueLT <$> valuePlate child x <*> valuePlate child y
-      buildObservation (ValueLE x y) = ValueLE <$> valuePlate child x <*> valuePlate child y
-      buildObservation (ValueEQ x y) = ValueEQ <$> valuePlate child x <*> valuePlate child y
-      buildObservation x = pure x
-    in
-      MarlowePlate
-        buildContract
-        buildCase
-        buildAction
-        buildValue
-        buildObservation
-  mkPlate build =
-    MarlowePlate
-      (build contractPlate)
-      (build casePlate)
-      (build actionPlate)
-      (build valuePlate)
-      (build observationPlate)
-
-
--- | Extract something using the Marlowe multiplate.
-class Extract a where
-  -- | Shallow extraction.
-  extractor :: MarlowePlate (F.Constant (S.Set a))
-  -- | Deep extraction.
-  extractAll :: Ord a => Contract -> S.Set a
-  extractAll = foldFor contractPlate $ preorderFold extractor
-
-instance Extract Token where
-  extractor =
-    let
-      single = F.Constant . S.singleton
-      contractPlate' (Pay _ _ t _ _) = single t
-      contractPlate' x = pure x
-      actionPlate' (Deposit _ _ t _) = single t
-      actionPlate' x = pure x
-      valuePlate' (AvailableMoney _ t) = single t
-      valuePlate' x = pure x
-    in
-      purePlate
-      {
-        contractPlate = contractPlate'
-      , actionPlate = actionPlate'
-      , valuePlate = valuePlate'
-      }
-
-instance Extract P.TokenName where
-  extractor =
-    let
-      role (Role r) = S.singleton r
-      role _ = S.empty
-      contractPlate' (Pay a (Account p) _ _ _) = F.Constant $ role a <> role p
-      contractPlate' (Pay a (Party p) _ _ _) = F.Constant $ role a <> role p
-      contractPlate' x = pure x
-      actionPlate' (Deposit a p _ _) = F.Constant $ role a <> role p
-      actionPlate' (Choice (ChoiceId _ p) _) = F.Constant $ role p
-      actionPlate' x = pure x
-      valuePlate' (AvailableMoney a _) = F.Constant $ role a
-      valuePlate' (ChoiceValue (ChoiceId _ p)) = F.Constant $ role p
-      valuePlate' x = pure x
-      observationPlate' (ChoseSomething (ChoiceId _ p)) = F.Constant $ role p
-      observationPlate' x = pure x
-    in
-      purePlate
-      {
-        contractPlate = contractPlate'
-      , actionPlate = actionPlate'
-      , valuePlate = valuePlate'
-      , observationPlate = observationPlate'
-      }
-
-
-
--- | Extract something from a Marlowe contract.
-extractFromContract :: Extract a
-                    => Ord a
-                    => ContractInstance lang era  -- ^ The bundle of contract information.
-                    -> S.Set a                    -- ^ The extract.
-extractFromContract ContractInstance{..} =
-  M.foldr (S.union . extractAll) (extractAll ciContract) ciContinuations
 
 
 -- | Format results of checking as JSON.

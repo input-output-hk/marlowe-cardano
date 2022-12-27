@@ -6,14 +6,21 @@
 module Language.Marlowe.Core.V1.Plate
   ( Extract(..)
   , MarlowePlate(..)
+  , extractAllWithContinuations
   ) where
 
 
-import Data.Generics.Multiplate (Multiplate(..), foldFor, preorderFold)
+import Data.Generics.Multiplate (Multiplate(..), foldFor, preorderFold, purePlate)
 import Language.Marlowe.Core.V1.Semantics.Types
+import Plutus.V1.Ledger.Api (DatumHash, TokenName)
 
 import qualified Data.Functor.Constant as F (Constant(..))
-import qualified Data.Set as S
+import qualified Data.Map.Strict as M (Map, foldr)
+import qualified Data.Set as S (Set, empty, singleton, union)
+
+
+-- | Hasked continuations of a Marlowe contract.
+type Continuations = M.Map DatumHash Contract
 
 
 -- | A mutltiplate for a Marlowe contract.
@@ -81,7 +88,17 @@ class Extract a where
   extractAll :: Ord a => Contract -> S.Set a
   extractAll = foldFor contractPlate $ preorderFold extractor
 
-{-
+instance Extract Action where
+  extractor =
+    let
+      actionPlate' c@Choice{} = F.Constant $ S.singleton c
+      actionPlate' x = pure x
+    in
+      purePlate
+      {
+        actionPlate = actionPlate'
+      }
+
 instance Extract Token where
   extractor =
     let
@@ -100,7 +117,7 @@ instance Extract Token where
       , valuePlate = valuePlate'
       }
 
-instance Extract P.TokenName where
+instance Extract TokenName where
   extractor =
     let
       role (Role r) = S.singleton r
@@ -126,12 +143,11 @@ instance Extract P.TokenName where
       }
 
 
-
 -- | Extract something from a Marlowe contract.
-extractFromContract :: Extract a
-                    => Ord a
-                    => ContractInstance lang era  -- ^ The bundle of contract information.
-                    -> S.Set a                    -- ^ The extract.
-extractFromContract ContractInstance{..} =
-  M.foldr (S.union . extractAll) (extractAll ciContract) ciContinuations
--}
+extractAllWithContinuations
+  :: Extract a
+  => Ord a
+  => Contract       -- ^ The contract.
+  -> Continuations  -- ^ The continuations of the contract.
+  -> S.Set a        -- ^ The extract.
+extractAllWithContinuations = M.foldr (S.union . extractAll) . extractAll
