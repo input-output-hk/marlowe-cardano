@@ -11,8 +11,7 @@ build-type         : Simple
 extra-source-files : ReadMe.md
 
 library
-  exposed-modules   : Language.Marlowe.Core.V1.Plate
-                      Language.Marlowe.Runtime.App
+  exposed-modules   : Language.Marlowe.Runtime.App
                       Language.Marlowe.Runtime.App.Build
                       Language.Marlowe.Runtime.App.List
                       Language.Marlowe.Runtime.App.Run
@@ -36,7 +35,6 @@ library
                     , marlowe-runtime:tx-api
                     , marlowe-runtime
                     , monad-control
-                    , multiplate
                     , network
                     , stm
                     , text
@@ -86,16 +84,23 @@ executable marlowe-scaling
 executable marlowe-oracle
   main-is           : Main.hs
   hs-source-dirs    : oracle
-  other-modules     : Network.Oracle
+  other-modules     : Language.Marlowe.Oracle
+                      Network.Oracle
                       Network.Oracle.CoinGecko
                       Network.Oracle.Sofr
   build-depends     : base >= 4.9 && < 5
                     , aeson
                     , bytestring
+                    , cardano-api
+                    , extra
                     , http-client
                     , http-client-tls
+                    , marlowe
                     , marlowe-apps
+                    , marlowe-chain-sync
                     , marlowe-runtime
+                    , marlowe-runtime:history-api
+                    , plutus-ledger-api
                     , servant
                     , servant-client
                     , stm

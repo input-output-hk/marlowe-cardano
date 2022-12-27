@@ -9,6 +9,7 @@ module Network.Oracle
   , makeOracle
   , oracles
   , readOracle
+  , toOracleSymbol
   ) where
 
 
@@ -16,6 +17,7 @@ import Network.HTTP.Client (Manager)
 import Network.Oracle.CoinGecko (Currency(..), CurrencyPair(..), coinGeckoEnv, fetchCurrencyPair)
 import Network.Oracle.Sofr (fetchSofrBasisPoints, nyfrbEnv)
 import Servant.Client (ClientEnv)
+import Text.Read (readMaybe)
 
 
 data Oracle = SOFR | BTCETH | BTCEUR | BTCGBP | BTCJPY | BTCUSD | ADABTC | ADAETH | ADAEUR | ADAGBP | ADAJPY | ADAUSD | ETHBTC | ETHEUR | ETHGBP | ETHJPY | ETHUSD
@@ -56,3 +58,7 @@ readOracle OracleEnv{..} ETHEUR = fmap rate <$> fetchCurrencyPair coinGecko ETH 
 readOracle OracleEnv{..} ETHGBP = fmap rate <$> fetchCurrencyPair coinGecko ETH GBP
 readOracle OracleEnv{..} ETHJPY = fmap rate <$> fetchCurrencyPair coinGecko ETH JPY
 readOracle OracleEnv{..} ETHUSD = fmap rate <$> fetchCurrencyPair coinGecko ETH USD
+
+
+toOracleSymbol :: String -> Maybe Oracle
+toOracleSymbol = readMaybe
