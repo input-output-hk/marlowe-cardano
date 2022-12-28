@@ -8,6 +8,9 @@ This oracle watches the blockchain for Marlowe contracts that have a `Choice` ac
 ![Block for oracle input in a Marlowe contract](oracle-block.png)
 
 
+A [video demonstrates the Marlowe oracle](https://youtu.be/n1Mv3I7QoTE).
+
+
 ## Security Considerations
 
 *The security of a Marlowe contract that uses oracle(s) depends upon trust in the oracle(s). For the oracle presented here, this means that the parties to the contract must trust the holder of the signing (private) key for the oracle address and the infrastructure running the oracle.*
@@ -59,7 +62,7 @@ Contract ID: 43d663aae2d19fbfa39a9d1f32c45a06f3ac266eb6098f4a55dfc996a6bb1a5f#1
 Contract ID: 5aca6d23973da2ad2b1927ee7bd95cf4f99c7eb47cfd267672711326bf8bb98c#1
   Ready for oracle: "ADAGBP"
   Available from oracle: ADAGBP
-  ADAGBP = 20941100 [NB: scaled integer units]
+  ADAGBP = 20941100 [scaled integer units]
   Confirmed.
 ```
 

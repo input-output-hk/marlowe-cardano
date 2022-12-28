@@ -1,7 +1,6 @@
 
 
 {-# LANGUAGE DataKinds #-}
-{-# LANGUAGE NamedFieldPuns #-}
 
 
 module Language.Marlowe.Oracle.Detect

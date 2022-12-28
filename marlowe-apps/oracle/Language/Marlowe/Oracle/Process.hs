@@ -8,13 +8,13 @@ module Language.Marlowe.Oracle.Process
   where
 
 
-import Control.Concurrent (forkIO)
+import Control.Concurrent (forkIO, threadDelay)
 import Control.Concurrent.STM (atomically)
-import Control.Concurrent.STM.TChan (TChan, newTChanIO, readTChan)
+import Control.Concurrent.STM.TChan (TChan, newTChanIO, readTChan, writeTChan)
 import Control.Monad (forever, void)
 import Control.Monad.Except (ExceptT(ExceptT), liftIO, runExceptT)
 import Data.List (intercalate)
-import Data.Maybe (fromMaybe, mapMaybe)
+import Data.Maybe (mapMaybe)
 import Language.Marlowe.Core.V1.Semantics.Types
   (ChoiceId(ChoiceId), Contract, Input(NormalInput), InputContent(IChoice), Party)
 import Language.Marlowe.Oracle.Detect (containsOracleAction, contractReadyForOracle)
@@ -78,16 +78,18 @@ runDetection config pollingFrequency party inChannel =
 runOracle
   :: OracleEnv
   -> Config
+  -> Int
   -> Address
   -> C.SigningKey C.PaymentExtendedKey
   -> Party
   -> TChan (ContractStream 'V1)
+  -> TChan ContractId
   -> IO ()
-runOracle oracleEnv config address key party channel =
+runOracle oracleEnv config pollingFrequency address key party inChannel outChannel =
   let
     go contracts =
       do
-        cs <- liftIO . atomically $ readTChan channel
+        cs <- liftIO . atomically $ readTChan inChannel
         go =<<
           case cs of
             ContractStreamFinish{..} -> pure
@@ -95,9 +97,8 @@ runOracle oracleEnv config address key party channel =
             ContractStreamWait{..}   -> do
                                           let
                                             rawSymbols =
-                                              fromMaybe mempty
-                                                $ contractReadyForOracle party
-                                                <$> (csContractId `M.lookup` contracts)
+                                              maybe mempty (contractReadyForOracle party)
+                                                $ csContractId `M.lookup` contracts
                                             validSymbols = mapMaybe toOracleSymbol rawSymbols
                                             report symbol =
                                               do
@@ -107,17 +108,23 @@ runOracle oracleEnv config address key party channel =
                                                   . pure . NormalInput
                                                   $ IChoice (ChoiceId (toBuiltin . BS8.pack $ show symbol) party) value
                                                 liftIO . hPutStrLn stderr
-                                                  $ "  " <> show symbol <> " = " <> show value <> " [NB: scaled integer units]"
+                                                  $ "  " <> show symbol <> " = " <> show value <> " [scaled integer units]"
                                           hPutStrLn stderr ""
                                           hPutStrLn stderr $ "Contract ID: " <> (init . tail . LBS8.unpack . A.encode) csContractId
                                           hPutStrLn stderr $ "  Ready for oracle: " <> intercalate ", " (show <$> rawSymbols)
                                           hPutStrLn stderr $ "  Available from oracle: " <> intercalate ", " (show <$> validSymbols)
                                           runExceptT (mapM_ report  $ take 1 validSymbols)
                                             >>= \result ->
-                                              hPutStrLn stderr
-                                                $ case result of
-                                                  Right ()     -> (if null validSymbols then "  Ignored." else "  Confirmed.")
-                                                  Left message -> "  Failed: " <> message
+                                              case (result, null validSymbols) of
+                                                (Left message, _    ) -> hPutStrLn stderr $ "  Failed: " <> message
+                                                (Right ()    , True ) -> hPutStrLn stderr "  Ignored."
+                                                (Right ()    , False) -> do
+                                                                           hPutStrLn stderr "  Confirmed."
+                                                                           -- FIXME: This is a workaround for contract discovery
+                                                                           --        not tailing past the tip of the blockchain.
+                                                                           void . forkIO
+                                                                             $ threadDelay pollingFrequency
+                                                                             >> atomically (writeTChan outChannel csContractId)
                                           pure contracts
             _                        -> pure
                                           . maybe contracts (flip (M.insert $ csContractId cs) contracts)
