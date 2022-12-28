@@ -10,8 +10,9 @@ MINADA=1500000
 SLOTLENGTH=1000
 
 SYMBOL="$1"
-ADDRESS="$2"
-SKEY="$3"
+ORACLE="$2"
+ADDRESS="$3"
+SKEY="$4"
 TIMEOUT="$((SLOTLENGTH * ($(date -u +%s) + 24 * 3600)))"
 
 cat << EOI > "$CONTRACT"
@@ -22,7 +23,7 @@ cat << EOI > "$CONTRACT"
         "for_choice" : {
           "choice_name" : "$SYMBOL"
         , "choice_owner" : {
-            "address" : "$ADDRESS"
+            "address" : "$ORACLE"
           }
         }
       , "choose_between": [
@@ -40,7 +41,7 @@ cat << EOI > "$CONTRACT"
 }
 EOI
 
-echo "Address: $ADDRESS"
+echo "Address: $ORACLE"
 echo "Symbol: $SYMBOL"
 echo "Timeout: $TIMEOUT = $(date -d @$((TIMEOUT / SLOTLENGTH)))"
 
