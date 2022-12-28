@@ -34,7 +34,6 @@ import Servant.API (Get, JSON, QueryParam', Required, Strict, (:>))
 import Servant.Client (ClientEnv, ClientM, client, mkClientEnv, parseBaseUrl, runClientM)
 
 
-
 coinGeckoEnv :: Manager -> IO ClientEnv
 coinGeckoEnv manager = mkClientEnv manager <$> parseBaseUrl "https://api.coingecko.com"
 

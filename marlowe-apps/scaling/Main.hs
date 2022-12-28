@@ -47,6 +47,7 @@ import System.Environment (getArgs)
 import System.Random (randomRIO)
 
 import qualified Cardano.Api as C
+  (AsType(AsPaymentExtendedKey, AsSigningKey), PaymentExtendedKey, SigningKey, readFileTextEnvelope)
 import qualified Data.Text as T (Text, pack)
 import qualified Data.Time.Clock.POSIX as P (getPOSIXTime)
 

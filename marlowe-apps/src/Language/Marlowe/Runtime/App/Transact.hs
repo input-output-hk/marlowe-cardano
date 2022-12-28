@@ -25,29 +25,20 @@ import Language.Marlowe.Core.V1.Semantics.Types (Contract, Input)
 import Language.Marlowe.Runtime.App.Types (App, Config, MarloweRequest(..), MarloweResponse(..))
 import Language.Marlowe.Runtime.ChainSync.Api (Address, Lovelace)
 import Language.Marlowe.Runtime.Core.Api (ContractId, MarloweVersionTag(V1))
-import Observe.Event (addField, withSubEvent)
-import Observe.Event.Backend (EventImpl(..))
-import Observe.Event.Dynamic (DynamicEvent, DynamicEventSelector(..), DynamicField)
+import Observe.Event (addField, newEvent, withSubEvent)
+import Observe.Event.Backend (unitEventBackend)
+import Observe.Event.Dynamic (DynamicEvent, DynamicEventSelector(..))
 import Observe.Event.Syntax ((≔))
 
-import qualified Cardano.Api as C
+import qualified Cardano.Api as C (PaymentExtendedKey, SigningKey)
 import qualified Data.Aeson as A (encode)
 import qualified Data.ByteString.Lazy.Char8 as LBS8 (unpack)
 import qualified Data.Text as T (Text)
 import qualified Language.Marlowe.Runtime.App as App (handle)
 
 
-unitEvent :: DynamicEvent App ()
-unitEvent = undefined
-  EventImpl
-  {
-    referenceImpl = ()
-  , addFieldImpl = const $ pure () :: DynamicField  -> App ()
-  , addParentImpl = const $ pure ()
-  , addProximateImpl = const $ pure ()
-  , finalizeImpl = pure ()
-  , failImpl = const $ pure ()
-  }
+unitEvent :: App (DynamicEvent App ())
+unitEvent = newEvent unitEventBackend $ DynamicEventSelector "unit"
 
 
 run
@@ -58,7 +49,10 @@ run
   -> [[Input]]
   -> Lovelace
   -> App ContractId
-run = runWithEvents unitEvent
+run config address key contract inputs minUtxo =
+  do
+    event <- unitEvent
+    runWithEvents event config address key contract inputs minUtxo
 
 
 runWithEvents
@@ -86,7 +80,10 @@ create
   -> Contract
   -> Lovelace
   -> App ContractId
-create = createWithEvents unitEvent
+create config address key contract minUtxo =
+  do
+    event <- unitEvent
+    createWithEvents event config address key contract minUtxo
 
 
 createWithEvents
@@ -109,7 +106,10 @@ apply
   -> ContractId
   -> [Input]
   -> App ContractId
-apply = applyWithEvents unitEvent
+apply config address key contractId input =
+  do
+    event <- unitEvent
+    applyWithEvents event config address key contractId input
 
 
 applyWithEvents
@@ -130,7 +130,10 @@ transact
   -> C.SigningKey C.PaymentExtendedKey
   -> MarloweRequest 'V1
   -> App ContractId
-transact = transactWithEvents unitEvent
+transact config key request =
+  do
+    event <- unitEvent
+    transactWithEvents event config key request
 
 
 transactWithEvents

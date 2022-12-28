@@ -26,7 +26,6 @@ import Servant.API (Get, JSON, (:>))
 import Servant.Client (ClientEnv, ClientM, client, mkClientEnv, parseBaseUrl, runClientM)
 
 
-
 nyfrbEnv :: Manager -> IO ClientEnv
 nyfrbEnv manager = mkClientEnv manager <$> parseBaseUrl "https://markets.newyorkfed.org"
 

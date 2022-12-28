@@ -18,7 +18,7 @@
       author = "Brian W Bush <brian.bush@iohk.io>";
       homepage = "";
       url = "";
-      synopsis = "Scalable creation of Marlowe transactions.";
+      synopsis = "Marlowe Runtimee applications";
       description = "";
       buildType = "Simple";
       isLocal = true;
@@ -104,6 +104,7 @@
             (hsPkgs."aeson" or (errorHandler.buildDepError "aeson"))
             (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
             (hsPkgs."cardano-api" or (errorHandler.buildDepError "cardano-api"))
+            (hsPkgs."containers" or (errorHandler.buildDepError "containers"))
             (hsPkgs."extra" or (errorHandler.buildDepError "extra"))
             (hsPkgs."http-client" or (errorHandler.buildDepError "http-client"))
             (hsPkgs."http-client-tls" or (errorHandler.buildDepError "http-client-tls"))
@@ -111,7 +112,7 @@
             (hsPkgs."marlowe-apps" or (errorHandler.buildDepError "marlowe-apps"))
             (hsPkgs."marlowe-chain-sync" or (errorHandler.buildDepError "marlowe-chain-sync"))
             (hsPkgs."marlowe-runtime" or (errorHandler.buildDepError "marlowe-runtime"))
-            (hsPkgs."marlowe-runtime".components.sublibs.history-api or (errorHandler.buildDepError "marlowe-runtime:history-api"))
+            (hsPkgs."mtl" or (errorHandler.buildDepError "mtl"))
             (hsPkgs."plutus-ledger-api" or (errorHandler.buildDepError "plutus-ledger-api"))
             (hsPkgs."servant" or (errorHandler.buildDepError "servant"))
             (hsPkgs."servant-client" or (errorHandler.buildDepError "servant-client"))
@@ -120,7 +121,8 @@
             ];
           buildable = true;
           modules = [
-            "Language/Marlowe/Oracle"
+            "Language/Marlowe/Oracle/Detect"
+            "Language/Marlowe/Oracle/Process"
             "Network/Oracle"
             "Network/Oracle/CoinGecko"
             "Network/Oracle/Sofr"

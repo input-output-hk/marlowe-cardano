@@ -2,7 +2,7 @@
 
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE NumericUnderscores #-}
+{-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -11,7 +11,12 @@
 
 module Language.Marlowe.Runtime.App.Stream
   ( ContractStream(..)
+  , contractFromStep
+  , contractFromStream
+  , datumFromStep
+  , datumFromStream
   , hasClosed
+  , isContractStreamFinish
   , streamAllContractIds
   , streamAllContractIdsClient
   , streamAllContractSteps
@@ -27,9 +32,10 @@ import Control.Concurrent (threadDelay)
 import Control.Concurrent.STM (atomically)
 import Control.Concurrent.STM.TChan (TChan, writeTChan)
 import Control.Monad.IO.Class (liftIO)
-import Data.Aeson (ToJSON(..), object, (.=))
+import Data.Aeson (ToJSON(..), encode, object, (.=))
 import Data.Maybe (isNothing, mapMaybe)
 import Data.Type.Equality ((:~:)(Refl))
+import Language.Marlowe.Core.V1.Semantics (MarloweData(marloweContract))
 import Language.Marlowe.Protocol.HeaderSync.Client (MarloweHeaderSyncClient)
 import Language.Marlowe.Protocol.Sync.Client (MarloweSyncClient)
 import Language.Marlowe.Runtime.App.Run (runMarloweHeaderSyncClient, runMarloweSyncClient)
@@ -42,11 +48,14 @@ import Language.Marlowe.Runtime.Core.Api
   , MarloweVersionTag(V1)
   , Transaction(Transaction, output)
   , TransactionOutput(TransactionOutput, scriptOutput)
+  , TransactionScriptOutput(TransactionScriptOutput, datum)
   , assertVersionsEqual
   )
 import Language.Marlowe.Runtime.Discovery.Api (ContractHeader(contractId))
-import Language.Marlowe.Runtime.History.Api (ContractStep(ApplyTransaction), CreateStep)
+import Language.Marlowe.Runtime.History.Api (ContractStep(ApplyTransaction), CreateStep(CreateStep, createOutput))
 
+import qualified Data.ByteString.Lazy.Char8 as LBS8 (unpack)
+import qualified Language.Marlowe.Core.V1.Semantics.Types as V1 (Contract)
 import qualified Language.Marlowe.Protocol.HeaderSync.Client as HSync
   ( ClientStIdle(SendMsgRequestNext)
   , ClientStNext(..)
@@ -58,37 +67,41 @@ import qualified Language.Marlowe.Protocol.Sync.Client as CSync
   , ClientStIdle(SendMsgDone, SendMsgRequestNext)
   , ClientStInit(SendMsgFollowContract)
   , ClientStNext(..)
-  , ClientStWait(SendMsgPoll)
+  , ClientStWait(SendMsgCancel, SendMsgPoll)
   , MarloweSyncClient(MarloweSyncClient)
   )
 
 
 streamAllContractIds
-  :: TChan ContractId
+  :: Int
+  -> TChan ContractId
   -> Client (Either String ())
-streamAllContractIds = streamContractHeaders $ Just . contractId
+streamAllContractIds pollingFrequency = streamContractHeaders pollingFrequency $ Just . contractId
 
 
 streamAllContractIdsClient
-  :: TChan ContractId
+  :: Int
+  -> TChan ContractId
   -> MarloweHeaderSyncClient Client (Either String ())
-streamAllContractIdsClient = streamContractHeadersClient $ Just . contractId
+streamAllContractIdsClient pollingFrequency = streamContractHeadersClient pollingFrequency $ Just . contractId
 
 
 streamContractHeaders
-  :: (ContractHeader -> Maybe a)
+  :: Int
+  -> (ContractHeader -> Maybe a)
   -> TChan a
   -> Client (Either String ())
-streamContractHeaders extract channel =
+streamContractHeaders pollingFrequency extract channel =
   runMarloweHeaderSyncClient runDiscoverySyncClient
-    $ streamContractHeadersClient extract channel
+    $ streamContractHeadersClient pollingFrequency extract channel
 
 
 streamContractHeadersClient
-  :: (ContractHeader -> Maybe a)
+  :: Int
+  -> (ContractHeader -> Maybe a)
   -> TChan a
   -> MarloweHeaderSyncClient Client (Either String ())
-streamContractHeadersClient extract channel =
+streamContractHeadersClient pollingFrequency extract channel =
   let
     clientIdle = HSync.SendMsgRequestNext clientNext
     clientWait = HSync.SendMsgPoll clientNext
@@ -101,7 +114,7 @@ streamContractHeadersClient extract channel =
                                                    $ mapMaybe extract results
                                                  pure clientIdle
       , HSync.recvMsgRollBackward = const $ pure clientIdle
-      , HSync.recvMsgWait = clientWait <$ liftIO (threadDelay 5_000_000)
+      , HSync.recvMsgWait = clientWait <$ liftIO (threadDelay pollingFrequency)
       }
   in
     HSync.MarloweHeaderSyncClient
@@ -126,11 +139,17 @@ data ContractStream v =
       csContractId :: ContractId
     , csBlockHeader :: BlockHeader
     }
+  | ContractStreamWait
+    {
+      csContractId :: ContractId
+    }
   | ContractStreamFinish
     {
       csContractId :: ContractId
     , csFinish :: Either String Bool  -- ^ Either an error message or an indication whether the contract closed.
     }
+instance Show (ContractStream 'V1) where
+  show = LBS8.unpack . encode
 
 instance ToJSON (ContractStream 'V1) where
   toJSON ContractStreamStart{..} =
@@ -153,6 +172,11 @@ instance ToJSON (ContractStream 'V1) where
         "contractId" .= csContractId
       , "blockHeader" .= csBlockHeader
       ]
+  toJSON ContractStreamWait{..} =
+    object
+      [
+        "contractId" .= csContractId
+      ]
   toJSON ContractStreamFinish{..} =
     object
       [
@@ -161,22 +185,61 @@ instance ToJSON (ContractStream 'V1) where
       ]
 
 
+isContractStreamFinish
+  :: ContractStream v
+  -> Bool
+isContractStreamFinish ContractStreamFinish{} = True
+isContractStreamFinish _ = False
+
+
+datumFromStep
+  :: Either (CreateStep v) (ContractStep v)
+  -> Maybe (Datum v)
+datumFromStep (Left CreateStep{createOutput=TransactionScriptOutput{datum}}) = pure datum
+datumFromStep (Right (ApplyTransaction Transaction{output=TransactionOutput{scriptOutput=Just TransactionScriptOutput{datum}}})) = pure datum
+datumFromStep _ = Nothing
+
+
+contractFromStep
+  :: Either (CreateStep 'V1) (ContractStep 'V1)
+  -> Maybe V1.Contract
+contractFromStep = fmap marloweContract . datumFromStep
+
+
+datumFromStream
+  :: ContractStream v
+  -> Maybe (Datum v)
+datumFromStream ContractStreamStart{csCreateStep} = datumFromStep $ Left csCreateStep
+datumFromStream ContractStreamContinued{csContractStep} = datumFromStep $ Right csContractStep
+datumFromStream _ = Nothing
+
+
+contractFromStream
+  :: ContractStream 'V1
+  -> Maybe V1.Contract
+contractFromStream = fmap marloweContract . datumFromStream
+
+
 streamAllContractSteps
   :: forall v
   .  IsMarloweVersion v
-  => ContractId
+  => Int
+  -> Bool
+  -> ContractId
   -> TChan (ContractStream v)
   -> Client ()
-streamAllContractSteps = streamContractSteps True $ const True
+streamAllContractSteps pollingFrequency finishOnWait = streamContractSteps pollingFrequency True finishOnWait $ const True
 
 
 streamAllContractStepsClient
   :: forall v
   .  IsMarloweVersion v
-  => ContractId
+  => Int
+  -> Bool
+  -> ContractId
   -> TChan (ContractStream v)
   -> MarloweSyncClient Client ()
-streamAllContractStepsClient = streamContractStepsClient True $ const True
+streamAllContractStepsClient pollingFrequency finishOnWait = streamContractStepsClient pollingFrequency True finishOnWait $ const True
 
 
 hasClosed :: ContractStep v -> Bool
@@ -187,25 +250,29 @@ hasClosed  _ = False
 streamContractSteps
   :: forall v
   .  IsMarloweVersion v
-  => Bool
+  => Int
+  -> Bool
+  -> Bool
   -> (Either (CreateStep v) (ContractStep v) -> Bool)
   -> ContractId
   -> TChan (ContractStream v)
   -> Client ()
-streamContractSteps finishOnClose accept csContractId channel =
+streamContractSteps pollingFrequency finishOnClose finishOnWait accept csContractId channel =
   runMarloweSyncClient runHistorySyncClient
-    $ streamContractStepsClient finishOnClose accept csContractId channel
+    $ streamContractStepsClient pollingFrequency finishOnClose finishOnWait accept csContractId channel
 
 
 streamContractStepsClient
   :: forall v
   .  IsMarloweVersion v
-  => Bool
+  => Int
+  -> Bool
+  -> Bool
   -> (Either (CreateStep v) (ContractStep v) -> Bool)
   -> ContractId
   -> TChan (ContractStream v)
   -> MarloweSyncClient Client ()
-streamContractStepsClient finishOnClose accept csContractId channel =
+streamContractStepsClient pollingFrequency finishOnClose finishOnWait accept csContractId channel =
   let
     clientInit =
       CSync.SendMsgFollowContract csContractId
@@ -267,7 +334,15 @@ streamContractStepsClient finishOnClose accept csContractId channel =
                      . ContractStreamFinish csContractId
                      $ Right False
                    pure $ CSync.SendMsgDone ()
-      , CSync.recvMsgWait = clientWait version <$ liftIO (threadDelay 5_000_000)
+      , CSync.recvMsgWait =
+          do
+            -- FIXME: It would have been helpful if `recvMsgWait` had reported the current tip.
+            liftIO . atomically
+              . writeTChan channel
+              $ ContractStreamWait csContractId
+            if finishOnWait
+              then pure . CSync.SendMsgCancel $ CSync.SendMsgDone ()
+              else clientWait version <$ liftIO (threadDelay pollingFrequency)
       }
   in
     CSync.MarloweSyncClient

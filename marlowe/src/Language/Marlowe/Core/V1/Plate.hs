@@ -10,7 +10,7 @@ module Language.Marlowe.Core.V1.Plate
   ) where
 
 
-import Data.Generics.Multiplate (Multiplate(..), foldFor, preorderFold, purePlate)
+import Data.Generics.Multiplate (Multiplate(..), foldFor, mChildren, preorderFold, purePlate)
 import Language.Marlowe.Core.V1.Semantics.Types
 import Plutus.V1.Ledger.Api (DatumHash, TokenName)
 
@@ -82,22 +82,21 @@ instance Multiplate MarlowePlate where
 
 -- | Extract something using the Marlowe multiplate.
 class Extract a where
-  -- | Shallow extraction.
+  -- | Extraction.
   extractor :: MarlowePlate (F.Constant (S.Set a))
+  -- | Shallow extraction.
+  extract :: Ord a => Contract -> S.Set a
+  extract = foldFor contractPlate $ mChildren extractor
   -- | Deep extraction.
   extractAll :: Ord a => Contract -> S.Set a
   extractAll = foldFor contractPlate $ preorderFold extractor
 
 instance Extract Action where
   extractor =
-    let
-      actionPlate' c@Choice{} = F.Constant $ S.singleton c
-      actionPlate' x = pure x
-    in
-      purePlate
-      {
-        actionPlate = actionPlate'
-      }
+    purePlate
+    {
+      casePlate = F.Constant . S.singleton . getAction
+    }
 
 instance Extract Token where
   extractor =
