@@ -25,6 +25,7 @@ module Language.Marlowe.Runtime.App.Stream
   , streamContractHeadersClient
   , streamContractSteps
   , streamContractStepsClient
+  , transactionIdFromStream
   ) where
 
 
@@ -40,15 +41,15 @@ import Language.Marlowe.Protocol.HeaderSync.Client (MarloweHeaderSyncClient)
 import Language.Marlowe.Protocol.Sync.Client (MarloweSyncClient)
 import Language.Marlowe.Runtime.App.Run (runMarloweHeaderSyncClient, runMarloweSyncClient)
 import Language.Marlowe.Runtime.App.Types (Client, Services(..))
-import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader)
+import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, TxId, TxOutRef(TxOutRef, txId))
 import Language.Marlowe.Runtime.Core.Api
   ( ContractId
   , IsMarloweVersion(..)
   , MarloweVersion
   , MarloweVersionTag(V1)
-  , Transaction(Transaction, output)
+  , Transaction(Transaction, output, transactionId)
   , TransactionOutput(TransactionOutput, scriptOutput)
-  , TransactionScriptOutput(TransactionScriptOutput, datum)
+  , TransactionScriptOutput(TransactionScriptOutput, datum, utxo)
   , assertVersionsEqual
   )
 import Language.Marlowe.Runtime.Discovery.Api (ContractHeader(contractId))
@@ -183,6 +184,14 @@ instance ToJSON (ContractStream 'V1) where
         "contractId" .= csContractId
       , "finish" .= csFinish
       ]
+
+
+transactionIdFromStream
+  :: ContractStream v
+  -> Maybe TxId
+transactionIdFromStream ContractStreamStart{csCreateStep=CreateStep{createOutput=TransactionScriptOutput{utxo=TxOutRef{txId}}}} = pure txId
+transactionIdFromStream ContractStreamContinued{csContractStep=(ApplyTransaction Transaction{transactionId})} = pure transactionId
+transactionIdFromStream _ = Nothing
 
 
 isContractStreamFinish

@@ -33,4 +33,4 @@ main =
     Right key <- C.AsSigningKey C.AsPaymentExtendedKey `C.readFileTextEnvelope` keyFile
     discoveryChannel <- runDiscovery config pollingFrequency
     detectionChannel <- runDetection config pollingFrequency party discoveryChannel
-    runOracle oracleEnv config pollingFrequency address key party detectionChannel discoveryChannel
+    runOracle oracleEnv config (4 * pollingFrequency) address key party detectionChannel discoveryChannel
