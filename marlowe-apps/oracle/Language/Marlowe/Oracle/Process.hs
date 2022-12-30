@@ -163,9 +163,13 @@ runOracle eventBackend oracleEnv config pollingFrequency address key party inCha
     -- Build and submit a transaction to report the oracle's value.
     report event contractId symbol =
       do
+        let
+          event' = hoistEvent liftIO event
+        addField event' $ ("symbol" :: Text) ≔ show symbol
         value <- ExceptT $ readOracle eventBackend oracleEnv symbol
+        addField event' $ ("value" :: Text) ≔ value
         void
-          . applyWithEvents (hoistEvent liftIO event) config address key contractId
+          . applyWithEvents event' config address key contractId
           . pure . NormalInput
           $ IChoice (ChoiceId (toBuiltin . BS8.pack $ show symbol) party) value
     -- Print the context of the transaction.

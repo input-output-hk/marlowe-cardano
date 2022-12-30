@@ -52,8 +52,8 @@ might result in the following output:
 ```JSON
 {
   "OracleProcess": {
-    "end": "2022-12-30T18:22:27.945264767Z",
-    "event-id": "b65d70e1-bb98-4771-91e4-f1a2dc0ff401",
+    "end": "2022-12-30T18:32:05.385512191Z",
+    "event-id": "7645d15a-4d2e-40ff-8f8b-0ef8380d34bb",
     "fields": {
       "action": "wait",
       "availableForOracle": [
@@ -64,17 +64,19 @@ might result in the following output:
       "readyForOracle": [
         "ADAUSD"
       ],
-      "result": "Failed: ApplyInputsConstraintsBuildupFailed (MarloweComputeTransactionFailed \"TEIntervalError (InvalidInterval (POSIXTime {getPOSIXTime = 1672424499000},POSIXTime {getPOSIXTime = 1672424485999}))\")"
+      "result": "Failed: ApplyInputsConstraintsBuildupFailed (MarloweComputeTransactionFailed \"TEIntervalError (InvalidInterval (POSIXTime {getPOSIXTime = 1672425076000},POSIXTime {getPOSIXTime = 1672424485999}))\")",
+      "symbol": "ADAUSD",
+      "value": 24407200
     },
-    "start": "2022-12-30T18:22:27.693471633Z"
+    "start": "2022-12-30T18:32:05.063148547Z"
   }
 }
 ```
 ```JSON
 {
   "OracleProcess": {
-    "end": "2022-12-30T18:22:37.64959332Z",
-    "event-id": "8e6d3cde-0f60-4777-951e-ff616ad10f30",
+    "end": "2022-12-30T18:32:05.385600584Z",
+    "event-id": "546d30f2-934d-43c1-ae93-184b70580042",
     "fields": {
       "action": "wait",
       "availableForOracle": [],
@@ -85,28 +87,30 @@ might result in the following output:
       ],
       "result": "Ignored."
     },
-    "start": "2022-12-30T18:22:37.649154573Z"
+    "start": "2022-12-30T18:32:05.385563061Z"
   }
 }
 ```
 ```JSON
 {
   "OracleProcess": {
-    "end": "2022-12-30T18:23:01.223700597Z",
-    "event-id": "036d2c40-b354-4238-bddb-2e405e748d7a",
+    "end": "2022-12-30T18:33:42.773918093Z",
+    "event-id": "3834f5ab-264b-4e4b-9da5-0873fb3999cf",
     "fields": {
       "action": "wait",
       "availableForOracle": [
         "ADAGBP"
       ],
-      "contractId": "d9126cc9dd22be6db889299f18a0d54671da16931d40d0a9f21bf6d9409d6697#1",
-      "previousTransactionId": "d9126cc9dd22be6db889299f18a0d54671da16931d40d0a9f21bf6d9409d6697",
+      "contractId": "25fcc55b8f14442260119fdd2c487e86fc661c717007e250b62cd5cc55b785fd#1",
+      "previousTransactionId": "25fcc55b8f14442260119fdd2c487e86fc661c717007e250b62cd5cc55b785fd",
       "readyForOracle": [
         "ADAGBP"
       ],
-      "result": "Confirmed."
+      "result": "Confirmed.",
+      "symbol": "ADAGBP",
+      "value": 20229900
     },
-    "start": "2022-12-30T18:22:52.657003723Z"
+    "start": "2022-12-30T18:33:35.102403175Z"
   }
 }
 ```
@@ -138,11 +142,11 @@ results in the following output:
 ```console
 Address: addr_test1qqzg379vgpjnm3n5kffdqq86sr6veng453rfnu07c8y9umdn3kr657fpa3q8mzwmjqvl9lqdn9g2pm3ejhlgwpprwy2swc7lhj
 Symbol: ADAGBP
-Timeout: 1672342136000 = Thu Dec 29 12:28:56 PM MST 2022
-contractId: 5aca6d23973da2ad2b1927ee7bd95cf4f99c7eb47cfd267672711326bf8bb98c#1
-blockHeaderHash: 689ca1d8d072b9cd409a53bbe2fc2fe32b2c9840be5a72ce6c8916ff7d05e4a9
-blockNo: 454180
-slotNo: 16572556
+Timeout: 1672511600000 = Sat Dec 31 11:33:20 AM MST 2022
+contractId: 25fcc55b8f14442260119fdd2c487e86fc661c717007e250b62cd5cc55b785fd#1
+blockHeaderHash: d40988caf80a338ed6fc08229a9b333638b443a273d716ed76a011b02d224ff3
+blockNo: 462090
+slotNo: 16742013
 ```
 
 This creates a minimalist contract `example.contract` that requires oracle input:
