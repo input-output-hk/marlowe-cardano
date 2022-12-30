@@ -26,6 +26,7 @@ module Language.Marlowe.Runtime.App.Types
 
 import Control.Applicative (Alternative)
 import Control.Monad.Base (MonadBase)
+import Control.Monad.Cleanup (MonadCleanup)
 import Control.Monad.Except (ExceptT)
 import Control.Monad.Fix (MonadFix)
 import Control.Monad.IO.Class (MonadIO(..))
@@ -144,7 +145,7 @@ data Services m =
 
 -- | A monad type for Marlowe Runtime.Client programs.
 newtype Client a = Client { runClient :: ReaderT (Services IO) IO a }
-  deriving newtype (Alternative, Applicative, Functor, Monad, MonadBase IO, MonadBaseControl IO, MonadFail, MonadFix, MonadIO)
+  deriving newtype (Alternative, Applicative, Functor, Monad, MonadBase IO, MonadBaseControl IO, MonadCleanup, MonadFail, MonadFix, MonadIO)
 
 
 -- | A function signature for running a client for some protocol in some monad m.

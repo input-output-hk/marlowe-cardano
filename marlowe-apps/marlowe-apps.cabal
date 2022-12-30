@@ -98,6 +98,9 @@ executable marlowe-oracle
                     , cardano-api
                     , containers
                     , extra
+                    , eventuo11y
+                    , eventuo11y-dsl
+                    , eventuo11y-json
                     , http-client
                     , http-client-tls
                     , marlowe

@@ -25,7 +25,7 @@ import Language.Marlowe.Core.V1.Semantics.Types (Contract, Input)
 import Language.Marlowe.Runtime.App.Types (App, Config, MarloweRequest(..), MarloweResponse(..))
 import Language.Marlowe.Runtime.ChainSync.Api (Address, Lovelace)
 import Language.Marlowe.Runtime.Core.Api (ContractId, MarloweVersionTag(V1))
-import Observe.Event (addField, newEvent, withSubEvent)
+import Observe.Event (Event, addField, newEvent, withSubEvent)
 import Observe.Event.Backend (unitEventBackend)
 import Observe.Event.Dynamic (DynamicEvent, DynamicEventSelector(..))
 import Observe.Event.Syntax ((≔))
@@ -56,7 +56,7 @@ run config address key contract inputs minUtxo =
 
 
 runWithEvents
-  :: DynamicEvent App r
+  :: Event App r DynamicEventSelector f
   -> Config
   -> Address
   -> C.SigningKey C.PaymentExtendedKey
@@ -87,7 +87,7 @@ create config address key contract minUtxo =
 
 
 createWithEvents
-  :: DynamicEvent App r
+  :: Event App r DynamicEventSelector f
   -> Config
   -> Address
   -> C.SigningKey C.PaymentExtendedKey
@@ -113,7 +113,7 @@ apply config address key contractId input =
 
 
 applyWithEvents
-  :: DynamicEvent App r
+  :: Event App r DynamicEventSelector f
   -> Config
   -> Address
   -> C.SigningKey C.PaymentExtendedKey
@@ -137,7 +137,7 @@ transact config key request =
 
 
 transactWithEvents
-  :: DynamicEvent App r
+  :: Event App r DynamicEventSelector f
   -> Config
   -> C.SigningKey C.PaymentExtendedKey
   -> MarloweRequest 'V1
@@ -173,7 +173,7 @@ transactWithEvents event config key request =
 
 
 handleWithEvents
-  :: DynamicEvent App r
+  :: Event App r DynamicEventSelector f
   -> T.Text
   -> Config
   -> MarloweRequest 'V1

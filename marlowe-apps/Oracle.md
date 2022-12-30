@@ -43,27 +43,72 @@ For example, executing the oracle as
 marlowe-oracle \
   preprod.config \
   addr_test1qqzg379vgpjnm3n5kffdqq86sr6veng453rfnu07c8y9umdn3kr657fpa3q8mzwmjqvl9lqdn9g2pm3ejhlgwpprwy2swc7lhj \
-  payment.skey
+  payment.skey \
+|& jq 'select(.OracleProcess.fields.action == "wait")'
 ```
 
 might result in the following output:
 
-```console
-Contract ID: 1029b6a81fa3278f6179bce4c51f648cbf40a6dd1c2bb8aff2168b187ae78bd7#1
-  Ready for oracle: "ADAUSD"
-  Available from oracle: ADAUSD
-  Failed: ApplyInputsConstraintsBuildupFailed (MarloweComputeTransactionFailed "TEIntervalError (InvalidInterval (POSIXTime {getPOSIXTime = 1672255867000},POSIXTime {getPOSIXTime = 1672240010999}))")
-
-Contract ID: 43d663aae2d19fbfa39a9d1f32c45a06f3ac266eb6098f4a55dfc996a6bb1a5f#1
-  Ready for oracle: "XYZ"
-  Available from oracle: 
-  Ignored.
-
-Contract ID: 5aca6d23973da2ad2b1927ee7bd95cf4f99c7eb47cfd267672711326bf8bb98c#1
-  Ready for oracle: "ADAGBP"
-  Available from oracle: ADAGBP
-  ADAGBP = 20941100 [scaled integer units]
-  Confirmed.
+```JSON
+{
+  "OracleProcess": {
+    "end": "2022-12-30T18:22:27.945264767Z",
+    "event-id": "b65d70e1-bb98-4771-91e4-f1a2dc0ff401",
+    "fields": {
+      "action": "wait",
+      "availableForOracle": [
+        "ADAUSD"
+      ],
+      "contractId": "fa4dd274fb921dea7f909d363c5331de1f9712e624f9ee7797f3eed5aab7e6db#1",
+      "previousTransactionId": "fa4dd274fb921dea7f909d363c5331de1f9712e624f9ee7797f3eed5aab7e6db",
+      "readyForOracle": [
+        "ADAUSD"
+      ],
+      "result": "Failed: ApplyInputsConstraintsBuildupFailed (MarloweComputeTransactionFailed \"TEIntervalError (InvalidInterval (POSIXTime {getPOSIXTime = 1672424499000},POSIXTime {getPOSIXTime = 1672424485999}))\")"
+    },
+    "start": "2022-12-30T18:22:27.693471633Z"
+  }
+}
+```
+```JSON
+{
+  "OracleProcess": {
+    "end": "2022-12-30T18:22:37.64959332Z",
+    "event-id": "8e6d3cde-0f60-4777-951e-ff616ad10f30",
+    "fields": {
+      "action": "wait",
+      "availableForOracle": [],
+      "contractId": "22faecc06b460e18a92c628831410131007a988a77dec1562d31a0b8b78d937e#1",
+      "previousTransactionId": "22faecc06b460e18a92c628831410131007a988a77dec1562d31a0b8b78d937e",
+      "readyForOracle": [
+        "XYZ"
+      ],
+      "result": "Ignored."
+    },
+    "start": "2022-12-30T18:22:37.649154573Z"
+  }
+}
+```
+```JSON
+{
+  "OracleProcess": {
+    "end": "2022-12-30T18:23:01.223700597Z",
+    "event-id": "036d2c40-b354-4238-bddb-2e405e748d7a",
+    "fields": {
+      "action": "wait",
+      "availableForOracle": [
+        "ADAGBP"
+      ],
+      "contractId": "d9126cc9dd22be6db889299f18a0d54671da16931d40d0a9f21bf6d9409d6697#1",
+      "previousTransactionId": "d9126cc9dd22be6db889299f18a0d54671da16931d40d0a9f21bf6d9409d6697",
+      "readyForOracle": [
+        "ADAGBP"
+      ],
+      "result": "Confirmed."
+    },
+    "start": "2022-12-30T18:22:52.657003723Z"
+  }
+}
 ```
 
 In the above, the oracle attempted to provide input to the first contract, but the time for oracle input had already passed. The oracle ignored the second contract because the oracle does not provide a feed for the `XYZ` symbol. The oracle confirmed that it reported a value for `ADAGBP` to the third contract.

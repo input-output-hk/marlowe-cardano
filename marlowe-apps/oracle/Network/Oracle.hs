@@ -1,5 +1,6 @@
 
 
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 
 
@@ -13,9 +14,14 @@ module Network.Oracle
   ) where
 
 
+import Data.Maybe (fromJust)
+import Data.Text (Text)
 import Network.HTTP.Client (Manager)
 import Network.Oracle.CoinGecko (Currency(..), CurrencyPair(..), coinGeckoEnv, fetchCurrencyPair)
 import Network.Oracle.Sofr (fetchSofrBasisPoints, nyfrbEnv)
+import Observe.Event (EventBackend, addField, withEvent)
+import Observe.Event.Dynamic (DynamicEventSelector(..))
+import Observe.Event.Syntax ((≔))
 import Servant.Client (ClientEnv)
 import Text.Read (readMaybe)
 
@@ -24,8 +30,34 @@ data Oracle = SOFR | BTCETH | BTCEUR | BTCGBP | BTCJPY | BTCUSD | ADABTC | ADAET
   deriving (Bounded, Enum, Eq, Ord, Read, Show)
 
 
+toOracleSymbol :: String -> Maybe Oracle
+toOracleSymbol = readMaybe
+
+
 oracles :: [Oracle]
 oracles = [minBound..maxBound]
+
+
+pairs :: [(Oracle, (Currency, Currency))]
+pairs =
+  [
+    (BTCETH, (BTC, ETH))
+  , (BTCEUR, (BTC, EUR))
+  , (BTCGBP, (BTC, GBP))
+  , (BTCJPY, (BTC, JPY))
+  , (BTCUSD, (BTC, USD))
+  , (ADABTC, (ADA, BTC))
+  , (ADAETH, (ADA, ETH))
+  , (ADAEUR, (ADA, EUR))
+  , (ADAGBP, (ADA, GBP))
+  , (ADAJPY, (ADA, JPY))
+  , (ADAUSD, (ADA, USD))
+  , (ETHBTC, (ETH, BTC))
+  , (ETHEUR, (ETH, EUR))
+  , (ETHGBP, (ETH, GBP))
+  , (ETHJPY, (ETH, JPY))
+  , (ETHUSD, (ETH, USD))
+  ]
 
 
 data OracleEnv =
@@ -36,29 +68,38 @@ data OracleEnv =
   }
 
 
-makeOracle :: Manager -> IO OracleEnv
-makeOracle manager = OracleEnv <$> nyfrbEnv manager <*> coinGeckoEnv manager
+makeOracle
+  :: Manager
+  -> IO OracleEnv
+makeOracle manager =
+  OracleEnv
+    <$> nyfrbEnv manager
+    <*> coinGeckoEnv manager
 
 
-readOracle :: OracleEnv -> Oracle -> IO (Either String Integer)
-readOracle OracleEnv{..} SOFR   = fetchSofrBasisPoints nyfrb
-readOracle OracleEnv{..} BTCETH = fmap rate <$> fetchCurrencyPair coinGecko BTC ETH
-readOracle OracleEnv{..} BTCEUR = fmap rate <$> fetchCurrencyPair coinGecko BTC EUR
-readOracle OracleEnv{..} BTCGBP = fmap rate <$> fetchCurrencyPair coinGecko BTC GBP
-readOracle OracleEnv{..} BTCJPY = fmap rate <$> fetchCurrencyPair coinGecko BTC JPY
-readOracle OracleEnv{..} BTCUSD = fmap rate <$> fetchCurrencyPair coinGecko BTC USD
-readOracle OracleEnv{..} ADABTC = fmap rate <$> fetchCurrencyPair coinGecko ADA BTC
-readOracle OracleEnv{..} ADAETH = fmap rate <$> fetchCurrencyPair coinGecko ADA ETH
-readOracle OracleEnv{..} ADAEUR = fmap rate <$> fetchCurrencyPair coinGecko ADA EUR
-readOracle OracleEnv{..} ADAGBP = fmap rate <$> fetchCurrencyPair coinGecko ADA GBP
-readOracle OracleEnv{..} ADAJPY = fmap rate <$> fetchCurrencyPair coinGecko ADA JPY
-readOracle OracleEnv{..} ADAUSD = fmap rate <$> fetchCurrencyPair coinGecko ADA USD
-readOracle OracleEnv{..} ETHBTC = fmap rate <$> fetchCurrencyPair coinGecko ETH BTC
-readOracle OracleEnv{..} ETHEUR = fmap rate <$> fetchCurrencyPair coinGecko ETH EUR
-readOracle OracleEnv{..} ETHGBP = fmap rate <$> fetchCurrencyPair coinGecko ETH GBP
-readOracle OracleEnv{..} ETHJPY = fmap rate <$> fetchCurrencyPair coinGecko ETH JPY
-readOracle OracleEnv{..} ETHUSD = fmap rate <$> fetchCurrencyPair coinGecko ETH USD
-
-
-toOracleSymbol :: String -> Maybe Oracle
-toOracleSymbol = readMaybe
+readOracle
+  :: EventBackend IO r DynamicEventSelector
+  -> OracleEnv
+  -> Oracle
+  -> IO (Either String Integer)
+readOracle eventBackend OracleEnv{..} symbol =
+ do
+  withEvent eventBackend (DynamicEventSelector "Oracle")
+    $ \event ->
+      do
+        addField event $ ("symbol" :: Text) ≔ show symbol
+        value <-
+          case symbol of
+            SOFR -> do
+                      addField event $ ("source" :: Text) ≔ ("NYFRB" :: String)
+                      addField event $ ("unit" :: Text) ≔ ("basis points" :: String)
+                      fetchSofrBasisPoints nyfrb
+            _    -> do
+                      result <- uncurry (fetchCurrencyPair coinGecko) . fromJust $ symbol `lookup` pairs
+                      addField event $ ("source" :: Text) ≔ ("CoinGecko" :: String)
+                      addField event $ ("result":: Text)  ≔ show result
+                      addField event $ ("unit" :: Text) ≔ ("/ 100,000,000" :: String)
+                      pure $ rate <$> result
+        addField event
+          $ either (("failure":: Text)  ≔) (("value":: Text)  ≔) value
+        pure value

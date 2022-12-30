@@ -1,7 +1,9 @@
 
 
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 
 
@@ -14,8 +16,8 @@ import Control.Concurrent.STM (atomically)
 import Control.Concurrent.STM.TChan (TChan, newTChanIO, readTChan, writeTChan)
 import Control.Monad (forever, unless, void)
 import Control.Monad.Except (ExceptT(ExceptT), liftIO, runExceptT)
-import Data.List (intercalate)
 import Data.Maybe (mapMaybe)
+import Data.Text (Text)
 import Language.Marlowe.Core.V1.Semantics.Types
   (ChoiceId(ChoiceId), Contract, Input(NormalInput), InputContent(IChoice), Party)
 import Language.Marlowe.Oracle.Detect (containsOracleAction, contractReadyForOracle)
@@ -28,42 +30,48 @@ import Language.Marlowe.Runtime.App.Stream
   , streamContractSteps
   , transactionIdFromStream
   )
-import Language.Marlowe.Runtime.App.Transact (apply)
+import Language.Marlowe.Runtime.App.Transact (applyWithEvents)
 import Language.Marlowe.Runtime.App.Types (Config)
 import Language.Marlowe.Runtime.ChainSync.Api (Address, TxId)
 import Language.Marlowe.Runtime.Core.Api (ContractId, MarloweVersionTag(V1))
 import Network.Oracle (Oracle, OracleEnv, readOracle, toOracleSymbol)
+import Observe.Event (EventBackend, addField, hoistEvent, withEvent)
+import Observe.Event.Backend (hoistEventBackend)
+import Observe.Event.Dynamic (DynamicEventSelector(..))
+import Observe.Event.Syntax ((≔))
 import Plutus.V2.Ledger.Api (toBuiltin)
-import System.IO (hPutStrLn, stderr)
 
 import qualified Cardano.Api as C (PaymentExtendedKey, SigningKey)
-import qualified Data.Aeson as A (encode)
 import qualified Data.ByteString.Char8 as BS8 (pack)
-import qualified Data.ByteString.Lazy.Char8 as LBS8 (unpack)
 import qualified Data.Map.Strict as M (Map, adjust, delete, insert, lookup)
 import qualified Data.Set as S (Set, insert, member)
 
 
 runDiscovery
-  :: Config
+  :: EventBackend IO r DynamicEventSelector
+  -> Config
   -> Int
   -> IO (TChan ContractId)
-runDiscovery config pollingFrequency =
+runDiscovery eventBackend config pollingFrequency =
   do
     channel <- newTChanIO
     void . forkIO
-      $ either (hPutStrLn stderr) pure
-      =<< runClientWithConfig config (streamAllContractIds pollingFrequency channel)
+      . withEvent (hoistEventBackend liftIO eventBackend) (DynamicEventSelector "DiscoveryProcess")
+      $ \event ->
+        addField event
+          . either (("failure" :: Text) ≔) (const $ ("success" :: Text) ≔ True)
+          =<< runClientWithConfig config (streamAllContractIds eventBackend pollingFrequency channel)
     pure channel
 
 
 runDetection
-  :: Config
+  :: EventBackend IO r DynamicEventSelector
+  -> Config
   -> Int
   -> Party
   -> TChan ContractId
   -> IO (TChan (ContractStream 'V1))
-runDetection config pollingFrequency party inChannel =
+runDetection eventBackend config pollingFrequency party inChannel =
   do
     outChannel <- newTChanIO
     void . forkIO
@@ -71,15 +79,18 @@ runDetection config pollingFrequency party inChannel =
       . runClientWithConfig config
       -- FIXME: If `MarloweSyncClient` were a `Monad`, then we could run
       --        multiple actions sequentially in a single connection.
-      $ do
-        contractId <- liftIO . atomically $ readTChan inChannel
-        -- FIXME: If there were concurrency combinators for `MarloweSyncClient`, then we
-        --        could follow multiple contracts in parallel using the same connection.
-        let
-          finishOnClose = True
-          finishOnWait = True
-          accept = maybe False (not . null . containsOracleAction party) . contractFromStep
-        streamContractSteps pollingFrequency finishOnClose finishOnWait accept contractId outChannel
+      . withEvent (hoistEventBackend liftIO eventBackend) (DynamicEventSelector "DetectionProcess")
+      $ \event ->
+        do
+          contractId <- liftIO . atomically $ readTChan inChannel
+          addField event $ ("contractId" :: Text) ≔ contractId
+          -- FIXME: If there were concurrency combinators for `MarloweSyncClient`, then we
+          --        could follow multiple contracts in parallel using the same connection.
+          let
+            finishOnClose = True
+            finishOnWait = True
+            accept = maybe False (not . null . containsOracleAction party) . contractFromStep
+          streamContractSteps eventBackend pollingFrequency finishOnClose finishOnWait accept contractId outChannel
     pure outChannel
 
 
@@ -95,7 +106,8 @@ data LastSeen =
 
 
 runOracle
-  :: OracleEnv
+  :: EventBackend IO r DynamicEventSelector
+  -> OracleEnv
   -> Config
   -> Int
   -> Address
@@ -104,7 +116,7 @@ runOracle
   -> TChan (ContractStream 'V1)
   -> TChan ContractId
   -> IO ()
-runOracle oracleEnv config pollingFrequency address key party inChannel outChannel =
+runOracle eventBackend oracleEnv config pollingFrequency address key party inChannel outChannel =
   let
     -- Nothing needs updating.
     rollback :: ContractStream 'V1 -> M.Map ContractId LastSeen -> M.Map ContractId LastSeen
@@ -122,7 +134,7 @@ runOracle oracleEnv config pollingFrequency address key party inChannel outChann
           $ case (contractId `M.lookup` lastSeen, contractFromStream cs, transactionIdFromStream cs) of
               (Nothing  , Just contract, Just txId) -> LastSeen contractId contract txId mempty
               (Just seen, Just contract, Just txId) -> seen {lastContract = contract, lastTxId = txId}
-              _                                     -> error
+              _                                     -> error  -- FIXME: Guaranteed to occur.
                                                          $ "Invalid contract stream: seen = "
                                                          <> show (contractId `M.lookup` lastSeen)
                                                          <> ", contract = " <> show (contractFromStream cs)
@@ -149,59 +161,66 @@ runOracle oracleEnv config pollingFrequency address key party inChannel outChann
       in
         (rawSymbols, validSymbols, ignored)
     -- Build and submit a transaction to report the oracle's value.
-    report :: ContractId -> Oracle -> ExceptT String IO ()
-    report contractId symbol =
+    report event contractId symbol =
       do
-        value <- ExceptT $ readOracle oracleEnv symbol
+        value <- ExceptT $ readOracle eventBackend oracleEnv symbol
         void
-          . apply config address key contractId
+          . applyWithEvents (hoistEvent liftIO event) config address key contractId
           . pure . NormalInput
           $ IChoice (ChoiceId (toBuiltin . BS8.pack $ show symbol) party) value
-        liftIO . hPutStrLn stderr
-          $ "  " <> show symbol <> " = " <> show value <> " [scaled integer units]"
     -- Print the context of the transaction.
-    printContext :: ContractId -> LastSeen -> [String] -> [Oracle] -> IO ()
-    printContext contractId LastSeen{lastTxId} rawSymbols validSymbols =
+    printContext event LastSeen{lastTxId} rawSymbols validSymbols =
       do
-        hPutStrLn stderr ""
-        hPutStrLn stderr $ "Contract ID: " <> (init . tail . LBS8.unpack . A.encode) contractId
-        hPutStrLn stderr $ "  Previous transaction ID: " <> (init . tail . show) lastTxId
-        hPutStrLn stderr $ "  Ready for oracle: " <> intercalate ", " (show <$> rawSymbols)
-        hPutStrLn stderr $ "  Available from oracle: " <> intercalate ", " (show <$> validSymbols)
+        addField event $ ("previousTransactionId" :: Text) ≔ lastTxId
+        addField event $ ("readyForOracle" :: Text) ≔ rawSymbols
+        addField event $ ("availableForOracle" :: Text) ≔ fmap show validSymbols
     -- Print the result of the transaction.
-    printResult :: String -> IO ()
-    printResult = hPutStrLn stderr . ("  " <>)
+    printResult event = addField event . (("result" :: Text) ≔)
     -- Process the stream of changes to contracts.
     go :: M.Map ContractId LastSeen -> IO ()
     go lastSeen =
       do
-        cs <- liftIO . atomically $ readTChan inChannel
-        go =<<
-          case cs of
-            ContractStreamStart{}      -> pure $ update cs lastSeen
-            ContractStreamContinued{}  -> pure $ update cs lastSeen
-            ContractStreamRolledBack{} -> pure $ rollback cs lastSeen
-            ContractStreamWait{..}     -> do
-                                            let
-                                              seen@LastSeen{lastTxId} =
-                                                case csContractId `M.lookup` lastSeen of
-                                                  Just seen' -> seen'
-                                                  _          -> error
-                                                                  $ "Invalid contract stream: seen = "
-                                                                  <> show (csContractId `M.lookup` lastSeen)
-                                                                  <> "."
-                                              (rawSymbols, validSymbols, ignored) = lookupSymbols seen
-                                            unless ignored
-                                              $ do
-                                                printContext csContractId seen rawSymbols validSymbols
-                                                result <- runExceptT $ mapM_ (report csContractId) (take 1 validSymbols)
-                                                printResult
-                                                  $ case (result, null validSymbols) of
-                                                      (Right ()    , True ) -> "Ignored."
-                                                      (Right ()    , False) -> "Confirmed."
-                                                      (Left message, _    ) -> "Failed: " <> message
-                                            revisit csContractId
-                                            pure $ ignore csContractId lastTxId lastSeen
-            ContractStreamFinish{..}   -> pure $ delete csContractId lastSeen
+        lastSeen' <-
+          withEvent eventBackend (DynamicEventSelector "OracleProcess")
+            $ \event ->
+              do
+                cs <- liftIO . atomically $ readTChan inChannel
+                addField event $ ("contractId" :: Text) ≔ csContractId cs
+                case cs of
+                  ContractStreamStart{}      -> do
+                                                  addField event $ ("action" :: Text) ≔ ("start" :: String)
+                                                  pure $ update cs lastSeen
+                  ContractStreamContinued{}  -> do
+                                                  addField event $ ("action" :: Text) ≔ ("continued" :: String)
+                                                  pure $ update cs lastSeen
+                  ContractStreamRolledBack{} -> do
+                                                  addField event $ ("action" :: Text) ≔ ("rollback" :: String)
+                                                  pure $ rollback cs lastSeen
+                  ContractStreamWait{..}     -> do
+                                                  addField event $ ("action" :: Text) ≔ ("wait" :: String)
+                                                  let
+                                                    seen@LastSeen{lastTxId} =
+                                                      case csContractId `M.lookup` lastSeen of
+                                                        Just seen' -> seen'
+                                                        _          -> error  -- FIXME: Guaranteed to occur.
+                                                                        $ "Invalid contract stream: seen = "
+                                                                        <> show (csContractId `M.lookup` lastSeen)
+                                                                        <> "."
+                                                    (rawSymbols, validSymbols, ignored) = lookupSymbols seen
+                                                  unless ignored
+                                                    $ do
+                                                      printContext event seen rawSymbols validSymbols
+                                                      result <- runExceptT $ mapM_ (report event csContractId) (take 1 validSymbols)
+                                                      printResult event
+                                                        $ case (result, null validSymbols) of
+                                                            (Right ()    , True ) -> "Ignored."
+                                                            (Right ()    , False) -> "Confirmed."
+                                                            (Left message, _    ) -> "Failed: " <> message
+                                                  revisit csContractId
+                                                  pure $ ignore csContractId lastTxId lastSeen
+                  ContractStreamFinish{..}   -> do
+                                                  addField event $ ("action" :: Text) ≔ ("finish" :: String)
+                                                  pure $ delete csContractId lastSeen
+        go lastSeen'
   in
     go mempty

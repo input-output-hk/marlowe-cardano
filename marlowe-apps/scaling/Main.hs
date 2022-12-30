@@ -35,7 +35,7 @@ import Language.Marlowe.Runtime.App.Transact
 import Language.Marlowe.Runtime.App.Types (Config)
 import Language.Marlowe.Runtime.ChainSync.Api (Address(unAddress), fromBech32)
 import Language.Marlowe.Runtime.Core.Api (ContractId)
-import Observe.Event (EventBackend, addField, hoistEvent, hoistEventBackend, withEvent)
+import Observe.Event (EventBackend, addField, hoistEvent, withEvent)
 import Observe.Event.Dynamic (DynamicEvent, DynamicEventSelector(..))
 import Observe.Event.Render.JSON (DefaultRenderSelectorJSON(defaultRenderSelectorJSON))
 import Observe.Event.Render.JSON.Handle (JSONRef, simpleJsonStderrBackend)
@@ -144,23 +144,23 @@ runOne eventBackend config address key =
 
 main :: IO ()
 main =
-   do
-     eventBackend <- hoistEventBackend liftIO <$> simpleJsonStderrBackend defaultRenderSelectorJSON
-     configFilename : countText : addressKeyEntries <- getArgs
-     config <- read <$> readFile configFilename
-     let
-       count = read countText
-     addressKeys <-
-       sequence
-         [
-           do
-             Just address <- pure . fromBech32 $ T.pack addressBech32
-             Right key <- C.readFileTextEnvelope (C.AsSigningKey C.AsPaymentExtendedKey) keyFilename
-             pure (address, key)
-         |
-           [addressBech32, keyFilename] <- chunksOf 2 addressKeyEntries
-         ]
-     void
-       $ mapConcurrently
-         (\(address, key) -> replicateM_ count $ runOne eventBackend config address key)
-         addressKeys
+  do
+    eventBackend <- simpleJsonStderrBackend defaultRenderSelectorJSON
+    configFilename : countText : addressKeyEntries <- getArgs
+    config <- read <$> readFile configFilename
+    let
+      count = read countText
+    addressKeys <-
+      sequence
+        [
+          do
+            Just address <- pure . fromBech32 $ T.pack addressBech32
+            Right key <- C.readFileTextEnvelope (C.AsSigningKey C.AsPaymentExtendedKey) keyFilename
+            pure (address, key)
+        |
+          [addressBech32, keyFilename] <- chunksOf 2 addressKeyEntries
+        ]
+    void
+      $ mapConcurrently
+        (\(address, key) -> replicateM_ count $ runOne eventBackend config address key)
+        addressKeys

@@ -35,6 +35,7 @@ import Control.Concurrent.STM.TChan (TChan, writeTChan)
 import Control.Monad.IO.Class (liftIO)
 import Data.Aeson (ToJSON(..), encode, object, (.=))
 import Data.Maybe (isNothing, mapMaybe)
+import Data.Text (Text)
 import Data.Type.Equality ((:~:)(Refl))
 import Language.Marlowe.Core.V1.Semantics (MarloweData(marloweContract))
 import Language.Marlowe.Protocol.HeaderSync.Client (MarloweHeaderSyncClient)
@@ -54,6 +55,9 @@ import Language.Marlowe.Runtime.Core.Api
   )
 import Language.Marlowe.Runtime.Discovery.Api (ContractHeader(contractId))
 import Language.Marlowe.Runtime.History.Api (ContractStep(ApplyTransaction), CreateStep(CreateStep, createOutput))
+import Observe.Event (EventBackend, addField, withEvent)
+import Observe.Event.Dynamic (DynamicEventSelector(..))
+import Observe.Event.Syntax ((≔))
 
 import qualified Data.ByteString.Lazy.Char8 as LBS8 (unpack)
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1 (Contract)
@@ -74,48 +78,65 @@ import qualified Language.Marlowe.Protocol.Sync.Client as CSync
 
 
 streamAllContractIds
-  :: Int
+  :: EventBackend IO r DynamicEventSelector
+  -> Int
   -> TChan ContractId
   -> Client (Either String ())
-streamAllContractIds pollingFrequency = streamContractHeaders pollingFrequency $ Just . contractId
+streamAllContractIds eventBackend pollingFrequency = streamContractHeaders eventBackend pollingFrequency $ Just . contractId
 
 
 streamAllContractIdsClient
-  :: Int
+  :: EventBackend IO r DynamicEventSelector
+  -> Int
   -> TChan ContractId
   -> MarloweHeaderSyncClient Client (Either String ())
-streamAllContractIdsClient pollingFrequency = streamContractHeadersClient pollingFrequency $ Just . contractId
+streamAllContractIdsClient eventBackend pollingFrequency = streamContractHeadersClient eventBackend pollingFrequency $ Just . contractId
 
 
 streamContractHeaders
-  :: Int
+  :: EventBackend IO r DynamicEventSelector
+  -> Int
   -> (ContractHeader -> Maybe a)
   -> TChan a
   -> Client (Either String ())
-streamContractHeaders pollingFrequency extract channel =
+streamContractHeaders eventBackend pollingFrequency extract channel =
   runMarloweHeaderSyncClient runDiscoverySyncClient
-    $ streamContractHeadersClient pollingFrequency extract channel
+    $ streamContractHeadersClient eventBackend pollingFrequency extract channel
 
 
 streamContractHeadersClient
-  :: Int
+  :: EventBackend IO r DynamicEventSelector
+  -> Int
   -> (ContractHeader -> Maybe a)
   -> TChan a
   -> MarloweHeaderSyncClient Client (Either String ())
-streamContractHeadersClient pollingFrequency extract channel =
+streamContractHeadersClient eventBackend pollingFrequency extract channel =
   let
     clientIdle = HSync.SendMsgRequestNext clientNext
     clientWait = HSync.SendMsgPoll clientNext
     clientNext =
       HSync.ClientStNext
       {
-        HSync.recvMsgNewHeaders = \_ results -> do
-                                                 liftIO . atomically
-                                                   . mapM_ (writeTChan channel)
-                                                   $ mapMaybe extract results
-                                                 pure clientIdle
-      , HSync.recvMsgRollBackward = const $ pure clientIdle
-      , HSync.recvMsgWait = clientWait <$ liftIO (threadDelay pollingFrequency)
+        HSync.recvMsgNewHeaders = \blockHeader results ->
+          liftIO . withEvent eventBackend (DynamicEventSelector "HeadersClientNew")
+            $ \event ->
+              do
+                addField event $ ("blockHeader" :: Text) ≔ blockHeader
+                addField event $ ("preFilterCount" :: Text) ≔ length results
+                let
+                  extracted = mapMaybe extract results
+                addField event $ ("postFilterCount" :: Text) ≔ length extracted
+                atomically $ mapM_ (writeTChan channel) extracted
+                pure clientIdle
+      , HSync.recvMsgRollBackward = \blockHeader ->
+          liftIO . withEvent eventBackend (DynamicEventSelector "HeadersClientRollback")
+            $ \event ->
+              do
+                addField event $ ("blockHeader" :: Text) ≔ blockHeader
+                pure clientIdle
+      , HSync.recvMsgWait =
+          liftIO . withEvent eventBackend (DynamicEventSelector "HeadersClientWait")
+            . const $ clientWait <$ threadDelay pollingFrequency
       }
   in
     HSync.MarloweHeaderSyncClient
@@ -230,25 +251,29 @@ contractFromStream = fmap marloweContract . datumFromStream
 
 
 streamAllContractSteps
-  :: forall v
-  .  IsMarloweVersion v
-  => Int
+  :: IsMarloweVersion v
+  => EventBackend IO r DynamicEventSelector
+  -> Int
   -> Bool
   -> ContractId
   -> TChan (ContractStream v)
   -> Client ()
-streamAllContractSteps pollingFrequency finishOnWait = streamContractSteps pollingFrequency True finishOnWait $ const True
+streamAllContractSteps eventBackend pollingFrequency finishOnWait =
+  streamContractSteps eventBackend pollingFrequency True finishOnWait
+    $ const True
 
 
 streamAllContractStepsClient
-  :: forall v
-  .  IsMarloweVersion v
-  => Int
+  :: IsMarloweVersion v
+  => EventBackend IO r DynamicEventSelector
+  -> Int
   -> Bool
   -> ContractId
   -> TChan (ContractStream v)
   -> MarloweSyncClient Client ()
-streamAllContractStepsClient pollingFrequency finishOnWait = streamContractStepsClient pollingFrequency True finishOnWait $ const True
+streamAllContractStepsClient eventBackend pollingFrequency finishOnWait =
+  streamContractStepsClient eventBackend pollingFrequency True finishOnWait
+    $ const True
 
 
 hasClosed :: ContractStep v -> Bool
@@ -257,54 +282,67 @@ hasClosed  _ = False
 
 
 streamContractSteps
-  :: forall v
-  .  IsMarloweVersion v
-  => Int
+  :: IsMarloweVersion v
+  => EventBackend IO r DynamicEventSelector
+  -> Int
   -> Bool
   -> Bool
   -> (Either (CreateStep v) (ContractStep v) -> Bool)
   -> ContractId
   -> TChan (ContractStream v)
   -> Client ()
-streamContractSteps pollingFrequency finishOnClose finishOnWait accept csContractId channel =
+streamContractSteps eventBackend pollingFrequency finishOnClose finishOnWait accept csContractId channel =
   runMarloweSyncClient runHistorySyncClient
-    $ streamContractStepsClient pollingFrequency finishOnClose finishOnWait accept csContractId channel
+    $ streamContractStepsClient eventBackend pollingFrequency finishOnClose finishOnWait accept csContractId channel
 
 
 streamContractStepsClient
-  :: forall v
+  :: forall v r
   .  IsMarloweVersion v
-  => Int
+  => EventBackend IO r DynamicEventSelector
+  -> Int
   -> Bool
   -> Bool
   -> (Either (CreateStep v) (ContractStep v) -> Bool)
   -> ContractId
   -> TChan (ContractStream v)
   -> MarloweSyncClient Client ()
-streamContractStepsClient pollingFrequency finishOnClose finishOnWait accept csContractId channel =
+streamContractStepsClient eventBackend pollingFrequency finishOnClose finishOnWait accept csContractId channel =
   let
     clientInit =
       CSync.SendMsgFollowContract csContractId
         CSync.ClientStFollow
         {
-          CSync.recvMsgContractNotFound = liftIO . atomically
-                                         . writeTChan channel
-                                         . ContractStreamFinish csContractId
-                                         $ Left "Contract not found."
+          CSync.recvMsgContractNotFound =
+            liftIO . withEvent eventBackend (DynamicEventSelector "StepsClientContractNotFound")
+              $ \event ->
+                do
+                  addField event $ ("contractId" :: Text) ≔ csContractId
+                  atomically . writeTChan channel
+                    . ContractStreamFinish csContractId
+                    $ Left "Contract not found."
         , CSync.recvMsgContractFound = \csBlockHeader version csCreateStep ->
-            case version `assertVersionsEqual` (marloweVersion :: MarloweVersion v) of
-              Refl -> if accept $ Left csCreateStep
-                        then do
-                               liftIO . atomically
-                                 $ writeTChan channel
-                                   ContractStreamStart{..}
-                               pure $ clientIdle version
-                        else do
-                               liftIO . atomically
-                                 . writeTChan channel
-                                 . ContractStreamFinish csContractId
-                                 $ Right False
-                               pure $ CSync.SendMsgDone ()
+            liftIO . withEvent eventBackend (DynamicEventSelector "StepsClientContractFound")
+              $ \event ->
+                do
+                  addField event $ ("contractId" :: Text) ≔ csContractId
+                  addField event $ ("blockHeader" :: Text) ≔ csBlockHeader
+--                addField event $ ("createStep" :: Text) ≔ csCreateStep
+                  case version `assertVersionsEqual` (marloweVersion :: MarloweVersion v) of
+                    Refl -> do
+                              let
+                                accepted = accept $ Left csCreateStep
+                              addField event $ ("accepted" :: Text) ≔ accepted
+                              if accepted
+                                then do
+                                       atomically $ writeTChan channel
+                                         ContractStreamStart{..}
+                                       pure $ clientIdle version
+                                else do
+                                       atomically . writeTChan channel
+                                         . ContractStreamFinish csContractId
+                                         $ Right False
+                                       pure $ CSync.SendMsgDone ()
         }
     clientIdle = CSync.SendMsgRequestNext . clientNext
     clientWait = CSync.SendMsgPoll . clientNext
@@ -313,45 +351,61 @@ streamContractStepsClient pollingFrequency finishOnClose finishOnWait accept csC
       CSync.ClientStNext
       {
         CSync.recvMsgRollBackCreation =
-          liftIO . atomically
-            . writeTChan channel
-            . ContractStreamFinish csContractId
-            $ Left "Creation transaction was rolled back."
-      , CSync.recvMsgRollBackward = \csBlockHeader -> do
-          liftIO . atomically
-            $ writeTChan channel
-              ContractStreamRolledBack{..}
-          pure $ clientIdle version
-      , CSync.recvMsgRollForward = \csBlockHeader steps -> do
-          let
-            acceptances = accept . Right <$> steps
-          liftIO . atomically
-            . mapM_ (\csContractStep -> writeTChan channel ContractStreamContinued{..})
-            $ fst <$> takeWhile snd (zip steps acceptances)
-          if and acceptances
-            then if finishOnClose && any hasClosed steps
-                   then do
-                          liftIO . atomically
-                            . writeTChan channel
-                            . ContractStreamFinish csContractId
-                            $ Right True
-                          pure $ CSync.SendMsgDone ()
-                   else pure $ clientIdle version
-            else do
-                   liftIO . atomically
-                     . writeTChan channel
-                     . ContractStreamFinish csContractId
-                     $ Right False
-                   pure $ CSync.SendMsgDone ()
+          liftIO . withEvent eventBackend (DynamicEventSelector "StepsClientCreateRollback")
+            $ \event ->
+              do
+                addField event $ ("contractId" :: Text) ≔ csContractId
+                atomically . writeTChan channel
+                  . ContractStreamFinish csContractId
+                  $ Left "Creation transaction was rolled back."
+      , CSync.recvMsgRollBackward = \csBlockHeader ->
+          liftIO . withEvent eventBackend (DynamicEventSelector "StepsClientApplyRollback")
+            $ \event ->
+              do
+                addField event $ ("contractId" :: Text) ≔ csContractId
+                addField event $ ("blockHeader" :: Text) ≔ csBlockHeader
+                atomically $ writeTChan channel
+                  ContractStreamRolledBack{..}
+                pure $ clientIdle version
+      , CSync.recvMsgRollForward = \csBlockHeader steps ->
+          liftIO . withEvent eventBackend (DynamicEventSelector "StepsClientApplyForward")
+            $ \event ->
+              do
+                addField event $ ("contractId" :: Text) ≔ csContractId
+                addField event $ ("blockHeader" :: Text) ≔ csBlockHeader
+                addField event $ ("stepsCount" :: Text) ≔ length steps
+--              addField event $ ("steps" :: Text) ≔ steps
+                let
+                  acceptances = accept . Right <$> steps
+                addField event $ ("acceptancesCount" :: Text) ≔ length (filter id acceptances)
+                addField event $ ("rejectionsCount" :: Text) ≔ length (filter not acceptances)
+                atomically
+                  . mapM_ (\csContractStep -> writeTChan channel ContractStreamContinued{..})
+                  $ fst <$> takeWhile snd (zip steps acceptances)
+                if and acceptances
+                  then if finishOnClose && any hasClosed steps
+                         then do
+                                atomically . writeTChan channel
+                                  . ContractStreamFinish csContractId
+                                  $ Right True
+                                pure $ CSync.SendMsgDone ()
+                         else pure $ clientIdle version
+                  else do
+                         atomically . writeTChan channel
+                           . ContractStreamFinish csContractId
+                           $ Right False
+                         pure $ CSync.SendMsgDone ()
       , CSync.recvMsgWait =
-          do
-            -- FIXME: It would have been helpful if `recvMsgWait` had reported the current tip.
-            liftIO . atomically
-              . writeTChan channel
-              $ ContractStreamWait csContractId
-            if finishOnWait
-              then pure . CSync.SendMsgCancel $ CSync.SendMsgDone ()
-              else clientWait version <$ liftIO (threadDelay pollingFrequency)
+          liftIO . withEvent eventBackend (DynamicEventSelector "StepsClientWait")
+            $ \event ->
+              do
+                addField event $ ("contractId" :: Text) ≔ csContractId
+                -- FIXME: It would have been helpful if `recvMsgWait` had reported the current tip.
+                atomically . writeTChan channel
+                  $ ContractStreamWait csContractId
+                if finishOnWait
+                  then pure . CSync.SendMsgCancel $ CSync.SendMsgDone ()
+                  else clientWait version <$ threadDelay pollingFrequency
       }
   in
     CSync.MarloweSyncClient
