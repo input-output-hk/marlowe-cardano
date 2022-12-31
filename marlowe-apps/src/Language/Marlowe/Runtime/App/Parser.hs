@@ -1,14 +1,18 @@
 
 
 module Language.Marlowe.Runtime.App.Parser
-  ( getConfigParser
+  ( addressKeyfileParser
+  , addressParser
+  , getConfigParser
   ) where
 
 
 import Language.Marlowe.Runtime.App.Types (Config(Config))
 import Language.Marlowe.Runtime.CLI.Option (CliOption, host, optParserWithEnvDefault, port)
+import Language.Marlowe.Runtime.ChainSync.Api (Address, fromBech32)
 import Network.Socket (HostName, PortNumber)
 
+import qualified Data.Text as T (pack)
 import qualified Language.Marlowe.Runtime.CLI.Option as CLI
 import qualified Options.Applicative as O
 
@@ -68,3 +72,18 @@ chainSeekQueryPort = port "chain-seek-query" "CHAINSEEK_QUERY" 3716 "The port nu
 
 chainSeekSyncPort :: CliOption O.OptionFields PortNumber
 chainSeekSyncPort = port "chain-seek-sync" "CHAINSEEK_SYNC" 3715 "The port number of the chain-seek server's synchronization API."
+
+
+addressParser :: O.ReadM Address
+addressParser = O.maybeReader $ fromBech32 . T.pack
+
+
+addressKeyfileParser :: O.ReadM (Address, FilePath)
+addressKeyfileParser =
+  O.eitherReader
+    $ \s ->
+      case break (== '=') s of
+        (_, [])            -> Left "Missing key filename."
+        (address, _ : key) -> case fromBech32 $ T.pack address of
+                                Just address' -> Right (address', key)
+                                Nothing       -> Left "Filed to parse Bech32 address."

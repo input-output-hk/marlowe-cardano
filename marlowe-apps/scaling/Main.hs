@@ -32,10 +32,10 @@ import Language.Marlowe.Core.V1.Semantics.Types
   , Value(ChoiceValue)
   )
 import Language.Marlowe.Core.V1.Semantics.Types.Address (deserialiseAddress)
-import Language.Marlowe.Runtime.App.Parser (getConfigParser)
+import Language.Marlowe.Runtime.App.Parser (addressKeyfileParser, getConfigParser)
 import Language.Marlowe.Runtime.App.Transact (App, runWithEvents)
 import Language.Marlowe.Runtime.App.Types (Config)
-import Language.Marlowe.Runtime.ChainSync.Api (Address(unAddress), fromBech32)
+import Language.Marlowe.Runtime.ChainSync.Api (Address(unAddress))
 import Language.Marlowe.Runtime.Core.Api (ContractId)
 import Observe.Event (EventBackend, addField, hoistEvent, withEvent)
 import Observe.Event.Dynamic (DynamicEvent, DynamicEventSelector(..))
@@ -47,9 +47,9 @@ import System.Random (randomRIO)
 
 import qualified Cardano.Api as C
   (AsType(AsPaymentExtendedKey, AsSigningKey), PaymentExtendedKey, SigningKey, readFileTextEnvelope)
-import qualified Data.Text as T (Text, pack)
+import qualified Data.Text as T (Text)
 import qualified Data.Time.Clock.POSIX as P (getPOSIXTime)
-import Options.Applicative as O
+import qualified Options.Applicative as O
 
 
 makeContract
@@ -180,24 +180,16 @@ commandParser =
   do
     configParser <- getConfigParser
     let
-      parseParty =
-        O.eitherReader
-          $ \s ->
-            case break (== '=') s of
-              (_, []) -> Left "Missing key filename."
-              (address, _ : key) -> case fromBech32 $ T.pack address of
-                                      Just address' -> Right (address', key)
-                                      Nothing       -> Left "Filed to parse Bech32 address."
       commandOptions =
         Command
           <$> configParser
           <*> (O.argument O.auto $ O.metavar "NATURAL" <> O.help "The number of contracts to run sequentially for each party.")
-          <*> (O.many . O.argument parseParty) (O.metavar "ADDRESS=KEYFILE" <> O.help "The addresses of the parties and the files with their signing keys.")
+          <*> (O.many . O.argument addressKeyfileParser) (O.metavar "ADDRESS=KEYFILE" <> O.help "The addresses of the parties and the files with their signing keys.")
     pure
       $ O.info
         (O.helper {- <*> O.versionOption -} <*> commandOptions)
         (
           O.fullDesc
             <> O.progDesc "This command-line tool is a scaling test client for Marlowe Runtime: it runs multiple contracts in parallel against a Marlowe Runtime backend, with a specified number of contracts run in sequence for each party and each party running contracts in parallel."
-            <> O.header "marlowe-scaling : a run multiple Marlowe test contracts in parallel"
+            <> O.header "marlowe-scaling : run multiple Marlowe test contracts in parallel"
         )

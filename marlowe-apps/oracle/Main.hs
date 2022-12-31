@@ -1,6 +1,8 @@
 
 
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NumericUnderscores #-}
+{-# LANGUAGE RecordWildCards #-}
 
 
 module Main
@@ -10,31 +12,66 @@ module Main
 
 import Language.Marlowe.Core.V1.Semantics.Types (Party(Address))
 import Language.Marlowe.Core.V1.Semantics.Types.Address (deserialiseAddress)
-import Language.Marlowe.Oracle.Process
-import Language.Marlowe.Runtime.ChainSync.Api (Address(unAddress), fromBech32)
+import Language.Marlowe.Oracle.Process (runDetection, runDiscovery, runOracle)
+import Language.Marlowe.Runtime.App.Parser (addressParser, getConfigParser)
+import Language.Marlowe.Runtime.App.Types (Config)
+import Language.Marlowe.Runtime.ChainSync.Api (Address(unAddress))
 import Network.HTTP.Client.TLS (newTlsManager)
 import Network.Oracle (makeOracle)
 import Observe.Event.Render.JSON (DefaultRenderSelectorJSON(defaultRenderSelectorJSON))
 import Observe.Event.Render.JSON.Handle (simpleJsonStderrBackend)
-import System.Environment (getArgs)
 
 import qualified Cardano.Api as C (AsType(AsPaymentExtendedKey, AsSigningKey), readFileTextEnvelope)
-import qualified Data.Text as T (pack)
+import qualified Options.Applicative as O
 
 
 main :: IO ()
 main =
   do
+    Command{..} <- O.execParser =<< commandParser
+    key <-
+      C.readFileTextEnvelope (C.AsSigningKey C.AsPaymentExtendedKey) keyFile
+        >>= \case
+          Right key'   -> pure key'
+          Left message -> error $ show message
+    Just party <- pure $ uncurry Address <$> deserialiseAddress (unAddress address)
     eventBackend <- simpleJsonStderrBackend defaultRenderSelectorJSON
     manager <- newTlsManager
     oracleEnv <- makeOracle manager
-    let pollingFrequency = 5_000_000
-    let requeueFrequency = 20_000_000
-    [configFile, addressBech32, keyFile] <- getArgs
-    config <- read <$> readFile configFile
-    Just address <- pure . fromBech32 $ T.pack addressBech32
-    Just party <- pure $ uncurry Address <$> deserialiseAddress (unAddress address)
-    Right key <- C.AsSigningKey C.AsPaymentExtendedKey `C.readFileTextEnvelope` keyFile
     discoveryChannel <- runDiscovery eventBackend config pollingFrequency
     detectionChannel <- runDetection eventBackend config pollingFrequency party discoveryChannel
     runOracle eventBackend oracleEnv config requeueFrequency address key party detectionChannel discoveryChannel
+
+
+data Command =
+  Command
+  {
+    config :: Config
+  , pollingFrequency :: Int
+  , requeueFrequency :: Int
+  , address :: Address
+  , keyFile :: FilePath
+  }
+    deriving (Show)
+
+
+commandParser :: IO (O.ParserInfo Command)
+commandParser =
+  do
+    configParser <- getConfigParser
+    let
+      commandOptions =
+        Command
+          <$> configParser
+          <*> O.option O.auto (O.long "polling" <> O.value 5_000_000 <> O.metavar "SECONDS" <> O.help "The polling frequency for waiting on Marlowe Runtime.")
+          <*> O.option O.auto (O.long "requeue" <> O.value 20_000_000 <> O.metavar "SECONDS" <> O.help "The requeuing frequency for reviewing the progress of contracts on Marlowe Runtime.")
+          <*> (O.argument addressParser $ O.metavar "ADDRESS" <> O.help "The Bech32 address of the oracle.")
+          <*> (O.argument O.auto $ O.metavar "KEYFILE" <> O.help "The extended payment signing key file for the oracle.")
+    pure
+      $ O.info
+        (O.helper {- <*> O.versionOption -} <*> commandOptions)
+        (
+          O.fullDesc
+            <> O.progDesc "This command-line tool watches the blockchain for Marlowe contracts to which it can contribute oracle input, and then it submits an oracle `IChoice` to the contract when it is ready for that input."
+            <> O.header "marlowe-oracle : run an oracle for Marlowe contracts"
+        )

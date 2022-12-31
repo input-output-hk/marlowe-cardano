@@ -1,6 +1,6 @@
 # Application for Scale Testing of Marlowe Runtime
 
-To run multiple contracts for multiple wallets, set environment variables to the hosts and ports for the  Runtime instances, and on the command line supply that along with the number of repetitions and the pairs of addresses and keys.
+To run multiple contracts for multiple wallets, set environment variables to the hosts and ports for the  Runtime instances (see [Help](#help)), and on the command line supply that along with the number of repetitions and the pairs of addresses and keys.
 
 ```bash
 marlowe-scaling 2 \
@@ -70,7 +70,7 @@ The output will show which transactions are submitted for which contracts, punct
 ```console
 $ marlowe-scaling --help
 
-marlowe-scaling : a run multiple Marlowe test contracts in parallel
+marlowe-scaling : run multiple Marlowe test contracts in parallel
 
 Usage: marlowe-scaling [--chain-seek-host HOST_NAME]
                        [--chain-seek-command-port PORT_NUMBER]

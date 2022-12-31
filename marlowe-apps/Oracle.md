@@ -1,6 +1,3 @@
-***WORK IN PROGRESS***
-
-
 # General-Purpose Oracle for Marlowe Runtime
 
 This oracle watches the blockchain for Marlowe contracts that have a `Choice` action ready for input. The start of the contract remaining on chain must be of the form `When [... (Case (Choice (ChoiceId symbol address) ...)) ...] ...`, where `address` is the address of the oracle and `symbol` is the symbol that the oracle should report a value for (see [the list of data feeds](#data-feeds-available)). If the `When` contract contains several `Case` terms for oracle input, the oracle arbitrarily selects one of them. Note that the `ChosenNum` provided by the oracle is an `Integer` representing the scaled value of the raw real number. For example, a 4.30% annual interest rate might be reported as `4300`. Needless to say, it is *critically important* that the Marlowe contract correctly interpret the integer that the oracle reports to it.
@@ -31,17 +28,17 @@ One can add data feeds to the oracle by adding a new oracle module (like [`Netwo
 
 ## Running the Oracle
 
-The oracle takes three command-line arguments:
+The oracle requires two command-line arguments:
 
-1. The configuration file for the Marlowe Runtime backend.
-2. The address of the oracle.
-3. The signing key file for the oracle.
+1. The address of the oracle.
+2. The signing key file for the oracle.
+
+See [Help](#help) for option arguments that select the Cardano network and polling frequency.
 
 For example, executing the oracle as
 
 ```bash
 marlowe-oracle \
-  preprod.config \
   addr_test1qqzg379vgpjnm3n5kffdqq86sr6veng453rfnu07c8y9umdn3kr657fpa3q8mzwmjqvl9lqdn9g2pm3ejhlgwpprwy2swc7lhj \
   payment.skey \
 |& jq 'select(.OracleProcess.fields.action == "wait")'
@@ -177,3 +174,95 @@ The oracle uses a Marlowe Runtime *discovery follower* to watch the blockchain f
 A future version of this oracle will allow requiring that a fee be paid to the oracle in return for the oracle's successful report. The diagram below shows that construct. The oracle would ignore contracts that did not have a `Pay` with sufficient Ada to the oracle.
 
 ![Block for a fee-based oracle input in a Marlowe contract](oracle-fee.png)
+
+
+## Help
+
+
+```console
+$ marlowe-oracle --help
+
+marlowe-oracle : run an oracle for Marlowe contracts
+
+Usage: marlowe-oracle [--chain-seek-host HOST_NAME]
+                      [--chain-seek-command-port PORT_NUMBER]
+                      [--chain-seek-query-port PORT_NUMBER]
+                      [--chain-seek-sync-port PORT_NUMBER]
+                      [--history-host HOST_NAME]
+                      [--history-command-port PORT_NUMBER]
+                      [--history-query-port PORT_NUMBER]
+                      [--history-sync-port PORT_NUMBER]
+                      [--discovery-host HOST_NAME]
+                      [--discovery-query-port PORT_NUMBER]
+                      [--discovery-sync-port PORT_NUMBER] [--tx-host HOST_NAME]
+                      [--tx-command-port PORT_NUMBER]
+                      [--timeout-seconds INTEGER] [--polling SECONDS]
+                      [--requeue SECONDS] ADDRESS KEYFILE
+
+  This command-line tool watches the blockchain for Marlowe contracts to which
+  it can contribute oracle input, and then it submits an oracle `IChoice` to the
+  contract when it is ready for that input.
+
+Available options:
+  -h,--help                Show this help text
+  --chain-seek-host HOST_NAME
+                           The hostname of the Marlowe Runtime chain-seek
+                           server. Can be set as the environment variable
+                           MARLOWE_RT_CHAINSEEK_HOST (default: "127.0.0.1")
+  --chain-seek-command-port PORT_NUMBER
+                           The port number of the chain-seek server's job API.
+                           Can be set as the environment variable
+                           MARLOWE_RT_CHAINSEEK_COMMAND_PORT (default: 23720)
+  --chain-seek-query-port PORT_NUMBER
+                           The port number of the chain-seek server's query API.
+                           Can be set as the environment variable
+                           MARLOWE_RT_CHAINSEEK_QUERY_PORT (default: 23716)
+  --chain-seek-sync-port PORT_NUMBER
+                           The port number of the chain-seek server's
+                           synchronization API. Can be set as the environment
+                           variable MARLOWE_RT_CHAINSEEK_SYNC_PORT
+                           (default: 23715)
+  --history-host HOST_NAME The hostname of the Marlowe Runtime history server.
+                           Can be set as the environment variable
+                           MARLOWE_RT_HISTORY_HOST (default: "127.0.0.1")
+  --history-command-port PORT_NUMBER
+                           The port number of the history server's job API. Can
+                           be set as the environment variable
+                           MARLOWE_RT_HISTORY_COMMAND_PORT (default: 23717)
+  --history-query-port PORT_NUMBER
+                           The port number of the history server's query API.
+                           Can be set as the environment variable
+                           MARLOWE_RT_HISTORY_QUERY_PORT (default: 23718)
+  --history-sync-port PORT_NUMBER
+                           The port number of the history server's
+                           synchronization API. Can be set as the environment
+                           variable MARLOWE_RT_HISTORY_SYNC_PORT
+                           (default: 23719)
+  --discovery-host HOST_NAME
+                           The hostname of the Marlowe Runtime discovery server.
+                           Can be set as the environment variable
+                           MARLOWE_RT_DISCOVERY_HOST (default: "127.0.0.1")
+  --discovery-query-port PORT_NUMBER
+                           The port number of the discovery server's query API.
+                           Can be set as the environment variable
+                           MARLOWE_RT_DISCOVERY_QUERY_PORT (default: 23721)
+  --discovery-sync-port PORT_NUMBER
+                           The port number of the discovery server's
+                           synchronization API. Can be set as the environment
+                           variable MARLOWE_RT_DISCOVERY_SYNC_PORT
+                           (default: 23722)
+  --tx-host HOST_NAME      The hostname of the Marlowe Runtime transaction
+                           server. Can be set as the environment variable
+                           MARLOWE_RT_TX_HOST (default: "127.0.0.1")
+  --tx-command-port PORT_NUMBER
+                           The port number of the transaction server's job API.
+                           Can be set as the environment variable
+                           MARLOWE_RT_TX_COMMAND_PORT (default: 23723)
+  --timeout-seconds INTEGER
+                           Time timeout in seconds for transaction confirmation.
+  --polling SECONDS        The polling frequency for waiting on Marlowe Runtime.
+  --requeue SECONDS        The requeuing frequency for reviewing the progress of
+                           contracts on Marlowe Runtime.
+  ADDRESS                  The Bech32 address of the oracle.
+  KEYFILE                  The extended payment signing key file for the oracle.
+```
