@@ -66,6 +66,7 @@
         modules = [
           "Language/Marlowe/Runtime/App"
           "Language/Marlowe/Runtime/App/Build"
+          "Language/Marlowe/Runtime/App/Channel"
           "Language/Marlowe/Runtime/App/List"
           "Language/Marlowe/Runtime/App/Parser"
           "Language/Marlowe/Runtime/App/Run"
@@ -107,7 +108,6 @@
             (hsPkgs."aeson" or (errorHandler.buildDepError "aeson"))
             (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
             (hsPkgs."cardano-api" or (errorHandler.buildDepError "cardano-api"))
-            (hsPkgs."containers" or (errorHandler.buildDepError "containers"))
             (hsPkgs."extra" or (errorHandler.buildDepError "extra"))
             (hsPkgs."eventuo11y" or (errorHandler.buildDepError "eventuo11y"))
             (hsPkgs."eventuo11y-dsl" or (errorHandler.buildDepError "eventuo11y-dsl"))

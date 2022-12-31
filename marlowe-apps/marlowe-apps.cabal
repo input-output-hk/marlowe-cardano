@@ -13,6 +13,7 @@ extra-source-files : ReadMe.md
 library
   exposed-modules   : Language.Marlowe.Runtime.App
                       Language.Marlowe.Runtime.App.Build
+                      Language.Marlowe.Runtime.App.Channel
                       Language.Marlowe.Runtime.App.List
                       Language.Marlowe.Runtime.App.Parser
                       Language.Marlowe.Runtime.App.Run
@@ -99,7 +100,6 @@ executable marlowe-oracle
                     , aeson
                     , bytestring
                     , cardano-api
-                    , containers
                     , extra
                     , eventuo11y
                     , eventuo11y-dsl

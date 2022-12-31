@@ -12,7 +12,8 @@ module Main
 
 import Language.Marlowe.Core.V1.Semantics.Types (Party(Address))
 import Language.Marlowe.Core.V1.Semantics.Types.Address (deserialiseAddress)
-import Language.Marlowe.Oracle.Process (runDetection, runDiscovery, runOracle)
+import Language.Marlowe.Oracle.Process (runDetection, runOracle)
+import Language.Marlowe.Runtime.App.Channel (runDiscovery)
 import Language.Marlowe.Runtime.App.Parser (addressParser, getConfigParser)
 import Language.Marlowe.Runtime.App.Types (Config)
 import Language.Marlowe.Runtime.ChainSync.Api (Address(unAddress))
@@ -39,8 +40,8 @@ main =
     manager <- newTlsManager
     oracleEnv <- makeOracle manager
     discoveryChannel <- runDiscovery eventBackend config pollingFrequency
-    detectionChannel <- runDetection eventBackend config pollingFrequency party discoveryChannel
-    runOracle eventBackend oracleEnv config requeueFrequency address key party detectionChannel discoveryChannel
+    detectionChannel <- runDetection party eventBackend config pollingFrequency discoveryChannel
+    runOracle oracleEnv config address key party eventBackend requeueFrequency detectionChannel discoveryChannel
 
 
 data Command =
