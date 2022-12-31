@@ -125,3 +125,24 @@ executable marlowe-oracle
                       -Widentities
                       -Wunused-packages
   default-language  : Haskell2010
+
+executable marlowe-finder
+  main-is           : Main.hs
+  hs-source-dirs    : finder
+  build-depends     : base >= 4.9 && < 5
+                    , eventuo11y
+                    , eventuo11y-dsl
+                    , eventuo11y-json
+                    , marlowe-apps
+                    , marlowe-runtime
+                    , optparse-applicative
+                    , stm
+                    , text
+  ghc-options       : -Wall
+                      -Wnoncanonical-monad-instances
+                      -Wincomplete-uni-patterns
+                      -Wincomplete-record-updates
+                      -Wredundant-constraints
+                      -Widentities
+                      -Wunused-packages
+  default-language  : Haskell2010

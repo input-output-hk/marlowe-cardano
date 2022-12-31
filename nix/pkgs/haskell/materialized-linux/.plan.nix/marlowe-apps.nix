@@ -137,6 +137,22 @@
           hsSourceDirs = [ "oracle" ];
           mainPath = [ "Main.hs" ];
           };
+        "marlowe-finder" = {
+          depends = [
+            (hsPkgs."base" or (errorHandler.buildDepError "base"))
+            (hsPkgs."eventuo11y" or (errorHandler.buildDepError "eventuo11y"))
+            (hsPkgs."eventuo11y-dsl" or (errorHandler.buildDepError "eventuo11y-dsl"))
+            (hsPkgs."eventuo11y-json" or (errorHandler.buildDepError "eventuo11y-json"))
+            (hsPkgs."marlowe-apps" or (errorHandler.buildDepError "marlowe-apps"))
+            (hsPkgs."marlowe-runtime" or (errorHandler.buildDepError "marlowe-runtime"))
+            (hsPkgs."optparse-applicative" or (errorHandler.buildDepError "optparse-applicative"))
+            (hsPkgs."stm" or (errorHandler.buildDepError "stm"))
+            (hsPkgs."text" or (errorHandler.buildDepError "text"))
+            ];
+          buildable = true;
+          hsSourceDirs = [ "finder" ];
+          mainPath = [ "Main.hs" ];
+          };
         };
       };
     } // rec { src = (pkgs.lib).mkDefault ../marlowe-apps; }

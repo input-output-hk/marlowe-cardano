@@ -962,6 +962,7 @@
           "marlowe-runtime".components.sublibs."web-server".planned = lib.mkOverride 900 true;
           "cardano-ledger-babbage".components.library.planned = lib.mkOverride 900 true;
           "cardano-addresses".components.library.planned = lib.mkOverride 900 true;
+          "marlowe-apps".components.exes."marlowe-finder".planned = lib.mkOverride 900 true;
           "ral".components.library.planned = lib.mkOverride 900 true;
           "wai".components.library.planned = lib.mkOverride 900 true;
           "data-textual".components.library.planned = lib.mkOverride 900 true;

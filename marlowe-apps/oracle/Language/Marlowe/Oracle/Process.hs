@@ -29,7 +29,7 @@ import Plutus.V2.Ledger.Api (toBuiltin)
 
 import qualified Cardano.Api as C (PaymentExtendedKey, SigningKey)
 import qualified Data.ByteString.Char8 as BS8 (pack)
-import qualified Language.Marlowe.Runtime.App.Channel as App
+import qualified Language.Marlowe.Runtime.App.Channel as App (LastSeen(..), runContractAction, runDetection)
 
 
 runDetection
@@ -56,7 +56,7 @@ runOracle
   -> TChan ContractId
   -> IO ()
 runOracle oracleEnv config address key party eventBackend =
-  App.runContractAction eventBackend
+  App.runContractAction "OracleProcess" eventBackend
     $ \event App.LastSeen{..} ->
       do
         let

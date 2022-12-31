@@ -1,6 +1,6 @@
 # Application for Scale Testing of Marlowe Runtime
 
-To run multiple contracts for multiple wallets, set environment variables to the hosts and ports for the  Runtime instances (see [Help](#help)), and on the command line supply that along with the number of repetitions and the pairs of addresses and keys.
+To run multiple contracts for multiple wallets, set environment variables to the hosts and ports for the Marlowe Runtime instances (see [Help](#help)), and on the command line supply that along with the number of repetitions and the pairs of addresses and keys.
 
 ```bash
 marlowe-scaling 2 \

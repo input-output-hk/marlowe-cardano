@@ -4,6 +4,7 @@
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 
 module Language.Marlowe.Runtime.App.Channel
@@ -19,6 +20,7 @@ import Control.Concurrent.STM (atomically)
 import Control.Concurrent.STM.TChan (TChan, newTChanIO, readTChan, writeTChan)
 import Control.Monad (forever, unless, void)
 import Control.Monad.IO.Class (liftIO)
+import Data.Aeson (object, (.=))
 import Data.Text (Text)
 import Language.Marlowe.Core.V1.Semantics.Types (Contract)
 import Language.Marlowe.Runtime.App.Run (runClientWithConfig)
@@ -95,13 +97,15 @@ data LastSeen =
 
 
 runContractAction
-  :: EventBackend IO r DynamicEventSelector
+  :: forall r
+  .  Text
+  -> EventBackend IO r DynamicEventSelector
   -> (Event IO r DynamicEventSelector DynamicField -> LastSeen -> IO ())
   -> Int
   -> TChan (ContractStream 'V1)
   -> TChan ContractId
   -> IO ()
-runContractAction eventBackend runInput pollingFrequency inChannel outChannel =
+runContractAction selectorName eventBackend runInput pollingFrequency inChannel outChannel =
   let
     -- Nothing needs updating.
     rollback :: ContractStream 'V1 -> M.Map ContractId LastSeen -> M.Map ContractId LastSeen
@@ -110,21 +114,25 @@ runContractAction eventBackend runInput pollingFrequency inChannel outChannel =
     delete :: ContractId -> M.Map ContractId LastSeen -> M.Map ContractId LastSeen
     delete = M.delete
     -- Update the contract and its latest transaction.
-    update :: ContractStream 'V1 -> M.Map ContractId LastSeen -> M.Map ContractId LastSeen
-    update cs lastSeen =
+    update :: Event IO r DynamicEventSelector DynamicField -> ContractStream 'V1 -> M.Map ContractId LastSeen -> IO (M.Map ContractId LastSeen)
+    update event cs lastSeen =
       let
         contractId = csContractId cs
       in
-        flip (M.insert contractId) lastSeen
-          $ case (contractId `M.lookup` lastSeen, contractFromStream cs, transactionIdFromStream cs) of
-              (Nothing  , Just contract, Just txId) -> LastSeen contractId contract txId mempty
-              (Just seen, Just contract, Just txId) -> seen {lastContract = contract, lastTxId = txId}
-              _                                     -> error  -- FIXME: Guaranteed to occur.
-                                                         $ "Invalid contract stream: seen = "
-                                                         <> show (contractId `M.lookup` lastSeen)
-                                                         <> ", contract = " <> show (contractFromStream cs)
-                                                         <> " txId = " <> show (transactionIdFromStream cs)
-                                                         <> "."
+        case (contractId `M.lookup` lastSeen, contractFromStream cs, transactionIdFromStream cs) of
+          (Nothing  , Just contract, Just txId) -> pure $ M.insert contractId (LastSeen contractId contract txId mempty) lastSeen
+          (Just seen, Just contract, Just txId) -> pure $ M.insert contractId (seen {lastContract = contract, lastTxId = txId}) lastSeen
+          (Just _   , Nothing      , Just _   ) -> pure $ M.delete contractId lastSeen
+          (seen     , _            , _        ) -> do  -- FIXME: Diagnose and remedy situations if this ever occurs.
+                                                     addField event
+                                                       $ ("invalidContractStream" :: Text) ≔
+                                                         object
+                                                             [
+                                                               "lastContract" .= fmap lastContract seen
+                                                             , "lastTxId" .= fmap lastTxId seen
+                                                             , "contractStream" .= cs
+                                                             ]
+                                                     pure lastSeen
     -- Ignore the transaction in the future.
     ignore :: ContractId -> TxId -> M.Map ContractId LastSeen -> M.Map ContractId LastSeen
     ignore contractId txId lastSeen =
@@ -140,7 +148,7 @@ runContractAction eventBackend runInput pollingFrequency inChannel outChannel =
     go lastSeen =
       do
         lastSeen' <-
-          withEvent eventBackend (DynamicEventSelector "OracleProcess")
+          withEvent eventBackend (DynamicEventSelector selectorName)
             $ \event ->
               do
                 cs <- liftIO . atomically $ readTChan inChannel
@@ -148,27 +156,28 @@ runContractAction eventBackend runInput pollingFrequency inChannel outChannel =
                 case cs of
                   ContractStreamStart{}      -> do
                                                   addField event $ ("action" :: Text) ≔ ("start" :: String)
-                                                  pure $ update cs lastSeen
+                                                  update event cs lastSeen
                   ContractStreamContinued{}  -> do
                                                   addField event $ ("action" :: Text) ≔ ("continued" :: String)
-                                                  pure $ update cs lastSeen
+                                                  update event cs lastSeen
                   ContractStreamRolledBack{} -> do
                                                   addField event $ ("action" :: Text) ≔ ("rollback" :: String)
                                                   pure $ rollback cs lastSeen
                   ContractStreamWait{..}     -> do
                                                   addField event $ ("action" :: Text) ≔ ("wait" :: String)
-                                                  let
-                                                    seen@LastSeen{lastTxId} =
-                                                      case csContractId `M.lookup` lastSeen of
-                                                        Just seen' -> seen'
-                                                        _          -> error  -- FIXME: Guaranteed to occur.
-                                                                        $ "Invalid contract stream: seen = "
-                                                                        <> show (csContractId `M.lookup` lastSeen)
-                                                                        <> "."
-                                                  unless (lastTxId `S.member` ignoredTxIds seen)
-                                                    $ runInput event seen
-                                                  revisit csContractId
-                                                  pure $ ignore csContractId lastTxId lastSeen
+                                                  case csContractId `M.lookup` lastSeen of
+                                                    Just seen@LastSeen{lastTxId} ->
+                                                      do
+                                                        unless (lastTxId `S.member` ignoredTxIds seen)
+                                                          $ runInput event seen
+                                                        revisit csContractId
+                                                        pure $ ignore csContractId lastTxId lastSeen
+                                                    _ ->
+                                                      do  -- FIXME: Diagnose and remedy situations if this ever occurs.
+                                                        addField event
+                                                          $ ("invalidContractStream" :: Text) ≔
+                                                            object ["contractStream" .= cs]
+                                                        pure lastSeen
                   ContractStreamFinish{..}   -> do
                                                   addField event $ ("action" :: Text) ≔ ("finish" :: String)
                                                   pure $ delete csContractId lastSeen
