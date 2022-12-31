@@ -76,7 +76,6 @@ executable marlowe-scaling
                     , optparse-applicative
                     , plutus-ledger-api
                     , random
-                    , split
                     , text
                     , time
   ghc-options       : -Wall

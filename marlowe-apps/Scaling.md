@@ -1,37 +1,155 @@
-***WORK IN PROGRESS***
-
-
 # Application for Scale Testing of Marlowe Runtime
 
-To run multiple contracts for multiple wallets, modify the [preview.config](preview.config) file to point to the node and Runtime instances, and on the command line supply that along with the number of repetitions and the pairs of addresses and keys.
+To run multiple contracts for multiple wallets, set environment variables to the hosts and ports for the  Runtime instances, and on the command line supply that along with the number of repetitions and the pairs of addresses and keys.
 
 ```bash
-cabal run exe:marlowe-scaling -- preview.config 2 \
-  $(cat alice.payment-0.testnet.address) alice.payment-0.skey \
-$(cat bob.payment-0.testnet.address) bob.payment-0.skey
+marlowe-scaling 2 \
+  addr_test1qryrafsnj3wt3as5pgeng8ddh42gq0dk8gphkz3mx8utzn6h3execksjs6h7k77qflc3mydgdlk98snlj6ngqzltl8mqjuqmk9=alice.skey \
+  addr_test1qzl43spe69knxgfl5eqxrr89lwkef3elskmapjvzmy6akmu68l4aw87t9a9304rgj2p67tlrzaszh32ej3nlwp5t8zsqdcz20w=bob.skey \
+|& jq 'select(.Contract)'
 ```
 
 The output will show which transactions are submitted for which contracts, punctuated by an success/failure (`Right`/`Left`) report after each contract closes.
 
+```JSON
+{
+  "Contract": {
+    "end": "2022-12-31T16:16:28.399591192Z",
+    "event-id": "f293b084-9b8c-45f0-8c1b-eaf12e0c57f0",
+    "fields": {
+      "success": "7741671ad473c5c1a532f921da6e8b9c942cc445ba316c70f0cf0dc395502ef6#1",
+      "threadId": "ThreadId 2"
+    },
+    "start": "2022-12-31T16:15:34.313226613Z"
+  }
+}
+```
+```JSON
+{
+  "Contract": {
+    "end": "2022-12-31T16:16:28.400022128Z",
+    "event-id": "f70754c7-39b0-4634-a210-1e109e1c1047",
+    "fields": {
+      "success": "bcab6da80765cc128be6611224895c495d43a4a40ccf46fa3dd73a9a71e44c17#1",
+      "threadId": "ThreadId 5"
+    },
+    "start": "2022-12-31T16:15:34.313234766Z"
+  }
+}
+```
+```JSON
+{
+  "Contract": {
+    "end": "2022-12-31T16:17:22.765717631Z",
+    "event-id": "a187c5f9-a740-49cb-8817-7c237593480b",
+    "fields": {
+      "success": "dd64edd77fc7405112b147ab847f9fc81952d1ab90bc6808c7851f84f84597bb#1",
+      "threadId": "ThreadId 5"
+    },
+    "start": "2022-12-31T16:16:28.40002814Z"
+  }
+}
+```
+```JSON
+{
+  "Contract": {
+    "end": "2022-12-31T16:17:23.322001857Z",
+    "event-id": "6b808865-a785-4831-b83a-83dc63f48805",
+    "fields": {
+      "success": "8e8c216bf4a91e45c6da4f3c75211145e5fde662e12e7a93536d557c2d6248af#1",
+      "threadId": "ThreadId 2"
+    },
+    "start": "2022-12-31T16:16:28.399615255Z"
+  }
+}
+
+```
+
+## Help
+
 ```console
-ContractId = 47e765c433b74e6793b040e2fd0fdd134bdd3496c33445bcef62a5371bac73df#1 > TxId = 47e765c433b74e6793b040e2fd0fdd134bdd3496c33445bcef62a5371bac73df
-ContractId = 395419fc09b24d4a1e5c9ac9add62da3be567b03e3beab1c8eb55b73b5aca24b#1 > TxId = 395419fc09b24d4a1e5c9ac9add62da3be567b03e3beab1c8eb55b73b5aca24b
-ContractId = 395419fc09b24d4a1e5c9ac9add62da3be567b03e3beab1c8eb55b73b5aca24b#1 > TxId = fd1426451c5dca09e7688ef04b8a7b67cd50b5663391199934ab715b164c9102
-ContractId = 47e765c433b74e6793b040e2fd0fdd134bdd3496c33445bcef62a5371bac73df#1 > TxId = e2328b14a0741d9ced6472b5b67a364ae9a35d5a6284de5dcba76f6a8218956d
-ContractId = 47e765c433b74e6793b040e2fd0fdd134bdd3496c33445bcef62a5371bac73df#1 > TxId = dd0593f526390b2494ebff46e2f773983d2558cb5c89449c6068b7ef9e91a670
-ContractId = 395419fc09b24d4a1e5c9ac9add62da3be567b03e3beab1c8eb55b73b5aca24b#1 > TxId = 3733b13c6a1dd0f1b86ccce10af692e2015326b65703660590dfc0aab30d0b62
-ContractId = 395419fc09b24d4a1e5c9ac9add62da3be567b03e3beab1c8eb55b73b5aca24b#1 > TxId = a40f863590bda57fed82ed0c5a51cd20169b3adc6e626098291f7764c0366fb6
-ContractId = 47e765c433b74e6793b040e2fd0fdd134bdd3496c33445bcef62a5371bac73df#1 > TxId = 08989b2e8ded311c5723ce576b46b9462b3fe60db0c17d86dcd6971de489543e
-Right (ContractId {unContractId = TxOutRef {txId = "47e765c433b74e6793b040e2fd0fdd134bdd3496c33445bcef62a5371bac73df", txIx = TxIx {unTxIx = 1}}})
-Right (ContractId {unContractId = TxOutRef {txId = "395419fc09b24d4a1e5c9ac9add62da3be567b03e3beab1c8eb55b73b5aca24b", txIx = TxIx {unTxIx = 1}}})
-ContractId = 69a67e7786aa6694f934ba10cd463e314d5fac2a133196d4f94879fef74d5c30#1 > TxId = 69a67e7786aa6694f934ba10cd463e314d5fac2a133196d4f94879fef74d5c30
-ContractId = b1ad35a7f4ca3e50285edea1b76bbed72e44a8ea0eea9763088b35216d027b2e#1 > TxId = b1ad35a7f4ca3e50285edea1b76bbed72e44a8ea0eea9763088b35216d027b2e
-ContractId = 69a67e7786aa6694f934ba10cd463e314d5fac2a133196d4f94879fef74d5c30#1 > TxId = 8fc6d67baf19f7bef397110870727904d6910e04f125b6730f24f123f6b02889
-ContractId = b1ad35a7f4ca3e50285edea1b76bbed72e44a8ea0eea9763088b35216d027b2e#1 > TxId = 7e7a30cb85ab65cc9a1e2ddd1419b293b1f7c8e0cb7fd1a015845375f4662cc3
-ContractId = 69a67e7786aa6694f934ba10cd463e314d5fac2a133196d4f94879fef74d5c30#1 > TxId = f938626e858864feb8b66626eee14b8eca548c909bf23bcba1f5697af7f9693d
-ContractId = b1ad35a7f4ca3e50285edea1b76bbed72e44a8ea0eea9763088b35216d027b2e#1 > TxId = 4097d40d897138b502adb5e86eb6f8524bd0801ede9198d47ae32921a1f7b23a
-ContractId = b1ad35a7f4ca3e50285edea1b76bbed72e44a8ea0eea9763088b35216d027b2e#1 > TxId = 4e261f3bcc0fbd2764d73036a4e8da02f3bf0f24feb4a8c97a91415289cd207b
-ContractId = 69a67e7786aa6694f934ba10cd463e314d5fac2a133196d4f94879fef74d5c30#1 > TxId = c66384627ed0e2bfacc109b63c5c4e0133b3513eb03c4a5b9c2042a0df55fb6a
-Right (ContractId {unContractId = TxOutRef {txId = "69a67e7786aa6694f934ba10cd463e314d5fac2a133196d4f94879fef74d5c30", txIx = TxIx {unTxIx = 1}}})
-Right (ContractId {unContractId = TxOutRef {txId = "b1ad35a7f4ca3e50285edea1b76bbed72e44a8ea0eea9763088b35216d027b2e", txIx = TxIx {unTxIx = 1}}})
+$ marlowe-scaling --help
+
+marlowe-scaling : a run multiple Marlowe test contracts in parallel
+
+Usage: marlowe-scaling [--chain-seek-host HOST_NAME]
+                       [--chain-seek-command-port PORT_NUMBER]
+                       [--chain-seek-query-port PORT_NUMBER]
+                       [--chain-seek-sync-port PORT_NUMBER]
+                       [--history-host HOST_NAME]
+                       [--history-command-port PORT_NUMBER]
+                       [--history-query-port PORT_NUMBER]
+                       [--history-sync-port PORT_NUMBER]
+                       [--discovery-host HOST_NAME]
+                       [--discovery-query-port PORT_NUMBER]
+                       [--discovery-sync-port PORT_NUMBER] [--tx-host HOST_NAME]
+                       [--tx-command-port PORT_NUMBER]
+                       [--timeout-seconds INTEGER] NATURAL [ADDRESS=KEYFILE]
+
+  This command-line tool is a scaling test client for Marlowe Runtime: it runs
+  multiple contracts in parallel against a Marlowe Runtime backend, with a
+  specified number of contracts run in sequence for each party and each party
+  running contracts in parallel.
+
+Available options:
+  -h,--help                Show this help text
+  --chain-seek-host HOST_NAME
+                           The hostname of the Marlowe Runtime chain-seek
+                           server. Can be set as the environment variable
+                           MARLOWE_RT_CHAINSEEK_HOST (default: "127.0.0.1")
+  --chain-seek-command-port PORT_NUMBER
+                           The port number of the chain-seek server's job API.
+                           Can be set as the environment variable
+                           MARLOWE_RT_CHAINSEEK_COMMAND_PORT (default: 23720)
+  --chain-seek-query-port PORT_NUMBER
+                           The port number of the chain-seek server's query API.
+                           Can be set as the environment variable
+                           MARLOWE_RT_CHAINSEEK_QUERY_PORT (default: 23716)
+  --chain-seek-sync-port PORT_NUMBER
+                           The port number of the chain-seek server's
+                           synchronization API. Can be set as the environment
+                           variable MARLOWE_RT_CHAINSEEK_SYNC_PORT
+                           (default: 23715)
+  --history-host HOST_NAME The hostname of the Marlowe Runtime history server.
+                           Can be set as the environment variable
+                           MARLOWE_RT_HISTORY_HOST (default: "127.0.0.1")
+  --history-command-port PORT_NUMBER
+                           The port number of the history server's job API. Can
+                           be set as the environment variable
+                           MARLOWE_RT_HISTORY_COMMAND_PORT (default: 23717)
+  --history-query-port PORT_NUMBER
+                           The port number of the history server's query API.
+                           Can be set as the environment variable
+                           MARLOWE_RT_HISTORY_QUERY_PORT (default: 23718)
+  --history-sync-port PORT_NUMBER
+                           The port number of the history server's
+                           synchronization API. Can be set as the environment
+                           variable MARLOWE_RT_HISTORY_SYNC_PORT
+                           (default: 23719)
+  --discovery-host HOST_NAME
+                           The hostname of the Marlowe Runtime discovery server.
+                           Can be set as the environment variable
+                           MARLOWE_RT_DISCOVERY_HOST (default: "127.0.0.1")
+  --discovery-query-port PORT_NUMBER
+                           The port number of the discovery server's query API.
+                           Can be set as the environment variable
+                           MARLOWE_RT_DISCOVERY_QUERY_PORT (default: 23721)
+  --discovery-sync-port PORT_NUMBER
+                           The port number of the discovery server's
+                           synchronization API. Can be set as the environment
+                           variable MARLOWE_RT_DISCOVERY_SYNC_PORT
+                           (default: 23722)
+  --tx-host HOST_NAME      The hostname of the Marlowe Runtime transaction
+                           server. Can be set as the environment variable
+                           MARLOWE_RT_TX_HOST (default: "127.0.0.1")
+  --tx-command-port PORT_NUMBER
+                           The port number of the transaction server's job API.
+                           Can be set as the environment variable
+                           MARLOWE_RT_TX_COMMAND_PORT (default: 23723)
+  --timeout-seconds INTEGER
+                           Time timeout in seconds for transaction confirmation.
+  NATURAL                  The number of contracts to run sequentially for each
+                           party.
+  ADDRESS=KEYFILE          The addresses of the parties and the files with their
+                           signing keys.
 ```

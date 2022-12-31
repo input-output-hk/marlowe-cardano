@@ -2,8 +2,10 @@
 
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 
 
 module Main
@@ -15,7 +17,6 @@ import Control.Concurrent (myThreadId)
 import Control.Concurrent.Async (mapConcurrently)
 import Control.Monad (replicateM_, void)
 import Control.Monad.Except (MonadIO, liftIO, runExceptT, throwError)
-import Data.List.Split (chunksOf)
 import Data.Time.Clock (nominalDiffTimeToSeconds)
 import Language.Marlowe.Core.V1.Semantics.Types
   ( Action(..)
@@ -31,7 +32,8 @@ import Language.Marlowe.Core.V1.Semantics.Types
   , Value(ChoiceValue)
   )
 import Language.Marlowe.Core.V1.Semantics.Types.Address (deserialiseAddress)
-import Language.Marlowe.Runtime.App.Transact
+import Language.Marlowe.Runtime.App.Parser (getConfigParser)
+import Language.Marlowe.Runtime.App.Transact (App, runWithEvents)
 import Language.Marlowe.Runtime.App.Types (Config)
 import Language.Marlowe.Runtime.ChainSync.Api (Address(unAddress), fromBech32)
 import Language.Marlowe.Runtime.Core.Api (ContractId)
@@ -41,13 +43,13 @@ import Observe.Event.Render.JSON (DefaultRenderSelectorJSON(defaultRenderSelecto
 import Observe.Event.Render.JSON.Handle (JSONRef, simpleJsonStderrBackend)
 import Observe.Event.Syntax ((≔))
 import Plutus.V2.Ledger.Api (POSIXTime(..))
-import System.Environment (getArgs)
 import System.Random (randomRIO)
 
 import qualified Cardano.Api as C
   (AsType(AsPaymentExtendedKey, AsSigningKey), PaymentExtendedKey, SigningKey, readFileTextEnvelope)
 import qualified Data.Text as T (Text, pack)
 import qualified Data.Time.Clock.POSIX as P (getPOSIXTime)
+import Options.Applicative as O
 
 
 makeContract
@@ -145,22 +147,57 @@ runOne eventBackend config address key =
 main :: IO ()
 main =
   do
-    eventBackend <- simpleJsonStderrBackend defaultRenderSelectorJSON
-    configFilename : countText : addressKeyEntries <- getArgs
-    config <- read <$> readFile configFilename
-    let
-      count = read countText
+    Command{..} <- O.execParser =<< commandParser
     addressKeys <-
       sequence
         [
-          do
-            Just address <- pure . fromBech32 $ T.pack addressBech32
-            Right key <- C.readFileTextEnvelope (C.AsSigningKey C.AsPaymentExtendedKey) keyFilename
-            pure (address, key)
+          C.readFileTextEnvelope (C.AsSigningKey C.AsPaymentExtendedKey) keyFilename
+            >>= \case
+              Right key    -> pure (address, key)
+              Left message -> error $ show message
         |
-          [addressBech32, keyFilename] <- chunksOf 2 addressKeyEntries
+          (address, keyFilename) <- parties
         ]
+    eventBackend <- simpleJsonStderrBackend defaultRenderSelectorJSON
     void
       $ mapConcurrently
-        (\(address, key) -> replicateM_ count $ runOne eventBackend config address key)
+        (uncurry $ (replicateM_ count .) . runOne eventBackend config)
         addressKeys
+
+
+data Command =
+  Command
+  {
+    config :: Config
+  , count :: Int
+  , parties :: [(Address, FilePath)]
+  }
+    deriving (Show)
+
+
+commandParser :: IO (O.ParserInfo Command)
+commandParser =
+  do
+    configParser <- getConfigParser
+    let
+      parseParty =
+        O.eitherReader
+          $ \s ->
+            case break (== '=') s of
+              (_, []) -> Left "Missing key filename."
+              (address, _ : key) -> case fromBech32 $ T.pack address of
+                                      Just address' -> Right (address', key)
+                                      Nothing       -> Left "Filed to parse Bech32 address."
+      commandOptions =
+        Command
+          <$> configParser
+          <*> (O.argument O.auto $ O.metavar "NATURAL" <> O.help "The number of contracts to run sequentially for each party.")
+          <*> (O.many . O.argument parseParty) (O.metavar "ADDRESS=KEYFILE" <> O.help "The addresses of the parties and the files with their signing keys.")
+    pure
+      $ O.info
+        (O.helper {- <*> O.versionOption -} <*> commandOptions)
+        (
+          O.fullDesc
+            <> O.progDesc "This command-line tool is a scaling test client for Marlowe Runtime: it runs multiple contracts in parallel against a Marlowe Runtime backend, with a specified number of contracts run in sequence for each party and each party running contracts in parallel."
+            <> O.header "marlowe-scaling : a run multiple Marlowe test contracts in parallel"
+        )

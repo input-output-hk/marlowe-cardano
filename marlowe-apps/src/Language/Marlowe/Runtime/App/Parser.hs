@@ -63,7 +63,7 @@ chainSeekCommandPort = port "chain-seek-command" "CHAINSEEK_COMMAND" 3720 "The p
 
 
 chainSeekQueryPort :: CliOption O.OptionFields PortNumber
-chainSeekQueryPort = port "chain-seek-job" "CHAINSEEK_QUERY" 3716 "The port number of the chain-seek server's query API."
+chainSeekQueryPort = port "chain-seek-query" "CHAINSEEK_QUERY" 3716 "The port number of the chain-seek server's query API."
 
 
 chainSeekSyncPort :: CliOption O.OptionFields PortNumber
