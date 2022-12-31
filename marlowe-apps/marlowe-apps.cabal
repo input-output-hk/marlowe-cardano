@@ -14,6 +14,7 @@ library
   exposed-modules   : Language.Marlowe.Runtime.App
                       Language.Marlowe.Runtime.App.Build
                       Language.Marlowe.Runtime.App.List
+                      Language.Marlowe.Runtime.App.Parser
                       Language.Marlowe.Runtime.App.Run
                       Language.Marlowe.Runtime.App.Sign
                       Language.Marlowe.Runtime.App.Stream
@@ -34,6 +35,7 @@ library
                     , marlowe
                     , marlowe-chain-sync
                     , marlowe-protocols
+                    , marlowe-runtime:config
                     , marlowe-runtime:discovery-api
                     , marlowe-runtime:history-api
                     , marlowe-runtime:tx-api
@@ -41,6 +43,7 @@ library
                     , monad-control
                     , mtl
                     , network
+                    , optparse-applicative
                     , stm
                     , text
                     , time
@@ -70,6 +73,7 @@ executable marlowe-scaling
                     , marlowe-chain-sync
                     , marlowe-runtime
                     , mtl
+                    , optparse-applicative
                     , plutus-ledger-api
                     , random
                     , split
@@ -108,6 +112,7 @@ executable marlowe-oracle
                     , marlowe-chain-sync
                     , marlowe-runtime
                     , mtl
+                    , optparse-applicative
                     , plutus-ledger-api
                     , servant
                     , servant-client

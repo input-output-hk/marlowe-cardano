@@ -98,7 +98,7 @@ runClientWithConfig
   -> Client a
   -> IO a
 runClientWithConfig Config{..} client = do
-  chainSeekAddr <- resolve chainSeekHost chainSeekPort
+  chainSeekAddr <- resolve chainSeekHost chainSeekSyncPort
   syncCommandAddr <- resolve chainSeekHost chainSeekCommandPort
   historyJobAddr <- resolve historyHost historyCommandPort
   historyQueryAddr <- resolve historyHost historyQueryPort
