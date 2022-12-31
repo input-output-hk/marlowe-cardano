@@ -41,6 +41,7 @@ import Language.Marlowe.Runtime.Cardano.Api (fromCardanoTxId)
 import Language.Marlowe.Runtime.ChainSync.Api
   ( Address
   , ChainSyncCommand
+  , ChainSyncQuery
   , Lovelace(..)
   , RuntimeChainSeekClient
   , TokenName
@@ -134,14 +135,15 @@ instance Default Config where
 
 data Services m =
   Services
-  { runSyncClient :: RunClient m RuntimeChainSeekClient
-  , runSyncCommandClient :: RunClient m (JobClient ChainSyncCommand)
-  , runHistoryJobClient :: RunClient m (JobClient HistoryCommand)
+  { runChainSeekCommandClient :: RunClient m (JobClient ChainSyncCommand)
+  , runChainSeekQueryClient :: RunClient m (QueryClient ChainSyncQuery)
+  , runChainSeekSyncClient :: RunClient m RuntimeChainSeekClient
+  , runHistoryCommandClient :: RunClient m (JobClient HistoryCommand)
   , runHistoryQueryClient :: RunClient m (QueryClient HistoryQuery)
   , runHistorySyncClient :: RunClient m MarloweSyncClient
-  , runDiscoverySyncClient :: RunClient m MarloweHeaderSyncClient
   , runDiscoveryQueryClient :: RunClient m (QueryClient DiscoveryQuery)
-  , runTxJobClient :: RunClient m (JobClient MarloweTxCommand)
+  , runDiscoverySyncClient :: RunClient m MarloweHeaderSyncClient
+  , runTxCommandClient :: RunClient m (JobClient MarloweTxCommand)
   }
 
 

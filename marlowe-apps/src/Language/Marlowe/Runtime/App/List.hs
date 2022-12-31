@@ -92,7 +92,7 @@ followCommand
   -> Client (Either String Bool)
 followCommand command =
   fmap (first show)
-    . runJobClient runHistoryJobClient
+    . runJobClient runHistoryCommandClient
     . liftCommand
     . command
 

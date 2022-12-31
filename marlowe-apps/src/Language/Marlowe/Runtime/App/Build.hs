@@ -107,7 +107,7 @@ build showError getBody command addresses change collaterals =
     command' = command $ WalletAddresses change (S.fromList addresses) (S.fromList collaterals)
   in
     fmap (bimap showError getBody)
-      . runJobClient runTxJobClient
+      . runJobClient runTxCommandClient
       $ liftCommand command'
 
 

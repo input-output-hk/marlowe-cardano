@@ -35,7 +35,7 @@ submit
   -> Client (Either String TxId)
 submit tx =
   fmap (second . const . fromCardanoTxId . C.getTxId $ C.getTxBody tx)
-    . runJobClient runSyncCommandClient
+    . runJobClient runChainSeekCommandClient
     . liftCommand
     $ SubmitTx C.ScriptDataInBabbageEra tx
 
@@ -62,6 +62,6 @@ waitForTx pollingFrequency txId =
           At _    -> pure $ SendMsgDone $ Right tx
       }
   in
-    runChainSeekClient runSyncClient
+    runChainSeekClient runChainSeekSyncClient
       . ChainSeekClient
       $ pure clientInit
