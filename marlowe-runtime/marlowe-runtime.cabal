@@ -85,6 +85,7 @@ library
 library history-api
   import: lang
   hs-source-dirs:   history-api
+  visibility: public
   exposed-modules:
     Language.Marlowe.Protocol.Sync.Client
     Language.Marlowe.Protocol.Sync.Codec
@@ -106,11 +107,11 @@ library history-api
     , ouroboros-network
     , transformers
     , typed-protocols
-  visibility: public
 
 library history
   import: lang
   hs-source-dirs:   history
+  visibility: public
   exposed-modules:
     Language.Marlowe.Runtime.History
     Language.Marlowe.Runtime.History.Follower
@@ -140,6 +141,7 @@ library history
 library discovery-api
   import: lang
   hs-source-dirs:   discovery-api
+  visibility: public
   exposed-modules:
     Language.Marlowe.Protocol.HeaderSync.Client
     Language.Marlowe.Protocol.HeaderSync.Codec
@@ -156,11 +158,11 @@ library discovery-api
     , marlowe-protocols
     , marlowe-runtime
     , typed-protocols
-  visibility: public
 
 library discovery
   import: lang
   hs-source-dirs:   discovery
+  visibility: public
   exposed-modules:
     Language.Marlowe.Runtime.Discovery
     Language.Marlowe.Runtime.Discovery.Chain
@@ -184,6 +186,7 @@ library discovery
 library tx-api
   import: lang
   hs-source-dirs:   tx-api
+  visibility: public
   exposed-modules:
     Language.Marlowe.Runtime.Transaction.Api
   build-depends:
@@ -198,11 +201,11 @@ library tx-api
     , marlowe-runtime
     , marlowe-runtime:history-api
     , time
-  visibility: public
 
 library tx
   import: lang
   hs-source-dirs:   tx
+  visibility: public
   exposed-modules:
     Language.Marlowe.Runtime.Transaction
     Language.Marlowe.Runtime.Transaction.BuildConstraints
@@ -242,6 +245,7 @@ library tx
 library plutus-scripts
   import: lang
   hs-source-dirs:   plutus-scripts
+  visibility: public
   -- Needed to suppress the erroneous warning about plutus-tx-plugin not being
   -- needed.
   ghc-options: -Wno-unused-packages
@@ -254,11 +258,11 @@ library plutus-scripts
     , plutus-ledger-api
     , plutus-tx
     , plutus-tx-plugin
-  visibility: public
 
 library config
   import: lang
   hs-source-dirs: config
+  visibility: public
   exposed-modules:
     Language.Marlowe.Runtime.CLI.Option
   build-depends:
@@ -273,6 +277,7 @@ library config
 library web
   import: lang
   hs-source-dirs: web
+  visibility: public
   exposed-modules:
     Language.Marlowe.Runtime.Web
   other-modules:
@@ -298,6 +303,7 @@ library web
 library web-server
   import: lang
   hs-source-dirs: web-server
+  visibility: public
   exposed-modules:
     Language.Marlowe.Runtime.Web.Server
     Language.Marlowe.Runtime.Web.Server.Util
@@ -324,7 +330,6 @@ library web-server
     , eventuo11y-json
     , eventuo11y-batteries
     , exceptions
-    , http-types
     , lens
     , marlowe
     , marlowe-protocols

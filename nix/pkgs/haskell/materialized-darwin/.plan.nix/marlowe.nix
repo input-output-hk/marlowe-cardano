@@ -42,6 +42,7 @@
           (hsPkgs."containers" or (errorHandler.buildDepError "containers"))
           (hsPkgs."deriving-aeson" or (errorHandler.buildDepError "deriving-aeson"))
           (hsPkgs."mtl" or (errorHandler.buildDepError "mtl"))
+          (hsPkgs."multiplate" or (errorHandler.buildDepError "multiplate"))
           (hsPkgs."newtype-generics" or (errorHandler.buildDepError "newtype-generics"))
           (hsPkgs."ordered-containers" or (errorHandler.buildDepError "ordered-containers"))
           (hsPkgs."plutus-ledger-api" or (errorHandler.buildDepError "plutus-ledger-api"))
@@ -51,6 +52,7 @@
           (hsPkgs."scientific" or (errorHandler.buildDepError "scientific"))
           (hsPkgs."serialise" or (errorHandler.buildDepError "serialise"))
           (hsPkgs."template-haskell" or (errorHandler.buildDepError "template-haskell"))
+          (hsPkgs."transformers" or (errorHandler.buildDepError "transformers"))
           (hsPkgs."text" or (errorHandler.buildDepError "text"))
           (hsPkgs."wl-pprint" or (errorHandler.buildDepError "wl-pprint"))
           ] ++ (pkgs.lib).optional (!(compiler.isGhcjs && true || system.isGhcjs)) (hsPkgs."plutus-tx-plugin" or (errorHandler.buildDepError "plutus-tx-plugin"));
@@ -59,6 +61,7 @@
           "Language/Marlowe"
           "Language/Marlowe/Extended/V1"
           "Language/Marlowe/Extended/V1/Metadata/Types"
+          "Language/Marlowe/Core/V1/Plate"
           "Language/Marlowe/Core/V1/Semantics"
           "Language/Marlowe/Core/V1/Semantics/Types"
           "Language/Marlowe/Core/V1/Semantics/Types/Address"

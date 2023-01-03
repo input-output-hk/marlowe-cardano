@@ -82,6 +82,7 @@ library
 library libchainseek
   import: lang
   hs-source-dirs:   libchainseek
+  visibility: public
   exposed-modules:
     Language.Marlowe.Runtime.ChainSync
     Language.Marlowe.Runtime.ChainSync.Database
@@ -111,6 +112,7 @@ library libchainseek
 library chain-indexer
   import: lang
   hs-source-dirs:   chain-indexer
+  visibility: public
   exposed-modules:
     Language.Marlowe.Runtime.ChainIndexer
     Language.Marlowe.Runtime.ChainIndexer.Database
@@ -196,6 +198,7 @@ executable marlowe-chain-indexer
     , time
     , transformers
     , uuid
+  visibility: public
 
 executable chainseekd
   import: lang

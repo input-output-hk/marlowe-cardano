@@ -289,7 +289,6 @@
             (hsPkgs."eventuo11y-json" or (errorHandler.buildDepError "eventuo11y-json"))
             (hsPkgs."eventuo11y-batteries" or (errorHandler.buildDepError "eventuo11y-batteries"))
             (hsPkgs."exceptions" or (errorHandler.buildDepError "exceptions"))
-            (hsPkgs."http-types" or (errorHandler.buildDepError "http-types"))
             (hsPkgs."lens" or (errorHandler.buildDepError "lens"))
             (hsPkgs."marlowe" or (errorHandler.buildDepError "marlowe"))
             (hsPkgs."marlowe-protocols" or (errorHandler.buildDepError "marlowe-protocols"))

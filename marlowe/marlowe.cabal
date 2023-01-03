@@ -57,6 +57,7 @@ library
     containers,
     deriving-aeson,
     mtl,
+    multiplate,
     newtype-generics,
     ordered-containers,
     plutus-ledger-api,
@@ -66,6 +67,7 @@ library
     scientific,
     serialise,
     template-haskell,
+    transformers,
     text,
     wl-pprint,
 
@@ -73,6 +75,7 @@ library
     Language.Marlowe
     Language.Marlowe.Extended.V1
     Language.Marlowe.Extended.V1.Metadata.Types
+    Language.Marlowe.Core.V1.Plate
     Language.Marlowe.Core.V1.Semantics
     Language.Marlowe.Core.V1.Semantics.Types
     Language.Marlowe.Core.V1.Semantics.Types.Address

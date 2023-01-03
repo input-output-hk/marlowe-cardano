@@ -22,6 +22,7 @@ packages:
   eventuo11y-extras
   marlowe
   marlowe-actus
+  marlowe-apps
   marlowe-chain-sync
   marlowe-cli
   marlowe-contracts
@@ -29,7 +30,6 @@ packages:
   marlowe-protocols-test
   marlowe-runtime
   marlowe-test
-  marlowe-scaling
 
   libs/aeson-via-serialise
   libs/base16-aeson
@@ -163,6 +163,7 @@ constraints:
   , cardano-protocol-tpraos == 0.1.0.0
   , cardano-slotting == 0.1.0.0
   , hasql < 1.6
+  , hasql-pool > 0.5.2.1
   , heapwords == 0.1.0.1
   , hedgehog >= 1.0
   , io-classes == 0.2.0.0

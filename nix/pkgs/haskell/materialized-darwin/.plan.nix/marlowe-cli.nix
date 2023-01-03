@@ -62,7 +62,6 @@
           (hsPkgs."marlowe-contracts" or (errorHandler.buildDepError "marlowe-contracts"))
           (hsPkgs."memory" or (errorHandler.buildDepError "memory"))
           (hsPkgs."mtl" or (errorHandler.buildDepError "mtl"))
-          (hsPkgs."multiplate" or (errorHandler.buildDepError "multiplate"))
           (hsPkgs."network" or (errorHandler.buildDepError "network"))
           (hsPkgs."one-line-aeson-text" or (errorHandler.buildDepError "one-line-aeson-text"))
           (hsPkgs."openapi3" or (errorHandler.buildDepError "openapi3"))
