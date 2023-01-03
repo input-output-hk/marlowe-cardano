@@ -452,7 +452,9 @@ findMinUtxo protocol (chAddress, mbDatum, origValue) =
   do
     let
       atLeastHalfAnAda :: C.Value
-      atLeastHalfAnAda = origValue <> C.lovelaceToValue (maximum [500_000, C.selectLovelace origValue] - C.selectLovelace origValue)
+      -- FIXME Found what looks like the same value being added and then subtracted from this computation
+      -- atLeastHalfAnAda = origValue <> C.lovelaceToValue (maximum [500_000, C.selectLovelace origValue] - C.selectLovelace origValue)
+      atLeastHalfAnAda = C.lovelaceToValue (maximum [500_000, C.selectLovelace origValue])
       datum = maybe C.TxOutDatumNone
         (C.TxOutDatumInTx C.ScriptDataInBabbageEra . C.fromPlutusData . P.toData)
         $ Core.fromChainDatum Core.MarloweV1 =<< mbDatum
@@ -510,6 +512,8 @@ selectCoins protocol marloweVersion marloweCtx walletCtx@WalletContext{..} txBod
     txOutToValue :: C.TxOut C.CtxTx C.BabbageEra -> C.Value
     txOutToValue (C.TxOut _ value _ _) = C.txOutValueToValue value
 
+    -- All utxos that are spendable from either the Marlowe context or wallet context
+    -- False means not including the reference utxo
     utxos :: [(C.TxIn, C.TxOut C.CtxTx C.BabbageEra)]
     utxos = allUtxos marloweVersion marloweCtx walletCtx False
 
@@ -517,15 +521,18 @@ selectCoins protocol marloweVersion marloweCtx walletCtx@WalletContext{..} txBod
     universe :: C.Value
     universe = foldMap (txOutToValue . snd) utxos
 
+    -- FIXME: Use protocolParamCollateralPercent from ProtocolParameters instead of this hard-coded '2'. We will automatically pick up future chain values this way.
     fee :: C.Value
     fee = C.lovelaceToValue $ 2 * maximumFee protocol
 
   collateral <-
     case filter (\candidate -> let value = txOutToValue $ snd candidate in onlyLovelace value && C.selectLovelace value >= C.selectLovelace fee) utxos of
+    -- case filter (\candidate -> let value = txOutToValue $ snd candidate in onlyLovelace value && C.selectLovelace value >= C.selectLovelace fee) (logD ("selectCoins all utxos:\n" <> (unlines . map show $ utxos)) utxos) of
       utxo : _ -> pure utxo
       []       -> Left . CoinSelectionFailed $ "No collateral found in " <> show utxos <> "."
 
   -- Bound the lovelace that must be included with change
+  -- Worst case scenario of how much ADA would be added to the native and non-native change outputs
   minUtxo <-
     (<>) <$> findMinUtxo protocol (changeAddress, Nothing, universe)  -- Output to native tokens.
          <*> findMinUtxo protocol (changeAddress, Nothing, mempty  )  -- Pure lovelace to change address.
@@ -536,6 +543,7 @@ selectCoins protocol marloweVersion marloweCtx walletCtx@WalletContext{..} txBod
     outputsFromBody = foldMap txOutToValue $ C.txOuts txBodyContent
 
     -- Sum of value that's been placed in the tx body
+    -- example: spending the value at the Marlowe script address, this will be here as an input when we get the txBodyContent
     inputTxIns = map fst $ C.txIns txBodyContent
     inputsFromBody = foldMap (txOutToValue . snd) $ filter (flip elem inputTxIns . fst) utxos
 
@@ -543,9 +551,10 @@ selectCoins protocol marloweVersion marloweCtx walletCtx@WalletContext{..} txBod
       C.TxMintValue _ value _ -> value
       _ -> mempty
 
-    -- Find the net additional input that is needed
+    -- Find the net additional input that is needed; the extra input we need to find, worst case
     targetSelectionValue :: C.Value
-    targetSelectionValue = outputsFromBody <> fee <> minUtxo <> C.negateValue inputsFromBody <> C.negateValue mintValue
+    -- targetSelectionValue = outputsFromBody <> fee <> minUtxo <> C.negateValue inputsFromBody <> C.negateValue mintValue
+    targetSelectionValue = outputsFromBody <> logD ("selectCoins fee: " <> show fee) fee <> logD ("selectCoins minUtxo: " <> show minUtxo) minUtxo <> (C.negateValue inputsFromBody <> C.negateValue mintValue)
     -- targetSelectionValue = logD ("selectCoins outputsFromBody: " <> show outputsFromBody) outputsFromBody <> logD ("selectCoins fee: " <> show fee) fee <> logD ("selectCoins minUtxo: " <> show minUtxo) minUtxo <> logD ("selectCoins inputsFromBody (subtracted): " <> show inputsFromBody) (C.negateValue inputsFromBody <> C.negateValue mintValue)
 
     -- Remove the lovelace from a value.
@@ -642,7 +651,7 @@ selectCoins protocol marloweVersion marloweCtx walletCtx@WalletContext{..} txBod
     selection :: [(C.TxIn, C.TxOut C.CtxTx C.BabbageEra)]
     selection = select targetSelectionValue $ filter (flip notElem inputTxIns . fst) utxos
 
-    -- Compute the native token change, if any.
+    -- Compute the *native token* change, if any.
     change :: C.Value
     change =                                            -- This is the change required to balance native tokens.
       deleteLovelace                                    -- The lovelace are irrelevant because pure-lovelace change is handled during the final balancing.
@@ -656,8 +665,8 @@ selectCoins protocol marloweVersion marloweCtx walletCtx@WalletContext{..} txBod
     if change == mempty
       then pure []
       else do
-        (a, v) <- ensureMinUtxo protocol (changeAddress, change)
-        (: []) <$> makeTxOut a C.TxOutDatumNone v C.ReferenceScriptNone
+        (addr, val) <- ensureMinUtxo protocol (changeAddress, change)
+        (: []) <$> makeTxOut addr C.TxOutDatumNone val C.ReferenceScriptNone
 
   let
     -- FIXME Generalize to include script witnesses
@@ -736,6 +745,7 @@ balanceTx era systemStart eraHistory protocol marloweVersion marloweCtx walletCt
 
     -- The available UTxOs.
     -- FIXME: This only needs to be the subset of available UTxOs that are actually `TxIns`, but including extras should be harmless.
+    -- This time we call allUtxos we need to know the total cost, so we do want the reference script (passing True)
     utxos :: C.UTxO C.BabbageEra
     utxos = C.UTxO . SMap.fromList $ allUtxos marloweVersion marloweCtx walletCtx True
 
@@ -769,7 +779,7 @@ allUtxos :: forall v ctx
          .  Core.MarloweVersion v
          -> MarloweContext v
          -> WalletContext
-         -> Bool
+         -> Bool  -- False if we do not want to include the script reference
          -> [(C.TxIn, C.TxOut ctx C.BabbageEra)]
 allUtxos marloweVersion MarloweContext{..} WalletContext{..} includeReferences =
   let
