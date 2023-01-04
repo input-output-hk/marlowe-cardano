@@ -217,6 +217,16 @@ import Text.PrettyPrint.Leijen (comma, hang, lbrace, line, rbrace, space, text, 
 data Payment = Payment AccountId Payee Token Integer
   deriving stock (Haskell.Eq, Haskell.Show)
 
+instance ToJSON Payment where
+  toJSON (Payment accountId payee token amount) =
+    object
+      [
+        "payment_from" .= accountId
+      , "to" .= payee
+      , "token" .= token
+      , "amount" .= amount
+      ]
+
 
 -- | Extract the money value from a payment.
 paymentMoney :: Payment -> Money
@@ -319,6 +329,16 @@ data TransactionOutput =
     | Error TransactionError
   deriving stock (Haskell.Show)
 
+instance ToJSON TransactionOutput where
+  toJSON TransactionOutput{..} =
+    object
+      [
+        "warnings" .= txOutWarnings
+      , "payments" .= txOutPayments
+      , "state" .= txOutState
+      , "contract" .= txOutContract
+      ]
+  toJSON (Error err) = object ["transaction_err" .= err]
 
 -- | Parse a validator hash from JSON.
 validatorHashFromJSON :: JSON.Value -> Parser ValidatorHash
