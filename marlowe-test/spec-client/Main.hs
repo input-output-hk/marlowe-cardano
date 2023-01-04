@@ -6,7 +6,9 @@
 
 
 module Main
-  where
+  ( handle
+  , main
+  ) where
 
 
 import Marlowe.Spec.Service.Random (generateValue)
@@ -15,9 +17,10 @@ import Marlowe.Spec.Service.Types (Request(..), Response(..))
 import System.Exit (die)
 import System.IO (BufferMode(LineBuffering), hSetBuffering, stdin, stdout)
 
-import qualified Data.Aeson as A (eitherDecode, encode, encodeFile, object, toJSON, (.=))
+import qualified Data.Aeson as A (eitherDecode, encode, object, toJSON, (.=))
 import qualified Data.ByteString.Lazy.Char8 as LBS8 (pack, putStrLn)
-import qualified Language.Marlowe.Core.V1.Semantics as Marlowe (playTrace)
+import qualified Language.Marlowe.Core.V1.Semantics as Marlowe (computeTransaction, playTrace)
+
 
 main :: IO ()
 main =
@@ -27,12 +30,8 @@ main =
     stream <- lines <$> getContents
     sequence_
       [
-        writeFile "chunk" chunk >> case A.eitherDecode $ LBS8.pack chunk of
-          Right request -> do
-                             A.encodeFile "req" request
-                             response <- handle request
-                             A.encodeFile "res" response
-                             LBS8.putStrLn . A.encode =<< handle request
+        case A.eitherDecode $ LBS8.pack chunk of
+          Right request -> LBS8.putStrLn . A.encode =<< handle request
           Left message  -> die message
       |
         chunk <- parseChunks stream
@@ -62,8 +61,11 @@ handle GenerateRandomValue{..} =
     >>= \case
       Right value -> pure . RequestResponse . A.object . pure $ "value" A..= value
       Left failureResponse -> pure $ ResponseFailure{..}
-handle ComputeTransaction{} =
-  pure RequestNotImplemented
+handle ComputeTransaction{..} =
+  let
+    valueResponse = A.toJSON $ Marlowe.computeTransaction transactionInput state contract
+  in
+    pure RequestResponse{..}
 handle PlayTrace{..} =
   let
     valueResponse = A.toJSON $ Marlowe.playTrace initialTime contract transactionInputs
