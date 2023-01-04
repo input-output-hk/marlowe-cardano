@@ -1159,6 +1159,7 @@
           "plutus-ledger".components.library.planned = lib.mkOverride 900 true;
           "cmdargs".components.library.planned = lib.mkOverride 900 true;
           "aeson-pretty".components.exes."aeson-pretty".planned = lib.mkOverride 900 true;
+          "marlowe-test".components.exes."marlowe-spec-client".planned = lib.mkOverride 900 true;
           "prettyprinter-configurable".components.setup.planned = lib.mkOverride 900 true;
           "StateVar".components.library.planned = lib.mkOverride 900 true;
           "network-arbitrary".components.library.planned = lib.mkOverride 900 true;

@@ -11,7 +11,7 @@
     flags = { defer-plugin-errors = false; limit-static-analysis-time = true; };
     package = {
       specVersion = "2.2";
-      identifier = { name = "marlowe-test"; version = "0.1.0.3"; };
+      identifier = { name = "marlowe-test"; version = "0.1.1.0"; };
       license = "Apache-2.0";
       copyright = "";
       maintainer = "B W Bush <brian.bush@iokk.io>";
@@ -69,6 +69,7 @@
           ];
         buildable = true;
         modules = [
+          "Data/Jsonable"
           "Spec/Marlowe/Common"
           "Spec/Marlowe/Marlowe"
           "Spec/Marlowe/Semantics"
@@ -103,6 +104,24 @@
           "Spec/Marlowe/Semantics/Util"
           ];
         hsSourceDirs = [ "src" ];
+        };
+      exes = {
+        "marlowe-spec-client" = {
+          depends = [
+            (hsPkgs."base" or (errorHandler.buildDepError "base"))
+            (hsPkgs."aeson" or (errorHandler.buildDepError "aeson"))
+            (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
+            (hsPkgs."marlowe" or (errorHandler.buildDepError "marlowe"))
+            (hsPkgs."marlowe-test" or (errorHandler.buildDepError "marlowe-test"))
+            ];
+          buildable = true;
+          modules = [
+            "Marlowe/Spec/Service/Serialization"
+            "Marlowe/Spec/Service/Types"
+            ];
+          hsSourceDirs = [ "spec-client" ];
+          mainPath = [ "Main.hs" ];
+          };
         };
       tests = {
         "marlowe-test" = {

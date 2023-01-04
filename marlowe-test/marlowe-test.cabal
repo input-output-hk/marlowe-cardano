@@ -1,6 +1,6 @@
 cabal-version: 2.2
 name: marlowe-test
-version: 0.1.0.3
+version: 0.1.1.0
 license: Apache-2.0
 license-files:
   LICENSE
@@ -57,6 +57,7 @@ library
   import: lang
   hs-source-dirs: src
   exposed-modules:
+    Data.Jsonable
     Spec.Marlowe.Common
     Spec.Marlowe.Marlowe
     Spec.Marlowe.Semantics
@@ -129,3 +130,18 @@ test-suite marlowe-test
     , marlowe-test
     , tasty
     , tasty-quickcheck
+
+
+executable marlowe-spec-client
+  import: lang
+  hs-source-dirs: spec-client
+  type: exitcode-stdio-1.0
+  main-is: Main.hs
+  other-modules: Marlowe.Spec.Service.Serialization
+                 Marlowe.Spec.Service.Types
+  build-depends:
+      base >=4.9 && <5
+    , aeson
+    , bytestring
+    , marlowe
+    , marlowe-test
