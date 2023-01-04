@@ -6,6 +6,7 @@
 
 module Marlowe.Spec.Service.Serialization
   ( SerializationResponse(..)
+  , knownJsonTypes
   , roundtripSerialization
   ) where
 
@@ -14,6 +15,7 @@ import Control.Applicative ((<|>))
 import Data.Aeson (FromJSON(..), ToJSON(..))
 import Data.Jsonable (JsonableType(JsonableType), KnownJsonable, isKnownJson, roundTripJsonable)
 import Data.Proxy (Proxy(..))
+import Spec.Marlowe.Semantics.Arbitrary ()
 
 import qualified Data.Aeson as A (Value, object, withObject, (.:), (.=))
 import qualified Language.Marlowe.Core.V1.Semantics as Marlowe
@@ -74,8 +76,8 @@ knownJsonTypes =
 --, JsonableType "Core.Payment" (Proxy :: Proxy Marlowe.Payment)
   , JsonableType "Core.Party" (Proxy :: Proxy Marlowe.Party)
   , JsonableType "Core.State" (Proxy :: Proxy Marlowe.State)
-  , JsonableType "Core.TransactionError" (Proxy :: Proxy Marlowe.TransactionError)
+--, JsonableType "Core.TransactionError" (Proxy :: Proxy Marlowe.TransactionError)
 --, JsonableType "Core.TransactionOutput" (Proxy :: Proxy Marlowe.TransactionOutput)
-  , JsonableType "Core.TransactionWarning" (Proxy :: Proxy Marlowe.TransactionWarning)
+--, JsonableType "Core.TransactionWarning" (Proxy :: Proxy Marlowe.TransactionWarning)
 --, JsonableType "Core.Transaction" (Proxy :: Proxy Marlowe.Transaction)
   ]

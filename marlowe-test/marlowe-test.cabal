@@ -135,9 +135,9 @@ test-suite marlowe-test
 executable marlowe-spec-client
   import: lang
   hs-source-dirs: spec-client
-  type: exitcode-stdio-1.0
   main-is: Main.hs
-  other-modules: Marlowe.Spec.Service.Serialization
+  other-modules: Marlowe.Spec.Service.Random
+                 Marlowe.Spec.Service.Serialization
                  Marlowe.Spec.Service.Types
   build-depends:
       base >=4.9 && <5
@@ -145,3 +145,4 @@ executable marlowe-spec-client
     , bytestring
     , marlowe
     , marlowe-test
+    , QuickCheck

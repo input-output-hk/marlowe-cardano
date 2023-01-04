@@ -113,9 +113,11 @@
             (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
             (hsPkgs."marlowe" or (errorHandler.buildDepError "marlowe"))
             (hsPkgs."marlowe-test" or (errorHandler.buildDepError "marlowe-test"))
+            (hsPkgs."QuickCheck" or (errorHandler.buildDepError "QuickCheck"))
             ];
           buildable = true;
           modules = [
+            "Marlowe/Spec/Service/Random"
             "Marlowe/Spec/Service/Serialization"
             "Marlowe/Spec/Service/Types"
             ];

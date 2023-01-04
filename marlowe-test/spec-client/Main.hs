@@ -1,5 +1,6 @@
 
 
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 
@@ -8,12 +9,13 @@ module Main
   where
 
 
+import Marlowe.Spec.Service.Random (generateValue)
 import Marlowe.Spec.Service.Serialization (roundtripSerialization)
 import Marlowe.Spec.Service.Types (Request(..), Response(..))
 import System.Exit (die)
 import System.IO (BufferMode(LineBuffering), hSetBuffering, stdin, stdout)
 
-import qualified Data.Aeson as A (eitherDecode, encode, toJSON)
+import qualified Data.Aeson as A (eitherDecode, encode, encodeFile, object, toJSON, (.=))
 import qualified Data.ByteString.Lazy.Char8 as LBS8 (pack, putStrLn)
 
 
@@ -26,7 +28,11 @@ main =
     sequence_
       [
         case A.eitherDecode $ LBS8.pack chunk of
-          Right request -> LBS8.putStrLn . A.encode $ handle request
+          Right request -> do
+                             A.encodeFile "req" request
+                             response <- handle request
+                             A.encodeFile "res" response
+                             LBS8.putStrLn . A.encode =<< handle request
           Left message  -> die message
       |
         chunk <- parseChunks stream
@@ -46,6 +52,14 @@ parseChunks stream =
     unlines <$> separate False mempty stream
 
 
-handle :: Request -> Response
-handle TestRoundtripSerialization{..} = RequestResponse . A.toJSON $ roundtripSerialization typeSerialized valueSerialized
-handle _ = RequestNotImplemented
+handle :: Request -> IO Response
+handle TestRoundtripSerialization{..} =
+  pure
+    . RequestResponse . A.toJSON
+    $ roundtripSerialization typeSerialized valueSerialized
+handle GenerateRandomValue{..} =
+  generateValue typeSerialized
+    >>= \case
+      Right value -> pure . RequestResponse . A.object . pure $ "value" A..= value
+      Left failureResponse -> pure $ ResponseFailure{..}
+handle _ = pure RequestNotImplemented
