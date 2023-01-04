@@ -17,7 +17,7 @@ import System.IO (BufferMode(LineBuffering), hSetBuffering, stdin, stdout)
 
 import qualified Data.Aeson as A (eitherDecode, encode, encodeFile, object, toJSON, (.=))
 import qualified Data.ByteString.Lazy.Char8 as LBS8 (pack, putStrLn)
-
+import qualified Language.Marlowe.Core.V1.Semantics as Marlowe (playTrace)
 
 main :: IO ()
 main =
@@ -27,7 +27,7 @@ main =
     stream <- lines <$> getContents
     sequence_
       [
-        case A.eitherDecode $ LBS8.pack chunk of
+        writeFile "chunk" chunk >> case A.eitherDecode $ LBS8.pack chunk of
           Right request -> do
                              A.encodeFile "req" request
                              response <- handle request
@@ -62,4 +62,10 @@ handle GenerateRandomValue{..} =
     >>= \case
       Right value -> pure . RequestResponse . A.object . pure $ "value" A..= value
       Left failureResponse -> pure $ ResponseFailure{..}
-handle _ = pure RequestNotImplemented
+handle ComputeTransaction{} =
+  pure RequestNotImplemented
+handle PlayTrace{..} =
+  let
+    valueResponse = A.toJSON $ Marlowe.playTrace initialTime contract transactionInputs
+  in
+    pure RequestResponse{..}

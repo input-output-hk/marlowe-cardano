@@ -13,9 +13,12 @@ module Marlowe.Spec.Service.Types
 
 import Control.Applicative ((<|>))
 import Data.Aeson (FromJSON(..), ToJSON(..))
+import Plutus.V1.Ledger.Api (POSIXTime(..))
 
 import qualified Data.Aeson as A (Value(Object, String), object, withObject, (.:), (.=))
 import qualified Data.Aeson.Types as A (Parser)
+import qualified Language.Marlowe.Core.V1.Semantics as Marlowe
+import qualified Language.Marlowe.Core.V1.Semantics.Types as Marlowe
 
 
 data Request =
@@ -28,9 +31,19 @@ data Request =
     {
       typeSerialized :: String
     }
-  | ComputeTransaction () () ()
-  | PlayTrace () () ()
-    deriving (Eq, Ord, Read, Show)
+  | ComputeTransaction
+    {
+      transactionInput :: Marlowe.TransactionInput
+    , contract :: Marlowe.Contract
+    , state :: Marlowe.State
+    }
+  | PlayTrace
+    {
+      transactionInputs :: [Marlowe.TransactionInput]
+    , contract :: Marlowe.Contract
+    , initialTime :: POSIXTime
+    }
+    deriving (Eq, Show)
 
 instance FromJSON Request where
   parseJSON =
@@ -41,8 +54,8 @@ instance FromJSON Request where
             "test-roundtrip-serialization" -> TestRoundtripSerialization <$> o A..: "typeId" <*> o A..: "json"
             "generate-random-value"        -> GenerateRandomValue <$> o A..: "typeId"
             "compute-transaction"          -> ComputeTransaction <$> o A..: "transactionInput" <*> o A..: "coreContract" <*> o A..: "state"
-            "play-trace"                   -> PlayTrace <$> o A..: "transactionInput" <*> o A..: "coreContract" <*> o A..: "initialTime"
-            _                              -> fail "Request not understood."
+            "playtrace"                    -> PlayTrace <$> o A..: "transactionInputs" <*> o A..: "coreContract" <*> (POSIXTime <$> o A..: "initialTime")
+            request                        -> fail $ "Request not understood: " <> show request <> "."
 
 instance ToJSON Request where
   toJSON TestRoundtripSerialization{..} =
@@ -58,21 +71,21 @@ instance ToJSON Request where
         "request" A..= ("generate-random-value" :: String)
       , "typeId" A..= typeSerialized
       ]
-  toJSON (ComputeTransaction i s c) =
+  toJSON ComputeTransaction{..} =
     A.object
       [
         "request" A..= ("compute-transaction" :: String)
-      , "transactionInput" A..= i
-      , "coreContract" A..= c
-      , "state" A..= s
+      , "transactionInput" A..= transactionInput
+      , "coreContract" A..= contract
+      , "state" A..= state
       ]
-  toJSON (PlayTrace t c is) =
+  toJSON PlayTrace{..} =
     A.object
       [
         "request" A..= ("playtrace" :: String)
-      , "transactionInputs" A..= is
-      , "coreContract" A..= c
-      , "initialTime" A..= t
+      , "transactionInputs" A..= transactionInputs
+      , "coreContract" A..= contract
+      , "initialTime" A..= getPOSIXTime initialTime
       ]
 
 

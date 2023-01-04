@@ -18,7 +18,6 @@ import Data.Proxy (Proxy(..))
 import Spec.Marlowe.Semantics.Arbitrary ()
 
 import qualified Data.Aeson as A (Value, object, withObject, (.:), (.=))
-import qualified Language.Marlowe.Core.V1.Semantics as Marlowe
 import qualified Language.Marlowe.Core.V1.Semantics.Types as Marlowe
 
 
@@ -73,11 +72,13 @@ knownJsonTypes =
   , JsonableType "Core.Input" (Proxy :: Proxy Marlowe.Input)
   , JsonableType "Core.Observation" (Proxy :: Proxy Marlowe.Observation)
   , JsonableType "Core.Value" (Proxy :: Proxy (Marlowe.Value Marlowe.Observation))
---, JsonableType "Core.Payment" (Proxy :: Proxy Marlowe.Payment)
   , JsonableType "Core.Party" (Proxy :: Proxy Marlowe.Party)
   , JsonableType "Core.State" (Proxy :: Proxy Marlowe.State)
---, JsonableType "Core.TransactionError" (Proxy :: Proxy Marlowe.TransactionError)
---, JsonableType "Core.TransactionOutput" (Proxy :: Proxy Marlowe.TransactionOutput)
---, JsonableType "Core.TransactionWarning" (Proxy :: Proxy Marlowe.TransactionWarning)
---, JsonableType "Core.Transaction" (Proxy :: Proxy Marlowe.Transaction)
+{- FIXME: Implement any missing `JSON` and `Arbitrary` instances.
+  , JsonableType "Core.Payment" (Proxy :: Proxy Marlowe.Payment)
+  , JsonableType "Core.TransactionError" (Proxy :: Proxy Marlowe.TransactionError)
+  , JsonableType "Core.TransactionOutput" (Proxy :: Proxy Marlowe.TransactionOutput)
+  , JsonableType "Core.TransactionWarning" (Proxy :: Proxy Marlowe.TransactionWarning)
+  , JsonableType "Core.Transaction" (Proxy :: Proxy Marlowe.Transaction)
+-}
   ]
