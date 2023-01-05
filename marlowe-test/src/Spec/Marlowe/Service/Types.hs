@@ -1,3 +1,14 @@
+-----------------------------------------------------------------------------
+--
+-- Module      :  $Headers
+-- License     :  Apache 2.0
+--
+-- Stability   :  Experimental
+-- Portability :  Portable
+--
+-- | Marlowe types for the test service client.
+--
+-----------------------------------------------------------------------------
 
 
 {-# LANGUAGE LambdaCase #-}
@@ -6,7 +17,8 @@
 
 
 module Spec.Marlowe.Service.Types
-  ( Request(..)
+  ( -- * Types
+    Request(..)
   , Response(..)
   ) where
 

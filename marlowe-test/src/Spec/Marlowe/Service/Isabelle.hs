@@ -1,7 +1,19 @@
+-----------------------------------------------------------------------------
+--
+-- Module      :  $Headers
+-- License     :  Apache 2.0
+--
+-- Stability   :  Experimental
+-- Portability :  Portable
+--
+-- | Test Marlowe's Cardano implementation against the Isabelle-derived test server.
+--
+-----------------------------------------------------------------------------
 
 
 module Spec.Marlowe.Service.Isabelle
-  ( tests
+  ( -- * Testing
+    tests
   ) where
 
 
@@ -12,6 +24,7 @@ import qualified Data.Aeson as A
 import qualified Marlowe.Spec.Core (tests)
 
 
+-- | Run the tests.
 tests :: TestTree
 tests =
   testGroup "Marlowe Client"

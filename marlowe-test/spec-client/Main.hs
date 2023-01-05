@@ -1,3 +1,14 @@
+-----------------------------------------------------------------------------
+--
+-- Module      :  $Headers
+-- License     :  Apache 2.0
+--
+-- Stability   :  Experimental
+-- Portability :  Portable
+--
+-- | Client for `marlowe-test-spec` from the `marlowe` repository.
+--
+-----------------------------------------------------------------------------
 
 
 {-# LANGUAGE LambdaCase #-}
@@ -6,7 +17,8 @@
 
 
 module Main
-  ( main
+  ( -- * Testing
+    main
   ) where
 
 
@@ -18,6 +30,7 @@ import qualified Data.Aeson as A (eitherDecode, encode)
 import qualified Data.ByteString.Lazy.Char8 as LBS8 (pack, putStrLn)
 
 
+-- | Entry point.
 main :: IO ()
 main =
   do
@@ -34,6 +47,7 @@ main =
       ]
 
 
+-- | Parse lines of the `marlowe-test-spec` communication protocol.
 parseChunks :: [String] -> [String]
 parseChunks stream =
   let

@@ -1,3 +1,14 @@
+-----------------------------------------------------------------------------
+--
+-- Module      :  $Headers
+-- License     :  Apache 2.0
+--
+-- Stability   :  Experimental
+-- Portability :  Portable
+--
+-- | Test of Marlowe's Cardano JSON implementation against the reference implementation.
+--
+-----------------------------------------------------------------------------
 
 
 {-# LANGUAGE OverloadedStrings #-}
@@ -5,8 +16,10 @@
 
 
 module Spec.Marlowe.Service.Serialization
-  ( SerializationResponse(..)
+  ( -- * Types
+    SerializationResponse(..)
   , knownJsonTypes
+    -- * Testing
   , roundtripSerialization
   ) where
 
@@ -21,18 +34,22 @@ import qualified Data.Aeson as A (Value, object, withObject, (.:), (.=))
 import qualified Language.Marlowe.Core.V1.Semantics.Types as Marlowe
 
 
+-- | Response to a round-trip serialization request.
 data SerializationResponse =
+    -- | Success.
     SerializationSuccess
     {
-      valueReserialized :: A.Value
+      valueReserialized :: A.Value  -- ^ The reserialized value.
     }
+    -- | The type was not known.
   | UnknownType
     {
-      unknownType :: String
+      unknownType :: String  -- ^ The type.
     }
+    -- | The deserialization or serialization failed.
   | SerializationError
     {
-      serializationError :: String
+      serializationError :: String  -- ^ The error message.
     }
   deriving (Eq, Ord, Read, Show)
 
@@ -50,7 +67,11 @@ instance FromJSON SerializationResponse where
         <|> (SerializationError <$> o A..: "serialization-error")
 
 
-roundtripSerialization :: String -> A.Value -> SerializationResponse
+-- | Deserialize and then serialize a value.
+roundtripSerialization
+  :: String  -- ^ The key to the type.
+  -> A.Value  -- ^ The value.
+  -> SerializationResponse  -- ^ The result.
 roundtripSerialization typeSerialized valueSerialized =
   if isKnownJson knownJsonTypes typeSerialized
     then case roundTripJsonable knownJsonTypes typeSerialized valueSerialized of
@@ -59,6 +80,7 @@ roundtripSerialization typeSerialized valueSerialized =
     else UnknownType typeSerialized
 
 
+-- | List of known types that can be serialized and deserialized as JSON.
 knownJsonTypes :: KnownJsonable
 knownJsonTypes =
   [

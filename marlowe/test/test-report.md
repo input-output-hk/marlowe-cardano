@@ -400,7 +400,7 @@ Several other property-based tests, in the [`Spec.Marlowe.Marlowe`](src/Spec/Mar
 
 ## Test Oracle for Marlowe
 
-A test oracle service, based on Marlowe's PureScript export from Isabelle is available for testing the Haskell implementation. This is currently work in progress.
+[A test oracle service](https://github.com/input-output-hk/marlowe/blob/master/marlowe-spec-test/README.md), based on Marlowe's Haskell export from Isabelle is available for testing the Haskell implementation. These tests are automatically run as part of the `marlowe-test` suite.
 
 
 ## On-Chain Tests of Marlowe

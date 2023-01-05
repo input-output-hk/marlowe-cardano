@@ -1,3 +1,14 @@
+-----------------------------------------------------------------------------
+--
+-- Module      :  $Headers
+-- License     :  Apache 2.0
+--
+-- Stability   :  Experimental
+-- Portability :  Portable
+--
+-- | Client for Isabelle-based Marlowe testing service.
+--
+-----------------------------------------------------------------------------
 
 
 {-# LANGUAGE LambdaCase #-}
@@ -6,7 +17,8 @@
 
 
 module Spec.Marlowe.Service
-  ( handle
+  ( -- * Testing
+    handle
   , handleValues
   ) where
 
@@ -19,6 +31,7 @@ import qualified Data.Aeson as A (Result(..), Value, fromJSON, object, toJSON, (
 import qualified Language.Marlowe.Core.V1.Semantics as Marlowe (computeTransaction, playTrace)
 
 
+-- | Respond to a request expressed as JSON.
 handleValues :: A.Value -> IO A.Value
 handleValues request =
   case A.fromJSON request of
@@ -26,6 +39,7 @@ handleValues request =
     A.Error message -> error message
 
 
+-- | Respond to a request.
 handle :: Request -> IO Response
 handle TestRoundtripSerialization{..} =
   pure

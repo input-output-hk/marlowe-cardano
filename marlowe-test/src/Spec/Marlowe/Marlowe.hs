@@ -29,7 +29,6 @@ module Spec.Marlowe.Marlowe
   ) where
 
 
-
 import Control.Exception (SomeException, catch)
 import Control.Monad (when)
 import Data.Aeson (decode, eitherDecode, encode)

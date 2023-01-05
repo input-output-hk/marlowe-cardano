@@ -1,7 +1,19 @@
+-----------------------------------------------------------------------------
+--
+-- Module      :  $Headers
+-- License     :  Apache 2.0
+--
+-- Stability   :  Experimental
+-- Portability :  Portable
+--
+-- | Arbitrary instance for an existentially quantified JSON type.
+--
+-----------------------------------------------------------------------------
 
 
 module Spec.Marlowe.Service.Random
-  ( generateValue
+  ( -- * Testing
+    generateValue
   ) where
 
 
@@ -13,9 +25,10 @@ import Test.QuickCheck (generate)
 import qualified Data.Aeson as A (Value)
 
 
+-- | Generate an arbitrary value.
 generateValue
-  :: String
-  -> IO (Either String A.Value)
+  :: String  -- ^ The key for the type.
+  -> IO (Either String A.Value)  -- ^ Either the value or an error message.
 generateValue =
   either (pure . Left) (fmap Right . generate)
     . generateJsonable knownJsonTypes
