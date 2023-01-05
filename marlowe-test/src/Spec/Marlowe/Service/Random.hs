@@ -1,13 +1,13 @@
 
 
-module Marlowe.Spec.Service.Random
+module Spec.Marlowe.Service.Random
   ( generateValue
   ) where
 
 
 import Data.Jsonable (generateJsonable)
-import Marlowe.Spec.Service.Serialization (knownJsonTypes)
 import Spec.Marlowe.Semantics.Arbitrary ()
+import Spec.Marlowe.Service.Serialization (knownJsonTypes)
 import Test.QuickCheck (generate)
 
 import qualified Data.Aeson as A (Value)

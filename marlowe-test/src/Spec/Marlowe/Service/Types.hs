@@ -5,7 +5,7 @@
 {-# LANGUAGE RecordWildCards #-}
 
 
-module Marlowe.Spec.Service.Types
+module Spec.Marlowe.Service.Types
   ( Request(..)
   , Response(..)
   ) where

@@ -4,7 +4,7 @@
 {-# LANGUAGE RecordWildCards #-}
 
 
-module Marlowe.Spec.Service.Serialization
+module Spec.Marlowe.Service.Serialization
   ( SerializationResponse(..)
   , knownJsonTypes
   , roundtripSerialization

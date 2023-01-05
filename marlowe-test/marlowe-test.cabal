@@ -75,6 +75,10 @@ library
     Spec.Marlowe.Serialization
     Spec.Marlowe.Serialization.CoreJson
     Spec.Marlowe.Serialization.ExtendedJson
+    Spec.Marlowe.Service
+    Spec.Marlowe.Service.Random
+    Spec.Marlowe.Service.Serialization
+    Spec.Marlowe.Service.Types
     Spec.Marlowe.Semantics.Arbitrary
     Spec.Marlowe.Semantics.AssocMap
     Spec.Marlowe.Semantics.Compute
@@ -136,14 +140,8 @@ executable marlowe-spec-client
   import: lang
   hs-source-dirs: spec-client
   main-is: Main.hs
-  other-modules: Marlowe.Spec.Service.Random
-                 Marlowe.Spec.Service.Serialization
-                 Marlowe.Spec.Service.Types
   build-depends:
       base >=4.9 && <5
     , aeson
     , bytestring
-    , marlowe
     , marlowe-test
-    , plutus-ledger-api
-    , QuickCheck
