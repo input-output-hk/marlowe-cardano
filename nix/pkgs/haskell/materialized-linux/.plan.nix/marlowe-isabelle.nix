@@ -52,7 +52,6 @@
           "OptBoundTimeInterval"
           "Product_Lexorder"
           "Product_Type"
-          "SemanticsGuarantees"
           "SList"
           "Stringa"
           "Arith"
@@ -62,6 +61,7 @@
           "MarloweCoreJson"
           "Semantics"
           "SemanticsTypes"
+          "SemanticsGuarantees"
           ];
         hsSourceDirs = [ "generated" "haskell" ];
         };

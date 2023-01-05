@@ -391,21 +391,21 @@ data IntervalError = InvalidInterval TimeInterval
 
 instance ToJSON IntervalError where
   toJSON (InvalidInterval (s, e)) = A.object
-    [ ("invalidInterval", toJSON (posixTimeToJSON s, posixTimeToJSON e)) ]
+    [ ("invalidInterval", A.object [("from", posixTimeToJSON s), ("to", posixTimeToJSON e)]) ]
   toJSON (IntervalInPastError t (s, e)) = A.object
-    [ ("intervalInPastError", toJSON (posixTimeToJSON t, posixTimeToJSON s, posixTimeToJSON e)) ]
+    [ ("intervalInPastError", A.object [("minTime", posixTimeToJSON t), ("from", posixTimeToJSON s), ("to", posixTimeToJSON e)]) ]
 
 instance FromJSON IntervalError where
   parseJSON (JSON.Object v) =
     let
       parseInvalidInterval = do
-        (s, e) <- v .: "invalidInterval"
-        InvalidInterval <$> ((,) <$> posixTimeFromJSON s <*> posixTimeFromJSON e)
+        o <- v .: "invalidInterval"
+        InvalidInterval <$> ((,) <$> (posixTimeFromJSON =<< o .: "from") <*> (posixTimeFromJSON =<< o .: "to"))
       parseIntervalInPastError = do
-        (t, s, e) <- v .: "intervalInPastError"
+        o <- v .: "intervalInPastError"
         IntervalInPastError
-          <$> posixTimeFromJSON t
-          <*> ((,) <$> posixTimeFromJSON s <*> posixTimeFromJSON e)
+          <$> (posixTimeFromJSON =<< o .: "minTime")
+          <*> ((,) <$> (posixTimeFromJSON =<< o .: "from") <*> (posixTimeFromJSON =<< o .: "to"))
     in
       parseIntervalInPastError <|> parseInvalidInterval
   parseJSON invalid =
