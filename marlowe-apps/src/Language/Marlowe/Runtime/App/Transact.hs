@@ -13,6 +13,7 @@ module Language.Marlowe.Runtime.App.Transact
   , applyWithEvents
   , create
   , createWithEvents
+  , handleWithEvents
   , run
   , runWithEvents
   , transact
