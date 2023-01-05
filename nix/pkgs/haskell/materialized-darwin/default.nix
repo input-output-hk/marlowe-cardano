@@ -491,6 +491,7 @@
         "byron-spec-ledger".revision = (((hackage."byron-spec-ledger")."0.1.0.0").revisions).default;
         "data-default-class".revision = (((hackage."data-default-class")."0.1.2.0").revisions).default;
         "regex-base".revision = (((hackage."regex-base")."0.94.0.2").revisions).default;
+        "QuickCheck-GenT".revision = (((hackage."QuickCheck-GenT")."0.2.2").revisions).default;
         "vector-algorithms".revision = (((hackage."vector-algorithms")."0.8.0.4").revisions).default;
         "vector-algorithms".flags.internalchecks = false;
         "vector-algorithms".flags.llvm = false;
@@ -813,6 +814,7 @@
         eventuo11y = ./.plan.nix/eventuo11y.nix;
         eventuo11y-batteries = ./.plan.nix/eventuo11y-batteries.nix;
         cardano-addresses = ./.plan.nix/cardano-addresses.nix;
+        marlowe-spec-test = ./.plan.nix/marlowe-spec-test.nix;
         eventuo11y-extras = ./.plan.nix/eventuo11y-extras.nix;
         cardano-addresses-cli = ./.plan.nix/cardano-addresses-cli.nix;
         plutus-script-utils = ./.plan.nix/plutus-script-utils.nix;
@@ -829,6 +831,7 @@
         eventuo11y-dsl = ./.plan.nix/eventuo11y-dsl.nix;
         cardano-integration = ./.plan.nix/cardano-integration.nix;
         aeson-via-serialise = ./.plan.nix/aeson-via-serialise.nix;
+        marlowe-isabelle = ./.plan.nix/marlowe-isabelle.nix;
         eventuo11y-json = ./.plan.nix/eventuo11y-json.nix;
         plutus-ledger-slot = ./.plan.nix/plutus-ledger-slot.nix;
         };
@@ -856,6 +859,7 @@
           "cardano-addresses" = {
             flags = { "release" = lib.mkOverride 900 false; };
             };
+          "marlowe-spec-test" = { flags = {}; };
           "eventuo11y-extras" = { flags = {}; };
           "cardano-addresses-cli" = {
             flags = { "release" = lib.mkOverride 900 false; };
@@ -893,6 +897,7 @@
           "eventuo11y-dsl" = { flags = {}; };
           "cardano-integration" = { flags = {}; };
           "aeson-via-serialise" = { flags = {}; };
+          "marlowe-isabelle" = { flags = {}; };
           "eventuo11y-json" = { flags = {}; };
           "plutus-ledger-slot" = {
             flags = { "defer-plugin-errors" = lib.mkOverride 900 false; };
@@ -991,6 +996,7 @@
           "vector-sized".components.library.planned = lib.mkOverride 900 true;
           "marlowe-test".components.tests."marlowe-test".planned = lib.mkOverride 900 true;
           "quickcheck-io".components.library.planned = lib.mkOverride 900 true;
+          "marlowe-spec-test".components.library.planned = lib.mkOverride 900 true;
           "dec".components.library.planned = lib.mkOverride 900 true;
           "SHA".components.library.planned = lib.mkOverride 900 true;
           "bytestring".components.library.planned = lib.mkOverride 900 true;
@@ -1050,6 +1056,7 @@
           "HUnit".components.library.planned = lib.mkOverride 900 true;
           "some".components.library.planned = lib.mkOverride 900 true;
           "dependent-sum-template".components.library.planned = lib.mkOverride 900 true;
+          "marlowe-spec-test".components.exes."marlowe-spec".planned = lib.mkOverride 900 true;
           "validation-selective".components.library.planned = lib.mkOverride 900 true;
           "small-steps".components.library.planned = lib.mkOverride 900 true;
           "array".components.library.planned = lib.mkOverride 900 true;
@@ -1107,6 +1114,7 @@
           "int-cast".components.library.planned = lib.mkOverride 900 true;
           "vector".components.library.planned = lib.mkOverride 900 true;
           "indexed-traversable-instances".components.library.planned = lib.mkOverride 900 true;
+          "marlowe-isabelle".components.library.planned = lib.mkOverride 900 true;
           "marlowe-chain-sync".components.exes."example-client".planned = lib.mkOverride 900 true;
           "servant-server".components.library.planned = lib.mkOverride 900 true;
           "data-default-class".components.library.planned = lib.mkOverride 900 true;
@@ -1419,6 +1427,7 @@
           "finite-typelits".components.library.planned = lib.mkOverride 900 true;
           "lifted-async".components.library.planned = lib.mkOverride 900 true;
           "conduit".components.library.planned = lib.mkOverride 900 true;
+          "QuickCheck-GenT".components.library.planned = lib.mkOverride 900 true;
           "cardano-config".components.library.planned = lib.mkOverride 900 true;
           "blaze-textual".components.library.planned = lib.mkOverride 900 true;
           "errors".components.library.planned = lib.mkOverride 900 true;

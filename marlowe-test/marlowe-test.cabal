@@ -76,6 +76,7 @@ library
     Spec.Marlowe.Serialization.CoreJson
     Spec.Marlowe.Serialization.ExtendedJson
     Spec.Marlowe.Service
+    Spec.Marlowe.Service.Isabelle
     Spec.Marlowe.Service.Random
     Spec.Marlowe.Service.Serialization
     Spec.Marlowe.Service.Types
@@ -91,7 +92,6 @@ library
     Spec.Marlowe.Semantics.Golden.Trivial
     Spec.Marlowe.Semantics.Golden.ZeroCouponBond
     Spec.Marlowe.Semantics.Merkle
-    Spec.Marlowe.Semantics.Oracle
     Spec.Marlowe.Semantics.Orphans
     Spec.Marlowe.Semantics.Util
   build-depends:
@@ -101,12 +101,11 @@ library
     , cardano-api
     , containers
     , data-default
-    , directory
     , filepath
     , hint
     , lens
     , marlowe
-    , marlowe-contracts
+    , marlowe-spec-test
     , mtl
     , plutus-ledger
     , plutus-ledger-api

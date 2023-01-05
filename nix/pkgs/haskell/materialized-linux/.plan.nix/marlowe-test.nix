@@ -45,12 +45,11 @@
           (hsPkgs."cardano-api" or (errorHandler.buildDepError "cardano-api"))
           (hsPkgs."containers" or (errorHandler.buildDepError "containers"))
           (hsPkgs."data-default" or (errorHandler.buildDepError "data-default"))
-          (hsPkgs."directory" or (errorHandler.buildDepError "directory"))
           (hsPkgs."filepath" or (errorHandler.buildDepError "filepath"))
           (hsPkgs."hint" or (errorHandler.buildDepError "hint"))
           (hsPkgs."lens" or (errorHandler.buildDepError "lens"))
           (hsPkgs."marlowe" or (errorHandler.buildDepError "marlowe"))
-          (hsPkgs."marlowe-contracts" or (errorHandler.buildDepError "marlowe-contracts"))
+          (hsPkgs."marlowe-spec-test" or (errorHandler.buildDepError "marlowe-spec-test"))
           (hsPkgs."mtl" or (errorHandler.buildDepError "mtl"))
           (hsPkgs."plutus-ledger" or (errorHandler.buildDepError "plutus-ledger"))
           (hsPkgs."plutus-ledger-api" or (errorHandler.buildDepError "plutus-ledger-api"))
@@ -87,6 +86,11 @@
           "Spec/Marlowe/Serialization"
           "Spec/Marlowe/Serialization/CoreJson"
           "Spec/Marlowe/Serialization/ExtendedJson"
+          "Spec/Marlowe/Service"
+          "Spec/Marlowe/Service/Isabelle"
+          "Spec/Marlowe/Service/Random"
+          "Spec/Marlowe/Service/Serialization"
+          "Spec/Marlowe/Service/Types"
           "Spec/Marlowe/Semantics/Arbitrary"
           "Spec/Marlowe/Semantics/AssocMap"
           "Spec/Marlowe/Semantics/Compute"
@@ -99,7 +103,6 @@
           "Spec/Marlowe/Semantics/Golden/Trivial"
           "Spec/Marlowe/Semantics/Golden/ZeroCouponBond"
           "Spec/Marlowe/Semantics/Merkle"
-          "Spec/Marlowe/Semantics/Oracle"
           "Spec/Marlowe/Semantics/Orphans"
           "Spec/Marlowe/Semantics/Util"
           ];
@@ -111,17 +114,9 @@
             (hsPkgs."base" or (errorHandler.buildDepError "base"))
             (hsPkgs."aeson" or (errorHandler.buildDepError "aeson"))
             (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
-            (hsPkgs."marlowe" or (errorHandler.buildDepError "marlowe"))
             (hsPkgs."marlowe-test" or (errorHandler.buildDepError "marlowe-test"))
-            (hsPkgs."plutus-ledger-api" or (errorHandler.buildDepError "plutus-ledger-api"))
-            (hsPkgs."QuickCheck" or (errorHandler.buildDepError "QuickCheck"))
             ];
           buildable = true;
-          modules = [
-            "Marlowe/Spec/Service/Random"
-            "Marlowe/Spec/Service/Serialization"
-            "Marlowe/Spec/Service/Types"
-            ];
           hsSourceDirs = [ "spec-client" ];
           mainPath = [ "Main.hs" ];
           };

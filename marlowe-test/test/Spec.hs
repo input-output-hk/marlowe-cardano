@@ -27,8 +27,8 @@ import Test.Tasty.QuickCheck
 import qualified Spec.Marlowe.Marlowe (prop_noFalsePositives, tests)
 import qualified Spec.Marlowe.Plutus (tests)
 import qualified Spec.Marlowe.Semantics (tests)
-import qualified Spec.Marlowe.Semantics.Oracle (tests)
 import qualified Spec.Marlowe.Serialization (tests)
+import qualified Spec.Marlowe.Service.Isabelle (tests)
 
 
 -- | Timeout seconds for static analysis, which can take so much time on a complex contract
@@ -59,5 +59,5 @@ tests =
     , Spec.Marlowe.Serialization.tests
     , Spec.Marlowe.Semantics.tests
     , Spec.Marlowe.Plutus.tests
-    , Spec.Marlowe.Semantics.Oracle.tests
+    , Spec.Marlowe.Service.Isabelle.tests
     ]
