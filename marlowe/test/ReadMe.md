@@ -25,6 +25,7 @@
 -   [Marlowe-Cardano github repository](https://github.com/input-output-hk/marlowe-cardano/)
 -   [Test report](./test-report.md)
 -   [Testing framework](../marlowe-test/)
+-   [Marlowe Limitations on Cardano](best-practices.md)
 
 
 ## Testing tools:
