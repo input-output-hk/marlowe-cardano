@@ -25,6 +25,7 @@ import qualified Data.Map.Strict as SMap (toList)
 import Data.Maybe (fromJust, isJust, mapMaybe)
 import Data.Monoid (First(..), getFirst)
 import Data.Ratio ((%))
+import Data.SOP.Strict (K(..), NP(Nil, (:*)))
 import qualified Data.Set as Set
 import Data.Traversable (for)
 import Data.Word (Word32)
@@ -58,6 +59,11 @@ import qualified Language.Marlowe.Runtime.Core.Gen ()
 import Language.Marlowe.Runtime.Core.ScriptRegistry (ReferenceScriptUtxo(..))
 import Language.Marlowe.Runtime.Transaction.Constraints
 import qualified Language.Marlowe.Scripts as V1
+import Ouroboros.Consensus.BlockchainTime (RelativeTime(..), mkSlotLength)
+import Ouroboros.Consensus.HardFork.History
+  (Bound(..), EraEnd(..), EraParams(..), EraSummary(..), SafeZone(..), mkInterpreter)
+import Ouroboros.Consensus.HardFork.History.Summary (summaryWithExactly)
+import Ouroboros.Consensus.Util.Counting (Exactly(..))
 import Spec.Marlowe.Semantics.Arbitrary (SemiArbitrary(semiArbitrary), arbitraryValidInput)
 import Test.Hspec
 import Test.Hspec.QuickCheck
@@ -485,6 +491,109 @@ spec = do
            first (\message -> show (message :: ConstraintError 'V1))
              $ ensureMinUtxo protocolTestnet (inAddress, inValue)
          pure $ selectLovelace outValue `shouldBe` maximum [selectLovelace inValue, selectLovelace expected]
+
+  describe "balanceTx" do
+    prop "tx should balance if coin selection succeeded and no Plutus failure occurred" \(SomeTxConstraints marloweVersion constraints) -> do
+      marloweContext <- genSimpleMarloweContext marloweVersion constraints
+
+      -- We MUST dictate the distribution of wallet context assets, default
+      -- generation only tests with empty wallets!
+      maxLovelace <- choose (0, 40_000_000)
+      walletContext <- genWalletWithAsset marloweVersion constraints maxLovelace
+      start <- SystemStart <$> arbitrary
+
+      let
+        -- The following 4 definitions are for constructing a pure EraHistory,
+        -- which would normally come from the chain at runtime
+
+        eraHistory :: EraHistory CardanoMode
+        eraHistory = EraHistory CardanoMode
+          $ mkInterpreter
+          $ summaryWithExactly
+          $ Exactly
+          $  K (oneMillisecondEraSummary 0) -- Byron lasted 1 ms
+          :* K (oneMillisecondEraSummary 1) -- Shelley lasted 1 ms
+          :* K (oneMillisecondEraSummary 2) -- Allegra lasted 1 ms
+          :* K (oneMillisecondEraSummary 3) -- Mary lasted 1 ms
+          :* K (oneMillisecondEraSummary 4) -- Alonzo lasted 1 ms
+          :* K (unboundedEraSummary 5) -- Babbage never ends
+          :* Nil
+
+        unboundedEraSummary :: Integer -> EraSummary
+        unboundedEraSummary i = EraSummary
+          { eraStart = oneMillisecondBound i
+          , eraEnd = EraUnbounded
+          , eraParams = EraParams
+            { eraEpochSize = 1
+            , eraSlotLength = mkSlotLength 0.001
+            , eraSafeZone = UnsafeIndefiniteSafeZone
+            }
+          }
+
+        oneMillisecondEraSummary :: Integer -> EraSummary
+        oneMillisecondEraSummary i = EraSummary
+          { eraStart = oneMillisecondBound i
+          , eraEnd = EraEnd $ oneMillisecondBound $ i + 1
+          , eraParams = EraParams
+            { eraEpochSize = 1
+            , eraSlotLength = mkSlotLength 0.001
+            , eraSafeZone = UnsafeIndefiniteSafeZone
+            }
+          }
+
+        oneMillisecondBound :: Integer -> Bound
+        oneMillisecondBound i = Bound
+          { boundTime = RelativeTime $ fromInteger i / 1000
+          , boundSlot = fromInteger i
+          , boundEpoch = fromInteger i
+          }
+
+        -- We need to make a TxBodyContent that would have come from executing
+        -- selectCoins, containing the tx information in the WalletContext we
+        -- will also be passing to balanceTx. To do so, we'll use the
+        -- walletContext.
+
+        addBuilder :: TxIn -> (TxIn, BuildTxWith BuildTx (Witness WitCtxTxIn BabbageEra))
+        addBuilder = (, BuildTxWith (KeyWitness KeyWitnessForSpending))
+
+        txBodyContent = emptyTxBodyContent
+          { txIns = map addBuilder . mapMaybe (toCardanoTxIn . fst)
+              . Map.toList . Chain.unUTxOs . availableUtxos $ walletContext
+          , txInsCollateral = TxInsCollateral CollateralInBabbageEra  -- [TxIn]
+              $ mapMaybe toCardanoTxIn . Set.toList . collateralUtxos $ walletContext
+          }
+
+      {-  Explanation of the pass/fail criteria below. From a discussion
+          between Dino Morelli and Brian Bush 2023-Jan
+
+          In some sense, a successful makeTransactionBodyAutoBalance is the
+          ultimate test because that means the tx should succeed when submitted to a
+          node.
+
+          Of the errors in TxBodyErrorAutoBalance...
+
+          TxBodyErrorAdaBalanceNegative indicates that balanceTx failed.
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+          All of the other errors indicate that something upstream from
+          balanceTx failed. For instance, errors like TxBodyErrorAssetBalanceWrong,
+          TxBodyErrorAdaBalanceNegative,  TxBodyErrorAdaBalanceTooSmall,
+          TxBodyErrorMinUTxONotMet, or TxBodyErrorNonAdaAssetsUnbalanced mean that
+          selectCoins failed.
+
+          Errors like TxBodyScriptExecutionError or TxBodyErrorValidityInterval
+          mean that transaction constraints were wrong or incorrectly solved.
+
+          Only TxBodyScriptExecutionError indicates a Plutus validation failure.
+      -}
+
+      pure $ case balanceTx BabbageEraInCardanoMode start eraHistory
+              protocolTestnet marloweVersion marloweContext walletContext txBodyContent of
+        Right _ -> label "balancing succeeded" True
+        Left (BalancingError emsg) -> if "TxBodyErrorAdaBalanceNegative" `isPrefixOf` emsg
+          then counterexample ("balancing shouldn't have failed\n" <> emsg) False
+          else label "non-balanceable test cases" True
+        Left _ -> label "non-balanceable test cases" True
 
 -- Generate a wallet that always has a pure ADA value of 7 and a value
 -- with a minimum ADA plus zero or more "nuisance" tokens
