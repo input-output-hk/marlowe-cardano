@@ -9,6 +9,7 @@ import Data.UUID.V4 (nextRandom)
 import Language.Marlowe.Protocol.HeaderSync.Codec (codecMarloweHeaderSync)
 import Language.Marlowe.Protocol.HeaderSync.Server (marloweHeaderSyncServerPeer)
 import Language.Marlowe.Runtime.ChainSync.Api (RuntimeChainSeekClient, WithGenesis(..), runtimeChainSeekCodec)
+import qualified Language.Marlowe.Runtime.Core.ScriptRegistry as ScriptRegistry
 import Language.Marlowe.Runtime.Discovery (DiscoveryDependencies(..), discovery)
 import Logging (RootSelector(..), getRootSelectorConfig)
 import Network.Protocol.ChainSeek.Client (chainSeekClientPeer)
@@ -93,6 +94,7 @@ run Options{..} = withSocketsDo do
               syncSocket
               codecMarloweHeaderSync
               marloweHeaderSyncServerPeer
+            getMarloweVersion = ScriptRegistry.getMarloweVersion
           in DiscoveryDependencies{..}
         appComponent = discovery <<< arr discoveryDependencies <<< logger
       runComponent_ appComponent LoggerDependencies

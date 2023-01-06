@@ -479,6 +479,7 @@ executable marlowe-tx
     , eventuo11y-extras
     , marlowe-chain-sync
     , marlowe-protocols
+    , marlowe-runtime
     , marlowe-runtime:history-api
     , marlowe-runtime:tx
     , marlowe-runtime:tx-api
