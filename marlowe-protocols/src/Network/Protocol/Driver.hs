@@ -10,6 +10,9 @@
 module Network.Protocol.Driver
   where
 
+import Control.Concurrent.STM (STM, atomically, newTQueue, readTQueue)
+import Control.Concurrent.STM.TQueue (writeTQueue)
+import Control.Exception (Exception)
 import Control.Exception.Lifted (SomeException, bracketOnError, mask, throw, try)
 import Control.Monad.Base (MonadBase(liftBase))
 import Control.Monad.Cleanup (MonadCleanup)
@@ -18,7 +21,7 @@ import Data.Aeson (Value, toJSON)
 import Data.ByteString.Lazy (ByteString)
 import Data.ByteString.Lazy.Base16 (encodeBase16)
 import Data.Void (Void)
-import Network.Channel (Channel(..), hoistChannel, socketAsChannel)
+import Network.Channel (Channel(..), channelPair, hoistChannel, socketAsChannel)
 import Network.Socket (AddrInfo, SockAddr, Socket, addrAddress, close, connect, openSocket)
 import Network.Socket.Address (accept)
 import Network.TypedProtocol (Message, Peer(..), PeerHasAgency, PeerRole, SomeMessage(..), runPeerWithDriver)
@@ -237,6 +240,68 @@ acceptRunServerPeerOverSocketWithLogging eventBackend throwImpl socket codec toP
     withEvent eventBackend Disconnected \ev -> do
       addParent ev ref
       either throw pure result
+
+data ClientServerPair m server client = ClientServerPair
+  { acceptRunServer :: m (RunServer m server)
+  , runClient :: RunClient m client
+  }
+
+newtype ServerException e = ServerException e deriving (Show)
+newtype ClientException e = ClientException e deriving (Show)
+
+instance Exception e => Exception (ServerException e)
+instance Exception e => Exception (ClientException e)
+
+clientServerPair
+  :: forall protocol ex server client serverPeer clientPeer m st r
+   . (MonadBaseControl IO m, MonadCleanup m, Exception ex)
+  => EventBackend m r (AcceptSocketDriverSelector protocol)
+  -> EventBackend m r (ConnectSocketDriverSelector protocol)
+  -> (forall e x. Exception e => e -> m x)
+  -> Codec protocol ex m ByteString
+  -> ToPeer server protocol serverPeer st m
+  -> ToPeer client protocol clientPeer st m
+  -> STM (ClientServerPair m server client)
+clientServerPair serverEventBackend clientEventBackend throwImpl codec serverToPeer clientToPeer = do
+  serverChannelQueue <- newTQueue
+  let
+    acceptRunServer = mask \_ -> do
+      (channel, closeAction) <- liftBase $ atomically $ readTQueue serverChannelQueue
+      (eventBackend', ref) <- withEvent serverEventBackend Connected \ev -> do
+        pure (subEventBackend ServerDriverEvent ev, reference ev)
+      let
+        driver = logDriver eventBackend'
+          $ mkDriver throwImpl codec
+          $ hoistChannel (liftBase . atomically) channel
+      pure $ RunServer \server -> mask \restore -> do
+        let peer = serverToPeer server
+        result <- try @_ @SomeException $ restore $ fst <$> runPeerWithDriver driver peer (startDState driver)
+        withEvent serverEventBackend Disconnected \ev -> do
+          addParent ev ref
+          liftBase $ atomically closeAction
+          either (throwImpl . ServerException) pure result
+    runClient :: RunClient m client
+    runClient client = mask \restore -> do
+      (ref, (channel, closeAction)) <- withEvent clientEventBackend Connect \ev -> liftBase $ atomically do
+        (clientChannel, serverChannel) <- channelPair
+        writeTQueue serverChannelQueue serverChannel
+        pure (reference ev, clientChannel)
+      let
+        eventBackend' = narrowEventBackend ClientDriverEvent
+          $ modifyEventBackend (setAncestor ref) clientEventBackend
+        driver = logDriver eventBackend'
+          $ mkDriver throwImpl codec
+          $ hoistChannel (liftBase . atomically) channel
+        peer = clientToPeer client
+      result <- try @_ @SomeException
+        $ restore
+        $ fst <$> runPeerWithDriver driver peer (startDState driver)
+      withEvent clientEventBackend Disconnect \ev -> do
+        addParent ev ref
+        liftBase $ atomically closeAction
+        either (throwImpl . ClientException) pure result
+  pure ClientServerPair{..}
+
 
 hoistPeer :: Functor m => (forall x. m x -> n x) -> Peer protocol pr st m a -> Peer protocol pr st n a
 hoistPeer f = \case

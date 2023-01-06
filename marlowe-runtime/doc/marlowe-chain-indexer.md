@@ -9,6 +9,7 @@ Usage: marlowe-chain-indexer [--version] (-s|--socket-path SOCKET_FILE)
                   [-m|--testnet-magic INTEGER] (-d|--database-uri DATABASE_URI)
                   --genesis-config-file-hash CONFIG_HASH
                   --genesis-config-file CONFIG_FILE [--block-cost COST_UNITS]
+                  --shelley-genesis-config-file CONFIG_FILE
                   [--tx-cost COST_UNITS] [--max-cost COST_UNITS]
 
   Chain indexer for Marlowe Runtime.
@@ -29,6 +30,8 @@ Available options:
                            Hash of the Byron Genesis Config JSON file.
   --genesis-config-file CONFIG_FILE
                            Path to the Byron Genesis Config JSON File.
+  --shelley-genesis-config-file CONFIG_FILE
+                           Path to the Shelley Genesis Config JSON File.
   --block-cost COST_UNITS  The number of cost units to associate with persisting
                            a block when computing the cost model. (default: 1)
   --tx-cost COST_UNITS     The number of cost units to associate with persisting

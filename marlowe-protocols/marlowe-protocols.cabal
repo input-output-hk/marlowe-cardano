@@ -75,6 +75,7 @@ library
     , lifted-base
     , monad-control
     , network
+    , stm
     , template-haskell
     , text
     , transformers-base

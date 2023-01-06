@@ -151,7 +151,7 @@ configWatcher = component \(eventBackend, configFile) -> do
     runConfigWatcher :: m ()
     runConfigWatcher = do
       configFile' <- liftBase $ canonicalizePath configFile
-      control \runInBase -> forever $ void $ try @_ @SomeException $ withManager \manager -> do
+      control \runInBase -> forever $ void $ try @_ @IOError $ withManager \manager -> do
         let dir = dropFileName configFile'
         let
           predicate = \case

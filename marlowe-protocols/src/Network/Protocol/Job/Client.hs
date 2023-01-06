@@ -9,6 +9,8 @@
 module Network.Protocol.Job.Client
   where
 
+import Control.Concurrent (threadDelay)
+import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.Void (Void, absurd)
 import Network.Protocol.Job.Types
 import Network.TypedProtocol
@@ -161,6 +163,19 @@ liftCommand = JobClient . pure . ($ stCmd) . SendMsgExec
   where
     stCmd = ClientStCmd
       { recvMsgAwait = absurd
+      , recvMsgFail = pure . Left
+      , recvMsgSucceed = pure . Right
+      }
+
+-- | Create a client that runs a command to completion and returns the result,
+-- waiting as needed.
+liftCommandWait :: MonadIO m => cmd status err result -> JobClient cmd m (Either err result)
+liftCommandWait = JobClient . pure . ($ stCmd) . SendMsgExec
+  where
+    stCmd = ClientStCmd
+      { recvMsgAwait = \_ _ -> do
+          liftIO $ threadDelay 100_000
+          pure $ SendMsgPoll stCmd
       , recvMsgFail = pure . Left
       , recvMsgSucceed = pure . Right
       }

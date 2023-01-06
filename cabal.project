@@ -26,6 +26,7 @@ packages:
   marlowe-chain-sync
   marlowe-cli
   marlowe-contracts
+  marlowe-integration
   marlowe-protocols
   marlowe-protocols-test
   marlowe-runtime
@@ -76,6 +77,9 @@ package marlowe-protocols
   ghc-options: -Werror
 
 package marlowe-runtime
+  ghc-options: -Werror
+
+package marlowe-integration
   ghc-options: -Werror
 
 package cardano-integration

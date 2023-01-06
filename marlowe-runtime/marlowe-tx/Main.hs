@@ -20,6 +20,7 @@ import Language.Marlowe.Runtime.ChainSync.Api
   , chainSeekClientPeer
   , runtimeChainSeekCodec
   )
+import qualified Language.Marlowe.Runtime.Core.ScriptRegistry as ScriptRegistry
 import Language.Marlowe.Runtime.Transaction (TransactionDependencies(..), transaction)
 import Language.Marlowe.Runtime.Transaction.Query (LoadMarloweContext, LoadWalletContext)
 import qualified Language.Marlowe.Runtime.Transaction.Query as Query
@@ -133,7 +134,7 @@ run Options{..} = withSocketsDo do
           loadMarloweContext :: LoadMarloweContext r
           loadMarloweContext eb version contractId = do
             networkId <- queryChainSync GetNetworkId
-            Query.loadMarloweContext networkId connectToChainSeek runChainSyncQueryClient eb version contractId
+            Query.loadMarloweContext ScriptRegistry.getScripts networkId connectToChainSeek runChainSyncQueryClient eb version contractId
 
           runGetUTxOsQuery :: GetUTxOsQuery -> IO UTxOs
           runGetUTxOsQuery getUTxOsQuery = queryChainSync (GetUTxOs getUTxOsQuery)
@@ -142,6 +143,8 @@ run Options{..} = withSocketsDo do
           loadWalletContext = Query.loadWalletContext runGetUTxOsQuery
 
           eventBackend = narrowEventBackend App rootEventBackend
+
+          getCurrentScripts = ScriptRegistry.getCurrentScripts
         in TransactionDependencies{..}
       appComponent = transaction <<< arr transactionDependencies <<< logger
     runComponent_ appComponent LoggerDependencies

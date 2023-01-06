@@ -108,6 +108,7 @@ library libchainseek
     , these
     , transformers
     , vector
+  visibility: public
 
 library chain-indexer
   import: lang
@@ -123,6 +124,7 @@ library chain-indexer
   other-modules:
   build-depends:
       base >= 4.9 && < 5
+    , aeson
     , async-components
     , base16
     , bytestring
@@ -130,14 +132,18 @@ library chain-indexer
     , cardano-api
     , cardano-binary
     , cardano-crypto-wrapper
-    , cardano-ledger-byron
-    , cardano-ledger-babbage
     , cardano-ledger-alonzo
+    , cardano-ledger-babbage
+    , cardano-ledger-byron
+    , cardano-ledger-core
+    , cardano-ledger-shelley
     , containers
     , eventuo11y
+    , eventuo11y-extras
     , hasql
     , hasql-th
     , hasql-transaction
+    , marlowe-chain-sync
     , ouroboros-network
     , profunctors
     , stm
@@ -148,6 +154,7 @@ library chain-indexer
     , typed-protocols
     , vector
     , witherable
+  visibility: public
 
 library plutus-compat
   import: lang
@@ -190,7 +197,6 @@ executable marlowe-chain-indexer
     , hasql
     -- Consider removing the hasql < 1.6 constraint in cabal.project if updating hasql-pool
     , hasql-pool < 0.6
-    , marlowe-chain-sync
     , marlowe-chain-sync:chain-indexer
     , optparse-applicative
     , ouroboros-network

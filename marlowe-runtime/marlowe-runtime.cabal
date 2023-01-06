@@ -137,6 +137,7 @@ library history
     , these
     , transformers
     , witherable
+  visibility: public
 
 library discovery-api
   import: lang
@@ -182,6 +183,7 @@ library discovery
     , plutus-tx
     , semialign
     , stm
+  visibility: public
 
 library tx-api
   import: lang
@@ -224,6 +226,7 @@ library tx
     , containers
     , errors
     , eventuo11y
+    , eventuo11y-extras
     , marlowe
     , marlowe-chain-sync
     , marlowe-chain-sync:plutus-compat
@@ -238,9 +241,11 @@ library tx
     , plutus-tx
     , semialign
     , stm
+    , text
     , time
     , transformers
     , witherable
+  visibility: public
 
 library plutus-scripts
   import: lang
@@ -450,6 +455,7 @@ executable marlowe-discovery
     , eventuo11y-extras
     , marlowe-chain-sync
     , marlowe-protocols
+    , marlowe-runtime
     , marlowe-runtime:discovery
     , marlowe-runtime:discovery-api
     , network
@@ -470,7 +476,6 @@ executable marlowe-tx
   build-depends:
     base >= 4.9 && < 5
     , async-components
-    , cardano-api
     , eventuo11y
     , eventuo11y-extras
     , marlowe-chain-sync

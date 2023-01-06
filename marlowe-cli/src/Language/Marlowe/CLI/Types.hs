@@ -169,6 +169,7 @@ import qualified Cardano.Api as C
 import qualified Cardano.Api.Byron as CB
 import qualified Cardano.Api.Shelley as C
 import qualified Cardano.Api.Shelley as CS
+import Control.Exception (Exception)
 import Control.Monad.Except (MonadError, liftEither)
 import Control.Monad.IO.Class (MonadIO(liftIO))
 import Control.Monad.Reader.Class (MonadReader(..), asks)
@@ -198,6 +199,8 @@ newtype CliError = CliError {unCliError :: String}
 
 instance IsString CliError where
   fromString = CliError
+
+instance Exception CliError
 
 -- | A payment key.
 type SomePaymentVerificationKey = Either (VerificationKey PaymentKey) (VerificationKey PaymentExtendedKey)
@@ -762,4 +765,3 @@ data MintingAction era =
     , maProviders :: L.NonEmpty (AddressInEra era, SomePaymentSigningKey)
     }
   -- ^ Burn all found tokens on the providers UTxOs of a given "private currency".
-

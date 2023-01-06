@@ -183,19 +183,15 @@ getIntersectionPoints = GetIntersectionPoints $ HT.statement () $ rmap decodeRes
 -- CommitRollback
 
 commitRollback :: GenesisBlock -> CommitRollback Transaction
-commitRollback genesisBlock = CommitRollback \case
-  ChainPointAtGenesis -> do
-    -- truncate all tables
-    HT.sql $ BS.intercalate "\n"
-      [ "TRUNCATE TABLE chain.tx;"
-      , "TRUNCATE TABLE chain.txOut;"
-      , "TRUNCATE TABLE chain.txIn;"
-      , "TRUNCATE TABLE chain.asset RESTART IDENTITY CASCADE;"
-      , "TRUNCATE TABLE chain.block;"
-      ]
-    -- re-add the genesis block (faster than excluding the info using DELETE FROM ... WHERE ...)
-    runCommitGenesisBlock commitGenesisBlock genesisBlock
-  ChainPoint slotNo hash -> HT.statement (slotNoToParam slotNo, headerHashToParam hash)
+commitRollback GenesisBlock{..} = CommitRollback \point -> do
+  let
+    slotNo = case point of
+      ChainPointAtGenesis -> -1
+      ChainPoint s _ -> slotNoToParam s
+    hash = case point of
+      ChainPointAtGenesis -> genesisBlockHash
+      ChainPoint _ h -> h
+  HT.statement (slotNo, headerHashToParam hash)
     [resultlessStatement|
       WITH blockUpdates AS
         ( UPDATE chain.block

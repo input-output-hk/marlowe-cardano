@@ -16,8 +16,8 @@ import Control.Monad (guard, unless, when)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Maybe (MaybeT(..))
 import Data.Foldable (for_, traverse_)
+import Data.Maybe (isJust)
 import Data.Time (NominalDiffTime, UTCTime, addUTCTime, diffUTCTime, getCurrentTime, nominalDiffTimeToSeconds)
-import Data.Void (Void)
 import Language.Marlowe.Runtime.ChainIndexer.Database
 import Language.Marlowe.Runtime.ChainIndexer.Genesis (GenesisBlock)
 import Language.Marlowe.Runtime.ChainIndexer.NodeClient (Changes(..), isEmptyChanges)
@@ -26,7 +26,7 @@ import Prelude hiding (filter)
 import Witherable (Witherable(..))
 
 data ChainStoreSelector f where
-  CheckGenesisBlock :: ChainStoreSelector Void
+  CheckGenesisBlock :: ChainStoreSelector Bool
   Save :: ChainStoreSelector SaveField
 
 data SaveField
@@ -63,8 +63,9 @@ chainStore = component_ \ChainStoreDependencies{..} -> do
 
     runChainStore :: IO ()
     runChainStore = do
-      withEvent eventBackend CheckGenesisBlock \_ -> do
+      withEvent eventBackend CheckGenesisBlock \ev -> do
         mDbGenesisBlock <- runGetGenesisBlock getGenesisBlock
+        addField ev $ isJust mDbGenesisBlock
         case mDbGenesisBlock of
           Just dbGenesisBlock -> unless (dbGenesisBlock == genesisBlock) do
             fail "Existing genesis block does not match computed genesis block"

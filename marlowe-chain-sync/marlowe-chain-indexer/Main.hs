@@ -13,6 +13,7 @@ import Control.Category ((<<<))
 import Control.Concurrent.Component
 import Control.Monad ((<=<))
 import Control.Monad.Trans.Except (ExceptT(ExceptT), runExceptT, withExceptT)
+import Data.Aeson (eitherDecodeFileStrict)
 import Data.String (IsString(fromString))
 import Data.Text (unpack)
 import qualified Data.Text as T
@@ -25,7 +26,7 @@ import qualified Hasql.Session as Session
 import Language.Marlowe.Runtime.ChainIndexer (ChainIndexerDependencies(..), chainIndexer)
 import Language.Marlowe.Runtime.ChainIndexer.Database (hoistDatabaseQueries)
 import qualified Language.Marlowe.Runtime.ChainIndexer.Database.PostgreSQL as PostgreSQL
-import Language.Marlowe.Runtime.ChainIndexer.Genesis (computeByronGenesisBlock)
+import Language.Marlowe.Runtime.ChainIndexer.Genesis (computeGenesisBlock)
 import Logging (RootSelector(..), getRootSelectorConfig)
 import Observe.Event (narrowEventBackend)
 import Observe.Event.Backend (newOnceFlagMVar)
@@ -45,7 +46,8 @@ run Options{..} = do
       (mappend "failed to read byron genesis file: " . T.pack . show)
       (Byron.mkConfigFromFile (toByronRequiresNetworkMagic networkId) genesisConfigFile hash)
   (hash, genesisConfig) <- either (fail . unpack) pure genesisConfigResult
-  let genesisBlock = computeByronGenesisBlock (abstractHashToBytes hash) genesisConfig
+  shelleyGenesis <- either error id <$> eitherDecodeFileStrict shelleyGenesisFile
+  let genesisBlock = computeGenesisBlock (abstractHashToBytes hash) genesisConfig shelleyGenesis
   let
     chainIndexerDependencies eventBackend = ChainIndexerDependencies
       { connectToLocalNode = Cardano.connectToLocalNode localNodeConnectInfo

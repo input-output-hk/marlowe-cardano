@@ -40,7 +40,7 @@ import Language.Marlowe.Runtime.ChainSync.Api
 import Language.Marlowe.Runtime.Core.Api
   (ContractId(..), MarloweVersion, SomeMarloweVersion(..), TransactionScriptOutput(..))
 import qualified Language.Marlowe.Runtime.Core.Api as Core
-import Language.Marlowe.Runtime.Core.ScriptRegistry (MarloweScripts(..), ReferenceScriptUtxo, getScripts)
+import Language.Marlowe.Runtime.Core.ScriptRegistry (MarloweScripts(..), ReferenceScriptUtxo)
 import Language.Marlowe.Runtime.History.Api
   ( CreateStep(..)
   , ExtractCreationError
@@ -110,11 +110,12 @@ loadWalletContext runQuery eventBackend WalletAddresses{..} =
 
 -- | Loads the current MarloweContext for a contract by its ID.
 loadMarloweContext
-  :: C.NetworkId
+  :: (forall v. MarloweVersion v -> Set MarloweScripts)
+  -> C.NetworkId
   -> RunClient IO RuntimeChainSeekClient
   -> RunClient IO (QueryClient ChainSyncQuery)
   -> LoadMarloweContext r
-loadMarloweContext networkId runChainSeekClient runChainSyncQuery eventBackend desiredVersion contractId =
+loadMarloweContext getScripts networkId runChainSeekClient runChainSyncQuery eventBackend desiredVersion contractId =
   runChainSeekClient client
   where
     TxOutRef creationTxId _ = unContractId contractId
