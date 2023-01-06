@@ -95,6 +95,7 @@ run Options{..} = withSocketsDo do
               codecMarloweHeaderSync
               marloweHeaderSyncServerPeer
             getMarloweVersion = ScriptRegistry.getMarloweVersion
+            getScripts = ScriptRegistry.getScripts
           in DiscoveryDependencies{..}
         appComponent = discovery <<< arr discoveryDependencies <<< logger
       runComponent_ appComponent LoggerDependencies
