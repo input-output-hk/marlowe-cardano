@@ -97,7 +97,7 @@ The [Faustus programming language](https://www.uwyo.edu/wabl/faustus.html) relax
 
 ## Limitations Imposed by the Cardano Blockchain
 
-Marlowe’s implementation on particular blockchains typically inherit some of the limitations of the underlying blockchain. The ledger rules and the protocol limits of the Cardano blockchain somewhat restrict the Marlowe contracts that can be deployed there. Most of these limitations are trivial and easily avoided, but a few do impact complex Marlowe contracts and hence need careful consideration. The next sections discuss these limitations in detail.
+Marlowe’s implementation on particular blockchains typically inherits some of the limitations of the underlying blockchain. The ledger rules and the protocol limits of the Cardano blockchain somewhat restrict the Marlowe contracts that can be deployed there. Most of these limitations are trivial and easily avoided, but a few do impact complex Marlowe contracts and hence need careful consideration. The next sections discuss these limitations in detail.
 
 
 ### One Marlowe Contract per Transaction
@@ -156,8 +156,8 @@ Another example is when a Marlowe contract receives a deposit that would cause t
 #### Maximum Value Bytes
 
 The Cardano ledger also contains a rule that the size (in words) of the bytes storing the information about native tokens in a UTxO cannot exceed a protocol parameter named `maxValueSize`. In practice, this means that there is a limit to the number of different types of tokens that can be held in a single UTxO. A Marlowe contract might attempt to violate this ledger rule in two types of circumstances:
-    1. A `Pay` might send so many types of native tokens to the Marlowe payout script address that the UTxO exceeds the maximum value size.
-    2. A `Deposit` might place so many tokens at the Marlowe script address that the contract's UTxO exceeds the maximum value size.
+1. A `Pay` might send so many types of native tokens to the Marlowe payout script address that the UTxO exceeds the maximum value size.
+2. A `Deposit` might place so many tokens at the Marlowe script address that the contract's UTxO exceeds the maximum value size.
 
 In either case such a transaction would be rejected by the ledger and the execution path could never become realized.
 
@@ -165,19 +165,19 @@ In either case such a transaction would be rejected by the ledger and the execut
 #### Maximum Transaction Size
 
 The size (in bytes) of a transaction is limited by a Cardano ledger rule, specified by the protocol parameter `maxTxSize`. There are quite a few types of situations where a transaction executing a step in a Marlowe contract might become too large:
-    1. A `Pay` might exceed transaction size if the payments it makes require a `ScriptContext` that makes the transaction too large.
-    2. Similarly, a `Close` might result in numerous payments that enlarge the `ScriptContext`.
-    3. It might be impossible to demerkleize a `Case` term within a `When` because the continuation of the contract is too large.
-    4. A `Let` or `Choice` might increase the `Datum` size too much by adding a bound value or chosen value.
+1. A `Pay` might exceed transaction size if the payments it makes require a `ScriptContext` that makes the transaction too large.
+2. Similarly, a `Close` might result in numerous payments that enlarge the `ScriptContext`.
+3. It might be impossible to demerkleize a `Case` term within a `When` because the continuation of the contract is too large.
+4. A `Let` or `Choice` might increase the `Datum` size too much by adding a bound value or chosen value.
 
 
 #### Maximum Execution Steps and Memory
 
 Plutus execute costs are limited to a specific usage of "memory" and CPU "steps", defined by the protocol parameters `maxTxExecutionUnits.memory` and `maxTxExecutionUnits.steps`, respectively. If a Marlowe contract does too much computation or uses too much memory in a transaction, then it may violate this ledger rule. There are a wide variety of situations when execution steps might be exceeded:
-    1. A `Pay`, `If`, `Let`, or `Assert` might require an extensive evaluation of `Value` s and `Observations`, thus exceeding execution-step limits.
-    2. A `When` might include many `Case`s, so that evaluating the `Action`s within them (any of which might require extensive evaluation) exhausts the execution-step budget.
-    3. A `Close` is unlikely to exceed execution steps unless it triggers too many payments, but this is theoretically possible.
-    4. Because the execution of `Contract` terms is continued until a quiescent state is reached, the sequence of continuations might exceed step limits even though individual steps do not.
+1. A `Pay`, `If`, `Let`, or `Assert` might require an extensive evaluation of `Value`s and `Observation`s, thus exceeding execution-step limits.
+2. A `When` might include many `Case`s, so that evaluating the `Action`s within them (any of which might require extensive evaluation) exhausts the execution-step budget.
+3. A `Close` is unlikely to exceed execution steps unless it triggers too many payments, but this is theoretically possible.
+4. Because the execution of `Contract` terms is continued until a quiescent state is reached, the sequence of continuations might exceed step limits even though individual steps do not.
 
 The same considerations apply to execution memory as to execution steps. Furthermore, this includes the sequence of `Contract` continuations mentioned above because execution memory is the measured as a sum (not a maximum) over the execution's steps.
 
@@ -220,7 +220,7 @@ The `--preconditions` flag causes the initial state of the contract to be checke
 
 The `--roles` and the `--tokens` flags check that role and token names in the contract are no longer than 32 bytes, respectively, [as required by the ledger rule](#limitations-due-to-native-token-names-on-cardano).
 
-The `--maximum-value` flag checks conformance to the [maximum value size](#Maximum-value-bytes) ledger rule, and can run with or without the `--best` flag. Without the `--best` flag, the tool does a quick, worst-case analysis (i.e., an overestimate) that computes the value size under the hypothesis that at some point in the contract there is a UTxO containing every native token ever mentioned in the contract. With the `--best` flag, the tool checks the ledger rule for every possible transaction the contract could ever execute and provides a tight (perhaps lower) bound on the size of any value in the contract. If the contract is complex, then analysis with the `--best` flag may be slow and may require significant computational resources.
+The `--maximum-value` flag checks conformance to the [maximum value size](#Maximum-value-bytes) ledger rule, and can run with or without the `--best` flag. Without the `--best` flag, the tool does a quick, worst-case analysis (i.e., an overestimate) that computes the value size under the hypothesis that at some point in the contract there is a UTxO containing every native token ever mentioned in the contract. With the `--best` flag, the tool checks the ledger rule for every possible transaction the contract could ever execute and provides a precise (tight) bound on the size of any value in the contract. If the contract is complex, then analysis with the `--best` flag may be slow and may require significant computational resources.
 
 Similarly, the `--minimum-utxo` flag checks conformance to the [minimum UTxO requirement](#minimum-utxo-requirement), either quickly and generously without the `--best` flag or slowly and strictly with the `--best` flag. Any value that is not smaller than the value reported by the tool would be safe as the initial total value in the Marlowe contract when it is created. That value must match the total value in the internal accounts of the Marlowe state, of course.
 
@@ -235,7 +235,7 @@ In principle, if a Marlowe contract passes all of the checks in `marlowe run ana
 
 ## Designing Marlowe Contracts to Avoid Protocol Limits
 
-Although the protocol parameters and ledger rules do not put typical, simple Marlowe contracts at risk, it nevertheless is safest to either run all execution paths of the contract on a Cardano testnet or to use the `marlowe-cli run analyze` tool to check the contract. For complex contracts, such testing or analysis is essential. We list best practices and remediation methods below.
+Although the protocol parameters and ledger rules do not put typical, simple Marlowe contracts at risk, it nevertheless is safest either to run all execution paths of the contract on a Cardano testnet or to use the `marlowe-cli run analyze` tool to check the contract. For complex contracts, such testing or analysis is essential. We list best practices and remediation methods below.
 
 
 #### Choose role and token names that are no more than 32 bytes long.
@@ -250,7 +250,7 @@ Use a Marlowe tool (such as [Marlowe Runtime](../marlowe-runtime/doc/ReadMe.md))
 
 #### Ensure that the initial value in the contract contains sufficient lovelace.
 
-Use the `marlowe-cli run analyze --minimum-utxo` analysis to compute the worst-case scenario for value ever held in the contract. If that violates the [minimum UTxO requirement](#minimum-utxo-requirement), then increase the lovelace in initially accounts when the contract is created and re-run the analysis. Simply increasing the initial total lovelace is not always sufficient for Marlowe contracts that employ complex payment logic such as payments of `AvailableMoney` or payments that generate static-analysis warnings, *so it is critically important to rerun the analysis after adjusting initial lovelace in the contract's state.*
+Use the `marlowe-cli run analyze --minimum-utxo` analysis to compute the worst-case scenario for value ever held in the contract. If that violates the [minimum UTxO requirement](#minimum-utxo-requirement), then increase the lovelace in the initial accounts when the contract is created and re-run the analysis. Simply increasing the initial total lovelace is not always sufficient for Marlowe contracts that employ complex payment logic such as payments of `AvailableMoney` or payments that generate static-analysis warnings, *so it is critically important to rerun the analysis after adjusting initial lovelace in the contract's state.*
 
 
 #### Avoid contracts that use an excessive number of native token types.
@@ -266,7 +266,7 @@ It is not difficult to exceed the [execution steps or memory limits](#maximum-ex
 3. A `When` term with many `Case`s can be split into a `When` with the first several `Case`s and an extra `Case Notify` that continues to another `When` with the remaining `Case`s. Once again, use static analysis and simulation to check that the split has the intended behavior.
 4. Carefully re-use bound-value names and choices, in order to reduce the size of the contract's internal state.
 5. Take advantage of the fact that a bound value or choice defaults to zero in `UseValue` or `ChosenValue` if the value has never been bound or the choice has never been made. Although this reduces execution cost, it will cause warnings in [Marlowe Playground's](https://play.marlowe-finance.io/) static analysis, so proceed carefully.
-6. Use very short names for role tokens and (where feasible) native tokens. Every byte counts, so expressive user-friendly role and token names costs more. An application's front end or user interface can translate terms role or token names into human-readable ones.
+6. Use very short names for role tokens and (where feasible) native tokens. Every byte counts, so expressive user-friendly role and token names costs more. An application's front end or user interface can translate terse role or token names into human-readable ones.
 7. Use Marlowe's merkleization feature (e.g., `marlowe-cli run initialize --merkelize`) to store the contract's future logic off the blockchain, so it does not incur execution-memory costs. The [English Auction](../marlowe-cli/cookbook/english-auction.ipynb) example features aggressive merkleization.
 8. Remember that the continuation of a `When` cannot be merkleized, with the implication that a contract with `When` continuations containing many terms or (especially) additional `When` continuations will be large. One can mimic a merkleization of a `When` continuation by having the `When` continue to a `When [Case Notify ...] timeout Close` where the `timeout` is in the far distant future. That timeout needs to be chosen carefully and safely. The [Stabilized Collective Loan](../marlowe-cli/cookbook/collective-loan.ipynb) provides an example of merkleized continuations.
 
@@ -282,7 +282,7 @@ Even with reference scripts, transaction size can be large if either the Marlowe
 
 #### Be parsimonious in the use of the contract's internal state.
 
-The `Datum` of a Marlowe contract UTxO can only hold a limited amount of internal state without exceeding execution costs or transaction size. This is the most difficult limitation to remediate in Marlowe on Cardano, and is a subject of active research. Several techniques are helpful in reducing the size of the internal state, however:
+The `Datum` of a Marlowe contract UTxO can only hold a limited amount of internal state without exceeding execution costs or transaction size. This is the most difficult limitation to remediate in Marlowe on Cardano, and is a subject of active research for the next version of Marlowe. Several techniques are helpful in reducing the size of the internal state, however:
 1. Use short names for bound values and for choice names. Every byte counts! A front end or user interface can translate the terse names used by the contract into human-readable text.
 2. Reuse names of bound values and choice IDs when it is safe to do so. Rather than letting bound values and chosen values accumulate in the contract's state, reuse them instead of creating new ones later in the contract, if that doesn't impact contract logic.
 3. Compare using roles vs addresses in the contract. An address takes up more space in the internal state of a Marlowe contract than a role name does, so consider using roles in preference to addresses if the size of the state (and of the contract itself) is a concern.
@@ -290,7 +290,7 @@ The `Datum` of a Marlowe contract UTxO can only hold a limited amount of interna
 
 #### When all else fails . . . .
 
-In extreme situations, such as a complex contract with many simultaneous possible actions, many roles, and many state variables, consider introducing semi-centralization into the contract. Instead of distributing role tokens at the onset of a contract, let an administrative role hold all or some of them initially and distribute them to participants as needed. This technique collapses a `When` with a `Case` for each role into a `When` with a single `Case` where the administrator must distribute the role token for the `Action` in the `Case` in a just-in-time fashion to the party who will take that `Action`.  The [Collective Loan with 30 Lenders and 70 Borrowers](../marlowe-cli/cookbook/collective-loan-30-70.ipynb) illustrates how light semi-centralization works in a Marlowe contract with a large number of parties.Similarly, in some contracts the administrator can make the `Choice` instead of a party, avoiding the recording of choices by numerous parties in the contract's internal state.
+In extreme situations, such as a complex contract with many simultaneous possible actions, many roles, and many state variables, consider introducing semi-centralization into the contract. Instead of distributing role tokens at the onset of a contract, let an administrative role hold all or some of them initially and distribute them to participants as needed. This technique collapses a `When` with a `Case` for each role into a `When` with a single `Case` where the administrator must distribute the role token for the `Action` in the `Case` in a just-in-time fashion to the party who will take that `Action`.  The [Collective Loan with 30 Lenders and 70 Borrowers](../marlowe-cli/cookbook/collective-loan-30-70.ipynb) illustrates how light semi-centralization works in a Marlowe contract with a large number of parties. Similarly, in some contracts the administrator can make the `Choice` instead of a party, avoiding the recording of choices by numerous parties in the contract's internal state.
 
 Role tokens can also be used creatively to overcome apparent limitations of Marlowe on Cardano. For example, a role token *for the contract itself* can be deposited by one party and paid to another. This opens somewhat bizarre use cases where one or more Marlowe contracts manage some of their own role tokens. For some use cases, this technique can be exploited to record choices of multiple parties without increasing the internal state of chosen values, as parties pass a role token among themselves when recording the choice.
 
@@ -324,4 +324,4 @@ It is also possible for a Marlowe contract to manage its own role tokens or for 
 
 ## Interaction with Plutus Contracts
 
-Plutus contracts can be run in the same transaction as a Marlowe contract. A typical situation where this might occur is a when a Plutus oracle acts as a party to Marlowe contract via Marlowe's `Choose` construct: the Plutus contract would hold the role token and ensure that it authorizes the `IChoice` with the correct oracle data. A more advanced application that hybridizes Plutus and Marlowe would be an ecosystem where Plutus contract(s) supervise one or more Marlowe contracts: this would combine the safety of Marlowe with the flexibility of Plutus.
+Other Plutus contracts can be run in the same transaction as a Marlowe contract. A typical situation where this might occur is a when a Plutus oracle acts as a party to Marlowe contract via Marlowe's `Choose` construct: the Plutus contract would hold the role token and ensure that it authorizes the `IChoice` with the correct oracle data. A more advanced application that hybridizes Plutus and Marlowe would be an ecosystem where Plutus contract(s) supervise one or more Marlowe contracts: this would combine the safety of Marlowe with the flexibility of Plutus.
