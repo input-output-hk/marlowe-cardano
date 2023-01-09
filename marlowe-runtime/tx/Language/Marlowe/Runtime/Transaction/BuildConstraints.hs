@@ -83,7 +83,6 @@ import Language.Marlowe.Runtime.Transaction.Constraints
   , mustPayToAddress
   , mustPayToRole
   , mustSendMarloweOutput
-  , mustSendMerkleizedContinuationOutput
   , mustSpendRoleToken
   , requiresMetadata
   , requiresSignature
@@ -384,18 +383,9 @@ buildApplyInputsConstraintsV1 systemStart eraHistory marloweOutput tipSlot metad
         tell $ mustPayToRole assets $ roleAssetId role
       V1.Account _ -> pure ()
 
-  -- For every merkleized input require an output which contains the continuation in the datum.
-  for_ redeemer \input -> do
-    case marloweMerkleizedContinuation input of
-      Just cont -> tell $ mustSendMerkleizedContinuationOutput cont
-      Nothing -> pure ()
-
   pure (posixTimeToUTCTime $ fst txInterval, posixTimeToUTCTime $ snd txInterval, output)
 
   where
-    marloweMerkleizedContinuation (V1.NormalInput _) = Nothing
-    marloweMerkleizedContinuation (V1.MerkleizedInput _ _ c) = Just c
-
     marloweInputContent (V1.NormalInput c) = c
     marloweInputContent (V1.MerkleizedInput c _ _) = c
 

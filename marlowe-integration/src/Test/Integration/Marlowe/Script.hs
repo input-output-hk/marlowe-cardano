@@ -591,7 +591,7 @@ when_ cases timeout timeoutContinuation = V1ContractBuilder do
       contract <- runBuildV1Contract mContract
       let contractHash = dataHash $ toBuiltinData contract
       tell (mempty, Map.singleton (fromBuiltin contractHash) contract, mempty, mempty)
-      pure $ V1.MerkleizedCase action $ dataHash $ toBuiltinData contract
+      pure $ V1.Case action contract
 
 let_
   :: V1.ValueId

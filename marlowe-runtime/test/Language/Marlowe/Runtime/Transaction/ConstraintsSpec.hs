@@ -193,7 +193,7 @@ spec = do
       -- This test is broadly doing this:
       -- - Start with an empty tx body
       -- - and an empty (as possible) Marlowe context
-      -- - In an emtpy wallet context (we can use arbitrary instance to generate utxos to spend)
+      -- - In an empty wallet context (we can use arbitrary instance to generate utxos to spend)
       -- - Perform coin selection
       -- - Only look at collateral
       -- - Looking for a pure ADA utxo that's 2x the fee (protocol maximum fee)
@@ -557,7 +557,6 @@ violations marloweVersion marloweContext utxos constraints txBodyContent = fold
   , ("mustSpendRoleToken: " <>) <$> mustSpendRoleTokenViolations marloweVersion utxos constraints txBodyContent
   , ("mustPayToAddress: " <>) <$> mustPayToAddressViolations marloweVersion constraints txBodyContent
   , ("mustSendMarloweOutput: " <>) <$> mustSendMarloweOutputViolations marloweVersion marloweContext constraints txBodyContent
-  , ("mustSendMerkleizedContinuationOutput: " <>) <$> mustSendMerkleizedContinuationOutputViolations marloweVersion constraints txBodyContent
   , ("mustPayToRole: " <>) <$> mustPayToRoleViolations marloweVersion marloweContext constraints txBodyContent
   , ("mustConsumeMarloweOutput: " <>) <$> mustConsumeMarloweOutputViolations marloweVersion marloweContext constraints txBodyContent
   , ("mustConsumePayouts: " <>) <$> mustConsumePayoutsViolations marloweVersion marloweContext constraints txBodyContent
@@ -683,16 +682,6 @@ mustSendMarloweOutputViolations MarloweV1 MarloweContext{..} TxConstraints{..} T
           , check (extractDatum txOut == Just (toChainDatum MarloweV1 datum))
               $ (if isJust $ extractDatum txOut then "Wrong" else "No") <> " datum sent to Marlowe Address."
           ]
-
-mustSendMerkleizedContinuationOutputViolations
-  :: MarloweVersion v -> TxConstraints v -> TxBodyContent BuildTx BabbageEra -> [String]
-mustSendMerkleizedContinuationOutputViolations MarloweV1 TxConstraints{..} TxBodyContent{..} = do
-  continuationContract <- Set.toList merkleizedContinuationsConstraints
-  let isMatch = (== Just (Chain.toDatum continuationContract))
-  let matchingOutput = find (isMatch . extractDatum) txOuts
-  case matchingOutput of
-    Nothing -> ["No matching output found"]
-    _ -> []
 
 mustPayToRoleViolations
   :: MarloweVersion v
@@ -833,7 +822,6 @@ shrinkV1Constraints constraints@TxConstraints{..} = fold
   , [ constraints {  payToAddresses = x } | x <- shrinkPayToAddresses payToAddresses ]
   , [ constraints {  payToRoles = x } | x <- shrinkPayToRoles payToRoles ]
   , [ constraints {  marloweOutputConstraints = x } | x <- shrinkMarloweOutputConstraints marloweOutputConstraints ]
-  , [ constraints {  merkleizedContinuationsConstraints = x } | x <- shrinkMerkleizedContinuationsConstraints merkleizedContinuationsConstraints ]
   , [ constraints {  signatureConstraints = x } | x <- shrinkSignatureConstraints signatureConstraints ]
   , [ constraints {  metadataConstraints = x } | x <- shrinkMetadataConstraints metadataConstraints ]
   ]
@@ -903,7 +891,6 @@ genV1Constraints = sized \n -> frequency
     , (1, mustSpendRoleToken <$> genRoleToken)
     , (1, mustPayToAddress <$> genOutAssets <*> genAddress)
     , (1, mustSendMarloweOutput <$> genOutAssets <*> genDatum)
-    , (1, mustSendMerkleizedContinuationOutput <$> genContract)
     , (1, mustPayToRole <$> genOutAssets <*> genRoleToken)
     , (1, uncurry mustConsumeMarloweOutput <$> genValidityInterval <*> genRedeemer)
     , (1, mustConsumePayouts <$> genRoleToken)
