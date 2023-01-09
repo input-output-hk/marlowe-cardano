@@ -87,7 +87,7 @@ corsMiddleware accessControlAllowOriginAll =
           , "Accept"
           , "X-Change-Address"
           , "X-Address"
-          , "X-Colateral-UTxO"
+          , "X-Collateral-UTxO"
           ]
         , corsExposedHeaders = Just ["*"]
         , corsMethods = ["GET", "POST", "PUT", "OPTIONS", "DELETE"]
