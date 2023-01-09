@@ -1,5 +1,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
@@ -67,7 +68,7 @@ buildApplication
   :: Show (ApplyInputsError v)
   => MarloweVersion v
   -> ContractId
-  -> Redeemer v
+  -> Inputs v
   -> Maybe POSIXTime
   -> Maybe POSIXTime
   -> TransactionMetadata
@@ -75,9 +76,9 @@ buildApplication
   -> Address
   -> [TxOutRef]
   -> Client (Either String (ContractId, C.TxBody C.BabbageEra))
-buildApplication version' contractId' redeemer lower upper metadata' =
-  build show (\InputsApplied{..} -> (contractId, txBody))
-    $ \w -> ApplyInputs version' w contractId' metadata' (utcTime <$> lower) (utcTime <$> upper) redeemer
+buildApplication version' contractId' inputs lower upper metadata' =
+  build show (\InputsApplied{contractId, txBody} -> (contractId, txBody))
+    $ \w -> ApplyInputs version' w contractId' metadata' (utcTime <$> lower) (utcTime <$> upper) inputs
 
 
 buildWithdrawal
