@@ -87,7 +87,7 @@ class IsMarloweVersion (v :: MarloweVersionTag) where
   type Contract v :: *
   type TransactionError v :: *
   type Datum v :: *
-  type Redeemer (v :: MarloweVersionTag) :: *
+  type Inputs (v :: MarloweVersionTag) :: *
   type PayoutDatum v :: *
   marloweVersion :: MarloweVersion v
 
@@ -95,7 +95,7 @@ instance IsMarloweVersion 'V1 where
   type Contract 'V1 = V1.Contract
   type TransactionError 'V1 = V1.TransactionError
   type Datum 'V1 = V1.MarloweData
-  type Redeemer 'V1 = [V1.Input]
+  type Inputs 'V1 = [V1.Input]
   type PayoutDatum 'V1 = Chain.AssetId
   marloweVersion = MarloweV1
 
@@ -106,7 +106,7 @@ data Transaction v = Transaction
   , blockHeader :: BlockHeader
   , validityLowerBound :: UTCTime
   , validityUpperBound :: UTCTime
-  , redeemer :: Redeemer v
+  , inputs :: Inputs v
   , output :: TransactionOutput v
   } deriving Generic
 
@@ -122,7 +122,7 @@ instance Binary (Transaction 'V1) where
     put blockHeader
     putUTCTime validityLowerBound
     putUTCTime validityUpperBound
-    putRedeemer MarloweV1 redeemer
+    putInputs MarloweV1 inputs
     put output
   get = Transaction
     <$> get
@@ -131,7 +131,7 @@ instance Binary (Transaction 'V1) where
     <*> get
     <*> getUTCTime
     <*> getUTCTime
-    <*> getRedeemer MarloweV1
+    <*> getInputs MarloweV1
     <*> get
 
 data TransactionOutput v = TransactionOutput
@@ -248,14 +248,14 @@ getContract v = do
       Error err -> fail err
       Success c -> pure c
 
-putRedeemer :: MarloweVersion v -> Redeemer v -> Put
-putRedeemer v = put . toChainRedeemer v
+putInputs :: MarloweVersion v -> Inputs v -> Put
+putInputs MarloweV1 = put . Chain.toDatum
 
-getRedeemer :: MarloweVersion v -> Get (Redeemer v)
-getRedeemer v = do
+getInputs :: MarloweVersion v -> Get (Inputs v)
+getInputs MarloweV1 = do
   raw <- get
-  case fromChainRedeemer v raw of
-    Nothing -> fail "failed to decode redeemer"
+  case Chain.fromDatum raw of
+    Nothing -> fail "failed to decode inputs"
     Just r -> pure r
 
 putDatum :: MarloweVersion v -> Datum v -> Put
@@ -306,14 +306,6 @@ datumFromJSON :: MarloweVersion v -> Value -> Parser (Datum v)
 datumFromJSON = \case
   MarloweV1 -> parseJSON
 
-toChainMerkleizedContinuationDatum :: MarloweVersion v -> Contract v -> Chain.Datum
-toChainMerkleizedContinuationDatum = \case
-  MarloweV1 -> Chain.toDatum
-
-fromChainMerkleizedContinuationDatum :: MarloweVersion v -> Chain.Datum -> Maybe (Contract v)
-fromChainMerkleizedContinuationDatum = \case
-  MarloweV1 -> Chain.fromDatum
-
 toChainPayoutDatum :: MarloweVersion v -> PayoutDatum v -> Chain.Datum
 toChainPayoutDatum = \case
   MarloweV1 -> \case
@@ -339,11 +331,3 @@ toChainDatum = \case
 fromChainDatum :: MarloweVersion v -> Chain.Datum -> Maybe (Datum v)
 fromChainDatum = \case
   MarloweV1 -> Chain.fromDatum
-
-toChainRedeemer :: MarloweVersion v -> Redeemer v -> Chain.Redeemer
-toChainRedeemer = \case
-  MarloweV1 -> Chain.toRedeemer
-
-fromChainRedeemer :: MarloweVersion v -> Chain.Redeemer -> Maybe (Redeemer v)
-fromChainRedeemer = \case
-  MarloweV1 -> Chain.fromRedeemer

@@ -83,7 +83,6 @@ import Language.Marlowe.Runtime.Transaction.Constraints
   , mustPayToAddress
   , mustPayToRole
   , mustSendMarloweOutput
-  , mustSendMerkleizedContinuationOutput
   , mustSpendRoleToken
   , requiresMetadata
   , requiresSignature
@@ -278,11 +277,11 @@ buildApplyInputsConstraints
   -> Maybe UTCTime -- ^ The maximum bound of the validity interval (exclusive).
                    -- If not specified, this is computed from the the timeouts
                    -- in the contract.
-  -> Redeemer v -- ^ The inputs to apply to the contract.
+  -> Inputs v -- ^ The inputs to apply to the contract.
   -> Either (ApplyInputsError v) (ApplyResults v, TxConstraints v)
-buildApplyInputsConstraints systemStart eraHistory version marloweOutput tipSlot metadata invalidBefore invalidHereafter redeemer =
+buildApplyInputsConstraints systemStart eraHistory version marloweOutput tipSlot metadata invalidBefore invalidHereafter inputs =
   case version of
-    MarloweV1 -> buildApplyInputsConstraintsV1 systemStart eraHistory marloweOutput tipSlot metadata invalidBefore invalidHereafter redeemer
+    MarloweV1 -> buildApplyInputsConstraintsV1 systemStart eraHistory marloweOutput tipSlot metadata invalidBefore invalidHereafter inputs
 
 -- | Creates a set of Tx constraints that are used to build a transaction that
 -- applies an input to a contract.
@@ -294,15 +293,15 @@ buildApplyInputsConstraintsV1
   -> TransactionMetadata -- ^ Metadata to attach to the transaction
   -> Maybe UTCTime -- ^ The minimum bound of the validity interval (inclusive).
   -> Maybe UTCTime -- ^ The maximum bound of the validity interval (exclusive).
-  -> Redeemer 'V1 -- ^ The inputs to apply to the contract.
+  -> Inputs 'V1 -- ^ The inputs to apply to the contract.
   -> Either (ApplyInputsError 'V1) (ApplyResults 'V1, TxConstraints 'V1)
-buildApplyInputsConstraintsV1 systemStart eraHistory marloweOutput tipSlot metadata invalidBefore invalidHereafter redeemer = runWriterT do
+buildApplyInputsConstraintsV1 systemStart eraHistory marloweOutput tipSlot metadata invalidBefore invalidHereafter inputs = runWriterT do
   let
     TransactionScriptOutput _ _ _ datum = marloweOutput
     V1.MarloweData params state contract = datum
     V1.MarloweParams currencySymbol = params
 
-    requiredParties = Set.fromList $ for redeemer $ marloweInputParty >>> maybeToList
+    requiredParties = Set.fromList $ for inputs $ marloweInputParty >>> maybeToList
     roleAssetId = toAssetId currencySymbol
 
     tipSlot' = toCardanoSlotNo tipSlot
@@ -321,7 +320,7 @@ buildApplyInputsConstraintsV1 systemStart eraHistory marloweOutput tipSlot metad
 
   -- Construct inputs constraints.
   -- Consume UTXOs containing Marlowe script.
-  tell $ mustConsumeMarloweOutput @'V1 invalidBefore' invalidHereafter' redeemer
+  tell $ mustConsumeMarloweOutput @'V1 invalidBefore' invalidHereafter' inputs
 
   -- Consume UTXOs containing all necessary role tokens and send them back.
   for_ requiredParties $ traverse_ $ \case
@@ -348,7 +347,7 @@ buildApplyInputsConstraintsV1 systemStart eraHistory marloweOutput tipSlot metad
     -- valid millisecond. So we subtract 1 millisecond from the start of the
     -- first invalid slot to get the last millisecond in the last valid slot.
     <*> (subtract 1 <$> slotNoToPOSIXTime invalidHereafter')
-  let transactionInput = V1.TransactionInput { txInterval, txInputs = redeemer }
+  let transactionInput = V1.TransactionInput { txInterval, txInputs = inputs }
   (possibleContinuation, payments) <- case V1.computeTransaction transactionInput state contract of
      V1.Error err -> lift $ Left $ ApplyInputsConstraintsBuildupFailed (MarloweComputeTransactionFailed $ show err)
      V1.TransactionOutput _ payments _ V1.Close ->
@@ -384,18 +383,9 @@ buildApplyInputsConstraintsV1 systemStart eraHistory marloweOutput tipSlot metad
         tell $ mustPayToRole assets $ roleAssetId role
       V1.Account _ -> pure ()
 
-  -- For every merkleized input require an output which contains the continuation in the datum.
-  for_ redeemer \input -> do
-    case marloweMerkleizedContinuation input of
-      Just cont -> tell $ mustSendMerkleizedContinuationOutput cont
-      Nothing -> pure ()
-
   pure (posixTimeToUTCTime $ fst txInterval, posixTimeToUTCTime $ snd txInterval, output)
 
   where
-    marloweMerkleizedContinuation (V1.NormalInput _) = Nothing
-    marloweMerkleizedContinuation (V1.MerkleizedInput _ _ c) = Just c
-
     marloweInputContent (V1.NormalInput c) = c
     marloweInputContent (V1.MerkleizedInput c _ _) = c
 

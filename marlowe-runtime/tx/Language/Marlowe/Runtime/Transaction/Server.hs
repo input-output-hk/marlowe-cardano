@@ -58,9 +58,9 @@ import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Core.Api
   ( Contract
   , ContractId(..)
+  , Inputs
   , MarloweVersion(MarloweV1)
   , Payout(Payout, datum)
-  , Redeemer
   , TransactionScriptOutput(..)
   , withMarloweVersion
   )
@@ -195,7 +195,7 @@ worker = component_ \WorkerDependencies{..} -> do
                 metadata
                 minAda
                 contract
-            ApplyInputs version addresses contractId metadata invalidBefore invalidHereafter redeemer ->
+            ApplyInputs version addresses contractId metadata invalidBefore invalidHereafter inputs ->
               withSubEvent ev ExecApplyInputs \ev' -> withMarloweVersion version $ execApplyInputs
                 ev'
                 getTip
@@ -210,7 +210,7 @@ worker = component_ \WorkerDependencies{..} -> do
                 metadata
                 invalidBefore
                 invalidHereafter
-                redeemer
+                inputs
             Withdraw version addresses contractId roleToken ->
               withSubEvent ev ExecWithdraw \ev' -> execWithdraw
                 ev'
@@ -323,7 +323,7 @@ execApplyInputs
   -> TransactionMetadata
   -> Maybe UTCTime
   -> Maybe UTCTime
-  -> Redeemer v
+  -> Inputs v
   -> IO (ServerStCmd MarloweTxCommand Void (ApplyInputsError v) (InputsApplied BabbageEra v) IO ())
 execApplyInputs
   ev

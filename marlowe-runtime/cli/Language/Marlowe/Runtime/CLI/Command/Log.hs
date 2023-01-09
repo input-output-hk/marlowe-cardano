@@ -134,10 +134,10 @@ showStep showContract contractId BlockHeader{..} version step= do
   putStr "BlockId:    "
   putStrLn $ T.unpack $ encodeBase16 $ unBlockHeaderHash headerHash
   case step of
-    ApplyTransaction Transaction{redeemer, output} -> do
+    ApplyTransaction Transaction{inputs, output} -> do
       putStr "Inputs:     "
       putStrLn case version of
-        MarloweV1 -> show redeemer
+        MarloweV1 -> show inputs
       putStrLn ""
       when showContract do
         let TransactionOutput{..} = output

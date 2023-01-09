@@ -51,8 +51,8 @@ deriving instance Show (ApplyCommandError 'V1)
 
 data ContractInputs v
   = ContractInputsByFile FilePath
-  | ContractInputsByValue (Redeemer v)
-  | ContractInputsByValueWithContinuations (Redeemer v) [FilePath]
+  | ContractInputsByValue (Inputs v)
+  | ContractInputsByValueWithContinuations (Inputs v) [FilePath]
 
 deriving instance Show (ContractInputs 'V1)
 
@@ -215,7 +215,7 @@ readRole = V1.Role . P.TokenName <$> str
 runApplyCommand :: TxCommand ApplyCommand -> CLI ()
 runApplyCommand TxCommand { walletAddresses, signingMethod, metadataFile, subCommand=V1ApplyCommand{..}} = runCLIExceptT do
   inputs' <- case inputs of
-    ContractInputsByValue redeemer -> pure redeemer
+    ContractInputsByValue inputs' -> pure inputs'
     _ -> throwE (PlainInputsSupportedOnly inputs)
   metadata <- readMetadata
   let

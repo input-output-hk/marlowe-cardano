@@ -21,7 +21,6 @@ module Language.Marlowe.Runtime.Transaction.Constraints
   , mustPayToAddress
   , mustPayToRole
   , mustSendMarloweOutput
-  , mustSendMerkleizedContinuationOutput
   , mustSpendRoleToken
   , requiresMetadata
   , requiresSignature
@@ -49,6 +48,7 @@ import Data.Set (Set)
 import qualified Data.Set as Set (fromAscList, null, singleton, toAscList, toList, union)
 import Data.Word (Word64)
 import GHC.Generics (Generic)
+import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
 import Language.Marlowe.Runtime.Cardano.Api
   ( fromCardanoAddressInEra
   , toCardanoAddressInEra
@@ -68,6 +68,7 @@ import Language.Marlowe.Runtime.Core.Api (MarloweVersionTag(..), TransactionScri
 import qualified Language.Marlowe.Runtime.Core.Api as Core
 import Language.Marlowe.Runtime.Core.ScriptRegistry (ReferenceScriptUtxo(..))
 import Language.Marlowe.Runtime.Transaction.Api (ConstraintError(..))
+import qualified Language.Marlowe.Scripts as V1
 import Ouroboros.Consensus.BlockchainTime (SystemStart)
 import qualified Plutus.V2.Ledger.Api as P
 import Witherable (wither)
@@ -92,7 +93,6 @@ data TxConstraints v = TxConstraints
   , payToAddresses :: Map Chain.Address Chain.Assets
   , payToRoles :: Map (Core.PayoutDatum v) Chain.Assets
   , marloweOutputConstraints :: MarloweOutputConstraints v
-  , merkleizedContinuationsConstraints :: Set (Core.Contract v)
   , signatureConstraints :: Set Chain.PaymentKeyHash
   , metadataConstraints :: Map Word64 Chain.Metadata
   }
@@ -192,18 +192,6 @@ mustSendMarloweOutput :: Core.IsMarloweVersion v => Chain.Assets -> Core.Datum v
 mustSendMarloweOutput assets datum =
   mempty { marloweOutputConstraints = MarloweOutput assets datum }
 
--- | Require the transaction to send an output which contains datum with
--- the merkleized continuation. `MarloweTxInput` redeemer only references the continuation
--- through hash but the actual continuation is embedded in the datum of other dedicated for that
--- purpose output.
---
--- Requires that:
---  1. Transaction sends an output to a given address containing the continuation contract in the datum.
---  2. The contract in the rule 1 contains a contract for an appropriate Marlowe version.
-mustSendMerkleizedContinuationOutput :: Core.IsMarloweVersion v => Core.Contract v -> TxConstraints v
-mustSendMerkleizedContinuationOutput contract =
-  mempty { merkleizedContinuationsConstraints = Set.singleton contract }
-
 -- | Require the transaction to send an output to the payout script address
 -- with the given assets and the given datum.
 --
@@ -228,7 +216,7 @@ mustPayToRole assets datum =
 
 data MarloweInputConstraints v
   = MarloweInputConstraintsNone
-  | MarloweInput C.SlotNo C.SlotNo (Core.Redeemer v)
+  | MarloweInput C.SlotNo C.SlotNo (Core.Inputs v)
 
 deriving instance Show (MarloweInputConstraints 'V1)
 deriving instance Eq (MarloweInputConstraints 'V1)
@@ -250,7 +238,7 @@ instance Monoid (MarloweInputConstraints v) where
 --   3. The validity range of the transaction matches the given min and max
 --      validity bounds.
 --   4. All other inputs do not come from a script address.
-mustConsumeMarloweOutput :: Core.IsMarloweVersion v => C.SlotNo -> C.SlotNo -> Core.Redeemer v -> TxConstraints v
+mustConsumeMarloweOutput :: Core.IsMarloweVersion v => C.SlotNo -> C.SlotNo -> Core.Inputs v -> TxConstraints v
 mustConsumeMarloweOutput invalidBefore invalidHereafter inputs =
   mempty { marloweInputConstraints = MarloweInput invalidBefore invalidHereafter inputs }
 
@@ -292,7 +280,6 @@ instance Core.IsMarloweVersion v => Semigroup (TxConstraints v) where
       , payToAddresses = on (Map.unionWith (<>)) payToAddresses a b
       , payToRoles = on (Map.unionWith (<>)) payToRoles a b
       , marloweOutputConstraints = on (<>) marloweOutputConstraints a b
-      , merkleizedContinuationsConstraints = on (<>) merkleizedContinuationsConstraints a b
       , signatureConstraints = on (<>) signatureConstraints a b
       , metadataConstraints = on (<>) metadataConstraints a b
       }
@@ -306,7 +293,6 @@ instance Core.IsMarloweVersion v => Monoid (TxConstraints v) where
       , payToAddresses = mempty
       , payToRoles = mempty
       , marloweOutputConstraints = mempty
-      , merkleizedContinuationsConstraints = mempty
       , signatureConstraints = mempty
       , metadataConstraints = mempty
       }
@@ -885,7 +871,7 @@ solveInitialTxBodyContent protocol marloweVersion MarloweContext{..} WalletConte
     getMarloweInput :: Either (ConstraintError v) (Maybe (C.TxIn, C.BuildTxWith C.BuildTx (C.Witness C.WitCtxTxIn C.BabbageEra)))
     getMarloweInput = case marloweInputConstraints of
       MarloweInputConstraintsNone -> pure Nothing
-      MarloweInput _ _ redeemer -> fmap Just $ do
+      MarloweInput _ _ inputs -> fmap Just $ do
         Core.TransactionScriptOutput{..} <- note MissingMarloweInput scriptOutput
         txIn <- note ToCardanoError $ toCardanoTxIn utxo
         plutusScriptOrRefInput <- note ToCardanoError $ C.PReferenceScript
@@ -897,7 +883,11 @@ solveInitialTxBodyContent protocol marloweVersion MarloweContext{..} WalletConte
             C.PlutusScriptV2
             plutusScriptOrRefInput
             (C.ScriptDatumForTxIn $ toCardanoScriptData $ Core.toChainDatum marloweVersion datum)
-            (toCardanoScriptData $ Chain.unRedeemer $ Core.toChainRedeemer marloweVersion redeemer)
+            ( toCardanoScriptData case marloweVersion of
+                Core.MarloweV1 -> Chain.toDatum $ inputs <&> \case
+                  V1.NormalInput content -> V1.Input content
+                  V1.MerkleizedInput content hash _ -> V1.MerkleizedTxInput content hash
+            )
             (C.ExecutionUnits 0 0)
         pure (txIn, C.BuildTxWith $ C.ScriptWitness C.ScriptWitnessForSpending scriptWitness)
 
@@ -981,12 +971,15 @@ solveInitialTxBodyContent protocol marloweVersion MarloweContext{..} WalletConte
         $ Core.toChainDatum marloweVersion datum
 
     getMerkleizedContinuationOutputs :: [Chain.TransactionOutput]
-    getMerkleizedContinuationOutputs = Set.toList merkleizedContinuationsConstraints <&> \contract ->
-      Chain.TransactionOutput
-        changeAddress
-        mempty
-        Nothing
-        $ Just (Core.toChainMerkleizedContinuationDatum marloweVersion contract)
+    getMerkleizedContinuationOutputs = case marloweInputConstraints of
+      MarloweInput _ _ inputs -> case marloweVersion of
+        Core.MarloweV1 -> flip mapMaybe inputs \case
+          V1.MerkleizedInput _ _ continuation -> Just
+            $ Chain.TransactionOutput changeAddress mempty Nothing
+            $ Just
+            $ Chain.toDatum continuation
+          _ -> Nothing
+      _ -> []
 
     getRoleTokenOutputs :: Either (ConstraintError v) [Chain.TransactionOutput]
     getRoleTokenOutputs = case roleTokenConstraints of

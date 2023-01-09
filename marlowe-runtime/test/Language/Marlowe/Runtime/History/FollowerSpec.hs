@@ -179,12 +179,12 @@ creationOutput =
 closeTxIn :: Chain.TransactionInput
 closeTxIn =
   let
-    redeemer = Just $ Chain.Redeemer $ toDatum closeRedeemer
+    redeemer = Just $ Chain.Redeemer $ toDatum closeInputs
   in
     Chain.TransactionInput createTxId 0 testScriptAddress (Just $ toDatum createDatum) redeemer
 
-closeRedeemer :: [V1.Input]
-closeRedeemer = [ V1.NormalInput V1.INotify ]
+closeInputs :: [V1.Input]
+closeInputs = [ V1.NormalInput V1.INotify ]
 
 closeTxId :: TxId
 closeTxId = "0000000000000000000000000000000000000000000000000000000000000000"
@@ -680,7 +680,7 @@ checkRollbackToCreationWithInputs = do
                     , blockHeader = block2
                     , validityLowerBound = posixSecondsToUTCTime 0
                     , validityUpperBound = posixSecondsToUTCTime 100
-                    , redeemer = applyInputsRedeemer
+                    , inputs = applyInputsRedeemer
                     , output = TransactionOutput mempty $ Just $ TransactionScriptOutput
                         testScriptAddress
                         mempty
@@ -722,7 +722,7 @@ checkRollbackToCreationClosed = do
                     , blockHeader = block2
                     , validityLowerBound = posixSecondsToUTCTime 0
                     , validityUpperBound = posixSecondsToUTCTime 100
-                    , redeemer = closeRedeemer
+                    , inputs = closeInputs
                     , output = TransactionOutput mempty Nothing
                     }
                 ]
@@ -753,7 +753,7 @@ checkRollbackToTransaction = do
                     , blockHeader = block2
                     , validityLowerBound = posixSecondsToUTCTime 0
                     , validityUpperBound = posixSecondsToUTCTime 100
-                    , redeemer = applyInputsRedeemer
+                    , inputs = applyInputsRedeemer
                     , output = TransactionOutput mempty $ Just $ TransactionScriptOutput
                         testScriptAddress
                         mempty
@@ -777,7 +777,7 @@ checkRollbackToTransaction = do
                     , blockHeader = block3
                     , validityLowerBound = posixSecondsToUTCTime 0
                     , validityUpperBound = posixSecondsToUTCTime 100
-                    , redeemer = closeRedeemer
+                    , inputs = closeInputs
                     , output = TransactionOutput mempty Nothing
                     }
                 ]
@@ -804,7 +804,7 @@ checkCloseTransaction = do
                     , blockHeader = block2
                     , validityLowerBound = posixSecondsToUTCTime 0
                     , validityUpperBound = posixSecondsToUTCTime 100
-                    , redeemer = closeRedeemer
+                    , inputs = closeInputs
                     , output = TransactionOutput mempty Nothing
                     }
                 ]
@@ -831,7 +831,7 @@ checkNonCloseTransaction = do
                     , blockHeader = block2
                     , validityLowerBound = posixSecondsToUTCTime 0
                     , validityUpperBound = posixSecondsToUTCTime 100
-                    , redeemer = applyInputsRedeemer
+                    , inputs = applyInputsRedeemer
                     , output = TransactionOutput mempty $ Just $ TransactionScriptOutput
                         testScriptAddress
                         mempty
@@ -862,7 +862,7 @@ checkPayoutOpenRedeemedBefore = do
                     , blockHeader = block2
                     , validityLowerBound = posixSecondsToUTCTime 0
                     , validityUpperBound = posixSecondsToUTCTime 100
-                    , redeemer = applyInputsRedeemer
+                    , inputs = applyInputsRedeemer
                     , output = TransactionOutput (Map.singleton payoutUTxO payout) $ Just $ TransactionScriptOutput
                         testScriptAddress
                         mempty
@@ -901,7 +901,7 @@ checkPayoutOpenRedeemedBefore = do
                     , blockHeader = block4
                     , validityLowerBound = posixSecondsToUTCTime 0
                     , validityUpperBound = posixSecondsToUTCTime 100
-                    , redeemer = closeRedeemer
+                    , inputs = closeInputs
                     , output = TransactionOutput mempty Nothing
                     }
                 ]
@@ -945,7 +945,7 @@ checkPayoutOpenRedeemedAfter = do
                     , blockHeader = block2
                     , validityLowerBound = posixSecondsToUTCTime 0
                     , validityUpperBound = posixSecondsToUTCTime 100
-                    , redeemer = applyInputsRedeemer
+                    , inputs = applyInputsRedeemer
                     , output = TransactionOutput (Map.singleton payoutUTxO payout) $ Just $ TransactionScriptOutput
                         testScriptAddress
                         mempty
@@ -969,7 +969,7 @@ checkPayoutOpenRedeemedAfter = do
                     , blockHeader = block3
                     , validityLowerBound = posixSecondsToUTCTime 0
                     , validityUpperBound = posixSecondsToUTCTime 100
-                    , redeemer = closeRedeemer
+                    , inputs = closeInputs
                     , output = TransactionOutput mempty Nothing
                     }
                 ]
@@ -1011,7 +1011,7 @@ checkPayoutOpenRedeemedTogether = do
                     , blockHeader = block2
                     , validityLowerBound = posixSecondsToUTCTime 0
                     , validityUpperBound = posixSecondsToUTCTime 100
-                    , redeemer = applyInputsRedeemer
+                    , inputs = applyInputsRedeemer
                     , output = TransactionOutput (Map.singleton payoutUTxO payout) $ Just $ TransactionScriptOutput
                         testScriptAddress
                         mempty
@@ -1040,7 +1040,7 @@ checkPayoutOpenRedeemedTogether = do
                     , blockHeader = block3
                     , validityLowerBound = posixSecondsToUTCTime 0
                     , validityUpperBound = posixSecondsToUTCTime 100
-                    , redeemer = closeRedeemer
+                    , inputs = closeInputs
                     , output = TransactionOutput mempty Nothing
                     }
                 ]
