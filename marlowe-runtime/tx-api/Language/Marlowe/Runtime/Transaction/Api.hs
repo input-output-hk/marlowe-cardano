@@ -169,7 +169,7 @@ data InputsApplied era v = InputsApplied
   , output :: Maybe (TransactionScriptOutput v)
   , invalidBefore :: UTCTime
   , invalidHereafter :: UTCTime
-  , inputs :: Redeemer v
+  , inputs :: Inputs v
   , txBody :: TxBody era
   }
 
@@ -184,7 +184,7 @@ instance IsCardanoEra era => Binary (InputsApplied era 'V1) where
     put output
     putUTCTime invalidBefore
     putUTCTime invalidHereafter
-    putRedeemer MarloweV1 inputs
+    putInputs MarloweV1 inputs
     putTxBody txBody
   get = do
     let version = MarloweV1
@@ -194,7 +194,7 @@ instance IsCardanoEra era => Binary (InputsApplied era 'V1) where
     output <- get
     invalidBefore <- getUTCTime
     invalidHereafter <- getUTCTime
-    inputs <- getRedeemer MarloweV1
+    inputs <- getInputs MarloweV1
     txBody <- getTxBody
     pure InputsApplied{..}
 
@@ -251,7 +251,7 @@ data MarloweTxCommand status err result where
     -> Maybe UTCTime
     -- ^ The "invalid hereafter" bound of the validity interval. If omitted, this
     -- is computed from the contract.
-    -> Redeemer v
+    -> Inputs v
     -- ^ The inputs to apply.
     -> MarloweTxCommand Void (ApplyInputsError v) (InputsApplied BabbageEra v)
 
@@ -407,7 +407,7 @@ instance Command MarloweTxCommand where
       put metadata
       maybe (putWord8 0) (\t -> putWord8 1 *> putUTCTime t) invalidBefore
       maybe (putWord8 0) (\t -> putWord8 1 *> putUTCTime t) invalidHereafter
-      putRedeemer version redeemer
+      putInputs version redeemer
     Withdraw _ walletAddresses contractId tokenName -> do
       put walletAddresses
       put contractId
@@ -436,7 +436,7 @@ instance Command MarloweTxCommand where
         0 -> pure Nothing
         1 -> Just <$> getUTCTime
         t -> fail $ "Invalid Maybe tag: " <> show t
-      redeemer <- getRedeemer version
+      redeemer <- getInputs version
       pure $ ApplyInputs version walletAddresses contractId metadata invalidBefore invalidHereafter redeemer
 
     TagWithdraw version -> do

@@ -34,7 +34,7 @@ import Data.Time (UTCTime)
 import Data.Void (Void)
 import Language.Marlowe.Runtime.Cardano.Api (fromCardanoTxId)
 import Language.Marlowe.Runtime.ChainSync.Api (Lovelace, StakeCredential, TransactionMetadata, TxId)
-import Language.Marlowe.Runtime.Core.Api (Contract, ContractId, MarloweVersion, MarloweVersionTag, Redeemer)
+import Language.Marlowe.Runtime.Core.Api (Contract, ContractId, Inputs, MarloweVersion, MarloweVersionTag)
 import Language.Marlowe.Runtime.Transaction.Api
   ( ApplyInputsError
   , ContractCreated(..)
@@ -85,7 +85,7 @@ type ApplyInputs m
   -> TransactionMetadata
   -> Maybe UTCTime
   -> Maybe UTCTime
-  -> Redeemer v
+  -> Inputs v
   -> m (Either (ApplyInputsError v) (InputsApplied BabbageEra v))
 
 data TempTxStatus = Unsigned | Submitted

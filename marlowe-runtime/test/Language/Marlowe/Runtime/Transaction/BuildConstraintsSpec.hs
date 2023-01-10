@@ -110,11 +110,6 @@ createSpec = Hspec.describe "buildCreateConstraints" do
     in case version args of
       MarloweV1 -> result === Right MarloweInputConstraintsNone
       :: Property
-  Hspec.QuickCheck.prop "Doesn't send merkleized continuations" \(SomeCreateArgs args) ->
-    let result = merkleizedContinuationsConstraints <$> runBuildCreateConstraints args
-    in case version args of
-      MarloweV1 -> result === Right mempty
-      :: Property
   Hspec.QuickCheck.prop "Doesn't require extra signatures" \(SomeCreateArgs args) ->
     let result = signatureConstraints <$> runBuildCreateConstraints args
     in case version args of
@@ -249,7 +244,6 @@ withdrawSpec = Hspec.describe "buildWithdrawConstraints" do
           , payToAddresses = Map.empty
           , payToRoles = Map.empty
           , marloweOutputConstraints = TxConstraints.MarloweOutputConstraintsNone
-          , merkleizedContinuationsConstraints = mempty
           , signatureConstraints = Set.empty
           , metadataConstraints = Map.empty
           }

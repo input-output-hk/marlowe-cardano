@@ -8,9 +8,9 @@ module Language.Marlowe.Runtime.History.Api
   where
 
 import Cardano.Api (CardanoMode, EraHistory(EraHistory))
-import Control.Error (note, runMaybeT)
+import Control.Error (listToMaybe, note, runMaybeT)
 import Control.Error.Util (hoistMaybe)
-import Control.Monad (when)
+import Control.Monad (guard, when)
 import Control.Monad.Trans.Class (lift)
 import Data.Aeson (ToJSON, Value(..), object, toJSON, (.=))
 import Data.Bifunctor (first)
@@ -19,14 +19,18 @@ import qualified Data.ByteString.Lazy as LBS
 import Data.Foldable (find, for_)
 import Data.Map (Map)
 import qualified Data.Map as Map
+import Data.Maybe (mapMaybe)
 import Data.Set (Set)
+import Data.Traversable (for)
 import Data.Type.Equality (type (:~:)(Refl))
 import Data.Void (Void, absurd)
 import GHC.Generics (Generic)
+import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
 import Language.Marlowe.Runtime.ChainSync.Api (ScriptHash, TxError, TxId, TxOutRef(..), UTxOError)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Core.Api
 import Language.Marlowe.Runtime.Core.ScriptRegistry (MarloweScripts(..), getMarloweVersion)
+import qualified Language.Marlowe.Scripts as V1
 import Network.Protocol.ChainSeek.Codec (DeserializeError)
 import Network.Protocol.Job.Client
 import Network.Protocol.Job.Codec
@@ -40,6 +44,7 @@ import Network.TypedProtocol.Codec
 import Ouroboros.Consensus.BlockchainTime (SystemStart, fromRelativeTime)
 import Ouroboros.Consensus.HardFork.History (interpretQuery, slotToWallclock)
 import qualified Ouroboros.Network.Block as O
+import qualified Plutus.V2.Ledger.Api as PV2
 
 data ContractHistoryError
   = HansdshakeFailed
@@ -288,7 +293,18 @@ extractMarloweTransaction version systemStart eraHistory contractId scriptAddres
   Chain.TransactionInput { redeemer = mRedeemer } <-
     note TxInNotFound $ find (consumesUTxO consumedUTxO) inputs
   rawRedeemer <- note NoRedeemer mRedeemer
-  redeemer <- note InvalidRedeemer $ fromChainRedeemer version rawRedeemer
+  marloweInputs <- case version of
+    MarloweV1 -> do
+      redeemer <- note InvalidRedeemer $ Chain.fromRedeemer rawRedeemer
+      for redeemer \case
+        V1.Input content -> pure $ V1.NormalInput content
+        V1.MerkleizedTxInput content continuationHash ->
+          fmap (V1.MerkleizedInput content continuationHash)
+            $ note InvalidRedeemer
+            $ listToMaybe
+            $ flip mapMaybe outputs \Chain.TransactionOutput{..} -> do
+              guard $ datumHash == Just (Chain.DatumHash $ PV2.fromBuiltin continuationHash)
+              Chain.fromDatum =<< datum
   (minSlot, maxSlot) <- case validityRange of
     Chain.MinMaxBound minSlot maxSlot -> pure (minSlot, maxSlot)
     _                                 -> Left InvalidValidityRange
@@ -313,7 +329,16 @@ extractMarloweTransaction version systemStart eraHistory contractId scriptAddres
     payoutDatum <- note (InvalidPayoutDatum txOut) $ fromChainPayoutDatum version rawPayoutDatum
     pure $ Payout address assets payoutDatum
   let output = TransactionOutput{..}
-  pure Transaction{..}
+  pure Transaction
+    { transactionId
+    , contractId
+    , metadata
+    , blockHeader
+    , validityLowerBound
+    , validityUpperBound
+    , inputs = marloweInputs
+    , output
+    }
   where
     EraHistory _ interpreter = eraHistory
     slotStartTime (Chain.SlotNo slotNo) = do

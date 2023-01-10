@@ -100,11 +100,13 @@ library history-api
     , cardano-api
     , containers
     , errors
+    , marlowe
     , marlowe-chain-sync
     , marlowe-protocols
     , marlowe-runtime
     , ouroboros-consensus
     , ouroboros-network
+    , plutus-ledger-api
     , transformers
     , typed-protocols
 

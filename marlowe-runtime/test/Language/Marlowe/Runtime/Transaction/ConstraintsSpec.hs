@@ -16,6 +16,7 @@ import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import Data.Either (fromLeft, isRight)
 import Data.Foldable (fold)
+import Data.Functor ((<&>))
 import Data.List (find, isPrefixOf)
 import Data.Map (Map)
 import qualified Data.Map as Map
@@ -40,23 +41,24 @@ import Gen.Cardano.Api.Typed
   , genVerificationKey
   )
 import Language.Marlowe (MarloweData(..), MarloweParams(..), txInputs)
+import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
 import Language.Marlowe.Runtime.Cardano.Api
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Core.Api
   ( Contract
   , Datum
+  , Inputs
   , MarloweVersion(..)
   , MarloweVersionTag(..)
   , Payout(..)
   , PayoutDatum
-  , Redeemer
   , TransactionScriptOutput(..)
   , toChainDatum
   , toChainPayoutDatum
-  , toChainRedeemer
   )
 import Language.Marlowe.Runtime.Core.ScriptRegistry (ReferenceScriptUtxo(..))
 import Language.Marlowe.Runtime.Transaction.Constraints
+import qualified Language.Marlowe.Scripts as V1
 import Spec.Marlowe.Common (shrinkContract)
 import Spec.Marlowe.Semantics.Arbitrary (SemiArbitrary(semiArbitrary), arbitraryValidInput)
 import Test.Hspec
@@ -193,7 +195,7 @@ spec = do
       -- This test is broadly doing this:
       -- - Start with an empty tx body
       -- - and an empty (as possible) Marlowe context
-      -- - In an emtpy wallet context (we can use arbitrary instance to generate utxos to spend)
+      -- - In an empty wallet context (we can use arbitrary instance to generate utxos to spend)
       -- - Perform coin selection
       -- - Only look at collateral
       -- - Looking for a pure ADA utxo that's 2x the fee (protocol maximum fee)
@@ -221,7 +223,7 @@ spec = do
             -- Turn the TxInsCollateral ADT into a simple list
             insCollatToTxInList :: TxInsCollateral BabbageEra -> [TxIn]
             insCollatToTxInList TxInsCollateralNone = []
-            insCollatToTxInList (TxInsCollateral _ txins) = txins
+            insCollatToTxInList (TxInsCollateral _ txIns) = txIns
 
             -- The list of TxIn in the TxBodyContent
             selectedTxIns :: [TxIn] = insCollatToTxInList . txInsCollateral $ txBC
@@ -341,7 +343,7 @@ spec = do
             hasAda = any ((/= 0) . Chain.unLovelace . Chain.ada) allAssets
             hasNonAda = not (all (Map.null . Chain.unTokens . Chain.tokens) allAssets)
 
-        -- There are two sets of TxInS in a TxBodyContent. "normal" inputs and
+        -- There are two sets of TxIns in a TxBodyContent. "normal" inputs and
         -- collateral inputs. These two functions get those as a simple [TxIn]
         -- which is the common type needed by txInsToValue below.
 
@@ -352,10 +354,10 @@ spec = do
         -- txInsFromTxBodyCollat :: TxBodyContent BuildTx BabbageEra -> [TxIn]
         -- txInsFromTxBodyCollat txbc = case txInsCollateral txbc of
         --   TxInsCollateralNone -> []
-        --   TxInsCollateral _ txins -> txins
+        --   TxInsCollateral _ txIns -> txIns
 
         txInsToValue :: [TxIn] -> Value
-        txInsToValue txins = mconcat . map (assetsToValue . Chain.assets) $ selectedOutputs
+        txInsToValue txIns = mconcat . map (assetsToValue . Chain.assets) $ selectedOutputs
           where
             -- Extract the [(TxOutRef, TransactionOutput)] from the walletContext
             utT = map Chain.toUTxOTuple . Chain.toUTxOsList . availableUtxos $ walletContext
@@ -369,7 +371,7 @@ spec = do
             -- have a member in wantedTxIns [TxIn]
             selectedOutputs :: [Chain.TransactionOutput]
             selectedOutputs = map snd
-              . filter (\(txOutRef, _) -> any (txInEqTxOutRef txOutRef) txins) $ utT
+              . filter (\(txOutRef, _) -> any (txInEqTxOutRef txOutRef) txIns) $ utT
 
         fromChainTokens :: Chain.Tokens -> [(AssetId, Quantity)]
         fromChainTokens (Chain.Tokens chainTokenMap) =
@@ -557,7 +559,6 @@ violations marloweVersion marloweContext utxos constraints txBodyContent = fold
   , ("mustSpendRoleToken: " <>) <$> mustSpendRoleTokenViolations marloweVersion utxos constraints txBodyContent
   , ("mustPayToAddress: " <>) <$> mustPayToAddressViolations marloweVersion constraints txBodyContent
   , ("mustSendMarloweOutput: " <>) <$> mustSendMarloweOutputViolations marloweVersion marloweContext constraints txBodyContent
-  , ("mustSendMerkleizedContinuationOutput: " <>) <$> mustSendMerkleizedContinuationOutputViolations marloweVersion constraints txBodyContent
   , ("mustPayToRole: " <>) <$> mustPayToRoleViolations marloweVersion marloweContext constraints txBodyContent
   , ("mustConsumeMarloweOutput: " <>) <$> mustConsumeMarloweOutputViolations marloweVersion marloweContext constraints txBodyContent
   , ("mustConsumePayouts: " <>) <$> mustConsumePayoutsViolations marloweVersion marloweContext constraints txBodyContent
@@ -684,16 +685,6 @@ mustSendMarloweOutputViolations MarloweV1 MarloweContext{..} TxConstraints{..} T
               $ (if isJust $ extractDatum txOut then "Wrong" else "No") <> " datum sent to Marlowe Address."
           ]
 
-mustSendMerkleizedContinuationOutputViolations
-  :: MarloweVersion v -> TxConstraints v -> TxBodyContent BuildTx BabbageEra -> [String]
-mustSendMerkleizedContinuationOutputViolations MarloweV1 TxConstraints{..} TxBodyContent{..} = do
-  continuationContract <- Set.toList merkleizedContinuationsConstraints
-  let isMatch = (== Just (Chain.toDatum continuationContract))
-  let matchingOutput = find (isMatch . extractDatum) txOuts
-  case matchingOutput of
-    Nothing -> ["No matching output found"]
-    _ -> []
-
 mustPayToRoleViolations
   :: MarloweVersion v
   -> MarloweContext v
@@ -726,7 +717,7 @@ mustConsumeMarloweOutputViolations
 mustConsumeMarloweOutputViolations MarloweV1 MarloweContext{..} TxConstraints{..} TxBodyContent{..} =
   case marloweInputConstraints of
     MarloweInputConstraintsNone -> []
-    MarloweInput invalidBefore invalidHereafter redeemer -> fold
+    MarloweInput invalidBefore invalidHereafter inputs -> fold
       [ fromLeft [] do
           TransactionScriptOutput{..} <- note ["TEST ERROR: MarloweContext doesn't contain script output"] scriptOutput
           (_, witness) <- note
@@ -741,7 +732,12 @@ mustConsumeMarloweOutputViolations MarloweV1 MarloweContext{..} TxConstraints{..
                 (witDatum == toCardanoScriptData (toChainDatum MarloweV1 datum))
                 "Input datum does not match"
             , check
-                (witRedeemer == toCardanoScriptData (Chain.unRedeemer $ toChainRedeemer MarloweV1 redeemer))
+                ( witRedeemer == toCardanoScriptData
+                    ( Chain.toDatum $ inputs <&> \case
+                      V1.NormalInput content -> V1.Input content
+                      V1.MerkleizedInput content hash _ -> V1.MerkleizedTxInput content hash
+                    )
+                )
                 "Input redeemer does not match"
             ]
       , check
@@ -833,7 +829,6 @@ shrinkV1Constraints constraints@TxConstraints{..} = fold
   , [ constraints {  payToAddresses = x } | x <- shrinkPayToAddresses payToAddresses ]
   , [ constraints {  payToRoles = x } | x <- shrinkPayToRoles payToRoles ]
   , [ constraints {  marloweOutputConstraints = x } | x <- shrinkMarloweOutputConstraints marloweOutputConstraints ]
-  , [ constraints {  merkleizedContinuationsConstraints = x } | x <- shrinkMerkleizedContinuationsConstraints merkleizedContinuationsConstraints ]
   , [ constraints {  signatureConstraints = x } | x <- shrinkSignatureConstraints signatureConstraints ]
   , [ constraints {  metadataConstraints = x } | x <- shrinkMetadataConstraints metadataConstraints ]
   ]
@@ -903,9 +898,8 @@ genV1Constraints = sized \n -> frequency
     , (1, mustSpendRoleToken <$> genRoleToken)
     , (1, mustPayToAddress <$> genOutAssets <*> genAddress)
     , (1, mustSendMarloweOutput <$> genOutAssets <*> genDatum)
-    , (1, mustSendMerkleizedContinuationOutput <$> genContract)
     , (1, mustPayToRole <$> genOutAssets <*> genRoleToken)
-    , (1, uncurry mustConsumeMarloweOutput <$> genValidityInterval <*> genRedeemer)
+    , (1, uncurry mustConsumeMarloweOutput <$> genValidityInterval <*> genInputs)
     , (1, mustConsumePayouts <$> genRoleToken)
     , (1, requiresSignature <$> genPaymentKeyHash)
     , (1, requiresMetadata <$> arbitrary <*> genMetadata)
@@ -920,8 +914,8 @@ genValidityInterval = do
   (s1, s2) <- arbitrary
   pure (SlotNo $ min s1 s2, SlotNo $ max s1 s2)
 
-genRedeemer :: Gen (Redeemer 'V1)
-genRedeemer = do
+genInputs :: Gen (Inputs 'V1)
+genInputs = do
   ctx <- arbitrary
   state <- semiArbitrary ctx
   contract <- semiArbitrary ctx

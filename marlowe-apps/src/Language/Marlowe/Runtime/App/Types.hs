@@ -1,5 +1,3 @@
-
-
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -54,10 +52,10 @@ import Language.Marlowe.Runtime.ChainSync.Api
   )
 import Language.Marlowe.Runtime.Core.Api
   ( ContractId
-  , IsMarloweVersion(Contract, Redeemer)
+  , IsMarloweVersion(Contract, Inputs)
   , MarloweVersionTag(V1)
   , Payout(..)
-  , Transaction(Transaction, blockHeader, contractId, output, redeemer, transactionId, validityLowerBound, validityUpperBound)
+  , Transaction(Transaction, blockHeader, contractId, inputs, output, transactionId, validityLowerBound, validityUpperBound)
   , TransactionOutput(payouts, scriptOutput)
   , TransactionScriptOutput(..)
   , renderContractId
@@ -180,7 +178,7 @@ data MarloweRequest v =
     }
   | Apply
     { reqContractId :: ContractId
-    , reqInputs :: Redeemer v
+    , reqInputs :: Inputs v
     , reqValidityLowerBound :: Maybe POSIXTime
     , reqValidityUpperBound :: Maybe POSIXTime
     , reqMetadata :: TransactionMetadata
@@ -419,7 +417,7 @@ contractStepToJSON (ApplyTransaction Transaction{..}) =
     [ "step" A..= ("apply" :: String)
     , "txId" A..= transactionId
     , "contractId" A..= renderContractId contractId
-    , "redeemer" A..= redeemer
+    , "redeemer" A..= inputs
     , "scriptOutput" A..= fmap transactionScriptOutputToJSON (scriptOutput output)
     , "payouts" A..= M.map payoutToJSON (payouts output)
     ]

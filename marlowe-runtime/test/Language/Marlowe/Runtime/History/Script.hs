@@ -349,7 +349,7 @@ genApplyInputsV1 payoutAddress blockHeader contractId TransactionScriptOutput{..
       , blockHeader
       , validityLowerBound = posixSecondsToUTCTime $ secondsToNominalDiffTime $ fromIntegral vLow / 1000
       , validityUpperBound = posixSecondsToUTCTime $ secondsToNominalDiffTime $ fromIntegral vLow / 1000
-      , redeemer = inputs
+      , inputs
       , output
       }
 

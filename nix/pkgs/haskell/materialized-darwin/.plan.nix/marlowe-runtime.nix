@@ -65,11 +65,13 @@
             (hsPkgs."cardano-api" or (errorHandler.buildDepError "cardano-api"))
             (hsPkgs."containers" or (errorHandler.buildDepError "containers"))
             (hsPkgs."errors" or (errorHandler.buildDepError "errors"))
+            (hsPkgs."marlowe" or (errorHandler.buildDepError "marlowe"))
             (hsPkgs."marlowe-chain-sync" or (errorHandler.buildDepError "marlowe-chain-sync"))
             (hsPkgs."marlowe-protocols" or (errorHandler.buildDepError "marlowe-protocols"))
             (hsPkgs."marlowe-runtime" or (errorHandler.buildDepError "marlowe-runtime"))
             (hsPkgs."ouroboros-consensus" or (errorHandler.buildDepError "ouroboros-consensus"))
             (hsPkgs."ouroboros-network" or (errorHandler.buildDepError "ouroboros-network"))
+            (hsPkgs."plutus-ledger-api" or (errorHandler.buildDepError "plutus-ledger-api"))
             (hsPkgs."transformers" or (errorHandler.buildDepError "transformers"))
             (hsPkgs."typed-protocols" or (errorHandler.buildDepError "typed-protocols"))
             ];
