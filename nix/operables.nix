@@ -2,21 +2,24 @@
 let
   inherit (inputs) self std nixpkgs bitte-cells;
   inherit (self) packages;
-  inherit (nixpkgs.legacyPackages) sqitchPg;
+  inherit (nixpkgs) lib;
+  inherit (nixpkgs.legacyPackages) sqitchPg postgresql;
   inherit (inputs.bitte-cells._utils.packages) srvaddr;
 
   # Ensure this path only changes when sqitch.plan file is updated
-  sqitch-plan = (builtins.path {
+  sqitch-plan-dir = (builtins.path {
     path = self;
     name = "marlowe-chain-sync-sqitch-plan";
     filter = path: type:
-      path == "${self}/marlowe-chain-sync" ||
-      path == "${self}/marlowe-chain-sync/sqitch.plan";
-  }) + "/marlowe-chain-sync/sqitch.plan";
+      path == "${self}/marlowe-chain-sync"
+      || path == "${self}/marlowe-chain-sync/sqitch.plan"
+      || lib.hasPrefix "${self}/marlowe-chain-sync/deploy" path
+      || lib.hasPrefix "${self}/marlowe-chain-sync/revert" path;
+  }) + "/marlowe-chain-sync";
 in {
-  chainseekd = std.lib.ops.mkOperable {
-    package = packages.chainseekd;
-    runtimeInputs = [ sqitchPg srvaddr ];
+  chain-indexer = std.lib.ops.mkOperable {
+    package = packages.marlowe-chain-indexer;
+    runtimeInputs = [ sqitchPg srvaddr postgresql ];
     runtimeScript = ''
       if [ -n "''${MASTER_REPLICA_SRV_DNS:-}" ]; then
         # Find DB_HOST when running on bitte cluster with patroni
@@ -26,16 +29,41 @@ in {
       fi
 
       DATABASE_URI=postgresql://$DB_USER:$DB_PASS@$DB_HOST/$DB_NAME
-      sqitch deploy --target "$DATABASE_URI" --plan-file ${sqitch-plan}
+      cd ${sqitch-plan-dir}
+      export TZ=Etc/UTC
+      sqitch config --user user.name chainindexer
+      sqitch config --user user.email example@example.com
+      sqitch deploy --target "$DATABASE_URI"
+      cd -
+
+      ${packages.marlowe-chain-indexer}/bin/marlowe-chain-indexer \
+        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+        --database-uri  "$DATABASE_URI" \
+        --shelley-genesis-config-file "$SHELLEY_GENESIS_CONFIG" \
+        --genesis-config-file "$BYRON_GENESIS_CONFIG" \
+        --genesis-config-file-hash "$BYRON_GENESIS_HASH"
+    '';
+  };
+
+  chainseekd = std.lib.ops.mkOperable {
+    package = packages.chainseekd;
+    runtimeInputs = [ srvaddr postgresql ];
+    runtimeScript = ''
+      if [ -n "''${MASTER_REPLICA_SRV_DNS:-}" ]; then
+        # Find DB_HOST when running on bitte cluster with patroni
+        eval "$(srvaddr -env PSQL="$MASTER_REPLICA_SRV_DNS")"
+        # produces: PSQL_ADDR0=domain:port; PSQL_HOST0=domain; PSQL_PORT0=port
+        DB_HOST=$PSQL_ADDR0
+      fi
+
+      DATABASE_URI=postgresql://$DB_USER:$DB_PASS@$DB_HOST/$DB_NAME
       ${packages.chainseekd}/bin/chainseekd \
         --host "$HOST" \
         --port-number "$PORT" \
         --query-port-number "$QUERY_PORT" \
         --job-port-number "$JOB_PORT" \
         --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-        --database-uri  "$DATABASE_URI" \
-        --genesis-config-file "$GENESIS_CONFIG" \
-        --genesis-config-file-hash "$GENESIS_HASH"
+        --database-uri  "$DATABASE_URI"
     '';
   };
   marlowe-history = std.lib.ops.mkOperable {
@@ -73,8 +101,6 @@ in {
         --chain-seek-query-port-number "$CHAINSEEKD_QUERY_PORT" \
         --chain-seek-command-port-number "$CHAINSEEKD_COMMAND_PORT" \
         --chain-seek-host "$CHAINSEEKD_HOST" \
-        --history-sync-port "$HISTORY_SYNC_PORT" \
-        --history-host "$HISTORY_HOST"
       '';
   };
 }

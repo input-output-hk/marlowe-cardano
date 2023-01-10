@@ -121,6 +121,40 @@ in
                   # ----------
                   # Task: Marlowe-Runtime
                   # ----------
+                  chain-indexer = {
+                    env = {
+                      # PORT = "8090";
+                      # QUERY_PORT = "8091";
+                      # JOB_PORT = "8092";
+                      CARDANO_NODE_SOCKET_PATH = "/alloc/tmp/node.socket"; # figure out how to pass this from the cardano group
+                      WORKLOAD_CACERT = "/secrets/tls/ca.pem";
+                      WORKLOAD_CLIENT_KEY = "/secrets/tls/key.pem";
+                      WORKLOAD_CLIENT_CERT = "/secrets/tls/cert.pem";
+                    };
+                    template =
+                       _utils.nomadFragments.workload-identity-vault {inherit vaultPkiPath;}
+                      ++ _utils.nomadFragments.workload-identity-vault-consul {inherit consulRolePath;};
+
+                    config.image = ociNamer oci-images.chain-indexer;
+                    config.ports = ["http"];
+                    user = "0:0";
+                    driver = "docker";
+                    kill_signal = "SIGINT";
+                    kill_timeout = "30s";
+                    resources.cpu = 2000;
+                    resources.memory = 4096;
+                    volume_mount = {
+                      destination = "/persist";
+                      propagation_mode = "private";
+                      volume = "persist-cardano-node-local";
+                    };
+                    vault = {
+                      change_mode = "noop";
+                      env = true;
+                      policies = ["marlowe-runtime"];
+                    };
+                  };
+
                   chainseekd = {
                     env = {
                       HOST = "127.0.0.1";
@@ -145,11 +179,6 @@ in
                     kill_timeout = "30s";
                     resources.cpu = 2000;
                     resources.memory = 4096;
-                    volume_mount = {
-                      destination = "/persist";
-                      propagation_mode = "private";
-                      volume = "persist-cardano-node-local";
-                    };
                     vault = {
                       change_mode = "noop";
                       env = true;
