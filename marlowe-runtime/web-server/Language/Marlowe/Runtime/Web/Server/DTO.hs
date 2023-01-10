@@ -15,6 +15,7 @@ module Language.Marlowe.Runtime.Web.Server.DTO
 import Cardano.Api
   ( AsType(AsTxBody)
   , IsCardanoEra(cardanoEra)
+  , IsShelleyBasedEra
   , TextEnvelope(..)
   , TextEnvelopeType(..)
   , TxBody
@@ -22,6 +23,7 @@ import Cardano.Api
   , getTxId
   , metadataValueToJsonNoSchema
   , serialiseToTextEnvelope
+  , signShelleyTransaction
   )
 import Cardano.Api.SerialiseTextEnvelope (TextEnvelopeDescr(..))
 import Control.Arrow (second)
@@ -344,7 +346,7 @@ instance ToDTO (TempTx Tx.InputsApplied) where
 instance HasDTO (Tx.ContractCreated era v) where
   type DTO (Tx.ContractCreated era v) = Web.ContractState
 
-instance IsCardanoEra era => ToDTOWithTxStatus (Tx.ContractCreated era v) where
+instance (IsCardanoEra era, IsShelleyBasedEra era) => ToDTOWithTxStatus (Tx.ContractCreated era v) where
   toDTOWithTxStatus status Tx.ContractCreated{..} =
     Web.ContractState
       { contractId = toDTO contractId
@@ -369,7 +371,7 @@ instance IsCardanoEra era => ToDTOWithTxStatus (Tx.ContractCreated era v) where
 instance HasDTO (Tx.InputsApplied era v) where
   type DTO (Tx.InputsApplied era v) = Web.Tx
 
-instance IsCardanoEra era => ToDTOWithTxStatus (Tx.InputsApplied era v) where
+instance (IsCardanoEra era, IsShelleyBasedEra era) => ToDTOWithTxStatus (Tx.InputsApplied era v) where
   toDTOWithTxStatus status Tx.InputsApplied{..} =
     Web.Tx
       { contractId = toDTO contractId
@@ -423,8 +425,10 @@ instance FromDTO Chain.Address where
 instance HasDTO (TxBody era) where
   type DTO (TxBody era) = Web.TextEnvelope
 
-instance IsCardanoEra era => ToDTO (TxBody era) where
-  toDTO = toDTO . serialiseToTextEnvelope Nothing
+instance (IsCardanoEra era, IsShelleyBasedEra era) => ToDTO (TxBody era) where
+  toDTO txBody = toDTO . serialiseToTextEnvelope Nothing $ tx
+    where
+      tx = signShelleyTransaction txBody []
 
 instance IsCardanoEra era => FromDTO (TxBody era) where
   fromDTO = hush . deserialiseFromTextEnvelope asType <=< fromDTO
