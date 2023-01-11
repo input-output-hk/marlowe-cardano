@@ -134,7 +134,7 @@ extractHeaders getMarloweVersion getScripts blockHeader Chain.Transaction{..} =
       pure ContractHeader
         { contractId = ContractId $ Chain.TxOutRef txId $ fromInteger ix
         , rolesCurrency
-        , metadata = mempty -- TODO we need to index metadata in chain sync!
+        , metadata
         , marloweScriptHash
         , marloweScriptAddress = address
         , payoutScriptHash = payoutScript

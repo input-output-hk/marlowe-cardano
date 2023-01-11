@@ -448,6 +448,7 @@ checkCreation :: Expectation
 checkCreation = do
   let payoutValidatorHash = payoutScript currentV1Scripts
   let createOutput = TransactionScriptOutput testScriptAddress mempty createUTxO createDatum
+  let metadata = mempty
   FollowerTestResult{..} <- runFollowerTest
     $ ConfirmHandshake
     $ ExpectQuery (FindTx createTxId False)

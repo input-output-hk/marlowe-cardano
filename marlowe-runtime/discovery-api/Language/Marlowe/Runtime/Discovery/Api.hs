@@ -6,12 +6,10 @@ module Language.Marlowe.Runtime.Discovery.Api
 
 import Data.Aeson (ToJSON(..), Value(..), object, (.=))
 import Data.Binary (Binary, get, getWord8, put, putWord8)
-import Data.Map (Map)
 import Data.Type.Equality (type (:~:)(Refl))
 import Data.Void (Void, absurd)
-import Data.Word (Word64)
 import GHC.Generics (Generic)
-import Language.Marlowe.Runtime.ChainSync.Api (Address, BlockHeader, Metadata, PolicyId, ScriptHash)
+import Language.Marlowe.Runtime.ChainSync.Api (Address, BlockHeader, PolicyId, ScriptHash, TransactionMetadata)
 import Language.Marlowe.Runtime.Core.Api (ContractId, SomeMarloweVersion)
 import Network.Protocol.Query.Types (IsQuery(..), QueryToJSON(..), SomeTag(..))
 
@@ -22,7 +20,7 @@ data ContractHeader = ContractHeader
   -- ^ The ID of the Marlowe contract instance.
   , rolesCurrency :: PolicyId
   -- ^ The ID of the minting policy used to mint the role tokens.
-  , metadata :: Map Word64 Metadata
+  , metadata :: TransactionMetadata
   -- ^ Any custom metadata attached to the contract's creation transaction.
   , marloweScriptHash :: ScriptHash
   -- ^ The hash of the validator script.

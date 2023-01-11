@@ -325,6 +325,7 @@ genCreateContract slot = do
   let scriptAddress = "7062c56ccfc6217aff5692e1d3ebe89c21053d31fc11882cb21bfdd307"
   let payoutValidatorHash = "a2c56ccfc6217aff5692e1d3ebe89c21053d31fc11882cb21bfdd307"
   let createOutput = TransactionScriptOutput scriptAddress mempty (unContractId contractId) datum
+  let metadata = mempty
   pure $ Some $ CreateContract contractId MarloweV1 CreateStep{..}
 
 genTxId :: Gen TxId

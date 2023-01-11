@@ -93,6 +93,7 @@ data FollowerStatus
 
 data CreateStep v = CreateStep
   { createOutput :: TransactionScriptOutput v
+  , metadata :: Chain.TransactionMetadata
   , payoutValidatorHash :: ScriptHash
   } deriving (Generic)
 
@@ -111,8 +112,9 @@ instance Show SomeCreateStep where
 instance Binary (CreateStep 'V1) where
   put CreateStep{..} = do
     put createOutput
+    put metadata
     put payoutValidatorHash
-  get = CreateStep <$> get <*> get
+  get = CreateStep <$> get <*> get <*> get
 
 data RedeemStep v = RedeemStep
   { utxo        :: TxOutRef
@@ -142,7 +144,7 @@ instance Binary (ContractStep 'V1)
 instance ToJSON (ContractStep 'V1)
 
 extractCreation :: ContractId -> Chain.Transaction -> Either ExtractCreationError SomeCreateStep
-extractCreation contractId tx@Chain.Transaction{inputs} = do
+extractCreation contractId tx@Chain.Transaction{inputs, metadata} = do
   Chain.TransactionOutput{ assets, address = scriptAddress, datum = mdatum } <-
     getOutput (txIx $ unContractId contractId) tx
   marloweScriptHash <- getScriptHash scriptAddress
