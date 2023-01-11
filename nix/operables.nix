@@ -3,7 +3,7 @@ let
   inherit (inputs) self std nixpkgs bitte-cells;
   inherit (self) packages;
   inherit (nixpkgs) lib;
-  inherit (nixpkgs.legacyPackages) sqitchPg postgresql;
+  inherit (nixpkgs.legacyPackages) sqitchPg postgresql norouter;
   inherit (inputs.bitte-cells._utils.packages) srvaddr;
 
   # Ensure this path only changes when sqitch.plan file is updated
@@ -16,8 +16,15 @@ let
       || lib.hasPrefix "${self}/marlowe-chain-sync/deploy" path
       || lib.hasPrefix "${self}/marlowe-chain-sync/revert" path;
   }) + "/marlowe-chain-sync";
+
+  database-uri = "postgresql://$DB_USER:$DB_PASS@$DB_HOST/$DB_NAME";
+
+  mkOperable = args: std.lib.ops.mkOperable (args // {
+    debugInputs = [ norouter ] ++ (args.debugInputs or []);
+  });
+
 in {
-  chain-indexer = std.lib.ops.mkOperable {
+  chain-indexer = mkOperable {
     package = packages.marlowe-chain-indexer;
     runtimeInputs = [ sqitchPg srvaddr postgresql ];
     runtimeScript = ''
@@ -28,12 +35,12 @@ in {
         DB_HOST=$PSQL_ADDR0
       fi
 
-      DATABASE_URI=postgresql://$DB_USER:$DB_PASS@$DB_HOST/$DB_NAME
+      DATABASE_URI=${database-uri}
       cd ${sqitch-plan-dir}
       export TZ=Etc/UTC
       sqitch config --user user.name chainindexer
       sqitch config --user user.email example@example.com
-      sqitch deploy --target "$DATABASE_URI"
+      sqitch --quiet deploy --target "$DATABASE_URI"
       cd -
 
       ${packages.marlowe-chain-indexer}/bin/marlowe-chain-indexer \
@@ -45,9 +52,9 @@ in {
     '';
   };
 
-  chainseekd = std.lib.ops.mkOperable {
+  chainseekd = mkOperable {
     package = packages.chainseekd;
-    runtimeInputs = [ srvaddr postgresql ];
+    runtimeInputs = [ srvaddr ];
     runtimeScript = ''
       if [ -n "''${MASTER_REPLICA_SRV_DNS:-}" ]; then
         # Find DB_HOST when running on bitte cluster with patroni
@@ -56,7 +63,7 @@ in {
         DB_HOST=$PSQL_ADDR0
       fi
 
-      DATABASE_URI=postgresql://$DB_USER:$DB_PASS@$DB_HOST/$DB_NAME
+      DATABASE_URI=${database-uri}
       ${packages.chainseekd}/bin/chainseekd \
         --host "$HOST" \
         --port-number "$PORT" \
@@ -66,7 +73,7 @@ in {
         --database-uri  "$DATABASE_URI"
     '';
   };
-  marlowe-history = std.lib.ops.mkOperable {
+  marlowe-history = mkOperable {
     package = packages.marlowe-history;
     runtimeScript = ''
       ${packages.marlowe-history}/bin/marlowe-history \
@@ -79,7 +86,7 @@ in {
         --chain-seek-host "$CHAINSEEKD_HOST"
       '';
   };
-  marlowe-discovery = std.lib.ops.mkOperable {
+  marlowe-discovery = mkOperable {
     package = packages.marlowe-discovery;
     runtimeScript = ''
       ${packages.marlowe-discovery}/bin/marlowe-discovery \
@@ -91,7 +98,7 @@ in {
         --chain-seek-host "$CHAINSEEKD_HOST"
       '';
   };
-  marlowe-tx = std.lib.ops.mkOperable {
+  marlowe-tx = mkOperable {
     package = packages.marlowe-tx;
     runtimeScript = ''
       ${packages.marlowe-tx}/bin/marlowe-tx \

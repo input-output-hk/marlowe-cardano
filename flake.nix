@@ -4,7 +4,7 @@
   inputs = {
     flake-utils.url = "github:numtide/flake-utils";
 
-    nixpkgs.follows = "haskell-nix/nixpkgs-2205";
+    nixpkgs.follows = "haskell-nix/nixpkgs-unstable";
 
     haskell-nix = {
       url = "github:input-output-hk/haskell.nix";
@@ -58,18 +58,14 @@
     tullia = {
       url = "github:input-output-hk/tullia";
     };
-    std = {
-      url = "github:divnix/std";
-    };
-    data-merge = {
-      url = "github:divnix/data-merge";
-    };
-    bitte-cells = {
-      url = "github:input-output-hk/bitte-cells";
-    };
+
+    nosys.url = "github:divnix/nosys";
+    std.url = "github:divnix/std";
+    data-merge.url = "github:divnix/data-merge";
+    bitte-cells.url = "github:input-output-hk/bitte-cells";
   };
 
-  outputs = { self, flake-utils, std, tullia, ... }@inputs:
+  outputs = { self, flake-utils, nosys, tullia, ... }@inputs:
     let
       systems = [ "x86_64-linux" "x86_64-darwin" ];
     in
@@ -178,18 +174,18 @@
 
         # 4 Layers of Packaging
         operables = import ./nix/operables.nix {
-          inputs = std.deSystemize system inputs;
+          inputs = nosys.lib.deSys system inputs;
         };
         oci-images = import ./nix/oci-images.nix {
-          inputs = std.deSystemize system inputs;
+          inputs = nosys.lib.deSys system inputs;
         };
-        nomadChart = import ./nix/nomadChart.nix {
-          inputs = std.deSystemize system inputs;
+        nomadTasks = import ./nix/nomadTasks.nix {
+          inputs = nosys.lib.deSys system inputs;
         };
 
-        nomadEnv = let
-          envData = import ./nix/nomadEnv.nix {
-            inputs = std.deSystemize system inputs;
+        nomadEnvs = let
+          envData = import ./nix/nomadEnvs {
+            inputs = nosys.lib.deSys system inputs;
           };
           mkNomadJobs = let
             pkgs = inputs.nixpkgs.legacyPackages.${system};
