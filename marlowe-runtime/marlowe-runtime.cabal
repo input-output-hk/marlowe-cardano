@@ -110,6 +110,26 @@ library history-api
     , transformers
     , typed-protocols
 
+library indexer
+  import: lang
+  hs-source-dirs:   indexer
+  visibility: public
+  exposed-modules:
+    Language.Marlowe.Runtime.Indexer
+    Language.Marlowe.Runtime.Indexer.ChainSeekClient
+    Language.Marlowe.Runtime.Indexer.Database
+    Language.Marlowe.Runtime.Indexer.Database.PostgreSQL
+    Language.Marlowe.Runtime.Indexer.Store
+    Language.Marlowe.Runtime.Indexer.Types
+  build-depends:
+      base >= 4.9 && < 5
+    , async-components
+    , eventuo11y
+    , marlowe-chain-sync
+    , marlowe-protocols
+    , stm
+  visibility: public
+
 library history
   import: lang
   hs-source-dirs:   history
