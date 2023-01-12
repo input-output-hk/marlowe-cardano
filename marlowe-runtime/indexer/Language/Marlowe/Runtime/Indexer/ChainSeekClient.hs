@@ -54,10 +54,10 @@ data ChainSeekClientDependencies = ChainSeekClientDependencies
 -- | A change to the chain with respect to Marlowe contracts
 data ChainEvent
   -- | A change in which a new block of Marlowe transactions is added to the chain.
-  = RollForward MarloweBlock
+  = RollForward MarloweBlock ChainPoint ChainPoint
 
   -- | A change in which the chain is reverted to a previous point, discarding later blocks.
-  | RollBackward ChainPoint
+  | RollBackward ChainPoint ChainPoint
 
 -- | A component that runs a chain seek client to traverse the blockchain and
 -- extract blocks of Marlowe transactions. The sequence of changes to the chain
@@ -104,9 +104,9 @@ chainSeekClient = component \ChainSeekClientDependencies{..} -> do
             clientNextIntersect = ClientStNext
               -- Rejection of an intersection request implies no intersection was found.
               -- In this case, we have no choice but to start synchronization from Genesis.
-              { recvMsgQueryRejected = \_ _ -> do
+              { recvMsgQueryRejected = \_ tip -> do
                   -- Roll everything back to Genesis.
-                  emit $ RollBackward Genesis
+                  emit $ RollBackward Genesis tip
                   let
                     -- Initial empty Marlowe UTxO
                     rollbackStates = RollbackStates
@@ -122,7 +122,7 @@ chainSeekClient = component \ChainSeekClientDependencies{..} -> do
               -- that point.
               , recvMsgRollForward = \_ point tip -> do
                   -- Always emit a rollback at the start.
-                  emit $ RollBackward point
+                  emit $ RollBackward point tip
                   let
                     -- The block number of the tip point
                     tipBlockNo = case tip of
@@ -269,7 +269,7 @@ chainSeekClient = component \ChainSeekClientDependencies{..} -> do
 
               Just (marloweUTxO, marloweBlock) -> do
                 -- Emit the marlowe block in a roll forward event to a downstream consumer.
-                emit $ RollForward marloweBlock
+                emit $ RollForward marloweBlock point tip
 
                 -- Return the new MarloweUTxO
                 pure marloweUTxO
@@ -278,8 +278,8 @@ chainSeekClient = component \ChainSeekClientDependencies{..} -> do
             -- rollback state.
             pure $ clientIdle $ pushState securityParameter (blockNo block) (blockNo tipBlock) marloweUTxO states
 
-        , recvMsgRollBackward = \point _ -> do
-            emit $ RollBackward point
+        , recvMsgRollBackward = \point tip -> do
+            emit $ RollBackward point tip
             pure $ clientIdle $ rollback (blockNo <$> point) states
 
         , recvMsgWait = pollWithNext $ clientNext states

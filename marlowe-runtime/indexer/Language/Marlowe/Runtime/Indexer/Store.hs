@@ -10,9 +10,10 @@ module Language.Marlowe.Runtime.Indexer.Store
 import Control.Concurrent.Component
 import Control.Concurrent.STM (STM, atomically, modifyTVar, newTVar, readTVar, writeTVar)
 import Control.Monad (forever, guard, unless)
-import Data.Foldable (for_)
+import Data.Foldable (for_, traverse_)
 import Data.Function (on)
 import Data.List (partition)
+import Data.Semigroup (Last(..))
 import GHC.Generics (Generic)
 import Language.Marlowe.Runtime.ChainSync.Api (ChainPoint, WithGenesis(..))
 import Language.Marlowe.Runtime.Indexer.ChainSeekClient (ChainEvent(..))
@@ -26,6 +27,8 @@ data StoreSelector f where
 data SaveField
   = RollbackPoint ChainPoint
   | Stats ChangesStatistics
+  | LocalTip ChainPoint
+  | RemoteTip ChainPoint
 
 data StoreDependencies r = StoreDependencies
   { databaseQueries :: DatabaseQueries IO
@@ -45,7 +48,7 @@ aggregator = component \pullEvent -> do
     readChanges = do
       changes <- readTVar changesVar
       guard case changes of
-        Changes Nothing [] _ -> False
+        Changes Nothing [] _ _ _-> False
         _ -> True
       writeTVar changesVar mempty
       pure changes
@@ -54,8 +57,10 @@ aggregator = component \pullEvent -> do
       event <- pullEvent
       let
         changes = case event of
-          RollForward block -> mempty { blocks = [block], statistics = computeStats block }
-          RollBackward point -> mempty { rollbackTo = Just point }
+          RollForward block point tip ->
+            mempty { blocks = [block], statistics = computeStats block, localTip = Just point, remoteTip = Just tip }
+          RollBackward point tip ->
+            mempty { rollbackTo = Just point, localTip = Just point, remoteTip = Just tip }
       modifyTVar changesVar (<> changes)
   pure (runAggregator, readChanges)
 
@@ -69,6 +74,8 @@ persister :: Component IO (PersisterDependencies r) ()
 persister = component_ \PersisterDependencies{..} -> forever do
   Changes{..} <- atomically readChanges
   withEvent eventBackend Save \ev -> do
+    traverse_ (addField ev . LocalTip) localTip
+    traverse_ (addField ev . RemoteTip) remoteTip
     addField ev $ Stats statistics
     for_ rollbackTo \point -> do
       addField ev $ RollbackPoint point
@@ -79,6 +86,8 @@ data Changes = Changes
   { rollbackTo :: Maybe ChainPoint
   , blocks :: [MarloweBlock]
   , statistics :: ChangesStatistics
+  , localTip :: Maybe ChainPoint
+  , remoteTip :: Maybe ChainPoint
   } deriving (Show, Eq, Generic)
 
 instance Semigroup Changes where
@@ -90,6 +99,8 @@ instance Semigroup Changes where
         { rollbackTo = rollbackTo a'
         , blocks = on (<>) blocks a' b
         , statistics = on (<>) statistics a' b
+        , localTip = getLast $ on (<>) (Last . localTip) a b
+        , remoteTip = getLast $ on (<>) (Last . localTip) a b
         }
 
 applyRollback :: ChainPoint -> Changes -> Changes
@@ -121,7 +132,7 @@ computeStats MarloweBlock{..} = (foldMap computeTxStats transactions) { blockCou
     computeTxStats WithdrawTransaction{} = mempty { withdrawTxCount = 1 }
 
 instance Monoid Changes where
-  mempty = Changes Nothing mempty mempty
+  mempty = Changes Nothing mempty mempty Nothing Nothing
 
 data ChangesStatistics = ChangesStatistics
   { blockCount :: Int
