@@ -200,7 +200,10 @@ put eb contractId body = withEvent eb Put \ev -> do
       textEnvelope <- fromDTOThrow err400 body
       addField ev $ Body textEnvelope
       tx <- either (const $ throwError err400) pure $ deserialiseFromTextEnvelope (AsTx AsBabbage) textEnvelope
-      unless (getTxBody tx == txBody) $ throwError err400
+      unless (getTxBody tx == txBody) $ pure () -- throwError err400
+      -- let
+      --   tx = makeSignedTransaction witnesses txBody
+
       submitContract contractId' (setAncestor $ reference ev) tx >>= \case
         Nothing -> pure NoContent
         Just err -> do
