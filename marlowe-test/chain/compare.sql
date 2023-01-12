@@ -2,7 +2,7 @@
 -- Script to compare databases for `marlowe-chainindexer` and `cardano-db-sync`.
 --
 -- This assumes that the `marlowe-chainindexer` tables reside in the schema
--- `chain` and the `cardano-db-sync` tables reside in the schema `dbsync`.
+-- `chain` and the `cardano-db-sync` tables reside in the schema `public`.
 --
 -- This script writes CSV output files listing discrepancies to a folder `out/`.
 --
@@ -17,7 +17,7 @@ create temporary table max_slotno as
   select
       max(slotno) as max_slotno
     from chain.block as cblock
-    inner join dbsync.block as dblock
+    inner join public.block as dblock
       on cblock.id = dblock.hash
 ;
 select max_slotno as "Latest Block in Common"
@@ -40,7 +40,8 @@ create temporary table cmp_block as
     from max_slotno
     inner join chain.block
       on slotno <= max_slotno
-    where slotno >= 0
+    where slotno > 0
+      and rollbacktoblock is null
   union all
   select
       'dbsync'
@@ -48,8 +49,10 @@ create temporary table cmp_block as
     , slot_no
     , block_no
     from max_slotno
-    inner join dbsync.block
+    inner join public.block
       on slot_no <= max_slotno
+    where
+      block_no > 0
 ;
 select
     source as "Source"
@@ -113,12 +116,14 @@ create temporary table cmp_tx as
     , tx_metadata.bytes
     , valid_contract
     from max_slotno
-    inner join dbsync.block
+    inner join public.block
       on block.slot_no <= max_slotno
-    inner join dbsync.tx
+    inner join public.tx
       on tx.block_id = block.id
-    left outer join dbsync.tx_metadata
+    left outer join public.tx_metadata
       on tx.id = tx_metadata.tx_id
+    where
+      block_no > 0
 ;
 select
     source as "Source"
@@ -187,14 +192,16 @@ create temporary table cmp_txout as
     , datum.bytes
     , not tx.valid_contract
     from max_slotno
-    inner join dbsync.block
+    inner join public.block
       on block.slot_no <= max_slotno
-    inner join dbsync.tx
+    inner join public.tx
       on tx.block_id = block.id
-    inner join dbsync.tx_out
+    inner join public.tx_out
       on tx_out.tx_id = tx.id
-    left outer join dbsync.datum
+    left outer join public.datum
       on datum.hash = tx_out.data_hash
+    where
+      block_no > 0
 ;
 select
     source as "Source"
@@ -256,20 +263,22 @@ create temporary table cmp_txin as
     , redeemer_data.bytes
     , not in_tx.valid_contract
     from max_slotno
-    inner join dbsync.block as block
+    inner join public.block as block
       on block.slot_no <= max_slotno
-    inner join dbsync.tx as in_tx
+    inner join public.tx as in_tx
       on in_tx.block_id = block.id
-    inner join dbsync.tx_in
+    inner join public.tx_in
       on tx_in.tx_in_id = in_tx.id
-    inner join dbsync.tx_out
+    inner join public.tx_out
       on tx_out.tx_id = tx_in.tx_out_id and tx_out.index = tx_in.tx_out_index
-    inner join dbsync.tx as out_tx
+    inner join public.tx as out_tx
       on out_tx.id = tx_out.tx_id
-    left outer join dbsync.redeemer
+    left outer join public.redeemer
       on redeemer.id = tx_in.redeemer_id
-    left outer join dbsync.redeemer_data
+    left outer join public.redeemer_data
       on redeemer_data.id = redeemer.redeemer_data_id
+    where
+      block_no > 0
 ;
 select
     source as "Source"
@@ -324,14 +333,16 @@ create temporary table cmp_asset as
     , multi_asset.policy
     , multi_asset.name
     from max_slotno
-    inner join dbsync.block
+    inner join public.block
       on block.slot_no <= max_slotno
-    inner join dbsync.tx
+    inner join public.tx
       on tx.block_id = block.id
-    inner join dbsync.ma_tx_mint
+    inner join public.ma_tx_mint
       on ma_tx_mint.tx_id = tx.id
-    inner join dbsync.multi_asset
+    inner join public.multi_asset
       on multi_asset.id = ident
+    where
+      block_no > 0
 ;
 select
     source as "Source"
@@ -392,14 +403,16 @@ create temporary table cmp_asset_mint as
     , multi_asset.name
     , ma_tx_mint.quantity
     from max_slotno
-    inner join dbsync.block
+    inner join public.block
       on block.slot_no <= max_slotno
-    inner join dbsync.tx
+    inner join public.tx
       on tx.block_id = block.id
-    inner join dbsync.ma_tx_mint
+    inner join public.ma_tx_mint
       on ma_tx_mint.tx_id = tx.id
-    inner join dbsync.multi_asset
+    inner join public.multi_asset
       on multi_asset.id = ident
+    where
+      block_no > 0
 ;
 select
     source as "Source"
@@ -462,16 +475,18 @@ create temporary table cmp_asset_out as
     , multi_asset.name
     , ma_tx_out.quantity
     from max_slotno
-    inner join dbsync.block as block
+    inner join public.block as block
       on block.slot_no <= max_slotno
-    inner join dbsync.tx as tx
+    inner join public.tx as tx
       on tx.block_id = block.id
-    inner join dbsync.tx_out
+    inner join public.tx_out
       on tx_out.tx_id = tx.id
-    inner join dbsync.ma_tx_out
+    inner join public.ma_tx_out
       on ma_tx_out.tx_out_id = tx_out.id
-    inner join dbsync.multi_asset
+    inner join public.multi_asset
       on multi_asset.id = ident
+    where
+      block_no > 0
 ;
 select
     source as "Source"
