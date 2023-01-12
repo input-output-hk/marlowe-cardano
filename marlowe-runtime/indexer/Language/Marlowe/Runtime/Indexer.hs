@@ -6,8 +6,11 @@
 module Language.Marlowe.Runtime.Indexer
   where
 
+import Cardano.Api (CardanoMode, EraHistory, SystemStart)
 import Control.Concurrent.Component
-import Language.Marlowe.Runtime.ChainSync.Api (RuntimeChainSeekClient)
+import Data.Set (Set)
+import Data.Time (NominalDiffTime)
+import Language.Marlowe.Runtime.ChainSync.Api (RuntimeChainSeekClient, ScriptHash)
 import Language.Marlowe.Runtime.Indexer.ChainSeekClient
 import Language.Marlowe.Runtime.Indexer.Database (DatabaseQueries)
 import Language.Marlowe.Runtime.Indexer.Store
@@ -21,6 +24,11 @@ data MarloweIndexerDependencies r = MarloweIndexerDependencies
   { eventBackend :: EventBackend IO r MarloweIndexerSelector
   , databaseQueries :: DatabaseQueries IO
   , runChainSeekClient :: RunClient IO RuntimeChainSeekClient
+  , pollingInterval :: NominalDiffTime
+  , marloweScriptHashes :: Set ScriptHash
+  , systemStart :: SystemStart
+  , eraHistory :: EraHistory CardanoMode
+  , securityParameter :: Int
   }
 
 marloweIndexer :: Component IO (MarloweIndexerDependencies r) ()

@@ -123,6 +123,7 @@ library indexer
     Language.Marlowe.Runtime.Indexer.Types
   build-depends:
       base >= 4.9 && < 5
+    , async
     , async-components
     , cardano-api
     , containers
@@ -132,6 +133,8 @@ library indexer
     , marlowe-runtime
     , marlowe-runtime:history-api
     , stm
+    , time
+    , these
   visibility: public
 
 library history
