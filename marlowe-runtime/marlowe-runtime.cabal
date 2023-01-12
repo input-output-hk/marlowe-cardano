@@ -124,9 +124,13 @@ library indexer
   build-depends:
       base >= 4.9 && < 5
     , async-components
+    , cardano-api
+    , containers
     , eventuo11y
     , marlowe-chain-sync
     , marlowe-protocols
+    , marlowe-runtime
+    , marlowe-runtime:history-api
     , stm
   visibility: public
 
