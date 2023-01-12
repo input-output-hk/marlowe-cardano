@@ -127,6 +127,11 @@
             program = "${packages.marlowe-tx}/bin/marlowe-tx";
           };
 
+          marlowe-web-server = {
+            type = "app";
+            program = "${packages.marlowe-web-server}/bin/marlowe-web-server";
+          };
+
           marlowe = {
             type = "app";
             program = "${packages.marlowe-rt}/bin/marlowe";
