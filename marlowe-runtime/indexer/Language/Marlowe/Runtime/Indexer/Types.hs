@@ -155,10 +155,17 @@ extractMarloweBlock systemStart eraHistory marloweScriptHashes blockHeader txs u
       $ mapMaybe (extractCreateTx marloweScriptHashes)
       $ Set.toList txs
 
+    creationTxs = Set.map (\TxOutRef{..} -> txId)
+      $ fold
+      $ Map.keysSet invalidCreationTxs : (Set.map unContractId . Map.keysSet . newContracts <$> createTxs)
+
     -- Update the MarloweUTxO with the successful creation transactions.
     utxo' = foldr updateMarloweUTxOForCreateTx utxo createTxs
 
-    (utxo'', invalidApplyInputsTxs, applyInputsTxs, withdrawTxs) = extractApplyInputsAndWithdrawTxs systemStart eraHistory blockHeader txs utxo'
+    -- Remove the creation transactions from the candidates of other transaction types.
+    txs' = Set.filter ((`Set.notMember` creationTxs) . \Transaction{..} -> txId) txs
+
+    (utxo'', invalidApplyInputsTxs, applyInputsTxs, withdrawTxs) = extractApplyInputsAndWithdrawTxs systemStart eraHistory blockHeader txs' utxo'
 
     transactions = fold
       [ CreateTransaction <$> createTxs
@@ -192,8 +199,18 @@ extractApplyInputsAndWithdrawTxs
   -> (MarloweUTxO, Map TxId ExtractMarloweTransactionError, [MarloweApplyInputsTransaction], [MarloweWithdrawTransaction])
 extractApplyInputsAndWithdrawTxs systemStart eraHistory blockHeader txs marloweUTxO@MarloweUTxO{..} =
   let
+    txList = Set.toList txs
+
     -- Extract all apply inputs transactions for the current UTxO.
-    applyInputsTxResults = mapMaybe (extractApplyInputsTx systemStart eraHistory blockHeader unspentContractOutputs) $ Set.toList txs
+    applyInputsTxResults = mapMaybe (extractApplyInputsTx systemStart eraHistory blockHeader unspentContractOutputs) txList
+
+    -- Track which txs were apply inputs txs to avoid repeatedly examining them.
+    applyInputsTxIds = Set.fromList $ applyInputsTxResults <&> \case
+      Left (txId, _) -> txId
+      Right MarloweApplyInputsTransaction{marloweTransaction = Core.Transaction{transactionId}} -> transactionId
+
+    -- Remove the apply inputs transactions from the list of txs.
+    txList' = filter ((`Set.notMember` applyInputsTxIds) . \Transaction{..} -> txId) txList
 
     -- Get the successful apply inputs transactions.
     applyInputsTxs = rights applyInputsTxResults
@@ -202,10 +219,16 @@ extractApplyInputsAndWithdrawTxs systemStart eraHistory blockHeader txs marloweU
     invalidApplyInputsTxs = Map.fromList $ lefts applyInputsTxResults
 
     -- Extract all withdraw transactions for the current UTxO.
-    withdrawTxs = mapMaybe (extractWithdrawTx unspentPayoutOutputs) $ Set.toList txs
+    withdrawTxs = mapMaybe (extractWithdrawTx unspentPayoutOutputs) txList'
+
+    -- Track which txs were withdraw txs to avoid repeatedly examining them.
+    withdrawTxIds = Set.fromList $ consumingTx <$> withdrawTxs
+
+    -- Remove the payout transactions from the list of txs.
+    txList'' = filter ((`Set.notMember` withdrawTxIds) . \Transaction{..} -> txId) txList'
   in
     case (applyInputsTxs, withdrawTxs) of
-      -- No apply inputs or withdraws were successfully extracted, check the errors and return.
+      -- No apply inputs or withdraws were successfully extracted, return empty-handed.
       ([], []) -> (MarloweUTxO{..}, invalidApplyInputsTxs, [], [])
 
       -- Some new transactions were extracted. Update the MarloweUTxO and run recursively to find more.
@@ -216,15 +239,20 @@ extractApplyInputsAndWithdrawTxs systemStart eraHistory blockHeader txs marloweU
             updateMarloweUTxOForWithdrawTx
             (foldr updateMarloweUTxOForApplyInputsTx marloweUTxO applyInputsTxs)
             withdrawTxs
-
-          -- Recursive call with new MarloweUTxO (NOTE not tail-call optimized)
-          (marloweUTxO'', invalidApplyInputsTxs', applyInputsTxs', withdrawTxs') = extractApplyInputsAndWithdrawTxs systemStart eraHistory blockHeader txs marloweUTxO'
         in
-          ( marloweUTxO''
-          , invalidApplyInputsTxs <> invalidApplyInputsTxs'
-          , applyInputsTxs <> applyInputsTxs'
-          , withdrawTxs <> withdrawTxs'
-          )
+          case txList'' of
+            -- No more transactions to inspect.
+            [] -> (marloweUTxO', invalidApplyInputsTxs, applyInputsTxs, withdrawTxs)
+            _ ->
+              let
+                -- Recursive call with new MarloweUTxO and remaining transactions (NOTE not tail-call optimized)
+                (marloweUTxO'', invalidApplyInputsTxs', applyInputsTxs', withdrawTxs') = extractApplyInputsAndWithdrawTxs systemStart eraHistory blockHeader (Set.fromList txList'') marloweUTxO'
+              in
+                ( marloweUTxO''
+                , invalidApplyInputsTxs <> invalidApplyInputsTxs'
+                , applyInputsTxs <> applyInputsTxs'
+                , withdrawTxs <> withdrawTxs'
+                )
 
 
 -- | Extracts a MarloweCreateTransaction from a Chain transaction. A single
