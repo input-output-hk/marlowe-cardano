@@ -1,6 +1,6 @@
 { sqitchPg, runCommand, writeShellScriptBin, writeText, lib, glibcLocales, networks }:
 let
-  network = networks.preview;
+  network = networks.preprod;
   run-sqitch = writeShellScriptBin "run-sqitch" ''
     export PATH="$PATH:${lib.makeBinPath [ sqitchPg ]}"
     export LOCALE_ARCHIVE="${glibcLocales}/lib/locale/locale-archive"
