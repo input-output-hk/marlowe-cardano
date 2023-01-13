@@ -10,6 +10,7 @@ module Language.Marlowe.Runtime.Indexer.Store
 import Control.Concurrent.Component
 import Control.Concurrent.STM (STM, atomically, modifyTVar, newTVar, readTVar, writeTVar)
 import Control.Monad (forever, guard, unless)
+import Data.Aeson (ToJSON)
 import Data.Foldable (for_, traverse_)
 import Data.Function (on)
 import Data.List (partition)
@@ -140,6 +141,8 @@ data ChangesStatistics = ChangesStatistics
   , applyInputsTxCount :: Int
   , withdrawTxCount :: Int
   } deriving (Show, Eq, Generic)
+
+instance ToJSON ChangesStatistics
 
 instance Semigroup ChangesStatistics where
   a <> b = ChangesStatistics

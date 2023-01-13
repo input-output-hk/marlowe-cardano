@@ -123,11 +123,13 @@ library indexer
     Language.Marlowe.Runtime.Indexer.Types
   build-depends:
       base >= 4.9 && < 5
+    , aeson
     , async
     , async-components
     , cardano-api
     , containers
     , eventuo11y
+    , eventuo11y-extras
     , marlowe-chain-sync
     , marlowe-protocols
     , marlowe-runtime
@@ -442,6 +444,31 @@ executable marlowe
     , yaml
   if !os(windows)
     build-depends: unix
+
+executable marlowe-indexer
+  import: lang
+  hs-source-dirs:   marlowe-indexer
+  main-is: Main.hs
+  other-modules:
+    Logging
+    Paths_marlowe_runtime
+  autogen-modules:
+    Paths_marlowe_runtime
+  build-depends:
+      base >= 4.9 && < 5
+    , async-components
+    , containers
+    , eventuo11y
+    , eventuo11y-extras
+    , marlowe-chain-sync
+    , marlowe-protocols
+    , marlowe-runtime
+    , marlowe-runtime:indexer
+    , network
+    , optparse-applicative
+    , text
+    , uuid
+  ghc-options: -threaded
 
 executable marlowe-history
   import: lang

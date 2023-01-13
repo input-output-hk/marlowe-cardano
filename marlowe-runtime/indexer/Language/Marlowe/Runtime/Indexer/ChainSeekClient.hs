@@ -182,8 +182,15 @@ chainSeekClient = component \ChainSeekClientDependencies{..} -> do
             -- A client state for sending the intersect request.
             clientIdleIntersect = SendMsgQueryNext (Intersect intersectionPoints) clientNextIntersect
 
-          -- Request an intersection
-          pure clientIdleIntersect
+          pure case intersectionPoints of
+            -- Just start the loop right away with an empty UTxO.
+            [] -> clientIdle RollbackStates
+              { currentState = MarloweUTxO mempty mempty
+              , currentBlockNumber = Genesis
+              , previousStates = []
+              }
+            -- Request an intersection
+            _ -> clientIdleIntersect
       }
       where
       -- A helper function to poll pending query results after a set timeout and
@@ -205,20 +212,31 @@ chainSeekClient = component \ChainSeekClientDependencies{..} -> do
       clientIdle
         :: RollbackStates MarloweUTxO
         -> ClientStIdle Move ChainPoint (WithGenesis BlockHeader) IO a
-      clientIdle states@RollbackStates{..} = SendMsgQueryNext (mkQuery currentState) (clientNext states)
+      clientIdle states@RollbackStates{..} = either
+        -- Extract all transactions from the query results using Bifoldbale instance for `These`.
+        (flip SendMsgQueryNext (clientNext (bifoldMap id (Set.fromList . Map.elems)) states))
+        -- Extract all transactions from the query results using the identity function.
+        (flip SendMsgQueryNext (clientNext id states))
+        (mkQuery currentState)
 
       -- Builds the next chain seek query for a given MarloweUTxO. It requests
       -- both transactions with outputs to the Marlowe validator as well as
       -- transactions that consume unspent outputs in the MarloweUTxO.
       -- The first query is used to discover new contracts, and the second is
       -- used to follow contracts that have been previously discovered.
-      mkQuery :: MarloweUTxO -> Move (These FindTxsToError (Map TxOutRef UTxOError)) (These (Set Transaction) (Map TxOutRef Transaction))
-      mkQuery MarloweUTxO{..} = Fork
-        -- Query txs that send outputs to any of the marlowe validators to discover new contracts.
-        (FindTxsTo $ Set.map ScriptCredential marloweScriptHashes)
+      mkQuery :: MarloweUTxO -> Either
+        (Move (These FindTxsToError (Map TxOutRef UTxOError)) (These (Set Transaction) (Map TxOutRef Transaction)))
+        (Move FindTxsToError (Set Transaction))
+      mkQuery MarloweUTxO{..} = if Set.null allUnspentOutputs
+        -- Don't send a FindConsumingTxs query if there are not unconsumed
+        -- outputs - it will fail with an error.
+        then Right $ FindTxsTo $ Set.map ScriptCredential marloweScriptHashes
+        else Left $ Fork
+          -- Query txs that send outputs to any of the marlowe validators to discover new contracts.
+          (FindTxsTo $ Set.map ScriptCredential marloweScriptHashes)
 
-        -- Query txs that spend any of the outputs in the MarloweUTxO to follow existing contracts.
-        (FindConsumingTxs allUnspentOutputs)
+          -- Query txs that spend any of the outputs in the MarloweUTxO to follow existing contracts.
+          (FindConsumingTxs allUnspentOutputs)
 
         where
           -- All the unspent transaction outputs from the MarloweUTxO (contract and payout)
@@ -228,16 +246,11 @@ chainSeekClient = component \ChainSeekClientDependencies{..} -> do
 
       -- Handles responses from the main synchronization loop query.
       clientNext
-        :: RollbackStates MarloweUTxO
-        -> ClientStNext
-            Move
-            (These FindTxsToError (Map TxOutRef UTxOError))
-            (These (Set Transaction) (Map TxOutRef Transaction))
-            ChainPoint
-            (WithGenesis BlockHeader)
-            IO
-            a
-      clientNext states = ClientStNext
+        :: Show err
+        => (res -> Set Transaction)
+        -> RollbackStates MarloweUTxO
+        -> ClientStNext Move err res ChainPoint (WithGenesis BlockHeader) IO a
+      clientNext transactionsFromResults states = ClientStNext
         -- Fail with an error if chainseekd rejects the query. This is safe
         -- from bad user input, because our queries are derived from the ledger
         -- state, and so will only be rejected if the query derivation is
@@ -258,8 +271,8 @@ chainSeekClient = component \ChainSeekClientDependencies{..} -> do
               Genesis -> fail "Unexpected tip at Genesis"
               At tipBlock -> pure tipBlock
 
-            -- Extract all transactions from the query results using Bifoldbale instance for `These`.
-            let txs = bifoldMap id (Set.fromList . Map.elems) result
+            -- Extract all transactions from the query results.
+            let txs = transactionsFromResults result
 
             -- Extract the Marlowe block and compute the next MarloweUTxO.
             marloweUTxO <- case extractMarloweBlock systemStart eraHistory marloweScriptHashes block txs $ currentState states of
@@ -282,7 +295,7 @@ chainSeekClient = component \ChainSeekClientDependencies{..} -> do
             emit $ RollBackward point tip
             pure $ clientIdle $ rollback (blockNo <$> point) states
 
-        , recvMsgWait = pollWithNext $ clientNext states
+        , recvMsgWait = pollWithNext $ clientNext transactionsFromResults states
         }
 
 -- A current state with a collection of previous states
