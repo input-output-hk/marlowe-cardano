@@ -18,7 +18,7 @@ SELECT txId, txIx, contract, state, rolesCurrency
 FROM marlowe.contractTxOut
 WHERE FALSE;
 
-SELECT txId, txIx, role
+SELECT txId, txIx, rolesCurrency, role
 FROM marlowe.payoutTxOut
 WHERE FALSE;
 

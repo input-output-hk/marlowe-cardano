@@ -119,6 +119,7 @@ library indexer
     Language.Marlowe.Runtime.Indexer.ChainSeekClient
     Language.Marlowe.Runtime.Indexer.Database
     Language.Marlowe.Runtime.Indexer.Database.PostgreSQL
+    Language.Marlowe.Runtime.Indexer.Database.PostgreSQL.CommitBlocks
     Language.Marlowe.Runtime.Indexer.Store
     Language.Marlowe.Runtime.Indexer.Types
   build-depends:
@@ -126,20 +127,28 @@ library indexer
     , aeson
     , async
     , async-components
+    , binary
+    , bytestring
     , cardano-api
     , containers
     , eventuo11y
     , eventuo11y-extras
+    , hasql
+    , hasql-th
+    , hasql-transaction
+    , marlowe
     , marlowe-chain-sync
     , marlowe-protocols
     , marlowe-runtime
     , marlowe-runtime:history-api
     , mtl
+    , plutus-ledger-api
     , stm
     , time
     , these
     , transformers
     , witherable
+    , vector
   visibility: public
 
 library history
@@ -463,6 +472,8 @@ executable marlowe-indexer
     , containers
     , eventuo11y
     , eventuo11y-extras
+    , hasql
+    , hasql-pool
     , marlowe-chain-sync
     , marlowe-protocols
     , marlowe-runtime
@@ -470,6 +481,7 @@ executable marlowe-indexer
     , network
     , optparse-applicative
     , text
+    , time
     , uuid
   ghc-options: -threaded
 

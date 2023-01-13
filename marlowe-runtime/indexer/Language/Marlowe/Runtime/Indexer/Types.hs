@@ -33,6 +33,7 @@ import Language.Marlowe.Runtime.ChainSync.Api
   , ScriptHash
   , Transaction(..)
   , TransactionInput(..)
+  , TransactionMetadata
   , TransactionOutput(..)
   , TxId
   , TxOutRef(..)
@@ -63,24 +64,28 @@ data MarloweTransaction
   | InvalidApplyInputsTransaction TxId ExtractMarloweTransactionError
   deriving (Eq, Show, Generic)
 
-newtype MarloweCreateTransaction = MarloweCreateTransaction
+data MarloweCreateTransaction = MarloweCreateTransaction
   { newContracts :: Map ContractId SomeCreateStep
+  , metadata :: TransactionMetadata
   } deriving (Eq, Show, Generic)
 
 data MarloweApplyInputsTransaction = forall v. MarloweApplyInputsTransaction
   { marloweVersion :: Core.MarloweVersion v
+  , inputTxOutRef :: TxOutRef
   , marloweTransaction :: Core.Transaction v
   }
 
 instance Eq MarloweApplyInputsTransaction where
-  MarloweApplyInputsTransaction Core.MarloweV1 txA == MarloweApplyInputsTransaction Core.MarloweV1 txB = txA == txB
+  MarloweApplyInputsTransaction Core.MarloweV1 inpA txA == MarloweApplyInputsTransaction Core.MarloweV1 inpB txB = txA == txB && inpA == inpB
 
 instance Show MarloweApplyInputsTransaction where
-  showsPrec p (MarloweApplyInputsTransaction Core.MarloweV1 tx) =
+  showsPrec p (MarloweApplyInputsTransaction Core.MarloweV1 inp tx) =
     showParen (p >= 11)
       ( showString "MarloweApplyInputsTransaction"
       . showSpace
       . showsPrec 11 Core.MarloweV1
+      . showSpace
+      . showsPrec 11 inp
       . showSpace
       . showsPrec 11 tx
       )
@@ -285,6 +290,7 @@ extractApplyInputsTx systemStart eraHistory blockHeader tx@Transaction{inputs, t
 
     pure MarloweApplyInputsTransaction
       { marloweVersion
+      , inputTxOutRef = txOutRef
       , marloweTransaction
       }
 

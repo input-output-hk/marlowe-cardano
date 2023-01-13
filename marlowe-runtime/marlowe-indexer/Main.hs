@@ -6,17 +6,23 @@ module Main
 import Control.Arrow (arr, (<<<))
 import Control.Concurrent.Component
 import Control.Exception (throwIO)
+import Control.Monad ((<=<))
 import Data.Either (fromRight)
 import qualified Data.Set as Set
+import Data.String (fromString)
 import qualified Data.Text.Lazy.IO as TL
+import Data.Time (secondsToNominalDiffTime)
 import Data.UUID.V4 (nextRandom)
 import Data.Void (Void)
+import Hasql.Pool
+import qualified Hasql.Pool as Pool
+import qualified Hasql.Session as Session
 import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncQuery(..), WithGenesis(..), runtimeChainSeekCodec)
 import Language.Marlowe.Runtime.Core.Api (MarloweVersion(..))
 import qualified Language.Marlowe.Runtime.Core.ScriptRegistry as ScriptRegistry
 import Language.Marlowe.Runtime.Indexer (MarloweIndexerDependencies(..), marloweIndexer)
-import Language.Marlowe.Runtime.Indexer.Database (DatabaseQueries(..))
-import Language.Marlowe.Runtime.Indexer.Types (MarloweUTxO(MarloweUTxO))
+import Language.Marlowe.Runtime.Indexer.Database (hoistDatabaseQueries)
+import qualified Language.Marlowe.Runtime.Indexer.Database.PostgreSQL as PostgreSQL
 import Logging (RootSelector(..), getRootSelectorConfig)
 import Network.Protocol.ChainSeek.Client (chainSeekClientPeer)
 import Network.Protocol.Driver (runClientPeerOverSocket, runClientPeerOverSocketWithLogging)
@@ -38,6 +44,7 @@ import Options.Applicative
   , option
   , optional
   , progDesc
+  , short
   , showDefault
   , strOption
   , value
@@ -52,6 +59,7 @@ clientHints = defaultHints { addrSocketType = Stream }
 
 run :: Options -> IO ()
 run Options{..} = withSocketsDo do
+  pool <- Pool.acquire (100, secondsToNominalDiffTime 5, fromString databaseUri)
   systemStart <- queryChainSync GetSystemStart
   eraHistory <- queryChainSync GetEraHistory
   securityParameter <- queryChainSync GetSecurityParameter
@@ -66,12 +74,9 @@ run Options{..} = withSocketsDo do
             runtimeChainSeekCodec
             (chainSeekClientPeer Genesis)
             client
-      , databaseQueries = DatabaseQueries
-          { commitRollback = mempty
-          , commitBlocks = mempty
-          , getIntersectionPoints = pure []
-          , getMarloweUTxO = const $ pure $ MarloweUTxO mempty mempty
-          }
+      , databaseQueries = hoistDatabaseQueries
+          (either throwUsageError pure <=< Pool.use pool)
+          PostgreSQL.databaseQueries
       , eventBackend = narrowEventBackend App eventBackend
       , pollingInterval = 1
       , marloweScriptHashes = Set.map ScriptRegistry.marloweScript $ ScriptRegistry.getScripts MarloweV1
@@ -89,6 +94,9 @@ run Options{..} = withSocketsDo do
     , injectConfigWatcherSelector = ConfigWatcher
     }
   where
+    throwUsageError (ConnectionError err)                       = error $ show err
+    throwUsageError (SessionError (Session.QueryError _ _ err)) = error $ show err
+
     queryChainSeek :: ChainSyncQuery Void e a -> IO (Either e a)
     queryChainSeek query = do
       addr <- head <$> getAddrInfo (Just clientHints) (Just chainSeekHost) (Just $ show chainSeekQueryPort)
@@ -98,10 +106,11 @@ run Options{..} = withSocketsDo do
     queryChainSync = fmap (fromRight $ error "failed to query chain seek server") . queryChainSeek
 
 data Options = Options
-  { chainSeekPort      :: PortNumber
+  { chainSeekPort :: PortNumber
   , chainSeekQueryPort :: PortNumber
-  , chainSeekHost      :: HostName
-  , logConfigFile      :: Maybe FilePath
+  , chainSeekHost :: HostName
+  , databaseUri :: String
+  , logConfigFile :: Maybe FilePath
   }
 
 getOptions :: IO Options
@@ -111,6 +120,7 @@ getOptions = execParser $ info (helper <*> parser) infoMod
       <$> chainSeekPortParser
       <*> chainSeekQueryPortParser
       <*> chainSeekHostParser
+      <*> databaseUriParser
       <*> logConfigFileParser
 
     chainSeekPortParser = option auto $ mconcat
@@ -135,6 +145,13 @@ getOptions = execParser $ info (helper <*> parser) infoMod
       , metavar "HOST_NAME"
       , help "The host name of the chain seek server."
       , showDefault
+      ]
+
+    databaseUriParser = strOption $ mconcat
+      [ long "database-uri"
+      , short 'd'
+      , metavar "DATABASE_URI"
+      , help "URI of the database where the contract information is saved."
       ]
 
     logConfigFileParser = optional $ strOption $ mconcat

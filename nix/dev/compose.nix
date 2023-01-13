@@ -8,6 +8,13 @@ let
     exec sqitch deploy "$@"
   '';
 
+  run-sqitch-marlowe-indexer = writeShellScriptBin "run-sqitch-marlowe-indexer" ''
+    export PATH="$PATH:${lib.makeBinPath [ sqitchPg ]}"
+    export LOCALE_ARCHIVE="${glibcLocales}/lib/locale/locale-archive"
+    cd /src/marlowe-runtime/marlowe-indexer
+    exec sqitch deploy "$@"
+  '';
+
   run-local-service = project: version: prog: writeShellScriptBin "run-${prog}" ''
     set -e
     PROG=${lib.escapeShellArg prog}
@@ -22,6 +29,7 @@ let
   symlinks = runCommand "symlinks" { } ''
     mkdir -p $out
     ln -sv ${run-sqitch}/bin/run-sqitch $out
+    ln -sv ${run-sqitch-marlowe-indexer}/bin/run-sqitch-marlowe-indexer $out
     ln -sv ${run-local-service "marlowe-chain-sync" "0.0.0.0" "marlowe-chain-indexer"}/bin/run-marlowe-chain-indexer $out
     ln -sv ${run-local-service "marlowe-chain-sync" "0.0.0.0" "chainseekd"}/bin/run-chainseekd $out
     ln -sv ${run-local-service "marlowe-runtime" "0.0.0.0" "marlowe-history"}/bin/run-marlowe-history $out
@@ -127,7 +135,13 @@ let
       "chainseekd"
       "--log-config-file"
       "./marlowe-indexer.log.config"
+      "--database-uri"
+      "postgresql://postgres@postgres/chain"
     ];
+    healthcheck = {
+      test = "/exec/run-sqitch-marlowe-indexer -h postgres";
+      retries = 0;
+    };
   };
 
   chainseekd-service = dev-service {

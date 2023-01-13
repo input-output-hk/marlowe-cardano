@@ -90,6 +90,7 @@ CREATE INDEX applyTx_blockId ON marlowe.applyTx USING BTREE (blockId);
 CREATE TABLE marlowe.payoutTxOut
   ( txId BYTEA NOT NULL
   , txIx SMALLINT NOT NULL
+  , rolesCurrency BYTEA NOT NULL
   , role BYTEA NOT NULL
   , PRIMARY KEY (txId, txIx)
   , FOREIGN KEY (txId, txIx) REFERENCES marlowe.txOut
