@@ -121,6 +121,7 @@ library indexer
     Language.Marlowe.Runtime.Indexer.Database.PostgreSQL
     Language.Marlowe.Runtime.Indexer.Database.PostgreSQL.CommitBlocks
     Language.Marlowe.Runtime.Indexer.Database.PostgreSQL.CommitRollback
+    Language.Marlowe.Runtime.Indexer.Database.PostgreSQL.GetIntersectionPoints
     Language.Marlowe.Runtime.Indexer.Store
     Language.Marlowe.Runtime.Indexer.Types
   build-depends:
