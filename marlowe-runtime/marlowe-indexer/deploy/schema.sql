@@ -52,17 +52,6 @@ CREATE TABLE marlowe.contractTxOut
   , FOREIGN KEY (txId, txIx) REFERENCES marlowe.txOut
   );
 
--- Create the payoutTxOut table
-CREATE TABLE marlowe.payoutTxOut
-  ( txId BYTEA NOT NULL
-  , txIx SMALLINT NOT NULL
-  , role BYTEA NOT NULL
-  , PRIMARY KEY (txId, txIx)
-  , FOREIGN KEY (txId, txIx) REFERENCES marlowe.txOut
-  );
-
-CREATE INDEX payoutTxOut_txId ON marlowe.payoutTxOut USING BTREE (txId);
-
 -- Create the createTxOut table
 CREATE TABLE marlowe.createTxOut
   ( txId BYTEA NOT NULL
@@ -96,6 +85,18 @@ CREATE TABLE marlowe.applyTx
   );
 
 CREATE INDEX applyTx_blockId ON marlowe.applyTx USING BTREE (blockId);
+
+-- Create the payoutTxOut table
+CREATE TABLE marlowe.payoutTxOut
+  ( txId BYTEA NOT NULL
+  , txIx SMALLINT NOT NULL
+  , role BYTEA NOT NULL
+  , PRIMARY KEY (txId, txIx)
+  , FOREIGN KEY (txId, txIx) REFERENCES marlowe.txOut
+  , FOREIGN KEY (txId) REFERENCES marlowe.applyTx
+  );
+
+CREATE INDEX payoutTxOut_txId ON marlowe.payoutTxOut USING BTREE (txId);
 
 -- Create the withdrawalTxIn table
 CREATE TABLE marlowe.withdrawalTxIn

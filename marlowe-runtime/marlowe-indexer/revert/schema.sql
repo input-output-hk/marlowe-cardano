@@ -3,9 +3,9 @@
 BEGIN;
 
 DROP TABLE marlowe.withdrawalTxIn;
+DROP TABLE marlowe.payoutTxOut;
 DROP TABLE marlowe.applyTx;
 DROP TABLE marlowe.createTxOut;
-DROP TABLE marlowe.payoutTxOut;
 DROP TABLE marlowe.contractTxOut;
 DROP TABLE marlowe.txOutAsset;
 DROP TABLE marlowe.txOut;
