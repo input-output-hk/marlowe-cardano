@@ -157,8 +157,35 @@ select
 ;
 \copy (select * from x_tx order by 2, 3, 4, 5, 6, 7, 1) to 'out/tx-discrepancies.csv' CSV HEADER
 
--- FIXME: Add metadata substring find.
 
+\qecho
+\qecho Tx metadata comparison
+\qecho
+
+drop table if exists x_metadata;
+create temporary table x_metadata as
+  select
+      id
+    , m_tx.metadata as "chainindex_metadata"
+    , c_tx.metadata as "dbsync_metadata"
+    from cmp_tx as m_tx
+    inner join cmp_tx as c_tx
+      using (id)
+    where m_tx.source = 'chainindex'
+      and c_tx.source = 'dbsync'
+      and (m_tx.metadata is not null or c_tx.metadata is not null)
+      and (
+           m_tx.metadata is not null and c_tx.metadata is     null
+        or c_tx.metadata is     null and c_tx.metadata is not null
+        or position(right(encode(c_tx.metadata, 'hex'), -4) in encode(m_tx.metadata, 'hex')) = 0
+      )
+;
+select
+  count(*) as "Count of Tx Metadata Discrepancies"
+  from x_metadata
+;
+\copy (select * from x_metadata order by 1, 2, 3) to 'out/metadata-discrepancies.csv' CSV HEADER
+    
 
 \qecho
 \qecho TxOut comparison.
@@ -534,39 +561,45 @@ create table x_summary as
   union all
   select
       'tx'
-    , (select count(*) from x_tx where comparison = 'chainindex-dbsync') as "Count of ChainIndex Minus DbSync"
-    , (select count(*) from x_tx where comparison = 'dbsync-chainindex') as "Count of DbSync Minus ChainIndex"
-    , (select count(*) from x_tx) > 0 as "Discrepancies?"
+    , (select count(*) from x_tx where comparison = 'chainindex-dbsync')
+    , (select count(*) from x_tx where comparison = 'dbsync-chainindex')
+    , (select count(*) from x_tx) > 0
+  union all
+  select
+      'metadata'
+    , (select count(*) from x_metadata)
+    , (select count(*) from x_metadata)
+    , (select count(*) from x_metadata) > 0
   union all
   select
       'txout'
-    , (select count(*) from x_txout where comparison = 'chainindex-dbsync') as "Count of ChainIndex Minus DbSync"
-    , (select count(*) from x_txout where comparison = 'dbsync-chainindex') as "Count of DbSync Minus ChainIndex"
-    , (select count(*) from x_txout) > 0 as "Discrepancies?"
+    , (select count(*) from x_txout where comparison = 'chainindex-dbsync')
+    , (select count(*) from x_txout where comparison = 'dbsync-chainindex')
+    , (select count(*) from x_txout) > 0
   union all
   select
       'txin'
-    , (select count(*) from x_txin where comparison = 'chainindex-dbsync') as "Count of ChainIndex Minus DbSync"
-    , (select count(*) from x_txin where comparison = 'dbsync-chainindex') as "Count of DbSync Minus ChainIndex"
-    , (select count(*) from x_txin) > 0 as "Discrepancies?"
+    , (select count(*) from x_txin where comparison = 'chainindex-dbsync')
+    , (select count(*) from x_txin where comparison = 'dbsync-chainindex')
+    , (select count(*) from x_txin) > 0
   union all
   select
       'asset'
-    , (select count(*) from x_asset where comparison = 'chainindex-dbsync') as "Count of ChainIndex Minus DbSync"
-    , (select count(*) from x_asset where comparison = 'dbsync-chainindex') as "Count of DbSync Minus ChainIndex"
-    , (select count(*) from x_asset) > 0 as "Discrepancies?"
+    , (select count(*) from x_asset where comparison = 'chainindex-dbsync')
+    , (select count(*) from x_asset where comparison = 'dbsync-chainindex')
+    , (select count(*) from x_asset) > 0
   union all
   select
       'assetmint'
-    , (select count(*) from x_asset_mint where comparison = 'chainindex-dbsync') as "Count of ChainIndex Minus DbSync"
-    , (select count(*) from x_asset_mint where comparison = 'dbsync-chainindex') as "Count of DbSync Minus ChainIndex"
-    , (select count(*) from x_asset_mint) > 0 as "Discrepancies?"
+    , (select count(*) from x_asset_mint where comparison = 'chainindex-dbsync')
+    , (select count(*) from x_asset_mint where comparison = 'dbsync-chainindex')
+    , (select count(*) from x_asset_mint) > 0
   union all
   select
       'assetout'
-    , (select count(*) from x_asset_out where comparison = 'chainindex-dbsync') as "Count of ChainIndex Minus DbSync"
-    , (select count(*) from x_asset_out where comparison = 'dbsync-chainindex') as "Count of DbSync Minus ChainIndex"
-    , (select count(*) from x_asset_out) > 0 as "Discrepancies?"
+    , (select count(*) from x_asset_out where comparison = 'chainindex-dbsync')
+    , (select count(*) from x_asset_out where comparison = 'dbsync-chainindex')
+    , (select count(*) from x_asset_out) > 0
 ;
 select *
   from x_summary
