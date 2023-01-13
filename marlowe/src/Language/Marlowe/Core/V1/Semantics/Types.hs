@@ -108,7 +108,7 @@ import PlutusTx.Lift (makeLift)
 import PlutusTx.Prelude hiding (encodeUtf8, mapM, (<$>), (<*>), (<>))
 import Prelude (mapM, (<$>))
 import qualified Prelude as Haskell
-import Text.PrettyPrint.Leijen (text)
+import Text.PrettyPrint.Leijen (parens, text)
 
 
 -- Functions that used in Plutus Core must be inlinable,
@@ -126,8 +126,8 @@ data Party =
   deriving stock (Generic,Haskell.Eq,Haskell.Ord)
 
 instance Pretty Party where
-  prettyFragment (Address network address) = text $ "Address " ++ Haskell.show (serialiseAddressBech32 network address)
-  prettyFragment (Role role)               = text $ "Role "    ++ Haskell.show role
+  prettyFragment (Address network address) = parens $ text "Address " Haskell.<> prettyFragment (serialiseAddressBech32 network address)
+  prettyFragment (Role role)               = parens $ text "Role "    Haskell.<> prettyFragment role
 
 instance Haskell.Show Party where
   showsPrec _ (Address network address) = Haskell.showsPrec 11 $ Haskell.show (serialiseAddressBech32 network address)
