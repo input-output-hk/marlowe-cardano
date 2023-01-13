@@ -14,9 +14,13 @@ import Data.Aeson (ToJSON)
 import Data.Foldable (for_, traverse_)
 import Data.Function (on)
 import Data.List (partition)
+import Data.Map (Map)
+import qualified Data.Map as Map
 import Data.Semigroup (Last(..))
 import GHC.Generics (Generic)
-import Language.Marlowe.Runtime.ChainSync.Api (ChainPoint, WithGenesis(..))
+import Language.Marlowe.Runtime.ChainSync.Api (ChainPoint, TxId, WithGenesis(..))
+import Language.Marlowe.Runtime.Core.Api (ContractId)
+import Language.Marlowe.Runtime.History.Api (ExtractCreationError, ExtractMarloweTransactionError)
 import Language.Marlowe.Runtime.Indexer.ChainSeekClient (ChainEvent(..))
 import Language.Marlowe.Runtime.Indexer.Database (DatabaseQueries(..))
 import Language.Marlowe.Runtime.Indexer.Types (MarloweBlock(..), MarloweTransaction(..))
@@ -30,6 +34,8 @@ data SaveField
   | Stats ChangesStatistics
   | LocalTip ChainPoint
   | RemoteTip ChainPoint
+  | InvalidCreateTxs (Map ContractId ExtractCreationError)
+  | InvalidApplyInputsTxs (Map TxId ExtractMarloweTransactionError)
 
 data StoreDependencies r = StoreDependencies
   { databaseQueries :: DatabaseQueries IO
@@ -49,7 +55,8 @@ aggregator = component \pullEvent -> do
     readChanges = do
       changes <- readTVar changesVar
       guard case changes of
-        Changes Nothing [] _ _ _-> False
+        Changes Nothing [] _ _ _ invalidCreateTxs invalidApplyInputsTxs ->
+          not $ Map.null invalidCreateTxs && Map.null invalidApplyInputsTxs
         _ -> True
       writeTVar changesVar mempty
       pure changes
@@ -59,7 +66,18 @@ aggregator = component \pullEvent -> do
       let
         changes = case event of
           RollForward block point tip ->
-            mempty { blocks = [block], statistics = computeStats block, localTip = Just point, remoteTip = Just tip }
+            mempty
+              { blocks = [block]
+              , statistics = computeStats block
+              , localTip = Just point
+              , remoteTip = Just tip
+              , invalidCreateTxs = flip foldMap (transactions block) \case
+                  InvalidCreateTransaction contractId err -> Map.singleton contractId err
+                  _ -> mempty
+              , invalidApplyInputsTxs = flip foldMap (transactions block) \case
+                  InvalidApplyInputsTransaction txId err -> Map.singleton txId err
+                  _ -> mempty
+              }
           RollBackward point tip ->
             mempty { rollbackTo = Just point, localTip = Just point, remoteTip = Just tip }
       modifyTVar changesVar (<> changes)
@@ -81,6 +99,8 @@ persister = component_ \PersisterDependencies{..} -> forever do
     for_ rollbackTo \point -> do
       addField ev $ RollbackPoint point
       commitRollback databaseQueries point
+    unless (Map.null invalidCreateTxs) $ addField ev $ InvalidCreateTxs invalidCreateTxs
+    unless (Map.null invalidApplyInputsTxs) $ addField ev $ InvalidApplyInputsTxs invalidApplyInputsTxs
     unless (null blocks) $ commitBlocks databaseQueries blocks
 
 data Changes = Changes
@@ -89,6 +109,8 @@ data Changes = Changes
   , statistics :: ChangesStatistics
   , localTip :: Maybe ChainPoint
   , remoteTip :: Maybe ChainPoint
+  , invalidCreateTxs :: Map ContractId ExtractCreationError
+  , invalidApplyInputsTxs :: Map TxId ExtractMarloweTransactionError
   } deriving (Show, Eq, Generic)
 
 instance Semigroup Changes where
@@ -101,7 +123,9 @@ instance Semigroup Changes where
         , blocks = on (<>) blocks a' b
         , statistics = on (<>) statistics a' b
         , localTip = getLast $ on (<>) (Last . localTip) a b
-        , remoteTip = getLast $ on (<>) (Last . localTip) a b
+        , remoteTip = getLast $ on (<>) (Last . remoteTip) a b
+        , invalidCreateTxs = on (<>) invalidCreateTxs a b
+        , invalidApplyInputsTxs = on (<>) invalidApplyInputsTxs a b
         }
 
 applyRollback :: ChainPoint -> Changes -> Changes
@@ -131,9 +155,10 @@ computeStats MarloweBlock{..} = (foldMap computeTxStats transactions) { blockCou
     computeTxStats CreateTransaction{} = mempty { createTxCount = 1 }
     computeTxStats ApplyInputsTransaction{} = mempty { applyInputsTxCount = 1 }
     computeTxStats WithdrawTransaction{} = mempty { withdrawTxCount = 1 }
+    computeTxStats _ = mempty
 
 instance Monoid Changes where
-  mempty = Changes Nothing mempty mempty Nothing Nothing
+  mempty = Changes Nothing mempty mempty Nothing Nothing mempty mempty
 
 data ChangesStatistics = ChangesStatistics
   { blockCount :: Int

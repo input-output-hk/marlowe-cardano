@@ -134,9 +134,12 @@ library indexer
     , marlowe-protocols
     , marlowe-runtime
     , marlowe-runtime:history-api
+    , mtl
     , stm
     , time
     , these
+    , transformers
+    , witherable
   visibility: public
 
 library history

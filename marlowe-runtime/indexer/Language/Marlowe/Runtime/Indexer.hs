@@ -53,14 +53,20 @@ getStoreSelectorConfig = \case
         Stats _ -> "stats"
         LocalTip _ -> "local-tip"
         RemoteTip _ -> "remote-tip"
+        InvalidCreateTxs _ -> "invalid-create-txs"
+        InvalidApplyInputsTxs _ -> "invalid-apply-inputs-txs"
     , fieldDefaultEnabled = \case
         RollbackPoint _ -> True
         Stats _ -> True
         LocalTip _ -> True
         RemoteTip _ -> True
+        InvalidCreateTxs _ -> True
+        InvalidApplyInputsTxs _ -> True
     , toSomeJSON = \case
         RollbackPoint point -> SomeJSON point
         Stats stats -> SomeJSON stats
         LocalTip point -> SomeJSON point
         RemoteTip point -> SomeJSON point
+        InvalidCreateTxs errs -> SomeJSON errs
+        InvalidApplyInputsTxs errs -> SomeJSON errs
     }

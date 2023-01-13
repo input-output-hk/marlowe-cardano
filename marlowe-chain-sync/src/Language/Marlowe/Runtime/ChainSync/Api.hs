@@ -393,6 +393,9 @@ instance IsString Base16 where
 instance ToJSON Base16 where
   toJSON = toJSON . encodeBase16 . unBase16
 
+instance ToJSONKey Base16 where
+  toJSONKey = toJSONKeyText $ encodeBase16 . unBase16
+
 newtype DatumHash = DatumHash { unDatumHash :: ByteString }
   deriving stock (Eq, Ord, Generic)
   deriving newtype (Binary)
@@ -401,7 +404,7 @@ newtype DatumHash = DatumHash { unDatumHash :: ByteString }
 newtype TxId = TxId { unTxId :: ByteString }
   deriving stock (Eq, Ord, Generic)
   deriving newtype (Binary)
-  deriving (IsString, Show, ToJSON) via Base16
+  deriving (IsString, Show, ToJSON, ToJSONKey) via Base16
 
 newtype TxIx = TxIx { unTxIx :: Word16 }
   deriving stock (Show, Eq, Ord, Generic)
