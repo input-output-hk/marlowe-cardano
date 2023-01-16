@@ -1,4 +1,5 @@
 {-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE StrictData #-}
 
@@ -14,7 +15,7 @@ import Control.Monad.Trans (lift)
 import Control.Monad.Trans.Except (except)
 import Control.Monad.Trans.Maybe (MaybeT(..))
 import Control.Monad.Trans.Writer (WriterT, execWriterT)
-import Control.Monad.Writer.Class (tell)
+import Control.Monad.Writer.Class (MonadWriter, listens, tell)
 import Data.Aeson (ToJSON)
 import Data.Foldable (for_)
 import Data.List (find)
@@ -50,7 +51,7 @@ import Language.Marlowe.Runtime.History.Api
   , extractCreation
   , extractMarloweTransaction
   )
-import Witherable (wither)
+import Witherable (Witherable, wither)
 
 data MarloweBlock = MarloweBlock
   { blockHeader :: BlockHeader
@@ -163,13 +164,32 @@ extractMarloweBlock
   -> Maybe (MarloweUTxO, MarloweBlock)
 extractMarloweBlock systemStart eraHistory marloweScriptHashes blockHeader txs =
   sequenceA . swap . runState do
-    transactions <- execWriterT $ for_ txs \tx -> do
-      extractCreateTx marloweScriptHashes tx
-      extractApplyInputsTx systemStart eraHistory blockHeader tx
-      extractWithdrawTx tx
+    transactions <- execWriterT $ retrySilentUntilAllSilent (Set.toList txs) \tx -> untilNonSilent
+      [ extractCreateTx marloweScriptHashes tx
+      , extractApplyInputsTx systemStart eraHistory blockHeader tx
+      , extractWithdrawTx tx
+      ]
     pure case transactions of
       [] -> Nothing
       x : xs -> Just MarloweBlock { blockHeader, transactions = x :| xs }
+
+-- Tries the list of provided writer actions in the given order until one
+-- produces some output.
+untilNonSilent :: MonadWriter [w] m => [m ()] -> m ()
+untilNonSilent [] = pure ()
+untilNonSilent (w : ws) = do
+  (_, isSilent) <- listens null w
+  when isSilent $ untilNonSilent ws
+
+-- Runs the given writer action for each element in a structure. If any actions
+-- produce output, the silent elements
+-- (the ones that did not produce any output) will be retried
+retrySilentUntilAllSilent :: (Witherable t, MonadWriter [w] m) => t a -> (a -> m ()) -> m ()
+retrySilentUntilAllSilent as f = do
+  (as', allSilent) <- listens null $ flip wither as \a -> do
+    (_, isSilent) <- listens null $ f a
+    pure $ a <$ guard isSilent
+  if allSilent then pure () else retrySilentUntilAllSilent as' f
 
 -- | Extracts a MarloweCreateTransaction from a Chain transaction. A single
 -- transaction can create multiple Marlowe contracts, and this function returns
