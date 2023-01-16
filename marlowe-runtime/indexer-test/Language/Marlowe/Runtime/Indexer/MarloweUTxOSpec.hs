@@ -60,7 +60,7 @@ extractWithdrawTxSpec = describe "extractWithdrawTx" do
         in
           not (null txIns) ==>
             evalState (execWriterT $ extractWithdrawTx tx) utxo === [expected]
-  prop "Payouts don't vanish" $ forAll genTxId \txId ->
+  prop "Payouts are conserved" $ forAll genTxId \txId ->
     forAll (Set.fromList <$> listOf1 genTxIn) \txIns ->
       forAll genMarloweUTxO \utxo ->
         let
