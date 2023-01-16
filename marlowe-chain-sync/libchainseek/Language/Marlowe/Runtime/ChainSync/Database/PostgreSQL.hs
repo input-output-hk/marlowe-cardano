@@ -304,18 +304,14 @@ performFindTxsTo credentials point = do
       WITH credentials (addressHeader,  addressPaymentCredential) as
         ( SELECT * FROM UNNEST ($1 :: bytea[], $2 :: bytea[])
         )
-      , txIds (id) AS
-        ( SELECT DISTINCT txOut.txId
-            FROM chain.txOut
+      , txIds (id, slotNo) AS
+        ( SELECT DISTINCT txOut.txId, txOut.slotNo
+            FROM chain.txOut as txOut
             JOIN credentials USING (addressHeader, addressPaymentCredential)
+           WHERE txOut.slotNo > $3 :: bigint
         )
       , nextSlot (slotNo) AS
-        ( SELECT MIN(block.slotNo)
-            FROM chain.tx    AS tx
-            JOIN txIds                USING (id)
-            JOIN chain.block AS block ON block.id = tx.blockId AND block.slotNo = tx.slotNo
-           WHERE block.slotNo > $3 :: bigint
-             AND block.rollbackToBlock IS NULL
+        ( SELECT MIN(slotNo) FROM txIds
         )
       SELECT block.slotNo :: bigint?
            , block.id :: bytea?
