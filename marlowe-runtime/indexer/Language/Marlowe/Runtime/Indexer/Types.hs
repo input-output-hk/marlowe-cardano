@@ -15,6 +15,7 @@ import Control.Monad.Trans.Except (except)
 import Control.Monad.Trans.Maybe (MaybeT(..))
 import Control.Monad.Trans.Writer (WriterT, execWriterT)
 import Control.Monad.Writer.Class (tell)
+import Data.Aeson (ToJSON)
 import Data.Foldable (for_)
 import Data.List (find)
 import Data.List.NonEmpty (NonEmpty(..))
@@ -61,7 +62,7 @@ data MarloweTransaction
   | ApplyInputsTransaction MarloweApplyInputsTransaction
   | WithdrawTransaction MarloweWithdrawTransaction
   | InvalidCreateTransaction ContractId ExtractCreationError
-  | InvalidApplyInputsTransaction TxId ExtractMarloweTransactionError
+  | InvalidApplyInputsTransaction TxId TxOutRef ExtractMarloweTransactionError
   deriving (Eq, Show, Generic)
 
 data MarloweCreateTransaction = MarloweCreateTransaction
@@ -106,9 +107,11 @@ data MarloweUTxO = MarloweUTxO
     -- ^ The UTxO set to the payout validators keyed by the contract Id
   } deriving (Eq, Show, Generic)
 
+instance ToJSON MarloweUTxO
+
 -- | Information about an unspent contract transaction output.
-data UnspentContractOutput = forall v. UnspentContractOutput
-  { marloweVersion :: Core.MarloweVersion v
+data UnspentContractOutput = UnspentContractOutput
+  { marloweVersion :: Core.SomeMarloweVersion
   -- ^ The version of the contract.
 
   , txOutRef :: TxOutRef
@@ -119,16 +122,18 @@ data UnspentContractOutput = forall v. UnspentContractOutput
 
   , payoutValidatorHash :: ScriptHash
   -- ^ The hash of the payout validator.
-  }
+  } deriving Generic
 
+instance ToJSON UnspentContractOutput
 
 instance Eq UnspentContractOutput where
-  UnspentContractOutput Core.MarloweV1 refA addrA pHashA == UnspentContractOutput Core.MarloweV1 refB addrB pHashB =
+  UnspentContractOutput (Core.SomeMarloweVersion Core.MarloweV1) refA addrA pHashA
+    == UnspentContractOutput (Core.SomeMarloweVersion Core.MarloweV1) refB addrB pHashB =
     refA == refB && addrA == addrB && pHashA == pHashB
 
 
 instance Show UnspentContractOutput where
-  showsPrec p (UnspentContractOutput Core.MarloweV1 ref addr pHash) =
+  showsPrec p (UnspentContractOutput (Core.SomeMarloweVersion Core.MarloweV1) ref addr pHash) =
     showParen (p >= 11)
       ( showString "UnspentContractOutput"
       . showSpace
@@ -207,11 +212,12 @@ extractCreateTx marloweScriptHashes Transaction{..} = do
       Just (ScriptCredential scriptHash) -> Set.member scriptHash marloweScriptHashes
       _ -> False
 
-    createStepToUnspentContractOutput (SomeCreateStep marloweVersion CreateStep{..}) =
+    createStepToUnspentContractOutput (SomeCreateStep version CreateStep{..}) =
       let
         Core.TransactionScriptOutput{..} = createOutput
         txOutRef = utxo
         marloweAddress = address
+        marloweVersion = Core.SomeMarloweVersion version
       in
         UnspentContractOutput{..}
 
@@ -265,37 +271,39 @@ extractApplyInputsTx systemStart eraHistory blockHeader tx@Transaction{inputs, t
     modify \utxo -> utxo { unspentContractOutputs = Map.delete contractId $ unspentContractOutputs utxo }
 
     -- Extract a Marlowe transaction of the correct version.
-    marloweTransaction <- except $ extractMarloweTransaction marloweVersion systemStart eraHistory contractId marloweAddress payoutValidatorHash txOutRef blockHeader tx
+    case marloweVersion of
+      Core.SomeMarloweVersion v -> do
+        marloweTransaction <- withExceptT (txOutRef,) $ except $ extractMarloweTransaction v systemStart eraHistory contractId marloweAddress payoutValidatorHash txOutRef blockHeader tx
 
-    -- Add new payouts to the unspentPayoutOutputs and update the MarloweUTxO to add the new unspent contract output if one was produced.
-    modify \MarloweUTxO{..} -> MarloweUTxO
-      { unspentPayoutOutputs = Map.unionWith (<>) unspentPayoutOutputs
-          $ Map.singleton contractId
-          $ Map.keysSet
-          $ Core.payouts
-          $ Core.output marloweTransaction
-      , unspentContractOutputs = case Core.scriptOutput $ Core.output marloweTransaction of
-          Nothing -> unspentContractOutputs
-          Just scriptOutput ->
-            let
-              newOutput = UnspentContractOutput
-                { marloweVersion
-                , txOutRef = Core.utxo scriptOutput
-                , marloweAddress
-                , payoutValidatorHash
-                }
-            in
-              Map.insert contractId newOutput unspentContractOutputs
-      }
+        -- Add new payouts to the unspentPayoutOutputs and update the MarloweUTxO to add the new unspent contract output if one was produced.
+        modify \MarloweUTxO{..} -> MarloweUTxO
+          { unspentPayoutOutputs = Map.unionWith (<>) unspentPayoutOutputs
+              $ Map.singleton contractId
+              $ Map.keysSet
+              $ Core.payouts
+              $ Core.output marloweTransaction
+          , unspentContractOutputs = case Core.scriptOutput $ Core.output marloweTransaction of
+              Nothing -> unspentContractOutputs
+              Just scriptOutput ->
+                let
+                  newOutput = UnspentContractOutput
+                    { marloweVersion = Core.SomeMarloweVersion v
+                    , txOutRef = Core.utxo scriptOutput
+                    , marloweAddress
+                    , payoutValidatorHash
+                    }
+                in
+                  Map.insert contractId newOutput unspentContractOutputs
+          }
 
-    pure MarloweApplyInputsTransaction
-      { marloweVersion
-      , marloweInput
-      , marloweTransaction
-      }
+        pure MarloweApplyInputsTransaction
+          { marloweVersion = v
+          , marloweInput
+          , marloweTransaction
+          }
 
   for_ mTransaction \case
-    Left (txId, err) -> tell [InvalidApplyInputsTransaction txId err]
+    Left (txId, (txOutRef, err)) -> tell [InvalidApplyInputsTransaction txId txOutRef err]
     Right transaction -> tell [ApplyInputsTransaction transaction]
 
 

@@ -92,6 +92,9 @@ CREATE TABLE marlowe.applyTx
   );
 
 CREATE INDEX applyTx_blockId ON marlowe.applyTx USING BTREE (blockId);
+CREATE INDEX applyTx_createTxId_createTxIx ON marlowe.applyTx USING BTREE (createTxId, createTxIx);
+CREATE INDEX applyTx_txId_outputTxIx ON marlowe.applyTx USING BTREE (txId, outputTxIx);
+CREATE INDEX applyTx_inputTxId_inputTxIx ON marlowe.applyTx USING BTREE (inputTxId, inputTxIx);
 
 -- Create the payoutTxOut table
 CREATE TABLE marlowe.payoutTxOut
@@ -121,5 +124,18 @@ CREATE TABLE marlowe.withdrawalTxIn
 
 CREATE INDEX withdrawTxIn_blockId ON marlowe.withdrawalTxIn USING BTREE (blockId);
 CREATE INDEX withdrawTxIn_txId ON marlowe.withdrawalTxIn USING BTREE (txId);
+
+-- Create the invalidApplyIn table
+CREATE TABLE marlowe.invalidApplyTx
+  ( txId BYTEA PRIMARY KEY
+  , inputTxId BYTEA NOT NULL
+  , inputTxIx SMALLINT NOT NULL
+  , blockId BYTEA NOT NULL REFERENCES marlowe.block (id)
+  , error TEXT NOT NULL
+  , FOREIGN KEY (inputTxId, inputTxIx) REFERENCES marlowe.contractTxOut (txId, txIx)
+  );
+
+CREATE INDEX invalidApplyTx_blockId ON marlowe.invalidApplyTx USING BTREE (blockId);
+CREATE INDEX invalidApplyTx_inputTxId_inputTxIx ON marlowe.invalidApplyTx USING BTREE (inputTxId, inputTxIx);
 
 COMMIT;

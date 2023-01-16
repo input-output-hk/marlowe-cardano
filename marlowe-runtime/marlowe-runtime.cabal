@@ -147,6 +147,7 @@ library indexer
     , mtl
     , plutus-ledger-api
     , stm
+    , text
     , time
     , these
     , transformers

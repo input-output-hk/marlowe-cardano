@@ -75,7 +75,7 @@ aggregator = component \pullEvent -> do
                   InvalidCreateTransaction contractId err -> Map.singleton contractId err
                   _ -> mempty
               , invalidApplyInputsTxs = flip foldMap (transactions block) \case
-                  InvalidApplyInputsTransaction txId err -> Map.singleton txId err
+                  InvalidApplyInputsTransaction txId _ err -> Map.singleton txId err
                   _ -> mempty
               }
           RollBackward point tip ->

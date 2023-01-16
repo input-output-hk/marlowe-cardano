@@ -14,6 +14,8 @@ import Data.List (unzip4, unzip5, unzip6, unzip7)
 import qualified Data.Map as Map
 import Data.Maybe (maybeToList)
 import qualified Data.Set as Set
+import Data.Text (Text)
+import qualified Data.Text as T
 import Data.Time (LocalTime, utc, utcToLocalTime)
 import Data.Vector (Vector)
 import qualified Data.Vector as V
@@ -89,8 +91,15 @@ commitBlocks blocks = H.statement (prepareParams blocks)
     , withdrawalTxInInputs (txId, blockId, payoutTxId, payoutTxIx) AS
       ( SELECT * FROM UNNEST ($42 :: bytea[], $43 :: bytea[], $44 :: bytea[], $45 :: smallint[])
       )
-    INSERT INTO marlowe.withdrawalTxIn (txId, blockId, payoutTxId, payoutTxIx)
-      SELECT * FROM withdrawalTxInInputs
+    , insertWithdrawalTxIns AS
+      ( INSERT INTO marlowe.withdrawalTxIn (txId, blockId, payoutTxId, payoutTxIx)
+        SELECT * FROM withdrawalTxInInputs
+      )
+    , invalidApplyTxInputs (txId, inputTxId, inputTxIx, blockId, error) AS
+      ( SELECT * FROM UNNEST ($46 :: bytea[], $47 :: bytea[], $48 :: smallint[], $49 :: bytea[], $50 :: text[])
+      )
+    INSERT INTO marlowe.invalidApplyTx (txId, inputTxId, inputTxIx, blockId, error)
+    SELECT * FROM invalidApplyTxInputs
   |]
 
 type QueryParams =
@@ -146,6 +155,12 @@ type QueryParams =
   , Vector ByteString -- withdrawalTxIn blockId rows
   , Vector ByteString -- withdrawalTxIn payoutTxId rows
   , Vector Int16 -- withdrawalTxIn payoutTxIx rows
+
+  , Vector ByteString -- invalidApplyTx txId rows
+  , Vector ByteString -- invalidApplyTx inputTxId rows
+  , Vector Int16 -- invalidApplyTx inputTxIx rows
+  , Vector ByteString -- invalidApplyTx blockId rows
+  , Vector Text -- invalidApplyTx error rows
   )
 
 type BlockRow =
@@ -343,6 +358,14 @@ type WithdrawalTxInRow =
   , Int16 -- payoutTxIx
   )
 
+type InvalidApplyTxRow =
+  ( ByteString -- txId
+  , ByteString -- inputTxId
+  , Int16 -- inputTxIx
+  , ByteString -- blockId
+  , Text -- error
+  )
+
 withdrawTxToWithdrawalTxInRows
   :: BlockHeader
   -> MarloweWithdrawTransaction
@@ -409,6 +432,12 @@ prepareParams blocks =
   , V.fromList withdrawalTxInBlockIdRows
   , V.fromList withdrawalTxInPayoutTxIdRows
   , V.fromList withdrawalTxInPayoutTxIxRows
+
+  , V.fromList invalidApplyTxTxIdRows
+  , V.fromList invalidApplyTxInputTxIdRows
+  , V.fromList invalidApplyTxInputTxIxRows
+  , V.fromList invalidApplyTxBlockIdRows
+  , V.fromList invalidApplyTxErrorRows
   )
   where
     (blockIdRows, blockSlotRows, blockNoRows) = unzip3 $ blockToRow . blockHeader <$> blocks
@@ -420,7 +449,8 @@ prepareParams blocks =
       , applyTxRows
       , payoutTxOutRows
       , withdrawalTxInRows
-      ) = foldMap7 marloweBlockToTxRows blocks
+      , invalidApplyTxRows
+      ) = foldMap8 marloweBlockToTxRows blocks
 
     ( txOutTxIdRows
       , txOutTxIxRows
@@ -478,15 +508,22 @@ prepareParams blocks =
       , withdrawalTxInPayoutTxIxRows
       ) = unzip4 withdrawalTxInRows
 
+    ( invalidApplyTxTxIdRows
+      , invalidApplyTxInputTxIdRows
+      , invalidApplyTxInputTxIxRows
+      , invalidApplyTxBlockIdRows
+      , invalidApplyTxErrorRows
+      ) = unzip5 invalidApplyTxRows
+
 marloweBlockToTxRows
   :: MarloweBlock
-  -> ([TxOutRow], [TxOutAssetRow], [ContractTxOutRow], [CreateTxOutRow], [ApplyTxRow], [PayoutTxOutRow], [WithdrawalTxInRow])
-marloweBlockToTxRows MarloweBlock{..} = flip foldMap7 transactions \case
+  -> ([TxOutRow], [TxOutAssetRow], [ContractTxOutRow], [CreateTxOutRow], [ApplyTxRow], [PayoutTxOutRow], [WithdrawalTxInRow], [InvalidApplyTxRow])
+marloweBlockToTxRows MarloweBlock{..} = flip foldMap8 transactions \case
   CreateTransaction tx ->
     let
       (txOutRows, contractTxOutRows, createTxOutRows, txOutAssetRows) = unzip4 $ createTxToTxOutRows blockHeader tx
     in
-      (txOutRows, concat txOutAssetRows, contractTxOutRows, createTxOutRows, [], [], [])
+      (txOutRows, concat txOutAssetRows, contractTxOutRows, createTxOutRows, [], [], [], [])
   ApplyInputsTransaction tx ->
     let
       (applyTxRow, mOutRows, payoutRows) = applyTxToRows tx
@@ -500,20 +537,31 @@ marloweBlockToTxRows MarloweBlock{..} = flip foldMap7 transactions \case
       , [applyTxRow]
       , payoutTxOutRows
       , []
+      , []
       )
-  WithdrawTransaction tx -> ([], [], [], [] , [], [], withdrawTxToWithdrawalTxInRows blockHeader tx)
-  _ -> ([], [], [], [] , [], [], [])
+  WithdrawTransaction tx -> ([], [], [], [] , [], [], withdrawTxToWithdrawalTxInRows blockHeader tx, [])
+  InvalidApplyInputsTransaction txId (TxOutRef inputTxId inputTxIx) err ->
+    ( []
+    , []
+    , []
+    , []
+    , []
+    , []
+    , []
+    , [(unTxId txId, unTxId inputTxId, fromIntegral inputTxIx, unBlockHeaderHash $ headerHash blockHeader, T.pack $ show err)]
+    )
+  _ -> ([], [], [], [] , [], [], [], [])
 
 
-foldMap7
-  :: (Monoid a, Monoid b, Monoid c, Monoid d, Monoid e, Monoid f, Monoid g, Foldable t)
-  => (x -> (a, b, c, d, e, f, g))
+foldMap8
+  :: (Monoid a, Monoid b, Monoid c, Monoid d, Monoid e, Monoid f, Monoid g, Monoid h, Foldable t)
+  => (x -> (a, b, c, d, e, f, g, h))
   -> t x
-  -> (a, b, c, d, e, f, g)
-foldMap7 k = foldr
-  ( \x (a', b', c', d', e', f', g') ->
+  -> (a, b, c, d, e, f, g, h)
+foldMap8 k = foldr
+  ( \x (a', b', c', d', e', f', g', h') ->
     let
-      (a, b, c, d, e, f, g) = k x
+      (a, b, c, d, e, f, g, h) = k x
     in
       ( a <> a'
       , b <> b'
@@ -522,9 +570,10 @@ foldMap7 k = foldr
       , e <> e'
       , f <> f'
       , g <> g'
+      , h <> h'
       )
   )
-  (mempty, mempty, mempty, mempty, mempty, mempty, mempty)
+  (mempty, mempty, mempty, mempty, mempty, mempty, mempty, mempty)
 
 unzip11 :: [(a, b, c, d, e, f, g, h, i, j, k)] -> ([a], [b], [c], [d], [e], [f], [g], [h], [i], [j], [k])
 unzip11 = foldr

@@ -1,4 +1,5 @@
 {-# LANGUAGE ApplicativeDo #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE StrictData #-}
 
@@ -25,10 +26,15 @@ import Language.Marlowe.Runtime.Indexer.Database (DatabaseQueries(..))
 import Language.Marlowe.Runtime.Indexer.Types
   (MarloweBlock(..), MarloweUTxO(..), UnspentContractOutput(..), extractMarloweBlock)
 import Network.Protocol.Driver (RunClient)
+import Observe.Event (addField, withEvent)
+import Observe.Event.Backend (EventBackend)
 import Witherable (wither)
 
+data ChainSeekClientSelector f where
+  LoadMarloweUTxO :: ChainSeekClientSelector MarloweUTxO
+
 -- | Injectable dependencies for the chain seek client
-data ChainSeekClientDependencies = ChainSeekClientDependencies
+data ChainSeekClientDependencies r = ChainSeekClientDependencies
   { securityParameter :: Int
   -- ^ The protocol security parameter. The maximum number of blocks that can be rolled back.
 
@@ -49,6 +55,8 @@ data ChainSeekClientDependencies = ChainSeekClientDependencies
 
   , eraHistory :: EraHistory CardanoMode
   -- ^ The history of era switches in the blockchain.
+
+  , eventBackend :: EventBackend IO r ChainSeekClientSelector
   }
 
 -- | A change to the chain with respect to Marlowe contracts
@@ -62,7 +70,7 @@ data ChainEvent
 -- | A component that runs a chain seek client to traverse the blockchain and
 -- extract blocks of Marlowe transactions. The sequence of changes to the chain
 -- can be read by repeatedly running the resulting STM action.
-chainSeekClient :: Component IO ChainSeekClientDependencies (STM ChainEvent)
+chainSeekClient :: forall r. Component IO (ChainSeekClientDependencies r) (STM ChainEvent)
 chainSeekClient = component \ChainSeekClientDependencies{..} -> do
   -- Initialize a TQueue for emitting ChainEvents.
   eventQueue <- newTQueue
@@ -80,6 +88,7 @@ chainSeekClient = component \ChainSeekClientDependencies{..} -> do
         marloweScriptHashes
         systemStart
         eraHistory
+        eventBackend
     , readTQueue eventQueue
     )
   where
@@ -92,8 +101,9 @@ chainSeekClient = component \ChainSeekClientDependencies{..} -> do
     -> Set ScriptHash
     -> SystemStart
     -> EraHistory CardanoMode
+    -> EventBackend IO r ChainSeekClientSelector
     -> RuntimeChainSeekClient IO ()
-  client emit DatabaseQueries{..} securityParameter pollingInterval marloweScriptHashes systemStart eraHistory =
+  client emit DatabaseQueries{..} securityParameter pollingInterval marloweScriptHashes systemStart eraHistory eventBackend =
     ChainSeekClient $ pure $ SendMsgRequestHandshake moveSchema $ ClientStHandshake
       { recvMsgHandshakeRejected = \_ -> fail "unsupported chain seek version"
       , recvMsgHandshakeConfirmed = do
@@ -147,7 +157,7 @@ chainSeekClient = component \ChainSeekClientDependencies{..} -> do
                         $ sortOn Down intersectionPoints
 
                   -- Load the MarloweUTxO history in parallel, using ApplicativeDo and Concurrently.
-                  rollbackStates <- runConcurrently do
+                  rollbackStates <- withEvent eventBackend LoadMarloweUTxO \ev -> runConcurrently do
                     -- Load the current MarloweUTxO (this is why it was skipped in utxoHistoryRange).
                     currentState <- case point of
                       -- If the intersection point is at Genesis, return an empty MarloweUTxO.
@@ -156,7 +166,9 @@ chainSeekClient = component \ChainSeekClientDependencies{..} -> do
                       -- Otherwise load it from the database.
                       At block -> Concurrently $ getMarloweUTxO block >>= \case
                         Nothing -> fail $ "Unable to load MarloweUTxO at unknown block " <> show block
-                        Just utxo -> pure utxo
+                        Just utxo -> do
+                          addField ev utxo
+                          pure utxo
 
                     -- Load the previous MarloweUTxOs in parallel.
                     previousStates <- flip wither utxoHistoryRange \block ->

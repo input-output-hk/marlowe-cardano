@@ -44,4 +44,12 @@ SELECT txId, blockId, payoutTxId, payoutTxIx
 FROM marlowe.withdrawalTxIn
 WHERE FALSE;
 
+SELECT txId
+     , inputTxId
+     , inputTxIx
+     , blockId
+     , error
+FROM marlowe.invalidApplyTx
+WHERE FALSE;
+
 ROLLBACK;

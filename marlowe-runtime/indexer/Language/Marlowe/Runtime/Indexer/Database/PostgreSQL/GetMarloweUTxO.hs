@@ -62,6 +62,11 @@ getMarloweUTxO block = runMaybeT do
              , applyTx.inputTxIx
           FROM block
           JOIN marlowe.applyTx AS applyTx USING (blockId)
+         UNION
+        SELECT invalidApplyTx.inputTxId
+             , invalidApplyTx.inputTxIx
+          FROM block
+          JOIN marlowe.invalidApplyTx AS invalidApplyTx USING (blockId)
       )
     SELECT contractOut.createTxId :: bytea
          , contractOut.createTxIx :: smallint
@@ -121,7 +126,7 @@ decodeContractOutputRow
 decodeContractOutputRow (createTxId, createTxIx, txId, txIx, address, payoutValidatorHash) =
   ( Core.ContractId $ TxOutRef (TxId createTxId) (fromIntegral createTxIx)
   , UnspentContractOutput
-      { marloweVersion = Core.MarloweV1
+      { marloweVersion = Core.SomeMarloweVersion Core.MarloweV1
       , txOutRef = TxOutRef (TxId txId) (fromIntegral txIx)
       , marloweAddress = Address address
       , payoutValidatorHash = ScriptHash payoutValidatorHash

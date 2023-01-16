@@ -20,6 +20,7 @@ import Observe.Event.Component (FieldConfig(..), GetSelectorConfig, SelectorConf
 
 data MarloweIndexerSelector f where
   StoreEvent :: StoreSelector f -> MarloweIndexerSelector f
+  ChainSeekClientEvent :: ChainSeekClientSelector f -> MarloweIndexerSelector f
 
 data MarloweIndexerDependencies r = MarloweIndexerDependencies
   { eventBackend :: EventBackend IO r MarloweIndexerSelector
@@ -34,7 +35,16 @@ data MarloweIndexerDependencies r = MarloweIndexerDependencies
 
 marloweIndexer :: Component IO (MarloweIndexerDependencies r) ()
 marloweIndexer = proc MarloweIndexerDependencies{..} -> do
-  pullEvent <- chainSeekClient -< ChainSeekClientDependencies{..}
+  pullEvent <- chainSeekClient -< ChainSeekClientDependencies
+    { eventBackend = narrowEventBackend ChainSeekClientEvent eventBackend
+    , databaseQueries
+    , runChainSeekClient
+    , pollingInterval
+    , marloweScriptHashes
+    , systemStart
+    , eraHistory
+    , securityParameter
+    }
   store -< StoreDependencies
     { databaseQueries
     , pullEvent
@@ -44,6 +54,7 @@ marloweIndexer = proc MarloweIndexerDependencies{..} -> do
 getMarloweIndexerSelectorConfig :: GetSelectorConfig MarloweIndexerSelector
 getMarloweIndexerSelectorConfig = \case
   StoreEvent sel -> prependKey "store" $ getStoreSelectorConfig sel
+  ChainSeekClientEvent sel -> prependKey "chain-seek-client" $ getChainSeekClientSelectorConfig sel
 
 getStoreSelectorConfig :: GetSelectorConfig StoreSelector
 getStoreSelectorConfig = \case
@@ -69,4 +80,12 @@ getStoreSelectorConfig = \case
         RemoteTip point -> SomeJSON point
         InvalidCreateTxs errs -> SomeJSON errs
         InvalidApplyInputsTxs errs -> SomeJSON errs
+    }
+
+getChainSeekClientSelectorConfig :: GetSelectorConfig ChainSeekClientSelector
+getChainSeekClientSelectorConfig = \case
+  LoadMarloweUTxO -> SelectorConfig "load-marlowe-utxo" True FieldConfig
+    { fieldKey = const "marlowe-utxo"
+    , fieldDefaultEnabled = const True
+    , toSomeJSON = SomeJSON
     }
