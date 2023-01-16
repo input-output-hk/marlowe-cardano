@@ -3,21 +3,41 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 -- | This module defines a server for the /contracts REST API.
 
 module Language.Marlowe.Runtime.Web.Server.REST.Contracts
   where
 
-import Cardano.Api (AsType(..), deserialiseFromTextEnvelope, getTxBody)
+import Cardano.Api
+  ( AsType(..)
+  , BabbageEra
+  , HasTypeProxy(proxyToAsType)
+  , ScriptValidity(ScriptInvalid, ScriptValid)
+  , SerialiseAsCBOR(serialiseToCBOR)
+  , TxScriptValidity(TxScriptValidity, TxScriptValidityNone)
+  , deserialiseFromTextEnvelope
+  , makeSignedTransaction
+  )
+import qualified Cardano.Api as C
 import qualified Cardano.Api.SerialiseTextEnvelope as Cardano
-import Control.Monad (unless)
+import Cardano.Api.Shelley (ShelleyLedgerEra, Tx(ShelleyTx), TxBody(ShelleyTxBody))
+import qualified Cardano.Binary as CBOR
+import qualified Cardano.Ledger.Alonzo.Tx as Allonzo
+import qualified Cardano.Ledger.Alonzo.Tx as Alonzo
+import Cardano.Ledger.Alonzo.TxWitness (TxWitness(..))
+import Cardano.Ledger.BaseTypes (maybeToStrictMaybe)
+import Cardano.Ledger.Pretty.Alonzo (ppTxWitness)
 import Control.Monad.Except (MonadError)
 import qualified Data.ByteString.Lazy as BL
+import qualified Data.ByteString.Lazy as LBS
 import Data.Foldable (traverse_)
 import Data.Maybe (fromMaybe)
 import qualified Data.Set as Set
+import Data.Text (Text)
 import Data.Text.Lazy (pack)
 import Data.Text.Lazy.Encoding (encodeUtf8)
 import Language.Marlowe.Runtime.ChainSync.Api (Lovelace(..))
@@ -43,8 +63,12 @@ import Observe.Event.BackendModification (setAncestor)
 import Observe.Event.DSL (FieldSpec(..), SelectorField(Inject), SelectorSpec(..))
 import Observe.Event.Render.JSON.DSL.Compile (compile)
 import Observe.Event.Syntax ((≔))
+import qualified Prettyprinter as PP
+import Prettyprinter.Render.Text as PP
 import Servant
 import Servant.Pagination
+
+import qualified Cardano.Ledger.Alonzo.TxWitness as Alonzo
 
 type ContractHeaders = [ContractHeader]
 type Addresses = CommaList Address
@@ -73,6 +97,10 @@ compile $ SelectorSpec "contracts"
   , "put" ≔ FieldSpec "put"
       [ ["put", "id"] ≔ ''TxOutRef
       , "body" ≔ ''Cardano.TextEnvelope
+      , "witnessesBackend" ≔ ''Text
+      , "witnessesWallet" ≔ ''Text
+      -- , "txWallet" ≔ ''Text
+      -- , "txBackend" ≔ ''Text
       , "error" ≔ ''String
       ]
   , "transactions" ≔ Inject ''Transactions.TransactionsSelector
@@ -110,12 +138,13 @@ post eb req@PostContractsRequest{..} changeAddressDTO mAddresses mCollateralUtxo
     Left err -> do
       let
         err400' = err400 { errBody=encodeUtf8 . pack $ show err}
-        err404' = err400 { errBody=encodeUtf8 . pack $ show err}
+        err404' = err404 { errBody=encodeUtf8 . pack $ show err}
+        err403' = err403 { errBody=encodeUtf8 . pack $ show err}
         err500' = err500 { errBody=encodeUtf8 . pack $ show err}
       addField ev $ PostError $ show err
       case err of
         CreateConstraintError (MintingUtxoNotFound _) -> throwError err500'
-        CreateConstraintError (RoleTokenNotFound _) -> throwError err403
+        CreateConstraintError (RoleTokenNotFound _) -> throwError err403'
         CreateConstraintError ToCardanoError -> throwError err500'
         CreateConstraintError MissingMarloweInput -> throwError err500'
         CreateConstraintError (PayoutInputNotFound _) -> throwError err500'
@@ -186,6 +215,24 @@ getOne eb contractId = withEvent eb GetOne \ev -> do
       addField ev $ GetResult contractState
       pure $ IncludeLink (Proxy @"transactions") contractState
 
+
+newtype WitnessesBabbage = WitnessesBabbage (TxWitness (ShelleyLedgerEra BabbageEra))
+
+instance HasTypeProxy WitnessesBabbage where
+    data AsType _ = AsWitnessesBabbage
+    proxyToAsType _ = AsWitnessesBabbage
+
+instance SerialiseAsCBOR WitnessesBabbage where
+  serialiseToCBOR (WitnessesBabbage wit) = CBOR.serialize' wit
+
+  deserialiseFromCBOR _ bs = do
+    w <- CBOR.decodeAnnotator "witnessSet" CBOR.fromCBOR (LBS.fromStrict bs)
+    pure $ WitnessesBabbage w
+
+
+instance C.HasTextEnvelope WitnessesBabbage where
+  textEnvelopeType _ = "WitnessesBabbage"
+
 put
   :: EventBackend (AppM r) r ContractsSelector
   -> TxOutRef
@@ -199,10 +246,47 @@ put eb contractId body = withEvent eb Put \ev -> do
     Just (Left (TempTx _ Unsigned Tx.ContractCreated{txBody})) -> do
       textEnvelope <- fromDTOThrow err400 body
       addField ev $ Body textEnvelope
-      tx <- either (const $ throwError err400) pure $ deserialiseFromTextEnvelope (AsTx AsBabbage) textEnvelope
-      unless (getTxBody tx == txBody) $ pure () -- throwError err400
-      -- let
-      --   tx = makeSignedTransaction witnesses txBody
+
+      WitnessesBabbage wt <- either (const $ throwError $ err400 { errBody = "Witness decoding failed" }) pure $ deserialiseFromTextEnvelope AsWitnessesBabbage textEnvelope
+
+      let
+        txScriptValidityToScriptValidity :: TxScriptValidity era -> ScriptValidity
+        txScriptValidityToScriptValidity TxScriptValidityNone = ScriptValid
+        txScriptValidityToScriptValidity (TxScriptValidity _ scriptValidity) = scriptValidity
+
+        scriptValidityToIsValid :: ScriptValidity -> Alonzo.IsValid
+        scriptValidityToIsValid ScriptInvalid = Alonzo.IsValid False
+        scriptValidityToIsValid ScriptValid = Alonzo.IsValid True
+
+        txScriptValidityToIsValid :: TxScriptValidity era -> Alonzo.IsValid
+        txScriptValidityToIsValid = scriptValidityToIsValid . txScriptValidityToScriptValidity
+
+        -- tx = makeSignedTransaction txBody []
+        renderDoc = renderStrict . PP.layoutPretty PP.defaultLayoutOptions
+        wtRepr = renderDoc $ ppTxWitness wt
+        -- case  of
+        --   ShelleyTx _ (Alonzo.ValidatedTx _ wt' _ _)  -> addField ev $ WitnessesBackend $ renderDoc (ppTxWitness wt')
+
+        tx = case (txBody, wt, makeSignedTransaction [] txBody) of
+          (ShelleyTxBody era txBody' _ _ txmetadata scriptValidity, TxWitness wtKeys _ _ _ _, ShelleyTx _ (Alonzo.ValidatedTx _ bkTxWitness _ _)) -> do
+            let
+              Alonzo.TxWitness _ bkBoot bkScripts bkDats bkRdmrs = bkTxWitness
+              wt' =
+                Alonzo.TxWitness
+                  wtKeys
+                  bkBoot
+                  bkScripts
+                  bkDats
+                  bkRdmrs
+
+            ShelleyTx era $ Allonzo.ValidatedTx
+              txBody'
+              wt'
+              (txScriptValidityToIsValid scriptValidity)
+              (maybeToStrictMaybe txmetadata)
+
+      addField ev $ WitnessesWallet wtRepr
+
 
       submitContract contractId' (setAncestor $ reference ev) tx >>= \case
         Nothing -> pure NoContent
@@ -210,3 +294,105 @@ put eb contractId body = withEvent eb Put \ev -> do
           addField ev $ Error $ show err
           throwError err403
     Just _  -> throwError err409
+
+
+
+
+--       ShelleyTx era $
+--         Alonzo.ValidatedTx
+--           txbody'
+--           (Alonzo.TxWitness
+--             (Set.fromList [ w | ShelleyKeyWitness _ w <- witnesses ])
+--             (Set.fromList [ w | ShelleyBootstrapWitness _ w <- witnesses ])
+--             (Map.fromList [ (Ledger.hashScript @ledgerera sw, sw)
+--                           | sw <- txscripts ])
+--             datums
+--             redeemers)
+--           (txScriptValidityToIsValid scriptValidity)
+--           (maybeToStrictMaybe txmetadata)
+--       where
+--         (datums, redeemers) =
+--           case txscriptdata of
+--             TxBodyScriptData _ ds rs -> (ds, rs)
+--             TxBodyNoScriptData       -> (mempty, Alonzo.Redeemers mempty)
+
+
+
+-- makeSignedTransaction :: forall era.
+--      [KeyWitness era]
+--   -> TxBody era
+--   -> Tx era
+-- makeSignedTransaction witnesses (ByronTxBody txbody) =
+--     ByronTx
+--   . Byron.annotateTxAux
+--   $ Byron.mkTxAux
+--       (unAnnotated txbody)
+--       (Vector.fromList [ w | ByronKeyWitness w <- witnesses ])
+--
+-- makeSignedTransaction witnesses (ShelleyTxBody era txbody
+--                                                txscripts
+--                                                txscriptdata
+--                                                txmetadata
+--                                                scriptValidity
+--                                                ) =
+--     case era of
+--       ShelleyBasedEraShelley -> makeShelleySignedTransaction txbody
+--       ShelleyBasedEraAllegra -> makeShelleySignedTransaction txbody
+--       ShelleyBasedEraMary    -> makeShelleySignedTransaction txbody
+--       ShelleyBasedEraAlonzo  -> makeAlonzoSignedTransaction  txbody
+--       ShelleyBasedEraBabbage -> makeAlonzoSignedTransaction  txbody
+--   where
+--     makeShelleySignedTransaction
+--       :: forall ledgerera.
+--          ShelleyLedgerEra era ~ ledgerera
+--       => ToCBOR (Ledger.AuxiliaryData ledgerera)
+--       => ToCBOR (Ledger.TxBody ledgerera)
+--       => ToCBOR (Ledger.Script ledgerera)
+--       => FromCBOR (CBOR.Annotator (Ledger.Script ledgerera))
+--       => Ledger.Crypto ledgerera ~ StandardCrypto
+--       => Ledger.Witnesses ledgerera ~ Shelley.WitnessSetHKD Identity ledgerera
+--       => Ledger.Tx ledgerera ~ Shelley.Tx ledgerera
+--       => ToCBOR (Ledger.Witnesses ledgerera)
+--       => Shelley.UsesValue ledgerera
+--       => Shelley.ValidateScript ledgerera
+--       => Ledger.TxBody ledgerera
+--       -> Tx era
+--     makeShelleySignedTransaction txbody' =
+--       ShelleyTx era $
+--         Shelley.Tx
+--           txbody'
+--           (Shelley.WitnessSet
+--             (Set.fromList [ w | ShelleyKeyWitness _ w <- witnesses ])
+--             (Map.fromList [ (Ledger.hashScript @ledgerera sw, sw)
+--                           | sw <- txscripts ])
+--             (Set.fromList [ w | ShelleyBootstrapWitness _ w <- witnesses ]))
+--           (maybeToStrictMaybe txmetadata)
+--
+--     makeAlonzoSignedTransaction
+--       :: forall ledgerera.
+--          ShelleyLedgerEra era ~ ledgerera
+--       => Ledger.Crypto ledgerera ~ StandardCrypto
+--       => Ledger.Tx ledgerera ~ Alonzo.ValidatedTx ledgerera
+--       => Ledger.Script ledgerera ~ Alonzo.Script ledgerera
+--       => Shelley.UsesValue ledgerera
+--       => Shelley.ValidateScript ledgerera
+--       => Ledger.TxBody ledgerera
+--       -> Tx era
+--     makeAlonzoSignedTransaction txbody' =
+--       ShelleyTx era $
+--         Alonzo.ValidatedTx
+--           txbody'
+--           (Alonzo.TxWitness
+--             (Set.fromList [ w | ShelleyKeyWitness _ w <- witnesses ])
+--             (Set.fromList [ w | ShelleyBootstrapWitness _ w <- witnesses ])
+--             (Map.fromList [ (Ledger.hashScript @ledgerera sw, sw)
+--                           | sw <- txscripts ])
+--             datums
+--             redeemers)
+--           (txScriptValidityToIsValid scriptValidity)
+--           (maybeToStrictMaybe txmetadata)
+--       where
+--         (datums, redeemers) =
+--           case txscriptdata of
+--             TxBodyScriptData _ ds rs -> (ds, rs)
+--             TxBodyNoScriptData       -> (mempty, Alonzo.Redeemers mempty)

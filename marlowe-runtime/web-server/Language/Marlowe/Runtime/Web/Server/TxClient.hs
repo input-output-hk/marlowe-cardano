@@ -184,14 +184,14 @@ txClient = component \TxClientDependencies{..} -> do
 
   pure (runTxClient, TxClient
     { createContract = \stakeCredential version addresses roles metadata minUTxODeposit contract -> do
-        runTxJobClient
+        response <- runTxJobClient
           $ liftCommand
           $ Create stakeCredential version addresses roles metadata minUTxODeposit contract
-        -- for_ response \creation@ContractCreated{contractId} -> atomically
-        --  $ modifyTVar tempContracts
-        --  $ Map.insert contractId
-        --  $ TempTx version Unsigned creation
-        -- pure response
+        for_ response \creation@ContractCreated{contractId} -> atomically
+         $ modifyTVar tempContracts
+         $ Map.insert contractId
+         $ TempTx version Unsigned creation
+        pure response
     , applyInputs = \version addresses contractId metadata invalidBefore invalidHereafter inputs -> do
         response <- runTxJobClient
           $ liftCommand

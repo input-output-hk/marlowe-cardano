@@ -400,6 +400,12 @@ library web-server
     , async-components
     , bytestring
     , cardano-api
+    , cardano-binary
+    , cardano-ledger-alonzo
+    , cardano-ledger-babbage
+    , cardano-ledger-core
+    , cardano-ledger-pretty
+    , cardano-ledger-shelley
     , containers
     , errors
     , eventuo11y
@@ -420,6 +426,7 @@ library web-server
     , monad-control
     , mtl
     , openapi3
+    , prettyprinter
     , servant
     , servant-server
     , servant-openapi3
