@@ -76,7 +76,7 @@ run Options{..} = withSocketsDo do
             client
       , databaseQueries = hoistDatabaseQueries
           (either throwUsageError pure <=< Pool.use pool)
-          PostgreSQL.databaseQueries
+          (PostgreSQL.databaseQueries securityParameter)
       , eventBackend = narrowEventBackend App eventBackend
       , pollingInterval = 1
       , marloweScriptHashes = Set.map ScriptRegistry.marloweScript $ ScriptRegistry.getScripts MarloweV1

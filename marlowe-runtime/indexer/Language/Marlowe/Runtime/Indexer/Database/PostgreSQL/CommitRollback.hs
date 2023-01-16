@@ -24,51 +24,34 @@ commitRollback point = H.statement (prepareParams point)
         USING blockUpdates
         WHERE withdrawalTxIn.blockId = blockUpdates.blockId
       )
-    , deleteApplyTxs (txId, txIx) AS
+    , deleteApplyTxs AS
       ( DELETE FROM marlowe.applyTx as applyTx
         USING blockUpdates
         WHERE applyTx.blockId = blockUpdates.blockId
-        RETURNING txId, outputTxIx
       )
-    , deleteCreateTxOuts (txId, txIx) AS
+    , deleteCreateTxOuts AS
       ( DELETE FROM marlowe.createTxOut as createTxOut
         USING blockUpdates
         WHERE createTxOut.blockId = blockUpdates.blockId
-        RETURNING txId, txIx
       )
-    , deletePayoutTxOuts (txId, txIx) AS
+    , deletePayoutTxOuts AS
       ( DELETE FROM marlowe.payoutTxOut as payoutTxOut
         USING blockUpdates
         WHERE payoutTxOut.blockId = blockUpdates.blockId
-        RETURNING txId, txIx
       )
-    , deleteContractTxOuts (txId, txIx) AS
+    , deleteContractTxOuts AS
       ( DELETE FROM marlowe.contractTxOut as contractTxOut
-        USING deleteApplyTxs, deleteCreateTxOuts
-        WHERE ( contractTxOut.txId = deleteApplyTxs.txId
-                AND contractTxOut.txIx = deleteApplyTxs.txIx
-              ) OR
-              ( contractTxOut.txId = deleteCreateTxOuts.txId
-                AND contractTxOut.txIx = deleteCreateTxOuts.txIx
-              )
-        RETURNING txId, txIx
+        USING blockUpdates
+        WHERE contractTxOut.blockId = blockUpdates.blockId
       )
-    , deleteTxOuts (txId, txIx) AS
-      ( DELETE FROM marlowe.txOuts as txOuts
-        USING deleteContractTxOuts, deletePayoutTxOuts
-        WHERE ( txOut.txId = deleteContractTxOuts.txId
-                AND txOut.txIx = deleteContractTxOuts.txIx
-              ) OR
-              ( txOut.txId = deletePayoutTxOuts.txId
-                AND txOut.txIx = deletePayoutTxOuts.txIx
-              )
-        RETURNING txId, txIx
+    , deleteTxOuts AS
+      ( DELETE FROM marlowe.txOut as txOut
+        USING blockUpdates
+        WHERE txOut.blockId = blockUpdates.blockId
       )
       DELETE FROM marlowe.txOutAsset as txOutAsset
-      USING deleteTxOuts
-      WHERE ( txOutAsset.txId = deleteTxOuts.txId
-              AND txOutAsset.txIx = deleteTxOuts.txIx
-            )
+      USING blockUpdates
+      WHERE txOutAsset.blockId = blockUpdates.blockId
   |]
 
 type QueryParams = (Int64, ByteString)

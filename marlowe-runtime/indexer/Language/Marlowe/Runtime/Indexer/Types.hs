@@ -71,7 +71,7 @@ data MarloweCreateTransaction = MarloweCreateTransaction
 
 data MarloweApplyInputsTransaction = forall v. MarloweApplyInputsTransaction
   { marloweVersion :: Core.MarloweVersion v
-  , inputTxOutRef :: TxOutRef
+  , marloweInput :: UnspentContractOutput
   , marloweTransaction :: Core.Transaction v
   }
 
@@ -259,7 +259,7 @@ extractApplyInputsTx systemStart eraHistory blockHeader tx@Transaction{inputs, t
     contractUTxO <- gets unspentContractOutputs
 
     -- Find an unspent contract output that the transaction spends.
-    (contractId, UnspentContractOutput{..}) <- lift $ hoistMaybe $ find (flip Set.member inputTxOutRefs . txOutRef . snd) $ Map.toList contractUTxO
+    (contractId, marloweInput@UnspentContractOutput{..}) <- lift $ hoistMaybe $ find (flip Set.member inputTxOutRefs . txOutRef . snd) $ Map.toList contractUTxO
 
     -- Update the MarloweUTxO to remove the unspent contract output.
     modify \utxo -> utxo { unspentContractOutputs = Map.delete contractId $ unspentContractOutputs utxo }
@@ -290,7 +290,7 @@ extractApplyInputsTx systemStart eraHistory blockHeader tx@Transaction{inputs, t
 
     pure MarloweApplyInputsTransaction
       { marloweVersion
-      , inputTxOutRef = txOutRef
+      , marloweInput
       , marloweTransaction
       }
 

@@ -21,17 +21,20 @@ CREATE INDEX block_slotNo_id ON marlowe.block USING BTREE (slotNo, id);
 CREATE TABLE marlowe.txOut
   ( txId BYTEA NOT NULL
   , txIx SMALLINT NOT NULL
+  , blockId BYTEA NOT NULL REFERENCES marlowe.block (id)
   , address BYTEA NOT NULL
   , lovelace BIGINT NOT NULL
   , PRIMARY KEY (txId, txIx)
   );
 
+CREATE INDEX txOut_blockId ON marlowe.txOut USING BTREE (blockId);
 CREATE INDEX txOut_address ON marlowe.txOut USING BTREE (CAST(md5(address) AS uuid));
 
 -- Create the txOutAsset table
 CREATE TABLE marlowe.txOutAsset
   ( txId BYTEA NOT NULL
   , txIx SMALLINT NOT NULL
+  , blockId BYTEA NOT NULL REFERENCES marlowe.block (id)
   , policyId BYTEA NOT NULL
   , name BYTEA NOT NULL
   , quantity BIGINT NOT NULL
@@ -39,12 +42,15 @@ CREATE TABLE marlowe.txOutAsset
   , FOREIGN KEY (txId, txIx) REFERENCES marlowe.txOut
   );
 
+CREATE INDEX txOutAsset_blockId ON marlowe.txOutAsset USING BTREE (blockId);
 CREATE INDEX txOutAsset_txId_txIx ON marlowe.txOutAsset USING BTREE (txId, txIx);
 
 -- Create the contractTxOut table
 CREATE TABLE marlowe.contractTxOut
   ( txId BYTEA NOT NULL
   , txIx SMALLINT NOT NULL
+  , blockId BYTEA NOT NULL REFERENCES marlowe.block (id)
+  , payoutScriptHash BYTEA NOT NULL
   , contract BYTEA NOT NULL
   , state BYTEA NOT NULL
   , rolesCurrency BYTEA NOT NULL
@@ -52,12 +58,13 @@ CREATE TABLE marlowe.contractTxOut
   , FOREIGN KEY (txId, txIx) REFERENCES marlowe.txOut
   );
 
+CREATE INDEX contractTxOut_blockId ON marlowe.contractTxOut USING BTREE (blockId);
+
 -- Create the createTxOut table
 CREATE TABLE marlowe.createTxOut
   ( txId BYTEA NOT NULL
   , txIx SMALLINT NOT NULL
   , blockId BYTEA NOT NULL REFERENCES marlowe.block (id)
-  , payoutScriptHash BYTEA NOT NULL
   , metadata BYTEA
   , PRIMARY KEY (txId, txIx)
   , FOREIGN KEY (txId, txIx) REFERENCES marlowe.contractTxOut
@@ -90,6 +97,7 @@ CREATE INDEX applyTx_blockId ON marlowe.applyTx USING BTREE (blockId);
 CREATE TABLE marlowe.payoutTxOut
   ( txId BYTEA NOT NULL
   , txIx SMALLINT NOT NULL
+  , blockId BYTEA NOT NULL REFERENCES marlowe.block (id)
   , rolesCurrency BYTEA NOT NULL
   , role BYTEA NOT NULL
   , PRIMARY KEY (txId, txIx)
@@ -97,6 +105,7 @@ CREATE TABLE marlowe.payoutTxOut
   , FOREIGN KEY (txId) REFERENCES marlowe.applyTx
   );
 
+CREATE INDEX payoutTxOut_blockId ON marlowe.payoutTxOut USING BTREE (blockId);
 CREATE INDEX payoutTxOut_txId ON marlowe.payoutTxOut USING BTREE (txId);
 
 -- Create the withdrawalTxIn table

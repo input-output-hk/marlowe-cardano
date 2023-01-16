@@ -10,7 +10,7 @@ import Data.ByteString (ByteString)
 import Data.ByteString.Lazy (toStrict)
 import Data.Functor ((<&>))
 import Data.Int (Int16, Int64)
-import Data.List (unzip4, unzip5)
+import Data.List (unzip4, unzip5, unzip6, unzip7)
 import qualified Data.Map as Map
 import Data.Maybe (maybeToList)
 import qualified Data.Set as Set
@@ -38,56 +38,56 @@ commitBlocks blocks = H.statement (prepareParams blocks)
         SELECT * FROM blockInputs
       )
 
-    , txOutInputs (txId, txIx, address, lovelace) AS
-      ( SELECT * FROM UNNEST ($4 :: bytea[], $5 :: smallint[], $6 :: bytea[], $7 :: bigint[])
+    , txOutInputs (txId, txIx, blockId, address, lovelace) AS
+      ( SELECT * FROM UNNEST ($4 :: bytea[], $5 :: smallint[], $6 :: bytea[], $7 :: bytea[], $8 :: bigint[])
       )
     , insertTxOuts AS
-      ( INSERT INTO marlowe.txOut (txId, txIx, address, lovelace)
+      ( INSERT INTO marlowe.txOut (txId, txIx, blockId, address, lovelace)
         SELECT * FROM txOutInputs
       )
 
-    , txOutAssetInputs (txId, txIx, policyId, name, quantity) AS
-      ( SELECT * FROM UNNEST ($8 :: bytea[], $9 :: smallint[], $10 :: bytea[],  $11 :: bytea[], $12 :: bigint[])
+    , txOutAssetInputs (txId, txIx, blockId, policyId, name, quantity) AS
+      ( SELECT * FROM UNNEST ($9 :: bytea[], $10 :: smallint[], $11 :: bytea[], $12 :: bytea[],  $13 :: bytea[], $14 :: bigint[])
       )
     , insertTxOutAssets AS
-      ( INSERT INTO marlowe.txOutAsset (txId, txIx, policyId, name, quantity)
+      ( INSERT INTO marlowe.txOutAsset (txId, txIx, blockId, policyId, name, quantity)
         SELECT * FROM txOutAssetInputs
       )
 
-    , contractTxOutInputs (txId, txIx, contract, state, rolesCurrency) AS
-      ( SELECT * FROM UNNEST ($13 :: bytea[], $14 :: smallint[], $15 :: bytea[], $16 :: bytea[], $17 :: bytea[])
+    , contractTxOutInputs (txId, txIx, blockId, payoutScriptHash, contract, state, rolesCurrency) AS
+      ( SELECT * FROM UNNEST ($15 :: bytea[], $16 :: smallint[], $17 :: bytea[], $18 :: bytea[], $19 :: bytea[], $20 :: bytea[], $21 :: bytea[])
       )
     , insertContractTxOuts AS
-      ( INSERT INTO marlowe.contractTxOut (txId, txIx, contract, state, rolesCurrency)
+      ( INSERT INTO marlowe.contractTxOut (txId, txIx, blockId, payoutScriptHash, contract, state, rolesCurrency)
         SELECT * FROM contractTxOutInputs
       )
 
-    , createTxOutInputs (txId, txIx, blockId, payoutScriptHash, metadata) AS
-      ( SELECT * FROM UNNEST ($18 :: bytea[], $19 :: smallint[], $20 :: bytea[], $21 :: bytea[], $22 :: bytea?[])
+    , createTxOutInputs (txId, txIx, blockId, metadata) AS
+      ( SELECT * FROM UNNEST ($22 :: bytea[], $23 :: smallint[], $24 :: bytea[], $25 :: bytea?[])
       )
     , insertCreateTxOuts AS
-      ( INSERT INTO marlowe.createTxOut (txId, txIx, blockId, payoutScriptHash, metadata)
+      ( INSERT INTO marlowe.createTxOut (txId, txIx, blockId, metadata)
         SELECT * FROM createTxOutInputs
       )
 
     , applyTxInputs (txId, createTxId, createTxIx, blockId, invalidBefore, invalidHereafter, metadata, inputTxId, inputTxIx, inputs, outputTxIx) AS
-      ( SELECT * FROM UNNEST ($23 :: bytea[], $24 :: bytea[], $25 :: smallint[], $26 :: bytea[], $27 :: timestamp[], $28 :: timestamp[], $29 :: bytea?[], $30 :: bytea[], $31 :: smallint[], $32 :: bytea[], $33 :: smallint?[])
+      ( SELECT * FROM UNNEST ($26 :: bytea[], $27 :: bytea[], $28 :: smallint[], $29 :: bytea[], $30 :: timestamp[], $31 :: timestamp[], $32 :: bytea?[], $33 :: bytea[], $34 :: smallint[], $35 :: bytea[], $36 :: smallint?[])
       )
     , insertApplyTxs AS
       ( INSERT INTO marlowe.applyTx (txId, createTxId, createTxIx, blockId, invalidBefore, invalidHereafter, metadata, inputTxId, inputTxIx, inputs, outputTxIx)
         SELECT * FROM applyTxInputs
       )
 
-    , payoutTxOutInputs (txId, txIx, rolesCurrency, role) AS
-      ( SELECT * FROM UNNEST ($34 :: bytea[], $35 :: smallint[], $36 :: bytea[], $37 :: bytea[])
+    , payoutTxOutInputs (txId, txIx, blockId, rolesCurrency, role) AS
+      ( SELECT * FROM UNNEST ($37 :: bytea[], $38 :: smallint[], $39 :: bytea[], $40 :: bytea[], $41 :: bytea[])
       )
     , insertPayoutTxOuts AS
-      ( INSERT INTO marlowe.payoutTxOut (txId, txIx, rolesCurrency, role)
+      ( INSERT INTO marlowe.payoutTxOut (txId, txIx, blockId, rolesCurrency, role)
         SELECT * FROM payoutTxOutInputs
       )
 
     , withdrawalTxInInputs (txId, blockId, payoutTxId, payoutTxIx) AS
-      ( SELECT * FROM UNNEST ($38 :: bytea[], $39 :: bytea[], $40 :: bytea[], $41 :: smallint[])
+      ( SELECT * FROM UNNEST ($42 :: bytea[], $43 :: bytea[], $44 :: bytea[], $45 :: smallint[])
       )
     INSERT INTO marlowe.withdrawalTxIn (txId, blockId, payoutTxId, payoutTxIx)
       SELECT * FROM withdrawalTxInInputs
@@ -100,17 +100,21 @@ type QueryParams =
 
   , Vector ByteString -- txOut txId rows
   , Vector Int16 -- txOut txIx rows
+  , Vector ByteString -- txOut blockId rows
   , Vector ByteString -- txOut address rows
   , Vector Int64 -- txOut lovelace rows
 
   , Vector ByteString -- txOutAsset txId rows
   , Vector Int16 -- txOutAsset txIx rows
+  , Vector ByteString -- txOutAsset blockId rows
   , Vector ByteString -- txOutAsset policyId rows
   , Vector ByteString -- txOutAsset name rows
   , Vector Int64 -- txOutAsset quantity rows
 
   , Vector ByteString -- contractTxOut txId rows
   , Vector Int16 -- contractTxOut txIx rows
+  , Vector ByteString -- contractTxOut blockId rows
+  , Vector ByteString -- createTxOut payoutScriptHash rows
   , Vector ByteString -- contractTxOut contract rows
   , Vector ByteString -- contractTxOut state rows
   , Vector ByteString -- contractTxOut rolesCurrency rows
@@ -118,7 +122,6 @@ type QueryParams =
   , Vector ByteString -- createTxOut txId rows
   , Vector Int16 -- createTxOut txIx rows
   , Vector ByteString -- createTxOut blockId rows
-  , Vector ByteString -- createTxOut payoutScriptHash rows
   , Vector (Maybe ByteString) -- createTxOut metadata rows
 
   , Vector ByteString -- applyTx txId rows
@@ -135,6 +138,7 @@ type QueryParams =
 
   , Vector ByteString -- payoutTxOut txId rows
   , Vector Int16 -- payoutTxOut txIx rows
+  , Vector ByteString -- payoutTxOut blockId rows
   , Vector ByteString -- payoutTxOut rolesCurrency rows
   , Vector ByteString -- payoutTxOut role rows
 
@@ -160,6 +164,7 @@ blockToRow BlockHeader{..} =
 type TxOutRow =
   ( ByteString -- txId
   , Int16 -- txIx
+  , ByteString -- blockId
   , ByteString -- address
   , Int64 -- lovelace
   )
@@ -167,20 +172,23 @@ type TxOutRow =
 type TxOutAssetRow =
   ( ByteString -- txId
   , Int16 -- txIx
+  , ByteString -- blockId
   , ByteString -- policyId
   , ByteString -- name
   , Int64 -- quantity
   )
 
 assetsToTxOutAssetRows
-  :: ByteString
+  :: BlockHeader
+  -> ByteString
   -> Int16
   -> Assets
   -> [TxOutAssetRow]
-assetsToTxOutAssetRows txId txIx Assets{..} =
+assetsToTxOutAssetRows BlockHeader{..} txId txIx Assets{..} =
   Map.toList (unTokens tokens) <&> \(assetId, quantity) ->
     ( txId
     , txIx
+    , unBlockHeaderHash headerHash
     , unPolicyId $ policyId assetId
     , unTokenName $ tokenName assetId
     , fromIntegral quantity
@@ -189,31 +197,38 @@ assetsToTxOutAssetRows txId txIx Assets{..} =
 type ContractTxOutRow =
   ( ByteString -- txId
   , Int16 -- txIx
+  , ByteString -- blockId
+  , ByteString -- payoutScriptHash
   , ByteString -- contract
   , ByteString -- state
   , ByteString -- rolesCurrency
   )
 
 transactionScriptOutputToRows
-  :: TxOutRef
+  :: BlockHeader
+  -> ScriptHash
+  -> TxOutRef
   -> Core.MarloweVersion v
   -> Core.TransactionScriptOutput v
   -> (ByteString, Int16, TxOutRow, ContractTxOutRow, [TxOutAssetRow])
-transactionScriptOutputToRows TxOutRef{..} MarloweV1 TransactionScriptOutput{..} =
+transactionScriptOutputToRows blockHeader@BlockHeader{..} payoutValidatorHash TxOutRef{..} MarloweV1 TransactionScriptOutput{..} =
   ( txId'
   , txIx'
   , ( txId'
     , txIx'
+    , unBlockHeaderHash headerHash
     , unAddress address
     , fromIntegral $ ada assets
     )
   , ( txId'
     , txIx'
+    , unBlockHeaderHash headerHash
+    , unScriptHash payoutValidatorHash
     , toStrict $ runPut $ put $ toDatum marloweContract
     , toStrict $ runPut $ put $ toDatum marloweState
     , fromBuiltin $ unCurrencySymbol $ rolesCurrency marloweParams
     )
-  , assetsToTxOutAssetRows txId' txIx' assets
+  , assetsToTxOutAssetRows blockHeader txId' txIx' assets
   )
   where
     MarloweData{..} = datum
@@ -224,23 +239,21 @@ type CreateTxOutRow =
   ( ByteString -- txId
   , Int16 -- txIx
   , ByteString -- blockId
-  , ByteString -- payoutScriptHash
   , Maybe ByteString -- metadata
   )
 
 createTxToTxOutRows :: BlockHeader -> MarloweCreateTransaction -> [(TxOutRow, ContractTxOutRow, CreateTxOutRow, [TxOutAssetRow])]
-createTxToTxOutRows BlockHeader{..} MarloweCreateTransaction{..} =
+createTxToTxOutRows blockHeader@BlockHeader{..} MarloweCreateTransaction{..} =
   Map.toList newContracts <&> \(contractId, SomeCreateStep version CreateStep{..}) ->
     let
       (txId', txIx', txOutRow, contractTxOutRow, txOutAssetRows) =
-        transactionScriptOutputToRows (unContractId contractId) version createOutput
+        transactionScriptOutputToRows blockHeader payoutValidatorHash (unContractId contractId) version createOutput
     in
       ( txOutRow
       , contractTxOutRow
       , ( txId'
         , txIx'
         , unBlockHeaderHash headerHash
-        , unScriptHash payoutValidatorHash
         , if Map.null (unTransactionMetadata metadata)
             then Nothing
             else Just $ toStrict $ runPut $ put metadata
@@ -265,26 +278,27 @@ type ApplyTxRow =
 type PayoutTxOutRow =
   ( ByteString -- txId
   , Int16 -- txIx
+  , ByteString -- blockId
   , ByteString -- rolesCurrency
   , ByteString -- role
   )
 
 applyTxToRows
-  :: BlockHeader
-  -> MarloweApplyInputsTransaction
+  :: MarloweApplyInputsTransaction
   -> ( ApplyTxRow
      , Maybe (TxOutRow, ContractTxOutRow, [TxOutAssetRow])
      , [(TxOutRow, PayoutTxOutRow, [TxOutAssetRow])]
      )
-applyTxToRows BlockHeader{..} (MarloweApplyInputsTransaction MarloweV1 inputTxOutRef Core.Transaction{..}) =
+applyTxToRows (MarloweApplyInputsTransaction MarloweV1 UnspentContractOutput{..} Core.Transaction{..}) =
   let
+    BlockHeader{..} = blockHeader
     txId' = unTxId transactionId
     (createTxId', createTxIx') = case unContractId contractId of
       TxOutRef{..} -> (unTxId txId, fromIntegral txIx)
-    (inputTxId', inputTxIx') = case inputTxOutRef of
+    (inputTxId', inputTxIx') = case txOutRef of
       TxOutRef{..} -> (unTxId txId, fromIntegral txIx)
     mOutputRows = Core.scriptOutput output <&> \scriptOutput ->
-      transactionScriptOutputToRows (utxo scriptOutput) MarloweV1 scriptOutput
+      transactionScriptOutputToRows blockHeader payoutValidatorHash (utxo scriptOutput) MarloweV1 scriptOutput
   in
     ( ( txId'
       , createTxId'
@@ -308,15 +322,17 @@ applyTxToRows BlockHeader{..} (MarloweApplyInputsTransaction MarloweV1 inputTxOu
         in
           ( ( txId'
             , txIx'
+            , unBlockHeaderHash headerHash
             , unAddress address
             , fromIntegral $ ada assets
             )
           , ( txId'
             , txIx'
+            , unBlockHeaderHash headerHash
             , unTokenName $ tokenName datum
             , unPolicyId $ policyId datum
             )
-          , assetsToTxOutAssetRows txId' txIx' assets
+          , assetsToTxOutAssetRows blockHeader txId' txIx' assets
           )
     )
 
@@ -347,17 +363,21 @@ prepareParams blocks =
 
   , V.fromList txOutTxIdRows
   , V.fromList txOutTxIxRows
+  , V.fromList txOutBlockIdRows
   , V.fromList txOutAddressRows
   , V.fromList txOutLovelaceRows
 
   , V.fromList txOutAssetTxIdRows
   , V.fromList txOutAssetTxIxRows
+  , V.fromList txOutAssetBlockIdRows
   , V.fromList txOutAssetPolicyIdRows
   , V.fromList txOutAssetNameRows
   , V.fromList txOutAssetQuantityRows
 
   , V.fromList contractTxOutTxIdRows
   , V.fromList contractTxOutTxIxRows
+  , V.fromList contractTxOutBlockIdRows
+  , V.fromList contractTxOutPayoutScriptHashRows
   , V.fromList contractTxOutContractRows
   , V.fromList contractTxOutStateRows
   , V.fromList contractTxOutRolesCurrencyRows
@@ -365,7 +385,6 @@ prepareParams blocks =
   , V.fromList createTxOutTxIdRows
   , V.fromList createTxOutTxIxRows
   , V.fromList createTxOutBlockIdRows
-  , V.fromList createTxOutPayoutScriptHashRows
   , V.fromList createTxOutMetadataRows
 
   , V.fromList applyTxTxIdRows
@@ -382,6 +401,7 @@ prepareParams blocks =
 
   , V.fromList payoutTxOutTxIdRows
   , V.fromList payoutTxOutTxIxRows
+  , V.fromList payoutTxOutBlockIdRows
   , V.fromList payoutTxOutRolesCurrencyRows
   , V.fromList payoutTxOutRoleRows
 
@@ -404,30 +424,33 @@ prepareParams blocks =
 
     ( txOutTxIdRows
       , txOutTxIxRows
+      , txOutBlockIdRows
       , txOutAddressRows
       , txOutLovelaceRows
-      ) = unzip4 txOutRows
+      ) = unzip5 txOutRows
 
     ( txOutAssetTxIdRows
       , txOutAssetTxIxRows
+      , txOutAssetBlockIdRows
       , txOutAssetPolicyIdRows
       , txOutAssetNameRows
       , txOutAssetQuantityRows
-      ) = unzip5 txOutAssetRows
+      ) = unzip6 txOutAssetRows
 
     ( contractTxOutTxIdRows
       , contractTxOutTxIxRows
+      , contractTxOutBlockIdRows
+      , contractTxOutPayoutScriptHashRows
       , contractTxOutContractRows
       , contractTxOutStateRows
       , contractTxOutRolesCurrencyRows
-      ) = unzip5 contractTxOutRows
+      ) = unzip7 contractTxOutRows
 
     ( createTxOutTxIdRows
       , createTxOutTxIxRows
       , createTxOutBlockIdRows
-      , createTxOutPayoutScriptHashRows
       , createTxOutMetadataRows
-      ) = unzip5 createTxOutRows
+      ) = unzip4 createTxOutRows
 
     ( applyTxTxIdRows
       , applyTxCreateTxIdRows
@@ -444,9 +467,10 @@ prepareParams blocks =
 
     ( payoutTxOutTxIdRows
       , payoutTxOutTxIxRows
+      , payoutTxOutBlockIdRows
       , payoutTxOutRolesCurrencyRows
       , payoutTxOutRoleRows
-      ) = unzip4 payoutTxOutRows
+      ) = unzip5 payoutTxOutRows
 
     ( withdrawalTxInTxIdRows
       , withdrawalTxInBlockIdRows
@@ -465,7 +489,7 @@ marloweBlockToTxRows MarloweBlock{..} = flip foldMap7 transactions \case
       (txOutRows, concat txOutAssetRows, contractTxOutRows, createTxOutRows, [], [], [])
   ApplyInputsTransaction tx ->
     let
-      (applyTxRow, mOutRows, payoutRows) = applyTxToRows blockHeader tx
+      (applyTxRow, mOutRows, payoutRows) = applyTxToRows tx
       (txOutRows, contractTxOutRows, txOutAssetRows) = unzip3 $ maybeToList mOutRows
       (txOutRows', payoutTxOutRows, txOutAssetRows') = unzip3 payoutRows
     in

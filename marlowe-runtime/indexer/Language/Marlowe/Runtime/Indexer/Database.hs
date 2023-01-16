@@ -10,7 +10,7 @@ data DatabaseQueries m = DatabaseQueries
   { commitRollback :: ChainPoint -> m ()
   , commitBlocks :: [MarloweBlock] -> m ()
   , getIntersectionPoints :: m [BlockHeader]
-  , getMarloweUTxO :: BlockHeader -> m MarloweUTxO
+  , getMarloweUTxO :: BlockHeader -> m (Maybe MarloweUTxO)
   }
 
 hoistDatabaseQueries :: (forall a. m a -> n a) -> DatabaseQueries m -> DatabaseQueries n

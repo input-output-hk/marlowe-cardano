@@ -20,12 +20,12 @@ import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.These (These(..))
 import Data.Time (NominalDiffTime, nominalDiffTimeToSeconds)
-import Data.Traversable (for)
 import Language.Marlowe.Runtime.ChainSync.Api
 import Language.Marlowe.Runtime.Indexer.Database (DatabaseQueries(..))
 import Language.Marlowe.Runtime.Indexer.Types
   (MarloweBlock(..), MarloweUTxO(..), UnspentContractOutput(..), extractMarloweBlock)
 import Network.Protocol.Driver (RunClient)
+import Witherable (wither)
 
 -- | Injectable dependencies for the chain seek client
 data ChainSeekClientDependencies = ChainSeekClientDependencies
@@ -154,11 +154,13 @@ chainSeekClient = component \ChainSeekClientDependencies{..} -> do
                       Genesis -> pure $ MarloweUTxO mempty mempty
 
                       -- Otherwise load it from the database.
-                      At block -> Concurrently $ getMarloweUTxO block
+                      At block -> Concurrently $ getMarloweUTxO block >>= \case
+                        Nothing -> fail $ "Unable to load MarloweUTxO at unknown block " <> show block
+                        Just utxo -> pure utxo
 
                     -- Load the previous MarloweUTxOs in parallel.
-                    previousStates <- for utxoHistoryRange \block ->
-                      Concurrently $ (At $ blockNo block,) <$> getMarloweUTxO block
+                    previousStates <- flip wither utxoHistoryRange \block ->
+                      Concurrently $ fmap (At $ blockNo block,) <$> getMarloweUTxO block
 
                     -- Initialize the rollback states.
                     pure RollbackStates
