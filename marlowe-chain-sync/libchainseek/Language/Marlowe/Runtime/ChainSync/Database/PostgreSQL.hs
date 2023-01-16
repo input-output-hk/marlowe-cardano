@@ -70,9 +70,9 @@ import Prelude hiding (init)
 -- | PostgreSQL implementation for the chainseekd database queries.
 databaseQueries :: DatabaseQueries Session
 databaseQueries = DatabaseQueries
-  (hoistGetUTxOs (TS.transaction TS.ReadCommitted TS.Read) getUTxOs)
-  (hoistGetTip (TS.transaction TS.ReadCommitted TS.Read) getTip)
-  (hoistMoveClient (TS.transaction TS.ReadCommitted TS.Read) moveClient)
+  (hoistGetUTxOs (TS.transaction TS.Serializable TS.Read) getUTxOs)
+  (hoistGetTip (TS.transaction TS.Serializable TS.Read) getTip)
+  (hoistMoveClient (TS.transaction TS.Serializable TS.Read) moveClient)
 
 -- MoveClient
 
