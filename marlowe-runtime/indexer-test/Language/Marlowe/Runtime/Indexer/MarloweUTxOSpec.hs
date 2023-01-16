@@ -18,7 +18,17 @@ import Test.QuickCheck.Gen (sublistOf)
 
 spec :: Spec
 spec = describe "MarloweUTxO" do
+  extractCreateTxSpec
+  extractApplyInputsTxSpec
   extractWithdrawTxSpec
+
+extractCreateTxSpec :: Spec
+extractCreateTxSpec = describe "extractCreateTx" do
+  pure ()
+
+extractApplyInputsTxSpec :: Spec
+extractApplyInputsTxSpec = describe "extractApplyInputsTx" do
+  pure ()
 
 extractWithdrawTxSpec :: Spec
 extractWithdrawTxSpec = describe "extractWithdrawTx" do
