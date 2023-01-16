@@ -10,10 +10,11 @@ import qualified Data.Map as Map
 import qualified Data.Set as Set
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Core.Api (ContractId(..), MarloweVersion(..), SomeMarloweVersion(..))
-import Language.Marlowe.Runtime.Indexer.Types (MarloweUTxO(..), UnspentContractOutput(..), extractWithdrawTx)
+import Language.Marlowe.Runtime.Indexer.Types
 import Test.Hspec (Spec, describe)
 import Test.Hspec.QuickCheck (prop)
-import Test.QuickCheck (Gen, arbitrary, forAll, listOf, listOf1, (===), (==>))
+import Test.QuickCheck (Gen, arbitrary, forAll, infiniteListOf, listOf, listOf1, (===), (==>))
+import Test.QuickCheck.Gen (sublistOf)
 
 spec :: Spec
 spec = describe "MarloweUTxO" do
@@ -36,6 +37,47 @@ extractWithdrawTxSpec = describe "extractWithdrawTx" do
           (result, utxo') = runState (execWriterT $ extractWithdrawTx tx) utxo
         in
           null result ==> utxo === utxo'
+  prop "Tx contains all spent payouts" $ forAll genTxId \txId ->
+    forAll genMarloweUTxO \utxo -> not (Map.null $ unspentPayoutOutputs utxo) ==>
+      forAll (Set.fromList <$> (zipWith mkTxIn <$> infiniteListOf genAddress <*> sublistOf (Map.elems (unspentPayoutOutputs utxo) >>= Set.toList))) \txIns ->
+        let
+          tx = Chain.Transaction txId Chain.Unbounded mempty txIns [] mempty
+          consumedPayouts = Map.filter (not . Set.null) $ flip Set.intersection (Set.map inputToTxOutRef txIns) <$> unspentPayoutOutputs utxo
+          expected = WithdrawTransaction MarloweWithdrawTransaction
+            { consumedPayouts
+            , consumingTx = txId
+            }
+        in
+          not (null txIns) ==>
+            evalState (execWriterT $ extractWithdrawTx tx) utxo === [expected]
+  prop "Payouts don't vanish" $ forAll genTxId \txId ->
+    forAll (Set.fromList <$> listOf1 genTxIn) \txIns ->
+      forAll genMarloweUTxO \utxo ->
+        let
+          tx = Chain.Transaction txId Chain.Unbounded mempty txIns [] mempty
+          (txs, utxo') = runState (execWriterT $ extractWithdrawTx tx) utxo
+          consumed = flip foldMap txs \case
+            WithdrawTransaction MarloweWithdrawTransaction{..} -> consumedPayouts
+            _ -> mempty
+        in
+          Map.unionWith (<>) consumed (unspentPayoutOutputs utxo') == unspentPayoutOutputs utxo
+  prop "Payouts aren't duplicated" $ forAll genTxId \txId ->
+    forAll (Set.fromList <$> listOf1 genTxIn) \txIns ->
+      forAll genMarloweUTxO \utxo ->
+        let
+          tx = Chain.Transaction txId Chain.Unbounded mempty txIns [] mempty
+          (txs, utxo') = runState (execWriterT $ extractWithdrawTx tx) utxo
+          consumed = flip foldMap txs \case
+            WithdrawTransaction MarloweWithdrawTransaction{..} -> consumedPayouts
+            _ -> mempty
+        in
+          Map.filter (not . Set.null) (Map.intersectionWith Set.intersection consumed (unspentPayoutOutputs utxo')) == mempty
+
+mkTxIn :: Chain.Address -> Chain.TxOutRef -> Chain.TransactionInput
+mkTxIn address Chain.TxOutRef{..} = Chain.TransactionInput{..}
+  where
+    datumBytes = Nothing
+    redeemer = Nothing
 
 inputToTxOutRef :: Chain.TransactionInput -> Chain.TxOutRef
 inputToTxOutRef Chain.TransactionInput{..} = Chain.TxOutRef{..}

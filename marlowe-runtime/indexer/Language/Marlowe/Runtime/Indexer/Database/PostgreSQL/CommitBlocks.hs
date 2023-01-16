@@ -371,7 +371,7 @@ withdrawTxToWithdrawalTxInRows
   -> MarloweWithdrawTransaction
   -> [WithdrawalTxInRow]
 withdrawTxToWithdrawalTxInRows BlockHeader{..} MarloweWithdrawTransaction{..} =
-  Set.toList consumedPayouts <&> \TxOutRef{..} ->
+  (Map.elems consumedPayouts >>= Set.toList) <&> \TxOutRef{..} ->
     ( unTxId consumingTx
     , unBlockHeaderHash headerHash
     , unTxId txId

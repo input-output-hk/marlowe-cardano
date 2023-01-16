@@ -93,8 +93,7 @@ instance Show MarloweApplyInputsTransaction where
       )
 
 data MarloweWithdrawTransaction = MarloweWithdrawTransaction
-  { contractId :: ContractId
-  , consumedPayouts :: Set TxOutRef
+  { consumedPayouts :: Map ContractId (Set TxOutRef)
   , consumingTx :: TxId
   } deriving (Eq, Show, Generic)
 
@@ -338,18 +337,18 @@ extractWithdrawTx Transaction{inputs, txId = consumingTx} = do
   -- Get the unspentPayoutOutputs fro the MarloweUTxO
   unspentPayoutOutputs <- gets unspentPayoutOutputs
 
-  -- Find an unspent payout output set that the transaction spends.
-  let mPayouts = find (not . Set.null . snd) $ fmap (Set.intersection inputTxOutRefs) <$> Map.toList unspentPayoutOutputs
-  for_ mPayouts \(contractId, consumedPayouts) -> do
+  -- Find unspent payouts that the transaction spends.
+  let consumedPayouts = Map.filter (not . Set.null) $ Set.intersection inputTxOutRefs <$> unspentPayoutOutputs
+  for_ (Map.toList consumedPayouts) \(contractId, payoutsForContract) -> do
 
     -- Update the MarloweUTxO to remove the unspentPayoutOutputs.
-    modify \utxo -> utxo { unspentPayoutOutputs = Map.alter (>>= removePayout consumedPayouts) contractId unspentPayoutOutputs }
+    modify \utxo -> utxo { unspentPayoutOutputs = Map.alter (>>= removePayouts payoutsForContract) contractId unspentPayoutOutputs }
 
-    tell [WithdrawTransaction MarloweWithdrawTransaction{..}]
+  unless (Map.null consumedPayouts) $ tell [WithdrawTransaction MarloweWithdrawTransaction{..}]
   where
     -- Remove the consumed payouts for the contract and remove the contractId from the
     -- map if there are no more payouts left afterward.
-    removePayout consumedPayouts = mfilter (not . Set.null) . Just . (`Set.difference` consumedPayouts)
+    removePayouts consumedPayouts = mfilter (not . Set.null) . Just . (`Set.difference` consumedPayouts)
 
 
 hoistMaybe :: Applicative m => Maybe a -> MaybeT m a
