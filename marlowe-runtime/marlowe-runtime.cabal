@@ -638,6 +638,27 @@ test-suite marlowe-runtime-test
   build-tool-depends: hspec-discover:hspec-discover
   ghc-options: -threaded
 
+test-suite indexer-test
+  import: lang
+  hs-source-dirs: indexer-test
+  type: exitcode-stdio-1.0
+  main-is: Spec.hs
+  other-modules:
+    Language.Marlowe.Runtime.Indexer.MarloweUTxOSpec
+    Paths_marlowe_runtime
+  build-depends:
+      base >= 4.9 && < 5
+    , bytestring
+    , containers
+    , hspec
+    , marlowe-chain-sync
+    , marlowe-runtime
+    , marlowe-runtime:indexer
+    , QuickCheck
+    , transformers
+  build-tool-depends: hspec-discover:hspec-discover
+  ghc-options: -threaded
+
 test-suite web-server-test
   import: lang
   hs-source-dirs: web-server-test
