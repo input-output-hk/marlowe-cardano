@@ -441,11 +441,12 @@ findMinUtxo protocol (chAddress, mbDatum, origValue) =
       -- FIXME Found what looks like the same value being added and then subtracted from this computation
       -- atLeastHalfAnAda = origValue <> C.lovelaceToValue (maximum [500_000, C.selectLovelace origValue] - C.selectLovelace origValue)
       atLeastHalfAnAda = C.lovelaceToValue (maximum [500_000, C.selectLovelace origValue])
+      revisedValue = origValue <> C.negateValue (C.lovelaceToValue $ C.selectLovelace origValue) <> atLeastHalfAnAda
       datum = maybe C.TxOutDatumNone
         (C.TxOutDatumInTx C.ScriptDataInBabbageEra . C.fromPlutusData . P.toData)
         $ Core.fromChainDatum Core.MarloweV1 =<< mbDatum
 
-    dummyTxOut <- makeTxOut chAddress datum atLeastHalfAnAda C.ReferenceScriptNone
+    dummyTxOut <- makeTxOut chAddress datum revisedValue C.ReferenceScriptNone
     case C.calculateMinimumUTxO C.ShelleyBasedEraBabbage dummyTxOut protocol of
        Right minValue -> pure minValue
        Left e -> Left . CoinSelectionFailed $ show e
