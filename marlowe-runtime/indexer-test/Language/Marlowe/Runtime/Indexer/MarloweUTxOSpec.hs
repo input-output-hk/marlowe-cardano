@@ -20,7 +20,6 @@ import Language.Marlowe.Runtime.Cardano.Api (fromCardanoDatumHash, toCardanoScri
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import qualified Language.Marlowe.Runtime.ChainSync.Api as TransactionInput (TransactionInput(..))
 import qualified Language.Marlowe.Runtime.ChainSync.Api as TransactionOutput (TransactionOutput(..))
-import qualified Language.Marlowe.Runtime.ChainSync.Api as TxOutRef (TxOutRef(..))
 import qualified Language.Marlowe.Runtime.Core.Api as Core
 import qualified Language.Marlowe.Runtime.Core.ScriptRegistry as ScriptRegistry
 import Language.Marlowe.Runtime.History.Api (CreateStep(..), ExtractCreationError(..), SomeCreateStep(..))
@@ -74,7 +73,8 @@ extractCreateTxSpec = describe "extractCreateTx" do
         let
           (txs, utxo') = runState (execWriterT $ extractCreateTx marloweScriptHashes tx) utxo
           addedContracts = flip foldMap txs \case
-            CreateTransaction MarloweCreateTransaction{..} -> createStepToUnspentContractOutput <$> newContracts
+            CreateTransaction MarloweCreateTransaction{..} ->
+              Map.mapKeys (Core.ContractId . Chain.TxOutRef txId) $ createStepToUnspentContractOutput <$> newContracts
             _ -> mempty
         in
           Map.difference (unspentContractOutputs utxo') (unspentContractOutputs utxo) === addedContracts
@@ -171,8 +171,7 @@ genCreateBug = elements [NoCreateDatum, InvalidCreateDatum]
 createTxToChainTx :: Maybe ExtractCreationError -> MarloweCreateTransaction -> Gen Chain.Transaction
 createTxToChainTx bug MarloweCreateTransaction{..} = do
   inputs <- Set.fromList <$> listOf1 genTxIn
-  let newContractByIx = Map.mapKeys (TxOutRef.txIx . Core.unContractId) newContracts
-  outputs' <- for [0..maximum (Map.keys newContractByIx)] \txIx -> case Map.lookup txIx newContractByIx of
+  outputs' <- for [0..maximum (Map.keys newContracts)] \txIx -> case Map.lookup txIx newContracts of
     Nothing -> genTxOut
     Just (SomeCreateStep Core.MarloweV1 CreateStep{createOutput = Core.TransactionScriptOutput{..}}) -> pure $ Chain.TransactionOutput
       address
@@ -182,7 +181,7 @@ createTxToChainTx bug MarloweCreateTransaction{..} = do
   outputs <- case bug of
     Nothing -> pure outputs'
     Just err -> do
-      affectedContract <- fromIntegral @_ @Int <$> elements (Map.keys newContractByIx)
+      affectedContract <- fromIntegral @_ @Int <$> elements (Map.keys newContracts)
       let modifyOutput f = zipWithM (\i -> if i == affectedContract then f else pure) [0..] outputs'
       modifyOutput \txOut -> case err of
         TxIxNotFound -> error "Cannot inject TxIxNotFound"
@@ -195,7 +194,7 @@ createTxToChainTx bug MarloweCreateTransaction{..} = do
           pure txOut { TransactionOutput.datum = Just datum }
         NotCreationTransaction -> error "Cannot inject NotCreationTransaction"
   pure Chain.Transaction
-    { txId = TxOutRef.txId $ Core.unContractId $ head $ Map.keys newContracts
+    { txId
     , validityRange = Chain.Unbounded
     , metadata
     , inputs
@@ -236,8 +235,8 @@ genCreateTx scripts = do
   txIxs <- sized \size -> resize (min size 10) $ nub <$> listOf1 genTxIx
   newContracts <- Map.fromList <$> for txIxs \txIx -> do
     let txOut = Chain.TxOutRef{..}
-    (Core.ContractId txOut,) <$> genSomeCreateStep scripts txOut
-  pure $ MarloweCreateTransaction newContracts mempty
+    (txIx,) <$> genSomeCreateStep scripts txOut
+  pure $ MarloweCreateTransaction txId newContracts mempty
 
 genSomeCreateStep :: Set ScriptRegistry.MarloweScripts -> Chain.TxOutRef -> Gen SomeCreateStep
 genSomeCreateStep scripts txOut = SomeCreateStep Core.MarloweV1

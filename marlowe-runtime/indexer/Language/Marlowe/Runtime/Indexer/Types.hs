@@ -38,6 +38,7 @@ import Language.Marlowe.Runtime.ChainSync.Api
   , TransactionMetadata
   , TransactionOutput(..)
   , TxId
+  , TxIx
   , TxOutRef(..)
   , paymentCredential
   )
@@ -67,7 +68,8 @@ data MarloweTransaction
   deriving (Eq, Show, Generic)
 
 data MarloweCreateTransaction = MarloweCreateTransaction
-  { newContracts :: Map ContractId SomeCreateStep
+  { txId :: TxId
+  , newContracts :: Map TxIx SomeCreateStep
   , metadata :: TransactionMetadata
   } deriving (Eq, Show, Generic)
 
@@ -213,13 +215,13 @@ extractCreateTx marloweScriptHashes Transaction{..} = do
             Left err -> do
               tell [InvalidCreateTransaction contractId err]
               pure Nothing
-            Right creationStep -> pure $ Just (contractId, creationStep)
+            Right creationStep -> pure $ Just (case Core.unContractId contractId of TxOutRef{txIx} -> txIx, creationStep)
 
     -- Prevent the creation of empty create transactions.
     unless (null newContracts) do
 
       -- Add the new contract outputs to the MarloweUTxO
-      let newUnspentContractOutputs = createStepToUnspentContractOutput <$> newContracts
+      let newUnspentContractOutputs = Map.mapKeys (Core.ContractId . TxOutRef txId) $ createStepToUnspentContractOutput <$> newContracts
       modify \utxo -> utxo { unspentContractOutputs = unspentContractOutputs utxo <> newUnspentContractOutputs }
 
       tell [CreateTransaction MarloweCreateTransaction{..}]

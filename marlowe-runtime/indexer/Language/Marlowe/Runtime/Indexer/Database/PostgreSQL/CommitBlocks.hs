@@ -259,10 +259,10 @@ type CreateTxOutRow =
 
 createTxToTxOutRows :: BlockHeader -> MarloweCreateTransaction -> [(TxOutRow, ContractTxOutRow, CreateTxOutRow, [TxOutAssetRow])]
 createTxToTxOutRows blockHeader@BlockHeader{..} MarloweCreateTransaction{..} =
-  Map.toList newContracts <&> \(contractId, SomeCreateStep version CreateStep{..}) ->
+  Map.toList newContracts <&> \(txIx, SomeCreateStep version CreateStep{..}) ->
     let
       (txId', txIx', txOutRow, contractTxOutRow, txOutAssetRows) =
-        transactionScriptOutputToRows blockHeader payoutValidatorHash (unContractId contractId) version createOutput
+        transactionScriptOutputToRows blockHeader payoutValidatorHash (TxOutRef txId txIx) version createOutput
     in
       ( txOutRow
       , contractTxOutRow
