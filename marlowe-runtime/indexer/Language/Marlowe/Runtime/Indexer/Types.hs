@@ -163,22 +163,13 @@ extractMarloweBlock
   -> Maybe (MarloweUTxO, MarloweBlock)
 extractMarloweBlock systemStart eraHistory marloweScriptHashes blockHeader txs =
   sequenceA . swap . runState do
-    transactions <- execWriterT $ retrySilentUntilAllSilent (Set.toList txs) \tx -> untilNonSilent
-      [ extractCreateTx marloweScriptHashes tx
-      , extractApplyInputsTx systemStart eraHistory blockHeader tx
-      , extractWithdrawTx tx
-      ]
+    transactions <- execWriterT $ retrySilentUntilAllSilent (Set.toList txs) \tx -> do
+      extractCreateTx marloweScriptHashes tx
+      extractApplyInputsTx systemStart eraHistory blockHeader tx
+      extractWithdrawTx tx
     pure case transactions of
       [] -> Nothing
       x : xs -> Just MarloweBlock { blockHeader, transactions = x :| xs }
-
--- Tries the list of provided writer actions in the given order until one
--- produces some output.
-untilNonSilent :: MonadWriter [w] m => [m ()] -> m ()
-untilNonSilent [] = pure ()
-untilNonSilent (w : ws) = do
-  (_, isSilent) <- listens null w
-  when isSilent $ untilNonSilent ws
 
 -- Runs the given writer action for each element in a structure. If any actions
 -- produce output, the silent elements
