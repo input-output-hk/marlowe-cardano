@@ -2,6 +2,11 @@
 :toc: left
 :reproducible:
 
+== Restriction on PRs for DSL and validator
+
+If you are proposing a change to the Marlowe domain-specific language (DSL) or to the Plutus validator for Marlowe, pursue the https://github.com/input-output-hk/MIPs[Marlowe Improvement Proposal (MIP)] process by starting a https://github.com/input-output-hk/MIPs/discussions[MIP discussion] of the proposed change. *Pull requests for DSL or validator changes will be rejected unless they have previously been approved via the MIP process.*
+
+
 == Setting up and working with our development tools
 
 Make sure you have set up the link:./README{outfilesuffix}#prerequisites[prerequisities].
