@@ -649,11 +649,17 @@ test-suite indexer-test
   build-depends:
       base >= 4.9 && < 5
     , bytestring
+    , cardano-api
     , containers
     , hspec
+    , marlowe
     , marlowe-chain-sync
+    , marlowe-chain-sync:plutus-compat
     , marlowe-runtime
+    , marlowe-runtime:history-api
     , marlowe-runtime:indexer
+    , marlowe-test
+    , plutus-tx
     , QuickCheck
     , transformers
   build-tool-depends: hspec-discover:hspec-discover

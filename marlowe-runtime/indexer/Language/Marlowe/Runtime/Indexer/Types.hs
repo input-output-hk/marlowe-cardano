@@ -45,7 +45,7 @@ import Language.Marlowe.Runtime.Core.Api (ContractId(..))
 import qualified Language.Marlowe.Runtime.Core.Api as Core
 import Language.Marlowe.Runtime.History.Api
   ( CreateStep(..)
-  , ExtractCreationError
+  , ExtractCreationError(NotCreationTransaction)
   , ExtractMarloweTransactionError
   , SomeCreateStep(..)
   , extractCreation
@@ -199,14 +199,21 @@ extractCreateTx marloweScriptHashes Transaction{..} = do
       contractIds = mapMaybe (uncurry $ extractContractId marloweScriptHashes)
         $ zip (TxOutRef txId <$> [0..]) outputs
 
+    existingContracts <- gets $ Map.keysSet . unspentContractOutputs
+
     -- Try to extract a creation step for each prospective contract ID, reporting
     -- any errors found.
     newContracts <- Map.fromList <$> flip wither contractIds \contractId ->
-      case extractCreation contractId Transaction{..} of
-        Left err -> do
-          tell [InvalidCreateTransaction contractId err]
+      if Set.member contractId existingContracts
+        then do
+          tell [InvalidCreateTransaction contractId NotCreationTransaction]
           pure Nothing
-        Right creationStep -> pure $ Just (contractId, creationStep)
+        else
+          case extractCreation contractId Transaction{..} of
+            Left err -> do
+              tell [InvalidCreateTransaction contractId err]
+              pure Nothing
+            Right creationStep -> pure $ Just (contractId, creationStep)
 
     -- Prevent the creation of empty create transactions.
     unless (null newContracts) do
@@ -222,14 +229,15 @@ extractCreateTx marloweScriptHashes Transaction{..} = do
       Just (ScriptCredential scriptHash) -> Set.member scriptHash marloweScriptHashes
       _ -> False
 
-    createStepToUnspentContractOutput (SomeCreateStep version CreateStep{..}) =
-      let
-        Core.TransactionScriptOutput{..} = createOutput
-        txOutRef = utxo
-        marloweAddress = address
-        marloweVersion = Core.SomeMarloweVersion version
-      in
-        UnspentContractOutput{..}
+createStepToUnspentContractOutput :: SomeCreateStep -> UnspentContractOutput
+createStepToUnspentContractOutput (SomeCreateStep version CreateStep{..}) =
+  let
+    Core.TransactionScriptOutput{..} = createOutput
+    txOutRef = utxo
+    marloweAddress = address
+    marloweVersion = Core.SomeMarloweVersion version
+  in
+    UnspentContractOutput{..}
 
 
 -- | Extracts a ContractId from a transaction output if it is a Marlowe contract output.
