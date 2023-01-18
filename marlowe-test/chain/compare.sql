@@ -2,7 +2,7 @@
 -- Script to compare databases for `marlowe-chainindexer` and `cardano-db-sync`.
 --
 -- This assumes that the `marlowe-chainindexer` tables reside in the schema
--- `chain` and the `cardano-db-sync` tables reside in the schema `dbsync`.
+-- `chain` and the `cardano-db-sync` tables reside in the schema `public`.
 --
 -- This script writes CSV output files listing discrepancies to a folder `out/`.
 --
@@ -17,7 +17,7 @@ create temporary table max_slotno as
   select
       max(slotno) as max_slotno
     from chain.block as cblock
-    inner join dbsync.block as dblock
+    inner join public.block as dblock
       on cblock.id = dblock.hash
 ;
 select max_slotno as "Latest Block in Common"
@@ -40,7 +40,8 @@ create temporary table cmp_block as
     from max_slotno
     inner join chain.block
       on slotno <= max_slotno
-    where slotno >= 0
+    where slotno > 0
+      and rollbacktoblock is null
   union all
   select
       'dbsync'
@@ -48,8 +49,10 @@ create temporary table cmp_block as
     , slot_no
     , block_no
     from max_slotno
-    inner join dbsync.block
+    inner join public.block
       on slot_no <= max_slotno
+    where
+      block_no > 0
 ;
 select
     source as "Source"
@@ -113,12 +116,14 @@ create temporary table cmp_tx as
     , tx_metadata.bytes
     , valid_contract
     from max_slotno
-    inner join dbsync.block
+    inner join public.block
       on block.slot_no <= max_slotno
-    inner join dbsync.tx
+    inner join public.tx
       on tx.block_id = block.id
-    left outer join dbsync.tx_metadata
+    left outer join public.tx_metadata
       on tx.id = tx_metadata.tx_id
+    where
+      block_no > 0
 ;
 select
     source as "Source"
@@ -152,8 +157,35 @@ select
 ;
 \copy (select * from x_tx order by 2, 3, 4, 5, 6, 7, 1) to 'out/tx-discrepancies.csv' CSV HEADER
 
--- FIXME: Add metadata substring find.
 
+\qecho
+\qecho Tx metadata comparison
+\qecho
+
+drop table if exists x_metadata;
+create temporary table x_metadata as
+  select
+      id
+    , m_tx.metadata as "chainindex_metadata"
+    , c_tx.metadata as "dbsync_metadata"
+    from cmp_tx as m_tx
+    inner join cmp_tx as c_tx
+      using (id)
+    where m_tx.source = 'chainindex'
+      and c_tx.source = 'dbsync'
+      and (m_tx.metadata is not null or c_tx.metadata is not null)
+      and (
+           m_tx.metadata is not null and c_tx.metadata is     null
+        or c_tx.metadata is     null and c_tx.metadata is not null
+        or position(right(encode(c_tx.metadata, 'hex'), -4) in encode(m_tx.metadata, 'hex')) = 0
+      )
+;
+select
+  count(*) as "Count of Tx Metadata Discrepancies"
+  from x_metadata
+;
+\copy (select * from x_metadata order by 1, 2, 3) to 'out/metadata-discrepancies.csv' CSV HEADER
+    
 
 \qecho
 \qecho TxOut comparison.
@@ -187,14 +219,16 @@ create temporary table cmp_txout as
     , datum.bytes
     , not tx.valid_contract
     from max_slotno
-    inner join dbsync.block
+    inner join public.block
       on block.slot_no <= max_slotno
-    inner join dbsync.tx
+    inner join public.tx
       on tx.block_id = block.id
-    inner join dbsync.tx_out
+    inner join public.tx_out
       on tx_out.tx_id = tx.id
-    left outer join dbsync.datum
+    left outer join public.datum
       on datum.hash = tx_out.data_hash
+    where
+      block_no > 0
 ;
 select
     source as "Source"
@@ -256,20 +290,22 @@ create temporary table cmp_txin as
     , redeemer_data.bytes
     , not in_tx.valid_contract
     from max_slotno
-    inner join dbsync.block as block
+    inner join public.block as block
       on block.slot_no <= max_slotno
-    inner join dbsync.tx as in_tx
+    inner join public.tx as in_tx
       on in_tx.block_id = block.id
-    inner join dbsync.tx_in
+    inner join public.tx_in
       on tx_in.tx_in_id = in_tx.id
-    inner join dbsync.tx_out
+    inner join public.tx_out
       on tx_out.tx_id = tx_in.tx_out_id and tx_out.index = tx_in.tx_out_index
-    inner join dbsync.tx as out_tx
+    inner join public.tx as out_tx
       on out_tx.id = tx_out.tx_id
-    left outer join dbsync.redeemer
+    left outer join public.redeemer
       on redeemer.id = tx_in.redeemer_id
-    left outer join dbsync.redeemer_data
+    left outer join public.redeemer_data
       on redeemer_data.id = redeemer.redeemer_data_id
+    where
+      block_no > 0
 ;
 select
     source as "Source"
@@ -324,14 +360,16 @@ create temporary table cmp_asset as
     , multi_asset.policy
     , multi_asset.name
     from max_slotno
-    inner join dbsync.block
+    inner join public.block
       on block.slot_no <= max_slotno
-    inner join dbsync.tx
+    inner join public.tx
       on tx.block_id = block.id
-    inner join dbsync.ma_tx_mint
+    inner join public.ma_tx_mint
       on ma_tx_mint.tx_id = tx.id
-    inner join dbsync.multi_asset
+    inner join public.multi_asset
       on multi_asset.id = ident
+    where
+      block_no > 0
 ;
 select
     source as "Source"
@@ -392,14 +430,16 @@ create temporary table cmp_asset_mint as
     , multi_asset.name
     , ma_tx_mint.quantity
     from max_slotno
-    inner join dbsync.block
+    inner join public.block
       on block.slot_no <= max_slotno
-    inner join dbsync.tx
+    inner join public.tx
       on tx.block_id = block.id
-    inner join dbsync.ma_tx_mint
+    inner join public.ma_tx_mint
       on ma_tx_mint.tx_id = tx.id
-    inner join dbsync.multi_asset
+    inner join public.multi_asset
       on multi_asset.id = ident
+    where
+      block_no > 0
 ;
 select
     source as "Source"
@@ -462,16 +502,18 @@ create temporary table cmp_asset_out as
     , multi_asset.name
     , ma_tx_out.quantity
     from max_slotno
-    inner join dbsync.block as block
+    inner join public.block as block
       on block.slot_no <= max_slotno
-    inner join dbsync.tx as tx
+    inner join public.tx as tx
       on tx.block_id = block.id
-    inner join dbsync.tx_out
+    inner join public.tx_out
       on tx_out.tx_id = tx.id
-    inner join dbsync.ma_tx_out
+    inner join public.ma_tx_out
       on ma_tx_out.tx_out_id = tx_out.id
-    inner join dbsync.multi_asset
+    inner join public.multi_asset
       on multi_asset.id = ident
+    where
+      block_no > 0
 ;
 select
     source as "Source"
@@ -519,39 +561,45 @@ create table x_summary as
   union all
   select
       'tx'
-    , (select count(*) from x_tx where comparison = 'chainindex-dbsync') as "Count of ChainIndex Minus DbSync"
-    , (select count(*) from x_tx where comparison = 'dbsync-chainindex') as "Count of DbSync Minus ChainIndex"
-    , (select count(*) from x_tx) > 0 as "Discrepancies?"
+    , (select count(*) from x_tx where comparison = 'chainindex-dbsync')
+    , (select count(*) from x_tx where comparison = 'dbsync-chainindex')
+    , (select count(*) from x_tx) > 0
+  union all
+  select
+      'metadata'
+    , (select count(*) from x_metadata)
+    , (select count(*) from x_metadata)
+    , (select count(*) from x_metadata) > 0
   union all
   select
       'txout'
-    , (select count(*) from x_txout where comparison = 'chainindex-dbsync') as "Count of ChainIndex Minus DbSync"
-    , (select count(*) from x_txout where comparison = 'dbsync-chainindex') as "Count of DbSync Minus ChainIndex"
-    , (select count(*) from x_txout) > 0 as "Discrepancies?"
+    , (select count(*) from x_txout where comparison = 'chainindex-dbsync')
+    , (select count(*) from x_txout where comparison = 'dbsync-chainindex')
+    , (select count(*) from x_txout) > 0
   union all
   select
       'txin'
-    , (select count(*) from x_txin where comparison = 'chainindex-dbsync') as "Count of ChainIndex Minus DbSync"
-    , (select count(*) from x_txin where comparison = 'dbsync-chainindex') as "Count of DbSync Minus ChainIndex"
-    , (select count(*) from x_txin) > 0 as "Discrepancies?"
+    , (select count(*) from x_txin where comparison = 'chainindex-dbsync')
+    , (select count(*) from x_txin where comparison = 'dbsync-chainindex')
+    , (select count(*) from x_txin) > 0
   union all
   select
       'asset'
-    , (select count(*) from x_asset where comparison = 'chainindex-dbsync') as "Count of ChainIndex Minus DbSync"
-    , (select count(*) from x_asset where comparison = 'dbsync-chainindex') as "Count of DbSync Minus ChainIndex"
-    , (select count(*) from x_asset) > 0 as "Discrepancies?"
+    , (select count(*) from x_asset where comparison = 'chainindex-dbsync')
+    , (select count(*) from x_asset where comparison = 'dbsync-chainindex')
+    , (select count(*) from x_asset) > 0
   union all
   select
       'assetmint'
-    , (select count(*) from x_asset_mint where comparison = 'chainindex-dbsync') as "Count of ChainIndex Minus DbSync"
-    , (select count(*) from x_asset_mint where comparison = 'dbsync-chainindex') as "Count of DbSync Minus ChainIndex"
-    , (select count(*) from x_asset_mint) > 0 as "Discrepancies?"
+    , (select count(*) from x_asset_mint where comparison = 'chainindex-dbsync')
+    , (select count(*) from x_asset_mint where comparison = 'dbsync-chainindex')
+    , (select count(*) from x_asset_mint) > 0
   union all
   select
       'assetout'
-    , (select count(*) from x_asset_out where comparison = 'chainindex-dbsync') as "Count of ChainIndex Minus DbSync"
-    , (select count(*) from x_asset_out where comparison = 'dbsync-chainindex') as "Count of DbSync Minus ChainIndex"
-    , (select count(*) from x_asset_out) > 0 as "Discrepancies?"
+    , (select count(*) from x_asset_out where comparison = 'chainindex-dbsync')
+    , (select count(*) from x_asset_out where comparison = 'dbsync-chainindex')
+    , (select count(*) from x_asset_out) > 0
 ;
 select *
   from x_summary
