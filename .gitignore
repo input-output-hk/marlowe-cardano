@@ -121,3 +121,5 @@ treasury
 
 compose.yaml
 *.log.config
+
+marlowe-test/out/
