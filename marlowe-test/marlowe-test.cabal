@@ -144,3 +144,4 @@ executable marlowe-spec-client
     , aeson
     , bytestring
     , marlowe-test
+    , split

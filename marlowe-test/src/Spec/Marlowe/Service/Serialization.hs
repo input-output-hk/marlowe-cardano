@@ -77,7 +77,7 @@ roundtripSerialization typeSerialized valueSerialized =
   if isKnownJson knownJsonTypes typeSerialized
     then case roundTripJsonable knownJsonTypes typeSerialized valueSerialized of
              Right valueReserialized -> SerializationSuccess{..}
-             Left serializationError      -> SerializationError{..}
+             Left serializationError -> SerializationError{..}
     else UnknownType typeSerialized
 
 

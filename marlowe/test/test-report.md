@@ -22,7 +22,7 @@ This test report covers the tests of the Haskell implementation of Marlowe seman
         -   [Semantics Validator](#semantics-validator)
         -   [Payout Validator](#payout-validator)
     -   [Miscellaneous Property-Based Tests](#miscellaneous-property-based-tests)
--   [Test Oracle for Marlowe](#test-oracle-for-marlowe)
+-   [Test Spec for Marlowe](#test-spec-for-marlowe)
 -   [On-Chain Tests of Marlowe](#on-chain-tests-of-marlowe)
     -   [Formal Tests](#formal-tests)
     -   [Informal Tests](#informal-tests)
@@ -398,7 +398,7 @@ Several other property-based tests, in the [`Spec.Marlowe.Marlowe`](src/Spec/Mar
  
 
 
-## Test Oracle for Marlowe
+## Test Spec for Marlowe
 
 [A test oracle service](https://github.com/input-output-hk/marlowe/blob/master/marlowe-spec-test/README.md), based on Marlowe's Haskell export from Isabelle is available for testing the Haskell implementation. These tests are automatically run as part of the `marlowe-test` suite.
 
