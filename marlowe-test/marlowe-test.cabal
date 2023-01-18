@@ -104,7 +104,7 @@ library
     , filepath
     , hint
     , lens
-    , marlowe
+    , marlowe-cardano
     , marlowe-spec-test
     , mtl
     , plutus-ledger

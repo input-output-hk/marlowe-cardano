@@ -33,7 +33,7 @@ library
                     , eventuo11y
                     , eventuo11y-dsl
                     , eventuo11y-json
-                    , marlowe
+                    , marlowe-cardano
                     , marlowe-chain-sync
                     , marlowe-protocols
                     , marlowe-runtime:config
@@ -69,7 +69,7 @@ executable marlowe-scaling
                     , eventuo11y
                     , eventuo11y-dsl
                     , eventuo11y-json
-                    , marlowe
+                    , marlowe-cardano
                     , marlowe-apps
                     , marlowe-chain-sync
                     , marlowe-runtime
@@ -106,7 +106,7 @@ executable marlowe-oracle
                     , eventuo11y-json
                     , http-client
                     , http-client-tls
-                    , marlowe
+                    , marlowe-cardano
                     , marlowe-apps
                     , marlowe-chain-sync
                     , marlowe-runtime

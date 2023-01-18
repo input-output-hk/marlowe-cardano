@@ -65,7 +65,7 @@ library
   other-modules:
   build-depends:
     base >= 4.9 && < 5,
-    marlowe -any,
+    marlowe-cardano -any,
     time -any
 
 test-suite marlowe-contracts-test
@@ -85,7 +85,7 @@ test-suite marlowe-contracts-test
         text -any,
         plutus-ledger-api -any,
         plutus-ledger-ada,
-        marlowe,
+        marlowe-cardano,
         marlowe-contracts,
         plutus-tx -any,
         QuickCheck,

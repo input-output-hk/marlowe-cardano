@@ -36,7 +36,7 @@
           (hsPkgs."aeson" or (errorHandler.buildDepError "aeson"))
           (hsPkgs."base" or (errorHandler.buildDepError "base"))
           (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
-          (hsPkgs."marlowe-isabelle" or (errorHandler.buildDepError "marlowe-isabelle"))
+          (hsPkgs."marlowe" or (errorHandler.buildDepError "marlowe"))
           (hsPkgs."tasty" or (errorHandler.buildDepError "tasty"))
           (hsPkgs."tasty-hunit" or (errorHandler.buildDepError "tasty-hunit"))
           (hsPkgs."process" or (errorHandler.buildDepError "process"))

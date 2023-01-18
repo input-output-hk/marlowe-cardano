@@ -109,7 +109,7 @@ library
     freer-simple,
     http-client,
     lens,
-    marlowe,
+    marlowe-cardano,
     marlowe-actus,
     marlowe-contracts,
     memory,

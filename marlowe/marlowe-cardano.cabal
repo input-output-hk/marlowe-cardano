@@ -1,5 +1,5 @@
 cabal-version: 2.2
-name: marlowe
+name: marlowe-cardano
 version: 0.1.0.3
 license: Apache-2.0
 license-files:

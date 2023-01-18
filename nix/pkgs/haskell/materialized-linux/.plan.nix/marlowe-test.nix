@@ -48,7 +48,7 @@
           (hsPkgs."filepath" or (errorHandler.buildDepError "filepath"))
           (hsPkgs."hint" or (errorHandler.buildDepError "hint"))
           (hsPkgs."lens" or (errorHandler.buildDepError "lens"))
-          (hsPkgs."marlowe" or (errorHandler.buildDepError "marlowe"))
+          (hsPkgs."marlowe-cardano" or (errorHandler.buildDepError "marlowe-cardano"))
           (hsPkgs."marlowe-spec-test" or (errorHandler.buildDepError "marlowe-spec-test"))
           (hsPkgs."mtl" or (errorHandler.buildDepError "mtl"))
           (hsPkgs."plutus-ledger" or (errorHandler.buildDepError "plutus-ledger"))
@@ -115,6 +115,7 @@
             (hsPkgs."aeson" or (errorHandler.buildDepError "aeson"))
             (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
             (hsPkgs."marlowe-test" or (errorHandler.buildDepError "marlowe-test"))
+            (hsPkgs."split" or (errorHandler.buildDepError "split"))
             ];
           buildable = true;
           hsSourceDirs = [ "spec-client" ];

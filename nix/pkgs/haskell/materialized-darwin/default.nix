@@ -806,6 +806,7 @@
         base16-aeson = ./.plan.nix/base16-aeson.nix;
         marlowe-integration = ./.plan.nix/marlowe-integration.nix;
         freer-extras = ./.plan.nix/freer-extras.nix;
+        marlowe-cardano = ./.plan.nix/marlowe-cardano.nix;
         marlowe-apps = ./.plan.nix/marlowe-apps.nix;
         plutus-ledger-aeson = ./.plan.nix/plutus-ledger-aeson.nix;
         marlowe = ./.plan.nix/marlowe.nix;
@@ -831,7 +832,6 @@
         eventuo11y-dsl = ./.plan.nix/eventuo11y-dsl.nix;
         cardano-integration = ./.plan.nix/cardano-integration.nix;
         aeson-via-serialise = ./.plan.nix/aeson-via-serialise.nix;
-        marlowe-isabelle = ./.plan.nix/marlowe-isabelle.nix;
         eventuo11y-json = ./.plan.nix/eventuo11y-json.nix;
         plutus-ledger-slot = ./.plan.nix/plutus-ledger-slot.nix;
         };
@@ -843,13 +843,14 @@
           "base16-aeson" = { flags = {}; };
           "marlowe-integration" = { flags = {}; };
           "freer-extras" = { flags = {}; };
+          "marlowe-cardano" = {
+            flags = { "defer-plugin-errors" = lib.mkOverride 900 false; };
+            };
           "marlowe-apps" = { flags = {}; };
           "plutus-ledger-aeson" = {
             flags = { "defer-plugin-errors" = lib.mkOverride 900 false; };
             };
-          "marlowe" = {
-            flags = { "defer-plugin-errors" = lib.mkOverride 900 false; };
-            };
+          "marlowe" = { flags = {}; };
           "plutus-ledger" = {
             flags = { "defer-plugin-errors" = lib.mkOverride 900 false; };
             };
@@ -897,7 +898,6 @@
           "eventuo11y-dsl" = { flags = {}; };
           "cardano-integration" = { flags = {}; };
           "aeson-via-serialise" = { flags = {}; };
-          "marlowe-isabelle" = { flags = {}; };
           "eventuo11y-json" = { flags = {}; };
           "plutus-ledger-slot" = {
             flags = { "defer-plugin-errors" = lib.mkOverride 900 false; };
@@ -1114,7 +1114,6 @@
           "int-cast".components.library.planned = lib.mkOverride 900 true;
           "vector".components.library.planned = lib.mkOverride 900 true;
           "indexed-traversable-instances".components.library.planned = lib.mkOverride 900 true;
-          "marlowe-isabelle".components.library.planned = lib.mkOverride 900 true;
           "marlowe-chain-sync".components.exes."example-client".planned = lib.mkOverride 900 true;
           "servant-server".components.library.planned = lib.mkOverride 900 true;
           "data-default-class".components.library.planned = lib.mkOverride 900 true;
@@ -1157,6 +1156,7 @@
           "MonadRandom".components.library.planned = lib.mkOverride 900 true;
           "bech32-th".components.library.planned = lib.mkOverride 900 true;
           "cardano-slotting".components.library.planned = lib.mkOverride 900 true;
+          "marlowe-cardano".components.library.planned = lib.mkOverride 900 true;
           "http-api-data".components.library.planned = lib.mkOverride 900 true;
           "network".components.library.planned = lib.mkOverride 900 true;
           "psqueues".components.library.planned = lib.mkOverride 900 true;
