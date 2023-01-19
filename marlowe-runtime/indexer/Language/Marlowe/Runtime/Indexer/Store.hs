@@ -43,27 +43,48 @@ data StoreDependencies r = StoreDependencies
   , pullEvent :: STM ChainEvent
   }
 
+-- | The store component aggregates changes into batches in one thread, and
+-- pulls batches to save in another.
 store :: Component IO (StoreDependencies r) ()
 store = proc StoreDependencies{..} -> do
+  -- Spawn the aggregator thread
   readChanges <- aggregator -< pullEvent
+
+  -- Spawn the persister thread to read the changes accumulated by the aggregator.
   persister -< PersisterDependencies{..}
 
+-- | The aggregator component pulls chain events and accumulates a batch of
+-- changes to persist.
 aggregator :: Component IO (STM ChainEvent) (STM Changes)
 aggregator = component \pullEvent -> do
+  -- A variable which will hold the accumulated changes.
   changesVar <- newTVar mempty
+
   let
+    -- An action to read and empty the changes.
     readChanges = do
+      -- Read the current changes
       changes <- readTVar changesVar
+
+      -- Retry the STM transaction if the changes are empty
       guard case changes of
         Changes Nothing [] _ _ _ invalidCreateTxs invalidApplyInputsTxs ->
           not $ Map.null invalidCreateTxs && Map.null invalidApplyInputsTxs
         _ -> True
+
+      -- Empty the changes variable
       writeTVar changesVar mempty
+
+      -- Return the changes
       pure changes
 
-    runAggregator = forever $ atomically do
-      event <- pullEvent
+    -- The IO action loop to run in this component's thread.
+    runAggregator = forever do
+      -- Pull an event from the queue.
+      event <- atomically pullEvent
+
       let
+        -- Compute the changes for the pulled event.
         changes = case event of
           RollForward block point tip ->
             mempty
@@ -80,7 +101,9 @@ aggregator = component \pullEvent -> do
               }
           RollBackward point tip ->
             mempty { rollbackTo = Just point, localTip = Just point, remoteTip = Just tip }
-      modifyTVar changesVar (<> changes)
+
+      -- Append the new changes to the existing changes.
+      atomically $ modifyTVar changesVar (<> changes)
   pure (runAggregator, readChanges)
 
 data PersisterDependencies r = PersisterDependencies
@@ -89,18 +112,27 @@ data PersisterDependencies r = PersisterDependencies
   , readChanges :: STM Changes
   }
 
+-- | A component to save batches of changes to the database.
 persister :: Component IO (PersisterDependencies r) ()
 persister = component_ \PersisterDependencies{..} -> forever do
+  -- Read the next batch of changes.
   Changes{..} <- atomically readChanges
+
+  -- Log a save event.
   withEvent eventBackend Save \ev -> do
     traverse_ (addField ev . LocalTip) localTip
     traverse_ (addField ev . RemoteTip) remoteTip
     addField ev $ Stats statistics
+
+    -- If there is a rollback, save it first.
     for_ rollbackTo \point -> do
       addField ev $ RollbackPoint point
       commitRollback databaseQueries point
+
     unless (Map.null invalidCreateTxs) $ addField ev $ InvalidCreateTxs invalidCreateTxs
     unless (Map.null invalidApplyInputsTxs) $ addField ev $ InvalidApplyInputsTxs invalidApplyInputsTxs
+
+    -- If there are blocks to save, save them.
     unless (null blocks) $ commitBlocks databaseQueries blocks
 
 data Changes = Changes
