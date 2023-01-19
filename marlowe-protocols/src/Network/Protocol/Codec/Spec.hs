@@ -6,7 +6,6 @@ module Network.Protocol.Codec.Spec
 
 import Data.ByteString.Lazy (ByteString, fromStrict, toChunks)
 import qualified Data.ByteString.Lazy as LBS
-import Data.Data (Proxy)
 import Data.Function ((&))
 import Data.Functor.Identity (Identity(..))
 import GHC.Show (showSpace)
@@ -48,9 +47,8 @@ checkPropCodec
   :: (ArbitraryMessage ps, ShowProtocol ps, Show failure, MessageEq ps)
   => (bytes -> Gen [bytes])
   -> Codec ps failure Identity bytes
-  -> Proxy ps
   -> Property
-checkPropCodec genSplits Codec{..} _ =
+checkPropCodec genSplits Codec{..} =
   forAllShrinkShow arbitraryMessage shrinkAnyMessageAndAgency showAnyMessageAndAgency
     \(AnyMessageAndAgency agency msg) -> do
       let bytes = encode agency msg

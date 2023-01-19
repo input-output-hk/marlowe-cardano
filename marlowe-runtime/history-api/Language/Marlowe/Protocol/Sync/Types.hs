@@ -7,7 +7,7 @@ module Language.Marlowe.Protocol.Sync.Types
 
 import Data.Aeson (Key, ToJSON, Value(..), object, (.=))
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader)
-import Language.Marlowe.Runtime.Core.Api (ContractId, MarloweVersion(..), MarloweVersionTag)
+import Language.Marlowe.Runtime.Core.Api (ContractId(..), MarloweVersion(..), MarloweVersionTag)
 import Language.Marlowe.Runtime.History.Api
 import Network.Protocol.Driver (MessageToJSON(..))
 import Network.TypedProtocol (PeerHasAgency(..), Protocol(..))

@@ -602,6 +602,7 @@ test-suite marlowe-runtime-test
     Language.Marlowe.Runtime.HistorySpec
     Language.Marlowe.Runtime.Transaction.BuildConstraintsSpec
     Language.Marlowe.Runtime.Transaction.ConstraintsSpec
+    Language.Marlowe.Protocol.SyncSpec
     Paths_marlowe_runtime
   build-depends:
       base >= 4.9 && < 5
@@ -612,6 +613,7 @@ test-suite marlowe-runtime-test
     , cardano-api:gen
     , containers
     , errors
+    , hedgehog-quickcheck
     , hedgehog-quickcheck
     , hspec
     , marlowe-cardano
@@ -629,12 +631,12 @@ test-suite marlowe-runtime-test
     , plutus-tx
     , plutus-ledger-api
     , QuickCheck
-    , hedgehog-quickcheck
     , quickcheck-instances
     , some
     , stm
     , time
     , transformers
+    , typed-protocols
   build-tool-depends: hspec-discover:hspec-discover
   ghc-options: -threaded
 
