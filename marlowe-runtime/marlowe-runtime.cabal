@@ -659,8 +659,10 @@ test-suite indexer-test
     , marlowe-runtime:history-api
     , marlowe-runtime:indexer
     , marlowe-test
+    , ouroboros-consensus
     , plutus-tx
     , QuickCheck
+    , time
     , transformers
   build-tool-depends: hspec-discover:hspec-discover
   ghc-options: -threaded

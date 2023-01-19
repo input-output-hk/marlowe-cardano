@@ -540,7 +540,7 @@ marloweBlockToTxRows MarloweBlock{..} = flip foldMap8 transactions \case
       , []
       )
   WithdrawTransaction tx -> ([], [], [], [] , [], [], withdrawTxToWithdrawalTxInRows blockHeader tx, [])
-  InvalidApplyInputsTransaction txId (TxOutRef inputTxId inputTxIx) err ->
+  InvalidApplyInputsTransaction txId txOutRefs err ->
     ( []
     , []
     , []
@@ -548,7 +548,8 @@ marloweBlockToTxRows MarloweBlock{..} = flip foldMap8 transactions \case
     , []
     , []
     , []
-    , [(unTxId txId, unTxId inputTxId, fromIntegral inputTxIx, unBlockHeaderHash $ headerHash blockHeader, T.pack $ show err)]
+    , Set.toList txOutRefs <&> \(TxOutRef inputTxId inputTxIx) ->
+        (unTxId txId, unTxId inputTxId, fromIntegral inputTxIx, unBlockHeaderHash $ headerHash blockHeader, T.pack $ show err)
     )
   _ -> ([], [], [], [] , [], [], [], [])
 

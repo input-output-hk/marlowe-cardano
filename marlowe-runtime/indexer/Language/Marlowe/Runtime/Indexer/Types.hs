@@ -7,8 +7,9 @@ module Language.Marlowe.Runtime.Indexer.Types
   where
 
 import Cardano.Api (CardanoMode, EraHistory, SystemStart)
+import Control.Applicative (empty)
 import Control.Monad (guard, mfilter, unless, when)
-import Control.Monad.Except (runExceptT, withExceptT)
+import Control.Monad.Except (MonadError(throwError), runExceptT, withExceptT)
 import Control.Monad.State (State, runState)
 import Control.Monad.State.Class (gets, modify)
 import Control.Monad.Trans (lift)
@@ -18,7 +19,6 @@ import Control.Monad.Trans.Writer (WriterT, execWriterT)
 import Control.Monad.Writer.Class (MonadWriter, listens, tell)
 import Data.Aeson (ToJSON)
 import Data.Foldable (for_)
-import Data.List (find)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Map (Map)
 import qualified Data.Map as Map
@@ -47,7 +47,7 @@ import qualified Language.Marlowe.Runtime.Core.Api as Core
 import Language.Marlowe.Runtime.History.Api
   ( CreateStep(..)
   , ExtractCreationError(NotCreationTransaction)
-  , ExtractMarloweTransactionError
+  , ExtractMarloweTransactionError(MultipleContractInputs)
   , SomeCreateStep(..)
   , extractCreation
   , extractMarloweTransaction
@@ -64,7 +64,7 @@ data MarloweTransaction
   | ApplyInputsTransaction MarloweApplyInputsTransaction
   | WithdrawTransaction MarloweWithdrawTransaction
   | InvalidCreateTransaction ContractId ExtractCreationError
-  | InvalidApplyInputsTransaction TxId TxOutRef ExtractMarloweTransactionError
+  | InvalidApplyInputsTransaction TxId (Set TxOutRef) ExtractMarloweTransactionError
   deriving (Eq, Show, Generic)
 
 data MarloweCreateTransaction = MarloweCreateTransaction
@@ -281,23 +281,33 @@ extractApplyInputsTx systemStart eraHistory blockHeader tx@Transaction{inputs, t
     -- Convert the transaction's inputs to a set of tx out refs.
     let inputTxOutRefs = Set.map (\TransactionInput{..} -> TxOutRef{..}) inputs
 
-    -- Get the unspentContractOutputs fro the MarloweUTxO
+    -- Get the unspentContractOutputs from  the MarloweUTxO
     contractUTxO <- gets unspentContractOutputs
 
     -- Find an unspent contract output that the transaction spends.
-    (contractId, marloweInput@UnspentContractOutput{..}) <- lift $ hoistMaybe $ find (flip Set.member inputTxOutRefs . txOutRef . snd) $ Map.toList contractUTxO
-
-    -- Update the MarloweUTxO to remove the unspent contract output.
-    modify \utxo -> utxo { unspentContractOutputs = Map.delete contractId $ unspentContractOutputs utxo }
+    (contractId, marloweInput@UnspentContractOutput{..}) <- do
+      let matchingInputs = filter (flip Set.member inputTxOutRefs . txOutRef . snd) $ Map.toList contractUTxO
+      let contractIds = Set.fromList $ fst <$> matchingInputs
+      -- Update the MarloweUTxO to remove the unspent contract outputs.
+      modify \utxo -> utxo { unspentContractOutputs = Map.withoutKeys (unspentContractOutputs utxo) contractIds }
+      case matchingInputs of
+        [] -> lift empty
+        [x] -> pure x
+        _ -> do
+          let matchingRefs = Set.fromList $ txOutRef . snd <$> matchingInputs
+          throwError (matchingRefs, MultipleContractInputs matchingRefs)
 
     -- Extract a Marlowe transaction of the correct version.
     case marloweVersion of
       Core.SomeMarloweVersion v -> do
-        marloweTransaction <- withExceptT (txOutRef,) $ except $ extractMarloweTransaction v systemStart eraHistory contractId marloweAddress payoutValidatorHash txOutRef blockHeader tx
+        marloweTransaction <- withExceptT (Set.singleton txOutRef,)
+          $ except
+          $ extractMarloweTransaction v systemStart eraHistory contractId marloweAddress payoutValidatorHash txOutRef blockHeader tx
 
         -- Add new payouts to the unspentPayoutOutputs and update the MarloweUTxO to add the new unspent contract output if one was produced.
         modify \MarloweUTxO{..} -> MarloweUTxO
           { unspentPayoutOutputs = Map.unionWith (<>) unspentPayoutOutputs
+              $ Map.filter (not . Set.null)
               $ Map.singleton contractId
               $ Map.keysSet
               $ Core.payouts
@@ -323,7 +333,7 @@ extractApplyInputsTx systemStart eraHistory blockHeader tx@Transaction{inputs, t
           }
 
   for_ mTransaction \case
-    Left (txId, (txOutRef, err)) -> tell [InvalidApplyInputsTransaction txId txOutRef err]
+    Left (txId, (txOutRefs, err)) -> tell [InvalidApplyInputsTransaction txId txOutRefs err]
     Right transaction -> tell [ApplyInputsTransaction transaction]
 
 

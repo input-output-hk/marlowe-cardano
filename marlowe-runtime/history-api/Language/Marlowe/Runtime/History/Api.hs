@@ -79,6 +79,7 @@ data ExtractMarloweTransactionError
   | InvalidPayoutDatum TxOutRef
   | InvalidValidityRange
   | SlotConversionFailed
+  | MultipleContractInputs (Set TxOutRef)
   deriving stock (Show, Eq, Ord, Generic)
   deriving anyclass (Binary, ToJSON)
 
