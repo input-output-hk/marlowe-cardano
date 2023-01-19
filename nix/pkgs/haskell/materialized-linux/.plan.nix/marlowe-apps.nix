@@ -11,7 +11,7 @@
     flags = {};
     package = {
       specVersion = "3.0";
-      identifier = { name = "marlowe-apps"; version = "0.2.0.0"; };
+      identifier = { name = "marlowe-apps"; version = "0.2.0.1"; };
       license = "Apache-2.0";
       copyright = "";
       maintainer = "Brian W Bush <brian.bush@iohk.io>";
