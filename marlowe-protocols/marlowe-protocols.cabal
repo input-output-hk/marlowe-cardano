@@ -68,6 +68,7 @@ library
     Network.Protocol.Query.Server
     Network.Protocol.Query.Types
     Network.Protocol.Codec
+    Network.Protocol.Codec.Spec
   build-depends:
       base >= 4.9 && < 5
     , aeson
@@ -81,6 +82,7 @@ library
     , monad-control
     , network
     , stm
+    , QuickCheck
     , template-haskell
     , text
     , transformers-base

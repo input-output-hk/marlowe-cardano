@@ -14,13 +14,20 @@ module Network.Protocol.ChainSeek.Types
 
 import Data.Aeson (ToJSON(..), Value(..), object, (.=))
 import Data.Binary (Binary(..), Get, Put)
+import Data.Data (type (:~:)(Refl))
+import Data.Functor ((<&>))
 import Data.Kind (Type)
+import Data.Maybe (catMaybes)
 import Data.String (IsString)
 import Data.Text (Text)
+import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
-import Data.Type.Equality (type (:~:))
+import GHC.Show (showSpace)
+import Network.Protocol.Codec.Spec (ArbitraryMessage(..), MessageEq(..), ShowProtocol(..))
 import Network.Protocol.Driver (MessageToJSON(..))
 import Network.TypedProtocol (PeerHasAgency(..), Protocol(..))
+import Network.TypedProtocol.Codec (AnyMessageAndAgency(..))
+import Test.QuickCheck (Arbitrary, Gen, arbitrary, oneof, shrink)
 
 data SomeTag q = forall err result. SomeTag (Tag q err result)
 
@@ -70,6 +77,9 @@ data ChainSeek (query :: Type -> Type -> Type) point tip where
 newtype SchemaVersion = SchemaVersion Text
   deriving stock (Show, Eq, Ord)
   deriving newtype (IsString, ToJSON)
+
+instance Arbitrary SchemaVersion where
+  arbitrary = SchemaVersion . T.pack <$> arbitrary
 
 instance Binary SchemaVersion where
   put (SchemaVersion v) = put $ T.encodeUtf8 v
@@ -199,3 +209,185 @@ instance
             ]
         ]
       MsgWait -> String "wait"
+
+class Query query => ArbitraryQuery query where
+  arbitraryTag :: Gen (SomeTag query)
+  arbitraryQuery :: Tag query err result -> Gen (query err result)
+  arbitraryErr :: Tag query err result -> Gen (Maybe err)
+  arbitraryResult :: Tag query err result -> Gen result
+  shrinkQuery :: query err result -> [query err result]
+  shrinkErr :: Tag query err result-> err -> [err]
+  shrinkResult :: Tag query err result-> result -> [result]
+
+instance
+  ( Arbitrary point
+  , Arbitrary tip
+  , ArbitraryQuery query
+  ) => ArbitraryMessage (ChainSeek query point tip) where
+  arbitraryMessage = do
+    SomeTag tag <- arbitraryTag
+    mError <- arbitraryErr tag
+    oneof $ catMaybes
+      [ Just $ AnyMessageAndAgency (ClientAgency TokInit) . MsgRequestHandshake <$> arbitrary
+      , Just $ pure $ AnyMessageAndAgency (ServerAgency TokHandshake) MsgConfirmHandshake
+      , Just $ AnyMessageAndAgency (ServerAgency TokHandshake) . MsgRejectHandshake <$> arbitrary
+      , Just $ do
+          query <- arbitraryQuery tag
+          pure $ AnyMessageAndAgency (ClientAgency TokIdle) $ MsgQueryNext query
+      , Just $ pure $ AnyMessageAndAgency (ClientAgency TokIdle) MsgDone
+      , mError <&> \err -> do
+          tip <- arbitrary
+          pure $ AnyMessageAndAgency (ServerAgency $ TokNext tag) $ MsgRejectQuery err tip
+      , Just $ do
+          result <- arbitraryResult tag
+          point <- arbitrary
+          tip <- arbitrary
+          pure $ AnyMessageAndAgency (ServerAgency $ TokNext tag) $ MsgRollForward result point tip
+      , Just $ do
+          point <- arbitrary
+          tip <- arbitrary
+          pure $ AnyMessageAndAgency (ServerAgency $ TokNext tag) $ MsgRollBackward point tip
+      , Just $ do
+          pure $ AnyMessageAndAgency (ServerAgency $ TokNext tag) MsgWait
+      , Just $ pure $ AnyMessageAndAgency (ClientAgency TokPoll) MsgPoll
+      , Just $ pure $ AnyMessageAndAgency (ClientAgency TokPoll) MsgCancel
+      ]
+  shrinkMessage agency = \case
+    MsgRequestHandshake version -> MsgRequestHandshake <$> shrink version
+    MsgRejectHandshake versions -> MsgRejectHandshake <$> shrink versions
+    MsgQueryNext query -> MsgQueryNext <$> shrinkQuery query
+    MsgRejectQuery err tip -> []
+      <> [ MsgRejectQuery err' tip | err' <- case agency of ServerAgency (TokNext tag) -> shrinkErr tag err ]
+      <> [ MsgRejectQuery err tip' | tip' <- shrink tip ]
+    MsgRollForward result point tip -> []
+      <> [ MsgRollForward result' point tip | result' <- case agency of ServerAgency (TokNext tag) -> shrinkResult tag result ]
+      <> [ MsgRollForward result point' tip | point' <- shrink point ]
+      <> [ MsgRollForward result point tip' | tip' <- shrink tip ]
+    MsgRollBackward point tip -> []
+      <> [ MsgRollBackward point' tip | point' <- shrink point ]
+      <> [ MsgRollBackward point tip' | tip' <- shrink tip ]
+    _ -> []
+
+class Query query => QueryEq query where
+  queryEq :: query err result -> query err result -> Bool
+  errEq :: Tag query err result -> err -> err -> Bool
+  resultEq :: Tag query err result -> result -> result -> Bool
+
+instance
+  ( Eq point
+  , Eq tip
+  , QueryEq query
+  ) => MessageEq (ChainSeek query point tip) where
+  messageEq (AnyMessageAndAgency agency msg) = case (agency, msg) of
+    (_, MsgRequestHandshake version) -> \case
+      AnyMessageAndAgency _ (MsgRequestHandshake version') -> version == version'
+      _ -> False
+    (_, MsgRejectHandshake versions) -> \case
+      AnyMessageAndAgency _ (MsgRejectHandshake versions') -> versions == versions'
+      _ -> False
+    (_, MsgConfirmHandshake) -> \case
+      AnyMessageAndAgency _ MsgConfirmHandshake -> True
+      _ -> False
+    (_, MsgQueryNext query) -> \case
+      AnyMessageAndAgency _ (MsgQueryNext query') ->
+        case tagEq (tagFromQuery query) (tagFromQuery query') of
+          Just (Refl, Refl) -> queryEq query query'
+          Nothing -> False
+      _ -> False
+    (ServerAgency (TokNext tag), MsgRejectQuery err tip) -> \case
+      AnyMessageAndAgency (ServerAgency (TokNext tag')) (MsgRejectQuery err' tip') ->
+        tip == tip' && case tagEq tag tag' of
+          Just (Refl, Refl) -> errEq tag err err'
+          Nothing -> False
+      _ -> False
+    (ServerAgency (TokNext tag), MsgRollForward result point tip) -> \case
+      AnyMessageAndAgency (ServerAgency (TokNext tag')) (MsgRollForward result' point' tip') ->
+        point == point' && tip == tip' && case tagEq tag tag' of
+          Just (Refl, Refl) -> resultEq tag result result'
+          Nothing -> False
+      _ -> False
+    (_, MsgRollBackward point tip) -> \case
+      AnyMessageAndAgency _ (MsgRollBackward point' tip') ->
+        point == point' && tip == tip'
+      _ -> False
+    (_, MsgWait) -> \case
+      AnyMessageAndAgency _ MsgWait -> True
+      _ -> False
+    (_, MsgDone) -> \case
+      AnyMessageAndAgency _ MsgDone -> True
+      _ -> False
+    (_, MsgPoll) -> \case
+      AnyMessageAndAgency _ MsgPoll -> True
+      _ -> False
+    (_, MsgCancel) -> \case
+      AnyMessageAndAgency _ MsgCancel -> True
+      _ -> False
+
+class Query query => ShowQuery query where
+  showsPrecTag :: Int -> Tag query err result -> ShowS
+  showsPrecQuery :: Int -> query err result -> ShowS
+  showsPrecErr :: Int -> Tag query err result -> err -> ShowS
+  showsPrecResult :: Int -> Tag query err result -> result -> ShowS
+
+instance
+  ( Show point
+  , Show tip
+  , ShowQuery query
+  ) => ShowProtocol (ChainSeek query point tip) where
+  showsPrecMessage p agency = \case
+    MsgRequestHandshake version -> showParen (p >= 11)
+      ( showString "MsgRequestHandshake"
+      . showSpace
+      . showsPrec 11 version
+      )
+    MsgRejectHandshake versions -> showParen (p >= 11)
+      ( showString "MsgRejectHandshake"
+      . showSpace
+      . showsPrec 11 versions
+      )
+    MsgConfirmHandshake -> showString "MsgConfirmHandshake"
+    MsgQueryNext query -> showParen (p >= 11)
+      ( showString "MsgQueryNext"
+      . showSpace
+      . showsPrecQuery 11 query
+      )
+    MsgRejectQuery err tip -> showParen (p >= 11)
+      ( showString "MsgRejectQuery"
+      . showSpace
+      . case agency of ServerAgency (TokNext tag) -> showsPrecErr 11 tag err
+      . showSpace
+      . showsPrec 11 tip
+      )
+    MsgRollForward result point tip -> showParen (p >= 11)
+      ( showString "MsgRollForward"
+      . showSpace
+      . case agency of ServerAgency (TokNext tag) -> showsPrecResult 11 tag result
+      . showSpace
+      . showsPrec 11 point
+      . showSpace
+      . showsPrec 11 tip
+      )
+    MsgRollBackward point tip -> showParen (p >= 11)
+      ( showString "MsgRollBackward"
+      . showSpace
+      . showsPrec 11 point
+      . showSpace
+      . showsPrec 11 tip
+      )
+    MsgWait -> showString "MsgWait"
+    MsgDone -> showString "MsgDone"
+    MsgPoll -> showString "MsgPoll"
+    MsgCancel -> showString "MsgCancel"
+
+  showsPrecServerHasAgency p = \case
+    TokHandshake -> showString "TokHandshake"
+    TokNext tag -> showParen (p >= 11)
+      ( showString "TokNext"
+      . showSpace
+      . showsPrecTag p tag
+      )
+
+  showsPrecClientHasAgency _ = showString . \case
+    TokInit -> "TokInit"
+    TokIdle -> "TokIdle"
+    TokPoll -> "TokPoll"

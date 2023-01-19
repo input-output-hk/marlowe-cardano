@@ -14,7 +14,7 @@ import Data.Functor.Identity (runIdentity)
 import Data.Text as T
 import Network.Protocol.ChainSeek.Codec (codecChainSeek)
 import Network.Protocol.ChainSeek.Types
-  (ChainSeek(..), ClientHasAgency(..), Message(..), Query(..), ServerHasAgency(..), StNextKind(..), TokNextKind(..))
+  (ChainSeek(..), ClientHasAgency(..), Message(..), Query(..), ServerHasAgency(..))
 import qualified Network.Protocol.ChainSeek.Types as ChainSeek
 import Network.TypedProtocol.Codec
   ( AnyMessage(AnyMessage)
@@ -65,7 +65,7 @@ instance Eq (AnyMessage (ChainSeek TestQuery () ())) where
   (AnyMessage MsgRollForward {}) == (AnyMessage MsgRollForward {})  = True
   (AnyMessage MsgRollBackward {}) == (AnyMessage MsgRollBackward {})  = True
   (AnyMessage MsgWait {}) == (AnyMessage MsgWait {})  = True
-  (AnyMessage MsgPing {}) == (AnyMessage MsgPing {})  = True
+  (AnyMessage MsgPoll {}) == (AnyMessage MsgPoll {})  = True
   (AnyMessage MsgPong {}) == (AnyMessage MsgPong {})  = True
   (AnyMessage MsgDone) == (AnyMessage MsgDone) = True
   _ == _ = False
@@ -139,5 +139,3 @@ spec = do
       msg :: Message (ChainSeek TestQuery () ()) ('StPing () ()) ('StNext () () 'StMustReply)
       msg = MsgPong
     prop_codec runIdentity codecChainSeek (AnyMessageAndAgency (ClientAgency TokPing) msg) `shouldBe` True
-
-
