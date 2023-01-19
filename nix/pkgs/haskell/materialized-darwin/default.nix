@@ -967,6 +967,7 @@
           "data-default-instances-old-locale".components.library.planned = lib.mkOverride 900 true;
           "pretty-show".components.library.planned = lib.mkOverride 900 true;
           "newtype-generics".components.library.planned = lib.mkOverride 900 true;
+          "marlowe-runtime".components.sublibs."indexer".planned = lib.mkOverride 900 true;
           "marlowe-runtime".components.sublibs."web-server".planned = lib.mkOverride 900 true;
           "cardano-ledger-babbage".components.library.planned = lib.mkOverride 900 true;
           "cardano-addresses".components.library.planned = lib.mkOverride 900 true;
@@ -1225,6 +1226,7 @@
           "constraints".components.library.planned = lib.mkOverride 900 true;
           "byron-spec-ledger".components.library.planned = lib.mkOverride 900 true;
           "yaml".components.library.planned = lib.mkOverride 900 true;
+          "marlowe-runtime".components.exes."marlowe-indexer".planned = lib.mkOverride 900 true;
           "ouroboros-consensus".components.library.planned = lib.mkOverride 900 true;
           "fsnotify".components.library.planned = lib.mkOverride 900 true;
           "indexed-traversable".components.library.planned = lib.mkOverride 900 true;
@@ -1413,6 +1415,7 @@
           "wai-app-static".components.library.planned = lib.mkOverride 900 true;
           "ouroboros-network-framework".components.exes."demo-connection-manager".planned = lib.mkOverride 900 true;
           "sqlite-simple".components.library.planned = lib.mkOverride 900 true;
+          "marlowe-runtime".components.tests."indexer-test".planned = lib.mkOverride 900 true;
           "isomorphism-class".components.library.planned = lib.mkOverride 900 true;
           "constraints-extras".components.library.planned = lib.mkOverride 900 true;
           "OneTuple".components.library.planned = lib.mkOverride 900 true;
