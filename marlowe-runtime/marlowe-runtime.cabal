@@ -201,7 +201,6 @@ library discovery-api
     , aeson
     , binary
     , bytestring
-    , containers
     , marlowe-chain-sync
     , marlowe-protocols
     , marlowe-runtime
@@ -602,6 +601,8 @@ test-suite marlowe-runtime-test
     Language.Marlowe.Runtime.HistorySpec
     Language.Marlowe.Runtime.Transaction.BuildConstraintsSpec
     Language.Marlowe.Runtime.Transaction.ConstraintsSpec
+    Language.Marlowe.Protocol.Common
+    Language.Marlowe.Protocol.HeaderSyncSpec
     Language.Marlowe.Protocol.SyncSpec
     Paths_marlowe_runtime
   build-depends:
@@ -622,6 +623,7 @@ test-suite marlowe-runtime-test
     , marlowe-protocols
     , marlowe-protocols-test
     , marlowe-runtime
+    , marlowe-runtime:discovery-api
     , marlowe-runtime:history
     , marlowe-runtime:history-api
     , marlowe-runtime:tx
@@ -634,6 +636,7 @@ test-suite marlowe-runtime-test
     , quickcheck-instances
     , some
     , stm
+    , text
     , time
     , transformers
     , typed-protocols

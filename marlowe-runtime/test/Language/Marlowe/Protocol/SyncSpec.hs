@@ -6,20 +6,12 @@ module Language.Marlowe.Protocol.SyncSpec
   ( spec
   ) where
 
-import Control.Monad (guard)
-import qualified Data.ByteString as BS
-import Data.Functor (($>))
-import Data.Map (Map)
 import qualified Data.Map as Map
-import Data.Maybe (catMaybes)
-import Data.String (IsString(fromString))
-import Data.Time.Clock.POSIX (posixSecondsToUTCTime)
-import Data.Word (Word64)
 import GHC.Show (showSpace)
 import qualified Language.Marlowe.Core.V1.Semantics as V1
+import Language.Marlowe.Protocol.Common
 import Language.Marlowe.Protocol.Sync.Codec (codecMarloweSync)
 import Language.Marlowe.Protocol.Sync.Types
-import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import qualified Language.Marlowe.Runtime.Core.Api as Core
 import qualified Language.Marlowe.Runtime.Core.Api as Payout (Payout(..))
 import qualified Language.Marlowe.Runtime.Core.Api as Transaction (Transaction(..))
@@ -190,35 +182,6 @@ instance ArbitraryMessage MarloweSync where
     , pure $ AnyMessageAndAgency (ServerAgency (TokIntersect Core.MarloweV1)) MsgIntersectNotFound
     ]
     where
-      genContractId = Core.ContractId <$> genTxOutRef
-      genTxOutRef = Chain.TxOutRef <$> genTxId <*> genTxIx
-      genTxId = Chain.TxId <$> genBytes
-      genTxIx = Chain.TxIx <$> arbitrary
-      genBytes = BS.pack <$> listOf1 arbitrary
-      genSomeMarloweVersion = pure $ Core.SomeMarloweVersion Core.MarloweV1
-      genBlockHeader = Chain.BlockHeader <$> genSlotNo <*> genBlockHeaderHash <*> genBlockNo
-      genSlotNo = Chain.SlotNo <$> arbitrary
-      genBlockHeaderHash = Chain.BlockHeaderHash <$> genBytes
-      genBlockNo = Chain.BlockNo <$> arbitrary
-      genScriptHash = Chain.ScriptHash <$> genBytes
-      genAddress = Chain.Address <$> genBytes
-      genAssets = Chain.Assets <$> genLovelace <*> genTokens
-      genLovelace = Chain.Lovelace <$> arbitrary
-      genTokens = Chain.Tokens . Map.fromList <$> listOf ((,) <$> genAssetId <*> genQuantity)
-      genAssetId = Chain.AssetId <$> genPolicyId <*> genTokenName
-      genPolicyId = Chain.PolicyId <$> genBytes
-      genTokenName = Chain.TokenName <$> genBytes
-      genQuantity = Chain.Quantity <$> arbitrary
-      genTransactionMetadata = Chain.TransactionMetadata . Map.fromList <$> listOf ((,) <$> arbitrary <*> genMetadata)
-      genMetadata = sized \size -> oneof $ catMaybes
-        [ guard (size > 0) $> (Chain.MetadataMap <$> listOf ((,) <$> resize (size `div` 2) genMetadata <*> resize (size `div` 2) genMetadata))
-        , guard (size > 0) $> (Chain.MetadataList <$> listOf (resize (size `div` 2) genMetadata))
-        , Just $ Chain.MetadataNumber <$> arbitrary
-        , Just $ Chain.MetadataBytes <$> genBytes
-        , Just $ Chain.MetadataText . fromString <$> arbitrary
-        ]
-      genUTCTime = posixSecondsToUTCTime . fromIntegral <$> arbitrary @Word64
-
       genContractStep :: Core.MarloweVersion v -> Gen (History.ContractStep v)
       genContractStep version = oneof
         [ History.ApplyTransaction <$> genTransaction version
@@ -295,9 +258,6 @@ instance ArbitraryMessage MarloweSync where
     MsgIntersectFound _ -> []
     MsgIntersectNotFound -> []
     where
-      shrinkAssets = error "not implemented"
-      shrinkTransactionMetadata = error "not implemented"
-
       shrinkCreateStep :: Core.MarloweVersion v -> History.CreateStep v -> [History.CreateStep v]
       shrinkCreateStep version History.CreateStep{..} = []
         <> [ History.CreateStep {..} { History.createOutput = createOutput' } | createOutput' <- shrinkTransactionScriptOutput version createOutput ]
@@ -333,6 +293,3 @@ instance ArbitraryMessage MarloweSync where
       shrinkDatum Core.MarloweV1 V1.MarloweData{..} = []
         <> [ V1.MarloweData{..} { V1.marloweState = marloweState' } | marloweState' <- shrink marloweState ]
         <> [ V1.MarloweData{..} { V1.marloweContract = marloweContract' } | marloweContract' <- shrink marloweContract ]
-
-shrinkMap :: (a -> [a]) -> Map k a -> [Map k a]
-shrinkMap f = fmap Map.fromDistinctAscList . shrinkList (\(k, a) -> (k,) <$> f a) . Map.toAscList
