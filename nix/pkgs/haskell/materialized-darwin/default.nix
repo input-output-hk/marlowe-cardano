@@ -491,6 +491,7 @@
         "byron-spec-ledger".revision = (((hackage."byron-spec-ledger")."0.1.0.0").revisions).default;
         "data-default-class".revision = (((hackage."data-default-class")."0.1.2.0").revisions).default;
         "regex-base".revision = (((hackage."regex-base")."0.94.0.2").revisions).default;
+        "QuickCheck-GenT".revision = (((hackage."QuickCheck-GenT")."0.2.2").revisions).default;
         "vector-algorithms".revision = (((hackage."vector-algorithms")."0.8.0.4").revisions).default;
         "vector-algorithms".flags.internalchecks = false;
         "vector-algorithms".flags.llvm = false;
@@ -805,6 +806,7 @@
         base16-aeson = ./.plan.nix/base16-aeson.nix;
         marlowe-integration = ./.plan.nix/marlowe-integration.nix;
         freer-extras = ./.plan.nix/freer-extras.nix;
+        marlowe-cardano = ./.plan.nix/marlowe-cardano.nix;
         marlowe-apps = ./.plan.nix/marlowe-apps.nix;
         plutus-ledger-aeson = ./.plan.nix/plutus-ledger-aeson.nix;
         marlowe = ./.plan.nix/marlowe.nix;
@@ -813,6 +815,7 @@
         eventuo11y = ./.plan.nix/eventuo11y.nix;
         eventuo11y-batteries = ./.plan.nix/eventuo11y-batteries.nix;
         cardano-addresses = ./.plan.nix/cardano-addresses.nix;
+        marlowe-spec-test = ./.plan.nix/marlowe-spec-test.nix;
         eventuo11y-extras = ./.plan.nix/eventuo11y-extras.nix;
         cardano-addresses-cli = ./.plan.nix/cardano-addresses-cli.nix;
         plutus-script-utils = ./.plan.nix/plutus-script-utils.nix;
@@ -840,13 +843,14 @@
           "base16-aeson" = { flags = {}; };
           "marlowe-integration" = { flags = {}; };
           "freer-extras" = { flags = {}; };
+          "marlowe-cardano" = {
+            flags = { "defer-plugin-errors" = lib.mkOverride 900 false; };
+            };
           "marlowe-apps" = { flags = {}; };
           "plutus-ledger-aeson" = {
             flags = { "defer-plugin-errors" = lib.mkOverride 900 false; };
             };
-          "marlowe" = {
-            flags = { "defer-plugin-errors" = lib.mkOverride 900 false; };
-            };
+          "marlowe" = { flags = {}; };
           "plutus-ledger" = {
             flags = { "defer-plugin-errors" = lib.mkOverride 900 false; };
             };
@@ -856,6 +860,7 @@
           "cardano-addresses" = {
             flags = { "release" = lib.mkOverride 900 false; };
             };
+          "marlowe-spec-test" = { flags = {}; };
           "eventuo11y-extras" = { flags = {}; };
           "cardano-addresses-cli" = {
             flags = { "release" = lib.mkOverride 900 false; };
@@ -991,6 +996,7 @@
           "vector-sized".components.library.planned = lib.mkOverride 900 true;
           "marlowe-test".components.tests."marlowe-test".planned = lib.mkOverride 900 true;
           "quickcheck-io".components.library.planned = lib.mkOverride 900 true;
+          "marlowe-spec-test".components.library.planned = lib.mkOverride 900 true;
           "dec".components.library.planned = lib.mkOverride 900 true;
           "SHA".components.library.planned = lib.mkOverride 900 true;
           "bytestring".components.library.planned = lib.mkOverride 900 true;
@@ -1050,6 +1056,7 @@
           "HUnit".components.library.planned = lib.mkOverride 900 true;
           "some".components.library.planned = lib.mkOverride 900 true;
           "dependent-sum-template".components.library.planned = lib.mkOverride 900 true;
+          "marlowe-spec-test".components.exes."marlowe-spec".planned = lib.mkOverride 900 true;
           "validation-selective".components.library.planned = lib.mkOverride 900 true;
           "small-steps".components.library.planned = lib.mkOverride 900 true;
           "array".components.library.planned = lib.mkOverride 900 true;
@@ -1149,6 +1156,7 @@
           "MonadRandom".components.library.planned = lib.mkOverride 900 true;
           "bech32-th".components.library.planned = lib.mkOverride 900 true;
           "cardano-slotting".components.library.planned = lib.mkOverride 900 true;
+          "marlowe-cardano".components.library.planned = lib.mkOverride 900 true;
           "http-api-data".components.library.planned = lib.mkOverride 900 true;
           "network".components.library.planned = lib.mkOverride 900 true;
           "psqueues".components.library.planned = lib.mkOverride 900 true;
@@ -1159,6 +1167,7 @@
           "plutus-ledger".components.library.planned = lib.mkOverride 900 true;
           "cmdargs".components.library.planned = lib.mkOverride 900 true;
           "aeson-pretty".components.exes."aeson-pretty".planned = lib.mkOverride 900 true;
+          "marlowe-test".components.exes."marlowe-spec-client".planned = lib.mkOverride 900 true;
           "prettyprinter-configurable".components.setup.planned = lib.mkOverride 900 true;
           "StateVar".components.library.planned = lib.mkOverride 900 true;
           "network-arbitrary".components.library.planned = lib.mkOverride 900 true;
@@ -1418,6 +1427,7 @@
           "finite-typelits".components.library.planned = lib.mkOverride 900 true;
           "lifted-async".components.library.planned = lib.mkOverride 900 true;
           "conduit".components.library.planned = lib.mkOverride 900 true;
+          "QuickCheck-GenT".components.library.planned = lib.mkOverride 900 true;
           "cardano-config".components.library.planned = lib.mkOverride 900 true;
           "blaze-textual".components.library.planned = lib.mkOverride 900 true;
           "errors".components.library.planned = lib.mkOverride 900 true;

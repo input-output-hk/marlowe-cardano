@@ -217,6 +217,26 @@ import Text.PrettyPrint.Leijen (comma, hang, lbrace, line, rbrace, space, text, 
 data Payment = Payment AccountId Payee Token Integer
   deriving stock (Haskell.Eq, Haskell.Show)
 
+instance ToJSON Payment where
+  toJSON (Payment accountId payee token amount) =
+    object
+      [
+        "payment_from" .= accountId
+      , "to" .= payee
+      , "token" .= token
+      , "amount" .= amount
+      ]
+
+instance FromJSON Payment where
+  parseJSON =
+    withObject "Payment"
+      $ \o ->
+        Payment
+          <$> o .: "payment_from"
+          <*> o .: "to"
+          <*> o .: "token"
+          <*> o .: "amount"
+
 
 -- | Extract the money value from a payment.
 paymentMoney :: Payment -> Money
@@ -293,7 +313,28 @@ data TransactionError = TEAmbiguousTimeIntervalError
                       | TEUselessTransaction
                       | TEHashMismatch
   deriving stock (Haskell.Show, Generic, Haskell.Eq)
-  deriving anyclass (ToJSON, FromJSON)
+
+instance ToJSON TransactionError where
+  toJSON TEAmbiguousTimeIntervalError = JSON.String "TEAmbiguousTimeIntervalError"
+  toJSON TEApplyNoMatchError = JSON.String "TEApplyNoMatchError"
+  toJSON (TEIntervalError intervalError) = object ["error" .= JSON.String "TEIntervalError", "context" .= intervalError]
+  toJSON TEUselessTransaction = JSON.String "TEUselessTransaction"
+  toJSON TEHashMismatch = JSON.String "TEHashMismatch"
+
+instance FromJSON TransactionError where
+  parseJSON (JSON.String s) =
+    case s of
+      "TEAmbiguousTimeIntervalError" -> return TEAmbiguousTimeIntervalError
+      "TEApplyNoMatchError" -> return TEApplyNoMatchError
+      "TEUselessTransaction" -> return TEUselessTransaction
+      "TEHashMismatch" -> return TEHashMismatch
+      _ -> Haskell.fail "Failed parsing TransactionError"
+  parseJSON (JSON.Object o) = do
+                                err <- o .: "error"
+                                if err Haskell.== ("TEIntervalError" :: Haskell.String)
+                                  then TEIntervalError <$> o .: "context"
+                                  else Haskell.fail "Failed parsing TransactionError"
+  parseJSON _ = Haskell.fail "Failed parsing TransactionError"
 
 
 -- | Marlowe transaction input.
@@ -319,6 +360,31 @@ data TransactionOutput =
     | Error TransactionError
   deriving stock (Haskell.Show)
 
+instance ToJSON TransactionOutput where
+  toJSON TransactionOutput{..} =
+    object
+      [
+        "warnings" .= txOutWarnings
+      , "payments" .= txOutPayments
+      , "state" .= txOutState
+      , "contract" .= txOutContract
+      ]
+  toJSON (Error err) = object ["transaction_error" .= err]
+
+instance FromJSON TransactionOutput where
+  parseJSON =
+    withObject "TransactionOutput"
+      $ \o ->
+        let
+          asTransactionOutput =
+            TransactionOutput
+              <$> o .: "warnings"
+              <*> o .: "payments"
+              <*> o .: "state"
+              <*> o .: "contract"
+          asError = Error <$> o .: "transaction_error"
+        in
+          asTransactionOutput <|> asError
 
 -- | Parse a validator hash from JSON.
 validatorHashFromJSON :: JSON.Value -> Parser ValidatorHash

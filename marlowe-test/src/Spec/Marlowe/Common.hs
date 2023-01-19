@@ -12,7 +12,6 @@
 
 
 {-# LANGUAGE DataKinds #-}
-{-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
@@ -490,5 +489,3 @@ pangramContract = let
                 Close)
         , Case (Notify (AndObs (TimeIntervalStart `ValueLT` TimeIntervalEnd) TrueObs)) Close
         ] (Ledger.POSIXTime 100) Close
-
-

@@ -11,7 +11,7 @@
     flags = {};
     package = {
       specVersion = "3.0";
-      identifier = { name = "marlowe-apps"; version = "0.2.0.0"; };
+      identifier = { name = "marlowe-apps"; version = "0.2.0.1"; };
       license = "Apache-2.0";
       copyright = "";
       maintainer = "Brian W Bush <brian.bush@iohk.io>";
@@ -43,7 +43,7 @@
           (hsPkgs."eventuo11y" or (errorHandler.buildDepError "eventuo11y"))
           (hsPkgs."eventuo11y-dsl" or (errorHandler.buildDepError "eventuo11y-dsl"))
           (hsPkgs."eventuo11y-json" or (errorHandler.buildDepError "eventuo11y-json"))
-          (hsPkgs."marlowe" or (errorHandler.buildDepError "marlowe"))
+          (hsPkgs."marlowe-cardano" or (errorHandler.buildDepError "marlowe-cardano"))
           (hsPkgs."marlowe-chain-sync" or (errorHandler.buildDepError "marlowe-chain-sync"))
           (hsPkgs."marlowe-protocols" or (errorHandler.buildDepError "marlowe-protocols"))
           (hsPkgs."marlowe-runtime".components.sublibs.config or (errorHandler.buildDepError "marlowe-runtime:config"))
@@ -87,7 +87,7 @@
             (hsPkgs."eventuo11y" or (errorHandler.buildDepError "eventuo11y"))
             (hsPkgs."eventuo11y-dsl" or (errorHandler.buildDepError "eventuo11y-dsl"))
             (hsPkgs."eventuo11y-json" or (errorHandler.buildDepError "eventuo11y-json"))
-            (hsPkgs."marlowe" or (errorHandler.buildDepError "marlowe"))
+            (hsPkgs."marlowe-cardano" or (errorHandler.buildDepError "marlowe-cardano"))
             (hsPkgs."marlowe-apps" or (errorHandler.buildDepError "marlowe-apps"))
             (hsPkgs."marlowe-chain-sync" or (errorHandler.buildDepError "marlowe-chain-sync"))
             (hsPkgs."marlowe-runtime" or (errorHandler.buildDepError "marlowe-runtime"))
@@ -114,7 +114,7 @@
             (hsPkgs."eventuo11y-json" or (errorHandler.buildDepError "eventuo11y-json"))
             (hsPkgs."http-client" or (errorHandler.buildDepError "http-client"))
             (hsPkgs."http-client-tls" or (errorHandler.buildDepError "http-client-tls"))
-            (hsPkgs."marlowe" or (errorHandler.buildDepError "marlowe"))
+            (hsPkgs."marlowe-cardano" or (errorHandler.buildDepError "marlowe-cardano"))
             (hsPkgs."marlowe-apps" or (errorHandler.buildDepError "marlowe-apps"))
             (hsPkgs."marlowe-chain-sync" or (errorHandler.buildDepError "marlowe-chain-sync"))
             (hsPkgs."marlowe-runtime" or (errorHandler.buildDepError "marlowe-runtime"))

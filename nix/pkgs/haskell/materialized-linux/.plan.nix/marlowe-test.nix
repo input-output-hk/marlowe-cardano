@@ -11,7 +11,7 @@
     flags = { defer-plugin-errors = false; limit-static-analysis-time = true; };
     package = {
       specVersion = "2.2";
-      identifier = { name = "marlowe-test"; version = "0.1.0.3"; };
+      identifier = { name = "marlowe-test"; version = "0.1.1.0"; };
       license = "Apache-2.0";
       copyright = "";
       maintainer = "B W Bush <brian.bush@iokk.io>";
@@ -45,12 +45,11 @@
           (hsPkgs."cardano-api" or (errorHandler.buildDepError "cardano-api"))
           (hsPkgs."containers" or (errorHandler.buildDepError "containers"))
           (hsPkgs."data-default" or (errorHandler.buildDepError "data-default"))
-          (hsPkgs."directory" or (errorHandler.buildDepError "directory"))
           (hsPkgs."filepath" or (errorHandler.buildDepError "filepath"))
           (hsPkgs."hint" or (errorHandler.buildDepError "hint"))
           (hsPkgs."lens" or (errorHandler.buildDepError "lens"))
-          (hsPkgs."marlowe" or (errorHandler.buildDepError "marlowe"))
-          (hsPkgs."marlowe-contracts" or (errorHandler.buildDepError "marlowe-contracts"))
+          (hsPkgs."marlowe-cardano" or (errorHandler.buildDepError "marlowe-cardano"))
+          (hsPkgs."marlowe-spec-test" or (errorHandler.buildDepError "marlowe-spec-test"))
           (hsPkgs."mtl" or (errorHandler.buildDepError "mtl"))
           (hsPkgs."plutus-ledger" or (errorHandler.buildDepError "plutus-ledger"))
           (hsPkgs."plutus-ledger-api" or (errorHandler.buildDepError "plutus-ledger-api"))
@@ -69,6 +68,7 @@
           ];
         buildable = true;
         modules = [
+          "Data/Jsonable"
           "Spec/Marlowe/Common"
           "Spec/Marlowe/Marlowe"
           "Spec/Marlowe/Semantics"
@@ -86,6 +86,11 @@
           "Spec/Marlowe/Serialization"
           "Spec/Marlowe/Serialization/CoreJson"
           "Spec/Marlowe/Serialization/ExtendedJson"
+          "Spec/Marlowe/Service"
+          "Spec/Marlowe/Service/Isabelle"
+          "Spec/Marlowe/Service/Random"
+          "Spec/Marlowe/Service/Serialization"
+          "Spec/Marlowe/Service/Types"
           "Spec/Marlowe/Semantics/Arbitrary"
           "Spec/Marlowe/Semantics/AssocMap"
           "Spec/Marlowe/Semantics/Compute"
@@ -98,11 +103,24 @@
           "Spec/Marlowe/Semantics/Golden/Trivial"
           "Spec/Marlowe/Semantics/Golden/ZeroCouponBond"
           "Spec/Marlowe/Semantics/Merkle"
-          "Spec/Marlowe/Semantics/Oracle"
           "Spec/Marlowe/Semantics/Orphans"
           "Spec/Marlowe/Semantics/Util"
           ];
         hsSourceDirs = [ "src" ];
+        };
+      exes = {
+        "marlowe-spec-client" = {
+          depends = [
+            (hsPkgs."base" or (errorHandler.buildDepError "base"))
+            (hsPkgs."aeson" or (errorHandler.buildDepError "aeson"))
+            (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
+            (hsPkgs."marlowe-test" or (errorHandler.buildDepError "marlowe-test"))
+            (hsPkgs."split" or (errorHandler.buildDepError "split"))
+            ];
+          buildable = true;
+          hsSourceDirs = [ "spec-client" ];
+          mainPath = [ "Main.hs" ];
+          };
         };
       tests = {
         "marlowe-test" = {

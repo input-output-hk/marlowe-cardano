@@ -37,7 +37,7 @@
           (hsPkgs."base" or (errorHandler.buildDepError "base"))
           (hsPkgs."plutus-tx" or (errorHandler.buildDepError "plutus-tx"))
           (hsPkgs."plutus-ledger" or (errorHandler.buildDepError "plutus-ledger"))
-          (hsPkgs."marlowe" or (errorHandler.buildDepError "marlowe"))
+          (hsPkgs."marlowe-cardano" or (errorHandler.buildDepError "marlowe-cardano"))
           (hsPkgs."time" or (errorHandler.buildDepError "time"))
           (hsPkgs."validation" or (errorHandler.buildDepError "validation"))
           ];
@@ -112,7 +112,7 @@
             (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
             (hsPkgs."containers" or (errorHandler.buildDepError "containers"))
             (hsPkgs."scientific" or (errorHandler.buildDepError "scientific"))
-            (hsPkgs."marlowe" or (errorHandler.buildDepError "marlowe"))
+            (hsPkgs."marlowe-cardano" or (errorHandler.buildDepError "marlowe-cardano"))
             (hsPkgs."marlowe-actus" or (errorHandler.buildDepError "marlowe-actus"))
             (hsPkgs."mtl" or (errorHandler.buildDepError "mtl"))
             (hsPkgs."plutus-ledger" or (errorHandler.buildDepError "plutus-ledger"))

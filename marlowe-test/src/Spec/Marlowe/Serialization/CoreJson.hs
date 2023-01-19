@@ -9,11 +9,15 @@
 -- | This suite tests the Json serialization of the Marlowe core module
 --
 -----------------------------------------------------------------------------
+
+
 {-# LANGUAGE OverloadedStrings #-}
+
 
 module Spec.Marlowe.Serialization.CoreJson
   ( tests
   ) where
+
 
 import Control.Arrow (Arrow((***)))
 import Data.Aeson (decode, encode)
@@ -28,6 +32,7 @@ import Test.QuickCheck.Property (forAll, forAllShrink, withMaxSuccess)
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.QuickCheck (testProperty)
 
+
 tests :: TestTree
 tests = testGroup "Core Contract Serialization"
     [ testProperty "Serialise deserialise Contract loops" prop_contractJsonLoops
@@ -40,6 +45,7 @@ tests = testGroup "Core Contract Serialization"
 contractJsonLoops :: Contract -> Property
 contractJsonLoops cont = decode (encode cont) === Just cont
 
+
 -- | Test that JSON decoding inverts encoding for contracts.
 prop_contractJsonLoops :: Property
 prop_contractJsonLoops = withMaxSuccess 1000 $ forAllShrink contractGen shrinkContract contractJsonLoops
@@ -50,6 +56,7 @@ prop_contractJsonLoops = withMaxSuccess 1000 $ forAllShrink contractGen shrinkCo
 marloweParamsJsonLoops :: MarloweParams -> Property
 marloweParamsJsonLoops mp = decode (encode mp) === Just mp
 
+
 -- | Test that JSON decoding inverts encoding for Marlowe parameters.
 prop_marloweParamsJsonLoops :: Property
 prop_marloweParamsJsonLoops = withMaxSuccess 1000 $ forAll gen marloweParamsJsonLoops
@@ -57,6 +64,7 @@ prop_marloweParamsJsonLoops = withMaxSuccess 1000 $ forAll gen marloweParamsJson
     gen = do
       c <- toBuiltin <$> (arbitrary :: Gen ByteString)
       return $ MarloweParams (CurrencySymbol c)
+
 
 -- | Test that JSON decoding inverts encoding for an interval error.
 intervalErrorJsonLoops :: IntervalError -> Property

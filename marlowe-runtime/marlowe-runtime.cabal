@@ -74,7 +74,7 @@ library
     , cardano-api
     , bytestring
     , containers
-    , marlowe
+    , marlowe-cardano
     , marlowe-chain-sync
     , ouroboros-network
     , plutus-ledger-api
@@ -100,7 +100,7 @@ library history-api
     , cardano-api
     , containers
     , errors
-    , marlowe
+    , marlowe-cardano
     , marlowe-chain-sync
     , marlowe-protocols
     , marlowe-runtime
@@ -176,7 +176,7 @@ library discovery
       base >= 4.9 && < 5
     , async-components
     , containers
-    , marlowe
+    , marlowe-cardano
     , marlowe-chain-sync
     , marlowe-protocols
     , marlowe-runtime
@@ -229,7 +229,7 @@ library tx
     , errors
     , eventuo11y
     , eventuo11y-extras
-    , marlowe
+    , marlowe-cardano
     , marlowe-chain-sync
     , marlowe-chain-sync:plutus-compat
     , marlowe-protocols
@@ -298,7 +298,7 @@ library web
     , bytestring
     , containers
     , lens
-    , marlowe
+    , marlowe-cardano
     , network-uri
     , openapi3
     , servant
@@ -338,7 +338,7 @@ library web-server
     , eventuo11y-batteries
     , exceptions
     , lens
-    , marlowe
+    , marlowe-cardano
     , marlowe-protocols
     , marlowe-runtime:web
     , marlowe-runtime
@@ -392,7 +392,7 @@ executable marlowe
     , cardano-api
     , containers
     , errors
-    , marlowe
+    , marlowe-cardano
     , marlowe-chain-sync
     , marlowe-protocols
     , marlowe-runtime
@@ -541,7 +541,7 @@ test-suite marlowe-runtime-test
     , errors
     , hedgehog-quickcheck
     , hspec
-    , marlowe
+    , marlowe-cardano
     , marlowe-chain-sync
     , marlowe-chain-sync:plutus-compat
     , marlowe-protocols

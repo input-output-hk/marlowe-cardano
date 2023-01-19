@@ -121,7 +121,7 @@ executable marlowe-integration-example
       base >= 4.9 && < 5
     , aeson
     , cardano-api
-    , marlowe
+    , marlowe-cardano
     , marlowe-chain-sync
     , marlowe-integration
     , marlowe-protocols

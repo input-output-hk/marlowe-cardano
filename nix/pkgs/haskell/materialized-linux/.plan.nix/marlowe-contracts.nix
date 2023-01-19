@@ -34,7 +34,7 @@
       "library" = {
         depends = [
           (hsPkgs."base" or (errorHandler.buildDepError "base"))
-          (hsPkgs."marlowe" or (errorHandler.buildDepError "marlowe"))
+          (hsPkgs."marlowe-cardano" or (errorHandler.buildDepError "marlowe-cardano"))
           (hsPkgs."time" or (errorHandler.buildDepError "time"))
           ];
         buildable = true;
@@ -71,7 +71,7 @@
             (hsPkgs."text" or (errorHandler.buildDepError "text"))
             (hsPkgs."plutus-ledger-api" or (errorHandler.buildDepError "plutus-ledger-api"))
             (hsPkgs."plutus-ledger-ada" or (errorHandler.buildDepError "plutus-ledger-ada"))
-            (hsPkgs."marlowe" or (errorHandler.buildDepError "marlowe"))
+            (hsPkgs."marlowe-cardano" or (errorHandler.buildDepError "marlowe-cardano"))
             (hsPkgs."marlowe-contracts" or (errorHandler.buildDepError "marlowe-contracts"))
             (hsPkgs."plutus-tx" or (errorHandler.buildDepError "plutus-tx"))
             (hsPkgs."QuickCheck" or (errorHandler.buildDepError "QuickCheck"))

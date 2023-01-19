@@ -1,6 +1,6 @@
 cabal-version: 2.2
 name: marlowe-test
-version: 0.1.0.3
+version: 0.1.1.0
 license: Apache-2.0
 license-files:
   LICENSE
@@ -57,6 +57,7 @@ library
   import: lang
   hs-source-dirs: src
   exposed-modules:
+    Data.Jsonable
     Spec.Marlowe.Common
     Spec.Marlowe.Marlowe
     Spec.Marlowe.Semantics
@@ -74,6 +75,11 @@ library
     Spec.Marlowe.Serialization
     Spec.Marlowe.Serialization.CoreJson
     Spec.Marlowe.Serialization.ExtendedJson
+    Spec.Marlowe.Service
+    Spec.Marlowe.Service.Isabelle
+    Spec.Marlowe.Service.Random
+    Spec.Marlowe.Service.Serialization
+    Spec.Marlowe.Service.Types
     Spec.Marlowe.Semantics.Arbitrary
     Spec.Marlowe.Semantics.AssocMap
     Spec.Marlowe.Semantics.Compute
@@ -86,7 +92,6 @@ library
     Spec.Marlowe.Semantics.Golden.Trivial
     Spec.Marlowe.Semantics.Golden.ZeroCouponBond
     Spec.Marlowe.Semantics.Merkle
-    Spec.Marlowe.Semantics.Oracle
     Spec.Marlowe.Semantics.Orphans
     Spec.Marlowe.Semantics.Util
   build-depends:
@@ -96,12 +101,11 @@ library
     , cardano-api
     , containers
     , data-default
-    , directory
     , filepath
     , hint
     , lens
-    , marlowe
-    , marlowe-contracts
+    , marlowe-cardano
+    , marlowe-spec-test
     , mtl
     , plutus-ledger
     , plutus-ledger-api
@@ -129,3 +133,15 @@ test-suite marlowe-test
     , marlowe-test
     , tasty
     , tasty-quickcheck
+
+
+executable marlowe-spec-client
+  import: lang
+  hs-source-dirs: spec-client
+  main-is: Main.hs
+  build-depends:
+      base >=4.9 && <5
+    , aeson
+    , bytestring
+    , marlowe-test
+    , split

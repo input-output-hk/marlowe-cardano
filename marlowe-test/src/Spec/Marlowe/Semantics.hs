@@ -24,6 +24,7 @@ import qualified Spec.Marlowe.Semantics.Entropy (tests)
 import qualified Spec.Marlowe.Semantics.Functions (tests)
 import qualified Spec.Marlowe.Semantics.Golden (tests)
 
+
 -- | Run the tests.
 tests :: TestTree
 tests =

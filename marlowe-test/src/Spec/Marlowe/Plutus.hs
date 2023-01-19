@@ -37,4 +37,3 @@ tests =
     , Spec.Marlowe.Plutus.ScriptContext.tests
     , Spec.Marlowe.Plutus.Specification.tests
     ]
-

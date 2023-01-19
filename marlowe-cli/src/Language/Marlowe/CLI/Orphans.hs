@@ -35,7 +35,6 @@ import Cardano.Api
   )
 import Data.Aeson (FromJSON(..), ToJSON(..), Value(Null, String), object, withObject, withText, (.:), (.=))
 import Data.ByteString.Short (ShortByteString, fromShort, toShort)
-import Language.Marlowe.Core.V1.Semantics (Payment(..), TransactionOutput(..))
 import Ledger.Orphans ()
 
 import qualified Data.ByteString.Base16 as Base16 (decode, encode)
@@ -53,44 +52,6 @@ instance FromJSON ShortByteString where
         case Base16.decode . BS8.pack $ T.unpack t of
           Right bytes   -> pure $ toShort bytes
           Left  message -> fail message
-
-
-instance ToJSON TransactionOutput where
-  toJSON TransactionOutput{..} =
-    object
-      [
-        "payments" .= toJSON txOutPayments
-      , "state"    .= toJSON txOutState
-      , "contract" .= toJSON txOutContract
-      , "warnings" .= toJSON txOutWarnings
-      ]
-  toJSON (Error message) =
-    object
-      [
-        "error" .= toJSON message
-      ]
-
-
-instance ToJSON Payment where
-  toJSON (Payment accountId payee token amount) =
-    object
-      [
-        "accountId" .= toJSON accountId
-      , "payee"     .= toJSON payee
-      , "token"     .= toJSON token
-      , "amount"    .= toJSON amount
-      ]
-
-
-instance FromJSON Payment where
-  parseJSON =
-    withObject "Payment"
-      $ \o ->
-        Payment
-          <$> (o .: "accountId")
-          <*> (o .: "payee"    )
-          <*> (o .: "token"    )
-          <*> (o .: "amount"   )
 
 
 instance ToJSON AddressAny where

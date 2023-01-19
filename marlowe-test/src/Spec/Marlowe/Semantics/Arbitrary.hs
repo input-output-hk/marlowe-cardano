@@ -54,7 +54,15 @@ import Control.Monad (replicateM)
 import Data.Function (on)
 import Data.List (nub, nubBy)
 import Language.Marlowe.Core.V1.Semantics
-  (TransactionInput(..), TransactionOutput(..), computeTransaction, evalObservation, evalValue)
+  ( Payment(..)
+  , TransactionError(..)
+  , TransactionInput(..)
+  , TransactionOutput(..)
+  , TransactionWarning(..)
+  , computeTransaction
+  , evalObservation
+  , evalValue
+  )
 import Language.Marlowe.Core.V1.Semantics.Types
   ( Accounts
   , Action(..)
@@ -67,6 +75,7 @@ import Language.Marlowe.Core.V1.Semantics.Types
   , Environment(..)
   , Input(..)
   , InputContent(..)
+  , IntervalError(..)
   , Observation(..)
   , Party(..)
   , Payee(..)
@@ -91,7 +100,7 @@ import Plutus.V2.Ledger.Api
 import PlutusTx.Builtins (BuiltinByteString, appendByteString, lengthOfByteString, sliceByteString)
 import Spec.Marlowe.Semantics.Golden (GoldenTransaction, goldenContracts, goldenTransactions)
 import Test.Tasty.QuickCheck
-  (Arbitrary(..), Gen, chooseInteger, elements, frequency, listOf, shrinkList, sized, suchThat, vectorOf)
+  (Arbitrary(..), Gen, chooseInteger, elements, frequency, listOf, oneof, shrinkList, sized, suchThat, vectorOf)
 
 import qualified Plutus.V2.Ledger.Api as Ledger (Address(..))
 import qualified PlutusTx.AssocMap as AM (Map, delete, empty, fromList, keys, toList)
@@ -1151,3 +1160,49 @@ arbitraryGoldenTransaction =
     if equalContractWeights
       then elements =<< elements goldenTransactions
       else elements $ concat goldenTransactions
+
+
+instance Arbitrary Payment where
+  arbitrary = Payment <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
+
+
+instance Arbitrary IntervalError where
+  arbitrary =
+    oneof
+      [
+        InvalidInterval <$> arbitrary
+      , IntervalInPastError <$> arbitrary <*> arbitrary
+      ]
+
+
+instance Arbitrary TransactionError where
+  arbitrary =
+    oneof
+      [
+        pure TEAmbiguousTimeIntervalError
+      , pure TEApplyNoMatchError
+      , TEIntervalError <$> arbitrary
+      , pure TEUselessTransaction
+      , pure TEHashMismatch
+      ]
+
+
+instance Arbitrary TransactionWarning where
+  arbitrary =
+    oneof
+      [
+        TransactionNonPositiveDeposit <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
+      , TransactionNonPositivePay <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
+      , TransactionPartialPay <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
+      , TransactionShadowing <$> arbitrary <*> arbitrary <*> arbitrary
+      , pure TransactionAssertionFailed
+      ]
+
+
+instance Arbitrary TransactionOutput where
+  arbitrary =
+    oneof
+      [
+        TransactionOutput <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
+      , Error <$> arbitrary
+      ]

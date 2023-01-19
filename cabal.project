@@ -207,6 +207,14 @@ allow-newer:
   monoidal-containers:aeson,
   size-based:template-haskell
 
+source-repository-package
+  type: git
+  location: https://github.com/input-output-hk/marlowe
+  tag: 2f5cfbf2afd6baf3b373cec1482ea3ab92b0a949
+  --sha256: 0xvxwvznv5mi8cyscjmxs90i0ljyw44wrff23g4r1wvyhkikyprs
+  subdir: isabelle
+          marlowe-spec-test
+
 -- marlowe-cli only
 
 source-repository-package
