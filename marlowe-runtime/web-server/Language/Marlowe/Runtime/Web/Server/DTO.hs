@@ -268,7 +268,7 @@ instance ToDTO ContractRecord where
           $ Sem.marloweParams
           $ datum createOutput
       , version = Web.V1
-      , metadata = mempty -- TODO
+      , metadata = toDTO metadata
       , status = Web.Confirmed
       , block = Just $ toDTO block
       , initialContract = Sem.marloweContract $ datum createOutput
