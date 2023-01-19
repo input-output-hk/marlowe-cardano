@@ -9,10 +9,13 @@ repository cardano-haskell-packages
     c00aae8461a256275598500ea0e187588c35a5d5d7454fb57eac18d9edb86a56
     d4a35cd3121aa00d18544bb0ac01c3e1691d618f462c46129271bccf39f7e8ee
 
--- run `nix flake lock --update-input hackage` after updating this index-state.
+-- repeating the index-state for hackage to work around hackage.nix parsing limitation
 index-state: 2022-10-29T00:00:00Z
--- run `nix flake lock --update-input CHaP` after updating this index-state.
-index-state: cardano-haskell-packages 2022-11-17T04:56:26Z
+index-state:
+  -- run `nix flake lock --update-input hackage` after updating this index-state.
+  , hackage.haskell.org 2022-10-29T00:00:00Z
+  -- run `nix flake lock --update-input CHaP` after updating this index-state.
+  , cardano-haskell-packages 2022-11-17T04:56:26Z
 
 -- with-compiler: ghc-8.10.7
 
