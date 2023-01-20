@@ -3,8 +3,7 @@
 {-# LANGUAGE GADTs #-}
 
 module Language.Marlowe.Protocol.HeaderSyncSpec
-  ( spec
-  ) where
+  where
 
 import GHC.Show (showSpace)
 import Language.Marlowe.Protocol.Common
@@ -112,18 +111,6 @@ instance ArbitraryMessage MarloweHeaderSync where
     , AnyMessageAndAgency (ServerAgency TokIntersect) . MsgIntersectFound <$> genBlockHeader
     , pure $ AnyMessageAndAgency (ServerAgency TokIntersect) MsgIntersectNotFound
     ]
-    where
-      genContractHeader :: Gen Discovery.ContractHeader
-      genContractHeader = Discovery.ContractHeader
-        <$> genContractId
-        <*> genPolicyId
-        <*> genTransactionMetadata
-        <*> genScriptHash
-        <*> genAddress
-        <*> genScriptHash
-        <*> genSomeMarloweVersion
-        <*> genBlockHeader
-
   shrinkMessage agency = \case
     MsgIntersect points -> MsgIntersect <$> shrinkList (const []) points
     MsgDone -> []
@@ -136,7 +123,18 @@ instance ArbitraryMessage MarloweHeaderSync where
     MsgCancel -> []
     MsgIntersectFound _ -> []
     MsgIntersectNotFound -> []
-    where
-      shrinkContractHeader :: Discovery.ContractHeader -> [Discovery.ContractHeader]
-      shrinkContractHeader Discovery.ContractHeader{..} =
-        [ Discovery.ContractHeader{..} { Discovery.metadata = metadata' } | metadata' <- shrinkTransactionMetadata metadata ]
+
+genContractHeader :: Gen Discovery.ContractHeader
+genContractHeader = Discovery.ContractHeader
+  <$> genContractId
+  <*> genPolicyId
+  <*> genTransactionMetadata
+  <*> genScriptHash
+  <*> genAddress
+  <*> genScriptHash
+  <*> genSomeMarloweVersion
+  <*> genBlockHeader
+
+shrinkContractHeader :: Discovery.ContractHeader -> [Discovery.ContractHeader]
+shrinkContractHeader Discovery.ContractHeader{..} =
+  [ Discovery.ContractHeader{..} { Discovery.metadata = metadata' } | metadata' <- shrinkTransactionMetadata metadata ]

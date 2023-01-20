@@ -601,6 +601,7 @@ test-suite marlowe-runtime-test
     Language.Marlowe.Runtime.History.StoreSpec
     Language.Marlowe.Runtime.History.Store.ModelSpec
     Language.Marlowe.Runtime.HistorySpec
+    Language.Marlowe.Runtime.Discovery.QuerySpec
     Language.Marlowe.Runtime.Transaction.BuildConstraintsSpec
     Language.Marlowe.Runtime.Transaction.ConstraintsSpec
     Language.Marlowe.Protocol.Common
