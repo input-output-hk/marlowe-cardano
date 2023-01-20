@@ -44,6 +44,8 @@ import qualified Data.Map as Map
 import Data.Monoid (Sum(..))
 import Data.Set (Set)
 import qualified Data.Set as Set
+import Data.Set.NonEmpty (NESet)
+import qualified Data.Set.NonEmpty as NESet
 import Data.These (These(..))
 import qualified Data.Vector as V
 import Data.Void (Void)
@@ -70,9 +72,9 @@ import Prelude hiding (init)
 -- | PostgreSQL implementation for the chainseekd database queries.
 databaseQueries :: DatabaseQueries Session
 databaseQueries = DatabaseQueries
-  (hoistGetUTxOs (TS.transaction TS.ReadCommitted TS.Read) getUTxOs)
-  (hoistGetTip (TS.transaction TS.ReadCommitted TS.Read) getTip)
-  (hoistMoveClient (TS.transaction TS.ReadCommitted TS.Read) moveClient)
+  (hoistGetUTxOs (TS.transaction TS.Serializable TS.Read) getUTxOs)
+  (hoistGetTip (TS.transaction TS.Serializable TS.Read) getTip)
+  (hoistMoveClient (TS.transaction TS.Serializable TS.Read) moveClient)
 
 -- MoveClient
 
@@ -128,6 +130,7 @@ performMove tip = \case
   Intersect points          -> performIntersect points
   FindConsumingTxs txOutRef -> performFindConsumingTxs txOutRef
   FindTxsTo credentials     -> performFindTxsTo credentials
+  FindTxsFor credentials    -> performFindTxsFor credentials
   AdvanceToTip              -> \point -> pure case tip of
     Genesis -> MoveWait
     At tipBlock
@@ -304,18 +307,14 @@ performFindTxsTo credentials point = do
       WITH credentials (addressHeader,  addressPaymentCredential) as
         ( SELECT * FROM UNNEST ($1 :: bytea[], $2 :: bytea[])
         )
-      , txIds (id) AS
-        ( SELECT DISTINCT txOut.txId
-            FROM chain.txOut
+      , txIds (id, slotNo) AS
+        ( SELECT txOut.txId, txOut.slotNo
+            FROM chain.txOut as txOut
             JOIN credentials USING (addressHeader, addressPaymentCredential)
+           WHERE txOut.slotNo > $3 :: bigint
         )
       , nextSlot (slotNo) AS
-        ( SELECT MIN(block.slotNo)
-            FROM chain.tx    AS tx
-            JOIN txIds                USING (id)
-            JOIN chain.block AS block ON block.id = tx.blockId AND block.slotNo = tx.slotNo
-           WHERE block.slotNo > $3 :: bigint
-             AND block.rollbackToBlock IS NULL
+        ( SELECT MIN(slotNo) FROM txIds
         )
       SELECT block.slotNo :: bigint?
            , block.id :: bytea?
@@ -467,6 +466,110 @@ performFindTx txId wait point = do
           , mintedTokens = decodeTokens policyId tokenName quantity
           }
     readFirstTxRow _ = MoveWait
+
+performFindTxsFor :: NESet Credential -> ChainPoint -> HT.Transaction (PerformMoveResult Void (Set Transaction))
+performFindTxsFor credentials point = do
+  initialResult <- HT.statement params $
+    [foldStatement|
+      WITH credentials (addressHeader,  addressPaymentCredential) as
+        ( SELECT * FROM UNNEST ($1 :: bytea[], $2 :: bytea[])
+        )
+      , txIds (id, slotNo) AS
+        ( SELECT txOut.txId, txOut.slotNo
+            FROM chain.txOut as txOut
+            JOIN credentials USING (addressHeader, addressPaymentCredential)
+           WHERE txOut.slotNo > $3 :: bigint
+           UNION
+          SELECT txIn.txInId, txIn.slotNo
+            FROM chain.txIn as tXIn
+            JOIN chain.txOut as txOut ON txOut.txId = txIn.txOutId AND txOut.txIx = txIn.txOutIx
+            JOIN credentials USING (addressHeader, addressPaymentCredential)
+           WHERE txIn.slotNo > $3 :: bigint
+        )
+      , nextSlot (slotNo) AS
+        ( SELECT MIN(slotNo) FROM txIds
+        )
+      SELECT block.slotNo :: bigint?
+           , block.id :: bytea?
+           , block.blockNo :: bigint?
+           , tx.id :: bytea?
+           , tx.validityLowerBound :: bigint?
+           , tx.validityUpperBound :: bigint?
+           , tx.metadata :: bytea?
+           , asset.policyId :: bytea?
+           , asset.name :: bytea?
+           , assetMint.quantity :: bigint?
+        FROM chain.tx             AS tx
+        JOIN nextSlot                          USING (slotNo)
+        JOIN txIds                             USING (id)
+        JOIN chain.block          AS block     ON block.id = tx.blockId AND block.slotNo = tx.slotNo
+        LEFT JOIN chain.assetMint AS assetMint ON assetMint.txId = tx.id AND assetMint.slotNo = tx.slotNo
+        LEFT JOIN chain.asset     AS asset     ON asset.id = assetMint.assetId
+    |] foldTxs
+  case initialResult of
+    (Nothing, _) -> pure MoveWait
+    (Just header@BlockHeader{..}, txs) -> do
+      let txIds = Map.keysSet txs
+      txIns <- queryTxInsBulk slotNo txIds
+      txOuts <- queryTxOutsBulk slotNo txIds
+      let insOuts = Map.intersectionWith (,) txIns txOuts
+      pure
+        $ MoveArrive header
+        $ Set.fromList
+        $ fmap snd
+        $ Map.toList
+        $ Map.intersectionWith (\(ins, outs) tx -> tx { inputs = ins, outputs = outs }) insOuts txs
+  where
+    params =
+      ( V.fromList $ fst <$> addressParts
+      , V.fromList $ snd <$> addressParts
+      , pointSlot point
+      )
+    addressParts = Set.toList (NESet.toSet credentials) >>= \case
+      PaymentKeyCredential pkh ->
+        (,unPaymentKeyHash pkh) . BS.pack . pure <$> [0x00, 0x20, 0x40, 0x60]
+      ScriptCredential sh ->
+        (,unScriptHash sh) . BS.pack . pure <$> [0x10, 0x30, 0x50, 0x70]
+    foldTxs :: Fold ReadTxRow (Maybe BlockHeader, Map TxId Transaction)
+    foldTxs = Fold foldTxs' (Nothing, mempty) id
+
+    foldTxs'
+      :: (Maybe BlockHeader, Map TxId Transaction)
+      -> ReadTxRow
+      -> (Maybe BlockHeader, Map TxId Transaction)
+    foldTxs' (blockHeader, txs) row@(Just slotNo, Just hash, Just blockNo, Just txId, _, _, _, _, _, _) =
+      ( blockHeader <|> Just (BlockHeader (decodeSlotNo slotNo) (BlockHeaderHash hash) (decodeBlockNo blockNo))
+      , Map.alter (mergeRow row) (TxId txId) txs
+      )
+    foldTxs' x _ = x
+
+    mergeRow :: ReadTxRow -> Maybe Transaction -> Maybe Transaction
+    mergeRow row@
+      ( _
+      , _
+      , _
+      , Just txId
+      , validityLowerBound
+      , validityUpperBound
+      , mMetadata
+      , policyId
+      , tokenName
+      , quantity
+      ) = Just . \case
+        Nothing -> Transaction
+          { txId = TxId txId
+          , validityRange = case (validityLowerBound, validityUpperBound) of
+              (Nothing, Nothing) -> Unbounded
+              (Just lb, Nothing) -> MinBound $ decodeSlotNo lb
+              (Nothing, Just ub) -> MaxBound $ decodeSlotNo ub
+              (Just lb, Just ub) -> MinMaxBound (decodeSlotNo lb) $ decodeSlotNo ub
+          , metadata = maybe mempty fromCardanoTxMetadata $ decodeMetadata =<< mMetadata
+          , inputs = Set.empty
+          , outputs = []
+          , mintedTokens = decodeTokens policyId tokenName quantity
+          }
+        Just tx -> mergeTxRow tx row
+    mergeRow _ = const Nothing
 
 mergeTxRow :: Transaction -> ReadTxRow -> Transaction
 mergeTxRow tx@Transaction{mintedTokens} (_, _, _, _, _, _, _, policyId, tokenName, quantity) = tx

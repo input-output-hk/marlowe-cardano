@@ -85,6 +85,51 @@
             ];
           hsSourceDirs = [ "history-api" ];
           };
+        "indexer" = {
+          depends = [
+            (hsPkgs."base" or (errorHandler.buildDepError "base"))
+            (hsPkgs."aeson" or (errorHandler.buildDepError "aeson"))
+            (hsPkgs."async" or (errorHandler.buildDepError "async"))
+            (hsPkgs."async-components" or (errorHandler.buildDepError "async-components"))
+            (hsPkgs."binary" or (errorHandler.buildDepError "binary"))
+            (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
+            (hsPkgs."cardano-api" or (errorHandler.buildDepError "cardano-api"))
+            (hsPkgs."containers" or (errorHandler.buildDepError "containers"))
+            (hsPkgs."eventuo11y" or (errorHandler.buildDepError "eventuo11y"))
+            (hsPkgs."eventuo11y-extras" or (errorHandler.buildDepError "eventuo11y-extras"))
+            (hsPkgs."hasql" or (errorHandler.buildDepError "hasql"))
+            (hsPkgs."hasql-th" or (errorHandler.buildDepError "hasql-th"))
+            (hsPkgs."hasql-transaction" or (errorHandler.buildDepError "hasql-transaction"))
+            (hsPkgs."marlowe-cardano" or (errorHandler.buildDepError "marlowe-cardano"))
+            (hsPkgs."marlowe-chain-sync" or (errorHandler.buildDepError "marlowe-chain-sync"))
+            (hsPkgs."marlowe-protocols" or (errorHandler.buildDepError "marlowe-protocols"))
+            (hsPkgs."marlowe-runtime" or (errorHandler.buildDepError "marlowe-runtime"))
+            (hsPkgs."marlowe-runtime".components.sublibs.history-api or (errorHandler.buildDepError "marlowe-runtime:history-api"))
+            (hsPkgs."mtl" or (errorHandler.buildDepError "mtl"))
+            (hsPkgs."nonempty-containers" or (errorHandler.buildDepError "nonempty-containers"))
+            (hsPkgs."plutus-ledger-api" or (errorHandler.buildDepError "plutus-ledger-api"))
+            (hsPkgs."stm" or (errorHandler.buildDepError "stm"))
+            (hsPkgs."text" or (errorHandler.buildDepError "text"))
+            (hsPkgs."time" or (errorHandler.buildDepError "time"))
+            (hsPkgs."transformers" or (errorHandler.buildDepError "transformers"))
+            (hsPkgs."witherable" or (errorHandler.buildDepError "witherable"))
+            (hsPkgs."vector" or (errorHandler.buildDepError "vector"))
+            ];
+          buildable = true;
+          modules = [
+            "Language/Marlowe/Runtime/Indexer"
+            "Language/Marlowe/Runtime/Indexer/ChainSeekClient"
+            "Language/Marlowe/Runtime/Indexer/Database"
+            "Language/Marlowe/Runtime/Indexer/Database/PostgreSQL"
+            "Language/Marlowe/Runtime/Indexer/Database/PostgreSQL/CommitBlocks"
+            "Language/Marlowe/Runtime/Indexer/Database/PostgreSQL/CommitRollback"
+            "Language/Marlowe/Runtime/Indexer/Database/PostgreSQL/GetIntersectionPoints"
+            "Language/Marlowe/Runtime/Indexer/Database/PostgreSQL/GetMarloweUTxO"
+            "Language/Marlowe/Runtime/Indexer/Store"
+            "Language/Marlowe/Runtime/Indexer/Types"
+            ];
+          hsSourceDirs = [ "indexer" ];
+          };
         "history" = {
           depends = [
             (hsPkgs."base" or (errorHandler.buildDepError "base"))
@@ -390,6 +435,32 @@
             "Main.hs"
             ] ++ (pkgs.lib).optional (flags.defer-plugin-errors) "") ++ (pkgs.lib).optional (!system.isWindows) "";
           };
+        "marlowe-indexer" = {
+          depends = [
+            (hsPkgs."base" or (errorHandler.buildDepError "base"))
+            (hsPkgs."async-components" or (errorHandler.buildDepError "async-components"))
+            (hsPkgs."eventuo11y" or (errorHandler.buildDepError "eventuo11y"))
+            (hsPkgs."eventuo11y-extras" or (errorHandler.buildDepError "eventuo11y-extras"))
+            (hsPkgs."hasql" or (errorHandler.buildDepError "hasql"))
+            (hsPkgs."hasql-pool" or (errorHandler.buildDepError "hasql-pool"))
+            (hsPkgs."marlowe-chain-sync" or (errorHandler.buildDepError "marlowe-chain-sync"))
+            (hsPkgs."marlowe-protocols" or (errorHandler.buildDepError "marlowe-protocols"))
+            (hsPkgs."marlowe-runtime" or (errorHandler.buildDepError "marlowe-runtime"))
+            (hsPkgs."marlowe-runtime".components.sublibs.indexer or (errorHandler.buildDepError "marlowe-runtime:indexer"))
+            (hsPkgs."network" or (errorHandler.buildDepError "network"))
+            (hsPkgs."nonempty-containers" or (errorHandler.buildDepError "nonempty-containers"))
+            (hsPkgs."optparse-applicative" or (errorHandler.buildDepError "optparse-applicative"))
+            (hsPkgs."text" or (errorHandler.buildDepError "text"))
+            (hsPkgs."time" or (errorHandler.buildDepError "time"))
+            (hsPkgs."uuid" or (errorHandler.buildDepError "uuid"))
+            ];
+          buildable = true;
+          modules = [ "Logging" "Paths_marlowe_runtime" ];
+          hsSourceDirs = [ "marlowe-indexer" ];
+          mainPath = [
+            "Main.hs"
+            ] ++ (pkgs.lib).optional (flags.defer-plugin-errors) "";
+          };
         "marlowe-history" = {
           depends = [
             (hsPkgs."base" or (errorHandler.buildDepError "base"))
@@ -532,6 +603,37 @@
             "Paths_marlowe_runtime"
             ];
           hsSourceDirs = [ "test" ];
+          mainPath = [ "Spec.hs" ];
+          };
+        "indexer-test" = {
+          depends = [
+            (hsPkgs."base" or (errorHandler.buildDepError "base"))
+            (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
+            (hsPkgs."cardano-api" or (errorHandler.buildDepError "cardano-api"))
+            (hsPkgs."containers" or (errorHandler.buildDepError "containers"))
+            (hsPkgs."hspec" or (errorHandler.buildDepError "hspec"))
+            (hsPkgs."marlowe-cardano" or (errorHandler.buildDepError "marlowe-cardano"))
+            (hsPkgs."marlowe-chain-sync" or (errorHandler.buildDepError "marlowe-chain-sync"))
+            (hsPkgs."marlowe-chain-sync".components.sublibs.plutus-compat or (errorHandler.buildDepError "marlowe-chain-sync:plutus-compat"))
+            (hsPkgs."marlowe-runtime" or (errorHandler.buildDepError "marlowe-runtime"))
+            (hsPkgs."marlowe-runtime".components.sublibs.history-api or (errorHandler.buildDepError "marlowe-runtime:history-api"))
+            (hsPkgs."marlowe-runtime".components.sublibs.indexer or (errorHandler.buildDepError "marlowe-runtime:indexer"))
+            (hsPkgs."marlowe-test" or (errorHandler.buildDepError "marlowe-test"))
+            (hsPkgs."ouroboros-consensus" or (errorHandler.buildDepError "ouroboros-consensus"))
+            (hsPkgs."plutus-tx" or (errorHandler.buildDepError "plutus-tx"))
+            (hsPkgs."QuickCheck" or (errorHandler.buildDepError "QuickCheck"))
+            (hsPkgs."time" or (errorHandler.buildDepError "time"))
+            (hsPkgs."transformers" or (errorHandler.buildDepError "transformers"))
+            ];
+          build-tools = [
+            (hsPkgs.buildPackages.hspec-discover.components.exes.hspec-discover or (pkgs.buildPackages.hspec-discover or (errorHandler.buildToolDepError "hspec-discover:hspec-discover")))
+            ];
+          buildable = true;
+          modules = [
+            "Language/Marlowe/Runtime/Indexer/MarloweUTxOSpec"
+            "Paths_marlowe_runtime"
+            ];
+          hsSourceDirs = [ "indexer-test" ];
           mainPath = [ "Spec.hs" ];
           };
         "web-server-test" = {

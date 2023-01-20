@@ -68,6 +68,7 @@ library
     , cardano-ledger-core
     , containers
     , marlowe-protocols
+    , nonempty-containers
     , ouroboros-consensus
     , ouroboros-network
     , plutus-tx
@@ -104,6 +105,7 @@ library libchainseek
     , hasql-transaction
     , marlowe-chain-sync
     , marlowe-protocols
+    , nonempty-containers
     , ouroboros-network
     , these
     , transformers

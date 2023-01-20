@@ -110,6 +110,51 @@ library history-api
     , transformers
     , typed-protocols
 
+library indexer
+  import: lang
+  hs-source-dirs:   indexer
+  visibility: public
+  exposed-modules:
+    Language.Marlowe.Runtime.Indexer
+    Language.Marlowe.Runtime.Indexer.ChainSeekClient
+    Language.Marlowe.Runtime.Indexer.Database
+    Language.Marlowe.Runtime.Indexer.Database.PostgreSQL
+    Language.Marlowe.Runtime.Indexer.Database.PostgreSQL.CommitBlocks
+    Language.Marlowe.Runtime.Indexer.Database.PostgreSQL.CommitRollback
+    Language.Marlowe.Runtime.Indexer.Database.PostgreSQL.GetIntersectionPoints
+    Language.Marlowe.Runtime.Indexer.Database.PostgreSQL.GetMarloweUTxO
+    Language.Marlowe.Runtime.Indexer.Store
+    Language.Marlowe.Runtime.Indexer.Types
+  build-depends:
+      base >= 4.9 && < 5
+    , aeson
+    , async
+    , async-components
+    , binary
+    , bytestring
+    , cardano-api
+    , containers
+    , eventuo11y
+    , eventuo11y-extras
+    , hasql
+    , hasql-th
+    , hasql-transaction
+    , marlowe-cardano
+    , marlowe-chain-sync
+    , marlowe-protocols
+    , marlowe-runtime
+    , marlowe-runtime:history-api
+    , mtl
+    , nonempty-containers
+    , plutus-ledger-api
+    , stm
+    , text
+    , time
+    , transformers
+    , witherable
+    , vector
+  visibility: public
+
 library history
   import: lang
   hs-source-dirs:   history
@@ -416,6 +461,34 @@ executable marlowe
   if !os(windows)
     build-depends: unix
 
+executable marlowe-indexer
+  import: lang
+  hs-source-dirs:   marlowe-indexer
+  main-is: Main.hs
+  other-modules:
+    Logging
+    Paths_marlowe_runtime
+  autogen-modules:
+    Paths_marlowe_runtime
+  build-depends:
+      base >= 4.9 && < 5
+    , async-components
+    , eventuo11y
+    , eventuo11y-extras
+    , hasql
+    , hasql-pool
+    , marlowe-chain-sync
+    , marlowe-protocols
+    , marlowe-runtime
+    , marlowe-runtime:indexer
+    , network
+    , nonempty-containers
+    , optparse-applicative
+    , text
+    , time
+    , uuid
+  ghc-options: -threaded
+
 executable marlowe-history
   import: lang
   hs-source-dirs:   marlowe-history
@@ -560,6 +633,35 @@ test-suite marlowe-runtime-test
     , quickcheck-instances
     , some
     , stm
+    , time
+    , transformers
+  build-tool-depends: hspec-discover:hspec-discover
+  ghc-options: -threaded
+
+test-suite indexer-test
+  import: lang
+  hs-source-dirs: indexer-test
+  type: exitcode-stdio-1.0
+  main-is: Spec.hs
+  other-modules:
+    Language.Marlowe.Runtime.Indexer.MarloweUTxOSpec
+    Paths_marlowe_runtime
+  build-depends:
+      base >= 4.9 && < 5
+    , bytestring
+    , cardano-api
+    , containers
+    , hspec
+    , marlowe-cardano
+    , marlowe-chain-sync
+    , marlowe-chain-sync:plutus-compat
+    , marlowe-runtime
+    , marlowe-runtime:history-api
+    , marlowe-runtime:indexer
+    , marlowe-test
+    , ouroboros-consensus
+    , plutus-tx
+    , QuickCheck
     , time
     , transformers
   build-tool-depends: hspec-discover:hspec-discover

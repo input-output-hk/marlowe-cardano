@@ -1,0 +1,5 @@
+%syntax-version=1.0.0
+%project=marlowe
+%uri=https://github.com/input-output-hk/marlowe-cardano/tree/main/marlowe-runtime/marlowe-indexer
+
+schema 2023-01-13T17:57:34Z Jamie Bertram <jamie.bertram@iohk.io> # Add schema for Marlowe Indexer
