@@ -197,6 +197,23 @@ library gen
     , these
     , time
 
+test-suite marlowe-chain-sync-test
+  import: lang
+  hs-source-dirs: test
+  type: exitcode-stdio-1.0
+  main-is: Spec.hs
+  other-modules:
+    Language.Marlowe.Runtime.ChainSync.ApiSpec
+    Paths_marlowe_chain_sync
+  build-depends:
+      base >= 4.9 && < 5
+    , hspec
+    , marlowe-chain-sync
+    , marlowe-chain-sync:gen
+    , marlowe-protocols
+  build-tool-depends: hspec-discover:hspec-discover
+  ghc-options: -threaded
+
 executable marlowe-chain-indexer
   import: lang
   ghc-options: -threaded
