@@ -3,6 +3,8 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 
@@ -21,9 +23,11 @@ module Language.Marlowe.Runtime.App.Transact
   ) where
 
 
-import Control.Monad.Except (ExceptT(..), throwError)
+import Control.Concurrent (threadDelay)
+import Control.Monad (when)
+import Control.Monad.Except (ExceptT(..), liftIO, throwError)
 import Language.Marlowe.Core.V1.Semantics.Types (Contract, Input)
-import Language.Marlowe.Runtime.App.Types (App, Config, MarloweRequest(..), MarloweResponse(..))
+import Language.Marlowe.Runtime.App.Types (App, Config(Config, confirmSeconds), MarloweRequest(..), MarloweResponse(..))
 import Language.Marlowe.Runtime.ChainSync.Api (Address, Lovelace)
 import Language.Marlowe.Runtime.Core.Api (ContractId, MarloweVersionTag(V1))
 import Observe.Event (Event, addField, newEvent, withSubEvent)
@@ -143,7 +147,7 @@ transactWithEvents
   -> C.SigningKey C.PaymentExtendedKey
   -> MarloweRequest 'V1
   -> App ContractId
-transactWithEvents event config key request =
+transactWithEvents event config@Config{confirmSeconds} key request =
   let
     show' = LBS8.unpack . A.encode
     unexpected response = throwError $ "Unexpected response: " <> show' response
@@ -170,6 +174,9 @@ transactWithEvents event config key request =
             $ \case
               TxInfo{} -> pure ()
               response -> unexpected response
+          when (confirmSeconds > 0)
+            . liftIO . threadDelay
+            $ 1_000_000 * confirmSeconds
           pure contractId
 
 
