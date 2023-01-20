@@ -4,7 +4,8 @@
   inputs = {
     flake-utils.url = "github:numtide/flake-utils";
 
-    nixpkgs.follows = "haskell-nix/nixpkgs-unstable";
+    nixpkgs.follows = "haskell-nix/nixpkgs-2205";
+    nixpkgs-unstable.follows = "haskell-nix/nixpkgs-unstable";
 
     haskell-nix = {
       url = "github:input-output-hk/haskell.nix";
@@ -183,23 +184,26 @@
           inputs = nosys.lib.deSys system inputs;
         };
 
-        nomadEnvs = let
-          envData = import ./nix/nomadEnvs {
-            inputs = nosys.lib.deSys system inputs;
-          };
-          mkNomadJobs = let
-            pkgs = inputs.nixpkgs.legacyPackages.${system};
+        nomadEnv =
+          let
+            envData = import ./nix/nomadEnv {
+              inputs = nosys.lib.deSys system inputs;
+            };
+            mkNomadJobs =
+              let
+                pkgs = inputs.nixpkgs.legacyPackages.${system};
+              in
+              builtins.mapAttrs (
+                n: job:
+                  pkgs.linkFarm "job.${n}" [
+                    {
+                      name = "job";
+                      path = pkgs.writeText "${n}.nomad.json" (builtins.toJSON job);
+                    }
+                  ]
+              );
           in
-            builtins.mapAttrs (
-              n: job:
-              pkgs.linkFarm "job.${n}" [
-                {
-                  name = "job";
-                  path = pkgs.writeText "${n}.nomad.json" (builtins.toJSON job);
-                }
-              ]
-            );
-        in mkNomadJobs envData;
+          mkNomadJobs envData;
 
         # Export ciJobs for tullia to parse
         ciJobs = self.hydraJobs {
@@ -213,7 +217,7 @@
         inherit (self) internal;
         marlowe-cardano = self;
       };
-
+      inherit inputs;
       internal.packagesFun =
         { system
         , checkMaterialization ? false

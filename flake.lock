@@ -8729,11 +8729,11 @@
         "tullia": "tullia_4"
       },
       "locked": {
-        "lastModified": 1669782934,
-        "narHash": "sha256-WflJGjg/Az8rJr/2oVAHk7YZMsML8Tsd1+3BwB6Wh0U=",
+        "lastModified": 1674174115,
+        "narHash": "sha256-P+e0gHzsVYpEwJHKpzQFPx5HA/h5IJflGh5eFD4idGY=",
         "owner": "input-output-hk",
         "repo": "dapps-world",
-        "rev": "dcc4736ac64d74800a0a8e7fa24bd320bc02c3c8",
+        "rev": "438c68644f7b249b5728bc5c7a27f27d5295492c",
         "type": "github"
       },
       "original": {
@@ -37624,6 +37624,10 @@
         "haskell-nix": "haskell-nix_7",
         "iohk-nix": "iohk-nix_3",
         "nixpkgs": [
+          "haskell-nix",
+          "nixpkgs-2205"
+        ],
+        "nixpkgs-unstable": [
           "haskell-nix",
           "nixpkgs-unstable"
         ],
