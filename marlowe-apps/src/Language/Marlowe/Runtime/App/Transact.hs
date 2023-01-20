@@ -175,8 +175,9 @@ transactWithEvents event config@Config{confirmSeconds} key request =
               TxInfo{} -> pure ()
               response -> unexpected response
           when (confirmSeconds > 0)
-            . liftIO . threadDelay
-            $ 1_000_000 * confirmSeconds
+            . withSubEvent subEvent (DynamicEventSelector "Wait")
+            . const
+            $ liftIO . threadDelay $ confirmSeconds * 1_000_000
           pure contractId
 
 
