@@ -1466,6 +1466,7 @@
           "marlowe-actus".components.tests."actus-core-test".planned = lib.mkOverride 900 true;
           "tasty".components.library.planned = lib.mkOverride 900 true;
           "transformers-compat".components.library.planned = lib.mkOverride 900 true;
+          "marlowe-runtime".components.sublibs."gen".planned = lib.mkOverride 900 true;
           "dns".components.library.planned = lib.mkOverride 900 true;
           "optparse-generic".components.library.planned = lib.mkOverride 900 true;
           "plutus-core".components.exes."plc".planned = lib.mkOverride 900 true;

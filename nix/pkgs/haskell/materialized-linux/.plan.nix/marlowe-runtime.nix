@@ -56,6 +56,32 @@
         hsSourceDirs = [ "src" ];
         };
       sublibs = {
+        "gen" = {
+          depends = [
+            (hsPkgs."base" or (errorHandler.buildDepError "base"))
+            (hsPkgs."QuickCheck" or (errorHandler.buildDepError "QuickCheck"))
+            (hsPkgs."cardano-api" or (errorHandler.buildDepError "cardano-api"))
+            (hsPkgs."cardano-api".components.sublibs.gen or (errorHandler.buildDepError "cardano-api:gen"))
+            (hsPkgs."hedgehog-quickcheck" or (errorHandler.buildDepError "hedgehog-quickcheck"))
+            (hsPkgs."marlowe-cardano" or (errorHandler.buildDepError "marlowe-cardano"))
+            (hsPkgs."marlowe-chain-sync".components.sublibs.gen or (errorHandler.buildDepError "marlowe-chain-sync:gen"))
+            (hsPkgs."marlowe-chain-sync".components.sublibs.plutus-compat or (errorHandler.buildDepError "marlowe-chain-sync:plutus-compat"))
+            (hsPkgs."marlowe-runtime" or (errorHandler.buildDepError "marlowe-runtime"))
+            (hsPkgs."marlowe-runtime".components.sublibs.history-api or (errorHandler.buildDepError "marlowe-runtime:history-api"))
+            (hsPkgs."marlowe-runtime".components.sublibs.discovery-api or (errorHandler.buildDepError "marlowe-runtime:discovery-api"))
+            (hsPkgs."marlowe-runtime".components.sublibs.tx-api or (errorHandler.buildDepError "marlowe-runtime:tx-api"))
+            (hsPkgs."marlowe-test" or (errorHandler.buildDepError "marlowe-test"))
+            (hsPkgs."quickcheck-instances" or (errorHandler.buildDepError "quickcheck-instances"))
+            ];
+          buildable = true;
+          modules = [
+            "Language/Marlowe/Runtime/Core/Gen"
+            "Language/Marlowe/Runtime/History/Gen"
+            "Language/Marlowe/Runtime/Discovery/Gen"
+            "Language/Marlowe/Runtime/Transaction/Gen"
+            ];
+          hsSourceDirs = [ "gen" ];
+          };
         "history-api" = {
           depends = [
             (hsPkgs."base" or (errorHandler.buildDepError "base"))
@@ -572,6 +598,7 @@
             (hsPkgs."marlowe-protocols" or (errorHandler.buildDepError "marlowe-protocols"))
             (hsPkgs."marlowe-protocols-test" or (errorHandler.buildDepError "marlowe-protocols-test"))
             (hsPkgs."marlowe-runtime" or (errorHandler.buildDepError "marlowe-runtime"))
+            (hsPkgs."marlowe-runtime".components.sublibs.gen or (errorHandler.buildDepError "marlowe-runtime:gen"))
             (hsPkgs."marlowe-runtime".components.sublibs.discovery-api or (errorHandler.buildDepError "marlowe-runtime:discovery-api"))
             (hsPkgs."marlowe-runtime".components.sublibs.history or (errorHandler.buildDepError "marlowe-runtime:history"))
             (hsPkgs."marlowe-runtime".components.sublibs.history-api or (errorHandler.buildDepError "marlowe-runtime:history-api"))
@@ -606,7 +633,6 @@
             "Language/Marlowe/Runtime/Transaction/BuildConstraintsSpec"
             "Language/Marlowe/Runtime/Transaction/ConstraintsSpec"
             "Language/Marlowe/Runtime/Transaction/CommandSpec"
-            "Language/Marlowe/Protocol/Common"
             "Language/Marlowe/Protocol/HeaderSyncSpec"
             "Language/Marlowe/Protocol/SyncSpec"
             "Paths_marlowe_runtime"
