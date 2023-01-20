@@ -3,8 +3,7 @@
 {-# LANGUAGE GADTs #-}
 
 module Language.Marlowe.Protocol.SyncSpec
-  ( spec
-  ) where
+  where
 
 import qualified Data.Map as Map
 import GHC.Show (showSpace)
@@ -196,47 +195,6 @@ instance ArbitraryMessage MarloweSync where
         <*> arbitrary
         <*> arbitrary
 
-      genTransactionOutput :: Core.MarloweVersion v -> Gen (Core.TransactionOutput v)
-      genTransactionOutput version = Core.TransactionOutput
-        <$> (Map.fromList <$> listOf ((,) <$> arbitrary <*> genPayout version))
-        <*> oneof [pure Nothing, Just <$> genTransactionScriptOutput version]
-
-      genTransactionScriptOutput :: Core.MarloweVersion v -> Gen (Core.TransactionScriptOutput v)
-      genTransactionScriptOutput version = Core.TransactionScriptOutput
-        <$> arbitrary
-        <*> arbitrary
-        <*> arbitrary
-        <*> genDatum version
-
-      genTransaction :: Core.MarloweVersion v -> Gen (Core.Transaction v)
-      genTransaction version = Core.Transaction
-        <$> arbitrary
-        <*> arbitrary
-        <*> arbitrary
-        <*> arbitrary
-        <*> genUTCTime
-        <*> genUTCTime
-        <*> genInputs version
-        <*> genTransactionOutput version
-
-      genInputs :: Core.MarloweVersion v -> Gen (Core.Inputs v)
-      genInputs Core.MarloweV1 = listOf arbitrary
-
-      genPayout :: Core.MarloweVersion v -> Gen (Core.Payout v)
-      genPayout version = Core.Payout
-        <$> arbitrary
-        <*> arbitrary
-        <*> genPayoutDatum version
-
-      genPayoutDatum :: Core.MarloweVersion v -> Gen (Core.PayoutDatum v)
-      genPayoutDatum Core.MarloweV1 = arbitrary
-
-      genDatum :: Core.MarloweVersion v -> Gen (Core.Datum v)
-      genDatum Core.MarloweV1 = V1.MarloweData
-        <$> (V1.MarloweParams . toPlutusCurrencySymbol <$> arbitrary)
-        <*> arbitrary
-        <*> arbitrary
-
   shrinkMessage agency = \case
     MsgFollowContract _ -> []
     MsgIntersect contractId Core.MarloweV1 points -> MsgIntersect contractId Core.MarloweV1 <$> shrinkList (const []) points
@@ -264,28 +222,70 @@ instance ArbitraryMessage MarloweSync where
         History.ApplyTransaction tx -> History.ApplyTransaction <$> shrinkTransaction version tx
         History.RedeemPayout _ -> []
 
-      shrinkTransaction :: Core.MarloweVersion v -> Core.Transaction v -> [Core.Transaction v]
-      shrinkTransaction version Core.Transaction{..} = []
-        <> [ Core.Transaction{..} { Transaction.metadata = metadata' } | metadata' <- shrink metadata ]
-        <> [ Core.Transaction{inputs = inputs', transactionId, contractId, metadata, blockHeader, validityLowerBound, validityUpperBound, output} | inputs' <- shrinkInputs version inputs ]
-        <> [ Core.Transaction{..} { Transaction.output = output' } | output' <- shrinkTransactionOutput version output ]
+genTransactionOutput :: Core.MarloweVersion v -> Gen (Core.TransactionOutput v)
+genTransactionOutput version = Core.TransactionOutput
+  <$> (Map.fromList <$> listOf ((,) <$> arbitrary <*> genPayout version))
+  <*> oneof [pure Nothing, Just <$> genTransactionScriptOutput version]
 
-      shrinkInputs :: Core.MarloweVersion v -> Core.Inputs v -> [Core.Inputs v]
-      shrinkInputs Core.MarloweV1 = shrinkList shrink
+genTransactionScriptOutput :: Core.MarloweVersion v -> Gen (Core.TransactionScriptOutput v)
+genTransactionScriptOutput version = Core.TransactionScriptOutput
+  <$> arbitrary
+  <*> arbitrary
+  <*> arbitrary
+  <*> genDatum version
 
-      shrinkTransactionOutput :: Core.MarloweVersion v -> Core.TransactionOutput v -> [Core.TransactionOutput v]
-      shrinkTransactionOutput version Core.TransactionOutput{..} = []
-        <> [ Core.TransactionOutput{..} { Core.payouts = payouts' } | payouts' <- shrinkMap (shrinkPayout version) payouts ]
+genTransaction :: Core.MarloweVersion v -> Gen (Core.Transaction v)
+genTransaction version = Core.Transaction
+  <$> arbitrary
+  <*> arbitrary
+  <*> arbitrary
+  <*> arbitrary
+  <*> genUTCTime
+  <*> genUTCTime
+  <*> genInputs version
+  <*> genTransactionOutput version
 
-      shrinkPayout :: Core.MarloweVersion v -> Core.Payout v -> [Core.Payout v]
-      shrinkPayout _ Core.Payout{..} = [ Core.Payout{..} { Payout.assets = assets' } | assets' <- shrink assets ]
+genInputs :: Core.MarloweVersion v -> Gen (Core.Inputs v)
+genInputs Core.MarloweV1 = listOf arbitrary
 
-      shrinkTransactionScriptOutput :: Core.MarloweVersion v -> Core.TransactionScriptOutput v -> [Core.TransactionScriptOutput v]
-      shrinkTransactionScriptOutput version Core.TransactionScriptOutput{..} = []
-        <> [ Core.TransactionScriptOutput{..} { TransactionScriptOutput.assets = assets' } | assets' <- shrink assets ]
-        <> [ Core.TransactionScriptOutput{datum = datum', address, assets, utxo} | datum' <- shrinkDatum version datum ]
+genPayout :: Core.MarloweVersion v -> Gen (Core.Payout v)
+genPayout version = Core.Payout
+  <$> arbitrary
+  <*> arbitrary
+  <*> genPayoutDatum version
 
-      shrinkDatum :: Core.MarloweVersion v -> Core.Datum v -> [Core.Datum v]
-      shrinkDatum Core.MarloweV1 V1.MarloweData{..} = []
-        <> [ V1.MarloweData{..} { V1.marloweState = marloweState' } | marloweState' <- shrink marloweState ]
-        <> [ V1.MarloweData{..} { V1.marloweContract = marloweContract' } | marloweContract' <- shrink marloweContract ]
+
+genPayoutDatum :: Core.MarloweVersion v -> Gen (Core.PayoutDatum v)
+genPayoutDatum Core.MarloweV1 = arbitrary
+
+genDatum :: Core.MarloweVersion v -> Gen (Core.Datum v)
+genDatum Core.MarloweV1 = V1.MarloweData
+  <$> (V1.MarloweParams . toPlutusCurrencySymbol <$> arbitrary)
+  <*> arbitrary
+  <*> arbitrary
+
+shrinkTransaction :: Core.MarloweVersion v -> Core.Transaction v -> [Core.Transaction v]
+shrinkTransaction version Core.Transaction{..} = []
+  <> [ Core.Transaction{..} { Transaction.metadata = metadata' } | metadata' <- shrink metadata ]
+  <> [ Core.Transaction{inputs = inputs', transactionId, contractId, metadata, blockHeader, validityLowerBound, validityUpperBound, output} | inputs' <- shrinkInputs version inputs ]
+  <> [ Core.Transaction{..} { Transaction.output = output' } | output' <- shrinkTransactionOutput version output ]
+
+shrinkInputs :: Core.MarloweVersion v -> Core.Inputs v -> [Core.Inputs v]
+shrinkInputs Core.MarloweV1 = shrinkList shrink
+
+shrinkTransactionOutput :: Core.MarloweVersion v -> Core.TransactionOutput v -> [Core.TransactionOutput v]
+shrinkTransactionOutput version Core.TransactionOutput{..} = []
+  <> [ Core.TransactionOutput{..} { Core.payouts = payouts' } | payouts' <- shrinkMap (shrinkPayout version) payouts ]
+
+shrinkPayout :: Core.MarloweVersion v -> Core.Payout v -> [Core.Payout v]
+shrinkPayout _ Core.Payout{..} = [ Core.Payout{..} { Payout.assets = assets' } | assets' <- shrink assets ]
+
+shrinkTransactionScriptOutput :: Core.MarloweVersion v -> Core.TransactionScriptOutput v -> [Core.TransactionScriptOutput v]
+shrinkTransactionScriptOutput version Core.TransactionScriptOutput{..} = []
+  <> [ Core.TransactionScriptOutput{..} { TransactionScriptOutput.assets = assets' } | assets' <- shrink assets ]
+  <> [ Core.TransactionScriptOutput{datum = datum', address, assets, utxo} | datum' <- shrinkDatum version datum ]
+
+shrinkDatum :: Core.MarloweVersion v -> Core.Datum v -> [Core.Datum v]
+shrinkDatum Core.MarloweV1 V1.MarloweData{..} = []
+  <> [ V1.MarloweData{..} { V1.marloweState = marloweState' } | marloweState' <- shrink marloweState ]
+  <> [ V1.MarloweData{..} { V1.marloweContract = marloweContract' } | marloweContract' <- shrink marloweContract ]

@@ -9,8 +9,11 @@ import Data.Time (UTCTime)
 import Data.Time.Clock.POSIX (posixSecondsToUTCTime)
 import Data.Word (Word64)
 import Language.Marlowe.Runtime.ChainSync.Gen ()
-import Language.Marlowe.Runtime.Core.Api (ContractId(..))
+import Language.Marlowe.Runtime.Core.Api
 import Test.QuickCheck hiding (shrinkMap)
+
+instance Arbitrary SomeMarloweVersion where
+  arbitrary = pure $ SomeMarloweVersion MarloweV1
 
 instance Arbitrary ContractId where
   arbitrary = ContractId <$> arbitrary

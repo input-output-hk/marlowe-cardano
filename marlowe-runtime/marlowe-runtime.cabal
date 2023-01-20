@@ -604,6 +604,7 @@ test-suite marlowe-runtime-test
     Language.Marlowe.Runtime.Discovery.QuerySpec
     Language.Marlowe.Runtime.Transaction.BuildConstraintsSpec
     Language.Marlowe.Runtime.Transaction.ConstraintsSpec
+    Language.Marlowe.Runtime.Transaction.CommandSpec
     Language.Marlowe.Protocol.Common
     Language.Marlowe.Protocol.HeaderSyncSpec
     Language.Marlowe.Protocol.SyncSpec

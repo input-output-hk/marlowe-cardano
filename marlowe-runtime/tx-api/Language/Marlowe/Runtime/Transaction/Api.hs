@@ -23,6 +23,7 @@ module Language.Marlowe.Runtime.Transaction.Api
   , RoleTokensConfig(..)
   , SubmitError(..)
   , SubmitStatus(..)
+  , Tag(..)
   , WalletAddresses(..)
   , WithdrawError(..)
   , mkMint
