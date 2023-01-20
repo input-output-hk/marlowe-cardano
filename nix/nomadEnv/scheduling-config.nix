@@ -10,7 +10,7 @@
     }
   ];
 
-  spread = [{attribute = "\${node.datacenter}";}];
+  spread = [{ attribute = "\${node.datacenter}"; }];
   # ----------
   # Update
   # ----------

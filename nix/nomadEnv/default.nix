@@ -7,9 +7,35 @@ let
   inherit (dapps-world) cloud;
   inherit (bitte-cells) vector;
   inherit (cloud.constants) baseDomain;
-  inherit (data-merge) merge;
+  inherit (data-merge) merge append;
+  inherit (nixpkgs.lib) genAttrs head splitString concatStringsSep toUpper replaceStrings;
 
   inherit (self) nomadTasks;
+
+  # ports to configure for each task
+  servicePorts = [
+    "chainseekd"
+    "chainseekd_query"
+    "chainseekd_command"
+    "history"
+    "history_query"
+    "history_sync"
+    "discovery"
+    "discovery_query"
+    "discovery_sync"
+    "tx"
+  ];
+
+  # environments to configure the runtime for
+  environments = [
+    "preprod"
+    "preview"
+    "mainnet"
+  ];
+
+  taskFromPort = p: head (splitString "_" p);
+  formatService = replaceStrings [ "_" ] [ "-" ];
+
 
   # marlowe namespace is created and configured in dapps-world
 
@@ -22,7 +48,7 @@ let
       domain = "${jobname}.${baseDomain}";
       scaling = 1;
 
-      datacenters = ["us-east-1" "eu-central-1" "eu-west-1"];
+      datacenters = [ "us-east-1" "eu-central-1" "eu-west-1" ];
       type = "service";
       priority = 50;
 
@@ -32,16 +58,16 @@ let
         jobname = "node";
         nodeClass = namespace;
       }).job.node.group.cardano;
-      group = builtins.removeAttrs node' ["task"];
-      node = group // {task.node = node'.task.node;};
+      group = builtins.removeAttrs node' [ "task" ];
+      node = group // { task.node = node'.task.node; };
 
     in
-      {
-        job.${jobname} = (import ./scheduling-config.nix) // {
-          inherit namespace datacenters id type priority;
+    {
+      job.${jobname} = (import ./scheduling-config.nix) // {
+        inherit namespace datacenters id type priority;
 
-          group.marlowe-runtime =
-            merge
+        group.marlowe-runtime =
+          merge
             # task.vector ...
             (vector.nomadTask.default {
               inherit namespace;
@@ -50,6 +76,20 @@ let
             (
               merge node
                 {
+                  network.port =
+                    (genAttrs servicePorts (n: { }))
+                      // { ssh.to = 22; };
+                  # Setup a service for each port, so that the sshd task can reference them
+                  service = append (map
+                    (port: {
+                      inherit port;
+                      name = "\${JOB}-\${TASKGROUP}-${formatService port}";
+                      task = taskFromPort port;
+                    })
+                    servicePorts);
+                  meta = {
+                    inherit environment;
+                  };
                   task = {
                     node = {
                       lifecycle.sidecar = true;
@@ -61,16 +101,16 @@ let
                       };
                     };
                     inherit (nomadTasks)
+                      chain-indexer
+                      chainseekd
                       marlowe-history
                       marlowe-discovery
                       marlowe-tx;
-                    chain-indexer = nomadTasks.chain-indexer { inherit environment; };
-                    chainseekd = nomadTasks.chainseekd { inherit environment; };
                   };
                 }
             );
-        };
       };
+    };
 in
 {
   marlowe-runtime-preprod = mkRuntimeJob "preprod";
