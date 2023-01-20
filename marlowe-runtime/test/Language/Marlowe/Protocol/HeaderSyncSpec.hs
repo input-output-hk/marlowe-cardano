@@ -6,12 +6,10 @@ module Language.Marlowe.Protocol.HeaderSyncSpec
   where
 
 import GHC.Show (showSpace)
-import Language.Marlowe.Protocol.Common ()
 import Language.Marlowe.Protocol.HeaderSync.Codec (codecMarloweHeaderSync)
 import Language.Marlowe.Protocol.HeaderSync.Types
-import Language.Marlowe.Runtime.ChainSync.Gen ()
-import qualified Language.Marlowe.Runtime.Core.Api as Core
-import qualified Language.Marlowe.Runtime.Discovery.Api as Discovery
+import Language.Marlowe.Runtime.ChainSync.Gen (resized)
+import Language.Marlowe.Runtime.Discovery.Gen ()
 import Network.Protocol.Codec.Spec
 import Network.TypedProtocol.Codec
 import Spec.Marlowe.Semantics.Arbitrary ()
@@ -102,7 +100,7 @@ instance ArbitraryMessage MarloweHeaderSync where
     , pure $ AnyMessageAndAgency (ClientAgency TokIdle) MsgDone
     , pure $ AnyMessageAndAgency (ClientAgency TokIdle) MsgRequestNext
     , do
-        msg <- MsgNewHeaders <$> arbitrary <*> sized \size -> resize (min 30 size) $ listOf genContractHeader
+        msg <- MsgNewHeaders <$> arbitrary <*> resized (min 30) arbitrary
         pure $ AnyMessageAndAgency (ServerAgency TokNext) msg
     , do
         msg <- MsgRollBackward <$> arbitrary
@@ -114,29 +112,14 @@ instance ArbitraryMessage MarloweHeaderSync where
     , pure $ AnyMessageAndAgency (ServerAgency TokIntersect) MsgIntersectNotFound
     ]
   shrinkMessage agency = \case
-    MsgIntersect points -> MsgIntersect <$> shrinkList (const []) points
+    MsgIntersect points -> MsgIntersect <$> shrink points
     MsgDone -> []
     MsgRequestNext -> []
     MsgNewHeaders blockHeader headers -> case agency of
-      ServerAgency TokNext -> MsgNewHeaders blockHeader <$> shrinkList shrinkContractHeader headers
+      ServerAgency TokNext -> MsgNewHeaders blockHeader <$> shrink headers
     MsgRollBackward _ -> []
     MsgWait -> []
     MsgPoll -> []
     MsgCancel -> []
     MsgIntersectFound _ -> []
     MsgIntersectNotFound -> []
-
-genContractHeader :: Gen Discovery.ContractHeader
-genContractHeader = Discovery.ContractHeader
-  <$> arbitrary
-  <*> arbitrary
-  <*> arbitrary
-  <*> arbitrary
-  <*> arbitrary
-  <*> arbitrary
-  <*> pure (Core.SomeMarloweVersion Core.MarloweV1)
-  <*> arbitrary
-
-shrinkContractHeader :: Discovery.ContractHeader -> [Discovery.ContractHeader]
-shrinkContractHeader Discovery.ContractHeader{..} =
-  [ Discovery.ContractHeader{..} { Discovery.metadata = metadata' } | metadata' <- shrink metadata ]

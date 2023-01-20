@@ -9,7 +9,7 @@ module Language.Marlowe.Runtime.History.CommandSpec
 import Data.Void (absurd)
 import GHC.Show (showSpace)
 import qualified Language.Marlowe.Runtime.History.Api as History
-import Language.Marlowe.Runtime.History.QuerySpec (genContractHistoryError)
+import Language.Marlowe.Runtime.History.Gen ()
 import Network.Protocol.Codec.Spec
 import Network.Protocol.Job.Codec (codecJob)
 import Network.Protocol.Job.Types
@@ -74,7 +74,7 @@ instance ArbitraryCommand History.HistoryCommand where
     History.TagStopFollowingContract -> History.StopFollowingContract <$> arbitrary
   arbitraryStatus _ = Nothing
   arbitraryErr = \case
-    History.TagFollowContract -> Just genContractHistoryError
+    History.TagFollowContract -> Just arbitrary
     History.TagStopFollowingContract -> Nothing
   arbitraryResult = \case
     History.TagFollowContract -> arbitrary

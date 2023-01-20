@@ -7,9 +7,9 @@ module Language.Marlowe.Runtime.Discovery.QuerySpec
 
 import Data.Void (absurd)
 import GHC.Show (showSpace)
-import Language.Marlowe.Protocol.Common ()
-import Language.Marlowe.Protocol.HeaderSyncSpec (genContractHeader, shrinkContractHeader)
+import Language.Marlowe.Runtime.ChainSync.Gen (resized)
 import qualified Language.Marlowe.Runtime.Discovery.Api as Discovery
+import qualified Language.Marlowe.Runtime.Discovery.Gen ()
 import Network.Protocol.Codec.Spec
 import Network.Protocol.Query.Codec (codecQuery)
 import Network.Protocol.Query.Types
@@ -71,8 +71,8 @@ instance ArbitraryQuery Discovery.DiscoveryQuery where
     Discovery.TagGetContractHeaders -> Nothing
     Discovery.TagGetContractHeadersByRoleTokenCurrency -> Nothing
   arbitraryResults = \case
-    Discovery.TagGetContractHeaders -> sized \size -> resize (min 30 size) $ listOf genContractHeader
-    Discovery.TagGetContractHeadersByRoleTokenCurrency -> sized \size -> resize (min 30 size) $ listOf genContractHeader
+    Discovery.TagGetContractHeaders -> resized (min 30) arbitrary
+    Discovery.TagGetContractHeadersByRoleTokenCurrency -> resized (min 30) arbitrary
   shrinkQuery = \case
     Discovery.GetContractHeaders -> []
     Discovery.GetContractHeadersByRoleTokenCurrency _ -> []
@@ -80,8 +80,8 @@ instance ArbitraryQuery Discovery.DiscoveryQuery where
     Discovery.TagGetContractHeaders -> absurd
     Discovery.TagGetContractHeadersByRoleTokenCurrency -> absurd
   shrinkResults = \case
-    Discovery.TagGetContractHeaders -> shrinkList shrinkContractHeader
-    Discovery.TagGetContractHeadersByRoleTokenCurrency -> shrinkList shrinkContractHeader
+    Discovery.TagGetContractHeaders -> shrink
+    Discovery.TagGetContractHeadersByRoleTokenCurrency -> shrink
   shrinkDelimiter = \case
     Discovery.TagGetContractHeaders -> const []
     Discovery.TagGetContractHeadersByRoleTokenCurrency -> absurd
