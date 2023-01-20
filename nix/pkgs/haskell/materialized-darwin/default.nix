@@ -518,6 +518,7 @@
         "uri-encode".revision = (((hackage."uri-encode")."1.5.0.7").revisions).default;
         "uri-encode".flags.tools = false;
         "uri-encode".flags.network-uri = true;
+        "nonempty-vector".revision = (((hackage."nonempty-vector")."0.2.1.0").revisions).default;
         "generic-monoid".revision = (((hackage."generic-monoid")."0.1.0.1").revisions).default;
         "ekg".revision = (((hackage."ekg")."0.4.0.15").revisions).default;
         "wai-logger".revision = (((hackage."wai-logger")."2.4.0").revisions).default;
@@ -564,6 +565,7 @@
         "http2".flags.h2spec = false;
         "http2".flags.doc = false;
         "deriving-aeson".revision = (((hackage."deriving-aeson")."0.2.8").revisions).default;
+        "nonempty-containers".revision = (((hackage."nonempty-containers")."0.3.4.4").revisions).default;
         "hspec".revision = (((hackage."hspec")."2.10.6").revisions).default;
         "primitive".revision = (((hackage."primitive")."0.7.4.0").revisions).default;
         "servant-client-core".revision = (((hackage."servant-client-core")."0.19").revisions).default;
@@ -1036,6 +1038,7 @@
           "profunctors".components.library.planned = lib.mkOverride 900 true;
           "exceptions".components.library.planned = lib.mkOverride 900 true;
           "one-line-aeson-text".components.library.planned = lib.mkOverride 900 true;
+          "nonempty-vector".components.setup.planned = lib.mkOverride 900 true;
           "marlowe-runtime".components.sublibs."tx".planned = lib.mkOverride 900 true;
           "mmorph".components.library.planned = lib.mkOverride 900 true;
           "safe-exceptions".components.library.planned = lib.mkOverride 900 true;
@@ -1065,6 +1068,7 @@
           "cardano-integration".components.exes."create-testnet".planned = lib.mkOverride 900 true;
           "quickcheck-instances".components.library.planned = lib.mkOverride 900 true;
           "servant-client-core".components.library.planned = lib.mkOverride 900 true;
+          "nonempty-containers".components.library.planned = lib.mkOverride 900 true;
           "mersenne-random-pure64".components.library.planned = lib.mkOverride 900 true;
           "js-chart".components.library.planned = lib.mkOverride 900 true;
           "template-haskell-compat-v0208".components.library.planned = lib.mkOverride 900 true;
@@ -1448,6 +1452,7 @@
           "base".components.library.planned = lib.mkOverride 900 true;
           "headed-megaparsec".components.library.planned = lib.mkOverride 900 true;
           "kan-extensions".components.library.planned = lib.mkOverride 900 true;
+          "nonempty-vector".components.library.planned = lib.mkOverride 900 true;
           "marlowe-runtime".components.exes."marlowe".planned = lib.mkOverride 900 true;
           "integer-logarithms".components.library.planned = lib.mkOverride 900 true;
           "cryptohash-md5".components.library.planned = lib.mkOverride 900 true;
