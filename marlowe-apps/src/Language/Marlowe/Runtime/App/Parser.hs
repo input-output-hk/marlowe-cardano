@@ -8,7 +8,7 @@ module Language.Marlowe.Runtime.App.Parser
 
 
 import Data.Default (def)
-import Language.Marlowe.Runtime.App.Types (Config(Config, confirmSeconds, timeoutSeconds))
+import Language.Marlowe.Runtime.App.Types (Config(Config, buildSeconds, confirmSeconds, timeoutSeconds))
 import Language.Marlowe.Runtime.CLI.Option (CliOption, host, optParserWithEnvDefault, port)
 import Language.Marlowe.Runtime.ChainSync.Api (Address, fromBech32)
 import Network.Socket (HostName, PortNumber)
@@ -42,6 +42,13 @@ getConfigParser =
           <> O.value (timeoutSeconds def)
           <> O.showDefault
           <> O.help "Timeout in seconds for transaction confirmation."
+      buildSecondsParser =
+        O.option O.auto
+          $  O.long "build-seconds"
+          <> O.metavar "INTEGER"
+          <> O.value (buildSeconds def)
+          <> O.showDefault
+          <> O.help "Wait specified seconds before transaction construction."
       confirmSecondsParser =
         O.option O.auto
           $  O.long "confirm-seconds"
@@ -65,6 +72,7 @@ getConfigParser =
       <*> txHostParser
       <*> txCommandPortParser
       <*> timeoutSecondsParser
+      <*> buildSecondsParser
       <*> confirmSecondsParser
 
 

@@ -27,7 +27,8 @@ import Control.Concurrent (threadDelay)
 import Control.Monad (when)
 import Control.Monad.Except (ExceptT(..), liftIO, throwError)
 import Language.Marlowe.Core.V1.Semantics.Types (Contract, Input)
-import Language.Marlowe.Runtime.App.Types (App, Config(Config, confirmSeconds), MarloweRequest(..), MarloweResponse(..))
+import Language.Marlowe.Runtime.App.Types
+  (App, Config(Config, buildSeconds, confirmSeconds), MarloweRequest(..), MarloweResponse(..))
 import Language.Marlowe.Runtime.ChainSync.Api (Address, Lovelace)
 import Language.Marlowe.Runtime.Core.Api (ContractId, MarloweVersionTag(V1))
 import Observe.Event (Event, addField, newEvent, withSubEvent)
@@ -147,7 +148,7 @@ transactWithEvents
   -> C.SigningKey C.PaymentExtendedKey
   -> MarloweRequest 'V1
   -> App ContractId
-transactWithEvents event config@Config{confirmSeconds} key request =
+transactWithEvents event config@Config{buildSeconds, confirmSeconds} key request =
   let
     show' = LBS8.unpack . A.encode
     unexpected response = throwError $ "Unexpected response: " <> show' response
@@ -155,6 +156,10 @@ transactWithEvents event config@Config{confirmSeconds} key request =
     withSubEvent event (DynamicEventSelector "Transact")
       $ \subEvent ->
         do
+          when (buildSeconds > 0)
+            . withSubEvent subEvent (DynamicEventSelector "WaitBeforeBuild")
+            . const
+            $ liftIO . threadDelay $ buildSeconds * 1_000_000
           (contractId, body) <-
             handleWithEvents subEvent "Build" config request
               $ \case
@@ -175,7 +180,7 @@ transactWithEvents event config@Config{confirmSeconds} key request =
               TxInfo{} -> pure ()
               response -> unexpected response
           when (confirmSeconds > 0)
-            . withSubEvent subEvent (DynamicEventSelector "Wait")
+            . withSubEvent subEvent (DynamicEventSelector "WaitAfterConfirm")
             . const
             $ liftIO . threadDelay $ confirmSeconds * 1_000_000
           pure contractId
