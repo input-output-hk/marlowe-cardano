@@ -139,17 +139,17 @@ library indexer
     , hasql
     , hasql-th
     , hasql-transaction
-    , marlowe
+    , marlowe-cardano
     , marlowe-chain-sync
     , marlowe-protocols
     , marlowe-runtime
     , marlowe-runtime:history-api
     , mtl
+    , nonempty-containers
     , plutus-ledger-api
     , stm
     , text
     , time
-    , these
     , transformers
     , witherable
     , vector
@@ -473,7 +473,6 @@ executable marlowe-indexer
   build-depends:
       base >= 4.9 && < 5
     , async-components
-    , containers
     , eventuo11y
     , eventuo11y-extras
     , hasql
@@ -483,6 +482,7 @@ executable marlowe-indexer
     , marlowe-runtime
     , marlowe-runtime:indexer
     , network
+    , nonempty-containers
     , optparse-applicative
     , text
     , time
@@ -652,7 +652,7 @@ test-suite indexer-test
     , cardano-api
     , containers
     , hspec
-    , marlowe
+    , marlowe-cardano
     , marlowe-chain-sync
     , marlowe-chain-sync:plutus-compat
     , marlowe-runtime

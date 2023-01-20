@@ -8,7 +8,7 @@ import Control.Concurrent.Component
 import Control.Exception (throwIO)
 import Control.Monad ((<=<))
 import Data.Either (fromRight)
-import qualified Data.Set as Set
+import qualified Data.Set.NonEmpty as NESet
 import Data.String (fromString)
 import qualified Data.Text.Lazy.IO as TL
 import Data.Time (secondsToNominalDiffTime)
@@ -63,6 +63,9 @@ run Options{..} = withSocketsDo do
   systemStart <- queryChainSync GetSystemStart
   eraHistory <- queryChainSync GetEraHistory
   securityParameter <- queryChainSync GetSecurityParameter
+  scripts <- case ScriptRegistry.getScripts MarloweV1 of
+    NESet.IsEmpty -> fail "No known marlowe scripts"
+    NESet.IsNonEmpty scripts -> pure scripts
   let
     indexerDependencies eventBackend = MarloweIndexerDependencies
       { runChainSeekClient = \client -> do
@@ -79,7 +82,8 @@ run Options{..} = withSocketsDo do
           (PostgreSQL.databaseQueries securityParameter)
       , eventBackend = narrowEventBackend App eventBackend
       , pollingInterval = 1
-      , marloweScriptHashes = Set.map ScriptRegistry.marloweScript $ ScriptRegistry.getScripts MarloweV1
+      , marloweScriptHashes = NESet.map ScriptRegistry.marloweScript scripts
+      , payoutScriptHashes = NESet.map ScriptRegistry.payoutScript scripts
       , systemStart
       , eraHistory
       , securityParameter

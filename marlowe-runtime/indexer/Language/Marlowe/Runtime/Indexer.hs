@@ -8,7 +8,7 @@ module Language.Marlowe.Runtime.Indexer
 
 import Cardano.Api (CardanoMode, EraHistory, SystemStart)
 import Control.Concurrent.Component
-import Data.Set (Set)
+import Data.Set.NonEmpty (NESet)
 import Data.Time (NominalDiffTime)
 import Language.Marlowe.Runtime.ChainSync.Api (RuntimeChainSeekClient, ScriptHash)
 import Language.Marlowe.Runtime.Indexer.ChainSeekClient
@@ -27,7 +27,8 @@ data MarloweIndexerDependencies r = MarloweIndexerDependencies
   , databaseQueries :: DatabaseQueries IO
   , runChainSeekClient :: RunClient IO RuntimeChainSeekClient
   , pollingInterval :: NominalDiffTime
-  , marloweScriptHashes :: Set ScriptHash
+  , marloweScriptHashes :: NESet ScriptHash
+  , payoutScriptHashes :: NESet ScriptHash
   , systemStart :: SystemStart
   , eraHistory :: EraHistory CardanoMode
   , securityParameter :: Int
@@ -41,6 +42,7 @@ marloweIndexer = proc MarloweIndexerDependencies{..} -> do
     , runChainSeekClient
     , pollingInterval
     , marloweScriptHashes
+    , payoutScriptHashes
     , systemStart
     , eraHistory
     , securityParameter

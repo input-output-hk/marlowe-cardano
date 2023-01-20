@@ -11,20 +11,16 @@ import Control.Concurrent (threadDelay)
 import Control.Concurrent.Async (Concurrently(..))
 import Control.Concurrent.Component
 import Control.Concurrent.STM (STM, atomically, newTQueue, readTQueue, writeTQueue)
-import Data.Bifoldable (Bifoldable(bifoldMap))
-import Data.Foldable (fold)
 import Data.List (sortOn)
-import Data.Map (Map)
-import qualified Data.Map as Map
 import Data.Ord (Down(Down))
 import Data.Set (Set)
-import qualified Data.Set as Set
-import Data.These (These(..))
+import Data.Set.NonEmpty (NESet)
+import qualified Data.Set.NonEmpty as NESet
 import Data.Time (NominalDiffTime, nominalDiffTimeToSeconds)
+import Data.Void (Void, absurd)
 import Language.Marlowe.Runtime.ChainSync.Api
 import Language.Marlowe.Runtime.Indexer.Database (DatabaseQueries(..))
-import Language.Marlowe.Runtime.Indexer.Types
-  (MarloweBlock(..), MarloweUTxO(..), UnspentContractOutput(..), extractMarloweBlock)
+import Language.Marlowe.Runtime.Indexer.Types (MarloweBlock(..), MarloweUTxO(..), extractMarloweBlock)
 import Network.Protocol.Driver (RunClient)
 import Observe.Event (addField, withEvent)
 import Observe.Event.Backend (EventBackend)
@@ -47,8 +43,11 @@ data ChainSeekClientDependencies r = ChainSeekClientDependencies
   , pollingInterval :: NominalDiffTime
   -- ^ How frequently to poll the chain seek server when waiting.
 
-  , marloweScriptHashes :: Set ScriptHash
+  , marloweScriptHashes :: NESet ScriptHash
   -- ^ The set of known marlowe script hashes.
+
+  , payoutScriptHashes :: NESet ScriptHash
+  -- ^ The set of known payout script hashes.
 
   , systemStart :: SystemStart
   -- ^ The starting type of the blockchain.
@@ -86,6 +85,7 @@ chainSeekClient = component \ChainSeekClientDependencies{..} -> do
         securityParameter
         pollingInterval
         marloweScriptHashes
+        payoutScriptHashes
         systemStart
         eraHistory
         eventBackend
@@ -98,12 +98,13 @@ chainSeekClient = component \ChainSeekClientDependencies{..} -> do
     -> DatabaseQueries IO
     -> Int
     -> NominalDiffTime
-    -> Set ScriptHash
+    -> NESet ScriptHash
+    -> NESet ScriptHash
     -> SystemStart
     -> EraHistory CardanoMode
     -> EventBackend IO r ChainSeekClientSelector
     -> RuntimeChainSeekClient IO ()
-  client emit DatabaseQueries{..} securityParameter pollingInterval marloweScriptHashes systemStart eraHistory eventBackend =
+  client emit DatabaseQueries{..} securityParameter pollingInterval marloweScriptHashes payoutScriptHashes systemStart eraHistory eventBackend =
     ChainSeekClient $ pure $ SendMsgRequestHandshake moveSchema $ ClientStHandshake
       { recvMsgHandshakeRejected = \_ -> fail "unsupported chain seek version"
       , recvMsgHandshakeConfirmed = do
@@ -207,6 +208,7 @@ chainSeekClient = component \ChainSeekClientDependencies{..} -> do
             _ -> clientIdleIntersect
       }
       where
+      allScriptCredentials = NESet.map ScriptCredential $ NESet.union marloweScriptHashes payoutScriptHashes
       -- A helper function to poll pending query results after a set timeout and
       -- continue with the given ClientStNext.
       pollWithNext
@@ -226,55 +228,23 @@ chainSeekClient = component \ChainSeekClientDependencies{..} -> do
       clientIdle
         :: RollbackStates MarloweUTxO
         -> ClientStIdle Move ChainPoint (WithGenesis BlockHeader) IO a
-      clientIdle states@RollbackStates{..} = either
-        -- Extract all transactions from the query results using Bifoldbale instance for `These`.
-        (flip SendMsgQueryNext (clientNext (bifoldMap id (Set.fromList . Map.elems)) states))
-        -- Extract all transactions from the query results using the identity function.
-        (flip SendMsgQueryNext (clientNext id states))
-        (mkQuery currentState)
-
-      -- Builds the next chain seek query for a given MarloweUTxO. It requests
-      -- both transactions with outputs to the Marlowe validator as well as
-      -- transactions that consume unspent outputs in the MarloweUTxO.
-      -- The first query is used to discover new contracts, and the second is
-      -- used to follow contracts that have been previously discovered.
-      mkQuery :: MarloweUTxO -> Either
-        (Move (These FindTxsToError (Map TxOutRef UTxOError)) (These (Set Transaction) (Map TxOutRef Transaction)))
-        (Move FindTxsToError (Set Transaction))
-      mkQuery MarloweUTxO{..} = if Set.null allUnspentOutputs
-        -- Don't send a FindConsumingTxs query if there are not unconsumed
-        -- outputs - it will fail with an error.
-        then Right $ FindTxsTo $ Set.map ScriptCredential marloweScriptHashes
-        else Left $ Fork
-          -- Query txs that send outputs to any of the marlowe validators to discover new contracts.
-          (FindTxsTo $ Set.map ScriptCredential marloweScriptHashes)
-
-          -- Query txs that spend any of the outputs in the MarloweUTxO to follow existing contracts.
-          (FindConsumingTxs allUnspentOutputs)
-
-        where
-          -- All the unspent transaction outputs from the MarloweUTxO (contract and payout)
-          allUnspentOutputs = unspentContractTxOuts <> unspentPayoutTxOuts
-          unspentContractTxOuts = Set.fromList $ (\UnspentContractOutput{..} -> txOutRef) <$> Map.elems unspentContractOutputs
-          unspentPayoutTxOuts = fold unspentPayoutOutputs
+      clientIdle = SendMsgQueryNext (FindTxsFor allScriptCredentials) . clientNext
 
       -- Handles responses from the main synchronization loop query.
       clientNext
-        :: Show err
-        => (res -> Set Transaction)
-        -> RollbackStates MarloweUTxO
-        -> ClientStNext Move err res ChainPoint (WithGenesis BlockHeader) IO a
-      clientNext transactionsFromResults states = ClientStNext
+        :: RollbackStates MarloweUTxO
+        -> ClientStNext Move Void (Set Transaction) ChainPoint (WithGenesis BlockHeader) IO a
+      clientNext states = ClientStNext
         -- Fail with an error if chainseekd rejects the query. This is safe
         -- from bad user input, because our queries are derived from the ledger
         -- state, and so will only be rejected if the query derivation is
         -- incorrect, or chainseekd is corrupt. Because both are unexpected
         -- errors, it is a non-recoverable error state.
-        { recvMsgQueryRejected = \err _ -> fail $ "Query rejected by chainseekd: " <> show err
+        { recvMsgQueryRejected = absurd
 
         -- Handle the next block by extracting Marlowe transactions into a
         -- MarloweBlock and updating the MarloweUTxO.
-        , recvMsgRollForward = \result point tip -> do
+        , recvMsgRollForward = \txs point tip -> do
             -- Get the current block (not expected ever to be Genesis).
             block <- case point of
               Genesis -> fail "Rolled forward to Genesis"
@@ -285,11 +255,8 @@ chainSeekClient = component \ChainSeekClientDependencies{..} -> do
               Genesis -> fail "Unexpected tip at Genesis"
               At tipBlock -> pure tipBlock
 
-            -- Extract all transactions from the query results.
-            let txs = transactionsFromResults result
-
             -- Extract the Marlowe block and compute the next MarloweUTxO.
-            marloweUTxO <- case extractMarloweBlock systemStart eraHistory marloweScriptHashes block txs $ currentState states of
+            marloweUTxO <- case extractMarloweBlock systemStart eraHistory (NESet.toSet marloweScriptHashes) block txs $ currentState states of
               -- If no MarloweBlock was extracted (not expected, but harmless), do nothing and return the current MarloweUTxO.
               -- This is not expected because the query would only be satisfied by a block that contains some usable Marlowe information.
               Nothing -> pure $ currentState states
@@ -309,7 +276,7 @@ chainSeekClient = component \ChainSeekClientDependencies{..} -> do
             emit $ RollBackward point tip
             pure $ clientIdle $ rollback (blockNo <$> point) states
 
-        , recvMsgWait = pollWithNext $ clientNext transactionsFromResults states
+        , recvMsgWait = pollWithNext $ clientNext states
         }
 
 -- A current state with a collection of previous states
