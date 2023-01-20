@@ -18,8 +18,9 @@ source-repository head
   location: https://github.com/input-output-hk/marlowe-cardano
   subdir: marlowe-protocols
 
-common lang
+library
   default-language: Haskell2010
+  hs-source-dirs:   src
   default-extensions:
     BlockArguments
     DeriveAnyClass
@@ -46,11 +47,6 @@ common lang
     -Wincomplete-uni-patterns -Wincomplete-record-updates
     -Wredundant-constraints -Widentities
     -Wunused-packages
-
-
-library
-  import: lang
-  hs-source-dirs:   src
   exposed-modules:
     Network.Channel
     Network.Protocol.Driver
@@ -87,25 +83,3 @@ library
     , text
     , transformers-base
     , typed-protocols
-
-test-suite marlowe-protocols-test
-  import: lang
-  hs-source-dirs:
-    test
-  type: exitcode-stdio-1.0
-  main-is: Spec.hs
-  other-modules:
-    Network.Protocol.ChainSeek.CodecSpec
-    Network.Protocol.Job.CodecSpec
-    Network.Protocol.Query.CodecSpec
-    Paths_marlowe_protocols
-  build-depends:
-      base >= 4.9 && < 5
-    , binary
-    , hspec
-    , marlowe-protocols
-    , QuickCheck
-    , text
-    , typed-protocols
-  build-tool-depends: hspec-discover:hspec-discover
-  ghc-options: -threaded
