@@ -132,6 +132,8 @@ import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Maybe (fromJust)
 import Data.Set (Set)
+import Data.Set.NonEmpty (NESet)
+import qualified Data.Set.NonEmpty as NESet
 import Data.String (IsString(..))
 import Data.Text (Text)
 import qualified Data.Text as T
@@ -644,6 +646,10 @@ data Move err result where
   -- addresses with the requested credentials.
   FindTxsTo :: Set Credential -> Move FindTxsToError (Set Transaction)
 
+  -- | Advance to the block containing transactions that send or consume outputs
+  -- to any addresses with the requested credentials.
+  FindTxsFor :: NESet Credential -> Move Void (Set Transaction)
+
   -- | Advances to the tip block. Waits if already at the tip.
   AdvanceToTip :: Move Void ()
 
@@ -675,6 +681,7 @@ instance QueryToJSON Move where
       ]
     FindTxsTo c -> object [ "findTxsTo" .= toJSON c ]
     AdvanceToTip -> String "advanceToTip"
+    FindTxsFor c -> object [ "findTxsFor" .= toJSON c ]
   errToJSON = \case
     TagFork m1 m2 -> toJSON . bimap (errToJSON m1) (errToJSON m2)
     TagAdvanceSlots -> toJSON
@@ -684,6 +691,7 @@ instance QueryToJSON Move where
     TagFindConsumingTxs -> toJSON
     TagFindTx -> toJSON
     TagFindTxsTo -> toJSON
+    TagFindTxsFor -> toJSON
     TagAdvanceToTip -> toJSON
   resultToJSON = \case
     TagFork m1 m2 -> toJSON . bimap (resultToJSON m1) (resultToJSON m2)
@@ -694,6 +702,7 @@ instance QueryToJSON Move where
     TagFindConsumingTxs -> toJSON
     TagFindTx -> toJSON
     TagFindTxsTo -> toJSON
+    TagFindTxsFor -> toJSON
     TagAdvanceToTip -> toJSON
 
 type RuntimeChainSeek = ChainSeek Move ChainPoint ChainPoint
@@ -720,6 +729,7 @@ instance Query Move where
     TagFindTx :: Tag Move TxError Transaction
     TagFindConsumingTxs :: Tag Move (Map TxOutRef UTxOError) (Map TxOutRef Transaction)
     TagFindTxsTo :: Tag Move FindTxsToError (Set Transaction)
+    TagFindTxsFor :: Tag Move Void (Set Transaction)
     TagAdvanceToTip :: Tag Move Void ()
 
   tagFromQuery = \case
@@ -731,6 +741,7 @@ instance Query Move where
     FindTx _ _         -> TagFindTx
     FindConsumingTxs _ -> TagFindConsumingTxs
     FindTxsTo _        -> TagFindTxsTo
+    FindTxsFor _        -> TagFindTxsFor
     AdvanceToTip       -> TagAdvanceToTip
 
   tagEq = curry \case
@@ -756,6 +767,8 @@ instance Query Move where
     (TagFindConsumingTxs, _)                  -> Nothing
     (TagFindTxsTo, TagFindTxsTo)                   -> Just (Refl, Refl)
     (TagFindTxsTo, _)                           -> Nothing
+    (TagFindTxsFor, TagFindTxsFor)                   -> Just (Refl, Refl)
+    (TagFindTxsFor, _)                           -> Nothing
     (TagAdvanceToTip, TagAdvanceToTip)                   -> Just (Refl, Refl)
     (TagAdvanceToTip, _)                           -> Nothing
 
@@ -772,6 +785,7 @@ instance Query Move where
     TagFindConsumingTxs -> putWord8 0x07
     TagFindTxsTo -> putWord8 0x08
     TagAdvanceToTip -> putWord8 0x09
+    TagFindTxsFor -> putWord8 0x0a
 
   putQuery = \case
     Fork m1 m2 -> do
@@ -785,6 +799,7 @@ instance Query Move where
     FindConsumingTxs utxos -> put utxos
     FindTxsTo credentials -> put credentials
     AdvanceToTip -> mempty
+    FindTxsFor credentials -> put $ NESet.toList credentials
 
   getTag = do
     tag <- getWord8
@@ -801,6 +816,7 @@ instance Query Move where
       0x07 -> pure $ SomeTag TagFindConsumingTxs
       0x08 -> pure $ SomeTag TagFindTxsTo
       0x09 -> pure $ SomeTag TagAdvanceToTip
+      0x0a -> pure $ SomeTag TagFindTxsFor
       _ -> fail $ "Invalid move tag " <> show tag
 
   getQuery = \case
@@ -813,6 +829,7 @@ instance Query Move where
     TagFindConsumingTxs -> FindConsumingTxs <$> get
     TagFindTxsTo        -> FindTxsTo <$> get
     TagAdvanceToTip     -> pure AdvanceToTip
+    TagFindTxsFor        -> FindTxsFor . NESet.fromList <$> get
 
   putResult = \case
     TagFork t1 t2 -> \case
@@ -834,6 +851,7 @@ instance Query Move where
     TagFindConsumingTxs -> put
     TagFindTxsTo -> put
     TagAdvanceToTip -> mempty
+    TagFindTxsFor -> put
 
   getResult = \case
     TagFork t1 t2    -> do
@@ -851,6 +869,7 @@ instance Query Move where
     TagFindConsumingTxs -> get
     TagFindTxsTo -> get
     TagAdvanceToTip -> pure ()
+    TagFindTxsFor -> get
 
   putErr = \case
     TagFork t1 t2 -> \case
@@ -871,6 +890,7 @@ instance Query Move where
     TagIntersect -> put
     TagFindConsumingTxs -> put
     TagFindTxsTo -> put
+    TagFindTxsFor -> put
     TagAdvanceToTip -> put
 
   getErr = \case
@@ -888,6 +908,7 @@ instance Query Move where
     TagIntersect -> get
     TagFindConsumingTxs -> get
     TagFindTxsTo -> get
+    TagFindTxsFor -> get
     TagAdvanceToTip -> get
 
 putUTCTime :: UTCTime -> Put
