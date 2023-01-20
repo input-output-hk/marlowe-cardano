@@ -12,6 +12,7 @@ import Control.Applicative (Alternative)
 import Control.Arrow ((***))
 import Control.Error (note)
 import Control.Monad (guard)
+import Data.Bifunctor (first)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import Data.Either (fromLeft, isRight)
@@ -249,8 +250,8 @@ spec = do
 
         chAddress = changeAddressFromWallet walletContext
 
-        minUtxo = findMinUtxo protocolTestnet chAddress universe
-               <> findMinUtxo protocolTestnet chAddress mempty
+        minUtxo = findMinUtxo' protocolTestnet chAddress universe
+               <> findMinUtxo' protocolTestnet chAddress mempty
 
         --walletContext has sufficient collateral ADA
         walletCtxSufficient :: Bool
@@ -416,7 +417,7 @@ spec = do
               adaOuts = lovelaceToValue . selectLovelace $ valOuts
               tokOuts = filterValue (/= AdaAssetId) valOuts
 
-              minUtxo = selectLovelace $ findMinUtxo protocolTestnet
+              minUtxo = selectLovelace $ findMinUtxo' protocolTestnet
                 (changeAddressFromWallet walletContext) mempty
               maxFee' = maxFee protocolTestnet
 
@@ -425,6 +426,40 @@ spec = do
             -- check 2: non-ADA inputs and non-ADA outputs cancel each other out
             tokIns <> negateValue tokOuts `shouldBe` mempty
         Left selFailedMsg -> counterexample ("selection failed: " <> selFailedMsg) False
+  describe "ensureMinUtxo" do
+    prop "non-lovelace value is unchanged" do
+      let
+        noLovelace = valueFromList . filter ((/= AdaAssetId) . fst) . valueToList
+      inAddress <- genAddress
+      inValue <- hedgehog genValueForTxOut
+      case ensureMinUtxo protocolTestnet (inAddress, inValue) of
+        Right (_, outValue)  -> pure $ noLovelace outValue `shouldBe` noLovelace inValue
+        Left message -> pure . expectationFailure $ show (message :: ConstraintError 'V1)
+    prop "address value is unchanged" do
+      inAddress <- genAddress
+      inValue <- hedgehog genValueForTxOut
+      case ensureMinUtxo protocolTestnet (inAddress, inValue) of
+        Right (outAddress, _)  -> pure $ outAddress `shouldBe` inAddress
+        Left message -> pure . expectationFailure $ show (message :: ConstraintError 'V1)
+    prop "adjusted lovelace is greater of minUTxO and original lovelace" do
+      inAddress <- genAddress
+      -- Tiny lovelace values violate ledger rules and occupy too few bytes for a meaningful test.
+      inValue <- (lovelaceToValue 100_000 <>) <$> hedgehog genValueForTxOut
+      either (pure . expectationFailure) pure
+        do
+         inAddress' <-
+           maybe (Left "Failed to convert address.") (Right . anyAddressInShelleyBasedEra)
+             $ Chain.toCardanoAddress inAddress
+         expected <-
+           first show
+             $ calculateMinimumUTxO
+               ShelleyBasedEraBabbage
+               (TxOut inAddress' (TxOutValue MultiAssetInBabbageEra inValue) TxOutDatumNone ReferenceScriptNone)
+               protocolTestnet
+         (_, outValue) <-
+           first (\message -> show (message :: ConstraintError 'V1))
+             $ ensureMinUtxo protocolTestnet (inAddress, inValue)
+         pure $ (inValue, selectLovelace outValue) `shouldBe` (inValue, maximum [selectLovelace inValue, selectLovelace expected])
 
 -- Generate a wallet that always has a pure ADA value of 7 and a value
 -- with a minimum ADA plus zero or more "nuisance" tokens
@@ -475,14 +510,15 @@ maxFee ProtocolParameters{..} = 2 * (txFee + round executionFee)
 changeAddressFromWallet :: WalletContext -> AddressInEra BabbageEra
 changeAddressFromWallet = anyAddressInShelleyBasedEra . fromJust . Chain.toCardanoAddress . changeAddress
 
-findMinUtxo :: ProtocolParameters -> AddressInEra BabbageEra -> Value -> Value
-findMinUtxo protocol chAddress origValue = do
+-- FIXME: It's risky to copy-and-paste code being tested into the test suite so that it can be used for other tests.
+findMinUtxo' :: ProtocolParameters -> AddressInEra BabbageEra -> Value -> Value
+findMinUtxo' protocol chAddress origValue = do
   let
     atLeastHalfAnAda :: Value
     atLeastHalfAnAda = lovelaceToValue (maximum [500_000, selectLovelace origValue])
-
+    revisedValue = origValue <> negateValue (lovelaceToValue $ selectLovelace origValue) <> atLeastHalfAnAda
     dummyTxOut = TxOut
-      chAddress (TxOutValue MultiAssetInBabbageEra atLeastHalfAnAda)
+      chAddress (TxOutValue MultiAssetInBabbageEra revisedValue)
       TxOutDatumNone ReferenceScriptNone
 
   case calculateMinimumUTxO ShelleyBasedEraBabbage dummyTxOut protocol of

@@ -15,6 +15,8 @@ module Language.Marlowe.Runtime.Transaction.Constraints
   , WalletContext(..)
   , adjustTxForMinUtxo
   , balanceTx
+  , ensureMinUtxo
+  , findMinUtxo
   , mustConsumeMarloweOutput
   , mustConsumePayouts
   , mustMintRoleToken
