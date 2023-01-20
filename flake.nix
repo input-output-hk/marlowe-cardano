@@ -174,19 +174,19 @@
         devShells.ops = inputs.dapps-world.${system}.automation.devshells.ops;
 
         # 4 Layers of Packaging
-        operables = import ./nix/operables.nix {
+        operables = import ./deploy/operables.nix {
           inputs = nosys.lib.deSys system inputs;
         };
-        oci-images = import ./nix/oci-images.nix {
+        oci-images = import ./deploy/oci-images.nix {
           inputs = nosys.lib.deSys system inputs;
         };
-        nomadTasks = import ./nix/nomadTasks.nix {
+        nomadTasks = import ./deploy/nomadTasks.nix {
           inputs = nosys.lib.deSys system inputs;
         };
 
         nomadEnv =
           let
-            envData = import ./nix/nomadEnv {
+            envData = import ./deploy/nomadEnv {
               inputs = nosys.lib.deSys system inputs;
             };
             mkNomadJobs =
