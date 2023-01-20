@@ -380,7 +380,7 @@ createTxToChainTx bug MarloweCreateTransaction{..} = do
   pure Chain.Transaction
     { txId
     , validityRange = Chain.Unbounded
-    , metadata
+    , metadata = newContracts & foldMap \(SomeCreateStep _ CreateStep{..}) -> metadata
     , inputs
     , outputs
     , mintedTokens = mempty
@@ -471,7 +471,7 @@ genCreateTx scripts = do
   newContracts <- Map.fromList <$> for txIxs \txIx -> do
     let txOut = Chain.TxOutRef{..}
     (txIx,) <$> genSomeCreateStep scripts txOut
-  pure $ MarloweCreateTransaction txId newContracts mempty
+  pure $ MarloweCreateTransaction txId newContracts
 
 genApplyTx :: Chain.BlockHeader -> Gen (V1.MarloweData, MarloweApplyInputsTransaction)
 genApplyTx blockHeader = do
@@ -562,6 +562,7 @@ genCreateStep scripts txOut genMarloweDatum assetsFromDatum = do
   ScriptRegistry.MarloweScripts{..} <- elements $ Set.toList scripts
   CreateStep
     <$> genTransactionScriptOutput (scriptHashToAddress marloweScript) txOut genMarloweDatum assetsFromDatum
+    <*> pure mempty
     <*> pure payoutScript
 
 genTransactionScriptOutput

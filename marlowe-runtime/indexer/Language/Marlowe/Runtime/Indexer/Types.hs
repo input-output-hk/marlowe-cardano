@@ -35,7 +35,6 @@ import Language.Marlowe.Runtime.ChainSync.Api
   , ScriptHash
   , Transaction(..)
   , TransactionInput(..)
-  , TransactionMetadata
   , TransactionOutput(..)
   , TxId
   , TxIx
@@ -70,7 +69,6 @@ data MarloweTransaction
 data MarloweCreateTransaction = MarloweCreateTransaction
   { txId :: TxId
   , newContracts :: Map TxIx SomeCreateStep
-  , metadata :: TransactionMetadata
   } deriving (Eq, Show, Generic)
 
 data MarloweApplyInputsTransaction = forall v. MarloweApplyInputsTransaction
