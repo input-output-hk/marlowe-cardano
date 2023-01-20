@@ -64,7 +64,7 @@ import Language.Marlowe.Runtime.Cardano.Api
   , toCardanoTxOutValue
   , tokensToCardanoValue
   )
-import Language.Marlowe.Runtime.ChainSync.Api (lookupUTxO, toCardanoMetadata, toUTxOTuple, toUTxOsList)
+import Language.Marlowe.Runtime.ChainSync.Api (lookupUTxO, toCardanoMetadata, toPlutusData, toUTxOTuple, toUTxOsList)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Core.Api (MarloweVersionTag(..), TransactionScriptOutput(utxo))
 import qualified Language.Marlowe.Runtime.Core.Api as Core
@@ -72,7 +72,6 @@ import Language.Marlowe.Runtime.Core.ScriptRegistry (ReferenceScriptUtxo(..))
 import Language.Marlowe.Runtime.Transaction.Api (ConstraintError(..))
 import qualified Language.Marlowe.Scripts as V1
 import Ouroboros.Consensus.BlockchainTime (SystemStart)
-import qualified Plutus.V2.Ledger.Api as P
 import Witherable (wither)
 
 -- For debug logging
@@ -445,8 +444,8 @@ findMinUtxo protocol (chAddress, mbDatum, origValue) =
       atLeastHalfAnAda = C.lovelaceToValue (maximum [500_000, C.selectLovelace origValue])
       revisedValue = origValue <> C.negateValue (C.lovelaceToValue $ C.selectLovelace origValue) <> atLeastHalfAnAda
       datum = maybe C.TxOutDatumNone
-        (C.TxOutDatumInTx C.ScriptDataInBabbageEra . C.fromPlutusData . P.toData)
-        $ Core.fromChainDatum Core.MarloweV1 =<< mbDatum
+        (C.TxOutDatumInTx C.ScriptDataInBabbageEra . C.fromPlutusData . toPlutusData)
+        $ mbDatum
 
     dummyTxOut <- makeTxOut chAddress datum revisedValue C.ReferenceScriptNone
     case C.calculateMinimumUTxO C.ShelleyBasedEraBabbage dummyTxOut protocol of
