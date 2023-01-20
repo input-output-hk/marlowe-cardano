@@ -1045,7 +1045,6 @@
           "strict-containers".components.library.planned = lib.mkOverride 900 true;
           "call-stack".components.library.planned = lib.mkOverride 900 true;
           "unix-bytestring".components.library.planned = lib.mkOverride 900 true;
-          "marlowe-protocols".components.tests."marlowe-protocols-test".planned = lib.mkOverride 900 true;
           "async-timer".components.library.planned = lib.mkOverride 900 true;
           "optics-core".components.library.planned = lib.mkOverride 900 true;
           "hint".components.library.planned = lib.mkOverride 900 true;
@@ -1071,6 +1070,7 @@
           "servant-client-core".components.library.planned = lib.mkOverride 900 true;
           "nonempty-containers".components.library.planned = lib.mkOverride 900 true;
           "mersenne-random-pure64".components.library.planned = lib.mkOverride 900 true;
+          "marlowe-chain-sync".components.sublibs."gen".planned = lib.mkOverride 900 true;
           "js-chart".components.library.planned = lib.mkOverride 900 true;
           "template-haskell-compat-v0208".components.library.planned = lib.mkOverride 900 true;
           "marlowe-runtime".components.sublibs."history".planned = lib.mkOverride 900 true;
@@ -1153,6 +1153,7 @@
           "network-ip".components.library.planned = lib.mkOverride 900 true;
           "happy".components.exes."happy".planned = lib.mkOverride 900 true;
           "network-info".components.library.planned = lib.mkOverride 900 true;
+          "marlowe-chain-sync".components.tests."marlowe-chain-sync-test".planned = lib.mkOverride 900 true;
           "servant-openapi3".components.setup.planned = lib.mkOverride 900 true;
           "uuid".components.library.planned = lib.mkOverride 900 true;
           "time".components.library.planned = lib.mkOverride 900 true;

@@ -167,7 +167,6 @@
             (hsPkgs."aeson" or (errorHandler.buildDepError "aeson"))
             (hsPkgs."binary" or (errorHandler.buildDepError "binary"))
             (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
-            (hsPkgs."containers" or (errorHandler.buildDepError "containers"))
             (hsPkgs."marlowe-chain-sync" or (errorHandler.buildDepError "marlowe-chain-sync"))
             (hsPkgs."marlowe-protocols" or (errorHandler.buildDepError "marlowe-protocols"))
             (hsPkgs."marlowe-runtime" or (errorHandler.buildDepError "marlowe-runtime"))
@@ -568,10 +567,12 @@
             (hsPkgs."hspec" or (errorHandler.buildDepError "hspec"))
             (hsPkgs."marlowe-cardano" or (errorHandler.buildDepError "marlowe-cardano"))
             (hsPkgs."marlowe-chain-sync" or (errorHandler.buildDepError "marlowe-chain-sync"))
+            (hsPkgs."marlowe-chain-sync".components.sublibs.gen or (errorHandler.buildDepError "marlowe-chain-sync:gen"))
             (hsPkgs."marlowe-chain-sync".components.sublibs.plutus-compat or (errorHandler.buildDepError "marlowe-chain-sync:plutus-compat"))
             (hsPkgs."marlowe-protocols" or (errorHandler.buildDepError "marlowe-protocols"))
             (hsPkgs."marlowe-protocols-test" or (errorHandler.buildDepError "marlowe-protocols-test"))
             (hsPkgs."marlowe-runtime" or (errorHandler.buildDepError "marlowe-runtime"))
+            (hsPkgs."marlowe-runtime".components.sublibs.discovery-api or (errorHandler.buildDepError "marlowe-runtime:discovery-api"))
             (hsPkgs."marlowe-runtime".components.sublibs.history or (errorHandler.buildDepError "marlowe-runtime:history"))
             (hsPkgs."marlowe-runtime".components.sublibs.history-api or (errorHandler.buildDepError "marlowe-runtime:history-api"))
             (hsPkgs."marlowe-runtime".components.sublibs.tx or (errorHandler.buildDepError "marlowe-runtime:tx"))
@@ -586,6 +587,7 @@
             (hsPkgs."stm" or (errorHandler.buildDepError "stm"))
             (hsPkgs."time" or (errorHandler.buildDepError "time"))
             (hsPkgs."transformers" or (errorHandler.buildDepError "transformers"))
+            (hsPkgs."typed-protocols" or (errorHandler.buildDepError "typed-protocols"))
             ];
           build-tools = [
             (hsPkgs.buildPackages.hspec-discover.components.exes.hspec-discover or (pkgs.buildPackages.hspec-discover or (errorHandler.buildToolDepError "hspec-discover:hspec-discover")))
@@ -593,13 +595,20 @@
           buildable = true;
           modules = [
             "Language/Marlowe/Runtime/Core/ScriptRegistrySpec"
+            "Language/Marlowe/Runtime/History/CommandSpec"
+            "Language/Marlowe/Runtime/History/QuerySpec"
             "Language/Marlowe/Runtime/History/FollowerSpec"
             "Language/Marlowe/Runtime/History/Script"
             "Language/Marlowe/Runtime/History/StoreSpec"
             "Language/Marlowe/Runtime/History/Store/ModelSpec"
             "Language/Marlowe/Runtime/HistorySpec"
+            "Language/Marlowe/Runtime/Discovery/QuerySpec"
             "Language/Marlowe/Runtime/Transaction/BuildConstraintsSpec"
             "Language/Marlowe/Runtime/Transaction/ConstraintsSpec"
+            "Language/Marlowe/Runtime/Transaction/CommandSpec"
+            "Language/Marlowe/Protocol/Common"
+            "Language/Marlowe/Protocol/HeaderSyncSpec"
+            "Language/Marlowe/Protocol/SyncSpec"
             "Paths_marlowe_runtime"
             ];
           hsSourceDirs = [ "test" ];

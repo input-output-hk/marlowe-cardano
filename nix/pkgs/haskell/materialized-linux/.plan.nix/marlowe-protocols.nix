@@ -45,6 +45,7 @@
           (hsPkgs."monad-control" or (errorHandler.buildDepError "monad-control"))
           (hsPkgs."network" or (errorHandler.buildDepError "network"))
           (hsPkgs."stm" or (errorHandler.buildDepError "stm"))
+          (hsPkgs."QuickCheck" or (errorHandler.buildDepError "QuickCheck"))
           (hsPkgs."template-haskell" or (errorHandler.buildDepError "template-haskell"))
           (hsPkgs."text" or (errorHandler.buildDepError "text"))
           (hsPkgs."transformers-base" or (errorHandler.buildDepError "transformers-base"))
@@ -68,33 +69,9 @@
           "Network/Protocol/Query/Server"
           "Network/Protocol/Query/Types"
           "Network/Protocol/Codec"
+          "Network/Protocol/Codec/Spec"
           ];
         hsSourceDirs = [ "src" ];
-        };
-      tests = {
-        "marlowe-protocols-test" = {
-          depends = [
-            (hsPkgs."base" or (errorHandler.buildDepError "base"))
-            (hsPkgs."binary" or (errorHandler.buildDepError "binary"))
-            (hsPkgs."hspec" or (errorHandler.buildDepError "hspec"))
-            (hsPkgs."marlowe-protocols" or (errorHandler.buildDepError "marlowe-protocols"))
-            (hsPkgs."QuickCheck" or (errorHandler.buildDepError "QuickCheck"))
-            (hsPkgs."text" or (errorHandler.buildDepError "text"))
-            (hsPkgs."typed-protocols" or (errorHandler.buildDepError "typed-protocols"))
-            ];
-          build-tools = [
-            (hsPkgs.buildPackages.hspec-discover.components.exes.hspec-discover or (pkgs.buildPackages.hspec-discover or (errorHandler.buildToolDepError "hspec-discover:hspec-discover")))
-            ];
-          buildable = true;
-          modules = [
-            "Network/Protocol/ChainSeek/CodecSpec"
-            "Network/Protocol/Job/CodecSpec"
-            "Network/Protocol/Query/CodecSpec"
-            "Paths_marlowe_protocols"
-            ];
-          hsSourceDirs = [ "test" ];
-          mainPath = [ "Spec.hs" ];
-          };
         };
       };
     } // rec { src = (pkgs.lib).mkDefault ../marlowe-protocols; }
