@@ -145,8 +145,8 @@ instance QueryToJSON query => MessageToJSON (Query query) where
 class IsQuery query => ArbitraryQuery query where
   arbitraryTag :: Gen (SomeTag query)
   arbitraryQuery :: Tag query delimiter err results -> Gen (query delimiter err results)
-  arbitraryDelimiter :: Tag query delimiter err results -> Gen (Maybe delimiter)
-  arbitraryErr :: Tag query delimiter err results -> Gen (Maybe err)
+  arbitraryDelimiter :: Tag query delimiter err results -> Maybe (Gen delimiter)
+  arbitraryErr :: Tag query delimiter err results -> Maybe (Gen err)
   arbitraryResults :: Tag query delimiter err results -> Gen results
   shrinkQuery :: query delimiter err results -> [query delimiter err results]
   shrinkErr :: Tag query delimiter err results -> err -> [err]
@@ -156,18 +156,20 @@ class IsQuery query => ArbitraryQuery query where
 instance ArbitraryQuery query => ArbitraryMessage (Query query) where
   arbitraryMessage = do
     SomeTag tag <- arbitraryTag
-    mError <- arbitraryErr tag
-    mDelimiter <- arbitraryDelimiter tag
+    let mGenError = arbitraryErr tag
+    let mGenDelimiter = arbitraryDelimiter tag
     oneof $ catMaybes
       [ Just $ AnyMessageAndAgency (ClientAgency TokInit) . MsgRequest <$> arbitraryQuery tag
-      , mError <&> \err ->
+      , mGenError <&> \genErr -> do
+          err <- genErr
           pure $ AnyMessageAndAgency (ServerAgency $ TokNext TokCanReject tag) $ MsgReject err
       , Just $ do
           results <- arbitraryResults tag
           AnyMessageAndAgency (ServerAgency $ TokNext TokCanReject tag) . MsgNextPage results
-            <$> oneof [pure Nothing, pure mDelimiter]
-      , mDelimiter <&> \delimiter ->
-         pure $ AnyMessageAndAgency (ClientAgency $ TokPage tag) $ MsgRequestNext delimiter
+            <$> oneof [pure Nothing, maybe (pure Nothing) (fmap Just) mGenDelimiter]
+      , mGenDelimiter <&> \genDelimiter -> do
+          delimiter <- genDelimiter
+          pure $ AnyMessageAndAgency (ClientAgency $ TokPage tag) $ MsgRequestNext delimiter
       , Just $ pure $ AnyMessageAndAgency (ClientAgency $ TokPage tag) MsgDone
       ]
   shrinkMessage agency = \case

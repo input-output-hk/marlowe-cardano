@@ -44,6 +44,7 @@ import Gen.Cardano.Api.Typed
 import Language.Marlowe (MarloweData(..), MarloweParams(..), txInputs)
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
 import Language.Marlowe.Runtime.Cardano.Api
+import Language.Marlowe.Runtime.ChainSync.Api (fromCardanoPaymentKeyHash, fromCardanoScriptHash)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Core.Api
   ( Contract

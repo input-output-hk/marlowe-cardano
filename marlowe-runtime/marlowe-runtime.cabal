@@ -618,10 +618,10 @@ test-suite marlowe-runtime-test
     , containers
     , errors
     , hedgehog-quickcheck
-    , hedgehog-quickcheck
     , hspec
     , marlowe-cardano
     , marlowe-chain-sync
+    , marlowe-chain-sync:gen
     , marlowe-chain-sync:plutus-compat
     , marlowe-protocols
     , marlowe-protocols-test
@@ -639,7 +639,6 @@ test-suite marlowe-runtime-test
     , quickcheck-instances
     , some
     , stm
-    , text
     , time
     , transformers
     , typed-protocols

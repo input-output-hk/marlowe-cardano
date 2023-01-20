@@ -60,9 +60,6 @@ fromCardanoBlockHeaderHash (C.HeaderHash hash) = BlockHeaderHash $ fromShort has
 toCardanoScriptHash :: ScriptHash -> Maybe C.ScriptHash
 toCardanoScriptHash = C.deserialiseFromRawBytes C.AsScriptHash . unScriptHash
 
-fromCardanoScriptHash :: C.ScriptHash -> ScriptHash
-fromCardanoScriptHash = ScriptHash . C.serialiseToRawBytes
-
 toCardanoPlutusScript :: forall lang. C.HasTypeProxy lang => PlutusScript -> Maybe (C.PlutusScript lang)
 toCardanoPlutusScript = C.deserialiseFromRawBytes (C.proxyToAsType (Proxy :: Proxy (C.PlutusScript lang))) . unPlutusScript
 
@@ -114,11 +111,6 @@ toCardanoStakeCredential = \case
   StakeKeyCredential pkh -> C.StakeCredentialByKey <$> toCardanoStakeKeyHash pkh
   StakeScriptCredential sh -> C.StakeCredentialByScript <$> toCardanoScriptHash sh
 
-fromCardanoStakeCredential :: C.StakeCredential -> StakeCredential
-fromCardanoStakeCredential = \case
-  C.StakeCredentialByKey pkh -> StakeKeyCredential $ fromCardanoStakeKeyHash pkh
-  C.StakeCredentialByScript sh -> StakeScriptCredential $ fromCardanoScriptHash sh
-
 toCardanoStakeAddressReference :: Maybe StakeReference -> Maybe C.StakeAddressReference
 toCardanoStakeAddressReference = \case
   Nothing -> Just C.NoStakeAddress
@@ -140,14 +132,8 @@ fromCardanoStakeAddressReference = \case
 toCardanoPaymentKeyHash :: PaymentKeyHash -> Maybe (C.Hash C.PaymentKey)
 toCardanoPaymentKeyHash = C.deserialiseFromRawBytes (C.AsHash C.AsPaymentKey) . unPaymentKeyHash
 
-fromCardanoPaymentKeyHash :: C.Hash C.PaymentKey -> PaymentKeyHash
-fromCardanoPaymentKeyHash = PaymentKeyHash . C.serialiseToRawBytes
-
 toCardanoStakeKeyHash :: StakeKeyHash -> Maybe (C.Hash C.StakeKey)
 toCardanoStakeKeyHash = C.deserialiseFromRawBytes (C.AsHash C.AsStakeKey) . unStakeKeyHash
-
-fromCardanoStakeKeyHash :: C.Hash C.StakeKey -> StakeKeyHash
-fromCardanoStakeKeyHash = StakeKeyHash . C.serialiseToRawBytes
 
 toCardanoPolicyId :: PolicyId -> Maybe C.PolicyId
 toCardanoPolicyId = C.deserialiseFromRawBytes C.AsPolicyId . unPolicyId

@@ -8,88 +8,7 @@
 {-# LANGUAGE ViewPatterns #-}
 
 module Language.Marlowe.Runtime.ChainSync.Api
-  ( Address(..)
-  , AssetId(..)
-  , Assets(..)
-  , BlockHeader(..)
-  , BlockHeaderHash(..)
-  , BlockNo(..)
-  , CertIx(..)
-  , ChainPoint
-  , ChainSyncCommand(..)
-  , ChainSyncQuery(..)
-  , Credential(..)
-  , Datum(..)
-  , DatumHash(..)
-  , FindTxsToError(..)
-  , GetUTxOsQuery(..)
-  , IntersectError(..)
-  , Lovelace(..)
-  , Metadata(..)
-  , Move(..)
-  , module Network.Protocol.ChainSeek.Client
-  , module Network.Protocol.ChainSeek.Codec
-  , module Network.Protocol.ChainSeek.Server
-  , module Network.Protocol.ChainSeek.Types
-  , PaymentKeyHash(..)
-  , PlutusScript(..)
-  , PolicyId(..)
-  , Quantity(..)
-  , Redeemer(..)
-  , RuntimeChainSeek
-  , RuntimeChainSeekClient
-  , RuntimeChainSeekCodec
-  , RuntimeChainSeekServer
-  , ScriptHash(..)
-  , SlotNo(..)
-  , StakeCredential(..)
-  , StakeKeyHash(..)
-  , StakeReference(..)
-  , TokenName(..)
-  , Tokens(..)
-  , Transaction(..)
-  , TransactionInput(..)
-  , TransactionMetadata(..)
-  , TransactionOutput(..)
-  , TxError(..)
-  , TxId(..)
-  , TxIx(..)
-  , TxOutRef(..)
-  , UTxO(..)
-  , UTxOError(..)
-  , UTxOs(..)
-  , ValidityRange(..)
-  , WithGenesis(..)
-  , fromBech32
-  , fromCardanoMetadata
-  , fromCardanoStakeAddressPointer
-  , fromCardanoTxMetadata
-  , fromDatum
-  , fromJSONEncodedMetadata
-  , fromJSONEncodedTransactionMetadata
-  , fromPlutusData
-  , fromRedeemer
-  , getUTCTime
-  , isAfter
-  , lookupUTxO
-  , moveSchema
-  , parseTxOutRef
-  , paymentCredential
-  , policyIdToScriptHash
-  , putUTCTime
-  , renderTxOutRef
-  , runtimeChainSeekCodec
-  , stakeReference
-  , toBech32
-  , toCardanoAddress
-  , toCardanoMetadata
-  , toCardanoTxMetadata
-  , toDatum
-  , toPlutusData
-  , toRedeemer
-  , toUTxOTuple
-  , toUTxOsList
-  ) where
+  where
 
 import Cardano.Api
   ( AsType(..)
@@ -251,7 +170,7 @@ fromJSONEncodedMetadata = \case
 -- Encodes `transaction_metadata`:
 -- https://github.com/input-output-hk/cardano-ledger/blob/node/1.35.3/eras/shelley/test-suite/cddl-files/shelley.cddl#L212
 newtype TransactionMetadata = TransactionMetadata { unTransactionMetadata :: Map Word64 Metadata }
-  deriving (Show, Eq, Ord)
+  deriving (Show, Eq, Ord, Generic)
   deriving newtype (Semigroup, Monoid, Binary, ToJSON)
 
 fromJSONEncodedTransactionMetadata :: A.Value -> Maybe TransactionMetadata
@@ -931,6 +850,7 @@ getUTCTime  = do
 data GetUTxOsQuery
   = GetUTxOsAtAddresses (Set Address)
   | GetUTxOsForTxOutRefs (Set TxOutRef)
+  deriving (Show, Eq, Ord, Generic)
 
 -- Semigroup and Monoid seem to be safe - we cover here a subset of a partial function.
 newtype UTxOs = UTxOs { unUTxOs :: Map TxOutRef TransactionOutput }

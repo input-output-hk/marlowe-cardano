@@ -6,9 +6,11 @@ module Language.Marlowe.Protocol.HeaderSyncSpec
   where
 
 import GHC.Show (showSpace)
-import Language.Marlowe.Protocol.Common
+import Language.Marlowe.Protocol.Common ()
 import Language.Marlowe.Protocol.HeaderSync.Codec (codecMarloweHeaderSync)
 import Language.Marlowe.Protocol.HeaderSync.Types
+import Language.Marlowe.Runtime.ChainSync.Gen ()
+import qualified Language.Marlowe.Runtime.Core.Api as Core
 import qualified Language.Marlowe.Runtime.Discovery.Api as Discovery
 import Network.Protocol.Codec.Spec
 import Network.TypedProtocol.Codec
@@ -96,19 +98,19 @@ instance ShowProtocol MarloweHeaderSync where
 
 instance ArbitraryMessage MarloweHeaderSync where
   arbitraryMessage = oneof
-    [ AnyMessageAndAgency (ClientAgency TokIdle) . MsgIntersect <$> listOf genBlockHeader
+    [ AnyMessageAndAgency (ClientAgency TokIdle) . MsgIntersect <$> arbitrary
     , pure $ AnyMessageAndAgency (ClientAgency TokIdle) MsgDone
     , pure $ AnyMessageAndAgency (ClientAgency TokIdle) MsgRequestNext
     , do
-        msg <- MsgNewHeaders <$> genBlockHeader <*> sized \size -> resize (min 30 size) $ listOf genContractHeader
+        msg <- MsgNewHeaders <$> arbitrary <*> sized \size -> resize (min 30 size) $ listOf genContractHeader
         pure $ AnyMessageAndAgency (ServerAgency TokNext) msg
     , do
-        msg <- MsgRollBackward <$> genWithGenesis genBlockHeader
+        msg <- MsgRollBackward <$> arbitrary
         pure $ AnyMessageAndAgency (ServerAgency TokNext) msg
     , pure $ AnyMessageAndAgency (ServerAgency TokNext) MsgWait
     , pure $ AnyMessageAndAgency (ClientAgency TokWait) MsgPoll
     , pure $ AnyMessageAndAgency (ClientAgency TokWait) MsgCancel
-    , AnyMessageAndAgency (ServerAgency TokIntersect) . MsgIntersectFound <$> genBlockHeader
+    , AnyMessageAndAgency (ServerAgency TokIntersect) . MsgIntersectFound <$> arbitrary
     , pure $ AnyMessageAndAgency (ServerAgency TokIntersect) MsgIntersectNotFound
     ]
   shrinkMessage agency = \case
@@ -126,15 +128,15 @@ instance ArbitraryMessage MarloweHeaderSync where
 
 genContractHeader :: Gen Discovery.ContractHeader
 genContractHeader = Discovery.ContractHeader
-  <$> genContractId
-  <*> genPolicyId
-  <*> genTransactionMetadata
-  <*> genScriptHash
-  <*> genAddress
-  <*> genScriptHash
-  <*> genSomeMarloweVersion
-  <*> genBlockHeader
+  <$> arbitrary
+  <*> arbitrary
+  <*> arbitrary
+  <*> arbitrary
+  <*> arbitrary
+  <*> arbitrary
+  <*> pure (Core.SomeMarloweVersion Core.MarloweV1)
+  <*> arbitrary
 
 shrinkContractHeader :: Discovery.ContractHeader -> [Discovery.ContractHeader]
 shrinkContractHeader Discovery.ContractHeader{..} =
-  [ Discovery.ContractHeader{..} { Discovery.metadata = metadata' } | metadata' <- shrinkTransactionMetadata metadata ]
+  [ Discovery.ContractHeader{..} { Discovery.metadata = metadata' } | metadata' <- shrink metadata ]

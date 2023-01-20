@@ -7,7 +7,7 @@ module Language.Marlowe.Runtime.Discovery.QuerySpec
 
 import Data.Void (absurd)
 import GHC.Show (showSpace)
-import Language.Marlowe.Protocol.Common
+import Language.Marlowe.Protocol.Common ()
 import Language.Marlowe.Protocol.HeaderSyncSpec (genContractHeader, shrinkContractHeader)
 import qualified Language.Marlowe.Runtime.Discovery.Api as Discovery
 import Network.Protocol.Codec.Spec
@@ -63,13 +63,13 @@ instance ArbitraryQuery Discovery.DiscoveryQuery where
   arbitraryTag = elements [SomeTag Discovery.TagGetContractHeaders, SomeTag Discovery.TagGetContractHeadersByRoleTokenCurrency]
   arbitraryQuery = \case
     Discovery.TagGetContractHeaders -> pure Discovery.GetContractHeaders
-    Discovery.TagGetContractHeadersByRoleTokenCurrency -> Discovery.GetContractHeadersByRoleTokenCurrency <$> genPolicyId
+    Discovery.TagGetContractHeadersByRoleTokenCurrency -> Discovery.GetContractHeadersByRoleTokenCurrency <$> arbitrary
   arbitraryDelimiter = \case
-    Discovery.TagGetContractHeaders -> pure $ Just ()
-    Discovery.TagGetContractHeadersByRoleTokenCurrency -> pure Nothing
+    Discovery.TagGetContractHeaders -> Just arbitrary
+    Discovery.TagGetContractHeadersByRoleTokenCurrency -> Nothing
   arbitraryErr = \case
-    Discovery.TagGetContractHeaders -> pure Nothing
-    Discovery.TagGetContractHeadersByRoleTokenCurrency -> pure Nothing
+    Discovery.TagGetContractHeaders -> Nothing
+    Discovery.TagGetContractHeadersByRoleTokenCurrency -> Nothing
   arbitraryResults = \case
     Discovery.TagGetContractHeaders -> sized \size -> resize (min 30 size) $ listOf genContractHeader
     Discovery.TagGetContractHeadersByRoleTokenCurrency -> sized \size -> resize (min 30 size) $ listOf genContractHeader

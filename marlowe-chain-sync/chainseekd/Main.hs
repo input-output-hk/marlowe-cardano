@@ -27,10 +27,11 @@ import Hasql.Pool (UsageError(..))
 import qualified Hasql.Pool as Pool
 import qualified Hasql.Session as Session
 import Language.Marlowe.Runtime.ChainSync (ChainSyncDependencies(..), chainSync)
-import Language.Marlowe.Runtime.ChainSync.Api (WithGenesis(..), codecChainSeek)
+import Language.Marlowe.Runtime.ChainSync.Api (WithGenesis(..))
 import Language.Marlowe.Runtime.ChainSync.Database (hoistDatabaseQueries)
 import qualified Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL as PostgreSQL
 import Logging (RootSelector(..), getRootSelectorConfig)
+import Network.Protocol.ChainSeek.Codec (codecChainSeek)
 import Network.Protocol.ChainSeek.Server (chainSeekServerPeer)
 import Network.Protocol.Driver (acceptRunServerPeerOverSocketWithLogging)
 import Network.Protocol.Job.Codec (codecJob)

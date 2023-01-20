@@ -22,6 +22,7 @@ import Language.Marlowe.Runtime.Core.Api
   (ContractId(..), MarloweVersion(..), SomeMarloweVersion(..), fromChainDatum, withSomeMarloweVersion)
 import Language.Marlowe.Runtime.Core.ScriptRegistry (MarloweScripts(..))
 import Language.Marlowe.Runtime.Discovery.Api (ContractHeader(..))
+import Network.Protocol.ChainSeek.Client
 import Network.Protocol.Driver (RunClient)
 import qualified Plutus.V1.Ledger.Api as P
 
@@ -65,8 +66,8 @@ discoveryChainClient :: Component IO DiscoveryChainClientDependencies (STM Chang
 discoveryChainClient = component \DiscoveryChainClientDependencies{..} -> do
   changesVar <- newTVar mempty
   let
-    clientInit = Chain.SendMsgRequestHandshake Chain.moveSchema clientHandshake
-    clientHandshake = Chain.ClientStHandshake
+    clientInit = SendMsgRequestHandshake Chain.moveSchema clientHandshake
+    clientHandshake = ClientStHandshake
       { recvMsgHandshakeRejected = \versions -> error
           $ "ChainSeek handshake failed. Requested schema version "
           <> show Chain.moveSchema
@@ -76,11 +77,11 @@ discoveryChainClient = component \DiscoveryChainClientDependencies{..} -> do
       , recvMsgHandshakeConfirmed = pure clientIdle
       }
 
-    clientIdle = Chain.SendMsgQueryNext
+    clientIdle = SendMsgQueryNext
       (Chain.FindTxsTo $ Set.map Chain.ScriptCredential $ marloweScriptHashes getScripts)
       clientNext
 
-    clientNext = Chain.ClientStNext
+    clientNext = ClientStNext
       { recvMsgQueryRejected = \_ _ -> pure clientIdle
       , recvMsgRollForward = \txs -> \case
           Chain.Genesis -> error "Roll forward to Genesis"
@@ -91,11 +92,11 @@ discoveryChainClient = component \DiscoveryChainClientDependencies{..} -> do
       , recvMsgRollBackward = \point _ -> do
           atomically $ modifyTVar changesVar (<> mempty { rollbackTo = Just point })
           pure clientIdle
-      , recvMsgWait = threadDelay 1_000_000 $> Chain.SendMsgPoll clientNext
+      , recvMsgWait = threadDelay 1_000_000 $> SendMsgPoll clientNext
       }
 
   pure
-    ( connectToChainSeek $ Chain.ChainSeekClient $ pure clientInit
+    ( connectToChainSeek $ ChainSeekClient $ pure clientInit
     , do
         changes <- readTVar changesVar
         writeTVar changesVar mempty

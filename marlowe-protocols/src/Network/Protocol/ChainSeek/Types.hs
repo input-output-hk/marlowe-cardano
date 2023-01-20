@@ -213,7 +213,7 @@ instance
 class Query query => ArbitraryQuery query where
   arbitraryTag :: Gen (SomeTag query)
   arbitraryQuery :: Tag query err result -> Gen (query err result)
-  arbitraryErr :: Tag query err result -> Gen (Maybe err)
+  arbitraryErr :: Tag query err result -> Maybe (Gen err)
   arbitraryResult :: Tag query err result -> Gen result
   shrinkQuery :: query err result -> [query err result]
   shrinkErr :: Tag query err result-> err -> [err]
@@ -226,7 +226,7 @@ instance
   ) => ArbitraryMessage (ChainSeek query point tip) where
   arbitraryMessage = do
     SomeTag tag <- arbitraryTag
-    mError <- arbitraryErr tag
+    let mGenError = arbitraryErr tag
     oneof $ catMaybes
       [ Just $ AnyMessageAndAgency (ClientAgency TokInit) . MsgRequestHandshake <$> arbitrary
       , Just $ pure $ AnyMessageAndAgency (ServerAgency TokHandshake) MsgConfirmHandshake
@@ -235,8 +235,9 @@ instance
           query <- arbitraryQuery tag
           pure $ AnyMessageAndAgency (ClientAgency TokIdle) $ MsgQueryNext query
       , Just $ pure $ AnyMessageAndAgency (ClientAgency TokIdle) MsgDone
-      , mError <&> \err -> do
+      , mGenError <&> \genErr -> do
           tip <- arbitrary
+          err <- genErr
           pure $ AnyMessageAndAgency (ServerAgency $ TokNext tag) $ MsgRejectQuery err tip
       , Just $ do
           result <- arbitraryResult tag

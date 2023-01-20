@@ -10,7 +10,7 @@ import qualified Data.Set as Set
 import Data.Void (absurd)
 import GHC.Show (showSpace)
 import Language.Marlowe.Protocol.Common
-import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
+import qualified Language.Marlowe.Runtime.Core.Api as Core
 import qualified Language.Marlowe.Runtime.History.Api as History
 import Network.Protocol.Codec.Spec
 import Network.Protocol.Query.Codec (codecQuery)
@@ -65,16 +65,16 @@ instance ArbitraryQuery History.HistoryQuery where
   arbitraryTag = elements [SomeTag History.TagGetFollowedContracts, SomeTag History.TagGetStatuses]
   arbitraryQuery = \case
     History.TagGetFollowedContracts -> pure History.GetFollowedContracts
-    History.TagGetStatuses -> History.GetStatuses . Set.fromList <$> listOf genContractId
+    History.TagGetStatuses -> History.GetStatuses <$> arbitrary
   arbitraryDelimiter = \case
-    History.TagGetFollowedContracts -> Just <$> genContractId
-    History.TagGetStatuses -> pure Nothing
+    History.TagGetFollowedContracts -> Just arbitrary
+    History.TagGetStatuses -> Nothing
   arbitraryErr = \case
-    History.TagGetFollowedContracts -> pure Nothing
-    History.TagGetStatuses -> pure Nothing
+    History.TagGetFollowedContracts -> Nothing
+    History.TagGetStatuses -> Nothing
   arbitraryResults = \case
-    History.TagGetFollowedContracts -> Map.fromList <$> listOf ((,) <$> genContractId <*> genFollowerStatus)
-    History.TagGetStatuses -> Map.fromList <$> listOf ((,) <$> genContractId <*> genFollowerStatus)
+    History.TagGetFollowedContracts -> Map.fromList <$> listOf ((,) <$> arbitrary <*> genFollowerStatus)
+    History.TagGetStatuses -> Map.fromList <$> listOf ((,) <$> arbitrary <*> genFollowerStatus)
   shrinkQuery = \case
     History.GetFollowedContracts -> []
     History.GetStatuses contractIds -> History.GetStatuses . Set.fromDistinctAscList <$> shrinkList (const []) (Set.toAscList contractIds)
@@ -88,32 +88,25 @@ instance ArbitraryQuery History.HistoryQuery where
     History.TagGetFollowedContracts -> const []
     History.TagGetStatuses -> absurd
 
-
 genFollowerStatus :: Gen History.FollowerStatus
 genFollowerStatus = oneof
   [ pure History.Pending
-  , History.Following <$> genSomeMarloweVersion
-  , History.Waiting <$> genSomeMarloweVersion
-  , History.Finished <$> genSomeMarloweVersion
+  , pure $ History.Following $ Core.SomeMarloweVersion Core.MarloweV1
+  , pure $ History.Waiting $ Core.SomeMarloweVersion Core.MarloweV1
+  , pure $ History.Finished $ Core.SomeMarloweVersion Core.MarloweV1
   , History.Failed <$> genContractHistoryError
   ]
 
 genContractHistoryError :: Gen History.ContractHistoryError
 genContractHistoryError = oneof
   [ pure History.HansdshakeFailed
-  , History.FindTxFailed <$> genTxError
+  , History.FindTxFailed <$> arbitrary
   , History.ExtractContractFailed <$> genExtractCreationError
-  , History.FollowScriptUTxOFailed <$> genUTxOError
-  , History.FollowPayoutUTxOsFailed . Map.fromList <$> listOf ((,) <$> genTxOutRef <*> genUTxOError)
+  , History.FollowScriptUTxOFailed <$> arbitrary
+  , History.FollowPayoutUTxOsFailed <$> arbitrary
   , History.ExtractMarloweTransactionFailed <$> genExtractMarloweTransactionError
-  , History.PayoutUTxONotFound <$> genTxOutRef
+  , History.PayoutUTxONotFound <$> arbitrary
   , pure History.CreateTxRolledBack
-  ]
-
-genTxError :: Gen Chain.TxError
-genTxError = oneof
-  [ pure Chain.TxNotFound
-  , Chain.TxInPast <$> genBlockHeader
   ]
 
 genExtractCreationError :: Gen History.ExtractCreationError
@@ -127,12 +120,6 @@ genExtractCreationError = elements
   , History.NotCreationTransaction
   ]
 
-genUTxOError :: Gen Chain.UTxOError
-genUTxOError = oneof
-  [ pure Chain.UTxONotFound
-  , Chain.UTxOSpent <$> genTxId
-  ]
-
 genExtractMarloweTransactionError :: Gen History.ExtractMarloweTransactionError
 genExtractMarloweTransactionError = oneof
   [ pure History.TxInNotFound
@@ -140,8 +127,8 @@ genExtractMarloweTransactionError = oneof
   , pure History.InvalidRedeemer
   , pure History.NoTransactionDatum
   , pure History.InvalidTransactionDatum
-  , History.NoPayoutDatum <$> genTxOutRef
-  , History.InvalidPayoutDatum <$> genTxOutRef
+  , History.NoPayoutDatum <$> arbitrary
+  , History.InvalidPayoutDatum <$> arbitrary
   , pure History.InvalidValidityRange
   , pure History.SlotConversionFailed
   ]

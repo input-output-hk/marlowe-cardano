@@ -8,7 +8,6 @@ module Language.Marlowe.Runtime.History.CommandSpec
 
 import Data.Void (absurd)
 import GHC.Show (showSpace)
-import Language.Marlowe.Protocol.Common
 import qualified Language.Marlowe.Runtime.History.Api as History
 import Language.Marlowe.Runtime.History.QuerySpec (genContractHistoryError)
 import Network.Protocol.Codec.Spec
@@ -68,15 +67,15 @@ instance ShowCommand History.HistoryCommand where
     History.TagStopFollowingContract -> showsPrec p
 
 instance ArbitraryCommand History.HistoryCommand where
-  arbitraryJobId _ = pure Nothing
+  arbitraryJobId _ = Nothing
   arbitraryTag = elements [SomeTag History.TagFollowContract, SomeTag History.TagStopFollowingContract]
   arbitraryCmd = \case
-    History.TagFollowContract -> History.FollowContract <$> genContractId
-    History.TagStopFollowingContract -> History.StopFollowingContract <$> genContractId
-  arbitraryStatus _ = pure Nothing
+    History.TagFollowContract -> History.FollowContract <$> arbitrary
+    History.TagStopFollowingContract -> History.StopFollowingContract <$> arbitrary
+  arbitraryStatus _ = Nothing
   arbitraryErr = \case
-    History.TagFollowContract -> Just <$> genContractHistoryError
-    History.TagStopFollowingContract -> pure Nothing
+    History.TagFollowContract -> Just genContractHistoryError
+    History.TagStopFollowingContract -> Nothing
   arbitraryResult = \case
     History.TagFollowContract -> arbitrary
     History.TagStopFollowingContract -> arbitrary

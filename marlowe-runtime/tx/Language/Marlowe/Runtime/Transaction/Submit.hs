@@ -12,6 +12,7 @@ import Control.Concurrent.STM (STM, atomically, newTVar, readTVar, writeTVar)
 import Data.Functor (($>))
 import Language.Marlowe.Runtime.ChainSync.Api
 import Language.Marlowe.Runtime.Transaction.Api (SubmitError(..), SubmitStatus(..))
+import Network.Protocol.ChainSeek.Client
 import Network.Protocol.Job.Client (JobClient, liftCommand)
 
 data SubmitJobStatus

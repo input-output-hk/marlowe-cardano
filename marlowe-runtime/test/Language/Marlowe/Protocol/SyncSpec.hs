@@ -154,31 +154,27 @@ instance ShowProtocol MarloweSync where
 
 instance ArbitraryMessage MarloweSync where
   arbitraryMessage = oneof
-    [ AnyMessageAndAgency (ClientAgency TokInit) . MsgFollowContract <$> genContractId
+    [ AnyMessageAndAgency (ClientAgency TokInit) . MsgFollowContract <$> arbitrary
     , do
-        Core.SomeMarloweVersion version <- genSomeMarloweVersion
-        msg <- MsgIntersect <$> genContractId <*> pure version <*> listOf genBlockHeader
+        msg <- MsgIntersect <$> arbitrary <*> pure Core.MarloweV1 <*> listOf arbitrary
         pure $ AnyMessageAndAgency (ClientAgency TokInit) msg
     , pure $ AnyMessageAndAgency (ServerAgency TokFollow) MsgContractNotFound
     , do
-        Core.SomeMarloweVersion version <- genSomeMarloweVersion
-        msg <- MsgContractFound <$> genBlockHeader <*> pure version <*> genCreateStep version
+        msg <- MsgContractFound <$> arbitrary <*> pure Core.MarloweV1 <*> genCreateStep Core.MarloweV1
         pure $ AnyMessageAndAgency (ServerAgency TokFollow) msg
     , pure $ AnyMessageAndAgency (ClientAgency (TokIdle Core.MarloweV1)) MsgDone
     , pure $ AnyMessageAndAgency (ClientAgency (TokIdle Core.MarloweV1)) MsgRequestNext
     , do
-        Core.SomeMarloweVersion version <- genSomeMarloweVersion
-        msg <- MsgRollForward <$> genBlockHeader <*> sized \size -> resize (min size 30) $ listOf (genContractStep version)
-        pure $ AnyMessageAndAgency (ServerAgency (TokNext version)) msg
+        msg <- MsgRollForward <$> arbitrary <*> sized \size -> resize (min size 30) $ listOf (genContractStep Core.MarloweV1)
+        pure $ AnyMessageAndAgency (ServerAgency (TokNext Core.MarloweV1)) msg
     , do
-        Core.SomeMarloweVersion version <- genSomeMarloweVersion
-        msg <- MsgRollBackward <$> genBlockHeader
-        pure $ AnyMessageAndAgency (ServerAgency (TokNext version)) msg
+        msg <- MsgRollBackward <$> arbitrary
+        pure $ AnyMessageAndAgency (ServerAgency (TokNext Core.MarloweV1)) msg
     , pure $ AnyMessageAndAgency (ServerAgency (TokNext Core.MarloweV1)) MsgRollBackCreation
     , pure $ AnyMessageAndAgency (ServerAgency (TokNext Core.MarloweV1)) MsgWait
     , pure $ AnyMessageAndAgency (ClientAgency (TokWait Core.MarloweV1)) MsgPoll
     , pure $ AnyMessageAndAgency (ClientAgency (TokWait Core.MarloweV1)) MsgCancel
-    , AnyMessageAndAgency (ServerAgency (TokIntersect Core.MarloweV1)) . MsgIntersectFound <$> genBlockHeader
+    , AnyMessageAndAgency (ServerAgency (TokIntersect Core.MarloweV1)) . MsgIntersectFound <$> arbitrary
     , pure $ AnyMessageAndAgency (ServerAgency (TokIntersect Core.MarloweV1)) MsgIntersectNotFound
     ]
     where
@@ -190,34 +186,34 @@ instance ArbitraryMessage MarloweSync where
 
       genRedeemStep :: Core.MarloweVersion v -> Gen (History.RedeemStep v)
       genRedeemStep version = History.RedeemStep
-        <$> genTxOutRef
-        <*> genTxId
+        <$> arbitrary
+        <*> arbitrary
         <*> genPayoutDatum version
 
       genCreateStep :: Core.MarloweVersion v -> Gen (History.CreateStep v)
       genCreateStep version = History.CreateStep
         <$> genTransactionScriptOutput version
-        <*> genTransactionMetadata
-        <*> genScriptHash
+        <*> arbitrary
+        <*> arbitrary
 
       genTransactionOutput :: Core.MarloweVersion v -> Gen (Core.TransactionOutput v)
       genTransactionOutput version = Core.TransactionOutput
-        <$> (Map.fromList <$> listOf ((,) <$> genTxOutRef <*> genPayout version))
+        <$> (Map.fromList <$> listOf ((,) <$> arbitrary <*> genPayout version))
         <*> oneof [pure Nothing, Just <$> genTransactionScriptOutput version]
 
       genTransactionScriptOutput :: Core.MarloweVersion v -> Gen (Core.TransactionScriptOutput v)
       genTransactionScriptOutput version = Core.TransactionScriptOutput
-        <$> genAddress
-        <*> genAssets
-        <*> genTxOutRef
+        <$> arbitrary
+        <*> arbitrary
+        <*> arbitrary
         <*> genDatum version
 
       genTransaction :: Core.MarloweVersion v -> Gen (Core.Transaction v)
       genTransaction version = Core.Transaction
-        <$> genTxId
-        <*> genContractId
-        <*> genTransactionMetadata
-        <*> genBlockHeader
+        <$> arbitrary
+        <*> arbitrary
+        <*> arbitrary
+        <*> arbitrary
         <*> genUTCTime
         <*> genUTCTime
         <*> genInputs version
@@ -228,16 +224,16 @@ instance ArbitraryMessage MarloweSync where
 
       genPayout :: Core.MarloweVersion v -> Gen (Core.Payout v)
       genPayout version = Core.Payout
-        <$> genAddress
-        <*> genAssets
+        <$> arbitrary
+        <*> arbitrary
         <*> genPayoutDatum version
 
       genPayoutDatum :: Core.MarloweVersion v -> Gen (Core.PayoutDatum v)
-      genPayoutDatum Core.MarloweV1 = genAssetId
+      genPayoutDatum Core.MarloweV1 = arbitrary
 
       genDatum :: Core.MarloweVersion v -> Gen (Core.Datum v)
       genDatum Core.MarloweV1 = V1.MarloweData
-        <$> (V1.MarloweParams . toPlutusCurrencySymbol <$> genPolicyId)
+        <$> (V1.MarloweParams . toPlutusCurrencySymbol <$> arbitrary)
         <*> arbitrary
         <*> arbitrary
 
@@ -261,7 +257,7 @@ instance ArbitraryMessage MarloweSync where
       shrinkCreateStep :: Core.MarloweVersion v -> History.CreateStep v -> [History.CreateStep v]
       shrinkCreateStep version History.CreateStep{..} = []
         <> [ History.CreateStep {..} { History.createOutput = createOutput' } | createOutput' <- shrinkTransactionScriptOutput version createOutput ]
-        <> [ History.CreateStep {..} { History.metadata = metadata' } | metadata' <- shrinkTransactionMetadata metadata ]
+        <> [ History.CreateStep {..} { History.metadata = metadata' } | metadata' <- shrink metadata ]
 
       shrinkContractStep :: Core.MarloweVersion v -> History.ContractStep v -> [History.ContractStep v]
       shrinkContractStep version = \case
@@ -270,7 +266,7 @@ instance ArbitraryMessage MarloweSync where
 
       shrinkTransaction :: Core.MarloweVersion v -> Core.Transaction v -> [Core.Transaction v]
       shrinkTransaction version Core.Transaction{..} = []
-        <> [ Core.Transaction{..} { Transaction.metadata = metadata' } | metadata' <- shrinkTransactionMetadata metadata ]
+        <> [ Core.Transaction{..} { Transaction.metadata = metadata' } | metadata' <- shrink metadata ]
         <> [ Core.Transaction{inputs = inputs', transactionId, contractId, metadata, blockHeader, validityLowerBound, validityUpperBound, output} | inputs' <- shrinkInputs version inputs ]
         <> [ Core.Transaction{..} { Transaction.output = output' } | output' <- shrinkTransactionOutput version output ]
 
@@ -282,11 +278,11 @@ instance ArbitraryMessage MarloweSync where
         <> [ Core.TransactionOutput{..} { Core.payouts = payouts' } | payouts' <- shrinkMap (shrinkPayout version) payouts ]
 
       shrinkPayout :: Core.MarloweVersion v -> Core.Payout v -> [Core.Payout v]
-      shrinkPayout _ Core.Payout{..} = [ Core.Payout{..} { Payout.assets = assets' } | assets' <- shrinkAssets assets ]
+      shrinkPayout _ Core.Payout{..} = [ Core.Payout{..} { Payout.assets = assets' } | assets' <- shrink assets ]
 
       shrinkTransactionScriptOutput :: Core.MarloweVersion v -> Core.TransactionScriptOutput v -> [Core.TransactionScriptOutput v]
       shrinkTransactionScriptOutput version Core.TransactionScriptOutput{..} = []
-        <> [ Core.TransactionScriptOutput{..} { TransactionScriptOutput.assets = assets' } | assets' <- shrinkAssets assets ]
+        <> [ Core.TransactionScriptOutput{..} { TransactionScriptOutput.assets = assets' } | assets' <- shrink assets ]
         <> [ Core.TransactionScriptOutput{datum = datum', address, assets, utxo} | datum' <- shrinkDatum version datum ]
 
       shrinkDatum :: Core.MarloweVersion v -> Core.Datum v -> [Core.Datum v]

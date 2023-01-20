@@ -185,9 +185,9 @@ instance CommandToJSON cmd => MessageToJSON (Job cmd) where
 class Command cmd => ArbitraryCommand cmd where
   arbitraryTag :: Gen (SomeTag cmd)
   arbitraryCmd :: Tag cmd status err result -> Gen (cmd status err result)
-  arbitraryJobId :: Tag cmd status err result -> Gen (Maybe (JobId cmd status err result))
-  arbitraryStatus :: Tag cmd status err result -> Gen (Maybe status)
-  arbitraryErr :: Tag cmd status err result -> Gen (Maybe err)
+  arbitraryJobId :: Tag cmd status err result -> Maybe (Gen (JobId cmd status err result))
+  arbitraryStatus :: Tag cmd status err result -> Maybe (Gen status)
+  arbitraryErr :: Tag cmd status err result -> Maybe (Gen err)
   arbitraryResult :: Tag cmd status err result -> Gen result
   shrinkCommand :: cmd status err result -> [cmd status err result]
   shrinkJobId :: JobId cmd status err result -> [JobId cmd status err result]
@@ -198,20 +198,24 @@ class Command cmd => ArbitraryCommand cmd where
 instance ArbitraryCommand cmd => ArbitraryMessage (Job cmd) where
   arbitraryMessage = do
     SomeTag tag <- arbitraryTag
-    mError <- arbitraryErr tag
-    mStatus <- arbitraryStatus tag
-    mJobId <- arbitraryJobId tag
+    let mError = arbitraryErr tag
+    let mStatus = arbitraryStatus tag
+    let mJobId = arbitraryJobId tag
     oneof $ catMaybes
       [ Just $ AnyMessageAndAgency (ClientAgency TokInit) . MsgExec <$> arbitraryCmd tag
-      , mJobId <&> \jobId ->
+      , mJobId <&> \genJobId -> do
+          jobId <- genJobId
           pure $ AnyMessageAndAgency (ClientAgency TokInit) $ MsgAttach jobId
       , Just $ pure $ AnyMessageAndAgency (ServerAgency (TokAttach tag)) MsgAttached
       , Just $ pure $ AnyMessageAndAgency (ServerAgency (TokAttach tag)) MsgAttachFailed
-      , mError <&> \err ->
+      , mError <&> \genErr -> do
+          err <- genErr
           pure $ AnyMessageAndAgency (ServerAgency $ TokCmd tag) $ MsgFail err
       , Just $ AnyMessageAndAgency (ServerAgency $ TokCmd tag) . MsgSucceed <$> arbitraryResult tag
-      , ((,) <$> mStatus <*> mJobId) <&> \(status, jobId) ->
-         pure $ AnyMessageAndAgency (ServerAgency $ TokCmd tag) $ MsgAwait status jobId
+      , ((,) <$> mStatus <*> mJobId) <&> \(genStatus, genJobId) -> do
+          status <- genStatus
+          jobId <- genJobId
+          pure $ AnyMessageAndAgency (ServerAgency $ TokCmd tag) $ MsgAwait status jobId
       , Just $ pure $ AnyMessageAndAgency (ClientAgency (TokAwait tag)) MsgPoll
       , Just $ pure $ AnyMessageAndAgency (ClientAgency (TokAwait tag)) MsgDetach
       ]

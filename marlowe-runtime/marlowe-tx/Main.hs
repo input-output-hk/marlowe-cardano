@@ -17,7 +17,6 @@ import Language.Marlowe.Runtime.ChainSync.Api
   , RuntimeChainSeekClient
   , UTxOs
   , WithGenesis(..)
-  , chainSeekClientPeer
   , runtimeChainSeekCodec
   )
 import qualified Language.Marlowe.Runtime.Core.ScriptRegistry as ScriptRegistry
@@ -26,6 +25,7 @@ import Language.Marlowe.Runtime.Transaction.Query (LoadMarloweContext, LoadWalle
 import qualified Language.Marlowe.Runtime.Transaction.Query as Query
 import qualified Language.Marlowe.Runtime.Transaction.Submit as Submit
 import Logging (RootSelector(..), getRootSelectorConfig)
+import Network.Protocol.ChainSeek.Client (chainSeekClientPeer)
 import Network.Protocol.Driver (RunClient, acceptRunServerPeerOverSocketWithLogging, runClientPeerOverSocketWithLogging)
 import Network.Protocol.Job.Client (JobClient, jobClientPeer)
 import Network.Protocol.Job.Codec (codecJob)
