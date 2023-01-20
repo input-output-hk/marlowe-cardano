@@ -43,7 +43,7 @@ Then you can enter the `ops` devshell in this repo: `nix develop .#ops`.
 
 If it worked right you should be able to see the `NOMAD_TOKEN` with `env | grep NOMAD_TOKEN`.
 ### Nomad Web UI
-To login to <nomad.dapps.aws.iohkdev.io>, run `nomad ui -authenticate`. You can also enter the token manually into that webiste if the command doesn't work. Make sure to login with your IOHK google account.
+To login to https://nomad.dapps.aws.iohkdev.io, run `nomad ui -authenticate`. You can also enter the token manually into that webiste if the command doesn't work. Make sure to login with your IOHK google account.
 
 In this webiste, you can view logs and restart/manage individual jobs and tasks.
 
