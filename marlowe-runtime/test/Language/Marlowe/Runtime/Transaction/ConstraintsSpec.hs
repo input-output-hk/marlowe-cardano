@@ -426,6 +426,34 @@ spec = do
             -- check 2: non-ADA inputs and non-ADA outputs cancel each other out
             tokIns <> negateValue tokOuts `shouldBe` mempty
         Left selFailedMsg -> counterexample ("selection failed: " <> selFailedMsg) False
+  describe "findMinUtxo" do
+    prop "pure lovelace" do
+      inAddress <- genAddress
+      inDatum <- oneof [pure Nothing, Just . fromCardanoScriptData <$> hedgehog genScriptData]
+      inValue <- hedgehog genValueForTxOut
+      case findMinUtxo protocolTestnet (inAddress, inDatum, inValue) of
+        Right outValue  -> pure $ valueToLovelace outValue `shouldSatisfy` isJust
+        Left message -> pure . expectationFailure $ show (message :: ConstraintError 'V1)
+    prop "minUTxO matches Cardano API" do
+      inAddress <- genAddress
+      inDatum <- oneof [pure Nothing, Just <$> hedgehog genScriptData]
+      -- Tiny lovelace values violate ledger rules and occupy too few bytes for a meaningful test.
+      inValue <- (lovelaceToValue 100_000 <>) <$> hedgehog genValueForTxOut
+      either (pure . expectationFailure) pure
+        do
+         inAddress' <-
+           maybe (Left "Failed to convert address.") (Right . anyAddressInShelleyBasedEra)
+             $ Chain.toCardanoAddress inAddress
+         expected <-
+           first show
+             $ calculateMinimumUTxO
+               ShelleyBasedEraBabbage
+               (TxOut inAddress' (TxOutValue MultiAssetInBabbageEra inValue) (maybe TxOutDatumNone (TxOutDatumInTx ScriptDataInBabbageEra) inDatum) ReferenceScriptNone)
+               protocolTestnet
+         outValue <-
+           first (\message -> show (message :: ConstraintError 'V1))
+             $ findMinUtxo protocolTestnet (inAddress, fromCardanoScriptData <$> inDatum, inValue)
+         pure $ (inDatum, outValue) `shouldBe` (inDatum, expected)
   describe "ensureMinUtxo" do
     prop "non-lovelace value is unchanged" do
       let
@@ -435,7 +463,7 @@ spec = do
       case ensureMinUtxo protocolTestnet (inAddress, inValue) of
         Right (_, outValue)  -> pure $ noLovelace outValue `shouldBe` noLovelace inValue
         Left message -> pure . expectationFailure $ show (message :: ConstraintError 'V1)
-    prop "address value is unchanged" do
+    prop "address is unchanged" do
       inAddress <- genAddress
       inValue <- hedgehog genValueForTxOut
       case ensureMinUtxo protocolTestnet (inAddress, inValue) of
@@ -459,7 +487,7 @@ spec = do
          (_, outValue) <-
            first (\message -> show (message :: ConstraintError 'V1))
              $ ensureMinUtxo protocolTestnet (inAddress, inValue)
-         pure $ (inValue, selectLovelace outValue) `shouldBe` (inValue, maximum [selectLovelace inValue, selectLovelace expected])
+         pure $ selectLovelace outValue `shouldBe` maximum [selectLovelace inValue, selectLovelace expected]
 
 -- Generate a wallet that always has a pure ADA value of 7 and a value
 -- with a minimum ADA plus zero or more "nuisance" tokens
