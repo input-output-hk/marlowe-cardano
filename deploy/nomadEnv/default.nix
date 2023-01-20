@@ -48,7 +48,7 @@ let
       domain = "${jobname}.${baseDomain}";
       scaling = 1;
 
-      datacenters = [ "us-east-1" "eu-central-1" "eu-west-1" ];
+      datacenters = ["us-east-1" "eu-central-1" "eu-west-1"];
       type = "service";
       priority = 50;
 
@@ -58,17 +58,18 @@ let
         jobname = "node";
         nodeClass = namespace;
       }).job.node.group.cardano;
-      group = builtins.removeAttrs node' [ "task" ];
-      node = group // { task.node = node'.task.node; };
+      group = builtins.removeAttrs node' ["task"];
+      node = group // {task.node = node'.task.node;};
 
     in
-    {
-      job.${jobname} = (import ./scheduling-config.nix) // {
-        inherit namespace datacenters id type priority;
+      {
+        job.${jobname} = (import ./scheduling-config.nix) // {
+          inherit namespace datacenters id type priority;
 
-        group.marlowe-runtime =
-          merge
+          group.marlowe-runtime =
+            merge
             # task.vector ...
+            # https://github.com/input-output-hk/bitte-cells/blob/main/cells/vector/nomadTask.nix
             (vector.nomadTask.default {
               inherit namespace;
               endpoints = [ ];
@@ -77,16 +78,14 @@ let
               merge node
                 {
                   network.port =
-                    (genAttrs servicePorts (n: { }))
-                      // { ssh.to = 22; };
+                    (genAttrs servicePorts (n: {}))
+                    // { ssh.to = 22; };
                   # Setup a service for each port, so that the sshd task can reference them
-                  service = append (map
-                    (port: {
-                      inherit port;
-                      name = "\${JOB}-\${TASKGROUP}-${formatService port}";
-                      task = taskFromPort port;
-                    })
-                    servicePorts);
+                  service = append (map (port: {
+                    inherit port;
+                    name = "\${JOB}-\${TASKGROUP}-${formatService port}";
+                    task = taskFromPort port;
+                  }) servicePorts);
                   meta = {
                     inherit environment;
                   };
@@ -109,8 +108,8 @@ let
                   };
                 }
             );
+        };
       };
-    };
 in
 {
   marlowe-runtime-preprod = mkRuntimeJob "preprod";

@@ -174,6 +174,7 @@
         devShells.ops = inputs.dapps-world.${system}.automation.devshells.ops;
 
         # 4 Layers of Packaging
+        # https://std.divnix.com/patterns/four-packaging-layers.html
         operables = import ./deploy/operables.nix {
           inputs = nosys.lib.deSys system inputs;
         };
