@@ -205,7 +205,7 @@ retry name event (delay : delays) action =
           Right result -> pure $ Right result
           Left message -> runExceptT
                             $ do
-                              addField subEvent $ ("failure" :: T.Text) ≔ message
+                              addField subEvent $ ("failedAttempt" :: T.Text) ≔ message
                               addField subEvent $ ("waitForRetry" :: T.Text) ≔ delay
                               liftIO . threadDelay $ delay * 1_000_000
                               retry name event delays action
