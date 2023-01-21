@@ -35,6 +35,7 @@ import Observe.Event (Event, addField, newEvent, withSubEvent)
 import Observe.Event.Backend (unitEventBackend)
 import Observe.Event.Dynamic (DynamicEvent, DynamicEventSelector(..))
 import Observe.Event.Syntax ((≔))
+import System.Random (randomRIO)
 
 import qualified Cardano.Api as C (PaymentExtendedKey, SigningKey)
 import qualified Data.Aeson as A (encode)
@@ -159,7 +160,8 @@ transactWithEvents event config@Config{buildSeconds, confirmSeconds} key request
           when (buildSeconds > 0)
             . withSubEvent subEvent (DynamicEventSelector "WaitBeforeBuild")
             . const
-            $ liftIO . threadDelay $ buildSeconds * 1_000_000
+            $ liftIO . threadDelay . (buildSeconds *)
+            =<< randomRIO (500_000, 1_500_000)
           (contractId, body) <-
             handleWithEvents subEvent "Build" config request
               $ \case
@@ -182,7 +184,8 @@ transactWithEvents event config@Config{buildSeconds, confirmSeconds} key request
           when (confirmSeconds > 0)
             . withSubEvent subEvent (DynamicEventSelector "WaitAfterConfirm")
             . const
-            $ liftIO . threadDelay $ confirmSeconds * 1_000_000
+            $ liftIO . threadDelay . (confirmSeconds *)
+            =<< randomRIO (500_000, 1_500_000)
           pure contractId
 
 

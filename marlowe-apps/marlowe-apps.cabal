@@ -45,6 +45,7 @@ library
                     , mtl
                     , network
                     , optparse-applicative
+                    , random
                     , stm
                     , text
                     , time
