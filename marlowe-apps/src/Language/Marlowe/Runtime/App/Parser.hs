@@ -8,7 +8,8 @@ module Language.Marlowe.Runtime.App.Parser
 
 
 import Data.Default (def)
-import Language.Marlowe.Runtime.App.Types (Config(Config, buildSeconds, confirmSeconds, timeoutSeconds))
+import Language.Marlowe.Runtime.App.Types
+  (Config(Config, buildSeconds, confirmSeconds, retryLimit, retrySeconds, timeoutSeconds))
 import Language.Marlowe.Runtime.CLI.Option (CliOption, host, optParserWithEnvDefault, port)
 import Language.Marlowe.Runtime.ChainSync.Api (Address, fromBech32)
 import Network.Socket (HostName, PortNumber)
@@ -56,6 +57,20 @@ getConfigParser =
           <> O.value (confirmSeconds def)
           <> O.showDefault
           <> O.help "Wait specified seconds after transaction confirmation."
+      retrySecondsParser =
+        O.option O.auto
+          $  O.long "retry-seconds"
+          <> O.metavar "INTEGER"
+          <> O.value (retrySeconds def)
+          <> O.showDefault
+          <> O.help "Wait specified seconds after after a failed transaction before trying again."
+      retryLimitParser =
+        O.option O.auto
+          $  O.long "retry-limit"
+          <> O.metavar "INTEGER"
+          <> O.value (retryLimit def)
+          <> O.showDefault
+          <> O.help "Maximum number of attempts for trying a failed transaction again."
     pure
       $ Config
       <$> chainSeekHostParser
@@ -74,6 +89,8 @@ getConfigParser =
       <*> timeoutSecondsParser
       <*> buildSecondsParser
       <*> confirmSecondsParser
+      <*> retrySecondsParser
+      <*> retryLimitParser
 
 
 chainSeekHost :: CliOption O.OptionFields HostName

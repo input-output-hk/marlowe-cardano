@@ -110,6 +110,8 @@ data Config =
   , timeoutSeconds :: Int
   , buildSeconds :: Int
   , confirmSeconds :: Int
+  , retrySeconds :: Int
+  , retryLimit :: Int
   }
     deriving (Read, Show)
 
@@ -132,6 +134,8 @@ instance Default Config where
     , timeoutSeconds = 600
     , buildSeconds = 3
     , confirmSeconds = 3
+    , retrySeconds = 10
+    , retryLimit = 4
     }
 
 

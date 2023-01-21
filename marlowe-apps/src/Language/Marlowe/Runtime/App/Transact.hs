@@ -25,15 +25,15 @@ module Language.Marlowe.Runtime.App.Transact
 
 import Control.Concurrent (threadDelay)
 import Control.Monad (when)
-import Control.Monad.Except (ExceptT(..), liftIO, throwError)
+import Control.Monad.Except (ExceptT(..), liftIO, runExceptT, throwError)
 import Language.Marlowe.Core.V1.Semantics.Types (Contract, Input)
 import Language.Marlowe.Runtime.App.Types
-  (App, Config(Config, buildSeconds, confirmSeconds), MarloweRequest(..), MarloweResponse(..))
+  (App, Config(Config, buildSeconds, confirmSeconds, retryLimit, retrySeconds), MarloweRequest(..), MarloweResponse(..))
 import Language.Marlowe.Runtime.ChainSync.Api (Address, Lovelace)
 import Language.Marlowe.Runtime.Core.Api (ContractId, MarloweVersionTag(V1))
 import Observe.Event (Event, addField, newEvent, withSubEvent)
 import Observe.Event.Backend (unitEventBackend)
-import Observe.Event.Dynamic (DynamicEvent, DynamicEventSelector(..))
+import Observe.Event.Dynamic (DynamicEvent, DynamicEventSelector(..), DynamicField)
 import Observe.Event.Syntax ((≔))
 import System.Random (randomRIO)
 
@@ -149,12 +149,12 @@ transactWithEvents
   -> C.SigningKey C.PaymentExtendedKey
   -> MarloweRequest 'V1
   -> App ContractId
-transactWithEvents event config@Config{buildSeconds, confirmSeconds} key request =
+transactWithEvents event config@Config{buildSeconds, confirmSeconds, retryLimit, retrySeconds} key request =
   let
     show' = LBS8.unpack . A.encode
     unexpected response = throwError $ "Unexpected response: " <> show' response
   in
-    withSubEvent event (DynamicEventSelector "Transact")
+    retry "Transact" event [retrySeconds * 2^(i-1) | i <- [1..retryLimit]]
       $ \subEvent ->
         do
           when (buildSeconds > 0)
@@ -187,6 +187,28 @@ transactWithEvents event config@Config{buildSeconds, confirmSeconds} key request
             $ liftIO . threadDelay . (confirmSeconds *)
             =<< randomRIO (500_000, 1_500_000)
           pure contractId
+
+
+retry
+  :: T.Text
+  -> Event App r DynamicEventSelector f
+  -> [Int]
+  -> (Event App r DynamicEventSelector DynamicField -> App a)
+  -> App a
+retry name event [] action = withSubEvent event (DynamicEventSelector name) action
+retry name event (delay : delays) action =
+  withSubEvent event (DynamicEventSelector name)
+    $ \subEvent ->
+      ExceptT
+        $ runExceptT (action subEvent)
+        >>= \case
+          Right result -> pure $ Right result
+          Left message -> runExceptT
+                            $ do
+                              addField subEvent $ ("failure" :: T.Text) ≔ message
+                              addField subEvent $ ("waitForRetry" :: T.Text) ≔ delay
+                              liftIO . threadDelay $ delay * 1_000_000
+                              retry name event delays action
 
 
 handleWithEvents
