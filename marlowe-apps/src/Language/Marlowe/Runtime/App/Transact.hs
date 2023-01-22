@@ -160,8 +160,8 @@ transactWithEvents event config@Config{buildSeconds, confirmSeconds, retryLimit,
           when (buildSeconds > 0)
             . withSubEvent subEvent (DynamicEventSelector "WaitBeforeBuild")
             . const
-            $ liftIO . threadDelay . ((buildSeconds * 1_000_000) +)
-            =<< randomRIO (-500_000, 500_000)
+            $ liftIO . threadDelay . (buildSeconds *)
+            =<< randomRIO (1_000_000, 2_000_000)
           (contractId, body) <-
             handleWithEvents subEvent "Build" config request
               $ \case
@@ -184,8 +184,8 @@ transactWithEvents event config@Config{buildSeconds, confirmSeconds, retryLimit,
           when (confirmSeconds > 0)
             . withSubEvent subEvent (DynamicEventSelector "WaitAfterConfirm")
             . const
-            $ liftIO . threadDelay . ((confirmSeconds * 1_000_000) +)
-            =<< randomRIO (-500_000, 500_000)
+            $ liftIO . threadDelay . (confirmSeconds +)
+            =<< randomRIO (1_000_000, 2_000_000)
           pure contractId
 
 
