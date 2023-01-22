@@ -154,7 +154,7 @@ transactWithEvents event config@Config{buildSeconds, confirmSeconds, retryLimit,
     show' = LBS8.unpack . A.encode
     unexpected response = throwError $ "Unexpected response: " <> show' response
   in
-    retry "Transact" event [retrySeconds * 2^(i-1) | i <- [1..retryLimit]]
+    retry "Transact" event [retrySeconds * 2^(i-1) | retrySeconds > 0, retryLimit > 0, i <- [1..retryLimit]]
       $ \subEvent ->
         do
           when (buildSeconds > 0)

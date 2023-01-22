@@ -49,28 +49,28 @@ getConfigParser =
           <> O.metavar "INTEGER"
           <> O.value (buildSeconds def)
           <> O.showDefault
-          <> O.help "Wait specified seconds before transaction construction."
+          <> O.help "Wait specified seconds before transaction construction. No waiting occurs if a non-positive number of seconds is specified. The specified wait period is randomly increased up to a factor of two. Increasing this value will increase the probability that Marlowe Runtime's node has seen the transactions that the submitting node has seen."
       confirmSecondsParser =
         O.option O.auto
           $  O.long "confirm-seconds"
           <> O.metavar "INTEGER"
           <> O.value (confirmSeconds def)
           <> O.showDefault
-          <> O.help "Wait specified seconds after transaction confirmation."
+          <> O.help "Wait specified seconds after transaction confirmation. No waiting occurs if a non-positive number of seconds is specified. The specified wait period is randomly increased up to a factor of two. Increasing this value will increase the probability that the submitting node has seen the transactions that Marlowe Runtime has seen."
       retrySecondsParser =
         O.option O.auto
           $  O.long "retry-seconds"
           <> O.metavar "INTEGER"
           <> O.value (retrySeconds def)
           <> O.showDefault
-          <> O.help "Wait specified seconds after after a failed transaction before trying again."
+          <> O.help "Wait specified seconds after after a failed transaction before trying again. No retries occur if a non-positive number of seconds is specified."
       retryLimitParser =
         O.option O.auto
           $  O.long "retry-limit"
           <> O.metavar "INTEGER"
           <> O.value (retryLimit def)
           <> O.showDefault
-          <> O.help "Maximum number of attempts for trying a failed transaction again."
+          <> O.help "Maximum number of attempts for trying a failed transaction again. Each subsequent retry waits twice as long as the previous retry. No retries occur if a non-positive number of retries is specified."
     pure
       $ Config
       <$> chainSeekHostParser

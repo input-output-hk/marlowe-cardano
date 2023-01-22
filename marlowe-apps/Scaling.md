@@ -151,14 +151,29 @@ Available options:
                            Timeout in seconds for transaction confirmation.
                            (default: 600)
   --build-seconds INTEGER  Wait specified seconds before transaction
-                           construction. (default: 3)
+                           construction. No waiting occurs if a non-positive
+                           number of seconds is specified. The specified wait
+                           period is randomly increased up to a factor of two.
+                           Increasing this value will increase the probability
+                           that Marlowe Runtime's node has seen the transactions
+                           that the submitting node has seen. (default: 3)
   --confirm-seconds INTEGER
                            Wait specified seconds after transaction
-                           confirmation. (default: 3)
+                           confirmation. No waiting occurs if a non-positive
+                           number of seconds is specified. The specified wait
+                           period is randomly increased up to a factor of two.
+                           Increasing this value will increase the probability
+                           that the submitting node has seen the transactions
+                           that Marlowe Runtime has seen. (default: 3)
   --retry-seconds INTEGER  Wait specified seconds after after a failed
-                           transaction before trying again. (default: 10)
+                           transaction before trying again. No retries occur if
+                           a non-positive number of seconds is specified.
+                           (default: 10)
   --retry-limit INTEGER    Maximum number of attempts for trying a failed
-                           transaction again. (default: 4)
+                           transaction again. Each subsequent retry waits twice
+                           as long as the previous retry. No retries occur if a
+                           non-positive number of retries is specified.
+                           (default: 5)
   NATURAL                  The number of contracts to run sequentially for each
                            party.
   ADDRESS=KEYFILE          The addresses of the parties and the files with their

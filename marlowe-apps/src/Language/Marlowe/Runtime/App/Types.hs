@@ -135,7 +135,7 @@ instance Default Config where
     , buildSeconds = 3
     , confirmSeconds = 3
     , retrySeconds = 10
-    , retryLimit = 4
+    , retryLimit = 5
     }
 
 
