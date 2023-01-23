@@ -49,7 +49,6 @@ import Data.Monoid (First(..), getFirst)
 import Data.Set (Set)
 import qualified Data.Set as Set (fromAscList, null, singleton, toAscList, toList, union)
 import Data.Word (Word64)
-import Debug.Trace (trace)
 import GHC.Generics (Generic)
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
 import Language.Marlowe.Runtime.Cardano.Api
@@ -445,7 +444,8 @@ findMinUtxo protocol (chAddress, mbDatum, origValue) =
       atLeastHalfAnAda = C.lovelaceToValue (maximum [500_000, C.selectLovelace origValue])
       revisedValue = origValue <> C.negateValue (C.lovelaceToValue $ C.selectLovelace origValue) <> atLeastHalfAnAda
       datum = maybe C.TxOutDatumNone
-        (C.TxOutDatumInTx C.ScriptDataInBabbageEra . C.fromPlutusData . toPlutusData) mbDatum
+        (C.TxOutDatumInTx C.ScriptDataInBabbageEra . C.fromPlutusData . toPlutusData)
+        $ mbDatum
 
     dummyTxOut <- makeTxOut chAddress datum revisedValue C.ReferenceScriptNone
     case C.calculateMinimumUTxO C.ShelleyBasedEraBabbage dummyTxOut protocol of
@@ -856,7 +856,7 @@ solveInitialTxBodyContent protocol marloweVersion MarloweContext{..} WalletConte
     getWalletInputs = case roleTokenConstraints of
       RoleTokenConstraintsNone -> pure []
       MintRoleTokens txOutRef _ _ -> do
-        txIn <- note (trace "a" ToCardanoError) $ toCardanoTxIn txOutRef
+        txIn <- note ToCardanoError $ toCardanoTxIn txOutRef
         _ <- note (MintingUtxoNotFound txOutRef) $ lookupUTxO txOutRef availableUtxos
         pure [(txIn, C.BuildTxWith $ C.KeyWitness C.KeyWitnessForSpending)]
       SpendRoleTokens roleTokens -> do
@@ -867,7 +867,7 @@ solveInitialTxBodyContent protocol marloweVersion MarloweContext{..} WalletConte
             containsToken :: Chain.TransactionOutput -> Bool
             containsToken = Map.member token . Chain.unTokens . Chain.tokens . Chain.assets
           (txOutRef, _) <- note (RoleTokenNotFound token) $ find (containsToken . snd) availTuples
-          note (trace "b" ToCardanoError) $ toCardanoTxIn txOutRef
+          note ToCardanoError $ toCardanoTxIn txOutRef
         pure $ (, C.BuildTxWith $ C.KeyWitness C.KeyWitnessForSpending) <$> txIns
 
     getMarloweInput :: Either (ConstraintError v) (Maybe (C.TxIn, C.BuildTxWith C.BuildTx (C.Witness C.WitCtxTxIn C.BabbageEra)))
@@ -875,8 +875,8 @@ solveInitialTxBodyContent protocol marloweVersion MarloweContext{..} WalletConte
       MarloweInputConstraintsNone -> pure Nothing
       MarloweInput _ _ inputs -> fmap Just $ do
         Core.TransactionScriptOutput{..} <- note MissingMarloweInput scriptOutput
-        txIn <- note (trace "c" ToCardanoError) $ toCardanoTxIn utxo
-        plutusScriptOrRefInput <- note (trace "d" ToCardanoError) $ C.PReferenceScript
+        txIn <- note ToCardanoError $ toCardanoTxIn utxo
+        plutusScriptOrRefInput <- note ToCardanoError $ C.PReferenceScript
           <$> toCardanoTxIn (txOutRef marloweScriptUTxO)
           <*> (Just <$> toCardanoScriptHash marloweScriptHash)
         let
@@ -913,8 +913,8 @@ solveInitialTxBodyContent protocol marloweVersion MarloweContext{..} WalletConte
     maybeGetPayoutInput payoutDatum (txOutRef, Core.Payout{..})
       | case marloweVersion of
           Core.MarloweV1 -> datum == payoutDatum = do
-        txIn <- note (trace "e" $ ToCardanoError) $ toCardanoTxIn txOutRef
-        plutusScriptOrRefInput <- note (trace "f" $ ToCardanoError) $ C.PReferenceScript
+        txIn <- note ToCardanoError $ toCardanoTxIn txOutRef
+        plutusScriptOrRefInput <- note ToCardanoError $ C.PReferenceScript
           <$> toCardanoTxIn (Language.Marlowe.Runtime.Core.ScriptRegistry.txOutRef payoutScriptUTxO)
           <*> (Just <$> toCardanoScriptHash payoutScriptHash)
         let
@@ -955,14 +955,14 @@ solveInitialTxBodyContent protocol marloweVersion MarloweContext{..} WalletConte
     marloweTxInReference :: Maybe (Either (ConstraintError v) C.TxIn)
     marloweTxInReference = case marloweInputConstraints of
       MarloweInputConstraintsNone -> Nothing
-      _ -> Just $ note (trace "g" $ ToCardanoError) $ toCardanoTxIn (txOutRef marloweScriptUTxO)
+      _ -> Just $ note ToCardanoError $ toCardanoTxIn (txOutRef marloweScriptUTxO)
 
     -- Only include the payout reference script if we are consuming any payout
     -- inputs.
     payoutTxInReference :: Maybe (Either (ConstraintError v) C.TxIn)
     payoutTxInReference
       | Set.null payoutInputConstraints = Nothing
-      | otherwise = Just $ note (trace "h" $ ToCardanoError) $ toCardanoTxIn (txOutRef payoutScriptUTxO)
+      | otherwise = Just $ note ToCardanoError $ toCardanoTxIn (txOutRef payoutScriptUTxO)
 
     getMarloweOutput :: Maybe Chain.TransactionOutput
     getMarloweOutput = case marloweOutputConstraints of
@@ -1016,7 +1016,7 @@ solveInitialTxBodyContent protocol marloweVersion MarloweContext{..} WalletConte
     getAddressOutput :: Chain.Address -> Chain.Assets -> Chain.TransactionOutput
     getAddressOutput address assets = Chain.TransactionOutput address assets Nothing Nothing
 
-    solveTxOuts = note (trace "i" $ ToCardanoError) . traverse (toCardanoTxOut C.MultiAssetInBabbageEra) =<< do
+    solveTxOuts = note ToCardanoError . traverse (toCardanoTxOut C.MultiAssetInBabbageEra) =<< do
       roleTokenOutputs <- getRoleTokenOutputs
       pure $ concat
         [ maybeToList getMarloweOutput
@@ -1044,7 +1044,7 @@ solveInitialTxBodyContent protocol marloweVersion MarloweContext{..} WalletConte
     solveTxExtraKeyWits :: Either (ConstraintError v) (C.TxExtraKeyWitnesses C.BabbageEra)
     solveTxExtraKeyWits
       | Set.null signatureConstraints = pure C.TxExtraKeyWitnessesNone
-      | otherwise = note (trace "j" $ ToCardanoError) $ C.TxExtraKeyWitnesses C.ExtraKeyWitnessesInBabbageEra
+      | otherwise = note ToCardanoError $ C.TxExtraKeyWitnesses C.ExtraKeyWitnessesInBabbageEra
           <$> traverse toCardanoPaymentKeyHash (Set.toList signatureConstraints)
 
     solveTxMintValue :: Either (ConstraintError v) (C.TxMintValue C.BuildTx C.BabbageEra)
@@ -1052,9 +1052,9 @@ solveInitialTxBodyContent protocol marloweVersion MarloweContext{..} WalletConte
       MintRoleTokens _ witness distribution -> do
         let assetIds = Map.keysSet distribution
         let tokens = Map.fromSet (const 1) assetIds
-        policyIds <- note (trace "k" $ ToCardanoError) $ Set.fromAscList
+        policyIds <- note ToCardanoError $ Set.fromAscList
           <$> traverse (toCardanoPolicyId . Chain.policyId) (Set.toAscList assetIds)
-        value <- note (trace "l" $ ToCardanoError) $ tokensToCardanoValue $ Chain.Tokens tokens
+        value <- note ToCardanoError $ tokensToCardanoValue $ Chain.Tokens tokens
         pure
           $ C.TxMintValue C.MultiAssetInBabbageEra value
           $ C.BuildTxWith
