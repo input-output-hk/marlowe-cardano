@@ -38,6 +38,10 @@ commitBlocks blocks = H.statement (prepareParams blocks)
     , insertBlocks AS
       ( INSERT INTO marlowe.block (id, slotNo, blockNo)
         SELECT * FROM blockInputs
+        ON CONFLICT (id) DO UPDATE
+        SET
+          rollbackToSlot = NULL,
+          rollbackToBlock = NULL
       )
 
     , txOutInputs (txId, txIx, blockId, address, lovelace) AS

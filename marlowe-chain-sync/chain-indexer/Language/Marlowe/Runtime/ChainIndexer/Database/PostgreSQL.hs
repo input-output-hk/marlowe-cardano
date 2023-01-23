@@ -360,7 +360,7 @@ commitBlocks = CommitBlocks \blocks ->
           ( UPDATE chain.block
                SET rollbackToBlock = NULL, rollbackToSlot = NULL
               FROM blockInputs AS input
-             WHERE chain.block.id = input.id AND chain.block.slotNo = input.blockNo
+             WHERE chain.block.id = input.id
           )
         , txInputs (id, blockId, slotNo, validityLowerBound, validityUpperBound, metadata, isValid) AS
           ( SELECT * FROM UNNEST ($4 :: bytea[], $5 :: bytea[], $6 :: bigint[], $7 :: bigint?[], $8 :: bigint?[], $9 :: bytea?[], $10 :: boolean[])
