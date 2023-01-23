@@ -10,7 +10,7 @@
   {
     flags = {};
     package = {
-      specVersion = "2.4";
+      specVersion = "3.0";
       identifier = { name = "marlowe-protocols"; version = "0.0.0.0"; };
       license = "Apache-2.0";
       copyright = "";
@@ -45,6 +45,7 @@
           (hsPkgs."monad-control" or (errorHandler.buildDepError "monad-control"))
           (hsPkgs."network" or (errorHandler.buildDepError "network"))
           (hsPkgs."stm" or (errorHandler.buildDepError "stm"))
+          (hsPkgs."QuickCheck" or (errorHandler.buildDepError "QuickCheck"))
           (hsPkgs."template-haskell" or (errorHandler.buildDepError "template-haskell"))
           (hsPkgs."text" or (errorHandler.buildDepError "text"))
           (hsPkgs."transformers-base" or (errorHandler.buildDepError "transformers-base"))
@@ -68,6 +69,7 @@
           "Network/Protocol/Query/Server"
           "Network/Protocol/Query/Types"
           "Network/Protocol/Codec"
+          "Network/Protocol/Codec/Spec"
           ];
         hsSourceDirs = [ "src" ];
         };

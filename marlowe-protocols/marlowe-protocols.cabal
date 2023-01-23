@@ -1,4 +1,4 @@
-cabal-version: 2.4
+cabal-version: 3.0
 name: marlowe-protocols
 version: 0.0.0.0
 synopsis:
@@ -46,6 +46,7 @@ library
     -Wall -Wnoncanonical-monad-instances -Wunused-packages
     -Wincomplete-uni-patterns -Wincomplete-record-updates
     -Wredundant-constraints -Widentities
+    -Wunused-packages
   exposed-modules:
     Network.Channel
     Network.Protocol.Driver
@@ -63,6 +64,7 @@ library
     Network.Protocol.Query.Server
     Network.Protocol.Query.Types
     Network.Protocol.Codec
+    Network.Protocol.Codec.Spec
   build-depends:
       base >= 4.9 && < 5
     , aeson
@@ -76,6 +78,7 @@ library
     , monad-control
     , network
     , stm
+    , QuickCheck
     , template-haskell
     , text
     , transformers-base

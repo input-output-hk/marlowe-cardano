@@ -41,13 +41,7 @@ import GHC.Show (showSpace)
 import Language.Marlowe.Runtime.ChainSync.Api
   ( BlockHeader
   , ChainPoint
-  , ChainSeekClient(..)
   , ChainSyncQuery(..)
-  , ClientStHandshake(..)
-  , ClientStIdle(..)
-  , ClientStInit(..)
-  , ClientStNext(..)
-  , ClientStPoll(..)
   , Move(..)
   , RuntimeChainSeekClient
   , ScriptHash(..)
@@ -69,6 +63,7 @@ import Language.Marlowe.Runtime.Core.Api
   , TransactionScriptOutput(..)
   )
 import Language.Marlowe.Runtime.History.Api
+import Network.Protocol.ChainSeek.Client
 import Network.Protocol.Driver (RunClient)
 
 data ContractChanges v = ContractChanges

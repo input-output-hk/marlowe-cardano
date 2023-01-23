@@ -17,9 +17,15 @@ module Network.Protocol.Query.Types
 
 import Data.Aeson (Value(..), object, (.=))
 import Data.Binary (Get, Put)
-import Data.Type.Equality (type (:~:))
+import Data.Data (type (:~:)(Refl))
+import Data.Functor ((<&>))
+import Data.Maybe (catMaybes)
+import GHC.Show (showSpace)
+import Network.Protocol.Codec.Spec (ArbitraryMessage(..), MessageEq(..), ShowProtocol(..))
 import Network.Protocol.Driver (MessageToJSON(..))
 import Network.TypedProtocol
+import Network.TypedProtocol.Codec (AnyMessageAndAgency(..))
+import Test.QuickCheck (Gen, oneof)
 
 data SomeTag q = forall delimiter err result. SomeTag (Tag q delimiter err result)
 
@@ -118,6 +124,8 @@ data TokNextKind k where
   TokCanReject :: TokNextKind 'CanReject
   TokMustReply :: TokNextKind 'MustReply
 
+deriving instance Show (TokNextKind k)
+
 instance QueryToJSON query => MessageToJSON (Query query) where
   messageToJSON = \case
     ClientAgency TokInit -> \case
@@ -133,3 +141,140 @@ instance QueryToJSON query => MessageToJSON (Query query) where
             , "next" .= (delimiterToJSON tag <$> d)
             ]
         ]
+
+class IsQuery query => ArbitraryQuery query where
+  arbitraryTag :: Gen (SomeTag query)
+  arbitraryQuery :: Tag query delimiter err results -> Gen (query delimiter err results)
+  arbitraryDelimiter :: Tag query delimiter err results -> Maybe (Gen delimiter)
+  arbitraryErr :: Tag query delimiter err results -> Maybe (Gen err)
+  arbitraryResults :: Tag query delimiter err results -> Gen results
+  shrinkQuery :: query delimiter err results -> [query delimiter err results]
+  shrinkErr :: Tag query delimiter err results -> err -> [err]
+  shrinkResults :: Tag query delimiter err results -> results -> [results]
+  shrinkDelimiter :: Tag query delimiter err results -> delimiter -> [delimiter]
+
+instance ArbitraryQuery query => ArbitraryMessage (Query query) where
+  arbitraryMessage = do
+    SomeTag tag <- arbitraryTag
+    let mGenError = arbitraryErr tag
+    let mGenDelimiter = arbitraryDelimiter tag
+    oneof $ catMaybes
+      [ Just $ AnyMessageAndAgency (ClientAgency TokInit) . MsgRequest <$> arbitraryQuery tag
+      , mGenError <&> \genErr -> do
+          err <- genErr
+          pure $ AnyMessageAndAgency (ServerAgency $ TokNext TokCanReject tag) $ MsgReject err
+      , Just $ do
+          results <- arbitraryResults tag
+          AnyMessageAndAgency (ServerAgency $ TokNext TokCanReject tag) . MsgNextPage results
+            <$> oneof [pure Nothing, maybe (pure Nothing) (fmap Just) mGenDelimiter]
+      , mGenDelimiter <&> \genDelimiter -> do
+          delimiter <- genDelimiter
+          pure $ AnyMessageAndAgency (ClientAgency $ TokPage tag) $ MsgRequestNext delimiter
+      , Just $ pure $ AnyMessageAndAgency (ClientAgency $ TokPage tag) MsgDone
+      ]
+  shrinkMessage agency = \case
+    MsgRequest query -> MsgRequest <$> shrinkQuery query
+    MsgReject err -> MsgReject <$> case agency of ServerAgency (TokNext _ tag) -> shrinkErr tag err
+    MsgNextPage results mDelimiter -> []
+      <> [ MsgNextPage results' mDelimiter | results' <- case agency of ServerAgency (TokNext _ tag) -> shrinkResults tag results ]
+      <> case mDelimiter of
+          Nothing -> []
+          Just delimiter -> MsgNextPage results Nothing
+            : [ MsgNextPage results (Just delimiter') | delimiter' <- case agency of ServerAgency (TokNext _ tag) -> shrinkDelimiter tag delimiter ]
+    MsgRequestNext delimiter -> MsgRequestNext <$> case agency of ClientAgency (TokPage tag) -> shrinkDelimiter tag delimiter
+    _ -> []
+
+class IsQuery query => QueryEq query where
+  queryEq :: query delimiter err result -> query delimiter err result -> Bool
+  delimiterEq :: Tag query delimiter err result -> delimiter -> delimiter -> Bool
+  errEq :: Tag query delimiter err result -> err -> err -> Bool
+  resultEq :: Tag query delimiter err result -> result -> result -> Bool
+
+instance QueryEq query => MessageEq (Query query) where
+  messageEq (AnyMessageAndAgency agency msg) = case (agency, msg) of
+    (_, MsgRequest query) -> \case
+      AnyMessageAndAgency _ (MsgRequest query') ->
+        case tagEq (tagFromQuery query) (tagFromQuery query') of
+          Just (Refl, Refl, Refl) -> queryEq query query'
+          Nothing -> False
+      _ -> False
+    (ServerAgency (TokNext _ tag), MsgReject err) -> \case
+      AnyMessageAndAgency (ServerAgency (TokNext _ tag')) (MsgReject err') ->
+        case tagEq tag tag' of
+          Just (Refl, Refl, Refl) -> errEq tag err err'
+          Nothing -> False
+      _ -> False
+    (ServerAgency (TokNext _ tag), MsgNextPage result mDelimiter) -> \case
+      AnyMessageAndAgency (ServerAgency (TokNext _ tag')) (MsgNextPage result' mDelimiter') ->
+        case tagEq tag tag' of
+          Just (Refl, Refl, Refl) -> resultEq tag result result' && case (mDelimiter, mDelimiter') of
+            (Nothing, Nothing) -> True
+            (Just delimiter, Just delimiter') -> delimiterEq tag delimiter delimiter'
+            _ -> False
+          Nothing -> False
+      _ -> False
+    (ClientAgency (TokPage tag), MsgRequestNext delimiter) -> \case
+      AnyMessageAndAgency (ClientAgency (TokPage tag')) (MsgRequestNext delimiter') ->
+        case tagEq tag tag' of
+          Just (Refl, Refl, Refl) -> delimiterEq tag delimiter delimiter'
+          Nothing -> False
+      _ -> False
+    (_, MsgDone) -> \case
+      AnyMessageAndAgency _ MsgDone -> True
+      _ -> False
+
+class IsQuery query => ShowQuery query where
+  showsPrecTag :: Int -> Tag query delimiter err result -> ShowS
+  showsPrecQuery :: Int -> query delimiter err result -> ShowS
+  showsPrecDelimiter :: Int -> Tag query delimiter err result -> delimiter -> ShowS
+  showsPrecErr :: Int -> Tag query delimiter err result -> err -> ShowS
+  showsPrecResult :: Int -> Tag query delimiter err result -> result -> ShowS
+
+instance ShowQuery query => ShowProtocol (Query query) where
+  showsPrecMessage p agency = \case
+    MsgRequest query -> showParen (p >= 11)
+      ( showString "MsgRequest"
+      . showSpace
+      . showsPrecQuery 11 query
+      )
+    MsgReject err -> showParen (p >= 11)
+      ( showString "MsgReject"
+      . showSpace
+      . case agency of ServerAgency (TokNext _ tag) -> showsPrecErr 11 tag err
+      )
+    MsgNextPage result mDelimiter -> showParen (p >= 11)
+      ( showString "MsgNextPage"
+      . showSpace
+      . case agency of ServerAgency (TokNext _ tag) -> showsPrecResult 11 tag result
+      . showSpace
+      . case mDelimiter of
+          Nothing -> showString "Nothing"
+          Just delimiter -> showParen True
+            ( showString "Just"
+            . showSpace
+            . case agency of ServerAgency (TokNext _ tag) -> showsPrecDelimiter 11 tag delimiter
+            )
+      )
+    MsgRequestNext delimiter -> showParen (p >= 11)
+      ( showString "MsgRequestNext"
+      . showSpace
+      . case agency of ClientAgency (TokPage tag) -> showsPrecDelimiter 11 tag delimiter
+      )
+    MsgDone -> showString "MsgDone"
+
+  showsPrecServerHasAgency p = \case
+    TokNext k tag -> showParen (p >= 11)
+      ( showString "TokNext"
+      . showSpace
+      . showsPrec 11 k
+      . showSpace
+      . showsPrecTag p tag
+      )
+
+  showsPrecClientHasAgency p = \case
+    TokInit -> showString "TokInit"
+    TokPage tag -> showParen (p >= 11)
+      ( showString "TokPage"
+      . showSpace
+      . showsPrecTag p tag
+      )

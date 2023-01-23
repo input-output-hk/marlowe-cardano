@@ -1070,6 +1070,7 @@
           "servant-client-core".components.library.planned = lib.mkOverride 900 true;
           "nonempty-containers".components.library.planned = lib.mkOverride 900 true;
           "mersenne-random-pure64".components.library.planned = lib.mkOverride 900 true;
+          "marlowe-chain-sync".components.sublibs."gen".planned = lib.mkOverride 900 true;
           "js-chart".components.library.planned = lib.mkOverride 900 true;
           "template-haskell-compat-v0208".components.library.planned = lib.mkOverride 900 true;
           "marlowe-runtime".components.sublibs."history".planned = lib.mkOverride 900 true;
@@ -1152,6 +1153,7 @@
           "network-ip".components.library.planned = lib.mkOverride 900 true;
           "happy".components.exes."happy".planned = lib.mkOverride 900 true;
           "network-info".components.library.planned = lib.mkOverride 900 true;
+          "marlowe-chain-sync".components.tests."marlowe-chain-sync-test".planned = lib.mkOverride 900 true;
           "servant-openapi3".components.setup.planned = lib.mkOverride 900 true;
           "uuid".components.library.planned = lib.mkOverride 900 true;
           "time".components.library.planned = lib.mkOverride 900 true;
@@ -1464,6 +1466,7 @@
           "marlowe-actus".components.tests."actus-core-test".planned = lib.mkOverride 900 true;
           "tasty".components.library.planned = lib.mkOverride 900 true;
           "transformers-compat".components.library.planned = lib.mkOverride 900 true;
+          "marlowe-runtime".components.sublibs."gen".planned = lib.mkOverride 900 true;
           "dns".components.library.planned = lib.mkOverride 900 true;
           "optparse-generic".components.library.planned = lib.mkOverride 900 true;
           "plutus-core".components.exes."plc".planned = lib.mkOverride 900 true;

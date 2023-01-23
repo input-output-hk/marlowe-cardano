@@ -176,6 +176,45 @@ library plutus-compat
     , plutus-ledger-api
     , serialise
 
+library gen
+  import: lang
+  hs-source-dirs: gen
+  visibility: public
+  exposed-modules:
+    Language.Marlowe.Runtime.ChainSync.Gen
+  other-modules:
+  build-depends:
+      base >= 4.9 && < 5
+    , bytestring
+    , cardano-api
+    , cardano-api:gen
+    , hedgehog-quickcheck
+    , marlowe-chain-sync
+    , marlowe-protocols
+    , nonempty-containers
+    , ouroboros-consensus
+    , QuickCheck
+    , text
+    , these
+    , time
+
+test-suite marlowe-chain-sync-test
+  import: lang
+  hs-source-dirs: test
+  type: exitcode-stdio-1.0
+  main-is: Spec.hs
+  other-modules:
+    Language.Marlowe.Runtime.ChainSync.ApiSpec
+    Paths_marlowe_chain_sync
+  build-depends:
+      base >= 4.9 && < 5
+    , hspec
+    , marlowe-chain-sync
+    , marlowe-chain-sync:gen
+    , marlowe-protocols
+  build-tool-depends: hspec-discover:hspec-discover
+  ghc-options: -threaded
+
 executable marlowe-chain-indexer
   import: lang
   ghc-options: -threaded

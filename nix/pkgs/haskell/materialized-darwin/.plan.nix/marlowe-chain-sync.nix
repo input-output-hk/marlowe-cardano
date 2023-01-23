@@ -155,6 +155,26 @@
           modules = [ "Language/Marlowe/Runtime/Plutus/V2/Api" ];
           hsSourceDirs = [ "plutus-compat" ];
           };
+        "gen" = {
+          depends = [
+            (hsPkgs."base" or (errorHandler.buildDepError "base"))
+            (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
+            (hsPkgs."cardano-api" or (errorHandler.buildDepError "cardano-api"))
+            (hsPkgs."cardano-api".components.sublibs.gen or (errorHandler.buildDepError "cardano-api:gen"))
+            (hsPkgs."hedgehog-quickcheck" or (errorHandler.buildDepError "hedgehog-quickcheck"))
+            (hsPkgs."marlowe-chain-sync" or (errorHandler.buildDepError "marlowe-chain-sync"))
+            (hsPkgs."marlowe-protocols" or (errorHandler.buildDepError "marlowe-protocols"))
+            (hsPkgs."nonempty-containers" or (errorHandler.buildDepError "nonempty-containers"))
+            (hsPkgs."ouroboros-consensus" or (errorHandler.buildDepError "ouroboros-consensus"))
+            (hsPkgs."QuickCheck" or (errorHandler.buildDepError "QuickCheck"))
+            (hsPkgs."text" or (errorHandler.buildDepError "text"))
+            (hsPkgs."these" or (errorHandler.buildDepError "these"))
+            (hsPkgs."time" or (errorHandler.buildDepError "time"))
+            ];
+          buildable = true;
+          modules = [ "Language/Marlowe/Runtime/ChainSync/Gen" ];
+          hsSourceDirs = [ "gen" ];
+          };
         };
       exes = {
         "marlowe-chain-indexer" = {
@@ -224,6 +244,27 @@
             ];
           hsSourceDirs = [ "example-client" ];
           mainPath = [ "Main.hs" ];
+          };
+        };
+      tests = {
+        "marlowe-chain-sync-test" = {
+          depends = [
+            (hsPkgs."base" or (errorHandler.buildDepError "base"))
+            (hsPkgs."hspec" or (errorHandler.buildDepError "hspec"))
+            (hsPkgs."marlowe-chain-sync" or (errorHandler.buildDepError "marlowe-chain-sync"))
+            (hsPkgs."marlowe-chain-sync".components.sublibs.gen or (errorHandler.buildDepError "marlowe-chain-sync:gen"))
+            (hsPkgs."marlowe-protocols" or (errorHandler.buildDepError "marlowe-protocols"))
+            ];
+          build-tools = [
+            (hsPkgs.buildPackages.hspec-discover.components.exes.hspec-discover or (pkgs.buildPackages.hspec-discover or (errorHandler.buildToolDepError "hspec-discover:hspec-discover")))
+            ];
+          buildable = true;
+          modules = [
+            "Language/Marlowe/Runtime/ChainSync/ApiSpec"
+            "Paths_marlowe_chain_sync"
+            ];
+          hsSourceDirs = [ "test" ];
+          mainPath = [ "Spec.hs" ];
           };
         };
       };

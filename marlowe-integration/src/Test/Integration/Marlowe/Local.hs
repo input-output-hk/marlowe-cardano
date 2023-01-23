@@ -91,8 +91,7 @@ import Language.Marlowe.Protocol.Sync.Client (MarloweSyncClient, marloweSyncClie
 import Language.Marlowe.Protocol.Sync.Codec (codecMarloweSync)
 import Language.Marlowe.Protocol.Sync.Server (MarloweSyncServer, marloweSyncServerPeer)
 import Language.Marlowe.Protocol.Sync.Types (MarloweSync)
-import Language.Marlowe.Runtime.Cardano.Api
-  (fromCardanoAddressInEra, fromCardanoLovelace, fromCardanoScriptHash, fromCardanoTxId)
+import Language.Marlowe.Runtime.Cardano.Api (fromCardanoAddressInEra, fromCardanoLovelace, fromCardanoTxId)
 import Language.Marlowe.Runtime.ChainIndexer
   (ChainIndexerDependencies(..), ChainIndexerSelector, chainIndexer, getChainIndexerSelectorConfig)
 import Language.Marlowe.Runtime.ChainIndexer.Database (CommitGenesisBlock(..), DatabaseQueries(..))
@@ -111,6 +110,7 @@ import Language.Marlowe.Runtime.ChainSync.Api
   , TransactionOutput(..)
   , TxOutRef(TxOutRef)
   , WithGenesis(..)
+  , fromCardanoScriptHash
   )
 import qualified Language.Marlowe.Runtime.ChainSync.Database as ChainSync
 import qualified Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL as ChainSync

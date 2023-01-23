@@ -28,7 +28,6 @@ import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
 import Language.Marlowe.Runtime.ChainSync.Api
   ( AssetId(AssetId)
   , ChainPoint
-  , ChainSeekClient
   , ChainSyncQuery
   , Move(..)
   , ScriptHash(..)
@@ -38,7 +37,6 @@ import Language.Marlowe.Runtime.ChainSync.Api
   , TxOutRef(..)
   , UTxOError(..)
   , WithGenesis(..)
-  , hoistChainSeekClient
   , toDatum
   )
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
@@ -56,6 +54,7 @@ import Language.Marlowe.Runtime.Core.Api
 import Language.Marlowe.Runtime.Core.ScriptRegistry (MarloweScripts(..), currentV1Scripts)
 import Language.Marlowe.Runtime.History.Api
 import Language.Marlowe.Runtime.History.Follower
+import Network.Protocol.ChainSeek.Client
 import Ouroboros.Consensus.BlockchainTime (RelativeTime(..), SystemStart(..), mkSlotLength)
 import Ouroboros.Consensus.HardFork.History
   (Bound(..), EraEnd(..), EraParams(..), EraSummary(..), SafeZone(..), mkInterpreter, summaryWithExactly)

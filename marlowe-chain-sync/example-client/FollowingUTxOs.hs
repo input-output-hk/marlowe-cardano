@@ -4,6 +4,7 @@ module FollowingUTxOs
 import Data.List (uncons)
 import Data.Maybe (fromMaybe)
 import Language.Marlowe.Runtime.ChainSync.Api
+import Network.Protocol.ChainSeek.Client
 
 -- This client follows a Genesis TxOut through transactions until it finds a
 -- UTxO at index 0 of some tx.
