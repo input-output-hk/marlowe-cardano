@@ -102,9 +102,9 @@ Deserialization of the `Datum` and `Redeemer` should target `(Plutus.V2.Ledger.A
 
 ## Marlowe Runtime
 
-[Marlowe Runtime](../marlowe-runtime/) provides off-chain services that discover Marlowe contract history and build transactions that apply input to Marlowe contracts. The Marlowe Runtime deployment does not have to be trusted if one carefully examines the Marlowe transactions it produces, as discussed in the previous section.
+[Marlowe Runtime](../marlowe-runtime/) provides off-chain services that discover Marlowe contract history and build transactions that apply input to Marlowe contracts. The Marlowe Runtime deployment does not have to be trusted if one carefully examines the Marlowe transactions it produces, as discussed in the previous section. If Marlowe Runtime is deployed as part of a web service, then one needs to be aware of the possibility of person-in-the-middle, cross-site scripting, and other attacks.
 
-Marlowe Runtime contains a [registry of known Marlowe script versions](../marlowe-runtime/src/Language/Marlowe/Runtime/Core/ScriptRegistry.hs) that it uses to create new Marlowe transactions. One should only use Marlowe Runtime to create contracts if one trusts the script hashes in that registry. The Marlowe test suite verifies that [the script registry has not be inadvertently or maliciously altered](https://github.com/input-output-hk/marlowe-cardano/blob/main/marlowe-runtime/test/Language/Marlowe/Runtime/Core/ScriptRegistrySpec.hs). (Of course, this does not guarantee that the test itself has not been altered.)
+Marlowe Runtime contains a [registry of known Marlowe script versions](../marlowe-runtime/src/Language/Marlowe/Runtime/Core/ScriptRegistry.hs) that it uses to create new Marlowe transactions. One should only use Marlowe Runtime to create contracts if one trusts the script hashes in that registry. The Marlowe test suite verifies that [the script registry has not be inadvertently or maliciously altered](https://github.com/input-output-hk/marlowe-cardano/blob/main/marlowe-runtime/test/Language/Marlowe/Runtime/Core/ScriptRegistrySpec.hs). (Of course, this does not guarantee that the test itself has not been altered.
 
 
 ## Marlowe CLI
