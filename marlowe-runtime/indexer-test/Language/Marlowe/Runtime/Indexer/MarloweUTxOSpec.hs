@@ -1,5 +1,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
 
 module Language.Marlowe.Runtime.Indexer.MarloweUTxOSpec
   ( spec
@@ -11,12 +12,10 @@ import Control.Monad (guard, mfilter, zipWithM)
 import Control.Monad.Trans.State (State, evalState, execState, runState)
 import Control.Monad.Trans.Writer (WriterT, execWriterT)
 import Data.Bifunctor (Bifunctor(bimap))
-import qualified Data.ByteString as B
 import Data.Foldable (Foldable(fold), asum)
 import Data.Function ((&))
 import Data.Functor (($>), (<&>))
 import Data.List (nub)
-import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Maybe (isJust, mapMaybe, maybeToList)
 import Data.SOP.Strict (K(..), NP(..))
@@ -33,6 +32,7 @@ import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import qualified Language.Marlowe.Runtime.ChainSync.Api as TransactionOutput (TransactionOutput(..))
 import qualified Language.Marlowe.Runtime.ChainSync.Api as TxOutRef (TxOutRef(..))
 import qualified Language.Marlowe.Runtime.Core.Api as Core
+import Language.Marlowe.Runtime.Core.Gen ()
 import qualified Language.Marlowe.Runtime.Core.ScriptRegistry as ScriptRegistry
 import Language.Marlowe.Runtime.History.Api
   (CreateStep(..), ExtractCreationError(..), ExtractMarloweTransactionError, SomeCreateStep(..))
@@ -49,7 +49,7 @@ import Spec.Marlowe.Semantics.Arbitrary (SemiArbitrary(semiArbitrary), arbitrary
 import Test.Hspec (Spec, describe)
 import Test.Hspec.QuickCheck (prop)
 import Test.QuickCheck
-  (Gen, arbitrary, elements, forAll, infiniteListOf, listOf, listOf1, oneof, resize, sized, (===), (==>))
+  (Arbitrary(..), Gen, elements, forAll, genericShrink, infiniteListOf, listOf1, resize, sized, (===), (==>))
 import Test.QuickCheck.Gen (sublistOf)
 
 spec :: Spec
@@ -63,70 +63,55 @@ testBlockHeader = Chain.BlockHeader 6 "" 6
 
 extractCreateTxSpec :: Spec
 extractCreateTxSpec = describe "extractCreateTx" do
-  prop "extracts the expected transaction" $ forAll (genCreateTx marloweScripts) \createTx ->
+  prop "extracts the expected transaction" $ forAll (genCreateTx marloweScripts) \createTx utxo ->
     forAll (createTxToChainTx Nothing createTx) \tx ->
-      forAll (removeCreate createTx <$> genMarloweUTxO) \utxo ->
-        evalState (execWriterT $ extractCreateTx marloweScriptHashes tx) utxo === [CreateTransaction createTx]
-  prop "extracts nothing if the script hash is not found" $ forAll (genCreateTx marloweScripts) \createTx ->
+      evalState (execWriterT $ extractCreateTx marloweScriptHashes tx) utxo === [CreateTransaction createTx]
+  prop "extracts nothing if the script hash is not found" $ forAll (genCreateTx marloweScripts) \createTx utxo hashes ->
     forAll (createTxToChainTx Nothing createTx) \tx ->
-      forAll (removeCreate createTx <$> genMarloweUTxO) \utxo ->
-        forAll (Set.fromList <$> listOf genScriptHash) \hashes ->
-          evalState (execWriterT $ extractCreateTx hashes tx) utxo === []
-  prop "if it extracts nothing, it doesn't change the UTxO" $ forAll genTx \tx ->
-    forAll genMarloweUTxO \utxo ->
+      evalState (execWriterT $ extractCreateTx hashes tx) utxo === []
+  prop "if it extracts nothing, it doesn't change the UTxO" \tx utxo ->
+    let
+      (txs, utxo') = runState (execWriterT $ extractCreateTx marloweScriptHashes tx) utxo
+    in
+      null txs ==> utxo' === utxo
+  prop "extracts nothing for apply inputs transactions" \utxo -> forAll (genApplyTx testBlockHeader) \(inputDatum, applyTx) ->
+    forAll (applyTxToChainTx inputDatum Nothing applyTx) \tx ->
+      evalState (execWriterT $ extractCreateTx marloweScriptHashes tx) utxo === []
+  prop "Only adds new contracts to the UTxO" $ forAll (genCreateTx marloweScripts) \createTx utxo ->
+    forAll (createTxToChainTx Nothing createTx) \tx ->
       let
         (txs, utxo') = runState (execWriterT $ extractCreateTx marloweScriptHashes tx) utxo
+        addedContracts = flip foldMap txs \case
+          CreateTransaction MarloweCreateTransaction{..} ->
+            Map.mapKeys (Core.ContractId . Chain.TxOutRef txId) $ createStepToUnspentContractOutput <$> newContracts
+          _ -> mempty
       in
-        null txs ==> utxo' === utxo
-  prop "extracts nothing for apply inputs transactions" $ forAll (genApplyTx testBlockHeader) \(inputDatum, applyTx) ->
-    forAll (applyTxToChainTx inputDatum Nothing applyTx) \tx ->
-      forAll genMarloweUTxO \utxo ->
-        evalState (execWriterT $ extractCreateTx marloweScriptHashes tx) utxo === []
-  prop "Only adds new contracts to the UTxO" $ forAll (genCreateTx marloweScripts) \createTx ->
-    forAll (createTxToChainTx Nothing createTx) \tx ->
-      forAll (removeCreate createTx <$> genMarloweUTxO) \utxo ->
-        let
-          (txs, utxo') = runState (execWriterT $ extractCreateTx marloweScriptHashes tx) utxo
-          addedContracts = flip foldMap txs \case
-            CreateTransaction MarloweCreateTransaction{..} ->
-              Map.mapKeys (Core.ContractId . Chain.TxOutRef txId) $ createStepToUnspentContractOutput <$> newContracts
-            _ -> mempty
-        in
-          Map.difference (unspentContractOutputs utxo') (unspentContractOutputs utxo) === addedContracts
-  prop "Emits invalid create transactions" $ forAll (genCreateTx marloweScripts) \createTx ->
+        Map.difference (unspentContractOutputs utxo') (unspentContractOutputs utxo) === addedContracts
+  prop "Emits invalid create transactions" $ forAll (genCreateTx marloweScripts) \createTx utxo ->
     forAll genCreateBug \bug ->
       forAll (createTxToChainTx (Just bug) createTx) \tx ->
-        forAll (removeCreate createTx <$> genMarloweUTxO) \utxo ->
-          let
-            txs = evalState (execWriterT $ extractCreateTx marloweScriptHashes tx) utxo
-            failures = flip foldMap txs \case
-              InvalidCreateTransaction _ err -> [err]
-              _ -> mempty
-          in
-            failures === [bug]
-
-removeCreate :: MarloweCreateTransaction -> MarloweUTxO -> MarloweUTxO
-removeCreate MarloweCreateTransaction{..} utxo = utxo
-  { unspentContractOutputs = Map.withoutKeys (unspentContractOutputs utxo)
-      $ Set.map (Core.ContractId . Chain.TxOutRef txId)
-      $ Map.keysSet newContracts
-  }
+        let
+          txs = evalState (execWriterT $ extractCreateTx marloweScriptHashes tx) utxo
+          failures = flip foldMap txs \case
+            InvalidCreateTransaction _ err -> [err]
+            _ -> mempty
+        in
+          failures === [bug]
 
 extractApplyInputsTxSpec :: Spec
 extractApplyInputsTxSpec = describe "extractApplyInputsTx" do
   prop "extracts the expected transaction" $ forAll (genApplyTx testBlockHeader) \(inputDatum, applyTx) ->
     forAll (applyTxToChainTx inputDatum Nothing applyTx) \tx ->
-      forAll (addInput applyTx . removeInputs tx <$> genMarloweUTxO) \utxo ->
+      forAll (addInput applyTx <$> arbitrary) \utxo ->
         evalState (execWriterT $ extractApplyInputsTx' testBlockHeader tx) utxo === [ApplyInputsTransaction applyTx]
-  prop "if it extracts nothing, it doesn't change the UTxO" $ forAll genTx \tx ->
-    forAll genMarloweUTxO \utxo ->
-      let
-        (txs, utxo') = runState (execWriterT $ extractApplyInputsTx' testBlockHeader tx) utxo
-      in
-        null txs ==> utxo' === utxo
+  prop "if it extracts nothing, it doesn't change the UTxO" \tx utxo ->
+    let
+      (txs, utxo') = runState (execWriterT $ extractApplyInputsTx' testBlockHeader tx) utxo
+    in
+      null txs ==> utxo' === utxo
   prop "Preserves contracts in the UTxO if there is a script output" $ forAll (genApplyTx testBlockHeader) \(inputDatum, applyTx) ->
     forAll (applyTxToChainTx inputDatum Nothing applyTx) \tx ->
-      forAll (addInput applyTx <$> genMarloweUTxO) \utxo ->
+      forAll (addInput applyTx <$> arbitrary) \utxo ->
         let
           (result, utxo') = runState (execWriterT $ extractApplyInputsTx' testBlockHeader tx) utxo
           applyTx' = asum $ result <&> \case
@@ -139,7 +124,7 @@ extractApplyInputsTxSpec = describe "extractApplyInputsTx" do
           hasScriptOut ==> Map.keysSet (unspentContractOutputs utxo') === Map.keysSet (unspentContractOutputs utxo)
   prop "Only modifies the contract it applies inputs to if it succeeds" $ forAll (genApplyTx testBlockHeader) \(inputDatum, applyTx) ->
     forAll (applyTxToChainTx inputDatum Nothing applyTx) \tx ->
-      forAll (addInput applyTx <$> genMarloweUTxO) \utxo ->
+      forAll (addInput applyTx <$> arbitrary) \utxo ->
         let
           (result, utxo') = runState (execWriterT $ extractApplyInputsTx' testBlockHeader tx) utxo
           applyTx' = asum $ result <&> \case
@@ -156,7 +141,7 @@ extractApplyInputsTxSpec = describe "extractApplyInputsTx" do
             Map.keysSet (Map.differenceWith isModified (unspentContractOutputs utxo) (unspentContractOutputs utxo')) === Set.singleton contractId
   prop "Sets the unspent contract output to the expected value" $ forAll (genApplyTx testBlockHeader) \(inputDatum, applyTx) ->
     forAll (applyTxToChainTx inputDatum Nothing applyTx) \tx ->
-      forAll (addInput applyTx <$> genMarloweUTxO) \utxo ->
+      forAll (addInput applyTx <$> arbitrary) \utxo ->
         let
           (result, utxo') = runState (execWriterT $ extractApplyInputsTx' testBlockHeader tx) utxo
           applyTx' = asum $ result <&> \case
@@ -176,7 +161,7 @@ extractApplyInputsTxSpec = describe "extractApplyInputsTx" do
           Map.lookup contractId (unspentContractOutputs utxo') === expectedOut
   prop "Only adds payouts" $ forAll (genApplyTx testBlockHeader) \(inputDatum, applyTx) ->
     forAll (applyTxToChainTx inputDatum Nothing applyTx) \tx ->
-      forAll (addInput applyTx <$> genMarloweUTxO) \utxo ->
+      forAll (addInput applyTx <$> arbitrary) \utxo ->
         let
           utxo' = execState (execWriterT $ extractApplyInputsTx' testBlockHeader tx) utxo
           diffAndRemoveEmpty a b = mfilter (not . Set.null) $ Just $ Set.difference a b
@@ -184,7 +169,7 @@ extractApplyInputsTxSpec = describe "extractApplyInputsTx" do
           Map.differenceWith diffAndRemoveEmpty (unspentPayoutOutputs utxo) (unspentPayoutOutputs utxo') === mempty
   prop "Only modifies payouts for the contract the inputs are applied to" $ forAll (genApplyTx testBlockHeader) \(inputDatum, applyTx) ->
     forAll (applyTxToChainTx inputDatum Nothing applyTx) \tx ->
-      forAll (addInput applyTx <$> genMarloweUTxO) \utxo ->
+      forAll (addInput applyTx <$> arbitrary) \utxo ->
         let
           utxo' = execState (execWriterT $ extractApplyInputsTx' testBlockHeader tx) utxo
           contractId = case applyTx of MarloweApplyInputsTransaction{..} -> Core.contractId marloweTransaction
@@ -198,14 +183,14 @@ extractApplyInputsTxSpec = describe "extractApplyInputsTx" do
             Map.keysSet (Map.differenceWith isModified (unspentPayoutOutputs utxo') (unspentPayoutOutputs utxo)) === Set.singleton contractId
   prop "Doesn't leave empty payout sets" $ forAll (genApplyTx testBlockHeader) \(inputDatum, applyTx) ->
     forAll (applyTxToChainTx inputDatum Nothing applyTx) \tx ->
-      forAll (addInput applyTx <$> genMarloweUTxO) \utxo ->
+      forAll (addInput applyTx <$> arbitrary) \utxo ->
         let
           utxo' = execState (execWriterT $ extractApplyInputsTx' testBlockHeader tx) utxo
         in
           Map.filter Set.null (unspentPayoutOutputs utxo') === mempty
   prop "Adds the payouts produced by the transaction" $ forAll (genApplyTx testBlockHeader) \(inputDatum, applyTx) ->
     forAll (applyTxToChainTx inputDatum Nothing applyTx) \tx ->
-      forAll (addInput applyTx <$> genMarloweUTxO) \utxo ->
+      forAll (addInput applyTx <$> arbitrary) \utxo ->
         let
           (result, utxo') = runState (execWriterT $ extractApplyInputsTx' testBlockHeader tx) utxo
           contractId = case applyTx of MarloweApplyInputsTransaction{..} -> Core.contractId marloweTransaction
@@ -217,14 +202,6 @@ extractApplyInputsTxSpec = describe "extractApplyInputsTx" do
             _ -> mempty
         in
           Set.difference newValue oldValue === payouts
-
-removeInputs :: Chain.Transaction -> MarloweUTxO -> MarloweUTxO
-removeInputs Chain.Transaction{inputs} utxo = utxo
-  { unspentContractOutputs = utxo & unspentContractOutputs & Map.filter \UnspentContractOutput{..} ->
-      Set.notMember txOutRef inputRefs
-  }
-  where
-    inputRefs = inputs & Set.map \Chain.TransactionInput{..} -> Chain.TxOutRef{..}
 
 addInput :: MarloweApplyInputsTransaction -> MarloweUTxO -> MarloweUTxO
 addInput MarloweApplyInputsTransaction{..} utxo = utxo
@@ -280,24 +257,21 @@ extractApplyInputsTx' = extractApplyInputsTx
 
 extractWithdrawTxSpec :: Spec
 extractWithdrawTxSpec = describe "extractWithdrawTx" do
-  prop "writes nothing if no payouts were withdrawn" $ forAll genTxId \txId ->
-    forAll (Set.fromList <$> listOf1 genTxIn) \txIns ->
-      forAll genMarloweUTxO \utxo -> all (Set.null . Set.intersection (Set.map inputToTxOutRef txIns)) (unspentPayoutOutputs utxo) ==>
-        let
-          tx = Chain.Transaction txId Chain.Unbounded mempty txIns [] mempty
-        in
-          evalState (execWriterT $ extractWithdrawTx tx) utxo === []
-  prop "does not update the marlowe UTxO if it produces nothing" $ forAll genTxId \txId ->
-    forAll (Set.fromList <$> listOf1 genTxIn) \txIns ->
-      forAll genMarloweUTxO \utxo ->
-        let
-          tx = Chain.Transaction txId Chain.Unbounded mempty txIns [] mempty
-          (result, utxo') = runState (execWriterT $ extractWithdrawTx tx) utxo
-        in
-          null result ==> utxo === utxo'
-  prop "Tx contains all spent payouts" $ forAll genTxId \txId ->
-    forAll genMarloweUTxO \utxo -> not (Map.null $ unspentPayoutOutputs utxo) ==>
-      forAll (Set.fromList <$> (zipWith mkTxIn <$> infiniteListOf genAddress <*> sublistOf (Map.elems (unspentPayoutOutputs utxo) >>= Set.toList))) \txIns ->
+  prop "writes nothing if no payouts were withdrawn" \txId txIns utxo ->
+    all (Set.null . Set.intersection (Set.map inputToTxOutRef txIns)) (unspentPayoutOutputs utxo) ==>
+      let
+        tx = Chain.Transaction txId Chain.Unbounded mempty txIns [] mempty
+      in
+        evalState (execWriterT $ extractWithdrawTx tx) utxo === []
+  prop "does not update the marlowe UTxO if it produces nothing" \txId txIns utxo ->
+    let
+      tx = Chain.Transaction txId Chain.Unbounded mempty txIns [] mempty
+      (result, utxo') = runState (execWriterT $ extractWithdrawTx tx) utxo
+    in
+      null result ==> utxo === utxo'
+  prop "Tx contains all spent payouts" \txId utxo ->
+    not (Map.null $ unspentPayoutOutputs utxo) ==>
+      forAll (Set.fromList <$> (zipWith mkTxIn <$> infiniteListOf arbitrary <*> sublistOf (Map.elems (unspentPayoutOutputs utxo) >>= Set.toList))) \txIns ->
         let
           tx = Chain.Transaction txId Chain.Unbounded mempty txIns [] mempty
           consumedPayouts = Map.filter (not . Set.null) $ flip Set.intersection (Set.map inputToTxOutRef txIns) <$> unspentPayoutOutputs utxo
@@ -308,28 +282,24 @@ extractWithdrawTxSpec = describe "extractWithdrawTx" do
         in
           not (null txIns) ==>
             evalState (execWriterT $ extractWithdrawTx tx) utxo === [expected]
-  prop "Payouts are conserved" $ forAll genTxId \txId ->
-    forAll (Set.fromList <$> listOf1 genTxIn) \txIns ->
-      forAll genMarloweUTxO \utxo ->
-        let
-          tx = Chain.Transaction txId Chain.Unbounded mempty txIns [] mempty
-          (txs, utxo') = runState (execWriterT $ extractWithdrawTx tx) utxo
-          consumed = flip foldMap txs \case
-            WithdrawTransaction MarloweWithdrawTransaction{..} -> consumedPayouts
-            _ -> mempty
-        in
-          Map.unionWith (<>) consumed (unspentPayoutOutputs utxo') == unspentPayoutOutputs utxo
-  prop "Payouts aren't duplicated" $ forAll genTxId \txId ->
-    forAll (Set.fromList <$> listOf1 genTxIn) \txIns ->
-      forAll genMarloweUTxO \utxo ->
-        let
-          tx = Chain.Transaction txId Chain.Unbounded mempty txIns [] mempty
-          (txs, utxo') = runState (execWriterT $ extractWithdrawTx tx) utxo
-          consumed = flip foldMap txs \case
-            WithdrawTransaction MarloweWithdrawTransaction{..} -> consumedPayouts
-            _ -> mempty
-        in
-          Map.filter (not . Set.null) (Map.intersectionWith Set.intersection consumed (unspentPayoutOutputs utxo')) == mempty
+  prop "Payouts are conserved" \txId txIns utxo ->
+    let
+      tx = Chain.Transaction txId Chain.Unbounded mempty txIns [] mempty
+      (txs, utxo') = runState (execWriterT $ extractWithdrawTx tx) utxo
+      consumed = flip foldMap txs \case
+        WithdrawTransaction MarloweWithdrawTransaction{..} -> consumedPayouts
+        _ -> mempty
+    in
+      Map.unionWith (<>) consumed (unspentPayoutOutputs utxo') == unspentPayoutOutputs utxo
+  prop "Payouts aren't duplicated" \txId txIns utxo ->
+    let
+      tx = Chain.Transaction txId Chain.Unbounded mempty txIns [] mempty
+      (txs, utxo') = runState (execWriterT $ extractWithdrawTx tx) utxo
+      consumed = flip foldMap txs \case
+        WithdrawTransaction MarloweWithdrawTransaction{..} -> consumedPayouts
+        _ -> mempty
+    in
+      Map.filter (not . Set.null) (Map.intersectionWith Set.intersection consumed (unspentPayoutOutputs utxo')) == mempty
 
 marloweScriptHashes :: Set Chain.ScriptHash
 marloweScriptHashes = Set.map ScriptRegistry.marloweScript marloweScripts
@@ -354,9 +324,9 @@ genCreateBug = elements [NoCreateDatum, InvalidCreateDatum]
 
 createTxToChainTx :: Maybe ExtractCreationError -> MarloweCreateTransaction -> Gen Chain.Transaction
 createTxToChainTx bug MarloweCreateTransaction{..} = do
-  inputs <- Set.fromList <$> listOf1 genTxIn
+  inputs <- Set.fromList <$> listOf1 arbitrary
   outputs' <- for [0..maximum (Map.keys newContracts)] \txIx -> case Map.lookup txIx newContracts of
-    Nothing -> genTxOut
+    Nothing -> arbitrary
     Just (SomeCreateStep Core.MarloweV1 CreateStep{createOutput = Core.TransactionScriptOutput{..}}) -> pure $ Chain.TransactionOutput
       address
       assets
@@ -374,7 +344,7 @@ createTxToChainTx bug MarloweCreateTransaction{..} = do
         InvalidScriptHash -> error "Cannot inject InvalidScriptHash"
         NoCreateDatum -> pure txOut { TransactionOutput.datum = Nothing }
         InvalidCreateDatum -> do
-          datum <- genDatum
+          datum <- arbitrary
           pure txOut { TransactionOutput.datum = Just datum }
         NotCreationTransaction -> error "Cannot inject NotCreationTransaction"
   pure Chain.Transaction
@@ -404,7 +374,7 @@ applyTxToChainTx inputDatum _ MarloweApplyInputsTransaction{..} = case marloweVe
         (Just $ Chain.toDatum inputDatum)
         (Just $ Chain.toRedeemer inputs)
       doesNotSpentMarloweInput Chain.TransactionInput{..} = Chain.TxOutRef{..} /= txOutRef
-    chainInputs <- Set.insert marloweChainInput . Set.filter doesNotSpentMarloweInput . Set.fromList <$> listOf genTxIn
+    chainInputs <- Set.insert marloweChainInput . Set.filter doesNotSpentMarloweInput <$> arbitrary
     -- This conversion works because of the way the era history is setup in
     -- this test suite. Byron started at the unix epoch and all slot lengths
     -- were 1 second, so slotNo = POSIX millisecond.
@@ -437,37 +407,10 @@ applyTxToChainTx inputDatum _ MarloweApplyInputsTransaction{..} = case marloweVe
       , mintedTokens = mempty
       }
 
-genDatum :: Gen Chain.Datum
-genDatum = sized \case
-  0 -> oneof [Chain.I <$> arbitrary, Chain.B . B.pack <$> listOf arbitrary]
-  size -> resize (size `div` 2) $ oneof
-    [ Chain.I <$> arbitrary
-    , Chain.B . B.pack <$> listOf arbitrary
-    , Chain.Map <$> (listOf $ (,) <$> genDatum <*> genDatum)
-    , Chain.List <$> listOf genDatum
-    , Chain.Constr <$> arbitrary <*> listOf genDatum
-    ]
-
-genTxOut :: Gen Chain.TransactionOutput
-genTxOut = Chain.TransactionOutput
-  <$> genAddress
-  <*> genAssets
-  <*> pure Nothing
-  <*> pure Nothing
-
-genAssets :: Gen Chain.Assets
-genAssets = Chain.Assets <$> (Chain.Lovelace <$> arbitrary) <*> (Chain.Tokens . Map.fromList <$> listOf ((,) <$> genAssetId <*> (Chain.Quantity <$> arbitrary)))
-
-genAssetId :: Gen Chain.AssetId
-genAssetId = Chain.AssetId <$> genPolicyId <*> genTokenName
-
-genTokenName :: Gen Chain.TokenName
-genTokenName = Chain.TokenName . B.pack <$> listOf arbitrary
-
 genCreateTx :: Set ScriptRegistry.MarloweScripts -> Gen MarloweCreateTransaction
 genCreateTx scripts = do
-  txId <- genTxId
-  txIxs <- sized \size -> resize (min size 10) $ nub <$> listOf1 genTxIx
+  txId <- arbitrary
+  txIxs <- sized \size -> resize (min size 10) $ nub <$> listOf1 arbitrary
   newContracts <- Map.fromList <$> for txIxs \txIx -> do
     let txOut = Chain.TxOutRef{..}
     (txIx,) <$> genSomeCreateStep scripts txOut
@@ -475,10 +418,10 @@ genCreateTx scripts = do
 
 genApplyTx :: Chain.BlockHeader -> Gen (V1.MarloweData, MarloweApplyInputsTransaction)
 genApplyTx blockHeader = do
-  marloweInput@UnspentContractOutput{..} <- genUnspentContractOutput
-  rolesCurrency <- genPolicyId
-  txId <- genTxId
-  contractId <- genContractId
+  marloweInput@UnspentContractOutput{..} <- arbitrary
+  rolesCurrency <- arbitrary
+  txId <- arbitrary
+  contractId <- arbitrary
   let
     marloweParams = V1.MarloweParams $ toPlutusCurrencySymbol rolesCurrency
     genInputs = do
@@ -542,15 +485,7 @@ paymentToPayout rolesCurrency payoutAddress (V1.Payment _ payee token@(V1.Token 
 
 genSomeCreateStep :: Set ScriptRegistry.MarloweScripts -> Chain.TxOutRef -> Gen SomeCreateStep
 genSomeCreateStep scripts txOut = SomeCreateStep Core.MarloweV1
-  <$> genCreateStep scripts txOut genV1Datum (assetsFromAccounts . V1.accounts . V1.marloweState)
-
-genV1Datum :: Gen V1.MarloweData
-genV1Datum = do
-  context <- arbitrary
-  V1.MarloweData
-    <$> (V1.MarloweParams . toPlutusCurrencySymbol <$> genPolicyId)
-    <*> semiArbitrary context
-    <*> semiArbitrary context
+  <$> genCreateStep scripts txOut arbitrary (assetsFromAccounts . V1.accounts . V1.marloweState)
 
 genCreateStep
   :: Set ScriptRegistry.MarloweScripts
@@ -585,65 +520,13 @@ assetsFromAccounts = foldMap assetsFromAccount . AM.toList
           $ Map.singleton (Chain.AssetId (fromPlutusCurrencySymbol cs) (fromPlutusTokenName tn))
           $ fromIntegral quantity
 
-genTx :: Gen Chain.Transaction
-genTx = Chain.Transaction
-  <$> genTxId
-  <*> genValidityRange
-  <*> pure mempty
-  <*> (Set.fromList <$> listOf1 genTxIn)
-  <*> listOf1 genTxOut
-  <*> pure mempty
+instance Arbitrary MarloweUTxO where
+  arbitrary = MarloweUTxO <$> arbitrary <*> (Map.filter (not . Set.null) <$> arbitrary)
+  shrink = genericShrink
 
-genValidityRange :: Gen Chain.ValidityRange
-genValidityRange = oneof
-  [ pure Chain.Unbounded
-  , Chain.MinBound <$> (Chain.SlotNo <$> arbitrary)
-  , Chain.MaxBound <$> (Chain.SlotNo <$> arbitrary)
-  , do
-      a <- Chain.SlotNo <$> arbitrary
-      b <- Chain.SlotNo <$> arbitrary
-      pure $ Chain.MinMaxBound (min a b) (max a b)
-  ]
-
-genTxIn :: Gen Chain.TransactionInput
-genTxIn = Chain.TransactionInput
-  <$> genTxId
-  <*> genTxIx
-  <*> genAddress
-  <*> pure Nothing
-  <*> pure Nothing
-
-genTxId :: Gen Chain.TxId
-genTxId = Chain.TxId . B.pack <$> listOf1 arbitrary
-
-genTxIx :: Gen Chain.TxIx
-genTxIx = Chain.TxIx <$> arbitrary
-
-genAddress :: Gen Chain.Address
-genAddress = Chain.Address . B.pack <$> listOf1 arbitrary
-
-genMarloweUTxO :: Gen MarloweUTxO
-genMarloweUTxO = MarloweUTxO
-  <$> genContractIdMapOf genUnspentContractOutput
-  <*> genContractIdMapOf (Set.fromList <$> listOf1 genTxOutRef)
-
-genContractIdMapOf :: Gen a -> Gen (Map Core.ContractId a)
-genContractIdMapOf genItem = Map.fromList <$> listOf ((,) <$> genContractId <*> genItem)
-
-genContractId :: Gen Core.ContractId
-genContractId = Core.ContractId <$> genTxOutRef
-
-genTxOutRef :: Gen Chain.TxOutRef
-genTxOutRef = Chain.TxOutRef <$> genTxId <*> genTxIx
-
-genUnspentContractOutput :: Gen UnspentContractOutput
-genUnspentContractOutput = UnspentContractOutput (Core.SomeMarloweVersion Core.MarloweV1)
-  <$> genTxOutRef
-  <*> genAddress
-  <*> elements (ScriptRegistry.payoutScript <$> Set.toList marloweScripts)
-
-genScriptHash :: Gen Chain.ScriptHash
-genScriptHash = Chain.ScriptHash . B.pack <$> listOf1 arbitrary
-
-genPolicyId :: Gen Chain.PolicyId
-genPolicyId = Chain.PolicyId . B.pack <$> listOf arbitrary
+instance Arbitrary UnspentContractOutput where
+  arbitrary = UnspentContractOutput (Core.SomeMarloweVersion Core.MarloweV1)
+    <$> arbitrary
+    <*> arbitrary
+    <*> elements (ScriptRegistry.payoutScript <$> Set.toList marloweScripts)
+  shrink = genericShrink
