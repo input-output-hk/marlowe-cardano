@@ -21,6 +21,7 @@ import Data.Void (Void, absurd)
 import Language.Marlowe.Runtime.ChainSync.Api
 import Language.Marlowe.Runtime.Indexer.Database (DatabaseQueries(..))
 import Language.Marlowe.Runtime.Indexer.Types (MarloweBlock(..), MarloweUTxO(..), extractMarloweBlock)
+import Network.Protocol.ChainSeek.Client
 import Network.Protocol.Driver (RunClient)
 import Observe.Event (addField, withEvent)
 import Observe.Event.Backend (EventBackend)
