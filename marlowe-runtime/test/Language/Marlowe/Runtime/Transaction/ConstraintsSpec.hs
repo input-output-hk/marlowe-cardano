@@ -12,6 +12,8 @@ import Control.Applicative (Alternative)
 import Control.Arrow ((***))
 import Control.Error (note)
 import Control.Monad (guard)
+import Control.Monad.Trans.Class (lift)
+import Control.Monad.Trans.State (StateT(StateT, runStateT), evalStateT, get, modify, put)
 import Data.Bifunctor (first)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
@@ -25,6 +27,7 @@ import qualified Data.Map.Strict as SMap (toList)
 import Data.Maybe (fromJust, isJust, mapMaybe)
 import Data.Monoid (First(..), getFirst)
 import Data.Ratio ((%))
+import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.Traversable (for)
 import Data.Word (Word32)
@@ -73,8 +76,10 @@ spec = do
   describe "solveInitialTxBodyContent" do
     prop "satisfies the constraints" \(SomeTxConstraints marloweVersion constraints) -> do
       protocol <- hedgehog genProtocolParameters
-      marloweContext <- genMarloweContext marloweVersion constraints
-      walletContext <- genWalletContext marloweVersion constraints
+      (marloweContext, walletContext) <- flip evalStateT mempty do
+        marloweContext <- genMarloweContext marloweVersion constraints
+        walletContext <- genWalletContext marloweVersion constraints
+        pure (marloweContext, walletContext)
       let
         (marloweContextStr, walletContextStr) = case marloweVersion of MarloweV1 -> (show marloweContext, show walletContext)
         marloweUtxo = case scriptOutput marloweContext of
@@ -493,7 +498,7 @@ spec = do
 -- with a minimum ADA plus zero or more "nuisance" tokens
 genWalletWithNuisance :: MarloweVersion v -> TxConstraints v -> Word64 -> Gen WalletContext
 genWalletWithNuisance marloweVersion' constraints' minLovelace = do
-  wc <- genWalletContext marloweVersion' constraints'
+  wc <- evalStateT (genWalletContext marloweVersion' constraints') mempty
   adaTxOutRef <- genTxOutRef
   nuisTxOutRef <- genTxOutRef
   someAddress <- genAddress
@@ -564,7 +569,7 @@ txOutToValue (TxOut _ value _ _) = txOutValueToValue value
 genSimpleMarloweContext :: MarloweVersion v -> TxConstraints v -> Gen (MarloweContext w)
 genSimpleMarloweContext marloweVersion constraints = do
   -- Let the generator make us one..
-  mctx <- genMarloweContext marloweVersion constraints
+  mctx <- evalStateT (genMarloweContext marloweVersion constraints) mempty
   -- ..and hack these values to be empty/nothing
   pure $ mctx
     { scriptOutput = Nothing
@@ -583,7 +588,7 @@ genAdaOnlyAssets maxLovelace = Chain.Assets
 --   changeAddress = any valid address
 genWalletWithAsset :: MarloweVersion v -> TxConstraints v -> Integer -> Gen WalletContext
 genWalletWithAsset marloweVersion constraints minLovelace = do
-  wc <- genWalletContext marloweVersion constraints
+  wc <- evalStateT (genWalletContext marloweVersion constraints) mempty
   txOutRef <- genTxOutRef
   stubAddress <- genAddress
   let
@@ -1005,6 +1010,16 @@ genDatum = do
 genOutAssets :: Gen Chain.Assets
 genOutAssets = hedgehog $ assetsFromCardanoValue <$> genValueForTxOut
 
+genTxOutRefTracked :: StateT (Set Chain.TxOutRef) Gen Chain.TxOutRef
+genTxOutRefTracked = do
+  used <- get
+  txOutRef <- lift genTxOutRef
+  if Set.member txOutRef used
+    then genTxOutRefTracked
+    else  do
+      put $ Set.insert txOutRef used
+      pure txOutRef
+
 genTxOutRef :: Gen Chain.TxOutRef
 genTxOutRef = Chain.TxOutRef <$> genTxId <*> (Chain.TxIx <$> arbitrary)
 
@@ -1159,10 +1174,10 @@ genAddress = fromCardanoAddressAny <$> oneof
   , hedgehog $ AddressShelley <$> genAddressShelley
   ]
 
-genMarloweContext :: MarloweVersion v -> TxConstraints v -> Gen (MarloweContext v)
+genMarloweContext :: MarloweVersion v -> TxConstraints v -> StateT (Set Chain.TxOutRef) Gen (MarloweContext v)
 genMarloweContext MarloweV1 constraints = do
-  marloweScriptHash <- hedgehog genScriptHash
-  payoutScriptHash <- hedgehog genScriptHash
+  marloweScriptHash <- lift $ hedgehog genScriptHash
+  payoutScriptHash <- lift $ hedgehog genScriptHash
   let
     scriptAddress hash = fromCardanoAddressAny
       $ AddressShelley
@@ -1179,27 +1194,33 @@ genMarloweContext MarloweV1 constraints = do
     <*> pure (fromCardanoScriptHash marloweScriptHash)
     <*> pure (fromCardanoScriptHash payoutScriptHash)
 
-genScriptOutput :: Chain.Address -> TxConstraints 'V1 -> Gen (Maybe (TransactionScriptOutput 'V1))
+genScriptOutput :: Chain.Address -> TxConstraints 'V1 -> StateT (Set Chain.TxOutRef) Gen (Maybe (TransactionScriptOutput 'V1))
 genScriptOutput address TxConstraints{..} = case marloweInputConstraints of
-  MarloweInputConstraintsNone -> oneof
+  MarloweInputConstraintsNone -> oneofT
     [ pure Nothing
-    , Just <$> (TransactionScriptOutput address <$> genOutAssets <*> genTxOutRef <*> genDatum)
+    , Just <$> (TransactionScriptOutput address <$> lift genOutAssets <*> genTxOutRefTracked <*> lift genDatum)
     ]
-  MarloweInput {} -> Just <$> (TransactionScriptOutput address <$> genOutAssets <*> genTxOutRef <*> genDatum)
+  MarloweInput {} -> Just <$> (TransactionScriptOutput address <$> lift genOutAssets <*> genTxOutRefTracked <*> lift genDatum)
+
+oneofT :: [StateT s Gen a] -> StateT s Gen a
+oneofT choices = StateT \s -> oneof $ flip runStateT s <$> choices
+
+listOfT :: StateT s Gen a -> StateT s Gen [a]
+listOfT a = do traverse (const a) =<< lift (listOf $ pure ())
 
 shrinkPayout :: Payout 'V1 -> [Payout 'V1]
 shrinkPayout Payout{..} = Payout address <$> shrinkAssets assets <*> pure datum
 
-genPayoutOutputs :: Chain.Address -> TxConstraints 'V1 -> Gen (Map Chain.TxOutRef (Payout 'V1))
+genPayoutOutputs :: Chain.Address -> TxConstraints 'V1 -> StateT (Set Chain.TxOutRef) Gen (Map Chain.TxOutRef (Payout 'V1))
 genPayoutOutputs address TxConstraints{..} = (<>) <$> required <*> extra
   where
     required = Map.fromList <$> traverse (genPayout address) (Set.toList payoutInputConstraints)
-    extra = Map.fromList <$> listOf (genPayout address =<< genRoleToken)
+    extra = Map.fromList <$> listOfT (genPayout address =<< lift genRoleToken)
 
-genPayout :: Chain.Address -> Chain.AssetId -> Gen (Chain.TxOutRef, Payout 'V1)
+genPayout :: Chain.Address -> Chain.AssetId -> StateT (Set Chain.TxOutRef) Gen (Chain.TxOutRef, Payout 'V1)
 genPayout address datum = do
-  assets <- genOutAssets
-  (,Payout{..}) <$> genTxOutRef
+  assets <- lift genOutAssets
+  (,Payout{..}) <$> genTxOutRefTracked
 
 shrinkTransactionOutput :: Chain.TransactionOutput -> [Chain.TransactionOutput]
 shrinkTransactionOutput Chain.TransactionOutput{..} = Chain.TransactionOutput address
@@ -1207,11 +1228,11 @@ shrinkTransactionOutput Chain.TransactionOutput{..} = Chain.TransactionOutput ad
   <*> pure datumHash
   <*> pure datum
 
-genReferenceScriptUtxo :: Chain.Address -> Gen ReferenceScriptUtxo
+genReferenceScriptUtxo :: Chain.Address -> StateT (Set Chain.TxOutRef) Gen ReferenceScriptUtxo
 genReferenceScriptUtxo address = ReferenceScriptUtxo
-  <$> genTxOutRef
-  <*> genTransactionOutput (pure address)
-  <*> hedgehog (genPlutusScript PlutusScriptV2)
+  <$> genTxOutRefTracked
+  <*> lift (genTransactionOutput $ pure address)
+  <*> lift (hedgehog $ genPlutusScript PlutusScriptV2)
 
 genTransactionOutput :: Gen Chain.Address -> Gen Chain.TransactionOutput
 genTransactionOutput address = Chain.TransactionOutput
@@ -1220,26 +1241,28 @@ genTransactionOutput address = Chain.TransactionOutput
   <*> pure Nothing
   <*> pure Nothing
 
-genWalletContext :: MarloweVersion v -> TxConstraints v -> Gen WalletContext
+genWalletContext :: MarloweVersion v -> TxConstraints v -> StateT (Set Chain.TxOutRef) Gen WalletContext
 genWalletContext MarloweV1 constraints = WalletContext
   <$> genWalletUtxos constraints
   <*> pure mempty
-  <*> genAddress
+  <*> lift  genAddress
 
-genWalletUtxos :: TxConstraints 'V1 -> Gen Chain.UTxOs
+genWalletUtxos :: TxConstraints 'V1 -> StateT (Set Chain.TxOutRef) Gen Chain.UTxOs
 genWalletUtxos TxConstraints{..} = (<>) <$> required <*> extra
   where
     required = case roleTokenConstraints of
       RoleTokenConstraintsNone -> pure mempty
-      MintRoleTokens txOutRef _ _ -> Chain.UTxOs . Map.singleton txOutRef <$> genTransactionOutput genAddress
+      MintRoleTokens txOutRef _ _ -> do
+        modify $ Set.insert txOutRef
+        lift $ Chain.UTxOs . Map.singleton txOutRef <$> genTransactionOutput genAddress
       SpendRoleTokens roleTokens -> fold <$> for (Set.toList roleTokens) \roleToken -> do
-        txOutRef <- genTxOutRef
-        txOut <- genTransactionOutput genAddress
+        txOutRef <- genTxOutRefTracked
+        txOut <- lift $ genTransactionOutput genAddress
         let roleTokenAssets = Chain.Assets 0 $ Chain.Tokens $ Map.singleton roleToken 1
         pure $ Chain.UTxOs $ Map.singleton txOutRef $ txOut { Chain.assets = Chain.assets txOut <> roleTokenAssets }
-    extra = fold <$> listOf do
-      txOutRef <- genTxOutRef
-      txOut <- genTransactionOutput genAddress
+    extra = fold <$> listOfT do
+      txOutRef <- genTxOutRefTracked
+      txOut <- lift $ genTransactionOutput genAddress
       pure $ Chain.UTxOs $ Map.singleton txOutRef txOut
 
 toCardanoAssetId :: Chain.AssetId -> AssetId
