@@ -191,6 +191,7 @@ library gen
     , hedgehog-quickcheck
     , marlowe-chain-sync
     , marlowe-protocols
+    , nonempty-containers
     , ouroboros-consensus
     , QuickCheck
     , text

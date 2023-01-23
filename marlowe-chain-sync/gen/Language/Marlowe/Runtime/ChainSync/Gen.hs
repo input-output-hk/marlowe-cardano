@@ -12,6 +12,7 @@ import Cardano.Api
   , CardanoMode
   , ConsensusMode(..)
   , EraHistory(..)
+  , Key(verificationKeyHash)
   , NetworkId(..)
   , NetworkMagic(..)
   , PlutusScriptVersion(..)
@@ -27,7 +28,9 @@ import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import Data.ByteString.Short (fromShort)
 import Data.Foldable (fold)
+import Data.Maybe (mapMaybe)
 import Data.SOP.Strict (K(..), NP(..))
+import qualified Data.Set.NonEmpty as NESet
 import qualified Data.Text as T
 import Data.These (These(..))
 import Data.Time.Clock.POSIX (posixSecondsToUTCTime)
@@ -35,7 +38,7 @@ import Data.Void (absurd)
 import Data.Word (Word64)
 import GHC.Show (showSpace)
 import Gen.Cardano.Api.Typed
-  (genAddressByron, genAddressShelley, genPlutusScript, genProtocolParameters, genScriptHash, genTx, genVerificationKey)
+  (genAddressShelley, genPlutusScript, genProtocolParameters, genScriptHash, genTx, genVerificationKey)
 import Language.Marlowe.Runtime.Cardano.Api (fromCardanoAddressAny, fromCardanoDatumHash, toCardanoScriptData)
 import Language.Marlowe.Runtime.ChainSync.Api
 import qualified Network.Protocol.ChainSeek.Types as ChainSeek
@@ -56,6 +59,7 @@ import Ouroboros.Consensus.HardFork.History
   )
 import Ouroboros.Consensus.Util.Counting (Exactly(..))
 import Test.QuickCheck hiding (shrinkMap)
+import Test.QuickCheck.Gen (chooseWord64)
 import Test.QuickCheck.Hedgehog (hedgehog)
 import Unsafe.Coerce (unsafeCoerce)
 
@@ -119,10 +123,7 @@ instance Arbitrary CertIx where
   arbitrary = CertIx <$> arbitrary
 
 instance Arbitrary Address where
-  arbitrary = oneof
-    [ hedgehog $ fromCardanoAddressAny . AddressByron <$> genAddressByron
-    , hedgehog $ fromCardanoAddressAny . AddressShelley <$> genAddressShelley
-    ]
+  arbitrary = hedgehog $ fromCardanoAddressAny . AddressShelley <$> genAddressShelley
 
 instance Arbitrary Assets where
   arbitrary = Assets <$> arbitrary <*> arbitrary
@@ -133,7 +134,7 @@ instance Arbitrary Lovelace where
   shrink = genericShrink
 
 instance Arbitrary Quantity where
-  arbitrary = Quantity <$> arbitrary
+  arbitrary = Quantity <$> chooseWord64 (1, maxBound)
   shrink = genericShrink
 
 instance Arbitrary Tokens where
@@ -145,8 +146,7 @@ instance Arbitrary AssetId where
   shrink = genericShrink
 
 instance Arbitrary PolicyId where
-  arbitrary = PolicyId <$> genBytes
-  shrink = genericShrink
+  arbitrary = PolicyId . unScriptHash <$> arbitrary
 
 instance Arbitrary TokenName where
   arbitrary = TokenName <$> genBytes
@@ -191,7 +191,7 @@ instance Arbitrary StakeCredential where
 instance Arbitrary PaymentKeyHash where
   arbitrary = do
     vKey <- hedgehog $ genVerificationKey AsPaymentKey
-    pure $ PaymentKeyHash $ serialiseToRawBytes vKey
+    pure $ PaymentKeyHash $ serialiseToRawBytes $ verificationKeyHash vKey
 
 instance Arbitrary StakeKeyHash where
   arbitrary = do
@@ -300,6 +300,7 @@ instance ChainSeek.ArbitraryQuery Move where
     TagFindConsumingTxs -> FindConsumingTxs <$> arbitrary
     TagFindTx -> FindTx <$> arbitrary <*> arbitrary
     TagFindTxsTo -> FindTxsTo <$> arbitrary
+    TagFindTxsFor -> FindTxsFor <$> (NESet.insertSet <$> arbitrary <*> arbitrary)
     TagAdvanceToTip -> pure AdvanceToTip
 
   arbitraryErr = \case
@@ -318,6 +319,7 @@ instance ChainSeek.ArbitraryQuery Move where
     TagFindConsumingTxs -> Just arbitrary
     TagFindTx -> Just arbitrary
     TagFindTxsTo -> Just arbitrary
+    TagFindTxsFor -> Nothing
     TagAdvanceToTip -> Nothing
 
   arbitraryResult = \case
@@ -329,6 +331,7 @@ instance ChainSeek.ArbitraryQuery Move where
     TagFindConsumingTxs -> arbitrary
     TagFindTx -> arbitrary
     TagFindTxsTo -> arbitrary
+    TagFindTxsFor -> arbitrary
     TagAdvanceToTip -> arbitrary
 
   shrinkQuery = \case
@@ -343,6 +346,7 @@ instance ChainSeek.ArbitraryQuery Move where
     FindConsumingTxs txOuts -> FindConsumingTxs <$> shrink txOuts
     FindTx _ _ -> []
     FindTxsTo credentials -> FindTxsTo <$> shrink credentials
+    FindTxsFor credentials -> FindTxsFor <$> mapMaybe NESet.nonEmptySet (shrink $ NESet.toSet credentials)
     AdvanceToTip -> pure AdvanceToTip
 
   shrinkErr = \case
@@ -354,6 +358,7 @@ instance ChainSeek.ArbitraryQuery Move where
     TagFindConsumingTxs -> shrink
     TagFindTx -> shrink
     TagFindTxsTo -> shrink
+    TagFindTxsFor -> absurd
     TagAdvanceToTip -> absurd
 
   shrinkResult = \case
@@ -365,6 +370,7 @@ instance ChainSeek.ArbitraryQuery Move where
     TagFindConsumingTxs -> shrink
     TagFindTx -> shrink
     TagFindTxsTo -> shrink
+    TagFindTxsFor -> shrink
     TagAdvanceToTip -> shrink
 
 instance ChainSeek.QueryEq Move where
@@ -387,6 +393,8 @@ instance ChainSeek.QueryEq Move where
       FindTx wait' txId' -> wait == wait' && txId == txId'
     FindTxsTo credentials -> \case
       FindTxsTo credentials' -> credentials == credentials'
+    FindTxsFor credentials -> \case
+      FindTxsFor credentials' -> credentials == credentials'
     AdvanceToTip -> \case
       AdvanceToTip -> True
       _ -> False
@@ -400,6 +408,7 @@ instance ChainSeek.QueryEq Move where
     TagFindConsumingTxs -> (==)
     TagFindTx -> (==)
     TagFindTxsTo -> (==)
+    TagFindTxsFor -> (==)
     TagAdvanceToTip -> (==)
 
   resultEq = \case
@@ -411,6 +420,7 @@ instance ChainSeek.QueryEq Move where
     TagFindConsumingTxs -> (==)
     TagFindTx -> (==)
     TagFindTxsTo -> (==)
+    TagFindTxsFor -> (==)
     TagAdvanceToTip -> (==)
 
 instance ChainSeek.ShowQuery Move where
@@ -429,6 +439,7 @@ instance ChainSeek.ShowQuery Move where
     TagFindConsumingTxs -> showString "TagFindConsumingTxs"
     TagFindTx -> showString "TagFindTx"
     TagFindTxsTo -> showString "TagFindTxsTo"
+    TagFindTxsFor -> showString "TagFindTxsFor"
     TagAdvanceToTip -> showString "TagAdvanceToTip"
 
   showsPrecQuery p = \case
@@ -476,6 +487,11 @@ instance ChainSeek.ShowQuery Move where
       . showSpace
       . showsPrec 11 credentials
       )
+    FindTxsFor credentials -> showParen (p >= 11)
+      ( showString "FindTxsFor"
+      . showSpace
+      . showsPrec 11 credentials
+      )
     AdvanceToTip -> showString "AdvanceToTip"
 
   showsPrecErr p = \case
@@ -487,6 +503,7 @@ instance ChainSeek.ShowQuery Move where
     TagFindConsumingTxs -> showsPrec p
     TagFindTx -> showsPrec p
     TagFindTxsTo -> showsPrec p
+    TagFindTxsFor -> showsPrec p
     TagAdvanceToTip -> showsPrec p
 
   showsPrecResult p = \case
@@ -498,6 +515,7 @@ instance ChainSeek.ShowQuery Move where
     TagFindConsumingTxs -> showsPrec p
     TagFindTx -> showsPrec p
     TagFindTxsTo -> showsPrec p
+    TagFindTxsFor -> showsPrec p
     TagAdvanceToTip -> showsPrec p
 
 instance Query.ArbitraryQuery ChainSyncQuery where

@@ -7,7 +7,6 @@ module Language.Marlowe.Runtime.Transaction.BuildConstraintsSpec
   ( spec
   ) where
 
-import Cardano.Api (AddressAny(AddressShelley), TxMetadata(..), TxMetadataValue)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import Data.Function (on)
@@ -15,13 +14,9 @@ import qualified Data.List.NonEmpty as NE
 import Data.Map (Map)
 import qualified Data.Map as Map
 import qualified Data.Set as Set
-import Data.Word (Word64)
 import GHC.Generics (Generic)
-import Gen.Cardano.Api.Metadata (genTxMetadata)
-import Gen.Cardano.Api.Typed (genAddressShelley)
 import qualified Language.Marlowe.Core.V1.Semantics as Semantics
 import qualified Language.Marlowe.Core.V1.Semantics.Types as Semantics
-import Language.Marlowe.Runtime.Cardano.Api (fromCardanoAddressAny)
 import Language.Marlowe.Runtime.ChainSync.Api (Lovelace, TransactionMetadata(unTransactionMetadata), toUTxOsList)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Core.Api (Contract, Datum, MarloweVersion(..), MarloweVersionTag(..))
@@ -39,14 +34,13 @@ import Language.Marlowe.Runtime.Transaction.Constraints
   , WalletContext(..)
   )
 import qualified Language.Marlowe.Runtime.Transaction.Constraints as TxConstraints
-import Language.Marlowe.Runtime.Transaction.ConstraintsSpec (genRole, genTransactionOutput, genTxOutRef, shrinkAssets)
+import Language.Marlowe.Runtime.Transaction.ConstraintsSpec (genRole)
 import Spec.Marlowe.Semantics.Arbitrary ()
 import Test.Hspec (Spec, shouldBe)
 import qualified Test.Hspec as Hspec
 import qualified Test.Hspec.QuickCheck as Hspec.QuickCheck
 import Test.QuickCheck (Arbitrary(..), Property, discard, genericShrink, listOf1, oneof, suchThat, (===))
 import qualified Test.QuickCheck as QuickCheck
-import Test.QuickCheck.Hedgehog (hedgehog)
 import Test.QuickCheck.Instances ()
 
 byteStringGen :: QuickCheck.Gen ByteString
@@ -177,20 +171,6 @@ instance Arbitrary WalletContext where
   arbitrary = WalletContext <$> arbitrary <*> arbitrary <*> arbitrary
   shrink = genericShrink
 
-instance Arbitrary Chain.UTxOs where
-  arbitrary = Chain.UTxOs <$> arbitrary
-  shrink = genericShrink
-
-instance Arbitrary Chain.TxOutRef where
-  arbitrary = genTxOutRef
-
-instance Arbitrary Chain.TransactionOutput where
-  arbitrary = genTransactionOutput arbitrary
-  shrink txOut = [ txOut { Chain.assets = assets' } | assets' <- shrinkAssets $ Chain.assets txOut ]
-
-instance Arbitrary Chain.Address where
-  arbitrary = hedgehog $ fromCardanoAddressAny . AddressShelley <$> genAddressShelley
-
 instance Arbitrary RoleTokensConfig where
   arbitrary = oneof
     [ pure RoleTokensNone
@@ -201,12 +181,6 @@ instance Arbitrary RoleTokensConfig where
     RoleTokensNone -> []
     RoleTokensUsePolicy _ -> [RoleTokensNone]
     RoleTokensMint _ -> [RoleTokensNone]
-
-instance Arbitrary Chain.TransactionMetadata where
-  arbitrary = hedgehog $ Chain.TransactionMetadata . fmap Chain.fromCardanoMetadata . unTxMetadata <$> genTxMetadata
-
-unTxMetadata :: TxMetadata -> Map Word64 TxMetadataValue
-unTxMetadata (TxMetadata m) = m
 
 notEmptyWalletContext :: WalletContext -> Bool
 notEmptyWalletContext WalletContext{..} = not $ null $ toUTxOsList availableUtxos

@@ -21,6 +21,7 @@ import Data.Data (Proxy(Proxy))
 import Data.Foldable (fold)
 import qualified Data.Map as Map
 import Data.Maybe (mapMaybe)
+import Debug.Trace (traceShow)
 import GHC.Base (Alternative((<|>)))
 import Language.Marlowe.Runtime.Cardano.Feature
 import Language.Marlowe.Runtime.ChainSync.Api
@@ -264,11 +265,15 @@ fromCardanoTxOutDatum = \case
   C.TxOutDatumInline _ datum -> (Nothing, Just $ fromCardanoScriptData datum)
 
 toCardanoTxOut :: C.MultiAssetSupportedInEra era -> TransactionOutput -> Maybe (C.TxOut C.CtxTx era)
-toCardanoTxOut era TransactionOutput{..} = C.TxOut
+toCardanoTxOut era TransactionOutput{..} = printIfNone $ C.TxOut
   <$> toCardanoAddressInEra (cardanoEraOfFeature era) address
   <*> toCardanoTxOutValue era assets
   <*> toCardanoTxOutDatum (cardanoEraOfFeature era) datumHash datum
   <*> pure C.ReferenceScriptNone
+  where
+    printIfNone = \case
+      Nothing -> traceShow TransactionOutput{..} Nothing
+      Just a -> Just a
 
 toCardanoTxOut' :: C.IsCardanoEra era
                 => C.MultiAssetSupportedInEra era
