@@ -846,10 +846,10 @@ shrinkThese shrinkA shrinkB = \case
     ]
 
 genNBytes :: Int -> Gen ByteString
-genNBytes len = BS.pack <$> replicateM len arbitrary
+genNBytes len = BS.pack <$> replicateM len (chooseBoundedIntegral (minBound, maxBound))
 
 genBytes :: Gen BS.ByteString
-genBytes = BS.pack <$> listOf1 arbitrary
+genBytes = BS.pack <$> listOf1 (chooseBoundedIntegral (minBound, maxBound))
 
 data StructureType
   = Leaf
