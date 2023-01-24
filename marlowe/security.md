@@ -2,6 +2,7 @@
 
 - [Contracts](#contracts)
 - [Transactions](#transactions)
+- [Role-Tokens](#role-tokens)
 - [Marlowe Runtime](#marlowe-runtime)
 - [Marlowe CLI](#marlowe-cli)
 
@@ -27,9 +28,9 @@ Before signing a Marlowe transaction, one should understand the following:
 
 #### Does the transaction operate a Marlowe contract?
 
-Because Marlowe's Plutus validator script is a universal interpreter for all Marlowe contracts of a specified version, the UTxO for a Marlowe contract resides at well-known *script hash*. If one verifies that a transaction spends from an address that has the Marlowe script hash as its *payment part*, then one knows that the true Marlowe validator will run to validate the spending of that UTxO.
+Because Marlowe's Plutus validator script is a universal interpreter for all Marlowe contracts of a specified version, the UTxO for a Marlowe contract resides at a well-known *script hash*. If one verifies that a transaction spends from an address that has the Marlowe script hash as its *payment part*, then one knows that the true Marlowe validator will run to validate the spending of that UTxO.
 
-One can compute the script hash of the Marlowe validator from first principles by compiling the validator and computing its hash, assume that one trusts [the Marlowe script source code](src/Language/Marlowe/Scripts.hs) in this repository. Here is a recipe:
+One can compute the script hash of the Marlowe validator from first principles by compiling the validator and computing its hash, assuming that one trusts [the Marlowe script source code](src/Language/Marlowe/Scripts.hs) in this repository. Here is a recipe:
 ```bash
 nix run 'github:input-output-hk/marlowe-cardano#marlowe-cli' -- contract validator --mainnet --out-file /dev/null --print-hash
 ```
@@ -64,7 +65,7 @@ $ cardano-cli address info --address addr1z94f8ywk4fg672xasahtk4t9k6w3aql943uxz5
 
 #### What is the current contract and its state?
 
-The pre-transaction state of the contract is defined in the Plutus `Datum` associated with the UTxO being spent from the Marlowe script address, and this datum must be provided in the transaction.  This datum contains . . .
+The pre-transaction state of the contract is defined in the Plutus `Datum` associated with the UTxO being spent from the Marlowe script address, and this datum must be provided in the transaction.  This datum contains the following:
 - the balances of the accounts internal to the contract,
 - the history of choices previously made up to this point in the contract's execution,
 - the current values of the contract's bound variables, and
@@ -87,7 +88,7 @@ The unsigned transaction may contain other spending and payments beyond that spe
 
 ### Marlowe Payout Validator
 
-In addition to the *semantics validator* discussed above, Marlowe has a *payout validator*. The same security consideration hold for it. Its script hash can be computed as follows:
+In addition to the *semantics validator* discussed above, Marlowe has a *payout validator*. The same security considerations hold for it. Its script hash can be computed as follows:
 ```bash
 nix run 'github:input-output-hk/marlowe-cardano#marlowe-cli' -- role validator --mainnet --out-file /dev/null --print-hash
 addr1w9yswm4tyqjrmj2xy5glhx9fe7m3n7rwj6fz3qfekly3mucd3rynq
@@ -100,11 +101,20 @@ Validator hash: "49076eab20243dc9462511fb98a9cfb719f86e9692288139b7c91df3"
 Deserialization of the `Datum` and `Redeemer` should target `(Plutus.V2.Ledger.Api.CurrencySymbol, Plutus.V2.Ledger.Api.TokenName)` and `()`, respectively.
 
 
+## Role Tokens
+
+The Marlowe validator does not enforce [a particular monetary policy for role tokens](./best-practices.md#monetary-policy-for-role-tokens), in order to make possible novel use cases using role tokens. However, the security of authorizations in a role-based Marlowe contract depends critically upon the role-token monetary policy. Thus, one should carefully scrutinize both the monetary policy and the on-chain disbursement of the tokens before participating in a Marlowe contract. Verifying the monetary policy of a simple script just involves retrieving the script off of the blockchain and studying it; verifying the monetary policy of a Plutus script involves obtaining and studying the Plutus source code for the script and hashing the source code to check the monetary policy ID.
+
+One typically uses a monetary policy (like that supported in Marlowe Runtime) that enforces a single minting event and single tokens for each role: such a monetary policy ensures that the role tokens are true non-fungible tokens (NFTs) so that the holders of the role tokens are provably the only ones who can act as the parties in the contract.
+
+Nevertheless, monetary policies that mint multiple copies of a particular role token or ones with an open minting policy support non-standard use cases. For instance, minting two copies of each role token and distributing them to the same party allows that party to place one token in cold storage as a backup if their wallet containing the "hot" role token becomes inaccessible. Some novel crowd-source contracts might involve assigning the role (via identical role tokens that may be minted even after the contract commences) to many participants. Finally, a Plutus contract's minting policy for role tokens can coordinate with the operation of one or more Marlowe contracts.
+
+
 ## Marlowe Runtime
 
 [Marlowe Runtime](../marlowe-runtime/) provides off-chain services that discover Marlowe contract history and build transactions that apply input to Marlowe contracts. The Marlowe Runtime deployment does not have to be trusted if one carefully examines the Marlowe transactions it produces, as discussed in the previous section. If Marlowe Runtime is deployed as part of a web service, then one needs to be aware of the possibility of person-in-the-middle, cross-site scripting, and other attacks.
 
-Marlowe Runtime contains a [registry of known Marlowe script versions](../marlowe-runtime/src/Language/Marlowe/Runtime/Core/ScriptRegistry.hs) that it uses to create new Marlowe transactions. One should only use Marlowe Runtime to create contracts if one trusts the script hashes in that registry. The Marlowe test suite verifies that [the script registry has not be inadvertently or maliciously altered](https://github.com/input-output-hk/marlowe-cardano/blob/main/marlowe-runtime/test/Language/Marlowe/Runtime/Core/ScriptRegistrySpec.hs). (Of course, this does not guarantee that the test itself has not been altered.
+Marlowe Runtime contains a [registry of known Marlowe script versions](../marlowe-runtime/src/Language/Marlowe/Runtime/Core/ScriptRegistry.hs) that it uses to create new Marlowe transactions. One should only use Marlowe Runtime to create contracts if one trusts the script hashes in that registry. The Marlowe test suite verifies that [the script registry has not been inadvertently or maliciously altered](https://github.com/input-output-hk/marlowe-cardano/blob/main/marlowe-runtime/test/Language/Marlowe/Runtime/Core/ScriptRegistrySpec.hs). (Of course, this does not guarantee that the test itself has not been altered.
 
 
 ## Marlowe CLI
