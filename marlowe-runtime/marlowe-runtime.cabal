@@ -203,6 +203,7 @@ library sync
     , containers
     , eventuo11y
     , eventuo11y-extras
+    , foldl
     , hasql
     , hasql-th
     , hasql-transaction
