@@ -491,8 +491,7 @@ spec = do
 genWalletWithNuisance :: MarloweVersion v -> TxConstraints v -> Word64 -> Gen WalletContext
 genWalletWithNuisance marloweVersion' constraints' minLovelace = do
   wc <- genWalletContext marloweVersion' constraints'
-  adaTxOutRef <- arbitrary
-  nuisTxOutRef <- arbitrary
+  (adaTxOutRef, nuisTxOutRef) <- suchThat ((,) <$> arbitrary <*> arbitrary) (uncurry (/=))
   someAddress <- arbitrary
   let lovelaceToAdd = Chain.Assets (Chain.Lovelace minLovelace) (Chain.Tokens Map.empty)
   nuisAssets <- (lovelaceToAdd <>) <$> arbitrary
