@@ -93,7 +93,9 @@ rec {
   marlowe-history = {
     restart = {
       attempts = 5;
-      delay = "1m";
+      delay = "30s";
+      interval = "5m";
+      mode = "delay";
     };
     env = {
       HOST = "0.0.0.0";
