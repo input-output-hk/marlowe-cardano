@@ -1,5 +1,7 @@
 
 
+
+{-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
@@ -24,8 +26,8 @@ module Language.Marlowe.Runtime.App.Transact
 
 
 import Control.Concurrent (threadDelay)
-import Control.Monad (when)
-import Control.Monad.Except (ExceptT(..), liftIO, runExceptT, throwError)
+import Control.Monad (join, when)
+import Control.Monad.Except (ExceptT(..), catchError, liftIO, throwError)
 import Language.Marlowe.Core.V1.Semantics.Types (Contract, Input)
 import Language.Marlowe.Runtime.App.Types
   (App, Config(Config, buildSeconds, confirmSeconds, retryLimit, retrySeconds), MarloweRequest(..), MarloweResponse(..))
@@ -197,18 +199,13 @@ retry
   -> App a
 retry name event [] action = withSubEvent event (DynamicEventSelector name) action
 retry name event (delay : delays) action =
-  withSubEvent event (DynamicEventSelector name)
-    $ \subEvent ->
-      ExceptT
-        $ runExceptT (action subEvent)
-        >>= \case
-          Right result -> pure $ Right result
-          Left message -> runExceptT
-                            $ do
-                              addField subEvent $ ("failedAttempt" :: T.Text) ≔ message
-                              addField subEvent $ ("waitForRetry" :: T.Text) ≔ delay
-                              liftIO . threadDelay $ delay * 1_000_000
-                              retry name event delays action
+  join $ withSubEvent event (DynamicEventSelector name) \subEvent ->
+    (pure <$> action subEvent) `catchError` \message -> do
+      addField subEvent $ ("failedAttempt" :: T.Text) ≔ message
+      addField subEvent $ ("waitForRetry" :: T.Text) ≔ delay
+      pure do
+        liftIO . threadDelay $ delay * 1_000_000
+        retry name event delays action
 
 
 handleWithEvents
