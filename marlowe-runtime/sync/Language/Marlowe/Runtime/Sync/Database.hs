@@ -9,18 +9,16 @@ import Language.Marlowe.Runtime.History.Api (ContractStep, SomeCreateStep)
 
 hoistDatabaseQueries :: (forall x. m x -> n x) -> DatabaseQueries m -> DatabaseQueries n
 hoistDatabaseQueries f DatabaseQueries{..} = DatabaseQueries
-  { getTip = f getTip
-  , getTipForContract = f . getTipForContract
+  { getTipForContract = f . getTipForContract
   , getCreateStep = f . getCreateStep
-  , getIntersection = f . getIntersection
+  , getIntersectionForContract = (fmap . fmap) f . getIntersectionForContract
   , getNextSteps = (fmap . fmap) f . getNextSteps
   }
 
 data DatabaseQueries m = DatabaseQueries
-  { getTip :: m ChainPoint
-  , getTipForContract :: ContractId -> m ChainPoint
+  { getTipForContract :: ContractId -> m ChainPoint
   , getCreateStep :: ContractId -> m (Maybe (BlockHeader, SomeCreateStep))
-  , getIntersection :: [BlockHeader] -> m (Maybe BlockHeader)
+  , getIntersectionForContract :: forall v. ContractId -> MarloweVersion v -> [BlockHeader] -> m ChainPoint
   , getNextSteps :: forall v. ContractId -> MarloweVersion v -> ChainPoint -> m (NextSteps v)
   }
 

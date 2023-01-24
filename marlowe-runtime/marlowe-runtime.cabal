@@ -188,6 +188,10 @@ library sync
     Language.Marlowe.Runtime.Sync
     Language.Marlowe.Runtime.Sync.Database
     Language.Marlowe.Runtime.Sync.Database.PostgreSQL
+    Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetTipForContract
+    Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetCreateStep
+    Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetIntersectionForContract
+    Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetNextSteps
   build-depends:
       base >= 4.9 && < 5
     , aeson
