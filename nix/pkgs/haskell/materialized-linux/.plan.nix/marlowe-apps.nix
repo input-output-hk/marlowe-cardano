@@ -11,7 +11,7 @@
     flags = {};
     package = {
       specVersion = "3.0";
-      identifier = { name = "marlowe-apps"; version = "0.2.0.1"; };
+      identifier = { name = "marlowe-apps"; version = "0.2.1.0"; };
       license = "Apache-2.0";
       copyright = "";
       maintainer = "Brian W Bush <brian.bush@iohk.io>";
@@ -55,6 +55,7 @@
           (hsPkgs."mtl" or (errorHandler.buildDepError "mtl"))
           (hsPkgs."network" or (errorHandler.buildDepError "network"))
           (hsPkgs."optparse-applicative" or (errorHandler.buildDepError "optparse-applicative"))
+          (hsPkgs."random" or (errorHandler.buildDepError "random"))
           (hsPkgs."stm" or (errorHandler.buildDepError "stm"))
           (hsPkgs."text" or (errorHandler.buildDepError "text"))
           (hsPkgs."time" or (errorHandler.buildDepError "time"))

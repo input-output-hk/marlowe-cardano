@@ -108,6 +108,10 @@ data Config =
   , txHost :: HostName
   , txCommandPort :: PortNumber
   , timeoutSeconds :: Int
+  , buildSeconds :: Int
+  , confirmSeconds :: Int
+  , retrySeconds :: Int
+  , retryLimit :: Int
   }
     deriving (Read, Show)
 
@@ -128,6 +132,10 @@ instance Default Config where
     , txHost = "127.0.0.1"
     , txCommandPort = 3723
     , timeoutSeconds = 600
+    , buildSeconds = 3
+    , confirmSeconds = 3
+    , retrySeconds = 10
+    , retryLimit = 5
     }
 
 

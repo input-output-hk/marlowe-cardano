@@ -7,7 +7,9 @@ module Language.Marlowe.Runtime.App.Parser
   ) where
 
 
-import Language.Marlowe.Runtime.App.Types (Config(Config))
+import Data.Default (def)
+import Language.Marlowe.Runtime.App.Types
+  (Config(Config, buildSeconds, confirmSeconds, retryLimit, retrySeconds, timeoutSeconds))
 import Language.Marlowe.Runtime.CLI.Option (CliOption, host, optParserWithEnvDefault, port)
 import Language.Marlowe.Runtime.ChainSync.Api (Address, fromBech32)
 import Network.Socket (HostName, PortNumber)
@@ -38,8 +40,37 @@ getConfigParser =
         O.option O.auto
           $  O.long "timeout-seconds"
           <> O.metavar "INTEGER"
-          <> O.value 600
-          <> O.help "Time timeout in seconds for transaction confirmation."
+          <> O.value (timeoutSeconds def)
+          <> O.showDefault
+          <> O.help "Timeout in seconds for transaction confirmation."
+      buildSecondsParser =
+        O.option O.auto
+          $  O.long "build-seconds"
+          <> O.metavar "INTEGER"
+          <> O.value (buildSeconds def)
+          <> O.showDefault
+          <> O.help "Wait specified seconds before transaction construction. No waiting occurs if a non-positive number of seconds is specified. The specified wait period is randomly increased up to a factor of two. Increasing this value will increase the probability that Marlowe Runtime's node has seen the transactions that the submitting node has seen."
+      confirmSecondsParser =
+        O.option O.auto
+          $  O.long "confirm-seconds"
+          <> O.metavar "INTEGER"
+          <> O.value (confirmSeconds def)
+          <> O.showDefault
+          <> O.help "Wait specified seconds after transaction confirmation. No waiting occurs if a non-positive number of seconds is specified. The specified wait period is randomly increased up to a factor of two. Increasing this value will increase the probability that the submitting node has seen the transactions that Marlowe Runtime has seen."
+      retrySecondsParser =
+        O.option O.auto
+          $  O.long "retry-seconds"
+          <> O.metavar "INTEGER"
+          <> O.value (retrySeconds def)
+          <> O.showDefault
+          <> O.help "Wait specified seconds after after a failed transaction before trying again. No retries occur if a non-positive number of seconds is specified."
+      retryLimitParser =
+        O.option O.auto
+          $  O.long "retry-limit"
+          <> O.metavar "INTEGER"
+          <> O.value (retryLimit def)
+          <> O.showDefault
+          <> O.help "Maximum number of attempts for trying a failed transaction again. Each subsequent retry waits twice as long as the previous retry. No retries occur if a non-positive number of retries is specified."
     pure
       $ Config
       <$> chainSeekHostParser
@@ -56,6 +87,10 @@ getConfigParser =
       <*> txHostParser
       <*> txCommandPortParser
       <*> timeoutSecondsParser
+      <*> buildSecondsParser
+      <*> confirmSecondsParser
+      <*> retrySecondsParser
+      <*> retryLimitParser
 
 
 chainSeekHost :: CliOption O.OptionFields HostName

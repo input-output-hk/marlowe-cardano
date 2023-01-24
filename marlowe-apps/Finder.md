@@ -40,7 +40,9 @@ Usage: marlowe-finder [--chain-seek-host HOST_NAME]
                       [--discovery-query-port PORT_NUMBER]
                       [--discovery-sync-port PORT_NUMBER] [--tx-host HOST_NAME]
                       [--tx-command-port PORT_NUMBER]
-                      [--timeout-seconds INTEGER] [--polling SECONDS]
+                      [--timeout-seconds INTEGER] [--build-seconds INTEGER]
+                      [--confirm-seconds INTEGER] [--retry-seconds INTEGER]
+                      [--retry-limit INTEGER] [--polling SECONDS]
                       [--requeue SECONDS]
 
   This command-line tool watches the blockchain for Marlowe contracts for active
@@ -55,32 +57,31 @@ Available options:
   --chain-seek-command-port PORT_NUMBER
                            The port number of the chain-seek server's job API.
                            Can be set as the environment variable
-                           MARLOWE_RT_CHAINSEEK_COMMAND_PORT (default: 13720)
+                           MARLOWE_RT_CHAINSEEK_COMMAND_PORT (default: 3720)
   --chain-seek-query-port PORT_NUMBER
                            The port number of the chain-seek server's query API.
                            Can be set as the environment variable
-                           MARLOWE_RT_CHAINSEEK_QUERY_PORT (default: 13716)
+                           MARLOWE_RT_CHAINSEEK_QUERY_PORT (default: 3716)
   --chain-seek-sync-port PORT_NUMBER
                            The port number of the chain-seek server's
                            synchronization API. Can be set as the environment
                            variable MARLOWE_RT_CHAINSEEK_SYNC_PORT
-                           (default: 13715)
+                           (default: 3715)
   --history-host HOST_NAME The hostname of the Marlowe Runtime history server.
                            Can be set as the environment variable
                            MARLOWE_RT_HISTORY_HOST (default: "127.0.0.1")
   --history-command-port PORT_NUMBER
                            The port number of the history server's job API. Can
                            be set as the environment variable
-                           MARLOWE_RT_HISTORY_COMMAND_PORT (default: 13717)
+                           MARLOWE_RT_HISTORY_COMMAND_PORT (default: 3717)
   --history-query-port PORT_NUMBER
                            The port number of the history server's query API.
                            Can be set as the environment variable
-                           MARLOWE_RT_HISTORY_QUERY_PORT (default: 13718)
+                           MARLOWE_RT_HISTORY_QUERY_PORT (default: 3718)
   --history-sync-port PORT_NUMBER
                            The port number of the history server's
                            synchronization API. Can be set as the environment
-                           variable MARLOWE_RT_HISTORY_SYNC_PORT
-                           (default: 13719)
+                           variable MARLOWE_RT_HISTORY_SYNC_PORT (default: 3719)
   --discovery-host HOST_NAME
                            The hostname of the Marlowe Runtime discovery server.
                            Can be set as the environment variable
@@ -88,21 +89,46 @@ Available options:
   --discovery-query-port PORT_NUMBER
                            The port number of the discovery server's query API.
                            Can be set as the environment variable
-                           MARLOWE_RT_DISCOVERY_QUERY_PORT (default: 13721)
+                           MARLOWE_RT_DISCOVERY_QUERY_PORT (default: 3721)
   --discovery-sync-port PORT_NUMBER
                            The port number of the discovery server's
                            synchronization API. Can be set as the environment
                            variable MARLOWE_RT_DISCOVERY_SYNC_PORT
-                           (default: 13722)
+                           (default: 3722)
   --tx-host HOST_NAME      The hostname of the Marlowe Runtime transaction
                            server. Can be set as the environment variable
                            MARLOWE_RT_TX_HOST (default: "127.0.0.1")
   --tx-command-port PORT_NUMBER
                            The port number of the transaction server's job API.
                            Can be set as the environment variable
-                           MARLOWE_RT_TX_COMMAND_PORT (default: 13723)
+                           MARLOWE_RT_TX_COMMAND_PORT (default: 3723)
   --timeout-seconds INTEGER
-                           Time timeout in seconds for transaction confirmation.
+                           Timeout in seconds for transaction confirmation.
+                           (default: 600)
+  --build-seconds INTEGER  Wait specified seconds before transaction
+                           construction. No waiting occurs if a non-positive
+                           number of seconds is specified. The specified wait
+                           period is randomly increased up to a factor of two.
+                           Increasing this value will increase the probability
+                           that Marlowe Runtime's node has seen the transactions
+                           that the submitting node has seen. (default: 3)
+  --confirm-seconds INTEGER
+                           Wait specified seconds after transaction
+                           confirmation. No waiting occurs if a non-positive
+                           number of seconds is specified. The specified wait
+                           period is randomly increased up to a factor of two.
+                           Increasing this value will increase the probability
+                           that the submitting node has seen the transactions
+                           that Marlowe Runtime has seen. (default: 3)
+  --retry-seconds INTEGER  Wait specified seconds after after a failed
+                           transaction before trying again. No retries occur if
+                           a non-positive number of seconds is specified.
+                           (default: 10)
+  --retry-limit INTEGER    Maximum number of attempts for trying a failed
+                           transaction again. Each subsequent retry waits twice
+                           as long as the previous retry. No retries occur if a
+                           non-positive number of retries is specified.
+                           (default: 5)
   --polling SECONDS        The polling frequency for waiting on Marlowe Runtime.
   --requeue SECONDS        The requeuing frequency for reviewing the progress of
                            contracts on Marlowe Runtime.

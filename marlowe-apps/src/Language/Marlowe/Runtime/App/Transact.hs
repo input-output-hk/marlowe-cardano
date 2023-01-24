@@ -1,8 +1,12 @@
 
 
+
+{-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 
@@ -21,15 +25,19 @@ module Language.Marlowe.Runtime.App.Transact
   ) where
 
 
-import Control.Monad.Except (ExceptT(..), throwError)
+import Control.Concurrent (threadDelay)
+import Control.Monad (join, when)
+import Control.Monad.Except (ExceptT(..), catchError, liftIO, throwError)
 import Language.Marlowe.Core.V1.Semantics.Types (Contract, Input)
-import Language.Marlowe.Runtime.App.Types (App, Config, MarloweRequest(..), MarloweResponse(..))
+import Language.Marlowe.Runtime.App.Types
+  (App, Config(Config, buildSeconds, confirmSeconds, retryLimit, retrySeconds), MarloweRequest(..), MarloweResponse(..))
 import Language.Marlowe.Runtime.ChainSync.Api (Address, Lovelace)
 import Language.Marlowe.Runtime.Core.Api (ContractId, MarloweVersionTag(V1))
 import Observe.Event (Event, addField, newEvent, withSubEvent)
 import Observe.Event.Backend (unitEventBackend)
-import Observe.Event.Dynamic (DynamicEvent, DynamicEventSelector(..))
+import Observe.Event.Dynamic (DynamicEvent, DynamicEventSelector(..), DynamicField)
 import Observe.Event.Syntax ((≔))
+import System.Random (randomRIO)
 
 import qualified Cardano.Api as C (PaymentExtendedKey, SigningKey)
 import qualified Data.Aeson as A (encode)
@@ -143,14 +151,19 @@ transactWithEvents
   -> C.SigningKey C.PaymentExtendedKey
   -> MarloweRequest 'V1
   -> App ContractId
-transactWithEvents event config key request =
+transactWithEvents event config@Config{buildSeconds, confirmSeconds, retryLimit, retrySeconds} key request =
   let
     show' = LBS8.unpack . A.encode
     unexpected response = throwError $ "Unexpected response: " <> show' response
   in
-    withSubEvent event (DynamicEventSelector "Transact")
+    retry "Transact" event [retrySeconds * 2^(i-1) | retrySeconds > 0, retryLimit > 0, i <- [1..retryLimit]]
       $ \subEvent ->
         do
+          when (buildSeconds > 0)
+            . withSubEvent subEvent (DynamicEventSelector "WaitBeforeBuild")
+            . const
+            $ liftIO . threadDelay . (buildSeconds *)
+            =<< randomRIO (1_000_000, 2_000_000)
           (contractId, body) <-
             handleWithEvents subEvent "Build" config request
               $ \case
@@ -170,7 +183,29 @@ transactWithEvents event config key request =
             $ \case
               TxInfo{} -> pure ()
               response -> unexpected response
+          when (confirmSeconds > 0)
+            . withSubEvent subEvent (DynamicEventSelector "WaitAfterConfirm")
+            . const
+            $ liftIO . threadDelay . (confirmSeconds *)
+            =<< randomRIO (1_000_000, 2_000_000)
           pure contractId
+
+
+retry
+  :: T.Text
+  -> Event App r DynamicEventSelector f
+  -> [Int]
+  -> (Event App r DynamicEventSelector DynamicField -> App a)
+  -> App a
+retry name event [] action = withSubEvent event (DynamicEventSelector name) action
+retry name event (delay : delays) action =
+  join $ withSubEvent event (DynamicEventSelector name) \subEvent ->
+    (pure <$> action subEvent) `catchError` \message -> do
+      addField subEvent $ ("failedAttempt" :: T.Text) ≔ message
+      addField subEvent $ ("waitForRetry" :: T.Text) ≔ delay
+      pure do
+        liftIO . threadDelay $ delay * 1_000_000
+        retry name event delays action
 
 
 handleWithEvents
