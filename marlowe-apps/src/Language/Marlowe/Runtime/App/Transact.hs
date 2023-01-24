@@ -184,7 +184,7 @@ transactWithEvents event config@Config{buildSeconds, confirmSeconds, retryLimit,
           when (confirmSeconds > 0)
             . withSubEvent subEvent (DynamicEventSelector "WaitAfterConfirm")
             . const
-            $ liftIO . threadDelay . (confirmSeconds +)
+            $ liftIO . threadDelay . (confirmSeconds *)
             =<< randomRIO (1_000_000, 2_000_000)
           pure contractId
 
