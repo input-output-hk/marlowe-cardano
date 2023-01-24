@@ -98,7 +98,7 @@ worker = component_ \WorkerDependencies{..} -> do
     waitServer :: ContractId -> MarloweVersion v -> ChainPoint -> BlockHeader -> STM ChainPoint -> ServerStWait v IO ()
     waitServer contractId version blockHeader requestedAt lastUpdated = ServerStWait
       { recvMsgPoll = do
-          hasChanged <- atomically $ fmap (== requestedAt) <$> lastUpdated
+          hasChanged <- atomically $ fmap (/= requestedAt) <$> lastUpdated
           case hasChanged of
             Genesis  -> pure $ SendMsgRollBackCreation ()
             At True  -> nextServer contractId version blockHeader
