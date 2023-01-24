@@ -47,7 +47,9 @@ module Language.Marlowe.Scripts
   , alternateMarloweValidator
   , alternateMarloweValidatorHash
   , marloweValidator
+  , marloweValidatorCompiled
   , marloweValidatorHash
+  , mkMarloweValidator
     -- * Payout Validator
   , TypedRolePayoutValidator
   , rolePayoutValidator
@@ -413,6 +415,16 @@ marloweValidator =
     typedValidator = Scripts.unsafeMkTypedValidator untypedValidator
   in
     unsafeCoerce typedValidator
+
+
+marloweValidatorCompiled :: PlutusTx.CompiledCode (ValidatorHash -> PlutusTx.BuiltinData -> PlutusTx.BuiltinData -> PlutusTx.BuiltinData -> ())
+marloweValidatorCompiled =
+  let
+    mkUntypedMarloweValidator :: ValidatorHash -> PlutusTx.BuiltinData -> PlutusTx.BuiltinData -> PlutusTx.BuiltinData -> ()
+    mkUntypedMarloweValidator rp = mkUntypedValidator (mkMarloweValidator rp)
+  in
+    $$(PlutusTx.compile [|| mkUntypedMarloweValidator ||])
+
 
 -- | The hash of the Marlowe semantics validator.
 marloweValidatorHash :: ValidatorHash

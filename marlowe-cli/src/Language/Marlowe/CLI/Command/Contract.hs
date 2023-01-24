@@ -31,6 +31,7 @@ import Language.Marlowe.CLI.Command.Parse
   (parseCurrencySymbol, parseNetworkId, parseStakeAddressReference, protocolVersionOpt)
 import Language.Marlowe.CLI.Export
   (exportDatum, exportMarlowe, exportMarloweAddress, exportMarloweValidator, exportRedeemer)
+import Language.Marlowe.CLI.Plutus.Script.Utils (printPir, printUplc)
 import Language.Marlowe.CLI.Types (CliEnv, CliError)
 import Language.Marlowe.Client (defaultMarloweParams, marloweParams)
 import Plutus.V1.Ledger.Api (CurrencySymbol, ProtocolVersion)
@@ -87,6 +88,16 @@ data ContractCommand =
     , outputFile :: Maybe FilePath  -- ^ The output JSON file for the redeemer.
     , printStats :: Bool            -- ^ Whether to print statistics about the redeemer.
     }
+    -- | Print the PIR for the Marlowe validator.
+  | PrintPir
+    {
+      outputFile :: Maybe FilePath  -- ^ The output file for the PIR.
+    }
+    -- | Print the UPLC for the Marlowe validator.
+  | PrintUplc
+    {
+      outputFile :: Maybe FilePath  -- ^ The output file for the UPLC.
+    }
 
 
 -- | Run an export-related command.
@@ -126,6 +137,8 @@ runContractCommand command =
                                inputFiles
                                outputFile
                                printStats
+      PrintPir{..}        -> printPir outputFile
+      PrintUplc{..}       -> printUplc outputFile
 
 
 -- | Parser for export-related commands.
@@ -139,6 +152,8 @@ parseContractCommand network =
     <> exportMarloweCommand network
     <> exportRedeemerCommand
     <> exportValidatorCommand network
+    <> printPirCommand
+    <> printUplcCommand
 
 
 -- | Parser for the "marlowe" command.
@@ -240,3 +255,25 @@ exportRedeemerOptions =
     <$> (O.many . O.strOption)     (O.long "input-file"  <> O.metavar "INPUT_FILE"  <> O.help "JSON input file for redeemer inputs.")
     <*> (O.optional . O.strOption) (O.long "out-file"    <> O.metavar "OUTPUT_FILE" <> O.help "JSON output file for redeemer."      )
     <*> O.switch                   (O.long "print-stats"                            <> O.help "Print statistics."                   )
+
+
+-- | Parser for the "pir" command.
+printPirCommand :: O.Mod O.CommandFields ContractCommand
+printPirCommand =
+  O.command "pir"
+    . O.info (
+      PrintPir
+        <$> (O.optional . O.strOption) (O.long "out-file"    <> O.metavar "OUTPUT_FILE" <> O.help "The output file for the PIR.")
+    )
+    $ O.progDesc "Print the Plutus Intermediate Representation (PIR) for the Marlowe validator."
+
+
+-- | Parser for the "uplc" command.
+printUplcCommand :: O.Mod O.CommandFields ContractCommand
+printUplcCommand =
+  O.command "uplc"
+    . O.info (
+      PrintUplc
+        <$> (O.optional . O.strOption) (O.long "out-file"    <> O.metavar "OUTPUT_FILE" <> O.help "The output file for the UPLC.")
+    )
+    $ O.progDesc "Print the Untyped Plutus Core (UPLC) for the Marlowe validator."
