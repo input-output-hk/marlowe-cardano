@@ -1,3 +1,4 @@
+{-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE RankNTypes #-}
 
 module Language.Marlowe.Runtime.Sync.Database
@@ -11,18 +12,18 @@ hoistDatabaseQueries :: (forall x. m x -> n x) -> DatabaseQueries m -> DatabaseQ
 hoistDatabaseQueries f DatabaseQueries{..} = DatabaseQueries
   { getTipForContract = f . getTipForContract
   , getCreateStep = f . getCreateStep
-  , getIntersectionForContract = (fmap . fmap) f . getIntersectionForContract
-  , getNextSteps = (fmap . fmap) f . getNextSteps
+  , getIntersectionForContract = fmap f . getIntersectionForContract
+  , getNextSteps = fmap f . getNextSteps
   }
 
 data DatabaseQueries m = DatabaseQueries
   { getTipForContract :: ContractId -> m ChainPoint
   , getCreateStep :: ContractId -> m (Maybe (BlockHeader, SomeCreateStep))
-  , getIntersectionForContract :: forall v. ContractId -> MarloweVersion v -> [BlockHeader] -> m ChainPoint
-  , getNextSteps :: forall v. ContractId -> MarloweVersion v -> ChainPoint -> m (NextSteps v)
+  , getIntersectionForContract :: ContractId -> [BlockHeader] -> m ChainPoint
+  , getNextSteps :: ContractId -> ChainPoint -> m NextSteps
   }
 
-data NextSteps v
+data NextSteps
   = Rollback ChainPoint
   | Wait BlockHeader
-  | Next BlockHeader [ContractStep v]
+  | forall v. Next (MarloweVersion v) BlockHeader [ContractStep v]
