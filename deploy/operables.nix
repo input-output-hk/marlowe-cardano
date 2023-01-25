@@ -3,7 +3,7 @@ let
   inherit (inputs) self std nixpkgs nixpkgs-unstable bitte-cells;
   inherit (self) packages;
   inherit (nixpkgs) lib;
-  inherit (nixpkgs.legacyPackages) jq sqitchPg postgresql;
+  inherit (nixpkgs.legacyPackages) jq sqitchPg postgresql coreutils;
   inherit (nixpkgs-unstable.legacyPackages) norouter;
   inherit (inputs.bitte-cells._utils.packages) srvaddr;
 
@@ -26,7 +26,7 @@ in
 {
   chain-indexer = mkOperable {
     package = packages.marlowe-chain-indexer;
-    runtimeInputs = [ jq sqitchPg srvaddr postgresql ];
+    runtimeInputs = [ jq sqitchPg srvaddr postgresql coreutils ];
     runtimeScript = ''
       #################
       # REQUIRED VARS #
@@ -53,6 +53,7 @@ in
 
       DATABASE_URI=${database-uri}
       cd ${sqitch-plan-dir}
+      HOME="$(mktemp -d)" # Ensure HOME is writable for sqitch config
       export TZ=Etc/UTC
       sqitch config --user user.name chainindexer
       sqitch config --user user.email example@example.com
@@ -77,7 +78,7 @@ in
 
   chainseekd = mkOperable {
     package = packages.chainseekd;
-    runtimeInputs = [ srvaddr jq ];
+    runtimeInputs = [ srvaddr jq coreutils ];
     runtimeScript = ''
       #################
       # REQUIRED VARS #
