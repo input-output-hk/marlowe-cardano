@@ -73,10 +73,10 @@ import Cardano.Api
   , valueToList
   )
 import Cardano.Api.Shelley (Hash(..), Tx(..), toShelleyTxIn)
-import Cardano.Binary (ToCBOR(toCBOR), toStrictByteString)
 import qualified Cardano.Ledger.Alonzo.Data as Alonzo
 import qualified Cardano.Ledger.Alonzo.Tx as Alonzo
 import qualified Cardano.Ledger.Babbage.Tx as Babbage
+import Cardano.Ledger.SafeHash (originalBytes)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import Data.ByteString.Base16 (encodeBase16)
@@ -590,13 +590,13 @@ commitBlocks = CommitBlocks \blocks ->
         getRedeemer = case tx of
           ShelleyTx ShelleyBasedEraAlonzo alonzoTx@Alonzo.ValidatedTx{} ->
             \txIn -> do
-              (Alonzo.Data datum, _) <- Alonzo.indexedRdmrs alonzoTx $ Alonzo.Spending $ toShelleyTxIn txIn
-              pure $ toStrictByteString $ toCBOR datum
+              (datum, _) <- Alonzo.indexedRdmrs alonzoTx $ Alonzo.Spending $ toShelleyTxIn txIn
+              pure $ originalBytes $ Alonzo.dataToBinaryData datum
 
           ShelleyTx ShelleyBasedEraBabbage  babbageTx@Babbage.ValidatedTx{} -> do
             \txIn -> do
-              (Alonzo.Data datum, _) <- Babbage.indexedRdmrs babbageTx $ Babbage.Spending $ toShelleyTxIn txIn
-              pure $ toStrictByteString $ toCBOR datum
+              (datum, _) <- Babbage.indexedRdmrs babbageTx $ Babbage.Spending $ toShelleyTxIn txIn
+              pure $ originalBytes $ Alonzo.dataToBinaryData datum
 
           _ -> const Nothing
 
