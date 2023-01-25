@@ -187,7 +187,7 @@ get eb ranges = withEvent eb Get \ev -> do
     Just headers -> do
       let headers' = either toContractHeader id <$> toDTO headers
       addField ev $ ContractHeaders headers'
-      let response = IncludeLink (Proxy @"contract") <$> headers'
+      let response = IncludeLink (Proxy @"transactions") . IncludeLink (Proxy @"contract") <$> headers'
       addHeader (length headers) . fmap ListObject <$> returnRange range response
 
 toContractHeader :: ContractState -> ContractHeader
@@ -261,11 +261,8 @@ put eb contractId body = withEvent eb Put \ev -> do
         txScriptValidityToIsValid :: TxScriptValidity era -> Alonzo.IsValid
         txScriptValidityToIsValid = scriptValidityToIsValid . txScriptValidityToScriptValidity
 
-        -- tx = makeSignedTransaction txBody []
         renderDoc = renderStrict . PP.layoutPretty PP.defaultLayoutOptions
         wtRepr = renderDoc $ ppTxWitness wt
-        -- case  of
-        --   ShelleyTx _ (Alonzo.ValidatedTx _ wt' _ _)  -> addField ev $ WitnessesBackend $ renderDoc (ppTxWitness wt')
 
         tx = case (txBody, wt, makeSignedTransaction [] txBody) of
           (ShelleyTxBody era txBody' _ _ txmetadata scriptValidity, TxWitness wtKeys _ _ _ _, ShelleyTx _ (Alonzo.ValidatedTx _ bkTxWitness _ _)) -> do
@@ -295,104 +292,3 @@ put eb contractId body = withEvent eb Put \ev -> do
           throwError err403
     Just _  -> throwError err409
 
-
-
-
---       ShelleyTx era $
---         Alonzo.ValidatedTx
---           txbody'
---           (Alonzo.TxWitness
---             (Set.fromList [ w | ShelleyKeyWitness _ w <- witnesses ])
---             (Set.fromList [ w | ShelleyBootstrapWitness _ w <- witnesses ])
---             (Map.fromList [ (Ledger.hashScript @ledgerera sw, sw)
---                           | sw <- txscripts ])
---             datums
---             redeemers)
---           (txScriptValidityToIsValid scriptValidity)
---           (maybeToStrictMaybe txmetadata)
---       where
---         (datums, redeemers) =
---           case txscriptdata of
---             TxBodyScriptData _ ds rs -> (ds, rs)
---             TxBodyNoScriptData       -> (mempty, Alonzo.Redeemers mempty)
-
-
-
--- makeSignedTransaction :: forall era.
---      [KeyWitness era]
---   -> TxBody era
---   -> Tx era
--- makeSignedTransaction witnesses (ByronTxBody txbody) =
---     ByronTx
---   . Byron.annotateTxAux
---   $ Byron.mkTxAux
---       (unAnnotated txbody)
---       (Vector.fromList [ w | ByronKeyWitness w <- witnesses ])
---
--- makeSignedTransaction witnesses (ShelleyTxBody era txbody
---                                                txscripts
---                                                txscriptdata
---                                                txmetadata
---                                                scriptValidity
---                                                ) =
---     case era of
---       ShelleyBasedEraShelley -> makeShelleySignedTransaction txbody
---       ShelleyBasedEraAllegra -> makeShelleySignedTransaction txbody
---       ShelleyBasedEraMary    -> makeShelleySignedTransaction txbody
---       ShelleyBasedEraAlonzo  -> makeAlonzoSignedTransaction  txbody
---       ShelleyBasedEraBabbage -> makeAlonzoSignedTransaction  txbody
---   where
---     makeShelleySignedTransaction
---       :: forall ledgerera.
---          ShelleyLedgerEra era ~ ledgerera
---       => ToCBOR (Ledger.AuxiliaryData ledgerera)
---       => ToCBOR (Ledger.TxBody ledgerera)
---       => ToCBOR (Ledger.Script ledgerera)
---       => FromCBOR (CBOR.Annotator (Ledger.Script ledgerera))
---       => Ledger.Crypto ledgerera ~ StandardCrypto
---       => Ledger.Witnesses ledgerera ~ Shelley.WitnessSetHKD Identity ledgerera
---       => Ledger.Tx ledgerera ~ Shelley.Tx ledgerera
---       => ToCBOR (Ledger.Witnesses ledgerera)
---       => Shelley.UsesValue ledgerera
---       => Shelley.ValidateScript ledgerera
---       => Ledger.TxBody ledgerera
---       -> Tx era
---     makeShelleySignedTransaction txbody' =
---       ShelleyTx era $
---         Shelley.Tx
---           txbody'
---           (Shelley.WitnessSet
---             (Set.fromList [ w | ShelleyKeyWitness _ w <- witnesses ])
---             (Map.fromList [ (Ledger.hashScript @ledgerera sw, sw)
---                           | sw <- txscripts ])
---             (Set.fromList [ w | ShelleyBootstrapWitness _ w <- witnesses ]))
---           (maybeToStrictMaybe txmetadata)
---
---     makeAlonzoSignedTransaction
---       :: forall ledgerera.
---          ShelleyLedgerEra era ~ ledgerera
---       => Ledger.Crypto ledgerera ~ StandardCrypto
---       => Ledger.Tx ledgerera ~ Alonzo.ValidatedTx ledgerera
---       => Ledger.Script ledgerera ~ Alonzo.Script ledgerera
---       => Shelley.UsesValue ledgerera
---       => Shelley.ValidateScript ledgerera
---       => Ledger.TxBody ledgerera
---       -> Tx era
---     makeAlonzoSignedTransaction txbody' =
---       ShelleyTx era $
---         Alonzo.ValidatedTx
---           txbody'
---           (Alonzo.TxWitness
---             (Set.fromList [ w | ShelleyKeyWitness _ w <- witnesses ])
---             (Set.fromList [ w | ShelleyBootstrapWitness _ w <- witnesses ])
---             (Map.fromList [ (Ledger.hashScript @ledgerera sw, sw)
---                           | sw <- txscripts ])
---             datums
---             redeemers)
---           (txScriptValidityToIsValid scriptValidity)
---           (maybeToStrictMaybe txmetadata)
---       where
---         (datums, redeemers) =
---           case txscriptdata of
---             TxBodyScriptData _ ds rs -> (ds, rs)
---             TxBodyNoScriptData       -> (mempty, Alonzo.Redeemers mempty)

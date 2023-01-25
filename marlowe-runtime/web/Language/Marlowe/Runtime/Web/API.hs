@@ -57,7 +57,7 @@ type ContractsAPI = GetContractsAPI
 -- | GET /contracts sub-API
 type GetContractsAPI = PaginatedGet '["contractId"] GetContractsResponse
 
-type GetContractsResponse = WithLink "contract" ContractHeader
+type GetContractsResponse = WithLink "transactions" (WithLink "contract" ContractHeader)
 
 instance HasNamedLink ContractHeader API "contract" where
   namedLink _ _ ContractHeader{..} = Just $ safeLink
@@ -65,12 +65,19 @@ instance HasNamedLink ContractHeader API "contract" where
     (Proxy @("contracts" :> Capture "contractId" TxOutRef :> GetContractAPI))
     contractId
 
+instance HasNamedLink ContractHeader API "transactions" where
+  namedLink _ _ ContractHeader{..} = guard (status == Confirmed) $> safeLink
+    api
+    (Proxy @("contracts" :> Capture "contractId" TxOutRef :> "transactions" :> GetTransactionsAPI))
+    contractId
+
+
 -- | POST /contracts sub-API
 type PostContractsAPI
   =  ReqBody '[JSON] PostContractsRequest
   :> PostTxAPI (PostCreated '[JSON] PostContractsResponse)
 
-type PostContractsResponse = WithLink "contract" CreateTxBody
+type PostContractsResponse = WithLink "transactions" (WithLink "contract" CreateTxBody)
 
 instance HasNamedLink CreateTxBody API "contract" where
   namedLink _ _ CreateTxBody{..} = Just $ safeLink
