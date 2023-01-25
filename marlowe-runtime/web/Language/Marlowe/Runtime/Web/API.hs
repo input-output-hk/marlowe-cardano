@@ -77,7 +77,7 @@ type PostContractsAPI
   =  ReqBody '[JSON] PostContractsRequest
   :> PostTxAPI (PostCreated '[JSON] PostContractsResponse)
 
-type PostContractsResponse = WithLink "transactions" (WithLink "contract" CreateTxBody)
+type PostContractsResponse = WithLink "contract" CreateTxBody
 
 instance HasNamedLink CreateTxBody API "contract" where
   namedLink _ _ CreateTxBody{..} = Just $ safeLink
