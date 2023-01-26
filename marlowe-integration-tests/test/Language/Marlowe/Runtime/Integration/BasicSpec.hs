@@ -36,7 +36,7 @@ data TestWallets = TestWallets
 
 spec :: Spec
 spec = describe "Marlowe runtime API" do
-  it "Basic e2e scenario" $ withLocalMarloweRuntime @IO \runtime -> do
+  it "Basic e2e scenario" $ withLocalMarloweRuntime \runtime -> do
     let
       startDiscoveryClient = runDiscoverySyncClient runtime
           $ MarloweHeaderSyncClient
