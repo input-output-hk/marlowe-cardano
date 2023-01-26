@@ -23,6 +23,7 @@ import Language.Marlowe.Runtime.Transaction.Api
   (ContractCreated(..), MarloweTxCommand(..), RoleTokensConfig(..), WalletAddresses(WalletAddresses), mkMint)
 import Network.Protocol.Job.Client (liftCommand, liftCommandWait)
 import qualified Plutus.V2.Ledger.Api as PV2
+import System.Directory (withCurrentDirectory)
 import Test.Hspec (Spec, describe, it, shouldBe)
 import Test.Integration.Marlowe.Local
   (LocalTestnet(..), MarloweRuntime(..), PaymentKeyPair(..), execCli, withLocalMarloweRuntime)
@@ -36,7 +37,7 @@ data TestWallets = TestWallets
 
 spec :: Spec
 spec = describe "Marlowe runtime API" do
-  it "Basic e2e scenario" $ withLocalMarloweRuntime \runtime -> do
+  it "Basic e2e scenario" $ withCurrentDirectory ".." $ withLocalMarloweRuntime \runtime -> do
     let
       startDiscoveryClient = runDiscoverySyncClient runtime
           $ MarloweHeaderSyncClient
@@ -73,7 +74,7 @@ spec = describe "Marlowe runtime API" do
               $ headerSyncExpectNewHeaders (`shouldBe` blockHeader) (`shouldBe` [expectedContractHeader])
               $ continueWithNewHeaders contract TestWallets{..}
 
-      continueWithNewHeaders contract TestWallets{..} = _
+      continueWithNewHeaders _ _ = fail "TODO implement the rest of the test"
 
     startDiscoveryClient
     {-
@@ -113,7 +114,7 @@ spec = describe "Marlowe runtime API" do
     -}
   where
     headerSyncExpectWait
-      :: m (HeaderSync.ClientStWait m a) -> HeaderSync.ClientStNext m a
+      :: IO (HeaderSync.ClientStWait IO a) -> HeaderSync.ClientStNext IO a
     headerSyncExpectWait action = HeaderSync.ClientStNext
       { recvMsgNewHeaders = \_ _ -> fail "Expected wait, got new headers"
       , recvMsgRollBackward = \_ -> fail "Expected wait, got roll backward"
@@ -121,10 +122,10 @@ spec = describe "Marlowe runtime API" do
       }
 
     headerSyncExpectNewHeaders
-      :: (BlockHeader -> m ())
-      -> ([ContractHeader] -> m ())
-      -> m (HeaderSync.ClientStIdle m a)
-      -> HeaderSync.ClientStNext m a
+      :: (BlockHeader -> IO ())
+      -> ([ContractHeader] -> IO ())
+      -> IO (HeaderSync.ClientStIdle IO a)
+      -> HeaderSync.ClientStNext IO a
     headerSyncExpectNewHeaders inspectBlock inspectHeaders action = HeaderSync.ClientStNext
       { recvMsgNewHeaders = \block headers -> do
           inspectBlock block
