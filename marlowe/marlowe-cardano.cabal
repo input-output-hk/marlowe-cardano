@@ -63,6 +63,7 @@ library
     plutus-ledger-api,
     plutus-script-utils,
     plutus-tx,
+    prettyprinter,
     sbv >=8.4,
     scientific,
     serialise,
