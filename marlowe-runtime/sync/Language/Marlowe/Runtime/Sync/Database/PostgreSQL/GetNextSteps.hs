@@ -14,7 +14,7 @@ import qualified Data.Map as Map
 import Data.Maybe (fromJust)
 import Data.Time (localTimeToUTC, utc)
 import qualified Data.Vector as V
-import Hasql.TH (foldStatement, maybeStatement)
+import Hasql.TH (foldStatement, maybeStatement, vectorStatement)
 import qualified Hasql.Transaction as T
 import Language.Marlowe.Core.V1.Semantics (MarloweData(..), MarloweParams(MarloweParams))
 import Language.Marlowe.Runtime.ChainSync.Api
@@ -41,7 +41,7 @@ import Language.Marlowe.Runtime.Core.Api
   , TransactionOutput(..)
   , TransactionScriptOutput(..)
   )
-import Language.Marlowe.Runtime.History.Api (ContractStep(..), RedeemStep)
+import Language.Marlowe.Runtime.History.Api (ContractStep(..), RedeemStep(..))
 import Language.Marlowe.Runtime.Sync.Database (NextSteps(..))
 import qualified Plutus.V2.Ledger.Api as PV2
 import Prelude hiding (init)
@@ -395,7 +395,31 @@ getApplySteps blockHeader contractId txIds = T.statement params $
     params = V.fromList $ unTxId <$> txIds
 
 getRedeemSteps :: [TxId] -> T.Transaction [RedeemStep 'V1]
-getRedeemSteps = error "not implemented"
+getRedeemSteps txIds = T.statement params $ fmap decodeRow . V.toList <$>
+  [vectorStatement|
+    WITH txIds (txId) AS
+      ( SELECT * FROM UNNEST ($1 :: bytea[])
+      )
+    SELECT
+      payoutTxOut.txId :: bytea,
+      payoutTxOut.txIx :: smallint,
+      withdrawalTxIn.txId :: bytea,
+      payoutTxOut.rolesCurrency :: bytea,
+      payoutTxOut.role :: bytea
+    FROM marlowe.withdrawalTxIn
+    JOIN txIds USING (txId)
+    JOIN marlowe.payoutTxOut
+      ON withdrawalTxIn.payoutTxId = payoutTxOut.txId
+      AND withdrawalTxIn.payoutTxIx = payoutTxOut.txIx
+  |]
+  where
+    params = V.fromList $ unTxId <$> txIds
+    decodeRow (payoutTxId, payoutTxIx, txId, rolesCurrency, role) = RedeemStep
+      { utxo = TxOutRef (TxId payoutTxId) (fromIntegral payoutTxIx)
+      , redeemingTx = TxId txId
+      , datum = AssetId (PolicyId rolesCurrency) (TokenName role)
+      } :: RedeemStep 'V1
+
 
 mergeWithChildren :: (a -> r) -> (c -> r -> r) -> Fold.Fold a c -> Fold.Fold a (Maybe r)
 mergeWithChildren extractParent mergeChild (Fold.Fold fChild iChild pChild) = Fold.Fold foldRow (Nothing, iChild) mapResult
