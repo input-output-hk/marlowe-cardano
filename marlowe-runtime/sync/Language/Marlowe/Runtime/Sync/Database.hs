@@ -25,5 +25,5 @@ data DatabaseQueries m = DatabaseQueries
 
 data NextSteps
   = Rollback ChainPoint
-  | Wait BlockHeader
+  | Wait
   | forall v. Next (MarloweVersion v) BlockHeader [ContractStep v]
