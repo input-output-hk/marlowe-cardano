@@ -834,6 +834,7 @@
         eventuo11y-dsl = ./.plan.nix/eventuo11y-dsl.nix;
         cardano-integration = ./.plan.nix/cardano-integration.nix;
         aeson-via-serialise = ./.plan.nix/aeson-via-serialise.nix;
+        marlowe-integration-tests = ./.plan.nix/marlowe-integration-tests.nix;
         eventuo11y-json = ./.plan.nix/eventuo11y-json.nix;
         plutus-ledger-slot = ./.plan.nix/plutus-ledger-slot.nix;
         };
@@ -900,6 +901,9 @@
           "eventuo11y-dsl" = { flags = {}; };
           "cardano-integration" = { flags = {}; };
           "aeson-via-serialise" = { flags = {}; };
+          "marlowe-integration-tests" = {
+            flags = { "defer-plugin-errors" = lib.mkOverride 900 false; };
+            };
           "eventuo11y-json" = { flags = {}; };
           "plutus-ledger-slot" = {
             flags = { "defer-plugin-errors" = lib.mkOverride 900 false; };
@@ -1351,6 +1355,7 @@
           "servant-client".components.library.planned = lib.mkOverride 900 true;
           "natural-transformation".components.library.planned = lib.mkOverride 900 true;
           "wl-pprint-annotated".components.library.planned = lib.mkOverride 900 true;
+          "marlowe-integration-tests".components.tests."marlowe-integration-tests".planned = lib.mkOverride 900 true;
           "marlowe-cli".components.library.planned = lib.mkOverride 900 true;
           "hasql-pool".components.library.planned = lib.mkOverride 900 true;
           "wai-logger".components.library.planned = lib.mkOverride 900 true;

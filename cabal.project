@@ -27,6 +27,7 @@ packages:
   marlowe-cli
   marlowe-contracts
   marlowe-integration
+  marlowe-integration-tests
   marlowe-protocols
   marlowe-protocols-test
   marlowe-runtime
@@ -80,6 +81,9 @@ package marlowe-runtime
   ghc-options: -Werror
 
 package marlowe-integration
+  ghc-options: -Werror
+
+package marlowe-integration-tests
   ghc-options: -Werror
 
 package cardano-integration
