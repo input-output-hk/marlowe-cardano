@@ -28,27 +28,20 @@ import Test.Hspec (Spec, describe, it, shouldBe)
 import Test.Integration.Marlowe.Local
   (LocalTestnet(..), MarloweRuntime(..), PaymentKeyPair(..), execCli, withLocalMarloweRuntime)
 
-data TestWallets = TestWallets
-  { partyAAddress :: Address
-  , partyBAddress :: Address
-  , partyASigningWitness :: ShelleyWitnessSigningKey
-  , partyBSigningWitness :: ShelleyWitnessSigningKey
-  }
-
 spec :: Spec
 spec = describe "Marlowe runtime API" do
   it "Basic e2e scenario" $ withCurrentDirectory ".." $ withLocalMarloweRuntime \runtime -> do
+    (partyAAddress, partyASigningWitness) <- getGenesisWallet runtime 0
+    (partyBAddress, _partyBSigningWitness) <- getGenesisWallet runtime 1
     let
+      -- 1. Start MarloweHeaderSyncClient (request next)
       startDiscoveryClient = runDiscoverySyncClient runtime
           $ MarloweHeaderSyncClient
-          -- 1. Start MarloweHeaderSyncClient (request next)
           $ pure
           $ HeaderSync.SendMsgRequestNext
           -- 2. Expect wait
           $ headerSyncExpectWait do
             -- 3. Create standard contract
-            (partyAAddress, partyASigningWitness) <- getGenesisWallet runtime 0
-            (partyBAddress, partyBSigningWitness) <- getGenesisWallet runtime 1
             let walletAddresses = WalletAddresses partyAAddress mempty mempty
             (blockHeader, contract@ContractCreated{..}) <- createStandardContract
               runtime
@@ -72,9 +65,9 @@ spec = describe "Marlowe runtime API" do
               $ HeaderSync.SendMsgPoll
               -- 5. Expect new headers
               $ headerSyncExpectNewHeaders (`shouldBe` blockHeader) (`shouldBe` [expectedContractHeader])
-              $ continueWithNewHeaders contract TestWallets{..}
+              $ continueWithNewHeaders contract
 
-      continueWithNewHeaders _ _ = fail "TODO implement the rest of the test"
+      continueWithNewHeaders _ = fail "TODO implement the rest of the test"
         {-
             6. RequestNext (header sync)
             7. Expect Wait
