@@ -75,43 +75,40 @@ spec = describe "Marlowe runtime API" do
               $ continueWithNewHeaders contract TestWallets{..}
 
       continueWithNewHeaders _ _ = fail "TODO implement the rest of the test"
+        {-
+            6. RequestNext (header sync)
+            7. Expect Wait
+            8. Deposit funds
+            9. Start MarloweSyncClient (follow contract)
+            10. Expect contract found
+            11. Request next (marlowe sync)
+            12. Expect roll forward with deposit
+            13. Request next (marlowe sync)
+            14. Expect wait
+            15. Make choice as party B
+            16. Poll (marlowe sync)
+            17. Expect roll forward with choice
+            18. Request next (marlowe sync)
+            19. Expect wait
+            20. Notify
+            21. Withdraw as party B
+            22. Poll (marlowe sync)
+            23. Expect roll forward with notify
+            24. Request next (marlowe sync)
+            25. Expect roll forward with withdrawal
+            26. Request next (marlowe sync)
+            27. Expect wait
+            28. Cancel
+            29. Done
+            30. Request next (header sync)
+            31. Expect wait
+            32. Cancel
+            33. Done
+            34. Start MarloweSyncClient (follow a tx in the contract)
+            35. Expect contract not found
+        -}
 
     startDiscoveryClient
-    {-
-        Create standard contract
-        Poll (header sync)
-        Expect NewHeaders
-        RequestNext (header sync)
-        Expect Wait
-        Deposit funds
-        Start MarloweSyncClient (follow contract)
-        Expect contract found
-        Request next (marlowe sync)
-        Expect roll forward with deposit
-        Request next (marlowe sync)
-        Expect wait
-        Make choice as party B
-        Poll (marlowe sync)
-        Expect roll forward with choice
-        Request next (marlowe sync)
-        Expect wait
-        Notify
-        Withdraw as party B
-        Poll (marlowe sync)
-        Expect roll forward with notify
-        Request next (marlowe sync)
-        Expect roll forward with withdrawal
-        Request next (marlowe sync)
-        Expect wait
-        Cancel
-        Done
-        Request next (header sync)
-        Expect wait
-        Cancel
-        Done
-        Start MarloweSyncClient (follow a tx in the contract)
-        Expect contract not found
-    -}
   where
     headerSyncExpectWait
       :: IO (HeaderSync.ClientStWait IO a) -> HeaderSync.ClientStNext IO a
