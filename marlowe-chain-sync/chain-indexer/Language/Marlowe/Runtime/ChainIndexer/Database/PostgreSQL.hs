@@ -72,18 +72,22 @@ import Cardano.Api
   , valueToList
   )
 import Cardano.Api.Shelley (Hash(..), Tx(..), toShelleyTxIn)
+import Cardano.Binary (serialize')
 import qualified Cardano.Ledger.Alonzo.Data as Alonzo
 import qualified Cardano.Ledger.Alonzo.Tx as Alonzo
 import qualified Cardano.Ledger.Alonzo.TxBody as Alonzo
+import qualified Cardano.Ledger.Alonzo.TxWitness as Alonzo
 import qualified Cardano.Ledger.Babbage.Tx as Babbage
 import qualified Cardano.Ledger.Babbage.TxBody as Babbage
 import Cardano.Ledger.SafeHash (originalBytes)
+import Cardano.Ledger.Shelley.API.Types (StrictMaybe(..))
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import Data.ByteString.Base16 (encodeBase16)
 import Data.ByteString.Short (fromShort, toShort)
 import Data.Foldable (toList)
 import Data.Int (Int16, Int64)
+import qualified Data.Map.Strict as M
 import Data.Profunctor (rmap)
 import qualified Data.Set as Set
 import Data.Text (Text)
@@ -569,18 +573,26 @@ commitBlocks = CommitBlocks \blocks ->
           pure $ SomeTxOut (getTxId body) (TxIx ix) slotNo txOut datumInfo False era
       where
         datums = case tx of
-          ShelleyTx ShelleyBasedEraAlonzo (Alonzo.ValidatedTx body _ _ _) ->
+          ShelleyTx ShelleyBasedEraAlonzo (Alonzo.ValidatedTx body wits _ _) ->
             let
-              getDatum (Alonzo.TxOut _ _ mh) = (foldMap (Just . originalBytes) mh, Nothing)
+              getDatum (Alonzo.TxOut _ _ (SJust dh)) =
+                ( Just $ originalBytes dh
+                , fmap serialize' . M.lookup dh . Alonzo.unTxDats $ Alonzo.txdats' wits
+                )
+              getDatum (Alonzo.TxOut _ _ SNothing) = (Nothing, Nothing)
             in
               toList $ getDatum <$> Alonzo.outputs' body
-          ShelleyTx ShelleyBasedEraBabbage (Babbage.ValidatedTx body _ _ _) ->
+          ShelleyTx ShelleyBasedEraBabbage (Babbage.ValidatedTx body wits _ _) ->
             let
               getDatum (Babbage.TxOut _ _ datum _) =
                 case datum of
                   Babbage.NoDatum -> (Nothing, Nothing)
-                  Babbage.DatumHash dh -> (Just $ originalBytes dh, Nothing)
-                  Babbage.Datum d -> (Just . originalBytes $ Alonzo.hashBinaryData d, Nothing)
+                  Babbage.DatumHash dh -> ( Just $ originalBytes dh
+                                          , fmap serialize' . M.lookup dh . Alonzo.unTxDats $ Babbage.txdats' wits
+                                          )
+                  Babbage.Datum d -> ( Just . originalBytes $ Alonzo.hashBinaryData d
+                                     , Just . serialize' $ Alonzo.binaryDataToData d
+                                     )
             in
               toList $ getDatum <$> Babbage.outputs' body
           _ -> (Nothing, Nothing) <$ (let TxBody TxBodyContent{txOuts} = getTxBody tx in txOuts)
