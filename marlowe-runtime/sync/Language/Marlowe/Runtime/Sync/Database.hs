@@ -14,7 +14,8 @@ import Data.Text (Text)
 import Data.Void (Void)
 import GHC.Generics (Generic)
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainPoint)
-import Language.Marlowe.Runtime.Core.Api (ContractId, MarloweVersion(..), MarloweVersionTag(..), SomeMarloweVersion)
+import Language.Marlowe.Runtime.Core.Api (ContractId, MarloweVersion(..), SomeMarloweVersion)
+import Language.Marlowe.Runtime.Discovery.Api (ContractHeader)
 import Language.Marlowe.Runtime.History.Api (ContractStep, SomeCreateStep)
 import Observe.Event (EventBackend, addField, withEvent)
 import Observe.Event.Component (FieldConfig(..), GetSelectorConfig, SelectorConfig(SelectorConfig), SomeJSON(SomeJSON))
@@ -25,7 +26,8 @@ data DatabaseSelector f where
   GetCreateStep :: DatabaseSelector (QueryField ContractId (Maybe GetCreateStepResult))
   GetIntersectionForContract :: DatabaseSelector (QueryField GetIntersectionForContractArguments (Maybe GetIntersectionForContractResult))
   GetIntersection :: DatabaseSelector (QueryField [BlockHeader] (Maybe BlockHeader))
-  GetNextSteps :: MarloweVersion v -> DatabaseSelector (QueryField (GetNextStepsArguments v) (NextSteps v))
+  GetNextHeaders :: DatabaseSelector (QueryField ChainPoint (Next ContractHeader))
+  GetNextSteps :: MarloweVersion v -> DatabaseSelector (QueryField (GetNextStepsArguments v) (Next (ContractStep v)))
 
 data QueryField p r
   = Arguments p
@@ -86,6 +88,11 @@ logDatabaseQueries eventBackend DatabaseQueries{..} = DatabaseQueries
       result <- getIntersectionForContract contractId points
       addField ev $ Result $ uncurry GetIntersectionForContractResult <$> result
       pure result
+  , getNextHeaders = \fromPoint -> withEvent eventBackend GetNextHeaders \ev -> do
+      addField ev $ Arguments fromPoint
+      result <- getNextHeaders fromPoint
+      addField ev $ Result result
+      pure result
   , getNextSteps = \version contractId fromPoint -> withEvent eventBackend (GetNextSteps version) \ev -> do
       addField ev $ Arguments $ GetNextStepsArguments{..}
       result <- getNextSteps version contractId fromPoint
@@ -100,6 +107,7 @@ hoistDatabaseQueries f DatabaseQueries{..} = DatabaseQueries
   , getCreateStep = f . getCreateStep
   , getIntersectionForContract = fmap f . getIntersectionForContract
   , getIntersection = f . getIntersection
+  , getNextHeaders = f . getNextHeaders
   , getNextSteps = (fmap . fmap) f . getNextSteps
   }
 
@@ -109,16 +117,16 @@ data DatabaseQueries m = DatabaseQueries
   , getCreateStep :: ContractId -> m (Maybe (BlockHeader, SomeCreateStep))
   , getIntersection :: [BlockHeader] -> m (Maybe BlockHeader)
   , getIntersectionForContract :: ContractId -> [BlockHeader] -> m (Maybe (BlockHeader, SomeMarloweVersion))
-  , getNextSteps :: forall v. MarloweVersion v -> ContractId -> ChainPoint -> m (NextSteps v)
+  , getNextHeaders :: ChainPoint -> m (Next ContractHeader)
+  , getNextSteps :: forall v. MarloweVersion v -> ContractId -> ChainPoint -> m (Next (ContractStep v))
   }
 
-data NextSteps v
+data Next a
   = Rollback ChainPoint
   | Wait
-  | Next BlockHeader [ContractStep v]
-  deriving stock (Generic)
-
-instance ToJSON (NextSteps 'V1)
+  | Next BlockHeader [a]
+  deriving stock (Generic, Functor)
+  deriving anyclass (ToJSON)
 
 getDatabaseSelectorConfig :: GetSelectorConfig DatabaseSelector
 getDatabaseSelectorConfig = \case
@@ -127,6 +135,7 @@ getDatabaseSelectorConfig = \case
   GetCreateStep -> getQuerySelectorConfig "get-create-step"
   GetIntersectionForContract -> getQuerySelectorConfig "get-intersection-for-contract"
   GetIntersection -> getQuerySelectorConfig "get-intersection"
+  GetNextHeaders -> getQuerySelectorConfig "get-next-headers"
   GetNextSteps MarloweV1 -> getQuerySelectorConfig "get-next-steps"
 
 getQuerySelectorConfig :: (ToJSON p, ToJSON r) => Text -> SelectorConfig (QueryField p r)

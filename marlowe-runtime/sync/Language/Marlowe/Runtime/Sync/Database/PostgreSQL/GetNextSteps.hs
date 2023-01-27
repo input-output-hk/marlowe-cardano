@@ -44,12 +44,12 @@ import Language.Marlowe.Runtime.Core.Api
   , TransactionScriptOutput(..)
   )
 import Language.Marlowe.Runtime.History.Api (ContractStep(..), RedeemStep(..))
-import Language.Marlowe.Runtime.Sync.Database (NextSteps(..))
+import Language.Marlowe.Runtime.Sync.Database (Next(..))
 import qualified Plutus.V2.Ledger.Api as PV2
 import Prelude hiding (init)
 import Witherable (catMaybes, mapMaybe)
 
-getNextSteps :: MarloweVersion v -> ContractId -> ChainPoint -> T.Transaction (NextSteps v)
+getNextSteps :: MarloweVersion v -> ContractId -> ChainPoint -> T.Transaction (Next (ContractStep v))
 getNextSteps MarloweV1 contractId point = do
   orient point >>= \case
     RolledBack toPoint -> pure $ Rollback toPoint
