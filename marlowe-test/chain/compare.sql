@@ -216,7 +216,7 @@ create temporary table cmp_txout as
     , tx_out.address_raw
     , tx_out.value
     , tx_out.data_hash
-    , datum.bytes
+    , case when tx_out.inline_datum_id is not null then datum.bytes else null end
     , not tx.valid_contract
     from max_slotno
     inner join public.block
@@ -289,9 +289,8 @@ create temporary table x_datum as
 	  using (txid, txix)
 	where a.source = 'dbsync'
 	  and b.source = 'chainindex'
-	  and a.datumbytes <> b.datumbytes
 	  and a.datumbytes is not null
-	  and b.datumbytes is not null
+	  and coalesce(a.datumbytes <> b.datumbytes, true)
     ) as cm_datum
 ;
 select
