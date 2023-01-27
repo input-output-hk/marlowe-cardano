@@ -68,16 +68,14 @@ worker WorkerDependencies{..} = do
       where
         nextIdle = serverIdle createBlock contractId version
         recvMsgRequestNext = do
-          nextSteps <- getNextSteps contractId clientPos
-          case nextSteps of
-            Rollback Genesis -> pure $ SendMsgRollBackCreation ()
+          nextSteps <- getNextSteps version contractId clientPos
+          pure case nextSteps of
+            Rollback Genesis -> SendMsgRollBackCreation ()
             Rollback (At targetBlock)
-              | targetBlock < createBlock -> pure $ SendMsgRollBackCreation ()
-              | otherwise -> pure $ SendMsgRollBackward targetBlock $ nextIdle $ At targetBlock
-            Wait -> pure $ SendMsgWait serverWait
-            Next version' nextBlock steps -> case testEquality version version' of
-              Nothing -> fail $ "getNextSteps returned unexpected Marlowe version " <> show version'
-              Just Refl -> pure $ SendMsgRollForward nextBlock steps $ nextIdle $ At nextBlock
+              | targetBlock < createBlock -> SendMsgRollBackCreation ()
+              | otherwise -> SendMsgRollBackward targetBlock $ nextIdle $ At targetBlock
+            Wait -> SendMsgWait serverWait
+            Next nextBlock steps -> SendMsgRollForward nextBlock steps $ nextIdle $ At nextBlock
 
         serverWait :: ServerStWait v IO ()
         serverWait = ServerStWait

@@ -196,11 +196,9 @@ library sync
   build-depends:
       base >= 4.9 && < 5
     , aeson
-    , async
     , async-components
     , binary
     , bytestring
-    , cardano-api
     , containers
     , eventuo11y
     , eventuo11y-extras
@@ -213,13 +211,9 @@ library sync
     , marlowe-protocols
     , marlowe-runtime
     , marlowe-runtime:history-api
-    , mtl
-    , nonempty-containers
     , plutus-ledger-api
-    , stm
     , text
     , time
-    , transformers
     , witherable
     , vector
   visibility: public
@@ -551,6 +545,32 @@ executable marlowe-indexer
     , marlowe-runtime:indexer
     , network
     , nonempty-containers
+    , optparse-applicative
+    , text
+    , time
+    , uuid
+  ghc-options: -threaded
+
+executable marlowe-sync
+  import: lang
+  hs-source-dirs:   marlowe-sync
+  main-is: Main.hs
+  other-modules:
+    Logging
+    Paths_marlowe_runtime
+  autogen-modules:
+    Paths_marlowe_runtime
+  build-depends:
+      base >= 4.9 && < 5
+    , async-components
+    , eventuo11y
+    , eventuo11y-extras
+    , hasql
+    , hasql-pool
+    , marlowe-protocols
+    , marlowe-runtime:history-api
+    , marlowe-runtime:sync
+    , network
     , optparse-applicative
     , text
     , time

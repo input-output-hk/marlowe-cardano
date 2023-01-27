@@ -110,6 +110,12 @@ instance Eq SomeCreateStep where
 instance Show SomeCreateStep where
   show (SomeCreateStep MarloweV1 a) = show a
 
+instance ToJSON SomeCreateStep where
+  toJSON (SomeCreateStep MarloweV1 createStep) = object
+    [ "version" .= MarloweV1
+    , "createStep" .= createStep
+    ]
+
 instance Binary (CreateStep 'V1) where
   put CreateStep{..} = do
     put createOutput

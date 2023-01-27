@@ -1,4 +1,5 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE QuasiQuotes #-}
 
 module Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetNextSteps
@@ -48,8 +49,8 @@ import qualified Plutus.V2.Ledger.Api as PV2
 import Prelude hiding (init)
 import Witherable (catMaybes, mapMaybe)
 
-getNextSteps :: ContractId -> ChainPoint -> T.Transaction NextSteps
-getNextSteps contractId point = do
+getNextSteps :: MarloweVersion v -> ContractId -> ChainPoint -> T.Transaction (NextSteps v)
+getNextSteps MarloweV1 contractId point = do
   orient point >>= \case
     RolledBack toPoint -> pure $ Rollback toPoint
     AtTip -> pure Wait
@@ -58,7 +59,7 @@ getNextSteps contractId point = do
       Just NextTxIds{..} -> do
         applySteps <- getApplySteps nextBlock contractId nextApplyTxIds
         redeemSteps <- getRedeemSteps nextWithdrawalTxIds
-        pure $ Next MarloweV1 nextBlock $ (ApplyTransaction <$> applySteps) <> (RedeemPayout <$> redeemSteps)
+        pure $ Next nextBlock $ (ApplyTransaction <$> applySteps) <> (RedeemPayout <$> redeemSteps)
 
 data Orientation
   = BeforeTip
