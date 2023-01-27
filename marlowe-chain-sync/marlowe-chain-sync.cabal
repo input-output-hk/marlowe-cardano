@@ -130,9 +130,7 @@ library chain-indexer
     , async-components
     , base16
     , bytestring
-    , cborg
     , cardano-api
-    , cardano-binary
     , cardano-crypto-wrapper
     , cardano-ledger-alonzo
     , cardano-ledger-babbage
