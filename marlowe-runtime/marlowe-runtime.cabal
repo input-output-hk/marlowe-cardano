@@ -180,6 +180,44 @@ library indexer
     , vector
   visibility: public
 
+library sync
+  import: lang
+  hs-source-dirs:   sync
+  visibility: public
+  exposed-modules:
+    Language.Marlowe.Runtime.Sync
+    Language.Marlowe.Runtime.Sync.MarloweSyncServer
+    Language.Marlowe.Runtime.Sync.Database
+    Language.Marlowe.Runtime.Sync.Database.PostgreSQL
+    Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetTipForContract
+    Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetCreateStep
+    Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetIntersectionForContract
+    Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetNextSteps
+  build-depends:
+      base >= 4.9 && < 5
+    , aeson
+    , async-components
+    , binary
+    , bytestring
+    , containers
+    , eventuo11y
+    , eventuo11y-extras
+    , foldl
+    , hasql
+    , hasql-th
+    , hasql-transaction
+    , marlowe-cardano
+    , marlowe-chain-sync
+    , marlowe-protocols
+    , marlowe-runtime
+    , marlowe-runtime:history-api
+    , plutus-ledger-api
+    , text
+    , time
+    , witherable
+    , vector
+  visibility: public
+
 library history
   import: lang
   hs-source-dirs:   history
@@ -507,6 +545,32 @@ executable marlowe-indexer
     , marlowe-runtime:indexer
     , network
     , nonempty-containers
+    , optparse-applicative
+    , text
+    , time
+    , uuid
+  ghc-options: -threaded
+
+executable marlowe-sync
+  import: lang
+  hs-source-dirs:   marlowe-sync
+  main-is: Main.hs
+  other-modules:
+    Logging
+    Paths_marlowe_runtime
+  autogen-modules:
+    Paths_marlowe_runtime
+  build-depends:
+      base >= 4.9 && < 5
+    , async-components
+    , eventuo11y
+    , eventuo11y-extras
+    , hasql
+    , hasql-pool
+    , marlowe-protocols
+    , marlowe-runtime:history-api
+    , marlowe-runtime:sync
+    , network
     , optparse-applicative
     , text
     , time

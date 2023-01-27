@@ -15,7 +15,7 @@ rec {
 
   inherit (haskell.packages.marlowe-cli.components.exes) marlowe-cli;
   inherit (haskell.packages.marlowe-chain-sync.components.exes) chainseekd marlowe-chain-indexer;
-  inherit (haskell.packages.marlowe-runtime.components.exes) marlowe-history marlowe-discovery marlowe-tx marlowe-web-server;
+  inherit (haskell.packages.marlowe-runtime.components.exes) marlowe-history marlowe-sync marlowe-indexer marlowe-discovery marlowe-tx marlowe-web-server;
   marlowe-rt = haskell.packages.marlowe-runtime.components.exes.marlowe;
 
   network = pkgs.networks.${networkNixName};
