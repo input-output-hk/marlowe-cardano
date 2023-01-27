@@ -13,5 +13,5 @@ databaseQueries :: DatabaseQueries H.Session
 databaseQueries = DatabaseQueries
   (T.transaction T.Serializable T.Read . getTipForContract)
   (T.transaction T.Serializable T.Read . getCreateStep)
-  (\contractId version -> T.transaction T.Serializable T.Read . getIntersectionForContract contractId version)
-  (\contractId version -> T.transaction T.Serializable T.Read . getNextSteps contractId version)
+  (\contractId -> T.transaction T.Serializable T.Read . getIntersectionForContract contractId)
+  (\contractId -> T.transaction T.Serializable T.Read . getNextSteps contractId)

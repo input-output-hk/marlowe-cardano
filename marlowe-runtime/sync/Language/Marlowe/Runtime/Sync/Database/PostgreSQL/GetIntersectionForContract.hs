@@ -1,3 +1,5 @@
+{-# LANGUAGE QuasiQuotes #-}
+
 module Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetIntersectionForContract
   where
 
@@ -7,12 +9,11 @@ import Data.Maybe (listToMaybe)
 import qualified Data.Vector as V
 import Hasql.TH (vectorStatement)
 import qualified Hasql.Transaction as T
-import Language.Marlowe.Runtime.ChainSync.Api
-  (BlockHeader(..), BlockHeaderHash(..), ChainPoint, TxId(..), TxOutRef(..), WithGenesis(..))
-import Language.Marlowe.Runtime.Core.Api (ContractId(ContractId))
+import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader(..), BlockHeaderHash(..), TxId(..), TxOutRef(..))
+import Language.Marlowe.Runtime.Core.Api (ContractId(ContractId), MarloweVersion(..), SomeMarloweVersion(..))
 
-getIntersectionForContract :: ContractId -> [BlockHeader] -> T.Transaction ChainPoint
-getIntersectionForContract _ [] = pure Genesis
+getIntersectionForContract :: ContractId -> [BlockHeader] -> T.Transaction (Maybe (BlockHeader, SomeMarloweVersion))
+getIntersectionForContract _ [] = pure Nothing
 getIntersectionForContract (ContractId TxOutRef{..}) (b : bs) = do
   serverBlocks <- fmap decodeBlock . V.toList <$> T.statement params
     [vectorStatement|
@@ -60,7 +61,7 @@ getIntersectionForContract (ContractId TxOutRef{..}) (b : bs) = do
       ORDER BY block.slotNo
     |]
   pure
-    $ maybe Genesis (At . fst)
+    $ fmap ((, SomeMarloweVersion MarloweV1) . fst)
     $ listToMaybe
     $ reverse
     $ takeWhile (uncurry (==))

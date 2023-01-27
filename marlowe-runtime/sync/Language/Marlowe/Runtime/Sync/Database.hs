@@ -5,7 +5,7 @@ module Language.Marlowe.Runtime.Sync.Database
   where
 
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainPoint)
-import Language.Marlowe.Runtime.Core.Api (ContractId, MarloweVersion)
+import Language.Marlowe.Runtime.Core.Api (ContractId, MarloweVersion, SomeMarloweVersion)
 import Language.Marlowe.Runtime.History.Api (ContractStep, SomeCreateStep)
 
 hoistDatabaseQueries :: (forall x. m x -> n x) -> DatabaseQueries m -> DatabaseQueries n
@@ -19,7 +19,7 @@ hoistDatabaseQueries f DatabaseQueries{..} = DatabaseQueries
 data DatabaseQueries m = DatabaseQueries
   { getTipForContract :: ContractId -> m ChainPoint
   , getCreateStep :: ContractId -> m (Maybe (BlockHeader, SomeCreateStep))
-  , getIntersectionForContract :: ContractId -> [BlockHeader] -> m ChainPoint
+  , getIntersectionForContract :: ContractId -> [BlockHeader] -> m (Maybe (BlockHeader, SomeMarloweVersion))
   , getNextSteps :: ContractId -> ChainPoint -> m NextSteps
   }
 

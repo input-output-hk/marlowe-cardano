@@ -1,3 +1,5 @@
+{-# LANGUAGE QuasiQuotes #-}
+
 module Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetCreateStep
   where
 

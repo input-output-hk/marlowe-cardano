@@ -1,4 +1,5 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE QuasiQuotes #-}
 
 module Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetNextSteps
   where

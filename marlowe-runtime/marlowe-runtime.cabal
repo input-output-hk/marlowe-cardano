@@ -186,6 +186,7 @@ library sync
   visibility: public
   exposed-modules:
     Language.Marlowe.Runtime.Sync
+    Language.Marlowe.Runtime.Sync.MarloweSyncServer
     Language.Marlowe.Runtime.Sync.Database
     Language.Marlowe.Runtime.Sync.Database.PostgreSQL
     Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetTipForContract
