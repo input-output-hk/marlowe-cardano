@@ -156,6 +156,44 @@
             ];
           hsSourceDirs = [ "indexer" ];
           };
+        "sync" = {
+          depends = [
+            (hsPkgs."base" or (errorHandler.buildDepError "base"))
+            (hsPkgs."aeson" or (errorHandler.buildDepError "aeson"))
+            (hsPkgs."async-components" or (errorHandler.buildDepError "async-components"))
+            (hsPkgs."binary" or (errorHandler.buildDepError "binary"))
+            (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
+            (hsPkgs."containers" or (errorHandler.buildDepError "containers"))
+            (hsPkgs."eventuo11y" or (errorHandler.buildDepError "eventuo11y"))
+            (hsPkgs."eventuo11y-extras" or (errorHandler.buildDepError "eventuo11y-extras"))
+            (hsPkgs."foldl" or (errorHandler.buildDepError "foldl"))
+            (hsPkgs."hasql" or (errorHandler.buildDepError "hasql"))
+            (hsPkgs."hasql-th" or (errorHandler.buildDepError "hasql-th"))
+            (hsPkgs."hasql-transaction" or (errorHandler.buildDepError "hasql-transaction"))
+            (hsPkgs."marlowe-cardano" or (errorHandler.buildDepError "marlowe-cardano"))
+            (hsPkgs."marlowe-chain-sync" or (errorHandler.buildDepError "marlowe-chain-sync"))
+            (hsPkgs."marlowe-protocols" or (errorHandler.buildDepError "marlowe-protocols"))
+            (hsPkgs."marlowe-runtime" or (errorHandler.buildDepError "marlowe-runtime"))
+            (hsPkgs."marlowe-runtime".components.sublibs.history-api or (errorHandler.buildDepError "marlowe-runtime:history-api"))
+            (hsPkgs."plutus-ledger-api" or (errorHandler.buildDepError "plutus-ledger-api"))
+            (hsPkgs."text" or (errorHandler.buildDepError "text"))
+            (hsPkgs."time" or (errorHandler.buildDepError "time"))
+            (hsPkgs."witherable" or (errorHandler.buildDepError "witherable"))
+            (hsPkgs."vector" or (errorHandler.buildDepError "vector"))
+            ];
+          buildable = true;
+          modules = [
+            "Language/Marlowe/Runtime/Sync"
+            "Language/Marlowe/Runtime/Sync/MarloweSyncServer"
+            "Language/Marlowe/Runtime/Sync/Database"
+            "Language/Marlowe/Runtime/Sync/Database/PostgreSQL"
+            "Language/Marlowe/Runtime/Sync/Database/PostgreSQL/GetTipForContract"
+            "Language/Marlowe/Runtime/Sync/Database/PostgreSQL/GetCreateStep"
+            "Language/Marlowe/Runtime/Sync/Database/PostgreSQL/GetIntersectionForContract"
+            "Language/Marlowe/Runtime/Sync/Database/PostgreSQL/GetNextSteps"
+            ];
+          hsSourceDirs = [ "sync" ];
+          };
         "history" = {
           depends = [
             (hsPkgs."base" or (errorHandler.buildDepError "base"))
@@ -482,6 +520,30 @@
           buildable = true;
           modules = [ "Logging" "Paths_marlowe_runtime" ];
           hsSourceDirs = [ "marlowe-indexer" ];
+          mainPath = [
+            "Main.hs"
+            ] ++ (pkgs.lib).optional (flags.defer-plugin-errors) "";
+          };
+        "marlowe-sync" = {
+          depends = [
+            (hsPkgs."base" or (errorHandler.buildDepError "base"))
+            (hsPkgs."async-components" or (errorHandler.buildDepError "async-components"))
+            (hsPkgs."eventuo11y" or (errorHandler.buildDepError "eventuo11y"))
+            (hsPkgs."eventuo11y-extras" or (errorHandler.buildDepError "eventuo11y-extras"))
+            (hsPkgs."hasql" or (errorHandler.buildDepError "hasql"))
+            (hsPkgs."hasql-pool" or (errorHandler.buildDepError "hasql-pool"))
+            (hsPkgs."marlowe-protocols" or (errorHandler.buildDepError "marlowe-protocols"))
+            (hsPkgs."marlowe-runtime".components.sublibs.history-api or (errorHandler.buildDepError "marlowe-runtime:history-api"))
+            (hsPkgs."marlowe-runtime".components.sublibs.sync or (errorHandler.buildDepError "marlowe-runtime:sync"))
+            (hsPkgs."network" or (errorHandler.buildDepError "network"))
+            (hsPkgs."optparse-applicative" or (errorHandler.buildDepError "optparse-applicative"))
+            (hsPkgs."text" or (errorHandler.buildDepError "text"))
+            (hsPkgs."time" or (errorHandler.buildDepError "time"))
+            (hsPkgs."uuid" or (errorHandler.buildDepError "uuid"))
+            ];
+          buildable = true;
+          modules = [ "Logging" "Paths_marlowe_runtime" ];
+          hsSourceDirs = [ "marlowe-sync" ];
           mainPath = [
             "Main.hs"
             ] ++ (pkgs.lib).optional (flags.defer-plugin-errors) "";

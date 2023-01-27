@@ -1328,6 +1328,7 @@
           "semialign".components.library.planned = lib.mkOverride 900 true;
           "erf".components.library.planned = lib.mkOverride 900 true;
           "cardano-crypto-test".components.library.planned = lib.mkOverride 900 true;
+          "marlowe-runtime".components.sublibs."sync".planned = lib.mkOverride 900 true;
           "selective".components.library.planned = lib.mkOverride 900 true;
           "generics-sop".components.library.planned = lib.mkOverride 900 true;
           "http-client".components.library.planned = lib.mkOverride 900 true;
@@ -1463,6 +1464,7 @@
           "Glob".components.library.planned = lib.mkOverride 900 true;
           "contravariant-extras".components.library.planned = lib.mkOverride 900 true;
           "ouroboros-consensus-protocol".components.sublibs."ouroboros-consensus-protocol-test".planned = lib.mkOverride 900 true;
+          "marlowe-runtime".components.exes."marlowe-sync".planned = lib.mkOverride 900 true;
           "integer-gmp".components.library.planned = lib.mkOverride 900 true;
           "marlowe-actus".components.tests."actus-core-test".planned = lib.mkOverride 900 true;
           "tasty".components.library.planned = lib.mkOverride 900 true;
