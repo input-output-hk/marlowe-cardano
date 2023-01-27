@@ -5,9 +5,11 @@ module Language.Marlowe.Runtime.Integration.BasicSpec
 
 import Cardano.Api (AsType(..), BabbageEra, ShelleyWitnessSigningKey(..), signShelleyTransaction)
 import Cardano.Api.Byron (deserialiseFromTextEnvelope)
+import Control.Concurrent (threadDelay)
 import Data.Aeson (decodeFileStrict)
 import Data.String (fromString)
-import Data.Time (NominalDiffTime, UTCTime, getCurrentTime, nominalDiffTimeToSeconds, secondsToNominalDiffTime)
+import Data.Time
+  (NominalDiffTime, UTCTime, diffUTCTime, getCurrentTime, nominalDiffTimeToSeconds, secondsToNominalDiffTime)
 import Data.Time.Clock (addUTCTime)
 import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
 import Language.Marlowe.Core.V1.Semantics.Types
@@ -60,12 +62,13 @@ spec = describe "Marlowe runtime API" do
                 , marloweVersion = SomeMarloweVersion MarloweV1
                 , blockHeader
                 }
-            pure
               -- 4. Poll
-              $ HeaderSync.SendMsgPoll
+            HeaderSync.SendMsgPoll
               -- 5. Expect new headers
-              $ headerSyncExpectNewHeaders (`shouldBe` blockHeader) (`shouldBe` [expectedContractHeader])
-              $ continueWithNewHeaders contract
+              <$> headerSyncExpectNewHeaders \actualBlock actualHeaders -> do
+                  actualBlock `shouldBe` blockHeader
+                  actualHeaders `shouldBe` [expectedContractHeader]
+                  continueWithNewHeaders contract
 
       continueWithNewHeaders _ = fail "TODO implement the rest of the test"
         {-
@@ -112,18 +115,29 @@ spec = describe "Marlowe runtime API" do
       }
 
     headerSyncExpectNewHeaders
-      :: (BlockHeader -> IO ())
-      -> ([ContractHeader] -> IO ())
-      -> IO (HeaderSync.ClientStIdle IO a)
-      -> HeaderSync.ClientStNext IO a
-    headerSyncExpectNewHeaders inspectBlock inspectHeaders action = HeaderSync.ClientStNext
-      { recvMsgNewHeaders = \block headers -> do
-          inspectBlock block
-          inspectHeaders headers
-          action
-      , recvMsgRollBackward = \_ -> fail "Expected new headers, got roll backward"
-      , recvMsgWait = fail "Expected new headers, got wait"
-      }
+      :: (BlockHeader -> [ContractHeader] -> IO (HeaderSync.ClientStIdle IO a))
+      -> IO (HeaderSync.ClientStNext IO a)
+    headerSyncExpectNewHeaders recvMsgNewHeaders = do
+      startTime <- getCurrentTime
+      let
+        next = HeaderSync.ClientStNext
+          { recvMsgNewHeaders
+          , recvMsgRollBackward = \_ -> fail "Expected new headers, got roll backward"
+          , recvMsgWait = do
+              time <- getCurrentTime
+              if (time `diffUTCTime` startTime) > timeout
+                then fail "Expected new headers, got wait"
+                else do
+                  threadDelay retryDelayMicroSeconds
+                  pure $ HeaderSync.SendMsgPoll next
+          }
+      pure next
+
+timeout :: NominalDiffTime
+timeout = secondsToNominalDiffTime 2
+
+retryDelayMicroSeconds :: Int
+retryDelayMicroSeconds = 100_000
 
 getGenesisWallet :: MarloweRuntime -> Int -> IO (Address, ShelleyWitnessSigningKey)
 getGenesisWallet MarloweRuntime{..} walletIx = do
