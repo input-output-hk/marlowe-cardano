@@ -569,7 +569,7 @@ commitBlocks = CommitBlocks \blocks ->
       body@(TxBody TxBodyContent{..}) -> case txScriptValidity of
         TxScriptValidity _ ScriptInvalid -> case txReturnCollateral of
           TxReturnCollateralNone     -> []
-          TxReturnCollateral _ txOut -> [SomeTxOut (getTxId body) (TxIx 0) slotNo txOut True era]
+          TxReturnCollateral _ txOut -> [SomeTxOut (getTxId body) (TxIx 1) slotNo txOut True era]
         _ -> do
           (ix, txOut) <- [0..] `zip` txOuts
           pure $ SomeTxOut (getTxId body) (TxIx ix) slotNo txOut False era
