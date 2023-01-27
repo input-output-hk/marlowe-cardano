@@ -189,6 +189,7 @@ library sync
     Language.Marlowe.Runtime.Sync.MarloweSyncServer
     Language.Marlowe.Runtime.Sync.Database
     Language.Marlowe.Runtime.Sync.Database.PostgreSQL
+    Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetTip
     Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetTipForContract
     Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetCreateStep
     Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetIntersectionForContract

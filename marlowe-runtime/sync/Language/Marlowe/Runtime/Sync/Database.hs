@@ -11,6 +11,7 @@ module Language.Marlowe.Runtime.Sync.Database
 import Control.Monad.Cleanup (MonadCleanup)
 import Data.Aeson (ToJSON)
 import Data.Text (Text)
+import Data.Void (Void)
 import GHC.Generics (Generic)
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainPoint)
 import Language.Marlowe.Runtime.Core.Api (ContractId, MarloweVersion(..), MarloweVersionTag(..), SomeMarloweVersion)
@@ -19,6 +20,7 @@ import Observe.Event (EventBackend, addField, withEvent)
 import Observe.Event.Component (FieldConfig(..), GetSelectorConfig, SelectorConfig(SelectorConfig), SomeJSON(SomeJSON))
 
 data DatabaseSelector f where
+  GetTip :: DatabaseSelector (QueryField Void ChainPoint)
   GetTipForContract :: DatabaseSelector (QueryField ContractId ChainPoint)
   GetCreateStep :: DatabaseSelector (QueryField ContractId (Maybe GetCreateStepResult))
   GetIntersectionForContract :: DatabaseSelector (QueryField GetIntersectionForContractArguments (Maybe GetIntersectionForContractResult))
@@ -60,7 +62,11 @@ data GetNextStepsArguments v = GetNextStepsArguments
 
 logDatabaseQueries :: MonadCleanup m => EventBackend m r DatabaseSelector -> DatabaseQueries m -> DatabaseQueries m
 logDatabaseQueries eventBackend DatabaseQueries{..} = DatabaseQueries
-  { getTipForContract = \contractId -> withEvent eventBackend GetTipForContract \ev -> do
+  { getTip = withEvent eventBackend GetTip \ev -> do
+      result <- getTip
+      addField ev $ Result result
+      pure result
+  , getTipForContract = \contractId -> withEvent eventBackend GetTipForContract \ev -> do
       addField ev $ Arguments contractId
       result <- getTipForContract contractId
       addField ev $ Result result
@@ -89,7 +95,8 @@ logDatabaseQueries eventBackend DatabaseQueries{..} = DatabaseQueries
 
 hoistDatabaseQueries :: (forall x. m x -> n x) -> DatabaseQueries m -> DatabaseQueries n
 hoistDatabaseQueries f DatabaseQueries{..} = DatabaseQueries
-  { getTipForContract = f . getTipForContract
+  { getTip = f getTip
+  , getTipForContract = f . getTipForContract
   , getCreateStep = f . getCreateStep
   , getIntersectionForContract = fmap f . getIntersectionForContract
   , getIntersection = f . getIntersection
@@ -97,7 +104,8 @@ hoistDatabaseQueries f DatabaseQueries{..} = DatabaseQueries
   }
 
 data DatabaseQueries m = DatabaseQueries
-  { getTipForContract :: ContractId -> m ChainPoint
+  { getTip :: m ChainPoint
+  , getTipForContract :: ContractId -> m ChainPoint
   , getCreateStep :: ContractId -> m (Maybe (BlockHeader, SomeCreateStep))
   , getIntersection :: [BlockHeader] -> m (Maybe BlockHeader)
   , getIntersectionForContract :: ContractId -> [BlockHeader] -> m (Maybe (BlockHeader, SomeMarloweVersion))
@@ -114,6 +122,7 @@ instance ToJSON (NextSteps 'V1)
 
 getDatabaseSelectorConfig :: GetSelectorConfig DatabaseSelector
 getDatabaseSelectorConfig = \case
+  GetTip -> getQuerySelectorConfig "get-tip"
   GetTipForContract -> getQuerySelectorConfig "get-tip-for-contract"
   GetCreateStep -> getQuerySelectorConfig "get-create-step"
   GetIntersectionForContract -> getQuerySelectorConfig "get-intersection-for-contract"

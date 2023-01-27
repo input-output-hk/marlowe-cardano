@@ -8,10 +8,12 @@ import Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetCreateStep (getCreat
 import Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetIntersection (getIntersection)
 import Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetIntersectionForContract (getIntersectionForContract)
 import Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetNextSteps (getNextSteps)
+import Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetTip (getTip)
 import Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetTipForContract (getTipForContract)
 
 databaseQueries :: DatabaseQueries H.Session
 databaseQueries = DatabaseQueries
+  (T.transaction T.Serializable T.Read getTip)
   (T.transaction T.Serializable T.Read . getTipForContract)
   (T.transaction T.Serializable T.Read . getCreateStep)
   (T.transaction T.Serializable T.Read . getIntersection)
