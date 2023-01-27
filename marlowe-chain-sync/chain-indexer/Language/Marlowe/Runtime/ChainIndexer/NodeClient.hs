@@ -1,6 +1,5 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
-{-# LANGUAGE TupleSections #-}
 
 module Language.Marlowe.Runtime.ChainIndexer.NodeClient
   ( Changes(..)
