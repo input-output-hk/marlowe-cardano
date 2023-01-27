@@ -1,6 +1,7 @@
 {-# LANGUAGE ApplicativeDo #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE QuasiQuotes #-}
@@ -60,7 +61,6 @@ import Cardano.Api
   , TxMetadataInEra(..)
   , TxMintValue(..)
   , TxOut(..)
-  , TxOutDatum(..)
   , TxOutValue(..)
   , TxReturnCollateral(..)
   , TxScriptValidity(..)
@@ -68,19 +68,21 @@ import Cardano.Api
   , TxValidityUpperBound(..)
   , getTxBody
   , getTxId
-  , hashScriptData
   , selectLovelace
   , valueToList
   )
 import Cardano.Api.Shelley (Hash(..), Tx(..), toShelleyTxIn)
 import qualified Cardano.Ledger.Alonzo.Data as Alonzo
 import qualified Cardano.Ledger.Alonzo.Tx as Alonzo
+import qualified Cardano.Ledger.Alonzo.TxBody as Alonzo
 import qualified Cardano.Ledger.Babbage.Tx as Babbage
+import qualified Cardano.Ledger.Babbage.TxBody as Babbage
 import Cardano.Ledger.SafeHash (originalBytes)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import Data.ByteString.Base16 (encodeBase16)
 import Data.ByteString.Short (fromShort, toShort)
+import Data.Foldable (toList)
 import Data.Int (Int16, Int64)
 import Data.Profunctor (rmap)
 import qualified Data.Set as Set
@@ -313,7 +315,7 @@ data SomeTx = forall era. IsCardanoEra era =>
   SomeTx (Hash BlockHeader) SlotNo (Tx era) (EraInMode era CardanoMode)
 
 data SomeTxOut = forall era. IsCardanoEra era =>
-  SomeTxOut TxId TxIx SlotNo (TxOut CtxTx era) Bool (EraInMode era CardanoMode)
+  SomeTxOut TxId TxIx SlotNo (TxOut CtxTx era) (Maybe ByteString, Maybe ByteString) Bool (EraInMode era CardanoMode)
 
 data SomeTxIn = SomeTxIn TxId TxIx TxId SlotNo (Maybe ByteString) Bool
 
@@ -512,7 +514,7 @@ commitBlocks = CommitBlocks \blocks ->
             }
 
         txOutRows = txOutRow <$> txOuts
-        txOutRow (SomeTxOut txId txIx slotNo (TxOut address value datum _) isCollateral _) = TxOutRow
+        txOutRow (SomeTxOut txId txIx slotNo (TxOut address value _ _) (datumBytesHashed, datumBytes) isCollateral _) = TxOutRow
           { txId = serialiseToRawBytes txId
           , txIx = txIxToParam txIx
           , slotNo = slotNoToParam slotNo
@@ -520,16 +522,8 @@ commitBlocks = CommitBlocks \blocks ->
           , lovelace = lovelaceToParam case value of
               TxOutAdaOnly _ lovelace -> lovelace
               TxOutValue _ value'     -> selectLovelace value'
-          , datumHash = case datum of
-              TxOutDatumNone        -> Nothing
-              TxOutDatumHash _ hash -> Just $ serialiseToRawBytes hash
-              TxOutDatumInTx _ d    -> Just $ serialiseToRawBytes $ hashScriptData d
-              TxOutDatumInline _ d  -> Just $ serialiseToRawBytes $ hashScriptData d
-          , datumBytes = case datum of
-              TxOutDatumNone       -> Nothing
-              TxOutDatumHash _ _   -> Nothing
-              TxOutDatumInTx _ d   -> Just $ serialiseToCBOR d
-              TxOutDatumInline _ d -> Just $ serialiseToCBOR d
+          , datumHash = datumBytesHashed
+          , datumBytes = datumBytes
           , isCollateral
           }
 
@@ -569,10 +563,27 @@ commitBlocks = CommitBlocks \blocks ->
       body@(TxBody TxBodyContent{..}) -> case txScriptValidity of
         TxScriptValidity _ ScriptInvalid -> case txReturnCollateral of
           TxReturnCollateralNone     -> []
-          TxReturnCollateral _ txOut -> [SomeTxOut (getTxId body) (TxIx 1) slotNo txOut True era]
+          TxReturnCollateral _ txOut -> [SomeTxOut (getTxId body) (TxIx 1) slotNo txOut (Nothing, Nothing) True era]
         _ -> do
-          (ix, txOut) <- [0..] `zip` txOuts
-          pure $ SomeTxOut (getTxId body) (TxIx ix) slotNo txOut False era
+          (ix, txOut, datumInfo) <- zip3 [0..] txOuts datums
+          pure $ SomeTxOut (getTxId body) (TxIx ix) slotNo txOut datumInfo False era
+      where
+        datums = case tx of
+          ShelleyTx ShelleyBasedEraAlonzo (Alonzo.ValidatedTx body _ _ _) ->
+            let
+              getDatum (Alonzo.TxOut _ _ mh) = (foldMap (Just . originalBytes) mh, Nothing)
+            in
+              toList $ getDatum <$> Alonzo.outputs' body
+          ShelleyTx ShelleyBasedEraBabbage (Babbage.ValidatedTx body _ _ _) ->
+            let
+              getDatum (Babbage.TxOut _ _ datum _) =
+                case datum of
+                  Babbage.NoDatum -> (Nothing, Nothing)
+                  Babbage.DatumHash dh -> (Just $ originalBytes dh, Nothing)
+                  Babbage.Datum d -> (Just . originalBytes $ Alonzo.hashBinaryData d, Nothing)
+            in
+              toList $ getDatum <$> Babbage.outputs' body
+          _ -> (Nothing, Nothing) <$ (let TxBody TxBodyContent{txOuts} = getTxBody tx in txOuts)
 
     extractTxIns :: SomeTx -> [SomeTxIn]
     extractTxIns (SomeTx _ slotNo tx _) = case getTxBody tx of
@@ -611,7 +622,7 @@ commitBlocks = CommitBlocks \blocks ->
             AssetId policyId name -> [AssetMint (getTxId body) slotNo policyId name quantity]
 
     extractAssetOuts :: SomeTxOut -> [AssetOut]
-    extractAssetOuts (SomeTxOut txId ix slotNo (TxOut _ value _ _)  _ _) = case value of
+    extractAssetOuts (SomeTxOut txId ix slotNo (TxOut _ value _ _) _ _ _) = case value of
       TxOutAdaOnly _ _  -> []
       TxOutValue _ value' -> do
         (assetId, quantity) <- valueToList value'
