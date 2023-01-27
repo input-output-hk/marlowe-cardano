@@ -145,7 +145,7 @@ getOptions = execParser $ info (helper <*> parser) infoMod
       , short 'h'
       , value "127.0.0.1"
       , metavar "HOST_NAME"
-      , help "The host name to run the history server on."
+      , help "The host name to run the server on."
       , showDefault
       ]
 
@@ -157,6 +157,6 @@ getOptions = execParser $ info (helper <*> parser) infoMod
 
     infoMod = mconcat
       [ fullDesc
-      , progDesc "Contract history service for Marlowe Runtime"
-      , header "marlowe-history : a contract history service for the Marlowe Runtime."
+      , progDesc "Contract synchronization and query service for Marlowe Runtime"
+      , header "marlowe-sync : a contract synchronization and query service for the Marlowe Runtime."
       ]

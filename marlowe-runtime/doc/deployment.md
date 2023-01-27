@@ -1,10 +1,13 @@
 # Deploying Marlowe Runtime Backend Services Manually
 
-Deploying the Marlowe Runtime requires running six backend services:
-- four [marlowe-cardano](https://github.com/input-output-hk/marlowe-cardano/blob/main/README.adoc) services:
-	- `chainseekd` for indexing the blockchain
-	- `marlowe-history` for tracking the on-chain history of Marlowe contract instances
-	- `marlowe-discovery` for discovering the presence of Marlowe contract instances on the blockchain
+Deploying the Marlowe Runtime requires running nine backend services:
+- seven [marlowe-cardano](https://github.com/input-output-hk/marlowe-cardano/blob/main/README.adoc) services:
+	- `marlowe-chain-indexer` for indexing the blockchain
+	- `chainseekd` for querying the indexed blockchain
+	- `marlowe-indexer` for indexing Marlowe contracts
+	- `marlowe-sync` for tracking the on-chain history of all Marlowe contract instances
+	- `marlowe-history` for tracking the on-chain history of Marlowe contract instances (to be deprecated in favour of `marlowe-sync`)
+	- `marlowe-discovery` for discovering the presence of Marlowe contract instances on the blockchain (to be deprecated in favour of `marlowe-sync`)
 	- `marlowe-tx` for building and submitting Marlowe transactions
 - [cardano-node](https://github.com/input-output-hk/cardano-node/blob/master/README.rst) for blockchain connectivity
 - [PostgreSQL](https://www.postgresql.org/) for persistent storage
@@ -28,7 +31,10 @@ separating the arguments from the command.
 ```console
 $ cd marlowe-cardano
 
+$ nix run .#marlowe-chain-indexer -- --help
 $ nix run .#chainseekd -- --help
+$ nix run .#marlowe-indexer -- --help
+$ nix run .#marlowe-sync -- --help
 $ nix run .#marlowe-history -- --help
 $ nix run .#marlowe-discovery -- --help
 $ nix run .#marlowe-tx -- --help
@@ -74,6 +80,8 @@ Start the backend services in the following order.
 - Cardano Node
 - `marlowe-chain-indexer`
 - `chainseekd`
+- `marlowe-indexer`
+- `marlowe-sync`
 - `marlowe-history`
 - `marlowe-discovery`
 - `marlowe-tx`
@@ -87,13 +95,10 @@ See the [help page](chainseekd.md) for all of the command-line options for `chai
 
 A typical invocation of `chainseekd` will be like something along the following lines:
 ```console
-$ sqitch deploy
-
 $ chainseekd \
     --socket-path "$CARDANO_NODE_SOCKET_PATH" \
     --database-uri postgresql://postgresql@0.0.0.0/chain
 ```
-The `sqitch deploy` command handles database creation and migration, so it is only necessary to run that on new installations or after upgrading `chainseekd`.
 
 
 ### Marlowe Chain Indexer Daemon
@@ -107,6 +112,7 @@ See the [help page](marlowe-chain-indexer.md) for all of the command-line option
 
 A typical invocation of `marlowe-chain-indexer` will be like something along the following lines:
 ```console
+$ cd marlowe-chain-sync
 $ sqitch deploy
 
 $ marlowe-chain-indexer \
@@ -116,7 +122,37 @@ $ marlowe-chain-indexer \
     --shelley-genesis-config-file shelley-genesis.json \
     --genesis-config-file-hash 5f20df933584822601f9e3f8c024eb5eb252fe8cefb24d1317dc3d432e940ebb
 ```
-The `sqitch deploy` command handles database creation and migration, so it is only necessary to run that on new installations or after upgrading `marlowe-chain-indexer`.
+The `sqitch deploy` command handles database creation and migration, so it is only necessary to run that on new installations or after upgrading `chainseekd`.
+To be safe, consider running this command before each invocation of `marlowe-chain-indexer`.
+
+
+### Marlowe Indexer Daemon
+
+See the [help page](marlowe-indexer.md) for all of the command-line options for `marlowe-indexer`. One needs to specify a few options explicitly:
+- `--database-uri` for the location and name of the PostgreSQL database.
+
+A typical invocation of `marlowe-indexer` will be like something along the following lines:
+```console
+$ cd marlowe-runtime/marlowe-indexer
+$ sqitch deploy
+
+$ marlowe-indexer \
+    --database-uri postgresql://postgresql@0.0.0.0/chain \
+```
+The `sqitch deploy` command handles database creation and migration, so it is only necessary to run that on new installations or after upgrading `marlowe-indexer`.
+To be safe, consider running this command before each invocation of `marlowe-indexer`.
+
+
+### Marlowe Sync
+
+See the [help page](marlowe-sync.md) for all of the command-line options for `marlowe-sync`. One needs to specify a few options explicitly:
+- `--database-uri` for the location and name of the PostgreSQL database.
+
+A typical invocation of `marlowe-sync` will be like something along the following lines:
+```console
+$ marlowe-sync \
+    --database-uri postgresql://postgresql@0.0.0.0/chain \
+```
 
 
 ### Marlowe History
@@ -126,6 +162,7 @@ See the [help page](marlowe-history.md) for all of the command-line options for 
 $ marlowe-history
 ```
 
+
 ### Marlowe Discovery
 
 See the [help page](marlowe-discovery.md) for all of the command-line options for `marlowe-discovery`. The default values for port numbers are consistent with those for `chainseekd` and `marlowe-history`, so they typically do not need to be specified explicitly. A typical invocation of `marlowe-discovery` is simple:
@@ -133,7 +170,7 @@ See the [help page](marlowe-discovery.md) for all of the command-line options fo
 $ marlowe-discovery
 ```
 
-### Marlowe History
+### Marlowe Tx
 
 See the [help page](marlowe-tx.md) for all of the command-line options for `marlowe-tx`. The default values for port numbers are consistent with those for `chainseekd` and `marlowe-history`, so they typically do not need to be specified explicitly. A typical invocation of `marlowe-tx` is simple:
 ```console
