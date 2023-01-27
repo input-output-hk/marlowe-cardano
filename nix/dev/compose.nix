@@ -32,6 +32,7 @@ let
     ln -sv ${run-sqitch-marlowe-indexer}/bin/run-sqitch-marlowe-indexer $out
     ln -sv ${run-local-service "marlowe-chain-sync" "0.0.0.0" "marlowe-chain-indexer"}/bin/run-marlowe-chain-indexer $out
     ln -sv ${run-local-service "marlowe-chain-sync" "0.0.0.0" "chainseekd"}/bin/run-chainseekd $out
+    ln -sv ${run-local-service "marlowe-runtime" "0.0.0.0" "marlowe-sync"}/bin/run-marlowe-sync $out
     ln -sv ${run-local-service "marlowe-runtime" "0.0.0.0" "marlowe-history"}/bin/run-marlowe-history $out
     ln -sv ${run-local-service "marlowe-runtime" "0.0.0.0" "marlowe-discovery"}/bin/run-marlowe-discovery $out
     ln -sv ${run-local-service "marlowe-runtime" "0.0.0.0" "marlowe-tx"}/bin/run-marlowe-tx $out
@@ -56,7 +57,7 @@ let
       test = "socat -u OPEN:/dev/null UNIX-CONNECT:/ipc/node.socket";
       interval = "10s";
       timeout = "5s";
-      retries = 5;
+      retries = 10;
     };
   };
 
@@ -112,6 +113,7 @@ let
     ];
     healthcheck = {
       test = "/exec/run-sqitch -h postgres";
+      timeout = "20s";
       retries = 0;
     };
   };
@@ -140,6 +142,7 @@ let
     ];
     healthcheck = {
       test = "/exec/run-sqitch-marlowe-indexer -h postgres";
+      timeout = "20s";
       retries = 0;
     };
   };
@@ -159,6 +162,20 @@ let
       "0.0.0.0"
       "--log-config-file"
       "./chainseekd.log.config"
+    ];
+  };
+
+  sync-service = dev-service {
+    ports = [ 3724 ];
+    depends_on = [ "marlowe-indexer" "postgres" ];
+    command = [
+      "/exec/run-marlowe-sync"
+      "--database-uri"
+      "postgresql://postgres@postgres/chain"
+      "--host"
+      "0.0.0.0"
+      "--log-config-file"
+      "./marlowe-sync.log.config"
     ];
   };
 
@@ -206,11 +223,13 @@ let
 
   web-service = dev-service {
     ports = [ 8080 ];
-    depends_on = [ "marlowe-history" "marlowe-discovery" "marlowe-tx" ];
+    depends_on = [ "marlowe-sync" "marlowe-discovery" "marlowe-tx" ];
     command = [
       "/exec/run-marlowe-web-server"
       "--history-host"
-      "marlowe-history"
+      "marlowe-sync"
+      "--history-sync-port"
+      "3724"
       "--discovery-host"
       "marlowe-discovery"
       "--tx-host"
@@ -273,6 +292,7 @@ let
     services.marlowe-tx = tx-service;
     services.web = web-service;
     services.marlowe-indexer = marlowe-indexer-service;
+    services.marlowe-sync = sync-service;
 
     services.node = node-service;
     volumes.shared = null;
