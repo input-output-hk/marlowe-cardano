@@ -112,6 +112,16 @@
             program = "${packages.marlowe-chain-indexer}/bin/marlowe-chain-indexer";
           };
 
+          marlowe-indexer = {
+            type = "app";
+            program = "${packages.marlowe-indexer}/bin/marlowe-indexer";
+          };
+
+          marlowe-sync = {
+            type = "app";
+            program = "${packages.marlowe-sync}/bin/marlowe-sync";
+          };
+
           marlowe-history = {
             type = "app";
             program = "${packages.marlowe-history}/bin/marlowe-history";
