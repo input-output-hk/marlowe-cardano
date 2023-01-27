@@ -186,6 +186,7 @@ library sync
   visibility: public
   exposed-modules:
     Language.Marlowe.Runtime.Sync
+    Language.Marlowe.Runtime.Sync.MarloweHeaderSyncServer
     Language.Marlowe.Runtime.Sync.MarloweSyncServer
     Language.Marlowe.Runtime.Sync.Database
     Language.Marlowe.Runtime.Sync.Database.PostgreSQL
@@ -572,6 +573,7 @@ executable marlowe-sync
     , hasql
     , hasql-pool
     , marlowe-protocols
+    , marlowe-runtime:discovery-api
     , marlowe-runtime:history-api
     , marlowe-runtime:sync
     , network
