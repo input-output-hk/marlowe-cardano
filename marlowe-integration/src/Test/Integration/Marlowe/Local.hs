@@ -172,6 +172,7 @@ data MarloweRuntime = MarloweRuntime
   , runHistorySyncClient :: RunClient IO MarloweSyncClient
   , runTxJobClient :: RunClient IO (JobClient MarloweTxCommand)
   , runWebClient :: forall a. ClientM a -> IO (Either ClientError a)
+  , marloweScripts :: MarloweScripts
   , testnet :: LocalTestnet
   }
 

@@ -71,6 +71,7 @@ test-suite marlowe-integration-tests
     , marlowe-protocols
     , marlowe-runtime
     , marlowe-runtime:discovery-api
+    , marlowe-runtime:history-api
     , marlowe-runtime:tx-api
     , plutus-ledger-api
     , time

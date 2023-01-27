@@ -1,9 +1,11 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE RankNTypes #-}
 
 module Language.Marlowe.Runtime.Integration.BasicSpec
   where
 
-import Cardano.Api (AsType(..), BabbageEra, ShelleyWitnessSigningKey(..), signShelleyTransaction)
+import Cardano.Api (AsType(..), BabbageEra, ShelleyWitnessSigningKey(..), TxBody, getTxId, signShelleyTransaction)
 import Cardano.Api.Byron (deserialiseFromTextEnvelope)
 import Control.Concurrent (threadDelay)
 import Data.Aeson (decodeFileStrict)
@@ -16,13 +18,30 @@ import Language.Marlowe.Core.V1.Semantics.Types
 import Language.Marlowe.Extended.V1 (ada)
 import Language.Marlowe.Protocol.HeaderSync.Client (MarloweHeaderSyncClient(..))
 import qualified Language.Marlowe.Protocol.HeaderSync.Client as HeaderSync
+import qualified Language.Marlowe.Protocol.Sync.Client as MarloweSync
+import Language.Marlowe.Runtime.Cardano.Api (fromCardanoTxId)
 import Language.Marlowe.Runtime.ChainSync.Api
-  (Address, BlockHeader, TransactionMetadata(TransactionMetadata), fromBech32)
-import Language.Marlowe.Runtime.Core.Api (MarloweVersion(..), MarloweVersionTag(..), SomeMarloweVersion(..))
+  (Address, Assets(Assets), BlockHeader, TransactionMetadata(TransactionMetadata), fromBech32)
+import Language.Marlowe.Runtime.Core.Api
+  ( ContractId(unContractId)
+  , MarloweVersion(..)
+  , MarloweVersionTag(..)
+  , SomeMarloweVersion(..)
+  , Transaction(..)
+  , TransactionOutput(..)
+  , TransactionScriptOutput(..)
+  )
 import Language.Marlowe.Runtime.Discovery.Api (ContractHeader(..))
+import Language.Marlowe.Runtime.History.Api (ContractStep(..), CreateStep(..))
 import Language.Marlowe.Runtime.Plutus.V2.Api (toPlutusAddress)
 import Language.Marlowe.Runtime.Transaction.Api
-  (ContractCreated(..), MarloweTxCommand(..), RoleTokensConfig(..), WalletAddresses(WalletAddresses), mkMint)
+  ( ContractCreated(..)
+  , InputsApplied(..)
+  , MarloweTxCommand(..)
+  , RoleTokensConfig(..)
+  , WalletAddresses(WalletAddresses)
+  , mkMint
+  )
 import Network.Protocol.Job.Client (liftCommand, liftCommandWait)
 import qualified Plutus.V2.Ledger.Api as PV2
 import System.Directory (withCurrentDirectory)
@@ -34,8 +53,13 @@ spec :: Spec
 spec = describe "Marlowe runtime API" do
   it "Basic e2e scenario" $ withCurrentDirectory ".." $ withLocalMarloweRuntime \runtime -> do
     (partyAAddress, partyASigningWitness) <- getGenesisWallet runtime 0
-    (partyBAddress, _partyBSigningWitness) <- getGenesisWallet runtime 1
+    (partyBAddress, partyBSigningWitness) <- getGenesisWallet runtime 1
     let
+      partyAWalletAddresses = WalletAddresses partyAAddress mempty mempty
+      partyASigningWitnesses = [partyASigningWitness]
+      _partyBWalletAddresses = WalletAddresses partyBAddress mempty mempty
+      _partyBSigningWitnesses = [partyBSigningWitness]
+
       -- 1. Start MarloweHeaderSyncClient (request next)
       startDiscoveryClient = runDiscoverySyncClient runtime
           $ MarloweHeaderSyncClient
@@ -44,13 +68,8 @@ spec = describe "Marlowe runtime API" do
           -- 2. Expect wait
           $ headerSyncExpectWait do
             -- 3. Create standard contract
-            let walletAddresses = WalletAddresses partyAAddress mempty mempty
-            (blockHeader, contract@ContractCreated{..}) <- createStandardContract
-              runtime
-              walletAddresses
-              [partyASigningWitness]
-              partyAAddress
-              partyBAddress
+            contract@ContractCreated{..} <- createStandardContract runtime partyAWalletAddresses partyAAddress partyBAddress
+            blockHeader <- submit runtime partyASigningWitnesses txBody
             let
               expectedContractHeader = ContractHeader
                 { contractId
@@ -68,17 +87,67 @@ spec = describe "Marlowe runtime API" do
               <$> headerSyncExpectNewHeaders \actualBlock actualHeaders -> do
                   actualBlock `shouldBe` blockHeader
                   actualHeaders `shouldBe` [expectedContractHeader]
-                  continueWithNewHeaders contract
+                  continueWithNewHeaders blockHeader contract
 
-      continueWithNewHeaders _ = fail "TODO implement the rest of the test"
+      continueWithNewHeaders createBlock contract@ContractCreated{..} = pure
+        -- 6. RequestNext (header sync)
+        $ HeaderSync.SendMsgRequestNext
+        -- 7. Expect Wait
+        $ headerSyncExpectWait do
+          -- 8. Deposit funds
+          inputsApplied <- deposit runtime partyAWalletAddresses contractId partyA partyA ada 100_000_000
+          depositBlock <- submit runtime partyASigningWitnesses txBody
+          runHistorySyncClient runtime $ marloweSyncClient contract inputsApplied createBlock depositBlock
+          fail "TODO implement the rest of the test"
+
+      -- 9. Start MarloweSyncClient (follow contract)
+      marloweSyncClient
+        :: ContractCreated BabbageEra 'V1
+        -> InputsApplied BabbageEra 'V1
+        -> BlockHeader
+        -> BlockHeader
+        -> MarloweSync.MarloweSyncClient IO ()
+      marloweSyncClient ContractCreated{..} inputsApplied createBlock depositBlock = MarloweSync.MarloweSyncClient
+          $ pure
+          $ MarloweSync.SendMsgFollowContract contractId
+          -- 10. Expect contract found
+          $ marloweSyncExpectContractFound \actualBlock MarloweV1 createStep -> do
+            actualBlock `shouldBe` createBlock
+            createStep `shouldBe` CreateStep
+              { createOutput = TransactionScriptOutput
+                  { address = marloweScriptAddress
+                  , assets = Assets 2_000_000 mempty
+                  , utxo = unContractId contractId
+                  , datum
+                  }
+              , metadata = mempty
+              , payoutValidatorHash = payoutScriptHash
+              }
+            pure
+              -- 11. Request next
+              $ MarloweSync.SendMsgRequestNext
+              -- 12. Expect roll forward with deposit
+              $ marloweSyncExpectRollForward \block steps -> do
+                  block `shouldBe` depositBlock
+                  let
+                    InputsApplied{ txBody = body, invalidBefore, invalidHereafter, inputs, output } = inputsApplied
+                    expectedStep = ApplyTransaction Transaction
+                      { transactionId = fromCardanoTxId $ getTxId body
+                      , contractId
+                      , metadata = mempty
+                      , blockHeader = depositBlock
+                      , validityLowerBound = invalidBefore
+                      , validityUpperBound = invalidHereafter
+                      , inputs
+                      , output = TransactionOutput
+                          { payouts = mempty
+                          , scriptOutput = output
+                          }
+                      }
+                  steps `shouldBe` [expectedStep]
+                  fail "TODO implement the rest of the test"
+
         {-
-            6. RequestNext (header sync)
-            7. Expect Wait
-            8. Deposit funds
-            9. Start MarloweSyncClient (follow contract)
-            10. Expect contract found
-            11. Request next (marlowe sync)
-            12. Expect roll forward with deposit
             13. Request next (marlowe sync)
             14. Expect wait
             15. Make choice as party B
@@ -133,6 +202,24 @@ spec = describe "Marlowe runtime API" do
           }
       pure next
 
+    marloweSyncExpectContractFound
+      :: (forall v. BlockHeader -> MarloweVersion v -> CreateStep v -> IO (MarloweSync.ClientStIdle v IO a))
+      -> MarloweSync.ClientStFollow IO a
+    marloweSyncExpectContractFound recvMsgContractFound = MarloweSync.ClientStFollow
+      { recvMsgContractNotFound = fail "Expected contract found, got new contract not found"
+      , recvMsgContractFound
+      }
+
+    marloweSyncExpectRollForward
+      :: (BlockHeader -> [ContractStep v] -> IO (MarloweSync.ClientStIdle v IO a))
+      -> MarloweSync.ClientStNext v IO a
+    marloweSyncExpectRollForward recvMsgRollForward = MarloweSync.ClientStNext
+      { recvMsgRollBackCreation = fail "Expected roll forward, got new roll back creation"
+      , recvMsgRollBackward = \_ -> fail "Expected roll forward, got new roll backward"
+      , recvMsgWait = fail "Expected roll forward, got wait"
+      , recvMsgRollForward
+      }
+
 timeout :: NominalDiffTime
 timeout = secondsToNominalDiffTime 2
 
@@ -148,35 +235,57 @@ getGenesisWallet MarloweRuntime{..} walletIx = do
     , "--verification-key-file", paymentVKey
     , "--testnet-magic", "1"
     ]
-  address <- case mAddress of
-    Nothing -> fail "Failed to decode address"
-    Just a -> pure a
+  address <- expectJust "Failed to decode address" mAddress
   mTextEnvelope <- decodeFileStrict paymentSKey
-  textEnvelope <- case mTextEnvelope of
-    Nothing -> fail "Failed to decode signing key text envelope"
-    Just a -> pure a
-  genesisUTxOKey <- case deserialiseFromTextEnvelope (AsSigningKey AsGenesisUTxOKey) textEnvelope of
-    Left err -> fail $ "failed to decode text envelope " <> show err
-    Right a -> pure a
+  textEnvelope <- expectJust "Failed to decode signing key text envelope" mTextEnvelope
+  genesisUTxOKey <- expectRight  "failed to decode text envelope"
+    $ deserialiseFromTextEnvelope (AsSigningKey AsGenesisUTxOKey) textEnvelope
   pure (address, WitnessGenesisUTxOKey genesisUTxOKey)
+
+submit
+  :: MarloweRuntime
+  -> [ShelleyWitnessSigningKey]
+  -> TxBody BabbageEra
+  -> IO BlockHeader
+submit MarloweRuntime{..} signingKeys txBody = do
+  let tx = signShelleyTransaction txBody signingKeys
+  submitResult <- runTxJobClient $ liftCommandWait $ Submit tx
+  expectRight "failed to submit tx" submitResult
+
+deposit
+  :: MarloweRuntime
+  -> WalletAddresses
+  -> ContractId
+  -> Party
+  -> Party
+  -> Token
+  -> Integer
+  -> IO (InputsApplied BabbageEra 'V1)
+deposit MarloweRuntime{..} walletAddresses contractId intoAccount fromParty ofToken quantity = do
+  result <- runTxJobClient $ liftCommand $ ApplyInputs
+    MarloweV1
+    walletAddresses
+    contractId
+    mempty
+    Nothing
+    Nothing
+    [NormalInput $ IDeposit intoAccount fromParty ofToken quantity]
+  expectRight "Failed to create deposit transaction" result
 
 createStandardContract
   :: MarloweRuntime
   -> WalletAddresses
-  -> [ShelleyWitnessSigningKey]
   -> Address
   -> Address
-  -> IO (BlockHeader, ContractCreated BabbageEra 'V1)
+  -> IO (ContractCreated BabbageEra 'V1)
 createStandardContract
   MarloweRuntime{..}
   walletAddresses
-  signingKeys
   partyAAddress
   partyBAddress = do
     now <- getCurrentTime
-    partyBAddressPlutus <- case toPlutusAddress partyBAddress of
-      Nothing -> fail "Failed to convert party B address to a plutus address"
-      Just addr -> pure addr
+    partyBAddressPlutus <- expectJust "Failed to convert party B address to a plutus address"
+      $ toPlutusAddress partyBAddress
     result <- runTxJobClient $ liftCommand $ Create
       Nothing
       MarloweV1
@@ -185,14 +294,7 @@ createStandardContract
       mempty
       2_000_000
       (standardContract partyBAddressPlutus now (secondsToNominalDiffTime 100))
-    contract@ContractCreated{..} <- case result of
-      Left err -> fail $ "failed to create standard contract: " <> show err
-      Right contract -> pure contract
-    let tx = signShelleyTransaction txBody signingKeys
-    submitResult <- runTxJobClient $ liftCommandWait $ Submit tx
-    case submitResult of
-      Left err -> fail $ "failed to submit standard contract creation tx: " <> show err
-      Right block -> pure (block, contract)
+    expectRight "failed to create standard contract" result
 
 
 standardContract
@@ -227,6 +329,18 @@ standardContract partyBAddress startTime timeoutLength = When
   Close
   where
     toPosixTime t = PV2.POSIXTime $ floor $ 1000 * nominalDiffTimeToSeconds (utcTimeToPOSIXSeconds t)
-    partyA = Role "Party A"
     -- 0x00 = testnet
     partyB = Address (toEnum 0x00) partyBAddress
+
+partyA :: Party
+partyA = Role "Party A"
+
+expectJust :: String -> Maybe a -> IO a
+expectJust msg = \case
+  Nothing -> fail msg
+  Just a -> pure a
+
+expectRight :: Show a => String -> Either a b -> IO b
+expectRight msg = \case
+  Left a -> fail $ msg <> ": " <> show a
+  Right b -> pure b
