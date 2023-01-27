@@ -22,6 +22,7 @@ data DatabaseSelector f where
   GetTipForContract :: DatabaseSelector (QueryField ContractId ChainPoint)
   GetCreateStep :: DatabaseSelector (QueryField ContractId (Maybe GetCreateStepResult))
   GetIntersectionForContract :: DatabaseSelector (QueryField GetIntersectionForContractArguments (Maybe GetIntersectionForContractResult))
+  GetIntersection :: DatabaseSelector (QueryField [BlockHeader] (Maybe BlockHeader))
   GetNextSteps :: MarloweVersion v -> DatabaseSelector (QueryField (GetNextStepsArguments v) (NextSteps v))
 
 data QueryField p r
@@ -69,6 +70,11 @@ logDatabaseQueries eventBackend DatabaseQueries{..} = DatabaseQueries
       result <- getCreateStep contractId
       addField ev $ Result $ uncurry GetCreateStepResult <$> result
       pure result
+  , getIntersection = \points -> withEvent eventBackend GetIntersection \ev -> do
+      addField ev $ Arguments points
+      result <- getIntersection points
+      addField ev $ Result result
+      pure result
   , getIntersectionForContract = \contractId points -> withEvent eventBackend GetIntersectionForContract \ev -> do
       addField ev $ Arguments $ GetIntersectionForContractArguments{..}
       result <- getIntersectionForContract contractId points
@@ -86,12 +92,14 @@ hoistDatabaseQueries f DatabaseQueries{..} = DatabaseQueries
   { getTipForContract = f . getTipForContract
   , getCreateStep = f . getCreateStep
   , getIntersectionForContract = fmap f . getIntersectionForContract
+  , getIntersection = f . getIntersection
   , getNextSteps = (fmap . fmap) f . getNextSteps
   }
 
 data DatabaseQueries m = DatabaseQueries
   { getTipForContract :: ContractId -> m ChainPoint
   , getCreateStep :: ContractId -> m (Maybe (BlockHeader, SomeCreateStep))
+  , getIntersection :: [BlockHeader] -> m (Maybe BlockHeader)
   , getIntersectionForContract :: ContractId -> [BlockHeader] -> m (Maybe (BlockHeader, SomeMarloweVersion))
   , getNextSteps :: forall v. MarloweVersion v -> ContractId -> ChainPoint -> m (NextSteps v)
   }
@@ -109,6 +117,7 @@ getDatabaseSelectorConfig = \case
   GetTipForContract -> getQuerySelectorConfig "get-tip-for-contract"
   GetCreateStep -> getQuerySelectorConfig "get-create-step"
   GetIntersectionForContract -> getQuerySelectorConfig "get-intersection-for-contract"
+  GetIntersection -> getQuerySelectorConfig "get-intersection"
   GetNextSteps MarloweV1 -> getQuerySelectorConfig "get-next-steps"
 
 getQuerySelectorConfig :: (ToJSON p, ToJSON r) => Text -> SelectorConfig (QueryField p r)
