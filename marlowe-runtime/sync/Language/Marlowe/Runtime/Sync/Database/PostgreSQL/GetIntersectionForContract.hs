@@ -21,44 +21,30 @@ getIntersectionForContract (ContractId TxOutRef{..}) (b : bs) = do
         ( SELECT $1 :: bytea, $2 :: smallint
         )
       SELECT
-        block.slotNo :: bigint,
-        block.id :: bytea,
-        block.blockNo :: bigint
+        slotNo :: bigint,
+        blockId :: bytea,
+        blockNo :: bigint
       FROM marlowe.createTxOut
-      JOIN marlowe.block
-        ON block.id = createTxOut.blockId
       JOIN contractId USING (txId, txIx)
-      WHERE block.rollbackToSlot IS NULL
       UNION
       SELECT DISTINCT
-        block.slotNo :: bigint,
-        block.id :: bytea,
-        block.blockNo :: bigint
+        slotNo :: bigint,
+        blockId :: bytea,
+        blockNo :: bigint
       FROM marlowe.applyTx
-      JOIN marlowe.block
-        ON block.id = applyTx.blockId
       JOIN contractId
         ON contractId.txId = applyTx.createTxId
         AND contractId.txIx = applyTx.createTxIx
-      WHERE block.rollbackToSlot IS NULL
       UNION
       SELECT DISTINCT
-        block.slotNo :: bigint,
-        block.id :: bytea,
-        block.blockNo :: bigint
+        slotNo :: bigint,
+        blockId :: bytea,
+        blockNo :: bigint
       FROM marlowe.withdrawalTxIn
-      JOIN marlowe.block
-        ON block.id = withdrawalTxIn.blockId
-      JOIN marlowe.payoutTxOut
-        ON payoutTxOut.txId = withdrawalTxIn.payoutTxId
-        AND payoutTxOut.txIx = withdrawalTxIn.payoutTxIx
-      JOIN marlowe.applyTx
-        ON applyTx.payoutTxId = payoutTxOut.txId
       JOIN contractId
-        ON contractId.txId = applyTx.createTxId
-        AND contractId.txIx = applyTx.createTxIx
-      WHERE block.rollbackToSlot IS NULL
-      ORDER BY block.slotNo
+        ON contractId.txId = withdrawalTxIn.createTxId
+        AND contractId.txIx = withdrawalTxIn.createTxIx
+      ORDER BY slotNo
     |]
   pure
     $ fmap ((, SomeMarloweVersion MarloweV1) . fst)

@@ -39,9 +39,9 @@ getCreateStep (ContractId TxOutRef{..}) = T.statement params $
       ( SELECT $1 :: bytea, $2 :: smallint
       )
     SELECT
-      block.slotNo :: bigint,
-      block.id :: bytea,
-      block.blockNo :: bigint,
+      createTxOut.slotNo :: bigint,
+      createTxOut.blockId :: bytea,
+      createTxOut.blockNo :: bigint,
       txOut.address :: bytea,
       txOut.lovelace :: bigint,
       txOutAsset.policyId :: bytea?,
@@ -56,7 +56,6 @@ getCreateStep (ContractId TxOutRef{..}) = T.statement params $
     JOIN marlowe.contractTxOut USING (txId, txIx)
     JOIN marlowe.txOut USING (txId, txIx)
     LEFT JOIN marlowe.txOutAsset USING (txId, txIx)
-    JOIN marlowe.block ON block.id = createTxOut.blockId
     JOIN contractId USING (txId, txIx)
   |] foldResults
   where

@@ -41,9 +41,9 @@ getHeaders range@Range{rangeStart = Just (ContractId TxOutRef{..}), ..} = do
     Descending ->
       [foldStatement|
         SELECT
-          block.slotNo :: bigint,
-          block.id :: bytea,
-          block.blockNo :: bigint,
+          createTxOut.slotNo :: bigint,
+          createTxOut.blockId :: bytea,
+          createTxOut.blockNo :: bigint,
           createTxOut.txId :: bytea,
           createTxOut.txIx :: smallint,
           contractTxOut.rolesCurrency :: bytea,
@@ -53,25 +53,21 @@ getHeaders range@Range{rangeStart = Just (ContractId TxOutRef{..}), ..} = do
         FROM marlowe.createTxOut
         JOIN marlowe.contractTxOut USING (txId, txIx)
         JOIN marlowe.txOut USING (txId, txIx)
-        JOIN marlowe.block
-          ON block.id = createTxOut.blockId
         JOIN
           ( SELECT slotNo, txId, txIx
             FROM marlowe.createTxOut
-            JOIN marlowe.block
-              ON block.id = createTxOut.blockId
             WHERE txId = $1 :: bytea
               AND txIx = $2 :: smallint
           ) AS pivot
-          ON block.slotNo < pivot.slotNo OR
-            ( block.slotNo = pivot.slotNo AND
+          ON createTxOut.slotNo < pivot.slotNo OR
+            ( createTxOut.slotNo = pivot.slotNo AND
               ( createTxOut.txId < pivot.txId OR
                 ( createTxOut.txId = pivot.txId AND
                     createTxOut.txIx <= pivot.txIx
                 )
               )
             )
-        ORDER BY block.slotNo DESC, createTxOut.txId DESC, createTxOut.txIx DESC
+        ORDER BY createTxOut.slotNo DESC, createTxOut.txId DESC, createTxOut.txIx DESC
         OFFSET ($3 :: int) ROWS
         FETCH NEXT ($4 :: int) ROWS ONLY
       |] (foldPage range totalItems)
@@ -79,9 +75,9 @@ getHeaders range@Range{rangeStart = Just (ContractId TxOutRef{..}), ..} = do
     Ascending ->
       [foldStatement|
         SELECT
-          block.slotNo :: bigint,
-          block.id :: bytea,
-          block.blockNo :: bigint,
+          createTxOut.slotNo :: bigint,
+          createTxOut.blockId :: bytea,
+          createTxOut.blockNo :: bigint,
           createTxOut.txId :: bytea,
           createTxOut.txIx :: smallint,
           contractTxOut.rolesCurrency :: bytea,
@@ -91,25 +87,21 @@ getHeaders range@Range{rangeStart = Just (ContractId TxOutRef{..}), ..} = do
         FROM marlowe.createTxOut
         JOIN marlowe.contractTxOut USING (txId, txIx)
         JOIN marlowe.txOut USING (txId, txIx)
-        JOIN marlowe.block
-          ON block.id = createTxOut.blockId
         JOIN
           ( SELECT slotNo, txId, txIx
             FROM marlowe.createTxOut
-            JOIN marlowe.block
-              ON block.id = createTxOut.blockId
             WHERE txId = $1 :: bytea
               AND txIx = $2 :: smallint
           ) AS pivot
-          ON block.slotNo > pivot.slotNo OR
-            ( block.slotNo = pivot.slotNo AND
+          ON createTxOut.slotNo > pivot.slotNo OR
+            ( createTxOut.slotNo = pivot.slotNo AND
               ( createTxOut.txId > pivot.txId OR
                 ( createTxOut.txId = pivot.txId AND
                     createTxOut.txIx >= pivot.txIx
                 )
               )
             )
-        ORDER BY block.slotNo, createTxOut.txId, createTxOut.txIx
+        ORDER BY createTxOut.slotNo, createTxOut.txId, createTxOut.txIx
         OFFSET ($3 :: int) ROWS
         FETCH NEXT ($4 :: int) ROWS ONLY
       |] (foldPage range totalItems)
@@ -122,9 +114,9 @@ getHeaders range@Range{..} = do
     Descending ->
       [foldStatement|
         SELECT
-          block.slotNo :: bigint,
-          block.id :: bytea,
-          block.blockNo :: bigint,
+          createTxOut.slotNo :: bigint,
+          createTxOut.blockId :: bytea,
+          createTxOut.blockNo :: bigint,
           createTxOut.txId :: bytea,
           createTxOut.txIx :: smallint,
           contractTxOut.rolesCurrency :: bytea,
@@ -134,9 +126,7 @@ getHeaders range@Range{..} = do
         FROM marlowe.createTxOut
         JOIN marlowe.contractTxOut USING (txId, txIx)
         JOIN marlowe.txOut USING (txId, txIx)
-        JOIN marlowe.block
-          ON block.id = createTxOut.blockId
-        ORDER BY block.slotNo DESC, createTxOut.txId DESC, createTxOut.txIx DESC
+        ORDER BY createTxOut.slotNo, createTxOut.txId, createTxOut.txIx
         OFFSET ($1 :: int) ROWS
         FETCH NEXT ($2 :: int) ROWS ONLY
       |] (foldPage range totalItems)

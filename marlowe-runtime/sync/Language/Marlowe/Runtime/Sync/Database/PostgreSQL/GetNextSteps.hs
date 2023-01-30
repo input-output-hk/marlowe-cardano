@@ -101,39 +101,28 @@ getNextTxIds (ContractId TxOutRef{..}) point = T.statement params $ fmap (NextTx
       )
     , nextApplyTxIds (slotNo, blockHeaderHash, blockNo, txIds) AS
       ( SELECT
-          block.slotNo,
-          (ARRAY_AGG(block.id))[1],
-          (ARRAY_AGG(block.blockNo))[1],
-          ARRAY_AGG(applyTx.txId)
+          slotNo,
+          (ARRAY_AGG(blockId))[1],
+          (ARRAY_AGG(blockNo))[1],
+          ARRAY_AGG(txId)
         FROM marlowe.applyTx
-        JOIN marlowe.block
-          ON block.id = applyTx.blockId
         JOIN params USING (createTxId, createTxIx)
-        WHERE block.rollbackToBlock IS NULL
-          AND block.slotNo > params.afterSlot
-        GROUP BY block.slotNo
-        ORDER BY block.slotNo
+        WHERE slotNo > params.afterSlot
+        GROUP BY slotNo
+        ORDER BY slotNo
         LIMIT 1
       )
     , nextWithdrawalTxIds (slotNo, blockHeaderHash, blockNo, txIds) AS
       ( SELECT
-          block.slotNo,
-          (ARRAY_AGG(block.id))[1],
-          (ARRAY_AGG(block.blockNo))[1],
-          ARRAY_AGG(withdrawalTxIn.txId)
+          slotNo,
+          (ARRAY_AGG(blockId))[1],
+          (ARRAY_AGG(blockNo))[1],
+          ARRAY_AGG(txId)
         FROM marlowe.withdrawalTxIn
-        JOIN marlowe.block
-          ON block.id = withdrawalTxIn.blockId
-        JOIN marlowe.payoutTxOut
-          ON payoutTxOut.txId = withdrawalTxIn.payoutTxId
-          AND payoutTxOut.txIx = withdrawalTxIn.payoutTxIx
-        JOIN marlowe.applyTx
-          ON applyTx.txId = payoutTxOut.txId
         JOIN params USING (createTxId, createTxIx)
-        WHERE block.rollbackToBlock IS NULL
-          AND block.slotNo > params.afterSlot
-        GROUP BY block.slotNo
-        ORDER BY block.slotNo
+        WHERE slotNo > params.afterSlot
+        GROUP BY slotNo
+        ORDER BY slotNo
         LIMIT 1
       )
     SELECT

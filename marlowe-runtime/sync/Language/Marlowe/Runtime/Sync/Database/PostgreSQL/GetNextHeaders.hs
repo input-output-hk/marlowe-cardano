@@ -39,31 +39,24 @@ getNextHeaders point = do
     AtTip -> pure Wait
     BeforeTip -> T.statement fromSlot $ decodeResult . V.toList <$>
       [vectorStatement|
-        WITH nextBlock AS
-          ( SELECT
-              block.slotNo,
-              block.id as blockId,
-              block.blockNo
-            FROM marlowe.block
-            JOIN marlowe.createTxOut
-              ON createTxOut.blockId = block.id
-            WHERE block.rollbackToBlock IS NULL
-              AND block.slotNo > $1 :: bigint
-            ORDER BY block.slotNo
-            LIMIT 1
-          )
         SELECT
-          nextBlock.slotNo :: bigint,
-          nextBlock.blockId :: bytea,
-          nextBlock.blockNo :: bigint,
+          createTxOut.slotNo :: bigint,
+          createTxOut.blockId :: bytea,
+          createTxOut.blockNo :: bigint,
           createTxOut.txId :: bytea,
           createTxOut.txIx :: smallint,
           contractTxOut.rolesCurrency :: bytea,
           createTxOut.metadata :: bytea?,
           txOut.address :: bytea,
           contractTxOut.payoutScriptHash :: bytea
-        FROM nextBlock
-        JOIN marlowe.createTxOut USING (blockId)
+        FROM marlowe.createTxOut
+        JOIN
+          ( SELECT slotNo, blockId, blockNo
+            FROM marlowe.createTxOut
+            WHERE slotNo > $1 :: bigint
+            ORDER BY slotNo
+            LIMIT 1
+          ) AS nextBlock USING (blockId)
         JOIN marlowe.contractTxOut USING (txId, txIx)
         JOIN marlowe.txOut USING (txId, txIx)
       |]
