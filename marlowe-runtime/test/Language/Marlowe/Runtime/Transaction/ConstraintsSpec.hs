@@ -493,7 +493,7 @@ spec = do
          pure $ selectLovelace outValue `shouldBe` maximum [selectLovelace inValue, selectLovelace expected]
 
   describe "balanceTx" do
-    prop "tx should balance if coin selection succeeded and no Plutus failure occurred" \(SomeTxConstraints marloweVersion constraints) -> do
+    prop "tx should balance for non-Plutus transactions where the wallet has sufficient funds" \(SomeTxConstraints marloweVersion constraints) -> do
       marloweContext <- genSimpleMarloweContext marloweVersion constraints
 
       -- We MUST dictate the distribution of wallet context assets, default
