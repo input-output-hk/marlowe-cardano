@@ -174,6 +174,7 @@
             (hsPkgs."marlowe-chain-sync" or (errorHandler.buildDepError "marlowe-chain-sync"))
             (hsPkgs."marlowe-protocols" or (errorHandler.buildDepError "marlowe-protocols"))
             (hsPkgs."marlowe-runtime" or (errorHandler.buildDepError "marlowe-runtime"))
+            (hsPkgs."marlowe-runtime".components.sublibs.discovery-api or (errorHandler.buildDepError "marlowe-runtime:discovery-api"))
             (hsPkgs."marlowe-runtime".components.sublibs.history-api or (errorHandler.buildDepError "marlowe-runtime:history-api"))
             (hsPkgs."plutus-ledger-api" or (errorHandler.buildDepError "plutus-ledger-api"))
             (hsPkgs."text" or (errorHandler.buildDepError "text"))
@@ -184,12 +185,16 @@
           buildable = true;
           modules = [
             "Language/Marlowe/Runtime/Sync"
+            "Language/Marlowe/Runtime/Sync/MarloweHeaderSyncServer"
             "Language/Marlowe/Runtime/Sync/MarloweSyncServer"
             "Language/Marlowe/Runtime/Sync/Database"
             "Language/Marlowe/Runtime/Sync/Database/PostgreSQL"
+            "Language/Marlowe/Runtime/Sync/Database/PostgreSQL/GetTip"
             "Language/Marlowe/Runtime/Sync/Database/PostgreSQL/GetTipForContract"
             "Language/Marlowe/Runtime/Sync/Database/PostgreSQL/GetCreateStep"
             "Language/Marlowe/Runtime/Sync/Database/PostgreSQL/GetIntersectionForContract"
+            "Language/Marlowe/Runtime/Sync/Database/PostgreSQL/GetIntersection"
+            "Language/Marlowe/Runtime/Sync/Database/PostgreSQL/GetNextHeaders"
             "Language/Marlowe/Runtime/Sync/Database/PostgreSQL/GetNextSteps"
             ];
           hsSourceDirs = [ "sync" ];
@@ -533,6 +538,7 @@
             (hsPkgs."hasql" or (errorHandler.buildDepError "hasql"))
             (hsPkgs."hasql-pool" or (errorHandler.buildDepError "hasql-pool"))
             (hsPkgs."marlowe-protocols" or (errorHandler.buildDepError "marlowe-protocols"))
+            (hsPkgs."marlowe-runtime".components.sublibs.discovery-api or (errorHandler.buildDepError "marlowe-runtime:discovery-api"))
             (hsPkgs."marlowe-runtime".components.sublibs.history-api or (errorHandler.buildDepError "marlowe-runtime:history-api"))
             (hsPkgs."marlowe-runtime".components.sublibs.sync or (errorHandler.buildDepError "marlowe-runtime:sync"))
             (hsPkgs."network" or (errorHandler.buildDepError "network"))
