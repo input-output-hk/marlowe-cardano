@@ -11,7 +11,7 @@ import Language.Marlowe.Protocol.Sync.Server
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainPoint, WithGenesis(..))
 import Language.Marlowe.Runtime.Core.Api (ContractId, MarloweVersion, SomeMarloweVersion(..))
 import Language.Marlowe.Runtime.History.Api (SomeCreateStep(..))
-import Language.Marlowe.Runtime.Sync.Database (DatabaseQueries(..), NextSteps(..))
+import Language.Marlowe.Runtime.Sync.Database (DatabaseQueries(..), Next(..))
 import Network.Protocol.Driver (RunServer(..))
 
 data MarloweSyncServerDependencies = MarloweSyncServerDependencies

@@ -11,18 +11,23 @@ module Language.Marlowe.Runtime.Sync.Database
 import Control.Monad.Cleanup (MonadCleanup)
 import Data.Aeson (ToJSON)
 import Data.Text (Text)
+import Data.Void (Void)
 import GHC.Generics (Generic)
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainPoint)
-import Language.Marlowe.Runtime.Core.Api (ContractId, MarloweVersion(..), MarloweVersionTag(..), SomeMarloweVersion)
+import Language.Marlowe.Runtime.Core.Api (ContractId, MarloweVersion(..), SomeMarloweVersion)
+import Language.Marlowe.Runtime.Discovery.Api (ContractHeader)
 import Language.Marlowe.Runtime.History.Api (ContractStep, SomeCreateStep)
 import Observe.Event (EventBackend, addField, withEvent)
 import Observe.Event.Component (FieldConfig(..), GetSelectorConfig, SelectorConfig(SelectorConfig), SomeJSON(SomeJSON))
 
 data DatabaseSelector f where
+  GetTip :: DatabaseSelector (QueryField Void ChainPoint)
   GetTipForContract :: DatabaseSelector (QueryField ContractId ChainPoint)
   GetCreateStep :: DatabaseSelector (QueryField ContractId (Maybe GetCreateStepResult))
   GetIntersectionForContract :: DatabaseSelector (QueryField GetIntersectionForContractArguments (Maybe GetIntersectionForContractResult))
-  GetNextSteps :: MarloweVersion v -> DatabaseSelector (QueryField (GetNextStepsArguments v) (NextSteps v))
+  GetIntersection :: DatabaseSelector (QueryField [BlockHeader] (Maybe BlockHeader))
+  GetNextHeaders :: DatabaseSelector (QueryField ChainPoint (Next ContractHeader))
+  GetNextSteps :: MarloweVersion v -> DatabaseSelector (QueryField (GetNextStepsArguments v) (Next (ContractStep v)))
 
 data QueryField p r
   = Arguments p
@@ -59,7 +64,11 @@ data GetNextStepsArguments v = GetNextStepsArguments
 
 logDatabaseQueries :: MonadCleanup m => EventBackend m r DatabaseSelector -> DatabaseQueries m -> DatabaseQueries m
 logDatabaseQueries eventBackend DatabaseQueries{..} = DatabaseQueries
-  { getTipForContract = \contractId -> withEvent eventBackend GetTipForContract \ev -> do
+  { getTip = withEvent eventBackend GetTip \ev -> do
+      result <- getTip
+      addField ev $ Result result
+      pure result
+  , getTipForContract = \contractId -> withEvent eventBackend GetTipForContract \ev -> do
       addField ev $ Arguments contractId
       result <- getTipForContract contractId
       addField ev $ Result result
@@ -69,10 +78,20 @@ logDatabaseQueries eventBackend DatabaseQueries{..} = DatabaseQueries
       result <- getCreateStep contractId
       addField ev $ Result $ uncurry GetCreateStepResult <$> result
       pure result
+  , getIntersection = \points -> withEvent eventBackend GetIntersection \ev -> do
+      addField ev $ Arguments points
+      result <- getIntersection points
+      addField ev $ Result result
+      pure result
   , getIntersectionForContract = \contractId points -> withEvent eventBackend GetIntersectionForContract \ev -> do
       addField ev $ Arguments $ GetIntersectionForContractArguments{..}
       result <- getIntersectionForContract contractId points
       addField ev $ Result $ uncurry GetIntersectionForContractResult <$> result
+      pure result
+  , getNextHeaders = \fromPoint -> withEvent eventBackend GetNextHeaders \ev -> do
+      addField ev $ Arguments fromPoint
+      result <- getNextHeaders fromPoint
+      addField ev $ Result result
       pure result
   , getNextSteps = \version contractId fromPoint -> withEvent eventBackend (GetNextSteps version) \ev -> do
       addField ev $ Arguments $ GetNextStepsArguments{..}
@@ -83,32 +102,40 @@ logDatabaseQueries eventBackend DatabaseQueries{..} = DatabaseQueries
 
 hoistDatabaseQueries :: (forall x. m x -> n x) -> DatabaseQueries m -> DatabaseQueries n
 hoistDatabaseQueries f DatabaseQueries{..} = DatabaseQueries
-  { getTipForContract = f . getTipForContract
+  { getTip = f getTip
+  , getTipForContract = f . getTipForContract
   , getCreateStep = f . getCreateStep
   , getIntersectionForContract = fmap f . getIntersectionForContract
+  , getIntersection = f . getIntersection
+  , getNextHeaders = f . getNextHeaders
   , getNextSteps = (fmap . fmap) f . getNextSteps
   }
 
 data DatabaseQueries m = DatabaseQueries
-  { getTipForContract :: ContractId -> m ChainPoint
+  { getTip :: m ChainPoint
+  , getTipForContract :: ContractId -> m ChainPoint
   , getCreateStep :: ContractId -> m (Maybe (BlockHeader, SomeCreateStep))
+  , getIntersection :: [BlockHeader] -> m (Maybe BlockHeader)
   , getIntersectionForContract :: ContractId -> [BlockHeader] -> m (Maybe (BlockHeader, SomeMarloweVersion))
-  , getNextSteps :: forall v. MarloweVersion v -> ContractId -> ChainPoint -> m (NextSteps v)
+  , getNextHeaders :: ChainPoint -> m (Next ContractHeader)
+  , getNextSteps :: forall v. MarloweVersion v -> ContractId -> ChainPoint -> m (Next (ContractStep v))
   }
 
-data NextSteps v
+data Next a
   = Rollback ChainPoint
   | Wait
-  | Next BlockHeader [ContractStep v]
-  deriving stock (Generic)
-
-instance ToJSON (NextSteps 'V1)
+  | Next BlockHeader [a]
+  deriving stock (Generic, Functor)
+  deriving anyclass (ToJSON)
 
 getDatabaseSelectorConfig :: GetSelectorConfig DatabaseSelector
 getDatabaseSelectorConfig = \case
+  GetTip -> getQuerySelectorConfig "get-tip"
   GetTipForContract -> getQuerySelectorConfig "get-tip-for-contract"
   GetCreateStep -> getQuerySelectorConfig "get-create-step"
   GetIntersectionForContract -> getQuerySelectorConfig "get-intersection-for-contract"
+  GetIntersection -> getQuerySelectorConfig "get-intersection"
+  GetNextHeaders -> getQuerySelectorConfig "get-next-headers"
   GetNextSteps MarloweV1 -> getQuerySelectorConfig "get-next-steps"
 
 getQuerySelectorConfig :: (ToJSON p, ToJSON r) => Text -> SelectorConfig (QueryField p r)

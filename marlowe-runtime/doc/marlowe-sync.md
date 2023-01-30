@@ -7,7 +7,8 @@ marlowe-sync : a contract synchronization and query service for the Marlowe
 Runtime.
 
 Usage: marlowe-sync (-d|--database-uri DATABASE_URI) [--sync-port PORT_NUMBER] 
-                    [-h|--host HOST_NAME] [--log-config-file FILE_PATH]
+                    [--header-sync-port PORT_NUMBER] [-h|--host HOST_NAME] 
+                    [--log-config-file FILE_PATH]
 
   Contract synchronization and query service for Marlowe Runtime
 
@@ -16,8 +17,11 @@ Available options:
   -d,--database-uri DATABASE_URI
                            URI of the database where the contract information is
                            saved.
-  --sync-port PORT_NUMBER  The port number to run the sync server on.
+  --sync-port PORT_NUMBER  The port number to run the sync protocol on.
                            (default: 3724)
+  --header-sync-port PORT_NUMBER
+                           The port number to run the header sync protocol on.
+                           (default: 3725)
   -h,--host HOST_NAME      The host name to run the server on.
                            (default: "127.0.0.1")
   --log-config-file FILE_PATH

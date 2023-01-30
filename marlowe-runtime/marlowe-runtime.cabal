@@ -186,12 +186,16 @@ library sync
   visibility: public
   exposed-modules:
     Language.Marlowe.Runtime.Sync
+    Language.Marlowe.Runtime.Sync.MarloweHeaderSyncServer
     Language.Marlowe.Runtime.Sync.MarloweSyncServer
     Language.Marlowe.Runtime.Sync.Database
     Language.Marlowe.Runtime.Sync.Database.PostgreSQL
+    Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetTip
     Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetTipForContract
     Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetCreateStep
     Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetIntersectionForContract
+    Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetIntersection
+    Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetNextHeaders
     Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetNextSteps
   build-depends:
       base >= 4.9 && < 5
@@ -210,6 +214,7 @@ library sync
     , marlowe-chain-sync
     , marlowe-protocols
     , marlowe-runtime
+    , marlowe-runtime:discovery-api
     , marlowe-runtime:history-api
     , plutus-ledger-api
     , text
@@ -568,6 +573,7 @@ executable marlowe-sync
     , hasql
     , hasql-pool
     , marlowe-protocols
+    , marlowe-runtime:discovery-api
     , marlowe-runtime:history-api
     , marlowe-runtime:sync
     , network

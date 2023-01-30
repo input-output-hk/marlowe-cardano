@@ -166,7 +166,7 @@ let
   };
 
   sync-service = dev-service {
-    ports = [ 3724 ];
+    ports = [ 3724 3725 ];
     depends_on = [ "marlowe-indexer" "postgres" ];
     command = [
       "/exec/run-marlowe-sync"
@@ -223,15 +223,17 @@ let
 
   web-service = dev-service {
     ports = [ 8080 ];
-    depends_on = [ "marlowe-sync" "marlowe-discovery" "marlowe-tx" ];
+    depends_on = [ "marlowe-sync" "marlowe-tx" ];
     command = [
       "/exec/run-marlowe-web-server"
       "--history-host"
       "marlowe-sync"
       "--history-sync-port"
       "3724"
+      "--discovery-sync-port"
+      "3725"
       "--discovery-host"
-      "marlowe-discovery"
+      "marlowe-sync"
       "--tx-host"
       "marlowe-tx"
       "--enable-open-api"
