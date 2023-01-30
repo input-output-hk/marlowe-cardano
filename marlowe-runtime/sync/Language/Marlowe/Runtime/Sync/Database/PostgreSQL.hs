@@ -5,6 +5,7 @@ import qualified Hasql.Session as H
 import qualified Hasql.Transaction.Sessions as T
 import Language.Marlowe.Runtime.Sync.Database (DatabaseQueries(DatabaseQueries))
 import Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetCreateStep (getCreateStep)
+import Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetHeaders (getHeaders)
 import Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetIntersection (getIntersection)
 import Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetIntersectionForContract (getIntersectionForContract)
 import Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetNextHeaders (getNextHeaders)
@@ -21,3 +22,4 @@ databaseQueries = DatabaseQueries
   (\contractId -> T.transaction T.Serializable T.Read . getIntersectionForContract contractId)
   (T.transaction T.Serializable T.Read . getNextHeaders)
   (\version contractId -> T.transaction T.Serializable T.Read . getNextSteps version contractId)
+  (T.transaction T.Serializable T.Read . getHeaders)
