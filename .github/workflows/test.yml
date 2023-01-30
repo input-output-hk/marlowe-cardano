@@ -80,8 +80,9 @@ jobs:
           cat > keys/payment.skey <<EOF
           $TREASURY_SKEY
           EOF
-          nix develop -p socat --command "socat UNIX-LISTEN:node.sock,fork OPENSSL-CONNECT:dev-ci-node.marlowe-finance.io:443,cert=client.pem,cafile=server.crt,openssl-commonname=marlowe-node-server,snihost=dev-ci-node.marlowe-finance.io" &>socat-log &
+          nix develop -p socat "socat UNIX-LISTEN:node.sock,fork OPENSSL-CONNECT:dev-ci-node.marlowe-finance.io:443,cert=client.pem,cafile=server.crt,openssl-commonname=marlowe-node-server,snihost=dev-ci-node.marlowe-finance.io" &>socat-log &
           export CARDANO_NODE_SOCKET_PATH=node.sock
           export CARDANO_TESTNET_MAGIC=2
           export TREASURY=keys/
-          nix develop --command "./run-nonpab-tests.sh"
+          nix develop
+          ./run-nonpab-tests.sh
