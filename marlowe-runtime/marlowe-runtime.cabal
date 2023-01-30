@@ -704,6 +704,7 @@ test-suite marlowe-runtime-test
     , bytestring
     , cardano-api
     , cardano-api:gen
+    , cardano-slotting
     , containers
     , errors
     , hedgehog-quickcheck
@@ -731,6 +732,7 @@ test-suite marlowe-runtime-test
     , stm
     , time
     , transformers
+    , tx-api
     , typed-protocols
   build-tool-depends: hspec-discover:hspec-discover
   ghc-options: -threaded
