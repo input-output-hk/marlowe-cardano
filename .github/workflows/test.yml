@@ -85,4 +85,4 @@ jobs:
           export CARDANO_TESTNET_MAGIC=2
           export TREASURY=keys/
           nix develop
-          cd marlowe-cli && . ./run-nonpab-tests.sh -a $(cat keys/payment.addr) -p keys/payment.skey --faucet-skey-file keys/payment.skey
+          cd marlowe-cli && . ./run-nonpab-tests.sh -a $(cat keys/payment.addr) -p ../keys/payment.skey --faucet-skey-file ../keys/payment.skey
