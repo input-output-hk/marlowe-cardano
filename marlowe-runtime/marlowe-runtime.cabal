@@ -194,9 +194,11 @@ library sync-api
     , aeson
     , binary
     , bytestring
+    , lifted-async
     , marlowe-protocols
     , marlowe-runtime
     , marlowe-runtime:discovery-api
+    , monad-control
     , typed-protocols
   visibility: public
 
@@ -208,6 +210,7 @@ library sync
     Language.Marlowe.Runtime.Sync
     Language.Marlowe.Runtime.Sync.MarloweHeaderSyncServer
     Language.Marlowe.Runtime.Sync.MarloweSyncServer
+    Language.Marlowe.Runtime.Sync.QueryServer
     Language.Marlowe.Runtime.Sync.Database
     Language.Marlowe.Runtime.Sync.Database.PostgreSQL
     Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetTip
@@ -598,6 +601,7 @@ executable marlowe-sync
     , marlowe-runtime:discovery-api
     , marlowe-runtime:history-api
     , marlowe-runtime:sync
+    , marlowe-runtime:sync-api
     , network
     , optparse-applicative
     , text
@@ -724,6 +728,7 @@ test-suite marlowe-runtime-test
     Language.Marlowe.Runtime.Transaction.CommandSpec
     Language.Marlowe.Protocol.HeaderSyncSpec
     Language.Marlowe.Protocol.SyncSpec
+    Language.Marlowe.Protocol.QuerySpec
     Paths_marlowe_runtime
   build-depends:
       base >= 4.9 && < 5
@@ -748,6 +753,7 @@ test-suite marlowe-runtime-test
     , marlowe-runtime:discovery-api
     , marlowe-runtime:history
     , marlowe-runtime:history-api
+    , marlowe-runtime:sync-api
     , marlowe-runtime:tx
     , marlowe-runtime:tx-api
     , marlowe-test
