@@ -13,6 +13,7 @@ import Data.Aeson (ToJSON)
 import Data.Text (Text)
 import Data.Void (Void)
 import GHC.Generics (Generic)
+import Language.Marlowe.Protocol.Query.Types (Page, Range)
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainPoint)
 import Language.Marlowe.Runtime.Core.Api (ContractId, MarloweVersion(..), SomeMarloweVersion)
 import Language.Marlowe.Runtime.Discovery.Api (ContractHeader)
@@ -128,27 +129,6 @@ data DatabaseQueries m = DatabaseQueries
   , getNextSteps :: forall v. MarloweVersion v -> ContractId -> ChainPoint -> m (Next (ContractStep v))
   , getHeaders :: Range ContractId -> m (Page ContractId ContractHeader)
   }
-
-data Range a = Range
-  { rangeStart :: Maybe a
-  , rangeOffset :: Int
-  , rangeLimit :: Int
-  , rangeDirection :: Order
-  }
-  deriving stock (Eq, Show, Read, Ord, Functor, Generic, Foldable, Traversable)
-  deriving anyclass (ToJSON)
-
-data Page a b = Page
-  { items :: [b]
-  , nextRange :: Maybe (Range a)
-  , totalCount :: Int
-  }
-  deriving stock (Eq, Show, Read, Ord, Functor, Generic, Foldable, Traversable)
-  deriving anyclass (ToJSON)
-
-data Order = Ascending | Descending
-  deriving stock (Eq, Show, Read, Ord, Enum, Bounded, Generic)
-  deriving anyclass (ToJSON)
 
 data Next a
   = Rollback ChainPoint
