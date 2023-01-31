@@ -429,6 +429,7 @@ spec = do
             -- check 2: non-ADA inputs and non-ADA outputs cancel each other out
             tokIns <> negateValue tokOuts `shouldBe` mempty
         Left selFailedMsg -> counterexample ("selection failed: " <> selFailedMsg) False
+
   describe "findMinUtxo" do
     prop "pure lovelace" do
       inAddress <- arbitrary
@@ -457,6 +458,7 @@ spec = do
            first (\message -> show (message :: ConstraintError 'V1))
              $ findMinUtxo protocolTestnet (inAddress, fromCardanoScriptData <$> inDatum, inValue)
          pure $ (inDatum, outValue) `shouldBe` (inDatum, expected)
+
   describe "ensureMinUtxo" do
     prop "non-lovelace value is unchanged" do
       let
@@ -676,11 +678,17 @@ genSimpleMarloweContext marloweVersion constraints = do
     , payoutOutputs = Map.empty
     }
 
--- Generate a random amount and add the specified amount of Lovelace to it
-genAdaOnlyAssets :: Integer -> Chain.Assets
-genAdaOnlyAssets maxLovelace = Chain.Assets
-  (fromCardanoLovelace $ Lovelace maxLovelace)
+-- Convenience function to build a chain Assets with the specified amount of only ADA
+mkAdaOnlyAssets :: Integer -> Chain.Assets
+mkAdaOnlyAssets lovelace = Chain.Assets
+  (fromCardanoLovelace $ Lovelace lovelace)
   (Chain.Tokens Map.empty)
+
+-- Generate a random amount and add the specified amount of Lovelace to it
+genAtLeastThisMuchAda :: Integer -> Gen Chain.Assets
+genAtLeastThisMuchAda minLovelace = do
+  additionalLovelaceValue <- suchThat arbitrary (>= 0)
+  pure . mkAdaOnlyAssets $ minLovelace + additionalLovelaceValue
 
 -- The simplest wallet context:
 --   availableUtxos = A single ADA-only Utxo
@@ -691,8 +699,8 @@ genWalletWithAsset marloweVersion constraints minLovelace = do
   wc <- genWalletContext marloweVersion constraints
   txOutRef <- arbitrary
   stubAddress <- arbitrary
+  assets <- genAtLeastThisMuchAda minLovelace
   let
-    assets = genAdaOnlyAssets minLovelace
     txOut = Chain.TransactionOutput stubAddress assets Nothing Nothing
     utxos = Chain.UTxOs $ Map.singleton txOutRef txOut
   pure $ wc { availableUtxos = utxos, collateralUtxos = Set.singleton txOutRef }
