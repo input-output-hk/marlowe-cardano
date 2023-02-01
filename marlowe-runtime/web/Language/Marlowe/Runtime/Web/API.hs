@@ -1,3 +1,4 @@
+{-# LANGUAGE ApplicativeDo #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
@@ -8,6 +9,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
 
 -- | This module specifies the Marlowe Runtime Web API as a Servant API type.
 
@@ -15,8 +17,14 @@ module Language.Marlowe.Runtime.Web.API
   where
 
 import Control.Lens hiding ((.=))
-import Control.Monad (guard)
+import Control.Monad (guard, replicateM, (<=<))
 import Data.Aeson
+import Data.Aeson.Types (parseFail)
+import qualified Data.Aeson.Types as A
+import Data.Bifunctor (first)
+import Data.Bits (Bits(shiftL), (.|.))
+import qualified Data.ByteString as BS
+import Data.Char (digitToInt)
 import Data.Functor (($>))
 import Data.OpenApi
   ( Definitions
@@ -33,7 +41,10 @@ import Data.OpenApi
   )
 import Data.OpenApi.Declare (Declare)
 import Data.String (IsString(..))
+import Data.Text (Text)
+import qualified Data.Text as T
 import Data.Typeable (Typeable)
+import Data.Word (Word8)
 import GHC.Base (Symbol)
 import GHC.Exts (IsList(..))
 import GHC.Generics (Generic)
@@ -42,6 +53,9 @@ import GHC.TypeLits (KnownSymbol, symbolVal)
 import Language.Marlowe.Runtime.Web.Types
 import Servant
 import Servant.Pagination
+import Text.Parsec (anyChar, digit, eof, hexDigit, many1, manyTill, runParser, spaces, string)
+import Text.Parsec.String (Parser)
+import Text.Read (readMaybe)
 
 api :: Proxy API
 api = Proxy
@@ -59,11 +73,37 @@ type GetContractsAPI = PaginatedGet '["contractId"] GetContractsResponse
 
 type GetContractsResponse = WithLink "contract" ContractHeader
 
+parseContractId :: Parser TxOutRef
+parseContractId = TxOutRef <$> parseTransactionId <*> do
+  digits <- many1 digit
+  case readMaybe digits of
+    Just txIx -> pure txIx
+    Nothing -> fail "txIx too large"
+
+parseTransactionId :: Parser TxId
+parseTransactionId = do
+  let
+    octet :: Parser Word8
+    octet = do
+      gb <- hexDigit
+      lb <- hexDigit
+      let gbi = fromIntegral $ digitToInt gb
+      let lbi = fromIntegral $ digitToInt lb
+      pure $ shiftL gbi 4 .|. lbi
+  octets <- replicateM 32 octet
+  pure $ TxId $ BS.pack octets
+
 instance HasNamedLink ContractHeader API "contract" where
   namedLink _ _ ContractHeader{..} = Just $ safeLink
     api
     (Proxy @("contracts" :> Capture "contractId" TxOutRef :> GetContractAPI))
     contractId
+  parseLink _ _ _ = do
+    contractId <- string "contracts/" *> parseContractId <* eof
+    pure $ safeLink
+      api
+      (Proxy @("contracts" :> Capture "contractId" TxOutRef :> GetContractAPI))
+      contractId
 
 -- | POST /contracts sub-API
 type PostContractsAPI
@@ -77,6 +117,13 @@ instance HasNamedLink CreateTxBody API "contract" where
     api
     (Proxy @("contracts" :> Capture "contractId" TxOutRef :> GetContractAPI))
     contractId
+  parseLink _ _ _ = do
+    contractId <- string "contracts/" *> parseContractId <* eof
+    pure $ safeLink
+      api
+      (Proxy @("contracts" :> Capture "contractId" TxOutRef :> GetContractAPI))
+      contractId
+
 
 -- | /contracts/:contractId sup-API
 type ContractAPI = GetContractAPI
@@ -93,6 +140,15 @@ instance HasNamedLink ContractState API "transactions" where
     api
     (Proxy @("contracts" :> Capture "contractId" TxOutRef :> "transactions" :> GetTransactionsAPI))
     contractId
+  parseLink _ _ _ = do
+    contractId <- string "contracts/"
+      *> parseContractId
+      <* string "/transactions"
+      <* eof
+    pure $ safeLink
+      api
+      (Proxy @("contracts" :> Capture "contractId" TxOutRef :> "transactions" :> GetTransactionsAPI))
+      contractId
 
 -- | /contracts/:contractId/transactions sup-API
 type TransactionsAPI = GetTransactionsAPI
@@ -118,6 +174,24 @@ instance HasNamedLink ApplyInputsTxBody API "transaction" where
     contractId
     transactionId
 
+  parseLink _ _ _ = do
+    contractId <- string "contracts/"
+      *> parseContractId
+      <* string "/transactions"
+    transactionId <- string "/transactions"
+      *> parseTransactionId
+      <* eof
+    pure $ safeLink
+      api
+      (Proxy @("contracts"
+            :> Capture "contractId" TxOutRef
+            :> "transactions"
+            :> Capture "transactionId" TxId
+            :> GetTransactionAPI
+      ))
+      contractId
+      transactionId
+
 -- | GET /contracts/:contractId/transactions sup-API
 type GetTransactionsAPI = PaginatedGet '["transactionId"] GetTransactionsResponse
 
@@ -134,6 +208,25 @@ instance HasNamedLink TxHeader API "transaction" where
     ))
     contractId
     transactionId
+
+  parseLink _ _ _ = do
+    contractId <- string "contracts/"
+      *> parseContractId
+      <* string "/transactions"
+    transactionId <- string "/transactions"
+      *> parseTransactionId
+      <* eof
+    pure $ safeLink
+      api
+      (Proxy @("contracts"
+            :> Capture "contractId" TxOutRef
+            :> "transactions"
+            :> Capture "transactionId" TxId
+            :> GetTransactionAPI
+      ))
+      contractId
+      transactionId
+
 
 -- | /contracts/:contractId/transactions/:transactionId sup-API
 type TransactionAPI = GetTransactionAPI
@@ -158,6 +251,25 @@ instance HasNamedLink Tx API "previous" where
     contractId
     (txId inputUtxo)
 
+  parseLink _ _ _ = do
+    contractId <- string "contracts/"
+      *> parseContractId
+      <* string "/transactions"
+    transactionId <- string "/transactions"
+      *> parseTransactionId
+      <* eof
+    pure $ safeLink
+      api
+      (Proxy @("contracts"
+            :> Capture "contractId" TxOutRef
+            :> "transactions"
+            :> Capture "transactionId" TxId
+            :> GetTransactionAPI
+      ))
+      contractId
+      transactionId
+
+
 instance HasNamedLink Tx API "next" where
   namedLink _ _ Tx{..} = safeLink api
     (Proxy @("contracts"
@@ -168,6 +280,25 @@ instance HasNamedLink Tx API "next" where
     ))
     contractId
     <$> consumingTx
+
+  parseLink _ _ _ = do
+    contractId <- string "contracts/"
+      *> parseContractId
+      <* string "/transactions"
+    transactionId <- string "/transactions"
+      *> parseTransactionId
+      <* eof
+    pure $ safeLink
+      api
+      (Proxy @("contracts"
+            :> Capture "contractId" TxOutRef
+            :> "transactions"
+            :> Capture "transactionId" TxId
+            :> GetTransactionAPI
+      ))
+      contractId
+      transactionId
+
 
 -- | Helper type for defining generic paginated GET endpoints
 type PaginatedGet rangeFields resource
@@ -193,15 +324,21 @@ type PostTxAPI api
 
 class HasNamedLink a api (name :: Symbol) where
   namedLink :: Proxy api -> Proxy name -> a -> Maybe Link
+  parseLink :: Proxy api -> Proxy name -> Proxy a -> Parser Link
 
 instance HasNamedLink a api name => HasNamedLink (WithLink name' a) api name where
   namedLink api' name = \case
     IncludeLink _ a -> namedLink api' name a
     OmitLink a -> namedLink api' name a
+  parseLink api' name _ = parseLink api' name $ Proxy @a
 
 data WithLink (name :: Symbol) a where
   IncludeLink :: Proxy name -> a -> WithLink name a
   OmitLink :: a -> WithLink name a
+
+retractLink :: WithLink name a -> a
+retractLink (IncludeLink _ a) = a
+retractLink (OmitLink a) = a
 
 deriving instance Typeable (WithLink name a)
 
@@ -223,6 +360,9 @@ instance (Show a, KnownSymbol name) => Show (WithLink name a) where
 class ToJSONWithLinks a where
   toJSONWithLinks :: a -> ([(String, Link)], Value)
 
+class FromJSONWithLinks a where
+  fromJSONWithLinks :: ([(String, String)], Value) -> A.Parser a
+
 instance {-# OVERLAPPING #-}
   ( HasNamedLink a API name
   , ToJSONWithLinks a
@@ -237,6 +377,22 @@ instance {-# OVERLAPPING #-}
 instance {-# OVERLAPPING #-} ToJSON a => ToJSONWithLinks a where
   toJSONWithLinks a = ([], toJSON a)
 
+instance {-# OVERLAPPING #-}
+  ( HasNamedLink a API name
+  , FromJSONWithLinks a
+  , KnownSymbol name
+  ) => FromJSONWithLinks (WithLink name a) where
+  fromJSONWithLinks (links, value) = do
+    let mUri = lookup (symbolVal $ Proxy @name) links
+    case mUri of
+      Nothing -> OmitLink <$> fromJSONWithLinks (links, value)
+      Just uri -> case runParser (parseLink api (Proxy @name) (Proxy @a)) () "" uri of
+        Right _ -> IncludeLink (Proxy @name) <$> fromJSONWithLinks (links, value)
+        Left err -> parseFail $ show err
+
+instance {-# OVERLAPPING #-} FromJSON a => FromJSONWithLinks a where
+  fromJSONWithLinks = parseJSON . snd
+
 instance
   ( HasNamedLink a API name
   , ToJSONWithLinks a
@@ -248,6 +404,18 @@ instance
         [ "resource" .= value
         , "links" .= object (bimap fromString (toJSON . show . linkURI) <$> links)
         ]
+
+instance
+  ( HasNamedLink a API name
+  , FromJSONWithLinks a
+  , KnownSymbol name
+  ) => FromJSON (WithLink name a) where
+  parseJSON = fromJSONWithLinks <=< parseJSON'
+    where
+      parseJSON' = withObject "WithLink" \obj -> do
+        value <- obj .: "resource"
+        links <- obj .: "links"
+        pure (links, value)
 
 instance HasPagination resource field => HasPagination (WithLink name resource) field where
   type RangeType (WithLink name resource) field = RangeType resource field
@@ -286,3 +454,36 @@ instance
                 & properties .~ fromList ((,stringSchema) . fromString <$> links)
             )
           ]
+
+class ContentRangeFromHttpApiData fields resource where
+  contentRangeFromHttpApiData :: Text -> Text -> Text -> Either Text (ContentRange fields resource)
+
+instance ContentRangeFromHttpApiData '[] resource where
+  contentRangeFromHttpApiData _ _ _ = Left "Invalid content range"
+
+instance
+  ( KnownSymbol field
+  , ToHttpApiData (RangeType resource field)
+  , FromHttpApiData (RangeType resource field)
+  , ContentRangeFromHttpApiData fields resource
+  ) => ContentRangeFromHttpApiData (field ': fields) resource where
+  contentRangeFromHttpApiData field start end
+    | field == T.pack (symbolVal $ Proxy @field) = ContentRange
+        <$> parseUrlPiece start
+        <*> parseUrlPiece end
+        <*> pure (Proxy @field)
+    | otherwise = do
+        ContentRange start' end' field' <-
+          contentRangeFromHttpApiData @fields @resource field start end
+        pure $ ContentRange start' end' field'
+
+instance ContentRangeFromHttpApiData fields resource
+  => FromHttpApiData (ContentRange fields resource) where
+  parseUrlPiece text = case T.splitOn " " text of
+    [field, suffix] -> case T.splitOn ".." suffix of
+      [start, end] -> contentRangeFromHttpApiData field start end
+      _ -> Left "Invalid content range"
+    _ -> Left "Invalid content range"
+
+instance FromHttpApiData (AcceptRanges fields) where
+  parseUrlPiece = const $ Right AcceptRanges

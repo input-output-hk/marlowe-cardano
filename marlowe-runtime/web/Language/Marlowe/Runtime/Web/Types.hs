@@ -228,6 +228,7 @@ data ContractState = ContractState
   } deriving (Show, Eq, Generic)
 
 instance ToJSON ContractState
+instance FromJSON ContractState
 instance ToSchema ContractState
 
 data ContractHeader = ContractHeader
@@ -240,6 +241,7 @@ data ContractHeader = ContractHeader
   } deriving (Show, Eq, Ord, Generic)
 
 instance ToJSON ContractHeader
+instance FromJSON ContractHeader
 instance ToSchema ContractHeader
 
 instance HasPagination ContractHeader "contractId" where
@@ -264,6 +266,7 @@ data TxHeader = TxHeader
   } deriving (Show, Eq, Ord, Generic)
 
 instance ToJSON TxHeader
+instance FromJSON TxHeader
 instance ToSchema TxHeader
 
 data Tx = Tx
@@ -286,6 +289,7 @@ data Tx = Tx
   } deriving (Show, Eq, Generic)
 
 instance ToJSON Tx
+instance FromJSON Tx
 instance ToSchema Tx
 
 instance HasPagination TxHeader "transactionId" where
@@ -303,6 +307,12 @@ instance ToJSON TxStatus where
   toJSON Submitted = String "submitted"
   toJSON Confirmed = String "confirmed"
 
+instance FromJSON TxStatus where
+  parseJSON (String "unsigned") = pure Unsigned
+  parseJSON (String "submitted") = pure Submitted
+  parseJSON (String "confirmed") = pure Confirmed
+  parseJSON _ = parseFail "invalid status"
+
 instance ToSchema TxStatus where
   declareNamedSchema _ = pure
     $ NamedSchema (Just "TxStatusHeader")
@@ -318,6 +328,7 @@ data BlockHeader = BlockHeader
   } deriving (Show, Eq, Ord, Generic)
 
 instance ToJSON BlockHeader
+instance FromJSON BlockHeader
 instance ToSchema BlockHeader
 
 data CreateTxBody = CreateTxBody
@@ -326,6 +337,7 @@ data CreateTxBody = CreateTxBody
   } deriving (Show, Eq, Ord, Generic)
 
 instance ToJSON CreateTxBody
+instance FromJSON CreateTxBody
 instance ToSchema CreateTxBody
 
 data TextEnvelope = TextEnvelope
@@ -532,4 +544,5 @@ data ApplyInputsTxBody = ApplyInputsTxBody
   } deriving (Show, Eq, Ord, Generic)
 
 instance ToJSON ApplyInputsTxBody
+instance FromJSON ApplyInputsTxBody
 instance ToSchema ApplyInputsTxBody
