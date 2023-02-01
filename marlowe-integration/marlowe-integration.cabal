@@ -64,6 +64,7 @@ library
     , eventuo11y-extras
     , hasql
     , hasql-pool
+    , http-client
     , lifted-async
     , marlowe-cli
     , marlowe-chain-sync
@@ -77,16 +78,21 @@ library
     , marlowe-runtime:history-api
     , marlowe-runtime:tx
     , marlowe-runtime:tx-api
+    , marlowe-runtime:web-server
     , ouroboros-network
     , postgresql-libpq
     , process
+    , random
     , resourcet
+    , servant
+    , servant-client
     , stm
     , text
     , time
     , transformers
     , uuid
     , unliftio
+    , warp
 
 executable marlowe-integration-example
   default-language: Haskell2010
