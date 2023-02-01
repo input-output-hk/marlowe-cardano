@@ -96,7 +96,7 @@ commitBlocks blocks = H.statement (prepareParams blocks)
       ( SELECT * FROM UNNEST ($46 :: bytea[], $47 :: bigint[], $48 :: bytea[], $49 :: bigint[], $50 :: bytea[], $51 :: smallint[])
       )
     , insertWithdrawalTxIns AS
-      ( INSERT INTO marlowe.withdrawalTxIn (txId, blockId, payoutTxId, payoutTxIx)
+      ( INSERT INTO marlowe.withdrawalTxIn (txId, slotNo, blockId, blockNo, payoutTxId, payoutTxIx)
         SELECT * FROM withdrawalTxInInputs
       )
     , invalidApplyTxInputs (txId, inputTxId, inputTxIx, blockId, error) AS
