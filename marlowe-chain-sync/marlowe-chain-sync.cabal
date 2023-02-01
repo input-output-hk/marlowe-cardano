@@ -131,6 +131,7 @@ library chain-indexer
     , base16
     , bytestring
     , cardano-api
+    , cardano-binary
     , cardano-crypto-wrapper
     , cardano-ledger-alonzo
     , cardano-ledger-babbage

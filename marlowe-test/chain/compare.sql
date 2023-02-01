@@ -216,7 +216,7 @@ create temporary table cmp_txout as
     , tx_out.address_raw
     , tx_out.value
     , tx_out.data_hash
-    , datum.bytes
+    , case when tx_out.inline_datum_id is not null then datum.bytes else null end
     , not tx.valid_contract
     from max_slotno
     inner join public.block
@@ -241,16 +241,16 @@ drop table if exists x_txout;
 create temporary table x_txout as
   select 'chainindex-dbsync' :: varchar as "comparison", *
     from (
-      select txid, txix, slotno, address, lovelace, datumhash, datumbytes, iscollateral from cmp_txout where source = 'chainindex'
+      select txid, txix, slotno, address, lovelace, datumhash, iscollateral from cmp_txout where source = 'chainindex'
       except
-      select txid, txix, slotno, address, lovelace, datumhash, datumbytes, iscollateral from cmp_txout where source = 'dbsync'
+      select txid, txix, slotno, address, lovelace, datumhash, iscollateral from cmp_txout where source = 'dbsync'
     ) as mc_txout
   union all
   select 'dbsync-chainindex', *
     from (
-      select txid, txix, slotno, address, lovelace, datumhash, datumbytes, iscollateral from cmp_txout where source = 'dbsync'
+      select txid, txix, slotno, address, lovelace, datumhash, iscollateral from cmp_txout where source = 'dbsync'
       except
-      select txid, txix, slotno, address, lovelace, datumhash, datumbytes, iscollateral from cmp_txout where source = 'chainindex'
+      select txid, txix, slotno, address, lovelace, datumhash, iscollateral from cmp_txout where source = 'chainindex'
     ) as cm_txout
 ;
 select
@@ -259,8 +259,48 @@ select
   from x_txout
   group by comparison
 ;
-\copy (select * from x_txout order by 2, 3, 4, 5, 6, 7, 8, 9, 1) to 'out/txout-discrepancies.csv' CSV HEADER
+\copy (select * from x_txout order by 2, 3, 4, 5, 6, 7, 8, 1) to 'out/txout-discrepancies.csv' CSV HEADER
 
+
+\qecho
+\qecho Datum comparison.
+\qecho
+
+drop table if exists x_datum;
+create temporary table x_datum as
+  select 'chainindex-dbsync' :: varchar as "comparison", *
+    from (
+      select txid, txix, a.datumbytes
+        from cmp_txout as a
+	inner join cmp_txout as b
+	  using (txid, txix)
+	where a.source = 'chainindex'
+	  and b.source = 'dbsync'
+	  and a.datumbytes <> b.datumbytes
+	  and a.datumbytes is not null
+	  and b.datumbytes is not null
+    ) as mc_datum
+  union all
+  select 'dbsync-chainindex', *
+    from (
+      select txid, txix, a.datumbytes
+        from cmp_txout a
+	inner join cmp_txout b
+	  using (txid, txix)
+	where a.source = 'dbsync'
+	  and b.source = 'chainindex'
+	  and a.datumbytes is not null
+	  and coalesce(a.datumbytes <> b.datumbytes, true)
+    ) as cm_datum
+;
+select
+    comparison as "Discrepancy"
+  , count(*) as "Count of Datum Records"
+  from x_datum
+  group by comparison
+;
+\copy (select * from x_datum order by 2, 3, 4, 1) to 'out/datum-discrepancies.csv' CSV HEADER
+  
 
 \qecho
 \qecho TxIn comparison.
@@ -576,6 +616,12 @@ create table x_summary as
     , (select count(*) from x_txout where comparison = 'chainindex-dbsync')
     , (select count(*) from x_txout where comparison = 'dbsync-chainindex')
     , (select count(*) from x_txout) > 0
+  union all
+  select
+      'datum'
+    , (select count(*) from x_datum where comparison = 'chainindex-dbsync')
+    , (select count(*) from x_datum where comparison = 'dbsync-chainindex')
+    , (select count(*) from x_datum) > 0
   union all
   select
       'txin'
