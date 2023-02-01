@@ -9,6 +9,7 @@ import Cardano.Api (AsType(..), BabbageEra, ShelleyWitnessSigningKey(..), TxBody
 import Cardano.Api.Byron (deserialiseFromTextEnvelope)
 import Control.Concurrent (threadDelay)
 import Data.Aeson (decodeFileStrict)
+import Data.Bifunctor (first)
 import Data.String (fromString)
 import Data.Time
   (NominalDiffTime, UTCTime, diffUTCTime, getCurrentTime, nominalDiffTimeToSeconds, secondsToNominalDiffTime)
@@ -250,7 +251,7 @@ submit
 submit MarloweRuntime{..} signingKeys txBody = do
   let tx = signShelleyTransaction txBody signingKeys
   submitResult <- runTxJobClient $ liftCommandWait $ Submit tx
-  expectRight "failed to submit tx" submitResult
+  expectRight "failed to submit tx" $ first (tx,) submitResult
 
 deposit
   :: MarloweRuntime
