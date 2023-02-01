@@ -21,11 +21,11 @@ import Control.Monad (guard, replicateM, (<=<))
 import Data.Aeson
 import Data.Aeson.Types (parseFail)
 import qualified Data.Aeson.Types as A
-import Data.Bifunctor (first)
 import Data.Bits (Bits(shiftL), (.|.))
 import qualified Data.ByteString as BS
 import Data.Char (digitToInt)
 import Data.Functor (($>))
+import qualified Data.Map as Map
 import Data.OpenApi
   ( Definitions
   , NamedSchema(..)
@@ -53,7 +53,7 @@ import GHC.TypeLits (KnownSymbol, symbolVal)
 import Language.Marlowe.Runtime.Web.Types
 import Servant
 import Servant.Pagination
-import Text.Parsec (anyChar, digit, eof, hexDigit, many1, manyTill, runParser, spaces, string)
+import Text.Parsec (digit, eof, hexDigit, many1, runParser, string)
 import Text.Parsec.String (Parser)
 import Text.Read (readMaybe)
 
@@ -73,8 +73,9 @@ type GetContractsAPI = PaginatedGet '["contractId"] GetContractsResponse
 
 type GetContractsResponse = WithLink "contract" ContractHeader
 
-parseContractId :: Parser TxOutRef
-parseContractId = TxOutRef <$> parseTransactionId <*> do
+parseTxOutRef :: Parser TxOutRef
+parseTxOutRef = TxOutRef <$> parseTransactionId <*> do
+  _ <- string "%23"
   digits <- many1 digit
   case readMaybe digits of
     Just txIx -> pure txIx
@@ -99,7 +100,7 @@ instance HasNamedLink ContractHeader API "contract" where
     (Proxy @("contracts" :> Capture "contractId" TxOutRef :> GetContractAPI))
     contractId
   parseLink _ _ _ = do
-    contractId <- string "contracts/" *> parseContractId <* eof
+    contractId <- string "contracts/" *> parseTxOutRef <* eof
     pure $ safeLink
       api
       (Proxy @("contracts" :> Capture "contractId" TxOutRef :> GetContractAPI))
@@ -118,7 +119,7 @@ instance HasNamedLink CreateTxBody API "contract" where
     (Proxy @("contracts" :> Capture "contractId" TxOutRef :> GetContractAPI))
     contractId
   parseLink _ _ _ = do
-    contractId <- string "contracts/" *> parseContractId <* eof
+    contractId <- string "contracts/" *> parseTxOutRef <* eof
     pure $ safeLink
       api
       (Proxy @("contracts" :> Capture "contractId" TxOutRef :> GetContractAPI))
@@ -142,7 +143,7 @@ instance HasNamedLink ContractState API "transactions" where
     contractId
   parseLink _ _ _ = do
     contractId <- string "contracts/"
-      *> parseContractId
+      *> parseTxOutRef
       <* string "/transactions"
       <* eof
     pure $ safeLink
@@ -175,10 +176,8 @@ instance HasNamedLink ApplyInputsTxBody API "transaction" where
     transactionId
 
   parseLink _ _ _ = do
-    contractId <- string "contracts/"
-      *> parseContractId
-      <* string "/transactions"
-    transactionId <- string "/transactions"
+    contractId <- string "contracts/" *> parseTxOutRef
+    transactionId <- string "/transactions/"
       *> parseTransactionId
       <* eof
     pure $ safeLink
@@ -210,10 +209,8 @@ instance HasNamedLink TxHeader API "transaction" where
     transactionId
 
   parseLink _ _ _ = do
-    contractId <- string "contracts/"
-      *> parseContractId
-      <* string "/transactions"
-    transactionId <- string "/transactions"
+    contractId <- string "contracts/" *> parseTxOutRef
+    transactionId <- string "/transactions/"
       *> parseTransactionId
       <* eof
     pure $ safeLink
@@ -252,10 +249,8 @@ instance HasNamedLink Tx API "previous" where
     (txId inputUtxo)
 
   parseLink _ _ _ = do
-    contractId <- string "contracts/"
-      *> parseContractId
-      <* string "/transactions"
-    transactionId <- string "/transactions"
+    contractId <- string "contracts/" *> parseTxOutRef
+    transactionId <- string "/transactions/"
       *> parseTransactionId
       <* eof
     pure $ safeLink
@@ -282,10 +277,8 @@ instance HasNamedLink Tx API "next" where
     <$> consumingTx
 
   parseLink _ _ _ = do
-    contractId <- string "contracts/"
-      *> parseContractId
-      <* string "/transactions"
-    transactionId <- string "/transactions"
+    contractId <- string "contracts/" *> parseTxOutRef
+    transactionId <- string "/transactions/"
       *> parseTransactionId
       <* eof
     pure $ safeLink
@@ -414,7 +407,7 @@ instance
     where
       parseJSON' = withObject "WithLink" \obj -> do
         value <- obj .: "resource"
-        links <- obj .: "links"
+        links <- Map.toList <$> obj .: "links"
         pure (links, value)
 
 instance HasPagination resource field => HasPagination (WithLink name resource) field where

@@ -55,12 +55,12 @@ getContracts range = do
     }
 
 postContract
-  :: PostContractsRequest
-  -> Address
+  :: Address
   -> Maybe (Set Address)
   -> Maybe (Set TxOutRef)
+  -> PostContractsRequest
   -> ClientM CreateTxBody
-postContract request changeAddress otherAddresses collateralUtxos = do
+postContract changeAddress otherAddresses collateralUtxos request = do
   let _ :<|> postContract' :<|> _ = client
   response <- postContract'
     request
@@ -99,13 +99,13 @@ getTransactions contractId range = do
     }
 
 postTransaction
-  :: TxOutRef
-  -> PostTransactionsRequest
-  -> Address
+  :: Address
   -> Maybe (Set Address)
   -> Maybe (Set TxOutRef)
+  -> TxOutRef
+  -> PostTransactionsRequest
   -> ClientM ApplyInputsTxBody
-postTransaction contractId request changeAddress otherAddresses collateralUtxos = do
+postTransaction changeAddress otherAddresses collateralUtxos contractId request = do
   let _ :<|> _ :<|> contractApi = client
   let _ :<|> _ :<|> _ :<|> postTransactions' :<|> _ = contractApi contractId
   response <- postTransactions'

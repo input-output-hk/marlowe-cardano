@@ -437,10 +437,6 @@ library web
     , containers
     , lens
     , marlowe-cardano
-    , marlowe-runtime
-    , marlowe-runtime:history-api
-    , marlowe-runtime:discovery-api
-    , marlowe-runtime:tx-api
     , network-uri
     , openapi3
     , parsec

@@ -1,18 +1,29 @@
-{-# OPTIONS_GHC -Wno-name-shadowing #-}
 module Main
   where
 
-import Cardano.Api (AsType(..), ShelleyWitnessSigningKey(..), deserialiseFromTextEnvelope, signShelleyTransaction)
+import Cardano.Api
+  ( AsType(..)
+  , ShelleyWitnessSigningKey(..)
+  , TextEnvelope(..)
+  , TextEnvelopeType(..)
+  , deserialiseFromTextEnvelope
+  , serialiseToTextEnvelope
+  , signShelleyTransaction
+  )
+import Cardano.Api.SerialiseTextEnvelope (TextEnvelopeDescr(..))
+import Control.Concurrent (threadDelay)
+import Control.Exception (throw)
+import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.Aeson (decodeFileStrict)
 import Data.Either (fromRight)
 import Data.Maybe (fromJust)
 import qualified Data.Text as T
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
-import Language.Marlowe.Runtime.ChainSync.Api (Address, fromBech32, toBech32)
-import Language.Marlowe.Runtime.Core.Api (MarloweVersion(..))
-import Language.Marlowe.Runtime.Transaction.Api
-  (ContractCreated(..), InputsApplied(..), MarloweTxCommand(..), RoleTokensConfig(..), WalletAddresses(..))
-import Network.Protocol.Job.Client (liftCommand, liftCommandWait)
+import Language.Marlowe.Runtime.ChainSync.Api (Address(..), fromBech32, toBech32)
+import Language.Marlowe.Runtime.Web (CreateTxBody(CreateTxBody), PostContractsRequest(..))
+import qualified Language.Marlowe.Runtime.Web as Web
+import Language.Marlowe.Runtime.Web.Client
+  (getContract, getTransaction, postContract, postTransaction, putContract, putTransaction)
 import Test.Integration.Marlowe
 import qualified Test.Integration.Marlowe as M (LocalTestnet(..))
 
@@ -23,61 +34,61 @@ main = withLocalMarloweRuntime \MarloweRuntime{..} -> do
 
   (address, signingKey) <- getFirstWallet testnet
   putStr "Loaded wallet: "
-  print $ fromJust $ toBech32 address
+  let webAddress = Web.Address $ fromJust $ toBech32 address
+  print webAddress
 
-  let walletAddresses = WalletAddresses address mempty mempty
+  either throw pure =<< runWebClient do
+    Web.CreateTxBody{txBody = createTxBody, ..} <- postContract webAddress Nothing Nothing Web.PostContractsRequest
+      { metadata = mempty
+      , version = Web.V1
+      , roles = Nothing
+      , contract = V1.Close
+      , minUTxODeposit = 2_000_000
+      }
 
-  createContractResult <- runTxJobClient $ liftCommand $ Create
-    Nothing
-    MarloweV1
-    walletAddresses
-    RoleTokensNone
-    mempty
-    2_000_000
-    V1.Close
+    liftIO $ print CreateTxBody{txBody = createTxBody, ..}
 
-  ContractCreated{..} <- case createContractResult of
-    Left err -> fail $ show err
-    Right c -> pure c
+    createTx <- liftIO $ signShelleyTransaction' createTxBody [signingKey]
 
-  print ContractCreated{..}
+    putContract contractId createTx
 
-  let createTx = signShelleyTransaction txBody [signingKey]
+    contractState <- waitUntilConfirmed (\Web.ContractState{status} -> status) $ getContract contractId
 
-  submitCreateContractResult <- runTxJobClient $ liftCommandWait $ Submit createTx
+    liftIO $ print contractState
 
-  createdBlock <- case submitCreateContractResult of
-    Left err -> fail $ show err
-    Right b -> pure b
+    Web.ApplyInputsTxBody{transactionId, txBody = applyTxBody} <- postTransaction webAddress Nothing Nothing contractId Web.PostTransactionsRequest
+      { version = Web.V1
+      , metadata = mempty
+      , invalidBefore = Nothing
+      , invalidHereafter = Nothing
+      , inputs = []
+      }
 
-  putStr "Created block: "
-  print createdBlock
+    applyTx <- liftIO $ signShelleyTransaction' applyTxBody [signingKey]
 
-  closeResult <- runTxJobClient $ liftCommand $ ApplyInputs
-    MarloweV1
-    walletAddresses
-    contractId
-    mempty
-    Nothing
-    Nothing
-    []
+    putTransaction contractId transactionId applyTx
 
-  InputsApplied{..} <- case closeResult of
+    tx <- waitUntilConfirmed (\Web.Tx{status} -> status) $ getTransaction contractId transactionId
+
+    liftIO $ print tx
+
+waitUntilConfirmed :: MonadIO m => (a -> Web.TxStatus) -> m a -> m a
+waitUntilConfirmed getStatus getResource = do
+  resource <- getResource
+  case getStatus resource of
+    Web.Confirmed -> pure resource
+    _ -> do
+      liftIO $ threadDelay 1000
+      waitUntilConfirmed getStatus getResource
+
+signShelleyTransaction' :: Web.TextEnvelope -> [ShelleyWitnessSigningKey] -> IO Web.TextEnvelope
+signShelleyTransaction' Web.TextEnvelope{..} wits = do
+  let te = TextEnvelope { teType = TextEnvelopeType (T.unpack teType), teDescription = TextEnvelopeDescr (T.unpack teDescription), teRawCBOR = Web.unBase16 teCborHex }
+  txBody <- case deserialiseFromTextEnvelope (AsTxBody AsBabbage) te of
     Left err -> fail $ show err
     Right a -> pure a
-
-  print InputsApplied{..}
-
-  let closeTx = signShelleyTransaction txBody [signingKey]
-
-  submitCloseResult <- runTxJobClient $ liftCommandWait $ Submit closeTx
-
-  closedBlock <- case submitCloseResult of
-    Left err -> fail $ show err
-    Right b -> pure b
-
-  putStr "Closed block: "
-  print closedBlock
+  pure case serialiseToTextEnvelope Nothing $ signShelleyTransaction txBody wits of
+    TextEnvelope (TextEnvelopeType ty) _ bytes -> Web.TextEnvelope (T.pack ty) "" $ Web.Base16 bytes
 
 getFirstWallet :: LocalTestnet -> IO (Address, ShelleyWitnessSigningKey)
 getFirstWallet LocalTestnet{..} = do
