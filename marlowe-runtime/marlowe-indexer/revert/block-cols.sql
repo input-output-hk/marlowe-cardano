@@ -2,15 +2,15 @@
 
 BEGIN;
 
-DROP INDEX createTxOut_slotNo;
-DROP INDEX createTxOut_slotNo_txId_txIx;
+DROP INDEX marlowe.createTxOut_slotNo;
+DROP INDEX marlowe.createTxOut_slotNo_txId_txIx;
 
-DROP INDEX applyTx_slotNo ON marlowe.applyTx;
-DROP INDEX applyTx_slotNo_txId_txIx ON marlowe.applyTx;
+DROP INDEX marlowe.applyTx_slotNo;
+DROP INDEX marlowe.applyTx_slotNo_txId_txIx;
 
-DROP INDEX withdrawalTxIn_slotNo ON marlowe.withdrawalTxIn;
-DROP INDEX withdrawalTxIn_slotNo_txId_txIx ON marlowe.withdrawalTxIn;
-DROP INDEX withdrawalTxIn_createTxId_createTxIx ON marlowe.withdrawalTxIn;
+DROP INDEX marlowe.withdrawalTxIn_slotNo;
+DROP INDEX marlowe.withdrawalTxIn_slotNo_txId_txIx;
+DROP INDEX marlowe.withdrawalTxIn_createTxId_createTxIx;
 
 ALTER TABLE marlowe.createTxOut
   DROP COLUMN slotNo,

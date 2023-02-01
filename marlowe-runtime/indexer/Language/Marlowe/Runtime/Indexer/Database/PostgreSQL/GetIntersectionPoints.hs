@@ -21,8 +21,6 @@ getIntersectionPoints securityParameter = do
       SELECT id :: bytea, slotNo :: bigint, blockNo :: bigint
         FROM marlowe.block
        WHERE blockNo >= $1 :: bigint
-         AND rollbackToSlot IS NULL
-         AND rollbackToBlock IS NULL
        ORDER BY slotNo DESC
     |]
 

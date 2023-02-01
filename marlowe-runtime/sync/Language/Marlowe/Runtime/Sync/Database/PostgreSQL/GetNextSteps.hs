@@ -71,21 +71,22 @@ orient Genesis = pure BeforeTip
 orient (At BlockHeader{..}) = T.statement (unBlockHeaderHash headerHash) $ decodeResult <$>
   [maybeStatement|
     SELECT
-      rollbackBlock.slotNo :: bigint?,
-      rollbackBlock.id :: bytea?,
-      rollbackBlock.blockNo :: bigint?
-    FROM marlowe.block
-    LEFT JOIN marlowe.block AS rollbackBlock ON block.rollbackToBlock = rollbackBlock.id
-    WHERE block.id = $1 :: bytea
+      block.slotNo :: bigint,
+      block.id :: bytea,
+      block.blockNo :: bigint
+    FROM marlowe.rollbackBlock
+    JOIN marlowe.block ON block.id = rollbackBlock.toBlock
+    WHERE rollbackBlock.fromBlock = $1 :: bytea
   |]
   where
-    decodeResult Nothing = RolledBack Genesis
-    decodeResult (Just (Just slot, Just hash, Just block)) = RolledBack $ At BlockHeader
-      { slotNo = fromIntegral slot
-      , headerHash = BlockHeaderHash hash
-      , blockNo = fromIntegral block
-      }
-    decodeResult _ = BeforeTip
+    decodeResult Nothing = BeforeTip
+    decodeResult (Just (slot, hash, block))
+      | slot < 0 || block < 0 = RolledBack Genesis
+      | otherwise = RolledBack $ At BlockHeader
+        { slotNo = fromIntegral slot
+        , headerHash = BlockHeaderHash hash
+        , blockNo = fromIntegral block
+        }
 
 data NextTxIds = NextTxIds
   { nextBlock :: BlockHeader
