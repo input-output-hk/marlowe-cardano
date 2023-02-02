@@ -10,6 +10,8 @@
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE UndecidableSuperClasses #-}
 
 -- | This module specifies the Marlowe Runtime Web API as a Servant API type.
 
@@ -17,14 +19,14 @@ module Language.Marlowe.Runtime.Web.API
   where
 
 import Control.Lens hiding ((.=))
-import Control.Monad (guard, replicateM, (<=<))
+import Control.Monad (guard, replicateM, unless, (<=<))
 import Data.Aeson
 import Data.Aeson.Types (parseFail)
 import qualified Data.Aeson.Types as A
 import Data.Bits (Bits(shiftL), (.|.))
 import qualified Data.ByteString as BS
 import Data.Char (digitToInt)
-import Data.Functor (($>))
+import Data.Functor (void, ($>))
 import qualified Data.Map as Map
 import Data.OpenApi
   ( Definitions
@@ -53,7 +55,7 @@ import GHC.TypeLits (KnownSymbol, symbolVal)
 import Language.Marlowe.Runtime.Web.Types
 import Servant
 import Servant.Pagination
-import Text.Parsec (digit, eof, hexDigit, many1, runParser, string)
+import Text.Parsec (char, digit, eof, hexDigit, many1, runParser, string)
 import Text.Parsec.String (Parser)
 import Text.Read (readMaybe)
 
@@ -73,38 +75,10 @@ type GetContractsAPI = PaginatedGet '["contractId"] GetContractsResponse
 
 type GetContractsResponse = WithLink "contract" ContractHeader
 
-parseTxOutRef :: Parser TxOutRef
-parseTxOutRef = TxOutRef <$> parseTransactionId <*> do
-  _ <- string "%23"
-  digits <- many1 digit
-  case readMaybe digits of
-    Just txIx -> pure txIx
-    Nothing -> fail "txIx too large"
-
-parseTransactionId :: Parser TxId
-parseTransactionId = do
-  let
-    octet :: Parser Word8
-    octet = do
-      gb <- hexDigit
-      lb <- hexDigit
-      let gbi = fromIntegral $ digitToInt gb
-      let lbi = fromIntegral $ digitToInt lb
-      pure $ shiftL gbi 4 .|. lbi
-  octets <- replicateM 32 octet
-  pure $ TxId $ BS.pack octets
-
 instance HasNamedLink ContractHeader API "contract" where
-  namedLink _ _ ContractHeader{..} = Just $ safeLink
-    api
-    (Proxy @("contracts" :> Capture "contractId" TxOutRef :> GetContractAPI))
-    contractId
-  parseLink _ _ _ = do
-    contractId <- string "contracts/" *> parseTxOutRef <* eof
-    pure $ safeLink
-      api
-      (Proxy @("contracts" :> Capture "contractId" TxOutRef :> GetContractAPI))
-      contractId
+  type Endpoint ContractHeader API "contract" =
+    "contracts" :> Capture "contractId" TxOutRef :> GetContractAPI
+  namedLink _ _ mkLink ContractHeader{..} = Just $ mkLink contractId
 
 -- | POST /contracts sub-API
 type PostContractsAPI
@@ -114,16 +88,9 @@ type PostContractsAPI
 type PostContractsResponse = WithLink "contract" CreateTxBody
 
 instance HasNamedLink CreateTxBody API "contract" where
-  namedLink _ _ CreateTxBody{..} = Just $ safeLink
-    api
-    (Proxy @("contracts" :> Capture "contractId" TxOutRef :> GetContractAPI))
-    contractId
-  parseLink _ _ _ = do
-    contractId <- string "contracts/" *> parseTxOutRef <* eof
-    pure $ safeLink
-      api
-      (Proxy @("contracts" :> Capture "contractId" TxOutRef :> GetContractAPI))
-      contractId
+  type Endpoint CreateTxBody API "contract" =
+    "contracts" :> Capture "contractId" TxOutRef :> GetContractAPI
+  namedLink _ _ mkLink CreateTxBody{..} = Just $ mkLink contractId
 
 
 -- | /contracts/:contractId sup-API
@@ -137,19 +104,9 @@ type GetContractAPI = Get '[JSON] GetContractResponse
 type GetContractResponse = WithLink "transactions" ContractState
 
 instance HasNamedLink ContractState API "transactions" where
-  namedLink _ _ ContractState{..} = guard (status == Confirmed) $> safeLink
-    api
-    (Proxy @("contracts" :> Capture "contractId" TxOutRef :> "transactions" :> GetTransactionsAPI))
-    contractId
-  parseLink _ _ _ = do
-    contractId <- string "contracts/"
-      *> parseTxOutRef
-      <* string "/transactions"
-      <* eof
-    pure $ safeLink
-      api
-      (Proxy @("contracts" :> Capture "contractId" TxOutRef :> "transactions" :> GetTransactionsAPI))
-      contractId
+  type Endpoint ContractState API "transactions" =
+    "contracts" :> Capture "contractId" TxOutRef :> "transactions" :> GetTransactionsAPI
+  namedLink _ _ mkLink ContractState{..} = guard (status == Confirmed) $> mkLink contractId
 
 -- | /contracts/:contractId/transactions sup-API
 type TransactionsAPI = GetTransactionsAPI
@@ -164,32 +121,13 @@ type PostTransactionsAPI
 type PostTransactionsResponse = WithLink "transaction" ApplyInputsTxBody
 
 instance HasNamedLink ApplyInputsTxBody API "transaction" where
-  namedLink _ _ ApplyInputsTxBody{..} = Just $ safeLink
-    api
-    (Proxy @("contracts"
-          :> Capture "contractId" TxOutRef
-          :> "transactions"
-          :> Capture "transactionId" TxId
-          :> GetTransactionAPI
-    ))
-    contractId
-    transactionId
-
-  parseLink _ _ _ = do
-    contractId <- string "contracts/" *> parseTxOutRef
-    transactionId <- string "/transactions/"
-      *> parseTransactionId
-      <* eof
-    pure $ safeLink
-      api
-      (Proxy @("contracts"
-            :> Capture "contractId" TxOutRef
-            :> "transactions"
-            :> Capture "transactionId" TxId
-            :> GetTransactionAPI
-      ))
-      contractId
-      transactionId
+  type Endpoint ApplyInputsTxBody API "transaction" =
+    "contracts"
+    :> Capture "contractId" TxOutRef
+    :> "transactions"
+    :> Capture "transactionId" TxId
+    :> GetTransactionAPI
+  namedLink _ _ mkLink ApplyInputsTxBody{..} = Just $ mkLink contractId transactionId
 
 -- | GET /contracts/:contractId/transactions sup-API
 type GetTransactionsAPI = PaginatedGet '["transactionId"] GetTransactionsResponse
@@ -197,33 +135,13 @@ type GetTransactionsAPI = PaginatedGet '["transactionId"] GetTransactionsRespons
 type GetTransactionsResponse = WithLink "transaction" TxHeader
 
 instance HasNamedLink TxHeader API "transaction" where
-  namedLink _ _ TxHeader{..} = Just $ safeLink
-    api
-    (Proxy @("contracts"
-          :> Capture "contractId" TxOutRef
-          :> "transactions"
-          :> Capture "transactionId" TxId
-          :> GetTransactionAPI
-    ))
-    contractId
-    transactionId
-
-  parseLink _ _ _ = do
-    contractId <- string "contracts/" *> parseTxOutRef
-    transactionId <- string "/transactions/"
-      *> parseTransactionId
-      <* eof
-    pure $ safeLink
-      api
-      (Proxy @("contracts"
-            :> Capture "contractId" TxOutRef
-            :> "transactions"
-            :> Capture "transactionId" TxId
-            :> GetTransactionAPI
-      ))
-      contractId
-      transactionId
-
+  type Endpoint TxHeader API "transaction" =
+    "contracts"
+    :> Capture "contractId" TxOutRef
+    :> "transactions"
+    :> Capture "transactionId" TxId
+    :> GetTransactionAPI
+  namedLink _ _ mkLink TxHeader{..} = Just $ mkLink contractId transactionId
 
 -- | /contracts/:contractId/transactions/:transactionId sup-API
 type TransactionAPI = GetTransactionAPI
@@ -237,61 +155,22 @@ type GetTransactionResponse = WithLink "previous" (WithLink "next" Tx)
 type PutSignedTxAPI = ReqBody '[JSON] TextEnvelope :> PutAccepted '[JSON] NoContent
 
 instance HasNamedLink Tx API "previous" where
-  namedLink _ _ Tx{..} = guard (inputUtxo /= contractId) $> safeLink
-    api
-    (Proxy @("contracts"
-          :> Capture "contractId" TxOutRef
-          :> "transactions"
-          :> Capture "transactionId" TxId
-          :> GetTransactionAPI
-    ))
-    contractId
-    (txId inputUtxo)
-
-  parseLink _ _ _ = do
-    contractId <- string "contracts/" *> parseTxOutRef
-    transactionId <- string "/transactions/"
-      *> parseTransactionId
-      <* eof
-    pure $ safeLink
-      api
-      (Proxy @("contracts"
-            :> Capture "contractId" TxOutRef
-            :> "transactions"
-            :> Capture "transactionId" TxId
-            :> GetTransactionAPI
-      ))
-      contractId
-      transactionId
-
+  type Endpoint Tx API "previous" =
+    "contracts"
+    :> Capture "contractId" TxOutRef
+    :> "transactions"
+    :> Capture "transactionId" TxId
+    :> GetTransactionAPI
+  namedLink _ _ mkLink Tx{..} = guard (inputUtxo /= contractId) $> mkLink contractId (txId inputUtxo)
 
 instance HasNamedLink Tx API "next" where
-  namedLink _ _ Tx{..} = safeLink api
-    (Proxy @("contracts"
-          :> Capture "contractId" TxOutRef
-          :> "transactions"
-          :> Capture "transactionId" TxId
-          :> GetTransactionAPI
-    ))
-    contractId
-    <$> consumingTx
-
-  parseLink _ _ _ = do
-    contractId <- string "contracts/" *> parseTxOutRef
-    transactionId <- string "/transactions/"
-      *> parseTransactionId
-      <* eof
-    pure $ safeLink
-      api
-      (Proxy @("contracts"
-            :> Capture "contractId" TxOutRef
-            :> "transactions"
-            :> Capture "transactionId" TxId
-            :> GetTransactionAPI
-      ))
-      contractId
-      transactionId
-
+  type Endpoint Tx API "next" =
+    "contracts"
+    :> Capture "contractId" TxOutRef
+    :> "transactions"
+    :> Capture "transactionId" TxId
+    :> GetTransactionAPI
+  namedLink _ _ mkLink Tx{..} = mkLink contractId <$> consumingTx
 
 -- | Helper type for defining generic paginated GET endpoints
 type PaginatedGet rangeFields resource
@@ -315,15 +194,64 @@ type PostTxAPI api
   :> Header "X-Collateral-UTxO" (CommaList TxOutRef)
   :> api
 
-class HasNamedLink a api (name :: Symbol) where
-  namedLink :: Proxy api -> Proxy name -> a -> Maybe Link
-  parseLink :: Proxy api -> Proxy name -> Proxy a -> Parser Link
+class ParseHttpApiData a where
+  urlPieceParser :: Parser a
+
+instance ParseHttpApiData TxOutRef where
+  urlPieceParser = TxOutRef <$> urlPieceParser <*> do
+    _ <- string "%23"
+    digits <- many1 digit
+    case readMaybe digits of
+      Just txIx -> pure txIx
+      Nothing -> fail "txIx too large"
+
+instance ParseHttpApiData TxId where
+  urlPieceParser = do
+    let
+      octet :: Parser Word8
+      octet = do
+        gb <- hexDigit
+        lb <- hexDigit
+        let gbi = fromIntegral $ digitToInt gb
+        let lbi = fromIntegral $ digitToInt lb
+        pure $ shiftL gbi 4 .|. lbi
+    octets <- replicateM 32 octet
+    pure $ TxId $ BS.pack octets
+
+class HasLink endpoint => HasLinkParser endpoint where
+  linkParser :: Bool -> Proxy endpoint -> Parser (MkLink endpoint a -> a)
+
+instance (KnownSymbol seg, HasLinkParser endpoint) => HasLinkParser (seg :> endpoint) where
+  linkParser isStart _ = do
+    unless isStart $ void $ char '/'
+    string (symbolVal $ Proxy @seg) *> linkParser False (Proxy @endpoint)
+
+instance HasLinkParser (Verb m s ct a) where
+  linkParser _ _ = eof $> id
+
+instance HasLinkParser sub => HasLinkParser (Header' mods sym a :> sub) where
+  linkParser isStart _ = linkParser isStart $ Proxy @sub
+
+instance
+  ( ParseHttpApiData a
+  , ToHttpApiData a
+  , HasLinkParser sub
+  ) => HasLinkParser (Capture' mods name a :> sub) where
+  linkParser isStart _ = do
+    unless isStart $ void $ char '/'
+    a <- urlPieceParser
+    withSubMkLink <- linkParser False $ Proxy @sub
+    pure \mkLink -> withSubMkLink $ mkLink a
+
+class (IsElem (Endpoint a api name) api, HasLink (Endpoint a api name)) => HasNamedLink a api (name :: Symbol) where
+  type (Endpoint a api name) :: *
+  namedLink :: Proxy api -> Proxy name -> MkLink (Endpoint a api name) Link -> a -> Maybe Link
 
 instance HasNamedLink a api name => HasNamedLink (WithLink name' a) api name where
-  namedLink api' name = \case
-    IncludeLink _ a -> namedLink api' name a
-    OmitLink a -> namedLink api' name a
-  parseLink api' name _ = parseLink api' name $ Proxy @a
+  type Endpoint (WithLink name' a) api name = Endpoint a api name
+  namedLink api' name mkLink = \case
+    IncludeLink _ a -> namedLink api' name mkLink a
+    OmitLink a -> namedLink api' name mkLink a
 
 data WithLink (name :: Symbol) a where
   IncludeLink :: Proxy name -> a -> WithLink name a
@@ -364,14 +292,14 @@ instance {-# OVERLAPPING #-}
   toJSONWithLinks (IncludeLink name a) = (maybe links (: links) link, value)
     where
       (links, value) = toJSONWithLinks a
-      link = (symbolVal name,) <$> namedLink api name a
+      link = (symbolVal name,) <$> namedLink api name (safeLink api $ Proxy @(Endpoint a API name)) a
   toJSONWithLinks (OmitLink a) = toJSONWithLinks a
 
 instance {-# OVERLAPPING #-} ToJSON a => ToJSONWithLinks a where
   toJSONWithLinks a = ([], toJSON a)
 
 instance {-# OVERLAPPING #-}
-  ( HasNamedLink a API name
+  ( HasLinkParser (Endpoint a API name)
   , FromJSONWithLinks a
   , KnownSymbol name
   ) => FromJSONWithLinks (WithLink name a) where
@@ -379,7 +307,7 @@ instance {-# OVERLAPPING #-}
     let mUri = lookup (symbolVal $ Proxy @name) links
     case mUri of
       Nothing -> OmitLink <$> fromJSONWithLinks (links, value)
-      Just uri -> case runParser (parseLink api (Proxy @name) (Proxy @a)) () "" uri of
+      Just uri -> case runParser (linkParser True (Proxy @(Endpoint a API name))) () "" uri of
         Right _ -> IncludeLink (Proxy @name) <$> fromJSONWithLinks (links, value)
         Left err -> parseFail $ show err
 
@@ -399,7 +327,7 @@ instance
         ]
 
 instance
-  ( HasNamedLink a API name
+  ( HasLinkParser (Endpoint a API name)
   , FromJSONWithLinks a
   , KnownSymbol name
   ) => FromJSON (WithLink name a) where
