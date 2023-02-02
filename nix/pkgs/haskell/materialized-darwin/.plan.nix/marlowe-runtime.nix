@@ -402,7 +402,9 @@
             (hsPkgs."marlowe-cardano" or (errorHandler.buildDepError "marlowe-cardano"))
             (hsPkgs."network-uri" or (errorHandler.buildDepError "network-uri"))
             (hsPkgs."openapi3" or (errorHandler.buildDepError "openapi3"))
+            (hsPkgs."parsec" or (errorHandler.buildDepError "parsec"))
             (hsPkgs."servant" or (errorHandler.buildDepError "servant"))
+            (hsPkgs."servant-client" or (errorHandler.buildDepError "servant-client"))
             (hsPkgs."servant-pagination" or (errorHandler.buildDepError "servant-pagination"))
             (hsPkgs."servant-server" or (errorHandler.buildDepError "servant-server"))
             (hsPkgs."text" or (errorHandler.buildDepError "text"))
@@ -414,6 +416,7 @@
             "Language/Marlowe/Runtime/Web/Types"
             "Language/Marlowe/Runtime/Web/Orphans"
             "Language/Marlowe/Runtime/Web"
+            "Language/Marlowe/Runtime/Web/Client"
             ];
           hsSourceDirs = [ "web" ];
           };
