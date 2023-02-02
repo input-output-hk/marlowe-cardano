@@ -90,13 +90,13 @@ spec = describe "Marlowe runtime API" do
                   actualHeaders `shouldBe` [expectedContractHeader]
                   continueWithNewHeaders blockHeader contract
 
-      continueWithNewHeaders createBlock contract@ContractCreated{..} = pure
+      continueWithNewHeaders createBlock contract@ContractCreated{contractId} = pure
         -- 6. RequestNext (header sync)
         $ HeaderSync.SendMsgRequestNext
         -- 7. Expect Wait
         $ headerSyncExpectWait do
           -- 8. Deposit funds
-          inputsApplied <- deposit runtime partyAWalletAddresses contractId partyA partyA ada 100_000_000
+          inputsApplied@InputsApplied{txBody} <- deposit runtime partyAWalletAddresses contractId partyA partyA ada 100_000_000
           depositBlock <- submit runtime partyASigningWitnesses txBody
           runHistorySyncClient runtime $ marloweSyncClient contract inputsApplied createBlock depositBlock
           fail "TODO implement the rest of the test"
