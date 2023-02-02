@@ -424,6 +424,7 @@ library web
   visibility: public
   exposed-modules:
     Language.Marlowe.Runtime.Web
+    Language.Marlowe.Runtime.Web.Client
   other-modules:
     Language.Marlowe.Runtime.Web.API
     Language.Marlowe.Runtime.Web.Types
@@ -438,7 +439,9 @@ library web
     , marlowe-cardano
     , network-uri
     , openapi3
+    , parsec
     , servant
+    , servant-client
     , servant-pagination
     , servant-server
     , text
