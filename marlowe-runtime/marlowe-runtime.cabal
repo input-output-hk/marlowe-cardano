@@ -180,6 +180,28 @@ library indexer
     , vector
   visibility: public
 
+library sync-api
+  import: lang
+  hs-source-dirs:   sync-api
+  visibility: public
+  exposed-modules:
+    Language.Marlowe.Protocol.Query.Client
+    Language.Marlowe.Protocol.Query.Codec
+    Language.Marlowe.Protocol.Query.Server
+    Language.Marlowe.Protocol.Query.Types
+  build-depends:
+      base >= 4.9 && < 5
+    , aeson
+    , binary
+    , bytestring
+    , lifted-async
+    , marlowe-protocols
+    , marlowe-runtime
+    , marlowe-runtime:discovery-api
+    , monad-control
+    , typed-protocols
+  visibility: public
+
 library sync
   import: lang
   hs-source-dirs:   sync
@@ -188,11 +210,13 @@ library sync
     Language.Marlowe.Runtime.Sync
     Language.Marlowe.Runtime.Sync.MarloweHeaderSyncServer
     Language.Marlowe.Runtime.Sync.MarloweSyncServer
+    Language.Marlowe.Runtime.Sync.QueryServer
     Language.Marlowe.Runtime.Sync.Database
     Language.Marlowe.Runtime.Sync.Database.PostgreSQL
     Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetTip
     Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetTipForContract
     Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetCreateStep
+    Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetHeaders
     Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetIntersectionForContract
     Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetIntersection
     Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetNextHeaders
@@ -216,6 +240,7 @@ library sync
     , marlowe-runtime
     , marlowe-runtime:discovery-api
     , marlowe-runtime:history-api
+    , marlowe-runtime:sync-api
     , plutus-ledger-api
     , text
     , time
@@ -576,6 +601,7 @@ executable marlowe-sync
     , marlowe-runtime:discovery-api
     , marlowe-runtime:history-api
     , marlowe-runtime:sync
+    , marlowe-runtime:sync-api
     , network
     , optparse-applicative
     , text
@@ -702,6 +728,7 @@ test-suite marlowe-runtime-test
     Language.Marlowe.Runtime.Transaction.CommandSpec
     Language.Marlowe.Protocol.HeaderSyncSpec
     Language.Marlowe.Protocol.SyncSpec
+    Language.Marlowe.Protocol.QuerySpec
     Paths_marlowe_runtime
   build-depends:
       base >= 4.9 && < 5
@@ -726,6 +753,7 @@ test-suite marlowe-runtime-test
     , marlowe-runtime:discovery-api
     , marlowe-runtime:history
     , marlowe-runtime:history-api
+    , marlowe-runtime:sync-api
     , marlowe-runtime:tx
     , marlowe-runtime:tx-api
     , marlowe-test

@@ -156,6 +156,28 @@
             ];
           hsSourceDirs = [ "indexer" ];
           };
+        "sync-api" = {
+          depends = [
+            (hsPkgs."base" or (errorHandler.buildDepError "base"))
+            (hsPkgs."aeson" or (errorHandler.buildDepError "aeson"))
+            (hsPkgs."binary" or (errorHandler.buildDepError "binary"))
+            (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
+            (hsPkgs."lifted-async" or (errorHandler.buildDepError "lifted-async"))
+            (hsPkgs."marlowe-protocols" or (errorHandler.buildDepError "marlowe-protocols"))
+            (hsPkgs."marlowe-runtime" or (errorHandler.buildDepError "marlowe-runtime"))
+            (hsPkgs."marlowe-runtime".components.sublibs.discovery-api or (errorHandler.buildDepError "marlowe-runtime:discovery-api"))
+            (hsPkgs."monad-control" or (errorHandler.buildDepError "monad-control"))
+            (hsPkgs."typed-protocols" or (errorHandler.buildDepError "typed-protocols"))
+            ];
+          buildable = true;
+          modules = [
+            "Language/Marlowe/Protocol/Query/Client"
+            "Language/Marlowe/Protocol/Query/Codec"
+            "Language/Marlowe/Protocol/Query/Server"
+            "Language/Marlowe/Protocol/Query/Types"
+            ];
+          hsSourceDirs = [ "sync-api" ];
+          };
         "sync" = {
           depends = [
             (hsPkgs."base" or (errorHandler.buildDepError "base"))
@@ -176,6 +198,7 @@
             (hsPkgs."marlowe-runtime" or (errorHandler.buildDepError "marlowe-runtime"))
             (hsPkgs."marlowe-runtime".components.sublibs.discovery-api or (errorHandler.buildDepError "marlowe-runtime:discovery-api"))
             (hsPkgs."marlowe-runtime".components.sublibs.history-api or (errorHandler.buildDepError "marlowe-runtime:history-api"))
+            (hsPkgs."marlowe-runtime".components.sublibs.sync-api or (errorHandler.buildDepError "marlowe-runtime:sync-api"))
             (hsPkgs."plutus-ledger-api" or (errorHandler.buildDepError "plutus-ledger-api"))
             (hsPkgs."text" or (errorHandler.buildDepError "text"))
             (hsPkgs."time" or (errorHandler.buildDepError "time"))
@@ -187,11 +210,13 @@
             "Language/Marlowe/Runtime/Sync"
             "Language/Marlowe/Runtime/Sync/MarloweHeaderSyncServer"
             "Language/Marlowe/Runtime/Sync/MarloweSyncServer"
+            "Language/Marlowe/Runtime/Sync/QueryServer"
             "Language/Marlowe/Runtime/Sync/Database"
             "Language/Marlowe/Runtime/Sync/Database/PostgreSQL"
             "Language/Marlowe/Runtime/Sync/Database/PostgreSQL/GetTip"
             "Language/Marlowe/Runtime/Sync/Database/PostgreSQL/GetTipForContract"
             "Language/Marlowe/Runtime/Sync/Database/PostgreSQL/GetCreateStep"
+            "Language/Marlowe/Runtime/Sync/Database/PostgreSQL/GetHeaders"
             "Language/Marlowe/Runtime/Sync/Database/PostgreSQL/GetIntersectionForContract"
             "Language/Marlowe/Runtime/Sync/Database/PostgreSQL/GetIntersection"
             "Language/Marlowe/Runtime/Sync/Database/PostgreSQL/GetNextHeaders"
@@ -541,6 +566,7 @@
             (hsPkgs."marlowe-runtime".components.sublibs.discovery-api or (errorHandler.buildDepError "marlowe-runtime:discovery-api"))
             (hsPkgs."marlowe-runtime".components.sublibs.history-api or (errorHandler.buildDepError "marlowe-runtime:history-api"))
             (hsPkgs."marlowe-runtime".components.sublibs.sync or (errorHandler.buildDepError "marlowe-runtime:sync"))
+            (hsPkgs."marlowe-runtime".components.sublibs.sync-api or (errorHandler.buildDepError "marlowe-runtime:sync-api"))
             (hsPkgs."network" or (errorHandler.buildDepError "network"))
             (hsPkgs."optparse-applicative" or (errorHandler.buildDepError "optparse-applicative"))
             (hsPkgs."text" or (errorHandler.buildDepError "text"))
@@ -671,6 +697,7 @@
             (hsPkgs."marlowe-runtime".components.sublibs.discovery-api or (errorHandler.buildDepError "marlowe-runtime:discovery-api"))
             (hsPkgs."marlowe-runtime".components.sublibs.history or (errorHandler.buildDepError "marlowe-runtime:history"))
             (hsPkgs."marlowe-runtime".components.sublibs.history-api or (errorHandler.buildDepError "marlowe-runtime:history-api"))
+            (hsPkgs."marlowe-runtime".components.sublibs.sync-api or (errorHandler.buildDepError "marlowe-runtime:sync-api"))
             (hsPkgs."marlowe-runtime".components.sublibs.tx or (errorHandler.buildDepError "marlowe-runtime:tx"))
             (hsPkgs."marlowe-runtime".components.sublibs.tx-api or (errorHandler.buildDepError "marlowe-runtime:tx-api"))
             (hsPkgs."marlowe-test" or (errorHandler.buildDepError "marlowe-test"))
@@ -705,6 +732,7 @@
             "Language/Marlowe/Runtime/Transaction/CommandSpec"
             "Language/Marlowe/Protocol/HeaderSyncSpec"
             "Language/Marlowe/Protocol/SyncSpec"
+            "Language/Marlowe/Protocol/QuerySpec"
             "Paths_marlowe_runtime"
             ];
           hsSourceDirs = [ "test" ];

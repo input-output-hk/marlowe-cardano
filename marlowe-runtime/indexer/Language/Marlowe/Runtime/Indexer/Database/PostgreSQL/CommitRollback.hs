@@ -12,51 +12,31 @@ import Language.Marlowe.Runtime.ChainSync.Api
 commitRollback :: ChainPoint -> H.Transaction ()
 commitRollback point = H.statement (prepareParams point)
   [resultlessStatement|
-    WITH blockUpdates (blockId) AS
-      (    UPDATE marlowe.block
-              SET rollbackToSlot = $1 :: bigint
-                , rollbackToBlock = $2 :: bytea
-            WHERE slotNo > $1 :: bigint
+    WITH blockDeletes (blockId) AS
+      ( DELETE FROM marlowe.block
+        WHERE slotNo > $1 :: bigint
         RETURNING id
       )
-    , deleteWithdrawalTxIns AS
-      ( DELETE FROM marlowe.withdrawalTxIn as withdrawalTxIn
-        USING blockUpdates
-        WHERE withdrawalTxIn.blockId = blockUpdates.blockId
+    , blockInsert AS
+      ( INSERT INTO marlowe.block (slotNo, id, blockNo)
+        VALUES ($1 :: bigint, $2 :: bytea, $3 :: bigint)
+        ON CONFLICT (id) DO NOTHING
       )
-    , deleteApplyTxs AS
-      ( DELETE FROM marlowe.applyTx as applyTx
-        USING blockUpdates
-        WHERE applyTx.blockId = blockUpdates.blockId
+    , rollbackUpdates AS
+      ( UPDATE marlowe.rollbackBlock
+        SET
+          toSlotNo = $1 :: bigint,
+          toBlock = $2 :: bytea
+        WHERE toSlotNo > $1 :: bigint
       )
-    , deleteCreateTxOuts AS
-      ( DELETE FROM marlowe.createTxOut as createTxOut
-        USING blockUpdates
-        WHERE createTxOut.blockId = blockUpdates.blockId
-      )
-    , deletePayoutTxOuts AS
-      ( DELETE FROM marlowe.payoutTxOut as payoutTxOut
-        USING blockUpdates
-        WHERE payoutTxOut.blockId = blockUpdates.blockId
-      )
-    , deleteContractTxOuts AS
-      ( DELETE FROM marlowe.contractTxOut as contractTxOut
-        USING blockUpdates
-        WHERE contractTxOut.blockId = blockUpdates.blockId
-      )
-    , deleteTxOuts AS
-      ( DELETE FROM marlowe.txOut as txOut
-        USING blockUpdates
-        WHERE txOut.blockId = blockUpdates.blockId
-      )
-      DELETE FROM marlowe.txOutAsset as txOutAsset
-      USING blockUpdates
-      WHERE txOutAsset.blockId = blockUpdates.blockId
+    INSERT INTO marlowe.rollbackBlock (fromBlock, toSlotNo, toBlock)
+    SELECT blockId, $1 :: bigint, $2 :: bytea
+    FROM blockDeletes
   |]
 
-type QueryParams = (Int64, ByteString)
+type QueryParams = (Int64, ByteString, Int64)
 
 prepareParams :: ChainPoint -> QueryParams
 prepareParams = \case
-  Genesis -> (-1, "")
-  At BlockHeader{..} -> (fromIntegral slotNo, unBlockHeaderHash headerHash)
+  Genesis -> (-1, "", -1)
+  At BlockHeader{..} -> (fromIntegral slotNo, unBlockHeaderHash headerHash, fromIntegral blockNo)

@@ -1410,6 +1410,7 @@
           "statistics".components.library.planned = lib.mkOverride 900 true;
           "vault".components.library.planned = lib.mkOverride 900 true;
           "th-abstraction".components.library.planned = lib.mkOverride 900 true;
+          "marlowe-runtime".components.sublibs."sync-api".planned = lib.mkOverride 900 true;
           "plutus-ledger-aeson".components.library.planned = lib.mkOverride 900 true;
           "cardano-ledger-shelley-test".components.library.planned = lib.mkOverride 900 true;
           "parsers".components.library.planned = lib.mkOverride 900 true;

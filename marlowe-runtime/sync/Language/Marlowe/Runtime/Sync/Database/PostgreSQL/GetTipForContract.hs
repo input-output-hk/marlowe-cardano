@@ -15,53 +15,32 @@ getTipForContract (ContractId TxOutRef{..}) = T.statement params $ decodePoint <
     WITH contractId (txId, txIx) AS
       ( SELECT $1 :: bytea, $2 :: smallint
       )
-    , createBlock AS
-      ( SELECT block.*
-        FROM marlowe.block
-        JOIN marlowe.createTxOut
-          ON createTxOut.blockId = block.id
-        JOIN contractId USING (txId, txIx)
-        WHERE block.rollbackToSlot IS NULL
-      )
-    , applyBlock AS
-      ( SELECT block.*
-        FROM marlowe.block
-        JOIN marlowe.applyTx
-          ON applyTx.blockId = block.id
-        JOIN contractId
-          ON applyTx.createTxId = contractId.txId
-            AND applyTx.createTxIx = contractId.txIx
-        WHERE block.rollbackToSlot IS NULL
-        ORDER BY block.slotNo DESC
-        LIMIT 1
-      )
-    , withdrawalBlock AS
-      ( SELECT block.*
-        FROM marlowe.applyTx
-        JOIN marlowe.payoutTxOut USING (txId)
-        JOIN marlowe.withdrawalTxIn
-          ON payoutTxOut.txId = withdrawalTxIn.payoutTxId
-            AND payoutTxOut.txIx = withdrawalTxIn.payoutTxIx
-        JOIN marlowe.block
-          ON withdrawalTxIn.blockId = block.id
-        JOIN contractId
-          ON applyTx.createTxId = contractId.txId
-            AND applyTx.createTxIx = contractId.txIx
-        WHERE block.rollbackToSlot IS NULL
-        ORDER BY block.slotNo DESC
-        LIMIT 1
-      )
-      SELECT
-        block.slotNo :: bigint,
-        block.id :: bytea,
-        block.blockNo :: bigint
-      FROM
-        ( SELECT * FROM createBlock
-          UNION SELECT * FROM applyBlock
-          UNION SELECT * FROM withdrawalBlock
-        ) AS block
-      ORDER BY block.slotNo DESC
-      LIMIT 1
+    SELECT
+      slotNo :: bigint,
+      blockId :: bytea,
+      blockNo :: bigint
+    FROM marlowe.createTxOut
+    JOIN contractId USING (txId, txIx)
+    UNION
+    SELECT
+      slotNo :: bigint,
+      blockId :: bytea,
+      blockNo :: bigint
+    FROM marlowe.applyTx
+    JOIN contractId
+      ON applyTx.createTxId = contractId.txId
+        AND applyTx.createTxIx = contractId.txIx
+    UNION
+    SELECT
+      slotNo :: bigint,
+      blockId :: bytea,
+      blockNo :: bigint
+    FROM marlowe.withdrawalTxIn
+    JOIN contractId
+      ON withdrawalTxIn.createTxId = contractId.txId
+        AND withdrawalTxIn.createTxIx = contractId.txIx
+    ORDER BY slotNo DESC
+    LIMIT 1
   |]
   where
     params = (unTxId txId, fromIntegral txIx)

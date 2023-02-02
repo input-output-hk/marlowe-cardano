@@ -24,27 +24,21 @@ getMarloweUTxO block = runMaybeT do
   slotNo <- MaybeT $ H.statement (prepareBlockQueryParams block) [maybeStatement|
     SELECT slotNo :: bigint
       FROM marlowe.block
-     WHERE id = $1 :: bytea AND slotNo = $2 :: bigint AND blockNo = $3 :: bigint AND rollbackToSlot IS NULL AND rollbackToBlock IS NULL
+     WHERE id = $1 :: bytea AND slotNo = $2 :: bigint AND blockNo = $3 :: bigint
   |]
 
-
   unspentContractOutputs <- lift $ Map.fromDistinctAscList . V.toList . fmap decodeContractOutputRow <$> H.statement slotNo [vectorStatement|
-    WITH block (blockId) AS
-      ( SELECT id :: bytea
-          FROM marlowe.block
-         WHERE slotNo <= $1 :: bigint AND rollbackToSlot IS NULL AND rollbackToBlock IS NULL
-      )
-    , contractOut (createTxId, createTxIx, txId, txIx, address, payoutScriptHash) AS
+    WITH contractOut (createTxId, createTxIx, txId, txIx, address, payoutScriptHash) AS
       ( SELECT createTxOut.txId
              , createTxOut.txIx
              , txOut.txId
              , txOut.txIx
              , txOut.address
              , contractTxOut.payoutScriptHash
-          FROM block
-          JOIN marlowe.txOut AS txOut USING (blockId)
-          JOIN marlowe.contractTxOut AS contractTxOut USING (txId, txIx)
-          JOIN marlowe.createTxOut AS createTxOut USING (txId, txIx)
+          FROM marlowe.txOut
+          JOIN marlowe.contractTxOut USING (txId, txIx)
+          JOIN marlowe.createTxOut USING (txId, txIx)
+          WHERE createTxOut.slotNo <= $1 :: bigint
          UNION
         SELECT applyTx.createTxId
              , applyTx.createTxIx
@@ -52,21 +46,22 @@ getMarloweUTxO block = runMaybeT do
              , txOut.txIx
              , txOut.address
              , contractTxOut.payoutScriptHash
-          FROM block
-          JOIN marlowe.txOut AS txOut USING (blockId)
-          JOIN marlowe.contractTxOut AS contractTxOut USING (txId, txIx)
-          JOIN marlowe.applyTx AS applyTx ON txOut.txId = applyTx.txId AND txOut.txIx = applyTx.outputTxIx
+          FROM marlowe.txOut
+          JOIN marlowe.contractTxOut USING (txId, txIx)
+          JOIN marlowe.applyTx ON txOut.txId = applyTx.txId AND txOut.txIx = applyTx.outputTxIx
+          WHERE applyTx.slotNo <= $1 :: bigint
       )
     , contractIn (txId, txIx) AS
       ( SELECT applyTx.inputTxId
              , applyTx.inputTxIx
-          FROM block
-          JOIN marlowe.applyTx AS applyTx USING (blockId)
+          FROM marlowe.applyTx
+          WHERE applyTx.slotNo <= $1 :: bigint
          UNION
         SELECT invalidApplyTx.inputTxId
              , invalidApplyTx.inputTxIx
-          FROM block
-          JOIN marlowe.invalidApplyTx AS invalidApplyTx USING (blockId)
+          FROM marlowe.invalidApplyTx
+          JOIN marlowe.block ON block.id = invalidApplyTx.blockId
+          WHERE block.slotNo <= $1 :: bigint
       )
     SELECT contractOut.createTxId :: bytea
          , contractOut.createTxIx :: smallint
@@ -82,26 +77,21 @@ getMarloweUTxO block = runMaybeT do
 
 
   unspentContractOutputsFlat <- lift $ V.toList . fmap decodePayoutOutputRow <$> H.statement slotNo [vectorStatement|
-    WITH block (blockId) AS
-      ( SELECT id :: bytea
-          FROM marlowe.block
-         WHERE slotNo <= $1 :: bigint AND rollbackToSlot IS NULL AND rollbackToBlock IS NULL
-      )
-    , payoutOut (createTxId, createTxIx, txId, txIx) AS
+    WITH payoutOut (createTxId, createTxIx, txId, txIx) AS
       ( SELECT applyTx.createTxId
              , applyTx.createTxIx
              , txOut.txId
              , txOut.txIx
-          FROM block
-          JOIN marlowe.txOut AS txOut USING (blockId)
+          FROM marlowe.txOut
           JOIN marlowe.payoutTxOut USING (txId, txIx)
-          JOIN marlowe.applyTx AS applyTx USING (txId)
+          JOIN marlowe.applyTx USING (txId)
+          WHERE applyTx.slotNo <= $1 :: bigint
       )
     , withdrawalIn (txId, txIx) AS
       ( SELECT withdrawalTxIn.payoutTxId
              , withdrawalTxIn.payoutTxIx
-          FROM block
-          JOIN marlowe.withdrawalTxIn AS withdrawalTxIn USING (blockId)
+          FROM marlowe.withdrawalTxIn
+          WHERE withdrawalTxIn.slotNo <= $1 :: bigint
       )
     SELECT payoutOut.createTxId :: bytea
          , payoutOut.createTxIx :: smallint

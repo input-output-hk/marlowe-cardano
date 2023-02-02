@@ -15,6 +15,7 @@ import qualified Hasql.Pool as Pool
 import qualified Hasql.Session as Session
 import Language.Marlowe.Protocol.HeaderSync.Codec (codecMarloweHeaderSync)
 import Language.Marlowe.Protocol.HeaderSync.Server (marloweHeaderSyncServerPeer)
+import Language.Marlowe.Protocol.Query.Codec (codecMarloweQuery)
 import Language.Marlowe.Protocol.Sync.Codec (codecMarloweSync)
 import Language.Marlowe.Protocol.Sync.Server (marloweSyncServerPeer)
 import Language.Marlowe.Runtime.Sync (SyncDependencies(..), sync)
@@ -73,39 +74,48 @@ run Options{..} = withSocketsDo do
   pool <- Pool.acquire (100, secondsToNominalDiffTime 5, fromString databaseUri)
   marloweSyncAddr <- resolve marloweSyncPort
   marloweHeaderSyncAddr <- resolve marloweHeaderSyncPort
+  queryAddr <- resolve queryPort
   bracket (openServer marloweSyncAddr) close \syncSocket -> do
     bracket (openServer marloweHeaderSyncAddr) close \headerSyncSocket -> do
-      let
-        appDependencies eventBackend =
-          let
-            databaseQueries = logDatabaseQueries (narrowEventBackend Database eventBackend) $ hoistDatabaseQueries
-              (either throwUsageError pure <=< Pool.use pool)
-              Postgres.databaseQueries
+      bracket (openServer queryAddr) close \querySocket -> do
+        let
+          appDependencies eventBackend =
+            let
+              databaseQueries = logDatabaseQueries (narrowEventBackend Database eventBackend) $ hoistDatabaseQueries
+                (either throwUsageError pure <=< Pool.use pool)
+                Postgres.databaseQueries
 
-            acceptRunMarloweSyncServer = acceptRunServerPeerOverSocketWithLogging
-              (narrowEventBackend MarloweSyncServer eventBackend)
-              throwIO
-              syncSocket
-              codecMarloweSync
-              marloweSyncServerPeer
+              acceptRunMarloweSyncServer = acceptRunServerPeerOverSocketWithLogging
+                (narrowEventBackend MarloweSyncServer eventBackend)
+                throwIO
+                syncSocket
+                codecMarloweSync
+                marloweSyncServerPeer
 
-            acceptRunMarloweHeaderSyncServer = acceptRunServerPeerOverSocketWithLogging
-              (narrowEventBackend MarloweHeaderSyncServer eventBackend)
-              throwIO
-              headerSyncSocket
-              codecMarloweHeaderSync
-              marloweHeaderSyncServerPeer
+              acceptRunMarloweHeaderSyncServer = acceptRunServerPeerOverSocketWithLogging
+                (narrowEventBackend MarloweHeaderSyncServer eventBackend)
+                throwIO
+                headerSyncSocket
+                codecMarloweHeaderSync
+                marloweHeaderSyncServerPeer
 
-            in SyncDependencies{..}
-      let appComponent = sync <<< arr appDependencies <<< logger
-      runComponent_ appComponent LoggerDependencies
-        { configFilePath = logConfigFile
-        , getSelectorConfig = getRootSelectorConfig
-        , newRef = nextRandom
-        , newOnceFlag = newOnceFlagMVar
-        , writeText = TL.hPutStr stderr
-        , injectConfigWatcherSelector = ConfigWatcher
-        }
+              acceptRunMarloweQueryServer = acceptRunServerPeerOverSocketWithLogging
+                (narrowEventBackend MarloweQueryServer eventBackend)
+                throwIO
+                querySocket
+                codecMarloweQuery
+                id
+
+              in SyncDependencies{..}
+        let appComponent = sync <<< arr appDependencies <<< logger
+        runComponent_ appComponent LoggerDependencies
+          { configFilePath = logConfigFile
+          , getSelectorConfig = getRootSelectorConfig
+          , newRef = nextRandom
+          , newOnceFlag = newOnceFlagMVar
+          , writeText = TL.hPutStr stderr
+          , injectConfigWatcherSelector = ConfigWatcher
+          }
   where
     throwUsageError (Pool.ConnectionError err)                       = error $ show err
     throwUsageError (Pool.SessionError (Session.QueryError _ _ err)) = error $ show err
@@ -125,6 +135,7 @@ data Options = Options
   { databaseUri :: String
   , marloweSyncPort :: PortNumber
   , marloweHeaderSyncPort :: PortNumber
+  , queryPort :: PortNumber
   , host :: HostName
   , logConfigFile :: Maybe FilePath
   }
@@ -136,6 +147,7 @@ getOptions = execParser $ info (helper <*> parser) infoMod
       <$> databaseUriParser
       <*> marloweSyncPortParser
       <*> marloweHeaderSyncPortParser
+      <*> queryPort
       <*> hostParser
       <*> logConfigFileParser
 
@@ -159,6 +171,14 @@ getOptions = execParser $ info (helper <*> parser) infoMod
       , value 3725
       , metavar "PORT_NUMBER"
       , help "The port number to run the header sync protocol on."
+      , showDefault
+      ]
+
+    queryPort = option auto $ mconcat
+      [ long "query-port"
+      , value 3726
+      , metavar "PORT_NUMBER"
+      , help "The port number to run the query protocol on."
       , showDefault
       ]
 

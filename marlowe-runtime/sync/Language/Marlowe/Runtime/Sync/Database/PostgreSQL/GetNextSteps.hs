@@ -71,21 +71,22 @@ orient Genesis = pure BeforeTip
 orient (At BlockHeader{..}) = T.statement (unBlockHeaderHash headerHash) $ decodeResult <$>
   [maybeStatement|
     SELECT
-      rollbackBlock.slotNo :: bigint?,
-      rollbackBlock.id :: bytea?,
-      rollbackBlock.blockNo :: bigint?
-    FROM marlowe.block
-    LEFT JOIN marlowe.block AS rollbackBlock ON block.rollbackToBlock = rollbackBlock.id
-    WHERE block.id = $1 :: bytea
+      block.slotNo :: bigint,
+      block.id :: bytea,
+      block.blockNo :: bigint
+    FROM marlowe.rollbackBlock
+    JOIN marlowe.block ON block.id = rollbackBlock.toBlock
+    WHERE rollbackBlock.fromBlock = $1 :: bytea
   |]
   where
-    decodeResult Nothing = RolledBack Genesis
-    decodeResult (Just (Just slot, Just hash, Just block)) = RolledBack $ At BlockHeader
-      { slotNo = fromIntegral slot
-      , headerHash = BlockHeaderHash hash
-      , blockNo = fromIntegral block
-      }
-    decodeResult _ = BeforeTip
+    decodeResult Nothing = BeforeTip
+    decodeResult (Just (slot, hash, block))
+      | slot < 0 || block < 0 = RolledBack Genesis
+      | otherwise = RolledBack $ At BlockHeader
+        { slotNo = fromIntegral slot
+        , headerHash = BlockHeaderHash hash
+        , blockNo = fromIntegral block
+        }
 
 data NextTxIds = NextTxIds
   { nextBlock :: BlockHeader
@@ -101,39 +102,28 @@ getNextTxIds (ContractId TxOutRef{..}) point = T.statement params $ fmap (NextTx
       )
     , nextApplyTxIds (slotNo, blockHeaderHash, blockNo, txIds) AS
       ( SELECT
-          block.slotNo,
-          (ARRAY_AGG(block.id))[1],
-          (ARRAY_AGG(block.blockNo))[1],
-          ARRAY_AGG(applyTx.txId)
+          slotNo,
+          (ARRAY_AGG(blockId))[1],
+          (ARRAY_AGG(blockNo))[1],
+          ARRAY_AGG(txId)
         FROM marlowe.applyTx
-        JOIN marlowe.block
-          ON block.id = applyTx.blockId
         JOIN params USING (createTxId, createTxIx)
-        WHERE block.rollbackToBlock IS NULL
-          AND block.slotNo > params.afterSlot
-        GROUP BY block.slotNo
-        ORDER BY block.slotNo
+        WHERE slotNo > params.afterSlot
+        GROUP BY slotNo
+        ORDER BY slotNo
         LIMIT 1
       )
     , nextWithdrawalTxIds (slotNo, blockHeaderHash, blockNo, txIds) AS
       ( SELECT
-          block.slotNo,
-          (ARRAY_AGG(block.id))[1],
-          (ARRAY_AGG(block.blockNo))[1],
-          ARRAY_AGG(withdrawalTxIn.txId)
+          slotNo,
+          (ARRAY_AGG(blockId))[1],
+          (ARRAY_AGG(blockNo))[1],
+          ARRAY_AGG(txId)
         FROM marlowe.withdrawalTxIn
-        JOIN marlowe.block
-          ON block.id = withdrawalTxIn.blockId
-        JOIN marlowe.payoutTxOut
-          ON payoutTxOut.txId = withdrawalTxIn.payoutTxId
-          AND payoutTxOut.txIx = withdrawalTxIn.payoutTxIx
-        JOIN marlowe.applyTx
-          ON applyTx.txId = payoutTxOut.txId
         JOIN params USING (createTxId, createTxIx)
-        WHERE block.rollbackToBlock IS NULL
-          AND block.slotNo > params.afterSlot
-        GROUP BY block.slotNo
-        ORDER BY block.slotNo
+        WHERE slotNo > params.afterSlot
+        GROUP BY slotNo
+        ORDER BY slotNo
         LIMIT 1
       )
     SELECT
