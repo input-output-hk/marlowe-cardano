@@ -10,6 +10,7 @@ module Test.Integration.Marlowe.Local
   , module Test.Integration.Cardano
   , defaultMarloweRuntimeOptions
   , withLocalMarloweRuntime
+  , withLocalMarloweRuntime'
   ) where
 
 import Cardano.Api
@@ -129,6 +130,8 @@ import qualified Language.Marlowe.Runtime.Transaction.Query as Query
 import Language.Marlowe.Runtime.Transaction.Server (TransactionServerSelector)
 import Language.Marlowe.Runtime.Transaction.Submit (SubmitJob, SubmitJobDependencies(..))
 import qualified Language.Marlowe.Runtime.Transaction.Submit as Submit
+import Language.Marlowe.Runtime.Web.Server (ServerDependencies(..), server)
+import Network.HTTP.Client (defaultManagerSettings, newManager)
 import Network.Protocol.ChainSeek.Client (chainSeekClientPeer)
 import Network.Protocol.ChainSeek.Codec (codecChainSeek)
 import Network.Protocol.ChainSeek.Server (chainSeekServerPeer)
@@ -141,16 +144,19 @@ import Network.Protocol.Query.Client (QueryClient, liftQuery, queryClientPeer)
 import Network.Protocol.Query.Codec (codecQuery)
 import Network.Protocol.Query.Server (QueryServer, queryServerPeer)
 import Network.Protocol.Query.Types (Query)
+import Network.Wai.Handler.Warp (run)
 import Observe.Event (EventBackend, narrowEventBackend)
-import Observe.Event.Backend (newOnceFlagMVar)
+import Observe.Event.Backend (newOnceFlagMVar, noopEventBackend)
 import Observe.Event.Component
   (ConfigWatcherSelector(..), LoggerDependencies(..), SelectorConfig(..), logger, prependKey, singletonFieldConfig)
 import Ouroboros.Network.Protocol.LocalTxSubmission.Type (SubmitResult)
+import Servant.Client (BaseUrl(..), ClientError, ClientM, Scheme(..), mkClientEnv, runClientM)
 import System.Environment (lookupEnv)
 import System.Exit (ExitCode(..))
 import System.IO (BufferMode(..), IOMode(..), hSetBuffering)
 import System.Process (readCreateProcessWithExitCode)
 import qualified System.Process as SP
+import System.Random (randomRIO)
 import Test.Integration.Cardano
 import qualified Test.Integration.Cardano as SpoNode (SpoNode(..))
 import Text.Read (readMaybe)
@@ -165,6 +171,7 @@ data MarloweRuntime = MarloweRuntime
   , runHistoryQueryClient :: RunClient IO (QueryClient HistoryQuery)
   , runHistorySyncClient :: RunClient IO MarloweSyncClient
   , runTxJobClient :: RunClient IO (JobClient MarloweTxCommand)
+  , runWebClient :: forall a. ClientM a -> IO (Either ClientError a)
   , testnet :: LocalTestnet
   }
 
@@ -249,7 +256,15 @@ withLocalMarloweRuntime' MarloweRuntimeOptions{..} test = withRunInIO \runInIO -
         (either (fail . show) pure <=< Pool.use pool)
         ChainSync.databaseQueries
 
+    webPort <- liftIO $ randomRIO (4000, 5000)
+    manager <- liftIO $ newManager defaultManagerSettings
+
     let mkSubmitJob = Submit.mkSubmitJob SubmitJobDependencies{..}
+    let baseUrl = BaseUrl Http "localhost" webPort ""
+    let clientEnv = mkClientEnv manager baseUrl
+    let
+      runWebClient :: ClientM a -> IO (Either ClientError a)
+      runWebClient = flip runClientM clientEnv
 
     -- Persist the genesis block before starting the services so that they
     -- exist already and no database queries fail.
@@ -416,8 +431,12 @@ data RuntimeDependencies r = RuntimeDependencies
   , runChainSeekClient :: RunClient IO RuntimeChainSeekClient
   , runChainSyncJobClient :: RunClient IO (JobClient ChainSyncCommand)
   , runChainSyncQueryClient :: RunClient IO (QueryClient ChainSyncQuery)
+  , runHistorySyncClient :: RunClient IO MarloweSyncClient
+  , runDiscoverySyncClient :: RunClient IO MarloweHeaderSyncClient
+  , runTxJobClient :: RunClient IO (JobClient MarloweTxCommand)
   , securityParameter :: Int
   , marloweScripts :: MarloweScripts
+  , webPort :: Int
   }
 
 runtime :: Component IO (RuntimeDependencies r) ()
@@ -511,6 +530,16 @@ runtime = proc RuntimeDependencies{..} -> do
       eventBackend = narrowEventBackend TxEvent rootEventBackend
     in
       TransactionDependencies{..}
+
+  server -< ServerDependencies
+    { openAPIEnabled = False
+    , accessControlAllowOriginAll = False
+    , runApplication = run webPort
+    , runMarloweSyncClient = runHistorySyncClient
+    , runMarloweHeaderSyncClient = runDiscoverySyncClient
+    , runTxJobClient
+    , eventBackend = noopEventBackend ()
+    }
 
 data Channels = Channels
   { acceptRunChainSeekServer :: IO (RunServer IO RuntimeChainSeekServer)
