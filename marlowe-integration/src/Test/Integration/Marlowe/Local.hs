@@ -275,7 +275,7 @@ withLocalMarloweRuntime' MarloweRuntimeOptions{..} test = withRunInIO \runInIO -
         (either (fail . show) pure <=< Pool.use pool)
         (Indexer.databaseQueries securityParameter)
 
-      marloweSyncDatabaseQueries = Sync.hoistDatabaseQueries
+      marloweSyncDatabaseQueries eventBackend = Sync.logDatabaseQueries eventBackend $ Sync.hoistDatabaseQueries
         (either (fail . show) pure <=< Pool.use pool)
         Sync.databaseQueries
 
@@ -448,6 +448,7 @@ data RuntimeSelector f where
   ChainIndexerEvent :: ChainIndexerSelector f -> RuntimeSelector f
   MarloweIndexerEvent :: MarloweIndexerSelector f -> RuntimeSelector f
   ConfigWatcher :: ConfigWatcherSelector f -> RuntimeSelector f
+  SyncDatabaseEvent :: Sync.DatabaseSelector f -> RuntimeSelector f
 
 data RuntimeDependencies r = RuntimeDependencies
   { acceptRunChainSeekServer :: IO (RunServer IO RuntimeChainSeekServer)
@@ -466,7 +467,7 @@ data RuntimeDependencies r = RuntimeDependencies
   , historyQueries :: HistoryQueries IO
   , localNodeConnectInfo :: LocalNodeConnectInfo CardanoMode
   , marloweIndexerDatabaseQueries :: Indexer.DatabaseQueries IO
-  , marloweSyncDatabaseQueries :: Sync.DatabaseQueries IO
+  , marloweSyncDatabaseQueries :: EventBackend IO r Sync.DatabaseSelector -> Sync.DatabaseQueries IO
   , mkSubmitJob :: Tx BabbageEra -> STM SubmitJob
   , rootEventBackend :: EventBackend IO r RuntimeSelector
   , runChainSeekClient :: RunClient IO RuntimeChainSeekClient
@@ -522,7 +523,7 @@ runtime = proc RuntimeDependencies{..} -> do
     }
 
   sync -< SyncDependencies
-    { databaseQueries = marloweSyncDatabaseQueries
+    { databaseQueries = marloweSyncDatabaseQueries $ narrowEventBackend SyncDatabaseEvent rootEventBackend
     , acceptRunMarloweSyncServer = acceptRunHistorySyncServer
     , acceptRunMarloweHeaderSyncServer = acceptRunDiscoverySyncServer
     , acceptRunMarloweQueryServer
@@ -721,6 +722,7 @@ getRuntimeSelectorConfig = \case
   TxEvent sel -> prependKey "marlowe-tx" $ getTransactionSererSelectorConfig sel
   ChainIndexerEvent sel -> prependKey "marlowe-chain-indexer" $ getChainIndexerSelectorConfig sel
   MarloweIndexerEvent sel -> prependKey "marlowe-indexer" $ getMarloweIndexerSelectorConfig sel
+  SyncDatabaseEvent sel -> prependKey "marlowe-sync-database" $ Sync.getDatabaseSelectorConfig sel
   ConfigWatcher ReloadConfig -> SelectorConfig "reload-log-config" True
     $ singletonFieldConfig "config" True
 
