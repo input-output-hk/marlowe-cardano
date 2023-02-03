@@ -58,6 +58,7 @@ import Test.Integration.Workspace
   )
 import qualified Test.Integration.Workspace as W
 import Text.Printf (printf)
+import UnliftIO.Async (concurrently)
 import UnliftIO.Exception (catchAny)
 import UnliftIO.Resource (allocate, runResourceT, unprotect)
 
@@ -135,7 +136,7 @@ instance ToJSON Network
 
 defaultOptions :: LocalTestnetOptions
 defaultOptions = LocalTestnetOptions
-  { slotDuration = 1000
+  { slotDuration = 100
   , securityParameter = 10
   , numSpoNodes = 3
   , numDelegators = 3
@@ -192,10 +193,11 @@ startLocalTestnet options@LocalTestnetOptions{..} = do
 
       currentTime <- round . utcTimeToPOSIXSeconds <$> liftIO getCurrentTime
       -- Add time to execute the CLI commands to set everything up
-      let startTime = posixSecondsToUTCTime $ secondsToNominalDiffTime $ fromInteger currentTime + 15
+      let startTime = posixSecondsToUTCTime $ secondsToNominalDiffTime $ fromInteger currentTime + 1
 
-      byronGenesisDir <- createByronGenesis workspace startTime testnetMagic options
-      shelleyGenesisDir <- createShelleyGenesisStaked workspace startTime testnetMagic options
+      (byronGenesisDir, shelleyGenesisDir) <- concurrently
+        (createByronGenesis workspace startTime testnetMagic options)
+        (createShelleyGenesisStaked workspace startTime testnetMagic options)
 
       let
         wallets = [1..numWallets] <&> \n -> PaymentKeyPair
@@ -324,7 +326,7 @@ setupNetwork workspace LocalTestnetOptions{..} byronGenesisDir shelleyGenesisDir
 
   rewriteJSONFile shelleyGenesisJson
     ( KM.insert "slotLength"             (toJSON @Double (fromIntegral slotDuration / 1000))
-    . KM.insert "activeSlotsCoeff"       (toJSON @Double 0.1)
+    . KM.insert "activeSlotsCoeff"       (toJSON @Double 0.2)
     . KM.insert "securityParam"          (toJSON @Int securityParameter)
     . KM.insert "epochLength"            (toJSON @Int 500)
     . KM.insert "maxLovelaceSupply"      (toJSON @Int 1000000000000)
