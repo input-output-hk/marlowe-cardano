@@ -61,6 +61,7 @@ test-suite marlowe-integration-tests
   build-depends:
       base >= 4.9 && < 5
     , aeson
+    , containers
     , hspec
     , cardano-api
     , directory

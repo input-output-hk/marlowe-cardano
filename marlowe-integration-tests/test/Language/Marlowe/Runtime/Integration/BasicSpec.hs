@@ -1,15 +1,30 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE RankNTypes #-}
+{-# OPTIONS_GHC -Wno-deferred-out-of-scope-variables #-}
 
 module Language.Marlowe.Runtime.Integration.BasicSpec
   where
 
-import Cardano.Api (AsType(..), BabbageEra, ShelleyWitnessSigningKey(..), TxBody, getTxId, signShelleyTransaction)
+import Cardano.Api
+  ( AsType(..)
+  , BabbageEra
+  , CardanoEra(BabbageEra)
+  , CtxTx
+  , ShelleyWitnessSigningKey(..)
+  , TxBody(..)
+  , TxBodyContent(..)
+  , TxOut(TxOut)
+  , getTxId
+  , signShelleyTransaction
+  )
 import Cardano.Api.Byron (deserialiseFromTextEnvelope)
 import Control.Concurrent (threadDelay)
 import Data.Aeson (decodeFileStrict)
 import Data.Bifunctor (first)
+import Data.Map (Map)
+import qualified Data.Map as Map
 import Data.String (fromString)
 import Data.Time
   (NominalDiffTime, UTCTime, diffUTCTime, getCurrentTime, nominalDiffTimeToSeconds, secondsToNominalDiffTime)
@@ -20,29 +35,36 @@ import Language.Marlowe.Extended.V1 (ada)
 import Language.Marlowe.Protocol.HeaderSync.Client (MarloweHeaderSyncClient(..))
 import qualified Language.Marlowe.Protocol.HeaderSync.Client as HeaderSync
 import qualified Language.Marlowe.Protocol.Sync.Client as MarloweSync
-import Language.Marlowe.Runtime.Cardano.Api (fromCardanoTxId)
+import Language.Marlowe.Runtime.Cardano.Api
+  (fromCardanoAddressInEra, fromCardanoTxId, fromCardanoTxOutDatum, fromCardanoTxOutValue)
 import Language.Marlowe.Runtime.ChainSync.Api
-  (Address, Assets(Assets), BlockHeader, TransactionMetadata(TransactionMetadata), fromBech32)
+  ( Address
+  , AssetId(..)
+  , Assets(Assets)
+  , BlockHeader
+  , TokenName
+  , TransactionMetadata(..)
+  , TxId
+  , TxIx
+  , TxOutRef(..)
+  , fromBech32
+  )
 import Language.Marlowe.Runtime.Core.Api
-  ( ContractId(unContractId)
+  ( ContractId(..)
   , MarloweVersion(..)
   , MarloweVersionTag(..)
+  , Payout(..)
   , SomeMarloweVersion(..)
   , Transaction(..)
   , TransactionOutput(..)
   , TransactionScriptOutput(..)
+  , fromChainPayoutDatum
   )
 import Language.Marlowe.Runtime.Discovery.Api (ContractHeader(..))
-import Language.Marlowe.Runtime.History.Api (ContractStep(..), CreateStep(..))
+import Language.Marlowe.Runtime.History.Api (ContractStep(..), CreateStep(..), RedeemStep(..))
 import Language.Marlowe.Runtime.Plutus.V2.Api (toPlutusAddress)
 import Language.Marlowe.Runtime.Transaction.Api
-  ( ContractCreated(..)
-  , InputsApplied(..)
-  , MarloweTxCommand(..)
-  , RoleTokensConfig(..)
-  , WalletAddresses(WalletAddresses)
-  , mkMint
-  )
+  (ContractCreated(..), InputsApplied(..), MarloweTxCommand(..), RoleTokensConfig(..), WalletAddresses(..), mkMint)
 import Network.Protocol.Job.Client (liftCommand, liftCommandWait)
 import qualified Plutus.V2.Ledger.Api as PV2
 import System.Directory (withCurrentDirectory)
@@ -55,11 +77,15 @@ spec = describe "Marlowe runtime API" do
   it "Basic e2e scenario" $ withCurrentDirectory ".." $ withLocalMarloweRuntime \runtime -> do
     (partyAAddress, partyASigningWitness) <- getGenesisWallet runtime 0
     (partyBAddress, partyBSigningWitness) <- getGenesisWallet runtime 1
+    partyBAddressPlutus <- expectJust "Failed to convert party B address to a plutus address"
+      $ toPlutusAddress partyBAddress
     let
+      -- 0x00 = testnet
+      partyB = Address (toEnum 0x00) partyBAddressPlutus
       partyAWalletAddresses = WalletAddresses partyAAddress mempty mempty
       partyASigningWitnesses = [partyASigningWitness]
-      _partyBWalletAddresses = WalletAddresses partyBAddress mempty mempty
-      _partyBSigningWitnesses = [partyBSigningWitness]
+      partyBWalletAddresses = WalletAddresses partyBAddress mempty mempty
+      partyBSigningWitnesses = [partyBSigningWitness]
 
       -- 1. Start MarloweHeaderSyncClient (request next)
       startDiscoveryClient = runDiscoverySyncClient runtime
@@ -69,7 +95,7 @@ spec = describe "Marlowe runtime API" do
           -- 2. Expect wait
           $ headerSyncExpectWait do
             -- 3. Create standard contract
-            contract@ContractCreated{txBody} <- createStandardContract runtime partyAWalletAddresses partyAAddress partyBAddress
+            contract@ContractCreated{txBody} <- createStandardContract runtime partyAWalletAddresses partyAAddress partyBAddressPlutus
             blockHeader <- submit runtime partyASigningWitnesses txBody
               -- 4. Poll
             HeaderSync.SendMsgPoll
@@ -79,16 +105,18 @@ spec = describe "Marlowe runtime API" do
                   actualHeaders `shouldBe` [contractCreatedToContractHeader blockHeader contract]
                   continueWithNewHeaders blockHeader contract
 
-      continueWithNewHeaders createBlock contract@ContractCreated{contractId} = pure
         -- 6. RequestNext (header sync)
-        $ HeaderSync.SendMsgRequestNext
         -- 7. Expect Wait
-        $ headerSyncExpectWait do
-          -- 8. Deposit funds
-          inputsApplied@InputsApplied{txBody} <- deposit runtime partyAWalletAddresses contractId partyA partyA ada 100_000_000
-          depositBlock <- submit runtime partyASigningWitnesses txBody
-          runHistorySyncClient runtime $ marloweSyncClient contract inputsApplied createBlock depositBlock
-          fail "TODO implement the rest of the test"
+      continueWithNewHeaders createBlock contract@ContractCreated{contractId} = pure $ HeaderSync.SendMsgRequestNext $ headerSyncExpectWait do
+        -- 8. Deposit funds
+        inputsApplied@InputsApplied{txBody} <- deposit runtime partyAWalletAddresses contractId partyA partyA ada 100_000_000
+        depositBlock <- submit runtime partyASigningWitnesses txBody
+        txOutRef <- runHistorySyncClient runtime $ marloweSyncClient contract inputsApplied createBlock depositBlock
+        -- 33. Poll
+        -- 34. Expect wait
+        -- 35. Cancel
+        -- 36. Done
+        pure $ HeaderSync.SendMsgPoll $ headerSyncExpectWait $ pure $ HeaderSync.SendMsgCancel $ HeaderSync.SendMsgDone txOutRef
 
       -- 9. Start MarloweSyncClient (follow contract)
       marloweSyncClient
@@ -96,50 +124,71 @@ spec = describe "Marlowe runtime API" do
         -> InputsApplied BabbageEra 'V1
         -> BlockHeader
         -> BlockHeader
-        -> MarloweSync.MarloweSyncClient IO ()
-      marloweSyncClient contractCreated@ContractCreated{contractId} inputsApplied createBlock depositBlock = MarloweSync.MarloweSyncClient
+        -> MarloweSync.MarloweSyncClient IO TxOutRef
+      marloweSyncClient contractCreated@ContractCreated{contractId, rolesCurrency} inputsApplied createBlock depositBlock = MarloweSync.MarloweSyncClient
           $ pure
           $ MarloweSync.SendMsgFollowContract contractId
           -- 10. Expect contract found
           $ marloweSyncExpectContractFound \actualBlock MarloweV1 createStep -> do
             actualBlock `shouldBe` createBlock
             createStep `shouldBe` contractCreatedToCreateStep contractCreated
-            pure
-              -- 11. Request next
-              $ MarloweSync.SendMsgRequestNext
-              -- 12. Expect roll forward with deposit
-              $ marloweSyncExpectRollForward \block steps -> do
-                  block `shouldBe` depositBlock
-                  steps `shouldBe` [ApplyTransaction $ inputsAppliedToTransaction depositBlock inputsApplied]
-                  fail "TODO implement the rest of the test"
+            -- 11. Request next
+            -- 12. Expect roll forward with deposit
+            marloweSyncRequestNextExpectRollForward depositBlock [ApplyTransaction $ inputsAppliedToTransaction depositBlock inputsApplied] do
+              -- 13. Request next
+              -- 14. Expect wait, poll, expect wait
+              pure $ marloweSyncRequestNextExpectWait $ pure $ marloweSyncPollExpectWait do
+                -- 15. Make choice as party B
+                choiceApplied@InputsApplied{txBody} <- choose runtime partyBWalletAddresses contractId "Gimme the money" partyB 0
+                choiceBlock <- submit runtime partyBSigningWitnesses txBody
+                -- 16. Poll
+                -- 17. Expect roll forward with choice
+                marloweSyncPollExpectRollForward choiceBlock [ApplyTransaction $ inputsAppliedToTransaction choiceBlock choiceApplied] do
+                  -- 18. Request next
+                  -- 19. Expect wait
+                  pure $ marloweSyncRequestNextExpectWait do
+                    -- 20. Notify
+                    notifyApplied@InputsApplied{txBody = notifyTxBody, output = notifyOutput} <- notify runtime partyAWalletAddresses contractId
+                    notifyBlock <- submit runtime partyASigningWitnesses notifyTxBody
 
-        {-
-            13. Request next (marlowe sync)
-            14. Expect wait
-            15. Make choice as party B
-            16. Poll (marlowe sync)
-            17. Expect roll forward with choice
-            18. Request next (marlowe sync)
-            19. Expect wait
-            20. Notify
-            21. Withdraw as party B
-            22. Poll (marlowe sync)
-            23. Expect roll forward with notify
-            24. Request next (marlowe sync)
-            25. Expect roll forward with withdrawal
-            26. Request next (marlowe sync)
-            27. Expect wait
-            28. Cancel
-            29. Done
-            30. Request next (header sync)
-            31. Expect wait
-            32. Cancel
-            33. Done
-            34. Start MarloweSyncClient (follow a tx in the contract)
-            35. Expect contract not found
-        -}
+                    -- 21. Deposit as party B
+                    depositApplied@InputsApplied{txBody = depositTxBody} <- deposit runtime partyBWalletAddresses contractId partyA partyB ada 100_000_000
+                    depositBlockPartyB <- submit runtime partyBSigningWitnesses depositTxBody
 
-    startDiscoveryClient
+                    -- 22. Withdraw as party A
+                    withdrawTxBody <- withdraw runtime partyAWalletAddresses contractId "Party A"
+                    withdrawBlock <- submit runtime partyASigningWitnesses withdrawTxBody
+
+                    -- 23. Poll
+                    -- 24. Expect roll forward with notify
+                    marloweSyncPollExpectRollForward notifyBlock [ApplyTransaction $ inputsAppliedToTransaction notifyBlock notifyApplied] do
+                      let depositTransaction@Transaction{output = TransactionOutput{payouts}} = inputsAppliedToTransaction depositBlockPartyB depositApplied
+                      -- 25. Request next
+                      -- 26. Expect roll forward with deposit
+                      marloweSyncRequestNextExpectRollForward depositBlockPartyB [ApplyTransaction depositTransaction] do
+                        -- 27. Request next
+                        -- 28. Expect roll forward with withdraw
+                        payoutTxOutRef <- expectJust "Failed to extract payout from deposit" case Map.toList payouts of
+                          [(txOutRef, _)] -> Just txOutRef
+                          _ -> Nothing
+                        let withdrawTxId = fromCardanoTxId $ getTxId withdrawTxBody
+                        marloweSyncRequestNextExpectRollForward withdrawBlock [RedeemPayout $ RedeemStep payoutTxOutRef withdrawTxId $ AssetId rolesCurrency "Party A"] do
+                          -- 29. Request next (marlowe sync)
+                          -- 30. Expect wait
+                          -- 31. Cancel
+                          -- 32. Done
+                          TransactionScriptOutput{utxo = notifyTxOutRef} <- expectJust "Failed to obtain deposit output" notifyOutput
+                          pure $ marloweSyncRequestNextExpectWait $ pure $ MarloweSync.SendMsgCancel $ MarloweSync.SendMsgDone notifyTxOutRef
+
+
+    txOutRef <- startDiscoveryClient
+    -- 37. Start MarloweSyncClient (follow a tx in the contract)
+    -- 38. Expect contract not found
+    runHistorySyncClient runtime $ MarloweSync.MarloweSyncClient $ pure $ MarloweSync.SendMsgFollowContract (ContractId txOutRef) $ MarloweSync.ClientStFollow
+      { recvMsgContractFound = \_ _ _ -> fail "Expected contract not found, got contract found"
+      , recvMsgContractNotFound = pure ()
+      }
+
   where
     headerSyncExpectWait
       :: IO (HeaderSync.ClientStWait IO a) -> HeaderSync.ClientStNext IO a
@@ -172,18 +221,72 @@ spec = describe "Marlowe runtime API" do
       :: (forall v. BlockHeader -> MarloweVersion v -> CreateStep v -> IO (MarloweSync.ClientStIdle v IO a))
       -> MarloweSync.ClientStFollow IO a
     marloweSyncExpectContractFound recvMsgContractFound = MarloweSync.ClientStFollow
-      { recvMsgContractNotFound = fail "Expected contract found, got new contract not found"
+      { recvMsgContractNotFound = fail "Expected contract found, got contract not found"
       , recvMsgContractFound
       }
 
     marloweSyncExpectRollForward
       :: (BlockHeader -> [ContractStep v] -> IO (MarloweSync.ClientStIdle v IO a))
+      -> IO (MarloweSync.ClientStNext v IO a)
+    marloweSyncExpectRollForward recvMsgRollForward = do
+      startTime <- getCurrentTime
+      let
+        next = MarloweSync.ClientStNext
+          { recvMsgRollBackCreation = fail "Expected roll forward, got roll back creation"
+          , recvMsgRollBackward = \_ -> fail "Expected roll forward, got roll backward"
+          , recvMsgWait = do
+              time <- getCurrentTime
+              if (time `diffUTCTime` startTime) > timeout
+                then fail "Expected roll forward, got wait"
+                else do
+                  threadDelay retryDelayMicroSeconds
+                  pure $ MarloweSync.SendMsgPoll next
+          , recvMsgRollForward
+          }
+      pure next
+
+    marloweSyncPollExpectWait
+      :: IO (MarloweSync.ClientStWait v IO a)
+      -> MarloweSync.ClientStWait v IO a
+    marloweSyncPollExpectWait = MarloweSync.SendMsgPoll . marloweSyncExpectWait
+
+    marloweSyncPollExpectRollForward
+      :: (Show (ContractStep v), Eq (ContractStep v))
+      => BlockHeader
+      -> [ContractStep v]
+      -> IO (MarloweSync.ClientStIdle v IO a)
+      -> IO (MarloweSync.ClientStWait v IO a)
+    marloweSyncPollExpectRollForward expectedBlock expectedSteps next =
+      MarloweSync.SendMsgPoll <$> marloweSyncExpectRollForward \actualBlock actualSteps -> do
+        actualBlock `shouldBe` expectedBlock
+        actualSteps `shouldBe` expectedSteps
+        next
+
+    marloweSyncRequestNextExpectWait
+      :: IO (MarloweSync.ClientStWait v IO a)
+      -> MarloweSync.ClientStIdle v IO a
+    marloweSyncRequestNextExpectWait = MarloweSync.SendMsgRequestNext . marloweSyncExpectWait
+
+    marloweSyncRequestNextExpectRollForward
+      :: (Show (ContractStep v), Eq (ContractStep v))
+      => BlockHeader
+      -> [ContractStep v]
+      -> IO (MarloweSync.ClientStIdle v IO a)
+      -> IO (MarloweSync.ClientStIdle v IO a)
+    marloweSyncRequestNextExpectRollForward expectedBlock expectedSteps next =
+      MarloweSync.SendMsgRequestNext <$> marloweSyncExpectRollForward \actualBlock actualSteps -> do
+        actualBlock `shouldBe` expectedBlock
+        actualSteps `shouldBe` expectedSteps
+        next
+
+    marloweSyncExpectWait
+      :: IO (MarloweSync.ClientStWait v IO a)
       -> MarloweSync.ClientStNext v IO a
-    marloweSyncExpectRollForward recvMsgRollForward = MarloweSync.ClientStNext
-      { recvMsgRollBackCreation = fail "Expected roll forward, got new roll back creation"
-      , recvMsgRollBackward = \_ -> fail "Expected roll forward, got new roll backward"
-      , recvMsgWait = fail "Expected roll forward, got wait"
-      , recvMsgRollForward
+    marloweSyncExpectWait recvMsgWait = MarloweSync.ClientStNext
+      { recvMsgRollBackCreation = fail "Expected wait, got roll back creation"
+      , recvMsgRollBackward = \_ -> fail "Expected wait, got roll backward"
+      , recvMsgWait
+      , recvMsgRollForward = \_ _ -> fail "Expected wait, got roll forward"
       }
 
 contractCreatedToCreateStep :: ContractCreated BabbageEra v -> CreateStep v
@@ -208,10 +311,22 @@ inputsAppliedToTransaction blockHeader InputsApplied{..} = Transaction
   , validityUpperBound = invalidHereafter
   , inputs
   , output = TransactionOutput
-      { payouts = mempty
+      { payouts = foldMap (uncurry $ txOutToPayout version $ fromCardanoTxId $ getTxId txBody) case txBody of
+          TxBody TxBodyContent{..} -> zip [0..] txOuts
       , scriptOutput = output
       }
   }
+
+txOutToPayout :: MarloweVersion v -> TxId -> TxIx -> TxOut CtxTx BabbageEra -> Map TxOutRef (Payout v)
+txOutToPayout version txId txIx (TxOut address value datum _) = case snd $ fromCardanoTxOutDatum datum of
+  Just datum' -> case fromChainPayoutDatum version datum' of
+    Just payoutDatum -> Map.singleton (TxOutRef txId txIx) Payout
+      { address = fromCardanoAddressInEra BabbageEra address
+      , assets = fromCardanoTxOutValue value
+      , datum = payoutDatum
+      }
+    Nothing -> mempty
+  Nothing -> mempty
 
 contractCreatedToContractHeader :: BlockHeader -> ContractCreated BabbageEra v -> ContractHeader
 contractCreatedToContractHeader blockHeader ContractCreated{..} = ContractHeader
@@ -277,11 +392,56 @@ deposit MarloweRuntime{..} walletAddresses contractId intoAccount fromParty ofTo
     [NormalInput $ IDeposit intoAccount fromParty ofToken quantity]
   expectRight "Failed to create deposit transaction" result
 
+choose
+  :: MarloweRuntime
+  -> WalletAddresses
+  -> ContractId
+  -> PV2.BuiltinByteString
+  -> Party
+  -> Integer
+  -> IO (InputsApplied BabbageEra 'V1)
+choose MarloweRuntime{..} walletAddresses contractId choice party chosenNum = do
+  result <- runTxJobClient $ liftCommand $ ApplyInputs
+    MarloweV1
+    walletAddresses
+    contractId
+    mempty
+    Nothing
+    Nothing
+    [NormalInput $ IChoice (ChoiceId choice party) chosenNum]
+  expectRight "Failed to create choice transaction" result
+
+notify
+  :: MarloweRuntime
+  -> WalletAddresses
+  -> ContractId
+  -> IO (InputsApplied BabbageEra 'V1)
+notify MarloweRuntime{..} walletAddresses contractId = do
+  result <- runTxJobClient $ liftCommand $ ApplyInputs
+    MarloweV1
+    walletAddresses
+    contractId
+    mempty
+    Nothing
+    Nothing
+    [NormalInput INotify]
+  expectRight "Failed to create notify transaction" result
+
+withdraw
+  :: MarloweRuntime
+  -> WalletAddresses
+  -> ContractId
+  -> TokenName
+  -> IO (TxBody BabbageEra)
+withdraw MarloweRuntime{..} walletAddresses contractId role = do
+  result <- runTxJobClient $ liftCommand $ Withdraw MarloweV1 walletAddresses contractId role
+  expectRight "Failed to create withdraw transaction" result
+
 createStandardContract
   :: MarloweRuntime
   -> WalletAddresses
   -> Address
-  -> Address
+  -> PV2.Address
   -> IO (ContractCreated BabbageEra 'V1)
 createStandardContract
   MarloweRuntime{..}
@@ -289,8 +449,6 @@ createStandardContract
   partyAAddress
   partyBAddress = do
     now <- getCurrentTime
-    partyBAddressPlutus <- expectJust "Failed to convert party B address to a plutus address"
-      $ toPlutusAddress partyBAddress
     result <- runTxJobClient $ liftCommand $ Create
       Nothing
       MarloweV1
@@ -298,7 +456,7 @@ createStandardContract
       (RoleTokensMint $ mkMint $ pure ("Party A", (partyAAddress, Left 1)))
       mempty
       2_000_000
-      (standardContract partyBAddressPlutus now (secondsToNominalDiffTime 100))
+      (standardContract partyBAddress now (secondsToNominalDiffTime 100))
     expectRight "failed to create standard contract" result
 
 
