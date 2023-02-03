@@ -49,7 +49,7 @@ ALTER TABLE marlowe.withdrawalTxIn
   ADD FOREIGN KEY (blockId) REFERENCES marlowe.block (id) ON DELETE CASCADE;
 
 ALTER TABLE marlowe.invalidApplyTx
-  DROP CONSTRAINT invalidApplyIn_blockId_fkey,
+  DROP CONSTRAINT invalidApplyTx_blockId_fkey,
   ADD FOREIGN KEY (blockId) REFERENCES marlowe.block (id) ON DELETE CASCADE;
 
 COMMIT;
