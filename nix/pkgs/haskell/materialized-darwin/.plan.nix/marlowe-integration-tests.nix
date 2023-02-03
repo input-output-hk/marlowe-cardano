@@ -35,12 +35,28 @@
         "marlowe-integration-tests" = {
           depends = [
             (hsPkgs."base" or (errorHandler.buildDepError "base"))
+            (hsPkgs."aeson" or (errorHandler.buildDepError "aeson"))
+            (hsPkgs."containers" or (errorHandler.buildDepError "containers"))
             (hsPkgs."hspec" or (errorHandler.buildDepError "hspec"))
+            (hsPkgs."cardano-api" or (errorHandler.buildDepError "cardano-api"))
+            (hsPkgs."directory" or (errorHandler.buildDepError "directory"))
+            (hsPkgs."marlowe-cardano" or (errorHandler.buildDepError "marlowe-cardano"))
+            (hsPkgs."marlowe-chain-sync" or (errorHandler.buildDepError "marlowe-chain-sync"))
+            (hsPkgs."marlowe-chain-sync".components.sublibs.plutus-compat or (errorHandler.buildDepError "marlowe-chain-sync:plutus-compat"))
+            (hsPkgs."marlowe-integration" or (errorHandler.buildDepError "marlowe-integration"))
+            (hsPkgs."marlowe-protocols" or (errorHandler.buildDepError "marlowe-protocols"))
+            (hsPkgs."marlowe-runtime" or (errorHandler.buildDepError "marlowe-runtime"))
+            (hsPkgs."marlowe-runtime".components.sublibs.discovery-api or (errorHandler.buildDepError "marlowe-runtime:discovery-api"))
+            (hsPkgs."marlowe-runtime".components.sublibs.history-api or (errorHandler.buildDepError "marlowe-runtime:history-api"))
+            (hsPkgs."marlowe-runtime".components.sublibs.tx-api or (errorHandler.buildDepError "marlowe-runtime:tx-api"))
+            (hsPkgs."plutus-ledger-api" or (errorHandler.buildDepError "plutus-ledger-api"))
+            (hsPkgs."time" or (errorHandler.buildDepError "time"))
             ];
           build-tools = [
             (hsPkgs.buildPackages.hspec-discover.components.exes.hspec-discover or (pkgs.buildPackages.hspec-discover or (errorHandler.buildToolDepError "hspec-discover:hspec-discover")))
             ];
           buildable = true;
+          modules = [ "Language/Marlowe/Runtime/Integration/BasicSpec" ];
           hsSourceDirs = [ "test" ];
           mainPath = [ "Spec.hs" ];
           };

@@ -39,6 +39,7 @@
           (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
           (hsPkgs."directory" or (errorHandler.buildDepError "directory"))
           (hsPkgs."filepath" or (errorHandler.buildDepError "filepath"))
+          (hsPkgs."HUnit" or (errorHandler.buildDepError "HUnit"))
           (hsPkgs."lifted-base" or (errorHandler.buildDepError "lifted-base"))
           (hsPkgs."monad-control" or (errorHandler.buildDepError "monad-control"))
           (hsPkgs."process" or (errorHandler.buildDepError "process"))
