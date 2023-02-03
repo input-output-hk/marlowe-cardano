@@ -69,25 +69,14 @@ spec = describe "Marlowe runtime API" do
           -- 2. Expect wait
           $ headerSyncExpectWait do
             -- 3. Create standard contract
-            contract@ContractCreated{..} <- createStandardContract runtime partyAWalletAddresses partyAAddress partyBAddress
+            contract@ContractCreated{txBody} <- createStandardContract runtime partyAWalletAddresses partyAAddress partyBAddress
             blockHeader <- submit runtime partyASigningWitnesses txBody
-            let
-              expectedContractHeader = ContractHeader
-                { contractId
-                , rolesCurrency
-                , metadata = TransactionMetadata metadata
-                , marloweScriptHash
-                , marloweScriptAddress
-                , payoutScriptHash
-                , marloweVersion = SomeMarloweVersion MarloweV1
-                , blockHeader
-                }
               -- 4. Poll
             HeaderSync.SendMsgPoll
               -- 5. Expect new headers
               <$> headerSyncExpectNewHeaders \actualBlock actualHeaders -> do
                   actualBlock `shouldBe` blockHeader
-                  actualHeaders `shouldBe` [expectedContractHeader]
+                  actualHeaders `shouldBe` [contractCreatedToContractHeader blockHeader contract]
                   continueWithNewHeaders blockHeader contract
 
       continueWithNewHeaders createBlock contract@ContractCreated{contractId} = pure
@@ -108,44 +97,20 @@ spec = describe "Marlowe runtime API" do
         -> BlockHeader
         -> BlockHeader
         -> MarloweSync.MarloweSyncClient IO ()
-      marloweSyncClient ContractCreated{..} inputsApplied createBlock depositBlock = MarloweSync.MarloweSyncClient
+      marloweSyncClient contractCreated@ContractCreated{contractId} inputsApplied createBlock depositBlock = MarloweSync.MarloweSyncClient
           $ pure
           $ MarloweSync.SendMsgFollowContract contractId
           -- 10. Expect contract found
           $ marloweSyncExpectContractFound \actualBlock MarloweV1 createStep -> do
             actualBlock `shouldBe` createBlock
-            createStep `shouldBe` CreateStep
-              { createOutput = TransactionScriptOutput
-                  { address = marloweScriptAddress
-                  , assets = Assets 2_000_000 mempty
-                  , utxo = unContractId contractId
-                  , datum
-                  }
-              , metadata = mempty
-              , payoutValidatorHash = payoutScriptHash
-              }
+            createStep `shouldBe` contractCreatedToCreateStep contractCreated
             pure
               -- 11. Request next
               $ MarloweSync.SendMsgRequestNext
               -- 12. Expect roll forward with deposit
               $ marloweSyncExpectRollForward \block steps -> do
                   block `shouldBe` depositBlock
-                  let
-                    InputsApplied{ txBody = body, invalidBefore, invalidHereafter, inputs, output } = inputsApplied
-                    expectedStep = ApplyTransaction Transaction
-                      { transactionId = fromCardanoTxId $ getTxId body
-                      , contractId
-                      , metadata = mempty
-                      , blockHeader = depositBlock
-                      , validityLowerBound = invalidBefore
-                      , validityUpperBound = invalidHereafter
-                      , inputs
-                      , output = TransactionOutput
-                          { payouts = mempty
-                          , scriptOutput = output
-                          }
-                      }
-                  steps `shouldBe` [expectedStep]
+                  steps `shouldBe` [ApplyTransaction $ inputsAppliedToTransaction depositBlock inputsApplied]
                   fail "TODO implement the rest of the test"
 
         {-
@@ -220,6 +185,45 @@ spec = describe "Marlowe runtime API" do
       , recvMsgWait = fail "Expected roll forward, got wait"
       , recvMsgRollForward
       }
+
+contractCreatedToCreateStep :: ContractCreated BabbageEra v -> CreateStep v
+contractCreatedToCreateStep ContractCreated{..} = CreateStep
+  { createOutput = TransactionScriptOutput
+      { address = marloweScriptAddress
+      , assets = Assets 2_000_000 mempty
+      , utxo = unContractId contractId
+      , datum
+      }
+  , metadata = mempty
+  , payoutValidatorHash = payoutScriptHash
+  }
+
+inputsAppliedToTransaction :: BlockHeader -> InputsApplied BabbageEra v -> Transaction v
+inputsAppliedToTransaction blockHeader InputsApplied{..} = Transaction
+  { transactionId = fromCardanoTxId $ getTxId txBody
+  , contractId
+  , metadata = mempty
+  , blockHeader
+  , validityLowerBound = invalidBefore
+  , validityUpperBound = invalidHereafter
+  , inputs
+  , output = TransactionOutput
+      { payouts = mempty
+      , scriptOutput = output
+      }
+  }
+
+contractCreatedToContractHeader :: BlockHeader -> ContractCreated BabbageEra v -> ContractHeader
+contractCreatedToContractHeader blockHeader ContractCreated{..} = ContractHeader
+  { contractId
+  , rolesCurrency
+  , metadata = TransactionMetadata metadata
+  , marloweScriptHash
+  , marloweScriptAddress
+  , payoutScriptHash
+  , marloweVersion = SomeMarloweVersion version
+  , blockHeader
+  }
 
 timeout :: NominalDiffTime
 timeout = secondsToNominalDiffTime 2
