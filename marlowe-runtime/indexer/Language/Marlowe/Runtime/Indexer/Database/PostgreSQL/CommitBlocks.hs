@@ -358,8 +358,8 @@ applyTxToRows (MarloweApplyInputsTransaction MarloweV1 UnspentContractOutput{..}
           , ( txId'
             , txIx'
             , unBlockHeaderHash headerHash
-            , unTokenName $ tokenName datum
             , unPolicyId $ policyId datum
+            , unTokenName $ tokenName datum
             )
           , assetsToTxOutAssetRows blockHeader txId' txIx' assets
           )
