@@ -986,6 +986,7 @@
           "network-mux".components.exes."mux-demo".planned = lib.mkOverride 900 true;
           "hw-aeson".components.library.planned = lib.mkOverride 900 true;
           "distributive".components.library.planned = lib.mkOverride 900 true;
+          "marlowe-integration-tests".components.exes."marlowe-integration-tests".planned = lib.mkOverride 900 true;
           "aeson-via-serialise".components.library.planned = lib.mkOverride 900 true;
           "ouroboros-network-framework".components.exes."demo-ping-pong".planned = lib.mkOverride 900 true;
           "pretty".components.library.planned = lib.mkOverride 900 true;
@@ -1355,7 +1356,6 @@
           "servant-client".components.library.planned = lib.mkOverride 900 true;
           "natural-transformation".components.library.planned = lib.mkOverride 900 true;
           "wl-pprint-annotated".components.library.planned = lib.mkOverride 900 true;
-          "marlowe-integration-tests".components.tests."marlowe-integration-tests".planned = lib.mkOverride 900 true;
           "marlowe-cli".components.library.planned = lib.mkOverride 900 true;
           "hfsevents".components.library.planned = lib.mkOverride 900 true;
           "hasql-pool".components.library.planned = lib.mkOverride 900 true;

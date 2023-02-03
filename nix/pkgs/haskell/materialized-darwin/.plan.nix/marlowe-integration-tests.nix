@@ -31,7 +31,7 @@
       extraDocFiles = [];
       };
     components = {
-      tests = {
+      exes = {
         "marlowe-integration-tests" = {
           depends = [
             (hsPkgs."base" or (errorHandler.buildDepError "base"))
@@ -39,7 +39,6 @@
             (hsPkgs."containers" or (errorHandler.buildDepError "containers"))
             (hsPkgs."hspec" or (errorHandler.buildDepError "hspec"))
             (hsPkgs."cardano-api" or (errorHandler.buildDepError "cardano-api"))
-            (hsPkgs."directory" or (errorHandler.buildDepError "directory"))
             (hsPkgs."marlowe-cardano" or (errorHandler.buildDepError "marlowe-cardano"))
             (hsPkgs."marlowe-chain-sync" or (errorHandler.buildDepError "marlowe-chain-sync"))
             (hsPkgs."marlowe-chain-sync".components.sublibs.plutus-compat or (errorHandler.buildDepError "marlowe-chain-sync:plutus-compat"))
@@ -58,7 +57,9 @@
           buildable = true;
           modules = [ "Language/Marlowe/Runtime/Integration/BasicSpec" ];
           hsSourceDirs = [ "test" ];
-          mainPath = [ "Spec.hs" ];
+          mainPath = [
+            "Spec.hs"
+            ] ++ (pkgs.lib).optional (flags.defer-plugin-errors) "";
           };
         };
       };

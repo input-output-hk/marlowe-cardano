@@ -23,7 +23,7 @@ source-repository head
   location: https://github.com/input-output-hk/marlowe-cardano
   subdir: marlowe-integration-tests
 
-test-suite marlowe-integration-tests
+executable marlowe-integration-tests
   default-language: Haskell2010
   default-extensions:
     BlockArguments
@@ -64,7 +64,6 @@ test-suite marlowe-integration-tests
     , containers
     , hspec
     , cardano-api
-    , directory
     , marlowe-cardano
     , marlowe-chain-sync
     , marlowe-chain-sync:plutus-compat

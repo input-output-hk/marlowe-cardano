@@ -67,14 +67,13 @@ import Language.Marlowe.Runtime.Transaction.Api
   (ContractCreated(..), InputsApplied(..), MarloweTxCommand(..), RoleTokensConfig(..), WalletAddresses(..), mkMint)
 import Network.Protocol.Job.Client (liftCommand, liftCommandWait)
 import qualified Plutus.V2.Ledger.Api as PV2
-import System.Directory (withCurrentDirectory)
 import Test.Hspec (Spec, describe, it, shouldBe)
 import Test.Integration.Marlowe.Local
   (LocalTestnet(..), MarloweRuntime(..), PaymentKeyPair(..), execCli, withLocalMarloweRuntime)
 
 spec :: Spec
 spec = describe "Marlowe runtime API" do
-  it "Basic e2e scenario" $ withCurrentDirectory ".." $ withLocalMarloweRuntime \runtime -> do
+  it "Basic e2e scenario" $ withLocalMarloweRuntime \runtime -> do
     (partyAAddress, partyASigningWitness) <- getGenesisWallet runtime 0
     (partyBAddress, partyBSigningWitness) <- getGenesisWallet runtime 1
     partyBAddressPlutus <- expectJust "Failed to convert party B address to a plutus address"
