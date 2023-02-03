@@ -60,12 +60,10 @@ clientHints = defaultHints { addrSocketType = Stream }
 run :: Options -> IO ()
 run Options{..} = withSocketsDo do
   pool <- Pool.acquire (100, secondsToNominalDiffTime 5, fromString databaseUri)
-  systemStart <- queryChainSync GetSystemStart
-  eraHistory <- queryChainSync GetEraHistory
-  securityParameter <- queryChainSync GetSecurityParameter
   scripts <- case ScriptRegistry.getScripts MarloweV1 of
     NESet.IsEmpty -> fail "No known marlowe scripts"
     NESet.IsNonEmpty scripts -> pure scripts
+  securityParameter <- queryChainSync GetSecurityParameter
   let
     indexerDependencies eventBackend = MarloweIndexerDependencies
       { runChainSeekClient = \client -> do
@@ -77,6 +75,15 @@ run Options{..} = withSocketsDo do
             runtimeChainSeekCodec
             (chainSeekClientPeer Genesis)
             client
+      , runChainSyncQueryClient = \client -> do
+          addr' <- head <$> getAddrInfo (Just clientHints) (Just chainSeekHost) (Just $ show chainSeekQueryPort)
+          runClientPeerOverSocketWithLogging
+            (narrowEventBackend ChainQueryClient eventBackend)
+            throwIO
+            addr'
+            codecQuery
+            queryClientPeer
+            client
       , databaseQueries = hoistDatabaseQueries
           (either throwUsageError pure <=< Pool.use pool)
           (PostgreSQL.databaseQueries securityParameter)
@@ -84,9 +91,6 @@ run Options{..} = withSocketsDo do
       , pollingInterval = 1
       , marloweScriptHashes = NESet.map ScriptRegistry.marloweScript scripts
       , payoutScriptHashes = NESet.map ScriptRegistry.payoutScript scripts
-      , systemStart
-      , eraHistory
-      , securityParameter
       }
   let appComponent = marloweIndexer <<< arr indexerDependencies <<< logger
   runComponent_ appComponent LoggerDependencies
@@ -101,13 +105,10 @@ run Options{..} = withSocketsDo do
     throwUsageError (ConnectionError err)                       = error $ show err
     throwUsageError (SessionError (Session.QueryError _ _ err)) = error $ show err
 
-    queryChainSeek :: ChainSyncQuery Void e a -> IO (Either e a)
-    queryChainSeek query = do
+    queryChainSync :: ChainSyncQuery Void e a -> IO a
+    queryChainSync query = fmap (fromRight $ error "failed to query chain seek server") do
       addr <- head <$> getAddrInfo (Just clientHints) (Just chainSeekHost) (Just $ show chainSeekQueryPort)
       runClientPeerOverSocket throwIO addr codecQuery queryClientPeer $ liftQuery query
-
-    queryChainSync :: ChainSyncQuery Void e a -> IO a
-    queryChainSync = fmap (fromRight $ error "failed to query chain seek server") . queryChainSeek
 
 data Options = Options
   { chainSeekPort :: PortNumber
