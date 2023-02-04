@@ -69,4 +69,5 @@ jobs:
         env:
           MARLOWE_RT_TEST_DB_HOST: localhost
           MARLOWE_RT_TEST_DB_PASSWORD: postgres
+          MARLOWE_RT_TEST_CLEANUP_DATABASE: False
           SQITCH_PASSWORD: postgres

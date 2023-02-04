@@ -49,7 +49,7 @@ import Control.Concurrent.Async.Lifted (Concurrently(..))
 import Control.Concurrent.Component
 import Control.Concurrent.STM (STM, atomically, retry)
 import Control.Exception (onException, throwIO)
-import Control.Monad ((<=<))
+import Control.Monad (when, (<=<))
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Except (runExceptT)
 import Control.Monad.Trans.Reader (runReaderT)
@@ -195,6 +195,7 @@ data MarloweRuntimeOptions = MarloweRuntimeOptions
   , databaseUser :: ByteString
   , databasePassword :: ByteString
   , tempDatabase :: ByteString
+  , cleanup :: Bool
   , localTestnetOptions :: LocalTestnetOptions
   }
 
@@ -205,12 +206,14 @@ defaultMarloweRuntimeOptions = do
   databaseUser <- lookupEnv "MARLOWE_RT_TEST_DB_USER"
   databasePassword <- lookupEnv "MARLOWE_RT_TEST_DB_PASSWORD"
   tempDatabase <- lookupEnv "MARLOWE_RT_TEST_TEMP_DB"
+  cleanupDatabase <- lookupEnv "MARLOWE_RT_TEST_CLEANUP_DATABASE"
   pure $ MarloweRuntimeOptions
     (maybe "127.0.0.1" fromString databaseHost)
     (fromMaybe 5432 $ readMaybe =<< databasePort)
     (maybe "postgres" fromString databaseUser)
     (maybe "" fromString databasePassword)
     (maybe "template1" fromString tempDatabase)
+    (fromMaybe True $ readMaybe =<< cleanupDatabase)
     defaultOptions
 
 withLocalMarloweRuntime :: MonadUnliftIO m => (MarloweRuntime -> m ()) -> m ()
@@ -322,7 +325,7 @@ withLocalMarloweRuntime' MarloweRuntimeOptions{..} test = withRunInIO \runInIO -
       finish connection
       pure dbName
 
-    cleanupDatabase dbName = do
+    cleanupDatabase dbName = when cleanup do
       connection <- connectdb rootConnectionString
       result <- exec connection $ "DROP DATABASE \"" <> dbName <> "\";"
       checkResult connection result
