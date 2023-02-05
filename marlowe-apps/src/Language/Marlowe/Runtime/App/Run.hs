@@ -100,8 +100,6 @@ runClientWithConfig
 runClientWithConfig Config{..} client = do
   chainSeekCommandAddr <- resolve chainSeekHost chainSeekCommandPort
   chainSeekSyncAddr <- resolve chainSeekHost chainSeekSyncPort
-  historyJobAddr <- resolve historyHost historyCommandPort
-  historyQueryAddr <- resolve historyHost historyQueryPort
   historySyncAddr <- resolve historyHost historySyncPort
   discoveryQueryAddr <- resolve discoveryHost discoveryQueryPort
   discoverySyncAddr <- resolve discoveryHost discoverySyncPort
@@ -109,8 +107,6 @@ runClientWithConfig Config{..} client = do
   runReaderT (runClient client) Services
     { runChainSeekCommandClient = runClientPeerOverSocket chainSeekCommandAddr codecJob jobClientPeer
     , runChainSeekSyncClient = runClientPeerOverSocket chainSeekSyncAddr codecChainSeek (chainSeekClientPeer Genesis)
-    , runHistoryCommandClient = runClientPeerOverSocket historyJobAddr codecJob jobClientPeer
-    , runHistoryQueryClient = runClientPeerOverSocket historyQueryAddr codecQuery queryClientPeer
     , runHistorySyncClient = runClientPeerOverSocket historySyncAddr codecMarloweSync marloweSyncClientPeer
     , runTxCommandClient = runClientPeerOverSocket txJobAddr codecJob jobClientPeer
     , runDiscoveryQueryClient = runClientPeerOverSocket discoveryQueryAddr codecQuery queryClientPeer

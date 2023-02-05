@@ -7,24 +7,18 @@
 
 module Language.Marlowe.Runtime.App.List
   ( allContracts
-  , followContract
-  , followedContracts
   , getContract
-  , unfollowContract
   ) where
 
 
-import Data.Bifunctor (first)
 import Data.Type.Equality ((:~:)(Refl))
 import Data.Void (Void, absurd)
-import Language.Marlowe.Runtime.App.Run (runJobClient, runMarloweSyncClient, runQueryClient)
+import Language.Marlowe.Runtime.App.Run (runMarloweSyncClient, runQueryClient)
 import Language.Marlowe.Runtime.App.Types (Client, Services(..))
 import Language.Marlowe.Runtime.Core.Api (ContractId, IsMarloweVersion(..), MarloweVersion, assertVersionsEqual)
 import Language.Marlowe.Runtime.Discovery.Api (ContractHeader(contractId), DiscoveryQuery(..))
-import Language.Marlowe.Runtime.History.Api (ContractStep, CreateStep, HistoryCommand(..), HistoryQuery(..))
-import Network.Protocol.Job.Client (liftCommand)
+import Language.Marlowe.Runtime.History.Api (ContractStep, CreateStep)
 
-import qualified Data.Map as M (keys)
 import qualified Language.Marlowe.Protocol.Sync.Client as Sync
   ( ClientStFollow(ClientStFollow, recvMsgContractFound, recvMsgContractNotFound)
   , ClientStIdle(SendMsgDone, SendMsgRequestNext)
@@ -44,10 +38,6 @@ import qualified Network.Protocol.Query.Client as Query
 
 allContracts :: Client [ContractId]
 allContracts = listContracts GetContractHeaders runDiscoveryQueryClient $ fmap contractId
-
-
-followedContracts :: Client [ContractId]
-followedContracts = listContracts GetFollowedContracts runHistoryQueryClient M.keys
 
 
 listContracts
@@ -75,26 +65,6 @@ listContracts query run extract =
         { Query.recvMsgReject = absurd
         , Query.recvMsgNextPage = handleNextPage mempty
         }
-
-
-followContract :: ContractId -> Client (Either String Bool)
-followContract = followCommand FollowContract
-
-
-unfollowContract :: ContractId -> Client (Either String Bool)
-unfollowContract = followCommand StopFollowingContract
-
-
-followCommand
-  :: Show e
-  => (ContractId -> HistoryCommand Void e Bool)
-  -> ContractId
-  -> Client (Either String Bool)
-followCommand command =
-  fmap (first show)
-    . runJobClient runHistoryCommandClient
-    . liftCommand
-    . command
 
 
 getContract

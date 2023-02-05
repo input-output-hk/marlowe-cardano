@@ -61,7 +61,7 @@ import Language.Marlowe.Runtime.Core.Api
   )
 import Language.Marlowe.Runtime.Discovery.Api (DiscoveryQuery)
 import Language.Marlowe.Runtime.History.Api
-  (ContractStep(..), CreateStep(..), HistoryCommand, HistoryQuery, RedeemStep(RedeemStep, datum, redeemingTx, utxo))
+  (ContractStep(..), CreateStep(..), RedeemStep(RedeemStep, datum, redeemingTx, utxo))
 import Language.Marlowe.Runtime.Transaction.Api (MarloweTxCommand)
 import Network.Protocol.Job.Client (JobClient)
 import Network.Protocol.Query.Client (QueryClient)
@@ -140,8 +140,6 @@ data Services m =
   Services
   { runChainSeekCommandClient :: RunClient m (JobClient ChainSyncCommand)
   , runChainSeekSyncClient :: RunClient m RuntimeChainSeekClient
-  , runHistoryCommandClient :: RunClient m (JobClient HistoryCommand)
-  , runHistoryQueryClient :: RunClient m (QueryClient HistoryQuery)
   , runHistorySyncClient :: RunClient m MarloweSyncClient
   , runDiscoveryQueryClient :: RunClient m (QueryClient DiscoveryQuery)
   , runDiscoverySyncClient :: RunClient m MarloweHeaderSyncClient
@@ -160,13 +158,6 @@ type RunClient m client = forall a. client m a -> m a
 
 data MarloweRequest v =
     List
-  | Followed
-  | Follow
-    { reqContractId :: ContractId
-    }
-  | Unfollow
-    { reqContractId :: ContractId
-    }
   | Get
     { reqContractId :: ContractId
     }
@@ -218,13 +209,6 @@ instance A.FromJSON (MarloweRequest 'V1) where
         (o A..: "request" :: A.Parser String)
           >>= \case
             "list" -> pure List
-            "followed" -> pure Followed
-            "follow" -> do
-                          reqContractId <- fromString <$> o A..: "contractId"
-                          pure Follow{..}
-            "unfollow" -> do
-                            reqContractId <- fromString <$> o A..: "contractId"
-                            pure Unfollow{..}
             "get" -> do
                        reqContractId <- fromString <$> o A..: "contractId"
                        pure Get{..}
@@ -270,17 +254,6 @@ instance A.FromJSON (MarloweRequest 'V1) where
 
 instance A.ToJSON (MarloweRequest 'V1) where
   toJSON List = A.object ["request" A..= ("list" :: String)]
-  toJSON Followed = A.object ["request" A..= ("followed" :: String)]
-  toJSON Follow{..} =
-    A.object
-      [ "request" A..=  ("follow" :: String)
-      , "contractId" A..= renderContractId reqContractId
-      ]
-  toJSON Unfollow{..} =
-    A.object
-      [ "request" A..=  ("unfollow" :: String)
-      , "contractId" A..= renderContractId reqContractId
-      ]
   toJSON Get{..} =
     A.object
       [ "request" A..= ("get" :: String)
