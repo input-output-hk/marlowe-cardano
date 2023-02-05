@@ -1,6 +1,8 @@
 
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE EmptyCase #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE RankNTypes #-}
 
 
@@ -10,10 +12,10 @@ module Language.Marlowe.Protocol.Query.Client.Extra
   ) where
 
 
-import Language.Marlowe.Protocol.Query.Client
-import Language.Marlowe.Protocol.Query.Types
+import Language.Marlowe.Protocol.Query.Client (MarloweQueryClient(..))
+import Language.Marlowe.Protocol.Query.Types (MarloweQuery(..))
 import Network.Protocol.Driver (hoistPeer)
-import Network.TypedProtocol
+import Network.TypedProtocol (NobodyHasAgency, Peer(Done), PeerRole(AsClient))
 
 
 marloweQueryClientPeer
