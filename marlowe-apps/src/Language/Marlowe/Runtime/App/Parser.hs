@@ -24,7 +24,6 @@ getConfigParser =
   do
     chainSeekHostParser <- optParserWithEnvDefault chainSeekHost
     chainSeekCommandPortParser <- optParserWithEnvDefault chainSeekCommandPort
-    chainSeekQueryPortParser <- optParserWithEnvDefault chainSeekQueryPort
     chainSeekSyncPortParser <- optParserWithEnvDefault chainSeekSyncPort
     historyHostParser <- optParserWithEnvDefault CLI.historyHost
     historyCommandPortParser <- optParserWithEnvDefault CLI.historyCommandPort
@@ -75,7 +74,6 @@ getConfigParser =
       $ Config
       <$> chainSeekHostParser
       <*> chainSeekCommandPortParser
-      <*> chainSeekQueryPortParser
       <*> chainSeekSyncPortParser
       <*> historyHostParser
       <*> historyCommandPortParser
@@ -99,10 +97,6 @@ chainSeekHost = host "chain-seek" "CHAINSEEK" "127.0.0.1" "The hostname of the M
 
 chainSeekCommandPort :: CliOption O.OptionFields PortNumber
 chainSeekCommandPort = port "chain-seek-command" "CHAINSEEK_COMMAND" 3720 "The port number of the chain-seek server's job API."
-
-
-chainSeekQueryPort :: CliOption O.OptionFields PortNumber
-chainSeekQueryPort = port "chain-seek-query" "CHAINSEEK_QUERY" 3716 "The port number of the chain-seek server's query API."
 
 
 chainSeekSyncPort :: CliOption O.OptionFields PortNumber

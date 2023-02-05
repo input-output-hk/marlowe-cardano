@@ -39,7 +39,6 @@ import Language.Marlowe.Runtime.Cardano.Api (fromCardanoTxId)
 import Language.Marlowe.Runtime.ChainSync.Api
   ( Address
   , ChainSyncCommand
-  , ChainSyncQuery
   , Lovelace(..)
   , RuntimeChainSeekClient
   , TokenName
@@ -96,7 +95,6 @@ data Config =
   Config
   { chainSeekHost :: HostName
   , chainSeekCommandPort :: PortNumber
-  , chainSeekQueryPort :: PortNumber
   , chainSeekSyncPort :: PortNumber
   , historyHost :: HostName
   , historyCommandPort :: PortNumber
@@ -120,7 +118,6 @@ instance Default Config where
     Config
     { chainSeekHost = "127.0.0.1"
     , chainSeekCommandPort = 3720
-    , chainSeekQueryPort = 3716
     , chainSeekSyncPort = 3715
     , historyHost = "127.0.0.1"
     , historyCommandPort = 3717
@@ -142,7 +139,6 @@ instance Default Config where
 data Services m =
   Services
   { runChainSeekCommandClient :: RunClient m (JobClient ChainSyncCommand)
-  , runChainSeekQueryClient :: RunClient m (QueryClient ChainSyncQuery)
   , runChainSeekSyncClient :: RunClient m RuntimeChainSeekClient
   , runHistoryCommandClient :: RunClient m (JobClient HistoryCommand)
   , runHistoryQueryClient :: RunClient m (QueryClient HistoryQuery)
