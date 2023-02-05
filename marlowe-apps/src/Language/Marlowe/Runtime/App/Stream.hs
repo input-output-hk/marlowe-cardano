@@ -100,7 +100,7 @@ streamContractHeaders
   -> TChan a
   -> Client (Either String ())
 streamContractHeaders eventBackend pollingFrequency extract channel =
-  runMarloweHeaderSyncClient runDiscoverySyncClient
+  runMarloweHeaderSyncClient runSyncHeaderClient
     $ streamContractHeadersClient eventBackend pollingFrequency extract channel
 
 
@@ -292,7 +292,7 @@ streamContractSteps
   -> TChan (ContractStream v)
   -> Client ()
 streamContractSteps eventBackend pollingFrequency finishOnClose finishOnWait accept csContractId channel =
-  runMarloweSyncClient runHistorySyncClient
+  runMarloweSyncClient runSyncSyncClient
     $ streamContractStepsClient eventBackend pollingFrequency finishOnClose finishOnWait accept csContractId channel
 
 

@@ -1,6 +1,7 @@
 
 
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
 
@@ -12,13 +13,14 @@ module Language.Marlowe.Runtime.App.List
 
 
 import Data.Type.Equality ((:~:)(Refl))
-import Data.Void (Void, absurd)
 import Language.Marlowe.Runtime.App.Run (runMarloweSyncClient, runQueryClient)
 import Language.Marlowe.Runtime.App.Types (Client, Services(..))
 import Language.Marlowe.Runtime.Core.Api (ContractId, IsMarloweVersion(..), MarloweVersion, assertVersionsEqual)
-import Language.Marlowe.Runtime.Discovery.Api (ContractHeader(contractId), DiscoveryQuery(..))
+import Language.Marlowe.Runtime.Discovery.Api (ContractHeader(contractId))
 import Language.Marlowe.Runtime.History.Api (ContractStep, CreateStep)
 
+import qualified Language.Marlowe.Protocol.Query.Client as Query
+import qualified Language.Marlowe.Protocol.Query.Types as Query
 import qualified Language.Marlowe.Protocol.Sync.Client as Sync
   ( ClientStFollow(ClientStFollow, recvMsgContractFound, recvMsgContractNotFound)
   , ClientStIdle(SendMsgDone, SendMsgRequestNext)
@@ -27,44 +29,38 @@ import qualified Language.Marlowe.Protocol.Sync.Client as Sync
   , ClientStWait(SendMsgCancel)
   , MarloweSyncClient(MarloweSyncClient)
   )
-import qualified Network.Protocol.Query.Client as Query
-  ( ClientStInit(SendMsgRequest)
-  , ClientStNext(ClientStNext)
-  , ClientStNextCanReject(..)
-  , ClientStPage(..)
-  , QueryClient(QueryClient)
-  )
 
 
 allContracts :: Client [ContractId]
-allContracts = listContracts GetContractHeaders runDiscoveryQueryClient $ fmap contractId
+allContracts = listContracts runSyncQueryClient $ fmap contractId
+
+
+pageSize :: Int
+pageSize = 1000
 
 
 listContracts
   :: Monoid a
-  => query delimiter Void results
-  -> (Services IO -> Query.QueryClient query IO a -> IO a)
-  -> (results -> a)
+  => (Services IO -> Query.MarloweQueryClient IO (Query.Page ContractId ContractHeader) -> IO (Query.Page ContractId ContractHeader))
+  -> ([ContractHeader] -> a)
   -> Client a
-listContracts query run extract =
+listContracts run =
   let
-    handleNextPage previous results nextPage =
+    bundleContracts getContractHeaders extract =
       let
-        cumulative = previous <> extract results
+        append = (. getContractHeaders) . (=<<) . handleNextPage
+        handleNextPage previous Query.Page{..} =
+          let
+            cumulative = previous <> extract items
+          in
+            case nextRange of
+              Nothing    -> pure cumulative
+              Just range -> cumulative `append` range
       in
-        pure
-          $ maybe
-            (Query.SendMsgDone cumulative)
-            (flip Query.SendMsgRequestNext . Query.ClientStNext $ handleNextPage cumulative)
-            nextPage
+        mempty `append` Query.Range Nothing 0 pageSize Query.Ascending
   in
-    runQueryClient run
-      . Query.QueryClient
-      . pure
-      $ Query.SendMsgRequest query Query.ClientStNextCanReject
-        { Query.recvMsgReject = absurd
-        , Query.recvMsgNextPage = handleNextPage mempty
-        }
+    bundleContracts
+      $ runQueryClient run . Query.getContractHeaders
 
 
 getContract
@@ -89,7 +85,7 @@ getContract contractId' =
                              $ Right (create, previous)
       }
   in
-    runMarloweSyncClient runHistorySyncClient
+    runMarloweSyncClient runSyncSyncClient
       . Sync.MarloweSyncClient
       . pure
       $ Sync.SendMsgFollowContract contractId' Sync.ClientStFollow

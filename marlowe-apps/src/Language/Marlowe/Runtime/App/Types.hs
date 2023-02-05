@@ -34,6 +34,7 @@ import Data.Default (Default(..))
 import Data.String (fromString)
 import Language.Marlowe (POSIXTime(..))
 import Language.Marlowe.Protocol.HeaderSync.Client (MarloweHeaderSyncClient)
+import Language.Marlowe.Protocol.Query.Client (MarloweQueryClient)
 import Language.Marlowe.Protocol.Sync.Client (MarloweSyncClient)
 import Language.Marlowe.Runtime.Cardano.Api (fromCardanoTxId)
 import Language.Marlowe.Runtime.ChainSync.Api
@@ -59,7 +60,6 @@ import Language.Marlowe.Runtime.Core.Api
   , TransactionScriptOutput(..)
   , renderContractId
   )
-import Language.Marlowe.Runtime.Discovery.Api (DiscoveryQuery)
 import Language.Marlowe.Runtime.History.Api
   (ContractStep(..), CreateStep(..), RedeemStep(RedeemStep, datum, redeemingTx, utxo))
 import Language.Marlowe.Runtime.Transaction.Api (MarloweTxCommand)
@@ -96,13 +96,10 @@ data Config =
   { chainSeekHost :: HostName
   , chainSeekCommandPort :: PortNumber
   , chainSeekSyncPort :: PortNumber
-  , historyHost :: HostName
-  , historyCommandPort :: PortNumber
-  , historyQueryPort :: PortNumber
-  , historySyncPort :: PortNumber
-  , discoveryHost :: HostName
-  , discoveryQueryPort :: PortNumber
-  , discoverySyncPort :: PortNumber
+  , syncHost :: HostName
+  , syncSyncPort :: PortNumber
+  , syncHeaderPort :: PortNumber
+  , syncQueryPort :: PortNumber
   , txHost :: HostName
   , txCommandPort :: PortNumber
   , timeoutSeconds :: Int
@@ -119,13 +116,10 @@ instance Default Config where
     { chainSeekHost = "127.0.0.1"
     , chainSeekCommandPort = 3720
     , chainSeekSyncPort = 3715
-    , historyHost = "127.0.0.1"
-    , historyCommandPort = 3717
-    , historyQueryPort = 3718
-    , historySyncPort = 3719
-    , discoveryHost = "127.0.0.1"
-    , discoveryQueryPort = 3721
-    , discoverySyncPort = 3722
+    , syncHost = "127.0.0.1"
+    , syncSyncPort = 3724
+    , syncHeaderPort = 3725
+    , syncQueryPort = 3726
     , txHost = "127.0.0.1"
     , txCommandPort = 3723
     , timeoutSeconds = 600
@@ -140,9 +134,9 @@ data Services m =
   Services
   { runChainSeekCommandClient :: RunClient m (JobClient ChainSyncCommand)
   , runChainSeekSyncClient :: RunClient m RuntimeChainSeekClient
-  , runHistorySyncClient :: RunClient m MarloweSyncClient
-  , runDiscoveryQueryClient :: RunClient m (QueryClient DiscoveryQuery)
-  , runDiscoverySyncClient :: RunClient m MarloweHeaderSyncClient
+  , runSyncSyncClient :: RunClient m MarloweSyncClient
+  , runSyncHeaderClient :: RunClient m MarloweHeaderSyncClient
+  , runSyncQueryClient :: RunClient m MarloweQueryClient
   , runTxCommandClient :: RunClient m (JobClient MarloweTxCommand)
   }
 

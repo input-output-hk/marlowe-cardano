@@ -25,13 +25,10 @@ getConfigParser =
     chainSeekHostParser <- optParserWithEnvDefault chainSeekHost
     chainSeekCommandPortParser <- optParserWithEnvDefault chainSeekCommandPort
     chainSeekSyncPortParser <- optParserWithEnvDefault chainSeekSyncPort
-    historyHostParser <- optParserWithEnvDefault CLI.historyHost
-    historyCommandPortParser <- optParserWithEnvDefault CLI.historyCommandPort
-    historyQueryPortParser <- optParserWithEnvDefault CLI.historyQueryPort
-    historySyncPortParser <- optParserWithEnvDefault CLI.historySyncPort
-    discoveryHostParser <- optParserWithEnvDefault CLI.discoveryHost
-    discoveryQueryPortParser <- optParserWithEnvDefault CLI.discoveryQueryPort
-    discoverySyncPortParser <- optParserWithEnvDefault CLI.discoverySyncPort
+    syncHostParser <- optParserWithEnvDefault syncHost
+    syncSyncPortParser <- optParserWithEnvDefault syncSyncPort
+    syncHeaderPortParser <- optParserWithEnvDefault syncHeaderPort
+    syncQueryPortParser <- optParserWithEnvDefault syncQueryPort
     txHostParser <- optParserWithEnvDefault CLI.txHost
     txCommandPortParser <- optParserWithEnvDefault CLI.txCommandPort
     let
@@ -75,13 +72,10 @@ getConfigParser =
       <$> chainSeekHostParser
       <*> chainSeekCommandPortParser
       <*> chainSeekSyncPortParser
-      <*> historyHostParser
-      <*> historyCommandPortParser
-      <*> historyQueryPortParser
-      <*> historySyncPortParser
-      <*> discoveryHostParser
-      <*> discoveryQueryPortParser
-      <*> discoverySyncPortParser
+      <*> syncHostParser
+      <*> syncSyncPortParser
+      <*> syncHeaderPortParser
+      <*> syncQueryPortParser
       <*> txHostParser
       <*> txCommandPortParser
       <*> timeoutSecondsParser
@@ -101,6 +95,22 @@ chainSeekCommandPort = port "chain-seek-command" "CHAINSEEK_COMMAND" 3720 "The p
 
 chainSeekSyncPort :: CliOption O.OptionFields PortNumber
 chainSeekSyncPort = port "chain-seek-sync" "CHAINSEEK_SYNC" 3715 "The port number of the chain-seek server's synchronization API."
+
+
+syncHost :: CliOption O.OptionFields HostName
+syncHost = host "marlowe-sync" "SYNC" "127.0.0.1" "The hostname of the Marlowe Runtime marlowe-sync server."
+
+
+syncSyncPort :: CliOption O.OptionFields PortNumber
+syncSyncPort = port "marlowe-sync-sync" "SYNC_SYNC" 3724 "The port number of the marlowe-sync server's synchronization API."
+
+
+syncHeaderPort :: CliOption O.OptionFields PortNumber
+syncHeaderPort = port "marlowe-sync-header" "SYNC_HEADER" 3725 "The port number of the marlowe-sync server's header synchronization API."
+
+
+syncQueryPort :: CliOption O.OptionFields PortNumber
+syncQueryPort = port "marlowe-sync-query" "SYNC_QUERY" 3726 "The port number of the marlowe-sync server's query API."
 
 
 addressParser :: O.ReadM Address
