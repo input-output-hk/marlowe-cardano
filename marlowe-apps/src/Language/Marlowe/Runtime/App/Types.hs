@@ -64,7 +64,6 @@ import Language.Marlowe.Runtime.History.Api
   (ContractStep(..), CreateStep(..), RedeemStep(RedeemStep, datum, redeemingTx, utxo))
 import Language.Marlowe.Runtime.Transaction.Api (MarloweTxCommand)
 import Network.Protocol.Job.Client (JobClient)
-import Network.Protocol.Query.Client (QueryClient)
 import Network.Socket (HostName, PortNumber)
 
 import qualified Cardano.Api as C
