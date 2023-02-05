@@ -60,6 +60,7 @@ import Language.Marlowe.Runtime.Core.Api
   , TransactionScriptOutput(..)
   , renderContractId
   )
+import Language.Marlowe.Runtime.Discovery.Api (ContractHeader)
 import Language.Marlowe.Runtime.History.Api
   (ContractStep(..), CreateStep(..), RedeemStep(RedeemStep, datum, redeemingTx, utxo))
 import Language.Marlowe.Runtime.Transaction.Api (MarloweTxCommand)
@@ -150,7 +151,8 @@ type RunClient m client = forall a. client m a -> m a
 
 
 data MarloweRequest v =
-    List
+    ListContracts
+  | ListHeaders
   | Get
     { reqContractId :: ContractId
     }
@@ -201,7 +203,8 @@ instance A.FromJSON (MarloweRequest 'V1) where
       $ \o ->
         (o A..: "request" :: A.Parser String)
           >>= \case
-            "list" -> pure List
+            "list" -> pure ListContracts
+            "headers" -> pure ListHeaders
             "get" -> do
                        reqContractId <- fromString <$> o A..: "contractId"
                        pure Get{..}
@@ -246,7 +249,8 @@ instance A.FromJSON (MarloweRequest 'V1) where
             request -> fail $ "Invalid request: " <> request <> "."
 
 instance A.ToJSON (MarloweRequest 'V1) where
-  toJSON List = A.object ["request" A..= ("list" :: String)]
+  toJSON ListContracts = A.object ["request" A..= ("list" :: String)]
+  toJSON ListHeaders = A.object ["request" A..= ("headers" :: String)]
   toJSON Get{..} =
     A.object
       [ "request" A..= ("get" :: String)
@@ -306,6 +310,9 @@ data MarloweResponse v =
     Contracts
     { resContractIds :: [ContractId]
     }
+  | Headers
+    { resContractHeaders :: [ContractHeader]
+    }
   | FollowResult
     { resResult :: Bool
     }
@@ -336,6 +343,11 @@ instance A.ToJSON (MarloweResponse 'V1) where
     A.object
       [ "response" A..= ("contracts" :: String)
       , "contractIds" A..= fmap renderContractId resContractIds
+      ]
+  toJSON Headers{..} =
+    A.object
+      [ "response" A..= ("headers" :: String)
+      , "contractHeaders" A..= resContractHeaders
       ]
   toJSON FollowResult{..} =
     A.object

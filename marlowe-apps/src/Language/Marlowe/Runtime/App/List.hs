@@ -8,6 +8,7 @@
 
 module Language.Marlowe.Runtime.App.List
   ( allContracts
+  , allHeaders
   , getContract
   ) where
 
@@ -35,8 +36,12 @@ allContracts :: Client [ContractId]
 allContracts = listContracts runSyncQueryClient $ fmap contractId
 
 
+allHeaders :: Client [ContractHeader]
+allHeaders = listContracts runSyncQueryClient id
+
+
 pageSize :: Int
-pageSize = 1000
+pageSize = 1024
 
 
 listContracts
