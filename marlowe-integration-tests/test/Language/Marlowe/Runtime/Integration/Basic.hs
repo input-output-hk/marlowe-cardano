@@ -4,7 +4,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# OPTIONS_GHC -Wno-deferred-out-of-scope-variables #-}
 
-module Language.Marlowe.Runtime.Integration.BasicSpec
+module Language.Marlowe.Runtime.Integration.Basic
   where
 
 import Cardano.Api (getTxId)
