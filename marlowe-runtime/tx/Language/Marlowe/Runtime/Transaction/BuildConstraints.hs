@@ -314,7 +314,7 @@ buildApplyInputsConstraintsV1 systemStart eraHistory marloweOutput tipSlot metad
     Nothing -> pure case nextMarloweTimeout contract of
       Nothing -> maxSafeSlot
       Just nextTimeout -> case utcTimeToSlotNo' nextTimeout of
-        Right slot -> slot
+        Right slot -> if slot > invalidBefore' then slot else maxSafeSlot
         _ -> maxSafeSlot
     Just t -> utcTimeToSlotNo t
 
