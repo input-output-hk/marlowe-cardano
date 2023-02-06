@@ -57,13 +57,16 @@ executable marlowe-integration-tests
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
-    Language.Marlowe.Runtime.IntegrationSpec
-    Language.Marlowe.Runtime.Integration.Common
     Language.Marlowe.Runtime.Integration.Basic
+    Language.Marlowe.Runtime.Integration.Intersections
+    Language.Marlowe.Runtime.Integration.Common
     Language.Marlowe.Runtime.Integration.StandardContract
+    Language.Marlowe.Runtime.IntegrationSpec
   build-depends:
       base >= 4.9 && < 5
     , aeson
+    , base16
+    , bytestring
     , containers
     , hspec
     , cardano-api
@@ -79,6 +82,7 @@ executable marlowe-integration-tests
     , mtl
     , plutus-ledger-api
     , unliftio
+    , text
     , time
     , transformers
   build-tool-depends: hspec-discover:hspec-discover

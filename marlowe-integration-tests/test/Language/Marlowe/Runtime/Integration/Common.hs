@@ -21,12 +21,20 @@ import Control.Concurrent (threadDelay)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Reader (ReaderT, runReaderT)
 import Control.Monad.Reader.Class (asks)
-import Data.Aeson (decodeFileStrict)
+import Data.Aeson (FromJSON(..), Value(..), decodeFileStrict, eitherDecodeStrict)
+import Data.Aeson.Types (parseFail)
 import Data.Bifunctor (first)
+import Data.ByteString (ByteString)
+import Data.ByteString.Base16 (decodeBase16)
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.String (fromString)
+import qualified Data.Text as T
+import Data.Text.Encoding (encodeUtf8)
+import qualified Data.Text.Encoding as T
 import Data.Time (NominalDiffTime, diffUTCTime, getCurrentTime, secondsToNominalDiffTime)
+import Data.Word (Word64)
+import GHC.Generics (Generic)
 import Language.Marlowe (ChoiceId(..), Input(..), InputContent(..), Party, Token)
 import Language.Marlowe.Protocol.HeaderSync.Client (MarloweHeaderSyncClient, hoistMarloweHeaderSyncClient)
 import qualified Language.Marlowe.Protocol.HeaderSync.Client as HeaderSync
@@ -35,7 +43,18 @@ import qualified Language.Marlowe.Protocol.Sync.Client as MarloweSync
 import Language.Marlowe.Runtime.Cardano.Api
   (fromCardanoAddressInEra, fromCardanoTxId, fromCardanoTxOutDatum, fromCardanoTxOutValue)
 import Language.Marlowe.Runtime.ChainSync.Api
-  (Assets(..), BlockHeader, TokenName, TransactionMetadata(..), TxId, TxIx, TxOutRef(..), fromBech32)
+  ( Assets(..)
+  , BlockHeader(..)
+  , BlockHeaderHash(..)
+  , BlockNo(..)
+  , SlotNo(..)
+  , TokenName
+  , TransactionMetadata(..)
+  , TxId
+  , TxIx
+  , TxOutRef(..)
+  , fromBech32
+  )
 import Language.Marlowe.Runtime.Core.Api
   ( ContractId(..)
   , MarloweVersion(..)
@@ -54,9 +73,10 @@ import Language.Marlowe.Runtime.Transaction.Api
 import Network.Protocol.Job.Client (JobClient, hoistJobClient, liftCommand, liftCommandWait)
 import qualified Plutus.V2.Ledger.Api as PV2
 import Test.Hspec (shouldBe)
-import Test.Integration.Marlowe (LocalTestnet(..), MarloweRuntime, PaymentKeyPair(..), execCli)
+import Test.Integration.Marlowe (LocalTestnet(..), MarloweRuntime, PaymentKeyPair(..), SpoNode(..), execCli)
 import qualified Test.Integration.Marlowe.Local as MarloweRuntime
-import UnliftIO (MonadUnliftIO(withRunInIO))
+import UnliftIO (MonadUnliftIO(withRunInIO), bracket_)
+import UnliftIO.Environment (setEnv, unsetEnv)
 
 type Integration = ReaderT MarloweRuntime IO
 
@@ -114,6 +134,31 @@ getGenesisWallet walletIx = do
     { addresses = WalletAddresses address mempty mempty
     , signingKeys = [WitnessGenesisUTxOKey genesisUTxOKey]
     }
+
+newtype CliHash = CliHash { unCliHash :: ByteString }
+
+instance FromJSON CliHash where
+  parseJSON = \case
+    String s -> either (parseFail . T.unpack) (pure . CliHash) $ decodeBase16 $ encodeUtf8 s
+    _ -> parseFail "Expected a string"
+
+data CliBlockHeader = CliBlockHeader
+  { block :: Word64
+  , hash :: CliHash
+  , slot :: Word64
+  }
+  deriving (Generic, FromJSON)
+
+getTip :: Integration BlockHeader
+getTip = do
+  LocalTestnet{..} <- testnet
+  let SpoNode{..} = head spoNodes
+  output <- bracket_ (setEnv "CARDANO_NODE_SOCKET_PATH" socket) (unsetEnv "CARDANO_NODE_SOCKET_PATH") $ liftIO $ execCli
+    [ "query", "tip"
+    , "--testnet-magic", show testnetMagic
+    ]
+  CliBlockHeader{..} <- expectRight "Failed to decode tip" $ eitherDecodeStrict $ T.encodeUtf8 $ T.pack output
+  pure $ BlockHeader (SlotNo slot) (BlockHeaderHash $ unCliHash hash) (BlockNo block)
 
 submit
   :: Wallet
@@ -335,6 +380,71 @@ marloweSyncExpectRollForward recvMsgRollForward = do
       , recvMsgRollForward
       }
   pure next
+
+headerSyncIntersectExpectNotFound :: [BlockHeader] -> Integration ()
+headerSyncIntersectExpectNotFound points = runMarloweHeaderSyncClient
+  $ HeaderSync.MarloweHeaderSyncClient
+  $ pure
+  $ HeaderSync.SendMsgIntersect points HeaderSync.ClientStIntersect
+    { recvMsgIntersectNotFound = pure $ HeaderSync.SendMsgDone ()
+    , recvMsgIntersectFound = \_ -> fail "Expected intersect not found, got intersect found"
+    }
+
+headerSyncIntersectExpectFound_ :: [BlockHeader] -> BlockHeader -> Integration ()
+headerSyncIntersectExpectFound_ points expectedPoint =
+  headerSyncIntersectExpectFound points expectedPoint
+    $ pure
+    $ HeaderSync.SendMsgDone ()
+
+headerSyncIntersectExpectFound
+  :: [BlockHeader]
+  -> BlockHeader
+  -> Integration (HeaderSync.ClientStIdle Integration a)
+  -> Integration a
+headerSyncIntersectExpectFound points expectedPoint next = runMarloweHeaderSyncClient
+  $ HeaderSync.MarloweHeaderSyncClient
+  $ pure
+  $ HeaderSync.SendMsgIntersect points HeaderSync.ClientStIntersect
+    { recvMsgIntersectNotFound = fail "Expected intersect found, got intersect not found"
+    , recvMsgIntersectFound = \actualPoint -> do
+        liftIO $ actualPoint `shouldBe` expectedPoint
+        next
+    }
+
+marloweSyncIntersectExpectNotFound :: ContractId -> [BlockHeader] -> Integration ()
+marloweSyncIntersectExpectNotFound contractId points = runMarloweSyncClient
+  $ MarloweSync.MarloweSyncClient
+  $ pure
+  $ MarloweSync.SendMsgIntersect contractId MarloweV1 points MarloweSync.ClientStIntersect
+    { recvMsgIntersectNotFound = pure ()
+    , recvMsgIntersectFound = \_ -> fail "Expected intersect not found, got intersect found"
+    }
+
+marloweSyncIntersectExpectFound_
+  :: ContractId
+  -> [BlockHeader]
+  -> BlockHeader
+  -> Integration ()
+marloweSyncIntersectExpectFound_ contractId points expectedPoint =
+  marloweSyncIntersectExpectFound contractId points expectedPoint
+    $ pure
+    $ MarloweSync.SendMsgDone ()
+
+marloweSyncIntersectExpectFound
+  :: ContractId
+  -> [BlockHeader]
+  -> BlockHeader
+  -> Integration (MarloweSync.ClientStIdle 'V1 Integration a)
+  -> Integration a
+marloweSyncIntersectExpectFound contractId points expectedPoint next = runMarloweSyncClient
+  $ MarloweSync.MarloweSyncClient
+  $ pure
+  $ MarloweSync.SendMsgIntersect contractId MarloweV1 points MarloweSync.ClientStIntersect
+    { recvMsgIntersectNotFound = fail "Expected intersect found, got intersect not found"
+    , recvMsgIntersectFound = \actualPoint -> do
+        liftIO $ actualPoint `shouldBe` expectedPoint
+        next
+    }
 
 marloweSyncPollExpectWait
   :: MonadFail m => m (MarloweSync.ClientStWait v m a)
