@@ -7,24 +7,30 @@ module Language.Marlowe.Runtime.Transaction.BuildConstraintsSpec
   ( spec
   ) where
 
+import Cardano.Api (ConsensusMode(..), EraHistory(EraHistory))
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import Data.Function (on)
+import Data.List (isPrefixOf)
 import qualified Data.List.NonEmpty as NE
 import Data.Map (Map)
 import qualified Data.Map as Map
+import Data.SOP.Strict (K(..), NP(..))
 import qualified Data.Set as Set
+import Data.Time.Clock.POSIX (posixSecondsToUTCTime)
 import GHC.Generics (Generic)
 import qualified Language.Marlowe.Core.V1.Semantics as Semantics
 import qualified Language.Marlowe.Core.V1.Semantics.Types as Semantics
 import Language.Marlowe.Runtime.ChainSync.Api (Lovelace, TransactionMetadata(unTransactionMetadata), toUTxOsList)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
-import Language.Marlowe.Runtime.Core.Api (Contract, Datum, MarloweVersion(..), MarloweVersionTag(..))
+import Language.Marlowe.Runtime.Core.Api
+  (Contract, Datum, MarloweVersion(..), MarloweVersionTag(..), TransactionScriptOutput(..))
 import qualified Language.Marlowe.Runtime.Core.Api as Core.Api
 import Language.Marlowe.Runtime.Plutus.V2.Api (fromPlutusValue)
-import Language.Marlowe.Runtime.Transaction.Api (CreateError, RoleTokensConfig(..), mkMint, unMint)
+import Language.Marlowe.Runtime.Transaction.Api
+  (ApplyInputsConstraintsBuildupError(..), ApplyInputsError(..), CreateError, RoleTokensConfig(..), mkMint, unMint)
 import qualified Language.Marlowe.Runtime.Transaction.Api as Transaction.Api
-import Language.Marlowe.Runtime.Transaction.BuildConstraints (buildCreateConstraints)
+import Language.Marlowe.Runtime.Transaction.BuildConstraints (buildApplyInputsConstraints, buildCreateConstraints)
 import qualified Language.Marlowe.Runtime.Transaction.BuildConstraints as BuildConstraints
 import Language.Marlowe.Runtime.Transaction.Constraints
   ( MarloweInputConstraints(..)
@@ -35,11 +41,17 @@ import Language.Marlowe.Runtime.Transaction.Constraints
   )
 import qualified Language.Marlowe.Runtime.Transaction.Constraints as TxConstraints
 import Language.Marlowe.Runtime.Transaction.ConstraintsSpec (genRole)
+import Ouroboros.Consensus.BlockchainTime (RelativeTime(..), SystemStart(..), mkSlotLength)
+import Ouroboros.Consensus.HardFork.History
+  (Bound(..), EraEnd(..), EraParams(..), EraSummary(..), SafeZone(..), mkInterpreter, summaryWithExactly)
+import Ouroboros.Consensus.Util.Counting (Exactly(..))
+import Plutus.V1.Ledger.Time (POSIXTime(POSIXTime))
+import qualified PlutusTx.AssocMap as AM
 import Spec.Marlowe.Semantics.Arbitrary ()
 import Test.Hspec (Spec, shouldBe)
 import qualified Test.Hspec as Hspec
 import qualified Test.Hspec.QuickCheck as Hspec.QuickCheck
-import Test.QuickCheck (Arbitrary(..), Property, discard, genericShrink, listOf1, oneof, suchThat, (===))
+import Test.QuickCheck (Arbitrary(..), Property, chooseInteger, discard, genericShrink, listOf1, oneof, suchThat, (===))
 import qualified Test.QuickCheck as QuickCheck
 import Test.QuickCheck.Instances ()
 
@@ -50,6 +62,7 @@ spec :: Spec
 spec = do
   createSpec
   withdrawSpec
+  buildApplyInputsConstraintsSpec
 
 createSpec :: Spec
 createSpec = Hspec.describe "buildCreateConstraints" do
@@ -223,3 +236,88 @@ withdrawSpec = Hspec.describe "buildWithdrawConstraints" do
           }
 
     pure $ actual `shouldBe` expected
+
+buildApplyInputsConstraintsSpec :: Spec
+buildApplyInputsConstraintsSpec =
+  Hspec.describe "buildApplyInputsConstraints" do
+    let
+      -- System start and era history are reusable across tests.
+      systemStart = SystemStart $ posixSecondsToUTCTime 0  -- Without loss of generality.
+      eraParams = EraParams
+        { eraEpochSize = 1
+        , eraSlotLength = mkSlotLength 1
+        , eraSafeZone = UnsafeIndefiniteSafeZone
+        }
+      oneSecondBound i = Bound
+        { boundTime = RelativeTime $ fromInteger i
+        , boundSlot = fromInteger i
+        , boundEpoch = fromInteger i
+        }
+      oneSecondEraSummary i = EraSummary
+        { eraStart = oneSecondBound i
+        , eraEnd = EraEnd $ oneSecondBound $ i + 1
+        , eraParams
+        }
+      unboundedEraSummary i = EraSummary
+        { eraStart = oneSecondBound i
+        , eraEnd = EraUnbounded
+        , eraParams
+        }
+      eraHistory =
+        EraHistory CardanoMode
+          . mkInterpreter
+          . summaryWithExactly
+          $ Exactly
+          $  K (oneSecondEraSummary 0) -- Byron lasted 1 second
+          :* K (oneSecondEraSummary 1) -- Shelley lasted 1 second
+          :* K (oneSecondEraSummary 2) -- Allegra lasted 1 second
+          :* K (oneSecondEraSummary 3) -- Mary lasted 1 second
+          :* K (oneSecondEraSummary 4) -- Alonzo lasted 1 second
+          :* K (unboundedEraSummary 5) -- Babbage never ends
+          :* Nil
+    Hspec.QuickCheck.prop "valid slot interval for timed-out contract" do
+      address <- arbitrary
+      assets <- arbitrary
+      utxo <- arbitrary
+      -- The choice intervals for the tip, minimum time, and timeout overlap, so every ordering will occur.
+      tipSlot' <- chooseInteger (9, 20) -- Make sure the tip is in the Babbage era.
+      minTime <- oneof
+                   [
+                     (1000 *) <$> chooseInteger (6, 20)  -- Even seconds, so there is a chance of collision.
+                   , chooseInteger (6000, 20000)         -- Milliseconds, so there is rounding off.
+                   ]
+      timeout <- oneof
+                   [
+                     (1000 *) <$> chooseInteger (6, 20)  -- Even seconds, so there is a chance of collision.
+                   , chooseInteger (6000, 20000)         -- Milliseconds, so there is rounding off.
+                   ]
+      marloweParams <- arbitrary
+      let
+        toSlot = (`div` 1000)
+        tipSlot = toEnum . fromEnum $ tipSlot'
+        tipTime = 1000 * tipSlot'
+        marloweState = Semantics.State AM.empty AM.empty AM.empty $ POSIXTime minTime
+        marloweContract = Semantics.When [] (POSIXTime timeout) Semantics.Close  -- This contract can only time out.
+        datum = Semantics.MarloweData{..}
+        marloweOutput = TransactionScriptOutput{..}
+        result =
+          buildApplyInputsConstraints
+            systemStart eraHistory MarloweV1
+            marloweOutput
+            tipSlot
+            (Chain.TransactionMetadata mempty) Nothing Nothing mempty
+      pure
+        case result of
+            -- A valid transaction will occur if the tip is not before the timeout.
+            Right _ -> toSlot timeout <= tipSlot'
+            -- A useless transaction will occur if the tip is before the timeout.
+            Left (ApplyInputsConstraintsBuildupFailed (MarloweComputeTransactionFailed "TEUselessTransaction")) ->
+              tipTime < timeout
+            -- If rounding off causes the timeout to fall at the tip, then there is an ambiguity.
+            Left (ApplyInputsConstraintsBuildupFailed (MarloweComputeTransactionFailed "TEAmbiguousTimeIntervalError")) ->
+              tipSlot' == toSlot timeout && minTime <= timeout
+            -- If the tip is in the past, then there should be an interval failure.
+            Left (ApplyInputsConstraintsBuildupFailed (MarloweComputeTransactionFailed message)) ->
+              "TEIntervalError (IntervalInPastError " `isPrefixOf` message == (tipTime < minTime)
+            -- Other failures should not occur.
+            Left _ -> False
