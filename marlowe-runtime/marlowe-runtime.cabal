@@ -199,6 +199,8 @@ library sync-api
     , marlowe-runtime
     , marlowe-runtime:discovery-api
     , monad-control
+    , transformers
+    , transformers-base
     , typed-protocols
   visibility: public
 

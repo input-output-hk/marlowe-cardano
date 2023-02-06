@@ -167,6 +167,8 @@
             (hsPkgs."marlowe-runtime" or (errorHandler.buildDepError "marlowe-runtime"))
             (hsPkgs."marlowe-runtime".components.sublibs.discovery-api or (errorHandler.buildDepError "marlowe-runtime:discovery-api"))
             (hsPkgs."monad-control" or (errorHandler.buildDepError "monad-control"))
+            (hsPkgs."transformers" or (errorHandler.buildDepError "transformers"))
+            (hsPkgs."transformers-base" or (errorHandler.buildDepError "transformers-base"))
             (hsPkgs."typed-protocols" or (errorHandler.buildDepError "typed-protocols"))
             ];
           buildable = true;

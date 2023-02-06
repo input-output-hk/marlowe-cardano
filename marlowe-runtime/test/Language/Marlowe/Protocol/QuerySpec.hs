@@ -25,36 +25,38 @@ instance ArbitraryMessage MarloweQuery where
   arbitraryMessage = resized (min 30) $ oneof
     [ do
         SomeRequest request <- arbitrary
-        pure $ AnyMessageAndAgency (ClientAgency TokInit) $ MsgRequest request
+        pure $ AnyMessageAndAgency (ClientAgency TokReq) $ MsgRequest request
+    , pure $ AnyMessageAndAgency (ClientAgency TokReq) MsgDone
     , do
-        SomeStRequest req <- arbitrary
+        SomeStRes req <- arbitrary
         a <- arbitraryResult req
-        pure $ AnyMessageAndAgency (ServerAgency (TokRequest req)) $ MsgRespond a
+        pure $ AnyMessageAndAgency (ServerAgency (TokRes req)) $ MsgRespond a
     ]
     where
-      arbitraryResult :: StRequest a -> Gen a
+      arbitraryResult :: StRes a -> Gen a
       arbitraryResult = \case
         TokContractHeaders -> arbitrary
         TokBoth a b -> resized (`div` 2) $ (,) <$> arbitraryResult a <*> arbitraryResult b
 
   shrinkMessage = \case
-    ClientAgency TokInit -> \case
+    ClientAgency TokReq -> \case
       MsgRequest req -> MsgRequest <$> shrinkRequest req
-    ServerAgency (TokRequest req) -> \case
+      MsgDone -> []
+    ServerAgency (TokRes req) -> \case
       MsgRespond a -> MsgRespond <$> shrinkResponse req a
 
-data SomeStRequest where
-  SomeStRequest :: StRequest a -> SomeStRequest
+data SomeStRes where
+  SomeStRes :: StRes a -> SomeStRes
 
-instance Arbitrary SomeStRequest where
+instance Arbitrary SomeStRes where
   arbitrary = oneofStructured
     [ ( Node
       , resize 0 do
-          SomeStRequest a <- arbitrary
-          SomeStRequest b <- arbitrary
-          pure $ SomeStRequest $ TokBoth a b
+          SomeStRes a <- arbitrary
+          SomeStRes b <- arbitrary
+          pure $ SomeStRes $ TokBoth a b
       )
-    , (Leaf, pure $ SomeStRequest TokContractHeaders)
+    , (Leaf, pure $ SomeStRes TokContractHeaders)
     ]
 
 instance Arbitrary SomeRequest where
@@ -82,7 +84,7 @@ shrinkRequest = \case
     , [ ReqBoth a b' | b' <- shrinkRequest b ]
     ]
 
-shrinkResponse :: StRequest a -> a -> [a]
+shrinkResponse :: StRes a -> a -> [a]
 shrinkResponse = \case
   TokContractHeaders -> shrink
   TokBoth ta tb -> \(a, b) -> fold
