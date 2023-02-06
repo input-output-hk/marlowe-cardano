@@ -1,6 +1,6 @@
 cabal-version      : 3.0
 name               : marlowe-apps
-version            : 0.2.2.0
+version            : 0.2.2.1
 synopsis           : Marlowe Runtimee applications
 license            : Apache-2.0
 license-file       : LICENSE
@@ -22,7 +22,6 @@ library
                       Language.Marlowe.Runtime.App.Submit
                       Language.Marlowe.Runtime.App.Types
                       Language.Marlowe.Runtime.App.Transact
-  other-modules     : Language.Marlowe.Protocol.Query.Client.Extra
   hs-source-dirs    : src
   build-depends     : base >= 4.9 && < 5
                     , aeson
