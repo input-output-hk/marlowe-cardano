@@ -57,7 +57,9 @@ executable marlowe-integration-tests
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
+    Language.Marlowe.Runtime.Integration.Common
     Language.Marlowe.Runtime.Integration.BasicSpec
+    Language.Marlowe.Runtime.Integration.StandardContract
   build-depends:
       base >= 4.9 && < 5
     , aeson
@@ -73,6 +75,9 @@ executable marlowe-integration-tests
     , marlowe-runtime:discovery-api
     , marlowe-runtime:history-api
     , marlowe-runtime:tx-api
+    , mtl
     , plutus-ledger-api
+    , unliftio
     , time
+    , transformers
   build-tool-depends: hspec-discover:hspec-discover
