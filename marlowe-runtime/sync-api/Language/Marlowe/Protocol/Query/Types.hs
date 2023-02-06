@@ -5,7 +5,7 @@
 module Language.Marlowe.Protocol.Query.Types
   where
 
-import Data.Aeson (ToJSON(..), Value, object, (.=))
+import Data.Aeson (ToJSON(..), Value(..), object, (.=))
 import Data.Bifunctor (bimap)
 import Data.Binary (Binary(..), getWord8, putWord8)
 import GHC.Generics (Generic)
@@ -18,8 +18,8 @@ import Network.TypedProtocol
 import Network.TypedProtocol.Codec (AnyMessageAndAgency(..))
 
 data MarloweQuery where
-  StInit :: MarloweQuery
-  StRequest :: a -> MarloweQuery
+  StReq :: MarloweQuery
+  StRes :: a -> MarloweQuery
   StDone :: MarloweQuery
 
 data Request a where
@@ -60,33 +60,37 @@ instance ToJSON (Request a) where
       [ "req-both" .= (toJSON a, toJSON b)
       ]
 
-data StRequest a where
-  TokContractHeaders :: StRequest (Page ContractId ContractHeader)
-  TokBoth :: StRequest a -> StRequest b -> StRequest (a, b)
+data StRes a where
+  TokContractHeaders :: StRes (Page ContractId ContractHeader)
+  TokBoth :: StRes a -> StRes b -> StRes (a, b)
 
-deriving instance Show (StRequest a)
-deriving instance Eq (StRequest a)
+deriving instance Show (StRes a)
+deriving instance Eq (StRes a)
 
 instance Protocol MarloweQuery where
   data Message MarloweQuery st st' where
     MsgRequest :: Request a -> Message MarloweQuery
-      'StInit
-      ('StRequest a)
+      'StReq
+      ('StRes a)
 
     MsgRespond :: a -> Message MarloweQuery
-      ('StRequest a)
+      ('StRes a)
+      'StReq
+
+    MsgDone :: Message MarloweQuery
+      'StReq
       'StDone
 
   data ClientHasAgency ps where
-    TokInit :: ClientHasAgency 'StInit
+    TokReq :: ClientHasAgency 'StReq
 
   data ServerHasAgency ps where
-    TokRequest :: StRequest a -> ServerHasAgency ('StRequest a)
+    TokRes :: StRes a -> ServerHasAgency ('StRes a)
 
   data NobodyHasAgency ps where
     TokDone :: NobodyHasAgency 'StDone
 
-  exclusionLemma_ClientAndServerHaveAgency TokInit = \case
+  exclusionLemma_ClientAndServerHaveAgency TokReq = \case
   exclusionLemma_NobodyAndClientHaveAgency TokDone = \case
   exclusionLemma_NobodyAndServerHaveAgency TokDone = \case
 
@@ -113,38 +117,43 @@ data Order = Ascending | Descending
 
 instance MessageToJSON MarloweQuery where
   messageToJSON = \case
-    ClientAgency TokInit -> \case
+    ClientAgency TokReq -> \case
       MsgRequest req -> object [ "request" .= req ]
-    ServerAgency (TokRequest req) -> \case
+      MsgDone -> String "done"
+    ServerAgency (TokRes req) -> \case
       MsgRespond a -> object [ "respond" .= responseToJSON req a ]
 
     where
-      responseToJSON :: StRequest a -> a -> Value
+      responseToJSON :: StRes a -> a -> Value
       responseToJSON = \case
         TokContractHeaders -> toJSON
         TokBoth a b -> toJSON . bimap (responseToJSON a) (responseToJSON b)
 
 instance ShowProtocol MarloweQuery where
-  showsPrecMessage p = fmap (showParen (p >= 11)) . \case
-    ClientAgency TokInit -> \case
-      MsgRequest req -> (showString "MsgRequest" . showSpace . showsPrec 11 req)
-    ServerAgency (TokRequest req) -> \case
-      MsgRespond a -> showsPrecResult req 11 a
+  showsPrecMessage p =  \case
+    ClientAgency TokReq -> \case
+      MsgRequest req -> showParen (p >= 11) (showString "MsgRequest" . showSpace . showsPrec 11 req)
+      MsgDone -> showString "MsgDone"
+    ServerAgency (TokRes req) -> \case
+      MsgRespond a -> showParen (p >= 11) (showString "MsgRespond" . showSpace . showsPrecResult req 11 a)
     where
-      showsPrecResult :: StRequest a -> Int -> a -> String -> String
+      showsPrecResult :: StRes a -> Int -> a -> String -> String
       showsPrecResult = \case
         TokContractHeaders -> showsPrec
         TokBoth ta tb -> \_ (a, b) -> showParen True (showsPrecResult ta 0 a . showCommaSpace . showsPrecResult tb 0 b)
-  showsPrecServerHasAgency p (TokRequest req) = showParen (p >= 11) (showString "TokRequest" . showSpace . showsPrec 11 req)
-  showsPrecClientHasAgency _ TokInit = showString "TokInit"
+  showsPrecServerHasAgency p (TokRes req) = showParen (p >= 11) (showString "TokRes" . showSpace . showsPrec 11 req)
+  showsPrecClientHasAgency _ TokReq = showString "TokReq"
 
 instance MessageEq MarloweQuery where
   messageEq = \case
-    AnyMessageAndAgency (ClientAgency TokInit) (MsgRequest req) -> \case
-      AnyMessageAndAgency (ClientAgency TokInit) (MsgRequest req') -> reqEq req req'
+    AnyMessageAndAgency (ClientAgency TokReq) (MsgRequest req) -> \case
+      AnyMessageAndAgency (ClientAgency TokReq) (MsgRequest req') -> reqEq req req'
       _ -> False
-    AnyMessageAndAgency (ServerAgency (TokRequest req)) (MsgRespond a) -> \case
-      AnyMessageAndAgency (ServerAgency (TokRequest req')) (MsgRespond a') -> resultEq req req' a a'
+    AnyMessageAndAgency (ClientAgency TokReq) MsgDone -> \case
+      AnyMessageAndAgency (ClientAgency TokReq) MsgDone -> True
+      _ -> False
+    AnyMessageAndAgency (ServerAgency (TokRes req)) (MsgRespond a) -> \case
+      AnyMessageAndAgency (ServerAgency (TokRes req')) (MsgRespond a') -> resultEq req req' a a'
       _ -> False
     where
       reqEq :: Request a -> Request a1 -> Bool
@@ -153,9 +162,14 @@ instance MessageEq MarloweQuery where
       reqEq (ReqBoth a b) (ReqBoth a' b') = reqEq a a' && reqEq b b'
       reqEq (ReqBoth _ _) _ = False
 
-      resultEq :: StRequest a -> StRequest b -> a -> b -> Bool
+      resultEq :: StRes a -> StRes b -> a -> b -> Bool
       resultEq TokContractHeaders TokContractHeaders = (==)
       resultEq TokContractHeaders _ = const $ const False
       resultEq (TokBoth ta tb) (TokBoth ta' tb') = \(a, b) (a', b') ->
         resultEq ta ta' a a' && resultEq tb tb' b b'
       resultEq (TokBoth _ _) _ = const $ const False
+
+requestToSt :: Request x -> StRes x
+requestToSt = \case
+  ReqContractHeaders _ -> TokContractHeaders
+  ReqBoth r1 r2 -> TokBoth (requestToSt r1) (requestToSt r2)

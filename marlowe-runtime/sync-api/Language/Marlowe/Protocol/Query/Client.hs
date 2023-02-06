@@ -1,61 +1,75 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 module Language.Marlowe.Protocol.Query.Client
   where
 
 import Control.Applicative (liftA2)
+import Control.Monad.Base (MonadBase(..))
+import Control.Monad.IO.Class (MonadIO(..))
+import Control.Monad.Trans.Class (MonadTrans(..))
 import Language.Marlowe.Protocol.Query.Types
 import Language.Marlowe.Runtime.Core.Api (ContractId)
 import Language.Marlowe.Runtime.Discovery.Api (ContractHeader)
 import Network.TypedProtocol
 
-data MarloweQueryClient m a
-  = MarloweQueryClientPure a
-  | MarloweQueryClientPeer (Peer MarloweQuery 'AsClient 'StInit m a)
-  deriving (Functor)
+data MarloweQueryClient m a where
+  ClientRequest :: Request x -> (x -> m (MarloweQueryClient m a)) -> MarloweQueryClient m a
+  ClientLift :: m (MarloweQueryClient m a) -> MarloweQueryClient m a
+  ClientPure :: a -> MarloweQueryClient m a
+
+deriving instance Functor m => Functor (MarloweQueryClient m)
 
 instance Applicative m => Applicative (MarloweQueryClient m) where
-  pure = MarloweQueryClientPure
-  MarloweQueryClientPure f <*> a = f <$> a
-  f <*> MarloweQueryClientPure a = ($ a) <$> f
-  MarloweQueryClientPeer peerF <*> MarloweQueryClientPeer peerA = MarloweQueryClientPeer $ apPeerInit peerF peerA
-    where
-    apPeerInit
-      :: Peer MarloweQuery 'AsClient 'StInit m (a -> b)
-      -> Peer MarloweQuery 'AsClient 'StInit m a
-      -> Peer MarloweQuery 'AsClient 'StInit m b
-    apPeerInit pf pa = case (pf, pa) of
-      (Effect m1, Effect m2) -> Effect $ liftA2 apPeerInit m1 m2
-      (Effect m1, _) -> Effect $ flip apPeerInit pa <$> m1
-      (_, Effect m2) -> Effect $ apPeerInit pf <$> m2
-      (Yield (ClientAgency TokInit) (MsgRequest req1) pf', Yield (ClientAgency TokInit) (MsgRequest req2) pa') ->
-        Yield (ClientAgency TokInit) (MsgRequest (ReqBoth req1 req2)) $ apPeerRequest pf' pa'
+  pure = ClientPure
+  ClientPure f <*> a = f <$> a
+  f <*> ClientPure a = ($ a) <$> f
+  ClientLift f <*> ClientLift a = ClientLift $ liftA2 (<*>) f a
+  ClientRequest req contF <*> ClientLift a = ClientRequest req \r ->
+    liftA2 (<*>) (contF r) a
+  ClientLift f <*> ClientRequest req contA = ClientRequest req \r ->
+    liftA2 (<*>) f (contA r)
+  ClientRequest req1 contF <*> ClientRequest req2 contA =
+    ClientRequest (ReqBoth req1 req2) \(r1, r2) -> liftA2 (<*>) (contF r1) (contA r2)
 
-    apPeerRequest
-      :: Peer MarloweQuery 'AsClient ('StRequest r1) m (a -> b)
-      -> Peer MarloweQuery 'AsClient ('StRequest r2) m a
-      -> Peer MarloweQuery 'AsClient ('StRequest (r1, r2)) m b
-    apPeerRequest pf pa = case (pf, pa) of
-      (Effect m1, Effect m2) -> Effect $ liftA2 apPeerRequest m1 m2
-      (Effect m1, _) -> Effect $ flip apPeerRequest pa <$> m1
-      (_, Effect m2) -> Effect $ apPeerRequest pf <$> m2
-      (Await (ServerAgency (TokRequest req1)) handleF, Await (ServerAgency (TokRequest req2)) handleA) ->
-        Await (ServerAgency $ TokRequest $ TokBoth req1 req2) \case
-          MsgRespond (r1, r2) -> appPeerDone (handleF $ MsgRespond r1) (handleA $ MsgRespond r2)
+instance Monad m => Monad (MarloweQueryClient m) where
+  ClientPure a >>= k = k a
+  ClientLift m >>= k = ClientLift $ (>>= k) <$> m
+  ClientRequest req cont >>= k = ClientRequest req $ fmap (>>= k) . cont
 
-    appPeerDone
-      :: Peer MarloweQuery 'AsClient 'StDone m (a -> b)
-      -> Peer MarloweQuery 'AsClient 'StDone m a
-      -> Peer MarloweQuery 'AsClient 'StDone m b
-    appPeerDone pf pa = case (pf, pa) of
-      (Effect m1, Effect m2) -> Effect $ liftA2 appPeerDone m1 m2
-      (Effect m1, _) -> Effect $ flip appPeerDone pa <$> m1
-      (_, Effect m2) -> Effect $ appPeerDone pf <$> m2
-      (Done TokDone f, Done TokDone a) -> Done TokDone $ f a
+instance MonadTrans MarloweQueryClient where
+  lift = ClientLift . fmap pure
 
-getContractHeaders :: Range ContractId -> MarloweQueryClient m (Page ContractId ContractHeader)
-getContractHeaders range = MarloweQueryClientPeer $
-  Yield (ClientAgency TokInit) (MsgRequest $ ReqContractHeaders range) $
-  Await (ServerAgency $ TokRequest TokContractHeaders) \(MsgRespond page) ->
-    Done TokDone page
+instance MonadIO m => MonadIO (MarloweQueryClient m) where
+  liftIO = lift . liftIO
+
+instance MonadBase b m => MonadBase b (MarloweQueryClient m) where
+  liftBase = lift . liftBase
+
+request :: Applicative m => Request a -> MarloweQueryClient m a
+request req = ClientRequest req $ pure . pure
+
+getContractHeaders :: Applicative m => Range ContractId -> MarloweQueryClient m (Page ContractId ContractHeader)
+getContractHeaders = request . ReqContractHeaders
+
+hoistMarloweQueryClient :: Functor m => (forall x. m x -> n x) -> MarloweQueryClient m a -> MarloweQueryClient n a
+hoistMarloweQueryClient f = \case
+  ClientPure a -> ClientPure a
+  ClientLift m -> ClientLift $ f $ hoistMarloweQueryClient f <$> m
+  ClientRequest req cont -> ClientRequest req $ f . fmap (hoistMarloweQueryClient f) . cont
+
+marloweQueryClientPeer :: Functor m => MarloweQueryClient m a -> Peer MarloweQuery 'AsClient 'StReq m a
+marloweQueryClientPeer = \case
+  ClientPure a ->
+    Yield (ClientAgency TokReq) MsgDone $
+    Done TokDone a
+  ClientLift m ->
+    Effect $ marloweQueryClientPeer <$> m
+  ClientRequest req cont ->
+    Yield (ClientAgency TokReq) (MsgRequest req) $
+    Await (ServerAgency (TokRes $ requestToSt req)) \case
+      MsgRespond r -> Effect $ marloweQueryClientPeer <$> cont r
