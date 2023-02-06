@@ -28,11 +28,8 @@ instance Applicative m => Applicative (MarloweQueryClient m) where
   pure = ClientPure
   ClientPure f <*> a = f <$> a
   f <*> ClientPure a = ($ a) <$> f
-  ClientLift f <*> ClientLift a = ClientLift $ liftA2 (<*>) f a
-  ClientRequest req contF <*> ClientLift a = ClientRequest req \r ->
-    liftA2 (<*>) (contF r) a
-  ClientLift f <*> ClientRequest req contA = ClientRequest req \r ->
-    liftA2 (<*>) f (contA r)
+  f <*> ClientLift a = ClientLift $ (f <*>) <$> a
+  ClientLift f <*> a = ClientLift $ (<*> a) <$> f
   ClientRequest req1 contF <*> ClientRequest req2 contA =
     ClientRequest (ReqBoth req1 req2) \(r1, r2) -> liftA2 (<*>) (contF r1) (contA r2)
 
