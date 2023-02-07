@@ -16,11 +16,9 @@ The `marlowe` executable provides a command-line interface to interacting with M
 	- [Output the History of a contract](marlowe/log.md)
 
 ```console
-Usage: marlowe [--history-host HOST_NAME] [--history-command-port PORT_NUMBER] 
-               [--history-query-port PORT_NUMBER] 
-               [--history-sync-port PORT_NUMBER] [--discovery-host HOST_NAME] 
-               [--discovery-query-port PORT_NUMBER] [--tx-host HOST_NAME] 
-               [--tx-command-port PORT_NUMBER] (COMMAND | COMMAND | COMMAND)
+Usage: marlowe [--history-host HOST_NAME] [--history-sync-port PORT_NUMBER]
+               [--tx-host HOST_NAME] [--tx-command-port PORT_NUMBER]
+               (COMMAND | COMMAND | COMMAND)
 
   Command line interface for managing Marlowe smart contracts on Cardano.
 
@@ -29,26 +27,10 @@ Available options:
   --history-host HOST_NAME The hostname of the Marlowe Runtime history server.
                            Can be set as the environment variable
                            MARLOWE_RT_HISTORY_HOST (default: "127.0.0.1")
-  --history-command-port PORT_NUMBER
-                           The port number of the history server's job API. Can
-                           be set as the environment variable
-                           MARLOWE_RT_HISTORY_COMMAND_PORT (default: 3717)
-  --history-query-port PORT_NUMBER
-                           The port number of the history server's query API.
-                           Can be set as the environment variable
-                           MARLOWE_RT_HISTORY_QUERY_PORT (default: 3718)
   --history-sync-port PORT_NUMBER
                            The port number of the history server's
                            synchronization API. Can be set as the environment
                            variable MARLOWE_RT_HISTORY_SYNC_PORT (default: 3719)
-  --discovery-host HOST_NAME
-                           The hostname of the Marlowe Runtime discovery server.
-                           Can be set as the environment variable
-                           MARLOWE_RT_DISCOVERY_HOST (default: "127.0.0.1")
-  --discovery-query-port PORT_NUMBER
-                           The port number of the discovery server's query API.
-                           Can be set as the environment variable
-                           MARLOWE_RT_DISCOVERY_QUERY_PORT (default: 3721)
   --tx-host HOST_NAME      The hostname of the Marlowe Runtime transaction
                            server. Can be set as the environment variable
                            MARLOWE_RT_TX_HOST (default: "127.0.0.1")

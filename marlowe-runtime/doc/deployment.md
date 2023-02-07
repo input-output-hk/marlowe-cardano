@@ -180,21 +180,4 @@ $ marlowe-tx
 
 ## Checking the Deployment
 
-A simple way to check a Marlowe Runtime deployment is to query the list of all Marlowe contract instance on the blockchain. This can be done with the `marlowe` command from within the development Nix shell:
-```console
-$ cd marlowe-cardano
-
-$ nix deploy
-
-$ marlowe ls --all | head
-02811e36c6cdac4721b53f718c4a1406e09ef0d985f9ad6b7fd676769e2f866c#1
-045d4ac6f50c57cade58fd697b907ff0418637ba1eadb36392e04d1c5d489b21#1
-0552fc00860d35d45c09b4b43740193579adbeea5097cf33b62201332e3095ee#1
-05574d9d1935d2a5d2e3cb15e79d46b076e4c81d85bd2e12940ed47b628001be#1
-05990678496287262051fc831ff35903e383ffc564b943de76e78394a8ceb4cd#1
-061d29872aae0580496aecc8bed3a7a11d743c55d24f6d2c5c03c630cf89e899#1
-066727dc5d40a6df33bb88dea3d29a9c1bb9b68493870ef9a04d6cbffe11e21b#1
-06718671646f66d1818fce1d2532a3bb2050a42df164c71c3306f9c67ba6f1ab#1
-06ddf0488df24a26882abf9546a8d314994b768465246172f8b4492e8a820162#1
-072b7513bfae663c993d21977e6b1c2231a6fb389d09595a1e3d4ee517b5a6ed#1
-```
+TODO
