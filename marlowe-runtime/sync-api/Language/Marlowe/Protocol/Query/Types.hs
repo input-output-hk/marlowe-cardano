@@ -13,9 +13,16 @@ import Data.Map (Map)
 import Data.Type.Equality (testEquality, type (:~:)(Refl))
 import GHC.Generics (Generic)
 import GHC.Show (showCommaSpace, showSpace)
-import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, PolicyId, TransactionMetadata, TxOutRef)
+import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, PolicyId, TransactionMetadata, TxId, TxOutRef)
 import Language.Marlowe.Runtime.Core.Api
-  (ContractId, MarloweVersion(..), MarloweVersionTag(..), Payout, SomeMarloweVersion(..), TransactionScriptOutput)
+  ( ContractId
+  , MarloweVersion(..)
+  , MarloweVersionTag(..)
+  , Payout
+  , SomeMarloweVersion(..)
+  , Transaction
+  , TransactionScriptOutput
+  )
 import Language.Marlowe.Runtime.Discovery.Api (ContractHeader)
 import Network.Protocol.Codec.Spec (MessageEq(..), ShowProtocol(..))
 import Network.Protocol.Driver (MessageToJSON(..))
@@ -30,6 +37,7 @@ data MarloweQuery where
 data Request a where
   ReqContractHeaders :: Range ContractId -> Request (Page ContractId ContractHeader)
   ReqContractState :: ContractId -> Request (Maybe SomeContractState)
+  ReqTransaction :: TxId -> Request (Maybe SomeTransaction)
   ReqBoth :: Request a -> Request b -> Request (a, b)
 
 data SomeRequest where
@@ -45,6 +53,7 @@ instance Binary SomeRequest where
         pure $ SomeRequest $ ReqBoth a b
       0x01 -> SomeRequest . ReqContractHeaders <$> get
       0x02 -> SomeRequest . ReqContractState <$> get
+      0x03 -> SomeRequest . ReqTransaction <$> get
       _ -> fail "Invalid Request tag"
 
   put (SomeRequest req) = case req of
@@ -58,6 +67,9 @@ instance Binary SomeRequest where
     ReqContractState contractId -> do
       putWord8 0x02
       put contractId
+    ReqTransaction txId -> do
+      putWord8 0x03
+      put txId
 
 deriving instance Eq (Request a)
 deriving instance Show (Request a)
@@ -72,10 +84,14 @@ instance ToJSON (Request a) where
     ReqContractState contractId -> object
       [ "get-contract-state" .= contractId
       ]
+    ReqTransaction txId -> object
+      [ "get-transaction" .= txId
+      ]
 
 data StRes a where
   TokContractHeaders :: StRes (Page ContractId ContractHeader)
   TokContractState :: StRes (Maybe SomeContractState)
+  TokTransaction :: StRes (Maybe SomeTransaction)
   TokBoth :: StRes a -> StRes b -> StRes (a, b)
 
 deriving instance Show (StRes a)
@@ -156,6 +172,50 @@ instance ToJSON SomeContractState where
     , "state" .= state
     ]
 
+data SomeTransaction = forall v. SomeTransaction
+  { version :: MarloweVersion v
+  , input :: TxOutRef
+  , consumedBy :: Maybe TxId
+  , transaction :: Transaction v
+  }
+
+instance Show SomeTransaction where
+  showsPrec p (SomeTransaction MarloweV1 input consumedBy transaction) = showParen (p >= 11)
+    ( showString "SomeTransaction"
+    . showSpace
+    . showsPrec 11 MarloweV1
+    . showSpace
+    . showsPrec 11 input
+    . showSpace
+    . showsPrec 11 consumedBy
+    . showSpace
+    . showsPrec 11 transaction
+    )
+
+instance Eq SomeTransaction where
+  SomeTransaction v input consumedBy tx == SomeTransaction v' input' consumedBy' tx' = case testEquality v v' of
+    Nothing -> False
+    Just Refl -> case v of
+      MarloweV1 -> input == input' && consumedBy == consumedBy' && tx == tx'
+
+instance Binary SomeTransaction where
+  put (SomeTransaction MarloweV1 input consumedBy tx) = do
+    put $ SomeMarloweVersion MarloweV1
+    put input
+    put consumedBy
+    put tx
+  get = do
+    SomeMarloweVersion MarloweV1 <- get
+    SomeTransaction MarloweV1 <$> get <*> get <*> get
+
+instance ToJSON SomeTransaction where
+  toJSON (SomeTransaction MarloweV1 input consumedBy tx) = object
+    [ "version" .= MarloweV1
+    , "input" .= input
+    , "consumedBy" .= consumedBy
+    , "transaction" .= tx
+    ]
+
 data ContractState v = ContractState
   { contractId :: ContractId
   , roleTokenMintingPolicyId :: PolicyId
@@ -189,6 +249,7 @@ instance MessageToJSON MarloweQuery where
       responseToJSON = \case
         TokContractHeaders -> toJSON
         TokContractState -> toJSON
+        TokTransaction -> toJSON
         TokBoth a b -> toJSON . bimap (responseToJSON a) (responseToJSON b)
 
 instance ShowProtocol MarloweQuery where
@@ -203,6 +264,7 @@ instance ShowProtocol MarloweQuery where
       showsPrecResult = \case
         TokContractHeaders -> showsPrec
         TokContractState -> showsPrec
+        TokTransaction -> showsPrec
         TokBoth ta tb -> \_ (a, b) -> showParen True (showsPrecResult ta 0 a . showCommaSpace . showsPrecResult tb 0 b)
   showsPrecServerHasAgency p (TokRes req) = showParen (p >= 11) (showString "TokRes" . showSpace . showsPrec 11 req)
   showsPrecClientHasAgency _ TokReq = showString "TokReq"
@@ -226,6 +288,8 @@ instance MessageEq MarloweQuery where
       reqEq (ReqContractHeaders _) _ = False
       reqEq (ReqContractState contractId) (ReqContractState contractId') = contractId == contractId'
       reqEq (ReqContractState _) _ = False
+      reqEq (ReqTransaction txId) (ReqTransaction txId') = txId == txId'
+      reqEq (ReqTransaction _) _ = False
 
       resultEq :: StRes a -> StRes b -> a -> b -> Bool
       resultEq (TokBoth ta tb) (TokBoth ta' tb') = \(a, b) (a', b') ->
@@ -235,9 +299,12 @@ instance MessageEq MarloweQuery where
       resultEq TokContractHeaders _ = const $ const False
       resultEq TokContractState TokContractState = (==)
       resultEq TokContractState _ = const $ const False
+      resultEq TokTransaction TokTransaction = (==)
+      resultEq TokTransaction _ = const $ const False
 
 requestToSt :: Request x -> StRes x
 requestToSt = \case
   ReqContractHeaders _ -> TokContractHeaders
   ReqContractState _ -> TokContractState
+  ReqTransaction _ -> TokTransaction
   ReqBoth r1 r2 -> TokBoth (requestToSt r1) (requestToSt r2)

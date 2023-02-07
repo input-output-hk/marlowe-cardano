@@ -13,6 +13,7 @@ import Control.Monad.Base (MonadBase(..))
 import Control.Monad.IO.Class (MonadIO(..))
 import Control.Monad.Trans.Class (MonadTrans(..))
 import Language.Marlowe.Protocol.Query.Types
+import Language.Marlowe.Runtime.ChainSync.Api (TxId)
 import Language.Marlowe.Runtime.Core.Api (ContractId)
 import Language.Marlowe.Runtime.Discovery.Api (ContractHeader)
 import Network.TypedProtocol
@@ -55,6 +56,9 @@ getContractHeaders = request . ReqContractHeaders
 
 getContractState :: Applicative m => ContractId -> MarloweQueryClient m (Maybe SomeContractState)
 getContractState = request . ReqContractState
+
+getTransaction :: Applicative m => TxId -> MarloweQueryClient m (Maybe SomeTransaction)
+getTransaction = request . ReqTransaction
 
 hoistMarloweQueryClient :: Functor m => (forall x. m x -> n x) -> MarloweQueryClient m a -> MarloweQueryClient n a
 hoistMarloweQueryClient f = \case

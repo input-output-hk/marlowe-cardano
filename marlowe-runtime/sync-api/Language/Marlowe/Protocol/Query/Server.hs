@@ -8,6 +8,7 @@ module Language.Marlowe.Protocol.Query.Server
 import Control.Concurrent.Async.Lifted (concurrently)
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Language.Marlowe.Protocol.Query.Types
+import Language.Marlowe.Runtime.ChainSync.Api (TxId)
 import Language.Marlowe.Runtime.Core.Api (ContractId)
 import Language.Marlowe.Runtime.Discovery.Api (ContractHeader)
 import Network.TypedProtocol
@@ -19,8 +20,9 @@ marloweQueryServer
    . MonadBaseControl IO m
   => (Range ContractId -> m (Page ContractId ContractHeader))
   -> (ContractId -> m (Maybe SomeContractState))
+  -> (TxId -> m (Maybe SomeTransaction))
   -> MarloweQueryServer m ()
-marloweQueryServer getContractHeaders getContractState = go
+marloweQueryServer getContractHeaders getContractState getTransaction = go
   where
     go = Await (ClientAgency TokReq) \case
       MsgRequest req -> Effect do
@@ -31,4 +33,5 @@ marloweQueryServer getContractHeaders getContractState = go
     serviceRequest = \case
       ReqContractHeaders range -> getContractHeaders range
       ReqContractState range -> getContractState range
+      ReqTransaction range -> getTransaction range
       ReqBoth a b -> concurrently (serviceRequest a) (serviceRequest b)
