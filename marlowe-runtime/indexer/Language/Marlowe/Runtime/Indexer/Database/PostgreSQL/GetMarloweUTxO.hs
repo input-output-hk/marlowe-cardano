@@ -4,8 +4,6 @@ module Language.Marlowe.Runtime.Indexer.Database.PostgreSQL.GetMarloweUTxO
   where
 
 import Control.Arrow ((&&&))
-import Control.Monad.Trans (lift)
-import Control.Monad.Trans.Maybe (MaybeT(..))
 import Data.ByteString (ByteString)
 import Data.Function (on)
 import Data.Int (Int16, Int64)
@@ -13,21 +11,15 @@ import Data.List (groupBy)
 import qualified Data.Map as Map
 import qualified Data.Set as Set
 import qualified Data.Vector as V
-import Hasql.TH (maybeStatement, vectorStatement)
+import Hasql.TH (vectorStatement)
 import qualified Hasql.Transaction as H
 import Language.Marlowe.Runtime.ChainSync.Api
 import qualified Language.Marlowe.Runtime.Core.Api as Core
 import Language.Marlowe.Runtime.Indexer.Types
 
-getMarloweUTxO :: BlockHeader -> H.Transaction (Maybe MarloweUTxO)
-getMarloweUTxO block = runMaybeT do
-  slotNo <- MaybeT $ H.statement (prepareBlockQueryParams block) [maybeStatement|
-    SELECT slotNo :: bigint
-      FROM marlowe.block
-     WHERE id = $1 :: bytea AND slotNo = $2 :: bigint AND blockNo = $3 :: bigint
-  |]
-
-  unspentContractOutputs <- lift $ Map.fromDistinctAscList . V.toList . fmap decodeContractOutputRow <$> H.statement slotNo [vectorStatement|
+getMarloweUTxO :: BlockHeader -> H.Transaction MarloweUTxO
+getMarloweUTxO BlockHeader{slotNo} = do
+  unspentContractOutputs <- Map.fromDistinctAscList . V.toList . fmap decodeContractOutputRow <$> H.statement (fromIntegral slotNo) [vectorStatement|
     WITH contractOut (createTxId, createTxIx, txId, txIx, address, payoutScriptHash) AS
       ( SELECT createTxOut.txId
              , createTxOut.txIx
@@ -76,7 +68,7 @@ getMarloweUTxO block = runMaybeT do
   |]
 
 
-  unspentContractOutputsFlat <- lift $ V.toList . fmap decodePayoutOutputRow <$> H.statement slotNo [vectorStatement|
+  unspentContractOutputsFlat <- V.toList . fmap decodePayoutOutputRow <$> H.statement (fromIntegral slotNo) [vectorStatement|
     WITH payoutOut (createTxId, createTxIx, txId, txIx) AS
       ( SELECT applyTx.createTxId
              , applyTx.createTxIx

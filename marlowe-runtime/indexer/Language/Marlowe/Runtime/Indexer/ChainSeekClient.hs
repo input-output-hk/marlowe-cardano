@@ -133,11 +133,10 @@ chainSeekClient = component \ChainSeekClientDependencies{..} -> do
                       Genesis -> pure $ MarloweUTxO mempty mempty
 
                       -- Otherwise load it from the database.
-                      At block -> getMarloweUTxO block >>= \case
-                        Nothing -> fail $ "Unable to load MarloweUTxO at unknown block " <> show block
-                        Just utxo -> do
-                          addField ev utxo
-                          pure utxo
+                      At block -> do
+                        utxo <- getMarloweUTxO block
+                        addField ev utxo
+                        pure utxo
 
                     -- Start the main synchronization loop.
                     pure $ clientIdle securityParameter systemStart eraHistory utxo
@@ -230,9 +229,7 @@ chainSeekClient = component \ChainSeekClientDependencies{..} -> do
             emit $ RollBackward point tip
             nextUtxo <- case point of
               Genesis -> pure $ MarloweUTxO mempty mempty
-              At block -> getMarloweUTxO block >>= \case
-                Nothing -> fail $ "unable to load marlowe utxo for rollback block " <> show block
-                Just a -> pure a
+              At block -> getMarloweUTxO block
             pure $ clientIdle securityParameter systemStart eraHistory nextUtxo
 
         , recvMsgWait = pollWithNext $ clientNext securityParameter systemStart eraHistory utxo
