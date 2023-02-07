@@ -68,4 +68,4 @@ jobs:
           nix run .#marlowe-integration-tests
         env:
           MARLOWE_RT_TEST_DB_HOST: localhost
-          MARLOWE_RT_TEST_CLEANUP_DATABASE: False
+          MARLOWE_RT_TEST_CLEANUP_DATABASE: "False"
