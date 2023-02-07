@@ -8,11 +8,8 @@ module Language.Marlowe.Runtime.Indexer.ChainSeekClient
 
 import Cardano.Api (CardanoMode, EraHistory, SystemStart)
 import Control.Concurrent (threadDelay)
-import Control.Concurrent.Async (Concurrently(..))
 import Control.Concurrent.Component
 import Control.Concurrent.STM (STM, atomically, newTQueue, readTQueue, writeTQueue)
-import Data.List (sortOn)
-import Data.Ord (Down(Down))
 import Data.Set (Set)
 import Data.Set.NonEmpty (NESet)
 import qualified Data.Set.NonEmpty as NESet
@@ -26,7 +23,6 @@ import Network.Protocol.Driver (RunClient)
 import Network.Protocol.Query.Client (QueryClient, liftQuery)
 import Observe.Event (addField, withEvent)
 import Observe.Event.Backend (EventBackend)
-import Witherable (wither)
 
 data ChainSeekClientSelector f where
   LoadMarloweUTxO :: ChainSeekClientSelector MarloweUTxO
@@ -121,72 +117,30 @@ chainSeekClient = component \ChainSeekClientDependencies{..} -> do
                 { recvMsgQueryRejected = \_ tip -> do
                     -- Roll everything back to Genesis.
                     emit $ RollBackward Genesis tip
-                    let
-                      -- Initial empty Marlowe UTxO
-                      rollbackStates = RollbackStates
-                        { currentState = MarloweUTxO mempty mempty
-                        , currentBlockNumber = Genesis
-                        , previousStates = []
-                        }
 
                     -- Start the main synchronization loop
-                    pure $ clientIdle securityParameter systemStart eraHistory rollbackStates
+                    pure $ clientIdle securityParameter systemStart eraHistory $ MarloweUTxO mempty mempty
 
                 -- An intersection point was found, resume synchronization from
                 -- that point.
                 , recvMsgRollForward = \_ point tip -> do
                     -- Always emit a rollback at the start.
                     emit $ RollBackward point tip
-                    let
-                      -- The block number of the tip point
-                      tipBlockNo = case tip of
-                        Genesis -> -1
-                        At BlockHeader{..} -> fromIntegral blockNo
 
-                      -- Determines if a block is within the security parameter of
-                      -- the tip, and must be retained in case a rollback occurs.
-                      isYoungerThanSecurityParameter BlockHeader{blockNo} =
-                        tipBlockNo - fromIntegral blockNo <= securityParameter
+                    -- Load the MarloweUTxO
+                    utxo <- withEvent eventBackend LoadMarloweUTxO \ev -> case point of
+                      -- If the intersection point is at Genesis, return an empty MarloweUTxO.
+                      Genesis -> pure $ MarloweUTxO mempty mempty
 
-                      -- List of block headers to load the MarloweUTxO at, in
-                      -- descending order, excluding the current block.
-                      utxoHistoryRange =
-                        -- Only load the Marlowe UTxO for blocks within the range of possible rollbacks.
-                        takeWhile isYoungerThanSecurityParameter
-                          -- Skip the current block (will be added back later).
-                          $ drop 1
-                          -- Drop blocks that were newer than the intersection point, as they have been rolled back.
-                          $ dropWhile ((> point) . At)
-                          -- Sort descending
-                          $ sortOn Down intersectionPoints
-
-                    -- Load the MarloweUTxO history in parallel, using ApplicativeDo and Concurrently.
-                    rollbackStates <- withEvent eventBackend LoadMarloweUTxO \ev -> runConcurrently do
-                      -- Load the current MarloweUTxO (this is why it was skipped in utxoHistoryRange).
-                      currentState <- case point of
-                        -- If the intersection point is at Genesis, return an empty MarloweUTxO.
-                        Genesis -> pure $ MarloweUTxO mempty mempty
-
-                        -- Otherwise load it from the database.
-                        At block -> Concurrently $ getMarloweUTxO block >>= \case
-                          Nothing -> fail $ "Unable to load MarloweUTxO at unknown block " <> show block
-                          Just utxo -> do
-                            addField ev utxo
-                            pure utxo
-
-                      -- Load the previous MarloweUTxOs in parallel.
-                      previousStates <- flip wither utxoHistoryRange \block ->
-                        Concurrently $ fmap (At $ blockNo block,) <$> getMarloweUTxO block
-
-                      -- Initialize the rollback states.
-                      pure RollbackStates
-                        { currentState
-                        , currentBlockNumber = blockNo <$> point
-                        , previousStates
-                        }
+                      -- Otherwise load it from the database.
+                      At block -> getMarloweUTxO block >>= \case
+                        Nothing -> fail $ "Unable to load MarloweUTxO at unknown block " <> show block
+                        Just utxo -> do
+                          addField ev utxo
+                          pure utxo
 
                     -- Start the main synchronization loop.
-                    pure $ clientIdle securityParameter systemStart eraHistory rollbackStates
+                    pure $ clientIdle securityParameter systemStart eraHistory utxo
 
                 -- Since the client is at Genesis at the start of this request,
                 -- it will never be rolled back. Handle the perfunctory case by
@@ -202,11 +156,7 @@ chainSeekClient = component \ChainSeekClientDependencies{..} -> do
 
             pure case intersectionPoints of
               -- Just start the loop right away with an empty UTxO.
-              [] -> clientIdle securityParameter systemStart eraHistory RollbackStates
-                { currentState = MarloweUTxO mempty mempty
-                , currentBlockNumber = Genesis
-                , previousStates = []
-                }
+              [] -> clientIdle securityParameter systemStart eraHistory $ MarloweUTxO mempty mempty
               -- Request an intersection
               _ -> clientIdleIntersect
         }
@@ -232,7 +182,7 @@ chainSeekClient = component \ChainSeekClientDependencies{..} -> do
         :: Int
         -> SystemStart
         -> EraHistory CardanoMode
-        -> RollbackStates MarloweUTxO
+        -> MarloweUTxO
         -> ClientStIdle Move ChainPoint (WithGenesis BlockHeader) IO a
       clientIdle securityParameter systemStart eraHistory = SendMsgQueryNext (FindTxsFor allScriptCredentials) . clientNext securityParameter systemStart eraHistory
 
@@ -241,9 +191,9 @@ chainSeekClient = component \ChainSeekClientDependencies{..} -> do
         :: Int
         -> SystemStart
         -> EraHistory CardanoMode
-        -> RollbackStates MarloweUTxO
+        -> MarloweUTxO
         -> ClientStNext Move Void (Set Transaction) ChainPoint (WithGenesis BlockHeader) IO a
-      clientNext securityParameter systemStart eraHistory states = ClientStNext
+      clientNext securityParameter systemStart eraHistory utxo = ClientStNext
         -- Fail with an error if chainseekd rejects the query. This is safe
         -- from bad user input, because our queries are derived from the ledger
         -- state, and so will only be rejected if the query derivation is
@@ -259,66 +209,31 @@ chainSeekClient = component \ChainSeekClientDependencies{..} -> do
               Genesis -> fail "Rolled forward to Genesis"
               At block -> pure block
 
-            -- Get the current remote tip block (not expected ever to be Genesis, because it is expected to be larger than or equal to point).
-            tipBlock <- case tip of
-              Genesis -> fail "Unexpected tip at Genesis"
-              At tipBlock -> pure tipBlock
-
             -- Extract the Marlowe block and compute the next MarloweUTxO.
-            marloweUTxO <- case extractMarloweBlock systemStart eraHistory (NESet.toSet marloweScriptHashes) block txs $ currentState states of
+            nextUtxo <- case extractMarloweBlock systemStart eraHistory (NESet.toSet marloweScriptHashes) block txs utxo of
               -- If no MarloweBlock was extracted (not expected, but harmless), do nothing and return the current MarloweUTxO.
               -- This is not expected because the query would only be satisfied by a block that contains some usable Marlowe information.
-              Nothing -> pure $ currentState states
+              Nothing -> pure utxo
 
-              Just (marloweUTxO, marloweBlock) -> do
+              Just (nextUtxo, marloweBlock) -> do
                 -- Emit the marlowe block in a roll forward event to a downstream consumer.
                 emit $ RollForward marloweBlock point tip
 
                 -- Return the new MarloweUTxO
-                pure marloweUTxO
+                pure nextUtxo
 
             -- Loop back into the main synchronization loop with an updated
             -- rollback state.
-            pure $ clientIdle securityParameter systemStart eraHistory $ pushState securityParameter (blockNo block) (blockNo tipBlock) marloweUTxO states
+            pure $ clientIdle securityParameter systemStart eraHistory nextUtxo
 
         , recvMsgRollBackward = \point tip -> do
             emit $ RollBackward point tip
-            pure $ clientIdle securityParameter systemStart eraHistory $ rollback (blockNo <$> point) states
+            nextUtxo <- case point of
+              Genesis -> pure $ MarloweUTxO mempty mempty
+              At block -> getMarloweUTxO block >>= \case
+                Nothing -> fail $ "unable to load marlowe utxo for rollback block " <> show block
+                Just a -> pure a
+            pure $ clientIdle securityParameter systemStart eraHistory nextUtxo
 
-        , recvMsgWait = pollWithNext $ clientNext securityParameter systemStart eraHistory states
-        }
-
--- A current state with a collection of previous states
-data RollbackStates a = RollbackStates
-  { currentState :: a
-  , currentBlockNumber :: WithGenesis BlockNo
-  , previousStates :: [(WithGenesis BlockNo, a)]
-  }
-
--- Add a new state at the given block number to the collection, moving the
--- current state to the previous states.
-pushState :: Int -> BlockNo -> BlockNo -> a -> RollbackStates a -> RollbackStates a
-pushState securityParameter blockNo tip state RollbackStates{..} = RollbackStates
-  { currentState = state
-  , currentBlockNumber = At blockNo
-  -- Add the previous current state to the previous states, and drop any
-  -- previous states that are older than the securityParameter (i.e. we can
-  -- safely assume we won't roll back to them).
-  , previousStates = takeWhile isYoungerThanSecurityParameter $ (currentBlockNumber, currentState) : previousStates
-  }
-  where
-    isYoungerThanSecurityParameter (Genesis, _) = fromIntegral tip <= securityParameter
-    isYoungerThanSecurityParameter (At blockNo', _) = fromIntegral (tip - blockNo') <= securityParameter
-
--- Rollback the state collection to a previous state. Throws an exception if
--- there are no previous states to rollback to.
-rollback :: WithGenesis BlockNo -> RollbackStates a -> RollbackStates a
-rollback rollbackBlock states@RollbackStates{..}
-  | currentBlockNumber <= rollbackBlock = states
-  | otherwise = case previousStates of
-      [] -> error "No previous states to rollback"
-      (currentBlockNumber', currentState') : previousStates' -> rollback rollbackBlock RollbackStates
-        { currentState = currentState'
-        , currentBlockNumber = currentBlockNumber'
-        , previousStates = previousStates'
+        , recvMsgWait = pollWithNext $ clientNext securityParameter systemStart eraHistory utxo
         }
