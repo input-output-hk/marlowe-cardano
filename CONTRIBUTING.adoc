@@ -294,6 +294,8 @@ It's okay to repeat information from such places, or simply to point to it.
 For one-commit PRs, Github will automatically populate the PR description with the commit message, so if you've written a good commit message you're done!
 Sometimes there is "change-related" information that doesn't belong in a commit message but is useful ("Kris I think this will fix the issue you had yesterday").
 
+A checklist for changes that require review is provided in the PR template.
+
 ==== Misc PR tips
 
 * Review the diff of your own PR at the last minute before hitting "create".
