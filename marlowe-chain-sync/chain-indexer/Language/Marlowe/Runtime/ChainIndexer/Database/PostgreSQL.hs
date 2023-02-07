@@ -567,7 +567,13 @@ commitBlocks = CommitBlocks \blocks ->
       body@(TxBody TxBodyContent{..}) -> case txScriptValidity of
         TxScriptValidity _ ScriptInvalid -> case txReturnCollateral of
           TxReturnCollateralNone     -> []
-          TxReturnCollateral _ txOut -> [SomeTxOut (getTxId body) (TxIx 1) slotNo txOut (Nothing, Nothing) True era]
+          TxReturnCollateral _ txOut -> let
+                                          -- The index of the `TxOut` for collateral change on a transaction that
+                                          -- fails due to an invalid script is one more than the number of `TxOut`s
+                                          -- that there would have been had the transaction succeeded.
+                                          index =  toEnum $ length txOuts
+                                        in
+                                          [SomeTxOut (getTxId body) (TxIx index) slotNo txOut (Nothing, Nothing) True era]
         _ -> do
           (ix, txOut, datumInfo) <- zip3 [0..] txOuts datums
           pure $ SomeTxOut (getTxId body) (TxIx ix) slotNo txOut datumInfo False era
