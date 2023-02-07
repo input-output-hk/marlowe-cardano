@@ -249,8 +249,9 @@ library sync
     , plutus-ledger-api
     , text
     , time
-    , witherable
+    , transformers
     , vector
+    , witherable
   visibility: public
 
 library history
