@@ -44,6 +44,7 @@ instance Binary SomeRequest where
         SomeRequest b <- get
         pure $ SomeRequest $ ReqBoth a b
       0x01 -> SomeRequest . ReqContractHeaders <$> get
+      0x02 -> SomeRequest . ReqContractState <$> get
       _ -> fail "Invalid Request tag"
 
   put (SomeRequest req) = case req of
