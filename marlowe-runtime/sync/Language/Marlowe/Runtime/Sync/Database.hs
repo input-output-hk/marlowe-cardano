@@ -13,7 +13,7 @@ import Data.Aeson (ToJSON)
 import Data.Text (Text)
 import Data.Void (Void)
 import GHC.Generics (Generic)
-import Language.Marlowe.Protocol.Query.Types (Page, Range)
+import Language.Marlowe.Protocol.Query.Types (Page, Range, SomeContractState)
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainPoint)
 import Language.Marlowe.Runtime.Core.Api (ContractId, MarloweVersion(..), SomeMarloweVersion)
 import Language.Marlowe.Runtime.Discovery.Api (ContractHeader)
@@ -30,6 +30,7 @@ data DatabaseSelector f where
   GetNextHeaders :: DatabaseSelector (QueryField ChainPoint (Next ContractHeader))
   GetNextSteps :: MarloweVersion v -> DatabaseSelector (QueryField (GetNextStepsArguments v) (Next (ContractStep v)))
   GetHeaders :: DatabaseSelector (QueryField (Range ContractId) (Page ContractId ContractHeader))
+  GetContractState :: DatabaseSelector (QueryField ContractId (Maybe SomeContractState))
 
 data QueryField p r
   = Arguments p
@@ -105,6 +106,11 @@ logDatabaseQueries eventBackend DatabaseQueries{..} = DatabaseQueries
       result <- getHeaders range
       addField ev $ Result result
       pure result
+  , getContractState = \contractId -> withEvent eventBackend GetContractState \ev -> do
+      addField ev $ Arguments contractId
+      result <- getContractState contractId
+      addField ev $ Result result
+      pure result
   }
 
 hoistDatabaseQueries :: (forall x. m x -> n x) -> DatabaseQueries m -> DatabaseQueries n
@@ -117,6 +123,7 @@ hoistDatabaseQueries f DatabaseQueries{..} = DatabaseQueries
   , getNextHeaders = f . getNextHeaders
   , getNextSteps = (fmap . fmap) f . getNextSteps
   , getHeaders = f . getHeaders
+  , getContractState = f . getContractState
   }
 
 data DatabaseQueries m = DatabaseQueries
@@ -128,6 +135,7 @@ data DatabaseQueries m = DatabaseQueries
   , getNextHeaders :: ChainPoint -> m (Next ContractHeader)
   , getNextSteps :: forall v. MarloweVersion v -> ContractId -> ChainPoint -> m (Next (ContractStep v))
   , getHeaders :: Range ContractId -> m (Page ContractId ContractHeader)
+  , getContractState :: ContractId -> m (Maybe SomeContractState)
   }
 
 data Next a
@@ -147,6 +155,7 @@ getDatabaseSelectorConfig = \case
   GetNextHeaders -> getQuerySelectorConfig "get-next-headers"
   GetNextSteps MarloweV1 -> getQuerySelectorConfig "get-next-steps"
   GetHeaders -> getQuerySelectorConfig "get-headers"
+  GetContractState -> getQuerySelectorConfig "get-contract-state"
 
 getQuerySelectorConfig :: (ToJSON p, ToJSON r) => Text -> SelectorConfig (QueryField p r)
 getQuerySelectorConfig key = SelectorConfig key True FieldConfig

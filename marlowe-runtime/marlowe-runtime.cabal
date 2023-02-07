@@ -194,7 +194,9 @@ library sync-api
     , aeson
     , binary
     , bytestring
+    , containers
     , lifted-async
+    , marlowe-chain-sync
     , marlowe-protocols
     , marlowe-runtime
     , marlowe-runtime:discovery-api
@@ -210,19 +212,20 @@ library sync
   visibility: public
   exposed-modules:
     Language.Marlowe.Runtime.Sync
+    Language.Marlowe.Runtime.Sync.Database
+    Language.Marlowe.Runtime.Sync.Database.PostgreSQL
+    Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetContractState
+    Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetCreateStep
+    Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetHeaders
+    Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetIntersection
+    Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetIntersectionForContract
+    Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetNextHeaders
+    Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetNextSteps
+    Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetTip
+    Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetTipForContract
     Language.Marlowe.Runtime.Sync.MarloweHeaderSyncServer
     Language.Marlowe.Runtime.Sync.MarloweSyncServer
     Language.Marlowe.Runtime.Sync.QueryServer
-    Language.Marlowe.Runtime.Sync.Database
-    Language.Marlowe.Runtime.Sync.Database.PostgreSQL
-    Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetTip
-    Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetTipForContract
-    Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetCreateStep
-    Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetHeaders
-    Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetIntersectionForContract
-    Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetIntersection
-    Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetNextHeaders
-    Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetNextSteps
   build-depends:
       base >= 4.9 && < 5
     , aeson

@@ -49,8 +49,10 @@ codecMarloweQuery = binaryCodec putMessage getMessage
   getResult = \case
     TokBoth a b -> (,) <$> getResult a <*> getResult b
     TokContractHeaders -> get
+    TokContractState -> get
 
   putResult :: StRes a -> a -> Put
   putResult = \case
     TokBoth ta tb -> \(a, b) -> putResult ta a *> putResult tb b
     TokContractHeaders -> put
+    TokContractState -> put

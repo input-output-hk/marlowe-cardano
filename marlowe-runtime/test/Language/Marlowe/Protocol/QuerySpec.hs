@@ -1,5 +1,6 @@
 {-# OPTIONS_GHC -Wno-orphans #-}
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 
 module Language.Marlowe.Protocol.QuerySpec
@@ -9,6 +10,7 @@ import Data.Foldable (fold)
 import Language.Marlowe.Protocol.Query.Codec (codecMarloweQuery)
 import Language.Marlowe.Protocol.Query.Types
 import Language.Marlowe.Runtime.ChainSync.Gen (StructureType(..), oneofStructured, resized)
+import Language.Marlowe.Runtime.Core.Api (MarloweVersion(..), MarloweVersionTag(V1))
 import Language.Marlowe.Runtime.Discovery.Gen ()
 import Network.Protocol.Codec.Spec
 import Network.TypedProtocol.Codec
@@ -36,6 +38,7 @@ instance ArbitraryMessage MarloweQuery where
       arbitraryResult :: StRes a -> Gen a
       arbitraryResult = \case
         TokContractHeaders -> arbitrary
+        TokContractState -> arbitrary
         TokBoth a b -> resized (`div` 2) $ (,) <$> arbitraryResult a <*> arbitraryResult b
 
   shrinkMessage = \case
@@ -48,6 +51,22 @@ instance ArbitraryMessage MarloweQuery where
 data SomeStRes where
   SomeStRes :: StRes a -> SomeStRes
 
+instance Arbitrary SomeContractState where
+  arbitrary = SomeContractState MarloweV1 <$> arbitrary
+  shrink (SomeContractState MarloweV1 state) = SomeContractState MarloweV1 <$> shrink state
+
+instance Arbitrary (ContractState 'V1) where
+  arbitrary = ContractState
+    <$> arbitrary
+    <*> arbitrary
+    <*> arbitrary
+    <*> arbitrary
+    <*> arbitrary
+    <*> arbitrary
+    <*> arbitrary
+    <*> arbitrary
+  shrink = genericShrink
+
 instance Arbitrary SomeStRes where
   arbitrary = oneofStructured
     [ ( Node
@@ -57,6 +76,7 @@ instance Arbitrary SomeStRes where
           pure $ SomeStRes $ TokBoth a b
       )
     , (Leaf, pure $ SomeStRes TokContractHeaders)
+    , (Leaf, pure $ SomeStRes TokContractState)
     ]
 
 instance Arbitrary SomeRequest where
@@ -68,9 +88,11 @@ instance Arbitrary SomeRequest where
           pure $ SomeRequest $ ReqBoth a b
       )
     , (Leaf, SomeRequest . ReqContractHeaders <$> arbitrary)
+    , (Leaf, SomeRequest . ReqContractState <$> arbitrary)
     ]
   shrink (SomeRequest req) = case req of
     ReqContractHeaders range -> SomeRequest . ReqContractHeaders <$> shrink range
+    ReqContractState contractId -> SomeRequest . ReqContractState <$> shrink contractId
     ReqBoth a b -> fold
       [ [ SomeRequest $ ReqBoth a' b | SomeRequest a' <- shrink (SomeRequest a) ]
       , [ SomeRequest $ ReqBoth a b' | SomeRequest b' <- shrink (SomeRequest b) ]
@@ -79,6 +101,7 @@ instance Arbitrary SomeRequest where
 shrinkRequest :: Request a -> [Request a]
 shrinkRequest = \case
   ReqContractHeaders range -> ReqContractHeaders <$> shrink range
+  ReqContractState contractId -> ReqContractState <$> shrink contractId
   ReqBoth a b -> fold
     [ [ ReqBoth a' b | a' <- shrinkRequest a ]
     , [ ReqBoth a b' | b' <- shrinkRequest b ]
@@ -87,6 +110,7 @@ shrinkRequest = \case
 shrinkResponse :: StRes a -> a -> [a]
 shrinkResponse = \case
   TokContractHeaders -> shrink
+  TokContractState -> shrink
   TokBoth ta tb -> \(a, b) -> fold
     [ [ (a', b) | a' <- shrinkResponse ta a ]
     , [ (a, b') | b' <- shrinkResponse tb b ]
