@@ -43,10 +43,10 @@ spec = it "Intersections" $ withLocalMarloweRuntime $ runIntegrationTest do
   marloweSyncIntersectExpectNotFound idA []
   -- 12. Do a MarloweSync Intersect with points [A0..A3]
   -- 13. Expect Intersect found @ A3
-  marloweSyncIntersectExpectFound_ idA [pA0, pA1, pA2, pA3] pA3
+  marloweSyncIntersectExpectFound idA [pA0, pA1, pA2, pA3] pA3 [pA4, pA5]
   -- 14. Do a MarloweSync Intersect with points [A2..A4]
   -- 15. Expect Intersect found @ A4
-  marloweSyncIntersectExpectFound_ idA [pA2, pA3, pA4] pA4
+  marloweSyncIntersectExpectFound idA [pA2, pA3, pA4] pA4 [pA5]
   -- 16. Do a MarloweSync Intersect with points [B0,A1-A5]
   -- 17. Expect Intersect not found
   marloweSyncIntersectExpectNotFound idA [pB0, pA1, pA2, pA3, pA4, pA5]
@@ -55,10 +55,10 @@ spec = it "Intersections" $ withLocalMarloweRuntime $ runIntegrationTest do
   headerSyncIntersectExpectNotFound []
   -- 20. Do a MarloweHeaderSync with points [A0, B0, C0]
   -- 21. Expect Intersect found @ C0
-  headerSyncIntersectExpectFound_ [pA0, pB0, pC0] pC0
+  headerSyncIntersectExpectFound [pA0, pB0, pC0] pC0 []
   -- 22. Do a MarloweHeaderSync with points [A0, B0]
   -- 23. Expect Intersect found @ B0
-  headerSyncIntersectExpectFound_ [pA0, pB0] pB0
+  headerSyncIntersectExpectFound [pA0, pB0] pB0 [pC0]
   -- 24. Do a MarloweHeaderSync with points [X, A0, B0, C0]
   -- 25. Expect Intersect not found
   headerSyncIntersectExpectNotFound [pX, pA0, pB0, pC0]

@@ -390,26 +390,29 @@ headerSyncIntersectExpectNotFound points = runMarloweHeaderSyncClient
     , recvMsgIntersectFound = \_ -> fail "Expected intersect not found, got intersect found"
     }
 
-headerSyncIntersectExpectFound_ :: [BlockHeader] -> BlockHeader -> Integration ()
-headerSyncIntersectExpectFound_ points expectedPoint =
-  headerSyncIntersectExpectFound points expectedPoint
-    $ pure
-    $ HeaderSync.SendMsgDone ()
-
 headerSyncIntersectExpectFound
   :: [BlockHeader]
   -> BlockHeader
-  -> Integration (HeaderSync.ClientStIdle Integration a)
-  -> Integration a
-headerSyncIntersectExpectFound points expectedPoint next = runMarloweHeaderSyncClient
+  -> [BlockHeader]
+  -> Integration ()
+headerSyncIntersectExpectFound points expectedIntersection remainingPoints = runMarloweHeaderSyncClient
   $ HeaderSync.MarloweHeaderSyncClient
   $ pure
   $ HeaderSync.SendMsgIntersect points HeaderSync.ClientStIntersect
     { recvMsgIntersectNotFound = fail "Expected intersect found, got intersect not found"
-    , recvMsgIntersectFound = \actualPoint -> do
-        liftIO $ actualPoint `shouldBe` expectedPoint
-        next
+    , recvMsgIntersectFound = \actualIntersection -> do
+        liftIO $ actualIntersection `shouldBe` expectedIntersection
+        expectRemainingPoints remainingPoints
     }
+  where
+    expectRemainingPoints [] = pure
+      $ headerSyncRequestNextExpectWait
+      $ pure
+      $ HeaderSync.SendMsgCancel
+      $ HeaderSync.SendMsgDone ()
+    expectRemainingPoints (x : xs) = HeaderSync.SendMsgRequestNext <$> headerSyncExpectNewHeaders \block _ -> do
+      liftIO $ block `shouldBe` x
+      expectRemainingPoints xs
 
 marloweSyncIntersectExpectNotFound :: ContractId -> [BlockHeader] -> Integration ()
 marloweSyncIntersectExpectNotFound contractId points = runMarloweSyncClient
@@ -420,31 +423,30 @@ marloweSyncIntersectExpectNotFound contractId points = runMarloweSyncClient
     , recvMsgIntersectFound = \_ -> fail "Expected intersect not found, got intersect found"
     }
 
-marloweSyncIntersectExpectFound_
-  :: ContractId
-  -> [BlockHeader]
-  -> BlockHeader
-  -> Integration ()
-marloweSyncIntersectExpectFound_ contractId points expectedPoint =
-  marloweSyncIntersectExpectFound contractId points expectedPoint
-    $ pure
-    $ MarloweSync.SendMsgDone ()
-
 marloweSyncIntersectExpectFound
   :: ContractId
   -> [BlockHeader]
   -> BlockHeader
-  -> Integration (MarloweSync.ClientStIdle 'V1 Integration a)
-  -> Integration a
-marloweSyncIntersectExpectFound contractId points expectedPoint next = runMarloweSyncClient
+  -> [BlockHeader]
+  -> Integration ()
+marloweSyncIntersectExpectFound contractId points expectedIntersection remainingPoints = runMarloweSyncClient
   $ MarloweSync.MarloweSyncClient
   $ pure
   $ MarloweSync.SendMsgIntersect contractId MarloweV1 points MarloweSync.ClientStIntersect
     { recvMsgIntersectNotFound = fail "Expected intersect found, got intersect not found"
-    , recvMsgIntersectFound = \actualPoint -> do
-        liftIO $ actualPoint `shouldBe` expectedPoint
-        next
+    , recvMsgIntersectFound = \actualIntersection -> do
+        liftIO $ actualIntersection `shouldBe` expectedIntersection
+        expectRemainingPoints remainingPoints
     }
+  where
+    expectRemainingPoints [] = pure
+      $ marloweSyncRequestNextExpectWait
+      $ pure
+      $ MarloweSync.SendMsgCancel
+      $ MarloweSync.SendMsgDone ()
+    expectRemainingPoints (x : xs) = MarloweSync.SendMsgRequestNext <$> marloweSyncExpectRollForward \block _ -> do
+      liftIO $ block `shouldBe` x
+      expectRemainingPoints xs
 
 marloweSyncPollExpectWait
   :: MonadFail m => m (MarloweSync.ClientStWait v m a)
