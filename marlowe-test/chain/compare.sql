@@ -551,7 +551,7 @@ create temporary table cmp_asset_out as
     inner join public.ma_tx_out
       on ma_tx_out.tx_out_id = tx_out.id
     inner join public.multi_asset
-      on multi_asset.id = ident
+      on multi_asset.id = ma_tx_out.ident
     where
       block_no > 0
 ;
@@ -592,7 +592,7 @@ select
 \qecho
 
 drop table if exists x_summary;
-create table x_summary as
+create temporary table x_summary as
   select
       'block' :: varchar as "Table"
     , (select count(*) from x_block where comparison = 'chainindex-dbsync') as "Count of ChainIndex Minus DbSync"
