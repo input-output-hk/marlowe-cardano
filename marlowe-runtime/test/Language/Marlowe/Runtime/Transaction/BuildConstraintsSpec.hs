@@ -275,10 +275,8 @@ buildApplyInputsConstraintsSpec =
           :* K (oneSecondEraSummary 4) -- Alonzo lasted 1 second
           :* K (unboundedEraSummary 5) -- Babbage never ends
           :* Nil
-    Hspec.QuickCheck.prop "valid slot interval for timed-out contract" do
+    Hspec.QuickCheck.prop "valid slot interval for timed-out contract" \assets utxo -> do
       address <- arbitrary
-      assets <- arbitrary
-      utxo <- arbitrary
       -- The choice intervals for the tip, minimum time, and timeout overlap, so every ordering will occur.
       tipSlot' <- chooseInteger (9, 20) -- Make sure the tip is in the Babbage era.
       minTime <- oneof
