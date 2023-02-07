@@ -20,7 +20,7 @@ import qualified Data.ByteString.Lazy as LBS
 import Data.UUID (UUID)
 import Data.UUID.V4 (nextRandom)
 import qualified Data.Yaml as YAML
-import System.Directory (copyFile, createDirectoryIfMissing, removeDirectoryRecursive, renameFile)
+import System.Directory (copyFile, createDirectoryIfMissing, removePathForcibly, renameFile)
 import System.FilePath (takeDirectory, (</>))
 import System.IO (Handle, IOMode, hClose, openFile)
 import UnliftIO.Resource (MonadResource, ReleaseKey, allocate)
@@ -36,7 +36,7 @@ createWorkspace :: MonadResource m => FilePath -> m Workspace
 createWorkspace workspaceName = do
   workspaceId <- liftIO nextRandom
   let workspaceDir = "/tmp/workspaces" </> (workspaceName <> "-" <> show workspaceId)
-  releaseKey <- allocate_ (createDirectoryIfMissing True workspaceDir) $ removeDirectoryRecursive workspaceDir
+  releaseKey <- allocate_ (createDirectoryIfMissing True workspaceDir) $ removePathForcibly workspaceDir
   pure Workspace{..}
 
 resolveWorkspacePath :: Workspace -> FilePath -> FilePath
