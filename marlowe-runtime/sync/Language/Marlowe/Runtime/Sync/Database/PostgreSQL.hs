@@ -13,6 +13,7 @@ import Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetNextHeaders (getNext
 import Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetNextSteps (getNextSteps)
 import Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetTip (getTip)
 import Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetTipForContract (getTipForContract)
+import Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetTransaction (getTransaction)
 
 databaseQueries :: DatabaseQueries H.Session
 databaseQueries = DatabaseQueries
@@ -25,3 +26,4 @@ databaseQueries = DatabaseQueries
   (\version contractId -> T.transaction T.Serializable T.Read . getNextSteps version contractId)
   (T.transaction T.Serializable T.Read . getHeaders)
   (T.transaction T.Serializable T.Read . getContractState)
+  (T.transaction T.Serializable T.Read . getTransaction)
