@@ -47,9 +47,9 @@ import Cardano.Crypto (abstractHashToBytes)
 import Control.Concurrent.Async (race_)
 import Control.Concurrent.Async.Lifted (Concurrently(..))
 import Control.Concurrent.Component
-import Control.Concurrent.STM (STM, atomically)
+import Control.Concurrent.STM (STM, atomically, retry)
 import Control.Exception (onException, throwIO)
-import Control.Monad ((<=<))
+import Control.Monad (when, (<=<))
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Except (runExceptT)
 import Control.Monad.Trans.Reader (runReaderT)
@@ -63,6 +63,7 @@ import qualified Data.Map as Map
 import Data.Maybe (fromMaybe)
 import Data.Set (Set)
 import qualified Data.Set as Set
+import qualified Data.Set.NonEmpty as NESet
 import Data.String (fromString)
 import qualified Data.Text as T
 import qualified Data.Text.Lazy.IO as TL
@@ -88,6 +89,10 @@ import Language.Marlowe.Protocol.HeaderSync.Client (MarloweHeaderSyncClient, mar
 import Language.Marlowe.Protocol.HeaderSync.Codec (codecMarloweHeaderSync)
 import Language.Marlowe.Protocol.HeaderSync.Server (MarloweHeaderSyncServer, marloweHeaderSyncServerPeer)
 import Language.Marlowe.Protocol.HeaderSync.Types (MarloweHeaderSync)
+import Language.Marlowe.Protocol.Query.Client (MarloweQueryClient(..), marloweQueryClientPeer)
+import Language.Marlowe.Protocol.Query.Codec (codecMarloweQuery)
+import Language.Marlowe.Protocol.Query.Server (MarloweQueryServer)
+import Language.Marlowe.Protocol.Query.Types (MarloweQuery)
 import Language.Marlowe.Protocol.Sync.Client (MarloweSyncClient, marloweSyncClientPeer)
 import Language.Marlowe.Protocol.Sync.Codec (codecMarloweSync)
 import Language.Marlowe.Protocol.Sync.Server (MarloweSyncServer, marloweSyncServerPeer)
@@ -117,12 +122,20 @@ import qualified Language.Marlowe.Runtime.ChainSync.Database as ChainSync
 import qualified Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL as ChainSync
 import Language.Marlowe.Runtime.Core.Api (MarloweVersion(..), SomeMarloweVersion(..))
 import Language.Marlowe.Runtime.Core.ScriptRegistry (MarloweScripts(..), ReferenceScriptUtxo(..))
+import qualified Language.Marlowe.Runtime.Core.ScriptRegistry as ScriptRegistry
 import Language.Marlowe.Runtime.Discovery
 import Language.Marlowe.Runtime.Discovery.Api (DiscoveryQuery)
 import Language.Marlowe.Runtime.History
 import Language.Marlowe.Runtime.History.Api (HistoryCommand, HistoryQuery)
 import Language.Marlowe.Runtime.History.Store (HistoryQueries, hoistHistoryQueries)
 import Language.Marlowe.Runtime.History.Store.Memory (mkHistoryQueriesInMemory)
+import Language.Marlowe.Runtime.Indexer
+  (MarloweIndexerDependencies(..), MarloweIndexerSelector, getMarloweIndexerSelectorConfig, marloweIndexer)
+import qualified Language.Marlowe.Runtime.Indexer.Database as Indexer
+import qualified Language.Marlowe.Runtime.Indexer.Database.PostgreSQL as Indexer
+import Language.Marlowe.Runtime.Sync (SyncDependencies(..), sync)
+import qualified Language.Marlowe.Runtime.Sync.Database as Sync
+import qualified Language.Marlowe.Runtime.Sync.Database.PostgreSQL as Sync
 import Language.Marlowe.Runtime.Transaction
 import Language.Marlowe.Runtime.Transaction.Api (MarloweTxCommand)
 import Language.Marlowe.Runtime.Transaction.Query (LoadMarloweContext)
@@ -172,6 +185,7 @@ data MarloweRuntime = MarloweRuntime
   , runHistorySyncClient :: RunClient IO MarloweSyncClient
   , runTxJobClient :: RunClient IO (JobClient MarloweTxCommand)
   , runWebClient :: forall a. ClientM a -> IO (Either ClientError a)
+  , marloweScripts :: MarloweScripts
   , testnet :: LocalTestnet
   }
 
@@ -181,6 +195,7 @@ data MarloweRuntimeOptions = MarloweRuntimeOptions
   , databaseUser :: ByteString
   , databasePassword :: ByteString
   , tempDatabase :: ByteString
+  , cleanup :: Bool
   , localTestnetOptions :: LocalTestnetOptions
   }
 
@@ -191,12 +206,14 @@ defaultMarloweRuntimeOptions = do
   databaseUser <- lookupEnv "MARLOWE_RT_TEST_DB_USER"
   databasePassword <- lookupEnv "MARLOWE_RT_TEST_DB_PASSWORD"
   tempDatabase <- lookupEnv "MARLOWE_RT_TEST_TEMP_DB"
+  cleanupDatabase <- lookupEnv "MARLOWE_RT_TEST_CLEANUP_DATABASE"
   pure $ MarloweRuntimeOptions
     (maybe "127.0.0.1" fromString databaseHost)
     (fromMaybe 5432 $ readMaybe =<< databasePort)
     (maybe "postgres" fromString databaseUser)
     (maybe "" fromString databasePassword)
     (maybe "template1" fromString tempDatabase)
+    (fromMaybe True $ readMaybe =<< cleanupDatabase)
     defaultOptions
 
 withLocalMarloweRuntime :: MonadUnliftIO m => (MarloweRuntime -> m ()) -> m ()
@@ -252,9 +269,18 @@ withLocalMarloweRuntime' MarloweRuntimeOptions{..} test = withRunInIO \runInIO -
       chainIndexerDatabaseQueries = ChainIndexer.hoistDatabaseQueries
         (either (fail . show) pure <=< Pool.use pool)
         (ChainIndexer.databaseQueries genesisBlock)
+
       chainSeekDatabaseQueries = ChainSync.hoistDatabaseQueries
         (either (fail . show) pure <=< Pool.use pool)
         ChainSync.databaseQueries
+
+      marloweIndexerDatabaseQueries = Indexer.hoistDatabaseQueries
+        (either (fail . show) pure <=< Pool.use pool)
+        (Indexer.databaseQueries securityParameter)
+
+      marloweSyncDatabaseQueries eventBackend = Sync.logDatabaseQueries eventBackend $ Sync.hoistDatabaseQueries
+        (either (fail . show) pure <=< Pool.use pool)
+        Sync.databaseQueries
 
     webPort <- liftIO $ randomRIO (4000, 5000)
     manager <- liftIO $ newManager defaultManagerSettings
@@ -299,7 +325,7 @@ withLocalMarloweRuntime' MarloweRuntimeOptions{..} test = withRunInIO \runInIO -
       finish connection
       pure dbName
 
-    cleanupDatabase dbName = do
+    cleanupDatabase dbName = when cleanup do
       connection <- connectdb rootConnectionString
       result <- exec connection $ "DROP DATABASE \"" <> dbName <> "\";"
       checkResult connection result
@@ -316,8 +342,20 @@ withLocalMarloweRuntime' MarloweRuntimeOptions{..} test = withRunInIO \runInIO -
         { SP.cwd = Just "./marlowe-chain-sync"
         }
       case exitCode of
-        ExitFailure _ -> fail $ "sqitch failed: \n" <> stderr
-        ExitSuccess -> pure ()
+        ExitFailure _ -> fail $ "chain sqitch failed: \n" <> stderr
+        ExitSuccess -> do
+          (exitCode', _, stderr') <- flip readCreateProcessWithExitCode "" $ (SP.proc "sqitch"
+            [ "deploy"
+            , "-h", BS.unpack databaseHost
+            , "-p", show databasePort
+            , "-u", BS.unpack databaseUser
+            , "-d", BS.unpack dbName
+            ])
+            { SP.cwd = Just "./marlowe-runtime/marlowe-indexer"
+            }
+          case exitCode' of
+            ExitFailure _ -> fail $ "marlowe sqitch failed: \n" <> stderr'
+            ExitSuccess -> pure ()
 
 publishCurrentScripts :: LocalTestnet -> LocalNodeConnectInfo CardanoMode -> IO MarloweScripts
 publishCurrentScripts LocalTestnet{..} localNodeConnectInfo = do
@@ -405,11 +443,15 @@ data RuntimeSelector f where
   HistoryQueryServerEvent :: AcceptSocketDriverSelector (Query HistoryQuery) f -> RuntimeSelector f
   HistorySyncClientEvent :: ConnectSocketDriverSelector MarloweSync f -> RuntimeSelector f
   HistorySyncServerEvent :: AcceptSocketDriverSelector MarloweSync f -> RuntimeSelector f
+  MarloweQueryClientEvent :: ConnectSocketDriverSelector MarloweQuery f -> RuntimeSelector f
+  MarloweQueryServerEvent :: AcceptSocketDriverSelector MarloweQuery f -> RuntimeSelector f
   TxJobClientEvent :: ConnectSocketDriverSelector (Job MarloweTxCommand) f -> RuntimeSelector f
   TxJobServerEvent :: AcceptSocketDriverSelector (Job MarloweTxCommand) f -> RuntimeSelector f
   TxEvent :: TransactionServerSelector f -> RuntimeSelector f
   ChainIndexerEvent :: ChainIndexerSelector f -> RuntimeSelector f
+  MarloweIndexerEvent :: MarloweIndexerSelector f -> RuntimeSelector f
   ConfigWatcher :: ConfigWatcherSelector f -> RuntimeSelector f
+  SyncDatabaseEvent :: Sync.DatabaseSelector f -> RuntimeSelector f
 
 data RuntimeDependencies r = RuntimeDependencies
   { acceptRunChainSeekServer :: IO (RunServer IO RuntimeChainSeekServer)
@@ -420,12 +462,15 @@ data RuntimeDependencies r = RuntimeDependencies
   , acceptRunHistoryJobServer :: IO (RunServer IO (JobServer HistoryCommand))
   , acceptRunHistoryQueryServer :: IO (RunServer IO (QueryServer HistoryQuery))
   , acceptRunHistorySyncServer :: IO (RunServer IO MarloweSyncServer)
+  , acceptRunMarloweQueryServer :: IO (RunServer IO MarloweQueryServer)
   , acceptRunTxJobServer :: IO (RunServer IO (JobServer MarloweTxCommand))
   , chainIndexerDatabaseQueries :: ChainIndexer.DatabaseQueries IO
   , chainSeekDatabaseQueries :: ChainSync.DatabaseQueries IO
   , genesisBlock :: !GenesisBlock
   , historyQueries :: HistoryQueries IO
   , localNodeConnectInfo :: LocalNodeConnectInfo CardanoMode
+  , marloweIndexerDatabaseQueries :: Indexer.DatabaseQueries IO
+  , marloweSyncDatabaseQueries :: EventBackend IO r Sync.DatabaseSelector -> Sync.DatabaseQueries IO
   , mkSubmitJob :: Tx BabbageEra -> STM SubmitJob
   , rootEventBackend :: EventBackend IO r RuntimeSelector
   , runChainSeekClient :: RunClient IO RuntimeChainSeekClient
@@ -470,6 +515,23 @@ runtime = proc RuntimeDependencies{..} -> do
      in
       ChainIndexerDependencies{..}
 
+  marloweIndexer -< MarloweIndexerDependencies
+    { databaseQueries = marloweIndexerDatabaseQueries
+    , eventBackend = narrowEventBackend MarloweIndexerEvent rootEventBackend
+    , runChainSeekClient = connectToChainSeek
+    , runChainSyncQueryClient
+    , pollingInterval = secondsToNominalDiffTime 0.01
+    , marloweScriptHashes = NESet.singleton $ ScriptRegistry.marloweScript marloweScripts
+    , payoutScriptHashes = NESet.singleton $ ScriptRegistry.payoutScript marloweScripts
+    }
+
+  sync -< SyncDependencies
+    { databaseQueries = marloweSyncDatabaseQueries $ narrowEventBackend SyncDatabaseEvent rootEventBackend
+    , acceptRunMarloweSyncServer = acceptRunHistorySyncServer
+    , acceptRunMarloweHeaderSyncServer = acceptRunDiscoverySyncServer
+    , acceptRunMarloweQueryServer
+    }
+
   chainSync -<
     let
       acceptRunJobServer = acceptRunChainSyncJobServer
@@ -494,7 +556,7 @@ runtime = proc RuntimeDependencies{..} -> do
     let
       acceptRunJobServer = acceptRunHistoryJobServer
       acceptRunQueryServer = acceptRunHistoryQueryServer
-      acceptRunSyncServer = acceptRunHistorySyncServer
+      acceptRunSyncServer = atomically retry
       followerPageSize = 1024
 
       queryChainSeek :: ChainSyncQuery Void err results -> IO (Either err results)
@@ -506,7 +568,7 @@ runtime = proc RuntimeDependencies{..} -> do
   discovery -<
     let
       acceptRunQueryServer = acceptRunDiscoveryQueryServer
-      acceptRunSyncServer = acceptRunDiscoverySyncServer
+      acceptRunSyncServer = atomically retry
       pageSize = 1024
     in
       DiscoveryDependencies{..}
@@ -550,6 +612,7 @@ data Channels = Channels
   , acceptRunHistoryJobServer :: IO (RunServer IO (JobServer HistoryCommand))
   , acceptRunHistoryQueryServer :: IO (RunServer IO (QueryServer HistoryQuery))
   , acceptRunHistorySyncServer :: IO (RunServer IO MarloweSyncServer)
+  , acceptRunMarloweQueryServer :: IO (RunServer IO MarloweQueryServer)
   , acceptRunTxJobServer :: IO (RunServer IO (JobServer MarloweTxCommand))
   , runChainSeekClient :: RunClient IO RuntimeChainSeekClient
   , runChainSyncJobClient :: RunClient IO (JobClient ChainSyncCommand)
@@ -559,6 +622,7 @@ data Channels = Channels
   , runHistoryJobClient :: RunClient IO (JobClient HistoryCommand)
   , runHistoryQueryClient :: RunClient IO (QueryClient HistoryQuery)
   , runHistorySyncClient :: RunClient IO MarloweSyncClient
+  , runMarloweQueryClient :: RunClient IO MarloweQueryClient
   , runTxJobClient :: RunClient IO (JobClient MarloweTxCommand)
   }
 
@@ -620,6 +684,13 @@ setupChannels eventBackend = do
     codecMarloweSync
     marloweSyncServerPeer
     marloweSyncClientPeer
+  ClientServerPair acceptRunMarloweQueryServer runMarloweQueryClient <- clientServerPair
+    (narrowEventBackend MarloweQueryServerEvent eventBackend)
+    (narrowEventBackend MarloweQueryClientEvent eventBackend)
+    throwIO
+    codecMarloweQuery
+    id
+    marloweQueryClientPeer
   ClientServerPair acceptRunTxJobServer runTxJobClient <- clientServerPair
     (narrowEventBackend TxJobServerEvent eventBackend)
     (narrowEventBackend TxJobClientEvent eventBackend)
@@ -647,10 +718,14 @@ getRuntimeSelectorConfig = \case
   HistoryQueryServerEvent sel -> prependKey "history-query.server" $ getAcceptSocketDriverSelectorConfig socketDriverConfig sel
   HistorySyncClientEvent sel -> prependKey "history-sync.client" $ getConnectSocketDriverSelectorConfig socketDriverConfig sel
   HistorySyncServerEvent sel -> prependKey "history-sync.server" $ getAcceptSocketDriverSelectorConfig socketDriverConfig sel
+  MarloweQueryClientEvent sel -> prependKey "marlowe-query.client" $ getConnectSocketDriverSelectorConfig socketDriverConfig sel
+  MarloweQueryServerEvent sel -> prependKey "marlowe-query.server" $ getAcceptSocketDriverSelectorConfig socketDriverConfig sel
   TxJobClientEvent sel -> prependKey "tx-job.client" $ getConnectSocketDriverSelectorConfig socketDriverConfig sel
   TxJobServerEvent sel -> prependKey "tx-job.server" $ getAcceptSocketDriverSelectorConfig socketDriverConfig sel
   TxEvent sel -> prependKey "marlowe-tx" $ getTransactionSererSelectorConfig sel
   ChainIndexerEvent sel -> prependKey "marlowe-chain-indexer" $ getChainIndexerSelectorConfig sel
+  MarloweIndexerEvent sel -> prependKey "marlowe-indexer" $ getMarloweIndexerSelectorConfig sel
+  SyncDatabaseEvent sel -> prependKey "marlowe-sync-database" $ Sync.getDatabaseSelectorConfig sel
   ConfigWatcher ReloadConfig -> SelectorConfig "reload-log-config" True
     $ singletonFieldConfig "config" True
 

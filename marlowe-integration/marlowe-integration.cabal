@@ -76,9 +76,13 @@ library
     , marlowe-runtime:discovery-api
     , marlowe-runtime:history
     , marlowe-runtime:history-api
+    , marlowe-runtime:indexer
+    , marlowe-runtime:sync
+    , marlowe-runtime:sync-api
     , marlowe-runtime:tx
     , marlowe-runtime:tx-api
     , marlowe-runtime:web-server
+    , nonempty-containers
     , ouroboros-network
     , postgresql-libpq
     , process

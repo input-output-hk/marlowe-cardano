@@ -34,14 +34,16 @@ import Data.List (isInfixOf)
 import Data.Maybe (fromJust)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
-import Data.Time (UTCTime, addUTCTime, getCurrentTime, nominalDiffTimeToSeconds, secondsToNominalDiffTime)
-import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
+import Data.Time (UTCTime, getCurrentTime, nominalDiffTimeToSeconds, secondsToNominalDiffTime)
+import Data.Time.Clock.POSIX (posixSecondsToUTCTime, utcTimeToPOSIXSeconds)
+import Data.Time.Format.ISO8601 (iso8601Show)
 import qualified Data.Yaml.Aeson as YAML
 import GHC.Generics (Generic)
 import System.FilePath ((</>))
 import System.IO (Handle, IOMode(..), hClose, openFile)
 import System.Process (CreateProcess(..), ProcessHandle, StdStream(..), cleanupProcess, createProcess, proc)
 import System.Random (randomRIO)
+import Test.HUnit.Lang (HUnitFailure(..))
 import Test.Integration.Cardano.Process (execCli_)
 import Test.Integration.Workspace
   ( Workspace(..)
@@ -56,6 +58,7 @@ import Test.Integration.Workspace
   )
 import qualified Test.Integration.Workspace as W
 import Text.Printf (printf)
+import UnliftIO.Async (concurrently)
 import UnliftIO.Exception (catchAny)
 import UnliftIO.Resource (allocate, runResourceT, unprotect)
 
@@ -133,7 +136,7 @@ instance ToJSON Network
 
 defaultOptions :: LocalTestnetOptions
 defaultOptions = LocalTestnetOptions
-  { slotDuration = 1000
+  { slotDuration = 100
   , securityParameter = 10
   , numSpoNodes = 3
   , numDelegators = 3
@@ -153,7 +156,10 @@ withLocalTestnet'
   -> m a
 withLocalTestnet' options test = runResourceT do
   testnet <- startLocalTestnet options
-  lift $ test testnet `catch` rethrowAsTestnetException testnet
+  result <- lift $ (Right <$> test testnet)
+    `catch` (\ex@HUnitFailure{} -> pure $ Left ex)
+    `catch` rethrowAsTestnetException testnet
+  either throw pure result
 
 data TestnetException = TestnetException
   { workspace :: FilePath
@@ -185,12 +191,13 @@ startLocalTestnet options@LocalTestnetOptions{..} = do
       socketDir <- createWorkspaceDir workspace "socket"
       logsDir <- createWorkspaceDir workspace "logs"
 
-      currentTime <- liftIO getCurrentTime
+      currentTime <- round . utcTimeToPOSIXSeconds <$> liftIO getCurrentTime
       -- Add time to execute the CLI commands to set everything up
-      let startTime = addUTCTime (secondsToNominalDiffTime 15) currentTime
+      let startTime = posixSecondsToUTCTime $ secondsToNominalDiffTime $ fromInteger currentTime + 1
 
-      byronGenesisDir <- createByronGenesis workspace startTime testnetMagic options
-      shelleyGenesisDir <- createShelleyGenesisStaked workspace testnetMagic options
+      (byronGenesisDir, shelleyGenesisDir) <- concurrently
+        (createByronGenesis workspace startTime testnetMagic options)
+        (createShelleyGenesisStaked workspace startTime testnetMagic options)
 
       let
         wallets = [1..numWallets] <&> \n -> PaymentKeyPair
@@ -262,8 +269,8 @@ createByronGenesis workspace startTime testnetMagic LocalTestnetOptions{..} = do
     ]
   pure byronGenesisDir
 
-createShelleyGenesisStaked :: MonadIO m => Workspace -> Int -> LocalTestnetOptions -> m FilePath
-createShelleyGenesisStaked workspace testnetMagic LocalTestnetOptions{..} = do
+createShelleyGenesisStaked :: MonadIO m => Workspace -> UTCTime -> Int -> LocalTestnetOptions -> m FilePath
+createShelleyGenesisStaked workspace startTime testnetMagic LocalTestnetOptions{..} = do
   let shelleyGenesisDir = "shelley-genesis"
   let shelleyGenesisDirInWorkspace = resolveWorkspacePath workspace shelleyGenesisDir
 
@@ -303,6 +310,7 @@ createShelleyGenesisStaked workspace testnetMagic LocalTestnetOptions{..} = do
     , "--gen-pools", show numSpoNodes
     , "--supply", "1000000000000"
     , "--supply-delegated", "1000000000000"
+    , "--start-time", iso8601Show startTime
     , "--gen-stake-delegs", show numDelegators
     , "--gen-utxo-keys", show numWallets
     ]
@@ -318,7 +326,7 @@ setupNetwork workspace LocalTestnetOptions{..} byronGenesisDir shelleyGenesisDir
 
   rewriteJSONFile shelleyGenesisJson
     ( KM.insert "slotLength"             (toJSON @Double (fromIntegral slotDuration / 1000))
-    . KM.insert "activeSlotsCoeff"       (toJSON @Double 0.1)
+    . KM.insert "activeSlotsCoeff"       (toJSON @Double 0.2)
     . KM.insert "securityParam"          (toJSON @Int securityParameter)
     . KM.insert "epochLength"            (toJSON @Int 500)
     . KM.insert "maxLovelaceSupply"      (toJSON @Int 1000000000000)

@@ -383,7 +383,11 @@ buildApplyInputsConstraintsV1 systemStart eraHistory marloweOutput tipSlot metad
         tell $ mustPayToRole assets $ roleAssetId role
       V1.Account _ -> pure ()
 
-  pure (posixTimeToUTCTime $ fst txInterval, posixTimeToUTCTime $ snd txInterval, output)
+  pure
+    ( posixTimeToUTCTime $ fst txInterval
+    , posixTimeToUTCTime $ snd txInterval + 1 -- Add the millisecond back to convert the upper bound back to an exclusive bound (ledger semantics)
+    , output
+    )
 
   where
     marloweInputContent (V1.NormalInput c) = c

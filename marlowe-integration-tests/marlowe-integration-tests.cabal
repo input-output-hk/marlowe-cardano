@@ -1,0 +1,78 @@
+cabal-version: 3.0
+name: marlowe-integration-tests
+version: 0.1.0.0
+synopsis:
+  End to end integration tests for the Marlowe Runtime
+bug-reports: https://github.com/input-output-hk/marlowe-marlowe/issues
+license: Apache-2.0
+author: Jamie Bertram
+maintainer: jamie.bertram@iohk.io
+category: Language
+license-files:
+  LICENSE
+  NOTICE
+
+flag defer-plugin-errors
+    description:
+        Defer errors from the plugin, useful for things like Haddock that can't handle it.
+    default: False
+    manual: True
+
+source-repository head
+  type: git
+  location: https://github.com/input-output-hk/marlowe-cardano
+  subdir: marlowe-integration-tests
+
+executable marlowe-integration-tests
+  default-language: Haskell2010
+  default-extensions:
+    BlockArguments
+    DeriveAnyClass
+    DeriveFoldable
+    DeriveFunctor
+    DeriveGeneric
+    DeriveLift
+    DeriveTraversable
+    DerivingStrategies
+    DerivingVia
+    EmptyCase
+    ExplicitForAll
+    GeneralizedNewtypeDeriving
+    LambdaCase
+    NamedFieldPuns
+    NumericUnderscores
+    OverloadedStrings
+    RecordWildCards
+    ScopedTypeVariables
+    StandaloneDeriving
+    TypeApplications
+    TupleSections
+  ghc-options:
+    -Wall -Wnoncanonical-monad-instances -Wunused-packages
+    -Wincomplete-uni-patterns -Wincomplete-record-updates
+    -Wredundant-constraints -Widentities -threaded
+  if flag(defer-plugin-errors)
+    ghc-options: -fplugin-opt PlutusTx.Plugin:defer-errors
+  hs-source-dirs: test
+  type: exitcode-stdio-1.0
+  main-is: Spec.hs
+  other-modules:
+    Language.Marlowe.Runtime.Integration.BasicSpec
+  build-depends:
+      base >= 4.9 && < 5
+    , aeson
+    , containers
+    , hspec
+    , cardano-api
+    , marlowe-cardano
+    , marlowe-chain-sync
+    , marlowe-chain-sync:plutus-compat
+    , marlowe-integration
+    , marlowe-protocols
+    , marlowe-runtime
+    , marlowe-runtime:discovery-api
+    , marlowe-runtime:history-api
+    , marlowe-runtime:tx-api
+    , plutus-ledger-api
+    , time
+  build-tool-depends: hspec-discover:hspec-discover

@@ -834,6 +834,7 @@
         eventuo11y-dsl = ./.plan.nix/eventuo11y-dsl.nix;
         cardano-integration = ./.plan.nix/cardano-integration.nix;
         aeson-via-serialise = ./.plan.nix/aeson-via-serialise.nix;
+        marlowe-integration-tests = ./.plan.nix/marlowe-integration-tests.nix;
         eventuo11y-json = ./.plan.nix/eventuo11y-json.nix;
         plutus-ledger-slot = ./.plan.nix/plutus-ledger-slot.nix;
         };
@@ -900,6 +901,9 @@
           "eventuo11y-dsl" = { flags = {}; };
           "cardano-integration" = { flags = {}; };
           "aeson-via-serialise" = { flags = {}; };
+          "marlowe-integration-tests" = {
+            flags = { "defer-plugin-errors" = lib.mkOverride 900 false; };
+            };
           "eventuo11y-json" = { flags = {}; };
           "plutus-ledger-slot" = {
             flags = { "defer-plugin-errors" = lib.mkOverride 900 false; };
@@ -982,6 +986,7 @@
           "network-mux".components.exes."mux-demo".planned = lib.mkOverride 900 true;
           "hw-aeson".components.library.planned = lib.mkOverride 900 true;
           "distributive".components.library.planned = lib.mkOverride 900 true;
+          "marlowe-integration-tests".components.exes."marlowe-integration-tests".planned = lib.mkOverride 900 true;
           "aeson-via-serialise".components.library.planned = lib.mkOverride 900 true;
           "ouroboros-network-framework".components.exes."demo-ping-pong".planned = lib.mkOverride 900 true;
           "pretty".components.library.planned = lib.mkOverride 900 true;

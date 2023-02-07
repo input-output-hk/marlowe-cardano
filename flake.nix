@@ -146,6 +146,11 @@
             type = "app";
             program = "${packages.marlowe-rt}/bin/marlowe";
           };
+
+          marlowe-integration-tests = {
+            type = "app";
+            program = "${packages.marlowe-integration-tests}/bin/marlowe-integration-tests";
+          };
         };
 
         devShells.default = import ./dev-shell.nix {

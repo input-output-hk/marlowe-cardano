@@ -58,6 +58,7 @@ library
     , bytestring
     , directory
     , filepath
+    , HUnit
     , lifted-base
     , monad-control
     , process

@@ -6,15 +6,15 @@
 module Language.Marlowe.Runtime.Indexer
   where
 
-import Cardano.Api (CardanoMode, EraHistory, SystemStart)
 import Control.Concurrent.Component
 import Data.Set.NonEmpty (NESet)
 import Data.Time (NominalDiffTime)
-import Language.Marlowe.Runtime.ChainSync.Api (RuntimeChainSeekClient, ScriptHash)
+import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncQuery, RuntimeChainSeekClient, ScriptHash)
 import Language.Marlowe.Runtime.Indexer.ChainSeekClient
 import Language.Marlowe.Runtime.Indexer.Database (DatabaseQueries)
 import Language.Marlowe.Runtime.Indexer.Store
 import Network.Protocol.Driver (RunClient)
+import Network.Protocol.Query.Client (QueryClient)
 import Observe.Event (EventBackend, narrowEventBackend)
 import Observe.Event.Component (FieldConfig(..), GetSelectorConfig, SelectorConfig(..), SomeJSON(SomeJSON), prependKey)
 
@@ -26,31 +26,21 @@ data MarloweIndexerDependencies r = MarloweIndexerDependencies
   { eventBackend :: EventBackend IO r MarloweIndexerSelector
   , databaseQueries :: DatabaseQueries IO
   , runChainSeekClient :: RunClient IO RuntimeChainSeekClient
+  , runChainSyncQueryClient :: RunClient IO (QueryClient ChainSyncQuery)
   , pollingInterval :: NominalDiffTime
   , marloweScriptHashes :: NESet ScriptHash
   , payoutScriptHashes :: NESet ScriptHash
-  , systemStart :: SystemStart
-  , eraHistory :: EraHistory CardanoMode
-  , securityParameter :: Int
   }
 
 marloweIndexer :: Component IO (MarloweIndexerDependencies r) ()
 marloweIndexer = proc MarloweIndexerDependencies{..} -> do
   pullEvent <- chainSeekClient -< ChainSeekClientDependencies
     { eventBackend = narrowEventBackend ChainSeekClientEvent eventBackend
-    , databaseQueries
-    , runChainSeekClient
-    , pollingInterval
-    , marloweScriptHashes
-    , payoutScriptHashes
-    , systemStart
-    , eraHistory
-    , securityParameter
+    , ..
     }
   store -< StoreDependencies
-    { databaseQueries
-    , pullEvent
-    , eventBackend = narrowEventBackend StoreEvent eventBackend
+    { eventBackend = narrowEventBackend StoreEvent eventBackend
+    , ..
     }
 
 getMarloweIndexerSelectorConfig :: GetSelectorConfig MarloweIndexerSelector
