@@ -13,11 +13,8 @@ import Control.Monad.Trans.Reader (ReaderT, ask, asks, local)
 import Data.Void (Void)
 import Language.Marlowe.Protocol.Sync.Client (MarloweSyncClient, hoistMarloweSyncClient)
 import Language.Marlowe.Runtime.CLI.Env (Env(..))
-import Language.Marlowe.Runtime.Discovery.Api (DiscoveryQuery)
-import Language.Marlowe.Runtime.History.Api (HistoryCommand, HistoryQuery)
 import Language.Marlowe.Runtime.Transaction.Api (MarloweTxCommand)
 import Network.Protocol.Job.Client (JobClient, hoistJobClient, liftCommand)
-import Network.Protocol.Query.Client (QueryClient, hoistQueryClient, liftQuery)
 import Options.Applicative (Alternative)
 import System.Exit (die)
 
@@ -48,20 +45,6 @@ asksEnv = CLI . asks
 localEnv :: (Env IO -> Env IO) -> CLI a -> CLI a
 localEnv f = CLI . local f . runCLI
 
--- | Run a History Job client.
-runHistoryJobClient :: JobClient HistoryCommand CLI a -> CLI a
-runHistoryJobClient client = do
-  Env{..} <- askEnv
-  liftBaseWith \runInBase ->
-    envRunHistoryJobClient $ hoistJobClient runInBase client
-
--- | Run a History Query client.
-runHistoryQueryClient :: QueryClient HistoryQuery CLI a -> CLI a
-runHistoryQueryClient client = do
-  Env{..} <- askEnv
-  liftBaseWith \runInBase ->
-    envRunHistoryQueryClient $ hoistQueryClient runInBase client
-
 -- | Run a Marlowe Sync client.
 runHistorySyncClient :: MarloweSyncClient CLI a -> CLI a
 runHistorySyncClient client = do
@@ -75,21 +58,6 @@ runTxJobClient client = do
   Env{..} <- askEnv
   liftBaseWith \runInBase ->
     envRunTxJobClient $ hoistJobClient runInBase client
-
--- | Run a Discovery Query client.
-runDiscoveryQueryClient :: QueryClient DiscoveryQuery CLI a -> CLI a
-runDiscoveryQueryClient client = do
-  Env{..} <- askEnv
-  liftBaseWith \runInBase ->
-    envRunDiscoveryQueryClient $ hoistQueryClient runInBase client
-
--- | Run a simple History command.
-runHistoryCommand :: HistoryCommand Void err result -> CLI (Either err result)
-runHistoryCommand = runHistoryJobClient . liftCommand
-
--- | Run a simple History query.
-queryHistory :: HistoryQuery Void err results -> CLI (Either err results)
-queryHistory = runHistoryQueryClient . liftQuery
 
 -- | Run a simple Tx command.
 runTxCommand :: MarloweTxCommand Void err result -> CLI (Either err result)

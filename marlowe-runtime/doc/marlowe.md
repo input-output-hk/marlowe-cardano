@@ -13,9 +13,6 @@ The `marlowe` executable provides a command-line interface to interacting with M
 - Submitting transactions
 	- [Submit a signed transaction to the node](marlowe/submit.md)
 - Querying history
-	- [List the contracts being tracked](marlowe/ls.md)
-	- [Add a contract to the set of tracked contracts](marlowe/add.md)
-	- [Remove a contract from the set of tracked contracts](marlowe/rm.md)
 	- [Output the History of a contract](marlowe/log.md)
 
 ```console
@@ -61,10 +58,7 @@ Available options:
                            MARLOWE_RT_TX_COMMAND_PORT (default: 3723)
 
 Contract history commands
-  add                      Start managing a new contract
   log                      Display the history of a contract
-  ls                       List managed contracts
-  rm                       Stop managing a contract
 
 Contract transaction commands
   apply                    Apply inputs to a contract

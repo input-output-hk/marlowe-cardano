@@ -511,12 +511,9 @@ executable marlowe
   main-is: Main.hs
   other-modules:
     Language.Marlowe.Runtime.CLI.Command
-    Language.Marlowe.Runtime.CLI.Command.Add
     Language.Marlowe.Runtime.CLI.Command.Apply
     Language.Marlowe.Runtime.CLI.Command.Create
     Language.Marlowe.Runtime.CLI.Command.Log
-    Language.Marlowe.Runtime.CLI.Command.Ls
-    Language.Marlowe.Runtime.CLI.Command.Rm
     Language.Marlowe.Runtime.CLI.Command.Submit
     Language.Marlowe.Runtime.CLI.Command.Tx
     Language.Marlowe.Runtime.CLI.Command.Withdraw
@@ -541,7 +538,6 @@ executable marlowe
     , marlowe-runtime:config
     , marlowe-runtime:tx-api
     , marlowe-runtime:history-api
-    , marlowe-runtime:discovery-api
     , monad-control
     , network
     , plutus-ledger-api
