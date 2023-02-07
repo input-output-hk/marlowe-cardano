@@ -47,6 +47,7 @@ spec = it "Intersections" $ withLocalMarloweRuntime $ runIntegrationTest do
   -- 14. Do a MarloweSync Intersect with points [A2..A4]
   -- 15. Expect Intersect found @ A4
   marloweSyncIntersectExpectFound idA [pA2, pA3, pA4] pA4 [pA5]
+  marloweSyncIntersectExpectFound idA [pA2, pA3, pA5] pA3 [pA4, pA5]
   -- 16. Do a MarloweSync Intersect with points [B0,A1-A5]
   -- 17. Expect Intersect not found
   marloweSyncIntersectExpectNotFound idA [pB0, pA1, pA2, pA3, pA4, pA5]
