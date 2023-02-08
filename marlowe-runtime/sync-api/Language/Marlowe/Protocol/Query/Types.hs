@@ -164,7 +164,7 @@ data ContractState v = ContractState
   , initialOutput :: TransactionScriptOutput v
   , latestBlock :: BlockHeader
   , latestOutput :: Maybe (TransactionScriptOutput v)
-  , availablePayouts :: Map TxOutRef (Payout v)
+  , unclaimedPayouts :: Map TxOutRef (Payout v)
   } deriving (Generic)
 
 deriving instance Show (ContractState 'V1)

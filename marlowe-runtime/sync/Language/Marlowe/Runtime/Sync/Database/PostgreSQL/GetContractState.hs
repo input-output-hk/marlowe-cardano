@@ -101,7 +101,7 @@ getContractState (ContractId TxOutRef{..}) = runMaybeT do
       AND consumer.txId IS NULL
     GROUP BY applyTx.txId
   |]
-  availablePayouts <- lift
+  unclaimedPayouts <- lift
     $ Map.fromDistinctAscList . V.toList . fmap decodePayout
     <$> T.statement params [vectorStatement|
       SELECT
