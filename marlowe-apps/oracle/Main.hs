@@ -66,7 +66,7 @@ commandParser =
           <$> configParser
           <*> O.option O.auto (O.long "polling" <> O.value 5_000_000 <> O.metavar "SECONDS" <> O.help "The polling frequency for waiting on Marlowe Runtime.")
           <*> O.option O.auto (O.long "requeue" <> O.value 20_000_000 <> O.metavar "SECONDS" <> O.help "The requeuing frequency for reviewing the progress of contracts on Marlowe Runtime.")
-          <*> (O.argument addressParser) (O.metavar "ADDRESS" <> O.help "The Bech32 address of the oracle.")
+          <*> O.argument addressParser (O.metavar "ADDRESS" <> O.help "The Bech32 address of the oracle.")
           <*> O.strArgument (O.metavar "KEYFILE" <> O.help "The extended payment signing key file for the oracle.")
     pure
       $ O.info

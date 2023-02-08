@@ -188,9 +188,9 @@ Usage: marlowe-oracle [--chain-seek-host HOST_NAME]
                       [--chain-seek-command-port PORT_NUMBER]
                       [--chain-seek-sync-port PORT_NUMBER]
                       [--marlowe-sync-host HOST_NAME]
-                      [--marlowe-sync-sync-port PORT_NUMBER]
-                      [--marlowe-sync-header-port PORT_NUMBER]
-                      [--marlowe-sync-query-port PORT_NUMBER]
+                      [--marlowe-sync-port PORT_NUMBER]
+                      [--marlowe-header-sync-port PORT_NUMBER]
+                      [--marlowe-query-sync-port PORT_NUMBER]
                       [--tx-host HOST_NAME] [--tx-command-port PORT_NUMBER]
                       [--timeout-seconds INTEGER] [--build-seconds INTEGER]
                       [--confirm-seconds INTEGER] [--retry-seconds INTEGER]
@@ -206,39 +206,40 @@ Available options:
   --chain-seek-host HOST_NAME
                            The hostname of the Marlowe Runtime chain-seek
                            server. Can be set as the environment variable
-                           MARLOWE_RT_CHAINSEEK_HOST (default: "127.0.0.1")
+                           MARLOWE_CHAINSEEKD_HOST (default: "127.0.0.1")
   --chain-seek-command-port PORT_NUMBER
                            The port number of the chain-seek server's job API.
                            Can be set as the environment variable
-                           MARLOWE_RT_CHAINSEEK_COMMAND_PORT (default: 13720)
+                           MARLOWE_CHAINSEEKD_COMMAND_PORT (default: 3720)
   --chain-seek-sync-port PORT_NUMBER
                            The port number of the chain-seek server's
                            synchronization API. Can be set as the environment
-                           variable MARLOWE_RT_CHAINSEEK_SYNC_PORT
-                           (default: 13715)
+                           variable MARLOWE_CHAINSEEKD_PORT (default: 3715)
   --marlowe-sync-host HOST_NAME
                            The hostname of the Marlowe Runtime marlowe-sync
                            server. Can be set as the environment variable
                            MARLOWE_RT_SYNC_HOST (default: "127.0.0.1")
-  --marlowe-sync-sync-port PORT_NUMBER
+  --marlowe-sync-port PORT_NUMBER
                            The port number of the marlowe-sync server's
                            synchronization API. Can be set as the environment
-                           variable MARLOWE_RT_SYNC_SYNC_PORT (default: 13724)
-  --marlowe-sync-header-port PORT_NUMBER
+                           variable MARLOWE_RT_SYNC_MARLOWE_SYNC_PORT
+                           (default: 3724)
+  --marlowe-header-sync-port PORT_NUMBER
                            The port number of the marlowe-sync server's header
                            synchronization API. Can be set as the environment
-                           variable MARLOWE_RT_SYNC_HEADER_PORT (default: 13725)
-  --marlowe-sync-query-port PORT_NUMBER
+                           variable MARLOWE_RT_SYNC_HEADER_SYNC_PORT
+                           (default: 3725)
+  --marlowe-query-sync-port PORT_NUMBER
                            The port number of the marlowe-sync server's query
                            API. Can be set as the environment variable
-                           MARLOWE_RT_SYNC_QUERY_PORT (default: 13726)
+                           MARLOWE_RT_SYNC_QUERY_SYNC_PORT (default: 3726)
   --tx-host HOST_NAME      The hostname of the Marlowe Runtime transaction
                            server. Can be set as the environment variable
                            MARLOWE_RT_TX_HOST (default: "127.0.0.1")
   --tx-command-port PORT_NUMBER
                            The port number of the transaction server's job API.
                            Can be set as the environment variable
-                           MARLOWE_RT_TX_COMMAND_PORT (default: 13723)
+                           MARLOWE_RT_TX_COMMAND_PORT (default: 3723)
   --timeout-seconds INTEGER
                            Timeout in seconds for transaction confirmation.
                            (default: 600)

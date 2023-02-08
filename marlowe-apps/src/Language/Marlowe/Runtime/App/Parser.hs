@@ -10,9 +10,10 @@ module Language.Marlowe.Runtime.App.Parser
 import Data.Default (def)
 import Language.Marlowe.Runtime.App.Types
   (Config(Config, buildSeconds, confirmSeconds, retryLimit, retrySeconds, timeoutSeconds))
-import Language.Marlowe.Runtime.CLI.Option (CliOption, host, optParserWithEnvDefault, port)
+import Language.Marlowe.Runtime.CLI.Option (CliOption, optParserWithEnvDefault)
 import Language.Marlowe.Runtime.ChainSync.Api (Address, fromBech32)
 import Network.Socket (HostName, PortNumber)
+import Text.Read (readMaybe)
 
 import qualified Data.Text as T (pack)
 import qualified Language.Marlowe.Runtime.CLI.Option as CLI
@@ -25,10 +26,10 @@ getConfigParser =
     chainSeekHostParser <- optParserWithEnvDefault chainSeekHost
     chainSeekCommandPortParser <- optParserWithEnvDefault chainSeekCommandPort
     chainSeekSyncPortParser <- optParserWithEnvDefault chainSeekSyncPort
-    syncHostParser <- optParserWithEnvDefault syncHost
-    syncSyncPortParser <- optParserWithEnvDefault syncSyncPort
-    syncHeaderPortParser <- optParserWithEnvDefault syncHeaderPort
-    syncQueryPortParser <- optParserWithEnvDefault syncQueryPort
+    syncHostParser <- optParserWithEnvDefault CLI.syncHost
+    syncSyncPortParser <- optParserWithEnvDefault CLI.syncSyncPort
+    syncHeaderPortParser <- optParserWithEnvDefault CLI.syncHeaderPort
+    syncQueryPortParser <- optParserWithEnvDefault CLI.syncQueryPort
     txHostParser <- optParserWithEnvDefault CLI.txHost
     txCommandPortParser <- optParserWithEnvDefault CLI.txCommandPort
     let
@@ -85,32 +86,48 @@ getConfigParser =
       <*> retryLimitParser
 
 
+host' :: String -> String -> HostName  -> String -> CliOption O.OptionFields HostName
+host' optPrefix envPrefix defaultValue description = CLI.CliOption
+  { CLI.env = env
+  , CLI.parseEnv = Just
+  , CLI.parser = O.strOption . (<>) (mconcat
+      [ O.long $ optPrefix <> "-host"
+      , O.value defaultValue
+      , O.metavar "HOST_NAME"
+      , O.help $ description <> " Can be set as the environment variable " <> env
+      , O.showDefault
+      ])
+  }
+  where
+    env = "MARLOWE_" <> envPrefix <> "_HOST"
+
+
+port' :: String -> String -> PortNumber -> String -> CliOption O.OptionFields PortNumber
+port' optPrefix envPrefix defaultValue description = CLI.CliOption
+  { CLI.env = env
+  , CLI.parseEnv = readMaybe
+  , CLI.parser = O.option O.auto . (<>) (mconcat
+      [ O.long $ optPrefix <> "-port"
+      , O.value defaultValue
+      , O.metavar "PORT_NUMBER"
+      , O.help $ description <> " Can be set as the environment variable " <> env
+      , O.showDefault
+      ])
+  }
+  where
+    env = "MARLOWE_" <> envPrefix <> "_PORT"
+
+
 chainSeekHost :: CliOption O.OptionFields HostName
-chainSeekHost = host "chain-seek" "CHAINSEEK" "127.0.0.1" "The hostname of the Marlowe Runtime chain-seek server."
+chainSeekHost = host' "chain-seek" "CHAINSEEKD" "127.0.0.1" "The hostname of the Marlowe Runtime chain-seek server."
 
 
 chainSeekCommandPort :: CliOption O.OptionFields PortNumber
-chainSeekCommandPort = port "chain-seek-command" "CHAINSEEK_COMMAND" 3720 "The port number of the chain-seek server's job API."
+chainSeekCommandPort = port' "chain-seek-command" "CHAINSEEKD_COMMAND" 3720 "The port number of the chain-seek server's job API."
 
 
 chainSeekSyncPort :: CliOption O.OptionFields PortNumber
-chainSeekSyncPort = port "chain-seek-sync" "CHAINSEEK_SYNC" 3715 "The port number of the chain-seek server's synchronization API."
-
-
-syncHost :: CliOption O.OptionFields HostName
-syncHost = host "marlowe-sync" "SYNC" "127.0.0.1" "The hostname of the Marlowe Runtime marlowe-sync server."
-
-
-syncSyncPort :: CliOption O.OptionFields PortNumber
-syncSyncPort = port "marlowe-sync-sync" "SYNC_SYNC" 3724 "The port number of the marlowe-sync server's synchronization API."
-
-
-syncHeaderPort :: CliOption O.OptionFields PortNumber
-syncHeaderPort = port "marlowe-sync-header" "SYNC_HEADER" 3725 "The port number of the marlowe-sync server's header synchronization API."
-
-
-syncQueryPort :: CliOption O.OptionFields PortNumber
-syncQueryPort = port "marlowe-sync-query" "SYNC_QUERY" 3726 "The port number of the marlowe-sync server's query API."
+chainSeekSyncPort = port' "chain-seek-sync" "CHAINSEEKD" 3715 "The port number of the chain-seek server's synchronization API."
 
 
 addressParser :: O.ReadM Address

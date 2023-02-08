@@ -24,6 +24,18 @@ data CliOption f a = CliOption
   , parser :: !(Mod f a -> Parser a)
   }
 
+syncHost :: CliOption OptionFields HostName
+syncHost = host "marlowe-sync" "SYNC" "127.0.0.1" "The hostname of the Marlowe Runtime marlowe-sync server."
+
+syncSyncPort :: CliOption OptionFields PortNumber
+syncSyncPort = port "marlowe-sync" "SYNC_MARLOWE_SYNC" 3724 "The port number of the marlowe-sync server's synchronization API."
+
+syncHeaderPort :: CliOption OptionFields PortNumber
+syncHeaderPort = port "marlowe-header-sync" "SYNC_HEADER_SYNC" 3725 "The port number of the marlowe-sync server's header synchronization API."
+
+syncQueryPort :: CliOption OptionFields PortNumber
+syncQueryPort = port "marlowe-query-sync" "SYNC_QUERY_SYNC" 3726 "The port number of the marlowe-sync server's query API."
+
 historyHost :: CliOption OptionFields HostName
 historyHost = host "history" "HISTORY" "127.0.0.1" "The hostname of the Marlowe Runtime history server."
 
