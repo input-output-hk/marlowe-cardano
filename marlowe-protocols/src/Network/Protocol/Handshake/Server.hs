@@ -24,6 +24,11 @@ instance (Functor m, Functor (server m)) => Functor (HandshakeServer h server m)
     { recvMsgHandshake = fmap (bimap f $ fmap f) . recvMsgHandshake
     }
 
+simpleHandshakeServer :: (Applicative m, Eq h) => h -> a -> server m a -> HandshakeServer h server m a
+simpleHandshakeServer expected a server = HandshakeServer
+  { recvMsgHandshake = \h -> pure if h == expected then Right server else Left a
+  }
+
 hoistHandshakeServer
   :: Functor m
   => (forall x. (forall y. m y -> n y) -> server m x -> server n x)

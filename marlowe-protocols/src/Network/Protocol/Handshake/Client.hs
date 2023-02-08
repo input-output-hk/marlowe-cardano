@@ -20,6 +20,13 @@ data HandshakeClient h client m a = HandshakeClient
   }
   deriving Functor
 
+simpleHandshakeClient :: Applicative m => h -> a -> client m a -> HandshakeClient h client m a
+simpleHandshakeClient h a client = HandshakeClient
+  { handshake = pure h
+  , recvMsgReject = pure a
+  , recvMsgAccept = pure client
+  }
+
 hoistHandshakeClient
   :: Functor m
   => (forall x. (forall y. m y -> n y) -> client m x -> client n x)
