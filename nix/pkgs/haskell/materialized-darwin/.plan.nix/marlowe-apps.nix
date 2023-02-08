@@ -11,7 +11,7 @@
     flags = {};
     package = {
       specVersion = "3.0";
-      identifier = { name = "marlowe-apps"; version = "0.2.2.1"; };
+      identifier = { name = "marlowe-apps"; version = "0.2.4.0"; };
       license = "Apache-2.0";
       copyright = "";
       maintainer = "Brian W Bush <brian.bush@iohk.io>";
@@ -81,6 +81,23 @@
         hsSourceDirs = [ "src" ];
         };
       exes = {
+        "marlowe-pipe" = {
+          depends = [
+            (hsPkgs."base" or (errorHandler.buildDepError "base"))
+            (hsPkgs."aeson" or (errorHandler.buildDepError "aeson"))
+            (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
+            (hsPkgs."eventuo11y" or (errorHandler.buildDepError "eventuo11y"))
+            (hsPkgs."eventuo11y-dsl" or (errorHandler.buildDepError "eventuo11y-dsl"))
+            (hsPkgs."eventuo11y-json" or (errorHandler.buildDepError "eventuo11y-json"))
+            (hsPkgs."marlowe-apps" or (errorHandler.buildDepError "marlowe-apps"))
+            (hsPkgs."mtl" or (errorHandler.buildDepError "mtl"))
+            (hsPkgs."optparse-applicative" or (errorHandler.buildDepError "optparse-applicative"))
+            (hsPkgs."text" or (errorHandler.buildDepError "text"))
+            ];
+          buildable = true;
+          hsSourceDirs = [ "pipe" ];
+          mainPath = [ "Main.hs" ];
+          };
         "marlowe-scaling" = {
           depends = [
             (hsPkgs."base" or (errorHandler.buildDepError "base"))
