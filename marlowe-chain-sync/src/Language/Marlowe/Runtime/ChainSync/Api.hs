@@ -86,8 +86,7 @@ data WithGenesis a = Genesis | At a
   deriving stock (Show, Eq, Ord, Functor, Generic)
   deriving anyclass (Binary, ToJSON)
 
-instance (HasSignature a, Signature a ~ Text) => HasSignature (WithGenesis a) where
-  type Signature (WithGenesis a) = Text
+instance HasSignature a => HasSignature (WithGenesis a) where
   signature _ = T.intercalate " " ["WithGenesis", signature $ Proxy @a]
 
 -- | A point in the chain, identified by a slot number, block header hash, and
@@ -104,7 +103,6 @@ data BlockHeader = BlockHeader
   deriving anyclass (Binary, ToJSON)
 
 instance HasSignature BlockHeader where
-  type Signature BlockHeader = Text
   signature _ = "BlockHeader"
 
 isAfter :: SlotNo -> BlockHeader -> Bool
@@ -583,7 +581,6 @@ data Move err result where
   AdvanceToTip :: Move Void ()
 
 instance HasSignature Move where
-  type Signature Move = Text
   signature _ = "Move"
 
 moveSchema :: SchemaVersion
@@ -896,7 +893,6 @@ data ChainSyncQuery delimiter err result where
   GetUTxOs :: GetUTxOsQuery -> ChainSyncQuery Void () UTxOs
 
 instance HasSignature ChainSyncQuery where
-  type Signature ChainSyncQuery = Text
   signature _ = "ChainSyncQuery"
 
 instance Query.QueryToJSON ChainSyncQuery where
@@ -1068,7 +1064,6 @@ data ChainSyncCommand status err result where
   SubmitTx :: ScriptDataSupportedInEra era -> Tx era -> ChainSyncCommand Void String ()
 
 instance HasSignature ChainSyncCommand where
-  type Signature ChainSyncCommand = Text
   signature _ = "ChainSyncCommand"
 
 instance CommandToJSON ChainSyncCommand where

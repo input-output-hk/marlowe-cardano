@@ -10,7 +10,6 @@ import Data.Aeson (ToJSON(..), Value(..), object, (.=))
 import Data.Bifunctor (bimap)
 import Data.Binary (Binary(..), getWord8, putWord8)
 import Data.Map (Map)
-import Data.Text (Text)
 import Data.Type.Equality (testEquality, type (:~:)(Refl))
 import GHC.Generics (Generic)
 import GHC.Show (showCommaSpace, showSpace)
@@ -37,7 +36,6 @@ data MarloweQuery where
   StDone :: MarloweQuery
 
 instance HasSignature MarloweQuery where
-  type Signature MarloweQuery = Text
   signature _ = "MarloweQuery"
 
 data Request a where

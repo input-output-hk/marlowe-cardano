@@ -6,7 +6,6 @@ module Language.Marlowe.Runtime.Discovery.Api
 
 import Data.Aeson (ToJSON(..), Value(..), object, (.=))
 import Data.Binary (Binary, get, getWord8, put, putWord8)
-import Data.Text (Text)
 import Data.Type.Equality (type (:~:)(Refl))
 import Data.Void (Void, absurd)
 import GHC.Generics (Generic)
@@ -48,7 +47,6 @@ data DiscoveryQuery delimiter err result where
   GetContractHeadersByRoleTokenCurrency :: PolicyId -> DiscoveryQuery Void Void [ContractHeader]
 
 instance HasSignature DiscoveryQuery where
-  type Signature DiscoveryQuery = Text
   signature _ = "DiscoveryQuery"
 
 instance QueryToJSON DiscoveryQuery where

@@ -21,7 +21,6 @@ import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Maybe (mapMaybe)
 import Data.Set (Set)
-import Data.Text (Text)
 import Data.Traversable (for)
 import Data.Type.Equality (type (:~:)(Refl))
 import Data.Void (Void, absurd)
@@ -188,7 +187,6 @@ data HistoryCommand status err result where
   StopFollowingContract :: ContractId -> HistoryCommand Void Void Bool
 
 instance HasSignature HistoryCommand where
-  type Signature HistoryCommand = Text
   signature _ = "HistoryCommand"
 
 instance CommandToJSON HistoryCommand where
@@ -382,7 +380,6 @@ data HistoryQuery delimiter err results where
   GetStatuses :: Set ContractId -> HistoryQuery Void Void (Map ContractId FollowerStatus)
 
 instance HasSignature HistoryQuery where
-  type Signature HistoryQuery = Text
   signature _ = "HistoryQuery"
 
 instance Query.QueryToJSON HistoryQuery where

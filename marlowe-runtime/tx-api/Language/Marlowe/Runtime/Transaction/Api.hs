@@ -50,7 +50,6 @@ import qualified Data.List.NonEmpty as NonEmpty
 import Data.Map (Map)
 import qualified Data.Map.Strict as Map
 import Data.Set (Set)
-import Data.Text (Text)
 import Data.Time (UTCTime)
 import Data.Type.Equality (type (:~:)(Refl))
 import Data.Void (Void, absurd)
@@ -287,7 +286,6 @@ data MarloweTxCommand status err result where
 
 
 instance HasSignature MarloweTxCommand where
-  type Signature MarloweTxCommand = Text
   signature _ = "MarloweTxCommand"
 
 instance CommandToJSON MarloweTxCommand where

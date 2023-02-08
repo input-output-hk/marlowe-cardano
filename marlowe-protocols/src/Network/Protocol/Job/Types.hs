@@ -22,7 +22,6 @@ import Data.Binary.Get (Get)
 import Data.Functor ((<&>))
 import Data.Maybe (catMaybes)
 import Data.Proxy (Proxy(..))
-import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Type.Equality (type (:~:)(Refl))
 import GHC.Show (showSpace)
@@ -96,8 +95,7 @@ data Job (cmd :: * -> * -> * -> *) where
   -- | The terminal state of the protocol.
   StDone :: Job cmd
 
-instance (HasSignature cmd, Signature cmd ~ Text) => HasSignature (Job cmd) where
-  type Signature (Job cmd) = Text
+instance HasSignature cmd => HasSignature (Job cmd) where
   signature _ = T.intercalate " " ["Job", signature $ Proxy @cmd]
 
 instance Protocol (Job cmd) where

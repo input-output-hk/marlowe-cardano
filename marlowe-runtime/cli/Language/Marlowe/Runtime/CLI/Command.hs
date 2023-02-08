@@ -1,5 +1,4 @@
 {-# LANGUAGE DataKinds #-}
-{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE RankNTypes #-}
@@ -11,7 +10,6 @@ import Control.Concurrent.STM (STM)
 import Control.Exception (SomeException, catch, throw)
 import Control.Exception.Base (throwIO)
 import Control.Monad.Trans.Reader (runReaderT)
-import Data.Binary (Binary)
 import qualified Data.ByteString.Lazy as LB
 import Data.Foldable (asum)
 import Language.Marlowe.Protocol.Sync.Client (marloweSyncClientPeer)
@@ -128,9 +126,7 @@ runCLIWithOptions sigInt Options{..} cli = do
 
 runClientPeerOverSocket'
   :: forall protocol client (st :: protocol)
-   . ( Binary (Signature protocol)
-     , HasSignature protocol
-     )
+   . HasSignature protocol
   => String -- ^ Client failure stderr extra message
   -> AddrInfo -- ^ Socket address to connect to
   -> Codec protocol DeserializeError IO LB.ByteString -- ^ A codec for the protocol

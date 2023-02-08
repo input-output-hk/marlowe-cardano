@@ -19,7 +19,7 @@ import Network.TypedProtocol.Codec
 
 codecHandshake
   :: forall ps m
-   . (Monad m, Binary (Signature ps))
+   . Monad m
   => Codec ps DeserializeError m LBS.ByteString
   -> Codec (Handshake ps) DeserializeError m LBS.ByteString
 codecHandshake (Codec encodeMsg decodeMsg) = Codec

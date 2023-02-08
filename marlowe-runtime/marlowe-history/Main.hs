@@ -8,7 +8,6 @@ import Control.Concurrent.Component
 import Control.Concurrent.STM (atomically)
 import Control.Exception (bracket, bracketOnError, throwIO)
 import Data.Either (fromRight)
-import Data.Text (Text)
 import qualified Data.Text.Lazy.IO as TL
 import Data.UUID.V4 (nextRandom)
 import Data.Void (Void)
@@ -22,10 +21,8 @@ import Language.Marlowe.Runtime.History.Store (hoistHistoryQueries)
 import Language.Marlowe.Runtime.History.Store.Memory (mkHistoryQueriesInMemory)
 import Logging (RootSelector(..), getRootSelectorConfig)
 import Network.Protocol.ChainSeek.Client (chainSeekClientPeer)
-import Network.Protocol.Driver (runClientPeerOverSocket)
 import Network.Protocol.Handshake.Client
-  (handshakeClientPeer, runClientPeerOverSocketWithLoggingWithHandshake, simpleHandshakeClient)
-import Network.Protocol.Handshake.Codec (codecHandshake)
+  (runClientPeerOverSocketWithHandshake, runClientPeerOverSocketWithLoggingWithHandshake)
 import Network.Protocol.Handshake.Server (acceptRunServerPeerOverSocketWithLoggingWithHandshake)
 import Network.Protocol.Job.Server (jobServerPeer)
 import Network.Protocol.Query.Client (liftQuery, queryClientPeer)
@@ -144,9 +141,7 @@ run Options{..} = withSocketsDo do
     queryChainSeek :: ChainSyncQuery Void e a -> IO (Either e a)
     queryChainSeek query = do
       addr <- head <$> getAddrInfo (Just clientHints) (Just chainSeekHost) (Just $ show chainSeekQueryPort)
-      runClientPeerOverSocket throwIO addr (codecHandshake codecQuery) (handshakeClientPeer queryClientPeer)
-        $ simpleHandshakeClient @_ @Text "Query ChainSyncQuery"
-        $ liftQuery query
+      runClientPeerOverSocketWithHandshake throwIO addr codecQuery queryClientPeer $ liftQuery query
 
     queryChainSync :: ChainSyncQuery Void e a -> IO a
     queryChainSync = fmap (fromRight $ error "failed to query chain seek server") . queryChainSeek

@@ -6,7 +6,6 @@ module Language.Marlowe.Protocol.Sync.Types
   where
 
 import Data.Aeson (Key, ToJSON, Value(..), object, (.=))
-import Data.Text (Text)
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader)
 import Language.Marlowe.Runtime.Core.Api (ContractId(..), MarloweVersion(..), MarloweVersionTag)
 import Language.Marlowe.Runtime.History.Api
@@ -24,7 +23,6 @@ data MarloweSync where
   StIntersect :: MarloweVersionTag -> MarloweSync
 
 instance HasSignature MarloweSync where
-  type Signature MarloweSync = Text
   signature _ = "MarloweSync"
 
 instance Protocol MarloweSync where

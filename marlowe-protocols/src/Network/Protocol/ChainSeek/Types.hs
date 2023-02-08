@@ -79,11 +79,7 @@ instance
   ( HasSignature query
   , HasSignature point
   , HasSignature tip
-  , Signature query ~ Text
-  , Signature point ~ Text
-  , Signature tip ~ Text
   ) => HasSignature (ChainSeek query point tip) where
-  type Signature (ChainSeek query point tip) = Text
   signature _ = T.intercalate " "
     [ "ChainSeek"
     , signature $ Proxy @query

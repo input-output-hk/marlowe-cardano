@@ -16,8 +16,10 @@
 module Network.Protocol.Handshake.Types
   where
 
-import Data.Aeson (ToJSON, Value(..), object, (.=))
+import Data.Aeson (Value(..), object, (.=))
 import Data.Proxy (Proxy)
+import Data.Text (Text)
+import qualified Data.Text as T
 import GHC.Show (showSpace)
 import Network.Protocol.Codec.Spec (ArbitraryMessage(..), MessageEq(..), ShowProtocol(..))
 import Network.Protocol.Driver (MessageToJSON(..))
@@ -32,12 +34,11 @@ data Handshake ps where
   StDone :: Handshake ps
 
 class HasSignature (ps :: k) where
-  type Signature ps :: *
-  signature :: Proxy ps -> Signature ps
+  signature :: Proxy ps -> Text
 
 instance Protocol ps => Protocol (Handshake ps) where
   data Message (Handshake ps) st st' where
-    MsgHandshake :: Signature ps -> Message (Handshake ps)
+    MsgHandshake :: Text -> Message (Handshake ps)
       ('StInit st)
       ('StHandshake st)
     MsgAccept :: Message (Handshake ps)
@@ -77,9 +78,9 @@ instance Protocol ps => Protocol (Handshake ps) where
     TokLiftNobody n_tok -> \case
       TokLiftServer s_tok -> exclusionLemma_NobodyAndServerHaveAgency n_tok s_tok
 
-instance (ArbitraryMessage ps, Arbitrary (Signature ps)) => ArbitraryMessage (Handshake ps) where
+instance ArbitraryMessage ps => ArbitraryMessage (Handshake ps) where
   arbitraryMessage = oneof
-    [ AnyMessageAndAgency (ClientAgency TokInit) . MsgHandshake <$> arbitrary
+    [ AnyMessageAndAgency (ClientAgency TokInit) . MsgHandshake . T.pack <$> arbitrary
     , pure $ AnyMessageAndAgency (ServerAgency TokHandshake) MsgReject
     , pure $ AnyMessageAndAgency (ServerAgency TokHandshake) MsgAccept
     , do
@@ -90,14 +91,14 @@ instance (ArbitraryMessage ps, Arbitrary (Signature ps)) => ArbitraryMessage (Ha
     ]
   shrinkMessage = \case
     ClientAgency TokInit -> \case
-      MsgHandshake sig -> MsgHandshake <$> shrink sig
+      MsgHandshake sig -> MsgHandshake . T.pack <$> shrink (T.unpack sig)
     ClientAgency (TokLiftClient tok) -> \case
       MsgLift msg -> MsgLift <$> shrinkMessage (ClientAgency tok) msg
     ServerAgency TokHandshake -> const []
     ServerAgency (TokLiftServer tok) -> \case
       MsgLift msg -> MsgLift <$> shrinkMessage (ServerAgency tok) msg
 
-instance (MessageEq ps, Eq (Signature ps)) => MessageEq (Handshake ps) where
+instance MessageEq ps => MessageEq (Handshake ps) where
   messageEq (AnyMessageAndAgency tok1 msg1) (AnyMessageAndAgency tok2 msg2)= case (tok1, tok2) of
     (ClientAgency TokInit, ClientAgency TokInit) -> case (msg1, msg2) of
       (MsgHandshake sig, MsgHandshake sig') -> sig == sig'
@@ -117,7 +118,7 @@ instance (MessageEq ps, Eq (Signature ps)) => MessageEq (Handshake ps) where
         messageEq (AnyMessageAndAgency (ServerAgency tok1') msg1') (AnyMessageAndAgency (ServerAgency tok2') msg2')
     (ServerAgency (TokLiftServer _), _) -> False
 
-instance (ShowProtocol ps, Show (Signature ps)) => ShowProtocol (Handshake ps) where
+instance ShowProtocol ps => ShowProtocol (Handshake ps) where
   showsPrecMessage p tok = \case
     MsgHandshake sig -> showParen (p >= 11)
       ( showString "MsgHandshake"
@@ -148,7 +149,7 @@ instance (ShowProtocol ps, Show (Signature ps)) => ShowProtocol (Handshake ps) w
       . showsPrecClientHasAgency 11 tok
       )
 
-instance (MessageToJSON ps, ToJSON (Signature ps)) => MessageToJSON (Handshake ps) where
+instance MessageToJSON ps => MessageToJSON (Handshake ps) where
   messageToJSON = \case
     ClientAgency TokInit -> \case
       MsgHandshake sig -> object [ "handshake" .= sig ]

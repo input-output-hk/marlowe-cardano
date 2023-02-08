@@ -21,7 +21,6 @@ import Data.Data (type (:~:)(Refl))
 import Data.Functor ((<&>))
 import Data.Maybe (catMaybes)
 import Data.Proxy (Proxy(..))
-import Data.Text (Text)
 import qualified Data.Text as T
 import GHC.Show (showSpace)
 import Network.Protocol.Codec.Spec (ArbitraryMessage(..), MessageEq(..), ShowProtocol(..))
@@ -72,8 +71,7 @@ data Query (query :: * -> * -> * -> *) where
   -- | The terminal state of the protocol.
   StDone :: Query query
 
-instance (HasSignature query, Signature query ~ Text) => HasSignature (Query query) where
-  type Signature (Query query) = Text
+instance HasSignature query => HasSignature (Query query) where
   signature _ = T.intercalate " " ["Query", signature $ Proxy @query]
 
 data StNextKind
