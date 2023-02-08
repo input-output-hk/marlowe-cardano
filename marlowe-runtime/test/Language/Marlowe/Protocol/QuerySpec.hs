@@ -39,6 +39,7 @@ instance ArbitraryMessage MarloweQuery where
       arbitraryResult = \case
         TokContractHeaders -> arbitrary
         TokContractState -> arbitrary
+        TokTransaction -> arbitrary
         TokBoth a b -> resized (`div` 2) $ (,) <$> arbitraryResult a <*> arbitraryResult b
 
   shrinkMessage = \case
@@ -54,6 +55,13 @@ data SomeStRes where
 instance Arbitrary SomeContractState where
   arbitrary = SomeContractState MarloweV1 <$> arbitrary
   shrink (SomeContractState MarloweV1 state) = SomeContractState MarloweV1 <$> shrink state
+
+instance Arbitrary SomeTransaction where
+  arbitrary = SomeTransaction MarloweV1 <$> arbitrary <*> arbitrary <*> arbitrary
+  shrink (SomeTransaction MarloweV1 input consumedBy state) = fold
+    [ SomeTransaction MarloweV1 input consumedBy <$> shrink state
+    , SomeTransaction MarloweV1 input <$> shrink consumedBy <*> pure state
+    ]
 
 instance Arbitrary (ContractState 'V1) where
   arbitrary = ContractState
@@ -77,6 +85,7 @@ instance Arbitrary SomeStRes where
       )
     , (Leaf, pure $ SomeStRes TokContractHeaders)
     , (Leaf, pure $ SomeStRes TokContractState)
+    , (Leaf, pure $ SomeStRes TokTransaction)
     ]
 
 instance Arbitrary SomeRequest where
@@ -93,6 +102,7 @@ instance Arbitrary SomeRequest where
   shrink (SomeRequest req) = case req of
     ReqContractHeaders range -> SomeRequest . ReqContractHeaders <$> shrink range
     ReqContractState contractId -> SomeRequest . ReqContractState <$> shrink contractId
+    ReqTransaction txId -> SomeRequest . ReqTransaction <$> shrink txId
     ReqBoth a b -> fold
       [ [ SomeRequest $ ReqBoth a' b | SomeRequest a' <- shrink (SomeRequest a) ]
       , [ SomeRequest $ ReqBoth a b' | SomeRequest b' <- shrink (SomeRequest b) ]
@@ -102,6 +112,7 @@ shrinkRequest :: Request a -> [Request a]
 shrinkRequest = \case
   ReqContractHeaders range -> ReqContractHeaders <$> shrink range
   ReqContractState contractId -> ReqContractState <$> shrink contractId
+  ReqTransaction txId -> ReqTransaction <$> shrink txId
   ReqBoth a b -> fold
     [ [ ReqBoth a' b | a' <- shrinkRequest a ]
     , [ ReqBoth a b' | b' <- shrinkRequest b ]
@@ -111,6 +122,7 @@ shrinkResponse :: StRes a -> a -> [a]
 shrinkResponse = \case
   TokContractHeaders -> shrink
   TokContractState -> shrink
+  TokTransaction -> shrink
   TokBoth ta tb -> \(a, b) -> fold
     [ [ (a', b) | a' <- shrinkResponse ta a ]
     , [ (a, b') | b' <- shrinkResponse tb b ]
