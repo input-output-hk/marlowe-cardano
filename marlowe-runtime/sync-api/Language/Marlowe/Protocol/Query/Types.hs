@@ -38,6 +38,7 @@ data Request a where
   ReqContractHeaders :: Range ContractId -> Request (Page ContractId ContractHeader)
   ReqContractState :: ContractId -> Request (Maybe SomeContractState)
   ReqTransaction :: TxId -> Request (Maybe SomeTransaction)
+  ReqTransactions :: ContractId -> Request (Maybe [SomeTransaction])
   ReqBoth :: Request a -> Request b -> Request (a, b)
 
 data SomeRequest where
@@ -54,6 +55,7 @@ instance Binary SomeRequest where
       0x01 -> SomeRequest . ReqContractHeaders <$> get
       0x02 -> SomeRequest . ReqContractState <$> get
       0x03 -> SomeRequest . ReqTransaction <$> get
+      0x04 -> SomeRequest . ReqTransactions <$> get
       _ -> fail "Invalid Request tag"
 
   put (SomeRequest req) = case req of
@@ -70,6 +72,9 @@ instance Binary SomeRequest where
     ReqTransaction txId -> do
       putWord8 0x03
       put txId
+    ReqTransactions contractId -> do
+      putWord8 0x04
+      put contractId
 
 deriving instance Eq (Request a)
 deriving instance Show (Request a)
@@ -87,11 +92,15 @@ instance ToJSON (Request a) where
     ReqTransaction txId -> object
       [ "get-transaction" .= txId
       ]
+    ReqTransactions contractId -> object
+      [ "get-transactions" .= contractId
+      ]
 
 data StRes a where
   TokContractHeaders :: StRes (Page ContractId ContractHeader)
   TokContractState :: StRes (Maybe SomeContractState)
   TokTransaction :: StRes (Maybe SomeTransaction)
+  TokTransactions :: StRes (Maybe [SomeTransaction])
   TokBoth :: StRes a -> StRes b -> StRes (a, b)
 
 deriving instance Show (StRes a)
@@ -250,6 +259,7 @@ instance MessageToJSON MarloweQuery where
         TokContractHeaders -> toJSON
         TokContractState -> toJSON
         TokTransaction -> toJSON
+        TokTransactions -> toJSON
         TokBoth a b -> toJSON . bimap (responseToJSON a) (responseToJSON b)
 
 instance ShowProtocol MarloweQuery where
@@ -265,6 +275,7 @@ instance ShowProtocol MarloweQuery where
         TokContractHeaders -> showsPrec
         TokContractState -> showsPrec
         TokTransaction -> showsPrec
+        TokTransactions -> showsPrec
         TokBoth ta tb -> \_ (a, b) -> showParen True (showsPrecResult ta 0 a . showCommaSpace . showsPrecResult tb 0 b)
   showsPrecServerHasAgency p (TokRes req) = showParen (p >= 11) (showString "TokRes" . showSpace . showsPrec 11 req)
   showsPrecClientHasAgency _ TokReq = showString "TokReq"
@@ -290,6 +301,8 @@ instance MessageEq MarloweQuery where
       reqEq (ReqContractState _) _ = False
       reqEq (ReqTransaction txId) (ReqTransaction txId') = txId == txId'
       reqEq (ReqTransaction _) _ = False
+      reqEq (ReqTransactions contractId) (ReqTransactions contractId') = contractId == contractId'
+      reqEq (ReqTransactions _) _ = False
 
       resultEq :: StRes a -> StRes b -> a -> b -> Bool
       resultEq (TokBoth ta tb) (TokBoth ta' tb') = \(a, b) (a', b') ->
@@ -301,10 +314,13 @@ instance MessageEq MarloweQuery where
       resultEq TokContractState _ = const $ const False
       resultEq TokTransaction TokTransaction = (==)
       resultEq TokTransaction _ = const $ const False
+      resultEq TokTransactions TokTransactions = (==)
+      resultEq TokTransactions _ = const $ const False
 
 requestToSt :: Request x -> StRes x
 requestToSt = \case
   ReqContractHeaders _ -> TokContractHeaders
   ReqContractState _ -> TokContractState
   ReqTransaction _ -> TokTransaction
+  ReqTransactions _ -> TokTransactions
   ReqBoth r1 r2 -> TokBoth (requestToSt r1) (requestToSt r2)

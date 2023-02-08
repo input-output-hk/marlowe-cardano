@@ -51,6 +51,7 @@ codecMarloweQuery = binaryCodec putMessage getMessage
     TokContractHeaders -> get
     TokContractState -> get
     TokTransaction -> get
+    TokTransactions -> get
 
   putResult :: StRes a -> a -> Put
   putResult = \case
@@ -58,3 +59,4 @@ codecMarloweQuery = binaryCodec putMessage getMessage
     TokContractHeaders -> put
     TokContractState -> put
     TokTransaction -> put
+    TokTransactions -> put
