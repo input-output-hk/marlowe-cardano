@@ -3,7 +3,15 @@ let
   inherit (inputs) self std nixpkgs nixpkgs-unstable bitte-cells;
   inherit (self) packages;
   inherit (nixpkgs) lib;
-  inherit (nixpkgs.legacyPackages) jq sqitchPg postgresql coreutils;
+  inherit (nixpkgs.legacyPackages)
+    jq
+    sqitchPg
+    postgresql
+    coreutils
+    writeShellScriptBin
+    socat
+    netcat
+    ;
   inherit (nixpkgs-unstable.legacyPackages) norouter;
   inherit (inputs.bitte-cells._utils.packages) srvaddr;
 
@@ -19,6 +27,51 @@ let
   }) + "/marlowe-chain-sync";
 
   database-uri = "postgresql://$DB_USER:$DB_PASS@$DB_HOST/$DB_NAME";
+
+  wait-for-socket = writeShellScriptBin "wait-for-socket" ''
+    set -eEuo pipefail
+
+    export PATH="${lib.makeBinPath [ coreutils socat ]}"
+
+    sock_path="$1"
+    delay_iterations="''${2:-8}"
+
+    for ((i=0;i<delay_iterations;i++))
+    do
+      if socat -u OPEN:/dev/null "UNIX-CONNECT:''${sock_path}"
+      then
+        exit 0
+      fi
+      let delay=2**i
+      echo "Connecting to ''${sock_path} failed, sleeping for ''${delay} seconds" >&2
+      sleep "''${delay}"
+    done
+
+    socat -u OPEN:/dev/null "UNIX-CONNECT:''${sock_path}"
+  '';
+
+  wait-for-tcp = writeShellScriptBin "wait-for-tcp" ''
+    set -eEuo pipefail
+
+    export PATH="${lib.makeBinPath [ coreutils netcat ]}"
+
+    ip="$1"
+    port="$2"
+    delay_iterations="''${3:-8}"
+
+    for ((i=0;i<delay_iterations;i++))
+    do
+      if nc -v -w 2 -z "$ip" "$port"
+      then
+        exit 0
+      fi
+      let delay=2**i
+      echo "Connecting to ''${ip}:''${port} failed, sleeping for ''${delay} seconds" >&2
+      sleep "''${delay}"
+    done
+
+    nc -v -w 2 -z "$ip" "$port"
+  '';
 
   inherit (std.lib.ops) mkOperable;
 
@@ -53,6 +106,7 @@ in
 
       DATABASE_URI=${database-uri}
       cd ${sqitch-plan-dir}
+      mkdir -p /tmp
       HOME="$(mktemp -d)" # Ensure HOME is writable for sqitch config
       export TZ=Etc/UTC
       sqitch config --user user.name chainindexer
@@ -66,6 +120,8 @@ in
       BYRON_GENESIS_HASH=$(jq -r '.ByronGenesisHash' "$NODE_CONFIG")
       CARDANO_TESTNET_MAGIC=$(jq -r '.networkMagic' "$SHELLEY_GENESIS_CONFIG");
       export CARDANO_TESTNET_MAGIC
+
+      ${wait-for-socket}/bin/wait-for-socket "$CARDANO_NODE_SOCKET_PATH"
 
       ${packages.marlowe-chain-indexer}/bin/marlowe-chain-indexer \
         --socket-path "$CARDANO_NODE_SOCKET_PATH" \
@@ -110,6 +166,8 @@ in
       CARDANO_TESTNET_MAGIC=$(jq -r '.networkMagic' "$SHELLEY_GENESIS_CONFIG");
       export CARDANO_TESTNET_MAGIC
 
+      ${wait-for-socket}/bin/wait-for-socket "$CARDANO_NODE_SOCKET_PATH"
+
       DATABASE_URI=${database-uri}
       ${packages.chainseekd}/bin/chainseekd \
         --host "$HOST" \
@@ -137,6 +195,8 @@ in
       [ -z "''${CHAINSEEKD_PORT:-}" ] && echo "CHAINSEEKD_PORT env var must be set -- aborting" && exit 1
       [ -z "''${CHAINSEEKD_QUERY_PORT:-}" ] && echo "CHAINSEEKD_QUERY_PORT env var must be set -- aborting" && exit 1
 
+      ${wait-for-tcp}/bin/wait-for-tcp "$CHAINSEEKD_HOST" "$CHAINSEEKD_PORT"
+
       ${packages.marlowe-history}/bin/marlowe-history \
         --host "$HOST" \
         --command-port "$PORT" \
@@ -163,6 +223,8 @@ in
       [ -z "''${CHAINSEEKD_PORT:-}" ] && echo "CHAINSEEKD_PORT env var must be set -- aborting" && exit 1
       [ -z "''${CHAINSEEKD_QUERY_PORT:-}" ] && echo "CHAINSEEKD_QUERY_PORT env var must be set -- aborting" && exit 1
 
+      ${wait-for-tcp}/bin/wait-for-tcp "$CHAINSEEKD_HOST" "$CHAINSEEKD_PORT"
+
       ${packages.marlowe-discovery}/bin/marlowe-discovery \
         --host "$HOST" \
         --query-port "$PORT" \
@@ -187,6 +249,8 @@ in
       [ -z "''${CHAINSEEKD_PORT:-}" ] && echo "CHAINSEEKD_PORT env var must be set -- aborting" && exit 1
       [ -z "''${CHAINSEEKD_COMMAND_PORT:-}" ] && echo "CHAINSEEKD_COMMAND_PORT env var must be set -- aborting" && exit 1
       [ -z "''${CHAINSEEKD_QUERY_PORT:-}" ] && echo "CHAINSEEKD_QUERY_PORT env var must be set -- aborting" && exit 1
+
+      ${wait-for-tcp}/bin/wait-for-tcp "$CHAINSEEKD_HOST" "$CHAINSEEKD_PORT"
 
       ${packages.marlowe-tx}/bin/marlowe-tx \
         --host "$HOST" \

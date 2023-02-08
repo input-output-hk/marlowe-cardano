@@ -91,12 +91,6 @@ rec {
     };
   };
   marlowe-history = {
-    restart = {
-      attempts = 5;
-      delay = "30s";
-      interval = "5m";
-      mode = "delay";
-    };
     env = {
       HOST = "0.0.0.0";
       PORT = "\${NOMAD_PORT_history}";
