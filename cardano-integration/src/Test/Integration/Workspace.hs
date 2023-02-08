@@ -13,6 +13,9 @@ module Test.Integration.Workspace
   , writeWorkspaceFileYAML
   ) where
 
+import Control.Concurrent (threadDelay)
+import Control.Exception (catch)
+import Control.Exception.Base (SomeException)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Trans.Resource (allocate_)
 import Data.Aeson (FromJSON, ToJSON, eitherDecodeFileStrict, encode, encodeFile)
@@ -20,6 +23,7 @@ import qualified Data.ByteString.Lazy as LBS
 import Data.UUID (UUID)
 import Data.UUID.V4 (nextRandom)
 import qualified Data.Yaml as YAML
+import GHC.Natural (Natural)
 import System.Directory (copyFile, createDirectoryIfMissing, removePathForcibly, renameFile)
 import System.FilePath (takeDirectory, (</>))
 import System.IO (Handle, IOMode, hClose, openFile)
@@ -36,8 +40,15 @@ createWorkspace :: MonadResource m => FilePath -> m Workspace
 createWorkspace workspaceName = do
   workspaceId <- liftIO nextRandom
   let workspaceDir = "/tmp/workspaces" </> (workspaceName <> "-" <> show workspaceId)
-  releaseKey <- allocate_ (createDirectoryIfMissing True workspaceDir) $ removePathForcibly workspaceDir
+  releaseKey <- allocate_ (createDirectoryIfMissing True workspaceDir) do
+    removePathForciblyWithRetries 10 workspaceDir
   pure Workspace{..}
+
+removePathForciblyWithRetries :: Natural -> FilePath -> IO ()
+removePathForciblyWithRetries 0 path = removePathForcibly path
+removePathForciblyWithRetries n path = removePathForcibly path `catch` \(_ :: SomeException) -> do
+  threadDelay 10_000
+  removePathForciblyWithRetries (n - 1) path
 
 resolveWorkspacePath :: Workspace -> FilePath -> FilePath
 resolveWorkspacePath Workspace{..} = (workspaceDir </>)

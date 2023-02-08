@@ -162,7 +162,9 @@
             (hsPkgs."aeson" or (errorHandler.buildDepError "aeson"))
             (hsPkgs."binary" or (errorHandler.buildDepError "binary"))
             (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
+            (hsPkgs."containers" or (errorHandler.buildDepError "containers"))
             (hsPkgs."lifted-async" or (errorHandler.buildDepError "lifted-async"))
+            (hsPkgs."marlowe-chain-sync" or (errorHandler.buildDepError "marlowe-chain-sync"))
             (hsPkgs."marlowe-protocols" or (errorHandler.buildDepError "marlowe-protocols"))
             (hsPkgs."marlowe-runtime" or (errorHandler.buildDepError "marlowe-runtime"))
             (hsPkgs."marlowe-runtime".components.sublibs.discovery-api or (errorHandler.buildDepError "marlowe-runtime:discovery-api"))
@@ -204,25 +206,27 @@
             (hsPkgs."plutus-ledger-api" or (errorHandler.buildDepError "plutus-ledger-api"))
             (hsPkgs."text" or (errorHandler.buildDepError "text"))
             (hsPkgs."time" or (errorHandler.buildDepError "time"))
-            (hsPkgs."witherable" or (errorHandler.buildDepError "witherable"))
+            (hsPkgs."transformers" or (errorHandler.buildDepError "transformers"))
             (hsPkgs."vector" or (errorHandler.buildDepError "vector"))
+            (hsPkgs."witherable" or (errorHandler.buildDepError "witherable"))
             ];
           buildable = true;
           modules = [
             "Language/Marlowe/Runtime/Sync"
+            "Language/Marlowe/Runtime/Sync/Database"
+            "Language/Marlowe/Runtime/Sync/Database/PostgreSQL"
+            "Language/Marlowe/Runtime/Sync/Database/PostgreSQL/GetContractState"
+            "Language/Marlowe/Runtime/Sync/Database/PostgreSQL/GetCreateStep"
+            "Language/Marlowe/Runtime/Sync/Database/PostgreSQL/GetHeaders"
+            "Language/Marlowe/Runtime/Sync/Database/PostgreSQL/GetIntersection"
+            "Language/Marlowe/Runtime/Sync/Database/PostgreSQL/GetIntersectionForContract"
+            "Language/Marlowe/Runtime/Sync/Database/PostgreSQL/GetNextHeaders"
+            "Language/Marlowe/Runtime/Sync/Database/PostgreSQL/GetNextSteps"
+            "Language/Marlowe/Runtime/Sync/Database/PostgreSQL/GetTip"
+            "Language/Marlowe/Runtime/Sync/Database/PostgreSQL/GetTipForContract"
             "Language/Marlowe/Runtime/Sync/MarloweHeaderSyncServer"
             "Language/Marlowe/Runtime/Sync/MarloweSyncServer"
             "Language/Marlowe/Runtime/Sync/QueryServer"
-            "Language/Marlowe/Runtime/Sync/Database"
-            "Language/Marlowe/Runtime/Sync/Database/PostgreSQL"
-            "Language/Marlowe/Runtime/Sync/Database/PostgreSQL/GetTip"
-            "Language/Marlowe/Runtime/Sync/Database/PostgreSQL/GetTipForContract"
-            "Language/Marlowe/Runtime/Sync/Database/PostgreSQL/GetCreateStep"
-            "Language/Marlowe/Runtime/Sync/Database/PostgreSQL/GetHeaders"
-            "Language/Marlowe/Runtime/Sync/Database/PostgreSQL/GetIntersectionForContract"
-            "Language/Marlowe/Runtime/Sync/Database/PostgreSQL/GetIntersection"
-            "Language/Marlowe/Runtime/Sync/Database/PostgreSQL/GetNextHeaders"
-            "Language/Marlowe/Runtime/Sync/Database/PostgreSQL/GetNextSteps"
             ];
           hsSourceDirs = [ "sync" ];
           };

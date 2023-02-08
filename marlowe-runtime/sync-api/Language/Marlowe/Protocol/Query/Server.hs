@@ -18,8 +18,9 @@ marloweQueryServer
   :: forall m
    . MonadBaseControl IO m
   => (Range ContractId -> m (Page ContractId ContractHeader))
+  -> (ContractId -> m (Maybe SomeContractState))
   -> MarloweQueryServer m ()
-marloweQueryServer getContractHeaders = go
+marloweQueryServer getContractHeaders getContractState = go
   where
     go = Await (ClientAgency TokReq) \case
       MsgRequest req -> Effect do
@@ -29,4 +30,5 @@ marloweQueryServer getContractHeaders = go
     serviceRequest :: Request a -> m a
     serviceRequest = \case
       ReqContractHeaders range -> getContractHeaders range
+      ReqContractState range -> getContractState range
       ReqBoth a b -> concurrently (serviceRequest a) (serviceRequest b)

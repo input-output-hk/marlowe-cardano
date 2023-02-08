@@ -53,6 +53,9 @@ request req = ClientRequest req $ pure . pure
 getContractHeaders :: Applicative m => Range ContractId -> MarloweQueryClient m (Page ContractId ContractHeader)
 getContractHeaders = request . ReqContractHeaders
 
+getContractState :: Applicative m => ContractId -> MarloweQueryClient m (Maybe SomeContractState)
+getContractState = request . ReqContractState
+
 hoistMarloweQueryClient :: Functor m => (forall x. m x -> n x) -> MarloweQueryClient m a -> MarloweQueryClient n a
 hoistMarloweQueryClient f = \case
   ClientPure a -> ClientPure a

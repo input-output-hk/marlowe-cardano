@@ -27,4 +27,4 @@ worker :: WorkerDependencies -> IO ()
 worker WorkerDependencies{..} = do
   let DatabaseQueries{..} = databaseQueries
   let RunServer runServer = runMarloweQueryServer
-  runServer $ marloweQueryServer getHeaders
+  runServer $ marloweQueryServer getHeaders getContractState
