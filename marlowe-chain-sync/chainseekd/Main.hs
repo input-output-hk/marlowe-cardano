@@ -33,7 +33,7 @@ import qualified Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL as Postg
 import Logging (RootSelector(..), getRootSelectorConfig)
 import Network.Protocol.ChainSeek.Codec (codecChainSeek)
 import Network.Protocol.ChainSeek.Server (chainSeekServerPeer)
-import Network.Protocol.Driver (acceptRunServerPeerOverSocketWithLogging)
+import Network.Protocol.Handshake.Server (acceptRunServerPeerOverSocketWithLoggingWithHandshake)
 import Network.Protocol.Job.Codec (codecJob)
 import Network.Protocol.Job.Server (jobServerPeer)
 import Network.Protocol.Query.Codec (codecQuery)
@@ -77,19 +77,19 @@ run Options{..} = withSocketsDo do
             { databaseQueries = hoistDatabaseQueries
                 (either throwUsageError pure <=< Pool.use pool)
                 PostgreSQL.databaseQueries
-            , acceptRunChainSeekServer = acceptRunServerPeerOverSocketWithLogging
+            , acceptRunChainSeekServer = acceptRunServerPeerOverSocketWithLoggingWithHandshake
                 (narrowEventBackend ChainSeekServer eventBackend)
                 throwIO
                 chainSeekSocket
                 codecChainSeek
                 (chainSeekServerPeer Genesis)
-            , acceptRunQueryServer = acceptRunServerPeerOverSocketWithLogging
+            , acceptRunQueryServer = acceptRunServerPeerOverSocketWithLoggingWithHandshake
                 (narrowEventBackend QueryServer eventBackend)
                 throwIO
                 querySocket
                 codecQuery
                 queryServerPeer
-            , acceptRunJobServer = acceptRunServerPeerOverSocketWithLogging
+            , acceptRunJobServer = acceptRunServerPeerOverSocketWithLoggingWithHandshake
                 (narrowEventBackend JobServer eventBackend)
                 throwIO
                 commandSocket

@@ -11,15 +11,16 @@ module Logging
 import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncCommand, ChainSyncQuery, RuntimeChainSeek)
 import Network.Protocol.Driver
   (AcceptSocketDriverSelector(..), SocketDriverConfigOptions(..), getAcceptSocketDriverSelectorConfig)
+import Network.Protocol.Handshake.Types (Handshake)
 import Network.Protocol.Job.Types (Job)
 import Network.Protocol.Query.Types (Query)
 import Observe.Event.Component
   (ConfigWatcherSelector(..), GetSelectorConfig, SelectorConfig(..), prependKey, singletonFieldConfig)
 
 data RootSelector f where
-  ChainSeekServer :: AcceptSocketDriverSelector RuntimeChainSeek f -> RootSelector f
-  QueryServer :: AcceptSocketDriverSelector (Query ChainSyncQuery) f -> RootSelector f
-  JobServer :: AcceptSocketDriverSelector (Job ChainSyncCommand) f -> RootSelector f
+  ChainSeekServer :: AcceptSocketDriverSelector (Handshake RuntimeChainSeek) f -> RootSelector f
+  QueryServer :: AcceptSocketDriverSelector (Handshake (Query ChainSyncQuery)) f -> RootSelector f
+  JobServer :: AcceptSocketDriverSelector (Handshake (Job ChainSyncCommand)) f -> RootSelector f
   ConfigWatcher :: ConfigWatcherSelector f -> RootSelector f
 
 -- TODO automate this boilerplate with Template Haskell

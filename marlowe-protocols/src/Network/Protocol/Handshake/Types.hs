@@ -1,10 +1,12 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE EmptyCase #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 -- | The type of the handshake protocol.
 --
@@ -15,6 +17,7 @@ module Network.Protocol.Handshake.Types
   where
 
 import Data.Aeson (ToJSON, Value(..), object, (.=))
+import Data.Proxy (Proxy)
 import GHC.Show (showSpace)
 import Network.Protocol.Codec.Spec (ArbitraryMessage(..), MessageEq(..), ShowProtocol(..))
 import Network.Protocol.Driver (MessageToJSON(..))
@@ -22,24 +25,28 @@ import Network.TypedProtocol
 import Network.TypedProtocol.Codec (AnyMessageAndAgency(..))
 import Test.QuickCheck (Arbitrary(arbitrary), oneof, shrink)
 
-data Handshake h ps where
-  StInit :: ps -> Handshake h ps
-  StHandshake :: ps -> Handshake h ps
-  StLift :: ps -> Handshake h ps
-  StDone :: Handshake h ps
+data Handshake ps where
+  StInit :: ps -> Handshake ps
+  StHandshake :: ps -> Handshake ps
+  StLift :: ps -> Handshake ps
+  StDone :: Handshake ps
 
-instance Protocol ps => Protocol (Handshake h ps) where
-  data Message (Handshake h ps) st st' where
-    MsgHandshake :: h -> Message (Handshake h ps)
+class HasSignature (ps :: k) where
+  type Signature ps :: *
+  signature :: Proxy ps -> Signature ps
+
+instance Protocol ps => Protocol (Handshake ps) where
+  data Message (Handshake ps) st st' where
+    MsgHandshake :: Signature ps -> Message (Handshake ps)
       ('StInit st)
       ('StHandshake st)
-    MsgAccept :: Message (Handshake h ps)
+    MsgAccept :: Message (Handshake ps)
       ('StHandshake st)
       ('StLift st)
-    MsgReject :: Message (Handshake h ps)
+    MsgReject :: Message (Handshake ps)
       ('StHandshake st)
       'StDone
-    MsgLift :: Message ps st st' -> Message (Handshake h ps)
+    MsgLift :: Message ps st st' -> Message (Handshake ps)
       ('StLift st)
       ('StLift st')
 
@@ -70,7 +77,7 @@ instance Protocol ps => Protocol (Handshake h ps) where
     TokLiftNobody n_tok -> \case
       TokLiftServer s_tok -> exclusionLemma_NobodyAndServerHaveAgency n_tok s_tok
 
-instance (ArbitraryMessage ps, Arbitrary h) => ArbitraryMessage (Handshake h ps) where
+instance (ArbitraryMessage ps, Arbitrary (Signature ps)) => ArbitraryMessage (Handshake ps) where
   arbitraryMessage = oneof
     [ AnyMessageAndAgency (ClientAgency TokInit) . MsgHandshake <$> arbitrary
     , pure $ AnyMessageAndAgency (ServerAgency TokHandshake) MsgReject
@@ -83,17 +90,17 @@ instance (ArbitraryMessage ps, Arbitrary h) => ArbitraryMessage (Handshake h ps)
     ]
   shrinkMessage = \case
     ClientAgency TokInit -> \case
-      MsgHandshake h -> MsgHandshake <$> shrink h
+      MsgHandshake sig -> MsgHandshake <$> shrink sig
     ClientAgency (TokLiftClient tok) -> \case
       MsgLift msg -> MsgLift <$> shrinkMessage (ClientAgency tok) msg
     ServerAgency TokHandshake -> const []
     ServerAgency (TokLiftServer tok) -> \case
       MsgLift msg -> MsgLift <$> shrinkMessage (ServerAgency tok) msg
 
-instance (MessageEq ps, Eq h) => MessageEq (Handshake h ps) where
+instance (MessageEq ps, Eq (Signature ps)) => MessageEq (Handshake ps) where
   messageEq (AnyMessageAndAgency tok1 msg1) (AnyMessageAndAgency tok2 msg2)= case (tok1, tok2) of
     (ClientAgency TokInit, ClientAgency TokInit) -> case (msg1, msg2) of
-      (MsgHandshake h, MsgHandshake h') -> h == h'
+      (MsgHandshake sig, MsgHandshake sig') -> sig == sig'
     (ClientAgency TokInit, _) -> False
     (ClientAgency (TokLiftClient tok1'), ClientAgency (TokLiftClient tok2')) -> case (msg1, msg2) of
       (MsgLift msg1', MsgLift msg2') ->
@@ -110,12 +117,12 @@ instance (MessageEq ps, Eq h) => MessageEq (Handshake h ps) where
         messageEq (AnyMessageAndAgency (ServerAgency tok1') msg1') (AnyMessageAndAgency (ServerAgency tok2') msg2')
     (ServerAgency (TokLiftServer _), _) -> False
 
-instance (ShowProtocol ps, Show h) => ShowProtocol (Handshake h ps) where
+instance (ShowProtocol ps, Show (Signature ps)) => ShowProtocol (Handshake ps) where
   showsPrecMessage p tok = \case
-    MsgHandshake h -> showParen (p >= 11)
+    MsgHandshake sig -> showParen (p >= 11)
       ( showString "MsgHandshake"
       . showSpace
-      . showsPrec 11 h
+      . showsPrec 11 sig
       )
     MsgAccept -> showString "MsgAccept"
     MsgReject -> showString "MsgReject"
@@ -141,10 +148,10 @@ instance (ShowProtocol ps, Show h) => ShowProtocol (Handshake h ps) where
       . showsPrecClientHasAgency 11 tok
       )
 
-instance (MessageToJSON ps, ToJSON h) => MessageToJSON (Handshake h ps) where
+instance (MessageToJSON ps, ToJSON (Signature ps)) => MessageToJSON (Handshake ps) where
   messageToJSON = \case
     ClientAgency TokInit -> \case
-      MsgHandshake h -> object [ "handshake" .= h ]
+      MsgHandshake sig -> object [ "handshake" .= sig ]
     ClientAgency (TokLiftClient tok) -> \case
       MsgLift msg -> object [ "lift" .= messageToJSON (ClientAgency tok) msg ]
     ServerAgency TokHandshake -> String . \case

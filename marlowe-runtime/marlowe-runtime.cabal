@@ -132,6 +132,7 @@ library history-api
     , ouroboros-consensus
     , ouroboros-network
     , plutus-ledger-api
+    , text
     , transformers
     , typed-protocols
 
@@ -200,6 +201,7 @@ library sync-api
     , marlowe-runtime
     , marlowe-runtime:discovery-api
     , monad-control
+    , text
     , transformers
     , transformers-base
     , typed-protocols
@@ -304,6 +306,7 @@ library discovery-api
     , marlowe-chain-sync
     , marlowe-protocols
     , marlowe-runtime
+    , text
     , typed-protocols
 
 library discovery
@@ -348,6 +351,7 @@ library tx-api
     , marlowe-protocols
     , marlowe-runtime
     , marlowe-runtime:history-api
+    , text
     , time
 
 library tx
@@ -532,6 +536,7 @@ executable marlowe
     , base >= 4.9 && < 5
     , ansi-terminal
     , base16
+    , binary
     , bytestring
     , cardano-api
     , containers

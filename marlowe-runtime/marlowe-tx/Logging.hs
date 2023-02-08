@@ -17,17 +17,18 @@ import Network.Protocol.Driver
   , getAcceptSocketDriverSelectorConfig
   , getConnectSocketDriverSelectorConfig
   )
+import Network.Protocol.Handshake.Types (Handshake)
 import Network.Protocol.Job.Types (Job)
 import Network.Protocol.Query.Types (Query)
 import Observe.Event.Component
   (ConfigWatcherSelector(ReloadConfig), GetSelectorConfig, SelectorConfig(..), prependKey, singletonFieldConfig)
 
 data RootSelector f where
-  ChainSeekClient :: ConnectSocketDriverSelector RuntimeChainSeek f -> RootSelector f
-  ChainSyncJobClient :: ConnectSocketDriverSelector (Job ChainSyncCommand) f -> RootSelector f
-  ChainSyncQueryClient :: ConnectSocketDriverSelector (Query ChainSyncQuery) f -> RootSelector f
-  HistoryClient :: ConnectSocketDriverSelector MarloweSync f -> RootSelector f
-  Server :: AcceptSocketDriverSelector (Job MarloweTxCommand) f -> RootSelector f
+  ChainSeekClient :: ConnectSocketDriverSelector (Handshake RuntimeChainSeek) f -> RootSelector f
+  ChainSyncJobClient :: ConnectSocketDriverSelector (Handshake (Job ChainSyncCommand)) f -> RootSelector f
+  ChainSyncQueryClient :: ConnectSocketDriverSelector (Handshake (Query ChainSyncQuery)) f -> RootSelector f
+  HistoryClient :: ConnectSocketDriverSelector (Handshake MarloweSync) f -> RootSelector f
+  Server :: AcceptSocketDriverSelector (Handshake (Job MarloweTxCommand)) f -> RootSelector f
   App :: TransactionServerSelector f -> RootSelector f
   ConfigWatcher :: ConfigWatcherSelector f -> RootSelector f
 

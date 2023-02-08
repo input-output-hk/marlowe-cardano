@@ -6,9 +6,11 @@ module Language.Marlowe.Protocol.HeaderSync.Types
   where
 
 import Data.Aeson (Value(..), object, (.=))
+import Data.Text (Text)
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainPoint)
 import Language.Marlowe.Runtime.Discovery.Api (ContractHeader)
 import Network.Protocol.Driver (MessageToJSON(..))
+import Network.Protocol.Handshake.Types (HasSignature(..))
 import Network.TypedProtocol (PeerHasAgency(..), Protocol(..))
 
 data MarloweHeaderSync where
@@ -17,6 +19,10 @@ data MarloweHeaderSync where
   StNext :: MarloweHeaderSync
   StWait :: MarloweHeaderSync
   StDone :: MarloweHeaderSync
+
+instance HasSignature MarloweHeaderSync where
+  type Signature MarloweHeaderSync = Text
+  signature _ = "MarloweSync"
 
 instance Protocol MarloweHeaderSync where
   data Message MarloweHeaderSync from to where

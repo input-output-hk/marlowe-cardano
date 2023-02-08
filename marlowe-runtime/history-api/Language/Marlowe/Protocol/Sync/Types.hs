@@ -6,10 +6,12 @@ module Language.Marlowe.Protocol.Sync.Types
   where
 
 import Data.Aeson (Key, ToJSON, Value(..), object, (.=))
+import Data.Text (Text)
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader)
 import Language.Marlowe.Runtime.Core.Api (ContractId(..), MarloweVersion(..), MarloweVersionTag)
 import Language.Marlowe.Runtime.History.Api
 import Network.Protocol.Driver (MessageToJSON(..))
+import Network.Protocol.Handshake.Types (HasSignature(..))
 import Network.TypedProtocol (PeerHasAgency(..), Protocol(..))
 
 data MarloweSync where
@@ -20,6 +22,10 @@ data MarloweSync where
   StNext :: MarloweVersionTag -> MarloweSync
   StWait :: MarloweVersionTag -> MarloweSync
   StIntersect :: MarloweVersionTag -> MarloweSync
+
+instance HasSignature MarloweSync where
+  type Signature MarloweSync = Text
+  signature _ = "MarloweSync"
 
 instance Protocol MarloweSync where
   data Message MarloweSync from to where

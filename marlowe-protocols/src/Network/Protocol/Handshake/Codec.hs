@@ -1,5 +1,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE ExplicitNamespaces #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE PolyKinds #-}
@@ -19,16 +20,16 @@ import Network.Protocol.Handshake.Types
 import Network.TypedProtocol.Codec
 
 codecHandshake
-  :: forall ps h m
-   . (Monad m, Binary h)
+  :: forall ps m
+   . (Monad m, Binary (Signature ps))
   => Codec ps DeserializeError m LBS.ByteString
-  -> Codec (Handshake h ps) DeserializeError m LBS.ByteString
+  -> Codec (Handshake ps) DeserializeError m LBS.ByteString
 codecHandshake (Codec encodeMsg decodeMsg) = Codec
   ( \case
     ClientAgency TokInit -> \case
-      MsgHandshake h -> runPut do
+      MsgHandshake sig -> runPut do
         putWord8 0x00
-        put h
+        put sig
     ClientAgency (TokLiftClient tok) -> \case
       MsgLift msg -> fold
         [ runPut $ putWord8 0x3
@@ -48,7 +49,7 @@ codecHandshake (Codec encodeMsg decodeMsg) = Codec
   (\tok -> decodeGet getWord8 >>= handleTag tok)
   where
     handleTag
-      :: PeerHasAgency pr (st :: Handshake h ps)
+      :: PeerHasAgency pr (st :: Handshake ps)
       -> DecodeStep LBS.ByteString DeserializeError m Word8
       -> m (DecodeStep LBS.ByteString DeserializeError m (SomeMessage st))
     handleTag tok = \case
@@ -56,17 +57,17 @@ codecHandshake (Codec encodeMsg decodeMsg) = Codec
       DecodePartial next -> pure $ DecodePartial $ handleTag tok <=< next
       DecodeDone tag mUnconsumed -> case tag of
         0x00 -> case tok of
-          ClientAgency TokInit -> handleH <$> decodeGet get
+          ClientAgency TokInit -> decodeSignature mUnconsumed <$> decodeGet get
           _ -> failInvalidTag "Invalid protocol state for MsgHandshake" mUnconsumed
         0x01 -> case tok of
           ServerAgency TokHandshake -> pure $ DecodeDone (SomeMessage MsgAccept) mUnconsumed
           _ -> failInvalidTag "Invalid protocol state for MsgAccept" mUnconsumed
         0x02 -> case tok of
-          ServerAgency TokHandshake -> pure $ DecodeDone (SomeMessage MsgAccept) mUnconsumed
-          _ -> failInvalidTag "Invalid protocol state for MsgAccept" mUnconsumed
+          ServerAgency TokHandshake -> pure $ DecodeDone (SomeMessage MsgReject) mUnconsumed
+          _ -> failInvalidTag "Invalid protocol state for MsgReject" mUnconsumed
         0x03 -> case tok of
-          ClientAgency (TokLiftClient tok') -> handleMsg <$> decodeMsg (ClientAgency tok')
-          ServerAgency (TokLiftServer tok') -> handleMsg <$> decodeMsg (ServerAgency tok')
+          ClientAgency (TokLiftClient tok') -> handleMsg mUnconsumed <$> decodeMsg (ClientAgency tok')
+          ServerAgency (TokLiftServer tok') -> handleMsg mUnconsumed <$> decodeMsg (ServerAgency tok')
           _ -> failInvalidTag "Invalid protocol state for MsgLift" mUnconsumed
         _ -> failInvalidTag ("Invalid msg tag " <> show tag) mUnconsumed
       where
@@ -76,18 +77,20 @@ codecHandshake (Codec encodeMsg decodeMsg) = Codec
           , unconsumedInput = foldMap toStrict mUnconsumed
           }
 
-    handleH
-      :: DecodeStep LBS.ByteString DeserializeError m h
-      -> DecodeStep LBS.ByteString DeserializeError m (SomeMessage ('StInit st' :: Handshake h ps))
-    handleH = \case
+    decodeSignature
+      :: Maybe LBS.ByteString
+      -> DecodeStep LBS.ByteString DeserializeError m (Signature ps)
+      -> DecodeStep LBS.ByteString DeserializeError m (SomeMessage ('StInit st' :: Handshake ps))
+    decodeSignature mUnconsumed = \case
       DecodeFail f -> DecodeFail f
-      DecodePartial next -> DecodePartial $ fmap handleH <$> next
-      DecodeDone h mUnconsumed -> DecodeDone (SomeMessage $ MsgHandshake h) mUnconsumed
+      DecodePartial next -> DecodePartial \mUnconsumed' -> decodeSignature Nothing <$> next (mUnconsumed <> mUnconsumed')
+      DecodeDone sig mUnconsumed' -> DecodeDone (SomeMessage $ MsgHandshake sig) $ mUnconsumed <> mUnconsumed'
 
     handleMsg
-      :: DecodeStep LBS.ByteString DeserializeError m (SomeMessage st')
+      :: Maybe LBS.ByteString
+      -> DecodeStep LBS.ByteString DeserializeError m (SomeMessage st')
       -> DecodeStep LBS.ByteString DeserializeError m (SomeMessage ('StLift st'))
-    handleMsg = \case
+    handleMsg mUnconsumed = \case
       DecodeFail f -> DecodeFail f
-      DecodePartial next -> DecodePartial $ fmap handleMsg <$> next
-      DecodeDone (SomeMessage msg) mUnconsumed -> DecodeDone (SomeMessage $ MsgLift msg) mUnconsumed
+      DecodePartial next -> DecodePartial \mUnconsumed' -> handleMsg Nothing <$> next (mUnconsumed <> mUnconsumed')
+      DecodeDone (SomeMessage msg) mUnconsumed' -> DecodeDone (SomeMessage $ MsgLift msg) $ mUnconsumed <> mUnconsumed'

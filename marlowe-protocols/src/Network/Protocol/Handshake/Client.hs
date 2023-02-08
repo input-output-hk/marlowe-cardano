@@ -1,5 +1,8 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE KindSignatures #-}
+{-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE RankNTypes #-}
 
 -- | A generic client for the handshake protocol. Includes a function for
@@ -9,30 +12,83 @@
 module Network.Protocol.Handshake.Client
   where
 
+import Control.Monad.Cleanup (MonadCleanup)
+import Control.Monad.Trans.Control (MonadBaseControl)
+import Data.Binary (Binary)
+import Data.ByteString.Lazy (ByteString)
+import Data.Proxy (Proxy(..))
+import Network.Protocol.ChainSeek.Codec (DeserializeError)
+import Network.Protocol.Driver (ConnectSocketDriverSelector, RunClient, ToPeer, runClientPeerOverSocketWithLogging)
+import Network.Protocol.Handshake.Codec (codecHandshake)
 import Network.Protocol.Handshake.Types
+import Network.Socket (AddrInfo)
 import Network.TypedProtocol
+import Network.TypedProtocol.Codec (Codec)
+import Observe.Event (EventBackend)
+import Observe.Event.Backend (noopEventBackend)
 
 -- | A generic client for the handshake protocol.
-data HandshakeClient h client m a = HandshakeClient
-  { handshake :: m h
+data HandshakeClient sig client m a = HandshakeClient
+  { handshake :: m sig
   , recvMsgReject :: m a
   , recvMsgAccept :: m (client m a)
   }
   deriving Functor
 
-simpleHandshakeClient :: Applicative m => h -> a -> client m a -> HandshakeClient h client m a
-simpleHandshakeClient h a client = HandshakeClient
-  { handshake = pure h
-  , recvMsgReject = pure a
+simpleHandshakeClient :: MonadFail m => sig -> client m a -> HandshakeClient sig client m a
+simpleHandshakeClient sig client = HandshakeClient
+  { handshake = pure sig
+  , recvMsgReject = fail "Handshake rejected by server"
   , recvMsgAccept = pure client
   }
+
+embedClientInHandshake :: MonadFail m => sig -> RunClient m (HandshakeClient sig server) -> RunClient m server
+embedClientInHandshake sig runClient = runClient . simpleHandshakeClient sig
+
+runClientPeerOverSocketWithLoggingWithHandshake
+  :: forall client protocol (st :: protocol) m r
+   . ( MonadBaseControl IO m
+     , MonadCleanup m
+     , MonadFail m
+     , Binary (Signature protocol)
+     , HasSignature protocol
+     )
+  => EventBackend m r (ConnectSocketDriverSelector (Handshake protocol))
+  -> (forall x. DeserializeError -> m x)
+  -> AddrInfo
+  -> Codec protocol DeserializeError m ByteString
+  -> ToPeer client protocol 'AsClient st m
+  -> RunClient m client
+runClientPeerOverSocketWithLoggingWithHandshake eventBackend throwImpl addr codec toPeer =
+  embedClientInHandshake (signature $ Proxy @protocol) $ runClientPeerOverSocketWithLogging
+    eventBackend
+    throwImpl
+    addr
+    (codecHandshake codec)
+    (handshakeClientPeer toPeer)
+
+runClientPeerOverSocketWithHandshake
+  :: forall client protocol (st :: protocol) m
+   . ( MonadBaseControl IO m
+     , MonadCleanup m
+     , MonadFail m
+     , Binary (Signature protocol)
+     , HasSignature protocol
+     )
+  => (forall x. DeserializeError -> m x)
+  -> AddrInfo
+  -> Codec protocol DeserializeError m ByteString
+  -> ToPeer client protocol 'AsClient st m
+  -> RunClient m client
+runClientPeerOverSocketWithHandshake =
+  runClientPeerOverSocketWithLoggingWithHandshake $ noopEventBackend ()
 
 hoistHandshakeClient
   :: Functor m
   => (forall x. (forall y. m y -> n y) -> client m x -> client n x)
   -> (forall x. m x -> n x)
-  -> HandshakeClient h client m a
-  -> HandshakeClient h client n a
+  -> HandshakeClient sig client m a
+  -> HandshakeClient sig client n a
 hoistHandshakeClient hoistClient f HandshakeClient{..} = HandshakeClient
   { handshake = f handshake
   , recvMsgReject = f recvMsgReject
@@ -40,22 +96,22 @@ hoistHandshakeClient hoistClient f HandshakeClient{..} = HandshakeClient
   }
 
 handshakeClientPeer
-  :: forall client m h ps st a
+  :: forall client m ps st a
    . Functor m
   => (forall x. client m x -> Peer ps 'AsClient st m x)
-  -> HandshakeClient h client m a
-  -> Peer (Handshake h ps) 'AsClient ('StInit st) m a
+  -> HandshakeClient (Signature ps) client m a
+  -> Peer (Handshake ps) 'AsClient ('StInit st) m a
 handshakeClientPeer clientPeer HandshakeClient{..} =
   Effect $ peerInit <$> handshake
   where
-    peerInit :: h -> Peer (Handshake h ps) 'AsClient ('StInit st) m a
-    peerInit h =
-      Yield (ClientAgency TokInit) (MsgHandshake h) $
+    peerInit :: Signature ps -> Peer (Handshake ps) 'AsClient ('StInit st) m a
+    peerInit sig =
+      Yield (ClientAgency TokInit) (MsgHandshake sig) $
       Await (ServerAgency TokHandshake) \case
         MsgReject -> Effect $ Done TokDone <$> recvMsgReject
         MsgAccept -> Effect $ liftPeer . clientPeer <$> recvMsgAccept
 
-    liftPeer :: forall st'. Peer ps 'AsClient st' m a -> Peer (Handshake h ps) 'AsClient ('StLift st') m a
+    liftPeer :: forall st'. Peer ps 'AsClient st' m a -> Peer (Handshake ps) 'AsClient ('StLift st') m a
     liftPeer = \case
       Effect m -> Effect $ liftPeer <$> m
       Done tok a -> Done (TokLiftNobody tok) a

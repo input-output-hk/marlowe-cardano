@@ -16,7 +16,7 @@ import Language.Marlowe.Protocol.HeaderSync.Codec (codecMarloweHeaderSync)
 import Language.Marlowe.Protocol.Sync.Client (marloweSyncClientPeer)
 import Language.Marlowe.Protocol.Sync.Codec (codecMarloweSync)
 import Language.Marlowe.Runtime.Web.Server
-import Network.Protocol.Driver (runClientPeerOverSocket)
+import Network.Protocol.Handshake.Client (runClientPeerOverSocketWithHandshake)
 import Network.Protocol.Job.Client (jobClientPeer)
 import Network.Protocol.Job.Codec (codecJob)
 import Network.Socket (AddrInfo(..), HostName, PortNumber, SocketType(..), defaultHints, getAddrInfo)
@@ -43,17 +43,17 @@ optionsToServerDependencies Options{..} = do
     { openAPIEnabled
     , accessControlAllowOriginAll
     , runApplication = run $ fromIntegral port
-    , runMarloweHeaderSyncClient = runClientPeerOverSocket
+    , runMarloweHeaderSyncClient = runClientPeerOverSocketWithHandshake
         throwIO
         discoverySyncAddr
         codecMarloweHeaderSync
         marloweHeaderSyncClientPeer
-    , runMarloweSyncClient = runClientPeerOverSocket
+    , runMarloweSyncClient = runClientPeerOverSocketWithHandshake
         throwIO
         historySyncAddr
         codecMarloweSync
         marloweSyncClientPeer
-    , runTxJobClient = runClientPeerOverSocket
+    , runTxJobClient = runClientPeerOverSocketWithHandshake
         throwIO
         txCommandAddr
         codecJob

@@ -25,7 +25,8 @@ import Language.Marlowe.Runtime.Indexer.Database (hoistDatabaseQueries)
 import qualified Language.Marlowe.Runtime.Indexer.Database.PostgreSQL as PostgreSQL
 import Logging (RootSelector(..), getRootSelectorConfig)
 import Network.Protocol.ChainSeek.Client (chainSeekClientPeer)
-import Network.Protocol.Driver (runClientPeerOverSocket, runClientPeerOverSocketWithLogging)
+import Network.Protocol.Driver (runClientPeerOverSocket)
+import Network.Protocol.Handshake.Client (runClientPeerOverSocketWithLoggingWithHandshake)
 import Network.Protocol.Query.Client (liftQuery, queryClientPeer)
 import Network.Protocol.Query.Codec (codecQuery)
 import Network.Socket (AddrInfo(..), HostName, PortNumber, SocketType(..), defaultHints, getAddrInfo, withSocketsDo)
@@ -68,7 +69,7 @@ run Options{..} = withSocketsDo do
     indexerDependencies eventBackend = MarloweIndexerDependencies
       { runChainSeekClient = \client -> do
           addr' <- head <$> getAddrInfo (Just clientHints) (Just chainSeekHost) (Just $ show chainSeekPort)
-          runClientPeerOverSocketWithLogging
+          runClientPeerOverSocketWithLoggingWithHandshake
             (narrowEventBackend ChainSeekClient eventBackend)
             throwIO
             addr'
@@ -77,7 +78,7 @@ run Options{..} = withSocketsDo do
             client
       , runChainSyncQueryClient = \client -> do
           addr' <- head <$> getAddrInfo (Just clientHints) (Just chainSeekHost) (Just $ show chainSeekQueryPort)
-          runClientPeerOverSocketWithLogging
+          runClientPeerOverSocketWithLoggingWithHandshake
             (narrowEventBackend ChainQueryClient eventBackend)
             throwIO
             addr'

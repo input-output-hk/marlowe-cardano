@@ -50,6 +50,7 @@ import qualified Data.List.NonEmpty as NonEmpty
 import Data.Map (Map)
 import qualified Data.Map.Strict as Map
 import Data.Set (Set)
+import Data.Text (Text)
 import Data.Time (UTCTime)
 import Data.Type.Equality (type (:~:)(Refl))
 import Data.Void (Void, absurd)
@@ -79,6 +80,7 @@ import Language.Marlowe.Runtime.ChainSync.Api
 import Language.Marlowe.Runtime.Core.Api
 import Language.Marlowe.Runtime.History.Api (ExtractCreationError, ExtractMarloweTransactionError)
 import Network.Protocol.ChainSeek.Types (SchemaVersion)
+import Network.Protocol.Handshake.Types (HasSignature(..))
 import Network.Protocol.Job.Types
 
 -- CIP-25 metadata
@@ -282,6 +284,11 @@ data MarloweTxCommand status err result where
         SubmitStatus -- This job reports the status of the tx submission, which can take some time.
         SubmitError
         BlockHeader  -- The block header of the block this transaction was added to.
+
+
+instance HasSignature MarloweTxCommand where
+  type Signature MarloweTxCommand = Text
+  signature _ = "MarloweTxCommand"
 
 instance CommandToJSON MarloweTxCommand where
   commandToJSON = \case

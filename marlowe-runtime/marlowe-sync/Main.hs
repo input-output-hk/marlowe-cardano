@@ -22,7 +22,7 @@ import Language.Marlowe.Runtime.Sync (SyncDependencies(..), sync)
 import Language.Marlowe.Runtime.Sync.Database (hoistDatabaseQueries, logDatabaseQueries)
 import qualified Language.Marlowe.Runtime.Sync.Database.PostgreSQL as Postgres
 import Logging (RootSelector(..), getRootSelectorConfig)
-import Network.Protocol.Driver (acceptRunServerPeerOverSocketWithLogging)
+import Network.Protocol.Handshake.Server (acceptRunServerPeerOverSocketWithLoggingWithHandshake)
 import Network.Socket
   ( AddrInfo(..)
   , AddrInfoFlag(..)
@@ -85,21 +85,21 @@ run Options{..} = withSocketsDo do
                 (either throwUsageError pure <=< Pool.use pool)
                 Postgres.databaseQueries
 
-              acceptRunMarloweSyncServer = acceptRunServerPeerOverSocketWithLogging
+              acceptRunMarloweSyncServer = acceptRunServerPeerOverSocketWithLoggingWithHandshake
                 (narrowEventBackend MarloweSyncServer eventBackend)
                 throwIO
                 syncSocket
                 codecMarloweSync
                 marloweSyncServerPeer
 
-              acceptRunMarloweHeaderSyncServer = acceptRunServerPeerOverSocketWithLogging
+              acceptRunMarloweHeaderSyncServer = acceptRunServerPeerOverSocketWithLoggingWithHandshake
                 (narrowEventBackend MarloweHeaderSyncServer eventBackend)
                 throwIO
                 headerSyncSocket
                 codecMarloweHeaderSync
                 marloweHeaderSyncServerPeer
 
-              acceptRunMarloweQueryServer = acceptRunServerPeerOverSocketWithLogging
+              acceptRunMarloweQueryServer = acceptRunServerPeerOverSocketWithLoggingWithHandshake
                 (narrowEventBackend MarloweQueryServer eventBackend)
                 throwIO
                 querySocket

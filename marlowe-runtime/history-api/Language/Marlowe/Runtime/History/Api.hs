@@ -21,6 +21,7 @@ import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Maybe (mapMaybe)
 import Data.Set (Set)
+import Data.Text (Text)
 import Data.Traversable (for)
 import Data.Type.Equality (type (:~:)(Refl))
 import Data.Void (Void, absurd)
@@ -32,6 +33,7 @@ import Language.Marlowe.Runtime.Core.Api
 import Language.Marlowe.Runtime.Core.ScriptRegistry (MarloweScripts(..), getMarloweVersion)
 import qualified Language.Marlowe.Scripts as V1
 import Network.Protocol.ChainSeek.Codec (DeserializeError)
+import Network.Protocol.Handshake.Types (HasSignature(..))
 import Network.Protocol.Job.Client
 import Network.Protocol.Job.Codec
 import Network.Protocol.Job.Server
@@ -184,6 +186,10 @@ getOutput (Chain.TxIx i) Chain.Transaction{..} = go i outputs
 data HistoryCommand status err result where
   FollowContract :: ContractId -> HistoryCommand Void ContractHistoryError Bool
   StopFollowingContract :: ContractId -> HistoryCommand Void Void Bool
+
+instance HasSignature HistoryCommand where
+  type Signature HistoryCommand = Text
+  signature _ = "HistoryCommand"
 
 instance CommandToJSON HistoryCommand where
   commandToJSON = \case
@@ -374,6 +380,10 @@ data SomeHistory = forall v. SomeHistory (MarloweVersion v) (History v)
 data HistoryQuery delimiter err results where
   GetFollowedContracts :: HistoryQuery ContractId Void (Map ContractId FollowerStatus)
   GetStatuses :: Set ContractId -> HistoryQuery Void Void (Map ContractId FollowerStatus)
+
+instance HasSignature HistoryQuery where
+  type Signature HistoryQuery = Text
+  signature _ = "HistoryQuery"
 
 instance Query.QueryToJSON HistoryQuery where
   queryToJSON = \case

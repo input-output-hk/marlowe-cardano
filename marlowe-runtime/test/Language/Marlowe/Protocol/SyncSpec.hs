@@ -12,6 +12,7 @@ import Language.Marlowe.Runtime.ChainSync.Gen (resized)
 import qualified Language.Marlowe.Runtime.Core.Api as Core
 import qualified Language.Marlowe.Runtime.History.Gen ()
 import Network.Protocol.Codec.Spec
+import Network.Protocol.Handshake.Codec (codecHandshake)
 import Network.TypedProtocol.Codec
 import Spec.Marlowe.Semantics.Arbitrary ()
 import Test.Hspec (Spec, describe)
@@ -20,7 +21,7 @@ import Test.QuickCheck hiding (shrinkMap)
 
 spec :: Spec
 spec = describe "MarloweSync protocol" do
-  prop "Has a lawful codec" $ checkPropCodec genByteStringSplits codecMarloweSync
+  prop "Has a lawful codec" $ checkPropCodec genByteStringSplits $ codecHandshake codecMarloweSync
 
 instance MessageEq MarloweSync where
   messageEq = \case

@@ -10,6 +10,7 @@ import Data.Aeson (ToJSON(..), Value(..), object, (.=))
 import Data.Bifunctor (bimap)
 import Data.Binary (Binary(..), getWord8, putWord8)
 import Data.Map (Map)
+import Data.Text (Text)
 import Data.Type.Equality (testEquality, type (:~:)(Refl))
 import GHC.Generics (Generic)
 import GHC.Show (showCommaSpace, showSpace)
@@ -26,6 +27,7 @@ import Language.Marlowe.Runtime.Core.Api
 import Language.Marlowe.Runtime.Discovery.Api (ContractHeader)
 import Network.Protocol.Codec.Spec (MessageEq(..), ShowProtocol(..))
 import Network.Protocol.Driver (MessageToJSON(..))
+import Network.Protocol.Handshake.Types (HasSignature(..))
 import Network.TypedProtocol
 import Network.TypedProtocol.Codec (AnyMessageAndAgency(..))
 
@@ -33,6 +35,10 @@ data MarloweQuery where
   StReq :: MarloweQuery
   StRes :: a -> MarloweQuery
   StDone :: MarloweQuery
+
+instance HasSignature MarloweQuery where
+  type Signature MarloweQuery = Text
+  signature _ = "MarloweQuery"
 
 data Request a where
   ReqContractHeaders :: Range ContractId -> Request (Page ContractId ContractHeader)

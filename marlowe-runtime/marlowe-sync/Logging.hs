@@ -11,13 +11,14 @@ import Language.Marlowe.Protocol.Sync.Types (MarloweSync)
 import Language.Marlowe.Runtime.Sync.Database (DatabaseSelector, getDatabaseSelectorConfig)
 import Network.Protocol.Driver
   (AcceptSocketDriverSelector, SocketDriverConfigOptions(..), getAcceptSocketDriverSelectorConfig)
+import Network.Protocol.Handshake.Types (Handshake)
 import Observe.Event.Component
   (ConfigWatcherSelector(ReloadConfig), GetSelectorConfig, SelectorConfig(..), prependKey, singletonFieldConfig)
 
 data RootSelector f where
-  MarloweSyncServer :: AcceptSocketDriverSelector MarloweSync f -> RootSelector f
-  MarloweHeaderSyncServer :: AcceptSocketDriverSelector MarloweHeaderSync f -> RootSelector f
-  MarloweQueryServer :: AcceptSocketDriverSelector MarloweQuery f -> RootSelector f
+  MarloweSyncServer :: AcceptSocketDriverSelector (Handshake MarloweSync) f -> RootSelector f
+  MarloweHeaderSyncServer :: AcceptSocketDriverSelector (Handshake MarloweHeaderSync) f -> RootSelector f
+  MarloweQueryServer :: AcceptSocketDriverSelector (Handshake MarloweQuery) f -> RootSelector f
   Database :: DatabaseSelector f -> RootSelector f
   ConfigWatcher :: ConfigWatcherSelector f -> RootSelector f
 
