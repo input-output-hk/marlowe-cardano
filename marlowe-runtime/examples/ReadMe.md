@@ -5,7 +5,6 @@
 -  [`marlowe deposit`](./deposit.ipynb)
 -  [`marlowe choose`](./choose.ipynb)
 -  [`marlowe notify`](./notify.ipynb)
--  [`marlowe ls` and `marlowe log`](./history.ipynb)
 -  [`marlowe submit`](./submit.ipynb)
 -  [Closing a contract](./runtime-close.ipynb)
 -  [Use of role tokens](./roles.ipynb)

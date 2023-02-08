@@ -497,7 +497,6 @@
             (hsPkgs."marlowe-runtime".components.sublibs.config or (errorHandler.buildDepError "marlowe-runtime:config"))
             (hsPkgs."marlowe-runtime".components.sublibs.tx-api or (errorHandler.buildDepError "marlowe-runtime:tx-api"))
             (hsPkgs."marlowe-runtime".components.sublibs.history-api or (errorHandler.buildDepError "marlowe-runtime:history-api"))
-            (hsPkgs."marlowe-runtime".components.sublibs.discovery-api or (errorHandler.buildDepError "marlowe-runtime:discovery-api"))
             (hsPkgs."monad-control" or (errorHandler.buildDepError "monad-control"))
             (hsPkgs."network" or (errorHandler.buildDepError "network"))
             (hsPkgs."plutus-ledger-api" or (errorHandler.buildDepError "plutus-ledger-api"))
@@ -515,12 +514,9 @@
           buildable = true;
           modules = [
             "Language/Marlowe/Runtime/CLI/Command"
-            "Language/Marlowe/Runtime/CLI/Command/Add"
             "Language/Marlowe/Runtime/CLI/Command/Apply"
             "Language/Marlowe/Runtime/CLI/Command/Create"
             "Language/Marlowe/Runtime/CLI/Command/Log"
-            "Language/Marlowe/Runtime/CLI/Command/Ls"
-            "Language/Marlowe/Runtime/CLI/Command/Rm"
             "Language/Marlowe/Runtime/CLI/Command/Submit"
             "Language/Marlowe/Runtime/CLI/Command/Tx"
             "Language/Marlowe/Runtime/CLI/Command/Withdraw"
