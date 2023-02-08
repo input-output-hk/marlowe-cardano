@@ -18,8 +18,7 @@ import Control.Exception (SomeException, catch)
 import Data.Bifunctor (second)
 import Data.Either (fromRight)
 import Language.Marlowe.Runtime.App.Build (buildApplication, buildCreation, buildWithdrawal)
-import Language.Marlowe.Runtime.App.List
-  (allContracts, followContract, followedContracts, getContract, unfollowContract)
+import Language.Marlowe.Runtime.App.List (allContracts, allHeaders, getContract)
 import Language.Marlowe.Runtime.App.Run (runClientWithConfig)
 import Language.Marlowe.Runtime.App.Sign (sign)
 import Language.Marlowe.Runtime.App.Submit (submit, waitForTx)
@@ -36,10 +35,8 @@ handle config request =
     let
       run =
         case request of
-          List -> Right . Contracts <$> allContracts
-          Followed -> Right . Contracts <$> followedContracts
-          Follow{..} -> fmap FollowResult <$> followContract reqContractId
-          Unfollow{..} -> fmap FollowResult <$> unfollowContract reqContractId
+          ListContracts -> Right . Contracts <$> allContracts
+          ListHeaders -> Right . Headers <$> allHeaders
           Get{..} -> fmap (uncurry Info) <$> getContract reqContractId
           Create{..} -> second (uncurry mkBody) <$> buildCreation MarloweV1 reqContract reqRoles reqMinUtxo reqMetadata reqAddresses reqChange reqCollateral
           Apply{..} -> second (uncurry mkBody) <$> buildApplication MarloweV1 reqContractId reqInputs reqValidityLowerBound reqValidityUpperBound reqMetadata reqAddresses reqChange reqCollateral

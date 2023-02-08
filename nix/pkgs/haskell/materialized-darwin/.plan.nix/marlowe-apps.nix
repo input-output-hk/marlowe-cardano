@@ -11,7 +11,7 @@
     flags = {};
     package = {
       specVersion = "3.0";
-      identifier = { name = "marlowe-apps"; version = "0.2.1.0"; };
+      identifier = { name = "marlowe-apps"; version = "0.2.2.1"; };
       license = "Apache-2.0";
       copyright = "";
       maintainer = "Brian W Bush <brian.bush@iohk.io>";
@@ -49,6 +49,7 @@
           (hsPkgs."marlowe-runtime".components.sublibs.config or (errorHandler.buildDepError "marlowe-runtime:config"))
           (hsPkgs."marlowe-runtime".components.sublibs.discovery-api or (errorHandler.buildDepError "marlowe-runtime:discovery-api"))
           (hsPkgs."marlowe-runtime".components.sublibs.history-api or (errorHandler.buildDepError "marlowe-runtime:history-api"))
+          (hsPkgs."marlowe-runtime".components.sublibs.sync-api or (errorHandler.buildDepError "marlowe-runtime:sync-api"))
           (hsPkgs."marlowe-runtime".components.sublibs.tx-api or (errorHandler.buildDepError "marlowe-runtime:tx-api"))
           (hsPkgs."marlowe-runtime" or (errorHandler.buildDepError "marlowe-runtime"))
           (hsPkgs."monad-control" or (errorHandler.buildDepError "monad-control"))

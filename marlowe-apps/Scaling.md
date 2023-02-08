@@ -74,16 +74,12 @@ marlowe-scaling : run multiple Marlowe test contracts in parallel
 
 Usage: marlowe-scaling [--chain-seek-host HOST_NAME]
                        [--chain-seek-command-port PORT_NUMBER]
-                       [--chain-seek-query-port PORT_NUMBER]
                        [--chain-seek-sync-port PORT_NUMBER]
-                       [--history-host HOST_NAME]
-                       [--history-command-port PORT_NUMBER]
-                       [--history-query-port PORT_NUMBER]
-                       [--history-sync-port PORT_NUMBER]
-                       [--discovery-host HOST_NAME]
-                       [--discovery-query-port PORT_NUMBER]
-                       [--discovery-sync-port PORT_NUMBER] [--tx-host HOST_NAME]
-                       [--tx-command-port PORT_NUMBER]
+                       [--marlowe-sync-host HOST_NAME]
+                       [--marlowe-sync-port PORT_NUMBER]
+                       [--marlowe-header-sync-port PORT_NUMBER]
+                       [--marlowe-query-sync-port PORT_NUMBER]
+                       [--tx-host HOST_NAME] [--tx-command-port PORT_NUMBER]
                        [--timeout-seconds INTEGER] [--build-seconds INTEGER]
                        [--confirm-seconds INTEGER] [--retry-seconds INTEGER]
                        [--retry-limit INTEGER] NATURAL [ADDRESS=KEYFILE]
@@ -98,48 +94,33 @@ Available options:
   --chain-seek-host HOST_NAME
                            The hostname of the Marlowe Runtime chain-seek
                            server. Can be set as the environment variable
-                           MARLOWE_RT_CHAINSEEK_HOST (default: "127.0.0.1")
+                           MARLOWE_CHAINSEEKD_HOST (default: "127.0.0.1")
   --chain-seek-command-port PORT_NUMBER
                            The port number of the chain-seek server's job API.
                            Can be set as the environment variable
-                           MARLOWE_RT_CHAINSEEK_COMMAND_PORT (default: 3720)
-  --chain-seek-query-port PORT_NUMBER
-                           The port number of the chain-seek server's query API.
-                           Can be set as the environment variable
-                           MARLOWE_RT_CHAINSEEK_QUERY_PORT (default: 3716)
+                           MARLOWE_CHAINSEEKD_COMMAND_PORT (default: 3720)
   --chain-seek-sync-port PORT_NUMBER
                            The port number of the chain-seek server's
                            synchronization API. Can be set as the environment
-                           variable MARLOWE_RT_CHAINSEEK_SYNC_PORT
-                           (default: 3715)
-  --history-host HOST_NAME The hostname of the Marlowe Runtime history server.
-                           Can be set as the environment variable
-                           MARLOWE_RT_HISTORY_HOST (default: "127.0.0.1")
-  --history-command-port PORT_NUMBER
-                           The port number of the history server's job API. Can
-                           be set as the environment variable
-                           MARLOWE_RT_HISTORY_COMMAND_PORT (default: 3717)
-  --history-query-port PORT_NUMBER
-                           The port number of the history server's query API.
-                           Can be set as the environment variable
-                           MARLOWE_RT_HISTORY_QUERY_PORT (default: 3718)
-  --history-sync-port PORT_NUMBER
-                           The port number of the history server's
+                           variable MARLOWE_CHAINSEEKD_PORT (default: 3715)
+  --marlowe-sync-host HOST_NAME
+                           The hostname of the Marlowe Runtime marlowe-sync
+                           server. Can be set as the environment variable
+                           MARLOWE_RT_SYNC_HOST (default: "127.0.0.1")
+  --marlowe-sync-port PORT_NUMBER
+                           The port number of the marlowe-sync server's
                            synchronization API. Can be set as the environment
-                           variable MARLOWE_RT_HISTORY_SYNC_PORT (default: 3719)
-  --discovery-host HOST_NAME
-                           The hostname of the Marlowe Runtime discovery server.
-                           Can be set as the environment variable
-                           MARLOWE_RT_DISCOVERY_HOST (default: "127.0.0.1")
-  --discovery-query-port PORT_NUMBER
-                           The port number of the discovery server's query API.
-                           Can be set as the environment variable
-                           MARLOWE_RT_DISCOVERY_QUERY_PORT (default: 3721)
-  --discovery-sync-port PORT_NUMBER
-                           The port number of the discovery server's
+                           variable MARLOWE_RT_SYNC_MARLOWE_SYNC_PORT
+                           (default: 3724)
+  --marlowe-header-sync-port PORT_NUMBER
+                           The port number of the marlowe-sync server's header
                            synchronization API. Can be set as the environment
-                           variable MARLOWE_RT_DISCOVERY_SYNC_PORT
-                           (default: 3722)
+                           variable MARLOWE_RT_SYNC_HEADER_SYNC_PORT
+                           (default: 3725)
+  --marlowe-query-sync-port PORT_NUMBER
+                           The port number of the marlowe-sync server's query
+                           API. Can be set as the environment variable
+                           MARLOWE_RT_SYNC_QUERY_SYNC_PORT (default: 3726)
   --tx-host HOST_NAME      The hostname of the Marlowe Runtime transaction
                            server. Can be set as the environment variable
                            MARLOWE_RT_TX_HOST (default: "127.0.0.1")

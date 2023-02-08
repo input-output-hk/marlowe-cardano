@@ -1,6 +1,6 @@
 cabal-version      : 3.0
 name               : marlowe-apps
-version            : 0.2.1.0
+version            : 0.2.2.1
 synopsis           : Marlowe Runtimee applications
 license            : Apache-2.0
 license-file       : LICENSE
@@ -39,6 +39,7 @@ library
                     , marlowe-runtime:config
                     , marlowe-runtime:discovery-api
                     , marlowe-runtime:history-api
+                    , marlowe-runtime:sync-api
                     , marlowe-runtime:tx-api
                     , marlowe-runtime
                     , monad-control
@@ -60,6 +61,7 @@ library
                       -Widentities
                       -Wunused-packages
   default-language  : Haskell2010
+
 
 executable marlowe-scaling
   main-is           : Main.hs

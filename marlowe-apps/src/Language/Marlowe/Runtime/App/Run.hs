@@ -25,6 +25,8 @@ import Data.ByteString.Lazy (ByteString)
 import Language.Marlowe.Protocol.HeaderSync.Client
   (MarloweHeaderSyncClient, hoistMarloweHeaderSyncClient, marloweHeaderSyncClientPeer)
 import Language.Marlowe.Protocol.HeaderSync.Codec (codecMarloweHeaderSync)
+import Language.Marlowe.Protocol.Query.Client (MarloweQueryClient, hoistMarloweQueryClient, marloweQueryClientPeer)
+import Language.Marlowe.Protocol.Query.Codec (codecMarloweQuery)
 import Language.Marlowe.Protocol.Sync.Client (MarloweSyncClient, hoistMarloweSyncClient, marloweSyncClientPeer)
 import Language.Marlowe.Protocol.Sync.Codec (codecMarloweSync)
 import Language.Marlowe.Runtime.App.Types (Client(..), Config(..), RunClient, Services(..))
@@ -35,8 +37,6 @@ import Network.Protocol.ChainSeek.Codec (codecChainSeek)
 import Network.Protocol.Driver (mkDriver)
 import Network.Protocol.Job.Client (JobClient, hoistJobClient, jobClientPeer)
 import Network.Protocol.Job.Codec (codecJob)
-import Network.Protocol.Query.Client (QueryClient, hoistQueryClient, queryClientPeer)
-import Network.Protocol.Query.Codec (codecQuery)
 import Network.Socket
   (AddrInfo, SocketType(..), addrAddress, addrSocketType, close, connect, defaultHints, getAddrInfo, openSocket)
 import Network.TypedProtocol (Driver(startDState), Peer, PeerRole(..), runPeerWithDriver)
@@ -44,13 +44,13 @@ import Network.TypedProtocol.Codec (Codec)
 
 
 runQueryClient
-  :: (Services IO -> QueryClient q IO a -> IO a)
-  -> QueryClient q Client a
+  :: (Services IO -> MarloweQueryClient IO a -> IO a)
+  -> MarloweQueryClient Client a
   -> Client a
 runQueryClient query client =
   do
     services <- Client ask
-    liftBaseWith $ \runInBase -> query services $ hoistQueryClient runInBase client
+    liftBaseWith $ \runInBase -> query services $ hoistMarloweQueryClient runInBase client
 
 
 runJobClient
@@ -99,24 +99,18 @@ runClientWithConfig
   -> IO a
 runClientWithConfig Config{..} client = do
   chainSeekCommandAddr <- resolve chainSeekHost chainSeekCommandPort
-  chainSeekQueryAddr <- resolve chainSeekHost chainSeekQueryPort
   chainSeekSyncAddr <- resolve chainSeekHost chainSeekSyncPort
-  historyJobAddr <- resolve historyHost historyCommandPort
-  historyQueryAddr <- resolve historyHost historyQueryPort
-  historySyncAddr <- resolve historyHost historySyncPort
-  discoveryQueryAddr <- resolve discoveryHost discoveryQueryPort
-  discoverySyncAddr <- resolve discoveryHost discoverySyncPort
+  syncSyncAddr <- resolve syncHost syncSyncPort
+  syncHeaderAddr <- resolve syncHost syncHeaderPort
+  syncQueryAddr <- resolve syncHost syncQueryPort
   txJobAddr <- resolve txHost txCommandPort
   runReaderT (runClient client) Services
     { runChainSeekCommandClient = runClientPeerOverSocket chainSeekCommandAddr codecJob jobClientPeer
-    , runChainSeekQueryClient = runClientPeerOverSocket chainSeekQueryAddr codecQuery queryClientPeer
     , runChainSeekSyncClient = runClientPeerOverSocket chainSeekSyncAddr codecChainSeek (chainSeekClientPeer Genesis)
-    , runHistoryCommandClient = runClientPeerOverSocket historyJobAddr codecJob jobClientPeer
-    , runHistoryQueryClient = runClientPeerOverSocket historyQueryAddr codecQuery queryClientPeer
-    , runHistorySyncClient = runClientPeerOverSocket historySyncAddr codecMarloweSync marloweSyncClientPeer
+    , runSyncSyncClient = runClientPeerOverSocket syncSyncAddr codecMarloweSync marloweSyncClientPeer
+    , runSyncHeaderClient = runClientPeerOverSocket syncHeaderAddr codecMarloweHeaderSync marloweHeaderSyncClientPeer
+    , runSyncQueryClient = runClientPeerOverSocket syncQueryAddr codecMarloweQuery marloweQueryClientPeer
     , runTxCommandClient = runClientPeerOverSocket txJobAddr codecJob jobClientPeer
-    , runDiscoveryQueryClient = runClientPeerOverSocket discoveryQueryAddr codecQuery queryClientPeer
-    , runDiscoverySyncClient = runClientPeerOverSocket discoverySyncAddr codecMarloweHeaderSync marloweHeaderSyncClientPeer
     }
   where
     resolve host port =

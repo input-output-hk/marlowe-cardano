@@ -10,9 +10,10 @@ module Language.Marlowe.Runtime.App.Parser
 import Data.Default (def)
 import Language.Marlowe.Runtime.App.Types
   (Config(Config, buildSeconds, confirmSeconds, retryLimit, retrySeconds, timeoutSeconds))
-import Language.Marlowe.Runtime.CLI.Option (CliOption, host, optParserWithEnvDefault, port)
+import Language.Marlowe.Runtime.CLI.Option (CliOption, optParserWithEnvDefault)
 import Language.Marlowe.Runtime.ChainSync.Api (Address, fromBech32)
 import Network.Socket (HostName, PortNumber)
+import Text.Read (readMaybe)
 
 import qualified Data.Text as T (pack)
 import qualified Language.Marlowe.Runtime.CLI.Option as CLI
@@ -24,15 +25,11 @@ getConfigParser =
   do
     chainSeekHostParser <- optParserWithEnvDefault chainSeekHost
     chainSeekCommandPortParser <- optParserWithEnvDefault chainSeekCommandPort
-    chainSeekQueryPortParser <- optParserWithEnvDefault chainSeekQueryPort
     chainSeekSyncPortParser <- optParserWithEnvDefault chainSeekSyncPort
-    historyHostParser <- optParserWithEnvDefault CLI.historyHost
-    historyCommandPortParser <- optParserWithEnvDefault CLI.historyCommandPort
-    historyQueryPortParser <- optParserWithEnvDefault CLI.historyQueryPort
-    historySyncPortParser <- optParserWithEnvDefault CLI.historySyncPort
-    discoveryHostParser <- optParserWithEnvDefault CLI.discoveryHost
-    discoveryQueryPortParser <- optParserWithEnvDefault CLI.discoveryQueryPort
-    discoverySyncPortParser <- optParserWithEnvDefault CLI.discoverySyncPort
+    syncHostParser <- optParserWithEnvDefault CLI.syncHost
+    syncSyncPortParser <- optParserWithEnvDefault CLI.syncSyncPort
+    syncHeaderPortParser <- optParserWithEnvDefault CLI.syncHeaderPort
+    syncQueryPortParser <- optParserWithEnvDefault CLI.syncQueryPort
     txHostParser <- optParserWithEnvDefault CLI.txHost
     txCommandPortParser <- optParserWithEnvDefault CLI.txCommandPort
     let
@@ -75,15 +72,11 @@ getConfigParser =
       $ Config
       <$> chainSeekHostParser
       <*> chainSeekCommandPortParser
-      <*> chainSeekQueryPortParser
       <*> chainSeekSyncPortParser
-      <*> historyHostParser
-      <*> historyCommandPortParser
-      <*> historyQueryPortParser
-      <*> historySyncPortParser
-      <*> discoveryHostParser
-      <*> discoveryQueryPortParser
-      <*> discoverySyncPortParser
+      <*> syncHostParser
+      <*> syncSyncPortParser
+      <*> syncHeaderPortParser
+      <*> syncQueryPortParser
       <*> txHostParser
       <*> txCommandPortParser
       <*> timeoutSecondsParser
@@ -93,20 +86,48 @@ getConfigParser =
       <*> retryLimitParser
 
 
+host' :: String -> String -> HostName  -> String -> CliOption O.OptionFields HostName
+host' optPrefix envPrefix defaultValue description = CLI.CliOption
+  { CLI.env = env
+  , CLI.parseEnv = Just
+  , CLI.parser = O.strOption . (<>) (mconcat
+      [ O.long $ optPrefix <> "-host"
+      , O.value defaultValue
+      , O.metavar "HOST_NAME"
+      , O.help $ description <> " Can be set as the environment variable " <> env
+      , O.showDefault
+      ])
+  }
+  where
+    env = "MARLOWE_" <> envPrefix <> "_HOST"
+
+
+port' :: String -> String -> PortNumber -> String -> CliOption O.OptionFields PortNumber
+port' optPrefix envPrefix defaultValue description = CLI.CliOption
+  { CLI.env = env
+  , CLI.parseEnv = readMaybe
+  , CLI.parser = O.option O.auto . (<>) (mconcat
+      [ O.long $ optPrefix <> "-port"
+      , O.value defaultValue
+      , O.metavar "PORT_NUMBER"
+      , O.help $ description <> " Can be set as the environment variable " <> env
+      , O.showDefault
+      ])
+  }
+  where
+    env = "MARLOWE_" <> envPrefix <> "_PORT"
+
+
 chainSeekHost :: CliOption O.OptionFields HostName
-chainSeekHost = host "chain-seek" "CHAINSEEK" "127.0.0.1" "The hostname of the Marlowe Runtime chain-seek server."
+chainSeekHost = host' "chain-seek" "CHAINSEEKD" "127.0.0.1" "The hostname of the Marlowe Runtime chain-seek server."
 
 
 chainSeekCommandPort :: CliOption O.OptionFields PortNumber
-chainSeekCommandPort = port "chain-seek-command" "CHAINSEEK_COMMAND" 3720 "The port number of the chain-seek server's job API."
-
-
-chainSeekQueryPort :: CliOption O.OptionFields PortNumber
-chainSeekQueryPort = port "chain-seek-query" "CHAINSEEK_QUERY" 3716 "The port number of the chain-seek server's query API."
+chainSeekCommandPort = port' "chain-seek-command" "CHAINSEEKD_COMMAND" 3720 "The port number of the chain-seek server's job API."
 
 
 chainSeekSyncPort :: CliOption O.OptionFields PortNumber
-chainSeekSyncPort = port "chain-seek-sync" "CHAINSEEK_SYNC" 3715 "The port number of the chain-seek server's synchronization API."
+chainSeekSyncPort = port' "chain-seek-sync" "CHAINSEEKD" 3715 "The port number of the chain-seek server's synchronization API."
 
 
 addressParser :: O.ReadM Address

@@ -34,12 +34,12 @@ import Data.Default (Default(..))
 import Data.String (fromString)
 import Language.Marlowe (POSIXTime(..))
 import Language.Marlowe.Protocol.HeaderSync.Client (MarloweHeaderSyncClient)
+import Language.Marlowe.Protocol.Query.Client (MarloweQueryClient)
 import Language.Marlowe.Protocol.Sync.Client (MarloweSyncClient)
 import Language.Marlowe.Runtime.Cardano.Api (fromCardanoTxId)
 import Language.Marlowe.Runtime.ChainSync.Api
   ( Address
   , ChainSyncCommand
-  , ChainSyncQuery
   , Lovelace(..)
   , RuntimeChainSeekClient
   , TokenName
@@ -60,12 +60,11 @@ import Language.Marlowe.Runtime.Core.Api
   , TransactionScriptOutput(..)
   , renderContractId
   )
-import Language.Marlowe.Runtime.Discovery.Api (DiscoveryQuery)
+import Language.Marlowe.Runtime.Discovery.Api (ContractHeader)
 import Language.Marlowe.Runtime.History.Api
-  (ContractStep(..), CreateStep(..), HistoryCommand, HistoryQuery, RedeemStep(RedeemStep, datum, redeemingTx, utxo))
+  (ContractStep(..), CreateStep(..), RedeemStep(RedeemStep, datum, redeemingTx, utxo))
 import Language.Marlowe.Runtime.Transaction.Api (MarloweTxCommand)
 import Network.Protocol.Job.Client (JobClient)
-import Network.Protocol.Query.Client (QueryClient)
 import Network.Socket (HostName, PortNumber)
 
 import qualified Cardano.Api as C
@@ -96,15 +95,11 @@ data Config =
   Config
   { chainSeekHost :: HostName
   , chainSeekCommandPort :: PortNumber
-  , chainSeekQueryPort :: PortNumber
   , chainSeekSyncPort :: PortNumber
-  , historyHost :: HostName
-  , historyCommandPort :: PortNumber
-  , historyQueryPort :: PortNumber
-  , historySyncPort :: PortNumber
-  , discoveryHost :: HostName
-  , discoveryQueryPort :: PortNumber
-  , discoverySyncPort :: PortNumber
+  , syncHost :: HostName
+  , syncSyncPort :: PortNumber
+  , syncHeaderPort :: PortNumber
+  , syncQueryPort :: PortNumber
   , txHost :: HostName
   , txCommandPort :: PortNumber
   , timeoutSeconds :: Int
@@ -120,15 +115,11 @@ instance Default Config where
     Config
     { chainSeekHost = "127.0.0.1"
     , chainSeekCommandPort = 3720
-    , chainSeekQueryPort = 3716
     , chainSeekSyncPort = 3715
-    , historyHost = "127.0.0.1"
-    , historyCommandPort = 3717
-    , historyQueryPort = 3718
-    , historySyncPort = 3719
-    , discoveryHost = "127.0.0.1"
-    , discoveryQueryPort = 3721
-    , discoverySyncPort = 3722
+    , syncHost = "127.0.0.1"
+    , syncSyncPort = 3724
+    , syncHeaderPort = 3725
+    , syncQueryPort = 3726
     , txHost = "127.0.0.1"
     , txCommandPort = 3723
     , timeoutSeconds = 600
@@ -142,13 +133,10 @@ instance Default Config where
 data Services m =
   Services
   { runChainSeekCommandClient :: RunClient m (JobClient ChainSyncCommand)
-  , runChainSeekQueryClient :: RunClient m (QueryClient ChainSyncQuery)
   , runChainSeekSyncClient :: RunClient m RuntimeChainSeekClient
-  , runHistoryCommandClient :: RunClient m (JobClient HistoryCommand)
-  , runHistoryQueryClient :: RunClient m (QueryClient HistoryQuery)
-  , runHistorySyncClient :: RunClient m MarloweSyncClient
-  , runDiscoveryQueryClient :: RunClient m (QueryClient DiscoveryQuery)
-  , runDiscoverySyncClient :: RunClient m MarloweHeaderSyncClient
+  , runSyncSyncClient :: RunClient m MarloweSyncClient
+  , runSyncHeaderClient :: RunClient m MarloweHeaderSyncClient
+  , runSyncQueryClient :: RunClient m MarloweQueryClient
   , runTxCommandClient :: RunClient m (JobClient MarloweTxCommand)
   }
 
@@ -163,14 +151,8 @@ type RunClient m client = forall a. client m a -> m a
 
 
 data MarloweRequest v =
-    List
-  | Followed
-  | Follow
-    { reqContractId :: ContractId
-    }
-  | Unfollow
-    { reqContractId :: ContractId
-    }
+    ListContracts
+  | ListHeaders
   | Get
     { reqContractId :: ContractId
     }
@@ -221,14 +203,8 @@ instance A.FromJSON (MarloweRequest 'V1) where
       $ \o ->
         (o A..: "request" :: A.Parser String)
           >>= \case
-            "list" -> pure List
-            "followed" -> pure Followed
-            "follow" -> do
-                          reqContractId <- fromString <$> o A..: "contractId"
-                          pure Follow{..}
-            "unfollow" -> do
-                            reqContractId <- fromString <$> o A..: "contractId"
-                            pure Unfollow{..}
+            "list" -> pure ListContracts
+            "headers" -> pure ListHeaders
             "get" -> do
                        reqContractId <- fromString <$> o A..: "contractId"
                        pure Get{..}
@@ -273,18 +249,8 @@ instance A.FromJSON (MarloweRequest 'V1) where
             request -> fail $ "Invalid request: " <> request <> "."
 
 instance A.ToJSON (MarloweRequest 'V1) where
-  toJSON List = A.object ["request" A..= ("list" :: String)]
-  toJSON Followed = A.object ["request" A..= ("followed" :: String)]
-  toJSON Follow{..} =
-    A.object
-      [ "request" A..=  ("follow" :: String)
-      , "contractId" A..= renderContractId reqContractId
-      ]
-  toJSON Unfollow{..} =
-    A.object
-      [ "request" A..=  ("unfollow" :: String)
-      , "contractId" A..= renderContractId reqContractId
-      ]
+  toJSON ListContracts = A.object ["request" A..= ("list" :: String)]
+  toJSON ListHeaders = A.object ["request" A..= ("headers" :: String)]
   toJSON Get{..} =
     A.object
       [ "request" A..= ("get" :: String)
@@ -344,6 +310,9 @@ data MarloweResponse v =
     Contracts
     { resContractIds :: [ContractId]
     }
+  | Headers
+    { resContractHeaders :: [ContractHeader]
+    }
   | FollowResult
     { resResult :: Bool
     }
@@ -374,6 +343,11 @@ instance A.ToJSON (MarloweResponse 'V1) where
     A.object
       [ "response" A..= ("contracts" :: String)
       , "contractIds" A..= fmap renderContractId resContractIds
+      ]
+  toJSON Headers{..} =
+    A.object
+      [ "response" A..= ("headers" :: String)
+      , "contractHeaders" A..= resContractHeaders
       ]
   toJSON FollowResult{..} =
     A.object
