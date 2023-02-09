@@ -103,7 +103,7 @@ We have observed that `marlowe-scaling` achieves greater than 99.99% success whe
 ## Summary Recommendations
 
 Empirical observations indicate that a single Marlowe Runtime backend scales to handle the following well:
-- Wait 6 seconds after the previous confirmation of a transaction before building another Marlowe transaction.
+- Wait 6 seconds after the previous confirmation of a transaction before building another Marlowe transaction that is based on the addresses used in the previous transaction. (There is no need to wait after the transactions at irrelevant addresses.)
 - Wait 10 seconds before retrying a failed Marlowe transactions.
 - Retry up to 5 times, doubling the delay from each subsequent retry.
 - Limit (throttle) the demand for building and executing Marlowe transactions on Marlowe Runtime to no more than 20 simultaneous request.
