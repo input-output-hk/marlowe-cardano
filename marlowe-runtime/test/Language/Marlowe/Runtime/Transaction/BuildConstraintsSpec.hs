@@ -51,7 +51,19 @@ import Spec.Marlowe.Semantics.Arbitrary ()
 import Test.Hspec (Spec, shouldBe)
 import qualified Test.Hspec as Hspec
 import qualified Test.Hspec.QuickCheck as Hspec.QuickCheck
-import Test.QuickCheck (Arbitrary(..), Property, chooseInteger, discard, genericShrink, listOf1, oneof, suchThat, (===))
+import Test.QuickCheck
+  ( Arbitrary(..)
+  , Property
+  , chooseInteger
+  , counterexample
+  , discard
+  , elements
+  , genericShrink
+  , listOf1
+  , oneof
+  , suchThat
+  , (===)
+  )
 import qualified Test.QuickCheck as QuickCheck
 import Test.QuickCheck.Instances ()
 
@@ -240,6 +252,7 @@ withdrawSpec = Hspec.describe "buildWithdrawConstraints" do
 buildApplyInputsConstraintsSpec :: Spec
 buildApplyInputsConstraintsSpec =
   Hspec.describe "buildApplyInputsConstraints" do
+    -- TODO: Break up this preface to utility functions when additional properties are tested.
     let
       -- System start and era history are reusable across tests.
       systemStart = SystemStart $ posixSecondsToUTCTime 0  -- Without loss of generality.
@@ -275,27 +288,32 @@ buildApplyInputsConstraintsSpec =
           :* K (oneSecondEraSummary 4) -- Alonzo lasted 1 second
           :* K (unboundedEraSummary 5) -- Babbage never ends
           :* Nil
-    Hspec.QuickCheck.prop "valid slot interval for timed-out contract" \assets utxo -> do
-      address <- arbitrary
+      genTipSlot = chooseInteger (9, 20) -- Make sure the tip is in the Babbage era.
+      genMinTime = oneof
+                   [
+                     (1000 *) <$> chooseInteger (6, 20)  -- Even seconds, so there is a chance of collision.
+                   , chooseInteger (6000, 20000)         -- Milliseconds, so there is rounding off.
+                   ]
+      genTimeout = oneof
+                   [
+                     (1000 *) <$> chooseInteger (6, 20)  -- Even seconds, so there is a chance of collision.
+                   , chooseInteger (6000, 20000)         -- Milliseconds, so there is rounding off.
+                   ]
+    Hspec.QuickCheck.prop "valid slot interval for timed-out contract" \assets utxo address marloweParams-> do
       -- The choice intervals for the tip, minimum time, and timeout overlap, so every ordering will occur.
-      tipSlot' <- chooseInteger (9, 20) -- Make sure the tip is in the Babbage era.
-      minTime <- oneof
-                   [
-                     (1000 *) <$> chooseInteger (6, 20)  -- Even seconds, so there is a chance of collision.
-                   , chooseInteger (6000, 20000)         -- Milliseconds, so there is rounding off.
-                   ]
-      timeout <- oneof
-                   [
-                     (1000 *) <$> chooseInteger (6, 20)  -- Even seconds, so there is a chance of collision.
-                   , chooseInteger (6000, 20000)         -- Milliseconds, so there is rounding off.
-                   ]
-      marloweParams <- arbitrary
+      tipSlot' <- genTipSlot
+      minTime <- genMinTime
+      timeout <- genTimeout
+      timeout' <- genTimeout
+      let
+        contract = Semantics.When [] (POSIXTime timeout) Semantics.Close
+        contract' = Semantics.When [] (POSIXTime timeout) $ Semantics.When [] (POSIXTime timeout') Semantics.Close
+      marloweContract <- elements [contract, contract'] -- This contract can only time out.
       let
         toSlot = (`div` 1000)
         tipSlot = toEnum . fromEnum $ tipSlot'
         tipTime = 1000 * tipSlot'
         marloweState = Semantics.State AM.empty AM.empty AM.empty $ POSIXTime minTime
-        marloweContract = Semantics.When [] (POSIXTime timeout) Semantics.Close  -- This contract can only time out.
         datum = Semantics.MarloweData{..}
         marloweOutput = TransactionScriptOutput{..}
         result =
@@ -305,17 +323,24 @@ buildApplyInputsConstraintsSpec =
             tipSlot
             (Chain.TransactionMetadata mempty) Nothing Nothing mempty
       pure
-        case result of
-            -- A valid transaction will occur if the tip is not before the timeout.
-            Right _ -> toSlot timeout <= tipSlot'
-            -- A useless transaction will occur if the tip is before the timeout.
+        . counterexample ("tipTime = " <> show tipTime)
+        . counterexample ("minTime = " <> show minTime)
+        . counterexample ("contract = " <> show marloweContract)
+        . counterexample ("result = " <> show result)
+        $ case result of
+            Right _ ->
+              counterexample "A valid transaction will occur if tip is not before the first timeout."
+                $ toSlot timeout <= tipSlot'
             Left (ApplyInputsConstraintsBuildupFailed (MarloweComputeTransactionFailed "TEUselessTransaction")) ->
-              tipTime < timeout
-            -- If rounding off causes the timeout to fall at the tip, then there is an ambiguity.
-            Left (ApplyInputsConstraintsBuildupFailed (MarloweComputeTransactionFailed "TEAmbiguousTimeIntervalError")) ->
-              tipSlot' == toSlot timeout && minTime <= timeout
-            -- If the tip is in the past, then there should be an interval failure.
+              counterexample "A useless transaction will occur if the tip is before the timeout."
+                $ tipTime < timeout
             Left (ApplyInputsConstraintsBuildupFailed (MarloweComputeTransactionFailed message)) ->
-              "TEIntervalError (IntervalInPastError " `isPrefixOf` message == (tipTime < minTime)
-            -- Other failures should not occur.
-            Left _ -> False
+              if "TEIntervalError (IntervalInPastError " `isPrefixOf` message
+                then counterexample "If the tip is in the past, then the interval should be in the past."
+                  $ tipTime < minTime
+                else if "TEIntervalError (InvalidInterval " `isPrefixOf` message
+                  then counterexample "If rounding off causes the timeout to fall at the tip, then the interval should be invalid (effectively empty)."
+                    $ tipSlot' == toSlot timeout || marloweContract == contract' && tipSlot' == toSlot timeout'
+                else counterexample "Unexpected transaction failure" False
+            Left _ ->
+              counterexample "Unexpected transaction failure" False
