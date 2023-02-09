@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+#
+ENVIRONMENT=${ENVIRONMENT:-"preprod"}
+
+eval "$(ssh dev@dapps.aws.iohkdev.io -p 4022 \
+  cat /local/network.env \
+  | sed -n "/^${ENVIRONMENT^^}_/s/^${ENVIRONMENT^^}_//p")"
+
+ssh dev@a.dapps.aws.iohkdev.io -p 4022 \
+  -L "3720:$CHAINSEEKD_IP:$CHAINSEEKD_COMMAND_PORT" \
+  -L "3716:$CHAINSEEKD_IP:$CHAINSEEKD_QUERY_PORT" \
+  -L "3715:$CHAINSEEKD_IP:$CHAINSEEKD_PORT" \
+  -L "3717:$HISTORY_IP:$HISTORY_PORT" \
+  -L "3718:$HISTORY_IP:$HISTORY_QUERY_PORT" \
+  -L "3719:$HISTORY_IP:$HISTORY_SYNC_PORT" \
+  -L "3721:$DISCOVERY_IP:$DISCOVERY_QUERY_PORT" \
+  -L "3722:$DISCOVERY_IP:$DISCOVERY_SYNC_PORT" \
+  -L "3723:$TX_IP:$TX_PORT"
