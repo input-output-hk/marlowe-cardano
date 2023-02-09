@@ -285,7 +285,7 @@ withLocalMarloweRuntime' MarloweRuntimeOptions{..} test = withRunInIO \runInIO -
     webPort <- liftIO $ randomRIO (4000, 5000)
     manager <- liftIO $ newManager defaultManagerSettings
 
-    let submitConfirmationBlocks = 2
+    let submitConfirmationBlocks = 5
     let mkSubmitJob = Submit.mkSubmitJob SubmitJobDependencies{..}
     let baseUrl = BaseUrl Http "localhost" webPort ""
     let clientEnv = mkClientEnv manager baseUrl
