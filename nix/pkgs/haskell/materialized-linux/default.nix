@@ -994,6 +994,7 @@
           "pretty-simple".components.library.planned = lib.mkOverride 900 true;
           "ouroboros-consensus-cardano".components.library.planned = lib.mkOverride 900 true;
           "typerep-map".components.sublibs."typerep-extra-impls".planned = lib.mkOverride 900 true;
+          "marlowe-apps".components.exes."marlowe-pipe".planned = lib.mkOverride 900 true;
           "plutus-tx".components.sublibs."plutus-tx-testlib".planned = lib.mkOverride 900 true;
           "Cabal".components.library.planned = lib.mkOverride 900 true;
           "cardano-integration".components.library.planned = lib.mkOverride 900 true;
