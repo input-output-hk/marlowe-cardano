@@ -10,6 +10,7 @@ import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader)
 import Language.Marlowe.Runtime.Core.Api (ContractId(..), MarloweVersion(..), MarloweVersionTag)
 import Language.Marlowe.Runtime.History.Api
 import Network.Protocol.Driver (MessageToJSON(..))
+import Network.Protocol.Handshake.Types (HasSignature(..))
 import Network.TypedProtocol (PeerHasAgency(..), Protocol(..))
 
 data MarloweSync where
@@ -20,6 +21,9 @@ data MarloweSync where
   StNext :: MarloweVersionTag -> MarloweSync
   StWait :: MarloweVersionTag -> MarloweSync
   StIntersect :: MarloweVersionTag -> MarloweSync
+
+instance HasSignature MarloweSync where
+  signature _ = "MarloweSync"
 
 instance Protocol MarloweSync where
   data Message MarloweSync from to where

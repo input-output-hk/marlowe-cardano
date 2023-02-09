@@ -50,6 +50,7 @@ import Data.Functor (($>))
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Maybe (fromJust)
+import Data.Proxy (Proxy(..))
 import Data.Set (Set)
 import Data.Set.NonEmpty (NESet)
 import qualified Data.Set.NonEmpty as NESet
@@ -71,6 +72,7 @@ import Network.Protocol.ChainSeek.Client
 import Network.Protocol.ChainSeek.Codec
 import Network.Protocol.ChainSeek.Server
 import Network.Protocol.ChainSeek.Types
+import Network.Protocol.Handshake.Types (HasSignature(..))
 import Network.Protocol.Job.Types (CommandToJSON)
 import qualified Network.Protocol.Job.Types as Job
 import qualified Network.Protocol.Query.Types as Query
@@ -84,6 +86,9 @@ data WithGenesis a = Genesis | At a
   deriving stock (Show, Eq, Ord, Functor, Generic)
   deriving anyclass (Binary, ToJSON)
 
+instance HasSignature a => HasSignature (WithGenesis a) where
+  signature _ = T.intercalate " " ["WithGenesis", signature $ Proxy @a]
+
 -- | A point in the chain, identified by a slot number, block header hash, and
 -- block number.
 type ChainPoint = WithGenesis BlockHeader
@@ -96,6 +101,9 @@ data BlockHeader = BlockHeader
   }
   deriving stock (Show, Eq, Ord, Generic)
   deriving anyclass (Binary, ToJSON)
+
+instance HasSignature BlockHeader where
+  signature _ = "BlockHeader"
 
 isAfter :: SlotNo -> BlockHeader -> Bool
 isAfter s BlockHeader{..} = slotNo > s
@@ -572,6 +580,9 @@ data Move err result where
   -- | Advances to the tip block. Waits if already at the tip.
   AdvanceToTip :: Move Void ()
 
+instance HasSignature Move where
+  signature _ = "Move"
+
 moveSchema :: SchemaVersion
 moveSchema = SchemaVersion "move_unsafe"
 
@@ -881,6 +892,9 @@ data ChainSyncQuery delimiter err result where
   GetEraHistory :: ChainSyncQuery Void () (EraHistory CardanoMode)
   GetUTxOs :: GetUTxOsQuery -> ChainSyncQuery Void () UTxOs
 
+instance HasSignature ChainSyncQuery where
+  signature _ = "ChainSyncQuery"
+
 instance Query.QueryToJSON ChainSyncQuery where
   queryToJSON = \case
     GetSecurityParameter -> String "get-security-parameter"
@@ -1048,6 +1062,9 @@ instance Query.IsQuery ChainSyncQuery where
 
 data ChainSyncCommand status err result where
   SubmitTx :: ScriptDataSupportedInEra era -> Tx era -> ChainSyncCommand Void String ()
+
+instance HasSignature ChainSyncCommand where
+  signature _ = "ChainSyncCommand"
 
 instance CommandToJSON ChainSyncCommand where
   commandToJSON = \case

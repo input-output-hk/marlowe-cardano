@@ -13,7 +13,8 @@ import qualified Language.Marlowe.Runtime.Core.ScriptRegistry as ScriptRegistry
 import Language.Marlowe.Runtime.Discovery (DiscoveryDependencies(..), discovery)
 import Logging (RootSelector(..), getRootSelectorConfig)
 import Network.Protocol.ChainSeek.Client (chainSeekClientPeer)
-import Network.Protocol.Driver (acceptRunServerPeerOverSocketWithLogging, runClientPeerOverSocketWithLogging)
+import Network.Protocol.Handshake.Client (runClientPeerOverSocketWithLoggingWithHandshake)
+import Network.Protocol.Handshake.Server (acceptRunServerPeerOverSocketWithLoggingWithHandshake)
 import Network.Protocol.Query.Codec (codecQuery)
 import Network.Protocol.Query.Server (queryServerPeer)
 import Network.Socket
@@ -75,20 +76,20 @@ run Options{..} = withSocketsDo do
             connectToChainSeek :: forall a. RuntimeChainSeekClient IO a -> IO a
             connectToChainSeek client = do
               addr' <- head <$> getAddrInfo (Just clientHints) (Just chainSeekHost) (Just $ show chainSeekPort)
-              runClientPeerOverSocketWithLogging
+              runClientPeerOverSocketWithLoggingWithHandshake
                 (narrowEventBackend ChainSeekClient eventBackend)
                 throwIO
                 addr'
                 runtimeChainSeekCodec
                 (chainSeekClientPeer Genesis)
                 client
-            acceptRunQueryServer = acceptRunServerPeerOverSocketWithLogging
+            acceptRunQueryServer = acceptRunServerPeerOverSocketWithLoggingWithHandshake
               (narrowEventBackend QueryServer eventBackend)
               throwIO
               querySocket
               codecQuery
               queryServerPeer
-            acceptRunSyncServer = acceptRunServerPeerOverSocketWithLogging
+            acceptRunSyncServer = acceptRunServerPeerOverSocketWithLoggingWithHandshake
               (narrowEventBackend SyncServer eventBackend)
               throwIO
               syncSocket

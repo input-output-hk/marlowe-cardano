@@ -20,9 +20,12 @@ import Data.Binary (Get, Put)
 import Data.Data (type (:~:)(Refl))
 import Data.Functor ((<&>))
 import Data.Maybe (catMaybes)
+import Data.Proxy (Proxy(..))
+import qualified Data.Text as T
 import GHC.Show (showSpace)
 import Network.Protocol.Codec.Spec (ArbitraryMessage(..), MessageEq(..), ShowProtocol(..))
 import Network.Protocol.Driver (MessageToJSON(..))
+import Network.Protocol.Handshake.Types (HasSignature(..))
 import Network.TypedProtocol
 import Network.TypedProtocol.Codec (AnyMessageAndAgency(..))
 import Test.QuickCheck (Gen, oneof)
@@ -67,6 +70,9 @@ data Query (query :: * -> * -> * -> *) where
 
   -- | The terminal state of the protocol.
   StDone :: Query query
+
+instance HasSignature query => HasSignature (Query query) where
+  signature _ = T.intercalate " " ["Query", signature $ Proxy @query]
 
 data StNextKind
   = CanReject

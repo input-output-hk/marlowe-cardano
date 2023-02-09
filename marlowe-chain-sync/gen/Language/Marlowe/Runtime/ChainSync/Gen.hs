@@ -93,8 +93,8 @@ instance Arbitrary ValidityRange where
 
 instance Arbitrary Metadata where
   arbitrary = oneofStructured
-    [ (Node, MetadataMap <$> listOf (resized (`div` 2) arbitrary))
-    , (Node, MetadataList <$> listOf (resized (`div` 2) arbitrary))
+    [ (Node, MetadataMap <$> listOf (resized (`div` 10) arbitrary))
+    , (Node, MetadataList <$> listOf (resized (`div` 10) arbitrary))
     , (Leaf, MetadataNumber <$> arbitrary)
     , (Leaf, MetadataBytes <$> genBytes)
     , (Leaf, MetadataText . T.pack <$> arbitrary)
@@ -154,9 +154,9 @@ instance Arbitrary TokenName where
 
 instance Arbitrary Datum where
   arbitrary = oneofStructured
-    [ (Node, Constr <$> arbitrary <*> listOf (resized (`div` 2) arbitrary))
-    , (Node, Map <$> listOf (resized (`div` 2) arbitrary))
-    , (Node, List <$> listOf (resized (`div` 2) arbitrary))
+    [ (Node, Constr <$> arbitrary <*> listOf (resized (`div` 10) arbitrary))
+    , (Node, Map <$> listOf (resized (`div` 10) arbitrary))
+    , (Node, List <$> listOf (resized (`div` 10) arbitrary))
     , (Leaf, I <$> arbitrary)
     , (Leaf, B <$> genBytes)
     ]
@@ -277,8 +277,8 @@ instance ChainSeek.ArbitraryQuery Move where
   arbitraryTag = oneofStructured
     [ ( Node
       , do
-        ChainSeek.SomeTag tag1 <- resized (`div` 2) ChainSeek.arbitraryTag
-        ChainSeek.SomeTag tag2 <- resized (`div` 2) ChainSeek.arbitraryTag
+        ChainSeek.SomeTag tag1 <- resized (const 0) ChainSeek.arbitraryTag
+        ChainSeek.SomeTag tag2 <- resized (const 0) ChainSeek.arbitraryTag
         pure $ ChainSeek.SomeTag $ TagFork tag1 tag2
       )
     , (Leaf, pure $ ChainSeek.SomeTag TagAdvanceSlots)
@@ -292,7 +292,7 @@ instance ChainSeek.ArbitraryQuery Move where
     ]
 
   arbitraryQuery = \case
-    TagFork m1 m2 -> Fork <$> ChainSeek.arbitraryQuery m1 <*> ChainSeek.arbitraryQuery m2
+    TagFork m1 m2 -> resized (`div` 2) $ Fork <$> ChainSeek.arbitraryQuery m1 <*> ChainSeek.arbitraryQuery m2
     TagAdvanceSlots -> AdvanceSlots . fromIntegral <$> arbitrary @Word64
     TagAdvanceBlocks -> AdvanceBlocks . fromIntegral <$> arbitrary @Word64
     TagIntersect -> Intersect <$> arbitrary
@@ -834,7 +834,7 @@ theseEq eqA eqB = \case
 
 
 genThese :: Gen a -> Gen b -> Gen (These a b)
-genThese a b = oneof [This <$> a, That <$> b, These <$> a <*> b]
+genThese a b = oneof [This <$> a, That <$> b, resized (`div` 2) $ These <$> a <*> b]
 
 shrinkThese :: (a -> [a]) -> (b -> [b]) -> These a b -> [These a b]
 shrinkThese shrinkA shrinkB = \case

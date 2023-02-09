@@ -27,7 +27,9 @@ import qualified Language.Marlowe.Runtime.Transaction.Query as Query
 import qualified Language.Marlowe.Runtime.Transaction.Submit as Submit
 import Logging (RootSelector(..), getRootSelectorConfig)
 import Network.Protocol.ChainSeek.Client (chainSeekClientPeer)
-import Network.Protocol.Driver (RunClient, acceptRunServerPeerOverSocketWithLogging, runClientPeerOverSocketWithLogging)
+import Network.Protocol.Driver (RunClient)
+import Network.Protocol.Handshake.Client (runClientPeerOverSocketWithLoggingWithHandshake)
+import Network.Protocol.Handshake.Server (acceptRunServerPeerOverSocketWithLoggingWithHandshake)
 import Network.Protocol.Job.Client (JobClient, jobClientPeer)
 import Network.Protocol.Job.Codec (codecJob)
 import Network.Protocol.Job.Server (jobServerPeer)
@@ -87,7 +89,7 @@ run Options{..} = withSocketsDo do
     let
       transactionDependencies rootEventBackend =
         let
-          acceptRunTransactionServer = acceptRunServerPeerOverSocketWithLogging
+          acceptRunTransactionServer = acceptRunServerPeerOverSocketWithLoggingWithHandshake
             (narrowEventBackend Server rootEventBackend)
             throwIO
             socket
@@ -97,7 +99,7 @@ run Options{..} = withSocketsDo do
           connectToChainSeek :: RunClient IO RuntimeChainSeekClient
           connectToChainSeek client = do
             addr' <- head <$> getAddrInfo (Just clientHints) (Just chainSeekHost) (Just $ show chainSeekPort)
-            runClientPeerOverSocketWithLogging
+            runClientPeerOverSocketWithLoggingWithHandshake
               (narrowEventBackend ChainSeekClient rootEventBackend)
               throwIO
               addr'
@@ -108,7 +110,7 @@ run Options{..} = withSocketsDo do
           runChainSyncJobClient :: RunClient IO (JobClient ChainSyncCommand)
           runChainSyncJobClient client = do
             addr' <- head <$> getAddrInfo (Just clientHints) (Just chainSeekHost) (Just $ show chainSeekCommandPort)
-            runClientPeerOverSocketWithLogging
+            runClientPeerOverSocketWithLoggingWithHandshake
               (narrowEventBackend ChainSyncJobClient rootEventBackend)
               throwIO
               addr'
@@ -119,7 +121,7 @@ run Options{..} = withSocketsDo do
           runChainSyncQueryClient :: RunClient IO (QueryClient ChainSyncQuery)
           runChainSyncQueryClient client = do
             addr' <- head <$> getAddrInfo (Just clientHints) (Just chainSeekHost) (Just $ show chainSeekQueryPort)
-            runClientPeerOverSocketWithLogging
+            runClientPeerOverSocketWithLoggingWithHandshake
               (narrowEventBackend ChainSyncQueryClient rootEventBackend)
               throwIO
               addr'

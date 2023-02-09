@@ -21,10 +21,13 @@ import Data.Binary (Put)
 import Data.Binary.Get (Get)
 import Data.Functor ((<&>))
 import Data.Maybe (catMaybes)
+import Data.Proxy (Proxy(..))
+import qualified Data.Text as T
 import Data.Type.Equality (type (:~:)(Refl))
 import GHC.Show (showSpace)
 import Network.Protocol.Codec.Spec (ArbitraryMessage(..), MessageEq(..), ShowProtocol(..))
 import Network.Protocol.Driver (MessageToJSON(..))
+import Network.Protocol.Handshake.Types (HasSignature(..))
 import Network.TypedProtocol
 import Network.TypedProtocol.Codec (AnyMessageAndAgency(..))
 import Test.QuickCheck (Gen, oneof)
@@ -91,6 +94,9 @@ data Job (cmd :: * -> * -> * -> *) where
 
   -- | The terminal state of the protocol.
   StDone :: Job cmd
+
+instance HasSignature cmd => HasSignature (Job cmd) where
+  signature _ = T.intercalate " " ["Job", signature $ Proxy @cmd]
 
 instance Protocol (Job cmd) where
 

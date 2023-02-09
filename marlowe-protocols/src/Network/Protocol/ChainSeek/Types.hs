@@ -18,6 +18,7 @@ import Data.Data (type (:~:)(Refl))
 import Data.Functor ((<&>))
 import Data.Kind (Type)
 import Data.Maybe (catMaybes)
+import Data.Proxy (Proxy(..))
 import Data.String (IsString)
 import Data.Text (Text)
 import qualified Data.Text as T
@@ -25,6 +26,7 @@ import qualified Data.Text.Encoding as T
 import GHC.Show (showSpace)
 import Network.Protocol.Codec.Spec (ArbitraryMessage(..), MessageEq(..), ShowProtocol(..))
 import Network.Protocol.Driver (MessageToJSON(..))
+import Network.Protocol.Handshake.Types (HasSignature(..))
 import Network.TypedProtocol (PeerHasAgency(..), Protocol(..))
 import Network.TypedProtocol.Codec (AnyMessageAndAgency(..))
 import Test.QuickCheck (Arbitrary, Gen, arbitrary, oneof, shrink)
@@ -72,6 +74,18 @@ data ChainSeek (query :: Type -> Type -> Type) point tip where
 
   -- | The terminal state of the protocol.
   StDone :: ChainSeek query point tip
+
+instance
+  ( HasSignature query
+  , HasSignature point
+  , HasSignature tip
+  ) => HasSignature (ChainSeek query point tip) where
+  signature _ = T.intercalate " "
+    [ "ChainSeek"
+    , signature $ Proxy @query
+    , signature $ Proxy @point
+    , signature $ Proxy @tip
+    ]
 
 -- | Schema version used for
 newtype SchemaVersion = SchemaVersion Text

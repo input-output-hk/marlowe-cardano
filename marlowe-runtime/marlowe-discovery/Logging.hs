@@ -15,14 +15,15 @@ import Network.Protocol.Driver
   , getAcceptSocketDriverSelectorConfig
   , getConnectSocketDriverSelectorConfig
   )
+import Network.Protocol.Handshake.Types (Handshake)
 import Network.Protocol.Query.Types (Query)
 import Observe.Event.Component
   (ConfigWatcherSelector(ReloadConfig), GetSelectorConfig, SelectorConfig(..), prependKey, singletonFieldConfig)
 
 data RootSelector f where
-  ChainSeekClient :: ConnectSocketDriverSelector RuntimeChainSeek f -> RootSelector f
-  QueryServer :: AcceptSocketDriverSelector (Query DiscoveryQuery) f -> RootSelector f
-  SyncServer :: AcceptSocketDriverSelector MarloweHeaderSync f -> RootSelector f
+  ChainSeekClient :: ConnectSocketDriverSelector (Handshake RuntimeChainSeek) f -> RootSelector f
+  QueryServer :: AcceptSocketDriverSelector (Handshake (Query DiscoveryQuery)) f -> RootSelector f
+  SyncServer :: AcceptSocketDriverSelector (Handshake MarloweHeaderSync) f -> RootSelector f
   -- App :: ChainSyncSelector f -> RootSelector f
   ConfigWatcher :: ConfigWatcherSelector f -> RootSelector f
 

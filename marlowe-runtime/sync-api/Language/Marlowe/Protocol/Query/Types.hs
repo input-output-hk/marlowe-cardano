@@ -26,6 +26,7 @@ import Language.Marlowe.Runtime.Core.Api
 import Language.Marlowe.Runtime.Discovery.Api (ContractHeader)
 import Network.Protocol.Codec.Spec (MessageEq(..), ShowProtocol(..))
 import Network.Protocol.Driver (MessageToJSON(..))
+import Network.Protocol.Handshake.Types (HasSignature(..))
 import Network.TypedProtocol
 import Network.TypedProtocol.Codec (AnyMessageAndAgency(..))
 
@@ -33,6 +34,9 @@ data MarloweQuery where
   StReq :: MarloweQuery
   StRes :: a -> MarloweQuery
   StDone :: MarloweQuery
+
+instance HasSignature MarloweQuery where
+  signature _ = "MarloweQuery"
 
 data Request a where
   ReqContractHeaders :: Range ContractId -> Request (Page ContractId ContractHeader)

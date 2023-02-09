@@ -1,11 +1,13 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE KindSignatures #-}
+{-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE RankNTypes #-}
 
 module Language.Marlowe.Runtime.CLI.Command
   where
 
 import Control.Concurrent.STM (STM)
-import Control.Exception (Exception, SomeException, catch, throw)
+import Control.Exception (SomeException, catch, throw)
 import Control.Exception.Base (throwIO)
 import Control.Monad.Trans.Reader (runReaderT)
 import qualified Data.ByteString.Lazy as LB
@@ -30,7 +32,10 @@ import Language.Marlowe.Runtime.CLI.Env (Env(..))
 import Language.Marlowe.Runtime.CLI.Monad (CLI, runCLI)
 import Language.Marlowe.Runtime.CLI.Option (optParserWithEnvDefault)
 import qualified Language.Marlowe.Runtime.CLI.Option as O
-import Network.Protocol.Driver (RunClient, runClientPeerOverSocket)
+import Network.Protocol.ChainSeek.Codec (DeserializeError)
+import Network.Protocol.Driver (RunClient)
+import Network.Protocol.Handshake.Client (runClientPeerOverSocketWithHandshake)
+import Network.Protocol.Handshake.Types (HasSignature(..))
 import Network.Protocol.Job.Client (jobClientPeer)
 import Network.Protocol.Job.Codec (codecJob)
 import Network.Socket (AddrInfo, HostName, PortNumber, SocketType(..), addrSocketType, defaultHints, getAddrInfo)
@@ -120,15 +125,16 @@ runCLIWithOptions sigInt Options{..} cli = do
       head <$> getAddrInfo (Just defaultHints { addrSocketType = Stream }) (Just host) (Just $ show port)
 
 runClientPeerOverSocket'
-  :: Exception ex
+  :: forall protocol client (st :: protocol)
+   . HasSignature protocol
   => String -- ^ Client failure stderr extra message
   -> AddrInfo -- ^ Socket address to connect to
-  -> Codec protocol ex IO LB.ByteString -- ^ A codec for the protocol
+  -> Codec protocol DeserializeError IO LB.ByteString -- ^ A codec for the protocol
   -> (forall a. client IO a -> Peer protocol 'AsClient st IO a) -- ^ Interpret the client as a protocol peer
   -> RunClient IO client
 runClientPeerOverSocket' errMsg addr codec clientToPeer client = do
   let
-    run = runClientPeerOverSocket throwIO addr codec clientToPeer client
+    run = runClientPeerOverSocketWithHandshake throwIO addr codec clientToPeer client
   run `catch` \(err :: SomeException)-> do
     hPutStrLn stderr errMsg
     throw err

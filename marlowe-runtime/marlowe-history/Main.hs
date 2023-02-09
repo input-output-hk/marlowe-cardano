@@ -21,8 +21,9 @@ import Language.Marlowe.Runtime.History.Store (hoistHistoryQueries)
 import Language.Marlowe.Runtime.History.Store.Memory (mkHistoryQueriesInMemory)
 import Logging (RootSelector(..), getRootSelectorConfig)
 import Network.Protocol.ChainSeek.Client (chainSeekClientPeer)
-import Network.Protocol.Driver
-  (acceptRunServerPeerOverSocketWithLogging, runClientPeerOverSocket, runClientPeerOverSocketWithLogging)
+import Network.Protocol.Handshake.Client
+  (runClientPeerOverSocketWithHandshake, runClientPeerOverSocketWithLoggingWithHandshake)
+import Network.Protocol.Handshake.Server (acceptRunServerPeerOverSocketWithLoggingWithHandshake)
 import Network.Protocol.Job.Server (jobServerPeer)
 import Network.Protocol.Query.Client (liftQuery, queryClientPeer)
 import Network.Protocol.Query.Codec (codecQuery)
@@ -90,26 +91,26 @@ run Options{..} = withSocketsDo do
               connectToChainSeek :: forall a. RuntimeChainSeekClient IO a -> IO a
               connectToChainSeek client = do
                 addr' <- head <$> getAddrInfo (Just clientHints) (Just chainSeekHost) (Just $ show chainSeekPort)
-                runClientPeerOverSocketWithLogging
+                runClientPeerOverSocketWithLoggingWithHandshake
                   (narrowEventBackend ChainSeekClient eventBackend)
                   throwIO
                   addr'
                   runtimeChainSeekCodec
                   (chainSeekClientPeer Genesis)
                   client
-              acceptRunJobServer = acceptRunServerPeerOverSocketWithLogging
+              acceptRunJobServer = acceptRunServerPeerOverSocketWithLoggingWithHandshake
                 (narrowEventBackend JobServer eventBackend)
                 throwIO
                 jobSocket
                 historyJobCodec
                 jobServerPeer
-              acceptRunQueryServer = acceptRunServerPeerOverSocketWithLogging
+              acceptRunQueryServer = acceptRunServerPeerOverSocketWithLoggingWithHandshake
                 (narrowEventBackend QueryServer eventBackend)
                 throwIO
                 querySocket
                 historyQueryCodec
                 queryServerPeer
-              acceptRunSyncServer = acceptRunServerPeerOverSocketWithLogging
+              acceptRunSyncServer = acceptRunServerPeerOverSocketWithLoggingWithHandshake
                 (narrowEventBackend SyncServer eventBackend)
                 throwIO
                 syncSocket
@@ -140,7 +141,7 @@ run Options{..} = withSocketsDo do
     queryChainSeek :: ChainSyncQuery Void e a -> IO (Either e a)
     queryChainSeek query = do
       addr <- head <$> getAddrInfo (Just clientHints) (Just chainSeekHost) (Just $ show chainSeekQueryPort)
-      runClientPeerOverSocket throwIO addr codecQuery queryClientPeer $ liftQuery query
+      runClientPeerOverSocketWithHandshake throwIO addr codecQuery queryClientPeer $ liftQuery query
 
     queryChainSync :: ChainSyncQuery Void e a -> IO a
     queryChainSync = fmap (fromRight $ error "failed to query chain seek server") . queryChainSeek

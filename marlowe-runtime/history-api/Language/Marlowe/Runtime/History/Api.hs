@@ -32,6 +32,7 @@ import Language.Marlowe.Runtime.Core.Api
 import Language.Marlowe.Runtime.Core.ScriptRegistry (MarloweScripts(..), getMarloweVersion)
 import qualified Language.Marlowe.Scripts as V1
 import Network.Protocol.ChainSeek.Codec (DeserializeError)
+import Network.Protocol.Handshake.Types (HasSignature(..))
 import Network.Protocol.Job.Client
 import Network.Protocol.Job.Codec
 import Network.Protocol.Job.Server
@@ -184,6 +185,9 @@ getOutput (Chain.TxIx i) Chain.Transaction{..} = go i outputs
 data HistoryCommand status err result where
   FollowContract :: ContractId -> HistoryCommand Void ContractHistoryError Bool
   StopFollowingContract :: ContractId -> HistoryCommand Void Void Bool
+
+instance HasSignature HistoryCommand where
+  signature _ = "HistoryCommand"
 
 instance CommandToJSON HistoryCommand where
   commandToJSON = \case
@@ -374,6 +378,9 @@ data SomeHistory = forall v. SomeHistory (MarloweVersion v) (History v)
 data HistoryQuery delimiter err results where
   GetFollowedContracts :: HistoryQuery ContractId Void (Map ContractId FollowerStatus)
   GetStatuses :: Set ContractId -> HistoryQuery Void Void (Map ContractId FollowerStatus)
+
+instance HasSignature HistoryQuery where
+  signature _ = "HistoryQuery"
 
 instance Query.QueryToJSON HistoryQuery where
   queryToJSON = \case

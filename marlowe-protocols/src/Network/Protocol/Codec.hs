@@ -8,6 +8,8 @@ module Network.Protocol.Codec
   , GetMessage
   , PutMessage
   , binaryCodec
+  , decodeGet
+  , encodePut
   ) where
 
 import Control.Exception (Exception)

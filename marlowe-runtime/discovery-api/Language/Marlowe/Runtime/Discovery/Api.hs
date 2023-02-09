@@ -11,6 +11,7 @@ import Data.Void (Void, absurd)
 import GHC.Generics (Generic)
 import Language.Marlowe.Runtime.ChainSync.Api (Address, BlockHeader, PolicyId, ScriptHash, TransactionMetadata)
 import Language.Marlowe.Runtime.Core.Api (ContractId, SomeMarloweVersion)
+import Network.Protocol.Handshake.Types (HasSignature(..))
 import Network.Protocol.Query.Types (IsQuery(..), QueryToJSON(..), SomeTag(..))
 
 -- | A Marlowe contract header is a compact structure that contains all the
@@ -44,6 +45,9 @@ data DiscoveryQuery delimiter err result where
   -- | Query all contract headers that use the given minting policy ID for role
   -- tokens.
   GetContractHeadersByRoleTokenCurrency :: PolicyId -> DiscoveryQuery Void Void [ContractHeader]
+
+instance HasSignature DiscoveryQuery where
+  signature _ = "DiscoveryQuery"
 
 instance QueryToJSON DiscoveryQuery where
   queryToJSON = \case

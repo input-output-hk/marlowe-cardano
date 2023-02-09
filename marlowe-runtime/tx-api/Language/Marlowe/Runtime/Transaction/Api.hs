@@ -79,6 +79,7 @@ import Language.Marlowe.Runtime.ChainSync.Api
 import Language.Marlowe.Runtime.Core.Api
 import Language.Marlowe.Runtime.History.Api (ExtractCreationError, ExtractMarloweTransactionError)
 import Network.Protocol.ChainSeek.Types (SchemaVersion)
+import Network.Protocol.Handshake.Types (HasSignature(..))
 import Network.Protocol.Job.Types
 
 -- CIP-25 metadata
@@ -282,6 +283,10 @@ data MarloweTxCommand status err result where
         SubmitStatus -- This job reports the status of the tx submission, which can take some time.
         SubmitError
         BlockHeader  -- The block header of the block this transaction was added to.
+
+
+instance HasSignature MarloweTxCommand where
+  signature _ = "MarloweTxCommand"
 
 instance CommandToJSON MarloweTxCommand where
   commandToJSON = \case
