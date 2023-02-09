@@ -11,7 +11,8 @@ import qualified Data.Text.Lazy.IO as TL
 import Data.UUID.V4 (nextRandom)
 import Data.Void (Void)
 import Language.Marlowe.Runtime.ChainSync.Api
-  ( ChainSyncCommand
+  ( BlockNo(..)
+  , ChainSyncCommand
   , ChainSyncQuery(..)
   , GetUTxOsQuery
   , RuntimeChainSeekClient
@@ -168,13 +169,14 @@ run Options{..} = withSocketsDo do
       head <$> getAddrInfo (Just hints) (Just host) (Just $ show p)
 
 data Options = Options
-  { chainSeekPort      :: PortNumber
+  { chainSeekPort :: PortNumber
   , chainSeekQueryPort :: PortNumber
   , chainSeekCommandPort :: PortNumber
-  , chainSeekHost      :: HostName
-  , port               :: PortNumber
-  , host               :: HostName
-  , logConfigFile  :: Maybe FilePath
+  , chainSeekHost :: HostName
+  , port :: PortNumber
+  , host :: HostName
+  , logConfigFile :: Maybe FilePath
+  , submitConfirmationBlocks :: BlockNo
   }
 
 getOptions :: IO Options
@@ -188,6 +190,7 @@ getOptions = execParser $ info (helper <*> parser) infoMod
       <*> portParser
       <*> hostParser
       <*> logConfigFileParser
+      <*> submitConfirmationBlocksParser
 
     chainSeekPortParser = option auto $ mconcat
       [ long "chain-seek-port-number"
@@ -242,6 +245,14 @@ getOptions = execParser $ info (helper <*> parser) infoMod
       [ long "log-config-file"
       , metavar "FILE_PATH"
       , help "The logging configuration JSON file."
+      ]
+
+    submitConfirmationBlocksParser = option (BlockNo <$> auto) $ mconcat
+      [ long "submit-confirmation-blocks"
+      , value 0
+      , metavar "INTEGER"
+      , help "The number of blocks after a transaction has been confirmed to wait before displaying the block in which was confirmed."
+      , showDefault
       ]
 
     infoMod = mconcat
