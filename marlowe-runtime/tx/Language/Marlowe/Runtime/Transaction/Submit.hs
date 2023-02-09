@@ -10,6 +10,7 @@ import Control.Concurrent (threadDelay)
 import Control.Concurrent.Async (race)
 import Control.Concurrent.STM (STM, atomically, newTVar, readTVar, writeTVar)
 import Data.Functor (($>))
+import Data.Void (absurd)
 import Language.Marlowe.Runtime.ChainSync.Api
 import Language.Marlowe.Runtime.Transaction.Api (SubmitError(..), SubmitStatus(..))
 import Network.Protocol.ChainSeek.Client
@@ -23,6 +24,7 @@ data SubmitJobStatus
 data SubmitJobDependencies = SubmitJobDependencies
   { connectToChainSeek :: forall a. RuntimeChainSeekClient IO a -> IO a
   , runChainSyncJobClient :: forall a. JobClient ChainSyncCommand IO a -> IO a
+  , submitConfirmationBlocks :: BlockNo
   }
 
 data SubmitJob = SubmitJob
@@ -61,18 +63,33 @@ doSubmit SubmitJobDependencies{..} tellStatus era tx= do
     waitForTx = connectToChainSeek client
       where
         client = ChainSeekClient $ pure clientInit
+
         clientInit = SendMsgRequestHandshake moveSchema ClientStHandshake
           { recvMsgHandshakeRejected = \_ ->
               error "chainseekd schema version mismatch"
-          , recvMsgHandshakeConfirmed = pure clientIdle
+          , recvMsgHandshakeConfirmed = pure clientIdleAwaitConfirmation
           }
-        clientIdle = SendMsgQueryNext (FindTx txId True) clientNext
-        clientNext = ClientStNext
+
+        clientIdleAwaitConfirmation = SendMsgQueryNext (FindTx txId True) clientNextAwaitConfirmation
+
+        clientNextAwaitConfirmation = ClientStNext
           { recvMsgQueryRejected = \err _ ->
               error $ "chainseekd rejected query: " <> show err
-          , recvMsgRollBackward = \_ _ -> pure clientIdle
+          , recvMsgRollBackward = \_ _ -> pure clientIdleAwaitConfirmation
           , recvMsgRollForward = \_ point _ -> case point of
               Genesis -> error "chainseekd rolled forward to genesis"
-              At block -> pure $ SendMsgDone block
-          , recvMsgWait = threadDelay 1_000_000 $> SendMsgPoll clientNext
+              At block -> pure $ clientIdleAwaitMaturity block
+          , recvMsgWait = threadDelay 100_000 $> SendMsgPoll clientNextAwaitConfirmation
+          }
+
+        clientIdleAwaitMaturity confirmationBlock
+          | submitConfirmationBlocks == 0 = SendMsgDone confirmationBlock
+          | otherwise = SendMsgQueryNext (AdvanceBlocks $ fromIntegral submitConfirmationBlocks)
+              $ clientNextAwaitMaturity confirmationBlock
+
+        clientNextAwaitMaturity confirmationBlock = ClientStNext
+          { recvMsgQueryRejected = absurd
+          , recvMsgRollBackward = \_ _ -> pure clientIdleAwaitConfirmation
+          , recvMsgRollForward = \_ _ _ -> pure $ SendMsgDone confirmationBlock
+          , recvMsgWait = threadDelay 100_000 $> SendMsgPoll (clientNextAwaitMaturity confirmationBlock)
           }
