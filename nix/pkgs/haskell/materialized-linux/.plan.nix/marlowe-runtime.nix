@@ -115,7 +115,6 @@
           depends = [
             (hsPkgs."base" or (errorHandler.buildDepError "base"))
             (hsPkgs."aeson" or (errorHandler.buildDepError "aeson"))
-            (hsPkgs."async" or (errorHandler.buildDepError "async"))
             (hsPkgs."async-components" or (errorHandler.buildDepError "async-components"))
             (hsPkgs."binary" or (errorHandler.buildDepError "binary"))
             (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
