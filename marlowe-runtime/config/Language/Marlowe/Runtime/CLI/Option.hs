@@ -31,10 +31,10 @@ syncSyncPort :: CliOption OptionFields PortNumber
 syncSyncPort = port "marlowe-sync" "SYNC_MARLOWE_SYNC" 3724 "The port number of the marlowe-sync server's synchronization API."
 
 syncHeaderPort :: CliOption OptionFields PortNumber
-syncHeaderPort = port "marlowe-header-sync" "SYNC_HEADER_SYNC" 3725 "The port number of the marlowe-sync server's header synchronization API."
+syncHeaderPort = port "marlowe-header" "SYNC_MARLOWE_HEADER" 3725 "The port number of the marlowe-sync server's header synchronization API."
 
 syncQueryPort :: CliOption OptionFields PortNumber
-syncQueryPort = port "marlowe-query-sync" "SYNC_QUERY_SYNC" 3726 "The port number of the marlowe-sync server's query API."
+syncQueryPort = port "marlowe-query" "SYNC_MARLOWE_QUERY" 3726 "The port number of the marlowe-sync server's query API."
 
 historyHost :: CliOption OptionFields HostName
 historyHost = host "history" "HISTORY" "127.0.0.1" "The hostname of the Marlowe Runtime history server."
