@@ -38,7 +38,7 @@ data Request a where
   ReqContractHeaders :: Range ContractId -> Request (Page ContractId ContractHeader)
   ReqContractState :: ContractId -> Request (Maybe SomeContractState)
   ReqTransaction :: TxId -> Request (Maybe SomeTransaction)
-  ReqTransactions :: ContractId -> Request (Maybe [SomeTransaction])
+  ReqTransactions :: ContractId -> Request (Maybe SomeTransactions)
   ReqBoth :: Request a -> Request b -> Request (a, b)
 
 data SomeRequest where
@@ -100,7 +100,7 @@ data StRes a where
   TokContractHeaders :: StRes (Page ContractId ContractHeader)
   TokContractState :: StRes (Maybe SomeContractState)
   TokTransaction :: StRes (Maybe SomeTransaction)
-  TokTransactions :: StRes (Maybe [SomeTransaction])
+  TokTransactions :: StRes (Maybe SomeTransactions)
   TokBoth :: StRes a -> StRes b -> StRes (a, b)
 
 deriving instance Show (StRes a)
@@ -223,6 +223,37 @@ instance ToJSON SomeTransaction where
     , "input" .= input
     , "consumedBy" .= consumedBy
     , "transaction" .= tx
+    ]
+
+data SomeTransactions = forall v. SomeTransactions (MarloweVersion v) [Transaction v]
+
+instance Show SomeTransactions where
+  showsPrec p (SomeTransactions MarloweV1 transactions) = showParen (p >= 11)
+    ( showString "SomeTransactions"
+    . showSpace
+    . showsPrec 11 MarloweV1
+    . showSpace
+    . showsPrec 11 transactions
+    )
+
+instance Eq SomeTransactions where
+  SomeTransactions v txs == SomeTransactions v' txs' = case testEquality v v' of
+    Nothing -> False
+    Just Refl -> case v of
+      MarloweV1 -> txs == txs'
+
+instance Binary SomeTransactions where
+  put (SomeTransactions MarloweV1 txs) = do
+    put $ SomeMarloweVersion MarloweV1
+    put txs
+  get = do
+    SomeMarloweVersion MarloweV1 <- get
+    SomeTransactions MarloweV1 <$> get
+
+instance ToJSON SomeTransactions where
+  toJSON (SomeTransactions MarloweV1 txs) = object
+    [ "version" .= MarloweV1
+    , "transactions" .= txs
     ]
 
 data ContractState v = ContractState

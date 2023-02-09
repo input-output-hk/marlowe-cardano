@@ -21,7 +21,7 @@ marloweQueryServer
   => (Range ContractId -> m (Page ContractId ContractHeader))
   -> (ContractId -> m (Maybe SomeContractState))
   -> (TxId -> m (Maybe SomeTransaction))
-  -> (ContractId -> m (Maybe [SomeTransaction]))
+  -> (ContractId -> m (Maybe SomeTransactions))
   -> MarloweQueryServer m ()
 marloweQueryServer getContractHeaders getContractState getTransaction getTransactions = go
   where

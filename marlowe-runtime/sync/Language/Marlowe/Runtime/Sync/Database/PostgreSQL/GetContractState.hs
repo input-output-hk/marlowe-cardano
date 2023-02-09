@@ -230,7 +230,28 @@ type PayoutRow =
   )
 
 decodePayout :: PayoutRow -> (TxOutRef, Payout 'V1)
-decodePayout = error "not implemented"
+decodePayout row =
+  ( decodeTxOutRef txId txIx
+  , Payout
+    { address = Address address
+    , assets = Assets
+      { ada = fromIntegral lovelace
+      , tokens = decodeTokens policyIds tokenNames quantities
+      }
+    , datum = AssetId (PolicyId rolesCurrency) (TokenName role)
+    }
+  )
+  where
+    ( txId
+      , txIx
+      , rolesCurrency
+      , role
+      , address
+      , lovelace
+      , policyIds
+      , tokenNames
+      , quantities
+      ) = row
 
 decodeBinary :: Binary a => ByteString -> a
 decodeBinary = runGet get . fromStrict
