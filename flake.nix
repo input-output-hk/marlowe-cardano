@@ -5,7 +5,6 @@
     flake-utils.url = "github:numtide/flake-utils";
 
     nixpkgs.follows = "haskell-nix/nixpkgs-2205";
-    nixpkgs-unstable.follows = "haskell-nix/nixpkgs-unstable";
 
     haskell-nix = {
       url = "github:input-output-hk/haskell.nix";

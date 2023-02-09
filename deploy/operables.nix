@@ -1,6 +1,6 @@
 { inputs }:
 let
-  inherit (inputs) self std nixpkgs nixpkgs-unstable bitte-cells;
+  inherit (inputs) self std nixpkgs bitte-cells;
   inherit (self) packages;
   inherit (nixpkgs) lib;
   inherit (nixpkgs.legacyPackages)
@@ -12,7 +12,6 @@ let
     socat
     netcat
     ;
-  inherit (nixpkgs-unstable.legacyPackages) norouter;
   inherit (inputs.bitte-cells._utils.packages) srvaddr;
 
   # Ensure this path only changes when sqitch.plan file is updated
