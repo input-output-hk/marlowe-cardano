@@ -311,7 +311,7 @@ buildApplyInputsConstraintsSpec =
       marloweContract <- elements [contract, contract'] -- This contract can only time out.
       let
         toSlot = (`div` 1000)
-        tipSlot = toEnum . fromEnum $ tipSlot'
+        tipSlot = Chain.SlotNo $ fromInteger tipSlot'
         tipTime = 1000 * tipSlot'
         marloweState = Semantics.State AM.empty AM.empty AM.empty $ POSIXTime minTime
         datum = Semantics.MarloweData{..}
