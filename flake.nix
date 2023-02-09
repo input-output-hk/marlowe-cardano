@@ -40,9 +40,6 @@
       url = "github:input-output-hk/cardano-haskell-packages?ref=repo";
       flake = false;
     };
-    dapps-world = {
-      url = "github:input-output-hk/dapps-world";
-    };
     plutus-core = {
       url = "github:input-output-hk/plutus";
       flake = false;
@@ -170,9 +167,7 @@
           packages = packagesProf;
         };
 
-        devShells.ops = inputs.dapps-world.${system}.automation.devshells.ops;
-
-        # 4 Layers of Packaging
+        # first 3 Layers of Packaging
         # https://std.divnix.com/patterns/four-packaging-layers.html
         operables = import ./deploy/operables.nix {
           inputs = nosys.lib.deSys system inputs;
@@ -183,27 +178,6 @@
         nomadTasks = import ./deploy/nomadTasks.nix {
           inputs = nosys.lib.deSys system inputs;
         };
-
-        nomadEnv =
-          let
-            envData = import ./deploy/nomadEnv {
-              inputs = nosys.lib.deSys system inputs;
-            };
-            mkNomadJobs =
-              let
-                pkgs = inputs.nixpkgs.legacyPackages.${system};
-              in
-              builtins.mapAttrs (
-                n: job:
-                  pkgs.linkFarm "job.${n}" [
-                    {
-                      name = "job";
-                      path = pkgs.writeText "${n}.nomad.json" (builtins.toJSON job);
-                    }
-                  ]
-              );
-          in
-          mkNomadJobs envData;
 
         # Export ciJobs for tullia to parse
         ciJobs = self.hydraJobs {
