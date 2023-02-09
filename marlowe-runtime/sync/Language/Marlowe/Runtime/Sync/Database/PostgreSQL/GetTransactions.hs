@@ -106,15 +106,14 @@ getTransactions (ContractId createTxOutRef@TxOutRef{..}) = runMaybeT do
 
   pure
     $ SomeTransactions MarloweV1
-    $ unfoldr ((fmap . first) (addPayouts payouts) . findConsumer txs)
+    $ unfoldr ((fmap . first) (addPayouts payouts) . (findConsumer txs =<<))
     $ Just createTxOutRef
 
 findConsumer
   :: Map TxOutRef (Transaction 'V1)
-  -> Maybe TxOutRef
+  -> TxOutRef
   -> Maybe (Transaction 'V1, Maybe TxOutRef)
-findConsumer txsByInputs mPreviousOutput = do
-  previousOutput <- mPreviousOutput
+findConsumer txsByInputs previousOutput = do
   consumer@Transaction{output=TransactionOutput{scriptOutput}} <- Map.lookup previousOutput txsByInputs
   pure (consumer, scriptOutput <&> \TransactionScriptOutput{utxo} -> utxo)
 
