@@ -336,10 +336,10 @@ buildApplyInputsConstraintsSpec =
                 $ tipTime < timeout
             Left (ApplyInputsConstraintsBuildupFailed (MarloweComputeTransactionFailed message)) ->
               if "TEIntervalError (IntervalInPastError " `isPrefixOf` message
-                then counterexample "If the tip is in the past, then the interval should be in the past."
+                then counterexample "The tip is in the past if the interval was in the past."
                   $ tipTime < minTime
                 else if "TEIntervalError (InvalidInterval " `isPrefixOf` message
-                  then counterexample "If rounding off causes the timeout to fall at the tip, then the interval should be invalid (effectively empty)."
+                  then counterexample "Rounding off causes the timeout to fall at the tip if the interval was invalid (effectively empty)."
                     $ tipSlot' == toSlot timeout || marloweContract == contract' && tipSlot' == toSlot timeout'
                 else counterexample "Unexpected transaction failure" False
             Left _ ->
