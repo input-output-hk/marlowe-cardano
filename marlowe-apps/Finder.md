@@ -33,9 +33,9 @@ Usage: marlowe-finder [--chain-seek-host HOST_NAME]
                       [--chain-seek-sync-port PORT_NUMBER]
                       [--marlowe-sync-host HOST_NAME]
                       [--marlowe-sync-port PORT_NUMBER]
-                      [--marlowe-header-sync-port PORT_NUMBER]
-                      [--marlowe-query-sync-port PORT_NUMBER]
-                      [--tx-host HOST_NAME] [--tx-command-port PORT_NUMBER]
+                      [--marlowe-header-port PORT_NUMBER]
+                      [--marlowe-query-port PORT_NUMBER] [--tx-host HOST_NAME]
+                      [--tx-command-port PORT_NUMBER]
                       [--timeout-seconds INTEGER] [--build-seconds INTEGER]
                       [--confirm-seconds INTEGER] [--retry-seconds INTEGER]
                       [--retry-limit INTEGER] [--polling SECONDS]
@@ -67,15 +67,15 @@ Available options:
                            synchronization API. Can be set as the environment
                            variable MARLOWE_RT_SYNC_MARLOWE_SYNC_PORT
                            (default: 3724)
-  --marlowe-header-sync-port PORT_NUMBER
+  --marlowe-header-port PORT_NUMBER
                            The port number of the marlowe-sync server's header
                            synchronization API. Can be set as the environment
-                           variable MARLOWE_RT_SYNC_HEADER_SYNC_PORT
+                           variable MARLOWE_RT_SYNC_MARLOWE_HEADER_PORT
                            (default: 3725)
-  --marlowe-query-sync-port PORT_NUMBER
+  --marlowe-query-port PORT_NUMBER
                            The port number of the marlowe-sync server's query
                            API. Can be set as the environment variable
-                           MARLOWE_RT_SYNC_QUERY_SYNC_PORT (default: 3726)
+                           MARLOWE_RT_SYNC_MARLOWE_QUERY_PORT (default: 3726)
   --tx-host HOST_NAME      The hostname of the Marlowe Runtime transaction
                            server. Can be set as the environment variable
                            MARLOWE_RT_TX_HOST (default: "127.0.0.1")
