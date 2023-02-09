@@ -76,25 +76,20 @@ doSubmit SubmitJobDependencies{..} tellStatus era tx= do
           { recvMsgQueryRejected = \err _ ->
               error $ "chainseekd rejected query: " <> show err
           , recvMsgRollBackward = \_ _ -> pure clientIdleAwaitConfirmation
-          , recvMsgRollForward = \_ point tip -> case (point, tip) of
-              (At block, At tipBlock) -> pure $ clientIdleAwaitMaturity block tipBlock
-              _ -> error "chainseekd rolled forward to genesis"
+          , recvMsgRollForward = \_ point _ -> case point of
+              Genesis -> error "chainseekd rolled forward to genesis"
+              At block -> pure $ clientIdleAwaitMaturity block
           , recvMsgWait = threadDelay 100_000 $> SendMsgPoll clientNextAwaitConfirmation
           }
 
-        clientIdleAwaitMaturity block tipBlock
-          | blockNo tipBlock - blockNo block >= submitConfirmationBlocks = SendMsgDone block
-          | otherwise = SendMsgQueryNext AdvanceToTip $ clientNextAwaitMaturity block
+        clientIdleAwaitMaturity confirmationBlock
+          | submitConfirmationBlocks == 0 = SendMsgDone confirmationBlock
+          | otherwise = SendMsgQueryNext (AdvanceBlocks $ fromIntegral submitConfirmationBlocks)
+              $ clientNextAwaitMaturity confirmationBlock
 
-        clientNextAwaitMaturity block = ClientStNext
+        clientNextAwaitMaturity confirmationBlock = ClientStNext
           { recvMsgQueryRejected = absurd
-          , recvMsgRollBackward = \rollbackPoint _ -> case rollbackPoint of
-              Genesis -> pure clientIdleAwaitConfirmation
-              At rollbackBlock
-                | rollbackBlock < block -> pure clientIdleAwaitConfirmation
-                | otherwise -> pure $ clientIdleAwaitMaturity block rollbackBlock
-          , recvMsgRollForward = \_ _ tip' -> case tip' of
-              Genesis -> error "chainseekd rolled forward to genesis"
-              At tipBlock' -> pure $ clientIdleAwaitMaturity block tipBlock'
-          , recvMsgWait = threadDelay 100_000 $> SendMsgPoll (clientNextAwaitMaturity block)
+          , recvMsgRollBackward = \_ _ -> pure clientIdleAwaitConfirmation
+          , recvMsgRollForward = \_ _ _ -> pure $ SendMsgDone confirmationBlock
+          , recvMsgWait = threadDelay 100_000 $> SendMsgPoll (clientNextAwaitMaturity confirmationBlock)
           }
