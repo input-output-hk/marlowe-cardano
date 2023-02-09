@@ -13,7 +13,7 @@ import Data.Aeson (ToJSON)
 import Data.Text (Text)
 import Data.Void (Void)
 import GHC.Generics (Generic)
-import Language.Marlowe.Protocol.Query.Types (Page, Range, SomeContractState, SomeTransaction)
+import Language.Marlowe.Protocol.Query.Types (Page, Range, SomeContractState, SomeTransaction, SomeTransactions)
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainPoint, TxId)
 import Language.Marlowe.Runtime.Core.Api (ContractId, MarloweVersion(..), SomeMarloweVersion)
 import Language.Marlowe.Runtime.Discovery.Api (ContractHeader)
@@ -32,6 +32,7 @@ data DatabaseSelector f where
   GetHeaders :: DatabaseSelector (QueryField (Range ContractId) (Page ContractId ContractHeader))
   GetContractState :: DatabaseSelector (QueryField ContractId (Maybe SomeContractState))
   GetTransaction :: DatabaseSelector (QueryField TxId (Maybe SomeTransaction))
+  GetTransactions :: DatabaseSelector (QueryField ContractId (Maybe SomeTransactions))
 
 data QueryField p r
   = Arguments p
@@ -117,6 +118,11 @@ logDatabaseQueries eventBackend DatabaseQueries{..} = DatabaseQueries
       result <- getTransaction txId
       addField ev $ Result result
       pure result
+  , getTransactions = \contractId -> withEvent eventBackend GetTransactions \ev -> do
+      addField ev $ Arguments contractId
+      result <- getTransactions contractId
+      addField ev $ Result result
+      pure result
   }
 
 hoistDatabaseQueries :: (forall x. m x -> n x) -> DatabaseQueries m -> DatabaseQueries n
@@ -131,6 +137,7 @@ hoistDatabaseQueries f DatabaseQueries{..} = DatabaseQueries
   , getHeaders = f . getHeaders
   , getContractState = f . getContractState
   , getTransaction = f . getTransaction
+  , getTransactions = f . getTransactions
   }
 
 data DatabaseQueries m = DatabaseQueries
@@ -144,6 +151,7 @@ data DatabaseQueries m = DatabaseQueries
   , getHeaders :: Range ContractId -> m (Page ContractId ContractHeader)
   , getContractState :: ContractId -> m (Maybe SomeContractState)
   , getTransaction :: TxId -> m (Maybe SomeTransaction)
+  , getTransactions :: ContractId -> m (Maybe SomeTransactions)
   }
 
 data Next a
@@ -165,6 +173,7 @@ getDatabaseSelectorConfig = \case
   GetHeaders -> getQuerySelectorConfig "get-headers"
   GetContractState -> getQuerySelectorConfig "get-contract-state"
   GetTransaction -> getQuerySelectorConfig "get-transaction"
+  GetTransactions -> getQuerySelectorConfig "get-transactions"
 
 getQuerySelectorConfig :: (ToJSON p, ToJSON r) => Text -> SelectorConfig (QueryField p r)
 getQuerySelectorConfig key = SelectorConfig key True FieldConfig

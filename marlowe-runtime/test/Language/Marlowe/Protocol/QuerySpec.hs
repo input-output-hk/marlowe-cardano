@@ -26,22 +26,13 @@ spec = describe "MarloweQuery protocol" do
 instance ArbitraryMessage MarloweQuery where
   arbitraryMessage = resized (min 30) $ oneof
     [ do
-        SomeRequest request <- arbitrary
-        pure $ AnyMessageAndAgency (ClientAgency TokReq) $ MsgRequest request
+        SomeStRes tok <- arbitrary
+        AnyMessageAndAgency (ClientAgency TokReq) . MsgRequest <$> arbitraryRequest tok
     , pure $ AnyMessageAndAgency (ClientAgency TokReq) MsgDone
     , do
         SomeStRes req <- arbitrary
-        a <- arbitraryResult req
-        pure $ AnyMessageAndAgency (ServerAgency (TokRes req)) $ MsgRespond a
+        AnyMessageAndAgency (ServerAgency (TokRes req)) . MsgRespond <$> arbitraryResponse req
     ]
-    where
-      arbitraryResult :: StRes a -> Gen a
-      arbitraryResult = \case
-        TokContractHeaders -> arbitrary
-        TokContractState -> arbitrary
-        TokTransaction -> arbitrary
-        TokBoth a b -> resized (`div` 2) $ (,) <$> arbitraryResult a <*> arbitraryResult b
-
   shrinkMessage = \case
     ClientAgency TokReq -> \case
       MsgRequest req -> MsgRequest <$> shrinkRequest req
@@ -62,6 +53,10 @@ instance Arbitrary SomeTransaction where
     [ SomeTransaction MarloweV1 input consumedBy <$> shrink state
     , SomeTransaction MarloweV1 input <$> shrink consumedBy <*> pure state
     ]
+
+instance Arbitrary SomeTransactions where
+  arbitrary = SomeTransactions MarloweV1 <$> arbitrary
+  shrink (SomeTransactions MarloweV1 txs) = SomeTransactions MarloweV1 <$> shrink txs
 
 instance Arbitrary (ContractState 'V1) where
   arbitrary = ContractState
@@ -86,46 +81,7 @@ instance Arbitrary SomeStRes where
     , (Leaf, pure $ SomeStRes TokContractHeaders)
     , (Leaf, pure $ SomeStRes TokContractState)
     , (Leaf, pure $ SomeStRes TokTransaction)
-    ]
-
-instance Arbitrary SomeRequest where
-  arbitrary = oneofStructured
-    [ ( Node
-      , resize 0 do
-          SomeRequest a <- arbitrary
-          SomeRequest b <- arbitrary
-          pure $ SomeRequest $ ReqBoth a b
-      )
-    , (Leaf, SomeRequest . ReqContractHeaders <$> arbitrary)
-    , (Leaf, SomeRequest . ReqContractState <$> arbitrary)
-    ]
-  shrink (SomeRequest req) = case req of
-    ReqContractHeaders range -> SomeRequest . ReqContractHeaders <$> shrink range
-    ReqContractState contractId -> SomeRequest . ReqContractState <$> shrink contractId
-    ReqTransaction txId -> SomeRequest . ReqTransaction <$> shrink txId
-    ReqBoth a b -> fold
-      [ [ SomeRequest $ ReqBoth a' b | SomeRequest a' <- shrink (SomeRequest a) ]
-      , [ SomeRequest $ ReqBoth a b' | SomeRequest b' <- shrink (SomeRequest b) ]
-      ]
-
-shrinkRequest :: Request a -> [Request a]
-shrinkRequest = \case
-  ReqContractHeaders range -> ReqContractHeaders <$> shrink range
-  ReqContractState contractId -> ReqContractState <$> shrink contractId
-  ReqTransaction txId -> ReqTransaction <$> shrink txId
-  ReqBoth a b -> fold
-    [ [ ReqBoth a' b | a' <- shrinkRequest a ]
-    , [ ReqBoth a b' | b' <- shrinkRequest b ]
-    ]
-
-shrinkResponse :: StRes a -> a -> [a]
-shrinkResponse = \case
-  TokContractHeaders -> shrink
-  TokContractState -> shrink
-  TokTransaction -> shrink
-  TokBoth ta tb -> \(a, b) -> fold
-    [ [ (a', b) | a' <- shrinkResponse ta a ]
-    , [ (a, b') | b' <- shrinkResponse tb b ]
+    , (Leaf, pure $ SomeStRes TokTransactions)
     ]
 
 instance (Arbitrary a, Arbitrary b) => Arbitrary (Page a b) where
@@ -138,3 +94,41 @@ instance Arbitrary a => Arbitrary (Range a) where
 
 instance Arbitrary Order where
   arbitrary = elements [Ascending, Descending]
+
+arbitraryRequest :: StRes a -> Gen (Request a)
+arbitraryRequest = \case
+  TokContractHeaders -> ReqContractHeaders <$> arbitrary
+  TokContractState -> ReqContractState <$> arbitrary
+  TokTransaction -> ReqTransaction <$> arbitrary
+  TokTransactions -> ReqTransactions <$> arbitrary
+  TokBoth a b -> resized (`div` 2) $ ReqBoth <$> arbitraryRequest a <*> arbitraryRequest b
+
+shrinkRequest :: Request a -> [Request a]
+shrinkRequest = \case
+  ReqContractHeaders range -> ReqContractHeaders <$> shrink range
+  ReqContractState contractId -> ReqContractState <$> shrink contractId
+  ReqTransaction txId -> ReqTransaction <$> shrink txId
+  ReqTransactions contractId -> ReqTransactions <$> shrink contractId
+  ReqBoth a b -> fold
+    [ [ ReqBoth a' b | a' <- shrinkRequest a ]
+    , [ ReqBoth a b' | b' <- shrinkRequest b ]
+    ]
+
+arbitraryResponse :: StRes a -> Gen a
+arbitraryResponse = \case
+  TokContractHeaders -> arbitrary
+  TokContractState -> arbitrary
+  TokTransaction -> arbitrary
+  TokTransactions -> arbitrary
+  TokBoth a b -> resized (`div` 2) $ (,) <$> arbitraryResponse a <*> arbitraryResponse b
+
+shrinkResponse :: StRes a -> a -> [a]
+shrinkResponse = \case
+  TokContractHeaders -> shrink
+  TokContractState -> shrink
+  TokTransaction -> shrink
+  TokTransactions -> shrink
+  TokBoth ta tb -> \(a, b) -> fold
+    [ [ (a', b) | a' <- shrinkResponse ta a ]
+    , [ (a, b') | b' <- shrinkResponse tb b ]
+    ]

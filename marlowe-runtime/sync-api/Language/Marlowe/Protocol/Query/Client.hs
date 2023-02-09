@@ -57,6 +57,9 @@ getContractHeaders = request . ReqContractHeaders
 getContractState :: Applicative m => ContractId -> MarloweQueryClient m (Maybe SomeContractState)
 getContractState = request . ReqContractState
 
+getTransactions :: Applicative m => ContractId -> MarloweQueryClient m (Maybe SomeTransactions)
+getTransactions = request . ReqTransactions
+
 getTransaction :: Applicative m => TxId -> MarloweQueryClient m (Maybe SomeTransaction)
 getTransaction = request . ReqTransaction
 

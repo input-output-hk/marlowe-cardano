@@ -6,7 +6,7 @@ module Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetTransaction
   where
 
 import Control.Monad.Trans.Class (lift)
-import Control.Monad.Trans.Maybe (MaybeT(MaybeT), runMaybeT)
+import Control.Monad.Trans.Maybe (MaybeT(..), runMaybeT)
 import Data.ByteString (ByteString)
 import Data.Int (Int16, Int64)
 import qualified Data.Map as Map
@@ -16,8 +16,9 @@ import qualified Data.Vector as V
 import Hasql.TH (maybeStatement, vectorStatement)
 import qualified Hasql.Transaction as T
 import Language.Marlowe.Protocol.Query.Types
-import Language.Marlowe.Runtime.ChainSync.Api (TxId(..))
-import Language.Marlowe.Runtime.Core.Api (MarloweVersion(..), Transaction(..), TransactionOutput(..))
+import Language.Marlowe.Runtime.ChainSync.Api (TxId(..), TxOutRef)
+import Language.Marlowe.Runtime.Core.Api
+  (MarloweVersion(..), MarloweVersionTag(..), Transaction(..), TransactionOutput(..))
 import Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetContractState
   ( decodeBlockHeader
   , decodeContractId
@@ -31,7 +32,7 @@ import Prelude hiding (init)
 
 getTransaction :: TxId -> T.Transaction (Maybe SomeTransaction)
 getTransaction txId = runMaybeT do
-  SomeTransaction MarloweV1 input consumedBy tx <- fmap decodeTransaction $ MaybeT $ T.statement (unTxId txId)
+  SomeTransaction MarloweV1 input consumedBy tx <- fmap decodeSomeTransaction $ MaybeT $ T.statement (unTxId txId)
     [maybeStatement|
       SELECT
         applyTx.txId :: bytea,
@@ -121,52 +122,126 @@ type ResultRow =
   , Vector Int64
   )
 
-decodeTransaction :: ResultRow -> SomeTransaction
-decodeTransaction row = SomeTransaction
+decodeSomeTransaction :: ResultRow -> SomeTransaction
+decodeSomeTransaction row = SomeTransaction
   { version = MarloweV1
-  , input = decodeTxOutRef inputTxId inputTxIx
+  , input
   , consumedBy = TxId <$> consumedBy
-  , transaction = Transaction
-      { transactionId = TxId txId
-      , contractId = decodeContractId createTxId createTxIx
-      , metadata = decodeMetadata metadata
-      , blockHeader = decodeBlockHeader slotNo hash blockNo
-      , validityUpperBound = localTimeToUTC utc invalidBefore
-      , validityLowerBound = localTimeToUTC utc invalidHereafter
-      , inputs = decodeDatumBytes inputs
-      , output = TransactionOutput mempty $ decodeTransactionScriptOutput txId
-          <$> outputTxIx
-          <*> address
-          <*> lovelace
-          <*> pure policyIds
-          <*> pure tokenNames
-          <*> pure quantities
-          <*> rolesCurrency
-          <*> state
-          <*> contract
-      }
+  , transaction
   }
   where
+    ( txId
+      , createTxId
+      , createTxIx
+      , outputTxIx
+      , inputTxId
+      , inputTxIx
+      , consumedBy
+      , metadata
+      , inputs
+      , invalidBefore
+      , invalidHereafter
+      , slotNo
+      , hash
+      , blockNo
+      , rolesCurrency
+      , state
+      , contract
+      , address
+      , lovelace
+      , policyIds
+      , tokenNames
+      , quantities
+      ) = row
+    (input, transaction) = decodeTransaction
+      ( txId
+      , createTxId
+      , createTxIx
+      , inputTxId
+      , inputTxIx
+      , outputTxIx
+      , metadata
+      , inputs
+      , invalidBefore
+      , invalidHereafter
+      , slotNo
+      , hash
+      , blockNo
+      , rolesCurrency
+      , state
+      , contract
+      , address
+      , lovelace
+      , policyIds
+      , tokenNames
+      , quantities
+      )
+
+
+decodeTransaction
+  :: ( ByteString
+     , ByteString
+     , Int16
+     , ByteString
+     , Int16
+     , Maybe Int16
+     , Maybe ByteString
+     , ByteString
+     , LocalTime
+     , LocalTime
+     , Int64
+     , ByteString
+     , Int64
+     , Maybe ByteString
+     , Maybe ByteString
+     , Maybe ByteString
+     , Maybe ByteString
+     , Maybe Int64
+     , Vector ByteString
+     , Vector ByteString
+     , Vector Int64
+     )
+  -> (TxOutRef, Transaction 'V1)
+decodeTransaction
   ( txId
-    , createTxId
-    , createTxIx
-    , outputTxIx
-    , inputTxId
-    , inputTxIx
-    , consumedBy
-    , metadata
-    , inputs
-    , invalidBefore
-    , invalidHereafter
-    , slotNo
-    , hash
-    , blockNo
-    , rolesCurrency
-    , state
-    , contract
-    , address
-    , lovelace
-    , policyIds
-    , tokenNames
-    , quantities
-    ) = row
+  , createTxId
+  , createTxIx
+  , inputTxId
+  , inputTxIx
+  , outputTxIx
+  , metadata
+  , inputs
+  , invalidBefore
+  , invalidHereafter
+  , slotNo
+  , hash
+  , blockNo
+  , rolesCurrency
+  , state
+  , contract
+  , address
+  , lovelace
+  , policyIds
+  , tokenNames
+  , quantities
+  ) = ( decodeTxOutRef inputTxId inputTxIx
+      , Transaction
+        { transactionId = TxId txId
+        , contractId = decodeContractId createTxId createTxIx
+        , metadata = decodeMetadata metadata
+        , blockHeader = decodeBlockHeader slotNo hash blockNo
+        , validityUpperBound = localTimeToUTC utc invalidBefore
+        , validityLowerBound = localTimeToUTC utc invalidHereafter
+        , inputs = decodeDatumBytes inputs
+        , output = TransactionOutput mempty $ decodeTransactionScriptOutput txId
+            <$> outputTxIx
+            <*> address
+            <*> lovelace
+            <*> pure policyIds
+            <*> pure tokenNames
+            <*> pure quantities
+            <*> rolesCurrency
+            <*> state
+            <*> contract
+        }
+      )
