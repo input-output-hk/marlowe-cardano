@@ -1,8 +1,6 @@
 { inputs }:
 let
   inherit (inputs) self cardano-world;
-  inherit (cardano-world) cardano;
-  inherit (cardano) environments;
   inherit (self) oci-images;
 
   # OCI-Image Namer
