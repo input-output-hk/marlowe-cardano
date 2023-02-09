@@ -225,6 +225,7 @@
             "Language/Marlowe/Runtime/Sync/Database/PostgreSQL/GetTip"
             "Language/Marlowe/Runtime/Sync/Database/PostgreSQL/GetTipForContract"
             "Language/Marlowe/Runtime/Sync/Database/PostgreSQL/GetTransaction"
+            "Language/Marlowe/Runtime/Sync/Database/PostgreSQL/GetTransactions"
             "Language/Marlowe/Runtime/Sync/MarloweHeaderSyncServer"
             "Language/Marlowe/Runtime/Sync/MarloweSyncServer"
             "Language/Marlowe/Runtime/Sync/QueryServer"
