@@ -47,9 +47,9 @@
       url = "github:input-output-hk/plutus";
       flake = false;
     };
-    pre-commit-hooks-nix = {
+    pre-commit-hooks = {
       url = "github:cachix/pre-commit-hooks.nix";
-      flake = false;
+      inputs.nixpkgs.follows = "nixpkgs";
     };
     sphinxcontrib-haddock = {
       url = "github:michaelpj/sphinxcontrib-haddock";

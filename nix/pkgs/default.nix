@@ -53,13 +53,7 @@ let
   sphinx-markdown-tables = pkgs.python3Packages.callPackage ./sphinx-markdown-tables.nix { };
   sphinxemoji = pkgs.python3Packages.callPackage ./sphinxemoji.nix { };
 
-  # By default pre-commit-hooks.nix uses its own pinned version of nixpkgs. In order to
-  # to get it to use our version we have to (somewhat awkwardly) use `nix/default.nix`
-  # to which both `nixpkgs` and `system` can be passed.
-  nix-pre-commit-hooks = (pkgs.callPackage (inputs.pre-commit-hooks-nix + "/nix/default.nix") {
-    inherit system;
-    inherit (inputs) nixpkgs;
-  });
+  nix-pre-commit-hooks = inputs.pre-commit-hooks.lib.${system};
 
   # sphinx haddock support
   sphinxcontrib-haddock = pkgs.callPackage (inputs.sphinxcontrib-haddock) { pythonPackages = pkgs.python3Packages; };
