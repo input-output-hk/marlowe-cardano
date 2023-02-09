@@ -311,11 +311,19 @@ buildApplyInputsConstraintsV1 systemStart eraHistory marloweOutput tipSlot metad
   lift $ unless (invalidBefore' <= tipSlot') $ Left $ ValidityLowerBoundTooHigh tipSlot $ fromCardanoSlotNo invalidBefore'
 
   invalidHereafter' <- lift case invalidHereafter of
-    Nothing -> pure case nextMarloweTimeout contract of
-      Nothing -> maxSafeSlot
-      Just nextTimeout -> case utcTimeToSlotNo' nextTimeout of
-        Right slot -> if slot > invalidBefore' then slot else maxSafeSlot
-        _ -> maxSafeSlot
+    Nothing -> case nextMarloweTimeout contract of                                  -- Find the first timeout.
+      Nothing -> pure maxSafeSlot                                                   -- There is no timeout.
+      Just nextTimeout -> case utcTimeToSlotNo' nextTimeout of                      -- There is a timeout.
+        Right slot -> if slot > invalidBefore'                                      -- Check if next timeout is in the future.
+          then pure slot                                                            -- The next timeout is in the future, but note that this might be an empty interval.
+          else do                                                                   -- The next timeout is in the past.
+            invalidBefore'' <- slotStart invalidBefore'                             -- Find the start time of the validity range.
+            pure case nextMarloweTimeoutAfter invalidBefore'' contract of           -- Find the subsequent timeout, if any.
+              Nothing -> maxSafeSlot                                                -- There is no subsequent future timeout.
+              Just subsequentTimeout -> case utcTimeToSlotNo' subsequentTimeout of  -- There is a subsequent future timeout.
+                Right slot' -> slot'                                                -- The subsequent timeout is before the safe horizon, but note that this might be an empty interval.
+                _ ->  maxSafeSlot                                                   -- The subsequent timeout is beyond the safe horizon.
+        _ -> pure maxSafeSlot                                                       -- The next timeout is in the future, but beyond the safe horizon.
     Just t -> utcTimeToSlotNo t
 
   -- Construct inputs constraints.
@@ -433,6 +441,16 @@ buildApplyInputsConstraintsV1 systemStart eraHistory marloweOutput tipSlot metad
     nextMarloweTimeout (V1.If _ c1 c2) = on min nextMarloweTimeout c1 c2
     nextMarloweTimeout (V1.Let _ _ c) = nextMarloweTimeout c
     nextMarloweTimeout (V1.Assert _ c) = nextMarloweTimeout c
+
+    nextMarloweTimeoutAfter :: UTCTime -> V1.Contract -> Maybe UTCTime
+    nextMarloweTimeoutAfter limit (V1.When _ timeout c)
+      | posixTimeToUTCTime timeout > limit = Just $ posixTimeToUTCTime timeout
+      | otherwise = nextMarloweTimeoutAfter limit c
+    nextMarloweTimeoutAfter _ V1.Close = Nothing
+    nextMarloweTimeoutAfter limit (V1.Pay _ _ _ _ c) = nextMarloweTimeoutAfter limit c
+    nextMarloweTimeoutAfter limit (V1.If _ c1 c2) = on min (nextMarloweTimeoutAfter limit) c1 c2
+    nextMarloweTimeoutAfter limit (V1.Let _ _ c) = nextMarloweTimeoutAfter limit c
+    nextMarloweTimeoutAfter limit (V1.Assert _ c) = nextMarloweTimeoutAfter limit c
 
     maxSafeSlot :: O.SlotNo
     maxSafeSlot = getMaxSafeSlotFromSummary $ unInterpreter interpreter
