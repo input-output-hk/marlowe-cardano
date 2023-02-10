@@ -19,7 +19,7 @@ marlowe-finder |& jq 'select(.FinderProcess.fields.action == "wait") | .FinderPr
 The Cardano public  `preview`  test network currently contains well over 100,000 Marlowe transactions, which makes it an ideal network on which to run `marlowe-finder` . A successful stress test is to simply run `marlowe-finder` and observe whether any backend services report errors in the logs or crash.
 
 
-## Running Multiple Marlowe Contract Simultaneously
+## Running Multiple Marlowe Contracts Simultaneously
 
 The transaction-building aspects of Marlowe Runtime can be tested by running many Marlowe contracts simultaneously against a single set of backend services. See the [`marlowe-scaling` documentation](../marlowe-apps/Scaling.md) for more details.
 
@@ -104,8 +104,8 @@ We have observed that `marlowe-scaling` achieves greater than 99.99% success whe
 
 Empirical observations indicate that a single Marlowe Runtime backend scales to handle the following well:
 - Wait 6 seconds after the previous confirmation of a transaction before building another Marlowe transaction that is based on the addresses used in the previous transaction. (There is no need to wait after the transactions at irrelevant addresses.)
-- Wait 10 seconds before retrying a failed Marlowe transactions.
+- Wait 10 seconds before retrying a failed Marlowe transaction.
 - Retry up to 5 times, doubling the delay from each subsequent retry.
-- Limit (throttle) the demand for building and executing Marlowe transactions on Marlowe Runtime to no more than 20 simultaneous request.
+- Limit (throttle) the demand for building and executing Marlowe transactions on Marlowe Runtime to no more than 20 simultaneous requests.
 
-Also note that request to Marlowe Runtime are stateless, so that any request can be routed to any instance of Marlowe Runtime.
+Also note that requests to Marlowe Runtime are stateless, so that any request can be routed to any instance of Marlowe Runtime.
