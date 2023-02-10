@@ -47,12 +47,13 @@ import qualified Data.Map.Strict as SMap (fromList, toList)
 import Data.Maybe (mapMaybe, maybeToList)
 import Data.Monoid (First(..), getFirst)
 import Data.Set (Set)
-import qualified Data.Set as Set (fromAscList, null, singleton, toAscList, toList, union)
+import qualified Data.Set as Set (fromAscList, member, null, singleton, toAscList, toList, union)
 import Data.Word (Word64)
 import GHC.Generics (Generic)
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
 import Language.Marlowe.Runtime.Cardano.Api
   ( fromCardanoAddressInEra
+  , fromCardanoTxIn
   , toCardanoAddressInEra
   , toCardanoPaymentKeyHash
   , toCardanoPolicyId
@@ -514,10 +515,17 @@ selectCoins protocol marloweVersion marloweCtx walletCtx@WalletContext{..} txBod
     fee = C.lovelaceToValue $ 2 * maximumFee protocol
 
   collateral <-
-    case filter (\candidate -> let value = txOutToValue $ snd candidate in onlyLovelace value && C.selectLovelace value >= C.selectLovelace fee) utxos of
-    -- case filter (\candidate -> let value = txOutToValue $ snd candidate in onlyLovelace value && C.selectLovelace value >= C.selectLovelace fee) (logD ("selectCoins all utxos:\n" <> (unlines . map show $ utxos)) utxos) of
-      utxo : _ -> pure utxo
-      []       -> Left . CoinSelectionFailed $ "No collateral found in " <> show utxos <> "."
+    let
+       candidateCollateral =
+         if Set.null collateralUtxos
+           then utxos  -- Use any UTxO if the wallet did not constrain collateral.
+           else -- The filter below is safe because, by the definition of `WalletContext`,
+                -- the `collateralUtxos` are an improper subset of `availableUtxos`.
+                filter (flip Set.member collateralUtxos . fromCardanoTxIn . fst) utxos
+    in
+      case filter (\candidate -> let value = txOutToValue $ snd candidate in onlyLovelace value && C.selectLovelace value >= C.selectLovelace fee) candidateCollateral of
+          utxo : _ -> pure utxo
+          []       -> Left . CoinSelectionFailed $ "No collateral found in " <> show utxos <> "."
 
   -- Bound the lovelace that must be included with change
   -- Worst case scenario of how much ADA would be added to the native and non-native change outputs
