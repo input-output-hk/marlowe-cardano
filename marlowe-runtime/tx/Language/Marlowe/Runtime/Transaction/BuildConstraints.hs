@@ -311,19 +311,13 @@ buildApplyInputsConstraintsV1 systemStart eraHistory marloweOutput tipSlot metad
   lift $ unless (invalidBefore' <= tipSlot') $ Left $ ValidityLowerBoundTooHigh tipSlot $ fromCardanoSlotNo invalidBefore'
 
   invalidHereafter' <- lift case invalidHereafter of
-    Nothing -> case nextMarloweTimeout contract of                                  -- Find the first timeout.
-      Nothing -> pure maxSafeSlot                                                   -- There is no timeout.
-      Just nextTimeout -> case utcTimeToSlotNo' nextTimeout of                      -- There is a timeout.
-        Right slot -> if slot > invalidBefore'                                      -- Check if next timeout is in the future.
-          then pure slot                                                            -- The next timeout is in the future, but note that this might be an empty interval.
-          else do                                                                   -- The next timeout is in the past.
-            invalidBefore'' <- slotStart invalidBefore'                             -- Find the start time of the validity range.
-            pure case nextMarloweTimeoutAfter invalidBefore'' contract of           -- Find the subsequent timeout, if any.
-              Nothing -> maxSafeSlot                                                -- There is no subsequent future timeout.
-              Just subsequentTimeout -> case utcTimeToSlotNo' subsequentTimeout of  -- There is a subsequent future timeout.
-                Right slot' -> slot'                                                -- The subsequent timeout is before the safe horizon, but note that this might be an empty interval.
-                _ ->  maxSafeSlot                                                   -- The subsequent timeout is beyond the safe horizon.
-        _ -> pure maxSafeSlot                                                       -- The next timeout is in the future, but beyond the safe horizon.
+    Nothing -> do
+      invalidBefore'' <- slotStart invalidBefore'                             -- Find the start time of the validity range.
+      pure case nextMarloweTimeoutAfter invalidBefore'' contract of           -- Find the next timeout after the range start, if any.
+        Nothing -> maxSafeSlot                                                -- There is no future timeout.
+        Just subsequentTimeout -> case utcTimeToSlotNo' subsequentTimeout of  -- There is a future timeout.
+          Right slot' -> slot'                                                -- The next timeout is before the safe horizon, but note that this might be an empty interval.
+          _ ->  maxSafeSlot                                                   -- The next timeout is beyond the safe horizon.
     Just t -> utcTimeToSlotNo t
 
   -- Construct inputs constraints.
