@@ -327,10 +327,10 @@ spec = do
           label "Not a Plutus transaction"
             $ case selection of
                 Right txBodyContent' ->
-                  counterexample ("Non-Plutus transaction should not have collateral")
+                  counterexample "Non-Plutus transaction should not have collateral"
                     $ txInsCollateral txBodyContent' `shouldBe` TxInsCollateralNone
                 Left (CoinSelectionFailed message) ->
-                  counterexample ("Non-Plutus coin selection should not fail due to lack of collateral")
+                  counterexample "Non-Plutus coin selection should not fail due to lack of collateral"
                     $ message `shouldNotSatisfy` isPrefixOf "No collateral found in "
                 Left _ -> counterexample "Coin selection may fail for reasons unrelated to collateral" True
 
