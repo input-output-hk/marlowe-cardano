@@ -52,7 +52,6 @@ library
                     , time
                     , transformers
                     , transformers-base
-                    , typed-protocols
   ghc-options       : -Wall
                       -Wnoncanonical-monad-instances
                       -Wincomplete-uni-patterns
