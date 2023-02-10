@@ -29,4 +29,5 @@ in
   marlowe-indexer = mkImage "marlowe-indexer" { };
   marlowe-sync = mkImage "marlowe-sync" { };
   marlowe-tx = mkImage "marlowe-tx" { };
+  marlowe-web-server = mkImage "marlowe-web-server" { };
 }
