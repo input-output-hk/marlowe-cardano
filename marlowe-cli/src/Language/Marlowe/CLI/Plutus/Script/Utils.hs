@@ -11,7 +11,7 @@ import Prettyprinter (pretty)
 
 import qualified Plutus.Script.Utils.V1.Typed.Scripts as V1
 import qualified Plutus.Script.Utils.V2.Typed.Scripts as V2
-import qualified PlutusTx as PlutusTx
+import qualified PlutusTx
 -- These types are common to Plutus V1 and V2
 import Cardano.Api (PlutusScriptV1)
 import Cardano.Api.Byron (PlutusScriptV2)
