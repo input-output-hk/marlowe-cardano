@@ -126,7 +126,7 @@ getHeaders range@Range{..} = do
         FROM marlowe.createTxOut
         JOIN marlowe.contractTxOut USING (txId, txIx)
         JOIN marlowe.txOut USING (txId, txIx)
-        ORDER BY createTxOut.slotNo, createTxOut.txId, createTxOut.txIx
+        ORDER BY createTxOut.slotNo DESC, createTxOut.txId DESC, createTxOut.txIx DESC
         OFFSET ($1 :: int) ROWS
         FETCH NEXT ($2 :: int) ROWS ONLY
       |] (foldPage range totalItems)
