@@ -77,7 +77,7 @@ getTransactions (ContractId createTxOutRef@TxOutRef{..}) = runMaybeT do
         ON txOutAsset.txId = applyTx.txId
         AND txOutAsset.txIx = applyTx.outputTxIx
       WHERE applyTx.createTxId = $1 :: bytea
-        AND applyTx.createTxId = $2 :: smallint
+        AND applyTx.createTxIx = $2 :: smallint
       GROUP BY applyTx.txId
       ORDER BY (ARRAY_AGG(applyTx.inputTxId))[1], (ARRAY_AGG(applyTx.inputTxIx))[1]
     |]
@@ -99,7 +99,7 @@ getTransactions (ContractId createTxOutRef@TxOutRef{..}) = runMaybeT do
       LEFT JOIN marlowe.txOutAsset USING (txId, txIx)
       JOIN marlowe.applyTx USING (txId)
       WHERE applyTx.createTxId = $1 :: bytea
-        AND applyTx.createTxId = $2 :: smallint
+        AND applyTx.createTxIx = $2 :: smallint
       GROUP BY payoutTxOut.txId, payoutTxOut.txIx
       ORDER BY payoutTxOut.txId, payoutTxOut.txIx
     |]
