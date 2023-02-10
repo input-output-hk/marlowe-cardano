@@ -526,7 +526,7 @@ selectCoins protocol marloweVersion marloweCtx walletCtx@WalletContext{..} txBod
                -- UTxOs are *available* for use as collateral.
                filter (flip Set.member collateralUtxos . fromCardanoTxIn . fst) utxos
       hasPlutusScriptWitness :: (C.TxIn, C.BuildTxWith C.BuildTx (C.Witness C.WitCtxTxIn C.BabbageEra)) -> Bool
-      hasPlutusScriptWitness (_, C.BuildTxWith (C.ScriptWitness _ (C.PlutusScriptWitness _ _ _ _ _ _))) = True
+      hasPlutusScriptWitness (_, C.BuildTxWith (C.ScriptWitness _ C.PlutusScriptWitness{})) = True
       hasPlutusScriptWitness _ = False
     in
       -- TODO: Support Babbage-style collateral, where multiple UTxOs are used and change is made.
