@@ -516,16 +516,25 @@ selectCoins protocol marloweVersion marloweCtx walletCtx@WalletContext{..} txBod
 
   collateral <-
     let
-       candidateCollateral =
-         if Set.null collateralUtxos
-           then utxos  -- Use any UTxO if the wallet did not constrain collateral.
-           else -- The filter below is safe because, by the definition of `WalletContext`,
-                -- the `collateralUtxos` are an improper subset of `availableUtxos`.
-                filter (flip Set.member collateralUtxos . fromCardanoTxIn . fst) utxos
+      candidateCollateral =
+        if Set.null collateralUtxos
+          then utxos  -- Use any UTxO if the wallet did not constrain collateral.
+          else -- The filter below is safe because, by the definition of `WalletContext`,
+               -- the `collateralUtxos` are an improper subset of `availableUtxos`. Also
+               -- note that the definition of `WalletContext` does not *require* that
+               -- every UTxO specified as collateral be used: it just states that those
+               -- UTxOs are *available* for use as collateral.
+               filter (flip Set.member collateralUtxos . fromCardanoTxIn . fst) utxos
+      hasPlutusScriptWitness :: (C.TxIn, C.BuildTxWith C.BuildTx (C.Witness C.WitCtxTxIn C.BabbageEra)) -> Bool
+      hasPlutusScriptWitness (_, C.BuildTxWith (C.ScriptWitness _ (C.PlutusScriptWitness _ _ _ _ _ _))) = True
+      hasPlutusScriptWitness _ = False
     in
-      case filter (\candidate -> let value = txOutToValue $ snd candidate in onlyLovelace value && C.selectLovelace value >= C.selectLovelace fee) candidateCollateral of
-          utxo : _ -> pure utxo
-          []       -> Left . CoinSelectionFailed $ "No collateral found in " <> show utxos <> "."
+      -- TODO: Support Babbage-style collateral, where multiple UTxOs are used and change is made.
+      if any hasPlutusScriptWitness $ C.txIns txBodyContent
+        then case filter (\candidate -> let value = txOutToValue $ snd candidate in onlyLovelace value && C.selectLovelace value >= C.selectLovelace fee) candidateCollateral of
+          (txIn, _) : _ -> pure $ C.TxInsCollateral C.CollateralInBabbageEra [txIn]
+          []            -> Left . CoinSelectionFailed $ "No collateral found in " <> show utxos <> "."
+        else pure C.TxInsCollateralNone  -- No collateral is needed unless a Plutus script is being executed.
 
   -- Bound the lovelace that must be included with change
   -- Worst case scenario of how much ADA would be added to the native and non-native change outputs
@@ -673,7 +682,7 @@ selectCoins protocol marloweVersion marloweCtx walletCtx@WalletContext{..} txBod
 
   -- Return the transaction with coin selection added
   pure $ txBodyContent
-    { C.txInsCollateral = C.TxInsCollateral C.CollateralInBabbageEra [fst collateral]
+    { C.txInsCollateral = collateral
     , C.txIns = C.txIns txBodyContent <> fmap addWitness selection
     , C.txOuts = outputs <> (output :: [C.TxOut C.CtxTx C.BabbageEra])
     }
