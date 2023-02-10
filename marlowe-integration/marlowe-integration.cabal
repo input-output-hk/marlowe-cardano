@@ -72,9 +72,7 @@ library
     , marlowe-chain-sync:libchainseek
     , marlowe-protocols
     , marlowe-runtime
-    , marlowe-runtime:discovery
     , marlowe-runtime:discovery-api
-    , marlowe-runtime:history
     , marlowe-runtime:history-api
     , marlowe-runtime:indexer
     , marlowe-runtime:sync

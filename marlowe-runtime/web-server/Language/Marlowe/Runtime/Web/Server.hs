@@ -27,22 +27,14 @@ import Control.Concurrent.Component
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Reader (runReaderT)
 import Data.Void (Void)
-import Language.Marlowe.Protocol.HeaderSync.Client (MarloweHeaderSyncClient)
-import Language.Marlowe.Protocol.Sync.Client (MarloweSyncClient)
+import Language.Marlowe.Protocol.Query.Client (MarloweQueryClient)
 import Language.Marlowe.Runtime.Transaction.Api (MarloweTxCommand)
 import qualified Language.Marlowe.Runtime.Web as Web
-import Language.Marlowe.Runtime.Web.Server.ContractHeaderIndexer
-  ( ContractHeaderIndexer(..)
-  , ContractHeaderIndexerDependencies(..)
-  , ContractHeaderIndexerSelector
-  , contractHeaderIndexer
-  )
-import Language.Marlowe.Runtime.Web.Server.HistoryClient
-  (HistoryClient(..), HistoryClientDependencies(..), HistoryClientSelector, historyClient)
 import Language.Marlowe.Runtime.Web.Server.Monad (AppEnv(..), AppM(..))
 import qualified Language.Marlowe.Runtime.Web.Server.OpenAPI as OpenAPI
 import Language.Marlowe.Runtime.Web.Server.REST (ApiSelector)
 import qualified Language.Marlowe.Runtime.Web.Server.REST as REST
+import Language.Marlowe.Runtime.Web.Server.SyncClient (SyncClient(..), SyncClientDependencies(..), syncClient)
 import Language.Marlowe.Runtime.Web.Server.TxClient (TxClient(..), TxClientDependencies(..), TxClientSelector, txClient)
 import Network.Protocol.Driver (RunClient)
 import Network.Protocol.Job.Client (JobClient)
@@ -101,8 +93,6 @@ compile $ SelectorSpec "server"
   [ ["run", "server"] ≔ ''Void
   , "http" ≔ Inject ''ServeRequest
   , "api" ≔ Inject ''ApiSelector
-  , ["contract", "indexer"] ≔ Inject ''ContractHeaderIndexerSelector
-  , "history" ≔ Inject ''HistoryClientSelector
   , "tx" ≔ Inject ''TxClientSelector
   ]
 
@@ -110,8 +100,7 @@ data ServerDependencies r = ServerDependencies
   { openAPIEnabled :: Bool
   , accessControlAllowOriginAll :: Bool
   , runApplication :: Application -> IO ()
-  , runMarloweHeaderSyncClient :: RunClient IO MarloweHeaderSyncClient
-  , runMarloweSyncClient :: RunClient IO MarloweSyncClient
+  , runMarloweQueryClient :: RunClient IO MarloweQueryClient
   , runTxJobClient :: RunClient IO (JobClient MarloweTxCommand)
   , eventBackend :: EventBackend IO r ServerSelector
   }
@@ -133,17 +122,11 @@ server = proc ServerDependencies{..} -> do
     { runTxJobClient
     , eventBackend = narrowEventBackend Tx eventBackend
     }
-  ContractHeaderIndexer{..} <- contractHeaderIndexer -< ContractHeaderIndexerDependencies
-    { runMarloweHeaderSyncClient
-    , getTempContracts
-    , eventBackend = narrowEventBackend ContractIndexer eventBackend
-    }
-  HistoryClient{..} <- historyClient -< HistoryClientDependencies
-    { runMarloweSyncClient
+  SyncClient{..} <- syncClient -< SyncClientDependencies
+    { runMarloweQueryClient
     , lookupTempContract
     , lookupTempTransaction
     , getTempTransactions
-    , eventBackend = narrowEventBackend History eventBackend
     }
   webServer -< WebServerDependencies
     { env = AppEnv

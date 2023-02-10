@@ -28,9 +28,9 @@ import Language.Marlowe.Runtime.Transaction.Api
 import qualified Language.Marlowe.Runtime.Transaction.Api as Tx
 import Language.Marlowe.Runtime.Web hiding (Unsigned)
 import Language.Marlowe.Runtime.Web.Server.DTO
-import Language.Marlowe.Runtime.Web.Server.HistoryClient (LoadTxError(..))
 import Language.Marlowe.Runtime.Web.Server.Monad
   (AppM, applyInputs, loadTransaction, loadTransactions, submitTransaction)
+import Language.Marlowe.Runtime.Web.Server.SyncClient (LoadTxError(..))
 import Language.Marlowe.Runtime.Web.Server.TxClient (TempTx(TempTx), TempTxStatus(..))
 import Observe.Event (EventBackend, addField, reference, withEvent)
 import Observe.Event.BackendModification (setAncestor)
@@ -98,8 +98,7 @@ get eb contractId ranges = withEvent eb Get \ev -> do
   addField ev $ Order $ show rangeOrder
   contractId' <- fromDTOThrow err400 contractId
   startFrom <- fromDTOThrow err416 rangeValue
-  let mods = setAncestor $ reference ev
-  loadTransactions mods contractId' startFrom rangeLimit rangeOffset rangeOrder >>= \case
+  loadTransactions contractId' startFrom rangeLimit rangeOffset rangeOrder >>= \case
     Left ContractNotFound -> throwError err404
     Left TxNotFound -> throwError err416
     Right headers -> do
@@ -187,7 +186,7 @@ getOne eb contractId txId = withEvent eb GetOne \ev -> do
   addField ev $ GetTxId txId
   contractId' <- fromDTOThrow err400 contractId
   txId' <- fromDTOThrow err400 txId
-  loadTransaction (setAncestor $ reference ev) contractId' txId' >>= \case
+  loadTransaction contractId' txId' >>= \case
     Nothing -> throwError err404
     Just result -> do
       let contractState = either toDTO toDTO result
@@ -207,7 +206,7 @@ put eb contractId txId body = withEvent eb Put \ev -> do
   addField ev $ PutTxId txId
   contractId' <- fromDTOThrow err400 contractId
   txId' <- fromDTOThrow err400 txId
-  loadTransaction (setAncestor $ reference ev) contractId' txId' >>= \case
+  loadTransaction contractId' txId' >>= \case
     Nothing -> throwError err404
     Just (Left (TempTx _ Unsigned Tx.InputsApplied{txBody})) -> do
       textEnvelope <- fromDTOThrow err400 body

@@ -1,19 +1,15 @@
-{ sqitchPg, runCommand, writeShellScriptBin, writeText, lib, glibcLocales, networks }:
+{ sqitchPg, postgresql, runCommand, writeShellScriptBin, writeText, lib, glibcLocales, networks }:
 let
   network = networks.preview;
-  run-sqitch = writeShellScriptBin "run-sqitch" ''
-    export PATH="$PATH:${lib.makeBinPath [ sqitchPg ]}"
+  mkSqitchRunner = name: path: writeShellScriptBin name ''
+    export PATH="$PATH:${lib.makeBinPath [ sqitchPg postgresql ]}"
     export LOCALE_ARCHIVE="${glibcLocales}/lib/locale/locale-archive"
-    cd /src/marlowe-chain-sync
+    cd ${path}
     exec sqitch deploy "$@"
   '';
 
-  run-sqitch-marlowe-indexer = writeShellScriptBin "run-sqitch-marlowe-indexer" ''
-    export PATH="$PATH:${lib.makeBinPath [ sqitchPg ]}"
-    export LOCALE_ARCHIVE="${glibcLocales}/lib/locale/locale-archive"
-    cd /src/marlowe-runtime/marlowe-indexer
-    exec sqitch deploy "$@"
-  '';
+  run-sqitch = mkSqitchRunner "run-sqitch" "/src/marlowe-chain-sync";
+  run-sqitch-marlowe-indexer = mkSqitchRunner "run-sqitch-marlowe-indexer" "/src/marlowe-runtime/marlowe-indexer";
 
   run-local-service = project: version: prog: writeShellScriptBin "run-${prog}" ''
     set -e
@@ -33,8 +29,6 @@ let
     ln -sv ${run-local-service "marlowe-chain-sync" "0.0.0.0" "marlowe-chain-indexer"}/bin/run-marlowe-chain-indexer $out
     ln -sv ${run-local-service "marlowe-chain-sync" "0.0.0.0" "chainseekd"}/bin/run-chainseekd $out
     ln -sv ${run-local-service "marlowe-runtime" "0.0.0.0" "marlowe-sync"}/bin/run-marlowe-sync $out
-    ln -sv ${run-local-service "marlowe-runtime" "0.0.0.0" "marlowe-history"}/bin/run-marlowe-history $out
-    ln -sv ${run-local-service "marlowe-runtime" "0.0.0.0" "marlowe-discovery"}/bin/run-marlowe-discovery $out
     ln -sv ${run-local-service "marlowe-runtime" "0.0.0.0" "marlowe-tx"}/bin/run-marlowe-tx $out
     ln -sv ${run-local-service "marlowe-runtime" "0.0.0.0" "marlowe-web-server"}/bin/run-marlowe-web-server $out
     ln -sv ${run-local-service "marlowe-runtime" "0.0.0.0" "marlowe-indexer"}/bin/run-marlowe-indexer $out
@@ -89,6 +83,9 @@ let
       "${symlinks}:/exec"
       "shared:/ipc"
     ];
+    environment = [
+      "TZ=UTC"
+    ];
     restart = "unless-stopped";
     depends_on = {
       "postgres" = { condition = "service_healthy"; };
@@ -125,6 +122,9 @@ let
       "/nix:/nix"
       "${symlinks}:/exec"
       "shared:/ipc"
+    ];
+    environment = [
+      "TZ=UTC"
     ];
     restart = "unless-stopped";
     depends_on = {
@@ -179,34 +179,6 @@ let
     ];
   };
 
-  history-service = dev-service {
-    ports = [ 3717 3718 3719 ];
-    depends_on = [ "chainseekd" ];
-    command = [
-      "/exec/run-marlowe-history"
-      "--chain-seek-host"
-      "chainseekd"
-      "--host"
-      "0.0.0.0"
-      "--log-config-file"
-      "./marlowe-history.log.config"
-    ];
-  };
-
-  discovery-service = dev-service {
-    ports = [ 3721 3722 ];
-    depends_on = [ "chainseekd" ];
-    command = [
-      "/exec/run-marlowe-discovery"
-      "--chain-seek-host"
-      "chainseekd"
-      "--host"
-      "0.0.0.0"
-      "--log-config-file"
-      "./marlowe-discovery.log.config"
-    ];
-  };
-
   tx-service = dev-service {
     ports = [ 3723 ];
     depends_on = [ "chainseekd" ];
@@ -226,14 +198,10 @@ let
     depends_on = [ "marlowe-sync" "marlowe-tx" ];
     command = [
       "/exec/run-marlowe-web-server"
-      "--history-host"
+      "--marlowe-sync-host"
       "marlowe-sync"
-      "--history-sync-port"
-      "3724"
-      "--discovery-sync-port"
-      "3725"
-      "--discovery-host"
-      "marlowe-sync"
+      "--marlowe-query-port"
+      "3726"
       "--tx-host"
       "marlowe-tx"
       "--enable-open-api"
@@ -289,8 +257,6 @@ let
 
     services.marlowe-chain-indexer = chain-indexer-service;
     services.chainseekd = chainseekd-service;
-    services.marlowe-history = history-service;
-    services.marlowe-discovery = discovery-service;
     services.marlowe-tx = tx-service;
     services.web = web-service;
     services.marlowe-indexer = marlowe-indexer-service;

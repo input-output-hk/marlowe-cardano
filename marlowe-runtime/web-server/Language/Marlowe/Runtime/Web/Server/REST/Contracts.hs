@@ -167,7 +167,7 @@ getOne
 getOne eb contractId = withEvent eb GetOne \ev -> do
   addField ev $ GetId contractId
   contractId' <- fromDTOThrow err400 contractId
-  loadContract (setAncestor $ reference ev) contractId' >>= \case
+  loadContract contractId' >>= \case
     Nothing -> throwError err404
     Just result -> do
       let contractState = either toDTO toDTO result
@@ -182,7 +182,7 @@ put
 put eb contractId body = withEvent eb Put \ev -> do
   addField ev $ PutId contractId
   contractId' <- fromDTOThrow err400 contractId
-  loadContract (setAncestor $ reference ev) contractId' >>= \case
+  loadContract contractId' >>= \case
     Nothing -> throwError err404
     Just (Left (TempTx _ Unsigned Tx.ContractCreated{txBody})) -> do
       textEnvelope <- fromDTOThrow err400 body

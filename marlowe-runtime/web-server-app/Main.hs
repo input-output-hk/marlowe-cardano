@@ -11,10 +11,8 @@ module Main
 
 import Control.Concurrent.Component (runComponent_)
 import Control.Exception (throwIO)
-import Language.Marlowe.Protocol.HeaderSync.Client (marloweHeaderSyncClientPeer)
-import Language.Marlowe.Protocol.HeaderSync.Codec (codecMarloweHeaderSync)
-import Language.Marlowe.Protocol.Sync.Client (marloweSyncClientPeer)
-import Language.Marlowe.Protocol.Sync.Codec (codecMarloweSync)
+import Language.Marlowe.Protocol.Query.Client (marloweQueryClientPeer)
+import Language.Marlowe.Protocol.Query.Codec (codecMarloweQuery)
 import Language.Marlowe.Runtime.Web.Server
 import Network.Protocol.Handshake.Client (runClientPeerOverSocketWithHandshake)
 import Network.Protocol.Job.Client (jobClientPeer)
@@ -35,24 +33,18 @@ main = hSetBuffering stdout LineBuffering
 
 optionsToServerDependencies :: Options -> IO (ServerDependencies JSONRef)
 optionsToServerDependencies Options{..} = do
-  discoverySyncAddr <- resolve discoveryHost discoverySyncPort
-  historySyncAddr <- resolve historyHost historySyncPort
+  syncQueryAddr <- resolve syncHost syncQueryPort
   txCommandAddr <- resolve txHost txCommandPort
   eventBackend <- simpleJsonStderrBackend defaultRenderSelectorJSON
   pure ServerDependencies
     { openAPIEnabled
     , accessControlAllowOriginAll
     , runApplication = run $ fromIntegral port
-    , runMarloweHeaderSyncClient = runClientPeerOverSocketWithHandshake
+    , runMarloweQueryClient = runClientPeerOverSocketWithHandshake
         throwIO
-        discoverySyncAddr
-        codecMarloweHeaderSync
-        marloweHeaderSyncClientPeer
-    , runMarloweSyncClient = runClientPeerOverSocketWithHandshake
-        throwIO
-        historySyncAddr
-        codecMarloweSync
-        marloweSyncClientPeer
+        syncQueryAddr
+        codecMarloweQuery
+        marloweQueryClientPeer
     , runTxJobClient = runClientPeerOverSocketWithHandshake
         throwIO
         txCommandAddr
