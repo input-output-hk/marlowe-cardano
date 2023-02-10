@@ -25,8 +25,8 @@ import Language.Marlowe.Runtime.Indexer.Database (hoistDatabaseQueries)
 import qualified Language.Marlowe.Runtime.Indexer.Database.PostgreSQL as PostgreSQL
 import Logging (RootSelector(..), getRootSelectorConfig)
 import Network.Protocol.ChainSeek.Client (chainSeekClientPeer)
-import Network.Protocol.Driver (runClientPeerOverSocket)
-import Network.Protocol.Handshake.Client (runClientPeerOverSocketWithLoggingWithHandshake)
+import Network.Protocol.Handshake.Client
+  (runClientPeerOverSocketWithHandshake, runClientPeerOverSocketWithLoggingWithHandshake)
 import Network.Protocol.Query.Client (liftQuery, queryClientPeer)
 import Network.Protocol.Query.Codec (codecQuery)
 import Network.Socket (AddrInfo(..), HostName, PortNumber, SocketType(..), defaultHints, getAddrInfo, withSocketsDo)
@@ -109,7 +109,7 @@ run Options{..} = withSocketsDo do
     queryChainSync :: ChainSyncQuery Void e a -> IO a
     queryChainSync query = fmap (fromRight $ error "failed to query chain seek server") do
       addr <- head <$> getAddrInfo (Just clientHints) (Just chainSeekHost) (Just $ show chainSeekQueryPort)
-      runClientPeerOverSocket throwIO addr codecQuery queryClientPeer $ liftQuery query
+      runClientPeerOverSocketWithHandshake throwIO addr codecQuery queryClientPeer $ liftQuery query
 
 data Options = Options
   { chainSeekPort :: PortNumber
