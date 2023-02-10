@@ -667,12 +667,13 @@ genWalletWithNuisance marloweVersion' constraints' minLovelace = do
   someAddress <- arbitrary
   let lovelaceToAdd = Chain.Assets (Chain.Lovelace minLovelace) (Chain.Tokens Map.empty)
   nuisAssets <- (lovelaceToAdd <>) <$> arbitrary
+  collateral <- Set.fromList <$> sublistOf [adaTxOutRef]
   let
     adaAssets = Chain.Assets (Chain.Lovelace 7_000_000) (Chain.Tokens Map.empty)
     adaTxOut = Chain.TransactionOutput someAddress adaAssets Nothing Nothing
     nuisTxOut = Chain.TransactionOutput someAddress nuisAssets Nothing Nothing
     utxos = Chain.UTxOs $ Map.fromList [(adaTxOutRef, adaTxOut), (nuisTxOutRef, nuisTxOut)]
-  pure $ wc { availableUtxos = utxos, collateralUtxos = Set.singleton adaTxOutRef }
+  pure $ wc { availableUtxos = utxos, collateralUtxos = collateral }
 
 -- Simulate constraints specifying the tx must cover a 500ADA output
 -- after coin selection. This exists to force selection to consume the
@@ -761,10 +762,11 @@ genWalletWithAsset marloweVersion constraints minLovelace = do
   txOutRef <- arbitrary
   stubAddress <- arbitrary
   assets <- genAtLeastThisMuchAda minLovelace
+  collateral <- Set.fromList <$> sublistOf [txOutRef]
   let
     txOut = Chain.TransactionOutput stubAddress assets Nothing Nothing
     utxos = Chain.UTxOs $ Map.singleton txOutRef txOut
-  pure $ wc { availableUtxos = utxos, collateralUtxos = Set.singleton txOutRef }
+  pure $ wc { availableUtxos = utxos, collateralUtxos = collateral }
 
 -- A simple TxBodyContent that's completely empty
 emptyTxBodyContent :: TxBodyContent BuildTx BabbageEra
