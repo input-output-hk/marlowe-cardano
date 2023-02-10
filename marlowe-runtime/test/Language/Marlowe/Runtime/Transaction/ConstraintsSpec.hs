@@ -26,7 +26,7 @@ import Data.Functor ((<&>))
 import Data.List (find, isPrefixOf)
 import Data.Map (Map)
 import qualified Data.Map as Map
-import qualified Data.Map.Strict as SMap (toList)
+import qualified Data.Map.Strict as SMap (filterWithKey, toList)
 import Data.Maybe (fromJust, isJust, mapMaybe)
 import Data.Monoid (First(..), getFirst)
 import Data.Ratio ((%))
@@ -224,7 +224,7 @@ spec = do
                   BuildTxWith
                     . ScriptWitness ScriptWitnessForSpending
                     $ SimpleScriptWitness SimpleScriptV1InBabbage SimpleScriptV1 script)]}))
-          , (9, hedgehog $ do
+          , (20, hedgehog $ do
                 txIn <- genTxIn
                 script <- PReferenceScript <$> genTxIn <*> pure Nothing
                 datum <- ScriptDatumForTxIn <$> genScriptData
@@ -273,8 +273,18 @@ spec = do
           toCardanoTxOut' MultiAssetInBabbageEra transactionOutput Nothing
 
         -- All utxos that are spendable from the wallet context
+        eligible :: [(Chain.TxOutRef, Chain.TransactionOutput)]
+        eligible =
+          SMap.toList
+            . (
+                if Set.null $ collateralUtxos walletContext
+                  then id
+                  else SMap.filterWithKey $ const . flip Set.member (collateralUtxos walletContext)
+              )
+            . Chain.unUTxOs
+            $ availableUtxos walletContext
         utxos :: [TxOut CtxTx BabbageEra]
-        utxos = mapMaybe convertUtxo (SMap.toList . Chain.unUTxOs . availableUtxos $ walletContext)
+        utxos = mapMaybe convertUtxo eligible
 
         -- Compute the value of all available UTxOs
         universe :: Value
@@ -298,6 +308,13 @@ spec = do
             targetLovelace = fromCardanoLovelace $ fee' <> minUtxo'
             anyCoversFee = any ((>= targetLovelace) . Chain.ada) onlyAdas
 
+        eligibleUtxos txBodyContent' =
+          case txInsCollateral txBodyContent' of
+            TxInsCollateralNone          -> Left "No collateral selected"
+            TxInsCollateral _ collateral -> if all (`elem` mapMaybe (toCardanoTxIn . fst) eligible) collateral
+                                              then Right txBodyContent'
+                                              else Left "Collateral contains ineligible UTxO"
+
         singleUtxo :: [Chain.Assets] -> Either String Chain.Assets
         singleUtxo [as] = Right as
         singleUtxo l = Left $ "Collateral is not exactly one utxo" <> show l
@@ -320,7 +337,7 @@ spec = do
         selectResult :: Either String ()
         selectResult = either
           (\ce -> case marloweVersion of MarloweV1 -> Left . show $ ce)
-          (\txBC -> singleUtxo (extractCollat txBC) >>= assetsAdaOnly >>= adaCollatIsSufficient)
+          (\txBC -> fmap extractCollat (eligibleUtxos txBC) >>= singleUtxo >>= assetsAdaOnly >>= adaCollatIsSufficient)
           selection
 
         noCollateralUnlessPlutus =
