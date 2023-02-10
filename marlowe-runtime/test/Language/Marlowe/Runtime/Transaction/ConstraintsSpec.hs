@@ -1,13 +1,18 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE TupleSections #-}
 
 module Language.Marlowe.Runtime.Transaction.ConstraintsSpec
   where
 
 import Cardano.Api
 import Cardano.Api.Shelley
-  (PlutusScriptOrReferenceInput(PScript), ProtocolParameters(..), ReferenceScript(ReferenceScriptNone))
+  ( PlutusScriptOrReferenceInput(..)
+  , ProtocolParameters(..)
+  , ReferenceScript(ReferenceScriptNone)
+  , SimpleScriptOrReferenceInput(SReferenceScript)
+  )
 import Control.Applicative (Alternative)
 import Control.Arrow ((***))
 import Control.Error (note)
@@ -37,6 +42,7 @@ import Gen.Cardano.Api.Typed
   , genScriptData
   , genScriptHash
   , genTxBodyContent
+  , genTxIn
   , genValueForTxOut
   )
 import Language.Marlowe (MarloweData(..), MarloweParams(..), txInputs)
@@ -207,6 +213,29 @@ spec = do
 
       marloweContext <- genSimpleMarloweContext marloweVersion constraints
 
+      (executesPlutusScript, txBodyContent) <-
+        frequency
+          [
+            (1, pure (False, emptyTxBodyContent))
+          , (1, hedgehog $ do
+                txIn <- genTxIn
+                script <- SReferenceScript <$> genTxIn <*> pure Nothing
+                pure (False, emptyTxBodyContent {txIns = [(txIn,
+                  BuildTxWith
+                    . ScriptWitness ScriptWitnessForSpending
+                    $ SimpleScriptWitness SimpleScriptV1InBabbage SimpleScriptV1 script)]}))
+          , (9, hedgehog $ do
+                txIn <- genTxIn
+                script <- PReferenceScript <$> genTxIn <*> pure Nothing
+                datum <- ScriptDatumForTxIn <$> genScriptData
+                redeemer <- genScriptData
+                pure (True, emptyTxBodyContent {txIns = [(txIn,
+                  BuildTxWith
+                    . ScriptWitness ScriptWitnessForSpending
+                    $ PlutusScriptWitness PlutusScriptV2InBabbage PlutusScriptV2
+                        script datum redeemer (ExecutionUnits 0 0))]}))
+          ]
+
       -- We MUST dictate the distribution of wallet context assets, default
       -- generation only tests with empty wallets!
       maxLovelace <- choose (0, 40_000_000)
@@ -285,20 +314,35 @@ spec = do
               <> show lovelace <> "  fees: " <> show (maxFee protocolTestnet)
 
         -- Function to convert the Left side of the Either from (ConstraintError v) to String
+        selection =
+          selectCoins protocolTestnet marloweVersion marloweContext
+            walletContext txBodyContent
         selectResult :: Either String ()
         selectResult = either
           (\ce -> case marloweVersion of MarloweV1 -> Left . show $ ce)
           (\txBC -> singleUtxo (extractCollat txBC) >>= assetsAdaOnly >>= adaCollatIsSufficient)
-          $ selectCoins protocolTestnet marloweVersion marloweContext
-              walletContext emptyTxBodyContent
+          selection
 
-      pure $ case (walletCtxSufficient, selectResult) of
-        (True , Right _) -> label "Wallet has funds, selection succeeded" True
-        (False, Right _) -> counterexample "Selection should have failed" False
-        (True , Left selFailedMsg) ->
-          counterexample ("Selection shouldn't have failed\n" <> selFailedMsg) False
-        (False, Left selFailedMsg) -> label "Wallet does not have funds, selection failed"
-          $ selFailedMsg `shouldSatisfy` isPrefixOf "CoinSelectionFailed"
+        noCollateralUnlessPlutus =
+          label "Not a Plutus transaction"
+            $ case selection of
+                Right txBodyContent' ->
+                  counterexample ("Non-Plutus transaction should not have collateral")
+                    $ txInsCollateral txBodyContent' `shouldBe` TxInsCollateralNone
+                Left (CoinSelectionFailed message) ->
+                  counterexample ("Non-Plutus coin selection should not fail due to lack of collateral")
+                    $ message `shouldNotSatisfy` isPrefixOf "No collateral found in "
+                Left _ -> counterexample "Coin selection may fail for reasons unrelated to collateral" True
+
+      pure $ if executesPlutusScript
+        then case (walletCtxSufficient, selectResult) of
+          (True , Right _) -> label "Wallet has funds, selection succeeded" True
+          (False, Right _) -> counterexample "Selection should have failed" False
+          (True , Left selFailedMsg) ->
+            counterexample ("Selection shouldn't have failed\n" <> selFailedMsg) False
+          (False, Left selFailedMsg) -> label "Wallet does not have funds, selection failed"
+            $ selFailedMsg `shouldSatisfy` isPrefixOf "CoinSelectionFailed"
+        else noCollateralUnlessPlutus
 
     prop "selectCoins should increase the number of outputs by either 0 or exactly 1" \(SomeTxConstraints marloweVersion constraints) -> do
       marloweContext <- genSimpleMarloweContext marloweVersion constraints
