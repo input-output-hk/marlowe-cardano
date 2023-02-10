@@ -310,6 +310,8 @@ buildApplyInputsConstraintsSpec =
         contract' = Semantics.When [] (POSIXTime timeout) $ Semantics.When [] (POSIXTime timeout') Semantics.Close
       marloweContract <- elements [contract, contract'] -- This contract can only time out.
       let
+        -- Important note: these slot computations cannot be used generally, but are specificially tailored
+        -- to the contrived era history and system start used for this test case.
         toSlot = (`div` 1000)
         tipSlot = Chain.SlotNo $ fromInteger tipSlot'
         tipTime = 1000 * tipSlot'

@@ -428,14 +428,6 @@ buildApplyInputsConstraintsV1 systemStart eraHistory marloweOutput tipSlot metad
     posixTimeToUTCTime :: PV2.POSIXTime -> UTCTime
     posixTimeToUTCTime (P.POSIXTime t) = posixSecondsToUTCTime $ secondsToNominalDiffTime $ fromInteger t / 1000
 
-    nextMarloweTimeout :: V1.Contract -> Maybe UTCTime
-    nextMarloweTimeout (V1.When _ timeout _) = Just $ posixTimeToUTCTime timeout
-    nextMarloweTimeout V1.Close = Nothing
-    nextMarloweTimeout (V1.Pay _ _ _ _ c) = nextMarloweTimeout c
-    nextMarloweTimeout (V1.If _ c1 c2) = on min nextMarloweTimeout c1 c2
-    nextMarloweTimeout (V1.Let _ _ c) = nextMarloweTimeout c
-    nextMarloweTimeout (V1.Assert _ c) = nextMarloweTimeout c
-
     nextMarloweTimeoutAfter :: UTCTime -> V1.Contract -> Maybe UTCTime
     nextMarloweTimeoutAfter limit (V1.When _ timeout c)
       | posixTimeToUTCTime timeout > limit = Just $ posixTimeToUTCTime timeout
