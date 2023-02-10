@@ -446,7 +446,7 @@ findMinUtxo protocol (chAddress, mbDatum, origValue) =
       revisedValue = origValue <> C.negateValue (C.lovelaceToValue $ C.selectLovelace origValue) <> atLeastHalfAnAda
       datum = maybe C.TxOutDatumNone
         (C.TxOutDatumInTx C.ScriptDataInBabbageEra . C.fromPlutusData . toPlutusData)
-        $ mbDatum
+        mbDatum
 
     dummyTxOut <- makeTxOut chAddress datum revisedValue C.ReferenceScriptNone
     case C.calculateMinimumUTxO C.ShelleyBasedEraBabbage dummyTxOut protocol of
