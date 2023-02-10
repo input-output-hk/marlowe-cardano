@@ -18,7 +18,7 @@ type MarloweQueryServer = Peer MarloweQuery 'AsServer 'StReq
 marloweQueryServer
   :: forall m
    . MonadBaseControl IO m
-  => (Range ContractId -> m (Page ContractId ContractHeader))
+  => (Range ContractId -> m (Maybe (Page ContractId ContractHeader)))
   -> (ContractId -> m (Maybe SomeContractState))
   -> (TxId -> m (Maybe SomeTransaction))
   -> (ContractId -> m (Maybe SomeTransactions))

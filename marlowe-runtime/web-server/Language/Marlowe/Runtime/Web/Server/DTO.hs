@@ -1,4 +1,5 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE PolyKinds #-}
@@ -36,12 +37,16 @@ import Data.List.NonEmpty (NonEmpty(..))
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Maybe (fromMaybe)
+import Data.Proxy (Proxy(..))
 import Data.String (fromString)
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Word (Word16, Word64)
+import Debug.Trace (traceShowId)
+import GHC.TypeLits (KnownSymbol)
 import qualified Language.Marlowe.Core.V1.Semantics as Sem
 import Language.Marlowe.Protocol.Query.Types (ContractState(..), SomeContractState(..), SomeTransaction(..))
+import qualified Language.Marlowe.Protocol.Query.Types as Query
 import Language.Marlowe.Runtime.Cardano.Api (cardanoEraToAsType, fromCardanoTxId)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Core.Api
@@ -57,6 +62,8 @@ import qualified Language.Marlowe.Runtime.Discovery.Api as Discovery
 import qualified Language.Marlowe.Runtime.Transaction.Api as Tx
 import qualified Language.Marlowe.Runtime.Web as Web
 import Language.Marlowe.Runtime.Web.Server.TxClient (TempTx(..), TempTxStatus(..))
+import Servant.Pagination (IsRangeType)
+import qualified Servant.Pagination as Pagination
 
 -- | A class that states a type has a DTO representation.
 class HasDTO a where
@@ -456,6 +463,39 @@ instance HasDTO Tx.NFTMetadata where
 
 instance FromDTO Tx.NFTMetadata where
   fromDTO = Tx.mkNFTMetadata <=< Chain.fromJSONEncodedMetadata . toJSON
+
+instance HasDTO Query.Order where
+  type DTO Query.Order = Pagination.RangeOrder
+
+instance ToDTO Query.Order where
+  toDTO = \case
+    Query.Ascending -> Pagination.RangeAsc
+    Query.Descending -> Pagination.RangeDesc
+
+instance FromDTO Query.Order where
+  fromDTO = pure . \case
+    Pagination.RangeAsc -> Query.Ascending
+    Pagination.RangeDesc -> Query.Descending
+
+toPaginationRange
+  :: (KnownSymbol field, ToDTO a, IsRangeType (DTO a))
+  => Query.Range a
+  -> Pagination.Range field (DTO a)
+toPaginationRange Query.Range{..} = Pagination.Range
+  { rangeValue = toDTO rangeStart
+  , rangeOrder = toDTO rangeDirection
+  , rangeField = Proxy
+  , ..
+  }
+
+fromPaginationRange
+  :: (FromDTO a, Show a)
+  => Pagination.Range field (DTO a)
+  -> Maybe (Query.Range a)
+fromPaginationRange Pagination.Range{..} = do
+  rangeStart <- traceShowId $ fromDTO rangeValue
+  rangeDirection <- traceShowId $ fromDTO rangeOrder
+  pure Query.Range { rangeStart, rangeDirection, .. }
 
 tokenNameToText :: Text -> Chain.TokenName
 tokenNameToText = Chain.TokenName . fromString . T.unpack

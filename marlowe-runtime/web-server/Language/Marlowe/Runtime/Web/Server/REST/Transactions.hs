@@ -15,6 +15,7 @@ import Control.Monad (unless)
 import Data.Foldable (traverse_)
 import Data.Maybe (fromMaybe)
 import qualified Data.Set as Set
+import Language.Marlowe.Protocol.Query.Types (Page(..))
 import Language.Marlowe.Runtime.Cardano.Api (fromCardanoTxId)
 import Language.Marlowe.Runtime.Core.Api (MarloweVersion(..), SomeMarloweVersion(..))
 import Language.Marlowe.Runtime.Transaction.Api
@@ -97,24 +98,14 @@ get eb contractId ranges = withEvent eb Get \ev -> do
   addField ev $ Offset rangeOffset
   addField ev $ Order $ show rangeOrder
   contractId' <- fromDTOThrow err400 contractId
-  startFrom <- fromDTOThrow err416 rangeValue
-  loadTransactions contractId' startFrom rangeLimit rangeOffset rangeOrder >>= \case
+  range' <- maybe (throwError err416) pure $ fromPaginationRange range
+  loadTransactions contractId' range' >>= \case
     Left ContractNotFound -> throwError err404
     Left TxNotFound -> throwError err416
-    Right headers -> do
-      let headers' = either toTxHeader id <$> toDTO headers
+    Right Page{..} -> do
+      let headers' = toDTO items
       addField ev $ TxHeaders headers'
-      addHeader (length headers) . fmap ListObject <$> returnRange range (IncludeLink (Proxy @"transaction") <$> headers')
-
-toTxHeader :: Tx -> TxHeader
-toTxHeader Tx{..} = TxHeader
-  { contractId
-  , transactionId
-  , metadata
-  , status
-  , block
-  , utxo = outputUtxo
-  }
+      addHeader totalCount . fmap ListObject <$> returnRange range (IncludeLink (Proxy @"transaction") <$> headers')
 
 post
   :: EventBackend (AppM r) r TransactionsSelector

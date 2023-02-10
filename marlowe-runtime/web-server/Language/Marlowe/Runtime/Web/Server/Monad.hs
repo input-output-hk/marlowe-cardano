@@ -61,9 +61,9 @@ data AppEnv r = AppEnv
 
 -- | Load a list of contract headers.
 loadContractHeaders :: LoadContractHeaders (AppM r)
-loadContractHeaders startFrom limit offset order = do
+loadContractHeaders range = do
   load <- asks _loadContractHeaders
-  liftIO $ load startFrom limit offset order
+  liftIO $ load range
 
 -- | Load a list of contract headers.
 loadContract :: LoadContract r (AppM r)
@@ -73,9 +73,9 @@ loadContract contractId = do
 
 -- | Load a list of transactions for a contract.
 loadTransactions :: LoadTransactions r (AppM r)
-loadTransactions contractId startFrom limit offset order = do
+loadTransactions contractId range = do
   load <- asks _loadTransactions
-  liftIO $ load contractId startFrom limit offset order
+  liftIO $ load contractId range
 
 -- | Load a transaction for a contract.
 loadTransaction :: LoadTransaction r (AppM r)

@@ -126,7 +126,6 @@ server = proc ServerDependencies{..} -> do
     { runMarloweQueryClient
     , lookupTempContract
     , lookupTempTransaction
-    , getTempTransactions
     }
   webServer -< WebServerDependencies
     { env = AppEnv

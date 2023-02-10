@@ -51,7 +51,7 @@ instance MonadBase b m => MonadBase b (MarloweQueryClient m) where
 request :: Applicative m => Request a -> MarloweQueryClient m a
 request req = ClientRequest req $ pure . pure
 
-getContractHeaders :: Applicative m => Range ContractId -> MarloweQueryClient m (Page ContractId ContractHeader)
+getContractHeaders :: Applicative m => Range ContractId -> MarloweQueryClient m (Maybe (Page ContractId ContractHeader))
 getContractHeaders = request . ReqContractHeaders
 
 getContractState :: Applicative m => ContractId -> MarloweQueryClient m (Maybe SomeContractState)
