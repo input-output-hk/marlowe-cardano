@@ -44,9 +44,9 @@ import Language.Marlowe.CLI.Types (CliEnv(..), CliError(..), withShelleyBasedEra
 import System.Exit (exitFailure)
 import System.IO (BufferMode(LineBuffering), hPutStrLn, hSetBuffering, stderr, stdout)
 
-import Control.Applicative ((<|>))
 import Control.Monad.Reader (runReaderT)
 import qualified Options.Applicative as O
+import qualified Options.Applicative.Types as O
 
 
 -- | Marlowe CLI commands and options.
@@ -68,7 +68,12 @@ data Command era =
     -- | Test-related commands.
   | TestCommand (TestCommand era)
 
+
 data SomeCommand = forall era. SomeCommand (ScriptDataSupportedInEra era) (Command era)
+
+
+data SomeEra = forall era. SomeEra (ScriptDataSupportedInEra era)
+
 
 -- | Main entry point for Marlowe CLI tool.
 runCLI :: String  -- ^ The version of the tool.
@@ -115,7 +120,7 @@ parseCommand networkId socketPath version =
     (
           O.helper
       <*> versionOption version
-      <*> (noEraParser <|> alonzoParser <|> babbageParser)
+      <*> someCommandParser
     )
     (
          O.fullDesc
@@ -123,17 +128,25 @@ parseCommand networkId socketPath version =
       <> O.header "marlowe-cli : a command-line tool for Marlowe contracts"
     )
   where
-    alonzoParser = SomeCommand <$> alonzoFlagParser <*> commandParser
-    babbageParser = SomeCommand <$> babbageFlagParser <*> commandParser
-    noEraParser = SomeCommand ScriptDataInBabbageEra <$> commandParser
-    alonzoFlagParser = O.flag ScriptDataInAlonzoEra ScriptDataInAlonzoEra $ mconcat
-      [ O.long "alonzo-era"
-      , O.help "Read and write Alonzo transactions"
-      ]
-    babbageFlagParser = O.flag' ScriptDataInBabbageEra $ mconcat
-      [ O.long "babbage-era"
-      , O.help "Read and write Babbage transactions"
-      ]
+    eraOption :: O.Parser SomeEra
+    eraOption =
+      asum
+        [
+           O.flag' (SomeEra ScriptDataInAlonzoEra)
+             (  O.long "alonzo-era"
+             <> O.help "Specify the Alonzo era"
+             )
+         , O.flag' (SomeEra ScriptDataInBabbageEra)
+             (  O.long "babbage-era"
+             <> O.help "Specify the Babbage era (default)"
+             )
+         , pure (SomeEra ScriptDataInBabbageEra)
+         ]
+    someCommandParser :: O.Parser SomeCommand
+    someCommandParser = O.BindP eraOption mkSomeCommandParser
+    mkSomeCommandParser :: SomeEra -> O.Parser SomeCommand
+    mkSomeCommandParser (SomeEra ScriptDataInAlonzoEra ) = SomeCommand ScriptDataInAlonzoEra  <$> commandParser
+    mkSomeCommandParser (SomeEra ScriptDataInBabbageEra) = SomeCommand ScriptDataInBabbageEra <$> commandParser
     commandParser :: IsShelleyBasedEra era => O.Parser (Command era)
     commandParser = asum
       [

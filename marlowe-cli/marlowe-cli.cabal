@@ -1,13 +1,13 @@
 cabal-version: 2.2
 name: marlowe-cli
-version: 0.0.10.1
+version: 0.0.10.2
 license: Apache-2.0
 license-files:
   LICENSE
   NOTICE
 build-type: Simple
 maintainer: brian.bush@iohk.io
-stability: experimental
+stability: stable
 author: Brian W Bush
 synopsis:
   Command-line tool for running Marlowe financial contracts on Cardano Computation Layer
