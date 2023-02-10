@@ -359,6 +359,14 @@ instance ToSchema TextEnvelope where
           , ("cborHex", textSchema)
           ]
 
+data PostMerkleizationRequest = PostMerkleizationRequest
+  { contract :: Semantics.Contract
+  } deriving (Show, Eq, Ord, Generic)
+
+instance FromJSON PostMerkleizationRequest
+instance ToJSON PostMerkleizationRequest
+instance ToSchema PostMerkleizationRequest
+
 data PostContractsRequest = PostContractsRequest
   { metadata :: Map Word64 Metadata
   , version :: MarloweVersion

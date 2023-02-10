@@ -69,6 +69,8 @@ import Servant
 import Servant.Pagination
 
 import qualified Cardano.Ledger.Alonzo.TxWitness as Alonzo
+import Control.Monad.Trans.Writer (runWriter)
+import Language.Marlowe.CLI.Merkle (shallowMerkleize)
 
 type ContractHeaders = [ContractHeader]
 type Addresses = CommaList Address
@@ -111,10 +113,19 @@ server
   -> ServerT ContractsAPI (AppM r)
 server eb = get eb
        :<|> post eb
+       :<|> postMerkleization eb
        :<|> contractServer eb
 
 fromDTOThrow' :: (MonadError ServerError m, FromDTO a) => BL.ByteString -> ServerError -> DTO a -> m a
 fromDTOThrow' reason err = fromDTOThrow (err { errBody = reason })
+
+postMerkleization
+  :: EventBackend (AppM r) r ContractsSelector
+  -> PostMerkleizationRequest
+  -> AppM r PostMerkleizationResponse
+postMerkleization eb PostMerkleizationRequest{..} = withEvent eb Post \_ -> do
+  let (merkleized, continuations) = runWriter . shallowMerkleize $ contract
+   in pure (merkleized, continuations)
 
 post
   :: EventBackend (AppM r) r ContractsSelector

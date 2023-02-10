@@ -368,6 +368,7 @@ library web
     , containers
     , lens
     , marlowe-cardano
+    , marlowe-cli
     , network-uri
     , openapi3
     , servant
@@ -415,6 +416,7 @@ library web-server
     , exceptions
     , lens
     , marlowe-cardano
+    , marlowe-cli
     , marlowe-protocols
     , marlowe-runtime:web
     , marlowe-runtime

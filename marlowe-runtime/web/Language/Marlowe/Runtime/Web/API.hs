@@ -39,6 +39,8 @@ import GHC.Exts (IsList(..))
 import GHC.Generics (Generic)
 import GHC.Show (showSpace)
 import GHC.TypeLits (KnownSymbol, symbolVal)
+import Language.Marlowe.CLI.Types (Continuations)
+import qualified Language.Marlowe.Core.V1.Semantics.Types as Semantics
 import Language.Marlowe.Runtime.Web.Types
 import Servant
 import Servant.Pagination
@@ -52,6 +54,7 @@ type API = "contracts" :> ContractsAPI
 -- | /contracts sub-API
 type ContractsAPI = GetContractsAPI
                :<|> PostContractsAPI
+               :<|> "merkleize" :> PostMerkleizationAPI
                :<|> Capture "contractId" TxOutRef :> ContractAPI
 
 -- | GET /contracts sub-API
@@ -71,6 +74,12 @@ instance HasNamedLink ContractHeader API "transactions" where
     (Proxy @("contracts" :> Capture "contractId" TxOutRef :> "transactions" :> GetTransactionsAPI))
     contractId
 
+-- | POST /contracts sub-API
+type PostMerkleizationAPI
+  =  ReqBody '[JSON] PostMerkleizationRequest
+  :> Post '[JSON] PostMerkleizationResponse
+
+type PostMerkleizationResponse = (Semantics.Contract, Continuations)
 
 -- | POST /contracts sub-API
 type PostContractsAPI
