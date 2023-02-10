@@ -224,6 +224,24 @@ spec = do
                   BuildTxWith
                     . ScriptWitness ScriptWitnessForSpending
                     $ SimpleScriptWitness SimpleScriptV1InBabbage SimpleScriptV1 script)]}))
+          , (1, hedgehog $ do
+                policy <- PolicyId <$> genScriptHash
+                script <- SReferenceScript <$> genTxIn <*> pure Nothing
+                pure (False, emptyTxBodyContent {txMintValue =
+                  TxMintValue MultiAssetInBabbageEra mempty
+                    $ BuildTxWith
+                    $ Map.singleton policy
+                    $ SimpleScriptWitness SimpleScriptV1InBabbage SimpleScriptV1 script}))
+          , (5, hedgehog $ do
+                policy <- PolicyId <$> genScriptHash
+                script <- PReferenceScript <$> genTxIn <*> pure Nothing
+                redeemer <- genScriptData
+                pure (True, emptyTxBodyContent {txMintValue =
+                  TxMintValue MultiAssetInBabbageEra mempty
+                    $ BuildTxWith
+                    $ Map.singleton policy
+                    $ PlutusScriptWitness PlutusScriptV2InBabbage PlutusScriptV2
+                        script NoScriptDatumForMint redeemer (ExecutionUnits 0 0)}))
           , (20, hedgehog $ do
                 txIn <- genTxIn
                 script <- PReferenceScript <$> genTxIn <*> pure Nothing
