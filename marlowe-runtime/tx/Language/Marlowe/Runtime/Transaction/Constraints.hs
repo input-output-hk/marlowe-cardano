@@ -42,7 +42,7 @@ import Data.Functor ((<&>))
 import Data.List (delete, find, minimumBy, nub)
 import qualified Data.List.NonEmpty as NE (NonEmpty(..), toList)
 import Data.Map (Map)
-import qualified Data.Map as Map (fromSet, keysSet, mapWithKey, member, null, singleton, toList, unionWith)
+import qualified Data.Map as Map (elems, fromSet, keysSet, mapWithKey, member, null, singleton, toList, unionWith)
 import qualified Data.Map.Strict as SMap (fromList, toList)
 import Data.Maybe (mapMaybe, maybeToList)
 import Data.Monoid (First(..), getFirst)
@@ -525,12 +525,17 @@ selectCoins protocol marloweVersion marloweCtx walletCtx@WalletContext{..} txBod
                -- every UTxO specified as collateral be used: it just states that those
                -- UTxOs are *available* for use as collateral.
                filter (flip Set.member collateralUtxos . fromCardanoTxIn . fst) utxos
+      isPlutusScriptWitness C.PlutusScriptWitness{} = True
+      isPlutusScriptWitness _ = False
       hasPlutusScriptWitness :: (C.TxIn, C.BuildTxWith C.BuildTx (C.Witness C.WitCtxTxIn C.BabbageEra)) -> Bool
-      hasPlutusScriptWitness (_, C.BuildTxWith (C.ScriptWitness _ C.PlutusScriptWitness{})) = True
+      hasPlutusScriptWitness (_, C.BuildTxWith (C.ScriptWitness _ witness)) = isPlutusScriptWitness witness
       hasPlutusScriptWitness _ = False
+      hasPlutusMinting = case C.txMintValue txBodyContent of
+        C.TxMintNone -> False
+        C.TxMintValue _ _ (C.BuildTxWith policies) -> any isPlutusScriptWitness$ Map.elems policies
     in
       -- TODO: Support Babbage-style collateral, where multiple UTxOs are used and change is made.
-      if any hasPlutusScriptWitness $ C.txIns txBodyContent
+      if hasPlutusMinting || any hasPlutusScriptWitness (C.txIns txBodyContent)
         then case filter (\candidate -> let value = txOutToValue $ snd candidate in onlyLovelace value && C.selectLovelace value >= C.selectLovelace fee) candidateCollateral of
           (txIn, _) : _ -> pure $ C.TxInsCollateral C.CollateralInBabbageEra [txIn]
           []            -> Left . CoinSelectionFailed $ "No collateral found in " <> show utxos <> "."
