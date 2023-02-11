@@ -354,9 +354,9 @@ performFindTxsTo credentials point = do
       )
     addressParts = Set.toList credentials >>= \case
       PaymentKeyCredential pkh ->
-        (,unPaymentKeyHash pkh) . BS.pack . pure <$> [0x00, 0x20, 0x40, 0x60]
+        (,unPaymentKeyHash pkh) . BS.pack . pure <$> [0x00, 0x20, 0x40, 0x60] <> [0x01, 0x21, 0x41, 0x61]
       ScriptCredential sh ->
-        (,unScriptHash sh) . BS.pack . pure <$> [0x10, 0x30, 0x50, 0x70]
+        (,unScriptHash sh) . BS.pack . pure <$> [0x10, 0x30, 0x50, 0x70] <> [0x11, 0x31, 0x51, 0x71]
     foldTxs :: Fold ReadTxRow (Maybe BlockHeader, Map TxId Transaction)
     foldTxs = Fold foldTxs' (Nothing, mempty) id
 
@@ -527,9 +527,9 @@ performFindTxsFor credentials point = do
       )
     addressParts = Set.toList (NESet.toSet credentials) >>= \case
       PaymentKeyCredential pkh ->
-        (,unPaymentKeyHash pkh) . BS.pack . pure <$> [0x00, 0x20, 0x40, 0x60]
+        (,unPaymentKeyHash pkh) . BS.pack . pure <$> [0x00, 0x20, 0x40, 0x60] <> [0x01, 0x21, 0x41, 0x61]
       ScriptCredential sh ->
-        (,unScriptHash sh) . BS.pack . pure <$> [0x10, 0x30, 0x50, 0x70]
+        (,unScriptHash sh) . BS.pack . pure <$> [0x10, 0x30, 0x50, 0x70] <> [0x11, 0x31, 0x51, 0x71]
     foldTxs :: Fold ReadTxRow (Maybe BlockHeader, Map TxId Transaction)
     foldTxs = Fold foldTxs' (Nothing, mempty) id
 
