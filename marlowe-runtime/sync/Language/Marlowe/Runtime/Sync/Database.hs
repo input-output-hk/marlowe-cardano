@@ -13,7 +13,8 @@ import Data.Aeson (ToJSON)
 import Data.Text (Text)
 import Data.Void (Void)
 import GHC.Generics (Generic)
-import Language.Marlowe.Protocol.Query.Types (Page, Range, SomeContractState, SomeTransaction, SomeTransactions)
+import Language.Marlowe.Protocol.Query.Types
+  (Page, Range, SomeContractState, SomeTransaction, SomeTransactions, Withdrawal)
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainPoint, TxId)
 import Language.Marlowe.Runtime.Core.Api (ContractId, MarloweVersion(..), SomeMarloweVersion)
 import Language.Marlowe.Runtime.Discovery.Api (ContractHeader)
@@ -33,6 +34,8 @@ data DatabaseSelector f where
   GetContractState :: DatabaseSelector (QueryField ContractId (Maybe SomeContractState))
   GetTransaction :: DatabaseSelector (QueryField TxId (Maybe SomeTransaction))
   GetTransactions :: DatabaseSelector (QueryField ContractId (Maybe SomeTransactions))
+  GetWithdrawal :: DatabaseSelector (QueryField TxId (Maybe Withdrawal))
+  GetWithdrawals :: DatabaseSelector (QueryField ContractId (Maybe [Withdrawal]))
 
 data QueryField p r
   = Arguments p
@@ -123,6 +126,16 @@ logDatabaseQueries eventBackend DatabaseQueries{..} = DatabaseQueries
       result <- getTransactions contractId
       addField ev $ Result result
       pure result
+  , getWithdrawal = \txId -> withEvent eventBackend GetWithdrawal \ev -> do
+      addField ev $ Arguments txId
+      result <- getWithdrawal txId
+      addField ev $ Result result
+      pure result
+  , getWithdrawals = \contractId -> withEvent eventBackend GetWithdrawals \ev -> do
+      addField ev $ Arguments contractId
+      result <- getWithdrawals contractId
+      addField ev $ Result result
+      pure result
   }
 
 hoistDatabaseQueries :: (forall x. m x -> n x) -> DatabaseQueries m -> DatabaseQueries n
@@ -138,6 +151,8 @@ hoistDatabaseQueries f DatabaseQueries{..} = DatabaseQueries
   , getContractState = f . getContractState
   , getTransaction = f . getTransaction
   , getTransactions = f . getTransactions
+  , getWithdrawal = f . getWithdrawal
+  , getWithdrawals = f . getWithdrawals
   }
 
 data DatabaseQueries m = DatabaseQueries
@@ -152,6 +167,8 @@ data DatabaseQueries m = DatabaseQueries
   , getContractState :: ContractId -> m (Maybe SomeContractState)
   , getTransaction :: TxId -> m (Maybe SomeTransaction)
   , getTransactions :: ContractId -> m (Maybe SomeTransactions)
+  , getWithdrawal :: TxId -> m (Maybe Withdrawal)
+  , getWithdrawals :: ContractId -> m (Maybe [Withdrawal])
   }
 
 data Next a
@@ -174,6 +191,8 @@ getDatabaseSelectorConfig = \case
   GetContractState -> getQuerySelectorConfig "get-contract-state"
   GetTransaction -> getQuerySelectorConfig "get-transaction"
   GetTransactions -> getQuerySelectorConfig "get-transactions"
+  GetWithdrawal -> getQuerySelectorConfig "get-withdrawal"
+  GetWithdrawals -> getQuerySelectorConfig "get-withdrawals"
 
 getQuerySelectorConfig :: (ToJSON p, ToJSON r) => Text -> SelectorConfig (QueryField p r)
 getQuerySelectorConfig key = SelectorConfig key True FieldConfig
