@@ -325,7 +325,7 @@ in
       ${wait-for-tcp}/bin/wait-for-tcp "$SYNC_HOST" "$MARLOWE_QUERY_PORT"
 
       ${packages.marlowe-web-server}/bin/marlowe-web-server \
-        --port "$PORT" \
+        --http-port "$PORT" \
         --marlowe-sync-host "$SYNC_HOST" \
         --marlowe-query-port "$MARLOWE_QUERY_PORT" \
         --tx-host "$TX_HOST" \

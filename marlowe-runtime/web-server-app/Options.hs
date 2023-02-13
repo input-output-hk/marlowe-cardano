@@ -18,7 +18,7 @@ data Options = Options
   }
 
 portOption :: O.CliOption OptionFields PortNumber
-portOption = O.port "" "WEB" 8080 "The port number to serve the HTTP API on."
+portOption = O.port "http" "WEB" 8080 "The port number to serve the HTTP API on."
 
 getOptions :: IO Options
 getOptions = do
