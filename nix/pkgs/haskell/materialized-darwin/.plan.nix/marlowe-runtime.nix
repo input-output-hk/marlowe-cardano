@@ -447,10 +447,9 @@
             (hsPkgs."marlowe-runtime".components.sublibs.web or (errorHandler.buildDepError "marlowe-runtime:web"))
             (hsPkgs."marlowe-runtime" or (errorHandler.buildDepError "marlowe-runtime"))
             (hsPkgs."marlowe-runtime".components.sublibs.discovery-api or (errorHandler.buildDepError "marlowe-runtime:discovery-api"))
-            (hsPkgs."marlowe-runtime".components.sublibs.history-api or (errorHandler.buildDepError "marlowe-runtime:history-api"))
+            (hsPkgs."marlowe-runtime".components.sublibs.sync-api or (errorHandler.buildDepError "marlowe-runtime:sync-api"))
             (hsPkgs."marlowe-runtime".components.sublibs.tx-api or (errorHandler.buildDepError "marlowe-runtime:tx-api"))
             (hsPkgs."marlowe-chain-sync" or (errorHandler.buildDepError "marlowe-chain-sync"))
-            (hsPkgs."marlowe-chain-sync".components.sublibs.plutus-compat or (errorHandler.buildDepError "marlowe-chain-sync:plutus-compat"))
             (hsPkgs."monad-control" or (errorHandler.buildDepError "monad-control"))
             (hsPkgs."mtl" or (errorHandler.buildDepError "mtl"))
             (hsPkgs."openapi3" or (errorHandler.buildDepError "openapi3"))
@@ -472,11 +471,10 @@
             "Language/Marlowe/Runtime/Web/Server/DTO"
             "Language/Marlowe/Runtime/Web/Server/Monad"
             "Language/Marlowe/Runtime/Web/Server/OpenAPI"
-            "Language/Marlowe/Runtime/Web/Server/ContractHeaderIndexer"
-            "Language/Marlowe/Runtime/Web/Server/HistoryClient"
             "Language/Marlowe/Runtime/Web/Server/REST"
             "Language/Marlowe/Runtime/Web/Server/REST/Contracts"
             "Language/Marlowe/Runtime/Web/Server/REST/Transactions"
+            "Language/Marlowe/Runtime/Web/Server/SyncClient"
             "Language/Marlowe/Runtime/Web/Server/TxClient"
             "Language/Marlowe/Runtime/Web/Server"
             "Language/Marlowe/Runtime/Web/Server/Util"
@@ -664,8 +662,7 @@
             (hsPkgs."marlowe-protocols" or (errorHandler.buildDepError "marlowe-protocols"))
             (hsPkgs."marlowe-runtime".components.sublibs.config or (errorHandler.buildDepError "marlowe-runtime:config"))
             (hsPkgs."marlowe-runtime".components.sublibs.web-server or (errorHandler.buildDepError "marlowe-runtime:web-server"))
-            (hsPkgs."marlowe-runtime".components.sublibs.discovery-api or (errorHandler.buildDepError "marlowe-runtime:discovery-api"))
-            (hsPkgs."marlowe-runtime".components.sublibs.history-api or (errorHandler.buildDepError "marlowe-runtime:history-api"))
+            (hsPkgs."marlowe-runtime".components.sublibs.sync-api or (errorHandler.buildDepError "marlowe-runtime:sync-api"))
             (hsPkgs."network" or (errorHandler.buildDepError "network"))
             (hsPkgs."optparse-applicative" or (errorHandler.buildDepError "optparse-applicative"))
             (hsPkgs."warp" or (errorHandler.buildDepError "warp"))

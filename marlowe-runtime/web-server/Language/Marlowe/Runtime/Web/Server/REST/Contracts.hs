@@ -15,6 +15,7 @@ import Control.Monad (unless)
 import Data.Foldable (traverse_)
 import Data.Maybe (fromMaybe)
 import qualified Data.Set as Set
+import Language.Marlowe.Protocol.Query.Types (Page(..))
 import Language.Marlowe.Runtime.ChainSync.Api (Lovelace(..))
 import Language.Marlowe.Runtime.Core.Api (MarloweVersion(..), SomeMarloweVersion(..))
 import Language.Marlowe.Runtime.Transaction.Api
@@ -140,14 +141,14 @@ get eb ranges = withEvent eb Get \ev -> do
   addField ev $ Limit rangeLimit
   addField ev $ Offset rangeOffset
   addField ev $ Order $ show rangeOrder
-  startFrom <- fromDTOThrow err416 rangeValue
-  loadContractHeaders startFrom rangeLimit rangeOffset rangeOrder >>= \case
-    Nothing -> throwError err416
-    Just headers -> do
-      let headers' = either toContractHeader id <$> toDTO headers
+  range' <- maybe (throwError err416) pure $ fromPaginationRange range
+  loadContractHeaders range' >>= \case
+    Nothing -> throwError err416 { errBody = "Initial contract ID not found" }
+    Just Page{..} -> do
+      let headers' = toDTO items
       addField ev $ ContractHeaders headers'
       let response = IncludeLink (Proxy @"contract") <$> headers'
-      addHeader (length headers) . fmap ListObject <$> returnRange range response
+      addHeader totalCount . fmap ListObject <$> returnRange range response
 
 toContractHeader :: ContractState -> ContractHeader
 toContractHeader ContractState{..} = ContractHeader{..}
@@ -167,7 +168,7 @@ getOne
 getOne eb contractId = withEvent eb GetOne \ev -> do
   addField ev $ GetId contractId
   contractId' <- fromDTOThrow err400 contractId
-  loadContract (setAncestor $ reference ev) contractId' >>= \case
+  loadContract contractId' >>= \case
     Nothing -> throwError err404
     Just result -> do
       let contractState = either toDTO toDTO result
@@ -182,7 +183,7 @@ put
 put eb contractId body = withEvent eb Put \ev -> do
   addField ev $ PutId contractId
   contractId' <- fromDTOThrow err400 contractId
-  loadContract (setAncestor $ reference ev) contractId' >>= \case
+  loadContract contractId' >>= \case
     Nothing -> throwError err404
     Just (Left (TempTx _ Unsigned Tx.ContractCreated{txBody})) -> do
       textEnvelope <- fromDTOThrow err400 body

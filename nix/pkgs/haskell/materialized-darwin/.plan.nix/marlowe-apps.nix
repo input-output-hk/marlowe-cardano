@@ -62,7 +62,6 @@
           (hsPkgs."time" or (errorHandler.buildDepError "time"))
           (hsPkgs."transformers" or (errorHandler.buildDepError "transformers"))
           (hsPkgs."transformers-base" or (errorHandler.buildDepError "transformers-base"))
-          (hsPkgs."typed-protocols" or (errorHandler.buildDepError "typed-protocols"))
           ];
         buildable = true;
         modules = [

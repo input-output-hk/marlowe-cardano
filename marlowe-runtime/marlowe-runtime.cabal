@@ -465,11 +465,10 @@ library web-server
     Language.Marlowe.Runtime.Web.Server.DTO
     Language.Marlowe.Runtime.Web.Server.Monad
     Language.Marlowe.Runtime.Web.Server.OpenAPI
-    Language.Marlowe.Runtime.Web.Server.ContractHeaderIndexer
-    Language.Marlowe.Runtime.Web.Server.HistoryClient
     Language.Marlowe.Runtime.Web.Server.REST
     Language.Marlowe.Runtime.Web.Server.REST.Contracts
     Language.Marlowe.Runtime.Web.Server.REST.Transactions
+    Language.Marlowe.Runtime.Web.Server.SyncClient
     Language.Marlowe.Runtime.Web.Server.TxClient
   build-depends:
       base >= 4.9 && < 5
@@ -490,10 +489,9 @@ library web-server
     , marlowe-runtime:web
     , marlowe-runtime
     , marlowe-runtime:discovery-api
-    , marlowe-runtime:history-api
+    , marlowe-runtime:sync-api
     , marlowe-runtime:tx-api
     , marlowe-chain-sync
-    , marlowe-chain-sync:plutus-compat
     , monad-control
     , mtl
     , openapi3
@@ -707,8 +705,7 @@ executable marlowe-web-server
     , marlowe-protocols
     , marlowe-runtime:config
     , marlowe-runtime:web-server
-    , marlowe-runtime:discovery-api
-    , marlowe-runtime:history-api
+    , marlowe-runtime:sync-api
     , network
     , optparse-applicative
     , warp

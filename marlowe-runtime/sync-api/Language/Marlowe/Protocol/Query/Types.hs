@@ -39,7 +39,7 @@ instance HasSignature MarloweQuery where
   signature _ = "MarloweQuery"
 
 data Request a where
-  ReqContractHeaders :: Range ContractId -> Request (Page ContractId ContractHeader)
+  ReqContractHeaders :: Range ContractId -> Request (Maybe (Page ContractId ContractHeader))
   ReqContractState :: ContractId -> Request (Maybe SomeContractState)
   ReqTransaction :: TxId -> Request (Maybe SomeTransaction)
   ReqTransactions :: ContractId -> Request (Maybe SomeTransactions)
@@ -101,7 +101,7 @@ instance ToJSON (Request a) where
       ]
 
 data StRes a where
-  TokContractHeaders :: StRes (Page ContractId ContractHeader)
+  TokContractHeaders :: StRes (Maybe (Page ContractId ContractHeader))
   TokContractState :: StRes (Maybe SomeContractState)
   TokTransaction :: StRes (Maybe SomeTransaction)
   TokTransactions :: StRes (Maybe SomeTransactions)

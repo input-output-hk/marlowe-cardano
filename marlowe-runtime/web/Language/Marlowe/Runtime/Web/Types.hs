@@ -276,8 +276,6 @@ data Tx = Tx
   , status :: TxStatus
   , block :: Maybe BlockHeader
   , inputUtxo :: TxOutRef
-  , inputContract :: Semantics.Contract
-  , inputState :: Semantics.State
   , inputs :: [Semantics.Input]
   , outputUtxo :: Maybe TxOutRef
   , outputContract :: Maybe Semantics.Contract

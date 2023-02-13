@@ -1,3 +1,5 @@
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE PolyKinds #-}
@@ -35,27 +37,33 @@ import Data.List.NonEmpty (NonEmpty(..))
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Maybe (fromMaybe)
+import Data.Proxy (Proxy(..))
 import Data.String (fromString)
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Word (Word16, Word64)
+import Debug.Trace (traceShowId)
+import GHC.TypeLits (KnownSymbol)
 import qualified Language.Marlowe.Core.V1.Semantics as Sem
+import Language.Marlowe.Protocol.Query.Types (ContractState(..), SomeContractState(..), SomeTransaction(..))
+import qualified Language.Marlowe.Protocol.Query.Types as Query
 import Language.Marlowe.Runtime.Cardano.Api (cardanoEraToAsType, fromCardanoTxId)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Core.Api
   ( ContractId(..)
   , MarloweVersion(..)
+  , MarloweVersionTag(..)
   , SomeMarloweVersion(..)
   , Transaction(..)
   , TransactionOutput(..)
   , TransactionScriptOutput(..)
   )
 import qualified Language.Marlowe.Runtime.Discovery.Api as Discovery
-import Language.Marlowe.Runtime.History.Api (CreateStep(..))
-import Language.Marlowe.Runtime.Plutus.V2.Api (fromPlutusCurrencySymbol)
 import qualified Language.Marlowe.Runtime.Transaction.Api as Tx
 import qualified Language.Marlowe.Runtime.Web as Web
 import Language.Marlowe.Runtime.Web.Server.TxClient (TempTx(..), TempTxStatus(..))
+import Servant.Pagination (IsRangeType)
+import qualified Servant.Pagination as Pagination
 
 -- | A class that states a type has a DTO representation.
 class HasDTO a where
@@ -244,63 +252,37 @@ instance HasDTO Chain.BlockHeaderHash where
 instance ToDTO Chain.BlockHeaderHash where
   toDTO = coerce
 
-data ContractRecord = forall v. ContractRecord
-  (MarloweVersion v)
-  ContractId
-  Chain.BlockHeader
-  (CreateStep v)
-  (Maybe (TransactionScriptOutput v))
+instance HasDTO SomeContractState where
+  type DTO SomeContractState = Web.ContractState
 
-data SomeTransaction = forall v. SomeTransaction
-  (MarloweVersion v)
-  (Transaction v)
-
-instance HasDTO ContractRecord where
-  type DTO ContractRecord = Web.ContractState
-
-instance ToDTO ContractRecord where
-  toDTO (ContractRecord MarloweV1 contractId block CreateStep{..} output) =
+instance ToDTO SomeContractState where
+  toDTO (SomeContractState MarloweV1 ContractState{..}) =
     Web.ContractState
       { contractId = toDTO contractId
-      , roleTokenMintingPolicyId = toDTO
-          $ fromPlutusCurrencySymbol
-          $ Sem.rolesCurrency
-          $ Sem.marloweParams
-          $ datum createOutput
+      , roleTokenMintingPolicyId = toDTO roleTokenMintingPolicyId
       , version = Web.V1
       , metadata = toDTO metadata
       , status = Web.Confirmed
-      , block = Just $ toDTO block
-      , initialContract = Sem.marloweContract $ datum createOutput
-      , currentContract = Sem.marloweContract . datum <$> output
-      , state = Sem.marloweState . datum <$> output
-      , utxo = toDTO . utxo <$> output
+      , block = Just $ toDTO initialBlock
+      , initialContract = Sem.marloweContract $ datum initialOutput
+      , currentContract = Sem.marloweContract . datum <$> latestOutput
+      , state = Sem.marloweState . datum <$> latestOutput
+      , utxo = toDTO . utxo <$> latestOutput
       , txBody = Nothing
       }
 
-data TxRecord = forall v. TxRecord
-  { version :: MarloweVersion v
-  , tx :: Transaction v
-  , input :: TransactionScriptOutput v
-  , consumingTx :: Maybe Chain.TxId
-  }
+instance HasDTO SomeTransaction where
+  type DTO SomeTransaction = Web.Tx
 
-instance HasDTO TxRecord where
-  type DTO TxRecord = Web.Tx
-
-instance ToDTO TxRecord where
-  toDTO TxRecord{..} =
+instance ToDTO SomeTransaction where
+  toDTO SomeTransaction{..} =
     Web.Tx
       { contractId = toDTO contractId
       , transactionId = toDTO transactionId
       , metadata = toDTO metadata
       , status = Web.Confirmed
       , block = Just $ toDTO blockHeader
-      , inputUtxo = toDTO $ utxo input
-      , inputContract = case version of
-          MarloweV1 -> Sem.marloweContract $ datum input
-      , inputState = case version of
-          MarloweV1 -> Sem.marloweState $ datum input
+      , inputUtxo = toDTO input
       , inputs = case version of
           MarloweV1 -> inputs
       , outputUtxo = toDTO $ utxo <$> scriptOutput
@@ -308,13 +290,13 @@ instance ToDTO TxRecord where
           MarloweV1 -> Sem.marloweContract . datum <$> scriptOutput
       , outputState = case version of
           MarloweV1 -> Sem.marloweState . datum <$> scriptOutput
-      , consumingTx = toDTO consumingTx
+      , consumingTx = toDTO consumedBy
       , invalidBefore = validityLowerBound
       , invalidHereafter = validityUpperBound
       , txBody = Nothing
       }
     where
-      Transaction{..} = tx
+      Transaction{..} = transaction
       TransactionOutput{..} = output
 
 instance HasDTO TempTxStatus where
@@ -378,10 +360,6 @@ instance IsCardanoEra era => ToDTOWithTxStatus (Tx.InputsApplied era v) where
       , status = toDTO status
       , block = Nothing
       , inputUtxo = toDTO $ utxo input
-      , inputContract = case version of
-          MarloweV1 -> Sem.marloweContract $ datum input
-      , inputState = case version of
-          MarloweV1 -> Sem.marloweState $ datum input
       , inputs = case version of
           MarloweV1 -> inputs
       , outputUtxo = toDTO $ utxo <$> output
@@ -397,11 +375,11 @@ instance IsCardanoEra era => ToDTOWithTxStatus (Tx.InputsApplied era v) where
           Submitted -> Nothing
       }
 
-instance HasDTO SomeTransaction where
-  type DTO SomeTransaction = Web.TxHeader
+instance HasDTO (Transaction 'V1) where
+  type DTO (Transaction 'V1) = Web.TxHeader
 
-instance ToDTO SomeTransaction where
-  toDTO (SomeTransaction MarloweV1 Transaction{..}) =
+instance ToDTO (Transaction 'V1) where
+  toDTO Transaction{..} =
     Web.TxHeader
       { contractId = toDTO contractId
       , transactionId = toDTO transactionId
@@ -485,6 +463,39 @@ instance HasDTO Tx.NFTMetadata where
 
 instance FromDTO Tx.NFTMetadata where
   fromDTO = Tx.mkNFTMetadata <=< Chain.fromJSONEncodedMetadata . toJSON
+
+instance HasDTO Query.Order where
+  type DTO Query.Order = Pagination.RangeOrder
+
+instance ToDTO Query.Order where
+  toDTO = \case
+    Query.Ascending -> Pagination.RangeAsc
+    Query.Descending -> Pagination.RangeDesc
+
+instance FromDTO Query.Order where
+  fromDTO = pure . \case
+    Pagination.RangeAsc -> Query.Ascending
+    Pagination.RangeDesc -> Query.Descending
+
+toPaginationRange
+  :: (KnownSymbol field, ToDTO a, IsRangeType (DTO a))
+  => Query.Range a
+  -> Pagination.Range field (DTO a)
+toPaginationRange Query.Range{..} = Pagination.Range
+  { rangeValue = toDTO rangeStart
+  , rangeOrder = toDTO rangeDirection
+  , rangeField = Proxy
+  , ..
+  }
+
+fromPaginationRange
+  :: (FromDTO a, Show a)
+  => Pagination.Range field (DTO a)
+  -> Maybe (Query.Range a)
+fromPaginationRange Pagination.Range{..} = do
+  rangeStart <- traceShowId $ fromDTO rangeValue
+  rangeDirection <- traceShowId $ fromDTO rangeOrder
+  pure Query.Range { rangeStart, rangeDirection, .. }
 
 tokenNameToText :: Text -> Chain.TokenName
 tokenNameToText = Chain.TokenName . fromString . T.unpack

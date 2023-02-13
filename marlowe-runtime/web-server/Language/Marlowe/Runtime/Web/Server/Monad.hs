@@ -18,8 +18,8 @@ import Control.Monad.Trans.Control (MonadBaseControl)
 import Data.Coerce (coerce)
 import Language.Marlowe.Runtime.ChainSync.Api (TxId)
 import Language.Marlowe.Runtime.Core.Api (ContractId)
-import Language.Marlowe.Runtime.Web.Server.ContractHeaderIndexer (LoadContractHeaders)
-import Language.Marlowe.Runtime.Web.Server.HistoryClient (LoadContract, LoadTransaction, LoadTransactions)
+import Language.Marlowe.Runtime.Web.Server.SyncClient
+  (LoadContract, LoadContractHeaders, LoadTransaction, LoadTransactions)
 import Language.Marlowe.Runtime.Web.Server.TxClient (ApplyInputs, CreateContract, Submit)
 import Servant
 
@@ -61,27 +61,27 @@ data AppEnv r = AppEnv
 
 -- | Load a list of contract headers.
 loadContractHeaders :: LoadContractHeaders (AppM r)
-loadContractHeaders startFrom limit offset order = do
+loadContractHeaders range = do
   load <- asks _loadContractHeaders
-  liftIO $ load startFrom limit offset order
+  liftIO $ load range
 
 -- | Load a list of contract headers.
 loadContract :: LoadContract r (AppM r)
-loadContract mods contractId = do
+loadContract contractId = do
   load <- asks _loadContract
-  liftIO $ load mods contractId
+  liftIO $ load contractId
 
 -- | Load a list of transactions for a contract.
 loadTransactions :: LoadTransactions r (AppM r)
-loadTransactions mods contractId startFrom limit offset order = do
+loadTransactions contractId range = do
   load <- asks _loadTransactions
-  liftIO $ load mods contractId startFrom limit offset order
+  liftIO $ load contractId range
 
 -- | Load a transaction for a contract.
 loadTransaction :: LoadTransaction r (AppM r)
-loadTransaction mods contractId txId = do
+loadTransaction contractId txId = do
   load <- asks _loadTransaction
-  liftIO $ load mods contractId txId
+  liftIO $ load contractId txId
 
 -- | Create a contract.
 createContract :: CreateContract (AppM r)

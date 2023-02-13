@@ -8,10 +8,8 @@ import Network.Socket (HostName, PortNumber)
 import Options.Applicative
 
 data Options = Options
-  { discoveryHost :: HostName
-  , discoverySyncPort :: PortNumber
-  , historyHost :: HostName
-  , historySyncPort :: PortNumber
+  { syncHost :: HostName
+  , syncQueryPort :: PortNumber
   , txHost :: HostName
   , txCommandPort :: PortNumber
   , port :: PortNumber
@@ -24,10 +22,8 @@ portOption = O.port "" "WEB" 8080 "The port number to serve the HTTP API on."
 
 getOptions :: IO Options
 getOptions = do
-  discoveryHostParser <- O.optParserWithEnvDefault O.discoveryHost
-  discoverySyncPortParser <- O.optParserWithEnvDefault O.discoverySyncPort
-  historyHostParser <- O.optParserWithEnvDefault O.historyHost
-  historySyncPortParser <- O.optParserWithEnvDefault O.historySyncPort
+  syncHostParser <- O.optParserWithEnvDefault O.syncHost
+  syncQueryPortParser <- O.optParserWithEnvDefault O.syncQueryPort
   txHostParser <- O.optParserWithEnvDefault O.txHost
   txCommandPortParser <- O.optParserWithEnvDefault O.txCommandPort
   portParser <- O.optParserWithEnvDefault portOption
@@ -45,10 +41,8 @@ getOptions = do
       , showDefault
       ]
     parser = Options
-      <$> discoveryHostParser
-      <*> discoverySyncPortParser
-      <*> historyHostParser
-      <*> historySyncPortParser
+      <$> syncHostParser
+      <*> syncQueryPortParser
       <*> txHostParser
       <*> txCommandPortParser
       <*> portParser

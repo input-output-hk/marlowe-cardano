@@ -1,6 +1,5 @@
-
-
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -46,7 +45,10 @@ pageSize = 1024
 
 listContracts
   :: Monoid a
-  => (Services IO -> Query.MarloweQueryClient IO (Query.Page ContractId ContractHeader) -> IO (Query.Page ContractId ContractHeader))
+  -- TODO consider refactoring this - it is a bit confusing to pass around these
+  -- handler functions that have only one implementation, and I'm not sure what
+  -- benefit it adds.
+  => (forall x. Services IO -> Query.MarloweQueryClient IO x -> IO x)
   -> ([ContractHeader] -> a)
   -> Client a
 listContracts run =
@@ -54,7 +56,8 @@ listContracts run =
     bundleContracts getContractHeaders extract =
       let
         append = (. getContractHeaders) . (=<<) . handleNextPage
-        handleNextPage previous Query.Page{..} =
+        handleNextPage previous Nothing = pure previous
+        handleNextPage previous (Just Query.Page{..}) =
           let
             cumulative = previous <> extract items
           in
