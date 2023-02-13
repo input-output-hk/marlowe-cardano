@@ -10,6 +10,7 @@ import Data.Aeson (ToJSON(..), Value(..), object, (.=))
 import Data.Bifunctor (bimap)
 import Data.Binary (Binary(..), getWord8, putWord8)
 import Data.Map (Map)
+import Data.Set (Set)
 import Data.Type.Equality (testEquality, type (:~:)(Refl))
 import GHC.Generics (Generic)
 import GHC.Show (showCommaSpace, showSpace)
@@ -43,6 +44,8 @@ data Request a where
   ReqContractState :: ContractId -> Request (Maybe SomeContractState)
   ReqTransaction :: TxId -> Request (Maybe SomeTransaction)
   ReqTransactions :: ContractId -> Request (Maybe SomeTransactions)
+  ReqWithdrawal :: TxId -> Request (Maybe Withdrawal)
+  ReqWithdrawals :: ContractId -> Request (Maybe [Withdrawal])
   ReqBoth :: Request a -> Request b -> Request (a, b)
 
 data SomeRequest where
@@ -60,6 +63,8 @@ instance Binary SomeRequest where
       0x02 -> SomeRequest . ReqContractState <$> get
       0x03 -> SomeRequest . ReqTransaction <$> get
       0x04 -> SomeRequest . ReqTransactions <$> get
+      0x05 -> SomeRequest . ReqWithdrawal <$> get
+      0x06 -> SomeRequest . ReqWithdrawals <$> get
       _ -> fail "Invalid Request tag"
 
   put (SomeRequest req) = case req of
@@ -78,6 +83,12 @@ instance Binary SomeRequest where
       put txId
     ReqTransactions contractId -> do
       putWord8 0x04
+      put contractId
+    ReqWithdrawal txId -> do
+      putWord8 0x05
+      put txId
+    ReqWithdrawals contractId -> do
+      putWord8 0x06
       put contractId
 
 deriving instance Eq (Request a)
@@ -99,12 +110,20 @@ instance ToJSON (Request a) where
     ReqTransactions contractId -> object
       [ "get-transactions" .= contractId
       ]
+    ReqWithdrawal txId -> object
+      [ "get-withdrawal" .= txId
+      ]
+    ReqWithdrawals contractId -> object
+      [ "get-withdrawals" .= contractId
+      ]
 
 data StRes a where
   TokContractHeaders :: StRes (Maybe (Page ContractId ContractHeader))
   TokContractState :: StRes (Maybe SomeContractState)
   TokTransaction :: StRes (Maybe SomeTransaction)
   TokTransactions :: StRes (Maybe SomeTransactions)
+  TokWithdrawal :: StRes (Maybe Withdrawal)
+  TokWithdrawals :: StRes (Maybe [Withdrawal])
   TokBoth :: StRes a -> StRes b -> StRes (a, b)
 
 deriving instance Show (StRes a)
@@ -276,6 +295,14 @@ deriving instance Eq (ContractState 'V1)
 deriving instance ToJSON (ContractState 'V1)
 deriving instance Binary (ContractState 'V1)
 
+data Withdrawal = Withdrawal
+  { block :: BlockHeader
+  , withdrawnPayouts :: Set TxOutRef
+  , withdrawalTx :: TxId
+  }
+  deriving stock (Eq, Ord, Show, Generic)
+  deriving anyclass (ToJSON, Binary)
+
 data Order = Ascending | Descending
   deriving stock (Eq, Show, Read, Ord, Enum, Bounded, Generic)
   deriving anyclass (ToJSON, Binary)
@@ -295,6 +322,8 @@ instance MessageToJSON MarloweQuery where
         TokContractState -> toJSON
         TokTransaction -> toJSON
         TokTransactions -> toJSON
+        TokWithdrawal -> toJSON
+        TokWithdrawals -> toJSON
         TokBoth a b -> toJSON . bimap (responseToJSON a) (responseToJSON b)
 
 instance ShowProtocol MarloweQuery where
@@ -311,6 +340,8 @@ instance ShowProtocol MarloweQuery where
         TokContractState -> showsPrec
         TokTransaction -> showsPrec
         TokTransactions -> showsPrec
+        TokWithdrawal -> showsPrec
+        TokWithdrawals -> showsPrec
         TokBoth ta tb -> \_ (a, b) -> showParen True (showsPrecResult ta 0 a . showCommaSpace . showsPrecResult tb 0 b)
   showsPrecServerHasAgency p (TokRes req) = showParen (p >= 11) (showString "TokRes" . showSpace . showsPrec 11 req)
   showsPrecClientHasAgency _ TokReq = showString "TokReq"
@@ -338,6 +369,10 @@ instance MessageEq MarloweQuery where
       reqEq (ReqTransaction _) _ = False
       reqEq (ReqTransactions contractId) (ReqTransactions contractId') = contractId == contractId'
       reqEq (ReqTransactions _) _ = False
+      reqEq (ReqWithdrawal txId) (ReqWithdrawal txId') = txId == txId'
+      reqEq (ReqWithdrawal _) _ = False
+      reqEq (ReqWithdrawals contractId) (ReqWithdrawals contractId') = contractId == contractId'
+      reqEq (ReqWithdrawals _) _ = False
 
       resultEq :: StRes a -> StRes b -> a -> b -> Bool
       resultEq (TokBoth ta tb) (TokBoth ta' tb') = \(a, b) (a', b') ->
@@ -351,6 +386,10 @@ instance MessageEq MarloweQuery where
       resultEq TokTransaction _ = const $ const False
       resultEq TokTransactions TokTransactions = (==)
       resultEq TokTransactions _ = const $ const False
+      resultEq TokWithdrawal TokWithdrawal = (==)
+      resultEq TokWithdrawal _ = const $ const False
+      resultEq TokWithdrawals TokWithdrawals = (==)
+      resultEq TokWithdrawals _ = const $ const False
 
 requestToSt :: Request x -> StRes x
 requestToSt = \case
@@ -358,4 +397,6 @@ requestToSt = \case
   ReqContractState _ -> TokContractState
   ReqTransaction _ -> TokTransaction
   ReqTransactions _ -> TokTransactions
+  ReqWithdrawal _ -> TokWithdrawal
+  ReqWithdrawals _ -> TokWithdrawals
   ReqBoth r1 r2 -> TokBoth (requestToSt r1) (requestToSt r2)

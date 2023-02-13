@@ -32,3 +32,5 @@ worker WorkerDependencies{..} = do
     getContractState
     getTransaction
     getTransactions
+    getWithdrawal
+    getWithdrawals
