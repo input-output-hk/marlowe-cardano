@@ -78,4 +78,6 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: workspaces
-          path: /tmp/workspaces
+          path: |
+            /tmp/workspaces
+            !/tmp/workspaces/**/*.socket
