@@ -123,9 +123,9 @@ postMerkleization
   :: EventBackend (AppM r) r ContractsSelector
   -> PostMerkleizationRequest
   -> AppM r PostMerkleizationResponse
-postMerkleization eb PostMerkleizationRequest{..} = withEvent eb Post \_ -> do
+postMerkleization eb PostMerkleizationRequest{..} = withEvent eb Post \_ ->
   let (merkleized, continuations) = runWriter . shallowMerkleize $ contract
-   in pure (merkleized, continuations)
+   in pure $ PostMerkleizationResponse { contract = merkleized, continuations = continuations }
 
 post
   :: EventBackend (AppM r) r ContractsSelector

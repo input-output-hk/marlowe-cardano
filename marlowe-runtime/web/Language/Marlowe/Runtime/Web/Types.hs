@@ -54,6 +54,7 @@ import Data.Time (UTCTime)
 import Data.Word (Word16, Word64)
 import GHC.Exts (IsList)
 import GHC.Generics (Generic)
+import Language.Marlowe.CLI.Types (Continuations)
 import qualified Language.Marlowe.Core.V1.Semantics.Types as Semantics
 import Language.Marlowe.Runtime.Web.Orphans ()
 import Network.URI (parseURI)
@@ -366,6 +367,15 @@ data PostMerkleizationRequest = PostMerkleizationRequest
 instance FromJSON PostMerkleizationRequest
 instance ToJSON PostMerkleizationRequest
 instance ToSchema PostMerkleizationRequest
+
+data PostMerkleizationResponse = PostMerkleizationResponse
+  { contract :: Semantics.Contract
+  , continuations :: Continuations
+  } deriving (Show, Eq, Ord, Generic)
+
+instance FromJSON PostMerkleizationResponse
+instance ToJSON PostMerkleizationResponse
+instance ToSchema PostMerkleizationResponse
 
 data PostContractsRequest = PostContractsRequest
   { metadata :: Map Word64 Metadata
