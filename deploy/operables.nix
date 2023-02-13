@@ -14,16 +14,30 @@ let
     ;
   inherit (inputs.bitte-cells._utils.packages) srvaddr;
 
-  # Ensure this path only changes when sqitch.plan file is updated
-  sqitch-plan-dir = component: path: (builtins.path {
+  # Ensure this path only changes when sqitch.plan file is updated, or DDL
+  # files are updated.
+  chain-sync-sqitch-plan-dir = (builtins.path {
     path = self;
-    name = "${component}-sqitch-plan";
+    name = "marlowe-chain-sync-sqitch-plan";
     filter = path: type:
-      path == "${self}/${path}"
-        || path == "${self}/${path}/sqitch.plan"
-        || lib.hasPrefix "${self}/${path}/deploy" path
-        || lib.hasPrefix "${self}/${path}/revert" path;
-  }) + "/${path}";
+      path == "${self}/marlowe-chain-sync"
+        || path == "${self}/marlowe-chain-sync/sqitch.plan"
+        || lib.hasPrefix "${self}/marlowe-chain-sync/deploy" path
+        || lib.hasPrefix "${self}/marlowe-chain-sync/revert" path;
+  }) + "/marlowe-chain-sync";
+
+  # Ensure this path only changes when sqitch.plan file is updated, or DDL
+  # files are updated.
+  runtime-sqitch-plan-dir = (builtins.path {
+    path = self;
+    name = "marlowe-runtime-sqitch-plan";
+    filter = path: type:
+      path == "${self}/marlowe-runtime"
+        || path == "${self}/marlowe-runtime/marlowe-indexer"
+        || path == "${self}/marlowe-runtime/marlowe-indexer/sqitch.plan"
+        || lib.hasPrefix "${self}/marlowe-runtime/marlowe-indexer/deploy" path
+        || lib.hasPrefix "${self}/marlowe-runtime/marlowe-indexer/revert" path;
+  }) + "/marlowe-runtime/marlowe-indexer";
 
   database-uri = "postgresql://$DB_USER:$DB_PASS@$DB_HOST/$DB_NAME";
 
@@ -104,7 +118,7 @@ in
       [ -z "''${DB_HOST:-}" ] && echo "DB_HOST env var must be set -- aborting" && exit 1
 
       DATABASE_URI=${database-uri}
-      cd ${sqitch-plan-dir "marlowe-chain-sync" "marlowe-chain-sync"}
+      cd ${chain-sync-sqitch-plan-dir}
       mkdir -p /tmp
       HOME="$(mktemp -d)" # Ensure HOME is writable for sqitch config
       export TZ=Etc/UTC
@@ -206,7 +220,7 @@ in
       [ -z "''${DB_HOST:-}" ] && echo "DB_HOST env var must be set -- aborting" && exit 1
 
       DATABASE_URI=${database-uri}
-      cd ${sqitch-plan-dir "marlowe-indexer" "marlowe-runtime/marlowe-indexer"}
+      cd ${runtime-sqitch-plan-dir}
       mkdir -p /tmp
       HOME="$(mktemp -d)" # Ensure HOME is writable for sqitch config
       export TZ=Etc/UTC
@@ -253,6 +267,7 @@ in
 
       [ -z "''${DB_HOST:-}" ] && echo "DB_HOST env var must be set -- aborting" && exit 1
 
+      DATABASE_URI=${database-uri}
       ${packages.marlowe-sync}/bin/marlowe-sync \
         --database-uri  "$DATABASE_URI" \
         --host "$HOST" \
