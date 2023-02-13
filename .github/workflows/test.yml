@@ -69,3 +69,7 @@ jobs:
         env:
           MARLOWE_RT_TEST_DB_HOST: localhost
           MARLOWE_RT_TEST_CLEANUP_DATABASE: "False"
+      - uses: actions/upload-artifact@v3
+        with:
+          name: workspaces
+          path: /tmp/workspaces
