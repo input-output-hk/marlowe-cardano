@@ -262,7 +262,7 @@ withLocalMarloweRuntime' MarloweRuntimeOptions{..} test = withRunInIO \runInIO -
 
       chainSeekDatabaseQueries = ChainSync.hoistDatabaseQueries
         (either (fail . show) pure <=< Pool.use pool)
-        ChainSync.databaseQueries
+        (ChainSync.databaseQueries localNodeNetworkId)
 
       marloweIndexerDatabaseQueries = Indexer.hoistDatabaseQueries
         (either (fail . show) pure <=< Pool.use pool)
