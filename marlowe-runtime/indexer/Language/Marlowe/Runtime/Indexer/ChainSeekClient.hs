@@ -6,7 +6,7 @@
 module Language.Marlowe.Runtime.Indexer.ChainSeekClient
   where
 
-import Cardano.Api (CardanoMode, EraHistory, SystemStart)
+import Cardano.Api (SystemStart)
 import Control.Concurrent (threadDelay)
 import Control.Concurrent.Component
 import Control.Concurrent.STM (STM, atomically, newTQueue, readTQueue, writeTQueue)
@@ -102,7 +102,6 @@ chainSeekClient = component \ChainSeekClientDependencies{..} -> do
             Left _ -> fail "Failed to query chain sync"
             Right a -> pure a
       systemStart <- queryChainSync GetSystemStart
-      eraHistory <- queryChainSync GetEraHistory
       securityParameter <- queryChainSync GetSecurityParameter
       pure $ SendMsgRequestHandshake moveSchema $ ClientStHandshake
         { recvMsgHandshakeRejected = \_ -> fail "unsupported chain seek version"
@@ -119,7 +118,7 @@ chainSeekClient = component \ChainSeekClientDependencies{..} -> do
                     emit $ RollBackward Genesis tip
 
                     -- Start the main synchronization loop
-                    pure $ clientIdle securityParameter systemStart eraHistory $ MarloweUTxO mempty mempty
+                    pure $ clientIdle securityParameter systemStart queryChainSync $ MarloweUTxO mempty mempty
 
                 -- An intersection point was found, resume synchronization from
                 -- that point.
@@ -139,7 +138,7 @@ chainSeekClient = component \ChainSeekClientDependencies{..} -> do
                         pure utxo
 
                     -- Start the main synchronization loop.
-                    pure $ clientIdle securityParameter systemStart eraHistory utxo
+                    pure $ clientIdle securityParameter systemStart queryChainSync utxo
 
                 -- Since the client is at Genesis at the start of this request,
                 -- it will never be rolled back. Handle the perfunctory case by
@@ -155,7 +154,7 @@ chainSeekClient = component \ChainSeekClientDependencies{..} -> do
 
             pure case intersectionPoints of
               -- Just start the loop right away with an empty UTxO.
-              [] -> clientIdle securityParameter systemStart eraHistory $ MarloweUTxO mempty mempty
+              [] -> clientIdle securityParameter systemStart queryChainSync $ MarloweUTxO mempty mempty
               -- Request an intersection
               _ -> clientIdleIntersect
         }
@@ -180,19 +179,19 @@ chainSeekClient = component \ChainSeekClientDependencies{..} -> do
       clientIdle
         :: Int
         -> SystemStart
-        -> EraHistory CardanoMode
+        -> (forall err x. ChainSyncQuery Void err x -> IO x)
         -> MarloweUTxO
         -> ClientStIdle Move ChainPoint (WithGenesis BlockHeader) IO a
-      clientIdle securityParameter systemStart eraHistory = SendMsgQueryNext (FindTxsFor allScriptCredentials) . clientNext securityParameter systemStart eraHistory
+      clientIdle securityParameter systemStart queryChainSync = SendMsgQueryNext (FindTxsFor allScriptCredentials) . clientNext securityParameter systemStart queryChainSync
 
       -- Handles responses from the main synchronization loop query.
       clientNext
         :: Int
         -> SystemStart
-        -> EraHistory CardanoMode
+        -> (forall err x. ChainSyncQuery Void err x -> IO x)
         -> MarloweUTxO
         -> ClientStNext Move Void (Set Transaction) ChainPoint (WithGenesis BlockHeader) IO a
-      clientNext securityParameter systemStart eraHistory utxo = ClientStNext
+      clientNext securityParameter systemStart queryChainSync utxo = ClientStNext
         -- Fail with an error if chainseekd rejects the query. This is safe
         -- from bad user input, because our queries are derived from the ledger
         -- state, and so will only be rejected if the query derivation is
@@ -207,6 +206,9 @@ chainSeekClient = component \ChainSeekClientDependencies{..} -> do
             block <- case point of
               Genesis -> fail "Rolled forward to Genesis"
               At block -> pure block
+
+            -- Get the era history
+            eraHistory <- queryChainSync GetEraHistory
 
             -- Extract the Marlowe block and compute the next MarloweUTxO.
             nextUtxo <- case extractMarloweBlock systemStart eraHistory (NESet.toSet marloweScriptHashes) block txs utxo of
@@ -223,14 +225,14 @@ chainSeekClient = component \ChainSeekClientDependencies{..} -> do
 
             -- Loop back into the main synchronization loop with an updated
             -- rollback state.
-            pure $ clientIdle securityParameter systemStart eraHistory nextUtxo
+            pure $ clientIdle securityParameter systemStart queryChainSync nextUtxo
 
         , recvMsgRollBackward = \point tip -> do
             emit $ RollBackward point tip
             nextUtxo <- case point of
               Genesis -> pure $ MarloweUTxO mempty mempty
               At block -> getMarloweUTxO block
-            pure $ clientIdle securityParameter systemStart eraHistory nextUtxo
+            pure $ clientIdle securityParameter systemStart queryChainSync nextUtxo
 
-        , recvMsgWait = pollWithNext $ clientNext securityParameter systemStart eraHistory utxo
+        , recvMsgWait = pollWithNext $ clientNext securityParameter systemStart queryChainSync utxo
         }
