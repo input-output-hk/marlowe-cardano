@@ -76,7 +76,7 @@ run Options{..} = withSocketsDo do
           chainSyncDependencies eventBackend = ChainSyncDependencies
             { databaseQueries = hoistDatabaseQueries
                 (either throwUsageError pure <=< Pool.use pool)
-                PostgreSQL.databaseQueries
+                $ PostgreSQL.databaseQueries networkId
             , acceptRunChainSeekServer = acceptRunServerPeerOverSocketWithLoggingWithHandshake
                 (narrowEventBackend ChainSeekServer eventBackend)
                 throwIO

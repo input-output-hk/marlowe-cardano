@@ -70,22 +70,22 @@ import Numeric.Natural (Natural)
 import Prelude hiding (init)
 
 -- | PostgreSQL implementation for the chainseekd database queries.
-databaseQueries :: DatabaseQueries Session
-databaseQueries = DatabaseQueries
+databaseQueries :: C.NetworkId -> DatabaseQueries Session
+databaseQueries networkId = DatabaseQueries
   (hoistGetUTxOs (TS.transaction TS.Serializable TS.Read) getUTxOs)
   (hoistGetTip (TS.transaction TS.Serializable TS.Read) getTip)
-  (hoistMoveClient (TS.transaction TS.Serializable TS.Read) moveClient)
+  (hoistMoveClient (TS.transaction TS.Serializable TS.Read) $ moveClient networkId)
 
 -- MoveClient
 
-moveClient :: MoveClient HT.Transaction
-moveClient = MoveClient performMoveWithRollbackCheck
+moveClient :: C.NetworkId -> MoveClient HT.Transaction
+moveClient networkId = MoveClient $ performMoveWithRollbackCheck networkId
 
-performMoveWithRollbackCheck :: ChainPoint -> Move err result -> HT.Transaction (MoveResult err result)
-performMoveWithRollbackCheck point move = do
+performMoveWithRollbackCheck :: C.NetworkId -> ChainPoint -> Move err result -> HT.Transaction (MoveResult err result)
+performMoveWithRollbackCheck networkId point move = do
   tip <- runGetTip getTip
   getRollbackPoint >>= \case
-    Nothing -> performMove tip move point >>= \case
+    Nothing -> performMove networkId tip move point >>= \case
       MoveAbort err            -> pure $ Reject err tip
       MoveArrive point' result -> pure $ RollForward result point' tip
       MoveWait                 -> pure $ Wait tip
@@ -120,27 +120,27 @@ data PerformMoveResult err result
   | MoveAbort err
   | MoveArrive BlockHeader result
 
-performMove :: ChainPoint -> Move err result -> ChainPoint -> HT.Transaction (PerformMoveResult err result)
-performMove tip = \case
-  Fork left right           -> performFork tip left right
+performMove :: C.NetworkId -> ChainPoint -> Move err result -> ChainPoint -> HT.Transaction (PerformMoveResult err result)
+performMove networkId tip = \case
+  Fork left right           -> performFork networkId tip left right
   AdvanceSlots slots        -> performAdvanceSlots slots
   AdvanceBlocks blocks      -> performAdvanceBlocks blocks
   FindConsumingTx txOutRef  -> performFindConsumingTx txOutRef
   FindTx txId wait          -> performFindTx txId wait
   Intersect points          -> performIntersect points
   FindConsumingTxs txOutRef -> performFindConsumingTxs txOutRef
-  FindTxsTo credentials     -> performFindTxsTo credentials
-  FindTxsFor credentials    -> performFindTxsFor credentials
+  FindTxsTo credentials     -> performFindTxsTo networkId credentials
+  FindTxsFor credentials    -> performFindTxsFor networkId credentials
   AdvanceToTip              -> \point -> pure case tip of
     Genesis -> MoveWait
     At tipBlock
       | point == tip -> MoveWait
       | otherwise -> MoveArrive tipBlock ()
 
-performFork :: ChainPoint -> Move err1 result1 -> Move err2 result2 -> ChainPoint -> HT.Transaction (PerformMoveResult (These err1 err2) (These result1 result2))
-performFork tip left right point = do
-  leftMoveResult <- performMove tip left point
-  rightMoveResult <- performMove tip right point
+performFork :: C.NetworkId -> ChainPoint -> Move err1 result1 -> Move err2 result2 -> ChainPoint -> HT.Transaction (PerformMoveResult (These err1 err2) (These result1 result2))
+performFork networkId tip left right point = do
+  leftMoveResult <- performMove networkId tip left point
+  rightMoveResult <- performMove networkId tip right point
   let
     alignResults leftHeader leftResult rightHeader rightResult = case compare leftHeader rightHeader of
       EQ -> MoveArrive leftHeader $ These leftResult rightResult
@@ -300,8 +300,8 @@ performFindConsumingTxs utxos point = do
       MoveWait             -> (mempty, 1 :: Sum Int, mempty)
       MoveAbort err        -> (Map.singleton utxo err, mempty, mempty)
 
-performFindTxsTo :: Set Credential -> ChainPoint -> HT.Transaction (PerformMoveResult FindTxsToError (Set Transaction))
-performFindTxsTo credentials point = do
+performFindTxsTo :: C.NetworkId -> Set Credential -> ChainPoint -> HT.Transaction (PerformMoveResult FindTxsToError (Set Transaction))
+performFindTxsTo networkId credentials point = do
   initialResult <- HT.statement params $
     [foldStatement|
       WITH credentials (addressHeader,  addressPaymentCredential) as
@@ -354,9 +354,11 @@ performFindTxsTo credentials point = do
       )
     addressParts = Set.toList credentials >>= \case
       PaymentKeyCredential pkh ->
-        (,unPaymentKeyHash pkh) . BS.pack . pure <$> [0x00, 0x20, 0x40, 0x60] <> [0x01, 0x21, 0x41, 0x61]
+        (,unPaymentKeyHash pkh) . BS.pack . pure
+          <$> if networkId == C.Mainnet then [0x01, 0x21, 0x41, 0x61] else [0x00, 0x20, 0x40, 0x60]
       ScriptCredential sh ->
-        (,unScriptHash sh) . BS.pack . pure <$> [0x10, 0x30, 0x50, 0x70] <> [0x11, 0x31, 0x51, 0x71]
+        (,unScriptHash sh) . BS.pack . pure
+          <$> if networkId == C.Mainnet then [0x11, 0x31, 0x51, 0x71] else [0x10, 0x30, 0x50, 0x70]
     foldTxs :: Fold ReadTxRow (Maybe BlockHeader, Map TxId Transaction)
     foldTxs = Fold foldTxs' (Nothing, mempty) id
 
@@ -467,8 +469,8 @@ performFindTx txId wait point = do
           }
     readFirstTxRow _ = MoveWait
 
-performFindTxsFor :: NESet Credential -> ChainPoint -> HT.Transaction (PerformMoveResult Void (Set Transaction))
-performFindTxsFor credentials point = do
+performFindTxsFor :: C.NetworkId -> NESet Credential -> ChainPoint -> HT.Transaction (PerformMoveResult Void (Set Transaction))
+performFindTxsFor networkId credentials point = do
   initialResult <- HT.statement params $
     [foldStatement|
       WITH credentials (addressHeader,  addressPaymentCredential) as
@@ -527,9 +529,11 @@ performFindTxsFor credentials point = do
       )
     addressParts = Set.toList (NESet.toSet credentials) >>= \case
       PaymentKeyCredential pkh ->
-        (,unPaymentKeyHash pkh) . BS.pack . pure <$> [0x00, 0x20, 0x40, 0x60] <> [0x01, 0x21, 0x41, 0x61]
+        (,unPaymentKeyHash pkh) . BS.pack . pure
+          <$> if networkId == C.Mainnet then [0x01, 0x21, 0x41, 0x61] else [0x00, 0x20, 0x40, 0x60]
       ScriptCredential sh ->
-        (,unScriptHash sh) . BS.pack . pure <$> [0x10, 0x30, 0x50, 0x70] <> [0x11, 0x31, 0x51, 0x71]
+        (,unScriptHash sh) . BS.pack . pure
+          <$> if networkId == C.Mainnet then [0x11, 0x31, 0x51, 0x71] else [0x10, 0x30, 0x50, 0x70]
     foldTxs :: Fold ReadTxRow (Maybe BlockHeader, Map TxId Transaction)
     foldTxs = Fold foldTxs' (Nothing, mempty) id
 
