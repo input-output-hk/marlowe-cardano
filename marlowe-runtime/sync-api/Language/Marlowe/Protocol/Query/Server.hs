@@ -22,8 +22,10 @@ marloweQueryServer
   -> (ContractId -> m (Maybe SomeContractState))
   -> (TxId -> m (Maybe SomeTransaction))
   -> (ContractId -> m (Maybe SomeTransactions))
+  -> (TxId -> m (Maybe Withdrawal))
+  -> (ContractId -> m (Maybe [Withdrawal]))
   -> MarloweQueryServer m ()
-marloweQueryServer getContractHeaders getContractState getTransaction getTransactions = go
+marloweQueryServer getContractHeaders getContractState getTransaction getTransactions getWithdrawal getWithdrawals = go
   where
     go = Await (ClientAgency TokReq) \case
       MsgRequest req -> Effect do
@@ -36,4 +38,6 @@ marloweQueryServer getContractHeaders getContractState getTransaction getTransac
       ReqContractState contractId -> getContractState contractId
       ReqTransaction txId -> getTransaction txId
       ReqTransactions contractId -> getTransactions contractId
+      ReqWithdrawal txId -> getWithdrawal txId
+      ReqWithdrawals contractId -> getWithdrawals contractId
       ReqBoth a b -> concurrently (serviceRequest a) (serviceRequest b)
