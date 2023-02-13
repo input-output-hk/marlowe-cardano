@@ -92,6 +92,10 @@ instance Arbitrary a => Arbitrary (Range a) where
   arbitrary = Range <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
   shrink = genericShrink
 
+instance Arbitrary Withdrawal where
+  arbitrary = Withdrawal <$> arbitrary <*> arbitrary <*> arbitrary
+  shrink = genericShrink
+
 instance Arbitrary Order where
   arbitrary = elements [Ascending, Descending]
 
@@ -101,6 +105,8 @@ arbitraryRequest = \case
   TokContractState -> ReqContractState <$> arbitrary
   TokTransaction -> ReqTransaction <$> arbitrary
   TokTransactions -> ReqTransactions <$> arbitrary
+  TokWithdrawal -> ReqWithdrawal <$> arbitrary
+  TokWithdrawals -> ReqWithdrawals <$> arbitrary
   TokBoth a b -> resized (`div` 2) $ ReqBoth <$> arbitraryRequest a <*> arbitraryRequest b
 
 shrinkRequest :: Request a -> [Request a]
@@ -109,6 +115,8 @@ shrinkRequest = \case
   ReqContractState contractId -> ReqContractState <$> shrink contractId
   ReqTransaction txId -> ReqTransaction <$> shrink txId
   ReqTransactions contractId -> ReqTransactions <$> shrink contractId
+  ReqWithdrawal txId -> ReqWithdrawal <$> shrink txId
+  ReqWithdrawals contractId -> ReqWithdrawals <$> shrink contractId
   ReqBoth a b -> fold
     [ [ ReqBoth a' b | a' <- shrinkRequest a ]
     , [ ReqBoth a b' | b' <- shrinkRequest b ]
@@ -120,6 +128,8 @@ arbitraryResponse = \case
   TokContractState -> arbitrary
   TokTransaction -> arbitrary
   TokTransactions -> arbitrary
+  TokWithdrawal -> arbitrary
+  TokWithdrawals -> arbitrary
   TokBoth a b -> resized (`div` 2) $ (,) <$> arbitraryResponse a <*> arbitraryResponse b
 
 shrinkResponse :: StRes a -> a -> [a]
@@ -128,6 +138,8 @@ shrinkResponse = \case
   TokContractState -> shrink
   TokTransaction -> shrink
   TokTransactions -> shrink
+  TokWithdrawal -> shrink
+  TokWithdrawals -> shrink
   TokBoth ta tb -> \(a, b) -> fold
     [ [ (a', b) | a' <- shrinkResponse ta a ]
     , [ (a, b') | b' <- shrinkResponse tb b ]
