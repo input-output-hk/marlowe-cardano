@@ -311,11 +311,13 @@ buildApplyInputsConstraintsV1 systemStart eraHistory marloweOutput tipSlot metad
   lift $ unless (invalidBefore' <= tipSlot') $ Left $ ValidityLowerBoundTooHigh tipSlot $ fromCardanoSlotNo invalidBefore'
 
   invalidHereafter' <- lift case invalidHereafter of
-    Nothing -> pure case nextMarloweTimeout contract of
-      Nothing -> maxSafeSlot
-      Just nextTimeout -> case utcTimeToSlotNo' nextTimeout of
-        Right slot -> slot
-        _ -> maxSafeSlot
+    Nothing -> do
+      invalidBefore'' <- slotStart invalidBefore'                             -- Find the start time of the validity range.
+      pure case nextMarloweTimeoutAfter invalidBefore'' contract of           -- Find the next timeout after the range start, if any.
+        Nothing -> maxSafeSlot                                                -- There is no future timeout.
+        Just subsequentTimeout -> case utcTimeToSlotNo' subsequentTimeout of  -- There is a future timeout.
+          Right slot' -> slot'                                                -- The next timeout is before the safe horizon, but note that this might be an empty interval.
+          _ ->  maxSafeSlot                                                   -- The next timeout is beyond the safe horizon.
     Just t -> utcTimeToSlotNo t
 
   -- Construct inputs constraints.
@@ -426,13 +428,15 @@ buildApplyInputsConstraintsV1 systemStart eraHistory marloweOutput tipSlot metad
     posixTimeToUTCTime :: PV2.POSIXTime -> UTCTime
     posixTimeToUTCTime (P.POSIXTime t) = posixSecondsToUTCTime $ secondsToNominalDiffTime $ fromInteger t / 1000
 
-    nextMarloweTimeout :: V1.Contract -> Maybe UTCTime
-    nextMarloweTimeout (V1.When _ timeout _) = Just $ posixTimeToUTCTime timeout
-    nextMarloweTimeout V1.Close = Nothing
-    nextMarloweTimeout (V1.Pay _ _ _ _ c) = nextMarloweTimeout c
-    nextMarloweTimeout (V1.If _ c1 c2) = on min nextMarloweTimeout c1 c2
-    nextMarloweTimeout (V1.Let _ _ c) = nextMarloweTimeout c
-    nextMarloweTimeout (V1.Assert _ c) = nextMarloweTimeout c
+    nextMarloweTimeoutAfter :: UTCTime -> V1.Contract -> Maybe UTCTime
+    nextMarloweTimeoutAfter limit (V1.When _ timeout c)
+      | posixTimeToUTCTime timeout > limit = Just $ posixTimeToUTCTime timeout
+      | otherwise = nextMarloweTimeoutAfter limit c
+    nextMarloweTimeoutAfter _ V1.Close = Nothing
+    nextMarloweTimeoutAfter limit (V1.Pay _ _ _ _ c) = nextMarloweTimeoutAfter limit c
+    nextMarloweTimeoutAfter limit (V1.If _ c1 c2) = on min (nextMarloweTimeoutAfter limit) c1 c2
+    nextMarloweTimeoutAfter limit (V1.Let _ _ c) = nextMarloweTimeoutAfter limit c
+    nextMarloweTimeoutAfter limit (V1.Assert _ c) = nextMarloweTimeoutAfter limit c
 
     maxSafeSlot :: O.SlotNo
     maxSafeSlot = getMaxSafeSlotFromSummary $ unInterpreter interpreter
