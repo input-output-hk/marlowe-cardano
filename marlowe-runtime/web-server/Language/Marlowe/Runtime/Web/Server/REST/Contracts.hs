@@ -70,7 +70,7 @@ import Servant.Pagination
 
 import qualified Cardano.Ledger.Alonzo.TxWitness as Alonzo
 import Control.Monad.Trans.Writer (runWriter)
-import Language.Marlowe.CLI.Merkle (shallowMerkleize)
+import Language.Marlowe.CLI.Merkle (deepMerkleize)
 
 type ContractHeaders = [ContractHeader]
 type Addresses = CommaList Address
@@ -124,7 +124,7 @@ postMerkleization
   -> PostMerkleizationRequest
   -> AppM r PostMerkleizationResponse
 postMerkleization eb PostMerkleizationRequest{..} = withEvent eb Post \_ ->
-  let (merkleized, continuations) = runWriter . shallowMerkleize $ contract
+  let (merkleized, continuations) = runWriter . deepMerkleize $ contract
    in pure $ PostMerkleizationResponse { contract = merkleized, continuations = continuations }
 
 post
