@@ -38,6 +38,7 @@ import GHC.Generics (Generic)
 import Language.Marlowe (ChoiceId(..), Input(..), InputContent(..), Party, Token)
 import Language.Marlowe.Protocol.HeaderSync.Client (MarloweHeaderSyncClient, hoistMarloweHeaderSyncClient)
 import qualified Language.Marlowe.Protocol.HeaderSync.Client as HeaderSync
+import Language.Marlowe.Protocol.Query.Client (MarloweQueryClient, hoistMarloweQueryClient)
 import Language.Marlowe.Protocol.Sync.Client (MarloweSyncClient, hoistMarloweSyncClient)
 import qualified Language.Marlowe.Protocol.Sync.Client as MarloweSync
 import Language.Marlowe.Runtime.Cardano.Api
@@ -97,6 +98,11 @@ expectRight :: MonadFail m => Show a => String -> Either a b -> m b
 expectRight msg = \case
   Left a -> fail $ msg <> ": " <> show a
   Right b -> pure b
+
+runMarloweQueryClient :: MarloweQueryClient Integration a -> Integration a
+runMarloweQueryClient client = do
+  run <- asks MarloweRuntime.runMarloweQueryClient
+  withRunInIO \runInIO -> run $ hoistMarloweQueryClient runInIO client
 
 runMarloweSyncClient :: MarloweSyncClient Integration a -> Integration a
 runMarloweSyncClient client = do

@@ -11,9 +11,21 @@ import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
 import Language.Marlowe.Core.V1.Semantics.Types
 import Language.Marlowe.Extended.V1 (ada)
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader)
-import Language.Marlowe.Runtime.Core.Api (MarloweVersion(..), MarloweVersionTag(..))
+import Language.Marlowe.Runtime.Core.Api (ContractId, MarloweVersion(..), MarloweVersionTag(..))
+import Language.Marlowe.Runtime.Discovery.Api (ContractHeader)
 import Language.Marlowe.Runtime.Integration.Common
-  (Integration, Wallet(..), choose, deposit, expectJust, expectRight, notify, runTxJobClient, submit, withdraw)
+  ( Integration
+  , Wallet(..)
+  , choose
+  , contractCreatedToContractHeader
+  , deposit
+  , expectJust
+  , expectRight
+  , notify
+  , runTxJobClient
+  , submit
+  , withdraw
+  )
 import Language.Marlowe.Runtime.Plutus.V2.Api (toPlutusAddress)
 import Language.Marlowe.Runtime.Transaction.Api
   ( ContractCreated(..)
@@ -31,6 +43,12 @@ data StandardContractInit v = StandardContractInit
   , contractCreated :: ContractCreated BabbageEra v
   , createdBlock :: BlockHeader
   }
+
+standardContractHeader :: StandardContractInit v -> ContractHeader
+standardContractHeader StandardContractInit{..} = contractCreatedToContractHeader createdBlock contractCreated
+
+standardContractId :: StandardContractInit v -> ContractId
+standardContractId StandardContractInit{contractCreated=ContractCreated{..}} = contractId
 
 data StandardContractFundsDeposited v = StandardContractFundsDeposited
   { chooseGimmeTheMoney :: Integration (StandardContractChoiceMade v)
