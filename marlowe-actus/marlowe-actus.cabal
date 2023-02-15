@@ -115,6 +115,7 @@ library
     plutus-tx -any,
     plutus-ledger,
     marlowe-cardano -any,
+    mtl -any,
     time -any,
     validation -any
   default-language: Haskell2010

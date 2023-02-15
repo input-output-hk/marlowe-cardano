@@ -4,13 +4,10 @@
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE FlexibleInstances #-}
-
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
-
 {-# LANGUAGE TypeApplications #-}
-
 
 module Spec.TestFramework
   where
@@ -186,16 +183,17 @@ defaultRiskFactors =
 assertTestResults :: [TestCashFlow] -> [TestResult] -> IO ()
 assertTestResults [] []               = return ()
 assertTestResults (cf : cfs) (r : rs) = assertTestResult cf r >> assertTestResults cfs rs
+  where
+    assertTestResult :: TestCashFlow -> TestResult -> IO ()
+    assertTestResult CashFlow {..} TestResult {eventDate, eventType, payoff} = do
+      assertEqual cashEvent eventType
+      assertEqual cashPaymentDay eventDate
+      assertEqual (realToFrac amount :: Float) (realToFrac payoff :: Float)
+      where
+        assertEqual a b = assertBool (err a b) $ a == b
+        err a b = printf "Mismatch: actual %s, expected %s" (show a) (show b)
 assertTestResults _ _                 = assertFailure "Sizes differ"
 
-assertTestResult :: TestCashFlow -> TestResult -> IO ()
-assertTestResult CashFlow {..} TestResult {eventDate, eventType, payoff} = do
-  assertEqual cashEvent eventType
-  assertEqual cashPaymentDay eventDate
-  assertEqual (realToFrac amount :: Float) (realToFrac payoff :: Float)
-  where
-    assertEqual a b = assertBool (err a b) $ a == b
-    err a b = printf "Mismatch: actual %s, expected %s" (show a) (show b)
 
 testCasesFromFile :: [String] -> FilePath -> IO [TestCase]
 testCasesFromFile excluded testfile =

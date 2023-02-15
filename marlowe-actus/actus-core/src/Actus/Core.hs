@@ -182,6 +182,7 @@ genFixedSchedule ct@ContractTerms {..} =
     scheduleEvent ev = map (\(cid, d) -> (cid, ev, d)) $ schedule ev ct
 
     filtersSchedules :: Event -> Bool
+    filtersSchedules (_, AD, ShiftedDay {..}) = calculationDay == statusDate
     filtersSchedules (_, _, ShiftedDay {..}) | contractType == OPTNS = calculationDay > statusDate
     filtersSchedules (_, _, ShiftedDay {..}) | contractType == FUTUR = calculationDay > statusDate
     filtersSchedules (_, _, ShiftedDay {..}) | contractType == CLM = calculationDay > statusDate
