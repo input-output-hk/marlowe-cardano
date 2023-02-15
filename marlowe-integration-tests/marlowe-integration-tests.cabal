@@ -61,6 +61,7 @@ executable marlowe-integration-tests
     Language.Marlowe.Runtime.Integration.Intersections
     Language.Marlowe.Runtime.Integration.Common
     Language.Marlowe.Runtime.Integration.StandardContract
+    Language.Marlowe.Runtime.Integration.MarloweQuery
     Language.Marlowe.Runtime.IntegrationSpec
   build-depends:
       base >= 4.9 && < 5
@@ -78,6 +79,7 @@ executable marlowe-integration-tests
     , marlowe-runtime
     , marlowe-runtime:discovery-api
     , marlowe-runtime:history-api
+    , marlowe-runtime:sync-api
     , marlowe-runtime:tx-api
     , mtl
     , plutus-ledger-api

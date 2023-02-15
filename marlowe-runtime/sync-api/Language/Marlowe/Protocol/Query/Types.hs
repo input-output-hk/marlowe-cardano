@@ -7,7 +7,7 @@ module Language.Marlowe.Protocol.Query.Types
   where
 
 import Data.Aeson (ToJSON(..), Value(..), object, (.=))
-import Data.Bifunctor (bimap)
+import Data.Bifunctor (Bifunctor(..))
 import Data.Binary (Binary(..), getWord8, putWord8)
 import Data.Map (Map)
 import Data.Set (Set)
@@ -172,6 +172,9 @@ data Page a b = Page
   }
   deriving stock (Eq, Show, Read, Ord, Functor, Generic, Foldable, Traversable)
   deriving anyclass (ToJSON, Binary)
+
+instance Bifunctor Page where
+  bimap f g Page{..} = Page{items = g <$> items, nextRange = fmap f <$> nextRange, ..}
 
 data SomeContractState = forall v. SomeContractState (MarloweVersion v) (ContractState v)
 

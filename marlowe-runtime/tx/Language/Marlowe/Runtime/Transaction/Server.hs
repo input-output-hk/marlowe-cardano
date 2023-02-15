@@ -37,7 +37,8 @@ import Cardano.Api.Shelley (ProtocolParameters)
 import Control.Applicative ((<|>))
 import Control.Concurrent (forkFinally)
 import Control.Concurrent.Component
-import Control.Concurrent.STM (STM, atomically, modifyTVar, newEmptyTMVar, newTVar, putTMVar, readTMVar, readTVar)
+import Control.Concurrent.STM
+  (STM, atomically, modifyTVar, newEmptyTMVar, newTVar, putTMVar, readTMVar, readTVar, retry)
 import Control.Error.Util (hoistMaybe, note, noteT)
 import Control.Exception (Exception(..))
 import Control.Monad (when)
@@ -343,10 +344,11 @@ execApplyInputs
     marloweContext@MarloweContext{..} <- withExceptT ApplyInputsLoadMarloweContextFailed
       $ ExceptT
       $ liftIO $ loadMarloweContext (subEventBackend LoadMarloweContext ev) version contractId
-    tip <- liftIO $ atomically getTip
-    tipSlot <- except case tip of
-      Chain.Genesis -> Left TipAtGenesis
-      Chain.At Chain.BlockHeader{..} -> Right slotNo
+    let
+      getTipSlot = atomically $ getTip >>= \case
+        Chain.Genesis -> retry
+        Chain.At Chain.BlockHeader{..} -> pure slotNo
+    tipSlot <- liftIO getTipSlot
     scriptOutput' <- except $ maybe (Left ScriptOutputNotFound) Right scriptOutput
     ((invalidBefore, invalidHereafter, mAssetsAndDatum), constraints) <-
       except $ buildApplyInputsConstraints

@@ -230,8 +230,8 @@ decodeTransaction
         , contractId = decodeContractId createTxId createTxIx
         , metadata = decodeMetadata metadata
         , blockHeader = decodeBlockHeader slotNo hash blockNo
-        , validityUpperBound = localTimeToUTC utc invalidBefore
-        , validityLowerBound = localTimeToUTC utc invalidHereafter
+        , validityLowerBound = localTimeToUTC utc invalidBefore
+        , validityUpperBound = localTimeToUTC utc invalidHereafter
         , inputs = decodeDatumBytes inputs
         , output = TransactionOutput mempty $ decodeTransactionScriptOutput txId
             <$> outputTxIx

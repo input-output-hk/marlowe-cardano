@@ -44,11 +44,12 @@ import Cardano.Api.Shelley (AcquiringFailure)
 import qualified Cardano.Chain.Genesis as Byron
 import Cardano.Chain.UTxO (defaultUTxOConfiguration)
 import Cardano.Crypto (abstractHashToBytes)
+import Control.Concurrent (threadDelay)
 import Control.Concurrent.Async (race_)
 import Control.Concurrent.Async.Lifted (Concurrently(..))
 import Control.Concurrent.Component
 import Control.Concurrent.STM (STM, atomically)
-import Control.Exception (onException, throwIO)
+import Control.Exception (SomeException(..), catch, onException, throw, throwIO)
 import Control.Monad (when, (<=<))
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Except (runExceptT)
@@ -175,6 +176,7 @@ data MarloweRuntime = MarloweRuntime
   , runDiscoverySyncClient :: RunClient IO MarloweHeaderSyncClient
   , runHistorySyncClient :: RunClient IO MarloweSyncClient
   , runTxJobClient :: RunClient IO (JobClient MarloweTxCommand)
+  , runMarloweQueryClient :: RunClient IO MarloweQueryClient
   , runWebClient :: forall a. ClientM a -> IO (Either ClientError a)
   , marloweScripts :: MarloweScripts
   , testnet :: LocalTestnet
@@ -220,7 +222,7 @@ withLocalMarloweRuntime' MarloweRuntimeOptions{..} test = withRunInIO \runInIO -
     let localNodeSocketPath = SpoNode.socket . head $ spoNodes
     let localNodeConnectInfo = LocalNodeConnectInfo{..}
     marloweScripts <- liftIO $ publishCurrentScripts testnet localNodeConnectInfo
-    (dbReleaseKey, dbName) <- allocate (createDatabase workspace) cleanupDatabase
+    (dbReleaseKey, dbName) <- allocate (createDatabase workspace) (cleanupDatabase 10_000)
     liftIO $ migrateDatabase dbName
     let connectionString = settings databaseHost databasePort databaseUser databasePassword dbName
     let acquirePool = Pool.acquire (100, secondsToNominalDiffTime 5, connectionString)
@@ -275,7 +277,7 @@ withLocalMarloweRuntime' MarloweRuntimeOptions{..} test = withRunInIO \runInIO -
     webPort <- liftIO $ randomRIO (4000, 5000)
     manager <- liftIO $ newManager defaultManagerSettings
 
-    let submitConfirmationBlocks = 5
+    let submitConfirmationBlocks = 2
     let mkSubmitJob = Submit.mkSubmitJob SubmitJobDependencies{..}
     let baseUrl = BaseUrl Http "localhost" webPort ""
     let clientEnv = mkClientEnv manager baseUrl
@@ -316,11 +318,20 @@ withLocalMarloweRuntime' MarloweRuntimeOptions{..} test = withRunInIO \runInIO -
       finish connection
       pure dbName
 
-    cleanupDatabase dbName = when cleanup do
-      connection <- connectdb rootConnectionString
-      result <- exec connection $ "DROP DATABASE \"" <> dbName <> "\";"
-      checkResult connection result
-      finish connection
+    cleanupDatabase retryDelay dbName = when cleanup do
+      catch
+        ( do
+          connection <- connectdb rootConnectionString
+          result <- exec connection $ "DROP DATABASE \"" <> dbName <> "\";"
+          checkResult connection result
+          finish connection
+        )
+        ( \(SomeException e) -> if retryDelay > 1_000_000
+            then throw e
+            else do
+              threadDelay retryDelay
+              cleanupDatabase (retryDelay * 10) dbName
+        )
 
     migrateDatabase dbName = do
       (exitCode, _, stderr) <- flip readCreateProcessWithExitCode "" $ (SP.proc "sqitch"

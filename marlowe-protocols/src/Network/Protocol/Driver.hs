@@ -246,12 +246,6 @@ data ClientServerPair m server client = ClientServerPair
   , runClient :: RunClient m client
   }
 
-newtype ServerException e = ServerException e deriving (Show)
-newtype ClientException e = ClientException e deriving (Show)
-
-instance Exception e => Exception (ServerException e)
-instance Exception e => Exception (ClientException e)
-
 clientServerPair
   :: forall protocol ex server client serverPeer clientPeer m st r
    . (MonadBaseControl IO m, MonadCleanup m, Exception ex)
@@ -279,7 +273,7 @@ clientServerPair serverEventBackend clientEventBackend throwImpl codec serverToP
         withEvent serverEventBackend Disconnected \ev -> do
           addParent ev ref
           liftBase $ atomically closeAction
-          either (throwImpl . ServerException) pure result
+          either throwImpl pure result
     runClient :: RunClient m client
     runClient client = mask \restore -> do
       (ref, (channel, closeAction)) <- withEvent clientEventBackend Connect \ev -> liftBase $ atomically do
@@ -299,7 +293,7 @@ clientServerPair serverEventBackend clientEventBackend throwImpl codec serverToP
       withEvent clientEventBackend Disconnect \ev -> do
         addParent ev ref
         liftBase $ atomically closeAction
-        either (throwImpl . ClientException) pure result
+        either throwImpl pure result
   pure ClientServerPair{..}
 
 

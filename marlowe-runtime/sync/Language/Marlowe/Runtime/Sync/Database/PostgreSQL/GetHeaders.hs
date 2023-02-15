@@ -1,3 +1,4 @@
+{-# LANGUAGE ApplicativeDo #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE QuasiQuotes #-}
@@ -37,6 +38,13 @@ import Prelude hiding (init)
 getHeaders
   :: Range ContractId
   -> T.Transaction (Maybe (Page ContractId ContractHeader))
+getHeaders Range{..}
+  -- Invalid requests. Note rangeLimit == 0 is invalid because it produces no
+  -- results and causes infinite paging, which is potentially dangerous for
+  -- clients as they could get caught in an infinite loop if consuming all
+  -- pages.
+  | rangeLimit <= 0 || rangeOffset < 0 = pure Nothing
+
 getHeaders Range{rangeStart = Just (ContractId TxOutRef{..}), ..} = runMaybeT do
   let params = (unTxId txId, fromIntegral txIx)
   pivot <- MaybeT $ T.statement params
@@ -46,11 +54,11 @@ getHeaders Range{rangeStart = Just (ContractId TxOutRef{..}), ..} = runMaybeT do
       WHERE txId = $1 :: bytea
         AND txIx = $2 :: smallint
     |]
-  totalItems <- lift $ fromIntegral <$> T.statement () [singletonStatement| SELECT COUNT(*) :: int FROM marlowe.createTxOut |]
-  lift $ getHeadersFrom totalItems pivot rangeOffset rangeLimit rangeDirection
+  totalCount <- lift $ fromIntegral <$> T.statement () [singletonStatement| SELECT COUNT(*) :: int FROM marlowe.createTxOut |]
+  lift $ getHeadersFrom totalCount pivot rangeOffset rangeLimit rangeDirection
 
 getHeaders Range{..} = do
-  totalItems <- fromIntegral <$> T.statement () [singletonStatement| SELECT COUNT(*) :: int FROM marlowe.createTxOut |]
+  totalCount <- fromIntegral <$> T.statement () [singletonStatement| SELECT COUNT(*) :: int FROM marlowe.createTxOut |]
   Just <$> T.statement params case rangeDirection of
     Descending ->
       [foldStatement|
@@ -70,7 +78,7 @@ getHeaders Range{..} = do
         ORDER BY createTxOut.slotNo DESC, createTxOut.txId DESC, createTxOut.txIx DESC
         OFFSET ($1 :: int) ROWS
         FETCH NEXT ($2 :: int) ROWS ONLY
-      |] (foldPage rangeLimit rangeOffset rangeDirection totalItems)
+      |] (foldPage rangeLimit rangeDirection totalCount)
 
     Ascending ->
       [foldStatement|
@@ -92,9 +100,10 @@ getHeaders Range{..} = do
         ORDER BY block.slotNo, createTxOut.txId, createTxOut.txIx
         OFFSET ($1 :: int) ROWS
         FETCH NEXT ($2 :: int) ROWS ONLY
-      |] (foldPage rangeLimit rangeOffset rangeDirection totalItems)
+      |] (foldPage rangeLimit rangeDirection totalCount)
   where
-    params = (fromIntegral rangeOffset, fromIntegral rangeLimit)
+    -- Load one extra item so we can detect when we've hit the end
+    params = (fromIntegral rangeOffset, fromIntegral rangeLimit + 1)
 
 getHeadersFrom
   :: Int
@@ -103,7 +112,7 @@ getHeadersFrom
   -> Int
   -> Order
   -> T.Transaction (Page ContractId ContractHeader)
-getHeadersFrom totalItems (pivotSlot, pivotTxId, pivotTxIx) offset limit = T.statement params . \case
+getHeadersFrom totalCount (pivotSlot, pivotTxId, pivotTxIx) offset limit = T.statement params . \case
   Descending ->
     [foldStatement|
       SELECT
@@ -130,7 +139,7 @@ getHeadersFrom totalItems (pivotSlot, pivotTxId, pivotTxIx) offset limit = T.sta
       ORDER BY createTxOut.slotNo DESC, createTxOut.txId DESC, createTxOut.txIx DESC
       OFFSET ($4 :: int) ROWS
       FETCH NEXT ($5 :: int) ROWS ONLY
-    |] (foldPage offset limit Descending totalItems)
+    |] (foldPage limit Descending totalCount)
 
   Ascending ->
     [foldStatement|
@@ -158,10 +167,10 @@ getHeadersFrom totalItems (pivotSlot, pivotTxId, pivotTxIx) offset limit = T.sta
       ORDER BY createTxOut.slotNo, createTxOut.txId, createTxOut.txIx
       OFFSET ($4 :: int) ROWS
       FETCH NEXT ($5 :: int) ROWS ONLY
-    |] (foldPage offset limit Ascending totalItems)
+    |] (foldPage limit Ascending totalCount)
   where
-    params = (pivotSlot, pivotTxId, pivotTxIx, fromIntegral offset, fromIntegral limit)
-
+    -- Load one extra item so we can detect when we've hit the end
+    params = (pivotSlot, pivotTxId, pivotTxIx, fromIntegral offset, fromIntegral limit + 1)
 
 type ResultRow =
   ( Int64
@@ -175,14 +184,14 @@ type ResultRow =
   , ByteString
   )
 
-foldPage :: Int -> Int -> Order -> Int -> Fold ResultRow (Page ContractId ContractHeader)
-foldPage offset limit direction totalItems = Page
-  <$> foldItems
-  <*> foldNextRange offset limit direction
-  <*> pure totalItems
+foldPage :: Int -> Order -> Int -> Fold ResultRow (Page ContractId ContractHeader)
+foldPage limit direction totalCount = Page
+  <$> foldItems limit
+  <*> foldNextRange limit direction
+  <*> pure totalCount
 
-foldItems :: Fold ResultRow [ContractHeader]
-foldItems = fmap decodeContractHeader <$> Fold.list
+foldItems :: Int -> Fold ResultRow [ContractHeader]
+foldItems limit = fmap decodeContractHeader . take limit <$> Fold.list
 
 decodeContractHeader :: ResultRow -> ContractHeader
 decodeContractHeader
@@ -213,12 +222,13 @@ decodeContractHeader
         (fromIntegral blockNo)
     }
 
-foldNextRange :: Int -> Int -> Order -> Fold ResultRow (Maybe (Range ContractId))
-foldNextRange offset limit direction = fmap (decodeNextRange offset limit direction) <$> Fold.last
-
-decodeNextRange :: Int -> Int -> Order -> ResultRow -> Range ContractId
-decodeNextRange rangeOffset rangeLimit rangeDirection (_, _, _, txId, txIx, _, _, _, _) = Range
-  { rangeStart = Just $ ContractId (TxOutRef (TxId txId) (fromIntegral txIx))
-  , rangeOffset = rangeOffset + 1
-  , ..
-  }
+foldNextRange :: Int -> Order -> Fold ResultRow (Maybe (Range ContractId))
+foldNextRange rangeLimit rangeDirection = do
+  mNext <- Fold.index rangeLimit
+  pure do
+    (_, _, _, txId, txIx, _, _, _, _) <- mNext
+    pure Range
+      { rangeStart = Just $ ContractId (TxOutRef (TxId txId) (fromIntegral txIx))
+      , rangeOffset = 0
+      , ..
+      }
