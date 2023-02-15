@@ -13,13 +13,13 @@ import Data.Foldable (for_)
 import Data.Functor (void)
 import Data.Map (Map)
 import qualified Data.Map as Map
-import Data.Maybe (maybeToList)
+import Data.Maybe (fromJust, maybeToList)
 import Language.Marlowe.Protocol.Query.Client
-  (MarloweQueryClient, getContractHeaders, getContractState, getTransactions)
+  (MarloweQueryClient, getContractHeaders, getContractState, getTransaction, getTransactions)
 import Language.Marlowe.Protocol.Query.Types
 import Language.Marlowe.Runtime.Cardano.Api (fromCardanoTxId, fromCardanoTxOut)
 import Language.Marlowe.Runtime.ChainSync.Api
-  (BlockHeader, TransactionMetadata(..), TransactionOutput(..), TxOutRef(..))
+  (BlockHeader, TransactionMetadata(..), TransactionOutput(..), TxId, TxOutRef(..))
 import Language.Marlowe.Runtime.Core.Api
   ( ContractId(..)
   , MarloweVersion(..)
@@ -41,6 +41,7 @@ spec = describe "MarloweQuery" $ aroundAll setup do
   getContractHeadersSpec
   getContractStateSpec
   getTransactionsSpec
+  getTransactionSpec
 
 getContractHeadersSpec :: SpecWith MarloweQueryTestData
 getContractHeadersSpec = describe "getContractHeaders" do
@@ -166,7 +167,7 @@ getContractStateSpec = describe "getContractState" do
       liftIO $ actual `shouldBe` expected
 
 getTransactionsSpec :: SpecWith MarloweQueryTestData
-getTransactionsSpec = focus $ describe "getTransactions" do
+getTransactionsSpec = describe "getTransactions" do
   for_ (Unknown : (Known <$> allContractNos)) \contractNo -> do
     it (show contractNo) $ runMarloweQueryIntegrationTest \testData -> do
       let
@@ -174,6 +175,18 @@ getTransactionsSpec = focus $ describe "getTransactions" do
           Unknown -> Nothing
           Known contractNo' -> Just $ contractNoToTransactions testData contractNo'
       actual <- getTransactions $ contractNoToContractId testData contractNo
+      liftIO $ actual `shouldBe` expected
+
+getTransactionSpec :: SpecWith MarloweQueryTestData
+getTransactionSpec = describe "getTransaction" do
+  for_ (Unknown : ((Known . Left <$> allContractNos) <> (Known . Right <$> allTxNos))) \txNo -> do
+    it (show txNo) $ runMarloweQueryIntegrationTest \testData -> do
+      let
+        expected = case txNo of
+          Unknown -> Nothing
+          Known (Left _) -> Nothing
+          Known (Right txNo') -> Just $ txNoToSomeTransaction testData txNo'
+      actual <- getTransaction $ contractOrTxNoToTxId testData txNo
       liftIO $ actual `shouldBe` expected
 
 setup :: ActionWith MarloweQueryTestData -> IO ()
@@ -229,10 +242,27 @@ data ContractNo
   | Contract2
   | Contract3
   | Contract4
-  deriving (Show, Eq, Ord)
+  deriving (Show, Eq, Ord, Enum, Bounded)
+
+data TxNo
+  = Contract1Step1
+  | Contract1Step2
+  | Contract1Step3
+  | Contract1Step4
+  | Contract2Step1
+  | Contract2Step2
+  | Contract2Step3
+  | Contract2Step4
+  | Contract3Step1
+  | Contract3Step2
+  | Contract3Step3
+  deriving (Show, Eq, Ord, Enum, Bounded)
 
 allContractNos :: [ContractNo]
-allContractNos = [Contract1, Contract2, Contract3, Contract4]
+allContractNos = [minBound..maxBound]
+
+allTxNos :: [TxNo]
+allTxNos = [minBound..maxBound]
 
 contractNoToContractId :: MarloweQueryTestData -> WithUnknown ContractNo -> ContractId
 contractNoToContractId MarloweQueryTestData{..} = \case
@@ -241,6 +271,75 @@ contractNoToContractId MarloweQueryTestData{..} = \case
   Known Contract2 -> standardContractId contract2
   Known Contract3 -> standardContractId contract3
   Known Contract4 -> standardContractId contract4
+
+contractOrTxNoToTxId :: MarloweQueryTestData -> WithUnknown (Either ContractNo TxNo) -> TxId
+contractOrTxNoToTxId testData = \case
+  Unknown -> "0000000000000000000000000000000000000000000000000000000000000000"
+  Known (Left contractNo) -> case contractNoToContractId testData $ Known contractNo of
+    ContractId TxOutRef{..} -> txId
+  Known (Right txNo) -> txNoToTxId testData txNo
+
+txNoToInputsApplied :: MarloweQueryTestData -> TxNo -> InputsApplied BabbageEra 'V1
+txNoToInputsApplied MarloweQueryTestData{..} = \case
+  Contract1Step1 -> initialFundsDeposited contract1Step1
+  Contract1Step2 -> gimmeTheMoneyChosen contract1Step2
+  Contract1Step3 -> notified contract1Step3
+  Contract1Step4 -> returnDeposited contract1Step4
+  Contract2Step1 -> initialFundsDeposited contract2Step1
+  Contract2Step2 -> gimmeTheMoneyChosen contract2Step2
+  Contract2Step3 -> notified contract2Step3
+  Contract2Step4 -> returnDeposited contract2Step4
+  Contract3Step1 -> initialFundsDeposited contract3Step1
+  Contract3Step2 -> gimmeTheMoneyChosen contract3Step2
+  Contract3Step3 -> notified contract3Step3
+
+txNoToInput :: MarloweQueryTestData -> TxNo -> TxOutRef
+txNoToInput MarloweQueryTestData{..} = \case
+  Contract1Step1 -> unContractId $ standardContractId contract1
+  Contract1Step2 -> utxo $ fromJust $ output $ initialFundsDeposited contract1Step1
+  Contract1Step3 -> utxo $ fromJust $ output $ gimmeTheMoneyChosen contract1Step2
+  Contract1Step4 -> utxo $ fromJust $ output $ notified contract1Step3
+  Contract2Step1 -> unContractId $ standardContractId contract2
+  Contract2Step2 -> utxo $ fromJust $ output $ initialFundsDeposited contract2Step1
+  Contract2Step3 -> utxo $ fromJust $ output $ gimmeTheMoneyChosen contract2Step2
+  Contract2Step4 -> utxo $ fromJust $ output $ notified contract2Step3
+  Contract3Step1 -> unContractId $ standardContractId contract3
+  Contract3Step2 -> utxo $ fromJust $ output $ initialFundsDeposited contract3Step1
+  Contract3Step3 -> utxo $ fromJust $ output $ gimmeTheMoneyChosen contract3Step2
+
+txNoToConsumer :: MarloweQueryTestData -> TxNo -> Maybe TxId
+txNoToConsumer MarloweQueryTestData{..} = fmap inputsAppliedTxId . \case
+  Contract1Step1 -> Just $ gimmeTheMoneyChosen contract1Step2
+  Contract1Step2 -> Just $ notified contract1Step3
+  Contract1Step3 -> Just $ returnDeposited contract1Step4
+  Contract1Step4 -> Nothing
+  Contract2Step1 -> Just $ gimmeTheMoneyChosen contract2Step2
+  Contract2Step2 -> Just $ notified contract2Step3
+  Contract2Step3 -> Just $ returnDeposited contract2Step4
+  Contract2Step4 -> Nothing
+  Contract3Step1 -> Just $ gimmeTheMoneyChosen contract3Step2
+  Contract3Step2 -> Just $ notified contract3Step3
+  Contract3Step3 -> Nothing
+
+txNoToBlockHeader :: MarloweQueryTestData -> TxNo -> BlockHeader
+txNoToBlockHeader MarloweQueryTestData{..} = \case
+  Contract1Step1 -> initialDepositBlock contract1Step1
+  Contract1Step2 -> choiceBlock contract1Step2
+  Contract1Step3 -> notifiedBlock contract1Step3
+  Contract1Step4 -> returnDepositBlock contract1Step4
+  Contract2Step1 -> initialDepositBlock contract2Step1
+  Contract2Step2 -> choiceBlock contract2Step2
+  Contract2Step3 -> notifiedBlock contract2Step3
+  Contract2Step4 -> returnDepositBlock contract2Step4
+  Contract3Step1 -> initialDepositBlock contract3Step1
+  Contract3Step2 -> choiceBlock contract3Step2
+  Contract3Step3 -> notifiedBlock contract3Step3
+
+txNoToTxId :: MarloweQueryTestData -> TxNo -> TxId
+txNoToTxId testData = inputsAppliedTxId . txNoToInputsApplied testData
+
+inputsAppliedTxId :: InputsApplied era v -> TxId
+inputsAppliedTxId InputsApplied{..} = fromCardanoTxId $ getTxId txBody
 
 contractNoToStandardContract :: MarloweQueryTestData -> ContractNo -> StandardContractInit 'V1
 contractNoToStandardContract MarloweQueryTestData{..} = \case
@@ -310,6 +409,13 @@ contractNoToTransactions MarloweQueryTestData{..} = \case
     , inputsAppliedToTransaction (notifiedBlock contract3Step3) (notified contract3Step3)
     ]
   Contract4 -> mempty
+
+txNoToSomeTransaction :: MarloweQueryTestData -> TxNo -> SomeTransaction
+txNoToSomeTransaction testData txNo = SomeTransaction
+  MarloweV1
+  (txNoToInput testData txNo)
+  (txNoToConsumer testData txNo)
+  (inputsAppliedToTransaction (txNoToBlockHeader testData txNo) (txNoToInputsApplied testData txNo))
 
 runMarloweQueryIntegrationTest :: (MarloweQueryTestData -> MarloweQueryClient Integration a) -> ActionWith MarloweQueryTestData
 runMarloweQueryIntegrationTest test testData@MarloweQueryTestData{..} =
