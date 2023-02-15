@@ -4,8 +4,7 @@
 module Language.Marlowe.Runtime.Integration.MarloweQuery
   where
 
-import Cardano.Api (BabbageEra, CardanoEra(BabbageEra), TxBody(..), TxBodyContent(..), getTxId)
-import Control.Monad (guard)
+import Cardano.Api (BabbageEra, TxBody(..), getTxId)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Reader.Class
 import Data.Bifunctor (bimap)
@@ -13,21 +12,14 @@ import Data.Foldable (for_)
 import Data.Functor (void)
 import Data.Map (Map)
 import qualified Data.Map as Map
-import Data.Maybe (fromJust, maybeToList)
+import Data.Maybe (fromJust)
 import Language.Marlowe.Protocol.Query.Client
-  (MarloweQueryClient, getContractHeaders, getContractState, getTransaction, getTransactions)
+  (MarloweQueryClient, getContractHeaders, getContractState, getTransaction, getTransactions, getWithdrawals)
 import Language.Marlowe.Protocol.Query.Types
-import Language.Marlowe.Runtime.Cardano.Api (fromCardanoTxId, fromCardanoTxOut)
-import Language.Marlowe.Runtime.ChainSync.Api
-  (BlockHeader, TransactionMetadata(..), TransactionOutput(..), TxId, TxOutRef(..))
+import Language.Marlowe.Runtime.Cardano.Api (fromCardanoTxId)
+import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, TransactionMetadata(..), TxId, TxOutRef(..))
 import Language.Marlowe.Runtime.Core.Api
-  ( ContractId(..)
-  , MarloweVersion(..)
-  , MarloweVersionTag(..)
-  , Payout(..)
-  , TransactionScriptOutput(..)
-  , fromChainPayoutDatum
-  )
+  (ContractId(..), MarloweVersion(..), MarloweVersionTag(..), Payout(..), TransactionScriptOutput(..))
 import qualified Language.Marlowe.Runtime.Core.Api as Core
 import Language.Marlowe.Runtime.Discovery.Api (ContractHeader)
 import Language.Marlowe.Runtime.Integration.Common
@@ -42,6 +34,7 @@ spec = describe "MarloweQuery" $ aroundAll setup do
   getContractStateSpec
   getTransactionsSpec
   getTransactionSpec
+  getWithdrawalsSpec
 
 getContractHeadersSpec :: SpecWith MarloweQueryTestData
 getContractHeadersSpec = describe "getContractHeaders" do
@@ -187,6 +180,17 @@ getTransactionSpec = describe "getTransaction" do
           Known (Left _) -> Nothing
           Known (Right txNo') -> Just $ txNoToSomeTransaction testData txNo'
       actual <- getTransaction $ contractOrTxNoToTxId testData txNo
+      liftIO $ actual `shouldBe` expected
+
+getWithdrawalsSpec :: SpecWith MarloweQueryTestData
+getWithdrawalsSpec = describe "getWithdrawals" do
+  for_ (Unknown : (Known <$> allContractNos)) \contractNo -> do
+    it (show contractNo) $ runMarloweQueryIntegrationTest \testData -> do
+      let
+        expected = case contractNo of
+          Unknown -> Nothing
+          Known contractNo' -> Just $ contractNoToWithdrawals testData contractNo'
+      actual <- getWithdrawals $ contractNoToContractId testData contractNo
       liftIO $ actual `shouldBe` expected
 
 setup :: ActionWith MarloweQueryTestData -> IO ()
@@ -379,13 +383,8 @@ contractNoToLatestOutput MarloweQueryTestData{..} = \case
 contractNoToUnclaimedPayouts :: MarloweQueryTestData -> ContractNo -> Map TxOutRef (Payout 'V1)
 contractNoToUnclaimedPayouts MarloweQueryTestData{..} =  \case
   Contract1 -> mempty
-  Contract2 -> case returnDeposited contract2Step4 of
-    InputsApplied{..} -> Map.fromList do
-      (ix, TransactionOutput{..}) <- case txBody of
-        TxBody TxBodyContent{..} -> zip [0..] $ fromCardanoTxOut BabbageEra <$> txOuts
-      guard $ address == payoutScriptAddress (contractCreated contract2)
-      payout <- maybeToList $ Payout address assets <$> (fromChainPayoutDatum MarloweV1 =<< datum)
-      pure (TxOutRef (fromCardanoTxId $ getTxId txBody) ix, payout)
+  Contract2 -> case inputsAppliedToTransaction (returnDepositBlock contract2Step4) (returnDeposited contract2Step4) of
+    Core.Transaction{output=Core.TransactionOutput{payouts}} -> payouts
   Contract3 -> mempty
   Contract4 -> mempty
 
@@ -416,6 +415,17 @@ txNoToSomeTransaction testData txNo = SomeTransaction
   (txNoToInput testData txNo)
   (txNoToConsumer testData txNo)
   (inputsAppliedToTransaction (txNoToBlockHeader testData txNo) (txNoToInputsApplied testData txNo))
+
+contractNoToWithdrawals :: MarloweQueryTestData -> ContractNo -> [Withdrawal]
+contractNoToWithdrawals MarloweQueryTestData{..} = \case
+  Contract1 -> pure Withdrawal
+    { block = snd contract1Step5
+    , withdrawnPayouts =
+      case inputsAppliedToTransaction (returnDepositBlock contract1Step4) (returnDeposited contract1Step4) of
+        Core.Transaction{output=Core.TransactionOutput{payouts}} -> Map.keysSet payouts
+    , withdrawalTx = fromCardanoTxId $ getTxId $ fst contract1Step5
+    }
+  _ -> []
 
 runMarloweQueryIntegrationTest :: (MarloweQueryTestData -> MarloweQueryClient Integration a) -> ActionWith MarloweQueryTestData
 runMarloweQueryIntegrationTest test testData@MarloweQueryTestData{..} =
