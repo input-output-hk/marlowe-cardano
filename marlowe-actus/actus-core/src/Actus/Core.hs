@@ -1,5 +1,5 @@
-{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE RecordWildCards #-}
 
 
@@ -150,13 +150,12 @@ genProjectedPayoffs' ::
   Reader (CtxSTF a) [(Event, ContractState a, a)]
 genProjectedPayoffs' events =
   do
-    st0 <- initializeState
-    states <- genStates events st0
+    states <- initializeState >>= genStates events
+    (eventTypes, filteredStates) <- unzip <$> filterM filtersStates (zip (tail events) states)
 
-    let (x, y) = unzip states
-    payoffs <- trans $ genPayoffs x y
+    payoffs <- trans $ genPayoffs eventTypes filteredStates
 
-    pure $ zip3 x y payoffs
+    pure $ zip3 eventTypes filteredStates payoffs
   where
     trans :: Reader (CtxPOF a) b -> Reader (CtxSTF a) b
     trans = withReader (\c -> CtxPOF (contractTerms c) (riskFactors c) (referenceStates c))
@@ -181,8 +180,10 @@ genFixedSchedule ::
   [Event]
 genFixedSchedule ct@ContractTerms {..} =
   filter filtersSchedules . postProcessSchedules . sortOn (\(_, ev, d) -> (paymentDay d, ev)) $
-    concatMap scheduleEvent eventTypes
+    (event : concatMap scheduleEvent eventTypes)
   where
+    event = ("", AD, ShiftedDay statusDate statusDate)
+
     eventTypes = enumFrom (toEnum 0)
     scheduleEvent ev = map (\(cid, d) -> (cid, ev, d)) $ schedule ev ct
 
@@ -201,15 +202,6 @@ genFixedSchedule ct@ContractTerms {..} =
 
 type Event = (String, EventType, ShiftedDay)
 
-mapAccumLM' :: Monad m => (acc -> x -> m (acc, y)) -> acc -> [x] -> m (acc, [y])
-mapAccumLM' f = go
-  where
-    go s (x : xs) = do
-      (!s1, !x') <- f s x
-      (s2, xs') <- go s1 xs
-      return (s2, x' : xs')
-    go s [] = return (s, [])
-
 -- |Generate states
 genStates ::
   ActusFrac a =>
@@ -218,14 +210,12 @@ genStates ::
   -- | Initial state
   ContractState a ->
   -- | New states
-  Reader (CtxSTF a) [(Event, ContractState a)]
-genStates scs stn = mapAccumLM' apply st0 scs >>= filterM filtersStates . snd
-  where
-    apply ((_, ev, ShiftedDay {..}), st) (cid, ev', t') =
-      do
-        newState <- stateTransition ev calculationDay st
-        return (((cid, ev', t'), newState), ((cid, ev', t'), newState))
-    st0 = (("", AD, ShiftedDay (sd stn) (sd stn)), stn)
+  Reader (CtxSTF a) [ContractState a]
+genStates ((_, eventType, ShiftedDay { calculationDay }) : events) state = do
+  nextState <- stateTransition eventType calculationDay state
+  nextStates <- genStates events nextState
+  pure (nextState : nextStates)
+genStates [] _ = pure []
 
 filtersStates ::
   ActusFrac a =>
