@@ -15,7 +15,7 @@ module Actus.Marlowe.Instance
   , reduceContract
   ) where
 
-import Actus.Domain (ActusFrac(..), ActusOps(..), CashFlow, ContractState, ContractTerms, RiskFactors)
+import Actus.Domain (ActusOps(..), CashFlow, ContractState, ContractTerms, RiskFactors)
 import Data.Functor ((<&>))
 import Data.Maybe (fromMaybe)
 import GHC.Real (Ratio(..))
@@ -71,9 +71,6 @@ instance Num Value where
 instance ActusOps Value where
   _min x y = Cond (ValueLT x y) x y
   _max x y = Cond (ValueGT x y) x y
-
-instance ActusFrac Value where
-  _ceiling x = fromMaybe (error "ActusFrac partially implemented") (evalVal x)
 
 instance Fractional Value where
   lhs / rhs = MulValue (division lhs rhs) (Constant marloweFixedPoint)
