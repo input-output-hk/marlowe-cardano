@@ -21,12 +21,10 @@ import Data.Aeson.Types
   , Value(..)
   , defaultOptions
   , genericParseJSON
-  , object
   , parseJSON
   , toJSON
   , (.:)
   , (.:?)
-  , (.=)
   )
 import Data.Maybe (fromMaybe)
 import Data.Text as T hiding (reverse, takeWhile)
@@ -368,7 +366,6 @@ data Identifier = Identifier
 data Reference a = ReferenceTerms (ContractTerms a)
                  | ReferenceId Identifier
   deriving stock (Show, Generic)
-  deriving anyclass (ToJSON)
 
 -- |Contract structure
 data ContractStructure a = ContractStructure
@@ -378,26 +375,18 @@ data ContractStructure a = ContractStructure
   }
   deriving stock (Show, Generic)
 
-instance ToJSON a => ToJSON (ContractStructure a) where
-  toJSON ContractStructure{..} =
-    object
-      [ "object"        .= toJSON reference
-      , "referenceType" .= toJSON referenceType
-      , "referenceRole" .= toJSON referenceRole
-      ]
-
-getMarketObjectCode :: Reference a -> Maybe String
+getMarketObjectCode :: Fractional a => Reference a -> Maybe String
 getMarketObjectCode (ReferenceId i)    = marketObjectCode i
 getMarketObjectCode (ReferenceTerms t) = marketObjectCodeRef t
 
-getContractIdentifier :: Reference a -> Maybe String
+getContractIdentifier :: Fractional a => Reference a -> Maybe String
 getContractIdentifier (ReferenceId i)                     = contractIdentifier i
 getContractIdentifier (ReferenceTerms ContractTerms {..}) = Just contractId
 
 {-| ACTUS contract terms and attributes are defined in
     https://github.com/actusfrf/actus-dictionary/blob/master/actus-dictionary-terms.json
 -}
-data ContractTerms a = ContractTerms
+data Fractional a => ContractTerms a = ContractTerms
   { -- General
     contractId                               :: String
   , contractType                             :: CT
@@ -506,8 +495,7 @@ data ContractTerms a = ContractTerms
   , enableSettlement                         :: Bool             -- ^ Enable settlement currency
   , constraints                              :: Maybe Assertions -- ^ Assertions
   }
-  deriving stock (Show, Generic)
-  deriving anyclass (ToJSON)
+  deriving stock Show
 
 instance FromJSON (Reference Double) where
   parseJSON = genericParseJSON defaultOptions { sumEncoding = UntaggedValue }

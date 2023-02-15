@@ -10,11 +10,10 @@ Given ACTUS contract terms, cashflows are projected based on risk factors.
 -}
 
 module Actus.Core
-  ( genProjectedCashflows
-  ) where
+  where
 
 import Actus.Domain
-  ( ActusFrac
+  ( ActusOps(..)
   , CR(..)
   , CT(..)
   , CashFlow(..)
@@ -42,24 +41,23 @@ import Data.Time (LocalTime)
 -- an empty list, if building the initial state given the contract terms
 -- fails or in case there are no cash flows.
 genProjectedCashflows ::
-  ActusFrac a =>
   -- | Risk factors as a function of event type and time
-  (String -> EventType -> LocalTime -> RiskFactors a) ->
+  (String -> EventType -> LocalTime -> RiskFactors Double) ->
   -- | Contract terms
-  ContractTerms a ->
+  ContractTerms Double ->
   -- | Unscheduled events
   [Event] ->
   -- | List of projected cash flows
-  [CashFlow a]
+  [CashFlow Double]
 genProjectedCashflows rf ct us =
   let ctx = buildCtx rf ct us
    in check ct $ genCashflow ct <$> runReader (genProjectedPayoffs us) ctx
   where
-    check :: ActusFrac a => ContractTerms a -> [CashFlow a] -> [CashFlow a]
+    check :: Fractional a => ContractTerms a -> [CashFlow a] -> [CashFlow a]
     check ContractTerms {deliverySettlement = Just DS_S} = netCashflows
     check _                                              = id
 
-    netCashflows :: ActusFrac a => [CashFlow a] -> [CashFlow a]
+    netCashflows :: Fractional a => [CashFlow a] -> [CashFlow a]
     netCashflows cf = foldl1 plus <$> groupBy f cf
       where
         f a b =
@@ -76,15 +74,14 @@ genProjectedCashflows rf ct us =
 
 -- | Bulid the context allowing to perform state transitions
 buildCtx ::
-  ActusFrac a =>
   -- | Risk factors as a function of event type and time
-  (String -> EventType -> LocalTime -> RiskFactors a) ->
+  (String -> EventType -> LocalTime -> RiskFactors Double) ->
   -- | Contract terms
-  ContractTerms a ->
+  ContractTerms Double ->
   -- | Unscheduled events
   [Event] ->
   -- | Context
-  CtxSTF a
+  CtxSTF Double
 buildCtx rf ct us =
   CtxSTF
     ct
@@ -110,6 +107,7 @@ buildCtx rf ct us =
 
 -- |Generate cash flows
 genCashflow ::
+  Fractional a =>
   -- | Contract terms
   ContractTerms a ->
   -- | Projected payoff
@@ -132,10 +130,9 @@ genCashflow ct ((cid, ev, t), ContractState {..}, am) =
 
 -- |Generate projected cash flows
 genProjectedPayoffs ::
-  ActusFrac a =>
   -- | Unscheduled events
   [Event] ->
-  Reader (CtxSTF a) [(Event, ContractState a, a)]
+  Reader (CtxSTF Double) [(Event, ContractState Double, Double)]
 genProjectedPayoffs us =
   do
     ct <- asks contractTerms
@@ -143,11 +140,10 @@ genProjectedPayoffs us =
 
 -- |Generate projected cash flows
 genProjectedPayoffs' ::
-  ActusFrac a =>
   -- | Events
   [Event] ->
   -- | Projected cash flows
-  Reader (CtxSTF a) [(Event, ContractState a, a)]
+  Reader (CtxSTF Double) [(Event, ContractState Double, Double)]
 genProjectedPayoffs' events =
   do
     states <- initializeState >>= genStates events
@@ -162,9 +158,8 @@ genProjectedPayoffs' events =
 
 -- |Generate schedules
 genSchedule ::
-  ActusFrac a =>
   -- | Contract terms
-  ContractTerms a ->
+  ContractTerms Double ->
   -- | Schedule
   [Event] ->
   -- | Schedule
@@ -173,9 +168,8 @@ genSchedule ct us =
   sortOn (\(_, ev, d) -> (paymentDay d, ev)) $ genFixedSchedule ct <> us
 
 genFixedSchedule ::
-  ActusFrac a =>
   -- | Contract terms
-  ContractTerms a ->
+  ContractTerms Double ->
   -- | Schedule
   [Event]
 genFixedSchedule ct@ContractTerms {..} =
@@ -204,7 +198,8 @@ type Event = (String, EventType, ShiftedDay)
 
 -- |Generate states
 genStates ::
-  ActusFrac a =>
+  ActusOps a =>
+  Fractional a =>
   -- | Schedules
   [Event] ->
   -- | Initial state
@@ -218,9 +213,8 @@ genStates ((_, eventType, ShiftedDay { calculationDay }) : events) state = do
 genStates [] _ = pure []
 
 filtersStates ::
-  ActusFrac a =>
-  ((String, EventType, ShiftedDay), ContractState a) ->
-  Reader (CtxSTF a) Bool
+  ((String, EventType, ShiftedDay), ContractState Double) ->
+  Reader (CtxSTF Double) Bool
 filtersStates ((_, ev, ShiftedDay {..}), _) =
   do
     ct@ContractTerms {..} <- asks contractTerms
@@ -239,7 +233,8 @@ filtersStates ((_, ev, ShiftedDay {..}), _) =
 
 -- |Generate payoffs
 genPayoffs ::
-  ActusFrac a =>
+  ActusOps a =>
+  Fractional a =>
   -- | States with schedule
   [Event] ->
   -- | States with schedule

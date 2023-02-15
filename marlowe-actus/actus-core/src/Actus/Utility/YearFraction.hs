@@ -4,7 +4,6 @@ module Actus.Utility.YearFraction
   ( yearFraction
   ) where
 
-import Actus.Domain (ActusFrac(..))
 import Actus.Domain.ContractTerms (DCC(..))
 import Data.Time
   ( Day
@@ -18,7 +17,7 @@ import Data.Time
   , toGregorian
   )
 
-yearFraction :: ActusFrac a => DCC -> LocalTime -> LocalTime -> Maybe LocalTime -> a
+yearFraction :: Fractional a => DCC -> LocalTime -> LocalTime -> Maybe LocalTime -> a
 yearFraction dcc x y o = fromRational $ yearFraction' dcc (localDay x) (localDay $ clipToMidnight y) (localDay <$> o)
 
 yearFraction' :: DCC -> Day -> Day -> Maybe Day -> Rational

@@ -300,7 +300,6 @@ data TestCase = TestCase
     results        :: [TestResult]
   }
   deriving stock (Show, Generic)
-  deriving anyclass (ToJSON)
 
 instance FromJSON TestCase where
   parseJSON (Object v) =

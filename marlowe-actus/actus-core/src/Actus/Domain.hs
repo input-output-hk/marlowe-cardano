@@ -9,7 +9,6 @@ module Actus.Domain
   , module Actus.Domain.ContractState
   , module Actus.Domain.ContractTerms
   , module Actus.Domain.Schedule
-  , ActusFrac(..)
   , ActusOps(..)
   , CashFlow(..)
   , RiskFactors(..)
@@ -27,9 +26,9 @@ import Data.Aeson.Types (FromJSON, ToJSON)
 import Data.Time (LocalTime)
 import GHC.Generics (Generic)
 
-class (Fractional a, ActusOps a) => ActusFrac a where
-  _ceiling :: a -> Integer
-
+{-| The `ActusOps` type class is introduced to provide
+    the functions `min` and `max` without `Ord` constraint.
+-}
 class ActusOps a where
   _min :: a -> a -> a
   _max :: a -> a -> a
@@ -37,9 +36,6 @@ class ActusOps a where
 instance ActusOps Double where
   _min = min
   _max = max
-
-instance ActusFrac Double where
-  _ceiling = ceiling
 
 {-| Risk factor observer
 -}

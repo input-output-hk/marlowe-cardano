@@ -15,8 +15,7 @@ module Actus.Model.StateInitialization
   ) where
 
 import Actus.Domain
-  ( ActusFrac
-  , CEGE(..)
+  ( CEGE(..)
   , CT(..)
   , ContractState(..)
   , ContractStructure(..)
@@ -40,10 +39,10 @@ import GHC.Records (getField)
 
 -- |'initializeState' initializes the state variables at t0 based on the
 -- provided context
-initializeState :: ActusFrac a => Reader (CtxSTF a) (ContractState a)
+initializeState :: Fractional a => Reader (CtxSTF a) (ContractState a)
 initializeState = reader initializeState'
   where
-    initializeState' :: ActusFrac a => CtxSTF a -> ContractState a
+    initializeState' :: Fractional a => CtxSTF a -> ContractState a
     initializeState' CtxSTF {..} =
       ContractState
         { sd = t0,

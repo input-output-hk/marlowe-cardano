@@ -8,8 +8,7 @@ module Actus.Model.Payoff
   ) where
 
 import Actus.Domain
-  ( ActusFrac
-  , ActusOps(..)
+  ( ActusOps(..)
   , CT(..)
   , ContractState(..)
   , ContractTerms(..)
@@ -40,7 +39,8 @@ data CtxPOF a = CtxPOF
 
 -- | The payoff function
 payoff ::
-  ActusFrac a =>
+  ActusOps a =>
+  Fractional a =>
   -- | Event
   (String, EventType, LocalTime) ->
   -- | Contract state
