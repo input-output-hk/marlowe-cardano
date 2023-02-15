@@ -81,7 +81,6 @@ getContractHeadersSpec = describe "getContractHeaders" do
       Contract1 -> Nothing
 
 
-    -- rangeStart = Just (Known Contract4), rangeOffset = 3, rangeLimit = 5, rangeDirection = Descending
     expectedPage :: Range (WithUnknown ContractNo) -> Maybe (Page ContractNo ContractNo)
     expectedPage Range{..}
       | rangeLimit <= 0 || rangeOffset < 0 = Nothing
