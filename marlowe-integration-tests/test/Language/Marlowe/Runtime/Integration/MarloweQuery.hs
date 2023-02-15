@@ -14,7 +14,14 @@ import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Maybe (fromJust)
 import Language.Marlowe.Protocol.Query.Client
-  (MarloweQueryClient, getContractHeaders, getContractState, getTransaction, getTransactions, getWithdrawals)
+  ( MarloweQueryClient
+  , getContractHeaders
+  , getContractState
+  , getTransaction
+  , getTransactions
+  , getWithdrawal
+  , getWithdrawals
+  )
 import Language.Marlowe.Protocol.Query.Types
 import Language.Marlowe.Runtime.Cardano.Api (fromCardanoTxId)
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, TransactionMetadata(..), TxId, TxOutRef(..))
@@ -35,6 +42,7 @@ spec = describe "MarloweQuery" $ aroundAll setup do
   getTransactionsSpec
   getTransactionSpec
   getWithdrawalsSpec
+  getWithdrawalSpec
 
 getContractHeadersSpec :: SpecWith MarloweQueryTestData
 getContractHeadersSpec = describe "getContractHeaders" do
@@ -192,6 +200,21 @@ getWithdrawalsSpec = describe "getWithdrawals" do
           Known contractNo' -> Just $ contractNoToWithdrawals testData contractNo'
       actual <- getWithdrawals $ contractNoToContractId testData contractNo
       liftIO $ actual `shouldBe` expected
+
+getWithdrawalSpec :: SpecWith MarloweQueryTestData
+getWithdrawalSpec = describe "getWithdrawal" do
+  it "Returns Nothing for a fake txId" $ runMarloweQueryIntegrationTest \_ -> do
+    actual <- getWithdrawal "0000000000000000000000000000000000000000000000000000000000000000"
+    liftIO $ actual `shouldBe` Nothing
+  it "Returns Nothing for a create txId" $ runMarloweQueryIntegrationTest \testData -> do
+    actual <- getWithdrawal $ contractOrTxNoToTxId testData $ Known $ Left Contract1
+    liftIO $ actual `shouldBe` Nothing
+  it "Returns Nothing for an applyInputs txId" $ runMarloweQueryIntegrationTest \testData -> do
+    actual <- getWithdrawal $ contractOrTxNoToTxId testData $ Known $ Right Contract1Step4
+    liftIO $ actual `shouldBe` Nothing
+  it "Returns Just for a withdrawal txId" $ runMarloweQueryIntegrationTest \testData@MarloweQueryTestData{..} -> do
+    actual <- getWithdrawal $ fromCardanoTxId $ getTxId $ fst contract1Step5
+    liftIO $ actual `shouldBe` Just (contract1Step5Withdrawal testData)
 
 setup :: ActionWith MarloweQueryTestData -> IO ()
 setup runSpec = withLocalMarloweRuntime $ runIntegrationTest do
@@ -417,15 +440,18 @@ txNoToSomeTransaction testData txNo = SomeTransaction
   (inputsAppliedToTransaction (txNoToBlockHeader testData txNo) (txNoToInputsApplied testData txNo))
 
 contractNoToWithdrawals :: MarloweQueryTestData -> ContractNo -> [Withdrawal]
-contractNoToWithdrawals MarloweQueryTestData{..} = \case
-  Contract1 -> pure Withdrawal
-    { block = snd contract1Step5
-    , withdrawnPayouts =
-      case inputsAppliedToTransaction (returnDepositBlock contract1Step4) (returnDeposited contract1Step4) of
-        Core.Transaction{output=Core.TransactionOutput{payouts}} -> Map.keysSet payouts
-    , withdrawalTx = fromCardanoTxId $ getTxId $ fst contract1Step5
-    }
+contractNoToWithdrawals testData = \case
+  Contract1 -> pure $ contract1Step5Withdrawal testData
   _ -> []
+
+contract1Step5Withdrawal :: MarloweQueryTestData -> Withdrawal
+contract1Step5Withdrawal MarloweQueryTestData{..} = Withdrawal
+  { block = snd contract1Step5
+  , withdrawnPayouts =
+    case inputsAppliedToTransaction (returnDepositBlock contract1Step4) (returnDeposited contract1Step4) of
+      Core.Transaction{output=Core.TransactionOutput{payouts}} -> Map.keysSet payouts
+  , withdrawalTx = fromCardanoTxId $ getTxId $ fst contract1Step5
+  }
 
 runMarloweQueryIntegrationTest :: (MarloweQueryTestData -> MarloweQueryClient Integration a) -> ActionWith MarloweQueryTestData
 runMarloweQueryIntegrationTest test testData@MarloweQueryTestData{..} =
