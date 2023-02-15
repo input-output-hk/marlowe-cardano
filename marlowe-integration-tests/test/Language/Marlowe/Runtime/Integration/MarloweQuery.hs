@@ -4,31 +4,44 @@
 module Language.Marlowe.Runtime.Integration.MarloweQuery
   where
 
-import Cardano.Api (BabbageEra, TxBody)
+import Cardano.Api (BabbageEra, CardanoEra(BabbageEra), TxBody(..), TxBodyContent(..), getTxId)
+import Control.Monad (guard)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Reader.Class
 import Data.Bifunctor (bimap)
 import Data.Foldable (for_)
 import Data.Functor (void)
-import Language.Marlowe.Protocol.Query.Client (MarloweQueryClient, getContractHeaders)
+import Data.Map (Map)
+import qualified Data.Map as Map
+import Data.Maybe (maybeToList)
+import Language.Marlowe.Protocol.Query.Client (MarloweQueryClient, getContractHeaders, getContractState)
 import Language.Marlowe.Protocol.Query.Types
-import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, TxOutRef(..))
-import Language.Marlowe.Runtime.Core.Api (ContractId(..), MarloweVersionTag(..))
+import Language.Marlowe.Runtime.Cardano.Api (fromCardanoTxId, fromCardanoTxOut)
+import Language.Marlowe.Runtime.ChainSync.Api
+  (BlockHeader, TransactionMetadata(..), TransactionOutput(..), TxOutRef(..))
+import Language.Marlowe.Runtime.Core.Api
+  ( ContractId(..)
+  , MarloweVersion(..)
+  , MarloweVersionTag(..)
+  , Payout(..)
+  , TransactionScriptOutput(..)
+  , fromChainPayoutDatum
+  )
 import Language.Marlowe.Runtime.Discovery.Api (ContractHeader)
 import Language.Marlowe.Runtime.Integration.Common
 import Language.Marlowe.Runtime.Integration.StandardContract
+import Language.Marlowe.Runtime.Transaction.Api (ContractCreated(..), InputsApplied(..))
 import Test.Hspec
 import Test.Integration.Marlowe (MarloweRuntime, withLocalMarloweRuntime)
 
 spec :: Spec
 spec = describe "MarloweQuery" $ aroundAll setup do
   getContractHeadersSpec
+  getContractStateSpec
 
 getContractHeadersSpec :: SpecWith MarloweQueryTestData
 getContractHeadersSpec = describe "getContractHeaders" do
   let
-    allContractNos = [Contract1, Contract2, Contract3, Contract4]
-
     contractNoToInt = \case
       Contract1 -> 0
       Contract2 -> 1
@@ -38,18 +51,10 @@ getContractHeadersSpec = describe "getContractHeaders" do
     allRanges :: [Range (WithUnknown ContractNo)]
     allRanges = do
       rangeStart <- Nothing : Just Unknown : (Just . Known <$> allContractNos)
-      rangeOffset <- [0..5]
-      rangeLimit <- [0..5]
+      rangeOffset <- [-1..5]
+      rangeLimit <- [-1..5]
       rangeDirection <- [Ascending, Descending]
       pure Range{..}
-
-    contractNoToContractId :: MarloweQueryTestData -> WithUnknown ContractNo -> ContractId
-    contractNoToContractId MarloweQueryTestData{..} = \case
-      Unknown -> ContractId $ TxOutRef "0000000000000000000000000000000000000000000000000000000000000000" 1
-      Known Contract1 -> standardContractId contract1
-      Known Contract2 -> standardContractId contract2
-      Known Contract3 -> standardContractId contract3
-      Known Contract4 -> standardContractId contract4
 
     contractNoToContractHeader :: MarloweQueryTestData -> ContractNo -> ContractHeader
     contractNoToContractHeader MarloweQueryTestData{..} = \case
@@ -73,31 +78,33 @@ getContractHeadersSpec = describe "getContractHeaders" do
 
     -- rangeStart = Just (Known Contract4), rangeOffset = 3, rangeLimit = 5, rangeDirection = Descending
     expectedPage :: Range (WithUnknown ContractNo) -> Maybe (Page ContractNo ContractNo)
-    expectedPage Range{..} = case rangeStart of
-      Just Unknown -> Nothing
-      Just (Known contractNo) -> expectedPage Range
-        { rangeStart = Nothing
-        , rangeOffset = rangeOffset + case rangeDirection of
-            Ascending -> contractNoToInt contractNo
-            Descending -> contractNoToInt Contract4 - contractNoToInt contractNo
-        , ..
-        }
-      Nothing -> do
-        let
-          items = take rangeLimit $ drop rangeOffset $ case rangeDirection of
-            Ascending -> allContractNos
-            Descending -> reverse allContractNos
-          nextRange = case (reverse items, rangeDirection) of
-            ([], _) -> Nothing
-            (lastItem : _, _) -> do
-              nextItem <- getNext rangeDirection lastItem
-              Just Range
-                { rangeStart = Just nextItem
-                , rangeOffset = 0
-                , ..
-                }
-          totalCount = 4
-        pure Page{..}
+    expectedPage Range{..}
+      | rangeLimit <= 0 || rangeOffset < 0 = Nothing
+      | otherwise = case rangeStart of
+        Just Unknown -> Nothing
+        Just (Known contractNo) -> expectedPage Range
+          { rangeStart = Nothing
+          , rangeOffset = rangeOffset + case rangeDirection of
+              Ascending -> contractNoToInt contractNo
+              Descending -> contractNoToInt Contract4 - contractNoToInt contractNo
+          , ..
+          }
+        Nothing -> do
+          let
+            items = take rangeLimit $ drop rangeOffset $ case rangeDirection of
+              Ascending -> allContractNos
+              Descending -> reverse allContractNos
+            nextRange = case (reverse items, rangeDirection) of
+              ([], _) -> Nothing
+              (lastItem : _, _) -> do
+                nextItem <- getNext rangeDirection lastItem
+                Just Range
+                  { rangeStart = Just nextItem
+                  , rangeOffset = 0
+                  , ..
+                  }
+            totalCount = 4
+          pure Page{..}
 
   for_ allRanges \range -> do
     let expectedSymbolic = expectedPage range
@@ -128,6 +135,32 @@ getContractHeadersSpec = describe "getContractHeaders" do
       runMarloweQueryIntegrationTest \MarloweQueryTestData{..} -> do
         allContracts <- [] `append` Range{rangeStart = Nothing, rangeLimit, rangeOffset = 0, rangeDirection = Descending}
         liftIO $ allContracts `shouldBe` (standardContractHeader <$> [contract4, contract3, contract2, contract1])
+
+getContractStateSpec :: SpecWith MarloweQueryTestData
+getContractStateSpec = describe "getContractState" do
+  for_ (Unknown : (Known <$> allContractNos)) \contractNo -> do
+    it (show contractNo) $ runMarloweQueryIntegrationTest \testData -> do
+      let
+        expected = SomeContractState MarloweV1 <$> case contractNo of
+          Unknown -> Nothing
+          Known contractNo' -> case contractNoToContractCreated testData contractNo' of
+            ContractCreated{..} -> Just ContractState
+              { contractId
+              , roleTokenMintingPolicyId = rolesCurrency
+              , metadata = TransactionMetadata metadata
+              , initialBlock = contractNoToInitialBlock testData contractNo'
+              , initialOutput = TransactionScriptOutput
+                { address = marloweScriptAddress
+                , assets
+                , utxo = unContractId contractId
+                , datum
+                }
+              , latestBlock = contractNoToLatestBlock testData contractNo'
+              , latestOutput = contractNoToLatestOutput testData contractNo'
+              , unclaimedPayouts = contractNoToUnclaimedPayouts testData contractNo'
+              }
+      actual <- getContractState $ contractNoToContractId testData contractNo
+      liftIO $ actual `shouldBe` expected
 
 setup :: ActionWith MarloweQueryTestData -> IO ()
 setup runSpec = withLocalMarloweRuntime $ runIntegrationTest do
@@ -183,6 +216,66 @@ data ContractNo
   | Contract3
   | Contract4
   deriving (Show, Eq, Ord)
+
+allContractNos :: [ContractNo]
+allContractNos = [Contract1, Contract2, Contract3, Contract4]
+
+contractNoToContractId :: MarloweQueryTestData -> WithUnknown ContractNo -> ContractId
+contractNoToContractId MarloweQueryTestData{..} = \case
+  Unknown -> ContractId $ TxOutRef "0000000000000000000000000000000000000000000000000000000000000000" 1
+  Known Contract1 -> standardContractId contract1
+  Known Contract2 -> standardContractId contract2
+  Known Contract3 -> standardContractId contract3
+  Known Contract4 -> standardContractId contract4
+
+contractNoToStandardContract :: MarloweQueryTestData -> ContractNo -> StandardContractInit 'V1
+contractNoToStandardContract MarloweQueryTestData{..} = \case
+  Contract1 -> contract1
+  Contract2 -> contract2
+  Contract3 -> contract3
+  Contract4 -> contract4
+
+contractNoToContractCreated :: MarloweQueryTestData -> ContractNo -> ContractCreated BabbageEra 'V1
+contractNoToContractCreated testData = contractCreated . contractNoToStandardContract testData
+
+contractNoToInitialBlock :: MarloweQueryTestData -> ContractNo -> BlockHeader
+contractNoToInitialBlock testData = createdBlock . contractNoToStandardContract testData
+
+contractNoToLatestBlock :: MarloweQueryTestData -> ContractNo -> BlockHeader
+contractNoToLatestBlock MarloweQueryTestData{..} = \case
+  Contract1 -> returnDepositBlock contract1Step4 -- note: _not_ `snd contract1Step5` (which is a withdrawal)
+  Contract2 -> returnDepositBlock contract2Step4
+  Contract3 -> notifiedBlock contract3Step3
+  Contract4 -> createdBlock contract4
+
+contractNoToLatestOutput :: MarloweQueryTestData -> ContractNo -> Maybe (TransactionScriptOutput 'V1)
+contractNoToLatestOutput MarloweQueryTestData{..} = \case
+  Contract1 -> Nothing
+  Contract2 -> case returnDeposited contract2Step4 of
+    InputsApplied{..} -> output
+  Contract3 -> case notified contract3Step3 of
+    InputsApplied{..} -> output
+  Contract4 -> case contractCreated contract4 of
+    ContractCreated{..} -> Just TransactionScriptOutput
+      { address = marloweScriptAddress
+      , assets
+      , utxo = unContractId contractId
+      , datum
+      }
+
+contractNoToUnclaimedPayouts :: MarloweQueryTestData -> ContractNo -> Map TxOutRef (Payout 'V1)
+contractNoToUnclaimedPayouts MarloweQueryTestData{..} =  \case
+  Contract1 -> mempty
+  Contract2 -> case returnDeposited contract2Step4 of
+    InputsApplied{..} -> Map.fromList do
+      (ix, TransactionOutput{..}) <- case txBody of
+        TxBody TxBodyContent{..} -> zip [0..] $ fromCardanoTxOut BabbageEra <$> txOuts
+      guard $ address == payoutScriptAddress (contractCreated contract2)
+      payout <- maybeToList $ Payout address assets <$> (fromChainPayoutDatum MarloweV1 =<< datum)
+      pure (TxOutRef (fromCardanoTxId $ getTxId txBody) ix, payout)
+  Contract3 -> mempty
+  Contract4 -> mempty
+
 
 runMarloweQueryIntegrationTest :: (MarloweQueryTestData -> MarloweQueryClient Integration a) -> ActionWith MarloweQueryTestData
 runMarloweQueryIntegrationTest test testData@MarloweQueryTestData{..} =

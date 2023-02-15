@@ -38,6 +38,13 @@ import Prelude hiding (init)
 getHeaders
   :: Range ContractId
   -> T.Transaction (Maybe (Page ContractId ContractHeader))
+getHeaders Range{..}
+  -- Invalid requests. Note rangeLimit == 0 is invalid because it produces no
+  -- results and causes infinite paging, which is potentially dangerous for
+  -- clients as they could get caught in an infinite loop if consuming all
+  -- pages.
+  | rangeLimit <= 0 || rangeOffset < 0 = pure Nothing
+
 getHeaders Range{rangeStart = Just (ContractId TxOutRef{..}), ..} = runMaybeT do
   let params = (unTxId txId, fromIntegral txIx)
   pivot <- MaybeT $ T.statement params
@@ -49,10 +56,6 @@ getHeaders Range{rangeStart = Just (ContractId TxOutRef{..}), ..} = runMaybeT do
     |]
   totalCount <- lift $ fromIntegral <$> T.statement () [singletonStatement| SELECT COUNT(*) :: int FROM marlowe.createTxOut |]
   lift $ getHeadersFrom totalCount pivot rangeOffset rangeLimit rangeDirection
-
-getHeaders Range{rangeLimit = 0} = do
-  totalCount <- fromIntegral <$> T.statement () [singletonStatement| SELECT COUNT(*) :: int FROM marlowe.createTxOut |]
-  pure $ Just $ Page { items = [], nextRange = Nothing, totalCount }
 
 getHeaders Range{..} = do
   totalCount <- fromIntegral <$> T.statement () [singletonStatement| SELECT COUNT(*) :: int FROM marlowe.createTxOut |]
@@ -109,8 +112,6 @@ getHeadersFrom
   -> Int
   -> Order
   -> T.Transaction (Page ContractId ContractHeader)
-getHeadersFrom totalCount _ _ 0 = const $ pure Page { items = [], nextRange = Nothing, totalCount }
-
 getHeadersFrom totalCount (pivotSlot, pivotTxId, pivotTxIx) offset limit = T.statement params . \case
   Descending ->
     [foldStatement|
