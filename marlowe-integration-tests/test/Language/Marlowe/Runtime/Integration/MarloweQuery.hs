@@ -14,7 +14,8 @@ import Data.Functor (void)
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Maybe (maybeToList)
-import Language.Marlowe.Protocol.Query.Client (MarloweQueryClient, getContractHeaders, getContractState)
+import Language.Marlowe.Protocol.Query.Client
+  (MarloweQueryClient, getContractHeaders, getContractState, getTransactions)
 import Language.Marlowe.Protocol.Query.Types
 import Language.Marlowe.Runtime.Cardano.Api (fromCardanoTxId, fromCardanoTxOut)
 import Language.Marlowe.Runtime.ChainSync.Api
@@ -27,6 +28,7 @@ import Language.Marlowe.Runtime.Core.Api
   , TransactionScriptOutput(..)
   , fromChainPayoutDatum
   )
+import qualified Language.Marlowe.Runtime.Core.Api as Core
 import Language.Marlowe.Runtime.Discovery.Api (ContractHeader)
 import Language.Marlowe.Runtime.Integration.Common
 import Language.Marlowe.Runtime.Integration.StandardContract
@@ -38,6 +40,7 @@ spec :: Spec
 spec = describe "MarloweQuery" $ aroundAll setup do
   getContractHeadersSpec
   getContractStateSpec
+  getTransactionsSpec
 
 getContractHeadersSpec :: SpecWith MarloweQueryTestData
 getContractHeadersSpec = describe "getContractHeaders" do
@@ -162,6 +165,17 @@ getContractStateSpec = describe "getContractState" do
       actual <- getContractState $ contractNoToContractId testData contractNo
       liftIO $ actual `shouldBe` expected
 
+getTransactionsSpec :: SpecWith MarloweQueryTestData
+getTransactionsSpec = focus $ describe "getTransactions" do
+  for_ (Unknown : (Known <$> allContractNos)) \contractNo -> do
+    it (show contractNo) $ runMarloweQueryIntegrationTest \testData -> do
+      let
+        expected = SomeTransactions MarloweV1 <$> case contractNo of
+          Unknown -> Nothing
+          Known contractNo' -> Just $ contractNoToTransactions testData contractNo'
+      actual <- getTransactions $ contractNoToContractId testData contractNo
+      liftIO $ actual `shouldBe` expected
+
 setup :: ActionWith MarloweQueryTestData -> IO ()
 setup runSpec = withLocalMarloweRuntime $ runIntegrationTest do
   runtime <- ask
@@ -276,6 +290,26 @@ contractNoToUnclaimedPayouts MarloweQueryTestData{..} =  \case
   Contract3 -> mempty
   Contract4 -> mempty
 
+contractNoToTransactions :: MarloweQueryTestData -> ContractNo -> [Core.Transaction 'V1]
+contractNoToTransactions MarloweQueryTestData{..} = \case
+  Contract1 ->
+    [ inputsAppliedToTransaction (initialDepositBlock contract1Step1) (initialFundsDeposited contract1Step1)
+    , inputsAppliedToTransaction (choiceBlock contract1Step2) (gimmeTheMoneyChosen contract1Step2)
+    , inputsAppliedToTransaction (notifiedBlock contract1Step3) (notified contract1Step3)
+    , inputsAppliedToTransaction (returnDepositBlock contract1Step4) (returnDeposited contract1Step4)
+    ]
+  Contract2 ->
+    [ inputsAppliedToTransaction (initialDepositBlock contract2Step1) (initialFundsDeposited contract2Step1)
+    , inputsAppliedToTransaction (choiceBlock contract2Step2) (gimmeTheMoneyChosen contract2Step2)
+    , inputsAppliedToTransaction (notifiedBlock contract2Step3) (notified contract2Step3)
+    , inputsAppliedToTransaction (returnDepositBlock contract2Step4) (returnDeposited contract2Step4)
+    ]
+  Contract3 ->
+    [ inputsAppliedToTransaction (initialDepositBlock contract3Step1) (initialFundsDeposited contract3Step1)
+    , inputsAppliedToTransaction (choiceBlock contract3Step2) (gimmeTheMoneyChosen contract3Step2)
+    , inputsAppliedToTransaction (notifiedBlock contract3Step3) (notified contract3Step3)
+    ]
+  Contract4 -> mempty
 
 runMarloweQueryIntegrationTest :: (MarloweQueryTestData -> MarloweQueryClient Integration a) -> ActionWith MarloweQueryTestData
 runMarloweQueryIntegrationTest test testData@MarloweQueryTestData{..} =
