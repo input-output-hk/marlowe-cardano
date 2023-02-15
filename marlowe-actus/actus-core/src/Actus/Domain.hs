@@ -126,7 +126,7 @@ setDefaultContractTermValues ct@ContractTerms {..} =
       interestCalculationBaseA       = applyDefault 0.0 interestCalculationBaseA,
 
       -- see ContractModel.java
-      cycleAnchorDateOfInterestPayment = cycleAnchorDateOfInterestPayment <|> ((guard $ contractType == CLM) >> initialExchangeDate)
+      cycleAnchorDateOfInterestPayment = cycleAnchorDateOfInterestPayment <|> (guard (contractType == CLM) >> initialExchangeDate)
     }
   where
     infinity :: Double

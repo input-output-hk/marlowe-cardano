@@ -851,7 +851,7 @@ _SCHED_MD_CEG
   ct@ContractTerms
     { maturityDate = md
     } =
-    let refs = maximum <$> (mapM maturityDate $ mapMaybe termsFromStructure (filter (\cs -> referenceRole cs == COVE) $ contractStructure ct))
+    let refs = maximum <$> mapM maturityDate (mapMaybe termsFromStructure (filter (\cs -> referenceRole cs == COVE) $ contractStructure ct))
      in case md <|> maturity ct <|> refs of
           Just m  -> [mkShiftedDay m]
           Nothing -> []
@@ -867,7 +867,7 @@ _SCHED_FP_CEG
       maturityDate = md,
       scheduleConfig
     } =
-    let refs = maximum <$> (mapM maturityDate $ mapMaybe termsFromStructure (filter (\cs -> referenceRole cs == COVE) $ contractStructure ct))
+    let refs = maximum <$> mapM maturityDate (mapMaybe termsFromStructure (filter (\cs -> referenceRole cs == COVE) $ contractStructure ct))
      in case md <|> maturity ct <|> refs of
           Just m  -> generateRecurrentSchedule feanx fecl {includeEndDay = True} m scheduleConfig
           Nothing -> []

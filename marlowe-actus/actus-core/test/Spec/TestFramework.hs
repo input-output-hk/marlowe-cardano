@@ -4,13 +4,13 @@
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE LambdaCase #-}
+
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE TupleSections #-}
+
 {-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE TypeSynonymInstances #-}
+
 
 module Spec.TestFramework
   where
@@ -84,7 +84,7 @@ getValue i TestCase {..} ev date =
     observedKey RR | Actus.Domain.contractId terms == i = marketObjectCodeOfRateReset terms
     observedKey RR =
       do a <- mapM termsFromStructure $ contractStructure terms
-         head <$> (mapM marketObjectCodeOfRateReset $ filter (\b -> Actus.Domain.contractId b == i) a)
+         head <$> mapM marketObjectCodeOfRateReset (filter (\b -> Actus.Domain.contractId b == i) a)
     observedKey SC = marketObjectCodeOfScalingIndex terms
     observedKey DV = Just (fmap toUpper identifier ++ "_DV")
     observedKey XD = let l = map (getMarketObjectCode . reference) (contractStructure terms) in head $ filter isJust l
@@ -203,7 +203,7 @@ testCasesFromFile excluded testfile =
     >>= either
       msg
       ( return
-          . filter (\TestCase {..} -> notElem identifier excluded)
+          . filter (\TestCase {..} -> identifier `notElem` excluded)
           . elems
       )
   where

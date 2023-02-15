@@ -1,4 +1,4 @@
-{-# LANGUAGE NamedFieldPuns #-}
+
 {-# LANGUAGE RecordWildCards #-}
 
 module Actus.Utility.ScheduleGenerator

@@ -271,7 +271,7 @@ instance ToJSON Cycle where
           String s' ->
             String $
               'P'
-                `cons` (pack $ show n)
+                `cons` pack (show n)
                 `append` p'
                 `snoc` 'L'
                 `append` s'
@@ -289,15 +289,13 @@ instance FromJSON Cycle where
         if T.null r2
           then
             Just $
-              return (Cycle n)
-                <*> parseJSON (String $ singleton p)
+              Cycle n <$> parseJSON (String $ singleton p)
                 <*> return LongStub
                 <*> return False
           else do
             r3 <- unconsConstant 'L' r2
             Just $
-              return (Cycle n)
-                <*> parseJSON (String $ singleton p)
+              Cycle n <$> parseJSON (String $ singleton p)
                 <*> parseJSON (String r3)
                 <*> return False
 

@@ -957,8 +957,8 @@ _STF_SC_LAM
   s
   t =
     _STF_PY_LAM fs ct s t
-      & L.notionalScalingMultiplier .~ (if elem 'N' (show scef) then o_rf_SCMO / sccdd else s ^. L.notionalScalingMultiplier)
-      & L.interestScalingMultiplier .~ (if elem 'I' (show scef) then o_rf_SCMO / sccdd else s ^. L.interestScalingMultiplier)
+      & L.notionalScalingMultiplier .~ (if 'N' `elem` show scef then o_rf_SCMO / sccdd else s ^. L.notionalScalingMultiplier)
+      & L.interestScalingMultiplier .~ (if 'I' `elem` show scef then o_rf_SCMO / sccdd else s ^. L.interestScalingMultiplier)
 _STF_SC_LAM _ _ _ s _ = s
 
 -------------------
@@ -1037,7 +1037,7 @@ _STF_XD_CEG
     }
   s
   t =
-    let nt' = cecv * sign contractRole * (sum $ map f referenceStates)
+    let nt' = cecv * sign contractRole * sum (map f referenceStates)
         f cs =
           let (_, c, _) = last $ takeWhile (\((_, _, d), _, _) -> calculationDay d <= t) cs
            in nt c
@@ -1056,7 +1056,7 @@ _STF_XD_CEG
     }
   s
   t =
-    let nt' = cecv * sign contractRole * (sum $ map f referenceStates)
+    let nt' = cecv * sign contractRole * sum (map f referenceStates)
         f cs =
           let (_, c, _) = last $ takeWhile (\((_, _, d), _, _) -> calculationDay d <= t) cs
            in nt c
@@ -1072,7 +1072,7 @@ _STF_XD_CEG
     }
   s
   t =
-    let nt' = cecv * sign contractRole * (sum $ map f referenceStates)
+    let nt' = cecv * sign contractRole * sum (map f referenceStates)
         f cs =
           let (_, c, _) = last $ takeWhile (\(_, x, _) -> sd x <= t) cs
            in nt c + ipac c
@@ -1100,7 +1100,7 @@ _STF_XD_CEC
     }
   s
   t =
-    let nt' = cecv * sign contractRole * (sum $ map f referenceStates)
+    let nt' = cecv * sign contractRole * sum (map f referenceStates)
         f cs =
           let (_, c, _) = last $ takeWhile (\((_, _, d), _, _) -> calculationDay d <= t) cs
            in nt c
@@ -1119,7 +1119,7 @@ _STF_XD_CEC
     }
   s
   t =
-    let nt' = cecv * sign contractRole * (sum $ map f referenceStates)
+    let nt' = cecv * sign contractRole * sum (map f referenceStates)
         f cs =
           let (_, c, _) = last $ takeWhile (\(_, x, _) -> sd x <= t) cs
            in nt c + ipac c
@@ -1138,7 +1138,7 @@ _STF_XD_CEC
   s
   t =
     let cecv = fromMaybe 1 coverageOfCreditEnhancement
-        nt' = cecv * sign contractRole * (sum $ map f referenceStates)
+        nt' = cecv * sign contractRole * sum (map f referenceStates)
         f cs =
           let (_, c, _) = last $ takeWhile (\((_, _, d) , _, _) -> calculationDay d <= t) cs
            in nt c

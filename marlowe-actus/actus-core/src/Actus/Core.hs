@@ -1,7 +1,7 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE TupleSections #-}
+
 
 {-| = ACTUS
 
@@ -31,7 +31,7 @@ import Actus.Domain
 import Actus.Model (CtxPOF(CtxPOF), CtxSTF(..), initializeState, maturity, payoff, schedule, stateTransition)
 import Control.Applicative ((<|>))
 import Control.Monad (filterM)
-import Control.Monad.Reader (Reader, ask, runReader, withReader)
+import Control.Monad.Reader (Reader, asks, runReader, withReader)
 import Data.List (groupBy, nub)
 import Data.Maybe (fromMaybe, isNothing)
 import Data.Sort (sortOn)
@@ -60,7 +60,7 @@ genProjectedCashflows rf ct us =
     check _                                              = id
 
     netCashflows :: ActusFrac a => [CashFlow a] -> [CashFlow a]
-    netCashflows cf = fmap (foldl1 plus) $ groupBy f cf
+    netCashflows cf = foldl1 plus <$> groupBy f cf
       where
         f a b =
           cashEvent a == cashEvent b
@@ -138,7 +138,7 @@ genProjectedPayoffs ::
   Reader (CtxSTF a) [(Event, ContractState a, a)]
 genProjectedPayoffs us =
   do
-    ct <- contractTerms <$> ask
+    ct <- asks contractTerms
     genProjectedPayoffs' $ genSchedule ct us
 
 -- |Generate projected cash flows
@@ -233,7 +233,7 @@ filtersStates ::
   Reader (CtxSTF a) Bool
 filtersStates ((_, ev, ShiftedDay {..}), _) =
   do
-    ct@ContractTerms {..} <- contractTerms <$> ask
+    ct@ContractTerms {..} <- asks contractTerms
     return $ case contractType of
       PAM -> isNothing purchaseDate || Just calculationDay >= purchaseDate
       LAM -> isNothing purchaseDate || ev == PRD || Just calculationDay > purchaseDate
