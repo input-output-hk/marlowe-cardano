@@ -26,7 +26,7 @@ data RootSelector f where
 -- TODO automate this boilerplate with Template Haskell
 getRootSelectorConfig :: GetSelectorConfig RootSelector
 getRootSelectorConfig = \case
-  ChainSeekServer sel -> prependKey "chain-seek" $ getAcceptSocketDriverSelectorConfig chainSeekConfig sel
+  ChainSeekServer sel -> prependKey "chain-sync" $ getAcceptSocketDriverSelectorConfig chainSeekConfig sel
   QueryServer sel -> prependKey "query" $ getAcceptSocketDriverSelectorConfig queryConfig sel
   JobServer sel -> prependKey "job" $ getAcceptSocketDriverSelectorConfig jobConfig sel
   ConfigWatcher ReloadConfig -> SelectorConfig "reload-log-config" True

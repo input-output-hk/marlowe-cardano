@@ -101,7 +101,7 @@ parseOptions defaultNetworkId defaultSocketPath defaultDatabaseUri defaultHost d
       where
         versionOption :: O.Parser (a -> a)
         versionOption = O.infoOption
-          ("chainseekd " <> version)
+          ("marlowe-chain-sync " <> version)
           (O.long "version" <> O.help "Show version.")
 
         socketPathOption :: O.Parser FilePath
@@ -145,16 +145,16 @@ parseOptions defaultNetworkId defaultSocketPath defaultDatabaseUri defaultHost d
 
         portOption :: O.Parser PortNumber
         portOption = O.option O.auto $ mconcat
-          [ O.long "port-number"
+          [ O.long "port"
           , defaultPort
           , O.metavar "PORT_NUMBER"
-          , O.help "The port number to serve the chain seek protocol on."
+          , O.help "The port number to serve the chain sync protocol on."
           , O.showDefault
           ]
 
         queryPortOption :: O.Parser PortNumber
         queryPortOption = O.option O.auto $ mconcat
-          [ O.long "query-port-number"
+          [ O.long "query-port"
           , defaultQueryPort
           , O.metavar "PORT_NUMBER"
           , O.help "The port number to serve the query protocol on."
@@ -163,7 +163,7 @@ parseOptions defaultNetworkId defaultSocketPath defaultDatabaseUri defaultHost d
 
         jobPortOption :: O.Parser PortNumber
         jobPortOption = O.option O.auto $ mconcat
-          [ O.long "job-port-number"
+          [ O.long "job-port"
           , defaultJobPort
           , O.metavar "PORT_NUMBER"
           , O.help "The port number to serve the job protocol on."
@@ -176,7 +176,7 @@ parseOptions defaultNetworkId defaultSocketPath defaultDatabaseUri defaultHost d
           , O.short 'h'
           , defaultHost
           , O.metavar "HOST_NAME"
-          , O.help "The hostname to serve the chain seek protocol on."
+          , O.help "The hostname to serve the chain sync protocol on."
           , O.showDefault
           ]
 
@@ -193,6 +193,6 @@ parseOptions defaultNetworkId defaultSocketPath defaultDatabaseUri defaultHost d
     infoMod :: O.InfoMod Options
     infoMod = mconcat
       [ O.fullDesc
-      , O.progDesc "Chain seek server for Marlowe Runtime."
-      , O.header "chainseekd : a chain seek server for the Marlowe Runtime."
+      , O.progDesc "Chain sync server for Marlowe Runtime."
+      , O.header "marlowe-chain-sync : a chain sync server for the Marlowe Runtime."
       ]

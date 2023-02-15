@@ -48,17 +48,17 @@ waitForTx pollingFrequency txId =
   let
     clientInit = SendMsgRequestHandshake moveSchema ClientStHandshake
       { recvMsgHandshakeRejected = \_ ->
-          pure $ Left "Chain seek schema version mismatch."
+          pure $ Left "Chain sync schema version mismatch."
       , recvMsgHandshakeConfirmed = pure clientIdle
       }
     clientIdle = SendMsgQueryNext (FindTx txId True) clientNext
     clientNext = ClientStNext
       { recvMsgQueryRejected = \err _ ->
-          pure $ SendMsgDone $ Left $ "Chain seek rejected query: " <> show err <> "."
+          pure $ SendMsgDone $ Left $ "Chain sync rejected query: " <> show err <> "."
       , recvMsgWait = liftIO (threadDelay $ pollingFrequency * 1_000_000) $> SendMsgPoll clientNext
       , recvMsgRollBackward = \_ _ -> pure clientIdle
       , recvMsgRollForward = \tx point _ -> case point of
-          Genesis -> pure $ SendMsgDone $ Left  "Chain seek rolled forward to genesis."
+          Genesis -> pure $ SendMsgDone $ Left  "Chain sync rolled forward to genesis."
           At _    -> pure $ SendMsgDone $ Right tx
       }
   in

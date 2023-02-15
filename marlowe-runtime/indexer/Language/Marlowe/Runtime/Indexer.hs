@@ -46,7 +46,7 @@ marloweIndexer = proc MarloweIndexerDependencies{..} -> do
 getMarloweIndexerSelectorConfig :: GetSelectorConfig MarloweIndexerSelector
 getMarloweIndexerSelectorConfig = \case
   StoreEvent sel -> prependKey "store" $ getStoreSelectorConfig sel
-  ChainSeekClientEvent sel -> prependKey "chain-seek-client" $ getChainSeekClientSelectorConfig sel
+  ChainSeekClientEvent sel -> prependKey "chain-sync-client" $ getChainSeekClientSelectorConfig sel
 
 getStoreSelectorConfig :: GetSelectorConfig StoreSelector
 getStoreSelectorConfig = \case

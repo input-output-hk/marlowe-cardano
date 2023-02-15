@@ -7,7 +7,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
 
--- | The type of the chain seek protocol.
+-- | The type of the chain sync protocol.
 
 module Network.Protocol.ChainSeek.Types
   where

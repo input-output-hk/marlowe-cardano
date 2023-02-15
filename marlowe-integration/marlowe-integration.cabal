@@ -69,7 +69,7 @@ library
     , marlowe-cli
     , marlowe-chain-sync
     , marlowe-chain-sync:chain-indexer
-    , marlowe-chain-sync:libchainseek
+    , marlowe-chain-sync:libchainsync
     , marlowe-protocols
     , marlowe-runtime
     , marlowe-runtime:discovery-api

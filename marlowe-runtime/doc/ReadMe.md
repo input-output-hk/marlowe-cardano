@@ -15,7 +15,7 @@ Knowledge of Haskell or Plutus is not required for developers to communicate wit
 
 ## Architecture
 
-The backend for Marlowe runtime consists of a chain-indexing service (`chainseekd`), a history-tracking service for Marlowe contracts (`marlowe-history`), a discovery service for Marlowe contracts (`marlowe-discovery`), and a transaction-creation service for Marlowe contracts (`marlowe-tx`). These backend services operate in concert and rely upon [cardano-node](https://github.com/input-output-hk/cardano-node/blob/master/README.rst) for blockchain connectivity and upon [PostgreSQL](https://www.postgresql.org/) for persistent storage. Access to the backend services is provided via a command-line client (`marlowe`), an AWS Lambda function (`marlowe-lambda`), or a REST/WebSocket server (`web-server`) that uses JSON payloads. Web applications can integrate with a [CIP-30 light wallet](https://cips.cardano.org/cips/cip30/) for transaction signing, whereas enterprise applications can integrate with [cardano-wallet](https://github.com/input-output-hk/cardano-wallet/blob/master/README.md), [cardano-cli](https://github.com/input-output-hk/cardano-node/blob/master/cardano-cli/README.md), or [cardano-hw-cli](https://github.com/vacuumlabs/cardano-hw-cli/blob/develop/README.md) for signing transactions.
+The backend for Marlowe runtime consists of a chain-indexing service (`marlowe-chain-sync`), a history-tracking service for Marlowe contracts (`marlowe-history`), a discovery service for Marlowe contracts (`marlowe-discovery`), and a transaction-creation service for Marlowe contracts (`marlowe-tx`). These backend services operate in concert and rely upon [cardano-node](https://github.com/input-output-hk/cardano-node/blob/master/README.rst) for blockchain connectivity and upon [PostgreSQL](https://www.postgresql.org/) for persistent storage. Access to the backend services is provided via a command-line client (`marlowe`), an AWS Lambda function (`marlowe-lambda`), or a REST/WebSocket server (`web-server`) that uses JSON payloads. Web applications can integrate with a [CIP-30 light wallet](https://cips.cardano.org/cips/cip30/) for transaction signing, whereas enterprise applications can integrate with [cardano-wallet](https://github.com/input-output-hk/cardano-wallet/blob/master/README.md), [cardano-cli](https://github.com/input-output-hk/cardano-node/blob/master/cardano-cli/README.md), or [cardano-hw-cli](https://github.com/vacuumlabs/cardano-hw-cli/blob/develop/README.md) for signing transactions.
 
 ![Marlowe Runtime ecosystem](diagrams/ecosystem.png)
 
@@ -29,9 +29,9 @@ The backend services for use typed protocols over TCP sockets, with ports separa
 See the [tutorial for the Marlowe Runtime command-line-interface](tutorial.md) or the [deployment instructions for the Marlowe Runtime backend](deployment.md) for more information.
 
 
-### Chain Seek Daemon
+### Chain Sync Daemon
 
-The `chainseekd` executable provides services for querying the blockchain for information that may relate to Marlowe contracts. It manages and updates partitioned PostgreSQL tables for all blocks, transactions, inputs, outputs, and assets on the blockchain, not just for Marlowe transactions. It handles rollbacks in the blockchain. It syncs from the genesis block rapidly for test networks like `preprod` and `preview`, but currently takes about 15 hours to sync from the genesis of `mainnet`.
+The `marlowe-chain-sync` executable provides services for querying the blockchain for information that may relate to Marlowe contracts. It manages and updates partitioned PostgreSQL tables for all blocks, transactions, inputs, outputs, and assets on the blockchain, not just for Marlowe transactions. It handles rollbacks in the blockchain. It syncs from the genesis block rapidly for test networks like `preprod` and `preview`, but currently takes about 15 hours to sync from the genesis of `mainnet`.
 
 Three APIs, accessible over three different TCP sockets, are provided:
 - The *job* API provides one function:
@@ -41,12 +41,12 @@ Three APIs, accessible over three different TCP sockets, are provided:
 	- Get the unspent UTxOs.
 - The *sync* API streams or replays the block and transaction information from the Cardano node.
 
-See `chainseekd`'s [help page](chainseekd.md) or its [deployment instructions](../../marlowe-chain-sync/ReadMe.md) for more information.
+See `marlowe-chain-sync`'s [help page](marlowe-chain-sync.md) or its [deployment instructions](../../marlowe-chain-sync/ReadMe.md) for more information.
 
 
 ### Marlowe History
 
-The `marlowe-history` executable provides services for querying the on-chain history of Marlowe contracts. It uses `chainseekd` to follow the progress of a set of Marlowe contract instances, and it handles rollbacks in the blockchain.
+The `marlowe-history` executable provides services for querying the on-chain history of Marlowe contracts. It uses `marlowe-chain-sync` to follow the progress of a set of Marlowe contract instances, and it handles rollbacks in the blockchain.
 
 Three APIs, accessible over three different TCP sockets, are provided:
 - The *job* API supports two operations:
@@ -67,7 +67,7 @@ See `marlowe-history`'s [help page](marlowe-history.md) for more information.
 
 ### Marlowe Discovery
 
-The `marlowe-discovery` executable provides services for discoverying the on-chain presence of Marlowe contracts. It uses `chainseekd` to detect the presence of contract instance of known versions of Marlowe, and it handles rollbacks in the blockchain.
+The `marlowe-discovery` executable provides services for discoverying the on-chain presence of Marlowe contracts. It uses `marlowe-chain-sync` to detect the presence of contract instance of known versions of Marlowe, and it handles rollbacks in the blockchain.
 
 Two APIs, accessible over two different TCP sockets, are provided:
 - The *query* API supports two types of queries:
@@ -82,7 +82,7 @@ See `marlowe-discovery`'s [help page](marlowe-discovery.md) for more information
 
 ### Marlowe Transaction
 
-The `marlowe-tx` executable provides services related to building and submitting transactions for Marlowe contracts. It uses `chainseekd` and `marlowe-history` to gather the information needed to create and apply inputs to Marlowe contract instances. It also communicates with the Cardano node to submit transactions after they have been signed.
+The `marlowe-tx` executable provides services related to building and submitting transactions for Marlowe contracts. It uses `marlowe-chain-sync` and `marlowe-history` to gather the information needed to create and apply inputs to Marlowe contract instances. It also communicates with the Cardano node to submit transactions after they have been signed.
 
 There are three categories of Marlowe transactions on the blockchain:
 - The creation of a new Marlowe contract.

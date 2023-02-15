@@ -2,7 +2,7 @@
 
 Deploying the Marlowe Runtime requires running six backend services:
 - four [marlowe-cardano](https://github.com/input-output-hk/marlowe-cardano/blob/main/README.adoc) services:
-	- `chainseekd` for indexing the blockchain
+	- `marlowe-chain-sync` for indexing the blockchain
 	- `marlowe-history` for tracking the on-chain history of Marlowe contract instances
 	- `marlowe-discovery` for discovering the presence of Marlowe contract instances on the blockchain
 	- `marlowe-tx` for building and submitting Marlowe transactions

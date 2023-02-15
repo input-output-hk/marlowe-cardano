@@ -66,7 +66,7 @@ doSubmit SubmitJobDependencies{..} tellStatus era tx= do
 
         clientInit = SendMsgRequestHandshake moveSchema ClientStHandshake
           { recvMsgHandshakeRejected = \_ ->
-              error "chainseekd schema version mismatch"
+              error "marlowe-chain-sync schema version mismatch"
           , recvMsgHandshakeConfirmed = pure clientIdleAwaitConfirmation
           }
 
@@ -74,10 +74,10 @@ doSubmit SubmitJobDependencies{..} tellStatus era tx= do
 
         clientNextAwaitConfirmation = ClientStNext
           { recvMsgQueryRejected = \err _ ->
-              error $ "chainseekd rejected query: " <> show err
+              error $ "marlowe-chain-sync rejected query: " <> show err
           , recvMsgRollBackward = \_ _ -> pure clientIdleAwaitConfirmation
           , recvMsgRollForward = \_ point _ -> case point of
-              Genesis -> error "chainseekd rolled forward to genesis"
+              Genesis -> error "marlowe-chain-sync rolled forward to genesis"
               At block -> pure $ clientIdleAwaitMaturity block
           , recvMsgWait = threadDelay 100_000 $> SendMsgPoll clientNextAwaitConfirmation
           }

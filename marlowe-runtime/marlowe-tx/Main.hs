@@ -130,7 +130,7 @@ run Options{..} = withSocketsDo do
               client
 
           queryChainSync :: ChainSyncQuery Void e a -> IO a
-          queryChainSync = fmap (fromRight $ error "failed to query chain seek server") . runChainSyncQueryClient . liftQuery
+          queryChainSync = fmap (fromRight $ error "failed to query chain sync server") . runChainSyncQueryClient . liftQuery
 
           mkSubmitJob = Submit.mkSubmitJob Submit.SubmitJobDependencies{..}
 
@@ -195,15 +195,15 @@ getOptions = execParser $ info (helper <*> parser) infoMod
       <*> submitConfirmationBlocksParser
 
     chainSeekPortParser = option auto $ mconcat
-      [ long "chain-seek-port-number"
+      [ long "chain-sync-port"
       , value 3715
       , metavar "PORT_NUMBER"
-      , help "The port number of the chain seek server."
+      , help "The port number of the chain sync server."
       , showDefault
       ]
 
     chainSeekQueryPortParser = option auto $ mconcat
-      [ long "chain-seek-query-port-number"
+      [ long "chain-sync-query-port"
       , value 3716
       , metavar "PORT_NUMBER"
       , help "The port number of the chain sync query server."
@@ -211,7 +211,7 @@ getOptions = execParser $ info (helper <*> parser) infoMod
       ]
 
     chainSeekCommandPortParser = option auto $ mconcat
-      [ long "chain-seek-command-port-number"
+      [ long "chain-sync-command-port"
       , value 3720
       , metavar "PORT_NUMBER"
       , help "The port number of the chain sync job server."
@@ -227,10 +227,10 @@ getOptions = execParser $ info (helper <*> parser) infoMod
       ]
 
     chainSeekHostParser = strOption $ mconcat
-      [ long "chain-seek-host"
+      [ long "chain-sync-host"
       , value "127.0.0.1"
       , metavar "HOST_NAME"
-      , help "The host name of the chain seek server."
+      , help "The host name of the chain sync server."
       , showDefault
       ]
 

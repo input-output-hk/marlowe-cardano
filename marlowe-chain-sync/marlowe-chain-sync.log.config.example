@@ -1,8 +1,8 @@
 {
-  "chain-seek.connected": true,
-  "chain-seek.disconnected": true,
-  "chain-seek.send": false,
-  "chain-seek.recv": false,
+  "chain-sync.connected": true,
+  "chain-sync.disconnected": true,
+  "chain-sync.send": false,
+  "chain-sync.recv": false,
   "query.connected": true,
   "query.disconnected": true,
   "query.send": {

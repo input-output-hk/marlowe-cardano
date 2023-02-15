@@ -52,7 +52,7 @@
           (hsPkgs."marlowe-cli" or (errorHandler.buildDepError "marlowe-cli"))
           (hsPkgs."marlowe-chain-sync" or (errorHandler.buildDepError "marlowe-chain-sync"))
           (hsPkgs."marlowe-chain-sync".components.sublibs.chain-indexer or (errorHandler.buildDepError "marlowe-chain-sync:chain-indexer"))
-          (hsPkgs."marlowe-chain-sync".components.sublibs.libchainseek or (errorHandler.buildDepError "marlowe-chain-sync:libchainseek"))
+          (hsPkgs."marlowe-chain-sync".components.sublibs.libchainsync or (errorHandler.buildDepError "marlowe-chain-sync:libchainsync"))
           (hsPkgs."marlowe-protocols" or (errorHandler.buildDepError "marlowe-protocols"))
           (hsPkgs."marlowe-runtime" or (errorHandler.buildDepError "marlowe-runtime"))
           (hsPkgs."marlowe-runtime".components.sublibs.discovery-api or (errorHandler.buildDepError "marlowe-runtime:discovery-api"))

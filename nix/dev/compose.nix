@@ -27,7 +27,7 @@ let
     ln -sv ${run-sqitch}/bin/run-sqitch $out
     ln -sv ${run-sqitch-marlowe-indexer}/bin/run-sqitch-marlowe-indexer $out
     ln -sv ${run-local-service "marlowe-chain-sync" "0.0.0.0" "marlowe-chain-indexer"}/bin/run-marlowe-chain-indexer $out
-    ln -sv ${run-local-service "marlowe-chain-sync" "0.0.0.0" "chainseekd"}/bin/run-chainseekd $out
+    ln -sv ${run-local-service "marlowe-chain-sync" "0.0.0.0" "marlowe-chain-sync"}/bin/run-marlowe-chain-sync $out
     ln -sv ${run-local-service "marlowe-runtime" "0.0.0.0" "marlowe-sync"}/bin/run-marlowe-sync $out
     ln -sv ${run-local-service "marlowe-runtime" "0.0.0.0" "marlowe-tx"}/bin/run-marlowe-tx $out
     ln -sv ${run-local-service "marlowe-runtime" "0.0.0.0" "marlowe-web-server"}/bin/run-marlowe-web-server $out
@@ -129,12 +129,12 @@ let
     restart = "unless-stopped";
     depends_on = {
       "postgres" = { condition = "service_healthy"; };
-      "chainseekd" = { condition = "service_healthy"; };
+      "marlowe-chain-sync" = { condition = "service_healthy"; };
     };
     command = [
       "/exec/run-marlowe-indexer"
-      "--chain-seek-host"
-      "chainseekd"
+      "--chain-sync-host"
+      "marlowe-chain-sync"
       "--log-config-file"
       "./marlowe-indexer.log.config"
       "--database-uri"
@@ -147,11 +147,11 @@ let
     };
   };
 
-  chainseekd-service = dev-service {
+  marlowe-chain-sync-service = dev-service {
     ports = [ 3715 3716 3720 ];
     depends_on = [ "postgres" "node" "marlowe-chain-indexer" ];
     command = [
-      "/exec/run-chainseekd"
+      "/exec/run-marlowe-chain-sync"
       "--testnet-magic"
       (builtins.toString network.magic)
       "--socket-path"
@@ -161,7 +161,7 @@ let
       "--host"
       "0.0.0.0"
       "--log-config-file"
-      "./chainseekd.log.config"
+      "./marlowe-chain-sync.log.config"
     ];
   };
 
@@ -181,11 +181,11 @@ let
 
   tx-service = dev-service {
     ports = [ 3723 ];
-    depends_on = [ "chainseekd" ];
+    depends_on = [ "marlowe-chain-sync" ];
     command = [
       "/exec/run-marlowe-tx"
-      "--chain-seek-host"
-      "chainseekd"
+      "--chain-sync-host"
+      "marlowe-chain-sync"
       "--host"
       "0.0.0.0"
       "--log-config-file"
@@ -256,7 +256,7 @@ let
     volumes.postgres = null;
 
     services.marlowe-chain-indexer = chain-indexer-service;
-    services.chainseekd = chainseekd-service;
+    services.marlowe-chain-sync = marlowe-chain-sync-service;
     services.marlowe-tx = tx-service;
     services.web = web-service;
     services.marlowe-indexer = marlowe-indexer-service;

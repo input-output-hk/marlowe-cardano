@@ -28,9 +28,9 @@ $ marlowe-finder --help
 
 marlowe-finder : find active Marlowe contracts
 
-Usage: marlowe-finder [--chain-seek-host HOST_NAME]
-                      [--chain-seek-command-port PORT_NUMBER]
-                      [--chain-seek-sync-port PORT_NUMBER]
+Usage: marlowe-finder [--chain-sync-host HOST_NAME]
+                      [--chain-sync-command-port PORT_NUMBER]
+                      [--chain-sync-port PORT_NUMBER]
                       [--marlowe-sync-host HOST_NAME]
                       [--marlowe-sync-port PORT_NUMBER]
                       [--marlowe-header-port PORT_NUMBER]
@@ -46,18 +46,18 @@ Usage: marlowe-finder [--chain-seek-host HOST_NAME]
 
 Available options:
   -h,--help                Show this help text
-  --chain-seek-host HOST_NAME
-                           The hostname of the Marlowe Runtime chain-seek
+  --chain-sync-host HOST_NAME
+                           The hostname of the Marlowe Runtime chain-sync
                            server. Can be set as the environment variable
-                           MARLOWE_CHAINSEEKD_HOST (default: "127.0.0.1")
-  --chain-seek-command-port PORT_NUMBER
-                           The port number of the chain-seek server's job API.
+                           MARLOWE_CHAIN_SYNC_HOST (default: "127.0.0.1")
+  --chain-sync-command-port PORT_NUMBER
+                           The port number of the chain-sync server's job API.
                            Can be set as the environment variable
-                           MARLOWE_CHAINSEEKD_COMMAND_PORT (default: 3720)
-  --chain-seek-sync-port PORT_NUMBER
-                           The port number of the chain-seek server's
+                           MARLOWE_CHAIN_SYNC_COMMAND_PORT (default: 3720)
+  --chain-sync-port PORT_NUMBER
+                           The port number of the chain-sync server's
                            synchronization API. Can be set as the environment
-                           variable MARLOWE_CHAINSEEKD_PORT (default: 3715)
+                           variable MARLOWE_CHAIN_SYNC_PORT (default: 3715)
   --marlowe-sync-host HOST_NAME
                            The hostname of the Marlowe Runtime marlowe-sync
                            server. Can be set as the environment variable

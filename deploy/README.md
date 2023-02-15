@@ -11,7 +11,7 @@ ssh dev@dapps.aws.iohkdev.io -p 4022
 ## Network
 Information about the IP address and ports of each service is located in /local/network.env of the ssh daemon's container.
 
-Running `scripts/setup-dev-connection` will query that file and setup ssh port forwarding for chainseekd and all marlowe services.
+Running `scripts/setup-dev-connection` will query that file and setup ssh port forwarding for marlowe-chain-sync and all marlowe services.
 
 Ssh port forwarding will let you connect to ports bound on your local machine and have the stream forwarded to the service running on the remote machine. It will be as if you have all the services running on your local machine.
 
@@ -22,10 +22,10 @@ Each service has an operable in `deploy/operables.nix`. These are written to be 
 Each operable has a related OCI image containing exactly the operable and its debug and runtime dependencies.
 
 To push an oci-image to the registry you will need to get access credentials, by running `skopeo login` or `docker login` in a devshell with skopeo or docker (ask for login information).
-Then to push, for example, chainseekd run:
+Then to push, for example, marlowe-chain-sync run:
 
 ``` sh
-nix run .\#oci-images.x86_64-linux.chainseekd.copyToRegistry
+nix run .\#oci-images.x86_64-linux.marlowe-chain-sync.copyToRegistry
 ```
 
 `

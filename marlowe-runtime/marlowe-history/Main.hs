@@ -144,7 +144,7 @@ run Options{..} = withSocketsDo do
       runClientPeerOverSocketWithHandshake throwIO addr codecQuery queryClientPeer $ liftQuery query
 
     queryChainSync :: ChainSyncQuery Void e a -> IO a
-    queryChainSync = fmap (fromRight $ error "failed to query chain seek server") . queryChainSeek
+    queryChainSync = fmap (fromRight $ error "failed to query chain sync server") . queryChainSeek
 
 data Options = Options
   { chainSeekPort      :: PortNumber
@@ -171,15 +171,15 @@ getOptions = execParser $ info (helper <*> parser) infoMod
       <*> logConfigFileParser
 
     chainSeekPortParser = option auto $ mconcat
-      [ long "chain-seek-port-number"
+      [ long "chain-sync-port"
       , value 3715
       , metavar "PORT_NUMBER"
-      , help "The port number of the chain seek server."
+      , help "The port number of the chain sync server."
       , showDefault
       ]
 
     chainSeekQueryPortParser = option auto $ mconcat
-      [ long "chain-seek-query-port-number"
+      [ long "chain-sync-query-port"
       , value 3716
       , metavar "PORT_NUMBER"
       , help "The port number of the chain sync query server."
@@ -211,10 +211,10 @@ getOptions = execParser $ info (helper <*> parser) infoMod
       ]
 
     chainSeekHostParser = strOption $ mconcat
-      [ long "chain-seek-host"
+      [ long "chain-sync-host"
       , value "127.0.0.1"
       , metavar "HOST_NAME"
-      , help "The host name of the chain seek server."
+      , help "The host name of the chain sync server."
       , showDefault
       ]
 

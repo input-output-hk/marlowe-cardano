@@ -49,7 +49,7 @@ getOptions = O.execParser $ O.info parser infoMod
   where
     parser = O.helper <*> (Options <$> portParser <*> hostParser <*> exampleParser)
     portParser = O.option O.auto $ mconcat
-      [ O.long "port-number"
+      [ O.long "port"
       , O.short 'p'
       , O.value 3715
       , O.metavar "PORT_NUMBER"
@@ -68,5 +68,5 @@ getOptions = O.execParser $ O.info parser infoMod
       ]
     infoMod = mconcat
       [ O.fullDesc
-      , O.progDesc "Example Chain Seek client for the Marlowe Chain Sync"
+      , O.progDesc "Example Chain Sync client for the Marlowe Chain Sync"
       ]

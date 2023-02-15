@@ -119,15 +119,15 @@ port' optPrefix envPrefix defaultValue description = CLI.CliOption
 
 
 chainSeekHost :: CliOption O.OptionFields HostName
-chainSeekHost = host' "chain-seek" "CHAINSEEKD" "127.0.0.1" "The hostname of the Marlowe Runtime chain-seek server."
+chainSeekHost = host' "chain-sync" "MARLOWE_CHAIN_SYNC" "127.0.0.1" "The hostname of the Marlowe Runtime chain-sync server."
 
 
 chainSeekCommandPort :: CliOption O.OptionFields PortNumber
-chainSeekCommandPort = port' "chain-seek-command" "CHAINSEEKD_COMMAND" 3720 "The port number of the chain-seek server's job API."
+chainSeekCommandPort = port' "chain-sync-command" "MARLOWE_CHAIN_SYNC_COMMAND" 3720 "The port number of the chain-sync server's job API."
 
 
 chainSeekSyncPort :: CliOption O.OptionFields PortNumber
-chainSeekSyncPort = port' "chain-seek-sync" "CHAINSEEKD" 3715 "The port number of the chain-seek server's synchronization API."
+chainSeekSyncPort = port' "chain-sync" "MARLOWE_CHAIN_SYNC" 3715 "The port number of the chain-sync server's synchronization API."
 
 
 addressParser :: O.ReadM Address
