@@ -46,10 +46,12 @@
           (hsPkgs."network" or (errorHandler.buildDepError "network"))
           (hsPkgs."stm" or (errorHandler.buildDepError "stm"))
           (hsPkgs."QuickCheck" or (errorHandler.buildDepError "QuickCheck"))
+          (hsPkgs."resourcet" or (errorHandler.buildDepError "resourcet"))
           (hsPkgs."template-haskell" or (errorHandler.buildDepError "template-haskell"))
           (hsPkgs."text" or (errorHandler.buildDepError "text"))
           (hsPkgs."transformers-base" or (errorHandler.buildDepError "transformers-base"))
           (hsPkgs."typed-protocols" or (errorHandler.buildDepError "typed-protocols"))
+          (hsPkgs."unliftio" or (errorHandler.buildDepError "unliftio"))
           ];
         buildable = true;
         modules = [
