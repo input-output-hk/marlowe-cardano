@@ -24,18 +24,24 @@ import Data.Void (Void)
 import Network.Channel (Channel(..), channelPair, hoistChannel, socketAsChannel)
 import Network.Socket
   ( AddrInfo(..)
+  , AddrInfoFlag(..)
   , HostName
   , PortNumber
   , SockAddr
-  , Socket
+  , SocketOption(..)
   , SocketType(..)
   , addrAddress
+  , bind
   , close
   , connect
   , defaultHints
   , getAddrInfo
   , gracefulClose
+  , listen
   , openSocket
+  , setCloseOnExecIfNeeded
+  , setSocketOption
+  , withFdSocket
   )
 import Network.Socket.Address (accept)
 import Network.TypedProtocol (Message, Peer(..), PeerHasAgency, PeerRole, SomeMessage(..), runPeerWithDriver)
@@ -214,14 +220,6 @@ runClientPeerGeneral openChannel closeChannel mkDriver' toPeer client =
     let driver = mkDriver' ch
      in fst <$> runPeerWithDriver driver (toPeer client) (startDState driver)
 
-acceptRunServerPeerOverSocket
-  :: (MonadBaseControl IO m, MonadCleanup m, Exception ex)
-  => Socket
-  -> Codec protocol ex m ByteString
-  -> ToPeer server protocol peer st m
-  -> m (RunServer m server)
-acceptRunServerPeerOverSocket = acceptRunServerPeerOverSocketWithLogging $ noopEventBackend ()
-
 data AcceptSocketDriverSelector ps f where
   Accept :: AcceptSocketDriverSelector ps Void
   ServerDriverEvent :: DriverSelector ps f -> AcceptSocketDriverSelector ps f
@@ -249,24 +247,38 @@ getConnectSocketDriverSelectorConfig SocketDriverConfigOptions{..} = \case
   ClientSession -> SelectorConfig "session" enableDisconnected absurdFieldConfig
   ClientDriverEvent sel -> getDriverSelectorConfig enableServerDriverEvent sel
 
-acceptRunServerPeerOverSocketWithLogging
-  :: forall server protocol st ex m r peer
-   . (MonadBaseControl IO m, MonadCleanup m, Exception ex)
-  => EventBackend m r (AcceptSocketDriverSelector protocol)
-  -> Socket
+openServerPortWithLogging
+  :: forall server protocol st ex m n r peer a
+   . (MonadBaseControl IO m, MonadCleanup m, Exception ex, MonadBaseControl IO n)
+  => HostName
+  -> PortNumber
   -> Codec protocol ex m ByteString
   -> ToPeer server protocol peer st m
-  -> m (RunServer m server)
-acceptRunServerPeerOverSocketWithLogging eventBackend socket = acceptRunServerPeerWithLogging'
-  eventBackend
-  (liftBase $ fst <$> accept @SockAddr socket)
-  (fmap liftBase . \case
-    True -> close
-    False -> flip gracefulClose 5000
-  )
-  (hoistChannel liftBase . socketAsChannel)
+  -> ((EventBackend m r (AcceptSocketDriverSelector protocol) -> m (RunServer m server)) -> n a)
+  -> n a
+openServerPortWithLogging host port codec toPeer withAccept =
+  bracket open (liftBase . close) \socket -> withAccept \eventBackend -> acceptRunServerPeerWithLoggingGeneral
+    eventBackend
+    (liftBase $ fmap fst $ accept @SockAddr socket)
+    (fmap liftBase . \case
+      True -> close
+      False -> flip gracefulClose 5000
+    )
+    (hoistChannel liftBase . socketAsChannel)
+    codec
+    toPeer
+  where
+    open = liftBase do
+      let hints = defaultHints { addrFlags = [AI_PASSIVE], addrSocketType = Stream }
+      addr <- head <$> getAddrInfo (Just hints) (Just host) (Just $ show port)
+      bracketOnError (openSocket addr) close \socket -> do
+        setSocketOption socket ReuseAddr 1
+        withFdSocket socket setCloseOnExecIfNeeded
+        bind socket $ addrAddress addr
+        listen socket 1024
+        pure socket
 
-acceptRunServerPeerWithLogging'
+acceptRunServerPeerWithLoggingGeneral
   :: forall server protocol st ex m channel r peer
    . (MonadBaseControl IO m, MonadCleanup m, Exception ex)
   => EventBackend m r (AcceptSocketDriverSelector protocol)
@@ -276,7 +288,7 @@ acceptRunServerPeerWithLogging'
   -> Codec protocol ex m ByteString
   -> ToPeer server protocol peer st m
   -> m (RunServer m server)
-acceptRunServerPeerWithLogging' eventBackend acceptChannel closeChannel mkChannel codec = acceptRunServerPeerGeneral
+acceptRunServerPeerWithLoggingGeneral eventBackend acceptChannel closeChannel mkChannel codec = acceptRunServerPeerGeneral
   ( withEvent eventBackend Accept \ev -> do
       ch <- acceptChannel
       pure (reference ev, ch)
@@ -322,7 +334,7 @@ clientServerPair serverEventBackend clientEventBackend codec serverToPeer client
   serverChannelQueue <- newTQueue
   let
     acceptRunServer :: m (RunServer m server)
-    acceptRunServer = acceptRunServerPeerWithLogging'
+    acceptRunServer = acceptRunServerPeerWithLoggingGeneral
       serverEventBackend
       (liftBase $ atomically $ readTQueue serverChannelQueue)
       (const $ liftBase . atomically . snd)

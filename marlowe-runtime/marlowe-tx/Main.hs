@@ -5,7 +5,6 @@ module Main
 
 import Control.Arrow (arr, (<<<))
 import Control.Concurrent.Component
-import Control.Exception (bracket, bracketOnError)
 import Data.Either (fromRight)
 import qualified Data.Text.Lazy.IO as TL
 import Data.UUID.V4 (nextRandom)
@@ -29,30 +28,13 @@ import Logging (RootSelector(..), getRootSelectorConfig)
 import Network.Protocol.ChainSeek.Client (chainSeekClientPeer)
 import Network.Protocol.Driver (RunClient)
 import Network.Protocol.Handshake.Client (runClientPeerOverSocketWithLoggingWithHandshake)
-import Network.Protocol.Handshake.Server (acceptRunServerPeerOverSocketWithLoggingWithHandshake)
+import Network.Protocol.Handshake.Server (openServerPortWithLoggingWithHandshake)
 import Network.Protocol.Job.Client (JobClient, jobClientPeer)
 import Network.Protocol.Job.Codec (codecJob)
 import Network.Protocol.Job.Server (jobServerPeer)
 import Network.Protocol.Query.Client (QueryClient, liftQuery, queryClientPeer)
 import Network.Protocol.Query.Codec (codecQuery)
-import Network.Socket
-  ( AddrInfo(..)
-  , AddrInfoFlag(..)
-  , HostName
-  , PortNumber
-  , SocketOption(..)
-  , SocketType(..)
-  , bind
-  , close
-  , defaultHints
-  , getAddrInfo
-  , listen
-  , openSocket
-  , setCloseOnExecIfNeeded
-  , setSocketOption
-  , withFdSocket
-  , withSocketsDo
-  )
+import Network.Socket (HostName, PortNumber)
 import Observe.Event.Backend (narrowEventBackend, newOnceFlagMVar)
 import Observe.Event.Component (LoggerDependencies(..), logger)
 import Options.Applicative
@@ -78,22 +60,14 @@ import System.IO (stderr)
 main :: IO ()
 main = run =<< getOptions
 
-clientHints :: AddrInfo
-clientHints = defaultHints { addrSocketType = Stream }
-
 run :: Options -> IO ()
-run Options{..} = withSocketsDo do
-  addr <- resolve port
-  bracket (openServer addr) close \socket -> do
+run Options{..} = do
+  openServerPortWithLoggingWithHandshake host port codecJob jobServerPeer \acceptRunTransactionServer' -> do
     {- Setup Dependencies -}
     let
       transactionDependencies rootEventBackend =
         let
-          acceptRunTransactionServer = acceptRunServerPeerOverSocketWithLoggingWithHandshake
-            (narrowEventBackend Server rootEventBackend)
-            socket
-            codecJob
-            jobServerPeer
+          acceptRunTransactionServer = acceptRunTransactionServer' $ narrowEventBackend Server rootEventBackend
 
           connectToChainSeek :: RunClient IO RuntimeChainSeekClient
           connectToChainSeek = runClientPeerOverSocketWithLoggingWithHandshake
@@ -140,6 +114,7 @@ run Options{..} = withSocketsDo do
           getCurrentScripts = ScriptRegistry.getCurrentScripts
         in TransactionDependencies{..}
       appComponent = transaction <<< arr transactionDependencies <<< logger
+
     runComponent_ appComponent LoggerDependencies
       { configFilePath = logConfigFile
       , getSelectorConfig = getRootSelectorConfig
@@ -148,17 +123,6 @@ run Options{..} = withSocketsDo do
       , writeText = TL.hPutStr stderr
       , injectConfigWatcherSelector = ConfigWatcher
       }
-  where
-    openServer addr = bracketOnError (openSocket addr) close \socket -> do
-      setSocketOption socket ReuseAddr 1
-      withFdSocket socket setCloseOnExecIfNeeded
-      bind socket $ addrAddress addr
-      listen socket 2048
-      return socket
-
-    resolve p = do
-      let hints = defaultHints { addrFlags = [AI_PASSIVE], addrSocketType = Stream }
-      head <$> getAddrInfo (Just hints) (Just host) (Just $ show p)
 
 data Options = Options
   { chainSeekPort :: PortNumber
