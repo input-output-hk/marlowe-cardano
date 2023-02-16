@@ -13,7 +13,7 @@ module Network.Protocol.Driver
 import Control.Concurrent.STM (STM, atomically, newTQueue, readTQueue)
 import Control.Concurrent.STM.TQueue (writeTQueue)
 import Control.Exception (Exception)
-import Control.Exception.Lifted (bracket, bracketOnError, finally)
+import Control.Exception.Lifted (bracket, bracketOnError, finally, throwIO)
 import Control.Monad.Base (MonadBase(liftBase))
 import Control.Monad.Cleanup (MonadCleanup)
 import Control.Monad.Trans.Control (MonadBaseControl)
@@ -96,12 +96,11 @@ logDriver eventBackend Driver{..} = Driver{..}
 
 mkDriver
   :: forall ps failure bytes m
-   . Monad m
-  => (forall a. failure -> m a)
-  -> Codec ps failure m bytes
+   . (MonadBase IO m, Exception failure)
+  => Codec ps failure m bytes
   -> Channel m bytes
   -> Driver ps (Maybe bytes) m
-mkDriver throwImpl Codec{..} Channel{..} = Driver{..}
+mkDriver Codec{..} Channel{..} = Driver{..}
   where
     sendMessage
       :: forall (pr :: PeerRole) (st :: ps) (st' :: ps)
@@ -122,7 +121,7 @@ mkDriver throwImpl Codec{..} Channel{..} = Driver{..}
       -> DecodeStep bytes failure m a
       -> m (a, Maybe bytes)
     decodeChannel _ (DecodeDone a trailing)     = pure (a, trailing)
-    decodeChannel _ (DecodeFail failure)        = throwImpl failure
+    decodeChannel _ (DecodeFail failure)        = throwIO failure
     decodeChannel Nothing (DecodePartial next)  = recv >>= next >>= decodeChannel Nothing
     decodeChannel trailing (DecodePartial next) = next trailing >>= decodeChannel Nothing
 
@@ -135,9 +134,8 @@ newtype RunServer m server = RunServer (forall a. server m a -> m a)
 type ToPeer machine protocol peer st m = forall a. machine m a -> Peer protocol peer st m a
 
 runClientPeerOverSocket
-  :: (MonadCleanup m, MonadBaseControl IO m)
-  => (forall x. ex -> m x)
-  -> AddrInfo
+  :: (MonadCleanup m, MonadBaseControl IO m, Exception ex)
+  => AddrInfo
   -> Codec protocol ex m ByteString
   -> ToPeer client protocol peer st m
   -> RunClient m client
@@ -149,46 +147,55 @@ data ConnectSocketDriverSelector ps f where
   ClientDriverEvent :: DriverSelector ps f -> ConnectSocketDriverSelector ps f
 
 runClientPeerOverSocketWithLogging
-  :: (MonadBaseControl IO m, MonadCleanup m)
+  :: (MonadBaseControl IO m, MonadCleanup m, Exception ex)
   => EventBackend m r (ConnectSocketDriverSelector protocol)
-  -> (forall x. ex -> m x)
   -> AddrInfo
   -> Codec protocol ex m ByteString
   -> ToPeer client protocol peer st m
   -> RunClient m client
-runClientPeerOverSocketWithLogging eventBackend throwImpl addr = runClientPeerWithLogging'
+runClientPeerOverSocketWithLogging eventBackend addr = runClientPeerWithLoggingGeneral
   eventBackend
-  throwImpl
-  (liftBase $ openSocket addr)
+  ( liftBase do
+      socket <- liftBase $ openSocket addr
+      connect socket $ addrAddress addr
+      pure socket
+  )
   (liftBase . close)
-  (\sock -> liftBase $ connect sock $ addrAddress addr)
   (hoistChannel liftBase . socketAsChannel)
 
-runClientPeerWithLogging'
-  :: (MonadBaseControl IO m, MonadCleanup m)
+runClientPeerWithLoggingGeneral
+  :: (MonadBaseControl IO m, MonadCleanup m, Exception ex)
   => EventBackend m r (ConnectSocketDriverSelector protocol)
-  -> (forall x. ex -> m x)
   -> m channel
-  -> (channel -> m ())
   -> (channel -> m ())
   -> (channel -> Channel m ByteString)
   -> Codec protocol ex m ByteString
   -> ToPeer client protocol peer st m
   -> RunClient m client
-runClientPeerWithLogging' eventBackend throwImpl openChannel closeChannel connectChannel mkChannel codec toPeer client =
+runClientPeerWithLoggingGeneral eventBackend openChannel closeChannel mkChannel codec toPeer client =
+  withEvent eventBackend ClientSession \ev ->
+    runClientPeerGeneral
+      (withSubEvent ev Connect $ const openChannel)
+      closeChannel
+      (logDriver (subEventBackend ClientDriverEvent ev) . mkDriver codec . mkChannel)
+      toPeer
+      client
+
+runClientPeerGeneral
+  :: MonadBaseControl IO m
+  => m channel
+  -> (channel -> m ())
+  -> (channel -> Driver ps dState m)
+  -> ToPeer client ps peer st m
+  -> RunClient m client
+runClientPeerGeneral openChannel closeChannel mkDriver' toPeer client =
   bracket openChannel closeChannel \ch ->
-    withEvent eventBackend ClientSession \ev -> do
-      withSubEvent ev Connect $ const $ connectChannel ch
-      let
-        eventBackend' = subEventBackend ClientDriverEvent ev
-        driver = logDriver eventBackend' $ mkDriver throwImpl codec $ mkChannel ch
-        peer = toPeer client
-      fst <$> runPeerWithDriver driver peer (startDState driver)
+    let driver = mkDriver' ch
+     in fst <$> runPeerWithDriver driver (toPeer client) (startDState driver)
 
 acceptRunServerPeerOverSocket
-  :: (MonadBaseControl IO m, MonadCleanup m)
-  => (forall x. ex -> m x)
-  -> Socket
+  :: (MonadBaseControl IO m, MonadCleanup m, Exception ex)
+  => Socket
   -> Codec protocol ex m ByteString
   -> ToPeer server protocol peer st m
   -> m (RunServer m server)
@@ -225,16 +232,14 @@ getConnectSocketDriverSelectorConfig SocketDriverConfigOptions{..} = \case
 
 acceptRunServerPeerOverSocketWithLogging
   :: forall server protocol st ex m r peer
-   . (MonadBaseControl IO m, MonadCleanup m)
+   . (MonadBaseControl IO m, MonadCleanup m, Exception ex)
   => EventBackend m r (AcceptSocketDriverSelector protocol)
-  -> (forall x. ex -> m x)
   -> Socket
   -> Codec protocol ex m ByteString
   -> ToPeer server protocol peer st m
   -> m (RunServer m server)
-acceptRunServerPeerOverSocketWithLogging eventBackend throwImpl socket = acceptRunServerPeerWithLogging'
+acceptRunServerPeerOverSocketWithLogging eventBackend socket = acceptRunServerPeerWithLogging'
   eventBackend
-  throwImpl
   (liftBase $ fst <$> accept @SockAddr socket)
   (liftBase . close)
   (liftBase . flip gracefulClose 5000)
@@ -242,9 +247,8 @@ acceptRunServerPeerOverSocketWithLogging eventBackend throwImpl socket = acceptR
 
 acceptRunServerPeerWithLogging'
   :: forall server protocol st ex m channel r peer
-   . (MonadBaseControl IO m, MonadCleanup m)
+   . (MonadBaseControl IO m, MonadCleanup m, Exception ex)
   => EventBackend m r (AcceptSocketDriverSelector protocol)
-  -> (forall x. ex -> m x)
   -> m channel
   -> (channel -> m ())
   -> (channel -> m ())
@@ -252,7 +256,7 @@ acceptRunServerPeerWithLogging'
   -> Codec protocol ex m ByteString
   -> ToPeer server protocol peer st m
   -> m (RunServer m server)
-acceptRunServerPeerWithLogging' eventBackend throwImpl acceptChannel closeChannelOnError closeChannel mkChannel codec toPeer =
+acceptRunServerPeerWithLogging' eventBackend acceptChannel closeChannelOnError closeChannel mkChannel codec toPeer =
   bracketOnError acceptChannel closeChannelOnError \ch -> do
     let
       runServer :: server m a -> m a
@@ -260,7 +264,7 @@ acceptRunServerPeerWithLogging' eventBackend throwImpl acceptChannel closeChanne
         withSubEvent ev Connected $ const $ pure ()
         let
           driver = logDriver (subEventBackend ServerDriverEvent ev)
-            $ mkDriver throwImpl codec $ mkChannel ch
+            $ mkDriver codec $ mkChannel ch
         fst <$> runPeerWithDriver driver (toPeer server) (startDState driver)
     pure $ RunServer \server -> runServer server `finally` closeChannel ch
 
@@ -274,18 +278,16 @@ clientServerPair
    . (MonadBaseControl IO m, MonadCleanup m, Exception ex)
   => EventBackend m r (AcceptSocketDriverSelector protocol)
   -> EventBackend m r (ConnectSocketDriverSelector protocol)
-  -> (forall e x. Exception e => e -> m x)
   -> Codec protocol ex m ByteString
   -> ToPeer server protocol serverPeer st m
   -> ToPeer client protocol clientPeer st m
   -> STM (ClientServerPair m server client)
-clientServerPair serverEventBackend clientEventBackend throwImpl codec serverToPeer clientToPeer = do
+clientServerPair serverEventBackend clientEventBackend codec serverToPeer clientToPeer = do
   serverChannelQueue <- newTQueue
   let
     acceptRunServer :: m (RunServer m server)
     acceptRunServer = acceptRunServerPeerWithLogging'
       serverEventBackend
-      throwImpl
       (liftBase $ atomically $ readTQueue serverChannelQueue)
       (liftBase . atomically . snd)
       (liftBase . atomically . snd)
@@ -294,16 +296,14 @@ clientServerPair serverEventBackend clientEventBackend throwImpl codec serverToP
       serverToPeer
 
     runClient :: RunClient m client
-    runClient = runClientPeerWithLogging'
+    runClient = runClientPeerWithLoggingGeneral
       clientEventBackend
-      throwImpl
       ( liftBase $ atomically do
           (clientChannel, serverChannel) <- channelPair
           writeTQueue serverChannelQueue serverChannel
           pure clientChannel
       )
       (liftBase . atomically . snd)
-      (const $ pure ())
       (hoistChannel (liftBase . atomically) . fst)
       codec
       clientToPeer

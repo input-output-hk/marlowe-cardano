@@ -8,7 +8,6 @@ module Language.Marlowe.Runtime.CLI.Command
 
 import Control.Concurrent.STM (STM)
 import Control.Exception (SomeException, catch, throw)
-import Control.Exception.Base (throwIO)
 import Control.Monad.Trans.Reader (runReaderT)
 import qualified Data.ByteString.Lazy as LB
 import Data.Foldable (asum)
@@ -134,7 +133,7 @@ runClientPeerOverSocket'
   -> RunClient IO client
 runClientPeerOverSocket' errMsg addr codec clientToPeer client = do
   let
-    run = runClientPeerOverSocketWithHandshake throwIO addr codec clientToPeer client
+    run = runClientPeerOverSocketWithHandshake addr codec clientToPeer client
   run `catch` \(err :: SomeException)-> do
     hPutStrLn stderr errMsg
     throw err

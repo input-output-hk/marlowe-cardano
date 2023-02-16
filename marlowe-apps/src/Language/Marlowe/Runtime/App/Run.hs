@@ -16,7 +16,6 @@ module Language.Marlowe.Runtime.App.Run
   ) where
 
 
-import Control.Exception (throwIO)
 import Control.Monad.Trans.Control (liftBaseWith)
 import Control.Monad.Trans.Reader (ReaderT(..), ask)
 import Language.Marlowe.Protocol.HeaderSync.Client
@@ -98,12 +97,12 @@ runClientWithConfig Config{..} client = do
   syncQueryAddr <- resolve syncHost syncQueryPort
   txJobAddr <- resolve txHost txCommandPort
   runReaderT (runClient client) Services
-    { runChainSeekCommandClient = runClientPeerOverSocketWithHandshake throwIO chainSeekCommandAddr codecJob jobClientPeer
-    , runChainSeekSyncClient = runClientPeerOverSocketWithHandshake throwIO chainSeekSyncAddr codecChainSeek (chainSeekClientPeer Genesis)
-    , runSyncSyncClient = runClientPeerOverSocketWithHandshake throwIO syncSyncAddr codecMarloweSync marloweSyncClientPeer
-    , runSyncHeaderClient = runClientPeerOverSocketWithHandshake throwIO syncHeaderAddr codecMarloweHeaderSync marloweHeaderSyncClientPeer
-    , runSyncQueryClient = runClientPeerOverSocketWithHandshake throwIO syncQueryAddr codecMarloweQuery marloweQueryClientPeer
-    , runTxCommandClient = runClientPeerOverSocketWithHandshake throwIO txJobAddr codecJob jobClientPeer
+    { runChainSeekCommandClient = runClientPeerOverSocketWithHandshake chainSeekCommandAddr codecJob jobClientPeer
+    , runChainSeekSyncClient = runClientPeerOverSocketWithHandshake chainSeekSyncAddr codecChainSeek (chainSeekClientPeer Genesis)
+    , runSyncSyncClient = runClientPeerOverSocketWithHandshake syncSyncAddr codecMarloweSync marloweSyncClientPeer
+    , runSyncHeaderClient = runClientPeerOverSocketWithHandshake syncHeaderAddr codecMarloweHeaderSync marloweHeaderSyncClientPeer
+    , runSyncQueryClient = runClientPeerOverSocketWithHandshake syncQueryAddr codecMarloweQuery marloweQueryClientPeer
+    , runTxCommandClient = runClientPeerOverSocketWithHandshake txJobAddr codecJob jobClientPeer
     }
   where
     resolve host port =
