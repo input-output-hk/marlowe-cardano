@@ -23,7 +23,8 @@ import Language.Marlowe.Runtime.Sync (SyncDependencies(..), sync)
 import Language.Marlowe.Runtime.Sync.Database (hoistDatabaseQueries, logDatabaseQueries)
 import qualified Language.Marlowe.Runtime.Sync.Database.PostgreSQL as Postgres
 import Logging (RootSelector(..), getRootSelectorConfig)
-import Network.Protocol.Handshake.Server (openServerPortWithHandshake)
+import Network.Protocol.Driver (awaitConnection, openPortConnector)
+import Network.Protocol.Handshake.Server (withHandshake)
 import Network.Socket (HostName, PortNumber)
 import Observe.Event.Backend (narrowEventBackend, newOnceFlagMVar)
 import Observe.Event.Component (LoggerDependencies(..), logger)
@@ -53,18 +54,18 @@ main = run =<< getOptions
 run :: Options -> IO ()
 run Options{..} = runResourceT do
   (_, pool) <- allocate (Pool.acquire (100, secondsToNominalDiffTime 5, fromString databaseUri)) Pool.release
-  acceptRunMarloweSyncServer' <- openServerPortWithHandshake host marloweSyncPort codecMarloweSync marloweSyncServerPeer
-  acceptRunMarloweHeaderSyncServer' <- openServerPortWithHandshake host marloweHeaderSyncPort codecMarloweHeaderSync marloweHeaderSyncServerPeer
-  acceptRunMarloweQueryServer' <- openServerPortWithHandshake host queryPort codecMarloweQuery id
+  marloweSyncConnector <- withHandshake <$> openPortConnector host marloweSyncPort codecMarloweSync marloweSyncServerPeer
+  marloweHeaderSyncConnector <- withHandshake <$> openPortConnector host marloweHeaderSyncPort codecMarloweHeaderSync marloweHeaderSyncServerPeer
+  queryConnector <- withHandshake <$> openPortConnector host queryPort codecMarloweQuery id
   let
     appDependencies eventBackend =
       let
         databaseQueries = logDatabaseQueries (narrowEventBackend Database eventBackend) $ hoistDatabaseQueries
           (either throwUsageError pure <=< Pool.use pool)
           Postgres.databaseQueries
-        acceptRunMarloweSyncServer = acceptRunMarloweSyncServer' $ narrowEventBackend MarloweSyncServer eventBackend
-        acceptRunMarloweHeaderSyncServer = acceptRunMarloweHeaderSyncServer' $ narrowEventBackend MarloweHeaderSyncServer eventBackend
-        acceptRunMarloweQueryServer = acceptRunMarloweQueryServer' $ narrowEventBackend MarloweQueryServer eventBackend
+        acceptRunMarloweSyncServer = awaitConnection (narrowEventBackend MarloweSyncServer eventBackend) marloweSyncConnector
+        acceptRunMarloweHeaderSyncServer = awaitConnection (narrowEventBackend MarloweHeaderSyncServer eventBackend) marloweHeaderSyncConnector
+        acceptRunMarloweQueryServer = awaitConnection (narrowEventBackend MarloweQueryServer eventBackend) queryConnector
         in SyncDependencies{..}
   let appComponent = sync <<< arr appDependencies <<< logger
   liftIO $ runComponent_ appComponent LoggerDependencies

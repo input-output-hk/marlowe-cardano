@@ -12,22 +12,15 @@
 module Network.Protocol.Handshake.Server
   where
 
-import Control.Monad.Cleanup (MonadCleanup)
-import Control.Monad.Trans.Control (MonadBaseControl)
-import Control.Monad.Trans.Resource (ResourceT)
 import Data.Bifunctor (Bifunctor(bimap))
-import Data.ByteString.Lazy (ByteString)
 import Data.Functor ((<&>))
 import Data.Proxy (Proxy(..))
 import Data.Text (Text)
 import Network.Protocol.ChainSeek.Codec (DeserializeError)
-import Network.Protocol.Driver (AcceptSocketDriverSelector, RunServer(..), ToPeer, openServerPort)
+import Network.Protocol.Driver (ServerConnector(..))
 import Network.Protocol.Handshake.Codec (codecHandshake)
 import Network.Protocol.Handshake.Types
-import Network.Socket (HostName, PortNumber)
 import Network.TypedProtocol
-import Network.TypedProtocol.Codec (Codec)
-import Observe.Event (EventBackend)
 
 -- | A generic server for the handshake protocol.
 newtype HandshakeServer server m a = HandshakeServer
@@ -46,27 +39,16 @@ simpleHandshakeServer expected server = HandshakeServer
       else fail $ "Rejecting handshake, " <> show sig <> " /= " <> show expected
   }
 
-embedServerInHandshake :: MonadFail m => Text -> RunServer m (HandshakeServer server) -> RunServer m server
-embedServerInHandshake sig (RunServer runServer) = RunServer $ runServer . simpleHandshakeServer sig
-
-openServerPortWithHandshake
-  :: forall server protocol (st :: protocol) m r
-   . ( MonadBaseControl IO m
-     , MonadCleanup m
-     , MonadFail m
-     , HasSignature protocol
-     )
-  => HostName
-  -> PortNumber
-  -> Codec protocol DeserializeError m ByteString
-  -> ToPeer server protocol 'AsServer st m
-  -> ResourceT IO (EventBackend m r (AcceptSocketDriverSelector (Handshake protocol)) -> m (RunServer m server))
-openServerPortWithHandshake host port codec toPeer =
-  (fmap . fmap . fmap) (embedServerInHandshake (signature $ Proxy @protocol)) $ openServerPort
-    host
-    port
-    (codecHandshake codec)
-    (handshakeServerPeer toPeer)
+withHandshake
+  :: forall ps server m connection
+   . (HasSignature ps, Monad m, MonadFail m)
+  => ServerConnector ps server DeserializeError m connection
+  -> ServerConnector (Handshake ps) server DeserializeError m connection
+withHandshake ServerConnector{..} = ServerConnector
+  { codec = codecHandshake codec
+  , toPeer = handshakeServerPeer toPeer . simpleHandshakeServer (signature $ Proxy @ps)
+  , ..
+  }
 
 hoistHandshakeServer
   :: Functor m

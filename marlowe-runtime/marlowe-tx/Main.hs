@@ -28,9 +28,9 @@ import qualified Language.Marlowe.Runtime.Transaction.Query as Query
 import qualified Language.Marlowe.Runtime.Transaction.Submit as Submit
 import Logging (RootSelector(..), getRootSelectorConfig)
 import Network.Protocol.ChainSeek.Client (chainSeekClientPeer)
-import Network.Protocol.Driver (RunClient)
+import Network.Protocol.Driver (RunClient, awaitConnection, openPortConnector)
 import Network.Protocol.Handshake.Client (runClientPeerOverSocketWithLoggingWithHandshake)
-import Network.Protocol.Handshake.Server (openServerPortWithHandshake)
+import Network.Protocol.Handshake.Server (withHandshake)
 import Network.Protocol.Job.Client (JobClient, jobClientPeer)
 import Network.Protocol.Job.Codec (codecJob)
 import Network.Protocol.Job.Server (jobServerPeer)
@@ -64,12 +64,11 @@ main = run =<< getOptions
 
 run :: Options -> IO ()
 run Options{..} = runResourceT do
-  acceptRunTransactionServer' <- openServerPortWithHandshake host port codecJob jobServerPeer
-  {- Setup Dependencies -}
+  serverConnector <- withHandshake <$> openPortConnector host port codecJob jobServerPeer
   let
     transactionDependencies rootEventBackend =
       let
-        acceptRunTransactionServer = acceptRunTransactionServer' $ narrowEventBackend Server rootEventBackend
+        acceptRunTransactionServer = awaitConnection (narrowEventBackend Server rootEventBackend) serverConnector
 
         connectToChainSeek :: RunClient IO RuntimeChainSeekClient
         connectToChainSeek = runClientPeerOverSocketWithLoggingWithHandshake
