@@ -13,22 +13,20 @@ module Network.Protocol.Handshake.Server
   where
 
 import Control.Monad.Cleanup (MonadCleanup)
-import Control.Monad.Trans.Control (MonadBaseControl)
+import Control.Monad.Trans.Control (MonadBaseControl, control)
 import Data.Bifunctor (Bifunctor(bimap))
 import Data.ByteString.Lazy (ByteString)
 import Data.Functor ((<&>))
 import Data.Proxy (Proxy(..))
 import Data.Text (Text)
 import Network.Protocol.ChainSeek.Codec (DeserializeError)
-import Network.Protocol.Driver
-  (AcceptSocketDriverSelector, RunServer(..), ToPeer, acceptRunServerPeerOverSocketWithLogging)
+import Network.Protocol.Driver (AcceptSocketDriverSelector, RunServer(..), ToPeer, openServerPortWithLogging)
 import Network.Protocol.Handshake.Codec (codecHandshake)
 import Network.Protocol.Handshake.Types
-import Network.Socket (Socket)
+import Network.Socket (HostName, PortNumber, withSocketsDo)
 import Network.TypedProtocol
 import Network.TypedProtocol.Codec (Codec)
 import Observe.Event (EventBackend)
-import Observe.Event.Backend (noopEventBackend)
 
 -- | A generic server for the handshake protocol.
 newtype HandshakeServer server m a = HandshakeServer
@@ -50,38 +48,27 @@ simpleHandshakeServer expected server = HandshakeServer
 embedServerInHandshake :: MonadFail m => Text -> RunServer m (HandshakeServer server) -> RunServer m server
 embedServerInHandshake sig (RunServer runServer) = RunServer $ runServer . simpleHandshakeServer sig
 
-acceptRunServerPeerOverSocketWithLoggingWithHandshake
-  :: forall server protocol (st :: protocol) m r
+openServerPortWithLoggingWithHandshake
+  :: forall server protocol (st :: protocol) m n r a
    . ( MonadBaseControl IO m
+     , MonadBaseControl IO n
      , MonadCleanup m
      , MonadFail m
      , HasSignature protocol
      )
-  => EventBackend m r (AcceptSocketDriverSelector (Handshake protocol))
-  -> Socket
+  => HostName
+  -> PortNumber
   -> Codec protocol DeserializeError m ByteString
   -> ToPeer server protocol 'AsServer st m
-  -> m (RunServer m server)
-acceptRunServerPeerOverSocketWithLoggingWithHandshake eventBackend socket codec toPeer = do
-  embedServerInHandshake (signature $ Proxy @protocol) <$> acceptRunServerPeerOverSocketWithLogging
-    eventBackend
-    socket
+  -> ((EventBackend m r (AcceptSocketDriverSelector (Handshake protocol)) -> m (RunServer m server)) -> n a)
+  -> n a
+openServerPortWithLoggingWithHandshake host port codec toPeer withAccept = control \runInBase -> withSocketsDo $ runInBase do
+  openServerPortWithLogging
+    host
+    port
     (codecHandshake codec)
     (handshakeServerPeer toPeer)
-
-acceptRunServerPeerOverSocketWithHandshake
-  :: forall server protocol (st :: protocol) m
-   . ( MonadBaseControl IO m
-     , MonadCleanup m
-     , MonadFail m
-     , HasSignature protocol
-     )
-  => Socket
-  -> Codec protocol DeserializeError m ByteString
-  -> ToPeer server protocol 'AsServer st m
-  -> m (RunServer m server)
-acceptRunServerPeerOverSocketWithHandshake =
-  acceptRunServerPeerOverSocketWithLoggingWithHandshake $ noopEventBackend ()
+    (withAccept . (fmap . fmap) (embedServerInHandshake (signature $ Proxy @protocol)))
 
 hoistHandshakeServer
   :: Functor m
