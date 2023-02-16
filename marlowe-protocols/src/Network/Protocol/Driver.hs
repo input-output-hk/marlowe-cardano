@@ -17,6 +17,7 @@ import Control.Exception.Lifted (bracket, bracketOnError, finally, throwIO)
 import Control.Monad.Base (MonadBase(liftBase))
 import Control.Monad.Cleanup (MonadCleanup)
 import Control.Monad.Trans.Control (MonadBaseControl)
+import Control.Monad.Trans.Resource (ResourceT, allocate)
 import Data.Aeson (Value, toJSON)
 import Data.ByteString.Lazy (ByteString)
 import Data.ByteString.Lazy.Base16 (encodeBase16)
@@ -42,6 +43,7 @@ import Network.Socket
   , setCloseOnExecIfNeeded
   , setSocketOption
   , withFdSocket
+  , withSocketsDo
   )
 import Network.Socket.Address (accept)
 import Network.TypedProtocol (Message, Peer(..), PeerHasAgency, PeerRole, SomeMessage(..), runPeerWithDriver)
@@ -51,6 +53,7 @@ import Observe.Event (addField, narrowEventBackend, reference, subEventBackend, 
 import Observe.Event.Backend (EventBackend, noopEventBackend)
 import Observe.Event.BackendModification (modifyEventBackend, setAncestor)
 import Observe.Event.Component (FieldConfig(..), GetSelectorConfig, SelectorConfig(..), SomeJSON(..), absurdFieldConfig)
+import UnliftIO (withRunInIO)
 
 class MessageToJSON ps where
   messageToJSON :: PeerHasAgency pr (st :: ps) -> Message ps st st' -> Value
@@ -247,17 +250,17 @@ getConnectSocketDriverSelectorConfig SocketDriverConfigOptions{..} = \case
   ClientSession -> SelectorConfig "session" enableDisconnected absurdFieldConfig
   ClientDriverEvent sel -> getDriverSelectorConfig enableServerDriverEvent sel
 
-openServerPortWithLogging
-  :: forall server protocol st ex m n r peer a
-   . (MonadBaseControl IO m, MonadCleanup m, Exception ex, MonadBaseControl IO n)
+openServerPort
+  :: forall server protocol st ex m r peer
+   . (MonadBaseControl IO m, MonadCleanup m, Exception ex)
   => HostName
   -> PortNumber
   -> Codec protocol ex m ByteString
   -> ToPeer server protocol peer st m
-  -> ((EventBackend m r (AcceptSocketDriverSelector protocol) -> m (RunServer m server)) -> n a)
-  -> n a
-openServerPortWithLogging host port codec toPeer withAccept =
-  bracket open (liftBase . close) \socket -> withAccept \eventBackend -> acceptRunServerPeerWithLoggingGeneral
+  -> ResourceT IO (EventBackend m r (AcceptSocketDriverSelector protocol) -> m (RunServer m server))
+openServerPort host port codec toPeer = withRunInIO \runInIO -> withSocketsDo $ runInIO do
+  (_, socket) <- allocate open close
+  pure \eventBackend -> acceptRunServerPeerWithLoggingGeneral
     eventBackend
     (liftBase $ fmap fst $ accept @SockAddr socket)
     (fmap liftBase . \case

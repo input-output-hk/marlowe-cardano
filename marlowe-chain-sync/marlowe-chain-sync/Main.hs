@@ -18,6 +18,8 @@ import Control.Arrow (arr)
 import Control.Category ((<<<))
 import Control.Concurrent.Component
 import Control.Monad ((<=<))
+import Control.Monad.IO.Class (liftIO)
+import Control.Monad.Trans.Resource (allocate, runResourceT)
 import Data.String (IsString(fromString))
 import qualified Data.Text.Lazy.IO as TL
 import Data.Time (secondsToNominalDiffTime)
@@ -32,7 +34,7 @@ import qualified Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL as Postg
 import Logging (RootSelector(..), getRootSelectorConfig)
 import Network.Protocol.ChainSeek.Codec (codecChainSeek)
 import Network.Protocol.ChainSeek.Server (chainSeekServerPeer)
-import Network.Protocol.Handshake.Server (openServerPortWithLoggingWithHandshake)
+import Network.Protocol.Handshake.Server (openServerPortWithHandshake)
 import Network.Protocol.Job.Codec (codecJob)
 import Network.Protocol.Job.Server (jobServerPeer)
 import Network.Protocol.Query.Codec (codecQuery)
@@ -47,38 +49,38 @@ main :: IO ()
 main = run =<< getOptions "0.0.0.0"
 
 run :: Options -> IO ()
-run Options{..} = do
-  openServerPortWithLoggingWithHandshake host port codecChainSeek (chainSeekServerPeer Genesis) \acceptRunChainSeekServer ->
-    openServerPortWithLoggingWithHandshake host queryPort codecQuery queryServerPeer \acceptRunQueryServer ->
-      openServerPortWithLoggingWithHandshake host commandPort codecJob jobServerPeer \acceptRunJobServer -> do
-        pool <- Pool.acquire (100, secondsToNominalDiffTime 5, fromString databaseUri)
-        let
-          chainSyncDependencies eventBackend = ChainSyncDependencies
-            { databaseQueries = hoistDatabaseQueries
-                (either throwUsageError pure <=< Pool.use pool)
-                $ PostgreSQL.databaseQueries networkId
-            , acceptRunChainSeekServer = acceptRunChainSeekServer $ narrowEventBackend ChainSeekServer eventBackend
-            , acceptRunQueryServer = acceptRunQueryServer $ narrowEventBackend QueryServer eventBackend
-            , acceptRunJobServer = acceptRunJobServer $ narrowEventBackend JobServer eventBackend
-            , queryLocalNodeState = queryNodeLocalState localNodeConnectInfo
-            , submitTxToNodeLocal = \era tx -> Cardano.submitTxToNodeLocal localNodeConnectInfo $ TxInMode tx case era of
-                ByronEra -> ByronEraInCardanoMode
-                ShelleyEra -> ShelleyEraInCardanoMode
-                AllegraEra -> AllegraEraInCardanoMode
-                MaryEra -> MaryEraInCardanoMode
-                AlonzoEra -> AlonzoEraInCardanoMode
-                BabbageEra -> BabbageEraInCardanoMode
-            }
-          loggerDependencies = LoggerDependencies
-            { configFilePath = logConfigFile
-            , getSelectorConfig = getRootSelectorConfig
-            , newRef = nextRandom
-            , newOnceFlag = newOnceFlagMVar
-            , writeText = TL.hPutStr stderr
-            , injectConfigWatcherSelector = ConfigWatcher
-            }
-          appComponent = chainSync <<< arr chainSyncDependencies <<< logger
-        runComponent_ appComponent loggerDependencies
+run Options{..} = runResourceT do
+  acceptRunChainSeekServer <- openServerPortWithHandshake host port codecChainSeek $ chainSeekServerPeer Genesis
+  acceptRunQueryServer <- openServerPortWithHandshake host queryPort codecQuery queryServerPeer
+  acceptRunJobServer <- openServerPortWithHandshake host commandPort codecJob jobServerPeer
+  (_, pool) <- allocate (Pool.acquire (100, secondsToNominalDiffTime 5, fromString databaseUri)) Pool.release
+  let
+    chainSyncDependencies eventBackend = ChainSyncDependencies
+      { databaseQueries = hoistDatabaseQueries
+          (either throwUsageError pure <=< Pool.use pool)
+          $ PostgreSQL.databaseQueries networkId
+      , acceptRunChainSeekServer = acceptRunChainSeekServer $ narrowEventBackend ChainSeekServer eventBackend
+      , acceptRunQueryServer = acceptRunQueryServer $ narrowEventBackend QueryServer eventBackend
+      , acceptRunJobServer = acceptRunJobServer $ narrowEventBackend JobServer eventBackend
+      , queryLocalNodeState = queryNodeLocalState localNodeConnectInfo
+      , submitTxToNodeLocal = \era tx -> Cardano.submitTxToNodeLocal localNodeConnectInfo $ TxInMode tx case era of
+          ByronEra -> ByronEraInCardanoMode
+          ShelleyEra -> ShelleyEraInCardanoMode
+          AllegraEra -> AllegraEraInCardanoMode
+          MaryEra -> MaryEraInCardanoMode
+          AlonzoEra -> AlonzoEraInCardanoMode
+          BabbageEra -> BabbageEraInCardanoMode
+      }
+    loggerDependencies = LoggerDependencies
+      { configFilePath = logConfigFile
+      , getSelectorConfig = getRootSelectorConfig
+      , newRef = nextRandom
+      , newOnceFlag = newOnceFlagMVar
+      , writeText = TL.hPutStr stderr
+      , injectConfigWatcherSelector = ConfigWatcher
+      }
+    appComponent = chainSync <<< arr chainSyncDependencies <<< logger
+  liftIO $ runComponent_ appComponent loggerDependencies
   where
     throwUsageError (ConnectionError err)                       = error $ show err
     throwUsageError (SessionError (Session.QueryError _ _ err)) = error $ show err

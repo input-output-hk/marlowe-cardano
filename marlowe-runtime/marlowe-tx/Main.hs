@@ -5,6 +5,8 @@ module Main
 
 import Control.Arrow (arr, (<<<))
 import Control.Concurrent.Component
+import Control.Monad.IO.Class (liftIO)
+import Control.Monad.Trans.Resource (runResourceT)
 import Data.Either (fromRight)
 import qualified Data.Text.Lazy.IO as TL
 import Data.UUID.V4 (nextRandom)
@@ -28,7 +30,7 @@ import Logging (RootSelector(..), getRootSelectorConfig)
 import Network.Protocol.ChainSeek.Client (chainSeekClientPeer)
 import Network.Protocol.Driver (RunClient)
 import Network.Protocol.Handshake.Client (runClientPeerOverSocketWithLoggingWithHandshake)
-import Network.Protocol.Handshake.Server (openServerPortWithLoggingWithHandshake)
+import Network.Protocol.Handshake.Server (openServerPortWithHandshake)
 import Network.Protocol.Job.Client (JobClient, jobClientPeer)
 import Network.Protocol.Job.Codec (codecJob)
 import Network.Protocol.Job.Server (jobServerPeer)
@@ -61,68 +63,68 @@ main :: IO ()
 main = run =<< getOptions
 
 run :: Options -> IO ()
-run Options{..} = do
-  openServerPortWithLoggingWithHandshake host port codecJob jobServerPeer \acceptRunTransactionServer' -> do
-    {- Setup Dependencies -}
-    let
-      transactionDependencies rootEventBackend =
-        let
-          acceptRunTransactionServer = acceptRunTransactionServer' $ narrowEventBackend Server rootEventBackend
+run Options{..} = runResourceT do
+  acceptRunTransactionServer' <- openServerPortWithHandshake host port codecJob jobServerPeer
+  {- Setup Dependencies -}
+  let
+    transactionDependencies rootEventBackend =
+      let
+        acceptRunTransactionServer = acceptRunTransactionServer' $ narrowEventBackend Server rootEventBackend
 
-          connectToChainSeek :: RunClient IO RuntimeChainSeekClient
-          connectToChainSeek = runClientPeerOverSocketWithLoggingWithHandshake
-            (narrowEventBackend ChainSeekClient rootEventBackend)
-            chainSeekHost
-            chainSeekPort
-            runtimeChainSeekCodec
-            (chainSeekClientPeer Genesis)
+        connectToChainSeek :: RunClient IO RuntimeChainSeekClient
+        connectToChainSeek = runClientPeerOverSocketWithLoggingWithHandshake
+          (narrowEventBackend ChainSeekClient rootEventBackend)
+          chainSeekHost
+          chainSeekPort
+          runtimeChainSeekCodec
+          (chainSeekClientPeer Genesis)
 
-          runChainSyncJobClient :: RunClient IO (JobClient ChainSyncCommand)
-          runChainSyncJobClient = runClientPeerOverSocketWithLoggingWithHandshake
-            (narrowEventBackend ChainSyncJobClient rootEventBackend)
-            chainSeekHost
-            chainSeekCommandPort
-            codecJob
-            jobClientPeer
+        runChainSyncJobClient :: RunClient IO (JobClient ChainSyncCommand)
+        runChainSyncJobClient = runClientPeerOverSocketWithLoggingWithHandshake
+          (narrowEventBackend ChainSyncJobClient rootEventBackend)
+          chainSeekHost
+          chainSeekCommandPort
+          codecJob
+          jobClientPeer
 
-          runChainSyncQueryClient :: RunClient IO (QueryClient ChainSyncQuery)
-          runChainSyncQueryClient = runClientPeerOverSocketWithLoggingWithHandshake
-            (narrowEventBackend ChainSyncQueryClient rootEventBackend)
-            chainSeekHost
-            chainSeekQueryPort
-            codecQuery
-            queryClientPeer
+        runChainSyncQueryClient :: RunClient IO (QueryClient ChainSyncQuery)
+        runChainSyncQueryClient = runClientPeerOverSocketWithLoggingWithHandshake
+          (narrowEventBackend ChainSyncQueryClient rootEventBackend)
+          chainSeekHost
+          chainSeekQueryPort
+          codecQuery
+          queryClientPeer
 
-          queryChainSync :: ChainSyncQuery Void e a -> IO a
-          queryChainSync = fmap (fromRight $ error "failed to query chain sync server") . runChainSyncQueryClient . liftQuery
+        queryChainSync :: ChainSyncQuery Void e a -> IO a
+        queryChainSync = fmap (fromRight $ error "failed to query chain sync server") . runChainSyncQueryClient . liftQuery
 
-          mkSubmitJob = Submit.mkSubmitJob Submit.SubmitJobDependencies{..}
+        mkSubmitJob = Submit.mkSubmitJob Submit.SubmitJobDependencies{..}
 
-          loadMarloweContext :: LoadMarloweContext r
-          loadMarloweContext eb version contractId = do
-            networkId <- queryChainSync GetNetworkId
-            Query.loadMarloweContext ScriptRegistry.getScripts networkId connectToChainSeek runChainSyncQueryClient eb version contractId
+        loadMarloweContext :: LoadMarloweContext r
+        loadMarloweContext eb version contractId = do
+          networkId <- queryChainSync GetNetworkId
+          Query.loadMarloweContext ScriptRegistry.getScripts networkId connectToChainSeek runChainSyncQueryClient eb version contractId
 
-          runGetUTxOsQuery :: GetUTxOsQuery -> IO UTxOs
-          runGetUTxOsQuery getUTxOsQuery = queryChainSync (GetUTxOs getUTxOsQuery)
+        runGetUTxOsQuery :: GetUTxOsQuery -> IO UTxOs
+        runGetUTxOsQuery getUTxOsQuery = queryChainSync (GetUTxOs getUTxOsQuery)
 
-          loadWalletContext :: LoadWalletContext r
-          loadWalletContext = Query.loadWalletContext runGetUTxOsQuery
+        loadWalletContext :: LoadWalletContext r
+        loadWalletContext = Query.loadWalletContext runGetUTxOsQuery
 
-          eventBackend = narrowEventBackend App rootEventBackend
+        eventBackend = narrowEventBackend App rootEventBackend
 
-          getCurrentScripts = ScriptRegistry.getCurrentScripts
-        in TransactionDependencies{..}
-      appComponent = transaction <<< arr transactionDependencies <<< logger
+        getCurrentScripts = ScriptRegistry.getCurrentScripts
+      in TransactionDependencies{..}
+    appComponent = transaction <<< arr transactionDependencies <<< logger
 
-    runComponent_ appComponent LoggerDependencies
-      { configFilePath = logConfigFile
-      , getSelectorConfig = getRootSelectorConfig
-      , newRef = nextRandom
-      , newOnceFlag = newOnceFlagMVar
-      , writeText = TL.hPutStr stderr
-      , injectConfigWatcherSelector = ConfigWatcher
-      }
+  liftIO $ runComponent_ appComponent LoggerDependencies
+    { configFilePath = logConfigFile
+    , getSelectorConfig = getRootSelectorConfig
+    , newRef = nextRandom
+    , newOnceFlag = newOnceFlagMVar
+    , writeText = TL.hPutStr stderr
+    , injectConfigWatcherSelector = ConfigWatcher
+    }
 
 data Options = Options
   { chainSeekPort :: PortNumber

@@ -13,17 +13,18 @@ module Network.Protocol.Handshake.Server
   where
 
 import Control.Monad.Cleanup (MonadCleanup)
-import Control.Monad.Trans.Control (MonadBaseControl, control)
+import Control.Monad.Trans.Control (MonadBaseControl)
+import Control.Monad.Trans.Resource (ResourceT)
 import Data.Bifunctor (Bifunctor(bimap))
 import Data.ByteString.Lazy (ByteString)
 import Data.Functor ((<&>))
 import Data.Proxy (Proxy(..))
 import Data.Text (Text)
 import Network.Protocol.ChainSeek.Codec (DeserializeError)
-import Network.Protocol.Driver (AcceptSocketDriverSelector, RunServer(..), ToPeer, openServerPortWithLogging)
+import Network.Protocol.Driver (AcceptSocketDriverSelector, RunServer(..), ToPeer, openServerPort)
 import Network.Protocol.Handshake.Codec (codecHandshake)
 import Network.Protocol.Handshake.Types
-import Network.Socket (HostName, PortNumber, withSocketsDo)
+import Network.Socket (HostName, PortNumber)
 import Network.TypedProtocol
 import Network.TypedProtocol.Codec (Codec)
 import Observe.Event (EventBackend)
@@ -48,10 +49,9 @@ simpleHandshakeServer expected server = HandshakeServer
 embedServerInHandshake :: MonadFail m => Text -> RunServer m (HandshakeServer server) -> RunServer m server
 embedServerInHandshake sig (RunServer runServer) = RunServer $ runServer . simpleHandshakeServer sig
 
-openServerPortWithLoggingWithHandshake
-  :: forall server protocol (st :: protocol) m n r a
+openServerPortWithHandshake
+  :: forall server protocol (st :: protocol) m r
    . ( MonadBaseControl IO m
-     , MonadBaseControl IO n
      , MonadCleanup m
      , MonadFail m
      , HasSignature protocol
@@ -60,15 +60,13 @@ openServerPortWithLoggingWithHandshake
   -> PortNumber
   -> Codec protocol DeserializeError m ByteString
   -> ToPeer server protocol 'AsServer st m
-  -> ((EventBackend m r (AcceptSocketDriverSelector (Handshake protocol)) -> m (RunServer m server)) -> n a)
-  -> n a
-openServerPortWithLoggingWithHandshake host port codec toPeer withAccept = control \runInBase -> withSocketsDo $ runInBase do
-  openServerPortWithLogging
+  -> ResourceT IO (EventBackend m r (AcceptSocketDriverSelector (Handshake protocol)) -> m (RunServer m server))
+openServerPortWithHandshake host port codec toPeer =
+  (fmap . fmap . fmap) (embedServerInHandshake (signature $ Proxy @protocol)) $ openServerPort
     host
     port
     (codecHandshake codec)
     (handshakeServerPeer toPeer)
-    (withAccept . (fmap . fmap) (embedServerInHandshake (signature $ Proxy @protocol)))
 
 hoistHandshakeServer
   :: Functor m

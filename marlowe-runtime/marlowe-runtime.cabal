@@ -555,6 +555,7 @@ executable marlowe-sync
     , marlowe-runtime:sync-api
     , network
     , optparse-applicative
+    , resourcet
     , text
     , time
     , uuid
@@ -582,6 +583,7 @@ executable marlowe-tx
     , marlowe-runtime:tx-api
     , network
     , optparse-applicative
+    , resourcet
     , text
     , uuid
   ghc-options: -threaded
