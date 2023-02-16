@@ -34,7 +34,8 @@ import qualified Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL as Postg
 import Logging (RootSelector(..), getRootSelectorConfig)
 import Network.Protocol.ChainSeek.Codec (codecChainSeek)
 import Network.Protocol.ChainSeek.Server (chainSeekServerPeer)
-import Network.Protocol.Handshake.Server (openServerPortWithHandshake)
+import Network.Protocol.Driver (awaitConnection, openPortConnector)
+import Network.Protocol.Handshake.Server (withHandshake)
 import Network.Protocol.Job.Codec (codecJob)
 import Network.Protocol.Job.Server (jobServerPeer)
 import Network.Protocol.Query.Codec (codecQuery)
@@ -50,18 +51,18 @@ main = run =<< getOptions "0.0.0.0"
 
 run :: Options -> IO ()
 run Options{..} = runResourceT do
-  acceptRunChainSeekServer <- openServerPortWithHandshake host port codecChainSeek $ chainSeekServerPeer Genesis
-  acceptRunQueryServer <- openServerPortWithHandshake host queryPort codecQuery queryServerPeer
-  acceptRunJobServer <- openServerPortWithHandshake host commandPort codecJob jobServerPeer
+  chainSeekConnector <- withHandshake <$> openPortConnector host port codecChainSeek (chainSeekServerPeer Genesis)
+  queryConnector <- withHandshake <$> openPortConnector host queryPort codecQuery queryServerPeer
+  jobConnector <- withHandshake <$> openPortConnector host commandPort codecJob jobServerPeer
   (_, pool) <- allocate (Pool.acquire (100, secondsToNominalDiffTime 5, fromString databaseUri)) Pool.release
   let
     chainSyncDependencies eventBackend = ChainSyncDependencies
       { databaseQueries = hoistDatabaseQueries
           (either throwUsageError pure <=< Pool.use pool)
           $ PostgreSQL.databaseQueries networkId
-      , acceptRunChainSeekServer = acceptRunChainSeekServer $ narrowEventBackend ChainSeekServer eventBackend
-      , acceptRunQueryServer = acceptRunQueryServer $ narrowEventBackend QueryServer eventBackend
-      , acceptRunJobServer = acceptRunJobServer $ narrowEventBackend JobServer eventBackend
+      , acceptRunChainSeekServer = awaitConnection (narrowEventBackend ChainSeekServer eventBackend) chainSeekConnector
+      , acceptRunQueryServer = awaitConnection (narrowEventBackend QueryServer eventBackend) queryConnector
+      , acceptRunJobServer = awaitConnection (narrowEventBackend JobServer eventBackend) jobConnector
       , queryLocalNodeState = queryNodeLocalState localNodeConnectInfo
       , submitTxToNodeLocal = \era tx -> Cardano.submitTxToNodeLocal localNodeConnectInfo $ TxInMode tx case era of
           ByronEra -> ByronEraInCardanoMode
