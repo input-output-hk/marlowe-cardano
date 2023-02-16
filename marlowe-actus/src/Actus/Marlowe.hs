@@ -2,7 +2,7 @@
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE TupleSections #-}
+
 
 -- | = Generator for ACTUS contracts
 -- Given ACTUS contract terms a Marlowe contract is generated.

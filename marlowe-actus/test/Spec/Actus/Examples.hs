@@ -1,5 +1,5 @@
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE LambdaCase #-}
+
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -219,7 +219,7 @@ ex_optns1 =
           let Just contract = toCore $ genContract' ("party", "counterparty") rf ct
               rf :: Num a => String -> EventType -> LocalTime -> RiskFactors a
               rf _ XD d
-                | d == (fromJust $ maturityDate ct) =
+                | d == fromJust (maturityDate ct) =
                   RiskFactors
                     { o_rf_CURS = 1,
                       o_rf_RRMO = 1,
