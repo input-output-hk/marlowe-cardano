@@ -232,15 +232,15 @@ acceptRunServerPeerOverSocketWithLogging
   -> Codec protocol ex m ByteString
   -> ToPeer server protocol peer st m
   -> m (RunServer m server)
-acceptRunServerPeerOverSocketWithLogging eventBackend throwImpl socket = acceptRunServerPeer'
+acceptRunServerPeerOverSocketWithLogging eventBackend throwImpl socket = acceptRunServerPeerWithLogging'
   eventBackend
   throwImpl
-  (liftBase $ accept @SockAddr socket)
-  (liftBase . close . fst)
-  (liftBase . flip gracefulClose 5000 . fst)
-  (hoistChannel liftBase . socketAsChannel . fst)
+  (liftBase $ fst <$> accept @SockAddr socket)
+  (liftBase . close)
+  (liftBase . flip gracefulClose 5000)
+  (hoistChannel liftBase . socketAsChannel)
 
-acceptRunServerPeer'
+acceptRunServerPeerWithLogging'
   :: forall server protocol st ex m channel r peer
    . (MonadBaseControl IO m, MonadCleanup m)
   => EventBackend m r (AcceptSocketDriverSelector protocol)
@@ -252,7 +252,7 @@ acceptRunServerPeer'
   -> Codec protocol ex m ByteString
   -> ToPeer server protocol peer st m
   -> m (RunServer m server)
-acceptRunServerPeer' eventBackend throwImpl acceptChannel closeChannelOnError closeChannel mkChannel codec toPeer =
+acceptRunServerPeerWithLogging' eventBackend throwImpl acceptChannel closeChannelOnError closeChannel mkChannel codec toPeer =
   bracketOnError acceptChannel closeChannelOnError \ch -> do
     let
       runServer :: server m a -> m a
@@ -283,7 +283,7 @@ clientServerPair serverEventBackend clientEventBackend throwImpl codec serverToP
   serverChannelQueue <- newTQueue
   let
     acceptRunServer :: m (RunServer m server)
-    acceptRunServer = acceptRunServerPeer'
+    acceptRunServer = acceptRunServerPeerWithLogging'
       serverEventBackend
       throwImpl
       (liftBase $ atomically $ readTQueue serverChannelQueue)
@@ -293,16 +293,15 @@ clientServerPair serverEventBackend clientEventBackend throwImpl codec serverToP
       codec
       serverToPeer
 
-    openClientChannel = liftBase $ atomically do
-      (clientChannel, serverChannel) <- channelPair
-      writeTQueue serverChannelQueue serverChannel
-      pure clientChannel
-
     runClient :: RunClient m client
     runClient = runClientPeerWithLogging'
       clientEventBackend
       throwImpl
-      openClientChannel
+      ( liftBase $ atomically do
+          (clientChannel, serverChannel) <- channelPair
+          writeTQueue serverChannelQueue serverChannel
+          pure clientChannel
+      )
       (liftBase . atomically . snd)
       (const $ pure ())
       (hoistChannel (liftBase . atomically) . fst)
