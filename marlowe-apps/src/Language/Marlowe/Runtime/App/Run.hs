@@ -32,7 +32,6 @@ import Network.Protocol.ChainSeek.Codec (codecChainSeek)
 import Network.Protocol.Handshake.Client (runClientPeerOverSocketWithHandshake)
 import Network.Protocol.Job.Client (JobClient, hoistJobClient, jobClientPeer)
 import Network.Protocol.Job.Codec (codecJob)
-import Network.Socket (SocketType(..), addrSocketType, defaultHints, getAddrInfo)
 
 
 runQueryClient
@@ -89,21 +88,11 @@ runClientWithConfig
   :: Config
   -> Client a
   -> IO a
-runClientWithConfig Config{..} client = do
-  chainSeekCommandAddr <- resolve chainSeekHost chainSeekCommandPort
-  chainSeekSyncAddr <- resolve chainSeekHost chainSeekSyncPort
-  syncSyncAddr <- resolve syncHost syncSyncPort
-  syncHeaderAddr <- resolve syncHost syncHeaderPort
-  syncQueryAddr <- resolve syncHost syncQueryPort
-  txJobAddr <- resolve txHost txCommandPort
-  runReaderT (runClient client) Services
-    { runChainSeekCommandClient = runClientPeerOverSocketWithHandshake chainSeekCommandAddr codecJob jobClientPeer
-    , runChainSeekSyncClient = runClientPeerOverSocketWithHandshake chainSeekSyncAddr codecChainSeek (chainSeekClientPeer Genesis)
-    , runSyncSyncClient = runClientPeerOverSocketWithHandshake syncSyncAddr codecMarloweSync marloweSyncClientPeer
-    , runSyncHeaderClient = runClientPeerOverSocketWithHandshake syncHeaderAddr codecMarloweHeaderSync marloweHeaderSyncClientPeer
-    , runSyncQueryClient = runClientPeerOverSocketWithHandshake syncQueryAddr codecMarloweQuery marloweQueryClientPeer
-    , runTxCommandClient = runClientPeerOverSocketWithHandshake txJobAddr codecJob jobClientPeer
-    }
-  where
-    resolve host port =
-      head <$> getAddrInfo (Just defaultHints { addrSocketType = Stream }) (Just host) (Just $ show port)
+runClientWithConfig Config{..} client = runReaderT (runClient client) Services
+  { runChainSeekCommandClient = runClientPeerOverSocketWithHandshake chainSeekHost chainSeekCommandPort codecJob jobClientPeer
+  , runChainSeekSyncClient = runClientPeerOverSocketWithHandshake chainSeekHost chainSeekSyncPort codecChainSeek (chainSeekClientPeer Genesis)
+  , runSyncSyncClient = runClientPeerOverSocketWithHandshake syncHost syncSyncPort codecMarloweSync marloweSyncClientPeer
+  , runSyncHeaderClient = runClientPeerOverSocketWithHandshake syncHost syncHeaderPort codecMarloweHeaderSync marloweHeaderSyncClientPeer
+  , runSyncQueryClient = runClientPeerOverSocketWithHandshake syncHost syncQueryPort codecMarloweQuery marloweQueryClientPeer
+  , runTxCommandClient = runClientPeerOverSocketWithHandshake txHost txCommandPort codecJob jobClientPeer
+  }
