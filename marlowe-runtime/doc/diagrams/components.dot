@@ -14,15 +14,15 @@ digraph {
     }
   }
 
-  subgraph cluster_chain_seek {
+  subgraph cluster_chain_sync {
     label = "chain-sync"
-    subgraph cluster_chain_seek_inp {
+    subgraph cluster_chain_sync_inp {
       label = "Server"; 
-      cs_port_number [ label= "port-number: 3715" ];
-      cs_query_port_number [ label= "query-port-number: 3716" ];
-      cs_job_port_number [ label= "job-port-number: 3720" ];
+      cs_port_number [ label= "port: 3715" ];
+      cs_query_port_number [ label= "query-port: 3716" ];
+      cs_job_port_number [ label= "job-port: 3720" ];
     }
-    subgraph cluster_chain_seek_out {
+    subgraph cluster_chain_sync_out {
       label = "Client";
       cs_cn_unix_socket [ label= "cardano_node: UNIX socket"];
     }
@@ -38,8 +38,8 @@ digraph {
     }
     subgraph cluster_marlowe_history_out {
       label = "Client";
-      mh_cs_port_number [ label= "chain-seek-port-number: 3715" ];
-      mh_cs_query_server [ label= "chain-seek-query-port-number: 3716" ];
+      mh_cs_port_number [ label= "chain-sync-port: 3715" ];
+      mh_cs_query_server [ label= "chain-sync-query-port: 3716" ];
     }
    }
 
@@ -51,9 +51,9 @@ digraph {
     }
     subgraph cluster_marlowe_tx_out {
       label = "Client";
-      mt_cs_port_number [ label= "chain-seek-port-number: 3715" ];
-      mt_cs_query_server [ label= "chain-seek-query-port-number: 3716" ];
-      mt_cs_command_port [ label= "chain-seek-command-port-number: 3720" ];
+      mt_cs_port_number [ label= "chain-sync-port: 3715" ];
+      mt_cs_query_server [ label= "chain-sync-query-port: 3716" ];
+      mt_cs_command_port [ label= "chain-sync-command-port: 3720" ];
       mt_mh_history_sync_port [ label= "history-sync-port: 3719" ];
     }
    }
@@ -67,8 +67,8 @@ digraph {
     }
     subgraph cluster_marlowe_discovery_out {
       label = "Client";
-      md_cs_port_number [ label= "chain-seek-port-number: 3715" ];
-      md_cs_query_server [ label= "chain-seek-query-port-number: 3716" ];
+      md_cs_port_number [ label= "chain-sync-port: 3715" ];
+      md_cs_query_server [ label= "chain-sync-query-port: 3716" ];
     }
    }
 

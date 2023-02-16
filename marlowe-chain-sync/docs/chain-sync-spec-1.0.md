@@ -1,10 +1,10 @@
-# Chain Seek Protocol
+# Chain Sync Protocol
 
 ## Introduction
 
 ### Purpose
 
-The Chain Seek Protocol is an application-level protocol for efficient,
+The Chain Sync Protocol is an application-level protocol for efficient,
 domain-specific traversal of a blockchain. It is a modification of the Chain
 Sync Protocol which allows the client to skip blocks and filter information
 using arbitrary queries/seek motions. Provided that the server supports the
@@ -53,7 +53,7 @@ objects of, the protocol.
 
 ### Operation
 
-The Chain Seek Protocol is a stateful client-server protocol. When a
+The Chain Sync Protocol is a stateful client-server protocol. When a
 client establishes a connection with a server, a handshake is performed. If the
 handshake succeeds, the idle state is reached. From the idle state, the client
 has the agency to send a query or terminate the connection. If the client
@@ -79,7 +79,7 @@ blocks the client may have already visited during a previous session. This
 mechanism allows clients to connect without having to start from the genesis
 block each time.
 
-The Chain Seek Protocol does not provide such a mechanism, because the
+The Chain Sync Protocol does not provide such a mechanism, because the
 query mechanism provides a much more flexible way to acheive the same result,
 making intersection points redundant.
 

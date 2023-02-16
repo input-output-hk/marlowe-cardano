@@ -107,9 +107,9 @@
             '').outPath;
           };
 
-          chainseekd = {
+          marlowe-chain-sync = {
             type = "app";
-            program = "${packages.chainseekd}/bin/chainseekd";
+            program = "${packages.marlowe-chain-sync}/bin/marlowe-chain-sync";
           };
 
           marlowe-chain-indexer = {

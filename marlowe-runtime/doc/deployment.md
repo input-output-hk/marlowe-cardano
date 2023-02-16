@@ -3,7 +3,7 @@
 Deploying the Marlowe Runtime requires running nine backend services:
 - seven [marlowe-cardano](https://github.com/input-output-hk/marlowe-cardano/blob/main/README.adoc) services:
 	- `marlowe-chain-indexer` for indexing the blockchain
-	- `chainseekd` for querying the indexed blockchain
+	- `marlowe-chain-sync` for querying the indexed blockchain
 	- `marlowe-indexer` for indexing Marlowe contracts
 	- `marlowe-sync` for tracking the on-chain history of all Marlowe contract instances
 	- `marlowe-history` for tracking the on-chain history of Marlowe contract instances (to be deprecated in favour of `marlowe-sync`)
@@ -32,7 +32,7 @@ separating the arguments from the command.
 $ cd marlowe-cardano
 
 $ nix run .#marlowe-chain-indexer -- --help
-$ nix run .#chainseekd -- --help
+$ nix run .#marlowe-chain-sync -- --help
 $ nix run .#marlowe-indexer -- --help
 $ nix run .#marlowe-sync -- --help
 $ nix run .#marlowe-history -- --help
@@ -60,7 +60,7 @@ Start the Cardano node for the network of your choice: see https://book.world.de
 
 ### PostgreSQL Database
 
-Select a database name for the Marlowe chain seek database and create it using PostgreSQL's `createdb` command. Edit the file [marlowe-chain-sync/sqitch.conf](../../marlowe-chain-sync/sqitch.conf) file to reflect the PostgreSQL user and database names for your PostgreSQL installation.
+Select a database name for the Marlowe chain sync database and create it using PostgreSQL's `createdb` command. Edit the file [marlowe-chain-sync/sqitch.conf](../../marlowe-chain-sync/sqitch.conf) file to reflect the PostgreSQL user and database names for your PostgreSQL installation.
 
 Database performance on `mainnet` will be slow unless the write-ahead log and other parameters in the `postgresql.conf` file are tuned:
 ```console
@@ -79,7 +79,7 @@ Start the backend services in the following order.
 - PostgreSQL
 - Cardano Node
 - `marlowe-chain-indexer`
-- `chainseekd`
+- `marlowe-chain-sync`
 - `marlowe-indexer`
 - `marlowe-sync`
 - `marlowe-history`
@@ -87,15 +87,15 @@ Start the backend services in the following order.
 - `marlowe-tx`
 
 
-### Marlowe Chain Seek Daemon
+### Marlowe Chain Sync Daemon
 
-See the [help page](chainseekd.md) for all of the command-line options for `chainseekd`. The port numbers have sensible default values that are consistent with the other Marlowe Runtime services, but one needs to specify a few options explicitly:
+See the [help page](marlowe-chain-sync.md) for all of the command-line options for `marlowe-chain-sync`. The port numbers have sensible default values that are consistent with the other Marlowe Runtime services, but one needs to specify a few options explicitly:
 - `--socket-path` for the filesystem path to the Cardano node's socket.
 - `--database-uri` for the location and name of the PostgreSQL database.
 
-A typical invocation of `chainseekd` will be like something along the following lines:
+A typical invocation of `marlowe-chain-sync` will be like something along the following lines:
 ```console
-$ chainseekd \
+$ marlowe-chain-sync \
     --socket-path "$CARDANO_NODE_SOCKET_PATH" \
     --database-uri postgresql://postgresql@0.0.0.0/chain
 ```
@@ -122,7 +122,7 @@ $ marlowe-chain-indexer \
     --shelley-genesis-config-file shelley-genesis.json \
     --genesis-config-file-hash 5f20df933584822601f9e3f8c024eb5eb252fe8cefb24d1317dc3d432e940ebb
 ```
-The `sqitch deploy` command handles database creation and migration, so it is only necessary to run that on new installations or after upgrading `chainseekd`.
+The `sqitch deploy` command handles database creation and migration, so it is only necessary to run that on new installations or after upgrading `marlowe-chain-sync`.
 To be safe, consider running this command before each invocation of `marlowe-chain-indexer`.
 
 
@@ -157,7 +157,7 @@ $ marlowe-sync \
 
 ### Marlowe History
 
-See the [help page](marlowe-history.md) for all of the command-line options for `marlowe-history`. The default values for port numbers are consistent with those for `chainseekd`, so they typically do not need to be specified explicitly. A typical invocation of `marlowe-history` is simple:
+See the [help page](marlowe-history.md) for all of the command-line options for `marlowe-history`. The default values for port numbers are consistent with those for `marlowe-chain-sync`, so they typically do not need to be specified explicitly. A typical invocation of `marlowe-history` is simple:
 ```console
 $ marlowe-history
 ```
@@ -165,14 +165,14 @@ $ marlowe-history
 
 ### Marlowe Discovery
 
-See the [help page](marlowe-discovery.md) for all of the command-line options for `marlowe-discovery`. The default values for port numbers are consistent with those for `chainseekd` and `marlowe-history`, so they typically do not need to be specified explicitly. A typical invocation of `marlowe-discovery` is simple:
+See the [help page](marlowe-discovery.md) for all of the command-line options for `marlowe-discovery`. The default values for port numbers are consistent with those for `marlowe-chain-sync` and `marlowe-history`, so they typically do not need to be specified explicitly. A typical invocation of `marlowe-discovery` is simple:
 ```console
 $ marlowe-discovery
 ```
 
 ### Marlowe Tx
 
-See the [help page](marlowe-tx.md) for all of the command-line options for `marlowe-tx`. The default values for port numbers are consistent with those for `chainseekd` and `marlowe-history`, so they typically do not need to be specified explicitly. A typical invocation of `marlowe-tx` is simple:
+See the [help page](marlowe-tx.md) for all of the command-line options for `marlowe-tx`. The default values for port numbers are consistent with those for `marlowe-chain-sync` and `marlowe-history`, so they typically do not need to be specified explicitly. A typical invocation of `marlowe-tx` is simple:
 ```console
 $ marlowe-tx
 ```

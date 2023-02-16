@@ -131,8 +131,8 @@ in
     '';
   };
 
-  chainseekd = mkOperable {
-    package = packages.chainseekd;
+  marlowe-chain-sync = mkOperable {
+    package = packages.marlowe-chain-sync;
     runtimeInputs = [ srvaddr jq coreutils ];
     runtimeScript = ''
       #################
@@ -168,11 +168,11 @@ in
       ${wait-for-socket}/bin/wait-for-socket "$CARDANO_NODE_SOCKET_PATH"
 
       DATABASE_URI=${database-uri}
-      ${packages.chainseekd}/bin/chainseekd \
+      ${packages.marlowe-chain-sync}/bin/marlowe-chain-sync \
         --host "$HOST" \
-        --port-number "$PORT" \
-        --query-port-number "$QUERY_PORT" \
-        --job-port-number "$JOB_PORT" \
+        --port "$PORT" \
+        --query-port "$QUERY_PORT" \
+        --job-port "$JOB_PORT" \
         --socket-path "$CARDANO_NODE_SOCKET_PATH" \
         --database-uri  "$DATABASE_URI"
     '';
@@ -184,26 +184,26 @@ in
       # REQUIRED VARS #
       #################
       # HOST, PORT, QUERY_PORT, SYNC_PORT: network binding
-      # CHAINSEEKD_HOST, CHAINSEEKD_PORT, CHAINSEEKD_QUERY_PORT: connection info to chainseekd
+      # MARLOWE_CHAIN_SYNC_HOST, MARLOWE_CHAIN_SYNC_PORT, MARLOWE_CHAIN_SYNC_QUERY_PORT: connection info to marlowe-chain-sync
 
       [ -z "''${HOST:-}" ] && echo "HOST env var must be set -- aborting" && exit 1
       [ -z "''${PORT:-}" ] && echo "PORT env var must be set -- aborting" && exit 1
       [ -z "''${QUERY_PORT:-}" ] && echo "QUERY_PORT env var must be set -- aborting" && exit 1
       [ -z "''${SYNC_PORT:-}" ] && echo "SYNC_PORT env var must be set -- aborting" && exit 1
-      [ -z "''${CHAINSEEKD_HOST:-}" ] && echo "CHAINSEEKD_HOST env var must be set -- aborting" && exit 1
-      [ -z "''${CHAINSEEKD_PORT:-}" ] && echo "CHAINSEEKD_PORT env var must be set -- aborting" && exit 1
-      [ -z "''${CHAINSEEKD_QUERY_PORT:-}" ] && echo "CHAINSEEKD_QUERY_PORT env var must be set -- aborting" && exit 1
+      [ -z "''${MARLOWE_CHAIN_SYNC_HOST:-}" ] && echo "MARLOWE_CHAIN_SYNC_HOST env var must be set -- aborting" && exit 1
+      [ -z "''${MARLOWE_CHAIN_SYNC_PORT:-}" ] && echo "MARLOWE_CHAIN_SYNC_PORT env var must be set -- aborting" && exit 1
+      [ -z "''${MARLOWE_CHAIN_SYNC_QUERY_PORT:-}" ] && echo "MARLOWE_CHAIN_SYNC_QUERY_PORT env var must be set -- aborting" && exit 1
 
-      ${wait-for-tcp}/bin/wait-for-tcp "$CHAINSEEKD_HOST" "$CHAINSEEKD_PORT"
+      ${wait-for-tcp}/bin/wait-for-tcp "$MARLOWE_CHAIN_SYNC_HOST" "$MARLOWE_CHAIN_SYNC_PORT"
 
       ${packages.marlowe-history}/bin/marlowe-history \
         --host "$HOST" \
         --command-port "$PORT" \
         --query-port "$QUERY_PORT" \
         --sync-port "$SYNC_PORT" \
-        --chain-seek-port-number "$CHAINSEEKD_PORT" \
-        --chain-seek-query-port-number "$CHAINSEEKD_QUERY_PORT" \
-        --chain-seek-host "$CHAINSEEKD_HOST"
+        --chain-sync-port "$MARLOWE_CHAIN_SYNC_PORT" \
+        --chain-sync-query-port "$MARLOWE_CHAIN_SYNC_QUERY_PORT" \
+        --chain-sync-host "$MARLOWE_CHAIN_SYNC_HOST"
     '';
   };
   marlowe-discovery = mkOperable {
@@ -213,24 +213,24 @@ in
       # REQUIRED VARS #
       #################
       # HOST, PORT, SYNC_PORT: network binding
-      # CHAINSEEKD_HOST, CHAINSEEKD_PORT, CHAINSEEKD_QUERY_PORT: connection info to chainseekd
+      # MARLOWE_CHAIN_SYNC_HOST, MARLOWE_CHAIN_SYNC_PORT, MARLOWE_CHAIN_SYNC_QUERY_PORT: connection info to marlowe-chain-sync
 
       [ -z "''${HOST:-}" ] && echo "HOST env var must be set -- aborting" && exit 1
       [ -z "''${PORT:-}" ] && echo "PORT env var must be set -- aborting" && exit 1
       [ -z "''${SYNC_PORT:-}" ] && echo "SYNC_PORT env var must be set -- aborting" && exit 1
-      [ -z "''${CHAINSEEKD_HOST:-}" ] && echo "CHAINSEEKD_HOST env var must be set -- aborting" && exit 1
-      [ -z "''${CHAINSEEKD_PORT:-}" ] && echo "CHAINSEEKD_PORT env var must be set -- aborting" && exit 1
-      [ -z "''${CHAINSEEKD_QUERY_PORT:-}" ] && echo "CHAINSEEKD_QUERY_PORT env var must be set -- aborting" && exit 1
+      [ -z "''${MARLOWE_CHAIN_SYNC_HOST:-}" ] && echo "MARLOWE_CHAIN_SYNC_HOST env var must be set -- aborting" && exit 1
+      [ -z "''${MARLOWE_CHAIN_SYNC_PORT:-}" ] && echo "MARLOWE_CHAIN_SYNC_PORT env var must be set -- aborting" && exit 1
+      [ -z "''${MARLOWE_CHAIN_SYNC_QUERY_PORT:-}" ] && echo "MARLOWE_CHAIN_SYNC_QUERY_PORT env var must be set -- aborting" && exit 1
 
-      ${wait-for-tcp}/bin/wait-for-tcp "$CHAINSEEKD_HOST" "$CHAINSEEKD_PORT"
+      ${wait-for-tcp}/bin/wait-for-tcp "$MARLOWE_CHAIN_SYNC_HOST" "$MARLOWE_CHAIN_SYNC_PORT"
 
       ${packages.marlowe-discovery}/bin/marlowe-discovery \
         --host "$HOST" \
         --query-port "$PORT" \
         --sync-port "$SYNC_PORT" \
-        --chain-seek-port-number "$CHAINSEEKD_PORT" \
-        --chain-seek-query-port-number "$CHAINSEEKD_QUERY_PORT" \
-        --chain-seek-host "$CHAINSEEKD_HOST"
+        --chain-sync-port "$MARLOWE_CHAIN_SYNC_PORT" \
+        --chain-sync-query-port "$MARLOWE_CHAIN_SYNC_QUERY_PORT" \
+        --chain-sync-host "$MARLOWE_CHAIN_SYNC_HOST"
     '';
   };
   marlowe-tx = mkOperable {
@@ -240,24 +240,24 @@ in
       # REQUIRED VARS #
       #################
       # HOST, PORT: network binding
-      # CHAINSEEKD_HOST, CHAINSEEKD_PORT, CHAINSEEKD_QUERY_PORT, CHAINSEEKD_COMMAND_PORT: connection info to chainseekd
+      # MARLOWE_CHAIN_SYNC_HOST, MARLOWE_CHAIN_SYNC_PORT, MARLOWE_CHAIN_SYNC_QUERY_PORT, MARLOWE_CHAIN_SYNC_COMMAND_PORT: connection info to marlowe-chain-sync
 
       [ -z "''${HOST:-}" ] && echo "HOST env var must be set -- aborting" && exit 1
       [ -z "''${PORT:-}" ] && echo "PORT env var must be set -- aborting" && exit 1
-      [ -z "''${CHAINSEEKD_HOST:-}" ] && echo "CHAINSEEKD_HOST env var must be set -- aborting" && exit 1
-      [ -z "''${CHAINSEEKD_PORT:-}" ] && echo "CHAINSEEKD_PORT env var must be set -- aborting" && exit 1
-      [ -z "''${CHAINSEEKD_COMMAND_PORT:-}" ] && echo "CHAINSEEKD_COMMAND_PORT env var must be set -- aborting" && exit 1
-      [ -z "''${CHAINSEEKD_QUERY_PORT:-}" ] && echo "CHAINSEEKD_QUERY_PORT env var must be set -- aborting" && exit 1
+      [ -z "''${MARLOWE_CHAIN_SYNC_HOST:-}" ] && echo "MARLOWE_CHAIN_SYNC_HOST env var must be set -- aborting" && exit 1
+      [ -z "''${MARLOWE_CHAIN_SYNC_PORT:-}" ] && echo "MARLOWE_CHAIN_SYNC_PORT env var must be set -- aborting" && exit 1
+      [ -z "''${MARLOWE_CHAIN_SYNC_COMMAND_PORT:-}" ] && echo "MARLOWE_CHAIN_SYNC_COMMAND_PORT env var must be set -- aborting" && exit 1
+      [ -z "''${MARLOWE_CHAIN_SYNC_QUERY_PORT:-}" ] && echo "MARLOWE_CHAIN_SYNC_QUERY_PORT env var must be set -- aborting" && exit 1
 
-      ${wait-for-tcp}/bin/wait-for-tcp "$CHAINSEEKD_HOST" "$CHAINSEEKD_PORT"
+      ${wait-for-tcp}/bin/wait-for-tcp "$MARLOWE_CHAIN_SYNC_HOST" "$MARLOWE_CHAIN_SYNC_PORT"
 
       ${packages.marlowe-tx}/bin/marlowe-tx \
         --host "$HOST" \
         --command-port "$PORT" \
-        --chain-seek-port-number "$CHAINSEEKD_PORT" \
-        --chain-seek-query-port-number "$CHAINSEEKD_QUERY_PORT" \
-        --chain-seek-command-port-number "$CHAINSEEKD_COMMAND_PORT" \
-        --chain-seek-host "$CHAINSEEKD_HOST" \
+        --chain-sync-port "$MARLOWE_CHAIN_SYNC_PORT" \
+        --chain-sync-query-port "$MARLOWE_CHAIN_SYNC_QUERY_PORT" \
+        --chain-sync-command-port "$MARLOWE_CHAIN_SYNC_COMMAND_PORT" \
+        --chain-sync-host "$MARLOWE_CHAIN_SYNC_HOST" \
     '';
   };
 }

@@ -936,6 +936,7 @@
           "base-orphans".components.library.planned = lib.mkOverride 900 true;
           "marlowe-integration".components.exes."marlowe-integration-example".planned = lib.mkOverride 900 true;
           "lazy-search".components.library.planned = lib.mkOverride 900 true;
+          "marlowe-chain-sync".components.exes."marlowe-chain-sync".planned = lib.mkOverride 900 true;
           "groups".components.library.planned = lib.mkOverride 900 true;
           "servant".components.library.planned = lib.mkOverride 900 true;
           "bin".components.library.planned = lib.mkOverride 900 true;
@@ -996,6 +997,7 @@
           "typerep-map".components.sublibs."typerep-extra-impls".planned = lib.mkOverride 900 true;
           "marlowe-apps".components.exes."marlowe-pipe".planned = lib.mkOverride 900 true;
           "plutus-tx".components.sublibs."plutus-tx-testlib".planned = lib.mkOverride 900 true;
+          "marlowe-chain-sync".components.sublibs."libchainsync".planned = lib.mkOverride 900 true;
           "Cabal".components.library.planned = lib.mkOverride 900 true;
           "cardano-integration".components.library.planned = lib.mkOverride 900 true;
           "reflection".components.library.planned = lib.mkOverride 900 true;
@@ -1121,7 +1123,6 @@
           "hsc2hs".components.exes."hsc2hs".planned = lib.mkOverride 900 true;
           "hasql-transaction".components.library.planned = lib.mkOverride 900 true;
           "parser-combinators".components.library.planned = lib.mkOverride 900 true;
-          "marlowe-chain-sync".components.sublibs."libchainseek".planned = lib.mkOverride 900 true;
           "Win32-network".components.library.planned = lib.mkOverride 900 true;
           "int-cast".components.library.planned = lib.mkOverride 900 true;
           "vector".components.library.planned = lib.mkOverride 900 true;
@@ -1327,7 +1328,6 @@
           "byteorder".components.library.planned = lib.mkOverride 900 true;
           "dom-lt".components.library.planned = lib.mkOverride 900 true;
           "witherable".components.library.planned = lib.mkOverride 900 true;
-          "marlowe-chain-sync".components.exes."chainseekd".planned = lib.mkOverride 900 true;
           "openapi3".components.exes."example".planned = lib.mkOverride 900 true;
           "system-filepath".components.setup.planned = lib.mkOverride 900 true;
           "asn1-encoding".components.library.planned = lib.mkOverride 900 true;

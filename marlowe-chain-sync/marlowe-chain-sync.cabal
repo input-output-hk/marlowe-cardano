@@ -5,7 +5,7 @@ synopsis:
   Cardano chain sync system for thee Marlowe Runtime
 description:
   Marlowe runtime component for Cardano node synchronization. Communicates with
-  downstream compoents using the Chain Seek protocol, which provides
+  downstream compoents using the Chain Sync protocol, which provides
   efficient push and pull-based traversal of the cardano blockchain.
 bug-reports: https://github.com/input-output-hk/marlowe-cardano/issues
 license: Apache-2.0
@@ -80,9 +80,9 @@ library
     , typed-protocols
     , vector
 
-library libchainseek
+library libchainsync
   import: lang
-  hs-source-dirs:   libchainseek
+  hs-source-dirs:   libchainsync
   visibility: public
   exposed-modules:
     Language.Marlowe.Runtime.ChainSync
@@ -246,10 +246,10 @@ executable marlowe-chain-indexer
     , uuid
   visibility: public
 
-executable chainseekd
+executable marlowe-chain-sync
   import: lang
   ghc-options: -threaded
-  hs-source-dirs:   chainseekd
+  hs-source-dirs:   marlowe-chain-sync
   main-is: Main.hs
   other-modules:
     Logging
@@ -268,7 +268,7 @@ executable chainseekd
     -- Consider removing the hasql < 1.6 constraint in cabal.project if updating hasql-pool
     , hasql-pool < 0.6
     , marlowe-chain-sync
-    , marlowe-chain-sync:libchainseek
+    , marlowe-chain-sync:libchainsync
     , marlowe-protocols
     , network
     , optparse-applicative

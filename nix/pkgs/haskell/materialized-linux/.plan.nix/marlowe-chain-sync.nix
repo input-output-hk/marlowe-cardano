@@ -19,7 +19,7 @@
       homepage = "";
       url = "";
       synopsis = "Cardano chain sync system for thee Marlowe Runtime";
-      description = "Marlowe runtime component for Cardano node synchronization. Communicates with\ndownstream compoents using the Chain Seek protocol, which provides\nefficient push and pull-based traversal of the cardano blockchain.";
+      description = "Marlowe runtime component for Cardano node synchronization. Communicates with\ndownstream compoents using the Chain Sync protocol, which provides\nefficient push and pull-based traversal of the cardano blockchain.";
       buildType = "Simple";
       isLocal = true;
       detailLevel = "FullDetails";
@@ -63,7 +63,7 @@
         hsSourceDirs = [ "src" ];
         };
       sublibs = {
-        "libchainseek" = {
+        "libchainsync" = {
           depends = [
             (hsPkgs."base" or (errorHandler.buildDepError "base"))
             (hsPkgs."async-components" or (errorHandler.buildDepError "async-components"))
@@ -92,7 +92,7 @@
             "Language/Marlowe/Runtime/ChainSync/Server"
             "Language/Marlowe/Runtime/ChainSync/QueryServer"
             ];
-          hsSourceDirs = [ "libchainseek" ];
+          hsSourceDirs = [ "libchainsync" ];
           };
         "chain-indexer" = {
           depends = [
@@ -201,7 +201,7 @@
           hsSourceDirs = [ "marlowe-chain-indexer" ];
           mainPath = [ "Main.hs" ];
           };
-        "chainseekd" = {
+        "marlowe-chain-sync" = {
           depends = [
             (hsPkgs."base" or (errorHandler.buildDepError "base"))
             (hsPkgs."async-components" or (errorHandler.buildDepError "async-components"))
@@ -212,7 +212,7 @@
             (hsPkgs."hasql" or (errorHandler.buildDepError "hasql"))
             (hsPkgs."hasql-pool" or (errorHandler.buildDepError "hasql-pool"))
             (hsPkgs."marlowe-chain-sync" or (errorHandler.buildDepError "marlowe-chain-sync"))
-            (hsPkgs."marlowe-chain-sync".components.sublibs.libchainseek or (errorHandler.buildDepError "marlowe-chain-sync:libchainseek"))
+            (hsPkgs."marlowe-chain-sync".components.sublibs.libchainsync or (errorHandler.buildDepError "marlowe-chain-sync:libchainsync"))
             (hsPkgs."marlowe-protocols" or (errorHandler.buildDepError "marlowe-protocols"))
             (hsPkgs."network" or (errorHandler.buildDepError "network"))
             (hsPkgs."optparse-applicative" or (errorHandler.buildDepError "optparse-applicative"))
@@ -223,7 +223,7 @@
             ];
           buildable = true;
           modules = [ "Logging" "Options" "Paths_marlowe_chain_sync" ];
-          hsSourceDirs = [ "chainseekd" ];
+          hsSourceDirs = [ "marlowe-chain-sync" ];
           mainPath = [ "Main.hs" ];
           };
         "example-client" = {

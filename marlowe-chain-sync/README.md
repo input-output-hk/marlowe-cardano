@@ -29,15 +29,15 @@ new migrations that need to be run. For a detailed guide to writing and
 managing migrations, please read https://sqitch.org/docs/manual/sqitchtutorial/.
 
 The Marlowe chain sync consists of two processes: `marlowe-chain-indexer`, and
-`chainseekd`. This split is for scalability purposes. `marlowe-chain-indexer`
-copies blocks and transactions into the database and `chainseekd` serves the
-Chain Seek Protocol, backed by the database.
+`marlowe-chain-sync`. This split is for scalability purposes. `marlowe-chain-indexer`
+copies blocks and transactions into the database and `marlowe-chain-sync` serves the
+Chain Sync Protocol, backed by the database.
 
 To run the chain indexer process, you can use `nix run .#marlowe-chain-indexer`.
 Alternatively, you can directly invoke `cabal run marlowe-chain-indexer`.
 
-To run the chain seek server, you can use `nix run .#chainseekd`.
-Alternatively, you can directly invoke `cabal run chainseekd`.
+To run the chain sync server, you can use `nix run .#marlowe-chain-sync`.
+Alternatively, you can directly invoke `cabal run marlowe-chain-sync`.
 
 ### Adding a new query
 
@@ -59,7 +59,7 @@ performed:
 
 ### Configuring the log output
 
-The log output of `chainseekd` can be configured on-the-fly (i.e. updated while
+The log output of `marlowe-chain-sync` can be configured on-the-fly (i.e. updated while
 it is running) using a config file. This file is passed via an optional command line
 argument (see `--help`). An example config file is located in this directory.
 It shows the default configuration.
@@ -67,12 +67,12 @@ It shows the default configuration.
 Each key in the configuration object corresponds to an event type. Setting the
 value to true means the event will be logged, false means it won't be logged,
 and not present means the default behaviour will be used. For example, to turn
-on the `chain-seek.send` event (disabled by default), you can use a config file
+on the `chain-sync.send` event (disabled by default), you can use a config file
 with contents.
 
 ```json
 {
-  "chain-seek.send": true
+  "chain-sync.send": true
 }
 ```
 
@@ -91,5 +91,5 @@ behaviour is used. For example, to log the `stateBefore` field of the
 ```
 
 Each time you save this file, it will be read and the configuration will be
-updated by `chainseekd`. If it cannot find the config file, the default
+updated by `marlowe-chain-sync`. If it cannot find the config file, the default
 configuration will be used.

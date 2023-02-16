@@ -23,9 +23,9 @@ let
   };
 in
 {
-  # ensure chain-indexer and chainseekd have access to node socket
+  # ensure chain-indexer and marlowe-chain-sync have access to node socket
   chain-indexer = mkImage "chain-indexer" rootConfig;
-  chainseekd = mkImage "chainseekd" rootConfig;
+  marlowe-chain-sync = mkImage "marlowe-chain-sync" rootConfig;
   marlowe-history = mkImage "marlowe-history" { };
   marlowe-discovery = mkImage "marlowe-discovery" { };
   marlowe-tx = mkImage "marlowe-tx" { };

@@ -32,7 +32,7 @@ data RootSelector f where
 -- TODO automate this boilerplate with Template Haskell
 getRootSelectorConfig :: GetSelectorConfig RootSelector
 getRootSelectorConfig = \case
-  ChainSeekClient sel -> prependKey "chain-seek" $ getConnectSocketDriverSelectorConfig chainSeekConfig sel
+  ChainSeekClient sel -> prependKey "chain-sync" $ getConnectSocketDriverSelectorConfig chainSeekConfig sel
   QueryServer sel -> prependKey "query" $ getAcceptSocketDriverSelectorConfig queryConfig sel
   JobServer sel -> prependKey "job" $ getAcceptSocketDriverSelectorConfig jobConfig sel
   SyncServer sel -> prependKey "sync" $ getAcceptSocketDriverSelectorConfig syncConfig sel

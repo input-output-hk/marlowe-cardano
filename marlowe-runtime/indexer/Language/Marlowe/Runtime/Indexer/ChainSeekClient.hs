@@ -27,19 +27,19 @@ import Observe.Event.Backend (EventBackend)
 data ChainSeekClientSelector f where
   LoadMarloweUTxO :: ChainSeekClientSelector MarloweUTxO
 
--- | Injectable dependencies for the chain seek client
+-- | Injectable dependencies for the chain sync client
 data ChainSeekClientDependencies r = ChainSeekClientDependencies
   { databaseQueries :: DatabaseQueries IO
   -- ^ Implementations of the database queries.
 
   , runChainSeekClient :: RunClient IO RuntimeChainSeekClient
-  -- ^ A function that runs a client of the chain seek protocol.
+  -- ^ A function that runs a client of the chain sync protocol.
 
   , runChainSyncQueryClient :: RunClient IO (QueryClient ChainSyncQuery)
   -- ^ A function that runs a client of the chain sync query protocol.
 
   , pollingInterval :: NominalDiffTime
-  -- ^ How frequently to poll the chain seek server when waiting.
+  -- ^ How frequently to poll the chain sync server when waiting.
 
   , marloweScriptHashes :: NESet ScriptHash
   -- ^ The set of known marlowe script hashes.
@@ -58,7 +58,7 @@ data ChainEvent
   -- | A change in which the chain is reverted to a previous point, discarding later blocks.
   | RollBackward ChainPoint ChainPoint
 
--- | A component that runs a chain seek client to traverse the blockchain and
+-- | A component that runs a chain sync client to traverse the blockchain and
 -- extract blocks of Marlowe transactions. The sequence of changes to the chain
 -- can be read by repeatedly running the resulting STM action.
 chainSeekClient :: forall r. Component IO (ChainSeekClientDependencies r) (STM ChainEvent)
@@ -69,7 +69,7 @@ chainSeekClient = component \ChainSeekClientDependencies{..} -> do
   -- Return the component's thread action and the action to pull the next chain
   -- event.
   pure
-    -- In this component's thread, run the chain seek client that will pull the
+    -- In this component's thread, run the chain sync client that will pull the
     -- transactions for discovering and following Marlowe contracts
     ( runChainSeekClient $ client
         (atomically . writeTQueue eventQueue)
@@ -82,7 +82,7 @@ chainSeekClient = component \ChainSeekClientDependencies{..} -> do
     , readTQueue eventQueue
     )
   where
-  -- | A chain seek client that discovers and follows all Marlowe contracts
+  -- | A chain sync client that discovers and follows all Marlowe contracts
   client
     :: (ChainEvent -> IO ())
     -> DatabaseQueries IO
@@ -104,7 +104,7 @@ chainSeekClient = component \ChainSeekClientDependencies{..} -> do
       systemStart <- queryChainSync GetSystemStart
       securityParameter <- queryChainSync GetSecurityParameter
       pure $ SendMsgRequestHandshake moveSchema $ ClientStHandshake
-        { recvMsgHandshakeRejected = \_ -> fail "unsupported chain seek version"
+        { recvMsgHandshakeRejected = \_ -> fail "unsupported chain sync version"
         , recvMsgHandshakeConfirmed = do
             -- Get the intersection points - the most recent block headers stored locally.
             intersectionPoints <- getIntersectionPoints
@@ -174,7 +174,7 @@ chainSeekClient = component \ChainSeekClientDependencies{..} -> do
         pure $ SendMsgPoll next
 
       -- The client's idle state handler for the main synchronization loop.
-      -- Sends the next query to the chain seek server and handles the
+      -- Sends the next query to the chain sync server and handles the
       -- response.
       clientIdle
         :: Int
@@ -192,10 +192,10 @@ chainSeekClient = component \ChainSeekClientDependencies{..} -> do
         -> MarloweUTxO
         -> ClientStNext Move Void (Set Transaction) ChainPoint (WithGenesis BlockHeader) IO a
       clientNext securityParameter systemStart queryChainSync utxo = ClientStNext
-        -- Fail with an error if chainseekd rejects the query. This is safe
+        -- Fail with an error if marlowe-chain-sync rejects the query. This is safe
         -- from bad user input, because our queries are derived from the ledger
         -- state, and so will only be rejected if the query derivation is
-        -- incorrect, or chainseekd is corrupt. Because both are unexpected
+        -- incorrect, or marlowe-chain-sync is corrupt. Because both are unexpected
         -- errors, it is a non-recoverable error state.
         { recvMsgQueryRejected = absurd
 

@@ -69,7 +69,7 @@ import qualified Language.Marlowe.Runtime.ChainSync.Database as Database
 import Numeric.Natural (Natural)
 import Prelude hiding (init)
 
--- | PostgreSQL implementation for the chainseekd database queries.
+-- | PostgreSQL implementation for the marlowe-chain-sync database queries.
 databaseQueries :: C.NetworkId -> DatabaseQueries Session
 databaseQueries networkId = DatabaseQueries
   (hoistGetUTxOs (TS.transaction TS.Serializable TS.Read) getUTxOs)

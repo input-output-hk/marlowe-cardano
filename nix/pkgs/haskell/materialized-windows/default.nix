@@ -1507,7 +1507,7 @@
           "byteorder".components.library.planned = lib.mkOverride 900 true;
           "dom-lt".components.library.planned = lib.mkOverride 900 true;
           "witherable".components.library.planned = lib.mkOverride 900 true;
-          "marlowe-chain-sync".components.exes."chainseekd".planned = lib.mkOverride 900 true;
+          "marlowe-chain-sync".components.exes."marlowe-chain-sync".planned = lib.mkOverride 900 true;
           "abstract-par".components.library.planned = lib.mkOverride 900 true;
           "monad-par".components.library.planned = lib.mkOverride 900 true;
           "openapi3".components.exes."example".planned = lib.mkOverride 900 true;

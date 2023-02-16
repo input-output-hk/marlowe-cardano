@@ -11,7 +11,7 @@ let
       {
         change_mode = "restart";
         data = ''
-          {{- with secret (printf "kv/data/chainseek/%s" (env "NOMAD_META_environment")) }}
+          {{- with secret (printf "kv/data/chainsync/%s" (env "NOMAD_META_environment")) }}
           DB_USER={{ .Data.data.pgUser }}
           DB_PASS={{ .Data.data.pgPass }}
           {{ end -}}
@@ -32,7 +32,7 @@ rec {
       {
         CARDANO_NODE_SOCKET_PATH = "/alloc/tmp/node.socket"; # figure out how to pass this from the cardano group
         NODE_CONFIG = "${nodeConfigDir}/config.json";
-        DB_NAME = "\${NOMAD_META_environment}_chainseek";
+        DB_NAME = "\${NOMAD_META_environment}_chainsync";
         MASTER_REPLICA_SRV_DNS = "_infra-database._master.service.us-east-1.consul";
       };
     template = dbTemplate;
@@ -54,23 +54,23 @@ rec {
       policies = [ "marlowe-runtime" ];
     };
   };
-  chainseekd = {
+  marlowe-chain-sync = {
     env = {
       HOST = "0.0.0.0";
-      PORT = "\${NOMAD_PORT_chainseekd}";
-      QUERY_PORT = "\${NOMAD_PORT_chainseekd_query}";
-      JOB_PORT = "\${NOMAD_PORT_chainseekd_command}";
+      PORT = "\${NOMAD_PORT_marlowe_chain_sync}";
+      QUERY_PORT = "\${NOMAD_PORT_marlowe_chain_sync_query}";
+      JOB_PORT = "\${NOMAD_PORT_marlowe_chain_sync_command}";
 
       CARDANO_NODE_SOCKET_PATH = "/alloc/tmp/node.socket"; # figure out how to pass this from the cardano group
       NODE_CONFIG = "${nodeConfigDir}/config.json"; # To get network magic
 
-      DB_NAME = "\${NOMAD_META_environment}_chainseek";
+      DB_NAME = "\${NOMAD_META_environment}_chainsync";
       MASTER_REPLICA_SRV_DNS = "_infra-database._master.service.us-east-1.consul";
     };
     template = dbTemplate;
-    config.image = ociNamer oci-images.chainseekd;
-    config.ports = [ "chainseekd" "chainseekd_query" "chainseekd_command" ];
-    service.port = "chainseekd";
+    config.image = ociNamer oci-images.marlowe-chain-sync;
+    config.ports = [ "marlowe-chain-sync" "marlowe_chain_sync_query" "marlowe_chain_sync_command" ];
+    service.port = "marlowe-chain-sync";
     user = "0:0";
     driver = "docker";
     kill_signal = "SIGINT";
@@ -94,9 +94,9 @@ rec {
       PORT = "\${NOMAD_PORT_history}";
       QUERY_PORT = "\${NOMAD_PORT_history_query}";
       SYNC_PORT = "\${NOMAD_PORT_history_sync}";
-      CHAINSEEKD_HOST = "localhost";
-      CHAINSEEKD_PORT = "\${NOMAD_PORT_chainseekd}";
-      CHAINSEEKD_QUERY_PORT = "\${NOMAD_PORT_chainseekd_query}";
+      MARLOWE_CHAIN_SYNC_HOST = "localhost";
+      MARLOWE_CHAIN_SYNC_PORT = "\${NOMAD_PORT_marlowe_chain_sync}";
+      MARLOWE_CHAIN_SYNC_QUERY_PORT = "\${NOMAD_PORT_marlowe_chain_sync_query}";
     };
 
     config.image = ociNamer oci-images.marlowe-history;
@@ -115,9 +115,9 @@ rec {
       PORT = "\${NOMAD_PORT_discovery}";
       QUERY_PORT = "\${NOMAD_PORT_discovery_query}";
       SYNC_PORT = "\${NOMAD_PORT_discovery_sync}";
-      CHAINSEEKD_HOST = "localhost";
-      CHAINSEEKD_PORT = "\${NOMAD_PORT_chainseekd}";
-      CHAINSEEKD_QUERY_PORT = "\${NOMAD_PORT_chainseekd_query}";
+      MARLOWE_CHAIN_SYNC_HOST = "localhost";
+      MARLOWE_CHAIN_SYNC_PORT = "\${NOMAD_PORT_marlowe_chain_sync}";
+      MARLOWE_CHAIN_SYNC_QUERY_PORT = "\${NOMAD_PORT_marlowe_chain_sync_query}";
     };
 
     config.image = ociNamer oci-images.marlowe-discovery;
@@ -134,10 +134,10 @@ rec {
     env = {
       HOST = "0.0.0.0";
       PORT = "\${NOMAD_PORT_tx}";
-      CHAINSEEKD_HOST = "localhost";
-      CHAINSEEKD_PORT = "\${NOMAD_PORT_chainseekd}";
-      CHAINSEEKD_QUERY_PORT = "\${NOMAD_PORT_chainseekd_query}";
-      CHAINSEEKD_COMMAND_PORT = "\${NOMAD_PORT_chainseekd_command}";
+      MARLOWE_CHAIN_SYNC_HOST = "localhost";
+      MARLOWE_CHAIN_SYNC_PORT = "\${NOMAD_PORT_marlowe_chain_sync}";
+      MARLOWE_CHAIN_SYNC_QUERY_PORT = "\${NOMAD_PORT_marlowe_chain_sync_query}";
+      MARLOWE_CHAIN_SYNC_COMMAND_PORT = "\${NOMAD_PORT_marlowe_chain_sync_command}";
       HISTORY_HOST = "\${NOMAD_IP_history}";
       HISTORY_SYNC_PORT = "\${NOMAD_PORT_history_sync}";
     };

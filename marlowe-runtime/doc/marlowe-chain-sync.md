@@ -1,18 +1,18 @@
-# Chain Seek Daemon
+# Chain Sync Daemon
 
-The `chainseekd` executable provides services for querying the blockchain for information that may relate to Marlowe contracts.
+The `marlowe-chain-sync` executable provides services for querying the blockchain for information that may relate to Marlowe contracts.
 
 ```console
-chainseekd : a chain seek server for the Marlowe Runtime.
+marlowe-chain-sync : a chain sync server for the Marlowe Runtime.
 
-Usage: chainseekd [--version] (-s|--socket-path SOCKET_FILE) 
+Usage: marlowe-chain-sync [--version] (-s|--socket-path SOCKET_FILE) 
                   [-m|--testnet-magic INTEGER] (-d|--database-uri DATABASE_URI)
                   [-h|--host HOST_NAME] 
-                  [--port-number PORT_NUMBER] [--query-port-number PORT_NUMBER] 
-                  [--job-port-number PORT_NUMBER] [--block-cost COST_UNITS] 
+                  [--port PORT_NUMBER] [--query-port PORT_NUMBER] 
+                  [--job-port PORT_NUMBER] [--block-cost COST_UNITS] 
                   [--tx-cost COST_UNITS] [--max-cost COST_UNITS]
 
-  Chain seek server for Marlowe Runtime.
+  Chain sync server for Marlowe Runtime.
 
 Available options:
   -h,--help                Show this help text
@@ -26,15 +26,15 @@ Available options:
   -d,--database-uri DATABASE_URI
                            URI of the database where the chain information is
                            saved.
-  -h,--host HOST_NAME      The hostname to serve the chain seek protocol on.
+  -h,--host HOST_NAME      The hostname to serve the chain sync protocol on.
                            (default: "127.0.0.1")
-  --port-number PORT_NUMBER
-                           The port number to serve the chain seek protocol on.
+  --port PORT_NUMBER
+                           The port number to serve the chain sync protocol on.
                            (default: 3715)
-  --query-port-number PORT_NUMBER
+  --query-port PORT_NUMBER
                            The port number to serve the query protocol on.
                            (default: 3716)
-  --job-port-number PORT_NUMBER
+  --job-port PORT_NUMBER
                            The port number to serve the job protocol on.
                            (default: 3720)
   --block-cost COST_UNITS  The number of cost units to associate with persisting

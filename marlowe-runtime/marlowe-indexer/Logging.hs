@@ -22,7 +22,7 @@ data RootSelector f where
 
 getRootSelectorConfig :: GetSelectorConfig RootSelector
 getRootSelectorConfig = \case
-  ChainSeekClient sel -> prependKey "chain-seek" $ getConnectSocketDriverSelectorConfig chainSeekConfig sel
+  ChainSeekClient sel -> prependKey "chain-sync" $ getConnectSocketDriverSelectorConfig chainSeekConfig sel
   ChainQueryClient sel -> prependKey "chain-query" $ getConnectSocketDriverSelectorConfig chainQueryConfig sel
   App sel -> prependKey "marlowe-indexer" $ getMarloweIndexerSelectorConfig sel
   ConfigWatcher ReloadConfig -> SelectorConfig "reload-log-config" True

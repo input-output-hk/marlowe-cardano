@@ -19,17 +19,17 @@
 <text text-anchor="middle" x="1464" y="-269.8" font-family="Times,serif" font-size="14.00">Server</text>
 </g>
 <g id="clust4" class="cluster">
-<title>cluster_chain_seek</title>
+<title>cluster_chain_sync</title>
 <polygon fill="none" stroke="black" points="1046,-200 1046,-511 1250,-511 1250,-200 1046,-200"/>
 <text text-anchor="middle" x="1148" y="-495.8" font-family="Times,serif" font-size="14.00">chain&#45;sync</text>
 </g>
 <g id="clust5" class="cluster">
-<title>cluster_chain_seek_inp</title>
+<title>cluster_chain_sync_inp</title>
 <polygon fill="none" stroke="black" points="1062.5,-293 1062.5,-480 1233.5,-480 1233.5,-293 1062.5,-293"/>
 <text text-anchor="middle" x="1148" y="-464.8" font-family="Times,serif" font-size="14.00">Server</text>
 </g>
 <g id="clust6" class="cluster">
-<title>cluster_chain_seek_out</title>
+<title>cluster_chain_sync_out</title>
 <polygon fill="none" stroke="black" points="1054,-208 1054,-285 1242,-285 1242,-208 1054,-208"/>
 <text text-anchor="middle" x="1148" y="-269.8" font-family="Times,serif" font-size="14.00">Client</text>
 </g>
@@ -146,7 +146,7 @@
 <g id="node9" class="node">
 <title>mh_cs_port_number</title>
 <polygon fill="none" stroke="black" points="718.5,-520 718.5,-556 900.5,-556 900.5,-520 718.5,-520"/>
-<text text-anchor="middle" x="809.5" y="-534.3" font-family="Times,serif" font-size="14.00">chain&#45;seek&#45;port&#45;number: 3715</text>
+<text text-anchor="middle" x="809.5" y="-534.3" font-family="Times,serif" font-size="14.00">chain&#45;sync&#45;port&#45;number: 3715</text>
 </g>
 <!-- mh_cs_port_number&#45;&gt;cs_port_number -->
 <g id="edge2" class="edge">
@@ -158,7 +158,7 @@
 <g id="node10" class="node">
 <title>mh_cs_query_server</title>
 <polygon fill="none" stroke="black" points="701,-465 701,-501 918,-501 918,-465 701,-465"/>
-<text text-anchor="middle" x="809.5" y="-479.3" font-family="Times,serif" font-size="14.00">chain&#45;seek&#45;query&#45;port&#45;number: 3716</text>
+<text text-anchor="middle" x="809.5" y="-479.3" font-family="Times,serif" font-size="14.00">chain&#45;sync&#45;query&#45;port&#45;number: 3716</text>
 </g>
 <!-- mh_cs_query_server&#45;&gt;cs_query_port_number -->
 <g id="edge3" class="edge">
@@ -176,7 +176,7 @@
 <g id="node12" class="node">
 <title>mt_cs_port_number</title>
 <polygon fill="none" stroke="black" points="345.5,-403 345.5,-439 527.5,-439 527.5,-403 345.5,-403"/>
-<text text-anchor="middle" x="436.5" y="-417.3" font-family="Times,serif" font-size="14.00">chain&#45;seek&#45;port&#45;number: 3715</text>
+<text text-anchor="middle" x="436.5" y="-417.3" font-family="Times,serif" font-size="14.00">chain&#45;sync&#45;port&#45;number: 3715</text>
 </g>
 <!-- mt_cs_port_number&#45;&gt;cs_port_number -->
 <g id="edge4" class="edge">
@@ -188,7 +188,7 @@
 <g id="node13" class="node">
 <title>mt_cs_query_server</title>
 <polygon fill="none" stroke="black" points="328,-348 328,-384 545,-384 545,-348 328,-348"/>
-<text text-anchor="middle" x="436.5" y="-362.3" font-family="Times,serif" font-size="14.00">chain&#45;seek&#45;query&#45;port&#45;number: 3716</text>
+<text text-anchor="middle" x="436.5" y="-362.3" font-family="Times,serif" font-size="14.00">chain&#45;sync&#45;query&#45;port&#45;number: 3716</text>
 </g>
 <!-- mt_cs_query_server&#45;&gt;cs_query_port_number -->
 <g id="edge5" class="edge">
@@ -200,7 +200,7 @@
 <g id="node14" class="node">
 <title>mt_cs_command_port</title>
 <polygon fill="none" stroke="black" points="316,-293 316,-329 557,-329 557,-293 316,-293"/>
-<text text-anchor="middle" x="436.5" y="-307.3" font-family="Times,serif" font-size="14.00">chain&#45;seek&#45;command&#45;port&#45;number: 3720</text>
+<text text-anchor="middle" x="436.5" y="-307.3" font-family="Times,serif" font-size="14.00">chain&#45;sync&#45;command&#45;port&#45;number: 3720</text>
 </g>
 <!-- mt_cs_command_port&#45;&gt;cs_job_port_number -->
 <g id="edge6" class="edge">
@@ -236,7 +236,7 @@
 <g id="node18" class="node">
 <title>md_cs_port_number</title>
 <polygon fill="none" stroke="black" points="718.5,-80 718.5,-116 900.5,-116 900.5,-80 718.5,-80"/>
-<text text-anchor="middle" x="809.5" y="-94.3" font-family="Times,serif" font-size="14.00">chain&#45;seek&#45;port&#45;number: 3715</text>
+<text text-anchor="middle" x="809.5" y="-94.3" font-family="Times,serif" font-size="14.00">chain&#45;sync&#45;port&#45;number: 3715</text>
 </g>
 <!-- md_cs_port_number&#45;&gt;cs_port_number -->
 <g id="edge8" class="edge">
@@ -248,7 +248,7 @@
 <g id="node19" class="node">
 <title>md_cs_query_server</title>
 <polygon fill="none" stroke="black" points="701,-25 701,-61 918,-61 918,-25 701,-25"/>
-<text text-anchor="middle" x="809.5" y="-39.3" font-family="Times,serif" font-size="14.00">chain&#45;seek&#45;query&#45;port&#45;number: 3716</text>
+<text text-anchor="middle" x="809.5" y="-39.3" font-family="Times,serif" font-size="14.00">chain&#45;sync&#45;query&#45;port&#45;number: 3716</text>
 </g>
 <!-- md_cs_query_server&#45;&gt;cs_query_port_number -->
 <g id="edge9" class="edge">

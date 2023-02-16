@@ -544,7 +544,7 @@ runtime = proc RuntimeDependencies{..} -> do
       acceptRunTransactionServer = acceptRunTxJobServer
 
       queryChainSync :: ChainSyncQuery Void err results -> IO results
-      queryChainSync = fmap (fromRight $ error "failed to query chain seek server")
+      queryChainSync = fmap (fromRight $ error "failed to query chain sync server")
         . runChainSyncQueryClient
         . liftQuery
 
@@ -640,8 +640,8 @@ setupChannels eventBackend = do
 
 getRuntimeSelectorConfig :: RuntimeSelector f -> SelectorConfig f
 getRuntimeSelectorConfig = \case
-  ChainSeekClientEvent sel -> prependKey "chain-seek.client" $ getConnectSocketDriverSelectorConfig socketDriverConfig sel
-  ChainSeekServerEvent sel -> prependKey "chain-seek.server" $ getAcceptSocketDriverSelectorConfig socketDriverConfig sel
+  ChainSeekClientEvent sel -> prependKey "chain-sync.client" $ getConnectSocketDriverSelectorConfig socketDriverConfig sel
+  ChainSeekServerEvent sel -> prependKey "chain-sync.server" $ getAcceptSocketDriverSelectorConfig socketDriverConfig sel
   ChainSyncJobClientEvent sel -> prependKey "chain-sync-job.client" $ getConnectSocketDriverSelectorConfig socketDriverConfig sel
   ChainSyncJobServerEvent sel -> prependKey "chain-sync-job.server" $ getAcceptSocketDriverSelectorConfig socketDriverConfig sel
   ChainSyncQueryClientEvent sel -> prependKey "chain-sync-query.client" $ getConnectSocketDriverSelectorConfig socketDriverConfig sel
