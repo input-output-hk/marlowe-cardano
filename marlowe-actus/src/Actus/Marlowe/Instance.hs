@@ -15,7 +15,7 @@ module Actus.Marlowe.Instance
   , reduceContract
   ) where
 
-import Actus.Domain (ActusOps(..), CashFlow, ContractState, ContractTerms, RiskFactors)
+import Actus.Domain (CashFlow, ContractState, ContractTerms, MinMax(..), RiskFactors)
 import Data.Functor ((<&>))
 import Data.Maybe (fromMaybe)
 import GHC.Real (Ratio(..))
@@ -68,7 +68,7 @@ instance Num Value where
     Cond (ValueLT a 0) (-1) $
       Cond (ValueGT a 0) 1 0
 
-instance ActusOps Value where
+instance MinMax Value where
   _min x y = Cond (ValueLT x y) x y
   _max x y = Cond (ValueGT x y) x y
 

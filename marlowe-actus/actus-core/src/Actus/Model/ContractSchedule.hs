@@ -39,10 +39,11 @@ import Data.Time.LocalTime (LocalTime(..), addLocalTime)
 
 -- |Generate the schedule for a given event type
 schedule ::
+  RealFrac a =>
   -- | Event type
   EventType ->
   -- | Contract terms
-  ContractTerms Double ->
+  ContractTerms a ->
   -- | Schedule
   [(String, ShiftedDay)]
 schedule IED ct@ContractTerms {contractId, contractType = PAM} = zip (repeat contractId) $ _SCHED_IED_PAM ct
@@ -148,23 +149,24 @@ schedule ev   ct@ContractTerms{ contractRole, contractType = SWAPS}  =
    in s
 schedule _ _                                           = []
 
-setRoleFil :: CR -> ContractTerms Double -> ContractTerms Double
+setRoleFil :: RealFrac a => CR -> ContractTerms a -> ContractTerms a
 setRoleFil CR_RFL ct = ct {contractRole = CR_RPA}
 setRoleFil _ ct      = ct {contractRole = CR_RPL}
 
-setRoleSel :: CR -> ContractTerms Double -> ContractTerms Double
+setRoleSel :: RealFrac a => CR -> ContractTerms a -> ContractTerms a
 setRoleSel CR_RFL ct = ct {contractRole = CR_RPL}
 setRoleSel _ ct      = ct {contractRole = CR_RPA}
 
-termsFromStructure :: ContractStructure Double -> Maybe (ContractTerms Double)
+termsFromStructure :: ContractStructure a -> Maybe (ContractTerms a)
 termsFromStructure cs = case reference cs of
   ReferenceTerms rt -> Just rt
   ReferenceId _     -> Nothing
 
 -- |Determine the maturity of a contract
 maturity ::
+  RealFrac a =>
   -- | Contract terms
-  ContractTerms Double ->
+  ContractTerms a ->
   -- | Maturity, if available
   Maybe LocalTime
 maturity ContractTerms {contractType = PAM, ..} = maturityDate
@@ -261,7 +263,7 @@ maturity _ = Nothing
 
 -- Principal at Maturity (PAM)
 
-_SCHED_IED_PAM :: ContractTerms Double -> [ShiftedDay]
+_SCHED_IED_PAM :: RealFrac a => ContractTerms a -> [ShiftedDay]
 _SCHED_IED_PAM
   ContractTerms
     { scheduleConfig,
@@ -269,7 +271,7 @@ _SCHED_IED_PAM
     } = [applyBDCWithCfg scheduleConfig ied]
 _SCHED_IED_PAM _ = []
 
-_SCHED_MD_PAM :: ContractTerms Double -> [ShiftedDay]
+_SCHED_MD_PAM :: RealFrac a => ContractTerms a -> [ShiftedDay]
 _SCHED_MD_PAM
   ct@ContractTerms
     { maturityDate,
@@ -278,7 +280,7 @@ _SCHED_MD_PAM
     Just m  -> [let d = applyBDCWithCfg scheduleConfig m in d {paymentDay = m}]
     Nothing -> []
 
-_SCHED_PP_PAM :: ContractTerms Double -> [ShiftedDay]
+_SCHED_PP_PAM :: RealFrac a => ContractTerms a -> [ShiftedDay]
 _SCHED_PP_PAM
   ContractTerms
     { prepaymentEffect = Just PPEF_N
@@ -300,14 +302,14 @@ _SCHED_PP_PAM
     } = generateRecurrentSchedule (ied <+> opcl) opcl md scheduleConfig
 _SCHED_PP_PAM _ = []
 
-_SCHED_PY_PAM :: ContractTerms Double -> [ShiftedDay]
+_SCHED_PY_PAM :: RealFrac a => ContractTerms a -> [ShiftedDay]
 _SCHED_PY_PAM
   ContractTerms
     { penaltyType = Just PYTP_O
     } = []
 _SCHED_PY_PAM ct = _SCHED_PP_PAM ct
 
-_SCHED_FP_PAM :: ContractTerms Double -> [ShiftedDay]
+_SCHED_FP_PAM :: RealFrac a => ContractTerms a -> [ShiftedDay]
 _SCHED_FP_PAM
   ContractTerms
     { feeRate = Nothing
@@ -333,7 +335,7 @@ _SCHED_FP_PAM
     Nothing -> []
 _SCHED_FP_PAM _ = []
 
-_SCHED_PRD_PAM :: ContractTerms Double -> [ShiftedDay]
+_SCHED_PRD_PAM :: RealFrac a => ContractTerms a -> [ShiftedDay]
 _SCHED_PRD_PAM
   ContractTerms
     { scheduleConfig,
@@ -341,7 +343,7 @@ _SCHED_PRD_PAM
     } = [applyBDCWithCfg scheduleConfig prd]
 _SCHED_PRD_PAM _ = []
 
-_SCHED_TD_PAM :: ContractTerms Double -> [ShiftedDay]
+_SCHED_TD_PAM :: RealFrac a => ContractTerms a -> [ShiftedDay]
 _SCHED_TD_PAM
   ContractTerms
     { scheduleConfig,
@@ -349,8 +351,7 @@ _SCHED_TD_PAM
     } = [applyBDCWithCfg scheduleConfig td]
 _SCHED_TD_PAM _ = []
 
-_SCHED_IP_PAM :: ContractTerms Double ->
-  [ShiftedDay]
+_SCHED_IP_PAM :: RealFrac a => ContractTerms a -> [ShiftedDay]
 _SCHED_IP_PAM
   ct@ContractTerms
     { cycleAnchorDateOfInterestPayment = Just ipanx,
@@ -378,7 +379,7 @@ _SCHED_IP_PAM
     Nothing -> []
 _SCHED_IP_PAM _ = []
 
-_SCHED_IPCI_PAM :: ContractTerms Double -> [ShiftedDay]
+_SCHED_IPCI_PAM :: RealFrac a => ContractTerms a -> [ShiftedDay]
 _SCHED_IPCI_PAM
   ct@ContractTerms
     { cycleAnchorDateOfInterestPayment = Just ipanx,
@@ -406,7 +407,7 @@ _SCHED_IPCI_PAM
     Nothing -> []
 _SCHED_IPCI_PAM _ = []
 
-_SCHED_RR_PAM :: ContractTerms Double -> [ShiftedDay]
+_SCHED_RR_PAM :: RealFrac a => ContractTerms a -> [ShiftedDay]
 _SCHED_RR_PAM
   ct@ContractTerms
     { cycleAnchorDateOfRateReset = Just rranx,
@@ -463,7 +464,7 @@ _SCHED_RR_PAM
     } = [applyBDCWithCfg scheduleConfig rranx] -- if no cycle then only start (if specified) and end dates (see ScheduleFactory.java)
 _SCHED_RR_PAM _ = []
 
-_SCHED_RRF_PAM :: ContractTerms Double -> [ShiftedDay]
+_SCHED_RRF_PAM :: RealFrac a => ContractTerms a -> [ShiftedDay]
 _SCHED_RRF_PAM
   ct@ContractTerms
     { cycleAnchorDateOfRateReset = Just rranx,
@@ -493,7 +494,7 @@ _SCHED_RRF_PAM
     Nothing -> []
 _SCHED_RRF_PAM _ = []
 
-_SCHED_SC_PAM :: ContractTerms Double -> [ShiftedDay]
+_SCHED_SC_PAM :: RealFrac a => ContractTerms a -> [ShiftedDay]
 _SCHED_SC_PAM ContractTerms {scalingEffect = Just SE_OOO} = []
 _SCHED_SC_PAM
   ct@ContractTerms
@@ -518,7 +519,7 @@ _SCHED_SC_PAM _ = []
 
 -- Linear Amortizer (LAM)
 
-_SCHED_PR_LAM :: ContractTerms Double -> [ShiftedDay]
+_SCHED_PR_LAM :: RealFrac a => ContractTerms a -> [ShiftedDay]
 _SCHED_PR_LAM
   ct@ContractTerms
     { cycleAnchorDateOfPrincipalRedemption = Just pranx,
@@ -540,7 +541,7 @@ _SCHED_PR_LAM
     Nothing -> []
 _SCHED_PR_LAM _ = []
 
-_SCHED_MD_LAM :: ContractTerms Double -> [ShiftedDay]
+_SCHED_MD_LAM :: RealFrac a => ContractTerms a -> [ShiftedDay]
 _SCHED_MD_LAM
   ct@ContractTerms
     { maturityDate,
@@ -549,7 +550,7 @@ _SCHED_MD_LAM
     Just m  -> [applyBDCWithCfg scheduleConfig m]
     Nothing -> []
 
-_SCHED_IPCB_LAM :: ContractTerms Double -> [ShiftedDay]
+_SCHED_IPCB_LAM :: RealFrac a => ContractTerms a -> [ShiftedDay]
 _SCHED_IPCB_LAM ContractTerms {..} | interestCalculationBase /= Just IPCB_NTL = []
 _SCHED_IPCB_LAM
   ct@ContractTerms
@@ -574,7 +575,7 @@ _SCHED_IPCB_LAM _ = []
 
 -- Negative Amortizer (NAM)
 
-_SCHED_IP_NAM :: ContractTerms Double -> [ShiftedDay]
+_SCHED_IP_NAM :: RealFrac a => ContractTerms a -> [ShiftedDay]
 _SCHED_IP_NAM ct@ContractTerms {..} =
   let m = maturityDate <|> maturity ct
       s
@@ -602,7 +603,7 @@ _SCHED_IP_NAM ct@ContractTerms {..} =
         | otherwise = result
    in fromMaybe [] result'
 
-_SCHED_IPCI_NAM :: ContractTerms Double -> [ShiftedDay]
+_SCHED_IPCI_NAM :: RealFrac a => ContractTerms a -> [ShiftedDay]
 _SCHED_IPCI_NAM ct@ContractTerms {..} =
   let m = maturity ct <|> maturityDate
       s
@@ -633,7 +634,7 @@ _SCHED_IPCI_NAM ct@ContractTerms {..} =
 
 -- Annuity (ANN)
 
-_SCHED_PRF_ANN :: ContractTerms Double -> [ShiftedDay]
+_SCHED_PRF_ANN :: RealFrac a => ContractTerms a -> [ShiftedDay]
 _SCHED_PRF_ANN
   ct@ContractTerms
     { cycleAnchorDateOfPrincipalRedemption = Just pranx,
@@ -650,7 +651,7 @@ _SCHED_PRF_ANN _ = []
 
 -- Stock (STK)
 
-_SCHED_DV_STK :: ContractTerms Double -> [ShiftedDay]
+_SCHED_DV_STK :: RealFrac a => ContractTerms a -> [ShiftedDay]
 _SCHED_DV_STK
   ContractTerms
     { cycleAnchorDateOfDividend = Just dvanx,
@@ -670,7 +671,7 @@ _SCHED_DV_STK _ = []
 
 -- Options (OPTNS)
 
-_SCHED_XD_OPTNS :: ContractTerms Double -> [ShiftedDay]
+_SCHED_XD_OPTNS :: RealFrac a => ContractTerms a -> [ShiftedDay]
 _SCHED_XD_OPTNS
   ContractTerms
     { exerciseDate = Just xd,
@@ -688,7 +689,7 @@ _SCHED_XD_OPTNS
           Just m  -> [applyBDCWithCfg scheduleConfig m]
           Nothing -> []
 
-_SCHED_STD_OPTNS :: ContractTerms Double -> [ShiftedDay]
+_SCHED_STD_OPTNS :: RealFrac a => ContractTerms a -> [ShiftedDay]
 _SCHED_STD_OPTNS
   ContractTerms
     { scheduleConfig,
@@ -718,7 +719,7 @@ _SCHED_STD_OPTNS
           Just m  -> [applyBDCWithCfg scheduleConfig m]
           Nothing -> []
 
-_SCHED_IP_SWPPV :: ContractTerms Double -> [ShiftedDay]
+_SCHED_IP_SWPPV :: RealFrac a => ContractTerms a -> [ShiftedDay]
 _SCHED_IP_SWPPV
   ContractTerms
     { deliverySettlement = Just DS_D
@@ -746,7 +747,7 @@ _SCHED_IP_SWPPV
     } = generateRecurrentSchedule (ied <+> ipcl) ipcl {includeEndDay = True} md scheduleConfig
 _SCHED_IP_SWPPV _ = []
 
-_SCHED_IPFX_SWPPV :: ContractTerms Double -> [ShiftedDay]
+_SCHED_IPFX_SWPPV :: RealFrac a => ContractTerms a -> [ShiftedDay]
 _SCHED_IPFX_SWPPV
   ContractTerms
     { deliverySettlement = Just DS_S
@@ -774,7 +775,7 @@ _SCHED_IPFX_SWPPV
     } = generateRecurrentSchedule (ied <+> ipcl) ipcl {includeEndDay = True} md scheduleConfig
 _SCHED_IPFX_SWPPV _ = []
 
-_SCHED_IPFL_SWPPV :: ContractTerms Double -> [ShiftedDay]
+_SCHED_IPFL_SWPPV :: RealFrac a => ContractTerms a -> [ShiftedDay]
 _SCHED_IPFL_SWPPV
   ContractTerms
     { deliverySettlement = Just DS_S
@@ -802,7 +803,7 @@ _SCHED_IPFL_SWPPV
     } = generateRecurrentSchedule (ied <+> ipcl) ipcl {includeEndDay = True} md scheduleConfig
 _SCHED_IPFL_SWPPV _ = []
 
-_SCHED_RR_SWPPV :: ContractTerms Double -> [ShiftedDay]
+_SCHED_RR_SWPPV :: RealFrac a => ContractTerms a -> [ShiftedDay]
 _SCHED_RR_SWPPV
   ContractTerms
     { cycleAnchorDateOfRateReset = Just rranx,
@@ -825,10 +826,10 @@ _SCHED_RR_SWPPV
     } = [applyBDCWithCfg scheduleConfig rranx]
 _SCHED_RR_SWPPV _ = []
 
-_SCHED_XD_CEG :: ContractTerms Double -> [ShiftedDay]
+_SCHED_XD_CEG :: ContractTerms a -> [ShiftedDay]
 _SCHED_XD_CEG _ = []
 
-_SCHED_MD_CEG :: ContractTerms Double -> [ShiftedDay]
+_SCHED_MD_CEG :: RealFrac a => ContractTerms a -> [ShiftedDay]
 _SCHED_MD_CEG
   ct@ContractTerms
     { maturityDate = md
@@ -838,7 +839,7 @@ _SCHED_MD_CEG
           Just m  -> [mkShiftedDay m]
           Nothing -> []
 
-_SCHED_FP_CEG :: ContractTerms Double -> [ShiftedDay]
+_SCHED_FP_CEG :: RealFrac a => ContractTerms a -> [ShiftedDay]
 _SCHED_FP_CEG
   ct@ContractTerms
     { cycleAnchorDateOfFee = Just feanx,
@@ -852,7 +853,7 @@ _SCHED_FP_CEG
           Nothing -> []
 _SCHED_FP_CEG _ = []
 
-_SCHED_MD_CEC :: ContractTerms Double -> [ShiftedDay]
+_SCHED_MD_CEC :: RealFrac a => ContractTerms a -> [ShiftedDay]
 _SCHED_MD_CEC
   ct@ContractTerms
     {
@@ -860,7 +861,7 @@ _SCHED_MD_CEC
     Just m  -> [mkShiftedDay $ maximum m]
     Nothing -> []
 
-_SCHED_IP_CLM :: ContractTerms Double -> [ShiftedDay]
+_SCHED_IP_CLM :: RealFrac a => ContractTerms a -> [ShiftedDay]
 _SCHED_IP_CLM
   ContractTerms
     { maturityDate = Just md,
@@ -868,7 +869,7 @@ _SCHED_IP_CLM
     } = [let d = applyBDCWithCfg scheduleConfig md in d { paymentDay = md }]
 _SCHED_IP_CLM _ = []
 
-_SCHED_IPCI_CLM :: ContractTerms Double -> [ShiftedDay]
+_SCHED_IPCI_CLM :: RealFrac a => ContractTerms a -> [ShiftedDay]
 _SCHED_IPCI_CLM
   ContractTerms
     { nominalInterestRate = Nothing

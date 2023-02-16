@@ -8,12 +8,12 @@ module Actus.Model.Payoff
   ) where
 
 import Actus.Domain
-  ( ActusOps(..)
-  , CT(..)
+  ( CT(..)
   , ContractState(..)
   , ContractTerms(..)
   , EventType(..)
   , FEB(..)
+  , MinMax(..)
   , PYTP(..)
   , RiskFactors(..)
   , ShiftedDay(..)
@@ -39,7 +39,7 @@ data CtxPOF a = CtxPOF
 
 -- | The payoff function
 payoff ::
-  ActusOps a =>
+  MinMax a =>
   Fractional a =>
   -- | Event
   (String, EventType, LocalTime) ->
