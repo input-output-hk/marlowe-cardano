@@ -83,7 +83,9 @@ library
     , network
     , stm
     , QuickCheck
+    , resourcet
     , template-haskell
     , text
     , transformers-base
     , typed-protocols
+    , unliftio
