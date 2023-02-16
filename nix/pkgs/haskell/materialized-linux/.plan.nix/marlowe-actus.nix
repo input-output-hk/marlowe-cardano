@@ -38,6 +38,7 @@
           (hsPkgs."plutus-tx" or (errorHandler.buildDepError "plutus-tx"))
           (hsPkgs."plutus-ledger" or (errorHandler.buildDepError "plutus-ledger"))
           (hsPkgs."marlowe-cardano" or (errorHandler.buildDepError "marlowe-cardano"))
+          (hsPkgs."mtl" or (errorHandler.buildDepError "mtl"))
           (hsPkgs."time" or (errorHandler.buildDepError "time"))
           (hsPkgs."validation" or (errorHandler.buildDepError "validation"))
           ];
