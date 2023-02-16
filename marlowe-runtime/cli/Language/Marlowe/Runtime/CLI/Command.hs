@@ -37,7 +37,7 @@ import Network.Protocol.Handshake.Client (runClientPeerOverSocketWithHandshake)
 import Network.Protocol.Handshake.Types (HasSignature(..))
 import Network.Protocol.Job.Client (jobClientPeer)
 import Network.Protocol.Job.Codec (codecJob)
-import Network.Socket (AddrInfo, HostName, PortNumber, SocketType(..), addrSocketType, defaultHints, getAddrInfo)
+import Network.Socket (HostName, PortNumber)
 import Network.TypedProtocol (Peer, PeerRole(AsClient))
 import Network.TypedProtocol.Codec (Codec)
 import Options.Applicative
@@ -111,29 +111,24 @@ runCommand = \case
 
 -- | Interpret a CLI action in IO using the provided options.
 runCLIWithOptions :: STM () -> Options -> CLI a -> IO a
-runCLIWithOptions sigInt Options{..} cli = do
-  historySyncAddr <- resolve historyHost historySyncPort
-  txJobAddr <- resolve txHost txCommandPort
-  runReaderT (runCLI cli) Env
-    { envRunHistorySyncClient = runClientPeerOverSocket' "History sync client failure" historySyncAddr codecMarloweSync marloweSyncClientPeer
-    , envRunTxJobClient = runClientPeerOverSocket' "Tx client client failure" txJobAddr codecJob jobClientPeer
-    , sigInt
-    }
-  where
-    resolve host port =
-      head <$> getAddrInfo (Just defaultHints { addrSocketType = Stream }) (Just host) (Just $ show port)
+runCLIWithOptions sigInt Options{..} cli = runReaderT (runCLI cli) Env
+  { envRunHistorySyncClient = runClientPeerOverSocket' "History sync client failure" historyHost historySyncPort codecMarloweSync marloweSyncClientPeer
+  , envRunTxJobClient = runClientPeerOverSocket' "Tx client client failure" txHost txCommandPort codecJob jobClientPeer
+  , sigInt
+  }
 
 runClientPeerOverSocket'
   :: forall protocol client (st :: protocol)
    . HasSignature protocol
   => String -- ^ Client failure stderr extra message
-  -> AddrInfo -- ^ Socket address to connect to
+  -> HostName
+  -> PortNumber
   -> Codec protocol DeserializeError IO LB.ByteString -- ^ A codec for the protocol
   -> (forall a. client IO a -> Peer protocol 'AsClient st IO a) -- ^ Interpret the client as a protocol peer
   -> RunClient IO client
-runClientPeerOverSocket' errMsg addr codec clientToPeer client = do
+runClientPeerOverSocket' errMsg host port codec clientToPeer client = do
   let
-    run = runClientPeerOverSocketWithHandshake addr codec clientToPeer client
+    run = runClientPeerOverSocketWithHandshake host port codec clientToPeer client
   run `catch` \(err :: SomeException)-> do
     hPutStrLn stderr errMsg
     throw err

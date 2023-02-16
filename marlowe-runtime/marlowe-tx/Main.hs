@@ -96,34 +96,28 @@ run Options{..} = withSocketsDo do
             jobServerPeer
 
           connectToChainSeek :: RunClient IO RuntimeChainSeekClient
-          connectToChainSeek client = do
-            addr' <- head <$> getAddrInfo (Just clientHints) (Just chainSeekHost) (Just $ show chainSeekPort)
-            runClientPeerOverSocketWithLoggingWithHandshake
-              (narrowEventBackend ChainSeekClient rootEventBackend)
-              addr'
-              runtimeChainSeekCodec
-              (chainSeekClientPeer Genesis)
-              client
+          connectToChainSeek = runClientPeerOverSocketWithLoggingWithHandshake
+            (narrowEventBackend ChainSeekClient rootEventBackend)
+            chainSeekHost
+            chainSeekPort
+            runtimeChainSeekCodec
+            (chainSeekClientPeer Genesis)
 
           runChainSyncJobClient :: RunClient IO (JobClient ChainSyncCommand)
-          runChainSyncJobClient client = do
-            addr' <- head <$> getAddrInfo (Just clientHints) (Just chainSeekHost) (Just $ show chainSeekCommandPort)
-            runClientPeerOverSocketWithLoggingWithHandshake
-              (narrowEventBackend ChainSyncJobClient rootEventBackend)
-              addr'
-              codecJob
-              jobClientPeer
-              client
+          runChainSyncJobClient = runClientPeerOverSocketWithLoggingWithHandshake
+            (narrowEventBackend ChainSyncJobClient rootEventBackend)
+            chainSeekHost
+            chainSeekCommandPort
+            codecJob
+            jobClientPeer
 
           runChainSyncQueryClient :: RunClient IO (QueryClient ChainSyncQuery)
-          runChainSyncQueryClient client = do
-            addr' <- head <$> getAddrInfo (Just clientHints) (Just chainSeekHost) (Just $ show chainSeekQueryPort)
-            runClientPeerOverSocketWithLoggingWithHandshake
-              (narrowEventBackend ChainSyncQueryClient rootEventBackend)
-              addr'
-              codecQuery
-              queryClientPeer
-              client
+          runChainSyncQueryClient = runClientPeerOverSocketWithLoggingWithHandshake
+            (narrowEventBackend ChainSyncQueryClient rootEventBackend)
+            chainSeekHost
+            chainSeekQueryPort
+            codecQuery
+            queryClientPeer
 
           queryChainSync :: ChainSyncQuery Void e a -> IO a
           queryChainSync = fmap (fromRight $ error "failed to query chain sync server") . runChainSyncQueryClient . liftQuery

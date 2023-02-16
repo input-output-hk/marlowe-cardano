@@ -22,7 +22,21 @@ import Data.ByteString.Lazy (ByteString)
 import Data.ByteString.Lazy.Base16 (encodeBase16)
 import Data.Void (Void)
 import Network.Channel (Channel(..), channelPair, hoistChannel, socketAsChannel)
-import Network.Socket (AddrInfo, SockAddr, Socket, addrAddress, close, connect, gracefulClose, openSocket)
+import Network.Socket
+  ( AddrInfo(..)
+  , HostName
+  , PortNumber
+  , SockAddr
+  , Socket
+  , SocketType(..)
+  , addrAddress
+  , close
+  , connect
+  , defaultHints
+  , getAddrInfo
+  , gracefulClose
+  , openSocket
+  )
 import Network.Socket.Address (accept)
 import Network.TypedProtocol (Message, Peer(..), PeerHasAgency, PeerRole, SomeMessage(..), runPeerWithDriver)
 import Network.TypedProtocol.Codec (Codec(..), DecodeStep(..))
@@ -136,7 +150,8 @@ type ToPeer machine protocol peer st m = forall a. machine m a -> Peer protocol 
 
 runClientPeerOverSocket
   :: (MonadCleanup m, MonadBaseControl IO m, Exception ex)
-  => AddrInfo
+  => HostName
+  -> PortNumber
   -> Codec protocol ex m ByteString
   -> ToPeer client protocol peer st m
   -> RunClient m client
@@ -150,13 +165,18 @@ data ConnectSocketDriverSelector ps f where
 runClientPeerOverSocketWithLogging
   :: (MonadBaseControl IO m, MonadCleanup m, Exception ex)
   => EventBackend m r (ConnectSocketDriverSelector protocol)
-  -> AddrInfo
+  -> HostName
+  -> PortNumber
   -> Codec protocol ex m ByteString
   -> ToPeer client protocol peer st m
   -> RunClient m client
-runClientPeerOverSocketWithLogging eventBackend addr = runClientPeerWithLoggingGeneral
+runClientPeerOverSocketWithLogging eventBackend host port = runClientPeerWithLoggingGeneral
   eventBackend
   ( liftBase do
+      addr <- head <$> getAddrInfo
+        (Just defaultHints { addrSocketType = Stream })
+        (Just host)
+        (Just $ show port)
       socket <- liftBase $ openSocket addr
       connect socket $ addrAddress addr
       pure socket

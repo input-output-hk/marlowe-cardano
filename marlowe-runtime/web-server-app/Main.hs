@@ -16,7 +16,6 @@ import Language.Marlowe.Runtime.Web.Server
 import Network.Protocol.Handshake.Client (runClientPeerOverSocketWithHandshake)
 import Network.Protocol.Job.Client (jobClientPeer)
 import Network.Protocol.Job.Codec (codecJob)
-import Network.Socket (AddrInfo(..), HostName, PortNumber, SocketType(..), defaultHints, getAddrInfo)
 import Network.Wai.Handler.Warp (run)
 import Observe.Event.Render.JSON (DefaultRenderSelectorJSON(defaultRenderSelectorJSON))
 import Observe.Event.Render.JSON.Handle (JSONRef, simpleJsonStderrBackend)
@@ -32,24 +31,20 @@ main = hSetBuffering stdout LineBuffering
 
 optionsToServerDependencies :: Options -> IO (ServerDependencies JSONRef)
 optionsToServerDependencies Options{..} = do
-  syncQueryAddr <- resolve syncHost syncQueryPort
-  txCommandAddr <- resolve txHost txCommandPort
   eventBackend <- simpleJsonStderrBackend defaultRenderSelectorJSON
   pure ServerDependencies
     { openAPIEnabled
     , accessControlAllowOriginAll
     , runApplication = run $ fromIntegral port
     , runMarloweQueryClient = runClientPeerOverSocketWithHandshake
-        syncQueryAddr
+        syncHost
+        syncQueryPort
         codecMarloweQuery
         marloweQueryClientPeer
     , runTxJobClient = runClientPeerOverSocketWithHandshake
-        txCommandAddr
+        txHost
+        txCommandPort
         codecJob
         jobClientPeer
     , eventBackend
     }
-
-resolve :: HostName -> PortNumber -> IO AddrInfo
-resolve host port =
-  head <$> getAddrInfo (Just defaultHints { addrSocketType = Stream }) (Just host) (Just $ show port)

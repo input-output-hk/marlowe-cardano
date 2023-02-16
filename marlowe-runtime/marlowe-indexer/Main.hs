@@ -28,7 +28,7 @@ import Network.Protocol.Handshake.Client
   (runClientPeerOverSocketWithHandshake, runClientPeerOverSocketWithLoggingWithHandshake)
 import Network.Protocol.Query.Client (liftQuery, queryClientPeer)
 import Network.Protocol.Query.Codec (codecQuery)
-import Network.Socket (AddrInfo(..), HostName, PortNumber, SocketType(..), defaultHints, getAddrInfo, withSocketsDo)
+import Network.Socket (AddrInfo(..), HostName, PortNumber, SocketType(..), defaultHints, withSocketsDo)
 import Observe.Event.Backend (narrowEventBackend, newOnceFlagMVar)
 import Observe.Event.Component (LoggerDependencies(..), logger)
 import Options.Applicative
@@ -66,22 +66,18 @@ run Options{..} = withSocketsDo do
   securityParameter <- queryChainSync GetSecurityParameter
   let
     indexerDependencies eventBackend = MarloweIndexerDependencies
-      { runChainSeekClient = \client -> do
-          addr' <- head <$> getAddrInfo (Just clientHints) (Just chainSeekHost) (Just $ show chainSeekPort)
-          runClientPeerOverSocketWithLoggingWithHandshake
-            (narrowEventBackend ChainSeekClient eventBackend)
-            addr'
-            runtimeChainSeekCodec
-            (chainSeekClientPeer Genesis)
-            client
-      , runChainSyncQueryClient = \client -> do
-          addr' <- head <$> getAddrInfo (Just clientHints) (Just chainSeekHost) (Just $ show chainSeekQueryPort)
-          runClientPeerOverSocketWithLoggingWithHandshake
-            (narrowEventBackend ChainQueryClient eventBackend)
-            addr'
-            codecQuery
-            queryClientPeer
-            client
+      { runChainSeekClient = runClientPeerOverSocketWithLoggingWithHandshake
+          (narrowEventBackend ChainSeekClient eventBackend)
+          chainSeekHost
+          chainSeekPort
+          runtimeChainSeekCodec
+          (chainSeekClientPeer Genesis)
+      , runChainSyncQueryClient = runClientPeerOverSocketWithLoggingWithHandshake
+          (narrowEventBackend ChainQueryClient eventBackend)
+          chainSeekHost
+          chainSeekQueryPort
+          codecQuery
+          queryClientPeer
       , databaseQueries = hoistDatabaseQueries
           (either throwUsageError pure <=< Pool.use pool)
           (PostgreSQL.databaseQueries securityParameter)
@@ -104,9 +100,13 @@ run Options{..} = withSocketsDo do
     throwUsageError (SessionError (Session.QueryError _ _ err)) = error $ show err
 
     queryChainSync :: ChainSyncQuery Void e a -> IO a
-    queryChainSync query = fmap (fromRight $ error "failed to query chain sync server") do
-      addr <- head <$> getAddrInfo (Just clientHints) (Just chainSeekHost) (Just $ show chainSeekQueryPort)
-      runClientPeerOverSocketWithHandshake addr codecQuery queryClientPeer $ liftQuery query
+    queryChainSync = fmap (fromRight $ error "failed to query chain sync server")
+      . runClientPeerOverSocketWithHandshake
+          chainSeekHost
+          chainSeekQueryPort
+          codecQuery
+          queryClientPeer
+      . liftQuery
 
 data Options = Options
   { chainSeekPort :: PortNumber

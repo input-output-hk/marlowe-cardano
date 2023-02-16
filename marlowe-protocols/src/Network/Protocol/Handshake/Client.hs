@@ -21,7 +21,7 @@ import Network.Protocol.ChainSeek.Codec (DeserializeError)
 import Network.Protocol.Driver (ConnectSocketDriverSelector, RunClient, ToPeer, runClientPeerOverSocketWithLogging)
 import Network.Protocol.Handshake.Codec (codecHandshake)
 import Network.Protocol.Handshake.Types
-import Network.Socket (AddrInfo)
+import Network.Socket (HostName, PortNumber)
 import Network.TypedProtocol
 import Network.TypedProtocol.Codec (Codec)
 import Observe.Event (EventBackend)
@@ -53,14 +53,16 @@ runClientPeerOverSocketWithLoggingWithHandshake
      , HasSignature protocol
      )
   => EventBackend m r (ConnectSocketDriverSelector (Handshake protocol))
-  -> AddrInfo
+  -> HostName
+  -> PortNumber
   -> Codec protocol DeserializeError m ByteString
   -> ToPeer client protocol 'AsClient st m
   -> RunClient m client
-runClientPeerOverSocketWithLoggingWithHandshake eventBackend addr codec toPeer =
+runClientPeerOverSocketWithLoggingWithHandshake eventBackend host port codec toPeer =
   embedClientInHandshake (signature $ Proxy @protocol) $ runClientPeerOverSocketWithLogging
     eventBackend
-    addr
+    host
+    port
     (codecHandshake codec)
     (handshakeClientPeer toPeer)
 
@@ -71,7 +73,8 @@ runClientPeerOverSocketWithHandshake
      , MonadFail m
      , HasSignature protocol
      )
-  => AddrInfo
+  => HostName
+  -> PortNumber
   -> Codec protocol DeserializeError m ByteString
   -> ToPeer client protocol 'AsClient st m
   -> RunClient m client
