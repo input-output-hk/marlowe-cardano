@@ -5,7 +5,6 @@ module Main
 
 import Control.Arrow (arr, (<<<))
 import Control.Concurrent.Component
-import Control.Exception (throwIO)
 import Control.Monad ((<=<))
 import Data.Either (fromRight)
 import qualified Data.Set.NonEmpty as NESet
@@ -71,7 +70,6 @@ run Options{..} = withSocketsDo do
           addr' <- head <$> getAddrInfo (Just clientHints) (Just chainSeekHost) (Just $ show chainSeekPort)
           runClientPeerOverSocketWithLoggingWithHandshake
             (narrowEventBackend ChainSeekClient eventBackend)
-            throwIO
             addr'
             runtimeChainSeekCodec
             (chainSeekClientPeer Genesis)
@@ -80,7 +78,6 @@ run Options{..} = withSocketsDo do
           addr' <- head <$> getAddrInfo (Just clientHints) (Just chainSeekHost) (Just $ show chainSeekQueryPort)
           runClientPeerOverSocketWithLoggingWithHandshake
             (narrowEventBackend ChainQueryClient eventBackend)
-            throwIO
             addr'
             codecQuery
             queryClientPeer
@@ -109,7 +106,7 @@ run Options{..} = withSocketsDo do
     queryChainSync :: ChainSyncQuery Void e a -> IO a
     queryChainSync query = fmap (fromRight $ error "failed to query chain sync server") do
       addr <- head <$> getAddrInfo (Just clientHints) (Just chainSeekHost) (Just $ show chainSeekQueryPort)
-      runClientPeerOverSocketWithHandshake throwIO addr codecQuery queryClientPeer $ liftQuery query
+      runClientPeerOverSocketWithHandshake addr codecQuery queryClientPeer $ liftQuery query
 
 data Options = Options
   { chainSeekPort :: PortNumber

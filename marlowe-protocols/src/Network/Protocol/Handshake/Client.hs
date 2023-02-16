@@ -53,15 +53,13 @@ runClientPeerOverSocketWithLoggingWithHandshake
      , HasSignature protocol
      )
   => EventBackend m r (ConnectSocketDriverSelector (Handshake protocol))
-  -> (forall x. DeserializeError -> m x)
   -> AddrInfo
   -> Codec protocol DeserializeError m ByteString
   -> ToPeer client protocol 'AsClient st m
   -> RunClient m client
-runClientPeerOverSocketWithLoggingWithHandshake eventBackend throwImpl addr codec toPeer =
+runClientPeerOverSocketWithLoggingWithHandshake eventBackend addr codec toPeer =
   embedClientInHandshake (signature $ Proxy @protocol) $ runClientPeerOverSocketWithLogging
     eventBackend
-    throwImpl
     addr
     (codecHandshake codec)
     (handshakeClientPeer toPeer)
@@ -73,8 +71,7 @@ runClientPeerOverSocketWithHandshake
      , MonadFail m
      , HasSignature protocol
      )
-  => (forall x. DeserializeError -> m x)
-  -> AddrInfo
+  => AddrInfo
   -> Codec protocol DeserializeError m ByteString
   -> ToPeer client protocol 'AsClient st m
   -> RunClient m client

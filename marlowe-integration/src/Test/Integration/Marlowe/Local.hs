@@ -590,49 +590,42 @@ setupChannels eventBackend = do
   ClientServerPair acceptRunChainSeekServer runChainSeekClient <- clientServerPair
     (narrowEventBackend ChainSeekServerEvent eventBackend)
     (narrowEventBackend ChainSeekClientEvent eventBackend)
-    throwIO
     codecChainSeek
     (chainSeekServerPeer Genesis)
     (chainSeekClientPeer Genesis)
   ClientServerPair acceptRunChainSyncJobServer runChainSyncJobClient <- clientServerPair
     (narrowEventBackend ChainSyncJobServerEvent eventBackend)
     (narrowEventBackend ChainSyncJobClientEvent eventBackend)
-    throwIO
     codecJob
     jobServerPeer
     jobClientPeer
   ClientServerPair acceptRunChainSyncQueryServer runChainSyncQueryClient <- clientServerPair
     (narrowEventBackend ChainSyncQueryServerEvent eventBackend)
     (narrowEventBackend ChainSyncQueryClientEvent eventBackend)
-    throwIO
     codecQuery
     queryServerPeer
     queryClientPeer
   ClientServerPair acceptRunDiscoverySyncServer runDiscoverySyncClient <- clientServerPair
     (narrowEventBackend DiscoverySyncServerEvent eventBackend)
     (narrowEventBackend DiscoverySyncClientEvent eventBackend)
-    throwIO
     codecMarloweHeaderSync
     marloweHeaderSyncServerPeer
     marloweHeaderSyncClientPeer
   ClientServerPair acceptRunHistorySyncServer runHistorySyncClient <- clientServerPair
     (narrowEventBackend HistorySyncServerEvent eventBackend)
     (narrowEventBackend HistorySyncClientEvent eventBackend)
-    throwIO
     codecMarloweSync
     marloweSyncServerPeer
     marloweSyncClientPeer
   ClientServerPair acceptRunMarloweQueryServer runMarloweQueryClient <- clientServerPair
     (narrowEventBackend MarloweQueryServerEvent eventBackend)
     (narrowEventBackend MarloweQueryClientEvent eventBackend)
-    throwIO
     codecMarloweQuery
     id
     marloweQueryClientPeer
   ClientServerPair acceptRunTxJobServer runTxJobClient <- clientServerPair
     (narrowEventBackend TxJobServerEvent eventBackend)
     (narrowEventBackend TxJobClientEvent eventBackend)
-    throwIO
     codecJob
     jobServerPeer
     jobClientPeer

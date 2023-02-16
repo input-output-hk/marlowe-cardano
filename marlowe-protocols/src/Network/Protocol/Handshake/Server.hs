@@ -58,15 +58,13 @@ acceptRunServerPeerOverSocketWithLoggingWithHandshake
      , HasSignature protocol
      )
   => EventBackend m r (AcceptSocketDriverSelector (Handshake protocol))
-  -> (forall x. DeserializeError -> m x)
   -> Socket
   -> Codec protocol DeserializeError m ByteString
   -> ToPeer server protocol 'AsServer st m
   -> m (RunServer m server)
-acceptRunServerPeerOverSocketWithLoggingWithHandshake eventBackend throwImpl socket codec toPeer = do
+acceptRunServerPeerOverSocketWithLoggingWithHandshake eventBackend socket codec toPeer = do
   embedServerInHandshake (signature $ Proxy @protocol) <$> acceptRunServerPeerOverSocketWithLogging
     eventBackend
-    throwImpl
     socket
     (codecHandshake codec)
     (handshakeServerPeer toPeer)
@@ -78,8 +76,7 @@ acceptRunServerPeerOverSocketWithHandshake
      , MonadFail m
      , HasSignature protocol
      )
-  => (forall x. DeserializeError -> m x)
-  -> Socket
+  => Socket
   -> Codec protocol DeserializeError m ByteString
   -> ToPeer server protocol 'AsServer st m
   -> m (RunServer m server)

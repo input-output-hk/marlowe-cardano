@@ -5,7 +5,7 @@ module Main
 
 import Control.Arrow (arr, (<<<))
 import Control.Concurrent.Component
-import Control.Exception (bracket, bracketOnError, throwIO)
+import Control.Exception (bracket, bracketOnError)
 import Control.Monad ((<=<))
 import Data.String (fromString)
 import qualified Data.Text.Lazy.IO as TL
@@ -66,9 +66,6 @@ import System.IO (stderr)
 main :: IO ()
 main = run =<< getOptions
 
-clientHints :: AddrInfo
-clientHints = defaultHints { addrSocketType = Stream }
-
 run :: Options -> IO ()
 run Options{..} = withSocketsDo do
   pool <- Pool.acquire (100, secondsToNominalDiffTime 5, fromString databaseUri)
@@ -87,21 +84,18 @@ run Options{..} = withSocketsDo do
 
               acceptRunMarloweSyncServer = acceptRunServerPeerOverSocketWithLoggingWithHandshake
                 (narrowEventBackend MarloweSyncServer eventBackend)
-                throwIO
                 syncSocket
                 codecMarloweSync
                 marloweSyncServerPeer
 
               acceptRunMarloweHeaderSyncServer = acceptRunServerPeerOverSocketWithLoggingWithHandshake
                 (narrowEventBackend MarloweHeaderSyncServer eventBackend)
-                throwIO
                 headerSyncSocket
                 codecMarloweHeaderSync
                 marloweHeaderSyncServerPeer
 
               acceptRunMarloweQueryServer = acceptRunServerPeerOverSocketWithLoggingWithHandshake
                 (narrowEventBackend MarloweQueryServer eventBackend)
-                throwIO
                 querySocket
                 codecMarloweQuery
                 id

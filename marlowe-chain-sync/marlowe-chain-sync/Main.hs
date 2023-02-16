@@ -17,7 +17,7 @@ import qualified Cardano.Api as Cardano
 import Control.Arrow (arr)
 import Control.Category ((<<<))
 import Control.Concurrent.Component
-import Control.Exception (bracket, bracketOnError, throwIO)
+import Control.Exception (bracket, bracketOnError)
 import Control.Monad ((<=<))
 import Data.String (IsString(fromString))
 import qualified Data.Text.Lazy.IO as TL
@@ -79,19 +79,16 @@ run Options{..} = withSocketsDo do
                 $ PostgreSQL.databaseQueries networkId
             , acceptRunChainSeekServer = acceptRunServerPeerOverSocketWithLoggingWithHandshake
                 (narrowEventBackend ChainSeekServer eventBackend)
-                throwIO
                 chainSeekSocket
                 codecChainSeek
                 (chainSeekServerPeer Genesis)
             , acceptRunQueryServer = acceptRunServerPeerOverSocketWithLoggingWithHandshake
                 (narrowEventBackend QueryServer eventBackend)
-                throwIO
                 querySocket
                 codecQuery
                 queryServerPeer
             , acceptRunJobServer = acceptRunServerPeerOverSocketWithLoggingWithHandshake
                 (narrowEventBackend JobServer eventBackend)
-                throwIO
                 commandSocket
                 codecJob
                 jobServerPeer

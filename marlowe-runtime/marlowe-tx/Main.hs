@@ -5,7 +5,7 @@ module Main
 
 import Control.Arrow (arr, (<<<))
 import Control.Concurrent.Component
-import Control.Exception (bracket, bracketOnError, throwIO)
+import Control.Exception (bracket, bracketOnError)
 import Data.Either (fromRight)
 import qualified Data.Text.Lazy.IO as TL
 import Data.UUID.V4 (nextRandom)
@@ -91,7 +91,6 @@ run Options{..} = withSocketsDo do
         let
           acceptRunTransactionServer = acceptRunServerPeerOverSocketWithLoggingWithHandshake
             (narrowEventBackend Server rootEventBackend)
-            throwIO
             socket
             codecJob
             jobServerPeer
@@ -101,7 +100,6 @@ run Options{..} = withSocketsDo do
             addr' <- head <$> getAddrInfo (Just clientHints) (Just chainSeekHost) (Just $ show chainSeekPort)
             runClientPeerOverSocketWithLoggingWithHandshake
               (narrowEventBackend ChainSeekClient rootEventBackend)
-              throwIO
               addr'
               runtimeChainSeekCodec
               (chainSeekClientPeer Genesis)
@@ -112,7 +110,6 @@ run Options{..} = withSocketsDo do
             addr' <- head <$> getAddrInfo (Just clientHints) (Just chainSeekHost) (Just $ show chainSeekCommandPort)
             runClientPeerOverSocketWithLoggingWithHandshake
               (narrowEventBackend ChainSyncJobClient rootEventBackend)
-              throwIO
               addr'
               codecJob
               jobClientPeer
@@ -123,7 +120,6 @@ run Options{..} = withSocketsDo do
             addr' <- head <$> getAddrInfo (Just clientHints) (Just chainSeekHost) (Just $ show chainSeekQueryPort)
             runClientPeerOverSocketWithLoggingWithHandshake
               (narrowEventBackend ChainSyncQueryClient rootEventBackend)
-              throwIO
               addr'
               codecQuery
               queryClientPeer

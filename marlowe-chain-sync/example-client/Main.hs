@@ -1,7 +1,7 @@
 module Main
   where
 
-import Control.Exception (bracket, bracketOnError, throwIO)
+import Control.Exception (bracket, bracketOnError)
 import Data.Functor (void)
 import Data.Proxy (Proxy(Proxy))
 import qualified FollowingUTxOs
@@ -34,7 +34,7 @@ main = do
 run :: Natural -> Socket -> IO ()
 run example conn = void $ runPeerWithDriver driver peer (startDState driver)
   where
-    driver = mkDriver throwIO (codecHandshake runtimeChainSeekCodec) channel
+    driver = mkDriver (codecHandshake runtimeChainSeekCodec) channel
     channel = socketAsChannel conn
     peer = handshakeClientPeer (chainSeekClientPeer Genesis) $ simpleHandshakeClient (signature $ Proxy @RuntimeChainSeek) client
     client = case example of

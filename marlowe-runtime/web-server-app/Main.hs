@@ -10,7 +10,6 @@ module Main
   where
 
 import Control.Concurrent.Component (runComponent_)
-import Control.Exception (throwIO)
 import Language.Marlowe.Protocol.Query.Client (marloweQueryClientPeer)
 import Language.Marlowe.Protocol.Query.Codec (codecMarloweQuery)
 import Language.Marlowe.Runtime.Web.Server
@@ -41,12 +40,10 @@ optionsToServerDependencies Options{..} = do
     , accessControlAllowOriginAll
     , runApplication = run $ fromIntegral port
     , runMarloweQueryClient = runClientPeerOverSocketWithHandshake
-        throwIO
         syncQueryAddr
         codecMarloweQuery
         marloweQueryClientPeer
     , runTxJobClient = runClientPeerOverSocketWithHandshake
-        throwIO
         txCommandAddr
         codecJob
         jobClientPeer
