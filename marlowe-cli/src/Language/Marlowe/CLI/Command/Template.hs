@@ -31,7 +31,7 @@ module Language.Marlowe.CLI.Command.Template
   ) where
 
 
-import Actus.Marlowe (defaultRiskFactors, genContract', toMarlowe)
+import Actus.Marlowe (defaultRiskFactors, genContract')
 import Control.Monad.Except (MonadError, MonadIO)
 import Data.Aeson (FromJSON(..), ToJSON(..))
 import GHC.Generics (Generic)
@@ -209,7 +209,7 @@ runTemplateCommand TemplateCoveredCall{..} OutputFiles{..} = do issueDate' <- to
                                                                 let marloweState = initialMarloweState issuer minAda
                                                                 makeExample contractFile stateFile (marloweContract, marloweState)
 runTemplateCommand TemplateActus{..}      OutputFiles{..} = do ct <- decodeFileStrict actusTermsFile
-                                                               marloweContract <- makeContract $ genContract' (party, counterparty) defaultRiskFactors (toMarlowe ct)
+                                                               marloweContract <- makeContract $ genContract' (party, counterparty) defaultRiskFactors ct
                                                                let marloweState = initialMarloweState party minAda
                                                                makeExample contractFile stateFile (marloweContract, marloweState)
 
