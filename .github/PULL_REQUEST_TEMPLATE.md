@@ -15,10 +15,10 @@ Pre-submit checklist:
 - PR
     - [ ] Self-reviewed the diff
     - [ ] Useful pull request description
-    - Review required
+        - Review required
         - [ ] Substantial changes to code, test, or documentation
         - [ ] Change made to Marlowe validator (@bwbush and @palas must be included as reviewers)
-    - Review not required
+        - Review not required
         - [ ] Minor changes to non-critical code, documentation, nix derivations, configuration files, or scripts
         - [ ] Formatting, spelling, grammar, or reorganization
     - [ ] Reviewer requested
