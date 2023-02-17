@@ -8,7 +8,6 @@ module Logging
   , getRootSelectorConfig
   ) where
 
-import Data.ByteString.Lazy (ByteString)
 import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncCommand, ChainSyncQuery, RuntimeChainSeek)
 import Network.Protocol.Driver (ConnectionSourceSelector, getConnectionSourceSelectorConfig)
 import Network.Protocol.Handshake.Types (Handshake)
@@ -18,9 +17,9 @@ import Observe.Event.Component
   (ConfigWatcherSelector(..), GetSelectorConfig, SelectorConfig(..), prependKey, singletonFieldConfig)
 
 data RootSelector f where
-  ChainSeekServer :: ConnectionSourceSelector (Handshake RuntimeChainSeek) ByteString f -> RootSelector f
-  QueryServer :: ConnectionSourceSelector (Handshake (Query ChainSyncQuery)) ByteString f -> RootSelector f
-  JobServer :: ConnectionSourceSelector (Handshake (Job ChainSyncCommand)) ByteString f -> RootSelector f
+  ChainSeekServer :: ConnectionSourceSelector (Handshake RuntimeChainSeek) f -> RootSelector f
+  QueryServer :: ConnectionSourceSelector (Handshake (Query ChainSyncQuery)) f -> RootSelector f
+  JobServer :: ConnectionSourceSelector (Handshake (Job ChainSyncCommand)) f -> RootSelector f
   ConfigWatcher :: ConfigWatcherSelector f -> RootSelector f
 
 -- TODO automate this boilerplate with Template Haskell

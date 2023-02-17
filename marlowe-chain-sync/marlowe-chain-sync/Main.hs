@@ -30,13 +30,10 @@ import Language.Marlowe.Runtime.ChainSync.Api (WithGenesis(..))
 import Language.Marlowe.Runtime.ChainSync.Database (hoistDatabaseQueries)
 import qualified Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL as PostgreSQL
 import Logging (RootSelector(..), getRootSelectorConfig)
-import Network.Protocol.ChainSeek.Codec (codecChainSeek)
 import Network.Protocol.ChainSeek.Server (chainSeekServerPeer)
 import Network.Protocol.Driver (TcpServerDependencies(..), awaitConnection, logConnectionSource, tcpServer)
 import Network.Protocol.Handshake.Server (handshakeConnectionSource)
-import Network.Protocol.Job.Codec (codecJob)
 import Network.Protocol.Job.Server (jobServerPeer)
-import Network.Protocol.Query.Codec (codecQuery)
 import Network.Protocol.Query.Server (queryServerPeer)
 import Observe.Event (narrowEventBackend)
 import Observe.Event.Backend (newOnceFlagMVar)
@@ -62,21 +59,18 @@ run Options{..} = bracket (Pool.acquire (100, secondsToNominalDiffTime 5, fromSt
     syncSource <- tcpServer -< TcpServerDependencies
       { host
       , port
-      , codec = codecChainSeek
       , toPeer = chainSeekServerPeer Genesis
       }
 
     querySource <- tcpServer -< TcpServerDependencies
       { host
       , port = queryPort
-      , codec = codecQuery
       , toPeer = queryServerPeer
       }
 
     jobSource <- tcpServer -< TcpServerDependencies
       { host
       , port = commandPort
-      , codec = codecJob
       , toPeer = jobServerPeer
       }
 

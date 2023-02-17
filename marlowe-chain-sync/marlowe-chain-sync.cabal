@@ -77,7 +77,6 @@ library
     , text
     , these
     , time
-    , typed-protocols
     , vector
 
 library libchainsync
@@ -260,7 +259,6 @@ executable marlowe-chain-sync
   build-depends:
       base >= 4.9 && < 5
     , async-components
-    , bytestring
     , cardano-api
     , cardano-ledger-byron
     , eventuo11y
@@ -274,7 +272,6 @@ executable marlowe-chain-sync
     , network
     , optparse-applicative
     , ouroboros-network
-    , resourcet
     , text
     , time
     , uuid

@@ -5,12 +5,11 @@ import Control.Exception (bracket, bracketOnError)
 import Data.Functor (void)
 import Data.Proxy (Proxy(Proxy))
 import qualified FollowingUTxOs
-import Language.Marlowe.Runtime.ChainSync.Api (RuntimeChainSeek, WithGenesis(..), runtimeChainSeekCodec)
+import Language.Marlowe.Runtime.ChainSync.Api (RuntimeChainSeek, WithGenesis(..))
 import Network.Channel (socketAsChannel)
 import Network.Protocol.ChainSeek.Client (chainSeekClientPeer)
 import Network.Protocol.Driver (mkDriver)
 import Network.Protocol.Handshake.Client (handshakeClientPeer, simpleHandshakeClient)
-import Network.Protocol.Handshake.Codec (codecHandshake)
 import Network.Protocol.Handshake.Types (signature)
 import Network.Socket
   (AddrInfo(..), HostName, PortNumber, Socket, SocketType(..), close, connect, defaultHints, getAddrInfo, openSocket)
@@ -34,7 +33,7 @@ main = do
 run :: Natural -> Socket -> IO ()
 run example conn = void $ runPeerWithDriver driver peer (startDState driver)
   where
-    driver = mkDriver (codecHandshake runtimeChainSeekCodec) channel
+    driver = mkDriver channel
     channel = socketAsChannel conn
     peer = handshakeClientPeer (chainSeekClientPeer Genesis) $ simpleHandshakeClient (signature $ Proxy @RuntimeChainSeek) client
     client = case example of
