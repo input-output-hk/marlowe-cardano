@@ -18,8 +18,8 @@
       author = "Dmytro Kondratiuk, Yves Hauser";
       homepage = "";
       url = "";
-      synopsis = "Marlowe ACTUS: Standardised financial contracts with Marlowe";
-      description = "/marlowe-actus/ is an implementation of the [ACTUS](https://www.actusfrf.org)\nspecification in Haskell together with generators for Marlowe contracts.\n\nACTUS is a [taxonomy](https://www.actusfrf.org/taxonomy) of financial contracts that\nuniformly specifies projected cash flows per contract type. A contract is evolved\nover time, i.e. state changes are triggered from event schedules and performed by\nstate transformation functions, projected cash flows are determined by payoff\nfunctions. Future contract state and payoff might depend on observable values, like\nuser provided input (a choice for example) or market values\nobserved by an Oracle.\n\nThe implementation is tested against the [reference test cases](https://github.com/actusfrf/actus-tests) provided by the\nACTUS foundation.";
+      synopsis = "Marlowe ACTUS";
+      description = "/marlowe-actus/ implements generators of Marlowe contracts based on ACTUS\ncontract terms.";
       buildType = "Simple";
       isLocal = true;
       detailLevel = "FullDetails";
