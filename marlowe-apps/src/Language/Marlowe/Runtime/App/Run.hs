@@ -20,18 +20,13 @@ import Control.Monad.Trans.Control (liftBaseWith)
 import Control.Monad.Trans.Reader (ReaderT(..), ask)
 import Language.Marlowe.Protocol.HeaderSync.Client
   (MarloweHeaderSyncClient, hoistMarloweHeaderSyncClient, marloweHeaderSyncClientPeer)
-import Language.Marlowe.Protocol.HeaderSync.Codec (codecMarloweHeaderSync)
 import Language.Marlowe.Protocol.Query.Client (MarloweQueryClient, hoistMarloweQueryClient, marloweQueryClientPeer)
-import Language.Marlowe.Protocol.Query.Codec (codecMarloweQuery)
 import Language.Marlowe.Protocol.Sync.Client (MarloweSyncClient, hoistMarloweSyncClient, marloweSyncClientPeer)
-import Language.Marlowe.Protocol.Sync.Codec (codecMarloweSync)
 import Language.Marlowe.Runtime.App.Types (Client(..), Config(..), Services(..))
 import Language.Marlowe.Runtime.ChainSync.Api (RuntimeChainSeekClient, WithGenesis(Genesis))
 import Network.Protocol.ChainSeek.Client (chainSeekClientPeer, hoistChainSeekClient)
-import Network.Protocol.ChainSeek.Codec (codecChainSeek)
 import Network.Protocol.Handshake.Client (runClientPeerOverSocketWithHandshake)
 import Network.Protocol.Job.Client (JobClient, hoistJobClient, jobClientPeer)
-import Network.Protocol.Job.Codec (codecJob)
 
 
 runQueryClient
@@ -89,10 +84,10 @@ runClientWithConfig
   -> Client a
   -> IO a
 runClientWithConfig Config{..} client = runReaderT (runClient client) Services
-  { runChainSeekCommandClient = runClientPeerOverSocketWithHandshake chainSeekHost chainSeekCommandPort codecJob jobClientPeer
-  , runChainSeekSyncClient = runClientPeerOverSocketWithHandshake chainSeekHost chainSeekSyncPort codecChainSeek (chainSeekClientPeer Genesis)
-  , runSyncSyncClient = runClientPeerOverSocketWithHandshake syncHost syncSyncPort codecMarloweSync marloweSyncClientPeer
-  , runSyncHeaderClient = runClientPeerOverSocketWithHandshake syncHost syncHeaderPort codecMarloweHeaderSync marloweHeaderSyncClientPeer
-  , runSyncQueryClient = runClientPeerOverSocketWithHandshake syncHost syncQueryPort codecMarloweQuery marloweQueryClientPeer
-  , runTxCommandClient = runClientPeerOverSocketWithHandshake txHost txCommandPort codecJob jobClientPeer
+  { runChainSeekCommandClient = runClientPeerOverSocketWithHandshake chainSeekHost chainSeekCommandPort jobClientPeer
+  , runChainSeekSyncClient = runClientPeerOverSocketWithHandshake chainSeekHost chainSeekSyncPort (chainSeekClientPeer Genesis)
+  , runSyncSyncClient = runClientPeerOverSocketWithHandshake syncHost syncSyncPort marloweSyncClientPeer
+  , runSyncHeaderClient = runClientPeerOverSocketWithHandshake syncHost syncHeaderPort marloweHeaderSyncClientPeer
+  , runSyncQueryClient = runClientPeerOverSocketWithHandshake syncHost syncQueryPort marloweQueryClientPeer
+  , runTxCommandClient = runClientPeerOverSocketWithHandshake txHost txCommandPort jobClientPeer
   }

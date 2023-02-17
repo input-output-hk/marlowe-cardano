@@ -5,7 +5,6 @@ module Logging
   , getRootSelectorConfig
   ) where
 
-import Data.ByteString.Lazy (ByteString)
 import Language.Marlowe.Protocol.HeaderSync.Types (MarloweHeaderSync)
 import Language.Marlowe.Protocol.Query.Types (MarloweQuery)
 import Language.Marlowe.Protocol.Sync.Types (MarloweSync)
@@ -16,9 +15,9 @@ import Observe.Event.Component
   (ConfigWatcherSelector(ReloadConfig), GetSelectorConfig, SelectorConfig(..), prependKey, singletonFieldConfig)
 
 data RootSelector f where
-  MarloweSyncServer :: ConnectionSourceSelector (Handshake MarloweSync) ByteString f -> RootSelector f
-  MarloweHeaderSyncServer :: ConnectionSourceSelector (Handshake MarloweHeaderSync) ByteString f -> RootSelector f
-  MarloweQueryServer :: ConnectionSourceSelector (Handshake MarloweQuery) ByteString f -> RootSelector f
+  MarloweSyncServer :: ConnectionSourceSelector (Handshake MarloweSync) f -> RootSelector f
+  MarloweHeaderSyncServer :: ConnectionSourceSelector (Handshake MarloweHeaderSync) f -> RootSelector f
+  MarloweQueryServer :: ConnectionSourceSelector (Handshake MarloweQuery) f -> RootSelector f
   Database :: DatabaseSelector f -> RootSelector f
   ConfigWatcher :: ConfigWatcherSelector f -> RootSelector f
 

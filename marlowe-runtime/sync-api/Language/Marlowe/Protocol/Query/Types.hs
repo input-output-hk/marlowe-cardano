@@ -8,7 +8,7 @@ module Language.Marlowe.Protocol.Query.Types
 
 import Data.Aeson (ToJSON(..), Value(..), object, (.=))
 import Data.Bifunctor (Bifunctor(..))
-import Data.Binary (Binary(..), getWord8, putWord8)
+import Data.Binary (Binary(..), Get, Put, getWord8, putWord8)
 import Data.Map (Map)
 import Data.Set (Set)
 import Data.Type.Equality (testEquality, type (:~:)(Refl))
@@ -25,6 +25,7 @@ import Language.Marlowe.Runtime.Core.Api
   , TransactionScriptOutput
   )
 import Language.Marlowe.Runtime.Discovery.Api (ContractHeader)
+import Network.Protocol.Codec (BinaryMessage(..))
 import Network.Protocol.Codec.Spec (MessageEq(..), ShowProtocol(..))
 import Network.Protocol.Driver (MessageToJSON(..))
 import Network.Protocol.Handshake.Types (HasSignature(..))
@@ -177,6 +178,59 @@ instance Bifunctor Page where
   bimap f g Page{..} = Page{items = g <$> items, nextRange = fmap f <$> nextRange, ..}
 
 data SomeContractState = forall v. SomeContractState (MarloweVersion v) (ContractState v)
+
+instance BinaryMessage MarloweQuery where
+  putMessage = \case
+    ClientAgency TokReq -> \case
+      MsgRequest req -> do
+        putWord8 0x01
+        put $ SomeRequest req
+
+      MsgDone -> putWord8 0x03
+
+    ServerAgency (TokRes req) -> \case
+      MsgRespond a -> do
+        putWord8 0x02
+        putResult req a
+
+  getMessage tok = do
+    tag <- getWord8
+    case tag of
+      0x01 -> case tok of
+        ClientAgency TokReq -> do
+          SomeRequest req <- get
+          pure $ SomeMessage $ MsgRequest req
+        _ -> fail "Invalid protocol state for MsgRequest"
+
+      0x02 -> case tok of
+        ServerAgency (TokRes req) -> SomeMessage . MsgRespond <$> getResult req
+        ClientAgency _  -> fail "Invalid protocol state for MsgRespond"
+
+      0x03 -> case tok of
+        ClientAgency TokReq -> pure $ SomeMessage MsgDone
+        _ -> fail "Invalid protocol state for MsgDone"
+
+      _ -> fail $ "Invalid message tag " <> show tag
+
+getResult :: StRes a -> Get a
+getResult = \case
+  TokBoth a b -> (,) <$> getResult a <*> getResult b
+  TokContractHeaders -> get
+  TokContractState -> get
+  TokTransaction -> get
+  TokTransactions -> get
+  TokWithdrawal -> get
+  TokWithdrawals -> get
+
+putResult :: StRes a -> a -> Put
+putResult = \case
+  TokBoth ta tb -> \(a, b) -> putResult ta a *> putResult tb b
+  TokContractHeaders -> put
+  TokContractState -> put
+  TokTransaction -> put
+  TokTransactions -> put
+  TokWithdrawal -> put
+  TokWithdrawals -> put
 
 instance Show SomeContractState where
   showsPrec p (SomeContractState MarloweV1 state) = showParen (p >= 11)

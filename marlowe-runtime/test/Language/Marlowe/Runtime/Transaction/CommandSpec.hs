@@ -14,8 +14,7 @@ import Gen.Cardano.Api.Typed (genTx, genTxBody)
 import Language.Marlowe.Runtime.Core.Api
 import Language.Marlowe.Runtime.Transaction.Api
 import Language.Marlowe.Runtime.Transaction.Gen ()
-import Network.Protocol.Codec.Spec (checkPropCodec, genByteStringSplits)
-import Network.Protocol.Job.Codec (codecJob)
+import Network.Protocol.Codec.Spec (checkPropCodec)
 import Network.Protocol.Job.Types
 import Spec.Marlowe.Semantics.Arbitrary ()
 import Test.Hspec
@@ -26,7 +25,7 @@ import Test.QuickCheck.Instances ()
 
 spec :: Spec
 spec = describe "MarloweTxCommand" do
-  prop "It has a lawful Job protocol codec" $ checkPropCodec genByteStringSplits $ codecJob @MarloweTxCommand
+  prop "It has a lawful Job protocol codec" $ checkPropCodec @(Job MarloweTxCommand)
 
 instance ArbitraryCommand MarloweTxCommand where
   arbitraryTag = elements
