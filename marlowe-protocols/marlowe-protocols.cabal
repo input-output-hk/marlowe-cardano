@@ -50,7 +50,6 @@ library
   exposed-modules:
     Network.Channel
     Network.Protocol.ChainSeek.Client
-    Network.Protocol.ChainSeek.Codec
     Network.Protocol.ChainSeek.Server
     Network.Protocol.ChainSeek.TH
     Network.Protocol.ChainSeek.Types
@@ -58,16 +57,13 @@ library
     Network.Protocol.Codec.Spec
     Network.Protocol.Driver
     Network.Protocol.Handshake.Client
-    Network.Protocol.Handshake.Codec
     Network.Protocol.Handshake.Server
     Network.Protocol.Handshake.Types
     Network.Protocol.Job.Client
-    Network.Protocol.Job.Codec
     Network.Protocol.Job.Server
     Network.Protocol.Job.Types
     Network.Protocol.Peer
     Network.Protocol.Query.Client
-    Network.Protocol.Query.Codec
     Network.Protocol.Query.Server
     Network.Protocol.Query.Types
   build-depends:
