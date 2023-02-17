@@ -835,6 +835,7 @@
         cardano-integration = ./.plan.nix/cardano-integration.nix;
         aeson-via-serialise = ./.plan.nix/aeson-via-serialise.nix;
         marlowe-integration-tests = ./.plan.nix/marlowe-integration-tests.nix;
+        actus-core = ./.plan.nix/actus-core.nix;
         eventuo11y-json = ./.plan.nix/eventuo11y-json.nix;
         plutus-ledger-slot = ./.plan.nix/plutus-ledger-slot.nix;
         };
@@ -902,6 +903,9 @@
           "cardano-integration" = { flags = {}; };
           "aeson-via-serialise" = { flags = {}; };
           "marlowe-integration-tests" = {
+            flags = { "defer-plugin-errors" = lib.mkOverride 900 false; };
+            };
+          "actus-core" = {
             flags = { "defer-plugin-errors" = lib.mkOverride 900 false; };
             };
           "eventuo11y-json" = { flags = {}; };
@@ -1134,7 +1138,6 @@
           "servant-openapi3".components.library.planned = lib.mkOverride 900 true;
           "type-hint".components.library.planned = lib.mkOverride 900 true;
           "marlowe-runtime".components.exes."marlowe-web-server".planned = lib.mkOverride 900 true;
-          "marlowe-actus".components.sublibs."actus-core".planned = lib.mkOverride 900 true;
           "regex-base".components.library.planned = lib.mkOverride 900 true;
           "adjunctions".components.library.planned = lib.mkOverride 900 true;
           "tree-diff".components.library.planned = lib.mkOverride 900 true;
@@ -1473,7 +1476,6 @@
           "ouroboros-consensus-protocol".components.sublibs."ouroboros-consensus-protocol-test".planned = lib.mkOverride 900 true;
           "marlowe-runtime".components.exes."marlowe-sync".planned = lib.mkOverride 900 true;
           "integer-gmp".components.library.planned = lib.mkOverride 900 true;
-          "marlowe-actus".components.tests."actus-core-test".planned = lib.mkOverride 900 true;
           "tasty".components.library.planned = lib.mkOverride 900 true;
           "transformers-compat".components.library.planned = lib.mkOverride 900 true;
           "marlowe-runtime".components.sublibs."gen".planned = lib.mkOverride 900 true;
@@ -1522,6 +1524,7 @@
           "marlowe-test".components.library.planned = lib.mkOverride 900 true;
           "marlowe-chain-sync".components.sublibs."plutus-compat".planned = lib.mkOverride 900 true;
           "connection".components.library.planned = lib.mkOverride 900 true;
+          "actus-core".components.library.planned = lib.mkOverride 900 true;
           "void".components.library.planned = lib.mkOverride 900 true;
           "Only".components.library.planned = lib.mkOverride 900 true;
           "testing-type-modifiers".components.library.planned = lib.mkOverride 900 true;

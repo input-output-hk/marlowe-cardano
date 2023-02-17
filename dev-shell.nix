@@ -138,7 +138,6 @@ let
     # costs a fair bit of eval time.
     withHoogle = false;
     shellHook = ''
-      export ACTUS_TEST_DATA_DIR=${packages.actus-tests}/tests/
       export PGUSER=postgres
       ${defaultShellHook}
     '';
@@ -178,20 +177,11 @@ let
         };
     in
     {
-      marloweActus = develShell {
-        buildInputs = marloweCoreBuildInputs;
-        name = "actus";
-        packages = cmps: [ cmps.marlowe-actus ];
-        shellHook = ''
-          export ACTUS_TEST_DATA_DIR=${packages.actus-tests}/tests/
-        '';
-      };
       marloweCli = develShell { buildInputs = marloweCliBuildInputs; name = "cli"; packages = cmps: [ cmps.marlowe-cli ]; };
       marloweCore = develShell { buildInputs = marloweCoreBuildInputs; name = "core"; packages = cmps: [ cmps.marlowe ]; };
     };
 in
 (defaultShell // {
-  marlowe-actus = develShells.marloweActus;
   marlowe-cli = develShells.marloweCli;
   marlowe-core = develShells.marloweCore;
 }).overrideAttrs (attrs: attrs // {

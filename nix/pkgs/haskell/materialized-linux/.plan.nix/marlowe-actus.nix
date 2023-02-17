@@ -33,7 +33,7 @@
     components = {
       "library" = {
         depends = [
-          (hsPkgs."marlowe-actus".components.sublibs.actus-core or (errorHandler.buildDepError "marlowe-actus:actus-core"))
+          (hsPkgs."actus-core" or (errorHandler.buildDepError "actus-core"))
           (hsPkgs."base" or (errorHandler.buildDepError "base"))
           (hsPkgs."plutus-tx" or (errorHandler.buildDepError "plutus-tx"))
           (hsPkgs."plutus-ledger" or (errorHandler.buildDepError "plutus-ledger"))
@@ -46,68 +46,10 @@
         modules = [ "Actus/Marlowe/Instance" "Actus/Marlowe" ];
         hsSourceDirs = [ "src" ];
         };
-      sublibs = {
-        "actus-core" = {
-          depends = [
-            (hsPkgs."aeson" or (errorHandler.buildDepError "aeson"))
-            (hsPkgs."base" or (errorHandler.buildDepError "base"))
-            (hsPkgs."mtl" or (errorHandler.buildDepError "mtl"))
-            (hsPkgs."sort" or (errorHandler.buildDepError "sort"))
-            (hsPkgs."lens" or (errorHandler.buildDepError "lens"))
-            (hsPkgs."text" or (errorHandler.buildDepError "text"))
-            (hsPkgs."time" or (errorHandler.buildDepError "time"))
-            (hsPkgs."validation" or (errorHandler.buildDepError "validation"))
-            ];
-          buildable = true;
-          modules = [
-            "Actus/Domain/BusinessEvents"
-            "Actus/Domain/ContractTerms"
-            "Actus/Domain/ContractState"
-            "Actus/Domain/Schedule"
-            "Actus/Model/Applicability"
-            "Actus/Model/ContractSchedule"
-            "Actus/Model/Payoff"
-            "Actus/Model/StateInitialization"
-            "Actus/Model/StateTransition"
-            "Actus/Utility/ANN/Annuity"
-            "Actus/Utility/DateShift"
-            "Actus/Utility/ScheduleGenerator"
-            "Actus/Utility/YearFraction"
-            "Actus/Core"
-            "Actus/Domain"
-            "Actus/Model"
-            "Actus/Utility"
-            ];
-          hsSourceDirs = [ "actus-core/src" ];
-          };
-        };
       tests = {
-        "actus-core-test" = {
-          depends = [
-            (hsPkgs."marlowe-actus".components.sublibs.actus-core or (errorHandler.buildDepError "marlowe-actus:actus-core"))
-            (hsPkgs."aeson" or (errorHandler.buildDepError "aeson"))
-            (hsPkgs."base" or (errorHandler.buildDepError "base"))
-            (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
-            (hsPkgs."containers" or (errorHandler.buildDepError "containers"))
-            (hsPkgs."lens" or (errorHandler.buildDepError "lens"))
-            (hsPkgs."mtl" or (errorHandler.buildDepError "mtl"))
-            (hsPkgs."pretty-simple" or (errorHandler.buildDepError "pretty-simple"))
-            (hsPkgs."sort" or (errorHandler.buildDepError "sort"))
-            (hsPkgs."tasty" or (errorHandler.buildDepError "tasty"))
-            (hsPkgs."tasty-hunit" or (errorHandler.buildDepError "tasty-hunit"))
-            (hsPkgs."tasty-quickcheck" or (errorHandler.buildDepError "tasty-quickcheck"))
-            (hsPkgs."text" or (errorHandler.buildDepError "text"))
-            (hsPkgs."time" or (errorHandler.buildDepError "time"))
-            (hsPkgs."validation" or (errorHandler.buildDepError "validation"))
-            ];
-          buildable = true;
-          modules = [ "Spec/TestFramework" ];
-          hsSourceDirs = [ "actus-core/test" ];
-          mainPath = [ "Spec.hs" ];
-          };
         "marlowe-actus-test" = {
           depends = [
-            (hsPkgs."marlowe-actus".components.sublibs.actus-core or (errorHandler.buildDepError "marlowe-actus:actus-core"))
+            (hsPkgs."actus-core" or (errorHandler.buildDepError "actus-core"))
             (hsPkgs."aeson" or (errorHandler.buildDepError "aeson"))
             (hsPkgs."base" or (errorHandler.buildDepError "base"))
             (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))

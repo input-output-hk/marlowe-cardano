@@ -11,7 +11,6 @@
 , rPackages
 , z3
 , enableHaskellProfiling
-, actus-tests
 , source-repo-override
 , evalSystem
 }:
@@ -41,7 +40,6 @@ let
       inherit checkMaterialization compiler-nix-name;
       inherit enableHaskellProfiling;
       inherit deferPluginErrors;
-      inherit actus-tests;
       inherit source-repo-override;
       inherit (inputs) CHaP;
     };
