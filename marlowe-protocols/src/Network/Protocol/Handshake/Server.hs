@@ -13,13 +13,10 @@ module Network.Protocol.Handshake.Server
   where
 
 import Data.Bifunctor (Bifunctor(bimap))
-import Data.ByteString.Lazy (ByteString)
 import Data.Functor ((<&>))
 import Data.Proxy (Proxy(..))
 import Data.Text (Text)
-import Network.Protocol.ChainSeek.Codec (DeserializeError)
 import Network.Protocol.Driver (Connection(..), ConnectionSource(..), MakeServerConnection(..))
-import Network.Protocol.Handshake.Codec (codecHandshake)
 import Network.Protocol.Handshake.Types
 import Network.TypedProtocol
 
@@ -43,8 +40,8 @@ simpleHandshakeServer expected server = HandshakeServer
 handshakeConnectionSource
   :: forall ps server m
    . (HasSignature ps, MonadFail m)
-  => ConnectionSource ps server DeserializeError m ByteString
-  -> ConnectionSource (Handshake ps) server DeserializeError m ByteString
+  => ConnectionSource ps server m
+  -> ConnectionSource (Handshake ps) server m
 handshakeConnectionSource ConnectionSource{..} = ConnectionSource
   { acceptConnection = do
       MakeServerConnection{..} <- acceptConnection
@@ -54,11 +51,10 @@ handshakeConnectionSource ConnectionSource{..} = ConnectionSource
 handshakeServerConnection
   :: forall ps m a
    . (HasSignature ps, MonadFail m)
-  => Connection ps 'AsServer DeserializeError m ByteString a
-  -> Connection (Handshake ps) 'AsServer DeserializeError m ByteString a
+  => Connection ps 'AsServer m a
+  -> Connection (Handshake ps) 'AsServer m a
 handshakeServerConnection Connection{..} = Connection
-  { connectionCodec = codecHandshake connectionCodec
-  , peer = handshakeServerPeer id $ simpleHandshakeServer (signature $ Proxy @ps) peer
+  { peer = handshakeServerPeer id $ simpleHandshakeServer (signature $ Proxy @ps) peer
   , ..
   }
 
