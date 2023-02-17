@@ -73,12 +73,17 @@ type ContractsAPI = GetContractsAPI
 -- | GET /contracts sub-API
 type GetContractsAPI = PaginatedGet '["contractId"] GetContractsResponse
 
-type GetContractsResponse = WithLink "contract" ContractHeader
+type GetContractsResponse = WithLink "transactions" (WithLink "contract" ContractHeader)
 
 instance HasNamedLink ContractHeader API "contract" where
   type Endpoint ContractHeader API "contract" =
     "contracts" :> Capture "contractId" TxOutRef :> GetContractAPI
   namedLink _ _ mkLink ContractHeader{..} = Just $ mkLink contractId
+
+instance HasNamedLink ContractHeader API "transactions" where
+  type Endpoint ContractHeader API "transactions" =
+    "contracts" :> Capture "contractId" TxOutRef :> "transactions" :> GetTransactionsAPI
+  namedLink _ _ mkLink ContractHeader{..} = guard (status == Confirmed) $> mkLink contractId
 
 -- | POST /contracts sub-API
 type PostContractsAPI
