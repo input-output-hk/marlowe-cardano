@@ -44,7 +44,6 @@ import Data.Binary (Binary(..), Get, Put, get, getWord8, put, putWord8)
 import Data.ByteString (ByteString)
 import Data.ByteString.Base16 (decodeBase16, encodeBase16)
 import qualified Data.ByteString.Char8 as BS
-import qualified Data.ByteString.Lazy as LBS
 import Data.Function (on)
 import Data.Functor (($>))
 import Data.Map (Map)
@@ -69,14 +68,12 @@ import Data.Word (Word16, Word64)
 import GHC.Generics (Generic)
 import GHC.Natural (Natural)
 import Network.Protocol.ChainSeek.Client
-import Network.Protocol.ChainSeek.Codec
 import Network.Protocol.ChainSeek.Server
 import Network.Protocol.ChainSeek.Types
 import Network.Protocol.Handshake.Types (HasSignature(..))
 import Network.Protocol.Job.Types (CommandToJSON)
 import qualified Network.Protocol.Job.Types as Job
 import qualified Network.Protocol.Query.Types as Query
-import Network.TypedProtocol.Codec (Codec)
 import Ouroboros.Consensus.BlockchainTime (SystemStart(..))
 import qualified Plutus.V1.Ledger.Api as Plutus
 import Text.Read (readMaybe)
@@ -640,11 +637,6 @@ type RuntimeChainSeek = ChainSeek Move ChainPoint ChainPoint
 type RuntimeChainSeekClient = ChainSeekClient Move ChainPoint ChainPoint
 
 type RuntimeChainSeekServer = ChainSeekServer Move ChainPoint ChainPoint
-
-type RuntimeChainSeekCodec m = Codec RuntimeChainSeek DeserializeError m LBS.ByteString
-
-runtimeChainSeekCodec :: Applicative m => RuntimeChainSeekCodec m
-runtimeChainSeekCodec = codecChainSeek
 
 instance Query Move where
   data Tag Move err result where
