@@ -1,13 +1,12 @@
+{-# LANGUAGE Arrows #-}
 {-# LANGUAGE GADTs #-}
 
 module Main
   where
 
-import Control.Arrow (arr, (<<<))
 import Control.Concurrent.Component
+import Control.Exception (bracket)
 import Control.Monad ((<=<))
-import Control.Monad.IO.Class (liftIO)
-import Control.Monad.Trans.Resource (allocate, runResourceT)
 import Data.String (fromString)
 import qualified Data.Text.Lazy.IO as TL
 import Data.Time (secondsToNominalDiffTime)
@@ -23,8 +22,8 @@ import Language.Marlowe.Runtime.Sync (SyncDependencies(..), sync)
 import Language.Marlowe.Runtime.Sync.Database (hoistDatabaseQueries, logDatabaseQueries)
 import qualified Language.Marlowe.Runtime.Sync.Database.PostgreSQL as Postgres
 import Logging (RootSelector(..), getRootSelectorConfig)
-import Network.Protocol.Driver (awaitConnection, openPortConnector)
-import Network.Protocol.Handshake.Server (withHandshake)
+import Network.Protocol.Driver (TcpServerDependencies(..), awaitConnection, logConnectionSource, tcpServer)
+import Network.Protocol.Handshake.Server (handshakeConnectionSource)
 import Network.Socket (HostName, PortNumber)
 import Observe.Event.Backend (narrowEventBackend, newOnceFlagMVar)
 import Observe.Event.Component (LoggerDependencies(..), logger)
@@ -52,30 +51,52 @@ main :: IO ()
 main = run =<< getOptions
 
 run :: Options -> IO ()
-run Options{..} = runResourceT do
-  (_, pool) <- allocate (Pool.acquire (100, secondsToNominalDiffTime 5, fromString databaseUri)) Pool.release
-  marloweSyncConnector <- withHandshake <$> openPortConnector host marloweSyncPort codecMarloweSync marloweSyncServerPeer
-  marloweHeaderSyncConnector <- withHandshake <$> openPortConnector host marloweHeaderSyncPort codecMarloweHeaderSync marloweHeaderSyncServerPeer
-  queryConnector <- withHandshake <$> openPortConnector host queryPort codecMarloweQuery id
-  let
-    appDependencies eventBackend =
-      let
-        databaseQueries = logDatabaseQueries (narrowEventBackend Database eventBackend) $ hoistDatabaseQueries
-          (either throwUsageError pure <=< Pool.use pool)
-          Postgres.databaseQueries
-        acceptRunMarloweSyncServer = awaitConnection (narrowEventBackend MarloweSyncServer eventBackend) marloweSyncConnector
-        acceptRunMarloweHeaderSyncServer = awaitConnection (narrowEventBackend MarloweHeaderSyncServer eventBackend) marloweHeaderSyncConnector
-        acceptRunMarloweQueryServer = awaitConnection (narrowEventBackend MarloweQueryServer eventBackend) queryConnector
-        in SyncDependencies{..}
-  let appComponent = sync <<< arr appDependencies <<< logger
-  liftIO $ runComponent_ appComponent LoggerDependencies
-    { configFilePath = logConfigFile
-    , getSelectorConfig = getRootSelectorConfig
-    , newRef = nextRandom
-    , newOnceFlag = newOnceFlagMVar
-    , writeText = TL.hPutStr stderr
-    , injectConfigWatcherSelector = ConfigWatcher
-    }
+run Options{..} = bracket (Pool.acquire (100, secondsToNominalDiffTime 5, fromString databaseUri)) Pool.release $
+  runComponent_ proc pool -> do
+    eventBackend <- logger -< LoggerDependencies
+      { configFilePath = logConfigFile
+      , getSelectorConfig = getRootSelectorConfig
+      , newRef = nextRandom
+      , newOnceFlag = newOnceFlagMVar
+      , writeText = TL.hPutStr stderr
+      , injectConfigWatcherSelector = ConfigWatcher
+      }
+
+    marloweSyncSource <- tcpServer -< TcpServerDependencies
+      { host
+      , port = marloweSyncPort
+      , codec = codecMarloweSync
+      , toPeer = marloweSyncServerPeer
+      }
+
+    headerSyncSource <- tcpServer -< TcpServerDependencies
+      { host
+      , port = marloweHeaderSyncPort
+      , codec = codecMarloweHeaderSync
+      , toPeer = marloweHeaderSyncServerPeer
+      }
+
+    qyerySource <- tcpServer -< TcpServerDependencies
+      { host
+      , port = queryPort
+      , codec = codecMarloweQuery
+      , toPeer = id
+      }
+
+    sync -< SyncDependencies
+      { databaseQueries = logDatabaseQueries (narrowEventBackend Database eventBackend) $ hoistDatabaseQueries
+            (either throwUsageError pure <=< Pool.use pool)
+            Postgres.databaseQueries
+      , acceptRunMarloweSyncServer = awaitConnection
+          $ logConnectionSource (narrowEventBackend MarloweSyncServer eventBackend)
+          $ handshakeConnectionSource marloweSyncSource
+      , acceptRunMarloweHeaderSyncServer = awaitConnection
+          $ logConnectionSource (narrowEventBackend MarloweHeaderSyncServer eventBackend)
+          $ handshakeConnectionSource headerSyncSource
+      , acceptRunMarloweQueryServer = awaitConnection
+          $ logConnectionSource (narrowEventBackend MarloweQueryServer eventBackend)
+          $ handshakeConnectionSource qyerySource
+      }
   where
     throwUsageError (Pool.ConnectionError err)                       = error $ show err
     throwUsageError (Pool.SessionError (Session.QueryError _ _ err)) = error $ show err

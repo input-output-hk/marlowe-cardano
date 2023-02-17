@@ -544,6 +544,7 @@ executable marlowe-sync
   build-depends:
       base >= 4.9 && < 5
     , async-components
+    , bytestring
     , eventuo11y
     , eventuo11y-extras
     , hasql
@@ -555,7 +556,6 @@ executable marlowe-sync
     , marlowe-runtime:sync-api
     , network
     , optparse-applicative
-    , resourcet
     , text
     , time
     , uuid
@@ -573,6 +573,7 @@ executable marlowe-tx
   build-depends:
     base >= 4.9 && < 5
     , async-components
+    , bytestring
     , eventuo11y
     , eventuo11y-extras
     , marlowe-chain-sync
@@ -583,7 +584,6 @@ executable marlowe-tx
     , marlowe-runtime:tx-api
     , network
     , optparse-applicative
-    , resourcet
     , text
     , uuid
   ghc-options: -threaded

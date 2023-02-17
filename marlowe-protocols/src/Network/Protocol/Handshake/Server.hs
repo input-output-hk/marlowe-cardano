@@ -13,11 +13,12 @@ module Network.Protocol.Handshake.Server
   where
 
 import Data.Bifunctor (Bifunctor(bimap))
+import Data.ByteString.Lazy (ByteString)
 import Data.Functor ((<&>))
 import Data.Proxy (Proxy(..))
 import Data.Text (Text)
 import Network.Protocol.ChainSeek.Codec (DeserializeError)
-import Network.Protocol.Driver (ServerConnector(..))
+import Network.Protocol.Driver (Connection(..), ConnectionSource(..), MakeServerConnection(..))
 import Network.Protocol.Handshake.Codec (codecHandshake)
 import Network.Protocol.Handshake.Types
 import Network.TypedProtocol
@@ -39,14 +40,25 @@ simpleHandshakeServer expected server = HandshakeServer
       else fail $ "Rejecting handshake, " <> show sig <> " /= " <> show expected
   }
 
-withHandshake
-  :: forall ps server m connection
-   . (HasSignature ps, Monad m, MonadFail m)
-  => ServerConnector ps server DeserializeError m connection
-  -> ServerConnector (Handshake ps) server DeserializeError m connection
-withHandshake ServerConnector{..} = ServerConnector
-  { codec = codecHandshake codec
-  , toPeer = handshakeServerPeer toPeer . simpleHandshakeServer (signature $ Proxy @ps)
+handshakeConnectionSource
+  :: forall ps server m
+   . (HasSignature ps, MonadFail m)
+  => ConnectionSource ps server DeserializeError m ByteString
+  -> ConnectionSource (Handshake ps) server DeserializeError m ByteString
+handshakeConnectionSource ConnectionSource{..} = ConnectionSource
+  { acceptConnection = do
+      MakeServerConnection{..} <- acceptConnection
+      pure $ MakeServerConnection $ fmap handshakeServerConnection . runMakeServerConnection
+  }
+
+handshakeServerConnection
+  :: forall ps m a
+   . (HasSignature ps, MonadFail m)
+  => Connection ps 'AsServer DeserializeError m ByteString a
+  -> Connection (Handshake ps) 'AsServer DeserializeError m ByteString a
+handshakeServerConnection Connection{..} = Connection
+  { connectionCodec = codecHandshake connectionCodec
+  , peer = handshakeServerPeer id $ simpleHandshakeServer (signature $ Proxy @ps) peer
   , ..
   }
 

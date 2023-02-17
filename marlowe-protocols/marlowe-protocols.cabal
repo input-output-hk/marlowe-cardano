@@ -49,12 +49,14 @@ library
     -Wunused-packages
   exposed-modules:
     Network.Channel
-    Network.Protocol.Driver
     Network.Protocol.ChainSeek.Client
     Network.Protocol.ChainSeek.Codec
     Network.Protocol.ChainSeek.Server
-    Network.Protocol.ChainSeek.Types
     Network.Protocol.ChainSeek.TH
+    Network.Protocol.ChainSeek.Types
+    Network.Protocol.Codec
+    Network.Protocol.Codec.Spec
+    Network.Protocol.Driver
     Network.Protocol.Handshake.Client
     Network.Protocol.Handshake.Codec
     Network.Protocol.Handshake.Server
@@ -63,15 +65,15 @@ library
     Network.Protocol.Job.Codec
     Network.Protocol.Job.Server
     Network.Protocol.Job.Types
+    Network.Protocol.Peer
     Network.Protocol.Query.Client
     Network.Protocol.Query.Codec
     Network.Protocol.Query.Server
     Network.Protocol.Query.Types
-    Network.Protocol.Codec
-    Network.Protocol.Codec.Spec
   build-depends:
       base >= 4.9 && < 5
     , aeson
+    , async-components
     , base16
     , binary
     , bytestring
@@ -81,11 +83,10 @@ library
     , lifted-base
     , monad-control
     , network
+    , network-run
     , stm
     , QuickCheck
-    , resourcet
     , template-haskell
     , text
     , transformers-base
     , typed-protocols
-    , unliftio
