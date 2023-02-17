@@ -16,7 +16,7 @@ import Data.Void (Void)
 import Hasql.Pool
 import qualified Hasql.Pool as Pool
 import qualified Hasql.Session as Session
-import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncQuery(..), WithGenesis(..), runtimeChainSeekCodec)
+import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncQuery(..), WithGenesis(..))
 import Language.Marlowe.Runtime.Core.Api (MarloweVersion(..))
 import qualified Language.Marlowe.Runtime.Core.ScriptRegistry as ScriptRegistry
 import Language.Marlowe.Runtime.Indexer (MarloweIndexerDependencies(..), marloweIndexer)
@@ -27,7 +27,6 @@ import Network.Protocol.ChainSeek.Client (chainSeekClientPeer)
 import Network.Protocol.Handshake.Client
   (runClientPeerOverSocketWithHandshake, runClientPeerOverSocketWithLoggingWithHandshake)
 import Network.Protocol.Query.Client (liftQuery, queryClientPeer)
-import Network.Protocol.Query.Codec (codecQuery)
 import Network.Socket (AddrInfo(..), HostName, PortNumber, SocketType(..), defaultHints, withSocketsDo)
 import Observe.Event.Backend (narrowEventBackend, newOnceFlagMVar)
 import Observe.Event.Component (LoggerDependencies(..), logger)
@@ -70,13 +69,11 @@ run Options{..} = withSocketsDo do
           (narrowEventBackend ChainSeekClient eventBackend)
           chainSeekHost
           chainSeekPort
-          runtimeChainSeekCodec
           (chainSeekClientPeer Genesis)
       , runChainSyncQueryClient = runClientPeerOverSocketWithLoggingWithHandshake
           (narrowEventBackend ChainQueryClient eventBackend)
           chainSeekHost
           chainSeekQueryPort
-          codecQuery
           queryClientPeer
       , databaseQueries = hoistDatabaseQueries
           (either throwUsageError pure <=< Pool.use pool)
@@ -104,7 +101,6 @@ run Options{..} = withSocketsDo do
       . runClientPeerOverSocketWithHandshake
           chainSeekHost
           chainSeekQueryPort
-          codecQuery
           queryClientPeer
       . liftQuery
 

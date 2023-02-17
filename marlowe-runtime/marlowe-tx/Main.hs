@@ -8,8 +8,7 @@ import Control.Concurrent.Component
 import Data.Either (fromRight)
 import qualified Data.Text.Lazy.IO as TL
 import Data.UUID.V4 (nextRandom)
-import Language.Marlowe.Runtime.ChainSync.Api
-  (BlockNo(..), ChainSyncQuery(..), RuntimeChainSeekClient, WithGenesis(..), runtimeChainSeekCodec)
+import Language.Marlowe.Runtime.ChainSync.Api (BlockNo(..), ChainSyncQuery(..), RuntimeChainSeekClient, WithGenesis(..))
 import qualified Language.Marlowe.Runtime.Core.ScriptRegistry as ScriptRegistry
 import Language.Marlowe.Runtime.Transaction (TransactionDependencies(..), transaction)
 import qualified Language.Marlowe.Runtime.Transaction.Query as Query
@@ -21,10 +20,8 @@ import Network.Protocol.Driver
 import Network.Protocol.Handshake.Client (runClientPeerOverSocketWithLoggingWithHandshake)
 import Network.Protocol.Handshake.Server (handshakeConnectionSource)
 import Network.Protocol.Job.Client (jobClientPeer)
-import Network.Protocol.Job.Codec (codecJob)
 import Network.Protocol.Job.Server (jobServerPeer)
 import Network.Protocol.Query.Client (QueryClient, liftQuery, queryClientPeer)
-import Network.Protocol.Query.Codec (codecQuery)
 import Network.Socket (HostName, PortNumber)
 import Observe.Event.Backend (narrowEventBackend, newOnceFlagMVar)
 import Observe.Event.Component (LoggerDependencies(..), logger)
@@ -61,14 +58,13 @@ run = runComponent_ proc Options{..} -> do
     , writeText = TL.hPutStr stderr
     , injectConfigWatcherSelector = ConfigWatcher
     }
-  serverSource <- tcpServer -< TcpServerDependencies host port codecJob jobServerPeer
+  serverSource <- tcpServer -< TcpServerDependencies host port jobServerPeer
   let
     connectToChainSeek :: RunClient IO RuntimeChainSeekClient
     connectToChainSeek = runClientPeerOverSocketWithLoggingWithHandshake
       (narrowEventBackend ChainSeekClient eventBackend)
       chainSeekHost
       chainSeekPort
-      runtimeChainSeekCodec
       (chainSeekClientPeer Genesis)
 
     runChainSyncQueryClient :: RunClient IO (QueryClient ChainSyncQuery)
@@ -76,7 +72,6 @@ run = runComponent_ proc Options{..} -> do
       (narrowEventBackend ChainSyncQueryClient eventBackend)
       chainSeekHost
       chainSeekQueryPort
-      codecQuery
       queryClientPeer
 
     queryChainSync = fmap (fromRight $ error "failed to query chain sync server") . runChainSyncQueryClient . liftQuery
@@ -89,7 +84,6 @@ run = runComponent_ proc Options{..} -> do
             (narrowEventBackend ChainSyncJobClient eventBackend)
             chainSeekHost
             chainSeekCommandPort
-            codecJob
             jobClientPeer
         , ..
         }

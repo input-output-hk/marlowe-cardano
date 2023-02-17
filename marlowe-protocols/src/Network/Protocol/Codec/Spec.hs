@@ -1,3 +1,4 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE PolyKinds #-}
 
@@ -9,6 +10,7 @@ import qualified Data.ByteString.Lazy as LBS
 import Data.Function ((&))
 import Data.Functor.Identity (Identity(..))
 import GHC.Show (showSpace)
+import Network.Protocol.Codec (BinaryMessage, binaryCodec)
 import Network.TypedProtocol (PeerHasAgency, Protocol(..), SomeMessage(..))
 import Network.TypedProtocol.Codec (AnyMessageAndAgency(..), Codec(..), PeerHasAgency(..), runDecoder)
 import Test.QuickCheck (Property, Testable(property), counterexample, forAllShrinkShow, infiniteList, oneof)
@@ -44,15 +46,15 @@ genByteStringSplits bytes = oneof
             chunk : chunksByLength bs' lens
 
 checkPropCodec
-  :: (ArbitraryMessage ps, ShowProtocol ps, Show failure, MessageEq ps)
-  => (bytes -> Gen [bytes])
-  -> Codec ps failure Identity bytes
-  -> Property
-checkPropCodec genSplits Codec{..} =
-  forAllShrinkShow arbitraryMessage shrinkAnyMessageAndAgency showAnyMessageAndAgency
+  :: forall ps
+   . (ArbitraryMessage ps, ShowProtocol ps, MessageEq ps, BinaryMessage ps)
+  => Property
+checkPropCodec = do
+  let Codec{..} = binaryCodec @_ @ps
+  forAllShrinkShow (arbitraryMessage @ps) shrinkAnyMessageAndAgency showAnyMessageAndAgency
     \(AnyMessageAndAgency agency msg) -> do
       let bytes = encode agency msg
-      bytes' <- oneof [pure [bytes], genSplits bytes]
+      bytes' <- oneof [pure [bytes], genByteStringSplits bytes]
       let Identity r = runDecoder bytes' $ runIdentity $ decode agency
       pure case r of
         Left err -> counterexample (show err) failed

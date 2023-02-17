@@ -5,7 +5,6 @@ module Logging
   , getRootSelectorConfig
   ) where
 
-import Data.ByteString.Lazy (ByteString)
 import Language.Marlowe.Protocol.Sync.Types (MarloweSync)
 import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncCommand, ChainSyncQuery, RuntimeChainSeek)
 import Language.Marlowe.Runtime.Transaction (getTransactionSererSelectorConfig)
@@ -29,7 +28,7 @@ data RootSelector f where
   ChainSyncJobClient :: ConnectSocketDriverSelector (Handshake (Job ChainSyncCommand)) f -> RootSelector f
   ChainSyncQueryClient :: ConnectSocketDriverSelector (Handshake (Query ChainSyncQuery)) f -> RootSelector f
   HistoryClient :: ConnectSocketDriverSelector (Handshake MarloweSync) f -> RootSelector f
-  Server :: ConnectionSourceSelector (Handshake (Job MarloweTxCommand)) ByteString f -> RootSelector f
+  Server :: ConnectionSourceSelector (Handshake (Job MarloweTxCommand)) f -> RootSelector f
   App :: TransactionServerSelector f -> RootSelector f
   ConfigWatcher :: ConfigWatcherSelector f -> RootSelector f
 

@@ -13,10 +13,7 @@ import Data.Time (secondsToNominalDiffTime)
 import Data.UUID.V4 (nextRandom)
 import qualified Hasql.Pool as Pool
 import qualified Hasql.Session as Session
-import Language.Marlowe.Protocol.HeaderSync.Codec (codecMarloweHeaderSync)
 import Language.Marlowe.Protocol.HeaderSync.Server (marloweHeaderSyncServerPeer)
-import Language.Marlowe.Protocol.Query.Codec (codecMarloweQuery)
-import Language.Marlowe.Protocol.Sync.Codec (codecMarloweSync)
 import Language.Marlowe.Protocol.Sync.Server (marloweSyncServerPeer)
 import Language.Marlowe.Runtime.Sync (SyncDependencies(..), sync)
 import Language.Marlowe.Runtime.Sync.Database (hoistDatabaseQueries, logDatabaseQueries)
@@ -65,21 +62,18 @@ run Options{..} = bracket (Pool.acquire (100, secondsToNominalDiffTime 5, fromSt
     marloweSyncSource <- tcpServer -< TcpServerDependencies
       { host
       , port = marloweSyncPort
-      , codec = codecMarloweSync
       , toPeer = marloweSyncServerPeer
       }
 
     headerSyncSource <- tcpServer -< TcpServerDependencies
       { host
       , port = marloweHeaderSyncPort
-      , codec = codecMarloweHeaderSync
       , toPeer = marloweHeaderSyncServerPeer
       }
 
     qyerySource <- tcpServer -< TcpServerDependencies
       { host
       , port = queryPort
-      , codec = codecMarloweQuery
       , toPeer = id
       }
 

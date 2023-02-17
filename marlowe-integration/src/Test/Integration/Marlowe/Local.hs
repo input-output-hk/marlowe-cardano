@@ -58,7 +58,6 @@ import Control.Monad.Trans.Resource (allocate, runResourceT, unprotect)
 import Data.Aeson (eitherDecodeFileStrict)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as BS
-import qualified Data.ByteString.Lazy as LBS
 import Data.Either (fromRight)
 import Data.Functor (void)
 import qualified Data.Map as Map
@@ -88,15 +87,12 @@ import Language.Marlowe.CLI.Types
   , defaultCoinSelectionStrategy
   )
 import Language.Marlowe.Protocol.HeaderSync.Client (MarloweHeaderSyncClient, marloweHeaderSyncClientPeer)
-import Language.Marlowe.Protocol.HeaderSync.Codec (codecMarloweHeaderSync)
 import Language.Marlowe.Protocol.HeaderSync.Server (MarloweHeaderSyncServer, marloweHeaderSyncServerPeer)
 import Language.Marlowe.Protocol.HeaderSync.Types (MarloweHeaderSync)
 import Language.Marlowe.Protocol.Query.Client (MarloweQueryClient(..), marloweQueryClientPeer)
-import Language.Marlowe.Protocol.Query.Codec (codecMarloweQuery)
 import Language.Marlowe.Protocol.Query.Server (MarloweQueryServer)
 import Language.Marlowe.Protocol.Query.Types (MarloweQuery)
 import Language.Marlowe.Protocol.Sync.Client (MarloweSyncClient, marloweSyncClientPeer)
-import Language.Marlowe.Protocol.Sync.Codec (codecMarloweSync)
 import Language.Marlowe.Protocol.Sync.Server (MarloweSyncServer, marloweSyncServerPeer)
 import Language.Marlowe.Protocol.Sync.Types (MarloweSync)
 import Language.Marlowe.Runtime.Cardano.Api (fromCardanoAddressInEra, fromCardanoLovelace, fromCardanoTxId)
@@ -142,15 +138,12 @@ import qualified Language.Marlowe.Runtime.Transaction.Submit as Submit
 import Language.Marlowe.Runtime.Web.Server (ServerDependencies(..), server)
 import Network.HTTP.Client (defaultManagerSettings, newManager)
 import Network.Protocol.ChainSeek.Client (chainSeekClientPeer)
-import Network.Protocol.ChainSeek.Codec (codecChainSeek)
 import Network.Protocol.ChainSeek.Server (chainSeekServerPeer)
 import Network.Protocol.Driver
 import Network.Protocol.Job.Client (JobClient, jobClientPeer)
-import Network.Protocol.Job.Codec (codecJob)
 import Network.Protocol.Job.Server (JobServer, jobServerPeer)
 import Network.Protocol.Job.Types (Job)
 import Network.Protocol.Query.Client (QueryClient, liftQuery, queryClientPeer)
-import Network.Protocol.Query.Codec (codecQuery)
 import Network.Protocol.Query.Server (QueryServer, queryServerPeer)
 import Network.Protocol.Query.Types (Query)
 import Network.Wai.Handler.Warp (run)
@@ -431,19 +424,19 @@ toMarloweScripts testnetMagic txBody PublishMarloweScripts{..} = MarloweScripts{
 
 data RuntimeSelector f where
   ChainSeekClientEvent :: ConnectSocketDriverSelector RuntimeChainSeek f -> RuntimeSelector f
-  ChainSeekServerEvent :: ConnectionSourceSelector RuntimeChainSeek LBS.ByteString f -> RuntimeSelector f
+  ChainSeekServerEvent :: ConnectionSourceSelector RuntimeChainSeek f -> RuntimeSelector f
   ChainSyncJobClientEvent :: ConnectSocketDriverSelector (Job ChainSyncCommand) f -> RuntimeSelector f
-  ChainSyncJobServerEvent :: ConnectionSourceSelector (Job ChainSyncCommand) LBS.ByteString f -> RuntimeSelector f
+  ChainSyncJobServerEvent :: ConnectionSourceSelector (Job ChainSyncCommand) f -> RuntimeSelector f
   ChainSyncQueryClientEvent :: ConnectSocketDriverSelector (Query ChainSyncQuery) f -> RuntimeSelector f
-  ChainSyncQueryServerEvent :: ConnectionSourceSelector (Query ChainSyncQuery) LBS.ByteString f -> RuntimeSelector f
+  ChainSyncQueryServerEvent :: ConnectionSourceSelector (Query ChainSyncQuery) f -> RuntimeSelector f
   DiscoverySyncClientEvent :: ConnectSocketDriverSelector MarloweHeaderSync f -> RuntimeSelector f
-  DiscoverySyncServerEvent :: ConnectionSourceSelector MarloweHeaderSync LBS.ByteString f -> RuntimeSelector f
+  DiscoverySyncServerEvent :: ConnectionSourceSelector MarloweHeaderSync f -> RuntimeSelector f
   HistorySyncClientEvent :: ConnectSocketDriverSelector MarloweSync f -> RuntimeSelector f
-  HistorySyncServerEvent :: ConnectionSourceSelector MarloweSync LBS.ByteString f -> RuntimeSelector f
+  HistorySyncServerEvent :: ConnectionSourceSelector MarloweSync f -> RuntimeSelector f
   MarloweQueryClientEvent :: ConnectSocketDriverSelector MarloweQuery f -> RuntimeSelector f
-  MarloweQueryServerEvent :: ConnectionSourceSelector MarloweQuery LBS.ByteString f -> RuntimeSelector f
+  MarloweQueryServerEvent :: ConnectionSourceSelector MarloweQuery f -> RuntimeSelector f
   TxJobClientEvent :: ConnectSocketDriverSelector (Job MarloweTxCommand) f -> RuntimeSelector f
-  TxJobServerEvent :: ConnectionSourceSelector (Job MarloweTxCommand) LBS.ByteString f -> RuntimeSelector f
+  TxJobServerEvent :: ConnectionSourceSelector (Job MarloweTxCommand) f -> RuntimeSelector f
   TxEvent :: TransactionServerSelector f -> RuntimeSelector f
   ChainIndexerEvent :: ChainIndexerSelector f -> RuntimeSelector f
   MarloweIndexerEvent :: MarloweIndexerSelector f -> RuntimeSelector f
@@ -591,43 +584,36 @@ setupChannels eventBackend = do
   ClientServerPair acceptRunChainSeekServer runChainSeekClient <- clientServerPair
     (narrowEventBackend ChainSeekServerEvent eventBackend)
     (narrowEventBackend ChainSeekClientEvent eventBackend)
-    codecChainSeek
     (chainSeekServerPeer Genesis)
     (chainSeekClientPeer Genesis)
   ClientServerPair acceptRunChainSyncJobServer runChainSyncJobClient <- clientServerPair
     (narrowEventBackend ChainSyncJobServerEvent eventBackend)
     (narrowEventBackend ChainSyncJobClientEvent eventBackend)
-    codecJob
     jobServerPeer
     jobClientPeer
   ClientServerPair acceptRunChainSyncQueryServer runChainSyncQueryClient <- clientServerPair
     (narrowEventBackend ChainSyncQueryServerEvent eventBackend)
     (narrowEventBackend ChainSyncQueryClientEvent eventBackend)
-    codecQuery
     queryServerPeer
     queryClientPeer
   ClientServerPair acceptRunDiscoverySyncServer runDiscoverySyncClient <- clientServerPair
     (narrowEventBackend DiscoverySyncServerEvent eventBackend)
     (narrowEventBackend DiscoverySyncClientEvent eventBackend)
-    codecMarloweHeaderSync
     marloweHeaderSyncServerPeer
     marloweHeaderSyncClientPeer
   ClientServerPair acceptRunHistorySyncServer runHistorySyncClient <- clientServerPair
     (narrowEventBackend HistorySyncServerEvent eventBackend)
     (narrowEventBackend HistorySyncClientEvent eventBackend)
-    codecMarloweSync
     marloweSyncServerPeer
     marloweSyncClientPeer
   ClientServerPair acceptRunMarloweQueryServer runMarloweQueryClient <- clientServerPair
     (narrowEventBackend MarloweQueryServerEvent eventBackend)
     (narrowEventBackend MarloweQueryClientEvent eventBackend)
-    codecMarloweQuery
     id
     marloweQueryClientPeer
   ClientServerPair acceptRunTxJobServer runTxJobClient <- clientServerPair
     (narrowEventBackend TxJobServerEvent eventBackend)
     (narrowEventBackend TxJobClientEvent eventBackend)
-    codecJob
     jobServerPeer
     jobClientPeer
   pure Channels{..}

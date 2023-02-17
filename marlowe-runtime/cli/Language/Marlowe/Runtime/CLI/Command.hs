@@ -9,10 +9,8 @@ module Language.Marlowe.Runtime.CLI.Command
 import Control.Concurrent.STM (STM)
 import Control.Exception (SomeException, catch, throw)
 import Control.Monad.Trans.Reader (runReaderT)
-import qualified Data.ByteString.Lazy as LB
 import Data.Foldable (asum)
 import Language.Marlowe.Protocol.Sync.Client (marloweSyncClientPeer)
-import Language.Marlowe.Protocol.Sync.Codec (codecMarloweSync)
 import Language.Marlowe.Runtime.CLI.Command.Apply
   ( ApplyCommand
   , advanceCommandParser
@@ -31,15 +29,13 @@ import Language.Marlowe.Runtime.CLI.Env (Env(..))
 import Language.Marlowe.Runtime.CLI.Monad (CLI, runCLI)
 import Language.Marlowe.Runtime.CLI.Option (optParserWithEnvDefault)
 import qualified Language.Marlowe.Runtime.CLI.Option as O
-import Network.Protocol.ChainSeek.Codec (DeserializeError)
+import Network.Protocol.Codec (BinaryMessage)
 import Network.Protocol.Driver (RunClient)
 import Network.Protocol.Handshake.Client (runClientPeerOverSocketWithHandshake)
 import Network.Protocol.Handshake.Types (HasSignature(..))
 import Network.Protocol.Job.Client (jobClientPeer)
-import Network.Protocol.Job.Codec (codecJob)
 import Network.Socket (HostName, PortNumber)
 import Network.TypedProtocol (Peer, PeerRole(AsClient))
-import Network.TypedProtocol.Codec (Codec)
 import Options.Applicative
 import System.IO (hPutStrLn, stderr)
 
@@ -112,23 +108,22 @@ runCommand = \case
 -- | Interpret a CLI action in IO using the provided options.
 runCLIWithOptions :: STM () -> Options -> CLI a -> IO a
 runCLIWithOptions sigInt Options{..} cli = runReaderT (runCLI cli) Env
-  { envRunHistorySyncClient = runClientPeerOverSocket' "History sync client failure" historyHost historySyncPort codecMarloweSync marloweSyncClientPeer
-  , envRunTxJobClient = runClientPeerOverSocket' "Tx client client failure" txHost txCommandPort codecJob jobClientPeer
+  { envRunHistorySyncClient = runClientPeerOverSocket' "History sync client failure" historyHost historySyncPort marloweSyncClientPeer
+  , envRunTxJobClient = runClientPeerOverSocket' "Tx client client failure" txHost txCommandPort jobClientPeer
   , sigInt
   }
 
 runClientPeerOverSocket'
   :: forall protocol client (st :: protocol)
-   . HasSignature protocol
+   . (HasSignature protocol, BinaryMessage protocol)
   => String -- ^ Client failure stderr extra message
   -> HostName
   -> PortNumber
-  -> Codec protocol DeserializeError IO LB.ByteString -- ^ A codec for the protocol
   -> (forall a. client IO a -> Peer protocol 'AsClient st IO a) -- ^ Interpret the client as a protocol peer
   -> RunClient IO client
-runClientPeerOverSocket' errMsg host port codec clientToPeer client = do
+runClientPeerOverSocket' errMsg host port clientToPeer client = do
   let
-    run = runClientPeerOverSocketWithHandshake host port codec clientToPeer client
+    run = runClientPeerOverSocketWithHandshake host port clientToPeer client
   run `catch` \(err :: SomeException)-> do
     hPutStrLn stderr errMsg
     throw err

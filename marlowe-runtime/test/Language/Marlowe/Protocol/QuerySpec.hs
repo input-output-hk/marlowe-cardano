@@ -7,7 +7,6 @@ module Language.Marlowe.Protocol.QuerySpec
   where
 
 import Data.Foldable (fold)
-import Language.Marlowe.Protocol.Query.Codec (codecMarloweQuery)
 import Language.Marlowe.Protocol.Query.Types
 import Language.Marlowe.Runtime.ChainSync.Gen (StructureType(..), oneofStructured, resized)
 import Language.Marlowe.Runtime.Core.Api (MarloweVersion(..), MarloweVersionTag(V1))
@@ -21,7 +20,7 @@ import Test.QuickCheck hiding (shrinkMap)
 
 spec :: Spec
 spec = describe "MarloweQuery protocol" do
-  prop "Has a lawful codec" $ checkPropCodec genByteStringSplits codecMarloweQuery
+  prop "Has a lawful codec" $ checkPropCodec @MarloweQuery
 
 instance ArbitraryMessage MarloweQuery where
   arbitraryMessage = resized (min 30) $ oneof
