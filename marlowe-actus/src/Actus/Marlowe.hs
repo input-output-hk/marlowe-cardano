@@ -33,7 +33,7 @@ import Actus.Marlowe.Instance
   , toMarloweFixedPoint
   )
 
-import Actus.Core (genCashflow, genPayoffs, genSchedule, genStates)
+import Actus.Core (Event, genCashflow, genPayoffs, genSchedule, genStates)
 import Actus.Model
   ( CtxPOF(CtxPOF)
   , CtxSTF(CtxSTF, contractTerms, referenceStates, riskFactors)
@@ -42,8 +42,10 @@ import Actus.Model
   , schedule
   , validateTerms
   )
+import Control.Applicative ((<|>))
 import Control.Monad.Reader (Reader, filterM, runReader, withReader)
 import Data.List as L (foldl', groupBy)
+import Data.Maybe (isNothing)
 import Data.Time (LocalTime(..), UTCTime(UTCTime), nominalDiffTimeToSeconds, timeOfDayToTime)
 import Data.Time.Clock.POSIX
 import Data.Validation (Validation(..))
@@ -208,8 +210,6 @@ toTimeout LocalTime {..} =
   let secs = nominalDiffTimeToSeconds $ utcTimeToPOSIXSeconds (UTCTime localDay (timeOfDayToTime localTimeOfDay))
    in POSIXTime (floor $ 1000 * secs)
 
-type Event = (String, EventType, ShiftedDay)
-
 -- |'genProjectedCashflows' generates a list of projected cashflows for
 -- given contract terms and provided risk factors. The function returns
 -- an empty list, if building the initial state given the contract terms
@@ -224,7 +224,7 @@ genProjectedCashflows ::
 genProjectedCashflows rf ct =
   let ctx = buildCtx rf ct
       sched = genSchedule ct []
-   in check (toMarlowe ct) $ genCashflow (toMarlowe ct) <$> runReader (genProjectedPayoffs sched) ctx
+   in check (toMarlowe ct) $ genCashflow (toMarlowe ct) <$> runReader (genProjectedPayoffs ct sched) ctx
   where
     check :: Fractional a => ContractTerms a -> [CashFlow a] -> [CashFlow a]
     check ContractTerms {deliverySettlement = Just DS_S} = netCashflows
@@ -247,27 +247,40 @@ genProjectedCashflows rf ct =
 
 -- |Generate projected cash flows
 genProjectedPayoffs ::
+  -- | Contract terms
+  ContractTerms Double ->
   -- | Events
   [Event] ->
   -- | Projected cash flows
   Reader (CtxSTF Value) [(Event, ContractState Value, Value)]
-genProjectedPayoffs events =
+genProjectedPayoffs ct@ContractTerms{..} events =
   do
     states <- initializeState >>= genStates events
     (eventTypes, filteredStates) <- unzip <$> filterM filtersStates (zip (tail events) states)
-
     payoffs <- trans $ genPayoffs eventTypes filteredStates
-
     pure $ zip3 eventTypes filteredStates payoffs
   where
     trans :: Reader (CtxPOF a) b -> Reader (CtxSTF a) b
     trans = withReader (\c -> CtxPOF (contractTerms c) (riskFactors c) (referenceStates c))
 
-filtersStates ::
-  ((String, EventType, ShiftedDay), ContractState Value) ->
-  Reader (CtxSTF Value) Bool
--- filtersStates ((_, ev, ShiftedDay {..}), _) = pure True
-filtersStates _ = pure True
+    filtersStates ::
+      ((String, EventType, ShiftedDay), ContractState Value) ->
+      Reader (CtxSTF Value) Bool
+    filtersStates ((_, ev, ShiftedDay {..}), _) =
+       do
+         return $ case contractType of
+           PAM -> isNothing purchaseDate || Just calculationDay >= purchaseDate
+           LAM -> isNothing purchaseDate || ev == PRD || Just calculationDay > purchaseDate
+           NAM -> isNothing purchaseDate || ev == PRD || Just calculationDay > purchaseDate
+           ANN ->
+             let b1 = isNothing purchaseDate || ev == PRD || Just calculationDay > purchaseDate
+                 b2 = let m = maturityDate <|> amortizationDate <|> maturity ct in isNothing m || Just calculationDay <= m
+              in b1 && b2
+           SWPPV -> isNothing purchaseDate || ev == PRD || Just calculationDay > purchaseDate
+           SWAPS -> isNothing purchaseDate || ev == PRD || Just calculationDay > purchaseDate
+           CLM -> isNothing purchaseDate || ev == PRD || Just calculationDay > purchaseDate
+           _ -> True
+
 
 -- | Bulid the context allowing to perform state transitions
 buildCtx ::
