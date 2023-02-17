@@ -2,7 +2,7 @@
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE TupleSections #-}
+
 
 -- | = Generator for ACTUS contracts
 -- Given ACTUS contract terms a Marlowe contract is generated.
@@ -23,7 +23,6 @@ module Actus.Marlowe
   , toMarloweFixedPoint
   ) where
 
-import Actus.Core (genProjectedCashflows)
 import Actus.Domain
 import Actus.Marlowe.Instance
   ( CashFlowMarlowe
@@ -33,8 +32,20 @@ import Actus.Marlowe.Instance
   , reduceContract
   , toMarloweFixedPoint
   )
-import Actus.Model (validateTerms)
-import Data.List as L (foldl')
+
+import Actus.Core (Event, genCashflow, genPayoffs, genSchedule, genStates)
+import Actus.Model
+  ( CtxPOF(CtxPOF)
+  , CtxSTF(CtxSTF, contractTerms, referenceStates, riskFactors)
+  , initializeState
+  , maturity
+  , schedule
+  , validateTerms
+  )
+import Control.Applicative ((<|>))
+import Control.Monad.Reader (Reader, filterM, runReader, withReader)
+import Data.List as L (foldl', groupBy)
+import Data.Maybe (isNothing)
 import Data.Time (LocalTime(..), UTCTime(UTCTime), nominalDiffTimeToSeconds, timeOfDayToTime)
 import Data.Time.Clock.POSIX
 import Data.Validation (Validation(..))
@@ -50,7 +61,7 @@ genContract ::
   -- | Risk factors per event and time
   (String -> EventType -> LocalTime -> RiskFactorsMarlowe) ->
   -- | ACTUS contract terms
-  ContractTermsMarlowe ->
+  ContractTerms Double ->
   -- | Marlowe contract or applicabilty errors
   Validation [TermValidationError] Contract
 genContract p rf = fmap (genContract' p rf) . validateTerms
@@ -63,11 +74,11 @@ genContract' ::
   -- | Risk factors per event and time
   (String -> EventType -> LocalTime -> RiskFactorsMarlowe) ->
   -- | ACTUS contract terms
-  ContractTermsMarlowe ->
+  ContractTerms Double ->
   -- | Marlowe contract
   Contract
 genContract' (party, couterparty) rf ct =
-  let cfs = genProjectedCashflows rf ct []
+  let cfs = genProjectedCashflows rf ct
    in foldl' gen Close $ reverse cfs
   where
     gen :: Contract -> CashFlow Value -> Contract
@@ -198,6 +209,96 @@ toTimeout :: LocalTime -> Timeout
 toTimeout LocalTime {..} =
   let secs = nominalDiffTimeToSeconds $ utcTimeToPOSIXSeconds (UTCTime localDay (timeOfDayToTime localTimeOfDay))
    in POSIXTime (floor $ 1000 * secs)
+
+-- |'genProjectedCashflows' generates a list of projected cashflows for
+-- given contract terms and provided risk factors. The function returns
+-- an empty list, if building the initial state given the contract terms
+-- fails or in case there are no cash flows.
+genProjectedCashflows ::
+  -- | Risk factors as a function of event type and time
+  (String -> EventType -> LocalTime -> RiskFactors Value) ->
+  -- | Contract terms
+  ContractTerms Double ->
+  -- | List of projected cash flows
+  [CashFlow Value]
+genProjectedCashflows rf ct =
+  let ctx = buildCtx rf ct
+      sched = genSchedule ct []
+   in check (toMarlowe ct) $ genCashflow (toMarlowe ct) <$> runReader (genProjectedPayoffs ct sched) ctx
+  where
+    check :: Fractional a => ContractTerms a -> [CashFlow a] -> [CashFlow a]
+    check ContractTerms {deliverySettlement = Just DS_S} = netCashflows
+    check _                                              = id
+
+    netCashflows :: Fractional a => [CashFlow a] -> [CashFlow a]
+    netCashflows cf = foldl1 plus <$> groupBy f cf
+      where
+        f a b =
+          cashEvent a == cashEvent b
+            && cashPaymentDay a == cashPaymentDay b
+            && cashParty a == cashParty b
+            && cashCounterParty a == cashCounterParty b
+            && cashCurrency a == cashCurrency b
+        plus a b =
+          a
+            { amount = amount a + amount b,
+              notional = notional a + notional b
+            }
+
+-- |Generate projected cash flows
+genProjectedPayoffs ::
+  -- | Contract terms
+  ContractTerms Double ->
+  -- | Events
+  [Event] ->
+  -- | Projected cash flows
+  Reader (CtxSTF Value) [(Event, ContractState Value, Value)]
+genProjectedPayoffs ct@ContractTerms{..} events =
+  do
+    states <- initializeState >>= genStates events
+    (eventTypes, filteredStates) <- unzip <$> filterM filtersStates (zip (tail events) states)
+    payoffs <- trans $ genPayoffs eventTypes filteredStates
+    pure $ zip3 eventTypes filteredStates payoffs
+  where
+    trans :: Reader (CtxPOF a) b -> Reader (CtxSTF a) b
+    trans = withReader (\c -> CtxPOF (contractTerms c) (riskFactors c) (referenceStates c))
+
+    filtersStates ::
+      ((String, EventType, ShiftedDay), ContractState Value) ->
+      Reader (CtxSTF Value) Bool
+    filtersStates ((_, ev, ShiftedDay {..}), _) =
+       do
+         return $ case contractType of
+           PAM -> isNothing purchaseDate || Just calculationDay >= purchaseDate
+           LAM -> isNothing purchaseDate || ev == PRD || Just calculationDay > purchaseDate
+           NAM -> isNothing purchaseDate || ev == PRD || Just calculationDay > purchaseDate
+           ANN ->
+             let b1 = isNothing purchaseDate || ev == PRD || Just calculationDay > purchaseDate
+                 b2 = let m = maturityDate <|> amortizationDate <|> maturity ct in isNothing m || Just calculationDay <= m
+              in b1 && b2
+           SWPPV -> isNothing purchaseDate || ev == PRD || Just calculationDay > purchaseDate
+           SWAPS -> isNothing purchaseDate || ev == PRD || Just calculationDay > purchaseDate
+           CLM -> isNothing purchaseDate || ev == PRD || Just calculationDay > purchaseDate
+           _ -> True
+
+
+-- | Bulid the context allowing to perform state transitions
+buildCtx ::
+  -- | Risk factors as a function of event type and time
+  (String -> EventType -> LocalTime -> RiskFactors Value) ->
+  -- | Contract terms
+  ContractTerms Double ->
+  -- | Context
+  CtxSTF Value
+buildCtx rf ct =
+  CtxSTF
+    (toMarlowe ct)
+    (calculationDay . snd <$> schedule FP ct) -- init & stf rely on the fee payment schedule
+    (calculationDay . snd <$> schedule PR ct) -- init & stf rely on the principal redemption schedule
+    (calculationDay . snd <$> schedule IP ct) -- init & stf rely on the interest payment schedule
+    (maturity ct)
+    rf
+    []
 
 toMarlowe :: ContractTerms Double -> ContractTermsMarlowe
 toMarlowe ct =

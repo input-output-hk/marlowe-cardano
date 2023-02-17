@@ -161,22 +161,6 @@
         "type": "github"
       }
     },
-    "actus-tests": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1622458452,
-        "narHash": "sha256-/Rwv1d2rOfAl3EFaUi6gj4df3xbL0e8Vc5AezqspnBg=",
-        "owner": "actusfrf",
-        "repo": "actus-tests",
-        "rev": "acfaab81a2eac8334dda0ac01edff89f3271e4df",
-        "type": "github"
-      },
-      "original": {
-        "owner": "actusfrf",
-        "repo": "actus-tests",
-        "type": "github"
-      }
-    },
     "agenix": {
       "inputs": {
         "nixpkgs": "nixpkgs_17"
@@ -9685,7 +9669,6 @@
     "root": {
       "inputs": {
         "CHaP": "CHaP",
-        "actus-tests": "actus-tests",
         "bitte-cells": "bitte-cells",
         "cardano-world": "cardano-world",
         "data-merge": "data-merge_6",

@@ -1,5 +1,5 @@
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE LambdaCase #-}
+
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -10,6 +10,7 @@ module Spec.Actus.Examples
   ( tests
   ) where
 
+import qualified Actus.Core as Core
 import Actus.Domain
 import Actus.Marlowe
 import Data.Aeson (eitherDecode)
@@ -56,8 +57,8 @@ ex_pam1 =
     >>= either
       (\err -> assertFailure ("Error parsing file: " ++ err))
       ( \ct ->
-          let Just contract = toCore $ genContract' ("party", "counterparty") emptyRiskFactors (toMarlowe ct)
-              cashFlows = genProjectedCashflows emptyRiskFactors ct []
+          let Just contract = toCore $ genContract' ("party", "counterparty") emptyRiskFactors ct
+              cashFlows = Core.genProjectedCashflows emptyRiskFactors ct []
            in case computeTransaction
                 ( TransactionInput
                     (0, 0)
@@ -99,8 +100,8 @@ ex_lam1 =
     >>= either
       (\err -> assertFailure ("Error parsing file: " ++ err))
       ( \ct ->
-          let Just contract = toCore $ genContract' ("party", "counterparty") emptyRiskFactors (toMarlowe ct)
-              cashFlows = genProjectedCashflows emptyRiskFactors ct []
+          let Just contract = toCore $ genContract' ("party", "counterparty") emptyRiskFactors ct
+              cashFlows = Core.genProjectedCashflows emptyRiskFactors ct []
            in case computeTransaction
                 ( TransactionInput
                     (0, 0)
@@ -144,8 +145,8 @@ ex_nam1 =
     >>= either
       (\err -> assertFailure ("Error parsing file: " ++ err))
       ( \ct ->
-          let Just contract = toCore $ genContract' ("party", "counterparty") emptyRiskFactors (toMarlowe ct)
-              cashFlows = genProjectedCashflows emptyRiskFactors ct []
+          let Just contract = toCore $ genContract' ("party", "counterparty") emptyRiskFactors ct
+              cashFlows = Core.genProjectedCashflows emptyRiskFactors ct []
            in case computeTransaction
                 ( TransactionInput
                     (0, 0)
@@ -189,8 +190,8 @@ ex_ann1 =
     >>= either
       (\err -> assertFailure ("Error parsing file: " ++ err))
       ( \ct ->
-          let Just contract = toCore $ genContract' ("party", "counterparty") emptyRiskFactors (toMarlowe ct)
-              cashFlows = genProjectedCashflows emptyRiskFactors ct []
+          let Just contract = toCore $ genContract' ("party", "counterparty") emptyRiskFactors ct
+              cashFlows = Core.genProjectedCashflows emptyRiskFactors ct []
            in case computeTransaction
                 ( TransactionInput
                     (0, 0)
@@ -215,10 +216,10 @@ ex_optns1 =
     >>= either
       (\err -> assertFailure ("Error parsing file: " ++ err))
       ( \ct ->
-          let Just contract = toCore $ genContract' ("party", "counterparty") rf (toMarlowe ct)
+          let Just contract = toCore $ genContract' ("party", "counterparty") rf ct
               rf :: Num a => String -> EventType -> LocalTime -> RiskFactors a
               rf _ XD d
-                | d == (fromJust $ maturityDate ct) =
+                | d == fromJust (maturityDate ct) =
                   RiskFactors
                     { o_rf_CURS = 1,
                       o_rf_RRMO = 1,
@@ -236,7 +237,7 @@ ex_optns1 =
                     xd_payoff = 0,
                     dv_payoff = 0
                   }
-              cashFlows = genProjectedCashflows rf ct []
+              cashFlows = Core.genProjectedCashflows rf ct []
            in case computeTransaction
                 ( TransactionInput
                     (0, 0)
@@ -261,8 +262,8 @@ ex_com1 =
     >>= either
       (\err -> assertFailure ("Error parsing file: " ++ err))
       ( \ct ->
-          let Just contract = toCore $ genContract' ("party", "counterparty") emptyRiskFactors (toMarlowe ct)
-              cashFlows = genProjectedCashflows emptyRiskFactors ct []
+          let Just contract = toCore $ genContract' ("party", "counterparty") emptyRiskFactors ct
+              cashFlows = Core.genProjectedCashflows emptyRiskFactors ct []
            in case computeTransaction
                 ( TransactionInput
                     (0, 0)

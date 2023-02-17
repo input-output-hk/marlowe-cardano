@@ -17,7 +17,6 @@ let
     inherit inputs evalSystem;
     inherit checkMaterialization enableHaskellProfiling;
     inherit source-repo-override;
-    inherit (inputs) actus-tests;
 
     # This ensures that the utility scripts produced in here will run on the current system, not
     # the build system, so we can run e.g. the darwin ones on linux

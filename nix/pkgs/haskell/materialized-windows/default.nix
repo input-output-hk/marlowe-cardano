@@ -1306,7 +1306,6 @@
           "data-default-class".components.library.planned = lib.mkOverride 900 true;
           "flat".components.library.planned = lib.mkOverride 900 true;
           "type-hint".components.library.planned = lib.mkOverride 900 true;
-          "marlowe-actus".components.sublibs."actus-core".planned = lib.mkOverride 900 true;
           "regex-base".components.library.planned = lib.mkOverride 900 true;
           "adjunctions".components.library.planned = lib.mkOverride 900 true;
           "tree-diff".components.library.planned = lib.mkOverride 900 true;
@@ -1661,7 +1660,6 @@
           "contravariant-extras".components.library.planned = lib.mkOverride 900 true;
           "ouroboros-consensus-protocol".components.sublibs."ouroboros-consensus-protocol-test".planned = lib.mkOverride 900 true;
           "integer-gmp".components.library.planned = lib.mkOverride 900 true;
-          "marlowe-actus".components.tests."actus-core-test".planned = lib.mkOverride 900 true;
           "marlowe-runtime".components.exes."marlowe-server".planned = lib.mkOverride 900 true;
           "tasty".components.library.planned = lib.mkOverride 900 true;
           "lobemo-scribe-systemd".components.library.planned = lib.mkOverride 900 true;
