@@ -18,19 +18,13 @@ import qualified Data.Set as Set
 import Language.Marlowe.Protocol.Query.Types (Page(..))
 import Language.Marlowe.Runtime.ChainSync.Api (Lovelace(..))
 import Language.Marlowe.Runtime.Core.Api (MarloweVersion(..), SomeMarloweVersion(..))
-import Language.Marlowe.Runtime.Transaction.Api
-  ( ConstraintError(..)
-  , ContractCreated(..)
-  , CreateBuildupError(..)
-  , CreateError(..)
-  , LoadMarloweContextError(..)
-  , WalletAddresses(..)
-  )
+import Language.Marlowe.Runtime.Transaction.Api (ContractCreated(..), WalletAddresses(..))
 import qualified Language.Marlowe.Runtime.Transaction.Api as Tx
 import Language.Marlowe.Runtime.Web hiding (Unsigned)
 import Language.Marlowe.Runtime.Web.Server.DTO
 import Language.Marlowe.Runtime.Web.Server.Monad
   (AppM, createContract, loadContract, loadContractHeaders, submitContract)
+import Language.Marlowe.Runtime.Web.Server.REST.Error (badRequest, throwDTOError)
 import qualified Language.Marlowe.Runtime.Web.Server.REST.Transactions as Transactions
 import Language.Marlowe.Runtime.Web.Server.TxClient (TempTx(TempTx), TempTxStatus(Unsigned))
 import Observe.Event (EventBackend, addField, reference, withEvent)
@@ -93,36 +87,16 @@ post eb req@PostContractsRequest{..} changeAddressDTO mAddresses mCollateralUtxo
   addField ev $ ChangeAddress changeAddressDTO
   traverse_ (addField ev . Addresses) mAddresses
   traverse_ (addField ev . Collateral) mCollateralUtxos
-  SomeMarloweVersion v@MarloweV1  <- fromDTOThrow err400 version
-  changeAddress <- fromDTOThrow err400 changeAddressDTO
-  extraAddresses <- Set.fromList <$> fromDTOThrow err400 (maybe [] unCommaList mAddresses)
-  collateralUtxos <- Set.fromList <$> fromDTOThrow err400 (maybe [] unCommaList mCollateralUtxos)
-  roles' <- fromDTOThrow err400 roles
-  metadata' <- fromDTOThrow err400 metadata
+  SomeMarloweVersion v@MarloweV1  <- fromDTOThrow (badRequest "Unsupported Marlowe version") version
+  changeAddress <- fromDTOThrow (badRequest "change address format") changeAddressDTO
+  extraAddresses <- Set.fromList <$> fromDTOThrow (badRequest "addresses header value") (maybe [] unCommaList mAddresses)
+  collateralUtxos <- Set.fromList <$> fromDTOThrow (badRequest "collateral header UTxO value") (maybe [] unCommaList mCollateralUtxos)
+  roles' <- fromDTOThrow (badRequest "roles value") roles
+  metadata' <- fromDTOThrow (badRequest "metadata value") metadata
   createContract Nothing v WalletAddresses{..} roles' metadata' (Lovelace minUTxODeposit) contract >>= \case
     Left err -> do
       addField ev $ PostError $ show err
-      case err of
-        CreateConstraintError (MintingUtxoNotFound _) -> throwError err500
-        CreateConstraintError (RoleTokenNotFound _) -> throwError err403
-        CreateConstraintError ToCardanoError -> throwError err500
-        CreateConstraintError MissingMarloweInput -> throwError err500
-        CreateConstraintError (PayoutInputNotFound _) -> throwError err500
-        CreateConstraintError (CalculateMinUtxoFailed _) -> throwError err500
-        CreateConstraintError (CoinSelectionFailed _) -> throwError err400
-        CreateConstraintError (BalancingError _) -> throwError err500
-        CreateLoadMarloweContextFailed LoadMarloweContextErrorNotFound -> throwError err404
-        CreateLoadMarloweContextFailed (LoadMarloweContextErrorVersionMismatch _) -> throwError err400
-        CreateLoadMarloweContextFailed (HandshakeFailed _) -> throwError err500
-        CreateLoadMarloweContextFailed LoadMarloweContextToCardanoError -> throwError err500
-        CreateLoadMarloweContextFailed (MarloweScriptNotPublished _) -> throwError err500
-        CreateLoadMarloweContextFailed (PayoutScriptNotPublished _) -> throwError err500
-        CreateLoadMarloweContextFailed (ExtractCreationError _) -> throwError err500
-        CreateLoadMarloweContextFailed (ExtractMarloweTransactionError _) -> throwError err500
-        CreateBuildupFailed MintingUtxoSelectionFailed -> throwError err400
-        CreateBuildupFailed (AddressDecodingFailed _) -> throwError err500
-        CreateBuildupFailed (MintingScriptDecodingFailed _) -> throwError err500
-        CreateToCardanoError -> throwError err400
+      throwDTOError err
     Right ContractCreated{contractId, txBody} -> do
       let (contractId', txBody') = toDTO (contractId, txBody)
       let body = CreateTxBody contractId' txBody'
