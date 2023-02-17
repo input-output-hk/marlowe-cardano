@@ -13,7 +13,7 @@ module Network.Protocol.Driver
 import Control.Concurrent.STM (STM, atomically, newTQueue, readTQueue)
 import Control.Concurrent.STM.TQueue (writeTQueue)
 import Control.Exception (Exception)
-import Control.Exception.Lifted (SomeException, bracketOnError, mask, throw, try)
+import Control.Exception.Lifted (bracket, bracketOnError, finally)
 import Control.Monad.Base (MonadBase(liftBase))
 import Control.Monad.Cleanup (MonadCleanup)
 import Control.Monad.Trans.Control (MonadBaseControl)
@@ -22,14 +22,13 @@ import Data.ByteString.Lazy (ByteString)
 import Data.ByteString.Lazy.Base16 (encodeBase16)
 import Data.Void (Void)
 import Network.Channel (Channel(..), channelPair, hoistChannel, socketAsChannel)
-import Network.Socket (AddrInfo, SockAddr, Socket, addrAddress, close, connect, openSocket)
+import Network.Socket (AddrInfo, SockAddr, Socket, addrAddress, close, connect, gracefulClose, openSocket)
 import Network.Socket.Address (accept)
 import Network.TypedProtocol (Message, Peer(..), PeerHasAgency, PeerRole, SomeMessage(..), runPeerWithDriver)
 import Network.TypedProtocol.Codec (Codec(..), DecodeStep(..))
 import Network.TypedProtocol.Driver (Driver(..))
-import Observe.Event (addField, addParent, narrowEventBackend, reference, subEventBackend, withEvent)
+import Observe.Event (addField, subEventBackend, withEvent, withSubEvent)
 import Observe.Event.Backend (EventBackend, noopEventBackend)
-import Observe.Event.BackendModification (modifyEventBackend, setAncestor)
 import Observe.Event.Component (FieldConfig(..), GetSelectorConfig, SelectorConfig(..), SomeJSON(..), absurdFieldConfig)
 
 class MessageToJSON ps where
@@ -145,8 +144,8 @@ runClientPeerOverSocket
 runClientPeerOverSocket = runClientPeerOverSocketWithLogging $ noopEventBackend ()
 
 data ConnectSocketDriverSelector ps f where
+  ClientSession :: ConnectSocketDriverSelector ps Void
   Connect :: ConnectSocketDriverSelector ps Void
-  Disconnect :: ConnectSocketDriverSelector ps Void
   ClientDriverEvent :: DriverSelector ps f -> ConnectSocketDriverSelector ps f
 
 runClientPeerOverSocketWithLogging
@@ -157,27 +156,34 @@ runClientPeerOverSocketWithLogging
   -> Codec protocol ex m ByteString
   -> ToPeer client protocol peer st m
   -> RunClient m client
-runClientPeerOverSocketWithLogging eventBackend throwImpl addr codec toPeer client =
-  mask \restore -> do
-    (ref, sock) <- open
-    let
-      channel = hoistChannel liftBase $ socketAsChannel sock
-      eventBackend' = narrowEventBackend ClientDriverEvent
-        $ modifyEventBackend (setAncestor ref) eventBackend
-      driver = logDriver eventBackend' $ mkDriver throwImpl codec channel
-      peer = toPeer client
-    result <- try @_ @SomeException
-      $ restore
-      $ fst <$> runPeerWithDriver driver peer (startDState driver)
-    withEvent eventBackend Disconnect \ev -> do
-      addParent ev ref
-      liftBase $ close sock
-      either throw pure result
-  where
-    open = bracketOnError (liftBase $ openSocket addr) (liftBase . close) \sock ->
-      withEvent eventBackend Connect \ev -> do
-        liftBase (connect sock $ addrAddress addr)
-        pure (reference ev, sock)
+runClientPeerOverSocketWithLogging eventBackend throwImpl addr = runClientPeerWithLogging'
+  eventBackend
+  throwImpl
+  (liftBase $ openSocket addr)
+  (liftBase . close)
+  (\sock -> liftBase $ connect sock $ addrAddress addr)
+  (hoistChannel liftBase . socketAsChannel)
+
+runClientPeerWithLogging'
+  :: (MonadBaseControl IO m, MonadCleanup m)
+  => EventBackend m r (ConnectSocketDriverSelector protocol)
+  -> (forall x. ex -> m x)
+  -> m channel
+  -> (channel -> m ())
+  -> (channel -> m ())
+  -> (channel -> Channel m ByteString)
+  -> Codec protocol ex m ByteString
+  -> ToPeer client protocol peer st m
+  -> RunClient m client
+runClientPeerWithLogging' eventBackend throwImpl openChannel closeChannel connectChannel mkChannel codec toPeer client =
+  bracket openChannel closeChannel \ch ->
+    withEvent eventBackend ClientSession \ev -> do
+      withSubEvent ev Connect $ const $ connectChannel ch
+      let
+        eventBackend' = subEventBackend ClientDriverEvent ev
+        driver = logDriver eventBackend' $ mkDriver throwImpl codec $ mkChannel ch
+        peer = toPeer client
+      fst <$> runPeerWithDriver driver peer (startDState driver)
 
 acceptRunServerPeerOverSocket
   :: (MonadBaseControl IO m, MonadCleanup m)
@@ -189,8 +195,8 @@ acceptRunServerPeerOverSocket
 acceptRunServerPeerOverSocket = acceptRunServerPeerOverSocketWithLogging $ noopEventBackend ()
 
 data AcceptSocketDriverSelector ps f where
+  ServerSession :: AcceptSocketDriverSelector ps Void
   Connected :: AcceptSocketDriverSelector ps Void
-  Disconnected :: AcceptSocketDriverSelector ps Void
   ServerDriverEvent :: DriverSelector ps f -> AcceptSocketDriverSelector ps f
 
 data SocketDriverConfigOptions = SocketDriverConfigOptions
@@ -205,7 +211,7 @@ getAcceptSocketDriverSelectorConfig
   -> GetSelectorConfig (AcceptSocketDriverSelector ps)
 getAcceptSocketDriverSelectorConfig SocketDriverConfigOptions{..} = \case
   Connected -> SelectorConfig "connected" enableConnected absurdFieldConfig
-  Disconnected -> SelectorConfig "disconnected" enableDisconnected absurdFieldConfig
+  ServerSession -> SelectorConfig "session" enableDisconnected absurdFieldConfig
   ServerDriverEvent sel -> getDriverSelectorConfig enableServerDriverEvent sel
 
 getConnectSocketDriverSelectorConfig
@@ -214,32 +220,49 @@ getConnectSocketDriverSelectorConfig
   -> GetSelectorConfig (ConnectSocketDriverSelector ps)
 getConnectSocketDriverSelectorConfig SocketDriverConfigOptions{..} = \case
   Connect -> SelectorConfig "connect" enableConnected absurdFieldConfig
-  Disconnect -> SelectorConfig "disconnect" enableDisconnected absurdFieldConfig
+  ClientSession -> SelectorConfig "session" enableDisconnected absurdFieldConfig
   ClientDriverEvent sel -> getDriverSelectorConfig enableServerDriverEvent sel
 
 acceptRunServerPeerOverSocketWithLogging
-  :: (MonadBaseControl IO m, MonadCleanup m)
+  :: forall server protocol st ex m r peer
+   . (MonadBaseControl IO m, MonadCleanup m)
   => EventBackend m r (AcceptSocketDriverSelector protocol)
   -> (forall x. ex -> m x)
   -> Socket
   -> Codec protocol ex m ByteString
   -> ToPeer server protocol peer st m
   -> m (RunServer m server)
-acceptRunServerPeerOverSocketWithLogging eventBackend throwImpl socket codec toPeer = do
-  (conn, _ :: SockAddr) <- liftBase $ accept socket
-  (eventBackend', ref) <- withEvent eventBackend Connected \ev -> do
-    pure (subEventBackend ServerDriverEvent ev, reference ev)
-  let
-    driver = logDriver eventBackend'
-      $ mkDriver throwImpl codec
-      $ hoistChannel liftBase
-      $ socketAsChannel conn
-  pure $ RunServer \server -> mask \restore -> do
-    let peer = toPeer server
-    result <- try @_ @SomeException $ restore $ fst <$> runPeerWithDriver driver peer (startDState driver)
-    withEvent eventBackend Disconnected \ev -> do
-      addParent ev ref
-      either throw pure result
+acceptRunServerPeerOverSocketWithLogging eventBackend throwImpl socket = acceptRunServerPeerWithLogging'
+  eventBackend
+  throwImpl
+  (liftBase $ fst <$> accept @SockAddr socket)
+  (liftBase . close)
+  (liftBase . flip gracefulClose 5000)
+  (hoistChannel liftBase . socketAsChannel)
+
+acceptRunServerPeerWithLogging'
+  :: forall server protocol st ex m channel r peer
+   . (MonadBaseControl IO m, MonadCleanup m)
+  => EventBackend m r (AcceptSocketDriverSelector protocol)
+  -> (forall x. ex -> m x)
+  -> m channel
+  -> (channel -> m ())
+  -> (channel -> m ())
+  -> (channel -> Channel m ByteString)
+  -> Codec protocol ex m ByteString
+  -> ToPeer server protocol peer st m
+  -> m (RunServer m server)
+acceptRunServerPeerWithLogging' eventBackend throwImpl acceptChannel closeChannelOnError closeChannel mkChannel codec toPeer =
+  bracketOnError acceptChannel closeChannelOnError \ch -> do
+    let
+      runServer :: server m a -> m a
+      runServer server = withEvent eventBackend ServerSession \ev -> do
+        withSubEvent ev Connected $ const $ pure ()
+        let
+          driver = logDriver (subEventBackend ServerDriverEvent ev)
+            $ mkDriver throwImpl codec $ mkChannel ch
+        fst <$> runPeerWithDriver driver (toPeer server) (startDState driver)
+    pure $ RunServer \server -> runServer server `finally` closeChannel ch
 
 data ClientServerPair m server client = ClientServerPair
   { acceptRunServer :: m (RunServer m server)
@@ -259,41 +282,32 @@ clientServerPair
 clientServerPair serverEventBackend clientEventBackend throwImpl codec serverToPeer clientToPeer = do
   serverChannelQueue <- newTQueue
   let
-    acceptRunServer = mask \_ -> do
-      (channel, closeAction) <- liftBase $ atomically $ readTQueue serverChannelQueue
-      (eventBackend', ref) <- withEvent serverEventBackend Connected \ev -> do
-        pure (subEventBackend ServerDriverEvent ev, reference ev)
-      let
-        driver = logDriver eventBackend'
-          $ mkDriver throwImpl codec
-          $ hoistChannel (liftBase . atomically) channel
-      pure $ RunServer \server -> mask \restore -> do
-        let peer = serverToPeer server
-        result <- try @_ @SomeException $ restore $ fst <$> runPeerWithDriver driver peer (startDState driver)
-        withEvent serverEventBackend Disconnected \ev -> do
-          addParent ev ref
-          liftBase $ atomically closeAction
-          either throwImpl pure result
+    acceptRunServer :: m (RunServer m server)
+    acceptRunServer = acceptRunServerPeerWithLogging'
+      serverEventBackend
+      throwImpl
+      (liftBase $ atomically $ readTQueue serverChannelQueue)
+      (liftBase . atomically . snd)
+      (liftBase . atomically . snd)
+      (hoistChannel (liftBase . atomically) . fst)
+      codec
+      serverToPeer
+
     runClient :: RunClient m client
-    runClient client = mask \restore -> do
-      (ref, (channel, closeAction)) <- withEvent clientEventBackend Connect \ev -> liftBase $ atomically do
-        (clientChannel, serverChannel) <- channelPair
-        writeTQueue serverChannelQueue serverChannel
-        pure (reference ev, clientChannel)
-      let
-        eventBackend' = narrowEventBackend ClientDriverEvent
-          $ modifyEventBackend (setAncestor ref) clientEventBackend
-        driver = logDriver eventBackend'
-          $ mkDriver throwImpl codec
-          $ hoistChannel (liftBase . atomically) channel
-        peer = clientToPeer client
-      result <- try @_ @SomeException
-        $ restore
-        $ fst <$> runPeerWithDriver driver peer (startDState driver)
-      withEvent clientEventBackend Disconnect \ev -> do
-        addParent ev ref
-        liftBase $ atomically closeAction
-        either throwImpl pure result
+    runClient = runClientPeerWithLogging'
+      clientEventBackend
+      throwImpl
+      ( liftBase $ atomically do
+          (clientChannel, serverChannel) <- channelPair
+          writeTQueue serverChannelQueue serverChannel
+          pure clientChannel
+      )
+      (liftBase . atomically . snd)
+      (const $ pure ())
+      (hoistChannel (liftBase . atomically) . fst)
+      codec
+      clientToPeer
+
   pure ClientServerPair{..}
 
 
