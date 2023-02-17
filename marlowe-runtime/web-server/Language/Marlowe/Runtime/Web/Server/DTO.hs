@@ -30,7 +30,7 @@ import Control.Arrow (second)
 import Control.Error.Util (hush)
 import Control.Monad ((<=<))
 import Control.Monad.Except (MonadError, throwError)
-import Data.Aeson (ToJSON(toJSON), Value(Null))
+import Data.Aeson (ToJSON(toJSON))
 import Data.Bifunctor (bimap)
 import Data.Coerce (coerce)
 import Data.List.NonEmpty (NonEmpty(..))
@@ -59,8 +59,6 @@ import Language.Marlowe.Runtime.Core.Api
   , TransactionScriptOutput(..)
   )
 import qualified Language.Marlowe.Runtime.Discovery.Api as Discovery
-import Language.Marlowe.Runtime.Transaction.Api
-  (ConstraintError(..), CreateBuildupError(..), CreateError(..), LoadMarloweContextError(..))
 import qualified Language.Marlowe.Runtime.Transaction.Api as Tx
 import qualified Language.Marlowe.Runtime.Web as Web
 import Language.Marlowe.Runtime.Web.Server.TxClient (TempTx(..), TempTxStatus(..))
@@ -505,4 +503,3 @@ tokenNameToText = Chain.TokenName . fromString . T.unpack
 toNonEmpty :: [a] -> Maybe (NonEmpty a)
 toNonEmpty [] = Nothing
 toNonEmpty (a : as) = Just $ a :| as
-

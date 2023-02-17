@@ -12,7 +12,7 @@
 -- no cardano-api dependencies and have nice JSON representations. This module
 -- describes how they are mapped to the internal API types of the runtime.
 
-module Language.Marlowe.Runtime.Web.Server.REST.Error
+module Language.Marlowe.Runtime.Web.Server.REST.ApiError
   where
 
 import Control.Monad.Except (MonadError(throwError))
@@ -20,7 +20,13 @@ import Data.Aeson (Value(Null), encode, object, (.=))
 import Data.Maybe (fromMaybe)
 import Language.Marlowe.Runtime.Core.Api (MarloweVersionTag(..))
 import Language.Marlowe.Runtime.Transaction.Api
-  (ConstraintError(..), CreateBuildupError(..), CreateError(..), LoadMarloweContextError(..))
+  ( ApplyInputsConstraintsBuildupError(..)
+  , ApplyInputsError(..)
+  , ConstraintError(..)
+  , CreateBuildupError(..)
+  , CreateError(..)
+  , LoadMarloweContextError(..)
+  )
 import Language.Marlowe.Runtime.Web.Server.DTO (DTO, HasDTO, ToDTO, toDTO)
 import Servant (ServerError(ServerError))
 
@@ -85,8 +91,23 @@ serverErrorFromDTO = toServerError . toDTO
 throwDTOError :: (ToDTO e, DTO e ~ ApiError, MonadError ServerError m) => e -> m a
 throwDTOError = throwError . serverErrorFromDTO
 
-badRequest :: String -> ServerError
-badRequest msg = toServerError . ApiError ("Bad Request: " <> msg) "BadRequest" Null $ 400
+badRequest :: String -> Maybe String -> ServerError
+badRequest msg errorCode = toServerError . ApiError msg (fromMaybe "BadRequest" errorCode) Null $ 400
+
+badRequest' :: String -> ServerError
+badRequest' msg = badRequest msg Nothing
+
+notFound :: String -> Maybe String -> ServerError
+notFound msg errorCode = toServerError . ApiError msg (fromMaybe "NotFound" errorCode) Null $ 404
+
+notFound' :: String -> ServerError
+notFound' msg = notFound msg Nothing
+
+rangeNotSatisfiable :: String -> Maybe String -> ServerError
+rangeNotSatisfiable msg errorCode = toServerError . ApiError msg (fromMaybe "RangeNotSatisfiable" errorCode) Null $ 416
+
+rangeNotSatisfiable' :: String -> ServerError
+rangeNotSatisfiable' msg = rangeNotSatisfiable msg Nothing
 
 instance HasDTO (CreateError 'V1) where
   type DTO (CreateError 'V1) = ApiError
@@ -114,3 +135,30 @@ instance ToDTO (CreateError 'V1) where
     CreateBuildupFailed (MintingScriptDecodingFailed _) -> ApiError "Internal error" "InternalError" Null 500
     CreateToCardanoError -> ApiError "Internal error" "InternalError" Null 400
 
+instance HasDTO (ApplyInputsError 'V1) where
+  type DTO (ApplyInputsError 'V1) = ApiError
+
+instance ToDTO (ApplyInputsError 'V1) where
+  toDTO = \case
+    ApplyInputsConstraintError (MintingUtxoNotFound _) -> ApiError "Minting UTxO not found" "MintingUtxoNotFound" Null 500
+    ApplyInputsConstraintError (RoleTokenNotFound _) -> ApiError "Role token not found" "RoleTokenNotFound" Null 403
+    ApplyInputsConstraintError ToCardanoError -> ApiError "Internal error" "InternalError" Null 500
+    ApplyInputsConstraintError MissingMarloweInput -> ApiError "Internal error" "InternalError" Null 500
+    ApplyInputsConstraintError (PayoutInputNotFound _) -> ApiError "Internal error" "InternalError" Null 500
+    ApplyInputsConstraintError (CalculateMinUtxoFailed _) -> ApiError "Internal error" "InternalError" Null 500
+    ApplyInputsConstraintError (CoinSelectionFailed msg) -> ApiError ("Coin selection failed: " <> msg) "CoinSelectionFailed" Null 400
+    ApplyInputsConstraintError (BalancingError _) -> ApiError "Internal error" "InternalError" Null 500
+    ScriptOutputNotFound -> ApiError "Script output not found" "ScriptOutputNotFound" Null 400
+    ApplyInputsLoadMarloweContextFailed LoadMarloweContextErrorNotFound -> ApiError "Marlowe contract not found" "MarloweContractNotFound" Null 404
+    ApplyInputsLoadMarloweContextFailed (LoadMarloweContextErrorVersionMismatch _) -> ApiError "Marlowe contract version mismatch" "MarloweContractVersionMismatch" Null 400
+    ApplyInputsLoadMarloweContextFailed (HandshakeFailed _) -> ApiError "Internal error" "InternalError" Null 500
+    ApplyInputsLoadMarloweContextFailed LoadMarloweContextToCardanoError -> ApiError "Internal error" "InternalError" Null 500
+    ApplyInputsLoadMarloweContextFailed (MarloweScriptNotPublished _) -> ApiError "Internal error" "InternalError" Null 500
+    ApplyInputsLoadMarloweContextFailed (PayoutScriptNotPublished _) -> ApiError "Internal error" "InternalError" Null 500
+    ApplyInputsLoadMarloweContextFailed (ExtractCreationError _) -> ApiError "Internal error" "InternalError" Null 500
+    ApplyInputsLoadMarloweContextFailed (ExtractMarloweTransactionError _) -> ApiError "Internal error" "InternalError" Null 500
+    ApplyInputsConstraintsBuildupFailed (MarloweComputeTransactionFailed _) -> ApiError "Marlowe compute transaction failed" "MarloweComputeTransactionFailed" Null 400
+    ApplyInputsConstraintsBuildupFailed UnableToDetermineTransactionTimeout -> ApiError "Unable to determine transaction timeout" "UnableToDetermineTransactionTimeout" Null 400
+    SlotConversionFailed _ -> ApiError "Slot conversion failed" "SlotConversionFailed" Null 400
+    TipAtGenesis -> ApiError "Internal error" "InternalError" Null 500
+    ValidityLowerBoundTooHigh _ _ -> ApiError "Validity lower bound too high" "ValidityLowerBoundTooHigh" Null 400
