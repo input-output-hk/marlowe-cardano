@@ -260,6 +260,7 @@ executable marlowe-chain-sync
   build-depends:
       base >= 4.9 && < 5
     , async-components
+    , bytestring
     , cardano-api
     , cardano-ledger-byron
     , eventuo11y

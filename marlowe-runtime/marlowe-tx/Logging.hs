@@ -5,17 +5,18 @@ module Logging
   , getRootSelectorConfig
   ) where
 
+import Data.ByteString.Lazy (ByteString)
 import Language.Marlowe.Protocol.Sync.Types (MarloweSync)
 import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncCommand, ChainSyncQuery, RuntimeChainSeek)
 import Language.Marlowe.Runtime.Transaction (getTransactionSererSelectorConfig)
 import Language.Marlowe.Runtime.Transaction.Api (MarloweTxCommand)
 import Language.Marlowe.Runtime.Transaction.Server
 import Network.Protocol.Driver
-  ( AcceptSocketDriverSelector
-  , ConnectSocketDriverSelector
+  ( ConnectSocketDriverSelector
+  , ConnectionSourceSelector
   , SocketDriverConfigOptions(..)
-  , getAcceptSocketDriverSelectorConfig
   , getConnectSocketDriverSelectorConfig
+  , getConnectionSourceSelectorConfig
   )
 import Network.Protocol.Handshake.Types (Handshake)
 import Network.Protocol.Job.Types (Job)
@@ -28,18 +29,17 @@ data RootSelector f where
   ChainSyncJobClient :: ConnectSocketDriverSelector (Handshake (Job ChainSyncCommand)) f -> RootSelector f
   ChainSyncQueryClient :: ConnectSocketDriverSelector (Handshake (Query ChainSyncQuery)) f -> RootSelector f
   HistoryClient :: ConnectSocketDriverSelector (Handshake MarloweSync) f -> RootSelector f
-  Server :: AcceptSocketDriverSelector (Handshake (Job MarloweTxCommand)) f -> RootSelector f
+  Server :: ConnectionSourceSelector (Handshake (Job MarloweTxCommand)) ByteString f -> RootSelector f
   App :: TransactionServerSelector f -> RootSelector f
   ConfigWatcher :: ConfigWatcherSelector f -> RootSelector f
 
--- TODO automate this boilerplate with Template Haskell
 getRootSelectorConfig :: GetSelectorConfig RootSelector
 getRootSelectorConfig = \case
   ChainSeekClient sel -> prependKey "chain-sync" $ getConnectSocketDriverSelectorConfig chainSeekConfig sel
   ChainSyncJobClient sel -> prependKey "chain-sync-job" $ getConnectSocketDriverSelectorConfig chainSyncJobConfig sel
   ChainSyncQueryClient sel -> prependKey "chain-sync-query" $ getConnectSocketDriverSelectorConfig chainSyncQueryConfig sel
   HistoryClient sel -> prependKey "history" $ getConnectSocketDriverSelectorConfig historyClientConfig sel
-  Server sel -> prependKey "server" $ getAcceptSocketDriverSelectorConfig jobConfig sel
+  Server sel -> prependKey "server" $ getConnectionSourceSelectorConfig True True sel
   App sel -> getTransactionSererSelectorConfig sel
   ConfigWatcher ReloadConfig -> SelectorConfig "reload-log-config" True
     $ singletonFieldConfig "config" True
@@ -60,13 +60,6 @@ chainSyncJobConfig = SocketDriverConfigOptions
 
 chainSyncQueryConfig :: SocketDriverConfigOptions
 chainSyncQueryConfig = SocketDriverConfigOptions
-  { enableConnected = True
-  , enableDisconnected = True
-  , enableServerDriverEvent = True
-  }
-
-jobConfig :: SocketDriverConfigOptions
-jobConfig = SocketDriverConfigOptions
   { enableConnected = True
   , enableDisconnected = True
   , enableServerDriverEvent = True

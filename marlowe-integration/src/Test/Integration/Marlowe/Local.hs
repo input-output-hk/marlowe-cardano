@@ -58,6 +58,7 @@ import Control.Monad.Trans.Resource (allocate, runResourceT, unprotect)
 import Data.Aeson (eitherDecodeFileStrict)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as BS
+import qualified Data.ByteString.Lazy as LBS
 import Data.Either (fromRight)
 import Data.Functor (void)
 import qualified Data.Map as Map
@@ -430,19 +431,19 @@ toMarloweScripts testnetMagic txBody PublishMarloweScripts{..} = MarloweScripts{
 
 data RuntimeSelector f where
   ChainSeekClientEvent :: ConnectSocketDriverSelector RuntimeChainSeek f -> RuntimeSelector f
-  ChainSeekServerEvent :: AcceptSocketDriverSelector RuntimeChainSeek f -> RuntimeSelector f
+  ChainSeekServerEvent :: ConnectionSourceSelector RuntimeChainSeek LBS.ByteString f -> RuntimeSelector f
   ChainSyncJobClientEvent :: ConnectSocketDriverSelector (Job ChainSyncCommand) f -> RuntimeSelector f
-  ChainSyncJobServerEvent :: AcceptSocketDriverSelector (Job ChainSyncCommand) f -> RuntimeSelector f
+  ChainSyncJobServerEvent :: ConnectionSourceSelector (Job ChainSyncCommand) LBS.ByteString f -> RuntimeSelector f
   ChainSyncQueryClientEvent :: ConnectSocketDriverSelector (Query ChainSyncQuery) f -> RuntimeSelector f
-  ChainSyncQueryServerEvent :: AcceptSocketDriverSelector (Query ChainSyncQuery) f -> RuntimeSelector f
+  ChainSyncQueryServerEvent :: ConnectionSourceSelector (Query ChainSyncQuery) LBS.ByteString f -> RuntimeSelector f
   DiscoverySyncClientEvent :: ConnectSocketDriverSelector MarloweHeaderSync f -> RuntimeSelector f
-  DiscoverySyncServerEvent :: AcceptSocketDriverSelector MarloweHeaderSync f -> RuntimeSelector f
+  DiscoverySyncServerEvent :: ConnectionSourceSelector MarloweHeaderSync LBS.ByteString f -> RuntimeSelector f
   HistorySyncClientEvent :: ConnectSocketDriverSelector MarloweSync f -> RuntimeSelector f
-  HistorySyncServerEvent :: AcceptSocketDriverSelector MarloweSync f -> RuntimeSelector f
+  HistorySyncServerEvent :: ConnectionSourceSelector MarloweSync LBS.ByteString f -> RuntimeSelector f
   MarloweQueryClientEvent :: ConnectSocketDriverSelector MarloweQuery f -> RuntimeSelector f
-  MarloweQueryServerEvent :: AcceptSocketDriverSelector MarloweQuery f -> RuntimeSelector f
+  MarloweQueryServerEvent :: ConnectionSourceSelector MarloweQuery LBS.ByteString f -> RuntimeSelector f
   TxJobClientEvent :: ConnectSocketDriverSelector (Job MarloweTxCommand) f -> RuntimeSelector f
-  TxJobServerEvent :: AcceptSocketDriverSelector (Job MarloweTxCommand) f -> RuntimeSelector f
+  TxJobServerEvent :: ConnectionSourceSelector (Job MarloweTxCommand) LBS.ByteString f -> RuntimeSelector f
   TxEvent :: TransactionServerSelector f -> RuntimeSelector f
   ChainIndexerEvent :: ChainIndexerSelector f -> RuntimeSelector f
   MarloweIndexerEvent :: MarloweIndexerSelector f -> RuntimeSelector f
@@ -634,19 +635,19 @@ setupChannels eventBackend = do
 getRuntimeSelectorConfig :: RuntimeSelector f -> SelectorConfig f
 getRuntimeSelectorConfig = \case
   ChainSeekClientEvent sel -> prependKey "chain-sync.client" $ getConnectSocketDriverSelectorConfig socketDriverConfig sel
-  ChainSeekServerEvent sel -> prependKey "chain-sync.server" $ getAcceptSocketDriverSelectorConfig socketDriverConfig sel
+  ChainSeekServerEvent sel -> prependKey "chain-sync.server" $ getConnectionSourceSelectorConfig True True sel
   ChainSyncJobClientEvent sel -> prependKey "chain-sync-job.client" $ getConnectSocketDriverSelectorConfig socketDriverConfig sel
-  ChainSyncJobServerEvent sel -> prependKey "chain-sync-job.server" $ getAcceptSocketDriverSelectorConfig socketDriverConfig sel
+  ChainSyncJobServerEvent sel -> prependKey "chain-sync-job.server" $ getConnectionSourceSelectorConfig True True sel
   ChainSyncQueryClientEvent sel -> prependKey "chain-sync-query.client" $ getConnectSocketDriverSelectorConfig socketDriverConfig sel
-  ChainSyncQueryServerEvent sel -> prependKey "chain-sync-query.server" $ getAcceptSocketDriverSelectorConfig socketDriverConfig sel
+  ChainSyncQueryServerEvent sel -> prependKey "chain-sync-query.server" $ getConnectionSourceSelectorConfig True True sel
   DiscoverySyncClientEvent sel -> prependKey "discovery-job.client" $ getConnectSocketDriverSelectorConfig socketDriverConfig sel
-  DiscoverySyncServerEvent sel -> prependKey "discovery-job.server" $ getAcceptSocketDriverSelectorConfig socketDriverConfig sel
+  DiscoverySyncServerEvent sel -> prependKey "discovery-job.server" $ getConnectionSourceSelectorConfig True True sel
   HistorySyncClientEvent sel -> prependKey "history-sync.client" $ getConnectSocketDriverSelectorConfig socketDriverConfig sel
-  HistorySyncServerEvent sel -> prependKey "history-sync.server" $ getAcceptSocketDriverSelectorConfig socketDriverConfig sel
+  HistorySyncServerEvent sel -> prependKey "history-sync.server" $ getConnectionSourceSelectorConfig True True sel
   MarloweQueryClientEvent sel -> prependKey "marlowe-query.client" $ getConnectSocketDriverSelectorConfig socketDriverConfig sel
-  MarloweQueryServerEvent sel -> prependKey "marlowe-query.server" $ getAcceptSocketDriverSelectorConfig socketDriverConfig sel
+  MarloweQueryServerEvent sel -> prependKey "marlowe-query.server" $ getConnectionSourceSelectorConfig True True sel
   TxJobClientEvent sel -> prependKey "tx-job.client" $ getConnectSocketDriverSelectorConfig socketDriverConfig sel
-  TxJobServerEvent sel -> prependKey "tx-job.server" $ getAcceptSocketDriverSelectorConfig socketDriverConfig sel
+  TxJobServerEvent sel -> prependKey "tx-job.server" $ getConnectionSourceSelectorConfig True True sel
   TxEvent sel -> prependKey "marlowe-tx" $ getTransactionSererSelectorConfig sel
   ChainIndexerEvent sel -> prependKey "marlowe-chain-indexer" $ getChainIndexerSelectorConfig sel
   MarloweIndexerEvent sel -> prependKey "marlowe-indexer" $ getMarloweIndexerSelectorConfig sel

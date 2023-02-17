@@ -10,51 +10,53 @@
 module Network.Protocol.Driver
   where
 
-import Control.Concurrent.STM (STM, atomically, newTQueue, readTQueue)
+import Control.Concurrent.Component
+import Control.Concurrent.STM (STM, atomically, newEmptyTMVar, newTQueue, readTMVar, readTQueue, tryPutTMVar)
 import Control.Concurrent.STM.TQueue (writeTQueue)
-import Control.Exception (Exception)
-import Control.Exception.Lifted (bracket, bracketOnError, finally, throwIO)
+import Control.Exception (Exception, SomeException)
+import Control.Exception.Lifted (bracket, mask, throwIO, try)
+import Control.Monad ((<=<))
 import Control.Monad.Base (MonadBase(liftBase))
 import Control.Monad.Cleanup (MonadCleanup)
 import Control.Monad.Trans.Control (MonadBaseControl)
-import Control.Monad.Trans.Resource (ResourceT, allocate)
 import Data.Aeson (Value, toJSON)
 import Data.ByteString.Lazy (ByteString)
 import Data.ByteString.Lazy.Base16 (encodeBase16)
+import Data.Functor (void)
+import qualified Data.Text.Lazy as T
 import Data.Void (Void)
-import Network.Channel (Channel(..), channelPair, hoistChannel, socketAsChannel)
+import Network.Channel
+  (Channel(..), ChannelSelector, channelPair, getChannelSelectorConfig, hoistChannel, logChannel, socketAsChannel)
+import Network.Protocol.Peer (PeerSelector, logPeer)
+import qualified Network.Protocol.Peer as Peer
+import Network.Run.TCP (runTCPServer)
 import Network.Socket
   ( AddrInfo(..)
-  , AddrInfoFlag(..)
   , HostName
   , PortNumber
-  , SockAddr
-  , Socket
-  , SocketOption(..)
   , SocketType(..)
   , addrAddress
-  , bind
   , close
   , connect
   , defaultHints
   , getAddrInfo
-  , gracefulClose
-  , listen
   , openSocket
-  , setCloseOnExecIfNeeded
-  , setSocketOption
-  , withFdSocket
-  , withSocketsDo
   )
-import Network.Socket.Address (accept)
 import Network.TypedProtocol (Message, Peer(..), PeerHasAgency, PeerRole(..), SomeMessage(..), runPeerWithDriver)
-import Network.TypedProtocol.Codec (Codec(..), DecodeStep(..))
+import Network.TypedProtocol.Codec (AnyMessageAndAgency(AnyMessageAndAgency), Codec(..), DecodeStep(..))
 import Network.TypedProtocol.Driver (Driver(..))
-import Observe.Event (addField, narrowEventBackend, reference, subEventBackend, withEvent, withSubEvent)
+import Observe.Event
+  (addField, failEvent, finalize, narrowEventBackend, newEvent, subEventBackend, withEvent, withSubEvent)
 import Observe.Event.Backend (EventBackend, noopEventBackend)
-import Observe.Event.BackendModification (modifyEventBackend, setAncestor)
-import Observe.Event.Component (FieldConfig(..), GetSelectorConfig, SelectorConfig(..), SomeJSON(..), absurdFieldConfig)
-import UnliftIO (withRunInIO)
+import Observe.Event.Component
+  ( FieldConfig(..)
+  , GetSelectorConfig
+  , SelectorConfig(..)
+  , SomeJSON(..)
+  , absurdFieldConfig
+  , prependKey
+  , singletonFieldConfigWith
+  )
 
 class MessageToJSON ps where
   messageToJSON :: PeerHasAgency pr (st :: ps) -> Message ps st st' -> Value
@@ -224,23 +226,150 @@ runClientPeerGeneral openChannel closeChannel mkDriver' toPeer client =
     let driver = mkDriver' ch
      in fst <$> runPeerWithDriver driver (toPeer client) (startDState driver)
 
-data AcceptSocketDriverSelector ps f where
-  Accept :: AcceptSocketDriverSelector ps Void
-  ServerDriverEvent :: DriverSelector ps f -> AcceptSocketDriverSelector ps f
+data TcpServerDependencies ps server ex m = forall (st :: ps). TcpServerDependencies
+  { host :: HostName
+  , port :: PortNumber
+  , codec :: Codec ps ex m ByteString
+  , toPeer :: ToPeer server ps 'AsServer st m
+  }
+
+tcpServer
+  :: MonadBase IO m
+  => Component m (TcpServerDependencies ps server ex m) (ConnectionSource ps server ex m ByteString)
+tcpServer = component \TcpServerDependencies{..} -> do
+  socketQueue <- newTQueue
+  pure
+    ( liftBase $ runTCPServer (Just host) (show port) \socket -> do
+        closeTMVar <- atomically do
+          closeTMVar <- newEmptyTMVar
+          writeTQueue socketQueue (socket, void $ tryPutTMVar closeTMVar ())
+          pure closeTMVar
+        atomically $ readTMVar closeTMVar
+    , ConnectionSource do
+        (socket, closeConnection) <- readTQueue socketQueue
+        pure $ MakeServerConnection \server -> pure Connection
+          { closeConnection = \_ -> liftBase $ atomically closeConnection
+          , channel = hoistChannel liftBase $ socketAsChannel socket
+          , peer = toPeer server
+          , connectionCodec = codec
+          }
+    )
+
+newtype MakeServerConnection ps server ex m bytes = MakeServerConnection
+  { runMakeServerConnection :: forall a. server m a -> m (Connection ps 'AsServer ex m bytes a)
+  }
+
+newtype ConnectionSource ps server ex m bytes = ConnectionSource
+  { acceptConnection :: STM (MakeServerConnection ps server ex m bytes)
+  }
+
+data ConnectionSourceSelector ps bytes f where
+  Session :: ConnectionSourceSelector ps bytes Void
+  ConnectionSelector :: ConnectionSelector ps bytes f -> ConnectionSourceSelector ps bytes f
+
+getConnectionSourceSelectorConfig
+  :: MessageToJSON ps
+  => Bool
+  -> Bool
+  -> GetSelectorConfig (ConnectionSourceSelector ps ByteString)
+getConnectionSourceSelectorConfig channelEnabled peerEnabled = \case
+  Session -> SelectorConfig "session" True absurdFieldConfig
+  ConnectionSelector sel -> prependKey "session" $ getConnectionSelectorConfig channelEnabled peerEnabled sel
+
+logConnectionSource
+  :: (MonadBaseControl IO m, MonadCleanup m)
+  => EventBackend m r (ConnectionSourceSelector ps bytes)
+  -> ConnectionSource ps server ex m bytes
+  -> ConnectionSource ps server ex m bytes
+logConnectionSource eventBackend ConnectionSource{..} = ConnectionSource
+  { acceptConnection = do
+      MakeServerConnection{..} <- acceptConnection
+      pure MakeServerConnection
+        { runMakeServerConnection = \server -> do
+            ev <- newEvent eventBackend Session
+            Connection{..} <- runMakeServerConnection server
+            pure $ logConnection (subEventBackend ConnectionSelector ev) Connection
+              { closeConnection = \mError -> do
+                  case mError of
+                    Nothing -> finalize ev
+                    Just ex -> failEvent ev ex
+                  closeConnection mError
+              , ..
+              }
+        }
+  }
+
+data Connection ps pr ex m bytes a = forall (st :: ps). Connection
+  { closeConnection :: Maybe SomeException -> m ()
+  , channel :: Channel m bytes
+  , connectionCodec :: Codec ps ex m bytes
+  , peer :: Peer ps pr st m a
+  }
+
+data ConnectionSelector ps bytes f where
+  ChannelSelector :: ChannelSelector bytes f -> ConnectionSelector ps bytes f
+  PeerSelector :: PeerSelector ps f -> ConnectionSelector ps bytes f
+
+getConnectionSelectorConfig
+  :: MessageToJSON ps
+  => Bool
+  -> Bool
+  -> GetSelectorConfig (ConnectionSelector ps ByteString)
+getConnectionSelectorConfig channelEnabled peerEnabled = \case
+  ChannelSelector sel -> prependKey "channel" $ getChannelSelectorConfig (T.toStrict . encodeBase16) channelEnabled sel
+  PeerSelector sel -> prependKey "peer" $ getPeerSelectorConfig peerEnabled sel
+
+getPeerSelectorConfig :: MessageToJSON ps => Bool -> GetSelectorConfig (PeerSelector ps)
+getPeerSelectorConfig defaultEnabled = \case
+  Peer.Send -> SelectorConfig "send" defaultEnabled $ singletonFieldConfigWith
+    (\(AnyMessageAndAgency tok msg) -> SomeJSON $ messageToJSON tok msg)
+    "message"
+    True
+  Peer.Recv -> SelectorConfig "recv" defaultEnabled $ singletonFieldConfigWith
+    (\(AnyMessageAndAgency tok msg) -> SomeJSON $ messageToJSON tok msg)
+    "message"
+    True
+
+logConnection
+  :: (MonadBaseControl IO m, MonadCleanup m)
+  => EventBackend m r (ConnectionSelector ps bytes)
+  -> Connection ps pr ex m bytes a
+  -> Connection ps pr ex m bytes a
+logConnection eventBackend Connection{..} = Connection
+  { channel = logChannel (narrowEventBackend ChannelSelector eventBackend) channel
+  , peer = logPeer (narrowEventBackend PeerSelector eventBackend) peer
+  , ..
+  }
+
+awaitConnection
+  :: (MonadBaseControl IO m, Exception ex)
+  => ConnectionSource ps server ex m bytes
+  -> m (RunServer m server)
+awaitConnection ConnectionSource{..} = do
+  MakeServerConnection{..} <- liftBase $ atomically acceptConnection
+  pure $ RunServer $ runConnection <=< runMakeServerConnection
+
+runConnection
+  :: (MonadBaseControl IO m, Exception ex)
+  => Connection ps machine ex m bytes a
+  -> m a
+runConnection Connection{..} = do
+  let driver = mkDriver connectionCodec channel
+  mask \restore -> do
+    result <- try $ restore $ runPeerWithDriver driver peer (startDState driver)
+    case result of
+      Left ex -> do
+        closeConnection $ Just ex
+        throwIO ex
+      Right (a, _) -> do
+        closeConnection Nothing
+        pure a
 
 data SocketDriverConfigOptions = SocketDriverConfigOptions
   { enableConnected :: Bool
   , enableDisconnected :: Bool
   , enableServerDriverEvent :: Bool
   }
-
-getAcceptSocketDriverSelectorConfig
-  :: MessageToJSON ps
-  => SocketDriverConfigOptions
-  -> GetSelectorConfig (AcceptSocketDriverSelector ps)
-getAcceptSocketDriverSelectorConfig SocketDriverConfigOptions{..} = \case
-  Accept -> SelectorConfig "accept" enableConnected absurdFieldConfig
-  ServerDriverEvent sel -> getDriverSelectorConfig enableServerDriverEvent sel
 
 getConnectSocketDriverSelectorConfig
   :: MessageToJSON ps
@@ -251,86 +380,34 @@ getConnectSocketDriverSelectorConfig SocketDriverConfigOptions{..} = \case
   ClientSession -> SelectorConfig "session" enableDisconnected absurdFieldConfig
   ClientDriverEvent sel -> getDriverSelectorConfig enableServerDriverEvent sel
 
-openPortConnector
-  :: MonadBaseControl IO m
-  => HostName
-  -> PortNumber
-  -> Codec ps ex m ByteString
-  -> ToPeer server ps 'AsServer st m
-  -> ResourceT IO (ServerConnector ps server ex m Socket)
-openPortConnector host port codec toPeer = withRunInIO \runInIO -> withSocketsDo $ runInIO do
-  (_, socket) <- allocate open close
-  pure ServerConnector
-    { acceptConnection = liftBase $ fmap fst $ accept @SockAddr socket
-    , closeConnection = fmap liftBase . \case
-        True -> close
-        False -> flip gracefulClose 5000
-    , channelForConnection = hoistChannel liftBase . socketAsChannel
-    , codec
-    , ..
-    }
-  where
-    open = liftBase do
-      let hints = defaultHints { addrFlags = [AI_PASSIVE], addrSocketType = Stream }
-      addr <- head <$> getAddrInfo (Just hints) (Just host) (Just $ show port)
-      bracketOnError (openSocket addr) close \socket -> do
-        setSocketOption socket ReuseAddr 1
-        withFdSocket socket setCloseOnExecIfNeeded
-        bind socket $ addrAddress addr
-        listen socket 1024
-        pure socket
-
-data ServerConnector ps server ex m connection = forall (st :: ps). ServerConnector
-  { acceptConnection :: m connection
-  , closeConnection :: Bool -> connection -> m ()
-  , channelForConnection :: connection -> Channel m ByteString
-  , codec :: Codec ps ex m ByteString
-  , toPeer :: ToPeer server ps 'AsServer st m
-  }
-
-awaitConnection
-  :: (MonadBaseControl IO m, Exception ex, MonadCleanup m)
-  => EventBackend m r (AcceptSocketDriverSelector ps)
-  -> ServerConnector ps server ex m connection
-  -> m (RunServer m server)
-awaitConnection eventBackend ServerConnector{..} = do
-  let
-    accept' = withEvent eventBackend Accept \ev -> do
-      conn <- acceptConnection
-      pure (reference ev, conn)
-  bracketOnError accept' (closeConnection True . snd) \(ref, conn) -> do
-    let
-      driver = logDriver (modifyEventBackend (setAncestor ref) $ narrowEventBackend ServerDriverEvent eventBackend)
-        $ mkDriver codec $ channelForConnection conn
-    pure $ RunServer \server -> do
-      (a, _) <- runPeerWithDriver driver (toPeer server) (startDState driver) `finally` closeConnection False conn
-      pure a
-
 data ClientServerPair m server client = ClientServerPair
   { acceptRunServer :: m (RunServer m server)
   , runClient :: RunClient m client
   }
 
 clientServerPair
-  :: forall protocol ex server client m st r
+  :: forall ps ex server client m st r
    . (MonadBaseControl IO m, MonadCleanup m, Exception ex)
-  => EventBackend m r (AcceptSocketDriverSelector protocol)
-  -> EventBackend m r (ConnectSocketDriverSelector protocol)
-  -> Codec protocol ex m ByteString
-  -> ToPeer server protocol 'AsServer st m
-  -> ToPeer client protocol 'AsClient st m
+  => EventBackend m r (ConnectionSourceSelector ps ByteString)
+  -> EventBackend m r (ConnectSocketDriverSelector ps)
+  -> Codec ps ex m ByteString
+  -> ToPeer server ps 'AsServer st m
+  -> ToPeer client ps 'AsClient st m
   -> STM (ClientServerPair m server client)
 clientServerPair serverEventBackend clientEventBackend codec serverToPeer clientToPeer = do
   serverChannelQueue <- newTQueue
   let
     acceptRunServer :: m (RunServer m server)
-    acceptRunServer = awaitConnection serverEventBackend ServerConnector
-      { acceptConnection = liftBase $ atomically $ readTQueue serverChannelQueue
-      , closeConnection = const $ liftBase . atomically . snd
-      , channelForConnection = hoistChannel (liftBase . atomically) . fst
-      , toPeer = serverToPeer
-      , codec
-      }
+    acceptRunServer = awaitConnection
+      $ logConnectionSource serverEventBackend
+      $ ConnectionSource do
+        (channel, closeChannel) <- readTQueue serverChannelQueue
+        pure $ MakeServerConnection \server -> pure Connection
+          { closeConnection = const $ liftBase $ atomically closeChannel
+          , peer = serverToPeer server
+          , connectionCodec = codec
+          , channel = hoistChannel (liftBase . atomically) channel
+          }
 
     runClient :: RunClient m client
     runClient = runClientPeerWithLoggingGeneral
@@ -346,11 +423,3 @@ clientServerPair serverEventBackend clientEventBackend codec serverToPeer client
       clientToPeer
 
   pure ClientServerPair{..}
-
-
-hoistPeer :: Functor m => (forall x. m x -> n x) -> Peer protocol pr st m a -> Peer protocol pr st n a
-hoistPeer f = \case
-  Effect m -> Effect $ f $ hoistPeer f <$> m
-  Done na a -> Done na a
-  Yield wa msg peer -> Yield wa msg $ hoistPeer f peer
-  Await ta handle -> Await ta $ hoistPeer f . handle
