@@ -94,8 +94,9 @@ type App = ExceptT String IO
 data Config =
   Config
   { chainSeekHost :: HostName
-  , chainSeekCommandPort :: PortNumber
   , chainSeekSyncPort :: PortNumber
+  , chainSeekQueryPort :: PortNumber
+  , chainSeekCommandPort :: PortNumber
   , syncHost :: HostName
   , syncSyncPort :: PortNumber
   , syncHeaderPort :: PortNumber
@@ -114,8 +115,9 @@ instance Default Config where
   def =
     Config
     { chainSeekHost = "127.0.0.1"
-    , chainSeekCommandPort = 3720
     , chainSeekSyncPort = 3715
+    , chainSeekQueryPort = 3716
+    , chainSeekCommandPort = 3720
     , syncHost = "127.0.0.1"
     , syncSyncPort = 3724
     , syncHeaderPort = 3725

@@ -24,8 +24,9 @@ getConfigParser :: IO (O.Parser Config)
 getConfigParser =
   do
     chainSeekHostParser <- optParserWithEnvDefault chainSeekHost
-    chainSeekCommandPortParser <- optParserWithEnvDefault chainSeekCommandPort
     chainSeekSyncPortParser <- optParserWithEnvDefault chainSeekSyncPort
+    chainSeekQueryPortParser <- optParserWithEnvDefault chainSeekQueryPort
+    chainSeekCommandPortParser <- optParserWithEnvDefault chainSeekCommandPort
     syncHostParser <- optParserWithEnvDefault CLI.syncHost
     syncSyncPortParser <- optParserWithEnvDefault CLI.syncSyncPort
     syncHeaderPortParser <- optParserWithEnvDefault CLI.syncHeaderPort
@@ -71,8 +72,9 @@ getConfigParser =
     pure
       $ Config
       <$> chainSeekHostParser
-      <*> chainSeekCommandPortParser
       <*> chainSeekSyncPortParser
+      <*> chainSeekQueryPortParser
+      <*> chainSeekCommandPortParser
       <*> syncHostParser
       <*> syncSyncPortParser
       <*> syncHeaderPortParser
@@ -119,15 +121,19 @@ port' optPrefix envPrefix defaultValue description = CLI.CliOption
 
 
 chainSeekHost :: CliOption O.OptionFields HostName
-chainSeekHost = host' "chain-sync" "MARLOWE_CHAIN_SYNC" "127.0.0.1" "The hostname of the Marlowe Runtime chain-sync server."
-
-
-chainSeekCommandPort :: CliOption O.OptionFields PortNumber
-chainSeekCommandPort = port' "chain-sync-command" "MARLOWE_CHAIN_SYNC_COMMAND" 3720 "The port number of the chain-sync server's job API."
+chainSeekHost = host' "chain-sync" "CHAIN_SYNC" "127.0.0.1" "The hostname of the Marlowe Runtime chain-sync server."
 
 
 chainSeekSyncPort :: CliOption O.OptionFields PortNumber
-chainSeekSyncPort = port' "chain-sync" "MARLOWE_CHAIN_SYNC" 3715 "The port number of the chain-sync server's synchronization API."
+chainSeekSyncPort = port' "chain-sync" "CHAIN_SYNC" 3715 "The port number of the chain-sync server's synchronization API."
+
+
+chainSeekQueryPort :: CliOption O.OptionFields PortNumber
+chainSeekQueryPort = port' "chain-sync-command" "CHAIN_SYNC_QUERY" 3716 "The port number of the chain-sync server's query API."
+
+
+chainSeekCommandPort :: CliOption O.OptionFields PortNumber
+chainSeekCommandPort = port' "chain-sync-command" "CHAIN_SYNC_COMMAND" 3720 "The port number of the chain-sync server's job API."
 
 
 addressParser :: O.ReadM Address
