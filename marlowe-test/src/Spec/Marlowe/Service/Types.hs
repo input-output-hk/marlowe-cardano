@@ -55,6 +55,12 @@ data Request =
     , contract :: Marlowe.Contract
     , initialTime :: POSIXTime
     }
+  | EvalValue
+    {
+      environment :: Marlowe.Environment
+    , state :: Marlowe.State
+    , value :: Marlowe.Value Marlowe.Observation
+    }
     deriving (Eq, Show)
 
 instance FromJSON Request where
@@ -67,6 +73,7 @@ instance FromJSON Request where
             "generate-random-value"        -> GenerateRandomValue <$> o A..: "typeId"
             "compute-transaction"          -> ComputeTransaction <$> o A..: "transactionInput" <*> o A..: "coreContract" <*> o A..: "state"
             "playtrace"                    -> PlayTrace <$> o A..: "transactionInputs" <*> o A..: "coreContract" <*> (POSIXTime <$> o A..: "initialTime")
+            "eval-value"                   -> EvalValue <$> o A..: "environment" <*> o A..: "state" <*> o A..: "value"
             request                        -> fail $ "Request not understood: " <> show request <> "."
 
 instance ToJSON Request where
@@ -99,7 +106,14 @@ instance ToJSON Request where
       , "coreContract" A..= contract
       , "initialTime" A..= getPOSIXTime initialTime
       ]
-
+  toJSON EvalValue{..} =
+    A.object
+      [
+        "request" A..= ("eval-value" :: String)
+      , "environment" A..= environment
+      , "state" A..= state
+      , "value" A..= value
+      ]
 
 data Response =
     InvalidRequest

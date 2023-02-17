@@ -307,6 +307,13 @@ data State = State { accounts    :: Accounts
 newtype Environment = Environment { timeInterval :: TimeInterval }
   deriving stock (Haskell.Show,Haskell.Eq,Haskell.Ord)
 
+instance FromJSON Environment where
+  parseJSON = withObject "Environment"
+    (\v -> Environment <$> (posixIntervalFromJSON =<< v .: "timeInterval"))
+
+instance ToJSON Environment where
+  toJSON Environment{..} = object
+    [ "timeInterval" .= posixIntervalToJSON timeInterval]
 
 -- | Input for a Marlowe contract. Correspond to expected 'Action's.
 data InputContent = IDeposit AccountId Party Token Integer
@@ -389,6 +396,7 @@ data IntervalError = InvalidInterval TimeInterval
                    | IntervalInPastError POSIXTime TimeInterval
   deriving stock (Haskell.Show, Generic, Haskell.Eq)
 
+
 instance ToJSON IntervalError where
   toJSON (InvalidInterval (s, e)) = A.object
     [ ("invalidInterval", A.object [("from", posixTimeToJSON s), ("to", posixTimeToJSON e)]) ]
@@ -400,12 +408,12 @@ instance FromJSON IntervalError where
     let
       parseInvalidInterval = do
         o <- v .: "invalidInterval"
-        InvalidInterval <$> ((,) <$> (posixTimeFromJSON =<< o .: "from") <*> (posixTimeFromJSON =<< o .: "to"))
+        InvalidInterval <$> posixIntervalFromJSON o
       parseIntervalInPastError = do
         o <- v .: "intervalInPastError"
         IntervalInPastError
           <$> (posixTimeFromJSON =<< o .: "minTime")
-          <*> ((,) <$> (posixTimeFromJSON =<< o .: "from") <*> (posixTimeFromJSON =<< o .: "to"))
+          <*> posixIntervalFromJSON o
     in
       parseIntervalInPastError <|> parseInvalidInterval
   parseJSON invalid =
@@ -422,11 +430,18 @@ posixTimeFromJSON = \case
   invalid ->
       JSON.prependFailure "parsing POSIXTime failed, " (JSON.typeMismatch "Number" invalid)
 
+posixIntervalFromJSON :: A.Object -> Parser TimeInterval
+posixIntervalFromJSON o = (,) <$> (posixTimeFromJSON =<< o .: "from") <*> (posixTimeFromJSON =<< o .: "to")
 
 -- | Serialise time as a JSON value.
 posixTimeToJSON :: POSIXTime -> JSON.Value
 posixTimeToJSON (POSIXTime n) = JSON.Number $ scientific n 0
 
+posixIntervalToJSON :: TimeInterval -> JSON.Value
+posixIntervalToJSON (from, to) = object
+  [ "from" .= posixTimeToJSON from
+  , "to" .= posixTimeToJSON to
+  ]
 
 -- | Result of 'fixInterval'
 data IntervalResult = IntervalTrimmed Environment State
