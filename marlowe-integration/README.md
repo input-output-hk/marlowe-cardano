@@ -13,18 +13,42 @@ following programs need to be in the `PATH` when you use them:
 - `sqitch`
 
 Additionally, you are required to have a PostgreSQL server running and
-available. You can configure the connection settings with the following
-environment variables:
+available.
 
-- `MARLOWE_RT_TEST_DB_HOST` (default: `127.0.0.1`)
-- `MARLOWE_RT_TEST_DB_PORT` (default: `5432`)
-- `MARLOWE_RT_TEST_DB_USER` (default: `postgres`)
-- `MARLOWE_RT_TEST_DB_PASSWORD` (default `<blank>`)
-- `MARLOWE_RT_TEST_TEMP_DB` (default: `template1`)
+### Setting up a PostgreSQL database (NixOS)
+
+To set up a PostgreSQL database in NixOS, you can use the `services.postgresql` option in your NixOS configuration. Here's an example:
+
+```nix
+services.postgresql = {
+  enable = true;
+  package = pkgs.postgresql;
+  enableTCPIP = true;
+  authentication = pkgs.lib.mkOverride 10 ''
+    local all all trust
+    host all all ::1/128 trust
+    host all all 127.0.0.1/32 trust
+  '';
+};
+```
+
+This configuration enables the PostgreSQL service, installs the `postgresql` package, and allows connections from localhost (`127.0.0.1`) using the default user `postgres` which starts with no password. The `authentication` option adds entries to the `pg_hba.conf` file to allow the integration tests to connect locally.
+
+### Customizing the PostgreSQL configuration
+
+You can configure the connection settings by setting the following
+environment variables:
+- `MARLOWE_RT_TEST_DB_HOST` sets the host of the postgresql server (by default: `127.0.0.1`).
+- `MARLOWE_RT_TEST_DB_PORT` sets the port of the postgresql server (by default: `5432`).
+- `MARLOWE_RT_TEST_DB_USER` sets the user that will be used to connect to the postgresql server as part of the tests (by default: `postgresql`).
+- `MARLOWE_RT_TEST_DB_PASSWORD` sets the password that will be used to authenticate the connection to postgresql server as part of the tests (by default no password or the empty string).
+- `MARLOWE_RT_TEST_TEMP_DB` sets the template database to be used when creating test databases (by default `template1`).
+- `MARLOWE_RT_TEST_CLEANUP_DATABASE` determines whether to delete the test databases after the tests (by default `true`).
+
 
 ## Usage
 
-the functions `withLocalMarloweRuntime` and `withLocalMarloweRuntime'` allow
+The functions `withLocalMarloweRuntime` and `withLocalMarloweRuntime'` allow
 you to run an action in the context of a running Marlowe runtime and Cardano
 testnet. `withLocalMarloweRuntime'` allows configuration to be explicitly
 provided, `withLocalMarloweRuntime` uses default configuration.
@@ -41,7 +65,7 @@ the `MarloweRuntime` record contains:
 - Client runners for all public-facing Marlowe runtime APIs
 - The `LocalTestnet` record for the Cardano network.
 
-## Notes on performance:
+## Notes on performance
 
 You probably want to share an instance if running a test suite, as it takes a
 considerable amount of time to start the cardano testnet. You can use hooks
@@ -56,3 +80,4 @@ myTestSuite = aroundAll withLocalMarloweRuntime do
     it "test 3" \MarloweRuntime{..} -> _ -- test code here
     it "test 4" \MarloweRuntime{..} -> _ -- test code here
 ```
+
