@@ -614,7 +614,6 @@ test-suite marlowe-runtime-test
   main-is: Spec.hs
   other-modules:
     Language.Marlowe.Runtime.Core.ScriptRegistrySpec
-    Language.Marlowe.Runtime.Discovery.QuerySpec
     Language.Marlowe.Runtime.Transaction.BuildConstraintsSpec
     Language.Marlowe.Runtime.Transaction.ConstraintsSpec
     Language.Marlowe.Runtime.Transaction.CommandSpec
