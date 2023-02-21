@@ -12,17 +12,11 @@
 module Network.Protocol.Handshake.Client
   where
 
-import Control.Monad.Cleanup (MonadCleanup)
-import Control.Monad.Trans.Control (MonadBaseControl)
 import Data.Proxy (Proxy(..))
 import Data.Text (Text)
-import Network.Protocol.Codec (BinaryMessage)
-import Network.Protocol.Driver (ConnectSocketDriverSelector, RunClient, ToPeer, runClientPeerOverSocketWithLogging)
+import Network.Protocol.Driver (Connection(..), Connector(..))
 import Network.Protocol.Handshake.Types
-import Network.Socket (HostName, PortNumber)
 import Network.TypedProtocol
-import Observe.Event (EventBackend)
-import Observe.Event.Backend (noopEventBackend)
 
 -- | A generic client for the handshake protocol.
 data HandshakeClient client m a = HandshakeClient
@@ -39,43 +33,22 @@ simpleHandshakeClient sig client = HandshakeClient
   , recvMsgAccept = pure client
   }
 
-embedClientInHandshake :: MonadFail m => Text -> RunClient m (HandshakeClient server) -> RunClient m server
-embedClientInHandshake sig runClient = runClient . simpleHandshakeClient sig
+handshakeConnector
+  :: forall ps client m
+   . (HasSignature ps, MonadFail m)
+  => Connector ps 'AsClient client m
+  -> Connector (Handshake ps) 'AsClient client m
+handshakeConnector Connector{..} = Connector $ fmap handshakeClientConnection . runConnector
 
-runClientPeerOverSocketWithLoggingWithHandshake
-  :: forall client ps (st :: ps) m r
-   . ( MonadBaseControl IO m
-     , MonadCleanup m
-     , MonadFail m
-     , HasSignature ps
-     , BinaryMessage ps
-     )
-  => EventBackend m r (ConnectSocketDriverSelector (Handshake ps))
-  -> HostName
-  -> PortNumber
-  -> ToPeer client ps 'AsClient st m
-  -> RunClient m client
-runClientPeerOverSocketWithLoggingWithHandshake eventBackend host port toPeer =
-  embedClientInHandshake (signature $ Proxy @ps) $ runClientPeerOverSocketWithLogging
-    eventBackend
-    host
-    port
-    (handshakeClientPeer toPeer)
-
-runClientPeerOverSocketWithHandshake
-  :: forall client ps (st :: ps) m
-   . ( MonadBaseControl IO m
-     , MonadCleanup m
-     , MonadFail m
-     , HasSignature ps
-     , BinaryMessage ps
-     )
-  => HostName
-  -> PortNumber
-  -> ToPeer client ps 'AsClient st m
-  -> RunClient m client
-runClientPeerOverSocketWithHandshake =
-  runClientPeerOverSocketWithLoggingWithHandshake $ noopEventBackend ()
+handshakeClientConnection
+  :: forall ps m a
+   . (HasSignature ps, MonadFail m)
+  => Connection ps 'AsClient m a
+  -> Connection (Handshake ps) 'AsClient m a
+handshakeClientConnection Connection{..} = Connection
+  { peer = handshakeClientPeer id $ simpleHandshakeClient (signature $ Proxy @ps) peer
+  , ..
+  }
 
 hoistHandshakeClient
   :: Functor m

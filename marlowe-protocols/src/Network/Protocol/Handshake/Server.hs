@@ -16,7 +16,7 @@ import Data.Bifunctor (Bifunctor(bimap))
 import Data.Functor ((<&>))
 import Data.Proxy (Proxy(..))
 import Data.Text (Text)
-import Network.Protocol.Driver (Connection(..), ConnectionSource(..), MakeServerConnection(..))
+import Network.Protocol.Driver (Connection(..), ConnectionSource(..), Connector(..))
 import Network.Protocol.Handshake.Types
 import Network.TypedProtocol
 
@@ -42,11 +42,14 @@ handshakeConnectionSource
    . (HasSignature ps, MonadFail m)
   => ConnectionSource ps server m
   -> ConnectionSource (Handshake ps) server m
-handshakeConnectionSource ConnectionSource{..} = ConnectionSource
-  { acceptConnection = do
-      MakeServerConnection{..} <- acceptConnection
-      pure $ MakeServerConnection $ fmap handshakeServerConnection . runMakeServerConnection
-  }
+handshakeConnectionSource = ConnectionSource . fmap handshakeServerConnector . acceptConnector
+
+handshakeServerConnector
+  :: forall ps server m
+   . (HasSignature ps, MonadFail m)
+  => Connector ps 'AsServer server m
+  -> Connector (Handshake ps) 'AsServer server m
+handshakeServerConnector Connector{..} = Connector $ fmap handshakeServerConnection . runConnector
 
 handshakeServerConnection
   :: forall ps m a
