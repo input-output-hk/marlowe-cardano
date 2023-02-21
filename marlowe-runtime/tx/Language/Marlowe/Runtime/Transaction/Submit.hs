@@ -14,6 +14,7 @@ import Data.Void (absurd)
 import Language.Marlowe.Runtime.ChainSync.Api
 import Language.Marlowe.Runtime.Transaction.Api (SubmitError(..), SubmitStatus(..))
 import Network.Protocol.ChainSeek.Client
+import Network.Protocol.Driver (SomeClientConnector, runSomeConnector)
 import Network.Protocol.Job.Client (JobClient, liftCommand)
 
 data SubmitJobStatus
@@ -22,8 +23,8 @@ data SubmitJobStatus
   | Failed SubmitError
 
 data SubmitJobDependencies = SubmitJobDependencies
-  { connectToChainSeek :: forall a. RuntimeChainSeekClient IO a -> IO a
-  , runChainSyncJobClient :: forall a. JobClient ChainSyncCommand IO a -> IO a
+  { chainSyncConnector :: SomeClientConnector RuntimeChainSeekClient IO
+  , chainSyncJobConnector :: SomeClientConnector (JobClient ChainSyncCommand) IO
   , submitConfirmationBlocks :: BlockNo
   }
 
@@ -47,7 +48,7 @@ doSubmit
   -> Tx era
   -> IO ()
 doSubmit SubmitJobDependencies{..} tellStatus era tx= do
-  result <- runChainSyncJobClient $ liftCommand $ SubmitTx era tx
+  result <- runSomeConnector chainSyncJobConnector $ liftCommand $ SubmitTx era tx
   case result of
     Left msg -> tellStatus $ Failed $ SubmitFailed msg
     Right _ -> do
@@ -60,7 +61,7 @@ doSubmit SubmitJobDependencies{..} tellStatus era tx= do
     timeout = threadDelay $ 10 * 60 * 1_000_000 -- 10 minutes in microseconds
 
     waitForTx :: IO BlockHeader
-    waitForTx = connectToChainSeek client
+    waitForTx = runSomeConnector chainSyncConnector client
       where
         client = ChainSeekClient $ pure clientInit
 

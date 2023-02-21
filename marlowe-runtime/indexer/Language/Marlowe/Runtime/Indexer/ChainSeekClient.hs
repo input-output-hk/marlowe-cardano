@@ -19,7 +19,7 @@ import Language.Marlowe.Runtime.ChainSync.Api
 import Language.Marlowe.Runtime.Indexer.Database (DatabaseQueries(..))
 import Language.Marlowe.Runtime.Indexer.Types (MarloweBlock(..), MarloweUTxO(..), extractMarloweBlock)
 import Network.Protocol.ChainSeek.Client
-import Network.Protocol.Driver (RunClient)
+import Network.Protocol.Driver (SomeClientConnector, runSomeConnector)
 import Network.Protocol.Query.Client (QueryClient, liftQuery)
 import Observe.Event (addField, withEvent)
 import Observe.Event.Backend (EventBackend)
@@ -32,11 +32,11 @@ data ChainSeekClientDependencies r = ChainSeekClientDependencies
   { databaseQueries :: DatabaseQueries IO
   -- ^ Implementations of the database queries.
 
-  , runChainSeekClient :: RunClient IO RuntimeChainSeekClient
-  -- ^ A function that runs a client of the chain sync protocol.
+  , chainSyncConnector :: SomeClientConnector RuntimeChainSeekClient IO
+  -- ^ A connector that connects a client of the chain sync protocol.
 
-  , runChainSyncQueryClient :: RunClient IO (QueryClient ChainSyncQuery)
-  -- ^ A function that runs a client of the chain sync query protocol.
+  , chainSyncQueryConnector :: SomeClientConnector (QueryClient ChainSyncQuery) IO
+  -- ^ A connector that connects a client of the chain sync query protocol.
 
   , pollingInterval :: NominalDiffTime
   -- ^ How frequently to poll the chain sync server when waiting.
@@ -71,13 +71,13 @@ chainSeekClient = component \ChainSeekClientDependencies{..} -> do
   pure
     -- In this component's thread, run the chain sync client that will pull the
     -- transactions for discovering and following Marlowe contracts
-    ( runChainSeekClient $ client
+    ( runSomeConnector chainSyncConnector $ client
         (atomically . writeTQueue eventQueue)
         databaseQueries
         pollingInterval
         marloweScriptHashes
         payoutScriptHashes
-        runChainSyncQueryClient
+        chainSyncQueryConnector
         eventBackend
     , readTQueue eventQueue
     )
@@ -89,15 +89,15 @@ chainSeekClient = component \ChainSeekClientDependencies{..} -> do
     -> NominalDiffTime
     -> NESet ScriptHash
     -> NESet ScriptHash
-    -> RunClient IO (QueryClient ChainSyncQuery)
+    -> SomeClientConnector (QueryClient ChainSyncQuery) IO
     -> EventBackend IO r ChainSeekClientSelector
     -> RuntimeChainSeekClient IO ()
-  client emit DatabaseQueries{..} pollingInterval marloweScriptHashes payoutScriptHashes runChainSyncQueryClient eventBackend =
+  client emit DatabaseQueries{..} pollingInterval marloweScriptHashes payoutScriptHashes chainSyncQueryConnector eventBackend =
     ChainSeekClient do
       let
         queryChainSync :: ChainSyncQuery Void err a -> IO a
         queryChainSync query = do
-          result <- runChainSyncQueryClient $ liftQuery query
+          result <- runSomeConnector chainSyncQueryConnector $ liftQuery query
           case result of
             Left _ -> fail "Failed to query chain sync"
             Right a -> pure a

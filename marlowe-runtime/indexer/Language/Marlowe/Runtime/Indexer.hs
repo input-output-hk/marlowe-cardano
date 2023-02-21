@@ -13,7 +13,7 @@ import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncQuery, RuntimeChainSeekC
 import Language.Marlowe.Runtime.Indexer.ChainSeekClient
 import Language.Marlowe.Runtime.Indexer.Database (DatabaseQueries)
 import Language.Marlowe.Runtime.Indexer.Store
-import Network.Protocol.Driver (RunClient)
+import Network.Protocol.Driver (SomeClientConnector)
 import Network.Protocol.Query.Client (QueryClient)
 import Observe.Event (EventBackend, narrowEventBackend)
 import Observe.Event.Component (FieldConfig(..), GetSelectorConfig, SelectorConfig(..), SomeJSON(SomeJSON), prependKey)
@@ -25,8 +25,8 @@ data MarloweIndexerSelector f where
 data MarloweIndexerDependencies r = MarloweIndexerDependencies
   { eventBackend :: EventBackend IO r MarloweIndexerSelector
   , databaseQueries :: DatabaseQueries IO
-  , runChainSeekClient :: RunClient IO RuntimeChainSeekClient
-  , runChainSyncQueryClient :: RunClient IO (QueryClient ChainSyncQuery)
+  , chainSyncConnector :: SomeClientConnector RuntimeChainSeekClient IO
+  , chainSyncQueryConnector :: SomeClientConnector (QueryClient ChainSyncQuery) IO
   , pollingInterval :: NominalDiffTime
   , marloweScriptHashes :: NESet ScriptHash
   , payoutScriptHashes :: NESet ScriptHash

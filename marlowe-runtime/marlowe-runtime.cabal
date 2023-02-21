@@ -611,23 +611,6 @@ test-suite marlowe-runtime-test
   main-is: Spec.hs
   other-modules:
     Language.Marlowe.Runtime.Core.ScriptRegistrySpec
-<<<<<<< HEAD
-||||||| parent of f283d5d85 (Migrate everything to BinaryMessage)
-    Language.Marlowe.Runtime.History.CommandSpec
-    Language.Marlowe.Runtime.History.QuerySpec
-    Language.Marlowe.Runtime.History.FollowerSpec
-    Language.Marlowe.Runtime.History.Script
-    Language.Marlowe.Runtime.History.StoreSpec
-    Language.Marlowe.Runtime.History.Store.ModelSpec
-    Language.Marlowe.Runtime.HistorySpec
-    Language.Marlowe.Runtime.Discovery.QuerySpec
-=======
-    Language.Marlowe.Runtime.History.FollowerSpec
-    Language.Marlowe.Runtime.History.Script
-    Language.Marlowe.Runtime.History.StoreSpec
-    Language.Marlowe.Runtime.History.Store.ModelSpec
-    Language.Marlowe.Runtime.HistorySpec
->>>>>>> f283d5d85 (Migrate everything to BinaryMessage)
     Language.Marlowe.Runtime.Transaction.BuildConstraintsSpec
     Language.Marlowe.Runtime.Transaction.ConstraintsSpec
     Language.Marlowe.Runtime.Transaction.CommandSpec

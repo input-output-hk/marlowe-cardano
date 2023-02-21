@@ -16,12 +16,13 @@ import qualified Language.Marlowe.Runtime.Transaction.Submit as Submit
 import Logging (RootSelector(..), getRootSelectorConfig)
 import Network.Protocol.ChainSeek.Client (chainSeekClientPeer)
 import Network.Protocol.Driver
-  ( RunClient
-  , TcpServerDependencies(TcpServerDependencies)
-  , awaitConnection
+  ( SomeClientConnector
+  , SomeConnectionSource(..)
+  , SomeConnector(SomeConnector)
+  , TcpServerDependencies(..)
   , logConnectionSource
   , logConnector
-  , runConnector
+  , runSomeConnector
   , tcpClient
   , tcpServer
   )
@@ -68,26 +69,26 @@ run = runComponent_ proc Options{..} -> do
     }
   serverSource <- tcpServer -< TcpServerDependencies host port jobServerPeer
   let
-    connectToChainSeek :: RunClient IO RuntimeChainSeekClient
-    connectToChainSeek = runConnector
+    chainSyncConnector :: SomeClientConnector RuntimeChainSeekClient IO
+    chainSyncConnector = SomeConnector
       $ logConnector (narrowEventBackend ChainSeekClient eventBackend)
       $ handshakeClientConnector
       $ tcpClient chainSeekHost chainSeekPort
       $ chainSeekClientPeer Genesis
 
-    runChainSyncQueryClient :: RunClient IO (QueryClient ChainSyncQuery)
-    runChainSyncQueryClient = runConnector
+    chainSyncQueryConnector :: SomeClientConnector (QueryClient ChainSyncQuery) IO
+    chainSyncQueryConnector = SomeConnector
       $ logConnector (narrowEventBackend ChainSyncQueryClient eventBackend)
       $ handshakeClientConnector
       $ tcpClient chainSeekHost chainSeekQueryPort queryClientPeer
 
-    queryChainSync = fmap (fromRight $ error "failed to query chain sync server") . runChainSyncQueryClient . liftQuery
+    queryChainSync = fmap (fromRight $ error "failed to query chain sync server") . runSomeConnector chainSyncQueryConnector . liftQuery
   transaction -< TransactionDependencies
-    { acceptRunTransactionServer = awaitConnection
+    { connectionSource = SomeConnectionSource
         $ logConnectionSource (narrowEventBackend Server eventBackend)
         $ handshakeConnectionSource serverSource
     , mkSubmitJob = Submit.mkSubmitJob Submit.SubmitJobDependencies
-        { runChainSyncJobClient = runConnector
+        { chainSyncJobConnector = SomeConnector
             $ logConnector (narrowEventBackend ChainSyncJobClient eventBackend)
             $ handshakeClientConnector
             $ tcpClient chainSeekHost chainSeekCommandPort jobClientPeer
@@ -95,7 +96,7 @@ run = runComponent_ proc Options{..} -> do
         }
     , loadMarloweContext = \eb version contractId -> do
         networkId <- queryChainSync GetNetworkId
-        Query.loadMarloweContext ScriptRegistry.getScripts networkId connectToChainSeek runChainSyncQueryClient eb version contractId
+        Query.loadMarloweContext ScriptRegistry.getScripts networkId chainSyncConnector chainSyncQueryConnector eb version contractId
     , loadWalletContext = Query.loadWalletContext $ queryChainSync . GetUTxOs
     , eventBackend = narrowEventBackend App eventBackend
     , getCurrentScripts = ScriptRegistry.getCurrentScripts
