@@ -25,7 +25,8 @@ import Language.Marlowe.Protocol.Sync.Client (MarloweSyncClient, hoistMarloweSyn
 import Language.Marlowe.Runtime.App.Types (Client(..), Config(..), Services(..))
 import Language.Marlowe.Runtime.ChainSync.Api (RuntimeChainSeekClient, WithGenesis(Genesis))
 import Network.Protocol.ChainSeek.Client (chainSeekClientPeer, hoistChainSeekClient)
-import Network.Protocol.Handshake.Client (runClientPeerOverSocketWithHandshake)
+import Network.Protocol.Driver (runConnector, tcpClient)
+import Network.Protocol.Handshake.Client (handshakeClientConnector)
 import Network.Protocol.Job.Client (JobClient, hoistJobClient, jobClientPeer)
 
 
@@ -84,10 +85,10 @@ runClientWithConfig
   -> Client a
   -> IO a
 runClientWithConfig Config{..} client = runReaderT (runClient client) Services
-  { runChainSeekCommandClient = runClientPeerOverSocketWithHandshake chainSeekHost chainSeekCommandPort jobClientPeer
-  , runChainSeekSyncClient = runClientPeerOverSocketWithHandshake chainSeekHost chainSeekSyncPort (chainSeekClientPeer Genesis)
-  , runSyncSyncClient = runClientPeerOverSocketWithHandshake syncHost syncSyncPort marloweSyncClientPeer
-  , runSyncHeaderClient = runClientPeerOverSocketWithHandshake syncHost syncHeaderPort marloweHeaderSyncClientPeer
-  , runSyncQueryClient = runClientPeerOverSocketWithHandshake syncHost syncQueryPort marloweQueryClientPeer
-  , runTxCommandClient = runClientPeerOverSocketWithHandshake txHost txCommandPort jobClientPeer
+  { runChainSeekCommandClient = runConnector $ handshakeClientConnector $ tcpClient chainSeekHost chainSeekCommandPort jobClientPeer
+  , runChainSeekSyncClient = runConnector $ handshakeClientConnector $ tcpClient chainSeekHost chainSeekSyncPort (chainSeekClientPeer Genesis)
+  , runSyncSyncClient = runConnector $ handshakeClientConnector $ tcpClient syncHost syncSyncPort marloweSyncClientPeer
+  , runSyncHeaderClient = runConnector $ handshakeClientConnector $ tcpClient syncHost syncHeaderPort marloweHeaderSyncClientPeer
+  , runSyncQueryClient = runConnector $ handshakeClientConnector $ tcpClient syncHost syncQueryPort marloweQueryClientPeer
+  , runTxCommandClient = runConnector $ handshakeClientConnector $ tcpClient txHost txCommandPort jobClientPeer
   }

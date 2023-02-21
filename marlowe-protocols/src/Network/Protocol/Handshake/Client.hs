@@ -33,12 +33,12 @@ simpleHandshakeClient sig client = HandshakeClient
   , recvMsgAccept = pure client
   }
 
-handshakeConnector
+handshakeClientConnector
   :: forall ps client m
    . (HasSignature ps, MonadFail m)
   => Connector ps 'AsClient client m
   -> Connector (Handshake ps) 'AsClient client m
-handshakeConnector Connector{..} = Connector $ fmap handshakeClientConnection . runConnector
+handshakeClientConnector Connector{..} = Connector $ fmap handshakeClientConnection . connectPeer
 
 handshakeClientConnection
   :: forall ps m a

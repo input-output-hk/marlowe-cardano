@@ -24,8 +24,8 @@ import Language.Marlowe.Runtime.Indexer.Database (hoistDatabaseQueries)
 import qualified Language.Marlowe.Runtime.Indexer.Database.PostgreSQL as PostgreSQL
 import Logging (RootSelector(..), getRootSelectorConfig)
 import Network.Protocol.ChainSeek.Client (chainSeekClientPeer)
-import Network.Protocol.Handshake.Client
-  (runClientPeerOverSocketWithHandshake, runClientPeerOverSocketWithLoggingWithHandshake)
+import Network.Protocol.Driver (logConnector, runConnector, tcpClient)
+import Network.Protocol.Handshake.Client (handshakeClientConnector)
 import Network.Protocol.Query.Client (liftQuery, queryClientPeer)
 import Network.Socket (AddrInfo(..), HostName, PortNumber, SocketType(..), defaultHints, withSocketsDo)
 import Observe.Event.Backend (narrowEventBackend, newOnceFlagMVar)
@@ -65,16 +65,12 @@ run Options{..} = withSocketsDo do
   securityParameter <- queryChainSync GetSecurityParameter
   let
     indexerDependencies eventBackend = MarloweIndexerDependencies
-      { runChainSeekClient = runClientPeerOverSocketWithLoggingWithHandshake
-          (narrowEventBackend ChainSeekClient eventBackend)
-          chainSeekHost
-          chainSeekPort
-          (chainSeekClientPeer Genesis)
-      , runChainSyncQueryClient = runClientPeerOverSocketWithLoggingWithHandshake
-          (narrowEventBackend ChainQueryClient eventBackend)
-          chainSeekHost
-          chainSeekQueryPort
-          queryClientPeer
+      { runChainSeekClient = runConnector
+          $ logConnector (narrowEventBackend ChainSeekClient eventBackend)
+          $ handshakeClientConnector
+          $ tcpClient chainSeekHost chainSeekPort (chainSeekClientPeer Genesis)
+      , runChainSyncQueryClient = runConnector
+          $ logConnector (narrowEventBackend ChainQueryClient eventBackend) chainSyncQueryConnector
       , databaseQueries = hoistDatabaseQueries
           (either throwUsageError pure <=< Pool.use pool)
           (PostgreSQL.databaseQueries securityParameter)
@@ -96,12 +92,11 @@ run Options{..} = withSocketsDo do
     throwUsageError (ConnectionError err)                       = error $ show err
     throwUsageError (SessionError (Session.QueryError _ _ err)) = error $ show err
 
+    chainSyncQueryConnector = handshakeClientConnector $ tcpClient chainSeekHost chainSeekQueryPort queryClientPeer
+
     queryChainSync :: ChainSyncQuery Void e a -> IO a
     queryChainSync = fmap (fromRight $ error "failed to query chain sync server")
-      . runClientPeerOverSocketWithHandshake
-          chainSeekHost
-          chainSeekQueryPort
-          queryClientPeer
+      . runConnector chainSyncQueryConnector
       . liftQuery
 
 data Options = Options

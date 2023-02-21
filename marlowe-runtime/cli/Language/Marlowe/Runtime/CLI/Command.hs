@@ -30,8 +30,8 @@ import Language.Marlowe.Runtime.CLI.Monad (CLI, runCLI)
 import Language.Marlowe.Runtime.CLI.Option (optParserWithEnvDefault)
 import qualified Language.Marlowe.Runtime.CLI.Option as O
 import Network.Protocol.Codec (BinaryMessage)
-import Network.Protocol.Driver (RunClient)
-import Network.Protocol.Handshake.Client (runClientPeerOverSocketWithHandshake)
+import Network.Protocol.Driver (RunClient, runConnector, tcpClient)
+import Network.Protocol.Handshake.Client (handshakeClientConnector)
 import Network.Protocol.Handshake.Types (HasSignature(..))
 import Network.Protocol.Job.Client (jobClientPeer)
 import Network.Socket (HostName, PortNumber)
@@ -123,7 +123,7 @@ runClientPeerOverSocket'
   -> RunClient IO client
 runClientPeerOverSocket' errMsg host port clientToPeer client = do
   let
-    run = runClientPeerOverSocketWithHandshake host port clientToPeer client
+    run = runConnector (handshakeClientConnector $ tcpClient host port clientToPeer) client
   run `catch` \(err :: SomeException)-> do
     hPutStrLn stderr errMsg
     throw err
