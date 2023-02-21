@@ -11,23 +11,21 @@ import Data.Functor (void, (<&>))
 import Language.Marlowe.Runtime.ChainSync.Api (ChainPoint, Move, RuntimeChainSeekServer, WithGenesis(..), moveSchema)
 import Language.Marlowe.Runtime.ChainSync.Database (GetTip(..), MoveClient(..), MoveResult(..))
 import Network.Protocol.ChainSeek.Server
-import Network.Protocol.Driver (RunServer(..))
-
-type RunChainSeekServer m = RunServer m RuntimeChainSeekServer
+import Network.Protocol.Driver (SomeConnectionSource, SomeServerConnector, acceptSomeConnector, runSomeConnector)
 
 data ChainSyncServerDependencies = ChainSyncServerDependencies
-  { acceptRunChainSeekServer :: IO (RunChainSeekServer IO)
+  { syncSource :: SomeConnectionSource RuntimeChainSeekServer IO
   , moveClient :: MoveClient IO
   , getTip :: GetTip IO
   }
 
 chainSyncServer :: Component IO ChainSyncServerDependencies ()
 chainSyncServer = serverComponent worker \ChainSyncServerDependencies{..} -> do
-  runChainSeekServer <- acceptRunChainSeekServer
+  connector <- acceptSomeConnector syncSource
   pure WorkerDependencies{..}
 
 data WorkerDependencies = WorkerDependencies
-  { runChainSeekServer :: RunChainSeekServer IO
+  { connector :: SomeServerConnector RuntimeChainSeekServer IO
   , moveClient :: MoveClient IO
   , getTip :: GetTip IO
   }
@@ -35,10 +33,7 @@ data WorkerDependencies = WorkerDependencies
 worker :: Component IO WorkerDependencies ()
 worker = component_ \WorkerDependencies{..} -> do
   let
-    RunServer runServer = runChainSeekServer
-    runWorker = void $ runServer server
-
-    server = ChainSeekServer $ pure stInit
+    runWorker = void $ runSomeConnector connector $ ChainSeekServer $ pure stInit
 
     stInit = ServerStInit \version -> pure if version == moveSchema
       then SendMsgHandshakeConfirmed $ stIdle Genesis
