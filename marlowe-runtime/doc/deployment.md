@@ -1,13 +1,11 @@
 # Deploying Marlowe Runtime Backend Services Manually
 
-Deploying the Marlowe Runtime requires running nine backend services:
-- seven [marlowe-cardano](https://github.com/input-output-hk/marlowe-cardano/blob/main/README.adoc) services:
+Deploying the Marlowe Runtime requires running seven backend services:
+- five [marlowe-cardano](https://github.com/input-output-hk/marlowe-cardano/blob/main/README.adoc) services:
 	- `marlowe-chain-indexer` for indexing the blockchain
 	- `marlowe-chain-sync` for querying the indexed blockchain
 	- `marlowe-indexer` for indexing Marlowe contracts
 	- `marlowe-sync` for tracking the on-chain history of all Marlowe contract instances
-	- `marlowe-history` for tracking the on-chain history of Marlowe contract instances (to be deprecated in favour of `marlowe-sync`)
-	- `marlowe-discovery` for discovering the presence of Marlowe contract instances on the blockchain (to be deprecated in favour of `marlowe-sync`)
 	- `marlowe-tx` for building and submitting Marlowe transactions
 - [cardano-node](https://github.com/input-output-hk/cardano-node/blob/master/README.rst) for blockchain connectivity
 - [PostgreSQL](https://www.postgresql.org/) for persistent storage
@@ -35,8 +33,6 @@ $ nix run .#marlowe-chain-indexer -- --help
 $ nix run .#marlowe-chain-sync -- --help
 $ nix run .#marlowe-indexer -- --help
 $ nix run .#marlowe-sync -- --help
-$ nix run .#marlowe-history -- --help
-$ nix run .#marlowe-discovery -- --help
 $ nix run .#marlowe-tx -- --help
 $ nix run .#marlowe -- --help
 ```
@@ -82,8 +78,6 @@ Start the backend services in the following order.
 - `marlowe-chain-sync`
 - `marlowe-indexer`
 - `marlowe-sync`
-- `marlowe-history`
-- `marlowe-discovery`
 - `marlowe-tx`
 
 
@@ -155,24 +149,9 @@ $ marlowe-sync \
 ```
 
 
-### Marlowe History
-
-See the [help page](marlowe-history.md) for all of the command-line options for `marlowe-history`. The default values for port numbers are consistent with those for `marlowe-chain-sync`, so they typically do not need to be specified explicitly. A typical invocation of `marlowe-history` is simple:
-```console
-$ marlowe-history
-```
-
-
-### Marlowe Discovery
-
-See the [help page](marlowe-discovery.md) for all of the command-line options for `marlowe-discovery`. The default values for port numbers are consistent with those for `marlowe-chain-sync` and `marlowe-history`, so they typically do not need to be specified explicitly. A typical invocation of `marlowe-discovery` is simple:
-```console
-$ marlowe-discovery
-```
-
 ### Marlowe Tx
 
-See the [help page](marlowe-tx.md) for all of the command-line options for `marlowe-tx`. The default values for port numbers are consistent with those for `marlowe-chain-sync` and `marlowe-history`, so they typically do not need to be specified explicitly. A typical invocation of `marlowe-tx` is simple:
+See the [help page](marlowe-tx.md) for all of the command-line options for `marlowe-tx`. The default values for port numbers are consistent with those for `marlowe-chain-sync`, so they typically do not need to be specified explicitly. A typical invocation of `marlowe-tx` is simple:
 ```console
 $ marlowe-tx
 ```
