@@ -6,12 +6,12 @@ let
   # OCI-Image Namer
   ociNamer = oci: builtins.unsafeDiscardStringContext "${oci.imageName}:${oci.imageTag}";
 
-  dbTemplate =
+  dbTemplate = db:
     [
       {
         change_mode = "restart";
         data = ''
-          {{- with secret (printf "kv/data/chainsync/%s" (env "NOMAD_META_environment")) }}
+          {{- with secret (printf "kv/data/${db}/%s" (env "NOMAD_META_environment")) }}
           DB_USER={{ .Data.data.pgUser }}
           DB_PASS={{ .Data.data.pgPass }}
           {{ end -}}
@@ -35,7 +35,7 @@ rec {
         DB_NAME = "\${NOMAD_META_environment}_chainsync";
         MASTER_REPLICA_SRV_DNS = "_infra-database._master.service.us-east-1.consul";
       };
-    template = dbTemplate;
+    template = dbTemplate "chainsync";
     config.image = ociNamer oci-images.chain-indexer;
     user = "0:0";
     driver = "docker";
@@ -60,14 +60,12 @@ rec {
       PORT = "\${NOMAD_PORT_marlowe_chain_sync}";
       QUERY_PORT = "\${NOMAD_PORT_marlowe_chain_sync_query}";
       JOB_PORT = "\${NOMAD_PORT_marlowe_chain_sync_command}";
-
       CARDANO_NODE_SOCKET_PATH = "/alloc/tmp/node.socket"; # figure out how to pass this from the cardano group
       NODE_CONFIG = "${nodeConfigDir}/config.json"; # To get network magic
-
       DB_NAME = "\${NOMAD_META_environment}_chainsync";
       MASTER_REPLICA_SRV_DNS = "_infra-database._master.service.us-east-1.consul";
     };
-    template = dbTemplate;
+    template = dbTemplate "chainsync";
     config.image = ociNamer oci-images.marlowe-chain-sync;
     config.ports = [ "marlowe-chain-sync" "marlowe_chain_sync_query" "marlowe_chain_sync_command" ];
     service.port = "marlowe-chain-sync";
@@ -88,48 +86,56 @@ rec {
       policies = [ "marlowe-runtime" ];
     };
   };
-  marlowe-history = {
+
+  marlowe-indexer = {
     env = {
-      HOST = "0.0.0.0";
-      PORT = "\${NOMAD_PORT_history}";
-      QUERY_PORT = "\${NOMAD_PORT_history_query}";
-      SYNC_PORT = "\${NOMAD_PORT_history_sync}";
+      DB_NAME = "\${NOMAD_META_environment}_marlowe";
+      MASTER_REPLICA_SRV_DNS = "_infra-database._master.service.us-east-1.consul";
       MARLOWE_CHAIN_SYNC_HOST = "localhost";
       MARLOWE_CHAIN_SYNC_PORT = "\${NOMAD_PORT_marlowe_chain_sync}";
       MARLOWE_CHAIN_SYNC_QUERY_PORT = "\${NOMAD_PORT_marlowe_chain_sync_query}";
     };
-
-    config.image = ociNamer oci-images.marlowe-history;
-    config.ports = [ "history" "history_query" "history_sync" ];
-    service.port = "history";
+    template = dbTemplate "marlowe";
+    config.image = ociNamer oci-images.marlowe-indexer;
     user = "0:0";
     driver = "docker";
     kill_signal = "SIGINT";
     kill_timeout = "30s";
     resources.cpu = 2000;
     resources.memory = 4096;
-  };
-  marlowe-discovery = {
-    env = {
-      HOST = "0.0.0.0";
-      PORT = "\${NOMAD_PORT_discovery}";
-      QUERY_PORT = "\${NOMAD_PORT_discovery_query}";
-      SYNC_PORT = "\${NOMAD_PORT_discovery_sync}";
-      MARLOWE_CHAIN_SYNC_HOST = "localhost";
-      MARLOWE_CHAIN_SYNC_PORT = "\${NOMAD_PORT_marlowe_chain_sync}";
-      MARLOWE_CHAIN_SYNC_QUERY_PORT = "\${NOMAD_PORT_marlowe_chain_sync_query}";
+    vault = {
+      change_mode = "noop";
+      env = true;
+      policies = [ "marlowe-runtime" ];
     };
+  };
 
-    config.image = ociNamer oci-images.marlowe-discovery;
-    config.ports = [ "discovery" "discovery_query" "discovery_sync" ];
-    service.port = "discovery";
+  marlowe-sync = {
+    env = {
+      DB_NAME = "\${NOMAD_META_environment}_marlowe";
+      MASTER_REPLICA_SRV_DNS = "_infra-database._master.service.us-east-1.consul";
+      HOST = "0.0.0.0";
+      MARLOWE_SYNC_PORT = "\${NOMAD_PORT_marlowe_sync}";
+      MARLOWE_HEADER_SYNC_PORT = "\${NOMAD_PORT_marlowe_header_sync}";
+      MARLOWE_QUERY_PORT = "\${NOMAD_PORT_marlowe_query}";
+    };
+    template = dbTemplate "marlowe";
+    config.image = ociNamer oci-images.marlowe-sync;
+    config.ports = [ "marlowe-sync" "marlowe-header-sync" "marlowe-query" ];
+    service.port = "marlowe-sync";
     user = "0:0";
     driver = "docker";
     kill_signal = "SIGINT";
     kill_timeout = "30s";
     resources.cpu = 2000;
     resources.memory = 4096;
+    vault = {
+      change_mode = "noop";
+      env = true;
+      policies = [ "marlowe-runtime" ];
+    };
   };
+
   marlowe-tx = {
     env = {
       HOST = "0.0.0.0";
@@ -138,10 +144,7 @@ rec {
       MARLOWE_CHAIN_SYNC_PORT = "\${NOMAD_PORT_marlowe_chain_sync}";
       MARLOWE_CHAIN_SYNC_QUERY_PORT = "\${NOMAD_PORT_marlowe_chain_sync_query}";
       MARLOWE_CHAIN_SYNC_COMMAND_PORT = "\${NOMAD_PORT_marlowe_chain_sync_command}";
-      HISTORY_HOST = "\${NOMAD_IP_history}";
-      HISTORY_SYNC_PORT = "\${NOMAD_PORT_history_sync}";
     };
-
     config.image = ociNamer oci-images.marlowe-tx;
     config.ports = [ "tx" ];
     service.port = "tx";

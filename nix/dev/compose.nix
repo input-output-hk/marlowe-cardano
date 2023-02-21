@@ -200,8 +200,6 @@ let
       "/exec/run-marlowe-web-server"
       "--marlowe-sync-host"
       "marlowe-sync"
-      "--marlowe-query-port"
-      "3726"
       "--tx-host"
       "marlowe-tx"
       "--enable-open-api"

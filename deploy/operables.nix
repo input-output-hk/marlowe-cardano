@@ -14,8 +14,9 @@ let
     ;
   inherit (inputs.bitte-cells._utils.packages) srvaddr;
 
-  # Ensure this path only changes when sqitch.plan file is updated
-  sqitch-plan-dir = (builtins.path {
+  # Ensure this path only changes when sqitch.plan file is updated, or DDL
+  # files are updated.
+  chain-sync-sqitch-plan-dir = (builtins.path {
     path = self;
     name = "marlowe-chain-sync-sqitch-plan";
     filter = path: type:
@@ -24,6 +25,19 @@ let
         || lib.hasPrefix "${self}/marlowe-chain-sync/deploy" path
         || lib.hasPrefix "${self}/marlowe-chain-sync/revert" path;
   }) + "/marlowe-chain-sync";
+
+  # Ensure this path only changes when sqitch.plan file is updated, or DDL
+  # files are updated.
+  runtime-sqitch-plan-dir = (builtins.path {
+    path = self;
+    name = "marlowe-runtime-sqitch-plan";
+    filter = path: type:
+      path == "${self}/marlowe-runtime"
+        || path == "${self}/marlowe-runtime/marlowe-indexer"
+        || path == "${self}/marlowe-runtime/marlowe-indexer/sqitch.plan"
+        || lib.hasPrefix "${self}/marlowe-runtime/marlowe-indexer/deploy" path
+        || lib.hasPrefix "${self}/marlowe-runtime/marlowe-indexer/revert" path;
+  }) + "/marlowe-runtime/marlowe-indexer";
 
   database-uri = "postgresql://$DB_USER:$DB_PASS@$DB_HOST/$DB_NAME";
 
@@ -104,7 +118,7 @@ in
       [ -z "''${DB_HOST:-}" ] && echo "DB_HOST env var must be set -- aborting" && exit 1
 
       DATABASE_URI=${database-uri}
-      cd ${sqitch-plan-dir}
+      cd ${chain-sync-sqitch-plan-dir}
       mkdir -p /tmp
       HOME="$(mktemp -d)" # Ensure HOME is writable for sqitch config
       export TZ=Etc/UTC
@@ -177,62 +191,92 @@ in
         --database-uri  "$DATABASE_URI"
     '';
   };
-  marlowe-history = mkOperable {
-    package = packages.marlowe-history;
+
+  marlowe-indexer = mkOperable {
+    package = packages.marlowe-indexer;
+    runtimeInputs = [ sqitchPg srvaddr postgresql coreutils ];
     runtimeScript = ''
       #################
       # REQUIRED VARS #
       #################
-      # HOST, PORT, QUERY_PORT, SYNC_PORT: network binding
       # MARLOWE_CHAIN_SYNC_HOST, MARLOWE_CHAIN_SYNC_PORT, MARLOWE_CHAIN_SYNC_QUERY_PORT: connection info to marlowe-chain-sync
+      # DB_NAME, DB_USER, DB_PASS,
+      # Either DB_HOST or MASTER_REPLICA_SRV_DNS (for auto-discovery of DB host with srvaddr)
 
-      [ -z "''${HOST:-}" ] && echo "HOST env var must be set -- aborting" && exit 1
-      [ -z "''${PORT:-}" ] && echo "PORT env var must be set -- aborting" && exit 1
-      [ -z "''${QUERY_PORT:-}" ] && echo "QUERY_PORT env var must be set -- aborting" && exit 1
-      [ -z "''${SYNC_PORT:-}" ] && echo "SYNC_PORT env var must be set -- aborting" && exit 1
+      [ -z "''${DB_NAME:-}" ] && echo "DB_NAME env var must be set -- aborting" && exit 1
+      [ -z "''${DB_USER:-}" ] && echo "DB_USER env var must be set -- aborting" && exit 1
+      [ -z "''${DB_PASS:-}" ] && echo "DB_PASS env var must be set -- aborting" && exit 1
       [ -z "''${MARLOWE_CHAIN_SYNC_HOST:-}" ] && echo "MARLOWE_CHAIN_SYNC_HOST env var must be set -- aborting" && exit 1
       [ -z "''${MARLOWE_CHAIN_SYNC_PORT:-}" ] && echo "MARLOWE_CHAIN_SYNC_PORT env var must be set -- aborting" && exit 1
       [ -z "''${MARLOWE_CHAIN_SYNC_QUERY_PORT:-}" ] && echo "MARLOWE_CHAIN_SYNC_QUERY_PORT env var must be set -- aborting" && exit 1
 
+      if [ -n "''${MASTER_REPLICA_SRV_DNS:-}" ]; then
+        # Find DB_HOST when running on bitte cluster with patroni
+        eval "$(srvaddr -env PSQL="$MASTER_REPLICA_SRV_DNS")"
+        # produces: PSQL_ADDR0=domain:port; PSQL_HOST0=domain; PSQL_PORT0=port
+        DB_HOST=$PSQL_ADDR0
+      fi
+
+      [ -z "''${DB_HOST:-}" ] && echo "DB_HOST env var must be set -- aborting" && exit 1
+
+      DATABASE_URI=${database-uri}
+      cd ${runtime-sqitch-plan-dir}
+      mkdir -p /tmp
+      HOME="$(mktemp -d)" # Ensure HOME is writable for sqitch config
+      export TZ=Etc/UTC
+      sqitch config --user user.name marloweindexer
+      sqitch config --user user.email example@example.com
+      sqitch --quiet deploy --target "$DATABASE_URI"
+      cd -
+
       ${wait-for-tcp}/bin/wait-for-tcp "$MARLOWE_CHAIN_SYNC_HOST" "$MARLOWE_CHAIN_SYNC_PORT"
 
-      ${packages.marlowe-history}/bin/marlowe-history \
-        --host "$HOST" \
-        --command-port "$PORT" \
-        --query-port "$QUERY_PORT" \
-        --sync-port "$SYNC_PORT" \
+      ${packages.marlowe-indexer}/bin/marlowe-indexer \
+        --database-uri  "$DATABASE_URI" \
         --chain-sync-port "$MARLOWE_CHAIN_SYNC_PORT" \
         --chain-sync-query-port "$MARLOWE_CHAIN_SYNC_QUERY_PORT" \
         --chain-sync-host "$MARLOWE_CHAIN_SYNC_HOST"
     '';
   };
-  marlowe-discovery = mkOperable {
-    package = packages.marlowe-discovery;
+
+  marlowe-sync = mkOperable {
+    package = packages.marlowe-sync;
+    runtimeInputs = [ srvaddr coreutils ];
     runtimeScript = ''
       #################
       # REQUIRED VARS #
       #################
-      # HOST, PORT, SYNC_PORT: network binding
-      # MARLOWE_CHAIN_SYNC_HOST, MARLOWE_CHAIN_SYNC_PORT, MARLOWE_CHAIN_SYNC_QUERY_PORT: connection info to marlowe-chain-sync
+      # HOST, MARLOWE_SYNC_PORT, MARLOWE_HEADER_SYNC_PORT, MARLOWE_QUERY_PORT: network binding
+      # DB_NAME, DB_USER, DB_PASS,
+      # Either DB_HOST or MASTER_REPLICA_SRV_DNS (for auto-discovery of DB host with srvaddr)
 
       [ -z "''${HOST:-}" ] && echo "HOST env var must be set -- aborting" && exit 1
-      [ -z "''${PORT:-}" ] && echo "PORT env var must be set -- aborting" && exit 1
-      [ -z "''${SYNC_PORT:-}" ] && echo "SYNC_PORT env var must be set -- aborting" && exit 1
-      [ -z "''${MARLOWE_CHAIN_SYNC_HOST:-}" ] && echo "MARLOWE_CHAIN_SYNC_HOST env var must be set -- aborting" && exit 1
-      [ -z "''${MARLOWE_CHAIN_SYNC_PORT:-}" ] && echo "MARLOWE_CHAIN_SYNC_PORT env var must be set -- aborting" && exit 1
-      [ -z "''${MARLOWE_CHAIN_SYNC_QUERY_PORT:-}" ] && echo "MARLOWE_CHAIN_SYNC_QUERY_PORT env var must be set -- aborting" && exit 1
+      [ -z "''${MARLOWE_SYNC_PORT:-}" ] && echo "MARLOWE_SYNC_PORT env var must be set -- aborting" && exit 1
+      [ -z "''${MARLOWE_HEADER_SYNC_PORT:-}" ] && echo "MARLOWE_HEADER_SYNC_PORT env var must be set -- aborting" && exit 1
+      [ -z "''${MARLOWE_QUERY_PORT:-}" ] && echo "MARLOWE_QUERY_PORT env var must be set -- aborting" && exit 1
+      [ -z "''${DB_NAME:-}" ] && echo "DB_NAME env var must be set -- aborting" && exit 1
+      [ -z "''${DB_USER:-}" ] && echo "DB_USER env var must be set -- aborting" && exit 1
+      [ -z "''${DB_PASS:-}" ] && echo "DB_PASS env var must be set -- aborting" && exit 1
 
-      ${wait-for-tcp}/bin/wait-for-tcp "$MARLOWE_CHAIN_SYNC_HOST" "$MARLOWE_CHAIN_SYNC_PORT"
+      if [ -n "''${MASTER_REPLICA_SRV_DNS:-}" ]; then
+        # Find DB_HOST when running on bitte cluster with patroni
+        eval "$(srvaddr -env PSQL="$MASTER_REPLICA_SRV_DNS")"
+        # produces: PSQL_ADDR0=domain:port; PSQL_HOST0=domain; PSQL_PORT0=port
+        DB_HOST=$PSQL_ADDR0
+      fi
 
-      ${packages.marlowe-discovery}/bin/marlowe-discovery \
+      [ -z "''${DB_HOST:-}" ] && echo "DB_HOST env var must be set -- aborting" && exit 1
+
+      DATABASE_URI=${database-uri}
+      ${packages.marlowe-sync}/bin/marlowe-sync \
+        --database-uri  "$DATABASE_URI" \
         --host "$HOST" \
-        --query-port "$PORT" \
-        --sync-port "$SYNC_PORT" \
-        --chain-sync-port "$MARLOWE_CHAIN_SYNC_PORT" \
-        --chain-sync-query-port "$MARLOWE_CHAIN_SYNC_QUERY_PORT" \
-        --chain-sync-host "$MARLOWE_CHAIN_SYNC_HOST"
+        --sync-port "$MARLOWE_SYNC_PORT" \
+        --header-sync-port "$MARLOWE_HEADER_SYNC_PORT" \
+        --query-port "$MARLOWE_QUERY_PORT"
     '';
   };
+
   marlowe-tx = mkOperable {
     package = packages.marlowe-tx;
     runtimeScript = ''
@@ -258,6 +302,36 @@ in
         --chain-sync-query-port "$MARLOWE_CHAIN_SYNC_QUERY_PORT" \
         --chain-sync-command-port "$MARLOWE_CHAIN_SYNC_COMMAND_PORT" \
         --chain-sync-host "$MARLOWE_CHAIN_SYNC_HOST" \
+    '';
+  };
+
+  marlowe-web-server = mkOperable {
+    package = packages.marlowe-web-server;
+    runtimeScript = ''
+      #################
+      # REQUIRED VARS #
+      #################
+      # PORT: network binding
+      # TX_HOST, TX_PORT: connection info to marlowe-tx
+      # SYNC_HOST, MARLOWE_QUERY_PORT: connection info to marlowe-sync
+
+      [ -z "''${PORT:-}" ] && echo "PORT env var must be set -- aborting" && exit 1
+      [ -z "''${TX_HOST:-}" ] && echo "TX_HOST env var must be set -- aborting" && exit 1
+      [ -z "''${TX_PORT:-}" ] && echo "TX_PORT env var must be set -- aborting" && exit 1
+      [ -z "''${SYNC_HOST:-}" ] && echo "SYNC_HOST env var must be set -- aborting" && exit 1
+      [ -z "''${MARLOWE_QUERY_PORT:-}" ] && echo "MARLOWE_QUERY_PORT env var must be set -- aborting" && exit 1
+
+      ${wait-for-tcp}/bin/wait-for-tcp "$TX_HOST" "$TX_PORT"
+      ${wait-for-tcp}/bin/wait-for-tcp "$SYNC_HOST" "$MARLOWE_QUERY_PORT"
+
+      ${packages.marlowe-web-server}/bin/marlowe-web-server \
+        --http-port "$PORT" \
+        --marlowe-sync-host "$SYNC_HOST" \
+        --marlowe-query-port "$MARLOWE_QUERY_PORT" \
+        --tx-host "$TX_HOST" \
+        --tx-command-port "$TX_PORT" \
+        --enable-open-api \
+        --access-control-allow-origin-all
     '';
   };
 }

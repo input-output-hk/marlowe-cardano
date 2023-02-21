@@ -69,6 +69,9 @@ let
               # When cross compiling only include haskell for now
               inherit (x) haskell;
             };
+          oci-images = import ./deploy/oci-images.nix {
+            inputs = inputs.nosys.lib.deSys system inputs;
+          };
         in
         filterAttrsOnlyRecursive (_: drv: isBuildable drv) ({
           # The haskell.nix IFD roots for the Haskell project. We include these so they won't be GCd and will be in the
@@ -76,6 +79,10 @@ let
           inherit (marlowe.haskell.project) roots;
         } // pkgs.lib.optionalAttrs (system == "x86_64-linux") {
           inherit (packages) compose-spec;
+
+          # Build all oci image uploaders
+          copyAllOciImagesToRegistry = oci-images.all.copyToRegistry;
+          copyAllOciImagesToDockerDaemon = oci-images.all.copyToDockerDaemon;
         } // pkgs.lib.optionalAttrs (!rootsOnly) (filterCross {
           # build relevant top level attributes from flake.nix
           inherit (packages) tests;
