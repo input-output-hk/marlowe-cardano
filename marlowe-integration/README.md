@@ -36,13 +36,12 @@ This configuration enables the PostgreSQL service, installs the `postgresql` pac
 
 ### Customizing the PostgreSQL configuration
 
-You can configure the connection settings by setting the following
-environment variables:
+You can configure the connection settings by exporting the following environment variables using the `export` command:
 - `MARLOWE_RT_TEST_DB_HOST` sets the host of the postgresql server (by default: `127.0.0.1`).
 - `MARLOWE_RT_TEST_DB_PORT` sets the port of the postgresql server (by default: `5432`).
-- `MARLOWE_RT_TEST_DB_USER` sets the user that will be used to connect to the postgresql server as part of the tests (by default: `postgresql`).
+- `MARLOWE_RT_TEST_DB_USER` sets the user that will be used to connect to the postgresql server as part of the tests (by default: `postgresql`). User must have rights to create databases (`CREATEDB`).
 - `MARLOWE_RT_TEST_DB_PASSWORD` sets the password that will be used to authenticate the connection to postgresql server as part of the tests (by default no password or the empty string).
-- `MARLOWE_RT_TEST_TEMP_DB` sets the template database to be used when creating test databases (by default `template1`).
+- `MARLOWE_RT_TEST_TEMP_DB` sets the template database to be used when creating test databases (by default `template1`), it needs to exist and be accessible by the user specified.
 - `MARLOWE_RT_TEST_CLEANUP_DATABASE` determines whether to delete the test databases after the tests (by default `true`).
 
 
