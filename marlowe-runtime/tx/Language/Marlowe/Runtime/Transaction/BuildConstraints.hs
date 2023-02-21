@@ -3,7 +3,8 @@
 {-# LANGUAGE ViewPatterns #-}
 
 module Language.Marlowe.Runtime.Transaction.BuildConstraints
-  ( buildApplyInputsConstraints
+  ( ApplyResults
+  , buildApplyInputsConstraints
   , buildCreateConstraints
   , buildWithdrawConstraints
   ) where

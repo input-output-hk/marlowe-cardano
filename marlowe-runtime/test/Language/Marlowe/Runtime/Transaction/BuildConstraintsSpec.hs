@@ -17,7 +17,8 @@ import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.SOP.Strict (K(..), NP(..))
 import qualified Data.Set as Set
-import Data.Time.Clock.POSIX (posixSecondsToUTCTime)
+import Data.Time (UTCTime, nominalDiffTimeToSeconds, secondsToNominalDiffTime)
+import Data.Time.Clock.POSIX (posixSecondsToUTCTime, utcTimeToPOSIXSeconds)
 import GHC.Generics (Generic)
 import qualified Language.Marlowe.Core.V1.Semantics as Semantics
 import qualified Language.Marlowe.Core.V1.Semantics.Types as Semantics
@@ -346,3 +347,39 @@ buildApplyInputsConstraintsSpec =
                 else counterexample "Unexpected transaction failure" False
             Left _ ->
               counterexample "Unexpected transaction failure" False
+    Hspec.QuickCheck.prop "respects client-specified slot interval" \assets utxo address marloweParams-> do
+      tipTime <- (1_000 *) <$> chooseInteger (0, 1_000)                                   -- Choose the tip first.
+      minTime <- chooseInteger (0, tipTime)                                               -- Choose a minimum before the tip.
+      lower <- oneof [pure Nothing, Just <$> chooseInteger (0, tipTime)]                  -- Choose a lower bound be not after the tip.
+      upper <- oneof [pure Nothing, Just <$> chooseInteger (tipTime + 1_000, 2_000_000)]  -- Choose an upper bound at least one slot after the tip.
+      let
+        toUTC = posixSecondsToUTCTime . secondsToNominalDiffTime . (/ 1000) . fromInteger :: Integer -> UTCTime
+        fromUTC = floor . (1000 *) . nominalDiffTimeToSeconds . utcTimeToPOSIXSeconds :: UTCTime -> Integer
+        toSecondFloor = (* 1000) . (`div` 1000)
+        -- Important note: these slot computations cannot be used generally, but are specificially tailored
+        -- to the contrived era history and system start used for this test case.
+        tipSlot = Chain.SlotNo $ fromInteger $ tipTime `div` 1_000
+        marloweContract = Semantics.Assert Semantics.TrueObs Semantics.Close
+        marloweState = Semantics.State AM.empty AM.empty AM.empty $ POSIXTime 0
+        datum = Semantics.MarloweData{..}
+        marloweOutput = TransactionScriptOutput{..}
+        result =
+          buildApplyInputsConstraints
+            systemStart eraHistory MarloweV1
+            marloweOutput
+            tipSlot
+            (Chain.TransactionMetadata mempty) (toUTC <$> lower) (toUTC <$> upper) mempty
+      pure
+        . counterexample ("minTime = " <> show minTime)
+        . counterexample ("lower = " <> show lower)
+        . counterexample ("tipTime = " <> show tipTime)
+        . counterexample ("specified upper = " <> show upper)
+        . counterexample ("specified result = " <> show result)
+        $ case result of
+            Right ((lower', upper', _), _) ->
+              counterexample "Rounded specified bounds should match the computed bounds"
+                . counterexample ("computed lower = " <> show (fromUTC lower'))
+                . counterexample ("computed upper = " <> show (fromUTC upper'))
+                $  maybe True ((== fromUTC lower') . toSecondFloor) lower  -- The specified lower bound should be rounded down to the second/slot.
+                && maybe True ((== fromUTC upper') . toSecondFloor) upper  -- The specified upper bound should be rounded down to the second/slot.
+            _ -> counterexample "Assert-close contract is valid" False
