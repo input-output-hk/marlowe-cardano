@@ -147,7 +147,7 @@ get eb ranges = withEvent eb Get \ev -> do
     Just Page{..} -> do
       let headers' = toDTO items
       addField ev $ ContractHeaders headers'
-      let response = IncludeLink (Proxy @"contract") <$> headers'
+      let response = IncludeLink (Proxy @"transactions") . IncludeLink (Proxy @"contract") <$> headers'
       addHeader totalCount . fmap ListObject <$> returnRange range response
 
 toContractHeader :: ContractState -> ContractHeader

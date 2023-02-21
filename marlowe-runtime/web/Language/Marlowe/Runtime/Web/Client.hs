@@ -51,7 +51,7 @@ getContracts range = do
   pure Page
     { totalCount
     , nextRange = extractRangeSingleton @GetContractsResponse nextRanges
-    , items = retractLink <$> items
+    , items = retractLink @"contract" . retractLink @"transactions" <$> items
     }
 
 postContract
