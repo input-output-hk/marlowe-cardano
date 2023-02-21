@@ -425,3 +425,41 @@ buildApplyInputsConstraintsSpec =
                 && payToRoles     == expectedPayToRoles
             Left _ ->
               counterexample "Unexpected transaction failure" False
+    Hspec.QuickCheck.prop "output constraints" \assets utxo address marloweParams choices values -> do
+      accounts <- AM.fromList <$> listOf ((,) <$> ((,) <$> arbitrary <*> arbitrary) <*> chooseInteger (1, 1000))
+      closes <- arbitrary
+      let
+        marloweState = Semantics.State accounts choices values $ POSIXTime 0
+        expectedContract =
+          if closes
+            then Semantics.Close
+            else Semantics.When [] 1_000_000_000_000_000_000_000 Semantics.Close
+        marloweContract = Semantics.Assert Semantics.TrueObs expectedContract
+        datum = Semantics.MarloweData{..}
+        marloweOutput = TransactionScriptOutput{..}
+        result =
+          buildApplyInputsConstraints
+            systemStart eraHistory MarloweV1
+            marloweOutput
+            (Chain.SlotNo 1_000_000)
+            (Chain.TransactionMetadata mempty) Nothing Nothing mempty
+        expectedAssets = fromPlutusValue $ Semantics.totalBalance accounts
+        expectedDatum = datum {Semantics.marloweContract = expectedContract, Semantics.marloweState = marloweState {Semantics.minTime = 1_000_000_000}}
+        expectedOutput =
+          if closes
+            then MarloweOutputConstraintsNone
+            else MarloweOutput expectedAssets expectedDatum
+      pure
+        . counterexample ("contract = " <> show marloweContract)
+        . counterexample ("result = " <> show result)
+        . counterexample ("expected output = " <> show expectedOutput)
+        $ case result of
+            Right ((_, _, Just output), TxConstraints{..}) ->
+              counterexample "continuing output is correct"
+                $ marloweOutputConstraints == expectedOutput
+                && output == (expectedAssets, expectedDatum)
+            Right ((_, _, Nothing), TxConstraints{..}) ->
+              counterexample "no continuing output is correct"
+                $ marloweOutputConstraints == expectedOutput
+            Left _ ->
+              counterexample "Unexpected transaction failure" False
