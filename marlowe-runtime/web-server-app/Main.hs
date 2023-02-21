@@ -12,7 +12,7 @@ module Main
 import Control.Concurrent.Component (runComponent_)
 import Language.Marlowe.Protocol.Query.Client (marloweQueryClientPeer)
 import Language.Marlowe.Runtime.Web.Server
-import Network.Protocol.Driver (runConnector, tcpClient)
+import Network.Protocol.Driver (SomeConnector(..), tcpClient)
 import Network.Protocol.Handshake.Client (handshakeClientConnector)
 import Network.Protocol.Job.Client (jobClientPeer)
 import Network.Wai.Handler.Warp (run)
@@ -35,10 +35,10 @@ optionsToServerDependencies Options{..} = do
     { openAPIEnabled
     , accessControlAllowOriginAll
     , runApplication = run $ fromIntegral port
-    , runMarloweQueryClient = runConnector
+    , marloweQueryConnector = SomeConnector
         $ handshakeClientConnector
         $ tcpClient syncHost syncQueryPort marloweQueryClientPeer
-    , runTxJobClient = runConnector
+    , txJobConnector = SomeConnector
         $ handshakeClientConnector
         $ tcpClient txHost txCommandPort jobClientPeer
     , eventBackend

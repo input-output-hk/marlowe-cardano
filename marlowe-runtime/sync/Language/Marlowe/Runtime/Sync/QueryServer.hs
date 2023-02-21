@@ -6,28 +6,27 @@ module Language.Marlowe.Runtime.Sync.QueryServer
 import Control.Concurrent.Component
 import Language.Marlowe.Protocol.Query.Server (MarloweQueryServer, marloweQueryServer)
 import Language.Marlowe.Runtime.Sync.Database (DatabaseQueries(..))
-import Network.Protocol.Driver (RunServer(..))
+import Network.Protocol.Driver (SomeConnectionSource, SomeServerConnector, acceptSomeConnector, runSomeConnector)
 
 data QueryServerDependencies = QueryServerDependencies
   { databaseQueries :: DatabaseQueries IO
-  , acceptRunMarloweQueryServer :: IO (RunServer IO MarloweQueryServer)
+  , querySource :: SomeConnectionSource MarloweQueryServer IO
   }
 
 queryServer :: Component IO QueryServerDependencies ()
 queryServer = serverComponent (component_ worker) \QueryServerDependencies{..} -> do
-  runMarloweQueryServer <- acceptRunMarloweQueryServer
+  connector <- acceptSomeConnector querySource
   pure WorkerDependencies{..}
 
 data WorkerDependencies = WorkerDependencies
   { databaseQueries :: DatabaseQueries IO
-  , runMarloweQueryServer :: RunServer IO MarloweQueryServer
+  , connector :: SomeServerConnector MarloweQueryServer IO
   }
 
 worker :: WorkerDependencies -> IO ()
 worker WorkerDependencies{..} = do
   let DatabaseQueries{..} = databaseQueries
-  let RunServer runServer = runMarloweQueryServer
-  runServer $ marloweQueryServer
+  runSomeConnector connector $ marloweQueryServer
     getHeaders
     getContractState
     getTransaction

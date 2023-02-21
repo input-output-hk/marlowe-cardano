@@ -14,6 +14,7 @@ import Data.Void (Void)
 import Language.Marlowe.Protocol.Sync.Client (MarloweSyncClient, hoistMarloweSyncClient)
 import Language.Marlowe.Runtime.CLI.Env (Env(..))
 import Language.Marlowe.Runtime.Transaction.Api (MarloweTxCommand)
+import Network.Protocol.Driver (runSomeConnector)
 import Network.Protocol.Job.Client (JobClient, hoistJobClient, liftCommand)
 import Options.Applicative (Alternative)
 import System.Exit (die)
@@ -50,14 +51,14 @@ runHistorySyncClient :: MarloweSyncClient CLI a -> CLI a
 runHistorySyncClient client = do
   Env{..} <- askEnv
   liftBaseWith \runInBase ->
-    envRunHistorySyncClient $ hoistMarloweSyncClient runInBase client
+    runSomeConnector marloweSyncConnector $ hoistMarloweSyncClient runInBase client
 
 -- | Run a Tx Job client.
 runTxJobClient :: JobClient MarloweTxCommand CLI a -> CLI a
 runTxJobClient client = do
   Env{..} <- askEnv
   liftBaseWith \runInBase ->
-    envRunTxJobClient $ hoistJobClient runInBase client
+    runSomeConnector txJobConnector $ hoistJobClient runInBase client
 
 -- | Run a simple Tx command.
 runTxCommand :: MarloweTxCommand Void err result -> CLI (Either err result)
