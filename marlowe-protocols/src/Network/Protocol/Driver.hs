@@ -90,9 +90,6 @@ mkDriver  Channel{..} = Driver{..}
     startDState :: Maybe ByteString
     startDState = Nothing
 
-type RunClient m client = forall a. client m a -> m a
-newtype RunServer m server = RunServer (forall a. server m a -> m a)
-
 type ToPeer peer protocol pr st m = forall a. peer m a -> Peer protocol pr st m a
 
 data TcpServerDependencies ps server m = forall (st :: ps). TcpServerDependencies
@@ -263,10 +260,10 @@ runConnector Connector{..} = runConnection <=< connectPeer
 runSomeConnector :: MonadBaseControl IO m => SomeConnector pr peer m -> peer m a -> m a
 runSomeConnector (SomeConnector connector) = runConnector connector
 
-data ClientServerPair m server client = ClientServerPair
-  { acceptRunServer :: m (RunServer m server)
-  , runClient :: RunClient m client
-  }
+-- data ClientServerPair m server client = ClientServerPair
+--   { acceptRunServer :: m (RunServer m server)
+--   , runClient :: RunClient m client
+--   }
 
 -- clientServerPair
 --   :: forall ps server client m st r
