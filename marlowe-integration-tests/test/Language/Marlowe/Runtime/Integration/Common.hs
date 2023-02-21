@@ -71,6 +71,7 @@ import Language.Marlowe.Runtime.Discovery.Api (ContractHeader(..))
 import Language.Marlowe.Runtime.History.Api (ContractStep, CreateStep(..))
 import Language.Marlowe.Runtime.Transaction.Api
   (ContractCreated(..), InputsApplied(..), MarloweTxCommand(..), WalletAddresses(WalletAddresses))
+import Network.Protocol.Driver (runSomeConnector)
 import Network.Protocol.Job.Client (JobClient, hoistJobClient, liftCommand, liftCommandWait)
 import qualified Plutus.V2.Ledger.Api as PV2
 import Servant.Client (ClientError, ClientM)
@@ -105,23 +106,23 @@ expectRight msg = \case
 
 runMarloweQueryClient :: MarloweQueryClient Integration a -> Integration a
 runMarloweQueryClient client = do
-  run <- asks MarloweRuntime.runMarloweQueryClient
-  withRunInIO \runInIO -> run $ hoistMarloweQueryClient runInIO client
+  connector <- asks MarloweRuntime.marloweQueryConnector
+  withRunInIO \runInIO -> runSomeConnector connector $ hoistMarloweQueryClient runInIO client
 
 runMarloweSyncClient :: MarloweSyncClient Integration a -> Integration a
 runMarloweSyncClient client = do
-  run <- asks MarloweRuntime.runHistorySyncClient
-  withRunInIO \runInIO -> run $ hoistMarloweSyncClient runInIO client
+  connector <- asks MarloweRuntime.marloweSyncConnector
+  withRunInIO \runInIO -> runSomeConnector connector $ hoistMarloweSyncClient runInIO client
 
 runMarloweHeaderSyncClient :: MarloweHeaderSyncClient Integration a -> Integration a
 runMarloweHeaderSyncClient client = do
-  run <- asks MarloweRuntime.runDiscoverySyncClient
-  withRunInIO \runInIO -> run $ hoistMarloweHeaderSyncClient runInIO client
+  connector <- asks MarloweRuntime.marloweHeaderSyncConnector
+  withRunInIO \runInIO -> runSomeConnector connector $ hoistMarloweHeaderSyncClient runInIO client
 
 runTxJobClient :: JobClient MarloweTxCommand Integration a -> Integration a
 runTxJobClient client = do
-  run <- asks MarloweRuntime.runTxJobClient
-  withRunInIO \runInIO -> run $ hoistJobClient runInIO client
+  connector <- asks MarloweRuntime.txJobConnector
+  withRunInIO \runInIO -> runSomeConnector connector $ hoistJobClient runInIO client
 
 testnet :: Integration LocalTestnet
 testnet = asks MarloweRuntime.testnet

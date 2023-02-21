@@ -82,23 +82,30 @@ effectChannel onSend onRecv Channel{..} = Channel
   , recv = recv >>= \ma -> onRecv ma $> ma
   }
 
-channelPair :: STM ((Channel STM a, STM ()), (Channel STM a, STM ()))
+data STMChannel a = STMChannel
+  { channel :: Channel STM a
+  , close :: STM ()
+  }
+
+channelPair :: STM (STMChannel a, STMChannel a)
 channelPair = do
   ch1 <- newTChan
   ch2 <- newTChan
   pure
-    ( ( Channel
-        { send = writeTChan ch1 . Just
-        , recv = readTChan ch2
-        }
-      , writeTChan ch1 Nothing
-      )
-    , ( Channel
+    ( STMChannel
+      { channel = Channel
+          { send = writeTChan ch1 . Just
+          , recv = readTChan ch2
+          }
+      , close = writeTChan ch1 Nothing
+      }
+    , STMChannel
+      { channel = Channel
         { send = writeTChan ch2 . Just
         , recv = readTChan ch1
         }
-      , writeTChan ch2 Nothing
-      )
+      , close = writeTChan ch2 Nothing
+      }
     )
 
 data ChannelSelector bytes f where

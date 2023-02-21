@@ -11,7 +11,7 @@ module Network.Protocol.Driver
   where
 
 import Control.Concurrent.Component
-import Control.Concurrent.STM (STM, atomically, newEmptyTMVar, newTQueue, readTMVar, readTQueue, tryPutTMVar)
+import Control.Concurrent.STM (STM, TQueue, atomically, newEmptyTMVar, newTQueue, readTMVar, readTQueue, tryPutTMVar)
 import Control.Concurrent.STM.TQueue (writeTQueue)
 import Control.Exception (SomeException)
 import Control.Exception.Lifted (mask, throwIO, try)
@@ -26,7 +26,15 @@ import Data.Functor (void)
 import qualified Data.Text.Lazy as T
 import Data.Void (Void)
 import Network.Channel
-  (Channel(..), ChannelSelector, getChannelSelectorConfig, hoistChannel, logChannel, socketAsChannel)
+  ( Channel(..)
+  , ChannelSelector
+  , STMChannel(STMChannel)
+  , channelPair
+  , getChannelSelectorConfig
+  , hoistChannel
+  , logChannel
+  , socketAsChannel
+  )
 import Network.Protocol.Codec (BinaryMessage, DeserializeError, binaryCodec)
 import Network.Protocol.Peer (PeerSelector, logPeer)
 import qualified Network.Protocol.Peer as Peer
@@ -260,43 +268,81 @@ runConnector Connector{..} = runConnection <=< connectPeer
 runSomeConnector :: MonadBaseControl IO m => SomeConnector pr peer m -> peer m a -> m a
 runSomeConnector (SomeConnector connector) = runConnector connector
 
--- data ClientServerPair m server client = ClientServerPair
---   { acceptRunServer :: m (RunServer m server)
---   , runClient :: RunClient m client
---   }
+stmConnectionSource
+  :: MonadBase IO m
+  => TQueue (STMChannel ByteString)
+  -> ToPeer server ps 'AsServer st m
+  -> ConnectionSource ps server m
+stmConnectionSource queue toPeer = ConnectionSource do
+  channel <- readTQueue queue
+  pure $ stmServerConnector channel toPeer
 
--- clientServerPair
---   :: forall ps server client m st r
---    . (MonadBaseControl IO m, MonadCleanup m, BinaryMessage ps)
---   => EventBackend m r (ConnectorSelector ps)
---   -> EventBackend m r (ConnectorSelector ps)
---   -> ToPeer server ps 'AsServer st m
---   -> ToPeer client ps 'AsClient st m
---   -> STM (ClientServerPair m server client)
--- clientServerPair serverEventBackend clientEventBackend serverToPeer clientToPeer = do
---   serverChannelQueue <- newTQueue
---   let
---     acceptRunServer :: m (RunServer m server)
---     acceptRunServer = awaitConnection
---       $ logConnectionSource serverEventBackend
---       $ ConnectionSource do
---         (channel, closeChannel) <- readTQueue serverChannelQueue
---         pure $ Connector \server -> pure Connection
---           { closeConnection = const $ liftBase $ atomically closeChannel
---           , peer = serverToPeer server
---           , channel = hoistChannel (liftBase . atomically) channel
---           }
+stmServerConnector
+  :: MonadBase IO m
+  => STMChannel ByteString
+  -> ToPeer client ps 'AsServer st m
+  -> ServerConnector ps client m
+stmServerConnector (STMChannel channel closeChannel) toPeer = Connector \server -> pure Connection
+  { closeConnection = const $ liftBase $ atomically closeChannel
+  , peer = toPeer server
+  , channel = hoistChannel (liftBase . atomically) channel
+  }
 
---     runClient :: RunClient m client
---     runClient = runClientPeerWithLoggingGeneral
---       clientEventBackend
---       ( liftBase $ atomically do
---           (clientChannel, serverChannel) <- channelPair
---           writeTQueue serverChannelQueue serverChannel
---           pure clientChannel
---       )
---       (liftBase . atomically . snd)
---       (hoistChannel (liftBase . atomically) . fst)
---       clientToPeer
+stmClientConnector
+  :: MonadBase IO m
+  => TQueue (STMChannel ByteString)
+  -> ToPeer client ps 'AsClient st m
+  -> ClientConnector ps client m
+stmClientConnector queue toPeer = Connector \client -> do
+  STMChannel channel closeChannel <- liftBase $ atomically do
+    (clientChannel, serverChannel) <- channelPair
+    writeTQueue queue serverChannel
+    pure clientChannel
+  pure Connection
+    { closeConnection = \_ -> liftBase $ atomically closeChannel
+    , channel = hoistChannel (liftBase . atomically) channel
+    , peer = toPeer client
+    }
 
---   pure ClientServerPair{..}
+data ClientServerPair ps server client m = ClientServerPair
+  { connectionSource :: ConnectionSource ps server m
+  , clientConnector :: ClientConnector ps client m
+  }
+
+data ClientServerPairSelector ps f where
+  ClientEvent :: ConnectorSelector ps f -> ClientServerPairSelector ps f
+  ServerEvent :: ConnectorSelector ps f -> ClientServerPairSelector ps f
+
+getClientServerPairSelectorConfig
+  :: MessageToJSON ps
+  => Bool
+  -> Bool
+  -> GetSelectorConfig (ClientServerPairSelector ps)
+getClientServerPairSelectorConfig channelEnabled peerEnabled = \case
+  ClientEvent sel -> prependKey "client" $ getConnectorSelectorConfig channelEnabled peerEnabled sel
+  ServerEvent sel -> prependKey "server" $ getConnectorSelectorConfig channelEnabled peerEnabled sel
+
+logClientServerPair
+  :: forall ps server client m r
+   . (MonadBaseControl IO m, MonadCleanup m)
+  => EventBackend m r (ClientServerPairSelector ps)
+  -> ClientServerPair ps server client m
+  -> ClientServerPair ps server client m
+logClientServerPair eventBackend ClientServerPair{..} = ClientServerPair
+  { connectionSource = logConnectionSource (narrowEventBackend ServerEvent eventBackend) connectionSource
+  , clientConnector = logConnector (narrowEventBackend ClientEvent eventBackend) clientConnector
+  }
+
+clientServerPair
+  :: forall ps server client m st
+   . MonadBaseControl IO m
+  => ToPeer server ps 'AsServer st m
+  -> ToPeer client ps 'AsClient st m
+  -> STM (ClientServerPair ps server client m)
+clientServerPair serverToPeer clientToPeer = do
+  serverChannelQueue <- newTQueue
+  let
+  pure ClientServerPair
+    { connectionSource = stmConnectionSource serverChannelQueue serverToPeer
+    , clientConnector = stmClientConnector serverChannelQueue clientToPeer
+    }
