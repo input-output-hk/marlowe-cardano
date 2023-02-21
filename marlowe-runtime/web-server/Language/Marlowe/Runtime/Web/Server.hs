@@ -36,7 +36,7 @@ import Language.Marlowe.Runtime.Web.Server.REST (ApiSelector)
 import qualified Language.Marlowe.Runtime.Web.Server.REST as REST
 import Language.Marlowe.Runtime.Web.Server.SyncClient (SyncClient(..), SyncClientDependencies(..), syncClient)
 import Language.Marlowe.Runtime.Web.Server.TxClient (TxClient(..), TxClientDependencies(..), TxClientSelector, txClient)
-import Network.Protocol.Driver (RunClient)
+import Network.Protocol.Driver (SomeClientConnector)
 import Network.Protocol.Job.Client (JobClient)
 import qualified Network.Wai as WAI
 import Network.Wai.Middleware.Cors (CorsResourcePolicy(..), cors, simpleCorsResourcePolicy)
@@ -100,8 +100,8 @@ data ServerDependencies r = ServerDependencies
   { openAPIEnabled :: Bool
   , accessControlAllowOriginAll :: Bool
   , runApplication :: Application -> IO ()
-  , runMarloweQueryClient :: RunClient IO MarloweQueryClient
-  , runTxJobClient :: RunClient IO (JobClient MarloweTxCommand)
+  , marloweQueryConnector :: SomeClientConnector MarloweQueryClient IO
+  , txJobConnector :: SomeClientConnector (JobClient MarloweTxCommand) IO
   , eventBackend :: EventBackend IO r ServerSelector
   }
 
@@ -119,11 +119,11 @@ data ServerDependencies r = ServerDependencies
 server :: Component IO (ServerDependencies r) ()
 server = proc ServerDependencies{..} -> do
   TxClient{..} <- txClient -< TxClientDependencies
-    { runTxJobClient
+    { txJobConnector
     , eventBackend = narrowEventBackend Tx eventBackend
     }
   SyncClient{..} <- syncClient -< SyncClientDependencies
-    { runMarloweQueryClient
+    { marloweQueryConnector
     , lookupTempContract
     , lookupTempTransaction
     }

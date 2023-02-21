@@ -12,27 +12,26 @@ import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainPoint, WithGene
 import Language.Marlowe.Runtime.Core.Api (ContractId, MarloweVersion, SomeMarloweVersion(..))
 import Language.Marlowe.Runtime.History.Api (SomeCreateStep(..))
 import Language.Marlowe.Runtime.Sync.Database (DatabaseQueries(..), Next(..))
-import Network.Protocol.Driver (RunServer(..))
+import Network.Protocol.Driver (SomeConnectionSource, SomeServerConnector, acceptSomeConnector, runSomeConnector)
 
 data MarloweSyncServerDependencies = MarloweSyncServerDependencies
   { databaseQueries :: DatabaseQueries IO
-  , acceptRunMarloweSyncServer :: IO (RunServer IO MarloweSyncServer)
+  , syncSource :: SomeConnectionSource MarloweSyncServer IO
   }
 
 marloweSyncServer :: Component IO MarloweSyncServerDependencies ()
 marloweSyncServer = serverComponent (component_ worker) \MarloweSyncServerDependencies{..} -> do
-  runMarloweSyncServer <- acceptRunMarloweSyncServer
+  connector <- acceptSomeConnector syncSource
   pure WorkerDependencies{..}
 
 data WorkerDependencies = WorkerDependencies
   { databaseQueries :: DatabaseQueries IO
-  , runMarloweSyncServer :: RunServer IO MarloweSyncServer
+  , connector :: SomeServerConnector MarloweSyncServer IO
   }
 
 worker :: WorkerDependencies -> IO ()
 worker WorkerDependencies{..} = do
-  let RunServer runServer = runMarloweSyncServer
-  runServer $ MarloweSyncServer $ pure serverInit
+  runSomeConnector connector $ MarloweSyncServer $ pure serverInit
   where
     DatabaseQueries{..} = databaseQueries
 

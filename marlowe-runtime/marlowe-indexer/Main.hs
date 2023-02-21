@@ -24,7 +24,7 @@ import Language.Marlowe.Runtime.Indexer.Database (hoistDatabaseQueries)
 import qualified Language.Marlowe.Runtime.Indexer.Database.PostgreSQL as PostgreSQL
 import Logging (RootSelector(..), getRootSelectorConfig)
 import Network.Protocol.ChainSeek.Client (chainSeekClientPeer)
-import Network.Protocol.Driver (logConnector, runConnector, tcpClient)
+import Network.Protocol.Driver (SomeConnector(..), logConnector, runConnector, tcpClient)
 import Network.Protocol.Handshake.Client (handshakeClientConnector)
 import Network.Protocol.Query.Client (liftQuery, queryClientPeer)
 import Network.Socket (AddrInfo(..), HostName, PortNumber, SocketType(..), defaultHints, withSocketsDo)
@@ -65,11 +65,11 @@ run Options{..} = withSocketsDo do
   securityParameter <- queryChainSync GetSecurityParameter
   let
     indexerDependencies eventBackend = MarloweIndexerDependencies
-      { runChainSeekClient = runConnector
+      { chainSyncConnector = SomeConnector
           $ logConnector (narrowEventBackend ChainSeekClient eventBackend)
           $ handshakeClientConnector
           $ tcpClient chainSeekHost chainSeekPort (chainSeekClientPeer Genesis)
-      , runChainSyncQueryClient = runConnector
+      , chainSyncQueryConnector = SomeConnector
           $ logConnector (narrowEventBackend ChainQueryClient eventBackend) chainSyncQueryConnector
       , databaseQueries = hoistDatabaseQueries
           (either throwUsageError pure <=< Pool.use pool)

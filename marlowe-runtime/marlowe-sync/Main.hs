@@ -19,7 +19,7 @@ import Language.Marlowe.Runtime.Sync (SyncDependencies(..), sync)
 import Language.Marlowe.Runtime.Sync.Database (hoistDatabaseQueries, logDatabaseQueries)
 import qualified Language.Marlowe.Runtime.Sync.Database.PostgreSQL as Postgres
 import Logging (RootSelector(..), getRootSelectorConfig)
-import Network.Protocol.Driver (TcpServerDependencies(..), awaitConnection, logConnectionSource, tcpServer)
+import Network.Protocol.Driver (SomeConnectionSource(..), TcpServerDependencies(..), logConnectionSource, tcpServer)
 import Network.Protocol.Handshake.Server (handshakeConnectionSource)
 import Network.Socket (HostName, PortNumber)
 import Observe.Event.Backend (narrowEventBackend, newOnceFlagMVar)
@@ -71,7 +71,7 @@ run Options{..} = bracket (Pool.acquire (100, secondsToNominalDiffTime 5, fromSt
       , toPeer = marloweHeaderSyncServerPeer
       }
 
-    qyerySource <- tcpServer -< TcpServerDependencies
+    querySource <- tcpServer -< TcpServerDependencies
       { host
       , port = queryPort
       , toPeer = id
@@ -81,15 +81,15 @@ run Options{..} = bracket (Pool.acquire (100, secondsToNominalDiffTime 5, fromSt
       { databaseQueries = logDatabaseQueries (narrowEventBackend Database eventBackend) $ hoistDatabaseQueries
             (either throwUsageError pure <=< Pool.use pool)
             Postgres.databaseQueries
-      , acceptRunMarloweSyncServer = awaitConnection
+      , syncSource = SomeConnectionSource
           $ logConnectionSource (narrowEventBackend MarloweSyncServer eventBackend)
           $ handshakeConnectionSource marloweSyncSource
-      , acceptRunMarloweHeaderSyncServer = awaitConnection
+      , headerSyncSource = SomeConnectionSource
           $ logConnectionSource (narrowEventBackend MarloweHeaderSyncServer eventBackend)
           $ handshakeConnectionSource headerSyncSource
-      , acceptRunMarloweQueryServer = awaitConnection
+      , querySource = SomeConnectionSource
           $ logConnectionSource (narrowEventBackend MarloweQueryServer eventBackend)
-          $ handshakeConnectionSource qyerySource
+          $ handshakeConnectionSource querySource
       }
   where
     throwUsageError (Pool.ConnectionError err)                       = error $ show err

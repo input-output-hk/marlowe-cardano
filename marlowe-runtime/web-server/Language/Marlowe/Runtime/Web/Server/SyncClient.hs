@@ -24,10 +24,11 @@ import Language.Marlowe.Runtime.Discovery.Api (ContractHeader)
 import Language.Marlowe.Runtime.Transaction.Api (ContractCreated, InputsApplied(..))
 import Language.Marlowe.Runtime.Web.Server.TxClient (TempTx(..))
 import Language.Marlowe.Runtime.Web.Server.Util (applyRangeToAscList)
+import Network.Protocol.Driver (SomeClientConnector, runSomeConnector)
 import Servant.Pagination
 
 data SyncClientDependencies r = SyncClientDependencies
-  { runMarloweQueryClient :: forall a. MarloweQueryClient IO a -> IO a
+  { marloweQueryConnector :: SomeClientConnector MarloweQueryClient IO
   , lookupTempContract :: ContractId -> STM (Maybe (TempTx ContractCreated))
   , lookupTempTransaction :: ContractId -> TxId -> STM (Maybe (TempTx InputsApplied))
   }
@@ -68,19 +69,19 @@ data SyncClient r = SyncClient
 
 syncClient :: Component IO (SyncClientDependencies r) (SyncClient r)
 syncClient = arr \SyncClientDependencies{..} -> SyncClient
-  { loadContractHeaders = runMarloweQueryClient . getContractHeaders
-  , loadContract = \contractId -> runMarloweQueryClient do
+  { loadContractHeaders = runSomeConnector marloweQueryConnector . getContractHeaders
+  , loadContract = \contractId -> runSomeConnector marloweQueryConnector do
       result <- getContractState contractId
       case result of
         Nothing -> liftIO $ atomically $ fmap Left <$> lookupTempContract contractId
         Just contract -> pure $ Just $ Right contract
-  , loadTransaction = \contractId txId -> runMarloweQueryClient do
+  , loadTransaction = \contractId txId -> runSomeConnector marloweQueryConnector do
       result <- getTransaction txId
       let matchesContract (SomeTransaction _ _ _ Transaction{contractId=cid}) = cid == contractId
       case mfilter matchesContract result of
         Nothing -> liftIO $ atomically $ fmap Left <$> lookupTempTransaction contractId txId
         Just contract -> pure $ Just $ Right contract
-  , loadTransactions = \contractId Query.Range{..} -> runMarloweQueryClient do
+  , loadTransactions = \contractId Query.Range{..} -> runSomeConnector  marloweQueryConnector do
       mTxs <- getTransactions contractId
       pure do
         SomeTransactions MarloweV1 txs <- note ContractNotFound mTxs

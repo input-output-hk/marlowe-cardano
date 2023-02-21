@@ -489,7 +489,6 @@ executable marlowe
     , plutus-ledger-api
     , transformers
     , transformers-base
-    , typed-protocols
     , optparse-applicative
     , stm
     , stm-delay
