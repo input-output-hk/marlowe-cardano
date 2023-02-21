@@ -141,7 +141,7 @@ import Network.Protocol.ChainSeek.Client (chainSeekClientPeer)
 import Network.Protocol.ChainSeek.Server (chainSeekServerPeer)
 import Network.Protocol.Driver
 import qualified Network.Protocol.Driver as Driver
-import Network.Protocol.Handshake.Server (handshakeClientServerPair)
+import Network.Protocol.Handshake.Server (handshakeClientServerPair, handshakeConnectionSource)
 import Network.Protocol.Handshake.Types (Handshake)
 import Network.Protocol.Job.Client (JobClient, jobClientPeer)
 import Network.Protocol.Job.Server (JobServer, jobServerPeer)
@@ -172,6 +172,10 @@ data MarloweRuntime = MarloweRuntime
   , marloweSyncConnector :: SomeClientConnector MarloweSyncClient IO
   , marloweQueryConnector :: SomeClientConnector MarloweQueryClient IO
   , txJobConnector :: SomeClientConnector (JobClient MarloweTxCommand) IO
+  , marloweHeaderSyncPort :: Int
+  , marloweSyncPort :: Int
+  , marloweQueryPort :: Int
+  , txJobPort :: Int
   , runWebClient :: forall a. ClientM a -> IO (Either ClientError a)
   , marloweScripts :: MarloweScripts
   , testnet :: LocalTestnet
@@ -267,6 +271,10 @@ withLocalMarloweRuntime' MarloweRuntimeOptions{..} test = withRunInIO \runInIO -
         Sync.databaseQueries
 
     webPort <- liftIO $ randomRIO (4000, 5000)
+    marloweHeaderSyncPort <- liftIO $ randomRIO (5000, 6000)
+    let marloweSyncPort = marloweHeaderSyncPort + 1
+    let marloweQueryPort = marloweHeaderSyncPort + 2
+    let txJobPort = marloweHeaderSyncPort + 3
     manager <- liftIO $ newManager defaultManagerSettings
 
     let submitConfirmationBlocks = 2
@@ -431,10 +439,14 @@ data RuntimeSelector f where
   ChainSeekPair :: ClientServerPairSelector (Handshake RuntimeChainSeek) f -> RuntimeSelector f
   ChainSyncJobPair :: ClientServerPairSelector (Handshake (Job ChainSyncCommand)) f -> RuntimeSelector f
   ChainSyncQueryPair :: ClientServerPairSelector (Handshake (Query ChainSyncQuery)) f -> RuntimeSelector f
-  DiscoverySyncPair :: ClientServerPairSelector (Handshake MarloweHeaderSync) f -> RuntimeSelector f
-  HistorySyncPair :: ClientServerPairSelector (Handshake MarloweSync) f -> RuntimeSelector f
+  HeaderSyncPair :: ClientServerPairSelector (Handshake MarloweHeaderSync) f -> RuntimeSelector f
+  MarloweSyncPair :: ClientServerPairSelector (Handshake MarloweSync) f -> RuntimeSelector f
   MarloweQueryPair :: ClientServerPairSelector (Handshake MarloweQuery) f -> RuntimeSelector f
   TxJobPair :: ClientServerPairSelector (Handshake (Job MarloweTxCommand)) f -> RuntimeSelector f
+  HeaderSyncTCP :: ConnectorSelector (Handshake MarloweHeaderSync) f -> RuntimeSelector f
+  MarloweSyncTCP :: ConnectorSelector (Handshake MarloweSync) f -> RuntimeSelector f
+  MarloweQueryTCP :: ConnectorSelector (Handshake MarloweQuery) f -> RuntimeSelector f
+  TxJobTCP :: ConnectorSelector (Handshake (Job MarloweTxCommand)) f -> RuntimeSelector f
   TxEvent :: TransactionServerSelector f -> RuntimeSelector f
   ChainIndexerEvent :: ChainIndexerSelector f -> RuntimeSelector f
   MarloweIndexerEvent :: MarloweIndexerSelector f -> RuntimeSelector f
@@ -460,6 +472,10 @@ data RuntimeDependencies r = RuntimeDependencies
   , securityParameter :: Int
   , marloweScripts :: MarloweScripts
   , webPort :: Int
+  , marloweHeaderSyncPort :: Int
+  , marloweSyncPort :: Int
+  , marloweQueryPort :: Int
+  , txJobPort :: Int
   }
 
 runtime :: Component IO (RuntimeDependencies r) ()
@@ -472,6 +488,11 @@ runtime = proc RuntimeDependencies{..} -> do
     getCurrentScripts MarloweV1 = marloweScripts
 
     LocalNodeConnectInfo{..} = localNodeConnectInfo
+
+  headerSyncSource <- handshakeConnectionSource <$> tcpServer -< TcpServerDependencies "127.0.0.1" (fromIntegral marloweHeaderSyncPort) marloweHeaderSyncServerPeer
+  syncSource <- handshakeConnectionSource <$> tcpServer -< TcpServerDependencies "127.0.0.1" (fromIntegral marloweSyncPort) marloweSyncServerPeer
+  querySource <- handshakeConnectionSource <$> tcpServer -< TcpServerDependencies "127.0.0.1" (fromIntegral marloweQueryPort) id
+  txJobSource <- handshakeConnectionSource <$> tcpServer -< TcpServerDependencies "127.0.0.1" (fromIntegral txJobPort) jobServerPeer
 
   chainIndexer -<
     let
@@ -496,9 +517,9 @@ runtime = proc RuntimeDependencies{..} -> do
 
   sync -< SyncDependencies
     { databaseQueries = marloweSyncDatabaseQueries $ narrowEventBackend SyncDatabaseEvent rootEventBackend
-    , syncSource = SomeConnectionSource $ Driver.connectionSource marloweSyncPair
-    , headerSyncSource = SomeConnectionSource $ Driver.connectionSource marloweHeaderSyncPair
-    , querySource = SomeConnectionSource $ Driver.connectionSource marloweQueryPair
+    , syncSource = SomeConnectionSource $ mergeConnectionSource (logConnectionSource (narrowEventBackend MarloweSyncTCP rootEventBackend) syncSource) $ Driver.connectionSource marloweSyncPair
+    , headerSyncSource = SomeConnectionSource $ mergeConnectionSource (logConnectionSource (narrowEventBackend HeaderSyncTCP rootEventBackend) headerSyncSource) $ Driver.connectionSource marloweHeaderSyncPair
+    , querySource = SomeConnectionSource $ mergeConnectionSource (logConnectionSource (narrowEventBackend MarloweQueryTCP rootEventBackend) querySource) $ Driver.connectionSource marloweQueryPair
     }
 
   chainSync -<
@@ -546,7 +567,7 @@ runtime = proc RuntimeDependencies{..} -> do
     in
       TransactionDependencies
         { chainSyncConnector = SomeConnector $ clientConnector chainSyncPair
-        , connectionSource = SomeConnectionSource $ Driver.connectionSource txJobPair
+        , connectionSource = SomeConnectionSource $ mergeConnectionSource (logConnectionSource (narrowEventBackend TxJobTCP rootEventBackend) txJobSource) $ Driver.connectionSource txJobPair
         , ..
         }
 
@@ -580,10 +601,10 @@ setupChannels eventBackend = do
   chainSyncQueryPair <- logClientServerPair (narrowEventBackend ChainSyncQueryPair eventBackend) . handshakeClientServerPair <$> clientServerPair
     queryServerPeer
     queryClientPeer
-  marloweHeaderSyncPair <- logClientServerPair (narrowEventBackend DiscoverySyncPair eventBackend) . handshakeClientServerPair <$> clientServerPair
+  marloweHeaderSyncPair <- logClientServerPair (narrowEventBackend HeaderSyncPair eventBackend) . handshakeClientServerPair <$> clientServerPair
     marloweHeaderSyncServerPeer
     marloweHeaderSyncClientPeer
-  marloweSyncPair <- logClientServerPair (narrowEventBackend HistorySyncPair eventBackend) . handshakeClientServerPair <$> clientServerPair
+  marloweSyncPair <- logClientServerPair (narrowEventBackend MarloweSyncPair eventBackend) . handshakeClientServerPair <$> clientServerPair
     marloweSyncServerPeer
     marloweSyncClientPeer
   marloweQueryPair <- logClientServerPair (narrowEventBackend MarloweQueryPair eventBackend) . handshakeClientServerPair <$> clientServerPair
@@ -599,10 +620,14 @@ getRuntimeSelectorConfig = \case
   ChainSeekPair sel -> prependKey "chain-sync" $ getClientServerPairSelectorConfig True True sel
   ChainSyncJobPair sel -> prependKey "chain-sync-job" $ getClientServerPairSelectorConfig True True sel
   ChainSyncQueryPair sel -> prependKey "chain-sync-query" $ getClientServerPairSelectorConfig True True sel
-  DiscoverySyncPair sel -> prependKey "discovery-job" $ getClientServerPairSelectorConfig True True sel
-  HistorySyncPair sel -> prependKey "history-sync" $ getClientServerPairSelectorConfig True True sel
+  HeaderSyncPair sel -> prependKey "header-sync" $ getClientServerPairSelectorConfig True True sel
+  MarloweSyncPair sel -> prependKey "marlowe-sync" $ getClientServerPairSelectorConfig True True sel
   MarloweQueryPair sel -> prependKey "marlowe-query" $ getClientServerPairSelectorConfig True True sel
   TxJobPair sel -> prependKey "tx-job" $ getClientServerPairSelectorConfig True True sel
+  HeaderSyncTCP sel -> prependKey "header-sync.tcp" $ getConnectorSelectorConfig True True sel
+  MarloweSyncTCP sel -> prependKey "marlowe-sync.tcp" $ getConnectorSelectorConfig True True sel
+  MarloweQueryTCP sel -> prependKey "marlowe-query.tcp" $ getConnectorSelectorConfig True True sel
+  TxJobTCP sel -> prependKey "tx-job.tcp" $ getConnectorSelectorConfig True True sel
   TxEvent sel -> prependKey "marlowe-tx" $ getTransactionSererSelectorConfig sel
   ChainIndexerEvent sel -> prependKey "marlowe-chain-indexer" $ getChainIndexerSelectorConfig sel
   MarloweIndexerEvent sel -> prependKey "marlowe-indexer" $ getMarloweIndexerSelectorConfig sel

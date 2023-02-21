@@ -10,6 +10,7 @@
 module Network.Protocol.Driver
   where
 
+import Control.Applicative ((<|>))
 import Control.Concurrent.Component
 import Control.Concurrent.STM (STM, TQueue, atomically, newEmptyTMVar, newTQueue, readTMVar, readTQueue, tryPutTMVar)
 import Control.Concurrent.STM.TQueue (writeTQueue)
@@ -160,6 +161,9 @@ type SomeServerConnector = SomeConnector 'AsServer
 newtype ConnectionSource ps server m = ConnectionSource
   { acceptConnector :: STM (Connector ps 'AsServer server m)
   }
+
+mergeConnectionSource :: ConnectionSource ps server m -> ConnectionSource ps server m -> ConnectionSource ps server m
+mergeConnectionSource (ConnectionSource source1) (ConnectionSource source2) = ConnectionSource $ source1 <|> source2
 
 data SomeConnectionSource server m =
   forall ps. BinaryMessage ps => SomeConnectionSource (ConnectionSource ps server m)
