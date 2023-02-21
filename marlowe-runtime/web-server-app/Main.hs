@@ -12,7 +12,8 @@ module Main
 import Control.Concurrent.Component (runComponent_)
 import Language.Marlowe.Protocol.Query.Client (marloweQueryClientPeer)
 import Language.Marlowe.Runtime.Web.Server
-import Network.Protocol.Handshake.Client (runClientPeerOverSocketWithHandshake)
+import Network.Protocol.Driver (runConnector, tcpClient)
+import Network.Protocol.Handshake.Client (handshakeClientConnector)
 import Network.Protocol.Job.Client (jobClientPeer)
 import Network.Wai.Handler.Warp (run)
 import Observe.Event.Render.JSON (DefaultRenderSelectorJSON(defaultRenderSelectorJSON))
@@ -34,13 +35,11 @@ optionsToServerDependencies Options{..} = do
     { openAPIEnabled
     , accessControlAllowOriginAll
     , runApplication = run $ fromIntegral port
-    , runMarloweQueryClient = runClientPeerOverSocketWithHandshake
-        syncHost
-        syncQueryPort
-        marloweQueryClientPeer
-    , runTxJobClient = runClientPeerOverSocketWithHandshake
-        txHost
-        txCommandPort
-        jobClientPeer
+    , runMarloweQueryClient = runConnector
+        $ handshakeClientConnector
+        $ tcpClient syncHost syncQueryPort marloweQueryClientPeer
+    , runTxJobClient = runConnector
+        $ handshakeClientConnector
+        $ tcpClient txHost txCommandPort jobClientPeer
     , eventBackend
     }

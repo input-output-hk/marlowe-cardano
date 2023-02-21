@@ -93,7 +93,7 @@ mkDriver  Channel{..} = Driver{..}
 type RunClient m client = forall a. client m a -> m a
 newtype RunServer m server = RunServer (forall a. server m a -> m a)
 
-type ToPeer machine protocol peer st m = forall a. machine m a -> Peer protocol peer st m a
+type ToPeer peer protocol pr st m = forall a. peer m a -> Peer protocol pr st m a
 
 data TcpServerDependencies ps server m = forall (st :: ps). TcpServerDependencies
   { host :: HostName
@@ -139,8 +139,8 @@ tcpClient host port toPeer = Connector \client -> do
     , peer = toPeer client
     }
 
-newtype Connector ps pr server m = Connector
-  { runConnector :: forall a. server m a -> m (Connection ps pr m a)
+newtype Connector ps pr peer m = Connector
+  { connectPeer :: forall a. peer m a -> m (Connection ps pr m a)
   }
 
 newtype ConnectionSource ps server m = ConnectionSource
@@ -166,9 +166,9 @@ logConnector
   -> Connector ps pr peer m
   -> Connector ps pr peer m
 logConnector eventBackend Connector{..} = Connector
-  { runConnector = \p -> do
+  { connectPeer = \p -> do
       ev <- newEvent eventBackend Session
-      Connection{..} <- runConnector p
+      Connection{..} <- connectPeer p
       pure $ logConnection (subEventBackend ConnectionSelector ev) Connection
         { closeConnection = \mError -> do
             case mError of
@@ -232,9 +232,9 @@ logConnection eventBackend Connection{..} = Connection
 awaitConnection :: (MonadBaseControl IO m, BinaryMessage ps) => ConnectionSource ps server m -> m (RunServer m server)
 awaitConnection ConnectionSource{..} = do
   Connector{..} <- liftBase $ atomically acceptConnector
-  pure $ RunServer $ runConnection <=< runConnector
+  pure $ RunServer $ runConnection <=< connectPeer
 
-runConnection :: (MonadBaseControl IO m, BinaryMessage ps) => Connection ps machine m a -> m a
+runConnection :: (MonadBaseControl IO m, BinaryMessage ps) => Connection ps peer m a -> m a
 runConnection Connection{..} = do
   let driver = mkDriver channel
   mask \restore -> do
@@ -246,6 +246,9 @@ runConnection Connection{..} = do
       Right (a, _) -> do
         closeConnection Nothing
         pure a
+
+runConnector :: (MonadBaseControl IO m, BinaryMessage ps) => Connector ps pr peer m -> peer m a -> m a
+runConnector Connector{..} = runConnection <=< connectPeer
 
 data ClientServerPair m server client = ClientServerPair
   { acceptRunServer :: m (RunServer m server)

@@ -16,8 +16,16 @@ import qualified Language.Marlowe.Runtime.Transaction.Submit as Submit
 import Logging (RootSelector(..), getRootSelectorConfig)
 import Network.Protocol.ChainSeek.Client (chainSeekClientPeer)
 import Network.Protocol.Driver
-  (RunClient, TcpServerDependencies(TcpServerDependencies), awaitConnection, logConnectionSource, tcpServer)
-import Network.Protocol.Handshake.Client (runClientPeerOverSocketWithLoggingWithHandshake)
+  ( RunClient
+  , TcpServerDependencies(TcpServerDependencies)
+  , awaitConnection
+  , logConnectionSource
+  , logConnector
+  , runConnector
+  , tcpClient
+  , tcpServer
+  )
+import Network.Protocol.Handshake.Client (handshakeClientConnector)
 import Network.Protocol.Handshake.Server (handshakeConnectionSource)
 import Network.Protocol.Job.Client (jobClientPeer)
 import Network.Protocol.Job.Server (jobServerPeer)
@@ -61,18 +69,17 @@ run = runComponent_ proc Options{..} -> do
   serverSource <- tcpServer -< TcpServerDependencies host port jobServerPeer
   let
     connectToChainSeek :: RunClient IO RuntimeChainSeekClient
-    connectToChainSeek = runClientPeerOverSocketWithLoggingWithHandshake
-      (narrowEventBackend ChainSeekClient eventBackend)
-      chainSeekHost
-      chainSeekPort
-      (chainSeekClientPeer Genesis)
+    connectToChainSeek = runConnector
+      $ logConnector (narrowEventBackend ChainSeekClient eventBackend)
+      $ handshakeClientConnector
+      $ tcpClient chainSeekHost chainSeekPort
+      $ chainSeekClientPeer Genesis
 
     runChainSyncQueryClient :: RunClient IO (QueryClient ChainSyncQuery)
-    runChainSyncQueryClient = runClientPeerOverSocketWithLoggingWithHandshake
-      (narrowEventBackend ChainSyncQueryClient eventBackend)
-      chainSeekHost
-      chainSeekQueryPort
-      queryClientPeer
+    runChainSyncQueryClient = runConnector
+      $ logConnector (narrowEventBackend ChainSyncQueryClient eventBackend)
+      $ handshakeClientConnector
+      $ tcpClient chainSeekHost chainSeekQueryPort queryClientPeer
 
     queryChainSync = fmap (fromRight $ error "failed to query chain sync server") . runChainSyncQueryClient . liftQuery
   transaction -< TransactionDependencies
@@ -80,11 +87,10 @@ run = runComponent_ proc Options{..} -> do
         $ logConnectionSource (narrowEventBackend Server eventBackend)
         $ handshakeConnectionSource serverSource
     , mkSubmitJob = Submit.mkSubmitJob Submit.SubmitJobDependencies
-        { runChainSyncJobClient = runClientPeerOverSocketWithLoggingWithHandshake
-            (narrowEventBackend ChainSyncJobClient eventBackend)
-            chainSeekHost
-            chainSeekCommandPort
-            jobClientPeer
+        { runChainSyncJobClient = runConnector
+            $ logConnector (narrowEventBackend ChainSyncJobClient eventBackend)
+            $ handshakeClientConnector
+            $ tcpClient chainSeekHost chainSeekCommandPort jobClientPeer
         , ..
         }
     , loadMarloweContext = \eb version contractId -> do

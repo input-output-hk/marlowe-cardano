@@ -49,7 +49,7 @@ handshakeServerConnector
    . (HasSignature ps, MonadFail m)
   => Connector ps 'AsServer server m
   -> Connector (Handshake ps) 'AsServer server m
-handshakeServerConnector Connector{..} = Connector $ fmap handshakeServerConnection . runConnector
+handshakeServerConnector Connector{..} = Connector $ fmap handshakeServerConnection . connectPeer
 
 handshakeServerConnection
   :: forall ps m a
