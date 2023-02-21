@@ -7,7 +7,7 @@ module Language.Marlowe.Runtime.Transaction.BuildConstraintsSpec
   ( spec
   ) where
 
-import Cardano.Api (ConsensusMode(..), EraHistory(EraHistory))
+import Cardano.Api (ConsensusMode(..), EraHistory(EraHistory), SlotNo(SlotNo))
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import Data.Function (on)
@@ -291,6 +291,8 @@ buildApplyInputsConstraintsSpec =
           :* K (oneSecondEraSummary 4) -- Alonzo lasted 1 second
           :* K (unboundedEraSummary 5) -- Babbage never ends
           :* Nil
+      -- Important note: these slot computations cannot be used generally, but are specificially tailored
+      -- to the contrived era history and system start used for this test case.
       genTipSlot = chooseInteger (9, 20) -- Make sure the tip is in the Babbage era.
       genMinTime = oneof
                    [
@@ -302,6 +304,11 @@ buildApplyInputsConstraintsSpec =
                      (1000 *) <$> chooseInteger (6, 20)  -- Even seconds, so there is a chance of collision.
                    , chooseInteger (6000, 20000)         -- Milliseconds, so there is rounding off.
                    ]
+      toSlot = (`div` 1000)
+      toSlotNo = SlotNo . fromInteger . (`div` 1000)
+      toUTC = posixSecondsToUTCTime . secondsToNominalDiffTime . (/ 1000) . fromInteger :: Integer -> UTCTime
+      fromUTC = floor . (1000 *) . nominalDiffTimeToSeconds . utcTimeToPOSIXSeconds :: UTCTime -> Integer
+      toSecondFloor = (* 1000) . (`div` 1000)
     Hspec.QuickCheck.prop "valid slot interval for timed-out contract" \assets utxo address marloweParams-> do
       -- The choice intervals for the tip, minimum time, and timeout overlap, so every ordering will occur.
       tipSlot' <- genTipSlot
@@ -313,9 +320,6 @@ buildApplyInputsConstraintsSpec =
         contract' = Semantics.When [] (POSIXTime timeout) $ Semantics.When [] (POSIXTime timeout') Semantics.Close
       marloweContract <- elements [contract, contract'] -- This contract can only time out.
       let
-        -- Important note: these slot computations cannot be used generally, but are specificially tailored
-        -- to the contrived era history and system start used for this test case.
-        toSlot = (`div` 1000)
         tipSlot = Chain.SlotNo $ fromInteger tipSlot'
         tipTime = 1000 * tipSlot'
         marloweState = Semantics.State AM.empty AM.empty AM.empty $ POSIXTime minTime
@@ -355,11 +359,6 @@ buildApplyInputsConstraintsSpec =
       lower <- oneof [pure Nothing, Just <$> chooseInteger (0, tipTime)]                  -- Choose a lower bound be not after the tip.
       upper <- oneof [pure Nothing, Just <$> chooseInteger (tipTime + 1_000, 2_000_000)]  -- Choose an upper bound at least one slot after the tip.
       let
-        toUTC = posixSecondsToUTCTime . secondsToNominalDiffTime . (/ 1000) . fromInteger :: Integer -> UTCTime
-        fromUTC = floor . (1000 *) . nominalDiffTimeToSeconds . utcTimeToPOSIXSeconds :: UTCTime -> Integer
-        toSecondFloor = (* 1000) . (`div` 1000)
-        -- Important note: these slot computations cannot be used generally, but are specificially tailored
-        -- to the contrived era history and system start used for this test case.
         tipSlot = Chain.SlotNo $ fromInteger $ tipTime `div` 1_000
         marloweContract = Semantics.Assert Semantics.TrueObs Semantics.Close
         marloweState = Semantics.State AM.empty AM.empty AM.empty $ POSIXTime 0
@@ -423,6 +422,47 @@ buildApplyInputsConstraintsSpec =
               counterexample "role and address payments are correct"
                 $  payToAddresses == expectedPayToAddresses
                 && payToRoles     == expectedPayToRoles
+            Left _ ->
+              counterexample "Unexpected transaction failure" False
+    Hspec.QuickCheck.prop "input constraints" \assets utxo address marloweParams -> do
+      choiceId <- arbitrary
+      chosenNum <- arbitrary
+      closes <- arbitrary
+      tipTime <- (1_000 *) <$> chooseInteger (0, 1_000)    -- Choose the tip first.
+      minTime <- chooseInteger (0, tipTime)                -- Choose a minimum before the tip.
+      lower <- chooseInteger (0, tipTime)                  -- Choose a lower bound be not after the tip.
+      upper <- chooseInteger (tipTime + 1_000, 2_000_000)  -- Choose an upper bound at least one slot after the tip.
+      let
+        tipSlot = Chain.SlotNo $ fromInteger $ tipTime `div` 1_000
+        inputs = pure . Semantics.NormalInput $ Semantics.IChoice choiceId chosenNum
+        marloweState = Semantics.State AM.empty AM.empty AM.empty $ POSIXTime minTime
+        remainder =
+          if closes
+            then Semantics.Close
+            else Semantics.When [] 1_000_000_000_000_000_000_000 Semantics.Close
+        marloweContract =
+          Semantics.When [Semantics.Case (Semantics.Choice choiceId [Semantics.Bound chosenNum chosenNum]) remainder] 1_000_000_000_000_000_000_000 Semantics.Close
+        datum = Semantics.MarloweData{..}
+        marloweOutput = TransactionScriptOutput{..}
+        result =
+          buildApplyInputsConstraints
+            systemStart eraHistory MarloweV1
+            marloweOutput
+            tipSlot
+            (Chain.TransactionMetadata mempty) (Just $ toUTC lower) (Just $ toUTC upper) inputs
+      pure
+        . counterexample ("minTime = " <> show minTime)
+        . counterexample ("lower = " <> show lower)
+        . counterexample ("tipTime = " <> show tipTime)
+        . counterexample ("specified upper = " <> show upper)
+        . counterexample ("specified result = " <> show result)
+        . counterexample ("contract = " <> show marloweContract)
+        . counterexample ("inputs = " <> show inputs)
+        . counterexample ("result = " <> show result)
+        $ case result of
+            Right (_, TxConstraints{..}) ->
+              counterexample "input is correct"
+                $ marloweInputConstraints == MarloweInput (toSlotNo lower) (toSlotNo upper) inputs
             Left _ ->
               counterexample "Unexpected transaction failure" False
     Hspec.QuickCheck.prop "output constraints" \assets utxo address marloweParams choices values -> do
