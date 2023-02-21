@@ -16,7 +16,8 @@ import Data.Bifunctor (Bifunctor(bimap))
 import Data.Functor ((<&>))
 import Data.Proxy (Proxy(..))
 import Data.Text (Text)
-import Network.Protocol.Driver (Connection(..), ConnectionSource(..), Connector(..))
+import Network.Protocol.Driver (ClientServerPair(..), Connection(..), ConnectionSource(..), Connector(..))
+import Network.Protocol.Handshake.Client (handshakeClientConnector)
 import Network.Protocol.Handshake.Types
 import Network.TypedProtocol
 
@@ -59,6 +60,16 @@ handshakeServerConnection
 handshakeServerConnection Connection{..} = Connection
   { peer = handshakeServerPeer id $ simpleHandshakeServer (signature $ Proxy @ps) peer
   , ..
+  }
+
+handshakeClientServerPair
+  :: forall ps client server m
+   . (HasSignature ps, MonadFail m)
+  => ClientServerPair ps client server m
+  -> ClientServerPair (Handshake ps) client server m
+handshakeClientServerPair ClientServerPair{..} = ClientServerPair
+  { connectionSource = handshakeConnectionSource connectionSource
+  , clientConnector = handshakeClientConnector clientConnector
   }
 
 hoistHandshakeServer

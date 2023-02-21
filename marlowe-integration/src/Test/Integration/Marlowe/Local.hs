@@ -140,6 +140,9 @@ import Network.HTTP.Client (defaultManagerSettings, newManager)
 import Network.Protocol.ChainSeek.Client (chainSeekClientPeer)
 import Network.Protocol.ChainSeek.Server (chainSeekServerPeer)
 import Network.Protocol.Driver
+import qualified Network.Protocol.Driver as Driver
+import Network.Protocol.Handshake.Server (handshakeClientServerPair)
+import Network.Protocol.Handshake.Types (Handshake)
 import Network.Protocol.Job.Client (JobClient, jobClientPeer)
 import Network.Protocol.Job.Server (JobServer, jobServerPeer)
 import Network.Protocol.Job.Types (Job)
@@ -165,12 +168,10 @@ import Text.Read (readMaybe)
 import UnliftIO (MonadUnliftIO, withRunInIO)
 
 data MarloweRuntime = MarloweRuntime
-  { runChainSyncQueryClient :: RunClient IO (QueryClient ChainSyncQuery)
-  , runChainSeekClient :: RunClient IO RuntimeChainSeekClient
-  , runDiscoverySyncClient :: RunClient IO MarloweHeaderSyncClient
-  , runHistorySyncClient :: RunClient IO MarloweSyncClient
-  , runTxJobClient :: RunClient IO (JobClient MarloweTxCommand)
-  , runMarloweQueryClient :: RunClient IO MarloweQueryClient
+  { marloweHeaderSyncConnector :: SomeClientConnector MarloweHeaderSyncClient IO
+  , marloweSyncConnector :: SomeClientConnector MarloweSyncClient IO
+  , marloweQueryConnector :: SomeClientConnector MarloweQueryClient IO
+  , txJobConnector :: SomeClientConnector (JobClient MarloweTxCommand) IO
   , runWebClient :: forall a. ClientM a -> IO (Either ClientError a)
   , marloweScripts :: MarloweScripts
   , testnet :: LocalTestnet
@@ -238,9 +239,6 @@ withLocalMarloweRuntime' MarloweRuntimeOptions{..} test = withRunInIO \runInIO -
       Right a -> pure a
     shelleyGenesisConfig <- liftIO $ either error id <$> eitherDecodeFileStrict (shelleyGenesisJson network)
     let
-      connectToChainSeek :: RunClient IO RuntimeChainSeekClient
-      connectToChainSeek = runChainSeekClient
-
       byronGenesisConfig = Byron.Config
         genesisData
         genesisHash
@@ -272,12 +270,19 @@ withLocalMarloweRuntime' MarloweRuntimeOptions{..} test = withRunInIO \runInIO -
     manager <- liftIO $ newManager defaultManagerSettings
 
     let submitConfirmationBlocks = 2
+    let chainSyncConnector = SomeConnector $ clientConnector chainSyncPair
+    let chainSyncJobConnector = SomeConnector $ clientConnector chainSyncJobPair
     let mkSubmitJob = Submit.mkSubmitJob SubmitJobDependencies{..}
     let baseUrl = BaseUrl Http "localhost" webPort ""
     let clientEnv = mkClientEnv manager baseUrl
     let
       runWebClient :: ClientM a -> IO (Either ClientError a)
       runWebClient = flip runClientM clientEnv
+
+    let marloweSyncConnector = SomeConnector $ clientConnector marloweSyncPair
+    let marloweHeaderSyncConnector = SomeConnector $ clientConnector marloweHeaderSyncPair
+    let marloweQueryConnector = SomeConnector $ clientConnector marloweQueryPair
+    let txJobConnector = SomeConnector $ clientConnector txJobPair
 
     -- Persist the genesis block before starting the services so that they
     -- exist already and no database queries fail.
@@ -423,20 +428,13 @@ toMarloweScripts testnetMagic txBody PublishMarloweScripts{..} = MarloweScripts{
     payoutScriptUTxOs = Map.singleton networkId payoutReferenceScriptUTxO
 
 data RuntimeSelector f where
-  ChainSeekClientEvent :: ConnectSocketDriverSelector RuntimeChainSeek f -> RuntimeSelector f
-  ChainSeekServerEvent :: ConnectionSourceSelector RuntimeChainSeek f -> RuntimeSelector f
-  ChainSyncJobClientEvent :: ConnectSocketDriverSelector (Job ChainSyncCommand) f -> RuntimeSelector f
-  ChainSyncJobServerEvent :: ConnectionSourceSelector (Job ChainSyncCommand) f -> RuntimeSelector f
-  ChainSyncQueryClientEvent :: ConnectSocketDriverSelector (Query ChainSyncQuery) f -> RuntimeSelector f
-  ChainSyncQueryServerEvent :: ConnectionSourceSelector (Query ChainSyncQuery) f -> RuntimeSelector f
-  DiscoverySyncClientEvent :: ConnectSocketDriverSelector MarloweHeaderSync f -> RuntimeSelector f
-  DiscoverySyncServerEvent :: ConnectionSourceSelector MarloweHeaderSync f -> RuntimeSelector f
-  HistorySyncClientEvent :: ConnectSocketDriverSelector MarloweSync f -> RuntimeSelector f
-  HistorySyncServerEvent :: ConnectionSourceSelector MarloweSync f -> RuntimeSelector f
-  MarloweQueryClientEvent :: ConnectSocketDriverSelector MarloweQuery f -> RuntimeSelector f
-  MarloweQueryServerEvent :: ConnectionSourceSelector MarloweQuery f -> RuntimeSelector f
-  TxJobClientEvent :: ConnectSocketDriverSelector (Job MarloweTxCommand) f -> RuntimeSelector f
-  TxJobServerEvent :: ConnectionSourceSelector (Job MarloweTxCommand) f -> RuntimeSelector f
+  ChainSeekPair :: ClientServerPairSelector (Handshake RuntimeChainSeek) f -> RuntimeSelector f
+  ChainSyncJobPair :: ClientServerPairSelector (Handshake (Job ChainSyncCommand)) f -> RuntimeSelector f
+  ChainSyncQueryPair :: ClientServerPairSelector (Handshake (Query ChainSyncQuery)) f -> RuntimeSelector f
+  DiscoverySyncPair :: ClientServerPairSelector (Handshake MarloweHeaderSync) f -> RuntimeSelector f
+  HistorySyncPair :: ClientServerPairSelector (Handshake MarloweSync) f -> RuntimeSelector f
+  MarloweQueryPair :: ClientServerPairSelector (Handshake MarloweQuery) f -> RuntimeSelector f
+  TxJobPair :: ClientServerPairSelector (Handshake (Job MarloweTxCommand)) f -> RuntimeSelector f
   TxEvent :: TransactionServerSelector f -> RuntimeSelector f
   ChainIndexerEvent :: ChainIndexerSelector f -> RuntimeSelector f
   MarloweIndexerEvent :: MarloweIndexerSelector f -> RuntimeSelector f
@@ -444,13 +442,13 @@ data RuntimeSelector f where
   SyncDatabaseEvent :: Sync.DatabaseSelector f -> RuntimeSelector f
 
 data RuntimeDependencies r = RuntimeDependencies
-  { acceptRunChainSeekServer :: IO (RunServer IO RuntimeChainSeekServer)
-  , acceptRunChainSyncJobServer :: IO (RunServer IO (JobServer ChainSyncCommand))
-  , acceptRunChainSyncQueryServer :: IO (RunServer IO (QueryServer ChainSyncQuery))
-  , acceptRunDiscoverySyncServer :: IO (RunServer IO MarloweHeaderSyncServer)
-  , acceptRunHistorySyncServer :: IO (RunServer IO MarloweSyncServer)
-  , acceptRunMarloweQueryServer :: IO (RunServer IO MarloweQueryServer)
-  , acceptRunTxJobServer :: IO (RunServer IO (JobServer MarloweTxCommand))
+  { chainSyncPair :: ClientServerPair (Handshake RuntimeChainSeek) RuntimeChainSeekServer RuntimeChainSeekClient IO
+  , chainSyncJobPair :: ClientServerPair (Handshake (Job ChainSyncCommand)) (JobServer ChainSyncCommand) (JobClient ChainSyncCommand) IO
+  , chainSyncQueryPair :: ClientServerPair (Handshake (Query ChainSyncQuery)) (QueryServer ChainSyncQuery) (QueryClient ChainSyncQuery) IO
+  , marloweHeaderSyncPair :: ClientServerPair (Handshake MarloweHeaderSync) MarloweHeaderSyncServer MarloweHeaderSyncClient IO
+  , marloweSyncPair :: ClientServerPair (Handshake MarloweSync) MarloweSyncServer MarloweSyncClient IO
+  , marloweQueryPair :: ClientServerPair (Handshake MarloweQuery) MarloweQueryServer MarloweQueryClient IO
+  , txJobPair :: ClientServerPair (Handshake (Job MarloweTxCommand)) (JobServer MarloweTxCommand) (JobClient MarloweTxCommand) IO
   , chainIndexerDatabaseQueries :: ChainIndexer.DatabaseQueries IO
   , chainSeekDatabaseQueries :: ChainSync.DatabaseQueries IO
   , genesisBlock :: !GenesisBlock
@@ -459,13 +457,6 @@ data RuntimeDependencies r = RuntimeDependencies
   , marloweSyncDatabaseQueries :: EventBackend IO r Sync.DatabaseSelector -> Sync.DatabaseQueries IO
   , mkSubmitJob :: Tx BabbageEra -> STM SubmitJob
   , rootEventBackend :: EventBackend IO r RuntimeSelector
-  , runChainSeekClient :: RunClient IO RuntimeChainSeekClient
-  , runChainSyncJobClient :: RunClient IO (JobClient ChainSyncCommand)
-  , runChainSyncQueryClient :: RunClient IO (QueryClient ChainSyncQuery)
-  , runDiscoverySyncClient :: RunClient IO MarloweHeaderSyncClient
-  , runHistorySyncClient :: RunClient IO MarloweSyncClient
-  , runMarloweQueryClient :: RunClient IO MarloweQueryClient
-  , runTxJobClient :: RunClient IO (JobClient MarloweTxCommand)
   , securityParameter :: Int
   , marloweScripts :: MarloweScripts
   , webPort :: Int
@@ -474,9 +465,6 @@ data RuntimeDependencies r = RuntimeDependencies
 runtime :: Component IO (RuntimeDependencies r) ()
 runtime = proc RuntimeDependencies{..} -> do
   let
-    connectToChainSeek :: RunClient IO RuntimeChainSeekClient
-    connectToChainSeek = runChainSeekClient
-
     getScripts :: MarloweVersion v -> Set MarloweScripts
     getScripts MarloweV1 = Set.singleton marloweScripts
 
@@ -499,8 +487,8 @@ runtime = proc RuntimeDependencies{..} -> do
   marloweIndexer -< MarloweIndexerDependencies
     { databaseQueries = marloweIndexerDatabaseQueries
     , eventBackend = narrowEventBackend MarloweIndexerEvent rootEventBackend
-    , runChainSeekClient = connectToChainSeek
-    , runChainSyncQueryClient
+    , chainSyncConnector = SomeConnector $ clientConnector chainSyncPair
+    , chainSyncQueryConnector = SomeConnector $ clientConnector chainSyncQueryPair
     , pollingInterval = secondsToNominalDiffTime 0.01
     , marloweScriptHashes = NESet.singleton $ ScriptRegistry.marloweScript marloweScripts
     , payoutScriptHashes = NESet.singleton $ ScriptRegistry.payoutScript marloweScripts
@@ -508,15 +496,13 @@ runtime = proc RuntimeDependencies{..} -> do
 
   sync -< SyncDependencies
     { databaseQueries = marloweSyncDatabaseQueries $ narrowEventBackend SyncDatabaseEvent rootEventBackend
-    , acceptRunMarloweSyncServer = acceptRunHistorySyncServer
-    , acceptRunMarloweHeaderSyncServer = acceptRunDiscoverySyncServer
-    , acceptRunMarloweQueryServer
+    , syncSource = SomeConnectionSource $ Driver.connectionSource marloweSyncPair
+    , headerSyncSource = SomeConnectionSource $ Driver.connectionSource marloweHeaderSyncPair
+    , querySource = SomeConnectionSource $ Driver.connectionSource marloweQueryPair
     }
 
   chainSync -<
     let
-      acceptRunJobServer = acceptRunChainSyncJobServer
-      acceptRunQueryServer = acceptRunChainSyncQueryServer
       databaseQueries = chainSeekDatabaseQueries
 
       queryLocalNodeState :: Maybe ChainPoint -> QueryInMode CardanoMode result -> IO (Either AcquiringFailure result)
@@ -531,15 +517,18 @@ runtime = proc RuntimeDependencies{..} -> do
         AlonzoEra -> AlonzoEraInCardanoMode
         BabbageEra -> BabbageEraInCardanoMode
      in
-      ChainSyncDependencies{..}
+      ChainSyncDependencies
+        { syncSource = SomeConnectionSource $ Driver.connectionSource chainSyncPair
+        , querySource = SomeConnectionSource $ Driver.connectionSource chainSyncQueryPair
+        , jobSource = SomeConnectionSource $ Driver.connectionSource chainSyncJobPair
+        , ..
+        }
 
   transaction -<
     let
-      acceptRunTransactionServer = acceptRunTxJobServer
-
       queryChainSync :: ChainSyncQuery Void err results -> IO results
       queryChainSync = fmap (fromRight $ error "failed to query chain sync server")
-        . runChainSyncQueryClient
+        . runConnector (clientConnector chainSyncQueryPair)
         . liftQuery
 
       loadWalletContext = Query.loadWalletContext $ queryChainSync . GetUTxOs
@@ -547,103 +536,76 @@ runtime = proc RuntimeDependencies{..} -> do
       networkId = localNodeNetworkId
 
       loadMarloweContext :: LoadMarloweContext r
-      loadMarloweContext = Query.loadMarloweContext getScripts networkId connectToChainSeek runChainSyncQueryClient
+      loadMarloweContext = Query.loadMarloweContext
+        getScripts
+        networkId
+        (SomeConnector $ clientConnector chainSyncPair)
+        (SomeConnector $ clientConnector chainSyncQueryPair)
 
       eventBackend = narrowEventBackend TxEvent rootEventBackend
     in
-      TransactionDependencies{..}
+      TransactionDependencies
+        { chainSyncConnector = SomeConnector $ clientConnector chainSyncPair
+        , connectionSource = SomeConnectionSource $ Driver.connectionSource txJobPair
+        , ..
+        }
 
   server -< ServerDependencies
     { openAPIEnabled = False
     , accessControlAllowOriginAll = False
     , runApplication = run webPort
-    , runMarloweQueryClient
-    , runTxJobClient
+    , marloweQueryConnector = SomeConnector $ clientConnector marloweQueryPair
+    , txJobConnector = SomeConnector $ clientConnector txJobPair
     , eventBackend = noopEventBackend ()
     }
 
 data Channels = Channels
-  { acceptRunChainSeekServer :: IO (RunServer IO RuntimeChainSeekServer)
-  , acceptRunChainSyncJobServer :: IO (RunServer IO (JobServer ChainSyncCommand))
-  , acceptRunChainSyncQueryServer :: IO (RunServer IO (QueryServer ChainSyncQuery))
-  , acceptRunDiscoverySyncServer :: IO (RunServer IO MarloweHeaderSyncServer)
-  , acceptRunHistorySyncServer :: IO (RunServer IO MarloweSyncServer)
-  , acceptRunMarloweQueryServer :: IO (RunServer IO MarloweQueryServer)
-  , acceptRunTxJobServer :: IO (RunServer IO (JobServer MarloweTxCommand))
-  , runChainSeekClient :: RunClient IO RuntimeChainSeekClient
-  , runChainSyncJobClient :: RunClient IO (JobClient ChainSyncCommand)
-  , runChainSyncQueryClient :: RunClient IO (QueryClient ChainSyncQuery)
-  , runDiscoverySyncClient :: RunClient IO MarloweHeaderSyncClient
-  , runHistorySyncClient :: RunClient IO MarloweSyncClient
-  , runMarloweQueryClient :: RunClient IO MarloweQueryClient
-  , runTxJobClient :: RunClient IO (JobClient MarloweTxCommand)
+  { chainSyncPair :: ClientServerPair (Handshake RuntimeChainSeek) RuntimeChainSeekServer RuntimeChainSeekClient IO
+  , chainSyncJobPair :: ClientServerPair (Handshake (Job ChainSyncCommand)) (JobServer ChainSyncCommand) (JobClient ChainSyncCommand) IO
+  , chainSyncQueryPair :: ClientServerPair (Handshake (Query ChainSyncQuery)) (QueryServer ChainSyncQuery) (QueryClient ChainSyncQuery) IO
+  , marloweHeaderSyncPair :: ClientServerPair (Handshake MarloweHeaderSync) MarloweHeaderSyncServer MarloweHeaderSyncClient IO
+  , marloweSyncPair :: ClientServerPair (Handshake MarloweSync) MarloweSyncServer MarloweSyncClient IO
+  , marloweQueryPair :: ClientServerPair (Handshake MarloweQuery) MarloweQueryServer MarloweQueryClient IO
+  , txJobPair :: ClientServerPair (Handshake (Job MarloweTxCommand)) (JobServer MarloweTxCommand) (JobClient MarloweTxCommand) IO
   }
 
 setupChannels :: EventBackend IO r RuntimeSelector -> STM Channels
 setupChannels eventBackend = do
-  ClientServerPair acceptRunChainSeekServer runChainSeekClient <- clientServerPair
-    (narrowEventBackend ChainSeekServerEvent eventBackend)
-    (narrowEventBackend ChainSeekClientEvent eventBackend)
+  chainSyncPair <- logClientServerPair (narrowEventBackend ChainSeekPair eventBackend) . handshakeClientServerPair <$> clientServerPair
     (chainSeekServerPeer Genesis)
     (chainSeekClientPeer Genesis)
-  ClientServerPair acceptRunChainSyncJobServer runChainSyncJobClient <- clientServerPair
-    (narrowEventBackend ChainSyncJobServerEvent eventBackend)
-    (narrowEventBackend ChainSyncJobClientEvent eventBackend)
+  chainSyncJobPair <- logClientServerPair (narrowEventBackend ChainSyncJobPair eventBackend) . handshakeClientServerPair <$> clientServerPair
     jobServerPeer
     jobClientPeer
-  ClientServerPair acceptRunChainSyncQueryServer runChainSyncQueryClient <- clientServerPair
-    (narrowEventBackend ChainSyncQueryServerEvent eventBackend)
-    (narrowEventBackend ChainSyncQueryClientEvent eventBackend)
+  chainSyncQueryPair <- logClientServerPair (narrowEventBackend ChainSyncQueryPair eventBackend) . handshakeClientServerPair <$> clientServerPair
     queryServerPeer
     queryClientPeer
-  ClientServerPair acceptRunDiscoverySyncServer runDiscoverySyncClient <- clientServerPair
-    (narrowEventBackend DiscoverySyncServerEvent eventBackend)
-    (narrowEventBackend DiscoverySyncClientEvent eventBackend)
+  marloweHeaderSyncPair <- logClientServerPair (narrowEventBackend DiscoverySyncPair eventBackend) . handshakeClientServerPair <$> clientServerPair
     marloweHeaderSyncServerPeer
     marloweHeaderSyncClientPeer
-  ClientServerPair acceptRunHistorySyncServer runHistorySyncClient <- clientServerPair
-    (narrowEventBackend HistorySyncServerEvent eventBackend)
-    (narrowEventBackend HistorySyncClientEvent eventBackend)
+  marloweSyncPair <- logClientServerPair (narrowEventBackend HistorySyncPair eventBackend) . handshakeClientServerPair <$> clientServerPair
     marloweSyncServerPeer
     marloweSyncClientPeer
-  ClientServerPair acceptRunMarloweQueryServer runMarloweQueryClient <- clientServerPair
-    (narrowEventBackend MarloweQueryServerEvent eventBackend)
-    (narrowEventBackend MarloweQueryClientEvent eventBackend)
+  marloweQueryPair <- logClientServerPair (narrowEventBackend MarloweQueryPair eventBackend) . handshakeClientServerPair <$> clientServerPair
     id
     marloweQueryClientPeer
-  ClientServerPair acceptRunTxJobServer runTxJobClient <- clientServerPair
-    (narrowEventBackend TxJobServerEvent eventBackend)
-    (narrowEventBackend TxJobClientEvent eventBackend)
+  txJobPair <- logClientServerPair (narrowEventBackend TxJobPair eventBackend) . handshakeClientServerPair <$> clientServerPair
     jobServerPeer
     jobClientPeer
   pure Channels{..}
 
 getRuntimeSelectorConfig :: RuntimeSelector f -> SelectorConfig f
 getRuntimeSelectorConfig = \case
-  ChainSeekClientEvent sel -> prependKey "chain-sync.client" $ getConnectSocketDriverSelectorConfig socketDriverConfig sel
-  ChainSeekServerEvent sel -> prependKey "chain-sync.server" $ getConnectionSourceSelectorConfig True True sel
-  ChainSyncJobClientEvent sel -> prependKey "chain-sync-job.client" $ getConnectSocketDriverSelectorConfig socketDriverConfig sel
-  ChainSyncJobServerEvent sel -> prependKey "chain-sync-job.server" $ getConnectionSourceSelectorConfig True True sel
-  ChainSyncQueryClientEvent sel -> prependKey "chain-sync-query.client" $ getConnectSocketDriverSelectorConfig socketDriverConfig sel
-  ChainSyncQueryServerEvent sel -> prependKey "chain-sync-query.server" $ getConnectionSourceSelectorConfig True True sel
-  DiscoverySyncClientEvent sel -> prependKey "discovery-job.client" $ getConnectSocketDriverSelectorConfig socketDriverConfig sel
-  DiscoverySyncServerEvent sel -> prependKey "discovery-job.server" $ getConnectionSourceSelectorConfig True True sel
-  HistorySyncClientEvent sel -> prependKey "history-sync.client" $ getConnectSocketDriverSelectorConfig socketDriverConfig sel
-  HistorySyncServerEvent sel -> prependKey "history-sync.server" $ getConnectionSourceSelectorConfig True True sel
-  MarloweQueryClientEvent sel -> prependKey "marlowe-query.client" $ getConnectSocketDriverSelectorConfig socketDriverConfig sel
-  MarloweQueryServerEvent sel -> prependKey "marlowe-query.server" $ getConnectionSourceSelectorConfig True True sel
-  TxJobClientEvent sel -> prependKey "tx-job.client" $ getConnectSocketDriverSelectorConfig socketDriverConfig sel
-  TxJobServerEvent sel -> prependKey "tx-job.server" $ getConnectionSourceSelectorConfig True True sel
+  ChainSeekPair sel -> prependKey "chain-sync" $ getClientServerPairSelectorConfig True True sel
+  ChainSyncJobPair sel -> prependKey "chain-sync-job" $ getClientServerPairSelectorConfig True True sel
+  ChainSyncQueryPair sel -> prependKey "chain-sync-query" $ getClientServerPairSelectorConfig True True sel
+  DiscoverySyncPair sel -> prependKey "discovery-job" $ getClientServerPairSelectorConfig True True sel
+  HistorySyncPair sel -> prependKey "history-sync" $ getClientServerPairSelectorConfig True True sel
+  MarloweQueryPair sel -> prependKey "marlowe-query" $ getClientServerPairSelectorConfig True True sel
+  TxJobPair sel -> prependKey "tx-job" $ getClientServerPairSelectorConfig True True sel
   TxEvent sel -> prependKey "marlowe-tx" $ getTransactionSererSelectorConfig sel
   ChainIndexerEvent sel -> prependKey "marlowe-chain-indexer" $ getChainIndexerSelectorConfig sel
   MarloweIndexerEvent sel -> prependKey "marlowe-indexer" $ getMarloweIndexerSelectorConfig sel
   SyncDatabaseEvent sel -> prependKey "marlowe-sync-database" $ Sync.getDatabaseSelectorConfig sel
   ConfigWatcher ReloadConfig -> SelectorConfig "reload-log-config" True
     $ singletonFieldConfig "config" True
-
-socketDriverConfig :: SocketDriverConfigOptions
-socketDriverConfig = SocketDriverConfigOptions
-  { enableConnected = True
-  , enableDisconnected = True
-  , enableServerDriverEvent = True
-  }
