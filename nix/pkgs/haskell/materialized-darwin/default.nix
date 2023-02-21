@@ -821,7 +821,6 @@
         eventuo11y-extras = ./.plan.nix/eventuo11y-extras.nix;
         cardano-addresses-cli = ./.plan.nix/cardano-addresses-cli.nix;
         plutus-script-utils = ./.plan.nix/plutus-script-utils.nix;
-        marlowe-protocols-test = ./.plan.nix/marlowe-protocols-test.nix;
         async-components = ./.plan.nix/async-components.nix;
         marlowe-chain-sync = ./.plan.nix/marlowe-chain-sync.nix;
         marlowe-test = ./.plan.nix/marlowe-test.nix;
@@ -872,7 +871,6 @@
           "plutus-script-utils" = {
             flags = { "defer-plugin-errors" = lib.mkOverride 900 false; };
             };
-          "marlowe-protocols-test" = { flags = {}; };
           "async-components" = { flags = {}; };
           "marlowe-chain-sync" = { flags = {}; };
           "marlowe-test" = {
@@ -1251,7 +1249,6 @@
           "criterion".components.library.planned = lib.mkOverride 900 true;
           "katip".components.library.planned = lib.mkOverride 900 true;
           "marlowe-apps".components.exes."marlowe-scaling".planned = lib.mkOverride 900 true;
-          "marlowe-protocols-test".components.library.planned = lib.mkOverride 900 true;
           "hasql".components.library.planned = lib.mkOverride 900 true;
           "wai-logger".components.setup.planned = lib.mkOverride 900 true;
           "streaming-binary".components.library.planned = lib.mkOverride 900 true;

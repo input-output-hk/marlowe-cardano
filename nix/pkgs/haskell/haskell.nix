@@ -135,7 +135,6 @@ let
             marlowe-integration.ghcOptions = [ "-Werror" ];
             marlowe-integration-tests.ghcOptions = [ "-Werror" ];
             marlowe-protocols.ghcOptions = [ "-Werror" ];
-            marlowe-protocols-test.ghcOptions = [ "-Werror" ];
             marlowe-runtime.ghcOptions = [ "-Werror" ];
             marlowe-test.ghcOptions = [ "-Werror" ];
 
