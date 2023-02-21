@@ -22,12 +22,13 @@ import Data.Time.Clock.POSIX (posixSecondsToUTCTime, utcTimeToPOSIXSeconds)
 import GHC.Generics (Generic)
 import qualified Language.Marlowe.Core.V1.Semantics as Semantics
 import qualified Language.Marlowe.Core.V1.Semantics.Types as Semantics
+import qualified Language.Marlowe.Core.V1.Semantics.Types.Address as Semantics
 import Language.Marlowe.Runtime.ChainSync.Api (Lovelace, TransactionMetadata(unTransactionMetadata), toUTxOsList)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Core.Api
   (Contract, Datum, MarloweVersion(..), MarloweVersionTag(..), TransactionScriptOutput(..))
 import qualified Language.Marlowe.Runtime.Core.Api as Core.Api
-import Language.Marlowe.Runtime.Plutus.V2.Api (fromPlutusValue)
+import Language.Marlowe.Runtime.Plutus.V2.Api (fromPlutusValue, toAssetId)
 import Language.Marlowe.Runtime.Transaction.Api
   (ApplyInputsConstraintsBuildupError(..), ApplyInputsError(..), CreateError, RoleTokensConfig(..), mkMint, unMint)
 import qualified Language.Marlowe.Runtime.Transaction.Api as Transaction.Api
@@ -60,6 +61,7 @@ import Test.QuickCheck
   , discard
   , elements
   , genericShrink
+  , listOf
   , listOf1
   , oneof
   , suchThat
@@ -383,3 +385,43 @@ buildApplyInputsConstraintsSpec =
                 $  maybe True ((== fromUTC lower') . toSecondFloor) lower  -- The specified lower bound should be rounded down to the second/slot.
                 && maybe True ((== fromUTC upper') . toSecondFloor) upper  -- The specified upper bound should be rounded down to the second/slot.
             _ -> counterexample "Assert-close contract is valid" False
+    Hspec.QuickCheck.prop "payment constraints" \assets utxo address marloweParams-> do
+      payments <- listOf $ Semantics.Payment <$> arbitrary <*> arbitrary <*> arbitrary <*> chooseInteger (1, 1000)
+      let
+        toChainAddress = (Chain.Address .) . Semantics.serialiseAddress
+        toChainRole = toAssetId $ Semantics.rolesCurrency marloweParams
+        toChainAssets (Semantics.Token "" "") amount = Chain.Assets (fromInteger amount) mempty
+        toChainAssets (Semantics.Token currency name) amount = Chain.Assets 0 . Chain.Tokens $ Map.singleton (toAssetId currency name) (fromInteger amount)
+        makePayToAddress (Semantics.Payment _ (Semantics.Party (Semantics.Address network address')) token amount) =
+          Map.singleton (toChainAddress network address') $ toChainAssets token amount
+        makePayToAddress _ = mempty
+        makePayToRole (Semantics.Payment _ (Semantics.Party (Semantics.Role name)) token amount) =
+          Map.singleton (toChainRole name) $ toChainAssets token amount
+        makePayToRole _ = mempty
+        makeAccount (Semantics.Payment account _ token amount) = Map.singleton (account, token) amount
+        makePay (Semantics.Payment account payee token amount) = Semantics.Pay account payee token $ Semantics.Constant amount
+        accounts = AM.fromList . Map.toList . Map.unionsWith (+) $ makeAccount <$> payments
+        marloweState = Semantics.State accounts AM.empty AM.empty $ POSIXTime 0
+        marloweContract = foldr makePay (Semantics.Assert Semantics.TrueObs $ Semantics.When [] 1_000_000_000_000_000_000_000 Semantics.Close) payments
+        datum = Semantics.MarloweData{..}
+        marloweOutput = TransactionScriptOutput{..}
+        result =
+          buildApplyInputsConstraints
+            systemStart eraHistory MarloweV1
+            marloweOutput
+            (Chain.SlotNo 1_000_000)
+            (Chain.TransactionMetadata mempty) Nothing Nothing mempty
+        expectedPayToAddresses = Map.unionsWith (<>) $ makePayToAddress <$> payments  -- This assumes that the semigroup for assets is correct.
+        expectedPayToRoles     = Map.unionsWith (<>) $ makePayToRole    <$> payments  -- This assumes that the semigroup for assets is correct.
+      pure
+        . counterexample ("contract = " <> show marloweContract)
+        . counterexample ("result = " <> show result)
+        . counterexample ("expected pays to addresses = " <> show expectedPayToAddresses)
+        . counterexample ("expected pays to roles = " <> show expectedPayToRoles)
+        $ case result of
+            Right (_, TxConstraints{..}) ->
+              counterexample "role and address payments are correct"
+                $  payToAddresses == expectedPayToAddresses
+                && payToRoles     == expectedPayToRoles
+            Left _ ->
+              counterexample "Unexpected transaction failure" False
