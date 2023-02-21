@@ -615,7 +615,6 @@
           buildable = true;
           modules = [
             "Language/Marlowe/Runtime/Core/ScriptRegistrySpec"
-            "Language/Marlowe/Runtime/Discovery/QuerySpec"
             "Language/Marlowe/Runtime/Transaction/BuildConstraintsSpec"
             "Language/Marlowe/Runtime/Transaction/ConstraintsSpec"
             "Language/Marlowe/Runtime/Transaction/CommandSpec"
