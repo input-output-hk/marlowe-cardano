@@ -31,7 +31,7 @@ import Language.Marlowe.Runtime.ChainSync.Database (hoistDatabaseQueries)
 import qualified Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL as PostgreSQL
 import Logging (RootSelector(..), getRootSelectorConfig)
 import Network.Protocol.ChainSeek.Server (chainSeekServerPeer)
-import Network.Protocol.Driver (TcpServerDependencies(..), awaitConnection, logConnectionSource, tcpServer)
+import Network.Protocol.Driver (SomeConnectionSource(..), TcpServerDependencies(..), logConnectionSource, tcpServer)
 import Network.Protocol.Handshake.Server (handshakeConnectionSource)
 import Network.Protocol.Job.Server (jobServerPeer)
 import Network.Protocol.Query.Server (queryServerPeer)
@@ -78,13 +78,13 @@ run Options{..} = bracket (Pool.acquire (100, secondsToNominalDiffTime 5, fromSt
       { databaseQueries = hoistDatabaseQueries
           (either throwUsageError pure <=< Pool.use pool)
           $ PostgreSQL.databaseQueries networkId
-      , acceptRunChainSeekServer = awaitConnection
+      , syncSource = SomeConnectionSource
           $ logConnectionSource (narrowEventBackend ChainSeekServer eventBackend)
           $ handshakeConnectionSource syncSource
-      , acceptRunQueryServer = awaitConnection
+      , querySource = SomeConnectionSource
           $ logConnectionSource (narrowEventBackend QueryServer eventBackend)
           $ handshakeConnectionSource querySource
-      , acceptRunJobServer = awaitConnection
+      , jobSource = SomeConnectionSource
           $ logConnectionSource (narrowEventBackend JobServer eventBackend)
           $ handshakeConnectionSource jobSource
       , queryLocalNodeState = queryNodeLocalState localNodeConnectInfo

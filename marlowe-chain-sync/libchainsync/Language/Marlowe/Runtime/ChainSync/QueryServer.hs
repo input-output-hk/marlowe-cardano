@@ -28,14 +28,12 @@ import Data.Bifunctor (first)
 import Data.Void (Void, absurd)
 import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncQuery(..))
 import qualified Language.Marlowe.Runtime.ChainSync.Database as Database
-import Network.Protocol.Driver (RunServer(..))
+import Network.Protocol.Driver (SomeConnectionSource, SomeServerConnector, acceptSomeConnector, runSomeConnector)
 import Network.Protocol.Query.Server (QueryServer(..), ServerStInit(..), ServerStNext(..), ServerStPage(..))
 import Network.Protocol.Query.Types (StNextKind(..))
 
-type RunQueryServer m = RunServer m (QueryServer ChainSyncQuery)
-
 data ChainSyncQueryServerDependencies = ChainSyncQueryServerDependencies
-  { acceptRunQueryServer :: IO (RunQueryServer IO)
+  { querySource :: SomeConnectionSource (QueryServer ChainSyncQuery) IO
   , queryLocalNodeState
       :: forall result
        . Maybe Cardano.ChainPoint
@@ -46,11 +44,11 @@ data ChainSyncQueryServerDependencies = ChainSyncQueryServerDependencies
 
 chainSyncQueryServer :: Component IO ChainSyncQueryServerDependencies ()
 chainSyncQueryServer = serverComponent worker \ChainSyncQueryServerDependencies{..} -> do
-  runQueryServer <- acceptRunQueryServer
+  connector <- acceptSomeConnector querySource
   pure WorkerDependencies {..}
 
 data WorkerDependencies = WorkerDependencies
-  { runQueryServer      :: RunQueryServer IO
+  { connector :: SomeServerConnector (QueryServer ChainSyncQuery) IO
   , queryLocalNodeState
       :: forall result
        . Maybe Cardano.ChainPoint
@@ -62,8 +60,6 @@ data WorkerDependencies = WorkerDependencies
 worker :: Component IO WorkerDependencies ()
 worker = component_ \WorkerDependencies{..} -> do
   let
-    RunServer run = runQueryServer
-
     server :: QueryServer ChainSyncQuery IO ()
     server = QueryServer $ pure $ ServerStInit \case
       GetSecurityParameter -> queryGenesisParameters protocolParamSecurity
@@ -112,4 +108,4 @@ worker = component_ \WorkerDependencies{..} -> do
         $ QueryInEra eraInMode
         $ QueryInShelleyBasedEra shelleyBasedEra $ query shelleyBasedEra
       withExceptT (const ()) $ except result
-  run server
+  runSomeConnector connector server

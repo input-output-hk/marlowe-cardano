@@ -143,9 +143,21 @@ newtype Connector ps pr peer m = Connector
   { connectPeer :: forall a. peer m a -> m (Connection ps pr m a)
   }
 
+type ClientConnector ps = Connector ps 'AsClient
+type ServerConnector ps = Connector ps 'AsServer
+
+data SomeConnector pr peer m =
+  forall ps. BinaryMessage ps => SomeConnector (Connector ps pr peer m)
+
+type SomeClientConnector = SomeConnector 'AsClient
+type SomeServerConnector = SomeConnector 'AsServer
+
 newtype ConnectionSource ps server m = ConnectionSource
   { acceptConnector :: STM (Connector ps 'AsServer server m)
   }
+
+data SomeConnectionSource server m =
+  forall ps. BinaryMessage ps => SomeConnectionSource (ConnectionSource ps server m)
 
 data ConnectorSelector ps f where
   Session :: ConnectorSelector ps Void
@@ -229,10 +241,8 @@ logConnection eventBackend Connection{..} = Connection
   , ..
   }
 
-awaitConnection :: (MonadBaseControl IO m, BinaryMessage ps) => ConnectionSource ps server m -> m (RunServer m server)
-awaitConnection ConnectionSource{..} = do
-  Connector{..} <- liftBase $ atomically acceptConnector
-  pure $ RunServer $ runConnection <=< connectPeer
+acceptSomeConnector :: MonadBaseControl IO m => SomeConnectionSource server m -> m (SomeServerConnector server m)
+acceptSomeConnector (SomeConnectionSource ConnectionSource{..}) = liftBase $ SomeConnector <$> atomically acceptConnector
 
 runConnection :: (MonadBaseControl IO m, BinaryMessage ps) => Connection ps peer m a -> m a
 runConnection Connection{..} = do
@@ -249,6 +259,9 @@ runConnection Connection{..} = do
 
 runConnector :: (MonadBaseControl IO m, BinaryMessage ps) => Connector ps pr peer m -> peer m a -> m a
 runConnector Connector{..} = runConnection <=< connectPeer
+
+runSomeConnector :: MonadBaseControl IO m => SomeConnector pr peer m -> peer m a -> m a
+runSomeConnector (SomeConnector connector) = runConnector connector
 
 data ClientServerPair m server client = ClientServerPair
   { acceptRunServer :: m (RunServer m server)
