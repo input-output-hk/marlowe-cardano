@@ -29,7 +29,6 @@ packages:
   marlowe-integration
   marlowe-integration-tests
   marlowe-protocols
-  marlowe-protocols-test
   marlowe-runtime
   marlowe-test
 
