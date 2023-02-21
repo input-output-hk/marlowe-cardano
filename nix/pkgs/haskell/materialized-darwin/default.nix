@@ -958,7 +958,6 @@
           "cardano-crypto-wrapper".components.library.planned = lib.mkOverride 900 true;
           "marlowe-runtime".components.tests."web-server-test".planned = lib.mkOverride 900 true;
           "pretty-simple".components.setup.planned = lib.mkOverride 900 true;
-          "marlowe-runtime".components.exes."marlowe-history".planned = lib.mkOverride 900 true;
           "sort".components.library.planned = lib.mkOverride 900 true;
           "cereal".components.library.planned = lib.mkOverride 900 true;
           "deferred-folds".components.library.planned = lib.mkOverride 900 true;
@@ -1085,7 +1084,6 @@
           "marlowe-chain-sync".components.sublibs."gen".planned = lib.mkOverride 900 true;
           "js-chart".components.library.planned = lib.mkOverride 900 true;
           "template-haskell-compat-v0208".components.library.planned = lib.mkOverride 900 true;
-          "marlowe-runtime".components.sublibs."history".planned = lib.mkOverride 900 true;
           "eventuo11y-json".components.library.planned = lib.mkOverride 900 true;
           "canonical-json".components.library.planned = lib.mkOverride 900 true;
           "tracer-transformers".components.library.planned = lib.mkOverride 900 true;
@@ -1300,7 +1298,6 @@
           "entropy".components.library.planned = lib.mkOverride 900 true;
           "assoc".components.library.planned = lib.mkOverride 900 true;
           "process".components.library.planned = lib.mkOverride 900 true;
-          "marlowe-runtime".components.exes."marlowe-discovery".planned = lib.mkOverride 900 true;
           "binary-parser".components.library.planned = lib.mkOverride 900 true;
           "http-date".components.library.planned = lib.mkOverride 900 true;
           "hspec-discover".components.library.planned = lib.mkOverride 900 true;
@@ -1393,7 +1390,6 @@
           "filelock".components.library.planned = lib.mkOverride 900 true;
           "wai-app-static".components.exes."warp".planned = lib.mkOverride 900 true;
           "singleton-bool".components.library.planned = lib.mkOverride 900 true;
-          "marlowe-runtime".components.sublibs."discovery".planned = lib.mkOverride 900 true;
           "attoparsec".components.library.planned = lib.mkOverride 900 true;
           "algebraic-graphs".components.library.planned = lib.mkOverride 900 true;
           "vector-map".components.library.planned = lib.mkOverride 900 true;

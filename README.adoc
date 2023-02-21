@@ -207,12 +207,12 @@ Running `nix run .#re-up` will refresh `compose.yaml` if need be and then restar
 
 Services currently included:
 
-* `marlowe-chain-sync`: `marlowe-chain-sync` for the `preview` network.
-* `marlowe-chain-indexer`: `marlowe-chain-indexer` for the `preview` network.
-* `node`: A node for the `preview` network.
+* `marlowe-chain-sync`: `marlowe-chain-sync` for the `preprod` network.
+* `marlowe-chain-indexer`: `marlowe-chain-indexer` for the `preprod` network.
+* `node`: A node for the `preprod` network.
 * `postgres`: A postgres instance, for marlowe-chain-sync state.
-* `marlowe-history`: A `marlowe-history` instance.
-* `marlowe-discovery`: A `marlowe-discovery` instance.
+* `marlowe--sync`: `marlowe-sync` for the `preprod` network.
+* `marlowe--indexer`: `marlowe-indexer` for the `preprod` network.
 * `marlowe-tx`: A `marlowe-tx` instance.
 * `web`: A `marlowe-web-server` instance.
 

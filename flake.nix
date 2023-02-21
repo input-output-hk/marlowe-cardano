@@ -123,16 +123,6 @@
             program = "${packages.marlowe-sync}/bin/marlowe-sync";
           };
 
-          marlowe-history = {
-            type = "app";
-            program = "${packages.marlowe-history}/bin/marlowe-history";
-          };
-
-          marlowe-discovery = {
-            type = "app";
-            program = "${packages.marlowe-discovery}/bin/marlowe-discovery";
-          };
-
           marlowe-tx = {
             type = "app";
             program = "${packages.marlowe-tx}/bin/marlowe-tx";
