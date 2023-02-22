@@ -263,6 +263,18 @@ let
     services.marlowe-sync = sync-service;
 
     services.node = node-service;
+
+    # services.postgresql = {
+    #   enable = true;
+    #   package = pkgs.postgresql;
+    #   enableTCPIP = true;
+    #   authentication = pkgs.lib.mkOverride 10 ''
+    #     local all all trust
+    #     host all all ::1/128 trust
+    #     host all postgres 127.0.0.1/32 trust
+    #   '';
+    # };
+
     volumes.shared = null;
     volumes.node-db = null;
   };

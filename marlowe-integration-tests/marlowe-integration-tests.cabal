@@ -63,6 +63,7 @@ executable marlowe-integration-tests
     Language.Marlowe.Runtime.Integration.StandardContract
     Language.Marlowe.Runtime.Integration.MarloweQuery
     Language.Marlowe.Runtime.IntegrationSpec
+    Language.Marlowe.Runtime.CliSpec
   build-depends:
       base >= 4.9 && < 5
     , aeson
@@ -87,4 +88,5 @@ executable marlowe-integration-tests
     , text
     , time
     , transformers
+    , process
   build-tool-depends: hspec-discover:hspec-discover
