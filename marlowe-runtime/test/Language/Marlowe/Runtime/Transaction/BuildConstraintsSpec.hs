@@ -562,3 +562,38 @@ buildApplyInputsConstraintsSpec =
             Left _ ->
               counterexample "Unexpected transaction failure" False
         :: QuickCheck.Gen Property
+    Hspec.QuickCheck.prop "role constraints" \assets utxo address marloweParams inputs -> do
+      let
+        toAction (Semantics.IDeposit account party token amount) = Semantics.Deposit account party token $ Semantics.Constant amount
+        toAction (Semantics.IChoice choiceId chosenNum) = Semantics.Choice choiceId [Semantics.Bound chosenNum chosenNum]
+        toAction Semantics.INotify = Semantics.Notify Semantics.TrueObs
+        toContract action contract = Semantics.When [Semantics.Case action contract] distantFuture Semantics.Close
+        toChainRole = toAssetId $ Semantics.rolesCurrency marloweParams
+        toRole (Semantics.IDeposit _ (Semantics.Role name) _ _) = Set.singleton $ toChainRole name
+        toRole (Semantics.IChoice (Semantics.ChoiceId _ (Semantics.Role name)) _) = Set.singleton $ toChainRole name
+        toRole _ = Set.empty
+        marloweState = Semantics.State AM.empty AM.empty AM.empty $ POSIXTime 0
+        marloweContract =
+          foldr (toContract . toAction)
+            (Semantics.Assert Semantics.TrueObs $ Semantics.When [Semantics.Case (Semantics.Notify Semantics.TrueObs) Semantics.Close] distantFuture Semantics.Close)
+            inputs
+        datum = Semantics.MarloweData{..}
+        marloweOutput = TransactionScriptOutput{..}
+        result =
+          buildApplyInputsConstraints
+            systemStart eraHistory MarloweV1
+            marloweOutput
+            (Chain.SlotNo 1_000_000)
+            (Chain.TransactionMetadata mempty) Nothing Nothing (Semantics.NormalInput <$> inputs)
+        expectedRoles = Set.unions $ toRole <$> inputs
+      pure
+        . counterexample ("contract = " <> show marloweContract)
+        . counterexample ("result = " <> show result)
+        . counterexample ("expected roles = " <> show expectedRoles)
+        $ case result of
+            Right (_, TxConstraints{..}) ->
+              counterexample "roles are present"
+                $ roleTokenConstraints == if Set.null expectedRoles then RoleTokenConstraintsNone else SpendRoleTokens expectedRoles
+            Left _ ->
+              counterexample "Unexpected transaction failure" False
+        :: QuickCheck.Gen Property
