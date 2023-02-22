@@ -311,20 +311,41 @@ buildApplyInputsConstraintsSpec =
       fromUTC = floor . (1000 *) . nominalDiffTimeToSeconds . utcTimeToPOSIXSeconds :: UTCTime -> Integer
       toSecondFloor = (* 1000) . (`div` 1000)
       distantFuture = 1_000_000_000_000_000_000_000
+      toChainAddress = (Chain.Address .) . Semantics.serialiseAddress
+      toChainAssets (Semantics.Token "" "") amount = Chain.Assets (fromInteger amount) mempty
+      toChainAssets (Semantics.Token currency name) amount = Chain.Assets 0 . Chain.Tokens $ Map.singleton (toAssetId currency name) (fromInteger amount)
+      toAction (Semantics.IDeposit account party token amount) = Semantics.Deposit account party token $ Semantics.Constant amount
+      toAction (Semantics.IChoice choiceId chosenNum) = Semantics.Choice choiceId [Semantics.Bound chosenNum chosenNum]
+      toAction Semantics.INotify = Semantics.Notify Semantics.TrueObs
+      toContract action contract = Semantics.When [Semantics.Case action contract] distantFuture Semantics.Close
+      toChainRole = toAssetId . Semantics.rolesCurrency
+      toRole marloweParams (Semantics.IDeposit _ (Semantics.Role name) _ _) = Set.singleton $ toChainRole marloweParams name
+      toRole marloweParams (Semantics.IChoice (Semantics.ChoiceId _ (Semantics.Role name)) _) = Set.singleton $ toChainRole marloweParams name
+      toRole _ _ = Set.empty
+      toAddress (Semantics.IDeposit _ (Semantics.Address _ address') _ _) = toPaymentKeyHash address'
+      toAddress (Semantics.IChoice (Semantics.ChoiceId _ (Semantics.Address _ address')) _) = toPaymentKeyHash address'
+      toAddress _ = Set.empty
+      toPaymentKeyHash (Address (PubKeyCredential (PubKeyHash hash)) _) = Set.singleton . Chain.PaymentKeyHash $ fromBuiltin hash
+      toPaymentKeyHash _ = Set.empty
+      assertCloseContract = Semantics.Assert Semantics.TrueObs Semantics.Close
+      assertWhenCloseContract = Semantics.Assert Semantics.TrueObs $ Semantics.When [] distantFuture Semantics.Close
+      whenCloseContract timeout = Semantics.When [] (POSIXTime timeout) Semantics.Close
+      whenCloseContract' = Semantics.When [] distantFuture Semantics.Close
+      whenWhenCloseContract timeout timeout' = Semantics.When [] (POSIXTime timeout) $ Semantics.When [] (POSIXTime timeout') Semantics.Close
+      whenNotify = Semantics.When [Semantics.Case (Semantics.Notify Semantics.TrueObs) Semantics.Close] distantFuture Semantics.Close
+      afterAssert = Semantics.Assert Semantics.TrueObs
+      emptyState = Semantics.State AM.empty AM.empty AM.empty . POSIXTime
     Hspec.QuickCheck.prop "valid slot interval for timed-out contract" \assets utxo address marloweParams-> do
       -- The choice intervals for the tip, minimum time, and timeout overlap, so every ordering will occur.
       tipSlot' <- genTipSlot
       minTime <- genMinTime
       timeout <- genTimeout
       timeout' <- genTimeout
-      let
-        contract = Semantics.When [] (POSIXTime timeout) Semantics.Close
-        contract' = Semantics.When [] (POSIXTime timeout) $ Semantics.When [] (POSIXTime timeout') Semantics.Close
-      marloweContract <- elements [contract, contract'] -- This contract can only time out.
+      marloweContract <- elements [whenCloseContract timeout, whenWhenCloseContract timeout timeout'] -- This contract can only time out.
       let
         tipSlot = Chain.SlotNo $ fromInteger tipSlot'
         tipTime = 1000 * tipSlot'
-        marloweState = Semantics.State AM.empty AM.empty AM.empty $ POSIXTime minTime
+        marloweState = emptyState minTime
         datum = Semantics.MarloweData{..}
         marloweOutput = TransactionScriptOutput{..}
         result =
@@ -351,7 +372,7 @@ buildApplyInputsConstraintsSpec =
                   $ tipTime < minTime
                 else if "TEIntervalError (InvalidInterval " `isPrefixOf` message
                   then counterexample "Rounding off causes the timeout to fall at the tip if the interval was invalid (effectively empty)."
-                    $ tipSlot' == toSlot timeout || marloweContract == contract' && tipSlot' == toSlot timeout'
+                    $ tipSlot' == toSlot timeout || marloweContract == whenWhenCloseContract timeout timeout' && tipSlot' == toSlot timeout'
                 else counterexample "Unexpected transaction failure" False
             Left _ ->
               counterexample "Unexpected transaction failure" False
@@ -362,8 +383,8 @@ buildApplyInputsConstraintsSpec =
       upper <- oneof [pure Nothing, Just <$> chooseInteger (tipTime + 1_000, 2_000_000)]  -- Choose an upper bound at least one slot after the tip.
       let
         tipSlot = Chain.SlotNo $ fromInteger $ tipTime `div` 1_000
-        marloweContract = Semantics.Assert Semantics.TrueObs Semantics.Close
-        marloweState = Semantics.State AM.empty AM.empty AM.empty $ POSIXTime 0
+        marloweContract = assertCloseContract
+        marloweState = emptyState 0
         datum = Semantics.MarloweData{..}
         marloweOutput = TransactionScriptOutput{..}
         result =
@@ -389,21 +410,17 @@ buildApplyInputsConstraintsSpec =
     Hspec.QuickCheck.prop "payment constraints" \assets utxo address marloweParams-> do
       payments <- listOf $ Semantics.Payment <$> arbitrary <*> arbitrary <*> arbitrary <*> chooseInteger (1, 1000)
       let
-        toChainAddress = (Chain.Address .) . Semantics.serialiseAddress
-        toChainRole = toAssetId $ Semantics.rolesCurrency marloweParams
-        toChainAssets (Semantics.Token "" "") amount = Chain.Assets (fromInteger amount) mempty
-        toChainAssets (Semantics.Token currency name) amount = Chain.Assets 0 . Chain.Tokens $ Map.singleton (toAssetId currency name) (fromInteger amount)
         makePayToAddress (Semantics.Payment _ (Semantics.Party (Semantics.Address network address')) token amount) =
           Map.singleton (toChainAddress network address') $ toChainAssets token amount
         makePayToAddress _ = mempty
         makePayToRole (Semantics.Payment _ (Semantics.Party (Semantics.Role name)) token amount) =
-          Map.singleton (toChainRole name) $ toChainAssets token amount
+          Map.singleton (toChainRole marloweParams name) $ toChainAssets token amount
         makePayToRole _ = mempty
         makeAccount (Semantics.Payment account _ token amount) = Map.singleton (account, token) amount
         makePay (Semantics.Payment account payee token amount) = Semantics.Pay account payee token $ Semantics.Constant amount
         accounts = AM.fromList . Map.toList . Map.unionsWith (+) $ makeAccount <$> payments
         marloweState = Semantics.State accounts AM.empty AM.empty $ POSIXTime 0
-        marloweContract = foldr makePay (Semantics.Assert Semantics.TrueObs $ Semantics.When [] distantFuture Semantics.Close) payments
+        marloweContract = foldr makePay assertWhenCloseContract payments
         datum = Semantics.MarloweData{..}
         marloweOutput = TransactionScriptOutput{..}
         result =
@@ -437,11 +454,8 @@ buildApplyInputsConstraintsSpec =
       let
         tipSlot = Chain.SlotNo $ fromInteger $ tipTime `div` 1_000
         inputs = pure . Semantics.NormalInput $ Semantics.IChoice choiceId chosenNum
-        marloweState = Semantics.State AM.empty AM.empty AM.empty $ POSIXTime minTime
-        remainder =
-          if closes
-            then Semantics.Close
-            else Semantics.When [] distantFuture Semantics.Close
+        marloweState = emptyState minTime
+        remainder = if closes then Semantics.Close else whenCloseContract'
         marloweContract =
           Semantics.When [Semantics.Case (Semantics.Choice choiceId [Semantics.Bound chosenNum chosenNum]) remainder] distantFuture Semantics.Close
         datum = Semantics.MarloweData{..}
@@ -472,11 +486,8 @@ buildApplyInputsConstraintsSpec =
       closes <- arbitrary
       let
         marloweState = Semantics.State accounts choices values $ POSIXTime 0
-        expectedContract =
-          if closes
-            then Semantics.Close
-            else Semantics.When [] distantFuture Semantics.Close
-        marloweContract = Semantics.Assert Semantics.TrueObs expectedContract
+        expectedContract = if closes then Semantics.Close else whenCloseContract'
+        marloweContract = afterAssert expectedContract
         datum = Semantics.MarloweData{..}
         marloweOutput = TransactionScriptOutput{..}
         result =
@@ -507,8 +518,8 @@ buildApplyInputsConstraintsSpec =
               counterexample "Unexpected transaction failure" False
     Hspec.QuickCheck.prop "metadata constraints" \assets utxo address marloweParams metadata -> do
       let
-        marloweState = Semantics.State AM.empty AM.empty AM.empty $ POSIXTime 0
-        marloweContract = Semantics.Assert Semantics.TrueObs $ Semantics.When [] distantFuture Semantics.Close
+        marloweState = emptyState 0
+        marloweContract = assertWhenCloseContract
         datum = Semantics.MarloweData{..}
         marloweOutput = TransactionScriptOutput{..}
         result =
@@ -528,20 +539,8 @@ buildApplyInputsConstraintsSpec =
         :: QuickCheck.Gen Property
     Hspec.QuickCheck.prop "signature constraints" \assets utxo address marloweParams inputs -> do
       let
-        toAction (Semantics.IDeposit account party token amount) = Semantics.Deposit account party token $ Semantics.Constant amount
-        toAction (Semantics.IChoice choiceId chosenNum) = Semantics.Choice choiceId [Semantics.Bound chosenNum chosenNum]
-        toAction Semantics.INotify = Semantics.Notify Semantics.TrueObs
-        toContract action contract = Semantics.When [Semantics.Case action contract] distantFuture Semantics.Close
-        toAddress (Semantics.IDeposit _ (Semantics.Address _ address') _ _) = toPaymentKeyHash address'
-        toAddress (Semantics.IChoice (Semantics.ChoiceId _ (Semantics.Address _ address')) _) = toPaymentKeyHash address'
-        toAddress _ = Set.empty
-        toPaymentKeyHash (Address (PubKeyCredential (PubKeyHash hash)) _) = Set.singleton . Chain.PaymentKeyHash $ fromBuiltin hash
-        toPaymentKeyHash _ = Set.empty
-        marloweState = Semantics.State AM.empty AM.empty AM.empty $ POSIXTime 0
-        marloweContract =
-          foldr (toContract . toAction)
-            (Semantics.Assert Semantics.TrueObs $ Semantics.When [Semantics.Case (Semantics.Notify Semantics.TrueObs) Semantics.Close] distantFuture Semantics.Close)
-            inputs
+        marloweState = emptyState 0
+        marloweContract = foldr (toContract . toAction) (afterAssert whenNotify) inputs
         datum = Semantics.MarloweData{..}
         marloweOutput = TransactionScriptOutput{..}
         result =
@@ -564,19 +563,8 @@ buildApplyInputsConstraintsSpec =
         :: QuickCheck.Gen Property
     Hspec.QuickCheck.prop "role constraints" \assets utxo address marloweParams inputs -> do
       let
-        toAction (Semantics.IDeposit account party token amount) = Semantics.Deposit account party token $ Semantics.Constant amount
-        toAction (Semantics.IChoice choiceId chosenNum) = Semantics.Choice choiceId [Semantics.Bound chosenNum chosenNum]
-        toAction Semantics.INotify = Semantics.Notify Semantics.TrueObs
-        toContract action contract = Semantics.When [Semantics.Case action contract] distantFuture Semantics.Close
-        toChainRole = toAssetId $ Semantics.rolesCurrency marloweParams
-        toRole (Semantics.IDeposit _ (Semantics.Role name) _ _) = Set.singleton $ toChainRole name
-        toRole (Semantics.IChoice (Semantics.ChoiceId _ (Semantics.Role name)) _) = Set.singleton $ toChainRole name
-        toRole _ = Set.empty
-        marloweState = Semantics.State AM.empty AM.empty AM.empty $ POSIXTime 0
-        marloweContract =
-          foldr (toContract . toAction)
-            (Semantics.Assert Semantics.TrueObs $ Semantics.When [Semantics.Case (Semantics.Notify Semantics.TrueObs) Semantics.Close] distantFuture Semantics.Close)
-            inputs
+        marloweState = emptyState 0
+        marloweContract = foldr (toContract . toAction) (afterAssert whenNotify) inputs
         datum = Semantics.MarloweData{..}
         marloweOutput = TransactionScriptOutput{..}
         result =
@@ -585,7 +573,7 @@ buildApplyInputsConstraintsSpec =
             marloweOutput
             (Chain.SlotNo 1_000_000)
             (Chain.TransactionMetadata mempty) Nothing Nothing (Semantics.NormalInput <$> inputs)
-        expectedRoles = Set.unions $ toRole <$> inputs
+        expectedRoles = Set.unions $ toRole marloweParams <$> inputs
       pure
         . counterexample ("contract = " <> show marloweContract)
         . counterexample ("result = " <> show result)
