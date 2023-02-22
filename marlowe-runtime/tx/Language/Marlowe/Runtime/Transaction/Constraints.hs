@@ -42,17 +42,18 @@ import Data.Functor ((<&>))
 import Data.List (delete, find, minimumBy, nub)
 import qualified Data.List.NonEmpty as NE (NonEmpty(..), toList)
 import Data.Map (Map)
-import qualified Data.Map as Map (fromSet, keysSet, mapWithKey, member, null, singleton, toList, unionWith)
+import qualified Data.Map as Map (elems, fromSet, keysSet, mapWithKey, member, null, singleton, toList, unionWith)
 import qualified Data.Map.Strict as SMap (fromList, toList)
 import Data.Maybe (mapMaybe, maybeToList)
 import Data.Monoid (First(..), getFirst)
 import Data.Set (Set)
-import qualified Data.Set as Set (fromAscList, null, singleton, toAscList, toList, union)
+import qualified Data.Set as Set (fromAscList, member, null, singleton, toAscList, toList, union)
 import Data.Word (Word64)
 import GHC.Generics (Generic)
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
 import Language.Marlowe.Runtime.Cardano.Api
   ( fromCardanoAddressInEra
+  , fromCardanoTxIn
   , toCardanoAddressInEra
   , toCardanoPaymentKeyHash
   , toCardanoPolicyId
@@ -445,7 +446,7 @@ findMinUtxo protocol (chAddress, mbDatum, origValue) =
       revisedValue = origValue <> C.negateValue (C.lovelaceToValue $ C.selectLovelace origValue) <> atLeastHalfAnAda
       datum = maybe C.TxOutDatumNone
         (C.TxOutDatumInTx C.ScriptDataInBabbageEra . C.fromPlutusData . toPlutusData)
-        $ mbDatum
+        mbDatum
 
     dummyTxOut <- makeTxOut chAddress datum revisedValue C.ReferenceScriptNone
     case C.calculateMinimumUTxO C.ShelleyBasedEraBabbage dummyTxOut protocol of
@@ -514,10 +515,31 @@ selectCoins protocol marloweVersion marloweCtx walletCtx@WalletContext{..} txBod
     fee = C.lovelaceToValue $ 2 * maximumFee protocol
 
   collateral <-
-    case filter (\candidate -> let value = txOutToValue $ snd candidate in onlyLovelace value && C.selectLovelace value >= C.selectLovelace fee) utxos of
-    -- case filter (\candidate -> let value = txOutToValue $ snd candidate in onlyLovelace value && C.selectLovelace value >= C.selectLovelace fee) (logD ("selectCoins all utxos:\n" <> (unlines . map show $ utxos)) utxos) of
-      utxo : _ -> pure utxo
-      []       -> Left . CoinSelectionFailed $ "No collateral found in " <> show utxos <> "."
+    let
+      candidateCollateral =
+        if Set.null collateralUtxos
+          then utxos  -- Use any UTxO if the wallet did not constrain collateral.
+          else -- The filter below is safe because, by the definition of `WalletContext`,
+               -- the `collateralUtxos` are an improper subset of `availableUtxos`. Also
+               -- note that the definition of `WalletContext` does not *require* that
+               -- every UTxO specified as collateral be used: it just states that those
+               -- UTxOs are *available* for use as collateral.
+               filter (flip Set.member collateralUtxos . fromCardanoTxIn . fst) utxos
+      isPlutusScriptWitness C.PlutusScriptWitness{} = True
+      isPlutusScriptWitness _ = False
+      hasPlutusScriptWitness :: (C.TxIn, C.BuildTxWith C.BuildTx (C.Witness C.WitCtxTxIn C.BabbageEra)) -> Bool
+      hasPlutusScriptWitness (_, C.BuildTxWith (C.ScriptWitness _ witness)) = isPlutusScriptWitness witness
+      hasPlutusScriptWitness _ = False
+      hasPlutusMinting = case C.txMintValue txBodyContent of
+        C.TxMintNone -> False
+        C.TxMintValue _ _ (C.BuildTxWith policies) -> any isPlutusScriptWitness$ Map.elems policies
+    in
+      -- TODO: Support Babbage-style collateral, where multiple UTxOs are used and change is made.
+      if hasPlutusMinting || any hasPlutusScriptWitness (C.txIns txBodyContent)
+        then case filter (\candidate -> let value = txOutToValue $ snd candidate in onlyLovelace value && C.selectLovelace value >= C.selectLovelace fee) candidateCollateral of
+          (txIn, _) : _ -> pure $ C.TxInsCollateral C.CollateralInBabbageEra [txIn]
+          []            -> Left . CoinSelectionFailed $ "No collateral found in " <> show utxos <> "."
+        else pure C.TxInsCollateralNone  -- No collateral is needed unless a Plutus script is being executed.
 
   -- Bound the lovelace that must be included with change
   -- Worst case scenario of how much ADA would be added to the native and non-native change outputs
@@ -665,7 +687,7 @@ selectCoins protocol marloweVersion marloweCtx walletCtx@WalletContext{..} txBod
 
   -- Return the transaction with coin selection added
   pure $ txBodyContent
-    { C.txInsCollateral = C.TxInsCollateral C.CollateralInBabbageEra [fst collateral]
+    { C.txInsCollateral = collateral
     , C.txIns = C.txIns txBodyContent <> fmap addWitness selection
     , C.txOuts = outputs <> (output :: [C.TxOut C.CtxTx C.BabbageEra])
     }

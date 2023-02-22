@@ -1,13 +1,18 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE TupleSections #-}
 
 module Language.Marlowe.Runtime.Transaction.ConstraintsSpec
   where
 
 import Cardano.Api
 import Cardano.Api.Shelley
-  (PlutusScriptOrReferenceInput(PScript), ProtocolParameters(..), ReferenceScript(ReferenceScriptNone))
+  ( PlutusScriptOrReferenceInput(..)
+  , ProtocolParameters(..)
+  , ReferenceScript(ReferenceScriptNone)
+  , SimpleScriptOrReferenceInput(SReferenceScript)
+  )
 import Control.Applicative (Alternative)
 import Control.Arrow ((***))
 import Control.Error (note)
@@ -21,7 +26,7 @@ import Data.Functor ((<&>))
 import Data.List (find, isPrefixOf)
 import Data.Map (Map)
 import qualified Data.Map as Map
-import qualified Data.Map.Strict as SMap (toList)
+import qualified Data.Map.Strict as SMap (filterWithKey, toList)
 import Data.Maybe (fromJust, isJust, mapMaybe)
 import Data.Monoid (First(..), getFirst)
 import Data.Ratio ((%))
@@ -37,6 +42,7 @@ import Gen.Cardano.Api.Typed
   , genScriptData
   , genScriptHash
   , genTxBodyContent
+  , genTxIn
   , genValueForTxOut
   )
 import Language.Marlowe (MarloweData(..), MarloweParams(..), txInputs)
@@ -207,6 +213,52 @@ spec = do
 
       marloweContext <- genSimpleMarloweContext marloweVersion constraints
 
+      (executesPlutusScript, txBodyContent) <-
+        frequency
+          [
+            -- A representative transaction without any scripts, which should not have collateral.
+            (1, pure (False, emptyTxBodyContent))
+            -- A representative simple script for payment, which should not have collateral.
+          , (1, hedgehog $ do
+                txIn <- genTxIn
+                script <- SReferenceScript <$> genTxIn <*> pure Nothing
+                pure (False, emptyTxBodyContent {txIns = [(txIn,
+                  BuildTxWith
+                    . ScriptWitness ScriptWitnessForSpending
+                    $ SimpleScriptWitness SimpleScriptV1InBabbage SimpleScriptV1 script)]}))
+            -- A representative transaction with a simple script for minting, which should not have collateral.
+          , (1, hedgehog $ do
+                policy <- PolicyId <$> genScriptHash
+                script <- SReferenceScript <$> genTxIn <*> pure Nothing
+                pure (False, emptyTxBodyContent {txMintValue =
+                  TxMintValue MultiAssetInBabbageEra mempty
+                    $ BuildTxWith
+                    $ Map.singleton policy
+                    $ SimpleScriptWitness SimpleScriptV1InBabbage SimpleScriptV1 script}))
+            -- A representative transaction with a Plutus script for minting, which should have collateral.
+          , (5, hedgehog $ do
+                policy <- PolicyId <$> genScriptHash
+                script <- PReferenceScript <$> genTxIn <*> pure Nothing
+                redeemer <- genScriptData
+                pure (True, emptyTxBodyContent {txMintValue =
+                  TxMintValue MultiAssetInBabbageEra mempty
+                    $ BuildTxWith
+                    $ Map.singleton policy
+                    $ PlutusScriptWitness PlutusScriptV2InBabbage PlutusScriptV2
+                        script NoScriptDatumForMint redeemer (ExecutionUnits 0 0)}))
+            -- A representative transaction with a Plutus script for payment, which should have collateral.
+          , (20, hedgehog $ do
+                txIn <- genTxIn
+                script <- PReferenceScript <$> genTxIn <*> pure Nothing
+                datum <- ScriptDatumForTxIn <$> genScriptData
+                redeemer <- genScriptData
+                pure (True, emptyTxBodyContent {txIns = [(txIn,
+                  BuildTxWith
+                    . ScriptWitness ScriptWitnessForSpending
+                    $ PlutusScriptWitness PlutusScriptV2InBabbage PlutusScriptV2
+                        script datum redeemer (ExecutionUnits 0 0))]}))
+          ]
+
       -- We MUST dictate the distribution of wallet context assets, default
       -- generation only tests with empty wallets!
       maxLovelace <- choose (0, 40_000_000)
@@ -244,8 +296,18 @@ spec = do
           toCardanoTxOut' MultiAssetInBabbageEra transactionOutput Nothing
 
         -- All utxos that are spendable from the wallet context
+        eligible :: [(Chain.TxOutRef, Chain.TransactionOutput)]
+        eligible =
+          SMap.toList
+            . (
+                if Set.null $ collateralUtxos walletContext
+                  then id
+                  else SMap.filterWithKey $ const . flip Set.member (collateralUtxos walletContext)
+              )
+            . Chain.unUTxOs
+            $ availableUtxos walletContext
         utxos :: [TxOut CtxTx BabbageEra]
-        utxos = mapMaybe convertUtxo (SMap.toList . Chain.unUTxOs . availableUtxos $ walletContext)
+        utxos = mapMaybe convertUtxo eligible
 
         -- Compute the value of all available UTxOs
         universe :: Value
@@ -269,6 +331,13 @@ spec = do
             targetLovelace = fromCardanoLovelace $ fee' <> minUtxo'
             anyCoversFee = any ((>= targetLovelace) . Chain.ada) onlyAdas
 
+        eligibleUtxos txBodyContent' =
+          case txInsCollateral txBodyContent' of
+            TxInsCollateralNone          -> Left "No collateral selected"
+            TxInsCollateral _ collateral -> if all (`elem` mapMaybe (toCardanoTxIn . fst) eligible) collateral
+                                              then Right txBodyContent'
+                                              else Left "Collateral contains ineligible UTxO"
+
         singleUtxo :: [Chain.Assets] -> Either String Chain.Assets
         singleUtxo [as] = Right as
         singleUtxo l = Left $ "Collateral is not exactly one utxo" <> show l
@@ -285,20 +354,35 @@ spec = do
               <> show lovelace <> "  fees: " <> show (maxFee protocolTestnet)
 
         -- Function to convert the Left side of the Either from (ConstraintError v) to String
+        selection =
+          selectCoins protocolTestnet marloweVersion marloweContext
+            walletContext txBodyContent
         selectResult :: Either String ()
         selectResult = either
           (\ce -> case marloweVersion of MarloweV1 -> Left . show $ ce)
-          (\txBC -> singleUtxo (extractCollat txBC) >>= assetsAdaOnly >>= adaCollatIsSufficient)
-          $ selectCoins protocolTestnet marloweVersion marloweContext
-              walletContext emptyTxBodyContent
+          (\txBC -> fmap extractCollat (eligibleUtxos txBC) >>= singleUtxo >>= assetsAdaOnly >>= adaCollatIsSufficient)
+          selection
 
-      pure $ case (walletCtxSufficient, selectResult) of
-        (True , Right _) -> label "Wallet has funds, selection succeeded" True
-        (False, Right _) -> counterexample "Selection should have failed" False
-        (True , Left selFailedMsg) ->
-          counterexample ("Selection shouldn't have failed\n" <> selFailedMsg) False
-        (False, Left selFailedMsg) -> label "Wallet does not have funds, selection failed"
-          $ selFailedMsg `shouldSatisfy` isPrefixOf "CoinSelectionFailed"
+        noCollateralUnlessPlutus =
+          label "Not a Plutus transaction"
+            $ case selection of
+                Right txBodyContent' ->
+                  counterexample "Non-Plutus transaction should not have collateral"
+                    $ txInsCollateral txBodyContent' `shouldBe` TxInsCollateralNone
+                Left (CoinSelectionFailed message) ->
+                  counterexample "Non-Plutus coin selection should not fail due to lack of collateral"
+                    $ message `shouldNotSatisfy` isPrefixOf "No collateral found in "
+                Left _ -> counterexample "Coin selection may fail for reasons unrelated to collateral" True
+
+      pure $ if executesPlutusScript
+        then case (walletCtxSufficient, selectResult) of
+          (True , Right _) -> label "Wallet has funds, selection succeeded" True
+          (False, Right _) -> counterexample "Selection should have failed" False
+          (True , Left selFailedMsg) ->
+            counterexample ("Selection shouldn't have failed\n" <> selFailedMsg) False
+          (False, Left selFailedMsg) -> label "Wallet does not have funds, selection failed"
+            $ selFailedMsg `shouldSatisfy` isPrefixOf "CoinSelectionFailed"
+        else noCollateralUnlessPlutus
 
     prop "selectCoins should increase the number of outputs by either 0 or exactly 1" \(SomeTxConstraints marloweVersion constraints) -> do
       marloweContext <- genSimpleMarloweContext marloweVersion constraints
@@ -606,12 +690,13 @@ genWalletWithNuisance marloweVersion' constraints' minLovelace = do
   someAddress <- arbitrary
   let lovelaceToAdd = Chain.Assets (Chain.Lovelace minLovelace) (Chain.Tokens Map.empty)
   nuisAssets <- (lovelaceToAdd <>) <$> arbitrary
+  collateral <- Set.fromList <$> sublistOf [adaTxOutRef]
   let
     adaAssets = Chain.Assets (Chain.Lovelace 7_000_000) (Chain.Tokens Map.empty)
     adaTxOut = Chain.TransactionOutput someAddress adaAssets Nothing Nothing
     nuisTxOut = Chain.TransactionOutput someAddress nuisAssets Nothing Nothing
     utxos = Chain.UTxOs $ Map.fromList [(adaTxOutRef, adaTxOut), (nuisTxOutRef, nuisTxOut)]
-  pure $ wc { availableUtxos = utxos, collateralUtxos = Set.singleton adaTxOutRef }
+  pure $ wc { availableUtxos = utxos, collateralUtxos = collateral }
 
 -- Simulate constraints specifying the tx must cover a 500ADA output
 -- after coin selection. This exists to force selection to consume the
@@ -700,10 +785,11 @@ genWalletWithAsset marloweVersion constraints minLovelace = do
   txOutRef <- arbitrary
   stubAddress <- arbitrary
   assets <- genAtLeastThisMuchAda minLovelace
+  collateral <- Set.fromList <$> sublistOf [txOutRef]
   let
     txOut = Chain.TransactionOutput stubAddress assets Nothing Nothing
     utxos = Chain.UTxOs $ Map.singleton txOutRef txOut
-  pure $ wc { availableUtxos = utxos, collateralUtxos = Set.singleton txOutRef }
+  pure $ wc { availableUtxos = utxos, collateralUtxos = collateral }
 
 -- A simple TxBodyContent that's completely empty
 emptyTxBodyContent :: TxBodyContent BuildTx BabbageEra
