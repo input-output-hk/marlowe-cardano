@@ -53,8 +53,8 @@ data Command
 -- | Read options from the environment and the command line.
 getOptions :: IO Options
 getOptions = do
-  historyHostParser <- optParserWithEnvDefault O.historyHost
-  historySyncPortParser <- optParserWithEnvDefault O.historySyncPort
+  syncHostParser <- optParserWithEnvDefault O.syncHost
+  syncSyncPort <- optParserWithEnvDefault O.syncSyncPort
   txHostParser <- optParserWithEnvDefault O.txHost
   txCommandPortParser <- optParserWithEnvDefault O.txCommandPort
   let
@@ -79,8 +79,8 @@ getOptions = do
           ]
       ]
     parser = Options
-      <$> historyHostParser
-      <*> historySyncPortParser
+      <$> syncHostParser
+      <*> syncSyncPort
       <*> txHostParser
       <*> txCommandPortParser
       <*> commandParser
