@@ -257,37 +257,6 @@ library sync
     , witherable
   visibility: public
 
-library history
-  import: lang
-  hs-source-dirs:   history
-  visibility: public
-  exposed-modules:
-    Language.Marlowe.Runtime.History
-    Language.Marlowe.Runtime.History.Follower
-    Language.Marlowe.Runtime.History.FollowerSupervisor
-    Language.Marlowe.Runtime.History.JobServer
-    Language.Marlowe.Runtime.History.QueryServer
-    Language.Marlowe.Runtime.History.Store
-    Language.Marlowe.Runtime.History.Store.Memory
-    Language.Marlowe.Runtime.History.Store.Model
-    Language.Marlowe.Runtime.History.SyncServer
-  build-depends:
-      base >= 4.9 && < 5
-    , async
-    , async-components
-    , cardano-api
-    , containers
-    , marlowe-chain-sync
-    , marlowe-protocols
-    , marlowe-runtime
-    , marlowe-runtime:history-api
-    , semialign
-    , stm
-    , these
-    , transformers
-    , witherable
-  visibility: public
-
 library discovery-api
   import: lang
   hs-source-dirs:   discovery-api
@@ -307,31 +276,6 @@ library discovery-api
     , marlowe-protocols
     , marlowe-runtime
     , typed-protocols
-
-library discovery
-  import: lang
-  hs-source-dirs:   discovery
-  visibility: public
-  exposed-modules:
-    Language.Marlowe.Runtime.Discovery
-    Language.Marlowe.Runtime.Discovery.Chain
-    Language.Marlowe.Runtime.Discovery.Store
-    Language.Marlowe.Runtime.Discovery.QueryServer
-    Language.Marlowe.Runtime.Discovery.SyncServer
-  build-depends:
-      base >= 4.9 && < 5
-    , async-components
-    , containers
-    , marlowe-cardano
-    , marlowe-chain-sync
-    , marlowe-protocols
-    , marlowe-runtime
-    , marlowe-runtime:discovery-api
-    , plutus-ledger-api
-    , plutus-tx
-    , semialign
-    , stm
-  visibility: public
 
 library tx-api
   import: lang
@@ -615,56 +559,6 @@ executable marlowe-sync
     , uuid
   ghc-options: -threaded
 
-executable marlowe-history
-  import: lang
-  hs-source-dirs:   marlowe-history
-  main-is: Main.hs
-  other-modules:
-    Logging
-    Paths_marlowe_runtime
-  autogen-modules:
-    Paths_marlowe_runtime
-  build-depends:
-      base >= 4.9 && < 5
-    , async-components
-    , eventuo11y
-    , eventuo11y-extras
-    , marlowe-chain-sync
-    , marlowe-protocols
-    , marlowe-runtime:history
-    , marlowe-runtime:history-api
-    , network
-    , optparse-applicative
-    , stm
-    , text
-    , uuid
-  ghc-options: -threaded
-
-executable marlowe-discovery
-  import: lang
-  hs-source-dirs:   marlowe-discovery
-  main-is: Main.hs
-  other-modules:
-    Logging
-    Paths_marlowe_runtime
-  autogen-modules:
-    Paths_marlowe_runtime
-  build-depends:
-      base >= 4.9 && < 5
-    , async-components
-    , eventuo11y
-    , eventuo11y-extras
-    , marlowe-chain-sync
-    , marlowe-protocols
-    , marlowe-runtime
-    , marlowe-runtime:discovery
-    , marlowe-runtime:discovery-api
-    , network
-    , optparse-applicative
-    , text
-    , uuid
-  ghc-options: -threaded
-
 executable marlowe-tx
   import: lang
   hs-source-dirs:   marlowe-tx
@@ -720,14 +614,6 @@ test-suite marlowe-runtime-test
   main-is: Spec.hs
   other-modules:
     Language.Marlowe.Runtime.Core.ScriptRegistrySpec
-    Language.Marlowe.Runtime.History.CommandSpec
-    Language.Marlowe.Runtime.History.QuerySpec
-    Language.Marlowe.Runtime.History.FollowerSpec
-    Language.Marlowe.Runtime.History.Script
-    Language.Marlowe.Runtime.History.StoreSpec
-    Language.Marlowe.Runtime.History.Store.ModelSpec
-    Language.Marlowe.Runtime.HistorySpec
-    Language.Marlowe.Runtime.Discovery.QuerySpec
     Language.Marlowe.Runtime.Transaction.BuildConstraintsSpec
     Language.Marlowe.Runtime.Transaction.ConstraintsSpec
     Language.Marlowe.Runtime.Transaction.CommandSpec
@@ -737,8 +623,6 @@ test-suite marlowe-runtime-test
     Paths_marlowe_runtime
   build-depends:
       base >= 4.9 && < 5
-    , async
-    , async-components
     , bytestring
     , cardano-api
     , cardano-api:gen
@@ -752,11 +636,9 @@ test-suite marlowe-runtime-test
     , marlowe-chain-sync:gen
     , marlowe-chain-sync:plutus-compat
     , marlowe-protocols
-    , marlowe-protocols-test
     , marlowe-runtime
     , marlowe-runtime:gen
     , marlowe-runtime:discovery-api
-    , marlowe-runtime:history
     , marlowe-runtime:history-api
     , marlowe-runtime:sync-api
     , marlowe-runtime:tx
@@ -767,10 +649,7 @@ test-suite marlowe-runtime-test
     , plutus-ledger-api
     , QuickCheck
     , quickcheck-instances
-    , some
-    , stm
     , time
-    , transformers
     , tx-api
     , typed-protocols
   build-tool-depends: hspec-discover:hspec-discover

@@ -233,37 +233,6 @@
             ];
           hsSourceDirs = [ "sync" ];
           };
-        "history" = {
-          depends = [
-            (hsPkgs."base" or (errorHandler.buildDepError "base"))
-            (hsPkgs."async" or (errorHandler.buildDepError "async"))
-            (hsPkgs."async-components" or (errorHandler.buildDepError "async-components"))
-            (hsPkgs."cardano-api" or (errorHandler.buildDepError "cardano-api"))
-            (hsPkgs."containers" or (errorHandler.buildDepError "containers"))
-            (hsPkgs."marlowe-chain-sync" or (errorHandler.buildDepError "marlowe-chain-sync"))
-            (hsPkgs."marlowe-protocols" or (errorHandler.buildDepError "marlowe-protocols"))
-            (hsPkgs."marlowe-runtime" or (errorHandler.buildDepError "marlowe-runtime"))
-            (hsPkgs."marlowe-runtime".components.sublibs.history-api or (errorHandler.buildDepError "marlowe-runtime:history-api"))
-            (hsPkgs."semialign" or (errorHandler.buildDepError "semialign"))
-            (hsPkgs."stm" or (errorHandler.buildDepError "stm"))
-            (hsPkgs."these" or (errorHandler.buildDepError "these"))
-            (hsPkgs."transformers" or (errorHandler.buildDepError "transformers"))
-            (hsPkgs."witherable" or (errorHandler.buildDepError "witherable"))
-            ];
-          buildable = true;
-          modules = [
-            "Language/Marlowe/Runtime/History"
-            "Language/Marlowe/Runtime/History/Follower"
-            "Language/Marlowe/Runtime/History/FollowerSupervisor"
-            "Language/Marlowe/Runtime/History/JobServer"
-            "Language/Marlowe/Runtime/History/QueryServer"
-            "Language/Marlowe/Runtime/History/Store"
-            "Language/Marlowe/Runtime/History/Store/Memory"
-            "Language/Marlowe/Runtime/History/Store/Model"
-            "Language/Marlowe/Runtime/History/SyncServer"
-            ];
-          hsSourceDirs = [ "history" ];
-          };
         "discovery-api" = {
           depends = [
             (hsPkgs."base" or (errorHandler.buildDepError "base"))
@@ -284,31 +253,6 @@
             "Language/Marlowe/Runtime/Discovery/Api"
             ];
           hsSourceDirs = [ "discovery-api" ];
-          };
-        "discovery" = {
-          depends = [
-            (hsPkgs."base" or (errorHandler.buildDepError "base"))
-            (hsPkgs."async-components" or (errorHandler.buildDepError "async-components"))
-            (hsPkgs."containers" or (errorHandler.buildDepError "containers"))
-            (hsPkgs."marlowe-cardano" or (errorHandler.buildDepError "marlowe-cardano"))
-            (hsPkgs."marlowe-chain-sync" or (errorHandler.buildDepError "marlowe-chain-sync"))
-            (hsPkgs."marlowe-protocols" or (errorHandler.buildDepError "marlowe-protocols"))
-            (hsPkgs."marlowe-runtime" or (errorHandler.buildDepError "marlowe-runtime"))
-            (hsPkgs."marlowe-runtime".components.sublibs.discovery-api or (errorHandler.buildDepError "marlowe-runtime:discovery-api"))
-            (hsPkgs."plutus-ledger-api" or (errorHandler.buildDepError "plutus-ledger-api"))
-            (hsPkgs."plutus-tx" or (errorHandler.buildDepError "plutus-tx"))
-            (hsPkgs."semialign" or (errorHandler.buildDepError "semialign"))
-            (hsPkgs."stm" or (errorHandler.buildDepError "stm"))
-            ];
-          buildable = true;
-          modules = [
-            "Language/Marlowe/Runtime/Discovery"
-            "Language/Marlowe/Runtime/Discovery/Chain"
-            "Language/Marlowe/Runtime/Discovery/Store"
-            "Language/Marlowe/Runtime/Discovery/QueryServer"
-            "Language/Marlowe/Runtime/Discovery/SyncServer"
-            ];
-          hsSourceDirs = [ "discovery" ];
           };
         "tx-api" = {
           depends = [
@@ -586,52 +530,6 @@
             "Main.hs"
             ] ++ (pkgs.lib).optional (flags.defer-plugin-errors) "";
           };
-        "marlowe-history" = {
-          depends = [
-            (hsPkgs."base" or (errorHandler.buildDepError "base"))
-            (hsPkgs."async-components" or (errorHandler.buildDepError "async-components"))
-            (hsPkgs."eventuo11y" or (errorHandler.buildDepError "eventuo11y"))
-            (hsPkgs."eventuo11y-extras" or (errorHandler.buildDepError "eventuo11y-extras"))
-            (hsPkgs."marlowe-chain-sync" or (errorHandler.buildDepError "marlowe-chain-sync"))
-            (hsPkgs."marlowe-protocols" or (errorHandler.buildDepError "marlowe-protocols"))
-            (hsPkgs."marlowe-runtime".components.sublibs.history or (errorHandler.buildDepError "marlowe-runtime:history"))
-            (hsPkgs."marlowe-runtime".components.sublibs.history-api or (errorHandler.buildDepError "marlowe-runtime:history-api"))
-            (hsPkgs."network" or (errorHandler.buildDepError "network"))
-            (hsPkgs."optparse-applicative" or (errorHandler.buildDepError "optparse-applicative"))
-            (hsPkgs."stm" or (errorHandler.buildDepError "stm"))
-            (hsPkgs."text" or (errorHandler.buildDepError "text"))
-            (hsPkgs."uuid" or (errorHandler.buildDepError "uuid"))
-            ];
-          buildable = true;
-          modules = [ "Logging" "Paths_marlowe_runtime" ];
-          hsSourceDirs = [ "marlowe-history" ];
-          mainPath = [
-            "Main.hs"
-            ] ++ (pkgs.lib).optional (flags.defer-plugin-errors) "";
-          };
-        "marlowe-discovery" = {
-          depends = [
-            (hsPkgs."base" or (errorHandler.buildDepError "base"))
-            (hsPkgs."async-components" or (errorHandler.buildDepError "async-components"))
-            (hsPkgs."eventuo11y" or (errorHandler.buildDepError "eventuo11y"))
-            (hsPkgs."eventuo11y-extras" or (errorHandler.buildDepError "eventuo11y-extras"))
-            (hsPkgs."marlowe-chain-sync" or (errorHandler.buildDepError "marlowe-chain-sync"))
-            (hsPkgs."marlowe-protocols" or (errorHandler.buildDepError "marlowe-protocols"))
-            (hsPkgs."marlowe-runtime" or (errorHandler.buildDepError "marlowe-runtime"))
-            (hsPkgs."marlowe-runtime".components.sublibs.discovery or (errorHandler.buildDepError "marlowe-runtime:discovery"))
-            (hsPkgs."marlowe-runtime".components.sublibs.discovery-api or (errorHandler.buildDepError "marlowe-runtime:discovery-api"))
-            (hsPkgs."network" or (errorHandler.buildDepError "network"))
-            (hsPkgs."optparse-applicative" or (errorHandler.buildDepError "optparse-applicative"))
-            (hsPkgs."text" or (errorHandler.buildDepError "text"))
-            (hsPkgs."uuid" or (errorHandler.buildDepError "uuid"))
-            ];
-          buildable = true;
-          modules = [ "Logging" "Paths_marlowe_runtime" ];
-          hsSourceDirs = [ "marlowe-discovery" ];
-          mainPath = [
-            "Main.hs"
-            ] ++ (pkgs.lib).optional (flags.defer-plugin-errors) "";
-          };
         "marlowe-tx" = {
           depends = [
             (hsPkgs."base" or (errorHandler.buildDepError "base"))
@@ -681,8 +579,6 @@
         "marlowe-runtime-test" = {
           depends = [
             (hsPkgs."base" or (errorHandler.buildDepError "base"))
-            (hsPkgs."async" or (errorHandler.buildDepError "async"))
-            (hsPkgs."async-components" or (errorHandler.buildDepError "async-components"))
             (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
             (hsPkgs."cardano-api" or (errorHandler.buildDepError "cardano-api"))
             (hsPkgs."cardano-api".components.sublibs.gen or (errorHandler.buildDepError "cardano-api:gen"))
@@ -696,11 +592,9 @@
             (hsPkgs."marlowe-chain-sync".components.sublibs.gen or (errorHandler.buildDepError "marlowe-chain-sync:gen"))
             (hsPkgs."marlowe-chain-sync".components.sublibs.plutus-compat or (errorHandler.buildDepError "marlowe-chain-sync:plutus-compat"))
             (hsPkgs."marlowe-protocols" or (errorHandler.buildDepError "marlowe-protocols"))
-            (hsPkgs."marlowe-protocols-test" or (errorHandler.buildDepError "marlowe-protocols-test"))
             (hsPkgs."marlowe-runtime" or (errorHandler.buildDepError "marlowe-runtime"))
             (hsPkgs."marlowe-runtime".components.sublibs.gen or (errorHandler.buildDepError "marlowe-runtime:gen"))
             (hsPkgs."marlowe-runtime".components.sublibs.discovery-api or (errorHandler.buildDepError "marlowe-runtime:discovery-api"))
-            (hsPkgs."marlowe-runtime".components.sublibs.history or (errorHandler.buildDepError "marlowe-runtime:history"))
             (hsPkgs."marlowe-runtime".components.sublibs.history-api or (errorHandler.buildDepError "marlowe-runtime:history-api"))
             (hsPkgs."marlowe-runtime".components.sublibs.sync-api or (errorHandler.buildDepError "marlowe-runtime:sync-api"))
             (hsPkgs."marlowe-runtime".components.sublibs.tx or (errorHandler.buildDepError "marlowe-runtime:tx"))
@@ -711,10 +605,7 @@
             (hsPkgs."plutus-ledger-api" or (errorHandler.buildDepError "plutus-ledger-api"))
             (hsPkgs."QuickCheck" or (errorHandler.buildDepError "QuickCheck"))
             (hsPkgs."quickcheck-instances" or (errorHandler.buildDepError "quickcheck-instances"))
-            (hsPkgs."some" or (errorHandler.buildDepError "some"))
-            (hsPkgs."stm" or (errorHandler.buildDepError "stm"))
             (hsPkgs."time" or (errorHandler.buildDepError "time"))
-            (hsPkgs."transformers" or (errorHandler.buildDepError "transformers"))
             (hsPkgs."marlowe-runtime".components.sublibs.tx-api or (errorHandler.buildDepError "marlowe-runtime:tx-api"))
             (hsPkgs."typed-protocols" or (errorHandler.buildDepError "typed-protocols"))
             ];
@@ -724,14 +615,6 @@
           buildable = true;
           modules = [
             "Language/Marlowe/Runtime/Core/ScriptRegistrySpec"
-            "Language/Marlowe/Runtime/History/CommandSpec"
-            "Language/Marlowe/Runtime/History/QuerySpec"
-            "Language/Marlowe/Runtime/History/FollowerSpec"
-            "Language/Marlowe/Runtime/History/Script"
-            "Language/Marlowe/Runtime/History/StoreSpec"
-            "Language/Marlowe/Runtime/History/Store/ModelSpec"
-            "Language/Marlowe/Runtime/HistorySpec"
-            "Language/Marlowe/Runtime/Discovery/QuerySpec"
             "Language/Marlowe/Runtime/Transaction/BuildConstraintsSpec"
             "Language/Marlowe/Runtime/Transaction/ConstraintsSpec"
             "Language/Marlowe/Runtime/Transaction/CommandSpec"
