@@ -503,3 +503,24 @@ buildApplyInputsConstraintsSpec =
                 $ marloweOutputConstraints == expectedOutput
             Left _ ->
               counterexample "Unexpected transaction failure" False
+    Hspec.QuickCheck.prop "metadata constraints" \assets utxo address marloweParams metadata -> do
+      let
+        marloweState = Semantics.State AM.empty AM.empty AM.empty $ POSIXTime 0
+        marloweContract = Semantics.Assert Semantics.TrueObs $ Semantics.When [] 1_000_000_000_000_000_000_000 Semantics.Close
+        datum = Semantics.MarloweData{..}
+        marloweOutput = TransactionScriptOutput{..}
+        result =
+          buildApplyInputsConstraints
+            systemStart eraHistory MarloweV1
+            marloweOutput
+            (Chain.SlotNo 1_000_000)
+            (Chain.TransactionMetadata metadata) Nothing Nothing mempty
+      pure
+        . counterexample ("result = " <> show result)
+        $ case result of
+            Right (_, TxConstraints{..}) ->
+              counterexample "metadata is preserved is correct"
+                $ metadataConstraints == metadata
+            Left _ ->
+              counterexample "Unexpected transaction failure" False
+        :: QuickCheck.Gen Property
