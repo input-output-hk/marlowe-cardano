@@ -39,6 +39,11 @@ commitBlocks blocks = H.statement (prepareParams blocks)
       ( INSERT INTO marlowe.block (id, slotNo, blockNo)
         SELECT * FROM blockInputs
       )
+    , deleteRollbackBlocks AS
+      ( DELETE FROM marlowe.rollbackBlock
+        USING blockInputs
+        WHERE blockInputs.id = rollbackBlock.fromBlock
+      )
 
     , txOutInputs (txId, txIx, blockId, address, lovelace) AS
       ( SELECT * FROM UNNEST ($4 :: bytea[], $5 :: smallint[], $6 :: bytea[], $7 :: bytea[], $8 :: bigint[])
