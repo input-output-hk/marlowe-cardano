@@ -29,6 +29,7 @@ import Language.Marlowe.Runtime.CLI.Monad (CLI, runCLI)
 import Language.Marlowe.Runtime.CLI.Option (optParserWithEnvDefault)
 import qualified Language.Marlowe.Runtime.CLI.Option as O
 import Network.Protocol.Driver (SomeConnector(..), tcpClient)
+import Network.Protocol.Handshake.Client (handshakeClientConnector)
 import Network.Protocol.Job.Client (jobClientPeer)
 import Network.Socket (HostName, PortNumber)
 import Options.Applicative
@@ -102,7 +103,7 @@ runCommand = \case
 -- | Interpret a CLI action in IO using the provided options.
 runCLIWithOptions :: STM () -> Options -> CLI a -> IO a
 runCLIWithOptions sigInt Options{..} cli = runReaderT (runCLI cli) Env
-  { marloweSyncConnector = SomeConnector $ tcpClient historyHost historySyncPort marloweSyncClientPeer
-  , txJobConnector = SomeConnector $ tcpClient txHost txCommandPort jobClientPeer
+  { marloweSyncConnector = SomeConnector $ handshakeClientConnector $ tcpClient historyHost historySyncPort marloweSyncClientPeer
+  , txJobConnector = SomeConnector $ handshakeClientConnector $ tcpClient txHost txCommandPort jobClientPeer
   , sigInt
   }
