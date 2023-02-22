@@ -216,7 +216,9 @@ spec = do
       (executesPlutusScript, txBodyContent) <-
         frequency
           [
+            -- A representative transaction without any scripts, which should not have collateral.
             (1, pure (False, emptyTxBodyContent))
+            -- A representative simple script for payment, which should not have collateral.
           , (1, hedgehog $ do
                 txIn <- genTxIn
                 script <- SReferenceScript <$> genTxIn <*> pure Nothing
@@ -224,6 +226,7 @@ spec = do
                   BuildTxWith
                     . ScriptWitness ScriptWitnessForSpending
                     $ SimpleScriptWitness SimpleScriptV1InBabbage SimpleScriptV1 script)]}))
+            -- A representative transaction with a simple script for minting, which should not have collateral.
           , (1, hedgehog $ do
                 policy <- PolicyId <$> genScriptHash
                 script <- SReferenceScript <$> genTxIn <*> pure Nothing
@@ -232,6 +235,7 @@ spec = do
                     $ BuildTxWith
                     $ Map.singleton policy
                     $ SimpleScriptWitness SimpleScriptV1InBabbage SimpleScriptV1 script}))
+            -- A representative transaction with a Plutus script for minting, which should have collateral.
           , (5, hedgehog $ do
                 policy <- PolicyId <$> genScriptHash
                 script <- PReferenceScript <$> genTxIn <*> pure Nothing
@@ -242,6 +246,7 @@ spec = do
                     $ Map.singleton policy
                     $ PlutusScriptWitness PlutusScriptV2InBabbage PlutusScriptV2
                         script NoScriptDatumForMint redeemer (ExecutionUnits 0 0)}))
+            -- A representative transaction with a Plutus script for payment, which should have collateral.
           , (20, hedgehog $ do
                 txIn <- genTxIn
                 script <- PReferenceScript <$> genTxIn <*> pure Nothing
