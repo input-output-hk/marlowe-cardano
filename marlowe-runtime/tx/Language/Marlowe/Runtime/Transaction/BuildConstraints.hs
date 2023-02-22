@@ -302,7 +302,7 @@ buildApplyInputsConstraintsV1 systemStart eraHistory marloweOutput tipSlot metad
     V1.MarloweData params state contract = datum
     V1.MarloweParams currencySymbol = params
 
-    requiredParties = Set.fromList $ for inputs $ marloweInputParty >>> maybeToList
+    requiredParties = Set.fromList $ maybeToList . marloweInputParty <$> inputs
     roleAssetId = toAssetId currencySymbol
 
     tipSlot' = toCardanoSlotNo tipSlot
