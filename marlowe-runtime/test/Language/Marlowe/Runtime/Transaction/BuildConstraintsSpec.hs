@@ -47,6 +47,7 @@ import Ouroboros.Consensus.BlockchainTime (RelativeTime(..), SystemStart(..), mk
 import Ouroboros.Consensus.HardFork.History
   (Bound(..), EraEnd(..), EraParams(..), EraSummary(..), SafeZone(..), mkInterpreter, summaryWithExactly)
 import Ouroboros.Consensus.Util.Counting (Exactly(..))
+import Plutus.V1.Ledger.Api (Address(Address), Credential(PubKeyCredential), PubKeyHash(PubKeyHash), fromBuiltin)
 import Plutus.V1.Ledger.Time (POSIXTime(POSIXTime))
 import qualified PlutusTx.AssocMap as AM
 import Spec.Marlowe.Semantics.Arbitrary ()
@@ -309,6 +310,7 @@ buildApplyInputsConstraintsSpec =
       toUTC = posixSecondsToUTCTime . secondsToNominalDiffTime . (/ 1000) . fromInteger :: Integer -> UTCTime
       fromUTC = floor . (1000 *) . nominalDiffTimeToSeconds . utcTimeToPOSIXSeconds :: UTCTime -> Integer
       toSecondFloor = (* 1000) . (`div` 1000)
+      distantFuture = 1_000_000_000_000_000_000_000
     Hspec.QuickCheck.prop "valid slot interval for timed-out contract" \assets utxo address marloweParams-> do
       -- The choice intervals for the tip, minimum time, and timeout overlap, so every ordering will occur.
       tipSlot' <- genTipSlot
@@ -401,7 +403,7 @@ buildApplyInputsConstraintsSpec =
         makePay (Semantics.Payment account payee token amount) = Semantics.Pay account payee token $ Semantics.Constant amount
         accounts = AM.fromList . Map.toList . Map.unionsWith (+) $ makeAccount <$> payments
         marloweState = Semantics.State accounts AM.empty AM.empty $ POSIXTime 0
-        marloweContract = foldr makePay (Semantics.Assert Semantics.TrueObs $ Semantics.When [] 1_000_000_000_000_000_000_000 Semantics.Close) payments
+        marloweContract = foldr makePay (Semantics.Assert Semantics.TrueObs $ Semantics.When [] distantFuture Semantics.Close) payments
         datum = Semantics.MarloweData{..}
         marloweOutput = TransactionScriptOutput{..}
         result =
@@ -439,9 +441,9 @@ buildApplyInputsConstraintsSpec =
         remainder =
           if closes
             then Semantics.Close
-            else Semantics.When [] 1_000_000_000_000_000_000_000 Semantics.Close
+            else Semantics.When [] distantFuture Semantics.Close
         marloweContract =
-          Semantics.When [Semantics.Case (Semantics.Choice choiceId [Semantics.Bound chosenNum chosenNum]) remainder] 1_000_000_000_000_000_000_000 Semantics.Close
+          Semantics.When [Semantics.Case (Semantics.Choice choiceId [Semantics.Bound chosenNum chosenNum]) remainder] distantFuture Semantics.Close
         datum = Semantics.MarloweData{..}
         marloweOutput = TransactionScriptOutput{..}
         result =
@@ -473,7 +475,7 @@ buildApplyInputsConstraintsSpec =
         expectedContract =
           if closes
             then Semantics.Close
-            else Semantics.When [] 1_000_000_000_000_000_000_000 Semantics.Close
+            else Semantics.When [] distantFuture Semantics.Close
         marloweContract = Semantics.Assert Semantics.TrueObs expectedContract
         datum = Semantics.MarloweData{..}
         marloweOutput = TransactionScriptOutput{..}
@@ -506,7 +508,7 @@ buildApplyInputsConstraintsSpec =
     Hspec.QuickCheck.prop "metadata constraints" \assets utxo address marloweParams metadata -> do
       let
         marloweState = Semantics.State AM.empty AM.empty AM.empty $ POSIXTime 0
-        marloweContract = Semantics.Assert Semantics.TrueObs $ Semantics.When [] 1_000_000_000_000_000_000_000 Semantics.Close
+        marloweContract = Semantics.Assert Semantics.TrueObs $ Semantics.When [] distantFuture Semantics.Close
         datum = Semantics.MarloweData{..}
         marloweOutput = TransactionScriptOutput{..}
         result =
@@ -521,6 +523,42 @@ buildApplyInputsConstraintsSpec =
             Right (_, TxConstraints{..}) ->
               counterexample "metadata is preserved is correct"
                 $ metadataConstraints == metadata
+            Left _ ->
+              counterexample "Unexpected transaction failure" False
+        :: QuickCheck.Gen Property
+    Hspec.QuickCheck.prop "signature constraints" \assets utxo address marloweParams inputs -> do
+      let
+        toAction (Semantics.IDeposit account party token amount) = Semantics.Deposit account party token $ Semantics.Constant amount
+        toAction (Semantics.IChoice choiceId chosenNum) = Semantics.Choice choiceId [Semantics.Bound chosenNum chosenNum]
+        toAction Semantics.INotify = Semantics.Notify Semantics.TrueObs
+        toContract action contract = Semantics.When [Semantics.Case action contract] distantFuture Semantics.Close
+        toAddress (Semantics.IDeposit _ (Semantics.Address _ address') _ _) = toPaymentKeyHash address'
+        toAddress (Semantics.IChoice (Semantics.ChoiceId _ (Semantics.Address _ address')) _) = toPaymentKeyHash address'
+        toAddress _ = Set.empty
+        toPaymentKeyHash (Address (PubKeyCredential (PubKeyHash hash)) _) = Set.singleton . Chain.PaymentKeyHash $ fromBuiltin hash
+        toPaymentKeyHash _ = Set.empty
+        marloweState = Semantics.State AM.empty AM.empty AM.empty $ POSIXTime 0
+        marloweContract =
+          foldr (toContract . toAction)
+            (Semantics.Assert Semantics.TrueObs $ Semantics.When [Semantics.Case (Semantics.Notify Semantics.TrueObs) Semantics.Close] distantFuture Semantics.Close)
+            inputs
+        datum = Semantics.MarloweData{..}
+        marloweOutput = TransactionScriptOutput{..}
+        result =
+          buildApplyInputsConstraints
+            systemStart eraHistory MarloweV1
+            marloweOutput
+            (Chain.SlotNo 1_000_000)
+            (Chain.TransactionMetadata mempty) Nothing Nothing (Semantics.NormalInput <$> inputs)
+        expectedPaymentKeyHashes = Set.unions $ toAddress <$> inputs
+      pure
+        . counterexample ("contract = " <> show marloweContract)
+        . counterexample ("result = " <> show result)
+        . counterexample ("expected payment key hashes = " <> show expectedPaymentKeyHashes)
+        $ case result of
+            Right (_, TxConstraints{..}) ->
+              counterexample "signatures are present"
+                $ signatureConstraints == expectedPaymentKeyHashes
             Left _ ->
               counterexample "Unexpected transaction failure" False
         :: QuickCheck.Gen Property
