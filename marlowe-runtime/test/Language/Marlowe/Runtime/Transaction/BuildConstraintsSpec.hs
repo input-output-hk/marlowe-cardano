@@ -379,6 +379,32 @@ buildApplyInputsConstraintsSpec =
                 else counterexample "Unexpected transaction failure" False
             Left _ ->
               counterexample "Unexpected transaction failure" False
+    Hspec.QuickCheck.prop "valid slot interval for non-timed-out contract" \assets utxo address marloweParams state -> do
+      -- The choice intervals for the tip, minimum time, and timeout overlap, so every ordering will occur.
+      tipTime <- (1_000 *) <$> chooseInteger (0, 1_000)                                   -- Choose the tip first.
+      minTime <- chooseInteger (0, tipTime)                                               -- Choose a minimum before the tip.
+      timeout <- chooseInteger (tipTime + 1_000, tipTime + 1_000_000)
+      let
+        tipSlot = Chain.SlotNo $ fromInteger $ tipTime `div` 1_000
+        marloweState = state {Semantics.minTime = POSIXTime minTime}
+        marloweContract = afterAssert $ whenCloseContract timeout
+        datum = Semantics.MarloweData{..}
+        marloweOutput = TransactionScriptOutput{..}
+        result =
+          buildApplyInputsConstraints
+            systemStart eraHistory MarloweV1
+            marloweOutput
+            tipSlot
+            (Chain.TransactionMetadata mempty) Nothing Nothing mempty
+      pure
+        . counterexample ("tipTime = " <> show tipTime)
+        . counterexample ("minTime = " <> show minTime)
+        . counterexample ("timeout = " <> show timeout)
+        . counterexample ("contract = " <> show marloweContract)
+        . counterexample ("result = " <> show result)
+        $ case result of
+            Right _ -> counterexample "A valid transaction will occur if tip is before the first timeout." True
+            Left _ -> counterexample "Unexpected transaction failure" False
     Hspec.QuickCheck.prop "respects client-specified slot interval" \assets utxo address marloweParams state -> do
       tipTime <- (1_000 *) <$> chooseInteger (0, 1_000)                                   -- Choose the tip first.
       minTime <- chooseInteger (0, tipTime)                                               -- Choose a minimum before the tip.
