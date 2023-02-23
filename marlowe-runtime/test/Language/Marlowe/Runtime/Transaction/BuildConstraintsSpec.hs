@@ -61,6 +61,7 @@ import Test.QuickCheck
   , counterexample
   , discard
   , elements
+  , forAllShrink
   , genericShrink
   , listOf
   , listOf1
@@ -439,7 +440,7 @@ buildApplyInputsConstraintsSpec =
             _ -> counterexample "Assert-close contract is valid" False
     Hspec.QuickCheck.prop "payment constraints" \assets utxo address marloweParams choices values -> do
       -- Create a bunch of payments.
-      forAllShrink (listOf $ Semantics.Payment <$> arbitrary <*> arbitrary <*> arbitrary <*> chooseInteger (1, 1000)) \payments -> do
+      forAllShrink (listOf $ Semantics.Payment <$> arbitrary <*> arbitrary <*> arbitrary <*> chooseInteger (1, 1000)) shrink \payments -> do
         let
           makePayToAddress (Semantics.Payment _ (Semantics.Party (Semantics.Address network address')) token amount) =
             Map.singleton (toChainAddress network address') $ toChainAssets token amount
@@ -476,6 +477,7 @@ buildApplyInputsConstraintsSpec =
                   && payToRoles     == expectedPayToRoles
               Left _ ->
                 counterexample "Unexpected transaction failure" False
+        :: QuickCheck.Gen Property
     Hspec.QuickCheck.prop "input constraints" \assets utxo address marloweParams state inputs -> do
       tipTime <- (1_000 *) <$> chooseInteger (0, 1_000)    -- Choose the tip first.
       minTime <- chooseInteger (0, tipTime)                -- Choose a minimum before the tip.
