@@ -23,24 +23,6 @@ import Test.Integration.Marlowe.Local (execMarlowe_, marloweSyncPort, txJobPort,
 --   , signingKeys :: [ShelleyWitnessSigningKey]
 --   }
 
-{-
-https://github.com/input-output-hk/marlowe-cardano/blob/main/marlowe-integration/src/Test/Integration/Marlowe/Local.hs
-https://github.com/input-output-hk/marlowe-cardano/blob/jhbertra/connection-refactor/marlowe-integration/src/Test/Integration/Marlowe/Local.hs
-data MarloweRuntime = MarloweRuntime
-  { marloweHeaderSyncConnector :: SomeClientConnector MarloweHeaderSyncClient IO
-  , marloweSyncConnector :: SomeClientConnector MarloweSyncClient IO
-  , marloweQueryConnector :: SomeClientConnector MarloweQueryClient IO
-  , txJobConnector :: SomeClientConnector (JobClient MarloweTxCommand) IO
-  , marloweHeaderSyncPort :: Int
-  , marloweSyncPort :: Int
-  , marloweQueryPort :: Int
-  , txJobPort :: Int
-  , runWebClient :: forall a. ClientM a -> IO (Either ClientError a)
-  , marloweScripts :: MarloweScripts
-  , testnet :: LocalTestnet
-  }
--}
-
 serializeAddress :: Address -> String
 serializeAddress = Text.unpack . Maybe.fromJust . toBech32
 
@@ -56,7 +38,7 @@ spec = fdescribe "Marlowe runtime CLI" do
       withLocalMarloweRuntime $ runIntegrationTest do
         Wallet {addresses = WalletAddresses {changeAddress, extraAddresses}} <- getGenesisWallet 0
 
-        history_sync_port :: Int <- Reader.asks marloweSyncPort
+        marlowe_sync_port :: Int <- Reader.asks marloweSyncPort
         tx_command_port :: Int <- Reader.asks txJobPort
 
         execMarlowe_ $
@@ -66,7 +48,7 @@ spec = fdescribe "Marlowe runtime CLI" do
               ["--manual-sign", txEnvelope],
               ["--core-file", contractName],
               ["--min-utxo", show @Int 2_000_000],
-              ["--history-sync-port", show history_sync_port],
+              ["--marlowe-sync-port", show marlowe_sync_port],
               ["--tx-command-port", show tx_command_port]
             ]
 
