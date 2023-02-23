@@ -42,6 +42,10 @@ create temporary table cmp_block as
       on slotno <= max_slotno
     where slotno > 0
       and rollbacktoblock is null
+      -- This eliminates epoch-boundary blocks (EBBs) that
+      -- `marlowe-chain-indexer` and `cardano-db-sync` record
+      -- differently. Those blocks never contain transactions.
+      and id not in (select hash from public.block where slot_no is null)
   union all
   select
       'dbsync'
