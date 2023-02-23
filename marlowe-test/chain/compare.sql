@@ -20,7 +20,7 @@ create temporary table max_slotno as
     inner join public.block as dblock
       on cblock.id = dblock.hash
 ;
-select max_slotno as "Latest Block in Common"
+select max_slotno as "Slot for Latest Block in Common"
   from max_slotno
 ;
 \copy max_slotno to 'out/latest-block.csv' CSV HEADER
@@ -42,6 +42,10 @@ create temporary table cmp_block as
       on slotno <= max_slotno
     where slotno > 0
       and rollbacktoblock is null
+      -- This eliminates epoch-boundary blocks (EBBs) that
+      -- `marlowe-chain-indexer` and `cardano-db-sync` record
+      -- differently. Those blocks never contain transactions.
+      and id not in (select hash from public.block where slot_no is null)
   union all
   select
       'dbsync'
@@ -52,7 +56,7 @@ create temporary table cmp_block as
     inner join public.block
       on slot_no <= max_slotno
     where
-      block_no > 0
+      slot_no > 0
 ;
 select
     source as "Source"

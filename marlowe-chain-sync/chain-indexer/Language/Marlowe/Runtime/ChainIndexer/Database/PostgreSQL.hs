@@ -339,6 +339,13 @@ data AssetOut = AssetOut TxId TxIx SlotNo PolicyId AssetName Quantity
 -- writes are atomic at the block level (i.e. it should be impossible for a
 -- block to be partially saved). This is because the server may be shut down at
 -- any moment, and the connection to the database will be severed.
+--
+-- NOTE: Mainnet epochs 0 through 175 contain epoch-boundary blocks (EBBs) between
+-- the last block of one epoch and the first block of the new epoch. Such blocks
+-- have a hash, but never any transactions, and are recorded in this index as
+-- belonging to the new epoch. Beware that if a unique key is ever added to the
+-- index for block or slot number, then these blocks will violate that new
+-- constraint.
 commitBlocks :: CommitBlocks Transaction
 commitBlocks = CommitBlocks \blocks ->
   let
