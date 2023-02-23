@@ -30,7 +30,7 @@ import Control.Applicative ((<|>))
 import Data.Aeson (FromJSON(..), ToJSON(..))
 import Plutus.V1.Ledger.Api (POSIXTime(..))
 
-import qualified Data.Aeson as A (Value(Object, String), object, withObject, (.:), (.=))
+import qualified Data.Aeson as A (Value(Object, String), object, withObject, (.:), (.:?), (.=))
 import qualified Data.Aeson.Types as A (Parser)
 import qualified Language.Marlowe.Core.V1.Semantics as Marlowe
 import qualified Language.Marlowe.Core.V1.Semantics.Types as Marlowe
@@ -77,7 +77,7 @@ instance FromJSON Request where
         (o A..: "request" :: A.Parser String)
           >>= \case
             "test-roundtrip-serialization" -> TestRoundtripSerialization <$> o A..: "typeId" <*> o A..: "json"
-            "generate-random-value"        -> GenerateRandomValue <$> o A..: "typeId" <*> o A..: "size" <*> o A..: "seed"
+            "generate-random-value"        -> GenerateRandomValue <$> o A..: "typeId" <*> o A..:? "size" <*> o A..:? "seed"
             "compute-transaction"          -> ComputeTransaction <$> o A..: "transactionInput" <*> o A..: "coreContract" <*> o A..: "state"
             "playtrace"                    -> PlayTrace <$> o A..: "transactionInputs" <*> o A..: "coreContract" <*> (POSIXTime <$> o A..: "initialTime")
             "eval-value"                   -> EvalValue <$> o A..: "environment" <*> o A..: "state" <*> o A..: "value"
