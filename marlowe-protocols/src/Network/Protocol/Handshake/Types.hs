@@ -2,10 +2,8 @@
 {-# LANGUAGE EmptyCase #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
-{-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 -- | The type of the handshake protocol.
@@ -16,15 +14,18 @@
 module Network.Protocol.Handshake.Types
   where
 
+import Control.Monad (unless)
 import Data.Aeson (Value(..), object, (.=))
+import Data.Binary (get, getWord8, put, putWord8)
 import Data.Proxy (Proxy)
 import Data.Text (Text)
 import qualified Data.Text as T
 import GHC.Show (showSpace)
+import Network.Protocol.Codec (BinaryMessage(..))
 import Network.Protocol.Codec.Spec (ArbitraryMessage(..), MessageEq(..), ShowProtocol(..))
-import Network.Protocol.Driver (MessageToJSON(..))
 import Network.TypedProtocol
 import Network.TypedProtocol.Codec (AnyMessageAndAgency(..))
+import Observe.Event.Network.Protocol (MessageToJSON(..))
 import Test.QuickCheck (Arbitrary(arbitrary), oneof, shrink)
 
 data Handshake ps where
@@ -148,6 +149,38 @@ instance ShowProtocol ps => ShowProtocol (Handshake ps) where
       . showSpace
       . showsPrecClientHasAgency 11 tok
       )
+
+instance BinaryMessage ps => BinaryMessage (Handshake ps) where
+  putMessage = \case
+    ClientAgency TokInit -> \case
+      MsgHandshake sig -> do
+        putWord8 0x00
+        put sig
+    ServerAgency TokHandshake -> \case
+      MsgAccept -> putWord8 0x01
+      MsgReject -> putWord8 0x02
+    ClientAgency (TokLiftClient tok) -> \case
+      MsgLift msg -> putMessage (ClientAgency tok) msg
+    ServerAgency (TokLiftServer tok) -> \case
+      MsgLift msg -> putMessage (ServerAgency tok) msg
+
+  getMessage = \case
+    ClientAgency TokInit -> do
+      tag <- getWord8
+      unless (tag == 0x00) $ fail $ "Expected 0x00, got " <> show tag
+      SomeMessage . MsgHandshake <$> get
+    ServerAgency TokHandshake -> do
+      tag <- getWord8
+      case tag of
+        0x01 -> pure $ SomeMessage MsgAccept
+        0x02 -> pure $ SomeMessage MsgReject
+        _ -> fail $ "Expected 0x01 or 0x02, got " <> show tag
+    ClientAgency (TokLiftClient tok) -> do
+      SomeMessage msg <- getMessage $ ClientAgency tok
+      pure $ SomeMessage $ MsgLift msg
+    ServerAgency (TokLiftServer tok) -> do
+      SomeMessage msg <- getMessage $ ServerAgency tok
+      pure $ SomeMessage $ MsgLift msg
 
 instance MessageToJSON ps => MessageToJSON (Handshake ps) where
   messageToJSON = \case

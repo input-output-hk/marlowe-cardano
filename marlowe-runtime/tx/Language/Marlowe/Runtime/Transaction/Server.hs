@@ -90,7 +90,8 @@ import Language.Marlowe.Runtime.Transaction.Query
   , lookupPayoutScriptUtxo
   )
 import Language.Marlowe.Runtime.Transaction.Submit (SubmitJob(..), SubmitJobStatus(..))
-import Network.Protocol.Driver (RunServer(..))
+import Network.Protocol.Connection (SomeConnectionSource(..), SomeServerConnector, acceptSomeConnector)
+import Network.Protocol.Driver (runSomeConnector)
 import Network.Protocol.Job.Server
   (JobServer(..), ServerStAttach(..), ServerStAwait(..), ServerStCmd(..), ServerStInit(..), hoistAttach, hoistCmd)
 import Observe.Event (Event, EventBackend, addField, subEventBackend, withEvent, withSubEvent)
@@ -115,10 +116,8 @@ data BuildTxField where
   Constraints :: MarloweVersion v -> TxConstraints v -> BuildTxField
   ResultingTxBody :: TxBody BabbageEra -> BuildTxField
 
-type RunTransactionServer m = RunServer m (JobServer MarloweTxCommand)
-
 data TransactionServerDependencies r = TransactionServerDependencies
-  { acceptRunTransactionServer :: IO (RunTransactionServer IO)
+  { connectionSource :: SomeConnectionSource (JobServer MarloweTxCommand) IO
   , mkSubmitJob :: Tx BabbageEra -> STM SubmitJob
   , loadWalletContext :: LoadWalletContext r
   , loadMarloweContext :: LoadMarloweContext r
@@ -135,11 +134,11 @@ transactionServer = serverComponentWithSetup worker \TransactionServerDependenci
     getSubmitJob txId = Map.lookup txId <$> readTVar submitJobsVar
     trackSubmitJob txId = modifyTVar submitJobsVar . Map.insert txId
   pure do
-    runServer <- acceptRunTransactionServer
+    connector <- acceptSomeConnector connectionSource
     pure WorkerDependencies {..}
 
 data WorkerDependencies r = WorkerDependencies
-  { runServer :: RunTransactionServer IO
+  { connector :: SomeServerConnector (JobServer MarloweTxCommand) IO
   , getSubmitJob :: TxId -> STM (Maybe SubmitJob)
   , trackSubmitJob :: TxId -> SubmitJob -> STM ()
   , mkSubmitJob :: Tx BabbageEra -> STM SubmitJob
@@ -154,8 +153,6 @@ data WorkerDependencies r = WorkerDependencies
 worker :: Component IO (WorkerDependencies r) ()
 worker = component_ \WorkerDependencies{..} -> do
   let
-    RunServer run = runServer
-
     server :: JobServer MarloweTxCommand IO ()
     server = JobServer $ pure serverInit
 
@@ -225,7 +222,7 @@ worker = component_ \WorkerDependencies{..} -> do
           jobId@(JobIdSubmit txId) ->
             attachSubmit jobId $ getSubmitJob txId
       }
-  run server
+  runSomeConnector connector server
 
 attachSubmit
   :: JobId MarloweTxCommand SubmitStatus SubmitError BlockHeader

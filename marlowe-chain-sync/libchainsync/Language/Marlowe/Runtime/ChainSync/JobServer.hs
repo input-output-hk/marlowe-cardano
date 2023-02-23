@@ -11,14 +11,13 @@ module Language.Marlowe.Runtime.ChainSync.JobServer
 import Cardano.Api (CardanoEra(..), CardanoMode, ScriptDataSupportedInEra(..), Tx, TxValidationErrorInMode)
 import Control.Concurrent.Component
 import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncCommand(..))
-import Network.Protocol.Driver (RunServer(..))
+import Network.Protocol.Connection (SomeConnectionSource, SomeServerConnector, acceptSomeConnector)
+import Network.Protocol.Driver (runSomeConnector)
 import Network.Protocol.Job.Server
 import Ouroboros.Network.Protocol.LocalTxSubmission.Client (SubmitResult(..))
 
-type RunJobServer m = RunServer m (JobServer ChainSyncCommand)
-
 data ChainSyncJobServerDependencies = ChainSyncJobServerDependencies
-  { acceptRunJobServer :: IO (RunJobServer IO)
+  { jobSource :: SomeConnectionSource (JobServer ChainSyncCommand) IO
   , submitTxToNodeLocal
       :: forall era
        . CardanoEra era
@@ -28,11 +27,11 @@ data ChainSyncJobServerDependencies = ChainSyncJobServerDependencies
 
 chainSyncJobServer :: Component IO ChainSyncJobServerDependencies ()
 chainSyncJobServer = serverComponent worker \ChainSyncJobServerDependencies{..} -> do
-  runJobServer <- acceptRunJobServer
+  connector <- acceptSomeConnector jobSource
   pure WorkerDependencies {..}
 
 data WorkerDependencies = WorkerDependencies
-  { runJobServer      :: RunJobServer IO
+  { connector :: SomeServerConnector (JobServer ChainSyncCommand) IO
   , submitTxToNodeLocal
       :: forall era
        . CardanoEra era
@@ -43,8 +42,6 @@ data WorkerDependencies = WorkerDependencies
 worker :: Component IO WorkerDependencies ()
 worker = component_ \WorkerDependencies{..} -> do
   let
-    RunServer run = runJobServer
-
     server :: JobServer ChainSyncCommand IO ()
     server = liftCommandHandler $ flip either (\case) \case
       SubmitTx era tx -> ((),) <$> do
@@ -56,4 +53,4 @@ worker = component_ \WorkerDependencies{..} -> do
         pure case result of
           SubmitFail err -> Left $ show err
           SubmitSuccess -> Right ()
-  run server
+  runSomeConnector connector server

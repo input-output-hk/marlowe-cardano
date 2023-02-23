@@ -46,7 +46,8 @@ import Language.Marlowe.Runtime.Transaction.Api
   , SubmitStatus(..)
   , WalletAddresses
   )
-import Network.Protocol.Driver (RunClient)
+import Network.Protocol.Connection (SomeClientConnector)
+import Network.Protocol.Driver (runSomeConnector)
 import Network.Protocol.Job.Client
 import Observe.Event (EventBackend, addField, reference, withEvent)
 import Observe.Event.BackendModification (EventBackendModifier, modifyEventBackend, setAncestor)
@@ -62,7 +63,7 @@ compile $ SelectorSpec ["tx", "client"]
   ]
 
 data TxClientDependencies r = TxClientDependencies
-  { runTxJobClient :: RunClient IO (JobClient MarloweTxCommand)
+  { txJobConnector :: SomeClientConnector (JobClient MarloweTxCommand) IO
   , eventBackend :: EventBackend IO r TxClientSelector
   }
 
@@ -161,7 +162,7 @@ txClient = component \TxClientDependencies{..} -> do
               atomically $ waitDelay delay
               pure $ SendMsgPoll $ clientCmd report'
           }
-      runTxJobClient client
+      runSomeConnector txJobConnector client
 
     genericSubmit
       :: SomeTVarWithMapUpdate
@@ -184,7 +185,7 @@ txClient = component \TxClientDependencies{..} -> do
 
   pure (runTxClient, TxClient
     { createContract = \stakeCredential version addresses roles metadata minUTxODeposit contract -> do
-        response <- runTxJobClient
+        response <- runSomeConnector txJobConnector
           $ liftCommand
           $ Create stakeCredential version addresses roles metadata minUTxODeposit contract
         for_ response \creation@ContractCreated{contractId} -> atomically
@@ -193,7 +194,7 @@ txClient = component \TxClientDependencies{..} -> do
           $ TempTx version Unsigned creation
         pure response
     , applyInputs = \version addresses contractId metadata invalidBefore invalidHereafter inputs -> do
-        response <- runTxJobClient
+        response <- runSomeConnector txJobConnector
           $ liftCommand
           $ ApplyInputs version addresses contractId metadata invalidBefore invalidHereafter inputs
         for_ response \application@InputsApplied{txBody} -> do

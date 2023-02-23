@@ -77,7 +77,6 @@ library
     , text
     , these
     , time
-    , typed-protocols
     , vector
 
 library libchainsync

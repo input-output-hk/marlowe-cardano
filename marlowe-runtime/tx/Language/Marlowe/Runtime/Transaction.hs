@@ -15,12 +15,14 @@ import Data.Void
 import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncQuery, RuntimeChainSeekClient)
 import Language.Marlowe.Runtime.Core.Api (MarloweVersion(..))
 import Language.Marlowe.Runtime.Core.ScriptRegistry (MarloweScripts)
+import Language.Marlowe.Runtime.Transaction.Api (MarloweTxCommand)
 import Language.Marlowe.Runtime.Transaction.Chain
 import Language.Marlowe.Runtime.Transaction.Query (LoadMarloweContext, LoadWalletContext)
 import qualified Language.Marlowe.Runtime.Transaction.Query as Q
 import Language.Marlowe.Runtime.Transaction.Server
 import Language.Marlowe.Runtime.Transaction.Submit (SubmitJob)
-import Network.Protocol.Driver (RunClient)
+import Network.Protocol.Connection (SomeClientConnector, SomeConnectionSource)
+import Network.Protocol.Job.Server (JobServer)
 import Observe.Event (EventBackend)
 import Observe.Event.Component
   ( FieldConfig(..)
@@ -33,8 +35,8 @@ import Observe.Event.Component
   )
 
 data TransactionDependencies r = TransactionDependencies
-  { connectToChainSeek :: RunClient IO RuntimeChainSeekClient
-  , acceptRunTransactionServer :: IO (RunTransactionServer IO)
+  { chainSyncConnector :: SomeClientConnector RuntimeChainSeekClient IO
+  , connectionSource :: SomeConnectionSource (JobServer MarloweTxCommand) IO
   , mkSubmitJob :: Tx BabbageEra -> STM SubmitJob
   , loadWalletContext :: LoadWalletContext r
   , loadMarloweContext :: LoadMarloweContext r

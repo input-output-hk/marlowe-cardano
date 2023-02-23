@@ -1,11 +1,11 @@
+{-# LANGUAGE Arrows #-}
 {-# LANGUAGE GADTs #-}
 
 module Main
   where
 
-import Control.Arrow (arr, (<<<))
 import Control.Concurrent.Component
-import Control.Exception (bracket, bracketOnError, throwIO)
+import Control.Exception (bracket)
 import Control.Monad ((<=<))
 import Data.String (fromString)
 import qualified Data.Text.Lazy.IO as TL
@@ -13,34 +13,16 @@ import Data.Time (secondsToNominalDiffTime)
 import Data.UUID.V4 (nextRandom)
 import qualified Hasql.Pool as Pool
 import qualified Hasql.Session as Session
-import Language.Marlowe.Protocol.HeaderSync.Codec (codecMarloweHeaderSync)
 import Language.Marlowe.Protocol.HeaderSync.Server (marloweHeaderSyncServerPeer)
-import Language.Marlowe.Protocol.Query.Codec (codecMarloweQuery)
-import Language.Marlowe.Protocol.Sync.Codec (codecMarloweSync)
 import Language.Marlowe.Protocol.Sync.Server (marloweSyncServerPeer)
 import Language.Marlowe.Runtime.Sync (SyncDependencies(..), sync)
 import Language.Marlowe.Runtime.Sync.Database (hoistDatabaseQueries, logDatabaseQueries)
 import qualified Language.Marlowe.Runtime.Sync.Database.PostgreSQL as Postgres
 import Logging (RootSelector(..), getRootSelectorConfig)
-import Network.Protocol.Handshake.Server (acceptRunServerPeerOverSocketWithLoggingWithHandshake)
-import Network.Socket
-  ( AddrInfo(..)
-  , AddrInfoFlag(..)
-  , HostName
-  , PortNumber
-  , SocketOption(..)
-  , SocketType(..)
-  , bind
-  , close
-  , defaultHints
-  , getAddrInfo
-  , listen
-  , openSocket
-  , setCloseOnExecIfNeeded
-  , setSocketOption
-  , withFdSocket
-  , withSocketsDo
-  )
+import Network.Protocol.Connection (SomeConnectionSource(..), logConnectionSource)
+import Network.Protocol.Driver (TcpServerDependencies(..), tcpServer)
+import Network.Protocol.Handshake.Server (handshakeConnectionSource)
+import Network.Socket (HostName, PortNumber)
 import Observe.Event.Backend (narrowEventBackend, newOnceFlagMVar)
 import Observe.Event.Component (LoggerDependencies(..), logger)
 import Options.Applicative
@@ -66,70 +48,53 @@ import System.IO (stderr)
 main :: IO ()
 main = run =<< getOptions
 
-clientHints :: AddrInfo
-clientHints = defaultHints { addrSocketType = Stream }
-
 run :: Options -> IO ()
-run Options{..} = withSocketsDo do
-  pool <- Pool.acquire (100, secondsToNominalDiffTime 5, fromString databaseUri)
-  marloweSyncAddr <- resolve marloweSyncPort
-  marloweHeaderSyncAddr <- resolve marloweHeaderSyncPort
-  queryAddr <- resolve queryPort
-  bracket (openServer marloweSyncAddr) close \syncSocket -> do
-    bracket (openServer marloweHeaderSyncAddr) close \headerSyncSocket -> do
-      bracket (openServer queryAddr) close \querySocket -> do
-        let
-          appDependencies eventBackend =
-            let
-              databaseQueries = logDatabaseQueries (narrowEventBackend Database eventBackend) $ hoistDatabaseQueries
-                (either throwUsageError pure <=< Pool.use pool)
-                Postgres.databaseQueries
+run Options{..} = bracket (Pool.acquire (100, secondsToNominalDiffTime 5, fromString databaseUri)) Pool.release $
+  runComponent_ proc pool -> do
+    eventBackend <- logger -< LoggerDependencies
+      { configFilePath = logConfigFile
+      , getSelectorConfig = getRootSelectorConfig
+      , newRef = nextRandom
+      , newOnceFlag = newOnceFlagMVar
+      , writeText = TL.hPutStr stderr
+      , injectConfigWatcherSelector = ConfigWatcher
+      }
 
-              acceptRunMarloweSyncServer = acceptRunServerPeerOverSocketWithLoggingWithHandshake
-                (narrowEventBackend MarloweSyncServer eventBackend)
-                throwIO
-                syncSocket
-                codecMarloweSync
-                marloweSyncServerPeer
+    marloweSyncSource <- tcpServer -< TcpServerDependencies
+      { host
+      , port = marloweSyncPort
+      , toPeer = marloweSyncServerPeer
+      }
 
-              acceptRunMarloweHeaderSyncServer = acceptRunServerPeerOverSocketWithLoggingWithHandshake
-                (narrowEventBackend MarloweHeaderSyncServer eventBackend)
-                throwIO
-                headerSyncSocket
-                codecMarloweHeaderSync
-                marloweHeaderSyncServerPeer
+    headerSyncSource <- tcpServer -< TcpServerDependencies
+      { host
+      , port = marloweHeaderSyncPort
+      , toPeer = marloweHeaderSyncServerPeer
+      }
 
-              acceptRunMarloweQueryServer = acceptRunServerPeerOverSocketWithLoggingWithHandshake
-                (narrowEventBackend MarloweQueryServer eventBackend)
-                throwIO
-                querySocket
-                codecMarloweQuery
-                id
+    querySource <- tcpServer -< TcpServerDependencies
+      { host
+      , port = queryPort
+      , toPeer = id
+      }
 
-              in SyncDependencies{..}
-        let appComponent = sync <<< arr appDependencies <<< logger
-        runComponent_ appComponent LoggerDependencies
-          { configFilePath = logConfigFile
-          , getSelectorConfig = getRootSelectorConfig
-          , newRef = nextRandom
-          , newOnceFlag = newOnceFlagMVar
-          , writeText = TL.hPutStr stderr
-          , injectConfigWatcherSelector = ConfigWatcher
-          }
+    sync -< SyncDependencies
+      { databaseQueries = logDatabaseQueries (narrowEventBackend Database eventBackend) $ hoistDatabaseQueries
+            (either throwUsageError pure <=< Pool.use pool)
+            Postgres.databaseQueries
+      , syncSource = SomeConnectionSource
+          $ logConnectionSource (narrowEventBackend MarloweSyncServer eventBackend)
+          $ handshakeConnectionSource marloweSyncSource
+      , headerSyncSource = SomeConnectionSource
+          $ logConnectionSource (narrowEventBackend MarloweHeaderSyncServer eventBackend)
+          $ handshakeConnectionSource headerSyncSource
+      , querySource = SomeConnectionSource
+          $ logConnectionSource (narrowEventBackend MarloweQueryServer eventBackend)
+          $ handshakeConnectionSource querySource
+      }
   where
     throwUsageError (Pool.ConnectionError err)                       = error $ show err
     throwUsageError (Pool.SessionError (Session.QueryError _ _ err)) = error $ show err
-
-    openServer addr = bracketOnError (openSocket addr) close \socket -> do
-      setSocketOption socket ReuseAddr 1
-      withFdSocket socket setCloseOnExecIfNeeded
-      bind socket $ addrAddress addr
-      listen socket 2048
-      return socket
-
-    resolve p = do
-      let hints = defaultHints { addrFlags = [AI_PASSIVE], addrSocketType = Stream }
-      head <$> getAddrInfo (Just hints) (Just host) (Just $ show p)
 
 data Options = Options
   { databaseUri :: String

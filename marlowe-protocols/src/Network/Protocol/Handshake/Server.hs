@@ -1,7 +1,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
-{-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE RankNTypes #-}
 
@@ -12,23 +11,14 @@
 module Network.Protocol.Handshake.Server
   where
 
-import Control.Monad.Cleanup (MonadCleanup)
-import Control.Monad.Trans.Control (MonadBaseControl)
 import Data.Bifunctor (Bifunctor(bimap))
-import Data.ByteString.Lazy (ByteString)
 import Data.Functor ((<&>))
 import Data.Proxy (Proxy(..))
 import Data.Text (Text)
-import Network.Protocol.ChainSeek.Codec (DeserializeError)
-import Network.Protocol.Driver
-  (AcceptSocketDriverSelector, RunServer(..), ToPeer, acceptRunServerPeerOverSocketWithLogging)
-import Network.Protocol.Handshake.Codec (codecHandshake)
+import Network.Protocol.Connection (ClientServerPair(..), Connection(..), ConnectionSource(..), Connector(..))
+import Network.Protocol.Handshake.Client (handshakeClientConnector)
 import Network.Protocol.Handshake.Types
-import Network.Socket (Socket)
 import Network.TypedProtocol
-import Network.TypedProtocol.Codec (Codec)
-import Observe.Event (EventBackend)
-import Observe.Event.Backend (noopEventBackend)
 
 -- | A generic server for the handshake protocol.
 newtype HandshakeServer server m a = HandshakeServer
@@ -47,44 +37,39 @@ simpleHandshakeServer expected server = HandshakeServer
       else fail $ "Rejecting handshake, " <> show sig <> " /= " <> show expected
   }
 
-embedServerInHandshake :: MonadFail m => Text -> RunServer m (HandshakeServer server) -> RunServer m server
-embedServerInHandshake sig (RunServer runServer) = RunServer $ runServer . simpleHandshakeServer sig
+handshakeConnectionSource
+  :: forall ps server m
+   . (HasSignature ps, MonadFail m)
+  => ConnectionSource ps server m
+  -> ConnectionSource (Handshake ps) server m
+handshakeConnectionSource = ConnectionSource . fmap handshakeServerConnector . acceptConnector
 
-acceptRunServerPeerOverSocketWithLoggingWithHandshake
-  :: forall server protocol (st :: protocol) m r
-   . ( MonadBaseControl IO m
-     , MonadCleanup m
-     , MonadFail m
-     , HasSignature protocol
-     )
-  => EventBackend m r (AcceptSocketDriverSelector (Handshake protocol))
-  -> (forall x. DeserializeError -> m x)
-  -> Socket
-  -> Codec protocol DeserializeError m ByteString
-  -> ToPeer server protocol 'AsServer st m
-  -> m (RunServer m server)
-acceptRunServerPeerOverSocketWithLoggingWithHandshake eventBackend throwImpl socket codec toPeer = do
-  embedServerInHandshake (signature $ Proxy @protocol) <$> acceptRunServerPeerOverSocketWithLogging
-    eventBackend
-    throwImpl
-    socket
-    (codecHandshake codec)
-    (handshakeServerPeer toPeer)
+handshakeServerConnector
+  :: forall ps server m
+   . (HasSignature ps, MonadFail m)
+  => Connector ps 'AsServer server m
+  -> Connector (Handshake ps) 'AsServer server m
+handshakeServerConnector Connector{..} = Connector $ handshakeServerConnection <$> openConnection
 
-acceptRunServerPeerOverSocketWithHandshake
-  :: forall server protocol (st :: protocol) m
-   . ( MonadBaseControl IO m
-     , MonadCleanup m
-     , MonadFail m
-     , HasSignature protocol
-     )
-  => (forall x. DeserializeError -> m x)
-  -> Socket
-  -> Codec protocol DeserializeError m ByteString
-  -> ToPeer server protocol 'AsServer st m
-  -> m (RunServer m server)
-acceptRunServerPeerOverSocketWithHandshake =
-  acceptRunServerPeerOverSocketWithLoggingWithHandshake $ noopEventBackend ()
+handshakeServerConnection
+  :: forall ps peer m
+   . (HasSignature ps, MonadFail m)
+  => Connection ps 'AsServer peer m
+  -> Connection (Handshake ps) 'AsServer peer m
+handshakeServerConnection Connection{..} = Connection
+  { toPeer = handshakeServerPeer id . simpleHandshakeServer (signature $ Proxy @ps) . toPeer
+  , ..
+  }
+
+handshakeClientServerPair
+  :: forall ps client server m
+   . (HasSignature ps, MonadFail m)
+  => ClientServerPair ps client server m
+  -> ClientServerPair (Handshake ps) client server m
+handshakeClientServerPair ClientServerPair{..} = ClientServerPair
+  { connectionSource = handshakeConnectionSource connectionSource
+  , clientConnector = handshakeClientConnector clientConnector
+  }
 
 hoistHandshakeServer
   :: Functor m

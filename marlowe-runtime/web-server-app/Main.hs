@@ -3,21 +3,18 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE TypeOperators #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 module Main
   where
 
 import Control.Concurrent.Component (runComponent_)
-import Control.Exception (throwIO)
 import Language.Marlowe.Protocol.Query.Client (marloweQueryClientPeer)
-import Language.Marlowe.Protocol.Query.Codec (codecMarloweQuery)
 import Language.Marlowe.Runtime.Web.Server
-import Network.Protocol.Handshake.Client (runClientPeerOverSocketWithHandshake)
+import Network.Protocol.Connection (SomeConnector(..))
+import Network.Protocol.Driver (tcpClient)
+import Network.Protocol.Handshake.Client (handshakeClientConnector)
 import Network.Protocol.Job.Client (jobClientPeer)
-import Network.Protocol.Job.Codec (codecJob)
-import Network.Socket (AddrInfo(..), HostName, PortNumber, SocketType(..), defaultHints, getAddrInfo)
 import Network.Wai.Handler.Warp (run)
 import Observe.Event.Render.JSON (DefaultRenderSelectorJSON(defaultRenderSelectorJSON))
 import Observe.Event.Render.JSON.Handle (JSONRef, simpleJsonStderrBackend)
@@ -33,26 +30,16 @@ main = hSetBuffering stdout LineBuffering
 
 optionsToServerDependencies :: Options -> IO (ServerDependencies JSONRef)
 optionsToServerDependencies Options{..} = do
-  syncQueryAddr <- resolve syncHost syncQueryPort
-  txCommandAddr <- resolve txHost txCommandPort
   eventBackend <- simpleJsonStderrBackend defaultRenderSelectorJSON
   pure ServerDependencies
     { openAPIEnabled
     , accessControlAllowOriginAll
     , runApplication = run $ fromIntegral port
-    , runMarloweQueryClient = runClientPeerOverSocketWithHandshake
-        throwIO
-        syncQueryAddr
-        codecMarloweQuery
-        marloweQueryClientPeer
-    , runTxJobClient = runClientPeerOverSocketWithHandshake
-        throwIO
-        txCommandAddr
-        codecJob
-        jobClientPeer
+    , marloweQueryConnector = SomeConnector
+        $ handshakeClientConnector
+        $ tcpClient syncHost syncQueryPort marloweQueryClientPeer
+    , txJobConnector = SomeConnector
+        $ handshakeClientConnector
+        $ tcpClient txHost txCommandPort jobClientPeer
     , eventBackend
     }
-
-resolve :: HostName -> PortNumber -> IO AddrInfo
-resolve host port =
-  head <$> getAddrInfo (Just defaultHints { addrSocketType = Stream }) (Just host) (Just $ show port)

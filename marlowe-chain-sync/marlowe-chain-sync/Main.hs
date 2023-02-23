@@ -1,3 +1,4 @@
+{-# LANGUAGE Arrows #-}
 {-# LANGUAGE GADTs #-}
 
 module Main
@@ -14,10 +15,8 @@ import Cardano.Api
   , queryNodeLocalState
   )
 import qualified Cardano.Api as Cardano
-import Control.Arrow (arr)
-import Control.Category ((<<<))
 import Control.Concurrent.Component
-import Control.Exception (bracket, bracketOnError, throwIO)
+import Control.Exception (bracket)
 import Control.Monad ((<=<))
 import Data.String (IsString(fromString))
 import qualified Data.Text.Lazy.IO as TL
@@ -31,29 +30,12 @@ import Language.Marlowe.Runtime.ChainSync.Api (WithGenesis(..))
 import Language.Marlowe.Runtime.ChainSync.Database (hoistDatabaseQueries)
 import qualified Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL as PostgreSQL
 import Logging (RootSelector(..), getRootSelectorConfig)
-import Network.Protocol.ChainSeek.Codec (codecChainSeek)
 import Network.Protocol.ChainSeek.Server (chainSeekServerPeer)
-import Network.Protocol.Handshake.Server (acceptRunServerPeerOverSocketWithLoggingWithHandshake)
-import Network.Protocol.Job.Codec (codecJob)
+import Network.Protocol.Connection (SomeConnectionSource(..), logConnectionSource)
+import Network.Protocol.Driver (TcpServerDependencies(..), tcpServer)
+import Network.Protocol.Handshake.Server (handshakeConnectionSource)
 import Network.Protocol.Job.Server (jobServerPeer)
-import Network.Protocol.Query.Codec (codecQuery)
 import Network.Protocol.Query.Server (queryServerPeer)
-import Network.Socket
-  ( AddrInfo(..)
-  , AddrInfoFlag(..)
-  , SocketOption(ReuseAddr)
-  , SocketType(..)
-  , bind
-  , close
-  , defaultHints
-  , getAddrInfo
-  , listen
-  , openSocket
-  , setCloseOnExecIfNeeded
-  , setSocketOption
-  , withFdSocket
-  , withSocketsDo
-  )
 import Observe.Event (narrowEventBackend)
 import Observe.Event.Backend (newOnceFlagMVar)
 import Observe.Event.Component (LoggerDependencies(..), logger)
@@ -64,56 +46,57 @@ main :: IO ()
 main = run =<< getOptions "0.0.0.0"
 
 run :: Options -> IO ()
-run Options{..} = withSocketsDo do
-  chainSeekAddr <- resolve port
-  queryAddr <- resolve queryPort
-  commandAddr <- resolve commandPort
-  bracket (open chainSeekAddr) close \chainSeekSocket -> do
-    bracket (open queryAddr) close \querySocket -> do
-      bracket (open commandAddr) close \commandSocket -> do
-        pool <- Pool.acquire (100, secondsToNominalDiffTime 5, fromString databaseUri)
-        let
-          chainSyncDependencies eventBackend = ChainSyncDependencies
-            { databaseQueries = hoistDatabaseQueries
-                (either throwUsageError pure <=< Pool.use pool)
-                $ PostgreSQL.databaseQueries networkId
-            , acceptRunChainSeekServer = acceptRunServerPeerOverSocketWithLoggingWithHandshake
-                (narrowEventBackend ChainSeekServer eventBackend)
-                throwIO
-                chainSeekSocket
-                codecChainSeek
-                (chainSeekServerPeer Genesis)
-            , acceptRunQueryServer = acceptRunServerPeerOverSocketWithLoggingWithHandshake
-                (narrowEventBackend QueryServer eventBackend)
-                throwIO
-                querySocket
-                codecQuery
-                queryServerPeer
-            , acceptRunJobServer = acceptRunServerPeerOverSocketWithLoggingWithHandshake
-                (narrowEventBackend JobServer eventBackend)
-                throwIO
-                commandSocket
-                codecJob
-                jobServerPeer
-            , queryLocalNodeState = queryNodeLocalState localNodeConnectInfo
-            , submitTxToNodeLocal = \era tx -> Cardano.submitTxToNodeLocal localNodeConnectInfo $ TxInMode tx case era of
-                ByronEra -> ByronEraInCardanoMode
-                ShelleyEra -> ShelleyEraInCardanoMode
-                AllegraEra -> AllegraEraInCardanoMode
-                MaryEra -> MaryEraInCardanoMode
-                AlonzoEra -> AlonzoEraInCardanoMode
-                BabbageEra -> BabbageEraInCardanoMode
-            }
-          loggerDependencies = LoggerDependencies
-            { configFilePath = logConfigFile
-            , getSelectorConfig = getRootSelectorConfig
-            , newRef = nextRandom
-            , newOnceFlag = newOnceFlagMVar
-            , writeText = TL.hPutStr stderr
-            , injectConfigWatcherSelector = ConfigWatcher
-            }
-          appComponent = chainSync <<< arr chainSyncDependencies <<< logger
-        runComponent_ appComponent loggerDependencies
+run Options{..} = bracket (Pool.acquire (100, secondsToNominalDiffTime 5, fromString databaseUri)) Pool.release $
+  runComponent_ proc pool -> do
+    eventBackend <- logger -< LoggerDependencies
+      { configFilePath = logConfigFile
+      , getSelectorConfig = getRootSelectorConfig
+      , newRef = nextRandom
+      , newOnceFlag = newOnceFlagMVar
+      , writeText = TL.hPutStr stderr
+      , injectConfigWatcherSelector = ConfigWatcher
+      }
+
+    syncSource <- tcpServer -< TcpServerDependencies
+      { host
+      , port
+      , toPeer = chainSeekServerPeer Genesis
+      }
+
+    querySource <- tcpServer -< TcpServerDependencies
+      { host
+      , port = queryPort
+      , toPeer = queryServerPeer
+      }
+
+    jobSource <- tcpServer -< TcpServerDependencies
+      { host
+      , port = commandPort
+      , toPeer = jobServerPeer
+      }
+
+    chainSync -< ChainSyncDependencies
+      { databaseQueries = hoistDatabaseQueries
+          (either throwUsageError pure <=< Pool.use pool)
+          $ PostgreSQL.databaseQueries networkId
+      , syncSource = SomeConnectionSource
+          $ logConnectionSource (narrowEventBackend ChainSeekServer eventBackend)
+          $ handshakeConnectionSource syncSource
+      , querySource = SomeConnectionSource
+          $ logConnectionSource (narrowEventBackend QueryServer eventBackend)
+          $ handshakeConnectionSource querySource
+      , jobSource = SomeConnectionSource
+          $ logConnectionSource (narrowEventBackend JobServer eventBackend)
+          $ handshakeConnectionSource jobSource
+      , queryLocalNodeState = queryNodeLocalState localNodeConnectInfo
+      , submitTxToNodeLocal = \era tx -> Cardano.submitTxToNodeLocal localNodeConnectInfo $ TxInMode tx case era of
+          ByronEra -> ByronEraInCardanoMode
+          ShelleyEra -> ShelleyEraInCardanoMode
+          AllegraEra -> AllegraEraInCardanoMode
+          MaryEra -> MaryEraInCardanoMode
+          AlonzoEra -> AlonzoEraInCardanoMode
+          BabbageEra -> BabbageEraInCardanoMode
+      }
   where
     throwUsageError (ConnectionError err)                       = error $ show err
     throwUsageError (SessionError (Session.QueryError _ _ err)) = error $ show err
@@ -125,14 +108,3 @@ run Options{..} = withSocketsDo do
       , localNodeNetworkId = networkId
       , localNodeSocketPath = nodeSocket
       }
-
-    resolve p = do
-      let hints = defaultHints { addrFlags = [AI_PASSIVE], addrSocketType = Stream }
-      head <$> getAddrInfo (Just hints) (Just host) (Just $ show p)
-
-    open addr = bracketOnError (openSocket addr) close \socket -> do
-      setSocketOption socket ReuseAddr 1
-      withFdSocket socket setCloseOnExecIfNeeded
-      bind socket $ addrAddress addr
-      listen socket 2048
-      return socket

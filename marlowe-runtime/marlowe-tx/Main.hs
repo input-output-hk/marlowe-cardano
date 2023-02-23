@@ -1,58 +1,29 @@
+{-# LANGUAGE Arrows #-}
 {-# LANGUAGE GADTs #-}
 
 module Main
   where
 
-import Control.Arrow (arr, (<<<))
 import Control.Concurrent.Component
-import Control.Exception (bracket, bracketOnError, throwIO)
 import Data.Either (fromRight)
 import qualified Data.Text.Lazy.IO as TL
 import Data.UUID.V4 (nextRandom)
-import Data.Void (Void)
-import Language.Marlowe.Runtime.ChainSync.Api
-  ( BlockNo(..)
-  , ChainSyncCommand
-  , ChainSyncQuery(..)
-  , GetUTxOsQuery
-  , RuntimeChainSeekClient
-  , UTxOs
-  , WithGenesis(..)
-  , runtimeChainSeekCodec
-  )
+import Language.Marlowe.Runtime.ChainSync.Api (BlockNo(..), ChainSyncQuery(..), RuntimeChainSeekClient, WithGenesis(..))
 import qualified Language.Marlowe.Runtime.Core.ScriptRegistry as ScriptRegistry
 import Language.Marlowe.Runtime.Transaction (TransactionDependencies(..), transaction)
-import Language.Marlowe.Runtime.Transaction.Query (LoadMarloweContext, LoadWalletContext)
 import qualified Language.Marlowe.Runtime.Transaction.Query as Query
 import qualified Language.Marlowe.Runtime.Transaction.Submit as Submit
 import Logging (RootSelector(..), getRootSelectorConfig)
 import Network.Protocol.ChainSeek.Client (chainSeekClientPeer)
-import Network.Protocol.Driver (RunClient)
-import Network.Protocol.Handshake.Client (runClientPeerOverSocketWithLoggingWithHandshake)
-import Network.Protocol.Handshake.Server (acceptRunServerPeerOverSocketWithLoggingWithHandshake)
-import Network.Protocol.Job.Client (JobClient, jobClientPeer)
-import Network.Protocol.Job.Codec (codecJob)
+import Network.Protocol.Connection
+  (SomeClientConnector, SomeConnectionSource(..), SomeConnector(SomeConnector), logConnectionSource, logConnector)
+import Network.Protocol.Driver (TcpServerDependencies(..), runSomeConnector, tcpClient, tcpServer)
+import Network.Protocol.Handshake.Client (handshakeClientConnector)
+import Network.Protocol.Handshake.Server (handshakeConnectionSource)
+import Network.Protocol.Job.Client (jobClientPeer)
 import Network.Protocol.Job.Server (jobServerPeer)
 import Network.Protocol.Query.Client (QueryClient, liftQuery, queryClientPeer)
-import Network.Protocol.Query.Codec (codecQuery)
-import Network.Socket
-  ( AddrInfo(..)
-  , AddrInfoFlag(..)
-  , HostName
-  , PortNumber
-  , SocketOption(..)
-  , SocketType(..)
-  , bind
-  , close
-  , defaultHints
-  , getAddrInfo
-  , listen
-  , openSocket
-  , setCloseOnExecIfNeeded
-  , setSocketOption
-  , withFdSocket
-  , withSocketsDo
-  )
+import Network.Socket (HostName, PortNumber)
 import Observe.Event.Backend (narrowEventBackend, newOnceFlagMVar)
 import Observe.Event.Component (LoggerDependencies(..), logger)
 import Options.Applicative
@@ -78,97 +49,51 @@ import System.IO (stderr)
 main :: IO ()
 main = run =<< getOptions
 
-clientHints :: AddrInfo
-clientHints = defaultHints { addrSocketType = Stream }
-
 run :: Options -> IO ()
-run Options{..} = withSocketsDo do
-  addr <- resolve port
-  bracket (openServer addr) close \socket -> do
-    {- Setup Dependencies -}
-    let
-      transactionDependencies rootEventBackend =
-        let
-          acceptRunTransactionServer = acceptRunServerPeerOverSocketWithLoggingWithHandshake
-            (narrowEventBackend Server rootEventBackend)
-            throwIO
-            socket
-            codecJob
-            jobServerPeer
+run = runComponent_ proc Options{..} -> do
+  eventBackend <- logger -< LoggerDependencies
+    { configFilePath = logConfigFile
+    , getSelectorConfig = getRootSelectorConfig
+    , newRef = nextRandom
+    , newOnceFlag = newOnceFlagMVar
+    , writeText = TL.hPutStr stderr
+    , injectConfigWatcherSelector = ConfigWatcher
+    }
+  serverSource <- tcpServer -< TcpServerDependencies host port jobServerPeer
+  let
+    chainSyncConnector :: SomeClientConnector RuntimeChainSeekClient IO
+    chainSyncConnector = SomeConnector
+      $ logConnector (narrowEventBackend ChainSeekClient eventBackend)
+      $ handshakeClientConnector
+      $ tcpClient chainSeekHost chainSeekPort
+      $ chainSeekClientPeer Genesis
 
-          connectToChainSeek :: RunClient IO RuntimeChainSeekClient
-          connectToChainSeek client = do
-            addr' <- head <$> getAddrInfo (Just clientHints) (Just chainSeekHost) (Just $ show chainSeekPort)
-            runClientPeerOverSocketWithLoggingWithHandshake
-              (narrowEventBackend ChainSeekClient rootEventBackend)
-              throwIO
-              addr'
-              runtimeChainSeekCodec
-              (chainSeekClientPeer Genesis)
-              client
+    chainSyncQueryConnector :: SomeClientConnector (QueryClient ChainSyncQuery) IO
+    chainSyncQueryConnector = SomeConnector
+      $ logConnector (narrowEventBackend ChainSyncQueryClient eventBackend)
+      $ handshakeClientConnector
+      $ tcpClient chainSeekHost chainSeekQueryPort queryClientPeer
 
-          runChainSyncJobClient :: RunClient IO (JobClient ChainSyncCommand)
-          runChainSyncJobClient client = do
-            addr' <- head <$> getAddrInfo (Just clientHints) (Just chainSeekHost) (Just $ show chainSeekCommandPort)
-            runClientPeerOverSocketWithLoggingWithHandshake
-              (narrowEventBackend ChainSyncJobClient rootEventBackend)
-              throwIO
-              addr'
-              codecJob
-              jobClientPeer
-              client
-
-          runChainSyncQueryClient :: RunClient IO (QueryClient ChainSyncQuery)
-          runChainSyncQueryClient client = do
-            addr' <- head <$> getAddrInfo (Just clientHints) (Just chainSeekHost) (Just $ show chainSeekQueryPort)
-            runClientPeerOverSocketWithLoggingWithHandshake
-              (narrowEventBackend ChainSyncQueryClient rootEventBackend)
-              throwIO
-              addr'
-              codecQuery
-              queryClientPeer
-              client
-
-          queryChainSync :: ChainSyncQuery Void e a -> IO a
-          queryChainSync = fmap (fromRight $ error "failed to query chain sync server") . runChainSyncQueryClient . liftQuery
-
-          mkSubmitJob = Submit.mkSubmitJob Submit.SubmitJobDependencies{..}
-
-          loadMarloweContext :: LoadMarloweContext r
-          loadMarloweContext eb version contractId = do
-            networkId <- queryChainSync GetNetworkId
-            Query.loadMarloweContext ScriptRegistry.getScripts networkId connectToChainSeek runChainSyncQueryClient eb version contractId
-
-          runGetUTxOsQuery :: GetUTxOsQuery -> IO UTxOs
-          runGetUTxOsQuery getUTxOsQuery = queryChainSync (GetUTxOs getUTxOsQuery)
-
-          loadWalletContext :: LoadWalletContext r
-          loadWalletContext = Query.loadWalletContext runGetUTxOsQuery
-
-          eventBackend = narrowEventBackend App rootEventBackend
-
-          getCurrentScripts = ScriptRegistry.getCurrentScripts
-        in TransactionDependencies{..}
-      appComponent = transaction <<< arr transactionDependencies <<< logger
-    runComponent_ appComponent LoggerDependencies
-      { configFilePath = logConfigFile
-      , getSelectorConfig = getRootSelectorConfig
-      , newRef = nextRandom
-      , newOnceFlag = newOnceFlagMVar
-      , writeText = TL.hPutStr stderr
-      , injectConfigWatcherSelector = ConfigWatcher
-      }
-  where
-    openServer addr = bracketOnError (openSocket addr) close \socket -> do
-      setSocketOption socket ReuseAddr 1
-      withFdSocket socket setCloseOnExecIfNeeded
-      bind socket $ addrAddress addr
-      listen socket 2048
-      return socket
-
-    resolve p = do
-      let hints = defaultHints { addrFlags = [AI_PASSIVE], addrSocketType = Stream }
-      head <$> getAddrInfo (Just hints) (Just host) (Just $ show p)
+    queryChainSync = fmap (fromRight $ error "failed to query chain sync server") . runSomeConnector chainSyncQueryConnector . liftQuery
+  transaction -< TransactionDependencies
+    { connectionSource = SomeConnectionSource
+        $ logConnectionSource (narrowEventBackend Server eventBackend)
+        $ handshakeConnectionSource serverSource
+    , mkSubmitJob = Submit.mkSubmitJob Submit.SubmitJobDependencies
+        { chainSyncJobConnector = SomeConnector
+            $ logConnector (narrowEventBackend ChainSyncJobClient eventBackend)
+            $ handshakeClientConnector
+            $ tcpClient chainSeekHost chainSeekCommandPort jobClientPeer
+        , ..
+        }
+    , loadMarloweContext = \eb version contractId -> do
+        networkId <- queryChainSync GetNetworkId
+        Query.loadMarloweContext ScriptRegistry.getScripts networkId chainSyncConnector chainSyncQueryConnector eb version contractId
+    , loadWalletContext = Query.loadWalletContext $ queryChainSync . GetUTxOs
+    , eventBackend = narrowEventBackend App eventBackend
+    , getCurrentScripts = ScriptRegistry.getCurrentScripts
+    , ..
+    }
 
 data Options = Options
   { chainSeekPort :: PortNumber

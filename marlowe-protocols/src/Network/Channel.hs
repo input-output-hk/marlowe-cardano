@@ -1,15 +1,21 @@
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE RankNTypes #-}
 module Network.Channel
   where
 
 import Control.Concurrent.STM (STM, newTChan, readTChan, writeTChan)
 import Control.Monad (mfilter, (>=>))
+import Control.Monad.Cleanup (MonadCleanup)
+import Data.Aeson (Value(..))
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as LBS
 import Data.Functor (($>))
+import Data.Text (Text)
 import Data.Text.Internal.Lazy (smallChunkSize)
 import Network.Socket (Socket)
 import qualified Network.Socket.ByteString.Lazy as Socket
+import Observe.Event (EventBackend, addField, withEvent)
+import Observe.Event.Component (GetSelectorConfig, SelectorConfig(..), SomeJSON(SomeJSON), singletonFieldConfigWith)
 import qualified System.IO as IO
 
 data Channel m a = Channel
@@ -76,21 +82,52 @@ effectChannel onSend onRecv Channel{..} = Channel
   , recv = recv >>= \ma -> onRecv ma $> ma
   }
 
-channelPair :: STM ((Channel STM a, STM ()), (Channel STM a, STM ()))
+data STMChannel a = STMChannel
+  { channel :: Channel STM a
+  , close :: STM ()
+  }
+
+channelPair :: STM (STMChannel a, STMChannel a)
 channelPair = do
   ch1 <- newTChan
   ch2 <- newTChan
   pure
-    ( ( Channel
-        { send = writeTChan ch1 . Just
-        , recv = readTChan ch2
-        }
-      , writeTChan ch1 Nothing
-      )
-    , ( Channel
+    ( STMChannel
+      { channel = Channel
+          { send = writeTChan ch1 . Just
+          , recv = readTChan ch2
+          }
+      , close = writeTChan ch1 Nothing
+      }
+    , STMChannel
+      { channel = Channel
         { send = writeTChan ch2 . Just
         , recv = readTChan ch1
         }
-      , writeTChan ch2 Nothing
-      )
+      , close = writeTChan ch2 Nothing
+      }
     )
+
+data ChannelSelector bytes f where
+  Send :: ChannelSelector bytes bytes
+  Recv :: ChannelSelector bytes (Maybe bytes)
+
+logChannel
+  :: MonadCleanup m
+  => EventBackend m r (ChannelSelector bytes)
+  -> Channel m bytes
+  -> Channel m bytes
+logChannel eventBackend Channel{..} = Channel
+  { send = \bytes -> withEvent eventBackend Send \ev -> do
+      addField ev bytes
+      send bytes
+  , recv = withEvent eventBackend Recv \ev -> do
+      mBytes <- recv
+      addField ev mBytes
+      pure mBytes
+  }
+
+getChannelSelectorConfig :: (bytes -> Text) -> Bool -> GetSelectorConfig (ChannelSelector bytes)
+getChannelSelectorConfig renderBytes defaultEnabled = \case
+  Send -> SelectorConfig "send" defaultEnabled $ singletonFieldConfigWith (SomeJSON . String . renderBytes) "bytes" True
+  Recv -> SelectorConfig "recv" defaultEnabled $ singletonFieldConfigWith (SomeJSON . fmap (String . renderBytes)) "bytes" True

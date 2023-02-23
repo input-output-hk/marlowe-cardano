@@ -1,7 +1,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
-{-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE RankNTypes #-}
 
@@ -12,20 +11,11 @@
 module Network.Protocol.Handshake.Client
   where
 
-import Control.Monad.Cleanup (MonadCleanup)
-import Control.Monad.Trans.Control (MonadBaseControl)
-import Data.ByteString.Lazy (ByteString)
 import Data.Proxy (Proxy(..))
 import Data.Text (Text)
-import Network.Protocol.ChainSeek.Codec (DeserializeError)
-import Network.Protocol.Driver (ConnectSocketDriverSelector, RunClient, ToPeer, runClientPeerOverSocketWithLogging)
-import Network.Protocol.Handshake.Codec (codecHandshake)
+import Network.Protocol.Connection (Connection(..), Connector(..))
 import Network.Protocol.Handshake.Types
-import Network.Socket (AddrInfo)
 import Network.TypedProtocol
-import Network.TypedProtocol.Codec (Codec)
-import Observe.Event (EventBackend)
-import Observe.Event.Backend (noopEventBackend)
 
 -- | A generic client for the handshake protocol.
 data HandshakeClient client m a = HandshakeClient
@@ -42,44 +32,22 @@ simpleHandshakeClient sig client = HandshakeClient
   , recvMsgAccept = pure client
   }
 
-embedClientInHandshake :: MonadFail m => Text -> RunClient m (HandshakeClient server) -> RunClient m server
-embedClientInHandshake sig runClient = runClient . simpleHandshakeClient sig
+handshakeClientConnector
+  :: forall ps client m
+   . (HasSignature ps, MonadFail m)
+  => Connector ps 'AsClient client m
+  -> Connector (Handshake ps) 'AsClient client m
+handshakeClientConnector Connector{..} = Connector $ handshakeClientConnection <$> openConnection
 
-runClientPeerOverSocketWithLoggingWithHandshake
-  :: forall client protocol (st :: protocol) m r
-   . ( MonadBaseControl IO m
-     , MonadCleanup m
-     , MonadFail m
-     , HasSignature protocol
-     )
-  => EventBackend m r (ConnectSocketDriverSelector (Handshake protocol))
-  -> (forall x. DeserializeError -> m x)
-  -> AddrInfo
-  -> Codec protocol DeserializeError m ByteString
-  -> ToPeer client protocol 'AsClient st m
-  -> RunClient m client
-runClientPeerOverSocketWithLoggingWithHandshake eventBackend throwImpl addr codec toPeer =
-  embedClientInHandshake (signature $ Proxy @protocol) $ runClientPeerOverSocketWithLogging
-    eventBackend
-    throwImpl
-    addr
-    (codecHandshake codec)
-    (handshakeClientPeer toPeer)
-
-runClientPeerOverSocketWithHandshake
-  :: forall client protocol (st :: protocol) m
-   . ( MonadBaseControl IO m
-     , MonadCleanup m
-     , MonadFail m
-     , HasSignature protocol
-     )
-  => (forall x. DeserializeError -> m x)
-  -> AddrInfo
-  -> Codec protocol DeserializeError m ByteString
-  -> ToPeer client protocol 'AsClient st m
-  -> RunClient m client
-runClientPeerOverSocketWithHandshake =
-  runClientPeerOverSocketWithLoggingWithHandshake $ noopEventBackend ()
+handshakeClientConnection
+  :: forall ps peer m
+   . (HasSignature ps, MonadFail m)
+  => Connection ps 'AsClient peer m
+  -> Connection (Handshake ps) 'AsClient peer m
+handshakeClientConnection Connection{..} = Connection
+  { toPeer = handshakeClientPeer id . simpleHandshakeClient (signature $ Proxy @ps) . toPeer
+  , ..
+  }
 
 hoistHandshakeClient
   :: Functor m

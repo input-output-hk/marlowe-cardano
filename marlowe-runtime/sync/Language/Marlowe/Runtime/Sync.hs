@@ -11,13 +11,13 @@ import Language.Marlowe.Runtime.Sync.Database (DatabaseQueries)
 import Language.Marlowe.Runtime.Sync.MarloweHeaderSyncServer
 import Language.Marlowe.Runtime.Sync.MarloweSyncServer
 import Language.Marlowe.Runtime.Sync.QueryServer
-import Network.Protocol.Driver (RunServer)
+import Network.Protocol.Connection (SomeConnectionSource)
 
 data SyncDependencies = SyncDependencies
   { databaseQueries :: DatabaseQueries IO
-  , acceptRunMarloweSyncServer :: IO (RunServer IO MarloweSyncServer)
-  , acceptRunMarloweHeaderSyncServer :: IO (RunServer IO MarloweHeaderSyncServer)
-  , acceptRunMarloweQueryServer :: IO (RunServer IO MarloweQueryServer)
+  , syncSource :: SomeConnectionSource MarloweSyncServer IO
+  , headerSyncSource :: SomeConnectionSource MarloweHeaderSyncServer IO
+  , querySource :: SomeConnectionSource MarloweQueryServer IO
   }
 
 sync :: Component IO SyncDependencies ()

@@ -1,5 +1,4 @@
 {-# LANGUAGE DataKinds #-}
-{-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE RankNTypes #-}
 
@@ -7,13 +6,9 @@ module Language.Marlowe.Runtime.CLI.Command
   where
 
 import Control.Concurrent.STM (STM)
-import Control.Exception (SomeException, catch, throw)
-import Control.Exception.Base (throwIO)
 import Control.Monad.Trans.Reader (runReaderT)
-import qualified Data.ByteString.Lazy as LB
 import Data.Foldable (asum)
 import Language.Marlowe.Protocol.Sync.Client (marloweSyncClientPeer)
-import Language.Marlowe.Protocol.Sync.Codec (codecMarloweSync)
 import Language.Marlowe.Runtime.CLI.Command.Apply
   ( ApplyCommand
   , advanceCommandParser
@@ -32,17 +27,12 @@ import Language.Marlowe.Runtime.CLI.Env (Env(..))
 import Language.Marlowe.Runtime.CLI.Monad (CLI, runCLI)
 import Language.Marlowe.Runtime.CLI.Option (optParserWithEnvDefault)
 import qualified Language.Marlowe.Runtime.CLI.Option as O
-import Network.Protocol.ChainSeek.Codec (DeserializeError)
-import Network.Protocol.Driver (RunClient)
-import Network.Protocol.Handshake.Client (runClientPeerOverSocketWithHandshake)
-import Network.Protocol.Handshake.Types (HasSignature(..))
+import Network.Protocol.Connection (SomeConnector(..))
+import Network.Protocol.Driver (tcpClient)
+import Network.Protocol.Handshake.Client (handshakeClientConnector)
 import Network.Protocol.Job.Client (jobClientPeer)
-import Network.Protocol.Job.Codec (codecJob)
-import Network.Socket (AddrInfo, HostName, PortNumber, SocketType(..), addrSocketType, defaultHints, getAddrInfo)
-import Network.TypedProtocol (Peer, PeerRole(AsClient))
-import Network.TypedProtocol.Codec (Codec)
+import Network.Socket (HostName, PortNumber)
 import Options.Applicative
-import System.IO (hPutStrLn, stderr)
 
 -- | Top-level options for running a command in the Marlowe Runtime CLI.
 data Options = Options
@@ -64,8 +54,8 @@ data Command
 -- | Read options from the environment and the command line.
 getOptions :: IO Options
 getOptions = do
-  historyHostParser <- optParserWithEnvDefault O.historyHost
-  historySyncPortParser <- optParserWithEnvDefault O.historySyncPort
+  syncHostParser <- optParserWithEnvDefault O.syncHost
+  syncSyncPort <- optParserWithEnvDefault O.syncSyncPort
   txHostParser <- optParserWithEnvDefault O.txHost
   txCommandPortParser <- optParserWithEnvDefault O.txCommandPort
   let
@@ -90,8 +80,8 @@ getOptions = do
           ]
       ]
     parser = Options
-      <$> historyHostParser
-      <*> historySyncPortParser
+      <$> syncHostParser
+      <*> syncSyncPort
       <*> txHostParser
       <*> txCommandPortParser
       <*> commandParser
@@ -112,29 +102,8 @@ runCommand = \case
 
 -- | Interpret a CLI action in IO using the provided options.
 runCLIWithOptions :: STM () -> Options -> CLI a -> IO a
-runCLIWithOptions sigInt Options{..} cli = do
-  historySyncAddr <- resolve historyHost historySyncPort
-  txJobAddr <- resolve txHost txCommandPort
-  runReaderT (runCLI cli) Env
-    { envRunHistorySyncClient = runClientPeerOverSocket' "History sync client failure" historySyncAddr codecMarloweSync marloweSyncClientPeer
-    , envRunTxJobClient = runClientPeerOverSocket' "Tx client client failure" txJobAddr codecJob jobClientPeer
-    , sigInt
-    }
-  where
-    resolve host port =
-      head <$> getAddrInfo (Just defaultHints { addrSocketType = Stream }) (Just host) (Just $ show port)
-
-runClientPeerOverSocket'
-  :: forall protocol client (st :: protocol)
-   . HasSignature protocol
-  => String -- ^ Client failure stderr extra message
-  -> AddrInfo -- ^ Socket address to connect to
-  -> Codec protocol DeserializeError IO LB.ByteString -- ^ A codec for the protocol
-  -> (forall a. client IO a -> Peer protocol 'AsClient st IO a) -- ^ Interpret the client as a protocol peer
-  -> RunClient IO client
-runClientPeerOverSocket' errMsg addr codec clientToPeer client = do
-  let
-    run = runClientPeerOverSocketWithHandshake throwIO addr codec clientToPeer client
-  run `catch` \(err :: SomeException)-> do
-    hPutStrLn stderr errMsg
-    throw err
+runCLIWithOptions sigInt Options{..} cli = runReaderT (runCLI cli) Env
+  { marloweSyncConnector = SomeConnector $ handshakeClientConnector $ tcpClient historyHost historySyncPort marloweSyncClientPeer
+  , txJobConnector = SomeConnector $ handshakeClientConnector $ tcpClient txHost txCommandPort jobClientPeer
+  , sigInt
+  }

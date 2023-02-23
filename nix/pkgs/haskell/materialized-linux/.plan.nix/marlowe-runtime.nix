@@ -87,7 +87,6 @@
             (hsPkgs."base" or (errorHandler.buildDepError "base"))
             (hsPkgs."aeson" or (errorHandler.buildDepError "aeson"))
             (hsPkgs."binary" or (errorHandler.buildDepError "binary"))
-            (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
             (hsPkgs."cardano-api" or (errorHandler.buildDepError "cardano-api"))
             (hsPkgs."containers" or (errorHandler.buildDepError "containers"))
             (hsPkgs."errors" or (errorHandler.buildDepError "errors"))
@@ -104,7 +103,6 @@
           buildable = true;
           modules = [
             "Language/Marlowe/Protocol/Sync/Client"
-            "Language/Marlowe/Protocol/Sync/Codec"
             "Language/Marlowe/Protocol/Sync/Server"
             "Language/Marlowe/Protocol/Sync/Types"
             "Language/Marlowe/Runtime/History/Api"
@@ -160,7 +158,6 @@
             (hsPkgs."base" or (errorHandler.buildDepError "base"))
             (hsPkgs."aeson" or (errorHandler.buildDepError "aeson"))
             (hsPkgs."binary" or (errorHandler.buildDepError "binary"))
-            (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
             (hsPkgs."containers" or (errorHandler.buildDepError "containers"))
             (hsPkgs."lifted-async" or (errorHandler.buildDepError "lifted-async"))
             (hsPkgs."marlowe-chain-sync" or (errorHandler.buildDepError "marlowe-chain-sync"))
@@ -175,7 +172,6 @@
           buildable = true;
           modules = [
             "Language/Marlowe/Protocol/Query/Client"
-            "Language/Marlowe/Protocol/Query/Codec"
             "Language/Marlowe/Protocol/Query/Server"
             "Language/Marlowe/Protocol/Query/Types"
             ];
@@ -238,7 +234,6 @@
             (hsPkgs."base" or (errorHandler.buildDepError "base"))
             (hsPkgs."aeson" or (errorHandler.buildDepError "aeson"))
             (hsPkgs."binary" or (errorHandler.buildDepError "binary"))
-            (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
             (hsPkgs."marlowe-chain-sync" or (errorHandler.buildDepError "marlowe-chain-sync"))
             (hsPkgs."marlowe-protocols" or (errorHandler.buildDepError "marlowe-protocols"))
             (hsPkgs."marlowe-runtime" or (errorHandler.buildDepError "marlowe-runtime"))
@@ -247,7 +242,6 @@
           buildable = true;
           modules = [
             "Language/Marlowe/Protocol/HeaderSync/Client"
-            "Language/Marlowe/Protocol/HeaderSync/Codec"
             "Language/Marlowe/Protocol/HeaderSync/Server"
             "Language/Marlowe/Protocol/HeaderSync/Types"
             "Language/Marlowe/Runtime/Discovery/Api"
@@ -452,7 +446,6 @@
             (hsPkgs."plutus-ledger-api" or (errorHandler.buildDepError "plutus-ledger-api"))
             (hsPkgs."transformers" or (errorHandler.buildDepError "transformers"))
             (hsPkgs."transformers-base" or (errorHandler.buildDepError "transformers-base"))
-            (hsPkgs."typed-protocols" or (errorHandler.buildDepError "typed-protocols"))
             (hsPkgs."optparse-applicative" or (errorHandler.buildDepError "optparse-applicative"))
             (hsPkgs."stm" or (errorHandler.buildDepError "stm"))
             (hsPkgs."stm-delay" or (errorHandler.buildDepError "stm-delay"))

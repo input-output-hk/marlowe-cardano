@@ -52,7 +52,8 @@ import Language.Marlowe.Runtime.History.Api
 import Language.Marlowe.Runtime.Transaction.Api
 import Language.Marlowe.Runtime.Transaction.Constraints
 import Network.Protocol.ChainSeek.Client
-import Network.Protocol.Driver (RunClient)
+import Network.Protocol.Connection (SomeClientConnector)
+import Network.Protocol.Driver (runSomeConnector)
 import Network.Protocol.Query.Client (QueryClient, liftQuery)
 import Observe.Event (EventBackend, addField, withEvent, withSubEvent)
 
@@ -112,11 +113,11 @@ loadWalletContext runQuery eventBackend WalletAddresses{..} =
 loadMarloweContext
   :: (forall v. MarloweVersion v -> Set MarloweScripts)
   -> C.NetworkId
-  -> RunClient IO RuntimeChainSeekClient
-  -> RunClient IO (QueryClient ChainSyncQuery)
+  -> SomeClientConnector RuntimeChainSeekClient IO
+  -> SomeClientConnector (QueryClient ChainSyncQuery) IO
   -> LoadMarloweContext r
-loadMarloweContext getScripts networkId runChainSeekClient runChainSyncQuery eventBackend desiredVersion contractId =
-  runChainSeekClient client
+loadMarloweContext getScripts networkId chainSyncConnector chainSyncQueryConnector eventBackend desiredVersion contractId =
+  runSomeConnector chainSyncConnector client
   where
     TxOutRef creationTxId _ = unContractId contractId
     client = ChainSeekClient $ pure $ SendMsgRequestHandshake moveSchema $ ClientStHandshake
@@ -206,8 +207,8 @@ loadMarloweContext getScripts networkId runChainSeekClient runChainSyncQuery eve
           At blockHeader -> case scriptUtxo >>= \u -> (u,) <$> Map.lookup u txs of
             Nothing -> pure $ clientFollowContract version $ updateContext blockHeader Nothing txs contexts
             Just (u, scriptConsumer) -> do
-              systemStart <- fromJust . hush <$> runChainSyncQuery (liftQuery GetSystemStart)
-              eraHistory <- fromJust . hush <$> runChainSyncQuery (liftQuery GetEraHistory)
+              systemStart <- fromJust . hush <$> runSomeConnector chainSyncQueryConnector (liftQuery GetSystemStart)
+              eraHistory <- fromJust . hush <$> runSomeConnector chainSyncQueryConnector (liftQuery GetEraHistory)
               case extractMarloweTransaction version systemStart eraHistory contractId marloweAddress payoutScriptHash u blockHeader scriptConsumer of
                 Left e -> withEvent eventBackend ExtractMarloweTransactionFailed \ev' -> do
                   addField ev' e

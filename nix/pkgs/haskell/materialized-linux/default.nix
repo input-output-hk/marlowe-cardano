@@ -95,6 +95,7 @@
         "network".flags.devel = false;
         "servant-openapi3".revision = (((hackage."servant-openapi3")."2.0.1.5").revisions).default;
         "statistics".revision = (((hackage."statistics")."0.16.1.0").revisions).default;
+        "network-run".revision = (((hackage."network-run")."0.2.4").revisions).default;
         "invariant".revision = (((hackage."invariant")."0.6").revisions).default;
         "int-cast".revision = (((hackage."int-cast")."0.2.0.0.0.0.0.0.1").revisions).default;
         "parallel".revision = (((hackage."parallel")."3.2.2.0").revisions).default;
@@ -1457,6 +1458,7 @@
           "base".components.library.planned = lib.mkOverride 900 true;
           "headed-megaparsec".components.library.planned = lib.mkOverride 900 true;
           "kan-extensions".components.library.planned = lib.mkOverride 900 true;
+          "network-run".components.library.planned = lib.mkOverride 900 true;
           "nonempty-vector".components.library.planned = lib.mkOverride 900 true;
           "marlowe-runtime".components.exes."marlowe".planned = lib.mkOverride 900 true;
           "integer-logarithms".components.library.planned = lib.mkOverride 900 true;

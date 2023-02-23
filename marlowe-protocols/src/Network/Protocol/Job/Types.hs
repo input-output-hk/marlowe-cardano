@@ -1,7 +1,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE EmptyCase #-}
 {-# LANGUAGE GADTs #-}
-{-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
@@ -17,7 +16,7 @@ module Network.Protocol.Job.Types
   where
 
 import Data.Aeson (Value(..), object, (.=))
-import Data.Binary (Put)
+import Data.Binary (Put, getWord8, putWord8)
 import Data.Binary.Get (Get)
 import Data.Functor ((<&>))
 import Data.Maybe (catMaybes)
@@ -25,11 +24,12 @@ import Data.Proxy (Proxy(..))
 import qualified Data.Text as T
 import Data.Type.Equality (type (:~:)(Refl))
 import GHC.Show (showSpace)
+import Network.Protocol.Codec (BinaryMessage(..))
 import Network.Protocol.Codec.Spec (ArbitraryMessage(..), MessageEq(..), ShowProtocol(..))
-import Network.Protocol.Driver (MessageToJSON(..))
 import Network.Protocol.Handshake.Types (HasSignature(..))
 import Network.TypedProtocol
 import Network.TypedProtocol.Codec (AnyMessageAndAgency(..))
+import Observe.Event.Network.Protocol (MessageToJSON(..))
 import Test.QuickCheck (Gen, oneof)
 
 data SomeTag cmd = forall status err result. SomeTag (Tag cmd status err result)
@@ -166,6 +166,88 @@ instance Protocol (Job cmd) where
   exclusionLemma_NobodyAndClientHaveAgency TokDone = \case
 
   exclusionLemma_NobodyAndServerHaveAgency TokDone = \case
+
+instance Command cmd => BinaryMessage (Job cmd) where
+  putMessage = \case
+    ClientAgency TokInit -> \case
+      MsgExec cmd -> do
+        putWord8 0x01
+        let tag = tagFromCommand cmd
+        putTag tag
+        putCommand cmd
+      MsgAttach jobId -> do
+        putWord8 0x02
+        let tag = tagFromJobId jobId
+        putTag tag
+        putJobId jobId
+    ServerAgency (TokCmd tag) -> \case
+      MsgFail err -> do
+        putWord8 0x03
+        putTag tag
+        putErr tag err
+      MsgSucceed result -> do
+        putWord8 0x04
+        putTag tag
+        putResult tag result
+      MsgAwait status jobId -> do
+        putWord8 0x05
+        putTag tag
+        putStatus tag status
+        putJobId jobId
+    ClientAgency (TokAwait _) -> \case
+      MsgPoll   -> putWord8 0x06
+      MsgDetach -> putWord8 0x07
+    ServerAgency (TokAttach _) -> \case
+      MsgAttached     -> putWord8 0x08
+      MsgAttachFailed -> putWord8 0x09
+
+  getMessage tok = do
+    tag <- getWord8
+    case tag of
+      0x01 -> case tok of
+        ClientAgency TokInit -> do
+          SomeTag ctag <- getTag
+          SomeMessage . MsgExec <$> getCommand ctag
+        _ -> fail "Invalid protocol state for MsgExec"
+      0x02 -> case tok of
+        ClientAgency TokInit -> do
+          SomeTag ctag <- getTag
+          SomeMessage . MsgAttach <$> getJobId ctag
+        _ -> fail "Invalid protocol state for MsgAttach"
+      0x03 -> case tok of
+        ServerAgency (TokCmd ctag) -> do
+          SomeTag ctag' <- getTag
+          case tagEq ctag ctag' of
+            Nothing                 -> fail "decoded command tag does not match expected command tag"
+            Just (Refl, Refl, Refl) -> SomeMessage . MsgFail <$> getErr ctag'
+        _ -> fail "Invalid protocol state for MsgFail"
+      0x04 -> case tok of
+        ServerAgency (TokCmd ctag) -> do
+          SomeTag ctag' <- getTag
+          case tagEq ctag ctag' of
+            Nothing                 -> fail "decoded command tag does not match expected command tag"
+            Just (Refl, Refl, Refl) -> SomeMessage . MsgSucceed <$> getResult ctag'
+        _ -> fail "Invalid protocol state for MsgSucceed"
+      0x05 -> case tok of
+        ServerAgency (TokCmd ctag) -> do
+          SomeTag ctag' <- getTag
+          case tagEq ctag ctag' of
+            Nothing                 -> fail "decoded command tag does not match expected command tag"
+            Just (Refl, Refl, Refl) -> SomeMessage <$> (MsgAwait <$> getStatus ctag' <*> getJobId ctag')
+        _ -> fail "Invalid protocol state for MsgAwait"
+      0x06 -> case tok of
+        ClientAgency (TokAwait _) -> pure $ SomeMessage MsgPoll
+        _                         -> fail "Invalid protocol state for MsgPoll"
+      0x07 -> case tok of
+        ClientAgency (TokAwait _) -> pure $ SomeMessage MsgDetach
+        _                         -> fail "Invalid protocol state for MsgDetach"
+      0x08 -> case tok of
+        ServerAgency (TokAttach _) -> pure $ SomeMessage MsgAttached
+        _                          -> fail "Invalid protocol state for MsgAttached"
+      0x09 -> case tok of
+        ServerAgency (TokAttach _) -> pure $ SomeMessage MsgAttachFailed
+        _                          -> fail "Invalid protocol state for MsgAttachFailed"
+      _ -> fail $ "Invalid msg tag " <> show tag
 
 instance CommandToJSON cmd => MessageToJSON (Job cmd) where
   messageToJSON = \case

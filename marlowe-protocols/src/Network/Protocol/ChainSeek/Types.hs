@@ -13,7 +13,7 @@ module Network.Protocol.ChainSeek.Types
   where
 
 import Data.Aeson (ToJSON(..), Value(..), object, (.=))
-import Data.Binary (Binary(..), Get, Put)
+import Data.Binary (Binary(..), Get, Put, getWord8, putWord8)
 import Data.Data (type (:~:)(Refl))
 import Data.Functor ((<&>))
 import Data.Kind (Type)
@@ -24,11 +24,12 @@ import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import GHC.Show (showSpace)
+import Network.Protocol.Codec (BinaryMessage(..))
 import Network.Protocol.Codec.Spec (ArbitraryMessage(..), MessageEq(..), ShowProtocol(..))
-import Network.Protocol.Driver (MessageToJSON(..))
 import Network.Protocol.Handshake.Types (HasSignature(..))
-import Network.TypedProtocol (PeerHasAgency(..), Protocol(..))
+import Network.TypedProtocol (PeerHasAgency(..), Protocol(..), SomeMessage(SomeMessage))
 import Network.TypedProtocol.Codec (AnyMessageAndAgency(..))
+import Observe.Event.Network.Protocol (MessageToJSON(..))
 import Test.QuickCheck (Arbitrary, Gen, arbitrary, oneof, shrink)
 
 data SomeTag q = forall err result. SomeTag (Tag q err result)
@@ -184,6 +185,101 @@ instance Protocol (ChainSeek query point tip) where
   exclusionLemma_NobodyAndClientHaveAgency TokDone  = \case
 
   exclusionLemma_NobodyAndServerHaveAgency TokDone  = \case
+
+instance
+  ( Query query
+  , Binary tip
+  , Binary point
+  ) => BinaryMessage (ChainSeek query point tip) where
+    putMessage (ClientAgency TokInit) msg = case msg of
+      MsgRequestHandshake schemaVersion -> do
+        putWord8 0x01
+        put schemaVersion
+
+    putMessage (ClientAgency TokIdle) msg = case msg of
+      MsgQueryNext query -> do
+        putWord8 0x04
+        let tag = tagFromQuery query
+        putTag tag
+        putQuery query
+      MsgDone            -> putWord8 0x09
+
+    putMessage (ServerAgency TokHandshake) msg = case msg of
+      MsgConfirmHandshake                  -> putWord8 0x02
+      MsgRejectHandshake supportedVersions -> do
+       putWord8 0x03
+       put supportedVersions
+
+    putMessage (ServerAgency (TokNext tag)) (MsgRejectQuery err tip) = do
+        putWord8 0x05
+        putTag tag
+        putErr tag err
+        put tip
+
+    putMessage (ServerAgency (TokNext tag)) (MsgRollForward result pos tip) = do
+        putWord8 0x06
+        putTag tag
+        putResult tag result
+        put pos
+        put tip
+
+    putMessage (ServerAgency TokNext{}) (MsgRollBackward pos tip) = do
+        putWord8 0x07
+        put pos
+        put tip
+
+    putMessage (ServerAgency TokNext{}) MsgWait = putWord8 0x08
+
+    putMessage (ClientAgency TokPoll) MsgPoll = putWord8 0x0a
+
+    putMessage (ClientAgency TokPoll) MsgCancel = putWord8 0x0b
+
+    getMessage tok      = do
+      tag <- getWord8
+      case (tag, tok) of
+        (0x01, ClientAgency TokInit) -> SomeMessage . MsgRequestHandshake <$> get
+
+        (0x04, ClientAgency TokIdle) -> do
+          SomeTag qtag <- getTag
+          SomeMessage . MsgQueryNext <$> getQuery qtag
+
+        (0x09, ClientAgency TokIdle) -> pure $ SomeMessage MsgDone
+
+        (0x02, ServerAgency TokHandshake) -> pure $ SomeMessage MsgConfirmHandshake
+
+        (0x03, ServerAgency TokHandshake) -> SomeMessage . MsgRejectHandshake <$> get
+
+        (0x05, ServerAgency (TokNext qtag)) -> do
+          SomeTag qtag' :: SomeTag query <- getTag
+          case tagEq qtag qtag' of
+            Nothing -> fail "decoded query tag does not match expected query tag"
+            Just (Refl, Refl) -> do
+              err <- getErr qtag'
+              tip <- get
+              pure $ SomeMessage $ MsgRejectQuery err tip
+
+        (0x06, ServerAgency (TokNext qtag)) -> do
+          SomeTag qtag' :: SomeTag query <- getTag
+          case tagEq qtag qtag' of
+            Nothing -> fail "decoded query tag does not match expected query tag"
+            Just (Refl, Refl) -> do
+              result <- getResult qtag'
+              point <- get
+              tip <- get
+              pure $ SomeMessage $ MsgRollForward result point tip
+
+        (0x07, ServerAgency (TokNext _)) -> do
+          point <- get
+          tip <- get
+          pure $ SomeMessage $ MsgRollBackward point tip
+
+        (0x08, ServerAgency (TokNext _)) -> pure $ SomeMessage MsgWait
+
+        (0x0a, ClientAgency TokPoll) -> pure $ SomeMessage MsgPoll
+
+        (0x0b, ClientAgency TokPoll) -> pure $ SomeMessage MsgCancel
+
+        _ -> fail $ "Unexpected tag " <> show tag
 
 instance
   ( QueryToJSON query

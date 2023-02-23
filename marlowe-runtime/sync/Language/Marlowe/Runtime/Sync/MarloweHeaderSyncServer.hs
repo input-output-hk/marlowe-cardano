@@ -9,27 +9,27 @@ import Control.Concurrent.Component
 import Language.Marlowe.Protocol.HeaderSync.Server
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainPoint, WithGenesis(..))
 import Language.Marlowe.Runtime.Sync.Database (DatabaseQueries(..), Next(..))
-import Network.Protocol.Driver (RunServer(..))
+import Network.Protocol.Connection (SomeConnectionSource, SomeServerConnector, acceptSomeConnector)
+import Network.Protocol.Driver (runSomeConnector)
 
 data MarloweHeaderSyncServerDependencies = MarloweHeaderSyncServerDependencies
   { databaseQueries :: DatabaseQueries IO
-  , acceptRunMarloweHeaderSyncServer :: IO (RunServer IO MarloweHeaderSyncServer)
+  , headerSyncSource :: SomeConnectionSource MarloweHeaderSyncServer IO
   }
 
 marloweHeaderSyncServer :: Component IO MarloweHeaderSyncServerDependencies ()
 marloweHeaderSyncServer = serverComponent (component_ worker) \MarloweHeaderSyncServerDependencies{..} -> do
-  runMarloweHeaderSyncServer <- acceptRunMarloweHeaderSyncServer
+  connector <- acceptSomeConnector headerSyncSource
   pure WorkerDependencies{..}
 
 data WorkerDependencies = WorkerDependencies
   { databaseQueries :: DatabaseQueries IO
-  , runMarloweHeaderSyncServer :: RunServer IO MarloweHeaderSyncServer
+  , connector :: SomeServerConnector MarloweHeaderSyncServer IO
   }
 
 worker :: WorkerDependencies -> IO ()
 worker WorkerDependencies{..} = do
-  let RunServer runServer = runMarloweHeaderSyncServer
-  runServer $ MarloweHeaderSyncServer $ pure $ serverIdle Genesis
+  runSomeConnector connector $ MarloweHeaderSyncServer $ pure $ serverIdle Genesis
   where
     DatabaseQueries{..} = databaseQueries
 

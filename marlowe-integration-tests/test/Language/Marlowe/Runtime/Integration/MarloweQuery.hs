@@ -1,5 +1,4 @@
 {-# LANGUAGE DataKinds #-}
-{-# LANGUAGE MultiWayIf #-}
 
 module Language.Marlowe.Runtime.Integration.MarloweQuery
   where

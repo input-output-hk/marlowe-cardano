@@ -10,13 +10,7 @@ import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncCommand, ChainSyncQuery,
 import Language.Marlowe.Runtime.Transaction (getTransactionSererSelectorConfig)
 import Language.Marlowe.Runtime.Transaction.Api (MarloweTxCommand)
 import Language.Marlowe.Runtime.Transaction.Server
-import Network.Protocol.Driver
-  ( AcceptSocketDriverSelector
-  , ConnectSocketDriverSelector
-  , SocketDriverConfigOptions(..)
-  , getAcceptSocketDriverSelectorConfig
-  , getConnectSocketDriverSelectorConfig
-  )
+import Network.Protocol.Connection (ConnectorSelector, getConnectorSelectorConfig)
 import Network.Protocol.Handshake.Types (Handshake)
 import Network.Protocol.Job.Types (Job)
 import Network.Protocol.Query.Types (Query)
@@ -24,57 +18,21 @@ import Observe.Event.Component
   (ConfigWatcherSelector(ReloadConfig), GetSelectorConfig, SelectorConfig(..), prependKey, singletonFieldConfig)
 
 data RootSelector f where
-  ChainSeekClient :: ConnectSocketDriverSelector (Handshake RuntimeChainSeek) f -> RootSelector f
-  ChainSyncJobClient :: ConnectSocketDriverSelector (Handshake (Job ChainSyncCommand)) f -> RootSelector f
-  ChainSyncQueryClient :: ConnectSocketDriverSelector (Handshake (Query ChainSyncQuery)) f -> RootSelector f
-  HistoryClient :: ConnectSocketDriverSelector (Handshake MarloweSync) f -> RootSelector f
-  Server :: AcceptSocketDriverSelector (Handshake (Job MarloweTxCommand)) f -> RootSelector f
+  ChainSeekClient :: ConnectorSelector (Handshake RuntimeChainSeek) f -> RootSelector f
+  ChainSyncJobClient :: ConnectorSelector (Handshake (Job ChainSyncCommand)) f -> RootSelector f
+  ChainSyncQueryClient :: ConnectorSelector (Handshake (Query ChainSyncQuery)) f -> RootSelector f
+  HistoryClient :: ConnectorSelector (Handshake MarloweSync) f -> RootSelector f
+  Server :: ConnectorSelector (Handshake (Job MarloweTxCommand)) f -> RootSelector f
   App :: TransactionServerSelector f -> RootSelector f
   ConfigWatcher :: ConfigWatcherSelector f -> RootSelector f
 
--- TODO automate this boilerplate with Template Haskell
 getRootSelectorConfig :: GetSelectorConfig RootSelector
 getRootSelectorConfig = \case
-  ChainSeekClient sel -> prependKey "chain-sync" $ getConnectSocketDriverSelectorConfig chainSeekConfig sel
-  ChainSyncJobClient sel -> prependKey "chain-sync-job" $ getConnectSocketDriverSelectorConfig chainSyncJobConfig sel
-  ChainSyncQueryClient sel -> prependKey "chain-sync-query" $ getConnectSocketDriverSelectorConfig chainSyncQueryConfig sel
-  HistoryClient sel -> prependKey "history" $ getConnectSocketDriverSelectorConfig historyClientConfig sel
-  Server sel -> prependKey "server" $ getAcceptSocketDriverSelectorConfig jobConfig sel
+  ChainSeekClient sel -> prependKey "chain-sync" $ getConnectorSelectorConfig True True sel
+  ChainSyncJobClient sel -> prependKey "chain-sync-job" $ getConnectorSelectorConfig True True sel
+  ChainSyncQueryClient sel -> prependKey "chain-sync-query" $ getConnectorSelectorConfig True True sel
+  HistoryClient sel -> prependKey "history" $ getConnectorSelectorConfig True True sel
+  Server sel -> prependKey "server" $ getConnectorSelectorConfig True True sel
   App sel -> getTransactionSererSelectorConfig sel
   ConfigWatcher ReloadConfig -> SelectorConfig "reload-log-config" True
     $ singletonFieldConfig "config" True
-
-chainSeekConfig :: SocketDriverConfigOptions
-chainSeekConfig = SocketDriverConfigOptions
-  { enableConnected = True
-  , enableDisconnected = True
-  , enableServerDriverEvent = True
-  }
-
-chainSyncJobConfig :: SocketDriverConfigOptions
-chainSyncJobConfig = SocketDriverConfigOptions
-  { enableConnected = True
-  , enableDisconnected = True
-  , enableServerDriverEvent = True
-  }
-
-chainSyncQueryConfig :: SocketDriverConfigOptions
-chainSyncQueryConfig = SocketDriverConfigOptions
-  { enableConnected = True
-  , enableDisconnected = True
-  , enableServerDriverEvent = True
-  }
-
-jobConfig :: SocketDriverConfigOptions
-jobConfig = SocketDriverConfigOptions
-  { enableConnected = True
-  , enableDisconnected = True
-  , enableServerDriverEvent = True
-  }
-
-historyClientConfig :: SocketDriverConfigOptions
-historyClientConfig = SocketDriverConfigOptions
-  { enableConnected = True
-  , enableDisconnected = True
-  , enableServerDriverEvent = True
-  }
