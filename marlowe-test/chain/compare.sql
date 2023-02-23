@@ -20,7 +20,7 @@ create temporary table max_slotno as
     inner join public.block as dblock
       on cblock.id = dblock.hash
 ;
-select max_slotno as "Latest Block in Common"
+select max_slotno as "Slot for Latest Block in Common"
   from max_slotno
 ;
 \copy max_slotno to 'out/latest-block.csv' CSV HEADER

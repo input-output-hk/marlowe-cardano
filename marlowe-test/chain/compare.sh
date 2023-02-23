@@ -2,7 +2,7 @@
 
 set -e
 
-TIMESTAMP="$(date -u +%Y%m%d%H)"
+TIMESTAMP="$(date -u +%Y%m%d%H%M)"
 COMMIT=$(git rev-parse HEAD)
 
 echo "PGHOST=$PGHOST"
