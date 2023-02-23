@@ -2,6 +2,9 @@ module Test.Integration.Cardano.Process
   ( execCli
   , execCli'
   , execCli_
+  , execMarlowe
+  , execMarlowe'
+  , execMarlowe_
   ) where
 
 import Control.Monad.IO.Class (MonadIO, liftIO)
@@ -18,6 +21,15 @@ execCli = exec "cardano-cli"
 
 execCli' :: MonadIO m => [String] -> m (ExitCode, String, String)
 execCli' = exec' "cardano-cli"
+
+execMarlowe :: MonadIO m => [String] -> m String
+execMarlowe = exec "bash" . ("./marlowe-integration-tests/marlowe" :)
+
+execMarlowe_ :: MonadIO m => [String] -> m ()
+execMarlowe_ = void . execMarlowe
+
+execMarlowe' :: MonadIO m => [String] -> m (ExitCode, String, String)
+execMarlowe' = exec' "bash" . ("./marlowe-integration-tests/marlowe" :)
 
 exec :: MonadIO m => FilePath -> [String] -> m String
 exec path args = do
