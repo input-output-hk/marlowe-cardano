@@ -449,7 +449,6 @@
             (hsPkgs."plutus-ledger-api" or (errorHandler.buildDepError "plutus-ledger-api"))
             (hsPkgs."transformers" or (errorHandler.buildDepError "transformers"))
             (hsPkgs."transformers-base" or (errorHandler.buildDepError "transformers-base"))
-            (hsPkgs."typed-protocols" or (errorHandler.buildDepError "typed-protocols"))
             (hsPkgs."optparse-applicative" or (errorHandler.buildDepError "optparse-applicative"))
             (hsPkgs."stm" or (errorHandler.buildDepError "stm"))
             (hsPkgs."stm-delay" or (errorHandler.buildDepError "stm-delay"))
