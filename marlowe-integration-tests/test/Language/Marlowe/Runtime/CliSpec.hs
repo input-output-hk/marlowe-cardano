@@ -1,7 +1,9 @@
 module Language.Marlowe.Runtime.CliSpec
   where
 
+import Control.Monad (void)
 import qualified Control.Monad.Reader as Reader
+import qualified Control.Monad.Trans as Trans
 import qualified Data.Maybe as Maybe
 import qualified Data.Set as Set
 import qualified Data.Text as Text
@@ -9,34 +11,37 @@ import Language.Marlowe.Runtime.ChainSync.Api (Address(..), toBech32)
 import Language.Marlowe.Runtime.Integration.Common (Wallet(..), getGenesisWallet, runIntegrationTest)
 import Language.Marlowe.Runtime.Transaction.Api (WalletAddresses(..))
 import Test.Hspec (Spec, describe, fdescribe, it)
-import Test.Integration.Marlowe.Local (execMarlowe_, marloweSyncPort, txJobPort, withLocalMarloweRuntime)
-
--- data WalletAddresses = WalletAddresses
---   { changeAddress  :: Address
---   , extraAddresses :: Set Address
---   , collateralUtxos :: Set TxOutRef
---   }
---   deriving (Eq, Show, Generic, Binary, ToJSON)
-
--- data Wallet = Wallet
---   { addresses :: WalletAddresses
---   , signingKeys :: [ShelleyWitnessSigningKey]
---   }
+import Test.Integration.Marlowe.Local
+  ( LocalTestnet(..)
+  , Workspace(Workspace, workspaceDir)
+  , execMarlowe_
+  , marloweSyncPort
+  , testnet
+  , txJobPort
+  , withLocalMarloweRuntime
+  )
 
 serializeAddress :: Address -> String
 serializeAddress = Text.unpack . Maybe.fromJust . toBech32
 
+{-
+bash ./marlowe-integration-tests/marlowe --help
+cabal run marlowe-integration-tests
+-}
+
 spec :: Spec
 spec = fdescribe "Marlowe runtime CLI" do
   describe "create" do
-    it "works" do
-      -- // TODO do not accidentally commit this!!!!!!:
-      let contractName = "./temporary-close-contract"
-          txEnvelope = "./tx-body-1234567.envelope"
-      writeFile contractName "\"close\""
-
+    it "creates a tx body envelope" $
       withLocalMarloweRuntime $ runIntegrationTest do
         Wallet {addresses = WalletAddresses {changeAddress, extraAddresses}} <- getGenesisWallet 0
+
+        LocalTestnet {workspace = Workspace {workspaceDir}} <- Reader.asks testnet
+
+        let contractFilePath = workspaceDir <> "/close-contract"
+            txBodyEnvelopeFilePath = workspaceDir <> "/tx-body.envelope"
+
+        Trans.lift $ writeFile contractFilePath "\"close\""
 
         marlowe_sync_port :: Int <- Reader.asks marloweSyncPort
         tx_command_port :: Int <- Reader.asks txJobPort
@@ -45,14 +50,11 @@ spec = fdescribe "Marlowe runtime CLI" do
           concat
             [ ["create", "--change-address", serializeAddress changeAddress],
               do address <- Set.toList extraAddresses; ["--address", serializeAddress address],
-              ["--manual-sign", txEnvelope],
-              ["--core-file", contractName],
+              ["--manual-sign", txBodyEnvelopeFilePath],
+              ["--core-file", contractFilePath],
               ["--min-utxo", show @Int 2_000_000],
               ["--marlowe-sync-port", show marlowe_sync_port],
               ["--tx-command-port", show tx_command_port]
             ]
 
-{-
-bash ./marlowe-integration-tests/marlowe --help
-cabal run marlowe-integration-tests
--}
+        void $ Trans.lift $ readFile txBodyEnvelopeFilePath
