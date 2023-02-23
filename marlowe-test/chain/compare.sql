@@ -526,6 +526,18 @@ select
 \qecho Asset out comparison.
 \qecho
 
+drop table xref_asset;
+create temporary table xref_asset as
+  select
+      asset.id as "chainindex_id"
+    , multi_asset.id as "dbsync_id"
+    , asset.policyid
+    , asset.name
+    from chain.asset
+    inner join public.multi_asset
+      on (asset.policyid, asset.name) = (multi_asset.policy, multi_asset.name)
+;
+
 drop table if exists cmp_asset_out;
 create temporary table cmp_asset_out as
   select
@@ -533,8 +545,7 @@ create temporary table cmp_asset_out as
     , txoutid
     , txoutix
     , slotno
-    , policyid
-    , name
+    , assetid
     , quantity
     from max_slotno
     inner join chain.assetout
@@ -543,12 +554,11 @@ create temporary table cmp_asset_out as
       on assetid = id
   union
   select
-      'dbsync'
+      'dbsync' :: varchar as "source"
     , tx.hash
     , tx_out.index
     , block.slot_no
-    , multi_asset.policy
-    , multi_asset.name
+    , chainindex_id
     , ma_tx_out.quantity
     from max_slotno
     inner join public.block as block
@@ -559,8 +569,8 @@ create temporary table cmp_asset_out as
       on tx_out.tx_id = tx.id
     inner join public.ma_tx_out
       on ma_tx_out.tx_out_id = tx_out.id
-    inner join public.multi_asset
-      on multi_asset.id = ma_tx_out.ident
+    inner join xref_asset
+      on dbsync_id = ma_tx_out.ident
     where
       block_no > 0
 ;
@@ -575,17 +585,17 @@ drop table if exists x_asset_out;
 create temporary table x_asset_out as
   select 'chainindex-dbsync' as "comparison", *
     from (
-      select txoutid, txoutix, slotno, policyid, name, quantity from cmp_asset_out where source = 'chainindex'
+      select txoutid, txoutix, slotno, assetid, quantity from cmp_asset_out where source = 'chainindex'
       except
-      select txoutid, txoutix, slotno, policyid, name, quantity from cmp_asset_out where source = 'dbsync'
-    ) as mc_asset
+      select txoutid, txoutix, slotno, assetid, quantity from cmp_asset_out where source = 'dbsync'
+    ) as mc_asset_out
   union all
   select 'dbsync-chainindex', *
     from (
-      select txoutid, txoutix, slotno, policyid, name, quantity from cmp_asset_out where source = 'dbsync'
+      select txoutid, txoutix, slotno, assetid, quantity from cmp_asset_out where source = 'dbsync'
       except
-      select txoutid, txoutix, slotno, policyid, name, quantity from cmp_asset_out where source = 'chainindex'
-    ) as cm_asset
+      select txoutid, txoutix, slotno, assetid, quantity from cmp_asset_out where source = 'chainindex'
+    ) as cm_asset_out
 ;
 select
     comparison as "Discrepancy"
