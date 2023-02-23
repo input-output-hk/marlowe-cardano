@@ -1,4 +1,3 @@
-{-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE PolyKinds #-}
 
 module Observe.Event.Network.Protocol

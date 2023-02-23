@@ -360,7 +360,7 @@ spec = do
         selectResult :: Either String ()
         selectResult = either
           (\ce -> case marloweVersion of MarloweV1 -> Left . show $ ce)
-          (\txBC -> fmap extractCollat (eligibleUtxos txBC) >>= singleUtxo >>= assetsAdaOnly >>= adaCollatIsSufficient)
+          (\txBC -> eligibleUtxos txBC >>= singleUtxo . extractCollat >>= assetsAdaOnly >>= adaCollatIsSufficient)
           selection
 
         noCollateralUnlessPlutus =
