@@ -49,15 +49,15 @@ handshakeServerConnector
    . (HasSignature ps, MonadFail m)
   => Connector ps 'AsServer server m
   -> Connector (Handshake ps) 'AsServer server m
-handshakeServerConnector Connector{..} = Connector $ fmap handshakeServerConnection . connectPeer
+handshakeServerConnector Connector{..} = Connector $ handshakeServerConnection <$> openConnection
 
 handshakeServerConnection
-  :: forall ps m a
+  :: forall ps peer m
    . (HasSignature ps, MonadFail m)
-  => Connection ps 'AsServer m a
-  -> Connection (Handshake ps) 'AsServer m a
+  => Connection ps 'AsServer peer m
+  -> Connection (Handshake ps) 'AsServer peer m
 handshakeServerConnection Connection{..} = Connection
-  { peer = handshakeServerPeer id $ simpleHandshakeServer (signature $ Proxy @ps) peer
+  { toPeer = handshakeServerPeer id . simpleHandshakeServer (signature $ Proxy @ps) . toPeer
   , ..
   }
 

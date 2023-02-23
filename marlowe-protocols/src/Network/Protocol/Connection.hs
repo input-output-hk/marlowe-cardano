@@ -30,7 +30,7 @@ import Observe.Event.Network.Protocol (MessageToJSON)
 type ToPeer peer protocol pr st m = forall a. peer m a -> Peer protocol pr st m a
 
 newtype Connector ps pr peer m = Connector
-  { connectPeer :: forall a. peer m a -> m (Connection ps pr m a)
+  { openConnection :: m (Connection ps pr peer m)
   }
 
 type ClientConnector ps = Connector ps 'AsClient
@@ -55,7 +55,6 @@ data SomeConnectionSource server m =
 data ConnectorSelector ps f where
   Connect :: ConnectorSelector ps Void
   ConnectionSelector :: ConnectionSelector ps f -> ConnectorSelector ps f
-  Disconnect :: ConnectorSelector ps Void
 
 getConnectorSelectorConfig
   :: MessageToJSON ps
@@ -65,7 +64,6 @@ getConnectorSelectorConfig
 getConnectorSelectorConfig channelEnabled peerEnabled = \case
   Connect -> SelectorConfig "connect" True absurdFieldConfig
   ConnectionSelector sel -> prependKey "connection" $ getConnectionSelectorConfig channelEnabled peerEnabled sel
-  Disconnect -> SelectorConfig "disconnect" True absurdFieldConfig
 
 logConnector
   :: (MonadBaseControl IO m, MonadCleanup m)
@@ -73,18 +71,8 @@ logConnector
   -> Connector ps pr peer m
   -> Connector ps pr peer m
 logConnector eventBackend Connector{..} = Connector
-  { connectPeer = \p -> do
-      eventBackend' <- withEvent eventBackend Connect $ pure . causedEventBackend id
-      Connection{..} <- connectPeer p
-      pure $ logConnection (narrowEventBackend ConnectionSelector eventBackend') Connection
-        { closeConnection = \mError -> do
-            ev <- newEvent eventBackend' Disconnect
-            case mError of
-              Nothing -> finalize ev
-              Just ex -> failEvent ev ex
-            closeConnection mError
-        , ..
-        }
+  { openConnection = withEvent eventBackend Connect \ev ->
+      logConnection (causedEventBackend ConnectionSelector ev) <$> openConnection
   }
 
 logConnectionSource
@@ -96,15 +84,16 @@ logConnectionSource eventBackend ConnectionSource{..} = ConnectionSource
   { acceptConnector = logConnector eventBackend <$> acceptConnector
   }
 
-data Connection ps pr m a = forall (st :: ps). Connection
+data Connection ps pr peer m = forall (st :: ps). Connection
   { closeConnection :: Maybe SomeException -> m ()
   , channel :: Channel m ByteString
-  , peer :: Peer ps pr st m a
+  , toPeer :: forall a. peer m a -> Peer ps pr st m a
   }
 
 data ConnectionSelector ps f where
   ChannelSelector :: ChannelSelector ByteString f -> ConnectionSelector ps f
   PeerSelector :: PeerSelector ps f -> ConnectionSelector ps f
+  Close :: ConnectionSelector ps Void
 
 getConnectionSelectorConfig
   :: MessageToJSON ps
@@ -114,16 +103,22 @@ getConnectionSelectorConfig
 getConnectionSelectorConfig channelEnabled peerEnabled = \case
   ChannelSelector sel -> prependKey "channel" $ getChannelSelectorConfig (T.toStrict . encodeBase16) channelEnabled sel
   PeerSelector sel -> prependKey "peer" $ getPeerSelectorConfig peerEnabled sel
+  Close -> SelectorConfig "close" True absurdFieldConfig
 
 logConnection
   :: (MonadBaseControl IO m, MonadCleanup m)
   => EventBackend m r (ConnectionSelector ps)
-  -> Connection ps pr m a
-  -> Connection ps pr m a
+  -> Connection ps pr peer m
+  -> Connection ps pr peer m
 logConnection eventBackend Connection{..} = Connection
   { channel = logChannel (narrowEventBackend ChannelSelector eventBackend) channel
-  , peer = logPeer (narrowEventBackend PeerSelector eventBackend) peer
-  , ..
+  , toPeer = logPeer (narrowEventBackend PeerSelector eventBackend) . toPeer
+  , closeConnection = \mError -> do
+      ev <- newEvent eventBackend Close
+      case mError of
+        Nothing -> finalize ev
+        Just ex -> failEvent ev ex
+      closeConnection mError
   }
 
 acceptSomeConnector :: MonadBaseControl IO m => SomeConnectionSource server m -> m (SomeServerConnector server m)
@@ -143,10 +138,10 @@ stmServerConnector
   => STMChannel ByteString
   -> ToPeer client ps 'AsServer st m
   -> ServerConnector ps client m
-stmServerConnector (STMChannel channel closeChannel) toPeer = Connector \server -> pure Connection
+stmServerConnector (STMChannel channel closeChannel) toPeer = Connector $ pure Connection
   { closeConnection = const $ liftBase $ atomically closeChannel
-  , peer = toPeer server
   , channel = hoistChannel (liftBase . atomically) channel
+  , ..
   }
 
 stmClientConnector
@@ -154,7 +149,7 @@ stmClientConnector
   => TQueue (STMChannel ByteString)
   -> ToPeer client ps 'AsClient st m
   -> ClientConnector ps client m
-stmClientConnector queue toPeer = Connector \client -> do
+stmClientConnector queue toPeer = Connector do
   STMChannel channel closeChannel <- liftBase $ atomically do
     (clientChannel, serverChannel) <- channelPair
     writeTQueue queue serverChannel
@@ -162,7 +157,7 @@ stmClientConnector queue toPeer = Connector \client -> do
   pure Connection
     { closeConnection = \_ -> liftBase $ atomically closeChannel
     , channel = hoistChannel (liftBase . atomically) channel
-    , peer = toPeer client
+    , ..
     }
 
 data ClientServerPair ps server client m = ClientServerPair

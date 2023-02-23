@@ -13,7 +13,6 @@ import Control.Concurrent.Component
 import Control.Concurrent.STM (atomically, newEmptyTMVar, newTQueue, readTMVar, readTQueue, tryPutTMVar)
 import Control.Concurrent.STM.TQueue (writeTQueue)
 import Control.Exception.Lifted (mask, throwIO, try)
-import Control.Monad ((<=<))
 import Control.Monad.Base (MonadBase(liftBase))
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Data.ByteString.Lazy (ByteString)
@@ -90,10 +89,10 @@ tcpServer = component \TcpServerDependencies{..} -> do
         atomically $ readTMVar closeTMVar
     , ConnectionSource do
         (socket, closeConnection) <- readTQueue socketQueue
-        pure $ Connector \server -> pure Connection
+        pure $ Connector $ pure Connection
           { closeConnection = \_ -> liftBase $ atomically closeConnection
           , channel = hoistChannel liftBase $ socketAsChannel socket
-          , peer = toPeer server
+          , ..
           }
     )
 
@@ -103,7 +102,7 @@ tcpClient
   -> PortNumber
   -> ToPeer client ps 'AsClient st m
   -> Connector ps 'AsClient client m
-tcpClient host port toPeer = Connector \client -> do
+tcpClient host port toPeer = Connector do
   addr <- liftBase $ head <$> getAddrInfo
     (Just defaultHints { addrSocketType = Stream })
     (Just host)
@@ -113,14 +112,14 @@ tcpClient host port toPeer = Connector \client -> do
   pure Connection
     { closeConnection = \_ -> liftBase $ close socket
     , channel = hoistChannel liftBase $ socketAsChannel socket
-    , peer = toPeer client
+    , ..
     }
 
-runConnection :: (MonadBaseControl IO m, BinaryMessage ps) => Connection ps peer m a -> m a
-runConnection Connection{..} = do
+runConnection :: (MonadBaseControl IO m, BinaryMessage ps) => Connection ps pr peer m -> peer m a -> m a
+runConnection Connection{..} peer = do
   let driver = mkDriver channel
   mask \restore -> do
-    result <- try $ restore $ runPeerWithDriver driver peer (startDState driver)
+    result <- try $ restore $ runPeerWithDriver driver (toPeer peer) (startDState driver)
     case result of
       Left ex -> do
         closeConnection $ Just ex
@@ -130,7 +129,7 @@ runConnection Connection{..} = do
         pure a
 
 runConnector :: (MonadBaseControl IO m, BinaryMessage ps) => Connector ps pr peer m -> peer m a -> m a
-runConnector Connector{..} = runConnection <=< connectPeer
+runConnector Connector{..} peer = flip runConnection peer =<< openConnection
 
 runSomeConnector :: MonadBaseControl IO m => SomeConnector pr peer m -> peer m a -> m a
 runSomeConnector (SomeConnector connector) = runConnector connector
