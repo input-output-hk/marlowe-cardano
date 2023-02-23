@@ -406,9 +406,9 @@ library web-server
   visibility: public
   exposed-modules:
     Language.Marlowe.Runtime.Web.Server
+    Language.Marlowe.Runtime.Web.Server.DTO
     Language.Marlowe.Runtime.Web.Server.Util
   other-modules:
-    Language.Marlowe.Runtime.Web.Server.DTO
     Language.Marlowe.Runtime.Web.Server.Monad
     Language.Marlowe.Runtime.Web.Server.OpenAPI
     Language.Marlowe.Runtime.Web.Server.REST

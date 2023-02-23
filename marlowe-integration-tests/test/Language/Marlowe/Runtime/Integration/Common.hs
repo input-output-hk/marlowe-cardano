@@ -19,7 +19,7 @@ import Cardano.Api
 import Cardano.Api.Byron (deserialiseFromTextEnvelope)
 import Control.Concurrent (threadDelay)
 import Control.Monad.IO.Class (MonadIO, liftIO)
-import Control.Monad.Reader (ReaderT, runReaderT)
+import Control.Monad.Reader (ReaderT(..), runReaderT)
 import Control.Monad.Reader.Class (asks)
 import Data.Aeson (FromJSON(..), Value(..), decodeFileStrict, eitherDecodeStrict)
 import Data.Aeson.Types (parseFail)
@@ -73,6 +73,7 @@ import Language.Marlowe.Runtime.Transaction.Api
   (ContractCreated(..), InputsApplied(..), MarloweTxCommand(..), WalletAddresses(WalletAddresses))
 import Network.Protocol.Job.Client (JobClient, hoistJobClient, liftCommand, liftCommandWait)
 import qualified Plutus.V2.Ledger.Api as PV2
+import Servant.Client (ClientError, ClientM)
 import Test.Hspec (shouldBe)
 import Test.Integration.Marlowe (LocalTestnet(..), MarloweRuntime, PaymentKeyPair(..), SpoNode(..), execCli)
 import qualified Test.Integration.Marlowe.Local as MarloweRuntime
@@ -88,6 +89,9 @@ data Wallet = Wallet
 
 runIntegrationTest :: Integration a -> MarloweRuntime -> IO a
 runIntegrationTest = runReaderT
+
+runWebClient :: ClientM a -> Integration (Either ClientError a)
+runWebClient client = ReaderT \runtime -> MarloweRuntime.runWebClient runtime client
 
 expectJust :: MonadFail m => String -> Maybe a -> m a
 expectJust msg = \case
