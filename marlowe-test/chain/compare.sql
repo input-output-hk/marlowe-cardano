@@ -234,6 +234,11 @@ create temporary table cmp_txout as
     where
       block_no > 0
 ;
+update cmp_txout  -- Fix for illegal bytes of a Shelley address on the `mainnet` ledger in a transaction output.
+  set address = '\x015bad085057ac10ecc7060f7ac41edd6f63068d8963ef7d86ca58669e5ecf2d283418a60be5a848a2380eb721000da1e0bbf39733134beca4cb57afb0b35fc89c63061c9914e055001a518c7516' :: bytea
+  where source = 'chainindex'
+    and address = '\x015bad085057ac10ecc7060f7ac41edd6f63068d8963ef7d86ca58669e5ecf2d283418a60be5a848a2380eb721000da1e0bbf39733134beca4' :: bytea
+;
 select
     source as "Source"
   , count(*) as "Count of TxOut Records"
