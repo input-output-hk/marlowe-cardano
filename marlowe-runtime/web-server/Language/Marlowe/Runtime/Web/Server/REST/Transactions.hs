@@ -12,25 +12,22 @@ module Language.Marlowe.Runtime.Web.Server.REST.Transactions
 import Cardano.Api (AsType(..), deserialiseFromTextEnvelope, getTxBody, getTxId)
 import qualified Cardano.Api.SerialiseTextEnvelope as Cardano
 import Control.Monad (unless)
+import Data.Aeson (Value(Null))
 import Data.Foldable (traverse_)
 import Data.Maybe (fromMaybe)
 import qualified Data.Set as Set
 import Language.Marlowe.Protocol.Query.Types (Page(..))
 import Language.Marlowe.Runtime.Cardano.Api (fromCardanoTxId)
 import Language.Marlowe.Runtime.Core.Api (MarloweVersion(..), SomeMarloweVersion(..))
-import Language.Marlowe.Runtime.Transaction.Api
-  ( ApplyInputsConstraintsBuildupError(..)
-  , ApplyInputsError(..)
-  , ConstraintError(..)
-  , InputsApplied(..)
-  , LoadMarloweContextError(..)
-  , WalletAddresses(..)
-  )
+import Language.Marlowe.Runtime.Transaction.Api (InputsApplied(..), WalletAddresses(..))
 import qualified Language.Marlowe.Runtime.Transaction.Api as Tx
 import Language.Marlowe.Runtime.Web hiding (Unsigned)
 import Language.Marlowe.Runtime.Web.Server.DTO
 import Language.Marlowe.Runtime.Web.Server.Monad
   (AppM, applyInputs, loadTransaction, loadTransactions, submitTransaction)
+import Language.Marlowe.Runtime.Web.Server.REST.ApiError
+  (ApiError(ApiError), badRequest', notFound', rangeNotSatisfiable', throwDTOError)
+import qualified Language.Marlowe.Runtime.Web.Server.REST.ApiError as ApiError
 import Language.Marlowe.Runtime.Web.Server.SyncClient (LoadTxError(..))
 import Language.Marlowe.Runtime.Web.Server.TxClient (TempTx(TempTx), TempTxStatus(..))
 import Observe.Event (EventBackend, addField, reference, withEvent)
@@ -97,11 +94,11 @@ get eb contractId ranges = withEvent eb Get \ev -> do
   addField ev $ Limit rangeLimit
   addField ev $ Offset rangeOffset
   addField ev $ Order $ show rangeOrder
-  contractId' <- fromDTOThrow err400 contractId
-  range' <- maybe (throwError err416) pure $ fromPaginationRange range
+  contractId' <- fromDTOThrow (badRequest' "Invalid contract id value") contractId
+  range' <- maybe (throwError $ rangeNotSatisfiable' "Invalid range value") pure $ fromPaginationRange range
   loadTransactions contractId' range' >>= \case
-    Left ContractNotFound -> throwError err404
-    Left TxNotFound -> throwError err416
+    Left ContractNotFound -> throwError $ notFound' "Contract not found"
+    Left TxNotFound -> throwError $ rangeNotSatisfiable' "Transcations not found"
     Right Page{..} -> do
       let headers' = toDTO items
       addField ev $ TxHeaders headers'
@@ -120,38 +117,16 @@ post eb contractId req@PostTransactionsRequest{..} changeAddressDTO mAddresses m
   addField ev $ ChangeAddress changeAddressDTO
   traverse_ (addField ev . Addresses) mAddresses
   traverse_ (addField ev . Collateral) mCollateralUtxos
-  SomeMarloweVersion v@MarloweV1  <- fromDTOThrow err400 version
-  changeAddress <- fromDTOThrow err400 changeAddressDTO
-  extraAddresses <- Set.fromList <$> fromDTOThrow err400 (maybe [] unCommaList mAddresses)
-  collateralUtxos <- Set.fromList <$> fromDTOThrow err400 (maybe [] unCommaList mCollateralUtxos)
-  contractId' <- fromDTOThrow err400 contractId
-  metadata' <- fromDTOThrow err400 metadata
+  SomeMarloweVersion v@MarloweV1  <- fromDTOThrow (badRequest' "Invalid Marlowe version") version
+  changeAddress <- fromDTOThrow (badRequest' "Invalid change address") changeAddressDTO
+  extraAddresses <- Set.fromList <$> fromDTOThrow (badRequest' "Invalid addresses header value") (maybe [] unCommaList mAddresses)
+  collateralUtxos <- Set.fromList <$> fromDTOThrow (badRequest' "Invalid collateral header UTxO value") (maybe [] unCommaList mCollateralUtxos)
+  contractId' <- fromDTOThrow (badRequest' "Invalid contract id value") contractId
+  metadata' <- fromDTOThrow (badRequest' "Invalid metadata value") metadata
   applyInputs v WalletAddresses{..} contractId' metadata' invalidBefore invalidHereafter inputs >>= \case
     Left err -> do
       addField ev $ PostError $ show err
-      case err of
-        ApplyInputsConstraintError (MintingUtxoNotFound _) -> throwError err500
-        ApplyInputsConstraintError (RoleTokenNotFound _) -> throwError err403
-        ApplyInputsConstraintError ToCardanoError -> throwError err500
-        ApplyInputsConstraintError MissingMarloweInput -> throwError err500
-        ApplyInputsConstraintError (PayoutInputNotFound _) -> throwError err500
-        ApplyInputsConstraintError (CalculateMinUtxoFailed _) -> throwError err500
-        ApplyInputsConstraintError (CoinSelectionFailed _) -> throwError err400
-        ApplyInputsConstraintError (BalancingError _) -> throwError err500
-        ScriptOutputNotFound -> throwError err400
-        ApplyInputsLoadMarloweContextFailed LoadMarloweContextErrorNotFound -> throwError err404
-        ApplyInputsLoadMarloweContextFailed (LoadMarloweContextErrorVersionMismatch _) -> throwError err400
-        ApplyInputsLoadMarloweContextFailed (HandshakeFailed _) -> throwError err500
-        ApplyInputsLoadMarloweContextFailed LoadMarloweContextToCardanoError -> throwError err500
-        ApplyInputsLoadMarloweContextFailed (MarloweScriptNotPublished _) -> throwError err500
-        ApplyInputsLoadMarloweContextFailed (PayoutScriptNotPublished _) -> throwError err500
-        ApplyInputsLoadMarloweContextFailed (ExtractCreationError _) -> throwError err500
-        ApplyInputsLoadMarloweContextFailed (ExtractMarloweTransactionError _) -> throwError err500
-        ApplyInputsConstraintsBuildupFailed (MarloweComputeTransactionFailed _) -> throwError err400
-        ApplyInputsConstraintsBuildupFailed UnableToDetermineTransactionTimeout -> throwError err400
-        SlotConversionFailed _ -> throwError err400
-        TipAtGenesis -> throwError err500
-        ValidityLowerBoundTooHigh _ _ -> throwError err400
+      throwDTOError err
     Right InputsApplied{txBody} -> do
       let txBody' = toDTO txBody
       let txId = toDTO $ fromCardanoTxId $ getTxId txBody
@@ -175,10 +150,10 @@ getOne
 getOne eb contractId txId = withEvent eb GetOne \ev -> do
   addField ev $ GetOneContractId contractId
   addField ev $ GetTxId txId
-  contractId' <- fromDTOThrow err400 contractId
-  txId' <- fromDTOThrow err400 txId
+  contractId' <- fromDTOThrow (badRequest' "Invalid contract id value") contractId
+  txId' <- fromDTOThrow (badRequest' "Invalid transaction id value") txId
   loadTransaction contractId' txId' >>= \case
-    Nothing -> throwError err404
+    Nothing -> throwError $ notFound' "Transaction not found"
     Just result -> do
       let contractState = either toDTO toDTO result
       addField ev $ GetResult contractState
@@ -195,18 +170,20 @@ put
 put eb contractId txId body = withEvent eb Put \ev -> do
   addField ev $ PutContractId contractId
   addField ev $ PutTxId txId
-  contractId' <- fromDTOThrow err400 contractId
-  txId' <- fromDTOThrow err400 txId
+  contractId' <- fromDTOThrow (badRequest' "Invalid contract id value") contractId
+  txId' <- fromDTOThrow (badRequest' "Invalid transaction id value") txId
   loadTransaction contractId' txId' >>= \case
-    Nothing -> throwError err404
+    Nothing -> throwError $ notFound' "Transaction not found"
     Just (Left (TempTx _ Unsigned Tx.InputsApplied{txBody})) -> do
-      textEnvelope <- fromDTOThrow err400 body
+      textEnvelope <- fromDTOThrow (badRequest' "Invalid body value") body
       addField ev $ Body textEnvelope
-      tx <- either (const $ throwError err400) pure $ deserialiseFromTextEnvelope (AsTx AsBabbage) textEnvelope
-      unless (getTxBody tx == txBody) $ throwError err400
+      tx <- either (const $ throwError $ badRequest' "Invalid body text envelope content") pure $ deserialiseFromTextEnvelope (AsTx AsBabbage) textEnvelope
+      unless (getTxBody tx == txBody) $ throwError (badRequest' "Provided transaction body differs from the original one")
       submitTransaction contractId' txId' (setAncestor $ reference ev) tx >>= \case
         Nothing -> pure NoContent
         Just err -> do
           addField ev $ Error $ show err
-          throwError err403
-    Just _  -> throwError err409
+          throwError $ ApiError.toServerError $ ApiError (show err) "SubmissionError" Null 403
+    Just _  -> throwError $
+      ApiError.toServerError $
+      ApiError "Transaction already submitted" "ContractAlreadySubmitted" Null 409

@@ -418,6 +418,7 @@
             "Language/Marlowe/Runtime/Web/Server/Monad"
             "Language/Marlowe/Runtime/Web/Server/OpenAPI"
             "Language/Marlowe/Runtime/Web/Server/REST"
+            "Language/Marlowe/Runtime/Web/Server/REST/ApiError"
             "Language/Marlowe/Runtime/Web/Server/REST/Contracts"
             "Language/Marlowe/Runtime/Web/Server/REST/Transactions"
             "Language/Marlowe/Runtime/Web/Server/SyncClient"

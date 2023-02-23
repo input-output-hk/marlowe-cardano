@@ -12,25 +12,22 @@ module Language.Marlowe.Runtime.Web.Server.REST.Contracts
 import Cardano.Api (AsType(..), deserialiseFromTextEnvelope, getTxBody)
 import qualified Cardano.Api.SerialiseTextEnvelope as Cardano
 import Control.Monad (unless)
+import Data.Aeson (Value(Null))
 import Data.Foldable (traverse_)
 import Data.Maybe (fromMaybe)
 import qualified Data.Set as Set
 import Language.Marlowe.Protocol.Query.Types (Page(..))
 import Language.Marlowe.Runtime.ChainSync.Api (Lovelace(..))
 import Language.Marlowe.Runtime.Core.Api (MarloweVersion(..), SomeMarloweVersion(..))
-import Language.Marlowe.Runtime.Transaction.Api
-  ( ConstraintError(..)
-  , ContractCreated(..)
-  , CreateBuildupError(..)
-  , CreateError(..)
-  , LoadMarloweContextError(..)
-  , WalletAddresses(..)
-  )
+import Language.Marlowe.Runtime.Transaction.Api (ContractCreated(..), WalletAddresses(..))
 import qualified Language.Marlowe.Runtime.Transaction.Api as Tx
 import Language.Marlowe.Runtime.Web hiding (Unsigned)
 import Language.Marlowe.Runtime.Web.Server.DTO
 import Language.Marlowe.Runtime.Web.Server.Monad
   (AppM, createContract, loadContract, loadContractHeaders, submitContract)
+import Language.Marlowe.Runtime.Web.Server.REST.ApiError
+  (ApiError(ApiError), badRequest', notFound', rangeNotSatisfiable', throwDTOError)
+import qualified Language.Marlowe.Runtime.Web.Server.REST.ApiError as ApiError
 import qualified Language.Marlowe.Runtime.Web.Server.REST.Transactions as Transactions
 import Language.Marlowe.Runtime.Web.Server.TxClient (TempTx(TempTx), TempTxStatus(Unsigned))
 import Observe.Event (EventBackend, addField, reference, withEvent)
@@ -93,36 +90,16 @@ post eb req@PostContractsRequest{..} changeAddressDTO mAddresses mCollateralUtxo
   addField ev $ ChangeAddress changeAddressDTO
   traverse_ (addField ev . Addresses) mAddresses
   traverse_ (addField ev . Collateral) mCollateralUtxos
-  SomeMarloweVersion v@MarloweV1  <- fromDTOThrow err400 version
-  changeAddress <- fromDTOThrow err400 changeAddressDTO
-  extraAddresses <- Set.fromList <$> fromDTOThrow err400 (maybe [] unCommaList mAddresses)
-  collateralUtxos <- Set.fromList <$> fromDTOThrow err400 (maybe [] unCommaList mCollateralUtxos)
-  roles' <- fromDTOThrow err400 roles
-  metadata' <- fromDTOThrow err400 metadata
+  SomeMarloweVersion v@MarloweV1  <- fromDTOThrow (badRequest' "Unsupported Marlowe version") version
+  changeAddress <- fromDTOThrow (badRequest' "Invalid change address value") changeAddressDTO
+  extraAddresses <- Set.fromList <$> fromDTOThrow (badRequest' "Invalid addresses header value") (maybe [] unCommaList mAddresses)
+  collateralUtxos <- Set.fromList <$> fromDTOThrow (badRequest' "Invalid collateral header UTxO value") (maybe [] unCommaList mCollateralUtxos)
+  roles' <- fromDTOThrow (badRequest' "Invalid roles value") roles
+  metadata' <- fromDTOThrow (badRequest' "Invalid metadata value") metadata
   createContract Nothing v WalletAddresses{..} roles' metadata' (Lovelace minUTxODeposit) contract >>= \case
     Left err -> do
       addField ev $ PostError $ show err
-      case err of
-        CreateConstraintError (MintingUtxoNotFound _) -> throwError err500
-        CreateConstraintError (RoleTokenNotFound _) -> throwError err403
-        CreateConstraintError ToCardanoError -> throwError err500
-        CreateConstraintError MissingMarloweInput -> throwError err500
-        CreateConstraintError (PayoutInputNotFound _) -> throwError err500
-        CreateConstraintError (CalculateMinUtxoFailed _) -> throwError err500
-        CreateConstraintError (CoinSelectionFailed _) -> throwError err400
-        CreateConstraintError (BalancingError _) -> throwError err500
-        CreateLoadMarloweContextFailed LoadMarloweContextErrorNotFound -> throwError err404
-        CreateLoadMarloweContextFailed (LoadMarloweContextErrorVersionMismatch _) -> throwError err400
-        CreateLoadMarloweContextFailed (HandshakeFailed _) -> throwError err500
-        CreateLoadMarloweContextFailed LoadMarloweContextToCardanoError -> throwError err500
-        CreateLoadMarloweContextFailed (MarloweScriptNotPublished _) -> throwError err500
-        CreateLoadMarloweContextFailed (PayoutScriptNotPublished _) -> throwError err500
-        CreateLoadMarloweContextFailed (ExtractCreationError _) -> throwError err500
-        CreateLoadMarloweContextFailed (ExtractMarloweTransactionError _) -> throwError err500
-        CreateBuildupFailed MintingUtxoSelectionFailed -> throwError err400
-        CreateBuildupFailed (AddressDecodingFailed _) -> throwError err500
-        CreateBuildupFailed (MintingScriptDecodingFailed _) -> throwError err500
-        CreateToCardanoError -> throwError err400
+      throwDTOError err
     Right ContractCreated{contractId, txBody} -> do
       let (contractId', txBody') = toDTO (contractId, txBody)
       let body = CreateTxBody contractId' txBody'
@@ -141,9 +118,9 @@ get eb ranges = withEvent eb Get \ev -> do
   addField ev $ Limit rangeLimit
   addField ev $ Offset rangeOffset
   addField ev $ Order $ show rangeOrder
-  range' <- maybe (throwError err416) pure $ fromPaginationRange range
+  range' <- maybe (throwError $ rangeNotSatisfiable' "Invalid range value") pure $ fromPaginationRange range
   loadContractHeaders range' >>= \case
-    Nothing -> throwError err416 { errBody = "Initial contract ID not found" }
+    Nothing -> throwError $ rangeNotSatisfiable' "Initial contract ID not found"
     Just Page{..} -> do
       let headers' = toDTO items
       addField ev $ ContractHeaders headers'
@@ -167,9 +144,9 @@ getOne
   -> AppM r GetContractResponse
 getOne eb contractId = withEvent eb GetOne \ev -> do
   addField ev $ GetId contractId
-  contractId' <- fromDTOThrow err400 contractId
+  contractId' <- fromDTOThrow (badRequest' "Invalid contract id value") contractId
   loadContract contractId' >>= \case
-    Nothing -> throwError err404
+    Nothing -> throwError $ notFound' "Contract not found"
     Just result -> do
       let contractState = either toDTO toDTO result
       addField ev $ GetResult contractState
@@ -182,17 +159,19 @@ put
   -> AppM r NoContent
 put eb contractId body = withEvent eb Put \ev -> do
   addField ev $ PutId contractId
-  contractId' <- fromDTOThrow err400 contractId
+  contractId' <- fromDTOThrow (badRequest' "Invalid contract id value") contractId
   loadContract contractId' >>= \case
-    Nothing -> throwError err404
+    Nothing -> throwError $ notFound' "Contract not found"
     Just (Left (TempTx _ Unsigned Tx.ContractCreated{txBody})) -> do
-      textEnvelope <- fromDTOThrow err400 body
+      textEnvelope <- fromDTOThrow (badRequest' "Invalid body value") body
       addField ev $ Body textEnvelope
-      tx <- either (const $ throwError err400) pure $ deserialiseFromTextEnvelope (AsTx AsBabbage) textEnvelope
-      unless (getTxBody tx == txBody) $ throwError err400
+      tx <- either (const $ throwError $ badRequest' "Invalid body text envelope content") pure $ deserialiseFromTextEnvelope (AsTx AsBabbage) textEnvelope
+      unless (getTxBody tx == txBody) $ throwError (badRequest' "Provided transaction body differs from the original one")
       submitContract contractId' (setAncestor $ reference ev) tx >>= \case
         Nothing -> pure NoContent
         Just err -> do
           addField ev $ Error $ show err
-          throwError err403
-    Just _  -> throwError err409
+          throwError $ ApiError.toServerError $ ApiError (show err) "SubmissionError" Null 403
+    Just _  -> throwError $
+      ApiError.toServerError $
+      ApiError "Contract already submitted" "ContractAlreadySubmitted" Null 409
