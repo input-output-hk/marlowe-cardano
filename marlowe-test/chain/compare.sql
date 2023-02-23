@@ -52,7 +52,7 @@ create temporary table cmp_block as
     inner join public.block
       on slot_no <= max_slotno
     where
-      block_no > 0
+      slot_no > 0
 ;
 select
     source as "Source"
