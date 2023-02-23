@@ -333,13 +333,19 @@
           depends = [
             (hsPkgs."base" or (errorHandler.buildDepError "base"))
             (hsPkgs."async-components" or (errorHandler.buildDepError "async-components"))
+            (hsPkgs."eventuo11y" or (errorHandler.buildDepError "eventuo11y"))
+            (hsPkgs."exceptions" or (errorHandler.buildDepError "exceptions"))
             (hsPkgs."marlowe-protocols" or (errorHandler.buildDepError "marlowe-protocols"))
             (hsPkgs."marlowe-runtime".components.sublibs.discovery-api or (errorHandler.buildDepError "marlowe-runtime:discovery-api"))
             (hsPkgs."marlowe-runtime".components.sublibs.history-api or (errorHandler.buildDepError "marlowe-runtime:history-api"))
             (hsPkgs."marlowe-runtime".components.sublibs.proxy-api or (errorHandler.buildDepError "marlowe-runtime:proxy-api"))
             (hsPkgs."marlowe-runtime".components.sublibs.sync-api or (errorHandler.buildDepError "marlowe-runtime:sync-api"))
             (hsPkgs."marlowe-runtime".components.sublibs.tx-api or (errorHandler.buildDepError "marlowe-runtime:tx-api"))
+            (hsPkgs."monad-control" or (errorHandler.buildDepError "monad-control"))
+            (hsPkgs."resourcet" or (errorHandler.buildDepError "resourcet"))
+            (hsPkgs."transformers-base" or (errorHandler.buildDepError "transformers-base"))
             (hsPkgs."typed-protocols" or (errorHandler.buildDepError "typed-protocols"))
+            (hsPkgs."unliftio" or (errorHandler.buildDepError "unliftio"))
             ];
           buildable = true;
           modules = [ "Language/Marlowe/Runtime/Proxy" ];
@@ -597,6 +603,7 @@
             (hsPkgs."marlowe-runtime".components.sublibs.proxy-api or (errorHandler.buildDepError "marlowe-runtime:proxy-api"))
             (hsPkgs."network" or (errorHandler.buildDepError "network"))
             (hsPkgs."optparse-applicative" or (errorHandler.buildDepError "optparse-applicative"))
+            (hsPkgs."resourcet" or (errorHandler.buildDepError "resourcet"))
             (hsPkgs."text" or (errorHandler.buildDepError "text"))
             (hsPkgs."typed-protocols" or (errorHandler.buildDepError "typed-protocols"))
             (hsPkgs."uuid" or (errorHandler.buildDepError "uuid"))
