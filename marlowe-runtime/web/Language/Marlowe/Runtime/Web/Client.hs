@@ -1,7 +1,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE ExplicitNamespaces #-}
 {-# LANGUAGE GADTs #-}
-{-# LANGUAGE TypeOperators #-}
 
 module Language.Marlowe.Runtime.Web.Client
   ( Page(..)
@@ -35,7 +34,7 @@ client = Servant.client api
 
 data Page field resource = Page
   { totalCount :: Int
-  , nextRange :: Range field (RangeType resource field)
+  , nextRange :: Maybe (Range field (RangeType resource field))
   , items :: [resource]
   }
 
@@ -46,11 +45,11 @@ getContracts range = do
   let getContracts' :<|> _ = client
   response <- getContracts' $ putRange <$> range
   totalCount <- reqHeaderValue $ lookupResponseHeader @"Total-Count" response
-  nextRanges <- reqHeaderValue $ lookupResponseHeader @"Next-Range" response
+  nextRanges <- headerValue $ lookupResponseHeader @"Next-Range" response
   let ListObject items = getResponse response
   pure Page
     { totalCount
-    , nextRange = extractRangeSingleton @GetContractsResponse nextRanges
+    , nextRange = extractRangeSingleton @GetContractsResponse <$> nextRanges
     , items = retractLink @"contract" . retractLink @"transactions" <$> items
     }
 
@@ -90,11 +89,11 @@ getTransactions contractId range = do
   let _ :<|> _ :<|> getTransactions' :<|> _= contractApi contractId
   response <- getTransactions' $ putRange <$> range
   totalCount <- reqHeaderValue $ lookupResponseHeader @"Total-Count" response
-  nextRanges <- reqHeaderValue $ lookupResponseHeader @"Next-Range" response
+  nextRanges <- headerValue $ lookupResponseHeader @"Next-Range" response
   let ListObject items = getResponse response
   pure Page
     { totalCount
-    , nextRange = extractRangeSingleton @GetTransactionsResponse nextRanges
+    , nextRange = extractRangeSingleton @GetTransactionsResponse <$> nextRanges
     , items = retractLink <$> items
     }
 
@@ -137,6 +136,12 @@ reqHeaderValue = \case
   Header a -> pure a
   UndecodableHeader _ -> liftIO $ fail $ "Unable to decode header " <> symbolVal (Proxy @name)
   MissingHeader -> liftIO $ fail $ "Required header missing " <> symbolVal (Proxy @name)
+
+headerValue :: forall name a. KnownSymbol name => ResponseHeader name a -> ClientM (Maybe a)
+headerValue = \case
+  Header a -> pure $ Just a
+  UndecodableHeader _ -> liftIO $ fail $ "Unable to decode header " <> symbolVal (Proxy @name)
+  MissingHeader -> pure Nothing
 
 extractRangeSingleton
   :: HasPagination resource field

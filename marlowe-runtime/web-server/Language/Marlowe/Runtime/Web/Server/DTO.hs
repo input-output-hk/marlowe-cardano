@@ -42,7 +42,6 @@ import Data.String (fromString)
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Word (Word16, Word64)
-import Debug.Trace (traceShowId)
 import GHC.TypeLits (KnownSymbol)
 import qualified Language.Marlowe.Core.V1.Semantics as Sem
 import Language.Marlowe.Protocol.Query.Types (ContractState(..), SomeContractState(..), SomeTransaction(..))
@@ -489,12 +488,12 @@ toPaginationRange Query.Range{..} = Pagination.Range
   }
 
 fromPaginationRange
-  :: (FromDTO a, Show a)
+  :: (FromDTO a)
   => Pagination.Range field (DTO a)
   -> Maybe (Query.Range a)
 fromPaginationRange Pagination.Range{..} = do
-  rangeStart <- traceShowId $ fromDTO rangeValue
-  rangeDirection <- traceShowId $ fromDTO rangeOrder
+  rangeStart <- fromDTO rangeValue
+  rangeDirection <- fromDTO rangeOrder
   pure Query.Range { rangeStart, rangeDirection, .. }
 
 tokenNameToText :: Text -> Chain.TokenName

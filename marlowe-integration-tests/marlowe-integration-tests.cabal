@@ -63,6 +63,8 @@ executable marlowe-integration-tests
     Language.Marlowe.Runtime.Integration.StandardContract
     Language.Marlowe.Runtime.Integration.MarloweQuery
     Language.Marlowe.Runtime.IntegrationSpec
+    Language.Marlowe.Runtime.WebSpec
+    Language.Marlowe.Runtime.Web.GetContracts
   build-depends:
       base >= 4.9 && < 5
     , aeson
@@ -81,8 +83,11 @@ executable marlowe-integration-tests
     , marlowe-runtime:history-api
     , marlowe-runtime:sync-api
     , marlowe-runtime:tx-api
+    , marlowe-runtime:web
+    , marlowe-runtime:web-server
     , mtl
     , plutus-ledger-api
+    , servant-client
     , unliftio
     , text
     , time

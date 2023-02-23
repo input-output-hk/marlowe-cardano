@@ -51,8 +51,11 @@
             (hsPkgs."marlowe-runtime".components.sublibs.history-api or (errorHandler.buildDepError "marlowe-runtime:history-api"))
             (hsPkgs."marlowe-runtime".components.sublibs.sync-api or (errorHandler.buildDepError "marlowe-runtime:sync-api"))
             (hsPkgs."marlowe-runtime".components.sublibs.tx-api or (errorHandler.buildDepError "marlowe-runtime:tx-api"))
+            (hsPkgs."marlowe-runtime".components.sublibs.web or (errorHandler.buildDepError "marlowe-runtime:web"))
+            (hsPkgs."marlowe-runtime".components.sublibs.web-server or (errorHandler.buildDepError "marlowe-runtime:web-server"))
             (hsPkgs."mtl" or (errorHandler.buildDepError "mtl"))
             (hsPkgs."plutus-ledger-api" or (errorHandler.buildDepError "plutus-ledger-api"))
+            (hsPkgs."servant-client" or (errorHandler.buildDepError "servant-client"))
             (hsPkgs."unliftio" or (errorHandler.buildDepError "unliftio"))
             (hsPkgs."text" or (errorHandler.buildDepError "text"))
             (hsPkgs."time" or (errorHandler.buildDepError "time"))
@@ -69,6 +72,8 @@
             "Language/Marlowe/Runtime/Integration/StandardContract"
             "Language/Marlowe/Runtime/Integration/MarloweQuery"
             "Language/Marlowe/Runtime/IntegrationSpec"
+            "Language/Marlowe/Runtime/WebSpec"
+            "Language/Marlowe/Runtime/Web/GetContracts"
             ];
           hsSourceDirs = [ "test" ];
           mainPath = [

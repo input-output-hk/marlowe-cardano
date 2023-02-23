@@ -414,7 +414,6 @@
             ];
           buildable = true;
           modules = [
-            "Language/Marlowe/Runtime/Web/Server/DTO"
             "Language/Marlowe/Runtime/Web/Server/Monad"
             "Language/Marlowe/Runtime/Web/Server/OpenAPI"
             "Language/Marlowe/Runtime/Web/Server/REST"
@@ -424,6 +423,7 @@
             "Language/Marlowe/Runtime/Web/Server/SyncClient"
             "Language/Marlowe/Runtime/Web/Server/TxClient"
             "Language/Marlowe/Runtime/Web/Server"
+            "Language/Marlowe/Runtime/Web/Server/DTO"
             "Language/Marlowe/Runtime/Web/Server/Util"
             ];
           hsSourceDirs = [ "web-server" ];

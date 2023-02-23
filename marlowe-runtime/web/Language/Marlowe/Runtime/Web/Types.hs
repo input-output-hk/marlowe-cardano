@@ -142,10 +142,15 @@ instance ToHttpApiData a => ToHttpApiData (CommaList a) where
 instance FromHttpApiData a => FromHttpApiData (CommaList a) where
   parseUrlPiece = fmap CommaList
     . traverse (parseUrlPiece . T.dropWhileEnd isSpace . T.dropWhile isSpace)
-    . T.splitOn ","
+    . splitOnNonEmpty ","
   parseQueryParam = fmap CommaList
     . traverse (parseQueryParam . T.dropWhileEnd isSpace . T.dropWhile isSpace)
-    . T.splitOn ","
+    . splitOnNonEmpty ","
+
+splitOnNonEmpty :: Text -> Text -> [Text]
+splitOnNonEmpty sep t
+  | T.null t = []
+  | otherwise = T.splitOn sep t
 
 newtype PolicyId = PolicyId { unPolicyId :: ByteString }
   deriving (Eq, Ord, Generic)
