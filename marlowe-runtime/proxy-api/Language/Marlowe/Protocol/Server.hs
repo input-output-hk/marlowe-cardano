@@ -21,27 +21,29 @@ import Network.Protocol.Job.Types (Job)
 import qualified Network.Protocol.Job.Types as Job
 import Network.TypedProtocol
 
-data MarloweServer m = forall dState. MarloweServer
+data MarloweServer m a = forall dState. MarloweServer
   { getMarloweSyncDriver :: m (Driver (Handshake MarloweSync) dState m)
   , getMarloweHeaderSyncDriver :: m (Driver (Handshake MarloweHeaderSync) dState m)
   , getMarloweQueryDriver :: m (Driver (Handshake MarloweQuery) dState m)
   , getTxJobDriver :: m (Driver (Handshake (Job MarloweTxCommand)) dState m)
+  , result :: a
   }
 
-hoistMarloweServer :: Functor m => (forall x. m x -> n x) -> MarloweServer m -> MarloweServer n
+hoistMarloweServer :: Functor m => (forall x. m x -> n x) -> MarloweServer m a -> MarloweServer n a
 hoistMarloweServer f MarloweServer{..} = MarloweServer
   { getMarloweSyncDriver = f $ hoistDriver f <$> getMarloweSyncDriver
   , getMarloweHeaderSyncDriver = f $ hoistDriver f <$> getMarloweHeaderSyncDriver
   , getMarloweQueryDriver = f $ hoistDriver f <$> getMarloweQueryDriver
   , getTxJobDriver = f $ hoistDriver f <$> getTxJobDriver
+  , ..
   }
 
-marloweServerPeer :: Monad m => MarloweServer m -> Peer Marlowe 'AsServer 'StInit m ()
+marloweServerPeer :: Monad m => MarloweServer m a -> Peer Marlowe 'AsServer 'StInit m a
 marloweServerPeer MarloweServer{..} = Await (ClientAgency TokInit) \case
-  MsgRunMarloweSync -> withHandshake (marloweSyncPeer (ClientAgency Sync.TokInit)) getMarloweSyncDriver
-  MsgRunMarloweHeaderSync -> withHandshake (marloweHeaderSyncPeer (ClientAgency Header.TokIdle)) getMarloweHeaderSyncDriver
-  MsgRunMarloweQuery -> withHandshake (marloweQueryPeer (ClientAgency Query.TokReq)) getMarloweQueryDriver
-  MsgRunTxJob -> withHandshake (jobPeer (ClientAgency Job.TokInit)) getTxJobDriver
+  MsgRunMarloweSync -> result <$ withHandshake (marloweSyncPeer (ClientAgency Sync.TokInit)) getMarloweSyncDriver
+  MsgRunMarloweHeaderSync -> result <$ withHandshake (marloweHeaderSyncPeer (ClientAgency Header.TokIdle)) getMarloweHeaderSyncDriver
+  MsgRunMarloweQuery -> result <$ withHandshake (marloweQueryPeer (ClientAgency Query.TokReq)) getMarloweQueryDriver
+  MsgRunTxJob -> result <$ withHandshake (jobPeer (ClientAgency Job.TokInit)) getTxJobDriver
 
 withHandshake
   :: forall ps dState st m a
