@@ -84,7 +84,7 @@ data TcpServerDependencies ps server m = forall (st :: ps). TcpServerDependencie
   , toPeer :: ToPeer server ps 'AsServer st m
   }
 
-tcpServer :: MonadBase IO m => Component m (TcpServerDependencies ps server m) (ConnectionSource ps server m)
+tcpServer :: (MonadBase IO m', MonadBase IO m) => Component m (TcpServerDependencies ps server m') (ConnectionSource ps server m')
 tcpServer = component \TcpServerDependencies{..} -> do
   socketQueue <- newTQueue
   pure

@@ -362,13 +362,19 @@ library proxy
   build-depends:
       base >= 4.9 && < 5
     , async-components
+    , eventuo11y
+    , exceptions
     , marlowe-protocols
     , marlowe-runtime:discovery-api
     , marlowe-runtime:history-api
     , marlowe-runtime:proxy-api
     , marlowe-runtime:sync-api
     , marlowe-runtime:tx-api
+    , monad-control
+    , resourcet
+    , transformers-base
     , typed-protocols
+    , unliftio
   visibility: public
 
 library plutus-scripts
@@ -638,6 +644,7 @@ executable marlowe-proxy
     , marlowe-runtime:proxy-api
     , network
     , optparse-applicative
+    , resourcet
     , text
     , typed-protocols
     , uuid

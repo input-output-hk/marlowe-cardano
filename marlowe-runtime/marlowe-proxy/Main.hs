@@ -5,6 +5,7 @@ module Main
   where
 
 import Control.Concurrent.Component
+import Control.Monad.IO.Class (liftIO)
 import Data.ByteString.Lazy (ByteString)
 import qualified Data.Text.Lazy.IO as TL
 import Data.UUID.V4 (nextRandom)
@@ -13,7 +14,7 @@ import Language.Marlowe.Runtime.CLI.Option (optParserWithEnvDefault)
 import qualified Language.Marlowe.Runtime.CLI.Option as O
 import Language.Marlowe.Runtime.Proxy
 import Logging (RootSelector(..), getRootSelectorConfig)
-import Network.Channel (socketAsChannel)
+import Network.Channel (hoistChannel, socketAsChannel)
 import Network.Protocol.Codec (BinaryMessage)
 import Network.Protocol.Driver
   (SomeConnectionSource(..), TcpServerDependencies(..), logConnectionSource, mkDriver, tcpServer)
@@ -24,13 +25,14 @@ import Network.Socket
   , HostName
   , PortNumber
   , SocketType(Stream)
+  , close
   , connect
   , defaultHints
   , getAddrInfo
   , openSocket
   )
 import Network.TypedProtocol (Driver)
-import Observe.Event.Backend (narrowEventBackend, newOnceFlagMVar)
+import Observe.Event.Backend (hoistEventBackend, narrowEventBackend, newOnceFlagMVar)
 import Observe.Event.Component (LoggerDependencies(..), logger)
 import Options.Applicative
   ( auto
@@ -51,6 +53,7 @@ import Options.Applicative
   , value
   )
 import System.IO (stderr)
+import UnliftIO.Resource (allocate)
 
 main :: IO ()
 main = run =<< getOptions
@@ -77,7 +80,7 @@ run = runComponent_ proc Options{..} -> do
     , getMarloweQueryDriver = driverFactory syncHost marloweQueryPort
     , getTxJobDriver = driverFactory txHost txPort
     , connectionSource = SomeConnectionSource
-        $ logConnectionSource (narrowEventBackend MarloweServer eventBackend)
+        $ logConnectionSource (hoistEventBackend liftIO $ narrowEventBackend MarloweServer eventBackend)
         $ handshakeConnectionSource connectionSource
     }
 
@@ -85,15 +88,15 @@ driverFactory
   :: BinaryMessage ps
   => HostName
   -> PortNumber
-  -> IO (Driver (Handshake ps) (Maybe ByteString) IO)
+  -> ServerM (Driver (Handshake ps) (Maybe ByteString) ServerM)
 driverFactory host port = do
-  addr <- head <$> getAddrInfo
+  addr <- liftIO $ head <$> getAddrInfo
     (Just defaultHints { addrSocketType = Stream })
     (Just host)
     (Just $ show port)
-  socket <- openSocket addr
-  connect socket $ addrAddress addr
-  pure $ mkDriver (socketAsChannel socket)
+  (_, socket) <- WrappedUnliftIO $ allocate (openSocket addr) close
+  liftIO $ connect socket $ addrAddress addr
+  pure $ mkDriver $ hoistChannel liftIO $ socketAsChannel socket
 
 data Options = Options
   { host :: HostName
