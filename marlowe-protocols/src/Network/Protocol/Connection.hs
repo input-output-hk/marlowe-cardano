@@ -40,8 +40,7 @@ ihoistConnector
   -> (forall x. n x -> m x)
   -> Connector ps pr peer m
   -> Connector ps pr peer n
-ihoistConnector hoistPeer' f f' Connector{..} = Connector \peer ->
-  f $ hoistConnection f <$> connectPeer (hoistPeer' f' peer)
+ihoistConnector hoistPeer' f f' Connector{..} = Connector $ f $ ihoistConnection hoistPeer' f f' <$> openConnection
 
 type ClientConnector ps = Connector ps 'AsClient
 type ServerConnector ps = Connector ps 'AsServer
@@ -100,11 +99,17 @@ data Connection ps pr peer m = forall (st :: ps). Connection
   , toPeer :: forall a. peer m a -> Peer ps pr st m a
   }
 
-hoistConnection :: Functor m => (forall x. m x -> n x) -> Connection ps pr m a -> Connection ps pr n a
-hoistConnection f Connection{..} = Connection
+ihoistConnection
+  :: (Functor m, Functor n)
+  => (forall p q a. Functor p => (forall x. p x -> q x) -> peer p a -> peer q a)
+  -> (forall x. m x -> n x)
+  -> (forall x. n x -> m x)
+  -> Connection ps pr peer m
+  -> Connection ps pr peer n
+ihoistConnection hoistPeer' f f' Connection{..} = Connection
   { closeConnection = f . closeConnection
   , channel = hoistChannel f channel
-  , peer = hoistPeer f peer
+  , toPeer = hoistPeer f . toPeer . hoistPeer' f'
   }
 
 data ConnectionSelector ps f where

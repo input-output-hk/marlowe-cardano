@@ -305,8 +305,8 @@ in
     '';
   };
 
-  marlowe-web-server = mkOperable {
-    package = packages.marlowe-web-server;
+  marlowe-proxy = mkOperable {
+    package = packages.marlowe-proxy;
     runtimeScript = ''
       #################
       # REQUIRED VARS #
@@ -327,7 +327,7 @@ in
       ${wait-for-tcp}/bin/wait-for-tcp "$TX_HOST" "$TX_PORT"
       ${wait-for-tcp}/bin/wait-for-tcp "$SYNC_HOST" "$MARLOWE_QUERY_PORT"
 
-      ${packages.marlowe-proxy}/bin/marlowe-web-server \
+      ${packages.marlowe-proxy}/bin/marlowe-proxy \
         --host "$HOST" \
         --port "$PORT" \
         --marlowe-sync-host "$SYNC_HOST" \

@@ -603,7 +603,7 @@ runtime = proc RuntimeDependencies{..} -> do
 
 driverFactory :: BinaryMessage ps => ClientConnector ps client IO -> ServerM (Driver ps (Maybe LBS.ByteString) ServerM)
 driverFactory Connector{..} = WrappedUnliftIO do
-  (_, Connection{..}) <- allocate (connectPeer undefined) \Connection{..} -> closeConnection Nothing -- This is a bit of a hack to just get a channel we can hijack to make our driver.
+  (_, Connection{..}) <- allocate openConnection \Connection{..} -> closeConnection Nothing
   pure $ mkDriver $ hoistChannel liftIO channel
 
 data Channels = Channels
