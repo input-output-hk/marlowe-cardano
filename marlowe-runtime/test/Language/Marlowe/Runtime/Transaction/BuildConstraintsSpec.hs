@@ -439,43 +439,43 @@ buildApplyInputsConstraintsSpec =
             _ -> counterexample "Assert-close contract is valid" False
     Hspec.QuickCheck.prop "payment constraints" \assets utxo address marloweParams choices values -> do
       -- Create a bunch of payments.
-      payments <- listOf $ Semantics.Payment <$> arbitrary <*> arbitrary <*> arbitrary <*> chooseInteger (1, 1000)
-      let
-        makePayToAddress (Semantics.Payment _ (Semantics.Party (Semantics.Address network address')) token amount) =
-          Map.singleton (toChainAddress network address') $ toChainAssets token amount
-        makePayToAddress _ = mempty
-        makePayToRole (Semantics.Payment _ (Semantics.Party (Semantics.Role name)) token amount) =
-          Map.singleton (toChainRole marloweParams name) $ toChainAssets token amount
-        makePayToRole _ = mempty
-        makeAccount (Semantics.Payment account _ token amount) = Map.singleton (account, token) amount
-        makePay (Semantics.Payment account payee token amount) = Semantics.Pay account payee token $ Semantics.Constant amount
-        -- Fill the accounts with sufficient funds to make the payments.
-        accounts = AM.fromList . Map.toList . Map.unionsWith (+) $ makeAccount <$> payments
-        marloweState = Semantics.State accounts choices values $ POSIXTime 0
-        -- Add all of the payments to the contract.
-        marloweContract = foldr makePay assertWhenCloseContract payments
-        datum = Semantics.MarloweData{..}
-        marloweOutput = TransactionScriptOutput{..}
-        result =
-          buildApplyInputsConstraints
-            systemStart eraHistory MarloweV1
-            marloweOutput
-            (Chain.SlotNo 1_000_000)
-            (Chain.TransactionMetadata mempty) Nothing Nothing mempty
-        expectedPayToAddresses = Map.unionsWith (<>) $ makePayToAddress <$> payments  -- This assumes that the semigroup for assets is correct.
-        expectedPayToRoles     = Map.unionsWith (<>) $ makePayToRole    <$> payments  -- This assumes that the semigroup for assets is correct.
-      pure
-        . counterexample ("contract = " <> show marloweContract)
-        . counterexample ("result = " <> show result)
-        . counterexample ("expected pays to addresses = " <> show expectedPayToAddresses)
-        . counterexample ("expected pays to roles = " <> show expectedPayToRoles)
-        $ case result of
-            Right (_, TxConstraints{..}) ->
-              counterexample "role and address payments are correct"
-                $  payToAddresses == expectedPayToAddresses
-                && payToRoles     == expectedPayToRoles
-            Left _ ->
-              counterexample "Unexpected transaction failure" False
+      forAllShrink (listOf $ Semantics.Payment <$> arbitrary <*> arbitrary <*> arbitrary <*> chooseInteger (1, 1000)) \payments -> do
+        let
+          makePayToAddress (Semantics.Payment _ (Semantics.Party (Semantics.Address network address')) token amount) =
+            Map.singleton (toChainAddress network address') $ toChainAssets token amount
+          makePayToAddress _ = mempty
+          makePayToRole (Semantics.Payment _ (Semantics.Party (Semantics.Role name)) token amount) =
+            Map.singleton (toChainRole marloweParams name) $ toChainAssets token amount
+          makePayToRole _ = mempty
+          makeAccount (Semantics.Payment account _ token amount) = Map.singleton (account, token) amount
+          makePay (Semantics.Payment account payee token amount) = Semantics.Pay account payee token $ Semantics.Constant amount
+          -- Fill the accounts with sufficient funds to make the payments.
+          accounts = AM.fromList . Map.toList . Map.unionsWith (+) $ makeAccount <$> payments
+          marloweState = Semantics.State accounts choices values $ POSIXTime 0
+          -- Add all of the payments to the contract.
+          marloweContract = foldr makePay assertWhenCloseContract payments
+          datum = Semantics.MarloweData{..}
+          marloweOutput = TransactionScriptOutput{..}
+          result =
+            buildApplyInputsConstraints
+              systemStart eraHistory MarloweV1
+              marloweOutput
+              (Chain.SlotNo 1_000_000)
+              (Chain.TransactionMetadata mempty) Nothing Nothing mempty
+          expectedPayToAddresses = Map.unionsWith (<>) $ makePayToAddress <$> payments  -- This assumes that the semigroup for assets is correct.
+          expectedPayToRoles     = Map.unionsWith (<>) $ makePayToRole    <$> payments  -- This assumes that the semigroup for assets is correct.
+        pure
+          . counterexample ("contract = " <> show marloweContract)
+          . counterexample ("result = " <> show result)
+          . counterexample ("expected pays to addresses = " <> show expectedPayToAddresses)
+          . counterexample ("expected pays to roles = " <> show expectedPayToRoles)
+          $ case result of
+              Right (_, TxConstraints{..}) ->
+                counterexample "role and address payments are correct"
+                  $  payToAddresses == expectedPayToAddresses
+                  && payToRoles     == expectedPayToRoles
+              Left _ ->
+                counterexample "Unexpected transaction failure" False
     Hspec.QuickCheck.prop "input constraints" \assets utxo address marloweParams state inputs -> do
       tipTime <- (1_000 *) <$> chooseInteger (0, 1_000)    -- Choose the tip first.
       minTime <- chooseInteger (0, tipTime)                -- Choose a minimum before the tip.
