@@ -662,7 +662,7 @@ lovelaceToParam :: Lovelace -> Int64
 lovelaceToParam (Lovelace slotNo) = fromIntegral slotNo
 
 slotNoToParam :: SlotNo -> Int64
-slotNoToParam (SlotNo slotNo) = fromIntegral slotNo
+slotNoToParam (SlotNo slotNo) = fromIntegral $ minimum [slotNo, fromIntegral (maxBound :: Int64)]
 
 txIxToParam :: TxIx -> Int16
 txIxToParam (TxIx txIx) = fromIntegral txIx
