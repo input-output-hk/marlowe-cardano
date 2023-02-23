@@ -22,7 +22,7 @@ import Network.Channel
 import Network.Protocol.Codec (BinaryMessage)
 import Network.Protocol.Peer (PeerSelector, getPeerSelectorConfig, logPeer)
 import Network.TypedProtocol
-import Observe.Event (EventBackend, failEvent, finalize, newEvent, subEventBackend)
+import Observe.Event (EventBackend, causedEventBackend, failEvent, finalize, newEvent, withEvent)
 import Observe.Event.Backend (narrowEventBackend)
 import Observe.Event.Component (GetSelectorConfig, SelectorConfig(..), absurdFieldConfig, prependKey)
 import Observe.Event.Network.Protocol (MessageToJSON)
@@ -53,17 +53,19 @@ data SomeConnectionSource server m =
   forall ps. BinaryMessage ps => SomeConnectionSource (ConnectionSource ps server m)
 
 data ConnectorSelector ps f where
-  Session :: ConnectorSelector ps Void
+  Connect :: ConnectorSelector ps Void
   ConnectionSelector :: ConnectionSelector ps f -> ConnectorSelector ps f
+  Disconnect :: ConnectorSelector ps Void
 
 getConnectorSelectorConfig
   :: MessageToJSON ps
-  => Bool
-  -> Bool
+  => Bool -- ^ Enable channel messages
+  -> Bool -- ^ Enable peer messages
   -> GetSelectorConfig (ConnectorSelector ps)
 getConnectorSelectorConfig channelEnabled peerEnabled = \case
-  Session -> SelectorConfig "session" True absurdFieldConfig
+  Connect -> SelectorConfig "connect" True absurdFieldConfig
   ConnectionSelector sel -> prependKey "connection" $ getConnectionSelectorConfig channelEnabled peerEnabled sel
+  Disconnect -> SelectorConfig "disconnect" True absurdFieldConfig
 
 logConnector
   :: (MonadBaseControl IO m, MonadCleanup m)
@@ -72,10 +74,11 @@ logConnector
   -> Connector ps pr peer m
 logConnector eventBackend Connector{..} = Connector
   { connectPeer = \p -> do
-      ev <- newEvent eventBackend Session
+      eventBackend' <- withEvent eventBackend Connect $ pure . causedEventBackend id
       Connection{..} <- connectPeer p
-      pure $ logConnection (subEventBackend ConnectionSelector ev) Connection
+      pure $ logConnection (narrowEventBackend ConnectionSelector eventBackend') Connection
         { closeConnection = \mError -> do
+            ev <- newEvent eventBackend' Disconnect
             case mError of
               Nothing -> finalize ev
               Just ex -> failEvent ev ex
