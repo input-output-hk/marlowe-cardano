@@ -20,15 +20,26 @@ module Spec.Marlowe.Service.Random
 import Data.Jsonable (generateJsonable)
 import Spec.Marlowe.Semantics.Arbitrary ()
 import Spec.Marlowe.Service.Serialization (knownJsonTypes)
-import Test.QuickCheck (generate)
+import Spec.Marlowe.Service.Types (Seed(..), Size(..))
+import Test.QuickCheck (generate, variant)
+import Test.QuickCheck.Gen (Gen(..))
 
 import qualified Data.Aeson as A (Value)
 
 
 -- | Generate an arbitrary value.
 generateValue
-  :: String  -- ^ The key for the type.
+  :: Maybe Size  -- ^ The optional size paramater.
+  -> Maybe Seed  -- ^ The optional seed for the generator.
+  -> String  -- ^ The key for the type.
   -> IO (Either String A.Value)  -- ^ Either the value or an error message.
-generateValue =
-  either (pure . Left) (fmap Right . generate)
-    . generateJsonable knownJsonTypes
+generateValue size seed =
+  mapM (generate . resize' size . variant' seed) . generateJsonable knownJsonTypes
+  where
+    variant' :: Maybe Seed -> Gen a -> Gen a
+    variant' (Just (Seed n)) = variant n
+    variant' Nothing = id
+
+    resize' :: Maybe Size -> Gen a -> Gen a
+    resize' (Just (Size n)) (MkGen g) = MkGen (\r _ -> g r n)
+    resize' _ g = g
