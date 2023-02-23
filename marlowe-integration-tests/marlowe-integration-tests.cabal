@@ -88,5 +88,4 @@ executable marlowe-integration-tests
     , text
     , time
     , transformers
-    , process
   build-tool-depends: hspec-discover:hspec-discover
