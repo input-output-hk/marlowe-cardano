@@ -71,6 +71,13 @@ mkDriver  Channel{..} = Driver{..}
     startDState :: Maybe ByteString
     startDState = Nothing
 
+hoistDriver :: (forall x. m x -> n x) -> Driver ps dState m -> Driver ps dState n
+hoistDriver f Driver{..} = Driver
+  { sendMessage = fmap f . sendMessage
+  , recvMessage = fmap f . recvMessage
+  , ..
+  }
+
 data TcpServerDependencies ps server m = forall (st :: ps). TcpServerDependencies
   { host :: HostName
   , port :: PortNumber

@@ -333,6 +333,26 @@ library tx
     , witherable
   visibility: public
 
+library proxy-api
+  import: lang
+  hs-source-dirs:   proxy-api
+  visibility: public
+  exposed-modules:
+    Language.Marlowe.Protocol.Client
+    Language.Marlowe.Protocol.Server
+    Language.Marlowe.Protocol.Types
+  build-depends:
+      base >= 4.9 && < 5
+    , aeson
+    , binary
+    , marlowe-protocols
+    , marlowe-runtime:discovery-api
+    , marlowe-runtime:history-api
+    , marlowe-runtime:sync-api
+    , marlowe-runtime:tx-api
+    , typed-protocols
+  visibility: public
+
 library plutus-scripts
   import: lang
   hs-source-dirs:   plutus-scripts

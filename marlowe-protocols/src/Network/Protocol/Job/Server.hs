@@ -14,6 +14,7 @@ import Network.TypedProtocol
 
 -- | A generic server for the job protocol.
 newtype JobServer cmd m a = JobServer { runJobServer :: m (ServerStInit cmd m a) }
+  deriving Functor
 
 -- | In the 'StInit' state, the client has agency. The server must be prepared
 -- to handle either:

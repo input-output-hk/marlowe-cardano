@@ -11,6 +11,7 @@ import Language.Marlowe.Runtime.Discovery.Api (ContractHeader)
 import Network.TypedProtocol
 
 newtype MarloweHeaderSyncClient m a = MarloweHeaderSyncClient { runMarloweHeaderSyncClient :: m (ClientStIdle m a) }
+  deriving Functor
 
 data ClientStIdle m a where
   SendMsgRequestNext :: ClientStNext m a -> ClientStIdle m a
