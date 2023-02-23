@@ -62,6 +62,7 @@
           "Network/Protocol/ChainSeek/Types"
           "Network/Protocol/Codec"
           "Network/Protocol/Codec/Spec"
+          "Network/Protocol/Connection"
           "Network/Protocol/Driver"
           "Network/Protocol/Handshake/Client"
           "Network/Protocol/Handshake/Server"
@@ -73,6 +74,7 @@
           "Network/Protocol/Query/Client"
           "Network/Protocol/Query/Server"
           "Network/Protocol/Query/Types"
+          "Observe/Event/Network/Protocol"
           ];
         hsSourceDirs = [ "src" ];
         };
