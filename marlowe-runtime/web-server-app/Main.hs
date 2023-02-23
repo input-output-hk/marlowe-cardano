@@ -12,7 +12,8 @@ module Main
 import Control.Concurrent.Component (runComponent_)
 import Language.Marlowe.Protocol.Query.Client (marloweQueryClientPeer)
 import Language.Marlowe.Runtime.Web.Server
-import Network.Protocol.Driver (SomeConnector(..), tcpClient)
+import Network.Protocol.Connection (SomeConnector(..))
+import Network.Protocol.Driver (tcpClient)
 import Network.Protocol.Handshake.Client (handshakeClientConnector)
 import Network.Protocol.Job.Client (jobClientPeer)
 import Network.Wai.Handler.Warp (run)

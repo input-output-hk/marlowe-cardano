@@ -7,7 +7,7 @@ module Logging
 
 import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncQuery, RuntimeChainSeek)
 import Language.Marlowe.Runtime.Indexer (MarloweIndexerSelector, getMarloweIndexerSelectorConfig)
-import Network.Protocol.Driver (ConnectorSelector, getConnectorSelectorConfig)
+import Network.Protocol.Connection (ConnectorSelector, getConnectorSelectorConfig)
 import Network.Protocol.Handshake.Types (Handshake)
 import Network.Protocol.Query.Types (Query)
 import Observe.Event.Component

@@ -14,7 +14,7 @@ module Network.Protocol.Handshake.Client
 
 import Data.Proxy (Proxy(..))
 import Data.Text (Text)
-import Network.Protocol.Driver (Connection(..), Connector(..))
+import Network.Protocol.Connection (Connection(..), Connector(..))
 import Network.Protocol.Handshake.Types
 import Network.TypedProtocol
 

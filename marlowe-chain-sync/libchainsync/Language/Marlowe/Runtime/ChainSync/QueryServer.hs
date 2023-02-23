@@ -28,7 +28,8 @@ import Data.Bifunctor (first)
 import Data.Void (Void, absurd)
 import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncQuery(..))
 import qualified Language.Marlowe.Runtime.ChainSync.Database as Database
-import Network.Protocol.Driver (SomeConnectionSource, SomeServerConnector, acceptSomeConnector, runSomeConnector)
+import Network.Protocol.Connection (SomeConnectionSource, SomeServerConnector, acceptSomeConnector)
+import Network.Protocol.Driver (runSomeConnector)
 import Network.Protocol.Query.Server (QueryServer(..), ServerStInit(..), ServerStNext(..), ServerStPage(..))
 import Network.Protocol.Query.Types (StNextKind(..))
 

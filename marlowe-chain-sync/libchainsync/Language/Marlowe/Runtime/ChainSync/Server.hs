@@ -11,7 +11,8 @@ import Data.Functor (void, (<&>))
 import Language.Marlowe.Runtime.ChainSync.Api (ChainPoint, Move, RuntimeChainSeekServer, WithGenesis(..), moveSchema)
 import Language.Marlowe.Runtime.ChainSync.Database (GetTip(..), MoveClient(..), MoveResult(..))
 import Network.Protocol.ChainSeek.Server
-import Network.Protocol.Driver (SomeConnectionSource, SomeServerConnector, acceptSomeConnector, runSomeConnector)
+import Network.Protocol.Connection (SomeConnectionSource, SomeServerConnector, acceptSomeConnector)
+import Network.Protocol.Driver (runSomeConnector)
 
 data ChainSyncServerDependencies = ChainSyncServerDependencies
   { syncSource :: SomeConnectionSource RuntimeChainSeekServer IO

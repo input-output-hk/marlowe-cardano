@@ -25,10 +25,10 @@ import qualified Data.Text as T
 import GHC.Show (showSpace)
 import Network.Protocol.Codec (BinaryMessage(..))
 import Network.Protocol.Codec.Spec (ArbitraryMessage(..), MessageEq(..), ShowProtocol(..))
-import Network.Protocol.Driver (MessageToJSON(..))
 import Network.Protocol.Handshake.Types (HasSignature(..))
 import Network.TypedProtocol
 import Network.TypedProtocol.Codec (AnyMessageAndAgency(..))
+import Observe.Event.Network.Protocol (MessageToJSON(..))
 import Test.QuickCheck (Gen, oneof)
 
 data SomeTag q = forall delimiter err result. SomeTag (Tag q delimiter err result)

@@ -16,7 +16,7 @@ import Data.Bifunctor (Bifunctor(bimap))
 import Data.Functor ((<&>))
 import Data.Proxy (Proxy(..))
 import Data.Text (Text)
-import Network.Protocol.Driver (ClientServerPair(..), Connection(..), ConnectionSource(..), Connector(..))
+import Network.Protocol.Connection (ClientServerPair(..), Connection(..), ConnectionSource(..), Connector(..))
 import Network.Protocol.Handshake.Client (handshakeClientConnector)
 import Network.Protocol.Handshake.Types
 import Network.TypedProtocol

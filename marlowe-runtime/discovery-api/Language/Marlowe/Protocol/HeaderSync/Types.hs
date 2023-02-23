@@ -11,10 +11,10 @@ import Data.Binary.Get (getWord8)
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainPoint)
 import Language.Marlowe.Runtime.Discovery.Api (ContractHeader)
 import Network.Protocol.Codec (BinaryMessage(..))
-import Network.Protocol.Driver (MessageToJSON(..))
 import Network.Protocol.Handshake.Types (HasSignature(..))
 import Network.TypedProtocol (PeerHasAgency(..), Protocol(..))
 import Network.TypedProtocol.Codec (SomeMessage(..))
+import Observe.Event.Network.Protocol (MessageToJSON(..))
 
 data MarloweHeaderSync where
   StIdle :: MarloweHeaderSync

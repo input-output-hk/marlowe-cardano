@@ -52,7 +52,8 @@ import Language.Marlowe.Runtime.History.Api
 import Language.Marlowe.Runtime.Transaction.Api
 import Language.Marlowe.Runtime.Transaction.Constraints
 import Network.Protocol.ChainSeek.Client
-import Network.Protocol.Driver (SomeClientConnector, runSomeConnector)
+import Network.Protocol.Connection (SomeClientConnector)
+import Network.Protocol.Driver (runSomeConnector)
 import Network.Protocol.Query.Client (QueryClient, liftQuery)
 import Observe.Event (EventBackend, addField, withEvent, withSubEvent)
 

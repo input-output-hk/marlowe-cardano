@@ -21,7 +21,7 @@ import Language.Marlowe.Runtime.Transaction.Query (LoadMarloweContext, LoadWalle
 import qualified Language.Marlowe.Runtime.Transaction.Query as Q
 import Language.Marlowe.Runtime.Transaction.Server
 import Language.Marlowe.Runtime.Transaction.Submit (SubmitJob)
-import Network.Protocol.Driver (SomeClientConnector, SomeConnectionSource)
+import Network.Protocol.Connection (SomeClientConnector, SomeConnectionSource)
 import Network.Protocol.Job.Server (JobServer)
 import Observe.Event (EventBackend)
 import Observe.Event.Component

@@ -11,7 +11,7 @@ import Language.Marlowe.Runtime.Sync.Database (DatabaseQueries)
 import Language.Marlowe.Runtime.Sync.MarloweHeaderSyncServer
 import Language.Marlowe.Runtime.Sync.MarloweSyncServer
 import Language.Marlowe.Runtime.Sync.QueryServer
-import Network.Protocol.Driver (SomeConnectionSource)
+import Network.Protocol.Connection (SomeConnectionSource)
 
 data SyncDependencies = SyncDependencies
   { databaseQueries :: DatabaseQueries IO

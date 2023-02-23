@@ -24,7 +24,8 @@ import Language.Marlowe.Runtime.Discovery.Api (ContractHeader)
 import Language.Marlowe.Runtime.Transaction.Api (ContractCreated, InputsApplied(..))
 import Language.Marlowe.Runtime.Web.Server.TxClient (TempTx(..))
 import Language.Marlowe.Runtime.Web.Server.Util (applyRangeToAscList)
-import Network.Protocol.Driver (SomeClientConnector, runSomeConnector)
+import Network.Protocol.Connection (SomeClientConnector)
+import Network.Protocol.Driver (runSomeConnector)
 import Servant.Pagination
 
 data SyncClientDependencies r = SyncClientDependencies

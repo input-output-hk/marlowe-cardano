@@ -26,10 +26,10 @@ import qualified Data.Text.Encoding as T
 import GHC.Show (showSpace)
 import Network.Protocol.Codec (BinaryMessage(..))
 import Network.Protocol.Codec.Spec (ArbitraryMessage(..), MessageEq(..), ShowProtocol(..))
-import Network.Protocol.Driver (MessageToJSON(..))
 import Network.Protocol.Handshake.Types (HasSignature(..))
 import Network.TypedProtocol (PeerHasAgency(..), Protocol(..), SomeMessage(SomeMessage))
 import Network.TypedProtocol.Codec (AnyMessageAndAgency(..))
+import Observe.Event.Network.Protocol (MessageToJSON(..))
 import Test.QuickCheck (Arbitrary, Gen, arbitrary, oneof, shrink)
 
 data SomeTag q = forall err result. SomeTag (Tag q err result)

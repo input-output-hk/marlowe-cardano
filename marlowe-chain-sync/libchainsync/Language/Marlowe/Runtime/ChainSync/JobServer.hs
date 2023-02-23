@@ -11,7 +11,8 @@ module Language.Marlowe.Runtime.ChainSync.JobServer
 import Cardano.Api (CardanoEra(..), CardanoMode, ScriptDataSupportedInEra(..), Tx, TxValidationErrorInMode)
 import Control.Concurrent.Component
 import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncCommand(..))
-import Network.Protocol.Driver (SomeConnectionSource, SomeServerConnector, acceptSomeConnector, runSomeConnector)
+import Network.Protocol.Connection (SomeConnectionSource, SomeServerConnector, acceptSomeConnector)
+import Network.Protocol.Driver (runSomeConnector)
 import Network.Protocol.Job.Server
 import Ouroboros.Network.Protocol.LocalTxSubmission.Client (SubmitResult(..))
 

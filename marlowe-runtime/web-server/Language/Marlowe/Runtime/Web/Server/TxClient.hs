@@ -46,7 +46,8 @@ import Language.Marlowe.Runtime.Transaction.Api
   , SubmitStatus(..)
   , WalletAddresses
   )
-import Network.Protocol.Driver (SomeClientConnector, runSomeConnector)
+import Network.Protocol.Connection (SomeClientConnector)
+import Network.Protocol.Driver (runSomeConnector)
 import Network.Protocol.Job.Client
 import Observe.Event (EventBackend, addField, reference, withEvent)
 import Observe.Event.BackendModification (EventBackendModifier, modifyEventBackend, setAncestor)

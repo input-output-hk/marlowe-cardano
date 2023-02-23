@@ -9,7 +9,7 @@ import Language.Marlowe.Protocol.HeaderSync.Types (MarloweHeaderSync)
 import Language.Marlowe.Protocol.Query.Types (MarloweQuery)
 import Language.Marlowe.Protocol.Sync.Types (MarloweSync)
 import Language.Marlowe.Runtime.Sync.Database (DatabaseSelector, getDatabaseSelectorConfig)
-import Network.Protocol.Driver (ConnectorSelector, getConnectorSelectorConfig)
+import Network.Protocol.Connection (ConnectorSelector, getConnectorSelectorConfig)
 import Network.Protocol.Handshake.Types (Handshake)
 import Observe.Event.Component
   (ConfigWatcherSelector(ReloadConfig), GetSelectorConfig, SelectorConfig(..), prependKey, singletonFieldConfig)

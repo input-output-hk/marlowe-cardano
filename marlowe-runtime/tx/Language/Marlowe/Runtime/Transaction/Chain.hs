@@ -11,7 +11,8 @@ import Data.Void (absurd)
 import Language.Marlowe.Runtime.ChainSync.Api (Move(..), RuntimeChainSeekClient, moveSchema)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Network.Protocol.ChainSeek.Client
-import Network.Protocol.Driver (SomeClientConnector, runSomeConnector)
+import Network.Protocol.Connection (SomeClientConnector)
+import Network.Protocol.Driver (runSomeConnector)
 
 newtype TransactionChainClientDependencies = TransactionChainClientDependencies
   { chainSyncConnector :: SomeClientConnector RuntimeChainSeekClient IO

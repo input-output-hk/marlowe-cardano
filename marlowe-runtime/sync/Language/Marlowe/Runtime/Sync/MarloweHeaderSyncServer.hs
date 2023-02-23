@@ -9,7 +9,8 @@ import Control.Concurrent.Component
 import Language.Marlowe.Protocol.HeaderSync.Server
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainPoint, WithGenesis(..))
 import Language.Marlowe.Runtime.Sync.Database (DatabaseQueries(..), Next(..))
-import Network.Protocol.Driver (SomeConnectionSource, SomeServerConnector, acceptSomeConnector, runSomeConnector)
+import Network.Protocol.Connection (SomeConnectionSource, SomeServerConnector, acceptSomeConnector)
+import Network.Protocol.Driver (runSomeConnector)
 
 data MarloweHeaderSyncServerDependencies = MarloweHeaderSyncServerDependencies
   { databaseQueries :: DatabaseQueries IO

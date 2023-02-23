@@ -90,7 +90,8 @@ import Language.Marlowe.Runtime.Transaction.Query
   , lookupPayoutScriptUtxo
   )
 import Language.Marlowe.Runtime.Transaction.Submit (SubmitJob(..), SubmitJobStatus(..))
-import Network.Protocol.Driver (SomeConnectionSource(..), SomeServerConnector, acceptSomeConnector, runSomeConnector)
+import Network.Protocol.Connection (SomeConnectionSource(..), SomeServerConnector, acceptSomeConnector)
+import Network.Protocol.Driver (runSomeConnector)
 import Network.Protocol.Job.Server
   (JobServer(..), ServerStAttach(..), ServerStAwait(..), ServerStCmd(..), ServerStInit(..), hoistAttach, hoistCmd)
 import Observe.Event (Event, EventBackend, addField, subEventBackend, withEvent, withSubEvent)

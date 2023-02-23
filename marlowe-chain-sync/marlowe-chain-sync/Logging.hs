@@ -9,7 +9,7 @@ module Logging
   ) where
 
 import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncCommand, ChainSyncQuery, RuntimeChainSeek)
-import Network.Protocol.Driver (ConnectorSelector, getConnectorSelectorConfig)
+import Network.Protocol.Connection (ConnectorSelector, getConnectorSelectorConfig)
 import Network.Protocol.Handshake.Types (Handshake)
 import Network.Protocol.Job.Types (Job)
 import Network.Protocol.Query.Types (Query)

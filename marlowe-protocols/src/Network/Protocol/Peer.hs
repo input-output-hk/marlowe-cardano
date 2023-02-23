@@ -8,12 +8,25 @@ module Network.Protocol.Peer
 import Control.Monad.Cleanup (MonadCleanup)
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Network.TypedProtocol
-import Network.TypedProtocol.Codec (AnyMessageAndAgency(AnyMessageAndAgency))
+import Network.TypedProtocol.Codec (AnyMessageAndAgency(..))
 import Observe.Event (EventBackend, addField, withEvent)
+import Observe.Event.Component (GetSelectorConfig, SelectorConfig(..), SomeJSON(..), singletonFieldConfigWith)
+import Observe.Event.Network.Protocol (MessageToJSON(..))
 
 data PeerSelector ps f where
   Send :: PeerSelector ps (AnyMessageAndAgency ps)
   Recv :: PeerSelector ps (AnyMessageAndAgency ps)
+
+getPeerSelectorConfig :: MessageToJSON ps => Bool -> GetSelectorConfig (PeerSelector ps)
+getPeerSelectorConfig defaultEnabled = \case
+  Send -> SelectorConfig "send" defaultEnabled $ singletonFieldConfigWith
+    (\(AnyMessageAndAgency tok msg) -> SomeJSON $ messageToJSON tok msg)
+    "message"
+    True
+  Recv -> SelectorConfig "recv" defaultEnabled $ singletonFieldConfigWith
+    (\(AnyMessageAndAgency tok msg) -> SomeJSON $ messageToJSON tok msg)
+    "message"
+    True
 
 hoistPeer :: Functor m => (forall x. m x -> n x) -> Peer protocol pr st m a -> Peer protocol pr st n a
 hoistPeer f = \case

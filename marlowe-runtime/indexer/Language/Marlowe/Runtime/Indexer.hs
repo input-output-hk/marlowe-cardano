@@ -13,7 +13,7 @@ import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncQuery, RuntimeChainSeekC
 import Language.Marlowe.Runtime.Indexer.ChainSeekClient
 import Language.Marlowe.Runtime.Indexer.Database (DatabaseQueries)
 import Language.Marlowe.Runtime.Indexer.Store
-import Network.Protocol.Driver (SomeClientConnector)
+import Network.Protocol.Connection (SomeClientConnector)
 import Network.Protocol.Query.Client (QueryClient)
 import Observe.Event (EventBackend, narrowEventBackend)
 import Observe.Event.Component (FieldConfig(..), GetSelectorConfig, SelectorConfig(..), SomeJSON(SomeJSON), prependKey)

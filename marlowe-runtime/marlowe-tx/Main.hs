@@ -15,17 +15,9 @@ import qualified Language.Marlowe.Runtime.Transaction.Query as Query
 import qualified Language.Marlowe.Runtime.Transaction.Submit as Submit
 import Logging (RootSelector(..), getRootSelectorConfig)
 import Network.Protocol.ChainSeek.Client (chainSeekClientPeer)
-import Network.Protocol.Driver
-  ( SomeClientConnector
-  , SomeConnectionSource(..)
-  , SomeConnector(SomeConnector)
-  , TcpServerDependencies(..)
-  , logConnectionSource
-  , logConnector
-  , runSomeConnector
-  , tcpClient
-  , tcpServer
-  )
+import Network.Protocol.Connection
+  (SomeClientConnector, SomeConnectionSource(..), SomeConnector(SomeConnector), logConnectionSource, logConnector)
+import Network.Protocol.Driver (TcpServerDependencies(..), runSomeConnector, tcpClient, tcpServer)
 import Network.Protocol.Handshake.Client (handshakeClientConnector)
 import Network.Protocol.Handshake.Server (handshakeConnectionSource)
 import Network.Protocol.Job.Client (jobClientPeer)

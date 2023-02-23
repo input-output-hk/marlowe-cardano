@@ -6,7 +6,8 @@ module Language.Marlowe.Runtime.Sync.QueryServer
 import Control.Concurrent.Component
 import Language.Marlowe.Protocol.Query.Server (MarloweQueryServer, marloweQueryServer)
 import Language.Marlowe.Runtime.Sync.Database (DatabaseQueries(..))
-import Network.Protocol.Driver (SomeConnectionSource, SomeServerConnector, acceptSomeConnector, runSomeConnector)
+import Network.Protocol.Connection (SomeConnectionSource, SomeServerConnector, acceptSomeConnector)
+import Network.Protocol.Driver (runSomeConnector)
 
 data QueryServerDependencies = QueryServerDependencies
   { databaseQueries :: DatabaseQueries IO

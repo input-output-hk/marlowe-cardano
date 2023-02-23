@@ -11,9 +11,9 @@ import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader)
 import Language.Marlowe.Runtime.Core.Api (ContractId(..), MarloweVersion(..), MarloweVersionTag, SomeMarloweVersion(..))
 import Language.Marlowe.Runtime.History.Api
 import Network.Protocol.Codec (BinaryMessage(..))
-import Network.Protocol.Driver (MessageToJSON(..))
 import Network.Protocol.Handshake.Types (HasSignature(..))
 import Network.TypedProtocol (PeerHasAgency(..), Protocol(..), SomeMessage(..))
+import Observe.Event.Network.Protocol (MessageToJSON(..))
 
 data MarloweSync where
   StInit :: MarloweSync

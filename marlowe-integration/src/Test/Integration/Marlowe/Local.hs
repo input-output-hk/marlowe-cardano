@@ -139,8 +139,9 @@ import Language.Marlowe.Runtime.Web.Server (ServerDependencies(..), server)
 import Network.HTTP.Client (defaultManagerSettings, newManager)
 import Network.Protocol.ChainSeek.Client (chainSeekClientPeer)
 import Network.Protocol.ChainSeek.Server (chainSeekServerPeer)
+import Network.Protocol.Connection
+import qualified Network.Protocol.Connection as Connection
 import Network.Protocol.Driver
-import qualified Network.Protocol.Driver as Driver
 import Network.Protocol.Handshake.Server (handshakeClientServerPair, handshakeConnectionSource)
 import Network.Protocol.Handshake.Types (Handshake)
 import Network.Protocol.Job.Client (JobClient, jobClientPeer)
@@ -517,9 +518,9 @@ runtime = proc RuntimeDependencies{..} -> do
 
   sync -< SyncDependencies
     { databaseQueries = marloweSyncDatabaseQueries $ narrowEventBackend SyncDatabaseEvent rootEventBackend
-    , syncSource = SomeConnectionSource $ mergeConnectionSource (logConnectionSource (narrowEventBackend MarloweSyncTCP rootEventBackend) syncSource) $ Driver.connectionSource marloweSyncPair
-    , headerSyncSource = SomeConnectionSource $ mergeConnectionSource (logConnectionSource (narrowEventBackend HeaderSyncTCP rootEventBackend) headerSyncSource) $ Driver.connectionSource marloweHeaderSyncPair
-    , querySource = SomeConnectionSource $ mergeConnectionSource (logConnectionSource (narrowEventBackend MarloweQueryTCP rootEventBackend) querySource) $ Driver.connectionSource marloweQueryPair
+    , syncSource = SomeConnectionSource $ mergeConnectionSource (logConnectionSource (narrowEventBackend MarloweSyncTCP rootEventBackend) syncSource) $ Connection.connectionSource marloweSyncPair
+    , headerSyncSource = SomeConnectionSource $ mergeConnectionSource (logConnectionSource (narrowEventBackend HeaderSyncTCP rootEventBackend) headerSyncSource) $ Connection.connectionSource marloweHeaderSyncPair
+    , querySource = SomeConnectionSource $ mergeConnectionSource (logConnectionSource (narrowEventBackend MarloweQueryTCP rootEventBackend) querySource) $ Connection.connectionSource marloweQueryPair
     }
 
   chainSync -<
@@ -539,9 +540,9 @@ runtime = proc RuntimeDependencies{..} -> do
         BabbageEra -> BabbageEraInCardanoMode
      in
       ChainSyncDependencies
-        { syncSource = SomeConnectionSource $ Driver.connectionSource chainSyncPair
-        , querySource = SomeConnectionSource $ Driver.connectionSource chainSyncQueryPair
-        , jobSource = SomeConnectionSource $ Driver.connectionSource chainSyncJobPair
+        { syncSource = SomeConnectionSource $ Connection.connectionSource chainSyncPair
+        , querySource = SomeConnectionSource $ Connection.connectionSource chainSyncQueryPair
+        , jobSource = SomeConnectionSource $ Connection.connectionSource chainSyncJobPair
         , ..
         }
 
@@ -567,7 +568,7 @@ runtime = proc RuntimeDependencies{..} -> do
     in
       TransactionDependencies
         { chainSyncConnector = SomeConnector $ clientConnector chainSyncPair
-        , connectionSource = SomeConnectionSource $ mergeConnectionSource (logConnectionSource (narrowEventBackend TxJobTCP rootEventBackend) txJobSource) $ Driver.connectionSource txJobPair
+        , connectionSource = SomeConnectionSource $ mergeConnectionSource (logConnectionSource (narrowEventBackend TxJobTCP rootEventBackend) txJobSource) $ Connection.connectionSource txJobPair
         , ..
         }
 

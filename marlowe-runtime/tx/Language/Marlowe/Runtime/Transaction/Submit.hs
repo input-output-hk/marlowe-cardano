@@ -14,7 +14,8 @@ import Data.Void (absurd)
 import Language.Marlowe.Runtime.ChainSync.Api
 import Language.Marlowe.Runtime.Transaction.Api (SubmitError(..), SubmitStatus(..))
 import Network.Protocol.ChainSeek.Client
-import Network.Protocol.Driver (SomeClientConnector, runSomeConnector)
+import Network.Protocol.Connection (SomeClientConnector)
+import Network.Protocol.Driver (runSomeConnector)
 import Network.Protocol.Job.Client (JobClient, liftCommand)
 
 data SubmitJobStatus

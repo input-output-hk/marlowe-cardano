@@ -27,10 +27,10 @@ import Language.Marlowe.Runtime.Core.Api
 import Language.Marlowe.Runtime.Discovery.Api (ContractHeader)
 import Network.Protocol.Codec (BinaryMessage(..))
 import Network.Protocol.Codec.Spec (MessageEq(..), ShowProtocol(..))
-import Network.Protocol.Driver (MessageToJSON(..))
 import Network.Protocol.Handshake.Types (HasSignature(..))
 import Network.TypedProtocol
 import Network.TypedProtocol.Codec (AnyMessageAndAgency(..))
+import Observe.Event.Network.Protocol (MessageToJSON(..))
 
 data MarloweQuery where
   StReq :: MarloweQuery
