@@ -103,7 +103,6 @@
           buildable = true;
           modules = [
             "Language/Marlowe/Protocol/Sync/Client"
-            "Language/Marlowe/Protocol/Sync/Codec"
             "Language/Marlowe/Protocol/Sync/Server"
             "Language/Marlowe/Protocol/Sync/Types"
             "Language/Marlowe/Runtime/History/Api"
@@ -173,7 +172,6 @@
           buildable = true;
           modules = [
             "Language/Marlowe/Protocol/Query/Client"
-            "Language/Marlowe/Protocol/Query/Codec"
             "Language/Marlowe/Protocol/Query/Server"
             "Language/Marlowe/Protocol/Query/Types"
             ];
@@ -244,7 +242,6 @@
           buildable = true;
           modules = [
             "Language/Marlowe/Protocol/HeaderSync/Client"
-            "Language/Marlowe/Protocol/HeaderSync/Codec"
             "Language/Marlowe/Protocol/HeaderSync/Server"
             "Language/Marlowe/Protocol/HeaderSync/Types"
             "Language/Marlowe/Runtime/Discovery/Api"
