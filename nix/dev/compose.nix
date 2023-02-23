@@ -193,6 +193,22 @@ let
     ];
   };
 
+  proxy-service = dev-service {
+    ports = [ 3700 ];
+    depends_on = [ "marlowe-sync" "marlowe-tx" ];
+    command = [
+      "/exec/run-marlowe-proxy"
+      "--host"
+      "0.0.0.0"
+      "--marlowe-sync-host"
+      "marlowe-chain-sync"
+      "--tx-host"
+      "marlowe-tx"
+      "--log-config-file"
+      "./marlowe-proxy.log.config"
+    ];
+  };
+
   web-service = dev-service {
     ports = [ 8080 ];
     depends_on = [ "marlowe-sync" "marlowe-tx" ];
@@ -256,6 +272,7 @@ let
     services.marlowe-chain-indexer = chain-indexer-service;
     services.marlowe-chain-sync = marlowe-chain-sync-service;
     services.marlowe-tx = tx-service;
+    services.marlowe-proxy = proxy-service;
     services.web = web-service;
     services.marlowe-indexer = marlowe-indexer-service;
     services.marlowe-sync = sync-service;

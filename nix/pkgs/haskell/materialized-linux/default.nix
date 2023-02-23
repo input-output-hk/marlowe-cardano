@@ -1232,6 +1232,7 @@
           "generic-random".components.library.planned = lib.mkOverride 900 true;
           "lifted-base".components.library.planned = lib.mkOverride 900 true;
           "lazysmallcheck".components.library.planned = lib.mkOverride 900 true;
+          "marlowe-runtime".components.sublibs."proxy-api".planned = lib.mkOverride 900 true;
           "criterion-measurement".components.library.planned = lib.mkOverride 900 true;
           "unliftio-core".components.library.planned = lib.mkOverride 900 true;
           "data-default-instances-containers".components.library.planned = lib.mkOverride 900 true;
@@ -1290,6 +1291,7 @@
           "criterion".components.exes."criterion-report".planned = lib.mkOverride 900 true;
           "sbv".components.library.planned = lib.mkOverride 900 true;
           "cardano-binary".components.library.planned = lib.mkOverride 900 true;
+          "marlowe-runtime".components.sublibs."proxy".planned = lib.mkOverride 900 true;
           "text-short".components.library.planned = lib.mkOverride 900 true;
           "marlowe-apps".components.library.planned = lib.mkOverride 900 true;
           "haskell-src-exts".components.library.planned = lib.mkOverride 900 true;
@@ -1402,6 +1404,7 @@
           "dependent-sum".components.library.planned = lib.mkOverride 900 true;
           "plutus-core".components.exes."pir".planned = lib.mkOverride 900 true;
           "marlowe-runtime".components.sublibs."tx-api".planned = lib.mkOverride 900 true;
+          "marlowe-runtime".components.exes."marlowe-proxy".planned = lib.mkOverride 900 true;
           "plutus-tx-plugin".components.library.planned = lib.mkOverride 900 true;
           "base-unicode-symbols".components.library.planned = lib.mkOverride 900 true;
           "marlowe-chain-sync".components.exes."marlowe-chain-indexer".planned = lib.mkOverride 900 true;

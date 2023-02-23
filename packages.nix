@@ -18,7 +18,7 @@ rec {
 
   inherit (haskell.packages.marlowe-cli.components.exes) marlowe-cli;
   inherit (haskell.packages.marlowe-chain-sync.components.exes) marlowe-chain-sync marlowe-chain-indexer;
-  inherit (haskell.packages.marlowe-runtime.components.exes) marlowe-history marlowe-sync marlowe-indexer marlowe-discovery marlowe-tx marlowe-web-server;
+  inherit (haskell.packages.marlowe-runtime.components.exes) marlowe-sync marlowe-indexer marlowe-tx marlowe-web-server marlowe-proxy;
   marlowe-integration-tests = pkgs.writeShellScriptBin "marlowe-integration-tests" ''
     export PATH="${pkgs.lib.makeBinPath [ cardano-cli cardano-node pkgs.sqitchPg ]}:$PATH"
     ${haskell.packages.marlowe-integration-tests.components.exes.marlowe-integration-tests}/bin/marlowe-integration-tests "$@"

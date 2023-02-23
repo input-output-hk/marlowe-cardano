@@ -25,6 +25,7 @@ let
     marlowe-indexer = mkImage "marlowe-indexer";
     marlowe-sync = mkImage "marlowe-sync";
     marlowe-tx = mkImage "marlowe-tx";
+    marlowe-proxy = mkImage "marlowe-proxy";
     marlowe-web-server = mkImage "marlowe-web-server";
   };
 

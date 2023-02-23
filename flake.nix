@@ -128,6 +128,11 @@
             program = "${packages.marlowe-tx}/bin/marlowe-tx";
           };
 
+          marlowe-proxy = {
+            type = "app";
+            program = "${packages.marlowe-proxy}/bin/marlowe-proxy";
+          };
+
           marlowe-web-server = {
             type = "app";
             program = "${packages.marlowe-web-server}/bin/marlowe-web-server";
