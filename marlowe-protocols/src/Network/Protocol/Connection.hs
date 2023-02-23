@@ -20,7 +20,7 @@ import Data.Void (Void)
 import Network.Channel
   (Channel(..), ChannelSelector, STMChannel(..), channelPair, getChannelSelectorConfig, hoistChannel, logChannel)
 import Network.Protocol.Codec (BinaryMessage)
-import Network.Protocol.Peer (PeerSelector, getPeerSelectorConfig, logPeer)
+import Network.Protocol.Peer (PeerSelector, getPeerSelectorConfig, hoistPeer, logPeer)
 import Network.TypedProtocol
 import Observe.Event (EventBackend, causedEventBackend, failEvent, finalize, newEvent, withEvent)
 import Observe.Event.Backend (narrowEventBackend)
@@ -32,6 +32,16 @@ type ToPeer peer protocol pr st m = forall a. peer m a -> Peer protocol pr st m 
 newtype Connector ps pr peer m = Connector
   { openConnection :: m (Connection ps pr peer m)
   }
+
+ihoistConnector
+  :: (Functor m, Functor n)
+  => (forall p q a. Functor p => (forall x. p x -> q x) -> peer p a -> peer q a)
+  -> (forall x. m x -> n x)
+  -> (forall x. n x -> m x)
+  -> Connector ps pr peer m
+  -> Connector ps pr peer n
+ihoistConnector hoistPeer' f f' Connector{..} = Connector \peer ->
+  f $ hoistConnection f <$> connectPeer (hoistPeer' f' peer)
 
 type ClientConnector ps = Connector ps 'AsClient
 type ServerConnector ps = Connector ps 'AsServer
@@ -88,6 +98,13 @@ data Connection ps pr peer m = forall (st :: ps). Connection
   { closeConnection :: Maybe SomeException -> m ()
   , channel :: Channel m ByteString
   , toPeer :: forall a. peer m a -> Peer ps pr st m a
+  }
+
+hoistConnection :: Functor m => (forall x. m x -> n x) -> Connection ps pr m a -> Connection ps pr n a
+hoistConnection f Connection{..} = Connection
+  { closeConnection = f . closeConnection
+  , channel = hoistChannel f channel
+  , peer = hoistPeer f peer
   }
 
 data ConnectionSelector ps f where

@@ -6,7 +6,7 @@ module Logging
   ) where
 
 import Language.Marlowe.Protocol.Types (Marlowe)
-import Network.Protocol.Driver (ConnectorSelector, getConnectorSelectorConfig)
+import Network.Protocol.Connection (ConnectorSelector, getConnectorSelectorConfig)
 import Network.Protocol.Handshake.Types (Handshake)
 import Observe.Event.Component
   (ConfigWatcherSelector(ReloadConfig), GetSelectorConfig, SelectorConfig(..), prependKey, singletonFieldConfig)

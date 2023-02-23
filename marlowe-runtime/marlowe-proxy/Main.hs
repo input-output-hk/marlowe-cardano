@@ -16,8 +16,8 @@ import Language.Marlowe.Runtime.Proxy
 import Logging (RootSelector(..), getRootSelectorConfig)
 import Network.Channel (hoistChannel, socketAsChannel)
 import Network.Protocol.Codec (BinaryMessage)
-import Network.Protocol.Driver
-  (SomeConnectionSource(..), TcpServerDependencies(..), logConnectionSource, mkDriver, tcpServer)
+import Network.Protocol.Connection (SomeConnectionSource(..), logConnectionSource)
+import Network.Protocol.Driver (TcpServerDependencies(..), mkDriver, tcpServer)
 import Network.Protocol.Handshake.Server (handshakeConnectionSource)
 import Network.Protocol.Handshake.Types (Handshake)
 import Network.Socket

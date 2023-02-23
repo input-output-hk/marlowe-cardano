@@ -79,6 +79,8 @@ library
     , marlowe-runtime:sync-api
     , marlowe-runtime:tx
     , marlowe-runtime:tx-api
+    , marlowe-runtime:proxy
+    , marlowe-runtime:proxy-api
     , marlowe-runtime:web-server
     , nonempty-containers
     , ouroboros-network
@@ -91,6 +93,7 @@ library
     , text
     , time
     , transformers
+    , typed-protocols
     , uuid
     , unliftio
     , warp
