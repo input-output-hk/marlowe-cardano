@@ -110,6 +110,7 @@ import Language.Marlowe.Runtime.ChainIndexer.NodeClient (CostModel(CostModel))
 import Language.Marlowe.Runtime.ChainSync (ChainSyncDependencies(..), chainSync)
 import Language.Marlowe.Runtime.ChainSync.Api
   ( Assets(..)
+  , BlockNo(..)
   , ChainSyncCommand
   , ChainSyncQuery(..)
   , RuntimeChainSeek
@@ -198,6 +199,7 @@ data MarloweRuntimeOptions = MarloweRuntimeOptions
   , databasePassword :: ByteString
   , tempDatabase :: ByteString
   , cleanup :: Bool
+  , submitConfirmationBlocks :: BlockNo
   , localTestnetOptions :: LocalTestnetOptions
   }
 
@@ -209,6 +211,7 @@ defaultMarloweRuntimeOptions = do
   databasePassword <- lookupEnv "MARLOWE_RT_TEST_DB_PASSWORD"
   tempDatabase <- lookupEnv "MARLOWE_RT_TEST_TEMP_DB"
   cleanupDatabase <- lookupEnv "MARLOWE_RT_TEST_CLEANUP_DATABASE"
+  submitConfirmationBlocks <- lookupEnv "MARLOWE_RT_TEST_SUBMIT_CONFIRMATION_BLOCKS"
   pure $ MarloweRuntimeOptions
     (maybe "127.0.0.1" fromString databaseHost)
     (fromMaybe 5432 $ readMaybe =<< databasePort)
@@ -216,6 +219,7 @@ defaultMarloweRuntimeOptions = do
     (maybe "" fromString databasePassword)
     (maybe "template1" fromString tempDatabase)
     (fromMaybe True $ readMaybe =<< cleanupDatabase)
+    (BlockNo $ fromMaybe 2 $ readMaybe =<< submitConfirmationBlocks)
     defaultOptions
 
 withLocalMarloweRuntime :: MonadUnliftIO m => (MarloweRuntime -> m ()) -> m ()
@@ -287,7 +291,6 @@ withLocalMarloweRuntime' MarloweRuntimeOptions{..} test = withRunInIO \runInIO -
     let txJobPort = marloweHeaderSyncPort + 3
     manager <- liftIO $ newManager defaultManagerSettings
 
-    let submitConfirmationBlocks = 2
     let chainSyncConnector = SomeConnector $ clientConnector chainSyncPair
     let chainSyncJobConnector = SomeConnector $ clientConnector chainSyncJobPair
     let mkSubmitJob = Submit.mkSubmitJob SubmitJobDependencies{..}
