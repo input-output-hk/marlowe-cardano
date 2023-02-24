@@ -103,7 +103,7 @@ run Options{..} = bracket (Pool.acquire (100, secondsToNominalDiffTime 5, fromSt
 
     localNodeConnectInfo :: LocalNodeConnectInfo CardanoMode
     localNodeConnectInfo = LocalNodeConnectInfo
-      -- FIXME read from config - what is the appropriate value?
+      -- The epoch slots ignored after Byron.
       { localConsensusModeParams = CardanoModeParams $ EpochSlots 21600
       , localNodeNetworkId = networkId
       , localNodeSocketPath = nodeSocket
