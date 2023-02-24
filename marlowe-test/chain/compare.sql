@@ -526,7 +526,7 @@ select
 \qecho Asset out comparison.
 \qecho
 
-drop table xref_asset;
+drop table if exists xref_asset;
 create temporary table xref_asset as
   select
       asset.id as "chainindex_id"
@@ -581,8 +581,9 @@ select
   group by source
 ;
 
-drop table if exists x_asset_out;
-create temporary table x_asset_out as
+-- This looks odd, but empirically PostgreSQL has difficulty differencing billon-record tables!
+drop table if exists x_asset_out_0;
+create temporary table x_asset_out_0 as
   select 'chainindex-dbsync' as "comparison", *
     from (
       select txoutid, txoutix, slotno, assetid, quantity from cmp_asset_out where source = 'chainindex'
@@ -597,13 +598,37 @@ create temporary table x_asset_out as
       select txoutid, txoutix, slotno, assetid, quantity from cmp_asset_out where source = 'chainindex'
     ) as cm_asset_out
 ;
+drop table if exists x_asset_1;
+create temporary table x_asset_1 as
+  select distinct
+      txoutid
+    , txoutix
+    , assetid
+    from x_asset_out_0
+;
+drop table if exists x_asset_out;
+create temporary table x_asset_out as
+  select 'chainindex-dbsync' as "comparison", *
+    from (
+      select txoutid, txoutix, slotno, assetid, quantity from cmp_asset_out inner join x_asset_1 using (txoutid, txoutix, assetid) where source = 'chainindex'
+      except
+      select txoutid, txoutix, slotno, assetid, quantity from cmp_asset_out inner join x_asset_1 using (txoutid, txoutix, assetid) where source = 'dbsync'
+    ) as mc_asset_out
+  union all
+  select 'dbsync-chainindex', *
+    from (
+      select txoutid, txoutix, slotno, assetid, quantity from cmp_asset_out inner join x_asset_1 using (txoutid, txoutix, assetid) where source = 'dbsync'
+      except
+      select txoutid, txoutix, slotno, assetid, quantity from cmp_asset_out inner join x_asset_1 using (txoutid, txoutix, assetid) where source = 'chainindex'
+    ) as cm_asset_out
+;
 select
     comparison as "Discrepancy"
   , count(*) as "Count of Asset Out Records"
   from x_asset_out
   group by comparison
 ;
-\copy (select * from x_asset_out order by 2, 3, 4, 5, 6, 7, 1) to 'out/assetout-discrepancies.csv' CSV HEADER
+\copy (select * from x_asset_out order by 2, 3, 4, 5, 6, 1) to 'out/assetout-discrepancies.csv' CSV HEADER
 
 
 \qecho
