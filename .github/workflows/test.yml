@@ -5,13 +5,9 @@ env:
   TRUSTED_PUBLIC_KEYS: "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ= marlowe-temp.cachix.org-1:1gPjVFpu4QjaAT3tRurCioX+BC23V7mjvFwpP5bV0Ec= loony-tools:pr9m4BkM/5/eSTZlkQyRt57Jz7OMBxNSUiMC4FkcNfk="
   SUBSTITUTERS: "https://cache.nixos.org/ https://cache.iog.io https://marlowe-temp.cachix.org https://cache.zw3rk.com/"
 on:
-  push:
-    branches-ignore:
-      - main # staging
-      - production
-      - deploy-hernan
-      - deploy-pablo
-      - shlevy
+  pull_request:
+    branches:
+      - main
   workflow_call:
 jobs:
   check-materialization:
@@ -73,6 +69,7 @@ jobs:
         env:
           MARLOWE_RT_TEST_DB_HOST: localhost
           MARLOWE_RT_TEST_CLEANUP_DATABASE: "False"
+          MARLOWE_RT_TEST_SUBMIT_CONFIRMATION_BLOCKS: 10
       - name: Upload failed test directories as artifacts
         if: ${{ failure() }}
         uses: actions/upload-artifact@v3

@@ -17,6 +17,7 @@ import Network.TypedProtocol
 
 -- | A generic client for the job protocol.
 newtype JobClient cmd m a = JobClient { runJobClient :: m (ClientStInit cmd m a) }
+  deriving Functor
 
 -- | In the 'StInit' state, the client has agency. It can send:
 --

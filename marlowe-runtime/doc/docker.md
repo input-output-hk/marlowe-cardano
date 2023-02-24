@@ -6,6 +6,7 @@ Deploying the Marlowe Runtime requires running seven backend services:
 	- `marlowe-chain-sync` for querying the blockchain
 	- `marlowe-indexer` for indexing marlowe contracts
 	- `marlowe-sync` for querying marlowe contracts
+	- `marlowe-proxy` for providing a unified API over a single port
 	- `marlowe-tx` for building and submitting Marlowe transactions
 - [cardano-node](https://github.com/input-output-hk/cardano-node/blob/master/README.rst) for blockchain connectivity
 - [PostgreSQL](https://www.postgresql.org/) for persistent storage

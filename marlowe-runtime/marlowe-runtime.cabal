@@ -333,6 +333,50 @@ library tx
     , witherable
   visibility: public
 
+library proxy-api
+  import: lang
+  hs-source-dirs:   proxy-api
+  visibility: public
+  exposed-modules:
+    Language.Marlowe.Protocol.Client
+    Language.Marlowe.Protocol.Server
+    Language.Marlowe.Protocol.Types
+  build-depends:
+      base >= 4.9 && < 5
+    , aeson
+    , binary
+    , marlowe-protocols
+    , marlowe-runtime:discovery-api
+    , marlowe-runtime:history-api
+    , marlowe-runtime:sync-api
+    , marlowe-runtime:tx-api
+    , typed-protocols
+  visibility: public
+
+library proxy
+  import: lang
+  hs-source-dirs:   proxy
+  visibility: public
+  exposed-modules:
+    Language.Marlowe.Runtime.Proxy
+  build-depends:
+      base >= 4.9 && < 5
+    , async-components
+    , eventuo11y
+    , exceptions
+    , marlowe-protocols
+    , marlowe-runtime:discovery-api
+    , marlowe-runtime:history-api
+    , marlowe-runtime:proxy-api
+    , marlowe-runtime:sync-api
+    , marlowe-runtime:tx-api
+    , monad-control
+    , resourcet
+    , transformers-base
+    , typed-protocols
+    , unliftio
+  visibility: public
+
 library plutus-scripts
   import: lang
   hs-source-dirs:   plutus-scripts
@@ -576,6 +620,33 @@ executable marlowe-tx
     , network
     , optparse-applicative
     , text
+    , uuid
+  ghc-options: -threaded
+
+executable marlowe-proxy
+  import: lang
+  hs-source-dirs: marlowe-proxy
+  main-is: Main.hs
+  other-modules:
+    Logging
+    Paths_marlowe_runtime
+  autogen-modules:
+    Paths_marlowe_runtime
+  build-depends:
+      base >= 4.9 && < 5
+    , async-components
+    , bytestring
+    , eventuo11y
+    , eventuo11y-extras
+    , marlowe-protocols
+    , marlowe-runtime:config
+    , marlowe-runtime:proxy
+    , marlowe-runtime:proxy-api
+    , network
+    , optparse-applicative
+    , resourcet
+    , text
+    , typed-protocols
     , uuid
   ghc-options: -threaded
 

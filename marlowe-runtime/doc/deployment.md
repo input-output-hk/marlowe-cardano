@@ -156,6 +156,13 @@ See the [help page](marlowe-tx.md) for all of the command-line options for `marl
 $ marlowe-tx
 ```
 
+### Marlowe Proxy
+
+See the [help page](marlowe-proxy.md) for all of the command-line options for `marlowe-proxy`. The default values for port numbers are consistent with those for `marlowe-sync` and `marlowe-tx`, so they typically do not need to be specified explicitly. A typical invocation of `marlowe-proxy` is simple:
+```console
+$ marlowe-proxy
+```
+
 
 ## Checking the Deployment
 

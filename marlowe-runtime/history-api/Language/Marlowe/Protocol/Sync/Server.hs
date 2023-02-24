@@ -12,6 +12,7 @@ import Language.Marlowe.Runtime.History.Api (ContractStep, CreateStep)
 import Network.TypedProtocol
 
 newtype MarloweSyncServer m a = MarloweSyncServer { runMarloweSyncServer :: m (ServerStInit m a) }
+  deriving Functor
 
 data ServerStInit m a = ServerStInit
   { recvMsgFollowContract :: ContractId -> m (ServerStFollow m a)

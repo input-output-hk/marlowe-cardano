@@ -71,13 +71,20 @@ mkDriver  Channel{..} = Driver{..}
     startDState :: Maybe ByteString
     startDState = Nothing
 
+hoistDriver :: (forall x. m x -> n x) -> Driver ps dState m -> Driver ps dState n
+hoistDriver f Driver{..} = Driver
+  { sendMessage = fmap f . sendMessage
+  , recvMessage = fmap f . recvMessage
+  , ..
+  }
+
 data TcpServerDependencies ps server m = forall (st :: ps). TcpServerDependencies
   { host :: HostName
   , port :: PortNumber
   , toPeer :: ToPeer server ps 'AsServer st m
   }
 
-tcpServer :: MonadBase IO m => Component m (TcpServerDependencies ps server m) (ConnectionSource ps server m)
+tcpServer :: (MonadBase IO m', MonadBase IO m) => Component m (TcpServerDependencies ps server m') (ConnectionSource ps server m')
 tcpServer = component \TcpServerDependencies{..} -> do
   socketQueue <- newTQueue
   pure
