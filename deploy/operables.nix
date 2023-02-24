@@ -332,7 +332,7 @@ in
         --port "$PORT" \
         --marlowe-sync-host "$SYNC_HOST" \
         --marlowe-sync-port "$MARLOWE_SYNC_PORT" \
-        --marlowe-header-sync-port "$MARLOWE_HEADER_SYNC_PORT" \
+        --marlowe-header-port "$MARLOWE_HEADER_SYNC_PORT" \
         --marlowe-query-port "$MARLOWE_QUERY_PORT" \
         --tx-host "$TX_HOST" \
         --tx-command-port "$TX_PORT"

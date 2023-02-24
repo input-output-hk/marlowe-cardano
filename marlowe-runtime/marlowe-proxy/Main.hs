@@ -160,6 +160,6 @@ getOptions = do
 
     infoMod = mconcat
       [ fullDesc
-      , progDesc "Contract synchronization and query service for Marlowe Runtime"
-      , header "marlowe-sync : a contract synchronization and query service for the Marlowe Runtime."
+      , progDesc "API proxy service for Marlowe Runtime"
+      , header "marlowe-proxy : an API proxy service for the Marlowe Runtime."
       ]
