@@ -15,31 +15,82 @@ import Control.Concurrent (threadDelay)
 import Control.Monad.IO.Class (MonadIO(liftIO))
 
 import Control.Exception (throw)
+import Data.Proxy (Proxy(Proxy))
 import qualified Data.Set as Set
 import qualified Data.Text as T
 import qualified Language.Marlowe as V1
+import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Integration.Common
 import Language.Marlowe.Runtime.Transaction.Api (WalletAddresses(..))
 import qualified Language.Marlowe.Runtime.Web as Web
 import Language.Marlowe.Runtime.Web.Client (Page(..), getContract, getContracts, postContract, putContract)
 import Language.Marlowe.Runtime.Web.Server.DTO (ToDTO(toDTO))
-import Servant.Client (ClientM)
-import Test.Hspec (Spec, describe, it, shouldBe)
+import Network.HTTP.Types (Status(..))
+import Servant.Client (ClientError(FailureResponse), ClientM)
+import Servant.Client.Streaming (ResponseF(Response, responseStatusCode))
+import Servant.Pagination (Range(..), RangeOrder(..))
+import Test.Hspec (Spec, describe, focus, it, shouldBe)
 import Test.Integration.Marlowe.Local (withLocalMarloweRuntime)
 
 spec :: Spec
 spec = describe "GET /contracts" do
   getContractsValidSpec
+  getContractsInvalidSpec
 
 getContractsValidSpec :: Spec
-getContractsValidSpec = it "returns a list of contract headers" $ withLocalMarloweRuntime $ runIntegrationTest do
+getContractsValidSpec = do
+  noContractsValidSpec
+  singleContractValidSpec
+  multipleContractValidSpec
 
+noContractsValidSpec :: Spec
+noContractsValidSpec = it "returns an empty list" $ withLocalMarloweRuntime $ runIntegrationTest do
+  either throw pure =<< runWebClient do
+    Page {..}<- getContracts Nothing
+    liftIO $ fmap (\Web.ContractHeader{..} -> contractId) items `shouldBe` []
+
+singleContractValidSpec :: Spec
+singleContractValidSpec  = it "returns a list with single contract header" $ withLocalMarloweRuntime $ runIntegrationTest do
   wallet <- getGenesisWallet 0
 
   either throw pure =<< runWebClient do
     expectedContractId <- createCloseContract wallet
     Page {..}<- getContracts Nothing
     liftIO $ fmap (\Web.ContractHeader{..} -> contractId) items `shouldBe` [expectedContractId]
+
+multipleContractValidSpec :: Spec
+multipleContractValidSpec  = it "returns a list with multiple contract headers" $ withLocalMarloweRuntime $ runIntegrationTest do
+  wallet1 <- getGenesisWallet 0
+  wallet2 <- getGenesisWallet 1
+
+  either throw pure =<< runWebClient do
+    expectedContractId1 <- createCloseContract wallet1
+    expectedContractId2 <- createCloseContract wallet2
+    Page {..}<- getContracts Nothing
+    liftIO $ fmap (\Web.ContractHeader{..} -> contractId) items `shouldBe` [expectedContractId2, expectedContractId1]
+
+getContractsInvalidSpec :: Spec
+getContractsInvalidSpec =
+  invalidTxIdSpec
+
+invalidTxIdSpec :: Spec
+invalidTxIdSpec = it "returns an error message" $ withLocalMarloweRuntime $ runIntegrationTest do
+  result <- runWebClient do
+    let
+      invalidRange =  Range
+        {
+          rangeValue = Just $ Web.TxOutRef (toDTO @Chain.TxId "0000000000000000000000000000000000000000000000000000000000000000") 1
+        , rangeOffset = 0
+        , rangeLimit = 1
+        , rangeOrder = RangeAsc
+        , rangeField = Proxy
+        }
+    getContracts $ Just invalidRange
+
+  case result of
+    Left (FailureResponse _ Response { responseStatusCode = Status { statusCode = 416 } } ) ->  pure ()
+    _ -> fail $ "Expected 416 response code - got " <> show result
+
 
 createCloseContract :: Wallet -> ClientM Web.TxOutRef
 createCloseContract Wallet{..}= do

@@ -37,6 +37,7 @@ data Page field resource = Page
   , nextRange :: Maybe (Range field (RangeType resource field))
   , items :: [resource]
   }
+  deriving (Eq, Show)
 
 getContracts
   :: Maybe (Range "contractId" TxOutRef)

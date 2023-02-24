@@ -72,6 +72,7 @@ executable marlowe-integration-tests
     , bytestring
     , containers
     , hspec
+    , http-types
     , cardano-api
     , marlowe-cardano
     , marlowe-chain-sync
@@ -89,6 +90,7 @@ executable marlowe-integration-tests
     , mtl
     , plutus-ledger-api
     , servant-client
+    , servant-pagination
     , unliftio
     , text
     , time
