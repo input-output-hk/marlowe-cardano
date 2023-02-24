@@ -235,7 +235,12 @@ create temporary table cmp_txout as
     , tx.hash
     , tx_out.index
     , block.slot_no
-    , tx_out.address_raw
+    , case
+        -- Clean up the few raw Shelley addresses that have illegal extra bytes.
+        when get_byte(tx_out.address_raw, 0) / 16 in (0, 1, 2, 3) then substring(tx_out.address_raw for 57)
+        when get_byte(tx_out.address_raw, 0) / 16 in (6, 7)       then substring(tx_out.address_raw for 29)
+        else tx_out.address_raw
+      end
     , tx_out.value
     , tx_out.data_hash
     , case when tx_out.inline_datum_id is not null then datum.bytes else null end
@@ -251,11 +256,6 @@ create temporary table cmp_txout as
       on datum.hash = tx_out.data_hash
     where
       block_no > 0
-;
-update cmp_txout  -- Fix for illegal bytes of a Shelley address on the `mainnet` ledger in a transaction output.
-  set address = '\x015bad085057ac10ecc7060f7ac41edd6f63068d8963ef7d86ca58669e5ecf2d283418a60be5a848a2380eb721000da1e0bbf39733134beca4cb57afb0b35fc89c63061c9914e055001a518c7516' :: bytea
-  where source = 'chainindex'
-    and address = '\x015bad085057ac10ecc7060f7ac41edd6f63068d8963ef7d86ca58669e5ecf2d283418a60be5a848a2380eb721000da1e0bbf39733134beca4' :: bytea
 ;
 commit;
 select
@@ -303,25 +303,25 @@ create temporary table x_datum as
     from (
       select txid, txix, a.datumbytes
         from cmp_txout as a
-	inner join cmp_txout as b
-	  using (txid, txix)
-	where a.source = 'chainindex'
-	  and b.source = 'dbsync'
-	  and a.datumbytes <> b.datumbytes
-	  and a.datumbytes is not null
-	  and b.datumbytes is not null
+        inner join cmp_txout as b
+          using (txid, txix)
+        where a.source = 'chainindex'
+          and b.source = 'dbsync'
+          and a.datumbytes <> b.datumbytes
+          and a.datumbytes is not null
+          and b.datumbytes is not null
     ) as mc_datum
   union all
   select 'dbsync-chainindex', *
     from (
       select txid, txix, a.datumbytes
         from cmp_txout a
-	inner join cmp_txout b
-	  using (txid, txix)
-	where a.source = 'dbsync'
-	  and b.source = 'chainindex'
-	  and a.datumbytes is not null
-	  and coalesce(a.datumbytes <> b.datumbytes, true)
+        inner join cmp_txout b
+          using (txid, txix)
+        where a.source = 'dbsync'
+          and b.source = 'chainindex'
+          and a.datumbytes is not null
+          and coalesce(a.datumbytes <> b.datumbytes, true)
     ) as cm_datum
 ;
 commit;
