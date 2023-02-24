@@ -1,19 +1,133 @@
 
 {-# LANGUAGE GADTs #-}
-{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE RankNTypes #-}
+
 
 module Language.Marlowe.Runtime.ChainSync.NodeClient
-  where
+  ( NodeClient(..)
+  , NodeClientDependencies(..)
+  , NodeClientSelector
+  , QueryNode
+  , SubmitToNode
+  , getNodeClientSelectorConfig
+  , nodeClient
+  ) where
 
 
-import Cardano.Api (BlockInMode, CardanoMode, ChainPoint, QueryInMode, TxInMode, TxValidationErrorInMode)
+import Cardano.Api
+  ( BlockInMode
+  , CardanoMode
+  , ChainPoint
+  , EraInMode(..)
+  , LocalChainSyncClient(NoLocalChainSyncClient)
+  , LocalNodeClientProtocols(..)
+  , LocalNodeClientProtocolsInMode
+  , QueryInMode
+  , TxInMode(TxInMode)
+  , TxValidationErrorInMode
+  , serialiseToTextEnvelope
+  )
+import Cardano.Api.Shelley (AcquiringFailure(..))
+import Control.Concurrent.Component
 import Control.Concurrent.STM (atomically)
-import Control.Concurrent.STM.TChan (TChan, readTChan, writeTChan)
+import Control.Concurrent.STM.TChan (TChan, newTChan, readTChan, writeTChan)
 import Control.Concurrent.STM.TMVar (TMVar, newEmptyTMVarIO, putTMVar, takeTMVar)
+import Control.Exception (SomeException, mask, throw, try)
+import Data.Aeson (Value(String), toJSON)
+import Data.Bifunctor (first)
+import qualified Data.Text as T (pack)
+import Data.Void (Void)
+import Observe.Event (EventBackend, addField, failEvent, newEvent, withEvent)
+import Observe.Event.Component
+  (GetSelectorConfig, SelectorConfig(..), SomeJSON(..), absurdFieldConfig, singletonFieldConfigWith)
 
 import qualified Ouroboros.Network.Protocol.LocalStateQuery.Client as Q
 import qualified Ouroboros.Network.Protocol.LocalStateQuery.Type as Q
 import qualified Ouroboros.Network.Protocol.LocalTxSubmission.Client as S
+
+
+type SubmitToNode
+  =  TxInMode CardanoMode
+  -> IO (S.SubmitResult (TxValidationErrorInMode CardanoMode))
+
+
+type QueryNode result
+  =  Maybe ChainPoint
+  -> QueryInMode CardanoMode result
+  -> IO (Either AcquiringFailure result)
+
+
+data NodeClientDependencies r = NodeClientDependencies
+  {
+    connectToLocalNode :: !(LocalNodeClientProtocolsInMode CardanoMode -> IO ())
+  , eventBackend :: !(EventBackend IO r NodeClientSelector)
+  }
+
+
+data NodeClient = NodeClient
+  {
+    submitTxToNode  :: SubmitToNode
+  , queryNode :: forall result . QueryNode result
+  }
+
+
+data NodeClientSelector f where
+  Connect :: NodeClientSelector Void
+  Submit :: NodeClientSelector (TxInMode CardanoMode)
+  Query :: NodeClientSelector (Q.Some (QueryInMode CardanoMode))
+
+
+getNodeClientSelectorConfig :: GetSelectorConfig NodeClientSelector
+getNodeClientSelectorConfig Connect = SelectorConfig "connect" True absurdFieldConfig
+getNodeClientSelectorConfig Submit =
+  SelectorConfig "submit" True $ singletonFieldConfigWith (SomeJSON . txToJSON) "tx" True
+  where
+    txToJSON :: TxInMode CardanoMode -> Value
+    txToJSON (TxInMode tx ShelleyEraInCardanoMode) = toJSON $ serialiseToTextEnvelope Nothing tx
+    txToJSON (TxInMode tx AllegraEraInCardanoMode) = toJSON $ serialiseToTextEnvelope Nothing tx
+    txToJSON (TxInMode tx MaryEraInCardanoMode) = toJSON $ serialiseToTextEnvelope Nothing tx
+    txToJSON (TxInMode tx AlonzoEraInCardanoMode) = toJSON $ serialiseToTextEnvelope Nothing tx
+    txToJSON (TxInMode tx BabbageEraInCardanoMode) = toJSON $ serialiseToTextEnvelope Nothing tx
+    txToJSON _ = String "<<a transaction>>"
+getNodeClientSelectorConfig Query =
+  SelectorConfig "query" True $ singletonFieldConfigWith (SomeJSON . queryToJSON) "query" True
+  where
+    queryToJSON :: Q.Some (QueryInMode CardanoMode) -> Value
+    queryToJSON (Q.Some query) = String . T.pack $ show query
+
+
+nodeClient :: Component IO (NodeClientDependencies r) NodeClient
+nodeClient =
+  component \NodeClientDependencies{..} ->
+    do
+      queryChannel <- newTChan
+      submitChannel <- newTChan
+      let
+        runNodeClient = mask \restore ->
+          do
+            ev <- newEvent eventBackend Connect
+            result <-
+              try @SomeException
+                . restore
+                $ connectToLocalNode LocalNodeClientProtocols
+                  {
+                    localChainSyncClient = NoLocalChainSyncClient
+                  , localTxSubmissionClient = Just $ submitClient submitChannel
+                  , localTxMonitoringClient = Nothing
+                  , localStateQueryClient = Just $ queryClient queryChannel
+                  }
+            case result of
+              Left ex -> failEvent ev ex *> throw ex
+              Right _ -> pure ()
+      pure
+        (
+          runNodeClient
+        , NodeClient
+          {
+            submitTxToNode = submitTxToNodeChannel eventBackend submitChannel
+          , queryNode = queryNodeChannel eventBackend queryChannel
+          }
+        )
 
 
 type SubmitChannel = TChan SubmitJob
@@ -28,14 +142,17 @@ data SubmitJob =
 
 
 submitTxToNodeChannel
-  :: SubmitChannel
+  :: EventBackend IO r NodeClientSelector
+  -> SubmitChannel
   -> TxInMode CardanoMode
   -> IO (S.SubmitResult (TxValidationErrorInMode CardanoMode))
-submitTxToNodeChannel channel tx =
-  do
-    submitResultTMVar <- newEmptyTMVarIO
-    atomically $ writeTChan channel SubmitJob{..}
-    atomically $ takeTMVar submitResultTMVar
+submitTxToNodeChannel eventBackend channel tx =
+  withEvent eventBackend Submit \event ->
+    do
+      event `addField` tx
+      submitResultTMVar <- newEmptyTMVarIO
+      atomically $ writeTChan channel SubmitJob{..}
+      atomically $ takeTMVar submitResultTMVar
 
 
 submitClient
@@ -69,15 +186,21 @@ data QueryJob result =
 
 
 queryNodeChannel
-  :: QueryChannel
+  :: EventBackend IO r NodeClientSelector
+  -> QueryChannel
   -> Maybe ChainPoint
   -> QueryInMode CardanoMode result
-  -> IO (Either Q.AcquireFailure result)
-queryNodeChannel channel point query =
-  do
-    queryResultTMVar <- newEmptyTMVarIO
-    atomically $ writeTChan channel $ Q.Some QueryJob{..}
-    atomically $ takeTMVar queryResultTMVar
+  -> IO (Either AcquiringFailure result)
+queryNodeChannel eventBackend channel point query =
+  withEvent eventBackend Query \event ->
+    do
+      event `addField` Q.Some query
+      let
+        toAcquiringFailure Q.AcquireFailurePointTooOld = AFPointTooOld
+        toAcquiringFailure Q.AcquireFailurePointNotOnChain = AFPointNotOnChain
+      queryResultTMVar <- newEmptyTMVarIO
+      atomically $ writeTChan channel $ Q.Some QueryJob{..}
+      atomically $ first toAcquiringFailure <$> takeTMVar queryResultTMVar
 
 
 queryClient
