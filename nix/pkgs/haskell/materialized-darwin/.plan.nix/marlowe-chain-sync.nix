@@ -78,6 +78,7 @@
             (hsPkgs."marlowe-protocols" or (errorHandler.buildDepError "marlowe-protocols"))
             (hsPkgs."nonempty-containers" or (errorHandler.buildDepError "nonempty-containers"))
             (hsPkgs."ouroboros-network" or (errorHandler.buildDepError "ouroboros-network"))
+            (hsPkgs."stm" or (errorHandler.buildDepError "stm"))
             (hsPkgs."these" or (errorHandler.buildDepError "these"))
             (hsPkgs."transformers" or (errorHandler.buildDepError "transformers"))
             (hsPkgs."vector" or (errorHandler.buildDepError "vector"))
@@ -88,6 +89,7 @@
             "Language/Marlowe/Runtime/ChainSync/Database"
             "Language/Marlowe/Runtime/ChainSync/Database/PostgreSQL"
             "Language/Marlowe/Runtime/ChainSync/JobServer"
+            "Language/Marlowe/Runtime/ChainSync/NodeClient"
             "Language/Marlowe/Runtime/ChainSync/Server"
             "Language/Marlowe/Runtime/ChainSync/QueryServer"
             ];
