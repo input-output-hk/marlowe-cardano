@@ -21,8 +21,9 @@ import Data.Jsonable (generateJsonable)
 import Spec.Marlowe.Semantics.Arbitrary ()
 import Spec.Marlowe.Service.Serialization (knownJsonTypes)
 import Spec.Marlowe.Service.Types (Seed(..), Size(..))
-import Test.QuickCheck (generate, variant)
+import Test.QuickCheck (generate)
 import Test.QuickCheck.Gen (Gen(..))
+import Test.QuickCheck.Random (mkQCGen, newQCGen)
 
 import qualified Data.Aeson as A (Value)
 
@@ -34,12 +35,10 @@ generateValue
   -> String  -- ^ The key for the type.
   -> IO (Either String A.Value)  -- ^ Either the value or an error message.
 generateValue size seed =
-  mapM (generate . resize' size . variant' seed) . generateJsonable knownJsonTypes
+  mapM (generate' size seed) . generateJsonable knownJsonTypes
   where
-    variant' :: Maybe Seed -> Gen a -> Gen a
-    variant' (Just (Seed n)) = variant n
-    variant' Nothing = id
-
-    resize' :: Maybe Size -> Gen a -> Gen a
-    resize' (Just (Size n)) (MkGen g) = MkGen (\r _ -> g r n)
-    resize' _ g = g
+    generate' :: Maybe Size -> Maybe Seed -> Gen a -> IO a
+    generate' (Just (Size s)) (Just (Seed r)) (MkGen g) = return $ g (mkQCGen r) s
+    generate' Nothing (Just (Seed r)) (MkGen g) = return $ g (mkQCGen r) 30
+    generate' (Just (Size s)) Nothing (MkGen g) = newQCGen >>= \r -> return $ g r s
+    generate' _ _ g = generate g
