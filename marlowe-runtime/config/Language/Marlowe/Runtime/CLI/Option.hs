@@ -25,10 +25,10 @@ data CliOption f a = CliOption
   }
 
 runtimeHost :: CliOption OptionFields HostName
-runtimeHost = host "marlowe-runtime" "RUNTIME" "127.0.0.1" "The hostname of the Marlowe Runtime server."
+runtimeHost = host "marlowe-runtime" "" "127.0.0.1" "The hostname of the Marlowe Runtime server."
 
 runtimePort :: CliOption OptionFields PortNumber
-runtimePort = port "marlowe-runtime" "RUNTIME" 3724 "The port number of the Marlowe Runtime server."
+runtimePort = port "marlowe-runtime" "" 3700 "The port number of the Marlowe Runtime server."
 
 syncHost :: CliOption OptionFields HostName
 syncHost = host "marlowe-sync" "SYNC" "127.0.0.1" "The hostname of the Marlowe Runtime marlowe-sync server."
@@ -82,7 +82,7 @@ port optPrefix envPrefix defaultValue description = CliOption
       ])
   }
   where
-    env = "MARLOWE_RT_" <> envPrefix <> "_PORT"
+    env = "MARLOWE_RT_" <> if null envPrefix then "PORT" else envPrefix <> "_PORT"
 
 host :: String -> String -> HostName  -> String -> CliOption OptionFields HostName
 host optPrefix envPrefix defaultValue description = CliOption
@@ -97,7 +97,7 @@ host optPrefix envPrefix defaultValue description = CliOption
       ])
   }
   where
-    env = "MARLOWE_RT_" <> envPrefix <> "_HOST"
+    env = "MARLOWE_RT_" <> if null envPrefix then "HOST" else envPrefix <> "_HOST"
 
 parseAddress :: String -> Either String Address
 parseAddress = maybe (Left "Invalid Bech 32 address") Right . fromBech32 . fromString
