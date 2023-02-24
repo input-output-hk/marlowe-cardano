@@ -602,8 +602,8 @@ create temporary table x_asset_out_0 as
       select txoutid, txoutix, slotno, assetid, quantity from cmp_asset_out where source = 'chainindex'
     ) as cm_asset_out
 ;
-drop table if exists x_asset_1;
-create temporary table x_asset_1 as
+drop table if exists x_asset_out_1;
+create temporary table x_asset_out_1 as
   select distinct
       txoutid
     , txoutix
@@ -614,16 +614,16 @@ drop table if exists x_asset_out;
 create temporary table x_asset_out as
   select 'chainindex-dbsync' as "comparison", *
     from (
-      select txoutid, txoutix, slotno, assetid, quantity from cmp_asset_out inner join x_asset_1 using (txoutid, txoutix, assetid) where source = 'chainindex'
+      select txoutid, txoutix, slotno, assetid, quantity from cmp_asset_out inner join x_asset_out_1 using (txoutid, txoutix, assetid) where source = 'chainindex'
       except
-      select txoutid, txoutix, slotno, assetid, quantity from cmp_asset_out inner join x_asset_1 using (txoutid, txoutix, assetid) where source = 'dbsync'
+      select txoutid, txoutix, slotno, assetid, quantity from cmp_asset_out inner join x_asset_out_1 using (txoutid, txoutix, assetid) where source = 'dbsync'
     ) as mc_asset_out
   union all
   select 'dbsync-chainindex', *
     from (
-      select txoutid, txoutix, slotno, assetid, quantity from cmp_asset_out inner join x_asset_1 using (txoutid, txoutix, assetid) where source = 'dbsync'
+      select txoutid, txoutix, slotno, assetid, quantity from cmp_asset_out inner join x_asset_out_1 using (txoutid, txoutix, assetid) where source = 'dbsync'
       except
-      select txoutid, txoutix, slotno, assetid, quantity from cmp_asset_out inner join x_asset_1 using (txoutid, txoutix, assetid) where source = 'chainindex'
+      select txoutid, txoutix, slotno, assetid, quantity from cmp_asset_out inner join x_asset_out_1 using (txoutid, txoutix, assetid) where source = 'chainindex'
     ) as cm_asset_out
 ;
 select
