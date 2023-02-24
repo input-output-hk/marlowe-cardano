@@ -1,7 +1,7 @@
 --
--- Script to compare databases for `marlowe-chainindexer` and `cardano-db-sync`.
+-- Script to compare databases for `marlowe-chain-indexer` and `cardano-db-sync`.
 --
--- This assumes that the `marlowe-chainindexer` tables reside in the schema
+-- This assumes that the `marlowe-chain-indexer` tables reside in the schema
 -- `chain` and the `cardano-db-sync` tables reside in the schema `public`.
 --
 -- This script writes CSV output files listing discrepancies to a folder `out/`.
@@ -12,14 +12,18 @@
 \qecho Finding the last block in common.
 \qecho
 
+begin;
 drop table if exists max_slotno;
 create temporary table max_slotno as
   select
-      max(slotno) as max_slotno
+      -- Don't examine the most recent epoch,
+      -- in case `cardano-db-sync` is lagging.
+      max(slotno) - 432000 as max_slotno
     from chain.block as cblock
     inner join public.block as dblock
       on cblock.id = dblock.hash
 ;
+commit;
 select max_slotno as "Slot for Latest Block in Common"
   from max_slotno
 ;
@@ -30,6 +34,7 @@ select max_slotno as "Slot for Latest Block in Common"
 \qecho Block comparison.
 \qecho
 
+begin;
 drop table if exists cmp_block;
 create temporary table cmp_block as
   select
@@ -58,6 +63,7 @@ create temporary table cmp_block as
     where
       slot_no > 0
 ;
+commit;
 select
     source as "Source"
   , count(*) as "Count of Block Records"
@@ -65,6 +71,7 @@ select
   group by source
 ;
 
+begin;
 drop table if exists x_block;
 create temporary table x_block as
   select 'chainindex-dbsync' :: varchar as "comparison", *
@@ -81,6 +88,7 @@ create temporary table x_block as
       select id, slotno, blockno from cmp_block where source = 'chainindex'
     ) as cm_block
 ;
+commit;
 select
     comparison as "Discrepancy"
   , count(*) as "Count of Block Records"
@@ -94,6 +102,7 @@ select
 \qecho Tx comparison.
 \qecho
 
+begin;
 drop table if exists cmp_tx;
 create temporary table cmp_tx as
   select
@@ -116,7 +125,8 @@ create temporary table cmp_tx as
     , block.hash
     , block.slot_no
     , invalid_before
-    , invalid_hereafter
+      -- Handle the limitations of `bigint`.
+    , case when invalid_hereafter is not null then least(invalid_hereafter, 9223372036854775807) else invalid_hereafter end
     , tx_metadata.bytes
     , valid_contract
     from max_slotno
@@ -129,6 +139,7 @@ create temporary table cmp_tx as
     where
       block_no > 0
 ;
+commit;
 select
     source as "Source"
   , count(*) as "Count of Tx Records"
@@ -137,6 +148,7 @@ select
   group by source
 ;
 
+begin;
 drop table if exists x_tx;
 create temporary table x_tx as
   select 'chainindex-dbsync' :: varchar as "comparison", *
@@ -153,6 +165,7 @@ create temporary table x_tx as
       select id, blockid, slotno, validitylowerbound, validityupperbound, isvalid from cmp_tx where source = 'chainindex'
     ) as cm_tx
 ;
+commit;
 select
     comparison as "Discrepancy"
   , count(*) as "Count of Tx Records"
@@ -166,6 +179,7 @@ select
 \qecho Tx metadata comparison
 \qecho
 
+begin;
 drop table if exists x_metadata;
 create temporary table x_metadata as
   select
@@ -177,6 +191,8 @@ create temporary table x_metadata as
       using (id)
     where m_tx.source = 'chainindex'
       and c_tx.source = 'dbsync'
+      and m_tx.isvalid
+      and c_tx.isvalid  -- Cardano DB sync omits metadata for invalid transactions.
       and (m_tx.metadata is not null or c_tx.metadata is not null)
       and (
            m_tx.metadata is not null and c_tx.metadata is     null
@@ -184,6 +200,7 @@ create temporary table x_metadata as
         or position(right(encode(c_tx.metadata, 'hex'), -4) in encode(m_tx.metadata, 'hex')) = 0
       )
 ;
+commit;
 select
   count(*) as "Count of Tx Metadata Discrepancies"
   from x_metadata
@@ -195,6 +212,7 @@ select
 \qecho TxOut comparison.
 \qecho
 
+begin;
 drop table if exists cmp_txout;
 create temporary table cmp_txout as
   select
@@ -217,7 +235,12 @@ create temporary table cmp_txout as
     , tx.hash
     , tx_out.index
     , block.slot_no
-    , tx_out.address_raw
+    , case
+        -- Clean up the few raw Shelley addresses that have illegal extra bytes.
+        when get_byte(tx_out.address_raw, 0) / 16 in (0, 1, 2, 3) then substring(tx_out.address_raw for 57)
+        when get_byte(tx_out.address_raw, 0) / 16 in (6, 7)       then substring(tx_out.address_raw for 29)
+        else tx_out.address_raw
+      end
     , tx_out.value
     , tx_out.data_hash
     , case when tx_out.inline_datum_id is not null then datum.bytes else null end
@@ -234,11 +257,7 @@ create temporary table cmp_txout as
     where
       block_no > 0
 ;
-update cmp_txout  -- Fix for illegal bytes of a Shelley address on the `mainnet` ledger in a transaction output.
-  set address = '\x015bad085057ac10ecc7060f7ac41edd6f63068d8963ef7d86ca58669e5ecf2d283418a60be5a848a2380eb721000da1e0bbf39733134beca4cb57afb0b35fc89c63061c9914e055001a518c7516' :: bytea
-  where source = 'chainindex'
-    and address = '\x015bad085057ac10ecc7060f7ac41edd6f63068d8963ef7d86ca58669e5ecf2d283418a60be5a848a2380eb721000da1e0bbf39733134beca4' :: bytea
-;
+commit;
 select
     source as "Source"
   , count(*) as "Count of TxOut Records"
@@ -246,6 +265,7 @@ select
   group by source
 ;
 
+begin;
 drop table if exists x_txout;
 create temporary table x_txout as
   select 'chainindex-dbsync' :: varchar as "comparison", *
@@ -262,6 +282,7 @@ create temporary table x_txout as
       select txid, txix, slotno, address, lovelace, datumhash, iscollateral from cmp_txout where source = 'chainindex'
     ) as cm_txout
 ;
+commit;
 select
     comparison as "Discrepancy"
   , count(*) as "Count of TxOut Records"
@@ -275,33 +296,35 @@ select
 \qecho Datum comparison.
 \qecho
 
+begin;
 drop table if exists x_datum;
 create temporary table x_datum as
   select 'chainindex-dbsync' :: varchar as "comparison", *
     from (
       select txid, txix, a.datumbytes
         from cmp_txout as a
-	inner join cmp_txout as b
-	  using (txid, txix)
-	where a.source = 'chainindex'
-	  and b.source = 'dbsync'
-	  and a.datumbytes <> b.datumbytes
-	  and a.datumbytes is not null
-	  and b.datumbytes is not null
+        inner join cmp_txout as b
+          using (txid, txix)
+        where a.source = 'chainindex'
+          and b.source = 'dbsync'
+          and a.datumbytes <> b.datumbytes
+          and a.datumbytes is not null
+          and b.datumbytes is not null
     ) as mc_datum
   union all
   select 'dbsync-chainindex', *
     from (
       select txid, txix, a.datumbytes
         from cmp_txout a
-	inner join cmp_txout b
-	  using (txid, txix)
-	where a.source = 'dbsync'
-	  and b.source = 'chainindex'
-	  and a.datumbytes is not null
-	  and coalesce(a.datumbytes <> b.datumbytes, true)
+        inner join cmp_txout b
+          using (txid, txix)
+        where a.source = 'dbsync'
+          and b.source = 'chainindex'
+          and a.datumbytes is not null
+          and coalesce(a.datumbytes <> b.datumbytes, true)
     ) as cm_datum
 ;
+commit;
 select
     comparison as "Discrepancy"
   , count(*) as "Count of Datum Records"
@@ -315,6 +338,7 @@ select
 \qecho TxIn comparison.
 \qecho
 
+begin;
 drop table if exists cmp_txin;
 create temporary table cmp_txin as
   select
@@ -356,6 +380,7 @@ create temporary table cmp_txin as
     where
       block_no > 0
 ;
+commit;
 select
     source as "Source"
   , count(*) as "Count of TxIn Records"
@@ -363,6 +388,7 @@ select
   group by source
 ;
 
+begin;
 drop table if exists x_txin;
 create temporary table x_txin as
   select 'chainindex-dbsync' :: varchar as "comparison", *
@@ -379,6 +405,7 @@ create temporary table x_txin as
     select txoutid, txoutix, txinid, slotno, redeemerdatumbytes from cmp_txin where source = 'chainindex'
   ) as cm_txin
 ;
+commit;
 select
     comparison as "Discrepancy"
   , count(*) as "Count of TxIn Records"
@@ -392,6 +419,7 @@ select
 \qecho Asset comparison.
 \qecho
 
+begin;
 drop table if exists cmp_asset;
 create temporary table cmp_asset as
   select
@@ -420,6 +448,7 @@ create temporary table cmp_asset as
     where
       block_no > 0
 ;
+commit;
 select
     source as "Source"
   , count(*) as "Count of Asset Records"
@@ -427,6 +456,7 @@ select
   group by source
 ;
 
+begin;
 drop table if exists x_asset;
 create temporary table x_asset as
   select 'chainindex-dbsync' :: varchar as "comparison", *
@@ -443,6 +473,7 @@ create temporary table x_asset as
       select policyid, name from cmp_asset where source = 'chainindex'
     ) as cm_asset
 ;
+commit;
 select
     comparison as "Discrepancy"
   , count(*) as "Count of Asset Records"
@@ -456,6 +487,7 @@ select
 \qecho Asset mint comparison.
 \qecho
 
+begin;
 drop table if exists cmp_asset_mint;
 create temporary table cmp_asset_mint as
   select
@@ -490,6 +522,7 @@ create temporary table cmp_asset_mint as
     where
       block_no > 0
 ;
+commit;
 select
     source as "Source"
   , count(*) as "Count of Asset Mint Records"
@@ -497,6 +530,7 @@ select
   group by source
 ;
 
+begin;
 drop table if exists x_asset_mint;
 create temporary table x_asset_mint as
   select 'chainindex-dbsync' :: varchar as "comparison", *
@@ -513,6 +547,7 @@ create temporary table x_asset_mint as
       select txid, slotno, policyid, name, quantity from cmp_asset_mint where source = 'chainindex'
     ) as cm_asset_mint
 ;
+commit;
 select
     comparison as "Discrepancy"
   , count(*) as "Count of Asset Mint Records"
@@ -526,6 +561,21 @@ select
 \qecho Asset out comparison.
 \qecho
 
+begin;
+drop table if exists xref_asset;
+create temporary table xref_asset as
+  select
+      asset.id as "chainindex_id"
+    , multi_asset.id as "dbsync_id"
+    , asset.policyid
+    , asset.name
+    from chain.asset
+    inner join public.multi_asset
+      on (asset.policyid, asset.name) = (multi_asset.policy, multi_asset.name)
+;
+commit;
+
+begin;
 drop table if exists cmp_asset_out;
 create temporary table cmp_asset_out as
   select
@@ -533,8 +583,7 @@ create temporary table cmp_asset_out as
     , txoutid
     , txoutix
     , slotno
-    , policyid
-    , name
+    , assetid
     , quantity
     from max_slotno
     inner join chain.assetout
@@ -543,12 +592,11 @@ create temporary table cmp_asset_out as
       on assetid = id
   union
   select
-      'dbsync'
+      'dbsync' :: varchar as "source"
     , tx.hash
     , tx_out.index
     , block.slot_no
-    , multi_asset.policy
-    , multi_asset.name
+    , chainindex_id
     , ma_tx_out.quantity
     from max_slotno
     inner join public.block as block
@@ -559,11 +607,12 @@ create temporary table cmp_asset_out as
       on tx_out.tx_id = tx.id
     inner join public.ma_tx_out
       on ma_tx_out.tx_out_id = tx_out.id
-    inner join public.multi_asset
-      on multi_asset.id = ma_tx_out.ident
+    inner join xref_asset
+      on dbsync_id = ma_tx_out.ident
     where
       block_no > 0
 ;
+commit;
 select
     source as "Source"
   , count(*) as "Count of Asset Out Records"
@@ -571,29 +620,31 @@ select
   group by source
 ;
 
+begin;
 drop table if exists x_asset_out;
 create temporary table x_asset_out as
   select 'chainindex-dbsync' as "comparison", *
     from (
-      select txoutid, txoutix, slotno, policyid, name, quantity from cmp_asset_out where source = 'chainindex'
+      select txoutid, txoutix, slotno, assetid, quantity from cmp_asset_out where source = 'chainindex'
       except
-      select txoutid, txoutix, slotno, policyid, name, quantity from cmp_asset_out where source = 'dbsync'
-    ) as mc_asset
+      select txoutid, txoutix, slotno, assetid, quantity from cmp_asset_out where source = 'dbsync'
+    ) as mc_asset_out
   union all
   select 'dbsync-chainindex', *
     from (
-      select txoutid, txoutix, slotno, policyid, name, quantity from cmp_asset_out where source = 'dbsync'
+      select txoutid, txoutix, slotno, assetid, quantity from cmp_asset_out where source = 'dbsync'
       except
-      select txoutid, txoutix, slotno, policyid, name, quantity from cmp_asset_out where source = 'chainindex'
-    ) as cm_asset
+      select txoutid, txoutix, slotno, assetid, quantity from cmp_asset_out where source = 'chainindex'
+    ) as cm_asset_out
 ;
+commit;
 select
     comparison as "Discrepancy"
   , count(*) as "Count of Asset Out Records"
   from x_asset_out
   group by comparison
 ;
-\copy (select * from x_asset_out order by 2, 3, 4, 5, 6, 7, 1) to 'out/assetout-discrepancies.csv' CSV HEADER
+\copy (select * from x_asset_out order by 2, 3, 4, 5, 6, 1) to 'out/assetout-discrepancies.csv' CSV HEADER
 
 
 \qecho
