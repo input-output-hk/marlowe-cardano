@@ -12,10 +12,13 @@
 \qecho Finding the last block in common.
 \qecho
 
+begin;
 drop table if exists max_slotno;
 create temporary table max_slotno as
   select
-      max(slotno) as max_slotno
+      -- Don't examine the most recent epoch,
+      -- in case `cardano-db-sync` is lagging.
+      max(slotno) - 432000 as max_slotno
     from chain.block as cblock
     inner join public.block as dblock
       on cblock.id = dblock.hash
