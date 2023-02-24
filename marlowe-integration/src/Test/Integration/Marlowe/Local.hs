@@ -72,7 +72,7 @@ import qualified Data.Text.Lazy.IO as TL
 import Data.Time.Clock (secondsToNominalDiffTime)
 import Data.UUID.V4 (nextRandom)
 import Data.Void (Void)
-import Data.Word (Word16, Word64)
+import Data.Word (Word16)
 import Database.PostgreSQL.LibPQ (connectdb, errorMessage, exec, finish, resultErrorMessage)
 import Hasql.Connection (settings)
 import qualified Hasql.Pool as Pool
