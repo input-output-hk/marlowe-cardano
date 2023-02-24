@@ -36,10 +36,10 @@ import Language.Marlowe.Runtime.Transaction.Api
 import Network.Protocol.Job.Client (liftCommand)
 
 import qualified Cardano.Api as C (BabbageEra, TxBody)
-import Control.Monad.Trans.Marlowe.Class (runMarloweTxClient)
 import qualified Data.List.NonEmpty as NE (fromList)
 import qualified Data.Map.Strict as M (Map, null, toList)
 import qualified Data.Set as S (fromList)
+import Language.Marlowe.Runtime.Client (runMarloweTxClient)
 
 
 buildCreation

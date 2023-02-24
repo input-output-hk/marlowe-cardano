@@ -47,13 +47,11 @@ newtype MarloweT m a = MarloweT { unMarloweT :: ReaderT (SomeClientConnector Mar
     , MonadTransControl
     , MonadBaseControl b
     , MonadResource
+    , MonadCleanup
     )
 
 instance MonadTrans MarloweT where
   lift = MarloweT . lift
-
-instance MonadMask m => MonadCleanup (MarloweT m) where
-  generalCleanup = generalBracket
 
 instance MonadReader r m => MonadReader r (MarloweT m) where
   ask = lift ask
