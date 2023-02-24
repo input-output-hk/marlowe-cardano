@@ -1,7 +1,7 @@
 --
--- Script to compare databases for `marlowe-chainindexer` and `cardano-db-sync`.
+-- Script to compare databases for `marlowe-chain-indexer` and `cardano-db-sync`.
 --
--- This assumes that the `marlowe-chainindexer` tables reside in the schema
+-- This assumes that the `marlowe-chain-indexer` tables reside in the schema
 -- `chain` and the `cardano-db-sync` tables reside in the schema `public`.
 --
 -- This script writes CSV output files listing discrepancies to a folder `out/`.
@@ -116,7 +116,8 @@ create temporary table cmp_tx as
     , block.hash
     , block.slot_no
     , invalid_before
-    , invalid_hereafter
+      -- Handle the limitations of `bigint`.
+    , case when invalid_hereafter is not null then least(invalid_hereafter, 9223372036854775807) else invalid_hereafter end
     , tx_metadata.bytes
     , valid_contract
     from max_slotno
