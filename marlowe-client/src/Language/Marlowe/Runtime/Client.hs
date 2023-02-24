@@ -1,7 +1,11 @@
 module Language.Marlowe.Runtime.Client
-  where
+  ( module Control.Monad.Trans.Marlowe
+  , module Control.Monad.Trans.Marlowe.Class
+  , connectToMarloweRuntime
+  ) where
 
-import Control.Monad.Trans.Marlowe (MarloweT, runMarloweT)
+import Control.Monad.Trans.Marlowe
+import Control.Monad.Trans.Marlowe.Class
 import Language.Marlowe.Protocol.Client (marloweClientPeer)
 import Network.Protocol.Connection (SomeConnector(..))
 import Network.Protocol.Driver (tcpClient)

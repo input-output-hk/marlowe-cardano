@@ -52,53 +52,18 @@ library
     Language.Marlowe.Runtime.Client
   build-depends:
       base >= 4.9 && < 5
-    , aeson
-    , async
-    , async-components
-    , bytestring
-    , cardano-api
-    , cardano-crypto-wrapper
-    , cardano-ledger-byron
-    , containers
     , eventuo11y
-    , eventuo11y-extras
     , exceptions
-    , hasql
-    , hasql-pool
-    , http-client
-    , lifted-async
-    , marlowe-cli
-    , marlowe-chain-sync
-    , marlowe-chain-sync:chain-indexer
-    , marlowe-chain-sync:libchainsync
     , marlowe-protocols
-    , marlowe-runtime
     , marlowe-runtime:discovery-api
     , marlowe-runtime:history-api
-    , marlowe-runtime:indexer
-    , marlowe-runtime:sync
     , marlowe-runtime:sync-api
-    , marlowe-runtime:tx
     , marlowe-runtime:tx-api
-    , marlowe-runtime:proxy
     , marlowe-runtime:proxy-api
-    , marlowe-runtime:web-server
     , mtl
     , monad-control
     , network
-    , nonempty-containers
-    , ouroboros-network
-    , postgresql-libpq
-    , process
-    , random
     , resourcet
-    , servant-client
-    , stm
-    , text
-    , time
     , transformers
     , transformers-base
-    , typed-protocols
-    , uuid
     , unliftio
-    , warp

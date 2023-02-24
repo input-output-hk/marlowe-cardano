@@ -24,6 +24,12 @@ data CliOption f a = CliOption
   , parser :: !(Mod f a -> Parser a)
   }
 
+runtimeHost :: CliOption OptionFields HostName
+runtimeHost = host "marlowe-runtime" "RUNTIME" "127.0.0.1" "The hostname of the Marlowe Runtime server."
+
+runtimePort :: CliOption OptionFields PortNumber
+runtimePort = port "marlowe-runtime" "RUNTIME" 3724 "The port number of the Marlowe Runtime server."
+
 syncHost :: CliOption OptionFields HostName
 syncHost = host "marlowe-sync" "SYNC" "127.0.0.1" "The hostname of the Marlowe Runtime marlowe-sync server."
 

@@ -1,5 +1,3 @@
-
-
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE NamedFieldPuns #-}
@@ -40,8 +38,7 @@ import Data.Type.Equality ((:~:)(Refl))
 import Language.Marlowe.Core.V1.Semantics (MarloweData(marloweContract))
 import Language.Marlowe.Protocol.HeaderSync.Client (MarloweHeaderSyncClient)
 import Language.Marlowe.Protocol.Sync.Client (MarloweSyncClient)
-import Language.Marlowe.Runtime.App.Run (runMarloweHeaderSyncClient, runMarloweSyncClient)
-import Language.Marlowe.Runtime.App.Types (Client, Services(..))
+import Language.Marlowe.Runtime.App.Types (Client)
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, TxId, TxOutRef(TxOutRef, txId))
 import Language.Marlowe.Runtime.Core.Api
   ( ContractId
@@ -75,6 +72,7 @@ import qualified Language.Marlowe.Protocol.Sync.Client as CSync
   , ClientStWait(SendMsgCancel, SendMsgPoll)
   , MarloweSyncClient(MarloweSyncClient)
   )
+import Language.Marlowe.Runtime.Client (runMarloweHeaderSyncClient, runMarloweSyncClient)
 
 
 streamAllContractIds
@@ -100,8 +98,7 @@ streamContractHeaders
   -> TChan a
   -> Client (Either String ())
 streamContractHeaders eventBackend pollingFrequency extract channel =
-  runMarloweHeaderSyncClient runSyncHeaderClient
-    $ streamContractHeadersClient eventBackend pollingFrequency extract channel
+  runMarloweHeaderSyncClient $ streamContractHeadersClient eventBackend pollingFrequency extract channel
 
 
 streamContractHeadersClient
@@ -292,8 +289,7 @@ streamContractSteps
   -> TChan (ContractStream v)
   -> Client ()
 streamContractSteps eventBackend pollingFrequency finishOnClose finishOnWait accept csContractId channel =
-  runMarloweSyncClient runSyncSyncClient
-    $ streamContractStepsClient eventBackend pollingFrequency finishOnClose finishOnWait accept csContractId channel
+  runMarloweSyncClient $ streamContractStepsClient eventBackend pollingFrequency finishOnClose finishOnWait accept csContractId channel
 
 
 streamContractStepsClient

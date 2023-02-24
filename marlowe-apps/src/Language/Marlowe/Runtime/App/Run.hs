@@ -16,14 +16,15 @@ module Language.Marlowe.Runtime.App.Run
   ) where
 
 
+import Control.Monad.Reader (ask)
 import Control.Monad.Trans.Control (liftBaseWith)
-import Control.Monad.Trans.Reader (ReaderT(..), ask)
-import Language.Marlowe.Protocol.HeaderSync.Client
-  (MarloweHeaderSyncClient, hoistMarloweHeaderSyncClient, marloweHeaderSyncClientPeer)
-import Language.Marlowe.Protocol.Query.Client (MarloweQueryClient, hoistMarloweQueryClient, marloweQueryClientPeer)
-import Language.Marlowe.Protocol.Sync.Client (MarloweSyncClient, hoistMarloweSyncClient, marloweSyncClientPeer)
+import Control.Monad.Trans.Reader (ReaderT(..))
+import Language.Marlowe.Protocol.HeaderSync.Client (MarloweHeaderSyncClient, hoistMarloweHeaderSyncClient)
+import Language.Marlowe.Protocol.Query.Client (MarloweQueryClient, hoistMarloweQueryClient)
+import Language.Marlowe.Protocol.Sync.Client (MarloweSyncClient, hoistMarloweSyncClient)
 import Language.Marlowe.Runtime.App.Types (Client(..), Config(..), Services(..))
 import Language.Marlowe.Runtime.ChainSync.Api (RuntimeChainSeekClient, WithGenesis(Genesis))
+import Language.Marlowe.Runtime.Client (connectToMarloweRuntime)
 import Network.Protocol.ChainSeek.Client (chainSeekClientPeer, hoistChainSeekClient)
 import Network.Protocol.Driver (runConnector, tcpClient)
 import Network.Protocol.Handshake.Client (handshakeClientConnector)
@@ -84,11 +85,7 @@ runClientWithConfig
   :: Config
   -> Client a
   -> IO a
-runClientWithConfig Config{..} client = runReaderT (runClient client) Services
+runClientWithConfig Config{..} client = runReaderT (connectToMarloweRuntime runtimeHost runtimePort (runClient client)) Services
   { runChainSeekCommandClient = runConnector $ handshakeClientConnector $ tcpClient chainSeekHost chainSeekCommandPort jobClientPeer
-  , runChainSeekSyncClient = runConnector $ handshakeClientConnector $ tcpClient chainSeekHost chainSeekSyncPort (chainSeekClientPeer Genesis)
-  , runSyncSyncClient = runConnector $ handshakeClientConnector $ tcpClient syncHost syncSyncPort marloweSyncClientPeer
-  , runSyncHeaderClient = runConnector $ handshakeClientConnector $ tcpClient syncHost syncHeaderPort marloweHeaderSyncClientPeer
-  , runSyncQueryClient = runConnector $ handshakeClientConnector $ tcpClient syncHost syncQueryPort marloweQueryClientPeer
-  , runTxCommandClient = runConnector $ handshakeClientConnector $ tcpClient txHost txCommandPort jobClientPeer
+  , runChainSeekSyncClient = runConnector $ handshakeClientConnector $ tcpClient chainSeekHost chainSeekSyncPort $ chainSeekClientPeer Genesis
   }

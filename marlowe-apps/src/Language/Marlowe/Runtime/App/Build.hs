@@ -19,8 +19,7 @@ import Data.Time (UTCTime, secondsToNominalDiffTime)
 import Data.Time.Clock.POSIX (posixSecondsToUTCTime)
 import Data.Void (Void)
 import Language.Marlowe (POSIXTime(..))
-import Language.Marlowe.Runtime.App.Run (runJobClient)
-import Language.Marlowe.Runtime.App.Types (Client, Services(..))
+import Language.Marlowe.Runtime.App.Types (Client)
 import Language.Marlowe.Runtime.ChainSync.Api (Address, Lovelace(..), TokenName, TransactionMetadata, TxOutRef)
 import Language.Marlowe.Runtime.Core.Api (ContractId, IsMarloweVersion(..), MarloweVersion)
 import Language.Marlowe.Runtime.Transaction.Api
@@ -37,6 +36,7 @@ import Language.Marlowe.Runtime.Transaction.Api
 import Network.Protocol.Job.Client (liftCommand)
 
 import qualified Cardano.Api as C (BabbageEra, TxBody)
+import Control.Monad.Trans.Marlowe.Class (runMarloweTxClient)
 import qualified Data.List.NonEmpty as NE (fromList)
 import qualified Data.Map.Strict as M (Map, null, toList)
 import qualified Data.Set as S (fromList)
@@ -108,7 +108,7 @@ build showError getBody command addresses change collaterals =
     command' = command $ WalletAddresses change (S.fromList addresses) (S.fromList collaterals)
   in
     fmap (bimap showError getBody)
-      . runJobClient runTxCommandClient
+      . runMarloweTxClient
       $ liftCommand command'
 
 
