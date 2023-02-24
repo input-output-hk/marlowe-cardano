@@ -191,6 +191,8 @@ create temporary table x_metadata as
       using (id)
     where m_tx.source = 'chainindex'
       and c_tx.source = 'dbsync'
+      and m_tx.isvalid
+      and c_tx.isvalid  -- Cardano DB sync omits metadata for invalid transactions.
       and (m_tx.metadata is not null or c_tx.metadata is not null)
       and (
            m_tx.metadata is not null and c_tx.metadata is     null
