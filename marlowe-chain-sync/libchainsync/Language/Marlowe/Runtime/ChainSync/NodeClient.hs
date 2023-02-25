@@ -18,17 +18,20 @@ import Cardano.Api
   ( BlockInMode
   , CardanoMode
   , ChainPoint
+  , ChainTip
   , EraInMode(..)
-  , LocalChainSyncClient(NoLocalChainSyncClient)
+  , LocalChainSyncClient(LocalChainSyncClient)
   , LocalNodeClientProtocols(..)
   , LocalNodeClientProtocolsInMode
   , QueryInMode
   , TxInMode(TxInMode)
   , TxValidationErrorInMode
+  , chainTipToChainPoint
   , serialiseToTextEnvelope
   )
+import Cardano.Api.ChainSync.Client
 import Cardano.Api.Shelley (AcquiringFailure(..))
-import Control.Concurrent.Component
+import Control.Concurrent.Component (Component, component)
 import Control.Concurrent.STM (atomically)
 import Control.Concurrent.STM.TChan (TChan, newTChan, readTChan, writeTChan)
 import Control.Concurrent.STM.TMVar (TMVar, newEmptyTMVarIO, putTMVar, takeTMVar)
@@ -111,7 +114,11 @@ nodeClient =
                 . restore
                 $ connectToLocalNode LocalNodeClientProtocols
                   {
-                    localChainSyncClient = NoLocalChainSyncClient
+                    -- We don't use the block and tip information, but the chain
+                    -- sync client keeps the connection open. Without this client,
+                    -- the node would close the connection in about three seconds,
+                    -- making it impossible to submit and queery.
+                    localChainSyncClient = LocalChainSyncClient chainSyncClient
                   , localTxSubmissionClient = Just $ submitClient submitChannel
                   , localTxMonitoringClient = Nothing
                   , localStateQueryClient = Just $ queryClient queryChannel
@@ -230,3 +237,36 @@ queryClient channel =
             }
   in
     Q.LocalStateQueryClient next
+
+
+chainSyncClient :: ChainSyncClient (BlockInMode CardanoMode) ChainPoint ChainTip IO ()
+chainSyncClient =
+  let
+    stStart :: ClientStIdle (BlockInMode CardanoMode) ChainPoint ChainTip IO ()
+    stStart = SendMsgRequestNext stFirst $ pure stNext
+    stFirst :: ClientStNext (BlockInMode CardanoMode) ChainPoint ChainTip IO ()
+    stFirst =
+      ClientStNext
+      {
+        recvMsgRollForward  = \_ tip -> ChainSyncClient . pure $ stTip tip  -- Identified the tip, now intersect with it.
+      , recvMsgRollBackward = \_ tip -> ChainSyncClient . pure $ stTip tip  -- Identified the tip, now intersect with it.
+      }
+    stTip :: ChainTip -> ClientStIdle (BlockInMode CardanoMode) ChainPoint ChainTip IO ()
+    stTip tip =
+      SendMsgFindIntersect [chainTipToChainPoint tip]
+        $ ClientStIntersect
+          {
+            recvMsgIntersectFound    = \_ _  -> ChainSyncClient $ pure stIdle        -- The tip was found, so follow it.
+          , recvMsgIntersectNotFound = \tip' -> ChainSyncClient . pure $ stTip tip'  -- The tip was not found, so try again.
+          }
+    stIdle :: ClientStIdle (BlockInMode CardanoMode) ChainPoint ChainTip IO ()
+    stIdle = SendMsgRequestNext stNext $ pure stNext
+    stNext :: ClientStNext (BlockInMode CardanoMode) ChainPoint ChainTip IO ()
+    stNext =
+      ClientStNext
+      {
+        recvMsgRollForward  = \_ _ -> ChainSyncClient $ pure stIdle  -- Continuing following the tip.
+      , recvMsgRollBackward = \_ _ -> ChainSyncClient $ pure stIdle  -- Continuing following the tip.
+      }
+  in
+    ChainSyncClient $ pure stStart
