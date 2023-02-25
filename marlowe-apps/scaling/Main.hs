@@ -136,7 +136,7 @@ runOne eventBackend config address key =
                   Just address' -> pure $ uncurry Address address'
                   Nothing       -> throwError "Address conversion failed."
               let
-                contract = makeContract (now + 15 * 60 * 1000) party
+                contract = makeContract (now + 5 * 60 * 60 * 1000) party
               inputs <- randomInputs party
               runScenario event' config address key contract inputs
         case result of
