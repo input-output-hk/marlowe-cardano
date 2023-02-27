@@ -63,6 +63,7 @@ api = Proxy
 
 -- | The REST API of the Marlowe Runtime
 type API = "contracts" :> ContractsAPI
+          :<|> "healthcheck" :> Get '[JSON] NoContent
 
 -- | /contracts sub-API
 type ContractsAPI = GetContractsAPI

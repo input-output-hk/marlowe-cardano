@@ -29,7 +29,7 @@ import Network.HTTP.Types (Status(..))
 import Servant.Client (ClientError(FailureResponse), ClientM)
 import Servant.Client.Streaming (ResponseF(Response, responseStatusCode))
 import Servant.Pagination (Range(..), RangeOrder(..))
-import Test.Hspec (Spec, describe, focus, it, shouldBe)
+import Test.Hspec (Spec, describe, it, shouldBe)
 import Test.Integration.Marlowe.Local (withLocalMarloweRuntime)
 
 spec :: Spec
