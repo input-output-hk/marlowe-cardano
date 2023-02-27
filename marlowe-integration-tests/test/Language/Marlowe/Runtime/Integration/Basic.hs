@@ -13,6 +13,7 @@ import qualified Language.Marlowe.Protocol.HeaderSync.Client as HeaderSync
 import qualified Language.Marlowe.Protocol.Sync.Client as MarloweSync
 import Language.Marlowe.Runtime.Cardano.Api (fromCardanoTxId)
 import Language.Marlowe.Runtime.ChainSync.Api (AssetId(..), TxOutRef(..))
+import Language.Marlowe.Runtime.Client (runMarloweHeaderSyncClient, runMarloweSyncClient)
 import Language.Marlowe.Runtime.Core.Api
   ( ContractId(..)
   , MarloweVersion(..)

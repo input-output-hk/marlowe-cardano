@@ -24,6 +24,7 @@ import Language.Marlowe.Protocol.Query.Client
 import Language.Marlowe.Protocol.Query.Types
 import Language.Marlowe.Runtime.Cardano.Api (fromCardanoTxId)
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, TransactionMetadata(..), TxId, TxOutRef(..))
+import Language.Marlowe.Runtime.Client (runMarloweQueryClient)
 import Language.Marlowe.Runtime.Core.Api
   (ContractId(..), MarloweVersion(..), MarloweVersionTag(..), Payout(..), TransactionScriptOutput(..))
 import qualified Language.Marlowe.Runtime.Core.Api as Core

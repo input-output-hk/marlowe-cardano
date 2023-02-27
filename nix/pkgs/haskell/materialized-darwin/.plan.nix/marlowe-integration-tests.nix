@@ -44,6 +44,7 @@
             (hsPkgs."marlowe-cardano" or (errorHandler.buildDepError "marlowe-cardano"))
             (hsPkgs."marlowe-chain-sync" or (errorHandler.buildDepError "marlowe-chain-sync"))
             (hsPkgs."marlowe-chain-sync".components.sublibs.plutus-compat or (errorHandler.buildDepError "marlowe-chain-sync:plutus-compat"))
+            (hsPkgs."marlowe-client" or (errorHandler.buildDepError "marlowe-client"))
             (hsPkgs."marlowe-integration" or (errorHandler.buildDepError "marlowe-integration"))
             (hsPkgs."marlowe-protocols" or (errorHandler.buildDepError "marlowe-protocols"))
             (hsPkgs."marlowe-runtime" or (errorHandler.buildDepError "marlowe-runtime"))

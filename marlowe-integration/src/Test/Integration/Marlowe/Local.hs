@@ -178,11 +178,7 @@ import Text.Read (readMaybe)
 import UnliftIO (MonadUnliftIO, withRunInIO)
 
 data MarloweRuntime = MarloweRuntime
-  { marloweHeaderSyncConnector :: SomeClientConnector MarloweHeaderSyncClient IO
-  , marloweSyncConnector :: SomeClientConnector MarloweSyncClient IO
-  , marloweQueryConnector :: SomeClientConnector MarloweQueryClient IO
-  , txJobConnector :: SomeClientConnector (JobClient MarloweTxCommand) IO
-  , protocolConnector :: SomeClientConnector MarloweClient IO
+  { protocolConnector :: SomeClientConnector MarloweClient IO
   , marloweHeaderSyncPort :: Int
   , marloweSyncPort :: Int
   , marloweQueryPort :: Int
@@ -300,10 +296,6 @@ withLocalMarloweRuntime' MarloweRuntimeOptions{..} test = withRunInIO \runInIO -
       runWebClient :: ClientM a -> IO (Either ClientError a)
       runWebClient = flip runClientM clientEnv
 
-    let marloweSyncConnector = SomeConnector $ clientConnector marloweSyncPair
-    let marloweHeaderSyncConnector = SomeConnector $ clientConnector marloweHeaderSyncPair
-    let marloweQueryConnector = SomeConnector $ clientConnector marloweQueryPair
-    let txJobConnector = SomeConnector $ clientConnector txJobPair
     let protocolConnector = SomeConnector $ ihoistConnector hoistMarloweClient (runResourceT . runWrappedUnliftIO) liftIO $ clientConnector marlowePair
 
     -- Persist the genesis block before starting the services so that they
