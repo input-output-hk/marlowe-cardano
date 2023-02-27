@@ -17,6 +17,7 @@ description:
   on Cardano Computation Layer.
 category: Language
 extra-doc-files: README.md
+                 CHANGELOG.md
 
 source-repository head
   type: git
@@ -63,7 +64,6 @@ library
     plutus-ledger-api,
     plutus-script-utils,
     plutus-tx,
-    prettyprinter,
     sbv >=8.4,
     scientific,
     serialise,
