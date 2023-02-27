@@ -75,12 +75,15 @@ executable marlowe
     , errors
     , marlowe-cardano
     , marlowe-chain-sync
+    , marlowe-client
     , marlowe-protocols
     , marlowe-runtime
     , marlowe-runtime:config
     , marlowe-runtime:tx-api
     , marlowe-runtime:history-api
+    , marlowe-runtime:proxy-api
     , monad-control
+    , mtl
     , network
     , plutus-ledger-api
     , transformers

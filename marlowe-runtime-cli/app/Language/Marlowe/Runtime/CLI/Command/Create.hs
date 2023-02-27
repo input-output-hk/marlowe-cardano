@@ -19,7 +19,7 @@ import qualified Data.Yaml as Yaml
 import Data.Yaml.Aeson (decodeFileEither)
 import Language.Marlowe (POSIXTime(POSIXTime))
 import Language.Marlowe.Runtime.CLI.Command.Tx (SigningMethod(Manual), TxCommand(..), txCommandParser)
-import Language.Marlowe.Runtime.CLI.Monad (CLI, runCLIExceptT, runTxCommand)
+import Language.Marlowe.Runtime.CLI.Monad (CLI, runCLIExceptT)
 import Language.Marlowe.Runtime.CLI.Option (keyValueOption, marloweVersionParser, parseAddress)
 import Language.Marlowe.Runtime.ChainSync.Api
   ( Address
@@ -30,6 +30,7 @@ import Language.Marlowe.Runtime.ChainSync.Api
   , fromJSONEncodedTransactionMetadata
   , renderTxOutRef
   )
+import Language.Marlowe.Runtime.Client (createContract)
 import Language.Marlowe.Runtime.Core.Api
   ( ContractId(ContractId)
   , IsMarloweVersion(Contract)
@@ -37,8 +38,7 @@ import Language.Marlowe.Runtime.Core.Api
   , MarloweVersionTag(V1)
   , SomeMarloweVersion(SomeMarloweVersion)
   )
-import Language.Marlowe.Runtime.Transaction.Api
-  (ContractCreated(..), CreateError, MarloweTxCommand(Create), RoleTokensConfig(..), mkMint)
+import Language.Marlowe.Runtime.Transaction.Api (ContractCreated(..), CreateError, RoleTokensConfig(..), mkMint)
 import Options.Applicative
 import Options.Applicative.NonEmpty (some1)
 import Text.Read (readMaybe)
@@ -183,9 +183,7 @@ runCreateCommand TxCommand { walletAddresses, signingMethod, metadataFile, subCo
     run version rolesDistribution  = do
       contract <- readContract version
       metadata <- readMetadata
-      let
-        cmd = Create Nothing version walletAddresses rolesDistribution metadata minUTxO contract
-      ContractCreated{contractId,txBody} <- ExceptT $ first CreateFailed <$> runTxCommand cmd
+      ContractCreated{contractId,txBody} <- ExceptT $ first CreateFailed <$> createContract Nothing version walletAddresses rolesDistribution metadata minUTxO contract
       case signingMethod of
         Manual outputFile -> do
           ExceptT $ liftIO $ first TransactionFileWriteFailed <$> C.writeFileTextEnvelope outputFile Nothing txBody

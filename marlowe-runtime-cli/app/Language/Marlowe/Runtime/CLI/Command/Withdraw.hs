@@ -11,12 +11,13 @@ import Data.Aeson (toJSON)
 import qualified Data.Aeson as A
 import Data.Bifunctor (first)
 import Language.Marlowe.Runtime.CLI.Command.Tx (SigningMethod(Manual), TxCommand(..), txCommandParser)
-import Language.Marlowe.Runtime.CLI.Monad (CLI, runCLIExceptT, runTxCommand)
+import Language.Marlowe.Runtime.CLI.Monad (CLI, runCLIExceptT)
 import Language.Marlowe.Runtime.CLI.Option (marloweVersionParser, txOutRefParser)
 import Language.Marlowe.Runtime.ChainSync.Api (TokenName(TokenName))
+import Language.Marlowe.Runtime.Client (withdraw)
 import Language.Marlowe.Runtime.Core.Api
   (ContractId(ContractId), MarloweVersion(MarloweV1), MarloweVersionTag(V1), SomeMarloweVersion(SomeMarloweVersion))
-import Language.Marlowe.Runtime.Transaction.Api (MarloweTxCommand(Withdraw), WithdrawError)
+import Language.Marlowe.Runtime.Transaction.Api (WithdrawError)
 import Options.Applicative
 
 data WithdrawCommand = WithdrawCommand
@@ -51,9 +52,7 @@ withdrawCommandParser = info (txCommandParser parser) $ progDesc "Withdraw funds
 runWithdrawCommand :: TxCommand WithdrawCommand -> CLI ()
 runWithdrawCommand TxCommand { walletAddresses, signingMethod, subCommand=WithdrawCommand{..}} = case marloweVersion of
   SomeMarloweVersion MarloweV1 -> runCLIExceptT do
-    let
-      cmd = Withdraw MarloweV1 walletAddresses contractId role
-    txBody <- ExceptT $ first WithdrawFailed <$> runTxCommand cmd
+    txBody <- ExceptT $ first WithdrawFailed <$> withdraw MarloweV1 walletAddresses contractId role
     case signingMethod of
       Manual outputFile -> do
         ExceptT $ liftIO $ first TransactionFileWriteFailed <$> C.writeFileTextEnvelope outputFile Nothing txBody
@@ -62,5 +61,3 @@ runWithdrawCommand TxCommand { walletAddresses, signingMethod, subCommand=Withdr
           res = A.object
             [ ("txId", toJSON txId) ]
         liftIO . print $ A.encode res
-
-

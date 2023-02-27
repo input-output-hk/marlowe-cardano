@@ -8,7 +8,6 @@ module Language.Marlowe.Runtime.CLI.Command
 import Control.Concurrent.STM (STM)
 import Control.Monad.Trans.Reader (runReaderT)
 import Data.Foldable (asum)
-import Language.Marlowe.Protocol.Sync.Client (marloweSyncClientPeer)
 import Language.Marlowe.Runtime.CLI.Command.Apply
   ( ApplyCommand
   , advanceCommandParser
@@ -27,19 +26,14 @@ import Language.Marlowe.Runtime.CLI.Env (Env(..))
 import Language.Marlowe.Runtime.CLI.Monad (CLI, runCLI)
 import Language.Marlowe.Runtime.CLI.Option (optParserWithEnvDefault)
 import qualified Language.Marlowe.Runtime.CLI.Option as O
-import Network.Protocol.Connection (SomeConnector(..))
-import Network.Protocol.Driver (tcpClient)
-import Network.Protocol.Handshake.Client (handshakeClientConnector)
-import Network.Protocol.Job.Client (jobClientPeer)
+import Language.Marlowe.Runtime.Client (connectToMarloweRuntime)
 import Network.Socket (HostName, PortNumber)
 import Options.Applicative
 
 -- | Top-level options for running a command in the Marlowe Runtime CLI.
 data Options = Options
-  { historyHost :: !HostName
-  , historySyncPort :: !PortNumber
-  , txHost :: !HostName
-  , txCommandPort :: !PortNumber
+  { host :: !HostName
+  , port :: !PortNumber
   , cmd :: !Command
   }
 
@@ -54,10 +48,8 @@ data Command
 -- | Read options from the environment and the command line.
 getOptions :: IO Options
 getOptions = do
-  syncHostParser <- optParserWithEnvDefault O.syncHost
-  syncSyncPort <- optParserWithEnvDefault O.syncSyncPort
-  txHostParser <- optParserWithEnvDefault O.txHost
-  txCommandPortParser <- optParserWithEnvDefault O.txCommandPort
+  hostParser <- optParserWithEnvDefault O.runtimeHost
+  portParser <- optParserWithEnvDefault O.runtimePort
   let
     commandParser = asum
       [ hsubparser $ mconcat
@@ -80,10 +72,8 @@ getOptions = do
           ]
       ]
     parser = Options
-      <$> syncHostParser
-      <*> syncSyncPort
-      <*> txHostParser
-      <*> txCommandPortParser
+      <$> hostParser
+      <*> portParser
       <*> commandParser
     infoMod = mconcat
       [ fullDesc
@@ -102,8 +92,4 @@ runCommand = \case
 
 -- | Interpret a CLI action in IO using the provided options.
 runCLIWithOptions :: STM () -> Options -> CLI a -> IO a
-runCLIWithOptions sigInt Options{..} cli = runReaderT (runCLI cli) Env
-  { marloweSyncConnector = SomeConnector $ handshakeClientConnector $ tcpClient historyHost historySyncPort marloweSyncClientPeer
-  , txJobConnector = SomeConnector $ handshakeClientConnector $ tcpClient txHost txCommandPort jobClientPeer
-  , sigInt
-  }
+runCLIWithOptions sigInt Options{..} cli = runReaderT (connectToMarloweRuntime host port $ runCLI cli) Env { sigInt }
