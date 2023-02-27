@@ -32,6 +32,7 @@ let
     ln -sv ${run-local-service "marlowe-runtime" "0.0.0.0" "marlowe-tx"}/bin/run-marlowe-tx $out
     ln -sv ${run-local-service "marlowe-runtime" "0.0.0.0" "marlowe-web-server"}/bin/run-marlowe-web-server $out
     ln -sv ${run-local-service "marlowe-runtime" "0.0.0.0" "marlowe-indexer"}/bin/run-marlowe-indexer $out
+    ln -sv ${run-local-service "marlowe-runtime" "0.0.0.0" "marlowe-proxy"}/bin/run-marlowe-proxy $out
   '';
 
   node-service = {
@@ -201,7 +202,7 @@ let
       "--host"
       "0.0.0.0"
       "--marlowe-sync-host"
-      "marlowe-chain-sync"
+      "marlowe-sync"
       "--tx-host"
       "marlowe-tx"
       "--log-config-file"
