@@ -2,7 +2,7 @@ cabal-version: 3.0
 name: marlowe-client
 version: 0.1.0.0
 synopsis:
-  Run integration tests in the context of a marlowe runtime
+  A client library for the Marlowe Runtime.
 bug-reports: https://github.com/input-output-hk/marlowe-marlowe/issues
 license: Apache-2.0
 author: Jamie Bertram
