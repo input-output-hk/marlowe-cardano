@@ -29,7 +29,7 @@ import Cardano.Api
   , chainTipToChainPoint
   , serialiseToTextEnvelope
   )
-import Cardano.Api.ChainSync.Client
+import Cardano.Api.ChainSync.Client (ChainSyncClient(..), ClientStIdle(..), ClientStIntersect(..), ClientStNext(..))
 import Cardano.Api.Shelley (AcquiringFailure(..))
 import Control.Concurrent.Component (Component, component)
 import Control.Concurrent.STM (atomically)
@@ -60,17 +60,17 @@ type QueryNode result
   -> IO (Either AcquiringFailure result)
 
 
-data NodeClientDependencies r = NodeClientDependencies
-  {
-    connectToLocalNode :: !(LocalNodeClientProtocolsInMode CardanoMode -> IO ())
-  , eventBackend :: !(EventBackend IO r NodeClientSelector)
-  }
-
-
 data NodeClient = NodeClient
   {
     submitTxToNode  :: SubmitToNode
   , queryNode :: forall result . QueryNode result
+  }
+
+
+data NodeClientDependencies r = NodeClientDependencies
+  {
+    connectToLocalNode :: !(LocalNodeClientProtocolsInMode CardanoMode -> IO ())
+  , eventBackend :: !(EventBackend IO r NodeClientSelector)
   }
 
 
@@ -117,7 +117,7 @@ nodeClient =
                     -- We don't use the block and tip information, but the chain
                     -- sync client keeps the connection open. Without this client,
                     -- the node would close the connection in about three seconds,
-                    -- making it impossible to submit and queery.
+                    -- making it impossible to submit and query.
                     localChainSyncClient = LocalChainSyncClient chainSyncClient
                   , localTxSubmissionClient = Just $ submitClient submitChannel
                   , localTxMonitoringClient = Nothing

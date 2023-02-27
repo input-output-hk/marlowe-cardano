@@ -410,7 +410,7 @@ contractStepToJSON (RedeemPayout RedeemStep{..}) =
     [ "step" A..= ("payout" :: String)
     , "utxo" A..= utxo
     , "redeemingTx" A..= redeemingTx
-    , "datumm" A..= datum
+    , "datum" A..= datum
     ]
 
 
