@@ -346,24 +346,18 @@ in
       # REQUIRED VARS #
       #################
       # PORT: network binding
-      # TX_HOST, TX_PORT: connection info to marlowe-tx
-      # SYNC_HOST, MARLOWE_QUERY_PORT: connection info to marlowe-sync
+      # RUNTIME_HOST, RUNTIME_PORT: connection info to marlowe-proxy
 
       [ -z "''${PORT:-}" ] && echo "PORT env var must be set -- aborting" && exit 1
-      [ -z "''${TX_HOST:-}" ] && echo "TX_HOST env var must be set -- aborting" && exit 1
-      [ -z "''${TX_PORT:-}" ] && echo "TX_PORT env var must be set -- aborting" && exit 1
-      [ -z "''${SYNC_HOST:-}" ] && echo "SYNC_HOST env var must be set -- aborting" && exit 1
-      [ -z "''${MARLOWE_QUERY_PORT:-}" ] && echo "MARLOWE_QUERY_PORT env var must be set -- aborting" && exit 1
+      [ -z "''${RUNTIME_HOST:-}" ] && echo "RUNTIME_HOST env var must be set -- aborting" && exit 1
+      [ -z "''${RUNTIME_PORT:-}" ] && echo "RUNTIME_PORT env var must be set -- aborting" && exit 1
 
-      ${wait-for-tcp}/bin/wait-for-tcp "$TX_HOST" "$TX_PORT"
-      ${wait-for-tcp}/bin/wait-for-tcp "$SYNC_HOST" "$MARLOWE_QUERY_PORT"
+      ${wait-for-tcp}/bin/wait-for-tcp "$RUNTIME_HOST" "$RUNTIME_PORT"
 
       ${packages.marlowe-web-server}/bin/marlowe-web-server \
         --http-port "$PORT" \
-        --marlowe-sync-host "$SYNC_HOST" \
-        --marlowe-query-port "$MARLOWE_QUERY_PORT" \
-        --tx-host "$TX_HOST" \
-        --tx-command-port "$TX_PORT" \
+        --marlowe-runtime-host "$RUNTIME_HOST" \
+        --marlowe-runtime-port "$RUNTIME_PORT" \
         --enable-open-api \
         --access-control-allow-origin-all
     '';
