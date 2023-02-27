@@ -25,6 +25,7 @@ packages:
   marlowe-apps
   marlowe-chain-sync
   marlowe-cli
+  marlowe-client
   marlowe-contracts
   marlowe-integration
   marlowe-integration-tests
@@ -67,6 +68,9 @@ package marlowe-chain-sync
   ghc-options: -Werror
 
 package marlowe-cli
+  ghc-options: -Werror
+
+package marlowe-client
   ghc-options: -Werror
 
 package marlowe-contracts

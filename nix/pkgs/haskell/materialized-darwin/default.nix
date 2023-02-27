@@ -832,6 +832,7 @@
         marlowe-contracts = ./.plan.nix/marlowe-contracts.nix;
         marlowe-actus = ./.plan.nix/marlowe-actus.nix;
         eventuo11y-dsl = ./.plan.nix/eventuo11y-dsl.nix;
+        marlowe-client = ./.plan.nix/marlowe-client.nix;
         cardano-integration = ./.plan.nix/cardano-integration.nix;
         aeson-via-serialise = ./.plan.nix/aeson-via-serialise.nix;
         marlowe-integration-tests = ./.plan.nix/marlowe-integration-tests.nix;
@@ -899,6 +900,7 @@
             flags = { "defer-plugin-errors" = lib.mkOverride 900 false; };
             };
           "eventuo11y-dsl" = { flags = {}; };
+          "marlowe-client" = { flags = {}; };
           "cardano-integration" = { flags = {}; };
           "aeson-via-serialise" = { flags = {}; };
           "marlowe-integration-tests" = {
@@ -1023,6 +1025,7 @@
           "servant-server".components.exes."greet".planned = lib.mkOverride 900 true;
           "list-t".components.library.planned = lib.mkOverride 900 true;
           "data-dword".components.library.planned = lib.mkOverride 900 true;
+          "marlowe-client".components.library.planned = lib.mkOverride 900 true;
           "freer-simple".components.exes."freer-simple-examples".planned = lib.mkOverride 900 true;
           "strict".components.library.planned = lib.mkOverride 900 true;
           "text-printer".components.library.planned = lib.mkOverride 900 true;

@@ -33,9 +33,6 @@ import Control.Monad.Trans.Reader (ReaderT(..))
 import Data.Default (Default(..))
 import Data.String (fromString)
 import Language.Marlowe (POSIXTime(..))
-import Language.Marlowe.Protocol.HeaderSync.Client (MarloweHeaderSyncClient)
-import Language.Marlowe.Protocol.Query.Client (MarloweQueryClient)
-import Language.Marlowe.Protocol.Sync.Client (MarloweSyncClient)
 import Language.Marlowe.Runtime.Cardano.Api (fromCardanoTxId)
 import Language.Marlowe.Runtime.ChainSync.Api
   ( Address
@@ -63,7 +60,6 @@ import Language.Marlowe.Runtime.Core.Api
 import Language.Marlowe.Runtime.Discovery.Api (ContractHeader)
 import Language.Marlowe.Runtime.History.Api
   (ContractStep(..), CreateStep(..), RedeemStep(RedeemStep, datum, redeemingTx, utxo))
-import Language.Marlowe.Runtime.Transaction.Api (MarloweTxCommand)
 import Network.Protocol.Job.Client (JobClient)
 import Network.Socket (HostName, PortNumber)
 
@@ -81,10 +77,13 @@ import qualified Cardano.Api as C
   , getTxId
   , serialiseToTextEnvelope
   )
+import Control.Monad.Trans.Marlowe (MarloweT)
+import Control.Monad.Trans.Marlowe.Class (MonadMarlowe(..))
 import qualified Data.Aeson.Types as A
   (FromJSON(parseJSON), Parser, ToJSON(toJSON), Value(String), object, parseFail, withObject, (.:), (.=))
 import qualified Data.Map.Strict as M (Map, map, mapKeys)
 import qualified Data.Text as T (Text)
+import Language.Marlowe.Protocol.Client (hoistMarloweClient)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as CS (Transaction)
 
 
@@ -95,14 +94,9 @@ data Config =
   Config
   { chainSeekHost :: HostName
   , chainSeekSyncPort :: PortNumber
-  , chainSeekQueryPort :: PortNumber
   , chainSeekCommandPort :: PortNumber
-  , syncHost :: HostName
-  , syncSyncPort :: PortNumber
-  , syncHeaderPort :: PortNumber
-  , syncQueryPort :: PortNumber
-  , txHost :: HostName
-  , txCommandPort :: PortNumber
+  , runtimeHost :: HostName
+  , runtimePort :: PortNumber
   , timeoutSeconds :: Int
   , buildSeconds :: Int
   , confirmSeconds :: Int
@@ -116,14 +110,9 @@ instance Default Config where
     Config
     { chainSeekHost = "127.0.0.1"
     , chainSeekSyncPort = 3715
-    , chainSeekQueryPort = 3716
     , chainSeekCommandPort = 3720
-    , syncHost = "127.0.0.1"
-    , syncSyncPort = 3724
-    , syncHeaderPort = 3725
-    , syncQueryPort = 3726
-    , txHost = "127.0.0.1"
-    , txCommandPort = 3723
+    , runtimeHost = "127.0.0.1"
+    , runtimePort = 3700
     , timeoutSeconds = 900
     , buildSeconds = 3
     , confirmSeconds = 3
@@ -136,16 +125,15 @@ data Services m =
   Services
   { runChainSeekCommandClient :: RunClient m (JobClient ChainSyncCommand)
   , runChainSeekSyncClient :: RunClient m RuntimeChainSeekClient
-  , runSyncSyncClient :: RunClient m MarloweSyncClient
-  , runSyncHeaderClient :: RunClient m MarloweHeaderSyncClient
-  , runSyncQueryClient :: RunClient m MarloweQueryClient
-  , runTxCommandClient :: RunClient m (JobClient MarloweTxCommand)
   }
 
 
 -- | A monad type for Marlowe Runtime.Client programs.
-newtype Client a = Client { runClient :: ReaderT (Services IO) IO a }
+newtype Client a = Client { runClient :: MarloweT (ReaderT (Services IO) IO) a }
   deriving newtype (Alternative, Applicative, Functor, Monad, MonadBase IO, MonadBaseControl IO, MonadCleanup, MonadFail, MonadFix, MonadIO)
+
+instance MonadMarlowe Client where
+  runMarloweClient client = Client $ runMarloweClient $ hoistMarloweClient runClient client
 
 
 -- | A function signature for running a client for some protocol in some monad m.
@@ -382,7 +370,7 @@ instance A.ToJSON (MarloweResponse 'V1) where
       ]
   toJSON TxInfo{..} =
     A.object
-      [ "reponse" A..= ("txInfo" :: String)
+      [ "response" A..= ("txInfo" :: String)
       , "transaction" A..= resTransaction
       ]
 

@@ -13,8 +13,7 @@ module Language.Marlowe.Runtime.App.List
 
 
 import Data.Type.Equality ((:~:)(Refl))
-import Language.Marlowe.Runtime.App.Run (runMarloweSyncClient, runQueryClient)
-import Language.Marlowe.Runtime.App.Types (Client, Services(..))
+import Language.Marlowe.Runtime.App.Types (Client)
 import Language.Marlowe.Runtime.Core.Api (ContractId, IsMarloweVersion(..), MarloweVersion, assertVersionsEqual)
 import Language.Marlowe.Runtime.Discovery.Api (ContractHeader(contractId))
 import Language.Marlowe.Runtime.History.Api (ContractStep, CreateStep)
@@ -29,29 +28,23 @@ import qualified Language.Marlowe.Protocol.Sync.Client as Sync
   , ClientStWait(SendMsgCancel)
   , MarloweSyncClient(MarloweSyncClient)
   )
+import Language.Marlowe.Runtime.Client (runMarloweQueryClient, runMarloweSyncClient)
 
 
 allContracts :: Client [ContractId]
-allContracts = listContracts runSyncQueryClient $ fmap contractId
+allContracts = listContracts $ fmap contractId
 
 
 allHeaders :: Client [ContractHeader]
-allHeaders = listContracts runSyncQueryClient id
+allHeaders = listContracts id
 
 
 pageSize :: Int
 pageSize = 1024
 
 
-listContracts
-  :: Monoid a
-  -- TODO consider refactoring this - it is a bit confusing to pass around these
-  -- handler functions that have only one implementation, and I'm not sure what
-  -- benefit it adds.
-  => (forall x. Services IO -> Query.MarloweQueryClient IO x -> IO x)
-  -> ([ContractHeader] -> a)
-  -> Client a
-listContracts run =
+listContracts :: Monoid a => ([ContractHeader] -> a) -> Client a
+listContracts =
   let
     bundleContracts getContractHeaders extract =
       let
@@ -68,7 +61,7 @@ listContracts run =
         mempty `append` Query.Range Nothing 0 pageSize Query.Ascending
   in
     bundleContracts
-      $ runQueryClient run . Query.getContractHeaders
+      $ runMarloweQueryClient . Query.getContractHeaders
 
 
 getContract
@@ -93,7 +86,7 @@ getContract contractId' =
                              $ Right (create, previous)
       }
   in
-    runMarloweSyncClient runSyncSyncClient
+    runMarloweSyncClient
       . Sync.MarloweSyncClient
       . pure
       $ Sync.SendMsgFollowContract contractId' Sync.ClientStFollow

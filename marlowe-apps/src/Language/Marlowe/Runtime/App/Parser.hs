@@ -1,5 +1,3 @@
-
-
 module Language.Marlowe.Runtime.App.Parser
   ( addressKeyfileParser
   , addressParser
@@ -25,14 +23,9 @@ getConfigParser =
   do
     chainSeekHostParser <- optParserWithEnvDefault chainSeekHost
     chainSeekSyncPortParser <- optParserWithEnvDefault chainSeekSyncPort
-    chainSeekQueryPortParser <- optParserWithEnvDefault chainSeekQueryPort
     chainSeekCommandPortParser <- optParserWithEnvDefault chainSeekCommandPort
-    syncHostParser <- optParserWithEnvDefault CLI.syncHost
-    syncSyncPortParser <- optParserWithEnvDefault CLI.syncSyncPort
-    syncHeaderPortParser <- optParserWithEnvDefault CLI.syncHeaderPort
-    syncQueryPortParser <- optParserWithEnvDefault CLI.syncQueryPort
-    txHostParser <- optParserWithEnvDefault CLI.txHost
-    txCommandPortParser <- optParserWithEnvDefault CLI.txCommandPort
+    runtimeHostParser <- optParserWithEnvDefault CLI.runtimeHost
+    runtimePortParser <- optParserWithEnvDefault CLI.runtimePort
     let
       timeoutSecondsParser =
         O.option O.auto
@@ -73,14 +66,9 @@ getConfigParser =
       $ Config
       <$> chainSeekHostParser
       <*> chainSeekSyncPortParser
-      <*> chainSeekQueryPortParser
       <*> chainSeekCommandPortParser
-      <*> syncHostParser
-      <*> syncSyncPortParser
-      <*> syncHeaderPortParser
-      <*> syncQueryPortParser
-      <*> txHostParser
-      <*> txCommandPortParser
+      <*> runtimeHostParser
+      <*> runtimePortParser
       <*> timeoutSecondsParser
       <*> buildSecondsParser
       <*> confirmSecondsParser
@@ -126,10 +114,6 @@ chainSeekHost = host' "chain-sync" "CHAIN_SYNC" "127.0.0.1" "The hostname of the
 
 chainSeekSyncPort :: CliOption O.OptionFields PortNumber
 chainSeekSyncPort = port' "chain-sync" "CHAIN_SYNC" 3715 "The port number of the chain-sync server's synchronization API."
-
-
-chainSeekQueryPort :: CliOption O.OptionFields PortNumber
-chainSeekQueryPort = port' "chain-sync-command" "CHAIN_SYNC_QUERY" 3716 "The port number of the chain-sync server's query API."
 
 
 chainSeekCommandPort :: CliOption O.OptionFields PortNumber

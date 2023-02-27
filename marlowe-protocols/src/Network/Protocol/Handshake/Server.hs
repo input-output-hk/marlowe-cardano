@@ -22,19 +22,19 @@ import Network.TypedProtocol
 
 -- | A generic server for the handshake protocol.
 newtype HandshakeServer server m a = HandshakeServer
-  { recvMsgHandshake :: Text -> m (Either a (server m a))
+  { recvMsgHandshake :: Text -> m (Either (m a) (server m a))
   }
 
 instance (Functor m, Functor (server m)) => Functor (HandshakeServer server m) where
   fmap f HandshakeServer{..} = HandshakeServer
-    { recvMsgHandshake = fmap (bimap f $ fmap f) . recvMsgHandshake
+    { recvMsgHandshake = fmap (bimap (fmap f) $ fmap f) . recvMsgHandshake
     }
 
 simpleHandshakeServer :: MonadFail m => Text -> server m a -> HandshakeServer server m a
 simpleHandshakeServer expected server = HandshakeServer
   { recvMsgHandshake = \sig -> if sig == expected
       then pure $ Right server
-      else fail $ "Rejecting handshake, " <> show sig <> " /= " <> show expected
+      else pure $ Left $ fail $ "Rejecting handshake, " <> show sig <> " /= " <> show expected
   }
 
 handshakeConnectionSource
@@ -78,7 +78,7 @@ hoistHandshakeServer
   -> HandshakeServer server m a
   -> HandshakeServer server n a
 hoistHandshakeServer hoistServer f HandshakeServer{..} = HandshakeServer
-  { recvMsgHandshake = f . (fmap . fmap) (hoistServer f) . recvMsgHandshake
+  { recvMsgHandshake = f . (fmap . bimap f) (hoistServer f) . recvMsgHandshake
   }
 
 handshakeServerPeer
@@ -91,7 +91,7 @@ handshakeServerPeer serverPeer HandshakeServer{..} =
   Await (ClientAgency TokInit) \case
     MsgHandshake sig -> Effect $ recvMsgHandshake sig <&> \case
       Left a ->
-        Yield (ServerAgency TokHandshake) MsgReject $ Done TokDone a
+        Yield (ServerAgency TokHandshake) MsgReject $ Effect $ Done TokDone <$> a
       Right server ->
         Yield (ServerAgency TokHandshake) MsgAccept $ liftPeer $ serverPeer server
   where
