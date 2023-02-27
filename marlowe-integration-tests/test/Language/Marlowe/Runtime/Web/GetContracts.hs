@@ -29,19 +29,124 @@ import Network.HTTP.Types (Status(..))
 import Servant.Client (ClientError(FailureResponse), ClientM)
 import Servant.Client.Streaming (ResponseF(Response, responseStatusCode))
 import Servant.Pagination (Range(..), RangeOrder(..))
-import Test.Hspec (Spec, describe, it, shouldBe)
+import Test.Hspec (Spec, describe, focus, it, shouldBe)
 import Test.Integration.Marlowe.Local (withLocalMarloweRuntime)
 
 spec :: Spec
-spec = describe "GET /contracts" do
+spec = focus $ describe "GET /contracts" do
   getContractsValidSpec
   getContractsInvalidSpec
+  getContractsValidNextPageSpec
 
 getContractsValidSpec :: Spec
-getContractsValidSpec = do
+getContractsValidSpec = describe "Valid GET /contracts" do
   noContractsValidSpec
   singleContractValidSpec
   multipleContractValidSpec
+
+getContractsInvalidSpec :: Spec
+getContractsInvalidSpec = describe "Invalid GET /contracts" do
+  invalidTxIdSpec
+
+getContractsValidNextPageSpec :: Spec
+getContractsValidNextPageSpec = describe "Valid Pagination of GET /contracts" do
+  firstPageAscValidSpec
+  secondPageAscValidSpec
+  firstPageDescValidSpec
+  secondPageDescValidSpec
+
+firstPageAscValidSpec :: Spec
+firstPageAscValidSpec = it "returns the first page of contract headers in ascending order" $ withLocalMarloweRuntime $ runIntegrationTest do
+  wallet1 <- getGenesisWallet 0
+  wallet2 <- getGenesisWallet 1
+  wallet3 <- getGenesisWallet 2
+
+  either throw pure =<< runWebClient do
+    expectedContractId1 <- createCloseContract wallet1
+    expectedContractId2 <- createCloseContract wallet2
+    _ <- createCloseContract wallet3
+    let
+      testRange =  Range
+        {
+          rangeValue = Just expectedContractId1
+        , rangeOffset = 0
+        , rangeLimit = 2
+        , rangeOrder = RangeAsc
+        , rangeField = Proxy
+        }
+    Page {..} <-getContracts $ Just testRange
+
+    liftIO $ fmap (\Web.ContractHeader{..} -> contractId) items `shouldBe` [expectedContractId1, expectedContractId2]
+
+secondPageAscValidSpec :: Spec
+secondPageAscValidSpec = it "returns the second page of contract headers in ascending order" $ withLocalMarloweRuntime $ runIntegrationTest do
+  wallet1 <- getGenesisWallet 0
+  wallet2 <- getGenesisWallet 1
+  wallet3 <- getGenesisWallet 2
+
+  either throw pure =<< runWebClient do
+    expectedContractId1 <- createCloseContract wallet1
+    expectedContractId2 <- createCloseContract wallet2
+    expectedContractId3 <- createCloseContract wallet3
+    let
+      testRange =  Range
+        {
+          rangeValue = Just expectedContractId1
+        , rangeOffset = 1
+        , rangeLimit = 2
+        , rangeOrder = RangeAsc
+        , rangeField = Proxy
+        }
+    Page {..} <-getContracts $ Just testRange
+
+    liftIO $ fmap (\Web.ContractHeader{..} -> contractId) items `shouldBe` [expectedContractId2, expectedContractId3]
+
+firstPageDescValidSpec :: Spec
+firstPageDescValidSpec = it "returns the first page of contract headers in descending order" $ withLocalMarloweRuntime $ runIntegrationTest do
+  wallet1 <- getGenesisWallet 0
+  wallet2 <- getGenesisWallet 1
+  wallet3 <- getGenesisWallet 2
+
+  either throw pure =<< runWebClient do
+    _ <- createCloseContract wallet1
+    expectedContractId2 <- createCloseContract wallet2
+    expectedContractId3 <- createCloseContract wallet3
+    let
+      testRange =  Range
+        {
+          rangeValue = Just expectedContractId3
+        , rangeOffset = 0
+        , rangeLimit = 2
+        , rangeOrder = RangeDesc
+        , rangeField = Proxy
+        }
+    Page {..} <-getContracts $ Just testRange
+
+    liftIO $ fmap (\Web.ContractHeader{..} -> contractId) items `shouldBe` [expectedContractId3, expectedContractId2]
+
+secondPageDescValidSpec :: Spec
+secondPageDescValidSpec = it "returns the second page of contract headers in descending order" $ withLocalMarloweRuntime $ runIntegrationTest do
+  wallet1 <- getGenesisWallet 0
+  wallet2 <- getGenesisWallet 1
+  wallet3 <- getGenesisWallet 2
+
+  either throw pure =<< runWebClient do
+    expectedContractId1 <- createCloseContract wallet1
+    expectedContractId2 <- createCloseContract wallet2
+    expectedContractId3 <- createCloseContract wallet3
+    let
+      testRange =  Range
+        {
+          rangeValue = Just expectedContractId3
+        , rangeOffset = 1
+        , rangeLimit = 2
+        , rangeOrder = RangeDesc
+        , rangeField = Proxy
+        }
+    Page {..} <-getContracts $ Just testRange
+
+    liftIO $ fmap (\Web.ContractHeader{..} -> contractId) items `shouldBe` [expectedContractId2, expectedContractId1]
+
 
 noContractsValidSpec :: Spec
 noContractsValidSpec = it "returns an empty list" $ withLocalMarloweRuntime $ runIntegrationTest do
@@ -69,9 +174,6 @@ multipleContractValidSpec  = it "returns a list with multiple contract headers" 
     Page {..}<- getContracts Nothing
     liftIO $ fmap (\Web.ContractHeader{..} -> contractId) items `shouldBe` [expectedContractId2, expectedContractId1]
 
-getContractsInvalidSpec :: Spec
-getContractsInvalidSpec =
-  invalidTxIdSpec
 
 invalidTxIdSpec :: Spec
 invalidTxIdSpec = it "returns an error message" $ withLocalMarloweRuntime $ runIntegrationTest do
