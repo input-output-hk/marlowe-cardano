@@ -24,7 +24,7 @@ data MarloweHeaderSync where
   StDone :: MarloweHeaderSync
 
 instance HasSignature MarloweHeaderSync where
-  signature _ = "MarloweSync"
+  signature _ = "MarloweHeaderSync"
 
 instance Protocol MarloweHeaderSync where
   data Message MarloweHeaderSync from to where

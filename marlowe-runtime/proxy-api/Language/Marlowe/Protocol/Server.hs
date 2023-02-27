@@ -47,13 +47,13 @@ marloweServerPeer MarloweServer{..} = Await (ClientAgency TokInit) \case
 
 withHandshake
   :: forall ps dState st m a
-   . Monad m
+   . (Monad m, Handshake.HasSignature ps)
   => (dState -> Driver ps dState m -> Peer Marlowe 'AsServer st m a)
   -> m (Driver (Handshake ps) dState m)
   -> Peer Marlowe 'AsServer st m a
 withHandshake main getDriver = Effect do
   driver <- getDriver
-  sendMessage driver (ClientAgency Handshake.TokInit) $ Handshake.MsgHandshake $ signature $ Proxy @MarloweSync
+  sendMessage driver (ClientAgency Handshake.TokInit) $ Handshake.MsgHandshake $ signature $ Proxy @ps
   (SomeMessage handshakeResponse, dState') <- recvMessage driver (ServerAgency Handshake.TokHandshake) (startDState driver)
   case handshakeResponse of
     Handshake.MsgReject -> error "Handshake rejected by upstream server"
