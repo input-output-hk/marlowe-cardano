@@ -299,7 +299,7 @@ withLocalMarloweRuntime' MarloweRuntimeOptions{..} test = withRunInIO \runInIO -
     let
       waitForWebServer :: Int -> IO ()
       waitForWebServer counter
-        | counter < 10 = (() <$) $ runWebClient do
+        | counter < 10 = void $ runWebClient do
             result <- healthcheck
             if result then pure ()
             else liftIO $ threadDelay 1000 *> waitForWebServer (counter + 1)
