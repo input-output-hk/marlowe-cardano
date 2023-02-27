@@ -52,9 +52,12 @@ library
     Language.Marlowe.Runtime.Client
   build-depends:
       base >= 4.9 && < 5
+    , cardano-api
     , eventuo11y
     , exceptions
     , marlowe-protocols
+    , marlowe-chain-sync
+    , marlowe-runtime
     , marlowe-runtime:discovery-api
     , marlowe-runtime:history-api
     , marlowe-runtime:sync-api
@@ -64,6 +67,7 @@ library
     , monad-control
     , network
     , resourcet
+    , time
     , transformers
     , transformers-base
     , unliftio
