@@ -180,10 +180,10 @@ submitClient channel =
 
 
 
-type QueryChannel = TChan (Q.Some QueryJob)
+type QueryChannel = TChan QueryJob
 
 
-data QueryJob result =
+data QueryJob = forall result .
   QueryJob
   {
     point :: Maybe ChainPoint
@@ -206,7 +206,7 @@ queryNodeChannel eventBackend channel point query =
         toAcquiringFailure Q.AcquireFailurePointTooOld = AFPointTooOld
         toAcquiringFailure Q.AcquireFailurePointNotOnChain = AFPointNotOnChain
       queryResultTMVar <- newEmptyTMVarIO
-      atomically $ writeTChan channel $ Q.Some QueryJob{..}
+      atomically . writeTChan channel $ QueryJob{..}
       atomically $ first toAcquiringFailure <$> takeTMVar queryResultTMVar
 
 
@@ -217,7 +217,7 @@ queryClient channel =
   let
     next =
       do
-        Q.Some QueryJob{..} <- atomically $ readTChan channel
+        QueryJob{..} <- atomically $ readTChan channel
         pure . Q.SendMsgAcquire point
           $ Q.ClientStAcquiring
             {
