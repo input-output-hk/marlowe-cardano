@@ -46,6 +46,8 @@
           (hsPkgs."QuickCheck" or (errorHandler.buildDepError "QuickCheck"))
           (hsPkgs."tasty-quickcheck" or (errorHandler.buildDepError "tasty-quickcheck"))
           (hsPkgs."stm" or (errorHandler.buildDepError "stm"))
+          (hsPkgs."random" or (errorHandler.buildDepError "random"))
+          (hsPkgs."mtl" or (errorHandler.buildDepError "mtl"))
           ];
         buildable = true;
         modules = [
@@ -55,10 +57,13 @@
           "Marlowe/Spec/Core/Arbitrary"
           "Marlowe/Spec/Core/Examples"
           "Marlowe/Spec/Core/Examples/Swap"
+          "Marlowe/Spec/Core/Semantics"
           "Marlowe/Spec/Core/Serialization/Json"
           "Marlowe/Spec/Interpret"
           "Marlowe/Spec/LocalInterpret"
+          "Marlowe/Spec/Reproducible"
           "Marlowe/Spec/TypeId"
+          "Marlowe/Utils"
           ];
         hsSourceDirs = [ "src" ];
         };

@@ -11,6 +11,7 @@
 -----------------------------------------------------------------------------
 
 
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -20,6 +21,8 @@ module Spec.Marlowe.Service.Types
   ( -- * Types
     Request(..)
   , Response(..)
+  , Seed(..)
+  , Size(..)
   ) where
 
 
@@ -27,11 +30,13 @@ import Control.Applicative ((<|>))
 import Data.Aeson (FromJSON(..), ToJSON(..))
 import Plutus.V1.Ledger.Api (POSIXTime(..))
 
-import qualified Data.Aeson as A (Value(Object, String), object, withObject, (.:), (.=))
+import qualified Data.Aeson as A (Value(Object, String), object, withObject, (.:), (.:?), (.=))
 import qualified Data.Aeson.Types as A (Parser)
 import qualified Language.Marlowe.Core.V1.Semantics as Marlowe
 import qualified Language.Marlowe.Core.V1.Semantics.Types as Marlowe
 
+newtype Size = Size Int deriving (Eq, Show, ToJSON, FromJSON)
+newtype Seed = Seed Int deriving (Eq, Show, ToJSON, FromJSON)
 
 data Request =
     TestRoundtripSerialization
@@ -42,6 +47,8 @@ data Request =
   | GenerateRandomValue
     {
       typeSerialized :: String
+    , size :: Maybe Size
+    , seed :: Maybe Seed
     }
   | ComputeTransaction
     {
@@ -70,7 +77,7 @@ instance FromJSON Request where
         (o A..: "request" :: A.Parser String)
           >>= \case
             "test-roundtrip-serialization" -> TestRoundtripSerialization <$> o A..: "typeId" <*> o A..: "json"
-            "generate-random-value"        -> GenerateRandomValue <$> o A..: "typeId"
+            "generate-random-value"        -> GenerateRandomValue <$> o A..: "typeId" <*> o A..:? "size" <*> o A..:? "seed"
             "compute-transaction"          -> ComputeTransaction <$> o A..: "transactionInput" <*> o A..: "coreContract" <*> o A..: "state"
             "playtrace"                    -> PlayTrace <$> o A..: "transactionInputs" <*> o A..: "coreContract" <*> (POSIXTime <$> o A..: "initialTime")
             "eval-value"                   -> EvalValue <$> o A..: "environment" <*> o A..: "state" <*> o A..: "value"
@@ -89,6 +96,8 @@ instance ToJSON Request where
       [
         "request" A..= ("generate-random-value" :: String)
       , "typeId" A..= typeSerialized
+      , "size" A..= size
+      , "seed" A..= seed
       ]
   toJSON ComputeTransaction{..} =
     A.object

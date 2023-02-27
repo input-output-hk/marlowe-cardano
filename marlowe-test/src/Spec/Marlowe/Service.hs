@@ -46,7 +46,7 @@ handle TestRoundtripSerialization{..} =
     . RequestResponse . A.toJSON
     $ roundtripSerialization typeSerialized valueSerialized
 handle GenerateRandomValue{..} =
-  generateValue typeSerialized
+  generateValue size seed typeSerialized
     >>= \case
       Right value -> pure . RequestResponse . A.object . pure $ "value" A..= value
       Left failureResponse -> pure $ ResponseFailure{..}
