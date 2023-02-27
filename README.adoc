@@ -214,6 +214,7 @@ Services currently included:
 * `marlowe--sync`: `marlowe-sync` for the `preprod` network.
 * `marlowe--indexer`: `marlowe-indexer` for the `preprod` network.
 * `marlowe-tx`: A `marlowe-tx` instance.
+* `marlowe-proxy`: A `marlowe-proxy` instance.
 * `web`: A `marlowe-web-server` instance.
 
 The following commands may be useful:
