@@ -35,12 +35,11 @@ import Control.Concurrent.Component (Component, component)
 import Control.Concurrent.STM (atomically)
 import Control.Concurrent.STM.TChan (TChan, newTChan, readTChan, writeTChan)
 import Control.Concurrent.STM.TMVar (TMVar, newEmptyTMVarIO, putTMVar, takeTMVar)
-import Control.Exception (SomeException, mask, throw, try)
 import Data.Aeson (Value(String), toJSON)
 import Data.Bifunctor (first)
 import qualified Data.Text as T (pack)
 import Data.Void (Void)
-import Observe.Event (EventBackend, addField, failEvent, newEvent, withEvent)
+import Observe.Event (EventBackend, addField, withEvent)
 import Observe.Event.Component
   (GetSelectorConfig, SelectorConfig(..), SomeJSON(..), absurdFieldConfig, singletonFieldConfigWith)
 
@@ -106,26 +105,18 @@ nodeClient =
       queryChannel <- newTChan
       submitChannel <- newTChan
       let
-        runNodeClient = mask \restore ->
-          do
-            ev <- newEvent eventBackend Connect
-            result <-
-              try @SomeException
-                . restore
-                $ connectToLocalNode LocalNodeClientProtocols
-                  {
-                    -- We don't use the block and tip information, but the chain
-                    -- sync client keeps the connection open. Without this client,
-                    -- the node would close the connection in about three seconds,
-                    -- making it impossible to submit and query.
-                    localChainSyncClient = LocalChainSyncClient chainSyncClient
-                  , localTxSubmissionClient = Just $ submitClient submitChannel
-                  , localTxMonitoringClient = Nothing
-                  , localStateQueryClient = Just $ queryClient queryChannel
-                  }
-            case result of
-              Left ex -> failEvent ev ex *> throw ex
-              Right _ -> pure ()
+        runNodeClient = withEvent eventBackend Connect \_ ->
+          connectToLocalNode LocalNodeClientProtocols
+          {
+            -- We don't use the block and tip information, but the chain
+            -- sync client keeps the connection open. Without this client,
+            -- the node would close the connection in about three seconds,
+            -- making it impossible to submit and query.
+            localChainSyncClient = LocalChainSyncClient chainSyncClient
+          , localTxSubmissionClient = Just $ submitClient submitChannel
+          , localTxMonitoringClient = Nothing
+          , localStateQueryClient = Just $ queryClient queryChannel
+          }
       pure
         (
           runNodeClient
