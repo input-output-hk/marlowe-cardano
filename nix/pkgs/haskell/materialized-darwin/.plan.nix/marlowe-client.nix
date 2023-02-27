@@ -18,7 +18,7 @@
       author = "Jamie Bertram";
       homepage = "";
       url = "";
-      synopsis = "Run integration tests in the context of a marlowe runtime";
+      synopsis = "A client library for the Marlowe Runtime.";
       description = "";
       buildType = "Simple";
       isLocal = true;
@@ -34,9 +34,12 @@
       "library" = {
         depends = [
           (hsPkgs."base" or (errorHandler.buildDepError "base"))
+          (hsPkgs."cardano-api" or (errorHandler.buildDepError "cardano-api"))
           (hsPkgs."eventuo11y" or (errorHandler.buildDepError "eventuo11y"))
           (hsPkgs."exceptions" or (errorHandler.buildDepError "exceptions"))
           (hsPkgs."marlowe-protocols" or (errorHandler.buildDepError "marlowe-protocols"))
+          (hsPkgs."marlowe-chain-sync" or (errorHandler.buildDepError "marlowe-chain-sync"))
+          (hsPkgs."marlowe-runtime" or (errorHandler.buildDepError "marlowe-runtime"))
           (hsPkgs."marlowe-runtime".components.sublibs.discovery-api or (errorHandler.buildDepError "marlowe-runtime:discovery-api"))
           (hsPkgs."marlowe-runtime".components.sublibs.history-api or (errorHandler.buildDepError "marlowe-runtime:history-api"))
           (hsPkgs."marlowe-runtime".components.sublibs.sync-api or (errorHandler.buildDepError "marlowe-runtime:sync-api"))
@@ -46,6 +49,7 @@
           (hsPkgs."monad-control" or (errorHandler.buildDepError "monad-control"))
           (hsPkgs."network" or (errorHandler.buildDepError "network"))
           (hsPkgs."resourcet" or (errorHandler.buildDepError "resourcet"))
+          (hsPkgs."time" or (errorHandler.buildDepError "time"))
           (hsPkgs."transformers" or (errorHandler.buildDepError "transformers"))
           (hsPkgs."transformers-base" or (errorHandler.buildDepError "transformers-base"))
           (hsPkgs."unliftio" or (errorHandler.buildDepError "unliftio"))
