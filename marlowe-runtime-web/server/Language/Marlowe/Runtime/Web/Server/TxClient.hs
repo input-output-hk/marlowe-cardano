@@ -32,6 +32,7 @@ import Data.Foldable (for_)
 import qualified Data.Map as Map
 import Data.Time (UTCTime)
 import Data.Void (Void)
+import Language.Marlowe.Protocol.Client (MarloweClient(..))
 import Language.Marlowe.Runtime.Cardano.Api (fromCardanoTxId)
 import Language.Marlowe.Runtime.ChainSync.Api (Lovelace, StakeCredential, TransactionMetadata, TxId)
 import Language.Marlowe.Runtime.Core.Api (Contract, ContractId, Inputs, MarloweVersion, MarloweVersionTag)
@@ -63,7 +64,7 @@ compile $ SelectorSpec ["tx", "client"]
   ]
 
 data TxClientDependencies r = TxClientDependencies
-  { txJobConnector :: SomeClientConnector (JobClient MarloweTxCommand) IO
+  { connector :: SomeClientConnector MarloweClient IO
   , eventBackend :: EventBackend IO r TxClientSelector
   }
 
@@ -162,7 +163,7 @@ txClient = component \TxClientDependencies{..} -> do
               atomically $ waitDelay delay
               pure $ SendMsgPoll $ clientCmd report'
           }
-      runSomeConnector txJobConnector client
+      runSomeConnector connector $ RunTxClient client
 
     genericSubmit
       :: SomeTVarWithMapUpdate
@@ -185,7 +186,8 @@ txClient = component \TxClientDependencies{..} -> do
 
   pure (runTxClient, TxClient
     { createContract = \stakeCredential version addresses roles metadata minUTxODeposit contract -> do
-        response <- runSomeConnector txJobConnector
+        response <- runSomeConnector connector
+          $ RunTxClient
           $ liftCommand
           $ Create stakeCredential version addresses roles metadata minUTxODeposit contract
         for_ response \creation@ContractCreated{contractId} -> atomically
@@ -194,7 +196,8 @@ txClient = component \TxClientDependencies{..} -> do
           $ TempTx version Unsigned creation
         pure response
     , applyInputs = \version addresses contractId metadata invalidBefore invalidHereafter inputs -> do
-        response <- runSomeConnector txJobConnector
+        response <- runSomeConnector connector
+          $ RunTxClient
           $ liftCommand
           $ ApplyInputs version addresses contractId metadata invalidBefore invalidHereafter inputs
         for_ response \application@InputsApplied{txBody} -> do

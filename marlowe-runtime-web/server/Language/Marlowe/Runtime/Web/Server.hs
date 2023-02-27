@@ -27,8 +27,7 @@ import Control.Concurrent.Component
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Reader (runReaderT)
 import Data.Void (Void)
-import Language.Marlowe.Protocol.Query.Client (MarloweQueryClient)
-import Language.Marlowe.Runtime.Transaction.Api (MarloweTxCommand)
+import Language.Marlowe.Protocol.Client (MarloweClient)
 import qualified Language.Marlowe.Runtime.Web as Web
 import Language.Marlowe.Runtime.Web.Server.Monad (AppEnv(..), AppM(..))
 import qualified Language.Marlowe.Runtime.Web.Server.OpenAPI as OpenAPI
@@ -37,7 +36,6 @@ import qualified Language.Marlowe.Runtime.Web.Server.REST as REST
 import Language.Marlowe.Runtime.Web.Server.SyncClient (SyncClient(..), SyncClientDependencies(..), syncClient)
 import Language.Marlowe.Runtime.Web.Server.TxClient (TxClient(..), TxClientDependencies(..), TxClientSelector, txClient)
 import Network.Protocol.Connection (SomeClientConnector)
-import Network.Protocol.Job.Client (JobClient)
 import qualified Network.Wai as WAI
 import Network.Wai.Middleware.Cors (CorsResourcePolicy(..), cors, simpleCorsResourcePolicy)
 import Observe.Event (EventBackend, hoistEventBackend, narrowEventBackend)
@@ -107,8 +105,7 @@ data ServerDependencies r = ServerDependencies
   { openAPIEnabled :: Bool
   , accessControlAllowOriginAll :: Bool
   , runApplication :: Application -> IO ()
-  , marloweQueryConnector :: SomeClientConnector MarloweQueryClient IO
-  , txJobConnector :: SomeClientConnector (JobClient MarloweTxCommand) IO
+  , connector :: SomeClientConnector MarloweClient IO
   , eventBackend :: EventBackend IO r ServerSelector
   }
 
@@ -126,11 +123,11 @@ data ServerDependencies r = ServerDependencies
 server :: Component IO (ServerDependencies r) ()
 server = proc ServerDependencies{..} -> do
   TxClient{..} <- txClient -< TxClientDependencies
-    { txJobConnector
+    { connector
     , eventBackend = narrowEventBackend Tx eventBackend
     }
   SyncClient{..} <- syncClient -< SyncClientDependencies
-    { marloweQueryConnector
+    { connector
     , lookupTempContract
     , lookupTempTransaction
     }

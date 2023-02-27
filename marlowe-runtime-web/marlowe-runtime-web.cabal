@@ -112,6 +112,7 @@ library server
     , marlowe-runtime-web
     , marlowe-runtime
     , marlowe-runtime:discovery-api
+    , marlowe-runtime:proxy-api
     , marlowe-runtime:sync-api
     , marlowe-runtime:tx-api
     , marlowe-chain-sync
@@ -144,10 +145,10 @@ executable marlowe-web-server
       base >= 4.9 && < 5
     , async-components
     , eventuo11y-json
-    , marlowe-protocols
+    , marlowe-client
     , marlowe-runtime-web:server
     , marlowe-runtime:config
-    , marlowe-runtime:sync-api
+    , mtl
     , network
     , optparse-applicative
     , warp

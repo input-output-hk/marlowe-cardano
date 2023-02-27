@@ -12,8 +12,8 @@ import Control.Error (note)
 import Control.Monad (guard, mfilter)
 import Control.Monad.IO.Class (liftIO)
 import Data.List (uncons)
-import Language.Marlowe.Protocol.Query.Client
-  (MarloweQueryClient, getContractHeaders, getContractState, getTransaction, getTransactions)
+import Language.Marlowe.Protocol.Client (MarloweClient(..))
+import Language.Marlowe.Protocol.Query.Client (getContractHeaders, getContractState, getTransaction, getTransactions)
 import Language.Marlowe.Protocol.Query.Types (SomeContractState, SomeTransaction(..), SomeTransactions(..))
 import qualified Language.Marlowe.Protocol.Query.Types as Query
 import Language.Marlowe.Runtime.ChainSync.Api (TxId)
@@ -27,7 +27,7 @@ import Network.Protocol.Driver (runSomeConnector)
 import Servant.Pagination
 
 data SyncClientDependencies r = SyncClientDependencies
-  { marloweQueryConnector :: SomeClientConnector MarloweQueryClient IO
+  { connector :: SomeClientConnector MarloweClient IO
   , lookupTempContract :: ContractId -> STM (Maybe (TempTx ContractCreated))
   , lookupTempTransaction :: ContractId -> TxId -> STM (Maybe (TempTx InputsApplied))
   }
@@ -68,19 +68,19 @@ data SyncClient r = SyncClient
 
 syncClient :: Component IO (SyncClientDependencies r) (SyncClient r)
 syncClient = arr \SyncClientDependencies{..} -> SyncClient
-  { loadContractHeaders = runSomeConnector marloweQueryConnector . getContractHeaders
-  , loadContract = \contractId -> runSomeConnector marloweQueryConnector do
+  { loadContractHeaders = runSomeConnector connector . RunMarloweQueryClient . getContractHeaders
+  , loadContract = \contractId -> runSomeConnector connector $ RunMarloweQueryClient do
       result <- getContractState contractId
       case result of
         Nothing -> liftIO $ atomically $ fmap Left <$> lookupTempContract contractId
         Just contract -> pure $ Just $ Right contract
-  , loadTransaction = \contractId txId -> runSomeConnector marloweQueryConnector do
+  , loadTransaction = \contractId txId -> runSomeConnector connector $ RunMarloweQueryClient do
       result <- getTransaction txId
       let matchesContract (SomeTransaction _ _ _ Transaction{contractId=cid}) = cid == contractId
       case mfilter matchesContract result of
         Nothing -> liftIO $ atomically $ fmap Left <$> lookupTempTransaction contractId txId
         Just contract -> pure $ Just $ Right contract
-  , loadTransactions = \contractId Query.Range{..} -> runSomeConnector  marloweQueryConnector do
+  , loadTransactions = \contractId Query.Range{..} -> runSomeConnector  connector $ RunMarloweQueryClient do
       mTxs <- getTransactions contractId
       pure do
         SomeTransactions MarloweV1 txs <- note ContractNotFound mTxs
