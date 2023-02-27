@@ -76,6 +76,7 @@ executable marlowe-integration-tests
     , marlowe-cardano
     , marlowe-chain-sync
     , marlowe-chain-sync:plutus-compat
+    , marlowe-client
     , marlowe-integration
     , marlowe-protocols
     , marlowe-runtime

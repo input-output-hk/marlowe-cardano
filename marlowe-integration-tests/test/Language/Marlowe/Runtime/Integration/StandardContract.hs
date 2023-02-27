@@ -11,6 +11,7 @@ import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
 import Language.Marlowe.Core.V1.Semantics.Types
 import Language.Marlowe.Extended.V1 (ada)
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader)
+import Language.Marlowe.Runtime.Client (createContract)
 import Language.Marlowe.Runtime.Core.Api (ContractId, MarloweVersion(..), MarloweVersionTag(..))
 import Language.Marlowe.Runtime.Discovery.Api (ContractHeader)
 import Language.Marlowe.Runtime.Integration.Common
@@ -22,20 +23,12 @@ import Language.Marlowe.Runtime.Integration.Common
   , expectJust
   , expectRight
   , notify
-  , runTxJobClient
   , submit
   , withdraw
   )
 import Language.Marlowe.Runtime.Plutus.V2.Api (toPlutusAddress)
 import Language.Marlowe.Runtime.Transaction.Api
-  ( ContractCreated(..)
-  , InputsApplied(..)
-  , MarloweTxCommand(..)
-  , RoleTokensConfig(..)
-  , WalletAddresses(changeAddress)
-  , mkMint
-  )
-import Network.Protocol.Job.Client (liftCommand)
+  (ContractCreated(..), InputsApplied(..), RoleTokensConfig(..), WalletAddresses(changeAddress), mkMint)
 import qualified Plutus.V2.Ledger.Api as PV2
 
 data StandardContractInit v = StandardContractInit
@@ -79,7 +72,7 @@ createStandardContract partyAWallet partyBWallet = do
   partyBAddress <- expectJust "Failed to convert party B address" $ toPlutusAddress $ changeAddress $ addresses partyBWallet
   now <- liftIO getCurrentTime
   let (contract, partyA, partyB) = standardContract partyBAddress now $ secondsToNominalDiffTime 100
-  result <- runTxJobClient $ liftCommand $ Create
+  result <- createContract
     Nothing
     MarloweV1
     (addresses partyAWallet)

@@ -21,6 +21,7 @@ import Control.Concurrent (threadDelay)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Reader (ReaderT(..), runReaderT)
 import Control.Monad.Reader.Class (asks)
+import Control.Monad.Trans.Class (lift)
 import Data.Aeson (FromJSON(..), Value(..), decodeFileStrict, eitherDecodeStrict)
 import Data.Aeson.Types (parseFail)
 import Data.Bifunctor (first)
@@ -36,10 +37,7 @@ import Data.Time (NominalDiffTime, diffUTCTime, getCurrentTime, secondsToNominal
 import Data.Word (Word64)
 import GHC.Generics (Generic)
 import Language.Marlowe (ChoiceId(..), Input(..), InputContent(..), Party, Token)
-import Language.Marlowe.Protocol.HeaderSync.Client (MarloweHeaderSyncClient, hoistMarloweHeaderSyncClient)
 import qualified Language.Marlowe.Protocol.HeaderSync.Client as HeaderSync
-import Language.Marlowe.Protocol.Query.Client (MarloweQueryClient, hoistMarloweQueryClient)
-import Language.Marlowe.Protocol.Sync.Client (MarloweSyncClient, hoistMarloweSyncClient)
 import qualified Language.Marlowe.Protocol.Sync.Client as MarloweSync
 import Language.Marlowe.Runtime.Cardano.Api
   (fromCardanoAddressInEra, fromCardanoTxId, fromCardanoTxOutDatum, fromCardanoTxOutValue)
@@ -56,6 +54,9 @@ import Language.Marlowe.Runtime.ChainSync.Api
   , TxOutRef(..)
   , fromBech32
   )
+import Language.Marlowe.Runtime.Client
+  (MarloweT, applyInputs, runMarloweHeaderSyncClient, runMarloweSyncClient, runMarloweT, runMarloweTxClient)
+import qualified Language.Marlowe.Runtime.Client as Client
 import Language.Marlowe.Runtime.Core.Api
   ( ContractId(..)
   , MarloweVersion(..)
@@ -71,17 +72,16 @@ import Language.Marlowe.Runtime.Discovery.Api (ContractHeader(..))
 import Language.Marlowe.Runtime.History.Api (ContractStep, CreateStep(..))
 import Language.Marlowe.Runtime.Transaction.Api
   (ContractCreated(..), InputsApplied(..), MarloweTxCommand(..), WalletAddresses(WalletAddresses))
-import Network.Protocol.Driver (runSomeConnector)
-import Network.Protocol.Job.Client (JobClient, hoistJobClient, liftCommand, liftCommandWait)
+import Network.Protocol.Job.Client (liftCommandWait)
 import qualified Plutus.V2.Ledger.Api as PV2
 import Servant.Client (ClientError, ClientM)
 import Test.Hspec (shouldBe)
 import Test.Integration.Marlowe (LocalTestnet(..), MarloweRuntime, PaymentKeyPair(..), SpoNode(..), execCli)
 import qualified Test.Integration.Marlowe.Local as MarloweRuntime
-import UnliftIO (MonadUnliftIO(withRunInIO), bracket_)
+import UnliftIO (bracket_)
 import UnliftIO.Environment (setEnv, unsetEnv)
 
-type Integration = ReaderT MarloweRuntime IO
+type Integration = MarloweT (ReaderT MarloweRuntime IO)
 
 data Wallet = Wallet
   { addresses :: WalletAddresses
@@ -89,10 +89,11 @@ data Wallet = Wallet
   }
 
 runIntegrationTest :: Integration a -> MarloweRuntime -> IO a
-runIntegrationTest = runReaderT
+runIntegrationTest m runtime@MarloweRuntime.MarloweRuntime{protocolConnector} =
+  runReaderT (runMarloweT m protocolConnector) runtime
 
 runWebClient :: ClientM a -> Integration (Either ClientError a)
-runWebClient client = ReaderT \runtime -> MarloweRuntime.runWebClient runtime client
+runWebClient client = lift $ ReaderT \runtime -> MarloweRuntime.runWebClient runtime client
 
 expectJust :: MonadFail m => String -> Maybe a -> m a
 expectJust msg = \case
@@ -103,26 +104,6 @@ expectRight :: MonadFail m => Show a => String -> Either a b -> m b
 expectRight msg = \case
   Left a -> fail $ msg <> ": " <> show a
   Right b -> pure b
-
-runMarloweQueryClient :: MarloweQueryClient Integration a -> Integration a
-runMarloweQueryClient client = do
-  connector <- asks MarloweRuntime.marloweQueryConnector
-  withRunInIO \runInIO -> runSomeConnector connector $ hoistMarloweQueryClient runInIO client
-
-runMarloweSyncClient :: MarloweSyncClient Integration a -> Integration a
-runMarloweSyncClient client = do
-  connector <- asks MarloweRuntime.marloweSyncConnector
-  withRunInIO \runInIO -> runSomeConnector connector $ hoistMarloweSyncClient runInIO client
-
-runMarloweHeaderSyncClient :: MarloweHeaderSyncClient Integration a -> Integration a
-runMarloweHeaderSyncClient client = do
-  connector <- asks MarloweRuntime.marloweHeaderSyncConnector
-  withRunInIO \runInIO -> runSomeConnector connector $ hoistMarloweHeaderSyncClient runInIO client
-
-runTxJobClient :: JobClient MarloweTxCommand Integration a -> Integration a
-runTxJobClient client = do
-  connector <- asks MarloweRuntime.txJobConnector
-  withRunInIO \runInIO -> runSomeConnector connector $ hoistJobClient runInIO client
 
 testnet :: Integration LocalTestnet
 testnet = asks MarloweRuntime.testnet
@@ -177,7 +158,7 @@ submit
   -> Integration BlockHeader
 submit Wallet{..} txBody = do
   let tx = signShelleyTransaction txBody signingKeys
-  submitResult <- runTxJobClient $ liftCommandWait $ Submit tx
+  submitResult <- runMarloweTxClient $ liftCommandWait $ Submit tx
   expectRight "failed to submit tx" $ first (tx,) submitResult
 
 deposit
@@ -189,13 +170,11 @@ deposit
   -> Integer
   -> Integration (InputsApplied BabbageEra 'V1)
 deposit Wallet{..} contractId intoAccount fromParty ofToken quantity = do
-  result <- runTxJobClient $ liftCommand $ ApplyInputs
+  result <- applyInputs
     MarloweV1
     addresses
     contractId
     mempty
-    Nothing
-    Nothing
     [NormalInput $ IDeposit intoAccount fromParty ofToken quantity]
   expectRight "Failed to create deposit transaction" result
 
@@ -207,13 +186,11 @@ choose
   -> Integer
   -> Integration (InputsApplied BabbageEra 'V1)
 choose Wallet{..} contractId choice party chosenNum = do
-  result <- runTxJobClient $ liftCommand $ ApplyInputs
+  result <- applyInputs
     MarloweV1
     addresses
     contractId
     mempty
-    Nothing
-    Nothing
     [NormalInput $ IChoice (ChoiceId choice party) chosenNum]
   expectRight "Failed to create choice transaction" result
 
@@ -222,13 +199,11 @@ notify
   -> ContractId
   -> Integration (InputsApplied BabbageEra 'V1)
 notify Wallet{..} contractId = do
-  result <- runTxJobClient $ liftCommand $ ApplyInputs
+  result <- applyInputs
     MarloweV1
     addresses
     contractId
     mempty
-    Nothing
-    Nothing
     [NormalInput INotify]
   expectRight "Failed to create notify transaction" result
 
@@ -238,7 +213,7 @@ withdraw
   -> TokenName
   -> Integration (TxBody BabbageEra)
 withdraw Wallet{..} contractId role = do
-  result <- runTxJobClient $ liftCommand $ Withdraw MarloweV1 addresses contractId role
+  result <- Client.withdraw MarloweV1 addresses contractId role
   expectRight "Failed to create withdraw transaction" result
 
 timeout :: NominalDiffTime
