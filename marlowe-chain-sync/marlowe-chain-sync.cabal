@@ -88,16 +88,20 @@ library libchainsync
     Language.Marlowe.Runtime.ChainSync.Database
     Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL
     Language.Marlowe.Runtime.ChainSync.JobServer
+    Language.Marlowe.Runtime.ChainSync.NodeClient
     Language.Marlowe.Runtime.ChainSync.Server
     Language.Marlowe.Runtime.ChainSync.QueryServer
   other-modules:
   build-depends:
       base >= 4.9 && < 5
+    , aeson
     , async-components
     , bytestring
     , cardano-api
     , cardano-binary
     , containers
+    , eventuo11y
+    , eventuo11y-extras
     , foldl
     , hasql
     , hasql-th
@@ -106,6 +110,8 @@ library libchainsync
     , marlowe-protocols
     , nonempty-containers
     , ouroboros-network
+    , stm
+    , text
     , these
     , transformers
     , vector

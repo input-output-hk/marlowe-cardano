@@ -124,7 +124,7 @@ instance Default Config where
     , syncQueryPort = 3726
     , txHost = "127.0.0.1"
     , txCommandPort = 3723
-    , timeoutSeconds = 600
+    , timeoutSeconds = 900
     , buildSeconds = 3
     , confirmSeconds = 3
     , retrySeconds = 10
@@ -410,7 +410,7 @@ contractStepToJSON (RedeemPayout RedeemStep{..}) =
     [ "step" A..= ("payout" :: String)
     , "utxo" A..= utxo
     , "redeemingTx" A..= redeemingTx
-    , "datumm" A..= datum
+    , "datum" A..= datum
     ]
 
 

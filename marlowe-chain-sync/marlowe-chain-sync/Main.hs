@@ -1,6 +1,7 @@
 {-# LANGUAGE Arrows #-}
 {-# LANGUAGE GADTs #-}
 
+
 module Main
   where
 
@@ -12,9 +13,8 @@ import Cardano.Api
   , EraInMode(..)
   , LocalNodeConnectInfo(..)
   , TxInMode(..)
-  , queryNodeLocalState
   )
-import qualified Cardano.Api as Cardano
+import qualified Cardano.Api as Cardano (connectToLocalNode)
 import Control.Concurrent.Component
 import Control.Exception (bracket)
 import Control.Monad ((<=<))
@@ -29,6 +29,7 @@ import Language.Marlowe.Runtime.ChainSync (ChainSyncDependencies(..), chainSync)
 import Language.Marlowe.Runtime.ChainSync.Api (WithGenesis(..))
 import Language.Marlowe.Runtime.ChainSync.Database (hoistDatabaseQueries)
 import qualified Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL as PostgreSQL
+import Language.Marlowe.Runtime.ChainSync.NodeClient (NodeClient(..), NodeClientDependencies(..), nodeClient)
 import Logging (RootSelector(..), getRootSelectorConfig)
 import Network.Protocol.ChainSeek.Server (chainSeekServerPeer)
 import Network.Protocol.Connection (SomeConnectionSource(..), logConnectionSource)
@@ -75,6 +76,12 @@ run Options{..} = bracket (Pool.acquire (100, secondsToNominalDiffTime 5, fromSt
       , toPeer = jobServerPeer
       }
 
+    NodeClient{..} <- nodeClient -< NodeClientDependencies
+      {
+        connectToLocalNode = Cardano.connectToLocalNode localNodeConnectInfo
+      , eventBackend = narrowEventBackend NodeService eventBackend
+      }
+
     chainSync -< ChainSyncDependencies
       { databaseQueries = hoistDatabaseQueries
           (either throwUsageError pure <=< Pool.use pool)
@@ -88,8 +95,8 @@ run Options{..} = bracket (Pool.acquire (100, secondsToNominalDiffTime 5, fromSt
       , jobSource = SomeConnectionSource
           $ logConnectionSource (narrowEventBackend JobServer eventBackend)
           $ handshakeConnectionSource jobSource
-      , queryLocalNodeState = queryNodeLocalState localNodeConnectInfo
-      , submitTxToNodeLocal = \era tx -> Cardano.submitTxToNodeLocal localNodeConnectInfo $ TxInMode tx case era of
+      , queryLocalNodeState = queryNode
+      , submitTxToNodeLocal = \era tx -> submitTxToNode $ TxInMode tx case era of
           ByronEra -> ByronEraInCardanoMode
           ShelleyEra -> ShelleyEraInCardanoMode
           AllegraEra -> AllegraEraInCardanoMode
@@ -103,7 +110,7 @@ run Options{..} = bracket (Pool.acquire (100, secondsToNominalDiffTime 5, fromSt
 
     localNodeConnectInfo :: LocalNodeConnectInfo CardanoMode
     localNodeConnectInfo = LocalNodeConnectInfo
-      -- FIXME read from config - what is the appropriate value?
+      -- The epoch slots ignored after Byron.
       { localConsensusModeParams = CardanoModeParams $ EpochSlots 21600
       , localNodeNetworkId = networkId
       , localNodeSocketPath = nodeSocket
