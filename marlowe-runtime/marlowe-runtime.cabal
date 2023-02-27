@@ -409,54 +409,6 @@ library config
     , text
     , split
 
-executable marlowe
-  import: lang
-  hs-source-dirs: cli
-  main-is: Main.hs
-  other-modules:
-    Language.Marlowe.Runtime.CLI.Command
-    Language.Marlowe.Runtime.CLI.Command.Apply
-    Language.Marlowe.Runtime.CLI.Command.Create
-    Language.Marlowe.Runtime.CLI.Command.Log
-    Language.Marlowe.Runtime.CLI.Command.Submit
-    Language.Marlowe.Runtime.CLI.Command.Tx
-    Language.Marlowe.Runtime.CLI.Command.Withdraw
-    Language.Marlowe.Runtime.CLI.Env
-    Language.Marlowe.Runtime.CLI.Monad
-    Paths_marlowe_runtime
-  autogen-modules:
-    Paths_marlowe_runtime
-  build-depends:
-      aeson
-    , base >= 4.9 && < 5
-    , ansi-terminal
-    , base16
-    , bytestring
-    , cardano-api
-    , containers
-    , errors
-    , marlowe-cardano
-    , marlowe-chain-sync
-    , marlowe-protocols
-    , marlowe-runtime
-    , marlowe-runtime:config
-    , marlowe-runtime:tx-api
-    , marlowe-runtime:history-api
-    , monad-control
-    , network
-    , plutus-ledger-api
-    , transformers
-    , transformers-base
-    , optparse-applicative
-    , stm
-    , stm-delay
-    , text
-    , time
-    , wl-pprint
-    , yaml
-  if !os(windows)
-    build-depends: unix
-
 executable marlowe-indexer
   import: lang
   hs-source-dirs:   marlowe-indexer

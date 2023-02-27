@@ -25,7 +25,7 @@ rec {
     ${haskell.packages.marlowe-integration-tests.components.exes.marlowe-integration-tests}/bin/marlowe-integration-tests "$@"
   '';
 
-  marlowe-rt = haskell.packages.marlowe-runtime.components.exes.marlowe;
+  marlowe-rt = haskell.packages.marlowe-runtime-cli.components.exes.marlowe;
 
   network = pkgs.networks.${networkNixName};
 
