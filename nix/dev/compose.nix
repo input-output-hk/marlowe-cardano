@@ -212,13 +212,11 @@ let
 
   web-service = dev-service {
     ports = [ 8080 ];
-    depends_on = [ "marlowe-sync" "marlowe-tx" ];
+    depends_on = [ "marlowe-proxy" ];
     command = [
       "/exec/run-marlowe-web-server"
-      "--marlowe-sync-host"
-      "marlowe-sync"
-      "--tx-host"
-      "marlowe-tx"
+      "--marlowe-runtime-host"
+      "marlowe-proxy"
       "--enable-open-api"
       "--access-control-allow-origin-all"
     ];
