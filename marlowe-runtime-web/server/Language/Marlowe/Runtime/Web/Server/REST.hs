@@ -23,4 +23,7 @@ compile $ SelectorSpec "api"
   ]
 
 server :: EventBackend (AppM r) r ApiSelector -> ServerT API (AppM r)
-server eventBackend = Contracts.server (narrowEventBackend Contracts eventBackend) :<|> pure NoContent
+server eventBackend = Contracts.server (narrowEventBackend Contracts eventBackend) :<|> healthcheckServer
+
+healthcheckServer :: AppM r NoContent
+healthcheckServer = pure NoContent
