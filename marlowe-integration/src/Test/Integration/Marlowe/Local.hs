@@ -591,8 +591,7 @@ runtime = proc RuntimeDependencies{..} -> do
     { openAPIEnabled = False
     , accessControlAllowOriginAll = False
     , runApplication = run webPort
-    , marloweQueryConnector = SomeConnector $ clientConnector marloweQueryPair
-    , txJobConnector = SomeConnector $ clientConnector txJobPair
+    , connector = SomeConnector $ ihoistConnector hoistMarloweClient (runResourceT . runWrappedUnliftIO) liftIO $ clientConnector marlowePair
     , eventBackend = noopEventBackend ()
     }
 
