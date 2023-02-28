@@ -98,6 +98,10 @@ instance Arbitrary Withdrawal where
 instance Arbitrary Order where
   arbitrary = elements [Ascending, Descending]
 
+instance Arbitrary WithdrawalFilter where
+  arbitrary = WithdrawalFilter <$> arbitrary
+  shrink = genericShrink
+
 arbitraryRequest :: StRes a -> Gen (Request a)
 arbitraryRequest = \case
   TokContractHeaders -> ReqContractHeaders <$> arbitrary
@@ -105,7 +109,7 @@ arbitraryRequest = \case
   TokTransaction -> ReqTransaction <$> arbitrary
   TokTransactions -> ReqTransactions <$> arbitrary
   TokWithdrawal -> ReqWithdrawal <$> arbitrary
-  TokWithdrawals -> ReqWithdrawals <$> arbitrary
+  TokWithdrawals -> ReqWithdrawals <$> arbitrary <*> arbitrary
   TokBoth a b -> resized (`div` 2) $ ReqBoth <$> arbitraryRequest a <*> arbitraryRequest b
 
 shrinkRequest :: Request a -> [Request a]
@@ -115,7 +119,10 @@ shrinkRequest = \case
   ReqTransaction txId -> ReqTransaction <$> shrink txId
   ReqTransactions contractId -> ReqTransactions <$> shrink contractId
   ReqWithdrawal txId -> ReqWithdrawal <$> shrink txId
-  ReqWithdrawals contractId -> ReqWithdrawals <$> shrink contractId
+  ReqWithdrawals wFilter range -> fold
+    [ ReqWithdrawals <$> shrink wFilter <*> pure range
+    , ReqWithdrawals wFilter <$> shrink range
+    ]
   ReqBoth a b -> fold
     [ [ ReqBoth a' b | a' <- shrinkRequest a ]
     , [ ReqBoth a b' | b' <- shrinkRequest b ]

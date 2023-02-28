@@ -14,7 +14,7 @@ import Data.Text (Text)
 import Data.Void (Void)
 import GHC.Generics (Generic)
 import Language.Marlowe.Protocol.Query.Types
-  (Page, Range, SomeContractState, SomeTransaction, SomeTransactions, Withdrawal)
+  (Page, Range, SomeContractState, SomeTransaction, SomeTransactions, Withdrawal, WithdrawalFilter)
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainPoint, TxId)
 import Language.Marlowe.Runtime.Core.Api (ContractId, MarloweVersion(..), SomeMarloweVersion)
 import Language.Marlowe.Runtime.Discovery.Api (ContractHeader)
@@ -35,7 +35,14 @@ data DatabaseSelector f where
   GetTransaction :: DatabaseSelector (QueryField TxId (Maybe SomeTransaction))
   GetTransactions :: DatabaseSelector (QueryField ContractId (Maybe SomeTransactions))
   GetWithdrawal :: DatabaseSelector (QueryField TxId (Maybe Withdrawal))
-  GetWithdrawals :: DatabaseSelector (QueryField ContractId (Maybe [Withdrawal]))
+  GetWithdrawals :: DatabaseSelector (QueryField GetWithdrawalsArguments (Maybe (Page TxId Withdrawal)))
+
+data GetWithdrawalsArguments = GetWithdrawalsArguments
+  { filter :: WithdrawalFilter
+  , range :: Range TxId
+  }
+  deriving stock (Generic)
+  deriving anyclass (ToJSON)
 
 data QueryField p r
   = Arguments p
@@ -131,9 +138,9 @@ logDatabaseQueries eventBackend DatabaseQueries{..} = DatabaseQueries
       result <- getWithdrawal txId
       addField ev $ Result result
       pure result
-  , getWithdrawals = \contractId -> withEvent eventBackend GetWithdrawals \ev -> do
-      addField ev $ Arguments contractId
-      result <- getWithdrawals contractId
+  , getWithdrawals = \wFilter range -> withEvent eventBackend GetWithdrawals \ev -> do
+      addField ev $ Arguments $ GetWithdrawalsArguments wFilter range
+      result <- getWithdrawals wFilter range
       addField ev $ Result result
       pure result
   }
@@ -152,7 +159,7 @@ hoistDatabaseQueries f DatabaseQueries{..} = DatabaseQueries
   , getTransaction = f . getTransaction
   , getTransactions = f . getTransactions
   , getWithdrawal = f . getWithdrawal
-  , getWithdrawals = f . getWithdrawals
+  , getWithdrawals = fmap f . getWithdrawals
   }
 
 data DatabaseQueries m = DatabaseQueries
@@ -168,7 +175,7 @@ data DatabaseQueries m = DatabaseQueries
   , getTransaction :: TxId -> m (Maybe SomeTransaction)
   , getTransactions :: ContractId -> m (Maybe SomeTransactions)
   , getWithdrawal :: TxId -> m (Maybe Withdrawal)
-  , getWithdrawals :: ContractId -> m (Maybe [Withdrawal])
+  , getWithdrawals :: WithdrawalFilter -> Range TxId -> m (Maybe (Page TxId Withdrawal))
   }
 
 data Next a
