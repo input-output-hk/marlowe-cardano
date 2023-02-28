@@ -16,7 +16,7 @@ import Language.Marlowe (pretty)
 import qualified Language.Marlowe.Core.V1.Semantics as V1
 import Language.Marlowe.Protocol.Sync.Client
 import Language.Marlowe.Runtime.CLI.Env (Env(..))
-import Language.Marlowe.Runtime.CLI.Monad (CLI, askEnv, runCLIExceptT, runHistorySyncClient)
+import Language.Marlowe.Runtime.CLI.Monad (CLI, askEnv, runCLIExceptT)
 import Language.Marlowe.Runtime.CLI.Option (contractIdArgument)
 import Language.Marlowe.Runtime.ChainSync.Api
   ( AssetId(AssetId)
@@ -30,6 +30,7 @@ import Language.Marlowe.Runtime.ChainSync.Api
   , toBech32
   , unBlockHeaderHash
   )
+import qualified Language.Marlowe.Runtime.Client as Client
 import Language.Marlowe.Runtime.Core.Api
   ( ContractId(..)
   , MarloweVersion(..)
@@ -71,7 +72,7 @@ logCommandParser = info parser $ progDesc "Display the history of a contract"
 runLogCommand :: LogCommand -> CLI ()
 runLogCommand LogCommand{..} = runCLIExceptT
   $ ExceptT
-  $ runHistorySyncClient
+  $ Client.runMarloweSyncClient
   $ MarloweSyncClient
   $ pure
   $ SendMsgFollowContract contractId ClientStFollow

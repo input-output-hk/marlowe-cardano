@@ -830,6 +830,7 @@
         cardano-config = ./.plan.nix/cardano-config.nix;
         plutus-ledger-ada = ./.plan.nix/plutus-ledger-ada.nix;
         marlowe-runtime = ./.plan.nix/marlowe-runtime.nix;
+        marlowe-runtime-cli = ./.plan.nix/marlowe-runtime-cli.nix;
         marlowe-contracts = ./.plan.nix/marlowe-contracts.nix;
         marlowe-actus = ./.plan.nix/marlowe-actus.nix;
         eventuo11y-dsl = ./.plan.nix/eventuo11y-dsl.nix;
@@ -895,6 +896,7 @@
           "marlowe-runtime" = {
             flags = { "defer-plugin-errors" = lib.mkOverride 900 false; };
             };
+          "marlowe-runtime-cli" = { flags = {}; };
           "marlowe-contracts" = {
             flags = { "defer-plugin-errors" = lib.mkOverride 900 false; };
             };
@@ -1117,6 +1119,7 @@
           "temporary".components.library.planned = lib.mkOverride 900 true;
           "hasql-th".components.library.planned = lib.mkOverride 900 true;
           "tagged".components.library.planned = lib.mkOverride 900 true;
+          "marlowe-runtime-cli".components.exes."marlowe".planned = lib.mkOverride 900 true;
           "ouroboros-network".components.sublibs."protocol-tests".planned = lib.mkOverride 900 true;
           "unix".components.library.planned = lib.mkOverride 900 true;
           "cardano-protocol-tpraos".components.library.planned = lib.mkOverride 900 true;
@@ -1469,7 +1472,6 @@
           "kan-extensions".components.library.planned = lib.mkOverride 900 true;
           "network-run".components.library.planned = lib.mkOverride 900 true;
           "nonempty-vector".components.library.planned = lib.mkOverride 900 true;
-          "marlowe-runtime".components.exes."marlowe".planned = lib.mkOverride 900 true;
           "integer-logarithms".components.library.planned = lib.mkOverride 900 true;
           "cryptohash-md5".components.library.planned = lib.mkOverride 900 true;
           "digest".components.library.planned = lib.mkOverride 900 true;

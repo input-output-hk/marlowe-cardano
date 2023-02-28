@@ -24,12 +24,13 @@ import Language.Marlowe (POSIXTime(..))
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
 import qualified Language.Marlowe.Core.V1.Semantics.Types.Address as V1
 import Language.Marlowe.Runtime.CLI.Command.Tx (SigningMethod(Manual), TxCommand(..), txCommandParser)
-import Language.Marlowe.Runtime.CLI.Monad (CLI, runCLIExceptT, runTxCommand)
+import Language.Marlowe.Runtime.CLI.Monad (CLI, runCLIExceptT)
 import Language.Marlowe.Runtime.CLI.Option (txOutRefParser)
 import Language.Marlowe.Runtime.ChainSync.Api (TransactionMetadata, fromJSONEncodedTransactionMetadata, unPolicyId)
+import Language.Marlowe.Runtime.Client (applyInputs')
 import Language.Marlowe.Runtime.Core.Api
   (ContractId(..), IsMarloweVersion(..), MarloweVersion(MarloweV1), MarloweVersionTag(..))
-import Language.Marlowe.Runtime.Transaction.Api (ApplyInputsError, InputsApplied(..), MarloweTxCommand(ApplyInputs))
+import Language.Marlowe.Runtime.Transaction.Api (ApplyInputsError, InputsApplied(..))
 import qualified Language.Marlowe.Util as V1
 import Options.Applicative
 import qualified Plutus.V1.Ledger.Api as P
@@ -222,8 +223,7 @@ runApplyCommand TxCommand { walletAddresses, signingMethod, metadataFile, subCom
     validityLowerBound'= posixTimeToUTCTime <$> validityLowerBound
     validityUpperBound'= posixTimeToUTCTime <$> validityUpperBound
 
-    cmd = ApplyInputs MarloweV1 walletAddresses contractId metadata validityLowerBound' validityUpperBound' inputs'
-  InputsApplied{txBody} <- ExceptT $ first ApplyFailed <$> runTxCommand cmd
+  InputsApplied{txBody} <- ExceptT $ first ApplyFailed <$> applyInputs' MarloweV1 walletAddresses contractId metadata validityLowerBound' validityUpperBound' inputs'
   case signingMethod of
     Manual outputFile -> do
       ExceptT $ liftIO $ first TransactionFileWriteFailed <$> C.writeFileTextEnvelope outputFile Nothing txBody

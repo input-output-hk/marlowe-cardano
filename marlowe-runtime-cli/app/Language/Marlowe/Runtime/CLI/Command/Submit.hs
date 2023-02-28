@@ -11,9 +11,10 @@ import qualified Data.Aeson as A
 import Data.Bifunctor (Bifunctor(first))
 import Data.ByteString.Base16 (encodeBase16)
 import Language.Marlowe.Runtime.CLI.Env (Env(..))
-import Language.Marlowe.Runtime.CLI.Monad (CLI, asksEnv, runCLIExceptT, runTxJobClient)
+import Language.Marlowe.Runtime.CLI.Monad (CLI, asksEnv, runCLIExceptT)
 import Language.Marlowe.Runtime.ChainSync.Api
   (BlockHeader(BlockHeader), BlockHeaderHash(unBlockHeaderHash), BlockNo(unBlockNo), SlotNo(unSlotNo))
+import Language.Marlowe.Runtime.Client (runMarloweTxClient)
 import Language.Marlowe.Runtime.Transaction.Api (MarloweTxCommand(Submit), SubmitError)
 import Network.Protocol.Job.Client
   (ClientStAwait(SendMsgDetach, SendMsgPoll), ClientStCmd(..), ClientStInit(SendMsgExec), JobClient(JobClient))
@@ -33,7 +34,7 @@ submitCommandParser = info parser $ progDesc "Submit a signed transaction to the
       , help "A file containing the CBOR bytes of the signed transaction to submit."
       ]
 
-data CilentSubmitError
+data ClientSubmitError
   = SubmitFailed SubmitError
   | SubmitInterrupted
   | TransactionDecodingFailed
@@ -60,7 +61,7 @@ runSubmitCommand SubmitCommand{txFile} = runCLIExceptT do
       , recvMsgSucceed = pure . Right
       }
     jobClient = JobClient . pure . SendMsgExec cmd $ next
-  BlockHeader slotNo hash blockNo <- ExceptT $ runTxJobClient jobClient
+  BlockHeader slotNo hash blockNo <- ExceptT $ runMarloweTxClient jobClient
   let
     res = A.object
       [ ("slotNo", toJSON $ unSlotNo slotNo)
@@ -68,4 +69,3 @@ runSubmitCommand SubmitCommand{txFile} = runCLIExceptT do
       , ("blockNo", toJSON $ unBlockNo blockNo)
       ]
   liftIO . print $ A.encode res
-
