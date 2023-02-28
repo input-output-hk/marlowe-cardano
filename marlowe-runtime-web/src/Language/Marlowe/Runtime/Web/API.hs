@@ -63,12 +63,18 @@ api = Proxy
 
 -- | The REST API of the Marlowe Runtime
 type API = "contracts" :> ContractsAPI
-          :<|> "healthcheck" :> Get '[JSON] NoContent
+      :<|> "withdrawals" :> WithdrawalsAPI
+      :<|> "healthcheck" :> Get '[JSON] NoContent
 
 -- | /contracts sub-API
 type ContractsAPI = GetContractsAPI
                :<|> PostContractsAPI
                :<|> Capture "contractId" TxOutRef :> ContractAPI
+
+-- | /withdrawals sub-API
+type WithdrawalsAPI = GetWithdrawalsAPI
+                 :<|> PostWithdrawalsAPI
+                 :<|> Capture "withdrawalId" TxId :> WithdrawalAPI
 
 -- | GET /contracts sub-API
 type GetContractsAPI = PaginatedGet '["contractId"] GetContractsResponse
@@ -176,6 +182,36 @@ instance HasNamedLink Tx API "next" where
     :> Capture "transactionId" TxId
     :> GetTransactionAPI
   namedLink _ _ mkLink Tx{..} = mkLink contractId <$> consumingTx
+
+-- | GET /contracts/:contractId/withdrawals sup-API
+type GetWithdrawalsAPI = QueryParams "roleCurrency" PolicyId
+                      :> PaginatedGet '["withdrawalId"] GetWithdrawalsResponse
+
+type GetWithdrawalsResponse = WithLink "withdrawal" WithdrawalHeader
+
+instance HasNamedLink WithdrawalHeader API "withdrawal" where
+  type Endpoint WithdrawalHeader API "withdrawal" =
+    "withdrawals" :> Capture "withdrawalId" TxId :> GetWithdrawalAPI
+  namedLink _ _ mkLink WithdrawalHeader{..} = Just $ mkLink withdrawalId
+
+-- | POST /contracts sub-API
+type PostWithdrawalsAPI
+  =  ReqBody '[JSON] PostWithdrawalsRequest
+  :> PostTxAPI (PostCreated '[JSON] PostWithdrawalsResponse)
+
+type PostWithdrawalsResponse = WithLink "withdrawal" WithdrawTxBody
+
+instance HasNamedLink WithdrawTxBody API "withdrawal" where
+  type Endpoint WithdrawTxBody API "withdrawal" =
+    "withdrawals" :> Capture "withdrawalId" TxId :> GetWithdrawalAPI
+  namedLink _ _ mkLink WithdrawTxBody{..} = Just $ mkLink withdrawalId
+
+-- | /contracts/:contractId/withdrawals/:withdrawalId sup-API
+type WithdrawalAPI = GetWithdrawalAPI
+                :<|> PutSignedTxAPI
+
+-- | GET /contracts/:contractId/withdrawals/:withdrawalId sub-API
+type GetWithdrawalAPI = Get '[JSON] Withdrawal
 
 -- | Helper type for defining generic paginated GET endpoints
 type PaginatedGet rangeFields resource

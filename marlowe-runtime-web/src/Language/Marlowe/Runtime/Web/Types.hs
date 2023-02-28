@@ -45,6 +45,7 @@ import Data.OpenApi
   )
 import qualified Data.OpenApi as OpenApi
 import Data.OpenApi.Schema (ToSchema(..))
+import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.String (IsString(..))
 import Data.Text (Text, intercalate, splitOn)
@@ -157,7 +158,10 @@ newtype PolicyId = PolicyId { unPolicyId :: ByteString }
   deriving (Show, ToHttpApiData, FromHttpApiData, ToJSON, FromJSON) via Base16
 
 instance ToSchema PolicyId where
-  declareNamedSchema _ = pure $ NamedSchema (Just "PolicyId") $ mempty
+  declareNamedSchema proxy = pure $ NamedSchema (Just "PolicyId") $ toParamSchema proxy
+
+instance ToParamSchema PolicyId where
+  toParamSchema _ = mempty
     & type_ ?~ OpenApiString
     & OpenApi.description ?~ "The hex-encoded minting policy ID for a native Cardano token"
     & pattern ?~ "^[a-fA-F0-9]*$"
@@ -249,6 +253,31 @@ instance ToJSON ContractHeader
 instance FromJSON ContractHeader
 instance ToSchema ContractHeader
 
+data WithdrawalHeader = WithdrawalHeader
+  { withdrawalId :: TxId
+  , status :: TxStatus
+  , block :: Maybe BlockHeader
+  } deriving (Show, Eq, Ord, Generic)
+
+instance ToJSON WithdrawalHeader
+instance FromJSON WithdrawalHeader
+instance ToSchema WithdrawalHeader
+
+instance HasPagination WithdrawalHeader "withdrawalId" where
+  type RangeType WithdrawalHeader "withdrawalId" = TxId
+  getFieldValue _ WithdrawalHeader{..} = withdrawalId
+
+data Withdrawal = Withdrawal
+  { payouts :: Set TxOutRef
+  , withdrawalId :: TxId
+  , status :: TxStatus
+  , block :: Maybe BlockHeader
+  } deriving (Show, Eq, Ord, Generic)
+
+instance ToJSON Withdrawal
+instance FromJSON Withdrawal
+instance ToSchema Withdrawal
+
 instance HasPagination ContractHeader "contractId" where
   type RangeType ContractHeader "contractId" = TxOutRef
   getFieldValue _ ContractHeader{..} = contractId
@@ -334,6 +363,15 @@ instance ToJSON BlockHeader
 instance FromJSON BlockHeader
 instance ToSchema BlockHeader
 
+data WithdrawTxBody = WithdrawTxBody
+  { withdrawalId :: TxId
+  , txBody :: TextEnvelope
+  } deriving (Show, Eq, Ord, Generic)
+
+instance ToJSON WithdrawTxBody
+instance FromJSON WithdrawTxBody
+instance ToSchema WithdrawTxBody
+
 data CreateTxBody = CreateTxBody
   { contractId :: TxOutRef
   , txBody :: TextEnvelope
@@ -373,6 +411,15 @@ instance ToSchema TextEnvelope where
           , ("description", textSchema)
           , ("cborHex", textSchema)
           ]
+
+data PostWithdrawalsRequest = PostWithdrawalsRequest
+  { role :: Text
+  , contractId :: TxOutRef
+  } deriving (Show, Eq, Ord, Generic)
+
+instance FromJSON PostWithdrawalsRequest
+instance ToJSON PostWithdrawalsRequest
+instance ToSchema PostWithdrawalsRequest
 
 data PostContractsRequest = PostContractsRequest
   { metadata :: Map Word64 Metadata
