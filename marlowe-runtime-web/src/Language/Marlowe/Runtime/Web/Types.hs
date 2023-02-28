@@ -267,8 +267,19 @@ instance HasPagination WithdrawalHeader "withdrawalId" where
   type RangeType WithdrawalHeader "withdrawalId" = TxId
   getFieldValue _ WithdrawalHeader{..} = withdrawalId
 
+data PayoutRef = PayoutRef
+  { contractId :: TxOutRef
+  , payout :: TxOutRef
+  , roleTokenMintingPolicyId :: PolicyId
+  , role :: Text
+  } deriving (Show, Eq, Ord, Generic)
+
+instance ToJSON PayoutRef
+instance FromJSON PayoutRef
+instance ToSchema PayoutRef
+
 data Withdrawal = Withdrawal
-  { payouts :: Set TxOutRef
+  { payouts :: Set PayoutRef
   , withdrawalId :: TxId
   , status :: TxStatus
   , block :: Maybe BlockHeader

@@ -46,7 +46,7 @@ import Data.Word (Word16, Word64)
 import GHC.TypeLits (KnownSymbol)
 import qualified Language.Marlowe.Core.V1.Semantics as Sem
 import Language.Marlowe.Protocol.Query.Types
-  (ContractState(..), SomeContractState(..), SomeTransaction(..), Withdrawal(..))
+  (ContractState(..), PayoutRef(..), SomeContractState(..), SomeTransaction(..), Withdrawal(..))
 import qualified Language.Marlowe.Protocol.Query.Types as Query
 import Language.Marlowe.Runtime.Cardano.Api (cardanoEraToAsType, fromCardanoTxId)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
@@ -212,7 +212,7 @@ instance HasDTO Chain.TokenName where
   type DTO Chain.TokenName = Text
 
 instance ToDTO Chain.TokenName where
-  toDTO = T.pack . show . Chain.unTokenName
+  toDTO = T.pack . read . show . Chain.unTokenName
 
 instance FromDTO Chain.TokenName where
   fromDTO = Just . Chain.TokenName . fromString . T.unpack
@@ -262,12 +262,23 @@ instance HasDTO Chain.BlockHeaderHash where
 instance ToDTO Chain.BlockHeaderHash where
   toDTO = coerce
 
+instance HasDTO PayoutRef where
+  type DTO PayoutRef = Web.PayoutRef
+
+instance ToDTO PayoutRef where
+  toDTO PayoutRef{..} = Web.PayoutRef
+    { contractId = toDTO contractId
+    , payout = toDTO payout
+    , roleTokenMintingPolicyId = toDTO rolesCurrency
+    , role = toDTO role
+    }
+
 instance HasDTO Withdrawal where
   type DTO Withdrawal = Web.Withdrawal
 
 instance ToDTO Withdrawal where
   toDTO Withdrawal{..} = Web.Withdrawal
-    { payouts = Set.map toDTO withdrawnPayouts
+    { payouts = Set.fromList $ toDTO $ Map.elems withdrawnPayouts
     , withdrawalId = toDTO withdrawalTx
     , status = Web.Confirmed
     , block = Just $ toDTO block
@@ -432,7 +443,7 @@ instance HasDTO Chain.Address where
   type DTO Chain.Address = Web.Address
 
 instance ToDTO Chain.Address where
-  toDTO address = Web.Address $ fromMaybe (T.pack $ show address) $ Chain.toBech32 address
+  toDTO address = Web.Address $ fromMaybe (T.pack $ read $ show address) $ Chain.toBech32 address
 
 instance FromDTO Chain.Address where
   fromDTO = Chain.fromBech32 . Web.unAddress
