@@ -61,7 +61,7 @@ getWithdrawals wFilter@WithdrawalFilter{..} Range{..} = Just <$> do
         ORDER BY slotNo DESC, blockId DESC, blockNo DESC, txId DESC
         OFFSET ($1 :: int) ROWS
         FETCH NEXT ($2 :: int) ROWS ONLY
-      |] (foldPage decodeTxId decodeWithdrawal rangeLimit Descending totalCount)
+      |] (foldPage decodeTxId decodeWithdrawal rangeLimit rangeDirection totalCount)
 
     (True, Ascending) -> T.statement nullFilterParams $
       [foldStatement|
@@ -77,7 +77,7 @@ getWithdrawals wFilter@WithdrawalFilter{..} Range{..} = Just <$> do
         ORDER BY slotNo, blockId, blockNo, txId
         OFFSET ($1 :: int) ROWS
         FETCH NEXT ($2 :: int) ROWS ONLY
-      |] (foldPage decodeTxId decodeWithdrawal rangeLimit Descending totalCount)
+      |] (foldPage decodeTxId decodeWithdrawal rangeLimit rangeDirection totalCount)
 
     (False, Descending) -> T.statement nonNullFilterParams $
       [foldStatement|
@@ -97,7 +97,7 @@ getWithdrawals wFilter@WithdrawalFilter{..} Range{..} = Just <$> do
         ORDER BY withdrawalTxIn.slotNo DESC, withdrawalTxIn.blockId DESC, withdrawalTxIn.blockNo DESC, withdrawalTxIn.txId DESC
         OFFSET ($1 :: int) ROWS
         FETCH NEXT ($2 :: int) ROWS ONLY
-      |] (foldPage decodeTxId decodeWithdrawal rangeLimit Descending totalCount)
+      |] (foldPage decodeTxId decodeWithdrawal rangeLimit rangeDirection totalCount)
 
     (False, Ascending) -> T.statement nonNullFilterParams $
       [foldStatement|
@@ -117,7 +117,7 @@ getWithdrawals wFilter@WithdrawalFilter{..} Range{..} = Just <$> do
         ORDER BY withdrawalTxIn.slotNo, withdrawalTxIn.blockId, withdrawalTxIn.blockNo, withdrawalTxIn.txId
         OFFSET ($1 :: int) ROWS
         FETCH NEXT ($2 :: int) ROWS ONLY
-      |] (foldPage decodeTxId decodeWithdrawal rangeLimit Descending totalCount)
+      |] (foldPage decodeTxId decodeWithdrawal rangeLimit rangeDirection totalCount)
   where
     -- Load one extra item so we can detect when we've hit the end
     nullFilterParams = (fromIntegral rangeOffset, fromIntegral rangeLimit + 1)
@@ -177,7 +177,7 @@ getWithdrawalsFrom WithdrawalFilter{..} totalCount (pivotSlot, pivotTxId) offset
         ORDER BY slotNo DESC, blockId DESC, blockNo DESC, txId DESC
         OFFSET ($3 :: int) ROWS
         FETCH NEXT ($4 :: int) ROWS ONLY
-      |] (foldPage decodeTxId decodeWithdrawal limit Descending totalCount)
+      |] (foldPage decodeTxId decodeWithdrawal limit order totalCount)
 
     (True, Ascending) -> T.statement nullFilterParams $
       [foldStatement|
@@ -194,7 +194,7 @@ getWithdrawalsFrom WithdrawalFilter{..} totalCount (pivotSlot, pivotTxId) offset
         ORDER BY slotNo, blockId, blockNo, txId
         OFFSET ($3 :: int) ROWS
         FETCH NEXT ($4 :: int) ROWS ONLY
-      |] (foldPage decodeTxId decodeWithdrawal limit Descending totalCount)
+      |] (foldPage decodeTxId decodeWithdrawal limit order totalCount)
 
     (False, Descending) -> T.statement nonNullFilterParams $
       [foldStatement|
@@ -215,7 +215,7 @@ getWithdrawalsFrom WithdrawalFilter{..} totalCount (pivotSlot, pivotTxId) offset
         ORDER BY withdrawalTxIn.slotNo DESC, withdrawalTxIn.blockId DESC, withdrawalTxIn.blockNo DESC, withdrawalTxIn.txId DESC
         OFFSET ($3 :: int) ROWS
         FETCH NEXT ($4 :: int) ROWS ONLY
-      |] (foldPage decodeTxId decodeWithdrawal limit Descending totalCount)
+      |] (foldPage decodeTxId decodeWithdrawal limit order totalCount)
 
     (False, Ascending) -> T.statement nonNullFilterParams $
       [foldStatement|
@@ -236,7 +236,7 @@ getWithdrawalsFrom WithdrawalFilter{..} totalCount (pivotSlot, pivotTxId) offset
         ORDER BY withdrawalTxIn.slotNo, withdrawalTxIn.blockId, withdrawalTxIn.blockNo, withdrawalTxIn.txId
         OFFSET ($3 :: int) ROWS
         FETCH NEXT ($4 :: int) ROWS ONLY
-      |] (foldPage decodeTxId decodeWithdrawal limit Descending totalCount)
+      |] (foldPage decodeTxId decodeWithdrawal limit order totalCount)
   where
     -- Load one extra item so we can detect when we've hit the end
     nullFilterParams = (pivotSlot, pivotTxId, fromIntegral offset, fromIntegral limit + 1)
