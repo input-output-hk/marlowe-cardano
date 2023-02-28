@@ -40,6 +40,7 @@
           (hsPkgs."containers" or (errorHandler.buildDepError "containers"))
           (hsPkgs."lens" or (errorHandler.buildDepError "lens"))
           (hsPkgs."marlowe-cardano" or (errorHandler.buildDepError "marlowe-cardano"))
+          (hsPkgs."mtl" or (errorHandler.buildDepError "mtl"))
           (hsPkgs."network-uri" or (errorHandler.buildDepError "network-uri"))
           (hsPkgs."openapi3" or (errorHandler.buildDepError "openapi3"))
           (hsPkgs."parsec" or (errorHandler.buildDepError "parsec"))
