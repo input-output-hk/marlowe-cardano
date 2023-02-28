@@ -2,7 +2,6 @@
 , crossSystem ? null
 , inputs
 , haskell-nix
-, checkMaterialization ? false
 , enableHaskellProfiling ? false
 , source-repo-override ? { }
 , evalSystem ? system
@@ -50,7 +49,7 @@ let
 
   pkgs = import inputs.nixpkgs nixpkgsArgs;
 
-  marlowe = import ./pkgs { inherit pkgs checkMaterialization enableHaskellProfiling inputs source-repo-override system evalSystem; };
+  marlowe = import ./pkgs { inherit pkgs enableHaskellProfiling inputs source-repo-override system evalSystem; };
 
 in
 {

@@ -72,23 +72,4 @@ let
 in
 {
   inherit nix-flakes-alias start-cardano-node;
-
-  updateMaterialized = writeShellScriptBinInRepoRoot "updateMaterialized" ''
-    # comment to appease nixpkgs-fmt
-    ${lib.concatStringsSep "\n" (lib.mapAttrsToList
-      (system: packages:
-      let
-        haskell = packages.marlowe.haskell;
-      in
-      ''
-        # comment to appease nixpkgs-fmt
-        ${haskell.project.plan-nix.passthru.generateMaterialized} \
-          ./nix/pkgs/haskell/materialized-${lib.removePrefix "x86_64-" system} &
-
-        ${haskell.extraPackages.updateAllShaFiles} &
-      '')
-      packagesBySystem)}
-
-      wait
-  '';
 }

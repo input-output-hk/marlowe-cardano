@@ -4,8 +4,6 @@
 }:
 { supportedSystems ? [ "x86_64-linux" "x86_64-darwin" ]
 , rootsOnly ? false
-  # We explicitly pass true here in the GitHub action but don't want to slow down hydra
-, checkMaterialization ? false
 , plutus-apps ? null
 , evalSystem ? "x86_64-linux" # Assuming hydra doesn't run elsewhere...
 }:
@@ -49,7 +47,7 @@ let
   ci-lib = pkgs.callPackage ./nix/lib/ci.nix { };
   inherit (ci-lib) stripAttrsForHydra filterDerivations derivationAggregate;
 
-  ci = import ./ci.nix { inherit supportedSystems rootsOnly checkMaterialization inputs source-repo-override pkgs internal evalSystem ci-lib; };
+  ci = import ./ci.nix { inherit supportedSystems rootsOnly inputs source-repo-override pkgs internal evalSystem ci-lib; };
 
   # ci.nix is a set of attributes that work fine as jobs (albeit in a slightly different structure, the platform comes
   # first), but we mainly just need to get rid of some extra attributes.

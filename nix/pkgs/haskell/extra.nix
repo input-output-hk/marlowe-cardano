@@ -10,7 +10,6 @@
 , inputs
 , index-state
 , compiler-nix-name
-, checkMaterialization
 , buildPackages
 , writeShellScript
 , evalSystem
@@ -19,11 +18,8 @@ let
   cabalInstallProject = haskell-nix.hackage-project {
     name = "cabal-install";
     version = "3.6.2.0";
-    inherit compiler-nix-name index-state checkMaterialization evalSystem;
-    plan-sha256 = lib.removeSuffix "\n" (builtins.readFile ./cabal-install.sha);
+    inherit compiler-nix-name index-state evalSystem;
   };
-  # See https://github.com/input-output-hk/nix-tools/issues/97
-  hlsShaFile = if stdenv.isLinux then ./hls-linux.sha else ./hls-darwin.sha;
   hlsProject = haskell-nix.cabalProject' {
     # See https://github.com/haskell/haskell-language-server/issues/411.
     # We want to use stylish-haskell, hlint, and implicit-hie as standalone tools *and* through HLS. But we need to have consistent versions in both
@@ -36,8 +32,7 @@ let
       allow-newer: hls-stylish-haskell-plugin:stylish-haskell
     '';
     src = inputs.haskell-language-server;
-    inherit compiler-nix-name index-state checkMaterialization evalSystem;
-    plan-sha256 = lib.removeSuffix "\n" (builtins.readFile hlsShaFile);
+    inherit compiler-nix-name index-state evalSystem;
     sha256map = {
       "https://github.com/hsyl20/ghc-api-compat"."8fee87eac97a538dbe81ff1ab18cff10f2f9fa15" = "16bibb7f3s2sxdvdy2mq6w1nj1lc8zhms54lwmj17ijhvjys29vg";
       "https://github.com/haskell/lsp.git"."ef59c28b41ed4c5775f0ab0c1e985839359cec96" = "1whcgw4hhn2aplrpy9w8q6rafwy7znnp0rczgr6py15fqyw2fwb5";
@@ -49,22 +44,8 @@ let
       packages.ghcide.flags.ghc-patched-unboxed-bytecode = true;
     }];
   };
-
-  updateShaFile = project: shaFile:
-    let
-      evalPkgs = project.pkg-set.config.evalPackages;
-    in
-    evalPkgs.writeShellScript "updateShaFile" ''
-      cd `${evalPkgs.git}/bin/git rev-parse --show-toplevel`
-      ${project.plan-nix.passthru.calculateMaterializedSha} > ./nix/pkgs/haskell/${baseNameOf shaFile}
-    '';
-  updateAllShaFiles = cabalInstallProject.pkg-set.config.evalPackages.writeShellScript "updateShaFiles" ''
-    ${updateShaFile cabalInstallProject ./cabal-install.sha}
-    ${updateShaFile hlsProject hlsShaFile}
-  '';
 in
 {
   inherit (hlsProject.hsPkgs) haskell-language-server hie-bios implicit-hie stylish-haskell hlint;
   inherit (cabalInstallProject.hsPkgs) cabal-install;
-  inherit updateAllShaFiles;
 }

@@ -1,7 +1,6 @@
 # This is meant to be called from:
 #  * nix/default.nix
 { pkgs
-, checkMaterialization
 , system
 , evalSystem
 , config ? { allowUnfreePredicate = (import ../lib/unfree.nix).unfreePredicate; }
@@ -15,7 +14,7 @@ let
   # { index-state, compiler-nix-name, project, projectPackages, packages, extraPackages }
   haskell = pkgs.callPackage ./haskell {
     inherit inputs evalSystem;
-    inherit checkMaterialization enableHaskellProfiling;
+    inherit enableHaskellProfiling;
     inherit source-repo-override;
 
     # This ensures that the utility scripts produced in here will run on the current system, not

@@ -4,7 +4,6 @@
 , haskell-nix
 , buildPackages
 , writeShellScript
-, checkMaterialization
 , R
 , libsodium-vrf
 , secp256k1
@@ -37,7 +36,7 @@ let
     { deferPluginErrors }:
     import ./haskell.nix {
       inherit lib haskell-nix R libsodium-vrf secp256k1 rPackages z3 evalSystem;
-      inherit checkMaterialization compiler-nix-name;
+      inherit compiler-nix-name;
       inherit enableHaskellProfiling;
       inherit deferPluginErrors;
       inherit source-repo-override;
@@ -59,7 +58,7 @@ let
 
   extraPackages = import ./extra.nix {
     inherit stdenv lib haskell-nix inputs buildPackages writeShellScript evalSystem;
-    inherit index-state checkMaterialization compiler-nix-name;
+    inherit index-state compiler-nix-name;
   };
 
 in
