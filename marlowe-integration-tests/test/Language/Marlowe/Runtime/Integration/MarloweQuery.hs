@@ -25,7 +25,8 @@ import Language.Marlowe.Protocol.Query.Client
   )
 import Language.Marlowe.Protocol.Query.Types
 import Language.Marlowe.Runtime.Cardano.Api (fromCardanoTxId)
-import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, PolicyId, TransactionMetadata(..), TxId, TxOutRef(..))
+import Language.Marlowe.Runtime.ChainSync.Api
+  (AssetId(..), BlockHeader, PolicyId, TransactionMetadata(..), TxId, TxOutRef(..))
 import Language.Marlowe.Runtime.Client (runMarloweQueryClient)
 import Language.Marlowe.Runtime.Core.Api
   (ContractId(..), MarloweVersion(..), MarloweVersionTag(..), Payout(..), TransactionScriptOutput(..))
@@ -192,7 +193,7 @@ getTransactionSpec = describe "getTransaction" do
       liftIO $ actual `shouldBe` expected
 
 getWithdrawalsSpec :: SpecWith MarloweQueryTestData
-getWithdrawalsSpec = focus $ describe "getWithdrawals" do
+getWithdrawalsSpec = describe "getWithdrawals" do
   let
     withdrawalNoToInt contractNos
       | Set.null contractNos = \case
@@ -221,12 +222,25 @@ getWithdrawalsSpec = focus $ describe "getWithdrawals" do
           Withdrawal1 ->
             ( contract1Step5
             , case inputsAppliedToTransaction (returnDepositBlock contract1Step4) (returnDeposited contract1Step4) of
-                Core.Transaction{output=Core.TransactionOutput{payouts}} -> Map.keysSet payouts
+                Core.Transaction{output=Core.TransactionOutput{payouts}} -> flip Map.mapWithKey payouts \payout Payout{..} -> case datum of
+                  AssetId{..} -> PayoutRef
+                    { contractId = standardContractId contract1
+                    , payout
+                    , rolesCurrency = policyId
+                    , role = tokenName
+                    }
             )
           Withdrawal2 ->
             ( contract2Step5
             , case inputsAppliedToTransaction (returnDepositBlock contract2Step4) (returnDeposited contract2Step4) of
-                Core.Transaction{output=Core.TransactionOutput{payouts}} -> Map.keysSet payouts
+                Core.Transaction{output=Core.TransactionOutput{payouts}} -> flip Map.mapWithKey payouts \payout Payout{..} -> case datum of
+                  AssetId{..} -> PayoutRef
+                    { contractId = standardContractId contract2
+                    , payout
+                    , rolesCurrency = policyId
+                    , role = tokenName
+                    }
+
             )
 
     getNext :: Set ContractNo -> Order -> WithdrawalNo -> Maybe WithdrawalNo
@@ -498,7 +512,7 @@ contractNoToLatestBlock :: MarloweQueryTestData -> ContractNo -> BlockHeader
 contractNoToLatestBlock MarloweQueryTestData{..} = \case
   Contract1 -> returnDepositBlock contract1Step4 -- note: _not_ `snd contract1Step5` (which is a withdrawal)
   Contract2 -> returnDepositBlock contract2Step4
-  Contract3 -> notifiedBlock contract3Step3
+  Contract3 -> returnDepositBlock contract3Step4
   Contract4 -> createdBlock contract4
 
 contractNoToLatestOutput :: MarloweQueryTestData -> ContractNo -> Maybe (TransactionScriptOutput 'V1)
@@ -506,7 +520,7 @@ contractNoToLatestOutput MarloweQueryTestData{..} = \case
   Contract1 -> Nothing
   Contract2 -> case returnDeposited contract2Step4 of
     InputsApplied{..} -> output
-  Contract3 -> case notified contract3Step3 of
+  Contract3 -> case returnDeposited contract3Step4 of
     InputsApplied{..} -> output
   Contract4 -> case contractCreated contract4 of
     ContractCreated{..} -> Just TransactionScriptOutput
@@ -519,9 +533,9 @@ contractNoToLatestOutput MarloweQueryTestData{..} = \case
 contractNoToUnclaimedPayouts :: MarloweQueryTestData -> ContractNo -> Map TxOutRef (Payout 'V1)
 contractNoToUnclaimedPayouts MarloweQueryTestData{..} =  \case
   Contract1 -> mempty
-  Contract2 -> case inputsAppliedToTransaction (returnDepositBlock contract2Step4) (returnDeposited contract2Step4) of
+  Contract2 -> mempty
+  Contract3 -> case inputsAppliedToTransaction (returnDepositBlock contract3Step4) (returnDeposited contract3Step4) of
     Core.Transaction{output=Core.TransactionOutput{payouts}} -> payouts
-  Contract3 -> mempty
   Contract4 -> mempty
 
 contractNoToTransactions :: MarloweQueryTestData -> ContractNo -> [Core.Transaction 'V1]
@@ -542,6 +556,7 @@ contractNoToTransactions MarloweQueryTestData{..} = \case
     [ inputsAppliedToTransaction (initialDepositBlock contract3Step1) (initialFundsDeposited contract3Step1)
     , inputsAppliedToTransaction (choiceBlock contract3Step2) (gimmeTheMoneyChosen contract3Step2)
     , inputsAppliedToTransaction (notifiedBlock contract3Step3) (notified contract3Step3)
+    , inputsAppliedToTransaction (returnDepositBlock contract3Step4) (returnDeposited contract3Step4)
     ]
   Contract4 -> mempty
 
@@ -562,7 +577,13 @@ contract1Step5Withdrawal MarloweQueryTestData{..} = Withdrawal
   { block = snd contract1Step5
   , withdrawnPayouts =
     case inputsAppliedToTransaction (returnDepositBlock contract1Step4) (returnDeposited contract1Step4) of
-      Core.Transaction{output=Core.TransactionOutput{payouts}} -> Map.keysSet payouts
+      Core.Transaction{output=Core.TransactionOutput{payouts}} -> flip Map.mapWithKey payouts \payout Payout{..} -> case datum of
+        AssetId{..} -> PayoutRef
+          { contractId = standardContractId contract1
+          , payout
+          , rolesCurrency = policyId
+          , role = tokenName
+          }
   , withdrawalTx = fromCardanoTxId $ getTxId $ fst contract1Step5
   }
 
