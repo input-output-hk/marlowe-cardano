@@ -40,13 +40,19 @@ data MarloweQuery where
 instance HasSignature MarloweQuery where
   signature _ = "MarloweQuery"
 
+newtype WithdrawalFilter = WithdrawalFilter
+  { roleCurrencies :: Set PolicyId
+  }
+  deriving stock (Show, Eq, Ord, Generic)
+  deriving anyclass (ToJSON, Binary)
+
 data Request a where
   ReqContractHeaders :: Range ContractId -> Request (Maybe (Page ContractId ContractHeader))
   ReqContractState :: ContractId -> Request (Maybe SomeContractState)
   ReqTransaction :: TxId -> Request (Maybe SomeTransaction)
   ReqTransactions :: ContractId -> Request (Maybe SomeTransactions)
   ReqWithdrawal :: TxId -> Request (Maybe Withdrawal)
-  ReqWithdrawals :: ContractId -> Request (Maybe [Withdrawal])
+  ReqWithdrawals :: WithdrawalFilter -> Range TxId -> Request (Maybe (Page TxId Withdrawal))
   ReqBoth :: Request a -> Request b -> Request (a, b)
 
 data SomeRequest where
@@ -65,7 +71,7 @@ instance Binary SomeRequest where
       0x03 -> SomeRequest . ReqTransaction <$> get
       0x04 -> SomeRequest . ReqTransactions <$> get
       0x05 -> SomeRequest . ReqWithdrawal <$> get
-      0x06 -> SomeRequest . ReqWithdrawals <$> get
+      0x06 -> SomeRequest <$> (ReqWithdrawals <$> get <*> get)
       _ -> fail "Invalid Request tag"
 
   put (SomeRequest req) = case req of
@@ -88,9 +94,10 @@ instance Binary SomeRequest where
     ReqWithdrawal txId -> do
       putWord8 0x05
       put txId
-    ReqWithdrawals contractId -> do
+    ReqWithdrawals wFilter range -> do
       putWord8 0x06
-      put contractId
+      put wFilter
+      put range
 
 deriving instance Eq (Request a)
 deriving instance Show (Request a)
@@ -114,8 +121,11 @@ instance ToJSON (Request a) where
     ReqWithdrawal txId -> object
       [ "get-withdrawal" .= txId
       ]
-    ReqWithdrawals contractId -> object
-      [ "get-withdrawals" .= contractId
+    ReqWithdrawals wFilter range -> object
+      [ "get-withdrawals" .= object
+        [ "filter" .= wFilter
+        , "range" .= range
+        ]
       ]
 
 data StRes a where
@@ -124,7 +134,7 @@ data StRes a where
   TokTransaction :: StRes (Maybe SomeTransaction)
   TokTransactions :: StRes (Maybe SomeTransactions)
   TokWithdrawal :: StRes (Maybe Withdrawal)
-  TokWithdrawals :: StRes (Maybe [Withdrawal])
+  TokWithdrawals :: StRes (Maybe (Page TxId Withdrawal))
   TokBoth :: StRes a -> StRes b -> StRes (a, b)
 
 deriving instance Show (StRes a)
@@ -428,8 +438,8 @@ instance MessageEq MarloweQuery where
       reqEq (ReqTransactions _) _ = False
       reqEq (ReqWithdrawal txId) (ReqWithdrawal txId') = txId == txId'
       reqEq (ReqWithdrawal _) _ = False
-      reqEq (ReqWithdrawals contractId) (ReqWithdrawals contractId') = contractId == contractId'
-      reqEq (ReqWithdrawals _) _ = False
+      reqEq (ReqWithdrawals wFilter range) (ReqWithdrawals filter' range') = wFilter == filter' && range == range'
+      reqEq (ReqWithdrawals _ _) _ = False
 
       resultEq :: StRes a -> StRes b -> a -> b -> Bool
       resultEq (TokBoth ta tb) (TokBoth ta' tb') = \(a, b) (a', b') ->
@@ -455,5 +465,5 @@ requestToSt = \case
   ReqTransaction _ -> TokTransaction
   ReqTransactions _ -> TokTransactions
   ReqWithdrawal _ -> TokWithdrawal
-  ReqWithdrawals _ -> TokWithdrawals
+  ReqWithdrawals _ _ -> TokWithdrawals
   ReqBoth r1 r2 -> TokBoth (requestToSt r1) (requestToSt r2)
