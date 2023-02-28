@@ -84,8 +84,8 @@ executable marlowe-integration-tests
     , marlowe-runtime:history-api
     , marlowe-runtime:sync-api
     , marlowe-runtime:tx-api
-    , marlowe-runtime:web
-    , marlowe-runtime:web-server
+    , marlowe-runtime-web
+    , marlowe-runtime-web:server
     , mtl
     , plutus-ledger-api
     , servant-client

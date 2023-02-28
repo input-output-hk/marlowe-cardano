@@ -821,6 +821,7 @@
         marlowe-spec-test = ./.plan.nix/marlowe-spec-test.nix;
         eventuo11y-extras = ./.plan.nix/eventuo11y-extras.nix;
         cardano-addresses-cli = ./.plan.nix/cardano-addresses-cli.nix;
+        marlowe-runtime-web = ./.plan.nix/marlowe-runtime-web.nix;
         plutus-script-utils = ./.plan.nix/plutus-script-utils.nix;
         async-components = ./.plan.nix/async-components.nix;
         marlowe-chain-sync = ./.plan.nix/marlowe-chain-sync.nix;
@@ -870,6 +871,7 @@
           "cardano-addresses-cli" = {
             flags = { "release" = lib.mkOverride 900 false; };
             };
+          "marlowe-runtime-web" = { flags = {}; };
           "plutus-script-utils" = {
             flags = { "defer-plugin-errors" = lib.mkOverride 900 false; };
             };
@@ -957,7 +959,6 @@
           "these".components.library.planned = lib.mkOverride 900 true;
           "cardano-binary-test".components.library.planned = lib.mkOverride 900 true;
           "cardano-crypto-wrapper".components.library.planned = lib.mkOverride 900 true;
-          "marlowe-runtime".components.tests."web-server-test".planned = lib.mkOverride 900 true;
           "pretty-simple".components.setup.planned = lib.mkOverride 900 true;
           "sort".components.library.planned = lib.mkOverride 900 true;
           "cereal".components.library.planned = lib.mkOverride 900 true;
@@ -979,7 +980,6 @@
           "pretty-show".components.library.planned = lib.mkOverride 900 true;
           "newtype-generics".components.library.planned = lib.mkOverride 900 true;
           "marlowe-runtime".components.sublibs."indexer".planned = lib.mkOverride 900 true;
-          "marlowe-runtime".components.sublibs."web-server".planned = lib.mkOverride 900 true;
           "cardano-ledger-babbage".components.library.planned = lib.mkOverride 900 true;
           "cardano-addresses".components.library.planned = lib.mkOverride 900 true;
           "marlowe-apps".components.exes."marlowe-finder".planned = lib.mkOverride 900 true;
@@ -1050,6 +1050,7 @@
           "ouroboros-network".components.library.planned = lib.mkOverride 900 true;
           "profunctors".components.library.planned = lib.mkOverride 900 true;
           "exceptions".components.library.planned = lib.mkOverride 900 true;
+          "marlowe-runtime-web".components.exes."marlowe-web-server".planned = lib.mkOverride 900 true;
           "one-line-aeson-text".components.library.planned = lib.mkOverride 900 true;
           "nonempty-vector".components.setup.planned = lib.mkOverride 900 true;
           "marlowe-runtime".components.sublibs."tx".planned = lib.mkOverride 900 true;
@@ -1084,6 +1085,7 @@
           "nonempty-containers".components.library.planned = lib.mkOverride 900 true;
           "mersenne-random-pure64".components.library.planned = lib.mkOverride 900 true;
           "marlowe-chain-sync".components.sublibs."gen".planned = lib.mkOverride 900 true;
+          "marlowe-runtime-web".components.library.planned = lib.mkOverride 900 true;
           "js-chart".components.library.planned = lib.mkOverride 900 true;
           "template-haskell-compat-v0208".components.library.planned = lib.mkOverride 900 true;
           "eventuo11y-json".components.library.planned = lib.mkOverride 900 true;
@@ -1137,7 +1139,6 @@
           "flat".components.library.planned = lib.mkOverride 900 true;
           "servant-openapi3".components.library.planned = lib.mkOverride 900 true;
           "type-hint".components.library.planned = lib.mkOverride 900 true;
-          "marlowe-runtime".components.exes."marlowe-web-server".planned = lib.mkOverride 900 true;
           "regex-base".components.library.planned = lib.mkOverride 900 true;
           "adjunctions".components.library.planned = lib.mkOverride 900 true;
           "tree-diff".components.library.planned = lib.mkOverride 900 true;
@@ -1150,6 +1151,7 @@
           "asn1-parse".components.library.planned = lib.mkOverride 900 true;
           "cardano-addresses-cli".components.exes."cardano-address".planned = lib.mkOverride 900 true;
           "beam-migrate".components.library.planned = lib.mkOverride 900 true;
+          "marlowe-runtime-web".components.sublibs."server".planned = lib.mkOverride 900 true;
           "indexed-list-literals".components.library.planned = lib.mkOverride 900 true;
           "foldl".components.library.planned = lib.mkOverride 900 true;
           "type-equality".components.library.planned = lib.mkOverride 900 true;
@@ -1404,7 +1406,6 @@
           "cardano-crypto-tests".components.library.planned = lib.mkOverride 900 true;
           "uniplate".components.library.planned = lib.mkOverride 900 true;
           "mtl".components.library.planned = lib.mkOverride 900 true;
-          "marlowe-runtime".components.sublibs."web".planned = lib.mkOverride 900 true;
           "dependent-sum".components.library.planned = lib.mkOverride 900 true;
           "plutus-core".components.exes."pir".planned = lib.mkOverride 900 true;
           "marlowe-runtime".components.sublibs."tx-api".planned = lib.mkOverride 900 true;
@@ -1425,6 +1426,7 @@
           "parsers".components.library.planned = lib.mkOverride 900 true;
           "random-shuffle".components.library.planned = lib.mkOverride 900 true;
           "cassava".components.library.planned = lib.mkOverride 900 true;
+          "marlowe-runtime-web".components.tests."marlowe-runtime-web-test".planned = lib.mkOverride 900 true;
           "multiplate".components.library.planned = lib.mkOverride 900 true;
           "pretty-simple".components.exes."pretty-simple".planned = lib.mkOverride 900 true;
           "transformers".components.library.planned = lib.mkOverride 900 true;

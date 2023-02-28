@@ -30,7 +30,7 @@ let
     ln -sv ${run-local-service "marlowe-chain-sync" "0.0.0.0" "marlowe-chain-sync"}/bin/run-marlowe-chain-sync $out
     ln -sv ${run-local-service "marlowe-runtime" "0.0.0.0" "marlowe-sync"}/bin/run-marlowe-sync $out
     ln -sv ${run-local-service "marlowe-runtime" "0.0.0.0" "marlowe-tx"}/bin/run-marlowe-tx $out
-    ln -sv ${run-local-service "marlowe-runtime" "0.0.0.0" "marlowe-web-server"}/bin/run-marlowe-web-server $out
+    ln -sv ${run-local-service "marlowe-runtime-web" "0.0.0.0" "marlowe-web-server"}/bin/run-marlowe-web-server $out
     ln -sv ${run-local-service "marlowe-runtime" "0.0.0.0" "marlowe-indexer"}/bin/run-marlowe-indexer $out
     ln -sv ${run-local-service "marlowe-runtime" "0.0.0.0" "marlowe-proxy"}/bin/run-marlowe-proxy $out
   '';
@@ -212,13 +212,11 @@ let
 
   web-service = dev-service {
     ports = [ 8080 ];
-    depends_on = [ "marlowe-sync" "marlowe-tx" ];
+    depends_on = [ "marlowe-proxy" ];
     command = [
       "/exec/run-marlowe-web-server"
-      "--marlowe-sync-host"
-      "marlowe-sync"
-      "--tx-host"
-      "marlowe-tx"
+      "--marlowe-runtime-host"
+      "marlowe-proxy"
       "--enable-open-api"
       "--access-control-allow-origin-all"
     ];

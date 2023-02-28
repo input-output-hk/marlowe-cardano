@@ -31,6 +31,7 @@ packages:
   marlowe-integration-tests
   marlowe-protocols
   marlowe-runtime
+  marlowe-runtime-web
   marlowe-test
 
   libs/aeson-via-serialise
@@ -81,6 +82,9 @@ package marlowe-protocols
   ghc-options: -Werror
 
 package marlowe-runtime
+  ghc-options: -Werror
+
+package marlowe-runtime-web
   ghc-options: -Werror
 
 package marlowe-integration

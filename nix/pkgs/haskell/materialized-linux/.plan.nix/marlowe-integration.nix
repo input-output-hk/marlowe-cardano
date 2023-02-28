@@ -64,7 +64,7 @@
           (hsPkgs."marlowe-runtime".components.sublibs.tx-api or (errorHandler.buildDepError "marlowe-runtime:tx-api"))
           (hsPkgs."marlowe-runtime".components.sublibs.proxy or (errorHandler.buildDepError "marlowe-runtime:proxy"))
           (hsPkgs."marlowe-runtime".components.sublibs.proxy-api or (errorHandler.buildDepError "marlowe-runtime:proxy-api"))
-          (hsPkgs."marlowe-runtime".components.sublibs.web-server or (errorHandler.buildDepError "marlowe-runtime:web-server"))
+          (hsPkgs."marlowe-runtime-web".components.sublibs.server or (errorHandler.buildDepError "marlowe-runtime-web:server"))
           (hsPkgs."nonempty-containers" or (errorHandler.buildDepError "nonempty-containers"))
           (hsPkgs."ouroboros-network" or (errorHandler.buildDepError "ouroboros-network"))
           (hsPkgs."postgresql-libpq" or (errorHandler.buildDepError "postgresql-libpq"))
@@ -97,7 +97,7 @@
             (hsPkgs."marlowe-cardano" or (errorHandler.buildDepError "marlowe-cardano"))
             (hsPkgs."marlowe-chain-sync" or (errorHandler.buildDepError "marlowe-chain-sync"))
             (hsPkgs."marlowe-integration" or (errorHandler.buildDepError "marlowe-integration"))
-            (hsPkgs."marlowe-runtime".components.sublibs.web or (errorHandler.buildDepError "marlowe-runtime:web"))
+            (hsPkgs."marlowe-runtime-web" or (errorHandler.buildDepError "marlowe-runtime-web"))
             (hsPkgs."text" or (errorHandler.buildDepError "text"))
             ];
           buildable = true;

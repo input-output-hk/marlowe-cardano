@@ -9,12 +9,11 @@ module Main
   where
 
 import Control.Concurrent.Component (runComponent_)
-import Language.Marlowe.Protocol.Query.Client (marloweQueryClientPeer)
+import Control.Monad.IO.Class (liftIO)
+import Control.Monad.Reader (ask)
+import Control.Monad.Trans.Marlowe (MarloweT(..))
+import Language.Marlowe.Runtime.Client (connectToMarloweRuntime)
 import Language.Marlowe.Runtime.Web.Server
-import Network.Protocol.Connection (SomeConnector(..))
-import Network.Protocol.Driver (tcpClient)
-import Network.Protocol.Handshake.Client (handshakeClientConnector)
-import Network.Protocol.Job.Client (jobClientPeer)
 import Network.Wai.Handler.Warp (run)
 import Observe.Event.Render.JSON (DefaultRenderSelectorJSON(defaultRenderSelectorJSON))
 import Observe.Event.Render.JSON.Handle (JSONRef, simpleJsonStderrBackend)
@@ -29,17 +28,13 @@ main = hSetBuffering stdout LineBuffering
   >>= runComponent_ server
 
 optionsToServerDependencies :: Options -> IO (ServerDependencies JSONRef)
-optionsToServerDependencies Options{..} = do
-  eventBackend <- simpleJsonStderrBackend defaultRenderSelectorJSON
+optionsToServerDependencies Options{..} = connectToMarloweRuntime runtimeHost runtimePort $ MarloweT do
+  connector <- ask
+  eventBackend <- liftIO $ simpleJsonStderrBackend defaultRenderSelectorJSON
   pure ServerDependencies
     { openAPIEnabled
     , accessControlAllowOriginAll
     , runApplication = run $ fromIntegral port
-    , marloweQueryConnector = SomeConnector
-        $ handshakeClientConnector
-        $ tcpClient syncHost syncQueryPort marloweQueryClientPeer
-    , txJobConnector = SomeConnector
-        $ handshakeClientConnector
-        $ tcpClient txHost txCommandPort jobClientPeer
+    , connector
     , eventBackend
     }

@@ -8,10 +8,8 @@ import Network.Socket (HostName, PortNumber)
 import Options.Applicative
 
 data Options = Options
-  { syncHost :: HostName
-  , syncQueryPort :: PortNumber
-  , txHost :: HostName
-  , txCommandPort :: PortNumber
+  { runtimeHost :: HostName
+  , runtimePort :: PortNumber
   , port :: PortNumber
   , openAPIEnabled :: Bool
   , accessControlAllowOriginAll :: Bool
@@ -22,10 +20,8 @@ portOption = O.port "http" "WEB" 8080 "The port number to serve the HTTP API on.
 
 getOptions :: IO Options
 getOptions = do
-  syncHostParser <- O.optParserWithEnvDefault O.syncHost
-  syncQueryPortParser <- O.optParserWithEnvDefault O.syncQueryPort
-  txHostParser <- O.optParserWithEnvDefault O.txHost
-  txCommandPortParser <- O.optParserWithEnvDefault O.txCommandPort
+  runtimeHostParser <- O.optParserWithEnvDefault O.runtimeHost
+  runtimePortParser <- O.optParserWithEnvDefault O.runtimePort
   portParser <- O.optParserWithEnvDefault portOption
   let
     openAPIParser = flag False True $ mconcat
@@ -41,10 +37,8 @@ getOptions = do
       , showDefault
       ]
     parser = Options
-      <$> syncHostParser
-      <*> syncQueryPortParser
-      <*> txHostParser
-      <*> txCommandPortParser
+      <$> runtimeHostParser
+      <*> runtimePortParser
       <*> portParser
       <*> openAPIParser
       <*> accessControlAllowOriginAllParser
