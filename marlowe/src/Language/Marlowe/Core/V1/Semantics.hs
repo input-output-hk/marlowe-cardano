@@ -470,12 +470,22 @@ evalValue env state value = let
                                    then 0
                                    else n `Builtins.quotientInteger` d
         ChoiceValue choiceId ->
+            -- SCP-5126: Given the precondition that `choices` contains no
+            -- duplicate entries, this lookup behaves identically to
+            -- Marlowe's Isabelle semantics given the precondition that
+            -- the initial state's `choices` in Isabelle was sorted and
+            -- did not contain duplicate entries.
             case Map.lookup choiceId (choices state) of
                 Just x  -> x
                 Nothing -> 0
         TimeIntervalStart    -> getPOSIXTime (fst (timeInterval env))
         TimeIntervalEnd      -> getPOSIXTime (snd (timeInterval env))
         UseValue valId       ->
+            -- SCP-5126: Given the precondition that `boundValues` contains
+            -- no duplicate entries, this lookup behaves identically to
+            -- Marlowe's Isabelle semantics given the precondition that
+            -- the initial state's `boundValues` in Isabelle was sorted
+            -- and did not contain duplicate entries.
             case Map.lookup valId (boundValues state) of
                 Just x  -> x
                 Nothing -> 0
@@ -491,6 +501,11 @@ evalObservation env state obs = let
         AndObs lhs rhs          -> evalObs lhs && evalObs rhs
         OrObs lhs rhs           -> evalObs lhs || evalObs rhs
         NotObs subObs           -> not (evalObs subObs)
+                                   -- SCP-5126: Given the precondition that `choices` contains no
+                                   -- duplicate entries, this membership test behaves identically
+                                   -- to Marlowe's Isabelle semantics given the precondition that
+                                   -- the initial state's `choices` in Isabelle was sorted and did
+                                   -- not contain duplicate entries.
         ChoseSomething choiceId -> choiceId `Map.member` choices state
         ValueGE lhs rhs         -> evalVal lhs >= evalVal rhs
         ValueGT lhs rhs         -> evalVal lhs > evalVal rhs
@@ -505,6 +520,10 @@ evalObservation env state obs = let
 refundOne :: Accounts -> Maybe ((Party, Token, Integer), Accounts)
 refundOne accounts = case Map.toList accounts of
     [] -> Nothing
+    -- SCP-5126: The return value of this function differs from
+    -- Isabelle semantics in that it returns the least-recently
+    -- added account-token combination rather than the first
+    -- lexicographically ordered one.
     ((accId, token), balance) : rest ->
         if balance > 0
         then Just ((accId, token, balance), Map.fromList rest)
@@ -513,14 +532,26 @@ refundOne accounts = case Map.toList accounts of
 
 -- | Obtains the amount of money available an account.
 moneyInAccount :: AccountId -> Token -> Accounts -> Integer
-moneyInAccount accId token accounts = case Map.lookup (accId, token) accounts of
-    Just x  -> x
-    Nothing -> 0
+moneyInAccount accId token accounts =
+    -- SCP-5126: Given the precondition that `accounts` contains
+    -- no duplicate entries, this lookup behaves identically to
+    -- Marlowe's Isabelle semantics given the precondition that
+    -- the initial state's `accounts` in Isabelle was sorted and
+    -- did not contain duplicate entries.
+    case Map.lookup (accId, token) accounts of
+      Just x  -> x
+      Nothing -> 0
 
 
 -- | Sets the amount of money available in an account.
 updateMoneyInAccount :: AccountId -> Token -> Integer -> Accounts -> Accounts
 updateMoneyInAccount accId token amount =
+    -- SCP-5126: Given the precondition that `accounts` contains
+    -- no duplicate entries, this deletion or insertion behaves
+    -- identically (aside from internal ordering) to Marlowe's
+    -- Isabelle semantics given the precondition that the initial
+    -- state's `accounts` in Isabelle was sorted and did not
+    -- contain duplicate entries.
     if amount <= 0 then Map.delete (accId, token) else Map.insert (accId, token) amount
 
 
@@ -548,6 +579,14 @@ giveMoney accountId payee token amount accounts = let
 reduceContractStep :: Environment -> State -> Contract -> ReduceStepResult
 reduceContractStep env state contract = case contract of
 
+    -- SCP-5126: Although `refundOne` refunds accounts-token combinations
+    -- in least-recently-added order and Isabelle semantics requires that
+    -- they be refunded in lexicographic order, `reduceContractUntilQuiescent`
+    -- ensures that the `Close` pattern will be executed until `accounts`
+    -- is empty. Thus, the net difference between the behavior here and the
+    -- Isabelle semantics is that the `ContractQuiescent` resulting from
+    -- `reduceContractUntilQuiescent` will contain payments in a different
+    -- order.
     Close -> case refundOne (accounts state) of
         Just ((party, token, amount), newAccounts) -> let
             newState = state { accounts = newAccounts }
@@ -588,7 +627,17 @@ reduceContractStep env state contract = case contract of
     Let valId val cont -> let
         evaluatedValue = evalValue env state val
         boundVals = boundValues state
+        -- SCP-5126: Given the precondition that `boundValues` contains
+        -- no duplicate entries, this insertion behaves identically
+        -- (aside from internal ordering) to Marlowe's Isabelle semantics
+        -- given the precondition that the initial state's `boundValues`
+        -- in Isabelle was sorted and did not contain duplicate entries.
         newState = state { boundValues = Map.insert valId evaluatedValue boundVals }
+        -- SCP-5126: Given the precondition that `boundValues` contains
+        -- no duplicate entries, this lookup behaves identically to
+        -- Marlowe's Isabelle semantics given the precondition that the
+        -- initial state's `boundValues` in Isabelle was sorted and did
+        -- not contain duplicate entries.
         warn = case Map.lookup valId boundVals of
               Just oldVal -> ReduceShadowing valId oldVal evaluatedValue
               Nothing     -> ReduceNoWarning
@@ -641,6 +690,11 @@ applyAction env state (IDeposit accId1 party1 tok1 amount) (Deposit accId2 party
     else NotAppliedAction
 applyAction _ state (IChoice choId1 choice) (Choice choId2 bounds) =
     if choId1 == choId2 && inBounds choice bounds
+    -- SCP-5126: Given the precondition that `choices` contains no
+    -- duplicate entries, this insertion behaves identically (aside
+    -- from internal ordering) to Marlowe's Isabelle semantics
+    -- given the precondition that the initial state's `choices`
+    -- in Isabelle was sorted and did not contain duplicate entries.
     then let newState = state { choices = Map.insert choId1 choice (choices state) }
          in AppliedAction ApplyNoWarning newState
     else NotAppliedAction

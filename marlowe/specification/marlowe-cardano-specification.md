@@ -97,6 +97,17 @@ data Input =
 In the above, the `BuiltinByteString` is the hash of the serialized continuation `Contract`.
 
 
+### Variations from Isabelle Semantics
+
+Marlowe's semantics validator uses Plutus's association list `PlutuxTx.AssocMap` that differs from the `MList` in Isabelle semantics in several respects:
+
+1.  The `insert`, `delete`, `member`, and `lookup` functions of `AssocMap` haven an equality (`Eq`) constraint whereas `MList` has a ordering (`Ord`) constraint.
+2.  If the elements of an `MList` are not in lexicographic order, then result of `insert`, `delete`, `member`, and `lookup` may differ from that in `AssocMap`.
+3.  The ordering of the result of `toList` may differ between `AssocMap` and `MList`.
+
+Provided that the initial state of the Marlowe contract does not contain duplicate entries in `accounts`, `choices`, or `boundValues` and also provided that the behavior of Marlowe's semantics validator is compared to Isabelle semantics with the Isabelle initial state for `accounts`, `choices`, and `boundValues` lexicographic ordered, the behavior of the Marlowe semantics validator does not differ from Isabelle semantics aside from the ordering of `accounts`, `choices`, and `boundValues` in Marlowe's state in the datum. Typically, Marlowe contracts start with an empty state, so this is not an issue, but one can in principle start a Marlowe contract with a non-empty state, even with one that contains duplicate entries. Internally to the validator, `computeTransaction` might order payments upon `Close` differently from Isabelle semantics, but that is undetectable at the validation or transaction level.
+
+
 ## Merkelization
 
 A contract can be represented as a tree of continuations ("sub-contracts") where each vertex is a contract and each edge follows either an `InputContent` made by a participant or a timeout. A `When` contract includes terms that are either (1) a `Case` which contains the `Action` that matches a particular `InputContent` via `NormalInput` and that explicitly includes the `Contract` continuation or (2) a `MerkleizedCase` which contains the `Action` that matches a particular `InputContent` via `MerkleizedInput` and that implicitly includes the continuation by reference to its Merkle hash. In the latter case `MerkleizedInput` includes both the Merkle hash of the continuation and the continuation `Contract` itself. The Plutus code must verify that the hash in the contract matches the hash in the input before it proceeds to use the continuation that was provided as input.
