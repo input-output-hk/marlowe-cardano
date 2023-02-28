@@ -8,7 +8,7 @@ module Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetWithdrawals
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Maybe (MaybeT(..))
 import Data.ByteString (ByteString)
-import Data.Int (Int16, Int64)
+import Data.Int (Int64)
 import qualified Data.Set as Set
 import qualified Data.Vector as V
 import Hasql.TH (foldStatement, maybeStatement, singletonStatement)
@@ -16,7 +16,7 @@ import qualified Hasql.Transaction as T
 import Language.Marlowe.Protocol.Query.Types
 import Language.Marlowe.Runtime.ChainSync.Api (PolicyId(..), TxId(..))
 import Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetHeaders (foldPage)
-import Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetWithdrawal (decodeWithdrawal)
+import Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetWithdrawal (ResultRow, decodeWithdrawal)
 import Prelude hiding (init)
 
 getWithdrawals :: WithdrawalFilter -> Range TxId -> T.Transaction (Maybe (Page TxId Withdrawal))
@@ -50,15 +50,22 @@ getWithdrawals wFilter@WithdrawalFilter{..} Range{..} = Just <$> do
     (True, Descending) -> T.statement nullFilterParams $
       [foldStatement|
         SELECT
-          txId :: bytea,
-          slotNo :: bigint,
-          blockId :: bytea,
-          blockNo :: bigint,
-          ARRAY_AGG(payoutTxId) :: bytea[],
-          ARRAY_AGG(payoutTxIx) :: smallint[]
+          withdrawalTxIn.txId :: bytea,
+          withdrawalTxIn.slotNo :: bigint,
+          withdrawalTxIn.blockId :: bytea,
+          withdrawalTxIn.blockNo :: bigint,
+          ARRAY_AGG(withdrawalTxIn.payoutTxId) :: bytea[],
+          ARRAY_AGG(withdrawalTxIn.payoutTxIx) :: smallint[],
+          ARRAY_AGG(withdrawalTxIn.createTxId) :: bytea[],
+          ARRAY_AGG(withdrawalTxIn.createTxIx) :: smallint[],
+          ARRAY_AGG(payoutTxOut.rolesCurrency) :: bytea[],
+          ARRAY_AGG(payoutTxOut.role) :: bytea[]
         FROM marlowe.withdrawalTxIn
-        GROUP BY slotNo, blockId, blockNo, txId
-        ORDER BY slotNo DESC, blockId DESC, blockNo DESC, txId DESC
+        JOIN marlowe.payoutTxOut
+          ON withdrawalTxIn.payoutTxId = payoutTxOut.txId
+          AND withdrawalTxIn.payoutTxIx = payoutTxOut.txIx
+        GROUP BY withdrawalTxIn.slotNo, withdrawalTxIn.blockId, withdrawalTxIn.blockNo, withdrawalTxIn.txId
+        ORDER BY withdrawalTxIn.slotNo DESC, withdrawalTxIn.blockId DESC, withdrawalTxIn.blockNo DESC, withdrawalTxIn.txId DESC
         OFFSET ($1 :: int) ROWS
         FETCH NEXT ($2 :: int) ROWS ONLY
       |] (foldPage decodeTxId decodeWithdrawal rangeLimit rangeDirection totalCount)
@@ -66,15 +73,22 @@ getWithdrawals wFilter@WithdrawalFilter{..} Range{..} = Just <$> do
     (True, Ascending) -> T.statement nullFilterParams $
       [foldStatement|
         SELECT
-          txId :: bytea,
-          slotNo :: bigint,
-          blockId :: bytea,
-          blockNo :: bigint,
-          ARRAY_AGG(payoutTxId) :: bytea[],
-          ARRAY_AGG(payoutTxIx) :: smallint[]
+          withdrawalTxIn.txId :: bytea,
+          withdrawalTxIn.slotNo :: bigint,
+          withdrawalTxIn.blockId :: bytea,
+          withdrawalTxIn.blockNo :: bigint,
+          ARRAY_AGG(withdrawalTxIn.payoutTxId) :: bytea[],
+          ARRAY_AGG(withdrawalTxIn.payoutTxIx) :: smallint[],
+          ARRAY_AGG(withdrawalTxIn.createTxId) :: bytea[],
+          ARRAY_AGG(withdrawalTxIn.createTxIx) :: smallint[],
+          ARRAY_AGG(payoutTxOut.rolesCurrency) :: bytea[],
+          ARRAY_AGG(payoutTxOut.role) :: bytea[]
         FROM marlowe.withdrawalTxIn
-        GROUP BY slotNo, blockId, blockNo, txId
-        ORDER BY slotNo, blockId, blockNo, txId
+        JOIN marlowe.payoutTxOut
+          ON withdrawalTxIn.payoutTxId = payoutTxOut.txId
+          AND withdrawalTxIn.payoutTxIx = payoutTxOut.txIx
+        GROUP BY withdrawalTxIn.slotNo, withdrawalTxIn.blockId, withdrawalTxIn.blockNo, withdrawalTxIn.txId
+        ORDER BY withdrawalTxIn.slotNo, withdrawalTxIn.blockId, withdrawalTxIn.blockNo, withdrawalTxIn.txId
         OFFSET ($1 :: int) ROWS
         FETCH NEXT ($2 :: int) ROWS ONLY
       |] (foldPage decodeTxId decodeWithdrawal rangeLimit rangeDirection totalCount)
@@ -87,7 +101,11 @@ getWithdrawals wFilter@WithdrawalFilter{..} Range{..} = Just <$> do
           withdrawalTxIn.blockId :: bytea,
           withdrawalTxIn.blockNo :: bigint,
           ARRAY_AGG(withdrawalTxIn.payoutTxId) :: bytea[],
-          ARRAY_AGG(withdrawalTxIn.payoutTxIx) :: smallint[]
+          ARRAY_AGG(withdrawalTxIn.payoutTxIx) :: smallint[],
+          ARRAY_AGG(withdrawalTxIn.createTxId) :: bytea[],
+          ARRAY_AGG(withdrawalTxIn.createTxIx) :: smallint[],
+          ARRAY_AGG(payoutTxOut.rolesCurrency) :: bytea[],
+          ARRAY_AGG(payoutTxOut.role) :: bytea[]
         FROM marlowe.withdrawalTxIn
         JOIN marlowe.payoutTxOut
           ON withdrawalTxIn.payoutTxId = payoutTxOut.txId
@@ -107,7 +125,11 @@ getWithdrawals wFilter@WithdrawalFilter{..} Range{..} = Just <$> do
           withdrawalTxIn.blockId :: bytea,
           withdrawalTxIn.blockNo :: bigint,
           ARRAY_AGG(withdrawalTxIn.payoutTxId) :: bytea[],
-          ARRAY_AGG(withdrawalTxIn.payoutTxIx) :: smallint[]
+          ARRAY_AGG(withdrawalTxIn.payoutTxIx) :: smallint[],
+          ARRAY_AGG(withdrawalTxIn.createTxId) :: bytea[],
+          ARRAY_AGG(withdrawalTxIn.createTxIx) :: smallint[],
+          ARRAY_AGG(payoutTxOut.rolesCurrency) :: bytea[],
+          ARRAY_AGG(payoutTxOut.role) :: bytea[]
         FROM marlowe.withdrawalTxIn
         JOIN marlowe.payoutTxOut
           ON withdrawalTxIn.payoutTxId = payoutTxOut.txId
@@ -165,16 +187,23 @@ getWithdrawalsFrom WithdrawalFilter{..} totalCount (pivotSlot, pivotTxId) offset
     (True, Descending) -> T.statement nullFilterParams $
       [foldStatement|
         SELECT
-          txId :: bytea,
-          slotNo :: bigint,
-          blockId :: bytea,
-          blockNo :: bigint,
-          ARRAY_AGG(payoutTxId) :: bytea[],
-          ARRAY_AGG(payoutTxIx) :: smallint[]
+          withdrawalTxIn.txId :: bytea,
+          withdrawalTxIn.slotNo :: bigint,
+          withdrawalTxIn.blockId :: bytea,
+          withdrawalTxIn.blockNo :: bigint,
+          ARRAY_AGG(withdrawalTxIn.payoutTxId) :: bytea[],
+          ARRAY_AGG(withdrawalTxIn.payoutTxIx) :: smallint[],
+          ARRAY_AGG(withdrawalTxIn.createTxId) :: bytea[],
+          ARRAY_AGG(withdrawalTxIn.createTxIx) :: smallint[],
+          ARRAY_AGG(payoutTxOut.rolesCurrency) :: bytea[],
+          ARRAY_AGG(payoutTxOut.role) :: bytea[]
         FROM marlowe.withdrawalTxIn
-        WHERE slotNo < $1 :: bigint OR (slotNo = $1 :: bigint AND txId <= $2 :: bytea)
-        GROUP BY slotNo, blockId, blockNo, txId
-        ORDER BY slotNo DESC, blockId DESC, blockNo DESC, txId DESC
+        JOIN marlowe.payoutTxOut
+          ON withdrawalTxIn.payoutTxId = payoutTxOut.txId
+          AND withdrawalTxIn.payoutTxIx = payoutTxOut.txIx
+        WHERE withdrawalTxIn.slotNo < $1 :: bigint OR (withdrawalTxIn.slotNo = $1 :: bigint AND withdrawalTxIn.txId <= $2 :: bytea)
+        GROUP BY withdrawalTxIn.slotNo, withdrawalTxIn.blockId, withdrawalTxIn.blockNo, withdrawalTxIn.txId
+        ORDER BY withdrawalTxIn.slotNo DESC, withdrawalTxIn.blockId DESC, withdrawalTxIn.blockNo DESC, withdrawalTxIn.txId DESC
         OFFSET ($3 :: int) ROWS
         FETCH NEXT ($4 :: int) ROWS ONLY
       |] (foldPage decodeTxId decodeWithdrawal limit order totalCount)
@@ -182,16 +211,23 @@ getWithdrawalsFrom WithdrawalFilter{..} totalCount (pivotSlot, pivotTxId) offset
     (True, Ascending) -> T.statement nullFilterParams $
       [foldStatement|
         SELECT
-          txId :: bytea,
-          slotNo :: bigint,
-          blockId :: bytea,
-          blockNo :: bigint,
-          ARRAY_AGG(payoutTxId) :: bytea[],
-          ARRAY_AGG(payoutTxIx) :: smallint[]
+          withdrawalTxIn.txId :: bytea,
+          withdrawalTxIn.slotNo :: bigint,
+          withdrawalTxIn.blockId :: bytea,
+          withdrawalTxIn.blockNo :: bigint,
+          ARRAY_AGG(withdrawalTxIn.payoutTxId) :: bytea[],
+          ARRAY_AGG(withdrawalTxIn.payoutTxIx) :: smallint[],
+          ARRAY_AGG(withdrawalTxIn.createTxId) :: bytea[],
+          ARRAY_AGG(withdrawalTxIn.createTxIx) :: smallint[],
+          ARRAY_AGG(payoutTxOut.rolesCurrency) :: bytea[],
+          ARRAY_AGG(payoutTxOut.role) :: bytea[]
         FROM marlowe.withdrawalTxIn
-        WHERE slotNo > $1 :: bigint OR (slotNo = $1 :: bigint AND txId >= $2 :: bytea)
-        GROUP BY slotNo, blockId, blockNo, txId
-        ORDER BY slotNo, blockId, blockNo, txId
+        JOIN marlowe.payoutTxOut
+          ON withdrawalTxIn.payoutTxId = payoutTxOut.txId
+          AND withdrawalTxIn.payoutTxIx = payoutTxOut.txIx
+        WHERE withdrawalTxIn.slotNo > $1 :: bigint OR (withdrawalTxIn.slotNo = $1 :: bigint AND withdrawalTxIn.txId >= $2 :: bytea)
+        GROUP BY withdrawalTxIn.slotNo, withdrawalTxIn.blockId, withdrawalTxIn.blockNo, withdrawalTxIn.txId
+        ORDER BY withdrawalTxIn.slotNo, withdrawalTxIn.blockId, withdrawalTxIn.blockNo, withdrawalTxIn.txId
         OFFSET ($3 :: int) ROWS
         FETCH NEXT ($4 :: int) ROWS ONLY
       |] (foldPage decodeTxId decodeWithdrawal limit order totalCount)
@@ -204,7 +240,11 @@ getWithdrawalsFrom WithdrawalFilter{..} totalCount (pivotSlot, pivotTxId) offset
           withdrawalTxIn.blockId :: bytea,
           withdrawalTxIn.blockNo :: bigint,
           ARRAY_AGG(withdrawalTxIn.payoutTxId) :: bytea[],
-          ARRAY_AGG(withdrawalTxIn.payoutTxIx) :: smallint[]
+          ARRAY_AGG(withdrawalTxIn.payoutTxIx) :: smallint[],
+          ARRAY_AGG(withdrawalTxIn.createTxId) :: bytea[],
+          ARRAY_AGG(withdrawalTxIn.createTxIx) :: smallint[],
+          ARRAY_AGG(payoutTxOut.rolesCurrency) :: bytea[],
+          ARRAY_AGG(payoutTxOut.role) :: bytea[]
         FROM marlowe.withdrawalTxIn
         JOIN marlowe.payoutTxOut
           ON withdrawalTxIn.payoutTxId = payoutTxOut.txId
@@ -225,7 +265,11 @@ getWithdrawalsFrom WithdrawalFilter{..} totalCount (pivotSlot, pivotTxId) offset
           withdrawalTxIn.blockId :: bytea,
           withdrawalTxIn.blockNo :: bigint,
           ARRAY_AGG(withdrawalTxIn.payoutTxId) :: bytea[],
-          ARRAY_AGG(withdrawalTxIn.payoutTxIx) :: smallint[]
+          ARRAY_AGG(withdrawalTxIn.payoutTxIx) :: smallint[],
+          ARRAY_AGG(withdrawalTxIn.createTxId) :: bytea[],
+          ARRAY_AGG(withdrawalTxIn.createTxIx) :: smallint[],
+          ARRAY_AGG(payoutTxOut.rolesCurrency) :: bytea[],
+          ARRAY_AGG(payoutTxOut.role) :: bytea[]
         FROM marlowe.withdrawalTxIn
         JOIN marlowe.payoutTxOut
           ON withdrawalTxIn.payoutTxId = payoutTxOut.txId
@@ -248,7 +292,5 @@ getWithdrawalsFrom WithdrawalFilter{..} totalCount (pivotSlot, pivotTxId) offset
       , V.fromList $ unPolicyId <$> Set.toList roleCurrencies
       )
 
-type ResultRow = (ByteString, Int64, ByteString, Int64, V.Vector ByteString, V.Vector Int16)
-
 decodeTxId :: ResultRow -> TxId
-decodeTxId (txId, _, _, _, _, _) = TxId txId
+decodeTxId (txId, _, _, _, _, _, _, _, _, _) = TxId txId

@@ -1,4 +1,5 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -14,7 +15,7 @@ import Data.Set (Set)
 import Data.Type.Equality (testEquality, type (:~:)(Refl))
 import GHC.Generics (Generic)
 import GHC.Show (showCommaSpace, showSpace)
-import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, PolicyId, TransactionMetadata, TxId, TxOutRef)
+import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, PolicyId, TokenName, TransactionMetadata, TxId, TxOutRef)
 import Language.Marlowe.Runtime.Core.Api
   ( ContractId
   , MarloweVersion(..)
@@ -362,9 +363,18 @@ deriving instance Eq (ContractState 'V1)
 deriving instance ToJSON (ContractState 'V1)
 deriving instance Binary (ContractState 'V1)
 
+data PayoutRef = PayoutRef
+  { contractId :: ContractId
+  , payout :: TxOutRef
+  , rolesCurrency :: PolicyId
+  , role :: TokenName
+  }
+  deriving stock (Eq, Ord, Show, Generic)
+  deriving anyclass (ToJSON, Binary)
+
 data Withdrawal = Withdrawal
   { block :: BlockHeader
-  , withdrawnPayouts :: Set TxOutRef
+  , withdrawnPayouts :: Map TxOutRef PayoutRef
   , withdrawalTx :: TxId
   }
   deriving stock (Eq, Ord, Show, Generic)
