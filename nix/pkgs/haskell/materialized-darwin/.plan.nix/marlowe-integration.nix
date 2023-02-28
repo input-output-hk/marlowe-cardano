@@ -64,6 +64,7 @@
           (hsPkgs."marlowe-runtime".components.sublibs.tx-api or (errorHandler.buildDepError "marlowe-runtime:tx-api"))
           (hsPkgs."marlowe-runtime".components.sublibs.proxy or (errorHandler.buildDepError "marlowe-runtime:proxy"))
           (hsPkgs."marlowe-runtime".components.sublibs.proxy-api or (errorHandler.buildDepError "marlowe-runtime:proxy-api"))
+          (hsPkgs."marlowe-runtime-web" or (errorHandler.buildDepError "marlowe-runtime-web"))
           (hsPkgs."marlowe-runtime-web".components.sublibs.server or (errorHandler.buildDepError "marlowe-runtime-web:server"))
           (hsPkgs."nonempty-containers" or (errorHandler.buildDepError "nonempty-containers"))
           (hsPkgs."ouroboros-network" or (errorHandler.buildDepError "ouroboros-network"))

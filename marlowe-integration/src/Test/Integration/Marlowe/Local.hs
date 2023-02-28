@@ -141,6 +141,7 @@ import qualified Language.Marlowe.Runtime.Transaction.Query as Query
 import Language.Marlowe.Runtime.Transaction.Server (TransactionServerSelector)
 import Language.Marlowe.Runtime.Transaction.Submit (SubmitJob, SubmitJobDependencies(..))
 import qualified Language.Marlowe.Runtime.Transaction.Submit as Submit
+import Language.Marlowe.Runtime.Web.Client (healthcheck)
 import Language.Marlowe.Runtime.Web.Server (ServerDependencies(..), server)
 import Network.Channel (hoistChannel)
 import Network.HTTP.Client (defaultManagerSettings, newManager)
@@ -295,6 +296,14 @@ withLocalMarloweRuntime' MarloweRuntimeOptions{..} test = withRunInIO \runInIO -
     let
       runWebClient :: ClientM a -> IO (Either ClientError a)
       runWebClient = flip runClientM clientEnv
+    let
+      waitForWebServer :: Int -> IO ()
+      waitForWebServer counter
+        | counter < 10 = void $ runWebClient do
+            result <- healthcheck
+            if result then pure ()
+            else liftIO $ threadDelay 1000 *> waitForWebServer (counter + 1)
+        | otherwise = fail "Unable to connect to webserver"
 
     let protocolConnector = SomeConnector $ ihoistConnector hoistMarloweClient (runResourceT . runWrappedUnliftIO) liftIO $ clientConnector marlowePair
 
@@ -305,7 +314,7 @@ withLocalMarloweRuntime' MarloweRuntimeOptions{..} test = withRunInIO \runInIO -
       onException
         ( runComponent_ runtime RuntimeDependencies{..}
           `race_` runLogger
-          `race_` runInIO (test MarloweRuntime{..})
+          `race_` (waitForWebServer 0 *> runInIO (test MarloweRuntime{..}))
         )
         (unprotect dbReleaseKey)
   where
