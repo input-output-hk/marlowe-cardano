@@ -22,7 +22,6 @@ module Spec.Marlowe.Plutus.Specification
     tests
   ) where
 
-
 import Control.Lens (use, uses, (%=), (<>=), (^.))
 import Control.Monad.State (lift)
 import Data.Bifunctor (bimap)
@@ -100,7 +99,8 @@ import Spec.Marlowe.Plutus.Types
 import Spec.Marlowe.Reference (ReferencePath)
 import Spec.Marlowe.Semantics.Arbitrary (arbitraryPositiveInteger)
 import Test.Tasty (TestTree, testGroup)
-import Test.Tasty.QuickCheck (Arbitrary(..), Gen, Property, forAll, property, suchThat, testProperty, (===))
+import Test.Tasty.QuickCheck
+  (Arbitrary(..), Gen, Property, chooseInteger, forAll, oneof, property, suchThat, testProperty, (===))
 
 import qualified Language.Marlowe.Core.V1.Semantics as M (MarloweData(marloweParams))
 import qualified Language.Marlowe.Core.V1.Semantics.Types as M (Party(Address))
@@ -146,7 +146,7 @@ tests referencePaths =
             ]
         , testGroup "Constraint 6. Output value to script"
             [
-              testProperty "Invalid mismatch between state and script input" $ checkValueOutput referencePaths
+              testProperty "Invalid mismatch between state and script output's value" $ checkValueOutput referencePaths
             ]
         , testGroup "Constraint 7. Input state"
             [
@@ -162,7 +162,7 @@ tests referencePaths =
             ]
         , testGroup "Constraint 10. Output state"
             [
-              testProperty "Invalid mismatch between state and script output" $ checkStateOutput referencePaths
+              testProperty "Invalid mismatch between state and script output's state" $ checkStateOutput referencePaths
             ]
         , testGroup "Constraint 11. Output contract"
             [
@@ -402,11 +402,12 @@ checkValueOutput referencePaths =
   let
     modifyAfter =
       do
+        delta <- lift $ oneof [chooseInteger (-5, -1), chooseInteger (1, 5), arbitrary `suchThat` (/= 0)]  -- Ensure small non-zero integers.
         let
-          -- Add one lovelace to the output to the script.
+          -- Add or subtract some lovelace to the output to the script.
           incrementOwnOutput txOut@(TxOut address value _ _)
-            | address == semanticsAddress = txOut {txOutValue = value <> singleton adaSymbol adaToken 1}
-            | otherwise                  = txOut
+            | address == semanticsAddress = txOut {txOutValue = value <> singleton adaSymbol adaToken delta}
+            | otherwise                   = txOut
         -- Update the outputs with the incremented script output.
         infoOutputs %= fmap incrementOwnOutput
   in
