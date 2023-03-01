@@ -20,7 +20,8 @@ import qualified Language.Marlowe as V1
 import Language.Marlowe.Runtime.Integration.Common
 import Language.Marlowe.Runtime.Transaction.Api (WalletAddresses(..))
 import qualified Language.Marlowe.Runtime.Web as Web
-import Language.Marlowe.Runtime.Web.Client (getContract, postContract, putContract)
+import Language.Marlowe.Runtime.Web.Client
+  (getContract, getTransaction, postContract, postTransaction, putContract, putTransaction)
 import Language.Marlowe.Runtime.Web.Server.DTO (ToDTO(toDTO))
 import Servant.Client (ClientM)
 
@@ -48,6 +49,33 @@ createCloseContract Wallet{..}= do
   putContract contractId createTx
   _ <- waitUntilConfirmed (\Web.ContractState{status} -> status) $ getContract contractId
   pure contractId
+
+applyCloseTransaction :: Wallet -> Web.TxOutRef -> ClientM Web.TxId
+applyCloseTransaction  Wallet{..} contractId = do
+  let WalletAddresses{..} = addresses
+  let webChangeAddress = toDTO changeAddress
+  let webExtraAddresses = Set.map toDTO extraAddresses
+  let webCollataralUtxos = Set.map toDTO collateralUtxos
+  Web.ApplyInputsTxBody{transactionId, txBody = applyTxBody} <- postTransaction
+    webChangeAddress
+    (Just webExtraAddresses)
+    (Just webCollataralUtxos)
+    contractId
+    Web.PostTransactionsRequest
+      { version = Web.V1
+      , metadata = mempty
+      , invalidBefore = Nothing
+      , invalidHereafter = Nothing
+      , inputs = []
+      }
+
+  applyTx <- liftIO $ signShelleyTransaction' applyTxBody signingKeys
+
+  putTransaction contractId transactionId applyTx
+
+  _ <- waitUntilConfirmed (\Web.Tx{status} -> status) $ getTransaction contractId transactionId
+  pure transactionId
+
 
 signShelleyTransaction' :: Web.TextEnvelope -> [ShelleyWitnessSigningKey] -> IO Web.TextEnvelope
 signShelleyTransaction' Web.TextEnvelope{..} wits = do
