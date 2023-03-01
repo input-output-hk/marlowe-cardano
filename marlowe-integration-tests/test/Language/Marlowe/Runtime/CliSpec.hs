@@ -24,7 +24,7 @@ import Language.Marlowe.Runtime.Integration.Common (Integration, Wallet(..), get
 import Language.Marlowe.Runtime.Transaction.Api
   (ContractCreated(..), CreateError, MarloweTxCommand(..), RoleTokensConfig(RoleTokensNone), WalletAddresses(..))
 import qualified Network.Protocol.Job.Client as JobClient
-import Test.Hspec (Spec, describe, fdescribe, it, shouldBe)
+import Test.Hspec (Spec, describe, it, shouldBe)
 import Test.Integration.Marlowe.Local
   ( LocalTestnet(..)
   , Workspace(Workspace, workspaceDir)
@@ -56,7 +56,7 @@ marloweRuntimeJobClient cmd = do
   pure txBody
 
 spec :: Spec
-spec = fdescribe "Marlowe runtime CLI" do
+spec = describe "Marlowe runtime CLI" do
   describe "create" do
     it "creates a tx body envelope" $
       withLocalMarloweRuntime $ runIntegrationTest do
