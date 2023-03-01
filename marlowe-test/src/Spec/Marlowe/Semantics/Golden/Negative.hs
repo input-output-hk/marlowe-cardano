@@ -67,8 +67,8 @@ contract =
     value = ChoiceValue choice
     initialDeadline = 1000
     choiceDeadline = 2000
-    depositDeadline = 3000
-    notifyDeadline = 4000
+    notifyDeadline = 3000
+    depositDeadline = 4000
   in
     When
       [
@@ -79,22 +79,36 @@ contract =
                   $ When
                     [
                       Case (Deposit party counterparty ada value)
-                        $ When
-                          [
-                            Case (Notify $ ValueGT value $ Constant 0)
-                             $ Let "Positive" (Constant 1)
-                               Close
-                          , Case (Notify $ ValueEQ value $ Constant 0)
-                             $ Let "Neutral" (Constant 1)
-                               Close
-                          , Case (Notify $ ValueLT value $ Constant 0)
-                             $ Let "Negative" (Constant 1)
-                               Close
-                          ]
-                          notifyDeadline
-                          Close
+                        Close
+                    , Case (Notify $ ValueGT value $ Constant 0)
+                       $ Let "Positive" (Constant 1)
+                       $ When
+                         [
+                           Case (Deposit party counterparty ada value)
+                             Close
+                         ]
+                         depositDeadline
+                         Close
+                    , Case (Notify $ ValueEQ value $ Constant 0)
+                       $ Let "Neutral" (Constant 1)
+                       $ When
+                         [
+                           Case (Deposit party party ada value)
+                             Close
+                         ]
+                         depositDeadline
+                         Close
+                    , Case (Notify $ ValueLT value $ Constant 0)
+                       $ Let "Negative" (Constant 1)
+                       $ When
+                         [
+                           Case (Deposit counterparty party ada value)
+                             Close
+                         ]
+                         depositDeadline
+                         Close
                     ]
-                    depositDeadline
+                    notifyDeadline
                     Close
               ]
               choiceDeadline
@@ -120,10 +134,13 @@ valids =
     (POSIXTime {getPOSIXTime = 0}, [TransactionInput {txInterval = (POSIXTime {getPOSIXTime = 1000},POSIXTime {getPOSIXTime = 1000}), txInputs = []}], TransactionOutput {txOutWarnings = [], txOutPayments = [], txOutState = State {accounts = toAM $ Map {unMap = []}, choices = toAM $ Map {unMap = []}, boundValues = toAM $ Map {unMap = []}, minTime = POSIXTime {getPOSIXTime = 1000}}, txOutContract = Close})
   , (POSIXTime {getPOSIXTime = 0}, [TransactionInput {txInterval = (POSIXTime {getPOSIXTime = 0},POSIXTime {getPOSIXTime = 0}), txInputs = [NormalInput (IDeposit "Counterparty" "Counterparty" (Token "" "") 2000000)]},TransactionInput {txInterval = (POSIXTime {getPOSIXTime = 2000},POSIXTime {getPOSIXTime = 2000}), txInputs = []}], TransactionOutput {txOutWarnings = [], txOutPayments = [Payment "Counterparty" (Party "Counterparty") (Token "" "") 2000000], txOutState = State {accounts = toAM $ Map {unMap = []}, choices = toAM $ Map {unMap = []}, boundValues = toAM $ Map {unMap = []}, minTime = POSIXTime {getPOSIXTime = 2000}}, txOutContract = Close})
   , (POSIXTime {getPOSIXTime = 0}, [TransactionInput {txInterval = (POSIXTime {getPOSIXTime = 0},POSIXTime {getPOSIXTime = 0}), txInputs = [NormalInput (IDeposit "Counterparty" "Counterparty" (Token "" "") 2000000)]},TransactionInput {txInterval = (POSIXTime {getPOSIXTime = 0},POSIXTime {getPOSIXTime = 0}), txInputs = [NormalInput (IChoice (ChoiceId "Deposit" "Party") 0)]},TransactionInput {txInterval = (POSIXTime {getPOSIXTime = 3000},POSIXTime {getPOSIXTime = 3000}), txInputs = []}], TransactionOutput {txOutWarnings = [], txOutPayments = [Payment "Counterparty" (Party "Counterparty") (Token "" "") 2000000], txOutState = State {accounts = toAM $ Map {unMap = []}, choices = toAM $ Map {unMap = [(ChoiceId "Deposit" "Party",0)]}, boundValues = toAM $ Map {unMap = []}, minTime = POSIXTime {getPOSIXTime = 3000}}, txOutContract = Close})
-  , (POSIXTime {getPOSIXTime = 0}, [TransactionInput {txInterval = (POSIXTime {getPOSIXTime = 0},POSIXTime {getPOSIXTime = 0}), txInputs = [NormalInput (IDeposit "Counterparty" "Counterparty" (Token "" "") 2000000)]},TransactionInput {txInterval = (POSIXTime {getPOSIXTime = 0},POSIXTime {getPOSIXTime = 0}), txInputs = [NormalInput (IChoice (ChoiceId "Deposit" "Party") 0)]},TransactionInput {txInterval = (POSIXTime {getPOSIXTime = 0},POSIXTime {getPOSIXTime = 0}), txInputs = [NormalInput (IDeposit "Party" "Counterparty" (Token "" "") 0)]},TransactionInput {txInterval = (POSIXTime {getPOSIXTime = 4000},POSIXTime {getPOSIXTime = 4000}), txInputs = []}], TransactionOutput {txOutWarnings = [TransactionNonPositiveDeposit "Counterparty" "Party" (Token "" "") 0], txOutPayments = [Payment "Counterparty" (Party "Counterparty") (Token "" "") 2000000], txOutState = State {accounts = toAM $ Map {unMap = []}, choices = toAM $ Map {unMap = [(ChoiceId "Deposit" "Party",0)]}, boundValues = toAM $ Map {unMap = []}, minTime = POSIXTime {getPOSIXTime = 4000}}, txOutContract = Close})
-  , (POSIXTime {getPOSIXTime = 0}, [TransactionInput {txInterval = (POSIXTime {getPOSIXTime = 0},POSIXTime {getPOSIXTime = 0}), txInputs = [NormalInput (IDeposit "Counterparty" "Counterparty" (Token "" "") 2000000)]},TransactionInput {txInterval = (POSIXTime {getPOSIXTime = 0},POSIXTime {getPOSIXTime = 0}), txInputs = [NormalInput (IChoice (ChoiceId "Deposit" "Party") 1)]},TransactionInput {txInterval = (POSIXTime {getPOSIXTime = 0},POSIXTime {getPOSIXTime = 0}), txInputs = [NormalInput (IDeposit "Party" "Counterparty" (Token "" "") 1)]},TransactionInput {txInterval = (POSIXTime {getPOSIXTime = 0},POSIXTime {getPOSIXTime = 0}), txInputs = [NormalInput INotify]}], TransactionOutput {txOutWarnings = [], txOutPayments = [Payment "Counterparty" (Party "Counterparty") (Token "" "") 2000000,Payment "Party" (Party "Party") (Token "" "") 1], txOutState = State {accounts = toAM $ Map {unMap = []}, choices = toAM $ Map {unMap = [(ChoiceId "Deposit" "Party",1)]}, boundValues = toAM $ Map {unMap = [("Positive",1)]}, minTime = POSIXTime {getPOSIXTime = 0}}, txOutContract = Close})
-  , (POSIXTime {getPOSIXTime = 0}, [TransactionInput {txInterval = (POSIXTime {getPOSIXTime = 0},POSIXTime {getPOSIXTime = 0}), txInputs = [NormalInput (IDeposit "Counterparty" "Counterparty" (Token "" "") 2000000)]},TransactionInput {txInterval = (POSIXTime {getPOSIXTime = 0},POSIXTime {getPOSIXTime = 0}), txInputs = [NormalInput (IChoice (ChoiceId "Deposit" "Party") 0)]},TransactionInput {txInterval = (POSIXTime {getPOSIXTime = 0},POSIXTime {getPOSIXTime = 0}), txInputs = [NormalInput (IDeposit "Party" "Counterparty" (Token "" "") 0)]},TransactionInput {txInterval = (POSIXTime {getPOSIXTime = 0},POSIXTime {getPOSIXTime = 0}), txInputs = [NormalInput INotify]}], TransactionOutput {txOutWarnings = [TransactionNonPositiveDeposit "Counterparty" "Party" (Token "" "") 0], txOutPayments = [Payment "Counterparty" (Party "Counterparty") (Token "" "") 2000000], txOutState = State {accounts = toAM $ Map {unMap = []}, choices = toAM $ Map {unMap = [(ChoiceId "Deposit" "Party",0)]}, boundValues = toAM $ Map {unMap = [("Neutral",1)]}, minTime = POSIXTime {getPOSIXTime = 0}}, txOutContract = Close})
-  , (POSIXTime {getPOSIXTime = 0}, [TransactionInput {txInterval = (POSIXTime {getPOSIXTime = 0},POSIXTime {getPOSIXTime = 0}), txInputs = [NormalInput (IDeposit "Counterparty" "Counterparty" (Token "" "") 2000000)]},TransactionInput {txInterval = (POSIXTime {getPOSIXTime = 0},POSIXTime {getPOSIXTime = 0}), txInputs = [NormalInput (IChoice (ChoiceId "Deposit" "Party") (-1))]},TransactionInput {txInterval = (POSIXTime {getPOSIXTime = 0},POSIXTime {getPOSIXTime = 0}), txInputs = [NormalInput (IDeposit "Party" "Counterparty" (Token "" "") (-1))]},TransactionInput {txInterval = (POSIXTime {getPOSIXTime = 0},POSIXTime {getPOSIXTime = 0}), txInputs = [NormalInput INotify]}], TransactionOutput {txOutWarnings = [TransactionNonPositiveDeposit "Counterparty" "Party" (Token "" "") (-1)], txOutPayments = [Payment "Counterparty" (Party "Counterparty") (Token "" "") 2000000], txOutState = State {accounts = toAM $ Map {unMap = []}, choices = toAM $ Map {unMap = [(ChoiceId "Deposit" "Party",-1)]}, boundValues = toAM $ Map {unMap = [("Negative",1)]}, minTime = POSIXTime {getPOSIXTime = 0}}, txOutContract = Close})
+  , (POSIXTime {getPOSIXTime = 0}, [TransactionInput {txInterval = (POSIXTime {getPOSIXTime = 0},POSIXTime {getPOSIXTime = 0}), txInputs = [NormalInput (IDeposit "Counterparty" "Counterparty" (Token "" "") 2000000)]},TransactionInput {txInterval = (POSIXTime {getPOSIXTime = 0},POSIXTime {getPOSIXTime = 0}), txInputs = [NormalInput (IChoice (ChoiceId "Deposit" "Party") 0)]},TransactionInput {txInterval = (POSIXTime {getPOSIXTime = 0},POSIXTime {getPOSIXTime = 0}), txInputs = [NormalInput (IDeposit "Party" "Counterparty" (Token "" "") 0)]}], TransactionOutput {txOutWarnings = [TransactionNonPositiveDeposit "Counterparty" "Party" (Token "" "") 0], txOutPayments = [Payment "Counterparty" (Party "Counterparty") (Token "" "") 2000000], txOutState = State {accounts = toAM $ Map {unMap = []}, choices = toAM $ Map {unMap = [(ChoiceId "Deposit" "Party",0)]}, boundValues = toAM $ Map {unMap = []}, minTime = POSIXTime {getPOSIXTime = 0}}, txOutContract = Close})
+  , (POSIXTime {getPOSIXTime = 0}, [TransactionInput {txInterval = (POSIXTime {getPOSIXTime = 0},POSIXTime {getPOSIXTime = 0}), txInputs = [NormalInput (IDeposit "Counterparty" "Counterparty" (Token "" "") 2000000)]},TransactionInput {txInterval = (POSIXTime {getPOSIXTime = 0},POSIXTime {getPOSIXTime = 0}), txInputs = [NormalInput (IChoice (ChoiceId "Deposit" "Party") 1)]},TransactionInput {txInterval = (POSIXTime {getPOSIXTime = 0},POSIXTime {getPOSIXTime = 0}), txInputs = [NormalInput INotify]},TransactionInput {txInterval = (POSIXTime {getPOSIXTime = 4000},POSIXTime {getPOSIXTime = 4000}), txInputs = []}], TransactionOutput {txOutWarnings = [], txOutPayments = [Payment "Counterparty" (Party "Counterparty") (Token "" "") 2000000], txOutState = State {accounts = toAM $ Map {unMap = []}, choices = toAM $ Map {unMap = [(ChoiceId "Deposit" "Party",1)]}, boundValues = toAM $ Map {unMap = [("Positive",1)]}, minTime = POSIXTime {getPOSIXTime = 4000}}, txOutContract = Close})
+  , (POSIXTime {getPOSIXTime = 0}, [TransactionInput {txInterval = (POSIXTime {getPOSIXTime = 0},POSIXTime {getPOSIXTime = 0}), txInputs = [NormalInput (IDeposit "Counterparty" "Counterparty" (Token "" "") 2000000)]},TransactionInput {txInterval = (POSIXTime {getPOSIXTime = 0},POSIXTime {getPOSIXTime = 0}), txInputs = [NormalInput (IChoice (ChoiceId "Deposit" "Party") 1)]},TransactionInput {txInterval = (POSIXTime {getPOSIXTime = 0},POSIXTime {getPOSIXTime = 0}), txInputs = [NormalInput INotify]},TransactionInput {txInterval = (POSIXTime {getPOSIXTime = 0},POSIXTime {getPOSIXTime = 0}), txInputs = [NormalInput (IDeposit "Party" "Counterparty" (Token "" "") 1)]}], TransactionOutput {txOutWarnings = [], txOutPayments = [Payment "Counterparty" (Party "Counterparty") (Token "" "") 2000000,Payment "Party" (Party "Party") (Token "" "") 1], txOutState = State {accounts = toAM $ Map {unMap = []}, choices = toAM $ Map {unMap = [(ChoiceId "Deposit" "Party",1)]}, boundValues = toAM $ Map {unMap = [("Positive",1)]}, minTime = POSIXTime {getPOSIXTime = 0}}, txOutContract = Close})
+  , (POSIXTime {getPOSIXTime = 0}, [TransactionInput {txInterval = (POSIXTime {getPOSIXTime = 0},POSIXTime {getPOSIXTime = 0}), txInputs = [NormalInput (IDeposit "Counterparty" "Counterparty" (Token "" "") 2000000)]},TransactionInput {txInterval = (POSIXTime {getPOSIXTime = 0},POSIXTime {getPOSIXTime = 0}), txInputs = [NormalInput (IChoice (ChoiceId "Deposit" "Party") 0)]},TransactionInput {txInterval = (POSIXTime {getPOSIXTime = 0},POSIXTime {getPOSIXTime = 0}), txInputs = [NormalInput INotify]},TransactionInput {txInterval = (POSIXTime {getPOSIXTime = 4000},POSIXTime {getPOSIXTime = 4000}), txInputs = []}], TransactionOutput {txOutWarnings = [], txOutPayments = [Payment "Counterparty" (Party "Counterparty") (Token "" "") 2000000], txOutState = State {accounts = toAM $ Map {unMap = []}, choices = toAM $ Map {unMap = [(ChoiceId "Deposit" "Party",0)]}, boundValues = toAM $ Map {unMap = [("Neutral",1)]}, minTime = POSIXTime {getPOSIXTime = 4000}}, txOutContract = Close})
+  , (POSIXTime {getPOSIXTime = 0}, [TransactionInput {txInterval = (POSIXTime {getPOSIXTime = 0},POSIXTime {getPOSIXTime = 0}), txInputs = [NormalInput (IDeposit "Counterparty" "Counterparty" (Token "" "") 2000000)]},TransactionInput {txInterval = (POSIXTime {getPOSIXTime = 0},POSIXTime {getPOSIXTime = 0}), txInputs = [NormalInput (IChoice (ChoiceId "Deposit" "Party") 0)]},TransactionInput {txInterval = (POSIXTime {getPOSIXTime = 0},POSIXTime {getPOSIXTime = 0}), txInputs = [NormalInput INotify]},TransactionInput {txInterval = (POSIXTime {getPOSIXTime = 0},POSIXTime {getPOSIXTime = 0}), txInputs = [NormalInput (IDeposit "Party" "Party" (Token "" "") 0)]}], TransactionOutput {txOutWarnings = [TransactionNonPositiveDeposit "Party" "Party" (Token "" "") 0], txOutPayments = [Payment "Counterparty" (Party "Counterparty") (Token "" "") 2000000], txOutState = State {accounts = toAM $ Map {unMap = []}, choices = toAM $ Map {unMap = [(ChoiceId "Deposit" "Party",0)]}, boundValues = toAM $ Map {unMap = [("Neutral",1)]}, minTime = POSIXTime {getPOSIXTime = 0}}, txOutContract = Close})
+  , (POSIXTime {getPOSIXTime = 0}, [TransactionInput {txInterval = (POSIXTime {getPOSIXTime = 0},POSIXTime {getPOSIXTime = 0}), txInputs = [NormalInput (IDeposit "Counterparty" "Counterparty" (Token "" "") 2000000)]},TransactionInput {txInterval = (POSIXTime {getPOSIXTime = 0},POSIXTime {getPOSIXTime = 0}), txInputs = [NormalInput (IChoice (ChoiceId "Deposit" "Party") (-1))]},TransactionInput {txInterval = (POSIXTime {getPOSIXTime = 0},POSIXTime {getPOSIXTime = 0}), txInputs = [NormalInput INotify]},TransactionInput {txInterval = (POSIXTime {getPOSIXTime = 4000},POSIXTime {getPOSIXTime = 4000}), txInputs = []}], TransactionOutput {txOutWarnings = [], txOutPayments = [Payment "Counterparty" (Party "Counterparty") (Token "" "") 2000000], txOutState = State {accounts = toAM $ Map {unMap = []}, choices = toAM $ Map {unMap = [(ChoiceId "Deposit" "Party",-1)]}, boundValues = toAM $ Map {unMap = [("Negative",1)]}, minTime = POSIXTime {getPOSIXTime = 4000}}, txOutContract = Close})
+  , (POSIXTime {getPOSIXTime = 0}, [TransactionInput {txInterval = (POSIXTime {getPOSIXTime = 0},POSIXTime {getPOSIXTime = 0}), txInputs = [NormalInput (IDeposit "Counterparty" "Counterparty" (Token "" "") 2000000)]},TransactionInput {txInterval = (POSIXTime {getPOSIXTime = 0},POSIXTime {getPOSIXTime = 0}), txInputs = [NormalInput (IChoice (ChoiceId "Deposit" "Party") (-1))]},TransactionInput {txInterval = (POSIXTime {getPOSIXTime = 0},POSIXTime {getPOSIXTime = 0}), txInputs = [NormalInput INotify]},TransactionInput {txInterval = (POSIXTime {getPOSIXTime = 0},POSIXTime {getPOSIXTime = 0}), txInputs = [NormalInput (IDeposit "Counterparty" "Party" (Token "" "") (-1))]}], TransactionOutput {txOutWarnings = [TransactionNonPositiveDeposit "Party" "Counterparty" (Token "" "") (-1)], txOutPayments = [Payment "Counterparty" (Party "Counterparty") (Token "" "") 2000000], txOutState = State {accounts = toAM $ Map {unMap = []}, choices = toAM $ Map {unMap = [(ChoiceId "Deposit" "Party",-1)]}, boundValues = toAM $ Map {unMap = [("Negative",1)]}, minTime = POSIXTime {getPOSIXTime = 0}}, txOutContract = Close})
   ]
 
 
