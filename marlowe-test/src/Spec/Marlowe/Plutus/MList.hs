@@ -23,7 +23,7 @@ import Data.Maybe (fromMaybe, isJust)
 import Prelude hiding (lookup)
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.HUnit (Assertion, assertBool, testCase)
-import Test.Tasty.QuickCheck (Arbitrary(..), Gen, Property, elements, forAll, property, shuffle, testProperty)
+import Test.Tasty.QuickCheck (Arbitrary(..), Gen, Property, elements, forAll, property, testProperty)
 
 import qualified PlutusTx.AssocMap as AM
   (Map, delete, empty, fromList, insert, lookup, member, null, singleton, toList, unionWith)
@@ -185,8 +185,11 @@ type Value = [()]
 
 
 -- | Generate a sorted `MList` with no duplicate keys.
-arbitraryMList :: Gen (MList Key Value)
-arbitraryMList = nubBy ((==) `on` fst) . sortBy (compare `on` fst) <$> arbitrary
+arbitraryMList :: Gen (MList Key Value, AM.Map Key Value)
+arbitraryMList =
+  do
+    items <- nubBy ((==) `on` fst) <$> arbitrary
+    pure (sortBy (compare `on` fst) items, AM.fromList items)
 
 
 -- | Compare an `MList` to an `AssocMap`, ignoring ordering.
@@ -207,8 +210,7 @@ checkNull :: Property
 checkNull = property $ do
   let
     gen = do
-      mlist <- arbitraryMList
-      assocmap <- AM.fromList <$> shuffle mlist
+      (mlist, assocmap) <- arbitraryMList
       pure (mlist, assocmap)
   forAll gen
     $ \(mlist, assocmap) -> (== empty) mlist == AM.null assocmap
@@ -231,8 +233,7 @@ checkInsert :: Property
 checkInsert = property $ do
   let
     gen = do
-      mlist <- arbitraryMList
-      assocmap <- AM.fromList <$> shuffle mlist
+      (mlist, assocmap) <- arbitraryMList
       a <- arbitrary
       b <- arbitrary
       pure (mlist, assocmap, a, b)
@@ -245,8 +246,7 @@ checkDelete :: Property
 checkDelete = property $ do
   let
     gen = do
-      mlist <- arbitraryMList
-      assocmap <- AM.fromList <$> shuffle mlist
+      (mlist, assocmap) <- arbitraryMList
       a <- arbitrary
       pure (mlist, assocmap, a)
   forAll gen
@@ -258,8 +258,7 @@ checkLookup :: Property
 checkLookup = property $ do
   let
     gen = do
-      mlist <- arbitraryMList
-      assocmap <- AM.fromList <$> shuffle mlist
+      (mlist, assocmap) <- arbitraryMList
       a <- arbitrary
       pure (mlist, assocmap, a)
   forAll gen
@@ -271,8 +270,7 @@ checkMember :: Property
 checkMember = property $ do
   let
     gen = do
-      mlist <- arbitraryMList
-      assocmap <- AM.fromList <$> shuffle mlist
+      (mlist, assocmap) <- arbitraryMList
       a <- arbitrary
       pure (mlist, assocmap, a)
   forAll gen
@@ -284,10 +282,8 @@ checkUnionWith :: Property
 checkUnionWith = property $ do
   let
     gen = do
-      mlist <- arbitraryMList
-      assocmap <- AM.fromList <$> shuffle mlist
-      mlist' <- arbitraryMList
-      assocmap' <- AM.fromList <$> shuffle mlist'
+      (mlist, assocmap) <- arbitraryMList
+      (mlist', assocmap') <- arbitraryMList
       function <- elements ["concat", "shortest", "longest", "first", "second"]
       pure (mlist, assocmap, mlist', assocmap', function)
   forAll gen
@@ -308,8 +304,7 @@ checkFindWithDefault :: Property
 checkFindWithDefault = property $ do
   let
     gen = do
-      mlist <- arbitraryMList
-      assocmap <- AM.fromList <$> shuffle mlist
+      (mlist, assocmap) <- arbitraryMList
       a <- arbitrary
       b <- arbitrary
       pure (mlist, assocmap, a, b)
