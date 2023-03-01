@@ -99,6 +99,7 @@
           "Spec/Marlowe/Semantics/Functions"
           "Spec/Marlowe/Semantics/Golden"
           "Spec/Marlowe/Semantics/Golden/Escrow"
+          "Spec/Marlowe/Semantics/Golden/Negative"
           "Spec/Marlowe/Semantics/Golden/Pangram"
           "Spec/Marlowe/Semantics/Golden/Swap"
           "Spec/Marlowe/Semantics/Golden/Trivial"

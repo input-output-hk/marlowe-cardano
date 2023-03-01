@@ -188,8 +188,12 @@ makeDeposit input' =
     address' <- lift arbitrary
     pure
       $ case getInputContent input' of
-          IDeposit _ (M.Address _ address) (Token c n) i -> pure . TxInInfo ref $ TxOut address  (V.singleton c n i) NoOutputDatum  Nothing
-          IDeposit _ (Role _             ) (Token c n) i -> pure . TxInInfo ref $ TxOut address' (V.singleton c n i) NoOutputDatum  Nothing
+          IDeposit _ (M.Address _ address) (Token c n) i -> if i > 0
+                                                              then pure . TxInInfo ref $ TxOut address  (V.singleton c n i) NoOutputDatum  Nothing
+                                                              else mempty
+          IDeposit _ (Role _             ) (Token c n) i -> if i > 0
+                                                              then pure . TxInInfo ref $ TxOut address' (V.singleton c n i) NoOutputDatum  Nothing
+                                                              else mempty
           _                                              -> mempty
 
 -- | Create role input for a Marlowe semantics transaction.
