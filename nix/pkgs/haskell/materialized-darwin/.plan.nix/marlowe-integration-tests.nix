@@ -76,7 +76,9 @@
             "Language/Marlowe/Runtime/Integration/MarloweQuery"
             "Language/Marlowe/Runtime/IntegrationSpec"
             "Language/Marlowe/Runtime/WebSpec"
+            "Language/Marlowe/Runtime/Web/Common"
             "Language/Marlowe/Runtime/Web/GetContracts"
+            "Language/Marlowe/Runtime/Web/GetContract"
             ];
           hsSourceDirs = [ "test" ];
           mainPath = [
