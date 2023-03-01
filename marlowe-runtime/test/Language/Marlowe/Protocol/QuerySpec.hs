@@ -91,6 +91,10 @@ instance Arbitrary a => Arbitrary (Range a) where
   arbitrary = Range <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
   shrink = genericShrink
 
+instance Arbitrary PayoutRef where
+  arbitrary = PayoutRef <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
+  shrink = genericShrink
+
 instance Arbitrary Withdrawal where
   arbitrary = Withdrawal <$> arbitrary <*> arbitrary <*> arbitrary
   shrink = genericShrink
