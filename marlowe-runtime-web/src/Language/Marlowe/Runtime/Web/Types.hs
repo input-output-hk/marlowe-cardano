@@ -1,5 +1,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE StrictData #-}
@@ -395,6 +396,15 @@ instance ToJSON CreateTxBody
 instance FromJSON CreateTxBody
 instance ToSchema CreateTxBody
 
+data CreateTx = CreateTx
+  { contractId :: TxOutRef
+  , tx :: TextEnvelope
+  } deriving (Show, Eq, Ord, Generic)
+
+instance ToJSON CreateTx
+instance FromJSON CreateTx
+instance ToSchema CreateTx
+
 data TextEnvelope = TextEnvelope
   { teType :: Text
   , teDescription :: Text
@@ -447,6 +457,8 @@ data PostContractsRequest = PostContractsRequest
 instance FromJSON PostContractsRequest
 instance ToJSON PostContractsRequest
 instance ToSchema PostContractsRequest
+
+newtype PostContractsConstructTx = PostContractsConstructTx Bool
 
 data RolesConfig
   = UsePolicy PolicyId
@@ -606,3 +618,4 @@ data ApplyInputsTxBody = ApplyInputsTxBody
 instance ToJSON ApplyInputsTxBody
 instance FromJSON ApplyInputsTxBody
 instance ToSchema ApplyInputsTxBody
+

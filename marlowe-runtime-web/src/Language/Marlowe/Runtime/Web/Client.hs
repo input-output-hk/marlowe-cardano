@@ -12,6 +12,8 @@ module Language.Marlowe.Runtime.Web.Client
   , getWithdrawals
   , healthcheck
   , postContract
+  , postContractsCreateTx
+  , postContractsCreateTxBody
   , postTransaction
   , postWithdrawal
   , putContract
@@ -70,16 +72,24 @@ getContracts roleCurrencies tags range = do
     , items = retractLink @"contract" . retractLink @"transactions" <$> items
     }
 
-postContract
+postContractsCreateTxBody changeAddress otherAddresses collateralUtxos request = do
+  let _ :<|> (postContractCreateTxBody' :<|> _) :<|> _ = client
+  response <- postContractCreateTxBody'
+    request
+    changeAddress
+    (setToCommaList <$> otherAddresses)
+    (setToCommaList <$> collateralUtxos)
+  pure $ retractLink response
+
+postContractCreateTx
   :: Address
   -> Maybe (Set Address)
   -> Maybe (Set TxOutRef)
   -> PostContractsRequest
-  -> ClientM CreateTxBody
-postContract changeAddress otherAddresses collateralUtxos request = do
-  let contractsClient :<|> _ = client
-  let _ :<|> postContract' :<|> _ = contractsClient
-  response <- postContract'
+  -> ClientM CreateTx
+postContractCreateTx changeAddress otherAddresses collateralUtxos request = do
+  let _ :<|> (_ :<|> postContractCreateTx') :<|> _ = client
+  response <- postContractCreateTx'
     request
     changeAddress
     (setToCommaList <$> otherAddresses)

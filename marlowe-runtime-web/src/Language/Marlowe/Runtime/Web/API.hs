@@ -52,6 +52,7 @@ import GHC.Generics (Generic)
 import GHC.Show (showSpace)
 import GHC.TypeLits (KnownSymbol, symbolVal)
 import Language.Marlowe.Runtime.Web.Types
+import Network.HTTP.Media ((//))
 import Servant
 import Servant.Pagination
 import Text.Parsec (char, digit, eof, hexDigit, many1, runParser, string)
@@ -93,10 +94,28 @@ instance HasNamedLink ContractHeader API "transactions" where
     "contracts" :> Capture "contractId" TxOutRef :> "transactions" :> GetTransactionsAPI
   namedLink _ _ mkLink ContractHeader{..} = guard (status == Confirmed) $> mkLink contractId
 
+data CreateTxJSON
+
+instance Accept CreateTxJSON where
+    contentType _ = "application" // "vendor.iog.marlowe-runtime.create-tx-json"
+
+instance MimeRender CreateTxJSON PostContractsCreateTxResponse where
+  mimeRender _ = encode . toJSON
+
+type PostContractsCreateTxResponse = WithLink "contract" CreateTx
+
+instance HasNamedLink CreateTx API "contract" where
+  type Endpoint CreateTx API "contract" =
+    "contracts" :> Capture "contractId" TxOutRef :> GetContractAPI
+  namedLink _ _ mkLink CreateTx{..} = Just $ mkLink contractId
+
+instance MimeUnrender CreateTxJSON PostContractsCreateTxResponse where
+  mimeUnrender _ bs = eitherDecode bs
+
 -- | POST /contracts sub-API
 type PostContractsAPI
-  =  ReqBody '[JSON] PostContractsRequest
-  :> PostTxAPI (PostCreated '[JSON] PostContractsResponse)
+  =  ReqBody '[JSON] PostContractsRequest :> PostTxAPI (PostCreated '[JSON] PostContractsResponse)
+  :<|> ReqBody '[JSON] PostContractsRequest :> PostTxAPI (PostCreated '[CreateTxJSON] PostContractsCreateTxResponse)
 
 type PostContractsResponse = WithLink "contract" CreateTxBody
 
@@ -104,7 +123,6 @@ instance HasNamedLink CreateTxBody API "contract" where
   type Endpoint CreateTxBody API "contract" =
     "contracts" :> Capture "contractId" TxOutRef :> GetContractAPI
   namedLink _ _ mkLink CreateTxBody{..} = Just $ mkLink contractId
-
 
 -- | /contracts/:contractId sup-API
 type ContractAPI = GetContractAPI

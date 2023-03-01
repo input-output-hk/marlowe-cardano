@@ -7,11 +7,6 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
--- | This module defines the data-transfer object (DTO) translation layer for
--- the web server. DTOs are the types served by the API, which notably include
--- no cardano-api dependencies and have nice JSON representations. This module
--- describes how they are mapped to the internal API types of the runtime.
-
 module Language.Marlowe.Runtime.Web.Server.REST.ApiError
   where
 
