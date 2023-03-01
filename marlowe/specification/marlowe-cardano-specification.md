@@ -252,12 +252,14 @@ inValue ≡ foldMap toValue (accounts $ marloweState marloweData)
 
 #### *Constraint 6.* Output value to script
 
-The beginning balance plus the deposits equals the ending balance plus the payments.
+The beginning balance plus the deposits (with negative deposits treated as zero, as required by the semantics) equals the ending balance plus the payments.
 ```haskell
 inValue + foldMap valueOfDeposit (fmap getInputContent transactionInput) ≡ outValue + foldMap valueOfPayment (txOutPayments transactionOutput)
   where getInputContent (Input inputContent) = inputContent
         getInputContent (MerkleizedTxInput inputContent _) = inputContent
-        valueOfDeposit (IDeposit _ _ (Token currency name) count) = Value.singleton currency name count
+        valueOfDeposit (IDeposit _ _ (Token currency name) count)
+          | count > 0 = Value.singleton currency name count
+          | otherwise = mempty
         valueOfDeposit _ = mempty
         valueOfPayment (Payment _ (Party _) value)) = value
         valueOfPayment _ = mempty
