@@ -523,7 +523,9 @@ refundOne accounts = case Map.toList accounts of
     -- SCP-5126: The return value of this function differs from
     -- Isabelle semantics in that it returns the least-recently
     -- added account-token combination rather than the first
-    -- lexicographically ordered one.
+    -- lexicographically ordered one. Also, the sequence
+    -- `Map.fromList . tail . Map.toList` preserves the
+    -- invariants of order and non-duplication.
     ((accId, token), balance) : rest ->
         if balance > 0
         then Just ((accId, token, balance), Map.fromList rest)
