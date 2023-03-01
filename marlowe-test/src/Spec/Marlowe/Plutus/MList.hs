@@ -11,24 +11,22 @@
 -----------------------------------------------------------------------------
 
 
-{-# ANN module "HLint: Use guards" #-}
-
-
 module Spec.Marlowe.Plutus.MList
   ( -- * Testing
     tests
   ) where
 
 
-import Prelude hiding (lookup)
 import Data.Function (on)
-import Data.Maybe (isJust, fromMaybe)
-import Data.List (sortBy, nubBy)
+import Data.List (nubBy, sortBy)
+import Data.Maybe (fromMaybe, isJust)
+import Prelude hiding (lookup)
 import Test.Tasty (TestTree, testGroup)
-import Test.Tasty.HUnit (Assertion, testCase, assertBool)
-import Test.Tasty.QuickCheck (Arbitrary(..), Gen, Property, elements, forAll, property, testProperty, shuffle, elements)
+import Test.Tasty.HUnit (Assertion, assertBool, testCase)
+import Test.Tasty.QuickCheck (Arbitrary(..), Gen, Property, elements, forAll, property, shuffle, testProperty)
 
-import qualified PlutusTx.AssocMap as AM (Map, delete, empty, fromList, insert, lookup, member, null, singleton, toList, unionWith)
+import qualified PlutusTx.AssocMap as AM
+  (Map, delete, empty, fromList, insert, lookup, member, null, singleton, toList, unionWith)
 
 
 -- | An association list in Isabelle.
@@ -44,6 +42,9 @@ type MList a b = [(a, b)]
 empty :: MList a b
 empty = []
 
+
+{-# ANN insert "HLint: ignore Use guards" #-}
+{-# ANN insert "HLint: ignore Use list literal" #-}
 
 -- | Insert into Isabelle `MList`.
 --
@@ -67,6 +68,8 @@ insert a b ((x, y) : z) =
       else (x, b) : z
 
 
+{-# ANN delete "HLint: ignore Use guards" #-}
+
 -- | Delete from Isabelle `MList`.
 --
 -- @
@@ -89,6 +92,8 @@ delete a ((x, y) : z) =
       else (x, y) : z
 
 
+{-# ANN lookup "HLint: ignore Use guards" #-}
+
 -- | Lookup in Isabelle `MList`.
 --
 -- @
@@ -110,6 +115,8 @@ lookup a ((x, y) : z) =
       then lookup a z
       else Nothing
 
+
+{-# ANN unionWith "HLint: ignore Use guards" #-}
 
 -- | Union with Isabelle `MList`.
 --
@@ -191,7 +198,7 @@ checkNull = property $ do
       mlist <- arbitraryMList
       assocmap <- AM.fromList <$> shuffle mlist
       pure (mlist, assocmap)
-  forAll gen 
+  forAll gen
     $ \(mlist, assocmap) -> (== empty) mlist == AM.null assocmap
 
 
@@ -203,7 +210,7 @@ checkSingleton = property $ do
       a <- arbitrary :: Gen Integer
       b <- arbitrary :: Gen [()]
       pure (a, b)
-  forAll gen 
+  forAll gen
     $ \(a, b) -> [(a, b)] `equivalent` AM.singleton a b
 
 
@@ -217,7 +224,7 @@ checkInsert = property $ do
       a <- arbitrary
       b <- arbitrary
       pure (mlist, assocmap, a, b)
-  forAll gen 
+  forAll gen
     $ \(mlist, assocmap, a, b) -> insert a b mlist `equivalent` AM.insert a b assocmap
 
 
@@ -230,7 +237,7 @@ checkDelete = property $ do
       assocmap <- AM.fromList <$> shuffle mlist
       a <- arbitrary
       pure (mlist, assocmap, a)
-  forAll gen 
+  forAll gen
     $ \(mlist, assocmap, a) -> delete a mlist `equivalent` AM.delete a assocmap
 
 
@@ -243,7 +250,7 @@ checkLookup = property $ do
       assocmap <- AM.fromList <$> shuffle mlist
       a <- arbitrary
       pure (mlist, assocmap, a)
-  forAll gen 
+  forAll gen
     $ \(mlist, assocmap, a) -> lookup a mlist == AM.lookup a assocmap
 
 
@@ -256,7 +263,7 @@ checkMember = property $ do
       assocmap <- AM.fromList <$> shuffle mlist
       a <- arbitrary
       pure (mlist, assocmap, a)
-  forAll gen 
+  forAll gen
     $ \(mlist, assocmap, a) -> isJust (lookup a mlist) == AM.member a assocmap
 
 
@@ -271,14 +278,14 @@ checkUnionWith = property $ do
       assocmap' <- AM.fromList <$> shuffle mlist'
       function <- elements ["concat", "shortest", "longest", "first", "second"]
       pure (mlist, assocmap, mlist', assocmap', function)
-  forAll gen 
+  forAll gen
     $ \(mlist, assocmap, mlist', assocmap', function) ->
       let
         f = case function of
               "shortest" -> \x y -> if length x < length y then x else y
               "longest"  -> \x y -> if length x > length y then x else y
-              "first"    -> \x _ -> x
-              "second"   -> \_ y -> y
+              "first"    -> const
+              "second"   -> const id
               _          -> (<>)
       in
         unionWith f mlist mlist' `equivalent` AM.unionWith f assocmap assocmap'
@@ -294,5 +301,5 @@ checkFindWithDefault = property $ do
       a <- arbitrary
       b <- arbitrary
       pure (mlist, assocmap, a, b)
-  forAll gen 
+  forAll gen
     $ \(mlist, assocmap, a, b) -> findWithDefault b a mlist == fromMaybe b (AM.lookup a assocmap)
