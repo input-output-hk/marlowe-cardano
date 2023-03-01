@@ -190,7 +190,7 @@ tests referencePaths =
               -- DO NOT ALTER THE FOLLOWING VALUE UNLESS YOU ARE COMMITTING
               -- APPROVED CHANGES TO MARLOWE'S SEMANTICS VALIDATOR. THIS HASH
               -- HAS IMPLICATIONS FOR VERSIONING, AUDIT, AND CONTRACT DISCOVERY.
-              "b87640d163345b38ebf34192bcb62aab66e1dbc9d57a6f612666fcf0"
+              "854b9e5196f0d7a787aec8d5359a65fb13666b075f973e25dad24d3e"
         ]
     , testGroup "Payout Validator"
         [
