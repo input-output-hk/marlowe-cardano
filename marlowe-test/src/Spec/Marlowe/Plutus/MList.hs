@@ -175,22 +175,22 @@ tests =
     ]
 
 
--- | Generate a sorted `MList` with no duplicates.
+-- | Generate a sorted `MList` with no duplicate keys.
 arbitraryMList :: Gen (MList Integer [()])
 arbitraryMList = nubBy ((==) `on` fst) . sortBy (compare `on` fst) <$> arbitrary
 
 
--- | Compare an `MList` to an `AssocMap`.
+-- | Compare an `MList` to an `AssocMap`, ignoring ordering.
 equivalent :: Ord a => Eq b => MList a b -> AM.Map a b -> Bool
 equivalent mlist assocmap = mlist == sortBy (compare `on` fst) (AM.toList assocmap)
 
 
--- | Compare `empty` for `MList` and `AssocMap`.
+-- | Compare `empty` for `MList` and `AssocMap`, provided the `MList` is sorted and neither contains duplicate keys.
 checkEmpty :: Assertion
 checkEmpty = assertBool "Empty MList and AssocMap" $ (empty :: MList [()] Integer) `equivalent` AM.empty
 
 
--- | Compare `empty` for `MList` and `AssocMap`.
+-- | Compare `null` for `MList` and `AssocMap`, provided the `MList` is sorted and neither contains duplicate keys.
 checkNull :: Property
 checkNull = property $ do
   let
@@ -202,7 +202,7 @@ checkNull = property $ do
     $ \(mlist, assocmap) -> (== empty) mlist == AM.null assocmap
 
 
--- | Compare `empty` for `MList` and `AssocMap`.
+-- | Compare `singleton` for `MList` and `AssocMap`, provided the `MList` is sorted and neither contains duplicate keys.
 checkSingleton :: Property
 checkSingleton = property $ do
   let
@@ -214,7 +214,7 @@ checkSingleton = property $ do
     $ \(a, b) -> [(a, b)] `equivalent` AM.singleton a b
 
 
--- | Compare `empty` for `MList` and `AssocMap`.
+-- | Compare `insert` for `MList` and `AssocMap`, provided the `MList` is sorted and neither contains duplicate keys.
 checkInsert :: Property
 checkInsert = property $ do
   let
@@ -228,7 +228,7 @@ checkInsert = property $ do
     $ \(mlist, assocmap, a, b) -> insert a b mlist `equivalent` AM.insert a b assocmap
 
 
--- | Compare `empty` for `MList` and `AssocMap`.
+-- | Compare `delete` for `MList` and `AssocMap`, provided the `MList` is sorted and neither contains duplicate keys.
 checkDelete :: Property
 checkDelete = property $ do
   let
@@ -241,7 +241,7 @@ checkDelete = property $ do
     $ \(mlist, assocmap, a) -> delete a mlist `equivalent` AM.delete a assocmap
 
 
--- | Compare `empty` for `MList` and `AssocMap`.
+-- | Compare `lookup` for `MList` and `AssocMap`, provided the `MList` is sorted and neither contains duplicate keys.
 checkLookup :: Property
 checkLookup = property $ do
   let
@@ -254,7 +254,7 @@ checkLookup = property $ do
     $ \(mlist, assocmap, a) -> lookup a mlist == AM.lookup a assocmap
 
 
--- | Compare `empty` for `MList` and `AssocMap`.
+-- | Compare `member` for `MList` and `AssocMap`, provided the `MList` is sorted and neither contains duplicate keys.
 checkMember :: Property
 checkMember = property $ do
   let
@@ -267,7 +267,7 @@ checkMember = property $ do
     $ \(mlist, assocmap, a) -> isJust (lookup a mlist) == AM.member a assocmap
 
 
--- | Compare `empty` for `MList` and `AssocMap`.
+-- | Compare `unionWith` for `MList` and `AssocMap`, provided the `MList` is sorted and neither contains duplicate keys.
 checkUnionWith :: Property
 checkUnionWith = property $ do
   let
@@ -291,7 +291,7 @@ checkUnionWith = property $ do
         unionWith f mlist mlist' `equivalent` AM.unionWith f assocmap assocmap'
 
 
--- | Compare `empty` for `MList` and `AssocMap`.
+-- | Compare `findWithDefault` for `MList` and `AssocMap`, provided the `MList` is sorted and neither contains duplicate keys.
 checkFindWithDefault :: Property
 checkFindWithDefault = property $ do
   let
