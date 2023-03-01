@@ -22,7 +22,6 @@ module Spec.Marlowe.Plutus.Specification
     tests
   ) where
 
-
 import Control.Lens (use, uses, (%=), (<>=), (<~), (^.))
 import Control.Monad.State (lift)
 import Data.Bifunctor (bimap)
@@ -105,19 +104,7 @@ import Spec.Marlowe.Reference (ReferencePath)
 import Spec.Marlowe.Semantics.Arbitrary (arbitraryPositiveInteger)
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.QuickCheck
-  ( Arbitrary(..)
-  , Gen
-  , Property
-  , chooseInteger
-  , elements
-  , forAll
-  , listOf1
-  , oneof
-  , property
-  , suchThat
-  , testProperty
-  , (===)
-  )
+  (Arbitrary(..), Gen, Property, chooseInteger, elements, forAll, listOf1, oneof, property, suchThat, testProperty, (===))
 
 import qualified Language.Marlowe.Core.V1.Semantics as M (MarloweData(marloweParams))
 import qualified Language.Marlowe.Core.V1.Semantics.Types as M (Party(Address), State(..))
@@ -164,7 +151,7 @@ tests referencePaths =
             ]
         , testGroup "Constraint 6. Output value to script"
             [
-              testProperty "Invalid mismatch between expected and actual output to script" $ checkValueOutput referencePaths
+              testProperty "Invalid mismatch between state and script output's value" $ checkValueOutput referencePaths
             ]
         , testGroup "Constraint 7. Input state"
             [
