@@ -27,6 +27,7 @@ import Test.Tasty.QuickCheck (Arbitrary(..), Gen, Property, elements, forAll, pr
 
 import qualified PlutusTx.AssocMap as AM
   (Map, delete, empty, fromList, insert, lookup, member, null, singleton, toList, unionWith)
+import qualified PlutusTx.Eq as P (Eq)
 
 
 -- | An association list in Isabelle.
@@ -175,19 +176,30 @@ tests =
     ]
 
 
+-- | Key type for testing.
+type Key = Integer
+
+
+-- | Value type for testing.
+type Value = [()]
+
+
 -- | Generate a sorted `MList` with no duplicate keys.
-arbitraryMList :: Gen (MList Integer [()])
+arbitraryMList :: Gen (MList Key Value)
 arbitraryMList = nubBy ((==) `on` fst) . sortBy (compare `on` fst) <$> arbitrary
 
 
 -- | Compare an `MList` to an `AssocMap`, ignoring ordering.
-equivalent :: Ord a => Eq b => MList a b -> AM.Map a b -> Bool
-equivalent mlist assocmap = mlist == sortBy (compare `on` fst) (AM.toList assocmap)
+equivalent :: Ord a => P.Eq a => Eq b => MList a b -> AM.Map a b -> Bool
+equivalent mlist assocmap =
+  mlist == sortBy (compare `on` fst) (AM.toList assocmap)
+    && and [AM.lookup a assocmap == Just b | (a, b) <- mlist]
+    && and [lookup a mlist == Just b | (a, b) <- AM.toList assocmap]
 
 
 -- | Compare `empty` for `MList` and `AssocMap`, provided the `MList` is sorted and neither contains duplicate keys.
 checkEmpty :: Assertion
-checkEmpty = assertBool "Empty MList and AssocMap" $ (empty :: MList [()] Integer) `equivalent` AM.empty
+checkEmpty = assertBool "Empty MList and AssocMap" $ (empty :: MList Key Value) `equivalent` AM.empty
 
 
 -- | Compare `null` for `MList` and `AssocMap`, provided the `MList` is sorted and neither contains duplicate keys.
@@ -207,8 +219,8 @@ checkSingleton :: Property
 checkSingleton = property $ do
   let
     gen = do
-      a <- arbitrary :: Gen Integer
-      b <- arbitrary :: Gen [()]
+      a <- arbitrary :: Gen Key
+      b <- arbitrary :: Gen Value
       pure (a, b)
   forAll gen
     $ \(a, b) -> [(a, b)] `equivalent` AM.singleton a b
