@@ -78,7 +78,7 @@ getHeaders Range{..} = do
         ORDER BY createTxOut.slotNo DESC, createTxOut.txId DESC, createTxOut.txIx DESC
         OFFSET ($1 :: int) ROWS
         FETCH NEXT ($2 :: int) ROWS ONLY
-      |] (foldPage rangeLimit rangeDirection totalCount)
+      |] (foldPage decodeContractId decodeContractHeader rangeLimit rangeDirection totalCount)
 
     Ascending ->
       [foldStatement|
@@ -100,7 +100,7 @@ getHeaders Range{..} = do
         ORDER BY block.slotNo, createTxOut.txId, createTxOut.txIx
         OFFSET ($1 :: int) ROWS
         FETCH NEXT ($2 :: int) ROWS ONLY
-      |] (foldPage rangeLimit rangeDirection totalCount)
+      |] (foldPage decodeContractId decodeContractHeader rangeLimit rangeDirection totalCount)
   where
     -- Load one extra item so we can detect when we've hit the end
     params = (fromIntegral rangeOffset, fromIntegral rangeLimit + 1)
@@ -139,7 +139,7 @@ getHeadersFrom totalCount (pivotSlot, pivotTxId, pivotTxIx) offset limit = T.sta
       ORDER BY createTxOut.slotNo DESC, createTxOut.txId DESC, createTxOut.txIx DESC
       OFFSET ($4 :: int) ROWS
       FETCH NEXT ($5 :: int) ROWS ONLY
-    |] (foldPage limit Descending totalCount)
+    |] (foldPage decodeContractId decodeContractHeader limit Descending totalCount)
 
   Ascending ->
     [foldStatement|
@@ -167,7 +167,7 @@ getHeadersFrom totalCount (pivotSlot, pivotTxId, pivotTxIx) offset limit = T.sta
       ORDER BY createTxOut.slotNo, createTxOut.txId, createTxOut.txIx
       OFFSET ($4 :: int) ROWS
       FETCH NEXT ($5 :: int) ROWS ONLY
-    |] (foldPage limit Ascending totalCount)
+    |] (foldPage decodeContractId decodeContractHeader limit Ascending totalCount)
   where
     -- Load one extra item so we can detect when we've hit the end
     params = (pivotSlot, pivotTxId, pivotTxIx, fromIntegral offset, fromIntegral limit + 1)
@@ -184,14 +184,14 @@ type ResultRow =
   , ByteString
   )
 
-foldPage :: Int -> Order -> Int -> Fold ResultRow (Page ContractId ContractHeader)
-foldPage limit direction totalCount = Page
-  <$> foldItems limit
-  <*> foldNextRange limit direction
+foldPage :: (row -> id) -> (row -> item) -> Int -> Order -> Int -> Fold row (Page id item)
+foldPage decodeId decodeItem limit direction totalCount = Page
+  <$> foldItems decodeItem limit
+  <*> foldNextRange decodeId limit direction
   <*> pure totalCount
 
-foldItems :: Int -> Fold ResultRow [ContractHeader]
-foldItems limit = fmap decodeContractHeader . take limit <$> Fold.list
+foldItems :: (row -> item) -> Int -> Fold row [item]
+foldItems decodeItem limit = fmap decodeItem . take limit <$> Fold.list
 
 decodeContractHeader :: ResultRow -> ContractHeader
 decodeContractHeader
@@ -222,13 +222,16 @@ decodeContractHeader
         (fromIntegral blockNo)
     }
 
-foldNextRange :: Int -> Order -> Fold ResultRow (Maybe (Range ContractId))
-foldNextRange rangeLimit rangeDirection = do
+foldNextRange :: (row -> id) -> Int -> Order -> Fold row (Maybe (Range id))
+foldNextRange decodeId rangeLimit rangeDirection = do
   mNext <- Fold.index rangeLimit
   pure do
-    (_, _, _, txId, txIx, _, _, _, _) <- mNext
+    row <- mNext
     pure Range
-      { rangeStart = Just $ ContractId (TxOutRef (TxId txId) (fromIntegral txIx))
+      { rangeStart = Just $ decodeId row
       , rangeOffset = 0
       , ..
       }
+
+decodeContractId :: ResultRow -> ContractId
+decodeContractId (_, _, _, txId, txIx, _, _, _, _) = ContractId (TxOutRef (TxId txId) (fromIntegral txIx))

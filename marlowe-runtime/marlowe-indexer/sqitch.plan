@@ -7,3 +7,4 @@ block-cols [schema] 2023-01-30T21:31:32Z Jamie Bertram <jamie.bertram@iohk.io> #
 rollback [schema] 2023-02-01T13:09:33Z Jamie Bertram <jamie.bertram@iohk.io> # Moves rollback info to a separate table for safety.
 withdrawalCreateNotNull [block-cols] 2023-02-03T19:58:45Z Jamie Bertram <jamie.bertram@iohk.io> # Adds NOT NULL constraints to withdrawalTxIn createTx columns.
 fixPayouts [schema] 2023-02-03T20:02:36Z Jamie Bertram <jamie.bertram@iohk.io> # Fixes payout columns.
+indexRoleCurrency [schema] 2023-02-28T21:16:41Z Jamie Bertram <jamie.bertram@iohk.io> # Fixes adds index to role currency columns.

@@ -23,7 +23,7 @@ marloweQueryServer
   -> (TxId -> m (Maybe SomeTransaction))
   -> (ContractId -> m (Maybe SomeTransactions))
   -> (TxId -> m (Maybe Withdrawal))
-  -> (ContractId -> m (Maybe [Withdrawal]))
+  -> (WithdrawalFilter -> Range TxId -> m (Maybe (Page TxId Withdrawal)))
   -> MarloweQueryServer m ()
 marloweQueryServer getContractHeaders getContractState getTransaction getTransactions getWithdrawal getWithdrawals = go
   where
@@ -39,5 +39,5 @@ marloweQueryServer getContractHeaders getContractState getTransaction getTransac
       ReqTransaction txId -> getTransaction txId
       ReqTransactions contractId -> getTransactions contractId
       ReqWithdrawal txId -> getWithdrawal txId
-      ReqWithdrawals contractId -> getWithdrawals contractId
+      ReqWithdrawals wFilter range -> getWithdrawals wFilter range
       ReqBoth a b -> concurrently (serviceRequest a) (serviceRequest b)
