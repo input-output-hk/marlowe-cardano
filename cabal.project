@@ -9,10 +9,15 @@ repository cardano-haskell-packages
     c00aae8461a256275598500ea0e187588c35a5d5d7454fb57eac18d9edb86a56
     d4a35cd3121aa00d18544bb0ac01c3e1691d618f462c46129271bccf39f7e8ee
 
--- run `nix flake lock --update-input hackage` after updating this index-state.
-index-state: 2022-10-29T00:00:00Z
--- run `nix flake lock --update-input CHaP` after updating this index-state.
-index-state: cardano-haskell-packages 2022-11-17T04:56:26Z
+-- run `nix flake lock --update-input hackage` after updating the hackage index-state.
+-- run `nix flake lock --update-input CHaP` after updating the cardano-haskell-packages index-state.
+-- We duplicate the hackage index-state first for haskell.nix, even though cabal ignores it.
+-- This must always match the hackage index-state on the next line.
+-- See https://github.com/input-output-hk/haskell.nix/issues/1869#issuecomment-1449272480
+index-state: 2023-02-28T00:00:00Z
+index-state:
+  , hackage.haskell.org      2023-02-28T00:00:00Z
+  , cardano-haskell-packages 2022-11-17T04:56:26Z
 
 -- with-compiler: ghc-8.10.7
 
