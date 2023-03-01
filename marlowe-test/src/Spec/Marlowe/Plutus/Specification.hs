@@ -189,7 +189,7 @@ tests =
               -- DO NOT ALTER THE FOLLOWING VALUE UNLESS YOU ARE COMMITTING
               -- APPROVED CHANGES TO MARLOWE'S SEMANTICS VALIDATOR. THIS HASH
               -- HAS IMPLICATIONS FOR VERSIONING, AUDIT, AND CONTRACT DISCOVERY.
-              "6a9391d6aa51af28dd876ebb5565b69d1e83e5ac7861506bd29b56b0"
+              "854b9e5196f0d7a787aec8d5359a65fb13666b075f973e25dad24d3e"
         ]
     , testGroup "Payout Validator"
         [
