@@ -103,7 +103,8 @@ Transaction failures occur in either phase 1 validation (ledger rules) or phase 
     *   `"b"`: All accounts must have positive balances.
     *   `"c"`: A transaction containing a contract that closes may not also include the creation of a new contract.
     *   `"d"`: The datum or value at the script output does not match the contract's transition.
-    *   `"o"`: Outputing to two Marlowe scripts with the same address in the same transaction is forbidden.
+    *   `"f"`: The value in the script's output UTxO does not match the value in its internal state.
+    *   `"o"`: Outputting to two Marlowe scripts with the same address in the same transaction is forbidden.
     *   `"p"`: Insufficient value is paid to a public-key address.
     *   `"r"`: Insufficient value is paid in a role payout. This may occur because the role payout was adjusted to satisfy the minimum-ADA ledger rule, despite that adjustment violating the terms of the contract.
     *   `"s"`: A required public-key signature was not present in the transaction.
