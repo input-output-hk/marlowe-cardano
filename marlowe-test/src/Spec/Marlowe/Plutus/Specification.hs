@@ -159,7 +159,7 @@ tests referencePaths =
             ]
         , testGroup "Constraint 9. Marlowe parameters"
             [
-              testProperty "Invalid alteration of parameters." $ checkParamsOutput referencePaths
+              testProperty "Invalid alteration of parameters" $ checkParamsOutput referencePaths
             ]
         , testGroup "Constraint 10. Output state"
             [
