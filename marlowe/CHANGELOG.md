@@ -19,3 +19,8 @@ Based on audit findings, we corrected the accounting equation so that negative d
 ## SCP-5129: Fixed `(==)` for `ReduceAssertionFailed`
 
 Based on audit finding, we corrected `instance Eq ReduceWarning` so that when a comparison of `ReduceAssertionFailed` to itself yields `True`.
+
+
+## SCP-5128: Rationale for multiple payments to address parties
+
+Based on audit finding, we added detailed comment in the Marlowe semantics validator about why multiple outputs to an address are allowed.
