@@ -15,9 +15,10 @@ import Data.Set (Set)
 import Data.Type.Equality (testEquality, type (:~:)(Refl))
 import GHC.Generics (Generic)
 import GHC.Show (showCommaSpace, showSpace)
-import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, PolicyId, TokenName, TransactionMetadata, TxId, TxOutRef)
+import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, PolicyId, TokenName, TxId, TxOutRef)
 import Language.Marlowe.Runtime.Core.Api
   ( ContractId
+  , MarloweTransactionMetadata
   , MarloweVersion(..)
   , MarloweVersionTag(..)
   , Payout
@@ -350,7 +351,7 @@ instance ToJSON SomeTransactions where
 data ContractState v = ContractState
   { contractId :: ContractId
   , roleTokenMintingPolicyId :: PolicyId
-  , metadata :: TransactionMetadata
+  , metadata :: MarloweTransactionMetadata
   , initialBlock :: BlockHeader
   , initialOutput :: TransactionScriptOutput v
   , latestBlock :: BlockHeader

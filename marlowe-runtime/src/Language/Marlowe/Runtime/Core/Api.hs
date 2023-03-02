@@ -11,14 +11,19 @@
 module Language.Marlowe.Runtime.Core.Api
   where
 
-import Data.Aeson (FromJSON(..), Result(..), ToJSON(..), ToJSONKey(toJSONKey), Value(..), eitherDecode, encode)
+import Control.Monad (zipWithM, (<=<))
+import Data.Aeson
+  (FromJSON(..), FromJSONKey, Result(..), ToJSON(..), ToJSONKey(toJSONKey), Value(..), eitherDecode, encode)
 import Data.Aeson.Types (Parser, parse, parseFail, toJSONKeyText)
+import Data.Bifunctor (first)
 import Data.Binary (Binary(..), Get, Put)
 import Data.Binary.Get (getWord32be)
 import Data.Binary.Put (putWord32be)
 import Data.ByteString.Base16 (decodeBase16, encodeBase16)
+import Data.Either (fromRight)
 import Data.Map (Map)
-import Data.Maybe (fromMaybe)
+import qualified Data.Map as Map
+import Data.Maybe (catMaybes, fromMaybe)
 import Data.String (IsString)
 import Data.Text (Text)
 import qualified Data.Text as T
@@ -40,6 +45,7 @@ import Language.Marlowe.Runtime.ChainSync.Api
   , unPolicyId
   )
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
+import Numeric.Natural (Natural)
 import qualified Plutus.V1.Ledger.Api as Plutus
 import qualified Plutus.V1.Ledger.Value as Plutus
 
@@ -97,10 +103,134 @@ instance IsMarloweVersion 'V1 where
   type PayoutDatum 'V1 = Chain.AssetId
   marloweVersion = MarloweV1
 
+newtype MarloweMetadataTag = MarloweMetadataTag { getMarloweMetadataTag :: Text }
+  deriving newtype (Show, Eq, Ord, IsString, FromJSON, ToJSON, Binary, ToJSONKey, FromJSONKey)
+
+-- | The standard metadata structure for Marlowe Contracts (metadata index 1564).
+-- | New versions should get new constructors here.
+data MarloweMetadata = MarloweMetadata
+  { tags :: Map MarloweMetadataTag (Maybe Chain.Metadata)
+  -- ^ custom metadata. The keys are indexed and searchable.
+  , continuations :: Maybe Text
+  -- ^ A URI that points to the continuation map for this contract.
+  }
+  deriving stock (Eq, Ord, Show, Generic)
+  deriving anyclass (Binary, ToJSON)
+
+-- | A wrapper around `Chain.TransactionMetadata` that has had the
+-- MarloweMetadata extracted.
+data MarloweTransactionMetadata = MarloweTransactionMetadata
+  { marloweMetadata :: Maybe MarloweMetadata
+  -- ^ The Marlowe metadata (key 1564), if present.
+  , transactionMetadata :: Chain.TransactionMetadata
+  -- ^ The raw underlying transaction metadata.
+  }
+  deriving stock (Eq, Ord, Show, Generic)
+  deriving anyclass (Binary, ToJSON)
+
+emptyMarloweTransactionMetadata :: MarloweTransactionMetadata
+emptyMarloweTransactionMetadata = MarloweTransactionMetadata Nothing mempty
+
+data MetadataDecodeError
+  = ExpectedMap
+  | ExpectedList
+  | ExpectedNumber
+  | ExpectedText
+  | ExpectedBytes
+  | ErrorInMap Chain.Metadata MetadataDecodeError
+  | ErrorInList Natural MetadataDecodeError
+  | MapIndexNotFound Natural
+  | ListIndexNotFound Natural
+  | InvalidValue Text
+  | OneOf MetadataDecodeError MetadataDecodeError
+
+encodeMarloweTransactionMetadata :: MarloweTransactionMetadata -> Chain.TransactionMetadata
+encodeMarloweTransactionMetadata MarloweTransactionMetadata{..} = case marloweMetadata of
+  Nothing -> transactionMetadata
+  Just m -> Chain.TransactionMetadata
+    $ Map.insert 1564 (encodeMarloweMetadata m)
+    $ Chain.unTransactionMetadata transactionMetadata
+
+decodeMarloweTransactionMetadataLenient :: Chain.TransactionMetadata -> MarloweTransactionMetadata
+decodeMarloweTransactionMetadataLenient metadata =
+  fromRight (MarloweTransactionMetadata Nothing metadata) $ decodeMarloweTransactionMetadata metadata
+
+decodeMarloweTransactionMetadata :: Chain.TransactionMetadata -> Either MetadataDecodeError MarloweTransactionMetadata
+decodeMarloweTransactionMetadata metadata = MarloweTransactionMetadata
+  <$> traverse decodeMarloweMetadata (Map.lookup 1564 $ Chain.unTransactionMetadata metadata)
+  <*> pure metadata
+
+encodeMarloweMetadata :: MarloweMetadata -> Chain.Metadata
+encodeMarloweMetadata MarloweMetadata{..} = Chain.MetadataList $ catMaybes
+  [ Just $ Chain.MetadataNumber 1 -- version
+  , Just $ Chain.MetadataList $ uncurry encodeMetadataTag <$> Map.toList tags-- tags
+  , Chain.MetadataText <$> continuations -- continuations
+  ]
+
+encodeMetadataTag :: MarloweMetadataTag -> Maybe Chain.Metadata -> Chain.Metadata
+encodeMetadataTag (MarloweMetadataTag tag) = \case
+  Nothing -> Chain.MetadataText tag
+  Just payload -> Chain.MetadataList [ Chain.MetadataText tag, payload ]
+
+decodeMarloweMetadata :: Chain.Metadata -> Either MetadataDecodeError MarloweMetadata
+decodeMarloweMetadata m = do
+  decoder <- flip (withMetadataListIx 0) m $ withMetadataNumber \case
+    1 -> pure decodeMarloweMetadataV1
+    v -> Left $ InvalidValue $ T.pack $ "Unknown contract metadata version " <> show v
+  decoder m
+
+decodeMarloweMetadataV1 :: Chain.Metadata -> Either MetadataDecodeError MarloweMetadata
+decodeMarloweMetadataV1 m = MarloweMetadata
+  <$> withMetadataListIx 1 decodeMetadataTags m
+  <*> withMetadataListIxOptional 2 (withMetadataText pure) m
+
+decodeMetadataTags
+  :: Chain.Metadata
+  -> Either MetadataDecodeError (Map MarloweMetadataTag (Maybe Chain.Metadata))
+decodeMetadataTags = fmap Map.fromList . withMetadataList \case
+  Chain.MetadataList ms -> withMetadataTuple
+    (withMetadataText $ pure . MarloweMetadataTag)
+    (pure . Just )
+    (Chain.MetadataList ms)
+  Chain.MetadataText tag -> pure (MarloweMetadataTag tag, Nothing)
+  _ -> Left $ OneOf ExpectedList ExpectedText
+
+withMetadataNumber :: (Integer -> Either MetadataDecodeError a) -> Chain.Metadata -> Either MetadataDecodeError a
+withMetadataNumber f = \case
+  Chain.MetadataNumber i -> f i
+  _ -> Left ExpectedNumber
+
+withMetadataText :: (Text -> Either MetadataDecodeError a) -> Chain.Metadata -> Either MetadataDecodeError a
+withMetadataText f = \case
+  Chain.MetadataText i -> f i
+  _ -> Left ExpectedText
+
+withMetadataList :: (Chain.Metadata -> Either MetadataDecodeError a) -> Chain.Metadata -> Either MetadataDecodeError [a]
+withMetadataList f = \case
+  Chain.MetadataList ms -> zipWithM (\i -> first (ErrorInList i) . f) [0..] ms
+  _ -> Left ExpectedList
+
+withMetadataListIx :: Natural -> (Chain.Metadata -> Either MetadataDecodeError a) -> Chain.Metadata -> Either MetadataDecodeError a
+withMetadataListIx ix f = maybe (Left $ ListIndexNotFound ix) pure <=< withMetadataListIxOptional ix f
+
+withMetadataListIxOptional :: Natural -> (Chain.Metadata -> Either MetadataDecodeError a) -> Chain.Metadata -> Either MetadataDecodeError (Maybe a)
+withMetadataListIxOptional ix f = \case
+  Chain.MetadataList ms -> case drop (fromIntegral ix) ms of
+    [] -> pure Nothing
+    m : _ -> first (ErrorInList ix) $ Just <$> f m
+  _ -> Left ExpectedList
+
+withMetadataTuple
+  :: (Chain.Metadata -> Either MetadataDecodeError a)
+  -> (Chain.Metadata -> Either MetadataDecodeError b)
+  -> Chain.Metadata
+  -> Either MetadataDecodeError (a, b)
+withMetadataTuple f g m = (,) <$> withMetadataListIx 0 f m <*> withMetadataListIx 1 g m
+
 data Transaction v = Transaction
   { transactionId :: TxId
   , contractId :: ContractId
-  , metadata :: Chain.TransactionMetadata
+  , metadata :: MarloweTransactionMetadata
   , blockHeader :: BlockHeader
   , validityLowerBound :: UTCTime
   , validityUpperBound :: UTCTime

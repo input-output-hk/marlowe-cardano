@@ -23,7 +23,8 @@ import Hasql.TH (resultlessStatement)
 import qualified Hasql.Transaction as H
 import Language.Marlowe.Core.V1.Semantics (MarloweData(..), MarloweParams(..))
 import Language.Marlowe.Runtime.ChainSync.Api
-import Language.Marlowe.Runtime.Core.Api (ContractId(..), MarloweVersion(..), TransactionScriptOutput(..))
+import Language.Marlowe.Runtime.Core.Api
+  (ContractId(..), MarloweVersion(..), TransactionScriptOutput(..), transactionMetadata)
 import qualified Language.Marlowe.Runtime.Core.Api as Core
 import Language.Marlowe.Runtime.History.Api (CreateStep(..), SomeCreateStep(..))
 import Language.Marlowe.Runtime.Indexer.Types
@@ -286,7 +287,7 @@ createTxToTxOutRows blockHeader@BlockHeader{..} MarloweCreateTransaction{..} =
         , fromIntegral slotNo
         , unBlockHeaderHash headerHash
         , fromIntegral blockNo
-        , if Map.null (unTransactionMetadata metadata)
+        , if Map.null (unTransactionMetadata $ transactionMetadata metadata)
             then Nothing
             else Just $ toStrict $ runPut $ put metadata
         )
@@ -342,7 +343,7 @@ applyTxToRows (MarloweApplyInputsTransaction MarloweV1 UnspentContractOutput{..}
       , fromIntegral blockNo
       , utcToLocalTime utc validityLowerBound
       , utcToLocalTime utc validityUpperBound
-      , if Map.null (unTransactionMetadata metadata)
+      , if Map.null (unTransactionMetadata $ transactionMetadata metadata)
           then Nothing
           else Just $ toStrict $ runPut $ put metadata
       , inputTxId'

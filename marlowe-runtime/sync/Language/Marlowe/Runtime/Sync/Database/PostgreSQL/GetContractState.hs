@@ -29,13 +29,19 @@ import Language.Marlowe.Runtime.ChainSync.Api
   , PolicyId(..)
   , TokenName(TokenName)
   , Tokens(Tokens)
-  , TransactionMetadata(..)
   , TxId(..)
   , TxOutRef(..)
   , fromDatum
   )
 import Language.Marlowe.Runtime.Core.Api
-  (ContractId(..), MarloweVersion(..), MarloweVersionTag(..), Payout(..), TransactionScriptOutput(..))
+  ( ContractId(..)
+  , MarloweTransactionMetadata
+  , MarloweVersion(..)
+  , MarloweVersionTag(..)
+  , Payout(..)
+  , TransactionScriptOutput(..)
+  , decodeMarloweTransactionMetadataLenient
+  )
 import qualified Plutus.V2.Ledger.Api as PV2
 import Prelude hiding (init)
 
@@ -146,7 +152,7 @@ type CreateResultRow =
   , Vector Int64
   )
 
-decodeCreateResults :: CreateResultRow -> (ContractId, PolicyId, TransactionMetadata, BlockHeader, TransactionScriptOutput 'V1)
+decodeCreateResults :: CreateResultRow -> (ContractId, PolicyId, MarloweTransactionMetadata, BlockHeader, TransactionScriptOutput 'V1)
 decodeCreateResults row =
   ( decodeContractId txId txIx
   , PolicyId rolesCurrency
@@ -256,8 +262,8 @@ decodePayout row =
 decodeBinary :: Binary a => ByteString -> a
 decodeBinary = runGet get . fromStrict
 
-decodeMetadata :: Maybe ByteString -> TransactionMetadata
-decodeMetadata = maybe mempty decodeBinary
+decodeMetadata :: Maybe ByteString -> MarloweTransactionMetadata
+decodeMetadata = decodeMarloweTransactionMetadataLenient . maybe mempty decodeBinary
 
 decodeContractId :: ByteString -> Int16 -> ContractId
 decodeContractId = fmap ContractId . decodeTxOutRef

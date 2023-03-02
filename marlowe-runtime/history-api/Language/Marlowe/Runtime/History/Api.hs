@@ -81,7 +81,7 @@ data FollowerStatus
 
 data CreateStep v = CreateStep
   { createOutput :: TransactionScriptOutput v
-  , metadata :: Chain.TransactionMetadata
+  , metadata :: MarloweTransactionMetadata
   , payoutValidatorHash :: ScriptHash
   } deriving (Generic)
 
@@ -138,7 +138,7 @@ instance Binary (ContractStep 'V1)
 instance ToJSON (ContractStep 'V1)
 
 extractCreation :: ContractId -> Chain.Transaction -> Either ExtractCreationError SomeCreateStep
-extractCreation contractId tx@Chain.Transaction{inputs, metadata} = do
+extractCreation contractId tx@Chain.Transaction{inputs, metadata = txMetadata} = do
   Chain.TransactionOutput{ assets, address = scriptAddress, datum = mdatum } <-
     getOutput (txIx $ unContractId contractId) tx
   marloweScriptHash <- getScriptHash scriptAddress
@@ -149,6 +149,7 @@ extractCreation contractId tx@Chain.Transaction{inputs, metadata} = do
   txDatum <- note NoCreateDatum mdatum
   datum <- note InvalidCreateDatum $ fromChainDatum version txDatum
   let createOutput = TransactionScriptOutput scriptAddress assets (unContractId contractId) datum
+  let metadata = decodeMarloweTransactionMetadataLenient txMetadata
   pure $ SomeCreateStep version CreateStep{..}
 
 getScriptHash :: Chain.Address -> Either ExtractCreationError ScriptHash
@@ -223,7 +224,7 @@ extractMarloweTransaction version systemStart eraHistory contractId scriptAddres
   pure Transaction
     { transactionId
     , contractId
-    , metadata
+    , metadata = decodeMarloweTransactionMetadataLenient metadata
     , blockHeader
     , validityLowerBound
     , validityUpperBound
