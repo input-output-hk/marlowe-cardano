@@ -38,9 +38,14 @@ instance Arbitrary Web.WithdrawalHeader where
     <*> arbitrary
     <*> arbitrary
 
+instance Arbitrary Web.MarloweMetadata where
+  arbitrary = Web.MarloweMetadata <$> arbitrary <*> arbitrary
+  shrink = genericShrink
+
 instance Arbitrary Web.ContractHeader where
   arbitrary = Web.ContractHeader
     <$> arbitrary
+    <*> arbitrary
     <*> arbitrary
     <*> arbitrary
     <*> arbitrary
@@ -55,10 +60,12 @@ instance Arbitrary Web.TxHeader where
     <*> arbitrary
     <*> arbitrary
     <*> arbitrary
+    <*> arbitrary
 
 instance Arbitrary Web.ContractState where
   arbitrary = Web.ContractState
     <$> arbitrary
+    <*> arbitrary
     <*> arbitrary
     <*> arbitrary
     <*> arbitrary
@@ -99,6 +106,7 @@ instance Arbitrary Web.Tx where
     <*> arbitrary
     <*> arbitrary
     <*> arbitrary
+    <*> arbitrary
     -- size of 6 will result in a 1-layer deep contract being generated (this is
     -- all we care about for the purposes of schema checking).
     <*> resize 6 arbitrary
@@ -117,6 +125,7 @@ instance Arbitrary Web.PostContractsRequest where
     <$> arbitrary
     <*> arbitrary
     <*> arbitrary
+    <*> arbitrary
     -- size of 6 will result in a 1-layer deep contract being generated (this is
     -- all we care about for the purposes of schema checking).
     <*> resize 6 arbitrary
@@ -126,6 +135,7 @@ instance Arbitrary Web.PostContractsRequest where
 instance Arbitrary Web.PostTransactionsRequest where
   arbitrary = Web.PostTransactionsRequest
     <$> arbitrary
+    <*> arbitrary
     <*> arbitrary
     <*> arbitrary
     <*> arbitrary

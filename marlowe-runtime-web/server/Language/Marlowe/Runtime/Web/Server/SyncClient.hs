@@ -16,7 +16,7 @@ import Language.Marlowe.Protocol.Client (MarloweClient(..))
 import Language.Marlowe.Protocol.Query.Client
   (getContractHeaders, getContractState, getTransaction, getTransactions, getWithdrawal, getWithdrawals)
 import Language.Marlowe.Protocol.Query.Types
-  (SomeContractState, SomeTransaction(..), SomeTransactions(..), Withdrawal, WithdrawalFilter)
+  (ContractFilter, SomeContractState, SomeTransaction(..), SomeTransactions(..), Withdrawal, WithdrawalFilter)
 import qualified Language.Marlowe.Protocol.Query.Types as Query
 import Language.Marlowe.Runtime.ChainSync.Api (TxId)
 import Language.Marlowe.Runtime.Core.Api (ContractId, MarloweVersion(MarloweV1), MarloweVersionTag(..), Transaction(..))
@@ -37,7 +37,8 @@ data SyncClientDependencies = SyncClientDependencies
 
 -- | Signature for a delegate that loads a list of contract headers.
 type LoadContractHeaders m
-   = Query.Range ContractId
+   = ContractFilter
+  -> Query.Range ContractId
   -> m (Maybe (Query.Page ContractId ContractHeader)) -- ^ Nothing if the initial ID is not found
 
 -- | Signature for a delegate that loads a list of contract headers.
@@ -84,7 +85,7 @@ data SyncClient = SyncClient
 
 syncClient :: Component IO SyncClientDependencies SyncClient
 syncClient = arr \SyncClientDependencies{..} -> SyncClient
-  { loadContractHeaders = runSomeConnector connector . RunMarloweQueryClient . getContractHeaders
+  { loadContractHeaders = \cFilter -> runSomeConnector connector . RunMarloweQueryClient . getContractHeaders cFilter
   , loadContract = \contractId -> runSomeConnector connector $ RunMarloweQueryClient do
       result <- getContractState contractId
       case result of

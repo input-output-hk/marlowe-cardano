@@ -18,9 +18,11 @@ import Data.Foldable (traverse_)
 import qualified Data.Map as Map
 import Data.Maybe (fromMaybe)
 import qualified Data.Set as Set
-import Language.Marlowe.Protocol.Query.Types (Page(..))
+import Data.Text (Text)
+import Language.Marlowe.Protocol.Query.Types (ContractFilter(..), Page(..))
 import Language.Marlowe.Runtime.ChainSync.Api (Lovelace(..))
-import Language.Marlowe.Runtime.Core.Api (MarloweTransactionMetadata(..), MarloweVersion(..), SomeMarloweVersion(..))
+import Language.Marlowe.Runtime.Core.Api
+  (MarloweMetadataTag(..), MarloweTransactionMetadata(..), MarloweVersion(..), SomeMarloweVersion(..))
 import Language.Marlowe.Runtime.Transaction.Api (ContractCreated(..), WalletAddresses(..))
 import qualified Language.Marlowe.Runtime.Transaction.Api as Tx
 import Language.Marlowe.Runtime.Web hiding (Unsigned)
@@ -121,9 +123,11 @@ post eb req@PostContractsRequest{..} changeAddressDTO mAddresses mCollateralUtxo
 
 get
   :: EventBackend IO r ContractsSelector
+  -> [PolicyId]
+  -> [Text]
   -> Maybe (Ranges '["contractId"] GetContractsResponse)
   -> AppM r (PaginatedResponse '["contractId"] GetContractsResponse)
-get eb ranges = withEvent (hoistEventBackend liftIO eb) Get \ev -> do
+get eb roleCurrencies' tags' ranges = withEvent (hoistEventBackend liftIO eb) Get \ev -> do
   let
     range :: Range "contractId" TxOutRef
     range@Range{..} = fromMaybe (getDefaultRange (Proxy @ContractHeader)) $ extractRange =<< ranges
@@ -132,7 +136,9 @@ get eb ranges = withEvent (hoistEventBackend liftIO eb) Get \ev -> do
   addField ev $ Offset rangeOffset
   addField ev $ Order $ show rangeOrder
   range' <- maybe (throwError $ rangeNotSatisfiable' "Invalid range value") pure $ fromPaginationRange range
-  loadContractHeaders range' >>= \case
+  roleCurrencies <- Set.fromList <$> fromDTOThrow (badRequest' "Invalid role currency") roleCurrencies'
+  let tags = Set.fromList $ MarloweMetadataTag <$> tags'
+  loadContractHeaders ContractFilter{..} range' >>= \case
     Nothing -> throwError $ rangeNotSatisfiable' "Initial contract ID not found"
     Just Page{..} -> do
       let headers' = toDTO items

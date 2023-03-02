@@ -77,7 +77,9 @@ type WithdrawalsAPI = GetWithdrawalsAPI
                  :<|> Capture "withdrawalId" TxId :> WithdrawalAPI
 
 -- | GET /contracts sub-API
-type GetContractsAPI = PaginatedGet '["contractId"] GetContractsResponse
+type GetContractsAPI = QueryParams "roleCurrency" PolicyId
+                    :> QueryParams "tag" Text
+                    :> PaginatedGet '["contractId"] GetContractsResponse
 
 type GetContractsResponse = WithLink "transactions" (WithLink "contract" ContractHeader)
 

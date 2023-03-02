@@ -26,6 +26,7 @@ import Data.Maybe (fromJust)
 import Data.Proxy (Proxy(..))
 import Data.Set (Set)
 import qualified Data.Set as Set
+import Data.Text (Text)
 import GHC.TypeLits (KnownSymbol, symbolVal)
 import Language.Marlowe.Runtime.Web.API
   (API, GetContractsResponse, GetTransactionsResponse, GetWithdrawalsResponse, ListObject(..), api, retractLink)
@@ -51,12 +52,15 @@ healthcheck = do
   (True <$ healthcheck') `catchError` const (pure False)
 
 getContracts
-  :: Maybe (Range "contractId" TxOutRef)
+  :: Maybe (Set PolicyId)
+  -> Maybe (Set Text)
+  -> Maybe (Range "contractId" TxOutRef)
   -> ClientM (Page "contractId" ContractHeader)
-getContracts range = do
+getContracts roleCurrencies tags range = do
   let contractsClient :<|> _ = client
   let getContracts' :<|> _ = contractsClient
-  response <- getContracts' $ putRange <$> range
+  response <- getContracts' (foldMap Set.toList roleCurrencies) (foldMap Set.toList tags)
+    $ putRange <$> range
   totalCount <- reqHeaderValue $ lookupResponseHeader @"Total-Count" response
   nextRanges <- headerValue $ lookupResponseHeader @"Next-Range" response
   let ListObject items = getResponse response
