@@ -793,23 +793,24 @@ instance ToJSON Contract where
 instance Eq Party where
     {-# INLINABLE (==) #-}
     Address n1 a1 == Address n2 a2 = n1 == n2 && a1 == a2
+    Address _ _   == _             = False
     Role r1       == Role r2       = r1 == r2
-    _             == _             = False
+    Role _        == _             = False
 
 
 instance Eq ChoiceId where
     {-# INLINABLE (==) #-}
-    (ChoiceId n1 p1) == (ChoiceId n2 p2) = n1 == n2 && p1 == p2
+    ChoiceId n1 p1 == ChoiceId n2 p2 = n1 == n2 && p1 == p2
 
 
 instance Eq Token where
     {-# INLINABLE (==) #-}
-    (Token n1 p1) == (Token n2 p2) = n1 == n2 && p1 == p2
+    Token n1 p1 == Token n2 p2 = n1 == n2 && p1 == p2
 
 
 instance Eq ValueId where
     {-# INLINABLE (==) #-}
-    (ValueId n1) == (ValueId n2) = n1 == n2
+    ValueId n1 == ValueId n2 = n1 == n2
 
 
 instance Pretty ValueId where
@@ -819,78 +820,107 @@ instance Pretty ValueId where
 instance Eq Payee where
     {-# INLINABLE (==) #-}
     Account acc1 == Account acc2 = acc1 == acc2
+    Account _    == _            = False
     Party p1 == Party p2         = p1 == p2
-    _ == _                       = False
+    Party _  == _                = False
 
 instance Eq a => Eq (Value a) where
     {-# INLINABLE (==) #-}
-    AvailableMoney acc1 tok1 == AvailableMoney acc2 tok2 =
-        acc1 == acc2 && tok1 == tok2
+    AvailableMoney acc1 tok1 == AvailableMoney acc2 tok2 = acc1 == acc2 && tok1 == tok2
+    AvailableMoney _    _    == _                        = False
     Constant i1 == Constant i2 = i1 == i2
+    Constant _  == _           = False
     NegValue val1 == NegValue val2 = val1 == val2
+    NegValue _    == _             = False
     AddValue val1 val2 == AddValue val3 val4 = val1 == val3 && val2 == val4
+    AddValue _    _    == _                  = False
     SubValue val1 val2 == SubValue val3 val4 = val1 == val3 && val2 == val4
+    SubValue _    _    == _                  = False
     MulValue val1 val2 == MulValue val3 val4 = val1 == val3 && val2 == val4
+    MulValue _    _    == _                  = False
     DivValue val1 val2 == DivValue val3 val4 = val1 == val3 && val2 == val4
+    DivValue _    _    == _                  = False
     ChoiceValue cid1 == ChoiceValue cid2 = cid1 == cid2
+    ChoiceValue _    == _                = False
     TimeIntervalStart == TimeIntervalStart = True
-    TimeIntervalEnd   == TimeIntervalEnd   = True
+    TimeIntervalStart == _                 = False
+    TimeIntervalEnd == TimeIntervalEnd = True
+    TimeIntervalEnd == _               = False
     UseValue val1 == UseValue val2 = val1 == val2
-    Cond obs1 thn1 els1 == Cond obs2 thn2 els2 =  obs1 == obs2 && thn1 == thn2 && els1 == els2
-    _ == _ = False
+    UseValue _    == _             = False
+    Cond obs1 thn1 els1 == Cond obs2 thn2 els2 = obs1 == obs2 && thn1 == thn2 && els1 == els2
+    Cond _    _    _    == _                   = False
 
 
 instance Eq Observation where
     {-# INLINABLE (==) #-}
     AndObs o1l o2l == AndObs o1r o2r           = o1l == o1r && o2l == o2r
+    AndObs _   _   == _                        = False
     OrObs  o1l o2l == OrObs  o1r o2r           = o1l == o1r && o2l == o2r
+    OrObs  _   _   == _                        = False
     NotObs ol == NotObs or                     = ol == or
+    NotObs _  == _                             = False
     ChoseSomething cid1 == ChoseSomething cid2 = cid1 == cid2
+    ChoseSomething _    == _                   = False
     ValueGE v1l v2l == ValueGE v1r v2r         = v1l == v1r && v2l == v2r
+    ValueGE _   _   == _                       = False
     ValueGT v1l v2l == ValueGT v1r v2r         = v1l == v1r && v2l == v2r
+    ValueGT _   _   == _                       = False
     ValueLT v1l v2l == ValueLT v1r v2r         = v1l == v1r && v2l == v2r
+    ValueLT _   _   == _                       = False
     ValueLE v1l v2l == ValueLE v1r v2r         = v1l == v1r && v2l == v2r
+    ValueLE _   _   == _                       = False
     ValueEQ v1l v2l == ValueEQ v1r v2r         = v1l == v1r && v2l == v2r
+    ValueEQ _   _   == _                       = False
     TrueObs  == TrueObs                        = True
+    TrueObs  == _                              = False
     FalseObs == FalseObs                       = True
-    _ == _                                     = False
+    FalseObs == _                              = False
 
 
 instance Eq Action where
     {-# INLINABLE (==) #-}
     Deposit acc1 party1 tok1 val1 == Deposit acc2 party2 tok2 val2 =
         acc1 == acc2 && party1 == party2 && tok1 == tok2 && val1 == val2
+    Deposit _ _ _ _ == _ = False
     Choice cid1 bounds1 == Choice cid2 bounds2 =
         cid1 == cid2 && length bounds1 == length bounds2 && let
             bounds = zip bounds1 bounds2
             checkBound (Bound low1 high1, Bound low2 high2) = low1 == low2 && high1 == high2
             in all checkBound bounds
+    Choice _ _ == _ = False
     Notify obs1 == Notify obs2 = obs1 == obs2
-    _ == _ = False
+    Notify _ == _ = False
 
 
 instance Eq a => Eq (Case a) where
     {-# INLINABLE (==) #-}
     Case acl cl == Case acr cr                       = acl == acr && cl == cr
+    Case _   _  == _                                 = False
     MerkleizedCase acl bsl == MerkleizedCase acr bsr = acl == acr && bsl == bsr
-    _ == _                                           = False
+    MerkleizedCase _   _   == _                      = False
 
 
 instance Eq Contract where
     {-# INLINABLE (==) #-}
     Close == Close = True
+    Close == _ = False
     Pay acc1 payee1 tok1 value1 cont1 == Pay acc2 payee2 tok2 value2 cont2 =
         acc1 == acc2 && payee1 == payee2 && tok1 == tok2 && value1 == value2 && cont1 == cont2
+    Pay _ _ _ _ _ == _ = False
     If obs1 cont1 cont2 == If obs2 cont3 cont4 =
         obs1 == obs2 && cont1 == cont3 && cont2 == cont4
+    If _ _ _ == _ = False
     When cases1 timeout1 cont1 == When cases2 timeout2 cont2 =
         timeout1 == timeout2 && cont1 == cont2
         && length cases1 == length cases2
         && and (zipWith (==) cases1 cases2)
+    When _ _ _ == _ = False
     Let valId1 val1 cont1 == Let valId2 val2 cont2 =
         valId1 == valId2 && val1 == val2 && cont1 == cont2
+    Let _ _ _ == _ = False
     Assert obs1 cont1 == Assert obs2 cont2 = obs1 == obs2 && cont1 == cont2
-    _ == _ = False
+    Assert _ _  == _ = False
 
 
 instance Eq State where
