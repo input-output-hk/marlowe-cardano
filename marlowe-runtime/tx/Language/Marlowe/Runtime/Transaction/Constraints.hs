@@ -33,6 +33,7 @@ module Language.Marlowe.Runtime.Transaction.Constraints
 
 import qualified Cardano.Api as C
 import qualified Cardano.Api.Shelley as C
+import Control.Applicative ((<|>))
 import Control.Error (note)
 import Control.Monad (forM, unless, when)
 import Data.Aeson (ToJSON)
@@ -48,7 +49,6 @@ import Data.Maybe (mapMaybe, maybeToList)
 import Data.Monoid (First(..), getFirst)
 import Data.Set (Set)
 import qualified Data.Set as Set (fromAscList, member, null, singleton, toAscList, toList, union)
-import Data.Word (Word64)
 import GHC.Generics (Generic)
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
 import Language.Marlowe.Runtime.Cardano.Api
@@ -67,25 +67,19 @@ import Language.Marlowe.Runtime.Cardano.Api
   )
 import Language.Marlowe.Runtime.ChainSync.Api (lookupUTxO, toCardanoMetadata, toPlutusData, toUTxOTuple, toUTxOsList)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
-import Language.Marlowe.Runtime.Core.Api (MarloweVersionTag(..), TransactionScriptOutput(utxo))
+import Language.Marlowe.Runtime.Core.Api
+  ( MarloweTransactionMetadata(..)
+  , MarloweVersionTag(..)
+  , TransactionScriptOutput(utxo)
+  , emptyMarloweTransactionMetadata
+  , encodeMarloweTransactionMetadata
+  )
 import qualified Language.Marlowe.Runtime.Core.Api as Core
 import Language.Marlowe.Runtime.Core.ScriptRegistry (ReferenceScriptUtxo(..))
 import Language.Marlowe.Runtime.Transaction.Api (ConstraintError(..))
 import qualified Language.Marlowe.Scripts as V1
 import Ouroboros.Consensus.BlockchainTime (SystemStart)
 import Witherable (wither)
-
--- For debug logging
--- import Debug.Trace (trace)
-
--- | Quick-and-dirty logging for the pure code in this module
---   examples, before: foo bar baz
---             after:  foo (logD ("bar: " <> show bar) bar) baz
---             or:     foo (logD "some message" bar) baz
---   Be advised: logging in pure code with trace is subject to lazy eval and may never show up!
-logD :: String -> a -> a
--- logD = trace  -- Logging "active"
-logD = const id -- Logging "inactive", uncomment this to disable logging without removing log code
 
 -- | Describes a set of Marlowe-specific conditions that a transaction must satisfy.
 data TxConstraints v = TxConstraints
@@ -96,7 +90,7 @@ data TxConstraints v = TxConstraints
   , payToRoles :: Map (Core.PayoutDatum v) Chain.Assets
   , marloweOutputConstraints :: MarloweOutputConstraints v
   , signatureConstraints :: Set Chain.PaymentKeyHash
-  , metadataConstraints :: Map Word64 Chain.Metadata
+  , metadataConstraints :: Core.MarloweTransactionMetadata
   }
 
 deriving instance Show (TxConstraints 'V1)
@@ -268,10 +262,9 @@ requiresSignature pkh = mempty { signatureConstraints = Set.singleton pkh }
 -- | Require the transaction include the given metadata.
 --
 -- Requires that:
---   1. The given metadata is present in the given index in the transaction.
-requiresMetadata :: Core.IsMarloweVersion v => Word64 -> Chain.Metadata -> TxConstraints v
-requiresMetadata idx value = do
-  mempty { metadataConstraints = Map.singleton idx value }
+--   1. The given metadata map is present in the transaction.
+requiresMetadata :: Core.IsMarloweVersion v => Core.MarloweTransactionMetadata -> TxConstraints v
+requiresMetadata metadataConstraints = mempty { metadataConstraints }
 
 instance Core.IsMarloweVersion v => Semigroup (TxConstraints v) where
   a <> b = case Core.marloweVersion @v of
@@ -283,7 +276,10 @@ instance Core.IsMarloweVersion v => Semigroup (TxConstraints v) where
       , payToRoles = on (Map.unionWith (<>)) payToRoles a b
       , marloweOutputConstraints = on (<>) marloweOutputConstraints a b
       , signatureConstraints = on (<>) signatureConstraints a b
-      , metadataConstraints = on (<>) metadataConstraints a b
+      , metadataConstraints = MarloweTransactionMetadata
+          { marloweMetadata = on (<|>) (marloweMetadata . metadataConstraints) a b
+          , transactionMetadata = on (<>) (transactionMetadata . metadataConstraints) a b
+          }
       }
 
 instance Core.IsMarloweVersion v => Monoid (TxConstraints v) where
@@ -296,7 +292,7 @@ instance Core.IsMarloweVersion v => Monoid (TxConstraints v) where
       , payToRoles = mempty
       , marloweOutputConstraints = mempty
       , signatureConstraints = mempty
-      , metadataConstraints = mempty
+      , metadataConstraints = emptyMarloweTransactionMetadata
       }
 
 -- | Data from a wallet needed to solve the constraints.
@@ -563,9 +559,7 @@ selectCoins protocol marloweVersion marloweCtx walletCtx@WalletContext{..} txBod
 
     -- Find the net additional input that is needed; the extra input we need to find, worst case
     targetSelectionValue :: C.Value
-    -- targetSelectionValue = outputsFromBody <> fee <> minUtxo <> C.negateValue inputsFromBody <> C.negateValue mintValue
-    targetSelectionValue = outputsFromBody <> logD ("selectCoins fee: " <> show fee) fee <> logD ("selectCoins minUtxo: " <> show minUtxo) minUtxo <> (C.negateValue inputsFromBody <> C.negateValue mintValue)
-    -- targetSelectionValue = logD ("selectCoins outputsFromBody: " <> show outputsFromBody) outputsFromBody <> logD ("selectCoins fee: " <> show fee) fee <> logD ("selectCoins minUtxo: " <> show minUtxo) minUtxo <> logD ("selectCoins inputsFromBody (subtracted): " <> show inputsFromBody) (C.negateValue inputsFromBody <> C.negateValue mintValue)
+    targetSelectionValue = outputsFromBody <> fee <> minUtxo <> (C.negateValue inputsFromBody <> C.negateValue mintValue)
 
     -- Remove the lovelace from a value.
     deleteLovelace :: C.Value -> C.Value
@@ -597,7 +591,7 @@ selectCoins protocol marloweVersion marloweCtx walletCtx@WalletContext{..} txBod
 
   -- Ensure that coin selection for lovelace is possible.
   -- unless (C.selectLovelace targetSelectionValue <= C.selectLovelace universe)
-  unless (C.selectLovelace (logD ("selectCoins targetSelectionValue: " <> show targetSelectionValue) targetSelectionValue) <= C.selectLovelace (logD ("selectCoins universe: " <> show universe) universe))
+  unless (C.selectLovelace targetSelectionValue <= C.selectLovelace universe)
     . Left
     . CoinSelectionFailed
     $ "Insufficient lovelace available for coin selection: "
@@ -637,18 +631,17 @@ selectCoins protocol marloweVersion marloweCtx walletCtx@WalletContext{..} txBod
         -- Choose the best UTxO from the candidates.
         next :: (C.TxIn, C.TxOut C.CtxTx C.BabbageEra)
         -- next = minimumBy (compare `on` priority required) candidates
-        next = minimumBy (compare `on` priority (logD ("select required: " <> show required) required)) candidates
+        next = minimumBy (compare `on` priority required) candidates
         -- Determine the remaining candidates.
         candidates' :: [(C.TxIn, C.TxOut C.CtxTx C.BabbageEra)]
         -- candidates' = delete next candidates
-        candidates' = delete next (logD ("select candidates: " <> show candidates) candidates)
+        candidates' = delete next candidates
         -- Ignore negative quantities.
         filterPositive :: C.Value -> C.Value
         filterPositive = C.valueFromList . filter ((> 0) . snd) . C.valueToList
         -- Compute the remaining requirement.
         required' :: C.Value
-        -- required' = filterPositive $ required <> C.negateValue (txOutToValue $ snd next)
-        required' = filterPositive $ required <> C.negateValue (txOutToValue $ snd (logD ("select next: " <> show next) next))
+        required' = filterPositive $ required <> C.negateValue (txOutToValue $ snd next)
       in
         -- Decide whether to continue.
         if required' == mempty
@@ -855,22 +848,22 @@ solveInitialTxBodyContent protocol marloweVersion MarloweContext{..} WalletConte
   txExtraKeyWits <- solveTxExtraKeyWits
   txMintValue <- solveTxMintValue
   pure C.TxBodyContent
-    { txIns = logD ("BEGIN values for the new tx body\nsolveInitialTxBodyContent txIns: " <> show txIns) txIns
+    { txIns
     , txInsCollateral = C.TxInsCollateralNone
-    , txInsReference = logD ("solveInitialTxBodyContent txInsReference: " <> show txInsReference) txInsReference
+    , txInsReference
     , txOuts
     , txTotalCollateral = C.TxTotalCollateralNone
     , txReturnCollateral = C.TxReturnCollateralNone
     , txFee = C.TxFeeExplicit C.TxFeesExplicitInBabbageEra 0
-    , txValidityRange = logD ("solveInitialTxBodyContent txValidityRange: " <> show txValidityRange) txValidityRange
-    , txMetadata = logD ("solveInitialTxBodyContent txMetadata: " <> show txMetadata) txMetadata
+    , txValidityRange
+    , txMetadata
     , txAuxScripts = C.TxAuxScriptsNone
-    , txExtraKeyWits = logD ("solveInitialTxBodyContent txExtraKeyWits: " <> show txExtraKeyWits) txExtraKeyWits
+    , txExtraKeyWits
     , txProtocolParams = C.BuildTxWith $ Just protocol
     , txWithdrawals = C.TxWithdrawalsNone
     , txCertificates = C.TxCertificatesNone
     , txUpdateProposal = C.TxUpdateProposalNone
-    , txMintValue = logD "END values for the new tx body" txMintValue
+    , txMintValue
     , txScriptValidity = C.TxScriptValidityNone
     }
   where
@@ -1058,10 +1051,12 @@ solveInitialTxBodyContent protocol marloweVersion MarloweContext{..} WalletConte
              , C.TxValidityUpperBound C.ValidityUpperBoundInBabbageEra maxSlotNo
              )
 
+    Chain.TransactionMetadata encodedMetadata = encodeMarloweTransactionMetadata metadataConstraints
+
     txMetadata :: C.TxMetadataInEra C.BabbageEra
     txMetadata
-      | Map.null metadataConstraints = C.TxMetadataNone
-      | otherwise = C.TxMetadataInEra C.TxMetadataInBabbageEra $ C.TxMetadata $ toCardanoMetadata <$> metadataConstraints
+      | Map.null encodedMetadata = C.TxMetadataNone
+      | otherwise = C.TxMetadataInEra C.TxMetadataInBabbageEra $ C.TxMetadata $ toCardanoMetadata <$> encodedMetadata
 
     solveTxExtraKeyWits :: Either (ConstraintError v) (C.TxExtraKeyWitnesses C.BabbageEra)
     solveTxExtraKeyWits
