@@ -202,12 +202,10 @@ mkMarloweValidator
             case closeInterval $ txInfoValidRange scriptContextTxInfo of
                 Just interval' -> interval'
                 Nothing        -> traceError "a"
-    -- The incoming balance of each account must be positive.
-    -- [Marlowe-Cardano Specification: "Constraint 13. Positive balances".]
-    let positiveBalances = traceIfFalse "b" $ validateBalances marloweState
 
     -- Find Contract continuation in TxInfo datums by hash or fail with error.
     let inputs = fmap marloweTxInputToInput marloweTxInputs
+
     {-  We do not check that a transaction contains exact input payments.
         We only require an evidence from a party, e.g. a signature for PubKey party,
         or a spend of a 'party role' token.  This gives huge flexibility by allowing
@@ -215,22 +213,19 @@ mkMarloweValidator
         Then, we check scriptOutput to be correct.
      -}
     let inputContents = fmap getInputContent inputs
+
     -- Check that the required signatures and role tokens are present.
     -- [Marlowe-Cardano Specification: "Constraint 14. Inputs authorized".]
     let inputsOk = validateInputs inputContents
 
-    -- Since individual balances were validated to be positive,
-    -- the total balance is also positive.
-    let inputBalance = totalBalance (accounts marloweState)
-
     -- [Marlowe-Cardano Specification: "Constraint 5. Input value from script".]
-    -- The total incoming balance must match the actual script value being spent.
-    let balancesOk = traceIfFalse "v" $ inputBalance == scriptInValue
+    -- [Marlowe-Cardano Specification: "Constraint 13. Positive balances".]
+    -- [Marlowe-Cardano Specification: "Constraint 19. No duplicates".]
+    -- Check that the initial state obeys the Semantic's invariants.
+    let preconditionsOk = checkState "i" scriptInValue marloweState
 
-    let preconditionsOk = positiveBalances && balancesOk
-
-    -- Package the inputs to be applied in the semantics.
     -- [Marlowe-Cardano Specification: "Constraint 0. Input to semantics".]
+    -- Package the inputs to be applied in the semantics.
     let txInput = TransactionInput {
             txInterval = interval,
             txInputs = inputs }
@@ -264,16 +259,17 @@ mkMarloweValidator
                     _ -> let
                         totalIncome = foldMap collectDeposits inputContents
                         totalPayouts = foldMap snd payoutsByParty
-                        finalBalance = inputBalance + totalIncome - totalPayouts
-                        outputBalance = totalBalance (accounts txOutState)
+                        finalBalance = scriptInValue + totalIncome - totalPayouts
                         in
-                          -- The total account balance must be paid to a single output to the script.
-                          -- [Marlowe-Cardano Specification: "Constraint 3. Single Marlowe output".]
-                          -- [Marlowe-Cardano Specification: "Constraint 6. Output value to script."]
-                          checkOwnOutputConstraint marloweData finalBalance
-                          -- The value in the script's output UTxO must match the value in the output state.
-                          -- [Marlowe-Cardano Specification: "Constraint 18. Final balance."]
-                          && traceIfFalse "f" (outputBalance == finalBalance)
+                             -- [Marlowe-Cardano Specification: "Constraint 3. Single Marlowe output".]
+                             -- [Marlowe-Cardano Specification: "Constraint 6. Output value to script."]
+                             -- Check that the single Marlowe output has the correct datum and value.
+                             checkOwnOutputConstraint marloweData finalBalance
+                             -- [Marlowe-Cardano Specification: "Constraint 18. Final balance."]
+                             -- [Marlowe-Cardano Specification: "Constraint 13. Positive balances".]
+                             -- [Marlowe-Cardano Specification: "Constraint 19. No duplicates".]
+                             -- Check that the final state obeys the Semantic's invariants.
+                          && checkState "o" finalBalance txOutState
             preconditionsOk && inputsOk && payoutsOk && checkContinuation
         Error TEAmbiguousTimeIntervalError -> traceError "i"
         Error TEApplyNoMatchError -> traceError "n"
@@ -310,6 +306,33 @@ mkMarloweValidator
         TxInInfo{txInInfoResolved=TxOut{txOutAddress=Ledger.Address (ScriptCredential vh1) _}}
         TxInInfo{txInInfoResolved=TxOut{txOutAddress=Ledger.Address (ScriptCredential vh2) _}} = vh1 == vh2
     sameValidatorHash _ _ = False
+
+    -- Check a state for the correct value, positive accounts, and no duplicates.
+    checkState :: BuiltinString -> Val.Value -> State -> Bool
+    checkState tag expected State{..} =
+      let
+        positiveBalance :: (a, Integer) -> Bool
+        positiveBalance (_, balance) = balance > 0
+        noDuplicates :: Eq k => AssocMap.Map k v -> Bool
+        noDuplicates am =
+          let
+            test [] = True           -- An empty list has no duplicates.
+            test (x : xs)            -- Look for a duplicate of the head in the tail.
+              | elem x xs = False    -- A duplicate is present.
+              | otherwise = test xs  -- Continue searching for a duplicate.
+          in
+            test $ AssocMap.keys am
+      in
+           -- [Marlowe-Cardano Specification: "Constraint 5. Input value from script".]
+           -- and/or
+           -- [Marlowe-Cardano Specification: "Constraint 18. Final balance."]
+           traceIfFalse ("v"  <> tag) (totalBalance accounts == expected)
+           -- [Marlowe-Cardano Specification: "Constraint 13. Positive balances".]
+        && traceIfFalse ("b"  <> tag) (all positiveBalance $ AssocMap.toList accounts)
+           -- [Marlowe-Cardano Specification: "Constraint 19. No duplicates".]
+        && traceIfFalse ("ea" <> tag) (noDuplicates accounts)
+        && traceIfFalse ("ec" <> tag) (noDuplicates choices)
+        && traceIfFalse ("eb" <> tag) (noDuplicates boundValues)
 
     -- Look up the Datum hash for specific data.
     findDatumHash' :: PlutusTx.ToData o => o -> Maybe DatumHash

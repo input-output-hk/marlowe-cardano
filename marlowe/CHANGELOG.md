@@ -34,3 +34,8 @@ Based on audit findings, we added "Constraint 18. Final balance" to the Marlowe-
 ## SCP-5143: Removed tracing from validator
 
 In order to reduces the validator size, calls to Plutus tracing functions were removed.
+
+
+## SCP-5141: Valid initial and final states
+
+Based on audit finds, we added "Constraint 19. No duplicates" to the Marlowe-Cardano specification and require that the validator ensure that both the intial and final states of the contract obey the invariants of correct total value, positive balances, and non-duplication of keys for accounts, choices, and bound values.

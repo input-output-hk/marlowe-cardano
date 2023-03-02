@@ -100,16 +100,24 @@ Transaction failures occur in either phase 1 validation (ledger rules) or phase 
 
 *   If a transaction fails phase two validation, a terse Marlowe error will be reported in the Plutus trace log:
     *   `"a"`: The slot/time validity range for the transaction is infinite or semi-infinite. The range should be finite/bounded.
-    *   `"b"`: All accounts must have positive balances.
+    *   `"bi"`: All accounts must have positive balances in the initial state.
+    *   `"bo"`: All accounts must have positive balances in the final state.
     *   `"c"`: A transaction containing a contract that closes may not also include the creation of a new contract.
     *   `"d"`: The datum or value at the script output does not match the contract's transition.
+    *   `"eai"` : The initial state must not have duplicate accounts.
+    *   `"ebi"` : The initial state must not have duplicate bound values.
+    *   `"eci"` : The initial state must not have duplicate choices.
+    *   `"eao"` : The final state must not have duplicate accounts.
+    *   `"ebo"` : The final state must not have duplicate bound values.
+    *   `"eco"` : The final state must not have duplicate choices.
     *   `"f"`: The value in the script's output UTxO does not match the value in its internal state.
     *   `"o"`: Outputting to two Marlowe scripts with the same address in the same transaction is forbidden.
     *   `"p"`: Insufficient value is paid to a public-key address.
     *   `"r"`: Insufficient value is paid in a role payout. This may occur because the role payout was adjusted to satisfy the minimum-ADA ledger rule, despite that adjustment violating the terms of the contract.
     *   `"s"`: A required public-key signature was not present in the transaction.
     *   `"t"`: The role token authorizing the application of input is not present in the transaction.
-    *   `"v"`: The value input from the script does not match that specified in its datum.
+    *   `"vi"`: The value input from the script does not match that specified in its datum.
+    *   `"vo"`: The value output from the script does not match that specified in its datum.
     *   `"w"`: Inputting from two Marlowe scripts with the same address in the same transaction is forbidden.
     *   `"x"`: The input datum was not provided to the script.
     *   If these errors occur during Plutus validation but not outside of it, then there likely is a clock inconsistency between local time and the node.
