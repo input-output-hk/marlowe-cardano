@@ -14,9 +14,8 @@ import Language.Marlowe.Protocol.Client (MarloweClient(..), hoistMarloweClient)
 import Language.Marlowe.Protocol.HeaderSync.Client (MarloweHeaderSyncClient)
 import Language.Marlowe.Protocol.Query.Client (MarloweQueryClient)
 import Language.Marlowe.Protocol.Sync.Client (MarloweSyncClient)
-import Language.Marlowe.Runtime.ChainSync.Api
-  (BlockHeader, Lovelace, StakeCredential, TokenName, TransactionMetadata, TxId)
-import Language.Marlowe.Runtime.Core.Api (Contract, ContractId, Inputs, MarloweVersion)
+import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, Lovelace, StakeCredential, TokenName, TxId)
+import Language.Marlowe.Runtime.Core.Api (Contract, ContractId, Inputs, MarloweTransactionMetadata, MarloweVersion)
 import Language.Marlowe.Runtime.Transaction.Api
   ( ApplyInputsError
   , ContractCreated
@@ -85,7 +84,7 @@ createContract
   -- ^ The wallet addresses to use when constructing the transaction
   -> RoleTokensConfig
   -- ^ How to initialize role tokens
-  -> TransactionMetadata
+  -> MarloweTransactionMetadata
   -- ^ Optional metadata to attach to the transaction
   -> Lovelace
   -- ^ Min Lovelace which should be used for the contract output.
@@ -111,7 +110,7 @@ applyInputs'
   -- ^ The wallet addresses to use when constructing the transaction
   -> ContractId
   -- ^ The ID of the contract to apply the inputs to.
-  -> TransactionMetadata
+  -> MarloweTransactionMetadata
   -- ^ Optional metadata to attach to the transaction
   -> Maybe UTCTime
   -- ^ The "invalid before" bound of the validity interval. If omitted, this
@@ -141,7 +140,7 @@ applyInputs
   -- ^ The wallet addresses to use when constructing the transaction
   -> ContractId
   -- ^ The ID of the contract to apply the inputs to.
-  -> TransactionMetadata
+  -> MarloweTransactionMetadata
   -- ^ Optional metadata to attach to the transaction
   -> Inputs v
   -- ^ The inputs to apply.

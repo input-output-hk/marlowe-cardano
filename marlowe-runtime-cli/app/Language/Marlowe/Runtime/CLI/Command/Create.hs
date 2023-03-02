@@ -34,6 +34,7 @@ import Language.Marlowe.Runtime.Client (createContract)
 import Language.Marlowe.Runtime.Core.Api
   ( ContractId(ContractId)
   , IsMarloweVersion(Contract)
+  , MarloweTransactionMetadata(..)
   , MarloweVersion(MarloweV1)
   , MarloweVersionTag(V1)
   , SomeMarloweVersion(SomeMarloweVersion)
@@ -182,7 +183,7 @@ runCreateCommand TxCommand { walletAddresses, signingMethod, metadataFile, subCo
     run :: MarloweVersion v -> RoleTokensConfig -> ExceptT (CreateCommandError v) CLI ContractId
     run version rolesDistribution  = do
       contract <- readContract version
-      metadata <- readMetadata
+      metadata <- MarloweTransactionMetadata Nothing <$> readMetadata
       ContractCreated{contractId,txBody} <- ExceptT $ first CreateFailed <$> createContract Nothing version walletAddresses rolesDistribution metadata minUTxO contract
       case signingMethod of
         Manual outputFile -> do

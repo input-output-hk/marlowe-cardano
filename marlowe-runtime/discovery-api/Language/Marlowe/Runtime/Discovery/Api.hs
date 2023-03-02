@@ -7,8 +7,8 @@ module Language.Marlowe.Runtime.Discovery.Api
 import Data.Aeson (ToJSON)
 import Data.Binary (Binary)
 import GHC.Generics (Generic)
-import Language.Marlowe.Runtime.ChainSync.Api (Address, BlockHeader, PolicyId, ScriptHash, TransactionMetadata)
-import Language.Marlowe.Runtime.Core.Api (ContractId, SomeMarloweVersion)
+import Language.Marlowe.Runtime.ChainSync.Api (Address, BlockHeader, PolicyId, ScriptHash)
+import Language.Marlowe.Runtime.Core.Api (ContractId, MarloweTransactionMetadata, SomeMarloweVersion)
 
 -- | A Marlowe contract header is a compact structure that contains all the
 -- significant metadata related to a Marlowe Contract on chain.
@@ -17,7 +17,7 @@ data ContractHeader = ContractHeader
   -- ^ The ID of the Marlowe contract instance.
   , rolesCurrency :: PolicyId
   -- ^ The ID of the minting policy used to mint the role tokens.
-  , metadata :: TransactionMetadata
+  , metadata :: MarloweTransactionMetadata
   -- ^ Any custom metadata attached to the contract's creation transaction.
   , marloweScriptHash :: ScriptHash
   -- ^ The hash of the validator script.

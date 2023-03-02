@@ -15,11 +15,12 @@ import Control.Monad (unless)
 import Control.Monad.IO.Class (liftIO)
 import Data.Aeson (Value(Null))
 import Data.Foldable (traverse_)
+import qualified Data.Map as Map
 import Data.Maybe (fromMaybe)
 import qualified Data.Set as Set
 import Language.Marlowe.Protocol.Query.Types (Page(..))
 import Language.Marlowe.Runtime.ChainSync.Api (Lovelace(..))
-import Language.Marlowe.Runtime.Core.Api (MarloweVersion(..), SomeMarloweVersion(..))
+import Language.Marlowe.Runtime.Core.Api (MarloweTransactionMetadata(..), MarloweVersion(..), SomeMarloweVersion(..))
 import Language.Marlowe.Runtime.Transaction.Api (ContractCreated(..), WalletAddresses(..))
 import qualified Language.Marlowe.Runtime.Transaction.Api as Tx
 import Language.Marlowe.Runtime.Web hiding (Unsigned)
@@ -104,8 +105,11 @@ post eb req@PostContractsRequest{..} changeAddressDTO mAddresses mCollateralUtxo
   extraAddresses <- Set.fromList <$> fromDTOThrow (badRequest' "Invalid addresses header value") (maybe [] unCommaList mAddresses)
   collateralUtxos <- Set.fromList <$> fromDTOThrow (badRequest' "Invalid collateral header UTxO value") (maybe [] unCommaList mCollateralUtxos)
   roles' <- fromDTOThrow (badRequest' "Invalid roles value") roles
-  metadata' <- fromDTOThrow (badRequest' "Invalid metadata value") metadata
-  createContract Nothing v WalletAddresses{..} roles' metadata' (Lovelace minUTxODeposit) contract >>= \case
+  transactionMetadata <- fromDTOThrow (badRequest' "Invalid metadata value") metadata
+  marloweMetadata <- fromDTOThrow
+    (badRequest' "Invalid tags value")
+    if Map.null tags then Nothing else Just $ MarloweMetadata tags Nothing
+  createContract Nothing v WalletAddresses{..} roles' MarloweTransactionMetadata{..} (Lovelace minUTxODeposit) contract >>= \case
     Left err -> do
       addField ev $ PostError $ show err
       throwDTOError err

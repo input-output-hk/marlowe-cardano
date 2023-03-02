@@ -15,11 +15,14 @@ import Control.Monad (unless)
 import Control.Monad.IO.Class (liftIO)
 import Data.Aeson (Value(Null))
 import Data.Foldable (traverse_)
+import qualified Data.Map as Map
 import Data.Maybe (fromMaybe)
 import qualified Data.Set as Set
 import Language.Marlowe.Protocol.Query.Types (Page(..))
 import Language.Marlowe.Runtime.Cardano.Api (fromCardanoTxId)
-import Language.Marlowe.Runtime.Core.Api (MarloweVersion(..), SomeMarloweVersion(..))
+import Language.Marlowe.Runtime.Core.Api
+  (MarloweTransactionMetadata(MarloweTransactionMetadata), MarloweVersion(..), SomeMarloweVersion(..))
+import qualified Language.Marlowe.Runtime.Core.Api as Core
 import Language.Marlowe.Runtime.Transaction.Api (InputsApplied(..), WalletAddresses(..))
 import qualified Language.Marlowe.Runtime.Transaction.Api as Tx
 import Language.Marlowe.Runtime.Web hiding (Unsigned)
@@ -108,7 +111,7 @@ get eb contractId ranges = withEvent (hoistEventBackend liftIO eb) Get \ev -> do
   range' <- maybe (throwError $ rangeNotSatisfiable' "Invalid range value") pure $ fromPaginationRange range
   loadTransactions contractId' range' >>= \case
     Left ContractNotFound -> throwError $ notFound' "Contract not found"
-    Left TxNotFound -> throwError $ rangeNotSatisfiable' "Transcations not found"
+    Left TxNotFound -> throwError $ rangeNotSatisfiable' "Starting transaction not found"
     Right Page{..} -> do
       let headers' = toDTO items
       addField ev $ TxHeaders headers'
@@ -132,8 +135,11 @@ post eb contractId req@PostTransactionsRequest{..} changeAddressDTO mAddresses m
   extraAddresses <- Set.fromList <$> fromDTOThrow (badRequest' "Invalid addresses header value") (maybe [] unCommaList mAddresses)
   collateralUtxos <- Set.fromList <$> fromDTOThrow (badRequest' "Invalid collateral header UTxO value") (maybe [] unCommaList mCollateralUtxos)
   contractId' <- fromDTOThrow (badRequest' "Invalid contract id value") contractId
-  metadata' <- fromDTOThrow (badRequest' "Invalid metadata value") metadata
-  applyInputs v WalletAddresses{..} contractId' metadata' invalidBefore invalidHereafter inputs >>= \case
+  transactionMetadata <- fromDTOThrow (badRequest' "Invalid metadata value") metadata
+  marloweMetadata <- fromDTOThrow
+    (badRequest' "Invalid tags value")
+    if Map.null tags then Nothing else Just $ MarloweMetadata tags Nothing
+  applyInputs v WalletAddresses{..} contractId' MarloweTransactionMetadata{..} invalidBefore invalidHereafter inputs >>= \case
     Left err -> do
       addField ev $ PostError $ show err
       throwDTOError err

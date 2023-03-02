@@ -31,7 +31,11 @@ import Language.Marlowe.Runtime.ChainSync.Api
   , paymentCredential
   )
 import Language.Marlowe.Runtime.Core.Api
-  (ContractId(..), MarloweVersion(MarloweV1), SomeMarloweVersion(SomeMarloweVersion))
+  ( ContractId(..)
+  , MarloweVersion(MarloweV1)
+  , SomeMarloweVersion(SomeMarloweVersion)
+  , decodeMarloweTransactionMetadataLenient
+  )
 import Language.Marlowe.Runtime.Discovery.Api (ContractHeader(..))
 import Prelude hiding (init)
 
@@ -207,7 +211,7 @@ decodeContractHeader
   ) = ContractHeader
     { contractId = ContractId (TxOutRef (TxId txId) (fromIntegral txIx))
     , rolesCurrency = PolicyId rolesCurrency
-    , metadata = maybe mempty (runGet get. fromStrict) metadata
+    , metadata = decodeMarloweTransactionMetadataLenient $ maybe mempty (runGet get. fromStrict) metadata
     , marloweScriptHash = fromJust do
         credential <- paymentCredential $ Address address
         case credential of

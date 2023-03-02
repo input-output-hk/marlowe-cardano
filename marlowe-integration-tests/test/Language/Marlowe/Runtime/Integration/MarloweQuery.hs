@@ -25,8 +25,7 @@ import Language.Marlowe.Protocol.Query.Client
   )
 import Language.Marlowe.Protocol.Query.Types
 import Language.Marlowe.Runtime.Cardano.Api (fromCardanoTxId)
-import Language.Marlowe.Runtime.ChainSync.Api
-  (AssetId(..), BlockHeader, PolicyId, TransactionMetadata(..), TxId, TxOutRef(..))
+import Language.Marlowe.Runtime.ChainSync.Api (AssetId(..), BlockHeader, PolicyId, TxId, TxOutRef(..))
 import Language.Marlowe.Runtime.Client (runMarloweQueryClient)
 import Language.Marlowe.Runtime.Core.Api
   (ContractId(..), MarloweVersion(..), MarloweVersionTag(..), Payout(..), TransactionScriptOutput(..))
@@ -154,7 +153,7 @@ getContractStateSpec = describe "getContractState" do
             ContractCreated{..} -> Just ContractState
               { contractId
               , roleTokenMintingPolicyId = rolesCurrency
-              , metadata = TransactionMetadata metadata
+              , metadata
               , initialBlock = contractNoToInitialBlock testData contractNo'
               , initialOutput = TransactionScriptOutput
                 { address = marloweScriptAddress

@@ -199,14 +199,15 @@ createCloseContract Wallet{..}= do
   let WalletAddresses{..} = addresses
   let webChangeAddress = toDTO changeAddress
   let webExtraAddresses = Set.map toDTO extraAddresses
-  let webCollataralUtxos = Set.map toDTO collateralUtxos
+  let webCollateralUtxos = Set.map toDTO collateralUtxos
 
   Web.CreateTxBody{txBody = createTxBody, ..} <- postContract
     webChangeAddress
     (Just webExtraAddresses)
-    (Just webCollataralUtxos)
+    (Just webCollateralUtxos)
     Web.PostContractsRequest
-      { metadata = mempty
+      { tags = mempty
+      , metadata = mempty
       , version = Web.V1
       , roles = Nothing
       , contract = V1.Close
@@ -235,4 +236,3 @@ waitUntilConfirmed getStatus getResource = do
     _ -> do
       liftIO $ threadDelay 1000
       waitUntilConfirmed getStatus getResource
-

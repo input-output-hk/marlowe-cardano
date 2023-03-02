@@ -226,6 +226,7 @@ data ContractState = ContractState
   { contractId :: TxOutRef
   , roleTokenMintingPolicyId :: PolicyId
   , version :: MarloweVersion
+  , marloweMetadata :: Maybe MarloweMetadata
   , metadata :: Map Word64 Metadata
   , status :: TxStatus
   , block :: Maybe BlockHeader
@@ -244,6 +245,7 @@ data ContractHeader = ContractHeader
   { contractId :: TxOutRef
   , roleTokenMintingPolicyId :: PolicyId
   , version :: MarloweVersion
+  , marloweMetadata :: Maybe MarloweMetadata
   , metadata :: Map Word64 Metadata
   , status :: TxStatus
   , block :: Maybe BlockHeader
@@ -293,6 +295,13 @@ instance HasPagination ContractHeader "contractId" where
   type RangeType ContractHeader "contractId" = TxOutRef
   getFieldValue _ ContractHeader{..} = contractId
 
+data MarloweMetadata = MarloweMetadata
+  { tags :: Map Text (Maybe Metadata)
+  , continuations :: Maybe Text
+  }
+  deriving (Show, Eq, Ord, Generic)
+  deriving anyclass (ToJSON, FromJSON, ToSchema)
+
 newtype Metadata = Metadata { unMetadata :: Value }
   deriving (Show, Eq, Ord)
   deriving newtype (ToJSON, FromJSON)
@@ -304,6 +313,7 @@ instance ToSchema Metadata where
 data TxHeader = TxHeader
   { contractId :: TxOutRef
   , transactionId :: TxId
+  , marloweMetadata :: Maybe MarloweMetadata
   , metadata :: Map Word64 Metadata
   , status :: TxStatus
   , block :: Maybe BlockHeader
@@ -317,6 +327,7 @@ instance ToSchema TxHeader
 data Tx = Tx
   { contractId :: TxOutRef
   , transactionId :: TxId
+  , marloweMetadata :: Maybe MarloweMetadata
   , metadata :: Map Word64 Metadata
   , status :: TxStatus
   , block :: Maybe BlockHeader
@@ -433,7 +444,8 @@ instance ToJSON PostWithdrawalsRequest
 instance ToSchema PostWithdrawalsRequest
 
 data PostContractsRequest = PostContractsRequest
-  { metadata :: Map Word64 Metadata
+  { tags :: Map Text (Maybe Metadata)
+  , metadata :: Map Word64 Metadata
   , version :: MarloweVersion
   , roles :: Maybe RolesConfig
   , contract :: Semantics.Contract
@@ -588,6 +600,7 @@ uriToJSON = String . T.pack . show
 
 data PostTransactionsRequest = PostTransactionsRequest
   { version :: MarloweVersion
+  , tags :: Map Text (Maybe Metadata)
   , metadata :: Map Word64 Metadata
   , invalidBefore :: Maybe UTCTime
   , invalidHereafter :: Maybe UTCTime

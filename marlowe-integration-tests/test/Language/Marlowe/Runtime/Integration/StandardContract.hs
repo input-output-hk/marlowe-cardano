@@ -12,7 +12,8 @@ import Language.Marlowe.Core.V1.Semantics.Types
 import Language.Marlowe.Extended.V1 (ada)
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader)
 import Language.Marlowe.Runtime.Client (createContract)
-import Language.Marlowe.Runtime.Core.Api (ContractId, MarloweVersion(..), MarloweVersionTag(..))
+import Language.Marlowe.Runtime.Core.Api
+  (ContractId, MarloweVersion(..), MarloweVersionTag(..), emptyMarloweTransactionMetadata)
 import Language.Marlowe.Runtime.Discovery.Api (ContractHeader)
 import Language.Marlowe.Runtime.Integration.Common
   ( Integration
@@ -77,7 +78,7 @@ createStandardContract partyAWallet partyBWallet = do
     MarloweV1
     (addresses partyAWallet)
     (RoleTokensMint $ mkMint $ pure ("Party A", (changeAddress $ addresses partyAWallet, Left 1)))
-    mempty
+    emptyMarloweTransactionMetadata
     2_000_000
     contract
   contractCreated@ContractCreated{contractId, txBody = createTxBody} <- expectRight "failed to create standard contract" result

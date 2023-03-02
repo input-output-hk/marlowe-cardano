@@ -52,6 +52,9 @@ import Language.Marlowe.Runtime.Cardano.Api (cardanoEraToAsType, fromCardanoTxId
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Core.Api
   ( ContractId(..)
+  , MarloweMetadata(..)
+  , MarloweMetadataTag(..)
+  , MarloweTransactionMetadata(..)
   , MarloweVersion(..)
   , MarloweVersionTag(..)
   , SomeMarloweVersion(..)
@@ -143,7 +146,8 @@ instance ToDTO Discovery.ContractHeader where
     { contractId = toDTO contractId
     , roleTokenMintingPolicyId = toDTO rolesCurrency
     , version = toDTO marloweVersion
-    , metadata = toDTO metadata
+    , marloweMetadata = toDTO $ marloweMetadata metadata
+    , metadata = toDTO $ transactionMetadata metadata
     , status = Web.Confirmed
     , block = Just $ toDTO blockHeader
     }
@@ -244,6 +248,20 @@ instance ToDTO Chain.TransactionMetadata where
 instance FromDTO Chain.TransactionMetadata where
   fromDTO = fmap Chain.TransactionMetadata . fromDTO
 
+instance HasDTO MarloweMetadata where
+  type DTO MarloweMetadata = Web.MarloweMetadata
+
+instance ToDTO MarloweMetadata where
+  toDTO MarloweMetadata{..} = Web.MarloweMetadata
+    { tags = Map.mapKeys getMarloweMetadataTag $ toDTO <$> tags
+    , continuations
+    }
+
+instance FromDTO MarloweMetadata where
+  fromDTO Web.MarloweMetadata{..} = MarloweMetadata
+    <$> (Map.mapKeys MarloweMetadataTag <$> traverse fromDTO tags)
+    <*> pure continuations
+
 instance HasDTO Chain.SlotNo where
   type DTO Chain.SlotNo = Word64
 
@@ -293,7 +311,8 @@ instance ToDTO SomeContractState where
       { contractId = toDTO contractId
       , roleTokenMintingPolicyId = toDTO roleTokenMintingPolicyId
       , version = Web.V1
-      , metadata = toDTO metadata
+      , marloweMetadata = toDTO $ marloweMetadata metadata
+      , metadata = toDTO $ transactionMetadata metadata
       , status = Web.Confirmed
       , block = Just $ toDTO initialBlock
       , initialContract = Sem.marloweContract $ datum initialOutput
@@ -311,7 +330,8 @@ instance ToDTO SomeTransaction where
     Web.Tx
       { contractId = toDTO contractId
       , transactionId = toDTO transactionId
-      , metadata = toDTO metadata
+      , marloweMetadata = toDTO $ marloweMetadata metadata
+      , metadata = toDTO $ transactionMetadata metadata
       , status = Web.Confirmed
       , block = Just $ toDTO blockHeader
       , inputUtxo = toDTO input
@@ -383,7 +403,8 @@ instance IsCardanoEra era => ToDTOWithTxStatus (Tx.ContractCreated era v) where
       , roleTokenMintingPolicyId = toDTO rolesCurrency
       , version = case version of
           MarloweV1 -> Web.V1
-      , metadata = toDTO metadata
+      , marloweMetadata = toDTO $ marloweMetadata metadata
+      , metadata = toDTO $ transactionMetadata metadata
       , status = toDTO status
       , block = Nothing
       , initialContract = case version of
@@ -406,7 +427,8 @@ instance IsCardanoEra era => ToDTOWithTxStatus (Tx.InputsApplied era v) where
     Web.Tx
       { contractId = toDTO contractId
       , transactionId = toDTO $ fromCardanoTxId $ getTxId txBody
-      , metadata = toDTO metadata
+      , marloweMetadata = toDTO $ marloweMetadata metadata
+      , metadata = toDTO $ transactionMetadata metadata
       , status = toDTO status
       , block = Nothing
       , inputUtxo = toDTO $ utxo input
@@ -433,7 +455,8 @@ instance ToDTO (Transaction 'V1) where
     Web.TxHeader
       { contractId = toDTO contractId
       , transactionId = toDTO transactionId
-      , metadata = toDTO metadata
+      , marloweMetadata = toDTO $ marloweMetadata metadata
+      , metadata = toDTO $ transactionMetadata metadata
       , status = Web.Confirmed
       , block = Just $ toDTO blockHeader
       , utxo = toDTO . utxo <$> scriptOutput output

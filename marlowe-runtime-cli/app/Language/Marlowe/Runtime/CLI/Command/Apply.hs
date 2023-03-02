@@ -29,7 +29,12 @@ import Language.Marlowe.Runtime.CLI.Option (txOutRefParser)
 import Language.Marlowe.Runtime.ChainSync.Api (TransactionMetadata, fromJSONEncodedTransactionMetadata, unPolicyId)
 import Language.Marlowe.Runtime.Client (applyInputs')
 import Language.Marlowe.Runtime.Core.Api
-  (ContractId(..), IsMarloweVersion(..), MarloweVersion(MarloweV1), MarloweVersionTag(..))
+  ( ContractId(..)
+  , IsMarloweVersion(..)
+  , MarloweTransactionMetadata(..)
+  , MarloweVersion(MarloweV1)
+  , MarloweVersionTag(..)
+  )
 import Language.Marlowe.Runtime.Transaction.Api (ApplyInputsError, InputsApplied(..))
 import qualified Language.Marlowe.Util as V1
 import Options.Applicative
@@ -218,7 +223,7 @@ runApplyCommand TxCommand { walletAddresses, signingMethod, metadataFile, subCom
   inputs' <- case inputs of
     ContractInputsByValue inputs' -> pure inputs'
     _ -> throwE (PlainInputsSupportedOnly inputs)
-  metadata <- readMetadata
+  metadata <- MarloweTransactionMetadata Nothing <$> readMetadata
   let
     validityLowerBound'= posixTimeToUTCTime <$> validityLowerBound
     validityUpperBound'= posixTimeToUTCTime <$> validityUpperBound
