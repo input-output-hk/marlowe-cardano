@@ -24,3 +24,8 @@ Based on audit finding, we corrected `instance Eq ReduceWarning` so that when a 
 ## SCP-5128: Rationale for multiple payments to address parties
 
 Based on audit finding, we added detailed comment in the Marlowe semantics validator about why multiple outputs to an address are allowed.
+
+
+## SCP-5124: Validator checks consistency of script output and internal accounts
+
+Based on audit findings, we added "Constraint 18. Final balance" to the Marlowe-Cardano specification, requiring that the value output to the script address match the total value of the accounts in the output state, along with a corresponding check in the Marlowe semantics validator.
