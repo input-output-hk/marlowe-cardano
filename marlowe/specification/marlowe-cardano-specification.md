@@ -361,6 +361,16 @@ Note that the comparison is `leq` instead of equality because additional Ada may
 The payment to a role must be in a single output, but the payment to an address may be split in multiple outputs, so long as the total output to the address is sufficient. (Note that allowing the multiple outputs to an address may increase transaction fees and wallet fragmentation, but the magnitude of this is severely limited by the Plutus execution budget, which strongly depends upon the number of UTxOs output. The flexibily of multiple outputs accommodates wallet-related practicalities (e.g., limitations in coin-selection and transaction balancing) such as the change and the return of the role token being in separate UTxOs in situations where a contract is also paying to the address where that change and that role token are sent.)
 
 
+#### *Constraint 18.* Final balance
+
+The value output to the script's UTxO must equal the total value in the output state.
+
+```haskell
+outValue ≡ foldMap toValue (accounts $ txOutState transactionOutput)
+  where toValue ((_, Token currency name), count)) = Value.singleton currency name count
+```
+
+
 ## Plutus Validator for Marlowe Payouts
 
 

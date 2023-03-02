@@ -254,10 +254,15 @@ mkMarloweValidator
                         totalIncome = foldMap collectDeposits inputContents
                         totalPayouts = foldMap snd payoutsByParty
                         finalBalance = inputBalance + totalIncome - totalPayouts
-                        -- The total account balance must be paid to a single output to the script.
-                        -- [Marlowe-Cardano Specification: "Constraint 3. Single Marlowe output".]
-                        -- [Marlowe-Cardano Specification: "Constraint 6. Output value to script."]
-                        in checkOwnOutputConstraint marloweData finalBalance
+                        outputBalance = totalBalance (accounts txOutState)
+                        in
+                          -- The total account balance must be paid to a single output to the script.
+                          -- [Marlowe-Cardano Specification: "Constraint 3. Single Marlowe output".]
+                          -- [Marlowe-Cardano Specification: "Constraint 6. Output value to script."]
+                          checkOwnOutputConstraint marloweData finalBalance
+                          -- The value in the script's output UTxO must match the value in the output state.
+                          -- [Marlowe-Cardano Specification: "Constraint 18. Final balance."]
+                          && traceIfFalse "f" (outputBalance == finalBalance)
             preconditionsOk && inputsOk && payoutsOk && checkContinuation
         Error TEAmbiguousTimeIntervalError -> traceError "i"
         Error TEApplyNoMatchError -> traceError "n"
