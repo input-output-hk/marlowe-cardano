@@ -14,3 +14,8 @@ Based on audit findings, we annotated Marlowe's Plutus validator with comments i
 ## SCP-5123: Semantically negative deposits do not withdraw funds from the script
 
 Based on audit findings, we corrected the accounting equation so that negative deposits are treated as zero by the validator. This prevents a negative deposit from removing value from the script's UTxO, which would have left the total value in accounts unequal to the value in the script UTxO.
+
+
+## SCP-5129: Fixed `(==)` for `ReduceAssertionFailed`
+
+Based on audit finding, we corrected `instance Eq ReduceWarning` so that when a comparison of `ReduceAssertionFailed` to itself yields `True`.
