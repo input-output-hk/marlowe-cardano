@@ -28,7 +28,7 @@
       dataFiles = [];
       extraSrcFiles = [];
       extraTmpFiles = [];
-      extraDocFiles = [ "README.md" ];
+      extraDocFiles = [ "README.md" "CHANGELOG.md" ];
       };
     components = {
       "library" = {
@@ -48,7 +48,6 @@
           (hsPkgs."plutus-ledger-api" or (errorHandler.buildDepError "plutus-ledger-api"))
           (hsPkgs."plutus-script-utils" or (errorHandler.buildDepError "plutus-script-utils"))
           (hsPkgs."plutus-tx" or (errorHandler.buildDepError "plutus-tx"))
-          (hsPkgs."prettyprinter" or (errorHandler.buildDepError "prettyprinter"))
           (hsPkgs."sbv" or (errorHandler.buildDepError "sbv"))
           (hsPkgs."scientific" or (errorHandler.buildDepError "scientific"))
           (hsPkgs."serialise" or (errorHandler.buildDepError "serialise"))
