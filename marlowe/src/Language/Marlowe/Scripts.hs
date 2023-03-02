@@ -95,9 +95,20 @@ import PlutusTx (makeIsDataIndexed, makeLift)
 import qualified PlutusTx
 import qualified PlutusTx.AssocMap as AssocMap
 import PlutusTx.Plugin ()
-import PlutusTx.Prelude as PlutusTxPrelude
+import PlutusTx.Prelude as PlutusTxPrelude hiding (traceError, traceIfFalse)
 import qualified Prelude as Haskell
 import Unsafe.Coerce (unsafeCoerce)
+
+
+-- Suppress traces, in order to save bytes.
+
+{-# INLINABLE traceError #-}
+traceError :: BuiltinString -> a
+traceError _ = error ()
+
+{-# INLINABLE traceIfFalse #-}
+traceIfFalse :: BuiltinString -> a -> a
+traceIfFalse _ = id
 
 
 -- | Input to a Marlowe transaction.
