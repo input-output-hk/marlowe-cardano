@@ -967,21 +967,26 @@ instance Eq Payment where
 instance Eq ReduceWarning where
     {-# INLINABLE (==) #-}
     ReduceNoWarning == ReduceNoWarning = True
-    (ReduceNonPositivePay acc1 p1 tn1 a1) == (ReduceNonPositivePay acc2 p2 tn2 a2) =
+    ReduceNoWarning == _ = False
+    ReduceNonPositivePay acc1 p1 tn1 a1 == ReduceNonPositivePay acc2 p2 tn2 a2 =
         acc1 == acc2 && p1 == p2 && tn1 == tn2 && a1 == a2
-    (ReducePartialPay acc1 p1 tn1 a1 e1) == (ReducePartialPay acc2 p2 tn2 a2 e2) =
+    ReduceNonPositivePay _ _ _ _ == _ = False
+    ReducePartialPay acc1 p1 tn1 a1 e1 == ReducePartialPay acc2 p2 tn2 a2 e2 =
         acc1 == acc2 && p1 == p2 && tn1 == tn2 && a1 == a2 && e1 == e2
-    (ReduceShadowing v1 old1 new1) == (ReduceShadowing v2 old2 new2) =
+    ReducePartialPay _ _ _ _ _ == _ = False
+    ReduceShadowing v1 old1 new1 == ReduceShadowing v2 old2 new2 =
         v1 == v2 && old1 == old2 && new1 == new2
+    ReduceShadowing _ _ _ == _ = False
     ReduceAssertionFailed == ReduceAssertionFailed = True
-    _ == _ = False
+    ReduceAssertionFailed == _ = False
 
 
 instance Eq ReduceEffect where
     {-# INLINABLE (==) #-}
     ReduceNoPayment == ReduceNoPayment           = True
+    ReduceNoPayment == _                         = False
     ReduceWithPayment p1 == ReduceWithPayment p2 = p1 == p2
-    _ == _                                       = False
+    ReduceWithPayment _ == _                     = False
 
 
 -- Lifting data types to Plutus Core
