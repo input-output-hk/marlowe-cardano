@@ -151,7 +151,7 @@ tests referencePaths =
             ]
         , testGroup "Constraint 6. Output value to script"
             [
-              testProperty "Invalid mismatch between state and script output's value" $ checkValueOutput referencePaths
+              testProperty "Invalid mismatch between expected and actual output to script" $ checkValueOutput referencePaths
             ]
         , testGroup "Constraint 7. Input state"
             [
