@@ -318,9 +318,11 @@ all demerkleizes transactionInput ≡ True
 
 #### *Constraint 13.* Positive balances
 
-All accounts in the state have positive balances.
+All accounts in the initial and final states have positive balances.
 ```haskell
-all ((> 0) . snd) (accounts $ marloweState marloweData) ≡ True
+positiveBalances $ marloweState marloweData     ≡ True
+positiveBalances $ txOutState transactionOutput ≡ True
+  where positiveBalances state = all ((> 0) . snd) (accounts state)
 ```
 
 
@@ -364,10 +366,25 @@ The payment to a role must be in a single output, but the payment to an address 
 #### *Constraint 18.* Final balance
 
 The value output to the script's UTxO must equal the total value in the output state.
-
 ```haskell
 outValue ≡ foldMap toValue (accounts $ txOutState transactionOutput)
   where toValue ((_, Token currency name), count)) = Value.singleton currency name count
+```
+
+
+#### *Constraint 19.* No duplicates
+
+The initial and final state must not have duplicate keys in their account entries, choices, or bound values.
+```haskell
+hasDuplicateKey (accounts    inState ) ≡ False
+hasDuplicateKey (choices     inState ) ≡ False
+hasDuplicateKey (boundValues inState ) ≡ False
+hasDuplicateKey (accounts    outState) ≡ False
+hasDuplicateKey (choices     outState) ≡ False
+hasDuplicateKey (boundValues outState) ≡ False
+  where
+    outState = txOutState transactionOutput
+    hasDuplicateKey am = let ks = fst <$> toList am in length ks /= length (nub ks)
 ```
 
 
