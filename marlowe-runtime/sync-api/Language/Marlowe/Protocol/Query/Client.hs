@@ -57,8 +57,8 @@ getWithdrawal = request . ReqWithdrawal
 getWithdrawals :: Applicative m => WithdrawalFilter -> Range TxId -> MarloweQueryClient m (Maybe (Page TxId Withdrawal))
 getWithdrawals = fmap request . ReqWithdrawals
 
-getContractHeaders :: Applicative m => Range ContractId -> MarloweQueryClient m (Maybe (Page ContractId ContractHeader))
-getContractHeaders = request . ReqContractHeaders
+getContractHeaders :: Applicative m => ContractFilter -> Range ContractId -> MarloweQueryClient m (Maybe (Page ContractId ContractHeader))
+getContractHeaders = fmap request . ReqContractHeaders
 
 getContractState :: Applicative m => ContractId -> MarloweQueryClient m (Maybe SomeContractState)
 getContractState = request . ReqContractState

@@ -18,6 +18,7 @@ import GHC.Show (showCommaSpace, showSpace)
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, PolicyId, TokenName, TxId, TxOutRef)
 import Language.Marlowe.Runtime.Core.Api
   ( ContractId
+  , MarloweMetadataTag
   , MarloweTransactionMetadata
   , MarloweVersion(..)
   , MarloweVersionTag(..)
@@ -48,8 +49,15 @@ newtype WithdrawalFilter = WithdrawalFilter
   deriving stock (Show, Eq, Ord, Generic)
   deriving anyclass (ToJSON, Binary)
 
+data ContractFilter = ContractFilter
+  { tags :: Set MarloweMetadataTag
+  , roleCurrencies :: Set PolicyId
+  }
+  deriving stock (Show, Eq, Ord, Generic)
+  deriving anyclass (ToJSON, Binary)
+
 data Request a where
-  ReqContractHeaders :: Range ContractId -> Request (Maybe (Page ContractId ContractHeader))
+  ReqContractHeaders :: ContractFilter -> Range ContractId -> Request (Maybe (Page ContractId ContractHeader))
   ReqContractState :: ContractId -> Request (Maybe SomeContractState)
   ReqTransaction :: TxId -> Request (Maybe SomeTransaction)
   ReqTransactions :: ContractId -> Request (Maybe SomeTransactions)
@@ -68,7 +76,7 @@ instance Binary SomeRequest where
         SomeRequest a <- get
         SomeRequest b <- get
         pure $ SomeRequest $ ReqBoth a b
-      0x01 -> SomeRequest . ReqContractHeaders <$> get
+      0x01 -> SomeRequest <$> (ReqContractHeaders <$> get <*> get)
       0x02 -> SomeRequest . ReqContractState <$> get
       0x03 -> SomeRequest . ReqTransaction <$> get
       0x04 -> SomeRequest . ReqTransactions <$> get
@@ -81,8 +89,9 @@ instance Binary SomeRequest where
       putWord8 0x00
       put $ SomeRequest a
       put $ SomeRequest b
-    ReqContractHeaders range -> do
+    ReqContractHeaders cFilter range -> do
       putWord8 0x01
+      put cFilter
       put range
     ReqContractState contractId -> do
       putWord8 0x02
@@ -108,8 +117,11 @@ instance ToJSON (Request a) where
     ReqBoth a b -> object
       [ "req-both" .= (toJSON a, toJSON b)
       ]
-    ReqContractHeaders range -> object
-      [ "get-contract-headers-for-range" .= range
+    ReqContractHeaders cFilter range -> object
+      [ "get-contract-headers" .= object
+        [ "filter" .= cFilter
+        , "range" .= range
+        ]
       ]
     ReqContractState contractId -> object
       [ "get-contract-state" .= contractId
@@ -439,8 +451,8 @@ instance MessageEq MarloweQuery where
       reqEq :: Request a -> Request a1 -> Bool
       reqEq (ReqBoth a b) (ReqBoth a' b') = reqEq a a' && reqEq b b'
       reqEq (ReqBoth _ _) _ = False
-      reqEq (ReqContractHeaders range) (ReqContractHeaders range') = range == range'
-      reqEq (ReqContractHeaders _) _ = False
+      reqEq (ReqContractHeaders cFilter range) (ReqContractHeaders cFilter' range') = range == range' && cFilter == cFilter'
+      reqEq (ReqContractHeaders _ _) _ = False
       reqEq (ReqContractState contractId) (ReqContractState contractId') = contractId == contractId'
       reqEq (ReqContractState _) _ = False
       reqEq (ReqTransaction txId) (ReqTransaction txId') = txId == txId'
@@ -471,7 +483,7 @@ instance MessageEq MarloweQuery where
 
 requestToSt :: Request x -> StRes x
 requestToSt = \case
-  ReqContractHeaders _ -> TokContractHeaders
+  ReqContractHeaders _ _ -> TokContractHeaders
   ReqContractState _ -> TokContractState
   ReqTransaction _ -> TokTransaction
   ReqTransactions _ -> TokTransactions

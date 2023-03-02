@@ -18,7 +18,7 @@ type MarloweQueryServer = Peer MarloweQuery 'AsServer 'StReq
 marloweQueryServer
   :: forall m
    . MonadBaseControl IO m
-  => (Range ContractId -> m (Maybe (Page ContractId ContractHeader)))
+  => (ContractFilter -> Range ContractId -> m (Maybe (Page ContractId ContractHeader)))
   -> (ContractId -> m (Maybe SomeContractState))
   -> (TxId -> m (Maybe SomeTransaction))
   -> (ContractId -> m (Maybe SomeTransactions))
@@ -34,7 +34,7 @@ marloweQueryServer getContractHeaders getContractState getTransaction getTransac
       MsgDone -> Done TokDone ()
     serviceRequest :: Request a -> m a
     serviceRequest = \case
-      ReqContractHeaders range -> getContractHeaders range
+      ReqContractHeaders cFilter range -> getContractHeaders cFilter range
       ReqContractState contractId -> getContractState contractId
       ReqTransaction txId -> getTransaction txId
       ReqTransactions contractId -> getTransactions contractId
