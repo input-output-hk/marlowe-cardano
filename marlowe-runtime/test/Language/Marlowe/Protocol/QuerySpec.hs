@@ -102,13 +102,17 @@ instance Arbitrary Withdrawal where
 instance Arbitrary Order where
   arbitrary = elements [Ascending, Descending]
 
+instance Arbitrary ContractFilter where
+  arbitrary = ContractFilter <$> arbitrary <*> arbitrary
+  shrink = genericShrink
+
 instance Arbitrary WithdrawalFilter where
   arbitrary = WithdrawalFilter <$> arbitrary
   shrink = genericShrink
 
 arbitraryRequest :: StRes a -> Gen (Request a)
 arbitraryRequest = \case
-  TokContractHeaders -> ReqContractHeaders <$> arbitrary
+  TokContractHeaders -> ReqContractHeaders <$> arbitrary <*> arbitrary
   TokContractState -> ReqContractState <$> arbitrary
   TokTransaction -> ReqTransaction <$> arbitrary
   TokTransactions -> ReqTransactions <$> arbitrary
@@ -118,7 +122,10 @@ arbitraryRequest = \case
 
 shrinkRequest :: Request a -> [Request a]
 shrinkRequest = \case
-  ReqContractHeaders range -> ReqContractHeaders <$> shrink range
+  ReqContractHeaders cFilter range -> fold
+    [  ReqContractHeaders <$> shrink cFilter <*> pure range
+    , ReqContractHeaders cFilter <$> shrink range
+    ]
   ReqContractState contractId -> ReqContractState <$> shrink contractId
   ReqTransaction txId -> ReqTransaction <$> shrink txId
   ReqTransactions contractId -> ReqTransactions <$> shrink contractId
