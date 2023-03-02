@@ -158,7 +158,7 @@ tests =
             ]
         , testGroup "Constraint 9. Marlowe parameters"
             [
-              testProperty "Invalid alteration of parameters." checkParamsOutput
+              testProperty "Invalid alteration of parameters" checkParamsOutput
             ]
         , testGroup "Constraint 10. Output state"
             [

@@ -122,7 +122,6 @@ library
     , tasty-quickcheck
     , text
     , these
-    , vector
 
 
 test-suite marlowe-test
