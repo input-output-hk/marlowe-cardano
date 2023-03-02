@@ -379,6 +379,11 @@ mkMarloweValidator
       where
         payoutToTxOut :: (Party, Val.Value) -> Bool
         payoutToTxOut (party, value) = case party of
+            -- [Marlowe-Cardano Specification: "Constraint 15. Sufficient Payment".]
+            -- SCP-5128: Note that the payment to an address may be split into several outputs but the payment to a role must be
+            -- a single output. The flexibily of multiple outputs accommodates wallet-related practicalities such as the change and
+            -- the return of the role token being in separate UTxOs in situations where a contract is also paying to the address
+            -- where that change and that role token are sent.
             Address _ address  -> traceIfFalse "p" $ value `Val.leq` valuePaidToAddress address  -- At least sufficient value paid.
             Role role -> let
                 hsh = findDatumHash' (rolesCurrency, role)
