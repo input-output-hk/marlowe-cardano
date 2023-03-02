@@ -12,10 +12,10 @@ module Language.Marlowe.Runtime.Web.Client
   , getWithdrawals
   , healthcheck
   , postContract
-  , postContractsCreateTx
-  , postContractsCreateTxBody
+  , postContractCreateTx
   , postTransaction
   , postWithdrawal
+  , postTransactionCreateTx
   , putContract
   , putTransaction
   , putWithdrawal
@@ -31,7 +31,7 @@ import qualified Data.Set as Set
 import Data.Text (Text)
 import GHC.TypeLits (KnownSymbol, symbolVal)
 import Language.Marlowe.Runtime.Web.API
-  (API, GetContractsResponse, GetTransactionsResponse, GetWithdrawalsResponse, ListObject(..), api, retractLink)
+  (API, CardanoTx, CardanoTxBody, GetContractsResponse, GetTransactionsResponse, GetWithdrawalsResponse, ListObject(..), api, retractLink)
 import Language.Marlowe.Runtime.Web.Types
 import Servant (ResponseHeader(..), getResponse, lookupResponseHeader, type (:<|>)((:<|>)))
 import Servant.Client (Client, ClientM)
@@ -72,8 +72,14 @@ getContracts roleCurrencies tags range = do
     , items = retractLink @"contract" . retractLink @"transactions" <$> items
     }
 
-postContractsCreateTxBody changeAddress otherAddresses collateralUtxos request = do
-  let _ :<|> (postContractCreateTxBody' :<|> _) :<|> _ = client
+postContract
+  :: Address
+  -> Maybe (Set Address)
+  -> Maybe (Set TxOutRef)
+  -> PostContractsRequest
+  -> ClientM (CreateTxBody CardanoTxBody)
+postContract changeAddress otherAddresses collateralUtxos request = do
+  let (_ :<|> (postContractCreateTxBody' :<|> _) :<|> _) :<|> _ = client
   response <- postContractCreateTxBody'
     request
     changeAddress
@@ -86,9 +92,9 @@ postContractCreateTx
   -> Maybe (Set Address)
   -> Maybe (Set TxOutRef)
   -> PostContractsRequest
-  -> ClientM CreateTx
+  -> ClientM (CreateTxBody CardanoTx)
 postContractCreateTx changeAddress otherAddresses collateralUtxos request = do
-  let _ :<|> (_ :<|> postContractCreateTx') :<|> _ = client
+  let (_ :<|> (_ :<|> postContractCreateTx') :<|> _) :<|> _ = client
   response <- postContractCreateTx'
     request
     changeAddress
@@ -181,17 +187,35 @@ postTransaction
   -> Maybe (Set TxOutRef)
   -> TxOutRef
   -> PostTransactionsRequest
-  -> ClientM ApplyInputsTxBody
+  -> ClientM (ApplyInputsTxBody CardanoTxBody)
 postTransaction changeAddress otherAddresses collateralUtxos contractId request = do
   let contractsClient :<|> _ = client
   let _ :<|> _ :<|> contractApi = contractsClient
-  let _ :<|> _ :<|> _ :<|> postTransactions' :<|> _ = contractApi contractId
-  response <- postTransactions'
+  let _ :<|> _ :<|> _ :<|> (postTransaction' :<|> _) :<|> _ = contractApi contractId
+  response <- postTransaction'
     request
     changeAddress
     (setToCommaList <$> otherAddresses)
     (setToCommaList <$> collateralUtxos)
   pure $ retractLink response
+
+postTransactionCreateTx
+  :: Address
+  -> Maybe (Set Address)
+  -> Maybe (Set TxOutRef)
+  -> TxOutRef
+  -> PostTransactionsRequest
+  -> ClientM (ApplyInputsTxBody CardanoTx)
+postTransactionCreateTx changeAddress otherAddresses collateralUtxos contractId request = do
+  let (_ :<|> _ :<|> contractApi) :<|> _ = client
+  let _ :<|> _ :<|> _ :<|> (_ :<|> postTransactionCreateTx') :<|> _ = contractApi contractId
+  response <- postTransactionCreateTx'
+    request
+    changeAddress
+    (setToCommaList <$> otherAddresses)
+    (setToCommaList <$> collateralUtxos)
+  pure $ retractLink response
+
 
 getTransaction :: TxOutRef -> TxId -> ClientM Tx
 getTransaction contractId transactionId = do

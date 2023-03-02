@@ -9,20 +9,9 @@
 module Language.Marlowe.Runtime.Web.Server.REST.Contracts
   where
 
-import Cardano.Api
-  ( BabbageEra
-  , ScriptValidity(ScriptInvalid, ScriptValid)
-  , TxBody
-  , TxScriptValidity(TxScriptValidity, TxScriptValidityNone)
-  , getTxBody
-  , makeSignedTransaction
-  )
+import Cardano.Api (BabbageEra, TxBody, getTxBody, makeSignedTransaction)
 import qualified Cardano.Api as Cardano
-import Cardano.Api.Shelley (Tx(ShelleyTx), TxBody(ShelleyTxBody))
-import Cardano.Ledger.Alonzo.Tx (ValidatedTx(ValidatedTx))
-import qualified Cardano.Ledger.Alonzo.Tx as Alonzo
 import Cardano.Ledger.Alonzo.TxWitness (TxWitness(TxWitness))
-import Cardano.Ledger.BaseTypes (maybeToStrictMaybe)
 import Control.Monad (unless)
 import Control.Monad.IO.Class (liftIO)
 import Data.Aeson (Value(Null))
@@ -50,6 +39,7 @@ import qualified Language.Marlowe.Runtime.Web.Server.REST.ApiError as ApiError
 import qualified Language.Marlowe.Runtime.Web.Server.REST.Transactions as Transactions
 import Language.Marlowe.Runtime.Web.Server.TxClient (TempTx(TempTx), TempTxStatus(Unsigned), TxClientSelector)
 import Language.Marlowe.Runtime.Web.Server.TxClient (TempTx(TempTx), TempTxStatus(Unsigned))
+import Language.Marlowe.Runtime.Web.Server.Util (makeSignedTxWithWitnessKeys)
 import Observe.Event (Event, EventBackend, addField, reference, withEvent)
 import Observe.Event.Backend (narrowEventBackend)
 import Observe.Event.BackendModification (setAncestor)
@@ -87,8 +77,8 @@ compile $ SelectorSpec "contracts"
       , "addresses" ≔ ''Addresses
       , "collateral" ≔ ''TxOutRefs
       , ["post", "error"] ≔ ''String
-      , ["post", "response"] ≔ ''CreateTxBody
-      , ["post", "response", "create", "tx"] ≔ ''CreateTx
+      , ["post", "response", "txBody"] ≔ [t|CreateTxBody CardanoTxBody|]
+      , ["post", "response", "tx"] ≔ [t|CreateTxBody CardanoTx|]
       ]
   , ["get", "one"] ≔ FieldSpec ["get", "one"]
       [ ["get", "id"] ≔ ''TxOutRef
@@ -145,12 +135,12 @@ postCreateTxBodyResponse
   -> Address
   -> Maybe (CommaList Address)
   -> Maybe (CommaList TxOutRef)
-  -> AppM r PostContractsResponse
+  -> AppM r (PostContractsResponse CardanoTxBody)
 postCreateTxBodyResponse eb req changeAddressDTO mAddresses mCollateralUtxos = withEvent (hoistEventBackend liftIO eb) Post \ev -> do
   res <- postCreateTxBody ev req changeAddressDTO mAddresses mCollateralUtxos
   let (contractId', txBody') = toDTO res
   let body = CreateTxBody contractId' txBody'
-  addField ev $ PostResponse body
+  addField ev $ PostResponseTxBody body
   pure $ IncludeLink (Proxy @"contract") body
 
 postCreateTxResponse
@@ -159,13 +149,13 @@ postCreateTxResponse
   -> Address
   -> Maybe (CommaList Address)
   -> Maybe (CommaList TxOutRef)
-  -> AppM r PostContractsCreateTxResponse
+  -> AppM r (PostContractsResponse CardanoTx)
 postCreateTxResponse eb req changeAddressDTO mAddresses mCollateralUtxos = withEvent (hoistEventBackend liftIO eb) Post \ev -> do
   (contractId, txBody) <- postCreateTxBody ev req changeAddressDTO mAddresses mCollateralUtxos
   let tx = makeSignedTransaction [] txBody
   let (contractId', tx') = toDTO (contractId, tx)
-  let body = CreateTx contractId' tx'
-  addField ev $ PostResponseCreateTx body
+  let body = CreateTxBody contractId' tx'
+  addField ev $ PostResponseTx body
   pure $ IncludeLink (Proxy @"contract") body
 
 get
@@ -237,18 +227,23 @@ put eb contractId body = withEvent (hoistEventBackend liftIO eb) Put \ev -> do
 --       unless (getTxBody tx == txBody) $ throwError (badRequest' "Provided transaction body differs from the original one")
 --       submitContract contractId' (narrowEventBackend (injectSelector RunTx) $ setAncestorEventBackend (reference ev) eb) tx >>= \case
 -- =======
-      let
-        -- `<|>` gives me error here
-        req :: Maybe (Either (Cardano.Tx BabbageEra) (ShelleyTxWitness BabbageEra))
-        req = case fromDTO (Left body) of
-          Just res -> pure res
-          Nothing -> fromDTO (Right body)
+--       let
+--         -- `<|>` gives me error here
+--         req :: Maybe (Either (Cardano.Tx BabbageEra) (ShelleyTxWitness BabbageEra))
+--         req = case fromDTO (Left body) of
+--           Just res -> pure res
+--           Nothing -> fromDTO (Right body)
+-- =======
+      (req :: Maybe (Either (Cardano.Tx BabbageEra) (ShelleyTxWitness BabbageEra))) <- case teType body of
+        "Tx BabbageEra" -> pure $ Left <$> fromDTO body
+        "ShelleyTxWitness BabbageEra" -> pure $ Right <$> fromDTO body
+        _ -> throwError $ badRequest' "Unknown envelope type - allowed types are: \"Tx BabbageEra\", \"ShelleyTxWitness BabbageEra\""
 
       for_ (fromDTO body :: Maybe Cardano.TextEnvelope) \te ->
         addField ev $ Body te
 
       tx <- case req of
-        Nothing -> throwError $ badRequest' "Invalid body value"
+        Nothing -> throwError $ badRequest' "Invalid text envelope cbor value"
         Just (Left tx) -> do
           unless (getTxBody tx == txBody) $ throwError (badRequest' "Provided transaction body differs from the original one")
           pure tx
@@ -257,37 +252,10 @@ put eb contractId body = withEvent (hoistEventBackend liftIO eb) Put \ev -> do
         -- > Only the portions of the witness set that were signed as a result of this call are returned to
         -- > encourage dApps to verify the contents returned by this endpoint while building the final transaction.
         Just (Right (ShelleyTxWitness (TxWitness wtKeys _ _ _ _))) -> do
-          let
-            txScriptValidityToScriptValidity :: TxScriptValidity era -> ScriptValidity
-            txScriptValidityToScriptValidity TxScriptValidityNone = ScriptValid
-            txScriptValidityToScriptValidity (TxScriptValidity _ scriptValidity) = scriptValidity
-
-            scriptValidityToIsValid :: ScriptValidity -> Alonzo.IsValid
-            scriptValidityToIsValid ScriptInvalid = Alonzo.IsValid False
-            scriptValidityToIsValid ScriptValid = Alonzo.IsValid True
-
-            txScriptValidityToIsValid :: TxScriptValidity era -> Alonzo.IsValid
-            txScriptValidityToIsValid = scriptValidityToIsValid . txScriptValidityToScriptValidity
-
-            tx = case (txBody, makeSignedTransaction [] txBody) of
-              (ShelleyTxBody era txBody' _ _ txmetadata scriptValidity, ShelleyTx _ (ValidatedTx _ bkTxWitness _ _)) -> do
-                let
-                  TxWitness _ bkBoot bkScripts bkDats bkRdmrs = bkTxWitness
-                  wt' =
-                    TxWitness
-                      wtKeys
-                      bkBoot
-                      bkScripts
-                      bkDats
-                      bkRdmrs
-
-                ShelleyTx era $ ValidatedTx
-                  txBody'
-                  wt'
-                  (txScriptValidityToIsValid scriptValidity)
-                  (maybeToStrictMaybe txmetadata)
-          pure tx
-      submitContract contractId' (setAncestor $ reference ev) tx >>= \case
+          case makeSignedTxWithWitnessKeys txBody wtKeys of
+            Just tx -> pure tx
+            Nothing -> throwError $ badRequest' "Invalid witness keys"
+      submitContract contractId' (narrowEventBackend (injectSelector RunTx) $ setAncestorEventBackend (reference ev) eb) tx >>= \case
         Nothing -> pure NoContent
         Just err -> do
           addField ev $ Error $ show err

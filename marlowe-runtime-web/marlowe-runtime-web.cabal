@@ -64,6 +64,7 @@ library
     , base16 >= 0.3.2 && < 0.4
     , bytestring >= 0.10.12 && < 0.12
     , containers >= 0.6.5 && < 0.7
+    -- , http-media
     , lens >= 5.2 && < 6
     , marlowe-cardano ==0.1.0.3
     , mtl >= 2.2 && < 3
@@ -97,11 +98,16 @@ library server
     Language.Marlowe.Runtime.Web.Server.TxClient
   build-depends:
     , base >= 4.9 && < 5
+    -- , bytestring
     , aeson >= 2 && < 3
     , async >= 2.2 && < 3
     , async-components ==0.1.0.0
     , cardano-api ==1.35.4
     , containers >= 0.6.5 && < 0.7
+    -- , cardano-binary
+    -- , cardano-ledger-alonzo
+    -- , cardano-ledger-core
+    -- , cardano-ledger-shelley
     , errors >= 2.3 && < 3
     , eventuo11y ^>= { 0.9, 0.10 }
     , eventuo11y-dsl ^>= { 0.2 }

@@ -554,7 +554,7 @@ instance
   , Ledger.Core.Script (ShelleyLedgerEra era) ~ Ledger.Alonzo.Scripts.Script (ShelleyLedgerEra era)
   ) => HasTextEnvelope (ShelleyTxWitness era) where
   textEnvelopeType _ = do
-    "ShelleyTxWitness:" <> case shelleyBasedEra :: ShelleyBasedEra era of
+    "ShelleyTxWitness " <> case shelleyBasedEra :: ShelleyBasedEra era of
        ShelleyBasedEraAlonzo -> "Alonzo"
        ShelleyBasedEraBabbage -> "Babbage"
 

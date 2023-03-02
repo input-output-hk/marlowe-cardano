@@ -21,6 +21,7 @@ import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import Data.ByteString.Base16 (decodeBase16, encodeBase16)
 import Data.Char (isSpace)
+import Data.Data (Typeable)
 import Data.Foldable (fold)
 import Data.Map (Map)
 import Data.OpenApi
@@ -387,14 +388,14 @@ instance ToJSON WithdrawTxBody
 instance FromJSON WithdrawTxBody
 instance ToSchema WithdrawTxBody
 
-data CreateTxBody = CreateTxBody
+data CreateTxBody tx = CreateTxBody
   { contractId :: TxOutRef
   , txBody :: TextEnvelope
   } deriving (Show, Eq, Ord, Generic)
 
-instance ToJSON CreateTxBody
-instance FromJSON CreateTxBody
-instance ToSchema CreateTxBody
+instance ToJSON (CreateTxBody tx)
+instance FromJSON (CreateTxBody tx)
+instance Typeable tx => ToSchema (CreateTxBody tx)
 
 data CreateTx = CreateTx
   { contractId :: TxOutRef
@@ -457,8 +458,6 @@ data PostContractsRequest = PostContractsRequest
 instance FromJSON PostContractsRequest
 instance ToJSON PostContractsRequest
 instance ToSchema PostContractsRequest
-
-newtype PostContractsConstructTx = PostContractsConstructTx Bool
 
 data RolesConfig
   = UsePolicy PolicyId
@@ -609,13 +608,13 @@ instance FromJSON PostTransactionsRequest
 instance ToJSON PostTransactionsRequest
 instance ToSchema PostTransactionsRequest
 
-data ApplyInputsTxBody = ApplyInputsTxBody
+data ApplyInputsTxBody tx = ApplyInputsTxBody
   { contractId :: TxOutRef
   , transactionId :: TxId
   , txBody :: TextEnvelope
   } deriving (Show, Eq, Ord, Generic)
 
-instance ToJSON ApplyInputsTxBody
-instance FromJSON ApplyInputsTxBody
-instance ToSchema ApplyInputsTxBody
+instance ToJSON (ApplyInputsTxBody tx)
+instance FromJSON (ApplyInputsTxBody tx)
+instance Typeable tx => ToSchema (ApplyInputsTxBody tx)
 

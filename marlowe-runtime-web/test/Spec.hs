@@ -143,7 +143,7 @@ instance Arbitrary Web.PostTransactionsRequest where
     <*> arbitraryNormal  -- FIXME: This should handle merkleized input, too.
   shrink = genericShrink
 
-instance Arbitrary Web.CreateTxBody where
+instance Arbitrary (Web.CreateTxBody tx) where
   arbitrary = Web.CreateTxBody <$> arbitrary <*> arbitrary
   shrink = genericShrink
 
@@ -151,7 +151,7 @@ instance Arbitrary Web.WithdrawTxBody where
   arbitrary = Web.WithdrawTxBody <$> arbitrary <*> arbitrary
   shrink = genericShrink
 
-instance Arbitrary Web.ApplyInputsTxBody where
+instance Arbitrary (Web.ApplyInputsTxBody tx) where
   arbitrary = Web.ApplyInputsTxBody <$> arbitrary <*> arbitrary <*> arbitrary
   shrink = genericShrink
 
