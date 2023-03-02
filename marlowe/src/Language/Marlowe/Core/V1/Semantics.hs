@@ -973,6 +973,7 @@ instance Eq ReduceWarning where
         acc1 == acc2 && p1 == p2 && tn1 == tn2 && a1 == a2 && e1 == e2
     (ReduceShadowing v1 old1 new1) == (ReduceShadowing v2 old2 new2) =
         v1 == v2 && old1 == old2 && new1 == new2
+    ReduceAssertionFailed == ReduceAssertionFailed = True
     _ == _ = False
 
 
