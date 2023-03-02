@@ -163,7 +163,7 @@ tests referencePaths =
             ]
         , testGroup "Constraint 6. Output value to script"
             [
-              testProperty "Invalid mismatch between state and script output's value" $ checkValueOutput referencePaths
+              testProperty "Invalid mismatch between expected and actual output to script" $ checkValueOutput referencePaths
             ]
         , testGroup "Constraint 7. Input state"
             [
@@ -215,6 +215,10 @@ tests referencePaths =
         , testGroup "Constraint 20. Single satisfaction"
             [
               testProperty "Invalid other validators during payment" $ checkOtherValidators referencePaths
+            ]
+        , testGroup "Constraint 18. Final balance"
+            [
+              testProperty "Invalid mismatch between output value and state" $ checkOutputConsistency referencePaths
             ]
         , testProperty "Script hash matches reference hash"
             $ checkValidatorHash semanticsScriptHash
