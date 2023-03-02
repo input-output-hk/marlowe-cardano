@@ -34,6 +34,7 @@ import Language.Marlowe.Core.V1.Semantics
   , Payment(Payment)
   , TransactionInput(..)
   , TransactionOutput(txOutContract, txOutPayments, txOutState)
+  , totalBalance
   )
 import Language.Marlowe.Core.V1.Semantics.Types
   ( ChoiceId(ChoiceId)
@@ -53,7 +54,7 @@ import Plutus.V2.Ledger.Api
   , BuiltinData(BuiltinData)
   , Credential(PubKeyCredential)
   , Data(B, Constr, List)
-  , Datum(Datum)
+  , Datum(..)
   , DatumHash(DatumHash)
   , FromData(..)
   , OutputDatum(..)
@@ -146,7 +147,7 @@ tests referencePaths =
             ]
         , testGroup "Constraint 6. Output value to script"
             [
-              testProperty "Invalid mismatch between state and script output's value" $ checkValueOutput referencePaths
+              testProperty "Invalid mismatch between expected and actual output to script" $ checkValueOutput referencePaths
             ]
         , testGroup "Constraint 7. Input state"
             [
@@ -184,6 +185,10 @@ tests referencePaths =
         , testGroup "Constraint 15. Sufficient payment"
             [
               testProperty "Invalid insufficient payment" $ checkPayment referencePaths
+            ]
+        , testGroup "Constraint 18. Final balance"
+            [
+              testProperty "Invalid mismatch between output value and state" $ checkOutputConsistency referencePaths
             ]
         , testProperty "Script hash matches reference hash"
             $ checkValidatorHash semanticsScriptHash
@@ -396,7 +401,7 @@ checkValueInput referencePaths =
       checkSemanticsTransaction referencePaths noModify modifyAfter noVeto False False
 
 
--- | Check that value output to a script matches its output state.
+-- | Check that value output to a script matches its expectation.
 checkValueOutput :: [ReferencePath] -> Property
 checkValueOutput referencePaths =
   let
@@ -412,6 +417,23 @@ checkValueOutput referencePaths =
         infoOutputs %= fmap incrementOwnOutput
   in
     checkSemanticsTransaction referencePaths noModify modifyAfter notCloses False False
+
+
+-- | Check the consistency of the output value with the output state.
+checkOutputConsistency :: [ReferencePath] -> Property
+checkOutputConsistency referencePaths =
+  property
+    . forAll (arbitrarySemanticsTransaction referencePaths noModify noModify False)
+    $ \tx ->
+      let
+        findOwnOutput (TxOut address value _ _)
+          | address == semanticsAddress = value
+          | otherwise                   = mempty
+        outValue = foldMap findOwnOutput $ tx ^. infoOutputs
+        finalBalance = totalBalance . accounts . txOutState $ tx ^. output
+        valid = outValue == finalBalance
+      in
+        checkSemanticsTransaction referencePaths noModify noModify notCloses valid False
 
 
 -- | Check that output datum to a script matches its semantic output.
