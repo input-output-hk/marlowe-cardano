@@ -360,8 +360,8 @@ mkMarloweValidator
     -- Tally the deposits in the input.
     collectDeposits :: InputContent -> Val.Value
     collectDeposits (IDeposit _ _ (Token cur tok) amount)
-      | amount > 0    = Val.singleton cur tok amount  -- SCP-5123: Semantically negative deposits do
-      | otherwise     = zero                          -- not withdraw funds from the script's UTxO.
+      | amount > 0    = Val.singleton cur tok amount  -- SCP-5123: Semantically negative deposits
+      | otherwise     = zero                          -- do not remove funds from the script's UTxO.
     collectDeposits _ = zero
 
     -- Extract the payout to a party.
