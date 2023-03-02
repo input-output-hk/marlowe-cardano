@@ -29,3 +29,8 @@ Based on audit finding, we added detailed comment in the Marlowe semantics valid
 ## SCP-5124: Validator checks consistency of script output and internal accounts
 
 Based on audit findings, we added "Constraint 18. Final balance" to the Marlowe-Cardano specification, requiring that the value output to the script address match the total value of the accounts in the output state, along with a corresponding check in the Marlowe semantics validator.
+
+
+## SCP-5143: Removed tracing from validator
+
+In order to reduces the validator size, calls to Plutus tracing functions were removed.
