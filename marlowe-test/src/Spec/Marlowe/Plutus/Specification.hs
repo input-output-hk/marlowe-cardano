@@ -34,6 +34,7 @@ import Language.Marlowe.Core.V1.Semantics
   , Payment(Payment)
   , TransactionInput(..)
   , TransactionOutput(txOutContract, txOutPayments, txOutState)
+  , totalBalance
   )
 import Language.Marlowe.Core.V1.Semantics.Types
   ( ChoiceId(ChoiceId)
@@ -53,7 +54,7 @@ import Plutus.V2.Ledger.Api
   , BuiltinData(BuiltinData)
   , Credential(PubKeyCredential)
   , Data(B, Constr, List)
-  , Datum(Datum)
+  , Datum(..)
   , DatumHash(DatumHash)
   , FromData(..)
   , OutputDatum(..)
@@ -145,7 +146,7 @@ tests =
             ]
         , testGroup "Constraint 6. Output value to script"
             [
-              testProperty "Invalid mismatch between state and script output's value" checkValueOutput
+              testProperty "Invalid mismatch between expected and actual output to script" checkValueOutput
             ]
         , testGroup "Constraint 7. Input state"
             [
@@ -183,6 +184,10 @@ tests =
         , testGroup "Constraint 15. Sufficient payment"
             [
               testProperty "Invalid insufficient payment" checkPayment
+            ]
+        , testGroup "Constraint 18. Final balance"
+            [
+              testProperty "Invalid mismatch between output value and state" checkOutputConsistency
             ]
         , testProperty "Script hash matches reference hash"
             $ checkValidatorHash semanticsScriptHash
@@ -394,7 +399,7 @@ checkValueInput =
       checkSemanticsTransaction noModify modifyAfter noVeto False False
 
 
--- | Check that value output to a script matches its output state.
+-- | Check that value output to a script matches its expectation.
 checkValueOutput :: Property
 checkValueOutput =
   let
@@ -410,6 +415,23 @@ checkValueOutput =
         infoOutputs %= fmap incrementOwnOutput
   in
     checkSemanticsTransaction noModify modifyAfter notCloses False False
+
+
+-- | Check the consistency of the output value with the output state.
+checkOutputConsistency :: Property
+checkOutputConsistency =
+  property
+    . forAll (arbitrarySemanticsTransaction noModify noModify False)
+    $ \tx ->
+      let
+        findOwnOutput (TxOut address value _ _)
+          | address == semanticsAddress = value
+          | otherwise                   = mempty
+        outValue = foldMap findOwnOutput $ tx ^. infoOutputs
+        finalBalance = totalBalance . accounts . txOutState $ tx ^. output
+        valid = outValue == finalBalance
+      in
+        checkSemanticsTransaction noModify noModify notCloses valid False
 
 
 -- | Check that output datum to a script matches its semantic output.
