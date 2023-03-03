@@ -1,19 +1,24 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE TypeFamilies #-}
 
 module Language.Marlowe.Runtime.Integration.MarloweQuery
   where
 
 import Cardano.Api (BabbageEra, TxBody(..), getTxId)
+import Control.Monad (guard)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Reader.Class
 import Data.Bifunctor (bimap)
-import Data.Foldable (for_)
+import Data.Foldable (Foldable(fold), for_)
 import Data.Functor (void)
 import Data.Map (Map)
 import qualified Data.Map as Map
-import Data.Maybe (fromJust, mapMaybe)
+import Data.Maybe (fromJust, isNothing)
 import Data.Set (Set)
 import qualified Data.Set as Set
+import qualified Data.Text as T
 import Language.Marlowe.Protocol.Query.Client
   ( MarloweQueryClient
   , getContractHeaders
@@ -28,7 +33,13 @@ import Language.Marlowe.Runtime.Cardano.Api (fromCardanoTxId)
 import Language.Marlowe.Runtime.ChainSync.Api (AssetId(..), BlockHeader, PolicyId, TxId, TxOutRef(..))
 import Language.Marlowe.Runtime.Client (runMarloweQueryClient)
 import Language.Marlowe.Runtime.Core.Api
-  (ContractId(..), MarloweVersion(..), MarloweVersionTag(..), Payout(..), TransactionScriptOutput(..))
+  ( ContractId(..)
+  , MarloweMetadataTag(..)
+  , MarloweVersion(..)
+  , MarloweVersionTag(..)
+  , Payout(..)
+  , TransactionScriptOutput(..)
+  )
 import qualified Language.Marlowe.Runtime.Core.Api as Core
 import Language.Marlowe.Runtime.Discovery.Api (ContractHeader)
 import Language.Marlowe.Runtime.Integration.Common
@@ -39,185 +50,85 @@ import Test.Integration.Marlowe (MarloweRuntime, withLocalMarloweRuntime)
 
 spec :: Spec
 spec = describe "MarloweQuery" $ aroundAll setup do
-  getContractHeadersSpec
+  describe "GetHeaders" $ paginatedQuerySpec GetHeaders runMarloweQueryIntegrationTest
   getContractStateSpec
   getTransactionsSpec
   getTransactionSpec
-  getWithdrawalsSpec
+  describe "GetWithdrawals" $ paginatedQuerySpec GetWithdrawals runMarloweQueryIntegrationTest
   getWithdrawalSpec
 
-getContractHeadersSpec :: SpecWith MarloweQueryTestData
-getContractHeadersSpec = describe "getContractHeaders" do
-  let
-    contractNoToInt = \case
-      Contract1 -> 0
-      Contract2 -> 1
-      Contract3 -> 2
-      Contract4 -> 3
+data GetHeaders = GetHeaders
+data GetWithdrawals = GetWithdrawals
 
-    allRanges :: [Range (WithUnknown ContractNo)]
-    allRanges = do
-      rangeStart <- Nothing : Just Unknown : (Just . Known <$> allContractNos)
-      rangeOffset <- [-1..5]
-      rangeLimit <- [-1..5]
-      rangeDirection <- [Ascending, Descending]
-      pure Range{..}
+instance PaginatedQuery GetHeaders where
+  type Filter GetHeaders = ContractFilter
+  type Ref GetHeaders = ContractId
+  type Item GetHeaders = ContractHeader
+  data RefSym GetHeaders
+    = Contract1
+    | Contract2
+    | Contract3
+    | Contract4
+    deriving (Eq, Ord, Show, Enum, Bounded)
+  data FilterSym GetHeaders = ContractFilterSym
+    { tagsSym :: Set TestTag
+    , roleCurrenciesSym :: Set (RefSym GetHeaders)
+    }
+    deriving (Eq, Ord, Show)
+  applyFilter _ ContractFilterSym{..} ref =
+    (Set.null tagsSym || not (Set.null $ Set.intersection tagsSym $ tagsForContract ref))
+      && (Set.null roleCurrenciesSym || Set.member ref roleCurrenciesSym)
+  toRef _ MarloweQueryTestData{..} = \case
+    Unknown -> ContractId $ TxOutRef "0000000000000000000000000000000000000000000000000000000000000000" 1
+    Known Contract1 -> standardContractId contract1
+    Known Contract2 -> standardContractId contract2
+    Known Contract3 -> standardContractId contract3
+    Known Contract4 -> standardContractId contract4
+  toItem _ MarloweQueryTestData{..} = \case
+    Contract1 -> standardContractHeader contract1
+    Contract2 -> standardContractHeader contract2
+    Contract3 -> standardContractHeader contract3
+    Contract4 -> standardContractHeader contract4
+  toFilter _ MarloweQueryTestData{..} ContractFilterSym{..} = ContractFilter
+    { tags = Set.map (MarloweMetadataTag . T.pack . show) tagsSym
+    , roleCurrencies = flip Set.map roleCurrenciesSym \case
+        Contract1 -> standardContractRoleCurrency contract1
+        Contract2 -> standardContractRoleCurrency contract2
+        Contract3 -> standardContractRoleCurrency contract3
+        Contract4 -> standardContractRoleCurrency contract4
+    }
+  enumerateFilters q = do
+    tagsSym <- Set.toList $ Set.powerSet $ Set.fromList [minBound..maxBound]
+    roleCurrenciesSym <- Set.toList $ Set.powerSet $ Set.fromList $ allRefs q
+    pure ContractFilterSym{..}
+  runQuery _ = getContractHeaders
 
-    contractNoToContractHeader :: MarloweQueryTestData -> ContractNo -> ContractHeader
-    contractNoToContractHeader MarloweQueryTestData{..} = \case
-      Contract1 -> standardContractHeader contract1
-      Contract2 -> standardContractHeader contract2
-      Contract3 -> standardContractHeader contract3
-      Contract4 -> standardContractHeader contract4
-
-    getNext :: Order -> ContractNo -> Maybe ContractNo
-    getNext Ascending = \case
-      Contract1 -> Just Contract2
-      Contract2 -> Just Contract3
-      Contract3 -> Just Contract4
-      Contract4 -> Nothing
-    getNext Descending = \case
-      Contract4 -> Just Contract3
-      Contract3 -> Just Contract2
-      Contract2 -> Just Contract1
-      Contract1 -> Nothing
-
-
-    expectedPage :: Range (WithUnknown ContractNo) -> Maybe (Page ContractNo ContractNo)
-    expectedPage Range{..}
-      | rangeLimit <= 0 || rangeOffset < 0 = Nothing
-      | otherwise = case rangeStart of
-        Just Unknown -> Nothing
-        Just (Known contractNo) -> expectedPage Range
-          { rangeStart = Nothing
-          , rangeOffset = rangeOffset + case rangeDirection of
-              Ascending -> contractNoToInt contractNo
-              Descending -> contractNoToInt Contract4 - contractNoToInt contractNo
-          , ..
-          }
-        Nothing -> do
-          let
-            items = take rangeLimit $ drop rangeOffset $ case rangeDirection of
-              Ascending -> allContractNos
-              Descending -> reverse allContractNos
-            nextRange = case (reverse items, rangeDirection) of
-              ([], _) -> Nothing
-              (lastItem : _, _) -> do
-                nextItem <- getNext rangeDirection lastItem
-                Just Range
-                  { rangeStart = Just nextItem
-                  , rangeOffset = 0
-                  , ..
-                  }
-            totalCount = 4
-          pure Page{..}
-
-  for_ allRanges \range -> do
-    let expectedSymbolic = expectedPage range
-    it (show range <> " => " <> show expectedSymbolic) $ runMarloweQueryIntegrationTest \testData -> do
-      actual <- getContractHeaders $ contractNoToContractId testData <$> range
-      let
-        expectedConcrete = fmap
-          (bimap (contractNoToContractId testData . Known) (contractNoToContractHeader testData))
-          expectedSymbolic
-      liftIO $ actual `shouldBe` expectedConcrete
-
-  for_ [1..4] \rangeLimit -> do
-    let
-      append prev range = do
-        mPage <- getContractHeaders range
-        case mPage of
-          Nothing -> pure prev
-          Just Page{..} -> case nextRange of
-            Just next -> (prev <> items) `append` next
-            Nothing -> pure $ prev <> items
-
-    it ("Allows all contracts to be listed in ascending pages of size " <> show rangeLimit) $
-      runMarloweQueryIntegrationTest \MarloweQueryTestData{..} -> do
-        allContracts <- [] `append` Range{rangeStart = Nothing, rangeLimit, rangeOffset = 0, rangeDirection = Ascending}
-        liftIO $ allContracts `shouldBe` (standardContractHeader <$> [contract1, contract2, contract3, contract4])
-
-    it ("Allows all contracts to be listed in descending pages of size " <> show rangeLimit) $
-      runMarloweQueryIntegrationTest \MarloweQueryTestData{..} -> do
-        allContracts <- [] `append` Range{rangeStart = Nothing, rangeLimit, rangeOffset = 0, rangeDirection = Descending}
-        liftIO $ allContracts `shouldBe` (standardContractHeader <$> [contract4, contract3, contract2, contract1])
-
-getContractStateSpec :: SpecWith MarloweQueryTestData
-getContractStateSpec = describe "getContractState" do
-  for_ (Unknown : (Known <$> allContractNos)) \contractNo -> do
-    it (show contractNo) $ runMarloweQueryIntegrationTest \testData -> do
-      let
-        expected = SomeContractState MarloweV1 <$> case contractNo of
-          Unknown -> Nothing
-          Known contractNo' -> case contractNoToContractCreated testData contractNo' of
-            ContractCreated{..} -> Just ContractState
-              { contractId
-              , roleTokenMintingPolicyId = rolesCurrency
-              , metadata
-              , initialBlock = contractNoToInitialBlock testData contractNo'
-              , initialOutput = TransactionScriptOutput
-                { address = marloweScriptAddress
-                , assets
-                , utxo = unContractId contractId
-                , datum
-                }
-              , latestBlock = contractNoToLatestBlock testData contractNo'
-              , latestOutput = contractNoToLatestOutput testData contractNo'
-              , unclaimedPayouts = contractNoToUnclaimedPayouts testData contractNo'
-              }
-      actual <- getContractState $ contractNoToContractId testData contractNo
-      liftIO $ actual `shouldBe` expected
-
-getTransactionsSpec :: SpecWith MarloweQueryTestData
-getTransactionsSpec = describe "getTransactions" do
-  for_ (Unknown : (Known <$> allContractNos)) \contractNo -> do
-    it (show contractNo) $ runMarloweQueryIntegrationTest \testData -> do
-      let
-        expected = SomeTransactions MarloweV1 <$> case contractNo of
-          Unknown -> Nothing
-          Known contractNo' -> Just $ contractNoToTransactions testData contractNo'
-      actual <- getTransactions $ contractNoToContractId testData contractNo
-      liftIO $ actual `shouldBe` expected
-
-getTransactionSpec :: SpecWith MarloweQueryTestData
-getTransactionSpec = describe "getTransaction" do
-  for_ (Unknown : ((Known . Left <$> allContractNos) <> (Known . Right <$> allTxNos))) \txNo -> do
-    it (show txNo) $ runMarloweQueryIntegrationTest \testData -> do
-      let
-        expected = case txNo of
-          Unknown -> Nothing
-          Known (Left _) -> Nothing
-          Known (Right txNo') -> Just $ txNoToSomeTransaction testData txNo'
-      actual <- getTransaction $ contractOrTxNoToTxId testData txNo
-      liftIO $ actual `shouldBe` expected
-
-getWithdrawalsSpec :: SpecWith MarloweQueryTestData
-getWithdrawalsSpec = describe "getWithdrawals" do
-  let
-    withdrawalNoToInt contractNos
-      | Set.null contractNos = \case
-          Withdrawal1 -> Just @Int 0
-          Withdrawal2 -> Just @Int 1
-      | otherwise = \no -> lookup no
-          $ flip zip [0..]
-          $ filter (applyRoleCurrencyFilter contractNos) allWithdrawalNos
-
-    allRanges :: [Range (WithUnknown WithdrawalNo)]
-    allRanges = do
-      rangeStart <- Nothing : Just Unknown : (Just . Known <$> allWithdrawalNos)
-      rangeOffset <- [-1..3]
-      rangeLimit <- [-1..3]
-      rangeDirection <- [Ascending, Descending]
-      pure Range{..}
-
-    withdrawalNoToWithdrawal :: MarloweQueryTestData -> WithdrawalNo -> Withdrawal
-    withdrawalNoToWithdrawal MarloweQueryTestData{..} withdrawalNo = Withdrawal
+instance PaginatedQuery GetWithdrawals where
+  type Filter GetWithdrawals = WithdrawalFilter
+  type Ref GetWithdrawals = TxId
+  type Item GetWithdrawals = Withdrawal
+  data RefSym GetWithdrawals
+    = Withdrawal1
+    | Withdrawal2
+    deriving (Eq, Ord, Show, Enum, Bounded)
+  newtype FilterSym GetWithdrawals = WithdrawalFilterSym
+    { withdrawalRoleCurrenciesSym :: Set (RefSym GetHeaders)
+    }
+    deriving (Eq, Ord, Show)
+  applyFilter _ WithdrawalFilterSym{..} = (Set.null withdrawalRoleCurrenciesSym ||) . \case
+    Withdrawal1 -> Set.member Contract1 withdrawalRoleCurrenciesSym
+    Withdrawal2 -> Set.member Contract2 withdrawalRoleCurrenciesSym
+  toRef _ MarloweQueryTestData{..} = \case
+    Unknown -> "0000000000000000000000000000000000000000000000000000000000000000"
+    Known Withdrawal1 -> fromCardanoTxId $ getTxId $ fst contract1Step5
+    Known Withdrawal2 -> fromCardanoTxId $ getTxId $ fst contract2Step5
+  toItem _ MarloweQueryTestData{..} ref = Withdrawal
       { block
       , withdrawnPayouts
       , withdrawalTx = fromCardanoTxId $ getTxId txBody
       }
       where
-        ((txBody, block), withdrawnPayouts) = case withdrawalNo of
+        ((txBody, block), withdrawnPayouts) = case ref of
           Withdrawal1 ->
             ( contract1Step5
             , case inputsAppliedToTransaction (returnDepositBlock contract1Step4) (returnDeposited contract1Step4) of
@@ -241,68 +152,85 @@ getWithdrawalsSpec = describe "getWithdrawals" do
                     }
 
             )
+  toFilter _ MarloweQueryTestData{..} WithdrawalFilterSym{..} = WithdrawalFilter
+    { roleCurrencies = flip Set.map withdrawalRoleCurrenciesSym \case
+        Contract1 -> standardContractRoleCurrency contract1
+        Contract2 -> standardContractRoleCurrency contract2
+        Contract3 -> standardContractRoleCurrency contract3
+        Contract4 -> standardContractRoleCurrency contract4
+    }
+  enumerateFilters _ = WithdrawalFilterSym <$> Set.toList (Set.powerSet $ Set.fromList $ allRefs GetHeaders)
+  runQuery _ = getWithdrawals
 
-    getNext :: Set ContractNo -> Order -> WithdrawalNo -> Maybe WithdrawalNo
-    getNext contractNos Ascending = \case
-      Withdrawal1 -> Withdrawal2 <$ withdrawalNoToInt contractNos Withdrawal2
-      Withdrawal2 -> Nothing
-    getNext contractNos Descending = \case
-      Withdrawal1 -> Nothing
-      Withdrawal2 -> Withdrawal1 <$ withdrawalNoToInt contractNos Withdrawal1
-
-    applyRoleCurrencyFilter :: Set ContractNo -> WithdrawalNo -> Bool
-    applyRoleCurrencyFilter contractNos
-      | Set.null contractNos = const True
-      | otherwise = \case
-          Withdrawal1 -> Set.member Contract1 contractNos
-          Withdrawal2 -> Set.member Contract2 contractNos
-
-    expectedPage :: Set ContractNo -> Range (WithUnknown WithdrawalNo) -> Maybe (Page WithdrawalNo WithdrawalNo)
-    expectedPage contractNos Range{..}
-      | rangeLimit <= 0 || rangeOffset < 0 = Nothing
-      | otherwise = case rangeStart of
-        Just Unknown -> Nothing
-        Just (Known withdrawalNo) -> do
-          withdrawalPos <- withdrawalNoToInt contractNos withdrawalNo
-          maxPos <- maximum $ withdrawalNoToInt contractNos <$> allWithdrawalNos
-          expectedPage contractNos Range
-            { rangeStart = Nothing
-            , rangeOffset = rangeOffset + case rangeDirection of
-                Ascending -> withdrawalPos
-                Descending -> maxPos - withdrawalPos
-            , ..
-            }
-        Nothing -> do
-          let
-            items = take rangeLimit $ drop rangeOffset $ filter (applyRoleCurrencyFilter contractNos) case rangeDirection of
-              Ascending -> allWithdrawalNos
-              Descending -> reverse allWithdrawalNos
-            nextRange = case (reverse items, rangeDirection) of
-              ([], _) -> Nothing
-              (lastItem : _, _) -> do
-                nextItem <- getNext contractNos rangeDirection lastItem
-                Just Range
-                  { rangeStart = Just nextItem
-                  , rangeOffset = 0
-                  , ..
-                  }
-            totalCount = length $ mapMaybe (withdrawalNoToInt contractNos) allWithdrawalNos
-          pure Page{..}
-
-  for_ allRanges \range -> do
-    for_ (Set.toList $ Set.powerSet $ Set.fromList allContractNos) \roleCurrencies -> do
-      let expectedSymbolic = expectedPage roleCurrencies range
-      it (show (roleCurrencies, range) <> " => " <> show expectedSymbolic) $ runMarloweQueryIntegrationTest \testData -> do
-        actual <- getWithdrawals (WithdrawalFilter $ Set.map (contractNoToRoleCurrency testData) roleCurrencies) $ withdrawalNoToWithdrawalId testData <$> range
-        let
-          expectedConcrete = fmap
-            (bimap (withdrawalNoToWithdrawalId testData . Known) (withdrawalNoToWithdrawal testData))
-            expectedSymbolic
-        liftIO $ actual `shouldBe` expectedConcrete
-
-contractNoToRoleCurrency :: MarloweQueryTestData -> ContractNo -> PolicyId
-contractNoToRoleCurrency testData contractNo = case contractNoToContractCreated testData contractNo of
+standardContractRoleCurrency :: StandardContractInit 'V1 -> PolicyId
+standardContractRoleCurrency StandardContractInit{..} = case contractCreated of
   ContractCreated{..} -> rolesCurrency
+
+data TestTag = Tag1 | Tag2
+  deriving (Eq, Ord, Show, Enum, Bounded)
+
+tagsForContract :: RefSym GetHeaders -> Set TestTag
+tagsForContract = \case
+  Contract1 -> mempty
+  Contract2 -> mempty
+  Contract3 -> mempty
+  Contract4 -> mempty
+
+-- tagsForContract :: RefSym GetHeaders -> Set TestTag
+-- tagsForContract = \case
+--   Contract1 -> mempty
+--   Contract2 -> Set.singleton Tag1
+--   Contract3 -> Set.fromList [Tag1, Tag2]
+--   Contract4 -> Set.singleton Tag2
+
+getContractStateSpec :: SpecWith MarloweQueryTestData
+getContractStateSpec = describe "getContractState" do
+  for_ (Unknown : (Known <$> allRefs GetHeaders)) \contractNo -> do
+    it (show contractNo) $ runMarloweQueryIntegrationTest \testData -> do
+      let
+        expected = SomeContractState MarloweV1 <$> case contractNo of
+          Unknown -> Nothing
+          Known contractNo' -> case contractNoToContractCreated testData contractNo' of
+            ContractCreated{..} -> Just ContractState
+              { contractId
+              , roleTokenMintingPolicyId = rolesCurrency
+              , metadata
+              , initialBlock = contractNoToInitialBlock testData contractNo'
+              , initialOutput = TransactionScriptOutput
+                { address = marloweScriptAddress
+                , assets
+                , utxo = unContractId contractId
+                , datum
+                }
+              , latestBlock = contractNoToLatestBlock testData contractNo'
+              , latestOutput = contractNoToLatestOutput testData contractNo'
+              , unclaimedPayouts = contractNoToUnclaimedPayouts testData contractNo'
+              }
+      actual <- getContractState $ toRef GetHeaders testData contractNo
+      liftIO $ actual `shouldBe` expected
+
+getTransactionsSpec :: SpecWith MarloweQueryTestData
+getTransactionsSpec = describe "getTransactions" do
+  for_ (Unknown : (Known <$> allRefs GetHeaders)) \contractNo -> do
+    it (show contractNo) $ runMarloweQueryIntegrationTest \testData -> do
+      let
+        expected = SomeTransactions MarloweV1 <$> case contractNo of
+          Unknown -> Nothing
+          Known contractNo' -> Just $ contractNoToTransactions testData contractNo'
+      actual <- getTransactions $ toRef GetHeaders testData contractNo
+      liftIO $ actual `shouldBe` expected
+
+getTransactionSpec :: SpecWith MarloweQueryTestData
+getTransactionSpec = describe "getTransaction" do
+  for_ (Unknown : ((Known . Left <$> allRefs GetHeaders) <> (Known . Right <$> allTxNos))) \txNo -> do
+    it (show txNo) $ runMarloweQueryIntegrationTest \testData -> do
+      let
+        expected = case txNo of
+          Unknown -> Nothing
+          Known (Left _) -> Nothing
+          Known (Right txNo') -> Just $ txNoToSomeTransaction testData txNo'
+      actual <- getTransaction $ contractOrTxNoToTxId testData txNo
+      liftIO $ actual `shouldBe` expected
 
 getWithdrawalSpec :: SpecWith MarloweQueryTestData
 getWithdrawalSpec = describe "getWithdrawal" do
@@ -368,21 +296,6 @@ data MarloweQueryTestData = MarloweQueryTestData
   , contract4 :: StandardContractInit 'V1
   }
 
-data WithUnknown a = Unknown | Known a
-  deriving (Show, Eq, Ord)
-
-data ContractNo
-  = Contract1
-  | Contract2
-  | Contract3
-  | Contract4
-  deriving (Show, Eq, Ord, Enum, Bounded)
-
-data WithdrawalNo
-  = Withdrawal1
-  | Withdrawal2
-  deriving (Show, Eq, Ord, Enum, Bounded)
-
 data TxNo
   = Contract1Step1
   | Contract1Step2
@@ -398,33 +311,158 @@ data TxNo
   | Contract3Step4
   deriving (Show, Eq, Ord, Enum, Bounded)
 
-allContractNos :: [ContractNo]
-allContractNos = [minBound..maxBound]
+data WithUnknown a = Unknown | Known a
+  deriving (Show, Eq, Ord)
 
-allWithdrawalNos :: [WithdrawalNo]
-allWithdrawalNos = [minBound..maxBound]
+class (Eq (RefSym q), Enum (RefSym q), Bounded (RefSym q)) => PaginatedQuery q where
+  type Filter q :: *
+  type Ref q :: *
+  type Item q :: *
+  data FilterSym q :: *
+  data RefSym q :: *
+  applyFilter :: q -> FilterSym q -> RefSym q -> Bool
+  toRef :: q -> MarloweQueryTestData -> WithUnknown (RefSym q) -> Ref q
+  toItem :: q -> MarloweQueryTestData -> RefSym q -> Item q
+  toFilter :: q -> MarloweQueryTestData -> FilterSym q -> Filter q
+  enumerateFilters :: q -> [FilterSym q]
+  runQuery :: Applicative m => q -> Filter q -> Range (Ref q) -> MarloweQueryClient m (Maybe (Page (Ref q) (Item q)))
+
+runQuerySym
+  :: (PaginatedQuery q, Applicative m)
+  => q
+  -> MarloweQueryTestData
+  -> FilterSym q
+  -> Range (WithUnknown (RefSym q))
+  -> MarloweQueryClient m (Maybe (Page (Ref q) (Item q)))
+runQuerySym q testData filter_ range = runQuery q (toFilter q testData filter_) (toRef q testData <$> range)
+
+paginatedQuerySpec
+  :: (PaginatedQuery q, Show (RefSym q), Show (Item q), Show (Ref q), Eq (Item q), Eq (Ref q), Show (FilterSym q))
+  => q
+  -> ((MarloweQueryTestData -> MarloweQueryClient Integration ()) -> MarloweQueryTestData -> IO ())
+  -> SpecWith MarloweQueryTestData
+paginatedQuerySpec q runner = do
+  describe "Range and filter combinations" do
+    for_ (enumerateFilters q) \filter_ -> do
+      for_ (allRanges q filter_) \range -> do
+        let expectedSym = applyRange q filter_ range
+        it (show filter_ <> "; " <> show range <> " => " <> show expectedSym) $ runner \testData -> do
+          actual <- runQuerySym q testData filter_ range
+          let expected = fmap (bimap (toRef q testData . Known) (toItem q testData)) expectedSym
+          liftIO $ actual `shouldBe` expected
+
+  describe "Page navigation" do
+    for_ (enumerateFilters q) \filter_ -> do
+      for_ (filter (isValidStartingRange q filter_) $ allRanges q filter_) \range -> do
+        let expectedSym = getFilteredSortedRefs q filter_ range
+        it (show filter_ <> "; pageSize = " <> show (rangeLimit range) <> "; start = " <> show (rangeStart range) <> "; order = " <> show (rangeDirection range) <> " => " <> show expectedSym) $ runner \testData -> do
+          actual <- appendRange q testData filter_ [] $ toRef q testData <$> range
+          let expected = toItem q testData <$> expectedSym
+          liftIO $ actual `shouldBe` Just (length expected, expected)
+
+isValidStartingRange :: PaginatedQuery q => q -> FilterSym q -> Range (WithUnknown (RefSym q)) -> Bool
+isValidStartingRange q filter_ Range{..} = case getFilteredSortedRefs q filter_ Range{..} of
+  [] -> False
+  a : _ -> (isNothing rangeStart || rangeStart == Just (Known a))
+    && rangeOffset == 0
+    && rangeLimit > 0
+
+appendRange
+  :: Monad m
+  => PaginatedQuery q
+  => q
+  -> MarloweQueryTestData
+  -> FilterSym q
+  -> [Item q]
+  -> Range (Ref q)
+  -> MarloweQueryClient m (Maybe (Int, [Item q]))
+appendRange q testData filter_ prev range = runQuery q (toFilter q testData filter_) range >>= \case
+  Nothing -> pure Nothing
+  Just Page{..} -> case nextRange of
+    Nothing -> pure $ Just (totalCount, prev <> items)
+    Just range' -> appendRange q testData filter_ (prev <> items) range'
+
+allRefs :: PaginatedQuery q => q -> [RefSym q]
+allRefs _ = [minBound..maxBound]
+
+getFilteredSortedRefs :: PaginatedQuery q => q -> FilterSym q -> Range a -> [RefSym q]
+getFilteredSortedRefs q filter_ Range{..} = case rangeDirection of
+  Ascending -> filter (applyFilter q filter_) $ allRefs q
+  Descending -> reverse $ filter (applyFilter q filter_) $ allRefs q
+
+getFilteredRefs :: PaginatedQuery q => q -> FilterSym q -> [RefSym q]
+getFilteredRefs q filter_ = filter (applyFilter q filter_) $ allRefs q
+
+allRanges :: PaginatedQuery q => q -> FilterSym q -> [Range (WithUnknown (RefSym q))]
+allRanges q filter_ = fold
+  [ allValidRanges
+  , badBoundsRanges
+  , notFoundRanges
+  ]
+  where
+  allValidRanges = do
+    let filteredRefs = getFilteredRefs q filter_
+    rangeStart <- Nothing : (Just . Known <$> allRefs q)
+    rangeOffset <- [0..(length filteredRefs)]
+    rangeLimit <- [1..(length filteredRefs)]
+    rangeDirection <- [Ascending, Descending]
+    pure Range{..}
+
+  badBoundsRanges = do
+    let rangeStart = Nothing
+    rangeOffset <- [-1, 0]
+    rangeLimit <- [-1, 0, 1]
+    guard $ rangeOffset == -1 || rangeLimit < 1
+    let rangeDirection = Ascending
+    pure Range{..}
+
+  notFoundRanges = do
+    let filteredRefs = getFilteredRefs q filter_
+    rangeStart <- Just <$> (Unknown : (Known <$> filteredRefs))
+    let rangeOffset = 0
+    let rangeLimit = 1
+    let rangeDirection = Ascending
+    pure Range{..}
+
+applyRange
+  :: PaginatedQuery q
+  => q
+  -> FilterSym q
+  -> Range (WithUnknown (RefSym q))
+  -> Maybe (Page (RefSym q) (RefSym q))
+applyRange q filter_ Range{..} = do
+  guard $ rangeLimit > 0 && rangeOffset >= 0
+  let sortedRefs = getFilteredSortedRefs q filter_ Range{..}
+  trimmedRefs <- case rangeStart of
+    Nothing -> pure sortedRefs
+    Just Unknown -> Nothing
+    Just (Known start) -> from start sortedRefs
+  let itemsWithNext = take (rangeLimit + 1) $ drop rangeOffset trimmedRefs
+  pure Page
+    { items = take rangeLimit itemsWithNext
+    , nextRange = case drop rangeLimit itemsWithNext of
+        [] -> Nothing
+        a : _ -> Just $ Range
+          { rangeStart = Just a
+          , rangeOffset = 0
+          , ..
+          }
+    , totalCount = length sortedRefs
+    }
+
+from :: Eq a => a -> [a] -> Maybe [a]
+from _ [] = Nothing
+from start (a : as)
+  | a == start = Just $ a : as
+  | otherwise = from start as
 
 allTxNos :: [TxNo]
 allTxNos = [minBound..maxBound]
 
-contractNoToContractId :: MarloweQueryTestData -> WithUnknown ContractNo -> ContractId
-contractNoToContractId MarloweQueryTestData{..} = \case
-  Unknown -> ContractId $ TxOutRef "0000000000000000000000000000000000000000000000000000000000000000" 1
-  Known Contract1 -> standardContractId contract1
-  Known Contract2 -> standardContractId contract2
-  Known Contract3 -> standardContractId contract3
-  Known Contract4 -> standardContractId contract4
-
-withdrawalNoToWithdrawalId :: MarloweQueryTestData -> WithUnknown WithdrawalNo -> TxId
-withdrawalNoToWithdrawalId MarloweQueryTestData{..} = \case
-  Unknown -> "0000000000000000000000000000000000000000000000000000000000000000"
-  Known Withdrawal1 -> fromCardanoTxId $ getTxId $ fst contract1Step5
-  Known Withdrawal2 -> fromCardanoTxId $ getTxId $ fst contract2Step5
-
-contractOrTxNoToTxId :: MarloweQueryTestData -> WithUnknown (Either ContractNo TxNo) -> TxId
+contractOrTxNoToTxId :: MarloweQueryTestData -> WithUnknown (Either (RefSym GetHeaders) TxNo) -> TxId
 contractOrTxNoToTxId testData = \case
   Unknown -> "0000000000000000000000000000000000000000000000000000000000000000"
-  Known (Left contractNo) -> case contractNoToContractId testData $ Known contractNo of
+  Known (Left contractNo) -> case toRef GetHeaders testData $ Known contractNo of
     ContractId TxOutRef{..} -> txId
   Known (Right txNo) -> txNoToTxId testData txNo
 
@@ -494,27 +532,27 @@ txNoToTxId testData = inputsAppliedTxId . txNoToInputsApplied testData
 inputsAppliedTxId :: InputsApplied era v -> TxId
 inputsAppliedTxId InputsApplied{..} = fromCardanoTxId $ getTxId txBody
 
-contractNoToStandardContract :: MarloweQueryTestData -> ContractNo -> StandardContractInit 'V1
+contractNoToStandardContract :: MarloweQueryTestData -> RefSym GetHeaders -> StandardContractInit 'V1
 contractNoToStandardContract MarloweQueryTestData{..} = \case
   Contract1 -> contract1
   Contract2 -> contract2
   Contract3 -> contract3
   Contract4 -> contract4
 
-contractNoToContractCreated :: MarloweQueryTestData -> ContractNo -> ContractCreated BabbageEra 'V1
+contractNoToContractCreated :: MarloweQueryTestData -> RefSym GetHeaders -> ContractCreated BabbageEra 'V1
 contractNoToContractCreated testData = contractCreated . contractNoToStandardContract testData
 
-contractNoToInitialBlock :: MarloweQueryTestData -> ContractNo -> BlockHeader
+contractNoToInitialBlock :: MarloweQueryTestData -> RefSym GetHeaders -> BlockHeader
 contractNoToInitialBlock testData = createdBlock . contractNoToStandardContract testData
 
-contractNoToLatestBlock :: MarloweQueryTestData -> ContractNo -> BlockHeader
+contractNoToLatestBlock :: MarloweQueryTestData -> RefSym GetHeaders -> BlockHeader
 contractNoToLatestBlock MarloweQueryTestData{..} = \case
   Contract1 -> returnDepositBlock contract1Step4 -- note: _not_ `snd contract1Step5` (which is a withdrawal)
   Contract2 -> returnDepositBlock contract2Step4
   Contract3 -> returnDepositBlock contract3Step4
   Contract4 -> createdBlock contract4
 
-contractNoToLatestOutput :: MarloweQueryTestData -> ContractNo -> Maybe (TransactionScriptOutput 'V1)
+contractNoToLatestOutput :: MarloweQueryTestData -> RefSym GetHeaders -> Maybe (TransactionScriptOutput 'V1)
 contractNoToLatestOutput MarloweQueryTestData{..} = \case
   Contract1 -> Nothing
   Contract2 -> case returnDeposited contract2Step4 of
@@ -529,7 +567,7 @@ contractNoToLatestOutput MarloweQueryTestData{..} = \case
       , datum
       }
 
-contractNoToUnclaimedPayouts :: MarloweQueryTestData -> ContractNo -> Map TxOutRef (Payout 'V1)
+contractNoToUnclaimedPayouts :: MarloweQueryTestData -> RefSym GetHeaders -> Map TxOutRef (Payout 'V1)
 contractNoToUnclaimedPayouts MarloweQueryTestData{..} =  \case
   Contract1 -> mempty
   Contract2 -> mempty
@@ -537,7 +575,7 @@ contractNoToUnclaimedPayouts MarloweQueryTestData{..} =  \case
     Core.Transaction{output=Core.TransactionOutput{payouts}} -> payouts
   Contract4 -> mempty
 
-contractNoToTransactions :: MarloweQueryTestData -> ContractNo -> [Core.Transaction 'V1]
+contractNoToTransactions :: MarloweQueryTestData -> RefSym GetHeaders -> [Core.Transaction 'V1]
 contractNoToTransactions MarloweQueryTestData{..} = \case
   Contract1 ->
     [ inputsAppliedToTransaction (initialDepositBlock contract1Step1) (initialFundsDeposited contract1Step1)
@@ -565,11 +603,6 @@ txNoToSomeTransaction testData txNo = SomeTransaction
   (txNoToInput testData txNo)
   (txNoToConsumer testData txNo)
   (inputsAppliedToTransaction (txNoToBlockHeader testData txNo) (txNoToInputsApplied testData txNo))
-
-contractNoToWithdrawals :: MarloweQueryTestData -> ContractNo -> [Withdrawal]
-contractNoToWithdrawals testData = \case
-  Contract1 -> pure $ contract1Step5Withdrawal testData
-  _ -> []
 
 contract1Step5Withdrawal :: MarloweQueryTestData -> Withdrawal
 contract1Step5Withdrawal MarloweQueryTestData{..} = Withdrawal

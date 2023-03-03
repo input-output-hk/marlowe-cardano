@@ -103,7 +103,6 @@ getHeaders cFilter@ContractFilter{..} Range{rangeStart = Just (ContractId TxOutR
         FROM marlowe.createTxOut
         JOIN marlowe.contractTxOut USING (txId, txIx)
         JOIN (SELECT UNNEST($3 :: bytea[]) AS rolesCurrency) as roles USING (rolesCurrency)
-        JOIN (SELECT UNNEST($4 :: text[]) AS tag) as tags USING (tag)
         WHERE createTxOut.txId = $1 :: bytea
           AND createTxOut.txIx = $2 :: smallint
           AND EXISTS
@@ -148,7 +147,7 @@ getHeaders cFilter@ContractFilter{..} Range{..} = do
       [foldStatement|
         SELECT
           createTxOut.slotNo :: bigint,
-          createTxOut.id :: bytea,
+          createTxOut.blockId :: bytea,
           createTxOut.blockNo :: bigint,
           createTxOut.txId :: bytea,
           createTxOut.txIx :: smallint,
@@ -189,7 +188,7 @@ getHeaders cFilter@ContractFilter{..} Range{..} = do
       [foldStatement|
         SELECT
           createTxOut.slotNo :: bigint,
-          createTxOut.id :: bytea,
+          createTxOut.blockId :: bytea,
           createTxOut.blockNo :: bigint,
           createTxOut.txId :: bytea,
           createTxOut.txIx :: smallint,
@@ -237,7 +236,7 @@ getHeaders cFilter@ContractFilter{..} Range{..} = do
       [foldStatement|
         SELECT
           createTxOut.slotNo :: bigint,
-          createTxOut.id :: bytea,
+          createTxOut.blockId :: bytea,
           createTxOut.blockNo :: bigint,
           createTxOut.txId :: bytea,
           createTxOut.txIx :: smallint,
@@ -292,7 +291,7 @@ getHeaders cFilter@ContractFilter{..} Range{..} = do
       [foldStatement|
         SELECT
           createTxOut.slotNo :: bigint,
-          createTxOut.id :: bytea,
+          createTxOut.blockId :: bytea,
           createTxOut.blockNo :: bigint,
           createTxOut.txId :: bytea,
           createTxOut.txIx :: smallint,

@@ -74,7 +74,7 @@ firstPageAscValidSpec = it "returns the first page of contract headers in ascend
         , rangeOrder = RangeAsc
         , rangeField = Proxy
         }
-    Page {..} <-getContracts $ Just testRange
+    Page {..} <- getContracts Nothing Nothing $ Just testRange
 
     liftIO $ fmap (\Web.ContractHeader{..} -> contractId) items `shouldBe` [expectedContractId1, expectedContractId2]
 
@@ -97,7 +97,7 @@ secondPageAscValidSpec = it "returns the second page of contract headers in asce
         , rangeOrder = RangeAsc
         , rangeField = Proxy
         }
-    Page {..} <-getContracts $ Just testRange
+    Page {..} <- getContracts Nothing Nothing $ Just testRange
 
     liftIO $ fmap (\Web.ContractHeader{..} -> contractId) items `shouldBe` [expectedContractId2, expectedContractId3]
 
@@ -120,7 +120,7 @@ firstPageDescValidSpec = it "returns the first page of contract headers in desce
         , rangeOrder = RangeDesc
         , rangeField = Proxy
         }
-    Page {..} <-getContracts $ Just testRange
+    Page {..} <- getContracts Nothing Nothing $ Just testRange
 
     liftIO $ fmap (\Web.ContractHeader{..} -> contractId) items `shouldBe` [expectedContractId3, expectedContractId2]
 
@@ -143,7 +143,7 @@ secondPageDescValidSpec = it "returns the second page of contract headers in des
         , rangeOrder = RangeDesc
         , rangeField = Proxy
         }
-    Page {..} <-getContracts $ Just testRange
+    Page {..} <- getContracts Nothing Nothing $ Just testRange
 
     liftIO $ fmap (\Web.ContractHeader{..} -> contractId) items `shouldBe` [expectedContractId2, expectedContractId1]
 
@@ -151,7 +151,7 @@ secondPageDescValidSpec = it "returns the second page of contract headers in des
 noContractsValidSpec :: Spec
 noContractsValidSpec = it "returns an empty list" $ withLocalMarloweRuntime $ runIntegrationTest do
   either throw pure =<< runWebClient do
-    Page {..}<- getContracts Nothing
+    Page {..}<- getContracts Nothing Nothing Nothing
     liftIO $ fmap (\Web.ContractHeader{..} -> contractId) items `shouldBe` []
 
 singleContractValidSpec :: Spec
@@ -160,7 +160,7 @@ singleContractValidSpec  = it "returns a list with single contract header" $ wit
 
   either throw pure =<< runWebClient do
     expectedContractId <- createCloseContract wallet
-    Page {..}<- getContracts Nothing
+    Page {..}<- getContracts Nothing Nothing Nothing
     liftIO $ fmap (\Web.ContractHeader{..} -> contractId) items `shouldBe` [expectedContractId]
 
 multipleContractValidSpec :: Spec
@@ -171,7 +171,7 @@ multipleContractValidSpec  = it "returns a list with multiple contract headers" 
   either throw pure =<< runWebClient do
     expectedContractId1 <- createCloseContract wallet1
     expectedContractId2 <- createCloseContract wallet2
-    Page {..}<- getContracts Nothing
+    Page {..}<- getContracts Nothing Nothing Nothing
     liftIO $ fmap (\Web.ContractHeader{..} -> contractId) items `shouldBe` [expectedContractId2, expectedContractId1]
 
 
@@ -187,7 +187,7 @@ invalidTxIdSpec = it "returns an error message" $ withLocalMarloweRuntime $ runI
         , rangeOrder = RangeAsc
         , rangeField = Proxy
         }
-    getContracts $ Just invalidRange
+    getContracts Nothing Nothing $ Just invalidRange
 
   case result of
     Left (FailureResponse _ Response { responseStatusCode = Status { statusCode = 416 } } ) ->  pure ()
