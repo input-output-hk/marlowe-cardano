@@ -270,6 +270,9 @@ mkMarloweValidator
                              -- [Marlowe-Cardano Specification: "Constraint 19. No duplicates".]
                              -- Check that the final state obeys the Semantic's invariants.
                           && checkState "o" finalBalance txOutState
+                             -- [Marlowe-Cardano Specification: "20. Single satsifaction".]
+                             -- Either there must be no payments, or there must be no other validators.
+                          && traceIfFalse "z" (totalPayouts == zero || noOthers)
             preconditionsOk && inputsOk && payoutsOk && checkContinuation
         Error TEAmbiguousTimeIntervalError -> traceError "i"
         Error TEApplyNoMatchError -> traceError "n"
@@ -289,22 +292,44 @@ mkMarloweValidator
         find (\TxInInfo{txInInfoOutRef} -> txInInfoOutRef == txOutRef) txInfoInputs
     findOwnInput _ = Nothing
 
-    -- The inputs being spent by this script.
     -- [Marlowe-Cardano Specification: "2. Single Marlowe script input".]
+    -- The inputs being spent by this script, and whether other validators are present.
     ownInput :: TxInInfo
-    ownInput@TxInInfo{txInInfoResolved=TxOut{txOutAddress=ownAddress}} =
+    noOthers :: Bool
+    (ownInput@TxInInfo{txInInfoResolved=TxOut{txOutAddress=ownAddress}}, noOthers) =
         case findOwnInput ctx of
-            Just ownTxInInfo ->
-                case filter (sameValidatorHash ownTxInInfo) (txInfoInputs scriptContextTxInfo) of
-                    [i] -> i
-                    _   -> traceError "w" -- Multiple Marlowe contract inputs with the same address are forbidden.
+            Just ownTxInInfo -> examineScripts (sameValidatorHash ownTxInInfo) Nothing True (txInfoInputs scriptContextTxInfo)
             _ -> traceError "x" -- Input to be validated was not found.
 
+    -- Check for the presence of multiple Marlowe validators or other Plutus validators.
+    examineScripts
+      :: (ValidatorHash -> Bool)  -- Test for this validator.
+      -> Maybe TxInInfo           -- The input for this validator, if found so far.
+      -> Bool                     -- Whether no other validator has been found so far.
+      -> [TxInInfo]               -- The inputs remaining to be examined.
+      -> (TxInInfo, Bool)         -- The input for this validator and whehter no other validators are present.
+    -- This validator has not been found.
+    examineScripts _ Nothing _ [] = traceError "x"
+    -- This validator has been found, and other validators may have been found.
+    examineScripts _ (Just self) noOthers [] = (self, noOthers)
+    -- This validator has not yet been found.
+    examineScripts f Nothing noOthers (tx@TxInInfo{txInInfoResolved=TxOut{txOutAddress=Ledger.Address (ScriptCredential vh) _}} : txs)
+      -- This validator is found, but continue looking for other validators if necessary.
+      | f vh = if noOthers then examineScripts f (Just tx) noOthers txs else (tx, False)
+      -- Another validator is found, but continue looking for this validator.
+      | otherwise = examineScripts f Nothing False txs
+    -- This validator has been found, but other validators have not yet been found.
+    examineScripts f (Just self) _ (TxInInfo{txInInfoResolved=TxOut{txOutAddress=Ledger.Address (ScriptCredential vh) _}} : _)
+      -- This validator is found a second time.
+      | f vh = traceError "w"
+      -- Another validator is found, so there is no need to look further.
+      | otherwise = (self, False)
+    -- An input without a validator is encountered.
+    examineScripts f self others (_ : txs) = examineScripts f self others txs
+
     -- Check if inputs are being spent from the same script.
-    sameValidatorHash:: TxInInfo -> TxInInfo -> Bool
-    sameValidatorHash
-        TxInInfo{txInInfoResolved=TxOut{txOutAddress=Ledger.Address (ScriptCredential vh1) _}}
-        TxInInfo{txInInfoResolved=TxOut{txOutAddress=Ledger.Address (ScriptCredential vh2) _}} = vh1 == vh2
+    sameValidatorHash:: TxInInfo -> ValidatorHash -> Bool
+    sameValidatorHash TxInInfo{txInInfoResolved=TxOut{txOutAddress=Ledger.Address (ScriptCredential vh1) _}} vh2 = vh1 == vh2
     sameValidatorHash _ _ = False
 
     -- Check a state for the correct value, positive accounts, and no duplicates.

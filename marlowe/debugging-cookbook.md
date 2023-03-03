@@ -120,6 +120,7 @@ Transaction failures occur in either phase 1 validation (ledger rules) or phase 
     *   `"vo"`: The value output from the script does not match that specified in its datum.
     *   `"w"`: Inputting from two Marlowe scripts with the same address in the same transaction is forbidden.
     *   `"x"`: The input datum was not provided to the script.
+    *   `"z"`: Payments are made in the presence of other Plutus validators.
     *   If these errors occur during Plutus validation but not outside of it, then there likely is a clock inconsistency between local time and the node.
         *   `"i" = TEAmbiguousTimeIntervalError`: The time interval for a transaction straddles the timeout of a `When` statement.
         *   `"j" = TEIntervalError InvalidInterval`: The start of the time interval is after its end.
