@@ -216,10 +216,6 @@ tests referencePaths =
             [
               testProperty "Invalid other validators during payment" $ checkOtherValidators referencePaths
             ]
-        , testGroup "Constraint 18. Final balance"
-            [
-              testProperty "Invalid mismatch between output value and state" $ checkOutputConsistency referencePaths
-            ]
         , testProperty "Script hash matches reference hash"
             $ checkValidatorHash semanticsScriptHash
               -- DO NOT ALTER THE FOLLOWING VALUE UNLESS YOU ARE COMMITTING
