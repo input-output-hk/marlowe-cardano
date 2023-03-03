@@ -8,11 +8,15 @@ module Language.Marlowe.Runtime.Web.Client
   , getContracts
   , getTransaction
   , getTransactions
+  , getWithdrawal
+  , getWithdrawals
   , healthcheck
   , postContract
   , postTransaction
+  , postWithdrawal
   , putContract
   , putTransaction
+  , putWithdrawal
   ) where
 
 import Control.Monad.Error.Class (MonadError(catchError))
@@ -24,7 +28,7 @@ import Data.Set (Set)
 import qualified Data.Set as Set
 import GHC.TypeLits (KnownSymbol, symbolVal)
 import Language.Marlowe.Runtime.Web.API
-  (API, GetContractsResponse, GetTransactionsResponse, ListObject(..), api, retractLink)
+  (API, GetContractsResponse, GetTransactionsResponse, GetWithdrawalsResponse, ListObject(..), api, retractLink)
 import Language.Marlowe.Runtime.Web.Types
 import Servant (ResponseHeader(..), getResponse, lookupResponseHeader, type (:<|>)((:<|>)))
 import Servant.Client (Client, ClientM)
@@ -43,14 +47,15 @@ data Page field resource = Page
 
 healthcheck :: ClientM Bool
 healthcheck = do
-  let _ :<|> healthcheck' = client
+  let _ :<|> _ :<|> healthcheck' = client
   (True <$ healthcheck') `catchError` const (pure False)
 
 getContracts
   :: Maybe (Range "contractId" TxOutRef)
   -> ClientM (Page "contractId" ContractHeader)
 getContracts range = do
-  let (getContracts' :<|> _) :<|> _ = client
+  let contractsClient :<|> _ = client
+  let getContracts' :<|> _ = contractsClient
   response <- getContracts' $ putRange <$> range
   totalCount <- reqHeaderValue $ lookupResponseHeader @"Total-Count" response
   nextRanges <- headerValue $ lookupResponseHeader @"Next-Range" response
@@ -68,7 +73,8 @@ postContract
   -> PostContractsRequest
   -> ClientM CreateTxBody
 postContract changeAddress otherAddresses collateralUtxos request = do
-  let (_ :<|> postContract' :<|> _) :<|> _ = client
+  let contractsClient :<|> _ = client
+  let _ :<|> postContract' :<|> _ = contractsClient
   response <- postContract'
     request
     changeAddress
@@ -78,23 +84,73 @@ postContract changeAddress otherAddresses collateralUtxos request = do
 
 getContract :: TxOutRef -> ClientM ContractState
 getContract contractId = do
-  let (_ :<|> _ :<|> contractApi) :<|> _ = client
+  let contractsClient :<|> _ = client
+  let _ :<|> _ :<|> contractApi = contractsClient
   let getContract' :<|> _ = contractApi contractId
   retractLink <$> getContract'
 
 putContract :: TxOutRef -> TextEnvelope -> ClientM ()
 putContract contractId tx = do
-  let (_ :<|> _ :<|> contractApi) :<|> _ = client
+  let contractsClient :<|> _ = client
+  let _ :<|> _ :<|> contractApi = contractsClient
   let _ :<|> putContract' :<|> _ = contractApi contractId
   void $ putContract' tx
+
+getWithdrawals
+  :: Maybe (Set PolicyId)
+  -> Maybe (Range "withdrawalId" TxId)
+  -> ClientM (Page "withdrawalId" WithdrawalHeader)
+getWithdrawals roleCurrencies range = do
+  let _ :<|> withdrawalsClient :<|> _ = client
+  let getWithdrawals' :<|> _ = withdrawalsClient
+  response <- getWithdrawals' (foldMap Set.toList roleCurrencies) $ putRange <$> range
+  totalCount <- reqHeaderValue $ lookupResponseHeader @"Total-Count" response
+  nextRanges <- headerValue $ lookupResponseHeader @"Next-Range" response
+  let ListObject items = getResponse response
+  pure Page
+    { totalCount
+    , nextRange = extractRangeSingleton @GetWithdrawalsResponse <$> nextRanges
+    , items = retractLink @"withdrawal" <$> items
+    }
+
+postWithdrawal
+  :: Address
+  -> Maybe (Set Address)
+  -> Maybe (Set TxOutRef)
+  -> PostWithdrawalsRequest
+  -> ClientM WithdrawTxBody
+postWithdrawal changeAddress otherAddresses collateralUtxos request = do
+  let _ :<|> withdrawalsClient :<|> _ = client
+  let _ :<|> postWithdrawal' :<|> _ = withdrawalsClient
+  response <- postWithdrawal'
+    request
+    changeAddress
+    (setToCommaList <$> otherAddresses)
+    (setToCommaList <$> collateralUtxos)
+  pure $ retractLink response
+
+getWithdrawal :: TxId -> ClientM Withdrawal
+getWithdrawal withdrawalId = do
+  let _ :<|> withdrawalsClient :<|> _ = client
+  let _ :<|> _ :<|> contractApi = withdrawalsClient
+  let getWithdrawal' :<|> _ = contractApi withdrawalId
+  getWithdrawal'
+
+putWithdrawal :: TxId -> TextEnvelope -> ClientM ()
+putWithdrawal withdrawalId tx = do
+  let _ :<|> withdrawalsClient :<|> _ = client
+  let _ :<|> _ :<|> contractApi = withdrawalsClient
+  let _ :<|> putWithdrawal' = contractApi withdrawalId
+  void $ putWithdrawal' tx
 
 getTransactions
   :: TxOutRef
   -> Maybe (Range "transactionId" TxId)
   -> ClientM (Page "transactionId" TxHeader)
 getTransactions contractId range = do
-  let (_ :<|> _ :<|> contractApi) :<|> _ = client
-  let _ :<|> _ :<|> getTransactions' :<|> _= contractApi contractId
+  let contractsClient :<|> _ = client
+  let _ :<|> _ :<|> contractApi = contractsClient
+  let _ :<|> _ :<|> getTransactions' :<|> _ = contractApi contractId
   response <- getTransactions' $ putRange <$> range
   totalCount <- reqHeaderValue $ lookupResponseHeader @"Total-Count" response
   nextRanges <- headerValue $ lookupResponseHeader @"Next-Range" response
@@ -113,7 +169,8 @@ postTransaction
   -> PostTransactionsRequest
   -> ClientM ApplyInputsTxBody
 postTransaction changeAddress otherAddresses collateralUtxos contractId request = do
-  let (_ :<|> _ :<|> contractApi) :<|> _ = client
+  let contractsClient :<|> _ = client
+  let _ :<|> _ :<|> contractApi = contractsClient
   let _ :<|> _ :<|> _ :<|> postTransactions' :<|> _ = contractApi contractId
   response <- postTransactions'
     request
@@ -124,14 +181,16 @@ postTransaction changeAddress otherAddresses collateralUtxos contractId request 
 
 getTransaction :: TxOutRef -> TxId -> ClientM Tx
 getTransaction contractId transactionId = do
-  let (_ :<|> _ :<|> contractApi) :<|> _ = client
+  let contractsClient :<|> _ = client
+  let _ :<|> _ :<|> contractApi = contractsClient
   let _ :<|> _ :<|> _ :<|> _ :<|> transactionApi = contractApi contractId
   let getTransaction' :<|> _ = transactionApi transactionId
   retractLink . retractLink <$> getTransaction'
 
 putTransaction :: TxOutRef -> TxId -> TextEnvelope -> ClientM ()
 putTransaction contractId transactionId tx = do
-  let (_ :<|> _ :<|> contractApi) :<|> _ = client
+  let contractsClient :<|> _ = client
+  let _ :<|> _ :<|> contractApi = contractsClient
   let _ :<|> _ :<|> _ :<|> _ :<|> transactionApi = contractApi contractId
   let _ :<|> putTransaction' = transactionApi transactionId
   void $ putTransaction' tx

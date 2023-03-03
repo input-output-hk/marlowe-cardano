@@ -110,6 +110,7 @@
             "Language/Marlowe/Runtime/Web/Server/REST/ApiError"
             "Language/Marlowe/Runtime/Web/Server/REST/Contracts"
             "Language/Marlowe/Runtime/Web/Server/REST/Transactions"
+            "Language/Marlowe/Runtime/Web/Server/REST/Withdrawals"
             "Language/Marlowe/Runtime/Web/Server/SyncClient"
             "Language/Marlowe/Runtime/Web/Server/TxClient"
             "Language/Marlowe/Runtime/Web/Server"

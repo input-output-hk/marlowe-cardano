@@ -26,6 +26,7 @@ import Language.Marlowe.Runtime.Transaction.Api
   , CreateBuildupError(..)
   , CreateError(..)
   , LoadMarloweContextError(..)
+  , WithdrawError(..)
   )
 import Language.Marlowe.Runtime.Web.Server.DTO (DTO, HasDTO, ToDTO, toDTO)
 import Servant (ServerError(ServerError))
@@ -108,6 +109,29 @@ rangeNotSatisfiable msg errorCode = toServerError . ApiError msg (fromMaybe "Ran
 
 rangeNotSatisfiable' :: String -> ServerError
 rangeNotSatisfiable' msg = rangeNotSatisfiable msg Nothing
+
+instance HasDTO (WithdrawError 'V1) where
+  type DTO (WithdrawError 'V1) = ApiError
+
+instance ToDTO (WithdrawError 'V1) where
+  toDTO = \case
+    WithdrawConstraintError (MintingUtxoNotFound _) -> ApiError "Minting UTxO not found" "MintingUtxoNotFound" Null 500
+    WithdrawConstraintError (RoleTokenNotFound _) -> ApiError "Role token not found" "RoleTokenNotFound" Null 403
+    WithdrawConstraintError ToCardanoError -> ApiError "Internal error" "InternalError" Null 500
+    WithdrawConstraintError MissingMarloweInput -> ApiError "Internal error" "InternalError" Null 500
+    WithdrawConstraintError (PayoutInputNotFound _) -> ApiError "Internal error" "InternalError" Null 500
+    WithdrawConstraintError (CalculateMinUtxoFailed _) -> ApiError "Internal error" "InternalError" Null 500
+    WithdrawConstraintError (CoinSelectionFailed msg) -> ApiError ("Coin selection failed: " <> msg) "CoinSelectionFailed" Null 400
+    WithdrawConstraintError (BalancingError _) -> ApiError "Internal error" "InternalError" Null 500
+    WithdrawLoadMarloweContextFailed LoadMarloweContextErrorNotFound -> ApiError "Marlowe contract not found" "MarloweContractNotFound" Null 404
+    WithdrawLoadMarloweContextFailed (LoadMarloweContextErrorVersionMismatch _) -> ApiError "Marlowe contract version mismatch" "MarloweContractVersionMismatch" Null 400
+    WithdrawLoadMarloweContextFailed (HandshakeFailed _) -> ApiError "Internal error" "InternalError" Null 500
+    WithdrawLoadMarloweContextFailed LoadMarloweContextToCardanoError -> ApiError "Internal error" "InternalError" Null 500
+    WithdrawLoadMarloweContextFailed (MarloweScriptNotPublished _) -> ApiError "Internal error" "InternalError" Null 500
+    WithdrawLoadMarloweContextFailed (PayoutScriptNotPublished _) -> ApiError "Internal error" "InternalError" Null 500
+    WithdrawLoadMarloweContextFailed (ExtractCreationError _) -> ApiError "Internal error" "InternalError" Null 500
+    WithdrawLoadMarloweContextFailed (ExtractMarloweTransactionError _) -> ApiError "Internal error" "InternalError" Null 500
+    UnableToFindPayoutForAGivenRole _ -> ApiError "No payouts available for given role" "InternalError" Null 409
 
 instance HasDTO (CreateError 'V1) where
   type DTO (CreateError 'V1) = ApiError

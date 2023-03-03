@@ -38,13 +38,15 @@ import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Maybe (fromMaybe)
 import Data.Proxy (Proxy(..))
+import qualified Data.Set as Set
 import Data.String (fromString)
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Word (Word16, Word64)
 import GHC.TypeLits (KnownSymbol)
 import qualified Language.Marlowe.Core.V1.Semantics as Sem
-import Language.Marlowe.Protocol.Query.Types (ContractState(..), SomeContractState(..), SomeTransaction(..))
+import Language.Marlowe.Protocol.Query.Types
+  (ContractState(..), PayoutRef(..), SomeContractState(..), SomeTransaction(..), Withdrawal(..))
 import qualified Language.Marlowe.Protocol.Query.Types as Query
 import Language.Marlowe.Runtime.Cardano.Api (cardanoEraToAsType, fromCardanoTxId)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
@@ -60,7 +62,7 @@ import Language.Marlowe.Runtime.Core.Api
 import qualified Language.Marlowe.Runtime.Discovery.Api as Discovery
 import qualified Language.Marlowe.Runtime.Transaction.Api as Tx
 import qualified Language.Marlowe.Runtime.Web as Web
-import Language.Marlowe.Runtime.Web.Server.TxClient (TempTx(..), TempTxStatus(..))
+import Language.Marlowe.Runtime.Web.Server.TxClient (TempTx(..), TempTxStatus(..), Withdrawn(..))
 import Servant.Pagination (IsRangeType)
 import qualified Servant.Pagination as Pagination
 
@@ -206,6 +208,15 @@ instance ToDTO Chain.PolicyId where
 instance FromDTO Chain.PolicyId where
   fromDTO = Just . coerce
 
+instance HasDTO Chain.TokenName where
+  type DTO Chain.TokenName = Text
+
+instance ToDTO Chain.TokenName where
+  toDTO = T.pack . read . show . Chain.unTokenName
+
+instance FromDTO Chain.TokenName where
+  fromDTO = Just . Chain.TokenName . fromString . T.unpack
+
 instance HasDTO Chain.TxIx where
   type DTO Chain.TxIx = Word16
 
@@ -250,6 +261,28 @@ instance HasDTO Chain.BlockHeaderHash where
 
 instance ToDTO Chain.BlockHeaderHash where
   toDTO = coerce
+
+instance HasDTO PayoutRef where
+  type DTO PayoutRef = Web.PayoutRef
+
+instance ToDTO PayoutRef where
+  toDTO PayoutRef{..} = Web.PayoutRef
+    { contractId = toDTO contractId
+    , payout = toDTO payout
+    , roleTokenMintingPolicyId = toDTO rolesCurrency
+    , role = toDTO role
+    }
+
+instance HasDTO Withdrawal where
+  type DTO Withdrawal = Web.Withdrawal
+
+instance ToDTO Withdrawal where
+  toDTO Withdrawal{..} = Web.Withdrawal
+    { payouts = Set.fromList $ toDTO $ Map.elems withdrawnPayouts
+    , withdrawalId = toDTO withdrawalTx
+    , status = Web.Confirmed
+    , block = Just $ toDTO block
+    }
 
 instance HasDTO SomeContractState where
   type DTO SomeContractState = Web.ContractState
@@ -322,8 +355,26 @@ instance HasDTO (TempTx Tx.InputsApplied) where
 instance ToDTO (TempTx Tx.InputsApplied) where
   toDTO (TempTx _ status tx) = toDTOWithTxStatus status tx
 
+instance HasDTO (TempTx Withdrawn) where
+  type DTO (TempTx Withdrawn) = Web.Withdrawal
+
+instance ToDTO (TempTx Withdrawn) where
+  toDTO (TempTx _ status tx) = toDTOWithTxStatus status tx
+
 instance HasDTO (Tx.ContractCreated era v) where
   type DTO (Tx.ContractCreated era v) = Web.ContractState
+
+instance HasDTO (Withdrawn era v) where
+  type DTO (Withdrawn era v) = Web.Withdrawal
+
+instance ToDTOWithTxStatus (Withdrawn era v) where
+  toDTOWithTxStatus status (Withdrawn txBody) =
+    Web.Withdrawal
+      { withdrawalId = toDTO $ fromCardanoTxId $ getTxId txBody
+      , payouts = mempty -- TODO the information cannot be recovered here. Push creating Withdrawn to marlowe-tx.
+      , status = toDTO status
+      , block = Nothing
+      }
 
 instance IsCardanoEra era => ToDTOWithTxStatus (Tx.ContractCreated era v) where
   toDTOWithTxStatus status Tx.ContractCreated{..} =
@@ -392,7 +443,7 @@ instance HasDTO Chain.Address where
   type DTO Chain.Address = Web.Address
 
 instance ToDTO Chain.Address where
-  toDTO address = Web.Address $ fromMaybe (T.pack $ show address) $ Chain.toBech32 address
+  toDTO address = Web.Address $ fromMaybe (T.pack $ read $ show address) $ Chain.toBech32 address
 
 instance FromDTO Chain.Address where
   fromDTO = Chain.fromBech32 . Web.unAddress
