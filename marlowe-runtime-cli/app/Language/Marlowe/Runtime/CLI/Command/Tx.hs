@@ -10,6 +10,7 @@ data TxCommand cmd = TxCommand
   { walletAddresses :: WalletAddresses
   , signingMethod :: SigningMethod
   , metadataFile :: Maybe FilePath
+  , tagsFile :: Maybe FilePath
   , subCommand :: cmd
   }
 
@@ -17,11 +18,12 @@ newtype SigningMethod
   = Manual FilePath
   deriving (Show)
 
-txCommandParser :: Parser cmd -> Parser (TxCommand cmd)
-txCommandParser subCommandParser = TxCommand
+txCommandParser :: Bool -> Parser cmd -> Parser (TxCommand cmd)
+txCommandParser metadataSupported subCommandParser = TxCommand
   <$> walletAddressesParser
   <*> signingMethodParser
   <*> metadataFileParser
+  <*> tagsFileParser
   <*> subCommandParser
   where
     walletAddressesParser = WalletAddresses
@@ -35,12 +37,21 @@ txCommandParser subCommandParser = TxCommand
       , metavar "FILE_PATH"
       , help "Sign the transaction manually. Writes the CBOR bytes of the unsigned transaction to the specified file for manual signing. Use the submit command to submit the signed transaction."
       ]
-    metadataFileParser = optional $ strOption $ mconcat
-      [ long "metadata-file"
-      , short 'm'
-      , help "A JSON file containing a map of integer indexes to arbitrary JSON values that will be added to the transaction's metadata."
-      , metavar "FILE_PATH"
-      ]
+    metadataFileParser
+      | metadataSupported = optional $ strOption $ mconcat
+        [ long "metadata-file"
+        , short 'm'
+        , help "A JSON file containing a map of integer indexes to arbitrary JSON values that will be added to the transaction's metadata."
+        , metavar "FILE_PATH"
+        ]
+      | otherwise = pure Nothing
+    tagsFileParser
+      | metadataSupported = optional $ strOption $ mconcat
+        [ long "tags-file"
+        , help "A JSON file containing a map of tags indexes to optional JSON-encoded metadata values that will be added to the transaction's 1564 metadata key."
+        , metavar "FILE_PATH"
+        ]
+      | otherwise = pure Nothing
     changeAddressParser = option (eitherReader parseAddress) $ mconcat
       [ long "change-address"
       , help "The address to which the change of the transaction should be sent."
@@ -57,4 +68,3 @@ txCommandParser subCommandParser = TxCommand
       , help "A UTXO which may be used as a collateral input"
       , metavar "UTXO"
       ]
-
