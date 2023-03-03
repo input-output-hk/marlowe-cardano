@@ -22,9 +22,10 @@ module Spec.Marlowe.Plutus.Specification
     tests
   ) where
 
-import Control.Lens (use, uses, (%=), (<>=), (^.))
+import Control.Lens (use, uses, (%=), (.=), (<>=), (^.))
 import Control.Monad.State (lift)
 import Data.Bifunctor (bimap)
+import Data.List (nub)
 import Data.Maybe (maybeToList)
 import Data.Proxy (Proxy(..))
 import Data.These (These(That, These, This))
@@ -100,11 +101,12 @@ import Spec.Marlowe.Plutus.Types
 import Spec.Marlowe.Semantics.Arbitrary (arbitraryPositiveInteger)
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.QuickCheck
-  (Arbitrary(..), Gen, Property, chooseInteger, forAll, oneof, property, suchThat, testProperty, (===))
+  (Arbitrary(..), Gen, Property, chooseInteger, elements, forAll, oneof, property, suchThat, testProperty, (===))
 
 import qualified Language.Marlowe.Core.V1.Semantics as M (MarloweData(marloweParams))
-import qualified Language.Marlowe.Core.V1.Semantics.Types as M (Party(Address))
-import qualified PlutusTx.AssocMap as AM (fromList, insert, toList)
+import qualified Language.Marlowe.Core.V1.Semantics.Types as M (Party(Address), State(..))
+import qualified PlutusTx.AssocMap as AM (Map, fromList, insert, keys, null, toList)
+import qualified Test.Tasty.QuickCheck as Q (shuffle)
 
 
 -- | Run tests.
@@ -176,6 +178,7 @@ tests =
         , testGroup "Constraint 13. Positive balances"
             [
               testProperty "Invalid non-positive balance" checkPositiveAccounts
+              -- TODO: This test on the output state requires instrumenting the Plutus script. For now, this constraint is enforced manually by code inspection.
             ]
         , testGroup "Constraint 14. Inputs authorized"
             [
@@ -188,6 +191,11 @@ tests =
         , testGroup "Constraint 18. Final balance"
             [
               testProperty "Invalid mismatch between output value and state" checkOutputConsistency
+            ]
+        , testGroup "Constraint 19. No duplicates"
+            [
+              testProperty "Invalid duplicate accounts in input state" checkInputDuplicates
+              -- TODO: This test on the output state requires instrumenting the Plutus script. For now, this constraint is enforced manually by code inspection.
             ]
         , testProperty "Script hash matches reference hash"
             $ checkValidatorHash semanticsScriptHash
@@ -432,6 +440,48 @@ checkOutputConsistency =
         valid = outValue == finalBalance
       in
         checkSemanticsTransaction noModify noModify notCloses valid False
+
+
+-- | Add a duplicate entry to an assocation list.
+addDuplicate :: Arbitrary v => AM.Map k v -> Gen (AM.Map k v)
+addDuplicate am =
+  do
+    let
+      am' = AM.toList am
+    key <- elements $ fst <$> am'
+    value <- arbitrary
+    AM.fromList <$> Q.shuffle ((key, value) : am')
+
+
+-- | Check for the detection of duplicates in input state
+checkInputDuplicates :: Property
+checkInputDuplicates =
+  let
+    hasDuplicates tx =
+      let
+        hasDuplicate am = length (AM.keys am) /= length (nub $ AM.keys am)
+        M.State{..} = tx ^. inputState
+      in
+           hasDuplicate accounts
+        || hasDuplicate choices
+        || hasDuplicate boundValues
+    makeDuplicates am =
+      if AM.null am
+        then pure am
+        else oneof [pure am, addDuplicate am]
+    modifyBefore =
+      do
+        M.State{..} <- use inputState
+        state' <-
+          lift
+            $ M.State
+            <$> makeDuplicates accounts
+            <*> makeDuplicates choices
+            <*> makeDuplicates boundValues
+            <*> pure minTime
+        inputState .= state'
+  in
+    checkSemanticsTransaction modifyBefore noModify hasDuplicates False False
 
 
 -- | Check that output datum to a script matches its semantic output.
