@@ -22,7 +22,7 @@ module Spec.Marlowe.Plutus.Specification
     tests
   ) where
 
-import Control.Lens (use, uses, (%=), (<>=), (<~), (^.))
+import Control.Lens (use, uses, (%=), (.=), (<>=), (<~), (^.))
 import Control.Monad.State (lift)
 import Data.Bifunctor (bimap)
 import Data.List (nub)
@@ -203,6 +203,11 @@ tests referencePaths =
         , testGroup "Constraint 20. Single satisfaction"
             [
               testProperty "Invalid other validators during payment" $ checkOtherValidators referencePaths
+            ]
+        , testGroup "Constraint 19. No duplicates"
+            [
+              testProperty "Invalid duplicate accounts in input state" checkInputDuplicates
+              -- TODO: This test on the output state requires instrumenting the Plutus script. For now, this constraint is enforced manually by code inspection.
             ]
         , testProperty "Script hash matches reference hash"
             $ checkValidatorHash semanticsScriptHash
@@ -501,6 +506,48 @@ checkInputDuplicates referencePaths =
             )
   in
     checkSemanticsTransaction referencePaths modifyBefore noModify hasDuplicates False False
+
+
+-- | Add a duplicate entry to an assocation list.
+addDuplicate :: Arbitrary v => AM.Map k v -> Gen (AM.Map k v)
+addDuplicate am =
+  do
+    let
+      am' = AM.toList am
+    key <- elements $ fst <$> am'
+    value <- arbitrary
+    AM.fromList <$> Q.shuffle ((key, value) : am')
+
+
+-- | Check for the detection of duplicates in input state
+checkInputDuplicates :: Property
+checkInputDuplicates =
+  let
+    hasDuplicates tx =
+      let
+        hasDuplicate am = length (AM.keys am) /= length (nub $ AM.keys am)
+        M.State{..} = tx ^. inputState
+      in
+           hasDuplicate accounts
+        || hasDuplicate choices
+        || hasDuplicate boundValues
+    makeDuplicates am =
+      if AM.null am
+        then pure am
+        else oneof [pure am, addDuplicate am]
+    modifyBefore =
+      do
+        M.State{..} <- use inputState
+        state' <-
+          lift
+            $ M.State
+            <$> makeDuplicates accounts
+            <*> makeDuplicates choices
+            <*> makeDuplicates boundValues
+            <*> pure minTime
+        inputState .= state'
+  in
+    checkSemanticsTransaction modifyBefore noModify hasDuplicates False False
 
 
 -- | Check that output datum to a script matches its semantic output.
