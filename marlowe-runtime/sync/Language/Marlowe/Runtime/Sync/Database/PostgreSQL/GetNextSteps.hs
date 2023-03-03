@@ -42,7 +42,7 @@ import Language.Marlowe.Runtime.Core.Api
   , Transaction(..)
   , TransactionOutput(..)
   , TransactionScriptOutput(..)
-  , decodeMarloweTransactionMetadataLenient
+  , emptyMarloweTransactionMetadata
   )
 import Language.Marlowe.Runtime.History.Api (ContractStep(..), RedeemStep(..))
 import Language.Marlowe.Runtime.Sync.Database (Next(..))
@@ -274,7 +274,7 @@ getApplySteps blockHeader contractId txIds = T.statement params $
       ) = Transaction
         { transactionId = TxId txId
         , contractId
-        , metadata = decodeMarloweTransactionMetadataLenient $ maybe mempty (runGet get. fromStrict) metadata
+        , metadata = maybe emptyMarloweTransactionMetadata (runGet get . fromStrict) metadata
         , blockHeader
         , validityLowerBound = localTimeToUTC utc invalidBefore
         , validityUpperBound = localTimeToUTC utc invalidHereafter

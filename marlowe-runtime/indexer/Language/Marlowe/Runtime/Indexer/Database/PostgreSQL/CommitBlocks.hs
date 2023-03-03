@@ -24,7 +24,12 @@ import qualified Hasql.Transaction as H
 import Language.Marlowe.Core.V1.Semantics (MarloweData(..), MarloweParams(..))
 import Language.Marlowe.Runtime.ChainSync.Api
 import Language.Marlowe.Runtime.Core.Api
-  (ContractId(..), MarloweVersion(..), TransactionScriptOutput(..), transactionMetadata)
+  ( ContractId(..)
+  , MarloweVersion(..)
+  , TransactionScriptOutput(..)
+  , emptyMarloweTransactionMetadata
+  , transactionMetadata
+  )
 import qualified Language.Marlowe.Runtime.Core.Api as Core
 import Language.Marlowe.Runtime.History.Api (CreateStep(..), SomeCreateStep(..))
 import Language.Marlowe.Runtime.Indexer.Types
@@ -113,8 +118,8 @@ commitBlocks blocks = H.statement (prepareParams blocks)
     , contractTxOutTagInputs (tag, txId, txIx) AS
       ( SELECT * FROM UNNEST ($59 :: text[], $60 :: bytea[], $61 :: smallint[])
       )
-    INSERT INTO marlowe.invalidApplyTx (txId, inputTxId, inputTxIx, blockId, error)
-    SELECT * FROM invalidApplyTxInputs
+    INSERT INTO marlowe.contractTxOutTag (tag, txId, txIx)
+    SELECT * FROM contractTxOutTagInputs
   |]
 
 type QueryParams =
@@ -300,7 +305,7 @@ createTxToTxOutRows blockHeader@BlockHeader{..} MarloweCreateTransaction{..} =
         , fromIntegral slotNo
         , unBlockHeaderHash headerHash
         , fromIntegral blockNo
-        , if Map.null (unTransactionMetadata $ transactionMetadata metadata)
+        , if metadata == emptyMarloweTransactionMetadata
             then Nothing
             else Just $ toStrict $ runPut $ put metadata
         )
@@ -310,7 +315,7 @@ createTxToTxOutRows blockHeader@BlockHeader{..} MarloweCreateTransaction{..} =
 
 transactionMetadataToTagRows :: ByteString -> Int16 -> Core.MarloweTransactionMetadata -> [ContractTxOutTagRow]
 transactionMetadataToTagRows txId txIx Core.MarloweTransactionMetadata{..} =
-  (, txId, txIx) . Core.getMarloweMetadataTag <$> foldMap Map.keys (Core.tags <$> marloweMetadata)
+  (, txId, txIx) . Core.getMarloweMetadataTag <$> foldMap (Map.keys . Core.tags) marloweMetadata
 
 type ApplyTxRow =
   ( ByteString -- txId
@@ -362,9 +367,9 @@ applyTxToRows (MarloweApplyInputsTransaction MarloweV1 UnspentContractOutput{..}
       , fromIntegral blockNo
       , utcToLocalTime utc validityLowerBound
       , utcToLocalTime utc validityUpperBound
-      , if Map.null (unTransactionMetadata $ transactionMetadata metadata)
-          then Nothing
-          else Just $ toStrict $ runPut $ put metadata
+      , if metadata == emptyMarloweTransactionMetadata
+        then Nothing
+        else Just $ toStrict $ runPut $ put metadata
       , inputTxId'
       , inputTxIx'
       , toStrict $ runPut $ put $ toDatum inputs

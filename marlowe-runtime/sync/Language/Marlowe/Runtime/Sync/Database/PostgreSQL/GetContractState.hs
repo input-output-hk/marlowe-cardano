@@ -40,7 +40,7 @@ import Language.Marlowe.Runtime.Core.Api
   , MarloweVersionTag(..)
   , Payout(..)
   , TransactionScriptOutput(..)
-  , decodeMarloweTransactionMetadataLenient
+  , emptyMarloweTransactionMetadata
   )
 import qualified Plutus.V2.Ledger.Api as PV2
 import Prelude hiding (init)
@@ -263,7 +263,7 @@ decodeBinary :: Binary a => ByteString -> a
 decodeBinary = runGet get . fromStrict
 
 decodeMetadata :: Maybe ByteString -> MarloweTransactionMetadata
-decodeMetadata = decodeMarloweTransactionMetadataLenient . maybe mempty decodeBinary
+decodeMetadata = maybe emptyMarloweTransactionMetadata decodeBinary
 
 decodeContractId :: ByteString -> Int16 -> ContractId
 decodeContractId = fmap ContractId . decodeTxOutRef

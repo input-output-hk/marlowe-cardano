@@ -28,7 +28,7 @@ import Language.Marlowe.Runtime.ChainSync.Api
   , fromDatum
   )
 import Language.Marlowe.Runtime.Core.Api
-  (ContractId(..), MarloweVersion(..), TransactionScriptOutput(..), decodeMarloweTransactionMetadataLenient)
+  (ContractId(..), MarloweVersion(..), TransactionScriptOutput(..), emptyMarloweTransactionMetadata)
 import Language.Marlowe.Runtime.History.Api (CreateStep(..), SomeCreateStep(..))
 import qualified Plutus.V2.Ledger.Api as PV2
 import Prelude hiding (init)
@@ -102,7 +102,7 @@ getCreateStep (ContractId TxOutRef{..}) = T.statement params $
                     , marloweContract = fromJust $ fromDatum $ runGet get $ fromStrict contract
                     }
                 }
-            , metadata = decodeMarloweTransactionMetadataLenient $ maybe mempty (runGet get. fromStrict) metadata
+            , metadata = maybe emptyMarloweTransactionMetadata (runGet get . fromStrict) metadata
             , payoutValidatorHash = ScriptHash payoutScriptHash
             }
         )

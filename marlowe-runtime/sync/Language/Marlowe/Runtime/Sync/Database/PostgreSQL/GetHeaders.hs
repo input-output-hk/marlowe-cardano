@@ -37,7 +37,7 @@ import Language.Marlowe.Runtime.Core.Api
   , MarloweMetadataTag(getMarloweMetadataTag)
   , MarloweVersion(MarloweV1)
   , SomeMarloweVersion(SomeMarloweVersion)
-  , decodeMarloweTransactionMetadataLenient
+  , emptyMarloweTransactionMetadata
   )
 import Language.Marlowe.Runtime.Discovery.Api (ContractHeader(..))
 import Prelude hiding (init)
@@ -464,14 +464,14 @@ getHeadersFrom ContractFilter{..} totalCount (pivotSlot, pivotTxId, pivotTxIx) o
       FROM marlowe.createTxOut
       JOIN marlowe.contractTxOut USING (txId, txIx)
       JOIN marlowe.txOut USING (txId, txIx)
-      WHERE createTxOut.slotNo < $1 :: bigint OR
+      WHERE (createTxOut.slotNo < $1 :: bigint OR
         ( createTxOut.slotNo = $1 :: bigint AND
           ( createTxOut.txId < $2 :: bytea OR
             ( createTxOut.txId = $2 :: bytea AND
                 createTxOut.txIx <= $3 :: smallint
             )
           )
-        )
+        ))
         AND EXISTS
           ( SELECT 1
             FROM marlowe.contractTxOutTag
@@ -499,14 +499,14 @@ getHeadersFrom ContractFilter{..} totalCount (pivotSlot, pivotTxId, pivotTxIx) o
       FROM marlowe.createTxOut
       JOIN marlowe.contractTxOut USING (txId, txIx)
       JOIN marlowe.txOut USING (txId, txIx)
-      WHERE createTxOut.slotNo > $1 :: bigint OR
+      WHERE (createTxOut.slotNo > $1 :: bigint OR
         ( createTxOut.slotNo = $1 :: bigint AND
           ( createTxOut.txId > $2 :: bytea OR
             ( createTxOut.txId = $2 :: bytea AND
                 createTxOut.txIx >= $3 :: smallint
             )
           )
-        )
+        ))
         AND EXISTS
           ( SELECT 1
             FROM marlowe.contractTxOutTag
@@ -535,14 +535,14 @@ getHeadersFrom ContractFilter{..} totalCount (pivotSlot, pivotTxId, pivotTxIx) o
       JOIN marlowe.contractTxOut USING (txId, txIx)
       JOIN marlowe.txOut USING (txId, txIx)
       JOIN (SELECT UNNEST($6 :: bytea[]) AS rolesCurrency) as roles USING (rolesCurrency)
-      WHERE createTxOut.slotNo < $1 :: bigint OR
+      WHERE (createTxOut.slotNo < $1 :: bigint OR
         ( createTxOut.slotNo = $1 :: bigint AND
           ( createTxOut.txId < $2 :: bytea OR
             ( createTxOut.txId = $2 :: bytea AND
                 createTxOut.txIx <= $3 :: smallint
             )
           )
-        )
+        ))
         AND EXISTS
           ( SELECT 1
             FROM marlowe.contractTxOutTag
@@ -571,14 +571,14 @@ getHeadersFrom ContractFilter{..} totalCount (pivotSlot, pivotTxId, pivotTxIx) o
       JOIN marlowe.contractTxOut USING (txId, txIx)
       JOIN marlowe.txOut USING (txId, txIx)
       JOIN (SELECT UNNEST($6 :: bytea[]) AS rolesCurrency) as roles USING (rolesCurrency)
-      WHERE createTxOut.slotNo > $1 :: bigint OR
+      WHERE (createTxOut.slotNo > $1 :: bigint OR
         ( createTxOut.slotNo = $1 :: bigint AND
           ( createTxOut.txId > $2 :: bytea OR
             ( createTxOut.txId = $2 :: bytea AND
                 createTxOut.txIx >= $3 :: smallint
             )
           )
-        )
+        ))
         AND EXISTS
           ( SELECT 1
             FROM marlowe.contractTxOutTag
@@ -700,7 +700,7 @@ decodeContractHeader
   ) = ContractHeader
     { contractId = ContractId (TxOutRef (TxId txId) (fromIntegral txIx))
     , rolesCurrency = PolicyId rolesCurrency
-    , metadata = decodeMarloweTransactionMetadataLenient $ maybe mempty (runGet get. fromStrict) metadata
+    , metadata = maybe emptyMarloweTransactionMetadata (runGet get . fromStrict) metadata
     , marloweScriptHash = fromJust do
         credential <- paymentCredential $ Address address
         case credential of

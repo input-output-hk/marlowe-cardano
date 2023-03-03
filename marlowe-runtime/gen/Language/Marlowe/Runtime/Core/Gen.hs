@@ -31,8 +31,13 @@ class
 instance ArbitraryMarloweVersion 'V1
 
 instance Arbitrary MarloweTransactionMetadata where
-  arbitrary = MarloweTransactionMetadata <$> arbitrary <*> arbitrary
-  shrink = genericShrink
+  arbitrary = patchMarloweTransactionMetadata <$> (MarloweTransactionMetadata <$> arbitrary <*> arbitrary)
+  shrink = fmap patchMarloweTransactionMetadata . genericShrink
+
+patchMarloweTransactionMetadata :: MarloweTransactionMetadata -> MarloweTransactionMetadata
+patchMarloweTransactionMetadata metadata = metadata
+  { transactionMetadata = encodeMarloweTransactionMetadata metadata
+  }
 
 instance Arbitrary MarloweMetadataTag where
   arbitrary = MarloweMetadataTag <$> arbitrary

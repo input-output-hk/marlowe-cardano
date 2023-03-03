@@ -90,7 +90,7 @@ instance PaginatedQuery GetHeaders where
     Contract3 -> standardContractHeader contract3
     Contract4 -> standardContractHeader contract4
   toFilter _ MarloweQueryTestData{..} ContractFilterSym{..} = ContractFilter
-    { tags = Set.map (MarloweMetadataTag . T.pack . show) tagsSym
+    { tags = testTagsToTags tagsSym
     , roleCurrencies = flip Set.map roleCurrenciesSym \case
         Contract1 -> standardContractRoleCurrency contract1
         Contract2 -> standardContractRoleCurrency contract2
@@ -169,19 +169,18 @@ standardContractRoleCurrency StandardContractInit{..} = case contractCreated of
 data TestTag = Tag1 | Tag2
   deriving (Eq, Ord, Show, Enum, Bounded)
 
+testTagsToTags :: Set TestTag -> Set MarloweMetadataTag
+testTagsToTags = Set.map testTagToTag
+
+testTagToTag :: TestTag -> MarloweMetadataTag
+testTagToTag = MarloweMetadataTag . T.pack . show
+
 tagsForContract :: RefSym GetHeaders -> Set TestTag
 tagsForContract = \case
   Contract1 -> mempty
-  Contract2 -> mempty
-  Contract3 -> mempty
-  Contract4 -> mempty
-
--- tagsForContract :: RefSym GetHeaders -> Set TestTag
--- tagsForContract = \case
---   Contract1 -> mempty
---   Contract2 -> Set.singleton Tag1
---   Contract3 -> Set.fromList [Tag1, Tag2]
---   Contract4 -> Set.singleton Tag2
+  Contract2 -> Set.singleton Tag1
+  Contract3 -> Set.fromList [Tag1, Tag2]
+  Contract4 -> Set.singleton Tag2
 
 getContractStateSpec :: SpecWith MarloweQueryTestData
 getContractStateSpec = describe "getContractState" do
@@ -252,16 +251,16 @@ setup runSpec = withLocalMarloweRuntime $ runIntegrationTest do
   runtime <- ask
   wallet1 <- getGenesisWallet 0
   wallet2 <- getGenesisWallet 1
-  contract1 <- createStandardContract wallet1 wallet2
+  contract1 <- createStandardContractWithTags (testTagsToTags $ tagsForContract Contract1) wallet1 wallet2
   contract1Step1 <- makeInitialDeposit contract1
   contract1Step2 <- chooseGimmeTheMoney contract1Step1
-  contract2 <- createStandardContract wallet1 wallet2
+  contract2 <- createStandardContractWithTags (testTagsToTags $ tagsForContract Contract2) wallet1 wallet2
   contract1Step3 <- sendNotify contract1Step2
   contract1Step4 <- makeReturnDeposit contract1Step3
   contract1Step5 <- withdrawPartyAFunds contract1Step4
   contract2Step1 <- makeInitialDeposit contract2
-  contract3 <- createStandardContract wallet1 wallet2
-  contract4 <- createStandardContract wallet1 wallet2
+  contract3 <- createStandardContractWithTags (testTagsToTags $ tagsForContract Contract3) wallet1 wallet2
+  contract4 <- createStandardContractWithTags (testTagsToTags $ tagsForContract Contract4) wallet1 wallet2
   contract2Step2 <- chooseGimmeTheMoney contract2Step1
   contract2Step3 <- sendNotify contract2Step2
   contract2Step4 <- makeReturnDeposit contract2Step3

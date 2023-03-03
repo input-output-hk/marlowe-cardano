@@ -5,6 +5,9 @@ module Language.Marlowe.Runtime.Integration.StandardContract
 
 import Cardano.Api (BabbageEra, TxBody)
 import Control.Monad.IO.Class (liftIO)
+import qualified Data.Map as Map
+import Data.Set (Set)
+import qualified Data.Set as Set
 import Data.Time (NominalDiffTime, UTCTime, addUTCTime, getCurrentTime, secondsToNominalDiffTime)
 import Data.Time.Clock (nominalDiffTimeToSeconds)
 import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
@@ -13,7 +16,14 @@ import Language.Marlowe.Extended.V1 (ada)
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader)
 import Language.Marlowe.Runtime.Client (createContract)
 import Language.Marlowe.Runtime.Core.Api
-  (ContractId, MarloweVersion(..), MarloweVersionTag(..), emptyMarloweTransactionMetadata)
+  ( ContractId
+  , MarloweMetadata(..)
+  , MarloweMetadataTag
+  , MarloweTransactionMetadata(..)
+  , MarloweVersion(..)
+  , MarloweVersionTag(..)
+  , emptyMarloweTransactionMetadata
+  )
 import Language.Marlowe.Runtime.Discovery.Api (ContractHeader)
 import Language.Marlowe.Runtime.Integration.Common
   ( Integration
@@ -69,7 +79,10 @@ data StandardContractClosed v = StandardContractClosed
   }
 
 createStandardContract :: Wallet -> Wallet -> Integration (StandardContractInit 'V1)
-createStandardContract partyAWallet partyBWallet = do
+createStandardContract = createStandardContractWithTags mempty
+
+createStandardContractWithTags :: Set MarloweMetadataTag -> Wallet -> Wallet -> Integration (StandardContractInit 'V1)
+createStandardContractWithTags tags partyAWallet partyBWallet = do
   partyBAddress <- expectJust "Failed to convert party B address" $ toPlutusAddress $ changeAddress $ addresses partyBWallet
   now <- liftIO getCurrentTime
   let (contract, partyA, partyB) = standardContract partyBAddress now $ secondsToNominalDiffTime 100
@@ -78,7 +91,15 @@ createStandardContract partyAWallet partyBWallet = do
     MarloweV1
     (addresses partyAWallet)
     (RoleTokensMint $ mkMint $ pure ("Party A", (changeAddress $ addresses partyAWallet, Left 1)))
-    emptyMarloweTransactionMetadata
+    (if Set.null tags
+        then emptyMarloweTransactionMetadata
+        else emptyMarloweTransactionMetadata
+          { marloweMetadata = Just MarloweMetadata
+            { tags = Map.fromSet (const Nothing) tags
+            , continuations = Nothing
+            }
+          }
+    )
     2_000_000
     contract
   contractCreated@ContractCreated{contractId, txBody = createTxBody} <- expectRight "failed to create standard contract" result

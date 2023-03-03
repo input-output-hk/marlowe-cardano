@@ -126,7 +126,11 @@ data MarloweTransactionMetadata = MarloweTransactionMetadata
   -- ^ The raw underlying transaction metadata.
   }
   deriving stock (Eq, Ord, Show, Generic)
-  deriving anyclass (Binary, ToJSON)
+  deriving anyclass (ToJSON)
+
+instance Binary MarloweTransactionMetadata where
+  put = put . encodeMarloweTransactionMetadata
+  get = decodeMarloweTransactionMetadataLenient <$> get
 
 emptyMarloweTransactionMetadata :: MarloweTransactionMetadata
 emptyMarloweTransactionMetadata = MarloweTransactionMetadata Nothing mempty
@@ -143,6 +147,7 @@ data MetadataDecodeError
   | ListIndexNotFound Natural
   | InvalidValue Text
   | OneOf MetadataDecodeError MetadataDecodeError
+  deriving (Eq, Ord, Show)
 
 encodeMarloweTransactionMetadata :: MarloweTransactionMetadata -> Chain.TransactionMetadata
 encodeMarloweTransactionMetadata MarloweTransactionMetadata{..} = case marloweMetadata of
