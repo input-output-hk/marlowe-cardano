@@ -388,6 +388,11 @@ hasDuplicateKey (boundValues outState) ≡ False
 ```
 
 
+#### *Constraint 20.* Single satisfaction
+
+If the contract makes payments, then the Marlowe validator must be the only validator executing in the transaction.
+
+
 ## Plutus Validator for Marlowe Payouts
 
 
