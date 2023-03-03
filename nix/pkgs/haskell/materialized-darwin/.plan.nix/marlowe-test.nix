@@ -64,7 +64,6 @@
           (hsPkgs."tasty-quickcheck" or (errorHandler.buildDepError "tasty-quickcheck"))
           (hsPkgs."text" or (errorHandler.buildDepError "text"))
           (hsPkgs."these" or (errorHandler.buildDepError "these"))
-          (hsPkgs."vector" or (errorHandler.buildDepError "vector"))
           ];
         buildable = true;
         modules = [
