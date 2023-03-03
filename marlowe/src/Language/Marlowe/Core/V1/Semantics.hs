@@ -970,13 +970,13 @@ instance Eq ReduceWarning where
     ReduceNoWarning == _ = False
     ReduceNonPositivePay acc1 p1 tn1 a1 == ReduceNonPositivePay acc2 p2 tn2 a2 =
         acc1 == acc2 && p1 == p2 && tn1 == tn2 && a1 == a2
-    ReduceNonPositivePay _ _ _ _ == _ = False
+    ReduceNonPositivePay{} == _ = False
     ReducePartialPay acc1 p1 tn1 a1 e1 == ReducePartialPay acc2 p2 tn2 a2 e2 =
         acc1 == acc2 && p1 == p2 && tn1 == tn2 && a1 == a2 && e1 == e2
-    ReducePartialPay _ _ _ _ _ == _ = False
+    ReducePartialPay{} == _ = False
     ReduceShadowing v1 old1 new1 == ReduceShadowing v2 old2 new2 =
         v1 == v2 && old1 == old2 && new1 == new2
-    ReduceShadowing _ _ _ == _ = False
+    ReduceShadowing{} == _ = False
     ReduceAssertionFailed == ReduceAssertionFailed = True
     ReduceAssertionFailed == _ = False
 
