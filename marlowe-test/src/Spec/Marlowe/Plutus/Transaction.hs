@@ -27,6 +27,7 @@ module Spec.Marlowe.Plutus.Transaction
   , noModify
   , shuffle
     -- * Conditions
+  , isScriptTxIn
   , noVeto
   ) where
 
@@ -61,7 +62,7 @@ import Plutus.Script.Utils.Scripts (datumHash)
 import Plutus.V1.Ledger.Value (gt)
 import Plutus.V2.Ledger.Api
   ( Address(Address)
-  , Credential(PubKeyCredential)
+  , Credential(..)
   , CurrencySymbol
   , Datum(..)
   , DatumHash(..)
@@ -76,7 +77,7 @@ import Plutus.V2.Ledger.Api
   , ToData(toBuiltinData)
   , TxInInfo(..)
   , TxInfo(..)
-  , TxOut(TxOut)
+  , TxOut(TxOut, txOutAddress)
   , UpperBound(UpperBound)
   , Value
   )
@@ -109,7 +110,7 @@ import Spec.Marlowe.Reference (ReferencePath, arbitraryReferenceTransaction)
 import Spec.Marlowe.Semantics.Arbitrary (arbitraryGoldenTransaction, arbitraryPositiveInteger)
 import Spec.Marlowe.Semantics.Golden (GoldenTransaction)
 import Spec.Marlowe.Semantics.Merkle (deepMerkleize, merkleizeInputs)
-import Test.Tasty.QuickCheck (Arbitrary(..), Gen, elements, frequency, suchThat)
+import Test.Tasty.QuickCheck (Arbitrary(..), Gen, elements, frequency, listOf, suchThat)
 
 import qualified Language.Marlowe.Core.V1.Semantics.Types as M (Party(Address))
 import qualified Plutus.V1.Ledger.Value as V (adaSymbol, adaToken, singleton)
@@ -186,7 +187,7 @@ makeDeposit :: Input
 makeDeposit input' =
   do
     ref <- lift arbitrary
-    address' <- lift arbitrary
+    address' <- lift $ arbitrary `suchThat` notScriptAddress
     pure
       $ case getInputContent input' of
           IDeposit _ (M.Address _ address) (Token c n) i -> if i > 0
@@ -204,7 +205,7 @@ makeRoleIn input' =
   do
     MarloweParams currencySymbol <- use marloweParams
     ref <- lift arbitrary
-    address  <- lift arbitrary
+    address  <- lift $ arbitrary `suchThat` notScriptAddress
     pure
       $ case getInputContent input' of
           IDeposit _ (Role role') _ _         -> pure . TxInInfo ref $ TxOut address (V.singleton currencySymbol role' 1) NoOutputDatum Nothing
@@ -403,7 +404,7 @@ makePayoutRoleIn :: ArbitraryTransaction PayoutTransaction TxInInfo
 makePayoutRoleIn =
   do
     ref <- lift arbitrary
-    address <- lift arbitrary
+    address <- lift $ arbitrary `suchThat` notScriptAddress
     value <- V.singleton <$> marloweParamsPayout `uses` rolesCurrency <*> use role <*> pure 1
     pure
       . TxInInfo ref
@@ -471,15 +472,50 @@ validPayoutTransaction noisy =
     infoFee <~ V.singleton V.adaSymbol V.adaToken <$> lift arbitraryPositiveInteger
 
     -- Add noise.
-    when noisy addNoise
+    when noisy addNoise'
 
     -- Shuffle.
     shuffle
 
 
+-- | Check that an address is not for a script.
+notScriptAddress :: Address -> Bool
+notScriptAddress (Address (ScriptCredential _) _) = False
+notScriptAddress _ = True
+
+
+-- | Check that an input is not from a script.
+notScriptTxIn :: TxInInfo -> Bool
+notScriptTxIn = not . isScriptTxIn
+
+
+-- | Check that an input is from a script.
+isScriptTxIn :: TxInInfo -> Bool
+isScriptTxIn TxInInfo{txInInfoResolved=TxOut{txOutAddress=Address (ScriptCredential _) _}} = True
+isScriptTxIn _ = False
+
+
 -- | Add noise to the inputs, outputs, and data in a Plutus transaction.
-addNoise :: ArbitraryTransaction a ()
+addNoise :: ArbitraryTransaction SemanticsTransaction ()
 addNoise =
+  do
+    let
+      isPayout (Payment _ (Party _) _ i) = i > 0
+      isPayout _ = False
+    hasPayments <- not . null . filter isPayout . txOutPayments <$> use output
+    let
+      arbitraryInput =
+        if hasPayments
+          then arbitrary `suchThat` notScriptTxIn
+          else arbitrary
+    infoInputs  <><~ lift (listOf arbitraryInput `suchThat` ((< 5) . length))
+    infoOutputs <><~ lift (arbitrary `suchThat` ((< 5) . length))
+    infoData    <><~ lift (fmap AM.fromList $ arbitrary `suchThat` ((< 5) . length))
+
+
+-- | Add noise to the inputs, outputs, and data in a Plutus transaction.
+addNoise' :: ArbitraryTransaction PayoutTransaction ()
+addNoise' =
   do
     infoInputs  <><~ lift (arbitrary `suchThat` ((< 5) . length))
     infoOutputs <><~ lift (arbitrary `suchThat` ((< 5) . length))

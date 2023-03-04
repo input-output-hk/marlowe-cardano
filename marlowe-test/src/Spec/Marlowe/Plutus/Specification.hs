@@ -22,7 +22,8 @@ module Spec.Marlowe.Plutus.Specification
     tests
   ) where
 
-import Control.Lens (use, uses, (%=), (.=), (<>=), (^.))
+
+import Control.Lens (use, uses, (%=), (<>=), (<~), (^.))
 import Control.Monad.State (lift)
 import Data.Bifunctor (bimap)
 import Data.List (nub)
@@ -72,12 +73,14 @@ import Plutus.V2.Ledger.Api
   , singleton
   , toData
   )
+import Spec.Marlowe.Plutus.Lens ((<><~))
 import Spec.Marlowe.Plutus.Script
   (evaluatePayout, evaluateSemantics, payoutAddress, payoutScriptHash, semanticsAddress, semanticsScriptHash)
 import Spec.Marlowe.Plutus.Transaction
   ( ArbitraryTransaction
   , arbitraryPayoutTransaction
   , arbitrarySemanticsTransaction
+  , isScriptTxIn
   , merkleize
   , noModify
   , noVeto
@@ -102,7 +105,19 @@ import Spec.Marlowe.Reference (ReferencePath)
 import Spec.Marlowe.Semantics.Arbitrary (arbitraryPositiveInteger)
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.QuickCheck
-  (Arbitrary(..), Gen, Property, chooseInteger, elements, forAll, oneof, property, suchThat, testProperty, (===))
+  ( Arbitrary(..)
+  , Gen
+  , Property
+  , chooseInteger
+  , elements
+  , forAll
+  , listOf1
+  , oneof
+  , property
+  , suchThat
+  , testProperty
+  , (===)
+  )
 
 import qualified Language.Marlowe.Core.V1.Semantics as M (MarloweData(marloweParams))
 import qualified Language.Marlowe.Core.V1.Semantics.Types as M (Party(Address), State(..))
@@ -198,12 +213,16 @@ tests referencePaths =
               testProperty "Invalid duplicate accounts in input state" $ checkInputDuplicates referencePaths
               -- TODO: This test on the output state requires instrumenting the Plutus script. For now, this constraint is enforced manually by code inspection.
             ]
+        , testGroup "Constraint 20. Single satisfaction"
+            [
+              testProperty "Invalid other validators during payment" $ checkOtherValidators referencePaths
+            ]
         , testProperty "Script hash matches reference hash"
             $ checkValidatorHash semanticsScriptHash
               -- DO NOT ALTER THE FOLLOWING VALUE UNLESS YOU ARE COMMITTING
               -- APPROVED CHANGES TO MARLOWE'S SEMANTICS VALIDATOR. THIS HASH
               -- HAS IMPLICATIONS FOR VERSIONING, AUDIT, AND CONTRACT DISCOVERY.
-              "102a6056f421df69629a70131a3ae32bbc1f0b2df83391a064be3e25"
+              "be8c2925fa8f7bc77285152008715960adec2ba92788832016f73880"
         ]
     , testGroup "Payout Validator"
         [
@@ -288,7 +307,7 @@ checkSemanticsTransaction referencePaths modifyBefore modifyAfter condition vali
       case evaluateSemantics (toData _datum) (toData _redeemer) (toData _scriptContext) of
         This  e   -> not valid || (error $ show e)
         These e l -> not valid || (error $ show e <> ": " <> show l)
-        That    _ -> valid
+        That    l -> valid
 
 
 -- | Check that a payout transaction succeeds.
@@ -354,6 +373,16 @@ doesClose = (== Close) . txOutContract . (^. output)
 -- | Ensure that the transaction does not close the contract.
 notCloses :: PlutusTransaction SemanticsTransaction -> Bool
 notCloses = not . doesClose
+
+
+-- | Ensure that the contract makes payments.
+hasPayouts :: PlutusTransaction SemanticsTransaction -> Bool
+hasPayouts =
+  let
+    isPayout (Payment _ (Party _) _ i) = i > 0
+    isPayout _ = False
+  in
+    not . null . filter isPayout . txOutPayments . (^. output)
 
 
 -- | Check that validation fails if there is more than one Marlowe output.
@@ -474,14 +503,15 @@ checkInputDuplicates referencePaths =
     modifyBefore =
       do
         M.State{..} <- use inputState
-        state' <-
+        inputState <~
           lift
-            $ M.State
-            <$> makeDuplicates accounts
-            <*> makeDuplicates choices
-            <*> makeDuplicates boundValues
-            <*> pure minTime
-        inputState .= state'
+            (
+              M.State
+                <$> makeDuplicates accounts
+                <*> makeDuplicates choices
+                <*> makeDuplicates boundValues
+                <*> pure minTime
+            )
   in
     checkSemanticsTransaction referencePaths modifyBefore noModify hasDuplicates False False
 
@@ -508,6 +538,17 @@ checkDatumOutput referencePaths perturb =
         infoData %= AM.fromList . fmap perturbOwnOutputDatum . AM.toList
   in
     checkSemanticsTransaction referencePaths noModify modifyAfter notCloses False False
+
+
+-- | Check that other validators are forbidden during payments.
+checkOtherValidators :: [ReferencePath] -> Property
+checkOtherValidators referencePaths =
+  let
+    modifyAfter =
+      -- Add an extra script input.
+      infoInputs <><~ lift (listOf1 $ arbitrary `suchThat` isScriptTxIn)
+  in
+    checkSemanticsTransaction referencePaths noModify modifyAfter hasPayouts False False
 
 
 -- | Check that parameters in the datum are not changed by the transaction.
