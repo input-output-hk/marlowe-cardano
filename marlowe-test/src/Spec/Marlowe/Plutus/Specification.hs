@@ -22,6 +22,7 @@ module Spec.Marlowe.Plutus.Specification
     tests
   ) where
 
+
 import Control.Lens (use, uses, (%=), (<>=), (<~), (^.))
 import Control.Monad.State (lift)
 import Data.Bifunctor (bimap)
