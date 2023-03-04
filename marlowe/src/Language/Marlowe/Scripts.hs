@@ -270,10 +270,10 @@ mkMarloweValidator
                              -- [Marlowe-Cardano Specification: "Constraint 19. No duplicates".]
                              -- Check that the final state obeys the Semantic's invariants.
                           && checkState "o" finalBalance txOutState
-                             -- [Marlowe-Cardano Specification: "20. Single satsifaction".]
-                             -- Either there must be no payments, or there must be no other validators.
-                          && traceIfFalse "z" (totalPayouts == zero || noOthers)
             preconditionsOk && inputsOk && payoutsOk && checkContinuation
+              -- [Marlowe-Cardano Specification: "20. Single satsifaction".]
+              -- Either there must be no payouts, or there must be no other validators.
+              && traceIfFalse "z" (null payoutsByParty || noOthers)
         Error TEAmbiguousTimeIntervalError -> traceError "i"
         Error TEApplyNoMatchError -> traceError "n"
         Error (TEIntervalError (InvalidInterval _)) -> traceError "j"
