@@ -305,7 +305,7 @@ checkSemanticsTransaction modifyBefore modifyAfter condition valid noisy =
       case evaluateSemantics (toData _datum) (toData _redeemer) (toData _scriptContext) of
         This  e   -> not valid || (error $ show e)
         These e l -> not valid || (error $ show e <> ": " <> show l)
-        That    l -> valid
+        That    _ -> valid
 
 
 -- | Check that a payout transaction succeeds.
