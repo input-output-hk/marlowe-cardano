@@ -382,7 +382,7 @@ hasPayouts =
     isPayout (Payment _ (Party _) _ i) = i > 0
     isPayout _ = False
   in
-    not . null . filter isPayout . txOutPayments . (^. output)
+    any isPayout . txOutPayments . (^. output)
 
 
 -- | Check that validation fails if there is more than one Marlowe output.
