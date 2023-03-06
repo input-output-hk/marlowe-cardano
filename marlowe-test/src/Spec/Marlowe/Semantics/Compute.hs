@@ -31,6 +31,7 @@ import Control.Applicative (liftA2)
 import Control.Lens.Getter (Getter, to, view)
 import Control.Monad.Except (MonadError(throwError), unless, when)
 import Control.Monad.Reader (ReaderT(runReaderT))
+import Data.Bifunctor (second)
 import Data.Default (Default(..))
 import Data.Function (on)
 import Data.List (sort)
@@ -54,7 +55,7 @@ import Language.Marlowe.Core.V1.Semantics.Types
   , ChosenNum
   , Contract(..)
   , Environment(Environment)
-  , Input
+  , Input(..)
   , InputContent(IChoice, IDeposit, INotify)
   , IntervalError(IntervalInPastError, InvalidInterval)
   , Observation
@@ -62,7 +63,7 @@ import Language.Marlowe.Core.V1.Semantics.Types
   , State(..)
   , TimeInterval
   , Token(..)
-  , Value
+  , Value(Constant)
   , ValueId
   , getAction
   , getInputContent
@@ -72,6 +73,8 @@ import Plutus.V2.Ledger.Api (CurrencySymbol, POSIXTime(..), TokenName)
 import Spec.Marlowe.Semantics.Arbitrary
   ( SemiArbitrary(semiArbitrary)
   , arbitraryContractWeighted
+  , arbitraryGoldenTransaction
+  , arbitraryPositiveInteger
   , assertContractWeights
   , closeContractWeights
   , defaultContractWeights
@@ -85,7 +88,19 @@ import Spec.Marlowe.Semantics.Orphans ()
 import System.IO.Unsafe (unsafePerformIO)
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.QuickCheck
-  (Arbitrary(..), Gen, Testable(property), discard, elements, forAll, forAllShrink, frequency, suchThat, testProperty)
+  ( Arbitrary(..)
+  , Gen
+  , Testable(property)
+  , chooseInteger
+  , discard
+  , elements
+  , forAll
+  , forAllShrink
+  , frequency
+  , shuffle
+  , suchThat
+  , testProperty
+  )
 
 import qualified PlutusTx.AssocMap as AM
 
@@ -161,18 +176,56 @@ arbitraryMarloweContext w =
 -- | Generate an arbitrary valid Marlowe transaction context.
 arbitraryValid :: Gen MarloweContext
 arbitraryValid =
-    do
-      mcContract <- arbitrary `suchThat` (/= Close)
-      (time, inputs') <-
-        case unsafePerformIO $ getAllInputs mcContract of
-          Right candidates -> elements candidates
-          Left _           -> discard
-      let
-        -- TODO: Generalize to arbitrary starting state.
-        mcState = State AM.empty AM.empty AM.empty time
-        mcInput = head inputs'
-        mcOutput = computeTransaction mcInput mcState mcContract
-      pure MarloweContext{..}
+  let
+    randomContext =
+      do
+        mcContract <- arbitrary `suchThat` (/= Close)
+        (time, inputs') <-
+          case unsafePerformIO $ getAllInputs mcContract of
+            Right candidates -> elements candidates
+            Left _           -> discard
+        let
+          -- TODO: Generalize to arbitrary starting state.
+          mcState = State AM.empty AM.empty AM.empty time
+          mcInput = head inputs'
+          mcOutput = computeTransaction mcInput mcState mcContract
+        pure MarloweContext{..}
+    goldenContext =
+      do
+        (mcState, mcContract, mcInput, mcOutput) <- arbitraryGoldenTransaction True
+        pure MarloweContext{..}
+  in
+    frequency [(1, randomContext), (2, goldenContext)]
+
+
+-- | generate a simple payment.
+simplePayment :: Gen MarloweContext
+simplePayment =
+  do
+    context <- arbitrary
+    balance <- arbitraryPositiveInteger
+    payment <- chooseInteger (1, balance)
+    account <- semiArbitrary context
+    payee <- semiArbitrary context
+    token <- semiArbitrary context
+    state <- semiArbitrary context
+    accounts' <-
+      fmap AM.fromList . shuffle . AM.toList
+        . AM.insert (account, token) balance
+        . AM.delete (account, token)
+        $ accounts state
+    intervalStart <- (getPOSIXTime (minTime state) +) <$> arbitraryPositiveInteger
+    intervalEnd <- (intervalStart +) <$> arbitraryPositiveInteger
+    timeout <- (intervalEnd +) <$> arbitraryPositiveInteger
+    mcContract <-
+        Pay account (Party payee) token (Constant payment)
+          . When [] (POSIXTime timeout)
+          <$> semiArbitrary context
+    let
+      mcState = state {accounts = accounts'}
+      mcInput = TransactionInput (POSIXTime intervalStart, POSIXTime intervalEnd) []
+      mcOutput = computeTransaction mcInput mcState mcContract
+    pure MarloweContext{..}
 
 
 -- | Recompute the output of a Marlowe transaction in an transaction context.
@@ -543,6 +596,27 @@ requireAmbiguousTimeout =
   >> requireNextTimeout `requireLE` view latestTime
 
 
+-- | Require a payment to a party.
+requirePayout :: Testify ()
+requirePayout =
+  let
+    isPayout (Payment _ (Party _) _ i) = i > 0
+    isPayout _ = False
+  in
+    view payments >>= "Positive payout" `require` any isPayout
+
+
+-- | Require not deposits.
+requireNoDeposits :: Testify ()
+requireNoDeposits =
+  let
+    isDeposit (NormalInput (IDeposit _ _ _ i)) = i > 0
+    isDeposit (MerkleizedInput (IDeposit _ _ _ i) _ _) = i > 0
+    isDeposit _ = False
+  in
+    view inputs >>= "No deposits" `require` (not . any isDeposit)
+
+
 -- | Throw an error unless a condition holds.
 throwUnless :: MonadError String m
             => String
@@ -671,30 +745,31 @@ checkContinuation expected =
 data TransactionTest =
   TransactionTest
   {
-    name          :: String
-  , generator     :: Gen MarloweContext
-  , precondition  :: Testify ()
-  , invariant     :: [Invariant]
-  , postcondition :: Testify ()
+    name           :: String
+  , generator      :: Gen MarloweContext
+  , precondition   :: Testify ()
+  , invariant      :: [Invariant]
+  , postcondition  :: Testify ()
+  , allowShrinkage :: Bool
   }
 
 instance Default TransactionTest where
   def =
     TransactionTest
     {
-      name          = mempty
-    , generator     = arbitrary
-    , precondition  = pure ()
-    , invariant     = mempty
-    , postcondition = pure ()
+      name           = mempty
+    , generator      = arbitrary
+    , precondition   = pure ()
+    , invariant      = mempty
+    , postcondition  = pure ()
+    , allowShrinkage = True
     }
 
 
 -- | Test a Marlowe transaction.
-test :: Bool             -- ^ Whether to perform shrinkage of generated values.
-     -> TransactionTest  -- ^ The test.
+test :: TransactionTest  -- ^ The test.
      -> TestTree         -- ^ The result.
-test doShrink TransactionTest{..} =
+test TransactionTest{..} =
   testProperty name
     . property
     $ let
@@ -707,7 +782,7 @@ test doShrink TransactionTest{..} =
             Right () -> True   -- Test passed.
         gen = generator `suchThat` preResolve precondition
       in
-        (if doShrink then forAllShrink gen shrink else forAll gen)
+        (if allowShrinkage then forAllShrink gen shrink else forAll gen)
           . postResolve
           $ mapM_ checkInvariant invariant >> postcondition
 
@@ -858,11 +933,30 @@ anyInput =
   }
 
 
+-- | Test that payments substract value from internal accounts.
+payingSubtractsFromAccount :: TransactionTest
+payingSubtractsFromAccount =
+  def
+  {
+    name           = "Paying subtracts from account"
+  , allowShrinkage = False
+  , generator      = simplePayment
+  , postcondition  = do
+                       delta <-
+                         fmap (AM.filter (/= 0))
+                           $ AM.unionWith (+)
+                           <$> view preAccounts
+                           <*> (AM.fromList . fmap (second negate) . AM.toList <$> view postAccounts)
+                       require "Only one balance changes" ((== 1) . length . AM.toList) delta
+                       require "Some balance decreases." (all (> 0) . AM.elems) delta
+  }
+
+
 -- | Run the tests.
 tests :: TestTree
 tests =
   testGroup "Compute Transaction"
-    $ fmap (test True)
+    $ test <$>
     [
       invalidInterval
     , tooEarly
@@ -875,4 +969,5 @@ tests =
     , ifBranches
     , assertWarns
     , anyInput
+    , payingSubtractsFromAccount
     ]
