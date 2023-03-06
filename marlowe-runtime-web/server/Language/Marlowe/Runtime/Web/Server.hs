@@ -130,6 +130,7 @@ server = proc ServerDependencies{..} -> do
     { connector
     , lookupTempContract
     , lookupTempTransaction
+    , lookupTempWithdrawal
     }
   webServer -< WebServerDependencies
     { env = AppEnv
@@ -137,10 +138,14 @@ server = proc ServerDependencies{..} -> do
         , _loadContract = loadContract
         , _loadTransactions = loadTransactions
         , _loadTransaction = loadTransaction
+        , _loadWithdrawals = loadWithdrawals
+        , _loadWithdrawal = loadWithdrawal
         , _createContract = createContract
         , _applyInputs = applyInputs
+        , _withdraw = withdraw
         , _submitContract = submitContract
         , _submitTransaction = submitTransaction
+        , _submitWithdrawal = submitWithdrawal
         }
     , eventBackend
     , openAPIEnabled
