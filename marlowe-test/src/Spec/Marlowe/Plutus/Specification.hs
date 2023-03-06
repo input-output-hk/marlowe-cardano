@@ -298,10 +298,11 @@ checkSemanticsTransaction :: [ReferencePath]                                   -
                           -> (PlutusTransaction SemanticsTransaction -> Bool)  -- ^ Whether to discard the transaction from the testing.
                           -> Bool                                              -- ^ Whether the transaction should test as valid.
                           -> Bool                                              -- ^ Whether to add noise to the script context.
+                          -> Bool                                              -- ^ Whether to allow merkleization.
                           -> Property                                          -- ^ The test property.
-checkSemanticsTransaction referencePaths modifyBefore modifyAfter condition valid noisy =
+checkSemanticsTransaction referencePaths modifyBefore modifyAfter condition valid noisy allowMerkleization =
   property
-    . forAll (arbitrarySemanticsTransaction referencePaths modifyBefore modifyAfter noisy `suchThat` condition)
+    . forAll (arbitrarySemanticsTransaction referencePaths modifyBefore modifyAfter noisy allowMerkleization `suchThat` condition)
     $ \PlutusTransaction{..} ->
       case evaluateSemantics (toData _datum) (toData _redeemer) (toData _scriptContext) of
         This  e   -> not valid || error (show e)
@@ -346,7 +347,7 @@ checkDoubleInput referencePaths =
         infoData <>= AM.fromList [(inDatumHash, inDatum)]
         shuffle
   in
-    checkSemanticsTransaction referencePaths noModify modifyAfter noVeto False False
+    checkSemanticsTransaction referencePaths noModify modifyAfter noVeto False False False
 
 
 -- | Split a value in half.
@@ -399,7 +400,7 @@ checkMultipleOutput referencePaths =
         infoOutputs %= concatMap splitOwnOutput
         shuffle
   in
-    checkSemanticsTransaction referencePaths noModify modifyAfter notCloses False False
+    checkSemanticsTransaction referencePaths noModify modifyAfter notCloses False False False
 
 
 -- | Check that validation fails if there is one Marlowe output upon close.
@@ -417,7 +418,7 @@ checkCloseOutput referencePaths =
         infoOutputs <>= (txInInfoResolved <$> inScript)
         shuffle
   in
-    checkSemanticsTransaction referencePaths noModify modifyAfter doesClose False False
+    checkSemanticsTransaction referencePaths noModify modifyAfter doesClose False False False
 
 
 -- | Check that value input to a script matches its input state.
@@ -434,7 +435,7 @@ checkValueInput referencePaths =
         -- Update the inputs with the incremented script input.
         infoInputs %= fmap incrementOwnInput
     in
-      checkSemanticsTransaction referencePaths noModify modifyAfter noVeto False False
+      checkSemanticsTransaction referencePaths noModify modifyAfter noVeto False False False
 
 
 -- | Check that value output to a script matches its expectation.
@@ -452,14 +453,14 @@ checkValueOutput referencePaths =
         -- Update the outputs with the incremented script output.
         infoOutputs %= fmap incrementOwnOutput
   in
-    checkSemanticsTransaction referencePaths noModify modifyAfter notCloses False False
+    checkSemanticsTransaction referencePaths noModify modifyAfter notCloses False False False
 
 
 -- | Check the consistency of the output value with the output state.
 checkOutputConsistency :: [ReferencePath] -> Property
 checkOutputConsistency referencePaths =
   property
-    . forAll (arbitrarySemanticsTransaction referencePaths noModify noModify False)
+    . forAll (arbitrarySemanticsTransaction referencePaths noModify noModify False True)
     $ \tx ->
       let
         findOwnOutput (TxOut address value _ _)
@@ -469,7 +470,7 @@ checkOutputConsistency referencePaths =
         finalBalance = totalBalance . accounts . txOutState $ tx ^. output
         valid = outValue == finalBalance
       in
-        checkSemanticsTransaction referencePaths noModify noModify notCloses valid False
+        checkSemanticsTransaction referencePaths noModify noModify notCloses valid False False
 
 
 -- | Add a duplicate entry to an assocation list.
@@ -512,7 +513,7 @@ checkInputDuplicates referencePaths =
                 <*> pure minTime
             )
   in
-    checkSemanticsTransaction referencePaths modifyBefore noModify hasDuplicates False False
+    checkSemanticsTransaction referencePaths modifyBefore noModify hasDuplicates False False False
 
 
 -- | Check that output datum to a script matches its semantic output.
@@ -536,7 +537,7 @@ checkDatumOutput referencePaths perturb =
         -- Update the data with the modification.
         infoData %= AM.fromList . fmap perturbOwnOutputDatum . AM.toList
   in
-    checkSemanticsTransaction referencePaths noModify modifyAfter notCloses False False
+    checkSemanticsTransaction referencePaths noModify modifyAfter notCloses False False False
 
 
 -- | Check that other validators are forbidden during payments.
@@ -547,7 +548,7 @@ checkOtherValidators referencePaths =
       -- Add an extra script input.
       infoInputs <><~ lift (listOf1 $ arbitrary `suchThat` isScriptTxIn)
   in
-    checkSemanticsTransaction referencePaths noModify modifyAfter hasPayouts False False
+    checkSemanticsTransaction referencePaths noModify modifyAfter hasPayouts False False False
 
 
 -- | Check that parameters in the datum are not changed by the transaction.
@@ -614,7 +615,7 @@ checkMerkleization referencePaths valid =
                hashes <- input `uses` (concatMap merkleHash . txInputs)
                infoData %= (AM.fromList . filter ((`notElem` hashes) . fst) . AM.toList)
   in
-    checkSemanticsTransaction referencePaths modifyBefore modifyAfter hasMerkleizedInput valid False
+    checkSemanticsTransaction referencePaths modifyBefore modifyAfter hasMerkleizedInput valid False False
 
 
 -- | Check that non-positive accounts are rejected.
@@ -630,7 +631,7 @@ checkPositiveAccounts referencePaths =
         -- Add the non-positive entry to the accounts.
         inputState %= (\state -> state {accounts = AM.insert (account, token) amount' $ accounts state})
   in
-    checkSemanticsTransaction referencePaths modifyBefore noModify noVeto False False
+    checkSemanticsTransaction referencePaths modifyBefore noModify noVeto False False False
 
 
 -- | Compute the authorization for an input.
@@ -680,7 +681,7 @@ checkAuthorization referencePaths =
         -- Remove the first PKH signatory.
         infoSignatories %= deleteFirst matchPkh
   in
-    checkSemanticsTransaction referencePaths noModify modifyAfter hasAuthorizations False False
+    checkSemanticsTransaction referencePaths noModify modifyAfter hasAuthorizations False False False
 
 
 -- | Determine whether there are any external payments in a transaction.
@@ -715,7 +716,7 @@ checkPayment referencePaths =
         -- Update the outputs.
         infoOutputs %= fmap decrementPayment
   in
-    checkSemanticsTransaction referencePaths noModify modifyAfter hasExternalPayments False False
+    checkSemanticsTransaction referencePaths noModify modifyAfter hasExternalPayments False False False
 
 
 -- | Remove a role input UTxOs from the transaction.

@@ -361,14 +361,15 @@ arbitrarySemanticsTransaction :: [ReferencePath]                               -
                               -> ArbitraryTransaction SemanticsTransaction ()  -- ^ Modifications to make before building the valid transaction.
                               -> ArbitraryTransaction SemanticsTransaction ()  -- ^ Modifications to make after building the valid transaction.
                               -> Bool                                          -- ^ Whether to add noise to the script context.
+                              -> Bool                                          -- ^ Whether to allow merkleization.
                               -> Gen (PlutusTransaction SemanticsTransaction)  -- ^ The generator.
-arbitrarySemanticsTransaction referencePaths modifyBefore modifyAfter noisy =
+arbitrarySemanticsTransaction referencePaths modifyBefore modifyAfter noisy allowMerkleization =
   do
     golden <-
       frequency
         [
-          (1, arbitraryGoldenTransaction)                    -- Manually vetted transactions.
-        , (5, arbitraryReferenceTransaction referencePaths)  -- Transactions generated using `getAllInputs` and `computeTransaction`.
+          (1, arbitraryGoldenTransaction allowMerkleization)  -- Manually vetted transactions.
+        , (5, arbitraryReferenceTransaction referencePaths)   -- Transactions generated using `getAllInputs` and `computeTransaction`.
         ]
     start <- bareSemanticsTransaction golden
     (modifyBefore >> validSemanticsTransaction noisy >> modifyAfter)
