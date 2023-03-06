@@ -134,8 +134,8 @@ tests referencePaths =
         [
           testGroup "Valid transaction succeeds"
             [
-              testProperty "Noiseless" $ checkSemanticsTransaction referencePaths noModify noModify noVeto True False
-            , testProperty "Noisy"     $ checkSemanticsTransaction referencePaths noModify noModify noVeto True True
+              testProperty "Noiseless" $ checkSemanticsTransaction referencePaths noModify noModify noVeto True False True
+            , testProperty "Noisy"     $ checkSemanticsTransaction referencePaths noModify noModify noVeto True True  True
             ]
         , testGroup "Constraint 1. Typed validation"
             [
