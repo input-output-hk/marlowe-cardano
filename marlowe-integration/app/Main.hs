@@ -40,6 +40,7 @@ main = withLocalMarloweRuntime \MarloweRuntime{..} -> do
   either throw pure =<< runWebClient do
     Web.CreateTxBody{txBody = createTxBody, ..} <- postContract webAddress Nothing Nothing Web.PostContractsRequest
       { metadata = mempty
+      , tags = mempty
       , version = Web.V1
       , roles = Nothing
       , contract = V1.Close
@@ -58,6 +59,7 @@ main = withLocalMarloweRuntime \MarloweRuntime{..} -> do
 
     Web.ApplyInputsTxBody{transactionId, txBody = applyTxBody} <- postTransaction webAddress Nothing Nothing contractId Web.PostTransactionsRequest
       { version = Web.V1
+      , tags = mempty
       , metadata = mempty
       , invalidBefore = Nothing
       , invalidHereafter = Nothing
