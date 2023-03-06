@@ -30,6 +30,7 @@ module Spec.Marlowe.Semantics.Arbitrary
   , arbitraryContractWeighted
   , arbitraryFibonacci
   , arbitraryGoldenTransaction
+  , arbitraryNonnegativeInteger
   , arbitraryPositiveInteger
   , arbitraryTimeIntervalAround
   , arbitraryValidInput
