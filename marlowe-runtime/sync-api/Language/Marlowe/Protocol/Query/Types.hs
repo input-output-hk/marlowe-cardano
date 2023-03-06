@@ -7,9 +7,10 @@
 module Language.Marlowe.Protocol.Query.Types
   where
 
-import Data.Aeson (ToJSON(..), Value(..), object, (.=))
+import Data.Aeson (FromJSON, ToJSON(..), Value(..), object, (.=))
 import Data.Bifunctor (Bifunctor(..))
 import Data.Binary (Binary(..), Get, Put, getWord8, putWord8)
+import Data.Function (on)
 import Data.Map (Map)
 import Data.Set (Set)
 import Data.Type.Equality (testEquality, type (:~:)(Refl))
@@ -47,14 +48,27 @@ newtype WithdrawalFilter = WithdrawalFilter
   { roleCurrencies :: Set PolicyId
   }
   deriving stock (Show, Eq, Ord, Generic)
-  deriving anyclass (ToJSON, Binary)
+  deriving anyclass (ToJSON, FromJSON, Binary)
+  deriving newtype (Semigroup, Monoid)
 
 data ContractFilter = ContractFilter
   { tags :: Set MarloweMetadataTag
   , roleCurrencies :: Set PolicyId
   }
   deriving stock (Show, Eq, Ord, Generic)
-  deriving anyclass (ToJSON, Binary)
+  deriving anyclass (ToJSON, FromJSON, Binary)
+
+instance Semigroup ContractFilter where
+  a <> b = ContractFilter
+    { tags = on (<>) tags a b
+    , roleCurrencies = on (<>) (\ContractFilter{..} -> roleCurrencies) a b
+    }
+
+instance Monoid ContractFilter where
+  mempty = ContractFilter
+    { tags = mempty
+    , roleCurrencies = mempty
+    }
 
 data Request a where
   ReqContractHeaders :: ContractFilter -> Range ContractId -> Request (Maybe (Page ContractId ContractHeader))

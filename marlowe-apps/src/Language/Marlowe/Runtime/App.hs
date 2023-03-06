@@ -34,8 +34,8 @@ handle config request =
     let
       run =
         case request of
-          ListContracts -> Right . Contracts <$> allContracts
-          ListHeaders -> Right . Headers <$> allHeaders
+          ListContracts{..} -> Right . Contracts <$> allContracts reqFilter
+          ListHeaders{..} -> Right . Headers <$> allHeaders reqFilter
           Get{..} -> fmap (uncurry Info) <$> getContract reqContractId
           Create{..} -> second (uncurry mkBody) <$> buildCreation MarloweV1 reqContract reqRoles reqMinUtxo (decodeMarloweTransactionMetadataLenient reqMetadata) reqAddresses reqChange reqCollateral
           Apply{..} -> second (uncurry mkBody) <$> buildApplication MarloweV1 reqContractId reqInputs reqValidityLowerBound reqValidityUpperBound (decodeMarloweTransactionMetadataLenient reqMetadata) reqAddresses reqChange reqCollateral
