@@ -503,7 +503,7 @@ addNoise =
     let
       isPayout (Payment _ (Party _) _ i) = i > 0
       isPayout _ = False
-    hasPayments <- not . null . filter isPayout . txOutPayments <$> use output
+    hasPayments <- any isPayout . txOutPayments <$> use output
     let
       arbitraryInput =
         if hasPayments
