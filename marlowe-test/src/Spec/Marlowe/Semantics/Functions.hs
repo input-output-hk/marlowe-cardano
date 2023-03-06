@@ -100,6 +100,7 @@ tests =
         testProperty "Invalid interval" $ checkFixInterval True  False
       , testProperty "Interval in past" $ checkFixInterval False True
       , testProperty "Interval trimmed" $ checkFixInterval False False
+      , testProperty "Invalid interval in past" $ checkFixInterval True True
       ]
     , testGroup "evalValue"
       [
@@ -218,14 +219,22 @@ forAll' = flip forAllShrink shrink
 --   generating arbitrary valid and invalid intervals and checking that
 --   results or errors re reported correctly.
 checkFixInterval :: Bool      -- ^ Whether the validity interval should be invalid.
-                 -> Bool      -- ^ Whethe the validity interval should be in the past.
+                 -> Bool      -- ^ Whether the validity interval should be in the past.
                  -> Property  -- ^ The test.
 checkFixInterval invalid inPast =
   property $ do
   let gen = do
         state <- arbitrary
-        end   <- arbitrary `suchThat` (\t -> (t < minTime state) == inPast)
-        start <- arbitrary `suchThat` (\t -> (t > end) == invalid && (t < minTime state) == inPast)
+        (start, end) <-
+          case (invalid, inPast) of
+            (True, True) -> do
+                              start' <- arbitrary `suchThat` (< minTime state)
+                              end'   <- arbitrary `suchThat` (< start')
+                              pure (start', end')
+            _            -> do
+                              end'   <- arbitrary `suchThat` (\t -> (t < minTime state) == inPast)
+                              start' <- arbitrary `suchThat` (\t -> (t > end') == invalid && (t < minTime state) == inPast)
+                              pure (start', end')
         pure ((start, end), state)
   forAll' gen $ \(interval, state) ->
     case fixInterval interval state of
