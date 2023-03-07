@@ -52,7 +52,7 @@ import Language.Marlowe.Core.V1.Semantics.Types
   , Accounts
   , Action(Choice, Deposit, Notify)
   , Bound(..)
-  , Case(Case)
+  , Case(..)
   , ChoiceId
   , ChosenNum
   , Contract(..)
@@ -71,7 +71,8 @@ import Language.Marlowe.Core.V1.Semantics.Types
   , getInputContent
   )
 import Language.Marlowe.FindInputs (getAllInputs)
-import Plutus.V2.Ledger.Api (CurrencySymbol, POSIXTime(..), TokenName)
+import Plutus.Script.Utils.Scripts (datumHash)
+import Plutus.V2.Ledger.Api (CurrencySymbol, Datum(..), DatumHash(..), POSIXTime(..), TokenName, toBuiltinData)
 import Spec.Marlowe.Semantics.Arbitrary
   ( Context
   , SemiArbitrary(semiArbitrary)
@@ -297,6 +298,27 @@ simpleNotify =
           pure $ When [Case (Notify TrueObs) contract'] timeout contract
       modifyInput (TransactionInput interval _) = pure $ TransactionInput interval [NormalInput INotify]
     simpleTransaction context modifyContract pure modifyInput
+
+
+-- | Generate a simple notification.
+simpleMerkleization :: Gen MarloweContext
+simpleMerkleization =
+  do
+    context <- arbitrary
+    mcState <- semiArbitrary context
+    intervalStart <- (getPOSIXTime (minTime mcState) +) <$> arbitraryPositiveInteger
+    intervalEnd <- (intervalStart +) <$> arbitraryPositiveInteger
+    let
+      interval = (POSIXTime intervalStart, POSIXTime intervalEnd)
+    timeout <- (intervalEnd +) <$> arbitraryPositiveInteger
+    contract <- When [] (POSIXTime timeout) <$> semiArbitrary context
+    let
+      DatumHash hash = datumHash . Datum $ toBuiltinData contract
+      mcInput = TransactionInput interval [MerkleizedInput INotify hash contract]
+    mcContract <- When [MerkleizedCase (Notify TrueObs) hash] (POSIXTime timeout) <$> semiArbitrary context
+    let
+      mcOutput = computeTransaction mcInput mcState mcContract
+    pure MarloweContext{..}
 
 
 -- | Recompute the output of a Marlowe transaction in an transaction context.
@@ -1082,7 +1104,41 @@ depositContinues =
   , generator      = simpleDeposit
   , postcondition  = view preContract >>=
                        \case
-                         When [Case (Deposit _ _ _ _) contract] _ _ -> checkContinuation contract
+                         When [Case Deposit{} contract] _ _ -> checkContinuation contract
+                         _ -> throwError "Test setup failed."
+  }
+
+
+-- | Test that deposit continues as expected.
+merkleizationContinues :: TransactionTest
+merkleizationContinues =
+  def
+  {
+    name           = "Merkleization continues as expected"
+  , allowShrinkage = False
+  , generator      = simpleMerkleization
+  , postcondition  = view inputs >>=
+                       \case
+                         [MerkleizedInput INotify _ contract] -> checkContinuation contract
+                         _ -> throwError "Test setup failed."
+  }
+
+
+-- | Test that deposit continues as expected.
+choiceSets :: TransactionTest
+choiceSets =
+  def
+  {
+    name           = "Choice records the value of the choice"
+  , allowShrinkage = False
+  , generator      = simpleChoice
+  , postcondition  = view inputs >>=
+                       \case
+                         [NormalInput (IChoice choiceId value)] ->
+                           do
+                             choices' <- choices <$> view postState
+                             unless (AM.lookup choiceId choices' == Just value)
+                               $ throwError "Choice missing from state"
                          _ -> throwError "Test setup failed."
   }
 
@@ -1109,4 +1165,6 @@ tests =
     , depositContinues
     , choiceContinues
     , notifyContinues
+    , choiceSets
+    , merkleizationContinues
     ]
