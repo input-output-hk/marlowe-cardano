@@ -739,7 +739,7 @@ applyInput _ _ _ _                          = ApplyNoMatchError
 
 -- | Propagate 'ReduceWarning' to 'TransactionWarning'.
 convertReduceWarnings :: [ReduceWarning] -> [TransactionWarning]
-convertReduceWarnings = foldr (\warn acc -> case warn of
+convertReduceWarnings = foldr (\warn acc -> case warn of  -- Note that `foldr` is used here for efficiency, differing from Isabelle.
     ReduceNoWarning -> acc
     ReduceNonPositivePay accId payee tok amount ->
         TransactionNonPositivePay accId payee tok amount : acc
