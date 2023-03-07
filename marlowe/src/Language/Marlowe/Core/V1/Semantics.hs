@@ -94,12 +94,12 @@ module Language.Marlowe.Core.V1.Semantics
   , TransactionError(..)
   , TransactionWarning(..)
     -- * Utility Functions
+  , allBalancesArePositive
   , contractLifespanUpperBound
   , isClose
   , notClose
   , paymentMoney
   , totalBalance
-  , validateBalances
     -- * Serialisation
   , currencySymbolFromJSON
   , currencySymbolToJSON
@@ -557,7 +557,7 @@ updateMoneyInAccount accId token amount =
     if amount <= 0 then Map.delete (accId, token) else Map.insert (accId, token) amount
 
 
--- | Add the given amount of money to an accoun (only if it is positive).
+-- | Add the given amount of money to an account (only if it is positive).
 --   Return the updated Map.
 addMoneyToAccount :: AccountId -> Token -> Integer -> Accounts -> Accounts
 addMoneyToAccount accId token amount accounts = let
@@ -716,7 +716,7 @@ getContinuation _ _ = Nothing
 
 -- | Try to apply an input to a list of cases, accepting the first match.
 applyCases :: Environment -> State -> Input -> [Case Contract] -> ApplyResult
-applyCases env state input (headCase : tailCase) =
+applyCases env state input (headCase : tailCases) =
     let inputContent = getInputContent input :: InputContent
         action = getAction headCase :: Action
         maybeContinuation = getContinuation input headCase :: Maybe Contract
@@ -727,7 +727,7 @@ applyCases env state input (headCase : tailCase) =
            case maybeContinuation of
              Just continuation -> Applied warning newState continuation
              Nothing           -> ApplyHashMismatch
-         NotAppliedAction -> applyCases env state input tailCase
+         NotAppliedAction -> applyCases env state input tailCases
 applyCases _ _ _ [] = ApplyNoMatchError
 
 
@@ -779,12 +779,12 @@ applyAllInputs env state contract inputs = let
                     curState
                     cont
                 (input : rest) -> case applyInput env curState input cont of
-                    Applied applyWarn newState cont ->
+                    Applied applyWarn newState cont' ->
                         applyAllLoop
                             True
                             env
                             newState
-                            cont
+                            cont'
                             rest
                             (warnings' ++ convertApplyWarning applyWarn)
                             payments'
@@ -883,8 +883,8 @@ totalBalance accounts = foldMap
 
 
 -- | Check that all accounts have positive balance.
-validateBalances :: State -> Bool
-validateBalances State{..} = all (\(_, balance) -> balance > 0) (Map.toList accounts)
+allBalancesArePositive :: State -> Bool
+allBalancesArePositive State{..} = all (\(_, balance) -> balance > 0) (Map.toList accounts)
 
 
 instance FromJSON TransactionInput where
