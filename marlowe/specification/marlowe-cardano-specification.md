@@ -406,7 +406,7 @@ rolePayoutValidator :: (CurrencySymbol, TokenName) -> () -> ScriptContext -> Boo
 
 Consider the application of the Marlowe payout validator:
 ```haskell
-validationResult' = rolePayoutValidator rolesCurrency' role () scriptContext
+validationResult' = rolePayoutValidator (rolesCurrency', role) () scriptContext
 ```
 
 The validation fails (via returning `False` for `validationResult'` or via the throwing of an error) if any of the following constraints does not hold.
