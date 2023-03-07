@@ -130,7 +130,7 @@ The Isabelle semantics do not include merkleization of Marlowe contracts, but th
 
 The Marlowe validator is an unparameterized interpreter of Marlowe semantics. Thus, the script address of the Marlowe validator is independent of the particular contract instance and roles currency.
 ```haskell
-smallMarloweValidator :: MarloweData -> MarloweInput -> ScriptContext -> Bool
+marloweValidator :: MarloweData -> MarloweInput -> ScriptContext -> Bool
 ```
 
 
@@ -183,7 +183,7 @@ The arguments of `computeTransaction` must be constructed as follows:
 4. The `Contract` is the `marloweContract` of the `MarloweData` provided as the `Datum`.
 5. The new `Datum` at the script address is the `MarloweData` with the same `marloweParams` as originally, but with the new `txOutState` and `txOutContract` of the `TransactionOutput`.
 
-In the diagram below, the upper three rectangles represent functions: the untyped `Validator`, the typed validator `smallMarloweValidator`, or the semantics's `computeTransaction`. The data values (ovals) are marshalled or passed from the untyped representation over to the semantics. The `computeTransaction` function validates the semantics and returns the required new state and contract instance. Conceptually, success or failure is passed to the untyped validator. The bottom rectangle packages the `Datum` that is provided as output for the continued progression of the Marlowe contract instance.
+In the diagram below, the upper three rectangles represent functions: the untyped `Validator`, the typed validator `marloweValidator`, or the semantics's `computeTransaction`. The data values (ovals) are marshalled or passed from the untyped representation over to the semantics. The `computeTransaction` function validates the semantics and returns the required new state and contract instance. Conceptually, success or failure is passed to the untyped validator. The bottom rectangle packages the `Datum` that is provided as output for the continued progression of the Marlowe contract instance.
 
 ![Relationship between Marlowe validator and semantics.](semantics2plutus.svg)
 
@@ -192,7 +192,7 @@ In the diagram below, the upper three rectangles represent functions: the untype
 
 Consider the application of the Marlowe validator and Marlowe semantics:
 ```haskell
-validationResult = smallMarloweValidator marloweData marloweInput scriptContext
+validationResult = marloweValidator marloweData marloweInput scriptContext
 
 transactionOutput = computeTransaction transactionInput inState inContract
 ```
