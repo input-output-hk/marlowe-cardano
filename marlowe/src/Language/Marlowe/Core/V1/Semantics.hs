@@ -714,7 +714,7 @@ getContinuation (MerkleizedInput _ inputContinuationHash continuation) (Merkleiz
     else Nothing
 getContinuation _ _ = Nothing
 
--- | Try to apply an input to a list of cases.
+-- | Try to apply an input to a list of cases, accepting the first match.
 applyCases :: Environment -> State -> Input -> [Case Contract] -> ApplyResult
 applyCases env state input (headCase : tailCase) =
     let inputContent = getInputContent input :: InputContent
