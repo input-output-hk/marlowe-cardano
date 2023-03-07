@@ -42,6 +42,8 @@ Thus each Marlowe contract instance is a finite sequence of continuations at the
 
 ![A typical transaction to withdraw funds from the Marlowe payout validator script address](redeem.svg)
 
+Other Plutus scripts may run when the Marlowe semantics validator runs in a transaction *provided that the Marlowe transaction does not pay out funds.* Restricting other Plutus script to non-payout Marlowe transactions eliminates the possibility of double-satisfaction attacks. Examples of Plutus scripts that would be usefully run during Marlowe transactions are (1) an oracle which checks that the correct value is being reported as an `IChoice` or (2) a minting script that mints and deposits tokens into the Marlowe contract; in general such Plutus scripts would examine the Marlowe datum and redeemer to determine whether they validate the action that they are coordinating with Marlowe.
+
 
 ## Monetary Policy for Role Tokens
 
