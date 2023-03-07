@@ -154,7 +154,10 @@ data MarloweTxInput =
     Input InputContent
   | MerkleizedTxInput InputContent BuiltinByteString
 ```
-In the above, the `BuiltinByteString` is the hash of the serialized continuation of the contract. If `MerkleizedTxInput` is supplied in a redeemer, then the `ScriptContext` for the transaction must also contain an extra entry in its `txInfoData . scriptContextTxInfo` map from `DatumHash` to `Datum` for the serialized continuation of the contract.
+In the above, the `BuiltinByteString` is the hash of the serialized continuation of the contract. If `MerkleizedTxInput` is supplied in a redeemer, then the `ScriptContext` for the transaction must also contain an extra entry in its `txInfoData . scriptContextTxInfo` map from `DatumHash` to `Datum` for the serialized continuation of the contract. Thus the `continuation` for a given `hash` is computed as follows:
+```haskell
+Just continuation = fromBuiltinData =<< lookup hash (txInfoData $ scriptContextTxInfo scriptContext) :: Maybe Contract
+```
 
 
 ### A Note about `Plutus.V1.Ledger.Value`
