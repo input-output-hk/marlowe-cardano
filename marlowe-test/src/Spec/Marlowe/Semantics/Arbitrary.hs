@@ -22,7 +22,8 @@
 
 module Spec.Marlowe.Semantics.Arbitrary
   ( -- * Types
-    IsValid(..)
+    Context
+  , IsValid(..)
   , SemiArbitrary(..)
     -- * Generators
   , arbitraryAssocMap
