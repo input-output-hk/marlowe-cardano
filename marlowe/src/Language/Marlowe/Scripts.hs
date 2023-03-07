@@ -161,7 +161,7 @@ mkRolePayoutValidator :: (CurrencySymbol, TokenName)  -- ^ The datum is the curr
                       -> Bool                         -- ^ Whether the transaction validated.
 mkRolePayoutValidator (currency, role) _ ctx =
     -- The role token for the correct currency must be present.
-    -- [Marlowe-Cardano Specification: "16. Payment authorized".]
+    -- [Marlowe-Cardano Specification: "17. Payment authorized".]
     Val.singleton currency role 1 `Val.leq` valueSpent (scriptContextTxInfo ctx)
 
 
