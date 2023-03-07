@@ -63,6 +63,8 @@
             (hsPkgs."text" or (errorHandler.buildDepError "text"))
             (hsPkgs."time" or (errorHandler.buildDepError "time"))
             (hsPkgs."transformers" or (errorHandler.buildDepError "transformers"))
+            (hsPkgs."transformers-base" or (errorHandler.buildDepError "transformers-base"))
+            (hsPkgs."lifted-async" or (errorHandler.buildDepError "lifted-async"))
             ];
           build-tools = [
             (hsPkgs.buildPackages.hspec-discover.components.exes.hspec-discover or (pkgs.buildPackages.hspec-discover or (errorHandler.buildToolDepError "hspec-discover:hspec-discover")))
@@ -77,6 +79,7 @@
             "Language/Marlowe/Runtime/IntegrationSpec"
             "Language/Marlowe/Runtime/WebSpec"
             "Language/Marlowe/Runtime/Web/GetContracts"
+            "Language/Marlowe/Runtime/CliSpec"
             ];
           hsSourceDirs = [ "test" ];
           mainPath = [

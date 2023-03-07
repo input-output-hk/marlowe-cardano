@@ -3,7 +3,7 @@
 }:
 let
   inherit (packages) pkgs marlowe docs marlowe-cli dev-scripts network;
-  inherit (dev-scripts) nix-flakes-alias start-cardano-node;
+  inherit (dev-scripts) nix-flakes-alias start-cardano-node mkCabalExeScript;
   inherit (pkgs) stdenv lib utillinux python3 nixpkgs-fmt writeShellScriptBin networks;
   inherit (marlowe) haskell cabal-install stylish-haskell sphinxcontrib-haddock sphinx-markdown-tables sphinxemoji nix-pre-commit-hooks cardano-address;
   inherit (marlowe) writeShellScriptBinInRepoRoot;
@@ -14,6 +14,8 @@ let
     export XDG_RUNTIME_DIR="''${XDG_RUNTIME_DIR:-''${HOME}/.local/run}"
     mkdir -p "''${XDG_RUNTIME_DIR}"
   '';
+
+  marlowe-runtime-cli = mkCabalExeScript "marlowe" "marlowe-runtime-cli";
 
   updateMaterialized = writeShellScriptBinInRepoRoot "updateMaterialized" ''
     nix run .#updateMaterialized
@@ -88,6 +90,7 @@ let
     pkgs.sqlite-interactive
     stylish-haskell
     updateMaterialized
+    marlowe-runtime-cli
     pkgs.yq
     pkgs.zlib
     pkgs.z3

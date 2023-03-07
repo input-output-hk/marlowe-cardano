@@ -18,8 +18,10 @@ import Cardano.Api
   )
 import Cardano.Api.Byron (deserialiseFromTextEnvelope)
 import Control.Concurrent (threadDelay)
+import Control.Monad (void, (<=<))
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Reader (ReaderT(..), runReaderT)
+import qualified Control.Monad.Reader as Reader
 import Control.Monad.Reader.Class (asks)
 import Control.Monad.Trans.Class (lift)
 import Data.Aeson (FromJSON(..), Value(..), decodeFileStrict, eitherDecodeStrict)
@@ -75,8 +77,10 @@ import Language.Marlowe.Runtime.Transaction.Api
 import Network.Protocol.Job.Client (liftCommandWait)
 import qualified Plutus.V2.Ledger.Api as PV2
 import Servant.Client (ClientError, ClientM)
+import System.Exit (ExitCode(..))
 import Test.Hspec (shouldBe)
-import Test.Integration.Marlowe (LocalTestnet(..), MarloweRuntime, PaymentKeyPair(..), SpoNode(..), execCli)
+import Test.Integration.Marlowe
+  (LocalTestnet(..), MarloweRuntime(MarloweRuntime), PaymentKeyPair(..), SpoNode(..), exec, exec', execCli)
 import qualified Test.Integration.Marlowe.Local as MarloweRuntime
 import UnliftIO (bracket_)
 import UnliftIO.Environment (setEnv, unsetEnv)
@@ -477,3 +481,17 @@ marloweSyncExpectWait recvMsgWait = MarloweSync.ClientStNext
   , recvMsgWait
   , recvMsgRollForward = \_ _ -> fail "Expected wait, got roll forward"
   }
+
+prepareCliArgs :: [String] -> Integration [String]
+prepareCliArgs args = do
+  MarloweRuntime{proxyPort} <- Reader.ask
+  pure $ ["--marlowe-runtime-port", show proxyPort] <> args
+
+execMarlowe :: [String] -> Integration String
+execMarlowe = exec "marlowe" <=< prepareCliArgs
+
+execMarlowe_ :: [String] -> Integration ()
+execMarlowe_ = void . execMarlowe
+
+execMarlowe' :: [String] -> Integration (ExitCode, String, String)
+execMarlowe' = exec' "marlowe" <=< prepareCliArgs
