@@ -149,7 +149,7 @@ data MarloweData =
 data MarloweParams =
     MarloweParams
     {
-      rolePayoutValidatorHash :: ValidatorHash
+      rolesCurrency :: CurrencySymbol
     }
 ```
 
