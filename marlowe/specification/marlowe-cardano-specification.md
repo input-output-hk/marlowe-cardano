@@ -324,6 +324,8 @@ all demerkleizes transactionInput ≡ True
         demerkleizes (Input _) = True
 ```
 
+Note that this constraint is not strictly necessary and is included here for informational purposes, since a valid transaction could not be constructed if it were removed.
+
 
 #### *Constraint 13.* Positive balances
 
