@@ -3,7 +3,7 @@
 
 ## Scope
 
-This document defines the specification for Marlowe semantics's interface with the Cardano blockchain. Marlowe utilizes three Plutus scripts: (i) a monetary policy for the roles currency used in some Marlowe contracts; (ii) the Marlowe application validator script that enforces Marlowe semantics; and (iii) the Marlowe payout-validator script that allows the holder of a role token to withdraw funds paid by the Marlowe application. Marlowe semantics are defined in the Isabelle language and specified in [Marlowe Specification, Version 3 (draft)](marlowe-isabelle-specification-4f9fa249fa51ec09a4f286099d5399eb4301ed49.pdf).
+This document defines the specification for Marlowe semantics's interface with the Cardano blockchain. Marlowe utilizes three Plutus scripts: (i) a monetary policy for the roles currency used in some Marlowe contracts; (ii) the Marlowe application validator script that enforces Marlowe semantics; and (iii) the Marlowe payout-validator script that allows the holder of a role token to withdraw funds paid by the Marlowe application. Marlowe semantics are defined in the Isabelle language and specified in [Marlowe Specification, Version 3](marlowe-isabelle-specification-4f9fa249fa51ec09a4f286099d5399eb4301ed49.pdf).
 
 
 ## Contents
@@ -30,9 +30,14 @@ Marlowe contracts identify each participant by either a *public-key hash (PKH)* 
 The execution of a Marlowe contract instance proceeds as a sequence of applications of inputs at the contract's script address.
 1. Role tokens are typically minted prior to or within the creation transaction of the contract instance, though this is not enforced on-chain.
 2. The creation transaction for the contract stores the state of the contract instance in the datum at the contract's script address.
-3. Each transaction that interacts with the contract instance updates the state/datum at that same address.
-4. If the contract instance pays funds to a role during application of inputs, those funds are sent to the address of the Marlowe payout-validator script, with a datum equal to the role name.
-5. When a contract instance closes, there is no output to the contract's script address.
+    - The creation transaction must contain sufficient lovelace to meet the [minimum UTxO requirement](../best-practices.md#minimum-utxo-requirement) *for every future state of the contract.*
+    - The initial state conforms to the state invariants required by Isabelle semantics and the Marlowe validator:
+	    - positive account balances,
+	    - no duplicate accounts, choices, or bound values, and
+	    - a total value that matches the value of the UTxO for the creation transaction.
+1. Each transaction that interacts with the contract instance updates the state/datum at that same address.
+2. If the contract instance pays funds to a role during application of inputs, those funds are sent to the address of the Marlowe payout-validator script, with a datum equal to the role name.
+3. When a contract instance closes, there is no output to the contract's script address.
 
 Thus each Marlowe contract instance is a finite sequence of continuations at the script address, from creation to closure. The following three UTxO diagrams illustrate the three typical types of Marlowe transactions.
 
@@ -49,7 +54,7 @@ Other Plutus scripts may run when the Marlowe semantics validator runs in a tran
 
 Any Cardano monetary policy may be used to mint the role tokens used in a Marlowe contract instance. For security in standard Marlowe use cases, a one-time or locked minting policy such as `Plutus.Contracts.Currency.OneShotCurrency` is recommended. Exotic use cases might employ other monetary policies. It is the responsibility both of the developer of the off-chain code managing a contract instance and also of the user of the contract instance to verify that the monetary policy of the role tokens meets their security requirements.
 
-The off-chain [Marlowe Runtime](../marlowe-runtime/doc/) services use a safe one-shot monetary policy to mint role tokens if the user requests. The [Marlowe Best Practices Guide](./best-practices.md) discussed security requirements for role tokens.
+The off-chain [Marlowe Runtime](../marlowe-runtime/doc/) services use a safe one-shot monetary policy to mint role tokens if the user requests. The [Marlowe Best Practices Guide](../best-practices.md) discussed security requirements for role tokens.
 
 
 ## Representation of Marlowe Semantics in Plutus
