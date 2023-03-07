@@ -13,6 +13,7 @@
 
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
 
@@ -50,6 +51,7 @@ import Language.Marlowe.Core.V1.Semantics.Types
   ( AccountId
   , Accounts
   , Action(Choice, Deposit, Notify)
+  , Bound(..)
   , Case(Case)
   , ChoiceId
   , ChosenNum
@@ -259,6 +261,25 @@ simpleDeposit =
           $ When [Case (Deposit account payee token $ Constant deposit) contract]
             (POSIXTime $ intervalEnd + 1) contract
       modifyInput (TransactionInput interval _) = pure $ TransactionInput interval [NormalInput $ IDeposit account payee token deposit]
+    simpleTransaction context modifyContract pure modifyInput
+
+
+-- | Generate a simple notification.
+simpleChoice :: Gen MarloweContext
+simpleChoice =
+  do
+    context <- arbitrary
+    choiceId <- semiArbitrary context
+    value <- semiArbitrary context
+    bound <- Bound <$> ((value -) <$> arbitraryPositiveInteger) <*> ((value +) <$> arbitraryPositiveInteger)
+    let
+      modifyContract (_, POSIXTime intervalEnd) contract =
+        do
+          let
+            timeout = POSIXTime $ intervalEnd + 1
+          contract' <- When [] timeout <$> semiArbitrary context
+          pure $ When [Case (Choice choiceId [bound]) contract'] timeout contract
+      modifyInput (TransactionInput interval _) = pure $ TransactionInput interval [NormalInput $ IChoice choiceId value]
     simpleTransaction context modifyContract pure modifyInput
 
 
@@ -1021,7 +1042,7 @@ depositAddsToAccount =
   }
 
 
--- | Test that deposits add value to internal accounts.
+-- | Test that notify contines as expected
 notifyContinues :: TransactionTest
 notifyContinues =
   def
@@ -1029,14 +1050,40 @@ notifyContinues =
     name           = "Notify continues as expected"
   , allowShrinkage = False
   , generator      = simpleNotify
-  , postcondition  = do
-                       let
-                         check (When [Case (Notify TrueObs) contract] _ _) contract' =
-                           require "Incorrect continuation." (== contract) contract'
-                         check _ _ = throwError "Test setup failed."
-                       pre <- view preContract
-                       post <- view postContract
-                       check pre post
+  , postcondition  = view preContract >>=
+                       \case
+                         When [Case (Notify TrueObs) contract] _ _ -> checkContinuation contract
+                         _ -> throwError "Test setup failed."
+  }
+
+
+-- | Test that choice continues as expected.
+choiceContinues :: TransactionTest
+choiceContinues =
+  def
+  {
+    name           = "Choice continues as expected"
+  , allowShrinkage = False
+  , generator      = simpleChoice
+  , postcondition  = view preContract >>=
+                       \case
+                         When [Case (Choice _ _) contract] _ _ -> checkContinuation contract
+                         _ -> throwError "Test setup failed."
+  }
+
+
+-- | Test that deposit continues as expected.
+depositContinues :: TransactionTest
+depositContinues =
+  def
+  {
+    name           = "Deposit continues as expected"
+  , allowShrinkage = False
+  , generator      = simpleDeposit
+  , postcondition  = view preContract >>=
+                       \case
+                         When [Case (Deposit _ _ _ _) contract] _ _ -> checkContinuation contract
+                         _ -> throwError "Test setup failed."
   }
 
 
@@ -1059,5 +1106,7 @@ tests =
     , anyInput
     , payingSubtractsFromAccount
     , depositAddsToAccount
+    , depositContinues
+    , choiceContinues
     , notifyContinues
     ]
