@@ -49,6 +49,8 @@ Other Plutus scripts may run when the Marlowe semantics validator runs in a tran
 
 Any Cardano monetary policy may be used to mint the role tokens used in a Marlowe contract instance. For security in standard Marlowe use cases, a one-time or locked minting policy such as `Plutus.Contracts.Currency.OneShotCurrency` is recommended. Exotic use cases might employ other monetary policies. It is the responsibility both of the developer of the off-chain code managing a contract instance and also of the user of the contract instance to verify that the monetary policy of the role tokens meets their security requirements.
 
+The off-chain [Marlowe Runtime](../marlowe-runtime/doc/) services use a safe one-shot monetary policy to mint role tokens if the user requests. The [Marlowe Best Practices Guide](./best-practices.md) discussed security requirements for role tokens.
+
 
 ## Representation of Marlowe Semantics in Plutus
 
