@@ -60,7 +60,7 @@ library
     , cardano-integration
     , cardano-ledger-byron
     , containers
-    , eventuo11y
+    , eventuo11y ^>= { 0.9, 0.10 }
     , eventuo11y-extras
     , hasql
     , hasql-pool

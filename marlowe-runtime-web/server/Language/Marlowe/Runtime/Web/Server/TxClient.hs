@@ -50,9 +50,8 @@ import Language.Marlowe.Runtime.Transaction.Api
 import Network.Protocol.Connection (SomeClientConnector)
 import Network.Protocol.Driver (runSomeConnector)
 import Network.Protocol.Job.Client
-import Observe.Event (EventBackend, addField, reference, withEvent)
-import Observe.Event.BackendModification (EventBackendModifier, modifyEventBackend, setAncestor)
 import Observe.Event.DSL (SelectorSpec(..))
+import Observe.Event.Explicit (EventBackend, addField, idInjectSelector, subEventBackend, withEvent)
 import Observe.Event.Render.JSON.DSL.Compile (compile)
 import Observe.Event.Syntax ((≔))
 
@@ -63,9 +62,8 @@ compile $ SelectorSpec ["tx", "client"]
   , ["submit", "await"] ≔ ''String
   ]
 
-data TxClientDependencies r = TxClientDependencies
+newtype TxClientDependencies r = TxClientDependencies
   { connector :: SomeClientConnector MarloweClient IO
-  , eventBackend :: EventBackend IO r TxClientSelector
   }
 
 type CreateContract m
@@ -92,8 +90,12 @@ type ApplyInputs m
 
 data TempTxStatus = Unsigned | Submitted
 
+-- Note that we hard-code 'IO' as the monad for
+-- the 'EventBackend'... This should be fixed by
+-- instead using a 'MonadEvent' (whose 'BackendMonad'
+-- is 'IO')
 type Submit r m
-   = [EventBackendModifier r]
+   = EventBackend IO r TxClientSelector
   -> Tx BabbageEra
   -> m (Maybe SubmitError)
 
@@ -135,9 +137,8 @@ txClient = component \TxClientDependencies{..} -> do
       (SomeTVarWithMapUpdate tempVar updateTemp)
       tx
       sender
-      mods = do
+      eb = do
       let
-        eb = modifyEventBackend mods eventBackend
         cmd = Submit tx
         client = JobClient $ pure $ SendMsgExec cmd $ clientCmd True
         clientCmd report = ClientStCmd
@@ -167,21 +168,21 @@ txClient = component \TxClientDependencies{..} -> do
 
     genericSubmit
       :: SomeTVarWithMapUpdate
-      -> [EventBackendModifier r]
+      -> EventBackend IO r TxClientSelector
       -> Tx BabbageEra
       -> IO (Maybe SubmitError)
-    genericSubmit tVarWithUpdate mods tx =
-      withEvent (modifyEventBackend mods eventBackend) SubmitTx \ev -> do
+    genericSubmit tVarWithUpdate eventBackend tx =
+      withEvent eventBackend SubmitTx \ev -> do
         sender <- atomically do
           sender <- newEmptyTMVar
-          writeTQueue submitQueue (tVarWithUpdate, tx, sender, setAncestor (reference ev) <> mods)
+          writeTQueue submitQueue (tVarWithUpdate, tx, sender, subEventBackend idInjectSelector ev eventBackend)
           pure sender
         atomically $ takeTMVar sender
 
     runTxClient = do
-      (tVarWithUpdate, tx, sender, mods) <- atomically $ readTQueue submitQueue
+      (tVarWithUpdate, tx, sender, eventBackend) <- atomically $ readTQueue submitQueue
       concurrently_
-        (try @SomeException $ runSubmitGeneric tVarWithUpdate tx sender mods)
+        (try @SomeException $ runSubmitGeneric tVarWithUpdate tx sender eventBackend)
         runTxClient
 
   pure (runTxClient, TxClient

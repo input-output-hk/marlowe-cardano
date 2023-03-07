@@ -24,9 +24,9 @@ import Control.Concurrent.STM
   )
 import Control.Concurrent.STM.TMVar (tryReadTMVar)
 import Control.Exception (SomeException)
-import Control.Monad (mfilter, unless)
+import Control.Monad (filterM, join, mfilter, unless)
 import Control.Monad.Base (MonadBase, liftBase)
-import Data.Maybe (isJust)
+import Data.Maybe (catMaybes, isJust, maybeToList)
 import Data.Some (Some(Some))
 import Data.Time (UTCTime, getCurrentTime)
 import Observe.Event.Backend
@@ -46,27 +46,35 @@ filterEventBackendM
   => (forall f. s f -> m (Maybe (f -> m Bool)))
   -> EventBackend m r s
   -> EventBackend m (Maybe r) s
-filterEventBackendM selectorPredicate eb@EventBackend{..} = eb
-  { newEventImpl = \selector -> selectorPredicate selector >>= \case
-      Nothing -> pure EventImpl
-        { referenceImpl = Nothing
-        , addFieldImpl = const $ pure ()
-        , addParentImpl = const $ pure ()
-        , addProximateImpl = const $ pure ()
-        , finalizeImpl = pure ()
-        , failImpl = const $ pure ()
+filterEventBackendM selectorPredicate EventBackend{..} = EventBackend
+  { newEvent = \args@NewEventArgs{..} -> selectorPredicate newEventSelector >>= \case
+      Nothing -> pure Event
+        { reference = Nothing
+        , addField = const $ pure ()
+        , finalize = const $ pure ()
         }
       Just fieldPredicate -> do
-        EventImpl{..} <- newEventImpl selector
-        pure EventImpl
-          { referenceImpl = Just referenceImpl
-          , addFieldImpl = \field -> fieldPredicate field >>= \case
+        filteredInitFields <- filterM fieldPredicate newEventInitialFields
+        Event{..} <- newEvent $ args
+          { newEventInitialFields = filteredInitFields
+          , newEventParent = join newEventParent
+          , newEventCauses = catMaybes newEventCauses
+          }
+        pure Event
+          { reference = Just reference
+          , addField = \field -> fieldPredicate field >>= \case
               False -> pure ()
-              True -> addFieldImpl field
-          , addParentImpl = maybe (pure ()) addParentImpl
-          , addProximateImpl = maybe (pure ()) addProximateImpl
-          , finalizeImpl
-          , failImpl
+              True -> addField field
+          , finalize
+          }
+  , emitImmediateEvent = \args@NewEventArgs{..} -> selectorPredicate newEventSelector >>= \case
+      Nothing -> pure Nothing
+      Just fieldPredicate -> do
+        filteredInitFields <- filterM fieldPredicate newEventInitialFields
+        fmap Just . emitImmediateEvent $ args
+          { newEventInitialFields = filteredInitFields
+          , newEventParent = join newEventParent
+          , newEventCauses = catMaybes newEventCauses
           }
   }
 
@@ -86,41 +94,35 @@ data EventRecord r s f = EventRecord
 -- separate thread.
 proxyEventBackend
   :: MonadBase IO m
-  => m (OnceFlag m)
-  -> m r
+  => m r
   -> STM (STM [Some (EventRecord r s)], EventBackend m r s)
-proxyEventBackend newOnceFlag newReference = do
+proxyEventBackend newReference = do
   queue <- newTQueue
   pure (flushTQueueNonEmpty queue, EventBackend
-    { newEventImpl = \selector -> do
+    { newEvent = \NewEventArgs{..} -> do
         ref <- newReference
         liftBase do
           start <- getCurrentTime
-          fieldsVar <- newTVarIO []
-          parentsVar <- newTVarIO []
-          causesVar <- newTVarIO []
+          fieldsVar <- newTVarIO newEventInitialFields
           endedVar <- newEmptyTMVarIO
           let
             unlessEnded m = do
               ended <- isJust <$> tryReadTMVar endedVar
               unless ended m
-            finish exception = do
-              end <- getCurrentTime
-              atomically $ unlessEnded do
-                fields <- readTVar fieldsVar
-                parents <- readTVar parentsVar
-                causes <- readTVar causesVar
-                writeTQueue queue $ Some EventRecord{..}
-                putTMVar endedVar ()
-          pure EventImpl
-            { referenceImpl = ref
-            , addFieldImpl = liftBase . atomically . unlessEnded . modifyTVar fieldsVar . (:)
-            , addParentImpl = liftBase . atomically . unlessEnded . modifyTVar parentsVar . (:)
-            , addProximateImpl = liftBase . atomically . unlessEnded . modifyTVar causesVar . (:)
-            , finalizeImpl = liftBase $ finish Nothing
-            , failImpl = liftBase . finish . Just
+            parents = maybeToList newEventParent
+            causes = newEventCauses
+            selector = newEventSelector
+          pure Event
+            { reference = ref
+            , addField = liftBase . atomically . unlessEnded . modifyTVar fieldsVar . (:)
+            , finalize = \exception -> liftBase do
+                end <- getCurrentTime
+                atomically $ unlessEnded do
+                  fields <- readTVar fieldsVar
+                  writeTQueue queue $ Some EventRecord{..}
+                  putTMVar endedVar ()
             }
-    , newOnceFlag
+    , emitImmediateEvent = \_ -> newReference
     })
 
 -- | Like flushTQueue but it retries if the result is empty

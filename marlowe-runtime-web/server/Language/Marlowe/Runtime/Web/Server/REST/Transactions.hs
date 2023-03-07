@@ -12,6 +12,7 @@ module Language.Marlowe.Runtime.Web.Server.REST.Transactions
 import Cardano.Api (AsType(..), deserialiseFromTextEnvelope, getTxBody, getTxId)
 import qualified Cardano.Api.SerialiseTextEnvelope as Cardano
 import Control.Monad (unless)
+import Control.Monad.IO.Class (liftIO)
 import Data.Aeson (Value(Null))
 import Data.Foldable (traverse_)
 import Data.Maybe (fromMaybe)
@@ -29,10 +30,18 @@ import Language.Marlowe.Runtime.Web.Server.REST.ApiError
   (ApiError(ApiError), badRequest', notFound', rangeNotSatisfiable', throwDTOError)
 import qualified Language.Marlowe.Runtime.Web.Server.REST.ApiError as ApiError
 import Language.Marlowe.Runtime.Web.Server.SyncClient (LoadTxError(..))
-import Language.Marlowe.Runtime.Web.Server.TxClient (TempTx(TempTx), TempTxStatus(..))
-import Observe.Event (EventBackend, addField, reference, withEvent)
-import Observe.Event.BackendModification (setAncestor)
-import Observe.Event.DSL (FieldSpec(..), SelectorSpec(..))
+import Language.Marlowe.Runtime.Web.Server.TxClient (TempTx(TempTx), TempTxStatus(..), TxClientSelector)
+import Observe.Event.DSL (FieldSpec(..), SelectorField(Inject), SelectorSpec(..))
+import Observe.Event.Explicit
+  ( EventBackend
+  , addField
+  , hoistEventBackend
+  , injectSelector
+  , narrowEventBackend
+  , reference
+  , setAncestorEventBackend
+  , withEvent
+  )
 import Observe.Event.Render.JSON.DSL.Compile (compile)
 import Observe.Event.Syntax ((≔))
 import Servant
@@ -70,10 +79,11 @@ compile $ SelectorSpec "transactions"
       , "body" ≔ ''Cardano.TextEnvelope
       , "error" ≔ ''String
       ]
+  , ["run", "tx" ] ≔ Inject ''TxClientSelector
   ]
 
 server
-  :: EventBackend (AppM r) r TransactionsSelector
+  :: EventBackend IO r TransactionsSelector
   -> TxOutRef
   -> ServerT TransactionsAPI (AppM r)
 server eb contractId = get eb contractId
@@ -81,11 +91,11 @@ server eb contractId = get eb contractId
                   :<|> transactionServer eb contractId
 
 get
-  :: EventBackend (AppM r) r TransactionsSelector
+  :: EventBackend IO r TransactionsSelector
   -> TxOutRef
   -> Maybe (Ranges '["transactionId"] GetTransactionsResponse)
   -> AppM r (PaginatedResponse '["transactionId"] GetTransactionsResponse)
-get eb contractId ranges = withEvent eb Get \ev -> do
+get eb contractId ranges = withEvent (hoistEventBackend liftIO eb) Get \ev -> do
   let
     range :: Range "transactionId" TxId
     range@Range{..} = fromMaybe (getDefaultRange (Proxy @TxHeader)) $ extractRange =<< ranges
@@ -105,14 +115,14 @@ get eb contractId ranges = withEvent eb Get \ev -> do
       addHeader totalCount . fmap ListObject <$> returnRange range (IncludeLink (Proxy @"transaction") <$> headers')
 
 post
-  :: EventBackend (AppM r) r TransactionsSelector
+  :: EventBackend IO r TransactionsSelector
   -> TxOutRef
   -> PostTransactionsRequest
   -> Address
   -> Maybe (CommaList Address)
   -> Maybe (CommaList TxOutRef)
   -> AppM r PostTransactionsResponse
-post eb contractId req@PostTransactionsRequest{..} changeAddressDTO mAddresses mCollateralUtxos = withEvent eb Post \ev -> do
+post eb contractId req@PostTransactionsRequest{..} changeAddressDTO mAddresses mCollateralUtxos = withEvent (hoistEventBackend liftIO eb) Post \ev -> do
   addField ev $ NewContract req
   addField ev $ ChangeAddress changeAddressDTO
   traverse_ (addField ev . Addresses) mAddresses
@@ -135,7 +145,7 @@ post eb contractId req@PostTransactionsRequest{..} changeAddressDTO mAddresses m
       pure $ IncludeLink (Proxy @"transaction") body
 
 transactionServer
-  :: EventBackend (AppM r) r TransactionsSelector
+  :: EventBackend IO r TransactionsSelector
   -> TxOutRef
   -> TxId
   -> ServerT TransactionAPI (AppM r)
@@ -143,11 +153,11 @@ transactionServer eb contractId txId = getOne eb contractId txId
                                   :<|> put eb contractId txId
 
 getOne
-  :: EventBackend (AppM r) r TransactionsSelector
+  :: EventBackend IO r TransactionsSelector
   -> TxOutRef
   -> TxId
   -> AppM r GetTransactionResponse
-getOne eb contractId txId = withEvent eb GetOne \ev -> do
+getOne eb contractId txId = withEvent (hoistEventBackend liftIO eb) GetOne \ev -> do
   addField ev $ GetOneContractId contractId
   addField ev $ GetTxId txId
   contractId' <- fromDTOThrow (badRequest' "Invalid contract id value") contractId
@@ -162,12 +172,12 @@ getOne eb contractId txId = withEvent eb GetOne \ev -> do
         $ IncludeLink (Proxy @"next") contractState
 
 put
-  :: EventBackend (AppM r) r TransactionsSelector
+  :: EventBackend IO r TransactionsSelector
   -> TxOutRef
   -> TxId
   -> TextEnvelope
   -> AppM r NoContent
-put eb contractId txId body = withEvent eb Put \ev -> do
+put eb contractId txId body = withEvent (hoistEventBackend liftIO eb) Put \ev -> do
   addField ev $ PutContractId contractId
   addField ev $ PutTxId txId
   contractId' <- fromDTOThrow (badRequest' "Invalid contract id value") contractId
@@ -179,7 +189,7 @@ put eb contractId txId body = withEvent eb Put \ev -> do
       addField ev $ Body textEnvelope
       tx <- either (const $ throwError $ badRequest' "Invalid body text envelope content") pure $ deserialiseFromTextEnvelope (AsTx AsBabbage) textEnvelope
       unless (getTxBody tx == txBody) $ throwError (badRequest' "Provided transaction body differs from the original one")
-      submitTransaction contractId' txId' (setAncestor $ reference ev) tx >>= \case
+      submitTransaction contractId' txId' (narrowEventBackend (injectSelector RunTx) $ setAncestorEventBackend (reference ev) eb) tx >>= \case
         Nothing -> pure NoContent
         Just err -> do
           addField ev $ Error $ show err

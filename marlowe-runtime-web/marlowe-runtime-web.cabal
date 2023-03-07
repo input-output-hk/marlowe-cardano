@@ -102,11 +102,12 @@ library server
     , cardano-api
     , containers
     , errors
-    , eventuo11y
-    , eventuo11y-dsl
-    , eventuo11y-json
-    , eventuo11y-batteries
+    , eventuo11y ^>= { 0.9, 0.10 }
+    , eventuo11y-dsl ^>= { 0.2 }
+    , eventuo11y-json ^>= { 0.3 }
+    , eventuo11y-batteries ^>= { 0.4 }
     , exceptions
+    , general-allocate ^>= { 0.2 }
     , lens
     , marlowe-cardano
     , marlowe-protocols
@@ -130,6 +131,7 @@ library server
     , time
     , transformers
     , transformers-base
+    , unliftio-core ^>= { 0.2 }
     , wai
     , wai-cors
 
@@ -145,7 +147,7 @@ executable marlowe-web-server
   build-depends:
       base >= 4.9 && < 5
     , async-components
-    , eventuo11y-json
+    , eventuo11y-json ^>= { 0.3 }
     , marlowe-client
     , marlowe-runtime-web:server
     , marlowe-runtime:config

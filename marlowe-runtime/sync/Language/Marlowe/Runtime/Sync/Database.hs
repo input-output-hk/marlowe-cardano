@@ -8,7 +8,7 @@
 module Language.Marlowe.Runtime.Sync.Database
   where
 
-import Control.Monad.Cleanup (MonadCleanup)
+import Control.Monad.With (MonadWithExceptable)
 import Data.Aeson (ToJSON)
 import Data.Text (Text)
 import Data.Void (Void)
@@ -19,8 +19,8 @@ import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainPoint, TxId)
 import Language.Marlowe.Runtime.Core.Api (ContractId, MarloweVersion(..), SomeMarloweVersion)
 import Language.Marlowe.Runtime.Discovery.Api (ContractHeader)
 import Language.Marlowe.Runtime.History.Api (ContractStep, SomeCreateStep)
-import Observe.Event (EventBackend, addField, withEvent)
 import Observe.Event.Component (FieldConfig(..), GetSelectorConfig, SelectorConfig(..), SomeJSON(..))
+import Observe.Event.Explicit (EventBackend, addField, withEvent)
 
 data DatabaseSelector f where
   GetTip :: DatabaseSelector (QueryField Void ChainPoint)
@@ -70,7 +70,7 @@ data GetNextStepsArguments v = GetNextStepsArguments
   deriving stock (Generic)
   deriving anyclass (ToJSON)
 
-logDatabaseQueries :: MonadCleanup m => EventBackend m r DatabaseSelector -> DatabaseQueries m -> DatabaseQueries m
+logDatabaseQueries :: MonadWithExceptable m => EventBackend m r DatabaseSelector -> DatabaseQueries m -> DatabaseQueries m
 logDatabaseQueries eventBackend DatabaseQueries{..} = DatabaseQueries
   { getTip = withEvent eventBackend GetTip \ev -> do
       result <- getTip

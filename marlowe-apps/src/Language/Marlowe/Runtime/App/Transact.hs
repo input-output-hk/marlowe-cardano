@@ -33,9 +33,8 @@ import Language.Marlowe.Runtime.App.Types
   (App, Config(Config, buildSeconds, confirmSeconds, retryLimit, retrySeconds), MarloweRequest(..), MarloweResponse(..))
 import Language.Marlowe.Runtime.ChainSync.Api (Address, Lovelace)
 import Language.Marlowe.Runtime.Core.Api (ContractId, MarloweVersionTag(V1))
-import Observe.Event (Event, addField, newEvent, withSubEvent)
-import Observe.Event.Backend (unitEventBackend)
-import Observe.Event.Dynamic (DynamicEvent, DynamicEventSelector(..), DynamicField)
+import Observe.Event.Dynamic (DynamicEventSelector(..))
+import Observe.Event.Explicit (EventBackend, addField, idInjectSelector, subEventBackend, unitEventBackend, withEvent)
 import Observe.Event.Syntax ((≔))
 import System.Random (randomRIO)
 
@@ -45,11 +44,6 @@ import qualified Data.ByteString.Lazy.Char8 as LBS8 (unpack)
 import qualified Data.Text as T (Text)
 import qualified Language.Marlowe.Runtime.App as App (handle)
 
-
-unitEvent :: App (DynamicEvent App ())
-unitEvent = newEvent unitEventBackend $ DynamicEventSelector "unit"
-
-
 run
   :: Config
   -> Address
@@ -58,14 +52,11 @@ run
   -> [[Input]]
   -> Lovelace
   -> App ContractId
-run config address key contract inputs minUtxo =
-  do
-    event <- unitEvent
-    runWithEvents event config address key contract inputs minUtxo
+run = runWithEvents unitEventBackend
 
 
 runWithEvents
-  :: Event App r DynamicEventSelector f
+  :: EventBackend App r DynamicEventSelector
   -> Config
   -> Address
   -> C.SigningKey C.PaymentExtendedKey
@@ -73,10 +64,10 @@ runWithEvents
   -> [[Input]]
   -> Lovelace
   -> App ContractId
-runWithEvents event config address key contract inputs minUtxo =
+runWithEvents backend config address key contract inputs minUtxo =
   do
     let
-      transact' = transactWithEvents event config key
+      transact' = transactWithEvents backend config key
     contractId <- transact' $ Create contract mempty minUtxo mempty mempty address mempty
     mapM_ (\input -> transact' $ Apply contractId input Nothing Nothing mempty mempty address mempty) inputs
     pure contractId
@@ -89,22 +80,19 @@ create
   -> Contract
   -> Lovelace
   -> App ContractId
-create config address key contract minUtxo =
-  do
-    event <- unitEvent
-    createWithEvents event config address key contract minUtxo
+create = createWithEvents unitEventBackend
 
 
 createWithEvents
-  :: Event App r DynamicEventSelector f
+  :: EventBackend App r DynamicEventSelector
   -> Config
   -> Address
   -> C.SigningKey C.PaymentExtendedKey
   -> Contract
   -> Lovelace
   -> App ContractId
-createWithEvents event config address key contract minUtxo =
-  transactWithEvents event config key
+createWithEvents backend config address key contract minUtxo =
+  transactWithEvents backend config key
     $ Create contract mempty minUtxo mempty mempty address mempty
 
 
@@ -115,76 +103,67 @@ apply
   -> ContractId
   -> [Input]
   -> App ContractId
-apply config address key contractId input =
-  do
-    event <- unitEvent
-    applyWithEvents event config address key contractId input
-
+apply = applyWithEvents unitEventBackend
 
 applyWithEvents
-  :: Event App r DynamicEventSelector f
+  :: EventBackend App r DynamicEventSelector
   -> Config
   -> Address
   -> C.SigningKey C.PaymentExtendedKey
   -> ContractId
   -> [Input]
   -> App ContractId
-applyWithEvents event config address key contractId input =
-  transactWithEvents event config key
+applyWithEvents backend config address key contractId input =
+  transactWithEvents backend config key
     $ Apply contractId input Nothing Nothing mempty mempty address mempty
-
 
 transact
   :: Config
   -> C.SigningKey C.PaymentExtendedKey
   -> MarloweRequest 'V1
   -> App ContractId
-transact config key request =
-  do
-    event <- unitEvent
-    transactWithEvents event config key request
-
+transact = transactWithEvents unitEventBackend
 
 transactWithEvents
-  :: Event App r DynamicEventSelector f
+  :: EventBackend App r DynamicEventSelector
   -> Config
   -> C.SigningKey C.PaymentExtendedKey
   -> MarloweRequest 'V1
   -> App ContractId
-transactWithEvents event config@Config{buildSeconds, confirmSeconds, retryLimit, retrySeconds} key request =
+transactWithEvents backend config@Config{buildSeconds, confirmSeconds, retryLimit, retrySeconds} key request =
   let
     show' = LBS8.unpack . A.encode
     unexpected response = throwError $ "Unexpected response: " <> show' response
   in
-    retry "Transact" event [retrySeconds * 2^(i-1) | retrySeconds > 0, retryLimit > 0, i <- [1..retryLimit]]
-      $ \subEvent ->
+    retry "Transact" backend [retrySeconds * 2^(i-1) | retrySeconds > 0, retryLimit > 0, i <- [1..retryLimit]]
+      $ \subBackend ->
         do
           when (buildSeconds > 0)
-            . withSubEvent subEvent (DynamicEventSelector "WaitBeforeBuild")
+            . withEvent subBackend (DynamicEventSelector "WaitBeforeBuild")
             . const
             $ liftIO . threadDelay . (buildSeconds *)
             =<< randomRIO (1_000_000, 2_000_000)
           (contractId, body) <-
-            handleWithEvents subEvent "Build" config request
+            handleWithEvents subBackend "Build" config request
               $ \case
                 Body{..} -> pure (resContractId, resTxBody)
                 response -> unexpected response
           tx <-
-            handleWithEvents subEvent "Sign" config (Sign body [] [key])
+            handleWithEvents subBackend "Sign" config (Sign body [] [key])
               $ \case
                 Tx{..}   -> pure resTx
                 response -> unexpected response
           txId' <-
-            handleWithEvents subEvent "Submit" config (Submit tx)
+            handleWithEvents subBackend "Submit" config (Submit tx)
               $ \case
                 TxId{..} -> pure resTxId
                 response -> unexpected response
-          handleWithEvents subEvent "Confirm" config (Wait txId' 1)
+          handleWithEvents subBackend "Confirm" config (Wait txId' 1)
             $ \case
               TxInfo{} -> pure ()
               response -> unexpected response
           when (confirmSeconds > 0)
-            . withSubEvent subEvent (DynamicEventSelector "WaitAfterConfirm")
+            . withEvent subBackend (DynamicEventSelector "WaitAfterConfirm")
             . const
             $ liftIO . threadDelay . (confirmSeconds *)
             =<< randomRIO (1_000_000, 2_000_000)
@@ -193,33 +172,35 @@ transactWithEvents event config@Config{buildSeconds, confirmSeconds, retryLimit,
 
 retry
   :: T.Text
-  -> Event App r DynamicEventSelector f
+  -> EventBackend App r DynamicEventSelector
   -> [Int]
-  -> (Event App r DynamicEventSelector DynamicField -> App a)
+  -> (EventBackend App r DynamicEventSelector -> App a)
   -> App a
-retry name event [] action = withSubEvent event (DynamicEventSelector name) action
-retry name event (delay : delays) action =
-  join $ withSubEvent event (DynamicEventSelector name) \subEvent ->
-    (pure <$> action subEvent) `catchError` \message -> do
-      addField subEvent $ ("failedAttempt" :: T.Text) ≔ message
-      addField subEvent $ ("waitForRetry" :: T.Text) ≔ delay
+retry name backend [] action = withEvent backend (DynamicEventSelector name) \ev ->
+  action $ subEventBackend idInjectSelector ev backend
+retry name backend (delay : delays) action =
+  join $ withEvent backend (DynamicEventSelector name) \ev ->
+    let subBackend = subEventBackend idInjectSelector ev backend in
+    (pure <$> action subBackend) `catchError` \message -> do
+      addField ev $ ("failedAttempt" :: T.Text) ≔ message
+      addField ev $ ("waitForRetry" :: T.Text) ≔ delay
       pure do
         liftIO . threadDelay $ delay * 1_000_000
-        retry name event delays action
+        retry name backend delays action
 
 
 handleWithEvents
-  :: Event App r DynamicEventSelector f
+  :: EventBackend App r DynamicEventSelector
   -> T.Text
   -> Config
   -> MarloweRequest 'V1
   -> (MarloweResponse 'V1 -> App a)
   -> App a
-handleWithEvents event name config request extract =
-  withSubEvent event (DynamicEventSelector name)
-    $ \subEvent ->
+handleWithEvents backend name config request extract =
+  withEvent backend (DynamicEventSelector name)
+    $ \ev ->
       do
-        addField subEvent $ ("request" :: T.Text) ≔ request
+        addField ev $ ("request" :: T.Text) ≔ request
         response <- ExceptT $ App.handle config request
-        addField subEvent $ ("response" :: T.Text) ≔ response
+        addField ev $ ("response" :: T.Text) ≔ response
         extract response

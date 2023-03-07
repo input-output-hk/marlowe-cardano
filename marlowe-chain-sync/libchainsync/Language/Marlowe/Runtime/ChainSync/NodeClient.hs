@@ -39,9 +39,9 @@ import Data.Aeson (Value(String), toJSON)
 import Data.Bifunctor (first)
 import qualified Data.Text as T (pack)
 import Data.Void (Void)
-import Observe.Event (EventBackend, addField, withEvent)
 import Observe.Event.Component
   (GetSelectorConfig, SelectorConfig(..), SomeJSON(..), absurdFieldConfig, singletonFieldConfigWith)
+import Observe.Event.Explicit (EventBackend, addField, withEvent)
 
 import qualified Ouroboros.Network.Protocol.LocalStateQuery.Client as Q
 import qualified Ouroboros.Network.Protocol.LocalStateQuery.Type as Q

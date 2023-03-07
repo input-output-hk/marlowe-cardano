@@ -24,7 +24,7 @@ module Language.Marlowe.Runtime.Web.Server
   ) where
 
 import Control.Concurrent.Component
-import Control.Monad.IO.Class (liftIO)
+import Control.Monad.IO.Unlift (withRunInIO)
 import Control.Monad.Reader (runReaderT)
 import Data.Void (Void)
 import Language.Marlowe.Protocol.Client (MarloweClient)
@@ -34,17 +34,18 @@ import qualified Language.Marlowe.Runtime.Web.Server.OpenAPI as OpenAPI
 import Language.Marlowe.Runtime.Web.Server.REST (ApiSelector)
 import qualified Language.Marlowe.Runtime.Web.Server.REST as REST
 import Language.Marlowe.Runtime.Web.Server.SyncClient (SyncClient(..), SyncClientDependencies(..), syncClient)
-import Language.Marlowe.Runtime.Web.Server.TxClient (TxClient(..), TxClientDependencies(..), TxClientSelector, txClient)
+import Language.Marlowe.Runtime.Web.Server.TxClient (TxClient(..), TxClientDependencies(..), txClient)
 import Network.Protocol.Connection (SomeClientConnector)
 import qualified Network.Wai as WAI
 import Network.Wai.Middleware.Cors (CorsResourcePolicy(..), cors, simpleCorsResourcePolicy)
-import Observe.Event (EventBackend, hoistEventBackend, narrowEventBackend)
-import Observe.Event.BackendModification (modifyEventBackend, setAncestor)
+import Observe.Event.Class (EventT, backend, runEventT, withModifiedBackend)
 import Observe.Event.DSL (SelectorField(Inject), SelectorSpec(SelectorSpec))
+import Observe.Event.Explicit (EventBackend, injectSelector, narrowEventBackend)
 import Observe.Event.Render.JSON (DefaultRenderSelectorJSON(..))
 import Observe.Event.Render.JSON.DSL.Compile (compile)
 import Observe.Event.Syntax ((≔))
 import Observe.Event.Wai (ServeRequest, application, renderServeRequest)
+import qualified Observe.Event.Wai as EvWai
 import Servant hiding (Server, respond)
 
 type APIWithOpenAPI = OpenAPI.API :<|>  Web.API
@@ -53,7 +54,7 @@ apiWithOpenApi :: Proxy APIWithOpenAPI
 apiWithOpenApi = Proxy
 
 serverWithOpenAPI
-  :: EventBackend (AppM r) r ApiSelector
+  :: EventBackend IO r ApiSelector
   -> ServerT APIWithOpenAPI (AppM r)
 serverWithOpenAPI eb = OpenAPI.server :<|> REST.server eb
 
@@ -85,21 +86,23 @@ corsMiddleware accessControlAllowOriginAll =
     cors (const $ Just policy)
   else id
 
-app :: Bool -> Bool -> AppEnv r -> EventBackend (AppM r) r ApiSelector -> Application
-app True accessControlAllowOriginAll env = do
-  corsMiddleware accessControlAllowOriginAll . serveAppM apiWithOpenApi env . serverWithOpenAPI
-app False accessControlAllowOriginAll env = do
-  corsMiddleware accessControlAllowOriginAll . serveAppM Web.api env . REST.server
-
-instance DefaultRenderSelectorJSON ServeRequest where
-  defaultRenderSelectorJSON = renderServeRequest
-
 compile $ SelectorSpec "server"
   [ ["run", "server"] ≔ ''Void
   , "http" ≔ Inject ''ServeRequest
   , "api" ≔ Inject ''ApiSelector
-  , "tx" ≔ Inject ''TxClientSelector
   ]
+
+app :: Bool -> Bool -> AppEnv r -> EvWai.Application (EventT IO) r ServerSelector
+app openAPIEnabled accessControlAllowOriginAll env req handleRes = withRunInIO $ \runInIO -> do
+    eb <- runInIO $ withModifiedBackend (narrowEventBackend $ injectSelector Api) backend
+    mkApp eb req (runInIO . handleRes)
+  where
+    mkApp
+      | openAPIEnabled = corsMiddleware accessControlAllowOriginAll . serveAppM apiWithOpenApi env . serverWithOpenAPI
+      | otherwise = corsMiddleware accessControlAllowOriginAll . serveAppM Web.api env . REST.server
+
+instance DefaultRenderSelectorJSON ServeRequest where
+  defaultRenderSelectorJSON = renderServeRequest
 
 data ServerDependencies r = ServerDependencies
   { openAPIEnabled :: Bool
@@ -124,7 +127,6 @@ server :: Component IO (ServerDependencies r) ()
 server = proc ServerDependencies{..} -> do
   TxClient{..} <- txClient -< TxClientDependencies
     { connector
-    , eventBackend = narrowEventBackend Tx eventBackend
     }
   SyncClient{..} <- syncClient -< SyncClientDependencies
     { connector
@@ -158,7 +160,7 @@ data WebServerDependencies r = WebServerDependencies
 
 webServer :: Component IO (WebServerDependencies r) ()
 webServer = component_ \WebServerDependencies{..} -> do
-  let httpBackend = hoistEventBackend liftIO $ narrowEventBackend Api eventBackend
-  runApplication
-    $ application (narrowEventBackend Http eventBackend)
-    $ app openAPIEnabled accessControlAllowOriginAll env . (`modifyEventBackend`  httpBackend) . setAncestor
+  app' <- flip runEventT eventBackend
+    $ application (injectSelector Http)
+    $ app openAPIEnabled accessControlAllowOriginAll env
+  runApplication app'

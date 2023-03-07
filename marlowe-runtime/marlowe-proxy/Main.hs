@@ -32,7 +32,7 @@ import Network.Socket
   , openSocket
   )
 import Network.TypedProtocol (Driver)
-import Observe.Event.Backend (hoistEventBackend, narrowEventBackend, newOnceFlagMVar)
+import Observe.Event.Backend (hoistEventBackend, injectSelector, narrowEventBackend)
 import Observe.Event.Component (LoggerDependencies(..), logger)
 import Options.Applicative
   ( auto
@@ -64,9 +64,8 @@ run = runComponent_ proc Options{..} -> do
     { configFilePath = logConfigFile
     , getSelectorConfig = getRootSelectorConfig
     , newRef = nextRandom
-    , newOnceFlag = newOnceFlagMVar
     , writeText = TL.hPutStr stderr
-    , injectConfigWatcherSelector = ConfigWatcher
+    , injectConfigWatcherSelector = injectSelector ConfigWatcher
     }
 
   connectionSource <- tcpServer -< TcpServerDependencies
@@ -80,7 +79,7 @@ run = runComponent_ proc Options{..} -> do
     , getMarloweQueryDriver = driverFactory syncHost marloweQueryPort
     , getTxJobDriver = driverFactory txHost txPort
     , connectionSource = SomeConnectionSource
-        $ logConnectionSource (hoistEventBackend liftIO $ narrowEventBackend MarloweServer eventBackend)
+        $ logConnectionSource (hoistEventBackend liftIO $ narrowEventBackend (injectSelector MarloweServer) eventBackend)
         $ handshakeConnectionSource connectionSource
     }
 

@@ -30,7 +30,6 @@ import Language.Marlowe.Runtime.ChainIndexer.NodeClient
   )
 import Language.Marlowe.Runtime.ChainIndexer.Store
   (ChainStoreDependencies(..), ChainStoreSelector(..), SaveField(..), chainStore)
-import Observe.Event (EventBackend, narrowEventBackend)
 import Observe.Event.Component
   ( FieldConfig(..)
   , GetSelectorConfig
@@ -41,6 +40,7 @@ import Observe.Event.Component
   , singletonFieldConfig
   , singletonFieldConfigWith
   )
+import Observe.Event.Explicit (EventBackend, injectSelector, narrowEventBackend)
 
 data ChainIndexerSelector f where
   NodeClientEvent :: NodeClientSelector f -> ChainIndexerSelector f
@@ -64,7 +64,7 @@ chainIndexer = proc ChainIndexerDependencies{..} -> do
     , getIntersectionPoints
     , maxCost
     , costModel
-    , eventBackend = narrowEventBackend NodeClientEvent eventBackend
+    , eventBackend = narrowEventBackend (injectSelector NodeClientEvent) eventBackend
     }
   let rateLimit = persistRateLimit
   chainStore -< ChainStoreDependencies
@@ -75,7 +75,7 @@ chainIndexer = proc ChainIndexerDependencies{..} -> do
     , getGenesisBlock
     , genesisBlock
     , commitGenesisBlock
-    , eventBackend = narrowEventBackend ChainStoreEvent eventBackend
+    , eventBackend = narrowEventBackend (injectSelector ChainStoreEvent) eventBackend
     }
 
 getChainIndexerSelectorConfig :: GetSelectorConfig ChainIndexerSelector

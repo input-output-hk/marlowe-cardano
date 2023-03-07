@@ -2,11 +2,13 @@
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 
@@ -24,13 +26,15 @@ module Language.Marlowe.Runtime.App.Types
 
 import Control.Applicative (Alternative)
 import Control.Monad.Base (MonadBase)
-import Control.Monad.Cleanup (MonadCleanup)
 import Control.Monad.Except (ExceptT)
 import Control.Monad.Fix (MonadFix)
 import Control.Monad.IO.Class (MonadIO(..))
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Monad.Trans.Reader (ReaderT(..))
+import Control.Monad.With (MonadWith(..))
 import Data.Default (Default(..))
+import Data.Functor ((<&>))
+import Data.GeneralAllocate (GeneralAllocate(..), GeneralAllocated(..))
 import Data.String (fromString)
 import Language.Marlowe (POSIXTime(..))
 import Language.Marlowe.Runtime.Cardano.Api (fromCardanoTxId)
@@ -130,7 +134,25 @@ data Services m =
 
 -- | A monad type for Marlowe Runtime.Client programs.
 newtype Client a = Client { runClient :: MarloweT (ReaderT (Services IO) IO) a }
-  deriving newtype (Alternative, Applicative, Functor, Monad, MonadBase IO, MonadBaseControl IO, MonadCleanup, MonadFail, MonadFix, MonadIO)
+  deriving newtype (Alternative, Applicative, Functor, Monad, MonadBase IO, MonadBaseControl IO, MonadFail, MonadFix, MonadIO)
+
+instance MonadWith Client where
+  type WithException Client = WithException (MarloweT (ReaderT (Services IO) IO))
+  stateThreadingGeneralWith
+    :: forall a b releaseReturn
+     . GeneralAllocate (Client) (WithException Client) releaseReturn b a
+    -> (a -> Client b)
+    -> Client (b, releaseReturn)
+  stateThreadingGeneralWith (GeneralAllocate allocA) go = Client $ do
+    stateThreadingGeneralWith (GeneralAllocate allocA') $ runClient . go
+   where
+    allocA' :: (forall x. MarloweT (ReaderT (Services IO) IO) x -> MarloweT (ReaderT (Services IO) IO) x) ->  MarloweT (ReaderT (Services IO) IO) (GeneralAllocated (MarloweT (ReaderT (Services IO) IO)) (WithException (MarloweT (ReaderT (Services IO) IO))) releaseReturn b a)
+    allocA' restore =
+      runClient (allocA restore') <&> \case
+        GeneralAllocated a releaseA -> GeneralAllocated a $ runClient . releaseA
+     where
+      restore' :: forall x. Client x -> Client x
+      restore' = Client . restore . runClient
 
 instance MonadMarlowe Client where
   runMarloweClient client = Client $ runMarloweClient $ hoistMarloweClient runClient client

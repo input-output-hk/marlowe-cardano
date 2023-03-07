@@ -23,7 +23,7 @@ import Network.Protocol.Connection (SomeConnectionSource(..), logConnectionSourc
 import Network.Protocol.Driver (TcpServerDependencies(..), tcpServer)
 import Network.Protocol.Handshake.Server (handshakeConnectionSource)
 import Network.Socket (HostName, PortNumber)
-import Observe.Event.Backend (narrowEventBackend, newOnceFlagMVar)
+import Observe.Event.Backend (injectSelector, narrowEventBackend)
 import Observe.Event.Component (LoggerDependencies(..), logger)
 import Options.Applicative
   ( auto
@@ -55,9 +55,8 @@ run Options{..} = bracket (Pool.acquire (100, secondsToNominalDiffTime 5, fromSt
       { configFilePath = logConfigFile
       , getSelectorConfig = getRootSelectorConfig
       , newRef = nextRandom
-      , newOnceFlag = newOnceFlagMVar
       , writeText = TL.hPutStr stderr
-      , injectConfigWatcherSelector = ConfigWatcher
+      , injectConfigWatcherSelector = injectSelector ConfigWatcher
       }
 
     marloweSyncSource <- tcpServer -< TcpServerDependencies
@@ -79,17 +78,17 @@ run Options{..} = bracket (Pool.acquire (100, secondsToNominalDiffTime 5, fromSt
       }
 
     sync -< SyncDependencies
-      { databaseQueries = logDatabaseQueries (narrowEventBackend Database eventBackend) $ hoistDatabaseQueries
+      { databaseQueries = logDatabaseQueries (narrowEventBackend (injectSelector Database) eventBackend) $ hoistDatabaseQueries
             (either throwUsageError pure <=< Pool.use pool)
             Postgres.databaseQueries
       , syncSource = SomeConnectionSource
-          $ logConnectionSource (narrowEventBackend MarloweSyncServer eventBackend)
+          $ logConnectionSource (narrowEventBackend (injectSelector MarloweSyncServer) eventBackend)
           $ handshakeConnectionSource marloweSyncSource
       , headerSyncSource = SomeConnectionSource
-          $ logConnectionSource (narrowEventBackend MarloweHeaderSyncServer eventBackend)
+          $ logConnectionSource (narrowEventBackend (injectSelector MarloweHeaderSyncServer) eventBackend)
           $ handshakeConnectionSource headerSyncSource
       , querySource = SomeConnectionSource
-          $ logConnectionSource (narrowEventBackend MarloweQueryServer eventBackend)
+          $ logConnectionSource (narrowEventBackend (injectSelector MarloweQueryServer) eventBackend)
           $ handshakeConnectionSource querySource
       }
   where

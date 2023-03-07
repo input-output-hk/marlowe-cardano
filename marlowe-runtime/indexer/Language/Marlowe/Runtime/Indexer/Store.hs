@@ -24,7 +24,7 @@ import Language.Marlowe.Runtime.History.Api (ExtractCreationError, ExtractMarlow
 import Language.Marlowe.Runtime.Indexer.ChainSeekClient (ChainEvent(..))
 import Language.Marlowe.Runtime.Indexer.Database (DatabaseQueries(..))
 import Language.Marlowe.Runtime.Indexer.Types (MarloweBlock(..), MarloweTransaction(..))
-import Observe.Event (EventBackend, addField, withEvent)
+import Observe.Event.Explicit (EventBackend, addField, withEvent)
 
 data StoreSelector f where
   Save :: StoreSelector SaveField

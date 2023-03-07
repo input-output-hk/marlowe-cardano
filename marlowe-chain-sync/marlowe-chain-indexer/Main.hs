@@ -28,9 +28,8 @@ import Language.Marlowe.Runtime.ChainIndexer.Database (hoistDatabaseQueries)
 import qualified Language.Marlowe.Runtime.ChainIndexer.Database.PostgreSQL as PostgreSQL
 import Language.Marlowe.Runtime.ChainIndexer.Genesis (computeGenesisBlock)
 import Logging (RootSelector(..), getRootSelectorConfig)
-import Observe.Event (narrowEventBackend)
-import Observe.Event.Backend (newOnceFlagMVar)
 import Observe.Event.Component (LoggerDependencies(..), logger)
+import Observe.Event.Explicit (injectSelector, narrowEventBackend)
 import Options (Options(..), getOptions)
 import System.IO (stderr)
 
@@ -58,15 +57,14 @@ run Options{..} = do
       , genesisBlock
       , maxCost
       , costModel
-      , eventBackend = narrowEventBackend App eventBackend
+      , eventBackend = narrowEventBackend (injectSelector App) eventBackend
       }
     loggerDependencies = LoggerDependencies
       { configFilePath = logConfigFile
       , getSelectorConfig = getRootSelectorConfig
       , newRef = nextRandom
-      , newOnceFlag = newOnceFlagMVar
       , writeText = TL.hPutStr stderr
-      , injectConfigWatcherSelector = ConfigWatcher
+      , injectConfigWatcherSelector = injectSelector ConfigWatcher
       }
     appComponent = chainIndexer <<< arr chainIndexerDependencies <<< logger
   runComponent_ appComponent loggerDependencies

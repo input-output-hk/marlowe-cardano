@@ -21,7 +21,7 @@ import Data.Time (NominalDiffTime, UTCTime, addUTCTime, diffUTCTime, getCurrentT
 import Language.Marlowe.Runtime.ChainIndexer.Database
 import Language.Marlowe.Runtime.ChainIndexer.Genesis (GenesisBlock)
 import Language.Marlowe.Runtime.ChainIndexer.NodeClient (Changes(..), isEmptyChanges)
-import Observe.Event (EventBackend, addField, withEvent)
+import Observe.Event.Explicit (EventBackend, addField, withEvent)
 import Prelude hiding (filter)
 import Witherable (Witherable(..))
 

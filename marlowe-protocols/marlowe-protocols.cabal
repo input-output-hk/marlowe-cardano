@@ -75,8 +75,9 @@ library
     , base16
     , binary
     , bytestring
-    , eventuo11y
+    , eventuo11y ^>= { 0.9, 0.10 }
     , eventuo11y-extras
+    , general-allocate ^>= { 0.2 }
     , hashable
     , lifted-base
     , monad-control

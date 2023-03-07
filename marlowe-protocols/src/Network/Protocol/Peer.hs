@@ -5,12 +5,11 @@
 module Network.Protocol.Peer
   where
 
-import Control.Monad.Cleanup (MonadCleanup)
-import Control.Monad.Trans.Control (MonadBaseControl)
+import Control.Monad.With (MonadWithExceptable)
 import Network.TypedProtocol
 import Network.TypedProtocol.Codec (AnyMessageAndAgency(..))
-import Observe.Event (EventBackend, addField, withEvent)
 import Observe.Event.Component (GetSelectorConfig, SelectorConfig(..), SomeJSON(..), singletonFieldConfigWith)
+import Observe.Event.Explicit (EventBackend, addField, withEvent)
 import Observe.Event.Network.Protocol (MessageToJSON(..))
 
 data PeerSelector ps f where
@@ -36,7 +35,7 @@ hoistPeer f = \case
   Await ta handle -> Await ta $ hoistPeer f . handle
 
 logPeer
-  :: (MonadCleanup m, MonadBaseControl IO m)
+  :: (MonadWithExceptable m)
   => EventBackend m r (PeerSelector ps)
   -> Peer ps pr st m a
   -> Peer ps pr st m a
