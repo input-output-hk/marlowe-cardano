@@ -58,7 +58,7 @@ import Language.Marlowe.Core.V1.Semantics.Types
   , Input(..)
   , InputContent(IChoice, IDeposit, INotify)
   , IntervalError(IntervalInPastError, InvalidInterval)
-  , Observation
+  , Observation(TrueObs)
   , Payee(Party)
   , State(..)
   , TimeInterval
@@ -259,6 +259,22 @@ simpleDeposit =
           $ When [Case (Deposit account payee token $ Constant deposit) contract]
             (POSIXTime $ intervalEnd + 1) contract
       modifyInput (TransactionInput interval _) = pure $ TransactionInput interval [NormalInput $ IDeposit account payee token deposit]
+    simpleTransaction context modifyContract pure modifyInput
+
+
+-- | Generate a simple notification.
+simpleNotify :: Gen MarloweContext
+simpleNotify =
+  do
+    context <- arbitrary
+    let
+      modifyContract (_, POSIXTime intervalEnd) contract =
+        do
+          let
+            timeout = POSIXTime $ intervalEnd + 1
+          contract' <- When [] timeout <$> semiArbitrary context
+          pure $ When [Case (Notify TrueObs) contract'] timeout contract
+      modifyInput (TransactionInput interval _) = pure $ TransactionInput interval [NormalInput INotify]
     simpleTransaction context modifyContract pure modifyInput
 
 
@@ -981,7 +997,7 @@ payingSubtractsFromAccount =
                            $ AM.unionWith (+)
                            <$> view preAccounts
                            <*> (AM.fromList . fmap (second negate) . AM.toList <$> view postAccounts)
-                       require "Only one balance changes" ((== 1) . length . AM.toList) delta
+                       require "Only one balance changes." ((== 1) . length . AM.toList) delta
                        require "Some balance decreases." (all (> 0) . AM.elems) delta
   }
 
@@ -1000,8 +1016,27 @@ depositAddsToAccount =
                            $ AM.unionWith (+)
                            <$> view postAccounts
                            <*> (AM.fromList . fmap (second negate) . AM.toList <$> view preAccounts)
-                       require "Only one balance changes" ((== 1) . length . AM.toList) delta
+                       require "Only one balance changes." ((== 1) . length . AM.toList) delta
                        require "Some balance increases." (all (> 0) . AM.elems) delta
+  }
+
+
+-- | Test that deposits add value to internal accounts.
+notifyContinues :: TransactionTest
+notifyContinues =
+  def
+  {
+    name           = "Notify continues as expected"
+  , allowShrinkage = False
+  , generator      = simpleNotify
+  , postcondition  = do
+                       let
+                         check (When [Case (Notify TrueObs) contract] _ _) contract' =
+                           require "Incorrect continuation." (== contract) contract'
+                         check _ _ = throwError "Test setup failed."
+                       pre <- view preContract
+                       post <- view postContract
+                       check pre post
   }
 
 
@@ -1024,4 +1059,5 @@ tests =
     , anyInput
     , payingSubtractsFromAccount
     , depositAddsToAccount
+    , notifyContinues
     ]
