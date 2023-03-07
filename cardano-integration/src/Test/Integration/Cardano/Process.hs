@@ -1,5 +1,7 @@
 module Test.Integration.Cardano.Process
-  ( execCli
+  ( exec
+  , exec'
+  , execCli
   , execCli'
   , execCli_
   ) where

@@ -7,7 +7,7 @@
 module Network.Protocol.Connection
   where
 
-import Control.Applicative ((<|>))
+import Control.Applicative (Alternative(empty), (<|>))
 import Control.Concurrent.STM (STM, TQueue, atomically, newTQueue, readTQueue, writeTQueue)
 import Control.Exception (SomeException)
 import Control.Monad.Base (MonadBase, liftBase)
@@ -55,8 +55,11 @@ newtype ConnectionSource ps server m = ConnectionSource
   { acceptConnector :: STM (Connector ps 'AsServer server m)
   }
 
-mergeConnectionSource :: ConnectionSource ps server m -> ConnectionSource ps server m -> ConnectionSource ps server m
-mergeConnectionSource (ConnectionSource source1) (ConnectionSource source2) = ConnectionSource $ source1 <|> source2
+instance Semigroup (ConnectionSource ps server m) where
+  (ConnectionSource source1) <> (ConnectionSource source2) = ConnectionSource $ source1 <|> source2
+
+instance Monoid (ConnectionSource ps server m) where
+  mempty = ConnectionSource empty
 
 data SomeConnectionSource server m =
   forall ps. BinaryMessage ps => SomeConnectionSource (ConnectionSource ps server m)
