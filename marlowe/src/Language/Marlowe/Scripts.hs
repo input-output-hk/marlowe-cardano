@@ -215,7 +215,7 @@ mkMarloweValidator
 
     -- Check that the required signatures and role tokens are present.
     -- [Marlowe-Cardano Specification: "Constraint 14. Inputs authorized".]
-    let inputsOk = validateInputs inputContents
+    let inputsOk = allInputsAreAuthorized inputContents
 
     -- [Marlowe-Cardano Specification: "Constraint 5. Input value from script".]
     -- [Marlowe-Cardano Specification: "Constraint 13. Positive balances".]
@@ -405,8 +405,8 @@ mkMarloweValidator
     marloweTxInputToInput (Input input) = NormalInput input
 
     -- Check that inputs are authorized.
-    validateInputs :: [InputContent] -> Bool
-    validateInputs = all validateInputWitness
+    allInputsAreAuthorized :: [InputContent] -> Bool
+    allInputsAreAuthorized = all validateInputWitness
       where
         validateInputWitness :: InputContent -> Bool
         validateInputWitness input =
