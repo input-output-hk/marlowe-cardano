@@ -11,7 +11,9 @@ import Data.Foldable (for_)
 import Data.Functor (void)
 import Data.Map (Map)
 import qualified Data.Map as Map
-import Data.Maybe (fromJust)
+import Data.Maybe (fromJust, mapMaybe)
+import Data.Set (Set)
+import qualified Data.Set as Set
 import Language.Marlowe.Protocol.Query.Client
   ( MarloweQueryClient
   , getContractHeaders
@@ -23,7 +25,8 @@ import Language.Marlowe.Protocol.Query.Client
   )
 import Language.Marlowe.Protocol.Query.Types
 import Language.Marlowe.Runtime.Cardano.Api (fromCardanoTxId)
-import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, TransactionMetadata(..), TxId, TxOutRef(..))
+import Language.Marlowe.Runtime.ChainSync.Api
+  (AssetId(..), BlockHeader, PolicyId, TransactionMetadata(..), TxId, TxOutRef(..))
 import Language.Marlowe.Runtime.Client (runMarloweQueryClient)
 import Language.Marlowe.Runtime.Core.Api
   (ContractId(..), MarloweVersion(..), MarloweVersionTag(..), Payout(..), TransactionScriptOutput(..))
@@ -191,14 +194,116 @@ getTransactionSpec = describe "getTransaction" do
 
 getWithdrawalsSpec :: SpecWith MarloweQueryTestData
 getWithdrawalsSpec = describe "getWithdrawals" do
-  for_ (Unknown : (Known <$> allContractNos)) \contractNo -> do
-    it (show contractNo) $ runMarloweQueryIntegrationTest \testData -> do
-      let
-        expected = case contractNo of
-          Unknown -> Nothing
-          Known contractNo' -> Just $ contractNoToWithdrawals testData contractNo'
-      actual <- getWithdrawals $ contractNoToContractId testData contractNo
-      liftIO $ actual `shouldBe` expected
+  let
+    withdrawalNoToInt contractNos
+      | Set.null contractNos = \case
+          Withdrawal1 -> Just @Int 0
+          Withdrawal2 -> Just @Int 1
+      | otherwise = \no -> lookup no
+          $ flip zip [0..]
+          $ filter (applyRoleCurrencyFilter contractNos) allWithdrawalNos
+
+    allRanges :: [Range (WithUnknown WithdrawalNo)]
+    allRanges = do
+      rangeStart <- Nothing : Just Unknown : (Just . Known <$> allWithdrawalNos)
+      rangeOffset <- [-1..3]
+      rangeLimit <- [-1..3]
+      rangeDirection <- [Ascending, Descending]
+      pure Range{..}
+
+    withdrawalNoToWithdrawal :: MarloweQueryTestData -> WithdrawalNo -> Withdrawal
+    withdrawalNoToWithdrawal MarloweQueryTestData{..} withdrawalNo = Withdrawal
+      { block
+      , withdrawnPayouts
+      , withdrawalTx = fromCardanoTxId $ getTxId txBody
+      }
+      where
+        ((txBody, block), withdrawnPayouts) = case withdrawalNo of
+          Withdrawal1 ->
+            ( contract1Step5
+            , case inputsAppliedToTransaction (returnDepositBlock contract1Step4) (returnDeposited contract1Step4) of
+                Core.Transaction{output=Core.TransactionOutput{payouts}} -> flip Map.mapWithKey payouts \payout Payout{..} -> case datum of
+                  AssetId{..} -> PayoutRef
+                    { contractId = standardContractId contract1
+                    , payout
+                    , rolesCurrency = policyId
+                    , role = tokenName
+                    }
+            )
+          Withdrawal2 ->
+            ( contract2Step5
+            , case inputsAppliedToTransaction (returnDepositBlock contract2Step4) (returnDeposited contract2Step4) of
+                Core.Transaction{output=Core.TransactionOutput{payouts}} -> flip Map.mapWithKey payouts \payout Payout{..} -> case datum of
+                  AssetId{..} -> PayoutRef
+                    { contractId = standardContractId contract2
+                    , payout
+                    , rolesCurrency = policyId
+                    , role = tokenName
+                    }
+
+            )
+
+    getNext :: Set ContractNo -> Order -> WithdrawalNo -> Maybe WithdrawalNo
+    getNext contractNos Ascending = \case
+      Withdrawal1 -> Withdrawal2 <$ withdrawalNoToInt contractNos Withdrawal2
+      Withdrawal2 -> Nothing
+    getNext contractNos Descending = \case
+      Withdrawal1 -> Nothing
+      Withdrawal2 -> Withdrawal1 <$ withdrawalNoToInt contractNos Withdrawal1
+
+    applyRoleCurrencyFilter :: Set ContractNo -> WithdrawalNo -> Bool
+    applyRoleCurrencyFilter contractNos
+      | Set.null contractNos = const True
+      | otherwise = \case
+          Withdrawal1 -> Set.member Contract1 contractNos
+          Withdrawal2 -> Set.member Contract2 contractNos
+
+    expectedPage :: Set ContractNo -> Range (WithUnknown WithdrawalNo) -> Maybe (Page WithdrawalNo WithdrawalNo)
+    expectedPage contractNos Range{..}
+      | rangeLimit <= 0 || rangeOffset < 0 = Nothing
+      | otherwise = case rangeStart of
+        Just Unknown -> Nothing
+        Just (Known withdrawalNo) -> do
+          withdrawalPos <- withdrawalNoToInt contractNos withdrawalNo
+          maxPos <- maximum $ withdrawalNoToInt contractNos <$> allWithdrawalNos
+          expectedPage contractNos Range
+            { rangeStart = Nothing
+            , rangeOffset = rangeOffset + case rangeDirection of
+                Ascending -> withdrawalPos
+                Descending -> maxPos - withdrawalPos
+            , ..
+            }
+        Nothing -> do
+          let
+            items = take rangeLimit $ drop rangeOffset $ filter (applyRoleCurrencyFilter contractNos) case rangeDirection of
+              Ascending -> allWithdrawalNos
+              Descending -> reverse allWithdrawalNos
+            nextRange = case (reverse items, rangeDirection) of
+              ([], _) -> Nothing
+              (lastItem : _, _) -> do
+                nextItem <- getNext contractNos rangeDirection lastItem
+                Just Range
+                  { rangeStart = Just nextItem
+                  , rangeOffset = 0
+                  , ..
+                  }
+            totalCount = length $ mapMaybe (withdrawalNoToInt contractNos) allWithdrawalNos
+          pure Page{..}
+
+  for_ allRanges \range -> do
+    for_ (Set.toList $ Set.powerSet $ Set.fromList allContractNos) \roleCurrencies -> do
+      let expectedSymbolic = expectedPage roleCurrencies range
+      it (show (roleCurrencies, range) <> " => " <> show expectedSymbolic) $ runMarloweQueryIntegrationTest \testData -> do
+        actual <- getWithdrawals (WithdrawalFilter $ Set.map (contractNoToRoleCurrency testData) roleCurrencies) $ withdrawalNoToWithdrawalId testData <$> range
+        let
+          expectedConcrete = fmap
+            (bimap (withdrawalNoToWithdrawalId testData . Known) (withdrawalNoToWithdrawal testData))
+            expectedSymbolic
+        liftIO $ actual `shouldBe` expectedConcrete
+
+contractNoToRoleCurrency :: MarloweQueryTestData -> ContractNo -> PolicyId
+contractNoToRoleCurrency testData contractNo = case contractNoToContractCreated testData contractNo of
+  ContractCreated{..} -> rolesCurrency
 
 getWithdrawalSpec :: SpecWith MarloweQueryTestData
 getWithdrawalSpec = describe "getWithdrawal" do
@@ -233,9 +338,11 @@ setup runSpec = withLocalMarloweRuntime $ runIntegrationTest do
   contract2Step2 <- chooseGimmeTheMoney contract2Step1
   contract2Step3 <- sendNotify contract2Step2
   contract2Step4 <- makeReturnDeposit contract2Step3
+  contract2Step5 <- withdrawPartyAFunds contract2Step4
   contract3Step1 <- makeInitialDeposit contract3
   contract3Step2 <- chooseGimmeTheMoney contract3Step1
   contract3Step3 <- sendNotify contract3Step2
+  contract3Step4 <- makeReturnDeposit contract3Step3
   liftIO $ runSpec MarloweQueryTestData{..}
 
 data MarloweQueryTestData = MarloweQueryTestData
@@ -253,10 +360,12 @@ data MarloweQueryTestData = MarloweQueryTestData
   , contract2Step2 :: StandardContractChoiceMade 'V1
   , contract2Step3 :: StandardContractNotified 'V1
   , contract2Step4 :: StandardContractClosed 'V1
+  , contract2Step5 :: (TxBody BabbageEra, BlockHeader)
   , contract3 :: StandardContractInit 'V1
   , contract3Step1 :: StandardContractFundsDeposited 'V1
   , contract3Step2 :: StandardContractChoiceMade 'V1
   , contract3Step3 :: StandardContractNotified 'V1
+  , contract3Step4 :: StandardContractClosed 'V1
   , contract4 :: StandardContractInit 'V1
   }
 
@@ -268,6 +377,11 @@ data ContractNo
   | Contract2
   | Contract3
   | Contract4
+  deriving (Show, Eq, Ord, Enum, Bounded)
+
+data WithdrawalNo
+  = Withdrawal1
+  | Withdrawal2
   deriving (Show, Eq, Ord, Enum, Bounded)
 
 data TxNo
@@ -282,10 +396,14 @@ data TxNo
   | Contract3Step1
   | Contract3Step2
   | Contract3Step3
+  | Contract3Step4
   deriving (Show, Eq, Ord, Enum, Bounded)
 
 allContractNos :: [ContractNo]
 allContractNos = [minBound..maxBound]
+
+allWithdrawalNos :: [WithdrawalNo]
+allWithdrawalNos = [minBound..maxBound]
 
 allTxNos :: [TxNo]
 allTxNos = [minBound..maxBound]
@@ -297,6 +415,12 @@ contractNoToContractId MarloweQueryTestData{..} = \case
   Known Contract2 -> standardContractId contract2
   Known Contract3 -> standardContractId contract3
   Known Contract4 -> standardContractId contract4
+
+withdrawalNoToWithdrawalId :: MarloweQueryTestData -> WithUnknown WithdrawalNo -> TxId
+withdrawalNoToWithdrawalId MarloweQueryTestData{..} = \case
+  Unknown -> "0000000000000000000000000000000000000000000000000000000000000000"
+  Known Withdrawal1 -> fromCardanoTxId $ getTxId $ fst contract1Step5
+  Known Withdrawal2 -> fromCardanoTxId $ getTxId $ fst contract2Step5
 
 contractOrTxNoToTxId :: MarloweQueryTestData -> WithUnknown (Either ContractNo TxNo) -> TxId
 contractOrTxNoToTxId testData = \case
@@ -318,6 +442,7 @@ txNoToInputsApplied MarloweQueryTestData{..} = \case
   Contract3Step1 -> initialFundsDeposited contract3Step1
   Contract3Step2 -> gimmeTheMoneyChosen contract3Step2
   Contract3Step3 -> notified contract3Step3
+  Contract3Step4 -> returnDeposited contract3Step4
 
 txNoToInput :: MarloweQueryTestData -> TxNo -> TxOutRef
 txNoToInput MarloweQueryTestData{..} = \case
@@ -332,6 +457,7 @@ txNoToInput MarloweQueryTestData{..} = \case
   Contract3Step1 -> unContractId $ standardContractId contract3
   Contract3Step2 -> utxo $ fromJust $ output $ initialFundsDeposited contract3Step1
   Contract3Step3 -> utxo $ fromJust $ output $ gimmeTheMoneyChosen contract3Step2
+  Contract3Step4 -> utxo $ fromJust $ output $ notified contract3Step3
 
 txNoToConsumer :: MarloweQueryTestData -> TxNo -> Maybe TxId
 txNoToConsumer MarloweQueryTestData{..} = fmap inputsAppliedTxId . \case
@@ -345,7 +471,8 @@ txNoToConsumer MarloweQueryTestData{..} = fmap inputsAppliedTxId . \case
   Contract2Step4 -> Nothing
   Contract3Step1 -> Just $ gimmeTheMoneyChosen contract3Step2
   Contract3Step2 -> Just $ notified contract3Step3
-  Contract3Step3 -> Nothing
+  Contract3Step3 -> Just $ returnDeposited contract3Step4
+  Contract3Step4 -> Nothing
 
 txNoToBlockHeader :: MarloweQueryTestData -> TxNo -> BlockHeader
 txNoToBlockHeader MarloweQueryTestData{..} = \case
@@ -360,6 +487,7 @@ txNoToBlockHeader MarloweQueryTestData{..} = \case
   Contract3Step1 -> initialDepositBlock contract3Step1
   Contract3Step2 -> choiceBlock contract3Step2
   Contract3Step3 -> notifiedBlock contract3Step3
+  Contract3Step4 -> returnDepositBlock contract3Step4
 
 txNoToTxId :: MarloweQueryTestData -> TxNo -> TxId
 txNoToTxId testData = inputsAppliedTxId . txNoToInputsApplied testData
@@ -384,7 +512,7 @@ contractNoToLatestBlock :: MarloweQueryTestData -> ContractNo -> BlockHeader
 contractNoToLatestBlock MarloweQueryTestData{..} = \case
   Contract1 -> returnDepositBlock contract1Step4 -- note: _not_ `snd contract1Step5` (which is a withdrawal)
   Contract2 -> returnDepositBlock contract2Step4
-  Contract3 -> notifiedBlock contract3Step3
+  Contract3 -> returnDepositBlock contract3Step4
   Contract4 -> createdBlock contract4
 
 contractNoToLatestOutput :: MarloweQueryTestData -> ContractNo -> Maybe (TransactionScriptOutput 'V1)
@@ -392,7 +520,7 @@ contractNoToLatestOutput MarloweQueryTestData{..} = \case
   Contract1 -> Nothing
   Contract2 -> case returnDeposited contract2Step4 of
     InputsApplied{..} -> output
-  Contract3 -> case notified contract3Step3 of
+  Contract3 -> case returnDeposited contract3Step4 of
     InputsApplied{..} -> output
   Contract4 -> case contractCreated contract4 of
     ContractCreated{..} -> Just TransactionScriptOutput
@@ -405,9 +533,9 @@ contractNoToLatestOutput MarloweQueryTestData{..} = \case
 contractNoToUnclaimedPayouts :: MarloweQueryTestData -> ContractNo -> Map TxOutRef (Payout 'V1)
 contractNoToUnclaimedPayouts MarloweQueryTestData{..} =  \case
   Contract1 -> mempty
-  Contract2 -> case inputsAppliedToTransaction (returnDepositBlock contract2Step4) (returnDeposited contract2Step4) of
+  Contract2 -> mempty
+  Contract3 -> case inputsAppliedToTransaction (returnDepositBlock contract3Step4) (returnDeposited contract3Step4) of
     Core.Transaction{output=Core.TransactionOutput{payouts}} -> payouts
-  Contract3 -> mempty
   Contract4 -> mempty
 
 contractNoToTransactions :: MarloweQueryTestData -> ContractNo -> [Core.Transaction 'V1]
@@ -428,6 +556,7 @@ contractNoToTransactions MarloweQueryTestData{..} = \case
     [ inputsAppliedToTransaction (initialDepositBlock contract3Step1) (initialFundsDeposited contract3Step1)
     , inputsAppliedToTransaction (choiceBlock contract3Step2) (gimmeTheMoneyChosen contract3Step2)
     , inputsAppliedToTransaction (notifiedBlock contract3Step3) (notified contract3Step3)
+    , inputsAppliedToTransaction (returnDepositBlock contract3Step4) (returnDeposited contract3Step4)
     ]
   Contract4 -> mempty
 
@@ -448,7 +577,13 @@ contract1Step5Withdrawal MarloweQueryTestData{..} = Withdrawal
   { block = snd contract1Step5
   , withdrawnPayouts =
     case inputsAppliedToTransaction (returnDepositBlock contract1Step4) (returnDeposited contract1Step4) of
-      Core.Transaction{output=Core.TransactionOutput{payouts}} -> Map.keysSet payouts
+      Core.Transaction{output=Core.TransactionOutput{payouts}} -> flip Map.mapWithKey payouts \payout Payout{..} -> case datum of
+        AssetId{..} -> PayoutRef
+          { contractId = standardContractId contract1
+          , payout
+          , rolesCurrency = policyId
+          , role = tokenName
+          }
   , withdrawalTx = fromCardanoTxId $ getTxId $ fst contract1Step5
   }
 

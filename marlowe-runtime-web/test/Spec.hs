@@ -32,6 +32,12 @@ openAPISpec = validateEveryToJSONWithPatternChecker patternChecker (Proxy @Web.A
 patternChecker :: Pattern -> Text -> Bool
 patternChecker pat text = T.unpack text =~ T.unpack pat
 
+instance Arbitrary Web.WithdrawalHeader where
+  arbitrary = Web.WithdrawalHeader
+    <$> arbitrary
+    <*> arbitrary
+    <*> arbitrary
+
 instance Arbitrary Web.ContractHeader where
   arbitrary = Web.ContractHeader
     <$> arbitrary
@@ -67,6 +73,22 @@ instance Arbitrary Web.ContractState where
     <*> arbitrary
   shrink = genericShrink
 
+instance Arbitrary Web.PayoutRef where
+  arbitrary = Web.PayoutRef
+    <$> arbitrary
+    <*> arbitrary
+    <*> arbitrary
+    <*> arbitrary
+  shrink = genericShrink
+
+instance Arbitrary Web.Withdrawal where
+  arbitrary = Web.Withdrawal
+    <$> arbitrary
+    <*> arbitrary
+    <*> arbitrary
+    <*> arbitrary
+  shrink = genericShrink
+
 instance Arbitrary Web.Tx where
   arbitrary = Web.Tx
     <$> arbitrary
@@ -86,6 +108,9 @@ instance Arbitrary Web.Tx where
     <*> arbitrary
     <*> arbitrary
   shrink = genericShrink
+
+instance Arbitrary Web.PostWithdrawalsRequest where
+  arbitrary = Web.PostWithdrawalsRequest <$> arbitrary <*> arbitrary
 
 instance Arbitrary Web.PostContractsRequest where
   arbitrary = Web.PostContractsRequest
@@ -109,6 +134,10 @@ instance Arbitrary Web.PostTransactionsRequest where
 
 instance Arbitrary Web.CreateTxBody where
   arbitrary = Web.CreateTxBody <$> arbitrary <*> arbitrary
+  shrink = genericShrink
+
+instance Arbitrary Web.WithdrawTxBody where
+  arbitrary = Web.WithdrawTxBody <$> arbitrary <*> arbitrary
   shrink = genericShrink
 
 instance Arbitrary Web.ApplyInputsTxBody where

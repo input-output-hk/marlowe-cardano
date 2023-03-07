@@ -8,7 +8,7 @@
 module Language.Marlowe.Runtime.Web.Server.TxClient
   where
 
-import Cardano.Api (BabbageEra, Tx, getTxId)
+import Cardano.Api (BabbageEra, Tx, TxBody, getTxId)
 import Control.Concurrent.Async (concurrently_)
 import Control.Concurrent.Component
 import Control.Concurrent.STM
@@ -34,7 +34,7 @@ import Data.Time (UTCTime)
 import Data.Void (Void)
 import Language.Marlowe.Protocol.Client (MarloweClient(..))
 import Language.Marlowe.Runtime.Cardano.Api (fromCardanoTxId)
-import Language.Marlowe.Runtime.ChainSync.Api (Lovelace, StakeCredential, TransactionMetadata, TxId)
+import Language.Marlowe.Runtime.ChainSync.Api (Lovelace, StakeCredential, TokenName, TransactionMetadata, TxId)
 import Language.Marlowe.Runtime.Core.Api (Contract, ContractId, Inputs, MarloweVersion, MarloweVersionTag)
 import Language.Marlowe.Runtime.Transaction.Api
   ( ApplyInputsError
@@ -46,6 +46,7 @@ import Language.Marlowe.Runtime.Transaction.Api
   , SubmitError
   , SubmitStatus(..)
   , WalletAddresses
+  , WithdrawError
   )
 import Network.Protocol.Connection (SomeClientConnector)
 import Network.Protocol.Driver (runSomeConnector)
@@ -88,6 +89,14 @@ type ApplyInputs m
   -> Inputs v
   -> m (Either (ApplyInputsError v) (InputsApplied BabbageEra v))
 
+type Withdraw m
+   = forall v
+   . MarloweVersion v
+  -> WalletAddresses
+  -> ContractId
+  -> TokenName
+  -> m (Either (WithdrawError v) (TxBody BabbageEra))
+
 data TempTxStatus = Unsigned | Submitted
 
 -- Note that we hard-code 'IO' as the monad for
@@ -99,6 +108,8 @@ type Submit r m
   -> Tx BabbageEra
   -> m (Maybe SubmitError)
 
+newtype Withdrawn era (v :: MarloweVersionTag) = Withdrawn { unWithdrawn :: TxBody era }
+
 data TempTx (tx :: * -> MarloweVersionTag -> *) where
   TempTx :: MarloweVersion v -> TempTxStatus -> tx BabbageEra v -> TempTx tx
 
@@ -106,12 +117,16 @@ data TempTx (tx :: * -> MarloweVersionTag -> *) where
 data TxClient r = TxClient
   { createContract :: CreateContract IO
   , applyInputs :: ApplyInputs IO
+  , withdraw :: Withdraw IO
   , submitContract :: ContractId -> Submit r IO
   , submitTransaction :: ContractId -> TxId -> Submit r IO
+  , submitWithdrawal :: TxId -> Submit r IO
   , lookupTempContract :: ContractId -> STM (Maybe (TempTx ContractCreated))
   , getTempContracts :: STM [TempTx ContractCreated]
   , lookupTempTransaction :: ContractId -> TxId -> STM (Maybe (TempTx InputsApplied))
   , getTempTransactions :: ContractId -> STM [TempTx InputsApplied]
+  , lookupTempWithdrawal :: TxId -> STM (Maybe (TempTx Withdrawn))
+  , getTempWithdrawals :: STM [TempTx Withdrawn]
   }
 
 -- Basically a lens to the actual map of temp txs to modify within a structure.
@@ -130,6 +145,7 @@ txClient :: forall r. Component IO (TxClientDependencies r) (TxClient r)
 txClient = component \TxClientDependencies{..} -> do
   tempContracts <- newTVar mempty
   tempTransactions <- newTVar mempty
+  tempWithdrawals <- newTVar mempty
   submitQueue <- newTQueue
 
   let
@@ -208,12 +224,26 @@ txClient = component \TxClientDependencies{..} -> do
             $ modifyTVar tempTransactions
             $ Map.alter (Just . maybe (Map.singleton txId tempTx) (Map.insert txId tempTx)) contractId
         pure response
+    , withdraw = \version addresses contractId role -> do
+        response <- runSomeConnector connector
+          $ RunTxClient
+          $ liftCommand
+          $ Withdraw version addresses contractId role
+        for_ response \txBody-> atomically
+          $ modifyTVar tempWithdrawals
+          $ Map.insert (fromCardanoTxId $ getTxId txBody)
+          $ TempTx version Unsigned
+          $ Withdrawn txBody
+        pure response
     , submitContract = \contractId -> genericSubmit $ SomeTVarWithMapUpdate tempContracts ($ contractId)
     , submitTransaction = \contractId txId -> genericSubmit $ SomeTVarWithMapUpdate tempTransactions \update -> Map.update (Just . update txId) contractId
+    , submitWithdrawal = \txId -> genericSubmit $ SomeTVarWithMapUpdate tempWithdrawals ($ txId)
     , lookupTempContract = \contractId -> Map.lookup contractId <$> readTVar tempContracts
     , getTempContracts = fmap snd . Map.toAscList <$> readTVar tempContracts
     , lookupTempTransaction = \contractId txId -> (Map.lookup txId <=< Map.lookup contractId) <$> readTVar tempTransactions
     , getTempTransactions = \contractId -> fmap snd . foldMap Map.toList . Map.lookup contractId <$> readTVar tempTransactions
+    , lookupTempWithdrawal = \txId -> Map.lookup txId <$> readTVar tempWithdrawals
+    , getTempWithdrawals = fmap snd . Map.toAscList <$> readTVar tempWithdrawals
     })
 
 toSubmitted :: TempTx tx -> TempTx tx

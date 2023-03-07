@@ -54,8 +54,8 @@ request req = ClientRequest req $ pure . pure
 getWithdrawal :: Applicative m => TxId -> MarloweQueryClient m (Maybe Withdrawal)
 getWithdrawal = request . ReqWithdrawal
 
-getWithdrawals :: Applicative m => ContractId -> MarloweQueryClient m (Maybe [Withdrawal])
-getWithdrawals = request . ReqWithdrawals
+getWithdrawals :: Applicative m => WithdrawalFilter -> Range TxId -> MarloweQueryClient m (Maybe (Page TxId Withdrawal))
+getWithdrawals = fmap request . ReqWithdrawals
 
 getContractHeaders :: Applicative m => Range ContractId -> MarloweQueryClient m (Maybe (Page ContractId ContractHeader))
 getContractHeaders = request . ReqContractHeaders

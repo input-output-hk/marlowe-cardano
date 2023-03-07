@@ -20,6 +20,7 @@ module Spec.Marlowe.Plutus
 import Test.Tasty (TestTree, testGroup)
 
 import qualified Spec.Marlowe.Plutus.AssocMap (tests)
+import qualified Spec.Marlowe.Plutus.MList (tests)
 import qualified Spec.Marlowe.Plutus.Prelude (tests)
 import qualified Spec.Marlowe.Plutus.ScriptContext (tests)
 import qualified Spec.Marlowe.Plutus.Specification (tests)
@@ -33,6 +34,7 @@ tests =
     [
       Spec.Marlowe.Plutus.Prelude.tests
     , Spec.Marlowe.Plutus.AssocMap.tests
+    , Spec.Marlowe.Plutus.MList.tests
     , Spec.Marlowe.Plutus.Value.tests
     , Spec.Marlowe.Plutus.ScriptContext.tests
     , Spec.Marlowe.Plutus.Specification.tests

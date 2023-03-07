@@ -1,6 +1,6 @@
 # Test of a Zero-Coupon Bond
 
-[This zero-coupon bond](../../src/Language/Marlowe/CLI/Examples/ZeroCouponBond.hs) has one party borrow and another pay back with interest. It uses role tokens.
+[This zero-coupon bond](https://github.com/input-output-hk/marlowe-cardano/blob/main/marlowe-contracts/src/Marlowe/Contracts/ZeroCouponBond.hs) has one party borrow and another pay back with interest. It uses role tokens.
 
 ## Prerequisites
 

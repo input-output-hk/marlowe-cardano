@@ -32,4 +32,4 @@ databaseQueries = DatabaseQueries
   (T.transaction T.Serializable T.Read . getTransaction)
   (T.transaction T.Serializable T.Read . getTransactions)
   (T.transaction T.Serializable T.Read . getWithdrawal)
-  (T.transaction T.Serializable T.Read . getWithdrawals)
+  (fmap (T.transaction T.Serializable T.Read) . getWithdrawals)
