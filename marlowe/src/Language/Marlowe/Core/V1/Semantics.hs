@@ -722,6 +722,8 @@ applyCases env state input (headCase : tailCase) =
         maybeContinuation = getContinuation input headCase :: Maybe Contract
     in case applyAction env state inputContent action of
          AppliedAction warning newState ->
+           -- Note that this differs from Isabelle semantics because
+           -- the Cardano semantics includes merkleization.
            case maybeContinuation of
              Just continuation -> Applied warning newState continuation
              Nothing           -> ApplyHashMismatch
