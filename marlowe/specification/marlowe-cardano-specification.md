@@ -116,6 +116,8 @@ Provided that the initial state of the Marlowe contract does not contain duplica
 
 A contract can be represented as a tree of continuations ("sub-contracts") where each vertex is a contract and each edge follows either an `InputContent` made by a participant or a timeout. A `When` contract includes terms that are either (1) a `Case` which contains the `Action` that matches a particular `InputContent` via `NormalInput` and that explicitly includes the `Contract` continuation or (2) a `MerkleizedCase` which contains the `Action` that matches a particular `InputContent` via `MerkleizedInput` and that implicitly includes the continuation by reference to its Merkle hash. In the latter case `MerkleizedInput` includes both the Merkle hash of the continuation and the continuation `Contract` itself. The Plutus code must verify that the hash in the contract matches the hash in the input before it proceeds to use the continuation that was provided as input.
 
+Merkleization enables large contracts to be succinctly represented on chain: instead of storing gigabytes of data representing a huge contract, only the hash of that contract need be represented on the chain. For example, a contract `When [Case action timeout continuation] contract'` that validates input `TransactionInput interval [NormalInput input]` may be "merkleized" to a contract `When [MerkleizedCase action hash] contract'` that will validate the input `TransactionInput interval [MerkleizedInput input hash contract]` provided that `DatumHash hash ≡ datumHash . Datum . toBuiltinData $ contract`. When a contract is merkelized the information `(hash, contract)` is stored off chain and provide to the Marlowe validator if needed for input. The Cardano node computes the hash and provides the `(hash, contract)` information in the script context.
+
 The Isabelle semantics do not include merkleization of Marlowe contracts, but the Haskell implementation does.
 
 
@@ -164,7 +166,7 @@ Just continuation = fromBuiltinData =<< lookup hash (txInfoData $ scriptContextT
 
 This specification relies on the following properties of `Plutus.V1.Ledger.Value` in the `plutus-ledger-api` package:
 1. `instance Monoid Value`, where `mempty` is zero value for all tokens and `mappend` sums the amounts of corresponding token types.
-2. `leq` is a partial ordering requiring that quantity of each token in the first operand is less than or equal to quanity of the corresponding token in the second operand, where a missing token in one operand represents a zero quantity.
+2. `leq` is a partial ordering requiring that quantity of each token in the first operand is less than or equal to quantity of the corresponding token in the second operand, where a missing token in one operand represents a zero quantity.
 
 
 ### Relationship between Marlowe Validator and Semantics
