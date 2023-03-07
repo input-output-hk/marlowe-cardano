@@ -255,7 +255,7 @@ mkMarloweValidator
 
                 checkContinuation = case txOutContract of
                     -- [Marlowe-Cardano Specification: "Constraint 4. No output to script on close".]
-                    Close -> traceIfFalse "c" checkScriptOutputAny
+                    Close -> traceIfFalse "c" hasNoOutputToOwnScript
                     _ -> let
                         totalIncome = foldMap collectDeposits inputContents
                         totalPayouts = foldMap snd payoutsByParty
@@ -368,7 +368,7 @@ mkMarloweValidator
     checkOwnOutputConstraint ocDatum ocValue =
         let hsh = findDatumHash' ocDatum
         in traceIfFalse "d" -- "Output constraint"
-        $ checkScriptOutput ownAddress hsh ocValue getContinuingOutput
+        $ checkScriptOutput (==) ownAddress hsh ocValue getContinuingOutput
 
     getContinuingOutput :: TxOut
     getContinuingOutput = case filter (\TxOut{txOutAddress} -> ownAddress == txOutAddress) allOutputs of
@@ -376,20 +376,14 @@ mkMarloweValidator
         _     -> traceError "o" -- No continuation or multiple Marlowe contract outputs is forbidden.
 
     -- Check that address, value, and datum match the specified.
-    checkScriptOutput :: Ledger.Address -> Maybe DatumHash -> Val.Value -> TxOut -> Bool
-    checkScriptOutput addr hsh value TxOut{txOutAddress, txOutValue, txOutDatum=OutputDatumHash svh} =
-                    txOutValue == value && hsh == Just svh && txOutAddress == addr
-    checkScriptOutput _ _ _ _ = False
-
-    -- Check that address and datum match the specified, and that value is at least that required.
-    checkScriptOutputRelaxed :: Ledger.Address -> Maybe DatumHash -> Val.Value -> TxOut -> Bool
-    checkScriptOutputRelaxed addr hsh value TxOut{txOutAddress, txOutValue, txOutDatum=OutputDatumHash svh} =
-                    txOutValue `Val.geq` value && hsh == Just svh && txOutAddress == addr
-    checkScriptOutputRelaxed _ _ _ _ = False
+    checkScriptOutput :: (Val.Value -> Val.Value -> Bool) -> Ledger.Address -> Maybe DatumHash -> Val.Value -> TxOut -> Bool
+    checkScriptOutput comparison addr hsh value TxOut{txOutAddress, txOutValue, txOutDatum=OutputDatumHash svh} =
+                    txOutValue `comparison` value && hsh == Just svh && txOutAddress == addr
+    checkScriptOutput _ _ _ _ _ = False
 
     -- Check for any output to the script address.
-    checkScriptOutputAny :: Bool
-    checkScriptOutputAny = all ((/= ownAddress) . txOutAddress) allOutputs
+    hasNoOutputToOwnScript :: Bool
+    hasNoOutputToOwnScript = all ((/= ownAddress) . txOutAddress) allOutputs
 
     -- All of the script outputs.
     allOutputs :: [TxOut]
@@ -453,7 +447,7 @@ mkMarloweValidator
                 hsh = findDatumHash' (rolesCurrency, role)
                 addr = Address.scriptHashAddress rolePayoutValidatorHash
                 -- Some output must have the correct value and datum to the role-payout address.
-                in traceIfFalse "r" $ any (checkScriptOutputRelaxed addr hsh value) allOutputs
+                in traceIfFalse "r" $ any (checkScriptOutput Val.geq addr hsh value) allOutputs
 
     -- The key for the address must have signed.
     txSignedByAddress :: Ledger.Address -> Bool
