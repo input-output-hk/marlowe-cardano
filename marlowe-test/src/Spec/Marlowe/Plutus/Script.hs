@@ -80,7 +80,7 @@ evaluateSemantics :: Data                    -- ^ The datum.
 evaluateSemantics datum redeemer context =
   case evaluationContext of
     Left message -> This message
-    Right ec     -> case evaluateScriptCounting PlutusV2 (ProtocolVersion 7 0) Verbose ec serialiseSemanticsValidator [datum, redeemer, context] of
+    Right ec     -> case evaluateScriptCounting PlutusV2 (ProtocolVersion 8 0) Verbose ec serialiseSemanticsValidator [datum, redeemer, context] of
                       (logOutput, Right ex@ExBudget{..}) -> if enforceBudget && (exBudgetCPU > 10_000_000_000 || exBudgetMemory > 14_000_000)
                                                               then These ("Exceeded Plutus budget: " <> show ex) logOutput
                                                               else That logOutput
@@ -331,12 +331,12 @@ costModel =
     , ("unListData-memory-arguments", 32)
     , ("unMapData-cpu-arguments", 38314)
     , ("unMapData-memory-arguments", 32)
-    , ("verifyEcdsaSecp256k1Signature-cpu-arguments", 20000000000)
-    , ("verifyEcdsaSecp256k1Signature-memory-arguments", 20000000000)
-    , ("verifyEd25519Signature-cpu-arguments-intercept", 9462713)
-    , ("verifyEd25519Signature-cpu-arguments-slope", 1021)
+    , ("verifyEcdsaSecp256k1Signature-cpu-arguments", 35892428)
+    , ("verifyEcdsaSecp256k1Signature-memory-arguments", 10)
+    , ("verifyEd25519Signature-cpu-arguments-intercept", 57996947)
+    , ("verifyEd25519Signature-cpu-arguments-slope", 18975)
     , ("verifyEd25519Signature-memory-arguments", 10)
-    , ("verifySchnorrSecp256k1Signature-cpu-arguments-intercept", 20000000000)
-    , ("verifySchnorrSecp256k1Signature-cpu-arguments-slope", 0)
-    , ("verifySchnorrSecp256k1Signature-memory-arguments", 20000000000)
+    , ("verifySchnorrSecp256k1Signature-cpu-arguments-intercept", 38887044)
+    , ("verifySchnorrSecp256k1Signature-cpu-arguments-slope", 32947)
+    , ("verifySchnorrSecp256k1Signature-memory-arguments", 10)
     ]
