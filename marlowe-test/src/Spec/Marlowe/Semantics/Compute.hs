@@ -50,7 +50,7 @@ import Language.Marlowe.Core.V1.Semantics.Types
   ( AccountId
   , Accounts
   , Action(Choice, Deposit, Notify)
-  , Case
+  , Case(Case)
   , ChoiceId
   , ChosenNum
   , Contract(..)
@@ -71,7 +71,8 @@ import Language.Marlowe.Core.V1.Semantics.Types
 import Language.Marlowe.FindInputs (getAllInputs)
 import Plutus.V2.Ledger.Api (CurrencySymbol, POSIXTime(..), TokenName)
 import Spec.Marlowe.Semantics.Arbitrary
-  ( SemiArbitrary(semiArbitrary)
+  ( Context
+  , SemiArbitrary(semiArbitrary)
   , arbitraryContractWeighted
   , arbitraryGoldenTransaction
   , arbitraryPositiveInteger
@@ -198,7 +199,29 @@ arbitraryValid =
     frequency [(1, randomContext), (2, goldenContext)]
 
 
--- | generate a simple payment.
+-- | Generate a simple valid transaction.
+simpleTransaction
+  :: Context
+  -> (TimeInterval -> Contract -> Gen Contract)
+  -> (State -> Gen State)
+  -> (TransactionInput -> Gen TransactionInput)
+  -> Gen MarloweContext
+simpleTransaction context modifyContract modifyState modifyInput =
+  do
+    mcState <- modifyState =<< semiArbitrary context
+    intervalStart <- (getPOSIXTime (minTime mcState) +) <$> arbitraryPositiveInteger
+    intervalEnd <- (intervalStart +) <$> arbitraryPositiveInteger
+    let
+      interval = (POSIXTime intervalStart, POSIXTime intervalEnd)
+    timeout <- (intervalEnd +) <$> arbitraryPositiveInteger
+    mcContract <- modifyContract interval . When [] (POSIXTime timeout) =<< semiArbitrary context
+    mcInput <- modifyInput $ TransactionInput interval []
+    let
+      mcOutput = computeTransaction mcInput mcState mcContract
+    pure MarloweContext{..}
+
+
+-- | Generate a simple payment.
 simplePayment :: Gen MarloweContext
 simplePayment =
   do
@@ -208,24 +231,35 @@ simplePayment =
     account <- semiArbitrary context
     payee <- semiArbitrary context
     token <- semiArbitrary context
-    state <- semiArbitrary context
-    accounts' <-
-      fmap AM.fromList . shuffle . AM.toList
-        . AM.insert (account, token) balance
-        . AM.delete (account, token)
-        $ accounts state
-    intervalStart <- (getPOSIXTime (minTime state) +) <$> arbitraryPositiveInteger
-    intervalEnd <- (intervalStart +) <$> arbitraryPositiveInteger
-    timeout <- (intervalEnd +) <$> arbitraryPositiveInteger
-    mcContract <-
-        Pay account (Party payee) token (Constant payment)
-          . When [] (POSIXTime timeout)
-          <$> semiArbitrary context
     let
-      mcState = state {accounts = accounts'}
-      mcInput = TransactionInput (POSIXTime intervalStart, POSIXTime intervalEnd) []
-      mcOutput = computeTransaction mcInput mcState mcContract
-    pure MarloweContext{..}
+      modifyContract _ contract = pure $ Pay account (Party payee) token (Constant payment) contract
+      modifyState state =
+        do
+          accounts' <-
+            fmap AM.fromList . shuffle . AM.toList
+              . AM.insert (account, token) balance
+              . AM.delete (account, token)
+              $ accounts state
+          pure state {accounts = accounts'}
+    simpleTransaction context modifyContract modifyState pure
+
+
+-- | Generate a simple deposit.
+simpleDeposit :: Gen MarloweContext
+simpleDeposit =
+  do
+    context <- arbitrary
+    deposit <- arbitraryPositiveInteger
+    account <- semiArbitrary context
+    payee <- semiArbitrary context
+    token <- semiArbitrary context
+    let
+      modifyContract (_, POSIXTime intervalEnd) contract =
+        pure
+          $ When [Case (Deposit account payee token $ Constant deposit) contract]
+            (POSIXTime $ intervalEnd + 1) contract
+      modifyInput (TransactionInput interval _) = pure $ TransactionInput interval [NormalInput $ IDeposit account payee token deposit]
+    simpleTransaction context modifyContract pure modifyInput
 
 
 -- | Recompute the output of a Marlowe transaction in an transaction context.
@@ -952,6 +986,25 @@ payingSubtractsFromAccount =
   }
 
 
+-- | Test that deposits add value to internal accounts.
+depositAddsToAccount :: TransactionTest
+depositAddsToAccount =
+  def
+  {
+    name           = "Deposit adds to account"
+  , allowShrinkage = False
+  , generator      = simpleDeposit
+  , postcondition  = do
+                       delta <-
+                         fmap (AM.filter (/= 0))
+                           $ AM.unionWith (+)
+                           <$> view postAccounts
+                           <*> (AM.fromList . fmap (second negate) . AM.toList <$> view preAccounts)
+                       require "Only one balance changes" ((== 1) . length . AM.toList) delta
+                       require "Some balance increases." (all (> 0) . AM.elems) delta
+  }
+
+
 -- | Run the tests.
 tests :: TestTree
 tests =
@@ -970,4 +1023,5 @@ tests =
     , assertWarns
     , anyInput
     , payingSubtractsFromAccount
+    , depositAddsToAccount
     ]
