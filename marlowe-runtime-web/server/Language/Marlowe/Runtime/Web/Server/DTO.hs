@@ -555,8 +555,8 @@ instance
   ) => HasTextEnvelope (ShelleyTxWitness era) where
   textEnvelopeType _ = do
     "ShelleyTxWitness " <> case shelleyBasedEra :: ShelleyBasedEra era of
-       ShelleyBasedEraAlonzo -> "Alonzo"
-       ShelleyBasedEraBabbage -> "Babbage"
+       ShelleyBasedEraAlonzo -> "AlonzoEra"
+       ShelleyBasedEraBabbage -> "BabbageEra"
 
 instance HasDTO (ShelleyTxWitness era) where
   type DTO (ShelleyTxWitness era) = Web.TextEnvelope

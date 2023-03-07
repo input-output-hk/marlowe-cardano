@@ -15,9 +15,8 @@ import Cardano.Ledger.Alonzo.TxWitness (TxWitness(TxWitness))
 import Control.Monad (unless)
 import Control.Monad.IO.Class (liftIO)
 import Data.Aeson (Value(Null))
-import Data.Foldable (traverse_)
-import qualified Data.Map as Map
 import Data.Foldable (for_, traverse_)
+import qualified Data.Map as Map
 import Data.Maybe (fromMaybe)
 import qualified Data.Set as Set
 import Language.Marlowe.Protocol.Query.Types (Page(..))
@@ -36,9 +35,11 @@ import Language.Marlowe.Runtime.Web.Server.REST.ApiError
 import qualified Language.Marlowe.Runtime.Web.Server.REST.ApiError as ApiError
 import Language.Marlowe.Runtime.Web.Server.SyncClient (LoadTxError(..))
 import Language.Marlowe.Runtime.Web.Server.TxClient (TempTx(TempTx), TempTxStatus(..), TxClientSelector)
+import Language.Marlowe.Runtime.Web.Server.Util (makeSignedTxWithWitnessKeys)
 import Observe.Event.DSL (FieldSpec(..), SelectorField(Inject), SelectorSpec(..))
 import Observe.Event.Explicit
-  ( EventBackend
+  ( Event
+  , EventBackend
   , addField
   , hoistEventBackend
   , injectSelector
@@ -47,11 +48,6 @@ import Observe.Event.Explicit
   , setAncestorEventBackend
   , withEvent
   )
-import Language.Marlowe.Runtime.Web.Server.TxClient (TempTx(TempTx), TempTxStatus(..))
-import Language.Marlowe.Runtime.Web.Server.Util (makeSignedTxWithWitnessKeys)
-import Observe.Event (Event, EventBackend, addField, reference, withEvent)
-import Observe.Event.BackendModification (setAncestor)
-import Observe.Event.DSL (FieldSpec(..), SelectorSpec(..))
 import Observe.Event.Render.JSON.DSL.Compile (compile)
 import Observe.Event.Syntax ((≔))
 import Servant
@@ -126,7 +122,7 @@ get eb contractId ranges = withEvent (hoistEventBackend liftIO eb) Get \ev -> do
       addHeader totalCount . fmap ListObject <$> returnRange range (IncludeLink (Proxy @"transaction") <$> headers')
 
 postCreateTxBody
-  :: Event (AppM r) r' s PostField
+  :: Event (AppM r) r' PostField
   -> TxOutRef
   -> PostTransactionsRequest
   -> Address
@@ -162,7 +158,7 @@ postCreateTxBodyResponse
   -> Maybe (CommaList Address)
   -> Maybe (CommaList TxOutRef)
   -> AppM r (PostTransactionsResponse CardanoTxBody)
-postCreateTxBodyResponse eb contractId req changeAddressDTO mAddresses mCollateralUtxos = withEvent eb Post \ev -> do
+postCreateTxBodyResponse eb contractId req changeAddressDTO mAddresses mCollateralUtxos = withEvent (hoistEventBackend liftIO eb) Post \ev -> do
   txBody <- postCreateTxBody ev contractId req changeAddressDTO mAddresses mCollateralUtxos
   let txBody' = toDTO txBody
   let txId = toDTO $ fromCardanoTxId $ getTxId txBody
@@ -178,7 +174,7 @@ postCreateTxResponse
   -> Maybe (CommaList Address)
   -> Maybe (CommaList TxOutRef)
   -> AppM r (PostTransactionsResponse CardanoTx)
-postCreateTxResponse eb contractId req changeAddressDTO mAddresses mCollateralUtxos = withEvent eb Post \ev -> do
+postCreateTxResponse eb contractId req changeAddressDTO mAddresses mCollateralUtxos = withEvent (hoistEventBackend liftIO eb) Post \ev -> do
   txBody <- postCreateTxBody ev contractId req changeAddressDTO mAddresses mCollateralUtxos
   let txId = toDTO $ fromCardanoTxId $ getTxId txBody
   let tx = makeSignedTransaction [] txBody
@@ -186,7 +182,6 @@ postCreateTxResponse eb contractId req changeAddressDTO mAddresses mCollateralUt
   let body = ApplyInputsTxBody contractId txId tx'
   addField ev $ PostResponseTx body
   pure $ IncludeLink (Proxy @"transaction") body
-
 
 transactionServer
   :: EventBackend IO r TransactionsSelector

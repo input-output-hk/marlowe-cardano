@@ -15,18 +15,15 @@ import Cardano.Ledger.Alonzo.TxWitness (TxWitness(TxWitness))
 import Control.Monad (unless)
 import Control.Monad.IO.Class (liftIO)
 import Data.Aeson (Value(Null))
-<<<<<<< HEAD
-import Data.Foldable (traverse_)
-import qualified Data.Map as Map
 import Data.Foldable (for_, traverse_)
+import qualified Data.Map as Map
 import Data.Maybe (fromMaybe)
 import qualified Data.Set as Set
 import Data.Text (Text)
 import Language.Marlowe.Protocol.Query.Types (ContractFilter(..), Page(..))
 import Language.Marlowe.Runtime.ChainSync.Api (Lovelace(..))
 import Language.Marlowe.Runtime.Core.Api
-  (MarloweMetadataTag(..), MarloweTransactionMetadata(..), MarloweVersion(..), SomeMarloweVersion(..))
-import Language.Marlowe.Runtime.Core.Api (ContractId, MarloweVersion(..), SomeMarloweVersion(..))
+  (ContractId, MarloweMetadataTag(..), MarloweTransactionMetadata(..), MarloweVersion(..), SomeMarloweVersion(..))
 import Language.Marlowe.Runtime.Transaction.Api (ContractCreated(..), WalletAddresses(..))
 import qualified Language.Marlowe.Runtime.Transaction.Api as Tx
 import Language.Marlowe.Runtime.Web hiding (Unsigned)
@@ -38,22 +35,11 @@ import Language.Marlowe.Runtime.Web.Server.REST.ApiError
 import qualified Language.Marlowe.Runtime.Web.Server.REST.ApiError as ApiError
 import qualified Language.Marlowe.Runtime.Web.Server.REST.Transactions as Transactions
 import Language.Marlowe.Runtime.Web.Server.TxClient (TempTx(TempTx), TempTxStatus(Unsigned), TxClientSelector)
-import Language.Marlowe.Runtime.Web.Server.TxClient (TempTx(TempTx), TempTxStatus(Unsigned))
 import Language.Marlowe.Runtime.Web.Server.Util (makeSignedTxWithWitnessKeys)
-import Observe.Event (Event, EventBackend, addField, reference, withEvent)
 import Observe.Event.Backend (narrowEventBackend)
-import Observe.Event.BackendModification (setAncestor)
 import Observe.Event.DSL (FieldSpec(..), SelectorField(Inject), SelectorSpec(..))
 import Observe.Event.Explicit
-  ( EventBackend
-  , addField
-  , hoistEventBackend
-  , injectSelector
-  , narrowEventBackend
-  , reference
-  , setAncestorEventBackend
-  , withEvent
-  )
+  (Event, EventBackend, addField, hoistEventBackend, injectSelector, reference, setAncestorEventBackend, withEvent)
 import Observe.Event.Render.JSON.DSL.Compile (compile)
 import Observe.Event.Syntax ((≔))
 import Servant
@@ -77,8 +63,8 @@ compile $ SelectorSpec "contracts"
       , "addresses" ≔ ''Addresses
       , "collateral" ≔ ''TxOutRefs
       , ["post", "error"] ≔ ''String
-      , ["post", "response", "txBody"] ≔ [t|CreateTxBody CardanoTxBody|]
-      , ["post", "response", "tx"] ≔ [t|CreateTxBody CardanoTx|]
+      , ["post", "response", "txBody"] ≔ [t|CreateTxEnvelope CardanoTxBody|]
+      , ["post", "response", "tx"] ≔ [t|CreateTxEnvelope CardanoTx|]
       ]
   , ["get", "one"] ≔ FieldSpec ["get", "one"]
       [ ["get", "id"] ≔ ''TxOutRef
@@ -100,9 +86,8 @@ server eb = get eb
        :<|> (postCreateTxBodyResponse eb :<|> postCreateTxResponse eb)
        :<|> contractServer eb
 
-post
-  -- :: EventBackend IO r ContractsSelector
-  :: Event (AppM r) r1 s PostField
+postCreateTxBody
+  :: Event (AppM r) r1 PostField
   -> PostContractsRequest
   -> Address
   -> Maybe (CommaList Address)
@@ -130,7 +115,7 @@ postCreateTxBody ev req@PostContractsRequest{..} changeAddressDTO mAddresses mCo
       pure (contractId, txBody)
 
 postCreateTxBodyResponse
-  :: EventBackend (AppM r) r ContractsSelector
+  :: EventBackend IO r ContractsSelector
   -> PostContractsRequest
   -> Address
   -> Maybe (CommaList Address)
@@ -139,12 +124,12 @@ postCreateTxBodyResponse
 postCreateTxBodyResponse eb req changeAddressDTO mAddresses mCollateralUtxos = withEvent (hoistEventBackend liftIO eb) Post \ev -> do
   res <- postCreateTxBody ev req changeAddressDTO mAddresses mCollateralUtxos
   let (contractId', txBody') = toDTO res
-  let body = CreateTxBody contractId' txBody'
+  let body = CreateTxEnvelope contractId' txBody'
   addField ev $ PostResponseTxBody body
   pure $ IncludeLink (Proxy @"contract") body
 
 postCreateTxResponse
-  :: EventBackend (AppM r) r ContractsSelector
+  :: EventBackend IO r ContractsSelector
   -> PostContractsRequest
   -> Address
   -> Maybe (CommaList Address)
@@ -154,7 +139,7 @@ postCreateTxResponse eb req changeAddressDTO mAddresses mCollateralUtxos = withE
   (contractId, txBody) <- postCreateTxBody ev req changeAddressDTO mAddresses mCollateralUtxos
   let tx = makeSignedTransaction [] txBody
   let (contractId', tx') = toDTO (contractId, tx)
-  let body = CreateTxBody contractId' tx'
+  let body = CreateTxEnvelope contractId' tx'
   addField ev $ PostResponseTx body
   pure $ IncludeLink (Proxy @"contract") body
 
@@ -220,20 +205,6 @@ put eb contractId body = withEvent (hoistEventBackend liftIO eb) Put \ev -> do
   loadContract contractId' >>= \case
     Nothing -> throwError $ notFound' "Contract not found"
     Just (Left (TempTx _ Unsigned Tx.ContractCreated{txBody})) -> do
--- <<<<<<< HEAD
---       textEnvelope <- fromDTOThrow (badRequest' "Invalid body value") body
---       addField ev $ Body textEnvelope
---       tx <- either (const $ throwError $ badRequest' "Invalid body text envelope content") pure $ deserialiseFromTextEnvelope (AsTx AsBabbage) textEnvelope
---       unless (getTxBody tx == txBody) $ throwError (badRequest' "Provided transaction body differs from the original one")
---       submitContract contractId' (narrowEventBackend (injectSelector RunTx) $ setAncestorEventBackend (reference ev) eb) tx >>= \case
--- =======
---       let
---         -- `<|>` gives me error here
---         req :: Maybe (Either (Cardano.Tx BabbageEra) (ShelleyTxWitness BabbageEra))
---         req = case fromDTO (Left body) of
---           Just res -> pure res
---           Nothing -> fromDTO (Right body)
--- =======
       (req :: Maybe (Either (Cardano.Tx BabbageEra) (ShelleyTxWitness BabbageEra))) <- case teType body of
         "Tx BabbageEra" -> pure $ Left <$> fromDTO body
         "ShelleyTxWitness BabbageEra" -> pure $ Right <$> fromDTO body
@@ -248,8 +219,7 @@ put eb contractId body = withEvent (hoistEventBackend liftIO eb) Put \ev -> do
           unless (getTxBody tx == txBody) $ throwError (badRequest' "Provided transaction body differs from the original one")
           pure tx
         -- It seems that wallets provide nearly empty `TxWitness` back. Here is a quoat from `CIP-30` docs:
-        --
-        -- > Only the portions of the witness set that were signed as a result of this call are returned to
+        -- > Only the portion of the witness set that were signed as a result of this call are returned to
         -- > encourage dApps to verify the contents returned by this endpoint while building the final transaction.
         Just (Right (ShelleyTxWitness (TxWitness wtKeys _ _ _ _))) -> do
           case makeSignedTxWithWitnessKeys txBody wtKeys of
@@ -260,8 +230,6 @@ put eb contractId body = withEvent (hoistEventBackend liftIO eb) Put \ev -> do
         Just err -> do
           addField ev $ Error $ show err
           throwError $ ApiError.toServerError $ ApiError (show err) "SubmissionError" Null 403
-
-
     Just _  -> throwError $
       ApiError.toServerError $
       ApiError "Contract already submitted" "ContractAlreadySubmitted" Null 409

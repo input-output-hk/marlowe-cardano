@@ -14,8 +14,8 @@ module Language.Marlowe.Runtime.Web.Client
   , postContract
   , postContractCreateTx
   , postTransaction
-  , postWithdrawal
   , postTransactionCreateTx
+  , postWithdrawal
   , putContract
   , putTransaction
   , putWithdrawal
@@ -31,7 +31,7 @@ import qualified Data.Set as Set
 import Data.Text (Text)
 import GHC.TypeLits (KnownSymbol, symbolVal)
 import Language.Marlowe.Runtime.Web.API
-  (API, CardanoTx, CardanoTxBody, GetContractsResponse, GetTransactionsResponse, GetWithdrawalsResponse, ListObject(..), api, retractLink)
+  (API, GetContractsResponse, GetTransactionsResponse, GetWithdrawalsResponse, ListObject(..), api, retractLink)
 import Language.Marlowe.Runtime.Web.Types
 import Servant (ResponseHeader(..), getResponse, lookupResponseHeader, type (:<|>)((:<|>)))
 import Servant.Client (Client, ClientM)
@@ -77,7 +77,7 @@ postContract
   -> Maybe (Set Address)
   -> Maybe (Set TxOutRef)
   -> PostContractsRequest
-  -> ClientM (CreateTxBody CardanoTxBody)
+  -> ClientM (CreateTxEnvelope CardanoTxBody)
 postContract changeAddress otherAddresses collateralUtxos request = do
   let (_ :<|> (postContractCreateTxBody' :<|> _) :<|> _) :<|> _ = client
   response <- postContractCreateTxBody'
@@ -92,7 +92,7 @@ postContractCreateTx
   -> Maybe (Set Address)
   -> Maybe (Set TxOutRef)
   -> PostContractsRequest
-  -> ClientM (CreateTxBody CardanoTx)
+  -> ClientM (CreateTxEnvelope CardanoTx)
 postContractCreateTx changeAddress otherAddresses collateralUtxos request = do
   let (_ :<|> (_ :<|> postContractCreateTx') :<|> _) :<|> _ = client
   response <- postContractCreateTx'

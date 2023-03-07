@@ -94,7 +94,7 @@ instance HasNamedLink ContractHeader API "transactions" where
     "contracts" :> Capture "contractId" TxOutRef :> "transactions" :> GetTransactionsAPI
   namedLink _ _ mkLink ContractHeader{..} = guard (status == Confirmed) $> mkLink contractId
 
-type PostContractsResponse tx = WithLink "contract" (CreateTxBody tx)
+type PostContractsResponse tx = WithLink "contract" (CreateTxEnvelope tx)
 
 data TxJSON a
 
@@ -109,18 +109,11 @@ instance MimeRender (TxJSON ContractTx) (PostContractsResponse CardanoTx) where
 instance MimeUnrender (TxJSON ContractTx) (PostContractsResponse CardanoTx) where
   mimeUnrender _ bs = eitherDecode bs
 
-instance HasNamedLink CreateTx API "contract" where
-  type Endpoint CreateTx API "contract" =
+instance HasNamedLink (CreateTxEnvelope tx) API "contract" where
+  type Endpoint (CreateTxEnvelope tx) API "contract" =
     "contracts" :> Capture "contractId" TxOutRef :> GetContractAPI
-  namedLink _ _ mkLink CreateTx{..} = Just $ mkLink contractId
+  namedLink _ _ mkLink CreateTxEnvelope{..} = Just $ mkLink contractId
 
-instance HasNamedLink (CreateTxBody tx) API "contract" where
-  type Endpoint (CreateTxBody tx) API "contract" =
-    "contracts" :> Capture "contractId" TxOutRef :> GetContractAPI
-  namedLink _ _ mkLink CreateTxBody{..} = Just $ mkLink contractId
-
-data CardanoTx
-data CardanoTxBody
 
 -- | POST /contracts sub-API
 type PostContractsAPI

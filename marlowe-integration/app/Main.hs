@@ -20,7 +20,7 @@ import Data.Maybe (fromJust)
 import qualified Data.Text as T
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
 import Language.Marlowe.Runtime.ChainSync.Api (Address(..), fromBech32, toBech32)
-import Language.Marlowe.Runtime.Web (CreateTxBody(CreateTxBody), PostContractsRequest(..))
+import Language.Marlowe.Runtime.Web (CreateTxEnvelope(CreateTxEnvelope), PostContractsRequest(..))
 import qualified Language.Marlowe.Runtime.Web as Web
 import Language.Marlowe.Runtime.Web.Client
   (getContract, getTransaction, postContract, postTransaction, putContract, putTransaction)
@@ -38,7 +38,7 @@ main = withLocalMarloweRuntime \MarloweRuntime{..} -> do
   print webAddress
 
   either throw pure =<< runWebClient do
-    Web.CreateTxBody{txBody = createTxBody, ..} <- postContract webAddress Nothing Nothing Web.PostContractsRequest
+    Web.CreateTxEnvelope{txBody = createTxBody, ..} <- postContract webAddress Nothing Nothing Web.PostContractsRequest
       { metadata = mempty
       , tags = mempty
       , version = Web.V1
@@ -47,7 +47,7 @@ main = withLocalMarloweRuntime \MarloweRuntime{..} -> do
       , minUTxODeposit = 2_000_000
       }
 
-    liftIO $ print CreateTxBody{txBody = createTxBody, ..}
+    liftIO $ print CreateTxEnvelope{txBody = createTxBody, ..}
 
     createTx <- liftIO $ signShelleyTransaction' createTxBody [signingKey]
 

@@ -388,23 +388,36 @@ instance ToJSON WithdrawTxBody
 instance FromJSON WithdrawTxBody
 instance ToSchema WithdrawTxBody
 
-data CreateTxBody tx = CreateTxBody
+data CreateTxEnvelope tx = CreateTxEnvelope
   { contractId :: TxOutRef
   , txBody :: TextEnvelope
   } deriving (Show, Eq, Ord, Generic)
 
-instance ToJSON (CreateTxBody tx)
-instance FromJSON (CreateTxBody tx)
-instance Typeable tx => ToSchema (CreateTxBody tx)
+data CardanoTx
+data CardanoTxBody
 
-data CreateTx = CreateTx
-  { contractId :: TxOutRef
-  , tx :: TextEnvelope
-  } deriving (Show, Eq, Ord, Generic)
+instance ToJSON (CreateTxEnvelope CardanoTx) where
+  toJSON CreateTxEnvelope{..} = object
+    [ ("contractId", toJSON contractId)
+    , ("tx", toJSON txBody)
+    ]
+instance ToJSON (CreateTxEnvelope CardanoTxBody) where
+  toJSON CreateTxEnvelope{..} = object
+    [ ("contractId", toJSON contractId)
+    , ("txBody", toJSON txBody)
+    ]
 
-instance ToJSON CreateTx
-instance FromJSON CreateTx
-instance ToSchema CreateTx
+instance FromJSON (CreateTxEnvelope CardanoTx) where
+  parseJSON = withObject "CreateTxEnvelope" \obj -> CreateTxEnvelope
+    <$> obj .: "contractId"
+    <*> obj .: "tx"
+
+instance FromJSON (CreateTxEnvelope CardanoTxBody) where
+  parseJSON = withObject "CreateTxEnvelope" \obj -> CreateTxEnvelope
+    <$> obj .: "contractId"
+    <*> obj .: "txBody"
+
+instance Typeable tx => ToSchema (CreateTxEnvelope tx)
 
 data TextEnvelope = TextEnvelope
   { teType :: Text
