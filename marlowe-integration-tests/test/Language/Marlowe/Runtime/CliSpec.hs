@@ -20,19 +20,13 @@ import Language.Marlowe.Runtime.Cardano.Api (cardanoEraToAsType)
 import Language.Marlowe.Runtime.ChainSync.Api (Address(..), Lovelace(Lovelace), TransactionMetadata, toBech32)
 import Language.Marlowe.Runtime.Client (runMarloweTxClient)
 import Language.Marlowe.Runtime.Core.Api (MarloweVersion(MarloweV1), MarloweVersionTag(V1), contractToJSON)
-import Language.Marlowe.Runtime.Integration.Common (Integration, Wallet(..), getGenesisWallet, runIntegrationTest)
+import Language.Marlowe.Runtime.Integration.Common
+  (Integration, Wallet(..), execMarlowe_, getGenesisWallet, runIntegrationTest)
 import Language.Marlowe.Runtime.Transaction.Api
   (ContractCreated(..), CreateError, MarloweTxCommand(..), RoleTokensConfig(RoleTokensNone), WalletAddresses(..))
 import qualified Network.Protocol.Job.Client as JobClient
 import Test.Hspec (Spec, describe, it, shouldBe)
-import Test.Integration.Marlowe.Local
-  ( LocalTestnet(..)
-  , Workspace(Workspace, workspaceDir)
-  , execMarlowe_
-  , marloweSyncPort
-  , testnet
-  , withLocalMarloweRuntime
-  )
+import Test.Integration.Marlowe (LocalTestnet(..), Workspace(Workspace, workspaceDir), testnet, withLocalMarloweRuntime)
 
 serializeAddress :: Address -> String
 serializeAddress = Text.unpack . Maybe.fromJust . toBech32
@@ -42,13 +36,6 @@ toCliArgs (Create _ _ WalletAddresses {changeAddress, extraAddresses} _ _ (Lovel
   ["create", "--change-address", serializeAddress changeAddress]
     <> do address <- Set.toList extraAddresses; ["--address", serializeAddress address]
     <> ["--min-utxo", show minUTXO]
-
-marloweRuntimeCli :: [String] -> Integration ()
-marloweRuntimeCli cliArgs = do
-  marlowe_sync_port :: Int <- Reader.asks marloweSyncPort
-  execMarlowe_ $
-    ["--marlowe-runtime-port", show marlowe_sync_port]
-      <> cliArgs
 
 marloweRuntimeJobClient :: MarloweTxCommand Void (CreateError v) (ContractCreated BabbageEra v) -> Integration (TxBody BabbageEra)
 marloweRuntimeJobClient cmd = do
@@ -99,7 +86,7 @@ spec = describe "Marlowe runtime CLI" do
 
             cliEffect :: Integration ()
             cliEffect =
-              marloweRuntimeCli $
+              execMarlowe_ $
                 toCliArgs creationCommand
                   <> ["--core-file", contractFilePath]
                   <> ["--metadata-file", transactionMetadataFilePath]

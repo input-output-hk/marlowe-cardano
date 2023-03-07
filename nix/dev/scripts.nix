@@ -73,6 +73,11 @@ in
 {
   inherit nix-flakes-alias start-cardano-node;
 
+  mkCabalExeScript = cmd: target: writeShellScriptBinInRepoRoot cmd ''
+    cabal build ${target} 1>/dev/null 2>/dev/null
+    cabal run ${target} -- "$@" | tail -n +2
+  '';
+
   updateMaterialized = writeShellScriptBinInRepoRoot "updateMaterialized" ''
     # comment to appease nixpkgs-fmt
     ${lib.concatStringsSep "\n" (lib.mapAttrsToList
