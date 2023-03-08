@@ -15,8 +15,8 @@ import Language.Marlowe.Runtime.Indexer.Database (DatabaseQueries)
 import Language.Marlowe.Runtime.Indexer.Store
 import Network.Protocol.Connection (SomeClientConnector)
 import Network.Protocol.Query.Client (QueryClient)
-import Observe.Event (EventBackend, narrowEventBackend)
 import Observe.Event.Component (FieldConfig(..), GetSelectorConfig, SelectorConfig(..), SomeJSON(SomeJSON), prependKey)
+import Observe.Event.Explicit (EventBackend, injectSelector, narrowEventBackend)
 
 data MarloweIndexerSelector f where
   StoreEvent :: StoreSelector f -> MarloweIndexerSelector f
@@ -35,11 +35,11 @@ data MarloweIndexerDependencies r = MarloweIndexerDependencies
 marloweIndexer :: Component IO (MarloweIndexerDependencies r) ()
 marloweIndexer = proc MarloweIndexerDependencies{..} -> do
   pullEvent <- chainSeekClient -< ChainSeekClientDependencies
-    { eventBackend = narrowEventBackend ChainSeekClientEvent eventBackend
+    { eventBackend = narrowEventBackend (injectSelector ChainSeekClientEvent) eventBackend
     , ..
     }
   store -< StoreDependencies
-    { eventBackend = narrowEventBackend StoreEvent eventBackend
+    { eventBackend = narrowEventBackend (injectSelector StoreEvent) eventBackend
     , ..
     }
 

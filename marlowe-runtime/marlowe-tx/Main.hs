@@ -24,7 +24,7 @@ import Network.Protocol.Job.Client (jobClientPeer)
 import Network.Protocol.Job.Server (jobServerPeer)
 import Network.Protocol.Query.Client (QueryClient, liftQuery, queryClientPeer)
 import Network.Socket (HostName, PortNumber)
-import Observe.Event.Backend (narrowEventBackend, newOnceFlagMVar)
+import Observe.Event.Backend (injectSelector, narrowEventBackend)
 import Observe.Event.Component (LoggerDependencies(..), logger)
 import Options.Applicative
   ( auto
@@ -55,33 +55,32 @@ run = runComponent_ proc Options{..} -> do
     { configFilePath = logConfigFile
     , getSelectorConfig = getRootSelectorConfig
     , newRef = nextRandom
-    , newOnceFlag = newOnceFlagMVar
     , writeText = TL.hPutStr stderr
-    , injectConfigWatcherSelector = ConfigWatcher
+    , injectConfigWatcherSelector = injectSelector ConfigWatcher
     }
   serverSource <- tcpServer -< TcpServerDependencies host port jobServerPeer
   let
     chainSyncConnector :: SomeClientConnector RuntimeChainSeekClient IO
     chainSyncConnector = SomeConnector
-      $ logConnector (narrowEventBackend ChainSeekClient eventBackend)
+      $ logConnector (narrowEventBackend (injectSelector ChainSeekClient) eventBackend)
       $ handshakeClientConnector
       $ tcpClient chainSeekHost chainSeekPort
       $ chainSeekClientPeer Genesis
 
     chainSyncQueryConnector :: SomeClientConnector (QueryClient ChainSyncQuery) IO
     chainSyncQueryConnector = SomeConnector
-      $ logConnector (narrowEventBackend ChainSyncQueryClient eventBackend)
+      $ logConnector (narrowEventBackend (injectSelector ChainSyncQueryClient) eventBackend)
       $ handshakeClientConnector
       $ tcpClient chainSeekHost chainSeekQueryPort queryClientPeer
 
     queryChainSync = fmap (fromRight $ error "failed to query chain sync server") . runSomeConnector chainSyncQueryConnector . liftQuery
   transaction -< TransactionDependencies
     { connectionSource = SomeConnectionSource
-        $ logConnectionSource (narrowEventBackend Server eventBackend)
+        $ logConnectionSource (narrowEventBackend (injectSelector Server) eventBackend)
         $ handshakeConnectionSource serverSource
     , mkSubmitJob = Submit.mkSubmitJob Submit.SubmitJobDependencies
         { chainSyncJobConnector = SomeConnector
-            $ logConnector (narrowEventBackend ChainSyncJobClient eventBackend)
+            $ logConnector (narrowEventBackend (injectSelector ChainSyncJobClient) eventBackend)
             $ handshakeClientConnector
             $ tcpClient chainSeekHost chainSeekCommandPort jobClientPeer
         , ..
@@ -90,7 +89,7 @@ run = runComponent_ proc Options{..} -> do
         networkId <- queryChainSync GetNetworkId
         Query.loadMarloweContext ScriptRegistry.getScripts networkId chainSyncConnector chainSyncQueryConnector eb version contractId
     , loadWalletContext = Query.loadWalletContext $ queryChainSync . GetUTxOs
-    , eventBackend = narrowEventBackend App eventBackend
+    , eventBackend = narrowEventBackend (injectSelector App) eventBackend
     , getCurrentScripts = ScriptRegistry.getCurrentScripts
     , ..
     }

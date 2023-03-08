@@ -52,7 +52,8 @@ import Data.Maybe (mapMaybe)
 import Data.Ord (Down(..))
 import Data.Void (Void)
 import Language.Marlowe.Runtime.ChainIndexer.Database (CardanoBlock, GetIntersectionPoints(..))
-import Observe.Event (EventBackend, addField, failEvent, finalize, newEvent, withEvent)
+import Observe.Event.Backend (simpleNewEventArgs)
+import Observe.Event.Explicit (EventBackend, addField, finalize, newEvent, withEvent)
 import Ouroboros.Network.Point (WithOrigin(..))
 
 type NumberedCardanoBlock = (BlockNo, CardanoBlock)
@@ -149,19 +150,19 @@ nodeClient = component \NodeClientDependencies{..} -> do
 
     runNodeClient :: IO ()
     runNodeClient = mask \restore -> do
-      ev <- newEvent eventBackend Connect
+      ev <- newEvent eventBackend $ simpleNewEventArgs Connect
       result <- try @SomeException $ restore $ connectToLocalNode LocalNodeClientProtocols
         { localChainSyncClient =
             let ChainSyncClientPipelined client = pipelinedClient'
               in LocalChainSyncClientPipelined $ ChainSyncClientPipelined do
-                finalize ev
+                finalize ev Nothing
                 client
         , localTxSubmissionClient = Nothing
         , localTxMonitoringClient = Nothing
         , localStateQueryClient   = Nothing
         }
       case result of
-        Left ex -> failEvent ev ex *> throw ex
+        Left ex -> finalize ev (Just ex) *> throw ex
         Right _ -> pure ()
 
   pure (runNodeClient, NodeClient { getChanges })

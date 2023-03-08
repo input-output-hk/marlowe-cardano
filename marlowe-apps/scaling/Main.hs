@@ -37,8 +37,8 @@ import Language.Marlowe.Runtime.App.Transact (App, runWithEvents)
 import Language.Marlowe.Runtime.App.Types (Config)
 import Language.Marlowe.Runtime.ChainSync.Api (Address(unAddress))
 import Language.Marlowe.Runtime.Core.Api (ContractId)
-import Observe.Event (EventBackend, addField, hoistEvent, withEvent)
-import Observe.Event.Dynamic (DynamicEvent, DynamicEventSelector(..))
+import Observe.Event.Dynamic (DynamicEventSelector(..))
+import Observe.Event.Explicit (EventBackend, addField, hoistEventBackend, idInjectSelector, subEventBackend, withEvent)
 import Observe.Event.Render.JSON (DefaultRenderSelectorJSON(defaultRenderSelectorJSON))
 import Observe.Event.Render.JSON.Handle (JSONRef, simpleJsonStderrBackend)
 import Observe.Event.Syntax ((≔))
@@ -98,15 +98,15 @@ randomInputs = (<$> randomRIO (1_000_000, 2_000_000)) . makeInputs
 
 
 runScenario
-  :: DynamicEvent App JSONRef
+  :: EventBackend App r DynamicEventSelector
   -> Config
   -> Address
   -> C.SigningKey C.PaymentExtendedKey
   -> Contract
   -> [InputContent]
   -> App ContractId
-runScenario event config address key contract inputs =
-  runWithEvents event config address key contract (pure . NormalInput <$> inputs) 1_500_000
+runScenario backend config address key contract inputs =
+  runWithEvents backend config address key contract (pure . NormalInput <$> inputs) 1_500_000
 
 
 currentTime :: MonadIO m => m POSIXTime
@@ -126,7 +126,7 @@ runOne eventBackend config address key =
         threadId <- myThreadId
         addField event $ ("threadId" :: T.Text) ≔ show threadId
         let
-          event' = hoistEvent liftIO event
+          subBackend = hoistEventBackend liftIO $ subEventBackend idInjectSelector event eventBackend
         result <-
           runExceptT
             $ do
@@ -138,7 +138,7 @@ runOne eventBackend config address key =
               let
                 contract = makeContract (now + 5 * 60 * 60 * 1000) party
               inputs <- randomInputs party
-              runScenario event' config address key contract inputs
+              runScenario subBackend config address key contract inputs
         case result of
           Right contractId -> addField event $ ("success" :: T.Text) ≔ contractId
           Left message     -> addField event $ ("failure" :: T.Text) ≔ message

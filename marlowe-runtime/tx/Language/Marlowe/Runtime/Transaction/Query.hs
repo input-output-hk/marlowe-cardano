@@ -55,7 +55,7 @@ import Network.Protocol.ChainSeek.Client
 import Network.Protocol.Connection (SomeClientConnector)
 import Network.Protocol.Driver (runSomeConnector)
 import Network.Protocol.Query.Client (QueryClient, liftQuery)
-import Observe.Event (EventBackend, addField, withEvent, withSubEvent)
+import Observe.Event.Explicit (EventBackend, addField, idInjectSelector, subEventBackend, withEvent)
 
 data LoadWalletContextSelector f where
   LoadWalletContext :: LoadWalletContextSelector LoadWalletContextField
@@ -135,7 +135,7 @@ loadMarloweContext getScripts networkId chainSyncConnector chainSyncQueryConnect
       , recvMsgRollForward = \tx point _ -> case point of
           Genesis -> error "Roll forward to Genesis"
           At blockHeader -> withEvent eventBackend ContractFound \ev -> case extractCreation contractId tx of
-            Left e -> withSubEvent ev ExtractCreationFailed \ev' -> do
+            Left e -> withEvent (subEventBackend idInjectSelector ev eventBackend) ExtractCreationFailed \ev' -> do
               addField ev' e
               pure $ SendMsgDone $ Left $ ExtractCreationError e
             Right (SomeCreateStep actualVersion CreateStep{..}) -> do

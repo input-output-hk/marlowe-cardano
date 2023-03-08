@@ -37,9 +37,8 @@ import Network.Protocol.Driver (TcpServerDependencies(..), tcpServer)
 import Network.Protocol.Handshake.Server (handshakeConnectionSource)
 import Network.Protocol.Job.Server (jobServerPeer)
 import Network.Protocol.Query.Server (queryServerPeer)
-import Observe.Event (narrowEventBackend)
-import Observe.Event.Backend (newOnceFlagMVar)
 import Observe.Event.Component (LoggerDependencies(..), logger)
+import Observe.Event.Explicit (injectSelector, narrowEventBackend)
 import Options (Options(..), getOptions)
 import System.IO (stderr)
 
@@ -53,9 +52,8 @@ run Options{..} = bracket (Pool.acquire (100, secondsToNominalDiffTime 5, fromSt
       { configFilePath = logConfigFile
       , getSelectorConfig = getRootSelectorConfig
       , newRef = nextRandom
-      , newOnceFlag = newOnceFlagMVar
       , writeText = TL.hPutStr stderr
-      , injectConfigWatcherSelector = ConfigWatcher
+      , injectConfigWatcherSelector = injectSelector ConfigWatcher
       }
 
     syncSource <- tcpServer -< TcpServerDependencies
@@ -79,7 +77,7 @@ run Options{..} = bracket (Pool.acquire (100, secondsToNominalDiffTime 5, fromSt
     NodeClient{..} <- nodeClient -< NodeClientDependencies
       {
         connectToLocalNode = Cardano.connectToLocalNode localNodeConnectInfo
-      , eventBackend = narrowEventBackend NodeService eventBackend
+      , eventBackend = narrowEventBackend (injectSelector NodeService) eventBackend
       }
 
     chainSync -< ChainSyncDependencies
@@ -87,13 +85,13 @@ run Options{..} = bracket (Pool.acquire (100, secondsToNominalDiffTime 5, fromSt
           (either throwUsageError pure <=< Pool.use pool)
           $ PostgreSQL.databaseQueries networkId
       , syncSource = SomeConnectionSource
-          $ logConnectionSource (narrowEventBackend ChainSeekServer eventBackend)
+          $ logConnectionSource (narrowEventBackend (injectSelector ChainSeekServer) eventBackend)
           $ handshakeConnectionSource syncSource
       , querySource = SomeConnectionSource
-          $ logConnectionSource (narrowEventBackend QueryServer eventBackend)
+          $ logConnectionSource (narrowEventBackend (injectSelector QueryServer) eventBackend)
           $ handshakeConnectionSource querySource
       , jobSource = SomeConnectionSource
-          $ logConnectionSource (narrowEventBackend JobServer eventBackend)
+          $ logConnectionSource (narrowEventBackend (injectSelector JobServer) eventBackend)
           $ handshakeConnectionSource jobSource
       , queryLocalNodeState = queryNode
       , submitTxToNodeLocal = \era tx -> submitTxToNode $ TxInMode tx case era of

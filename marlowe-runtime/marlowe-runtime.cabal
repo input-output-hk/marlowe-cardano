@@ -156,7 +156,7 @@ library indexer
     , bytestring
     , cardano-api
     , containers
-    , eventuo11y
+    , eventuo11y ^>= { 0.9, 0.10 }
     , eventuo11y-extras
     , hasql
     , hasql-th
@@ -232,9 +232,10 @@ library sync
     , binary
     , bytestring
     , containers
-    , eventuo11y
+    , eventuo11y ^>= { 0.9, 0.10 }
     , eventuo11y-extras
     , foldl
+    , general-allocate ^>= { 0.2 }
     , hasql
     , hasql-th
     , hasql-transaction
@@ -311,7 +312,7 @@ library tx
     , cardano-ledger-core
     , containers
     , errors
-    , eventuo11y
+    , eventuo11y ^>= { 0.9, 0.10 }
     , eventuo11y-extras
     , marlowe-cardano
     , marlowe-chain-sync
@@ -362,8 +363,8 @@ library proxy
   build-depends:
       base >= 4.9 && < 5
     , async-components
-    , eventuo11y
     , exceptions
+    , general-allocate ^>= { 0.2 }
     , marlowe-protocols
     , marlowe-runtime:discovery-api
     , marlowe-runtime:history-api
@@ -421,7 +422,7 @@ executable marlowe-indexer
   build-depends:
       base >= 4.9 && < 5
     , async-components
-    , eventuo11y
+    , eventuo11y ^>= { 0.9, 0.10 }
     , eventuo11y-extras
     , hasql
     , hasql-pool
@@ -449,7 +450,7 @@ executable marlowe-sync
   build-depends:
       base >= 4.9 && < 5
     , async-components
-    , eventuo11y
+    , eventuo11y ^>= { 0.9, 0.10 }
     , eventuo11y-extras
     , hasql
     , hasql-pool
@@ -477,7 +478,7 @@ executable marlowe-tx
   build-depends:
     base >= 4.9 && < 5
     , async-components
-    , eventuo11y
+    , eventuo11y ^>= { 0.9, 0.10 }
     , eventuo11y-extras
     , marlowe-chain-sync
     , marlowe-protocols
@@ -504,7 +505,7 @@ executable marlowe-proxy
       base >= 4.9 && < 5
     , async-components
     , bytestring
-    , eventuo11y
+    , eventuo11y ^>= { 0.9, 0.10 }
     , eventuo11y-extras
     , marlowe-protocols
     , marlowe-runtime:config

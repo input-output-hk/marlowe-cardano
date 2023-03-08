@@ -55,9 +55,10 @@ library
     , async-components
     , containers
     , directory
-    , eventuo11y
+    , eventuo11y ^>= { 0.9, 0.10 }
     , filepath
     , fsnotify
+    , general-allocate ^>= { 0.2 }
     , lifted-base
     , monad-control
     , some

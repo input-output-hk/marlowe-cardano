@@ -22,8 +22,8 @@ import Network.Protocol.ChainSeek.Client
 import Network.Protocol.Connection (SomeClientConnector)
 import Network.Protocol.Driver (runSomeConnector)
 import Network.Protocol.Query.Client (QueryClient, liftQuery)
-import Observe.Event (addField, withEvent)
 import Observe.Event.Backend (EventBackend)
+import Observe.Event.Explicit (addField, withEvent)
 
 data ChainSeekClientSelector f where
   LoadMarloweUTxO :: ChainSeekClientSelector MarloweUTxO

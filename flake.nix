@@ -72,12 +72,6 @@
         inherit packages;
 
         apps = rec {
-          updateMaterialized = {
-            type = "app";
-            program =
-              "${packages.dev-scripts.updateMaterialized}/bin/updateMaterialized";
-          };
-
           nixpkgs-fmt = {
             type = "app";
             program =
@@ -185,7 +179,6 @@
       inherit inputs;
       internal.packagesFun =
         { system
-        , checkMaterialization ? false
         , enableHaskellProfiling ? false
         , source-repo-override ? { }
         , crossSystem ? null
@@ -197,7 +190,7 @@
               name = system';
               value = import ./nix {
                 system = system';
-                inherit checkMaterialization enableHaskellProfiling source-repo-override inputs crossSystem evalSystem;
+                inherit enableHaskellProfiling source-repo-override inputs crossSystem evalSystem;
                 inherit (inputs) haskell-nix;
               };
             })

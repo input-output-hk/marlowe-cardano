@@ -1,6 +1,5 @@
 { supportedSystems
 , rootsOnly
-, checkMaterialization
 , inputs
 , source-repo-override
 , pkgs
@@ -54,7 +53,7 @@ let
       # given a system ("x86_64-linux") return an attrset of derivations to build
       _select = _: system: crossSystem:
         let
-          packages = internal.packagesFun { inherit system crossSystem checkMaterialization source-repo-override evalSystem; };
+          packages = internal.packagesFun { inherit system crossSystem source-repo-override evalSystem; };
           pkgs = packages.pkgs;
           marlowe = packages.marlowe;
           # Map `crossSystem.config` to a name used in `lib.platforms`

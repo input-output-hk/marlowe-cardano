@@ -37,7 +37,6 @@ The shell comes with some tools for fixing various simple problems that the CI w
 - `fix-stylish-haskell` will re-format all the Haskell sources correctly.
 - `fix-purs-tidy` will re-format all the Purescript sources correctly.
 - `fix-png-optimization` will optimize all PNGs in the repository.
-- `updateMaterialized` will update the materialized Nix files (see xref:update-generated[later]).
 
 If you're not using `nix develop` all the time and you want to run one of these, you can use `nix develop --command`.
 
@@ -110,18 +109,6 @@ application launcher like spotlight or dmenu for your editor to find it in
 its PATH.
 
 [[update-generated]]
-=== How to update the generated Haskell package set
-
-Some of the Nix code that builds all the Haskell packages and their dependencies is generated automatically.
-However, to avoid doing too much work all the time, we have checked the generated output in.
-
-IMPORTANT: These files needs to be regenerated if you change any dependencies in cabal files.
-But the CI will tell you if you've failed to do so.
-
-You can regenerate the files by running `updateMaterialized` (provided by `nix develop`) from the repository root.
-
-This will also update the `plan-256` shas for the extra Haskell tools, if you have a problem iwth that.
-
 === How to add a new Haskell package
 
 You need to do a few things when adding a new package, in the following order:

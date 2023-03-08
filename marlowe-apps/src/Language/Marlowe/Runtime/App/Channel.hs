@@ -30,9 +30,9 @@ import Language.Marlowe.Runtime.App.Types (Config)
 import Language.Marlowe.Runtime.ChainSync.Api (TxId)
 import Language.Marlowe.Runtime.Core.Api (ContractId, MarloweVersionTag(V1))
 import Language.Marlowe.Runtime.History.Api (ContractStep, CreateStep)
-import Observe.Event (Event, EventBackend, addField, withEvent)
 import Observe.Event.Backend (hoistEventBackend)
 import Observe.Event.Dynamic (DynamicEventSelector(..), DynamicField)
+import Observe.Event.Explicit (Event, EventBackend, addField, withEvent)
 import Observe.Event.Syntax ((≔))
 
 import qualified Data.Map.Strict as M (Map, adjust, delete, insert, lookup)
@@ -100,7 +100,7 @@ runContractAction
   :: forall r
   .  Text
   -> EventBackend IO r DynamicEventSelector
-  -> (Event IO r DynamicEventSelector DynamicField -> LastSeen -> IO ())
+  -> (Event IO r DynamicField -> LastSeen -> IO ())
   -> Int
   -> TChan (ContractStream 'V1)
   -> TChan ContractId
@@ -114,7 +114,7 @@ runContractAction selectorName eventBackend runInput pollingFrequency inChannel 
     delete :: ContractId -> M.Map ContractId LastSeen -> M.Map ContractId LastSeen
     delete = M.delete
     -- Update the contract and its latest transaction.
-    update :: Event IO r DynamicEventSelector DynamicField -> ContractStream 'V1 -> M.Map ContractId LastSeen -> IO (M.Map ContractId LastSeen)
+    update :: Event IO r DynamicField -> ContractStream 'V1 -> M.Map ContractId LastSeen -> IO (M.Map ContractId LastSeen)
     update event cs lastSeen =
       let
         contractId = csContractId cs

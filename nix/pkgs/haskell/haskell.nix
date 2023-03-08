@@ -8,7 +8,6 @@
 , R
 , libsodium-vrf
 , secp256k1
-, checkMaterialization
 , compiler-nix-name
 , enableHaskellProfiling
   # Whether to set the `defer-plugin-errors` flag on those packages that need
@@ -23,18 +22,7 @@ let
   project = haskell-nix.cabalProject' ({ pkgs, ... }: {
     inherit compiler-nix-name evalSystem;
     src = ../../../.;
-    # These files need to be regenerated when you change the cabal files.
-    # See ../CONTRIBUTING.doc for more information.
-    # Unfortuntely, they are *not* constant across all possible systems, so in some circumstances we need different sets of files
-    # At the moment, we only need one but conceivably we might need one for darwin in future.
-    # See https://github.com/input-output-hk/nix-tools/issues/97
-    materialized =
-      if source-repo-override != { } then null
-      else if pkgs.stdenv.hostPlatform.isLinux then ./materialized-linux
-      else if pkgs.stdenv.hostPlatform.isDarwin then ./materialized-darwin
-      else builtins.error "Don't have materialized files for this platform";
-    # If true, we check that the generated files are correct. Set in the CI so we don't make mistakes.
-    inherit checkMaterialization source-repo-override;
+    inherit source-repo-override;
     inputMap = { "https://input-output-hk.github.io/cardano-haskell-packages" = CHaP; };
     modules = [
       ({ pkgs, ... }: lib.mkIf (pkgs.stdenv.hostPlatform != pkgs.stdenv.buildPlatform) {

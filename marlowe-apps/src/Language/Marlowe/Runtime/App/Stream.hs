@@ -52,8 +52,8 @@ import Language.Marlowe.Runtime.Core.Api
   )
 import Language.Marlowe.Runtime.Discovery.Api (ContractHeader(contractId))
 import Language.Marlowe.Runtime.History.Api (ContractStep(ApplyTransaction), CreateStep(CreateStep, createOutput))
-import Observe.Event (EventBackend, addField, withEvent)
 import Observe.Event.Dynamic (DynamicEventSelector(..))
+import Observe.Event.Explicit (EventBackend, addField, withEvent)
 import Observe.Event.Syntax ((≔))
 
 import qualified Data.ByteString.Lazy.Char8 as LBS8 (unpack)

@@ -8,11 +8,9 @@ module Main
 
 import Control.Monad (replicateM)
 import Data.Aeson (Value(Null))
-import qualified Data.Aeson as Aeson
 import qualified Data.ByteString as BS
 import Data.OpenApi hiding (version)
 import Data.Proxy
-import Data.String (IsString(fromString))
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Language.Marlowe.Runtime.Web as Web
@@ -21,7 +19,6 @@ import Servant.OpenApi
 import Spec.Marlowe.Semantics.Arbitrary ()
 import Test.Hspec (Spec, describe, hspec)
 import Test.QuickCheck (Arbitrary(..), elements, genericShrink, listOf, oneof, resize)
-import Test.QuickCheck.Gen (suchThat)
 import Test.QuickCheck.Instances ()
 import Text.Regex.Posix ((=~))
 
@@ -173,9 +170,6 @@ instance Arbitrary Web.TokenMetadata where
     <*> arbitrary
     <*> arbitrary
   shrink = genericShrink
-
-instance Arbitrary Aeson.Key where
-  arbitrary = fromString <$> arbitrary `suchThat` (not . null)
 
 instance Arbitrary Web.TokenMetadataFile where
   arbitrary = Web.TokenMetadataFile <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary

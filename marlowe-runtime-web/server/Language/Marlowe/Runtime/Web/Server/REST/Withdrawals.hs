@@ -12,6 +12,7 @@ module Language.Marlowe.Runtime.Web.Server.REST.Withdrawals
 import Cardano.Api (AsType(..), deserialiseFromTextEnvelope, getTxBody, getTxId)
 import qualified Cardano.Api.SerialiseTextEnvelope as Cardano
 import Control.Monad (unless)
+import Control.Monad.IO.Class (liftIO)
 import Data.Aeson (Value(..))
 import Data.Foldable (traverse_)
 import Data.Maybe (fromMaybe)
@@ -27,10 +28,18 @@ import Language.Marlowe.Runtime.Web.Server.REST.ApiError
   (ApiError(ApiError), badRequest', notFound', rangeNotSatisfiable', throwDTOError)
 import qualified Language.Marlowe.Runtime.Web.Server.REST.ApiError as ApiError
 import qualified Language.Marlowe.Runtime.Web.Server.REST.Transactions as Transactions
-import Language.Marlowe.Runtime.Web.Server.TxClient (TempTx(..), TempTxStatus(..), Withdrawn(..))
-import Observe.Event (EventBackend, addField, reference, withEvent)
-import Observe.Event.BackendModification (setAncestor)
+import Language.Marlowe.Runtime.Web.Server.TxClient (TempTx(..), TempTxStatus(..), TxClientSelector, Withdrawn(..))
 import Observe.Event.DSL (FieldSpec(..), SelectorField(..), SelectorSpec(..))
+import Observe.Event.Explicit
+  ( EventBackend
+  , addField
+  , hoistEventBackend
+  , injectSelector
+  , narrowEventBackend
+  , reference
+  , setAncestorEventBackend
+  , withEvent
+  )
 import Observe.Event.Render.JSON.DSL.Compile (compile)
 import Observe.Event.Syntax ((≔))
 import Servant
@@ -68,23 +77,24 @@ compile $ SelectorSpec "withdrawals"
       , "error" ≔ ''String
       ]
   , "transactions" ≔ Inject ''Transactions.TransactionsSelector
+  , [ "run", "tx" ] ≔ Inject ''TxClientSelector
   ]
 
 server
-  :: EventBackend (AppM r) r WithdrawalsSelector
+  :: EventBackend IO r WithdrawalsSelector
   -> ServerT WithdrawalsAPI (AppM r)
 server eb = get eb
        :<|> post eb
        :<|> withdrawalServer eb
 
 post
-  :: EventBackend (AppM r) r WithdrawalsSelector
+  :: EventBackend IO r WithdrawalsSelector
   -> PostWithdrawalsRequest
   -> Address
   -> Maybe (CommaList Address)
   -> Maybe (CommaList TxOutRef)
   -> AppM r PostWithdrawalsResponse
-post eb req@PostWithdrawalsRequest{..} changeAddressDTO mAddresses mCollateralUtxos = withEvent eb Post \ev -> do
+post eb req@PostWithdrawalsRequest{..} changeAddressDTO mAddresses mCollateralUtxos = withEvent (hoistEventBackend liftIO eb) Post \ev -> do
   addField ev $ NewWithdrawal req
   addField ev $ ChangeAddress changeAddressDTO
   traverse_ (addField ev . Addresses) mAddresses
@@ -105,11 +115,11 @@ post eb req@PostWithdrawalsRequest{..} changeAddressDTO mAddresses mCollateralUt
       pure $ IncludeLink (Proxy @"withdrawal") body
 
 get
-  :: EventBackend (AppM r) r WithdrawalsSelector
+  :: EventBackend IO r WithdrawalsSelector
   -> [PolicyId]
   -> Maybe (Ranges '["withdrawalId"] GetWithdrawalsResponse)
   -> AppM r (PaginatedResponse '["withdrawalId"] GetWithdrawalsResponse)
-get eb roleCurrencies ranges = withEvent eb Get \ev -> do
+get eb roleCurrencies ranges = withEvent (hoistEventBackend liftIO eb) Get \ev -> do
   let
     range :: Range "withdrawalId" TxId
     range@Range{..} = fromMaybe (getDefaultRange (Proxy @WithdrawalHeader)) $ extractRange =<< ranges
@@ -133,17 +143,17 @@ toWithdrawalHeader :: Withdrawal -> WithdrawalHeader
 toWithdrawalHeader Withdrawal{..} = WithdrawalHeader{..}
 
 withdrawalServer
-  :: EventBackend (AppM r) r WithdrawalsSelector
+  :: EventBackend IO r WithdrawalsSelector
   -> TxId
   -> ServerT WithdrawalAPI (AppM r)
 withdrawalServer eb withdrawalId =
   getOne eb withdrawalId :<|> put eb withdrawalId
 
 getOne
-  :: EventBackend (AppM r) r WithdrawalsSelector
+  :: EventBackend IO r WithdrawalsSelector
   -> TxId
   -> AppM r Withdrawal
-getOne eb withdrawalId = withEvent eb GetOne \ev -> do
+getOne eb withdrawalId = withEvent (hoistEventBackend liftIO eb) GetOne \ev -> do
   addField ev $ GetId withdrawalId
   contractId' <- fromDTOThrow (badRequest' "Invalid contract id value") withdrawalId
   loadWithdrawal contractId' >>= \case
@@ -154,11 +164,11 @@ getOne eb withdrawalId = withEvent eb GetOne \ev -> do
       pure withdrawal
 
 put
-  :: EventBackend (AppM r) r WithdrawalsSelector
+  :: EventBackend IO r WithdrawalsSelector
   -> TxId
   -> TextEnvelope
   -> AppM r NoContent
-put eb contractId body = withEvent eb Put \ev -> do
+put eb contractId body = withEvent (hoistEventBackend liftIO eb) Put \ev -> do
   addField ev $ PutId contractId
   contractId' <- fromDTOThrow (badRequest' "Invalid contract id value") contractId
   loadWithdrawal contractId' >>= \case
@@ -168,7 +178,7 @@ put eb contractId body = withEvent eb Put \ev -> do
       addField ev $ Body textEnvelope
       tx <- either (const $ throwError $ badRequest' "Invalid body text envelope content") pure $ deserialiseFromTextEnvelope (AsTx AsBabbage) textEnvelope
       unless (getTxBody tx == txBody) $ throwError (badRequest' "Provided transaction body differs from the original one")
-      submitWithdrawal contractId' (setAncestor $ reference ev) tx >>= \case
+      submitWithdrawal contractId' (narrowEventBackend (injectSelector RunTx) $ setAncestorEventBackend (reference ev) eb) tx >>= \case
         Nothing -> pure NoContent
         Just err -> do
           addField ev $ Error $ show err

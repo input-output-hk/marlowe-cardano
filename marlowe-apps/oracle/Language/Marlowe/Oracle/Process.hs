@@ -22,8 +22,8 @@ import Language.Marlowe.Runtime.App.Types (Config)
 import Language.Marlowe.Runtime.ChainSync.Api (Address)
 import Language.Marlowe.Runtime.Core.Api (ContractId, MarloweVersionTag(V1))
 import Network.Oracle (OracleEnv, readOracle, toOracleSymbol)
-import Observe.Event (EventBackend, addField, hoistEvent)
 import Observe.Event.Dynamic (DynamicEventSelector(..))
+import Observe.Event.Explicit (EventBackend, addField, hoistEvent, hoistEventBackend, idInjectSelector, subEventBackend)
 import Observe.Event.Syntax ((≔))
 import Plutus.V2.Ledger.Api (toBuiltin)
 
@@ -68,11 +68,12 @@ runOracle oracleEnv config address key party eventBackend =
             do
               let
                 event' = hoistEvent liftIO event
+                subBackend = hoistEventBackend liftIO $ subEventBackend idInjectSelector event eventBackend
               addField event' $ ("symbol" :: Text) ≔ show symbol
               value <- ExceptT $ readOracle eventBackend oracleEnv symbol
               addField event' $ ("value" :: Text) ≔ value
               void
-                . applyWithEvents event' config address key contractId
+                . applyWithEvents subBackend config address key contractId
                 . pure . NormalInput
                 $ IChoice (ChoiceId (toBuiltin . BS8.pack $ show symbol) party) value
         -- Print the context of the transaction.

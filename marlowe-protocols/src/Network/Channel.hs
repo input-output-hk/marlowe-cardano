@@ -5,7 +5,7 @@ module Network.Channel
 
 import Control.Concurrent.STM (STM, newTChan, readTChan, writeTChan)
 import Control.Monad (mfilter, (>=>))
-import Control.Monad.Cleanup (MonadCleanup)
+import Control.Monad.With (MonadWithExceptable)
 import Data.Aeson (Value(..))
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as LBS
@@ -14,8 +14,8 @@ import Data.Text (Text)
 import Data.Text.Internal.Lazy (smallChunkSize)
 import Network.Socket (Socket)
 import qualified Network.Socket.ByteString.Lazy as Socket
-import Observe.Event (EventBackend, addField, withEvent)
 import Observe.Event.Component (GetSelectorConfig, SelectorConfig(..), SomeJSON(SomeJSON), singletonFieldConfigWith)
+import Observe.Event.Explicit (EventBackend, addField, withEvent)
 import qualified System.IO as IO
 
 data Channel m a = Channel
@@ -113,7 +113,7 @@ data ChannelSelector bytes f where
   Recv :: ChannelSelector bytes (Maybe bytes)
 
 logChannel
-  :: MonadCleanup m
+  :: MonadWithExceptable m
   => EventBackend m r (ChannelSelector bytes)
   -> Channel m bytes
   -> Channel m bytes

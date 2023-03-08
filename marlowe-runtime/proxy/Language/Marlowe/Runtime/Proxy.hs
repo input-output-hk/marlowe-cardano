@@ -8,11 +8,12 @@ module Language.Marlowe.Runtime.Proxy
 
 import Control.Concurrent.Component
 import Control.Monad.Base (MonadBase(..))
-import Control.Monad.Catch (MonadCatch, MonadMask, MonadThrow, generalBracket)
-import Control.Monad.Cleanup (MonadCleanup(..))
+import Control.Monad.Catch (MonadCatch, MonadMask, MonadThrow)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Trans.Control (MonadBaseControl(..))
 import Control.Monad.Trans.Resource (ResourceT, runResourceT)
+import Control.Monad.With (MonadWith(..))
+import Data.GeneralAllocate (GeneralAllocate(..), GeneralAllocated(..), GeneralReleaseType(..))
 import Language.Marlowe.Protocol.HeaderSync.Types (MarloweHeaderSync)
 import Language.Marlowe.Protocol.Query.Types (MarloweQuery)
 import Language.Marlowe.Protocol.Server (MarloweServer(..))
@@ -23,13 +24,19 @@ import Network.Protocol.Driver (runSomeConnector)
 import Network.Protocol.Handshake.Types (Handshake)
 import Network.Protocol.Job.Types (Job)
 import Network.TypedProtocol (Driver)
-import UnliftIO (MonadUnliftIO(..))
+import UnliftIO (MonadUnliftIO(..), catchSyncOrAsync, mask, throwIO)
 
 newtype WrappedUnliftIO m a = WrappedUnliftIO { runWrappedUnliftIO :: m a }
   deriving newtype (Functor, Applicative, Monad, MonadIO, MonadUnliftIO, MonadThrow, MonadCatch, MonadMask, MonadFail)
 
-instance MonadMask m => MonadCleanup (WrappedUnliftIO m) where
-  generalCleanup = generalBracket
+instance MonadUnliftIO m => MonadWith (WrappedUnliftIO m) where
+  stateThreadingGeneralWith (GeneralAllocate allocA) go = mask $ \restore -> do
+    GeneralAllocated a releaseA <- allocA restore
+    b <- restore (go a) `catchSyncOrAsync` \e -> do
+      _ <- releaseA $ ReleaseFailure e
+      throwIO e
+    c <- releaseA $ ReleaseSuccess b
+    pure (b, c)
 
 instance MonadIO m => MonadBase IO (WrappedUnliftIO m) where
   liftBase = liftIO

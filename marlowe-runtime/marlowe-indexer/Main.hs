@@ -29,7 +29,7 @@ import Network.Protocol.Driver (runConnector, tcpClient)
 import Network.Protocol.Handshake.Client (handshakeClientConnector)
 import Network.Protocol.Query.Client (liftQuery, queryClientPeer)
 import Network.Socket (AddrInfo(..), HostName, PortNumber, SocketType(..), defaultHints, withSocketsDo)
-import Observe.Event.Backend (narrowEventBackend, newOnceFlagMVar)
+import Observe.Event.Backend (injectSelector, narrowEventBackend)
 import Observe.Event.Component (LoggerDependencies(..), logger)
 import Options.Applicative
   ( auto
@@ -67,15 +67,15 @@ run Options{..} = withSocketsDo do
   let
     indexerDependencies eventBackend = MarloweIndexerDependencies
       { chainSyncConnector = SomeConnector
-          $ logConnector (narrowEventBackend ChainSeekClient eventBackend)
+          $ logConnector (narrowEventBackend (injectSelector ChainSeekClient) eventBackend)
           $ handshakeClientConnector
           $ tcpClient chainSeekHost chainSeekPort (chainSeekClientPeer Genesis)
       , chainSyncQueryConnector = SomeConnector
-          $ logConnector (narrowEventBackend ChainQueryClient eventBackend) chainSyncQueryConnector
+          $ logConnector (narrowEventBackend (injectSelector ChainQueryClient) eventBackend) chainSyncQueryConnector
       , databaseQueries = hoistDatabaseQueries
           (either throwUsageError pure <=< Pool.use pool)
           (PostgreSQL.databaseQueries securityParameter)
-      , eventBackend = narrowEventBackend App eventBackend
+      , eventBackend = narrowEventBackend (injectSelector App) eventBackend
       , pollingInterval = 1
       , marloweScriptHashes = NESet.map ScriptRegistry.marloweScript scripts
       , payoutScriptHashes = NESet.map ScriptRegistry.payoutScript scripts
@@ -85,9 +85,8 @@ run Options{..} = withSocketsDo do
     { configFilePath = logConfigFile
     , getSelectorConfig = getRootSelectorConfig
     , newRef = nextRandom
-    , newOnceFlag = newOnceFlagMVar
     , writeText = TL.hPutStr stderr
-    , injectConfigWatcherSelector = ConfigWatcher
+    , injectConfigWatcherSelector = injectSelector ConfigWatcher
     }
   where
     throwUsageError (ConnectionError err)                       = error $ show err

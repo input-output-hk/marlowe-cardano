@@ -162,10 +162,10 @@ import Network.Protocol.Query.Server (QueryServer, queryServerPeer)
 import Network.Protocol.Query.Types (Query)
 import Network.TypedProtocol (Driver)
 import Network.Wai.Handler.Warp (run)
-import Observe.Event (EventBackend, hoistEventBackend, narrowEventBackend)
-import Observe.Event.Backend (newOnceFlagMVar, noopEventBackend)
+import Observe.Event.Backend (noopEventBackend)
 import Observe.Event.Component
   (ConfigWatcherSelector(..), LoggerDependencies(..), SelectorConfig(..), logger, prependKey, singletonFieldConfig)
+import Observe.Event.Explicit (EventBackend, hoistEventBackend, injectSelector, narrowEventBackend)
 import Ouroboros.Network.Protocol.LocalTxSubmission.Type (SubmitResult)
 import Servant.Client (BaseUrl(..), ClientError, ClientM, Scheme(..), mkClientEnv, runClientM)
 import System.Environment (lookupEnv)
@@ -242,9 +242,8 @@ withLocalMarloweRuntime' MarloweRuntimeOptions{..} test = withRunInIO \runInIO -
       { configFilePath = Just $ resolveWorkspacePath workspace "runtime.log.config"
       , getSelectorConfig = getRuntimeSelectorConfig
       , newRef = nextRandom
-      , newOnceFlag = newOnceFlagMVar
       , writeText = TL.hPutStrLn logFileHandle
-      , injectConfigWatcherSelector = ConfigWatcher
+      , injectConfigWatcherSelector = injectSelector ConfigWatcher
       }
     Channels{..} <- liftIO $ atomically $ setupChannels rootEventBackend
     genesisConfigResult <- runExceptT . Byron.readGenesisData $ byronGenesisJson network
@@ -504,14 +503,14 @@ runtime = proc RuntimeDependencies{..} -> do
       costModel = CostModel 1 10
       persistRateLimit = secondsToNominalDiffTime 0.1
       databaseQueries = chainIndexerDatabaseQueries
-      eventBackend = narrowEventBackend ChainIndexerEvent rootEventBackend
+      eventBackend = narrowEventBackend (injectSelector ChainIndexerEvent) rootEventBackend
       connectToLocalNode = Cardano.connectToLocalNode localNodeConnectInfo
      in
       ChainIndexerDependencies{..}
 
   marloweIndexer -< MarloweIndexerDependencies
     { databaseQueries = marloweIndexerDatabaseQueries
-    , eventBackend = narrowEventBackend MarloweIndexerEvent rootEventBackend
+    , eventBackend = narrowEventBackend (injectSelector MarloweIndexerEvent) rootEventBackend
     , chainSyncConnector = SomeConnector $ clientConnector chainSyncPair
     , chainSyncQueryConnector = SomeConnector $ clientConnector chainSyncQueryPair
     , pollingInterval = secondsToNominalDiffTime 0.01
@@ -520,7 +519,7 @@ runtime = proc RuntimeDependencies{..} -> do
     }
 
   sync -< SyncDependencies
-    { databaseQueries = marloweSyncDatabaseQueries $ narrowEventBackend SyncDatabaseEvent rootEventBackend
+    { databaseQueries = marloweSyncDatabaseQueries $ narrowEventBackend (injectSelector SyncDatabaseEvent) rootEventBackend
     , syncSource = SomeConnectionSource $ Connection.connectionSource marloweSyncPair
     , headerSyncSource = SomeConnectionSource $ Connection.connectionSource marloweHeaderSyncPair
     , querySource = SomeConnectionSource $ Connection.connectionSource marloweQueryPair
@@ -567,7 +566,7 @@ runtime = proc RuntimeDependencies{..} -> do
         (SomeConnector $ clientConnector chainSyncPair)
         (SomeConnector $ clientConnector chainSyncQueryPair)
 
-      eventBackend = narrowEventBackend TxEvent rootEventBackend
+      eventBackend = narrowEventBackend (injectSelector TxEvent) rootEventBackend
     in
       TransactionDependencies
         { chainSyncConnector = SomeConnector $ clientConnector chainSyncPair
@@ -580,7 +579,7 @@ runtime = proc RuntimeDependencies{..} -> do
     , getMarloweHeaderSyncDriver = driverFactory $ clientConnector marloweHeaderSyncPair
     , getMarloweQueryDriver = driverFactory $ clientConnector marloweQueryPair
     , getTxJobDriver = driverFactory $ clientConnector txJobPair
-    , connectionSource = SomeConnectionSource (logConnectionSource (narrowEventBackend MarloweTCP $ hoistEventBackend liftIO rootEventBackend) marloweServerSource <> Connection.connectionSource marlowePair)
+    , connectionSource = SomeConnectionSource (logConnectionSource (narrowEventBackend (injectSelector MarloweTCP) $ hoistEventBackend liftIO rootEventBackend) marloweServerSource <> Connection.connectionSource marlowePair)
     }
 
   server -< ServerDependencies
@@ -609,28 +608,28 @@ data Channels = Channels
 
 setupChannels :: EventBackend IO r RuntimeSelector -> STM Channels
 setupChannels eventBackend = do
-  chainSyncPair <- logClientServerPair (narrowEventBackend ChainSeekPair eventBackend) . handshakeClientServerPair <$> clientServerPair
+  chainSyncPair <- logClientServerPair (narrowEventBackend (injectSelector ChainSeekPair) eventBackend) . handshakeClientServerPair <$> clientServerPair
     (chainSeekServerPeer Genesis)
     (chainSeekClientPeer Genesis)
-  chainSyncJobPair <- logClientServerPair (narrowEventBackend ChainSyncJobPair eventBackend) . handshakeClientServerPair <$> clientServerPair
+  chainSyncJobPair <- logClientServerPair (narrowEventBackend (injectSelector ChainSyncJobPair) eventBackend) . handshakeClientServerPair <$> clientServerPair
     jobServerPeer
     jobClientPeer
-  chainSyncQueryPair <- logClientServerPair (narrowEventBackend ChainSyncQueryPair eventBackend) . handshakeClientServerPair <$> clientServerPair
+  chainSyncQueryPair <- logClientServerPair (narrowEventBackend (injectSelector ChainSyncQueryPair) eventBackend) . handshakeClientServerPair <$> clientServerPair
     queryServerPeer
     queryClientPeer
-  marloweHeaderSyncPair <- logClientServerPair (narrowEventBackend HeaderSyncPair eventBackend) . handshakeClientServerPair <$> clientServerPair
+  marloweHeaderSyncPair <- logClientServerPair (narrowEventBackend (injectSelector HeaderSyncPair) eventBackend) . handshakeClientServerPair <$> clientServerPair
     marloweHeaderSyncServerPeer
     marloweHeaderSyncClientPeer
-  marloweSyncPair <- logClientServerPair (narrowEventBackend MarloweSyncPair eventBackend) . handshakeClientServerPair <$> clientServerPair
+  marloweSyncPair <- logClientServerPair (narrowEventBackend (injectSelector MarloweSyncPair) eventBackend) . handshakeClientServerPair <$> clientServerPair
     marloweSyncServerPeer
     marloweSyncClientPeer
-  marloweQueryPair <- logClientServerPair (narrowEventBackend MarloweQueryPair eventBackend) . handshakeClientServerPair <$> clientServerPair
+  marloweQueryPair <- logClientServerPair (narrowEventBackend (injectSelector MarloweQueryPair) eventBackend) . handshakeClientServerPair <$> clientServerPair
     id
     marloweQueryClientPeer
-  txJobPair <- logClientServerPair (narrowEventBackend TxJobPair eventBackend) . handshakeClientServerPair <$> clientServerPair
+  txJobPair <- logClientServerPair (narrowEventBackend (injectSelector TxJobPair) eventBackend) . handshakeClientServerPair <$> clientServerPair
     jobServerPeer
     jobClientPeer
-  marlowePair <- logClientServerPair (hoistEventBackend liftIO $ narrowEventBackend MarlowePair eventBackend) . handshakeClientServerPair <$> clientServerPair
+  marlowePair <- logClientServerPair (hoistEventBackend liftIO $ narrowEventBackend (injectSelector MarlowePair) eventBackend) . handshakeClientServerPair <$> clientServerPair
     marloweServerPeer
     marloweClientPeer
   pure Channels{..}

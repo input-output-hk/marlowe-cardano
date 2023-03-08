@@ -17,10 +17,6 @@ let
 
   marlowe-runtime-cli = mkCabalExeScript "marlowe" "marlowe-runtime-cli";
 
-  updateMaterialized = writeShellScriptBinInRepoRoot "updateMaterialized" ''
-    nix run .#updateMaterialized
-  '';
-
   # For Sphinx, and ad-hoc usage
   sphinxTools = python3.withPackages (ps: [
     sphinxcontrib-haddock.sphinxcontrib-domaintools
@@ -52,7 +48,7 @@ let
         # While nixpkgs-fmt does exclude patterns specified in `.ignore` this
         # does not appear to work inside the hook. For now we have to thus
         # maintain excludes here *and* in `./.ignore` and *keep them in sync*.
-        excludes = [ ".*nix/pkgs/haskell/materialized.*/.*" ".*/spago-packages.nix$" ".*/packages.nix$" ];
+        excludes = [ ".*/spago-packages.nix$" ".*/packages.nix$" ];
       };
       shellcheck.enable = true;
       png-optimization = {
@@ -89,7 +85,6 @@ let
     pkgs.shellcheck
     pkgs.sqlite-interactive
     stylish-haskell
-    updateMaterialized
     marlowe-runtime-cli
     pkgs.yq
     pkgs.zlib

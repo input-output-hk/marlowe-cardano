@@ -1,5 +1,7 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 -- | Defines a custom Monad for the web server's handler functions to run in.
@@ -10,12 +12,13 @@ module Language.Marlowe.Runtime.Web.Server.Monad
 import Control.Monad.Base (MonadBase)
 import Control.Monad.Catch (MonadCatch, MonadThrow)
 import Control.Monad.Catch.Pure (MonadMask)
-import Control.Monad.Cleanup (MonadCleanup(..))
 import Control.Monad.Except (ExceptT, MonadError)
 import Control.Monad.IO.Class (MonadIO, liftIO)
-import Control.Monad.Reader (MonadReader, ReaderT, asks)
+import Control.Monad.Reader (MonadReader, ReaderT(..), asks)
 import Control.Monad.Trans.Control (MonadBaseControl)
+import Control.Monad.With (MonadWith(..))
 import Data.Coerce (coerce)
+import Data.GeneralAllocate (GeneralAllocate(..), GeneralAllocated(..))
 import Language.Marlowe.Runtime.ChainSync.Api (TxId)
 import Language.Marlowe.Runtime.Core.Api (ContractId)
 import Language.Marlowe.Runtime.Web.Server.SyncClient
@@ -39,14 +42,25 @@ newtype AppM r a = AppM { runAppM :: ReaderT (AppEnv r) Handler a }
     , MonadBase IO
     )
 
-instance MonadCleanup (AppM r) where
-  generalCleanup acquire release action = coerce $ generalCleanup
-    (toTransformers acquire)
-    (\a b -> toTransformers $ release a b)
-    (\a -> toTransformers $ action a)
-    where
-      toTransformers :: AppM r a -> ReaderT (AppEnv r) (ExceptT ServerError IO) a
-      toTransformers = coerce
+instance MonadWith (AppM r) where
+  type WithException (AppM r) = WithException (ExceptT ServerError IO)
+  stateThreadingGeneralWith
+    :: forall a b releaseReturn
+     . GeneralAllocate (AppM r) (WithException (ExceptT ServerError IO)) releaseReturn b a
+    -> (a -> AppM r b)
+    -> AppM r (b, releaseReturn)
+  stateThreadingGeneralWith (GeneralAllocate allocA) go = AppM . ReaderT $ \r -> do
+    let
+      allocA' :: (forall x. ExceptT ServerError IO x -> ExceptT ServerError IO x) -> (ExceptT ServerError IO) (GeneralAllocated (ExceptT ServerError IO) (WithException (ExceptT ServerError IO)) releaseReturn b a)
+      allocA' restore = do
+        let
+          restore' :: forall x. AppM r x -> AppM r x
+          restore' mx = AppM . ReaderT $ coerce . restore . coerce . (runReaderT . runAppM) mx
+        GeneralAllocated a releaseA <- (coerce . runReaderT . runAppM) (allocA restore') r
+        let
+          releaseA' relTy = (coerce . runReaderT . runAppM) (releaseA relTy) r
+        pure $ GeneralAllocated a releaseA'
+    coerce $ stateThreadingGeneralWith (GeneralAllocate allocA') (flip (coerce . runReaderT . runAppM) r . go)
 
 data AppEnv r = AppEnv
   { _loadContractHeaders :: LoadContractHeaders IO
@@ -119,18 +133,18 @@ withdraw version addresses contractId role = do
 
 -- | Submit a contract creation transaction to the node
 submitContract :: ContractId -> Submit r (AppM r)
-submitContract contractId mods tx = do
+submitContract contractId backend tx = do
   submit <- asks _submitContract
-  liftIO $ submit contractId mods tx
+  liftIO $ submit contractId backend tx
 
 -- | Submit a withdrawal transaction to the node
 submitWithdrawal :: TxId -> Submit r (AppM r)
-submitWithdrawal txId mods tx = do
+submitWithdrawal txId backend tx = do
   submit <- asks _submitWithdrawal
-  liftIO $ submit txId mods tx
+  liftIO $ submit txId backend tx
 
 -- | Submit an apply inputs transaction to the node
 submitTransaction :: ContractId -> TxId -> Submit r (AppM r)
-submitTransaction contractId txId mods tx = do
+submitTransaction contractId txId backend tx = do
   submit <- asks _submitTransaction
-  liftIO $ submit contractId txId mods tx
+  liftIO $ submit contractId txId backend tx

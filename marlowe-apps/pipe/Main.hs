@@ -14,8 +14,8 @@ import Data.Aeson (eitherDecode, encode)
 import Data.Text (Text)
 import Language.Marlowe.Runtime.App.Parser (getConfigParser)
 import Language.Marlowe.Runtime.App.Transact (handleWithEvents)
-import Observe.Event (addField, hoistEvent, withEvent)
 import Observe.Event.Dynamic (DynamicEventSelector(..))
+import Observe.Event.Explicit (addField, hoistEventBackend, idInjectSelector, subEventBackend, withEvent)
 import Observe.Event.Render.JSON (DefaultRenderSelectorJSON(defaultRenderSelectorJSON))
 import Observe.Event.Render.JSON.Handle (simpleJsonStderrBackend)
 import Observe.Event.Syntax ((≔))
@@ -45,8 +45,9 @@ main =
           $ \event ->
             do
               addField event $ ("line" :: Text) ≔ LBS8.unpack line
+              let subBackend = subEventBackend idInjectSelector event eventBackend
               case eitherDecode line of
-                Right request -> runExceptT (handleWithEvents (hoistEvent liftIO event) "Handle" config request pure)
+                Right request -> runExceptT (handleWithEvents (hoistEventBackend liftIO subBackend) "Handle" config request pure)
                                    >>= \case
                                     Right response -> LBS8.putStrLn $ encode response
                                     Left message -> LBS8.putStrLn $ encode message

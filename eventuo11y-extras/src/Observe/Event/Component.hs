@@ -26,8 +26,8 @@ import Control.Exception (SomeException, displayException)
 import Control.Exception.Lifted (try)
 import Control.Monad (forever, mfilter, void)
 import Control.Monad.Base (MonadBase, liftBase)
-import Control.Monad.Cleanup (MonadCleanup)
 import Control.Monad.Trans.Control (MonadBaseControl, control)
+import Control.Monad.With (MonadWithExceptable)
 import Data.Aeson (FromJSON(..), ToJSON(..), Value(..), eitherDecodeFileStrict')
 import Data.Aeson.Text (encodeToLazyText)
 import Data.Foldable (traverse_)
@@ -39,9 +39,9 @@ import Data.Text (Text)
 import qualified Data.Text.Lazy as TL
 import Data.Time (diffUTCTime)
 import Data.Void (Void, absurd)
-import Observe.Event (EventBackend, addField, withEvent)
-import Observe.Event.Backend (OnceFlag, narrowEventBackend)
+import Observe.Event.Backend (InjectSelector, narrowEventBackend)
 import Observe.Event.Backend.Extra
+import Observe.Event.Explicit (EventBackend, addField, withEvent)
 import System.Directory (canonicalizePath)
 import System.FSNotify (Event(..), EventIsDirectory(..), watchDir, withManager)
 import System.FilePath (dropFileName)
@@ -122,13 +122,12 @@ data LoggerDependencies m r s = LoggerDependencies
   { configFilePath :: Maybe FilePath
   , getSelectorConfig :: GetSelectorConfig s
   , newRef :: m r
-  , newOnceFlag :: m (OnceFlag m)
   , writeText :: TL.Text -> m ()
-  , injectConfigWatcherSelector :: forall f. ConfigWatcherSelector f -> s f
+  , injectConfigWatcherSelector :: InjectSelector ConfigWatcherSelector s
   }
 
 logger
-  :: (MonadCleanup m, MonadBaseControl IO m, ToJSON r)
+  :: (MonadWithExceptable m, MonadBaseControl IO m, ToJSON r)
   => Component m (LoggerDependencies m r s) (EventBackend m (Maybe r) s)
 logger = proc LoggerDependencies{..} -> case configFilePath of
   Nothing -> logAppender -< let getLogConfig = pure mempty in LogAppenderDependencies{..}
@@ -143,7 +142,7 @@ data ConfigWatcherSelector f where
 
 configWatcher
   :: forall m r
-   . (MonadCleanup m, MonadBaseControl IO m)
+   . (MonadWithExceptable m, MonadBaseControl IO m)
   => Component m (EventBackend m r ConfigWatcherSelector, FilePath) (STM LogConfig)
 configWatcher = component \(eventBackend, configFile) -> do
   configVar <- newTVar mempty
@@ -178,7 +177,6 @@ data LogAppenderDependencies m r s = LogAppenderDependencies
   { getLogConfig :: STM LogConfig
   , getSelectorConfig :: GetSelectorConfig s
   , newRef :: m r
-  , newOnceFlag :: m (OnceFlag m)
   , writeText :: TL.Text -> m ()
   }
 
@@ -187,7 +185,7 @@ logAppender
    . (MonadBase IO m, ToJSON r)
   => Component m (LogAppenderDependencies m r s) (EventBackend m (Maybe r) s)
 logAppender = component \LogAppenderDependencies{..} -> do
-  (pullEvents, eventBackend) <- proxyEventBackend newOnceFlag newRef
+  (pullEvents, eventBackend) <- proxyEventBackend newRef
   let
     eventFilter :: s f -> m (Maybe (f -> m Bool))
     eventFilter = configFilter getSelectorConfig $ liftBase $ atomically getLogConfig

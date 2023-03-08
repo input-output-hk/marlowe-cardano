@@ -100,7 +100,7 @@ library libchainsync
     , cardano-api
     , cardano-binary
     , containers
-    , eventuo11y
+    , eventuo11y ^>= { 0.9, 0.10 }
     , eventuo11y-extras
     , foldl
     , hasql
@@ -144,7 +144,7 @@ library chain-indexer
     , cardano-ledger-core
     , cardano-ledger-shelley
     , containers
-    , eventuo11y
+    , eventuo11y ^>= { 0.9, 0.10 }
     , eventuo11y-extras
     , hasql
     , hasql-th
@@ -237,7 +237,7 @@ executable marlowe-chain-indexer
     , cardano-api
     , cardano-crypto-wrapper
     , cardano-ledger-byron
-    , eventuo11y
+    , eventuo11y ^>= { 0.9, 0.10 }
     , eventuo11y-extras
     , hasql
     -- Consider removing the hasql < 1.6 constraint in cabal.project if updating hasql-pool
@@ -267,7 +267,7 @@ executable marlowe-chain-sync
     , async-components
     , cardano-api
     , cardano-ledger-byron
-    , eventuo11y
+    , eventuo11y ^>= { 0.9, 0.10 }
     , eventuo11y-extras
     , hasql
     -- Consider removing the hasql < 1.6 constraint in cabal.project if updating hasql-pool

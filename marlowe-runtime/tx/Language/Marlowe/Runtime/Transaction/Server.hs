@@ -94,7 +94,8 @@ import Network.Protocol.Connection (SomeConnectionSource(..), SomeServerConnecto
 import Network.Protocol.Driver (runSomeConnector)
 import Network.Protocol.Job.Server
   (JobServer(..), ServerStAttach(..), ServerStAwait(..), ServerStCmd(..), ServerStInit(..), hoistAttach, hoistCmd)
-import Observe.Event (Event, EventBackend, addField, subEventBackend, withEvent, withSubEvent)
+import Observe.Event.Explicit
+  (Event, EventBackend, addField, idInjectSelector, injectSelector, subEventBackend, withEvent)
 import Ouroboros.Consensus.BlockchainTime (SystemStart)
 import System.Exit (die)
 
@@ -176,10 +177,12 @@ worker = component_ \WorkerDependencies{..} -> do
                 systemStart
                 eraHistory
                 protocolParameters
+            eventBackend' = subEventBackend idInjectSelector ev eventBackend
           case command of
             Create mStakeCredential version addresses roles metadata minAda contract ->
-              withSubEvent ev ExecCreate \ev' -> execCreate
+              withEvent eventBackend' ExecCreate \ev' -> execCreate
                 getCurrentScripts
+                eventBackend'
                 ev'
                 solveConstraints
                 loadWalletContext
@@ -192,7 +195,8 @@ worker = component_ \WorkerDependencies{..} -> do
                 minAda
                 contract
             ApplyInputs version addresses contractId metadata invalidBefore invalidHereafter inputs ->
-              withSubEvent ev ExecApplyInputs \ev' -> withMarloweVersion version $ execApplyInputs
+              withEvent eventBackend' ExecApplyInputs \ev' -> withMarloweVersion version $ execApplyInputs
+                eventBackend'
                 ev'
                 getTip
                 systemStart
@@ -208,7 +212,8 @@ worker = component_ \WorkerDependencies{..} -> do
                 invalidHereafter
                 inputs
             Withdraw version addresses contractId roleToken ->
-              withSubEvent ev ExecWithdraw \ev' -> execWithdraw
+              withEvent eventBackend' ExecWithdraw \ev' -> execWithdraw
+                eventBackend'
                 ev'
                 solveConstraints
                 loadWalletContext
@@ -233,7 +238,8 @@ attachSubmit jobId getSubmitJob =
 
 execCreate
   :: (MarloweVersion v -> MarloweScripts)
-  -> Event IO r TransactionServerSelector BuildTxField
+  -> EventBackend IO r TransactionServerSelector
+  -> Event IO r BuildTxField
   -> SolveConstraints
   -> LoadWalletContext r
   -> NetworkId
@@ -245,8 +251,8 @@ execCreate
   -> Chain.Lovelace
   -> Contract v
   -> IO (ServerStCmd MarloweTxCommand Void (CreateError v) (ContractCreated BabbageEra v) IO ())
-execCreate getCurrentScripts ev solveConstraints loadWalletContext networkId mStakeCredential version addresses roleTokens metadata minAda contract = execExceptT do
-  walletContext <- liftIO $ loadWalletContext (subEventBackend LoadWalletContext ev) addresses
+execCreate getCurrentScripts eventBackend ev solveConstraints loadWalletContext networkId mStakeCredential version addresses roleTokens metadata minAda contract = execExceptT do
+  walletContext <- liftIO $ loadWalletContext (subEventBackend (injectSelector LoadWalletContext) ev eventBackend) addresses
   mCardanoStakeCredential <- except $ traverse (note CreateToCardanoError . toCardanoStakeCredential) mStakeCredential
   ((datum, assets, rolesCurrency), constraints) <- except
     $ buildCreateConstraints version walletContext roleTokens metadata minAda contract
@@ -306,7 +312,8 @@ findMarloweOutput address = \case
       address == fromCardanoAddressInEra (cardanoEra @era) address'
 
 execApplyInputs
-  :: Event IO r TransactionServerSelector BuildTxField
+  :: EventBackend IO r TransactionServerSelector
+  -> Event IO r BuildTxField
   -> STM Chain.ChainPoint
   -> SystemStart
   -> EraHistory CardanoMode
@@ -322,6 +329,7 @@ execApplyInputs
   -> Inputs v
   -> IO (ServerStCmd MarloweTxCommand Void (ApplyInputsError v) (InputsApplied BabbageEra v) IO ())
 execApplyInputs
+  eventBackend
   ev
   getTip
   systemStart
@@ -338,7 +346,7 @@ execApplyInputs
   inputs = execExceptT do
     marloweContext@MarloweContext{..} <- withExceptT ApplyInputsLoadMarloweContextFailed
       $ ExceptT
-      $ liftIO $ loadMarloweContext (subEventBackend LoadMarloweContext ev) version contractId
+      $ liftIO $ loadMarloweContext (subEventBackend (injectSelector LoadMarloweContext) ev eventBackend) version contractId
     let
       getTipSlot = atomically $ getTip >>= \case
         Chain.Genesis -> retry
@@ -356,7 +364,7 @@ execApplyInputs
         invalidBefore'
         invalidHereafter'
         inputs
-    walletContext <- liftIO $ loadWalletContext (subEventBackend LoadWalletContext ev)addresses
+    walletContext <- liftIO $ loadWalletContext (subEventBackend (injectSelector LoadWalletContext) ev eventBackend) addresses
     txBody <- except
       $ first ApplyInputsConstraintError
       $ solveConstraints version marloweContext walletContext constraints
@@ -366,7 +374,8 @@ execApplyInputs
     pure InputsApplied{..}
 
 execWithdraw
-  :: Event IO r TransactionServerSelector BuildTxField
+  :: EventBackend IO r TransactionServerSelector
+  -> Event IO r BuildTxField
   -> SolveConstraints
   -> LoadWalletContext r
   -> LoadMarloweContext r
@@ -375,18 +384,18 @@ execWithdraw
   -> ContractId
   -> TokenName
   -> IO (ServerStCmd MarloweTxCommand Void (WithdrawError v) (TxBody BabbageEra) IO ())
-execWithdraw ev solveConstraints loadWalletContext loadMarloweContext version addresses contractId roleToken = liftIO $ execExceptT $ case version of
+execWithdraw eventBackend ev solveConstraints loadWalletContext loadMarloweContext version addresses contractId roleToken = liftIO $ execExceptT $ case version of
   MarloweV1 -> do
     marloweContext@MarloweContext{payoutOutputs=Map.elems -> payouts} <- withExceptT WithdrawLoadMarloweContextFailed
       $ ExceptT
-      $ loadMarloweContext (subEventBackend LoadMarloweContext ev) version contractId
+      $ loadMarloweContext (subEventBackend (injectSelector LoadMarloweContext) ev eventBackend) version contractId
     let
       payoutAssetId Payout {datum = assetId } = assetId
       isRolePayout (Chain.AssetId _ roleName) = roleName == roleToken
       possibleDatum = find isRolePayout . map payoutAssetId $ payouts
     datum <- noteT (UnableToFindPayoutForAGivenRole roleToken) $ hoistMaybe possibleDatum
     constraints <- except $ buildWithdrawConstraints version datum
-    walletContext <- lift $ loadWalletContext (subEventBackend LoadWalletContext ev) addresses
+    walletContext <- lift $ loadWalletContext (subEventBackend (injectSelector LoadWalletContext) ev eventBackend) addresses
     except
       $ first WithdrawConstraintError
       $ solveConstraints version marloweContext walletContext constraints
