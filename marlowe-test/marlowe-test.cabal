@@ -103,6 +103,7 @@ library
     , cardano-api
     , containers
     , data-default
+    , directory
     , filepath
     , hint
     , lens

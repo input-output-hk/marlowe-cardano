@@ -13,6 +13,7 @@
 
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -22,21 +23,62 @@ module Spec.Marlowe.Reference
   ( -- * Types
     ReferencePath(..)
   , ReferenceTransaction(..)
-    -- * Testing
+    -- * Analysis
   , processContract
+    -- * Testing
+  , arbitraryReferenceTransaction
+  , readReferencePaths
+  , referenceFolder
   ) where
 
 
+import Control.Monad (forM)
 import Control.Monad.Except (ExceptT(..), lift, throwError)
 import Data.Aeson (FromJSON, ToJSON, eitherDecodeFileStrict, encodeFile)
 import Data.Bifunctor (first)
+import Data.List (isSuffixOf)
 import GHC.Generics (Generic)
 import Language.Marlowe.Core.V1.Semantics (TransactionInput, TransactionOutput(..), computeTransaction)
 import Language.Marlowe.Core.V1.Semantics.Types (Contract, Party(Role), State(..), Token(..))
 import Language.Marlowe.FindInputs (getAllInputs)
 import Plutus.V2.Ledger.Api (POSIXTime)
+import Spec.Marlowe.Semantics.Golden (GoldenTransaction)
+import System.Directory (listDirectory)
+import System.FilePath ((</>))
+import Test.Tasty.QuickCheck (Gen, elements)
 
 import qualified PlutusTx.AssocMap as AM (empty, singleton)
+
+
+referenceFolder :: FilePath
+referenceFolder = "reference" </> "data"
+
+
+readReferencePaths :: IO [ReferencePath]
+readReferencePaths =
+  do
+    pathFiles <- fmap (referenceFolder </>) . filter (".paths" `isSuffixOf`) <$> listDirectory referenceFolder
+    fmap concat
+      . forM pathFiles
+      $ \pathFile ->
+        eitherDecodeFileStrict pathFile
+          >>= \case
+            Right paths -> pure $ filter (not . null . transactions) paths
+            Left msg -> error $ "Failed parsing " <> pathFile <> ": " <> msg <> "."
+
+
+arbitraryReferenceTransaction :: [ReferencePath] -> Gen GoldenTransaction
+arbitraryReferenceTransaction paths =
+  do
+    ReferencePath{..} <- elements paths
+    if length transactions > 1
+      then do
+             (ReferenceTransaction _ prior, ReferenceTransaction{..}) <- elements $ zip (init transactions) (tail transactions)
+             pure (txOutState prior, txOutContract prior, input, output)
+      else let
+             ReferenceTransaction{..} = head transactions
+            in
+              pure (state, contract, input, output)
 
 
 data ReferencePath =

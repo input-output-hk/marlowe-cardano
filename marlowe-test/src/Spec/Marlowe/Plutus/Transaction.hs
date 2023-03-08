@@ -105,10 +105,11 @@ import Spec.Marlowe.Plutus.Types
   , role
   , scriptPurpose
   )
+import Spec.Marlowe.Reference (ReferencePath, arbitraryReferenceTransaction)
 import Spec.Marlowe.Semantics.Arbitrary (arbitraryGoldenTransaction, arbitraryPositiveInteger)
 import Spec.Marlowe.Semantics.Golden (GoldenTransaction)
 import Spec.Marlowe.Semantics.Merkle (deepMerkleize, merkleizeInputs)
-import Test.Tasty.QuickCheck (Arbitrary(..), Gen, elements, suchThat)
+import Test.Tasty.QuickCheck (Arbitrary(..), Gen, elements, frequency, suchThat)
 
 import qualified Language.Marlowe.Core.V1.Semantics.Types as M (Party(Address))
 import qualified Plutus.V1.Ledger.Value as V (adaSymbol, adaToken, singleton)
@@ -336,13 +337,19 @@ validSemanticsTransaction noisy =
 
 
 -- | Generate an arbitrary, valid Marlowe semantics transaction: datum, redeemer, and script context.
-arbitrarySemanticsTransaction :: ArbitraryTransaction SemanticsTransaction ()  -- ^ Modifications to make before building the valid transaction.
+arbitrarySemanticsTransaction :: [ReferencePath]                               -- ^ The reference execution paths from which to choose.
+                              -> ArbitraryTransaction SemanticsTransaction ()  -- ^ Modifications to make before building the valid transaction.
                               -> ArbitraryTransaction SemanticsTransaction ()  -- ^ Modifications to make after building the valid transaction.
                               -> Bool                                          -- ^ Whether to add noise to the script context.
                               -> Gen (PlutusTransaction SemanticsTransaction)  -- ^ The generator.
-arbitrarySemanticsTransaction modifyBefore modifyAfter noisy =
+arbitrarySemanticsTransaction referencePaths modifyBefore modifyAfter noisy =
   do
-    golden <- arbitraryGoldenTransaction
+    golden <-
+      frequency
+        [
+          (1, arbitraryGoldenTransaction)                    -- ^ Manually vetted transactions.
+        , (9, arbitraryReferenceTransaction referencePaths)  -- ^ Transactions generated using `getAllInputs` and `computeTransaction`.
+        ]
     start <- bareSemanticsTransaction golden
     (modifyBefore >> validSemanticsTransaction noisy >> modifyAfter)
       `execStateT` start
