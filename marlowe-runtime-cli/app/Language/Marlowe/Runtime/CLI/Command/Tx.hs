@@ -48,7 +48,7 @@ txCommandParser metadataSupported subCommandParser = TxCommand
     tagsFileParser
       | metadataSupported = optional $ strOption $ mconcat
         [ long "tags-file"
-        , help "A JSON file containing a map of tags indexes to optional JSON-encoded metadata values that will be added to the transaction's 1564 metadata key."
+        , help "A JSON file containing a map of tags indexes to optional JSON-encoded metadata values that will be added to the transaction's 1564 metadata key. Note that the entire 1564 key will be overridden if also specified in --metadata-file."
         , metavar "FILE_PATH"
         ]
       | otherwise = pure Nothing
