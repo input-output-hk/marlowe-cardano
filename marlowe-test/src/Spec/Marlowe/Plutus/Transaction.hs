@@ -277,6 +277,21 @@ makeSpendSignatory (TxInInfo _ (TxOut (Address (PubKeyCredential pkh) _) _ _ _))
 makeSpendSignatory _                                                             = mempty
 
 
+-- | Combine payments with the same address and hash.
+consolidatePayments :: [TxOut] -> [TxOut]
+consolidatePayments ps =
+  let
+    extractAddressHash (TxOut address _ hash _) = (address, hash)
+    extractValue (TxOut _ value _ _) = value
+  in
+    [
+      TxOut address value hash Nothing
+    |
+      ah@(address, hash) <- nub $ extractAddressHash <$> ps
+    , let value = foldMap extractValue $ filter ((== ah) . extractAddressHash) ps
+    ]
+
+
 -- | Generate a valid Marlowe semantics transaction.
 validSemanticsTransaction :: Bool                                          -- ^ Whether to add noise to the script context.
                           -> ArbitraryTransaction SemanticsTransaction ()  -- ^ The generator.
@@ -314,7 +329,7 @@ validSemanticsTransaction noisy =
     MarloweParams currencySymbol <- use marloweParams
     -- Add the payments.
     (payments, paymentData) <- fmap (bimap mconcat mconcat . unzip) . mapM (makePayment currencySymbol) =<< (output `uses` txOutPayments)
-    infoOutputs <>= payments
+    infoOutputs <>= consolidatePayments payments
     infoData <>= AM.fromList paymentData
 
     -- Add the signatories.
@@ -347,8 +362,8 @@ arbitrarySemanticsTransaction referencePaths modifyBefore modifyAfter noisy =
     golden <-
       frequency
         [
-          (1, arbitraryGoldenTransaction)                    -- ^ Manually vetted transactions.
-        , (9, arbitraryReferenceTransaction referencePaths)  -- ^ Transactions generated using `getAllInputs` and `computeTransaction`.
+          (1, arbitraryGoldenTransaction)                    -- Manually vetted transactions.
+        , (5, arbitraryReferenceTransaction referencePaths)  -- Transactions generated using `getAllInputs` and `computeTransaction`.
         ]
     start <- bareSemanticsTransaction golden
     (modifyBefore >> validSemanticsTransaction noisy >> modifyAfter)
