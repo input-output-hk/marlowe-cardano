@@ -11,7 +11,9 @@
 -----------------------------------------------------------------------------
 
 
+{-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 
 
 module Spec.Marlowe.Plutus.Script
@@ -53,6 +55,7 @@ import Plutus.V2.Ledger.Api
   , Data
   , Datum(Datum)
   , DatumHash
+  , ExBudget(..)
   , ToData(toBuiltinData)
   , TokenName
   , Validator(getValidator)
@@ -64,6 +67,11 @@ import qualified Data.ByteString.Short as SBS (ShortByteString, toShort)
 import qualified Data.Map.Strict as M (fromList)
 
 
+-- | Check the Plutus execution budget.
+enforceBudget :: Bool
+enforceBudget = False
+
+
 -- | Run the Plutus evaluator on the Marlowe semantics validator.
 evaluateSemantics :: Data                    -- ^ The datum.
                   -> Data                    -- ^ The redeemer.
@@ -73,8 +81,10 @@ evaluateSemantics datum redeemer context =
   case evaluationContext of
     Left message -> This message
     Right ec     -> case evaluateScriptCounting PlutusV2 (ProtocolVersion 7 0) Verbose ec serialiseSemanticsValidator [datum, redeemer, context] of
-                      (logOutput, Right _     ) -> That logOutput
-                      (logOutput, Left message) -> These (show message) logOutput
+                      (logOutput, Right ex@ExBudget{..}) -> if enforceBudget && (exBudgetCPU > 10_000_000_000 || exBudgetMemory > 14_000_000)
+                                                              then These ("Exceeded Plutus budget: " <> show ex) logOutput
+                                                              else That logOutput
+                      (logOutput, Left message         ) -> These (show message) logOutput
 
 
 -- | Run the Plutus evaluator on the Marlowe payout validator.
