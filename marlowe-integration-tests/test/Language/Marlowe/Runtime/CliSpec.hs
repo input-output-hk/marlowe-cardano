@@ -17,9 +17,15 @@ import qualified Data.Text as Text
 import Data.Void (Void)
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
 import Language.Marlowe.Runtime.Cardano.Api (cardanoEraToAsType)
-import Language.Marlowe.Runtime.ChainSync.Api (Address(..), Lovelace(Lovelace), TransactionMetadata, toBech32)
+import Language.Marlowe.Runtime.ChainSync.Api (Address(..), Lovelace(Lovelace), toBech32)
 import Language.Marlowe.Runtime.Client (runMarloweTxClient)
-import Language.Marlowe.Runtime.Core.Api (MarloweVersion(MarloweV1), MarloweVersionTag(V1), contractToJSON)
+import Language.Marlowe.Runtime.Core.Api
+  ( MarloweTransactionMetadata
+  , MarloweVersion(MarloweV1)
+  , MarloweVersionTag(V1)
+  , contractToJSON
+  , emptyMarloweTransactionMetadata
+  )
 import Language.Marlowe.Runtime.Integration.Common
   (Integration, Wallet(..), execMarlowe_, getGenesisWallet, runIntegrationTest)
 import Language.Marlowe.Runtime.Transaction.Api
@@ -54,8 +60,8 @@ spec = describe "Marlowe runtime CLI" do
         let roleTokensConfig :: RoleTokensConfig
             roleTokensConfig = RoleTokensNone
 
-            transactionMetadata :: TransactionMetadata
-            transactionMetadata = mempty
+            transactionMetadata :: MarloweTransactionMetadata
+            transactionMetadata = emptyMarloweTransactionMetadata
 
             contract :: V1.Contract
             contract = V1.Close
