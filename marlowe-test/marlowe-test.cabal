@@ -73,14 +73,7 @@ library
     Spec.Marlowe.Plutus.Transaction
     Spec.Marlowe.Plutus.Types
     Spec.Marlowe.Plutus.Value
-    Spec.Marlowe.Serialization
-    Spec.Marlowe.Serialization.CoreJson
-    Spec.Marlowe.Serialization.ExtendedJson
-    Spec.Marlowe.Service
-    Spec.Marlowe.Service.Isabelle
-    Spec.Marlowe.Service.Random
-    Spec.Marlowe.Service.Serialization
-    Spec.Marlowe.Service.Types
+    Spec.Marlowe.Reference
     Spec.Marlowe.Semantics.Arbitrary
     Spec.Marlowe.Semantics.AssocMap
     Spec.Marlowe.Semantics.Compute
@@ -95,6 +88,14 @@ library
     Spec.Marlowe.Semantics.Merkle
     Spec.Marlowe.Semantics.Orphans
     Spec.Marlowe.Semantics.Util
+    Spec.Marlowe.Serialization
+    Spec.Marlowe.Serialization.CoreJson
+    Spec.Marlowe.Serialization.ExtendedJson
+    Spec.Marlowe.Service
+    Spec.Marlowe.Service.Isabelle
+    Spec.Marlowe.Service.Random
+    Spec.Marlowe.Service.Serialization
+    Spec.Marlowe.Service.Types
   build-depends:
       base >=4.9 && <5
     , aeson
@@ -146,3 +147,15 @@ executable marlowe-spec-client
     , bytestring
     , marlowe-test
     , split
+
+
+executable marlowe-reference
+  import: lang
+  hs-source-dirs: reference
+  main-is: Main.hs
+  build-depends:
+      base >=4.9 && <5
+    , directory
+    , filepath
+    , marlowe-test
+    , mtl
