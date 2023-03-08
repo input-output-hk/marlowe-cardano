@@ -110,7 +110,7 @@ post eb req@PostContractsRequest{..} changeAddressDTO mAddresses mCollateralUtxo
   transactionMetadata <- fromDTOThrow (badRequest' "Invalid metadata value") metadata
   marloweMetadata <- fromDTOThrow
     (badRequest' "Invalid tags value")
-    if Map.null tags then Nothing else Just $ MarloweMetadata tags Nothing
+    if Map.null tags then Nothing else Just (tags, Nothing)
   createContract Nothing v WalletAddresses{..} roles' MarloweTransactionMetadata{..} (Lovelace minUTxODeposit) contract >>= \case
     Left err -> do
       addField ev $ PostError $ show err

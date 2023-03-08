@@ -138,7 +138,7 @@ post eb contractId req@PostTransactionsRequest{..} changeAddressDTO mAddresses m
   transactionMetadata <- fromDTOThrow (badRequest' "Invalid metadata value") metadata
   marloweMetadata <- fromDTOThrow
     (badRequest' "Invalid tags value")
-    if Map.null tags then Nothing else Just $ MarloweMetadata tags Nothing
+    if Map.null tags then Nothing else Just (tags, Nothing)
   applyInputs v WalletAddresses{..} contractId' MarloweTransactionMetadata{..} invalidBefore invalidHereafter inputs >>= \case
     Left err -> do
       addField ev $ PostError $ show err

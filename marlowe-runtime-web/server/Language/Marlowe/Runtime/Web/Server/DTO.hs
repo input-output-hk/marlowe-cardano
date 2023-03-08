@@ -30,7 +30,7 @@ import Control.Arrow (second)
 import Control.Error.Util (hush)
 import Control.Monad ((<=<))
 import Control.Monad.Except (MonadError, throwError)
-import Data.Aeson (ToJSON(toJSON))
+import Data.Aeson (ToJSON(toJSON), Value(..))
 import Data.Bifunctor (bimap)
 import Data.Coerce (coerce)
 import Data.List.NonEmpty (NonEmpty(..))
@@ -42,6 +42,7 @@ import qualified Data.Set as Set
 import Data.String (fromString)
 import Data.Text (Text)
 import qualified Data.Text as T
+import Data.Traversable (for)
 import Data.Word (Word16, Word64)
 import GHC.TypeLits (KnownSymbol)
 import qualified Language.Marlowe.Core.V1.Semantics as Sem
@@ -146,7 +147,8 @@ instance ToDTO Discovery.ContractHeader where
     { contractId = toDTO contractId
     , roleTokenMintingPolicyId = toDTO rolesCurrency
     , version = toDTO marloweVersion
-    , marloweMetadata = toDTO $ marloweMetadata metadata
+    , tags = foldMap fst $ toDTO $ marloweMetadata metadata
+    , continuations = snd =<< toDTO (marloweMetadata metadata)
     , metadata = toDTO $ transactionMetadata metadata
     , status = Web.Confirmed
     , block = Just $ toDTO blockHeader
@@ -249,17 +251,20 @@ instance FromDTO Chain.TransactionMetadata where
   fromDTO = fmap Chain.TransactionMetadata . fromDTO
 
 instance HasDTO MarloweMetadata where
-  type DTO MarloweMetadata = Web.MarloweMetadata
+  type DTO MarloweMetadata = (Map Text Web.Metadata, Maybe Text)
 
 instance ToDTO MarloweMetadata where
-  toDTO MarloweMetadata{..} = Web.MarloweMetadata
-    { tags = Map.mapKeys getMarloweMetadataTag $ toDTO <$> tags
+  toDTO MarloweMetadata{..} =
+    ( Map.mapKeys getMarloweMetadataTag $ maybe (Web.Metadata Null) toDTO <$> tags
     , continuations
-    }
+    )
 
 instance FromDTO MarloweMetadata where
-  fromDTO Web.MarloweMetadata{..} = MarloweMetadata
-    <$> (Map.mapKeys MarloweMetadataTag <$> traverse fromDTO tags)
+  fromDTO (tags, continuations) = MarloweMetadata
+    <$> ( Map.mapKeys MarloweMetadataTag <$> for tags \case
+            Web.Metadata Null -> pure Nothing
+            m -> Just <$> fromDTO m
+        )
     <*> pure continuations
 
 instance HasDTO Chain.SlotNo where
@@ -311,7 +316,8 @@ instance ToDTO SomeContractState where
       { contractId = toDTO contractId
       , roleTokenMintingPolicyId = toDTO roleTokenMintingPolicyId
       , version = Web.V1
-      , marloweMetadata = toDTO $ marloweMetadata metadata
+      , tags = foldMap fst $ toDTO $ marloweMetadata metadata
+      , continuations = snd =<< toDTO (marloweMetadata metadata)
       , metadata = toDTO $ transactionMetadata metadata
       , status = Web.Confirmed
       , block = Just $ toDTO initialBlock
@@ -330,7 +336,8 @@ instance ToDTO SomeTransaction where
     Web.Tx
       { contractId = toDTO contractId
       , transactionId = toDTO transactionId
-      , marloweMetadata = toDTO $ marloweMetadata metadata
+      , continuations = snd =<< toDTO (marloweMetadata metadata)
+      , tags = foldMap fst $ toDTO $ marloweMetadata metadata
       , metadata = toDTO $ transactionMetadata metadata
       , status = Web.Confirmed
       , block = Just $ toDTO blockHeader
@@ -403,7 +410,8 @@ instance IsCardanoEra era => ToDTOWithTxStatus (Tx.ContractCreated era v) where
       , roleTokenMintingPolicyId = toDTO rolesCurrency
       , version = case version of
           MarloweV1 -> Web.V1
-      , marloweMetadata = toDTO $ marloweMetadata metadata
+      , tags = foldMap fst $ toDTO $ marloweMetadata metadata
+      , continuations = snd =<< toDTO (marloweMetadata metadata)
       , metadata = toDTO $ transactionMetadata metadata
       , status = toDTO status
       , block = Nothing
@@ -427,7 +435,8 @@ instance IsCardanoEra era => ToDTOWithTxStatus (Tx.InputsApplied era v) where
     Web.Tx
       { contractId = toDTO contractId
       , transactionId = toDTO $ fromCardanoTxId $ getTxId txBody
-      , marloweMetadata = toDTO $ marloweMetadata metadata
+      , continuations = snd =<< toDTO (marloweMetadata metadata)
+      , tags = foldMap fst $ toDTO $ marloweMetadata metadata
       , metadata = toDTO $ transactionMetadata metadata
       , status = toDTO status
       , block = Nothing
@@ -455,7 +464,8 @@ instance ToDTO (Transaction 'V1) where
     Web.TxHeader
       { contractId = toDTO contractId
       , transactionId = toDTO transactionId
-      , marloweMetadata = toDTO $ marloweMetadata metadata
+      , continuations = snd =<< toDTO (marloweMetadata metadata)
+      , tags = foldMap fst $ toDTO $ marloweMetadata metadata
       , metadata = toDTO $ transactionMetadata metadata
       , status = Web.Confirmed
       , block = Just $ toDTO blockHeader
