@@ -38,13 +38,10 @@ instance Arbitrary Web.WithdrawalHeader where
     <*> arbitrary
     <*> arbitrary
 
-instance Arbitrary Web.MarloweMetadata where
-  arbitrary = Web.MarloweMetadata <$> arbitrary <*> arbitrary
-  shrink = genericShrink
-
 instance Arbitrary Web.ContractHeader where
   arbitrary = Web.ContractHeader
     <$> arbitrary
+    <*> arbitrary
     <*> arbitrary
     <*> arbitrary
     <*> arbitrary
@@ -61,10 +58,12 @@ instance Arbitrary Web.TxHeader where
     <*> arbitrary
     <*> arbitrary
     <*> arbitrary
+    <*> arbitrary
 
 instance Arbitrary Web.ContractState where
   arbitrary = Web.ContractState
     <$> arbitrary
+    <*> arbitrary
     <*> arbitrary
     <*> arbitrary
     <*> arbitrary
@@ -99,6 +98,7 @@ instance Arbitrary Web.Withdrawal where
 instance Arbitrary Web.Tx where
   arbitrary = Web.Tx
     <$> arbitrary
+    <*> arbitrary
     <*> arbitrary
     <*> arbitrary
     <*> arbitrary
