@@ -2,6 +2,7 @@
 {-# LANGUAGE EmptyCase #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE QuantifiedConstraints #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -12,17 +13,21 @@
 module Network.Protocol.ChainSeek.Types
   where
 
+import Control.Monad (join)
 import Data.Aeson (ToJSON(..), Value(..), object, (.=))
 import Data.Binary (Binary(..), Get, Put, getWord8, putWord8)
 import Data.Data (type (:~:)(Refl))
+import Data.Foldable (fold)
 import Data.Functor ((<&>))
 import Data.Kind (Type)
+import Data.List.NonEmpty (NonEmpty((:|)))
 import Data.Maybe (catMaybes)
 import Data.Proxy (Proxy(..))
 import qualified Data.Text as T
 import GHC.Show (showSpace)
 import Network.Protocol.Codec (BinaryMessage(..))
-import Network.Protocol.Codec.Spec (ArbitraryMessage(..), MessageEq(..), ShowProtocol(..))
+import Network.Protocol.Codec.Spec
+  (ArbitraryMessage(..), MessageEq(..), MessageVariations(..), ShowProtocol(..), SomePeerHasAgency(..), Variations(..))
 import Network.Protocol.Handshake.Types (HasSignature(..))
 import Network.TypedProtocol (PeerHasAgency(..), Protocol(..), SomeMessage(SomeMessage))
 import Network.TypedProtocol.Codec (AnyMessageAndAgency(..))
@@ -264,6 +269,12 @@ class Query query => ArbitraryQuery query where
   shrinkErr :: Tag query err result-> err -> [err]
   shrinkResult :: Tag query err result-> result -> [result]
 
+class Query query => QueryVariations query where
+  tags :: NonEmpty (SomeTag query)
+  queryVariations :: Tag query err result -> NonEmpty (query err result)
+  errVariations :: Tag query err result -> [err]
+  resultVariations :: Tag query err result -> NonEmpty result
+
 instance
   ( Arbitrary point
   , Arbitrary tip
@@ -308,6 +319,60 @@ instance
       <> [ MsgRollBackward point' tip | point' <- shrink point ]
       <> [ MsgRollBackward point tip' | tip' <- shrink tip ]
     _ -> []
+
+instance
+  ( Variations point
+  , Variations tip
+  , QueryVariations query
+  ) => MessageVariations (ChainSeek query point tip) where
+    agencyVariations = join
+      [ pure $ SomePeerHasAgency $ ClientAgency TokIdle
+      , pure $ SomePeerHasAgency $ ClientAgency TokPoll
+      , do
+        SomeTag tag <- tags
+        pure $ SomePeerHasAgency $ ServerAgency $ TokNext tag
+      ]
+    messageVariations = \case
+      ClientAgency TokIdle -> join
+        [ do
+          SomeTag tag <- tags
+          SomeMessage . MsgQueryNext <$> queryVariations tag
+        , pure $ SomeMessage MsgDone
+        ]
+      ClientAgency TokPoll -> [SomeMessage MsgPoll, SomeMessage MsgCancel]
+      ServerAgency (TokNext tag) -> do
+        let
+          point :| points = variations
+          tip :| tips = variations
+          result :| results = resultVariations tag
+          errs = errVariations tag
+        join case errs of
+          [] ->
+            [ SomeMessage <$> MsgRollForward result point tip :| fold @[]
+                [ MsgRollForward <$> results <*> pure point <*> pure tip
+                , MsgRollForward result <$> points <*> pure tip
+                , MsgRollForward result point <$> tips
+                ]
+            , SomeMessage <$> MsgRollBackward point tip :| fold @[]
+                [ MsgRollBackward <$> points <*> pure tip
+                , MsgRollBackward point <$> tips
+                ]
+            ]
+          err : errs' ->
+            [ SomeMessage <$> MsgRollForward result point tip :| fold @[]
+                [ MsgRollForward <$> results <*> pure point <*> pure tip
+                , MsgRollForward result <$> points <*> pure tip
+                , MsgRollForward result point <$> tips
+                ]
+            , SomeMessage <$> MsgRollBackward point tip :| fold @[]
+                [ MsgRollBackward <$> points <*> pure tip
+                , MsgRollBackward point <$> tips
+                ]
+            , SomeMessage <$> MsgRejectQuery err tip :| fold @[]
+                [ MsgRejectQuery <$> errs' <*> pure tip
+                , MsgRejectQuery err <$> tips
+                ]
+            ]
 
 class Query query => QueryEq query where
   queryEq :: query err result -> query err result -> Bool
