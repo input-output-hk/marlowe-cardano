@@ -19,7 +19,7 @@ import Language.Marlowe.Runtime.Cardano.Api (cardanoEraToAsType)
 import Language.Marlowe.Runtime.ChainSync.Api (Address(..), Lovelace(Lovelace), TransactionMetadata, toBech32)
 import Language.Marlowe.Runtime.Client (runMarloweTxClient)
 import Language.Marlowe.Runtime.Core.Api
-  (MarloweTransactionMetadata(..), MarloweVersion(MarloweV1), MarloweVersionTag(V1), encodeMarloweTransactionMetadata)
+  (MarloweTransactionMetadata(..), MarloweVersion(MarloweV1), MarloweVersionTag(V1))
 import Language.Marlowe.Runtime.Integration.Common
   (Integration, Wallet(..), execMarlowe_, getGenesisWallet, runIntegrationTest)
 import Language.Marlowe.Runtime.Transaction.Api
