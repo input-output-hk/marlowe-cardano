@@ -34,7 +34,6 @@ import Language.Marlowe.Runtime.ChainSync.Api
   , TxOutRef(TxOutRef)
   , UTxOs(..)
   , WithGenesis(..)
-  , moveSchema
   , paymentCredential
   )
 import Language.Marlowe.Runtime.Core.Api
@@ -120,10 +119,7 @@ loadMarloweContext getScripts networkId chainSyncConnector chainSyncQueryConnect
   runSomeConnector chainSyncConnector client
   where
     TxOutRef creationTxId _ = unContractId contractId
-    client = ChainSeekClient $ pure $ SendMsgRequestHandshake moveSchema $ ClientStHandshake
-      { recvMsgHandshakeRejected = pure . Left . HandshakeFailed
-      , recvMsgHandshakeConfirmed = pure clientFindContract
-      }
+    client = ChainSeekClient $ pure clientFindContract
 
     clientFindContract = SendMsgQueryNext (FindTx creationTxId False) ClientStNext
       { recvMsgQueryRejected = \_ _ -> withEvent eventBackend ContractNotFound

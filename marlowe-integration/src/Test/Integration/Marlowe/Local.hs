@@ -119,7 +119,6 @@ import Language.Marlowe.Runtime.ChainSync.Api
   , RuntimeChainSeekServer
   , TransactionOutput(..)
   , TxOutRef(TxOutRef)
-  , WithGenesis(..)
   , fromCardanoScriptHash
   )
 import qualified Language.Marlowe.Runtime.ChainSync.Database as ChainSync
@@ -609,8 +608,8 @@ data Channels = Channels
 setupChannels :: EventBackend IO r RuntimeSelector -> STM Channels
 setupChannels eventBackend = do
   chainSyncPair <- logClientServerPair (narrowEventBackend (injectSelector ChainSeekPair) eventBackend) . handshakeClientServerPair <$> clientServerPair
-    (chainSeekServerPeer Genesis)
-    (chainSeekClientPeer Genesis)
+    chainSeekServerPeer
+    chainSeekClientPeer
   chainSyncJobPair <- logClientServerPair (narrowEventBackend (injectSelector ChainSyncJobPair) eventBackend) . handshakeClientServerPair <$> clientServerPair
     jobServerPeer
     jobClientPeer

@@ -8,7 +8,7 @@ import Control.Concurrent.Component
 import Control.Concurrent.STM (STM, atomically, newTVar, readTVar, writeTVar)
 import Data.Functor (($>))
 import Data.Void (absurd)
-import Language.Marlowe.Runtime.ChainSync.Api (Move(..), RuntimeChainSeekClient, moveSchema)
+import Language.Marlowe.Runtime.ChainSync.Api (Move(..), RuntimeChainSeekClient)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Network.Protocol.ChainSeek.Client
 import Network.Protocol.Connection (SomeClientConnector)
@@ -23,10 +23,7 @@ transactionChainClient = component \TransactionChainClientDependencies{..} -> do
   tipVar <- newTVar Chain.Genesis
   pure (runSomeConnector chainSyncConnector $ client tipVar, readTVar tipVar)
   where
-  client tipVar = ChainSeekClient $ pure $ SendMsgRequestHandshake moveSchema ClientStHandshake
-    { recvMsgHandshakeRejected = \versions -> error $ "Schema not supported, requires " <> show versions
-    , recvMsgHandshakeConfirmed = pure clientIdle
-    }
+  client tipVar = ChainSeekClient $ pure clientIdle
     where
     clientIdle = SendMsgQueryNext AdvanceToTip clientNext
     clientNext = ClientStNext

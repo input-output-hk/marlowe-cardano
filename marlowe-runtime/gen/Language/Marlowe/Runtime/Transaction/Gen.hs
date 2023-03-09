@@ -54,7 +54,6 @@ instance Arbitrary LoadMarloweContextError where
     , PayoutScriptNotPublished <$> arbitrary
     , ExtractCreationError <$> arbitrary
     , ExtractMarloweTransactionError <$> arbitrary
-    , HandshakeFailed <$> arbitrary
     ]
   shrink = genericShrink
 

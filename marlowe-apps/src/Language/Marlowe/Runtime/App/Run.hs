@@ -17,7 +17,7 @@ import Control.Monad.Reader (ask)
 import Control.Monad.Trans.Control (liftBaseWith)
 import Control.Monad.Trans.Reader (ReaderT(..))
 import Language.Marlowe.Runtime.App.Types (Client(..), Config(..), Services(..))
-import Language.Marlowe.Runtime.ChainSync.Api (RuntimeChainSeekClient, WithGenesis(Genesis))
+import Language.Marlowe.Runtime.ChainSync.Api (RuntimeChainSeekClient)
 import Language.Marlowe.Runtime.Client (connectToMarloweRuntime)
 import Network.Protocol.ChainSeek.Client (chainSeekClientPeer, hoistChainSeekClient)
 import Network.Protocol.Driver (runConnector, tcpClient)
@@ -51,5 +51,5 @@ runClientWithConfig
   -> IO a
 runClientWithConfig Config{..} client = runReaderT (connectToMarloweRuntime runtimeHost runtimePort (runClient client)) Services
   { runChainSeekCommandClient = runConnector $ handshakeClientConnector $ tcpClient chainSeekHost chainSeekCommandPort jobClientPeer
-  , runChainSeekSyncClient = runConnector $ handshakeClientConnector $ tcpClient chainSeekHost chainSeekSyncPort $ chainSeekClientPeer Genesis
+  , runChainSeekSyncClient = runConnector $ handshakeClientConnector $ tcpClient chainSeekHost chainSeekSyncPort chainSeekClientPeer
   }
