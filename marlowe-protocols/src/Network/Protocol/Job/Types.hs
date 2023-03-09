@@ -1,6 +1,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE EmptyCase #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
@@ -15,17 +16,21 @@
 module Network.Protocol.Job.Types
   where
 
+import Control.Monad (join)
 import Data.Aeson (Value(..), object, (.=))
 import Data.Binary (Put, getWord8, putWord8)
 import Data.Binary.Get (Get)
+import Data.Foldable (fold)
 import Data.Functor ((<&>))
+import Data.List.NonEmpty
 import Data.Maybe (catMaybes)
 import Data.Proxy (Proxy(..))
 import qualified Data.Text as T
 import Data.Type.Equality (type (:~:)(Refl))
 import GHC.Show (showSpace)
 import Network.Protocol.Codec (BinaryMessage(..))
-import Network.Protocol.Codec.Spec (ArbitraryMessage(..), MessageEq(..), ShowProtocol(..))
+import Network.Protocol.Codec.Spec
+  (ArbitraryMessage(..), MessageEq(..), MessageVariations(..), ShowProtocol(..), SomePeerHasAgency(..))
 import Network.Protocol.Handshake.Types (HasSignature(..))
 import Network.TypedProtocol
 import Network.TypedProtocol.Codec (AnyMessageAndAgency(..))
@@ -283,6 +288,14 @@ class Command cmd => ArbitraryCommand cmd where
   shrinkResult :: Tag cmd status err result -> result -> [result]
   shrinkStatus :: Tag cmd status err result -> status -> [status]
 
+class Command cmd => CommandVariations cmd where
+  tags :: NonEmpty (SomeTag cmd)
+  cmdVariations :: Tag cmd status err result -> NonEmpty (cmd status err result)
+  jobIdVariations :: Tag cmd status err result -> [JobId cmd status err result]
+  statusVariations :: Tag cmd status err result -> [status]
+  errVariations :: Tag cmd status err result -> [err]
+  resultVariations :: Tag cmd status err result -> NonEmpty result
+
 instance ArbitraryCommand cmd => ArbitraryMessage (Job cmd) where
   arbitraryMessage = do
     SomeTag tag <- arbitraryTag
@@ -368,6 +381,45 @@ instance CommandEq cmd => MessageEq (Job cmd) where
     (_, MsgDetach) -> \case
       AnyMessageAndAgency _ MsgDetach -> True
       _ -> False
+
+instance CommandVariations cmd => MessageVariations (Job cmd) where
+  agencyVariations = join
+    [ pure $ SomePeerHasAgency $ ClientAgency TokInit
+    , do
+        SomeTag tag <- tags
+        pure $ SomePeerHasAgency $ ClientAgency $ TokAwait tag
+    , do
+        SomeTag tag <- tags
+        pure $ SomePeerHasAgency $ ServerAgency $ TokCmd tag
+    , do
+        SomeTag tag <- tags
+        pure $ SomePeerHasAgency $ ServerAgency $ TokAttach tag
+    ]
+  messageVariations = \case
+    ClientAgency TokInit ->
+      let
+        execs = do
+          SomeTag tag <- tags
+          cmd <- cmdVariations tag
+          pure $ SomeMessage $ MsgExec cmd
+      in
+        case execs of
+          msg :| msgs -> msg :| msgs <> do
+            SomeTag tag <- toList tags
+            jobId <- jobIdVariations tag
+            pure $ SomeMessage $ MsgAttach jobId
+    ClientAgency (TokAwait _) -> [SomeMessage MsgPoll, SomeMessage MsgDetach]
+    ServerAgency (TokAttach _) -> [SomeMessage MsgAttached, SomeMessage MsgAttachFailed]
+    ServerAgency (TokCmd tag) -> case SomeMessage . MsgSucceed <$> resultVariations tag of
+      msg :| msgs -> msg :| msgs <> join
+        [ SomeMessage . MsgFail <$> errVariations tag
+        , SomeMessage <$> case (statusVariations tag, jobIdVariations tag) of
+            (status : statuses, jobId : jobIds) -> MsgAwait status jobId : fold @[]
+              [ MsgAwait status <$> jobIds
+              , flip MsgAwait jobId <$> statuses
+              ]
+            _ -> []
+        ]
 
 class Command cmd => ShowCommand cmd where
   showsPrecTag :: Int -> Tag cmd status err result -> ShowS
