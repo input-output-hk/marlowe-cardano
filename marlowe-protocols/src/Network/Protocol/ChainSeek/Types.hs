@@ -54,12 +54,6 @@ class Query q => QueryToJSON (q :: * -> * -> *) where
 
 -- | The type of states in the protocol.
 data ChainSeek (query :: Type -> Type -> Type) point tip where
-  -- | The server is waiting for the client to initiate the handshake.
-  StInit :: ChainSeek query point tip
-
-  -- | The client is waiting for the server to accept the handshake.
-  StHandshake :: ChainSeek query point tip
-
   -- | The client and server are idle. The client can send a request.
   StIdle :: ChainSeek query point tip
 
@@ -110,21 +104,6 @@ instance Protocol (ChainSeek query point tip) where
   -- transition in the state machine diagram.
   data Message (ChainSeek query point tip) from to where
 
-    -- | Initiate a handshake for the given schema version.
-    MsgRequestHandshake :: SchemaVersion -> Message (ChainSeek query point tip)
-      'StInit
-      'StHandshake
-
-    -- | Accept the handshake.
-    MsgConfirmHandshake :: Message (ChainSeek query point tip)
-      'StHandshake
-      'StIdle
-
-    -- | Reject the handshake.
-    MsgRejectHandshake :: [SchemaVersion] -> Message (ChainSeek query point tip)
-      'StHandshake
-      'StDone
-
     -- | Request the next matching result for the given query from the client's
     -- position.
     MsgQueryNext :: query err result -> Message (ChainSeek query point tip)
@@ -167,18 +146,15 @@ instance Protocol (ChainSeek query point tip) where
       'StIdle
 
   data ClientHasAgency st where
-    TokInit :: ClientHasAgency 'StInit
     TokIdle :: ClientHasAgency 'StIdle
     TokPoll :: ClientHasAgency ('StPoll err result)
 
   data ServerHasAgency st where
-    TokHandshake :: ServerHasAgency 'StHandshake
     TokNext :: Tag query err result -> ServerHasAgency ('StNext err result :: ChainSeek query point tip)
 
   data NobodyHasAgency st where
     TokDone :: NobodyHasAgency 'StDone
 
-  exclusionLemma_ClientAndServerHaveAgency TokInit = \case
   exclusionLemma_ClientAndServerHaveAgency TokIdle = \case
   exclusionLemma_ClientAndServerHaveAgency TokPoll = \case
 
@@ -191,11 +167,6 @@ instance
   , Binary tip
   , Binary point
   ) => BinaryMessage (ChainSeek query point tip) where
-    putMessage (ClientAgency TokInit) msg = case msg of
-      MsgRequestHandshake schemaVersion -> do
-        putWord8 0x01
-        put schemaVersion
-
     putMessage (ClientAgency TokIdle) msg = case msg of
       MsgQueryNext query -> do
         putWord8 0x04
@@ -203,12 +174,6 @@ instance
         putTag tag
         putQuery query
       MsgDone            -> putWord8 0x09
-
-    putMessage (ServerAgency TokHandshake) msg = case msg of
-      MsgConfirmHandshake                  -> putWord8 0x02
-      MsgRejectHandshake supportedVersions -> do
-       putWord8 0x03
-       put supportedVersions
 
     putMessage (ServerAgency (TokNext tag)) (MsgRejectQuery err tip) = do
         putWord8 0x05
@@ -237,17 +202,11 @@ instance
     getMessage tok      = do
       tag <- getWord8
       case (tag, tok) of
-        (0x01, ClientAgency TokInit) -> SomeMessage . MsgRequestHandshake <$> get
-
         (0x04, ClientAgency TokIdle) -> do
           SomeTag qtag <- getTag
           SomeMessage . MsgQueryNext <$> getQuery qtag
 
         (0x09, ClientAgency TokIdle) -> pure $ SomeMessage MsgDone
-
-        (0x02, ServerAgency TokHandshake) -> pure $ SomeMessage MsgConfirmHandshake
-
-        (0x03, ServerAgency TokHandshake) -> SomeMessage . MsgRejectHandshake <$> get
 
         (0x05, ServerAgency (TokNext qtag)) -> do
           SomeTag qtag' :: SomeTag query <- getTag
@@ -287,17 +246,12 @@ instance
   , ToJSON point
   ) => MessageToJSON (ChainSeek query point tip) where
   messageToJSON = \case
-    ClientAgency TokInit -> \case
-      MsgRequestHandshake version -> object [ "requestHandshake" .= toJSON version ]
     ClientAgency TokIdle -> \case
       MsgQueryNext query -> object [ "queryNext" .= queryToJSON query ]
       MsgDone -> String "done"
     ClientAgency TokPoll -> \case
       MsgPoll -> String "poll"
       MsgCancel -> String "cancel"
-    ServerAgency TokHandshake -> \case
-      MsgConfirmHandshake -> String "confirmHandshake"
-      MsgRejectHandshake versions -> object [ "rejectHandshake" .= toJSON versions ]
     ServerAgency (TokNext tag) -> \case
       MsgRejectQuery err tip -> object
         [ "rejectQuery" .= object
@@ -338,10 +292,7 @@ instance
     SomeTag tag <- arbitraryTag
     let mGenError = arbitraryErr tag
     oneof $ catMaybes
-      [ Just $ AnyMessageAndAgency (ClientAgency TokInit) . MsgRequestHandshake <$> arbitrary
-      , Just $ pure $ AnyMessageAndAgency (ServerAgency TokHandshake) MsgConfirmHandshake
-      , Just $ AnyMessageAndAgency (ServerAgency TokHandshake) . MsgRejectHandshake <$> arbitrary
-      , Just $ do
+      [ Just $ do
           query <- arbitraryQuery tag
           pure $ AnyMessageAndAgency (ClientAgency TokIdle) $ MsgQueryNext query
       , Just $ pure $ AnyMessageAndAgency (ClientAgency TokIdle) MsgDone
@@ -364,8 +315,6 @@ instance
       , Just $ pure $ AnyMessageAndAgency (ClientAgency TokPoll) MsgCancel
       ]
   shrinkMessage agency = \case
-    MsgRequestHandshake version -> MsgRequestHandshake <$> shrink version
-    MsgRejectHandshake versions -> MsgRejectHandshake <$> shrink versions
     MsgQueryNext query -> MsgQueryNext <$> shrinkQuery query
     MsgRejectQuery err tip -> []
       <> [ MsgRejectQuery err' tip | err' <- case agency of ServerAgency (TokNext tag) -> shrinkErr tag err ]
@@ -390,15 +339,6 @@ instance
   , QueryEq query
   ) => MessageEq (ChainSeek query point tip) where
   messageEq (AnyMessageAndAgency agency msg) = case (agency, msg) of
-    (_, MsgRequestHandshake version) -> \case
-      AnyMessageAndAgency _ (MsgRequestHandshake version') -> version == version'
-      _ -> False
-    (_, MsgRejectHandshake versions) -> \case
-      AnyMessageAndAgency _ (MsgRejectHandshake versions') -> versions == versions'
-      _ -> False
-    (_, MsgConfirmHandshake) -> \case
-      AnyMessageAndAgency _ MsgConfirmHandshake -> True
-      _ -> False
     (_, MsgQueryNext query) -> \case
       AnyMessageAndAgency _ (MsgQueryNext query') ->
         case tagEq (tagFromQuery query) (tagFromQuery query') of
@@ -446,17 +386,6 @@ instance
   , ShowQuery query
   ) => ShowProtocol (ChainSeek query point tip) where
   showsPrecMessage p agency = \case
-    MsgRequestHandshake version -> showParen (p >= 11)
-      ( showString "MsgRequestHandshake"
-      . showSpace
-      . showsPrec 11 version
-      )
-    MsgRejectHandshake versions -> showParen (p >= 11)
-      ( showString "MsgRejectHandshake"
-      . showSpace
-      . showsPrec 11 versions
-      )
-    MsgConfirmHandshake -> showString "MsgConfirmHandshake"
     MsgQueryNext query -> showParen (p >= 11)
       ( showString "MsgQueryNext"
       . showSpace
@@ -491,7 +420,6 @@ instance
     MsgCancel -> showString "MsgCancel"
 
   showsPrecServerHasAgency p = \case
-    TokHandshake -> showString "TokHandshake"
     TokNext tag -> showParen (p >= 11)
       ( showString "TokNext"
       . showSpace
@@ -499,6 +427,5 @@ instance
       )
 
   showsPrecClientHasAgency _ = showString . \case
-    TokInit -> "TokInit"
     TokIdle -> "TokIdle"
     TokPoll -> "TokPoll"

@@ -85,7 +85,6 @@ library
     , network-run
     , stm
     , QuickCheck
-    , template-haskell
     , text
     , transformers-base
     , typed-protocols
