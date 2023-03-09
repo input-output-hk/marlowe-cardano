@@ -51,7 +51,6 @@ library
     Network.Channel
     Network.Protocol.ChainSeek.Client
     Network.Protocol.ChainSeek.Server
-    Network.Protocol.ChainSeek.TH
     Network.Protocol.ChainSeek.Types
     Network.Protocol.Codec
     Network.Protocol.Codec.Spec
