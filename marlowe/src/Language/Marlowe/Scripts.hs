@@ -312,18 +312,18 @@ mkMarloweValidator
     examineScripts _ Nothing _ [] = traceError "x"
     -- This validator has been found, and other validators may have been found.
     examineScripts _ (Just self) noOthers [] = (self, noOthers)
-    -- This validator has not yet been found.
-    examineScripts f Nothing noOthers (tx@TxInInfo{txInInfoResolved=TxOut{txOutAddress=Ledger.Address (ScriptCredential vh) _}} : txs)
-      -- This validator is found, but continue looking for other validators if necessary.
-      | f vh = if noOthers then examineScripts f (Just tx) noOthers txs else (tx, False)
-      -- Another validator is found, but continue looking for this validator.
-      | otherwise = examineScripts f Nothing False txs
-    -- This validator has been found, but other validators have not yet been found.
-    examineScripts f (Just self) _ (TxInInfo{txInInfoResolved=TxOut{txOutAddress=Ledger.Address (ScriptCredential vh) _}} : _)
-      -- This validator is found a second time.
-      | f vh = traceError "w"
-      -- Another validator is found, so there is no need to look further.
-      | otherwise = (self, False)
+    -- Found both this validator and another script, so we short-cut.
+    examineScripts _ (Just self) False _ = (self, False)
+     -- Found one script.
+    examineScripts f mSelf noOthers (tx@TxInInfo{txInInfoResolved=TxOut{txOutAddress=Ledger.Address (ScriptCredential vh) _}} : txs)
+      -- The script is this validator.
+      | f vh = case mSelf of
+                 -- We hadn't found it before, so we save it in `mSelf`.
+                 Nothing -> examineScripts f (Just tx) noOthers txs
+                 -- We already had found this validator before
+                 Just _ -> traceError "w"
+      -- The script is something else, so we set `noOther` to `False`.
+      | otherwise = examineScripts f mSelf False txs
     -- An input without a validator is encountered.
     examineScripts f self others (_ : txs) = examineScripts f self others txs
 
