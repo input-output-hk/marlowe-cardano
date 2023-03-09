@@ -38,6 +38,8 @@ data-files:
   reference/data/escrow.paths
   reference/data/escrow-with-collateral.contract
   reference/data/escrow-with-collateral.paths
+  reference/data/guessing-game.contract
+  reference/data/guessing-game.paths
   reference/data/loan-with-nft-collateral.contract
   reference/data/loan-with-nft-collateral.paths
   reference/data/nft-airdrop.contract
@@ -52,8 +54,8 @@ data-files:
   reference/data/nft-swap.paths
   reference/data/nft-with-royalty.contract
   reference/data/nft-with-royalty.paths
-  reference/data/panggram-1.contract
-  reference/data/panggram-1.paths
+  reference/data/pangram-1.contract
+  reference/data/pangram-1.paths
   reference/data/serialization.contract
   reference/data/serialization.paths
   reference/data/shared-nft.contract
