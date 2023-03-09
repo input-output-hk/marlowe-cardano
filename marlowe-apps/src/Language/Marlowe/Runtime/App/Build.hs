@@ -20,8 +20,8 @@ import Data.Time.Clock.POSIX (posixSecondsToUTCTime)
 import Data.Void (Void)
 import Language.Marlowe (POSIXTime(..))
 import Language.Marlowe.Runtime.App.Types (Client)
-import Language.Marlowe.Runtime.ChainSync.Api (Address, Lovelace(..), TokenName, TransactionMetadata, TxOutRef)
-import Language.Marlowe.Runtime.Core.Api (ContractId, IsMarloweVersion(..), MarloweVersion)
+import Language.Marlowe.Runtime.ChainSync.Api (Address, Lovelace(..), TokenName, TxOutRef)
+import Language.Marlowe.Runtime.Core.Api (ContractId, IsMarloweVersion(..), MarloweTransactionMetadata, MarloweVersion)
 import Language.Marlowe.Runtime.Transaction.Api
   ( ApplyInputsError
   , ContractCreated(..)
@@ -48,7 +48,7 @@ buildCreation
   -> Contract v
   -> M.Map TokenName Address
   -> Lovelace
-  -> TransactionMetadata
+  -> MarloweTransactionMetadata
   -> [Address]
   -> Address
   -> [TxOutRef]
@@ -71,7 +71,7 @@ buildApplication
   -> Inputs v
   -> Maybe POSIXTime
   -> Maybe POSIXTime
-  -> TransactionMetadata
+  -> MarloweTransactionMetadata
   -> [Address]
   -> Address
   -> [TxOutRef]

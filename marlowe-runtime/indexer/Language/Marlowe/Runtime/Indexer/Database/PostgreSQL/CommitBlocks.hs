@@ -10,7 +10,7 @@ import Data.ByteString (ByteString)
 import Data.ByteString.Lazy (toStrict)
 import Data.Functor ((<&>))
 import Data.Int (Int16, Int64)
-import Data.List (unzip4, unzip5, unzip6, unzip7)
+import Data.List (unzip5, unzip6, unzip7)
 import qualified Data.Map as Map
 import Data.Maybe (maybeToList)
 import qualified Data.Set as Set
@@ -23,7 +23,13 @@ import Hasql.TH (resultlessStatement)
 import qualified Hasql.Transaction as H
 import Language.Marlowe.Core.V1.Semantics (MarloweData(..), MarloweParams(..))
 import Language.Marlowe.Runtime.ChainSync.Api
-import Language.Marlowe.Runtime.Core.Api (ContractId(..), MarloweVersion(..), TransactionScriptOutput(..))
+import Language.Marlowe.Runtime.Core.Api
+  ( ContractId(..)
+  , MarloweVersion(..)
+  , TransactionScriptOutput(..)
+  , emptyMarloweTransactionMetadata
+  , transactionMetadata
+  )
 import qualified Language.Marlowe.Runtime.Core.Api as Core
 import Language.Marlowe.Runtime.History.Api (CreateStep(..), SomeCreateStep(..))
 import Language.Marlowe.Runtime.Indexer.Types
@@ -100,11 +106,20 @@ commitBlocks blocks = H.statement (prepareParams blocks)
       ( INSERT INTO marlowe.withdrawalTxIn (txId, slotNo, blockId, blockNo, payoutTxId, payoutTxIx, createTxId, createTxIx)
         SELECT * FROM withdrawalTxInInputs
       )
+
     , invalidApplyTxInputs (txId, inputTxId, inputTxIx, blockId, error) AS
       ( SELECT * FROM UNNEST ($54 :: bytea[], $55 :: bytea[], $56 :: smallint[], $57 :: bytea[], $58 :: text[])
       )
-    INSERT INTO marlowe.invalidApplyTx (txId, inputTxId, inputTxIx, blockId, error)
-    SELECT * FROM invalidApplyTxInputs
+    , insertInvalidApplyTxs AS
+      ( INSERT INTO marlowe.invalidApplyTx (txId, inputTxId, inputTxIx, blockId, error)
+        SELECT * FROM invalidApplyTxInputs
+      )
+
+    , contractTxOutTagInputs (tag, txId, txIx) AS
+      ( SELECT * FROM UNNEST ($59 :: text[], $60 :: bytea[], $61 :: smallint[])
+      )
+    INSERT INTO marlowe.contractTxOutTag (tag, txId, txIx)
+    SELECT * FROM contractTxOutTagInputs
   |]
 
 type QueryParams =
@@ -174,6 +189,10 @@ type QueryParams =
   , Vector Int16 -- invalidApplyTx inputTxIx rows
   , Vector ByteString -- invalidApplyTx blockId rows
   , Vector Text -- invalidApplyTx error rows
+
+  , Vector Text -- contractTxOutTag tag rows
+  , Vector ByteString -- contractTxOutTag txId rows
+  , Vector Int16 -- contractTxOutTag txIx rows
   )
 
 type BlockRow =
@@ -272,7 +291,7 @@ type CreateTxOutRow =
   , Maybe ByteString -- metadata
   )
 
-createTxToTxOutRows :: BlockHeader -> MarloweCreateTransaction -> [(TxOutRow, ContractTxOutRow, CreateTxOutRow, [TxOutAssetRow])]
+createTxToTxOutRows :: BlockHeader -> MarloweCreateTransaction -> [(TxOutRow, ContractTxOutRow, CreateTxOutRow, [TxOutAssetRow], [ContractTxOutTagRow])]
 createTxToTxOutRows blockHeader@BlockHeader{..} MarloweCreateTransaction{..} =
   Map.toList newContracts <&> \(txIx, SomeCreateStep version CreateStep{..}) ->
     let
@@ -286,12 +305,17 @@ createTxToTxOutRows blockHeader@BlockHeader{..} MarloweCreateTransaction{..} =
         , fromIntegral slotNo
         , unBlockHeaderHash headerHash
         , fromIntegral blockNo
-        , if Map.null (unTransactionMetadata metadata)
+        , if metadata == emptyMarloweTransactionMetadata
             then Nothing
             else Just $ toStrict $ runPut $ put metadata
         )
       , txOutAssetRows
+      , transactionMetadataToTagRows txId' txIx' metadata
       )
+
+transactionMetadataToTagRows :: ByteString -> Int16 -> Core.MarloweTransactionMetadata -> [ContractTxOutTagRow]
+transactionMetadataToTagRows txId txIx Core.MarloweTransactionMetadata{..} =
+  (, txId, txIx) . Core.getMarloweMetadataTag <$> foldMap (Map.keys . Core.tags) marloweMetadata
 
 type ApplyTxRow =
   ( ByteString -- txId
@@ -322,6 +346,7 @@ applyTxToRows
   -> ( ApplyTxRow
      , Maybe (TxOutRow, ContractTxOutRow, [TxOutAssetRow])
      , [(TxOutRow, PayoutTxOutRow, [TxOutAssetRow])]
+     , [ContractTxOutTagRow]
      )
 applyTxToRows (MarloweApplyInputsTransaction MarloweV1 UnspentContractOutput{..} Core.Transaction{..}) =
   let
@@ -342,9 +367,9 @@ applyTxToRows (MarloweApplyInputsTransaction MarloweV1 UnspentContractOutput{..}
       , fromIntegral blockNo
       , utcToLocalTime utc validityLowerBound
       , utcToLocalTime utc validityUpperBound
-      , if Map.null (unTransactionMetadata metadata)
-          then Nothing
-          else Just $ toStrict $ runPut $ put metadata
+      , if metadata == emptyMarloweTransactionMetadata
+        then Nothing
+        else Just $ toStrict $ runPut $ put metadata
       , inputTxId'
       , inputTxIx'
       , toStrict $ runPut $ put $ toDatum inputs
@@ -370,6 +395,7 @@ applyTxToRows (MarloweApplyInputsTransaction MarloweV1 UnspentContractOutput{..}
             )
           , assetsToTxOutAssetRows blockHeader txId' txIx' assets
           )
+    , flip foldMap mOutputRows \(_, txIx, _, _, _) -> transactionMetadataToTagRows txId' txIx metadata
     )
 
 type WithdrawalTxInRow =
@@ -389,6 +415,12 @@ type InvalidApplyTxRow =
   , Int16 -- inputTxIx
   , ByteString -- blockId
   , Text -- error
+  )
+
+type ContractTxOutTagRow =
+  ( Text -- tag
+  , ByteString -- txId
+  , Int16 -- txIx
   )
 
 withdrawTxToWithdrawalTxInRows
@@ -475,6 +507,10 @@ prepareParams blocks =
   , V.fromList invalidApplyTxInputTxIxRows
   , V.fromList invalidApplyTxBlockIdRows
   , V.fromList invalidApplyTxErrorRows
+
+  , V.fromList contractTxOutTagTagRows
+  , V.fromList contractTxOutTagTxIdRows
+  , V.fromList contractTxOutTagTxIxRows
   )
   where
     (blockIdRows, blockSlotRows, blockNoRows) = unzip3 $ blockToRow . blockHeader <$> blocks
@@ -487,7 +523,8 @@ prepareParams blocks =
       , payoutTxOutRows
       , withdrawalTxInRows
       , invalidApplyTxRows
-      ) = foldMap8 marloweBlockToTxRows blocks
+      , contractTxOutTagRows
+      ) = foldMap9 marloweBlockToTxRows blocks
 
     ( txOutTxIdRows
       , txOutTxIxRows
@@ -560,18 +597,23 @@ prepareParams blocks =
       , invalidApplyTxErrorRows
       ) = unzip5 invalidApplyTxRows
 
+    ( contractTxOutTagTagRows
+      , contractTxOutTagTxIdRows
+      , contractTxOutTagTxIxRows
+      ) = unzip3 contractTxOutTagRows
+
 marloweBlockToTxRows
   :: MarloweBlock
-  -> ([TxOutRow], [TxOutAssetRow], [ContractTxOutRow], [CreateTxOutRow], [ApplyTxRow], [PayoutTxOutRow], [WithdrawalTxInRow], [InvalidApplyTxRow])
-marloweBlockToTxRows MarloweBlock{..} = flip foldMap8 transactions \case
+  -> ([TxOutRow], [TxOutAssetRow], [ContractTxOutRow], [CreateTxOutRow], [ApplyTxRow], [PayoutTxOutRow], [WithdrawalTxInRow], [InvalidApplyTxRow], [ContractTxOutTagRow])
+marloweBlockToTxRows MarloweBlock{..} = flip foldMap9 transactions \case
   CreateTransaction tx ->
     let
-      (txOutRows, contractTxOutRows, createTxOutRows, txOutAssetRows) = unzip4 $ createTxToTxOutRows blockHeader tx
+      (txOutRows, contractTxOutRows, createTxOutRows, txOutAssetRows, contractTxOutTagRows) = unzip5 $ createTxToTxOutRows blockHeader tx
     in
-      (txOutRows, concat txOutAssetRows, contractTxOutRows, createTxOutRows, [], [], [], [])
+      (txOutRows, concat txOutAssetRows, contractTxOutRows, createTxOutRows, [], [], [], [], concat contractTxOutTagRows)
   ApplyInputsTransaction tx ->
     let
-      (applyTxRow, mOutRows, payoutRows) = applyTxToRows tx
+      (applyTxRow, mOutRows, payoutRows, contractTxOutTagRows) = applyTxToRows tx
       (txOutRows, contractTxOutRows, txOutAssetRows) = unzip3 $ maybeToList mOutRows
       (txOutRows', payoutTxOutRows, txOutAssetRows') = unzip3 payoutRows
     in
@@ -583,8 +625,9 @@ marloweBlockToTxRows MarloweBlock{..} = flip foldMap8 transactions \case
       , payoutTxOutRows
       , []
       , []
+      , contractTxOutTagRows
       )
-  WithdrawTransaction tx -> ([], [], [], [] , [], [], withdrawTxToWithdrawalTxInRows blockHeader tx, [])
+  WithdrawTransaction tx -> ([], [], [], [] , [], [], withdrawTxToWithdrawalTxInRows blockHeader tx, [], [])
   InvalidApplyInputsTransaction txId txOutRefs err ->
     ( []
     , []
@@ -595,19 +638,20 @@ marloweBlockToTxRows MarloweBlock{..} = flip foldMap8 transactions \case
     , []
     , Set.toList txOutRefs <&> \(TxOutRef inputTxId inputTxIx) ->
         (unTxId txId, unTxId inputTxId, fromIntegral inputTxIx, unBlockHeaderHash $ headerHash blockHeader, T.pack $ show err)
+    , []
     )
-  _ -> ([], [], [], [] , [], [], [], [])
+  _ -> ([], [], [], [] , [], [], [], [], [])
 
 
-foldMap8
-  :: (Monoid a, Monoid b, Monoid c, Monoid d, Monoid e, Monoid f, Monoid g, Monoid h, Foldable t)
-  => (x -> (a, b, c, d, e, f, g, h))
+foldMap9
+  :: (Monoid a, Monoid b, Monoid c, Monoid d, Monoid e, Monoid f, Monoid g, Monoid h, Monoid i, Foldable t)
+  => (x -> (a, b, c, d, e, f, g, h, i))
   -> t x
-  -> (a, b, c, d, e, f, g, h)
-foldMap8 k = foldr
-  ( \x (a', b', c', d', e', f', g', h') ->
+  -> (a, b, c, d, e, f, g, h, i)
+foldMap9 k = foldr
+  ( \x (a', b', c', d', e', f', g', h', i') ->
     let
-      (a, b, c, d, e, f, g, h) = k x
+      (a, b, c, d, e, f, g, h, i) = k x
     in
       ( a <> a'
       , b <> b'
@@ -617,9 +661,10 @@ foldMap8 k = foldr
       , f <> f'
       , g <> g'
       , h <> h'
+      , i <> i'
       )
   )
-  (mempty, mempty, mempty, mempty, mempty, mempty, mempty, mempty)
+  (mempty, mempty, mempty, mempty, mempty, mempty, mempty, mempty, mempty)
 
 unzip13 :: [(a, b, c, d, e, f, g, h, i, j, k, l, m)] -> ([a], [b], [c], [d], [e], [f], [g], [h], [i], [j], [k], [l], [m])
 unzip13 = foldr

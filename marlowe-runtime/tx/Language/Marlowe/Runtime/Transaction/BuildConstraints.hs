@@ -22,7 +22,7 @@ import Control.Monad.Trans.Writer (WriterT(runWriterT), tell)
 import Data.Bifunctor (first)
 import Data.Foldable (for_, traverse_)
 import Data.Function (on)
-import Data.Functor (void, (<&>))
+import Data.Functor ((<&>))
 import Data.List (find, sortBy)
 import qualified Data.Map as Map
 import Data.Maybe (catMaybes, listToMaybe, maybeToList)
@@ -55,7 +55,13 @@ import Language.Marlowe.Runtime.ChainSync.Api
   )
 import qualified Language.Marlowe.Runtime.ChainSync.Api as CS
 import Language.Marlowe.Runtime.Core.Api
-  (IsMarloweVersion(..), MarloweVersion(..), MarloweVersionTag(..), TransactionScriptOutput(..), withMarloweVersion)
+  ( IsMarloweVersion(..)
+  , MarloweTransactionMetadata(..)
+  , MarloweVersion(..)
+  , MarloweVersionTag(..)
+  , TransactionScriptOutput(..)
+  , withMarloweVersion
+  )
 import Language.Marlowe.Runtime.Plutus.V2.Api
   ( fromPlutusScript
   , fromPlutusValue
@@ -128,7 +134,7 @@ buildCreateConstraints
    . MarloweVersion v -- ^ The Marlowe version to build the transaction for.
   -> WalletContext  -- ^ The wallet used to mint tokens.
   -> RoleTokensConfig  -- ^ The initial distribution of the role tokens.
-  -> TransactionMetadata -- ^ Extra metadata to add to the transaction.
+  -> MarloweTransactionMetadata -- ^ Metadata to add to the transaction.
   -> Lovelace -- ^ Min Lovelace value which should be used on the Marlowe output.
   -> Contract v -- ^ The contract being instantiated.
   -> Either (CreateError v) ((Datum v, Assets, PolicyId), TxConstraints v)
@@ -140,16 +146,12 @@ buildCreateConstraints version walletCtx roles metadata minAda contract = case v
 buildCreateConstraintsV1
   :: WalletContext  -- ^ The wallet used to mint tokens.
   -> RoleTokensConfig -- ^ The initial distribution of the role tokens.
-  -> TransactionMetadata -- ^ Extra metadata to add to the transaction.
+  -> MarloweTransactionMetadata -- ^ Metadata to add to the transaction.
   -> Lovelace -- ^ Min Lovelace value which should be used on the Marlowe output.
   -> Contract 'V1 -- ^ The contract being instantiated.
   -> TxConstraintsBuilderM (CreateError 'V1) 'V1 (Datum 'V1, Assets, PolicyId)
 buildCreateConstraintsV1 walletCtx roles metadata minAda contract = do
-  -- Tx body constraints.
-  let
-    metadata' = metadata <> nftsMetadata
-  for_ (Map.toList . unTransactionMetadata $ metadata') \(label, meta) -> do
-    tell . requiresMetadata label $ meta
+  tell . requiresMetadata $ metadata { transactionMetadata = transactionMetadata metadata <> nftsMetadata }
 
   -- Output constraints.
   -- Role tokens minting and distribution.
@@ -273,7 +275,7 @@ buildApplyInputsConstraints
   -> MarloweVersion v -- ^ The Marlowe version to build the transaction for.
   -> TransactionScriptOutput v -- ^ The previous script output for the contract
   -> SlotNo -- ^ The current tip slot
-  -> TransactionMetadata -- ^ Metadata to attach to the transaction
+  -> MarloweTransactionMetadata -- ^ Metadata to attach to the transaction
   -> Maybe UTCTime -- ^ The minimum bound of the validity interval (inclusive).
   -> Maybe UTCTime -- ^ The maximum bound of the validity interval (exclusive).
                    -- If not specified, this is computed from the the timeouts
@@ -291,7 +293,7 @@ buildApplyInputsConstraintsV1
   -> EraHistory CardanoMode -- ^ The era history for converting times to slots.
   -> TransactionScriptOutput 'V1 -- ^ The previous script output for the contract with raw TxOut.
   -> SlotNo
-  -> TransactionMetadata -- ^ Metadata to attach to the transaction
+  -> MarloweTransactionMetadata -- ^ Metadata to attach to the transaction
   -> Maybe UTCTime -- ^ The minimum bound of the validity interval (inclusive).
   -> Maybe UTCTime -- ^ The maximum bound of the validity interval (exclusive).
   -> Inputs 'V1 -- ^ The inputs to apply to the contract.
@@ -339,7 +341,7 @@ buildApplyInputsConstraintsV1 systemStart eraHistory marloweOutput tipSlot metad
     _ -> pure ()
 
   -- Require transaction metadata for all specified keys
-  void $ Map.traverseWithKey (fmap tell . requiresMetadata) $ unTransactionMetadata metadata
+  tell $ requiresMetadata metadata
 
   -- Apply inputs.
   let slotNoToPOSIXTime = fmap utcToPOSIXTime . slotStart

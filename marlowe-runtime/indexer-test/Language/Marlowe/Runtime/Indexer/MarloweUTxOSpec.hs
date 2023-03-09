@@ -31,6 +31,7 @@ import Language.Marlowe.Runtime.Cardano.Api (fromCardanoDatumHash, toCardanoScri
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import qualified Language.Marlowe.Runtime.ChainSync.Api as TransactionOutput (TransactionOutput(..))
 import qualified Language.Marlowe.Runtime.ChainSync.Api as TxOutRef (TxOutRef(..))
+import Language.Marlowe.Runtime.Core.Api (emptyMarloweTransactionMetadata, encodeMarloweTransactionMetadata)
 import qualified Language.Marlowe.Runtime.Core.Api as Core
 import Language.Marlowe.Runtime.Core.Gen ()
 import qualified Language.Marlowe.Runtime.Core.ScriptRegistry as ScriptRegistry
@@ -350,7 +351,7 @@ createTxToChainTx bug MarloweCreateTransaction{..} = do
   pure Chain.Transaction
     { txId
     , validityRange = Chain.Unbounded
-    , metadata = newContracts & foldMap \(SomeCreateStep _ CreateStep{..}) -> metadata
+    , metadata = newContracts & foldMap \(SomeCreateStep _ CreateStep{..}) -> encodeMarloweTransactionMetadata metadata
     , inputs
     , outputs
     , mintedTokens = mempty
@@ -401,7 +402,7 @@ applyTxToChainTx inputDatum _ MarloweApplyInputsTransaction{..} = case marloweVe
     pure Chain.Transaction
       { txId = transactionId
       , validityRange = Chain.MinMaxBound invalidBefore invalidHereafter
-      , metadata
+      , metadata = encodeMarloweTransactionMetadata metadata
       , inputs = chainInputs
       , outputs
       , mintedTokens = mempty
@@ -451,7 +452,7 @@ genApplyTx blockHeader = do
     marloweTransaction = Core.Transaction
       txId
       contractId
-      mempty
+      emptyMarloweTransactionMetadata
       blockHeader
       (posixSecondsToUTCTime $ fromIntegral minPOSIXTime / 1000)
       (posixSecondsToUTCTime $ fromIntegral maxPOSIXTime / 1000)
@@ -497,7 +498,7 @@ genCreateStep scripts txOut genMarloweDatum assetsFromDatum = do
   ScriptRegistry.MarloweScripts{..} <- elements $ Set.toList scripts
   CreateStep
     <$> genTransactionScriptOutput (scriptHashToAddress marloweScript) txOut genMarloweDatum assetsFromDatum
-    <*> pure mempty
+    <*> pure emptyMarloweTransactionMetadata
     <*> pure payoutScript
 
 genTransactionScriptOutput

@@ -1,5 +1,3 @@
-
-
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -23,7 +21,8 @@ import Language.Marlowe.Runtime.App.Run (runClientWithConfig)
 import Language.Marlowe.Runtime.App.Sign (sign)
 import Language.Marlowe.Runtime.App.Submit (submit, waitForTx)
 import Language.Marlowe.Runtime.App.Types (Config(timeoutSeconds), MarloweRequest(..), MarloweResponse(..), mkBody)
-import Language.Marlowe.Runtime.Core.Api (MarloweVersion(MarloweV1), MarloweVersionTag(V1))
+import Language.Marlowe.Runtime.Core.Api
+  (MarloweVersion(MarloweV1), MarloweVersionTag(V1), decodeMarloweTransactionMetadataLenient)
 
 
 handle
@@ -35,11 +34,11 @@ handle config request =
     let
       run =
         case request of
-          ListContracts -> Right . Contracts <$> allContracts
-          ListHeaders -> Right . Headers <$> allHeaders
+          ListContracts{..} -> Right . Contracts <$> allContracts reqFilter
+          ListHeaders{..} -> Right . Headers <$> allHeaders reqFilter
           Get{..} -> fmap (uncurry Info) <$> getContract reqContractId
-          Create{..} -> second (uncurry mkBody) <$> buildCreation MarloweV1 reqContract reqRoles reqMinUtxo reqMetadata reqAddresses reqChange reqCollateral
-          Apply{..} -> second (uncurry mkBody) <$> buildApplication MarloweV1 reqContractId reqInputs reqValidityLowerBound reqValidityUpperBound reqMetadata reqAddresses reqChange reqCollateral
+          Create{..} -> second (uncurry mkBody) <$> buildCreation MarloweV1 reqContract reqRoles reqMinUtxo (decodeMarloweTransactionMetadataLenient reqMetadata) reqAddresses reqChange reqCollateral
+          Apply{..} -> second (uncurry mkBody) <$> buildApplication MarloweV1 reqContractId reqInputs reqValidityLowerBound reqValidityUpperBound (decodeMarloweTransactionMetadataLenient reqMetadata) reqAddresses reqChange reqCollateral
           Withdraw{..} -> second (uncurry mkBody) <$> buildWithdrawal MarloweV1 reqContractId reqRole reqAddresses reqChange reqCollateral
           Sign{..} -> pure . Right . uncurry Tx $ sign reqTxBody reqPaymentKeys reqPaymentExtendedKeys
           Submit{..} -> second TxId <$> submit reqTx

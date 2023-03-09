@@ -19,6 +19,7 @@ import Language.Marlowe.Runtime.Discovery.Api (ContractHeader(contractId))
 import Language.Marlowe.Runtime.History.Api (ContractStep, CreateStep)
 
 import qualified Language.Marlowe.Protocol.Query.Client as Query
+import Language.Marlowe.Protocol.Query.Types (ContractFilter)
 import qualified Language.Marlowe.Protocol.Query.Types as Query
 import qualified Language.Marlowe.Protocol.Sync.Client as Sync
   ( ClientStFollow(ClientStFollow, recvMsgContractFound, recvMsgContractNotFound)
@@ -31,37 +32,32 @@ import qualified Language.Marlowe.Protocol.Sync.Client as Sync
 import Language.Marlowe.Runtime.Client (runMarloweQueryClient, runMarloweSyncClient)
 
 
-allContracts :: Client [ContractId]
-allContracts = listContracts $ fmap contractId
+allContracts :: ContractFilter -> Client [ContractId]
+allContracts = (fmap . fmap) contractId . listContracts
 
 
-allHeaders :: Client [ContractHeader]
-allHeaders = listContracts id
+allHeaders :: ContractFilter -> Client [ContractHeader]
+allHeaders = listContracts
 
 
 pageSize :: Int
 pageSize = 1024
 
 
-listContracts :: Monoid a => ([ContractHeader] -> a) -> Client a
-listContracts =
+listContracts :: ContractFilter -> Client [ContractHeader]
+listContracts cFilter =
   let
-    bundleContracts getContractHeaders extract =
+    append = (. Query.getContractHeaders cFilter) . (=<<) . handleNextPage
+    handleNextPage previous Nothing = pure previous
+    handleNextPage previous (Just Query.Page{..}) =
       let
-        append = (. getContractHeaders) . (=<<) . handleNextPage
-        handleNextPage previous Nothing = pure previous
-        handleNextPage previous (Just Query.Page{..}) =
-          let
-            cumulative = previous <> extract items
-          in
-            case nextRange of
-              Nothing    -> pure cumulative
-              Just range -> cumulative `append` range
+        cumulative = previous <> items
       in
-        mempty `append` Query.Range Nothing 0 pageSize Query.Ascending
+        case nextRange of
+          Nothing    -> pure cumulative
+          Just range -> cumulative `append` range
   in
-    bundleContracts
-      $ runMarloweQueryClient . Query.getContractHeaders
+    runMarloweQueryClient $ mempty `append` Query.Range Nothing 0 pageSize Query.Ascending
 
 
 getContract

@@ -33,12 +33,22 @@ import qualified Cardano.Api.Shelley as Cardano
 import qualified Cardano.Ledger.BaseTypes as Base
 import Cardano.Ledger.Credential (ptrCertIx, ptrSlotNo, ptrTxIx)
 import Codec.Serialise (deserialiseOrFail, serialise)
-import Control.Monad (guard, (>=>))
-import Data.Aeson (ToJSON, ToJSONKey, Value(..), object, toJSON, (.=))
+import Control.Monad (guard, (<=<), (>=>))
+import Data.Aeson
+  ( FromJSON(..)
+  , FromJSONKey(..)
+  , FromJSONKeyFunction(FromJSONKeyTextParser)
+  , ToJSON
+  , ToJSONKey
+  , Value(..)
+  , object
+  , toJSON
+  , (.=)
+  )
 import qualified Data.Aeson as A
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.KeyMap as KeyMap
-import Data.Aeson.Types (toJSONKeyText)
+import Data.Aeson.Types (parseFail, toJSONKeyText)
 import Data.Bifunctor (bimap)
 import Data.Binary (Binary(..), Get, Put, get, getWord8, put, putWord8)
 import Data.ByteString (ByteString)
@@ -316,6 +326,12 @@ instance Show Base16 where
 instance IsString Base16 where
   fromString = either (error . T.unpack) Base16 . decodeBase16 . encodeUtf8 . T.pack
 
+instance FromJSON Base16 where
+  parseJSON = either (parseFail . T.unpack) (pure . Base16) . decodeBase16 . encodeUtf8 <=< parseJSON
+
+instance FromJSONKey Base16 where
+  fromJSONKey = FromJSONKeyTextParser $ either (parseFail . T.unpack) (pure . Base16) . decodeBase16 . encodeUtf8
+
 instance ToJSON Base16 where
   toJSON = toJSON . encodeBase16 . unBase16
 
@@ -387,7 +403,7 @@ data AssetId = AssetId
 newtype PolicyId = PolicyId { unPolicyId :: ByteString }
   deriving stock (Eq, Ord, Generic)
   deriving newtype (Binary)
-  deriving (IsString, Show, ToJSON) via Base16
+  deriving (IsString, Show, FromJSON, FromJSONKey, ToJSON, ToJSONKey) via Base16
 
 newtype TokenName = TokenName { unTokenName :: ByteString }
   deriving stock (Eq, Ord, Generic)

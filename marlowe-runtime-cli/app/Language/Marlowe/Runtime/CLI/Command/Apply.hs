@@ -26,10 +26,17 @@ import qualified Language.Marlowe.Core.V1.Semantics.Types.Address as V1
 import Language.Marlowe.Runtime.CLI.Command.Tx (SigningMethod(Manual), TxCommand(..), txCommandParser)
 import Language.Marlowe.Runtime.CLI.Monad (CLI, runCLIExceptT)
 import Language.Marlowe.Runtime.CLI.Option (txOutRefParser)
-import Language.Marlowe.Runtime.ChainSync.Api (TransactionMetadata, fromJSONEncodedTransactionMetadata, unPolicyId)
+import Language.Marlowe.Runtime.ChainSync.Api
+  (TransactionMetadata, fromJSONEncodedMetadata, fromJSONEncodedTransactionMetadata, unPolicyId)
 import Language.Marlowe.Runtime.Client (applyInputs')
 import Language.Marlowe.Runtime.Core.Api
-  (ContractId(..), IsMarloweVersion(..), MarloweVersion(MarloweV1), MarloweVersionTag(..))
+  ( ContractId(..)
+  , IsMarloweVersion(..)
+  , MarloweMetadata(..)
+  , MarloweTransactionMetadata(..)
+  , MarloweVersion(MarloweV1)
+  , MarloweVersionTag(..)
+  )
 import Language.Marlowe.Runtime.Transaction.Api (ApplyInputsError, InputsApplied(..))
 import qualified Language.Marlowe.Util as V1
 import Options.Applicative
@@ -47,6 +54,7 @@ data ApplyCommandError v
   | PlainInputsSupportedOnly (ContractInputs v)
   | TransactionFileWriteFailed (C.FileError ())
   | MetadataDecodingFailed (Maybe Yaml.ParseException)
+  | TagsDecodingFailed (Maybe Yaml.ParseException)
 
 deriving instance Show (ApplyCommandError 'V1)
 
@@ -58,7 +66,7 @@ data ContractInputs v
 deriving instance Show (ContractInputs 'V1)
 
 applyCommandParser :: ParserInfo (TxCommand ApplyCommand)
-applyCommandParser = info (txCommandParser parser) $ progDesc "Apply inputs to a contract"
+applyCommandParser = info (txCommandParser True parser) $ progDesc "Apply inputs to a contract"
   where
     parser = V1ApplyCommand
       <$> contractIdParser "which to apply the inputs"
@@ -145,7 +153,7 @@ notifyCommandParser :: ParserInfo (TxCommand ApplyCommand)
 notifyCommandParser = singleInputParser "notify" (pure V1.INotify) $ progDesc "Notify a contract to proceed"
 
 singleInputParser :: String -> Parser V1.InputContent -> InfoMod (TxCommand ApplyCommand) -> ParserInfo (TxCommand ApplyCommand)
-singleInputParser verb contentParser = info (txCommandParser parser)
+singleInputParser verb contentParser = info (txCommandParser True parser)
   where
     parser = V1ApplyCommand
       <$> contractIdParser verb
@@ -165,7 +173,7 @@ singleInputParser verb contentParser = info (txCommandParser parser)
       ]
 
 advanceCommandParser :: ParserInfo (TxCommand ApplyCommand)
-advanceCommandParser = info (txCommandParser parser) $ progDesc "Advance a timed-out contract by applying an empty set of inputs."
+advanceCommandParser = info (txCommandParser True parser) $ progDesc "Advance a timed-out contract by applying an empty set of inputs."
   where
     parser = V1ApplyCommand
       <$> contractIdParser "advance."
@@ -214,11 +222,11 @@ readRole :: ReadM V1.Party
 readRole = V1.Role . P.TokenName <$> str
 
 runApplyCommand :: TxCommand ApplyCommand -> CLI ()
-runApplyCommand TxCommand { walletAddresses, signingMethod, metadataFile, subCommand=V1ApplyCommand{..}} = runCLIExceptT do
+runApplyCommand TxCommand { walletAddresses, signingMethod, tagsFile, metadataFile, subCommand=V1ApplyCommand{..}} = runCLIExceptT do
   inputs' <- case inputs of
     ContractInputsByValue inputs' -> pure inputs'
     _ -> throwE (PlainInputsSupportedOnly inputs)
-  metadata <- readMetadata
+  metadata <- MarloweTransactionMetadata <$> readTags <*> readMetadata
   let
     validityLowerBound'= posixTimeToUTCTime <$> validityLowerBound
     validityUpperBound'= posixTimeToUTCTime <$> validityUpperBound
@@ -242,3 +250,11 @@ runApplyCommand TxCommand { walletAddresses, signingMethod, metadataFile, subCom
         metadataJSON <- ExceptT $ liftIO $ first (MetadataDecodingFailed . Just) <$> decodeFileEither filePath
         noteT (MetadataDecodingFailed Nothing) $ hoistMaybe (fromJSONEncodedTransactionMetadata metadataJSON)
       Nothing -> pure mempty
+
+    readTags :: ExceptT (ApplyCommandError v) CLI (Maybe MarloweMetadata)
+    readTags = case tagsFile of
+      Just filePath -> Just <$> do
+        tagsJSON <- ExceptT $ liftIO $ first (TagsDecodingFailed . Just) <$> decodeFileEither filePath
+        tags <- noteT (TagsDecodingFailed Nothing) $ hoistMaybe (traverse (traverse fromJSONEncodedMetadata) tagsJSON)
+        pure $ MarloweMetadata tags Nothing
+      Nothing -> pure Nothing

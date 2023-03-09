@@ -27,6 +27,7 @@ import Language.Marlowe.Runtime.ChainSync.Api
   , PolicyId
   , TokenName(..)
   , TransactionMetadata
+  , fromJSONEncodedMetadata
   , fromJSONEncodedTransactionMetadata
   , renderTxOutRef
   )
@@ -34,6 +35,8 @@ import Language.Marlowe.Runtime.Client (createContract)
 import Language.Marlowe.Runtime.Core.Api
   ( ContractId(ContractId)
   , IsMarloweVersion(Contract)
+  , MarloweMetadata(..)
+  , MarloweTransactionMetadata(..)
   , MarloweVersion(MarloweV1)
   , MarloweVersionTag(V1)
   , SomeMarloweVersion(SomeMarloweVersion)
@@ -75,12 +78,13 @@ data CreateCommandError v
   | TransactionFileWriteFailed (C.FileError ())
   | RolesConfigNotSupportedYet RolesConfig
   | MetadataDecodingFailed (Maybe Yaml.ParseException)
+  | TagsDecodingFailed (Maybe Yaml.ParseException)
   | ExtendedContractsAreNotSupportedYet
 
 deriving instance Show (CreateCommandError 'V1)
 
 createCommandParser :: ParserInfo (TxCommand CreateCommand)
-createCommandParser = info (txCommandParser parser) $ progDesc "Create a new Marlowe Contract"
+createCommandParser = info (txCommandParser True parser) $ progDesc "Create a new Marlowe Contract"
   where
     parser = CreateCommand
       <$> marloweVersionParser
@@ -152,7 +156,7 @@ createCommandParser = info (txCommandParser parser) $ progDesc "Create a new Mar
       ]
 
 runCreateCommand :: TxCommand CreateCommand -> CLI ()
-runCreateCommand TxCommand { walletAddresses, signingMethod, metadataFile, subCommand=CreateCommand{..}} = case marloweVersion of
+runCreateCommand TxCommand { walletAddresses, signingMethod, tagsFile, metadataFile, subCommand=CreateCommand{..}} = case marloweVersion of
   SomeMarloweVersion MarloweV1 -> runCLIExceptT do
     minting' <- case roles of
       Nothing -> pure RoleTokensNone
@@ -179,10 +183,18 @@ runCreateCommand TxCommand { walletAddresses, signingMethod, metadataFile, subCo
         noteT (MetadataDecodingFailed Nothing) $ hoistMaybe (fromJSONEncodedTransactionMetadata metadataJSON)
       Nothing -> pure mempty
 
+    readTags :: ExceptT (CreateCommandError v) CLI (Maybe MarloweMetadata)
+    readTags = case tagsFile of
+      Just filePath -> Just <$> do
+        tagsJSON <- ExceptT $ liftIO $ first (TagsDecodingFailed . Just) <$> decodeFileEither filePath
+        tags <- noteT (TagsDecodingFailed Nothing) $ hoistMaybe (traverse (traverse fromJSONEncodedMetadata) tagsJSON)
+        pure $ MarloweMetadata tags Nothing
+      Nothing -> pure Nothing
+
     run :: MarloweVersion v -> RoleTokensConfig -> ExceptT (CreateCommandError v) CLI ContractId
     run version rolesDistribution  = do
       contract <- readContract version
-      metadata <- readMetadata
+      metadata <- MarloweTransactionMetadata <$> readTags <*> readMetadata
       ContractCreated{contractId,txBody} <- ExceptT $ first CreateFailed <$> createContract Nothing version walletAddresses rolesDistribution metadata minUTxO contract
       case signingMethod of
         Manual outputFile -> do
