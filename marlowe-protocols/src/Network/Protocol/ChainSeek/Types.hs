@@ -19,10 +19,7 @@ import Data.Functor ((<&>))
 import Data.Kind (Type)
 import Data.Maybe (catMaybes)
 import Data.Proxy (Proxy(..))
-import Data.String (IsString)
-import Data.Text (Text)
 import qualified Data.Text as T
-import qualified Data.Text.Encoding as T
 import GHC.Show (showSpace)
 import Network.Protocol.Codec (BinaryMessage(..))
 import Network.Protocol.Codec.Spec (ArbitraryMessage(..), MessageEq(..), ShowProtocol(..))
@@ -81,22 +78,6 @@ instance
     , signature $ Proxy @point
     , signature $ Proxy @tip
     ]
-
--- | Schema version used for
-newtype SchemaVersion = SchemaVersion Text
-  deriving stock (Show, Eq, Ord)
-  deriving newtype (IsString, ToJSON)
-
-instance Arbitrary SchemaVersion where
-  arbitrary = SchemaVersion . T.pack <$> arbitrary
-
-instance Binary SchemaVersion where
-  put (SchemaVersion v) = put $ T.encodeUtf8 v
-  get = do
-    bytes <- get
-    case T.decodeUtf8' bytes of
-      Left err      -> fail $ show err
-      Right version -> pure $ SchemaVersion version
 
 instance Protocol (ChainSeek query point tip) where
 
