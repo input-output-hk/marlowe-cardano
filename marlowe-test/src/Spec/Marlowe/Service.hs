@@ -28,7 +28,8 @@ import Spec.Marlowe.Service.Serialization (roundtripSerialization)
 import Spec.Marlowe.Service.Types (Request(..), Response(..))
 
 import qualified Data.Aeson as A (Result(..), Value, fromJSON, object, toJSON, (.=))
-import qualified Language.Marlowe.Core.V1.Semantics as Marlowe (computeTransaction, evalValue, playTrace)
+import qualified Language.Marlowe.Core.V1.Semantics as Marlowe
+  (computeTransaction, evalObservation, evalValue, playTrace)
 
 
 -- | Respond to a request expressed as JSON.
@@ -63,5 +64,10 @@ handle PlayTrace{..} =
 handle EvalValue{..} =
   let
     valueResponse = A.toJSON $ Marlowe.evalValue environment state value
+  in
+    pure RequestResponse{..}
+handle EvalObservation{..} =
+  let
+    valueResponse = A.toJSON $ Marlowe.evalObservation environment state observation
   in
     pure RequestResponse{..}
