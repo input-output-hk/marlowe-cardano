@@ -174,14 +174,6 @@ marlowe-cli --help
       transaction              Create and submit transactions.
       util                     Miscellaneous utilities.
 
-    Low-level commands:
-      contract                 Export contract address, validator, datum, or
-                               redeemer.
-      input                    Create inputs to a contract.
-      role                     Export role address, validator, datum, or redeemer.
-      transaction              Create and submit transactions.
-      util                     Miscellaneous utilities.
-
 </div>
 
 </div>
