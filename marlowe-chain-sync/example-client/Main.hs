@@ -5,7 +5,7 @@ import Control.Exception (bracket, bracketOnError)
 import Data.Functor (void)
 import Data.Proxy (Proxy(Proxy))
 import qualified FollowingUTxOs
-import Language.Marlowe.Runtime.ChainSync.Api (RuntimeChainSeek, WithGenesis(..))
+import Language.Marlowe.Runtime.ChainSync.Api (RuntimeChainSeek)
 import Network.Channel (socketAsChannel)
 import Network.Protocol.ChainSeek.Client (chainSeekClientPeer)
 import Network.Protocol.Driver (mkDriver)
@@ -35,7 +35,7 @@ run example conn = void $ runPeerWithDriver driver peer (startDState driver)
   where
     driver = mkDriver channel
     channel = socketAsChannel conn
-    peer = handshakeClientPeer (chainSeekClientPeer Genesis) $ simpleHandshakeClient (signature $ Proxy @RuntimeChainSeek) client
+    peer = handshakeClientPeer chainSeekClientPeer $ simpleHandshakeClient (signature $ Proxy @RuntimeChainSeek) client
     client = case example of
       0 -> SkippingBlocks.client
       1 -> FollowingUTxOs.client

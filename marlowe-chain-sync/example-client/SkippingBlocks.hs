@@ -9,17 +9,8 @@ import Network.Protocol.ChainSeek.Client
 
 -- This client advances 1000 blocks at a time until it reaches the tip.
 client :: RuntimeChainSeekClient IO ()
-client = ChainSeekClient stInit
+client = ChainSeekClient $ stIdle 1000
   where
-    stInit = pure $ SendMsgRequestHandshake moveSchema stHandshake
-
-    stHandshake = ClientStHandshake
-      { recvMsgHandshakeRejected = \supportedVersions -> do
-          putStr "Schema version not supported by server. Supported versions: "
-          print supportedVersions
-      , recvMsgHandshakeConfirmed = stIdle 1000
-      }
-
     stIdle stepSize = do
       putStrLn $ "Advancing " <> show stepSize <> " block(s)"
       pure $ SendMsgQueryNext (AdvanceBlocks stepSize) stNext

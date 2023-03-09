@@ -596,9 +596,6 @@ data Move err result where
 instance HasSignature Move where
   signature _ = "Move"
 
-moveSchema :: SchemaVersion
-moveSchema = SchemaVersion "move_unsafe"
-
 deriving instance Show (Move err result)
 deriving instance Eq (Move err result)
 deriving instance Ord (Move err result)

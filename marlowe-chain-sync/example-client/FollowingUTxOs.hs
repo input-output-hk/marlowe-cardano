@@ -9,17 +9,8 @@ import Network.Protocol.ChainSeek.Client
 -- This client follows a Genesis TxOut through transactions until it finds a
 -- UTxO at index 0 of some tx.
 client :: RuntimeChainSeekClient IO ()
-client = ChainSeekClient stInit
+client = ChainSeekClient $ stIdle []
   where
-    stInit = pure $ SendMsgRequestHandshake moveSchema stHandshake
-
-    stHandshake = ClientStHandshake
-      { recvMsgHandshakeRejected = \supportedVersions -> do
-          putStr "Schema version not supported by server. Supported versions: "
-          print supportedVersions
-      , recvMsgHandshakeConfirmed = stIdle []
-      }
-
     stIdle hist = do
       let
         (txOut, hist') = fromMaybe
