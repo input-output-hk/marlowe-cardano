@@ -97,6 +97,7 @@ import Spec.Marlowe.Plutus.Types
   , output
   , role
   )
+import Spec.Marlowe.Reference (ReferencePath)
 import Spec.Marlowe.Semantics.Arbitrary (arbitraryPositiveInteger)
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.QuickCheck (Arbitrary(..), Gen, Property, forAll, property, suchThat, testProperty, (===))
@@ -107,16 +108,16 @@ import qualified PlutusTx.AssocMap as AM (fromList, insert, toList)
 
 
 -- | Run tests.
-tests :: TestTree
-tests =
+tests :: [ReferencePath] -> TestTree
+tests referencePaths =
   testGroup "Marlowe On-Chain Specification"
     [
       testGroup "Semantics Validator"
         [
           testGroup "Valid transaction succeeds"
             [
-              testProperty "Noiseless" $ checkSemanticsTransaction noModify noModify noVeto True False
-            , testProperty "Noisy"     $ checkSemanticsTransaction noModify noModify noVeto True True
+              testProperty "Noiseless" $ checkSemanticsTransaction referencePaths noModify noModify noVeto True False
+            , testProperty "Noisy"     $ checkSemanticsTransaction referencePaths noModify noModify noVeto True True
             ]
         , testGroup "Constraint 1. Typed validation"
             [
@@ -129,23 +130,23 @@ tests =
             ]
         , testGroup "Constraint 2. Single Marlowe script input"
             [
-              testProperty "Invalid attempt to run two Marlowe scripts" checkDoubleInput
+              testProperty "Invalid attempt to run two Marlowe scripts" $ checkDoubleInput referencePaths
             ]
         , testGroup "Constraint 3. Single Marlowe output"
             [
-              testProperty "Invalid attempt to split Marlowe output" checkMultipleOutput
+              testProperty "Invalid attempt to split Marlowe output" $ checkMultipleOutput referencePaths
             ]
         , testGroup "Constraint 4. No output to script on close"
             [
-              testProperty "Invalid attempt to output to Marlowe on close" checkCloseOutput
+              testProperty "Invalid attempt to output to Marlowe on close" $ checkCloseOutput referencePaths
             ]
         , testGroup "Constraint 5. Input value from script"
             [
-              testProperty "Invalid mismatch between state and script input" checkValueInput
+              testProperty "Invalid mismatch between state and script input" $ checkValueInput referencePaths
             ]
         , testGroup "Constraint 6. Output value to script"
             [
-              testProperty "Invalid mismatch between state and script input" checkValueOutput
+              testProperty "Invalid mismatch between state and script input" $ checkValueOutput referencePaths
             ]
         , testGroup "Constraint 7. Input state"
             [
@@ -157,32 +158,32 @@ tests =
             ]
         , testGroup "Constraint 9. Marlowe parameters"
             [
-              testProperty "Invalid alteration of parameters." checkParamsOutput
+              testProperty "Invalid alteration of parameters." $ checkParamsOutput referencePaths
             ]
         , testGroup "Constraint 10. Output state"
             [
-              testProperty "Invalid mismatch between state and script output" checkStateOutput
+              testProperty "Invalid mismatch between state and script output" $ checkStateOutput referencePaths
             ]
         , testGroup "Constraint 11. Output contract"
             [
-              testProperty "Invalid mismatch between contract and script output" checkContractOutput
+              testProperty "Invalid mismatch between contract and script output" $ checkContractOutput referencePaths
             ]
         , testGroup "Constraint 12. Merkleized continuations"
             [
-              testProperty "Valid merkleization"   $ checkMerkleization True
-            , testProperty "Invalid merkleization" $ checkMerkleization False
+              testProperty "Valid merkleization"   $ checkMerkleization referencePaths True
+            , testProperty "Invalid merkleization" $ checkMerkleization referencePaths False
             ]
         , testGroup "Constraint 13. Positive balances"
             [
-              testProperty "Invalid non-positive balance" checkPositiveAccounts
+              testProperty "Invalid non-positive balance" $ checkPositiveAccounts referencePaths
             ]
         , testGroup "Constraint 14. Inputs authorized"
             [
-              testProperty "Invalid missing authorization" checkAuthorization
+              testProperty "Invalid missing authorization" $ checkAuthorization referencePaths
             ]
         , testGroup "Constraint 15. Sufficient payment"
             [
-              testProperty "Invalid insufficient payment" checkPayment
+              testProperty "Invalid insufficient payment" $ checkPayment referencePaths
             ]
         , testProperty "Script hash matches reference hash"
             $ checkValidatorHash semanticsScriptHash
@@ -260,15 +261,16 @@ check1Invalid _ allowEmptyList allowByteString allowUnit =
 
 
 -- | Check that a semantics transaction succeeds.
-checkSemanticsTransaction :: ArbitraryTransaction SemanticsTransaction ()      -- ^ Modifications to make before building the valid transaction.
+checkSemanticsTransaction :: [ReferencePath]                                   -- ^ The reference execution paths from which to choose.
+                          -> ArbitraryTransaction SemanticsTransaction ()      -- ^ Modifications to make before building the valid transaction.
                           -> ArbitraryTransaction SemanticsTransaction ()      -- ^ Modifications to make after building the valid transaction.
                           -> (PlutusTransaction SemanticsTransaction -> Bool)  -- ^ Whether to discard the transaction from the testing.
                           -> Bool                                              -- ^ Whether the transaction should test as valid.
                           -> Bool                                              -- ^ Whether to add noise to the script context.
                           -> Property                                          -- ^ The test property.
-checkSemanticsTransaction modifyBefore modifyAfter condition valid noisy =
+checkSemanticsTransaction referencePaths modifyBefore modifyAfter condition valid noisy =
   property
-    . forAll (arbitrarySemanticsTransaction modifyBefore modifyAfter noisy `suchThat` condition)
+    . forAll (arbitrarySemanticsTransaction referencePaths modifyBefore modifyAfter noisy `suchThat` condition)
     $ \PlutusTransaction{..} ->
       case evaluateSemantics (toData _datum) (toData _redeemer) (toData _scriptContext) of
         This  e   -> not valid || (error $ show e)
@@ -294,8 +296,8 @@ checkPayoutTransaction modifyBefore modifyAfter condition valid noisy =
 
 
 -- | Check that validation fails if two Marlowe scripts are run.
-checkDoubleInput :: Property
-checkDoubleInput =
+checkDoubleInput :: [ReferencePath] -> Property
+checkDoubleInput referencePaths =
   let
     modifyAfter =
       do
@@ -313,7 +315,7 @@ checkDoubleInput =
         infoData <>= AM.fromList [(inDatumHash, inDatum)]
         shuffle
   in
-    checkSemanticsTransaction noModify modifyAfter noVeto False False
+    checkSemanticsTransaction referencePaths noModify modifyAfter noVeto False False
 
 
 -- | Split a value in half.
@@ -342,8 +344,8 @@ notCloses = not . doesClose
 
 
 -- | Check that validation fails if there is more than one Marlowe output.
-checkMultipleOutput :: Property
-checkMultipleOutput =
+checkMultipleOutput :: [ReferencePath] -> Property
+checkMultipleOutput referencePaths =
   let
     modifyAfter =
       do
@@ -356,12 +358,12 @@ checkMultipleOutput =
         infoOutputs %= concatMap splitOwnOutput
         shuffle
   in
-    checkSemanticsTransaction noModify modifyAfter notCloses False False
+    checkSemanticsTransaction referencePaths noModify modifyAfter notCloses False False
 
 
 -- | Check that validation fails if there is one Marlowe output upon close.
-checkCloseOutput :: Property
-checkCloseOutput =
+checkCloseOutput :: [ReferencePath] -> Property
+checkCloseOutput referencePaths =
   let
     modifyAfter =
       do
@@ -374,12 +376,12 @@ checkCloseOutput =
         infoOutputs <>= (txInInfoResolved <$> inScript)
         shuffle
   in
-    checkSemanticsTransaction noModify modifyAfter doesClose False False
+    checkSemanticsTransaction referencePaths noModify modifyAfter doesClose False False
 
 
 -- | Check that value input to a script matches its input state.
-checkValueInput :: Property
-checkValueInput =
+checkValueInput :: [ReferencePath] -> Property
+checkValueInput referencePaths =
   let
     modifyAfter =
       do
@@ -391,12 +393,12 @@ checkValueInput =
         -- Update the inputs with the incremented script input.
         infoInputs %= fmap incrementOwnInput
     in
-      checkSemanticsTransaction noModify modifyAfter noVeto False False
+      checkSemanticsTransaction referencePaths noModify modifyAfter noVeto False False
 
 
 -- | Check that value output to a script matches its output state.
-checkValueOutput :: Property
-checkValueOutput =
+checkValueOutput :: [ReferencePath] -> Property
+checkValueOutput referencePaths =
   let
     modifyAfter =
       do
@@ -408,12 +410,12 @@ checkValueOutput =
         -- Update the outputs with the incremented script output.
         infoOutputs %= fmap incrementOwnOutput
   in
-    checkSemanticsTransaction noModify modifyAfter notCloses False False
+    checkSemanticsTransaction referencePaths noModify modifyAfter notCloses False False
 
 
 -- | Check that output datum to a script matches its semantic output.
-checkDatumOutput :: (MarloweData -> Gen MarloweData) -> Property
-checkDatumOutput perturb =
+checkDatumOutput :: [ReferencePath] -> (MarloweData -> Gen MarloweData) -> Property
+checkDatumOutput referencePaths perturb =
   let
     modifyAfter =
       do
@@ -432,13 +434,13 @@ checkDatumOutput perturb =
         -- Update the data with the modification.
         infoData %= AM.fromList . fmap perturbOwnOutputDatum . AM.toList
   in
-    checkSemanticsTransaction noModify modifyAfter notCloses False False
+    checkSemanticsTransaction referencePaths noModify modifyAfter notCloses False False
 
 
 -- | Check that parameters in the datum are not changed by the transaction.
-checkParamsOutput :: Property
-checkParamsOutput =
-  checkDatumOutput
+checkParamsOutput :: [ReferencePath] -> Property
+checkParamsOutput referencePaths =
+  checkDatumOutput referencePaths
     $ \marloweData ->
       do
         -- Replace the output parameters with a random one.
@@ -448,9 +450,9 @@ checkParamsOutput =
 
 
 -- | Check that state output to a script matches its semantic output.
-checkStateOutput :: Property
-checkStateOutput =
-  checkDatumOutput
+checkStateOutput :: [ReferencePath] -> Property
+checkStateOutput referencePaths =
+  checkDatumOutput referencePaths
     $ \marloweData ->
       do
         -- Replace the output state with a random one.
@@ -460,9 +462,9 @@ checkStateOutput =
 
 
 -- | Check that contract output to a script matches its semantic output.
-checkContractOutput :: Property
-checkContractOutput =
-  checkDatumOutput
+checkContractOutput :: [ReferencePath] -> Property
+checkContractOutput referencePaths =
+  checkDatumOutput referencePaths
     $ \marloweData ->
       do
         -- Replace the output ccontact with a random one.
@@ -482,8 +484,8 @@ hasMerkleizedInput =
 
 
 -- | Check than an invalid merkleization is rejected.
-checkMerkleization :: Bool -> Property
-checkMerkleization valid =
+checkMerkleization :: [ReferencePath] -> Bool -> Property
+checkMerkleization referencePaths valid =
   let
     -- Merkleizedd the contract and its input.
     modifyBefore = merkleize
@@ -499,12 +501,12 @@ checkMerkleization valid =
                hashes <- input `uses` (concatMap merkleHash . txInputs)
                infoData %= (AM.fromList . filter ((`notElem` hashes) . fst) . AM.toList)
   in
-    checkSemanticsTransaction modifyBefore modifyAfter hasMerkleizedInput valid False
+    checkSemanticsTransaction referencePaths modifyBefore modifyAfter hasMerkleizedInput valid False
 
 
 -- | Check that non-positive accounts are rejected.
-checkPositiveAccounts :: Property
-checkPositiveAccounts =
+checkPositiveAccounts :: [ReferencePath] -> Property
+checkPositiveAccounts referencePaths =
   let
     modifyBefore =
       do
@@ -515,7 +517,7 @@ checkPositiveAccounts =
         -- Add the non-positive entry to the accounts.
         inputState %= (\state -> state {accounts = AM.insert (account, token) amount' $ accounts state})
   in
-    checkSemanticsTransaction modifyBefore noModify noVeto False False
+    checkSemanticsTransaction referencePaths modifyBefore noModify noVeto False False
 
 
 -- | Compute the authorization for an input.
@@ -547,8 +549,8 @@ deleteFirst f z =
 
 
 -- | Check that a missing authorization causes failure.
-checkAuthorization :: Property
-checkAuthorization =
+checkAuthorization :: [ReferencePath] -> Property
+checkAuthorization referencePaths =
   let
     modifyAfter =
       do
@@ -565,7 +567,7 @@ checkAuthorization =
         -- Remove the first PKH signatory.
         infoSignatories %= deleteFirst matchPkh
   in
-    checkSemanticsTransaction noModify modifyAfter hasAuthorizations False False
+    checkSemanticsTransaction referencePaths noModify modifyAfter hasAuthorizations False False
 
 
 -- | Determine whether there are any external payments in a transaction.
@@ -585,8 +587,8 @@ decrementValue = foldMap (\(c, n, i) -> singleton c n (i - 1)) . flattenValue
 
 
 -- | Check that an insufficient payment causes failure.
-checkPayment :: Property
-checkPayment =
+checkPayment :: [ReferencePath] -> Property
+checkPayment referencePaths =
   let
     modifyAfter =
       do
@@ -600,7 +602,7 @@ checkPayment =
         -- Update the outputs.
         infoOutputs %= fmap decrementPayment
   in
-    checkSemanticsTransaction noModify modifyAfter hasExternalPayments False False
+    checkSemanticsTransaction referencePaths noModify modifyAfter hasExternalPayments False False
 
 
 -- | Remove a role input UTxOs from the transaction.

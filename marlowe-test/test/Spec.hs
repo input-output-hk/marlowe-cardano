@@ -21,6 +21,7 @@ module Main
   ) where
 
 
+import Spec.Marlowe.Reference (ReferencePath, readReferencePaths)
 import Test.Tasty (TestTree, defaultMain, testGroup)
 import Test.Tasty.QuickCheck
 
@@ -43,12 +44,12 @@ timeout = Nothing
 
 -- | Entry point for the tests.
 main :: IO ()
-main = defaultMain tests
+main = defaultMain . tests =<< readReferencePaths
 
 
 -- | Run the tests.
-tests :: TestTree
-tests =
+tests :: [ReferencePath] -> TestTree
+tests referencePaths =
   testGroup "Marlowe"
     [
       Spec.Marlowe.Marlowe.tests
@@ -58,6 +59,6 @@ tests =
       ]
     , Spec.Marlowe.Serialization.tests
     , Spec.Marlowe.Semantics.tests
-    , Spec.Marlowe.Plutus.tests
+    , Spec.Marlowe.Plutus.tests referencePaths
     , Spec.Marlowe.Service.Isabelle.tests
     ]

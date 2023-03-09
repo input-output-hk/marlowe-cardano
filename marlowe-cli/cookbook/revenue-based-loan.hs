@@ -3,7 +3,7 @@
 module RevenueBasedLoan
   where
 
-import Language.Marlowe.Extended.V1
+import Language.Marlowe.Extended.V1 hiding (contract)
 
 main :: IO ()
 main = printJSON $ contract
@@ -30,13 +30,13 @@ revenueBounds :: Bound
 revenueBounds = Bound 1 1000000
 
 principal :: Value
-principal = ConstantParam "Principal"
+principal = Constant $ 1000 * 1000000
 
 interest :: Value
-interest = ConstantParam "Interest"
+interest =  Constant $ 75 * 1000000
 
 paymentPercent :: Value
-paymentPercent = ConstantParam "Payment as Percent of Revenue"
+paymentPercent = Constant 20
 
 remainingDue :: Value
 remainingDue = UseValue "Remaining Due"
@@ -58,7 +58,7 @@ makePayment period continuation =
                     $ Pay lender (Party lender) djed remainingDue
                       Close
                 ]
-                (TimeParam $ "Deadline " <> show period <> " for Payment")
+                (fromIntegral $ (2 * period + 1) * 86400 * 1000)
                 continuation
             )
             (
@@ -69,11 +69,11 @@ makePayment period continuation =
                     $ Let "Remaining Due" (SubValue remainingDue nextPayment)
                       continuation
                 ]
-                (TimeParam $ "Deadline " <> show period <> " for Payment")
+                (fromIntegral $ (2 * period + 1) * 86400 * 1000)
                 continuation
             )
     ]
-    (TimeParam $ "Deadline " <> show period <> " for Oracle")
+    (fromIntegral $ 2 * period * 86400)
     continuation
 
 collectRemainder :: Contract
@@ -83,7 +83,7 @@ collectRemainder =
       Case (Deposit lender borrower djed remainingDue)
         Close
     ]
-    (TimeParam "End of Contract")
+    (fromIntegral $ 6 * 86400 * 1000)
     Close
 
 contract :: Contract
@@ -93,7 +93,7 @@ contract =
       Case (Deposit lender lender djed principal)
         $ Pay lender (Party borrower) djed principal
         $ Let "Remaining Due" (AddValue principal interest)
-        $ foldr makePayment collectRemainder [1..5]
+        $ foldr makePayment collectRemainder [1..2]
     ]
-    (TimeParam "Loan Deadline")
+    (fromIntegral $ 1 * 86400 * 1000)
     Close
