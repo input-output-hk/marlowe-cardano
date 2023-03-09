@@ -7,12 +7,20 @@ module Network.Protocol.Codec.Spec
 
 import Data.ByteString.Lazy (ByteString, fromStrict, toChunks)
 import qualified Data.ByteString.Lazy as LBS
+import Data.ByteString.Lazy.Base16 (encodeBase16)
+import Data.Foldable (for_)
 import Data.Function ((&))
 import Data.Functor.Identity (Identity(..))
+import Data.List.NonEmpty (NonEmpty)
+import Data.Text (Text)
+import qualified Data.Text as T
+import qualified Data.Text.Lazy as TL
 import GHC.Show (showSpace)
 import Network.Protocol.Codec (BinaryMessage, binaryCodec)
 import Network.TypedProtocol (PeerHasAgency, Protocol(..), SomeMessage(..))
 import Network.TypedProtocol.Codec (AnyMessageAndAgency(..), Codec(..), PeerHasAgency(..), runDecoder)
+import Test.Hspec (Spec, it)
+import Test.Hspec.Golden (Golden(..), defaultGolden)
 import Test.QuickCheck (Property, Testable(property), counterexample, forAllShrinkShow, infiniteList, oneof)
 import Test.QuickCheck.Gen (Gen)
 import Test.QuickCheck.Property (failed, succeeded)
@@ -29,6 +37,24 @@ class ArbitraryMessage ps where
   arbitraryMessage :: Gen (AnyMessageAndAgency ps)
   shrinkMessage :: PeerHasAgency pr st -> Message ps st st' -> [Message ps st st']
 
+-- | A class for generating variations of a data type. morally, at least one variation of
+-- each constructor should be generated.
+class Variations a where
+  variations :: NonEmpty a
+
+-- | A class for generating variations of protocol messages.
+class MessageVariations ps where
+  messageVariations :: PeerHasAgency pr (st :: ps) -> NonEmpty (SomeMessage st)
+  agencyVariations :: NonEmpty (SomePeerHasAgency ps)
+
+instance MessageVariations ps => Variations (AnyMessageAndAgency ps) where
+  variations = do
+    SomePeerHasAgency tok <- agencyVariations
+    SomeMessage msg <- messageVariations tok
+    pure $ AnyMessageAndAgency tok msg
+
+data SomePeerHasAgency ps = forall pr (st :: ps). SomePeerHasAgency (PeerHasAgency pr st)
+
 genByteStringSplits :: ByteString -> Gen [ByteString]
 genByteStringSplits bytes = oneof
   [ pure $ fromStrict <$> toChunks bytes
@@ -44,6 +70,28 @@ genByteStringSplits bytes = oneof
             (chunk, bs') = LBS.splitAt len bs
           in
             chunk : chunksByLength bs' lens
+
+data TextEnvelope = TextEnvelope
+  { text :: Text
+  , binary :: Text
+  } deriving (Eq, Show, Read, Ord)
+
+codecGoldenTests :: forall ps. (MessageVariations ps, ShowProtocol ps, BinaryMessage ps) => Spec
+codecGoldenTests = do
+  let Codec{..} = binaryCodec @Identity @ps
+  for_ variations \(AnyMessageAndAgency tok message) -> do
+    let text = T.pack $ showsPrecMessage 0 tok message ""
+    let binary = TL.toStrict $ encodeBase16 $ encode tok message
+    let output = TextEnvelope{..}
+    it (T.unpack text) Golden
+      { output
+      , encodePretty = show
+      , writeToFile = \path -> writeFile path . show
+      , readFromFile = fmap read . readFile
+      , goldenFile = goldenFile $ defaultGolden (T.unpack text) ""
+      , actualFile = actualFile $ defaultGolden (T.unpack text) ""
+      , failFirstTime = True
+      }
 
 checkPropCodec
   :: forall ps

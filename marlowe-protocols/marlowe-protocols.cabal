@@ -79,6 +79,8 @@ library
     , eventuo11y-extras
     , general-allocate ^>= { 0.2 }
     , hashable
+    , hspec
+    , hspec-golden
     , lifted-base
     , monad-control
     , network
