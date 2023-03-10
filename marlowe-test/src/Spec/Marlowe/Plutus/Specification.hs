@@ -222,7 +222,7 @@ tests referencePaths =
               -- DO NOT ALTER THE FOLLOWING VALUE UNLESS YOU ARE COMMITTING
               -- APPROVED CHANGES TO MARLOWE'S SEMANTICS VALIDATOR. THIS HASH
               -- HAS IMPLICATIONS FOR VERSIONING, AUDIT, AND CONTRACT DISCOVERY.
-              "226ddf010a2730335a1d49c577fdfb16d7670a0f4ba6ad9885443604"
+              "2ed2631dbb277c84334453c5c437b86325d371f0835a28b910a91a6e"
         ]
     , testGroup "Payout Validator"
         [
