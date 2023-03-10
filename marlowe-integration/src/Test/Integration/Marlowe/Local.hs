@@ -234,7 +234,7 @@ withLocalMarloweRuntime' MarloweRuntimeOptions{..} test = withRunInIO \runInIO -
     (dbReleaseKey, dbName) <- allocate (createDatabase workspace) (cleanupDatabase 10_000)
     liftIO $ migrateDatabase dbName
     let connectionString = settings databaseHost databasePort databaseUser databasePassword dbName
-    let acquirePool = Pool.acquire (100, secondsToNominalDiffTime 5, connectionString)
+    let acquirePool = Pool.acquire 100 (Just 5000000) connectionString
     (_, pool) <- allocate acquirePool Pool.release
     logFileHandle <- openWorkspaceFile workspace "logs/runtime.log" WriteMode
     liftIO $ hSetBuffering logFileHandle LineBuffering

@@ -425,7 +425,7 @@ executable marlowe-indexer
     , eventuo11y ^>= { 0.9, 0.10 }
     , eventuo11y-extras
     , hasql
-    , hasql-pool
+    , hasql-pool ^>= 0.8
     , marlowe-chain-sync
     , marlowe-protocols
     , marlowe-runtime
@@ -434,7 +434,6 @@ executable marlowe-indexer
     , nonempty-containers
     , optparse-applicative
     , text
-    , time
     , uuid
   ghc-options: -threaded
 
@@ -453,7 +452,7 @@ executable marlowe-sync
     , eventuo11y ^>= { 0.9, 0.10 }
     , eventuo11y-extras
     , hasql
-    , hasql-pool
+    , hasql-pool ^>= 0.8
     , marlowe-protocols
     , marlowe-runtime:discovery-api
     , marlowe-runtime:history-api
@@ -462,7 +461,6 @@ executable marlowe-sync
     , network
     , optparse-applicative
     , text
-    , time
     , uuid
   ghc-options: -threaded
 

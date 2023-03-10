@@ -107,7 +107,8 @@ import Language.Marlowe.CLI.Types (CliEnv, CliError(..))
 import Language.Marlowe.Client (marloweParams)
 import Language.Marlowe.Core.V1.Semantics.Types (Contract(..), Input(..), TimeInterval)
 import Language.Marlowe.Scripts (MarloweInput, MarloweTxInput(..), marloweValidatorHash, rolePayoutValidatorHash)
-import Ledger.Tx.CardanoAPI (FromCardanoError, fromCardanoAddressInEra, fromCardanoPolicyId, toCardanoScriptHash)
+import Ledger.Address (toPlutusAddress)
+import Ledger.Tx.CardanoAPI (fromCardanoPolicyId, toCardanoScriptHash)
 import Plutus.Script.Utils.Scripts (dataHash)
 import Plutus.V1.Ledger.Api
   ( BuiltinByteString
@@ -434,12 +435,10 @@ classifyMarlowe slotConfig includeAll meBlock txBody =
     parameters = makeParameters meBlock meTxId meMetadata <$> extractMints txMintValue
     meIns = classifyInputs txBody
     meInterval = convertSlots slotConfig txValidityRange
-    event =
-      case classifyOutputs meTxId txOuts of
-        Right meOuts -> if includeAll || any isMarloweIn meIns || any isMarloweOut meOuts
-                          then [Transaction{..}]
-                          else mempty
-        Left e       -> let meAnomaly = show e in [Anomaly{..}]
+    meOuts = classifyOutputs meTxId txOuts
+    event = if includeAll || any isMarloweIn meIns || any isMarloweOut meOuts
+              then [Transaction{..}]
+              else mempty
   in
     parameters <> event
 
@@ -535,35 +534,30 @@ isMarloweOut _          = True
 
 
 -- | Classify transaction outputs' Marlowe content.
-classifyOutputs :: TxId                                  -- ^ The transaction ID.
-                -> [TxOut CtxTx era]                     -- ^ The transaction outputs.
-                -> Either FromCardanoError [MarloweOut]  -- ^ The classified transaction outputs.
+classifyOutputs :: TxId               -- ^ The transaction ID.
+                -> [TxOut CtxTx era]  -- ^ The transaction outputs.
+                -> [MarloweOut]       -- ^ The classified transaction outputs.
 classifyOutputs txId txOuts =
-  sequence
-    $ uncurry classifyOutput
+  uncurry classifyOutput
     . first (TxIn txId . TxIx)
     <$> zip [0..] txOuts
 
 
 -- | Classify a transaction output's Marlowe content.
-classifyOutput :: TxIn                                -- ^ The transaction output ID.
-               -> TxOut CtxTx era                     -- ^ The transaction output content.
-               -> Either FromCardanoError MarloweOut  -- ^ The classified transaction output.
-classifyOutput moTxIn (TxOut address value datum _) =
-  do
-    moAddress <- fromCardanoAddressInEra address
-    let
-      moValue = txOutValueToValue value
-    pure
-      $ case datum of
-          TxOutDatumInTx _ datum' -> case (fromData $ toPlutusData datum', fromData $ toPlutusData datum') of
-                                    (Just moOutput, _) -> ApplicationOut{..}
-                                    (_, Just name)     -> if BA.length name <= 32
-                                                            then let moPayout = TokenName name in PayoutOut{..}
-                                                            else PlainOut{..}
-                                    _                  -> PlainOut{..}
-          _                   -> PlainOut{..}
-
+classifyOutput :: TxIn             -- ^ The transaction output ID.
+               -> TxOut CtxTx era  -- ^ The transaction output content.
+               -> MarloweOut       -- ^ The classified transaction output.
+classifyOutput moTxIn (TxOut address value datum _) = case datum of
+    TxOutDatumInTx _ datum' -> case (fromData $ toPlutusData datum', fromData $ toPlutusData datum') of
+                              (Just moOutput, _) -> ApplicationOut{..}
+                              (_, Just name)     -> if BA.length name <= 32
+                                                      then let moPayout = TokenName name in PayoutOut{..}
+                                                      else PlainOut{..}
+                              _                  -> PlainOut{..}
+    _                   -> PlainOut{..}
+  where
+    moAddress = toPlutusAddress address
+    moValue = txOutValueToValue value
 
 -- | Extract metadata from a transaction.
 extractMetadata :: TxMetadataInEra era  -- ^ The potential metadata.

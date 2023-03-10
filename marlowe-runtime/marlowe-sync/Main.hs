@@ -9,8 +9,8 @@ import Control.Exception (bracket)
 import Control.Monad ((<=<))
 import Data.String (fromString)
 import qualified Data.Text.Lazy.IO as TL
-import Data.Time (secondsToNominalDiffTime)
 import Data.UUID.V4 (nextRandom)
+import Hasql.Pool (UsageError(..))
 import qualified Hasql.Pool as Pool
 import qualified Hasql.Session as Session
 import Language.Marlowe.Protocol.HeaderSync.Server (marloweHeaderSyncServerPeer)
@@ -49,7 +49,7 @@ main :: IO ()
 main = run =<< getOptions
 
 run :: Options -> IO ()
-run Options{..} = bracket (Pool.acquire (100, secondsToNominalDiffTime 5, fromString databaseUri)) Pool.release $
+run Options{..} = bracket (Pool.acquire 100 (Just $ 5000000) (fromString databaseUri)) Pool.release $
   runComponent_ proc pool -> do
     eventBackend <- logger -< LoggerDependencies
       { configFilePath = logConfigFile
@@ -92,8 +92,10 @@ run Options{..} = bracket (Pool.acquire (100, secondsToNominalDiffTime 5, fromSt
           $ handshakeConnectionSource querySource
       }
   where
-    throwUsageError (Pool.ConnectionError err)                       = error $ show err
-    throwUsageError (Pool.SessionError (Session.QueryError _ _ err)) = error $ show err
+    throwUsageError (ConnectionUsageError err)                       = error $ show err
+    throwUsageError (SessionUsageError (Session.QueryError _ _ err)) = error $ show err
+    throwUsageError AcquisitionTimeoutUsageError                     = error "hasql-timeout"
+
 
 data Options = Options
   { databaseUri :: String

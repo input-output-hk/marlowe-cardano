@@ -10,7 +10,6 @@ import Data.Either (fromRight)
 import qualified Data.Set.NonEmpty as NESet
 import Data.String (fromString)
 import qualified Data.Text.Lazy.IO as TL
-import Data.Time (secondsToNominalDiffTime)
 import Data.UUID.V4 (nextRandom)
 import Data.Void (Void)
 import Hasql.Pool
@@ -59,7 +58,7 @@ clientHints = defaultHints { addrSocketType = Stream }
 
 run :: Options -> IO ()
 run Options{..} = withSocketsDo do
-  pool <- Pool.acquire (100, secondsToNominalDiffTime 5, fromString databaseUri)
+  pool <- Pool.acquire 100 (Just $ 5000000) (fromString databaseUri)
   scripts <- case ScriptRegistry.getScripts MarloweV1 of
     NESet.IsEmpty -> fail "No known marlowe scripts"
     NESet.IsNonEmpty scripts -> pure scripts
@@ -89,8 +88,10 @@ run Options{..} = withSocketsDo do
     , injectConfigWatcherSelector = injectSelector ConfigWatcher
     }
   where
-    throwUsageError (ConnectionError err)                       = error $ show err
-    throwUsageError (SessionError (Session.QueryError _ _ err)) = error $ show err
+    throwUsageError (ConnectionUsageError err)                       = error $ show err
+    throwUsageError (SessionUsageError (Session.QueryError _ _ err)) = error $ show err
+    throwUsageError AcquisitionTimeoutUsageError                     = error "hasql-timeout"
+
 
     chainSyncQueryConnector = handshakeClientConnector $ tcpClient chainSeekHost chainSeekQueryPort queryClientPeer
 

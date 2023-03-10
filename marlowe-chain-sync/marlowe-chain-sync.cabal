@@ -240,8 +240,7 @@ executable marlowe-chain-indexer
     , eventuo11y ^>= { 0.9, 0.10 }
     , eventuo11y-extras
     , hasql
-    -- Consider removing the hasql < 1.6 constraint in cabal.project if updating hasql-pool
-    , hasql-pool < 0.6
+    , hasql-pool ^>= 0.8
     , marlowe-chain-sync:chain-indexer
     , optparse-applicative
     , ouroboros-network
@@ -270,8 +269,7 @@ executable marlowe-chain-sync
     , eventuo11y ^>= { 0.9, 0.10 }
     , eventuo11y-extras
     , hasql
-    -- Consider removing the hasql < 1.6 constraint in cabal.project if updating hasql-pool
-    , hasql-pool < 0.6
+    , hasql-pool ^>= 0.8
     , marlowe-chain-sync
     , marlowe-chain-sync:libchainsync
     , marlowe-protocols
@@ -279,7 +277,6 @@ executable marlowe-chain-sync
     , optparse-applicative
     , ouroboros-network
     , text
-    , time
     , uuid
 
 executable example-client

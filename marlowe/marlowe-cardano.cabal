@@ -50,7 +50,7 @@ library
 
   build-depends:
     base,
-    aeson <2,
+    aeson,
     base16-aeson,
     base16-bytestring,
     bech32,
@@ -61,6 +61,7 @@ library
     multiplate,
     newtype-generics,
     ordered-containers,
+    plutus-ledger ^>= 1.2,
     plutus-ledger-api,
     plutus-script-utils,
     plutus-tx,

@@ -159,7 +159,8 @@ import Language.Marlowe.Core.V1.Semantics.Types
   , getInputContent
   )
 import Language.Marlowe.Core.V1.Semantics.Types.Address (Network, mainnet, testnet)
-import Ledger.Tx.CardanoAPI (fromCardanoAddressInEra, toCardanoAddressInEra, toCardanoScriptDataHash, toCardanoValue)
+import Ledger.Address (toPlutusAddress)
+import Ledger.Tx.CardanoAPI (toCardanoAddressInEra, toCardanoScriptDataHash, toCardanoValue)
 import Plutus.ApiCommon (ProtocolVersion)
 import Plutus.V1.Ledger.Ada (fromValue)
 import Plutus.V1.Ledger.SlotConfig (SlotConfig, posixTimeToEnclosingSlot, slotToBeginPOSIXTime, slotToEndPOSIXTime)
@@ -984,12 +985,11 @@ marloweAddressFromCardanoAddress :: MonadError CliError m
                                  -> m (Network, Address)
 marloweAddressFromCardanoAddress address =
   do
-    address' <- liftCli $ fromCardanoAddressInEra address
     network' <-
       case address of
         AddressInEra _ (CS.ShelleyAddress network _ _) -> pure $ if network == LC.Mainnet then mainnet else testnet
         _                                              -> throwError "Byron addresses are not supported."
-    pure (network', address')
+    pure (network', toPlutusAddress address)
 
 
 -- | Withdraw funds for a specific role from the role address, without selecting inputs or outputs.

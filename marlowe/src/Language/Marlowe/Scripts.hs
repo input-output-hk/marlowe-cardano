@@ -63,8 +63,9 @@ import GHC.Generics (Generic)
 import Language.Marlowe.Core.V1.Semantics as Semantics
 import Language.Marlowe.Core.V1.Semantics.Types as Semantics
 import Language.Marlowe.Pretty (Pretty(..))
+import Ledger.Typed.Scripts (unsafeMkTypedValidator)
 import qualified Plutus.Script.Utils.Typed as Scripts
-import Plutus.Script.Utils.V2.Typed.Scripts (mkTypedValidator, mkUntypedValidator)
+import Plutus.Script.Utils.V2.Typed.Scripts (mkTypedValidator)
 import qualified Plutus.Script.Utils.V2.Typed.Scripts as Scripts
 import qualified Plutus.V1.Ledger.Address as Address (scriptHashAddress)
 import qualified Plutus.V1.Ledger.Value as Val
@@ -138,7 +139,7 @@ rolePayoutValidator = mkTypedValidator @TypedRolePayoutValidator
   $$(PlutusTx.compile [|| mkRolePayoutValidator ||])
   $$(PlutusTx.compile [|| wrap ||])
   where
-    wrap = Scripts.mkUntypedValidator @(CurrencySymbol, TokenName) @()
+    wrap = Scripts.mkUntypedValidator @_ @(CurrencySymbol, TokenName) @()
 
 
 {-# INLINABLE rolePayoutValidator #-}
@@ -404,7 +405,7 @@ marloweValidator :: Scripts.TypedValidator TypedMarloweValidator
 marloweValidator =
   let
     mkUntypedMarloweValidator :: ValidatorHash -> BuiltinData -> BuiltinData -> BuiltinData -> ()
-    mkUntypedMarloweValidator rp = mkUntypedValidator (mkMarloweValidator rp)
+    mkUntypedMarloweValidator rp = Scripts.mkUntypedValidator (mkMarloweValidator rp)
 
     untypedValidator :: Scripts.Validator
     untypedValidator = mkValidatorScript $
@@ -412,7 +413,7 @@ marloweValidator =
         `PlutusTx.applyCode` PlutusTx.liftCode rolePayoutValidatorHash
 
     typedValidator :: Scripts.TypedValidator Scripts.Any
-    typedValidator = Scripts.unsafeMkTypedValidator untypedValidator
+    typedValidator = unsafeMkTypedValidator (Scripts.Versioned untypedValidator Scripts.PlutusV2)
   in
     unsafeCoerce typedValidator
 
@@ -421,7 +422,7 @@ marloweValidatorCompiled :: PlutusTx.CompiledCode (ValidatorHash -> PlutusTx.Bui
 marloweValidatorCompiled =
   let
     mkUntypedMarloweValidator :: ValidatorHash -> PlutusTx.BuiltinData -> PlutusTx.BuiltinData -> PlutusTx.BuiltinData -> ()
-    mkUntypedMarloweValidator rp = mkUntypedValidator (mkMarloweValidator rp)
+    mkUntypedMarloweValidator rp = Scripts.mkUntypedValidator (mkMarloweValidator rp)
   in
     $$(PlutusTx.compile [|| mkUntypedMarloweValidator ||])
 
@@ -444,7 +445,7 @@ alternateMarloweValidator = Scripts.mkTypedValidator
           $$(PlutusTx.compile [|| mkMarloweValidator ||])
             `PlutusTx.applyCode`
               PlutusTx.liftCode rolePayoutValidatorHash
-        mkArgsValidator = mkUntypedValidator @MarloweData @MarloweInput
+        mkArgsValidator = Scripts.mkUntypedValidator @_ @MarloweData @MarloweInput
         compiledArgsValidator =
           $$(PlutusTx.compile [|| mkArgsValidator ||])
 
