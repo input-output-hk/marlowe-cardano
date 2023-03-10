@@ -46,7 +46,6 @@ import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.Set.NonEmpty (NESet)
 import qualified Data.Set.NonEmpty as NESet
-import Data.These (These(..))
 import qualified Data.Vector as V
 import Data.Void (Void)
 import Hasql.Session (Session)
@@ -122,50 +121,16 @@ data PerformMoveResult err result
 
 performMove :: C.NetworkId -> ChainPoint -> Move err result -> ChainPoint -> HT.Transaction (PerformMoveResult err result)
 performMove networkId tip = \case
-  Fork left right           -> performFork networkId tip left right
-  AdvanceSlots slots        -> performAdvanceSlots slots
   AdvanceBlocks blocks      -> performAdvanceBlocks blocks
-  FindConsumingTx txOutRef  -> performFindConsumingTx txOutRef
   FindTx txId wait          -> performFindTx txId wait
   Intersect points          -> performIntersect points
   FindConsumingTxs txOutRef -> performFindConsumingTxs txOutRef
-  FindTxsTo credentials     -> performFindTxsTo networkId credentials
   FindTxsFor credentials    -> performFindTxsFor networkId credentials
   AdvanceToTip              -> \point -> pure case tip of
     Genesis -> MoveWait
     At tipBlock
       | point == tip -> MoveWait
       | otherwise -> MoveArrive tipBlock ()
-
-performFork :: C.NetworkId -> ChainPoint -> Move err1 result1 -> Move err2 result2 -> ChainPoint -> HT.Transaction (PerformMoveResult (These err1 err2) (These result1 result2))
-performFork networkId tip left right point = do
-  leftMoveResult <- performMove networkId tip left point
-  rightMoveResult <- performMove networkId tip right point
-  let
-    alignResults leftHeader leftResult rightHeader rightResult = case compare leftHeader rightHeader of
-      EQ -> MoveArrive leftHeader $ These leftResult rightResult
-      LT -> MoveArrive leftHeader $ This leftResult
-      GT -> MoveArrive rightHeader $ That rightResult
-  pure case (leftMoveResult, rightMoveResult) of
-    (MoveAbort leftErr, MoveAbort rightErr)                                -> MoveAbort $ These leftErr rightErr
-    (MoveAbort leftErr, _)                                                 -> MoveAbort $ This leftErr
-    (_, MoveAbort rightErr)                                                -> MoveAbort $ That rightErr
-    (MoveArrive leftHeader leftResult, MoveArrive rightHeader rightResult) -> alignResults leftHeader leftResult rightHeader rightResult
-    (MoveArrive leftHeader leftResult, MoveWait)                           -> MoveArrive leftHeader $ This leftResult
-    (MoveWait, MoveArrive rightHeader rightResult)                         -> MoveArrive rightHeader $ That rightResult
-    _                                                                      -> MoveWait
-
-performAdvanceSlots :: Natural -> ChainPoint -> HT.Transaction (PerformMoveResult Void ())
-performAdvanceSlots slots point = do
-  decodeAdvance <$> HT.statement (fromIntegral slots + pointSlot point)
-    [maybeStatement|
-      SELECT slotNo :: bigint, id :: bytea, blockNo :: bigint
-        FROM chain.block
-      WHERE slotNo >= $1 :: bigint
-        AND rollbackToBlock IS NULL
-      ORDER BY slotNo
-      LIMIT 1
-    |]
 
 performAdvanceBlocks :: Natural -> ChainPoint -> HT.Transaction (PerformMoveResult Void ())
 performAdvanceBlocks blocks point = do
@@ -299,106 +264,6 @@ performFindConsumingTxs utxos point = do
       MoveArrive header tx -> (mempty, mempty, Map.singleton utxo (header, tx))
       MoveWait             -> (mempty, 1 :: Sum Int, mempty)
       MoveAbort err        -> (Map.singleton utxo err, mempty, mempty)
-
-performFindTxsTo :: C.NetworkId -> Set Credential -> ChainPoint -> HT.Transaction (PerformMoveResult FindTxsToError (Set Transaction))
-performFindTxsTo networkId credentials point = do
-  initialResult <- HT.statement params $
-    [foldStatement|
-      WITH credentials (addressHeader,  addressPaymentCredential) as
-        ( SELECT * FROM UNNEST ($1 :: bytea[], $2 :: bytea[])
-        )
-      , txIds (id, slotNo) AS
-        ( SELECT txOut.txId, txOut.slotNo
-            FROM chain.txOut as txOut
-            JOIN credentials USING (addressHeader, addressPaymentCredential)
-           WHERE txOut.slotNo > $3 :: bigint
-        )
-      , nextSlot (slotNo) AS
-        ( SELECT MIN(slotNo) FROM txIds
-        )
-      SELECT block.slotNo :: bigint?
-           , block.id :: bytea?
-           , block.blockNo :: bigint?
-           , tx.id :: bytea?
-           , tx.validityLowerBound :: bigint?
-           , tx.validityUpperBound :: bigint?
-           , tx.metadata :: bytea?
-           , asset.policyId :: bytea?
-           , asset.name :: bytea?
-           , assetMint.quantity :: bigint?
-        FROM chain.tx             AS tx
-        JOIN nextSlot                          USING (slotNo)
-        JOIN txIds                             USING (id)
-        JOIN chain.block          AS block     ON block.id = tx.blockId AND block.slotNo = tx.slotNo
-        LEFT JOIN chain.assetMint AS assetMint ON assetMint.txId = tx.id AND assetMint.slotNo = tx.slotNo
-        LEFT JOIN chain.asset     AS asset     ON asset.id = assetMint.assetId
-    |] foldTxs
-  case initialResult of
-    (Nothing, _) -> pure MoveWait
-    (Just header@BlockHeader{..}, txs) -> do
-      let txIds = Map.keysSet txs
-      txIns <- queryTxInsBulk slotNo txIds
-      txOuts <- queryTxOutsBulk slotNo txIds
-      let insOuts = Map.intersectionWith (,) txIns txOuts
-      pure
-        $ MoveArrive header
-        $ Set.fromList
-        $ fmap snd
-        $ Map.toList
-        $ Map.intersectionWith (\(ins, outs) tx -> tx { inputs = ins, outputs = outs }) insOuts txs
-  where
-    params =
-      ( V.fromList $ fst <$> addressParts
-      , V.fromList $ snd <$> addressParts
-      , pointSlot point
-      )
-    addressParts = Set.toList credentials >>= \case
-      PaymentKeyCredential pkh ->
-        (,unPaymentKeyHash pkh) . BS.pack . pure
-          <$> if networkId == C.Mainnet then [0x01, 0x21, 0x41, 0x61] else [0x00, 0x20, 0x40, 0x60]
-      ScriptCredential sh ->
-        (,unScriptHash sh) . BS.pack . pure
-          <$> if networkId == C.Mainnet then [0x11, 0x31, 0x51, 0x71] else [0x10, 0x30, 0x50, 0x70]
-    foldTxs :: Fold ReadTxRow (Maybe BlockHeader, Map TxId Transaction)
-    foldTxs = Fold foldTxs' (Nothing, mempty) id
-
-    foldTxs'
-      :: (Maybe BlockHeader, Map TxId Transaction)
-      -> ReadTxRow
-      -> (Maybe BlockHeader, Map TxId Transaction)
-    foldTxs' (blockHeader, txs) row@(Just slotNo, Just hash, Just blockNo, Just txId, _, _, _, _, _, _) =
-      ( blockHeader <|> Just (BlockHeader (decodeSlotNo slotNo) (BlockHeaderHash hash) (decodeBlockNo blockNo))
-      , Map.alter (mergeRow row) (TxId txId) txs
-      )
-    foldTxs' x _ = x
-
-    mergeRow :: ReadTxRow -> Maybe Transaction -> Maybe Transaction
-    mergeRow row@
-      ( _
-      , _
-      , _
-      , Just txId
-      , validityLowerBound
-      , validityUpperBound
-      , mMetadata
-      , policyId
-      , tokenName
-      , quantity
-      ) = Just . \case
-        Nothing -> Transaction
-          { txId = TxId txId
-          , validityRange = case (validityLowerBound, validityUpperBound) of
-              (Nothing, Nothing) -> Unbounded
-              (Just lb, Nothing) -> MinBound $ decodeSlotNo lb
-              (Nothing, Just ub) -> MaxBound $ decodeSlotNo ub
-              (Just lb, Just ub) -> MinMaxBound (decodeSlotNo lb) $ decodeSlotNo ub
-          , metadata = maybe mempty fromCardanoTxMetadata $ decodeMetadata =<< mMetadata
-          , inputs = Set.empty
-          , outputs = []
-          , mintedTokens = decodeTokens policyId tokenName quantity
-          }
-        Just tx -> mergeTxRow tx row
-    mergeRow _ = const Nothing
 
 performFindTx :: TxId -> Bool -> ChainPoint -> HT.Transaction (PerformMoveResult TxError Transaction)
 performFindTx txId wait point = do

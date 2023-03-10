@@ -112,7 +112,6 @@ library libchainsync
     , ouroboros-network
     , stm
     , text
-    , these
     , transformers
     , vector
   visibility: public

@@ -155,46 +155,46 @@ instance
   ) => BinaryMessage (ChainSeek query point tip) where
     putMessage (ClientAgency TokIdle) msg = case msg of
       MsgQueryNext query -> do
-        putWord8 0x04
+        putWord8 0x01
         let tag = tagFromQuery query
         putTag tag
         putQuery query
-      MsgDone            -> putWord8 0x09
+      MsgDone            -> putWord8 0x02
 
     putMessage (ServerAgency (TokNext tag)) (MsgRejectQuery err tip) = do
-        putWord8 0x05
+        putWord8 0x03
         putTag tag
         putErr tag err
         put tip
 
     putMessage (ServerAgency (TokNext tag)) (MsgRollForward result pos tip) = do
-        putWord8 0x06
+        putWord8 0x04
         putTag tag
         putResult tag result
         put pos
         put tip
 
     putMessage (ServerAgency TokNext{}) (MsgRollBackward pos tip) = do
-        putWord8 0x07
+        putWord8 0x05
         put pos
         put tip
 
-    putMessage (ServerAgency TokNext{}) MsgWait = putWord8 0x08
+    putMessage (ServerAgency TokNext{}) MsgWait = putWord8 0x06
 
-    putMessage (ClientAgency TokPoll) MsgPoll = putWord8 0x0a
+    putMessage (ClientAgency TokPoll) MsgPoll = putWord8 0x07
 
-    putMessage (ClientAgency TokPoll) MsgCancel = putWord8 0x0b
+    putMessage (ClientAgency TokPoll) MsgCancel = putWord8 0x08
 
     getMessage tok      = do
       tag <- getWord8
       case (tag, tok) of
-        (0x04, ClientAgency TokIdle) -> do
+        (0x01, ClientAgency TokIdle) -> do
           SomeTag qtag <- getTag
           SomeMessage . MsgQueryNext <$> getQuery qtag
 
-        (0x09, ClientAgency TokIdle) -> pure $ SomeMessage MsgDone
+        (0x02, ClientAgency TokIdle) -> pure $ SomeMessage MsgDone
 
-        (0x05, ServerAgency (TokNext qtag)) -> do
+        (0x03, ServerAgency (TokNext qtag)) -> do
           SomeTag qtag' :: SomeTag query <- getTag
           case tagEq qtag qtag' of
             Nothing -> fail "decoded query tag does not match expected query tag"
@@ -203,7 +203,7 @@ instance
               tip <- get
               pure $ SomeMessage $ MsgRejectQuery err tip
 
-        (0x06, ServerAgency (TokNext qtag)) -> do
+        (0x04, ServerAgency (TokNext qtag)) -> do
           SomeTag qtag' :: SomeTag query <- getTag
           case tagEq qtag qtag' of
             Nothing -> fail "decoded query tag does not match expected query tag"
@@ -213,16 +213,16 @@ instance
               tip <- get
               pure $ SomeMessage $ MsgRollForward result point tip
 
-        (0x07, ServerAgency (TokNext _)) -> do
+        (0x05, ServerAgency (TokNext _)) -> do
           point <- get
           tip <- get
           pure $ SomeMessage $ MsgRollBackward point tip
 
-        (0x08, ServerAgency (TokNext _)) -> pure $ SomeMessage MsgWait
+        (0x06, ServerAgency (TokNext _)) -> pure $ SomeMessage MsgWait
 
-        (0x0a, ClientAgency TokPoll) -> pure $ SomeMessage MsgPoll
+        (0x07, ClientAgency TokPoll) -> pure $ SomeMessage MsgPoll
 
-        (0x0b, ClientAgency TokPoll) -> pure $ SomeMessage MsgCancel
+        (0x08, ClientAgency TokPoll) -> pure $ SomeMessage MsgCancel
 
         _ -> fail $ "Unexpected tag " <> show tag
 

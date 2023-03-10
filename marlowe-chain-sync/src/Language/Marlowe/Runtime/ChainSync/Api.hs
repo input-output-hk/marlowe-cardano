@@ -67,7 +67,6 @@ import Data.String (IsString(..))
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Text.Encoding (encodeUtf8)
-import Data.These (These(..))
 import Data.Time (UTCTime(..), diffTimeToPicoseconds, picosecondsToDiffTime)
 import Data.Time.Calendar.OrdinalDate (fromOrdinalDateValid, toOrdinalDate)
 import Data.Traversable (for)
@@ -553,16 +552,6 @@ data IntersectError = IntersectionNotFound
 -- | The 'query' type for the Marlowe Chain Sync.
 data Move err result where
 
-  -- | Perform two moves in parallel and collect the results from the one which
-  -- resolves first (or both if they resolve simultaneously).
-  Fork
-    :: Move err1 result1
-    -> Move err2 result2
-    -> Move (These err1 err2) (These result1 result2)
-
-  -- | Advance a minimum number of slots without collecting any results..
-  AdvanceSlots :: Natural -> Move Void ()
-
   -- | Advance a fixed number of blocks without collecting any results..
   AdvanceBlocks :: Natural -> Move Void ()
 
@@ -572,19 +561,11 @@ data Move err result where
 
   -- | Advance to the block when a tx out is consumed and collect the tx that
   -- consumes the tx out.
-  FindConsumingTx :: TxOutRef -> Move UTxOError Transaction
-
-  -- | Advance to the block when a tx out is consumed and collect the tx that
-  -- consumes the tx out.
   FindConsumingTxs :: Set TxOutRef -> Move (Map TxOutRef UTxOError) (Map TxOutRef Transaction)
 
   -- | Advance to the block containing a transaction. The boolean flag
   -- indicates whether or not to wait for the transaction to be produced.
   FindTx :: TxId -> Bool -> Move TxError Transaction
-
-  -- | Advance to the block containing transactions that send outputs to any
-  -- addresses with the requested credentials.
-  FindTxsTo :: Set Credential -> Move FindTxsToError (Set Transaction)
 
   -- | Advance to the block containing transactions that send or consume outputs
   -- to any addresses with the requested credentials.
@@ -602,16 +583,8 @@ deriving instance Ord (Move err result)
 
 instance QueryToJSON Move where
   queryToJSON = \case
-    Fork m1 m2 -> object
-      [ "fork" .= object
-        [ "query1" .= queryToJSON m1
-        , "query2" .= queryToJSON m2
-        ]
-      ]
-    AdvanceSlots offset -> object [ "advanceSlots" .= toJSON offset ]
     AdvanceBlocks offset -> object [ "advanceBlocks" .= toJSON offset ]
     Intersect blocks -> object [ "intersect" .= toJSON blocks ]
-    FindConsumingTx ref -> object [ "findConsumingTx" .= toJSON ref ]
     FindConsumingTxs refs -> object [ "findConsumingTxs" .= toJSON refs ]
     FindTx txId wait -> object
       [ "findTx" .= object
@@ -619,29 +592,20 @@ instance QueryToJSON Move where
         , "wait" .= toJSON wait
         ]
       ]
-    FindTxsTo c -> object [ "findTxsTo" .= toJSON c ]
     AdvanceToTip -> String "advanceToTip"
     FindTxsFor c -> object [ "findTxsFor" .= toJSON c ]
   errToJSON = \case
-    TagFork m1 m2 -> toJSON . bimap (errToJSON m1) (errToJSON m2)
-    TagAdvanceSlots -> toJSON
     TagAdvanceBlocks -> toJSON
     TagIntersect -> toJSON
-    TagFindConsumingTx -> toJSON
     TagFindConsumingTxs -> toJSON
     TagFindTx -> toJSON
-    TagFindTxsTo -> toJSON
     TagFindTxsFor -> toJSON
     TagAdvanceToTip -> toJSON
   resultToJSON = \case
-    TagFork m1 m2 -> toJSON . bimap (resultToJSON m1) (resultToJSON m2)
-    TagAdvanceSlots -> toJSON
     TagAdvanceBlocks -> toJSON
     TagIntersect -> toJSON
-    TagFindConsumingTx -> toJSON
     TagFindConsumingTxs -> toJSON
     TagFindTx -> toJSON
-    TagFindTxsTo -> toJSON
     TagFindTxsFor -> toJSON
     TagAdvanceToTip -> toJSON
 
@@ -653,196 +617,102 @@ type RuntimeChainSeekServer = ChainSeekServer Move ChainPoint ChainPoint
 
 instance Query Move where
   data Tag Move err result where
-    TagFork
-      :: Tag Move err1 result1
-      -> Tag Move err2 result2
-      -> Tag Move (These err1 err2) (These result1 result2)
-    TagAdvanceSlots :: Tag Move Void ()
     TagAdvanceBlocks :: Tag Move Void ()
     TagIntersect :: Tag Move IntersectError ()
-    TagFindConsumingTx :: Tag Move UTxOError Transaction
     TagFindTx :: Tag Move TxError Transaction
     TagFindConsumingTxs :: Tag Move (Map TxOutRef UTxOError) (Map TxOutRef Transaction)
-    TagFindTxsTo :: Tag Move FindTxsToError (Set Transaction)
     TagFindTxsFor :: Tag Move Void (Set Transaction)
     TagAdvanceToTip :: Tag Move Void ()
 
   tagFromQuery = \case
-    Fork m1 m2         -> TagFork (tagFromQuery m1) (tagFromQuery m2)
-    AdvanceSlots _     -> TagAdvanceSlots
     AdvanceBlocks _    -> TagAdvanceBlocks
     Intersect _        -> TagIntersect
-    FindConsumingTx _  -> TagFindConsumingTx
     FindTx _ _         -> TagFindTx
     FindConsumingTxs _ -> TagFindConsumingTxs
-    FindTxsTo _        -> TagFindTxsTo
     FindTxsFor _        -> TagFindTxsFor
     AdvanceToTip       -> TagAdvanceToTip
 
   tagEq = curry \case
-    (TagFork m1 m2, TagFork m3 m4)           ->
-      case (,) <$> tagEq m1 m3 <*> tagEq m2 m4 of
-        Nothing                           -> Nothing
-        Just ((Refl, Refl), (Refl, Refl)) -> Just (Refl, Refl)
+    (TagAdvanceBlocks, TagAdvanceBlocks)     -> Just (Refl, Refl)
     -- Please don't refactor this to use a single catch-all wildcard pattern.
     -- The idea of doing it this way is to cause an incomplete pattern match
     -- warning when a new 'Tag' constructor is added.
-    (TagFork _ _, _)                         -> Nothing
-    (TagAdvanceSlots, TagAdvanceSlots)       -> Just (Refl, Refl)
-    (TagAdvanceSlots, _)                     -> Nothing
-    (TagAdvanceBlocks, TagAdvanceBlocks)     -> Just (Refl, Refl)
     (TagAdvanceBlocks, _)                    -> Nothing
     (TagIntersect, TagIntersect)             -> Just (Refl, Refl)
     (TagIntersect, _)                        -> Nothing
-    (TagFindConsumingTx, TagFindConsumingTx) -> Just (Refl, Refl)
-    (TagFindConsumingTx, _)                  -> Nothing
     (TagFindTx, TagFindTx)                   -> Just (Refl, Refl)
     (TagFindTx, _)                           -> Nothing
     (TagFindConsumingTxs, TagFindConsumingTxs) -> Just (Refl, Refl)
     (TagFindConsumingTxs, _)                  -> Nothing
-    (TagFindTxsTo, TagFindTxsTo)                   -> Just (Refl, Refl)
-    (TagFindTxsTo, _)                           -> Nothing
     (TagFindTxsFor, TagFindTxsFor)                   -> Just (Refl, Refl)
     (TagFindTxsFor, _)                           -> Nothing
     (TagAdvanceToTip, TagAdvanceToTip)                   -> Just (Refl, Refl)
     (TagAdvanceToTip, _)                           -> Nothing
 
   putTag = \case
-    TagFork t1 t2 -> do
-      putWord8 0x01
-      putTag t1
-      putTag t2
-    TagAdvanceSlots -> putWord8 0x02
-    TagAdvanceBlocks -> putWord8 0x03
-    TagFindConsumingTx -> putWord8 0x04
-    TagIntersect -> putWord8 0x05
-    TagFindTx -> putWord8 0x06
-    TagFindConsumingTxs -> putWord8 0x07
-    TagFindTxsTo -> putWord8 0x08
-    TagAdvanceToTip -> putWord8 0x09
-    TagFindTxsFor -> putWord8 0x0a
+    TagAdvanceBlocks -> putWord8 0x01
+    TagIntersect -> putWord8 0x02
+    TagFindTx -> putWord8 0x03
+    TagFindConsumingTxs -> putWord8 0x04
+    TagAdvanceToTip -> putWord8 0x05
+    TagFindTxsFor -> putWord8 0x06
 
   putQuery = \case
-    Fork m1 m2 -> do
-      putQuery m1
-      putQuery m2
-    AdvanceSlots slots -> put slots
     AdvanceBlocks blocks -> put blocks
-    FindConsumingTx utxo -> put utxo
     Intersect points -> put points
     FindTx txId wait -> put txId *> put wait
     FindConsumingTxs utxos -> put utxos
-    FindTxsTo credentials -> put credentials
     AdvanceToTip -> mempty
     FindTxsFor credentials -> put $ NESet.toList credentials
 
   getTag = do
     tag <- getWord8
     case tag of
-      0x01 -> do
-        SomeTag m1 <- getTag
-        SomeTag m2 <- getTag
-        pure $ SomeTag $ TagFork m1 m2
-      0x02 -> pure $ SomeTag TagAdvanceSlots
-      0x03 -> pure $ SomeTag TagAdvanceBlocks
-      0x04 -> pure $ SomeTag TagFindConsumingTx
-      0x05 -> pure $ SomeTag TagIntersect
-      0x06 -> pure $ SomeTag TagFindTx
-      0x07 -> pure $ SomeTag TagFindConsumingTxs
-      0x08 -> pure $ SomeTag TagFindTxsTo
-      0x09 -> pure $ SomeTag TagAdvanceToTip
-      0x0a -> pure $ SomeTag TagFindTxsFor
+      0x01 -> pure $ SomeTag TagAdvanceBlocks
+      0x02 -> pure $ SomeTag TagIntersect
+      0x03 -> pure $ SomeTag TagFindTx
+      0x04 -> pure $ SomeTag TagFindConsumingTxs
+      0x05 -> pure $ SomeTag TagAdvanceToTip
+      0x06 -> pure $ SomeTag TagFindTxsFor
       _ -> fail $ "Invalid move tag " <> show tag
 
   getQuery = \case
-    TagFork t1 t2       -> Fork <$> getQuery t1 <*> getQuery t2
-    TagAdvanceSlots     -> AdvanceSlots <$> get
     TagAdvanceBlocks    -> AdvanceBlocks <$> get
-    TagFindConsumingTx  -> FindConsumingTx <$> get
     TagIntersect        -> Intersect <$> get
     TagFindTx           -> FindTx <$> get <*> get
     TagFindConsumingTxs -> FindConsumingTxs <$> get
-    TagFindTxsTo        -> FindTxsTo <$> get
     TagAdvanceToTip     -> pure AdvanceToTip
     TagFindTxsFor        -> FindTxsFor . NESet.fromList <$> get
 
   putResult = \case
-    TagFork t1 t2 -> \case
-      This r1 -> do
-        putWord8 0x01
-        putResult t1 r1
-      That r2 -> do
-        putWord8 0x02
-        putResult t2 r2
-      These r1 r2 -> do
-        putWord8 0x03
-        putResult t1 r1
-        putResult t2 r2
-    TagAdvanceSlots -> mempty
     TagAdvanceBlocks -> mempty
-    TagFindConsumingTx -> put
     TagFindTx -> put
     TagIntersect -> mempty
     TagFindConsumingTxs -> put
-    TagFindTxsTo -> put
     TagAdvanceToTip -> mempty
     TagFindTxsFor -> put
 
   getResult = \case
-    TagFork t1 t2    -> do
-      tag <- getWord8
-      case tag of
-        0x01 -> This <$> getResult t1
-        0x02 -> That <$> getResult t2
-        0x03 -> These <$> getResult t1 <*> getResult t2
-        _    -> fail $ "Invalid align result tag " <> show tag
-    TagAdvanceSlots -> pure ()
     TagAdvanceBlocks -> pure ()
-    TagFindConsumingTx -> get
     TagFindTx -> get
     TagIntersect -> pure ()
     TagFindConsumingTxs -> get
-    TagFindTxsTo -> get
     TagAdvanceToTip -> pure ()
     TagFindTxsFor -> get
 
   putErr = \case
-    TagFork t1 t2 -> \case
-      This e1 -> do
-        putWord8 0x01
-        putErr t1 e1
-      That e2 -> do
-        putWord8 0x02
-        putErr t2 e2
-      These e1 e2 -> do
-        putWord8 0x03
-        putErr t1 e1
-        putErr t2 e2
-    TagAdvanceSlots -> put
     TagAdvanceBlocks -> put
-    TagFindConsumingTx -> put
     TagFindTx -> put
     TagIntersect -> put
     TagFindConsumingTxs -> put
-    TagFindTxsTo -> put
     TagFindTxsFor -> put
     TagAdvanceToTip -> put
 
   getErr = \case
-    TagFork t1 t2    -> do
-      tag <- getWord8
-      case tag of
-        0x01 -> This <$> getErr t1
-        0x02 -> That <$> getErr t2
-        0x03 -> These <$> getErr t1 <*> getErr t2
-        _    -> fail $ "Invalid fork error tag " <> show tag
-    TagAdvanceSlots -> get
     TagAdvanceBlocks -> get
-    TagFindConsumingTx -> get
     TagFindTx -> get
     TagIntersect -> get
     TagFindConsumingTxs -> get
-    TagFindTxsTo -> get
     TagFindTxsFor -> get
     TagAdvanceToTip -> get
 
