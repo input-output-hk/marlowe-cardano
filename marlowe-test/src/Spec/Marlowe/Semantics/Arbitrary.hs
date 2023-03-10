@@ -1061,7 +1061,7 @@ instance SemiArbitrary InputContent where
 instance Arbitrary Input where
   arbitrary = semiArbitrary =<< arbitrary
   shrink (NormalInput i)         = NormalInput <$> shrink i
-  shrink (MerkleizedInput i b c) = [MerkleizedInput i' b c | i' <- shrink i]
+  shrink (MerkleizedInput i b c) = [MerkleizedInput i' b c | i' <- shrink i] <> [MerkleizedInput i b c' | c' <- shrink c]
 
 instance SemiArbitrary Input where
   semiArbitrary context =
