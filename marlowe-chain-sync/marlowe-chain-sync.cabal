@@ -70,7 +70,6 @@ library
     , marlowe-protocols
     , nonempty-containers
     , ouroboros-consensus
-    , ouroboros-consensus-cardano
     , ouroboros-network
     , plutus-tx
     , plutus-ledger-api

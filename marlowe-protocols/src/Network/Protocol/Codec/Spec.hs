@@ -14,7 +14,7 @@ import qualified Data.ByteString.Lazy as LBS
 import Data.ByteString.Lazy.Base16 (encodeBase16)
 import Data.Data (Proxy)
 import Data.Fixed (Fixed, HasResolution)
-import Data.Foldable (fold, for_)
+import Data.Foldable (fold)
 import Data.Function ((&))
 import Data.Functor.Identity (Identity(..))
 import Data.Int
@@ -24,7 +24,6 @@ import qualified Data.Map.Internal as Map
 import qualified Data.Set.Internal as Set
 import Data.Set.NonEmpty.Internal
 import Data.Text (Text)
-import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
 import Data.Time (Day, DiffTime, NominalDiffTime, UTCTime(..), secondsToDiffTime, secondsToNominalDiffTime)
 import Data.Time.Calendar.OrdinalDate (fromOrdinalDate)
@@ -36,8 +35,8 @@ import Network.Protocol.Codec (BinaryMessage, binaryCodec)
 import Network.TypedProtocol (PeerHasAgency, Protocol(..), SomeMessage(..))
 import Network.TypedProtocol.Codec (AnyMessageAndAgency(..), Codec(..), PeerHasAgency(..), runDecoder)
 import Numeric.Natural (Natural)
-import Test.Hspec (Spec, it)
-import Test.Hspec.Golden (Golden(..), defaultGolden)
+import Test.Hspec (Spec, describe, it)
+import Test.Hspec.Golden (defaultGolden)
 import Test.QuickCheck (Property, Testable(property), counterexample, forAllShrinkShow, infiniteList, oneof)
 import Test.QuickCheck.Gen (Gen)
 import Test.QuickCheck.Property (failed, succeeded)
@@ -56,12 +55,16 @@ class ArbitraryMessage ps where
 
 -- | A class for generating variations of a data type. morally, at least one variation of
 -- each constructor should be generated.
+--
+-- Warning: do not use the generic implementation for recursive types - it
+-- will generate an infinite list.
 class Variations a where
   variations :: NonEmpty a
   default variations :: (Generic a, GVariations (Rep a)) => NonEmpty a
   variations = to <$> gVariations
 
-instance Variations a => Variations [a]
+instance Variations a => Variations [a] where
+  variations = [] :| NE.toList (pure <$> variations)
 
 instance Variations a => Variations (Set.Set a) where
   variations = Set.Tip :| NE.toList (Set.Bin 1 <$> variations <*> pure Set.Tip <*> pure Set.Tip)
@@ -226,27 +229,15 @@ genByteStringSplits bytes = oneof
           in
             chunk : chunksByLength bs' lens
 
-data TextEnvelope = TextEnvelope
-  { text :: Text
-  , binary :: Text
-  } deriving (Eq, Show, Read, Ord)
-
-codecGoldenTests :: forall ps. (MessageVariations ps, ShowProtocol ps, BinaryMessage ps) => Spec
-codecGoldenTests = do
+codecGoldenTests :: forall ps. (MessageVariations ps, ShowProtocol ps, BinaryMessage ps) => String -> Spec
+codecGoldenTests protocolName = describe "Message Golden Tests" do
   let Codec{..} = binaryCodec @Identity @ps
-  for_ variations \(AnyMessageAndAgency tok message) -> do
-    let text = T.pack $ showsPrecMessage 0 tok message ""
-    let binary = TL.toStrict $ encodeBase16 $ encode tok message
-    let output = TextEnvelope{..}
-    it (T.unpack text) Golden
-      { output
-      , encodePretty = show
-      , writeToFile = \path -> writeFile path . show
-      , readFromFile = fmap read . readFile
-      , goldenFile = goldenFile $ defaultGolden (T.unpack text) ""
-      , actualFile = actualFile $ defaultGolden (T.unpack text) ""
-      , failFirstTime = True
-      }
+  it "Matches the golden output" $
+    defaultGolden protocolName $ unlines do
+        AnyMessageAndAgency tok message <- NE.toList variations
+        [ "Show: " <> showsPrecMessage 0 tok message ""
+          , "Binary: " <> TL.unpack (encodeBase16 $ encode tok message)
+          ]
 
 checkPropCodec
   :: forall ps

@@ -3,7 +3,7 @@ module Language.Marlowe.Runtime.ChainSync.ApiSpec
 
 import Language.Marlowe.Runtime.ChainSync.Api
 import Language.Marlowe.Runtime.ChainSync.Gen ()
-import Network.Protocol.Codec.Spec (checkPropCodec)
+import Network.Protocol.Codec.Spec (checkPropCodec, codecGoldenTests)
 import Network.Protocol.Job.Types (Job)
 import Network.Protocol.Query.Types (Query)
 import Test.Hspec
@@ -13,6 +13,7 @@ spec :: Spec
 spec = describe "Language.Marlowe.Runtime.ChainSync.Api" do
   describe "ChainSeek protocol" do
     prop "It has a lawful codec" $ checkPropCodec @RuntimeChainSeek
+    codecGoldenTests @RuntimeChainSeek "ChainSeek"
   describe "ChainSyncQuery" do
     prop "It has a lawful Query protocol codec" $ checkPropCodec @(Query ChainSyncQuery)
   describe "ChainSyncCommand" do

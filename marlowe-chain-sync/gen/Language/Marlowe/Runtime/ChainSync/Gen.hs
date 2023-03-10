@@ -43,7 +43,6 @@ import Gen.Cardano.Api.Typed
 import Language.Marlowe.Runtime.Cardano.Api (fromCardanoAddressAny, fromCardanoDatumHash, toCardanoScriptData)
 import Language.Marlowe.Runtime.ChainSync.Api
 import qualified Network.Protocol.ChainSeek.Types as ChainSeek
-import Network.Protocol.Codec.Spec (Variations(..), varyAp)
 import qualified Network.Protocol.Job.Types as Command
 import qualified Network.Protocol.Query.Types as Query
 import Ouroboros.Consensus.Block (EpochSize(..))

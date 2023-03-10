@@ -39,7 +39,7 @@ import qualified Cardano.Ledger.BaseTypes as Base
 import Cardano.Ledger.Credential (ptrCertIx, ptrSlotNo, ptrTxIx)
 import Cardano.Ledger.Slot (EpochSize)
 import Codec.Serialise (deserialiseOrFail, serialise)
-import Control.Monad (guard, (<=<), (>=>))
+import Control.Monad (guard, join, (<=<), (>=>))
 import Data.Aeson
   ( FromJSON(..)
   , FromJSONKey(..)
@@ -157,7 +157,19 @@ data Metadata
   | MetadataBytes ByteString
   | MetadataText Text
   deriving stock (Show, Eq, Ord, Generic)
-  deriving anyclass (Binary, Variations)
+  deriving anyclass (Binary)
+
+-- Using the generic implementation produces an infinite list.
+instance Variations Metadata where
+  variations = join $ NE.fromList
+    [ pure $ MetadataMap []
+    , pure $ MetadataMap [NE.head variations]
+    , pure $ MetadataList []
+    , pure $ MetadataList [NE.head variations]
+    , MetadataNumber <$> variations
+    , MetadataBytes <$> variations
+    , MetadataText <$> variations
+    ]
 
 instance ToJSON Metadata where
   toJSON = metadataValueToJsonNoSchema . toCardanoMetadata
@@ -248,7 +260,20 @@ data Datum
   | I Integer
   | B ByteString
   deriving stock (Show, Eq, Ord, Generic)
-  deriving anyclass (Binary, Variations)
+  deriving anyclass (Binary)
+
+-- Using the generic implementation produces an infinite list.
+instance Variations Datum where
+  variations = join $ NE.fromList
+    [ pure $ Constr 1 []
+    , pure $ Constr 1 [NE.head variations]
+    , pure $ Map []
+    , pure $ Map [NE.head variations]
+    , pure $ List []
+    , pure $ List [NE.head variations]
+    , I <$> variations
+    , B <$> variations
+    ]
 
 instance ToJSON Datum where
   toJSON = \case
