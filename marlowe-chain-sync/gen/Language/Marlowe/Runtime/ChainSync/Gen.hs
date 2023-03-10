@@ -28,6 +28,7 @@ import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import Data.ByteString.Short (fromShort)
 import Data.Foldable (fold)
+import qualified Data.List.NonEmpty as NE
 import Data.Maybe (mapMaybe)
 import Data.SOP.Strict (K(..), NP(..))
 import qualified Data.Set.NonEmpty as NESet
@@ -42,6 +43,7 @@ import Gen.Cardano.Api.Typed
 import Language.Marlowe.Runtime.Cardano.Api (fromCardanoAddressAny, fromCardanoDatumHash, toCardanoScriptData)
 import Language.Marlowe.Runtime.ChainSync.Api
 import qualified Network.Protocol.ChainSeek.Types as ChainSeek
+import Network.Protocol.Codec.Spec (Variations(..), varyAp)
 import qualified Network.Protocol.Job.Types as Command
 import qualified Network.Protocol.Query.Types as Query
 import Ouroboros.Consensus.Block (EpochSize(..))
@@ -274,22 +276,7 @@ instance Arbitrary UTxOs where
   shrink = genericShrink
 
 instance ChainSeek.ArbitraryQuery Move where
-  arbitraryTag = oneofStructured
-    [ ( Node
-      , do
-        ChainSeek.SomeTag tag1 <- resized (const 0) ChainSeek.arbitraryTag
-        ChainSeek.SomeTag tag2 <- resized (const 0) ChainSeek.arbitraryTag
-        pure $ ChainSeek.SomeTag $ TagFork tag1 tag2
-      )
-    , (Leaf, pure $ ChainSeek.SomeTag TagAdvanceSlots)
-    , (Leaf, pure $ ChainSeek.SomeTag TagAdvanceBlocks)
-    , (Leaf, pure $ ChainSeek.SomeTag TagIntersect)
-    , (Leaf, pure $ ChainSeek.SomeTag TagFindConsumingTx)
-    , (Leaf, pure $ ChainSeek.SomeTag TagFindConsumingTxs)
-    , (Leaf, pure $ ChainSeek.SomeTag TagFindTx)
-    , (Leaf, pure $ ChainSeek.SomeTag TagFindTxsTo)
-    , (Leaf, pure $ ChainSeek.SomeTag TagAdvanceToTip)
-    ]
+  arbitraryTag = elements $ NE.toList ChainSeek.tags
 
   arbitraryQuery = \case
     TagAdvanceBlocks -> AdvanceBlocks . fromIntegral <$> arbitrary @Word64

@@ -2,6 +2,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
 
 -- | Utilities for converting to and from Cardano API types.
 
@@ -9,6 +10,7 @@ module Language.Marlowe.Runtime.Cardano.Api
   where
 
 import qualified Cardano.Api as C
+import Cardano.Api.Shelley (ProtocolParameters(..))
 import qualified Cardano.Api.Shelley as C
 import qualified Cardano.Ledger.BaseTypes as L
 import Cardano.Ledger.Credential (Ptr(Ptr))
@@ -16,6 +18,7 @@ import Data.Bifunctor (Bifunctor(bimap))
 import Data.ByteString.Short (fromShort, toShort)
 import Data.Data (Proxy(Proxy))
 import Data.Foldable (fold)
+import qualified Data.List.NonEmpty as NE
 import qualified Data.Map as Map
 import Data.Maybe (mapMaybe)
 import Debug.Trace (traceShow)

@@ -74,6 +74,7 @@ library
     , base16
     , binary
     , bytestring
+    , containers
     , eventuo11y ^>= { 0.9, 0.10 }
     , eventuo11y-extras
     , general-allocate ^>= { 0.2 }
@@ -84,8 +85,10 @@ library
     , monad-control
     , network
     , network-run
+    , nonempty-containers
     , stm
     , QuickCheck
     , text
+    , time
     , transformers-base
     , typed-protocols

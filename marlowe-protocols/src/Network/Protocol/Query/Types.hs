@@ -27,7 +27,7 @@ import qualified Data.Text as T
 import GHC.Show (showSpace)
 import Network.Protocol.Codec (BinaryMessage(..))
 import Network.Protocol.Codec.Spec
-  (ArbitraryMessage(..), MessageEq(..), MessageVariations(..), ShowProtocol(..), SomePeerHasAgency(..), Variations(..))
+  (ArbitraryMessage(..), MessageEq(..), MessageVariations(..), ShowProtocol(..), SomePeerHasAgency(..))
 import Network.Protocol.Handshake.Types (HasSignature(..))
 import Network.TypedProtocol
 import Network.TypedProtocol.Codec (AnyMessageAndAgency(..))
