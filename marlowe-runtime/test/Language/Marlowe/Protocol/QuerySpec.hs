@@ -21,6 +21,7 @@ import Test.QuickCheck hiding (shrinkMap)
 spec :: Spec
 spec = describe "MarloweQuery protocol" do
   prop "Has a lawful codec" $ checkPropCodec @MarloweQuery
+  codecGoldenTests @MarloweQuery "MarloweQuery"
 
 instance ArbitraryMessage MarloweQuery where
   arbitraryMessage = resized (min 30) $ oneof
@@ -38,9 +39,6 @@ instance ArbitraryMessage MarloweQuery where
       MsgDone -> []
     ServerAgency (TokRes req) -> \case
       MsgRespond a -> MsgRespond <$> shrinkResponse req a
-
-data SomeStRes where
-  SomeStRes :: StRes a -> SomeStRes
 
 instance Arbitrary SomeContractState where
   arbitrary = SomeContractState MarloweV1 <$> arbitrary
