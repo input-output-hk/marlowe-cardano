@@ -21,6 +21,7 @@ import Test.QuickCheck hiding (shrinkMap)
 spec :: Spec
 spec = describe "MarloweSync protocol" do
   prop "Has a lawful codec" $ checkPropCodec @(Handshake MarloweSync)
+  codecGoldenTests @MarloweSync "MarloweSync"
 
 instance MessageEq MarloweSync where
   messageEq = \case

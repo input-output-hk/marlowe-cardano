@@ -76,6 +76,7 @@ library
     , containers
     , marlowe-cardano
     , marlowe-chain-sync
+    , marlowe-protocols
     , ouroboros-network
     , plutus-ledger-api
     , plutus-tx
