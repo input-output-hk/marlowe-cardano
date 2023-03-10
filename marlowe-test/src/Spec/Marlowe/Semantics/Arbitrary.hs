@@ -894,11 +894,11 @@ goldenContract = (,) <$> elements goldenContracts <*> pure (State AM.empty AM.em
 
 instance Arbitrary Contract where
   arbitrary = frequency [(95, semiArbitrary =<< arbitrary), (5, fst <$> goldenContract)]
-  shrink (Pay a p t x c) = [Pay a' p t x c | a' <- shrink a] ++ [Pay a p' t x c | p' <- shrink p] ++ [Pay a p t' x c | t' <- shrink t] ++ [Pay a p t x' c | x' <- shrink x] ++ [Pay a p t x c' | c' <- shrink c]
-  shrink (If o x y) = [If o' x y | o' <- shrink o] ++ [If o x' y | x' <- shrink x] ++ [If o x y' | y' <- shrink y]
-  shrink (When a t c) = [When a' t c | a' <- shrink a] ++ [When a t' c | t' <- shrink t] ++ [When a t c' | c' <- shrink c]
-  shrink (Let v x c) = [Let v' x c | v' <- shrink v] ++ [Let v x' c | x' <- shrink x] ++ [Let v x c' | c' <- shrink c]
-  shrink (Assert o c) = [Assert o' c | o' <- shrink o] ++ [Assert o c' | c' <- shrink c]
+  shrink (Pay a p t x c) = [c] ++ [Pay a' p t x c | a' <- shrink a] ++ [Pay a p' t x c | p' <- shrink p] ++ [Pay a p t' x c | t' <- shrink t] ++ [Pay a p t x' c | x' <- shrink x] ++ [Pay a p t x c' | c' <- shrink c]
+  shrink (If o x y) = [x, y] ++ [If o' x y | o' <- shrink o] ++ [If o x' y | x' <- shrink x] ++ [If o x y' | y' <- shrink y]
+  shrink (When a t c) = [c] ++ [When a' t c | a' <- shrink a] ++ [When a t' c | t' <- shrink t] ++ [When a t c' | c' <- shrink c]
+  shrink (Let v x c) = [c] ++ [Let v' x c | v' <- shrink v] ++ [Let v x' c | x' <- shrink x] ++ [Let v x c' | c' <- shrink c]
+  shrink (Assert o c) = [c] ++ [Assert o' c | o' <- shrink o] ++ [Assert o c' | c' <- shrink c]
   shrink _ = []
 
 
@@ -1061,7 +1061,10 @@ instance SemiArbitrary InputContent where
 instance Arbitrary Input where
   arbitrary = semiArbitrary =<< arbitrary
   shrink (NormalInput i)         = NormalInput <$> shrink i
-  shrink (MerkleizedInput i b c) = [MerkleizedInput i' b c | i' <- shrink i] <> [MerkleizedInput i b c' | c' <- shrink c]
+  shrink (MerkleizedInput i b c) =
+    [NormalInput i]
+      <> [MerkleizedInput i' b c | i' <- shrink i]
+      <> [MerkleizedInput i (dataHash $ toBuiltinData c) c' | c' <- shrink c]
 
 instance SemiArbitrary Input where
   semiArbitrary context =
