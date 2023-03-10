@@ -1,3 +1,9 @@
+<<<<<<< HEAD
+=======
+
+
+{-# LANGUAGE BlockArguments #-}
+>>>>>>> cd334ba81 (Add rollback info to the marlowe-apps discovery stream)
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NamedFieldPuns #-}
@@ -11,6 +17,7 @@ module Language.Marlowe.Runtime.App.Channel
   , runContractAction
   , runDetection
   , runDiscovery
+  , runDiscovery'
   ) where
 
 
@@ -36,7 +43,7 @@ import Language.Marlowe.Runtime.App.Stream
   , transactionIdFromStream
   )
 import Language.Marlowe.Runtime.App.Types (Config)
-import Language.Marlowe.Runtime.ChainSync.Api (TxId)
+import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainPoint, TxId)
 import Language.Marlowe.Runtime.Core.Api (ContractId, MarloweVersionTag(V1))
 import Language.Marlowe.Runtime.History.Api (ContractStep, CreateStep)
 import Observe.Event.Backend (hoistEventBackend)
@@ -49,7 +56,7 @@ runDiscovery
   -> Config
   -> Int
   -> Bool
-  -> IO (TChanEOF ContractId)
+  -> IO (TChan (Either ChainPoint (BlockHeader, ContractId)))
 runDiscovery eventBackend config pollingFrequency endOnWait =
   do
     channel <- newTChanIO
@@ -57,9 +64,25 @@ runDiscovery eventBackend config pollingFrequency endOnWait =
       . withEvent (hoistEventBackend liftIO eventBackend) (DynamicEventSelector "DiscoveryProcess")
       $ \event ->
         addField event
-          . either (("failure" :: Text) ≔) (const $ ("success" :: Text) ≔ True)
+          . maybe (("success" :: Text) ≔ True) ((("failure" :: Text) ≔) . show)
           =<< runClientWithConfig config (streamAllContractIds eventBackend pollingFrequency endOnWait channel)
     pure channel
+
+
+-- | A simplified version of `runDiscovery` that only notifies about new contracts and ignores rollback events.
+runDiscovery'
+  :: EventBackend IO r DynamicEventSelector
+  -> Config
+  -> Int
+  -> IO (TChan ContractId)
+runDiscovery' eventBackend config pollingFrequency = do
+  contractIdChannel <- newTChanIO
+  runDiscovery eventBackend config pollingFrequency >>= \discoveryChannel -> do
+    void . forkIO . forever $ atomically do
+      readTChan discoveryChannel >>= \case
+        Left _ -> pure ()
+        Right (_, contractId) -> writeTChan contractIdChannel contractId
+  pure contractIdChannel
 
 
 runDetection

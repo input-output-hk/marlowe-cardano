@@ -1,4 +1,6 @@
+{-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -21,7 +23,7 @@ import Observe.Event.Render.JSON.Handle (simpleJsonStderrBackend)
 import Observe.Event.Syntax ((≔))
 
 import qualified Language.Marlowe.Runtime.App.Channel as App
-  (LastSeen(..), runContractAction, runDetection, runDiscovery)
+  (LastSeen(..), runContractAction, runDetection, runDiscovery')
 import qualified Options.Applicative as O
 
 
@@ -52,7 +54,7 @@ main =
   do
     Command{..} <- O.execParser =<< commandParser
     eventBackend <- simpleJsonStderrBackend defaultRenderSelectorJSON
-    discoveryChannel <- App.runDiscovery eventBackend config pollingFrequency endOnWait
+    discoveryChannel <- App.runDiscovery' eventBackend config pollingFrequency endOnWait
     detectionChannel <- runDetection eventBackend config pollingFrequency discoveryChannel
     runFinder eventBackend requeueFrequency endOnWait detectionChannel discoveryChannel
 
