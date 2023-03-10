@@ -5,12 +5,15 @@
 module Language.Marlowe.Protocol.HeaderSync.Types
   where
 
+import Control.Monad (join)
 import Data.Aeson (Value(..), object, (.=))
 import Data.Binary (get, put, putWord8)
 import Data.Binary.Get (getWord8)
+import qualified Data.List.NonEmpty as NE
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainPoint)
 import Language.Marlowe.Runtime.Discovery.Api (ContractHeader)
 import Network.Protocol.Codec (BinaryMessage(..))
+import Network.Protocol.Codec.Spec (MessageVariations(..), SomePeerHasAgency(SomePeerHasAgency), Variations(..), varyAp)
 import Network.Protocol.Handshake.Types (HasSignature(..))
 import Network.TypedProtocol (PeerHasAgency(..), Protocol(..))
 import Network.TypedProtocol.Codec (SomeMessage(..))
@@ -151,6 +154,27 @@ instance BinaryMessage MarloweHeaderSync where
         _                             -> fail "Invalid protocol state for MsgIntersectNotFound"
 
       _ -> fail $ "Invalid message tag " <> show tag
+
+instance MessageVariations MarloweHeaderSync where
+  agencyVariations = NE.fromList
+    [ SomePeerHasAgency $ ClientAgency TokIdle
+    , SomePeerHasAgency $ ClientAgency TokWait
+    , SomePeerHasAgency $ ServerAgency TokNext
+    , SomePeerHasAgency $ ServerAgency TokIntersect
+    ]
+  messageVariations = \case
+    ClientAgency TokIdle -> NE.fromList [SomeMessage MsgDone, SomeMessage MsgRequestNext]
+    ClientAgency TokWait -> NE.fromList [SomeMessage MsgPoll, SomeMessage MsgCancel]
+    ServerAgency TokNext -> join $ NE.fromList
+      [ fmap SomeMessage $ MsgNewHeaders <$> variations `varyAp` variations
+      , SomeMessage . MsgRollBackward <$> variations
+      , pure $ SomeMessage MsgWait
+      ]
+    ServerAgency TokIntersect -> join $ NE.fromList
+      [ SomeMessage . MsgIntersectFound <$> variations
+      , pure $ SomeMessage MsgIntersectNotFound
+      ]
+
 
 instance MessageToJSON MarloweHeaderSync where
   messageToJSON = \case
