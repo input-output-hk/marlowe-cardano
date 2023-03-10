@@ -16,5 +16,6 @@ spec = describe "Language.Marlowe.Runtime.ChainSync.Api" do
     codecGoldenTests @RuntimeChainSeek "ChainSeek"
   describe "ChainSyncQuery" do
     prop "It has a lawful Query protocol codec" $ checkPropCodec @(Query ChainSyncQuery)
+    codecGoldenTests @(Query ChainSyncQuery) "ChainSeekQuery"
   describe "ChainSyncCommand" do
     prop "It has a lawful Job protocol codec" $ checkPropCodec @(Job ChainSyncCommand)
