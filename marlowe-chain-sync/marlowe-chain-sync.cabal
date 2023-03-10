@@ -278,22 +278,3 @@ executable marlowe-chain-sync
     , ouroboros-network
     , text
     , uuid
-
-executable example-client
-  import: lang
-  ghc-options: -threaded
-  hs-source-dirs: example-client
-  main-is: Main.hs
-  other-modules:
-    SkippingBlocks
-    FollowingUTxOs
-    Paths_marlowe_chain_sync
-  autogen-modules:
-    Paths_marlowe_chain_sync
-  build-depends:
-      base >= 4.9 && < 5
-    , marlowe-chain-sync
-    , marlowe-protocols
-    , network
-    , optparse-applicative
-    , typed-protocols
