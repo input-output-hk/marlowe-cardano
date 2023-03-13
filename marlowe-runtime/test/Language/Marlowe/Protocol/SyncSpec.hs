@@ -14,13 +14,16 @@ import Network.Protocol.Codec.Spec
 import Network.Protocol.Handshake.Types (Handshake)
 import Network.TypedProtocol.Codec
 import Spec.Marlowe.Semantics.Arbitrary ()
-import Test.Hspec (Spec, describe)
+import System.Directory (getCurrentDirectory, listDirectory)
+import Test.Hspec (Spec, describe, runIO)
 import Test.Hspec.QuickCheck (prop)
 import Test.QuickCheck hiding (shrinkMap)
 
 spec :: Spec
 spec = describe "MarloweSync protocol" do
   prop "Has a lawful codec" $ checkPropCodec @(Handshake MarloweSync)
+  runIO $ print =<< listDirectory =<< getCurrentDirectory
+  _ <- runIO $ fail "fail"
   codecGoldenTests @MarloweSync "MarloweSync"
 
 instance MessageEq MarloweSync where

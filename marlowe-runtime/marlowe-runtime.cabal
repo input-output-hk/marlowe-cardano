@@ -564,6 +564,7 @@ test-suite marlowe-runtime-test
     , time
     , tx-api
     , typed-protocols
+    , directory
   build-tool-depends: hspec-discover:hspec-discover
   ghc-options: -threaded
 
