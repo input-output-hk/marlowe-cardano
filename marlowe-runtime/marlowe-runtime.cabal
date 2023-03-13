@@ -14,6 +14,10 @@ author: Jamie Bertram
 maintainer: jamie.bertram@iohk.io
 stability: experimental
 category: Language
+data-files:
+  .golden/MarloweSync/golden
+  .golden/MarloweHeaderSync/golden
+  .golden/MarloweQuery/golden
 license-files:
   LICENSE
   NOTICE
@@ -523,8 +527,6 @@ test-suite marlowe-runtime-test
   hs-source-dirs: test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
-  data-files:
-    .golden/**/golden
   other-modules:
     Language.Marlowe.Runtime.Core.MetadataSpec
     Language.Marlowe.Runtime.Core.ScriptRegistrySpec
@@ -566,7 +568,6 @@ test-suite marlowe-runtime-test
     , time
     , tx-api
     , typed-protocols
-    , directory
   build-tool-depends: hspec-discover:hspec-discover
   ghc-options: -threaded
 
