@@ -1,3 +1,4 @@
+{-# LANGUAGE Arrows #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
@@ -7,6 +8,7 @@ module Language.Marlowe.Runtime.Proxy
   where
 
 import Control.Concurrent.Component
+import Control.Concurrent.Component.Probes
 import Control.Monad.Base (MonadBase(..))
 import Control.Monad.Catch (MonadCatch, MonadMask, MonadThrow)
 import Control.Monad.IO.Class (MonadIO, liftIO)
@@ -54,12 +56,22 @@ data ProxyDependencies = forall dState. ProxyDependencies
   , getMarloweQueryDriver :: ServerM (Driver (Handshake MarloweQuery) dState ServerM)
   , getTxJobDriver :: ServerM (Driver (Handshake (Job MarloweTxCommand)) dState ServerM)
   , connectionSource :: SomeConnectionSource MarloweServer ServerM
+  , httpPort :: Int
   }
 
 proxy :: Component IO ProxyDependencies ()
-proxy = serverComponent (component_ worker) \ProxyDependencies{..} -> do
-  connector <- runResourceT $ runWrappedUnliftIO $ acceptSomeConnector connectionSource
-  pure WorkerDependencies{..}
+proxy = proc deps -> do
+  (serverComponent (component_ worker) \ProxyDependencies{..} -> do
+    connector <- runResourceT $ runWrappedUnliftIO $ acceptSomeConnector connectionSource
+    pure WorkerDependencies{..}) -< deps
+  probeServer -< ProbeServerDependencies
+    { probes = Probes
+        { startup = pure True
+        , liveness = pure True
+        , readiness = pure True
+        }
+    , port = httpPort deps
+    }
 
 data WorkerDependencies = forall dState. WorkerDependencies
   { getMarloweSyncDriver :: ServerM (Driver (Handshake MarloweSync) dState ServerM)

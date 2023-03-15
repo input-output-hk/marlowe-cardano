@@ -81,6 +81,7 @@ run = runComponent_ proc Options{..} -> do
     , connectionSource = SomeConnectionSource
         $ logConnectionSource (hoistEventBackend liftIO $ narrowEventBackend (injectSelector MarloweServer) eventBackend)
         $ handshakeConnectionSource connectionSource
+    , httpPort = fromIntegral httpPort
     }
 
 driverFactory
@@ -107,6 +108,7 @@ data Options = Options
   , txHost :: HostName
   , txPort :: PortNumber
   , logConfigFile :: Maybe FilePath
+  , httpPort :: PortNumber
   }
 
 getOptions :: IO Options
@@ -129,6 +131,7 @@ getOptions = do
           <*> txHostParser
           <*> txPortParser
           <*> logConfigFileParser
+          <*> httpPortParser
       )
     )
     infoMod
@@ -155,6 +158,14 @@ getOptions = do
       [ long "log-config-file"
       , metavar "FILE_PATH"
       , help "The logging configuration JSON file."
+      ]
+
+    httpPortParser = option auto $ mconcat
+      [ long "http-port"
+      , metavar "PORT_NUMBER"
+      , help "Port number to serve the http healthcheck API on"
+      , value 8080
+      , showDefault
       ]
 
     infoMod = mconcat
