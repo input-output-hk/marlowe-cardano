@@ -9,8 +9,8 @@ module Language.Marlowe.Runtime.Indexer.ChainSeekClient
 import Cardano.Api (SystemStart)
 import Control.Concurrent (threadDelay)
 import Control.Concurrent.Component
-import Control.Concurrent.STM (STM, atomically, newTQueue, newTVar, readTQueue, readTVar, writeTQueue, writeTVar)
-import Control.Exception (bracket_)
+import Control.Concurrent.STM (STM, TVar, atomically, newTQueue, newTVar, readTQueue, readTVar, writeTQueue, writeTVar)
+import Control.Exception (finally)
 import Data.Set (Set)
 import Data.Set.NonEmpty (NESet)
 import qualified Data.Set.NonEmpty as NESet
@@ -76,7 +76,7 @@ chainSeekClient = component \ChainSeekClientDependencies{..} -> do
   pure
     -- In this component's thread, run the chain sync client that will pull the
     -- transactions for discovering and following Marlowe contracts
-    ( bracket_ (atomically $ writeTVar connectedVar True) (atomically $ writeTVar connectedVar False) do
+    ( flip finally (atomically $ writeTVar connectedVar False) do
         runSomeConnector chainSyncConnector $ client
           (atomically . writeTQueue eventQueue)
           databaseQueries
@@ -85,6 +85,7 @@ chainSeekClient = component \ChainSeekClientDependencies{..} -> do
           payoutScriptHashes
           chainSyncQueryConnector
           eventBackend
+          connectedVar
     , (readTVar connectedVar, readTQueue eventQueue)
     )
   where
@@ -97,8 +98,9 @@ chainSeekClient = component \ChainSeekClientDependencies{..} -> do
     -> NESet ScriptHash
     -> SomeClientConnector (QueryClient ChainSyncQuery) IO
     -> EventBackend IO r ChainSeekClientSelector
+    -> TVar Bool
     -> RuntimeChainSeekClient IO ()
-  client emit DatabaseQueries{..} pollingInterval marloweScriptHashes payoutScriptHashes chainSyncQueryConnector eventBackend =
+  client emit DatabaseQueries{..} pollingInterval marloweScriptHashes payoutScriptHashes chainSyncQueryConnector eventBackend connectedVar =
     ChainSeekClient do
       let
         queryChainSync :: ChainSyncQuery Void err a -> IO a
@@ -107,6 +109,7 @@ chainSeekClient = component \ChainSeekClientDependencies{..} -> do
           case result of
             Left _ -> fail "Failed to query chain sync"
             Right a -> pure a
+      atomically $ writeTVar connectedVar True
       systemStart <- queryChainSync GetSystemStart
       securityParameter <- queryChainSync GetSecurityParameter
       -- Get the intersection points - the most recent block headers stored locally.
