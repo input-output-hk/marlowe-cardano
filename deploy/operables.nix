@@ -2,7 +2,7 @@
 let
   inherit (inputs) self std nixpkgs bitte-cells;
   inherit (self) packages;
-  inherit (nixpkgs) lib;
+  inherit (nixpkgs) lib curl;
   inherit (nixpkgs.legacyPackages)
     jq
     sqitchPg
@@ -88,9 +88,28 @@ let
 
   inherit (std.lib.ops) mkOperable;
 
+  probes = {
+    livenessProbe = std.lib.ops.writeScript {
+      name = "liveness-probe";
+      runtimeInputs = [ curl ];
+      text = ''
+        curl -f http://localhost:8080/live
+      '';
+    };
+    livenessProbe = std.lib.ops.writeScript {
+      name = "readiness-probe";
+      runtimeInputs = [ curl ];
+      text = ''
+        curl -f http://localhost:8080/ready
+      '';
+    };
+  };
+
+  mkOperableWithProbes = args: mkOperable (args // probes);
+
 in
 {
-  chain-indexer = mkOperable {
+  chain-indexer = mkOperableWithProbes {
     package = packages.marlowe-chain-indexer;
     runtimeInputs = [ jq sqitchPg srvaddr postgresql coreutils ];
     runtimeScript = ''
@@ -145,7 +164,7 @@ in
     '';
   };
 
-  marlowe-chain-sync = mkOperable {
+  marlowe-chain-sync = mkOperableWithProbes {
     package = packages.marlowe-chain-sync;
     runtimeInputs = [ srvaddr jq coreutils ];
     runtimeScript = ''
@@ -192,7 +211,7 @@ in
     '';
   };
 
-  marlowe-indexer = mkOperable {
+  marlowe-indexer = mkOperableWithProbes {
     package = packages.marlowe-indexer;
     runtimeInputs = [ sqitchPg srvaddr postgresql coreutils ];
     runtimeScript = ''
@@ -239,7 +258,7 @@ in
     '';
   };
 
-  marlowe-sync = mkOperable {
+  marlowe-sync = mkOperableWithProbes {
     package = packages.marlowe-sync;
     runtimeInputs = [ srvaddr coreutils ];
     runtimeScript = ''
@@ -277,7 +296,7 @@ in
     '';
   };
 
-  marlowe-tx = mkOperable {
+  marlowe-tx = mkOperableWithProbes {
     package = packages.marlowe-tx;
     runtimeScript = ''
       #################
@@ -305,7 +324,7 @@ in
     '';
   };
 
-  marlowe-proxy = mkOperable {
+  marlowe-proxy = mkOperableWithProbes {
     package = packages.marlowe-proxy;
     runtimeScript = ''
       #################
@@ -339,7 +358,7 @@ in
     '';
   };
 
-  marlowe-web-server = mkOperable {
+  marlowe-web-server = mkOperableWithProbes {
     package = packages.marlowe-web-server;
     runtimeScript = ''
       #################
