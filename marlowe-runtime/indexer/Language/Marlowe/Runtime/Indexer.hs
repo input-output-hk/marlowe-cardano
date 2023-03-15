@@ -7,6 +7,8 @@ module Language.Marlowe.Runtime.Indexer
   where
 
 import Control.Concurrent.Component
+import Control.Concurrent.Component.Probes
+import Control.Concurrent.STM (atomically)
 import Data.Set.NonEmpty (NESet)
 import Data.Time (NominalDiffTime)
 import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncQuery, RuntimeChainSeekClient, ScriptHash)
@@ -30,17 +32,26 @@ data MarloweIndexerDependencies r = MarloweIndexerDependencies
   , pollingInterval :: NominalDiffTime
   , marloweScriptHashes :: NESet ScriptHash
   , payoutScriptHashes :: NESet ScriptHash
+  , httpPort :: Int
   }
 
 marloweIndexer :: Component IO (MarloweIndexerDependencies r) ()
 marloweIndexer = proc MarloweIndexerDependencies{..} -> do
-  pullEvent <- chainSeekClient -< ChainSeekClientDependencies
+  (connected, pullEvent) <- chainSeekClient -< ChainSeekClientDependencies
     { eventBackend = narrowEventBackend (injectSelector ChainSeekClientEvent) eventBackend
     , ..
     }
   store -< StoreDependencies
     { eventBackend = narrowEventBackend (injectSelector StoreEvent) eventBackend
     , ..
+    }
+  probeServer -< ProbeServerDependencies
+    { probes = Probes
+        { startup = pure True
+        , liveness = atomically connected
+        , readiness = pure True
+        }
+    , port = httpPort
     }
 
 getMarloweIndexerSelectorConfig :: GetSelectorConfig MarloweIndexerSelector
