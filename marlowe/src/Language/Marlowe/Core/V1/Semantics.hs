@@ -94,12 +94,12 @@ module Language.Marlowe.Core.V1.Semantics
   , TransactionError(..)
   , TransactionWarning(..)
     -- * Utility Functions
+  , allBalancesArePositive
   , contractLifespanUpperBound
   , isClose
   , notClose
   , paymentMoney
   , totalBalance
-  , validateBalances
     -- * Serialisation
   , currencySymbolFromJSON
   , currencySymbolToJSON
@@ -557,7 +557,7 @@ updateMoneyInAccount accId token amount =
     if amount <= 0 then Map.delete (accId, token) else Map.insert (accId, token) amount
 
 
--- | Add the given amount of money to an accoun (only if it is positive).
+-- | Add the given amount of money to an account (only if it is positive).
 --   Return the updated Map.
 addMoneyToAccount :: AccountId -> Token -> Integer -> Accounts -> Accounts
 addMoneyToAccount accId token amount accounts = let
@@ -714,18 +714,20 @@ getContinuation (MerkleizedInput _ inputContinuationHash continuation) (Merkleiz
     else Nothing
 getContinuation _ _ = Nothing
 
--- | Try to apply an input to a list of cases.
+-- | Try to apply an input to a list of cases, accepting the first match.
 applyCases :: Environment -> State -> Input -> [Case Contract] -> ApplyResult
-applyCases env state input (headCase : tailCase) =
+applyCases env state input (headCase : tailCases) =
     let inputContent = getInputContent input :: InputContent
         action = getAction headCase :: Action
         maybeContinuation = getContinuation input headCase :: Maybe Contract
     in case applyAction env state inputContent action of
          AppliedAction warning newState ->
+           -- Note that this differs from Isabelle semantics because
+           -- the Cardano semantics includes merkleization.
            case maybeContinuation of
              Just continuation -> Applied warning newState continuation
              Nothing           -> ApplyHashMismatch
-         NotAppliedAction -> applyCases env state input tailCase
+         NotAppliedAction -> applyCases env state input tailCases
 applyCases _ _ _ [] = ApplyNoMatchError
 
 
@@ -737,7 +739,7 @@ applyInput _ _ _ _                          = ApplyNoMatchError
 
 -- | Propagate 'ReduceWarning' to 'TransactionWarning'.
 convertReduceWarnings :: [ReduceWarning] -> [TransactionWarning]
-convertReduceWarnings = foldr (\warn acc -> case warn of
+convertReduceWarnings = foldr (\warn acc -> case warn of  -- Note that `foldr` is used here for efficiency, differing from Isabelle.
     ReduceNoWarning -> acc
     ReduceNonPositivePay accId payee tok amount ->
         TransactionNonPositivePay accId payee tok amount : acc
@@ -777,12 +779,12 @@ applyAllInputs env state contract inputs = let
                     curState
                     cont
                 (input : rest) -> case applyInput env curState input cont of
-                    Applied applyWarn newState cont ->
+                    Applied applyWarn newState cont' ->
                         applyAllLoop
                             True
                             env
                             newState
-                            cont
+                            cont'
                             rest
                             (warnings' ++ convertApplyWarning applyWarn)
                             payments'
@@ -881,8 +883,8 @@ totalBalance accounts = foldMap
 
 
 -- | Check that all accounts have positive balance.
-validateBalances :: State -> Bool
-validateBalances State{..} = all (\(_, balance) -> balance > 0) (Map.toList accounts)
+allBalancesArePositive :: State -> Bool
+allBalancesArePositive State{..} = all (\(_, balance) -> balance > 0) (Map.toList accounts)
 
 
 instance FromJSON TransactionInput where
@@ -967,20 +969,26 @@ instance Eq Payment where
 instance Eq ReduceWarning where
     {-# INLINABLE (==) #-}
     ReduceNoWarning == ReduceNoWarning = True
-    (ReduceNonPositivePay acc1 p1 tn1 a1) == (ReduceNonPositivePay acc2 p2 tn2 a2) =
+    ReduceNoWarning == _ = False
+    ReduceNonPositivePay acc1 p1 tn1 a1 == ReduceNonPositivePay acc2 p2 tn2 a2 =
         acc1 == acc2 && p1 == p2 && tn1 == tn2 && a1 == a2
-    (ReducePartialPay acc1 p1 tn1 a1 e1) == (ReducePartialPay acc2 p2 tn2 a2 e2) =
+    ReduceNonPositivePay{} == _ = False
+    ReducePartialPay acc1 p1 tn1 a1 e1 == ReducePartialPay acc2 p2 tn2 a2 e2 =
         acc1 == acc2 && p1 == p2 && tn1 == tn2 && a1 == a2 && e1 == e2
-    (ReduceShadowing v1 old1 new1) == (ReduceShadowing v2 old2 new2) =
+    ReducePartialPay{} == _ = False
+    ReduceShadowing v1 old1 new1 == ReduceShadowing v2 old2 new2 =
         v1 == v2 && old1 == old2 && new1 == new2
-    _ == _ = False
+    ReduceShadowing{} == _ = False
+    ReduceAssertionFailed == ReduceAssertionFailed = True
+    ReduceAssertionFailed == _ = False
 
 
 instance Eq ReduceEffect where
     {-# INLINABLE (==) #-}
     ReduceNoPayment == ReduceNoPayment           = True
+    ReduceNoPayment == _                         = False
     ReduceWithPayment p1 == ReduceWithPayment p2 = p1 == p2
-    _ == _                                       = False
+    ReduceWithPayment _ == _                     = False
 
 
 -- Lifting data types to Plutus Core

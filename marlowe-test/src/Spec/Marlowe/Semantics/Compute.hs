@@ -13,6 +13,7 @@
 
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
 
@@ -31,6 +32,7 @@ import Control.Applicative (liftA2)
 import Control.Lens.Getter (Getter, to, view)
 import Control.Monad.Except (MonadError(throwError), unless, when)
 import Control.Monad.Reader (ReaderT(runReaderT))
+import Data.Bifunctor (second)
 import Data.Default (Default(..))
 import Data.Function (on)
 import Data.List (sort)
@@ -49,29 +51,34 @@ import Language.Marlowe.Core.V1.Semantics.Types
   ( AccountId
   , Accounts
   , Action(Choice, Deposit, Notify)
-  , Case
+  , Bound(..)
+  , Case(..)
   , ChoiceId
   , ChosenNum
   , Contract(..)
   , Environment(Environment)
-  , Input
+  , Input(..)
   , InputContent(IChoice, IDeposit, INotify)
   , IntervalError(IntervalInPastError, InvalidInterval)
-  , Observation
+  , Observation(TrueObs)
   , Payee(Party)
   , State(..)
   , TimeInterval
   , Token(..)
-  , Value
+  , Value(Constant)
   , ValueId
   , getAction
   , getInputContent
   )
 import Language.Marlowe.FindInputs (getAllInputs)
-import Plutus.V2.Ledger.Api (CurrencySymbol, POSIXTime(..), TokenName)
+import Plutus.Script.Utils.Scripts (datumHash)
+import Plutus.V2.Ledger.Api (CurrencySymbol, Datum(..), DatumHash(..), POSIXTime(..), TokenName, toBuiltinData)
 import Spec.Marlowe.Semantics.Arbitrary
-  ( SemiArbitrary(semiArbitrary)
+  ( Context
+  , SemiArbitrary(semiArbitrary)
   , arbitraryContractWeighted
+  , arbitraryGoldenTransaction
+  , arbitraryPositiveInteger
   , assertContractWeights
   , closeContractWeights
   , defaultContractWeights
@@ -85,7 +92,19 @@ import Spec.Marlowe.Semantics.Orphans ()
 import System.IO.Unsafe (unsafePerformIO)
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.QuickCheck
-  (Arbitrary(..), Gen, Testable(property), discard, elements, forAll, forAllShrink, frequency, suchThat, testProperty)
+  ( Arbitrary(..)
+  , Gen
+  , Testable(property)
+  , chooseInteger
+  , discard
+  , elements
+  , forAll
+  , forAllShrink
+  , frequency
+  , shuffle
+  , suchThat
+  , testProperty
+  )
 
 import qualified PlutusTx.AssocMap as AM
 
@@ -161,18 +180,145 @@ arbitraryMarloweContext w =
 -- | Generate an arbitrary valid Marlowe transaction context.
 arbitraryValid :: Gen MarloweContext
 arbitraryValid =
-    do
-      mcContract <- arbitrary `suchThat` (/= Close)
-      (time, inputs') <-
-        case unsafePerformIO $ getAllInputs mcContract of
-          Right candidates -> elements candidates
-          Left _           -> discard
-      let
-        -- TODO: Generalize to arbitrary starting state.
-        mcState = State AM.empty AM.empty AM.empty time
-        mcInput = head inputs'
-        mcOutput = computeTransaction mcInput mcState mcContract
-      pure MarloweContext{..}
+  let
+    randomContext =
+      do
+        mcContract <- arbitrary `suchThat` (/= Close)
+        (time, inputs') <-
+          case unsafePerformIO $ getAllInputs mcContract of
+            Right candidates -> elements candidates
+            Left _           -> discard
+        let
+          -- TODO: Generalize to arbitrary starting state.
+          mcState = State AM.empty AM.empty AM.empty time
+          mcInput = head inputs'
+          mcOutput = computeTransaction mcInput mcState mcContract
+        pure MarloweContext{..}
+    goldenContext =
+      do
+        (mcState, mcContract, mcInput, mcOutput) <- arbitraryGoldenTransaction True
+        pure MarloweContext{..}
+  in
+    frequency [(1, randomContext), (2, goldenContext)]
+
+
+-- | Generate a simple valid transaction.
+simpleTransaction
+  :: Context
+  -> (TimeInterval -> Contract -> Gen Contract)
+  -> (State -> Gen State)
+  -> (TransactionInput -> Gen TransactionInput)
+  -> Gen MarloweContext
+simpleTransaction context modifyContract modifyState modifyInput =
+  do
+    mcState <- modifyState =<< semiArbitrary context
+    intervalStart <- (getPOSIXTime (minTime mcState) +) <$> arbitraryPositiveInteger
+    intervalEnd <- (intervalStart +) <$> arbitraryPositiveInteger
+    let
+      interval = (POSIXTime intervalStart, POSIXTime intervalEnd)
+    timeout <- (intervalEnd +) <$> arbitraryPositiveInteger
+    mcContract <- modifyContract interval . When [] (POSIXTime timeout) =<< semiArbitrary context
+    mcInput <- modifyInput $ TransactionInput interval []
+    let
+      mcOutput = computeTransaction mcInput mcState mcContract
+    pure MarloweContext{..}
+
+
+-- | Generate a simple payment.
+simplePayment :: Gen MarloweContext
+simplePayment =
+  do
+    context <- arbitrary
+    balance <- arbitraryPositiveInteger
+    payment <- chooseInteger (1, balance)
+    account <- semiArbitrary context
+    payee <- semiArbitrary context
+    token <- semiArbitrary context
+    let
+      modifyContract _ contract = pure $ Pay account (Party payee) token (Constant payment) contract
+      modifyState state =
+        do
+          accounts' <-
+            fmap AM.fromList . shuffle . AM.toList
+              . AM.insert (account, token) balance
+              . AM.delete (account, token)
+              $ accounts state
+          pure state {accounts = accounts'}
+    simpleTransaction context modifyContract modifyState pure
+
+
+-- | Generate a simple deposit.
+simpleDeposit :: Gen MarloweContext
+simpleDeposit =
+  do
+    context <- arbitrary
+    deposit <- arbitraryPositiveInteger
+    account <- semiArbitrary context
+    payee <- semiArbitrary context
+    token <- semiArbitrary context
+    let
+      modifyContract (_, POSIXTime intervalEnd) contract =
+        pure
+          $ When [Case (Deposit account payee token $ Constant deposit) contract]
+            (POSIXTime $ intervalEnd + 1) contract
+      modifyInput (TransactionInput interval _) = pure $ TransactionInput interval [NormalInput $ IDeposit account payee token deposit]
+    simpleTransaction context modifyContract pure modifyInput
+
+
+-- | Generate a simple notification.
+simpleChoice :: Gen MarloweContext
+simpleChoice =
+  do
+    context <- arbitrary
+    choiceId <- semiArbitrary context
+    value <- semiArbitrary context
+    bound <- Bound <$> ((value -) <$> arbitraryPositiveInteger) <*> ((value +) <$> arbitraryPositiveInteger)
+    let
+      modifyContract (_, POSIXTime intervalEnd) contract =
+        do
+          let
+            timeout = POSIXTime $ intervalEnd + 1
+          contract' <- When [] timeout <$> semiArbitrary context
+          pure $ When [Case (Choice choiceId [bound]) contract'] timeout contract
+      modifyInput (TransactionInput interval _) = pure $ TransactionInput interval [NormalInput $ IChoice choiceId value]
+    simpleTransaction context modifyContract pure modifyInput
+
+
+-- | Generate a simple notification.
+simpleNotify :: Gen MarloweContext
+simpleNotify =
+  do
+    context <- arbitrary
+    let
+      modifyContract (_, POSIXTime intervalEnd) contract =
+        do
+          let
+            timeout = POSIXTime $ intervalEnd + 1
+          contract' <- When [] timeout <$> semiArbitrary context
+          pure $ When [Case (Notify TrueObs) contract'] timeout contract
+      modifyInput (TransactionInput interval _) = pure $ TransactionInput interval [NormalInput INotify]
+    simpleTransaction context modifyContract pure modifyInput
+
+
+-- | Generate a simple notification.
+simpleMerkleization :: Gen MarloweContext
+simpleMerkleization =
+  do
+    context <- arbitrary
+    mcState <- semiArbitrary context
+    intervalStart <- (getPOSIXTime (minTime mcState) +) <$> arbitraryPositiveInteger
+    intervalEnd <- (intervalStart +) <$> arbitraryPositiveInteger
+    let
+      interval = (POSIXTime intervalStart, POSIXTime intervalEnd)
+    timeout <- (intervalEnd +) <$> arbitraryPositiveInteger
+    contract <- When [] (POSIXTime timeout) <$> semiArbitrary context
+    let
+      DatumHash hash = datumHash . Datum $ toBuiltinData contract
+      mcInput = TransactionInput interval [MerkleizedInput INotify hash contract]
+    mcContract <- When [MerkleizedCase (Notify TrueObs) hash] (POSIXTime timeout) <$> semiArbitrary context
+    let
+      mcOutput = computeTransaction mcInput mcState mcContract
+    pure MarloweContext{..}
 
 
 -- | Recompute the output of a Marlowe transaction in an transaction context.
@@ -543,6 +689,27 @@ requireAmbiguousTimeout =
   >> requireNextTimeout `requireLE` view latestTime
 
 
+-- | Require a payment to a party.
+requirePayout :: Testify ()
+requirePayout =
+  let
+    isPayout (Payment _ (Party _) _ i) = i > 0
+    isPayout _ = False
+  in
+    view payments >>= "Positive payout" `require` any isPayout
+
+
+-- | Require not deposits.
+requireNoDeposits :: Testify ()
+requireNoDeposits =
+  let
+    isDeposit (NormalInput (IDeposit _ _ _ i)) = i > 0
+    isDeposit (MerkleizedInput (IDeposit _ _ _ i) _ _) = i > 0
+    isDeposit _ = False
+  in
+    view inputs >>= "No deposits" `require` (not . any isDeposit)
+
+
 -- | Throw an error unless a condition holds.
 throwUnless :: MonadError String m
             => String
@@ -671,30 +838,31 @@ checkContinuation expected =
 data TransactionTest =
   TransactionTest
   {
-    name          :: String
-  , generator     :: Gen MarloweContext
-  , precondition  :: Testify ()
-  , invariant     :: [Invariant]
-  , postcondition :: Testify ()
+    name           :: String
+  , generator      :: Gen MarloweContext
+  , precondition   :: Testify ()
+  , invariant      :: [Invariant]
+  , postcondition  :: Testify ()
+  , allowShrinkage :: Bool
   }
 
 instance Default TransactionTest where
   def =
     TransactionTest
     {
-      name          = mempty
-    , generator     = arbitrary
-    , precondition  = pure ()
-    , invariant     = mempty
-    , postcondition = pure ()
+      name           = mempty
+    , generator      = arbitrary
+    , precondition   = pure ()
+    , invariant      = mempty
+    , postcondition  = pure ()
+    , allowShrinkage = True
     }
 
 
 -- | Test a Marlowe transaction.
-test :: Bool             -- ^ Whether to perform shrinkage of generated values.
-     -> TransactionTest  -- ^ The test.
+test :: TransactionTest  -- ^ The test.
      -> TestTree         -- ^ The result.
-test doShrink TransactionTest{..} =
+test TransactionTest{..} =
   testProperty name
     . property
     $ let
@@ -707,7 +875,7 @@ test doShrink TransactionTest{..} =
             Right () -> True   -- Test passed.
         gen = generator `suchThat` preResolve precondition
       in
-        (if doShrink then forAllShrink gen shrink else forAll gen)
+        (if allowShrinkage then forAllShrink gen shrink else forAll gen)
           . postResolve
           $ mapM_ checkInvariant invariant >> postcondition
 
@@ -858,11 +1026,128 @@ anyInput =
   }
 
 
+-- | Test that payments substract value from internal accounts.
+payingSubtractsFromAccount :: TransactionTest
+payingSubtractsFromAccount =
+  def
+  {
+    name           = "Paying subtracts from account"
+  , allowShrinkage = False
+  , generator      = simplePayment
+  , postcondition  = do
+                       delta <-
+                         fmap (AM.filter (/= 0))
+                           $ AM.unionWith (+)
+                           <$> view preAccounts
+                           <*> (AM.fromList . fmap (second negate) . AM.toList <$> view postAccounts)
+                       require "Only one balance changes." ((== 1) . length . AM.toList) delta
+                       require "Some balance decreases." (all (> 0) . AM.elems) delta
+  }
+
+
+-- | Test that deposits add value to internal accounts.
+depositAddsToAccount :: TransactionTest
+depositAddsToAccount =
+  def
+  {
+    name           = "Deposit adds to account"
+  , allowShrinkage = False
+  , generator      = simpleDeposit
+  , postcondition  = do
+                       delta <-
+                         fmap (AM.filter (/= 0))
+                           $ AM.unionWith (+)
+                           <$> view postAccounts
+                           <*> (AM.fromList . fmap (second negate) . AM.toList <$> view preAccounts)
+                       require "Only one balance changes." ((== 1) . length . AM.toList) delta
+                       require "Some balance increases." (all (> 0) . AM.elems) delta
+  }
+
+
+-- | Test that notify contines as expected
+notifyContinues :: TransactionTest
+notifyContinues =
+  def
+  {
+    name           = "Notify continues as expected"
+  , allowShrinkage = False
+  , generator      = simpleNotify
+  , postcondition  = view preContract >>=
+                       \case
+                         When [Case (Notify TrueObs) contract] _ _ -> checkContinuation contract
+                         _ -> throwError "Test setup failed."
+  }
+
+
+-- | Test that choice continues as expected.
+choiceContinues :: TransactionTest
+choiceContinues =
+  def
+  {
+    name           = "Choice continues as expected"
+  , allowShrinkage = False
+  , generator      = simpleChoice
+  , postcondition  = view preContract >>=
+                       \case
+                         When [Case (Choice _ _) contract] _ _ -> checkContinuation contract
+                         _ -> throwError "Test setup failed."
+  }
+
+
+-- | Test that deposit continues as expected.
+depositContinues :: TransactionTest
+depositContinues =
+  def
+  {
+    name           = "Deposit continues as expected"
+  , allowShrinkage = False
+  , generator      = simpleDeposit
+  , postcondition  = view preContract >>=
+                       \case
+                         When [Case Deposit{} contract] _ _ -> checkContinuation contract
+                         _ -> throwError "Test setup failed."
+  }
+
+
+-- | Test that deposit continues as expected.
+merkleizationContinues :: TransactionTest
+merkleizationContinues =
+  def
+  {
+    name           = "Merkleization continues as expected"
+  , allowShrinkage = False
+  , generator      = simpleMerkleization
+  , postcondition  = view inputs >>=
+                       \case
+                         [MerkleizedInput INotify _ contract] -> checkContinuation contract
+                         _ -> throwError "Test setup failed."
+  }
+
+
+-- | Test that deposit continues as expected.
+choiceSets :: TransactionTest
+choiceSets =
+  def
+  {
+    name           = "Choice records the value of the choice"
+  , allowShrinkage = False
+  , generator      = simpleChoice
+  , postcondition  = view inputs >>=
+                       \case
+                         [NormalInput (IChoice choiceId value)] ->
+                           do
+                             choices' <- choices <$> view postState
+                             unless (AM.lookup choiceId choices' == Just value)
+                               $ throwError "Choice missing from state"
+                         _ -> throwError "Test setup failed."
+  }
+
+
 -- | Run the tests.
 tests :: TestTree
 tests =
   testGroup "Compute Transaction"
-    $ fmap (test True)
+    $ test <$>
     [
       invalidInterval
     , tooEarly
@@ -875,4 +1160,11 @@ tests =
     , ifBranches
     , assertWarns
     , anyInput
+    , payingSubtractsFromAccount
+    , depositAddsToAccount
+    , depositContinues
+    , choiceContinues
+    , notifyContinues
+    , choiceSets
+    , merkleizationContinues
     ]

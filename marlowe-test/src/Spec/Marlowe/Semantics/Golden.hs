@@ -40,6 +40,7 @@ import Test.Tasty.HUnit (assertBool, testCase)
 
 import qualified PlutusTx.AssocMap as AM (empty)
 import qualified Spec.Marlowe.Semantics.Golden.Escrow as Escrow (contract, invalids, valids)
+import qualified Spec.Marlowe.Semantics.Golden.Negative as Negative (contract, invalids, valids)
 import qualified Spec.Marlowe.Semantics.Golden.Pangram as Pangram (contract, invalids, valids)
 import qualified Spec.Marlowe.Semantics.Golden.Swap as Swap (contract, invalids, valids)
 import qualified Spec.Marlowe.Semantics.Golden.Trivial as Trivial (contract, invalids, valids)
@@ -59,6 +60,7 @@ goldenContracts =
   , Swap.contract
   , Trivial.contract
   , ZCB.contract
+  , Negative.contract
   -- Note that Pangram is omitted because `getAllInputs` takes 30 minutes for it.
   ]
 
@@ -68,11 +70,12 @@ tests :: TestTree
 tests =
   testGroup "Golden"
     [
-      testGolden "Escrow"           _GENERATE_TEST_CASES_ Escrow.contract  Escrow.valids  Escrow.invalids
-    , testGolden "Pangram"          _GENERATE_TEST_CASES_ Pangram.contract Pangram.valids Pangram.invalids
-    , testGolden "Swap"             _GENERATE_TEST_CASES_ Swap.contract    Swap.valids    Swap.invalids
-    , testGolden "Trivial"          _GENERATE_TEST_CASES_ Trivial.contract Trivial.valids Trivial.invalids
-    , testGolden "Zero Coupon Bond" _GENERATE_TEST_CASES_ ZCB.contract     ZCB.valids     ZCB.invalids
+      testGolden "Escrow"           _GENERATE_TEST_CASES_ Escrow.contract   Escrow.valids   Escrow.invalids
+    , testGolden "Pangram"          _GENERATE_TEST_CASES_ Pangram.contract  Pangram.valids  Pangram.invalids
+    , testGolden "Swap"             _GENERATE_TEST_CASES_ Swap.contract     Swap.valids     Swap.invalids
+    , testGolden "Trivial"          _GENERATE_TEST_CASES_ Trivial.contract  Trivial.valids  Trivial.invalids
+    , testGolden "Zero Coupon Bond" _GENERATE_TEST_CASES_ ZCB.contract      ZCB.valids      ZCB.invalids
+    , testGolden "Negative"         _GENERATE_TEST_CASES_ Negative.contract Negative.valids Negative.invalids
     ]
 
 
@@ -125,7 +128,7 @@ testInvalid :: Contract -> [GoldenCase] -> IO ()
 testInvalid = testValidity False
 
 
--- | Test erroneous transactions for the Pangram contract.
+-- | Test erroneous transactions for a contract.
 testValidity :: Bool          -- ^ Whether the test cases should pass.
              -> Contract      -- ^ The contract.
              -> [GoldenCase]  -- ^ The test cases.
@@ -148,11 +151,12 @@ goldenTransactions :: [[GoldenTransaction]]
 goldenTransactions =
   uncurry validTransactions
     <$> [
-          (Escrow.contract , Escrow.valids )
-        , (Pangram.contract, Pangram.valids)
-        , (Swap.contract   , Swap.valids   )
-        , (Trivial.contract, Trivial.valids)
-        , (ZCB.contract    , ZCB.valids    )
+          (Escrow.contract  , Escrow.valids  )
+        , (Pangram.contract , Pangram.valids )
+        , (Swap.contract    , Swap.valids    )
+        , (Trivial.contract , Trivial.valids )
+        , (ZCB.contract     , ZCB.valids     )
+        , (Negative.contract, Negative.valids)
         ]
 
 

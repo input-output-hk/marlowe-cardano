@@ -95,9 +95,20 @@ import PlutusTx (makeIsDataIndexed, makeLift)
 import qualified PlutusTx
 import qualified PlutusTx.AssocMap as AssocMap
 import PlutusTx.Plugin ()
-import PlutusTx.Prelude as PlutusTxPrelude
+import PlutusTx.Prelude as PlutusTxPrelude hiding (traceError, traceIfFalse)
 import qualified Prelude as Haskell
 import Unsafe.Coerce (unsafeCoerce)
+
+
+-- Suppress traces, in order to save bytes.
+
+{-# INLINABLE traceError #-}
+traceError :: BuiltinString -> a
+traceError _ = error ()
+
+{-# INLINABLE traceIfFalse #-}
+traceIfFalse :: BuiltinString -> a -> a
+traceIfFalse _ = id
 
 
 -- | Input to a Marlowe transaction.
@@ -150,7 +161,7 @@ mkRolePayoutValidator :: (CurrencySymbol, TokenName)  -- ^ The datum is the curr
                       -> Bool                         -- ^ Whether the transaction validated.
 mkRolePayoutValidator (currency, role) _ ctx =
     -- The role token for the correct currency must be present.
-    -- [Marlowe-Cardano Specification: "16. Payment authorized".]
+    -- [Marlowe-Cardano Specification: "17. Payment authorized".]
     Val.singleton currency role 1 `Val.leq` valueSpent (scriptContextTxInfo ctx)
 
 
@@ -191,12 +202,10 @@ mkMarloweValidator
             case closeInterval $ txInfoValidRange scriptContextTxInfo of
                 Just interval' -> interval'
                 Nothing        -> traceError "a"
-    -- The incoming balance of each account must be positive.
-    -- [Marlowe-Cardano Specification: "Constraint 13. Positive balances".]
-    let positiveBalances = traceIfFalse "b" $ validateBalances marloweState
 
     -- Find Contract continuation in TxInfo datums by hash or fail with error.
     let inputs = fmap marloweTxInputToInput marloweTxInputs
+
     {-  We do not check that a transaction contains exact input payments.
         We only require an evidence from a party, e.g. a signature for PubKey party,
         or a spend of a 'party role' token.  This gives huge flexibility by allowing
@@ -204,22 +213,19 @@ mkMarloweValidator
         Then, we check scriptOutput to be correct.
      -}
     let inputContents = fmap getInputContent inputs
+
     -- Check that the required signatures and role tokens are present.
     -- [Marlowe-Cardano Specification: "Constraint 14. Inputs authorized".]
-    let inputsOk = validateInputs inputContents
-
-    -- Since individual balances were validated to be positive,
-    -- the total balance is also positive.
-    let inputBalance = totalBalance (accounts marloweState)
+    let inputsOk = allInputsAreAuthorized inputContents
 
     -- [Marlowe-Cardano Specification: "Constraint 5. Input value from script".]
-    -- The total incoming balance must match the actual script value being spent.
-    let balancesOk = traceIfFalse "v" $ inputBalance == scriptInValue
+    -- [Marlowe-Cardano Specification: "Constraint 13. Positive balances".]
+    -- [Marlowe-Cardano Specification: "Constraint 19. No duplicates".]
+    -- Check that the initial state obeys the Semantic's invariants.
+    let preconditionsOk = checkState "i" scriptInValue marloweState
 
-    let preconditionsOk = positiveBalances && balancesOk
-
-    -- Package the inputs to be applied in the semantics.
     -- [Marlowe-Cardano Specification: "Constraint 0. Input to semantics".]
+    -- Package the inputs to be applied in the semantics.
     let txInput = TransactionInput {
             txInterval = interval,
             txInputs = inputs }
@@ -249,16 +255,25 @@ mkMarloweValidator
 
                 checkContinuation = case txOutContract of
                     -- [Marlowe-Cardano Specification: "Constraint 4. No output to script on close".]
-                    Close -> traceIfFalse "c" checkScriptOutputAny
+                    Close -> traceIfFalse "c" hasNoOutputToOwnScript
                     _ -> let
                         totalIncome = foldMap collectDeposits inputContents
                         totalPayouts = foldMap snd payoutsByParty
-                        finalBalance = inputBalance + totalIncome - totalPayouts
-                        -- The total account balance must be paid to a single output to the script.
-                        -- [Marlowe-Cardano Specification: "Constraint 3. Single Marlowe output".]
-                        -- [Marlowe-Cardano Specification: "Constraint 6. Output value to script."]
-                        in checkOwnOutputConstraint marloweData finalBalance
+                        finalBalance = scriptInValue + totalIncome - totalPayouts
+                        in
+                             -- [Marlowe-Cardano Specification: "Constraint 3. Single Marlowe output".]
+                             -- [Marlowe-Cardano Specification: "Constraint 6. Output value to script."]
+                             -- Check that the single Marlowe output has the correct datum and value.
+                             checkOwnOutputConstraint marloweData finalBalance
+                             -- [Marlowe-Cardano Specification: "Constraint 18. Final balance."]
+                             -- [Marlowe-Cardano Specification: "Constraint 13. Positive balances".]
+                             -- [Marlowe-Cardano Specification: "Constraint 19. No duplicates".]
+                             -- Check that the final state obeys the Semantic's invariants.
+                          && checkState "o" finalBalance txOutState
             preconditionsOk && inputsOk && payoutsOk && checkContinuation
+              -- [Marlowe-Cardano Specification: "20. Single satsifaction".]
+              -- Either there must be no payouts, or there must be no other validators.
+              && traceIfFalse "z" (null payoutsByParty || noOthers)
         Error TEAmbiguousTimeIntervalError -> traceError "i"
         Error TEApplyNoMatchError -> traceError "n"
         Error (TEIntervalError (InvalidInterval _)) -> traceError "j"
@@ -277,23 +292,72 @@ mkMarloweValidator
         find (\TxInInfo{txInInfoOutRef} -> txInInfoOutRef == txOutRef) txInfoInputs
     findOwnInput _ = Nothing
 
-    -- The inputs being spent by this script.
     -- [Marlowe-Cardano Specification: "2. Single Marlowe script input".]
+    -- The inputs being spent by this script, and whether other validators are present.
     ownInput :: TxInInfo
-    ownInput@TxInInfo{txInInfoResolved=TxOut{txOutAddress=ownAddress}} =
+    noOthers :: Bool
+    (ownInput@TxInInfo{txInInfoResolved=TxOut{txOutAddress=ownAddress}}, noOthers) =
         case findOwnInput ctx of
-            Just ownTxInInfo ->
-                case filter (sameValidatorHash ownTxInInfo) (txInfoInputs scriptContextTxInfo) of
-                    [i] -> i
-                    _   -> traceError "w" -- Multiple Marlowe contract inputs with the same address are forbidden.
+            Just ownTxInInfo -> examineScripts (sameValidatorHash ownTxInInfo) Nothing True (txInfoInputs scriptContextTxInfo)
             _ -> traceError "x" -- Input to be validated was not found.
 
+    -- Check for the presence of multiple Marlowe validators or other Plutus validators.
+    examineScripts
+      :: (ValidatorHash -> Bool)  -- Test for this validator.
+      -> Maybe TxInInfo           -- The input for this validator, if found so far.
+      -> Bool                     -- Whether no other validator has been found so far.
+      -> [TxInInfo]               -- The inputs remaining to be examined.
+      -> (TxInInfo, Bool)         -- The input for this validator and whehter no other validators are present.
+    -- This validator has not been found.
+    examineScripts _ Nothing _ [] = traceError "x"
+    -- This validator has been found, and other validators may have been found.
+    examineScripts _ (Just self) noOthers [] = (self, noOthers)
+    -- Found both this validator and another script, so we short-cut.
+    examineScripts _ (Just self) False _ = (self, False)
+     -- Found one script.
+    examineScripts f mSelf noOthers (tx@TxInInfo{txInInfoResolved=TxOut{txOutAddress=Ledger.Address (ScriptCredential vh) _}} : txs)
+      -- The script is this validator.
+      | f vh = case mSelf of
+                 -- We hadn't found it before, so we save it in `mSelf`.
+                 Nothing -> examineScripts f (Just tx) noOthers txs
+                 -- We already had found this validator before
+                 Just _ -> traceError "w"
+      -- The script is something else, so we set `noOther` to `False`.
+      | otherwise = examineScripts f mSelf False txs
+    -- An input without a validator is encountered.
+    examineScripts f self others (_ : txs) = examineScripts f self others txs
+
     -- Check if inputs are being spent from the same script.
-    sameValidatorHash:: TxInInfo -> TxInInfo -> Bool
-    sameValidatorHash
-        TxInInfo{txInInfoResolved=TxOut{txOutAddress=Ledger.Address (ScriptCredential vh1) _}}
-        TxInInfo{txInInfoResolved=TxOut{txOutAddress=Ledger.Address (ScriptCredential vh2) _}} = vh1 == vh2
+    sameValidatorHash:: TxInInfo -> ValidatorHash -> Bool
+    sameValidatorHash TxInInfo{txInInfoResolved=TxOut{txOutAddress=Ledger.Address (ScriptCredential vh1) _}} vh2 = vh1 == vh2
     sameValidatorHash _ _ = False
+
+    -- Check a state for the correct value, positive accounts, and no duplicates.
+    checkState :: BuiltinString -> Val.Value -> State -> Bool
+    checkState tag expected State{..} =
+      let
+        positiveBalance :: (a, Integer) -> Bool
+        positiveBalance (_, balance) = balance > 0
+        noDuplicates :: Eq k => AssocMap.Map k v -> Bool
+        noDuplicates am =
+          let
+            test [] = True           -- An empty list has no duplicates.
+            test (x : xs)            -- Look for a duplicate of the head in the tail.
+              | elem x xs = False    -- A duplicate is present.
+              | otherwise = test xs  -- Continue searching for a duplicate.
+          in
+            test $ AssocMap.keys am
+      in
+           -- [Marlowe-Cardano Specification: "Constraint 5. Input value from script".]
+           -- and/or
+           -- [Marlowe-Cardano Specification: "Constraint 18. Final balance."]
+           traceIfFalse ("v"  <> tag) (totalBalance accounts == expected)
+           -- [Marlowe-Cardano Specification: "Constraint 13. Positive balances".]
+        && traceIfFalse ("b"  <> tag) (all positiveBalance $ AssocMap.toList accounts)
+           -- [Marlowe-Cardano Specification: "Constraint 19. No duplicates".]
+        && traceIfFalse ("ea" <> tag) (noDuplicates accounts)
+        && traceIfFalse ("ec" <> tag) (noDuplicates choices)
+        && traceIfFalse ("eb" <> tag) (noDuplicates boundValues)
 
     -- Look up the Datum hash for specific data.
     findDatumHash' :: PlutusTx.ToData o => o -> Maybe DatumHash
@@ -304,7 +368,7 @@ mkMarloweValidator
     checkOwnOutputConstraint ocDatum ocValue =
         let hsh = findDatumHash' ocDatum
         in traceIfFalse "d" -- "Output constraint"
-        $ checkScriptOutput ownAddress hsh ocValue getContinuingOutput
+        $ checkScriptOutput (==) ownAddress hsh ocValue getContinuingOutput
 
     getContinuingOutput :: TxOut
     getContinuingOutput = case filter (\TxOut{txOutAddress} -> ownAddress == txOutAddress) allOutputs of
@@ -312,20 +376,14 @@ mkMarloweValidator
         _     -> traceError "o" -- No continuation or multiple Marlowe contract outputs is forbidden.
 
     -- Check that address, value, and datum match the specified.
-    checkScriptOutput :: Ledger.Address -> Maybe DatumHash -> Val.Value -> TxOut -> Bool
-    checkScriptOutput addr hsh value TxOut{txOutAddress, txOutValue, txOutDatum=OutputDatumHash svh} =
-                    txOutValue == value && hsh == Just svh && txOutAddress == addr
-    checkScriptOutput _ _ _ _ = False
-
-    -- Check that address and datum match the specified, and that value is at least that required.
-    checkScriptOutputRelaxed :: Ledger.Address -> Maybe DatumHash -> Val.Value -> TxOut -> Bool
-    checkScriptOutputRelaxed addr hsh value TxOut{txOutAddress, txOutValue, txOutDatum=OutputDatumHash svh} =
-                    txOutValue `Val.geq` value && hsh == Just svh && txOutAddress == addr
-    checkScriptOutputRelaxed _ _ _ _ = False
+    checkScriptOutput :: (Val.Value -> Val.Value -> Bool) -> Ledger.Address -> Maybe DatumHash -> Val.Value -> TxOut -> Bool
+    checkScriptOutput comparison addr hsh value TxOut{txOutAddress, txOutValue, txOutDatum=OutputDatumHash svh} =
+                    txOutValue `comparison` value && hsh == Just svh && txOutAddress == addr
+    checkScriptOutput _ _ _ _ _ = False
 
     -- Check for any output to the script address.
-    checkScriptOutputAny :: Bool
-    checkScriptOutputAny = all ((/= ownAddress) . txOutAddress) allOutputs
+    hasNoOutputToOwnScript :: Bool
+    hasNoOutputToOwnScript = all ((/= ownAddress) . txOutAddress) allOutputs
 
     -- All of the script outputs.
     allOutputs :: [TxOut]
@@ -342,8 +400,8 @@ mkMarloweValidator
     marloweTxInputToInput (Input input) = NormalInput input
 
     -- Check that inputs are authorized.
-    validateInputs :: [InputContent] -> Bool
-    validateInputs = all validateInputWitness
+    allInputsAreAuthorized :: [InputContent] -> Bool
+    allInputsAreAuthorized = all validateInputWitness
       where
         validateInputWitness :: InputContent -> Bool
         validateInputWitness input =
@@ -359,8 +417,10 @@ mkMarloweValidator
 
     -- Tally the deposits in the input.
     collectDeposits :: InputContent -> Val.Value
-    collectDeposits (IDeposit _ _ (Token cur tok) amount) = Val.singleton cur tok amount
-    collectDeposits _                                     = zero
+    collectDeposits (IDeposit _ _ (Token cur tok) amount)
+      | amount > 0    = Val.singleton cur tok amount  -- SCP-5123: Semantically negative deposits
+      | otherwise     = zero                          -- do not remove funds from the script's UTxO.
+    collectDeposits _ = zero
 
     -- Extract the payout to a party.
     payoutByParty :: Payment -> AssocMap.Map Party Val.Value
@@ -377,12 +437,17 @@ mkMarloweValidator
       where
         payoutToTxOut :: (Party, Val.Value) -> Bool
         payoutToTxOut (party, value) = case party of
+            -- [Marlowe-Cardano Specification: "Constraint 15. Sufficient Payment".]
+            -- SCP-5128: Note that the payment to an address may be split into several outputs but the payment to a role must be
+            -- a single output. The flexibily of multiple outputs accommodates wallet-related practicalities such as the change and
+            -- the return of the role token being in separate UTxOs in situations where a contract is also paying to the address
+            -- where that change and that role token are sent.
             Address _ address  -> traceIfFalse "p" $ value `Val.leq` valuePaidToAddress address  -- At least sufficient value paid.
             Role role -> let
                 hsh = findDatumHash' (rolesCurrency, role)
                 addr = Address.scriptHashAddress rolePayoutValidatorHash
                 -- Some output must have the correct value and datum to the role-payout address.
-                in traceIfFalse "r" $ any (checkScriptOutputRelaxed addr hsh value) allOutputs
+                in traceIfFalse "r" $ any (checkScriptOutput Val.geq addr hsh value) allOutputs
 
     -- The key for the address must have signed.
     txSignedByAddress :: Ledger.Address -> Bool

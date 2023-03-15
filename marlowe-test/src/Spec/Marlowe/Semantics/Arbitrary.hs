@@ -22,7 +22,8 @@
 
 module Spec.Marlowe.Semantics.Arbitrary
   ( -- * Types
-    IsValid(..)
+    Context
+  , IsValid(..)
   , SemiArbitrary(..)
     -- * Generators
   , arbitraryAssocMap
@@ -30,6 +31,7 @@ module Spec.Marlowe.Semantics.Arbitrary
   , arbitraryContractWeighted
   , arbitraryFibonacci
   , arbitraryGoldenTransaction
+  , arbitraryNonnegativeInteger
   , arbitraryPositiveInteger
   , arbitraryTimeIntervalAround
   , arbitraryValidInput
@@ -86,6 +88,7 @@ import Language.Marlowe.Core.V1.Semantics.Types
   , ValueId(..)
   , getAction
   )
+import Plutus.Script.Utils.Scripts (dataHash)
 import Plutus.V2.Ledger.Api
   ( Credential(..)
   , CurrencySymbol(..)
@@ -96,9 +99,11 @@ import Plutus.V2.Ledger.Api
   , ValidatorHash(..)
   , adaSymbol
   , adaToken
+  , toBuiltinData
   )
 import PlutusTx.Builtins (BuiltinByteString, appendByteString, lengthOfByteString, sliceByteString)
 import Spec.Marlowe.Semantics.Golden (GoldenTransaction, goldenContracts, goldenTransactions)
+import Spec.Marlowe.Semantics.Merkle (merkleizeInputs, shallowMerkleize)
 import Test.Tasty.QuickCheck
   (Arbitrary(..), Gen, chooseInteger, elements, frequency, listOf, oneof, shrinkList, sized, suchThat, vectorOf)
 
@@ -889,11 +894,11 @@ goldenContract = (,) <$> elements goldenContracts <*> pure (State AM.empty AM.em
 
 instance Arbitrary Contract where
   arbitrary = frequency [(95, semiArbitrary =<< arbitrary), (5, fst <$> goldenContract)]
-  shrink (Pay a p t x c) = [Pay a' p t x c | a' <- shrink a] ++ [Pay a p' t x c | p' <- shrink p] ++ [Pay a p t' x c | t' <- shrink t] ++ [Pay a p t x' c | x' <- shrink x] ++ [Pay a p t x c' | c' <- shrink c]
-  shrink (If o x y) = [If o' x y | o' <- shrink o] ++ [If o x' y | x' <- shrink x] ++ [If o x y' | y' <- shrink y]
-  shrink (When a t c) = [When a' t c | a' <- shrink a] ++ [When a t' c | t' <- shrink t] ++ [When a t c' | c' <- shrink c]
-  shrink (Let v x c) = [Let v' x c | v' <- shrink v] ++ [Let v x' c | x' <- shrink x] ++ [Let v x c' | c' <- shrink c]
-  shrink (Assert o c) = [Assert o' c | o' <- shrink o] ++ [Assert o c' | c' <- shrink c]
+  shrink (Pay a p t x c) = [c] ++ [Pay a' p t x c | a' <- shrink a] ++ [Pay a p' t x c | p' <- shrink p] ++ [Pay a p t' x c | t' <- shrink t] ++ [Pay a p t x' c | x' <- shrink x] ++ [Pay a p t x c' | c' <- shrink c]
+  shrink (If o x y) = [x, y] ++ [If o' x y | o' <- shrink o] ++ [If o x' y | x' <- shrink x] ++ [If o x y' | y' <- shrink y]
+  shrink (When a t c) = [c] ++ [When a' t c | a' <- shrink a] ++ [When a t' c | t' <- shrink t] ++ [When a t c' | c' <- shrink c]
+  shrink (Let v x c) = [c] ++ [Let v' x c | v' <- shrink v] ++ [Let v x' c | x' <- shrink x] ++ [Let v x c' | c' <- shrink c]
+  shrink (Assert o c) = [c] ++ [Assert o' c | o' <- shrink o] ++ [Assert o c' | c' <- shrink c]
   shrink _ = []
 
 
@@ -1056,10 +1061,22 @@ instance SemiArbitrary InputContent where
 instance Arbitrary Input where
   arbitrary = semiArbitrary =<< arbitrary
   shrink (NormalInput i)         = NormalInput <$> shrink i
-  shrink (MerkleizedInput i b c) = [MerkleizedInput i' b c | i' <- shrink i]
+  shrink (MerkleizedInput i b c) =
+    [NormalInput i]
+      <> [MerkleizedInput i' b c | i' <- shrink i]
+      <> [MerkleizedInput i (dataHash $ toBuiltinData c) c' | c' <- shrink c]
 
 instance SemiArbitrary Input where
-  semiArbitrary context = NormalInput <$> semiArbitrary context
+  semiArbitrary context =
+    frequency
+      [
+        (9, NormalInput <$> semiArbitrary context)
+      , (1, do
+              input <- semiArbitrary context
+              contract <- semiArbitrary context
+              pure $ MerkleizedInput input (dataHash $ toBuiltinData contract) contract
+        )
+      ]
 
 
 instance Arbitrary TransactionInput where
@@ -1082,7 +1099,7 @@ arbitraryValidStep :: State                 -- ^ The state of the contract.
                    -> Gen TransactionInput  -- ^ Generator for a transaction input for a single step.
 arbitraryValidStep _ (When [] timeout _) =
   TransactionInput <$> arbitraryTimeIntervalAfter timeout <*> pure []
-arbitraryValidStep state@State{..} (When cases timeout _) =
+arbitraryValidStep state@State{..} contract@(When cases timeout _) =
   do
     let
       isEmptyChoice (Choice _ []) = True
@@ -1099,7 +1116,13 @@ arbitraryValidStep state@State{..} (When cases timeout _) =
                                          Bound lower upper <- elements bs
                                          IChoice n <$> chooseInteger (lower, upper)
                     Notify _        -> pure INotify
-             pure $ TransactionInput times [NormalInput i]
+             is <-
+               frequency
+                 [
+                   (9, pure [NormalInput i])
+                 , (1, pure [MerkleizedInput i (dataHash $ toBuiltinData contract) contract])
+                 ]
+             pure $ TransactionInput times is
 arbitraryValidStep State{minTime} contract =
 {-
   NOTE: Alternatively, if semantics should allow applying `[]` to a non-quiescent contract
@@ -1153,13 +1176,23 @@ arbitraryValidInputs state contract =
 
 
 -- | Generate an arbitrary golden transaction.
-arbitraryGoldenTransaction :: Gen GoldenTransaction
-arbitraryGoldenTransaction =
+arbitraryGoldenTransaction :: Bool -> Gen GoldenTransaction
+arbitraryGoldenTransaction allowMerkleization =
   do
+    let
+      perhapsMerkleize gt@(state, contract, input, _) =
+        let
+          (contract', continuations) = shallowMerkleize contract
+          input' = merkleizeInputs continuations state contract' input
+        in
+          case input' of
+            Nothing      -> pure gt
+            Just input'' -> frequency [(9, pure gt), (1, pure (state, contract', input'', computeTransaction input'' state contract'))]
     equalContractWeights <- frequency [(1, pure True), (5, pure False)]
-    if equalContractWeights
-      then elements =<< elements goldenTransactions
-      else elements $ concat goldenTransactions
+    (if allowMerkleization then perhapsMerkleize else pure)
+      =<< if equalContractWeights
+            then elements =<< elements goldenTransactions
+            else elements $ concat goldenTransactions
 
 
 instance Arbitrary Payment where
