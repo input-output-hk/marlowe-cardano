@@ -110,8 +110,9 @@ data NodeClientDependencies r = NodeClientDependencies
   }
 
 -- | The public API of the NodeClient component.
-newtype NodeClient = NodeClient
+data NodeClient = NodeClient
   { getChanges    :: STM Changes -- ^ An STM action that atomically reads and clears the current change set.
+  , connected :: STM Bool
   }
 
 data NodeClientSelector f where
@@ -136,6 +137,7 @@ data RollBackwardField
 nodeClient :: Component IO (NodeClientDependencies r) NodeClient
 nodeClient = component \NodeClientDependencies{..} -> do
   changesVar <- newTVar emptyChanges
+  connectedVar <- newTVar False
 
   let
     getChanges :: STM Changes
@@ -156,16 +158,20 @@ nodeClient = component \NodeClientDependencies{..} -> do
             let ChainSyncClientPipelined client = pipelinedClient'
               in LocalChainSyncClientPipelined $ ChainSyncClientPipelined do
                 finalize ev Nothing
+                atomically $ writeTVar connectedVar True
                 client
         , localTxSubmissionClient = Nothing
         , localTxMonitoringClient = Nothing
         , localStateQueryClient   = Nothing
         }
+      atomically $ writeTVar connectedVar False
       case result of
         Left ex -> finalize ev (Just ex) *> throw ex
         Right _ -> pure ()
 
-  pure (runNodeClient, NodeClient { getChanges })
+    connected = readTVar connectedVar
+
+  pure (runNodeClient, NodeClient { getChanges, connected })
 
 blockHeaderToBlockNo :: BlockHeader -> BlockNo
 blockHeaderToBlockNo (BlockHeader _ _ blockNo) = blockNo
