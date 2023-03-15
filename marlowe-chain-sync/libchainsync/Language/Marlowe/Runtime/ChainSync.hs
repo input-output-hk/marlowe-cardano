@@ -14,6 +14,7 @@ import Cardano.Api (CardanoEra, CardanoMode, Tx, TxValidationErrorInMode)
 import qualified Cardano.Api as Cardano
 import Cardano.Api.Shelley (AcquiringFailure)
 import Control.Concurrent.Component
+import Control.Concurrent.Component.Probes
 import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncCommand, ChainSyncQuery, RuntimeChainSeekServer)
 import Language.Marlowe.Runtime.ChainSync.Database (DatabaseQueries(..))
 import Language.Marlowe.Runtime.ChainSync.JobServer (ChainSyncJobServerDependencies(..), chainSyncJobServer)
@@ -39,6 +40,7 @@ data ChainSyncDependencies r = ChainSyncDependencies
        . CardanoEra era
       -> Tx era
       -> IO (SubmitResult (TxValidationErrorInMode CardanoMode))
+  , httpPort :: Int
   }
 
 chainSync :: Component IO (ChainSyncDependencies r) ()
@@ -47,3 +49,11 @@ chainSync = proc ChainSyncDependencies{..} -> do
   chainSyncServer -< ChainSyncServerDependencies{..}
   chainSyncQueryServer -< ChainSyncQueryServerDependencies{..}
   chainSyncJobServer -< ChainSyncJobServerDependencies{..}
+  probeServer -< ProbeServerDependencies
+    { probes = Probes
+        { startup = pure True
+        , liveness = pure True
+        , readiness = pure True
+        }
+    , port = httpPort
+    }

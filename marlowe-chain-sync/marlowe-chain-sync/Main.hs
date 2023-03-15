@@ -44,7 +44,7 @@ main :: IO ()
 main = run =<< getOptions "0.0.0.0"
 
 run :: Options -> IO ()
-run Options{..} = bracket (Pool.acquire 100 (Just $ 5000000) (fromString databaseUri)) Pool.release $
+run Options{..} = bracket (Pool.acquire 100 (Just 5000000) (fromString databaseUri)) Pool.release $
   runComponent_ proc pool -> do
     eventBackend <- logger -< LoggerDependencies
       { configFilePath = logConfigFile
@@ -73,8 +73,7 @@ run Options{..} = bracket (Pool.acquire 100 (Just $ 5000000) (fromString databas
       }
 
     NodeClient{..} <- nodeClient -< NodeClientDependencies
-      {
-        connectToLocalNode = Cardano.connectToLocalNode localNodeConnectInfo
+      { connectToLocalNode = Cardano.connectToLocalNode localNodeConnectInfo
       , eventBackend = narrowEventBackend (injectSelector NodeService) eventBackend
       }
 
@@ -99,6 +98,7 @@ run Options{..} = bracket (Pool.acquire 100 (Just $ 5000000) (fromString databas
           MaryEra -> MaryEraInCardanoMode
           AlonzoEra -> AlonzoEraInCardanoMode
           BabbageEra -> BabbageEraInCardanoMode
+      , httpPort = fromIntegral httpPort
       }
   where
     throwUsageError (ConnectionUsageError err)                       = error $ show err
