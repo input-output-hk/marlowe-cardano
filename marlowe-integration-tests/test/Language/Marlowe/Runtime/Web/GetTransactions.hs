@@ -164,7 +164,7 @@ multipleTransactionsValidSpec  = focus $ it "returns a list with multiple Tx hea
     _ <- applyCloseTransaction wallet1 expectedContractId1
     expectedContractId2 <- createCloseContract wallet2
     expectedTxId <- applyCloseTransaction wallet2 expectedContractId2
-    Page {..}<- getTransactions expectedContractId2 Nothing
+    Page {..} <- getTransactions expectedContractId2 Nothing
     liftIO $ fmap (\Web.TxHeader{..} -> transactionId) items `shouldBe` [expectedTxId]
 
 
