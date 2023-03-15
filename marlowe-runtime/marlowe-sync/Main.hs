@@ -49,7 +49,7 @@ main :: IO ()
 main = run =<< getOptions
 
 run :: Options -> IO ()
-run Options{..} = bracket (Pool.acquire 100 (Just $ 5000000) (fromString databaseUri)) Pool.release $
+run Options{..} = bracket (Pool.acquire 100 (Just 5000000) (fromString databaseUri)) Pool.release $
   runComponent_ proc pool -> do
     eventBackend <- logger -< LoggerDependencies
       { configFilePath = logConfigFile
@@ -90,6 +90,7 @@ run Options{..} = bracket (Pool.acquire 100 (Just $ 5000000) (fromString databas
       , querySource = SomeConnectionSource
           $ logConnectionSource (narrowEventBackend (injectSelector MarloweQueryServer) eventBackend)
           $ handshakeConnectionSource querySource
+      , httpPort = fromIntegral httpPort
       }
   where
     throwUsageError (ConnectionUsageError err)                       = error $ show err
@@ -104,6 +105,7 @@ data Options = Options
   , queryPort :: PortNumber
   , host :: HostName
   , logConfigFile :: Maybe FilePath
+  , httpPort :: PortNumber
   }
 
 getOptions :: IO Options
@@ -116,6 +118,7 @@ getOptions = execParser $ info (helper <*> parser) infoMod
       <*> queryPort
       <*> hostParser
       <*> logConfigFileParser
+      <*> httpPortParser
 
     databaseUriParser = strOption $ mconcat
       [ long "database-uri"
@@ -161,6 +164,14 @@ getOptions = execParser $ info (helper <*> parser) infoMod
       [ long "log-config-file"
       , metavar "FILE_PATH"
       , help "The logging configuration JSON file."
+      ]
+
+    httpPortParser = option auto $ mconcat
+      [ long "http-port"
+      , metavar "PORT_NUMBER"
+      , help "Port number to serve the http healthcheck API on"
+      , value 8080
+      , showDefault
       ]
 
     infoMod = mconcat
