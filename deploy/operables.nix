@@ -167,7 +167,8 @@ in
         --database-uri  "$DATABASE_URI" \
         --shelley-genesis-config-file "$SHELLEY_GENESIS_CONFIG" \
         --genesis-config-file "$BYRON_GENESIS_CONFIG" \
-        --genesis-config-file-hash "$BYRON_GENESIS_HASH"
+        --genesis-config-file-hash "$BYRON_GENESIS_HASH" \
+        --http-port "${HTTP_PORT}"
     '';
   };
 
@@ -216,7 +217,9 @@ in
         --query-port "$QUERY_PORT" \
         --job-port "$JOB_PORT" \
         --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-        --database-uri  "$DATABASE_URI"
+        --database-uri  "$DATABASE_URI" \
+        --http-port "${HTTP_PORT}"
+
     '';
   };
 
@@ -265,7 +268,9 @@ in
         --database-uri  "$DATABASE_URI" \
         --chain-sync-port "$MARLOWE_CHAIN_SYNC_PORT" \
         --chain-sync-query-port "$MARLOWE_CHAIN_SYNC_QUERY_PORT" \
-        --chain-sync-host "$MARLOWE_CHAIN_SYNC_HOST"
+        --chain-sync-host "$MARLOWE_CHAIN_SYNC_HOST" \
+        --http-port "${HTTP_PORT}"
+
     '';
   };
 
@@ -305,7 +310,9 @@ in
         --host "$HOST" \
         --sync-port "$MARLOWE_SYNC_PORT" \
         --header-sync-port "$MARLOWE_HEADER_SYNC_PORT" \
-        --query-port "$MARLOWE_QUERY_PORT"
+        --query-port "$MARLOWE_QUERY_PORT" \
+        --http-port "${HTTP_PORT}"
+
     '';
   };
 
@@ -335,7 +342,8 @@ in
         --chain-sync-port "$MARLOWE_CHAIN_SYNC_PORT" \
         --chain-sync-query-port "$MARLOWE_CHAIN_SYNC_QUERY_PORT" \
         --chain-sync-command-port "$MARLOWE_CHAIN_SYNC_COMMAND_PORT" \
-        --chain-sync-host "$MARLOWE_CHAIN_SYNC_HOST"
+        --chain-sync-host "$MARLOWE_CHAIN_SYNC_HOST" \
+        --http-port "${HTTP_PORT}"
     '';
   };
 
@@ -371,7 +379,8 @@ in
         --marlowe-header-port "$MARLOWE_HEADER_SYNC_PORT" \
         --marlowe-query-port "$MARLOWE_QUERY_PORT" \
         --tx-host "$TX_HOST" \
-        --tx-command-port "$TX_PORT"
+        --tx-command-port "$TX_PORT" \
+        --http-port "${HTTP_PORT}"
     '';
   };
 
