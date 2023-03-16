@@ -2,7 +2,7 @@
 let
   inherit (inputs) self std nixpkgs bitte-cells;
   inherit (self) packages;
-  inherit (nixpkgs) lib curl;
+  inherit (nixpkgs) lib;
   inherit (nixpkgs.legacyPackages)
     jq
     sqitchPg
@@ -11,6 +11,7 @@ let
     writeShellScriptBin
     socat
     netcat
+    curl
     ;
   inherit (inputs.bitte-cells._utils.packages) srvaddr;
 
