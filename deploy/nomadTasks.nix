@@ -32,7 +32,7 @@ rec {
       {
         CARDANO_NODE_SOCKET_PATH = "/alloc/tmp/node.socket"; # figure out how to pass this from the cardano group
         NODE_CONFIG = "${nodeConfigDir}/config.json";
-        DB_NAME = "\${NOMAD_META_environment}_chainsync";
+        DB_NAME = "\${NOMAD_META_environment}_chainseek";
         MASTER_REPLICA_SRV_DNS = "_infra-database._master.service.us-east-1.consul";
       };
     template = dbTemplate "chainsync";
@@ -63,7 +63,7 @@ rec {
       JOB_PORT = "\${NOMAD_PORT_marlowe_chain_sync_command}";
       CARDANO_NODE_SOCKET_PATH = "/alloc/tmp/node.socket"; # figure out how to pass this from the cardano group
       NODE_CONFIG = "${nodeConfigDir}/config.json"; # To get network magic
-      DB_NAME = "\${NOMAD_META_environment}_chainsync";
+      DB_NAME = "\${NOMAD_META_environment}_chainseek";
       MASTER_REPLICA_SRV_DNS = "_infra-database._master.service.us-east-1.consul";
     };
     template = dbTemplate "chainsync";
@@ -90,7 +90,7 @@ rec {
 
   marlowe-indexer = {
     env = {
-      DB_NAME = "\${NOMAD_META_environment}_marlowe";
+      DB_NAME = "\${NOMAD_META_environment}_chainseek";
       MASTER_REPLICA_SRV_DNS = "_infra-database._master.service.us-east-1.consul";
       MARLOWE_CHAIN_SYNC_HOST = "localhost";
       MARLOWE_CHAIN_SYNC_PORT = "\${NOMAD_PORT_marlowe_chain_sync}";
@@ -113,7 +113,7 @@ rec {
 
   marlowe-sync = {
     env = {
-      DB_NAME = "\${NOMAD_META_environment}_marlowe";
+      DB_NAME = "\${NOMAD_META_environment}_chainseek";
       MASTER_REPLICA_SRV_DNS = "_infra-database._master.service.us-east-1.consul";
       HOST = "0.0.0.0";
       MARLOWE_SYNC_PORT = "\${NOMAD_PORT_marlowe_sync}";
