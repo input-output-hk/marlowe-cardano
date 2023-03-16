@@ -301,7 +301,7 @@ in
         --chain-sync-port "$MARLOWE_CHAIN_SYNC_PORT" \
         --chain-sync-query-port "$MARLOWE_CHAIN_SYNC_QUERY_PORT" \
         --chain-sync-command-port "$MARLOWE_CHAIN_SYNC_COMMAND_PORT" \
-        --chain-sync-host "$MARLOWE_CHAIN_SYNC_HOST" \
+        --chain-sync-host "$MARLOWE_CHAIN_SYNC_HOST"
     '';
   };
 

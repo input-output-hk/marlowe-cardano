@@ -54,6 +54,7 @@ rec {
       policies = [ "marlowe-runtime" ];
     };
   };
+
   marlowe-chain-sync = {
     env = {
       HOST = "0.0.0.0";
@@ -67,8 +68,8 @@ rec {
     };
     template = dbTemplate "chainsync";
     config.image = ociNamer oci-images.marlowe-chain-sync;
-    config.ports = [ "marlowe-chain-sync" "marlowe_chain_sync_query" "marlowe_chain_sync_command" ];
-    service.port = "marlowe-chain-sync";
+    config.ports = [ "marlowe_chain_sync" "marlowe_chain_sync_query" "marlowe_chain_sync_command" ];
+    service.port = "marlowe_chain_sync";
     user = "0:0";
     driver = "docker";
     kill_signal = "SIGINT";
@@ -121,8 +122,8 @@ rec {
     };
     template = dbTemplate "marlowe";
     config.image = ociNamer oci-images.marlowe-sync;
-    config.ports = [ "marlowe-sync" "marlowe-header-sync" "marlowe-query" ];
-    service.port = "marlowe-sync";
+    config.ports = [ "marlowe_sync" "marlowe_header_sync" "marlowe_query" ];
+    service.port = "marlowe_sync";
     user = "0:0";
     driver = "docker";
     kill_signal = "SIGINT";
@@ -148,6 +149,28 @@ rec {
     config.image = ociNamer oci-images.marlowe-tx;
     config.ports = [ "tx" ];
     service.port = "tx";
+    user = "0:0";
+    driver = "docker";
+    kill_signal = "SIGINT";
+    kill_timeout = "30s";
+    resources.cpu = 2000;
+    resources.memory = 4096;
+  };
+
+  marlowe-proxy = {
+    env = {
+      HOST = "0.0.0.0";
+      PORT = "\${NOMAD_PORT_proxy}";
+      TX_HOST = "localhost";
+      TX_PORT = "\${NOMAD_PORT_tx}";
+      SYNC_HOST = "localhost";
+      MARLOWE_SYNC_PORT = "\${NOMAD_PORT_marlowe_sync}";
+      MARLOWE_HEADER_SYNC_PORT = "\${NOMAD_PORT_marlowe_header_sync}";
+      MARLOWE_QUERY_PORT = "\${NOMAD_PORT_marlowe_query}";
+    };
+    config.image = ociNamer oci-images.marlowe-proxy;
+    config.ports = [ "proxy" ];
+    service.port = "proxy";
     user = "0:0";
     driver = "docker";
     kill_signal = "SIGINT";
