@@ -96,7 +96,7 @@ let
       text = ''
         [ -z "''${HTTP_PORT:-}" ] && echo "HTTP_PORT env var must be set -- aborting" && exit 1
 
-        curl -f http://localhost:$HTTP_PORT/live
+        curl -f "http://localhost:$HTTP_PORT/live"
       '';
     };
     readinessProbe = std.lib.ops.writeScript {
@@ -105,7 +105,7 @@ let
       text = ''
         [ -z "''${HTTP_PORT:-}" ] && echo "HTTP_PORT env var must be set -- aborting" && exit 1
 
-        curl -f http://localhost:$HTTP_PORT/ready
+        curl -f "http://localhost:$HTTP_PORT/ready"
       '';
     };
   };
@@ -168,7 +168,7 @@ in
         --shelley-genesis-config-file "$SHELLEY_GENESIS_CONFIG" \
         --genesis-config-file "$BYRON_GENESIS_CONFIG" \
         --genesis-config-file-hash "$BYRON_GENESIS_HASH" \
-        --http-port "${HTTP_PORT}"
+        --http-port "$HTTP_PORT"
     '';
   };
 
@@ -218,7 +218,7 @@ in
         --job-port "$JOB_PORT" \
         --socket-path "$CARDANO_NODE_SOCKET_PATH" \
         --database-uri  "$DATABASE_URI" \
-        --http-port "${HTTP_PORT}"
+        --http-port "$HTTP_PORT"
 
     '';
   };
@@ -269,7 +269,7 @@ in
         --chain-sync-port "$MARLOWE_CHAIN_SYNC_PORT" \
         --chain-sync-query-port "$MARLOWE_CHAIN_SYNC_QUERY_PORT" \
         --chain-sync-host "$MARLOWE_CHAIN_SYNC_HOST" \
-        --http-port "${HTTP_PORT}"
+        --http-port "$HTTP_PORT"
 
     '';
   };
@@ -311,7 +311,7 @@ in
         --sync-port "$MARLOWE_SYNC_PORT" \
         --header-sync-port "$MARLOWE_HEADER_SYNC_PORT" \
         --query-port "$MARLOWE_QUERY_PORT" \
-        --http-port "${HTTP_PORT}"
+        --http-port "$HTTP_PORT"
 
     '';
   };
@@ -343,7 +343,7 @@ in
         --chain-sync-query-port "$MARLOWE_CHAIN_SYNC_QUERY_PORT" \
         --chain-sync-command-port "$MARLOWE_CHAIN_SYNC_COMMAND_PORT" \
         --chain-sync-host "$MARLOWE_CHAIN_SYNC_HOST" \
-        --http-port "${HTTP_PORT}"
+        --http-port "$HTTP_PORT"
     '';
   };
 
@@ -380,7 +380,7 @@ in
         --marlowe-query-port "$MARLOWE_QUERY_PORT" \
         --tx-host "$TX_HOST" \
         --tx-command-port "$TX_PORT" \
-        --http-port "${HTTP_PORT}"
+        --http-port "$HTTP_PORT"
     '';
   };
 
@@ -412,7 +412,7 @@ in
       text = ''
         [ -z "''${PORT:-}" ] && echo "PORT env var must be set -- aborting" && exit 1
 
-        curl -f http://localhost:$PORT/healthcheck
+        curl -f "http://localhost:$PORT/healthcheck"
       '';
     };
     readinessProbe = std.lib.ops.writeScript {
@@ -421,7 +421,7 @@ in
       text = ''
         [ -z "''${PORT:-}" ] && echo "PORT env var must be set -- aborting" && exit 1
 
-        curl -f http://localhost:$PORT/healthcheck
+        curl -f "http://localhost:$PORT/healthcheck"
       '';
     };
   };
