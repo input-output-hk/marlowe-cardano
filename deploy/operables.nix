@@ -96,7 +96,7 @@ let
         curl -f http://localhost:8080/live
       '';
     };
-    livenessProbe = std.lib.ops.writeScript {
+    readinessProbe = std.lib.ops.writeScript {
       name = "readiness-probe";
       runtimeInputs = [ curl ];
       text = ''
