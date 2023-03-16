@@ -34,9 +34,11 @@ rec {
         NODE_CONFIG = "${nodeConfigDir}/config.json";
         DB_NAME = "\${NOMAD_META_environment}_chainsync";
         MASTER_REPLICA_SRV_DNS = "_infra-database._master.service.us-east-1.consul";
+        HTTP_PORT = "\${NOMAD_PORT_chain_indexer_http}";
       };
     template = dbTemplate "chainsync";
     config.image = ociNamer oci-images.chain-indexer;
+    config.ports = [ "chain_indexer_http" ];
     user = "0:0";
     driver = "docker";
     kill_signal = "SIGINT";
@@ -65,10 +67,11 @@ rec {
       NODE_CONFIG = "${nodeConfigDir}/config.json"; # To get network magic
       DB_NAME = "\${NOMAD_META_environment}_chainsync";
       MASTER_REPLICA_SRV_DNS = "_infra-database._master.service.us-east-1.consul";
+      HTTP_PORT = "\${NOMAD_PORT_chain_sync_http}";
     };
     template = dbTemplate "chainsync";
     config.image = ociNamer oci-images.marlowe-chain-sync;
-    config.ports = [ "marlowe_chain_sync" "marlowe_chain_sync_query" "marlowe_chain_sync_command" ];
+    config.ports = [ "marlowe_chain_sync" "marlowe_chain_sync_query" "marlowe_chain_sync_command" "chain_sync_http" ];
     service.port = "marlowe_chain_sync";
     user = "0:0";
     driver = "docker";
@@ -95,9 +98,11 @@ rec {
       MARLOWE_CHAIN_SYNC_HOST = "localhost";
       MARLOWE_CHAIN_SYNC_PORT = "\${NOMAD_PORT_marlowe_chain_sync}";
       MARLOWE_CHAIN_SYNC_QUERY_PORT = "\${NOMAD_PORT_marlowe_chain_sync_query}";
+      HTTP_PORT = "\${NOMAD_PORT_indexer_http}";
     };
     template = dbTemplate "marlowe";
     config.image = ociNamer oci-images.marlowe-indexer;
+    config.ports = [ "indexer_http" ];
     user = "0:0";
     driver = "docker";
     kill_signal = "SIGINT";
@@ -119,10 +124,11 @@ rec {
       MARLOWE_SYNC_PORT = "\${NOMAD_PORT_marlowe_sync}";
       MARLOWE_HEADER_SYNC_PORT = "\${NOMAD_PORT_marlowe_header_sync}";
       MARLOWE_QUERY_PORT = "\${NOMAD_PORT_marlowe_query}";
+      HTTP_PORT = "\${NOMAD_PORT_sync_http}";
     };
     template = dbTemplate "marlowe";
     config.image = ociNamer oci-images.marlowe-sync;
-    config.ports = [ "marlowe_sync" "marlowe_header_sync" "marlowe_query" ];
+    config.ports = [ "marlowe_sync" "marlowe_header_sync" "marlowe_query" "sync_http" ];
     service.port = "marlowe_sync";
     user = "0:0";
     driver = "docker";
@@ -145,9 +151,10 @@ rec {
       MARLOWE_CHAIN_SYNC_PORT = "\${NOMAD_PORT_marlowe_chain_sync}";
       MARLOWE_CHAIN_SYNC_QUERY_PORT = "\${NOMAD_PORT_marlowe_chain_sync_query}";
       MARLOWE_CHAIN_SYNC_COMMAND_PORT = "\${NOMAD_PORT_marlowe_chain_sync_command}";
+      HTTP_PORT = "\${NOMAD_PORT_tx_http}";
     };
     config.image = ociNamer oci-images.marlowe-tx;
-    config.ports = [ "tx" ];
+    config.ports = [ "tx", "tx_http" ];
     service.port = "tx";
     user = "0:0";
     driver = "docker";
@@ -167,9 +174,10 @@ rec {
       MARLOWE_SYNC_PORT = "\${NOMAD_PORT_marlowe_sync}";
       MARLOWE_HEADER_SYNC_PORT = "\${NOMAD_PORT_marlowe_header_sync}";
       MARLOWE_QUERY_PORT = "\${NOMAD_PORT_marlowe_query}";
+      HTTP_PORT = "\${NOMAD_PORT_proxy_http}";
     };
     config.image = ociNamer oci-images.marlowe-proxy;
-    config.ports = [ "proxy" ];
+    config.ports = [ "proxy", "proxy_http" ];
     service.port = "proxy";
     user = "0:0";
     driver = "docker";

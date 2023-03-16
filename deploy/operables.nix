@@ -93,14 +93,18 @@ let
       name = "liveness-probe";
       runtimeInputs = [ curl ];
       text = ''
-        curl -f http://localhost:8080/live
+        [ -z "''${HTTP_PORT:-}" ] && echo "HTTP_PORT env var must be set -- aborting" && exit 1
+
+        curl -f http://localhost:$HTTP_PORT/live
       '';
     };
     readinessProbe = std.lib.ops.writeScript {
       name = "readiness-probe";
       runtimeInputs = [ curl ];
       text = ''
-        curl -f http://localhost:8080/ready
+        [ -z "''${HTTP_PORT:-}" ] && echo "HTTP_PORT env var must be set -- aborting" && exit 1
+
+        curl -f http://localhost:$HTTP_PORT/ready
       '';
     };
   };
@@ -119,6 +123,7 @@ in
       # NODE_CONFIG: path to the cardano node config file
       # CARDANO_NODE_SOCKET_PATH: path to the node socket
       # DB_NAME, DB_USER, DB_PASS,
+      # HTTP_PORT: port number for the HTTP healthcheck server
       # Either DB_HOST or MASTER_REPLICA_SRV_DNS (for auto-discovery of DB host with srvaddr)
 
       [ -z "''${NODE_CONFIG:-}" ] && echo "NODE_CONFIG env var must be set -- aborting" && exit 1
@@ -126,6 +131,7 @@ in
       [ -z "''${DB_NAME:-}" ] && echo "DB_NAME env var must be set -- aborting" && exit 1
       [ -z "''${DB_USER:-}" ] && echo "DB_USER env var must be set -- aborting" && exit 1
       [ -z "''${DB_PASS:-}" ] && echo "DB_PASS env var must be set -- aborting" && exit 1
+      [ -z "''${HTTP_PORT:-}" ] && echo "HTTP_PORT env var must be set -- aborting" && exit 1
 
       if [ -n "''${MASTER_REPLICA_SRV_DNS:-}" ]; then
         # Find DB_HOST when running on bitte cluster with patroni
@@ -175,6 +181,7 @@ in
       # CARDANO_NODE_SOCKET_PATH: path to the node socket
       # DB_NAME, DB_USER, DB_PASS,
       # Either DB_HOST or MASTER_REPLICA_SRV_DNS (for auto-discovery of DB host with srvaddr)
+      # HTTP_PORT: port number for the HTTP healthcheck server
 
       [ -z "''${HOST:-}" ] && echo "HOST env var must be set -- aborting" && exit 1
       [ -z "''${PORT:-}" ] && echo "PORT env var must be set -- aborting" && exit 1
@@ -184,6 +191,7 @@ in
       [ -z "''${DB_NAME:-}" ] && echo "DB_NAME env var must be set -- aborting" && exit 1
       [ -z "''${DB_USER:-}" ] && echo "DB_USER env var must be set -- aborting" && exit 1
       [ -z "''${DB_PASS:-}" ] && echo "DB_PASS env var must be set -- aborting" && exit 1
+      [ -z "''${HTTP_PORT:-}" ] && echo "HTTP_PORT env var must be set -- aborting" && exit 1
 
       if [ -n "''${MASTER_REPLICA_SRV_DNS:-}" ]; then
         # Find DB_HOST when running on bitte cluster with patroni
@@ -221,6 +229,7 @@ in
       # MARLOWE_CHAIN_SYNC_HOST, MARLOWE_CHAIN_SYNC_PORT, MARLOWE_CHAIN_SYNC_QUERY_PORT: connection info to marlowe-chain-sync
       # DB_NAME, DB_USER, DB_PASS,
       # Either DB_HOST or MASTER_REPLICA_SRV_DNS (for auto-discovery of DB host with srvaddr)
+      # HTTP_PORT: port number for the HTTP healthcheck server
 
       [ -z "''${DB_NAME:-}" ] && echo "DB_NAME env var must be set -- aborting" && exit 1
       [ -z "''${DB_USER:-}" ] && echo "DB_USER env var must be set -- aborting" && exit 1
@@ -228,6 +237,7 @@ in
       [ -z "''${MARLOWE_CHAIN_SYNC_HOST:-}" ] && echo "MARLOWE_CHAIN_SYNC_HOST env var must be set -- aborting" && exit 1
       [ -z "''${MARLOWE_CHAIN_SYNC_PORT:-}" ] && echo "MARLOWE_CHAIN_SYNC_PORT env var must be set -- aborting" && exit 1
       [ -z "''${MARLOWE_CHAIN_SYNC_QUERY_PORT:-}" ] && echo "MARLOWE_CHAIN_SYNC_QUERY_PORT env var must be set -- aborting" && exit 1
+      [ -z "''${HTTP_PORT:-}" ] && echo "HTTP_PORT env var must be set -- aborting" && exit 1
 
       if [ -n "''${MASTER_REPLICA_SRV_DNS:-}" ]; then
         # Find DB_HOST when running on bitte cluster with patroni
@@ -268,6 +278,7 @@ in
       # HOST, MARLOWE_SYNC_PORT, MARLOWE_HEADER_SYNC_PORT, MARLOWE_QUERY_PORT: network binding
       # DB_NAME, DB_USER, DB_PASS,
       # Either DB_HOST or MASTER_REPLICA_SRV_DNS (for auto-discovery of DB host with srvaddr)
+      # HTTP_PORT: port number for the HTTP healthcheck server
 
       [ -z "''${HOST:-}" ] && echo "HOST env var must be set -- aborting" && exit 1
       [ -z "''${MARLOWE_SYNC_PORT:-}" ] && echo "MARLOWE_SYNC_PORT env var must be set -- aborting" && exit 1
@@ -276,6 +287,7 @@ in
       [ -z "''${DB_NAME:-}" ] && echo "DB_NAME env var must be set -- aborting" && exit 1
       [ -z "''${DB_USER:-}" ] && echo "DB_USER env var must be set -- aborting" && exit 1
       [ -z "''${DB_PASS:-}" ] && echo "DB_PASS env var must be set -- aborting" && exit 1
+      [ -z "''${HTTP_PORT:-}" ] && echo "HTTP_PORT env var must be set -- aborting" && exit 1
 
       if [ -n "''${MASTER_REPLICA_SRV_DNS:-}" ]; then
         # Find DB_HOST when running on bitte cluster with patroni
@@ -304,6 +316,7 @@ in
       #################
       # HOST, PORT: network binding
       # MARLOWE_CHAIN_SYNC_HOST, MARLOWE_CHAIN_SYNC_PORT, MARLOWE_CHAIN_SYNC_QUERY_PORT, MARLOWE_CHAIN_SYNC_COMMAND_PORT: connection info to marlowe-chain-sync
+      # HTTP_PORT: port number for the HTTP healthcheck server
 
       [ -z "''${HOST:-}" ] && echo "HOST env var must be set -- aborting" && exit 1
       [ -z "''${PORT:-}" ] && echo "PORT env var must be set -- aborting" && exit 1
@@ -311,6 +324,7 @@ in
       [ -z "''${MARLOWE_CHAIN_SYNC_PORT:-}" ] && echo "MARLOWE_CHAIN_SYNC_PORT env var must be set -- aborting" && exit 1
       [ -z "''${MARLOWE_CHAIN_SYNC_COMMAND_PORT:-}" ] && echo "MARLOWE_CHAIN_SYNC_COMMAND_PORT env var must be set -- aborting" && exit 1
       [ -z "''${MARLOWE_CHAIN_SYNC_QUERY_PORT:-}" ] && echo "MARLOWE_CHAIN_SYNC_QUERY_PORT env var must be set -- aborting" && exit 1
+      [ -z "''${HTTP_PORT:-}" ] && echo "HTTP_PORT env var must be set -- aborting" && exit 1
 
       ${wait-for-tcp}/bin/wait-for-tcp "$MARLOWE_CHAIN_SYNC_HOST" "$MARLOWE_CHAIN_SYNC_PORT"
 
@@ -333,6 +347,7 @@ in
       # HOST, PORT: network binding
       # TX_HOST, TX_PORT: connection info to marlowe-tx
       # SYNC_HOST, MARLOWE_SYNC_PORT, MARLOWE_HEADER_SYNC_PORT, MARLOWE_QUERY_PORT: connection info to marlowe-sync
+      # HTTP_PORT: port number for the HTTP healthcheck server
 
       [ -z "''${HOST:-}" ] && echo "HOST env var must be set -- aborting" && exit 1
       [ -z "''${PORT:-}" ] && echo "PORT env var must be set -- aborting" && exit 1
@@ -342,6 +357,7 @@ in
       [ -z "''${MARLOWE_SYNC_PORT:-}" ] && echo "MARLOWE_SYNC_PORT env var must be set -- aborting" && exit 1
       [ -z "''${MARLOWE_HEADER_SYNC_PORT:-}" ] && echo "MARLOWE_HEADER_SYNC_PORT env var must be set -- aborting" && exit 1
       [ -z "''${MARLOWE_QUERY_PORT:-}" ] && echo "MARLOWE_QUERY_PORT env var must be set -- aborting" && exit 1
+      [ -z "''${HTTP_PORT:-}" ] && echo "HTTP_PORT env var must be set -- aborting" && exit 1
 
       ${wait-for-tcp}/bin/wait-for-tcp "$TX_HOST" "$TX_PORT"
       ${wait-for-tcp}/bin/wait-for-tcp "$SYNC_HOST" "$MARLOWE_QUERY_PORT"
@@ -358,7 +374,7 @@ in
     '';
   };
 
-  marlowe-web-server = mkOperableWithProbes {
+  marlowe-web-server = mkOperable {
     package = packages.marlowe-web-server;
     runtimeScript = ''
       #################
@@ -380,5 +396,23 @@ in
         --enable-open-api \
         --access-control-allow-origin-all
     '';
+    livenessProbe = std.lib.ops.writeScript {
+      name = "liveness-probe";
+      runtimeInputs = [ curl ];
+      text = ''
+        [ -z "''${PORT:-}" ] && echo "PORT env var must be set -- aborting" && exit 1
+
+        curl -f http://localhost:$PORT/healthcheck
+      '';
+    };
+    readinessProbe = std.lib.ops.writeScript {
+      name = "readiness-probe";
+      runtimeInputs = [ curl ];
+      text = ''
+        [ -z "''${PORT:-}" ] && echo "PORT env var must be set -- aborting" && exit 1
+
+        curl -f http://localhost:$PORT/healthcheck
+      '';
+    };
   };
 }
