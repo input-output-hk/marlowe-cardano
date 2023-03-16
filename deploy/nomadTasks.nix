@@ -154,7 +154,7 @@ rec {
       HTTP_PORT = "\${NOMAD_PORT_tx_http}";
     };
     config.image = ociNamer oci-images.marlowe-tx;
-    config.ports = [ "tx", "tx_http" ];
+    config.ports = [ "tx" "tx_http" ];
     service.port = "tx";
     user = "0:0";
     driver = "docker";
@@ -177,7 +177,7 @@ rec {
       HTTP_PORT = "\${NOMAD_PORT_proxy_http}";
     };
     config.image = ociNamer oci-images.marlowe-proxy;
-    config.ports = [ "proxy", "proxy_http" ];
+    config.ports = [ "proxy" "proxy_http" ];
     service.port = "proxy";
     user = "0:0";
     driver = "docker";
