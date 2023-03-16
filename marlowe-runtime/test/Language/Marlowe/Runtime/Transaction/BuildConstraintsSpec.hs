@@ -601,7 +601,7 @@ buildApplyInputsConstraintsSpec =
             MarloweV1
             marloweOutput
             (Chain.SlotNo 1_000_000)
-            emptyMarloweTransactionMetadata
+            metadata
             Nothing
             Nothing
             mempty

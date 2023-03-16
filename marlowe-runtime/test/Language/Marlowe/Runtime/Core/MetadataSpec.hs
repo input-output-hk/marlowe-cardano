@@ -8,7 +8,7 @@ import Test.Hspec.QuickCheck
 import Test.QuickCheck (counterexample, (===))
 
 spec :: Spec
-spec = focus do
+spec = do
   prop "prop: roundtrip encoding" \metadata ->
     let
       encoded = encodeMarloweTransactionMetadata metadata

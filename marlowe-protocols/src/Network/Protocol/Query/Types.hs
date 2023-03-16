@@ -1,6 +1,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE EmptyCase #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
@@ -14,16 +15,19 @@
 module Network.Protocol.Query.Types
   where
 
+import Control.Monad (join)
 import Data.Aeson (Value(..), object, (.=))
 import Data.Binary (Get, Put, getWord8, putWord8)
 import Data.Data (type (:~:)(Refl))
 import Data.Functor ((<&>))
+import Data.List.NonEmpty (NonEmpty((:|)))
 import Data.Maybe (catMaybes)
 import Data.Proxy (Proxy(..))
 import qualified Data.Text as T
 import GHC.Show (showSpace)
 import Network.Protocol.Codec (BinaryMessage(..))
-import Network.Protocol.Codec.Spec (ArbitraryMessage(..), MessageEq(..), ShowProtocol(..))
+import Network.Protocol.Codec.Spec
+  (ArbitraryMessage(..), MessageEq(..), MessageVariations(..), ShowProtocol(..), SomePeerHasAgency(..))
 import Network.Protocol.Handshake.Types (HasSignature(..))
 import Network.TypedProtocol
 import Network.TypedProtocol.Codec (AnyMessageAndAgency(..))
@@ -228,6 +232,13 @@ class IsQuery query => ArbitraryQuery query where
   shrinkResults :: Tag query delimiter err results -> results -> [results]
   shrinkDelimiter :: Tag query delimiter err results -> delimiter -> [delimiter]
 
+class IsQuery query => QueryVariations query where
+  tags :: NonEmpty (SomeTag query)
+  queryVariations :: Tag query delimiter err results -> NonEmpty (query delimiter err results)
+  delimiterVariations :: Tag query delimiter err results -> [delimiter]
+  errVariations :: Tag query delimiter err results -> [err]
+  resultsVariations :: Tag query delimiter err results -> NonEmpty results
+
 instance ArbitraryQuery query => ArbitraryMessage (Query query) where
   arbitraryMessage = do
     SomeTag tag <- arbitraryTag
@@ -258,6 +269,34 @@ instance ArbitraryQuery query => ArbitraryMessage (Query query) where
             : [ MsgNextPage results (Just delimiter') | delimiter' <- case agency of ServerAgency (TokNext _ tag) -> shrinkDelimiter tag delimiter ]
     MsgRequestNext delimiter -> MsgRequestNext <$> case agency of ClientAgency (TokPage tag) -> shrinkDelimiter tag delimiter
     _ -> []
+
+instance QueryVariations query => MessageVariations (Query query) where
+  agencyVariations = join
+    [ pure $ SomePeerHasAgency $ ClientAgency TokInit
+    , do
+        SomeTag tag <- tags
+        pure $ SomePeerHasAgency $ ClientAgency $ TokPage tag
+    , do
+        SomeTag tag <- tags
+        [
+            SomePeerHasAgency $ ServerAgency $ TokNext TokCanReject tag
+          , SomePeerHasAgency $ ServerAgency $ TokNext TokMustReply tag
+          ]
+    ]
+  messageVariations = \case
+    ClientAgency TokInit -> do
+      SomeTag tag <- tags
+      SomeMessage . MsgRequest <$> queryVariations tag
+    ClientAgency (TokPage tag) ->
+      SomeMessage MsgDone :| (SomeMessage . MsgRequestNext <$> delimiterVariations tag)
+    ServerAgency (TokNext nextKind tag) -> case resultsVariations tag of
+      result :| results -> SomeMessage (MsgNextPage result Nothing) :| join
+        [ SomeMessage . MsgNextPage result . Just <$> delimiterVariations tag
+        , SomeMessage . flip MsgNextPage Nothing <$> results
+        , case nextKind of
+            TokCanReject -> SomeMessage . MsgReject <$> errVariations tag
+            TokMustReply -> []
+        ]
 
 class IsQuery query => QueryEq query where
   queryEq :: query delimiter err result -> query delimiter err result -> Bool

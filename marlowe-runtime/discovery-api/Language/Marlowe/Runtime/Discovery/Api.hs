@@ -9,6 +9,7 @@ import Data.Binary (Binary)
 import GHC.Generics (Generic)
 import Language.Marlowe.Runtime.ChainSync.Api (Address, BlockHeader, PolicyId, ScriptHash)
 import Language.Marlowe.Runtime.Core.Api (ContractId, MarloweTransactionMetadata, SomeMarloweVersion)
+import Network.Protocol.Codec.Spec (Variations)
 
 -- | A Marlowe contract header is a compact structure that contains all the
 -- significant metadata related to a Marlowe Contract on chain.
@@ -32,3 +33,4 @@ data ContractHeader = ContractHeader
   } deriving (Show, Eq, Ord, Generic, Binary)
 
 instance ToJSON ContractHeader
+instance Variations ContractHeader

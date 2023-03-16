@@ -75,7 +75,6 @@ import Language.Marlowe.Runtime.ChainSync.Api
   )
 import Language.Marlowe.Runtime.Core.Api
 import Language.Marlowe.Runtime.History.Api (ExtractCreationError, ExtractMarloweTransactionError)
-import Network.Protocol.ChainSeek.Types (SchemaVersion)
 import Network.Protocol.Handshake.Types (HasSignature(..))
 import Network.Protocol.Job.Types
 
@@ -583,7 +582,6 @@ data LoadMarloweContextError
   | PayoutScriptNotPublished ScriptHash
   | ExtractCreationError ExtractCreationError
   | ExtractMarloweTransactionError ExtractMarloweTransactionError
-  | HandshakeFailed [SchemaVersion]
   deriving (Eq, Show, Ord, Generic)
   deriving anyclass (Binary, ToJSON)
 

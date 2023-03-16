@@ -6,6 +6,11 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE ViewPatterns #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE PolyKinds #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 module Language.Marlowe.Runtime.ChainSync.Api
   where
@@ -32,8 +37,9 @@ import Cardano.Api.Shelley (ProtocolParameters)
 import qualified Cardano.Api.Shelley as Cardano
 import qualified Cardano.Ledger.BaseTypes as Base
 import Cardano.Ledger.Credential (ptrCertIx, ptrSlotNo, ptrTxIx)
+import Cardano.Ledger.Slot (EpochSize)
 import Codec.Serialise (deserialiseOrFail, serialise)
-import Control.Monad (guard, (<=<), (>=>))
+import Control.Monad (guard, join, (<=<), (>=>))
 import Data.Aeson
   ( FromJSON(..)
   , FromJSONKey(..)
@@ -56,6 +62,7 @@ import Data.ByteString.Base16 (decodeBase16, encodeBase16)
 import qualified Data.ByteString.Char8 as BS
 import Data.Function (on)
 import Data.Functor (($>))
+import qualified Data.List.NonEmpty as NE
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Maybe (fromJust)
@@ -67,7 +74,6 @@ import Data.String (IsString(..))
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Text.Encoding (encodeUtf8)
-import Data.These (These(..))
 import Data.Time (UTCTime(..), diffTimeToPicoseconds, picosecondsToDiffTime)
 import Data.Time.Calendar.OrdinalDate (fromOrdinalDateValid, toOrdinalDate)
 import Data.Traversable (for)
@@ -80,18 +86,23 @@ import GHC.Natural (Natural)
 import Network.Protocol.ChainSeek.Client
 import Network.Protocol.ChainSeek.Server
 import Network.Protocol.ChainSeek.Types
+import qualified Network.Protocol.ChainSeek.Types as ChainSeek
+import Network.Protocol.Codec.Spec
 import Network.Protocol.Handshake.Types (HasSignature(..))
 import Network.Protocol.Job.Types (CommandToJSON)
 import qualified Network.Protocol.Job.Types as Job
 import qualified Network.Protocol.Query.Types as Query
-import Ouroboros.Consensus.BlockchainTime (SystemStart(..))
+import Ouroboros.Consensus.BlockchainTime (RelativeTime, SlotLength, SystemStart(..))
+import Ouroboros.Consensus.HardFork.History
+  (Bound, EraEnd, EraParams, EraSummary, Interpreter, SafeZone, Summary(Summary), mkInterpreter)
+import qualified Ouroboros.Consensus.Util.Counting as Counting
 import qualified Plutus.V1.Ledger.Api as Plutus
 import Text.Read (readMaybe)
 
 -- | Extends a type with a "Genesis" member.
 data WithGenesis a = Genesis | At a
   deriving stock (Show, Eq, Ord, Functor, Generic)
-  deriving anyclass (Binary, ToJSON)
+  deriving anyclass (Binary, ToJSON, Variations)
 
 instance HasSignature a => HasSignature (WithGenesis a) where
   signature _ = T.intercalate " " ["WithGenesis", signature $ Proxy @a]
@@ -107,7 +118,7 @@ data BlockHeader = BlockHeader
   , blockNo    :: BlockNo         -- ^ The ordinal number of this block.
   }
   deriving stock (Show, Eq, Ord, Generic)
-  deriving anyclass (Binary, ToJSON)
+  deriving anyclass (Binary, ToJSON, Variations)
 
 instance HasSignature BlockHeader where
   signature _ = "BlockHeader"
@@ -125,7 +136,7 @@ data Transaction = Transaction
   , mintedTokens  :: Tokens                 -- ^ Tokens minted by the transaction.
   }
   deriving stock (Show, Eq, Ord, Generic)
-  deriving anyclass (Binary, ToJSON)
+  deriving anyclass (Binary, ToJSON, Variations)
 
 -- | A validity range for a transaction
 data ValidityRange
@@ -134,7 +145,7 @@ data ValidityRange
   | MaxBound SlotNo           -- ^ The transaction is only valid before a specific slot.
   | MinMaxBound SlotNo SlotNo -- ^ The transaction is only valid between two slots.
   deriving stock (Show, Eq, Ord, Generic)
-  deriving anyclass (Binary, ToJSON)
+  deriving anyclass (Binary, ToJSON, Variations)
 
 
 -- Encodes `transaction_metadatum`:
@@ -147,6 +158,18 @@ data Metadata
   | MetadataText Text
   deriving stock (Show, Eq, Ord, Generic)
   deriving anyclass (Binary)
+
+-- Using the generic implementation produces an infinite list.
+instance Variations Metadata where
+  variations = join $ NE.fromList
+    [ pure $ MetadataMap []
+    , pure $ MetadataMap [NE.head variations]
+    , pure $ MetadataList []
+    , pure $ MetadataList [NE.head variations]
+    , MetadataNumber <$> variations
+    , MetadataBytes <$> variations
+    , MetadataText <$> variations
+    ]
 
 instance ToJSON Metadata where
   toJSON = metadataValueToJsonNoSchema . toCardanoMetadata
@@ -186,7 +209,7 @@ fromJSONEncodedMetadata = \case
 -- https://github.com/input-output-hk/cardano-ledger/blob/node/1.35.3/eras/shelley/test-suite/cddl-files/shelley.cddl#L212
 newtype TransactionMetadata = TransactionMetadata { unTransactionMetadata :: Map Word64 Metadata }
   deriving (Show, Eq, Ord, Generic)
-  deriving newtype (Semigroup, Monoid, Binary, ToJSON)
+  deriving newtype (Semigroup, Monoid, Binary, ToJSON, Variations)
 
 fromJSONEncodedTransactionMetadata :: A.Value -> Maybe TransactionMetadata
 fromJSONEncodedTransactionMetadata = \case
@@ -212,7 +235,7 @@ data TransactionInput = TransactionInput
   , redeemer   :: Maybe Redeemer -- ^ The script redeemer datum for this input (if one was provided).
   }
   deriving stock (Show, Eq, Ord, Generic)
-  deriving anyclass (Binary, ToJSON)
+  deriving anyclass (Binary, ToJSON, Variations)
 
 -- | An output of a transaction.
 data TransactionOutput = TransactionOutput
@@ -222,12 +245,12 @@ data TransactionOutput = TransactionOutput
   , datum     :: Maybe Datum     -- ^ The script datum associated with this output.
   }
   deriving stock (Show, Eq, Ord, Generic)
-  deriving anyclass (Binary, ToJSON)
+  deriving anyclass (Binary, ToJSON, Variations)
 
 -- | A script datum that is used to spend the output of a script tx.
 newtype Redeemer = Redeemer { unRedeemer :: Datum }
   deriving stock (Show, Eq, Ord, Generic)
-  deriving newtype (Binary, ToJSON)
+  deriving newtype (Binary, ToJSON, Variations)
 
 -- | A datum as a sum-of-products.
 data Datum
@@ -238,6 +261,19 @@ data Datum
   | B ByteString
   deriving stock (Show, Eq, Ord, Generic)
   deriving anyclass (Binary)
+
+-- Using the generic implementation produces an infinite list.
+instance Variations Datum where
+  variations = join $ NE.fromList
+    [ pure $ Constr 1 []
+    , pure $ Constr 1 [NE.head variations]
+    , pure $ Map []
+    , pure $ Map [NE.head variations]
+    , pure $ List []
+    , pure $ List [NE.head variations]
+    , I <$> variations
+    , B <$> variations
+    ]
 
 instance ToJSON Datum where
   toJSON = \case
@@ -291,7 +327,7 @@ data Assets = Assets
   , tokens :: Tokens   -- ^ Additional tokens sent by the tx output.
   }
   deriving stock (Show, Eq, Generic)
-  deriving anyclass (Binary, ToJSON)
+  deriving anyclass (Binary, ToJSON, Variations)
 
 -- | Let's make the instance explicit so we can assume "some" semantics.
 instance Ord Assets where
@@ -309,7 +345,7 @@ instance Monoid Assets where
 -- | A collection of token quantities by their asset ID.
 newtype Tokens = Tokens { unTokens :: Map AssetId Quantity }
   deriving stock (Show, Eq, Ord, Generic)
-  deriving newtype (Binary, ToJSON)
+  deriving newtype (Binary, ToJSON, Variations)
 
 instance Semigroup Tokens where
   (<>) = fmap Tokens . on (Map.unionWith (+)) unTokens
@@ -340,28 +376,28 @@ instance ToJSONKey Base16 where
 
 newtype DatumHash = DatumHash { unDatumHash :: ByteString }
   deriving stock (Eq, Ord, Generic)
-  deriving newtype (Binary)
+  deriving newtype (Binary, Variations)
   deriving (IsString, Show, ToJSON) via Base16
 
 newtype TxId = TxId { unTxId :: ByteString }
   deriving stock (Eq, Ord, Generic)
-  deriving newtype (Binary)
+  deriving newtype (Binary, Variations)
   deriving (IsString, Show, ToJSON, ToJSONKey) via Base16
 
 newtype TxIx = TxIx { unTxIx :: Word16 }
   deriving stock (Show, Eq, Ord, Generic)
-  deriving newtype (Num, Integral, Real, Enum, Bounded, Binary, ToJSON)
+  deriving newtype (Num, Integral, Real, Enum, Bounded, Binary, ToJSON, Variations)
 
 newtype CertIx = CertIx { unCertIx :: Word64 }
   deriving stock (Show, Eq, Ord, Generic)
-  deriving newtype (Num, Integral, Real, Enum, Bounded, Binary)
+  deriving newtype (Num, Integral, Real, Enum, Bounded, Binary, Variations)
 
 data TxOutRef = TxOutRef
   { txId :: TxId
   , txIx :: TxIx
   }
   deriving stock (Show, Eq, Ord, Generic)
-  deriving anyclass (Binary, ToJSON, ToJSONKey)
+  deriving anyclass (Binary, ToJSON, ToJSONKey, Variations)
 
 instance IsString TxOutRef where
   fromString = fromJust . parseTxOutRef . T.pack
@@ -382,15 +418,15 @@ renderTxOutRef TxOutRef{..} = mconcat
 
 newtype SlotNo = SlotNo { unSlotNo :: Word64 }
   deriving stock (Show, Eq, Ord, Generic)
-  deriving newtype (Num, Integral, Real, Enum, Bounded, Binary, ToJSON)
+  deriving newtype (Num, Integral, Real, Enum, Bounded, Binary, ToJSON, Variations)
 
 newtype BlockNo = BlockNo { unBlockNo :: Word64 }
   deriving stock (Show, Eq, Ord, Generic)
-  deriving newtype (Num, Integral, Real, Enum, Bounded, Binary, ToJSON)
+  deriving newtype (Num, Integral, Real, Enum, Bounded, Binary, ToJSON, Variations)
 
 newtype BlockHeaderHash = BlockHeaderHash { unBlockHeaderHash :: ByteString }
   deriving stock (Eq, Ord, Generic)
-  deriving newtype (Binary)
+  deriving newtype (Binary, Variations)
   deriving (IsString, Show, ToJSON) via Base16
 
 data AssetId = AssetId
@@ -398,16 +434,16 @@ data AssetId = AssetId
   , tokenName :: TokenName
   }
   deriving stock (Show, Eq, Ord, Generic)
-  deriving anyclass (Binary, ToJSON, ToJSONKey)
+  deriving anyclass (Binary, ToJSON, ToJSONKey, Variations)
 
 newtype PolicyId = PolicyId { unPolicyId :: ByteString }
   deriving stock (Eq, Ord, Generic)
-  deriving newtype (Binary)
+  deriving newtype (Binary, Variations)
   deriving (IsString, Show, FromJSON, FromJSONKey, ToJSON, ToJSONKey) via Base16
 
 newtype TokenName = TokenName { unTokenName :: ByteString }
   deriving stock (Eq, Ord, Generic)
-  deriving newtype (Show, IsString, Binary)
+  deriving newtype (Show, IsString, Binary, Variations)
 
 instance ToJSONKey TokenName where
   toJSONKey = toJSONKeyText $ T.pack . BS.unpack . unTokenName
@@ -417,15 +453,15 @@ instance ToJSON TokenName where
 
 newtype Quantity = Quantity { unQuantity :: Word64 }
   deriving stock (Show, Eq, Ord, Generic)
-  deriving newtype (Num, Integral, Real, Enum, Bounded, Binary, ToJSON)
+  deriving newtype (Num, Integral, Real, Enum, Bounded, Binary, ToJSON, Variations)
 
 newtype Lovelace = Lovelace { unLovelace :: Word64 }
   deriving stock (Show, Eq, Ord, Generic)
-  deriving newtype (Num, Integral, Real, Enum, Bounded, Binary, ToJSON)
+  deriving newtype (Num, Integral, Real, Enum, Bounded, Binary, ToJSON, Variations)
 
 newtype Address = Address { unAddress :: ByteString }
   deriving stock (Eq, Ord, Generic)
-  deriving newtype (Binary)
+  deriving newtype (Binary, Variations)
   deriving (IsString, Show, ToJSON) via Base16
 
 toBech32 :: Address -> Maybe Text
@@ -458,13 +494,13 @@ data Credential
   = PaymentKeyCredential PaymentKeyHash
   | ScriptCredential ScriptHash
   deriving stock (Show, Eq, Ord, Generic)
-  deriving anyclass (Binary, ToJSON)
+  deriving anyclass (Binary, ToJSON, Variations)
 
 data StakeCredential
   = StakeKeyCredential StakeKeyHash
   | StakeScriptCredential ScriptHash
   deriving stock (Show, Eq, Ord, Generic)
-  deriving anyclass (Binary, ToJSON)
+  deriving anyclass (Binary, ToJSON, Variations)
 
 fromCardanoPaymentCredential :: Cardano.PaymentCredential -> Credential
 fromCardanoPaymentCredential = \case
@@ -473,12 +509,12 @@ fromCardanoPaymentCredential = \case
 
 newtype PaymentKeyHash = PaymentKeyHash { unPaymentKeyHash :: ByteString }
   deriving stock (Eq, Ord, Generic)
-  deriving newtype (Binary)
+  deriving newtype (Binary, Variations)
   deriving (IsString, Show, ToJSON) via Base16
 
 newtype StakeKeyHash = StakeKeyHash { unStakeKeyHash :: ByteString }
   deriving stock (Eq, Ord, Generic)
-  deriving newtype (Binary)
+  deriving newtype (Binary, Variations)
   deriving (IsString, Show, ToJSON) via Base16
 
 fromCardanoPaymentKeyHash :: Cardano.Hash Cardano.PaymentKey -> PaymentKeyHash
@@ -490,7 +526,7 @@ fromCardanoStakeKeyHash = StakeKeyHash . Cardano.serialiseToRawBytes
 newtype ScriptHash = ScriptHash { unScriptHash :: ByteString }
   deriving stock (Eq, Ord, Generic)
   deriving (IsString, Show, ToJSON) via Base16
-  deriving anyclass (Binary)
+  deriving anyclass (Binary, Variations)
 
 policyIdToScriptHash :: PolicyId -> ScriptHash
 policyIdToScriptHash (PolicyId h) = ScriptHash h
@@ -501,12 +537,13 @@ fromCardanoScriptHash = ScriptHash . Cardano.serialiseToRawBytes
 newtype PlutusScript = PlutusScript { unPlutusScript :: ByteString }
   deriving stock (Eq, Ord, Generic)
   deriving (IsString, Show, ToJSON) via Base16
-  deriving anyclass (Binary)
+  deriving anyclass (Binary, Variations)
 
 data StakeReference
   = StakeCredential StakeCredential
   | StakePointer SlotNo TxIx CertIx
   deriving stock (Show, Eq, Ord, Generic)
+  deriving anyclass (Variations)
 
 fromCardanoStakeAddressReference :: Cardano.StakeAddressReference -> Maybe StakeReference
 fromCardanoStakeAddressReference = \case
@@ -530,38 +567,28 @@ data TxError
   = TxNotFound
   | TxInPast BlockHeader
   deriving stock (Show, Eq, Ord, Generic)
-  deriving anyclass (Binary, ToJSON)
+  deriving anyclass (Binary, ToJSON, Variations)
 
 -- | Reasons a 'FindTxsTo' request can be rejected.
 data FindTxsToError
   = NoAddresses
   deriving stock (Show, Eq, Ord, Generic)
-  deriving anyclass (Binary, ToJSON)
+  deriving anyclass (Binary, ToJSON, Variations)
 
 -- | Reasons a 'FindConsumingTx' request can be rejected.
 data UTxOError
   = UTxONotFound
   | UTxOSpent TxId
   deriving stock (Show, Eq, Ord, Generic)
-  deriving anyclass (Binary, ToJSON)
+  deriving anyclass (Binary, ToJSON, Variations)
 
 -- | Reasons an 'Intersect' request can be rejected.
 data IntersectError = IntersectionNotFound
   deriving stock (Show, Eq, Ord, Generic)
-  deriving anyclass (Binary, ToJSON)
+  deriving anyclass (Binary, ToJSON, Variations)
 
 -- | The 'query' type for the Marlowe Chain Sync.
 data Move err result where
-
-  -- | Perform two moves in parallel and collect the results from the one which
-  -- resolves first (or both if they resolve simultaneously).
-  Fork
-    :: Move err1 result1
-    -> Move err2 result2
-    -> Move (These err1 err2) (These result1 result2)
-
-  -- | Advance a minimum number of slots without collecting any results..
-  AdvanceSlots :: Natural -> Move Void ()
 
   -- | Advance a fixed number of blocks without collecting any results..
   AdvanceBlocks :: Natural -> Move Void ()
@@ -572,19 +599,11 @@ data Move err result where
 
   -- | Advance to the block when a tx out is consumed and collect the tx that
   -- consumes the tx out.
-  FindConsumingTx :: TxOutRef -> Move UTxOError Transaction
-
-  -- | Advance to the block when a tx out is consumed and collect the tx that
-  -- consumes the tx out.
   FindConsumingTxs :: Set TxOutRef -> Move (Map TxOutRef UTxOError) (Map TxOutRef Transaction)
 
   -- | Advance to the block containing a transaction. The boolean flag
   -- indicates whether or not to wait for the transaction to be produced.
   FindTx :: TxId -> Bool -> Move TxError Transaction
-
-  -- | Advance to the block containing transactions that send outputs to any
-  -- addresses with the requested credentials.
-  FindTxsTo :: Set Credential -> Move FindTxsToError (Set Transaction)
 
   -- | Advance to the block containing transactions that send or consume outputs
   -- to any addresses with the requested credentials.
@@ -596,25 +615,45 @@ data Move err result where
 instance HasSignature Move where
   signature _ = "Move"
 
-moveSchema :: SchemaVersion
-moveSchema = SchemaVersion "move_unsafe"
-
 deriving instance Show (Move err result)
 deriving instance Eq (Move err result)
 deriving instance Ord (Move err result)
 
+instance ChainSeek.QueryVariations Move where
+  tags = NE.fromList
+    [ ChainSeek.SomeTag TagAdvanceBlocks
+    , ChainSeek.SomeTag TagIntersect
+    , ChainSeek.SomeTag TagFindConsumingTxs
+    , ChainSeek.SomeTag TagFindTx
+    , ChainSeek.SomeTag TagFindTxsFor
+    , ChainSeek.SomeTag TagAdvanceToTip
+    ]
+  queryVariations = \case
+    TagAdvanceBlocks -> AdvanceBlocks <$> variations
+    TagIntersect -> Intersect <$> variations
+    TagFindConsumingTxs -> FindConsumingTxs <$> variations
+    TagFindTx -> FindTx <$> variations `varyAp` variations
+    TagFindTxsFor -> FindTxsFor <$> variations
+    TagAdvanceToTip -> pure AdvanceToTip
+  errVariations = \case
+    TagAdvanceBlocks -> []
+    TagIntersect -> NE.toList variations
+    TagFindConsumingTxs -> NE.toList variations
+    TagFindTx -> NE.toList variations
+    TagFindTxsFor -> []
+    TagAdvanceToTip -> []
+  resultVariations = \case
+    TagAdvanceBlocks -> variations
+    TagIntersect -> variations
+    TagFindConsumingTxs -> variations
+    TagFindTx -> variations
+    TagFindTxsFor -> variations
+    TagAdvanceToTip -> variations
+
 instance QueryToJSON Move where
   queryToJSON = \case
-    Fork m1 m2 -> object
-      [ "fork" .= object
-        [ "query1" .= queryToJSON m1
-        , "query2" .= queryToJSON m2
-        ]
-      ]
-    AdvanceSlots offset -> object [ "advanceSlots" .= toJSON offset ]
     AdvanceBlocks offset -> object [ "advanceBlocks" .= toJSON offset ]
     Intersect blocks -> object [ "intersect" .= toJSON blocks ]
-    FindConsumingTx ref -> object [ "findConsumingTx" .= toJSON ref ]
     FindConsumingTxs refs -> object [ "findConsumingTxs" .= toJSON refs ]
     FindTx txId wait -> object
       [ "findTx" .= object
@@ -622,29 +661,20 @@ instance QueryToJSON Move where
         , "wait" .= toJSON wait
         ]
       ]
-    FindTxsTo c -> object [ "findTxsTo" .= toJSON c ]
     AdvanceToTip -> String "advanceToTip"
     FindTxsFor c -> object [ "findTxsFor" .= toJSON c ]
   errToJSON = \case
-    TagFork m1 m2 -> toJSON . bimap (errToJSON m1) (errToJSON m2)
-    TagAdvanceSlots -> toJSON
     TagAdvanceBlocks -> toJSON
     TagIntersect -> toJSON
-    TagFindConsumingTx -> toJSON
     TagFindConsumingTxs -> toJSON
     TagFindTx -> toJSON
-    TagFindTxsTo -> toJSON
     TagFindTxsFor -> toJSON
     TagAdvanceToTip -> toJSON
   resultToJSON = \case
-    TagFork m1 m2 -> toJSON . bimap (resultToJSON m1) (resultToJSON m2)
-    TagAdvanceSlots -> toJSON
     TagAdvanceBlocks -> toJSON
     TagIntersect -> toJSON
-    TagFindConsumingTx -> toJSON
     TagFindConsumingTxs -> toJSON
     TagFindTx -> toJSON
-    TagFindTxsTo -> toJSON
     TagFindTxsFor -> toJSON
     TagAdvanceToTip -> toJSON
 
@@ -656,196 +686,102 @@ type RuntimeChainSeekServer = ChainSeekServer Move ChainPoint ChainPoint
 
 instance Query Move where
   data Tag Move err result where
-    TagFork
-      :: Tag Move err1 result1
-      -> Tag Move err2 result2
-      -> Tag Move (These err1 err2) (These result1 result2)
-    TagAdvanceSlots :: Tag Move Void ()
     TagAdvanceBlocks :: Tag Move Void ()
     TagIntersect :: Tag Move IntersectError ()
-    TagFindConsumingTx :: Tag Move UTxOError Transaction
     TagFindTx :: Tag Move TxError Transaction
     TagFindConsumingTxs :: Tag Move (Map TxOutRef UTxOError) (Map TxOutRef Transaction)
-    TagFindTxsTo :: Tag Move FindTxsToError (Set Transaction)
     TagFindTxsFor :: Tag Move Void (Set Transaction)
     TagAdvanceToTip :: Tag Move Void ()
 
   tagFromQuery = \case
-    Fork m1 m2         -> TagFork (tagFromQuery m1) (tagFromQuery m2)
-    AdvanceSlots _     -> TagAdvanceSlots
     AdvanceBlocks _    -> TagAdvanceBlocks
     Intersect _        -> TagIntersect
-    FindConsumingTx _  -> TagFindConsumingTx
     FindTx _ _         -> TagFindTx
     FindConsumingTxs _ -> TagFindConsumingTxs
-    FindTxsTo _        -> TagFindTxsTo
     FindTxsFor _        -> TagFindTxsFor
     AdvanceToTip       -> TagAdvanceToTip
 
   tagEq = curry \case
-    (TagFork m1 m2, TagFork m3 m4)           ->
-      case (,) <$> tagEq m1 m3 <*> tagEq m2 m4 of
-        Nothing                           -> Nothing
-        Just ((Refl, Refl), (Refl, Refl)) -> Just (Refl, Refl)
+    (TagAdvanceBlocks, TagAdvanceBlocks)     -> Just (Refl, Refl)
     -- Please don't refactor this to use a single catch-all wildcard pattern.
     -- The idea of doing it this way is to cause an incomplete pattern match
     -- warning when a new 'Tag' constructor is added.
-    (TagFork _ _, _)                         -> Nothing
-    (TagAdvanceSlots, TagAdvanceSlots)       -> Just (Refl, Refl)
-    (TagAdvanceSlots, _)                     -> Nothing
-    (TagAdvanceBlocks, TagAdvanceBlocks)     -> Just (Refl, Refl)
     (TagAdvanceBlocks, _)                    -> Nothing
     (TagIntersect, TagIntersect)             -> Just (Refl, Refl)
     (TagIntersect, _)                        -> Nothing
-    (TagFindConsumingTx, TagFindConsumingTx) -> Just (Refl, Refl)
-    (TagFindConsumingTx, _)                  -> Nothing
     (TagFindTx, TagFindTx)                   -> Just (Refl, Refl)
     (TagFindTx, _)                           -> Nothing
     (TagFindConsumingTxs, TagFindConsumingTxs) -> Just (Refl, Refl)
     (TagFindConsumingTxs, _)                  -> Nothing
-    (TagFindTxsTo, TagFindTxsTo)                   -> Just (Refl, Refl)
-    (TagFindTxsTo, _)                           -> Nothing
     (TagFindTxsFor, TagFindTxsFor)                   -> Just (Refl, Refl)
     (TagFindTxsFor, _)                           -> Nothing
     (TagAdvanceToTip, TagAdvanceToTip)                   -> Just (Refl, Refl)
     (TagAdvanceToTip, _)                           -> Nothing
 
   putTag = \case
-    TagFork t1 t2 -> do
-      putWord8 0x01
-      putTag t1
-      putTag t2
-    TagAdvanceSlots -> putWord8 0x02
-    TagAdvanceBlocks -> putWord8 0x03
-    TagFindConsumingTx -> putWord8 0x04
-    TagIntersect -> putWord8 0x05
-    TagFindTx -> putWord8 0x06
-    TagFindConsumingTxs -> putWord8 0x07
-    TagFindTxsTo -> putWord8 0x08
-    TagAdvanceToTip -> putWord8 0x09
-    TagFindTxsFor -> putWord8 0x0a
+    TagAdvanceBlocks -> putWord8 0x01
+    TagIntersect -> putWord8 0x02
+    TagFindTx -> putWord8 0x03
+    TagFindConsumingTxs -> putWord8 0x04
+    TagAdvanceToTip -> putWord8 0x05
+    TagFindTxsFor -> putWord8 0x06
 
   putQuery = \case
-    Fork m1 m2 -> do
-      putQuery m1
-      putQuery m2
-    AdvanceSlots slots -> put slots
     AdvanceBlocks blocks -> put blocks
-    FindConsumingTx utxo -> put utxo
     Intersect points -> put points
     FindTx txId wait -> put txId *> put wait
     FindConsumingTxs utxos -> put utxos
-    FindTxsTo credentials -> put credentials
     AdvanceToTip -> mempty
     FindTxsFor credentials -> put $ NESet.toList credentials
 
   getTag = do
     tag <- getWord8
     case tag of
-      0x01 -> do
-        SomeTag m1 <- getTag
-        SomeTag m2 <- getTag
-        pure $ SomeTag $ TagFork m1 m2
-      0x02 -> pure $ SomeTag TagAdvanceSlots
-      0x03 -> pure $ SomeTag TagAdvanceBlocks
-      0x04 -> pure $ SomeTag TagFindConsumingTx
-      0x05 -> pure $ SomeTag TagIntersect
-      0x06 -> pure $ SomeTag TagFindTx
-      0x07 -> pure $ SomeTag TagFindConsumingTxs
-      0x08 -> pure $ SomeTag TagFindTxsTo
-      0x09 -> pure $ SomeTag TagAdvanceToTip
-      0x0a -> pure $ SomeTag TagFindTxsFor
+      0x01 -> pure $ SomeTag TagAdvanceBlocks
+      0x02 -> pure $ SomeTag TagIntersect
+      0x03 -> pure $ SomeTag TagFindTx
+      0x04 -> pure $ SomeTag TagFindConsumingTxs
+      0x05 -> pure $ SomeTag TagAdvanceToTip
+      0x06 -> pure $ SomeTag TagFindTxsFor
       _ -> fail $ "Invalid move tag " <> show tag
 
   getQuery = \case
-    TagFork t1 t2       -> Fork <$> getQuery t1 <*> getQuery t2
-    TagAdvanceSlots     -> AdvanceSlots <$> get
     TagAdvanceBlocks    -> AdvanceBlocks <$> get
-    TagFindConsumingTx  -> FindConsumingTx <$> get
     TagIntersect        -> Intersect <$> get
     TagFindTx           -> FindTx <$> get <*> get
     TagFindConsumingTxs -> FindConsumingTxs <$> get
-    TagFindTxsTo        -> FindTxsTo <$> get
     TagAdvanceToTip     -> pure AdvanceToTip
     TagFindTxsFor        -> FindTxsFor . NESet.fromList <$> get
 
   putResult = \case
-    TagFork t1 t2 -> \case
-      This r1 -> do
-        putWord8 0x01
-        putResult t1 r1
-      That r2 -> do
-        putWord8 0x02
-        putResult t2 r2
-      These r1 r2 -> do
-        putWord8 0x03
-        putResult t1 r1
-        putResult t2 r2
-    TagAdvanceSlots -> mempty
     TagAdvanceBlocks -> mempty
-    TagFindConsumingTx -> put
     TagFindTx -> put
     TagIntersect -> mempty
     TagFindConsumingTxs -> put
-    TagFindTxsTo -> put
     TagAdvanceToTip -> mempty
     TagFindTxsFor -> put
 
   getResult = \case
-    TagFork t1 t2    -> do
-      tag <- getWord8
-      case tag of
-        0x01 -> This <$> getResult t1
-        0x02 -> That <$> getResult t2
-        0x03 -> These <$> getResult t1 <*> getResult t2
-        _    -> fail $ "Invalid align result tag " <> show tag
-    TagAdvanceSlots -> pure ()
     TagAdvanceBlocks -> pure ()
-    TagFindConsumingTx -> get
     TagFindTx -> get
     TagIntersect -> pure ()
     TagFindConsumingTxs -> get
-    TagFindTxsTo -> get
     TagAdvanceToTip -> pure ()
     TagFindTxsFor -> get
 
   putErr = \case
-    TagFork t1 t2 -> \case
-      This e1 -> do
-        putWord8 0x01
-        putErr t1 e1
-      That e2 -> do
-        putWord8 0x02
-        putErr t2 e2
-      These e1 e2 -> do
-        putWord8 0x03
-        putErr t1 e1
-        putErr t2 e2
-    TagAdvanceSlots -> put
     TagAdvanceBlocks -> put
-    TagFindConsumingTx -> put
     TagFindTx -> put
     TagIntersect -> put
     TagFindConsumingTxs -> put
-    TagFindTxsTo -> put
     TagFindTxsFor -> put
     TagAdvanceToTip -> put
 
   getErr = \case
-    TagFork t1 t2    -> do
-      tag <- getWord8
-      case tag of
-        0x01 -> This <$> getErr t1
-        0x02 -> That <$> getErr t2
-        0x03 -> These <$> getErr t1 <*> getErr t2
-        _    -> fail $ "Invalid fork error tag " <> show tag
-    TagAdvanceSlots -> get
     TagAdvanceBlocks -> get
-    TagFindConsumingTx -> get
     TagFindTx -> get
     TagIntersect -> get
     TagFindConsumingTxs -> get
-    TagFindTxsTo -> get
     TagFindTxsFor -> get
     TagAdvanceToTip -> get
 
@@ -870,11 +806,12 @@ data GetUTxOsQuery
   = GetUTxOsAtAddresses (Set Address)
   | GetUTxOsForTxOutRefs (Set TxOutRef)
   deriving (Show, Eq, Ord, Generic)
+  deriving anyclass Variations
 
 -- Semigroup and Monoid seem to be safe - we cover here a subset of a partial function.
 newtype UTxOs = UTxOs { unUTxOs :: Map TxOutRef TransactionOutput }
   deriving stock (Show, Eq, Ord, Generic)
-  deriving newtype (Semigroup, Monoid)
+  deriving newtype (Semigroup, Monoid, Variations)
   deriving anyclass (Binary, ToJSON)
 
 lookupUTxO :: TxOutRef -> UTxOs -> Maybe TransactionOutput
@@ -888,6 +825,7 @@ data UTxO = UTxO
   , transactionOutput ::  TransactionOutput
   }
   deriving stock (Show, Eq, Ord, Generic)
+  deriving anyclass (Variations)
 
 toUTxOTuple :: UTxO -> (TxOutRef, TransactionOutput)
 toUTxOTuple (UTxO txOutRef transactionOutput) = (txOutRef, transactionOutput)
@@ -942,6 +880,44 @@ instance Query.QueryToJSON ChainSyncQuery where
     TagGetSystemStart -> toJSON
     TagGetEraHistory -> toJSON
     TagGetUTxOs -> toJSON
+
+instance Query.QueryVariations ChainSyncQuery where
+  tags = NE.fromList
+    [ Query.SomeTag TagGetSecurityParameter
+    , Query.SomeTag TagGetNetworkId
+    , Query.SomeTag TagGetProtocolParameters
+    , Query.SomeTag TagGetSystemStart
+    , Query.SomeTag TagGetEraHistory
+    , Query.SomeTag TagGetUTxOs
+    ]
+  queryVariations = \case
+    TagGetSecurityParameter -> pure GetSecurityParameter
+    TagGetNetworkId -> pure GetNetworkId
+    TagGetProtocolParameters -> pure GetProtocolParameters
+    TagGetSystemStart -> pure GetSystemStart
+    TagGetEraHistory -> pure GetEraHistory
+    TagGetUTxOs -> GetUTxOs <$> variations
+  errVariations = \case
+    TagGetSecurityParameter -> NE.toList variations
+    TagGetNetworkId -> NE.toList variations
+    TagGetProtocolParameters -> NE.toList variations
+    TagGetSystemStart -> NE.toList variations
+    TagGetEraHistory -> NE.toList variations
+    TagGetUTxOs -> NE.toList variations
+  delimiterVariations = \case
+    TagGetSecurityParameter -> []
+    TagGetNetworkId -> []
+    TagGetProtocolParameters -> []
+    TagGetSystemStart -> []
+    TagGetEraHistory -> []
+    TagGetUTxOs -> []
+  resultsVariations = \case
+    TagGetSecurityParameter -> variations
+    TagGetNetworkId -> Mainnet NE.:| [Testnet $ NetworkMagic 0]
+    TagGetProtocolParameters -> variations
+    TagGetSystemStart -> SystemStart <$> variations
+    TagGetEraHistory -> variations
+    TagGetUTxOs -> variations
 
 instance Query.IsQuery ChainSyncQuery where
   data Tag ChainSyncQuery delimiter err result where
@@ -1143,3 +1119,63 @@ eraEq ScriptDataInAlonzoEra ScriptDataInAlonzoEra   = Just Refl
 eraEq ScriptDataInAlonzoEra _                       = Nothing
 eraEq ScriptDataInBabbageEra ScriptDataInBabbageEra = Just Refl
 eraEq ScriptDataInBabbageEra _                      = Nothing
+
+-- * Orphan instances
+
+instance Variations ProtocolParameters where
+
+instance Variations C.PraosNonce where
+  variations = C.makePraosNonce <$> variations
+
+instance Variations C.Lovelace where
+  variations = C.Lovelace <$> variations
+
+instance Variations C.EpochNo where
+
+instance Variations C.AnyPlutusScriptVersion where
+  variations = NE.fromList
+    [ C.AnyPlutusScriptVersion C.PlutusScriptV1
+    , C.AnyPlutusScriptVersion C.PlutusScriptV2
+    ]
+
+instance Variations C.CostModel where
+  variations = C.CostModel <$> variations
+
+instance Variations C.ExecutionUnitPrices where
+  variations = C.ExecutionUnitPrices <$> variations `varyAp` variations
+
+instance Variations C.ExecutionUnits where
+  variations = C.ExecutionUnits <$> variations `varyAp` variations
+
+instance Variations (C.EraHistory CardanoMode) where
+  variations = C.EraHistory C.CardanoMode <$> variations
+
+instance Variations (Counting.NonEmpty xs EraSummary) => Variations (Interpreter xs) where
+  variations = mkInterpreter <$> variations
+
+instance Variations (Counting.NonEmpty xs EraSummary) => Variations (Summary xs) where
+  variations = Summary <$> variations
+
+instance {-# OVERLAPPING #-} Variations a => Variations (Counting.NonEmpty '[x] a) where
+  variations = Counting.NonEmptyOne <$> variations
+
+instance {-# OVERLAPPING #-} (Variations a, Variations (Counting.NonEmpty xs a)) => Variations (Counting.NonEmpty (x ': xs) a) where
+  variations = Counting.NonEmptyCons <$> variations `varyAp` pure (NE.head variations)
+
+instance Variations EraSummary where
+
+instance Variations EraParams where
+
+instance Variations SafeZone where
+
+instance Variations EpochSize where
+
+instance Variations SlotLength where
+
+instance Variations EraEnd where
+
+instance Variations Bound where
+
+instance Variations Cardano.SlotNo where
+
+instance Variations RelativeTime where

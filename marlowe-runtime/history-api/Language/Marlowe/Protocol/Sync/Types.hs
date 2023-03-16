@@ -5,12 +5,15 @@
 module Language.Marlowe.Protocol.Sync.Types
   where
 
+import Control.Monad (join)
 import Data.Aeson (Key, ToJSON, Value(..), object, (.=))
 import Data.Binary (get, getWord8, put, putWord8)
+import qualified Data.List.NonEmpty as NE
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader)
 import Language.Marlowe.Runtime.Core.Api (ContractId(..), MarloweVersion(..), MarloweVersionTag, SomeMarloweVersion(..))
 import Language.Marlowe.Runtime.History.Api
 import Network.Protocol.Codec (BinaryMessage(..))
+import Network.Protocol.Codec.Spec (MessageVariations(..), SomePeerHasAgency(SomePeerHasAgency), Variations(..), varyAp)
 import Network.Protocol.Handshake.Types (HasSignature(..))
 import Network.TypedProtocol (PeerHasAgency(..), Protocol(..), SomeMessage(..))
 import Observe.Event.Network.Protocol (MessageToJSON(..))
@@ -211,6 +214,50 @@ instance BinaryMessage MarloweSync where
         _                        -> fail "Invalid protocol state for MsgRollBackCreation"
 
       _ -> fail $ "Invalid message tag " <> show tag
+
+instance MessageVariations MarloweSync where
+  agencyVariations = join $ NE.fromList
+    [ pure $ SomePeerHasAgency $ ClientAgency TokInit
+    , pure $ SomePeerHasAgency $ ServerAgency TokFollow
+    , do
+        SomeMarloweVersion v <- variations
+        pure $ SomePeerHasAgency $ ClientAgency $ TokIdle v
+    , do
+        SomeMarloweVersion v <- variations
+        pure $ SomePeerHasAgency $ ClientAgency $ TokWait v
+    , do
+        SomeMarloweVersion v <- variations
+        pure $ SomePeerHasAgency $ ServerAgency $ TokNext v
+    , do
+        SomeMarloweVersion v <- variations
+        pure $ SomePeerHasAgency $ ServerAgency $ TokIntersect v
+    ]
+  messageVariations = \case
+    ClientAgency TokInit -> join $ NE.fromList
+      [ SomeMessage . MsgFollowContract <$> variations
+      , do
+          SomeMarloweVersion v <- variations
+          fmap SomeMessage $ MsgIntersect <$> variations <*> pure v `varyAp` variations
+      ]
+    ServerAgency TokFollow -> join $ NE.fromList
+      [ pure $ SomeMessage MsgContractNotFound
+      , do
+          SomeMarloweVersion MarloweV1 <- variations
+          fmap SomeMessage $ MsgContractFound <$> variations <*> pure MarloweV1 `varyAp` variations
+      ]
+    ClientAgency (TokIdle _) -> NE.fromList [SomeMessage MsgDone, SomeMessage MsgRequestNext]
+    ClientAgency (TokWait _) -> NE.fromList [SomeMessage MsgPoll, SomeMessage MsgCancel]
+    ServerAgency (TokNext MarloweV1) -> join $ NE.fromList
+      [ fmap SomeMessage $ MsgRollForward <$> variations `varyAp` variations
+      , SomeMessage . MsgRollBackward <$> variations
+      , pure $ SomeMessage MsgRollBackCreation
+      , pure $ SomeMessage MsgWait
+      ]
+    ServerAgency (TokIntersect _) -> join $ NE.fromList
+      [ SomeMessage . MsgIntersectFound <$> variations
+      , pure $ SomeMessage MsgIntersectNotFound
+      ]
+
 
 instance MessageToJSON MarloweSync where
   messageToJSON = \case

@@ -50,16 +50,6 @@ instance Arbitrary ExtractMarloweTransactionError where
     ]
   shrink = genericShrink
 
-instance Arbitrary FollowerStatus where
-  arbitrary = oneof
-    [ pure Pending
-    , Following <$> arbitrary
-    , Waiting <$> arbitrary
-    , Finished <$> arbitrary
-    , Failed <$> arbitrary
-    ]
-  shrink = genericShrink
-
 instance ArbitraryMarloweVersion v => Arbitrary (CreateStep v) where
   arbitrary = CreateStep <$> arbitrary <*> arbitrary <*> arbitrary
   shrink = genericShrink

@@ -125,7 +125,6 @@ instance ToDTO (WithdrawError 'V1) where
     WithdrawConstraintError (BalancingError _) -> ApiError "Internal error" "InternalError" Null 500
     WithdrawLoadMarloweContextFailed LoadMarloweContextErrorNotFound -> ApiError "Marlowe contract not found" "MarloweContractNotFound" Null 404
     WithdrawLoadMarloweContextFailed (LoadMarloweContextErrorVersionMismatch _) -> ApiError "Marlowe contract version mismatch" "MarloweContractVersionMismatch" Null 400
-    WithdrawLoadMarloweContextFailed (HandshakeFailed _) -> ApiError "Internal error" "InternalError" Null 500
     WithdrawLoadMarloweContextFailed LoadMarloweContextToCardanoError -> ApiError "Internal error" "InternalError" Null 500
     WithdrawLoadMarloweContextFailed (MarloweScriptNotPublished _) -> ApiError "Internal error" "InternalError" Null 500
     WithdrawLoadMarloweContextFailed (PayoutScriptNotPublished _) -> ApiError "Internal error" "InternalError" Null 500
@@ -148,7 +147,6 @@ instance ToDTO (CreateError 'V1) where
     CreateConstraintError (BalancingError _) -> ApiError "Internal error" "InternalError" Null 500
     CreateLoadMarloweContextFailed LoadMarloweContextErrorNotFound -> ApiError "Marlowe contract not found" "MarloweContractNotFound" Null 404
     CreateLoadMarloweContextFailed (LoadMarloweContextErrorVersionMismatch _) -> ApiError "Marlowe contract version mismatch" "MarloweContractVersionMismatch" Null 400
-    CreateLoadMarloweContextFailed (HandshakeFailed _) -> ApiError "Internal error" "InternalError" Null 500
     CreateLoadMarloweContextFailed LoadMarloweContextToCardanoError -> ApiError "Internal error" "InternalError" Null 500
     CreateLoadMarloweContextFailed (MarloweScriptNotPublished _) -> ApiError "Internal error" "InternalError" Null 500
     CreateLoadMarloweContextFailed (PayoutScriptNotPublished _) -> ApiError "Internal error" "InternalError" Null 500
@@ -175,7 +173,6 @@ instance ToDTO (ApplyInputsError 'V1) where
     ScriptOutputNotFound -> ApiError "Script output not found" "ScriptOutputNotFound" Null 400
     ApplyInputsLoadMarloweContextFailed LoadMarloweContextErrorNotFound -> ApiError "Marlowe contract not found" "MarloweContractNotFound" Null 404
     ApplyInputsLoadMarloweContextFailed (LoadMarloweContextErrorVersionMismatch _) -> ApiError "Marlowe contract version mismatch" "MarloweContractVersionMismatch" Null 400
-    ApplyInputsLoadMarloweContextFailed (HandshakeFailed _) -> ApiError "Internal error" "InternalError" Null 500
     ApplyInputsLoadMarloweContextFailed LoadMarloweContextToCardanoError -> ApiError "Internal error" "InternalError" Null 500
     ApplyInputsLoadMarloweContextFailed (MarloweScriptNotPublished _) -> ApiError "Internal error" "InternalError" Null 500
     ApplyInputsLoadMarloweContextFailed (PayoutScriptNotPublished _) -> ApiError "Internal error" "InternalError" Null 500

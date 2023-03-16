@@ -104,61 +104,57 @@ chainSeekClient = component \ChainSeekClientDependencies{..} -> do
             Right a -> pure a
       systemStart <- queryChainSync GetSystemStart
       securityParameter <- queryChainSync GetSecurityParameter
-      pure $ SendMsgRequestHandshake moveSchema $ ClientStHandshake
-        { recvMsgHandshakeRejected = \_ -> fail "unsupported chain sync version"
-        , recvMsgHandshakeConfirmed = do
-            -- Get the intersection points - the most recent block headers stored locally.
-            intersectionPoints <- getIntersectionPoints
-            let
-              -- A client state for handling the intersect response.
-              clientNextIntersect = ClientStNext
-                -- Rejection of an intersection request implies no intersection was found.
-                -- In this case, we have no choice but to start synchronization from Genesis.
-                { recvMsgQueryRejected = \_ tip -> do
-                    -- Roll everything back to Genesis.
-                    emit $ RollBackward Genesis tip
+      -- Get the intersection points - the most recent block headers stored locally.
+      intersectionPoints <- getIntersectionPoints
+      let
+        -- A client state for handling the intersect response.
+        clientNextIntersect = ClientStNext
+          -- Rejection of an intersection request implies no intersection was found.
+          -- In this case, we have no choice but to start synchronization from Genesis.
+          { recvMsgQueryRejected = \_ tip -> do
+              -- Roll everything back to Genesis.
+              emit $ RollBackward Genesis tip
 
-                    -- Start the main synchronization loop
-                    pure $ clientIdle securityParameter systemStart queryChainSync $ MarloweUTxO mempty mempty
+              -- Start the main synchronization loop
+              pure $ clientIdle securityParameter systemStart queryChainSync $ MarloweUTxO mempty mempty
 
-                -- An intersection point was found, resume synchronization from
-                -- that point.
-                , recvMsgRollForward = \_ point tip -> do
-                    -- Always emit a rollback at the start.
-                    emit $ RollBackward point tip
+          -- An intersection point was found, resume synchronization from
+          -- that point.
+          , recvMsgRollForward = \_ point tip -> do
+              -- Always emit a rollback at the start.
+              emit $ RollBackward point tip
 
-                    -- Load the MarloweUTxO
-                    utxo <- withEvent eventBackend LoadMarloweUTxO \ev -> case point of
-                      -- If the intersection point is at Genesis, return an empty MarloweUTxO.
-                      Genesis -> pure $ MarloweUTxO mempty mempty
+              -- Load the MarloweUTxO
+              utxo <- withEvent eventBackend LoadMarloweUTxO \ev -> case point of
+                -- If the intersection point is at Genesis, return an empty MarloweUTxO.
+                Genesis -> pure $ MarloweUTxO mempty mempty
 
-                      -- Otherwise load it from the database.
-                      At block -> do
-                        utxo <- getMarloweUTxO block
-                        addField ev utxo
-                        pure utxo
+                -- Otherwise load it from the database.
+                At block -> do
+                  utxo <- getMarloweUTxO block
+                  addField ev utxo
+                  pure utxo
 
-                    -- Start the main synchronization loop.
-                    pure $ clientIdle securityParameter systemStart queryChainSync utxo
+              -- Start the main synchronization loop.
+              pure $ clientIdle securityParameter systemStart queryChainSync utxo
 
-                -- Since the client is at Genesis at the start of this request,
-                -- it will never be rolled back. Handle the perfunctory case by
-                -- looping.
-                , recvMsgRollBackward = \_ _ -> pure clientIdleIntersect
+          -- Since the client is at Genesis at the start of this request,
+          -- it will never be rolled back. Handle the perfunctory case by
+          -- looping.
+          , recvMsgRollBackward = \_ _ -> pure clientIdleIntersect
 
-                -- If the client is caught up to the tip, poll for the query results.
-                , recvMsgWait = pollWithNext clientNextIntersect
-                }
+          -- If the client is caught up to the tip, poll for the query results.
+          , recvMsgWait = pollWithNext clientNextIntersect
+          }
 
-              -- A client state for sending the intersect request.
-              clientIdleIntersect = SendMsgQueryNext (Intersect intersectionPoints) clientNextIntersect
+        -- A client state for sending the intersect request.
+        clientIdleIntersect = SendMsgQueryNext (Intersect intersectionPoints) clientNextIntersect
 
-            pure case intersectionPoints of
-              -- Just start the loop right away with an empty UTxO.
-              [] -> clientIdle securityParameter systemStart queryChainSync $ MarloweUTxO mempty mempty
-              -- Request an intersection
-              _ -> clientIdleIntersect
-        }
+      pure case intersectionPoints of
+        -- Just start the loop right away with an empty UTxO.
+        [] -> clientIdle securityParameter systemStart queryChainSync $ MarloweUTxO mempty mempty
+        -- Request an intersection
+        _ -> clientIdleIntersect
       where
       allScriptCredentials = NESet.map ScriptCredential $ NESet.union marloweScriptHashes payoutScriptHashes
       -- A helper function to poll pending query results after a set timeout and

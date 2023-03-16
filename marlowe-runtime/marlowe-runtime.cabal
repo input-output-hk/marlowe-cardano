@@ -14,6 +14,10 @@ author: Jamie Bertram
 maintainer: jamie.bertram@iohk.io
 stability: experimental
 category: Language
+data-files:
+  .golden/MarloweSync/golden
+  .golden/MarloweHeaderSync/golden
+  .golden/MarloweQuery/golden
 license-files:
   LICENSE
   NOTICE
@@ -76,6 +80,7 @@ library
     , containers
     , marlowe-cardano
     , marlowe-chain-sync
+    , marlowe-protocols
     , ouroboros-network
     , plutus-ledger-api
     , plutus-tx

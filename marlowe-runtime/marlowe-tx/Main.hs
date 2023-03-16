@@ -8,7 +8,7 @@ import Control.Concurrent.Component
 import Data.Either (fromRight)
 import qualified Data.Text.Lazy.IO as TL
 import Data.UUID.V4 (nextRandom)
-import Language.Marlowe.Runtime.ChainSync.Api (BlockNo(..), ChainSyncQuery(..), RuntimeChainSeekClient, WithGenesis(..))
+import Language.Marlowe.Runtime.ChainSync.Api (BlockNo(..), ChainSyncQuery(..), RuntimeChainSeekClient)
 import qualified Language.Marlowe.Runtime.Core.ScriptRegistry as ScriptRegistry
 import Language.Marlowe.Runtime.Transaction (TransactionDependencies(..), transaction)
 import qualified Language.Marlowe.Runtime.Transaction.Query as Query
@@ -64,8 +64,7 @@ run = runComponent_ proc Options{..} -> do
     chainSyncConnector = SomeConnector
       $ logConnector (narrowEventBackend (injectSelector ChainSeekClient) eventBackend)
       $ handshakeClientConnector
-      $ tcpClient chainSeekHost chainSeekPort
-      $ chainSeekClientPeer Genesis
+      $ tcpClient chainSeekHost chainSeekPort chainSeekClientPeer
 
     chainSyncQueryConnector :: SomeClientConnector (QueryClient ChainSyncQuery) IO
     chainSyncQueryConnector = SomeConnector

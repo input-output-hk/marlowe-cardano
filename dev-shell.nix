@@ -84,6 +84,7 @@ let
     pkgs.pre-commit
     pkgs.shellcheck
     pkgs.sqlite-interactive
+    pkgs.haskellPackages.hspec-golden
     stylish-haskell
     marlowe-runtime-cli
     pkgs.yq

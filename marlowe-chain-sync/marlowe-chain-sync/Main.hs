@@ -25,7 +25,6 @@ import Hasql.Pool (UsageError(..))
 import qualified Hasql.Pool as Pool
 import qualified Hasql.Session as Session
 import Language.Marlowe.Runtime.ChainSync (ChainSyncDependencies(..), chainSync)
-import Language.Marlowe.Runtime.ChainSync.Api (WithGenesis(..))
 import Language.Marlowe.Runtime.ChainSync.Database (hoistDatabaseQueries)
 import qualified Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL as PostgreSQL
 import Language.Marlowe.Runtime.ChainSync.NodeClient (NodeClient(..), NodeClientDependencies(..), nodeClient)
@@ -58,7 +57,7 @@ run Options{..} = bracket (Pool.acquire 100 (Just $ 5000000) (fromString databas
     syncSource <- tcpServer -< TcpServerDependencies
       { host
       , port
-      , toPeer = chainSeekServerPeer Genesis
+      , toPeer = chainSeekServerPeer
       }
 
     querySource <- tcpServer -< TcpServerDependencies

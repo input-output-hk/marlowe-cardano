@@ -15,7 +15,7 @@ import Data.Void (Void)
 import Hasql.Pool
 import qualified Hasql.Pool as Pool
 import qualified Hasql.Session as Session
-import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncQuery(..), WithGenesis(..))
+import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncQuery(..))
 import Language.Marlowe.Runtime.Core.Api (MarloweVersion(..))
 import qualified Language.Marlowe.Runtime.Core.ScriptRegistry as ScriptRegistry
 import Language.Marlowe.Runtime.Indexer (MarloweIndexerDependencies(..), marloweIndexer)
@@ -68,7 +68,7 @@ run Options{..} = withSocketsDo do
       { chainSyncConnector = SomeConnector
           $ logConnector (narrowEventBackend (injectSelector ChainSeekClient) eventBackend)
           $ handshakeClientConnector
-          $ tcpClient chainSeekHost chainSeekPort (chainSeekClientPeer Genesis)
+          $ tcpClient chainSeekHost chainSeekPort chainSeekClientPeer
       , chainSyncQueryConnector = SomeConnector
           $ logConnector (narrowEventBackend (injectSelector ChainQueryClient) eventBackend) chainSyncQueryConnector
       , databaseQueries = hoistDatabaseQueries
