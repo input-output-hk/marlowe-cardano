@@ -6,11 +6,11 @@ let
   inherit (self) operables;
   inherit (self.sourceInfo) lastModifiedDate;
 
-  mkImage = { operable, description, name ? operable }: tag:
+  mkImage = { name, description }: tag:
     std.lib.ops.mkStandardOCI {
       inherit tag;
       name = "ghcr.io/input-output-hk/${name}";
-      operable = operables.${operable};
+      operable = operables.${name};
       uid = "0";
       gid = "0";
       labels = {
@@ -21,33 +21,32 @@ let
     };
 
   images = {
-    chain-indexer = mkImage {
-      operable = "chain-indexer";
+    marlowe-chain-indexer = mkImage {
       name = "marlowe-chain-indexer";
       description = "A Cardano chain indexer for the Marlowe Runtime";
     };
     marlowe-chain-sync = mkImage {
-      operable = "marlowe-chain-sync";
+      name = "marlowe-chain-sync";
       description = "A Cardano chain sync and query service for the Marlowe Runtime.";
     };
     marlowe-indexer = mkImage {
-      operable = "marlowe-indexer";
+      name = "marlowe-indexer";
       description = "A Marlowe contract indexing service for the Marlowe Runtime.";
     };
     marlowe-sync = mkImage {
-      operable = "marlowe-sync";
+      name = "marlowe-sync";
       description = "A Marlowe contract synchronization and query service for the Marlowe Runtime.";
     };
     marlowe-tx = mkImage {
-      operable = "marlowe-tx";
+      name = "marlowe-tx";
       description = "A Marlowe transaction creation service for the Marlowe Runtime.";
     };
     marlowe-proxy = mkImage {
-      operable = "marlowe-proxy";
+      name = "marlowe-proxy";
       description = "An API Gateway service for the Marlowe Runtime.";
     };
     marlowe-web-server = mkImage {
-      operable = "marlowe-web-server";
+      name = "marlowe-web-server";
       description = "An HTTP server for the Marlowe Runtime, exposing a REST API.";
     };
   };
