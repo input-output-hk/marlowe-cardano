@@ -509,7 +509,18 @@ executeTransaction evaluationContext semanticsValidator semanticsAddress payoutA
       makePaymentDatum (Payment _ (Party (Role role)) _ _) =
         pure . P.Datum $ P.toBuiltinData (rolesCurrency, role)
       makePaymentDatum _ = mempty
-      outPayments = concatMap makePayment txOutPayments
+      consolidatePayments ps =
+        let
+          extractAddressHash (P.TxOut address _ hash _) = (address, hash)
+          extractValue (P.TxOut _ value _ _) = value
+        in
+          [
+            P.TxOut address value hash Nothing
+          |
+            ah@(address, hash) <- nub $ extractAddressHash <$> ps
+          , let value = foldMap extractValue $ filter ((== ah) . extractAddressHash) ps
+          ]
+      outPayments = consolidatePayments $ concatMap makePayment txOutPayments
       outPaymentDatums = concatMap makePaymentDatum txOutPayments
       findRole :: InputContent -> [P.TokenName]
       findRole (IDeposit _ (Role role) _ _) = pure role
