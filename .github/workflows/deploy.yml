@@ -31,7 +31,7 @@ jobs:
             experimental-features = nix-command flakes
 
       - name: Install Skopeo
-        run: nix-env -iA nixpkgs.skopeo
+        run: nix-env -iA skopeo -f '<nixpkgs>'
 
       - name: Login with Skopeo
         run: echo "${{ secrets.GITHUB_TOKEN }}" | skopeo login ghcr.io -u $ --password-stdin
