@@ -58,7 +58,7 @@ clientHints = defaultHints { addrSocketType = Stream }
 
 run :: Options -> IO ()
 run Options{..} = withSocketsDo do
-  pool <- Pool.acquire 100 (Just $ 5000000) (fromString databaseUri)
+  pool <- Pool.acquire 100 (Just 5000000) (fromString databaseUri)
   scripts <- case ScriptRegistry.getScripts MarloweV1 of
     NESet.IsEmpty -> fail "No known marlowe scripts"
     NESet.IsNonEmpty scripts -> pure scripts
@@ -78,6 +78,7 @@ run Options{..} = withSocketsDo do
       , pollingInterval = 1
       , marloweScriptHashes = NESet.map ScriptRegistry.marloweScript scripts
       , payoutScriptHashes = NESet.map ScriptRegistry.payoutScript scripts
+      , httpPort = fromIntegral httpPort
       }
   let appComponent = marloweIndexer <<< arr indexerDependencies <<< logger
   runComponent_ appComponent LoggerDependencies
@@ -106,6 +107,7 @@ data Options = Options
   , chainSeekHost :: HostName
   , databaseUri :: String
   , logConfigFile :: Maybe FilePath
+  , httpPort :: PortNumber
   }
 
 getOptions :: IO Options
@@ -117,6 +119,7 @@ getOptions = execParser $ info (helper <*> parser) infoMod
       <*> chainSeekHostParser
       <*> databaseUriParser
       <*> logConfigFileParser
+      <*> httpPortParser
 
     chainSeekPortParser = option auto $ mconcat
       [ long "chain-sync-port"
@@ -153,6 +156,14 @@ getOptions = execParser $ info (helper <*> parser) infoMod
       [ long "log-config-file"
       , metavar "FILE_PATH"
       , help "The logging configuration JSON file."
+      ]
+
+    httpPortParser = option auto $ mconcat
+      [ long "http-port"
+      , metavar "PORT_NUMBER"
+      , help "Port number to serve the http healthcheck API on"
+      , value 8080
+      , showDefault
       ]
 
     infoMod = mconcat

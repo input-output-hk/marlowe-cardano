@@ -90,6 +90,7 @@ run = runComponent_ proc Options{..} -> do
     , loadWalletContext = Query.loadWalletContext $ queryChainSync . GetUTxOs
     , eventBackend = narrowEventBackend (injectSelector App) eventBackend
     , getCurrentScripts = ScriptRegistry.getCurrentScripts
+    , httpPort = fromIntegral httpPort
     , ..
     }
 
@@ -102,6 +103,7 @@ data Options = Options
   , host :: HostName
   , logConfigFile :: Maybe FilePath
   , submitConfirmationBlocks :: BlockNo
+  , httpPort :: PortNumber
   }
 
 getOptions :: IO Options
@@ -116,6 +118,7 @@ getOptions = execParser $ info (helper <*> parser) infoMod
       <*> hostParser
       <*> logConfigFileParser
       <*> submitConfirmationBlocksParser
+      <*> httpPortParser
 
     chainSeekPortParser = option auto $ mconcat
       [ long "chain-sync-port"
@@ -170,6 +173,14 @@ getOptions = execParser $ info (helper <*> parser) infoMod
       [ long "log-config-file"
       , metavar "FILE_PATH"
       , help "The logging configuration JSON file."
+      ]
+
+    httpPortParser = option auto $ mconcat
+      [ long "http-port"
+      , metavar "PORT_NUMBER"
+      , help "Port number to serve the http healthcheck API on"
+      , value 8080
+      , showDefault
       ]
 
     submitConfirmationBlocksParser = option (BlockNo <$> auto) $ mconcat

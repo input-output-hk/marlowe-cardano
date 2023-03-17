@@ -9,7 +9,8 @@ module Language.Marlowe.Runtime.Indexer.ChainSeekClient
 import Cardano.Api (SystemStart)
 import Control.Concurrent (threadDelay)
 import Control.Concurrent.Component
-import Control.Concurrent.STM (STM, atomically, newTQueue, readTQueue, writeTQueue)
+import Control.Concurrent.STM (STM, TVar, atomically, newTQueue, newTVar, readTQueue, readTVar, writeTQueue, writeTVar)
+import Control.Exception (finally)
 import Data.Set (Set)
 import Data.Set.NonEmpty (NESet)
 import qualified Data.Set.NonEmpty as NESet
@@ -62,25 +63,30 @@ data ChainEvent
 -- | A component that runs a chain sync client to traverse the blockchain and
 -- extract blocks of Marlowe transactions. The sequence of changes to the chain
 -- can be read by repeatedly running the resulting STM action.
-chainSeekClient :: forall r. Component IO (ChainSeekClientDependencies r) (STM ChainEvent)
+chainSeekClient :: forall r. Component IO (ChainSeekClientDependencies r) (STM Bool, STM ChainEvent)
 chainSeekClient = component \ChainSeekClientDependencies{..} -> do
   -- Initialize a TQueue for emitting ChainEvents.
   eventQueue <- newTQueue
+
+  -- Initialize TVar for connectedness probe
+  connectedVar <- newTVar False
 
   -- Return the component's thread action and the action to pull the next chain
   -- event.
   pure
     -- In this component's thread, run the chain sync client that will pull the
     -- transactions for discovering and following Marlowe contracts
-    ( runSomeConnector chainSyncConnector $ client
-        (atomically . writeTQueue eventQueue)
-        databaseQueries
-        pollingInterval
-        marloweScriptHashes
-        payoutScriptHashes
-        chainSyncQueryConnector
-        eventBackend
-    , readTQueue eventQueue
+    ( flip finally (atomically $ writeTVar connectedVar False) do
+        runSomeConnector chainSyncConnector $ client
+          (atomically . writeTQueue eventQueue)
+          databaseQueries
+          pollingInterval
+          marloweScriptHashes
+          payoutScriptHashes
+          chainSyncQueryConnector
+          eventBackend
+          connectedVar
+    , (readTVar connectedVar, readTQueue eventQueue)
     )
   where
   -- | A chain sync client that discovers and follows all Marlowe contracts
@@ -92,8 +98,9 @@ chainSeekClient = component \ChainSeekClientDependencies{..} -> do
     -> NESet ScriptHash
     -> SomeClientConnector (QueryClient ChainSyncQuery) IO
     -> EventBackend IO r ChainSeekClientSelector
+    -> TVar Bool
     -> RuntimeChainSeekClient IO ()
-  client emit DatabaseQueries{..} pollingInterval marloweScriptHashes payoutScriptHashes chainSyncQueryConnector eventBackend =
+  client emit DatabaseQueries{..} pollingInterval marloweScriptHashes payoutScriptHashes chainSyncQueryConnector eventBackend connectedVar =
     ChainSeekClient do
       let
         queryChainSync :: ChainSyncQuery Void err a -> IO a
@@ -102,6 +109,7 @@ chainSeekClient = component \ChainSeekClientDependencies{..} -> do
           case result of
             Left _ -> fail "Failed to query chain sync"
             Right a -> pure a
+      atomically $ writeTVar connectedVar True
       systemStart <- queryChainSync GetSystemStart
       securityParameter <- queryChainSync GetSecurityParameter
       -- Get the intersection points - the most recent block headers stored locally.

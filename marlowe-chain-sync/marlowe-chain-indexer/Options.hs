@@ -21,6 +21,7 @@ data Options = Options
   , costModel         :: !CostModel
   , maxCost           :: !Int
   , logConfigFile     :: !(Maybe FilePath)
+  , httpPort :: !Int
   } deriving (Show, Eq)
 
 getOptions :: String -> IO Options
@@ -70,6 +71,7 @@ parseOptions defaultNetworkId defaultSocketPath defaultDatabaseUri version = O.i
               <*> costModelParser
               <*> maxCostParser
               <*> logConfigFileParser
+              <*> httpPortParser
           )
       where
         versionOption :: O.Parser (a -> a)
@@ -144,6 +146,18 @@ parseOptions defaultNetworkId defaultSocketPath defaultDatabaseUri version = O.i
               , O.metavar "INTEGER"
               , defaultNetworkId
               , O.help "Testnet network ID magic. Defaults to the CARDANO_TESTNET_MAGIC environment variable."
+              ]
+
+        httpPortParser :: O.Parser Int
+        httpPortParser = O.option O.auto options
+          where
+            options :: O.Mod O.OptionFields Int
+            options = mconcat
+              [ O.long "http-port"
+              , O.metavar "PORT_NUMBER"
+              , O.help "Port number to serve the http healthcheck API on"
+              , O.value 8080
+              , O.showDefault
               ]
 
         costModelParser :: O.Parser CostModel

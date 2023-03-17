@@ -48,6 +48,7 @@ library
     -Wredundant-constraints -Widentities
   exposed-modules:
     Control.Concurrent.Component
+    Control.Concurrent.Component.Probes
   build-depends:
       base >= 4.9 && < 5
     , lifted-async
@@ -55,3 +56,7 @@ library
     , monad-control
     , stm
     , transformers-base
+    , servant
+    , servant-server
+    , servant-client
+    , warp

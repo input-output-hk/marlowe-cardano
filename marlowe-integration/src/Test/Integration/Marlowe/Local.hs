@@ -297,7 +297,7 @@ withLocalMarloweRuntime' MarloweRuntimeOptions{..} test = withRunInIO \runInIO -
             result <- healthcheck
             if result then pure ()
             else liftIO $ threadDelay 1000 *> waitForWebServer (counter + 1)
-        | otherwise = fail "Unable to connect to webserver"
+        | otherwise = fail "Unable to connect to web server"
 
     let protocolConnector = SomeConnector $ ihoistConnector hoistMarloweClient (runResourceT . runWrappedUnliftIO) liftIO $ clientConnector marlowePair
 
@@ -504,6 +504,7 @@ runtime = proc RuntimeDependencies{..} -> do
       databaseQueries = chainIndexerDatabaseQueries
       eventBackend = narrowEventBackend (injectSelector ChainIndexerEvent) rootEventBackend
       connectToLocalNode = Cardano.connectToLocalNode localNodeConnectInfo
+      httpPort = webPort + 1
      in
       ChainIndexerDependencies{..}
 
@@ -515,6 +516,7 @@ runtime = proc RuntimeDependencies{..} -> do
     , pollingInterval = secondsToNominalDiffTime 0.01
     , marloweScriptHashes = NESet.singleton $ ScriptRegistry.marloweScript marloweScripts
     , payoutScriptHashes = NESet.singleton $ ScriptRegistry.payoutScript marloweScripts
+    , httpPort = webPort + 2
     }
 
   sync -< SyncDependencies
@@ -522,6 +524,7 @@ runtime = proc RuntimeDependencies{..} -> do
     , syncSource = SomeConnectionSource $ Connection.connectionSource marloweSyncPair
     , headerSyncSource = SomeConnectionSource $ Connection.connectionSource marloweHeaderSyncPair
     , querySource = SomeConnectionSource $ Connection.connectionSource marloweQueryPair
+    , httpPort = webPort + 3
     }
 
   chainSync -<
@@ -544,6 +547,7 @@ runtime = proc RuntimeDependencies{..} -> do
         { syncSource = SomeConnectionSource $ Connection.connectionSource chainSyncPair
         , querySource = SomeConnectionSource $ Connection.connectionSource chainSyncQueryPair
         , jobSource = SomeConnectionSource $ Connection.connectionSource chainSyncJobPair
+        , httpPort = webPort + 4
         , ..
         }
 
@@ -570,6 +574,7 @@ runtime = proc RuntimeDependencies{..} -> do
       TransactionDependencies
         { chainSyncConnector = SomeConnector $ clientConnector chainSyncPair
         , connectionSource = SomeConnectionSource $ Connection.connectionSource txJobPair
+        , httpPort = webPort + 5
         , ..
         }
 
@@ -579,6 +584,7 @@ runtime = proc RuntimeDependencies{..} -> do
     , getMarloweQueryDriver = driverFactory $ clientConnector marloweQueryPair
     , getTxJobDriver = driverFactory $ clientConnector txJobPair
     , connectionSource = SomeConnectionSource (logConnectionSource (narrowEventBackend (injectSelector MarloweTCP) $ hoistEventBackend liftIO rootEventBackend) marloweServerSource <> Connection.connectionSource marlowePair)
+    , httpPort = webPort + 6
     }
 
   server -< ServerDependencies

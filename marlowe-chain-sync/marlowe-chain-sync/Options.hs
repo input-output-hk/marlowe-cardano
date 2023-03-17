@@ -19,6 +19,7 @@ data Options = Options
   , queryPort         :: !PortNumber
   , commandPort       :: !PortNumber
   , logConfigFile     :: !(Maybe FilePath)
+  , httpPort :: !PortNumber
   } deriving (Show, Eq)
 
 getOptions :: String -> IO Options
@@ -97,6 +98,7 @@ parseOptions defaultNetworkId defaultSocketPath defaultDatabaseUri defaultHost d
               <*> queryPortOption
               <*> jobPortOption
               <*> logConfigFileParser
+              <*> httpPortOption
           )
       where
         versionOption :: O.Parser (a -> a)
@@ -189,6 +191,16 @@ parseOptions defaultNetworkId defaultSocketPath defaultDatabaseUri defaultHost d
               , O.metavar "FILE_PATH"
               , O.help "Path to the log configuration JSON file."
               ]
+
+        httpPortOption :: O.Parser PortNumber
+        httpPortOption = O.option O.auto $ mconcat
+          [ O.long "http-port"
+          , defaultPort
+          , O.metavar "PORT_NUMBER"
+          , O.help "Port number to serve the http healthcheck API on"
+          , O.value 8080
+          , O.showDefault
+          ]
 
     infoMod :: O.InfoMod Options
     infoMod = mconcat
