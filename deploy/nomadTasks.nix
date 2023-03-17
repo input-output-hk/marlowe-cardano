@@ -46,7 +46,7 @@ let
         kill_signal = "SIGINT";
         kill_timeout = "30s";
         resources.cpu = 2000;
-        resources.memory = 4096;
+        resources.memory = 2048;
         volume_mount = {
           destination = "/persist";
           propagation_mode = "private";
@@ -80,7 +80,7 @@ let
         kill_signal = "SIGINT";
         kill_timeout = "30s";
         resources.cpu = 2000;
-        resources.memory = 4096;
+        resources.memory = 2048;
         volume_mount = {
           destination = "/persist";
           propagation_mode = "private";
@@ -109,8 +109,8 @@ let
         driver = "docker";
         kill_signal = "SIGINT";
         kill_timeout = "30s";
-        resources.cpu = 2000;
-        resources.memory = 4096;
+        resources.cpu = 1000;
+        resources.memory = 1024;
         vault = {
           change_mode = "noop";
           env = true;
@@ -136,8 +136,8 @@ let
         driver = "docker";
         kill_signal = "SIGINT";
         kill_timeout = "30s";
-        resources.cpu = 2000;
-        resources.memory = 4096;
+        resources.cpu = 1000;
+        resources.memory = 1024;
         vault = {
           change_mode = "noop";
           env = true;
@@ -162,8 +162,8 @@ let
         driver = "docker";
         kill_signal = "SIGINT";
         kill_timeout = "30s";
-        resources.cpu = 2000;
-        resources.memory = 4096;
+        resources.cpu = 1000;
+        resources.memory = 1024;
       };
 
       marlowe-proxy = {
@@ -185,8 +185,8 @@ let
         driver = "docker";
         kill_signal = "SIGINT";
         kill_timeout = "30s";
-        resources.cpu = 2000;
-        resources.memory = 4096;
+        resources.cpu = 1000;
+        resources.memory = 1024;
       };
     };
 in
