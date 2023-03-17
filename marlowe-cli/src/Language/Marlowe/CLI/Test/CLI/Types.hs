@@ -91,6 +91,7 @@ import Language.Marlowe.Cardano.Thread
   (AnyMarloweThread, MarloweThread(Closed, Created, InputsApplied), anyMarloweThread)
 import qualified Language.Marlowe.Core.V1.Semantics.Types as M
 import qualified Language.Marlowe.Extended.V1 as E
+import Language.Marlowe.Runtime.Core.Api (ContractId)
 import Ledger.Orphans ()
 import Plutus.V1.Ledger.Api (CostModelParams, CurrencySymbol, ProtocolVersion, TokenName)
 import Plutus.V1.Ledger.SlotConfig (SlotConfig)
@@ -316,6 +317,7 @@ data InterpretState lang era = InterpretState
   , _isCurrencies :: Currencies
   , _isContracts :: CLIContracts lang era
   , _isReferenceScripts :: Maybe (MarloweScriptsRefs MarlowePlutusVersion era)
+  , _isKnownContracts :: Map ContractNickname ContractId
   }
 
 data InterpretEnv lang era = InterpretEnv

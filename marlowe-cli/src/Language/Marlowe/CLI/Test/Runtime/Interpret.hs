@@ -42,7 +42,6 @@ import Language.Marlowe.CLI.Test.ExecutionMode (skipInSimluationMode)
 import Language.Marlowe.CLI.Test.Log (logLabeledMsg, throwLabeledError, throwTraceError)
 import Language.Marlowe.CLI.Test.Runtime.Types
   ( InterpretMonad
-  , KnownContracts(KnownContracts)
   , RuntimeMonitorState(RuntimeMonitorState)
   , RuntimeOperation(..)
   , ieExecutionMode
@@ -58,7 +57,7 @@ getContractId
   => ContractNickname
   -> m ContractId
 getContractId nickname = do
-  KnownContracts knownContracts <- use isKnownContracts
+  knownContracts <- use isKnownContracts
   case Map.lookup nickname knownContracts of
     Just contractId -> pure contractId
     Nothing ->

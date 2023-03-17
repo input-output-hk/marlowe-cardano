@@ -11,6 +11,7 @@
 -----------------------------------------------------------------------------
 
 
+{-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
@@ -39,7 +40,7 @@ module Language.Marlowe.CLI.Test.Types
 import Cardano.Api
   (AddressInEra, CardanoMode, LocalNodeConnectInfo, Lovelace, NetworkId, PolicyId, ScriptDataSupportedInEra, TxBody)
 import qualified Cardano.Api as C
-import Control.Lens (makeLenses)
+import Control.Lens (Lens', makeLenses)
 import Control.Monad.Except (MonadError)
 import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.Reader (MonadReader)
@@ -66,6 +67,7 @@ import Language.Marlowe.CLI.Transaction (queryUtxos)
 import Language.Marlowe.CLI.Types
   ( CliEnv
   , CliError
+  , MarlowePlutusVersion
   , MarloweScriptsRefs
   , MarloweTransaction(MarloweTransaction, mtInputs)
   , PrintStats
@@ -84,12 +86,21 @@ import Plutus.V1.Ledger.SlotConfig (SlotConfig)
 import qualified Plutus.V1.Ledger.Value as P
 import Text.Read (readMaybe)
 
+import Control.Applicative (Alternative((<|>)))
 import Control.Concurrent.STM (TChan, TVar)
+import Control.Lens.Lens (lens)
+import Control.Monad.State.Class (MonadState)
 import Data.Set (Set)
-import Language.Marlowe.CLI.Test.CLI.Types (AnyCLIMarloweThread, CLIOperation)
+import Language.Marlowe.CLI.Test.CLI.Types (AnyCLIMarloweThread, CLIContracts(CLIContracts), CLIOperation)
+import qualified Language.Marlowe.CLI.Test.CLI.Types as CLI
+import Language.Marlowe.CLI.Test.Contract (ContractNickname(ContractNickname))
 import Language.Marlowe.CLI.Test.ExecutionMode (ExecutionMode)
-import Language.Marlowe.CLI.Test.Runtime.Types (RuntimeOperation)
-import Language.Marlowe.CLI.Test.Wallet.Types (CurrencyNickname, WalletOperation)
+import Language.Marlowe.CLI.Test.Runtime.Types
+  (RuntimeMonitorInput(RuntimeMonitorInput), RuntimeMonitorState(RuntimeMonitorState), RuntimeOperation)
+import qualified Language.Marlowe.CLI.Test.Runtime.Types as Runtime
+import Language.Marlowe.CLI.Test.Wallet.Types
+  (Currencies(Currencies), CurrencyNickname, WalletOperation, Wallets(Wallets))
+import qualified Language.Marlowe.CLI.Test.Wallet.Types as Wallet
 import Language.Marlowe.Protocol.Sync.Client (MarloweSyncClient)
 import qualified Language.Marlowe.Runtime.App.Stream as Runtime.App
 import Language.Marlowe.Runtime.App.Types (Client)
@@ -105,12 +116,12 @@ data MarloweTests era a =
     -- | Test contracts on-chain.
     ScriptTests
     {
-      stNetwork              :: NetworkId   -- ^ The network ID, if any.
-    , stSocketPath           :: FilePath    -- ^ The path to the node socket.
+      stNetwork :: NetworkId   -- ^ The network ID, if any.
+    , stSocketPath :: FilePath    -- ^ The path to the node socket.
     , stFaucetSigningKeyFile :: FilePath    -- ^ The file containing the faucet's signing key.
-    , stFaucetAddress        :: AddressInEra era  -- ^ The faucet address.
-    , stExecutionMode        :: ExecutionMode
-    , stTests                :: [a]         -- ^ Input for the tests.
+    , stFaucetAddress :: AddressInEra era  -- ^ The faucet address.
+    , stExecutionMode :: ExecutionMode
+    , stTests :: [a]         -- ^ Input for the tests.
     }
     deriving stock (Eq, Generic, Show)
 
@@ -121,14 +132,9 @@ data ScriptTest =
     stTestName         :: String             -- ^ The name of the test.
   , stScriptOperations :: [TestOperation]  -- ^ The sequence of test operations.
   }
-    deriving stock (Eq, Generic, Show)
-    deriving anyclass (FromJSON, ToJSON)
+  deriving stock (Eq, Generic, Show)
+  deriving anyclass (FromJSON, ToJSON)
 
-
---data UseMarloweScripts
---  = RuntimeScripts
---  | CompiledScripts
---
 -- | On-chain test operations for the Marlowe contract and payout validators.
 data TestOperation =
     CLIOperation CLIOperation
@@ -138,43 +144,96 @@ data TestOperation =
     {
       soFailureMessage :: String
     }
-    deriving stock (Eq, Generic, Show)
-    deriving anyclass (FromJSON, ToJSON)
+  deriving stock (Eq, Generic, Show)
 
+-- FIXME:
+-- * We should improve the error reporting here by manually
+-- checking the `tag` and then parsing appropriate sub-operation.
+-- * Improve `Fail` parsing / printing.
+instance FromJSON TestOperation where
+  parseJSON json =
+    CLIOperation <$> parseJSON json
+    <|> RuntimeOperation <$> parseJSON json
+    <|> WalletOperation <$> parseJSON json
+    <|> Fail <$> parseJSON json
 
--- data ScriptState lang era = ScriptState
---   {
---     _ssContracts              :: Map ContractNickname (MarloweContract lang era)
---   , _ssCurrencies             :: Map CurrencyNickname Currency
---   , _ssReferenceScripts       :: Maybe (MarloweScriptsRefs lang era)
---   , _ssWallets                :: Map WalletNickname (Wallet era)                    -- ^ Faucet wallet should be included here.
---   , _ssRuntime                :: Maybe (RuntimeMonitorInput lang era, RuntimeState lang era)
---   }
---
---
--- faucetNickname :: WalletNickname
--- faucetNickname = "Faucet"
---
---
--- scriptState :: Wallet era -> ScriptState lang era
--- scriptState faucet = do
---   let
---     wallets = Map.singleton faucetNickname faucet
---   ScriptState mempty mempty Nothing wallets Nothing
---
---
--- data ScriptEnv era = ScriptEnv
---   { _seConnection         :: LocalNodeConnectInfo CardanoMode
---   , _seCostModelParams    :: CostModelParams
---   , _seEra                :: ScriptDataSupportedInEra era
---   , _seProtocolVersion    :: ProtocolVersion
---   , _seSlotConfig         :: SlotConfig
---   , _seExecutionMode      :: ExecutionMode
---   , _sePrintStats         :: PrintStats
---   , _seEventBackend       :: EventBackend IO JSONRef DynamicEventSelector
---   }
---
---
--- makeLenses 'ScriptEnv
--- makeLenses 'ScriptState
---
+instance ToJSON TestOperation where
+  toJSON (CLIOperation op) = toJSON op
+  toJSON (RuntimeOperation op) = toJSON op
+  toJSON (WalletOperation op) = toJSON op
+  toJSON (Fail msg) = toJSON msg
+
+data InterpretState lang era = InterpretState
+  {
+    _ssContracts :: CLIContracts lang era
+  , _ssReferenceScripts :: Maybe (MarloweScriptsRefs MarlowePlutusVersion era)
+  , _ssCurrencies :: Currencies
+  , _ssWallets :: Wallets era
+  , _isKnownContracts :: Map ContractNickname ContractId
+  }
+
+data InterpretEnv lang era = InterpretEnv
+  {
+    _ieRuntimeMonitorState :: RuntimeMonitorState lang era
+  , _ieRuntimeMonitorInput :: RuntimeMonitorInput
+  , _ieExecutionMode :: ExecutionMode
+  , _ieConnection :: LocalNodeConnectInfo CardanoMode
+  , _ieEra :: ScriptDataSupportedInEra era
+  , _iePrintStats :: PrintStats
+  , _ieSlotConfig :: SlotConfig
+  , _ieCostModelParams :: CostModelParams
+  , _ieProtocolVersion :: ProtocolVersion
+  }
+
+type InterpretMonad m lang era =
+  ( MonadState (InterpretState lang era) m
+  , MonadReader (InterpretEnv lang era) m
+  , MonadError CliError m
+  , MonadIO m
+  )
+
+toCLIInterpretEnv :: InterpretEnv lang era -> CLI.InterpretEnv lang era
+toCLIInterpretEnv (InterpretEnv _ _ executionMode connection era printStats slotConfig costModelParams protocolVersion) =
+  CLI.InterpretEnv connection era printStats executionMode slotConfig costModelParams protocolVersion
+
+toRuntimeInterpretEnv :: InterpretEnv lang era -> Runtime.InterpretEnv lang era
+toRuntimeInterpretEnv (InterpretEnv runtimeMonitorState runtimeMonitorInput executionMode connection era printStats slotConfig costModelParams protocolVersion) =
+  Runtime.InterpretEnv runtimeMonitorState runtimeMonitorInput executionMode
+
+toWalletInterpretEnv :: InterpretEnv lang era -> Wallet.InterpretEnv era
+toWalletInterpretEnv (InterpretEnv _ _ executionMode connection era printStats _ _ _) =
+  Wallet.InterpretEnv connection era printStats executionMode
+
+cliInpterpretStateL :: Lens' (InterpretState lang era) (CLI.InterpretState lang era)
+cliInpterpretStateL = lens toCLIInterpretState fromCLIInterpretState
+  where
+    toCLIInterpretState (InterpretState contracts referenceScripts currencies wallets knownContracts) =
+      CLI.InterpretState wallets currencies contracts referenceScripts knownContracts
+    fromCLIInterpretState
+      InterpretState {}
+      (CLI.InterpretState wallets currencies contracts referenceScripts knownContracts) =
+      InterpretState contracts referenceScripts currencies wallets knownContracts
+
+runtimeInpterpretStateL :: Lens' (InterpretState lang era) Runtime.InterpretState
+runtimeInpterpretStateL = lens toRuntimeInterpretState fromRuntimeInterpretState
+  where
+    toRuntimeInterpretState (InterpretState contracts referenceScripts currencies wallets knownContracts) =
+      Runtime.InterpretState knownContracts
+    fromRuntimeInterpretState
+      (InterpretState contracts referenceScripts currencies wallets _)
+      (Runtime.InterpretState knownContracts) =
+      InterpretState contracts referenceScripts currencies wallets knownContracts
+
+walletInpterpretStateL :: Lens' (InterpretState lang era) (Wallet.InterpretState era)
+walletInpterpretStateL = lens toWalletInterpretState fromWalletInterpretState
+  where
+    toWalletInterpretState (InterpretState contracts referenceScripts currencies wallets knownContracts) =
+      Wallet.InterpretState wallets currencies
+    fromWalletInterpretState
+      (InterpretState contracts referenceScripts _ _ knownContracts)
+      (Wallet.InterpretState wallets currencies) =
+      InterpretState contracts referenceScripts currencies wallets knownContracts
+
+makeLenses 'InterpretEnv
+makeLenses 'InterpretState
+

@@ -90,13 +90,13 @@ library
     Language.Marlowe.CLI.Test.CLI.Monad
     Language.Marlowe.CLI.Test.CLI.Types
     Language.Marlowe.CLI.Test.ExecutionMode
+    Language.Marlowe.CLI.Test.Interpret
     Language.Marlowe.CLI.Test.Log
     Language.Marlowe.CLI.Test.Runtime.Interpret
     Language.Marlowe.CLI.Test.Runtime.Monitor
     Language.Marlowe.CLI.Test.Runtime.Types
     Language.Marlowe.CLI.Test.Wallet.Interpret
     Language.Marlowe.CLI.Test.Wallet.Types
-    Language.Marlowe.CLI.Test.Script
     Language.Marlowe.CLI.Test.Types
     Language.Marlowe.CLI.Transaction
     Language.Marlowe.CLI.Types

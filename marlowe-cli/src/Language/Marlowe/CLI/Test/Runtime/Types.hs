@@ -98,15 +98,9 @@ data RuntimeOperation =
   deriving stock (Eq, Generic, Show)
   deriving anyclass (FromJSON, ToJSON)
 
-newtype KnownContracts = KnownContracts (Map ContractNickname ContractId)
-
 newtype InterpretState = InterpretState
   {
-   _isKnownContracts :: KnownContracts
-  --, _isWallets :: Wallets era
-  --, _isCurrencies :: Currencies
-  --, _isContracts :: CLIContracts lang era
-  --, _isReferenceScripts :: Maybe (MarloweScriptsRefs MarlowePlutusVersion era)
+   _isKnownContracts :: Map ContractNickname ContractId
   }
 
 data InterpretEnv lang era = InterpretEnv
@@ -114,12 +108,6 @@ data InterpretEnv lang era = InterpretEnv
     _ieRuntimeMonitorState :: RuntimeMonitorState lang era
   , _ieRuntimeMonitorInput :: RuntimeMonitorInput
   , _ieExecutionMode :: ExecutionMode
-  -- , _ieConnection :: LocalNodeConnectInfo CardanoMode
-  -- , _ieEra :: ScriptDataSupportedInEra era
-  -- , _iePrintStats :: PrintStats
-  -- , _ieSlotConfig :: SlotConfig
-  -- , _ieCostModelParams :: CostModelParams
-  -- , _ieProtocolVersion :: ProtocolVersion
   }
 
 type InterpretMonad m lang era =

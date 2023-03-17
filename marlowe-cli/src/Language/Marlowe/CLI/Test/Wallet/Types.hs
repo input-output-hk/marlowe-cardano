@@ -255,8 +255,6 @@ data WalletOperation =
 
 newtype Wallets era = Wallets (Map WalletNickname (Wallet era))
 
--- conNames = getConNames @(Rep WalletOperation)
-
 data InterpretState era = InterpretState
   { _isWallets :: Wallets era
   , _isCurrencies :: Currencies
