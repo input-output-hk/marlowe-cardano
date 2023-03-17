@@ -1,28 +1,52 @@
 name: "Deploy"
+env:
+  ALLOWED_URIS: "https://github.com https://api.github.com"
+  TRUSTED_PUBLIC_KEYS: "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ= marlowe-temp.cachix.org-1:1gPjVFpu4QjaAT3tRurCioX+BC23V7mjvFwpP5bV0Ec= loony-tools:pr9m4BkM/5/eSTZlkQyRt57Jz7OMBxNSUiMC4FkcNfk="
+  SUBSTITUTERS: "https://cache.nixos.org/ https://cache.iog.io https://marlowe-temp.cachix.org https://cache.zw3rk.com/"
+
 on:
   push:
     branches:
-      - main # staging
-      - production
-      - deploy-hernan
-      - deploy-pablo
-      - shlevy
-      - marlowe-pioneers
-      - sprint-*
+      - main
+      - jhbertra/deployment
 jobs:
   tests:
     uses: ./.github/workflows/test.yml
   deploy:
     needs: [tests]
     runs-on: ubuntu-latest
-    env:
-      GITHUB_TOKEN: ${{ secrets.PLUTUS_OPS_GITHUB_TOKEN }}
     steps:
       - name: Checkout
         uses: actions/checkout@v3
 
-      - name: Inject slug/short variables
-        uses: rlespinasse/github-slug-action@v3.x
+      - name: Install Nix
+        uses: cachix/install-nix-action@v20
+        with:
+          nix_path: nixpkgs=channel:nixos-unstable
+          install_url: https://releases.nixos.org/nix/nix-2.10.3/install
+          extra_nix_config: |
+            allowed-uris = ${{ env.ALLOWED_URIS }}
+            trusted-public-keys = ${{ env.TRUSTED_PUBLIC_KEYS }}
+            substituters = ${{ env.SUBSTITUTERS }}
+            experimental-features = nix-command flakes
 
-      - name: Deploy to bitte
-        run: ./scripts/deploy-bitte
+      - name: Install Skopeo
+        run: nix-env -iA nixpkgs.skopeo
+
+      - name: Login with Skopeo
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | skopeo login ghcr.io -u $ --password-stdin
+
+      - name: Publish Runtime Images
+        run: |
+          nix build .#oci-images.x86_64-linux.latest.all.copyToRegistry
+          ./result/bin/copy-to-registry
+
+      - name: Setup .netrc
+        run: |
+          cat > ~/.netrc << EOF
+          machine github.com password ${{ secrets.GITHUB_TOKEN }}
+          machine api.github.com password ${{ secrets.GITHUB_TOKEN }}
+          EOF
+
+#       - name: Deploy to Nomad
+#         run: nix develop github:input-output-hk/dapps-world#x86_64-linux.automation.devshells.ops -c ./scripts/deploy-nomad
