@@ -78,7 +78,7 @@ import qualified Cardano.Api as C
 import Cardano.Api.Shelley (ReferenceScript(ReferenceScriptNone))
 import qualified Cardano.Api.Shelley as CS
 import qualified Cardano.Ledger.BaseTypes as LC (Network(..))
-import Control.Monad (forM_, guard, unless, when)
+import Control.Monad (forM_, guard, unless, void, when)
 import Control.Monad.Except (MonadError, MonadIO, catchError, liftIO, throwError)
 import Control.Monad.Reader (MonadReader)
 import Data.Bifunctor (bimap)
@@ -87,6 +87,7 @@ import Data.List (groupBy, sortBy)
 import qualified Data.Map.Strict as M (toList)
 import Data.Maybe (catMaybes, fromMaybe)
 import qualified Data.Set as S (singleton)
+import Data.Time.Units (Second)
 import Data.Traversable (for)
 import Data.Tuple.Extra (uncurry3)
 import Language.Marlowe.CLI.Cardano.Api (adjustMinimumUTxO)
@@ -120,14 +121,17 @@ import Language.Marlowe.CLI.Types
   , PrintStats(PrintStats)
   , PublishingStrategy
   , RedeemerInfo(..)
+  , Seconds(Seconds)
   , SigningKeyFile(..)
   , SomeMarloweTransaction(..)
   , SomePaymentSigningKey
+  , SubmitMode(DoSubmit, DontSubmit)
   , TxBodyFile(TxBodyFile, unTxBodyFile)
   , ValidatorInfo(..)
   , askEra
   , defaultCoinSelectionStrategy
   , doWithCardanoEra
+  , submitModeFromTimeout
   , toAddressAny'
   , toShelleyAddress
   , txIn
@@ -507,7 +511,7 @@ runTransaction :: forall era m
                -> [SigningKeyFile]                              -- ^ The files for required signing keys.
                -> Maybe FilePath                                -- ^ The file containing JSON metadata, if any.
                -> TxBodyFile                                    -- ^ The output file for the transaction body.
-               -> Maybe Int                                     -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
+               -> Maybe Second                                  -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
                -> Bool                                          -- ^ Whether to print statistics about the transaction.
                -> Bool                                          -- ^ Assertion that the transaction is invalid.
                -> m TxId                                        -- ^ Action to build the transaction body.
@@ -551,7 +555,7 @@ runTransactionImpl :: forall era lang m
                -> AddressInEra era                                    -- ^ The change address.
                -> [SomePaymentSigningKey]                             -- ^ Required signing keys.
                -> TxMetadataInEra era                                 -- ^ Tx metadata.
-               -> Maybe Int                                           -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
+               -> Maybe Second                                        -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
                -> Bool                                                -- ^ Whether to print statistics about the transaction.
                -> Bool                                                -- ^ Assertion that the transaction is invalid.
                -> m (TxBody era)                                      -- ^ Action to build the transaction body.
@@ -684,7 +688,7 @@ withdrawFunds :: (MonadError CliError m, MonadReader (CliEnv era) m)
               -> [SigningKeyFile]                              -- ^ The files for required signing keys.
               -> Maybe FilePath                          -- ^ The file containing JSON metadata, if any.
               -> TxBodyFile                              -- ^ The output file for the transaction body.
-              -> Maybe Int                               -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
+              -> Maybe Second                            -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
               -> Bool                                    -- ^ Whether to print statistics about the transaction.
               -> Bool                                    -- ^ Assertion that the transaction is invalid.
               -> m TxId                                  -- ^ Action to build the transaction body.
@@ -752,7 +756,7 @@ autoRunTransaction :: forall era m
                -> [SigningKeyFile]                              -- ^ The files for required signing keys.
                -> Maybe FilePath                                -- ^ The file containing JSON metadata, if any.
                -> TxBodyFile                                    -- ^ The output file for the transaction body.
-               -> Maybe Int                                     -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
+               -> Maybe Second                                  -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
                -> Bool                                          -- ^ Whether to print statistics about the transaction.
                -> Bool                                          -- ^ Assertion that the transaction is invalid.
                -> m TxId                                        -- ^ Action to build the transaction body.
@@ -763,6 +767,8 @@ autoRunTransaction connection marloweInBundle marloweOutFile changeAddress signi
     era <- askEra @era
     signingKeys <- mapM readSigningKey signingKeyFiles
     let
+      submitMode = submitModeFromTimeout timeout
+
       go :: forall lang. IsPlutusScriptLanguage lang => C.IsCardanoEra era => MarloweTransaction lang era -> m TxId
       go marloweOut'' = do
         marloweInBundle' <- case marloweInBundle of
@@ -771,7 +777,8 @@ autoRunTransaction connection marloweInBundle marloweOutFile changeAddress signi
             marloweIn <- readMarloweTransactionFile (plutusScriptVersion :: PlutusScriptVersion lang) marloweInFile
             pure $ Just (marloweIn, marloweTxIn)
 
-        (body :: TxBody era) <- autoRunTransactionImpl connection marloweInBundle' marloweOut'' changeAddress signingKeys metadata timeout printStats invalid
+        (body :: TxBody era) <- autoRunTransactionImpl
+          connection marloweInBundle' marloweOut'' changeAddress signingKeys metadata submitMode printStats invalid
         -- Write the transaction file.
         doWithCardanoEra $ liftCliIO $ writeFileTextEnvelope bodyFile Nothing body
         pure $ getTxId body
@@ -795,11 +802,11 @@ autoRunTransactionImpl :: forall era lang m
                -> AddressInEra era                            -- ^ The change address.
                -> [SomePaymentSigningKey]
                -> TxMetadataInEra era                         -- ^ The file containing JSON metadata, if any.
-               -> Maybe Int                                   -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
+               -> SubmitMode                                  -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
                -> Bool                                        -- ^ Whether to print statistics about the transaction.
                -> Bool                                        -- ^ Assertion that the transaction is invalid.
                -> m (TxBody era)                              -- ^ Action to build the transaction body.
-autoRunTransactionImpl connection marloweInBundle marloweOut' changeAddress signingKeys metadata timeout printStats invalid =
+autoRunTransactionImpl connection marloweInBundle marloweOut' changeAddress signingKeys metadata submitMode printStats invalid =
   do
     -- Fetch the protocol parameters.
     protocol <- queryInEra connection QueryProtocolParameters
@@ -960,10 +967,11 @@ autoRunTransactionImpl connection marloweInBundle marloweOut' changeAddress sign
             printStats
             invalid
         -- Optionally submit the transaction, waiting for a timeout.
-        forM_ timeout
-          $ if invalid
-              then const $ throwError "Refusing to submit an invalid transaction: collateral would be lost."
-              else submitBody connection body signingKeys
+        case submitMode of
+          DontSubmit -> pure ()
+          DoSubmit timeout -> if invalid
+              then throwError "Refusing to submit an invalid transaction: collateral would be lost."
+              else void $ submitBody connection body signingKeys timeout
         -- Return the transaction identifier.
         pure body
     go marloweOut'
@@ -1017,7 +1025,7 @@ autoWithdrawFunds :: forall era m
                   -> [SigningKeyFile]                        -- ^ The files for required signing keys.
                   -> Maybe FilePath                          -- ^ The file containing JSON metadata, if any.
                   -> TxBodyFile                              -- ^ The output file for the transaction body.
-                  -> Maybe Int                               -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
+                  -> Maybe Second                            -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
                   -> PrintStats                              -- ^ Whether to print statistics about the transaction.
                   -> Bool                                    -- ^ Assertion that the transaction is invalid.
                   -> m TxId                                  -- ^ Action to build the transaction body.
@@ -1039,7 +1047,9 @@ autoWithdrawFunds connection marloweOutFile roleName changeAddress signingKeyFil
           rolePayoutValidator = mtRoleValidator marloweOut'
 
         -- Write the transaction file.
-        (txBody :: TxBody era) <- autoWithdrawFundsImpl connection token rolePayoutValidator Nothing changeAddress signingKeys Nothing metadata timeout printStats invalid
+        let submitMode = submitModeFromTimeout timeout
+        (txBody :: TxBody era) <- autoWithdrawFundsImpl
+          connection token rolePayoutValidator Nothing changeAddress signingKeys Nothing metadata submitMode printStats invalid
 
         doWithCardanoEra $ liftCliIO $ writeFileTextEnvelope (unTxBodyFile bodyFile) Nothing txBody
         pure $ getTxId txBody
@@ -1066,11 +1076,11 @@ autoWithdrawFundsImpl :: forall era lang m
                   -> [SomePaymentSigningKey]                 -- ^ Required signing keys.
                   -> Maybe (FilterPayouts era)               -- ^ Filtering option so transactoin limits can be imposed.
                   -> TxMetadataInEra era                     -- ^ The file containing JSON metadata, if any.
-                  -> Maybe Int                               -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
+                  -> SubmitMode                              -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
                   -> PrintStats                              -- ^ Whether to print statistics about the transaction.
                   -> Bool                                    -- ^ Assertion that the transaction is invalid.
                   -> m (TxBody era)                          -- ^ Action to build the transaction body.
-autoWithdrawFundsImpl connection token validatorInfo range changeAddress signingKeys possibleFilter metadata timeout (PrintStats printStats) invalid =
+autoWithdrawFundsImpl connection token validatorInfo range changeAddress signingKeys possibleFilter metadata submitMode (PrintStats printStats) invalid =
   do
     -- Fetch the protocol parameters.
     protocol <- queryInEra connection QueryProtocolParameters
@@ -1137,9 +1147,10 @@ autoWithdrawFundsImpl connection token validatorInfo range changeAddress signing
         printStats
         invalid
     -- Optionally submit the transaction, waiting for a timeout.
-    forM_ timeout
-      $ if invalid
-          then const $ throwError "Refusing to submit an invalid transaction: collateral would be lost."
-          else submitBody connection body signingKeys
+    case submitMode of
+      DontSubmit -> pure ()
+      DoSubmit timeout -> if invalid
+          then throwError "Refusing to submit an invalid transaction: collateral would be lost."
+          else void $ submitBody connection body signingKeys timeout
     -- Return the transaction identifier.
     pure body

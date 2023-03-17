@@ -35,7 +35,6 @@ runDetection
   -> IO (TChanEOF (ContractStream 'V1))
 runDetection = App.runDetection $ const True
 
-
 runFinder
   :: EventBackend IO r DynamicEventSelector
   -> Int

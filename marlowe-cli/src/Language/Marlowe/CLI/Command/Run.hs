@@ -64,6 +64,7 @@ import Plutus.V1.Ledger.Api (CurrencySymbol, POSIXTime(..), TokenName)
 import qualified Cardano.Api as Api (Value)
 import qualified Cardano.Api as C
 import Control.Monad.Reader (MonadReader)
+import Data.Time.Units (Second)
 import Language.Marlowe.CLI.IO (getDefaultCostModel, getProtocolVersion)
 import qualified Options.Applicative as O
 
@@ -107,7 +108,7 @@ data RunCommand era =
     , signingKeyFiles :: [SigningKeyFile]                    -- ^ The files containing the required signing keys.
     , metadataFile    :: Maybe FilePath                -- ^ The file containing JSON metadata, if any.
     , bodyFile        :: TxBodyFile                    -- ^ The output file for the transaction body.
-    , submitTimeout   :: Maybe Int                     -- ^ Whether to submit the transaction, and its confirmation timeout in seconds.
+    , submitTimeout   :: Maybe Second                  -- ^ Whether to submit the transaction, and its confirmation timeout in seconds.
     , printStats      :: Bool                          -- ^ Whether to print statistics about the contract and transaction.
     , invalid         :: Bool                          -- ^ Assertion that the transaction is invalid.
     }
@@ -125,7 +126,7 @@ data RunCommand era =
     , signingKeyFiles :: [SigningKeyFile]                -- ^ The files containing the required signing keys.
     , metadataFile    :: Maybe FilePath            -- ^ The file containing JSON metadata, if any.
     , bodyFile        :: TxBodyFile                -- ^ The output file for the transaction body.
-    , submitTimeout   :: Maybe Int                 -- ^ Whether to submit the transaction, and its confirmation timeout in seconds.
+    , submitTimeout   :: Maybe Second              -- ^ Whether to submit the transaction, and its confirmation timeout in seconds.
     , printStats      :: Bool                      -- ^ Whether to print statistics about the contract and transaction.
     , invalid         :: Bool                      -- ^ Assertion that the transaction is invalid.
     }
@@ -140,7 +141,7 @@ data RunCommand era =
     , signingKeyFiles :: [SigningKeyFile]        -- ^ The files containing the required signing keys.
     , metadataFile    :: Maybe FilePath          -- ^ The file containing JSON metadata, if any.
     , bodyFile        :: TxBodyFile              -- ^ The output file for the transaction body.
-    , submitTimeout   :: Maybe Int               -- ^ Whether to submit the transaction, and its confirmation timeout in seconds.
+    , submitTimeout   :: Maybe Second            -- ^ Whether to submit the transaction, and its confirmation timeout in seconds.
     , printStats      :: Bool                    -- ^ Whether to print statistics about the contract and transaction.
     , invalid         :: Bool                    -- ^ Assertion that the transaction is invalid.
     }
@@ -155,7 +156,7 @@ data RunCommand era =
     , signingKeyFiles :: [SigningKeyFile]  -- ^ The files containing the required signing keys.
     , metadataFile    :: Maybe FilePath    -- ^ The file containing JSON metadata, if any.
     , bodyFile        :: TxBodyFile        -- ^ The output file for the transaction body.
-    , submitTimeout   :: Maybe Int         -- ^ Whether to submit the transaction, and its confirmation timeout in seconds.
+    , submitTimeout   :: Maybe Second      -- ^ Whether to submit the transaction, and its confirmation timeout in seconds.
     , printStats      :: Bool              -- ^ Whether to print statistics about the contract and transaction.
     , invalid         :: Bool              -- ^ Assertion that the transaction is invalid.
     }

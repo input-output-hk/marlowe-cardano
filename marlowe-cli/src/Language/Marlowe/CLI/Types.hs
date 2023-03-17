@@ -20,6 +20,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -36,8 +37,10 @@ module Language.Marlowe.CLI.Types
   , MarlowePlutusVersion
   , MarloweTransaction(..)
   , RedeemerInfo(..)
+  , Seconds(..)
   , SomeMarloweTransaction(..)
   , SomeTimeout(..)
+  , SubmitMode(..)
   , ValidatorInfo(..)
     -- * eUTxOs
   , AnUTxO(..)
@@ -93,6 +96,7 @@ module Language.Marlowe.CLI.Types
     -- * accessors and converters
   , anUTxOValue
   , getVerificationKey
+  , submitModeFromTimeout
   , toMarloweTimeout
   , toPOSIXTime
   , toPaymentVerificationKey
@@ -184,6 +188,7 @@ import qualified Data.Map.Strict as Map
 import Data.Proxy (Proxy(Proxy))
 import Data.Time (NominalDiffTime, UTCTime, addUTCTime, getCurrentTime, nominalDiffTimeToSeconds)
 import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
+import Data.Time.Units (Second, TimeUnit(fromMicroseconds))
 import GHC.Exts (IsString(fromString))
 import GHC.Natural (Natural)
 import Language.Marlowe.CLI.Cardano.Api (toMultiAssetSupportedInEra, withShelleyBasedEra)
@@ -756,7 +761,7 @@ data MintingAction era =
     Mint
     {
       maIssuer :: CurrencyIssuer era
-    , maTokenDistribution :: L.NonEmpty (P.TokenName, Natural, AddressInEra era)
+    , maTokenDistribution :: L.NonEmpty (P.TokenName, Natural, AddressInEra era, Maybe Lovelace)
     }
   -- ^ The token names, amount and a possible receipient addresses.
   | BurnAll
@@ -765,3 +770,12 @@ data MintingAction era =
     , maProviders :: L.NonEmpty (AddressInEra era, SomePaymentSigningKey)
     }
   -- ^ Burn all found tokens on the providers UTxOs of a given "private currency".
+
+newtype Seconds = Seconds Int
+    deriving stock (Eq, Show)
+
+data SubmitMode = DontSubmit | DoSubmit Second
+
+submitModeFromTimeout :: Maybe Second -> SubmitMode
+submitModeFromTimeout Nothing = DontSubmit
+submitModeFromTimeout (Just timeout) = DoSubmit timeout

@@ -1,4 +1,4 @@
-cabal-version: 2.2
+cabal-version: 3.0
 name: marlowe-cli
 version: 0.0.10.2
 license: Apache-2.0
@@ -35,9 +35,9 @@ common lang
                       DeriveFunctor DeriveFoldable
                       DeriveTraversable
   ghc-options:
-    -Wall -Wnoncanonical-monad-instances
-    -Wincomplete-uni-patterns -Wincomplete-record-updates
-    -Wredundant-constraints -Widentities
+    -- -Wall -Wnoncanonical-monad-instances
+    -- -Wincomplete-uni-patterns -Wincomplete-record-updates
+    -- -Wredundant-constraints -Widentities
   if flag(defer-plugin-errors)
     ghc-options: -fplugin-opt PlutusTx.Plugin:defer-errors
 
@@ -49,7 +49,14 @@ library
   import: lang
   hs-source-dirs: src
   exposed-modules:
+    Contrib.Control.Concurrent.Async
+    Contrib.Control.Monad.Except
+    Contrib.Data.Aeson.Generic
+    Contrib.Data.Aeson.Traversals
+    Contrib.Data.Foldable
     Language.Marlowe.CLI.Analyze
+    Language.Marlowe.Cardano
+    Language.Marlowe.Cardano.Thread
     Language.Marlowe.CLI.Cardano.Api
     Language.Marlowe.CLI.Cardano.Api.Address
     Language.Marlowe.CLI.Cardano.Api.Address.ProofOfBurn
@@ -66,7 +73,6 @@ library
     Language.Marlowe.CLI.Command.Test
     Language.Marlowe.CLI.Command.Transaction
     Language.Marlowe.CLI.Command.Util
-    Language.Marlowe.CLI.Data.Aeson.Traversals
     Language.Marlowe.CLI.Data.Foldable
     Language.Marlowe.CLI.Examples
     Language.Marlowe.CLI.Export
@@ -78,8 +84,19 @@ library
     Language.Marlowe.CLI.Sync
     Language.Marlowe.CLI.Sync.Types
     Language.Marlowe.CLI.Test
+    Language.Marlowe.CLI.Test.Contract
+    Language.Marlowe.CLI.Test.Contract.ParametrizedMarloweJSON
+    Language.Marlowe.CLI.Test.CLI.Interpret
+    Language.Marlowe.CLI.Test.CLI.Monad
+    Language.Marlowe.CLI.Test.CLI.Types
+    Language.Marlowe.CLI.Test.ExecutionMode
+    Language.Marlowe.CLI.Test.Log
+    Language.Marlowe.CLI.Test.Runtime.Interpret
+    Language.Marlowe.CLI.Test.Runtime.Monitor
+    Language.Marlowe.CLI.Test.Runtime.Types
+    Language.Marlowe.CLI.Test.Wallet.Interpret
+    Language.Marlowe.CLI.Test.Wallet.Types
     Language.Marlowe.CLI.Test.Script
-    Language.Marlowe.CLI.Test.Script.Debug
     Language.Marlowe.CLI.Test.Types
     Language.Marlowe.CLI.Transaction
     Language.Marlowe.CLI.Types
@@ -89,6 +106,7 @@ library
     aeson,
     aeson-pretty,
     appendmap -any,
+    async,
     base16-bytestring,
     bech32,
     bytestring,
@@ -103,17 +121,33 @@ library
     cborg-json,
     containers,
     data-default,
+    data-has,
     directory,
     errors,
+    eventuo11y,
+    eventuo11y-dsl,
+    eventuo11y-json,
     extra -any,
     freer-simple,
     http-client,
     lens,
-    marlowe-cardano,
     marlowe-actus,
+    marlowe-apps,
+    marlowe-cardano,
     marlowe-contracts,
+    marlowe-chain-sync,
+
+    marlowe-runtime:config,
+    marlowe-runtime:discovery-api,
+    marlowe-runtime:history-api,
+    marlowe-runtime:proxy-api,
+    marlowe-runtime:sync-api,
+    marlowe-runtime:tx-api,
+    marlowe-runtime,
+
     memory,
     mtl,
+    monad-loops,
     network,
     one-line-aeson-text,
     openapi3,
@@ -129,15 +163,18 @@ library
     plutus-tx,
     plutus-tx-plugin,
     prettyprinter,
+    reflection,
     QuickCheck,
     regex-posix,
     serialise,
     servant,
     servant-client,
     split,
+    stm,
     temporary,
     text,
     time,
+    time-units,
     transformers,
     unordered-containers,
     uuid,

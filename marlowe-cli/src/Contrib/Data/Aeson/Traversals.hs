@@ -2,7 +2,7 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE TupleSections #-}
 
-module Language.Marlowe.CLI.Data.Aeson.Traversals
+module Contrib.Data.Aeson.Traversals
   where
 
 import qualified Data.Aeson as A

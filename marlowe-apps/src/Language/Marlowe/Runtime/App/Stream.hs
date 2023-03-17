@@ -11,6 +11,7 @@ module Language.Marlowe.Runtime.App.Stream
   ( ContractStream(..)
   , EOF(..)
   , TChanEOF
+  , ContractStreamError(..)
   , SyncEvent
   , contractFromStep
   , contractFromStream
