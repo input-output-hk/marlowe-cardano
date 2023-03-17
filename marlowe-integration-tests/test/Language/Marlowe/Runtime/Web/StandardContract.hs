@@ -13,24 +13,14 @@ import Language.Marlowe.Core.V1.Semantics.Types
 import Language.Marlowe.Extended.V1 (ada)
 import Language.Marlowe.Runtime.Integration.Common (Wallet(..), expectJust)
 import Language.Marlowe.Runtime.Plutus.V2.Api (toPlutusAddress)
-import Language.Marlowe.Runtime.Transaction.Api (InputsApplied(..), WalletAddresses(..))
+import Language.Marlowe.Runtime.Transaction.Api (WalletAddresses(..))
 import Language.Marlowe.Runtime.Web
-  (ApplyInputsTxBody, BlockHeader, CreateTxBody, RoleTokenConfig(RoleTokenSimple), TextEnvelope)
+  (ApplyInputsTxBody, BlockHeader, CreateTxBody, RoleTokenConfig(RoleTokenSimple), WithdrawTxBody)
 import qualified Language.Marlowe.Runtime.Web as Web
-import Language.Marlowe.Runtime.Web.Client (getContract, postContract, putContract)
+import Language.Marlowe.Runtime.Web.Client (postContract)
 import Language.Marlowe.Runtime.Web.Common
-  ( choose
-  , deposit
-  , notify
-  , signShelleyTransaction'
-  , submitContract
-  , submitTransaction
-  , submitWithdrawal
-  , waitUntilConfirmed
-  , withdraw
-  )
+  (choose, deposit, notify, submitContract, submitTransaction, submitWithdrawal, withdraw)
 import Language.Marlowe.Runtime.Web.Server.DTO (ToDTO(toDTO))
-import Language.Marlowe.Runtime.Web.Types (RolesConfig(..))
 import qualified Plutus.V2.Ledger.Api as PV2
 import Servant.Client (ClientM)
 
@@ -59,7 +49,7 @@ data StandardContractNotified = StandardContractNotified
   }
 
 data StandardContractClosed = StandardContractClosed
-  { withdrawPartyAFunds :: ClientM TextEnvelope
+  { withdrawPartyAFunds :: ClientM (WithdrawTxBody, BlockHeader)
   , returnDeposited :: ApplyInputsTxBody
   , returnDepositBlock :: BlockHeader
   }
@@ -72,74 +62,70 @@ createStandardContract partyAWallet partyBWallet = do
   let partyAWebCollataralUtxos = Set.map toDTO $ collateralUtxos partyAWalletAddresses
 
   let partyBWalletAddresses = addresses partyBWallet
-  let partyBWebChangeAddress = toDTO $ changeAddress partyBWalletAddresses
-  let partyBWebExtraAddresses = Set.map toDTO $ extraAddresses partyBWalletAddresses
-  let partyBWebCollataralUtxos = Set.map toDTO $ collateralUtxos partyBWalletAddresses
 
-  partyBAddress <- expectJust "Failed to convert party B address" $ toPlutusAddress $ changeAddress $ addresses partyBWallet
+  partyBAddress <- liftIO $ expectJust "Failed to convert party B address" $ toPlutusAddress $ changeAddress partyBWalletAddresses
   now <- liftIO getCurrentTime
   let (contract, partyA, partyB) = standardContract partyBAddress now $ secondsToNominalDiffTime 100
 
-  Web.CreateTxBody{txBody = createTxBody, ..} <- postContract
+  contractCreated@Web.CreateTxBody{contractId} <- postContract
     partyAWebChangeAddress
     (Just partyAWebExtraAddresses)
     (Just partyAWebCollataralUtxos)
     Web.PostContractsRequest
       { metadata = mempty
       , version = Web.V1
-      , roles = Just $ Mint $ Map.singleton "PartyA" $ RoleTokenSimple partyAWebChangeAddress
+      , roles = Just $ Web.Mint $ Map.singleton "PartyA" $ RoleTokenSimple partyAWebChangeAddress
       , contract = contract
       , minUTxODeposit = 2_000_000
       , tags = mempty
       }
-  createTx <- liftIO $ signShelleyTransaction' createTxBody $ signingKeys partyAWallet
-  _ <- putContract contractId createTx
-  _ <- waitUntilConfirmed (\Web.ContractState{status} -> status) $ getContract contractId
+
+  createdBlock <- submitContract partyAWallet contractCreated
 
   pure StandardContractInit
     { createdBlock
     , contractCreated
     , makeInitialDeposit = do
-        initialFundsDeposited@InputsApplied{txBody = initialDepositTxBody} <- deposit
+        initialFundsDeposited <- deposit
           partyAWallet
           contractId
           partyA
           partyA
           ada
           100_000_000
-        initialDepositBlock <- submitContract partyAWallet contractId initialDepositTxBody
+        initialDepositBlock <- submitTransaction partyAWallet initialFundsDeposited
 
         pure StandardContractFundsDeposited
           { initialDepositBlock
           , initialFundsDeposited
           , chooseGimmeTheMoney = do
-              gimmeTheMoneyChosen@InputsApplied{txBody = choiceTxBody} <- choose
+              gimmeTheMoneyChosen <- choose
                 partyBWallet
                 contractId
                 "Gimme the money"
                 partyB
                 0
-              choiceBlock <- submit partyBWallet choiceTxBody
+              choiceBlock <- submitTransaction partyBWallet gimmeTheMoneyChosen
 
               pure StandardContractChoiceMade
                 { choiceBlock
                 , gimmeTheMoneyChosen
                 , sendNotify = do
-                    notified@InputsApplied{txBody = notifyTxBody} <- notify partyAWallet contractId
-                    notifiedBlock <- submit partyAWallet notifyTxBody
+                    notified <- notify partyAWallet contractId
+                    notifiedBlock <- submitTransaction partyAWallet notified
 
                     pure StandardContractNotified
                       { notifiedBlock
                       , notified
                       , makeReturnDeposit = do
-                          returnDeposited@InputsApplied{txBody = returnTxBody} <- deposit
+                          returnDeposited <- deposit
                             partyBWallet
                             contractId
                             partyA
                             partyB
                             ada
                             100_000_000
-                          returnDepositBlock <- submit partyBWallet returnTxBody
+                          returnDepositBlock <- submitTransaction partyBWallet returnDeposited
 
                           pure StandardContractClosed
                             { returnDepositBlock
