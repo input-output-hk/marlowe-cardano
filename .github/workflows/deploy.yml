@@ -12,44 +12,44 @@ on:
   push:
     branches:
       - main
-      - jhbertra/deployment
 jobs:
-  # tests:
-  #   uses: ./.github/workflows/test.yml
-  # publish:
-    # needs: [tests]
-    # runs-on: ubuntu-latest
-    # steps:
-    #   - name: Checkout
-    #     uses: actions/checkout@v3
+  tests:
+    uses: ./.github/workflows/test.yml
 
-    #   - name: Install Nix
-    #     uses: cachix/install-nix-action@v20
-    #     with:
-    #       nix_path: nixpkgs=channel:nixos-unstable
-    #       install_url: https://releases.nixos.org/nix/nix-2.10.3/install
-    #       extra_nix_config: |
-    #         allowed-uris = ${{ env.ALLOWED_URIS }}
-    #         trusted-public-keys = ${{ env.TRUSTED_PUBLIC_KEYS }}
-    #         substituters = ${{ env.SUBSTITUTERS }}
-    #         experimental-features = nix-command flakes
+  publish:
+    needs: [tests]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
 
-    #   - name: Install Skopeo
-    #     run: nix-env -iA skopeo -f '<nixpkgs>'
+      - name: Install Nix
+        uses: cachix/install-nix-action@v20
+        with:
+          nix_path: nixpkgs=channel:nixos-unstable
+          install_url: https://releases.nixos.org/nix/nix-2.10.3/install
+          extra_nix_config: |
+            allowed-uris = ${{ env.ALLOWED_URIS }}
+            trusted-public-keys = ${{ env.TRUSTED_PUBLIC_KEYS }}
+            substituters = ${{ env.SUBSTITUTERS }}
+            experimental-features = nix-command flakes
 
-    #   - name: Login with Skopeo
-    #     run: echo "${{ secrets.GITHUB_TOKEN }}" | skopeo login ghcr.io -u $ --password-stdin
+      - name: Install Skopeo
+        run: nix-env -iA skopeo -f '<nixpkgs>'
 
-    #   - name: Publish Runtime Images
-    #     run: |
-    #       nix build .#oci-images.x86_64-linux.latest.all.copyToRegistry
-    #       ./result/bin/copy-to-registry
+      - name: Login with Skopeo
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | skopeo login ghcr.io -u $ --password-stdin
+
+      - name: Publish Runtime Images
+        run: |
+          nix build .#oci-images.x86_64-linux.latest.all.copyToRegistry
+          ./result/bin/copy-to-registry
 
   deploy:
     strategy:
       matrix:
         network: [ preview, preprod, mainnet ]
-    # needs: [publish]
+    needs: [publish]
     runs-on: ubuntu-latest
     steps:
       - name: Install Nix
