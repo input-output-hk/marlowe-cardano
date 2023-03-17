@@ -6,7 +6,7 @@ env:
   SUBSTITUTERS: "https://cache.nixos.org/ https://cache.iog.io https://marlowe-temp.cachix.org https://cache.zw3rk.com/"
   VAULT_ADDR: "https://vault.dapps.aws.iohkdev.io"
   NOMAD_ADDR: "https://nomad.dapps.aws.iohkdev.io"
-  NOMAD_NAMESPACE: "testnet"
+  NOMAD_NAMESPACE: "marlowe"
 
 on:
   push:
@@ -79,4 +79,5 @@ jobs:
 
       - name: Deploy to Nomad
         run: |
+          nomad stop -token ${{ secrets.NOMAD_TOKEN }} marlowe-runtime-${{ matrix.network }}
           nomad run -token ${{ secrets.NOMAD_TOKEN }} -vault-token ${{ secrets.VAULT_TOKEN }} -consul-token ${{ secrets.CONSUL_HTTP_TOKEN }} result/job
