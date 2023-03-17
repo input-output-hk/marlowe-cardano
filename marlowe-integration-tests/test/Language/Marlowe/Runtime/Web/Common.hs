@@ -25,6 +25,7 @@ import qualified Language.Marlowe.Runtime.Web as Web
 import Language.Marlowe.Runtime.Web.Client
   ( getContract
   , getTransaction
+  , getWithdrawal
   , postContract
   , postTransaction
   , postWithdrawal
@@ -88,6 +89,106 @@ applyCloseTransaction  Wallet{..} contractId = do
   _ <- waitUntilConfirmed (\Web.Tx{status} -> status) $ getTransaction contractId transactionId
   pure transactionId
 
+submitContract
+  :: Wallet
+  -> Web.CreateTxBody
+  -> ClientM Web.BlockHeader
+submitContract Wallet{..} Web.CreateTxBody{contractId, txBody}= do
+  signedCreateTx <- liftIO $ signShelleyTransaction' txBody signingKeys
+  putContract contractId signedCreateTx
+  Web.ContractState{block} <- waitUntilConfirmed (\Web.ContractState{status} -> status) $ getContract contractId
+  liftIO $ expectJust "Expected a block header" block
+
+submitTransaction
+  :: Wallet
+  -> Web.ApplyInputsTxBody
+  -> ClientM Web.BlockHeader
+submitTransaction Wallet{..} Web.ApplyInputsTxBody{contractId, transactionId, txBody} = do
+  signedTx <- liftIO $ signShelleyTransaction' txBody signingKeys
+  putTransaction contractId transactionId signedTx
+  Web.Tx{block} <- waitUntilConfirmed (\Web.Tx{status} -> status) $ getTransaction contractId transactionId
+  liftIO $ expectJust "Expected a block header" block
+
+submitWithdrawal
+  :: Wallet
+  -> Web.WithdrawTxBody
+  -> ClientM Web.BlockHeader
+submitWithdrawal Wallet{..} Web.WithdrawTxBody{withdrawalId, txBody = withdrawTxBody}  = do
+  signedWithdrawalTx <- liftIO $ signShelleyTransaction' withdrawTxBody signingKeys
+  putWithdrawal withdrawalId signedWithdrawalTx
+  Web.Withdrawal{block} <- waitUntilConfirmed (\Web.Withdrawal{status} -> status) $ getWithdrawal withdrawalId
+  liftIO $ expectJust "Expected a block header" block
+
+deposit
+  :: Wallet
+  -> Web.TxOutRef
+  -> V1.Party
+  -> V1.Party
+  -> V1.Token
+  -> Integer
+  -> ClientM Web.ApplyInputsTxBody
+deposit wallet contractId intoAccount fromParty ofToken quantity =
+  applyInputs wallet contractId [NormalInput $ IDeposit intoAccount fromParty ofToken quantity]
+
+choose
+  :: Wallet
+  -> Web.TxOutRef
+  -> PV2.BuiltinByteString
+  -> V1.Party
+  -> Integer
+  -> ClientM Web.ApplyInputsTxBody
+choose wallet contractId choice party chosenNum =
+  applyInputs wallet contractId [NormalInput $ IChoice (ChoiceId choice party) chosenNum]
+
+notify
+  :: Wallet
+  -> Web.TxOutRef
+  -> ClientM Web.ApplyInputsTxBody
+notify wallet contractId = applyInputs wallet contractId [NormalInput INotify]
+
+withdraw
+  :: Wallet
+  -> Web.TxOutRef
+  -> T.Text
+  -> ClientM Web.WithdrawTxBody
+withdraw Wallet{..} contractId role = do
+  let WalletAddresses{..} = addresses
+  let webChangeAddress = toDTO changeAddress
+  let webExtraAddresses = Set.map toDTO extraAddresses
+  let webCollataralUtxos = Set.map toDTO collateralUtxos
+
+  postWithdrawal
+    webChangeAddress
+    (Just webExtraAddresses)
+    (Just webCollataralUtxos)
+    Web.PostWithdrawalsRequest
+      { role
+      , contractId
+      }
+applyInputs
+  :: Wallet
+  -> Web.TxOutRef
+  -> [V1.Input]
+  -> ClientM Web.ApplyInputsTxBody
+applyInputs Wallet{..} contractId inputs = do
+  let WalletAddresses{..} = addresses
+  let webChangeAddress = toDTO changeAddress
+  let webExtraAddresses = Set.map toDTO extraAddresses
+  let webCollataralUtxos = Set.map toDTO collateralUtxos
+
+  postTransaction
+    webChangeAddress
+    (Just webExtraAddresses)
+    (Just webCollataralUtxos)
+    contractId
+    Web.PostTransactionsRequest
+      { version = Web.V1
+      , metadata = mempty
+      , invalidBefore = Nothing
+      , invalidHereafter = Nothing
+      , inputs
+      , tags = mempty
+      }
 
 signShelleyTransaction' :: Web.TextEnvelope -> [ShelleyWitnessSigningKey] -> IO Web.TextEnvelope
 signShelleyTransaction' Web.TextEnvelope{..} wits = do
@@ -106,170 +207,4 @@ waitUntilConfirmed getStatus getResource = do
     _ -> do
       liftIO $ threadDelay 1000
       waitUntilConfirmed getStatus getResource
-
-submitContract
-  :: Wallet
-  -> Web.TxOutRef
-  -> Web.TextEnvelope
-  -> ClientM Web.BlockHeader
-submitContract Wallet{..} contractId txBody = do
-  signedCreateTx <- liftIO $ signShelleyTransaction' txBody signingKeys
-  putContract contractId signedCreateTx
-  Web.ContractState{block} <- waitUntilConfirmed (\Web.ContractState{status} -> status) $ getContract contractId
-  liftIO $ expectJust "Expected a block header" block
-
-submitTransaction
-  :: Wallet
-  -> Web.TxOutRef
-  -> Web.TxId
-  -> Web.TextEnvelope
-  -> ClientM Web.BlockHeader
-submitTransaction Wallet{..} contractId transactionId txBody = do
-  signedTx <- liftIO $ signShelleyTransaction' txBody signingKeys
-  putTransaction contractId transactionId signedTx
-  Web.ContractState{block} <- waitUntilConfirmed (\Web.ContractState{status} -> status) $ getContract contractId
-  liftIO $ expectJust "Expected a block header" block
-
-submitWithdrawal
-  :: Wallet
-  -> Web.TxOutRef
-  -> Web.TxId
-  -> Web.TextEnvelope
-  -> ClientM Web.BlockHeader
-submitWithdrawal Wallet{..} contractId transactionId withdrawTxBody  = do
-  signedWithdrawalTx <- liftIO $ signShelleyTransaction' withdrawTxBody signingKeys
-  putWithdrawal transactionId signedWithdrawalTx
-  Web.Tx{block} <- waitUntilConfirmed (\Web.Tx{status} -> status) $ getTransaction contractId transactionId
-  liftIO $ expectJust "Expected a block header" block
-
-deposit
-  :: Wallet
-  -> Web.TxOutRef
-  -> V1.Party
-  -> V1.Party
-  -> V1.Token
-  -> Integer
-  -> ClientM Web.BlockHeader
-deposit Wallet{..} contractId intoAccount fromParty ofToken quantity = do
-  let WalletAddresses{..} = addresses
-  let webChangeAddress = toDTO changeAddress
-  let webExtraAddresses = Set.map toDTO extraAddresses
-  let webCollataralUtxos = Set.map toDTO collateralUtxos
-
-
-  Web.ApplyInputsTxBody{transactionId, txBody = applyTxBody} <- postTransaction
-    webChangeAddress
-    (Just webExtraAddresses)
-    (Just webCollataralUtxos)
-    contractId
-    Web.PostTransactionsRequest
-      { version = Web.V1
-      , metadata = mempty
-      , invalidBefore = Nothing
-      , invalidHereafter = Nothing
-      , inputs = [NormalInput $ IDeposit intoAccount fromParty ofToken quantity]
-      , tags = mempty
-      }
-
-  applyTx <- liftIO $ signShelleyTransaction' applyTxBody signingKeys
-
-  putTransaction contractId transactionId applyTx
-
-  Web.ContractState{block} <- waitUntilConfirmed (\Web.ContractState{status} -> status) $ getContract contractId
-  liftIO $ expectJust "Expected a block header" block
-
-choose
-  :: Wallet
-  -> Web.TxOutRef
-  -> PV2.BuiltinByteString
-  -> V1.Party
-  -> Integer
-  -> ClientM Web.BlockHeader
-choose Wallet{..} contractId choice party chosenNum = do
-  let WalletAddresses{..} = addresses
-  let webChangeAddress = toDTO changeAddress
-  let webExtraAddresses = Set.map toDTO extraAddresses
-  let webCollataralUtxos = Set.map toDTO collateralUtxos
-
-
-  Web.ApplyInputsTxBody{transactionId, txBody = applyTxBody} <- postTransaction
-    webChangeAddress
-    (Just webExtraAddresses)
-    (Just webCollataralUtxos)
-    contractId
-    Web.PostTransactionsRequest
-      { version = Web.V1
-      , metadata = mempty
-      , invalidBefore = Nothing
-      , invalidHereafter = Nothing
-      , inputs = [NormalInput $ IChoice (ChoiceId choice party) chosenNum]
-      , tags = mempty
-      }
-
-  applyTx <- liftIO $ signShelleyTransaction' applyTxBody signingKeys
-
-  putTransaction contractId transactionId applyTx
-
-  Web.ContractState{block} <- waitUntilConfirmed (\Web.ContractState{status} -> status) $ getContract contractId
-  liftIO $ expectJust "Expected a block header" block
-
-notify
-  :: Wallet
-  -> Web.TxOutRef
-  -> ClientM Web.BlockHeader
-notify Wallet{..} contractId = do
-  let WalletAddresses{..} = addresses
-  let webChangeAddress = toDTO changeAddress
-  let webExtraAddresses = Set.map toDTO extraAddresses
-  let webCollataralUtxos = Set.map toDTO collateralUtxos
-
-
-  Web.ApplyInputsTxBody{transactionId, txBody = applyTxBody} <- postTransaction
-    webChangeAddress
-    (Just webExtraAddresses)
-    (Just webCollataralUtxos)
-    contractId
-    Web.PostTransactionsRequest
-      { version = Web.V1
-      , metadata = mempty
-      , invalidBefore = Nothing
-      , invalidHereafter = Nothing
-      , inputs = [NormalInput INotify]
-      , tags = mempty
-      }
-
-  applyTx <- liftIO $ signShelleyTransaction' applyTxBody signingKeys
-
-  putTransaction contractId transactionId applyTx
-
-  Web.ContractState{block} <- waitUntilConfirmed (\Web.ContractState{status} -> status) $ getContract contractId
-  liftIO $ expectJust "Expected a block header" block
-
-withdraw
-  :: Wallet
-  -> Web.TxOutRef
-  -> T.Text
-  -> ClientM Web.BlockHeader
-withdraw Wallet{..} contractId role = do
-  let WalletAddresses{..} = addresses
-  let webChangeAddress = toDTO changeAddress
-  let webExtraAddresses = Set.map toDTO extraAddresses
-  let webCollataralUtxos = Set.map toDTO collateralUtxos
-
-  Web.WithdrawTxBody{withdrawalId, txBody = withdrawTxBody} <- postWithdrawal
-    webChangeAddress
-    (Just webExtraAddresses)
-    (Just webCollataralUtxos)
-    Web.PostWithdrawalsRequest
-      { role
-      , contractId
-      }
-
-  withdrawTx <- liftIO $ signShelleyTransaction' withdrawTxBody signingKeys
-
-  putWithdrawal withdrawalId withdrawTx
-
-  Web.ContractState{block} <- waitUntilConfirmed (\Web.ContractState{status} -> status) $ getContract contractId
-
-  liftIO $ expectJust "Expected a block header" block
 
