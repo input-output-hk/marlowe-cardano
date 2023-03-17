@@ -1,8 +1,12 @@
 name: "Deploy"
 env:
+  CACHE_NAME: marlowe-temp
   ALLOWED_URIS: "https://github.com https://api.github.com"
   TRUSTED_PUBLIC_KEYS: "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ= marlowe-temp.cachix.org-1:1gPjVFpu4QjaAT3tRurCioX+BC23V7mjvFwpP5bV0Ec= loony-tools:pr9m4BkM/5/eSTZlkQyRt57Jz7OMBxNSUiMC4FkcNfk="
   SUBSTITUTERS: "https://cache.nixos.org/ https://cache.iog.io https://marlowe-temp.cachix.org https://cache.zw3rk.com/"
+  VAULT_ADDR: "https://vault.dapps.aws.iohkdev.io"
+  NOMAD_ADDR: "https://nomad.dapps.aws.iohkdev.io"
+  NOMAD_NAMESPACE: "testnet"
 
 on:
   push:
@@ -59,17 +63,20 @@ jobs:
             substituters = ${{ env.SUBSTITUTERS }}
             experimental-features = nix-command flakes
 
+      - name: Setup Cachix
+        uses: cachix/cachix-action@v12
+        with:
+          name: ${{ env.CACHE_NAME }}
+          authToken: "${{ secrets.CACHIX_AUTH_TOKEN }}"
+
       - name: Build nomad chart
         run: |
           nix build github:input-output-hk/dapps-world#marlowe.marlowe-runtime-${{ matrix.network }}-latest
 
-      - name: Setup .netrc
+      - name: Install Nomad
         run: |
-          cat > ~/.netrc << EOF
-          machine github.com password ${{ secrets.GITHUB_TOKEN }}
-          machine api.github.com password ${{ secrets.GITHUB_TOKEN }}
-          EOF
+          nix-env -iA nomad -f '<nixpkgs>'
 
       - name: Deploy to Nomad
         run: |
-          nix develop github:input-output-hk/dapps-world#x86_64-linux.automation.devshells.ops -c nomad run result/job
+          nomad run -token ${{ secrets.NOMAD_TOKEN }} -vault-token ${{ secrets.VAULT_TOKEN }} -consul-token ${{ secrets.CONSUL_HTTP_TOKEN }} result/job
