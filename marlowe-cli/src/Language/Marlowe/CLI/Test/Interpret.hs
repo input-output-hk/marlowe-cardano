@@ -52,18 +52,20 @@ import Language.Marlowe.CLI.Types (CliError(CliError))
 interpret
   :: forall m lang era
    . IsShelleyBasedEra era
-   => IsPlutusScriptLanguage lang
-   => InterpretMonad m lang era
-   => TestOperation
-   -> m ()
+  => IsPlutusScriptLanguage lang
+  => InterpretMonad m lang era
+  => TestOperation
+  -> m ()
 interpret (RuntimeOperation ro) = do
   state <- get
   env <- ask
-  let
-    interpret' = zoom runtimeInpterpretStateL (Runtime.interpret ro)
-    env' = toRuntimeInterpretEnv env
-  e <- liftIO $ runExceptT (runReaderT (evalStateT interpret' state) env')
-  either throwError pure e
+  case toRuntimeInterpretEnv env of
+    Nothing -> throwError $ CliError "Runtime env not initialized. Aborting."
+    Just env' -> do
+      let
+        interpret' = zoom runtimeInpterpretStateL (Runtime.interpret ro)
+      e <- liftIO $ runExceptT (runReaderT (evalStateT interpret' state) env')
+      either throwError pure e
 interpret (WalletOperation wo) = do
   state <- get
   env <- ask

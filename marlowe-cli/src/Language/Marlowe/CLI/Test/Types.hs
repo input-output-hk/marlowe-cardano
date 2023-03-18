@@ -111,29 +111,36 @@ import Observe.Event.Dynamic (DynamicEventSelector)
 import Observe.Event.Render.JSON.Handle (JSONRef)
 
 
--- | Configuration for a set of Marlowe tests.
-data MarloweTests era a =
-    -- | Test contracts on-chain.
-    ScriptTests
+data TestSuite era a =
+    TestSuite
     {
-      stNetwork :: NetworkId   -- ^ The network ID, if any.
-    , stSocketPath :: FilePath    -- ^ The path to the node socket.
-    , stFaucetSigningKeyFile :: FilePath    -- ^ The file containing the faucet's signing key.
-    , stFaucetAddress :: AddressInEra era  -- ^ The faucet address.
+      stNetwork :: NetworkId              -- ^ The network ID, if any.
+    , stSocketPath :: FilePath            -- ^ The path to the node socket.
+    , stFaucetSigningKeyFile :: FilePath  -- ^ The file containing the faucet's signing key.
+    , stFaucetAddress :: AddressInEra era -- ^ The faucet address.
     , stExecutionMode :: ExecutionMode
-    , stTests :: [a]         -- ^ Input for the tests.
+    , stTests :: [a]                      -- ^ Input for the tests.
     }
     deriving stock (Eq, Generic, Show)
 
 -- | An on-chain test of the Marlowe contract and payout validators.
-data ScriptTest =
-  ScriptTest
+data TestCase =
+  TestCase
   {
-    stTestName         :: String             -- ^ The name of the test.
-  , stScriptOperations :: [TestOperation]  -- ^ The sequence of test operations.
+    tcTestName         :: String  -- ^ The name of the test.
+  , tcTestOperations :: [TestOperation] -- ^ The sequence of test operations.
   }
   deriving stock (Eq, Generic, Show)
   deriving anyclass (FromJSON, ToJSON)
+
+-- FIXME: `CliError` was adpoted for an errror reporting as a quick
+-- migration path. We should improve error reporting here.
+-- We should also enhance success reporting.
+data TestResult = TestSucceeded | TestFailed CliError
+  deriving stock (Eq, Generic, Show)
+
+testResultFromEither :: Either CliError a -> TestResult
+testResultFromEither = either TestFailed (const TestSucceeded)
 
 -- | On-chain test operations for the Marlowe contract and payout validators.
 data TestOperation =
@@ -171,11 +178,9 @@ data InterpretState lang era = InterpretState
   , _ssWallets :: Wallets era
   , _isKnownContracts :: Map ContractNickname ContractId
   }
-
 data InterpretEnv lang era = InterpretEnv
   {
-    _ieRuntimeMonitorState :: RuntimeMonitorState lang era
-  , _ieRuntimeMonitorInput :: RuntimeMonitorInput
+    _ieRuntimeMonitor :: Maybe (RuntimeMonitorInput, RuntimeMonitorState lang era)
   , _ieExecutionMode :: ExecutionMode
   , _ieConnection :: LocalNodeConnectInfo CardanoMode
   , _ieEra :: ScriptDataSupportedInEra era
@@ -193,15 +198,16 @@ type InterpretMonad m lang era =
   )
 
 toCLIInterpretEnv :: InterpretEnv lang era -> CLI.InterpretEnv lang era
-toCLIInterpretEnv (InterpretEnv _ _ executionMode connection era printStats slotConfig costModelParams protocolVersion) =
+toCLIInterpretEnv (InterpretEnv _ executionMode connection era printStats slotConfig costModelParams protocolVersion) =
   CLI.InterpretEnv connection era printStats executionMode slotConfig costModelParams protocolVersion
 
-toRuntimeInterpretEnv :: InterpretEnv lang era -> Runtime.InterpretEnv lang era
-toRuntimeInterpretEnv (InterpretEnv runtimeMonitorState runtimeMonitorInput executionMode connection era printStats slotConfig costModelParams protocolVersion) =
-  Runtime.InterpretEnv runtimeMonitorState runtimeMonitorInput executionMode
+toRuntimeInterpretEnv :: InterpretEnv lang era -> Maybe (Runtime.InterpretEnv lang era)
+toRuntimeInterpretEnv (InterpretEnv (Just (runtimeMonitorInput, runtimeMonitorState)) executionMode _ _ _ _ _ _) =
+  Just $ Runtime.InterpretEnv runtimeMonitorState runtimeMonitorInput executionMode
+toRuntimeInterpretEnv _ = Nothing
 
 toWalletInterpretEnv :: InterpretEnv lang era -> Wallet.InterpretEnv era
-toWalletInterpretEnv (InterpretEnv _ _ executionMode connection era printStats _ _ _) =
+toWalletInterpretEnv (InterpretEnv _ executionMode connection era printStats _ _ _) =
   Wallet.InterpretEnv connection era printStats executionMode
 
 cliInpterpretStateL :: Lens' (InterpretState lang era) (CLI.InterpretState lang era)

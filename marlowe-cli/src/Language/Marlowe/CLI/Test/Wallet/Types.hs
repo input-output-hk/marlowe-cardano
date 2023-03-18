@@ -29,7 +29,7 @@ module Language.Marlowe.CLI.Test.Wallet.Types
   where
 
 import Cardano.Api
-  (AddressInEra, CardanoMode, LocalNodeConnectInfo, Lovelace, PolicyId, ScriptDataSupportedInEra, TxBody)
+  (AddressInEra, CardanoMode, LocalNodeConnectInfo, Lovelace, PolicyId, ScriptDataSupportedInEra, TxBody, UTxO(UTxO))
 import Contrib.Data.Aeson.Generic (getConName)
 import Control.Lens (makeLenses)
 import Control.Monad.Except (MonadError)
@@ -54,6 +54,7 @@ import Data.Traversable (for)
 import qualified Data.Vector as V
 import GHC.Generics (Generic(from))
 import GHC.Natural (Natural)
+import Language.Marlowe.CLI.Cardano.Api.Value (lovelaceToPlutusValue, toPlutusValue, txOutValueValue)
 import Language.Marlowe.CLI.Test.ExecutionMode (ExecutionMode)
 import Language.Marlowe.CLI.Types (CliError(CliError), PrintStats(PrintStats), SomePaymentSigningKey)
 import Ledger.Orphans ()
@@ -66,16 +67,22 @@ data Wallet era =
   { waAddress                   :: AddressInEra era
   , waBalanceCheckBaseline      :: P.Value                  -- ^ This value should reflect all the assets from the wallet which
                                                             -- were on the chain when we started a particular scenario. Currently
-                                                            -- it is only used in the context of `Faucet` wallet.
+                                                            -- it is only used in the case of the faucet wallet.
   , waMintedTokens              :: P.Value                  -- ^ Tracks all the minted tokens to simplify auto run flow.
   , waSigningKey                :: SomePaymentSigningKey
-  , waSubmittedTransactions     :: [TxBody era]             -- ^ We keep track of all the transaction so we can
+  , waSubmittedTransactions     :: [TxBody era]             -- ^ We keep track of all the transactions so we can
                                                             -- discard fees from the balance check calculation.
   }
   deriving stock (Generic, Show)
 
 emptyWallet :: AddressInEra era -> SomePaymentSigningKey -> Wallet era
 emptyWallet address signignKey = Wallet address mempty mempty signignKey mempty -- mempty
+
+fromUTxO :: AddressInEra era -> SomePaymentSigningKey -> UTxO era -> Wallet era
+fromUTxO address signignKey (UTxO utxo) = do
+  let
+    total = foldMap (toPlutusValue . txOutValueValue) (Map.elems utxo)
+  Wallet address total mempty signignKey mempty
 
 -- | In many contexts this defaults to the `RoleName` but at some
 -- | point we want to also support multiple marlowe contracts scenarios
@@ -131,16 +138,13 @@ instance ToJSON AssetId where
     toJSON (AssetId currencyNickname tokenName) =
       toJSON [ toJSON currencyNickname, tokenNameToJSON tokenName ]
 
-
 -- | Yaml friendly representation of assets which we use in balance checking.
 newtype Assets = Assets (Map AssetId Integer)
   deriving (Eq, Ord, Show)
   deriving newtype (Semigroup, Monoid)
 
-
 assetsSingleton :: AssetId -> Integer -> Assets
 assetsSingleton assetId = Assets . Map.singleton assetId
-
 
 lovelaceAssets :: Integer -> Assets
 lovelaceAssets = assetsSingleton AdaAsset

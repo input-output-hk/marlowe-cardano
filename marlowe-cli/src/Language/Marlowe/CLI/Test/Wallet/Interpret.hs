@@ -487,16 +487,3 @@ saveWalletFiles walletNickname wallet dir = do
   void $ either (writeEnvelope skeyFile) (writeEnvelope skeyFile) sskey
   pure (addrFile, T.SigningKeyFile skeyFile)
 
--- buildWallet :: MonadError CliError m
---             => MonadIO m
---             => MonadReader (CliEnv era) m
---             => C.LocalNodeConnectInfo CardanoMode
---             -> AddressInEra era
---             -> SomePaymentSigningKey
---             -> m (Wallet era)
--- buildWallet connection address signignKey = do
---   C.UTxO (Map.elems -> txOuts) <- queryUtxos connection address
---   let
---     total = foldMap (toPlutusValue . txOutValueValue) txOuts
---   pure $ Wallet address total mempty signignKey mempty
---

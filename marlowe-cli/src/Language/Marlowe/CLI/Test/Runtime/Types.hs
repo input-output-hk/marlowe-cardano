@@ -71,6 +71,7 @@ data RuntimeError
   | RuntimeExecutionFailure String
   | RuntimeContractNotFound ContractId
   | RuntimeRollbackError ContractNickname
+  deriving stock (Eq, Generic, Show)
 
 newtype RuntimeContractInfo era lang =
   RuntimeContractInfo (AnyRuntimeMarloweThread era lang)
@@ -79,7 +80,7 @@ newtype RuntimeMonitorInput = RuntimeMonitorInput (TChan (ContractNickname, Cont
 
 newtype RuntimeMonitorState era lang = RuntimeMonitorState (TVar (Map ContractNickname (RuntimeContractInfo era lang)))
 
-newtype RuntimeMonitor = RuntimeMonitor (IO RuntimeError)
+newtype RuntimeMonitor = RuntimeMonitor { runMonitor :: IO RuntimeError }
 
 data RuntimeOperation =
     RuntimeAwaitCreated
