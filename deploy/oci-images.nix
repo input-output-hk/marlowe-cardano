@@ -6,10 +6,9 @@ let
   inherit (self) operables;
   inherit (self.sourceInfo) lastModifiedDate;
 
-  mkImage = { name, description }: tag:
+  mkImage = { name, description }:
     std.lib.ops.mkStandardOCI {
-      inherit tag;
-      name = "ghcr.io/input-output-hk/${name}";
+      inherit name;
       operable = operables.${name};
       uid = "0";
       gid = "0";
@@ -51,23 +50,13 @@ let
     };
   };
 
-  forAllImages = f: tag: concatMapStrings
-    (s: s + "\n")
-    (mapAttrsToList (_: img: f (img tag)) images);
-
-  mkImages = tag: (mapAttrs (_: img: img tag) images) // {
-    all = {
-      copyToDockerDaemon = std.lib.ops.writeScript {
-        name = "copy-to-docker-daemon";
-        text = forAllImages (img: "${img.copyToDockerDaemon}/bin/copy-to-docker-daemon") tag;
-      };
-      copyToRegistry = std.lib.ops.writeScript {
-        name = "copy-to-registry";
-        text = forAllImages (img: "${img.copyToRegistry}/bin/copy-to-registry") tag;
-      };
+  forAllImages = f: concatMapStrings (s: s + "\n") (mapAttrsToList (_: f) images);
+in
+images // {
+  all = {
+    copyToDockerDaemon = std.lib.ops.writeScript {
+      name = "copy-to-docker-daemon";
+      text = forAllImages (img: "${img.copyToDockerDaemon}/bin/copy-to-docker-daemon");
     };
   };
-in
-{
-  latest = mkImages "latest";
 }
