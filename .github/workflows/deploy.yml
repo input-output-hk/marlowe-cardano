@@ -71,7 +71,7 @@ jobs:
 
       - name: Build nomad chart
         run: |
-          nix build github:input-output-hk/dapps-world#marlowe.marlowe-runtime-${{ matrix.network }}-latest
+          nix build github:input-output-hk/dapps-world#marlowe.marlowe-runtime-${{ matrix.network }}-latest --override-input marlowe-cardano github:input-output-hk/marlowe-cardano/$GITHUB_SHA
 
       - name: Install Nomad
         run: |
