@@ -15,15 +15,21 @@ import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Monad.With (MonadWithExceptable)
 import Data.ByteString.Lazy (ByteString)
 import Data.ByteString.Lazy.Base16 (encodeBase16)
+import Data.Foldable (fold)
+import Data.Map (Map)
+import Data.Text (Text)
 import qualified Data.Text.Lazy as T
 import Data.Void (Void)
 import Network.Channel
   (Channel(..), ChannelSelector, STMChannel(..), channelPair, getChannelSelectorConfig, hoistChannel, logChannel)
+import qualified Network.Channel as Channel
 import Network.Protocol.Codec (BinaryMessage)
 import Network.Protocol.Peer (PeerSelector, getPeerSelectorConfig, hoistPeer, logPeer)
+import qualified Network.Protocol.Peer as Peer
 import Network.TypedProtocol
 import Observe.Event.Backend (narrowEventBackend)
-import Observe.Event.Component (GetSelectorConfig, SelectorConfig(..), absurdFieldConfig, prependKey)
+import Observe.Event.Component
+  (GetSelectorConfig, SelectorConfig(..), SelectorLogConfig, absurdFieldConfig, getDefaultLogConfig, prependKey)
 import Observe.Event.Explicit (EventBackend, causedEventBackend, finalize, injectSelector, withEvent)
 import Observe.Event.Network.Protocol (MessageToJSON)
 
@@ -67,6 +73,19 @@ data SomeConnectionSource server m =
 data ConnectorSelector ps f where
   Connect :: ConnectorSelector ps Void
   ConnectionSelector :: ConnectionSelector ps f -> ConnectorSelector ps f
+
+getDefaultConnectorLogConfig
+  :: GetSelectorConfig s
+  -> (forall f. ConnectorSelector ps f -> s f)
+  -> Map Text SelectorLogConfig
+getDefaultConnectorLogConfig getConfig inject = fold
+  [ getDefaultLogConfig getConfig $ inject Connect
+  , getDefaultLogConfig getConfig $ inject $ ConnectionSelector $ ChannelSelector Channel.Send
+  , getDefaultLogConfig getConfig $ inject $ ConnectionSelector $ ChannelSelector Channel.Recv
+  , getDefaultLogConfig getConfig $ inject $ ConnectionSelector $ PeerSelector Peer.Send
+  , getDefaultLogConfig getConfig $ inject $ ConnectionSelector $ PeerSelector Peer.Recv
+  , getDefaultLogConfig getConfig $ inject $ ConnectionSelector Close
+  ]
 
 getConnectorSelectorConfig
   :: MessageToJSON ps

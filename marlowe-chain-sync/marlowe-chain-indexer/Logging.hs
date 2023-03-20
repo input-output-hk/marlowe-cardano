@@ -9,13 +9,20 @@ module Logging
   , getRootSelectorConfig
   ) where
 
-import Data.Aeson (ToJSON(toJSON), Value)
 import Data.Foldable (fold)
+import Data.Map (Map)
+import Data.Text (Text)
 import Language.Marlowe.Runtime.ChainIndexer (ChainIndexerSelector(..), getChainIndexerSelectorConfig)
 import Language.Marlowe.Runtime.ChainIndexer.NodeClient (NodeClientSelector(..))
 import Language.Marlowe.Runtime.ChainIndexer.Store (ChainStoreSelector(..))
 import Observe.Event.Component
-  (ConfigWatcherSelector(..), GetSelectorConfig, SelectorConfig(..), getDefaultLogConfig, singletonFieldConfig)
+  ( ConfigWatcherSelector(..)
+  , GetSelectorConfig
+  , SelectorConfig(..)
+  , SelectorLogConfig
+  , getDefaultLogConfig
+  , singletonFieldConfig
+  )
 
 data RootSelector f where
   App :: ChainIndexerSelector f -> RootSelector f
@@ -28,8 +35,8 @@ getRootSelectorConfig = \case
   ConfigWatcher ReloadConfig -> SelectorConfig "reload-log-config" True
     $ singletonFieldConfig "config" True
 
-defaultRootSelectorLogConfig :: Value
-defaultRootSelectorLogConfig = toJSON $ fold
+defaultRootSelectorLogConfig :: Map Text SelectorLogConfig
+defaultRootSelectorLogConfig = fold
   [ getDefaultLogConfig (App $ NodeClientEvent Connect) getRootSelectorConfig
   , getDefaultLogConfig (App $ NodeClientEvent Intersect) getRootSelectorConfig
   , getDefaultLogConfig (App $ NodeClientEvent IntersectFound) getRootSelectorConfig

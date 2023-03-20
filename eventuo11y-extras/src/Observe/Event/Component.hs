@@ -10,6 +10,7 @@ module Observe.Event.Component
   , GetSelectorConfig
   , LoggerDependencies(..)
   , SelectorConfig(..)
+  , SelectorLogConfig(..)
   , SomeJSON(..)
   , absurdFieldConfig
   , getDefaultLogConfig
@@ -120,10 +121,10 @@ instance ToJSON FieldLogConfig where
     FieldEnabled -> Bool True
 
 getDefaultLogConfig
-  :: s f
-  -> GetSelectorConfig s
+  :: GetSelectorConfig s
+  -> s f
   -> Map Text SelectorLogConfig
-getDefaultLogConfig sel getConfig = case getConfig sel of
+getDefaultLogConfig getConfig sel = case getConfig sel of
   SelectorConfig key True _ -> Map.singleton key SelectorEnabled
   SelectorConfig key False _ -> Map.singleton key SelectorDisabled
 
