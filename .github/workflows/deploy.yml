@@ -12,6 +12,7 @@ on:
   push:
     branches:
       - main
+      - jhbertra/deployment
 jobs:
   tests:
     uses: ./.github/workflows/test.yml
@@ -34,16 +35,38 @@ jobs:
             substituters = ${{ env.SUBSTITUTERS }}
             experimental-features = nix-command flakes
 
-      - name: Install Skopeo
-        run: nix-env -iA skopeo -f '<nixpkgs>'
-
-      - name: Login with Skopeo
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | skopeo login ghcr.io -u $ --password-stdin
-
-      - name: Publish Runtime Images
+      - name: Build images and copy to local Docker registry
         run: |
-          nix build .#oci-images.x86_64-linux.latest.all.copyToRegistry
-          ./result/bin/copy-to-registry
+          nix build .#oci-images.x86_64-linux.all.copyToDockerDaemon
+          ./result/bin/copy-to-docker-daemon
+
+      - name: Authenticate with container registry
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u $ --password-stdin
+
+      - name: Tag and push images
+        run: |
+          tagAndPush() {
+            IMAGE_ID=ghcr.io/${{ github.repository_owner }}/$1
+            # Change all uppercase to lowercase
+            IMAGE_ID=$(echo $IMAGE_ID | tr '[A-Z]' '[a-z]')
+            # Strip git ref prefix from version
+            TAG=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')
+            # Strip "v" prefix from tag name
+            [[ "${{ github.ref }}" == "refs/tags/"* ]] && TAG=$(echo $TAG | sed -e 's/^v//')
+            # Use Docker `latest` tag convention
+            [ "$TAG" == "main" ] && TAG=latest
+            echo IMAGE_ID=$IMAGE_ID
+            echo TAG=$TAG
+            docker tag $1:latest $IMAGE_ID:$TAG
+            docker push $IMAGE_ID:$TAG
+          }
+          tagAndPush "marlowe-chain-indexer"
+          tagAndPush "marlowe-chain-sync"
+          tagAndPush "marlowe-indexer"
+          tagAndPush "marlowe-sync"
+          tagAndPush "marlowe-tx"
+          tagAndPush "marlowe-proxy"
+          tagAndPush "marlowe-web-server"
 
   deploy:
     strategy:
@@ -71,7 +94,9 @@ jobs:
 
       - name: Build nomad chart
         run: |
-          nix build github:input-output-hk/dapps-world#marlowe.marlowe-runtime-${{ matrix.network }}-latest --override-input marlowe-cardano github:input-output-hk/marlowe-cardano/$GITHUB_SHA
+          nix build \
+            github:input-output-hk/dapps-world#marlowe.marlowe-runtime-${{ matrix.network }} \
+            --override-input marlowe-cardano github:input-output-hk/marlowe-cardano/$GITHUB_SHA
 
       - name: Install Nomad
         run: |
