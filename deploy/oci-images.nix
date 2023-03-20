@@ -9,6 +9,7 @@ let
   mkImage = { name, description }:
     std.lib.ops.mkStandardOCI {
       inherit name;
+      tag = "latest";
       operable = operables.${name};
       uid = "0";
       gid = "0";
