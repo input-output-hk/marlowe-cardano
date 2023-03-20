@@ -41,6 +41,7 @@ createCloseContract Wallet{..}= do
       , roles = Nothing
       , contract = V1.Close
       , minUTxODeposit = 2_000_000
+      , tags = mempty
       }
 
   createTx <- liftIO $ signShelleyTransaction' createTxBody signingKeys
