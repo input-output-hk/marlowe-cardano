@@ -1,6 +1,5 @@
-
-
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -17,15 +16,25 @@ module Language.Marlowe.Runtime.App.Channel
 
 import Control.Concurrent (forkIO, threadDelay)
 import Control.Concurrent.STM (atomically)
-import Control.Concurrent.STM.TChan (TChan, newTChanIO, readTChan, writeTChan)
-import Control.Monad (forever, unless, void)
+import Control.Concurrent.STM.TChan (newTChanIO, readTChan, writeTChan)
+import Control.Monad (join, unless, void)
+import Control.Monad.Except (ExceptT(ExceptT), runExceptT)
 import Control.Monad.IO.Class (liftIO)
 import Data.Aeson (object, (.=))
+import qualified Data.Map.Strict as M (Map, adjust, delete, insert, lookup)
+import qualified Data.Set as S (Set, insert, member)
 import Data.Text (Text)
 import Language.Marlowe.Core.V1.Semantics.Types (Contract)
 import Language.Marlowe.Runtime.App.Run (runClientWithConfig)
 import Language.Marlowe.Runtime.App.Stream
-  (ContractStream(..), contractFromStream, streamAllContractIds, streamContractSteps, transactionIdFromStream)
+  ( ContractStream(..)
+  , EOF(EOF)
+  , TChanEOF
+  , contractFromStream
+  , streamAllContractIds
+  , streamContractSteps
+  , transactionIdFromStream
+  )
 import Language.Marlowe.Runtime.App.Types (Config)
 import Language.Marlowe.Runtime.ChainSync.Api (TxId)
 import Language.Marlowe.Runtime.Core.Api (ContractId, MarloweVersionTag(V1))
@@ -35,16 +44,13 @@ import Observe.Event.Dynamic (DynamicEventSelector(..), DynamicField)
 import Observe.Event.Explicit (Event, EventBackend, addField, withEvent)
 import Observe.Event.Syntax ((≔))
 
-import qualified Data.Map.Strict as M (Map, adjust, delete, insert, lookup)
-import qualified Data.Set as S (Set, insert, member)
-
-
 runDiscovery
   :: EventBackend IO r DynamicEventSelector
   -> Config
   -> Int
-  -> IO (TChan ContractId)
-runDiscovery eventBackend config pollingFrequency =
+  -> Bool
+  -> IO (TChanEOF ContractId)
+runDiscovery eventBackend config pollingFrequency endOnWait =
   do
     channel <- newTChanIO
     void . forkIO
@@ -52,7 +58,7 @@ runDiscovery eventBackend config pollingFrequency =
       $ \event ->
         addField event
           . either (("failure" :: Text) ≔) (const $ ("success" :: Text) ≔ True)
-          =<< runClientWithConfig config (streamAllContractIds eventBackend pollingFrequency channel)
+          =<< runClientWithConfig config (streamAllContractIds eventBackend pollingFrequency endOnWait channel)
     pure channel
 
 
@@ -61,27 +67,32 @@ runDetection
   -> EventBackend IO r DynamicEventSelector
   -> Config
   -> Int
-  -> TChan ContractId
-  -> IO (TChan (ContractStream 'V1))
+  -> TChanEOF ContractId
+  -> IO (TChanEOF (ContractStream 'V1))
 runDetection accept eventBackend config pollingFrequency inChannel =
   do
     outChannel <- newTChanIO
-    void . forkIO
-      . forever
-      . runClientWithConfig config
+    let
       -- FIXME: If `MarloweSyncClient` were a `Monad`, then we could run
       --        multiple actions sequentially in a single connection.
-      . withEvent (hoistEventBackend liftIO eventBackend) (DynamicEventSelector "DetectionProcess")
-      $ \event ->
-        do
-          contractId <- liftIO . atomically $ readTChan inChannel
-          addField event $ ("contractId" :: Text) ≔ contractId
-          -- FIXME: If there were concurrency combinators for `MarloweSyncClient`, then we
-          --        could follow multiple contracts in parallel using the same connection.
-          let
-            finishOnClose = True
-            finishOnWait = True
-          streamContractSteps eventBackend pollingFrequency finishOnClose finishOnWait accept contractId outChannel
+      threadAction = join
+        . withEvent (hoistEventBackend liftIO eventBackend) (DynamicEventSelector "DetectionProcess")
+        $ \event ->
+          do
+            liftIO (atomically $ readTChan inChannel) >>= \case
+              Left _ -> do
+                liftIO . atomically $ writeTChan outChannel $ Left EOF
+                pure $ pure ()
+              Right contractId -> do
+                addField event $ ("contractId" :: Text) ≔ contractId
+                -- FIXME: If there were concurrency combinators for `MarloweSyncClient`, then we
+                --        could follow multiple contracts in parallel using the same connection.
+                let
+                  finishOnClose = True
+                  finishOnWait = True
+                streamContractSteps eventBackend pollingFrequency finishOnClose finishOnWait accept contractId outChannel
+                pure threadAction
+    void $ forkIO $ runClientWithConfig config threadAction
     pure outChannel
 
 
@@ -102,10 +113,11 @@ runContractAction
   -> EventBackend IO r DynamicEventSelector
   -> (Event IO r DynamicField -> LastSeen -> IO ())
   -> Int
-  -> TChan (ContractStream 'V1)
-  -> TChan ContractId
+  -> Bool
+  -> TChanEOF (ContractStream 'V1)
+  -> TChanEOF ContractId
   -> IO ()
-runContractAction selectorName eventBackend runInput pollingFrequency inChannel outChannel =
+runContractAction selectorName eventBackend runInput pollingFrequency endOnWait inChannel outChannel =
   let
     -- Nothing needs updating.
     rollback :: ContractStream 'V1 -> M.Map ContractId LastSeen -> M.Map ContractId LastSeen
@@ -139,21 +151,22 @@ runContractAction selectorName eventBackend runInput pollingFrequency inChannel 
       M.adjust (\seen -> seen {ignoredTxIds = txId `S.insert` ignoredTxIds seen}) contractId lastSeen
     -- Revisit a contract later.
     revisit :: ContractId -> IO ()
-    revisit contractId =
+    revisit contractId
+      | endOnWait = pure ()
       -- FIXME: This is a workaround for contract discovery not tailing past the tip of the blockchain.
-      void . forkIO
+      | otherwise = void . forkIO
         $ threadDelay pollingFrequency
-        >> atomically (writeTChan outChannel contractId)
+        >> atomically (writeTChan outChannel $ Right contractId)
     go :: M.Map ContractId LastSeen -> IO ()
     go lastSeen =
       do
         lastSeen' <-
           withEvent eventBackend (DynamicEventSelector selectorName)
-            $ \event ->
+            $ \event -> runExceptT $
               do
-                cs <- liftIO . atomically $ readTChan inChannel
-                addField event $ ("contractId" :: Text) ≔ csContractId cs
-                case cs of
+                cs <- ExceptT . atomically $ readTChan inChannel
+                liftIO . addField event $ ("contractId" :: Text) ≔ csContractId cs
+                liftIO $ case cs of
                   ContractStreamStart{}      -> do
                                                   addField event $ ("action" :: Text) ≔ ("start" :: String)
                                                   update event cs lastSeen
@@ -181,6 +194,6 @@ runContractAction selectorName eventBackend runInput pollingFrequency inChannel 
                   ContractStreamFinish{..}   -> do
                                                   addField event $ ("action" :: Text) ≔ ("finish" :: String)
                                                   pure $ delete csContractId lastSeen
-        go lastSeen'
+        either (const $ pure ()) go lastSeen'
   in
     go mempty
