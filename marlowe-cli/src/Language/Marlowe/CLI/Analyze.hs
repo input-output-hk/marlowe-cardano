@@ -46,7 +46,6 @@ import Language.Marlowe.CLI.Merkle (deepDemerkleize, merkleizeInput)
 import Language.Marlowe.CLI.Run (marloweAddressFromCardanoAddress)
 import Language.Marlowe.CLI.Types
   ( CliError(CliError)
-  , Continuations
   , MarloweTransaction(MarloweTransaction, mtContinuations, mtContract, mtInputs, mtPayments, mtRange, mtRoleValidator, mtRolesCurrency, mtSlotConfig, mtState, mtValidator)
   , SomeMarloweTransaction(SomeMarloweTransaction)
   , ValidatorInfo(..)

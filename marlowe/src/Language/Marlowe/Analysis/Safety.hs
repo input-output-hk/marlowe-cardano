@@ -1,0 +1,320 @@
+-----------------------------------------------------------------------------
+--
+-- Module      :  $Headers
+-- License     :  Apache 2.0
+--
+-- Stability   :  Experimental
+-- Portability :  Portable
+--
+-- | Safety analysis for Marlowe contracts.
+--
+-----------------------------------------------------------------------------
+
+
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TupleSections #-}
+
+
+module Language.Marlowe.Analysis.Safety
+  ( -- * Types
+    SafetyError(..)
+    -- * Checks for Contracts
+  , checkMaximumValueBound
+  , checkRoleNames
+  , checkSafety
+  , checkTokens
+    -- * Worst-Case Bounds
+  , worstDatumSize
+  , worstMarloweData
+  , worstMaximumValue
+  , worstMinimumUtxo
+  , worstRedeemerSize
+  , worstState
+  , worstTxOut
+  , worstValue
+  , worstValueSize
+    -- * Enumeration
+  , possibleRedeemers
+    -- * Measurement
+  , dataSize
+  ) where
+
+
+import Data.Foldable (maximumBy, toList)
+import Data.Function (on)
+import Data.List (nub)
+import Language.Marlowe.Core.V1.Plate (Continuations, Extract, extractAllWithContinuations)
+import Language.Marlowe.Core.V1.Semantics (MarloweData(..), MarloweParams(..))
+import Language.Marlowe.Core.V1.Semantics.Types
+  (Action(..), Bound(..), Case(..), Contract, InputContent(..), State(..), Token(..))
+import Language.Marlowe.Scripts (MarloweTxInput(..))
+import Plutus.V2.Ledger.Api
+  ( Credential(PubKeyCredential)
+  , CurrencySymbol(..)
+  , OutputDatum(OutputDatumHash)
+  , StakingCredential(StakingHash)
+  , ToData
+  , TokenName(..)
+  , TxOut(..)
+  , adaSymbol
+  , adaToken
+  , toBuiltinData
+  )
+import PlutusTx.Builtins (serialiseData)
+
+import qualified Data.Set as S
+import qualified Plutus.V1.Ledger.Value as V (singleton)
+import qualified Plutus.V2.Ledger.Api as P (Address(..), Value)
+import qualified PlutusTx.AssocMap as AM
+import qualified PlutusTx.Prelude as P
+
+
+-- | Information on the safety of a Marlowe contract and state.
+data SafetyReport =
+  SafetyReport
+  {
+    safetyErrors :: [SafetyError]  -- ^ Safety-related errors in the contract.
+  , boundOnMinimumUtxo :: Int  -- ^ A bound on the minimum-UTxO value, over all execution paths.
+  , boundOnDatumSize :: Int  -- ^ A bound (in bytes) on the size of the datum, over all execution paths.
+  , boundOnRedeemerSize :: Int  -- ^ A bound (in bytes) on the size of the redeemer, over all execution paths.
+  }
+    deriving (Eq, Ord, Show)
+
+
+-- | An unsafe aspect of a Marlowe contract.
+data SafetyError =
+    -- | Roles are present but there is no roles currency.
+    MissingRolesCurrency
+    -- | A role name is longer than the 32 bytes allowed by the ledger.
+  | RoleNameTooLong TokenName
+    -- | The currency symbol for a native asset is not 28 bytes long.
+  | InvalidCurrencySymbol CurrencySymbol
+    -- | A token name is longer than the 32 bytes allowed by the ledger.
+  | TokenNameTooLong TokenName
+    -- | A token name is associated with the ada symbol.
+  | InvalidToken Token
+    -- | Too many tokens might be stored at some point in the contract.
+  | MaximumValueMayExceedProtocol Int Int
+    deriving (Eq, Ord, Show)
+
+
+-- | Check the safety of a Marlowe contract and state.
+checkSafety
+  :: Int  -- ^ The `maxValueSize` protocol parameter.
+  -> Int  -- ^ The `utxoCostPerByte` protocol parameter.
+  -> MarloweData  -- ^ The initial Marlowe data for the contract and state.
+  -> Continuations  -- ^ The merkleized continuations of the contract.
+  -> SafetyReport  -- ^ The report on the contract's safety.
+checkSafety maxValueSize utxoCostPerByte MarloweData{..} continuations =
+  let
+    safetyErrors =
+         checkRoleNames (rolesCurrency marloweParams /= adaSymbol) marloweContract continuations
+      <> checkTokens marloweContract continuations
+      <> checkMaximumValueBound maxValueSize marloweContract continuations
+    boundOnMinimumUtxo = worstMinimumUtxo utxoCostPerByte marloweContract continuations
+    boundOnDatumSize = worstDatumSize marloweParams marloweContract continuations
+    boundOnRedeemerSize = worstRedeemerSize marloweContract continuations
+  in
+    SafetyReport{..}
+
+
+-- | Check that role names are not too long, and that roles are not present if a roles currency is not specified.
+checkRoleNames
+  :: Bool  -- ^ Whether the contract has a roles currency.
+  -> Contract  -- ^ The contract.
+  -> Continuations  -- ^ The merkleized continuations.
+  -> [SafetyError]  -- ^ The safety messages.
+checkRoleNames hasRolesCurrency contract continuations =
+  let
+    roles = extractAllWithContinuations contract continuations
+    invalidRole TokenName{..} = P.lengthOfByteString unTokenName > 32
+  in
+    if hasRolesCurrency || S.null roles
+      then fmap RoleNameTooLong . toList $ invalidRole `S.filter` roles
+      else pure MissingRolesCurrency
+
+
+-- | Check that a contract has native tokens satisfying the ledger rules.
+checkTokens
+  :: Contract  -- ^ The contract.
+  -> Continuations  -- ^ The merkleized continuations.
+  -> [SafetyError]  -- ^ The safety messages.
+checkTokens =
+  let
+    invalidToken token@(Token currency@CurrencySymbol{..} name@TokenName{..})
+      | currency == adaSymbol = if name == adaToken then mempty else pure $ InvalidToken token
+      | P.lengthOfByteString unCurrencySymbol /= 28 = pure $ InvalidCurrencySymbol currency
+      | P.lengthOfByteString unTokenName > 32 = pure $ TokenNameTooLong name
+      | otherwise = mempty
+  in
+   ((foldMap invalidToken . toList) .) . extractAllWithContinuations
+
+
+-- | Check that a contract satisfies the maximum value ledger constraint.
+checkMaximumValueBound
+  :: Int  -- ^ The `maxValueSize` protocol parameter.
+  -> Contract  -- ^ The contract.
+  -> Continuations  -- ^ The merkleized continuations.
+  -> [SafetyError]  -- ^ The safety messages.
+checkMaximumValueBound maxValueSize contract continuations =
+  let
+    actual = worstMaximumValue contract continuations
+  in
+    if actual <= maxValueSize
+      then mempty
+      else pure $ MaximumValueMayExceedProtocol actual maxValueSize
+
+
+-- | Compute a bound on the value size for a contract.
+worstMaximumValue
+  :: Contract  -- ^ The contract.
+  -> Continuations  -- ^ The merkleized continuations.
+  -> Int  -- ^ A bound on the value size (in bytes).
+worstMaximumValue = (worstValueSize .) . extractAllWithContinuations
+
+
+-- | Find a representative value with worst-case size.
+worstValue
+  :: Contract  -- ^ The contract.
+  -> Continuations  -- ^ The merkleized continuations.
+  -> P.Value  -- ^ The value.
+worstValue contract continuations =
+  let
+    tokens = extractAllWithContinuations contract continuations
+    representativeValue (Token currency name) = V.singleton currency name big
+  in
+    V.singleton adaSymbol adaToken big
+      <> foldMap representativeValue tokens
+
+
+-- | Find a representative transaction output with worst-case size.
+worstTxOut
+  :: Contract  -- ^ The contract.
+  -> Continuations  -- ^ The merkleized continuations.
+  -> TxOut  -- ^ The transaction output.
+worstTxOut contract continuations =
+  TxOut
+  {
+    txOutAddress =
+      P.Address
+      {
+        addressCredential = PubKeyCredential "88888888888888888888888888888888888888888888888888888888"
+      , addressStakingCredential = Just . StakingHash $ PubKeyCredential "99999999999999999999999999999999999999999999999999999999"
+      }
+  , txOutValue = worstValue contract continuations
+  , txOutDatum = OutputDatumHash "5555555555555555555555555555555555555555555555555555555555555555"
+  , txOutReferenceScript = Nothing
+  }
+
+
+-- | Compute a bound on the minimum UTxO that might be required for a Marlowe contract.
+worstMinimumUtxo
+  :: Int  -- ^ The `utxoCostPerByte` protocol parameter.
+  -> Contract  -- ^ The contract.
+  -> Continuations  -- ^ The merkleized continuations.
+  -> Int  -- ^ A worst-case bound on the minimum UTxO lovelace for the contract.
+worstMinimumUtxo utxoCostPerByte contract continuations =
+  utxoCostPerByte *
+    (
+        155                                       -- Offset.
+      + 28                                        -- Worst case for stake address.
+      + worstMaximumValue contract continuations  -- Worst case for size of value.
+      + 64                                        -- Worst case for length of datum hash.
+    )  -- FIXME: Depends upon the era.
+
+
+-- | Compute a bound on the size of a multi-asset value.
+worstValueSize
+  :: S.Set Token  -- ^ The tokens present.
+  -> Int          -- ^ The number of bytes on the ledger.
+worstValueSize tokens =
+  let
+    -- Number of tokens.
+    nTokens = S.size tokens
+    -- Number of bytes needed to store the policy IDs.
+    nPolicies = S.size $ S.map (\(Token c _) -> c) tokens
+    -- Number of bytes needed to store the token names.
+    nNames = sum . fmap P.lengthOfByteString . toList $ S.map (\(Token _ (TokenName n)) -> n) tokens
+    -- Round bytes up to whole words.
+    padWords x = (x + 7) `div` 8
+  in
+    -- This is the ledger formula for computing the size of a token bundle.
+    -- See <https://github.com/input-output-hk/cardano-ledger/blob/863f1d2f53852369802f070e16509ba3c896b47a/doc/explanations/min-utxo-alonzo.rst>.
+    8 * (6 + padWords (12 * nTokens + 28 * nPolicies + fromInteger nNames))
+
+
+-- | Find a representative Marlowe state with worst-case size.
+worstState
+  :: Contract  -- ^ The contract.
+  -> Continuations  -- ^ The merkleized continuations.
+  -> State  -- ^ A state with worst-case size.
+worstState contract continuations =
+  let
+    worst :: (Extract k, Ord k) => AM.Map k Integer
+    worst = AM.fromList . foldMap (pure . (, big)) $ extractAllWithContinuations contract continuations
+    accounts = worst
+    choices = worst
+    boundValues = worst
+    minTime = 9999999999999
+  in
+    State{..}
+
+
+-- | Find a representative Marlowe datum with worst-case size.
+worstMarloweData
+  :: MarloweParams  -- ^ The Marlowe parameters.
+  -> Contract  -- ^ The contract.
+  -> Continuations  -- ^ The merkleized continuations.
+  -> MarloweData  -- ^ A Marlowe datum of worst-case size.
+worstMarloweData marloweParams marloweContract continuations =
+  let
+    marloweState = worstState marloweContract continuations
+  in
+    MarloweData{..}
+
+
+-- | Compute a bound on the size of the Marlowe datum.
+worstDatumSize
+  :: MarloweParams  -- ^ The Marlowe parameters.
+  -> Contract  -- ^ The contract.
+  -> Continuations  -- ^ The merkleized continuations.
+  -> Int  -- ^ A worst-case bound on the size (in bytes) of the Marlowe datum.
+worstDatumSize = ((dataSize .) .) . worstMarloweData
+
+
+-- | Compute the representative redeemers for a Marlowe contract.
+possibleRedeemers
+  :: Contract  -- ^ The contract.
+  -> Continuations  -- ^ The merkleized continuations.
+  -> [MarloweTxInput]  -- ^ The possible transaction inputs.
+possibleRedeemers =
+  let
+    maximumAbs = maximumBy $ on compare abs
+    largestBound (Bound x y) = maximumAbs [x, y]
+    inputContent (Deposit a p t _) = IDeposit a p t big
+    inputContent (Choice c bs) = IChoice c . maximumAbs $ largestBound <$> bs
+    inputContent (Notify _) = INotify
+    input :: Case Contract -> MarloweTxInput
+    input (Case a _) = Input $ inputContent a
+    input (MerkleizedCase a hash) = MerkleizedTxInput (inputContent a) hash
+  in
+    ((nub . fmap input . toList) .) . extractAllWithContinuations
+
+
+-- | Compute a bound on the size of the Marlowe redeemer.
+worstRedeemerSize
+  :: Contract  -- ^ The contract.
+  -> Continuations  -- ^ The merkleized continuations.
+  -> Int  -- ^ A worst-case bound on the size (in bytes) of the Marlowe redeemer.
+worstRedeemerSize = ((maximum . fmap dataSize) .) . possibleRedeemers
+
+
+-- | Measure the size of Plutus data.
+dataSize :: ToData a => a -> Int
+dataSize = fromInteger . P.lengthOfByteString . serialiseData . toBuiltinData
+
+
+-- | A big integer.
+big :: Integral a => a
+big = 2^(63::Int)

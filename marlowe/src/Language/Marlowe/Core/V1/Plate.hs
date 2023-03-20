@@ -1,10 +1,12 @@
 
 
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 
 
 module Language.Marlowe.Core.V1.Plate
-  ( Extract(..)
+  ( Continuations
+  , Extract(..)
   , MarlowePlate(..)
   , extractAllWithContinuations
   ) where
@@ -16,7 +18,7 @@ import Plutus.V1.Ledger.Api (DatumHash, TokenName)
 
 import qualified Data.Functor.Constant as F (Constant(..))
 import qualified Data.Map.Strict as M (Map, foldr)
-import qualified Data.Set as S (Set, empty, singleton, union)
+import qualified Data.Set as S (Set, empty, fromList, singleton, union)
 
 
 -- | Hasked continuations of a Marlowe contract.
@@ -139,6 +141,68 @@ instance Extract TokenName where
       , actionPlate = actionPlate'
       , valuePlate = valuePlate'
       , observationPlate = observationPlate'
+      }
+
+instance Extract ChoiceId where
+  extractor =
+    let
+      actionPlate' (Choice c _) = F.Constant $ S.singleton c
+      actionPlate' x = pure x
+      valuePlate' (ChoiceValue c) = F.Constant $ S.singleton c
+      valuePlate' x = pure x
+      observationPlate' (ChoseSomething c) = F.Constant $ S.singleton c
+      observationPlate' x = pure x
+    in
+      purePlate
+      {
+        actionPlate = actionPlate'
+      , valuePlate = valuePlate'
+      , observationPlate = observationPlate'
+      }
+
+instance Extract ValueId where
+  extractor =
+    let
+      contractPlate' (Let v _ _) = F.Constant $ S.singleton v
+      contractPlate' x = pure x
+      valuePlate' (UseValue v) = F.Constant $ S.singleton v
+      valuePlate' x = pure x
+    in
+      purePlate
+      {
+        contractPlate = contractPlate'
+      , valuePlate = valuePlate'
+      }
+
+
+instance Extract (AccountId, Token) where
+  extractor =
+    let
+      contractPlate' (Pay a (Party _) t _ _) = F.Constant $ S.singleton (a, t)
+      contractPlate' (Pay a (Account a') t _ _) = F.Constant $ S.singleton (a, t) <> S.singleton (a', t)
+      contractPlate' x = pure x
+      actionPlate' (Deposit a _ t _) = F.Constant $ S.singleton (a, t)
+      actionPlate' x = pure x
+      valuePlate' (AvailableMoney a t) = F.Constant $ S.singleton (a, t)
+      valuePlate' x = pure x
+    in
+      purePlate
+      {
+        contractPlate = contractPlate'
+      , actionPlate = actionPlate'
+      , valuePlate = valuePlate'
+      }
+
+
+instance Extract (Case Contract) where
+  extractor =
+    let
+      contractPlate' (When cs _ _) = F.Constant $ S.fromList cs
+      contractPlate' x = pure x
+    in
+      purePlate
+      {
+        contractPlate = contractPlate'
       }
 
 
