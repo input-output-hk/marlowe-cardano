@@ -12,6 +12,7 @@ module Observe.Event.Component
   , SelectorConfig(..)
   , SomeJSON(..)
   , absurdFieldConfig
+  , getDefaultLogConfig
   , logger
   , prependKey
   , singletonFieldConfig
@@ -117,6 +118,14 @@ instance ToJSON FieldLogConfig where
     FieldDefault -> Null
     FieldDisabled -> Bool False
     FieldEnabled -> Bool True
+
+getDefaultLogConfig
+  :: s f
+  -> GetSelectorConfig s
+  -> Map Text SelectorLogConfig
+getDefaultLogConfig sel getConfig = case getConfig sel of
+  SelectorConfig key True _ -> Map.singleton key SelectorEnabled
+  SelectorConfig key False _ -> Map.singleton key SelectorDisabled
 
 data LoggerDependencies m r s = LoggerDependencies
   { configFilePath :: Maybe FilePath

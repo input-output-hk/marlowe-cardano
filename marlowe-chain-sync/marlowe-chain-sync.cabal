@@ -232,6 +232,7 @@ executable marlowe-chain-indexer
   build-depends:
       base >= 4.9 && < 5
     , aeson
+    , aeson-pretty
     , async-components
     , cardano-api
     , cardano-crypto-wrapper
@@ -262,6 +263,7 @@ executable marlowe-chain-sync
     Paths_marlowe_chain_sync
   build-depends:
       base >= 4.9 && < 5
+    , aeson-pretty
     , async-components
     , cardano-api
     , cardano-ledger-byron
