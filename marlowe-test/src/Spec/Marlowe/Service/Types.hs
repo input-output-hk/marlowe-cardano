@@ -15,6 +15,7 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
 
 
 module Spec.Marlowe.Service.Types
@@ -33,6 +34,7 @@ import Plutus.V1.Ledger.Api (POSIXTime(..))
 import qualified Data.Aeson as A (Value(Object, String), object, withObject, (.:), (.:?), (.=))
 import qualified Data.Aeson.Types as A (Parser)
 import qualified Language.Marlowe.Core.V1.Semantics as Marlowe
+import Language.Marlowe.Core.V1.Semantics.Types (IntervalResult(..))
 import qualified Language.Marlowe.Core.V1.Semantics.Types as Marlowe
 
 newtype Size = Size Int deriving (Eq, Show, ToJSON, FromJSON)
@@ -62,6 +64,11 @@ data Request =
     , contract :: Marlowe.Contract
     , initialTime :: POSIXTime
     }
+  | FixInterval
+    {
+      interval :: Marlowe.TimeInterval
+    , state :: Marlowe.State
+    }
   | EvalValue
     {
       environment :: Marlowe.Environment
@@ -81,6 +88,7 @@ instance FromJSON Request where
             "compute-transaction"          -> ComputeTransaction <$> o A..: "transactionInput" <*> o A..: "coreContract" <*> o A..: "state"
             "playtrace"                    -> PlayTrace <$> o A..: "transactionInputs" <*> o A..: "coreContract" <*> (POSIXTime <$> o A..: "initialTime")
             "eval-value"                   -> EvalValue <$> o A..: "environment" <*> o A..: "state" <*> o A..: "value"
+            "fix-interval"                 -> FixInterval <$> ((o A..: "interval") >>= \(a,b) -> pure (POSIXTime a, POSIXTime b)) <*> o A..: "state"
             request                        -> fail $ "Request not understood: " <> show request <> "."
 
 instance ToJSON Request where
@@ -114,6 +122,13 @@ instance ToJSON Request where
       , "transactionInputs" A..= transactionInputs
       , "coreContract" A..= contract
       , "initialTime" A..= getPOSIXTime initialTime
+      ]
+  toJSON FixInterval{..} =
+    A.object
+      [
+        "request" A..= ("fix-interval" :: String)
+      , "interval" A..= let (a,b) = interval in (getPOSIXTime a, getPOSIXTime b)
+      , "state" A..= state
       ]
   toJSON EvalValue{..} =
     A.object
@@ -155,3 +170,12 @@ instance ToJSON Response where
   toJSON (InvalidRequest err) = A.object . pure $ "invalid-request" A..= err
   toJSON (RequestResponse res) = A.object . pure $ "request-response" A..= res
   toJSON (ResponseFailure err) = A.object . pure $ "invalid-request" A..= err
+
+instance ToJSON IntervalResult where
+    toJSON (IntervalTrimmed env state) = A.object
+        [ "environment" A..= toJSON env
+        , "state" A..= toJSON state
+        ]
+    toJSON (IntervalError err) = A.object
+        [ "interval_error" A..= toJSON err
+        ]

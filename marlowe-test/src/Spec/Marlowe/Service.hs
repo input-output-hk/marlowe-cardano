@@ -28,7 +28,7 @@ import Spec.Marlowe.Service.Serialization (roundtripSerialization)
 import Spec.Marlowe.Service.Types (Request(..), Response(..))
 
 import qualified Data.Aeson as A (Result(..), Value, fromJSON, object, toJSON, (.=))
-import qualified Language.Marlowe.Core.V1.Semantics as Marlowe (computeTransaction, evalValue, playTrace)
+import qualified Language.Marlowe.Core.V1.Semantics as Marlowe (computeTransaction, evalValue, fixInterval, playTrace)
 
 
 -- | Respond to a request expressed as JSON.
@@ -58,6 +58,11 @@ handle ComputeTransaction{..} =
 handle PlayTrace{..} =
   let
     valueResponse = A.toJSON $ Marlowe.playTrace initialTime contract transactionInputs
+  in
+    pure RequestResponse{..}
+handle FixInterval{..} =
+  let
+    valueResponse = A.toJSON $ Marlowe.fixInterval interval state
   in
     pure RequestResponse{..}
 handle EvalValue{..} =
