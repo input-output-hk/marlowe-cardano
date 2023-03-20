@@ -33,6 +33,7 @@ import Plutus.V1.Ledger.Api (POSIXTime(..))
 
 import qualified Data.Aeson as A (Value(Object, String), object, withObject, (.:), (.:?), (.=))
 import qualified Data.Aeson.Types as A (Parser)
+import Language.Marlowe.Core.V1.Semantics (ReduceResult(..), ReduceWarning(..))
 import qualified Language.Marlowe.Core.V1.Semantics as Marlowe
 import Language.Marlowe.Core.V1.Semantics.Types (IntervalResult(..))
 import qualified Language.Marlowe.Core.V1.Semantics.Types as Marlowe
@@ -51,6 +52,12 @@ data Request =
       typeSerialized :: String
     , size :: Maybe Size
     , seed :: Maybe Seed
+    }
+  | ReduceContractUntilQuiescent
+    {
+      environment :: Marlowe.Environment
+    , state :: Marlowe.State
+    , contract :: Marlowe.Contract
     }
   | ComputeTransaction
     {
@@ -83,13 +90,14 @@ instance FromJSON Request where
       $ \o ->
         (o A..: "request" :: A.Parser String)
           >>= \case
-            "test-roundtrip-serialization" -> TestRoundtripSerialization <$> o A..: "typeId" <*> o A..: "json"
-            "generate-random-value"        -> GenerateRandomValue <$> o A..: "typeId" <*> o A..:? "size" <*> o A..:? "seed"
-            "compute-transaction"          -> ComputeTransaction <$> o A..: "transactionInput" <*> o A..: "coreContract" <*> o A..: "state"
-            "playtrace"                    -> PlayTrace <$> o A..: "transactionInputs" <*> o A..: "coreContract" <*> (POSIXTime <$> o A..: "initialTime")
-            "eval-value"                   -> EvalValue <$> o A..: "environment" <*> o A..: "state" <*> o A..: "value"
-            "fix-interval"                 -> FixInterval <$> ((o A..: "interval") >>= \(a,b) -> pure (POSIXTime a, POSIXTime b)) <*> o A..: "state"
-            request                        -> fail $ "Request not understood: " <> show request <> "."
+            "test-roundtrip-serialization"    -> TestRoundtripSerialization <$> o A..: "typeId" <*> o A..: "json"
+            "generate-random-value"           -> GenerateRandomValue <$> o A..: "typeId" <*> o A..:? "size" <*> o A..:? "seed"
+            "reduce-contract-until-quiescent" -> ReduceContractUntilQuiescent <$> o A..: "environment" <*> o A..: "state" <*> o A..: "coreContract"
+            "compute-transaction"             -> ComputeTransaction <$> o A..: "transactionInput" <*> o A..: "coreContract" <*> o A..: "state"
+            "playtrace"                       -> PlayTrace <$> o A..: "transactionInputs" <*> o A..: "coreContract" <*> (POSIXTime <$> o A..: "initialTime")
+            "eval-value"                      -> EvalValue <$> o A..: "environment" <*> o A..: "state" <*> o A..: "value"
+            "fix-interval"                    -> FixInterval <$> ((o A..: "interval") >>= \(a,b) -> pure (POSIXTime a, POSIXTime b)) <*> o A..: "state"
+            request                           -> fail $ "Request not understood: " <> show request <> "."
 
 instance ToJSON Request where
   toJSON TestRoundtripSerialization{..} =
@@ -106,6 +114,14 @@ instance ToJSON Request where
       , "typeId" A..= typeSerialized
       , "size" A..= size
       , "seed" A..= seed
+      ]
+  toJSON ReduceContractUntilQuiescent{..} =
+    A.object
+      [
+        "request" A..= ("reduce-contract-until-quiescent" :: String)
+      , "environment" A..= environment
+      , "state" A..= state
+      , "coreContract" A..= contract
       ]
   toJSON ComputeTransaction{..} =
     A.object
@@ -170,6 +186,42 @@ instance ToJSON Response where
   toJSON (InvalidRequest err) = A.object . pure $ "invalid-request" A..= err
   toJSON (RequestResponse res) = A.object . pure $ "request-response" A..= res
   toJSON (ResponseFailure err) = A.object . pure $ "invalid-request" A..= err
+
+instance ToJSON ReduceResult where
+  toJSON (ContractQuiescent reduced warnings payments state contract)
+    = A.object
+        [ "reduced" A..= toJSON reduced
+        , "warnings" A..= toJSON warnings
+        , "payments" A..= toJSON payments
+        , "state" A..= toJSON state
+        , "contract" A..= toJSON contract
+        ]
+  toJSON RRAmbiguousTimeIntervalError = A.String "RRAmbiguousTimeIntervalError"
+
+instance ToJSON ReduceWarning where
+  toJSON ReduceNoWarning = A.String "ReduceNoWarning"
+  toJSON (ReduceNonPositivePay accountId payee token amount)
+    = A.object
+        [ "accountId" A..= toJSON accountId
+        , "payee" A..= toJSON payee
+        , "token" A..= toJSON token
+        , "amount" A..= toJSON amount
+        ]
+  toJSON (ReducePartialPay accountId payee token paid expected)
+    = A.object
+        [ "accountId" A..= toJSON accountId
+        , "payee" A..= toJSON payee
+        , "token" A..= toJSON token
+        , "paid" A..= toJSON paid
+        , "expected" A..= toJSON expected
+        ]
+  toJSON (ReduceShadowing valueId oldValue newValue)
+    = A.object
+        [ "valueId" A..= toJSON valueId
+        , "oldValue" A..= oldValue
+        , "newValue" A..= newValue
+        ]
+  toJSON ReduceAssertionFailed = A.String "ReduceAssertionFailed"
 
 instance ToJSON IntervalResult where
     toJSON (IntervalTrimmed env state) = A.object

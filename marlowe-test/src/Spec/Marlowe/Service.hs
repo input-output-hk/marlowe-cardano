@@ -28,7 +28,8 @@ import Spec.Marlowe.Service.Serialization (roundtripSerialization)
 import Spec.Marlowe.Service.Types (Request(..), Response(..))
 
 import qualified Data.Aeson as A (Result(..), Value, fromJSON, object, toJSON, (.=))
-import qualified Language.Marlowe.Core.V1.Semantics as Marlowe (computeTransaction, evalValue, fixInterval, playTrace)
+import qualified Language.Marlowe.Core.V1.Semantics as Marlowe
+  (computeTransaction, evalValue, fixInterval, playTrace, reduceContractUntilQuiescent)
 
 
 -- | Respond to a request expressed as JSON.
@@ -50,6 +51,11 @@ handle GenerateRandomValue{..} =
     >>= \case
       Right value -> pure . RequestResponse . A.object . pure $ "value" A..= value
       Left failureResponse -> pure $ ResponseFailure{..}
+handle ReduceContractUntilQuiescent{..} =
+  let
+    valueResponse = A.toJSON $ Marlowe.reduceContractUntilQuiescent environment state contract
+  in
+    pure RequestResponse{..}
 handle ComputeTransaction{..} =
   let
     valueResponse = A.toJSON $ Marlowe.computeTransaction transactionInput state contract
