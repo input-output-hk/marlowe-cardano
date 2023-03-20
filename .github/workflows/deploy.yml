@@ -57,7 +57,8 @@ jobs:
             [ "$TAG" == "main" ] && TAG=latest
             echo IMAGE_ID=$IMAGE_ID
             echo TAG=$TAG
-            docker tag $1:latest $IMAGE_ID:$TAG
+            # Only tag the image if it would add a new tag
+            [ "$TAG" != "latest" ] && docker tag $1:latest $IMAGE_ID:$TAG
             docker push $IMAGE_ID:$TAG
           }
           tagAndPush "marlowe-chain-indexer"

@@ -188,5 +188,3 @@ rec
     resources.memory = 1024;
   };
 }
-  latest = mkNomadTasks "latest";
-}
