@@ -80,7 +80,7 @@ let
           inherit (packages) compose-spec;
 
           # Build all oci images
-          copyAllOciImagesToDockerDaemon = oci-images.latest.all.copyToDockerDaemon;
+          copyAllOciImagesToDockerDaemon = oci-images.all.copyToDockerDaemon;
         } // pkgs.lib.optionalAttrs (!rootsOnly) (filterCross {
           # build relevant top level attributes from flake.nix
           inherit (packages) tests;
