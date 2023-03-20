@@ -4,7 +4,7 @@ let
   inherit (self) oci-images;
 
   # OCI-Image Namer
-  ociNamer = oci: builtins.unsafeDiscardStringContext "${oci.imageName}:${oci.imageTag}";
+  ociNamer = oci: builtins.unsafeDiscardStringContext "ghcr.io/input-output-hk/${oci.imageName}:latest";
 
   dbTemplate = db:
     [
@@ -23,8 +23,9 @@ let
 
   nodeConfigDir = "/persist/marlowe-runtime-\${NOMAD_META_environment}/config/\${NOMAD_META_environment}/";
 in
-rec {
-  chain-indexer = {
+rec
+{
+  marlowe-chain-indexer = {
     env =
       let
         nodeConfigDir = "/persist/marlowe-runtime-\${NOMAD_META_environment}/config/\${NOMAD_META_environment}/";
@@ -37,14 +38,14 @@ rec {
         HTTP_PORT = "\${NOMAD_PORT_chain_indexer_http}";
       };
     template = dbTemplate "chainsync";
-    config.image = ociNamer oci-images.chain-indexer;
+    config.image = ociNamer oci-images.marlowe-chain-indexer;
     config.ports = [ "chain_indexer_http" ];
     user = "0:0";
     driver = "docker";
     kill_signal = "SIGINT";
     kill_timeout = "30s";
     resources.cpu = 2000;
-    resources.memory = 4096;
+    resources.memory = 2048;
     volume_mount = {
       destination = "/persist";
       propagation_mode = "private";
@@ -78,7 +79,7 @@ rec {
     kill_signal = "SIGINT";
     kill_timeout = "30s";
     resources.cpu = 2000;
-    resources.memory = 4096;
+    resources.memory = 2048;
     volume_mount = {
       destination = "/persist";
       propagation_mode = "private";
@@ -107,8 +108,8 @@ rec {
     driver = "docker";
     kill_signal = "SIGINT";
     kill_timeout = "30s";
-    resources.cpu = 2000;
-    resources.memory = 4096;
+    resources.cpu = 1000;
+    resources.memory = 1024;
     vault = {
       change_mode = "noop";
       env = true;
@@ -134,8 +135,8 @@ rec {
     driver = "docker";
     kill_signal = "SIGINT";
     kill_timeout = "30s";
-    resources.cpu = 2000;
-    resources.memory = 4096;
+    resources.cpu = 1000;
+    resources.memory = 1024;
     vault = {
       change_mode = "noop";
       env = true;
@@ -160,8 +161,8 @@ rec {
     driver = "docker";
     kill_signal = "SIGINT";
     kill_timeout = "30s";
-    resources.cpu = 2000;
-    resources.memory = 4096;
+    resources.cpu = 1000;
+    resources.memory = 1024;
   };
 
   marlowe-proxy = {
@@ -183,7 +184,7 @@ rec {
     driver = "docker";
     kill_signal = "SIGINT";
     kill_timeout = "30s";
-    resources.cpu = 2000;
-    resources.memory = 4096;
+    resources.cpu = 1000;
+    resources.memory = 1024;
   };
 }

@@ -79,8 +79,7 @@ let
         } // pkgs.lib.optionalAttrs (system == "x86_64-linux") {
           inherit (packages) compose-spec;
 
-          # Build all oci image uploaders
-          copyAllOciImagesToRegistry = oci-images.all.copyToRegistry;
+          # Build all oci images
           copyAllOciImagesToDockerDaemon = oci-images.all.copyToDockerDaemon;
         } // pkgs.lib.optionalAttrs (!rootsOnly) (filterCross {
           # build relevant top level attributes from flake.nix

@@ -114,7 +114,7 @@ let
 
 in
 {
-  chain-indexer = mkOperableWithProbes {
+  marlowe-chain-indexer = mkOperableWithProbes {
     package = packages.marlowe-chain-indexer;
     runtimeInputs = [ jq sqitchPg srvaddr postgresql coreutils ];
     runtimeScript = ''
