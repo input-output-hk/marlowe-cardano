@@ -2,6 +2,8 @@
 
 This document summarizes recommendations for the computational resources required to deploy Marlowe Runtime on public networks (`mainnet`, `preprod`, and `preview`).
 
+For more information about how to get started using the Cardano testnets, please see [Getting started](https://docs.cardano.org/cardano-testnet/getting-started).
+
 
 ## Marlowe Services
 
@@ -16,7 +18,7 @@ The table below provides guidance on the memory and CPU resources required for M
 | `marlowe-chain-indexer` | 2500 MB |        50 % |
 | `marlowe-chain-sync`    |  100 MB |        50 % |
 | `marlowe-indexer`       |  100 MB |        10 % |
-| `marlowe-sync`          |  500 MB |        50 % |
+| `marlowe-sync`          |  250 MB |        50 % |
 | `marlowe-tx`            |  250 MB |        25 % |
 | `marlowe-proxy`         |   50 MB |         5 % |
 | `marlowe-web-server`    |   50 MB |         5 % |
@@ -34,9 +36,9 @@ The table below lists the maximum size of the Marlowe Runtime database schemas f
 | `sqitch`  |    200 kB |    200 kB |    200 kB |
 | Total     |    200 GB |     10 GB |      3 GB |
 
-PostgreSQL memory and CPU requirements depend upon the particular PostgreSQL installation. During indexing, the SQL queries for Marlowe Runtime typically require 100% of a CPU core. A small PostgreSQL installation could use a little as 2 GB of memory, but such an installation would be slow to index the blockchain, though it would be adequate for queries once the blockchain was fully indexed.
+PostgreSQL memory and CPU requirements depend upon the particular PostgreSQL installation. During indexing, the SQL queries for Marlowe Runtime typically require 100% of a CPU core. A small PostgreSQL installation could use as little as 2 GB of memory, but such an installation would be slow to index the blockchain, though it would be adequate for queries once the blockchain was fully indexed.
 
-For fast indexing, about 8 GB of memory is ample for a PostgreSQL instance with the following custom configuration.
+For fast indexing, about 8 GB of memory is ample for a PostgreSQL instance with the following custom configuration:
 
 ```console
 max_connections = 1000;
