@@ -173,7 +173,7 @@ instance ToDTO (ApplyInputsError 'V1) where
     ApplyInputsLoadMarloweContextFailed (PayoutScriptNotPublished _) -> ApiError "Internal error" "InternalError" Null 500
     ApplyInputsLoadMarloweContextFailed (ExtractCreationError _) -> ApiError "Internal error" "InternalError" Null 500
     ApplyInputsLoadMarloweContextFailed (ExtractMarloweTransactionError _) -> ApiError "Internal error" "InternalError" Null 500
-    ApplyInputsConstraintsBuildupFailed (MarloweComputeTransactionFailed _) -> ApiError "Marlowe compute transaction failed" "MarloweComputeTransactionFailed" Null 400
+    ApplyInputsConstraintsBuildupFailed (MarloweComputeTransactionFailed err) -> ApiError ("Marlowe compute transaction failed: " <> err) "MarloweComputeTransactionFailed" Null 400
     ApplyInputsConstraintsBuildupFailed UnableToDetermineTransactionTimeout -> ApiError "Unable to determine transaction timeout" "UnableToDetermineTransactionTimeout" Null 400
     SlotConversionFailed _ -> ApiError "Slot conversion failed" "SlotConversionFailed" Null 400
     TipAtGenesis -> ApiError "Internal error" "InternalError" Null 500
