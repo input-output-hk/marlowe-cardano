@@ -40,14 +40,13 @@ jobs:
         run: |
           nix build .#marlowe.haskell.packages.marlowe-apps.components.exes.marlowe-finder
 
-      - name: Setup SSH files
-        run: |
-          echo ${{ secrets.SSH_KEY }} > ~/.ssh/id_ed25519
-          ssh-key -y -e -f ~/.ssh/id_ed25519 > ~/.ssh/id_ed25519.pub
-          echo >> ~/.ssh/known_hosts <<EOF
-
-          EOF
+      - name: Install SSH keys
+        uses: shimataro/ssh-key-action@v2
+        with:
+          key: ${{ secrets.SSH_KEY }}
+          known_hosts: ${{ secrets.KNOWN_HOSTS }}
 
       - name: Run Marlowe Finder on Preview
         run: |
-          result/bin/marlowe-finder --end-at-tip | grep exception
+          scripts/setup-dev-connection &
+          result/bin/marlowe-finder --end-at-tip
