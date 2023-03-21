@@ -5,7 +5,10 @@ module Main
   where
 
 import Control.Concurrent.Component
+import Data.Aeson.Encode.Pretty (encodePretty)
 import Data.Either (fromRight)
+import qualified Data.Text.Lazy as T
+import Data.Text.Lazy.Encoding (decodeUtf8)
 import qualified Data.Text.Lazy.IO as TL
 import Data.UUID.V4 (nextRandom)
 import Language.Marlowe.Runtime.ChainSync.Api (BlockNo(..), ChainSyncQuery(..), RuntimeChainSeekClient)
@@ -13,7 +16,7 @@ import qualified Language.Marlowe.Runtime.Core.ScriptRegistry as ScriptRegistry
 import Language.Marlowe.Runtime.Transaction (TransactionDependencies(..), transaction)
 import qualified Language.Marlowe.Runtime.Transaction.Query as Query
 import qualified Language.Marlowe.Runtime.Transaction.Submit as Submit
-import Logging (RootSelector(..), getRootSelectorConfig)
+import Logging (RootSelector(..), defaultRootSelectorLogConfig, getRootSelectorConfig)
 import Network.Protocol.ChainSeek.Client (chainSeekClientPeer)
 import Network.Protocol.Connection
   (SomeClientConnector, SomeConnectionSource(..), SomeConnector(SomeConnector), logConnectionSource, logConnector)
@@ -34,6 +37,7 @@ import Options.Applicative
   , help
   , helper
   , info
+  , infoOption
   , long
   , metavar
   , option
@@ -107,8 +111,12 @@ data Options = Options
   }
 
 getOptions :: IO Options
-getOptions = execParser $ info (helper <*> parser) infoMod
+getOptions = execParser $ info (helper <*> printLogConfigOption <*> parser) infoMod
   where
+    printLogConfigOption = infoOption
+      (T.unpack $ decodeUtf8 $ encodePretty defaultRootSelectorLogConfig)
+      (long "print-log-config" <> help "Print the default log configuration.")
+
     parser = Options
       <$> chainSeekPortParser
       <*> chainSeekQueryPortParser

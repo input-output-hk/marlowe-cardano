@@ -7,7 +7,10 @@ module Main
 import Control.Concurrent.Component
 import Control.Exception (bracket)
 import Control.Monad ((<=<))
+import Data.Aeson.Encode.Pretty (encodePretty)
 import Data.String (fromString)
+import qualified Data.Text.Lazy as T
+import Data.Text.Lazy.Encoding (decodeUtf8)
 import qualified Data.Text.Lazy.IO as TL
 import Data.UUID.V4 (nextRandom)
 import Hasql.Pool (UsageError(..))
@@ -18,7 +21,7 @@ import Language.Marlowe.Protocol.Sync.Server (marloweSyncServerPeer)
 import Language.Marlowe.Runtime.Sync (SyncDependencies(..), sync)
 import Language.Marlowe.Runtime.Sync.Database (hoistDatabaseQueries, logDatabaseQueries)
 import qualified Language.Marlowe.Runtime.Sync.Database.PostgreSQL as Postgres
-import Logging (RootSelector(..), getRootSelectorConfig)
+import Logging (RootSelector(..), defaultRootSelectorLogConfig, getRootSelectorConfig)
 import Network.Protocol.Connection (SomeConnectionSource(..), logConnectionSource)
 import Network.Protocol.Driver (TcpServerDependencies(..), tcpServer)
 import Network.Protocol.Handshake.Server (handshakeConnectionSource)
@@ -33,6 +36,7 @@ import Options.Applicative
   , help
   , helper
   , info
+  , infoOption
   , long
   , metavar
   , option
@@ -109,8 +113,12 @@ data Options = Options
   }
 
 getOptions :: IO Options
-getOptions = execParser $ info (helper <*> parser) infoMod
+getOptions = execParser $ info (helper <*> printLogConfigOption <*> parser) infoMod
   where
+    printLogConfigOption = infoOption
+      (T.unpack $ decodeUtf8 $ encodePretty defaultRootSelectorLogConfig)
+      (long "print-log-config" <> help "Print the default log configuration.")
+
     parser = Options
       <$> databaseUriParser
       <*> marloweSyncPortParser
