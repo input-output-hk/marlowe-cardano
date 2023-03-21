@@ -51,7 +51,15 @@ filterEventBackendM selectorPredicate EventBackend{..} = EventBackend
       Nothing -> pure Event
         { reference = Nothing
         , addField = const $ pure ()
-        , finalize = const $ pure ()
+        , finalize = \case
+            Nothing -> pure ()
+            Just ex -> do
+              Event{..} <- newEvent args
+                { newEventInitialFields = mempty
+                , newEventParent = join newEventParent
+                , newEventCauses = catMaybes newEventCauses
+                }
+              finalize $ Just ex
         }
       Just fieldPredicate -> do
         filteredInitFields <- filterM fieldPredicate newEventInitialFields
