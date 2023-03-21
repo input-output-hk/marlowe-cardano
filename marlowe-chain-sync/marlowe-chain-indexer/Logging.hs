@@ -37,13 +37,13 @@ getRootSelectorConfig = \case
 
 defaultRootSelectorLogConfig :: Map Text SelectorLogConfig
 defaultRootSelectorLogConfig = fold
-  [ getDefaultLogConfig (App $ NodeClientEvent Connect) getRootSelectorConfig
-  , getDefaultLogConfig (App $ NodeClientEvent Intersect) getRootSelectorConfig
-  , getDefaultLogConfig (App $ NodeClientEvent IntersectFound) getRootSelectorConfig
-  , getDefaultLogConfig (App $ NodeClientEvent IntersectNotFound) getRootSelectorConfig
-  , getDefaultLogConfig (App $ NodeClientEvent RollForward) getRootSelectorConfig
-  , getDefaultLogConfig (App $ NodeClientEvent RollBackward) getRootSelectorConfig
-  , getDefaultLogConfig (App $ ChainStoreEvent CheckGenesisBlock) getRootSelectorConfig
-  , getDefaultLogConfig (App $ ChainStoreEvent Save) getRootSelectorConfig
-  , getDefaultLogConfig (ConfigWatcher ReloadConfig) getRootSelectorConfig
+  [ getDefaultLogConfig getRootSelectorConfig (App $ NodeClientEvent Connect)
+  , getDefaultLogConfig getRootSelectorConfig (App $ NodeClientEvent Intersect)
+  , getDefaultLogConfig getRootSelectorConfig (App $ NodeClientEvent IntersectFound)
+  , getDefaultLogConfig getRootSelectorConfig (App $ NodeClientEvent IntersectNotFound)
+  , getDefaultLogConfig getRootSelectorConfig (App $ NodeClientEvent RollForward)
+  , getDefaultLogConfig getRootSelectorConfig (App $ NodeClientEvent RollBackward)
+  , getDefaultLogConfig getRootSelectorConfig (App $ ChainStoreEvent CheckGenesisBlock)
+  , getDefaultLogConfig getRootSelectorConfig (App $ ChainStoreEvent Save)
+  , getDefaultLogConfig getRootSelectorConfig (ConfigWatcher ReloadConfig)
   ]
