@@ -167,7 +167,7 @@ in
 
       ${wait-for-socket}/bin/wait-for-socket "$CARDANO_NODE_SOCKET_PATH"
 
-      ${packages.marlowe-chain-indexer}/bin/marlowe-chain-indexer $([ -z $LOG_CONFIG_FILE ] || echo --log-config-file "$LOG_CONFIG_FILE") \
+      ${packages.marlowe-chain-indexer}/bin/marlowe-chain-indexer $([ -z "''${LOG_CONFIG_FILE:-}" ] || echo --log-config-file "$LOG_CONFIG_FILE") \
         --socket-path "$CARDANO_NODE_SOCKET_PATH" \
         --database-uri  "$DATABASE_URI" \
         --shelley-genesis-config-file "$SHELLEY_GENESIS_CONFIG" \
@@ -222,7 +222,7 @@ in
       ${wait-for-socket}/bin/wait-for-socket "$CARDANO_NODE_SOCKET_PATH"
 
       DATABASE_URI=${database-uri}
-      ${packages.marlowe-chain-sync}/bin/marlowe-chain-sync $([ -z $LOG_CONFIG_FILE ] || echo --log-config-file "$LOG_CONFIG_FILE") \
+      ${packages.marlowe-chain-sync}/bin/marlowe-chain-sync $([ -z "''${LOG_CONFIG_FILE:-}" ] || echo --log-config-file "$LOG_CONFIG_FILE") \
         --host "$HOST" \
         --port "$PORT" \
         --query-port "$QUERY_PORT" \
@@ -280,7 +280,7 @@ in
 
       ${wait-for-tcp}/bin/wait-for-tcp "$MARLOWE_CHAIN_SYNC_HOST" "$MARLOWE_CHAIN_SYNC_PORT"
 
-      ${packages.marlowe-indexer}/bin/marlowe-indexer $([ -z $LOG_CONFIG_FILE ] || echo --log-config-file "$LOG_CONFIG_FILE") \
+      ${packages.marlowe-indexer}/bin/marlowe-indexer $([ -z "''${LOG_CONFIG_FILE:-}" ] || echo --log-config-file "$LOG_CONFIG_FILE") \
         --database-uri  "$DATABASE_URI" \
         --chain-sync-port "$MARLOWE_CHAIN_SYNC_PORT" \
         --chain-sync-query-port "$MARLOWE_CHAIN_SYNC_QUERY_PORT" \
@@ -325,8 +325,7 @@ in
 
       [ -z "''${DB_HOST:-}" ] && echo "DB_HOST env var must be set -- aborting" && exit 1
 
-      DATABASE_URI=${database-uri}
-      ${packages.marlowe-sync}/bin/marlowe-sync $([ -z $LOG_CONFIG_FILE ] || echo --log-config-file "$LOG_CONFIG_FILE") \
+      DATABASE_URI=${database-uri} ${packages.marlowe-sync}/bin/marlowe-sync $([ -z "''${LOG_CONFIG_FILE:-}" ] || echo --log-config-file "$LOG_CONFIG_FILE") \
         --database-uri  "$DATABASE_URI" \
         --host "$HOST" \
         --sync-port "$MARLOWE_SYNC_PORT" \
@@ -362,7 +361,7 @@ in
 
       ${wait-for-tcp}/bin/wait-for-tcp "$MARLOWE_CHAIN_SYNC_HOST" "$MARLOWE_CHAIN_SYNC_PORT"
 
-      ${packages.marlowe-tx}/bin/marlowe-tx $([ -z $LOG_CONFIG_FILE ] || echo --log-config-file "$LOG_CONFIG_FILE") \
+      ${packages.marlowe-tx}/bin/marlowe-tx $([ -z "''${LOG_CONFIG_FILE:-}" ] || echo --log-config-file "$LOG_CONFIG_FILE") \
         --host "$HOST" \
         --command-port "$PORT" \
         --chain-sync-port "$MARLOWE_CHAIN_SYNC_PORT" \
@@ -402,7 +401,7 @@ in
       ${wait-for-tcp}/bin/wait-for-tcp "$TX_HOST" "$TX_PORT"
       ${wait-for-tcp}/bin/wait-for-tcp "$SYNC_HOST" "$MARLOWE_QUERY_PORT"
 
-      ${packages.marlowe-proxy}/bin/marlowe-proxy $([ -z $LOG_CONFIG_FILE ] || echo --log-config-file "$LOG_CONFIG_FILE") \
+      ${packages.marlowe-proxy}/bin/marlowe-proxy $([ -z "''${LOG_CONFIG_FILE:-}" ] || echo --log-config-file "$LOG_CONFIG_FILE") \
         --host "$HOST" \
         --port "$PORT" \
         --marlowe-sync-host "$SYNC_HOST" \
