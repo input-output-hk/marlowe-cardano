@@ -1,4 +1,3 @@
-
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE RankNTypes #-}
 
@@ -6,7 +5,7 @@
 module Language.Marlowe.Runtime.ChainSync.NodeClient
   ( NodeClient(..)
   , NodeClientDependencies(..)
-  , NodeClientSelector
+  , NodeClientSelector(..)
   , QueryNode
   , SubmitToNode
   , getNodeClientSelectorConfig
