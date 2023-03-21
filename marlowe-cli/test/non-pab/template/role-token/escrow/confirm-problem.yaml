@@ -1,6 +1,6 @@
-stTestName: Confirm Problem Escrow Contract with Role Token
+testName: Confirm Problem Escrow Contract with Role Token
 
-stScriptOperations:
+operations:
   - tag: Publish
     soPublishPermanently: true
 

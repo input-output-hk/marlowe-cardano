@@ -42,7 +42,7 @@ import Language.Marlowe.CLI.Test.Wallet.Types
   )
 import Language.Marlowe.CLI.Types (CliError(CliError))
 import qualified Language.Marlowe.Core.V1.Semantics.Types.Address as Marlowe
-import Ledger.Tx.CardanoAPI (fromCardanoAddressInEra)
+import Ledger.Address (toPlutusAddress)
 import qualified Plutus.V1.Ledger.Value as PV
 
 marloweNetworkFromCardanoAddress

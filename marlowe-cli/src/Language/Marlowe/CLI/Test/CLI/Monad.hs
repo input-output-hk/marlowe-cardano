@@ -35,7 +35,7 @@ import Control.Monad.Except (MonadError(catchError, throwError))
 import Control.Monad.Reader (MonadReader, ReaderT(runReaderT))
 import Control.Monad.Reader.Class (asks)
 import Data.Has (Has(getter))
-import Language.Marlowe.CLI.Test.Log (Label, LabelFormat(LabelConstructorName), printLabeledMsg)
+import Language.Marlowe.CLI.Test.Log (Label, LabelFormat(LabelConstructorName), printLabeledMsg, printTraceMsg)
 import Language.Marlowe.CLI.Types (CliEnv(CliEnv), CliError(CliError))
 import Ledger.Orphans ()
 
@@ -55,6 +55,16 @@ runCli
   -> m a
 runCli era msg action = do
   withCliErrorMsg (mappend msg) $ runReaderT action (CliEnv era)
+
+runTraceCli
+  :: MonadError CliError m
+  => ScriptDataSupportedInEra era
+  -> String
+  -> ReaderT (CliEnv era) m a
+  -> m a
+runTraceCli era trace action = do
+  withCliErrorMsg (printTraceMsg trace) $ runReaderT action (CliEnv era)
+
 
 runLabeledCli
   :: MonadError CliError m

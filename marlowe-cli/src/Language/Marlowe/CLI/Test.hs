@@ -59,12 +59,7 @@ import qualified Language.Marlowe.CLI.Test.Runtime.Monitor as Runtime.Monitor
 import qualified Language.Marlowe.CLI.Test.Runtime.Types as Runtime
 import qualified Language.Marlowe.CLI.Test.Runtime.Types as Runtime.Monitor
 import Language.Marlowe.CLI.Test.Types
-  ( InterpretEnv(..)
-  , InterpretState(..)
-  , TestCase(TestCase, tcTestName)
-  , TestResult(TestFailed, TestSucceeded)
-  , TestSuite(..)
-  )
+  (InterpretEnv(..), InterpretState(..), TestCase(..), TestResult(TestFailed, TestSucceeded), TestSuite(..))
 import Language.Marlowe.CLI.Test.Wallet.Types (Currencies(Currencies), Wallet)
 import qualified Language.Marlowe.CLI.Test.Wallet.Types as Wallet
 import Language.Marlowe.CLI.Transaction (querySlotConfig, queryUtxos)
@@ -112,16 +107,16 @@ runTests era TestSuite{..} =
       printStats = PrintStats True
       protocolVersion = toPlutusProtocolVersion $ protocolParamProtocolVersion protocol
 
-    for_ tests' \testCase@TestCase { tcTestName } -> do
+    for_ tests' \testCase@TestCase { testName } -> do
       liftIO $ putStrLn ""
-      liftIO . putStrLn $ "***** Test " <> show tcTestName <> " *****"
+      liftIO . putStrLn $ "***** Test " <> show testName <> " *****"
 
       let
         config = def
           { -- chainSeekHost = "127.0.0.1"
-            Apps.chainSeekSyncPort = 33584 -- 3715
-          , Apps.chainSeekCommandPort = 33582 -- 3720
-          , Apps.runtimePort = 33589 -- 3700
+            Apps.chainSeekSyncPort = 32778 -- 3715
+          , Apps.chainSeekCommandPort = 32776 -- 3720
+          , Apps.runtimePort = 32782 -- 3700
           -- , Apps.runtimeHost = "127.0.0.1"
           -- , timeoutSeconds = 900
           -- , buildSeconds = 3
@@ -162,21 +157,17 @@ runTest env faucet (TestCase testName testOperations) = do
   let
     interpretState = InterpretState
       {
-        _ssContracts = CLIContracts mempty
-      , _ssReferenceScripts = Nothing
-      , _ssCurrencies = Currencies mempty
-      , _ssWallets = Wallet.Wallets $ Map.singleton Wallet.faucetNickname faucet
+        _isCLIContracts = CLIContracts mempty
+      , _isPublishedScripts = Nothing
+      , _isCurrencies = Currencies mempty
+      , _isWallets = Wallet.Wallets $ Map.singleton Wallet.faucetNickname faucet
       , _isKnownContracts = mempty
       }
   res <- runExceptT $ flip runReaderT env $ flip execStateT interpretState $ for testOperations \operation -> do
-    logLabeledMsg operation ""
     interpret operation
   case res of
     Left err -> pure $ TestFailed err
     Right _ -> pure TestSucceeded
-
-  -- mapM_ interpret env tests'
-
 
 
 -- -- | Test a Marlowe contract.

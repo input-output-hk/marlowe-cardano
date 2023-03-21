@@ -20,8 +20,6 @@ import Cardano.Api.Byron (TxIn)
 import Data.List.NonEmpty (NonEmpty((:|)))
 import qualified Data.List.NonEmpty as List
 import qualified Language.Marlowe as M
-import Ledger.Orphans ()
-
 
 data Running
 
@@ -62,11 +60,9 @@ getMarloweThreadTxIn (Created _ txIn)           = Just txIn
 getMarloweThreadTxIn (InputsApplied _ txIn _ _) = Just txIn
 getMarloweThreadTxIn Closed {}                    = Nothing
 
-
 -- | Hides the `status` type parameter.
 data AnyMarloweThread txInfo lang era where
   AnyMarloweThread :: MarloweThread txInfo lang era status -> AnyMarloweThread txInfo lang era
-
 
 -- | Safec onstructors for `AnyMarloweThread`.
 anyMarloweThreadCreated :: txInfo -> TxIn -> AnyMarloweThread txInfo lang era

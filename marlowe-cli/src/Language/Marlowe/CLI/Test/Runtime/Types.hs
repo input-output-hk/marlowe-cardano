@@ -39,12 +39,14 @@ import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.Reader.Class (MonadReader)
 import Control.Monad.State.Class (MonadState)
 import Data.Aeson (FromJSON)
+import qualified Data.Aeson as A
 import Data.Aeson.Types (ToJSON)
 import Data.Map (Map)
 import Data.Time.Units (Second)
 import GHC.Generics (Generic)
 import Language.Marlowe.CLI.Test.Contract (ContractNickname)
 import Language.Marlowe.CLI.Test.ExecutionMode (ExecutionMode)
+import qualified Language.Marlowe.CLI.Test.Operation.Aeson as Operation
 import Language.Marlowe.CLI.Types (CliError)
 import Language.Marlowe.Cardano.Thread (AnyMarloweThread, MarloweThread, anyMarloweThread)
 import qualified Language.Marlowe.Core.V1.Semantics.Types as M
@@ -97,7 +99,11 @@ data RuntimeOperation =
       roContractNickname  :: ContractNickname
     }
   deriving stock (Eq, Generic, Show)
-  deriving anyclass (FromJSON, ToJSON)
+
+instance FromJSON RuntimeOperation where
+  parseJSON = do
+    A.genericParseJSON $ Operation.genericParseJSONOptions "ro"
+
 
 newtype InterpretState = InterpretState
   {

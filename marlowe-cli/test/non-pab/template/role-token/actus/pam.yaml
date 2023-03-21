@@ -1,6 +1,6 @@
-stTestName: Actus PAM contract test with role token
+testName: Actus PAM contract test with role token
 
-stScriptOperations:
+operations:
   - tag: Publish
     soPublishPermanently: true
 

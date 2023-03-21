@@ -43,19 +43,24 @@ import Data.Aeson (FromJSON(..), ToJSON(..))
 import qualified Data.Aeson as A
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.Types as A
+import qualified Data.Char as Char
 import qualified Data.Fixed as F
 import qualified Data.Fixed as Fixed
 import Data.Foldable (fold)
+import qualified Data.List as List
 import Data.Map (Map)
 import qualified Data.Map.Strict as Map
+import Data.Maybe (fromMaybe)
 import Data.String (IsString(fromString))
 import qualified Data.Text as T
+import qualified Data.Text as Text
 import Data.Traversable (for)
 import qualified Data.Vector as V
 import GHC.Generics (Generic(from))
 import GHC.Natural (Natural)
 import Language.Marlowe.CLI.Cardano.Api.Value (lovelaceToPlutusValue, toPlutusValue, txOutValueValue)
 import Language.Marlowe.CLI.Test.ExecutionMode (ExecutionMode)
+import qualified Language.Marlowe.CLI.Test.Operation.Aeson as Operation
 import Language.Marlowe.CLI.Types (CliError(CliError), PrintStats(PrintStats), SomePaymentSigningKey)
 import Ledger.Orphans ()
 import Plutus.V1.Ledger.Api (CurrencySymbol, TokenName)
@@ -218,16 +223,16 @@ instance ToJSON TokenAssignment where
 data WalletOperation =
     BurnAll
     {
-      soCurrencyNickname    :: CurrencyNickname
-    , soMetadata            :: Maybe Aeson.Object
+      woCurrencyNickname    :: CurrencyNickname
+    , woMetadata            :: Maybe Aeson.Object
     }
   | CreateWallet
     {
-      soWalletNickname  :: WalletNickname
+      woWalletNickname  :: WalletNickname
     }
   | CheckBalance
-    { soWalletNickname  :: WalletNickname
-    , soBalance         :: Assets           -- ^ Expected delta of funds:
+    { woWalletNickname  :: WalletNickname
+    , woBalance         :: Assets           -- ^ Expected delta of funds:
                                             -- * We exclude tx fees from this calculation.
                                             -- * We DON'T subtract the minimum lovelace amount (attached when tokens are
                                             --  sent or attached to the contract during the execution).
@@ -236,26 +241,29 @@ data WalletOperation =
     }
   | FundWallets
     {
-      soWalletNicknames  :: [WalletNickname]
-    , soValues           :: [Lovelace]
-    , soCreateCollateral :: Maybe Bool
+      woWalletNicknames  :: [WalletNickname]
+    , woValues           :: [Lovelace]
+    , woCreateCollateral :: Maybe Bool
     }
   | Mint
     {
-      soCurrencyNickname  :: CurrencyNickname
-    , soIssuer            :: Maybe WalletNickname   -- ^ Fallbacks to faucet
-    , soMetadata          :: Maybe Aeson.Object
-    , soTokenDistribution :: [TokenAssignment]
-    , soMinLovelace       :: Lovelace
+      woCurrencyNickname  :: CurrencyNickname
+    , woIssuer            :: Maybe WalletNickname   -- ^ Fallbacks to faucet
+    , woMetadata          :: Maybe Aeson.Object
+    , woTokenDistribution :: [TokenAssignment]
+    , woMinLovelace       :: Lovelace
     }
 
   | SplitWallet
     {
-      soWalletNickname :: WalletNickname
-    , soValues         :: [Lovelace]
+      woWalletNickname :: WalletNickname
+    , woValues         :: [Lovelace]
     }
   deriving stock (Eq, Generic, Show)
-  deriving anyclass (FromJSON, ToJSON)
+
+instance FromJSON WalletOperation where
+  parseJSON = do
+    A.genericParseJSON $ Operation.genericParseJSONOptions "wo"
 
 newtype Wallets era = Wallets (Map WalletNickname (Wallet era))
 

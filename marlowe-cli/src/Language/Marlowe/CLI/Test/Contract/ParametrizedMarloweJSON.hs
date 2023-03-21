@@ -53,6 +53,7 @@ import Control.Monad.Except (MonadError(throwError))
 import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.Reader.Class (MonadReader, asks)
 import Control.Monad.State.Class (MonadState, gets)
+import Data.Aeson (FromJSON, ToJSON)
 import qualified Data.Aeson as A
 import qualified Data.Aeson.KeyMap as KeyMap
 import qualified Data.Aeson.OneLine as A
@@ -77,15 +78,19 @@ import Language.Marlowe.CLI.Test.Wallet.Types
 import Language.Marlowe.CLI.Types (CliError(CliError))
 import Language.Marlowe.Cardano (marloweNetworkFromLocalNodeConnectInfo)
 import qualified Language.Marlowe.Core.V1.Semantics.Types.Address as Marlowe
-import Ledger.Tx.CardanoAPI (fromCardanoAddressInEra)
+import Ledger.Address (toPlutusAddress)
 import qualified Plutus.V1.Ledger.Value as PV
 
 -- Either an JSON of the Input or a JSON of the Contract.
 
 newtype ParametrizedMarloweJSON = ParametrizedMarloweJSON { unParametrizedMarloweJSON :: A.Value }
     deriving stock (Eq, Ord, Generic, Show)
-    deriving anyclass (A.FromJSON, A.ToJSON)
 
+instance FromJSON ParametrizedMarloweJSON where
+  parseJSON = pure . ParametrizedMarloweJSON
+
+instance ToJSON ParametrizedMarloweJSON where
+  toJSON (ParametrizedMarloweJSON json) = json
 
 rewriteCurrencyRefs :: Currencies -> ParametrizedMarloweJSON -> Either CurrencyNickname ParametrizedMarloweJSON
 rewriteCurrencyRefs (Currencies currencies) (ParametrizedMarloweJSON json) = ParametrizedMarloweJSON <$> A.rewriteBottomUp rewrite json
@@ -125,9 +130,8 @@ rewritePartyRefs network (Wallets wallets) (ParametrizedMarloweJSON json) = Para
       A.Object (KeyMap.toList -> [("address", A.String walletNickname)]) -> do
         wallet <- findWallet (WalletNickname $ Text.unpack walletNickname)
         let
-          address = waAddress wallet
-        address' <- first (const $ InvalidWalletAddress (WalletNickname $ Text.unpack walletNickname) address) $ fromCardanoAddressInEra address
-        pure $ A.toJSON (Marlowe.Address network address')
+          address = toPlutusAddress. waAddress $ wallet
+        pure $ A.toJSON (Marlowe.Address network address)
       v -> do
         pure v
 

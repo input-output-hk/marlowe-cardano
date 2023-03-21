@@ -1,6 +1,6 @@
-stTestName: Non-PAB Swap Contract Test
+testName: Non-PAB Swap Contract Test
 
-stScriptOperations:
+operations:
   - tag: Publish
     soPublishPermanently: true
 

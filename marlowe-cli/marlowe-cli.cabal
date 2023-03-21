@@ -92,6 +92,7 @@ library
     Language.Marlowe.CLI.Test.ExecutionMode
     Language.Marlowe.CLI.Test.Interpret
     Language.Marlowe.CLI.Test.Log
+    Language.Marlowe.CLI.Test.Operation.Aeson
     Language.Marlowe.CLI.Test.Runtime.Interpret
     Language.Marlowe.CLI.Test.Runtime.Monitor
     Language.Marlowe.CLI.Test.Runtime.Types

@@ -44,7 +44,7 @@ import Control.Lens (Lens', makeLenses)
 import Control.Monad.Except (MonadError)
 import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.Reader (MonadReader)
-import Data.Aeson (FromJSON(..), ToJSON(..), (.=))
+import Data.Aeson (FromJSON(..), ToJSON(..), (.:), (.=))
 import qualified Data.Aeson as A
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.KeyMap as KeyMap
@@ -52,6 +52,7 @@ import qualified Data.Aeson.Types as A
 import qualified Data.Fixed as F
 import qualified Data.Fixed as Fixed
 import Data.Foldable (fold)
+import qualified Data.List as List
 import Data.List.NonEmpty (NonEmpty((:|)))
 import qualified Data.List.NonEmpty as List
 import Data.Map (Map)
@@ -91,7 +92,8 @@ import Control.Concurrent.STM (TChan, TVar)
 import Control.Lens.Lens (lens)
 import Control.Monad.State.Class (MonadState)
 import Data.Set (Set)
-import Language.Marlowe.CLI.Test.CLI.Types (AnyCLIMarloweThread, CLIContracts(CLIContracts), CLIOperation)
+import Language.Marlowe.CLI.Test.CLI.Types
+  (AnyCLIMarloweThread, CLIContracts(CLIContracts), CLIOperation, cliContractsIds)
 import qualified Language.Marlowe.CLI.Test.CLI.Types as CLI
 import Language.Marlowe.CLI.Test.Contract (ContractNickname(ContractNickname))
 import Language.Marlowe.CLI.Test.ExecutionMode (ExecutionMode)
@@ -127,11 +129,11 @@ data TestSuite era a =
 data TestCase =
   TestCase
   {
-    tcTestName         :: String  -- ^ The name of the test.
-  , tcTestOperations :: [TestOperation] -- ^ The sequence of test operations.
+    testName :: String  -- ^ The name of the test.
+  , operations :: [TestOperation] -- ^ The sequence of test operations.
   }
   deriving stock (Eq, Generic, Show)
-  deriving anyclass (FromJSON, ToJSON)
+  deriving anyclass (FromJSON) --, ToJSON)
 
 -- FIXME: `CliError` was adpoted for an errror reporting as a quick
 -- migration path. We should improve error reporting here.
@@ -153,31 +155,64 @@ data TestOperation =
     }
   deriving stock (Eq, Generic, Show)
 
+cliConstructors :: [String]
+cliConstructors =
+  [ "AutoRun"
+  , "Initialize"
+  , "Prepare"
+  , "Publish"
+  , "Withdraw"
+  ]
+
+runtimeConstructors :: [String]
+runtimeConstructors =
+  [ "RuntimeAwaitCreated"
+  , "RuntimeAwaitInputsApplied"
+  , "RuntimeAwaitClosed"
+  ]
+
+walletConstructors :: [String]
+walletConstructors =
+  [ "BurnAll"
+  , "CreateWallet"
+  , "CheckBalance"
+  , "FundWallets"
+  , "Mint"
+  , "SplitWallet"
+  ]
+
 -- FIXME:
--- * We should improve the error reporting here by manually
--- checking the `tag` and then parsing appropriate sub-operation.
 -- * Improve `Fail` parsing / printing.
 instance FromJSON TestOperation where
-  parseJSON json =
-    CLIOperation <$> parseJSON json
-    <|> RuntimeOperation <$> parseJSON json
-    <|> WalletOperation <$> parseJSON json
-    <|> Fail <$> parseJSON json
+  parseJSON json = do
+    obj <- Aeson.parseJSON json
+    (tag :: String) <- obj .: "tag"
+    case tag of
+      tag | tag `List.elem` cliConstructors -> CLIOperation <$> parseJSON json
+      tag | tag `List.elem` runtimeConstructors -> RuntimeOperation <$> parseJSON json
+      tag | tag `List.elem` walletConstructors -> WalletOperation <$> parseJSON json
+    -- CLIOperation <$> parseJSON json
+      -- <|> RuntimeOperation <$> parseJSON json
+      -- <|> WalletOperation <$> parseJSON json
+      -- "Fail" -> Fail <$> parseJSON json
+      _ -> fail $ "Unknown tag: " <> tag
+      -- <|> Fail <$> parseJSON json
 
-instance ToJSON TestOperation where
-  toJSON (CLIOperation op) = toJSON op
-  toJSON (RuntimeOperation op) = toJSON op
-  toJSON (WalletOperation op) = toJSON op
-  toJSON (Fail msg) = toJSON msg
+-- instance ToJSON TestOperation where
+--   toJSON (CLIOperation op) = toJSON op
+--   toJSON (RuntimeOperation op) = toJSON op
+--   toJSON (WalletOperation op) = toJSON op
+--   toJSON (Fail msg) = toJSON msg
 
 data InterpretState lang era = InterpretState
   {
-    _ssContracts :: CLIContracts lang era
-  , _ssReferenceScripts :: Maybe (MarloweScriptsRefs MarlowePlutusVersion era)
-  , _ssCurrencies :: Currencies
-  , _ssWallets :: Wallets era
+    _isCLIContracts :: CLIContracts lang era
+  , _isPublishedScripts :: Maybe (MarloweScriptsRefs MarlowePlutusVersion era)
+  , _isCurrencies :: Currencies
+  , _isWallets :: Wallets era
   , _isKnownContracts :: Map ContractNickname ContractId
   }
+
 data InterpretEnv lang era = InterpretEnv
   {
     _ieRuntimeMonitor :: Maybe (RuntimeMonitorInput, RuntimeMonitorState lang era)
@@ -214,16 +249,18 @@ cliInpterpretStateL :: Lens' (InterpretState lang era) (CLI.InterpretState lang 
 cliInpterpretStateL = lens toCLIInterpretState fromCLIInterpretState
   where
     toCLIInterpretState (InterpretState contracts referenceScripts currencies wallets knownContracts) =
-      CLI.InterpretState wallets currencies contracts referenceScripts knownContracts
+      CLI.InterpretState wallets currencies contracts referenceScripts
     fromCLIInterpretState
-      InterpretState {}
-      (CLI.InterpretState wallets currencies contracts referenceScripts knownContracts) =
-      InterpretState contracts referenceScripts currencies wallets knownContracts
+      InterpretState {_isKnownContracts=knownContracts}
+      (CLI.InterpretState wallets currencies contracts referenceScripts) = do
+      let
+        knownContracts' = knownContracts <> cliContractsIds contracts
+      InterpretState contracts referenceScripts currencies wallets knownContracts'
 
 runtimeInpterpretStateL :: Lens' (InterpretState lang era) Runtime.InterpretState
 runtimeInpterpretStateL = lens toRuntimeInterpretState fromRuntimeInterpretState
   where
-    toRuntimeInterpretState (InterpretState contracts referenceScripts currencies wallets knownContracts) =
+    toRuntimeInterpretState (InterpretState contracts referenceScripts currencies wallets knownContracts) = do
       Runtime.InterpretState knownContracts
     fromRuntimeInterpretState
       (InterpretState contracts referenceScripts currencies wallets _)

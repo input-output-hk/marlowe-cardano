@@ -84,7 +84,7 @@ import Language.Marlowe.CLI.Test.Wallet.Types
   , TokenAssignment(TokenAssignment)
   , Wallet(Wallet, waAddress, waBalanceCheckBaseline, waMintedTokens, waSigningKey, waSubmittedTransactions)
   , WalletNickname(WalletNickname)
-  , WalletOperation(BurnAll, CheckBalance, CreateWallet, FundWallets, Mint, SplitWallet, soBalance, soCurrencyNickname, soIssuer, soMetadata, soMinLovelace, soTokenDistribution, soValues, soWalletNickname, soWalletNicknames)
+  , WalletOperation(BurnAll, CheckBalance, CreateWallet, FundWallets, Mint, SplitWallet, woBalance, woCurrencyNickname, woIssuer, woMetadata, woMinLovelace, woTokenDistribution, woValues, woWalletNickname, woWalletNicknames)
   , Wallets(Wallets)
   , emptyWallet
   , faucetNickname
@@ -289,7 +289,7 @@ interpret
   -> m ()
 interpret so@CheckBalance {..} =
   view ieExecutionMode >>= skipInSimluationMode so do
-    wallet@Wallet {..} <- findWallet soWalletNickname
+    wallet@Wallet {..} <- findWallet woWalletNickname
     utxos <- (fetchWalletUTxOs wallet :: m (C.UTxO era))
     let
       onChainTotal = CV.toPlutusValue $ foldMap txOutValueValue . Map.elems . C.unUTxO $ utxos
@@ -307,7 +307,7 @@ interpret so@CheckBalance {..} =
         C.Lovelace amount = fees
       show ((fromInteger amount / 1_000_000) :: F.Micro) <> " ADA"
 
-    expectedBalance <- assetsToPlutusValue soBalance
+    expectedBalance <- assetsToPlutusValue woBalance
     when (expectedBalance /= actualBalance) do
       throwLabeledError so $ "Balance check difference: expectedBalance - actualBalance = " <> show (expectedBalance <> inv actualBalance)
 
@@ -318,17 +318,17 @@ interpret so@CreateWallet {..} = do
     vkey = getVerificationKey skey
     LocalNodeConnectInfo {localNodeNetworkId} = connection
     (address :: AddressInEra era) = makeShelleyAddressInEra localNodeNetworkId (PaymentCredentialByKey (verificationKeyHash vkey)) NoStakeAddress
-    WalletNickname rawNickname = soWalletNickname
+    WalletNickname rawNickname = woWalletNickname
   let wallet = emptyWallet address (Left skey)
   logLabeledMsg so $ "Wallet " <> show rawNickname <> " created with an address: " <> Text.unpack (C.serialiseAddress address)
 
-  (addrFile, T.SigningKeyFile skeyFile) <- liftIO $ saveWalletFiles soWalletNickname wallet Nothing
+  (addrFile, T.SigningKeyFile skeyFile) <- liftIO $ saveWalletFiles woWalletNickname wallet Nothing
   logLabeledMsg so $ "Wallet info stored in " <> addrFile <> " and " <> skeyFile
 
-  modifying isWallets \(Wallets wallets) -> Wallets (Map.insert soWalletNickname wallet wallets)
+  modifying isWallets \(Wallets wallets) -> Wallets (Map.insert woWalletNickname wallet wallets)
 
 interpret so@BurnAll {..} = do
-  Currency { ccCurrencySymbol, ccIssuer } <- findCurrency soCurrencyNickname
+  Currency { ccCurrencySymbol, ccIssuer } <- findCurrency woCurrencyNickname
   (Wallets allWallets :: Wallets era) <- use isWallets
   Wallet { waAddress=issuerAddress, waSigningKey=issuerSigningKey } <- findWallet ccIssuer
   let
@@ -342,7 +342,7 @@ interpret so@BurnAll {..} = do
   (burningTx, _) <- runLabeledCli era so $ buildMintingImpl
     connection
     mintingAction
-    soMetadata
+    woMetadata
     Nothing
     submitMode
     printStats
@@ -365,10 +365,10 @@ interpret so@BurnAll {..} = do
 
 interpret FundWallets {..} = do
   let
-    values = [ C.lovelaceToValue v | v <- soValues ]
+    values = [ C.lovelaceToValue v | v <- woValues ]
 
   (Wallet faucetAddress _ _ faucetSigningKey _ :: Wallet era) <- getFaucet
-  addresses <- for soWalletNicknames \walletNickname -> do
+  addresses <- for woWalletNicknames \walletNickname -> do
     (Wallet address _ _ _ _) <- findWallet walletNickname
     pure address
   connection <- view ieConnection
@@ -388,20 +388,20 @@ interpret FundWallets {..} = do
 
 interpret so@Mint {..} = do
   let
-    issuerNickname = fromMaybe faucetNickname soIssuer
+    issuerNickname = fromMaybe faucetNickname woIssuer
 
   (Currencies currencies) <- use isCurrencies
-  case Map.lookup soCurrencyNickname currencies of
+  case Map.lookup woCurrencyNickname currencies of
     Just Currency { ccIssuer=ci } -> when (ci /= issuerNickname)  do
       throwError "Currency with a given nickname already exist and is minted by someone else."
     Nothing -> pure ()
 
   Wallet issuerAddress _ _ issuerSigningKey _ :: Wallet era <- findWallet issuerNickname
-  (tokenDistribution, walletAssignemnts) <- unzip <$> forM soTokenDistribution \(TokenAssignment owner tokenName amount) -> do
+  (tokenDistribution, walletAssignemnts) <- unzip <$> forM woTokenDistribution \(TokenAssignment owner tokenName amount) -> do
     Wallet destAddress _ _ _ _ <- findWallet owner
-    pure ((tokenName, amount, destAddress, Just soMinLovelace), (owner, tokenName, amount))
+    pure ((tokenName, amount, destAddress, Just woMinLovelace), (owner, tokenName, amount))
 
-  logLabeledMsg so $ "Minting currency " <> show soCurrencyNickname <> " with tokens distribution: " <> show soTokenDistribution
+  logLabeledMsg so $ "Minting currency " <> show woCurrencyNickname <> " with tokens distribution: " <> show woTokenDistribution
   tokenDistribution' <- maybe (throwLabeledError so "Token distribution shouldn't be empty") pure $ List.NonEmpty.nonEmpty tokenDistribution
   let
     mintingAction = T.Mint
@@ -415,7 +415,7 @@ interpret so@Mint {..} = do
   (mintingTx, policy) <- runCli era "[Mint] " $ buildMintingImpl
     connection
     mintingAction
-    soMetadata
+    woMetadata
     Nothing
     submitMode
     printStats
@@ -445,14 +445,14 @@ interpret so@Mint {..} = do
       { waSubmittedTransactions = mintingTx : waSubmittedTransactions
       }
   modifying isCurrencies \(Currencies currencies) ->
-    Currencies $ Map.insert soCurrencyNickname currency currencies
+    Currencies $ Map.insert woCurrencyNickname currency currencies
 
 interpret SplitWallet {..} = do
-  Wallet address _ _ skey _ :: Wallet era <- findWallet soWalletNickname
+  Wallet address _ _ skey _ :: Wallet era <- findWallet woWalletNickname
   connection <- view ieConnection
   submitMode <- view ieExecutionMode <&> toSubmitMode
   let
-    values = [ C.lovelaceToValue v | v <- soValues ]
+    values = [ C.lovelaceToValue v | v <- woValues ]
 
   era <- view ieEra
   void $ runCli era "[createCollaterals] " $ buildFaucetImpl

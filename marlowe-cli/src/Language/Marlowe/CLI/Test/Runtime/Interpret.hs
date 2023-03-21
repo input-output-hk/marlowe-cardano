@@ -32,9 +32,10 @@ module Language.Marlowe.CLI.Test.Runtime.Interpret
 
 import Actus.Marlowe (getContractIdentifier)
 import Contrib.Control.Concurrent.Async (timeoutIO)
-import Control.Concurrent.STM (atomically, readTVar, retry)
+import Control.Concurrent.STM (atomically, readTVar, retry, writeTChan)
 import Control.Lens (use, view)
 import Control.Monad.IO.Class (MonadIO(liftIO))
+import Data.Coerce (coerce)
 import qualified Data.Map.Strict as Map
 import Data.Time.Units (TimeUnit(fromMicroseconds))
 import Language.Marlowe.CLI.Test.Contract (ContractNickname(ContractNickname))
@@ -42,9 +43,11 @@ import Language.Marlowe.CLI.Test.ExecutionMode (skipInSimluationMode)
 import Language.Marlowe.CLI.Test.Log (logLabeledMsg, throwLabeledError, throwTraceError)
 import Language.Marlowe.CLI.Test.Runtime.Types
   ( InterpretMonad
+  , RuntimeMonitorInput(RuntimeMonitorInput)
   , RuntimeMonitorState(RuntimeMonitorState)
   , RuntimeOperation(..)
   , ieExecutionMode
+  , ieRuntimeMonitorInput
   , ieRuntimeMonitorState
   , isKnownContracts
   )
@@ -71,12 +74,20 @@ interpret
 interpret ro@RuntimeAwaitCreated {..} = do
   view ieExecutionMode >>= skipInSimluationMode ro do
     contractId <- getContractId roContractNickname
+    RuntimeMonitorInput runtimeMonitorInput <- view ieRuntimeMonitorInput
+    liftIO $ atomically $ do
+      writeTChan runtimeMonitorInput (roContractNickname, contractId)
+
     RuntimeMonitorState runtimeMonitorStateRef <- view ieRuntimeMonitorState
     let
       getContractInfo = do
         runtimeMonitorState <- readTVar runtimeMonitorStateRef
         maybe retry pure (Map.lookup roContractNickname runtimeMonitorState)
-      timeout = maybe (fromMicroseconds 2000_000) (fromMicroseconds . (*) 1000_000 . toInteger) roTimeout
+      timeout = maybe (fromMicroseconds 60_000_000) (fromMicroseconds . (*) 1000_000 . toInteger) roTimeout
+
+    logLabeledMsg ro $ "Waiting for contract instance: " <> show (coerce roContractNickname :: String)
+    logLabeledMsg ro $ "Timeout: " <> show timeout
+
 
     (liftIO $ timeoutIO timeout (atomically getContractInfo)) >>= \case
       Just _ -> do

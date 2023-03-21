@@ -169,11 +169,14 @@ mkRuntimeMonitor config = do
           pure Nothing
         Right Nothing -> pure Nothing
 
-    input = forever $ atomically do
-      (contractNickname, contractId) <- readTChan runtimeContractInputChannel
-      writeTChan detectionInputChannel contractId
-      knownContracts <- readTVar knownContractsRef
-      writeTVar knownContractsRef (Map.insert contractId contractNickname knownContracts)
+    input = forever $ do
+      c <- atomically do
+        c@(contractNickname, contractId) <- readTChan runtimeContractInputChannel
+        writeTChan detectionInputChannel contractId
+        knownContracts <- readTVar knownContractsRef
+        writeTVar knownContractsRef (Map.insert contractId contractNickname knownContracts)
+        pure c
+      logTraceMsg "RuntimeMonitor" $ "Contract " <> show c <> " added to the runtime monitor."
 
   detection' <- do
     asyncDetection <- async detection
