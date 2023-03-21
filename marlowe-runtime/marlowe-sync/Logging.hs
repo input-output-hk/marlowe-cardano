@@ -35,9 +35,9 @@ data RootSelector f where
 
 getRootSelectorConfig :: GetSelectorConfig RootSelector
 getRootSelectorConfig = \case
-  MarloweSyncServer sel -> prependKey "marlowe-sync-server" $ getConnectorSelectorConfig True True sel
-  MarloweHeaderSyncServer sel -> prependKey "marlowe-header-sync-server" $ getConnectorSelectorConfig True True sel
-  MarloweQueryServer sel -> prependKey "marlowe-query-server" $ getConnectorSelectorConfig True True sel
+  MarloweSyncServer sel -> prependKey "marlowe-sync-server" $ getConnectorSelectorConfig False False sel
+  MarloweHeaderSyncServer sel -> prependKey "marlowe-header-sync-server" $ getConnectorSelectorConfig False False sel
+  MarloweQueryServer sel -> prependKey "marlowe-query-server" $ getConnectorSelectorConfig False False sel
   Database sel -> prependKey "database" $ getDatabaseSelectorConfig sel
   ConfigWatcher ReloadConfig -> SelectorConfig "reload-log-config" True
     $ singletonFieldConfig "config" True

@@ -39,10 +39,10 @@ data RootSelector f where
 
 getRootSelectorConfig :: GetSelectorConfig RootSelector
 getRootSelectorConfig = \case
-  ChainSeekClient sel -> prependKey "chain-sync" $ getConnectorSelectorConfig True True sel
-  ChainSyncJobClient sel -> prependKey "chain-sync-job" $ getConnectorSelectorConfig True True sel
-  ChainSyncQueryClient sel -> prependKey "chain-sync-query" $ getConnectorSelectorConfig True True sel
-  Server sel -> prependKey "server" $ getConnectorSelectorConfig True True sel
+  ChainSeekClient sel -> prependKey "chain-sync" $ getConnectorSelectorConfig False False sel
+  ChainSyncJobClient sel -> prependKey "chain-sync-job" $ getConnectorSelectorConfig False False sel
+  ChainSyncQueryClient sel -> prependKey "chain-sync-query" $ getConnectorSelectorConfig False False sel
+  Server sel -> prependKey "server" $ getConnectorSelectorConfig False True sel
   App sel -> getTransactionSererSelectorConfig sel
   ConfigWatcher ReloadConfig -> SelectorConfig "reload-log-config" True
     $ singletonFieldConfig "config" True
