@@ -182,7 +182,6 @@ library indexer
     , transformers
     , witherable
     , vector
-  visibility: public
 
 library sync-api
   import: lang
@@ -206,7 +205,28 @@ library sync-api
     , transformers
     , transformers-base
     , typed-protocols
+
+library builder-api
+  import: lang
+  hs-source-dirs:   builder-api
   visibility: public
+  exposed-modules:
+    Data.Nat
+    Data.Vec
+    Language.Marlowe.Protocol.Builder.Client
+    Language.Marlowe.Protocol.Builder.Server
+    Language.Marlowe.Protocol.Builder.Types
+  build-depends:
+      base >= 4.9 && < 5
+    , aeson
+    , binary
+    , bytestring
+    , cardano-api
+    , marlowe-cardano
+    , marlowe-chain-sync
+    , marlowe-protocols
+    , plutus-ledger-api
+    , typed-protocols
 
 library sync
   import: lang
@@ -259,7 +279,6 @@ library sync
     , transformers
     , vector
     , witherable
-  visibility: public
 
 library discovery-api
   import: lang
@@ -342,7 +361,6 @@ library tx
     , time
     , transformers
     , witherable
-  visibility: public
 
 library proxy-api
   import: lang
@@ -362,7 +380,6 @@ library proxy-api
     , marlowe-runtime:sync-api
     , marlowe-runtime:tx-api
     , typed-protocols
-  visibility: public
 
 library proxy
   import: lang
@@ -386,7 +403,6 @@ library proxy
     , transformers-base
     , typed-protocols
     , unliftio
-  visibility: public
 
 library plutus-scripts
   import: lang
