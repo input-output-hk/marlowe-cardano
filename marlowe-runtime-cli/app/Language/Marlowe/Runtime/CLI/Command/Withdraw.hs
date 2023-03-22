@@ -33,7 +33,7 @@ data WithdrawCommandError v
 deriving instance Show (WithdrawCommandError 'V1)
 
 withdrawCommandParser :: ParserInfo (TxCommand WithdrawCommand)
-withdrawCommandParser = info (txCommandParser parser) $ progDesc "Withdraw funds paid to a role in a contract"
+withdrawCommandParser = info (txCommandParser False parser) $ progDesc "Withdraw funds paid to a role in a contract"
   where
     parser = WithdrawCommand <$> contractIdParser <*> marloweVersionParser <*> roleParser
     contractIdParser = option (ContractId <$> txOutRefParser) $ mconcat

@@ -1,0 +1,113 @@
+{
+    "timeout": 1655596500000,
+    "timeout_continuation": "close",
+    "when": [
+        {
+            "case": {
+                "deposits": 300,
+                "into_account": {
+                    "address": "addr_test1vq9prvx8ufwutkwxx9cmmuuajaqmjqwujqlp9d8pvg6gupczgtm9j"
+                },
+                "of_token": {
+                    "currency_symbol": "48a6526d690a0e5258d6b883507f540cf6e2348596aa03d754753423",
+                    "token_name": "Globe"
+                },
+                "party": {
+                    "address": "addr_test1vq9prvx8ufwutkwxx9cmmuuajaqmjqwujqlp9d8pvg6gupczgtm9j"
+                }
+            },
+            "then": {
+                "timeout": 1655578500000,
+                "timeout_continuation": {
+                    "timeout": 1655621700000,
+                    "timeout_continuation": "close",
+                    "when": [
+                        {
+                            "case": {
+                                "choose_between": [
+                                    {
+                                        "from": 0,
+                                        "to": 1
+                                    }
+                                ],
+                                "for_choice": {
+                                    "choice_name": "Exercise Call",
+                                    "choice_owner": {
+                                        "address": "addr_test1qp2l7afky3eqfkrht5f3qgy7x2yek5dejcnpnuqlwywz9twr7cz4mu6gh005gdck67p7y9d8s8zsfgjkcdy75mrjh6jqp8jwfw"
+                                    }
+                                }
+                            },
+                            "then": {
+                                "else": {
+                                    "timeout": 1655621700000,
+                                    "timeout_continuation": "close",
+                                    "when": [
+                                        {
+                                            "case": {
+                                                "deposits": 500,
+                                                "into_account": {
+                                                    "address": "addr_test1qp2l7afky3eqfkrht5f3qgy7x2yek5dejcnpnuqlwywz9twr7cz4mu6gh005gdck67p7y9d8s8zsfgjkcdy75mrjh6jqp8jwfw"
+                                                },
+                                                "of_token": {
+                                                    "currency_symbol": "02332a91ff02a6801a5cc34ad6c4f15a77ac70348f8e305e6ae97659",
+                                                    "token_name": "Swan"
+                                                },
+                                                "party": {
+                                                    "address": "addr_test1qp2l7afky3eqfkrht5f3qgy7x2yek5dejcnpnuqlwywz9twr7cz4mu6gh005gdck67p7y9d8s8zsfgjkcdy75mrjh6jqp8jwfw"
+                                                }
+                                            },
+                                            "then": {
+                                                "from_account": {
+                                                    "address": "addr_test1vq9prvx8ufwutkwxx9cmmuuajaqmjqwujqlp9d8pvg6gupczgtm9j"
+                                                },
+                                                "pay": 300,
+                                                "then": {
+                                                    "from_account": {
+                                                        "address": "addr_test1qp2l7afky3eqfkrht5f3qgy7x2yek5dejcnpnuqlwywz9twr7cz4mu6gh005gdck67p7y9d8s8zsfgjkcdy75mrjh6jqp8jwfw"
+                                                    },
+                                                    "pay": 500,
+                                                    "then": "close",
+                                                    "to": {
+                                                        "party": {
+                                                            "address": "addr_test1vq9prvx8ufwutkwxx9cmmuuajaqmjqwujqlp9d8pvg6gupczgtm9j"
+                                                        }
+                                                    },
+                                                    "token": {
+                                                        "currency_symbol": "02332a91ff02a6801a5cc34ad6c4f15a77ac70348f8e305e6ae97659",
+                                                        "token_name": "Swan"
+                                                    }
+                                                },
+                                                "to": {
+                                                    "party": {
+                                                        "address": "addr_test1qp2l7afky3eqfkrht5f3qgy7x2yek5dejcnpnuqlwywz9twr7cz4mu6gh005gdck67p7y9d8s8zsfgjkcdy75mrjh6jqp8jwfw"
+                                                    }
+                                                },
+                                                "token": {
+                                                    "currency_symbol": "48a6526d690a0e5258d6b883507f540cf6e2348596aa03d754753423",
+                                                    "token_name": "Globe"
+                                                }
+                                            }
+                                        }
+                                    ]
+                                },
+                                "if": {
+                                    "equal_to": 0,
+                                    "value": {
+                                        "value_of_choice": {
+                                            "choice_name": "Exercise Call",
+                                            "choice_owner": {
+                                                "address": "addr_test1qp2l7afky3eqfkrht5f3qgy7x2yek5dejcnpnuqlwywz9twr7cz4mu6gh005gdck67p7y9d8s8zsfgjkcdy75mrjh6jqp8jwfw"
+                                            }
+                                        }
+                                    }
+                                },
+                                "then": "close"
+                            }
+                        }
+                    ]
+                },
+                "when": []
+            }
+        }
+    ]
+}

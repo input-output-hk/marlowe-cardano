@@ -20,13 +20,11 @@ import Control.Exception (bracket)
 import Control.Monad ((<=<))
 import Data.String (IsString(fromString))
 import qualified Data.Text.Lazy.IO as TL
-import Data.Time (secondsToNominalDiffTime)
 import Data.UUID.V4 (nextRandom)
 import Hasql.Pool (UsageError(..))
 import qualified Hasql.Pool as Pool
 import qualified Hasql.Session as Session
 import Language.Marlowe.Runtime.ChainSync (ChainSyncDependencies(..), chainSync)
-import Language.Marlowe.Runtime.ChainSync.Api (WithGenesis(..))
 import Language.Marlowe.Runtime.ChainSync.Database (hoistDatabaseQueries)
 import qualified Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL as PostgreSQL
 import Language.Marlowe.Runtime.ChainSync.NodeClient (NodeClient(..), NodeClientDependencies(..), nodeClient)
@@ -46,7 +44,7 @@ main :: IO ()
 main = run =<< getOptions "0.0.0.0"
 
 run :: Options -> IO ()
-run Options{..} = bracket (Pool.acquire (100, secondsToNominalDiffTime 5, fromString databaseUri)) Pool.release $
+run Options{..} = bracket (Pool.acquire 100 (Just 5000000) (fromString databaseUri)) Pool.release $
   runComponent_ proc pool -> do
     eventBackend <- logger -< LoggerDependencies
       { configFilePath = logConfigFile
@@ -59,7 +57,7 @@ run Options{..} = bracket (Pool.acquire (100, secondsToNominalDiffTime 5, fromSt
     syncSource <- tcpServer -< TcpServerDependencies
       { host
       , port
-      , toPeer = chainSeekServerPeer Genesis
+      , toPeer = chainSeekServerPeer
       }
 
     querySource <- tcpServer -< TcpServerDependencies
@@ -75,8 +73,7 @@ run Options{..} = bracket (Pool.acquire (100, secondsToNominalDiffTime 5, fromSt
       }
 
     NodeClient{..} <- nodeClient -< NodeClientDependencies
-      {
-        connectToLocalNode = Cardano.connectToLocalNode localNodeConnectInfo
+      { connectToLocalNode = Cardano.connectToLocalNode localNodeConnectInfo
       , eventBackend = narrowEventBackend (injectSelector NodeService) eventBackend
       }
 
@@ -101,10 +98,12 @@ run Options{..} = bracket (Pool.acquire (100, secondsToNominalDiffTime 5, fromSt
           MaryEra -> MaryEraInCardanoMode
           AlonzoEra -> AlonzoEraInCardanoMode
           BabbageEra -> BabbageEraInCardanoMode
+      , httpPort = fromIntegral httpPort
       }
   where
-    throwUsageError (ConnectionError err)                       = error $ show err
-    throwUsageError (SessionError (Session.QueryError _ _ err)) = error $ show err
+    throwUsageError (ConnectionUsageError err)                       = error $ show err
+    throwUsageError (SessionUsageError (Session.QueryError _ _ err)) = error $ show err
+    throwUsageError AcquisitionTimeoutUsageError                     = error "hasql-timeout"
 
     localNodeConnectInfo :: LocalNodeConnectInfo CardanoMode
     localNodeConnectInfo = LocalNodeConnectInfo

@@ -10,12 +10,13 @@ module Language.Marlowe.Runtime.History.Api
 import Cardano.Api (CardanoMode, EraHistory(EraHistory))
 import Control.Error (listToMaybe, note, runMaybeT)
 import Control.Error.Util (hoistMaybe)
-import Control.Monad (guard, when)
+import Control.Monad (guard, join, when)
 import Control.Monad.Trans.Class (lift)
 import Data.Aeson (ToJSON, object, toJSON, (.=))
 import Data.Bifunctor (first)
 import Data.Binary (Binary, get, put)
 import Data.Foldable (find, for_)
+import qualified Data.List.NonEmpty as NE
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Maybe (mapMaybe)
@@ -28,6 +29,7 @@ import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Core.Api
 import Language.Marlowe.Runtime.Core.ScriptRegistry (MarloweScripts(..), getMarloweVersion)
 import qualified Language.Marlowe.Scripts as V1
+import Network.Protocol.Codec.Spec (Variations(..))
 import Ouroboros.Consensus.BlockchainTime (SystemStart, fromRelativeTime)
 import Ouroboros.Consensus.HardFork.History (interpretQuery, slotToWallclock)
 import qualified Ouroboros.Network.Block as O
@@ -43,7 +45,7 @@ data ContractHistoryError
   | PayoutUTxONotFound Chain.TxOutRef
   | CreateTxRolledBack
   deriving stock (Show, Eq, Ord, Generic)
-  deriving anyclass (Binary, ToJSON)
+  deriving anyclass (Binary, ToJSON, Variations)
 
 data ExtractCreationError
   = TxIxNotFound
@@ -54,7 +56,7 @@ data ExtractCreationError
   | InvalidCreateDatum
   | NotCreationTransaction
   deriving stock (Show, Eq, Ord, Generic)
-  deriving anyclass (Binary, ToJSON)
+  deriving anyclass (Binary, ToJSON, Variations)
 
 data ExtractMarloweTransactionError
   = TxInNotFound
@@ -68,26 +70,18 @@ data ExtractMarloweTransactionError
   | SlotConversionFailed
   | MultipleContractInputs (Set TxOutRef)
   deriving stock (Show, Eq, Ord, Generic)
-  deriving anyclass (Binary, ToJSON)
-
-data FollowerStatus
-  = Pending
-  | Following SomeMarloweVersion
-  | Waiting SomeMarloweVersion
-  | Finished SomeMarloweVersion
-  | Failed ContractHistoryError
-  deriving (Eq, Ord, Show, Generic)
-  deriving anyclass (Binary, ToJSON)
+  deriving anyclass (Binary, ToJSON, Variations)
 
 data CreateStep v = CreateStep
   { createOutput :: TransactionScriptOutput v
-  , metadata :: Chain.TransactionMetadata
+  , metadata :: MarloweTransactionMetadata
   , payoutValidatorHash :: ScriptHash
   } deriving (Generic)
 
 deriving instance Show (CreateStep 'V1)
 deriving instance Eq (CreateStep 'V1)
 instance ToJSON (CreateStep 'V1)
+instance Variations (CreateStep 'V1)
 
 data SomeCreateStep = forall v. SomeCreateStep (MarloweVersion v) (CreateStep v)
 
@@ -101,6 +95,11 @@ instance ToJSON SomeCreateStep where
   toJSON (SomeCreateStep MarloweV1 createStep) = object
     [ "version" .= MarloweV1
     , "createStep" .= createStep
+    ]
+
+instance Variations SomeCreateStep where
+  variations = join $ NE.fromList
+    [ SomeCreateStep MarloweV1 <$> variations
     ]
 
 instance Binary (CreateStep 'V1) where
@@ -119,6 +118,7 @@ data RedeemStep v = RedeemStep
 deriving instance Show (RedeemStep 'V1)
 deriving instance Eq (RedeemStep 'V1)
 instance ToJSON (RedeemStep 'V1)
+instance Variations (RedeemStep 'V1)
 
 instance Binary (RedeemStep 'V1) where
   put RedeemStep{..} = do
@@ -136,9 +136,10 @@ deriving instance Show (ContractStep 'V1)
 deriving instance Eq (ContractStep 'V1)
 instance Binary (ContractStep 'V1)
 instance ToJSON (ContractStep 'V1)
+instance Variations (ContractStep 'V1)
 
 extractCreation :: ContractId -> Chain.Transaction -> Either ExtractCreationError SomeCreateStep
-extractCreation contractId tx@Chain.Transaction{inputs, metadata} = do
+extractCreation contractId tx@Chain.Transaction{inputs, metadata = txMetadata} = do
   Chain.TransactionOutput{ assets, address = scriptAddress, datum = mdatum } <-
     getOutput (txIx $ unContractId contractId) tx
   marloweScriptHash <- getScriptHash scriptAddress
@@ -149,6 +150,7 @@ extractCreation contractId tx@Chain.Transaction{inputs, metadata} = do
   txDatum <- note NoCreateDatum mdatum
   datum <- note InvalidCreateDatum $ fromChainDatum version txDatum
   let createOutput = TransactionScriptOutput scriptAddress assets (unContractId contractId) datum
+  let metadata = decodeMarloweTransactionMetadataLenient txMetadata
   pure $ SomeCreateStep version CreateStep{..}
 
 getScriptHash :: Chain.Address -> Either ExtractCreationError ScriptHash
@@ -223,7 +225,7 @@ extractMarloweTransaction version systemStart eraHistory contractId scriptAddres
   pure Transaction
     { transactionId
     , contractId
-    , metadata
+    , metadata = decodeMarloweTransactionMetadataLenient metadata
     , blockHeader
     , validityLowerBound
     , validityUpperBound

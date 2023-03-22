@@ -12,6 +12,10 @@ Developers of Web3 DApps who run Marlowe contracts can use the Marlowe Runtime a
 Knowledge of Haskell or Plutus is not required for developers to communicate with Runtime. Communication with Runtime over REST and/or WebSocket APIs is language-agnostic, so developers can use a language of their choice (e.g., Python, JavaScript, or Rust). However, the Runtime backend can interact directly with Haskell-based clients.
 
 
+## Logging
+
+See [eventuo11y-extras](../eventuo11y-extras).
+
 
 ## Architecture
 
@@ -98,7 +102,7 @@ The Marlowe Runtime client for AWS Lambda is documented in a separate repository
 
 ## Web Services
 
-*The development of Marlowe Runtime web services is an ongoing work in progress.*
+See `marlowe-runtime-web`.
 
 
 ## Related Documentation

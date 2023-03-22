@@ -48,7 +48,7 @@ import Gen.Cardano.Api.Typed
 import Language.Marlowe (MarloweData(..), MarloweParams(..), txInputs)
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
 import Language.Marlowe.Runtime.Cardano.Api
-import Language.Marlowe.Runtime.ChainSync.Api (fromCardanoPaymentKeyHash, fromCardanoScriptHash)
+import Language.Marlowe.Runtime.ChainSync.Api (fromCardanoPaymentKeyHash, fromCardanoScriptHash, unTransactionMetadata)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import qualified Language.Marlowe.Runtime.ChainSync.Gen ()
 import Language.Marlowe.Runtime.Core.Api
@@ -58,6 +58,7 @@ import Language.Marlowe.Runtime.Core.Api
   , MarloweVersionTag(..)
   , Payout(..)
   , TransactionScriptOutput(..)
+  , encodeMarloweTransactionMetadata
   , toChainDatum
   , toChainPayoutDatum
   )
@@ -1059,7 +1060,7 @@ requiresSignatureViolations MarloweV1 utxos TxConstraints{..} TxBodyContent{..} 
 requiresMetadataViolations
   :: MarloweVersion v -> TxConstraints v -> TxBodyContent BuildTx BabbageEra -> [String]
 requiresMetadataViolations MarloweV1 TxConstraints{..} TxBodyContent{..} = do
-  (idx, value) <- Map.toList metadataConstraints
+  (idx, value) <- Map.toList $ unTransactionMetadata $ encodeMarloweTransactionMetadata metadataConstraints
   let
     metadata = case txMetadata of
       TxMetadataNone -> Nothing
@@ -1135,7 +1136,7 @@ genV1Constraints = sized \n -> frequency
     , (1, uncurry mustConsumeMarloweOutput <$> genValidityInterval <*> genInputs)
     , (1, mustConsumePayouts <$> genRoleToken)
     , (1, requiresSignature <$> arbitrary)
-    , (1, requiresMetadata <$> arbitrary <*> arbitrary)
+    , (1, requiresMetadata <$> arbitrary)
     ]
 
 removeTokens :: Map Chain.AssetId Chain.Address -> Chain.Assets -> Chain.Assets

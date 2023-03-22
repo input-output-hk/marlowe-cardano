@@ -1,0 +1,383 @@
+Let
+    "Contract start"
+    TimeIntervalEnd 
+    (When
+        [Case
+            (Choice
+                (ChoiceId
+                    "Initial Deposit"
+                    (Role "c.marlowe")
+                )
+                [Bound -100 100]
+            )
+            (Assert
+                (ValueGT
+                    (ChoiceValue
+                        (ChoiceId
+                            "Initial Deposit"
+                            (Role "c.marlowe")
+                        ))
+                    (Constant 0)
+                )
+                (Assert
+                    (NotObs
+                        (ValueEQ
+                            (ChoiceValue
+                                (ChoiceId
+                                    "Initial Deposit"
+                                    (Role "c.marlowe")
+                                ))
+                            (Constant 0)
+                        ))
+                    (When
+                        [Case
+                            (Choice
+                                (ChoiceId
+                                    "Use Stablecoin"
+                                    (Role "c.marlowe")
+                                )
+                                [Bound 0 1]
+                            )
+                            (If
+                                (ValueEQ
+                                    (ChoiceValue
+                                        (ChoiceId
+                                            "Use Stablecoin"
+                                            (Role "c.marlowe")
+                                        ))
+                                    (Constant 1)
+                                )
+                                (When
+                                    []
+                                    (TimeParam "03 Forced Timeout")
+                                    (When
+                                        [Case
+                                            (Choice
+                                                (ChoiceId
+                                                    "Stablecoin Deadline"
+                                                    (Role "j.lumley")
+                                                )
+                                                [Bound 1 7200]
+                                            )
+                                            (Let
+                                                "Contract start"
+                                                (NegValue
+                                                    (DivValue
+                                                        (UseValue "Contract start")
+                                                        (Constant 1000000)
+                                                    ))
+                                                (When
+                                                    [Case
+                                                        (Notify
+                                                            (ValueLT
+                                                                (SubValue
+                                                                    (UseValue "Contract start")
+                                                                    (NegValue
+                                                                        (DivValue
+                                                                            TimeIntervalEnd 
+                                                                            (Constant 1000000)
+                                                                        ))
+                                                                )
+                                                                (ChoiceValue
+                                                                    (ChoiceId
+                                                                        "Stablecoin Deadline"
+                                                                        (Role "j.lumley")
+                                                                    ))
+                                                            ))
+                                                        (When
+                                                            [Case
+                                                                (Notify FalseObs )
+                                                                (Let
+                                                                    "Impossible"
+                                                                    (Constant 1)
+                                                                    Close 
+                                                                ), Case
+                                                                (Deposit
+                                                                    (Role "m.herbert")
+                                                                    (Role "e.cary")
+                                                                    (Token "8db269c3ec630e06ae29f74bc39edd1f87c819f1056206e879a1cd61" "DjedMicroUSD")
+                                                                    (ChoiceValue
+                                                                        (ChoiceId
+                                                                            "Initial Deposit"
+                                                                            (Role "c.marlowe")
+                                                                        ))
+                                                                )
+                                                                (Pay
+                                                                    (Role "m.herbert")
+                                                                    (Party (Role "j.webster"))
+                                                                    (Token "f66d78b4a3cb3d37afa0ec36461e51ecbde00f26c8f0a68f94b69880" "iUSD")
+                                                                    (ChoiceValue
+                                                                        (ChoiceId
+                                                                            "Initial Deposit"
+                                                                            (Role "c.marlowe")
+                                                                        ))
+                                                                    Close 
+                                                                ), Case
+                                                                (Notify TrueObs )
+                                                                (Let
+                                                                    "Possible"
+                                                                    (Constant 1)
+                                                                    Close 
+                                                                ), Case
+                                                                (Deposit
+                                                                    (Role "m.herbert")
+                                                                    (Role "e.cary")
+                                                                    (Token "f66d78b4a3cb3d37afa0ec36461e51ecbde00f26c8f0a68f94b69880" "iUSD")
+                                                                    (ChoiceValue
+                                                                        (ChoiceId
+                                                                            "Initial Deposit"
+                                                                            (Role "c.marlowe")
+                                                                        ))
+                                                                )
+                                                                (Pay
+                                                                    (Role "m.herbert")
+                                                                    (Account (Role "m.herbert"))
+                                                                    (Token "f66d78b4a3cb3d37afa0ec36461e51ecbde00f26c8f0a68f94b69880" "iUSD")
+                                                                    (ChoiceValue
+                                                                        (ChoiceId
+                                                                            "Initial Deposit"
+                                                                            (Role "c.marlowe")
+                                                                        ))
+                                                                    Close 
+                                                                )]
+                                                            (TimeParam "06 Deposit")
+                                                            (When
+                                                                [Case
+                                                                    (Choice
+                                                                        (ChoiceId
+                                                                            "A"
+                                                                            (Role "j.lumley")
+                                                                        )
+                                                                        [Bound 0 1]
+                                                                    )
+                                                                    (When
+                                                                        [Case
+                                                                            (Choice
+                                                                                (ChoiceId
+                                                                                    "B"
+                                                                                    (Role "e.cary")
+                                                                                )
+                                                                                [Bound 0 1]
+                                                                            )
+                                                                            (Let
+                                                                                "C"
+                                                                                (Cond
+                                                                                    (AndObs
+                                                                                        (OrObs
+                                                                                            (AndObs
+                                                                                                (ValueGE
+                                                                                                    (ChoiceValue
+                                                                                                        (ChoiceId
+                                                                                                            "A"
+                                                                                                            (Role "j.lumley")
+                                                                                                        ))
+                                                                                                    (Constant 1)
+                                                                                                )
+                                                                                                (NotObs
+                                                                                                    (ValueLT
+                                                                                                        (ChoiceValue
+                                                                                                            (ChoiceId
+                                                                                                                "B"
+                                                                                                                (Role "e.cary")
+                                                                                                            ))
+                                                                                                        (Constant 1)
+                                                                                                    ))
+                                                                                            )
+                                                                                            (NotObs
+                                                                                                (OrObs
+                                                                                                    (ValueGT
+                                                                                                        (ChoiceValue
+                                                                                                            (ChoiceId
+                                                                                                                "A"
+                                                                                                                (Role "j.lumley")
+                                                                                                            ))
+                                                                                                        (Constant 0)
+                                                                                                    )
+                                                                                                    (NotObs
+                                                                                                        (ValueLE
+                                                                                                            (ChoiceValue
+                                                                                                                (ChoiceId
+                                                                                                                    "B"
+                                                                                                                    (Role "e.cary")
+                                                                                                                ))
+                                                                                                            (Constant 0)
+                                                                                                        ))
+                                                                                                ))
+                                                                                        )
+                                                                                        (AndObs
+                                                                                            (ChoseSomething
+                                                                                                (ChoiceId
+                                                                                                    "A"
+                                                                                                    (Role "j.lumley")
+                                                                                                ))
+                                                                                            (ValueEQ
+                                                                                                (ChoiceValue
+                                                                                                    (ChoiceId
+                                                                                                        "B"
+                                                                                                        (Role "e.cary")
+                                                                                                    ))
+                                                                                                (Constant 0)
+                                                                                            )
+                                                                                        )
+                                                                                    )
+                                                                                    (Constant 1)
+                                                                                    (Constant 0)
+                                                                                )
+                                                                                Close 
+                                                                            )]
+                                                                        (TimeParam "08 B")
+                                                                        Close 
+                                                                    )]
+                                                                (TimeParam "07 A")
+                                                                Close 
+                                                            )
+                                                        )]
+                                                    (TimeParam "05 Notification")
+                                                    (Let
+                                                        "Deposit"
+                                                        (Constant 1)
+                                                        Close 
+                                                    )
+                                                )
+                                            )]
+                                        (TimeParam "04 Stablecoin Deadline")
+                                        (Let
+                                            "Stablecoin Deadline"
+                                            (Constant 1)
+                                            Close 
+                                        )
+                                    )
+                                )
+                                (When
+                                    [Case
+                                        (Choice
+                                            (ChoiceId
+                                                "ADA_USD"
+                                                (Role "j.lumley")
+                                            )
+                                            [Bound 1 100000000]
+                                        )
+                                        (When
+                                            [Case
+                                                (Deposit
+                                                    (Role "c.marlowe")
+                                                    (Role "c.marlowe")
+                                                    (Token "" "")
+                                                    (MulValue
+                                                        (ChoiceValue
+                                                            (ChoiceId
+                                                                "Initial Deposit"
+                                                                (Role "c.marlowe")
+                                                            ))
+                                                        (ChoiceValue
+                                                            (ChoiceId
+                                                                "ADA_USD"
+                                                                (Role "j.lumley")
+                                                            ))
+                                                    )
+                                                )
+                                                (Pay
+                                                    (Role "c.marlowe")
+                                                    (Account (PK "0000000000000000000000000000000000000000000000000000000000000000"))
+                                                    (Token "" "")
+                                                    (DivValue
+                                                        (AvailableMoney
+                                                            (Role "c.marlowe")
+                                                            (Token "" "")
+                                                        )
+                                                        (Constant 3)
+                                                    )
+                                                    (Pay
+                                                        (Role "c.marlowe")
+                                                        (Account (Role "e.cary"))
+                                                        (Token "" "")
+                                                        (DivValue
+                                                            (AvailableMoney
+                                                                (Role "c.marlowe")
+                                                                (Token "" "")
+                                                            )
+                                                            (Constant 2)
+                                                        )
+                                                        (Let
+                                                            "Done"
+                                                            (Constant 1)
+                                                            (Pay
+                                                                (Role "e.cary")
+                                                                (Account (Role "m.herbert"))
+                                                                (Token "" "")
+                                                                (MulValue
+                                                                    (Constant 3)
+                                                                    (DivValue
+                                                                        (AvailableMoney
+                                                                            (Role "e.cary")
+                                                                            (Token "" "")
+                                                                        )
+                                                                        (Constant 2)
+                                                                    )
+                                                                )
+                                                                (Pay
+                                                                    (Role "c.marlowe")
+                                                                    (Party (Role "j.lumley"))
+                                                                    (Token "" "")
+                                                                    (DivValue
+                                                                        (AvailableMoney
+                                                                            (Role "j.webster")
+                                                                            (Token "" "")
+                                                                        )
+                                                                        (Constant 0)
+                                                                    )
+                                                                    Close 
+                                                                )
+                                                            )
+                                                        )
+                                                    )
+                                                )]
+                                            (TimeParam "04 Deposit")
+                                            (Let
+                                                "ADA_USD"
+                                                (Constant 0)
+                                                Close 
+                                            )
+                                        )]
+                                    (TimeParam "03 ADA_USD")
+                                    (Let
+                                        "ADA_USD"
+                                        (Constant 0)
+                                        Close 
+                                    )
+                                )
+                            )]
+                        (TimeParam "02 Use Stablecoin")
+                        (Let
+                            "Use Stablecoin"
+                            (Constant 0)
+                            Close 
+                        )
+                    )
+                )
+            )]
+        (TimeParam "01 Initial Deposit")
+        (If
+            (ValueGT
+                (UseValue "Unassigned")
+                (ChoiceValue
+                    (ChoiceId
+                        "Unchosen"
+                        (Role "Unknown")
+                    ))
+            )
+            (Let
+                "Contradiction"
+                (Constant 0)
+                Close 
+            )
+            (Let
+                "Tautological"
+                (DivValue
+                    (Constant 1)
+                    (Constant 0)
+                )
+                Close 
+            )
+        )
+    )

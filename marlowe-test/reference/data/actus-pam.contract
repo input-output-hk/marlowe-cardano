@@ -1,0 +1,113 @@
+{
+    "timeout": 1704067200000,
+    "timeout_continuation": "close",
+    "when": [
+        {
+            "case": {
+                "deposits": {
+                    "negate": {
+                        "negate": 100000000
+                    }
+                },
+                "into_account": {
+                    "role_token": "c.marlowe"
+                },
+                "of_token": {
+                    "currency_symbol": "",
+                    "token_name": ""
+                },
+                "party": {
+                    "role_token": "c.marlowe"
+                }
+            },
+            "then": {
+                "from_account": {
+                    "role_token": "c.marlowe"
+                },
+                "pay": 100000000,
+                "then": {
+                    "timeout": 1735689600000,
+                    "timeout_continuation": "close",
+                    "when": [
+                        {
+                            "case": {
+                                "deposits": 2000000,
+                                "into_account": {
+                                    "role_token": "j.webster"
+                                },
+                                "of_token": {
+                                    "currency_symbol": "",
+                                    "token_name": ""
+                                },
+                                "party": {
+                                    "role_token": "j.webster"
+                                }
+                            },
+                            "then": {
+                                "from_account": {
+                                    "role_token": "j.webster"
+                                },
+                                "pay": 2000000,
+                                "then": {
+                                    "timeout": 1735689600000,
+                                    "timeout_continuation": "close",
+                                    "when": [
+                                        {
+                                            "case": {
+                                                "deposits": 100000000,
+                                                "into_account": {
+                                                    "role_token": "j.webster"
+                                                },
+                                                "of_token": {
+                                                    "currency_symbol": "",
+                                                    "token_name": ""
+                                                },
+                                                "party": {
+                                                    "role_token": "j.webster"
+                                                }
+                                            },
+                                            "then": {
+                                                "from_account": {
+                                                    "role_token": "j.webster"
+                                                },
+                                                "pay": 100000000,
+                                                "then": "close",
+                                                "to": {
+                                                    "party": {
+                                                        "role_token": "c.marlowe"
+                                                    }
+                                                },
+                                                "token": {
+                                                    "currency_symbol": "",
+                                                    "token_name": ""
+                                                }
+                                            }
+                                        }
+                                    ]
+                                },
+                                "to": {
+                                    "party": {
+                                        "role_token": "c.marlowe"
+                                    }
+                                },
+                                "token": {
+                                    "currency_symbol": "",
+                                    "token_name": ""
+                                }
+                            }
+                        }
+                    ]
+                },
+                "to": {
+                    "party": {
+                        "role_token": "j.webster"
+                    }
+                },
+                "token": {
+                    "currency_symbol": "",
+                    "token_name": ""
+                }
+            }
+        }
+    ]
+}

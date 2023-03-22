@@ -1,4 +1,3 @@
-
 {-# LANGUAGE NumericUnderscores #-}
 
 
@@ -16,15 +15,9 @@ import Language.Marlowe.Runtime.App.Run (runChainSeekClient, runJobClient)
 import Language.Marlowe.Runtime.App.Types (Client, Services(..))
 import Language.Marlowe.Runtime.Cardano.Api (fromCardanoTxId)
 import Language.Marlowe.Runtime.ChainSync.Api
-  (ChainSyncCommand(SubmitTx), Move(FindTx), Transaction, TxId, WithGenesis(..), moveSchema)
+  (ChainSyncCommand(SubmitTx), Move(FindTx), Transaction, TxId, WithGenesis(..))
 import Network.Protocol.ChainSeek.Client
-  ( ChainSeekClient(ChainSeekClient)
-  , ClientStHandshake(..)
-  , ClientStIdle(..)
-  , ClientStInit(..)
-  , ClientStNext(..)
-  , ClientStPoll(..)
-  )
+  (ChainSeekClient(ChainSeekClient), ClientStIdle(..), ClientStNext(..), ClientStPoll(..))
 import Network.Protocol.Job.Client (liftCommand)
 
 import qualified Cardano.Api as C (BabbageEra, ScriptDataSupportedInEra(ScriptDataInBabbageEra), Tx, getTxBody, getTxId)
@@ -46,11 +39,6 @@ waitForTx
   -> Client (Either String Transaction)
 waitForTx pollingFrequency txId =
   let
-    clientInit = SendMsgRequestHandshake moveSchema ClientStHandshake
-      { recvMsgHandshakeRejected = \_ ->
-          pure $ Left "Chain sync schema version mismatch."
-      , recvMsgHandshakeConfirmed = pure clientIdle
-      }
     clientIdle = SendMsgQueryNext (FindTx txId True) clientNext
     clientNext = ClientStNext
       { recvMsgQueryRejected = \err _ ->
@@ -64,4 +52,4 @@ waitForTx pollingFrequency txId =
   in
     runChainSeekClient runChainSeekSyncClient
       . ChainSeekClient
-      $ pure clientInit
+      $ pure clientIdle

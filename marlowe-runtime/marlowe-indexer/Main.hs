@@ -6,23 +6,25 @@ module Main
 import Control.Arrow (arr, (<<<))
 import Control.Concurrent.Component
 import Control.Monad ((<=<))
+import Data.Aeson.Encode.Pretty (encodePretty)
 import Data.Either (fromRight)
 import qualified Data.Set.NonEmpty as NESet
 import Data.String (fromString)
+import qualified Data.Text.Lazy as T
+import Data.Text.Lazy.Encoding (decodeUtf8)
 import qualified Data.Text.Lazy.IO as TL
-import Data.Time (secondsToNominalDiffTime)
 import Data.UUID.V4 (nextRandom)
 import Data.Void (Void)
 import Hasql.Pool
 import qualified Hasql.Pool as Pool
 import qualified Hasql.Session as Session
-import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncQuery(..), WithGenesis(..))
+import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncQuery(..))
 import Language.Marlowe.Runtime.Core.Api (MarloweVersion(..))
 import qualified Language.Marlowe.Runtime.Core.ScriptRegistry as ScriptRegistry
 import Language.Marlowe.Runtime.Indexer (MarloweIndexerDependencies(..), marloweIndexer)
 import Language.Marlowe.Runtime.Indexer.Database (hoistDatabaseQueries)
 import qualified Language.Marlowe.Runtime.Indexer.Database.PostgreSQL as PostgreSQL
-import Logging (RootSelector(..), getRootSelectorConfig)
+import Logging (RootSelector(..), defaultRootSelectorLogConfig, getRootSelectorConfig)
 import Network.Protocol.ChainSeek.Client (chainSeekClientPeer)
 import Network.Protocol.Connection (SomeConnector(..), logConnector)
 import Network.Protocol.Driver (runConnector, tcpClient)
@@ -39,6 +41,7 @@ import Options.Applicative
   , help
   , helper
   , info
+  , infoOption
   , long
   , metavar
   , option
@@ -59,7 +62,7 @@ clientHints = defaultHints { addrSocketType = Stream }
 
 run :: Options -> IO ()
 run Options{..} = withSocketsDo do
-  pool <- Pool.acquire (100, secondsToNominalDiffTime 5, fromString databaseUri)
+  pool <- Pool.acquire 100 (Just 5000000) (fromString databaseUri)
   scripts <- case ScriptRegistry.getScripts MarloweV1 of
     NESet.IsEmpty -> fail "No known marlowe scripts"
     NESet.IsNonEmpty scripts -> pure scripts
@@ -69,7 +72,7 @@ run Options{..} = withSocketsDo do
       { chainSyncConnector = SomeConnector
           $ logConnector (narrowEventBackend (injectSelector ChainSeekClient) eventBackend)
           $ handshakeClientConnector
-          $ tcpClient chainSeekHost chainSeekPort (chainSeekClientPeer Genesis)
+          $ tcpClient chainSeekHost chainSeekPort chainSeekClientPeer
       , chainSyncQueryConnector = SomeConnector
           $ logConnector (narrowEventBackend (injectSelector ChainQueryClient) eventBackend) chainSyncQueryConnector
       , databaseQueries = hoistDatabaseQueries
@@ -79,6 +82,7 @@ run Options{..} = withSocketsDo do
       , pollingInterval = 1
       , marloweScriptHashes = NESet.map ScriptRegistry.marloweScript scripts
       , payoutScriptHashes = NESet.map ScriptRegistry.payoutScript scripts
+      , httpPort = fromIntegral httpPort
       }
   let appComponent = marloweIndexer <<< arr indexerDependencies <<< logger
   runComponent_ appComponent LoggerDependencies
@@ -89,8 +93,10 @@ run Options{..} = withSocketsDo do
     , injectConfigWatcherSelector = injectSelector ConfigWatcher
     }
   where
-    throwUsageError (ConnectionError err)                       = error $ show err
-    throwUsageError (SessionError (Session.QueryError _ _ err)) = error $ show err
+    throwUsageError (ConnectionUsageError err)                       = error $ show err
+    throwUsageError (SessionUsageError (Session.QueryError _ _ err)) = error $ show err
+    throwUsageError AcquisitionTimeoutUsageError                     = error "hasql-timeout"
+
 
     chainSyncQueryConnector = handshakeClientConnector $ tcpClient chainSeekHost chainSeekQueryPort queryClientPeer
 
@@ -105,17 +111,23 @@ data Options = Options
   , chainSeekHost :: HostName
   , databaseUri :: String
   , logConfigFile :: Maybe FilePath
+  , httpPort :: PortNumber
   }
 
 getOptions :: IO Options
-getOptions = execParser $ info (helper <*> parser) infoMod
+getOptions = execParser $ info (helper <*> printLogConfigOption <*> parser) infoMod
   where
+    printLogConfigOption = infoOption
+      (T.unpack $ decodeUtf8 $ encodePretty defaultRootSelectorLogConfig)
+      (long "print-log-config" <> help "Print the default log configuration.")
+
     parser = Options
       <$> chainSeekPortParser
       <*> chainSeekQueryPortParser
       <*> chainSeekHostParser
       <*> databaseUriParser
       <*> logConfigFileParser
+      <*> httpPortParser
 
     chainSeekPortParser = option auto $ mconcat
       [ long "chain-sync-port"
@@ -152,6 +164,14 @@ getOptions = execParser $ info (helper <*> parser) infoMod
       [ long "log-config-file"
       , metavar "FILE_PATH"
       , help "The logging configuration JSON file."
+      ]
+
+    httpPortParser = option auto $ mconcat
+      [ long "http-port"
+      , metavar "PORT_NUMBER"
+      , help "Port number to serve the http healthcheck API on"
+      , value 8080
+      , showDefault
       ]
 
     infoMod = mconcat

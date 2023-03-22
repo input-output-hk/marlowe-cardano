@@ -52,7 +52,6 @@ import Data.Set (Set)
 import Data.Time (UTCTime)
 import Data.Type.Equality (type (:~:)(Refl))
 import Data.Void (Void, absurd)
-import Data.Word (Word64)
 import GHC.Generics (Generic)
 import GHC.Natural (Natural)
 import Language.Marlowe.Runtime.Cardano.Api (cardanoEraToAsType)
@@ -69,7 +68,6 @@ import Language.Marlowe.Runtime.ChainSync.Api
   , SlotNo
   , StakeCredential
   , TokenName
-  , TransactionMetadata
   , TxId
   , TxOutRef
   , getUTCTime
@@ -77,7 +75,6 @@ import Language.Marlowe.Runtime.ChainSync.Api
   )
 import Language.Marlowe.Runtime.Core.Api
 import Language.Marlowe.Runtime.History.Api (ExtractCreationError, ExtractMarloweTransactionError)
-import Network.Protocol.ChainSeek.Types (SchemaVersion)
 import Network.Protocol.Handshake.Types (HasSignature(..))
 import Network.Protocol.Job.Types
 
@@ -108,7 +105,7 @@ data RoleTokensConfig
 data ContractCreated era v = ContractCreated
   { contractId :: ContractId
   , rolesCurrency :: PolicyId
-  , metadata :: Map Word64 Metadata
+  , metadata :: MarloweTransactionMetadata
   , marloweScriptHash :: ScriptHash
   , marloweScriptAddress :: Address
   , payoutScriptHash :: ScriptHash
@@ -165,7 +162,7 @@ instance IsCardanoEra era => Binary (ContractCreated era 'V1) where
 data InputsApplied era v = InputsApplied
   { version :: MarloweVersion v
   , contractId :: ContractId
-  , metadata :: TransactionMetadata
+  , metadata :: MarloweTransactionMetadata
   , input :: TransactionScriptOutput v
   , output :: Maybe (TransactionScriptOutput v)
   , invalidBefore :: UTCTime
@@ -225,7 +222,7 @@ data MarloweTxCommand status err result where
     -- ^ The wallet addresses to use when constructing the transaction
     -> RoleTokensConfig
     -- ^ How to initialize role tokens
-    -> TransactionMetadata
+    -> MarloweTransactionMetadata
     -- ^ Optional metadata to attach to the transaction
     -> Lovelace
     -- ^ Min Lovelace which should be used for the contract output.
@@ -244,7 +241,7 @@ data MarloweTxCommand status err result where
     -- ^ The wallet addresses to use when constructing the transaction
     -> ContractId
     -- ^ The ID of the contract to apply the inputs to.
-    -> TransactionMetadata
+    -> MarloweTransactionMetadata
     -- ^ Optional metadata to attach to the transaction
     -> Maybe UTCTime
     -- ^ The "invalid before" bound of the validity interval. If omitted, this
@@ -585,7 +582,6 @@ data LoadMarloweContextError
   | PayoutScriptNotPublished ScriptHash
   | ExtractCreationError ExtractCreationError
   | ExtractMarloweTransactionError ExtractMarloweTransactionError
-  | HandshakeFailed [SchemaVersion]
   deriving (Eq, Show, Ord, Generic)
   deriving anyclass (Binary, ToJSON)
 

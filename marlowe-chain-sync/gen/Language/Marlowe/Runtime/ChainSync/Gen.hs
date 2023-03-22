@@ -28,6 +28,7 @@ import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import Data.ByteString.Short (fromShort)
 import Data.Foldable (fold)
+import qualified Data.List.NonEmpty as NE
 import Data.Maybe (mapMaybe)
 import Data.SOP.Strict (K(..), NP(..))
 import qualified Data.Set.NonEmpty as NESet
@@ -274,125 +275,67 @@ instance Arbitrary UTxOs where
   shrink = genericShrink
 
 instance ChainSeek.ArbitraryQuery Move where
-  arbitraryTag = oneofStructured
-    [ ( Node
-      , do
-        ChainSeek.SomeTag tag1 <- resized (const 0) ChainSeek.arbitraryTag
-        ChainSeek.SomeTag tag2 <- resized (const 0) ChainSeek.arbitraryTag
-        pure $ ChainSeek.SomeTag $ TagFork tag1 tag2
-      )
-    , (Leaf, pure $ ChainSeek.SomeTag TagAdvanceSlots)
-    , (Leaf, pure $ ChainSeek.SomeTag TagAdvanceBlocks)
-    , (Leaf, pure $ ChainSeek.SomeTag TagIntersect)
-    , (Leaf, pure $ ChainSeek.SomeTag TagFindConsumingTx)
-    , (Leaf, pure $ ChainSeek.SomeTag TagFindConsumingTxs)
-    , (Leaf, pure $ ChainSeek.SomeTag TagFindTx)
-    , (Leaf, pure $ ChainSeek.SomeTag TagFindTxsTo)
-    , (Leaf, pure $ ChainSeek.SomeTag TagAdvanceToTip)
-    ]
+  arbitraryTag = elements $ NE.toList ChainSeek.tags
 
   arbitraryQuery = \case
-    TagFork m1 m2 -> resized (`div` 2) $ Fork <$> ChainSeek.arbitraryQuery m1 <*> ChainSeek.arbitraryQuery m2
-    TagAdvanceSlots -> AdvanceSlots . fromIntegral <$> arbitrary @Word64
     TagAdvanceBlocks -> AdvanceBlocks . fromIntegral <$> arbitrary @Word64
     TagIntersect -> Intersect <$> arbitrary
-    TagFindConsumingTx -> FindConsumingTx <$> arbitrary
     TagFindConsumingTxs -> FindConsumingTxs <$> arbitrary
     TagFindTx -> FindTx <$> arbitrary <*> arbitrary
-    TagFindTxsTo -> FindTxsTo <$> arbitrary
     TagFindTxsFor -> FindTxsFor <$> (NESet.insertSet <$> arbitrary <*> arbitrary)
     TagAdvanceToTip -> pure AdvanceToTip
 
   arbitraryErr = \case
-    TagFork m1 m2 -> do
-      let mGenE1 = ChainSeek.arbitraryErr m1
-      let mGenE2 = ChainSeek.arbitraryErr m2
-      case (mGenE1, mGenE2) of
-        (Just genE1, Just genE2) -> Just $ genThese genE1 genE2
-        (Just genE1, _) -> Just $ This <$> genE1
-        (_, Just genE2) -> Just $ That <$> genE2
-        _ -> Nothing
-    TagAdvanceSlots -> Nothing
     TagAdvanceBlocks -> Nothing
     TagIntersect -> Just arbitrary
-    TagFindConsumingTx -> Just arbitrary
     TagFindConsumingTxs -> Just arbitrary
     TagFindTx -> Just arbitrary
-    TagFindTxsTo -> Just arbitrary
     TagFindTxsFor -> Nothing
     TagAdvanceToTip -> Nothing
 
   arbitraryResult = \case
-    TagFork m1 m2 -> genThese (ChainSeek.arbitraryResult m1) (ChainSeek.arbitraryResult m2)
-    TagAdvanceSlots -> arbitrary
     TagAdvanceBlocks -> arbitrary
     TagIntersect -> arbitrary
-    TagFindConsumingTx -> arbitrary
     TagFindConsumingTxs -> arbitrary
     TagFindTx -> arbitrary
-    TagFindTxsTo -> arbitrary
     TagFindTxsFor -> arbitrary
     TagAdvanceToTip -> arbitrary
 
   shrinkQuery = \case
-    Fork m1 m2 -> fold
-      [ [ Fork m1' m2 | m1' <- ChainSeek.shrinkQuery m1 ]
-      , [ Fork m1 m2' | m2' <- ChainSeek.shrinkQuery m2 ]
-      ]
-    AdvanceSlots _ -> []
     AdvanceBlocks  _-> []
     Intersect blocks -> Intersect <$> shrink blocks
-    FindConsumingTx _ -> []
     FindConsumingTxs txOuts -> FindConsumingTxs <$> shrink txOuts
     FindTx _ _ -> []
-    FindTxsTo credentials -> FindTxsTo <$> shrink credentials
     FindTxsFor credentials -> FindTxsFor <$> mapMaybe NESet.nonEmptySet (shrink $ NESet.toSet credentials)
     AdvanceToTip -> pure AdvanceToTip
 
   shrinkErr = \case
-    TagFork m1 m2 -> shrinkThese (ChainSeek.shrinkErr m1) (ChainSeek.shrinkErr m2)
-    TagAdvanceSlots -> absurd
     TagAdvanceBlocks -> absurd
     TagIntersect -> shrink
-    TagFindConsumingTx -> shrink
     TagFindConsumingTxs -> shrink
     TagFindTx -> shrink
-    TagFindTxsTo -> shrink
     TagFindTxsFor -> absurd
     TagAdvanceToTip -> absurd
 
   shrinkResult = \case
-    TagFork m1 m2 -> shrinkThese (ChainSeek.shrinkResult m1) (ChainSeek.shrinkResult m2)
-    TagAdvanceSlots -> shrink
     TagAdvanceBlocks -> shrink
     TagIntersect -> shrink
-    TagFindConsumingTx -> shrink
     TagFindConsumingTxs -> shrink
     TagFindTx -> shrink
-    TagFindTxsTo -> shrink
     TagFindTxsFor -> shrink
     TagAdvanceToTip -> shrink
 
 instance ChainSeek.QueryEq Move where
   queryEq = \case
-    Fork m1 m2 -> \case
-      Fork m1' m2' -> m1 == m1' && m2 == m2'
-    AdvanceSlots slots -> \case
-      AdvanceSlots slots' -> slots == slots'
-      _ -> False
     AdvanceBlocks blocks -> \case
       AdvanceBlocks blocks' -> blocks == blocks'
       _ -> False
     Intersect blocks -> \case
       Intersect blocks' -> blocks == blocks'
-    FindConsumingTx txOut -> \case
-      FindConsumingTx txOut' -> txOut == txOut'
     FindConsumingTxs txOuts -> \case
       FindConsumingTxs txOuts' -> txOuts == txOuts'
     FindTx wait txId -> \case
       FindTx wait' txId' -> wait == wait' && txId == txId'
-    FindTxsTo credentials -> \case
-      FindTxsTo credentials' -> credentials == credentials'
     FindTxsFor credentials -> \case
       FindTxsFor credentials' -> credentials == credentials'
     AdvanceToTip -> \case
@@ -400,61 +343,31 @@ instance ChainSeek.QueryEq Move where
       _ -> False
 
   errEq = \case
-    TagFork m1 m2 -> theseEq (ChainSeek.errEq m1) (ChainSeek.errEq m2)
-    TagAdvanceSlots -> (==)
     TagAdvanceBlocks -> (==)
     TagIntersect -> (==)
-    TagFindConsumingTx -> (==)
     TagFindConsumingTxs -> (==)
     TagFindTx -> (==)
-    TagFindTxsTo -> (==)
     TagFindTxsFor -> (==)
     TagAdvanceToTip -> (==)
 
   resultEq = \case
-    TagFork m1 m2 -> theseEq (ChainSeek.resultEq m1) (ChainSeek.resultEq m2)
-    TagAdvanceSlots -> (==)
     TagAdvanceBlocks -> (==)
     TagIntersect -> (==)
-    TagFindConsumingTx -> (==)
     TagFindConsumingTxs -> (==)
     TagFindTx -> (==)
-    TagFindTxsTo -> (==)
     TagFindTxsFor -> (==)
     TagAdvanceToTip -> (==)
 
 instance ChainSeek.ShowQuery Move where
-  showsPrecTag p = \case
-    TagFork m1 m2 -> showParen (p >= 11)
-      ( showString "TagFork"
-      . showSpace
-      . ChainSeek.showsPrecTag 11 m1
-      . showSpace
-      . ChainSeek.showsPrecTag 11 m2
-      )
-    TagAdvanceSlots -> showString "TagAdvanceSlots"
-    TagAdvanceBlocks -> showString "TagAdvanceBlocks"
-    TagIntersect -> showString "TagIntersect"
-    TagFindConsumingTx -> showString "TagFindConsumingTx"
-    TagFindConsumingTxs -> showString "TagFindConsumingTxs"
-    TagFindTx -> showString "TagFindTx"
-    TagFindTxsTo -> showString "TagFindTxsTo"
-    TagFindTxsFor -> showString "TagFindTxsFor"
-    TagAdvanceToTip -> showString "TagAdvanceToTip"
+  showsPrecTag _ = showString . \case
+    TagAdvanceBlocks -> "TagAdvanceBlocks"
+    TagIntersect -> "TagIntersect"
+    TagFindConsumingTxs -> "TagFindConsumingTxs"
+    TagFindTx -> "TagFindTx"
+    TagFindTxsFor -> "TagFindTxsFor"
+    TagAdvanceToTip -> "TagAdvanceToTip"
 
   showsPrecQuery p = \case
-    Fork m1 m2 -> showParen (p >= 11)
-      ( showString "Fork"
-      . showSpace
-      . ChainSeek.showsPrecQuery 11 m1
-      . showSpace
-      . ChainSeek.showsPrecQuery 11 m2
-      )
-    AdvanceSlots slots -> showParen (p >= 11)
-      ( showString "AdvanceSlots"
-      . showSpace
-      . showsPrec 11 slots
-      )
     AdvanceBlocks blocks -> showParen (p >= 11)
       ( showString "AdvanceBlocks"
       . showSpace
@@ -464,11 +377,6 @@ instance ChainSeek.ShowQuery Move where
       ( showString "Intersect"
       . showSpace
       . showsPrec 11 blocks
-      )
-    FindConsumingTx txOut -> showParen (p >= 11)
-      ( showString "FindConsumingTx"
-      . showSpace
-      . showsPrec 11 txOut
       )
     FindConsumingTxs txOuts -> showParen (p >= 11)
       ( showString "FindConsumingTxs"
@@ -482,11 +390,6 @@ instance ChainSeek.ShowQuery Move where
       . showSpace
       . showsPrec 11 txId
       )
-    FindTxsTo credentials -> showParen (p >= 11)
-      ( showString "FindTxsTo"
-      . showSpace
-      . showsPrec 11 credentials
-      )
     FindTxsFor credentials -> showParen (p >= 11)
       ( showString "FindTxsFor"
       . showSpace
@@ -495,26 +398,18 @@ instance ChainSeek.ShowQuery Move where
     AdvanceToTip -> showString "AdvanceToTip"
 
   showsPrecErr p = \case
-    TagFork m1 m2 -> showsPrecThese p (flip ChainSeek.showsPrecErr m1) (flip ChainSeek.showsPrecErr m2)
-    TagAdvanceSlots -> showsPrec p
     TagAdvanceBlocks -> showsPrec p
     TagIntersect -> showsPrec p
-    TagFindConsumingTx -> showsPrec p
     TagFindConsumingTxs -> showsPrec p
     TagFindTx -> showsPrec p
-    TagFindTxsTo -> showsPrec p
     TagFindTxsFor -> showsPrec p
     TagAdvanceToTip -> showsPrec p
 
   showsPrecResult p = \case
-    TagFork m1 m2 -> showsPrecThese p (flip ChainSeek.showsPrecResult m1) (flip ChainSeek.showsPrecResult m2)
-    TagAdvanceSlots -> showsPrec p
     TagAdvanceBlocks -> showsPrec p
     TagIntersect -> showsPrec p
-    TagFindConsumingTx -> showsPrec p
     TagFindConsumingTxs -> showsPrec p
     TagFindTx -> showsPrec p
-    TagFindTxsTo -> showsPrec p
     TagFindTxsFor -> showsPrec p
     TagAdvanceToTip -> showsPrec p
 

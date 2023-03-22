@@ -8,7 +8,7 @@ module Language.Marlowe.Runtime.ChainSync.Server
 
 import Control.Concurrent.Component
 import Data.Functor (void, (<&>))
-import Language.Marlowe.Runtime.ChainSync.Api (ChainPoint, Move, RuntimeChainSeekServer, WithGenesis(..), moveSchema)
+import Language.Marlowe.Runtime.ChainSync.Api (ChainPoint, Move, RuntimeChainSeekServer, WithGenesis(..))
 import Language.Marlowe.Runtime.ChainSync.Database (GetTip(..), MoveClient(..), MoveResult(..))
 import Network.Protocol.ChainSeek.Server
 import Network.Protocol.Connection (SomeConnectionSource, SomeServerConnector, acceptSomeConnector)
@@ -34,11 +34,7 @@ data WorkerDependencies = WorkerDependencies
 worker :: Component IO WorkerDependencies ()
 worker = component_ \WorkerDependencies{..} -> do
   let
-    runWorker = void $ runSomeConnector connector $ ChainSeekServer $ pure stInit
-
-    stInit = ServerStInit \version -> pure if version == moveSchema
-      then SendMsgHandshakeConfirmed $ stIdle Genesis
-      else SendMsgHandshakeRejected [ moveSchema ] ()
+    runWorker = void $ runSomeConnector connector $ ChainSeekServer $ stIdle Genesis
 
     stIdle :: ChainPoint -> IO (ServerStIdle Move ChainPoint ChainPoint IO ())
     stIdle pos = pure ServerStIdle

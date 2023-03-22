@@ -15,11 +15,14 @@ import Control.Monad (unless)
 import Control.Monad.IO.Class (liftIO)
 import Data.Aeson (Value(Null))
 import Data.Foldable (traverse_)
+import qualified Data.Map as Map
 import Data.Maybe (fromMaybe)
 import qualified Data.Set as Set
-import Language.Marlowe.Protocol.Query.Types (Page(..))
+import Data.Text (Text)
+import Language.Marlowe.Protocol.Query.Types (ContractFilter(..), Page(..))
 import Language.Marlowe.Runtime.ChainSync.Api (Lovelace(..))
-import Language.Marlowe.Runtime.Core.Api (MarloweVersion(..), SomeMarloweVersion(..))
+import Language.Marlowe.Runtime.Core.Api
+  (MarloweMetadataTag(..), MarloweTransactionMetadata(..), MarloweVersion(..), SomeMarloweVersion(..))
 import Language.Marlowe.Runtime.Transaction.Api (ContractCreated(..), WalletAddresses(..))
 import qualified Language.Marlowe.Runtime.Transaction.Api as Tx
 import Language.Marlowe.Runtime.Web hiding (Unsigned)
@@ -104,8 +107,11 @@ post eb req@PostContractsRequest{..} changeAddressDTO mAddresses mCollateralUtxo
   extraAddresses <- Set.fromList <$> fromDTOThrow (badRequest' "Invalid addresses header value") (maybe [] unCommaList mAddresses)
   collateralUtxos <- Set.fromList <$> fromDTOThrow (badRequest' "Invalid collateral header UTxO value") (maybe [] unCommaList mCollateralUtxos)
   roles' <- fromDTOThrow (badRequest' "Invalid roles value") roles
-  metadata' <- fromDTOThrow (badRequest' "Invalid metadata value") metadata
-  createContract Nothing v WalletAddresses{..} roles' metadata' (Lovelace minUTxODeposit) contract >>= \case
+  transactionMetadata <- fromDTOThrow (badRequest' "Invalid metadata value") metadata
+  marloweMetadata <- fromDTOThrow
+    (badRequest' "Invalid tags value")
+    if Map.null tags then Nothing else Just (tags, Nothing)
+  createContract Nothing v WalletAddresses{..} roles' MarloweTransactionMetadata{..} (Lovelace minUTxODeposit) contract >>= \case
     Left err -> do
       addField ev $ PostError $ show err
       throwDTOError err
@@ -117,9 +123,11 @@ post eb req@PostContractsRequest{..} changeAddressDTO mAddresses mCollateralUtxo
 
 get
   :: EventBackend IO r ContractsSelector
+  -> [PolicyId]
+  -> [Text]
   -> Maybe (Ranges '["contractId"] GetContractsResponse)
   -> AppM r (PaginatedResponse '["contractId"] GetContractsResponse)
-get eb ranges = withEvent (hoistEventBackend liftIO eb) Get \ev -> do
+get eb roleCurrencies' tags' ranges = withEvent (hoistEventBackend liftIO eb) Get \ev -> do
   let
     range :: Range "contractId" TxOutRef
     range@Range{..} = fromMaybe (getDefaultRange (Proxy @ContractHeader)) $ extractRange =<< ranges
@@ -128,7 +136,9 @@ get eb ranges = withEvent (hoistEventBackend liftIO eb) Get \ev -> do
   addField ev $ Offset rangeOffset
   addField ev $ Order $ show rangeOrder
   range' <- maybe (throwError $ rangeNotSatisfiable' "Invalid range value") pure $ fromPaginationRange range
-  loadContractHeaders range' >>= \case
+  roleCurrencies <- Set.fromList <$> fromDTOThrow (badRequest' "Invalid role currency") roleCurrencies'
+  let tags = Set.fromList $ MarloweMetadataTag <$> tags'
+  loadContractHeaders ContractFilter{..} range' >>= \case
     Nothing -> throwError $ rangeNotSatisfiable' "Initial contract ID not found"
     Just Page{..} -> do
       let headers' = toDTO items

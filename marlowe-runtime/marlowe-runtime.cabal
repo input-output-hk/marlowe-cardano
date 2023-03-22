@@ -14,6 +14,10 @@ author: Jamie Bertram
 maintainer: jamie.bertram@iohk.io
 stability: experimental
 category: Language
+data-files:
+  .golden/MarloweSync/golden
+  .golden/MarloweHeaderSync/golden
+  .golden/MarloweQuery/golden
 license-files:
   LICENSE
   NOTICE
@@ -76,6 +80,7 @@ library
     , containers
     , marlowe-cardano
     , marlowe-chain-sync
+    , marlowe-protocols
     , ouroboros-network
     , plutus-ledger-api
     , plutus-tx
@@ -421,11 +426,13 @@ executable marlowe-indexer
     Paths_marlowe_runtime
   build-depends:
       base >= 4.9 && < 5
+    , aeson-pretty
     , async-components
+    , containers
     , eventuo11y ^>= { 0.9, 0.10 }
     , eventuo11y-extras
     , hasql
-    , hasql-pool
+    , hasql-pool ^>= 0.8
     , marlowe-chain-sync
     , marlowe-protocols
     , marlowe-runtime
@@ -434,7 +441,6 @@ executable marlowe-indexer
     , nonempty-containers
     , optparse-applicative
     , text
-    , time
     , uuid
   ghc-options: -threaded
 
@@ -449,12 +455,15 @@ executable marlowe-sync
     Paths_marlowe_runtime
   build-depends:
       base >= 4.9 && < 5
+    , aeson-pretty
     , async-components
+    , containers
     , eventuo11y ^>= { 0.9, 0.10 }
     , eventuo11y-extras
     , hasql
-    , hasql-pool
+    , hasql-pool ^>= 0.8
     , marlowe-protocols
+    , marlowe-runtime
     , marlowe-runtime:discovery-api
     , marlowe-runtime:history-api
     , marlowe-runtime:sync
@@ -462,7 +471,6 @@ executable marlowe-sync
     , network
     , optparse-applicative
     , text
-    , time
     , uuid
   ghc-options: -threaded
 
@@ -477,13 +485,14 @@ executable marlowe-tx
     Paths_marlowe_runtime
   build-depends:
     base >= 4.9 && < 5
+    , aeson-pretty
     , async-components
+    , containers
     , eventuo11y ^>= { 0.9, 0.10 }
     , eventuo11y-extras
     , marlowe-chain-sync
     , marlowe-protocols
     , marlowe-runtime
-    , marlowe-runtime:history-api
     , marlowe-runtime:tx
     , marlowe-runtime:tx-api
     , network
@@ -503,7 +512,9 @@ executable marlowe-proxy
     Paths_marlowe_runtime
   build-depends:
       base >= 4.9 && < 5
+    , aeson-pretty
     , async-components
+    , containers
     , bytestring
     , eventuo11y ^>= { 0.9, 0.10 }
     , eventuo11y-extras
@@ -525,6 +536,7 @@ test-suite marlowe-runtime-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
+    Language.Marlowe.Runtime.Core.MetadataSpec
     Language.Marlowe.Runtime.Core.ScriptRegistrySpec
     Language.Marlowe.Runtime.Transaction.BuildConstraintsSpec
     Language.Marlowe.Runtime.Transaction.ConstraintsSpec

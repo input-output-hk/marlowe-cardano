@@ -9,7 +9,8 @@ import Cardano.Api (Tx)
 import qualified Cardano.Api as C
 import Cardano.Api.Byron (BabbageEra)
 import Control.Concurrent.Component
-import Control.Concurrent.STM (STM)
+import Control.Concurrent.Component.Probes
+import Control.Concurrent.STM (STM, atomically)
 import Data.Text (Text)
 import Data.Void
 import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncQuery, RuntimeChainSeekClient)
@@ -43,12 +44,21 @@ data TransactionDependencies r = TransactionDependencies
   , queryChainSync :: forall e a. ChainSyncQuery Void e a -> IO a
   , eventBackend :: EventBackend IO r TransactionServerSelector
   , getCurrentScripts :: forall v. MarloweVersion v -> MarloweScripts
+  , httpPort :: Int
   }
 
 transaction :: Component IO (TransactionDependencies r) ()
 transaction = proc TransactionDependencies{..} -> do
-  getTip <- transactionChainClient -< TransactionChainClientDependencies{..}
+  (connected, getTip) <- transactionChainClient -< TransactionChainClientDependencies{..}
   transactionServer -< TransactionServerDependencies{..}
+  probeServer -< ProbeServerDependencies
+    { probes = Probes
+        { startup = pure True
+        , liveness = atomically connected
+        , readiness = atomically connected
+        }
+    , port = httpPort
+    }
 
 getTransactionSererSelectorConfig :: GetSelectorConfig TransactionServerSelector
 getTransactionSererSelectorConfig = \case

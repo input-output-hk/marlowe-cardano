@@ -226,6 +226,8 @@ data ContractState = ContractState
   { contractId :: TxOutRef
   , roleTokenMintingPolicyId :: PolicyId
   , version :: MarloweVersion
+  , continuations :: Maybe Text
+  , tags :: Map Text Metadata
   , metadata :: Map Word64 Metadata
   , status :: TxStatus
   , block :: Maybe BlockHeader
@@ -244,6 +246,8 @@ data ContractHeader = ContractHeader
   { contractId :: TxOutRef
   , roleTokenMintingPolicyId :: PolicyId
   , version :: MarloweVersion
+  , continuations :: Maybe Text
+  , tags :: Map Text Metadata
   , metadata :: Map Word64 Metadata
   , status :: TxStatus
   , block :: Maybe BlockHeader
@@ -304,6 +308,8 @@ instance ToSchema Metadata where
 data TxHeader = TxHeader
   { contractId :: TxOutRef
   , transactionId :: TxId
+  , continuations :: Maybe Text
+  , tags :: Map Text Metadata
   , metadata :: Map Word64 Metadata
   , status :: TxStatus
   , block :: Maybe BlockHeader
@@ -317,6 +323,8 @@ instance ToSchema TxHeader
 data Tx = Tx
   { contractId :: TxOutRef
   , transactionId :: TxId
+  , continuations :: Maybe Text
+  , tags :: Map Text Metadata
   , metadata :: Map Word64 Metadata
   , status :: TxStatus
   , block :: Maybe BlockHeader
@@ -433,7 +441,8 @@ instance ToJSON PostWithdrawalsRequest
 instance ToSchema PostWithdrawalsRequest
 
 data PostContractsRequest = PostContractsRequest
-  { metadata :: Map Word64 Metadata
+  { tags :: Map Text Metadata
+  , metadata :: Map Word64 Metadata
   , version :: MarloweVersion
   , roles :: Maybe RolesConfig
   , contract :: Semantics.Contract
@@ -588,6 +597,7 @@ uriToJSON = String . T.pack . show
 
 data PostTransactionsRequest = PostTransactionsRequest
   { version :: MarloweVersion
+  , tags :: Map Text Metadata
   , metadata :: Map Word64 Metadata
   , invalidBefore :: Maybe UTCTime
   , invalidHereafter :: Maybe UTCTime

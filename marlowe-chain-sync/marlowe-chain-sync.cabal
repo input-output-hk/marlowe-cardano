@@ -112,10 +112,8 @@ library libchainsync
     , ouroboros-network
     , stm
     , text
-    , these
     , transformers
     , vector
-  visibility: public
 
 library chain-indexer
   import: lang
@@ -160,7 +158,6 @@ library chain-indexer
     , typed-protocols
     , vector
     , witherable
-  visibility: public
 
 library plutus-compat
   import: lang
@@ -233,15 +230,16 @@ executable marlowe-chain-indexer
   build-depends:
       base >= 4.9 && < 5
     , aeson
+    , aeson-pretty
     , async-components
     , cardano-api
     , cardano-crypto-wrapper
     , cardano-ledger-byron
+    , containers
     , eventuo11y ^>= { 0.9, 0.10 }
     , eventuo11y-extras
     , hasql
-    -- Consider removing the hasql < 1.6 constraint in cabal.project if updating hasql-pool
-    , hasql-pool < 0.6
+    , hasql-pool ^>= 0.8
     , marlowe-chain-sync:chain-indexer
     , optparse-applicative
     , ouroboros-network
@@ -249,7 +247,6 @@ executable marlowe-chain-indexer
     , time
     , transformers
     , uuid
-  visibility: public
 
 executable marlowe-chain-sync
   import: lang
@@ -264,14 +261,15 @@ executable marlowe-chain-sync
     Paths_marlowe_chain_sync
   build-depends:
       base >= 4.9 && < 5
+    , aeson-pretty
     , async-components
     , cardano-api
     , cardano-ledger-byron
+    , containers
     , eventuo11y ^>= { 0.9, 0.10 }
     , eventuo11y-extras
     , hasql
-    -- Consider removing the hasql < 1.6 constraint in cabal.project if updating hasql-pool
-    , hasql-pool < 0.6
+    , hasql-pool ^>= 0.8
     , marlowe-chain-sync
     , marlowe-chain-sync:libchainsync
     , marlowe-protocols
@@ -279,24 +277,4 @@ executable marlowe-chain-sync
     , optparse-applicative
     , ouroboros-network
     , text
-    , time
     , uuid
-
-executable example-client
-  import: lang
-  ghc-options: -threaded
-  hs-source-dirs: example-client
-  main-is: Main.hs
-  other-modules:
-    SkippingBlocks
-    FollowingUTxOs
-    Paths_marlowe_chain_sync
-  autogen-modules:
-    Paths_marlowe_chain_sync
-  build-depends:
-      base >= 4.9 && < 5
-    , marlowe-chain-sync
-    , marlowe-protocols
-    , network
-    , optparse-applicative
-    , typed-protocols

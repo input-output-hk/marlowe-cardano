@@ -2,6 +2,7 @@
 {-# LANGUAGE EmptyCase #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE QuantifiedConstraints #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -12,20 +13,21 @@
 module Network.Protocol.ChainSeek.Types
   where
 
+import Control.Monad (join)
 import Data.Aeson (ToJSON(..), Value(..), object, (.=))
 import Data.Binary (Binary(..), Get, Put, getWord8, putWord8)
 import Data.Data (type (:~:)(Refl))
+import Data.Foldable (fold)
 import Data.Functor ((<&>))
 import Data.Kind (Type)
+import Data.List.NonEmpty (NonEmpty((:|)))
 import Data.Maybe (catMaybes)
 import Data.Proxy (Proxy(..))
-import Data.String (IsString)
-import Data.Text (Text)
 import qualified Data.Text as T
-import qualified Data.Text.Encoding as T
 import GHC.Show (showSpace)
 import Network.Protocol.Codec (BinaryMessage(..))
-import Network.Protocol.Codec.Spec (ArbitraryMessage(..), MessageEq(..), ShowProtocol(..))
+import Network.Protocol.Codec.Spec
+  (ArbitraryMessage(..), MessageEq(..), MessageVariations(..), ShowProtocol(..), SomePeerHasAgency(..), Variations(..))
 import Network.Protocol.Handshake.Types (HasSignature(..))
 import Network.TypedProtocol (PeerHasAgency(..), Protocol(..), SomeMessage(SomeMessage))
 import Network.TypedProtocol.Codec (AnyMessageAndAgency(..))
@@ -54,12 +56,6 @@ class Query q => QueryToJSON (q :: * -> * -> *) where
 
 -- | The type of states in the protocol.
 data ChainSeek (query :: Type -> Type -> Type) point tip where
-  -- | The server is waiting for the client to initiate the handshake.
-  StInit :: ChainSeek query point tip
-
-  -- | The client is waiting for the server to accept the handshake.
-  StHandshake :: ChainSeek query point tip
-
   -- | The client and server are idle. The client can send a request.
   StIdle :: ChainSeek query point tip
 
@@ -88,42 +84,11 @@ instance
     , signature $ Proxy @tip
     ]
 
--- | Schema version used for
-newtype SchemaVersion = SchemaVersion Text
-  deriving stock (Show, Eq, Ord)
-  deriving newtype (IsString, ToJSON)
-
-instance Arbitrary SchemaVersion where
-  arbitrary = SchemaVersion . T.pack <$> arbitrary
-
-instance Binary SchemaVersion where
-  put (SchemaVersion v) = put $ T.encodeUtf8 v
-  get = do
-    bytes <- get
-    case T.decodeUtf8' bytes of
-      Left err      -> fail $ show err
-      Right version -> pure $ SchemaVersion version
-
 instance Protocol (ChainSeek query point tip) where
 
   -- | The type of messages in the protocol. Corresponds to the state
   -- transition in the state machine diagram.
   data Message (ChainSeek query point tip) from to where
-
-    -- | Initiate a handshake for the given schema version.
-    MsgRequestHandshake :: SchemaVersion -> Message (ChainSeek query point tip)
-      'StInit
-      'StHandshake
-
-    -- | Accept the handshake.
-    MsgConfirmHandshake :: Message (ChainSeek query point tip)
-      'StHandshake
-      'StIdle
-
-    -- | Reject the handshake.
-    MsgRejectHandshake :: [SchemaVersion] -> Message (ChainSeek query point tip)
-      'StHandshake
-      'StDone
 
     -- | Request the next matching result for the given query from the client's
     -- position.
@@ -167,18 +132,15 @@ instance Protocol (ChainSeek query point tip) where
       'StIdle
 
   data ClientHasAgency st where
-    TokInit :: ClientHasAgency 'StInit
     TokIdle :: ClientHasAgency 'StIdle
     TokPoll :: ClientHasAgency ('StPoll err result)
 
   data ServerHasAgency st where
-    TokHandshake :: ServerHasAgency 'StHandshake
     TokNext :: Tag query err result -> ServerHasAgency ('StNext err result :: ChainSeek query point tip)
 
   data NobodyHasAgency st where
     TokDone :: NobodyHasAgency 'StDone
 
-  exclusionLemma_ClientAndServerHaveAgency TokInit = \case
   exclusionLemma_ClientAndServerHaveAgency TokIdle = \case
   exclusionLemma_ClientAndServerHaveAgency TokPoll = \case
 
@@ -191,65 +153,48 @@ instance
   , Binary tip
   , Binary point
   ) => BinaryMessage (ChainSeek query point tip) where
-    putMessage (ClientAgency TokInit) msg = case msg of
-      MsgRequestHandshake schemaVersion -> do
-        putWord8 0x01
-        put schemaVersion
-
     putMessage (ClientAgency TokIdle) msg = case msg of
       MsgQueryNext query -> do
-        putWord8 0x04
+        putWord8 0x01
         let tag = tagFromQuery query
         putTag tag
         putQuery query
-      MsgDone            -> putWord8 0x09
-
-    putMessage (ServerAgency TokHandshake) msg = case msg of
-      MsgConfirmHandshake                  -> putWord8 0x02
-      MsgRejectHandshake supportedVersions -> do
-       putWord8 0x03
-       put supportedVersions
+      MsgDone            -> putWord8 0x02
 
     putMessage (ServerAgency (TokNext tag)) (MsgRejectQuery err tip) = do
-        putWord8 0x05
+        putWord8 0x03
         putTag tag
         putErr tag err
         put tip
 
     putMessage (ServerAgency (TokNext tag)) (MsgRollForward result pos tip) = do
-        putWord8 0x06
+        putWord8 0x04
         putTag tag
         putResult tag result
         put pos
         put tip
 
     putMessage (ServerAgency TokNext{}) (MsgRollBackward pos tip) = do
-        putWord8 0x07
+        putWord8 0x05
         put pos
         put tip
 
-    putMessage (ServerAgency TokNext{}) MsgWait = putWord8 0x08
+    putMessage (ServerAgency TokNext{}) MsgWait = putWord8 0x06
 
-    putMessage (ClientAgency TokPoll) MsgPoll = putWord8 0x0a
+    putMessage (ClientAgency TokPoll) MsgPoll = putWord8 0x07
 
-    putMessage (ClientAgency TokPoll) MsgCancel = putWord8 0x0b
+    putMessage (ClientAgency TokPoll) MsgCancel = putWord8 0x08
 
     getMessage tok      = do
       tag <- getWord8
       case (tag, tok) of
-        (0x01, ClientAgency TokInit) -> SomeMessage . MsgRequestHandshake <$> get
-
-        (0x04, ClientAgency TokIdle) -> do
+        (0x01, ClientAgency TokIdle) -> do
           SomeTag qtag <- getTag
           SomeMessage . MsgQueryNext <$> getQuery qtag
 
-        (0x09, ClientAgency TokIdle) -> pure $ SomeMessage MsgDone
+        (0x02, ClientAgency TokIdle) -> pure $ SomeMessage MsgDone
 
-        (0x02, ServerAgency TokHandshake) -> pure $ SomeMessage MsgConfirmHandshake
-
-        (0x03, ServerAgency TokHandshake) -> SomeMessage . MsgRejectHandshake <$> get
-
-        (0x05, ServerAgency (TokNext qtag)) -> do
+        (0x03, ServerAgency (TokNext qtag)) -> do
           SomeTag qtag' :: SomeTag query <- getTag
           case tagEq qtag qtag' of
             Nothing -> fail "decoded query tag does not match expected query tag"
@@ -258,7 +203,7 @@ instance
               tip <- get
               pure $ SomeMessage $ MsgRejectQuery err tip
 
-        (0x06, ServerAgency (TokNext qtag)) -> do
+        (0x04, ServerAgency (TokNext qtag)) -> do
           SomeTag qtag' :: SomeTag query <- getTag
           case tagEq qtag qtag' of
             Nothing -> fail "decoded query tag does not match expected query tag"
@@ -268,16 +213,16 @@ instance
               tip <- get
               pure $ SomeMessage $ MsgRollForward result point tip
 
-        (0x07, ServerAgency (TokNext _)) -> do
+        (0x05, ServerAgency (TokNext _)) -> do
           point <- get
           tip <- get
           pure $ SomeMessage $ MsgRollBackward point tip
 
-        (0x08, ServerAgency (TokNext _)) -> pure $ SomeMessage MsgWait
+        (0x06, ServerAgency (TokNext _)) -> pure $ SomeMessage MsgWait
 
-        (0x0a, ClientAgency TokPoll) -> pure $ SomeMessage MsgPoll
+        (0x07, ClientAgency TokPoll) -> pure $ SomeMessage MsgPoll
 
-        (0x0b, ClientAgency TokPoll) -> pure $ SomeMessage MsgCancel
+        (0x08, ClientAgency TokPoll) -> pure $ SomeMessage MsgCancel
 
         _ -> fail $ "Unexpected tag " <> show tag
 
@@ -287,17 +232,12 @@ instance
   , ToJSON point
   ) => MessageToJSON (ChainSeek query point tip) where
   messageToJSON = \case
-    ClientAgency TokInit -> \case
-      MsgRequestHandshake version -> object [ "requestHandshake" .= toJSON version ]
     ClientAgency TokIdle -> \case
       MsgQueryNext query -> object [ "queryNext" .= queryToJSON query ]
       MsgDone -> String "done"
     ClientAgency TokPoll -> \case
       MsgPoll -> String "poll"
       MsgCancel -> String "cancel"
-    ServerAgency TokHandshake -> \case
-      MsgConfirmHandshake -> String "confirmHandshake"
-      MsgRejectHandshake versions -> object [ "rejectHandshake" .= toJSON versions ]
     ServerAgency (TokNext tag) -> \case
       MsgRejectQuery err tip -> object
         [ "rejectQuery" .= object
@@ -329,6 +269,12 @@ class Query query => ArbitraryQuery query where
   shrinkErr :: Tag query err result-> err -> [err]
   shrinkResult :: Tag query err result-> result -> [result]
 
+class Query query => QueryVariations query where
+  tags :: NonEmpty (SomeTag query)
+  queryVariations :: Tag query err result -> NonEmpty (query err result)
+  errVariations :: Tag query err result -> [err]
+  resultVariations :: Tag query err result -> NonEmpty result
+
 instance
   ( Arbitrary point
   , Arbitrary tip
@@ -338,10 +284,7 @@ instance
     SomeTag tag <- arbitraryTag
     let mGenError = arbitraryErr tag
     oneof $ catMaybes
-      [ Just $ AnyMessageAndAgency (ClientAgency TokInit) . MsgRequestHandshake <$> arbitrary
-      , Just $ pure $ AnyMessageAndAgency (ServerAgency TokHandshake) MsgConfirmHandshake
-      , Just $ AnyMessageAndAgency (ServerAgency TokHandshake) . MsgRejectHandshake <$> arbitrary
-      , Just $ do
+      [ Just $ do
           query <- arbitraryQuery tag
           pure $ AnyMessageAndAgency (ClientAgency TokIdle) $ MsgQueryNext query
       , Just $ pure $ AnyMessageAndAgency (ClientAgency TokIdle) MsgDone
@@ -364,8 +307,6 @@ instance
       , Just $ pure $ AnyMessageAndAgency (ClientAgency TokPoll) MsgCancel
       ]
   shrinkMessage agency = \case
-    MsgRequestHandshake version -> MsgRequestHandshake <$> shrink version
-    MsgRejectHandshake versions -> MsgRejectHandshake <$> shrink versions
     MsgQueryNext query -> MsgQueryNext <$> shrinkQuery query
     MsgRejectQuery err tip -> []
       <> [ MsgRejectQuery err' tip | err' <- case agency of ServerAgency (TokNext tag) -> shrinkErr tag err ]
@@ -379,6 +320,60 @@ instance
       <> [ MsgRollBackward point tip' | tip' <- shrink tip ]
     _ -> []
 
+instance
+  ( Variations point
+  , Variations tip
+  , QueryVariations query
+  ) => MessageVariations (ChainSeek query point tip) where
+    agencyVariations = join
+      [ pure $ SomePeerHasAgency $ ClientAgency TokIdle
+      , pure $ SomePeerHasAgency $ ClientAgency TokPoll
+      , do
+        SomeTag tag <- tags
+        pure $ SomePeerHasAgency $ ServerAgency $ TokNext tag
+      ]
+    messageVariations = \case
+      ClientAgency TokIdle -> join
+        [ do
+          SomeTag tag <- tags
+          SomeMessage . MsgQueryNext <$> queryVariations tag
+        , pure $ SomeMessage MsgDone
+        ]
+      ClientAgency TokPoll -> [SomeMessage MsgPoll, SomeMessage MsgCancel]
+      ServerAgency (TokNext tag) -> do
+        let
+          point :| points = variations
+          tip :| tips = variations
+          result :| results = resultVariations tag
+          errs = errVariations tag
+        join case errs of
+          [] ->
+            [ SomeMessage <$> MsgRollForward result point tip :| fold @[]
+                [ MsgRollForward <$> results <*> pure point <*> pure tip
+                , MsgRollForward result <$> points <*> pure tip
+                , MsgRollForward result point <$> tips
+                ]
+            , SomeMessage <$> MsgRollBackward point tip :| fold @[]
+                [ MsgRollBackward <$> points <*> pure tip
+                , MsgRollBackward point <$> tips
+                ]
+            ]
+          err : errs' ->
+            [ SomeMessage <$> MsgRollForward result point tip :| fold @[]
+                [ MsgRollForward <$> results <*> pure point <*> pure tip
+                , MsgRollForward result <$> points <*> pure tip
+                , MsgRollForward result point <$> tips
+                ]
+            , SomeMessage <$> MsgRollBackward point tip :| fold @[]
+                [ MsgRollBackward <$> points <*> pure tip
+                , MsgRollBackward point <$> tips
+                ]
+            , SomeMessage <$> MsgRejectQuery err tip :| fold @[]
+                [ MsgRejectQuery <$> errs' <*> pure tip
+                , MsgRejectQuery err <$> tips
+                ]
+            ]
+
 class Query query => QueryEq query where
   queryEq :: query err result -> query err result -> Bool
   errEq :: Tag query err result -> err -> err -> Bool
@@ -390,15 +385,6 @@ instance
   , QueryEq query
   ) => MessageEq (ChainSeek query point tip) where
   messageEq (AnyMessageAndAgency agency msg) = case (agency, msg) of
-    (_, MsgRequestHandshake version) -> \case
-      AnyMessageAndAgency _ (MsgRequestHandshake version') -> version == version'
-      _ -> False
-    (_, MsgRejectHandshake versions) -> \case
-      AnyMessageAndAgency _ (MsgRejectHandshake versions') -> versions == versions'
-      _ -> False
-    (_, MsgConfirmHandshake) -> \case
-      AnyMessageAndAgency _ MsgConfirmHandshake -> True
-      _ -> False
     (_, MsgQueryNext query) -> \case
       AnyMessageAndAgency _ (MsgQueryNext query') ->
         case tagEq (tagFromQuery query) (tagFromQuery query') of
@@ -446,17 +432,6 @@ instance
   , ShowQuery query
   ) => ShowProtocol (ChainSeek query point tip) where
   showsPrecMessage p agency = \case
-    MsgRequestHandshake version -> showParen (p >= 11)
-      ( showString "MsgRequestHandshake"
-      . showSpace
-      . showsPrec 11 version
-      )
-    MsgRejectHandshake versions -> showParen (p >= 11)
-      ( showString "MsgRejectHandshake"
-      . showSpace
-      . showsPrec 11 versions
-      )
-    MsgConfirmHandshake -> showString "MsgConfirmHandshake"
     MsgQueryNext query -> showParen (p >= 11)
       ( showString "MsgQueryNext"
       . showSpace
@@ -491,7 +466,6 @@ instance
     MsgCancel -> showString "MsgCancel"
 
   showsPrecServerHasAgency p = \case
-    TokHandshake -> showString "TokHandshake"
     TokNext tag -> showParen (p >= 11)
       ( showString "TokNext"
       . showSpace
@@ -499,6 +473,5 @@ instance
       )
 
   showsPrecClientHasAgency _ = showString . \case
-    TokInit -> "TokInit"
     TokIdle -> "TokIdle"
     TokPoll -> "TokPoll"

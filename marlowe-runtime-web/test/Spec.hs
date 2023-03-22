@@ -13,12 +13,13 @@ import Data.OpenApi hiding (version)
 import Data.Proxy
 import Data.Text (Text)
 import qualified Data.Text as T
+import qualified Language.Marlowe.Core.V1.Semantics.Types as Semantics (Input(..))
 import qualified Language.Marlowe.Runtime.Web as Web
 import Network.Arbitrary ()
 import Servant.OpenApi
 import Spec.Marlowe.Semantics.Arbitrary ()
 import Test.Hspec (Spec, describe, hspec)
-import Test.QuickCheck (Arbitrary(..), elements, genericShrink, listOf, oneof, resize)
+import Test.QuickCheck (Arbitrary(..), Gen, elements, genericShrink, listOf, oneof, resize, suchThat)
 import Test.QuickCheck.Instances ()
 import Text.Regex.Posix ((=~))
 
@@ -46,6 +47,8 @@ instance Arbitrary Web.ContractHeader where
     <*> arbitrary
     <*> arbitrary
     <*> arbitrary
+    <*> arbitrary
+    <*> arbitrary
 
 instance Arbitrary Web.TxHeader where
   arbitrary = Web.TxHeader
@@ -55,10 +58,14 @@ instance Arbitrary Web.TxHeader where
     <*> arbitrary
     <*> arbitrary
     <*> arbitrary
+    <*> arbitrary
+    <*> arbitrary
 
 instance Arbitrary Web.ContractState where
   arbitrary = Web.ContractState
     <$> arbitrary
+    <*> arbitrary
+    <*> arbitrary
     <*> arbitrary
     <*> arbitrary
     <*> arbitrary
@@ -99,6 +106,8 @@ instance Arbitrary Web.Tx where
     <*> arbitrary
     <*> arbitrary
     <*> arbitrary
+    <*> arbitraryNormal  -- FIXME: This should handle merkleized input, too.
+    <*> arbitrary
     -- size of 6 will result in a 1-layer deep contract being generated (this is
     -- all we care about for the purposes of schema checking).
     <*> resize 6 arbitrary
@@ -117,6 +126,7 @@ instance Arbitrary Web.PostContractsRequest where
     <$> arbitrary
     <*> arbitrary
     <*> arbitrary
+    <*> arbitrary
     -- size of 6 will result in a 1-layer deep contract being generated (this is
     -- all we care about for the purposes of schema checking).
     <*> resize 6 arbitrary
@@ -130,6 +140,7 @@ instance Arbitrary Web.PostTransactionsRequest where
     <*> arbitrary
     <*> arbitrary
     <*> arbitrary
+    <*> arbitraryNormal  -- FIXME: This should handle merkleized input, too.
   shrink = genericShrink
 
 instance Arbitrary Web.CreateTxBody where
@@ -219,3 +230,9 @@ instance Arbitrary a => Arbitrary (Web.WithLink name a) where
     ]
   shrink (Web.OmitLink a) = Web.OmitLink <$> shrink a
   shrink (Web.IncludeLink n a) = [Web.OmitLink a] <> (Web.IncludeLink n <$> shrink a)
+
+arbitraryNormal :: Gen [Semantics.Input]
+arbitraryNormal =
+  arbitrary `suchThat` all isNormal
+    where isNormal (Semantics.NormalInput _) = True
+          isNormal _ = False

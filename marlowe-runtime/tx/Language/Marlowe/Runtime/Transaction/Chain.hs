@@ -6,9 +6,10 @@ module Language.Marlowe.Runtime.Transaction.Chain
 import Control.Concurrent (threadDelay)
 import Control.Concurrent.Component
 import Control.Concurrent.STM (STM, atomically, newTVar, readTVar, writeTVar)
+import Control.Exception (finally)
 import Data.Functor (($>))
 import Data.Void (absurd)
-import Language.Marlowe.Runtime.ChainSync.Api (Move(..), RuntimeChainSeekClient, moveSchema)
+import Language.Marlowe.Runtime.ChainSync.Api (Move(..), RuntimeChainSeekClient)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Network.Protocol.ChainSeek.Client
 import Network.Protocol.Connection (SomeClientConnector)
@@ -18,15 +19,20 @@ newtype TransactionChainClientDependencies = TransactionChainClientDependencies
   { chainSyncConnector :: SomeClientConnector RuntimeChainSeekClient IO
   }
 
-transactionChainClient :: Component IO TransactionChainClientDependencies (STM Chain.ChainPoint)
+transactionChainClient :: Component IO TransactionChainClientDependencies (STM Bool, STM Chain.ChainPoint)
 transactionChainClient = component \TransactionChainClientDependencies{..} -> do
   tipVar <- newTVar Chain.Genesis
-  pure (runSomeConnector chainSyncConnector $ client tipVar, readTVar tipVar)
+  connectedVar <- newTVar False
+  pure
+    ( flip finally (atomically $ writeTVar connectedVar False)
+        $ runSomeConnector chainSyncConnector
+        $ client connectedVar tipVar
+    , (readTVar connectedVar, readTVar tipVar)
+    )
   where
-  client tipVar = ChainSeekClient $ pure $ SendMsgRequestHandshake moveSchema ClientStHandshake
-    { recvMsgHandshakeRejected = \versions -> error $ "Schema not supported, requires " <> show versions
-    , recvMsgHandshakeConfirmed = pure clientIdle
-    }
+  client connectedVar tipVar = ChainSeekClient do
+    atomically $ writeTVar connectedVar True
+    pure clientIdle
     where
     clientIdle = SendMsgQueryNext AdvanceToTip clientNext
     clientNext = ClientStNext

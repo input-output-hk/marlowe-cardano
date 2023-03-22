@@ -50,7 +50,6 @@ import Language.Marlowe.Runtime.ChainSync.Api
   , BlockNo(..)
   , SlotNo(..)
   , TokenName
-  , TransactionMetadata(..)
   , TxId
   , TxIx
   , TxOutRef(..)
@@ -68,6 +67,7 @@ import Language.Marlowe.Runtime.Core.Api
   , Transaction(..)
   , TransactionOutput(..)
   , TransactionScriptOutput(..)
+  , emptyMarloweTransactionMetadata
   , fromChainPayoutDatum
   )
 import Language.Marlowe.Runtime.Discovery.Api (ContractHeader(..))
@@ -178,7 +178,7 @@ deposit Wallet{..} contractId intoAccount fromParty ofToken quantity = do
     MarloweV1
     addresses
     contractId
-    mempty
+    emptyMarloweTransactionMetadata
     [NormalInput $ IDeposit intoAccount fromParty ofToken quantity]
   expectRight "Failed to create deposit transaction" result
 
@@ -194,7 +194,7 @@ choose Wallet{..} contractId choice party chosenNum = do
     MarloweV1
     addresses
     contractId
-    mempty
+    emptyMarloweTransactionMetadata
     [NormalInput $ IChoice (ChoiceId choice party) chosenNum]
   expectRight "Failed to create choice transaction" result
 
@@ -207,7 +207,7 @@ notify Wallet{..} contractId = do
     MarloweV1
     addresses
     contractId
-    mempty
+    emptyMarloweTransactionMetadata
     [NormalInput INotify]
   expectRight "Failed to create notify transaction" result
 
@@ -234,7 +234,7 @@ contractCreatedToCreateStep ContractCreated{..} = CreateStep
       , utxo = unContractId contractId
       , datum
       }
-  , metadata = mempty
+  , metadata
   , payoutValidatorHash = payoutScriptHash
   }
 
@@ -242,7 +242,7 @@ inputsAppliedToTransaction :: BlockHeader -> InputsApplied BabbageEra v -> Trans
 inputsAppliedToTransaction blockHeader InputsApplied{..} = Transaction
   { transactionId = fromCardanoTxId $ getTxId txBody
   , contractId
-  , metadata = mempty
+  , metadata
   , blockHeader
   , validityLowerBound = invalidBefore
   , validityUpperBound = invalidHereafter
@@ -269,7 +269,7 @@ contractCreatedToContractHeader :: BlockHeader -> ContractCreated BabbageEra v -
 contractCreatedToContractHeader blockHeader ContractCreated{..} = ContractHeader
   { contractId
   , rolesCurrency
-  , metadata = TransactionMetadata metadata
+  , metadata
   , marloweScriptHash
   , marloweScriptAddress
   , payoutScriptHash

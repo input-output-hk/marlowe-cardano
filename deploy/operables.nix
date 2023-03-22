@@ -11,6 +11,7 @@ let
     writeShellScriptBin
     socat
     netcat
+    curl
     ;
   inherit (inputs.bitte-cells._utils.packages) srvaddr;
 
@@ -88,9 +89,32 @@ let
 
   inherit (std.lib.ops) mkOperable;
 
+  probes = {
+    livenessProbe = std.lib.ops.writeScript {
+      name = "liveness-probe";
+      runtimeInputs = [ curl ];
+      text = ''
+        [ -z "''${HTTP_PORT:-}" ] && echo "HTTP_PORT env var must be set -- aborting" && exit 1
+
+        curl -f "http://localhost:$HTTP_PORT/live"
+      '';
+    };
+    readinessProbe = std.lib.ops.writeScript {
+      name = "readiness-probe";
+      runtimeInputs = [ curl ];
+      text = ''
+        [ -z "''${HTTP_PORT:-}" ] && echo "HTTP_PORT env var must be set -- aborting" && exit 1
+
+        curl -f "http://localhost:$HTTP_PORT/ready"
+      '';
+    };
+  };
+
+  mkOperableWithProbes = args: mkOperable (args // probes);
+
 in
 {
-  chain-indexer = mkOperable {
+  marlowe-chain-indexer = mkOperableWithProbes {
     package = packages.marlowe-chain-indexer;
     runtimeInputs = [ jq sqitchPg srvaddr postgresql coreutils ];
     runtimeScript = ''
@@ -100,13 +124,20 @@ in
       # NODE_CONFIG: path to the cardano node config file
       # CARDANO_NODE_SOCKET_PATH: path to the node socket
       # DB_NAME, DB_USER, DB_PASS,
+      # HTTP_PORT: port number for the HTTP healthcheck server
       # Either DB_HOST or MASTER_REPLICA_SRV_DNS (for auto-discovery of DB host with srvaddr)
+
+      #################
+      # OPTIONAL VARS #
+      #################
+      # LOG_CONFIG_FILE: The path to the JSON logging config file
 
       [ -z "''${NODE_CONFIG:-}" ] && echo "NODE_CONFIG env var must be set -- aborting" && exit 1
       [ -z "''${CARDANO_NODE_SOCKET_PATH:-}" ] && echo "CARDANO_NODE_SOCKET_PATH env var must be set -- aborting" && exit 1
       [ -z "''${DB_NAME:-}" ] && echo "DB_NAME env var must be set -- aborting" && exit 1
       [ -z "''${DB_USER:-}" ] && echo "DB_USER env var must be set -- aborting" && exit 1
       [ -z "''${DB_PASS:-}" ] && echo "DB_PASS env var must be set -- aborting" && exit 1
+      [ -z "''${HTTP_PORT:-}" ] && echo "HTTP_PORT env var must be set -- aborting" && exit 1
 
       if [ -n "''${MASTER_REPLICA_SRV_DNS:-}" ]; then
         # Find DB_HOST when running on bitte cluster with patroni
@@ -136,16 +167,29 @@ in
 
       ${wait-for-socket}/bin/wait-for-socket "$CARDANO_NODE_SOCKET_PATH"
 
-      ${packages.marlowe-chain-indexer}/bin/marlowe-chain-indexer \
-        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-        --database-uri  "$DATABASE_URI" \
-        --shelley-genesis-config-file "$SHELLEY_GENESIS_CONFIG" \
-        --genesis-config-file "$BYRON_GENESIS_CONFIG" \
-        --genesis-config-file-hash "$BYRON_GENESIS_HASH"
+      if [ -z "''${LOG_CONFIG_FILE:-}" ]
+      then
+        ${packages.marlowe-chain-indexer}/bin/marlowe-chain-indexer \
+          --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+          --database-uri  "$DATABASE_URI" \
+          --shelley-genesis-config-file "$SHELLEY_GENESIS_CONFIG" \
+          --genesis-config-file "$BYRON_GENESIS_CONFIG" \
+          --genesis-config-file-hash "$BYRON_GENESIS_HASH" \
+          --http-port "$HTTP_PORT"
+      else
+        ${packages.marlowe-chain-indexer}/bin/marlowe-chain-indexer \
+          --log-config-file "$LOG_CONFIG_FILE" \
+          --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+          --database-uri  "$DATABASE_URI" \
+          --shelley-genesis-config-file "$SHELLEY_GENESIS_CONFIG" \
+          --genesis-config-file "$BYRON_GENESIS_CONFIG" \
+          --genesis-config-file-hash "$BYRON_GENESIS_HASH" \
+          --http-port "$HTTP_PORT"
+      fi
     '';
   };
 
-  marlowe-chain-sync = mkOperable {
+  marlowe-chain-sync = mkOperableWithProbes {
     package = packages.marlowe-chain-sync;
     runtimeInputs = [ srvaddr jq coreutils ];
     runtimeScript = ''
@@ -156,6 +200,12 @@ in
       # CARDANO_NODE_SOCKET_PATH: path to the node socket
       # DB_NAME, DB_USER, DB_PASS,
       # Either DB_HOST or MASTER_REPLICA_SRV_DNS (for auto-discovery of DB host with srvaddr)
+      # HTTP_PORT: port number for the HTTP healthcheck server
+
+      #################
+      # OPTIONAL VARS #
+      #################
+      # LOG_CONFIG_FILE: The path to the JSON logging config file
 
       [ -z "''${HOST:-}" ] && echo "HOST env var must be set -- aborting" && exit 1
       [ -z "''${PORT:-}" ] && echo "PORT env var must be set -- aborting" && exit 1
@@ -165,6 +215,7 @@ in
       [ -z "''${DB_NAME:-}" ] && echo "DB_NAME env var must be set -- aborting" && exit 1
       [ -z "''${DB_USER:-}" ] && echo "DB_USER env var must be set -- aborting" && exit 1
       [ -z "''${DB_PASS:-}" ] && echo "DB_PASS env var must be set -- aborting" && exit 1
+      [ -z "''${HTTP_PORT:-}" ] && echo "HTTP_PORT env var must be set -- aborting" && exit 1
 
       if [ -n "''${MASTER_REPLICA_SRV_DNS:-}" ]; then
         # Find DB_HOST when running on bitte cluster with patroni
@@ -182,17 +233,31 @@ in
       ${wait-for-socket}/bin/wait-for-socket "$CARDANO_NODE_SOCKET_PATH"
 
       DATABASE_URI=${database-uri}
-      ${packages.marlowe-chain-sync}/bin/marlowe-chain-sync \
-        --host "$HOST" \
-        --port "$PORT" \
-        --query-port "$QUERY_PORT" \
-        --job-port "$JOB_PORT" \
-        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-        --database-uri  "$DATABASE_URI"
+      if [ -z "''${LOG_CONFIG_FILE:-}" ]
+      then
+        ${packages.marlowe-chain-sync}/bin/marlowe-chain-sync \
+          --host "$HOST" \
+          --port "$PORT" \
+          --query-port "$QUERY_PORT" \
+          --job-port "$JOB_PORT" \
+          --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+          --database-uri  "$DATABASE_URI" \
+          --http-port "$HTTP_PORT"
+      else
+        ${packages.marlowe-chain-sync}/bin/marlowe-chain-sync \
+          --log-config-file "$LOG_CONFIG_FILE" \
+          --host "$HOST" \
+          --port "$PORT" \
+          --query-port "$QUERY_PORT" \
+          --job-port "$JOB_PORT" \
+          --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+          --database-uri  "$DATABASE_URI" \
+          --http-port "$HTTP_PORT"
+      fi
     '';
   };
 
-  marlowe-indexer = mkOperable {
+  marlowe-indexer = mkOperableWithProbes {
     package = packages.marlowe-indexer;
     runtimeInputs = [ sqitchPg srvaddr postgresql coreutils ];
     runtimeScript = ''
@@ -202,6 +267,12 @@ in
       # MARLOWE_CHAIN_SYNC_HOST, MARLOWE_CHAIN_SYNC_PORT, MARLOWE_CHAIN_SYNC_QUERY_PORT: connection info to marlowe-chain-sync
       # DB_NAME, DB_USER, DB_PASS,
       # Either DB_HOST or MASTER_REPLICA_SRV_DNS (for auto-discovery of DB host with srvaddr)
+      # HTTP_PORT: port number for the HTTP healthcheck server
+
+      #################
+      # OPTIONAL VARS #
+      #################
+      # LOG_CONFIG_FILE: The path to the JSON logging config file
 
       [ -z "''${DB_NAME:-}" ] && echo "DB_NAME env var must be set -- aborting" && exit 1
       [ -z "''${DB_USER:-}" ] && echo "DB_USER env var must be set -- aborting" && exit 1
@@ -209,6 +280,7 @@ in
       [ -z "''${MARLOWE_CHAIN_SYNC_HOST:-}" ] && echo "MARLOWE_CHAIN_SYNC_HOST env var must be set -- aborting" && exit 1
       [ -z "''${MARLOWE_CHAIN_SYNC_PORT:-}" ] && echo "MARLOWE_CHAIN_SYNC_PORT env var must be set -- aborting" && exit 1
       [ -z "''${MARLOWE_CHAIN_SYNC_QUERY_PORT:-}" ] && echo "MARLOWE_CHAIN_SYNC_QUERY_PORT env var must be set -- aborting" && exit 1
+      [ -z "''${HTTP_PORT:-}" ] && echo "HTTP_PORT env var must be set -- aborting" && exit 1
 
       if [ -n "''${MASTER_REPLICA_SRV_DNS:-}" ]; then
         # Find DB_HOST when running on bitte cluster with patroni
@@ -231,15 +303,27 @@ in
 
       ${wait-for-tcp}/bin/wait-for-tcp "$MARLOWE_CHAIN_SYNC_HOST" "$MARLOWE_CHAIN_SYNC_PORT"
 
-      ${packages.marlowe-indexer}/bin/marlowe-indexer \
-        --database-uri  "$DATABASE_URI" \
-        --chain-sync-port "$MARLOWE_CHAIN_SYNC_PORT" \
-        --chain-sync-query-port "$MARLOWE_CHAIN_SYNC_QUERY_PORT" \
-        --chain-sync-host "$MARLOWE_CHAIN_SYNC_HOST"
+      if [ -z "''${LOG_CONFIG_FILE:-}" ]
+      then
+        ${packages.marlowe-indexer}/bin/marlowe-indexer \
+          --database-uri  "$DATABASE_URI" \
+          --chain-sync-port "$MARLOWE_CHAIN_SYNC_PORT" \
+          --chain-sync-query-port "$MARLOWE_CHAIN_SYNC_QUERY_PORT" \
+          --chain-sync-host "$MARLOWE_CHAIN_SYNC_HOST" \
+          --http-port "$HTTP_PORT"
+      else
+        ${packages.marlowe-indexer}/bin/marlowe-indexer \
+          --log-config-file "$LOG_CONFIG_FILE" \
+          --database-uri  "$DATABASE_URI" \
+          --chain-sync-port "$MARLOWE_CHAIN_SYNC_PORT" \
+          --chain-sync-query-port "$MARLOWE_CHAIN_SYNC_QUERY_PORT" \
+          --chain-sync-host "$MARLOWE_CHAIN_SYNC_HOST" \
+          --http-port "$HTTP_PORT"
+      fi
     '';
   };
 
-  marlowe-sync = mkOperable {
+  marlowe-sync = mkOperableWithProbes {
     package = packages.marlowe-sync;
     runtimeInputs = [ srvaddr coreutils ];
     runtimeScript = ''
@@ -249,6 +333,12 @@ in
       # HOST, MARLOWE_SYNC_PORT, MARLOWE_HEADER_SYNC_PORT, MARLOWE_QUERY_PORT: network binding
       # DB_NAME, DB_USER, DB_PASS,
       # Either DB_HOST or MASTER_REPLICA_SRV_DNS (for auto-discovery of DB host with srvaddr)
+      # HTTP_PORT: port number for the HTTP healthcheck server
+
+      #################
+      # OPTIONAL VARS #
+      #################
+      # LOG_CONFIG_FILE: The path to the JSON logging config file
 
       [ -z "''${HOST:-}" ] && echo "HOST env var must be set -- aborting" && exit 1
       [ -z "''${MARLOWE_SYNC_PORT:-}" ] && echo "MARLOWE_SYNC_PORT env var must be set -- aborting" && exit 1
@@ -257,6 +347,7 @@ in
       [ -z "''${DB_NAME:-}" ] && echo "DB_NAME env var must be set -- aborting" && exit 1
       [ -z "''${DB_USER:-}" ] && echo "DB_USER env var must be set -- aborting" && exit 1
       [ -z "''${DB_PASS:-}" ] && echo "DB_PASS env var must be set -- aborting" && exit 1
+      [ -z "''${HTTP_PORT:-}" ] && echo "HTTP_PORT env var must be set -- aborting" && exit 1
 
       if [ -n "''${MASTER_REPLICA_SRV_DNS:-}" ]; then
         # Find DB_HOST when running on bitte cluster with patroni
@@ -268,16 +359,29 @@ in
       [ -z "''${DB_HOST:-}" ] && echo "DB_HOST env var must be set -- aborting" && exit 1
 
       DATABASE_URI=${database-uri}
-      ${packages.marlowe-sync}/bin/marlowe-sync \
-        --database-uri  "$DATABASE_URI" \
-        --host "$HOST" \
-        --sync-port "$MARLOWE_SYNC_PORT" \
-        --header-sync-port "$MARLOWE_HEADER_SYNC_PORT" \
-        --query-port "$MARLOWE_QUERY_PORT"
+      if [ -z "''${LOG_CONFIG_FILE:-}" ]
+      then
+        ${packages.marlowe-sync}/bin/marlowe-sync \
+          --database-uri  "$DATABASE_URI" \
+          --host "$HOST" \
+          --sync-port "$MARLOWE_SYNC_PORT" \
+          --header-sync-port "$MARLOWE_HEADER_SYNC_PORT" \
+          --query-port "$MARLOWE_QUERY_PORT" \
+          --http-port "$HTTP_PORT"
+      else
+        ${packages.marlowe-sync}/bin/marlowe-sync \
+          --log-config-file "$LOG_CONFIG_FILE" \
+          --database-uri  "$DATABASE_URI" \
+          --host "$HOST" \
+          --sync-port "$MARLOWE_SYNC_PORT" \
+          --header-sync-port "$MARLOWE_HEADER_SYNC_PORT" \
+          --query-port "$MARLOWE_QUERY_PORT" \
+          --http-port "$HTTP_PORT"
+      fi
     '';
   };
 
-  marlowe-tx = mkOperable {
+  marlowe-tx = mkOperableWithProbes {
     package = packages.marlowe-tx;
     runtimeScript = ''
       #################
@@ -285,6 +389,12 @@ in
       #################
       # HOST, PORT: network binding
       # MARLOWE_CHAIN_SYNC_HOST, MARLOWE_CHAIN_SYNC_PORT, MARLOWE_CHAIN_SYNC_QUERY_PORT, MARLOWE_CHAIN_SYNC_COMMAND_PORT: connection info to marlowe-chain-sync
+      # HTTP_PORT: port number for the HTTP healthcheck server
+
+      #################
+      # OPTIONAL VARS #
+      #################
+      # LOG_CONFIG_FILE: The path to the JSON logging config file
 
       [ -z "''${HOST:-}" ] && echo "HOST env var must be set -- aborting" && exit 1
       [ -z "''${PORT:-}" ] && echo "PORT env var must be set -- aborting" && exit 1
@@ -292,20 +402,35 @@ in
       [ -z "''${MARLOWE_CHAIN_SYNC_PORT:-}" ] && echo "MARLOWE_CHAIN_SYNC_PORT env var must be set -- aborting" && exit 1
       [ -z "''${MARLOWE_CHAIN_SYNC_COMMAND_PORT:-}" ] && echo "MARLOWE_CHAIN_SYNC_COMMAND_PORT env var must be set -- aborting" && exit 1
       [ -z "''${MARLOWE_CHAIN_SYNC_QUERY_PORT:-}" ] && echo "MARLOWE_CHAIN_SYNC_QUERY_PORT env var must be set -- aborting" && exit 1
+      [ -z "''${HTTP_PORT:-}" ] && echo "HTTP_PORT env var must be set -- aborting" && exit 1
 
       ${wait-for-tcp}/bin/wait-for-tcp "$MARLOWE_CHAIN_SYNC_HOST" "$MARLOWE_CHAIN_SYNC_PORT"
 
-      ${packages.marlowe-tx}/bin/marlowe-tx \
-        --host "$HOST" \
-        --command-port "$PORT" \
-        --chain-sync-port "$MARLOWE_CHAIN_SYNC_PORT" \
-        --chain-sync-query-port "$MARLOWE_CHAIN_SYNC_QUERY_PORT" \
-        --chain-sync-command-port "$MARLOWE_CHAIN_SYNC_COMMAND_PORT" \
-        --chain-sync-host "$MARLOWE_CHAIN_SYNC_HOST" \
+      if [ -z "''${LOG_CONFIG_FILE:-}" ]
+      then
+        ${packages.marlowe-tx}/bin/marlowe-tx \
+          --host "$HOST" \
+          --command-port "$PORT" \
+          --chain-sync-port "$MARLOWE_CHAIN_SYNC_PORT" \
+          --chain-sync-query-port "$MARLOWE_CHAIN_SYNC_QUERY_PORT" \
+          --chain-sync-command-port "$MARLOWE_CHAIN_SYNC_COMMAND_PORT" \
+          --chain-sync-host "$MARLOWE_CHAIN_SYNC_HOST" \
+          --http-port "$HTTP_PORT"
+      else
+        ${packages.marlowe-tx}/bin/marlowe-tx \
+          --log-config-file "$LOG_CONFIG_FILE" \
+          --host "$HOST" \
+          --command-port "$PORT" \
+          --chain-sync-port "$MARLOWE_CHAIN_SYNC_PORT" \
+          --chain-sync-query-port "$MARLOWE_CHAIN_SYNC_QUERY_PORT" \
+          --chain-sync-command-port "$MARLOWE_CHAIN_SYNC_COMMAND_PORT" \
+          --chain-sync-host "$MARLOWE_CHAIN_SYNC_HOST" \
+          --http-port "$HTTP_PORT"
+      fi
     '';
   };
 
-  marlowe-proxy = mkOperable {
+  marlowe-proxy = mkOperableWithProbes {
     package = packages.marlowe-proxy;
     runtimeScript = ''
       #################
@@ -314,6 +439,12 @@ in
       # HOST, PORT: network binding
       # TX_HOST, TX_PORT: connection info to marlowe-tx
       # SYNC_HOST, MARLOWE_SYNC_PORT, MARLOWE_HEADER_SYNC_PORT, MARLOWE_QUERY_PORT: connection info to marlowe-sync
+      # HTTP_PORT: port number for the HTTP healthcheck server
+
+      #################
+      # OPTIONAL VARS #
+      #################
+      # LOG_CONFIG_FILE: The path to the JSON logging config file
 
       [ -z "''${HOST:-}" ] && echo "HOST env var must be set -- aborting" && exit 1
       [ -z "''${PORT:-}" ] && echo "PORT env var must be set -- aborting" && exit 1
@@ -323,19 +454,36 @@ in
       [ -z "''${MARLOWE_SYNC_PORT:-}" ] && echo "MARLOWE_SYNC_PORT env var must be set -- aborting" && exit 1
       [ -z "''${MARLOWE_HEADER_SYNC_PORT:-}" ] && echo "MARLOWE_HEADER_SYNC_PORT env var must be set -- aborting" && exit 1
       [ -z "''${MARLOWE_QUERY_PORT:-}" ] && echo "MARLOWE_QUERY_PORT env var must be set -- aborting" && exit 1
+      [ -z "''${HTTP_PORT:-}" ] && echo "HTTP_PORT env var must be set -- aborting" && exit 1
 
       ${wait-for-tcp}/bin/wait-for-tcp "$TX_HOST" "$TX_PORT"
       ${wait-for-tcp}/bin/wait-for-tcp "$SYNC_HOST" "$MARLOWE_QUERY_PORT"
 
-      ${packages.marlowe-proxy}/bin/marlowe-proxy \
-        --host "$HOST" \
-        --port "$PORT" \
-        --marlowe-sync-host "$SYNC_HOST" \
-        --marlowe-sync-port "$MARLOWE_SYNC_PORT" \
-        --marlowe-header-port "$MARLOWE_HEADER_SYNC_PORT" \
-        --marlowe-query-port "$MARLOWE_QUERY_PORT" \
-        --tx-host "$TX_HOST" \
-        --tx-command-port "$TX_PORT"
+      if [ -z "''${LOG_CONFIG_FILE:-}" ]
+      then
+        ${packages.marlowe-proxy}/bin/marlowe-proxy \
+          --host "$HOST" \
+          --port "$PORT" \
+          --marlowe-sync-host "$SYNC_HOST" \
+          --marlowe-sync-port "$MARLOWE_SYNC_PORT" \
+          --marlowe-header-port "$MARLOWE_HEADER_SYNC_PORT" \
+          --marlowe-query-port "$MARLOWE_QUERY_PORT" \
+          --tx-host "$TX_HOST" \
+          --tx-command-port "$TX_PORT" \
+          --http-port "$HTTP_PORT"
+      else
+        ${packages.marlowe-proxy}/bin/marlowe-proxy \
+          --log-config-file "$LOG_CONFIG_FILE" \
+          --host "$HOST" \
+          --port "$PORT" \
+          --marlowe-sync-host "$SYNC_HOST" \
+          --marlowe-sync-port "$MARLOWE_SYNC_PORT" \
+          --marlowe-header-port "$MARLOWE_HEADER_SYNC_PORT" \
+          --marlowe-query-port "$MARLOWE_QUERY_PORT" \
+          --tx-host "$TX_HOST" \
+          --tx-command-port "$TX_PORT" \
+          --http-port "$HTTP_PORT"
+      fi
     '';
   };
 
@@ -361,5 +509,23 @@ in
         --enable-open-api \
         --access-control-allow-origin-all
     '';
+    livenessProbe = std.lib.ops.writeScript {
+      name = "liveness-probe";
+      runtimeInputs = [ curl ];
+      text = ''
+        [ -z "''${PORT:-}" ] && echo "PORT env var must be set -- aborting" && exit 1
+
+        curl -f "http://localhost:$PORT/healthcheck"
+      '';
+    };
+    readinessProbe = std.lib.ops.writeScript {
+      name = "readiness-probe";
+      runtimeInputs = [ curl ];
+      text = ''
+        [ -z "''${PORT:-}" ] && echo "PORT env var must be set -- aborting" && exit 1
+
+        curl -f "http://localhost:$PORT/healthcheck"
+      '';
+    };
   };
 }

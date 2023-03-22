@@ -6,14 +6,17 @@ module Main
 
 import Control.Concurrent.Component
 import Control.Monad.IO.Class (liftIO)
+import Data.Aeson.Encode.Pretty (encodePretty)
 import Data.ByteString.Lazy (ByteString)
+import qualified Data.Text.Lazy as T
+import Data.Text.Lazy.Encoding (decodeUtf8)
 import qualified Data.Text.Lazy.IO as TL
 import Data.UUID.V4 (nextRandom)
 import Language.Marlowe.Protocol.Server (marloweServerPeer)
 import Language.Marlowe.Runtime.CLI.Option (optParserWithEnvDefault)
 import qualified Language.Marlowe.Runtime.CLI.Option as O
 import Language.Marlowe.Runtime.Proxy
-import Logging (RootSelector(..), getRootSelectorConfig)
+import Logging (RootSelector(..), defaultRootSelectorLogConfig, getRootSelectorConfig)
 import Network.Channel (hoistChannel, socketAsChannel)
 import Network.Protocol.Codec (BinaryMessage)
 import Network.Protocol.Connection (SomeConnectionSource(..), logConnectionSource)
@@ -42,6 +45,7 @@ import Options.Applicative
   , help
   , helper
   , info
+  , infoOption
   , long
   , metavar
   , option
@@ -81,6 +85,7 @@ run = runComponent_ proc Options{..} -> do
     , connectionSource = SomeConnectionSource
         $ logConnectionSource (hoistEventBackend liftIO $ narrowEventBackend (injectSelector MarloweServer) eventBackend)
         $ handshakeConnectionSource connectionSource
+    , httpPort = fromIntegral httpPort
     }
 
 driverFactory
@@ -107,6 +112,7 @@ data Options = Options
   , txHost :: HostName
   , txPort :: PortNumber
   , logConfigFile :: Maybe FilePath
+  , httpPort :: PortNumber
   }
 
 getOptions :: IO Options
@@ -118,7 +124,7 @@ getOptions = do
   txHostParser <- optParserWithEnvDefault O.txHost
   txPortParser <- optParserWithEnvDefault O.txCommandPort
   execParser $ info
-    ( helper <*>
+    ( helper <*> printLogConfigOption <*>
       ( Options
           <$> hostParser
           <*> portParser
@@ -129,10 +135,15 @@ getOptions = do
           <*> txHostParser
           <*> txPortParser
           <*> logConfigFileParser
+          <*> httpPortParser
       )
     )
     infoMod
   where
+    printLogConfigOption = infoOption
+      (T.unpack $ decodeUtf8 $ encodePretty defaultRootSelectorLogConfig)
+      (long "print-log-config" <> help "Print the default log configuration.")
+
     hostParser = strOption $ mconcat
       [ long "host"
       , short 'h'
@@ -155,6 +166,14 @@ getOptions = do
       [ long "log-config-file"
       , metavar "FILE_PATH"
       , help "The logging configuration JSON file."
+      ]
+
+    httpPortParser = option auto $ mconcat
+      [ long "http-port"
+      , metavar "PORT_NUMBER"
+      , help "Port number to serve the http healthcheck API on"
+      , value 8080
+      , showDefault
       ]
 
     infoMod = mconcat

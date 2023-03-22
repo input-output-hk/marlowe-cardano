@@ -57,39 +57,6 @@ performed:
   find the result from the client's position, and retrieve the new position for
   the client.
 
-### Configuring the log output
+## Logging
 
-The log output of `marlowe-chain-sync` can be configured on-the-fly (i.e. updated while
-it is running) using a config file. This file is passed via an optional command line
-argument (see `--help`). An example config file is located in this directory.
-It shows the default configuration.
-
-Each key in the configuration object corresponds to an event type. Setting the
-value to true means the event will be logged, false means it won't be logged,
-and not present means the default behaviour will be used. For example, to turn
-on the `chain-sync.send` event (disabled by default), you can use a config file
-with contents.
-
-```json
-{
-  "chain-sync.send": true
-}
-```
-
-You can also assign an object value to each key. The keys of this object
-correspond to fields associated with that event. `true` means include the
-field, `false` means don't include the field, and not defined means the default
-behaviour is used. For example, to log the `stateBefore` field of the
-`query.recv` event (disabled by default), you can use a config file with the contents:
-
-```json
-{
-  "query.recv": {
-    "stateBefore": true
-  }
-}
-```
-
-Each time you save this file, it will be read and the configuration will be
-updated by `marlowe-chain-sync`. If it cannot find the config file, the default
-configuration will be used.
+See [eventuo11y-extras](../eventuo11y-extras).

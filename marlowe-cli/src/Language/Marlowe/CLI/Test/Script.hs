@@ -682,15 +682,13 @@ autoRunTransaction currency defaultSubmitter prev curr@T.MarloweTransaction {..}
   updateWallet submitterNickname \submitter@Wallet {..} ->
     submitter { waSubmittedTransactions = txBody : waSubmittedTransactions }
 
-  case classifyOutputs mTxId txOuts of
-    Right meOuts -> case filter isMarloweOut meOuts of
-      [ApplicationOut {moTxIn}] -> do
-        log' $ "Marlowe output:" <> show moTxIn
-        pure (txBody, Just moTxIn)
-      []                        -> pure (txBody, Nothing)
-      _                         -> throwError "[AutoRun] Multiple Marlowe outputs detected - unable to handle them yet."
-    Left e -> throwError . CliError $ "[AutoRun] Marlowe output anomaly: " <> show e
-
+  let meOuts = classifyOutputs mTxId txOuts
+  case filter isMarloweOut meOuts of
+    [ApplicationOut {moTxIn}] -> do
+      log' $ "Marlowe output:" <> show moTxIn
+      pure (txBody, Just moTxIn)
+    []                        -> pure (txBody, Nothing)
+    _                         -> throwError "[AutoRun] Multiple Marlowe outputs detected - unable to handle them yet."
 
 findMarloweContract :: MonadError CliError m
                     => MonadState (ScriptState lang era) m

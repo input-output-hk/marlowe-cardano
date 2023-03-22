@@ -13,6 +13,8 @@ module Language.Marlowe.Runtime.ChainIndexer
 
 import Cardano.Api (CardanoMode, ChainPoint(..), ChainTip(..), LocalNodeClientProtocolsInMode)
 import Control.Concurrent.Component
+import Control.Concurrent.Component.Probes
+import Control.Concurrent.STM (atomically)
 import Data.Aeson (Value(..), object, (.=))
 import Data.Time (NominalDiffTime)
 import Language.Marlowe.Runtime.Cardano.Api
@@ -54,6 +56,7 @@ data ChainIndexerDependencies r = ChainIndexerDependencies
   , persistRateLimit         :: !NominalDiffTime
   , genesisBlock             :: !GenesisBlock
   , eventBackend          :: !(EventBackend IO r ChainIndexerSelector)
+  , httpPort :: Int
   }
 
 chainIndexer :: Component IO (ChainIndexerDependencies r) ()
@@ -67,7 +70,7 @@ chainIndexer = proc ChainIndexerDependencies{..} -> do
     , eventBackend = narrowEventBackend (injectSelector NodeClientEvent) eventBackend
     }
   let rateLimit = persistRateLimit
-  chainStore -< ChainStoreDependencies
+  ready <- chainStore -< ChainStoreDependencies
     { commitRollback
     , commitBlocks
     , rateLimit
@@ -76,6 +79,14 @@ chainIndexer = proc ChainIndexerDependencies{..} -> do
     , genesisBlock
     , commitGenesisBlock
     , eventBackend = narrowEventBackend (injectSelector ChainStoreEvent) eventBackend
+    }
+  probeServer -< ProbeServerDependencies
+    { probes = Probes
+        { liveness = atomically connected
+        , startup = pure True
+        , readiness = atomically ready
+        }
+    , port = httpPort
     }
 
 getChainIndexerSelectorConfig :: GetSelectorConfig ChainIndexerSelector

@@ -159,7 +159,8 @@ import Language.Marlowe.Core.V1.Semantics.Types
   , getInputContent
   )
 import Language.Marlowe.Core.V1.Semantics.Types.Address (Network, mainnet, testnet)
-import Ledger.Tx.CardanoAPI (fromCardanoAddressInEra, toCardanoAddressInEra, toCardanoScriptDataHash, toCardanoValue)
+import Ledger.Address (toPlutusAddress)
+import Ledger.Tx.CardanoAPI (toCardanoAddressInEra, toCardanoScriptDataHash, toCardanoValue)
 import Plutus.ApiCommon (ProtocolVersion)
 import Plutus.V1.Ledger.Ada (fromValue)
 import Plutus.V1.Ledger.SlotConfig (SlotConfig, posixTimeToEnclosingSlot, slotToBeginPOSIXTime, slotToEndPOSIXTime)
@@ -234,18 +235,19 @@ initializeTransaction connection marloweParams slotConfig protocolVersion costMo
                                             $ findMarloweScriptsRefs connection publishingStrategy' (PrintStats printStats)
     contract <- decodeFileStrict contractFile
     state    <- decodeFileStrict stateFile
-    marloweTransaction <- initializeTransactionImpl
-      marloweParams
-      slotConfig
-      protocolVersion
-      costModelParams
-      network
-      stake
-      contract
-      state
-      refs
-      merkleize
-      printStats
+    marloweTransaction <- withShelleyBasedEra era $
+      initializeTransactionImpl
+        marloweParams
+        slotConfig
+        protocolVersion
+        costModelParams
+        network
+        stake
+        contract
+        state
+        refs
+        merkleize
+        printStats
     maybeWriteJson outputFile $
       SomeMarloweTransaction
       (plutusScriptVersion :: PlutusScriptVersion MarlowePlutusVersion)
@@ -257,6 +259,7 @@ initializeTransaction connection marloweParams slotConfig protocolVersion costMo
 initializeTransactionImpl :: forall m era
                            . MonadError CliError m
                           => MonadIO m
+                          => C.IsShelleyBasedEra era
                           => MonadReader (CliEnv era) m
                           => MarloweParams                      -- ^ The Marlowe contract parameters.
                           -> SlotConfig                         -- ^ The POSIXTime-to-slot configuration.
@@ -281,12 +284,22 @@ initializeTransactionImpl marloweParams mtSlotConfig protocolVersion costModelPa
                                          mv <- liftCli $ marloweValidatorInfo era protocolVersion costModelParams network stake
                                          rv <- liftCli $ roleValidatorInfo era protocolVersion costModelParams network stake
                                          pure (mv, rv)
-        Just MarloweScriptsRefs{..} -> pure
-                                         (
-                                           snd mrMarloweValidator
-                                         , snd mrRolePayoutValidator
-                                         )
-
+        Just MarloweScriptsRefs{..} -> do
+                                         let
+                                           vi = snd mrMarloweValidator
+                                         vi' <-
+                                           case toShelleyAddress $ viAddress vi of
+                                             Nothing -> throwError "Expecting shelley address in reference validator info"
+                                             Just (CS.ShelleyAddress n p _) ->
+                                               pure
+                                                 $ vi
+                                                   {
+                                                     viAddress =
+                                                       C.shelleyAddressInEra
+                                                         $ CS.ShelleyAddress n p
+                                                         $ toShelleyStakeReference stake
+                                                   }
+                                         pure (vi' , snd mrRolePayoutValidator)
     let
       ValidatorInfo{..} = mtValidator
       mtContinuations = mempty
@@ -984,12 +997,11 @@ marloweAddressFromCardanoAddress :: MonadError CliError m
                                  -> m (Network, Address)
 marloweAddressFromCardanoAddress address =
   do
-    address' <- liftCli $ fromCardanoAddressInEra address
     network' <-
       case address of
         AddressInEra _ (CS.ShelleyAddress network _ _) -> pure $ if network == LC.Mainnet then mainnet else testnet
         _                                              -> throwError "Byron addresses are not supported."
-    pure (network', address')
+    pure (network', toPlutusAddress address)
 
 
 -- | Withdraw funds for a specific role from the role address, without selecting inputs or outputs.

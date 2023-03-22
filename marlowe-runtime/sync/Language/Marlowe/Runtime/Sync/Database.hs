@@ -14,7 +14,7 @@ import Data.Text (Text)
 import Data.Void (Void)
 import GHC.Generics (Generic)
 import Language.Marlowe.Protocol.Query.Types
-  (Page, Range, SomeContractState, SomeTransaction, SomeTransactions, Withdrawal, WithdrawalFilter)
+  (ContractFilter, Page, Range, SomeContractState, SomeTransaction, SomeTransactions, Withdrawal, WithdrawalFilter)
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainPoint, TxId)
 import Language.Marlowe.Runtime.Core.Api (ContractId, MarloweVersion(..), SomeMarloweVersion)
 import Language.Marlowe.Runtime.Discovery.Api (ContractHeader)
@@ -30,7 +30,7 @@ data DatabaseSelector f where
   GetIntersection :: DatabaseSelector (QueryField [BlockHeader] (Maybe BlockHeader))
   GetNextHeaders :: DatabaseSelector (QueryField ChainPoint (Next ContractHeader))
   GetNextSteps :: MarloweVersion v -> DatabaseSelector (QueryField (GetNextStepsArguments v) (Next (ContractStep v)))
-  GetHeaders :: DatabaseSelector (QueryField (Range ContractId) (Maybe (Page ContractId ContractHeader)))
+  GetHeaders :: DatabaseSelector (QueryField GetHeadersArguments (Maybe (Page ContractId ContractHeader)))
   GetContractState :: DatabaseSelector (QueryField ContractId (Maybe SomeContractState))
   GetTransaction :: DatabaseSelector (QueryField TxId (Maybe SomeTransaction))
   GetTransactions :: DatabaseSelector (QueryField ContractId (Maybe SomeTransactions))
@@ -40,6 +40,13 @@ data DatabaseSelector f where
 data GetWithdrawalsArguments = GetWithdrawalsArguments
   { filter :: WithdrawalFilter
   , range :: Range TxId
+  }
+  deriving stock (Generic)
+  deriving anyclass (ToJSON)
+
+data GetHeadersArguments = GetHeadersArguments
+  { filter :: ContractFilter
+  , range :: Range ContractId
   }
   deriving stock (Generic)
   deriving anyclass (ToJSON)
@@ -113,9 +120,9 @@ logDatabaseQueries eventBackend DatabaseQueries{..} = DatabaseQueries
       result <- getNextSteps version contractId fromPoint
       addField ev $ Result result
       pure result
-  , getHeaders = \range -> withEvent eventBackend GetHeaders \ev -> do
-      addField ev $ Arguments range
-      result <- getHeaders range
+  , getHeaders = \cFilter range -> withEvent eventBackend GetHeaders \ev -> do
+      addField ev $ Arguments $ GetHeadersArguments cFilter range
+      result <- getHeaders cFilter range
       addField ev $ Result result
       pure result
   , getContractState = \contractId -> withEvent eventBackend GetContractState \ev -> do
@@ -154,7 +161,7 @@ hoistDatabaseQueries f DatabaseQueries{..} = DatabaseQueries
   , getIntersection = f . getIntersection
   , getNextHeaders = f . getNextHeaders
   , getNextSteps = (fmap . fmap) f . getNextSteps
-  , getHeaders = f . getHeaders
+  , getHeaders = fmap f . getHeaders
   , getContractState = f . getContractState
   , getTransaction = f . getTransaction
   , getTransactions = f . getTransactions
@@ -170,7 +177,7 @@ data DatabaseQueries m = DatabaseQueries
   , getIntersectionForContract :: ContractId -> [BlockHeader] -> m (Maybe (BlockHeader, SomeMarloweVersion))
   , getNextHeaders :: ChainPoint -> m (Next ContractHeader)
   , getNextSteps :: forall v. MarloweVersion v -> ContractId -> ChainPoint -> m (Next (ContractStep v))
-  , getHeaders :: Range ContractId -> m (Maybe (Page ContractId ContractHeader))
+  , getHeaders :: ContractFilter -> Range ContractId -> m (Maybe (Page ContractId ContractHeader))
   , getContractState :: ContractId -> m (Maybe SomeContractState)
   , getTransaction :: TxId -> m (Maybe SomeTransaction)
   , getTransactions :: ContractId -> m (Maybe SomeTransactions)

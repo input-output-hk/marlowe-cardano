@@ -27,6 +27,7 @@ module Spec.Marlowe.Plutus.Transaction
   , noModify
   , shuffle
     -- * Conditions
+  , isScriptTxIn
   , noVeto
   ) where
 
@@ -61,7 +62,7 @@ import Plutus.Script.Utils.Scripts (datumHash)
 import Plutus.V1.Ledger.Value (gt)
 import Plutus.V2.Ledger.Api
   ( Address(Address)
-  , Credential(PubKeyCredential)
+  , Credential(..)
   , CurrencySymbol
   , Datum(..)
   , DatumHash(..)
@@ -76,7 +77,7 @@ import Plutus.V2.Ledger.Api
   , ToData(toBuiltinData)
   , TxInInfo(..)
   , TxInfo(..)
-  , TxOut(TxOut)
+  , TxOut(TxOut, txOutAddress)
   , UpperBound(UpperBound)
   , Value
   )
@@ -105,10 +106,11 @@ import Spec.Marlowe.Plutus.Types
   , role
   , scriptPurpose
   )
+import Spec.Marlowe.Reference (ReferencePath, arbitraryReferenceTransaction)
 import Spec.Marlowe.Semantics.Arbitrary (arbitraryGoldenTransaction, arbitraryPositiveInteger)
 import Spec.Marlowe.Semantics.Golden (GoldenTransaction)
 import Spec.Marlowe.Semantics.Merkle (deepMerkleize, merkleizeInputs)
-import Test.Tasty.QuickCheck (Arbitrary(..), Gen, elements, suchThat)
+import Test.Tasty.QuickCheck (Arbitrary(..), Gen, elements, frequency, listOf, suchThat)
 
 import qualified Language.Marlowe.Core.V1.Semantics.Types as M (Party(Address))
 import qualified Plutus.V1.Ledger.Value as V (adaSymbol, adaToken, singleton)
@@ -185,11 +187,15 @@ makeDeposit :: Input
 makeDeposit input' =
   do
     ref <- lift arbitrary
-    address' <- lift arbitrary
+    address' <- lift $ arbitrary `suchThat` notScriptAddress
     pure
       $ case getInputContent input' of
-          IDeposit _ (M.Address _ address) (Token c n) i -> pure . TxInInfo ref $ TxOut address  (V.singleton c n i) NoOutputDatum  Nothing
-          IDeposit _ (Role _             ) (Token c n) i -> pure . TxInInfo ref $ TxOut address' (V.singleton c n i) NoOutputDatum  Nothing
+          IDeposit _ (M.Address _ address) (Token c n) i -> if i > 0
+                                                              then pure . TxInInfo ref $ TxOut address  (V.singleton c n i) NoOutputDatum  Nothing
+                                                              else mempty
+          IDeposit _ (Role _             ) (Token c n) i -> if i > 0
+                                                              then pure . TxInInfo ref $ TxOut address' (V.singleton c n i) NoOutputDatum  Nothing
+                                                              else mempty
           _                                              -> mempty
 
 -- | Create role input for a Marlowe semantics transaction.
@@ -199,7 +205,7 @@ makeRoleIn input' =
   do
     MarloweParams currencySymbol <- use marloweParams
     ref <- lift arbitrary
-    address  <- lift arbitrary
+    address  <- lift $ arbitrary `suchThat` notScriptAddress
     pure
       $ case getInputContent input' of
           IDeposit _ (Role role') _ _         -> pure . TxInInfo ref $ TxOut address (V.singleton currencySymbol role' 1) NoOutputDatum Nothing
@@ -276,6 +282,21 @@ makeSpendSignatory (TxInInfo _ (TxOut (Address (PubKeyCredential pkh) _) _ _ _))
 makeSpendSignatory _                                                             = mempty
 
 
+-- | Combine payments with the same address and hash.
+consolidatePayments :: [TxOut] -> [TxOut]
+consolidatePayments ps =
+  let
+    extractAddressHash (TxOut address _ hash _) = (address, hash)
+    extractValue (TxOut _ value _ _) = value
+  in
+    [
+      TxOut address value hash Nothing
+    |
+      ah@(address, hash) <- nub $ extractAddressHash <$> ps
+    , let value = foldMap extractValue $ filter ((== ah) . extractAddressHash) ps
+    ]
+
+
 -- | Generate a valid Marlowe semantics transaction.
 validSemanticsTransaction :: Bool                                          -- ^ Whether to add noise to the script context.
                           -> ArbitraryTransaction SemanticsTransaction ()  -- ^ The generator.
@@ -313,7 +334,7 @@ validSemanticsTransaction noisy =
     MarloweParams currencySymbol <- use marloweParams
     -- Add the payments.
     (payments, paymentData) <- fmap (bimap mconcat mconcat . unzip) . mapM (makePayment currencySymbol) =<< (output `uses` txOutPayments)
-    infoOutputs <>= payments
+    infoOutputs <>= consolidatePayments payments
     infoData <>= AM.fromList paymentData
 
     -- Add the signatories.
@@ -336,13 +357,20 @@ validSemanticsTransaction noisy =
 
 
 -- | Generate an arbitrary, valid Marlowe semantics transaction: datum, redeemer, and script context.
-arbitrarySemanticsTransaction :: ArbitraryTransaction SemanticsTransaction ()  -- ^ Modifications to make before building the valid transaction.
+arbitrarySemanticsTransaction :: [ReferencePath]                               -- ^ The reference execution paths from which to choose.
+                              -> ArbitraryTransaction SemanticsTransaction ()  -- ^ Modifications to make before building the valid transaction.
                               -> ArbitraryTransaction SemanticsTransaction ()  -- ^ Modifications to make after building the valid transaction.
                               -> Bool                                          -- ^ Whether to add noise to the script context.
+                              -> Bool                                          -- ^ Whether to allow merkleization.
                               -> Gen (PlutusTransaction SemanticsTransaction)  -- ^ The generator.
-arbitrarySemanticsTransaction modifyBefore modifyAfter noisy =
+arbitrarySemanticsTransaction referencePaths modifyBefore modifyAfter noisy allowMerkleization =
   do
-    golden <- arbitraryGoldenTransaction
+    golden <-
+      frequency
+        [
+          (1, arbitraryGoldenTransaction allowMerkleization)  -- Manually vetted transactions.
+        , (5, arbitraryReferenceTransaction referencePaths)   -- Transactions generated using `getAllInputs` and `computeTransaction`.
+        ]
     start <- bareSemanticsTransaction golden
     (modifyBefore >> validSemanticsTransaction noisy >> modifyAfter)
       `execStateT` start
@@ -377,7 +405,7 @@ makePayoutRoleIn :: ArbitraryTransaction PayoutTransaction TxInInfo
 makePayoutRoleIn =
   do
     ref <- lift arbitrary
-    address <- lift arbitrary
+    address <- lift $ arbitrary `suchThat` notScriptAddress
     value <- V.singleton <$> marloweParamsPayout `uses` rolesCurrency <*> use role <*> pure 1
     pure
       . TxInInfo ref
@@ -445,15 +473,50 @@ validPayoutTransaction noisy =
     infoFee <~ V.singleton V.adaSymbol V.adaToken <$> lift arbitraryPositiveInteger
 
     -- Add noise.
-    when noisy addNoise
+    when noisy addNoise'
 
     -- Shuffle.
     shuffle
 
 
+-- | Check that an address is not for a script.
+notScriptAddress :: Address -> Bool
+notScriptAddress (Address (ScriptCredential _) _) = False
+notScriptAddress _ = True
+
+
+-- | Check that an input is not from a script.
+notScriptTxIn :: TxInInfo -> Bool
+notScriptTxIn = not . isScriptTxIn
+
+
+-- | Check that an input is from a script.
+isScriptTxIn :: TxInInfo -> Bool
+isScriptTxIn TxInInfo{txInInfoResolved=TxOut{txOutAddress=Address (ScriptCredential _) _}} = True
+isScriptTxIn _ = False
+
+
 -- | Add noise to the inputs, outputs, and data in a Plutus transaction.
-addNoise :: ArbitraryTransaction a ()
+addNoise :: ArbitraryTransaction SemanticsTransaction ()
 addNoise =
+  do
+    let
+      isPayout (Payment _ (Party _) _ i) = i > 0
+      isPayout _ = False
+    hasPayments <- any isPayout . txOutPayments <$> use output
+    let
+      arbitraryInput =
+        if hasPayments
+          then arbitrary `suchThat` notScriptTxIn
+          else arbitrary
+    infoInputs  <><~ lift (listOf arbitraryInput `suchThat` ((< 5) . length))
+    infoOutputs <><~ lift (arbitrary `suchThat` ((< 5) . length))
+    infoData    <><~ lift (fmap AM.fromList $ arbitrary `suchThat` ((< 5) . length))
+
+
+-- | Add noise to the inputs, outputs, and data in a Plutus transaction.
+addNoise' :: ArbitraryTransaction PayoutTransaction ()
+addNoise' =
   do
     infoInputs  <><~ lift (arbitrary `suchThat` ((< 5) . length))
     infoOutputs <><~ lift (arbitrary `suchThat` ((< 5) . length))

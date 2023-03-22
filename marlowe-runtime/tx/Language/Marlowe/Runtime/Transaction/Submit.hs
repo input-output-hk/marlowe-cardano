@@ -64,13 +64,7 @@ doSubmit SubmitJobDependencies{..} tellStatus era tx= do
     waitForTx :: IO BlockHeader
     waitForTx = runSomeConnector chainSyncConnector client
       where
-        client = ChainSeekClient $ pure clientInit
-
-        clientInit = SendMsgRequestHandshake moveSchema ClientStHandshake
-          { recvMsgHandshakeRejected = \_ ->
-              error "marlowe-chain-sync schema version mismatch"
-          , recvMsgHandshakeConfirmed = pure clientIdleAwaitConfirmation
-          }
+        client = ChainSeekClient $ pure clientIdleAwaitConfirmation
 
         clientIdleAwaitConfirmation = SendMsgQueryNext (FindTx txId True) clientNextAwaitConfirmation
 

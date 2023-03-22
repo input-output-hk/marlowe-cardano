@@ -3,7 +3,7 @@
 
 ## Scope
 
-This document defines the specification for Marlowe semantics's interface with the Cardano blockchain. Marlowe utilizes three Plutus scripts: (i) a monetary policy for the roles currency used in some Marlowe contracts; (ii) the Marlowe application validator script that enforces Marlowe semantics; and (iii) the Marlowe payout-validator script that allows the holder of a role token to withdraw funds paid by the Marlowe application. Marlowe semantics are defined in the Isabelle language and specified in [Marlowe Specification, Version 3 (draft)](marlowe-isabelle-specification-4f9fa249fa51ec09a4f286099d5399eb4301ed49.pdf).
+This document defines the specification for Marlowe semantics's interface with the Cardano blockchain. Marlowe utilizes three Plutus scripts: (i) a monetary policy for the roles currency used in some Marlowe contracts; (ii) the Marlowe application validator script that enforces Marlowe semantics; and (iii) the Marlowe payout-validator script that allows the holder of a role token to withdraw funds paid by the Marlowe application. Marlowe semantics are defined in the Isabelle language and specified in [Marlowe Specification, Version 3](marlowe-isabelle-specification-4f9fa249fa51ec09a4f286099d5399eb4301ed49.pdf).
 
 
 ## Contents
@@ -30,9 +30,14 @@ Marlowe contracts identify each participant by either a *public-key hash (PKH)* 
 The execution of a Marlowe contract instance proceeds as a sequence of applications of inputs at the contract's script address.
 1. Role tokens are typically minted prior to or within the creation transaction of the contract instance, though this is not enforced on-chain.
 2. The creation transaction for the contract stores the state of the contract instance in the datum at the contract's script address.
-3. Each transaction that interacts with the contract instance updates the state/datum at that same address.
-4. If the contract instance pays funds to a role during application of inputs, those funds are sent to the address of the Marlowe payout-validator script, with a datum equal to the role name.
-5. When a contract instance closes, there is no output to the contract's script address.
+    - The creation transaction must contain sufficient lovelace to meet the [minimum UTxO requirement](../best-practices.md#minimum-utxo-requirement) *for every future state of the contract.*
+    - The initial state conforms to the state invariants required by Isabelle semantics and the Marlowe validator:
+	    - positive account balances,
+	    - no duplicate accounts, choices, or bound values, and
+	    - a total value that matches the value of the UTxO for the creation transaction.
+1. Each transaction that interacts with the contract instance updates the state/datum at that same address.
+2. If the contract instance pays funds to a role during application of inputs, those funds are sent to the address of the Marlowe payout-validator script, with a datum equal to the role name.
+3. When a contract instance closes, there is no output to the contract's script address.
 
 Thus each Marlowe contract instance is a finite sequence of continuations at the script address, from creation to closure. The following three UTxO diagrams illustrate the three typical types of Marlowe transactions.
 
@@ -42,10 +47,14 @@ Thus each Marlowe contract instance is a finite sequence of continuations at the
 
 ![A typical transaction to withdraw funds from the Marlowe payout validator script address](redeem.svg)
 
+Other Plutus scripts may run when the Marlowe semantics validator runs in a transaction *provided that the Marlowe transaction does not pay out funds.* Restricting other Plutus script to non-payout Marlowe transactions eliminates the possibility of double-satisfaction attacks. Examples of Plutus scripts that would be usefully run during Marlowe transactions are (1) an oracle which checks that the correct value is being reported as an `IChoice` or (2) a minting script that mints and deposits tokens into the Marlowe contract; in general such Plutus scripts would examine the Marlowe datum and redeemer to determine whether they validate the action that they are coordinating with Marlowe.
+
 
 ## Monetary Policy for Role Tokens
 
 Any Cardano monetary policy may be used to mint the role tokens used in a Marlowe contract instance. For security in standard Marlowe use cases, a one-time or locked minting policy such as `Plutus.Contracts.Currency.OneShotCurrency` is recommended. Exotic use cases might employ other monetary policies. It is the responsibility both of the developer of the off-chain code managing a contract instance and also of the user of the contract instance to verify that the monetary policy of the role tokens meets their security requirements.
+
+The off-chain [Marlowe Runtime](../marlowe-runtime/doc/) services use a safe one-shot monetary policy to mint role tokens if the user requests. The [Marlowe Best Practices Guide](../best-practices.md) discussed security requirements for role tokens.
 
 
 ## Representation of Marlowe Semantics in Plutus
@@ -112,6 +121,8 @@ Provided that the initial state of the Marlowe contract does not contain duplica
 
 A contract can be represented as a tree of continuations ("sub-contracts") where each vertex is a contract and each edge follows either an `InputContent` made by a participant or a timeout. A `When` contract includes terms that are either (1) a `Case` which contains the `Action` that matches a particular `InputContent` via `NormalInput` and that explicitly includes the `Contract` continuation or (2) a `MerkleizedCase` which contains the `Action` that matches a particular `InputContent` via `MerkleizedInput` and that implicitly includes the continuation by reference to its Merkle hash. In the latter case `MerkleizedInput` includes both the Merkle hash of the continuation and the continuation `Contract` itself. The Plutus code must verify that the hash in the contract matches the hash in the input before it proceeds to use the continuation that was provided as input.
 
+Merkleization enables large contracts to be succinctly represented on chain: instead of storing gigabytes of data representing a huge contract, only the hash of that contract need be represented on the chain. For example, a contract `When [Case action timeout continuation] contract'` that validates input `TransactionInput interval [NormalInput input]` may be "merkleized" to a contract `When [MerkleizedCase action hash] contract'` that will validate the input `TransactionInput interval [MerkleizedInput input hash contract]` provided that `DatumHash hash ≡ datumHash . Datum . toBuiltinData $ contract`. When a contract is merkelized the information `(hash, contract)` is stored off chain and provide to the Marlowe validator if needed for input. The Cardano node computes the hash and provides the `(hash, contract)` information in the script context.
+
 The Isabelle semantics do not include merkleization of Marlowe contracts, but the Haskell implementation does.
 
 
@@ -119,7 +130,7 @@ The Isabelle semantics do not include merkleization of Marlowe contracts, but th
 
 The Marlowe validator is an unparameterized interpreter of Marlowe semantics. Thus, the script address of the Marlowe validator is independent of the particular contract instance and roles currency.
 ```haskell
-smallMarloweValidator :: MarloweData -> MarloweInput -> ScriptContext -> Bool
+marloweValidator :: MarloweData -> MarloweInput -> ScriptContext -> Bool
 ```
 
 
@@ -138,7 +149,7 @@ data MarloweData =
 data MarloweParams =
     MarloweParams
     {
-      rolePayoutValidatorHash :: ValidatorHash
+      rolesCurrency :: CurrencySymbol
     }
 ```
 
@@ -150,14 +161,17 @@ data MarloweTxInput =
     Input InputContent
   | MerkleizedTxInput InputContent BuiltinByteString
 ```
-In the above, the `BuiltinByteString` is the hash of the serialized continuation of the contract. If `MerkleizedTxInput` is supplied in a redeemer, then the `ScriptContext` for the transaction must also contain an extra entry in its `txInfoData . scriptContextTxInfo` map from `DatumHash` to `Datum` for the serialized continuation of the contract.
+In the above, the `BuiltinByteString` is the hash of the serialized continuation of the contract. If `MerkleizedTxInput` is supplied in a redeemer, then the `ScriptContext` for the transaction must also contain an extra entry in its `txInfoData . scriptContextTxInfo` map from `DatumHash` to `Datum` for the serialized continuation of the contract. Thus the `continuation` for a given `hash` is computed as follows:
+```haskell
+Just continuation = fromBuiltinData =<< lookup hash (txInfoData $ scriptContextTxInfo scriptContext) :: Maybe Contract
+```
 
 
 ### A Note about `Plutus.V1.Ledger.Value`
 
 This specification relies on the following properties of `Plutus.V1.Ledger.Value` in the `plutus-ledger-api` package:
 1. `instance Monoid Value`, where `mempty` is zero value for all tokens and `mappend` sums the amounts of corresponding token types.
-2. `leq` is a partial ordering requiring that quantity of each token in the first operand is less than or equal to quanity of the corresponding token in the second operand, where a missing token in one operand represents a zero quantity.
+2. `leq` is a partial ordering requiring that quantity of each token in the first operand is less than or equal to quantity of the corresponding token in the second operand, where a missing token in one operand represents a zero quantity.
 
 
 ### Relationship between Marlowe Validator and Semantics
@@ -167,9 +181,10 @@ The arguments of `computeTransaction` must be constructed as follows:
 2. The `txInputs` of `TransactionInput` is derived from the `MarloweInput` provided as the `Redeemer` and the `txInfoData . scriptContextTxInfo` of the `ScriptContext`, as detailed below.
 3. The `State` is the `marloweState` of the `MarloweData` provided as the `Datum`.
 4. The `Contract` is the `marloweContract` of the `MarloweData` provided as the `Datum`.
-5. The new `Datum` at the script address is the `MarloweData` with the same `marloweParams` as originally, but with the new `txOutState` and `txOutContract` of the `TransactionOutput`.
 
-In the diagram below, the upper three rectangles represent functions: the untyped `Validator`, the typed validator `smallMarloweValidator`, or the semantics's `computeTransaction`. The data values (ovals) are marshalled or passed from the untyped representation over to the semantics. The `computeTransaction` function validates the semantics and returns the required new state and contract instance. Conceptually, success or failure is passed to the untyped validator. The bottom rectangle packages the `Datum` that is provided as output for the continued progression of the Marlowe contract instance.
+Additionally, the new `Datum` at the script address is the `MarloweData` with the same `marloweParams` as originally, but with the new `txOutState` and `txOutContract` of the `TransactionOutput`.
+
+In the diagram below, the upper three rectangles represent functions: the untyped `Validator`, the typed validator `marloweValidator`, or the semantics's `computeTransaction`. The data values (ovals) are marshalled or passed from the untyped representation over to the semantics. The `computeTransaction` function validates the semantics and returns the required new state and contract instance. Conceptually, success or failure is passed to the untyped validator. The bottom rectangle packages the `Datum` that is provided as output for the continued progression of the Marlowe contract instance.
 
 ![Relationship between Marlowe validator and semantics.](semantics2plutus.svg)
 
@@ -178,7 +193,7 @@ In the diagram below, the upper three rectangles represent functions: the untype
 
 Consider the application of the Marlowe validator and Marlowe semantics:
 ```haskell
-validationResult = smallMarloweValidator marloweData marloweInput scriptContext
+validationResult = marloweValidator marloweData marloweInput scriptContext
 
 transactionOutput = computeTransaction transactionInput inState inContract
 ```
@@ -252,12 +267,14 @@ inValue ≡ foldMap toValue (accounts $ marloweState marloweData)
 
 #### *Constraint 6.* Output value to script
 
-The beginning balance plus the deposits equals the ending balance plus the payments.
+The beginning balance plus the deposits (with negative deposits treated as zero, as required by the semantics) equals the ending balance plus the payments.
 ```haskell
 inValue + foldMap valueOfDeposit (fmap getInputContent transactionInput) ≡ outValue + foldMap valueOfPayment (txOutPayments transactionOutput)
   where getInputContent (Input inputContent) = inputContent
         getInputContent (MerkleizedTxInput inputContent _) = inputContent
-        valueOfDeposit (IDeposit _ _ (Token currency name) count) = Value.singleton currency name count
+        valueOfDeposit (IDeposit _ _ (Token currency name) count)
+          | count > 0 = Value.singleton currency name count
+          | otherwise = mempty
         valueOfDeposit _ = mempty
         valueOfPayment (Payment _ (Party _) value)) = value
         valueOfPayment _ = mempty
@@ -313,12 +330,16 @@ all demerkleizes transactionInput ≡ True
         demerkleizes (Input _) = True
 ```
 
+Note that this constraint is not strictly necessary and is included here for informational purposes, since a valid transaction could not be constructed if it were removed.
+
 
 #### *Constraint 13.* Positive balances
 
-All accounts in the state have positive balances.
+All accounts in the initial and final states have positive balances.
 ```haskell
-all ((> 0) . snd) (accounts $ marloweState marloweData) ≡ True
+positiveBalances $ marloweState marloweData     ≡ True
+positiveBalances $ txOutState transactionOutput ≡ True
+  where positiveBalances state = all ((> 0) . snd) (accounts state)
 ```
 
 
@@ -356,6 +377,38 @@ all sufficient (txOutPayments transactionOutput)
 
 Note that the comparison is `leq` instead of equality because additional Ada may be required in the payment in order to satisfy the ledger's `minimum UTxO` constraint.
 
+The payment to a role must be in a single output, but the payment to an address may be split in multiple outputs, so long as the total output to the address is sufficient. (Note that allowing the multiple outputs to an address may increase transaction fees and wallet fragmentation, but the magnitude of this is severely limited by the Plutus execution budget, which strongly depends upon the number of UTxOs output. The flexibily of multiple outputs accommodates wallet-related practicalities (e.g., limitations in coin-selection and transaction balancing) such as the change and the return of the role token being in separate UTxOs in situations where a contract is also paying to the address where that change and that role token are sent.)
+
+
+#### *Constraint 18.* Final balance
+
+The value output to the script's UTxO must equal the total value in the output state.
+```haskell
+outValue ≡ foldMap toValue (accounts $ txOutState transactionOutput)
+  where toValue ((_, Token currency name), count)) = Value.singleton currency name count
+```
+
+
+#### *Constraint 19.* No duplicates
+
+The initial and final state must not have duplicate keys in their account entries, choices, or bound values.
+```haskell
+hasDuplicateKey (accounts    inState ) ≡ False
+hasDuplicateKey (choices     inState ) ≡ False
+hasDuplicateKey (boundValues inState ) ≡ False
+hasDuplicateKey (accounts    outState) ≡ False
+hasDuplicateKey (choices     outState) ≡ False
+hasDuplicateKey (boundValues outState) ≡ False
+  where
+    outState = txOutState transactionOutput
+    hasDuplicateKey am = let ks = fst <$> toList am in length ks /= length (nub ks)
+```
+
+
+#### *Constraint 20.* Single satisfaction
+
+If the contract makes payments, then the Marlowe validator must be the only validator executing in the transaction.
+
 
 ## Plutus Validator for Marlowe Payouts
 
@@ -370,7 +423,7 @@ rolePayoutValidator :: (CurrencySymbol, TokenName) -> () -> ScriptContext -> Boo
 
 Consider the application of the Marlowe payout validator:
 ```haskell
-validationResult' = rolePayoutValidator rolesCurrency' role () scriptContext
+validationResult' = rolePayoutValidator (rolesCurrency', role) () scriptContext
 ```
 
 The validation fails (via returning `False` for `validationResult'` or via the throwing of an error) if any of the following constraints does not hold.

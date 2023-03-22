@@ -171,6 +171,7 @@ test-suite marlowe-runtime-web-test
     , aeson
     , bytestring
     , hspec
+    , marlowe-cardano
     , marlowe-runtime-web
     , marlowe-test
     , network-arbitrary

@@ -79,9 +79,9 @@ data AppEnv r = AppEnv
 
 -- | Load a list of contract headers.
 loadContractHeaders :: LoadContractHeaders (AppM r)
-loadContractHeaders range = do
+loadContractHeaders cFilter range = do
   load <- asks _loadContractHeaders
-  liftIO $ load range
+  liftIO $ load cFilter range
 
 -- | Load a contract.
 loadContract :: LoadContract (AppM r)

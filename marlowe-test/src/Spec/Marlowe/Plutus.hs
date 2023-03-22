@@ -17,6 +17,7 @@ module Spec.Marlowe.Plutus
   ) where
 
 
+import Spec.Marlowe.Reference (ReferencePath)
 import Test.Tasty (TestTree, testGroup)
 
 import qualified Spec.Marlowe.Plutus.AssocMap (tests)
@@ -28,8 +29,8 @@ import qualified Spec.Marlowe.Plutus.Value (tests)
 
 
 -- | Run tests.
-tests :: TestTree
-tests =
+tests :: [ReferencePath] -> TestTree
+tests referencePaths =
   testGroup "Plutus"
     [
       Spec.Marlowe.Plutus.Prelude.tests
@@ -37,5 +38,5 @@ tests =
     , Spec.Marlowe.Plutus.MList.tests
     , Spec.Marlowe.Plutus.Value.tests
     , Spec.Marlowe.Plutus.ScriptContext.tests
-    , Spec.Marlowe.Plutus.Specification.tests
+    , Spec.Marlowe.Plutus.Specification.tests referencePaths
     ]

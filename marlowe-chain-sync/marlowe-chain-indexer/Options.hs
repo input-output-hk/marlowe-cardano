@@ -4,9 +4,13 @@ module Options
   ) where
 
 import Cardano.Api (NetworkId(..), NetworkMagic(..))
+import Data.Aeson.Encode.Pretty (encodePretty)
 import Data.Maybe (fromMaybe)
 import Data.Text (Text)
+import qualified Data.Text.Lazy as T
+import Data.Text.Lazy.Encoding (decodeUtf8)
 import Language.Marlowe.Runtime.ChainIndexer.NodeClient (CostModel(..))
+import Logging (defaultRootSelectorLogConfig)
 import qualified Options.Applicative as O
 import System.Environment (lookupEnv)
 import Text.Read (readMaybe)
@@ -21,6 +25,7 @@ data Options = Options
   , costModel         :: !CostModel
   , maxCost           :: !Int
   , logConfigFile     :: !(Maybe FilePath)
+  , httpPort :: !Int
   } deriving (Show, Eq)
 
 getOptions :: String -> IO Options
@@ -60,6 +65,7 @@ parseOptions defaultNetworkId defaultSocketPath defaultDatabaseUri version = O.i
     parser :: O.Parser Options
     parser = O.helper
       <*> versionOption
+      <*> printLogConfigOption
       <*> ( Options
               <$> socketPathOption
               <*> networkIdOption
@@ -70,12 +76,18 @@ parseOptions defaultNetworkId defaultSocketPath defaultDatabaseUri version = O.i
               <*> costModelParser
               <*> maxCostParser
               <*> logConfigFileParser
+              <*> httpPortParser
           )
       where
         versionOption :: O.Parser (a -> a)
         versionOption = O.infoOption
           ("marlowe-chain-indexer " <> version)
           (O.long "version" <> O.help "Show version.")
+
+        printLogConfigOption :: O.Parser (a -> a)
+        printLogConfigOption = O.infoOption
+          (T.unpack $ decodeUtf8 $ encodePretty defaultRootSelectorLogConfig)
+          (O.long "print-log-config" <> O.help "Print the default log configuration.")
 
         socketPathOption :: O.Parser FilePath
         socketPathOption = O.strOption options
@@ -144,6 +156,18 @@ parseOptions defaultNetworkId defaultSocketPath defaultDatabaseUri version = O.i
               , O.metavar "INTEGER"
               , defaultNetworkId
               , O.help "Testnet network ID magic. Defaults to the CARDANO_TESTNET_MAGIC environment variable."
+              ]
+
+        httpPortParser :: O.Parser Int
+        httpPortParser = O.option O.auto options
+          where
+            options :: O.Mod O.OptionFields Int
+            options = mconcat
+              [ O.long "http-port"
+              , O.metavar "PORT_NUMBER"
+              , O.help "Port number to serve the http healthcheck API on"
+              , O.value 8080
+              , O.showDefault
               ]
 
         costModelParser :: O.Parser CostModel

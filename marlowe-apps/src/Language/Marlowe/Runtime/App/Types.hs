@@ -84,10 +84,12 @@ import qualified Cardano.Api as C
 import Control.Monad.Trans.Marlowe (MarloweT)
 import Control.Monad.Trans.Marlowe.Class (MonadMarlowe(..))
 import qualified Data.Aeson.Types as A
-  (FromJSON(parseJSON), Parser, ToJSON(toJSON), Value(String), object, parseFail, withObject, (.:), (.=))
+  (FromJSON(parseJSON), Parser, ToJSON(toJSON), Value(String), object, parseFail, withObject, (.:), (.:?), (.=))
+import Data.Foldable (fold)
 import qualified Data.Map.Strict as M (Map, map, mapKeys)
 import qualified Data.Text as T (Text)
 import Language.Marlowe.Protocol.Client (hoistMarloweClient)
+import Language.Marlowe.Protocol.Query.Types (ContractFilter)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as CS (Transaction)
 
 
@@ -164,7 +166,11 @@ type RunClient m client = forall a. client m a -> m a
 
 data MarloweRequest v =
     ListContracts
+    { reqFilter :: ContractFilter
+    }
   | ListHeaders
+    { reqFilter :: ContractFilter
+    }
   | Get
     { reqContractId :: ContractId
     }
@@ -215,8 +221,8 @@ instance A.FromJSON (MarloweRequest 'V1) where
       $ \o ->
         (o A..: "request" :: A.Parser String)
           >>= \case
-            "list" -> pure ListContracts
-            "headers" -> pure ListHeaders
+            "list" -> ListContracts . fold <$> o A..:? "filter"
+            "headers" -> ListHeaders . fold <$> o A..:? "filter"
             "get" -> do
                        reqContractId <- fromString <$> o A..: "contractId"
                        pure Get{..}
@@ -261,8 +267,16 @@ instance A.FromJSON (MarloweRequest 'V1) where
             request -> fail $ "Invalid request: " <> request <> "."
 
 instance A.ToJSON (MarloweRequest 'V1) where
-  toJSON ListContracts = A.object ["request" A..= ("list" :: String)]
-  toJSON ListHeaders = A.object ["request" A..= ("headers" :: String)]
+  toJSON ListContracts{..} =
+    A.object
+      [ "request" A..= ("list" :: String)
+      , "filter" A..= reqFilter
+      ]
+  toJSON ListHeaders{..} =
+    A.object
+      [ "request" A..= ("headers" :: String)
+      , "filter" A..= reqFilter
+      ]
   toJSON Get{..} =
     A.object
       [ "request" A..= ("get" :: String)

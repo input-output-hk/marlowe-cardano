@@ -38,7 +38,7 @@ main = run =<< getOptions "0.0.0.0"
 
 run :: Options -> IO ()
 run Options{..} = do
-  pool <- Pool.acquire (100, secondsToNominalDiffTime 5, fromString databaseUri)
+  pool <- Pool.acquire 100 (Just 5000000) (fromString databaseUri)
   genesisConfigResult <- runExceptT do
     hash <- ExceptT $ pure $ decodeAbstractHash genesisConfigHash
     (hash,) <$> withExceptT
@@ -58,6 +58,7 @@ run Options{..} = do
       , maxCost
       , costModel
       , eventBackend = narrowEventBackend (injectSelector App) eventBackend
+      , httpPort
       }
     loggerDependencies = LoggerDependencies
       { configFilePath = logConfigFile
@@ -69,8 +70,9 @@ run Options{..} = do
     appComponent = chainIndexer <<< arr chainIndexerDependencies <<< logger
   runComponent_ appComponent loggerDependencies
   where
-    throwUsageError (ConnectionError err)                       = error $ show err
-    throwUsageError (SessionError (Session.QueryError _ _ err)) = error $ show err
+    throwUsageError (ConnectionUsageError err)                       = error $ show err
+    throwUsageError (SessionUsageError (Session.QueryError _ _ err)) = error $ show err
+    throwUsageError AcquisitionTimeoutUsageError                     = error "hasql-timeout"
 
     localNodeConnectInfo :: LocalNodeConnectInfo CardanoMode
     localNodeConnectInfo = LocalNodeConnectInfo

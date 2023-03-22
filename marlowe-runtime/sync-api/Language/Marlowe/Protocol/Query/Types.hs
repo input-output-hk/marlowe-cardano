@@ -7,17 +7,22 @@
 module Language.Marlowe.Protocol.Query.Types
   where
 
-import Data.Aeson (ToJSON(..), Value(..), object, (.=))
+import Control.Monad (join)
+import Data.Aeson (FromJSON, ToJSON(..), Value(..), object, (.=))
 import Data.Bifunctor (Bifunctor(..))
 import Data.Binary (Binary(..), Get, Put, getWord8, putWord8)
+import Data.Function (on)
+import qualified Data.List.NonEmpty as NE
 import Data.Map (Map)
 import Data.Set (Set)
 import Data.Type.Equality (testEquality, type (:~:)(Refl))
 import GHC.Generics (Generic)
 import GHC.Show (showCommaSpace, showSpace)
-import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, PolicyId, TokenName, TransactionMetadata, TxId, TxOutRef)
+import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, PolicyId, TokenName, TxId, TxOutRef)
 import Language.Marlowe.Runtime.Core.Api
   ( ContractId
+  , MarloweMetadataTag
+  , MarloweTransactionMetadata
   , MarloweVersion(..)
   , MarloweVersionTag(..)
   , Payout
@@ -27,7 +32,8 @@ import Language.Marlowe.Runtime.Core.Api
   )
 import Language.Marlowe.Runtime.Discovery.Api (ContractHeader)
 import Network.Protocol.Codec (BinaryMessage(..))
-import Network.Protocol.Codec.Spec (MessageEq(..), ShowProtocol(..))
+import Network.Protocol.Codec.Spec
+  (MessageEq(..), MessageVariations(..), ShowProtocol(..), SomePeerHasAgency(..), Variations(..), varyAp)
 import Network.Protocol.Handshake.Types (HasSignature(..))
 import Network.TypedProtocol
 import Network.TypedProtocol.Codec (AnyMessageAndAgency(..))
@@ -45,10 +51,30 @@ newtype WithdrawalFilter = WithdrawalFilter
   { roleCurrencies :: Set PolicyId
   }
   deriving stock (Show, Eq, Ord, Generic)
-  deriving anyclass (ToJSON, Binary)
+  deriving anyclass (ToJSON, FromJSON, Binary, Variations)
+  deriving newtype (Semigroup, Monoid)
+
+data ContractFilter = ContractFilter
+  { tags :: Set MarloweMetadataTag
+  , roleCurrencies :: Set PolicyId
+  }
+  deriving stock (Show, Eq, Ord, Generic)
+  deriving anyclass (ToJSON, FromJSON, Binary, Variations)
+
+instance Semigroup ContractFilter where
+  a <> b = ContractFilter
+    { tags = on (<>) tags a b
+    , roleCurrencies = on (<>) (\ContractFilter{..} -> roleCurrencies) a b
+    }
+
+instance Monoid ContractFilter where
+  mempty = ContractFilter
+    { tags = mempty
+    , roleCurrencies = mempty
+    }
 
 data Request a where
-  ReqContractHeaders :: Range ContractId -> Request (Maybe (Page ContractId ContractHeader))
+  ReqContractHeaders :: ContractFilter -> Range ContractId -> Request (Maybe (Page ContractId ContractHeader))
   ReqContractState :: ContractId -> Request (Maybe SomeContractState)
   ReqTransaction :: TxId -> Request (Maybe SomeTransaction)
   ReqTransactions :: ContractId -> Request (Maybe SomeTransactions)
@@ -67,7 +93,7 @@ instance Binary SomeRequest where
         SomeRequest a <- get
         SomeRequest b <- get
         pure $ SomeRequest $ ReqBoth a b
-      0x01 -> SomeRequest . ReqContractHeaders <$> get
+      0x01 -> SomeRequest <$> (ReqContractHeaders <$> get <*> get)
       0x02 -> SomeRequest . ReqContractState <$> get
       0x03 -> SomeRequest . ReqTransaction <$> get
       0x04 -> SomeRequest . ReqTransactions <$> get
@@ -80,8 +106,9 @@ instance Binary SomeRequest where
       putWord8 0x00
       put $ SomeRequest a
       put $ SomeRequest b
-    ReqContractHeaders range -> do
+    ReqContractHeaders cFilter range -> do
       putWord8 0x01
+      put cFilter
       put range
     ReqContractState contractId -> do
       putWord8 0x02
@@ -102,13 +129,28 @@ instance Binary SomeRequest where
 
 deriving instance Eq (Request a)
 deriving instance Show (Request a)
+
+instance Variations SomeRequest where
+  variations = join $ NE.fromList
+    [ fmap SomeRequest $ ReqBoth <$> (ReqTransactions <$> variations) `varyAp` (ReqTransactions <$> variations)
+    , fmap SomeRequest $ ReqContractHeaders <$> variations `varyAp` variations
+    , SomeRequest . ReqContractState <$> variations
+    , SomeRequest . ReqTransaction <$> variations
+    , SomeRequest . ReqTransactions <$> variations
+    , SomeRequest . ReqWithdrawal <$> variations
+    , fmap SomeRequest $ ReqWithdrawals <$> variations `varyAp` variations
+    ]
+
 instance ToJSON (Request a) where
   toJSON = \case
     ReqBoth a b -> object
       [ "req-both" .= (toJSON a, toJSON b)
       ]
-    ReqContractHeaders range -> object
-      [ "get-contract-headers-for-range" .= range
+    ReqContractHeaders cFilter range -> object
+      [ "get-contract-headers" .= object
+        [ "filter" .= cFilter
+        , "range" .= range
+        ]
       ]
     ReqContractState contractId -> object
       [ "get-contract-state" .= contractId
@@ -137,6 +179,19 @@ data StRes a where
   TokWithdrawal :: StRes (Maybe Withdrawal)
   TokWithdrawals :: StRes (Maybe (Page TxId Withdrawal))
   TokBoth :: StRes a -> StRes b -> StRes (a, b)
+
+data SomeStRes = forall a. SomeStRes (StRes a)
+
+instance Variations SomeStRes where
+  variations = NE.fromList
+    [ SomeStRes $ TokBoth TokTransactions TokTransactions
+    , SomeStRes TokContractHeaders
+    , SomeStRes TokContractState
+    , SomeStRes TokTransaction
+    , SomeStRes TokTransactions
+    , SomeStRes TokWithdrawal
+    , SomeStRes TokWithdrawals
+    ]
 
 deriving instance Show (StRes a)
 deriving instance Eq (StRes a)
@@ -175,7 +230,7 @@ data Range a = Range
   , rangeDirection :: Order
   }
   deriving stock (Eq, Show, Read, Ord, Functor, Generic, Foldable, Traversable)
-  deriving anyclass (ToJSON, Binary)
+  deriving anyclass (ToJSON, Binary, Variations)
 
 data Page a b = Page
   { items :: [b]
@@ -183,7 +238,7 @@ data Page a b = Page
   , totalCount :: Int
   }
   deriving stock (Eq, Show, Read, Ord, Functor, Generic, Foldable, Traversable)
-  deriving anyclass (ToJSON, Binary)
+  deriving anyclass (ToJSON, Binary, Variations)
 
 instance Bifunctor Page where
   bimap f g Page{..} = Page{items = g <$> items, nextRange = fmap f <$> nextRange, ..}
@@ -266,6 +321,9 @@ instance Binary SomeContractState where
     SomeMarloweVersion MarloweV1 <- get
     SomeContractState MarloweV1 <$> get
 
+instance Variations SomeContractState where
+  variations = SomeContractState MarloweV1 <$> variations
+
 instance ToJSON SomeContractState where
   toJSON (SomeContractState MarloweV1 state) = object
     [ "version" .= MarloweV1
@@ -308,6 +366,9 @@ instance Binary SomeTransaction where
     SomeMarloweVersion MarloweV1 <- get
     SomeTransaction MarloweV1 <$> get <*> get <*> get
 
+instance Variations SomeTransaction where
+  variations = SomeTransaction MarloweV1 <$> variations `varyAp` variations `varyAp` variations
+
 instance ToJSON SomeTransaction where
   toJSON (SomeTransaction MarloweV1 input consumedBy tx) = object
     [ "version" .= MarloweV1
@@ -341,6 +402,9 @@ instance Binary SomeTransactions where
     SomeMarloweVersion MarloweV1 <- get
     SomeTransactions MarloweV1 <$> get
 
+instance Variations SomeTransactions where
+  variations = SomeTransactions MarloweV1 <$> variations
+
 instance ToJSON SomeTransactions where
   toJSON (SomeTransactions MarloweV1 txs) = object
     [ "version" .= MarloweV1
@@ -350,7 +414,7 @@ instance ToJSON SomeTransactions where
 data ContractState v = ContractState
   { contractId :: ContractId
   , roleTokenMintingPolicyId :: PolicyId
-  , metadata :: TransactionMetadata
+  , metadata :: MarloweTransactionMetadata
   , initialBlock :: BlockHeader
   , initialOutput :: TransactionScriptOutput v
   , latestBlock :: BlockHeader
@@ -361,6 +425,7 @@ data ContractState v = ContractState
 deriving instance Show (ContractState 'V1)
 deriving instance Eq (ContractState 'V1)
 deriving instance ToJSON (ContractState 'V1)
+deriving instance Variations (ContractState 'V1)
 deriving instance Binary (ContractState 'V1)
 
 data PayoutRef = PayoutRef
@@ -370,7 +435,7 @@ data PayoutRef = PayoutRef
   , role :: TokenName
   }
   deriving stock (Eq, Ord, Show, Generic)
-  deriving anyclass (ToJSON, Binary)
+  deriving anyclass (ToJSON, Binary, Variations)
 
 data Withdrawal = Withdrawal
   { block :: BlockHeader
@@ -378,11 +443,37 @@ data Withdrawal = Withdrawal
   , withdrawalTx :: TxId
   }
   deriving stock (Eq, Ord, Show, Generic)
-  deriving anyclass (ToJSON, Binary)
+  deriving anyclass (ToJSON, Binary, Variations)
 
 data Order = Ascending | Descending
   deriving stock (Eq, Show, Read, Ord, Enum, Bounded, Generic)
-  deriving anyclass (ToJSON, Binary)
+  deriving anyclass (ToJSON, Binary, Variations)
+
+instance MessageVariations MarloweQuery where
+  agencyVariations = join $ NE.fromList
+    [ pure $ SomePeerHasAgency $ ClientAgency TokReq
+    , do
+        SomeStRes tok <- variations
+        pure $ SomePeerHasAgency $ ServerAgency $ TokRes tok
+    ]
+  messageVariations = \case
+    ClientAgency TokReq -> join $ NE.fromList
+      [ pure $ SomeMessage MsgDone
+      , do
+          SomeRequest req <- variations
+          pure $ SomeMessage $ MsgRequest req
+      ]
+    ServerAgency (TokRes tok) -> SomeMessage . MsgRespond <$> resultVariations tok
+
+resultVariations :: StRes a -> NE.NonEmpty a
+resultVariations = \case
+  TokBoth a b -> (,) <$> resultVariations a `varyAp` resultVariations b
+  TokContractHeaders -> variations
+  TokContractState -> variations
+  TokTransaction -> variations
+  TokTransactions -> variations
+  TokWithdrawal -> variations
+  TokWithdrawals -> variations
 
 instance MessageToJSON MarloweQuery where
   messageToJSON = \case
@@ -438,8 +529,8 @@ instance MessageEq MarloweQuery where
       reqEq :: Request a -> Request a1 -> Bool
       reqEq (ReqBoth a b) (ReqBoth a' b') = reqEq a a' && reqEq b b'
       reqEq (ReqBoth _ _) _ = False
-      reqEq (ReqContractHeaders range) (ReqContractHeaders range') = range == range'
-      reqEq (ReqContractHeaders _) _ = False
+      reqEq (ReqContractHeaders cFilter range) (ReqContractHeaders cFilter' range') = range == range' && cFilter == cFilter'
+      reqEq (ReqContractHeaders _ _) _ = False
       reqEq (ReqContractState contractId) (ReqContractState contractId') = contractId == contractId'
       reqEq (ReqContractState _) _ = False
       reqEq (ReqTransaction txId) (ReqTransaction txId') = txId == txId'
@@ -470,7 +561,7 @@ instance MessageEq MarloweQuery where
 
 requestToSt :: Request x -> StRes x
 requestToSt = \case
-  ReqContractHeaders _ -> TokContractHeaders
+  ReqContractHeaders _ _ -> TokContractHeaders
   ReqContractState _ -> TokContractState
   ReqTransaction _ -> TokTransaction
   ReqTransactions _ -> TokTransactions

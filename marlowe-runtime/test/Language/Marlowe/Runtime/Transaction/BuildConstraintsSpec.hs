@@ -23,10 +23,17 @@ import GHC.Generics (Generic)
 import qualified Language.Marlowe.Core.V1.Semantics as Semantics
 import qualified Language.Marlowe.Core.V1.Semantics.Types as Semantics
 import qualified Language.Marlowe.Core.V1.Semantics.Types.Address as Semantics
-import Language.Marlowe.Runtime.ChainSync.Api (Lovelace, TransactionMetadata(unTransactionMetadata), toUTxOsList)
+import Language.Marlowe.Runtime.ChainSync.Api (Lovelace, toUTxOsList)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Core.Api
-  (Contract, Datum, MarloweVersion(..), MarloweVersionTag(..), TransactionScriptOutput(..))
+  ( Contract
+  , Datum
+  , MarloweTransactionMetadata
+  , MarloweVersion(..)
+  , MarloweVersionTag(..)
+  , TransactionScriptOutput(..)
+  , emptyMarloweTransactionMetadata
+  )
 import qualified Language.Marlowe.Runtime.Core.Api as Core.Api
 import Language.Marlowe.Runtime.Plutus.V2.Api (fromPlutusValue, toAssetId)
 import Language.Marlowe.Runtime.Transaction.Api
@@ -142,7 +149,7 @@ createSpec = Hspec.describe "buildCreateConstraints" do
   Hspec.QuickCheck.prop "Writes the correct metadata" \(SomeCreateArgs args) ->
     let result = metadataConstraints <$> runBuildCreateConstraints args
     in case version args of
-      MarloweV1 -> result === Right (unTransactionMetadata $ metadata args)
+      MarloweV1 -> result === Right (metadata args)
       :: Property
 
   where
@@ -178,7 +185,7 @@ data CreateArgs v = CreateArgs
   { version :: MarloweVersion v
   , walletContext :: WalletContext
   , roleTokensConfig :: RoleTokensConfig
-  , metadata :: TransactionMetadata
+  , metadata :: MarloweTransactionMetadata
   , minAda :: Lovelace
   , contract :: Contract v
   } deriving (Generic)
@@ -249,7 +256,7 @@ withdrawSpec = Hspec.describe "buildWithdrawConstraints" do
           , payToRoles = Map.empty
           , marloweOutputConstraints = TxConstraints.MarloweOutputConstraintsNone
           , signatureConstraints = Set.empty
-          , metadataConstraints = Map.empty
+          , metadataConstraints = emptyMarloweTransactionMetadata
           }
 
     pure $ actual `shouldBe` expected
@@ -293,7 +300,7 @@ buildApplyInputsConstraintsSpec =
           :* K (oneSecondEraSummary 4) -- Alonzo lasted 1 second
           :* K (unboundedEraSummary 5) -- Babbage never ends
           :* Nil
-      -- Important note: these slot computations cannot be used generally, but are specificially tailored
+      -- Important note: these slot computations cannot be used generally, but are specifically tailored
       -- to the contrived era history and system start used for this test case.
       genTipSlot = chooseInteger (9, 20) -- Make sure the tip is in the Babbage era.
       genMinTime = oneof
@@ -354,10 +361,15 @@ buildApplyInputsConstraintsSpec =
         marloweOutput = TransactionScriptOutput{..}
         result =
           buildApplyInputsConstraints
-            systemStart eraHistory MarloweV1
+            systemStart
+            eraHistory
+            MarloweV1
             marloweOutput
             tipSlot
-            (Chain.TransactionMetadata mempty) Nothing Nothing mempty
+            emptyMarloweTransactionMetadata
+            Nothing
+            Nothing
+            mempty
       pure
         . counterexample ("tipTime = " <> show tipTime)
         . counterexample ("minTime = " <> show minTime)
@@ -393,10 +405,15 @@ buildApplyInputsConstraintsSpec =
         marloweOutput = TransactionScriptOutput{..}
         result =
           buildApplyInputsConstraints
-            systemStart eraHistory MarloweV1
+            systemStart
+            eraHistory
+            MarloweV1
             marloweOutput
             tipSlot
-            (Chain.TransactionMetadata mempty) Nothing Nothing mempty
+            emptyMarloweTransactionMetadata
+            Nothing
+            Nothing
+            mempty
       pure
         . counterexample ("tipTime = " <> show tipTime)
         . counterexample ("minTime = " <> show minTime)
@@ -419,10 +436,15 @@ buildApplyInputsConstraintsSpec =
         marloweOutput = TransactionScriptOutput{..}
         result =
           buildApplyInputsConstraints
-            systemStart eraHistory MarloweV1
+            systemStart
+            eraHistory
+            MarloweV1
             marloweOutput
             tipSlot
-            (Chain.TransactionMetadata mempty) (toUTC <$> lower) (toUTC <$> upper) mempty
+            emptyMarloweTransactionMetadata
+            (toUTC <$> lower)
+            (toUTC <$> upper)
+            mempty
       -- Simply make sure that the client's slot interval is not altered, aside from rounding to slot times.
       pure
         . counterexample ("minTime = " <> show minTime)
@@ -459,10 +481,15 @@ buildApplyInputsConstraintsSpec =
           marloweOutput = TransactionScriptOutput{..}
           result =
             buildApplyInputsConstraints
-              systemStart eraHistory MarloweV1
+              systemStart
+              eraHistory
+              MarloweV1
               marloweOutput
               (Chain.SlotNo 1_000_000)
-              (Chain.TransactionMetadata mempty) Nothing Nothing mempty
+              emptyMarloweTransactionMetadata
+              Nothing
+              Nothing
+              mempty
           expectedPayToAddresses = Map.unionsWith (<>) $ makePayToAddress <$> payments  -- This assumes that the semigroup for assets is correct.
           expectedPayToRoles     = Map.unionsWith (<>) $ makePayToRole    <$> payments  -- This assumes that the semigroup for assets is correct.
         pure
@@ -495,10 +522,15 @@ buildApplyInputsConstraintsSpec =
         inputs' = Semantics.NormalInput <$> inputs
         result =
           buildApplyInputsConstraints
-            systemStart eraHistory MarloweV1
+            systemStart
+            eraHistory
+            MarloweV1
             marloweOutput
             tipSlot
-            (Chain.TransactionMetadata mempty) (Just $ toUTC lower) (Just $ toUTC upper) inputs'
+            emptyMarloweTransactionMetadata
+            (Just $ toUTC lower)
+            (Just $ toUTC upper)
+            inputs'
       -- Make sure that the required inputs are present as a constraint.
       pure
         . counterexample ("minTime = " <> show minTime)
@@ -526,10 +558,15 @@ buildApplyInputsConstraintsSpec =
         marloweOutput = TransactionScriptOutput{..}
         result =
           buildApplyInputsConstraints
-            systemStart eraHistory MarloweV1
+            systemStart
+            eraHistory
+            MarloweV1
             marloweOutput
             (Chain.SlotNo 1_000_000)
-            (Chain.TransactionMetadata mempty) Nothing Nothing mempty
+            emptyMarloweTransactionMetadata
+            Nothing
+            Nothing
+            mempty
         expectedAssets = fromPlutusValue . Semantics.totalBalance $ Semantics.accounts marloweState
         expectedDatum = datum {Semantics.marloweContract = expectedContract, Semantics.marloweState = marloweState {Semantics.minTime = 1_000_000_000}}
         -- There is no output if the contract closes, otherwise the assets and datum must be in the output.
@@ -559,10 +596,15 @@ buildApplyInputsConstraintsSpec =
         marloweOutput = TransactionScriptOutput{..}
         result =
           buildApplyInputsConstraints
-            systemStart eraHistory MarloweV1
+            systemStart
+            eraHistory
+            MarloweV1
             marloweOutput
             (Chain.SlotNo 1_000_000)
-            (Chain.TransactionMetadata metadata) Nothing Nothing mempty
+            metadata
+            Nothing
+            Nothing
+            mempty
       -- Simply check if the arbitrary metadata is present in the constraints.
       pure
         . counterexample ("result = " <> show result)
@@ -582,10 +624,15 @@ buildApplyInputsConstraintsSpec =
         marloweOutput = TransactionScriptOutput{..}
         result =
           buildApplyInputsConstraints
-            systemStart eraHistory MarloweV1
+            systemStart
+            eraHistory
+            MarloweV1
             marloweOutput
             (Chain.SlotNo 1_000_000)
-            (Chain.TransactionMetadata mempty) Nothing Nothing (Semantics.NormalInput <$> inputs)
+            emptyMarloweTransactionMetadata
+            Nothing
+            Nothing
+            (Semantics.NormalInput <$> inputs)
         -- Determine what payment key hashes must be present.
         expectedPaymentKeyHashes = Set.unions $ toAddress <$> inputs
       pure
@@ -608,10 +655,15 @@ buildApplyInputsConstraintsSpec =
         marloweOutput = TransactionScriptOutput{..}
         result =
           buildApplyInputsConstraints
-            systemStart eraHistory MarloweV1
+            systemStart
+            eraHistory
+            MarloweV1
             marloweOutput
             (Chain.SlotNo 1_000_000)
-            (Chain.TransactionMetadata mempty) Nothing Nothing (Semantics.NormalInput <$> inputs)
+            emptyMarloweTransactionMetadata
+            Nothing
+            Nothing
+            (Semantics.NormalInput <$> inputs)
         -- Determine what roles must be present.
         expectedRoles = Set.unions $ toRole marloweParams <$> inputs
       pure

@@ -51,13 +51,13 @@ import Data.Time (UTCTime)
 import Data.Void (Void)
 import Language.Marlowe.Runtime.Cardano.Api
   (fromCardanoAddressInEra, fromCardanoTxId, toCardanoPaymentCredential, toCardanoStakeCredential)
-import Language.Marlowe.Runtime.ChainSync.Api
-  (BlockHeader, ChainSyncQuery(..), Credential(..), TokenName, TransactionMetadata, TxId(..))
+import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainSyncQuery(..), Credential(..), TokenName, TxId(..))
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Core.Api
   ( Contract
   , ContractId(..)
   , Inputs
+  , MarloweTransactionMetadata
   , MarloweVersion(MarloweV1)
   , Payout(Payout, datum)
   , TransactionScriptOutput(..)
@@ -247,7 +247,7 @@ execCreate
   -> MarloweVersion v
   -> WalletAddresses
   -> RoleTokensConfig
-  -> TransactionMetadata
+  -> MarloweTransactionMetadata
   -> Chain.Lovelace
   -> Contract v
   -> IO (ServerStCmd MarloweTxCommand Void (CreateError v) (ContractCreated BabbageEra v) IO ())
@@ -291,7 +291,7 @@ execCreate getCurrentScripts eventBackend ev solveConstraints loadWalletContext 
   pure ContractCreated
     { contractId = ContractId $ fromJust $ findMarloweOutput marloweAddress txBody
     , rolesCurrency
-    , metadata = Chain.unTransactionMetadata metadata
+    , metadata
     , txBody
     , marloweScriptHash = Constraints.marloweScriptHash marloweContext
     , marloweScriptAddress
@@ -323,7 +323,7 @@ execApplyInputs
   -> MarloweVersion v
   -> WalletAddresses
   -> ContractId
-  -> TransactionMetadata
+  -> MarloweTransactionMetadata
   -> Maybe UTCTime
   -> Maybe UTCTime
   -> Inputs v

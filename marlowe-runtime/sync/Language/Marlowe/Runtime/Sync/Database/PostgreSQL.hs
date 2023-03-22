@@ -27,7 +27,7 @@ databaseQueries = DatabaseQueries
   (\contractId -> T.transaction T.Serializable T.Read . getIntersectionForContract contractId)
   (T.transaction T.Serializable T.Read . getNextHeaders)
   (\version contractId -> T.transaction T.Serializable T.Read . getNextSteps version contractId)
-  (T.transaction T.Serializable T.Read . getHeaders)
+  (fmap (T.transaction T.Serializable T.Read) . getHeaders)
   (T.transaction T.Serializable T.Read . getContractState)
   (T.transaction T.Serializable T.Read . getTransaction)
   (T.transaction T.Serializable T.Read . getTransactions)

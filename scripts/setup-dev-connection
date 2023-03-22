@@ -4,15 +4,8 @@ ENVIRONMENT=${ENVIRONMENT:-"preprod"}
 
 eval "$(ssh dev@dapps.aws.iohkdev.io -p 4022 \
   cat /local/network.env \
-  | sed -n "/^${ENVIRONMENT^^}_/s/^${ENVIRONMENT^^}_//p")"
+  | sed -n "/${ENVIRONMENT^^}/s/.*MAIN_//p")"
 
-ssh dev@a.dapps.aws.iohkdev.io -p 4022 \
-  -L "3720:$CHAIN_SYNC_IP:$MARLOWE_CHAIN_SYNC_COMMAND_PORT" \
-  -L "3716:$CHAIN_SYNC_IP:$MARLOWE_CHAIN_SYNC_QUERY_PORT" \
-  -L "3715:$CHAIN_SYNC_IP:$MARLOWE_CHAIN_SYNC_PORT" \
-  -L "3717:$HISTORY_IP:$HISTORY_PORT" \
-  -L "3718:$HISTORY_IP:$HISTORY_QUERY_PORT" \
-  -L "3719:$HISTORY_IP:$HISTORY_SYNC_PORT" \
-  -L "3721:$DISCOVERY_IP:$DISCOVERY_QUERY_PORT" \
-  -L "3722:$DISCOVERY_IP:$DISCOVERY_SYNC_PORT" \
-  -L "3723:$TX_IP:$TX_PORT"
+ssh -N dev@a.dapps.aws.iohkdev.io -p 4022 \
+  -L "3700:$PROXY_IP:$PROXY_PORT" \
+  -L "3715:$MARLOWE_CHAIN_SYNC_IP:$MARLOWE_CHAIN_SYNC_PORT" \
