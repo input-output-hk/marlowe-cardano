@@ -157,16 +157,16 @@ type PostTransactionsAPI
   =  ReqBody '[JSON] PostTransactionsRequest :> PostTxAPI (PostCreated '[JSON] (PostTransactionsResponse CardanoTxBody))
   :<|> ReqBody '[JSON] PostTransactionsRequest :> PostTxAPI (PostCreated '[TxJSON ApplyInputsTx] (PostTransactionsResponse CardanoTx))
 
-type PostTransactionsResponse tx = WithLink "transaction" (ApplyInputsTxBody tx)
+type PostTransactionsResponse tx = WithLink "transaction" (ApplyInputsTxEnvelope tx)
 
-instance HasNamedLink (ApplyInputsTxBody tx) API "transaction" where
-  type Endpoint (ApplyInputsTxBody tx) API "transaction" =
+instance HasNamedLink (ApplyInputsTxEnvelope tx) API "transaction" where
+  type Endpoint (ApplyInputsTxEnvelope tx) API "transaction" =
     "contracts"
     :> Capture "contractId" TxOutRef
     :> "transactions"
     :> Capture "transactionId" TxId
     :> GetTransactionAPI
-  namedLink _ _ mkLink ApplyInputsTxBody{..} = Just $ mkLink contractId transactionId
+  namedLink _ _ mkLink ApplyInputsTxEnvelope{..} = Just $ mkLink contractId transactionId
 
 -- | GET /contracts/:contractId/transactions sup-API
 type GetTransactionsAPI = PaginatedGet '["transactionId"] GetTransactionsResponse

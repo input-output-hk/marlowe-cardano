@@ -151,8 +151,8 @@ instance Arbitrary Web.WithdrawTxBody where
   arbitrary = Web.WithdrawTxBody <$> arbitrary <*> arbitrary
   shrink = genericShrink
 
-instance Arbitrary (Web.ApplyInputsTxBody tx) where
-  arbitrary = Web.ApplyInputsTxBody <$> arbitrary <*> arbitrary <*> arbitrary
+instance Arbitrary (Web.ApplyInputsTxEnvelope tx) where
+  arbitrary = Web.ApplyInputsTxEnvelope <$> arbitrary <*> arbitrary <*> arbitrary
   shrink = genericShrink
 
 instance Arbitrary Web.MarloweVersion where

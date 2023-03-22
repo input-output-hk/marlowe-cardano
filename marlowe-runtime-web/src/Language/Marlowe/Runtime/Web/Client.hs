@@ -187,7 +187,7 @@ postTransaction
   -> Maybe (Set TxOutRef)
   -> TxOutRef
   -> PostTransactionsRequest
-  -> ClientM (ApplyInputsTxBody CardanoTxBody)
+  -> ClientM (ApplyInputsTxEnvelope CardanoTxBody)
 postTransaction changeAddress otherAddresses collateralUtxos contractId request = do
   let contractsClient :<|> _ = client
   let _ :<|> _ :<|> contractApi = contractsClient
@@ -205,7 +205,7 @@ postTransactionCreateTx
   -> Maybe (Set TxOutRef)
   -> TxOutRef
   -> PostTransactionsRequest
-  -> ClientM (ApplyInputsTxBody CardanoTx)
+  -> ClientM (ApplyInputsTxEnvelope CardanoTx)
 postTransactionCreateTx changeAddress otherAddresses collateralUtxos contractId request = do
   let (_ :<|> _ :<|> contractApi) :<|> _ = client
   let _ :<|> _ :<|> _ :<|> (_ :<|> postTransactionCreateTx') :<|> _ = contractApi contractId

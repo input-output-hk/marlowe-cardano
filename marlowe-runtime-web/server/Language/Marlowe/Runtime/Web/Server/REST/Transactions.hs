@@ -72,8 +72,8 @@ compile $ SelectorSpec "transactions"
       , "addresses" ≔ ''Addresses
       , "collateral" ≔ ''TxOutRefs
       , ["post", "error"] ≔ ''String
-      , ["post", "response", "txBody"] ≔ [t|ApplyInputsTxBody CardanoTxBody|]
-      , ["post", "response", "tx"] ≔ [t|ApplyInputsTxBody CardanoTx|]
+      , ["post", "response", "txBody"] ≔ [t|ApplyInputsTxEnvelope CardanoTxBody|]
+      , ["post", "response", "tx"] ≔ [t|ApplyInputsTxEnvelope CardanoTx|]
       ]
   , ["get", "one"] ≔ FieldSpec ["get", "one"]
       [ ["get", "one", "contract", "id"] ≔ ''TxOutRef
@@ -162,7 +162,7 @@ postCreateTxBodyResponse eb contractId req changeAddressDTO mAddresses mCollater
   txBody <- postCreateTxBody ev contractId req changeAddressDTO mAddresses mCollateralUtxos
   let txBody' = toDTO txBody
   let txId = toDTO $ fromCardanoTxId $ getTxId txBody
-  let body = ApplyInputsTxBody contractId txId txBody'
+  let body = ApplyInputsTxEnvelope contractId txId txBody'
   addField ev $ PostResponseTxBody body
   pure $ IncludeLink (Proxy @"transaction") body
 
@@ -179,7 +179,7 @@ postCreateTxResponse eb contractId req changeAddressDTO mAddresses mCollateralUt
   let txId = toDTO $ fromCardanoTxId $ getTxId txBody
   let tx = makeSignedTransaction [] txBody
   let tx' = toDTO tx
-  let body = ApplyInputsTxBody contractId txId tx'
+  let body = ApplyInputsTxEnvelope contractId txId tx'
   addField ev $ PostResponseTx body
   pure $ IncludeLink (Proxy @"transaction") body
 

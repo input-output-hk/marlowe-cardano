@@ -21,7 +21,6 @@ import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import Data.ByteString.Base16 (decodeBase16, encodeBase16)
 import Data.Char (isSpace)
-import Data.Data (Typeable)
 import Data.Foldable (fold)
 import Data.Map (Map)
 import Data.OpenApi
@@ -390,7 +389,7 @@ instance ToSchema WithdrawTxBody
 
 data CreateTxEnvelope tx = CreateTxEnvelope
   { contractId :: TxOutRef
-  , txBody :: TextEnvelope
+  , txEnvelope :: TextEnvelope
   } deriving (Show, Eq, Ord, Generic)
 
 data CardanoTx
@@ -399,12 +398,12 @@ data CardanoTxBody
 instance ToJSON (CreateTxEnvelope CardanoTx) where
   toJSON CreateTxEnvelope{..} = object
     [ ("contractId", toJSON contractId)
-    , ("tx", toJSON txBody)
+    , ("tx", toJSON txEnvelope)
     ]
 instance ToJSON (CreateTxEnvelope CardanoTxBody) where
   toJSON CreateTxEnvelope{..} = object
     [ ("contractId", toJSON contractId)
-    , ("txBody", toJSON txBody)
+    , ("txBody", toJSON txEnvelope)
     ]
 
 instance FromJSON (CreateTxEnvelope CardanoTx) where
@@ -417,7 +416,30 @@ instance FromJSON (CreateTxEnvelope CardanoTxBody) where
     <$> obj .: "contractId"
     <*> obj .: "txBody"
 
-instance Typeable tx => ToSchema (CreateTxEnvelope tx)
+instance ToSchema (CreateTxEnvelope CardanoTx) where
+  declareNamedSchema _ = do
+    contractIdSchema <- declareSchemaRef (Proxy :: Proxy TxOutRef)
+    txEnvelopeSchema <- declareSchemaRef (Proxy :: Proxy TextEnvelope)
+    return $ NamedSchema (Just "ApplyInputsTxEnvelope") $ mempty
+      & type_ ?~ OpenApiObject
+      & properties .~
+          [ ("contractId", contractIdSchema)
+          , ("tx", txEnvelopeSchema)
+          ]
+      & required .~ [ "contractId", "tx" ]
+
+instance ToSchema (CreateTxEnvelope CardanoTxBody) where
+  declareNamedSchema _ = do
+    contractIdSchema <- declareSchemaRef (Proxy :: Proxy TxOutRef)
+    txEnvelopeSchema <- declareSchemaRef (Proxy :: Proxy TextEnvelope)
+    return $ NamedSchema (Just "ApplyInputsTxEnvelope") $ mempty
+      & type_ ?~ OpenApiObject
+      & properties .~
+          [ ("contractId", contractIdSchema)
+          , ("txBody", txEnvelopeSchema)
+          ]
+      & required .~ [ "contractId", "txBody" ]
+
 
 data TextEnvelope = TextEnvelope
   { teType :: Text
@@ -621,13 +643,62 @@ instance FromJSON PostTransactionsRequest
 instance ToJSON PostTransactionsRequest
 instance ToSchema PostTransactionsRequest
 
-data ApplyInputsTxBody tx = ApplyInputsTxBody
+data ApplyInputsTxEnvelope tx = ApplyInputsTxEnvelope
   { contractId :: TxOutRef
   , transactionId :: TxId
-  , txBody :: TextEnvelope
+  , txEnvelope :: TextEnvelope
   } deriving (Show, Eq, Ord, Generic)
 
-instance ToJSON (ApplyInputsTxBody tx)
-instance FromJSON (ApplyInputsTxBody tx)
-instance Typeable tx => ToSchema (ApplyInputsTxBody tx)
+instance ToJSON (ApplyInputsTxEnvelope CardanoTx) where
+  toJSON ApplyInputsTxEnvelope{..} = object
+    [ ("contractId", toJSON contractId)
+    , ("tx", toJSON txEnvelope)
+    ]
+instance ToJSON (ApplyInputsTxEnvelope CardanoTxBody) where
+  toJSON ApplyInputsTxEnvelope{..} = object
+    [ ("contractId", toJSON contractId)
+    , ("transactionId", toJSON transactionId)
+    , ("txBody", toJSON txEnvelope)
+    ]
 
+instance FromJSON (ApplyInputsTxEnvelope CardanoTx) where
+  parseJSON = withObject "ApplyInputsTxEnvelope" \obj -> do
+    contractId <- obj .: "contractId"
+    transactionId <- obj .: "transactionId"
+    txEnvelope <- obj .: "tx"
+    pure ApplyInputsTxEnvelope{..}
+
+instance FromJSON (ApplyInputsTxEnvelope CardanoTxBody) where
+  parseJSON = withObject "ApplyInputsTxEnvelope" \obj -> do
+    contractId <- obj .: "contractId"
+    transactionId <- obj .: "transactionId"
+    txEnvelope <- obj .: "txBody"
+    pure ApplyInputsTxEnvelope{..}
+
+instance ToSchema (ApplyInputsTxEnvelope CardanoTx) where
+  declareNamedSchema _ = do
+    contractIdSchema <- declareSchemaRef (Proxy :: Proxy TxOutRef)
+    transactionIdSchema <- declareSchemaRef (Proxy :: Proxy TxId)
+    txEnvelopeSchema <- declareSchemaRef (Proxy :: Proxy TextEnvelope)
+    return $ NamedSchema (Just "ApplyInputsTxEnvelope") $ mempty
+      & type_ ?~ OpenApiObject
+      & properties .~
+          [ ("contractId", contractIdSchema)
+          , ("transactionId", transactionIdSchema)
+          , ("tx", txEnvelopeSchema)
+          ]
+      & required .~ [ "contractId", "transactionId", "tx" ]
+
+instance ToSchema (ApplyInputsTxEnvelope CardanoTxBody) where
+  declareNamedSchema _ = do
+    contractIdSchema <- declareSchemaRef (Proxy :: Proxy TxOutRef)
+    transactionIdSchema <- declareSchemaRef (Proxy :: Proxy TxId)
+    txEnvelopeSchema <- declareSchemaRef (Proxy :: Proxy TextEnvelope)
+    return $ NamedSchema (Just "ApplyInputsTxEnvelope") $ mempty
+      & type_ ?~ OpenApiObject
+      & properties .~
+          [ ("contractId", contractIdSchema)
+          , ("transactionId", transactionIdSchema)
+          , ("txBody", txEnvelopeSchema)
+          ]
+      & required .~ [ "contractId", "transactionId", "txBody" ]
