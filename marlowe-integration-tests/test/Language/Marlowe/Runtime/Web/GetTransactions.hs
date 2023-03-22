@@ -9,10 +9,19 @@ import Control.Exception (throw)
 import Data.Proxy (Proxy(Proxy))
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Integration.Common
+import Language.Marlowe.Runtime.Web (ApplyInputsTxBody(ApplyInputsTxBody))
 import qualified Language.Marlowe.Runtime.Web as Web
 import Language.Marlowe.Runtime.Web.Client (Page(..), getContracts, getTransactions)
 import Language.Marlowe.Runtime.Web.Common (applyCloseTransaction, createCloseContract)
 import Language.Marlowe.Runtime.Web.Server.DTO (ToDTO(toDTO))
+import Language.Marlowe.Runtime.Web.StandardContract
+  ( StandardContractChoiceMade(..)
+  , StandardContractClosed(..)
+  , StandardContractFundsDeposited(..)
+  , StandardContractInit(..)
+  , StandardContractNotified(..)
+  , createStandardContract
+  )
 import Network.HTTP.Types (Status(..))
 import Servant.Client (ClientError(FailureResponse))
 import Servant.Client.Streaming (ResponseF(Response, responseStatusCode))
@@ -21,7 +30,7 @@ import Test.Hspec (Spec, describe, focus, it, shouldBe)
 import Test.Integration.Marlowe.Local (withLocalMarloweRuntime)
 
 spec :: Spec
-spec = describe "GET /contracts/{contractId}/transactions" do
+spec = focus $ describe "GET /contracts/{contractId}/transactions" do
   getTransactionsValidSpec
   -- getTransactionsInvalidSpec
   -- getTransactionsValidNextPageSpec
@@ -30,7 +39,8 @@ getTransactionsValidSpec :: Spec
 getTransactionsValidSpec = describe "Valid GET /contracts/{contractId}/transactions" do
   noTransactionsValidSpec
   singleTransactionValidSpec
-  multipleTransactionsValidSpec
+  multipleContractsSingleTransactionsValidSpec
+  singleContractsMultipleTransactionsValidSpec
 
 -- getTransactionsInvalidSpec :: Spec
 -- getTransactionsInvalidSpec = describe "Invalid GET /contracts/{contractId}/transactions" do
@@ -156,8 +166,8 @@ singleTransactionValidSpec  = it "returns a list with single Tx header" $ withLo
 
     liftIO $ fmap (\Web.TxHeader{..} -> transactionId) items `shouldBe` [expectedTxId]
 
-multipleTransactionsValidSpec :: Spec
-multipleTransactionsValidSpec  =  it "returns a list with multiple Tx headers" $ withLocalMarloweRuntime $ runIntegrationTest do
+multipleContractsSingleTransactionsValidSpec :: Spec
+multipleContractsSingleTransactionsValidSpec  =  it "returns a list with single Tx header" $ withLocalMarloweRuntime $ runIntegrationTest do
   wallet1 <- getGenesisWallet 0
   wallet2 <- getGenesisWallet 1
 
@@ -168,6 +178,35 @@ multipleTransactionsValidSpec  =  it "returns a list with multiple Tx headers" $
     expectedTxId <- applyCloseTransaction wallet2 expectedContractId2
     Page {..} <- getTransactions expectedContractId2 Nothing
     liftIO $ fmap (\Web.TxHeader{..} -> transactionId) items `shouldBe` [expectedTxId]
+
+singleContractsMultipleTransactionsValidSpec :: Spec
+singleContractsMultipleTransactionsValidSpec  =  focus $ it "returns a list with multiple Tx headers" $ withLocalMarloweRuntime $ runIntegrationTest do
+  wallet1 <- getGenesisWallet 0
+  wallet2 <- getGenesisWallet 1
+
+  either throw pure =<< runWebClient do
+    StandardContractInit{contractCreated, makeInitialDeposit} <- createStandardContract wallet1 wallet2
+    StandardContractFundsDeposited{initialFundsDeposited, chooseGimmeTheMoney} <- makeInitialDeposit
+    StandardContractChoiceMade{gimmeTheMoneyChosen, sendNotify} <- chooseGimmeTheMoney
+    StandardContractNotified{notified, makeReturnDeposit} <- sendNotify
+    StandardContractClosed{returnDeposited, withdrawPartyAFunds} <- makeReturnDeposit
+    (withdrawTxBody , _) <- withdrawPartyAFunds
+    createContractId <- case contractCreated of
+      Web.CreateTxBody{contractId} -> pure contractId
+    transactionId1 <- case initialFundsDeposited of
+      Web.ApplyInputsTxBody{transactionId} -> pure transactionId
+    transactionId2 <- case gimmeTheMoneyChosen of
+      Web.ApplyInputsTxBody{transactionId} -> pure transactionId
+    transactionId3 <- case notified of
+      Web.ApplyInputsTxBody{transactionId} -> pure transactionId
+    transactionId4 <- case returnDeposited of
+      Web.ApplyInputsTxBody{transactionId} -> pure transactionId
+    withdrawId <- case withdrawTxBody of
+      Web.WithdrawTxBody{withdrawalId} -> pure withdrawalId
+
+    Page {..} <- getTransactions createContractId Nothing
+
+    liftIO $ fmap (\Web.TxHeader{..} -> transactionId) items `shouldBe` [transactionId1, transactionId2, transactionId3, transactionId4, withdrawId]
 
 
 -- invalidTxIdSpec :: Spec
