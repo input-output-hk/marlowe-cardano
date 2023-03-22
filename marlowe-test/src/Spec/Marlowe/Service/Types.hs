@@ -68,6 +68,12 @@ data Request =
     , state :: Marlowe.State
     , value :: Marlowe.Value Marlowe.Observation
     }
+  | EvalObservation
+    {
+      environment :: Marlowe.Environment
+    , state :: Marlowe.State
+    , observation :: Marlowe.Observation
+    }
     deriving (Eq, Show)
 
 instance FromJSON Request where
@@ -81,6 +87,7 @@ instance FromJSON Request where
             "compute-transaction"          -> ComputeTransaction <$> o A..: "transactionInput" <*> o A..: "coreContract" <*> o A..: "state"
             "playtrace"                    -> PlayTrace <$> o A..: "transactionInputs" <*> o A..: "coreContract" <*> (POSIXTime <$> o A..: "initialTime")
             "eval-value"                   -> EvalValue <$> o A..: "environment" <*> o A..: "state" <*> o A..: "value"
+            "eval-observation"             -> EvalObservation <$> o A..: "environment" <*> o A..: "state" <*> o A..: "observation"
             request                        -> fail $ "Request not understood: " <> show request <> "."
 
 instance ToJSON Request where
@@ -122,6 +129,14 @@ instance ToJSON Request where
       , "environment" A..= environment
       , "state" A..= state
       , "value" A..= value
+      ]
+  toJSON EvalObservation{..} =
+    A.object
+      [
+        "request" A..= ("eval-value" :: String)
+      , "environment" A..= environment
+      , "state" A..= state
+      , "observation" A..= observation
       ]
 
 data Response =
