@@ -63,12 +63,23 @@ marloweLoadClientPeer = Effect . fmap peerLoad . runMarloweLoadClient
       Await (ServerAgency TokLoadServer) \(MsgPop hash contract) -> Effect $ peerLoad <$> recvMsgPop hash contract
     Return a -> Done TokLoadNobody a
 
+-- | Load a contract into the runtime in a space-efficient way. Note: this
+-- relies on the input contract being lazily evaluated and garbage collected as
+-- it is processed. This means that the caller of this function should avoid holding
+-- onto a reference to the input contract (e.g. in a let-binding)
 loadContractClient
   :: MonadFail m
+  -- The unmerkleized contract to load.
   => Contract
+  -- A callback to handle merkleized contracts and hashes sent back by the server.
   -> (DatumHash -> Contract -> m ())
+  -- A client that loads the entire contract into the runtime, returning a hash
+  -- of the merkleized contract and the merkleized version of the input
+  -- contract.
   -> MarloweLoadClient m (DatumHash, Contract)
-loadContractClient rootContract = MarloweLoadClient . pure . loadContractClient' (StateCons (Cons rootContract Nil) StateNil)
+loadContractClient rootContract = MarloweLoadClient
+  . pure
+  . loadContractClient' (StateCons (QueueOne (toFragment rootContract) Nil) StateNil)
 
 loadContractClient'
   :: MonadFail m
@@ -76,26 +87,30 @@ loadContractClient'
   -> (DatumHash -> Contract -> m ())
   -> ClientStLoad (n ': state) m (DatumHash, Contract)
 loadContractClient' state handleContract = case state of
-  StateCons Nil prevState ->
+  StateCons QueueNil prevState ->
     Pop \hash contract -> do
       handleContract hash contract
       pure case prevState of
         StateNil -> Return (hash, contract)
-        StateCons Nil _ -> loadContractClient' prevState handleContract
-        -- Important - do not force the first param to Cons, it will throw an
-        -- exception.
-        StateCons (Cons _ contracts) prevState' -> loadContractClient' (StateCons contracts prevState') handleContract
-  StateCons (Cons contract contracts) prevState -> case toFragment contract of
+        StateCons QueueNil _ -> loadContractClient' prevState handleContract
+        StateCons (QueueOne _ contracts) prevState' -> case contracts of
+          Nil -> loadContractClient' (StateCons QueueNil prevState') handleContract
+          Cons contract' contracts' -> loadContractClient' (StateCons (QueueOne (toFragment contract') contracts') prevState') handleContract
+  StateCons (QueueOne contract contracts) prevState -> case contract of
     Nothing -> error "Merkleized contract detected"
     Just (ConvertedFragment fragment contracts') ->
       let
-        nextState = StateCons contracts'
-          -- Set this to error instead of contract so contract can be garbage
-          -- collected (we never need to see it again)
-          $ StateCons (Cons (error "already converted this contract") contracts) prevState
+        nextQueue = case contracts' of
+          Nil -> QueueNil
+          Cons contract' contracts'' -> QueueOne (toFragment contract') contracts''
+        nextState = StateCons nextQueue $ StateCons (QueueOne contract contracts) prevState
       in
         Push fragment $ loadContractClient' nextState handleContract
 
 data PeerState (state :: [N]) where
   StateNil :: PeerState '[]
-  StateCons :: Vec n Contract -> PeerState state -> PeerState (n ': state)
+  StateCons :: ContractQueue n -> PeerState state -> PeerState (n ': state)
+
+data ContractQueue (state :: N) where
+  QueueNil :: ContractQueue 'Z
+  QueueOne :: Maybe ConvertedFragment -> Vec n Contract -> ContractQueue ('S n)
