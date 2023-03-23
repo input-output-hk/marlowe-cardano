@@ -6,13 +6,11 @@
 module Data.ContractFragment
   where
 
-import Cardano.Api (SerialiseAsRawBytes(serialiseToRawBytes), hashScriptData)
 import Data.Nat
-import Data.Vec (Vec(..))
+import Data.Vec (Vec(..), (%++))
 import qualified Data.Vec as Vec
 import Language.Marlowe.Core.V1.Semantics.Types
-import Language.Marlowe.Runtime.Cardano.Api (toCardanoScriptData)
-import Language.Marlowe.Runtime.ChainSync.Api (DatumHash(..), toDatum)
+import Language.Marlowe.Runtime.ChainSync.Api (DatumHash(..))
 import Plutus.V1.Ledger.Api (toBuiltin)
 
 -- A contract fragment indexed by the number of holes it contains.
@@ -55,6 +53,42 @@ toPartial = \case
     Succ{} -> WhenPCases [] cases timeout fallback
   LetF valueId value fragment -> LetP valueId value $ toPartial fragment
   AssertF obs fragment -> AssertP obs $ toPartial fragment
+
+-- | A contract fragment with the original contracts contained in its first
+-- layer of when clauses.
+data ConvertedFragment = forall n. ConvertedFragment (ContractFragment n) (Vec n Contract)
+
+-- | Convert a contract into a fragment with a vector of sub-contracts that
+-- were extracted. Fails if the contract is merkleized.
+toFragment :: Contract -> Maybe ConvertedFragment
+toFragment = \case
+  Close -> pure $ ConvertedFragment CloseF Nil
+  Pay payor payee token value contract -> do
+    ConvertedFragment contract' contracts <- toFragment contract
+    pure $ ConvertedFragment (PayF payor payee token value contract') contracts
+  If obs tru fal -> do
+    ConvertedFragment tru' contracts <- toFragment tru
+    ConvertedFragment fal' contracts' <- toFragment fal
+    pure $ ConvertedFragment (IfF obs tru' fal') $ contracts %++ contracts'
+  When cases timeout fallback -> do
+    CasesConverted actions contracts <- convertCases cases
+    ConvertedFragment fallback' contracts' <- toFragment fallback
+    pure $ ConvertedFragment (WhenF actions timeout fallback') $ contracts %++ contracts'
+  Let valueId value contract -> do
+    ConvertedFragment contract' contracts <- toFragment contract
+    pure $ ConvertedFragment (LetF valueId value contract') contracts
+  Assert obs contract -> do
+    ConvertedFragment contract' contracts <- toFragment contract
+    pure $ ConvertedFragment (AssertF obs contract') contracts
+
+data CasesConverted = forall n. CasesConverted (Vec n Action) (Vec n Contract)
+
+convertCases :: [Case Contract] -> Maybe CasesConverted
+convertCases [] = pure $ CasesConverted Nil Nil
+convertCases (Case action contract : cases) = do
+  CasesConverted actions contracts <- convertCases cases
+  pure $ CasesConverted (Cons action actions) (Cons contract contracts)
+convertCases (MerkleizedCase{} : _) = Nothing
 
 -- An incremental state of a contract fragment having its holes filled.
 data PartialContract (n :: N) where
@@ -102,39 +136,33 @@ convertContract = \case
   LetP valueId value contract -> Let valueId value $ convertContract contract
   AssertP obs contract -> Assert obs $ convertContract contract
 
--- | Fills the next hole in a partial contract with a complete contract. Also
--- returns the hash of the contract.
-fillNextHole :: Contract -> PartialContract ('S n) -> (DatumHash, PartialContract n)
-fillNextHole contract = \case
-  Root -> (DatumHash contractHash, RootFilled contract)
+-- | Fills the next hole in a partial contract with a complete contract.
+-- Accepts a precomputed contract hash (does not check it).
+fillNextHole :: DatumHash -> Contract -> PartialContract ('S n) -> PartialContract n
+fillNextHole hash contract = \case
+  Root -> RootFilled contract
   PayP payor payee token value partialContract ->
-    PayP payor payee token value <$> fillNextHole contract partialContract
+    PayP payor payee token value $ fillNextHole hash contract partialContract
   IfPL obs tru fal ->
     let
-      tru' = snd $ fillNextHole contract tru
+      tru' = fillNextHole hash contract tru
     in
-      ( DatumHash contractHash
-      , case partialHoles tru' of
-          Zero -> IfPR obs (convertContract tru') $ toPartial fal
-          Succ _ -> IfPL obs tru' fal
-      )
-  IfPR obs tru fal -> IfPR obs tru <$> fillNextHole contract fal
-  WhenPCases cases (Cons action actions) timeout fallback ->
-    ( DatumHash contractHash
-    , case actions of
-      Nil -> WhenPFallback (mkCase action : cases) timeout $ toPartial fallback
-      Cons{} ->
-        WhenPCases (mkCase action : cases) actions timeout fallback
-    )
+      case partialHoles tru' of
+        Zero -> IfPR obs (convertContract tru') $ toPartial fal
+        Succ _ -> IfPL obs tru' fal
+  IfPR obs tru fal -> IfPR obs tru $ fillNextHole hash contract fal
+  WhenPCases cases (Cons action actions) timeout fallback -> case actions of
+    Nil -> WhenPFallback (mkCase action : cases) timeout $ toPartial fallback
+    Cons{} ->
+      WhenPCases (mkCase action : cases) actions timeout fallback
   WhenPFallback cases timeout fallback ->
-    WhenPFallback cases timeout <$> fillNextHole contract fallback
+    WhenPFallback cases timeout $ fillNextHole hash contract fallback
   LetP valueId value partialContract ->
-    LetP valueId value <$> fillNextHole contract partialContract
+    LetP valueId value $ fillNextHole hash contract partialContract
   AssertP obs partialContract ->
-    AssertP obs <$> fillNextHole contract partialContract
+    AssertP obs $ fillNextHole hash contract partialContract
   where
     mkCase :: Action -> Case Contract
     mkCase action = case contract of
       Close -> Case action Close
-      _ -> MerkleizedCase action $ toBuiltin contractHash
-    contractHash = serialiseToRawBytes $ hashScriptData $ toCardanoScriptData $ toDatum contract
+      _ -> MerkleizedCase action $ toBuiltin $ unDatumHash hash

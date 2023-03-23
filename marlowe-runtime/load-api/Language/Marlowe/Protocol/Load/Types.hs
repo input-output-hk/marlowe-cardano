@@ -6,9 +6,9 @@
 module Language.Marlowe.Protocol.Load.Types
   where
 
-import Data.ByteString (ByteString)
 import Data.ContractFragment (ContractFragment)
 import Language.Marlowe.Core.V1.Semantics.Types
+import Language.Marlowe.Runtime.ChainSync.Api (DatumHash)
 import Network.Protocol.Handshake.Types (HasSignature(..))
 import Network.TypedProtocol
 
@@ -30,7 +30,7 @@ instance Protocol MarloweLoad where
       ('StLoad ('S n' ': ns))
       -- Push the number of holes in the new contract fragment onto the stack.
       ('StLoad (n ': 'S n' ': ns))
-    MsgPop :: ByteString -> Contract -> Message MarloweLoad
+    MsgPop :: DatumHash -> Contract -> Message MarloweLoad
       -- Server will pop when the current contract has no more holes to fill.
       ('StLoad ('Z ': ns))
       -- Fill the first hole in the previous contract with the current

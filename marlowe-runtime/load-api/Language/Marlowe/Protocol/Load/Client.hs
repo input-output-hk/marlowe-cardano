@@ -2,82 +2,75 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE KindSignatures #-}
+{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
 
 module Language.Marlowe.Protocol.Load.Client
   where
 
-import Data.Vec (Vec(..), (%++))
+import Data.ContractFragment (ContractFragment, ConvertedFragment(..), toFragment)
+import Data.Vec (Vec(..))
 import Language.Marlowe.Core.V1.Semantics.Types
 import Language.Marlowe.Protocol.Load.Types
+import Language.Marlowe.Runtime.ChainSync.Api (DatumHash)
 import Network.TypedProtocol
 
-marloweBuilderClientPeer
+newtype MarloweLoadClient m a = MarloweLoadClient { runMarloweLoadClient :: m (ClientStLoad '[ 'S 'Z ] m a) }
+
+data ClientStLoad (state :: [N]) m a where
+  Push
+    :: ContractFragment n'
+    -> ClientStLoad (n' ': 'S n ': state) m a
+    -> ClientStLoad ('S n ': state) m a
+  Pop
+    :: (DatumHash -> Contract -> m (ClientStLoad (Fill state) m a))
+    -> ClientStLoad ('Z ': state) m a
+  Return :: m a -> ClientStLoad '[] m a
+
+marloweLoadClientPeer :: forall m a. Functor m => MarloweLoadClient m a -> Peer MarloweLoad 'AsClient ('StLoad '[ 'S 'Z ]) m a
+marloweLoadClientPeer = Effect . fmap peerLoad . runMarloweLoadClient
+  where
+  peerLoad :: ClientStLoad ns m a -> Peer MarloweLoad 'AsClient ('StLoad ns) m a
+  peerLoad = \case
+    Push fragment next ->
+      Yield (ClientAgency TokLoadClient) (MsgPush fragment) $ peerLoad next
+    Pop recvMsgPop ->
+      Await (ServerAgency TokLoadServer) \(MsgPop hash contract) -> Effect $ peerLoad <$> recvMsgPop hash contract
+    Return a -> Effect $ Done TokLoadNobody <$> a
+
+loadContract
   :: MonadFail m
   => Contract
-  -> (Contract -> m ())
-  -> Peer MarloweBuilder 'AsClient ('StBuilder '[ 'S 'Z ]) m ()
-marloweBuilderClientPeer rootContract = peer' $ StateCons (Cons rootContract Nil) StateNil
+  -> (DatumHash -> Contract -> m ())
+  -> MarloweLoadClient m DatumHash
+loadContract rootContract = MarloweLoadClient . pure . loadContract' (StateCons (Cons rootContract Nil) StateNil)
 
-peer'
+loadContract'
   :: MonadFail m
-  => PeerState ns
-  -> (Contract -> m ())
-  -> Peer MarloweBuilder 'AsClient ('StBuilder ns) m ()
-peer' state handleContract = case state of
-  StateNil -> Done TokBuilderNobody ()
+  => PeerState (n ': ns)
+  -> (DatumHash -> Contract -> m ())
+  -> ClientStLoad (n ': ns) m DatumHash
+loadContract' state handleContract = case state of
   StateCons Nil prevState ->
-    Await (ServerAgency TokBuilderServer) \(MsgBuilt contract) -> Effect do
-      handleContract contract
+    Pop \hash contract -> do
+      handleContract hash contract
       pure case prevState of
-        StateNil -> peer' prevState handleContract
-        StateCons Nil _ -> peer' prevState handleContract
+        StateNil -> Return $ pure hash
+        StateCons Nil _ -> loadContract' prevState handleContract
         -- Important - do not force the first param to Cons, it will throw an
         -- exception.
-        StateCons (Cons _ contracts) prevState' -> peer' (StateCons contracts prevState') handleContract
-  StateCons (Cons contract contracts) prevState -> case convertContract contract of
-    Nothing -> Effect $ fail "Merkleized contract detected"
-    Just (Converted contract' contracts') ->
+        StateCons (Cons _ contracts) prevState' -> loadContract' (StateCons contracts prevState') handleContract
+  StateCons (Cons contract contracts) prevState -> case toFragment contract of
+    Nothing -> error "Merkleized contract detected"
+    Just (ConvertedFragment fragment contracts') ->
       let
         nextState = StateCons contracts'
           -- Set this to error instead of contract so contract can be garbage
           -- collected (we never need to see it again)
           $ StateCons (Cons (error "already converted this contract") contracts) prevState
       in
-        Yield (ClientAgency TokBuilderClient) (MsgPush contract') $ peer' nextState handleContract
+        Push fragment $ loadContract' nextState handleContract
 
 data PeerState (ns :: [N]) where
   StateNil :: PeerState '[]
   StateCons :: Vec n Contract -> PeerState ns -> PeerState (n ': ns)
-
-data Converted = forall n. Converted (ContractTemplate n) (Vec n Contract)
-
-convertContract :: Contract -> Maybe Converted
-convertContract = \case
-  Close -> pure $ Converted CloseT Nil
-  Pay payor payee token value contract -> do
-    Converted contract' contracts <- convertContract contract
-    pure $ Converted (PayT payor payee token value contract') contracts
-  If obs tru fal -> do
-    Converted tru' contracts <- convertContract tru
-    Converted fal' contracts' <- convertContract fal
-    pure $ Converted (IfT obs tru' fal') $ contracts %++ contracts'
-  When cases timeout fallback -> do
-    CasesConverted actions contracts <- convertCases cases
-    Converted fallback' contracts' <- convertContract fallback
-    pure $ Converted (WhenT actions timeout fallback') $ contracts %++ contracts'
-  Let valueId value contract -> do
-    Converted contract' contracts <- convertContract contract
-    pure $ Converted (LetT valueId value contract') contracts
-  Assert obs contract -> do
-    Converted contract' contracts <- convertContract contract
-    pure $ Converted (AssertT obs contract') contracts
-
-convertCases :: [Case Contract] -> Maybe CasesConverted
-convertCases [] = pure $ CasesConverted Nil Nil
-convertCases (Case action contract : cases) = do
-  CasesConverted actions contracts <- convertCases cases
-  pure $ CasesConverted (Cons action actions) (Cons contract contracts)
-convertCases (MerkleizedCase{} : _) = Nothing
-
-data CasesConverted = forall n. CasesConverted (Vec n Action) (Vec n Contract)
