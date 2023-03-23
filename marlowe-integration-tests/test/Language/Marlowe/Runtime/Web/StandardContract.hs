@@ -131,7 +131,7 @@ createStandardContract partyAWallet partyBWallet = do
                             { returnDepositBlock
                             , returnDeposited
                             , withdrawPartyAFunds = do
-                                withdrawTxBody <- withdraw partyAWallet contractId "Party A"
+                                withdrawTxBody <- withdraw partyAWallet contractId "PartyA"
                                 (withdrawTxBody,) <$> submitWithdrawal partyAWallet withdrawTxBody
                             }
                       }
@@ -174,6 +174,6 @@ standardContract partyBAddress startTime timeoutLength = (contract, partyA, part
       Close
 
 
-    partyA = Role "Party A"
+    partyA = Role "PartyA"
     -- 0x00 = testnet
     partyB = Address (toEnum 0x00) partyBAddress

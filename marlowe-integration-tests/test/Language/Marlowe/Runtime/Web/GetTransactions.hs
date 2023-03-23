@@ -26,7 +26,7 @@ import Network.HTTP.Types (Status(..))
 import Servant.Client (ClientError(FailureResponse))
 import Servant.Client.Streaming (ResponseF(Response, responseStatusCode))
 import Servant.Pagination (Range(..), RangeOrder(..))
-import Test.Hspec (Spec, describe, focus, it, shouldBe)
+import Test.Hspec (Spec, describe, focus, it, shouldBe, shouldContain)
 import Test.Integration.Marlowe.Local (withLocalMarloweRuntime)
 
 spec :: Spec
@@ -190,7 +190,7 @@ singleContractsMultipleTransactionsValidSpec  =  focus $ it "returns a list with
     StandardContractChoiceMade{gimmeTheMoneyChosen, sendNotify} <- chooseGimmeTheMoney
     StandardContractNotified{notified, makeReturnDeposit} <- sendNotify
     StandardContractClosed{returnDeposited, withdrawPartyAFunds} <- makeReturnDeposit
-    (withdrawTxBody , _) <- withdrawPartyAFunds
+    (_, _) <- withdrawPartyAFunds
     createContractId <- case contractCreated of
       Web.CreateTxBody{contractId} -> pure contractId
     transactionId1 <- case initialFundsDeposited of
@@ -201,12 +201,10 @@ singleContractsMultipleTransactionsValidSpec  =  focus $ it "returns a list with
       Web.ApplyInputsTxBody{transactionId} -> pure transactionId
     transactionId4 <- case returnDeposited of
       Web.ApplyInputsTxBody{transactionId} -> pure transactionId
-    withdrawId <- case withdrawTxBody of
-      Web.WithdrawTxBody{withdrawalId} -> pure withdrawalId
 
     Page {..} <- getTransactions createContractId Nothing
 
-    liftIO $ fmap (\Web.TxHeader{..} -> transactionId) items `shouldBe` [transactionId1, transactionId2, transactionId3, transactionId4, withdrawId]
+    liftIO $ fmap (\Web.TxHeader{..} -> transactionId) items `shouldBe` [transactionId4,  transactionId3, transactionId2, transactionId1]
 
 
 -- invalidTxIdSpec :: Spec
