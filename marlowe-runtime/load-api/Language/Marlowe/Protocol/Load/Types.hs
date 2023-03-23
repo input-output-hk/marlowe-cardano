@@ -3,6 +3,9 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
 
+-- | The Marlowe load protocol is a protocol for incrementally loading and
+-- merkleizing large contracts in a space-efficient way.
+
 module Language.Marlowe.Protocol.Load.Types
   where
 
@@ -14,7 +17,7 @@ import Network.Protocol.Codec (BinaryMessage(..))
 import Network.Protocol.Handshake.Types (HasSignature(..))
 import Network.TypedProtocol
 
--- The protocol state of the MarloweLoad protocol. Consists of a stack of
+-- | The protocol state of the MarloweLoad protocol. Consists of a stack of
 -- natural numbers, representing the number of unfilled holes in successive
 -- levels of the contract hierarchy for the current branch of the contract.
 newtype MarloweLoad = StLoad [N]
@@ -22,7 +25,7 @@ newtype MarloweLoad = StLoad [N]
 instance HasSignature MarloweLoad where
   signature _ = "MarloweLoad"
 
--- A helper for computing the target state of the Pop message.
+-- | A helper for computing the target state of the Pop message.
 type family Fill (ns :: [N]) :: [N] where
   -- We have popped the root contract, do nothing.
   Fill '[] = '[]
@@ -43,23 +46,28 @@ instance Protocol MarloweLoad where
       -- Push the number of holes in the new contract fragment onto the stack.
       ('StLoad (n ': 'S n' ': ns))
     -- | Pop a filled contract off the stack.
-    MsgPop :: DatumHash -> Contract -> Message MarloweLoad
-      -- Server will pop when the current contract has no more holes to fill.
-      ('StLoad ('Z ': ns))
-      -- Fill the first hole in the previous contract with the current
-      -- contract.
-      ('StLoad (Fill ns))
+    MsgPop
+      :: DatumHash
+      -- ^ The hash of the contract.
+      -> Contract
+      -- ^ The contract (merkleized).
+      -> Message MarloweLoad
+        -- Server will pop when the current contract has no more holes to fill.
+        ('StLoad ('Z ': ns))
+        -- Fill the first hole in the previous contract with the current
+        -- contract.
+        ('StLoad (Fill ns))
 
   data ClientHasAgency st where
-    -- Client has agency when there are holes in the current contract.
+    -- | Client has agency when there are holes in the current contract.
     TokLoadClient :: ClientHasAgency ('StLoad ('S n ': ns))
 
   data ServerHasAgency st where
-    -- Server has agency when there are no holes in the current contract.
+    -- | Server has agency when there are no holes in the current contract.
     TokLoadServer :: ServerHasAgency ('StLoad ('Z ': ns))
 
   data NobodyHasAgency st where
-    -- Nobody has agency when the stack is empty.
+    -- | Nobody has agency when the stack is empty.
     TokLoadNobody :: NobodyHasAgency ('StLoad '[])
 
   exclusionLemma_ClientAndServerHaveAgency TokLoadClient = \case
