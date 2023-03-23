@@ -5,7 +5,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeOperators #-}
 
-module Language.Marlowe.Protocol.Builder.Server
+module Language.Marlowe.Protocol.Load.Server
   where
 
 import Cardano.Api (SerialiseAsRawBytes(serialiseToRawBytes), hashScriptData)
@@ -13,7 +13,7 @@ import Data.Nat (type (+), (%+))
 import Data.Vec (Vec(..))
 import qualified Data.Vec as Vec
 import Language.Marlowe.Core.V1.Semantics.Types
-import Language.Marlowe.Protocol.Builder.Types
+import Language.Marlowe.Protocol.Load.Types
 import Language.Marlowe.Runtime.Cardano.Api (toCardanoScriptData)
 import Language.Marlowe.Runtime.ChainSync.Api (toDatum)
 import Network.TypedProtocol

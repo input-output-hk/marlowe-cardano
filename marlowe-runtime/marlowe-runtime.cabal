@@ -206,16 +206,17 @@ library sync-api
     , transformers-base
     , typed-protocols
 
-library builder-api
+library load-api
   import: lang
-  hs-source-dirs:   builder-api
+  hs-source-dirs:   load-api
   visibility: public
   exposed-modules:
     Data.Nat
     Data.Vec
-    Language.Marlowe.Protocol.Builder.Client
-    Language.Marlowe.Protocol.Builder.Server
-    Language.Marlowe.Protocol.Builder.Types
+    Data.ContractFragment
+    Language.Marlowe.Protocol.Load.Client
+    Language.Marlowe.Protocol.Load.Server
+    Language.Marlowe.Protocol.Load.Types
   build-depends:
       base >= 4.9 && < 5
     , aeson
