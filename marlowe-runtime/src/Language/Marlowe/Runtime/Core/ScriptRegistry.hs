@@ -68,7 +68,19 @@ currentV1Scripts = MarloweScripts
   { marloweScript = "2ed2631dbb277c84334453c5c437b86325d371f0835a28b910a91a6e"
   , payoutScript = "e165610232235bbbbeff5b998b233daae42979dec92a6722d9cda989"
   , marloweScriptUTxOs = Map.fromList
-      [ ( preprodNetworkId
+      [ ( mainnetNetworkId
+        , ReferenceScriptUtxo
+            { txOutRef = "672399f7d551d6e06fda70769f830e4e3783495c6250567c6ae97ecc788ad5a4#1"
+            , txOut = Chain.TransactionOutput
+                { address = fromJust $ fromBech32 "addr1z9l4w7djneh0kss4drg2php6ynflsvmal7x3w5nrc95uvhz7e4q926apsvcd6kn33cpx95k8jsmrj7v0k62rczvz8urqrl2z0l"
+                , assets = Assets 54021540 mempty
+                , datum = Just $ Constr 0 []
+                , datumHash = Nothing
+                }
+            , script = either (error . show) id $ deserialiseFromCBOR (AsPlutusScript AsPlutusScriptV2) currentV1MarloweScriptCBOR
+            }
+        )
+      , ( preprodNetworkId
         , ReferenceScriptUtxo
             { txOutRef = "9a8a6f387a3330b4141e1cb019380b9ac5c72151c0abc52aa4266245d3c555cd#1"
             , txOut = Chain.TransactionOutput
@@ -94,7 +106,19 @@ currentV1Scripts = MarloweScripts
         )
       ]
   , payoutScriptUTxOs = Map.fromList
-      [ ( preprodNetworkId
+      [ ( mainnetNetworkId
+        , ReferenceScriptUtxo
+            { txOutRef = "672399f7d551d6e06fda70769f830e4e3783495c6250567c6ae97ecc788ad5a4#2"
+            , txOut = Chain.TransactionOutput
+                { address = fromJust $ fromBech32 "addr1z9l4w7djneh0kss4drg2php6ynflsvmal7x3w5nrc95uvhz7e4q926apsvcd6kn33cpx95k8jsmrj7v0k62rczvz8urqrl2z0l"
+                , assets = Assets 13020510 mempty
+                , datum = Just $ Constr 0 []
+                , datumHash = Nothing
+                }
+            , script = either (error . show) id $ deserialiseFromCBOR (AsPlutusScript AsPlutusScriptV2) currentV1PayoutScriptCBOR
+            }
+        )
+      , ( preprodNetworkId
         , ReferenceScriptUtxo
             { txOutRef = "9a8a6f387a3330b4141e1cb019380b9ac5c72151c0abc52aa4266245d3c555cd#2"
             , txOut = Chain.TransactionOutput

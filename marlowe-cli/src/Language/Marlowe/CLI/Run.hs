@@ -981,7 +981,7 @@ marloweAddressToCardanoAddress network address =
     address' <-
       liftCli
         $ toCardanoAddressInEra
-          (if network == mainnet then Mainnet else Testnet (NetworkMagic 2))
+          (if network == mainnet then Mainnet else Testnet (NetworkMagic 1))
           address
     address'' <-
       case address' of
