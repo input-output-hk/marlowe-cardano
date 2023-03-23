@@ -6,12 +6,14 @@
 module Data.ContractFragment
   where
 
+import Data.Binary (Binary(..), Get, Put, getWord8, putWord8)
 import Data.Nat
-import Data.Vec (Vec(..), (%++))
+import Data.Vec (SomeVec(..), Vec(..), getVec, putVec, (%++))
 import qualified Data.Vec as Vec
 import Language.Marlowe.Core.V1.Semantics.Types
-import Language.Marlowe.Runtime.ChainSync.Api (DatumHash(..))
+import Language.Marlowe.Runtime.ChainSync.Api (DatumHash(..), fromDatum, toDatum)
 import Plutus.V1.Ledger.Api (toBuiltin)
+import Plutus.V2.Ledger.Api (FromData, POSIXTime(..))
 
 -- A contract fragment indexed by the number of holes it contains.
 data ContractFragment (n :: N) where
@@ -28,6 +30,79 @@ data ContractFragment (n :: N) where
   LetF :: ValueId -> Value Observation -> ContractFragment n -> ContractFragment n
   -- | An assert fragment
   AssertF :: Observation -> ContractFragment n -> ContractFragment n
+
+data SomeContractFragment = forall n. SomeContractFragment (ContractFragment n)
+
+
+putContractFragment :: ContractFragment n -> Put
+putContractFragment = \case
+  CloseF -> putWord8 0x00
+  PayF payor payee token value fragment -> do
+    putWord8 0x01
+    put $ toDatum payor
+    put $ toDatum payee
+    put $ toDatum token
+    put $ toDatum value
+    putContractFragment fragment
+  IfF obs tru fal -> do
+    putWord8 0x02
+    put $ toDatum obs
+    putContractFragment tru
+    putContractFragment fal
+  WhenF cases timeout fallback -> do
+    putWord8 0x03
+    putVec $ toDatum <$> cases
+    put $ getPOSIXTime timeout
+    putContractFragment fallback
+  LetF valueId value fragment -> do
+    putWord8 0x04
+    put $ toDatum valueId
+    put $ toDatum value
+    putContractFragment fragment
+  AssertF obs fragment -> do
+    putWord8 0x05
+    put $ toDatum obs
+    putContractFragment fragment
+
+getDatum :: FromData a => Get a
+getDatum = get >>= \datum -> case fromDatum datum of
+  Nothing -> fail "Invalid datum"
+  Just a -> pure a
+
+getContractFragment :: Get SomeContractFragment
+getContractFragment = do
+  tag <- getWord8
+  case tag of
+    0x00 -> pure $ SomeContractFragment CloseF
+    0x01 ->  do
+      payor <- getDatum
+      payee <- getDatum
+      token <- getDatum
+      value <- getDatum
+      SomeContractFragment fragment <- getContractFragment
+      pure $ SomeContractFragment $ PayF payor payee token value fragment
+    0x02 -> do
+      obs <- getDatum
+      SomeContractFragment tru <- getContractFragment
+      SomeContractFragment fal <- getContractFragment
+      pure $ SomeContractFragment $ IfF obs tru fal
+    0x03 -> do
+      SomeVec cases <- getVec >>= \(SomeVec dats) -> case traverse fromDatum dats of
+        Nothing -> fail "Invalid actions"
+        Just cases -> pure $ SomeVec cases
+      timeout <- POSIXTime <$> get
+      SomeContractFragment fallback <- getContractFragment
+      pure $ SomeContractFragment $ WhenF cases timeout fallback
+    0x04 -> do
+      valueId <- getDatum
+      value <- getDatum
+      SomeContractFragment fragment <- getContractFragment
+      pure $ SomeContractFragment $ LetF valueId value fragment
+    0x05 -> do
+      obs <- getDatum
+      SomeContractFragment fragment <- getContractFragment
+      pure $ SomeContractFragment $ AssertF obs fragment
+    _ -> fail $ "Invalid tag " <> show tag
 
 -- | Count the number of holes in a contract fragment.
 fragmentHoles :: ContractFragment n -> Nat n

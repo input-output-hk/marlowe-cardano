@@ -7,8 +7,9 @@
 module Data.Vec
   where
 
+import Data.Binary (Binary(..), Get, Put)
 import Data.Nat (N(..), Nat(..), SingNat(..), type (+), withSingNat)
-import Prelude (Applicative(..), Eq, Foldable, Functor, Ord, Show, Traversable, ($))
+import Prelude (Applicative(..), Eq, Foldable, Functor, Ord, Show, Traversable, ($), (.), (<$>))
 
 data Vec (n :: N) a where
   Nil :: Vec 'Z a
@@ -60,3 +61,22 @@ reverse (Cons a v) = snoc (reverse v) a
 replicate :: Nat n -> a -> Vec n a
 replicate Zero _ = Nil
 replicate (Succ n) a = Cons a $ replicate n a
+
+toList :: forall n a. Vec n a -> [a]
+toList = \case
+  Nil -> []
+  Cons a vec -> a : toList vec
+
+fromList :: [a] -> SomeVec a
+fromList = \case
+  [] -> SomeVec Nil
+  a : as -> case fromList as of
+    SomeVec vec -> SomeVec $ Cons a vec
+
+data SomeVec a = forall n. SomeVec (Vec n a)
+
+putVec :: Binary a => Vec n a -> Put
+putVec = put . toList
+
+getVec :: Binary a => Get (SomeVec a)
+getVec = fromList <$> get
