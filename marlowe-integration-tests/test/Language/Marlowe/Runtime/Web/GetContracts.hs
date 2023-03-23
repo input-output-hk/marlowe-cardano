@@ -201,7 +201,7 @@ createCloseContract Wallet{..}= do
   let webExtraAddresses = Set.map toDTO extraAddresses
   let webCollateralUtxos = Set.map toDTO collateralUtxos
 
-  Web.CreateTxEnvelope{txBody = createTxBody, ..} <- postContract
+  Web.CreateTxEnvelope{txEnvelope = createTxBody, ..} <- postContract
     webChangeAddress
     (Just webExtraAddresses)
     (Just webCollateralUtxos)

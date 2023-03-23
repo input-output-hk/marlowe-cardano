@@ -38,7 +38,7 @@ main = withLocalMarloweRuntime \MarloweRuntime{..} -> do
   print webAddress
 
   either throw pure =<< runWebClient do
-    Web.CreateTxEnvelope{txBody = createTxBody, ..} <- postContract webAddress Nothing Nothing Web.PostContractsRequest
+    Web.CreateTxEnvelope{txEnvelope = createTxBody, ..} <- postContract webAddress Nothing Nothing Web.PostContractsRequest
       { metadata = mempty
       , tags = mempty
       , version = Web.V1
@@ -47,7 +47,7 @@ main = withLocalMarloweRuntime \MarloweRuntime{..} -> do
       , minUTxODeposit = 2_000_000
       }
 
-    liftIO $ print CreateTxEnvelope{txBody = createTxBody, ..}
+    liftIO $ print CreateTxEnvelope{txEnvelope = createTxBody, ..}
 
     createTx <- liftIO $ signShelleyTransaction' createTxBody [signingKey]
 
@@ -57,7 +57,7 @@ main = withLocalMarloweRuntime \MarloweRuntime{..} -> do
 
     liftIO $ print contractState
 
-    Web.ApplyInputsTxBody{transactionId, txBody = applyTxBody} <- postTransaction webAddress Nothing Nothing contractId Web.PostTransactionsRequest
+    Web.ApplyInputsTxEnvelope{transactionId, txEnvelope = applyTxBody} <- postTransaction webAddress Nothing Nothing contractId Web.PostTransactionsRequest
       { version = Web.V1
       , tags = mempty
       , metadata = mempty
