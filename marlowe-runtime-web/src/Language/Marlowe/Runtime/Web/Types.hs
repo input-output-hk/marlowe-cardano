@@ -421,7 +421,7 @@ instance ToSchema (WithdrawTxEnvelope CardanoTx) where
 
 instance ToSchema (WithdrawTxEnvelope CardanoTxBody) where
   declareNamedSchema _ = do
-    withdrawalIdSchema <- declareSchemaRef (Proxy :: Proxy TxOutRef)
+    withdrawalIdSchema <- declareSchemaRef (Proxy :: Proxy TxId)
     txEnvelopeSchema <- declareSchemaRef (Proxy :: Proxy TextEnvelope)
     return $ NamedSchema (Just "ApplyInputsTxEnvelope") $ mempty
       & type_ ?~ OpenApiObject
