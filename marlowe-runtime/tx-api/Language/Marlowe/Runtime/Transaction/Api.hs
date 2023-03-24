@@ -660,6 +660,7 @@ data ConstraintError v
   deriving (Generic)
 
 deriving instance Eq (ConstraintError 'V1)
+deriving instance Ord (ConstraintError 'V1)
 deriving instance Show (ConstraintError 'V1)
 deriving instance Binary (ConstraintError 'V1)
 deriving instance ToJSON (ConstraintError 'V1)
@@ -673,6 +674,7 @@ data CreateError v
 
 deriving instance Eq (CreateError 'V1)
 deriving instance Show (CreateError 'V1)
+deriving instance Ord (CreateError 'V1)
 instance Binary (CreateError 'V1)
 instance ToJSON (CreateError 'V1)
 
@@ -680,7 +682,7 @@ data CreateBuildupError
   = MintingUtxoSelectionFailed
   | AddressDecodingFailed Address
   | MintingScriptDecodingFailed PlutusScript
-  deriving (Eq, Show, Generic)
+  deriving (Eq, Ord, Show, Generic)
   deriving anyclass (Binary, ToJSON)
 
 data ApplyInputsError v
