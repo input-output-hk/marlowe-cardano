@@ -42,7 +42,7 @@ import Data.Type.Equality ((:~:)(Refl))
 import Language.Marlowe.Core.V1.Semantics (MarloweData(marloweContract))
 import Language.Marlowe.Protocol.HeaderSync.Client (MarloweHeaderSyncClient)
 import Language.Marlowe.Protocol.Sync.Client (MarloweSyncClient)
-import Language.Marlowe.Runtime.App.Types (Client)
+import Language.Marlowe.Runtime.App.Types (Client, PollingFrequency(PollingFrequency))
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainPoint, TxId, TxOutRef(TxOutRef, txId))
 import Language.Marlowe.Runtime.Core.Api
   ( ContractId
@@ -84,7 +84,7 @@ type TChanEOF a = TChan (Either EOF a)
 
 streamAllContractIds
   :: EventBackend IO r DynamicEventSelector
-  -> Int
+  -> PollingFrequency
   -> Bool
   -> TChanEOF ContractId
   -> TChanEOF (SyncEvent ContractId)
@@ -94,7 +94,7 @@ streamAllContractIds eventBackend pollingFrequency endOnWait = streamContractHea
 
 streamAllContractIdsClient
   :: EventBackend IO r DynamicEventSelector
-  -> Int
+  -> PollingFrequency
   -> Bool
   -> TChanEOF (SyncEvent ContractId)
   -> MarloweHeaderSyncClient Client (Maybe ContractStreamError)
@@ -104,7 +104,7 @@ streamAllContractIdsClient eventBackend pollingFrequency endOnWait = streamContr
 
 streamContractHeaders
   :: EventBackend IO r DynamicEventSelector
-  -> Int
+  -> PollingFrequency
   -> Bool
   -> (Either ChainPoint ContractHeader -> Maybe a)
   -> TChanEOF a
@@ -119,19 +119,19 @@ streamContractHeaders eventBackend pollingFrequency endOnWait extract channel =
 
 streamContractHeadersClient
   :: EventBackend IO r DynamicEventSelector
-  -> Int
+  -> PollingFrequency
   -> Bool
   -> (Either ChainPoint ContractHeader -> Maybe a)
   -> TChanEOF a
   -> MarloweHeaderSyncClient Client (Maybe ContractStreamError)
-streamContractHeadersClient eventBackend pollingFrequency endOnWait extract channel =
+streamContractHeadersClient eventBackend (PollingFrequency pollingFrequency) endOnWait extract channel =
   let
     clientIdle = HSync.SendMsgRequestNext clientNext
     clientWait
       | endOnWait = do
           atomically $ writeTChan channel $ Left EOF
           pure $ HSync.SendMsgCancel $ HSync.SendMsgDone $ Right ()
-      | otherwise = HSync.SendMsgPoll clientNext <$ threadDelay pollingFrequency
+      | otherwise = HSync.SendMsgPoll clientNext <$ threadDelay (fromIntegral pollingFrequency)
     clientNext =
       HSync.ClientStNext
       {
@@ -287,7 +287,7 @@ contractFromStream = fmap marloweContract . datumFromStream
 streamAllContractSteps
   :: IsMarloweVersion v
   => EventBackend IO r DynamicEventSelector
-  -> Int
+  -> PollingFrequency
   -> Bool
   -> ContractId
   -> TChanEOF (ContractStream v)
@@ -300,7 +300,7 @@ streamAllContractSteps eventBackend pollingFrequency finishOnWait =
 streamAllContractStepsClient
   :: IsMarloweVersion v
   => EventBackend IO r DynamicEventSelector
-  -> Int
+  -> PollingFrequency
   -> Bool
   -> ContractId
   -> TChanEOF (ContractStream v)
@@ -318,7 +318,7 @@ hasClosed  _ = False
 streamContractSteps
   :: IsMarloweVersion v
   => EventBackend IO r DynamicEventSelector
-  -> Int
+  -> PollingFrequency
   -> Bool
   -> Bool
   -> (Either (CreateStep v) (ContractStep v) -> Bool)
@@ -333,14 +333,14 @@ streamContractStepsClient
   :: forall v r
   .  IsMarloweVersion v
   => EventBackend IO r DynamicEventSelector
-  -> Int
+  -> PollingFrequency
   -> Bool
   -> Bool
   -> (Either (CreateStep v) (ContractStep v) -> Bool)
   -> ContractId
   -> TChanEOF (ContractStream v)
   -> MarloweSyncClient Client ()
-streamContractStepsClient eventBackend pollingFrequency finishOnClose finishOnWait accept csContractId channel =
+streamContractStepsClient eventBackend (PollingFrequency pollingFrequency) finishOnClose finishOnWait accept csContractId channel =
   let
     clientInit =
       CSync.SendMsgFollowContract csContractId
@@ -444,7 +444,7 @@ streamContractStepsClient eventBackend pollingFrequency finishOnClose finishOnWa
                   $ ContractStreamWait csContractId
                 if finishOnWait
                   then pure . CSync.SendMsgCancel $ CSync.SendMsgDone ()
-                  else clientWait version <$ threadDelay pollingFrequency
+                  else clientWait version <$ threadDelay (fromIntegral pollingFrequency)
       }
   in
     CSync.MarloweSyncClient

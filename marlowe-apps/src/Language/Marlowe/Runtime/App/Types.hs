@@ -18,6 +18,7 @@ module Language.Marlowe.Runtime.App.Types
   , Config(..)
   , MarloweRequest(..)
   , MarloweResponse(..)
+  , PollingFrequency(..)
   , RunClient
   , Services(..)
   , mkBody
@@ -89,6 +90,7 @@ import Data.Foldable (fold)
 import qualified Data.Map.Strict as M (Map, map, mapKeys)
 import qualified Data.Text as T (Text)
 import Language.Marlowe.Protocol.Client (hoistMarloweRuntimeClient)
+import Data.Time.Units (Second)
 import Language.Marlowe.Protocol.Query.Types (ContractFilter)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as CS (Transaction)
 
@@ -142,7 +144,7 @@ instance MonadWith Client where
   type WithException Client = WithException (MarloweT (ReaderT (Services IO) IO))
   stateThreadingGeneralWith
     :: forall a b releaseReturn
-     . GeneralAllocate (Client) (WithException Client) releaseReturn b a
+     . GeneralAllocate Client (WithException Client) releaseReturn b a
     -> (a -> Client b)
     -> Client (b, releaseReturn)
   stateThreadingGeneralWith (GeneralAllocate allocA) go = Client $ do
@@ -409,6 +411,9 @@ instance A.ToJSON (MarloweResponse 'V1) where
       [ "response" A..= ("txInfo" :: String)
       , "transaction" A..= resTransaction
       ]
+
+
+newtype PollingFrequency = PollingFrequency Second
 
 
 contractCreationToJSON :: CreateStep 'V1-> A.Value

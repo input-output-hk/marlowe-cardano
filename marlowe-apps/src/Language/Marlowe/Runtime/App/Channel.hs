@@ -9,6 +9,7 @@
 
 module Language.Marlowe.Runtime.App.Channel
   ( LastSeen(..)
+  , RequeueFrequency(..)
   , mkDetection
   , mkDiscovery
   , runContractAction
@@ -39,7 +40,6 @@ import Language.Marlowe.Runtime.App.Stream
   , streamContractSteps
   , transactionIdFromStream
   )
-import Language.Marlowe.Runtime.App.Types (Config)
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainPoint, TxId)
 import Language.Marlowe.Runtime.Core.Api (ContractId, MarloweVersionTag(V1))
 import Language.Marlowe.Runtime.History.Api (ContractStep, CreateStep)
@@ -50,13 +50,14 @@ import Observe.Event.Syntax ((≔))
 
 import qualified Data.Map.Strict as M (Map, adjust, delete, insert, lookup)
 import qualified Data.Set as S (Set, insert, member)
+import Data.Time.Units (Second)
 
 
 -- `mk*` functions are useful if you want to manage the threads yourself.
 mkDiscovery
   :: EventBackend IO r DynamicEventSelector
   -> Config
-  -> Int
+  -> PollingFrequency
   -> Bool
   -> IO (TChan (Either ChainPoint (BlockHeader, ContractId)), IO ())
 mkDiscovery eventBackend config pollingFrequency endOnWait =
@@ -75,7 +76,7 @@ mkDiscovery eventBackend config pollingFrequency endOnWait =
 runDiscovery
   :: EventBackend IO r DynamicEventSelector
   -> Config
-  -> Int
+  -> PollingFrequency
   -> Bool
   -> IO (TChan (Either ChainPoint (BlockHeader, ContractId)))
 runDiscovery eventBackend config pollingFrequency endOnwait = do
@@ -88,7 +89,7 @@ runDiscovery eventBackend config pollingFrequency endOnwait = do
 runDiscovery'
   :: EventBackend IO r DynamicEventSelector
   -> Config
-  -> Int
+  -> PollingFrequency
   -> IO (TChan ContractId)
 runDiscovery' eventBackend config pollingFrequency = do
   contractIdChannel <- newTChanIO
@@ -104,7 +105,7 @@ mkDetection
   :: (Either (CreateStep 'V1) (ContractStep 'V1) -> Bool)
   -> EventBackend IO r DynamicEventSelector
   -> Config
-  -> Int
+  -> PollingFrequency
   -> TChanEOF ContractId
   -> IO (TChanEOF (ContractStream 'V1), IO ())
 mkDetection accept eventBackend config pollingFrequency inChannel =
@@ -133,8 +134,7 @@ runDetection
   :: (Either (CreateStep 'V1) (ContractStep 'V1) -> Bool)
   -> EventBackend IO r DynamicEventSelector
   -> Config
-  -> Int
--- <<<<<<< HEAD
+  -> PollingFrequency
   -> TChanEOF ContractId
   -> IO (TChanEOF (ContractStream 'V1))
 -- runDetection accept eventBackend config pollingFrequency inChannel =
@@ -166,6 +166,7 @@ runDetection
 -- =======
 --   -> TChan ContractId
 --   -> IO (TChan (ContractStream 'V1))
+-- =======
 runDetection accept eventBackend config pollingFrequency inChannel = do
   (outChannel, detection) <- mkDetection accept eventBackend config pollingFrequency inChannel
   void . forkIO $ detection
@@ -183,17 +184,20 @@ data LastSeen =
     deriving (Show)
 
 
+newtype RequeueFrequency = RequeueFrequency Second
+
+
 runContractAction
   :: forall r
   .  Text
   -> EventBackend IO r DynamicEventSelector
   -> (Event IO r DynamicField -> LastSeen -> IO ())
-  -> Int
+  -> RequeueFrequency
   -> Bool
   -> TChanEOF (ContractStream 'V1)
   -> TChanEOF ContractId
   -> IO ()
-runContractAction selectorName eventBackend runInput pollingFrequency endOnWait inChannel outChannel =
+runContractAction selectorName eventBackend runInput (RequeueFrequency requeueFrequency) endOnWait inChannel outChannel =
   let
     -- Nothing needs updating.
     rollback :: ContractStream 'V1 -> M.Map ContractId LastSeen -> M.Map ContractId LastSeen
@@ -231,7 +235,7 @@ runContractAction selectorName eventBackend runInput pollingFrequency endOnWait 
       | endOnWait = pure ()
       -- FIXME: This is a workaround for contract discovery not tailing past the tip of the blockchain.
       | otherwise = void . forkIO
-        $ threadDelay pollingFrequency
+        $ threadDelay (fromIntegral requeueFrequency)
         >> atomically (writeTChan outChannel $ Right contractId)
     go :: M.Map ContractId LastSeen -> IO ()
     go lastSeen =
