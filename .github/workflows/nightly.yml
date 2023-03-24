@@ -52,5 +52,8 @@ jobs:
       - name: Run Marlowe Finder on Preview
         run: |
           scripts/setup-dev-connection &
-          while ! nc -zv 127.0.0.1 3700 2>1 >/dev/null
+          while ! nc -zv 127.0.0.1 3700 > /dev/null 2>&1
+          do
+            :
+          done
           result/bin/marlowe-finder --end-at-tip
