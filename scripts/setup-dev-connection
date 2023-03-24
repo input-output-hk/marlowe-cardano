@@ -4,7 +4,7 @@ ENVIRONMENT=${ENVIRONMENT:-"preprod"}
 
 eval "$(ssh dev@dapps.aws.iohkdev.io -p 4022 \
   cat /local/network.env \
-  | sed -n "/${ENVIRONMENT^^}/s/.*MAIN_//p")"
+  | sed -n "/^${ENVIRONMENT^^}_/s/^${ENVIRONMENT^^}_//p")"
 
 ssh -N dev@a.dapps.aws.iohkdev.io -p 4022 \
   -L "3700:$PROXY_IP:$PROXY_PORT" \
