@@ -147,8 +147,8 @@ instance Arbitrary (Web.CreateTxEnvelope tx) where
   arbitrary = Web.CreateTxEnvelope <$> arbitrary <*> arbitrary
   shrink = genericShrink
 
-instance Arbitrary Web.WithdrawTxBody where
-  arbitrary = Web.WithdrawTxBody <$> arbitrary <*> arbitrary
+instance Arbitrary (Web.WithdrawTxEnvelope tx) where
+  arbitrary = Web.WithdrawTxEnvelope <$> arbitrary <*> arbitrary
   shrink = genericShrink
 
 instance Arbitrary (Web.ApplyInputsTxEnvelope tx) where

@@ -16,6 +16,7 @@ module Language.Marlowe.Runtime.Web.Client
   , postTransaction
   , postTransactionCreateTx
   , postWithdrawal
+  , postWithdrawalCreateTx
   , putContract
   , putTransaction
   , putWithdrawal
@@ -138,11 +139,27 @@ postWithdrawal
   -> Maybe (Set Address)
   -> Maybe (Set TxOutRef)
   -> PostWithdrawalsRequest
-  -> ClientM WithdrawTxBody
+  -> ClientM (WithdrawTxEnvelope CardanoTxBody)
 postWithdrawal changeAddress otherAddresses collateralUtxos request = do
   let _ :<|> withdrawalsClient :<|> _ = client
-  let _ :<|> postWithdrawal' :<|> _ = withdrawalsClient
+  let _ :<|> (postWithdrawal' :<|> _) :<|> _ = withdrawalsClient
   response <- postWithdrawal'
+    request
+    changeAddress
+    (setToCommaList <$> otherAddresses)
+    (setToCommaList <$> collateralUtxos)
+  pure $ retractLink response
+
+postWithdrawalCreateTx
+  :: Address
+  -> Maybe (Set Address)
+  -> Maybe (Set TxOutRef)
+  -> PostWithdrawalsRequest
+  -> ClientM (WithdrawTxEnvelope CardanoTx)
+postWithdrawalCreateTx changeAddress otherAddresses collateralUtxos request = do
+  let _ :<|> withdrawalsClient :<|> _ = client
+  let _ :<|> (_ :<|> postWithdrawalCreateTx') :<|> _ = withdrawalsClient
+  response <- postWithdrawalCreateTx'
     request
     changeAddress
     (setToCommaList <$> otherAddresses)

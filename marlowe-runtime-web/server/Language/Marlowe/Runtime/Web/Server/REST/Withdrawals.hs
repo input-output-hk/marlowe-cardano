@@ -9,7 +9,8 @@
 module Language.Marlowe.Runtime.Web.Server.REST.Withdrawals
   where
 
-import Cardano.Api (AsType(..), deserialiseFromTextEnvelope, getTxBody, getTxId)
+import Cardano.Api
+  (AsType(..), BabbageEra, TxBody, deserialiseFromTextEnvelope, getTxBody, getTxId, makeSignedTransaction)
 import qualified Cardano.Api.SerialiseTextEnvelope as Cardano
 import Control.Monad (unless)
 import Control.Monad.IO.Class (liftIO)
@@ -29,6 +30,7 @@ import Language.Marlowe.Runtime.Web.Server.REST.ApiError
 import qualified Language.Marlowe.Runtime.Web.Server.REST.ApiError as ApiError
 import qualified Language.Marlowe.Runtime.Web.Server.REST.Transactions as Transactions
 import Language.Marlowe.Runtime.Web.Server.TxClient (TempTx(..), TempTxStatus(..), TxClientSelector, Withdrawn(..))
+import Observe.Event.Backend (Event)
 import Observe.Event.DSL (FieldSpec(..), SelectorField(..), SelectorSpec(..))
 import Observe.Event.Explicit
   ( EventBackend
@@ -65,7 +67,8 @@ compile $ SelectorSpec "withdrawals"
       , "addresses" ≔ ''Addresses
       , "collateral" ≔ ''TxOutRefs
       , ["post", "error"] ≔ ''String
-      , ["post", "response"] ≔ ''WithdrawTxBody
+      , ["post", "response", "txBody"] ≔ [t|WithdrawTxEnvelope CardanoTxBody|]
+      , ["post", "response", "tx"] ≔ [t|WithdrawTxEnvelope CardanoTx|]
       ]
   , ["get", "one"] ≔ FieldSpec ["get", "one"]
       [ ["get", "id"] ≔ ''TxId
@@ -84,17 +87,17 @@ server
   :: EventBackend IO r WithdrawalsSelector
   -> ServerT WithdrawalsAPI (AppM r)
 server eb = get eb
-       :<|> post eb
+       :<|> (postCreateTxBodyResponse eb :<|> postCreateTxResponse eb)
        :<|> withdrawalServer eb
 
-post
-  :: EventBackend IO r WithdrawalsSelector
+postCreateTxBody
+  :: Event (AppM r) r' PostField
   -> PostWithdrawalsRequest
   -> Address
   -> Maybe (CommaList Address)
   -> Maybe (CommaList TxOutRef)
-  -> AppM r PostWithdrawalsResponse
-post eb req@PostWithdrawalsRequest{..} changeAddressDTO mAddresses mCollateralUtxos = withEvent (hoistEventBackend liftIO eb) Post \ev -> do
+  -> AppM r (TxBody BabbageEra)
+postCreateTxBody ev req@PostWithdrawalsRequest{..} changeAddressDTO mAddresses mCollateralUtxos = do
   addField ev $ NewWithdrawal req
   addField ev $ ChangeAddress changeAddressDTO
   traverse_ (addField ev . Addresses) mAddresses
@@ -108,11 +111,37 @@ post eb req@PostWithdrawalsRequest{..} changeAddressDTO mAddresses mCollateralUt
     Left err -> do
       addField ev $ PostError $ show err
       throwDTOError err
-    Right txBody -> do
-      let (withdrawalId', txBody') = toDTO (fromCardanoTxId $ getTxId txBody, txBody)
-      let body = WithdrawTxBody withdrawalId' txBody'
-      addField ev $ PostResponse body
-      pure $ IncludeLink (Proxy @"withdrawal") body
+    Right txBody -> pure txBody
+
+postCreateTxBodyResponse
+  :: EventBackend IO r WithdrawalsSelector
+  -> PostWithdrawalsRequest
+  -> Address
+  -> Maybe (CommaList Address)
+  -> Maybe (CommaList TxOutRef)
+  -> AppM r (PostWithdrawalsResponse CardanoTxBody)
+postCreateTxBodyResponse eb req changeAddressDTO mAddresses mCollateralUtxos = withEvent (hoistEventBackend liftIO eb) Post \ev -> do
+  txBody <- postCreateTxBody ev req changeAddressDTO mAddresses mCollateralUtxos
+  let (withdrawalId, txBody') = toDTO (fromCardanoTxId $ getTxId txBody, txBody)
+  let body = WithdrawTxEnvelope withdrawalId txBody'
+  addField ev $ PostResponseTxBody body
+  pure $ IncludeLink (Proxy @"withdrawal") body
+
+postCreateTxResponse
+  :: EventBackend IO r WithdrawalsSelector
+  -> PostWithdrawalsRequest
+  -> Address
+  -> Maybe (CommaList Address)
+  -> Maybe (CommaList TxOutRef)
+  -> AppM r (PostWithdrawalsResponse CardanoTx)
+postCreateTxResponse eb req changeAddressDTO mAddresses mCollateralUtxos = withEvent (hoistEventBackend liftIO eb) Post \ev -> do
+  txBody <- postCreateTxBody ev req changeAddressDTO mAddresses mCollateralUtxos
+  let tx = makeSignedTransaction [] txBody
+  let (withdrawalId, tx') = toDTO (fromCardanoTxId $ getTxId txBody, tx)
+  let body = WithdrawTxEnvelope withdrawalId tx'
+  addField ev $ PostResponseTx body
+  pure $ IncludeLink (Proxy @"withdrawal") body
+
 
 get
   :: EventBackend IO r WithdrawalsSelector

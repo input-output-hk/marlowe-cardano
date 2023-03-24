@@ -378,22 +378,63 @@ instance ToJSON BlockHeader
 instance FromJSON BlockHeader
 instance ToSchema BlockHeader
 
-data WithdrawTxBody = WithdrawTxBody
+data CardanoTx
+data CardanoTxBody
+
+data WithdrawTxEnvelope tx = WithdrawTxEnvelope
   { withdrawalId :: TxId
-  , txBody :: TextEnvelope
+  , txEnvelope :: TextEnvelope
   } deriving (Show, Eq, Ord, Generic)
 
-instance ToJSON WithdrawTxBody
-instance FromJSON WithdrawTxBody
-instance ToSchema WithdrawTxBody
+instance ToJSON (WithdrawTxEnvelope CardanoTx) where
+  toJSON WithdrawTxEnvelope{..} = object
+    [ ("withdrawalId", toJSON withdrawalId)
+    , ("tx", toJSON txEnvelope)
+    ]
+instance ToJSON (WithdrawTxEnvelope CardanoTxBody) where
+  toJSON WithdrawTxEnvelope{..} = object
+    [ ("withdrawalId", toJSON withdrawalId)
+    , ("txBody", toJSON txEnvelope)
+    ]
+
+instance FromJSON (WithdrawTxEnvelope CardanoTx) where
+  parseJSON = withObject "WithdrawTxEnvelope" \obj -> WithdrawTxEnvelope
+    <$> obj .: "withdrawalId"
+    <*> obj .: "tx"
+
+instance FromJSON (WithdrawTxEnvelope CardanoTxBody) where
+  parseJSON = withObject "WithdrawTxEnvelope" \obj -> WithdrawTxEnvelope
+    <$> obj .: "withdrawalId"
+    <*> obj .: "txBody"
+
+instance ToSchema (WithdrawTxEnvelope CardanoTx) where
+  declareNamedSchema _ = do
+    withdrawalIdSchema <- declareSchemaRef (Proxy :: Proxy TxId)
+    txEnvelopeSchema <- declareSchemaRef (Proxy :: Proxy TextEnvelope)
+    return $ NamedSchema (Just "ApplyInputsTxEnvelope") $ mempty
+      & type_ ?~ OpenApiObject
+      & properties .~
+          [ ("withdrawalId", withdrawalIdSchema)
+          , ("tx", txEnvelopeSchema)
+          ]
+      & required .~ [ "withdrawalId", "tx" ]
+
+instance ToSchema (WithdrawTxEnvelope CardanoTxBody) where
+  declareNamedSchema _ = do
+    withdrawalIdSchema <- declareSchemaRef (Proxy :: Proxy TxOutRef)
+    txEnvelopeSchema <- declareSchemaRef (Proxy :: Proxy TextEnvelope)
+    return $ NamedSchema (Just "ApplyInputsTxEnvelope") $ mempty
+      & type_ ?~ OpenApiObject
+      & properties .~
+          [ ("withdrawalId", withdrawalIdSchema)
+          , ("txBody", txEnvelopeSchema)
+          ]
+      & required .~ [ "withdrawalId", "txBody" ]
 
 data CreateTxEnvelope tx = CreateTxEnvelope
   { contractId :: TxOutRef
   , txEnvelope :: TextEnvelope
   } deriving (Show, Eq, Ord, Generic)
-
-data CardanoTx
-data CardanoTxBody
 
 instance ToJSON (CreateTxEnvelope CardanoTx) where
   toJSON CreateTxEnvelope{..} = object
@@ -439,7 +480,6 @@ instance ToSchema (CreateTxEnvelope CardanoTxBody) where
           , ("txBody", txEnvelopeSchema)
           ]
       & required .~ [ "contractId", "txBody" ]
-
 
 data TextEnvelope = TextEnvelope
   { teType :: Text

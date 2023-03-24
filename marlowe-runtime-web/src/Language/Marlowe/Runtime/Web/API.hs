@@ -114,7 +114,6 @@ instance HasNamedLink (CreateTxEnvelope tx) API "contract" where
     "contracts" :> Capture "contractId" TxOutRef :> GetContractAPI
   namedLink _ _ mkLink CreateTxEnvelope{..} = Just $ mkLink contractId
 
-
 -- | POST /contracts sub-API
 type PostContractsAPI
   =  ReqBody '[JSON] PostContractsRequest :> PostTxAPI (PostCreated '[JSON] (PostContractsResponse CardanoTxBody))
@@ -224,15 +223,32 @@ instance HasNamedLink WithdrawalHeader API "withdrawal" where
 
 -- | POST /contracts sub-API
 type PostWithdrawalsAPI
-  =  ReqBody '[JSON] PostWithdrawalsRequest
-  :> PostTxAPI (PostCreated '[JSON] PostWithdrawalsResponse)
+  =  ReqBody '[JSON] PostWithdrawalsRequest :> PostTxAPI (PostCreated '[JSON] (PostWithdrawalsResponse CardanoTxBody))
+  :<|> ReqBody '[JSON] PostWithdrawalsRequest :> PostTxAPI (PostCreated '[TxJSON WithdrawTx] (PostWithdrawalsResponse CardanoTx))
 
-type PostWithdrawalsResponse = WithLink "withdrawal" WithdrawTxBody
+type PostWithdrawalsResponse tx = WithLink "withdrawal" (WithdrawTxEnvelope tx)
 
-instance HasNamedLink WithdrawTxBody API "withdrawal" where
-  type Endpoint WithdrawTxBody API "withdrawal" =
+data WithdrawTx
+
+instance Accept (TxJSON WithdrawTx) where
+    contentType _ = "application" // "vendor.iog.marlowe-runtime.withdraw-tx-json"
+
+instance MimeRender (TxJSON WithdrawTx) (PostWithdrawalsResponse CardanoTx) where
+  mimeRender _ = encode . toJSON
+
+instance MimeUnrender (TxJSON WithdrawTx) (PostWithdrawalsResponse CardanoTx) where
+  mimeUnrender _ bs = eitherDecode bs
+
+-- instance HasNamedLink (CreateTxEnvelope tx) API "contract" where
+--   type Endpoint (CreateTxEnvelope tx) API "contract" =
+--     "contracts" :> Capture "contractId" TxOutRef :> GetContractAPI
+--   namedLink _ _ mkLink CreateTxEnvelope{..} = Just $ mkLink contractId
+--
+
+instance HasNamedLink (WithdrawTxEnvelope tx) API "withdrawal" where
+  type Endpoint (WithdrawTxEnvelope tx) API "withdrawal" =
     "withdrawals" :> Capture "withdrawalId" TxId :> GetWithdrawalAPI
-  namedLink _ _ mkLink WithdrawTxBody{..} = Just $ mkLink withdrawalId
+  namedLink _ _ mkLink WithdrawTxEnvelope{..} = Just $ mkLink withdrawalId
 
 -- | /contracts/:contractId/withdrawals/:withdrawalId sup-API
 type WithdrawalAPI = GetWithdrawalAPI
