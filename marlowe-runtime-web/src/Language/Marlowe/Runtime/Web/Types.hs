@@ -652,6 +652,7 @@ data ApplyInputsTxEnvelope tx = ApplyInputsTxEnvelope
 instance ToJSON (ApplyInputsTxEnvelope CardanoTx) where
   toJSON ApplyInputsTxEnvelope{..} = object
     [ ("contractId", toJSON contractId)
+    , ("transactionId", toJSON transactionId)
     , ("tx", toJSON txEnvelope)
     ]
 instance ToJSON (ApplyInputsTxEnvelope CardanoTxBody) where
