@@ -143,7 +143,6 @@ executable marlowe-oracle
                     , plutus-ledger-api
                     , servant
                     , servant-client
-                    , stm
                     , text
   ghc-options       : -Wall
                       -Wnoncanonical-monad-instances
