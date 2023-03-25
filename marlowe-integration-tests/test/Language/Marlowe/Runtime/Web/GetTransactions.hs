@@ -19,11 +19,11 @@ import Network.HTTP.Types (Status(..))
 import Servant.Client (ClientError(FailureResponse))
 import Servant.Client.Streaming (ResponseF(Response, responseStatusCode))
 import Servant.Pagination (Range(..), RangeOrder(..))
-import Test.Hspec (Spec, describe, focus, it, shouldBe, shouldContain)
+import Test.Hspec (Spec, describe, it, shouldBe, shouldContain)
 import Test.Integration.Marlowe.Local (withLocalMarloweRuntime)
 
 spec :: Spec
-spec = focus $ describe "GET /contracts/{contractId}/transactions" do
+spec = describe "GET /contracts/{contractId}/transactions" do
   getTransactionsValidSpec
   getTransactionsInvalidSpec
   getTransactionsValidNextPageSpec
