@@ -177,3 +177,27 @@ standardContract partyBAddress startTime timeoutLength = (contract, partyA, part
     partyA = Role "PartyA"
     -- 0x00 = testnet
     partyB = Address (toEnum 0x00) partyBAddress
+
+createFullyExecutedStandardContract :: Wallet -> Wallet -> ClientM (Web.TxOutRef, [Web.TxId])
+createFullyExecutedStandardContract partyAWallet partyBWallet = do
+    StandardContractInit{contractCreated, makeInitialDeposit} <- createStandardContract partyAWallet partyBWallet
+    StandardContractFundsDeposited{initialFundsDeposited, chooseGimmeTheMoney} <- makeInitialDeposit
+    StandardContractChoiceMade{gimmeTheMoneyChosen, sendNotify} <- chooseGimmeTheMoney
+    StandardContractNotified{notified, makeReturnDeposit} <- sendNotify
+    StandardContractClosed{returnDeposited, withdrawPartyAFunds} <- makeReturnDeposit
+    (_, _) <- withdrawPartyAFunds
+    createContractId <- case contractCreated of
+      Web.CreateTxBody{contractId} -> pure contractId
+    transactionId1 <- case initialFundsDeposited of
+      Web.ApplyInputsTxBody{transactionId} -> pure transactionId
+    transactionId2 <- case gimmeTheMoneyChosen of
+      Web.ApplyInputsTxBody{transactionId} -> pure transactionId
+    transactionId3 <- case notified of
+      Web.ApplyInputsTxBody{transactionId} -> pure transactionId
+    transactionId4 <- case returnDeposited of
+      Web.ApplyInputsTxBody{transactionId} -> pure transactionId
+    let
+      transactionIds = [transactionId1, transactionId2, transactionId3, transactionId4]
+    liftIO $ putStrLn $ "Created contract with id: " <> show createContractId
+    liftIO $ putStrLn $ "Transaction Ids with id: " <> show transactionIds
+    pure (createContractId, transactionIds)

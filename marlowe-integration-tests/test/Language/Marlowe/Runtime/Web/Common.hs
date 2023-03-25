@@ -207,4 +207,3 @@ waitUntilConfirmed getStatus getResource = do
     _ -> do
       liftIO $ threadDelay 1000
       waitUntilConfirmed getStatus getResource
-
