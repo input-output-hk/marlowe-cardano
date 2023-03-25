@@ -23,7 +23,7 @@ import Test.Hspec (Spec, describe, focus, it, shouldBe, shouldContain)
 import Test.Integration.Marlowe.Local (withLocalMarloweRuntime)
 
 spec :: Spec
-spec = describe "GET /contracts/{contractId}/transactions" do
+spec = focus $ describe "GET /contracts/{contractId}/transactions" do
   getTransactionsValidSpec
   getTransactionsInvalidSpec
   getTransactionsValidNextPageSpec
@@ -193,7 +193,7 @@ singleContractMultipleTransactionsValidSpec  =  it "returns a list with multiple
 
     Page {..} <- getTransactions createContractId Nothing
 
-    liftIO $ fmap (\Web.TxHeader{..} -> transactionId) items `shouldBe` expectedTransactionIds
+    liftIO $ fmap (\Web.TxHeader{..} -> transactionId) items `shouldBe` reverse expectedTransactionIds
 
 multipleContractsMultipleTransactionsValidSpec :: Spec
 multipleContractsMultipleTransactionsValidSpec  =  it "returns a list with multiple Tx headers when multiple contracts are on chain" $ withLocalMarloweRuntime $ runIntegrationTest do
@@ -206,7 +206,7 @@ multipleContractsMultipleTransactionsValidSpec  =  it "returns a list with multi
 
     Page {..} <- getTransactions createContractId Nothing
 
-    liftIO $ fmap (\Web.TxHeader{..} -> transactionId) items `shouldBe` expectedTransactionIds
+    liftIO $ fmap (\Web.TxHeader{..} -> transactionId) items `shouldBe` reverse expectedTransactionIds
 
 
 invalidTxIdSpec :: Spec
