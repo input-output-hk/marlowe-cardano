@@ -15,23 +15,23 @@ import Language.Marlowe.Runtime.Web.StandardContract (createFullyExecutedStandar
 import Network.HTTP.Types (Status(..))
 import Servant.Client (ClientError(FailureResponse))
 import Servant.Client.Streaming (ResponseF(Response, responseStatusCode))
-import Test.Hspec (Spec, describe, focus, it, shouldBe)
+import Test.Hspec (Spec, describe, it, shouldBe)
 import Test.Integration.Marlowe.Local (withLocalMarloweRuntime)
 
 spec :: Spec
 spec = describe "GET /contract/{contractId}/transactions/{transactionId}" do
   getTransactionValidSpec
-  -- getTransactionInvalidSpec
+  getTransactionInvalidSpec
 
 getTransactionValidSpec :: Spec
-getTransactionValidSpec = focus $ describe "Valid GET /contract/{contractId}/transactions/{transactionId}" do
+getTransactionValidSpec = describe "Valid GET /contract/{contractId}/transactions/{transactionId}" do
   getsFirstTransactionValidSpec
   getsSecondTransactionValidSpec
   getsThirdTransactionValidSpec
 
--- getTransactionInvalidSpec :: Spec
--- getTransactionInvalidSpec = describe "Invalid GET /contract/{contractId}/transactions/{transactionId}" do
-  -- invalidTxIdSpec
+getTransactionInvalidSpec :: Spec
+getTransactionInvalidSpec = describe "Invalid GET /contract/{contractId}/transactions/{transactionId}" do
+  invalidTxIdSpec
 
 getsFirstTransactionValidSpec :: Spec
 getsFirstTransactionValidSpec = it "returns the first transaction" $ withLocalMarloweRuntime $ runIntegrationTest do
@@ -83,13 +83,19 @@ getsThirdTransactionValidSpec = it "returns the third transaction" $ withLocalMa
         liftIO $ fail "Expected at least three transactions"
 
 
--- invalidTxIdSpec :: Spec
--- invalidTxIdSpec = it "returns not found for invalid transaction id" $ withLocalMarloweRuntime $ runIntegrationTest do
---   result <- runWebClient do
---     let
---       invalidTxId = Web.TxOutRef (toDTO @Chain.TxId "0000000000000000000000000000000000000000000000000000000000000000") 1
---     getTransaction invalidTxId
+invalidTxIdSpec :: Spec
+invalidTxIdSpec = it "returns not found for invalid transaction id" $ withLocalMarloweRuntime $ runIntegrationTest do
+  wallet1 <- getGenesisWallet 0
+  wallet2 <- getGenesisWallet 1
 
---   case result of
---     Left (FailureResponse _ Response { responseStatusCode = Status { statusCode = 404 } } ) ->  pure ()
---     _ -> fail $ "Expected 404 response code - got " <> show result
+
+  result <- runWebClient do
+    (contractId, _) <- createFullyExecutedStandardContract wallet1 wallet2
+
+    let
+      invalidTxId = toDTO @Chain.TxId "0000000000000000000000000000000000000000000000000000000000000000"
+    getTransaction contractId invalidTxId
+
+  case result of
+    Left (FailureResponse _ Response { responseStatusCode = Status { statusCode = 404 } } ) ->  pure ()
+    _ -> fail $ "Expected 404 response code - got " <> show result
