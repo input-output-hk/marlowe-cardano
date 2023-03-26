@@ -198,6 +198,4 @@ createFullyExecutedStandardContract partyAWallet partyBWallet = do
       Web.ApplyInputsTxBody{transactionId} -> pure transactionId
     let
       transactionIds = [transactionId1, transactionId2, transactionId3, transactionId4]
-    liftIO $ putStrLn $ "Created contract with id: " <> show createContractId
-    liftIO $ putStrLn $ "Transaction Ids with id: " <> show transactionIds
     pure (createContractId, transactionIds)
