@@ -15,7 +15,7 @@ import Language.Marlowe.Runtime.Web.StandardContract (createFullyExecutedStandar
 import Network.HTTP.Types (Status(..))
 import Servant.Client (ClientError(FailureResponse))
 import Servant.Client.Streaming (ResponseF(Response, responseStatusCode))
-import Test.Hspec (Spec, describe, it, shouldBe)
+import Test.Hspec (Spec, describe, focus, it, shouldBe)
 import Test.Integration.Marlowe.Local (withLocalMarloweRuntime)
 
 spec :: Spec
@@ -24,7 +24,7 @@ spec = describe "GET /contract/{contractId}/transactions/{transactionId}" do
   -- getTransactionInvalidSpec
 
 getTransactionValidSpec :: Spec
-getTransactionValidSpec = describe "Valid GET /contract/{contractId}/transactions/{transactionId}" do
+getTransactionValidSpec = focus $ describe "Valid GET /contract/{contractId}/transactions/{transactionId}" do
   getsFirstTransactionValidSpec
   getsSecondTransactionValidSpec
   getsThirdTransactionValidSpec

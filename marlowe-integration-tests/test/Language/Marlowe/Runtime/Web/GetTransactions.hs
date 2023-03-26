@@ -121,7 +121,7 @@ firstPageDescValidSpec = it "returns the first page of transactions in descendin
 
 
 secondPageDescValidSpec :: Spec
-secondPageDescValidSpec = it "returns the second page of contract headers in descending order" $ withLocalMarloweRuntime $ runIntegrationTest do
+secondPageDescValidSpec = it "returns the second page of transactions in descending order" $ withLocalMarloweRuntime $ runIntegrationTest do
   wallet1 <- getGenesisWallet 0
   wallet2 <- getGenesisWallet 1
 
@@ -157,7 +157,7 @@ noTransactionsValidSpec = it "returns an empty list when no transactions exist" 
     liftIO $ fmap (\Web.TxHeader{..} -> transactionId) items `shouldBe` []
 
 singleTransactionValidSpec :: Spec
-singleTransactionValidSpec  = it "returns a list with single Tx header when there is a single contract on chain" $ withLocalMarloweRuntime $ runIntegrationTest do
+singleTransactionValidSpec  = it "returns a list with single transaction when there is a single contract on chain" $ withLocalMarloweRuntime $ runIntegrationTest do
   wallet <- getGenesisWallet 0
 
   either throw pure =<< runWebClient do
@@ -168,7 +168,7 @@ singleTransactionValidSpec  = it "returns a list with single Tx header when ther
     liftIO $ fmap (\Web.TxHeader{..} -> transactionId) items `shouldBe` [expectedTxId]
 
 multipleContractsSingleTransactionsValidSpec :: Spec
-multipleContractsSingleTransactionsValidSpec  =  it "returns a list with single Tx header when there are multiple contracts on chain" $ withLocalMarloweRuntime $ runIntegrationTest do
+multipleContractsSingleTransactionsValidSpec  =  it "returns a list with single transaction when there are multiple contracts on chain" $ withLocalMarloweRuntime $ runIntegrationTest do
   wallet1 <- getGenesisWallet 0
   wallet2 <- getGenesisWallet 1
 
@@ -181,7 +181,7 @@ multipleContractsSingleTransactionsValidSpec  =  it "returns a list with single 
     liftIO $ fmap (\Web.TxHeader{..} -> transactionId) items `shouldBe` [expectedTxId]
 
 singleContractMultipleTransactionsValidSpec :: Spec
-singleContractMultipleTransactionsValidSpec  =  it "returns a list with multiple Tx headers when a single contract is on chain" $ withLocalMarloweRuntime $ runIntegrationTest do
+singleContractMultipleTransactionsValidSpec  =  it "returns a list with multiple transaction when a single contract is on chain" $ withLocalMarloweRuntime $ runIntegrationTest do
   wallet1 <- getGenesisWallet 0
   wallet2 <- getGenesisWallet 1
 
@@ -193,7 +193,7 @@ singleContractMultipleTransactionsValidSpec  =  it "returns a list with multiple
     liftIO $ fmap (\Web.TxHeader{..} -> transactionId) items `shouldBe` reverse expectedTransactionIds
 
 multipleContractsMultipleTransactionsValidSpec :: Spec
-multipleContractsMultipleTransactionsValidSpec  =  it "returns a list with multiple Tx headers when multiple contracts are on chain" $ withLocalMarloweRuntime $ runIntegrationTest do
+multipleContractsMultipleTransactionsValidSpec  =  it "returns a list with multiple transaction when multiple contracts are on chain" $ withLocalMarloweRuntime $ runIntegrationTest do
   wallet1 <- getGenesisWallet 0
   wallet2 <- getGenesisWallet 1
 
