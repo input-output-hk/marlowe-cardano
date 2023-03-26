@@ -1,5 +1,3 @@
-{-# OPTIONS_GHC -Wno-unused-imports #-}
-
 module Language.Marlowe.Runtime.Web.GetTransactions
   where
 
@@ -9,9 +7,8 @@ import Control.Exception (throw)
 import Data.Proxy (Proxy(Proxy))
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Integration.Common
-import Language.Marlowe.Runtime.Web (ApplyInputsTxBody(ApplyInputsTxBody))
 import qualified Language.Marlowe.Runtime.Web as Web
-import Language.Marlowe.Runtime.Web.Client (Page(..), getContracts, getTransactions)
+import Language.Marlowe.Runtime.Web.Client (Page(..), getTransactions)
 import Language.Marlowe.Runtime.Web.Common (applyCloseTransaction, createCloseContract)
 import Language.Marlowe.Runtime.Web.Server.DTO (ToDTO(toDTO))
 import Language.Marlowe.Runtime.Web.StandardContract (createFullyExecutedStandardContract)
@@ -19,7 +16,7 @@ import Network.HTTP.Types (Status(..))
 import Servant.Client (ClientError(FailureResponse))
 import Servant.Client.Streaming (ResponseF(Response, responseStatusCode))
 import Servant.Pagination (Range(..), RangeOrder(..))
-import Test.Hspec (Spec, describe, it, shouldBe, shouldContain)
+import Test.Hspec (Spec, describe, it, shouldBe)
 import Test.Integration.Marlowe.Local (withLocalMarloweRuntime)
 
 spec :: Spec
