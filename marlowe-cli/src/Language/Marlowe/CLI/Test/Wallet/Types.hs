@@ -137,7 +137,6 @@ instance FromJSON AssetId where
       pure $ AssetId currencyNickname tokenName
     _ -> fail "Expecting an AssetId \"tuple\" or \"ada\"."
 
-
 instance ToJSON AssetId where
     toJSON AdaAsset = A.String "ADA"
     toJSON (AssetId currencyNickname tokenName) =

@@ -49,7 +49,7 @@ import Cardano.Api
   , makeShelleyAddressInEra
   )
 import qualified Cardano.Api as C
-import Control.Lens (FunctorWithIndex(imap), makeLenses, modifying, use, view)
+import Control.Lens (FunctorWithIndex(imap), ifor, makeLenses, modifying, use, view)
 import Control.Lens.Combinators (_1, _2)
 import Control.Monad.Except (MonadError)
 import Control.Monad.IO.Class (MonadIO(liftIO))
@@ -274,7 +274,7 @@ interpret so@CheckBalance {..} =
           C.TxFeeExplicit _ lovelace -> lovelace
           C.TxFeeImplicit _ -> C.Lovelace 0
 
-
+    logLabeledMsg so $ "Checking balance of wallet:" <> show case woWalletNickname of WalletNickname n -> n
     logLabeledMsg so $ "Number of already submitted transactions: " <> show (length waSubmittedTransactions)
     logLabeledMsg so $ "Total transaction fees amount: " <> do
       let
@@ -288,12 +288,14 @@ interpret so@CheckBalance {..} =
       -- Use roIgnore to skipe values
       actualBalance = Assets $ Map.filterWithKey (\k _ -> k `notElem` ignore) actualTotalBalance
 
+    logLabeledMsg so $ "Expected balance: " <> show expectedBalance
     when (expectedBalance /= actualBalance) do
       -- Plutus value implements Group instnace so it is easier to present the diff using this type
       eb <- assetsToPlutusValue expectedBalance
       ab <- assetsToPlutusValue actualBalance
       let
         diff = eb <> inv ab
+      logLabeledMsg so $ "Actual balance: " <> show actualBalance
       throwLabeledError so $ "Balance check difference: expectedBalance - actualBalance = " <> show diff
 
 interpret so@CreateWallet {..} = do
@@ -382,6 +384,9 @@ interpret so@Mint {..} = do
     Just Currency { ccIssuer=ci } -> when (ci /= issuerNickname)  do
       throwError "Currency with a given nickname already exist and is minted by someone else."
     Nothing -> pure ()
+
+  ifor currencies \currencyNickname Currency { ccIssuer } -> when (ccIssuer == issuerNickname && currencyNickname /= woCurrencyNickname) do
+    throwError "Current minting strategy mints unique currency per issuer. You can't mint multiple currencies with the same issuer."
 
   Wallet issuerAddress _ _ issuerSigningKey _ :: Wallet era <- findWallet issuerNickname
   (tokenDistribution, walletAssignemnts) <- unzip <$> forM woTokenDistribution \(TokenAssignment owner tokenName amount) -> do

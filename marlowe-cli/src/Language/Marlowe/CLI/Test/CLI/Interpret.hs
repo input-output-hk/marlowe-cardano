@@ -222,7 +222,7 @@ import Language.Marlowe.Protocol.Sync.Client (MarloweSyncClient)
 import qualified Language.Marlowe.Runtime.App.Stream as Runtime.App
 import Language.Marlowe.Runtime.ChainSync.Api (SlotNo)
 import Language.Marlowe.Runtime.Core.Api (ContractId, MarloweVersionTag(V1))
-import Marlowe.Contracts (escrow, swap, trivial)
+import Marlowe.Contracts (coveredCall, escrow, swap, trivial)
 import Observe.Event.Backend (EventBackend)
 import Observe.Event.Dynamic (DynamicEventSelector)
 import Observe.Event.Render.JSON.Handle (JSONRef)
@@ -384,6 +384,8 @@ autoRunTransaction currency defaultSubmitter prev curr@T.MarloweTransaction {..}
       Just cn -> findWalletByUniqueToken cn rn
       Nothing -> throwError "[autoRunTransaction] Contract requires a role currency which was not specified."
 
+  log' $ "Submitter: " <> case submitterNickname of WalletNickname n -> n
+
   connection <- view ieConnection
   submitMode <- view ieExecutionMode <&> toSubmitMode
   era <- view ieEra
@@ -493,32 +495,42 @@ useTemplate currency =
       complaintDeadline'
       disputeDeadline'
       mediationDeadline'
-   --UseZeroCouponBond{..} -> do  lendingDeadline' <- toMarloweTimeout lendingDeadline
-   --                             paybackDeadline' <- toMarloweTimeout paybackDeadline
-   --                             makeContract $
-   --                               zeroCouponBond
-   --                                 lender
-   --                                 borrower
-   --                                 lendingDeadline'
-   --                                 paybackDeadline'
-   --                                 (Constant principal)
-   --                                 (Constant principal `AddValue` Constant interest)
-   --                                 ada
-   --                                 Close
-   --UseCoveredCall{..} -> do issueDate' <- toMarloweTimeout issueDate
-   --                         maturityDate' <- toMarloweTimeout maturityDate
-   --                         settlementDate' <- toMarloweTimeout settlementDate
-   --                         makeContract $ coveredCall
-   --                             issuer
-   --                             counterparty
-   --                             Nothing
-   --                             currency
-   --                             underlying
-   --                             (Constant strike)
-   --                             (Constant amount)
-   --                             issueDate'
-   --                             maturityDate'
-   --                             settlementDate'
+  -- UseCoveredCall{..} -> do
+  --   issueDate' <- toMarloweTimeout utIssueDate
+  --   maturityDate' <- toMarloweTimeout utMaturityDate
+  --   settlementDate' <- toMarloweTimeout utSettlementDate
+  --   issuer <- buildParty currency utIssuer
+  --   counterParty <- buildParty currency utCounterParty
+
+  --   case utCurrency of
+  --
+
+  --   Currency { ccCurrencySymbol=currency } <- findCurrency utCurrency
+  --   Currency { ccCurrencySymbol=underlying } <- findCurrency utUnderlying
+
+  --   makeContract $ coveredCall
+  --       issuer
+  --       counterParty
+  --       Nothing
+  --       currency
+  --       underlying
+  --       (Constant strike)
+  --       (Constant amount)
+  --       issueDate'
+  --       maturityDate'
+  --       settlementDate'
+  --UseZeroCouponBond{..} -> do  lendingDeadline' <- toMarloweTimeout lendingDeadline
+  --                             paybackDeadline' <- toMarloweTimeout paybackDeadline
+  --                             makeContract $
+  --                               zeroCouponBond
+  --                                 lender
+  --                                 borrower
+  --                                 lendingDeadline'
+  --                                 paybackDeadline'
+  --                                 (Constant principal)
+  --                                 (Constant principal `AddValue` Constant interest)
+  --                                 ada
+  --                                 Close
   template -> throwError $ CliError $ "Template not implemented: " <> show template
 
 publishCurrentValidators
@@ -732,7 +744,7 @@ interpret co@AutoRun {..} = do
         marloweContract' = marloweContract { ciThread = thread' }
       modifying (isContracts . coerced)  $ Map.insert coContractNickname marloweContract'
     SimulationMode -> do
-      -- TODO: We should be able to run balancing in here even in simulation mode
+      -- TODO: We should be able to run balancing in here even in the simulation mode
       pure ()
 
 interpret co@Withdraw {..} =

@@ -315,9 +315,9 @@ data UseTemplate =
   | UseCoveredCall
     {
       utIssuer         :: PartyRef  -- ^ The issuer.
-    , utCounterparty   :: PartyRef  -- ^ The counter-party.
-    , utCurrency       :: E.Token    -- ^ The currency token.
-    , utUnderlying     :: E.Token    -- ^ The underlying token.
+    , utCounterParty   :: PartyRef  -- ^ The counter-party.
+    , utCurrency       :: AssetId   -- ^ The currency token.
+    , utUnderlying     :: AssetId   -- ^ The underlying token.
     , utStrike         :: Integer    -- ^ The strike in currency.
     , utAmount         :: Integer    -- ^ The amount of underlying.
     , utIssueDate      :: SomeTimeout -- ^ The issue date.
@@ -328,7 +328,7 @@ data UseTemplate =
   | UseActus
     {
       utParty          :: Maybe PartyRef   -- ^ The party. Fallsback to the faucet wallet.
-    , utCounterparty   :: PartyRef         -- ^ The counter-party.
+    , utCounterParty   :: PartyRef         -- ^ The counter-party.
     , utActusTermsFile :: FilePath         -- ^ The Actus contract terms.
     }
     deriving stock (Eq, Generic, Show)
