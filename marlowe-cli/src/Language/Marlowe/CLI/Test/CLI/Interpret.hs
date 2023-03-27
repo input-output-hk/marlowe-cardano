@@ -217,7 +217,7 @@ import Language.Marlowe.CLI.Test.ExecutionMode
 import Language.Marlowe.CLI.Test.Log (logLabeledMsg, logTraceMsg, throwLabeledError, throwTraceError)
 import Language.Marlowe.Cardano (marloweNetworkFromLocalNodeConnectInfo)
 import Language.Marlowe.Cardano.Thread
-  (anyMarloweThreadCreated, foldrMarloweThread, getMarloweThreadTxIn, overAnyMarloweThread)
+  (anyMarloweThreadCreated, foldrMarloweThread, marloweThreadTxIn, overAnyMarloweThread)
 import Language.Marlowe.Protocol.Sync.Client (MarloweSyncClient)
 import qualified Language.Marlowe.Runtime.App.Stream as Runtime.App
 import Language.Marlowe.Runtime.ChainSync.Api (SlotNo)
@@ -444,7 +444,7 @@ useTemplate currency =
   UseTrivial{..} -> do
     timeout' <- toMarloweTimeout utTimeout
     let
-      partyRef = fromMaybe (WalletRef "faucet") utParty
+      partyRef = fromMaybe (WalletRef faucetNickname) utParty
     party <- buildParty currency partyRef
     makeContract $ trivial
       party
@@ -477,9 +477,9 @@ useTemplate currency =
     disputeDeadline' <- toMarloweTimeout utDisputeDeadline
     mediationDeadline' <- toMarloweTimeout utMediationDeadline
     let
-      sellerRef = fromMaybe (WalletRef "seller") utSeller
-      buyerRef = fromMaybe (WalletRef "buyer") utBuyer
-      mediatorRef = fromMaybe (WalletRef "mediator") utMediator
+      sellerRef = fromMaybe (WalletRef "Seller") utSeller
+      buyerRef = fromMaybe (WalletRef "Buyer") utBuyer
+      mediatorRef = fromMaybe (WalletRef "Mediator") utMediator
     seller <- buildParty currency sellerRef
     buyer <- buildParty currency buyerRef
     mediator <- buildParty currency mediatorRef
@@ -493,32 +493,32 @@ useTemplate currency =
       complaintDeadline'
       disputeDeadline'
       mediationDeadline'
---   --UseZeroCouponBond{..} -> do  lendingDeadline' <- toMarloweTimeout lendingDeadline
---   --                             paybackDeadline' <- toMarloweTimeout paybackDeadline
---   --                             makeContract $
---   --                               zeroCouponBond
---   --                                 lender
---   --                                 borrower
---   --                                 lendingDeadline'
---   --                                 paybackDeadline'
---   --                                 (Constant principal)
---   --                                 (Constant principal `AddValue` Constant interest)
---   --                                 ada
---   --                                 Close
---   --UseCoveredCall{..} -> do issueDate' <- toMarloweTimeout issueDate
---   --                         maturityDate' <- toMarloweTimeout maturityDate
---   --                         settlementDate' <- toMarloweTimeout settlementDate
---   --                         makeContract $ coveredCall
---   --                             issuer
---   --                             counterparty
---   --                             Nothing
---   --                             currency
---   --                             underlying
---   --                             (Constant strike)
---   --                             (Constant amount)
---   --                             issueDate'
---   --                             maturityDate'
---   --                             settlementDate'
+   --UseZeroCouponBond{..} -> do  lendingDeadline' <- toMarloweTimeout lendingDeadline
+   --                             paybackDeadline' <- toMarloweTimeout paybackDeadline
+   --                             makeContract $
+   --                               zeroCouponBond
+   --                                 lender
+   --                                 borrower
+   --                                 lendingDeadline'
+   --                                 paybackDeadline'
+   --                                 (Constant principal)
+   --                                 (Constant principal `AddValue` Constant interest)
+   --                                 ada
+   --                                 Close
+   --UseCoveredCall{..} -> do issueDate' <- toMarloweTimeout issueDate
+   --                         maturityDate' <- toMarloweTimeout maturityDate
+   --                         settlementDate' <- toMarloweTimeout settlementDate
+   --                         makeContract $ coveredCall
+   --                             issuer
+   --                             counterparty
+   --                             Nothing
+   --                             currency
+   --                             underlying
+   --                             (Constant strike)
+   --                             (Constant amount)
+   --                             issueDate'
+   --                             maturityDate'
+   --                             settlementDate'
   template -> throwError $ CliError $ "Template not implemented: " <> show template
 
 publishCurrentValidators
@@ -642,7 +642,7 @@ interpret co@Initialize {..} = do
         False
         True
 
-    ReferenceRuntimeValidators ->
+    ReferenceRuntimeValidators -> do
       throwLabeledError co "Usage of reference runtime scripts is not supported yet."
 
   CLIContracts contracts <- use isContracts
@@ -684,41 +684,56 @@ interpret co@Prepare {..} = do
 
   modifying (isContracts . coerced) $ Map.insert coContractNickname marloweContract'
 
-interpret co@AutoRun {..} =
-  view ieExecutionMode >>= skipInSimluationMode co do
-  marloweContract@CLIContractInfo {..} <- findCLIContractInfo coContractNickname
-  let
-    plan = do
+interpret co@Publish {..} = do
+  logLabeledMsg co "Using reference scripts to the current Marlowe validator."
+  use isPublishedScripts >>= \case
+    Nothing -> do
+      logLabeledMsg co "Publishing the scripts."
+      marloweScriptRefs <- publishCurrentValidators coPublishPermanently coPublisher
+      assign isPublishedScripts (Just marloweScriptRefs)
+    Just refs -> do
+      throwLabeledError co "Scripts were already published during this test scenario."
+
+interpret co@AutoRun {..} = do
+  executionMode <- view ieExecutionMode
+  case executionMode of
+    OnChainMode {} -> do
+      marloweContract@CLIContractInfo {..} <- findCLIContractInfo coContractNickname
       let
-        whole = reverse $ List.NonEmpty.toList ciPlan
-        threadLength = foldrMarloweThread (const (+ 1)) 0
-      case ciThread of
-        Just thread -> do
+        plan = do
           let
-            l = overAnyMarloweThread threadLength thread
-          drop l whole
-        Nothing -> whole
-    step mTh mt = do
+            whole = reverse $ List.NonEmpty.toList ciPlan
+            threadLength = foldrMarloweThread (const (+ 1)) 0
+          case ciThread of
+            Just thread -> do
+              let
+                l = overAnyMarloweThread threadLength thread
+              drop l whole
+            Nothing -> whole
+        step mTh mt = do
+          let
+            prev :: Maybe (MarloweTransaction lang era, C.TxIn)
+            prev = do
+              pmt <- overAnyMarloweThread getCLIMarloweThreadTransaction <$> mTh
+              txIn <- overAnyMarloweThread marloweThreadTxIn =<< mTh
+              pure (pmt, txIn)
+            invalid = Just True == coInvalid
+
+          (txBody, mTxIn) <- autoRunTransaction ciCurrency ciSubmitter prev mt invalid
+          case (mTh, mTxIn) of
+            (Nothing, Nothing) -> throwError "[AutoRun] Creation of the Marlowe thread failed."
+            (Nothing, Just txIn) -> pure $ Just $ anyMarloweThreadCreated (mt, txBody) txIn
+            (Just th, _) -> case anyCLIMarloweThread (mt, txBody) mTxIn th of
+              Just th' -> pure $ Just th'
+              Nothing  -> throwError "[AutoRun] Extending of the Marlowe thread failed."
+
+      thread' <- foldM step ciThread plan
       let
-        prev :: Maybe (MarloweTransaction lang era, C.TxIn)
-        prev = do
-          pmt <- overAnyMarloweThread getCLIMarloweThreadTransaction <$> mTh
-          txIn <- overAnyMarloweThread getMarloweThreadTxIn =<< mTh
-          pure (pmt, txIn)
-        invalid = Just True == coInvalid
-
-      (txBody, mTxIn) <- autoRunTransaction ciCurrency ciSubmitter prev mt invalid
-      case (mTh, mTxIn) of
-        (Nothing, Nothing) -> throwError "[AutoRun] Creation of the Marlowe thread failed."
-        (Nothing, Just txIn) -> pure $ Just $ anyMarloweThreadCreated (mt, txBody) txIn
-        (Just th, _) -> case anyCLIMarloweThread (mt, txBody) mTxIn th of
-          Just th' -> pure $ Just th'
-          Nothing  -> throwError "[AutoRun] Extending of the Marlowe thread failed."
-
-  thread' <- foldM step ciThread plan
-  let
-    marloweContract' = marloweContract { ciThread = thread' }
-  modifying (isContracts . coerced)  $ Map.insert coContractNickname marloweContract'
+        marloweContract' = marloweContract { ciThread = thread' }
+      modifying (isContracts . coerced)  $ Map.insert coContractNickname marloweContract'
+    SimulationMode -> do
+      -- TODO: We should be able to run balancing in here even in simulation mode
+      pure ()
 
 interpret co@Withdraw {..} =
   view ieExecutionMode >>= skipInSimluationMode co do
@@ -805,3 +820,4 @@ interpret co@Withdraw {..} =
       Map.singleton role (C.getTxId . overAnyMarloweThread getCLIMarloweThreadTxBody $ marloweThread)
     marloweContract' = marloweContract{ ciWithdrawalsCheckPoints = newWithdrawals <> ciWithdrawalsCheckPoints }
   modifying (isContracts . coerced) $ Map.insert coContractNickname marloweContract'
+

@@ -161,12 +161,6 @@ data MarloweValidators
   | ReferenceRuntimeValidators                      -- ^ Pick a version of the validator from the runtime registry.
   deriving stock (Eq, Generic, Show)
 
-
---   | Publish
---     { coPublisher          :: Maybe WalletNickname   -- ^ Wallet used to cover fees. Falls back to faucet wallet.
---     , coPublishPermanently :: Maybe Bool             -- ^ Whether to publish script permanently.
---     }
-
 instance FromJSON MarloweValidators where
   parseJSON json = do
     let
@@ -175,6 +169,7 @@ instance FromJSON MarloweValidators where
         _                          -> fail "Expected string `inTxCurrent`"
       fromRuntimeRegistry = parseJSON json >>= \case
         Aeson.String "referenceRuntime" -> pure ReferenceRuntimeValidators
+        Aeson.String "referenceCurrent" -> pure $ ReferenceCurrentValidators Nothing Nothing
         _ -> fail "Expected string `referenceRuntime`"
       fromPublished = parseJSON json >>= \case
         Aeson.Object (KeyMap.toList -> [("referenceCurrent", json)]) -> do
@@ -184,6 +179,17 @@ instance FromJSON MarloweValidators where
           pure $ ReferenceCurrentValidators permanent publisher
         _ -> fail "Expected object with a single field `referenceCurrent`"
     inTx <|> fromRuntimeRegistry <|> fromPublished
+
+instance ToJSON MarloweValidators where
+  toJSON InTxCurrentValidators = Aeson.String "inTxCurrent"
+  toJSON ReferenceRuntimeValidators = Aeson.String "referenceRuntime"
+  toJSON (ReferenceCurrentValidators permanent publisher) =
+    Aeson.object
+      [ "referenceCurrent" .= Aeson.object
+        [ "permanent" .= permanent
+        , "publisher" .= publisher
+        ]
+      ]
 
 -- | On-chain test operations for the Marlowe contract and payout validators.
 data CLIOperation =
@@ -204,8 +210,13 @@ data CLIOperation =
     , coInputs               :: [ParametrizedMarloweJSON]         -- ^ Inputs to the contract.
     , coMinimumTime          :: SomeTimeout
     , coMaximumTime          :: SomeTimeout
-    , coOverrideMarloweState :: Maybe M.State
+    , coOverrideMarloweState :: Maybe M.State -- ^ Useful for testing scenarios with non standard initial state.
     }
+  | Publish                                          -- ^ Publishing can be a part of `Initialize` operation but we can also test it separately.
+    { coPublisher          :: Maybe WalletNickname   -- ^ Wallet used to cover fees. Falls back to faucet wallet.
+    , coPublishPermanently :: Maybe Bool             -- ^ Whether to publish script permanently.
+    }
+
   | AutoRun
     {
       coContractNickname :: ContractNickname
@@ -221,6 +232,10 @@ data CLIOperation =
 instance FromJSON CLIOperation where
   parseJSON = do
     A.genericParseJSON $ Operation.genericParseJSONOptions "co"
+
+instance ToJSON CLIOperation where
+  toJSON = do
+    A.genericToJSON $ Operation.genericParseJSONOptions "co"
 
 -- | We encode `PartyRef` as `Party` so we can use role based contracts
 -- | without any change in the JSON structure.
@@ -317,7 +332,13 @@ data UseTemplate =
     , utActusTermsFile :: FilePath         -- ^ The Actus contract terms.
     }
     deriving stock (Eq, Generic, Show)
-    deriving anyclass (FromJSON, ToJSON)
+
+instance FromJSON UseTemplate where
+  parseJSON = do
+    A.genericParseJSON $ Operation.genericParseJSONOptions "ut"
+
+instance ToJSON UseTemplate where
+  toJSON = A.genericToJSON $ Operation.genericParseJSONOptions "ut"
 
 data CLIContractInfo lang era = CLIContractInfo
   {

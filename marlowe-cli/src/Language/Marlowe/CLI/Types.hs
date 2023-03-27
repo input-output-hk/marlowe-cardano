@@ -75,6 +75,7 @@ module Language.Marlowe.CLI.Types
   , asksEra
   , doWithCardanoEra
   , doWithShelleyBasedEra
+  , somePaymentsigningKeyToTxWitness
   , toAddressAny'
   , toAsType
   , toCardanoEra
@@ -196,6 +197,7 @@ import Language.Marlowe.CLI.Cardano.Api.PlutusScript
   (IsPlutusScriptLanguage, plutusScriptVersion, withPlutusScriptVersion)
 import Language.Marlowe.Extended.V1 (Timeout(POSIXTime))
 import qualified Language.Marlowe.Extended.V1 as E
+import PlutusCore (Some)
 
 
 -- | Exception for Marlowe CLI.
@@ -222,6 +224,8 @@ getVerificationKey :: SomePaymentSigningKey -> SomePaymentVerificationKey
 getVerificationKey (Left skey)  = Left $ C.getVerificationKey skey
 getVerificationKey (Right skey) = Right $ C.getVerificationKey skey
 
+somePaymentsigningKeyToTxWitness :: SomePaymentSigningKey -> CS.ShelleyWitnessSigningKey
+somePaymentsigningKeyToTxWitness = either C.WitnessPaymentKey C.WitnessPaymentExtendedKey
 
 -- | Continuations for contracts.
 type Continuations = M.Map DatumHash Contract

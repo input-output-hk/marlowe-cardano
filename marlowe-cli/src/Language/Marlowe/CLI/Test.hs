@@ -6,7 +6,7 @@
 -- Stability   :  Experimental
 -- Portability :  Portable
 --
--- | Testing Marlowe contracts.
+-- | Marlowe test DSL main runner.
 --
 -----------------------------------------------------------------------------
 
@@ -36,6 +36,8 @@ import Cardano.Api
 import qualified Cardano.Api as C
 import Cardano.Api.Shelley (protocolParamProtocolVersion)
 import Contrib.Control.Concurrent.Async (altIO)
+import Contrib.Monad.Loops (MaxRetries(MaxRetries), RetryCounter(RetryCounter), retryTillJust)
+import Control.Concurrent.Async (race)
 import Control.Error (hush)
 import Control.Lens (Bifunctor(bimap))
 import Control.Monad.Error.Class (throwError)
@@ -56,17 +58,28 @@ import Language.Marlowe.CLI.Test.ExecutionMode (ExecutionMode)
 import Language.Marlowe.CLI.Test.Interpret (interpret)
 import Language.Marlowe.CLI.Test.Log (logLabeledMsg)
 import qualified Language.Marlowe.CLI.Test.Runtime.Monitor as Runtime.Monitor
+import Language.Marlowe.CLI.Test.Runtime.Types (RuntimeError(RuntimeRollbackError))
 import qualified Language.Marlowe.CLI.Test.Runtime.Types as Runtime
 import qualified Language.Marlowe.CLI.Test.Runtime.Types as Runtime.Monitor
 import Language.Marlowe.CLI.Test.Types
-  (InterpretEnv(..), InterpretState(..), TestCase(..), TestResult(TestFailed, TestSucceeded), TestSuite(..))
+  ( InterpretEnv(..)
+  , InterpretState(..)
+  , RuntimeConfig(..)
+  , TestCase(..)
+  , TestResult(TestFailed, TestSucceeded)
+  , TestSuite(..)
+  )
 import Language.Marlowe.CLI.Test.Wallet.Types (Currencies(Currencies), Wallet)
 import qualified Language.Marlowe.CLI.Test.Wallet.Types as Wallet
 import Language.Marlowe.CLI.Transaction (querySlotConfig, queryUtxos)
 import Language.Marlowe.CLI.Types
   (CliEnv(CliEnv), CliError(..), MarlowePlutusVersion, PrintStats(PrintStats), SigningKeyFile(SigningKeyFile))
 import qualified Language.Marlowe.CLI.Types as T
+import qualified Language.Marlowe.Protocol.Client as Marlowe.Protocol
 import qualified Language.Marlowe.Runtime.App.Types as Apps
+import qualified Network.Protocol.Connection as Network.Protocol
+import qualified Network.Protocol.Driver as Network.Protocol
+import qualified Network.Protocol.Handshake.Client as Network.Protocol
 import Observe.Event.Render.JSON (defaultRenderSelectorJSON)
 import Observe.Event.Render.JSON.Handle (simpleJsonStderrBackend)
 import PlutusCore (defaultCostModelParams)
@@ -112,19 +125,36 @@ runTests era TestSuite{..} =
       liftIO . putStrLn $ "***** Test " <> show testName <> " *****"
 
       let
+        host = "127.0.0.1"
+        port = 33239
+
+        connector :: Network.Protocol.SomeClientConnector Marlowe.Protocol.MarloweClient IO
+        connector = Network.Protocol.SomeConnector
+          $ Network.Protocol.handshakeClientConnector
+          $ Network.Protocol.tcpClient host port Marlowe.Protocol.marloweClientPeer
+        RuntimeConfig { .. } = stRuntime
         config = def
-          { -- chainSeekHost = "127.0.0.1"
-            Apps.chainSeekSyncPort = 32778 -- 3715
-          , Apps.chainSeekCommandPort = 32776 -- 3720
-          , Apps.runtimePort = 32782 -- 3700
-          -- , Apps.runtimeHost = "127.0.0.1"
-          -- , timeoutSeconds = 900
-          -- , buildSeconds = 3
-          -- , confirmSeconds = 3
-          -- , retrySeconds = 10
-          -- , retryLimit = 5
+          { Apps.chainSeekHost = rcRuntimeHost
+          , Apps.runtimePort = rcRuntimePort -- 33239 -- 3700
+          , Apps.chainSeekSyncPort = rcChainSeekSyncPort -- 33235 -- 3715
+          , Apps.chainSeekCommandPort = rcChainSeekCommandPort -- 33233 -- 3720
           }
+
       (runtimeMonitorInput, runtimeMonitorContracts, runtimeMonitor) <- liftIO $ Runtime.Monitor.mkRuntimeMonitor config
+
+      let
+        state = InterpretState
+          {
+            _isCLIContracts = CLIContracts mempty
+          , _isPublishedScripts = Nothing
+          , _isCurrencies = Currencies mempty
+          , _isWallets = Wallet.Wallets $ Map.singleton Wallet.faucetNickname faucet
+          , _isKnownContracts = mempty
+          }
+      -- Currently only the interpreter thread has access to the state
+      -- so it is safe and much easier to just use an `IORef` and not a `TVar`.
+      -- stRef <- liftIO $ newIORef state
+
       let
         env :: InterpretEnv MarlowePlutusVersion era
         env = InterpretEnv
@@ -136,78 +166,42 @@ runTests era TestSuite{..} =
           , _ieExecutionMode=stExecutionMode
           , _iePrintStats=printStats
           , _ieRuntimeMonitor = Just (runtimeMonitorInput, runtimeMonitorContracts)
+          , _ieRuntimeClientConnector = Just connector
+          -- , _isStateRef = stRef
           }
-        runMonitor' = TestFailed . CliError . show <$> Runtime.runMonitor runtimeMonitor
-      result <- liftIO $ runTest env faucet testCase `altIO` runMonitor'
+        maxRetries = 4
+
+      result <- retryTillJust (MaxRetries maxRetries) \(RetryCounter retry) -> do
+        result <- liftIO $ runTest env state faucet testCase `race` Runtime.runMonitor runtimeMonitor
+        case result of
+          Right (RuntimeRollbackError _) | retry + 1 <= maxRetries -> do
+            liftIO $ putStrLn "Re running the test case because the rollback occured."
+            pure Nothing
+          Right runtimeError -> pure $ Just $ TestFailed . CliError . show $ runtimeError
+          Left testResult -> pure $ Just testResult
+
       case result of
-        TestSucceeded -> do
+        Just TestSucceeded -> do
           liftIO $ putStrLn "***** PASSED *****"
-        TestFailed err -> do
+        Just (TestFailed err) -> do
           liftIO (print err)
           liftIO (putStrLn "***** FAILED *****")
+        Nothing -> do
+          liftIO (putStrLn "***** FAILED: Unreachable case *****")
 
 runTest
   :: IsShelleyBasedEra era
   => IsPlutusScriptLanguage lang
   => InterpretEnv lang era
+  -> InterpretState lang era
   -> Wallet era
   -> TestCase
   -> IO TestResult
-runTest env faucet (TestCase testName testOperations) = do
-  let
-    interpretState = InterpretState
-      {
-        _isCLIContracts = CLIContracts mempty
-      , _isPublishedScripts = Nothing
-      , _isCurrencies = Currencies mempty
-      , _isWallets = Wallet.Wallets $ Map.singleton Wallet.faucetNickname faucet
-      , _isKnownContracts = mempty
-      }
-  res <- runExceptT $ flip runReaderT env $ flip execStateT interpretState $ for testOperations \operation -> do
+runTest env state faucet (TestCase testName testOperations) = do
+  res <- runExceptT $ flip runReaderT env $ flip execStateT state $ for testOperations \operation -> do
     interpret operation
   case res of
     Left err -> pure $ TestFailed err
     Right _ -> pure TestSucceeded
 
-
--- -- | Test a Marlowe contract.
--- scriptTest  :: forall era m
---              . MonadError CliError m
---             => IsShelleyBasedEra era
---             => MonadIO m
---             => ScriptDataSupportedInEra era
---             -> ProtocolVersion
---             -> CostModelParams
---             -> LocalNodeConnectInfo CardanoMode  -- ^ The connection to the local node.
---             -> Wallet era                        -- ^ Wallet which should be used as faucet.
---             -> SlotConfig                        -- ^ The time and slot correspondence.
---             -> ExecutionMode
---             -> ScriptTest                        -- ^ The tests to be run.
---             -> m ()                              -- ^ Action for running the tests.
--- scriptTest era protocolVersion costModel connection faucet slotConfig executionMode ScriptTest{..} =
---   do
---     liftIO $ putStrLn ""
---     liftIO . putStrLn $ "***** Test " <> show stTestName <> " *****"
---     eventBackend <- liftIO $ simpleJsonStderrBackend defaultRenderSelectorJSON
---     let
---       printStats = PrintStats True
---       scriptEnv = ScriptEnv connection costModel era protocolVersion slotConfig executionMode printStats eventBackend
---     runScriptTest scriptEnv (scriptState faucet) stScriptOperations
--- runScriptTest scriptEnv scriptSt stScriptOperations =
---   do
---     let
---       -- We gonna make runtime an optional requirment for the runner
---       -- eventBackend = undefined
---       interpretLoop = for_ stScriptOperations \operation -> do
---         logSoMsg SoName operation ""
---         interpret operation
---
---     void $ catchError
---       (runReaderT (execStateT interpretLoop scriptSt) scriptEnv)
---       $ \e -> do
---         -- TODO: Clean up wallets and instances.
---         liftIO (print e)
---         liftIO (putStrLn "***** FAILED *****")
---         throwError (e :: CliError)
---     liftIO $ putStrLn "***** PASSED *****"
 

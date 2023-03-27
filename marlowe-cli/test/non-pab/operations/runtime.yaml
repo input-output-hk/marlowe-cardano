@@ -21,3 +21,4 @@ operations:
   - tag: RuntimeAwaitClosed
     contractNickname: "Runtime"
 
+  - tag: ReturnFunds

@@ -27,6 +27,7 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TypeApplications #-}
 
 
 module Language.Marlowe.CLI.Test.Runtime.Monitor
@@ -42,15 +43,15 @@ import qualified Cardano.Api as C
 import Contrib.Control.Concurrent.Async (altIO)
 import qualified Contrib.Data.Aeson.Traversals as A
 import Control.Category ((>>>))
-import Control.Concurrent (forkFinally)
+import Control.Concurrent (forkFinally, forkIO, threadDelay)
 import Control.Concurrent.Async (async, cancel, concurrently, race, waitCatch)
 import Control.Concurrent.STM (TVar, atomically, modifyTVar', newTChanIO, newTVarIO, readTChan, writeTChan, writeTVar)
 import Control.Concurrent.STM.TVar (readTVar)
-import Control.Error (note)
+import Control.Error (hush, note)
 import Control.Exception (Exception(displayException))
 import Control.Lens (assign, modifying, use, view)
 import Control.Lens.Setter ((%=))
-import Control.Monad (forever, unless, void)
+import Control.Monad (forever, join, unless, void)
 import Control.Monad.Except (MonadError(throwError))
 import Control.Monad.Extra (whenM)
 import Control.Monad.Loops (untilJust)
@@ -75,8 +76,10 @@ import qualified Data.Map.Strict as Map
 import Data.Maybe (fromMaybe, isJust, mapMaybe)
 import qualified Data.Set as S (singleton)
 import qualified Data.Text as Text
+import Data.Time.Units (Microsecond, Second, TimeUnit(fromMicroseconds, toMicroseconds))
 import Data.Traversable (for)
 import Data.Tuple.Extra (uncurry3)
+import Debug.Trace (traceM)
 import Language.Marlowe.CLI.Cardano.Api.PlutusScript (IsPlutusScriptLanguage)
 import Language.Marlowe.CLI.Cardano.Api.Value (txOutValueValue)
 import qualified Language.Marlowe.CLI.Cardano.Api.Value as CV
@@ -115,7 +118,7 @@ import Language.Marlowe.Runtime.App.Channel (mkDetection)
 import qualified Language.Marlowe.Runtime.App.Run as Apps
 import qualified Language.Marlowe.Runtime.App.Run as Apps.Run
 import Language.Marlowe.Runtime.App.Stream (ContractStream(..), ContractStreamError(..), streamAllContractSteps)
-import Language.Marlowe.Runtime.App.Types (runClient)
+import Language.Marlowe.Runtime.App.Types (PollingFrequency(PollingFrequency), runClient)
 import qualified Language.Marlowe.Runtime.App.Types as Apps
 import qualified Language.Marlowe.Runtime.Cardano.Api as Runtime.Cardano.Api
 import Language.Marlowe.Runtime.Core.Api (ContractId(ContractId))
@@ -123,6 +126,7 @@ import qualified Language.Marlowe.Runtime.Core.Api as R
 import qualified Language.Marlowe.Runtime.Core.Api as Runtime.Core.Api
 import qualified Language.Marlowe.Runtime.History.Api as RH
 import Ledger.Tx.CardanoAPI (fromCardanoPolicyId)
+import Observe.Event.Backend (unitEventBackend)
 import Observe.Event.Render.JSON (defaultRenderSelectorJSON)
 import Observe.Event.Render.JSON.Handle (simpleJsonStderrBackend)
 import Plutus.ApiCommon (ProtocolVersion)
@@ -144,39 +148,56 @@ mkRuntimeMonitor config = do
   detectionInputChannel <- newTChanIO
   knownContractsRef <- newTVarIO Map.empty
   contractsRef <- newTVarIO Map.empty
-
-  eventBackend <- liftIO $ simpleJsonStderrBackend defaultRenderSelectorJSON
-
+  -- let
+  --   simpleJsonDevnullBackend :: RenderSelectorJSON s -> IO (EventBackend IO JSONRef s)
+  --   simpleJsonDevnullBackend = jsonHandleBackend stderr (toJSON @SomeJSONException)
+  -- eventBackend <- liftIO $ simpleJsonStderrBackend defaultRenderSelectorJSON
   let
-    pollingFrequency = 1000
+    eventBackend = unitEventBackend
+
+    seconds :: Second
+    seconds = 5
+
+    microseconds = fromMicroseconds $ toMicroseconds seconds
+    pollingFrequency = PollingFrequency microseconds
 
   (contractStream, detection) <- mkDetection (const True) eventBackend config pollingFrequency detectionInputChannel
 
   let
-    runtime = untilJust $ atomically do
-      contractStreamEvent <- readTChan contractStream
-      contracts <- readTVar contractsRef
-      knownContracts <- readTVar knownContractsRef
+    runtime = untilJust $ do
+      join $ atomically do
+        contractStreamEvent <- readTChan contractStream
+        contracts <- readTVar contractsRef
+        knownContracts <- readTVar knownContractsRef
 
-      case processMarloweStreamEvent knownContracts contracts contractStreamEvent of
-        Left (RuntimeContractNotFound contractId) -> do
-          writeTChan detectionInputChannel contractId
-          pure Nothing
-        Left err -> pure $ Just err
-        Right (Just (RuntimeContractUpdate contractId contractInfo)) -> do
-          for_ (Map.lookup contractId knownContracts) \contractNickname ->
-            modifyTVar' contractsRef (Map.insert contractNickname contractInfo)
-          pure Nothing
-        Right Nothing -> pure Nothing
+        case processMarloweStreamEvent knownContracts contracts contractStreamEvent of
+          Left (RuntimeContractNotFound contractId) -> do
+            writeTChan detectionInputChannel contractId
+            pure $ pure Nothing
+          Left err -> pure $ pure $ Just err
+          Right (Just (Revisit contractId)) -> pure $ do
+              void . forkIO
+                $ threadDelay (fromIntegral microseconds)
+                >> atomically (writeTChan detectionInputChannel contractId)
+              pure Nothing
+          Right (Just (RuntimeContractUpdate contractId contractInfo)) -> do
+            for_ (Map.lookup contractId knownContracts) \contractNickname ->
+              modifyTVar' contractsRef (Map.insert contractNickname contractInfo)
+            pure $ pure Nothing
+          Right Nothing -> pure $ pure Nothing
 
     input = forever $ do
-      c <- atomically do
+      possibleAddition <- atomically do
         c@(contractNickname, contractId) <- readTChan runtimeContractInputChannel
-        writeTChan detectionInputChannel contractId
         knownContracts <- readTVar knownContractsRef
-        writeTVar knownContractsRef (Map.insert contractId contractNickname knownContracts)
-        pure c
-      logTraceMsg "RuntimeMonitor" $ "Contract " <> show c <> " added to the runtime monitor."
+        case Map.lookup contractId knownContracts of
+          Just _ -> pure Nothing
+          Nothing -> do
+            writeTChan detectionInputChannel contractId
+            writeTVar knownContractsRef (Map.insert contractId contractNickname knownContracts)
+            pure $ Just c
+      for possibleAddition \c -> do
+        logTraceMsg "RuntimeMonitor" $ "Contract " <> show c <> " added to the runtime monitor."
 
   detection' <- do
     asyncDetection <- async detection
@@ -196,6 +217,7 @@ data RuntimeContractUpdate era lang
       { rcuContractId :: ContractId
       , rcuContractInfo :: RuntimeContractInfo era lang
       }
+  | Revisit ContractId
 
 processMarloweStreamEvent
   :: forall era lang v
@@ -227,11 +249,8 @@ processMarloweStreamEvent knownContracts contracts = do
   \case
     ContractStreamStart{csContractId, csCreateStep=RH.CreateStep{ RH.createOutput=scriptOutput}} -> do
       txIn <- scriptOutputToCardanoTxIn scriptOutput
-      case lookupContractInfo csContractId of
-        Nothing -> do
-          let th = anyMarloweThreadCreated () txIn
-          returnContractUpdate csContractId (RuntimeContractInfo th)
-        Just _ -> throwError $ RuntimeExecutionFailure $ "Contract id already running: " <> show csContractId
+      let th = anyMarloweThreadCreated () txIn
+      returnContractUpdate csContractId (RuntimeContractInfo th)
     ContractStreamContinued{csContractId, csContractStep=RH.RedeemPayout{}} -> pure Nothing
     ContractStreamContinued{csContractId, csContractStep=RH.ApplyTransaction R.Transaction {R.output=R.TransactionOutput{ scriptOutput=scriptOutput}}} -> do
       mTxIn <- for scriptOutput scriptOutputToCardanoTxIn
@@ -245,11 +264,13 @@ processMarloweStreamEvent knownContracts contracts = do
       case lookupContractNickname csContractId of
         Just contractNickname -> throwError $ RuntimeRollbackError contractNickname
         Nothing -> pure Nothing
-    ContractStreamWait {} -> pure Nothing
+    ContractStreamWait {csContractId} -> pure $ Just (Revisit csContractId)
     ContractStreamFinish{csFinish=Nothing, csContractId} -> do
-      RuntimeContractInfo th <- getContractInfo csContractId
-      unless (isRunning th) do
-        throwError $ RuntimeExecutionFailure $ "Thread already closed: " <> show csContractId
+      -- We should ignore this event because we are closing the thread
+      -- from the `ContractStreamContinued` handler.
+      -- RuntimeContractInfo th <- getContractInfo csContractId
+      -- unless (isRunning th) do
+      --   throwError $ RuntimeExecutionFailure $ "Thread already closed: " <> show csContractId
       pure Nothing
     ContractStreamFinish{csFinish=Just creationError, csContractId} -> do
       case creationError of

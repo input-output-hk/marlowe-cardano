@@ -30,12 +30,6 @@
 
 module Language.Marlowe.CLI.Test.Types
   where
---   ( MarloweTests(..)
---   , ScriptTest(..)
---   , TokenName(..)
---   -- , ssRuntimeContractStreams
---   -- , ssRuntimeKnownContracts
---   ) where
 
 import Cardano.Api
   (AddressInEra, CardanoMode, LocalNodeConnectInfo, Lovelace, NetworkId, PolicyId, ScriptDataSupportedInEra, TxBody)
@@ -103,15 +97,27 @@ import qualified Language.Marlowe.CLI.Test.Runtime.Types as Runtime
 import Language.Marlowe.CLI.Test.Wallet.Types
   (Currencies(Currencies), CurrencyNickname, WalletOperation, Wallets(Wallets))
 import qualified Language.Marlowe.CLI.Test.Wallet.Types as Wallet
+import qualified Language.Marlowe.Protocol.Client as Marlowe.Protocol
 import Language.Marlowe.Protocol.Sync.Client (MarloweSyncClient)
 import qualified Language.Marlowe.Runtime.App.Stream as Runtime.App
 import Language.Marlowe.Runtime.App.Types (Client)
 import Language.Marlowe.Runtime.ChainSync.Api (SlotNo)
 import Language.Marlowe.Runtime.Core.Api (ContractId, MarloweVersionTag(V1))
+import qualified Network.Protocol.Connection as Network.Protocol
+import qualified Network.Protocol.Driver as Network.Protocol
+import qualified Network.Protocol.Handshake.Client as Network.Protocol
+import Network.Socket (PortNumber)
 import Observe.Event.Backend (EventBackend)
 import Observe.Event.Dynamic (DynamicEventSelector)
 import Observe.Event.Render.JSON.Handle (JSONRef)
 
+data RuntimeConfig = RuntimeConfig
+  { rcRuntimeHost :: String
+  , rcRuntimePort :: PortNumber
+  , rcChainSeekSyncPort :: PortNumber
+  , rcChainSeekCommandPort :: PortNumber
+  }
+    deriving stock (Eq, Generic, Show)
 
 data TestSuite era a =
     TestSuite
@@ -122,6 +128,7 @@ data TestSuite era a =
     , stFaucetAddress :: AddressInEra era -- ^ The faucet address.
     , stExecutionMode :: ExecutionMode
     , stTests :: [a]                      -- ^ Input for the tests.
+    , stRuntime :: RuntimeConfig
     }
     deriving stock (Eq, Generic, Show)
 
@@ -169,6 +176,8 @@ runtimeConstructors =
   [ "RuntimeAwaitCreated"
   , "RuntimeAwaitInputsApplied"
   , "RuntimeAwaitClosed"
+  , "RuntimeCreateContract"
+  , "RuntimeApplyInputs"
   ]
 
 walletConstructors :: [String]
@@ -179,10 +188,9 @@ walletConstructors =
   , "FundWallets"
   , "Mint"
   , "SplitWallet"
+  , "ReturnFunds"
   ]
 
--- FIXME:
--- * Improve `Fail` parsing / printing.
 instance FromJSON TestOperation where
   parseJSON json = do
     obj <- Aeson.parseJSON json
@@ -191,18 +199,14 @@ instance FromJSON TestOperation where
       tag | tag `List.elem` cliConstructors -> CLIOperation <$> parseJSON json
       tag | tag `List.elem` runtimeConstructors -> RuntimeOperation <$> parseJSON json
       tag | tag `List.elem` walletConstructors -> WalletOperation <$> parseJSON json
-    -- CLIOperation <$> parseJSON json
-      -- <|> RuntimeOperation <$> parseJSON json
-      -- <|> WalletOperation <$> parseJSON json
-      -- "Fail" -> Fail <$> parseJSON json
+      tag | tag == "Fail" -> Fail <$> obj .: "failureMessage"
       _ -> fail $ "Unknown tag: " <> tag
-      -- <|> Fail <$> parseJSON json
 
--- instance ToJSON TestOperation where
---   toJSON (CLIOperation op) = toJSON op
---   toJSON (RuntimeOperation op) = toJSON op
---   toJSON (WalletOperation op) = toJSON op
---   toJSON (Fail msg) = toJSON msg
+instance ToJSON TestOperation where
+  toJSON (CLIOperation op) = toJSON op
+  toJSON (RuntimeOperation op) = toJSON op
+  toJSON (WalletOperation op) = toJSON op
+  toJSON (Fail msg) = A.object [("failureMessage", toJSON msg)]
 
 data InterpretState lang era = InterpretState
   {
@@ -216,6 +220,7 @@ data InterpretState lang era = InterpretState
 data InterpretEnv lang era = InterpretEnv
   {
     _ieRuntimeMonitor :: Maybe (RuntimeMonitorInput, RuntimeMonitorState lang era)
+  , _ieRuntimeClientConnector :: Maybe (Network.Protocol.SomeClientConnector Marlowe.Protocol.MarloweClient IO)
   , _ieExecutionMode :: ExecutionMode
   , _ieConnection :: LocalNodeConnectInfo CardanoMode
   , _ieEra :: ScriptDataSupportedInEra era
@@ -233,17 +238,37 @@ type InterpretMonad m lang era =
   )
 
 toCLIInterpretEnv :: InterpretEnv lang era -> CLI.InterpretEnv lang era
-toCLIInterpretEnv (InterpretEnv _ executionMode connection era printStats slotConfig costModelParams protocolVersion) =
-  CLI.InterpretEnv connection era printStats executionMode slotConfig costModelParams protocolVersion
+toCLIInterpretEnv InterpretEnv { _ieConnection, _ieEra, _iePrintStats, _ieExecutionMode, _ieSlotConfig, _ieCostModelParams, _ieProtocolVersion } =
+  CLI.InterpretEnv
+    { CLI._ieConnection = _ieConnection
+    , CLI._ieEra = _ieEra
+    , CLI._iePrintStats = _iePrintStats
+    , CLI._ieExecutionMode = _ieExecutionMode
+    , CLI._ieSlotConfig = _ieSlotConfig
+    , CLI._ieCostModelParams = _ieCostModelParams
+    , CLI._ieProtocolVersion = _ieProtocolVersion
+    }
 
 toRuntimeInterpretEnv :: InterpretEnv lang era -> Maybe (Runtime.InterpretEnv lang era)
-toRuntimeInterpretEnv (InterpretEnv (Just (runtimeMonitorInput, runtimeMonitorState)) executionMode _ _ _ _ _ _) =
-  Just $ Runtime.InterpretEnv runtimeMonitorState runtimeMonitorInput executionMode
+toRuntimeInterpretEnv InterpretEnv { _ieRuntimeMonitor = Just (runtimeMonitorInput, runtimeMonitorState), _ieRuntimeClientConnector = Just _ieRuntimeClientConnector, .. } =
+  Just $ Runtime.InterpretEnv
+    { Runtime._ieRuntimeMonitorInput = runtimeMonitorInput
+    , Runtime._ieRuntimeMonitorState = runtimeMonitorState
+    , Runtime._ieExecutionMode = _ieExecutionMode
+    , Runtime._ieRuntimeClientConnector = _ieRuntimeClientConnector
+    , Runtime._ieConnection = _ieConnection
+    , Runtime._ieEra = _ieEra
+    }
 toRuntimeInterpretEnv _ = Nothing
 
 toWalletInterpretEnv :: InterpretEnv lang era -> Wallet.InterpretEnv era
-toWalletInterpretEnv (InterpretEnv _ executionMode connection era printStats _ _ _) =
-  Wallet.InterpretEnv connection era printStats executionMode
+toWalletInterpretEnv InterpretEnv { _ieConnection, _ieEra, _iePrintStats, _ieExecutionMode } =
+  Wallet.InterpretEnv
+    { Wallet._ieConnection = _ieConnection
+    , Wallet._ieEra = _ieEra
+    , Wallet._iePrintStats = _iePrintStats
+    , Wallet._ieExecutionMode = _ieExecutionMode
+    }
 
 cliInpterpretStateL :: Lens' (InterpretState lang era) (CLI.InterpretState lang era)
 cliInpterpretStateL = lens toCLIInterpretState fromCLIInterpretState
@@ -257,15 +282,19 @@ cliInpterpretStateL = lens toCLIInterpretState fromCLIInterpretState
         knownContracts' = knownContracts <> cliContractsIds contracts
       InterpretState contracts referenceScripts currencies wallets knownContracts'
 
-runtimeInpterpretStateL :: Lens' (InterpretState lang era) Runtime.InterpretState
+runtimeInpterpretStateL :: Lens' (InterpretState lang era) (Runtime.InterpretState era)
 runtimeInpterpretStateL = lens toRuntimeInterpretState fromRuntimeInterpretState
   where
-    toRuntimeInterpretState (InterpretState contracts referenceScripts currencies wallets knownContracts) = do
-      Runtime.InterpretState knownContracts
+    toRuntimeInterpretState InterpretState { .. } =
+      Runtime.InterpretState
+        { Runtime._isKnownContracts = _isKnownContracts
+        , Runtime._isWallets = _isWallets
+        , Runtime._isCurrencies = _isCurrencies
+        }
     fromRuntimeInterpretState
-      (InterpretState contracts referenceScripts currencies wallets _)
-      (Runtime.InterpretState knownContracts) =
-      InterpretState contracts referenceScripts currencies wallets knownContracts
+      InterpretState {..}
+      Runtime.InterpretState { Runtime._isKnownContracts = knownContracts, Runtime._isWallets = wallets, Runtime._isCurrencies = currencies } =
+      InterpretState { _isKnownContracts = knownContracts, _isWallets = wallets, _isCurrencies = currencies, .. }
 
 walletInpterpretStateL :: Lens' (InterpretState lang era) (Wallet.InterpretState era)
 walletInpterpretStateL = lens toWalletInterpretState fromWalletInterpretState

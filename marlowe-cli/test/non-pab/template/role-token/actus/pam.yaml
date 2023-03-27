@@ -2,35 +2,35 @@ testName: Actus PAM contract test with role token
 
 operations:
   - tag: Publish
-    soPublishPermanently: true
+    publishPermanently: true
 
   - tag: CreateWallet
-    soWalletNickname: lender
+    walletNickname: lender
 
   - tag: FundWallets
-    soValues:
+    values:
       - 150_000_000
-    soWalletNicknames: [lender]
+    walletNicknames: [lender]
 
   - tag: CreateWallet
-    soWalletNickname: borrower
+    walletNickname: borrower
 
   - tag: FundWallets
-    soValues:
+    values:
       - 250_000_000
-    soWalletNicknames: [borrower]
+    walletNicknames: [borrower]
 
   - tag: Mint
-    soCurrencyNickname: Actus
-    soTokenDistribution:
+    currencyNickname: Actus
+    tokenDistribution:
       - [ lender, lenderRole, 1 ]
       - [ borrower, borrowerRole, 1 ]
 
   - tag: Initialize
-    soContractNickname: PAM
-    soMinAda: 3000000
-    soRoleCurrency: PAM
-    soContractSource:
+    contractNickname: PAM
+    minAda: 3000000
+    roleCurrency: PAM
+    contractSource:
       template:
         tag: UseActus
         utParty:
@@ -47,12 +47,12 @@ operations:
           relative: 4000000
 
   - tag: AutoRun
-    soSubmitter: seller
-    soContractNickname: Escrow
+    submitter: seller
+    contractNickname: Escrow
 
   - tag: Prepare
-    soContractNickname: Escrow
-    soInputs:
+    contractNickname: Escrow
+    inputs:
       - input_from_party:
           role_token: buyer
         that_deposits: 256
@@ -61,13 +61,13 @@ operations:
           token_name: ""
         into_account:
           role_token: seller
-    soMinimumTime:
+    minimumTime:
       relative: -1000
-    soMaximumTime:
+    maximumTime:
       relative: 8000
 
   - tag: AutoRun
-    soSubmitter: buyer
-    soContractNickname: Escrow
+    submitter: buyer
+    contractNickname: Escrow
 
 

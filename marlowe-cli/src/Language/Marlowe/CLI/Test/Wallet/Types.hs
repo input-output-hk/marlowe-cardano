@@ -223,8 +223,7 @@ instance ToJSON TokenAssignment where
 data WalletOperation =
     BurnAll
     {
-      woCurrencyNickname    :: CurrencyNickname
-    , woMetadata            :: Maybe Aeson.Object
+     woMetadata            :: Maybe Aeson.Object
     }
   | CreateWallet
     {
@@ -232,6 +231,7 @@ data WalletOperation =
     }
   | CheckBalance
     { woWalletNickname  :: WalletNickname
+    , woIgnore          :: Maybe [AssetId]  -- ^ Ignore these assets when checking the balance.
     , woBalance         :: Assets           -- ^ Expected delta of funds:
                                             -- * We exclude tx fees from this calculation.
                                             -- * We DON'T subtract the minimum lovelace amount (attached when tokens are
@@ -259,11 +259,15 @@ data WalletOperation =
       woWalletNickname :: WalletNickname
     , woValues         :: [Lovelace]
     }
+  | ReturnFunds
   deriving stock (Eq, Generic, Show)
 
 instance FromJSON WalletOperation where
   parseJSON = do
     A.genericParseJSON $ Operation.genericParseJSONOptions "wo"
+
+instance ToJSON WalletOperation where
+  toJSON = A.genericToJSON $ Operation.genericParseJSONOptions "wo"
 
 newtype Wallets era = Wallets (Map WalletNickname (Wallet era))
 

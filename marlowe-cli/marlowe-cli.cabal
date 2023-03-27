@@ -54,6 +54,7 @@ library
     Contrib.Data.Aeson.Generic
     Contrib.Data.Aeson.Traversals
     Contrib.Data.Foldable
+    Contrib.Monad.Loops
     Language.Marlowe.CLI.Analyze
     Language.Marlowe.Cardano
     Language.Marlowe.Cardano.Thread
@@ -137,6 +138,8 @@ library
     marlowe-cardano,
     marlowe-contracts,
     marlowe-chain-sync,
+    marlowe-client,
+    marlowe-protocols,
 
     marlowe-runtime:config,
     marlowe-runtime:discovery-api,

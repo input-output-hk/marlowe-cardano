@@ -495,7 +495,7 @@ newtype Address = Address { unAddress :: ByteString }
   deriving (IsString, Show, ToJSON, FromJSON) via Base16
 
 toBech32 :: Address -> Maybe Text
-toBech32 = toCardanoAddress >=> \case
+toBech32 = toCardanoAddressAny >=> \case
   Cardano.AddressShelley address ->
     Just $ serialiseToBech32 address
   _ -> Nothing
@@ -505,17 +505,25 @@ fromBech32 = fmap (Address . serialiseToRawBytes)
   . either (const Nothing) Just
   . deserialiseFromBech32 (AsAddress AsShelleyAddr)
 
-toCardanoAddress :: Address -> Maybe Cardano.AddressAny
-toCardanoAddress = Cardano.deserialiseFromRawBytes Cardano.AsAddressAny . unAddress
+fromCardanoShelleyAddress :: Cardano.Address Cardano.ShelleyAddr -> Address
+fromCardanoShelleyAddress = Address . serialiseToRawBytes
+
+fromCardanoAddressAny :: Cardano.AddressAny -> Maybe Address
+fromCardanoAddressAny = \case
+  Cardano.AddressShelley shelleyAddr -> Just $ fromCardanoShelleyAddress shelleyAddr
+  _ -> Nothing
+
+toCardanoAddressAny :: Address -> Maybe Cardano.AddressAny
+toCardanoAddressAny = Cardano.deserialiseFromRawBytes Cardano.AsAddressAny . unAddress
 
 paymentCredential :: Address -> Maybe Credential
-paymentCredential = toCardanoAddress >=> \case
+paymentCredential = toCardanoAddressAny >=> \case
   Cardano.AddressShelley (Cardano.ShelleyAddress _ credential _) ->
     Just $ fromCardanoPaymentCredential $ Cardano.fromShelleyPaymentCredential credential
   _ -> Nothing
 
 stakeReference :: Address -> Maybe StakeReference
-stakeReference = toCardanoAddress >=> \case
+stakeReference = toCardanoAddressAny >=> \case
   Cardano.AddressShelley (Cardano.ShelleyAddress _ _ ref) ->
     fromCardanoStakeAddressReference $ Cardano.fromShelleyStakeReference ref
   _ -> Nothing

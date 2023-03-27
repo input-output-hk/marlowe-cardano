@@ -2,50 +2,50 @@ testName: Non-PAB Swap Contract Test
 
 operations:
   - tag: Publish
-    soPublishPermanently: true
+    publishPermanently: true
 
   - tag: CreateWallet
-    soWalletNickname: aParty
+    walletNickname: aParty
 
   - tag: FundWallets
-    soValues:
+    values:
       - 100000000
-    soWalletNicknames: [aParty]
+    walletNicknames: [aParty]
 
   - tag: CreateWallet
-    soWalletNickname: bParty
+    walletNickname: bParty
 
   - tag: FundWallets
-    soValues:
+    values:
       - 100000000
-    soWalletNicknames: [bParty]
+    walletNicknames: [bParty]
 
   - tag: Mint
-    soCurrencyNickname: Swap
-    soTokenDistribution:
+    currencyNickname: Swap
+    tokenDistribution:
       - [ aParty, aParty, 1 ]
       - [ bParty, bParty, 1 ]
 
 
   # Minting tokens aParty will use in the swap
   - tag: Mint
-    soCurrencyNickname: aPartyCurrency
-    soIssuer: aParty
-    soTokenDistribution:
+    currencyNickname: aPartyCurrency
+    issuer: aParty
+    tokenDistribution:
       - [ aParty, Globe, 300]
 
   # Minting tokens bParty will use in the swap
   - tag: Mint
-    soCurrencyNickname: bPartyCurrency
-    soIssuer: bParty
-    soTokenDistribution:
+    currencyNickname: bPartyCurrency
+    issuer: bParty
+    tokenDistribution:
       - [ bParty, Swan, 500]
 
   - tag: Initialize
-    soContractNickname: Swap
-    soMinAda: 3000000
-    soRoleCurrency: Swap
-    soContractSource:
+    contractNickname: Swap
+    minAda: 3000000
+    roleCurrency: Swap
+    contractSource:
       template:
         tag: UseSwap
         utAParty:
@@ -70,8 +70,8 @@ operations:
           relative: 1000000
 
   - tag: Prepare
-    soContractNickname: Swap
-    soInputs:
+    contractNickname: Swap
+    inputs:
       - input_from_party:
           role_token: aParty
         that_deposits: 300
@@ -80,14 +80,14 @@ operations:
           token_name: Globe
         into_account:
           role_token: aParty
-    soMinimumTime:
+    minimumTime:
       relative: -1000
-    soMaximumTime:
+    maximumTime:
       relative: 8000
 
   - tag: Prepare
-    soContractNickname: Swap
-    soInputs:
+    contractNickname: Swap
+    inputs:
       - input_from_party:
           role_token: bParty
         that_deposits: 500
@@ -96,42 +96,42 @@ operations:
           token_name: Swan
         into_account:
           role_token: bParty
-    soMinimumTime:
+    minimumTime:
       relative: -1000
-    soMaximumTime:
+    maximumTime:
       relative: 8000
 
   - tag: AutoRun
-    soContractNickname: Swap
+    contractNickname: Swap
 
   - tag: Withdraw
-    soContractNickname: Swap
-    soWalletNickname: aParty
+    contractNickname: Swap
+    walletNickname: aParty
 
   - tag: Withdraw
-    soContractNickname: Swap
-    soWalletNickname: bParty
+    contractNickname: Swap
+    walletNickname: bParty
 
   - tag: CheckBalance
-    soWalletNickname: aParty
-    soBalance:
+    walletNickname: aParty
+    balance:
       - [Swap, aParty, 1]
       - [bPartyCurrency, Swan, 500]
       - [Ada, 100]
       - [Ada, 1.193870]
 
   - tag: CheckBalance
-    soWalletNickname: bParty
-    soBalance:
+    walletNickname: bParty
+    balance:
       - [Swap, bParty, 1]
       - [aPartyCurrency, Globe, 300]
       - [Ada, 100]
       - [Ada, 1.193870]
 
   - tag: BurnAll
-    soCurrencyNickname: aPartyCurrency
+    currencyNickname: aPartyCurrency
 
   - tag: BurnAll
-    soCurrencyNickname: bPartyCurrency
+    currencyNickname: bPartyCurrency
 
 

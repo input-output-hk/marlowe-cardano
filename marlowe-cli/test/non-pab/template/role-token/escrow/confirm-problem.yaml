@@ -2,45 +2,45 @@ testName: Confirm Problem Escrow Contract with Role Token
 
 operations:
   - tag: Publish
-    soPublishPermanently: true
+    publishPermanently: true
 
   - tag: CreateWallet
-    soWalletNickname: seller
+    walletNickname: seller
 
   - tag: FundWallets
-    soValues:
+    values:
       - 50000000
-    soWalletNicknames: [seller]
+    walletNicknames: [seller]
 
   - tag: CreateWallet
-    soWalletNickname: buyer
+    walletNickname: buyer
 
   - tag: FundWallets
-    soValues:
+    values:
       - 350000000
-    soWalletNicknames: [buyer]
+    walletNicknames: [buyer]
 
   - tag: CreateWallet
-    soWalletNickname: mediator
+    walletNickname: mediator
 
   - tag: FundWallets
-    soValues:
+    values:
       - 120000000
-    soWalletNicknames: [mediator]
+    walletNicknames: [mediator]
 
   - tag: Mint
-    soCurrencyNickname: Escrow
-    soTokenDistribution:
+    currencyNickname: Escrow
+    tokenDistribution:
       - [ seller, seller, 1 ]
       - [ buyer, buyer, 1 ]
       - [ mediator, mediator, 1 ]
 
 
   - tag: Initialize
-    soContractNickname: Escrow
-    soMinAda: 3000000
-    soRoleCurrency: Escrow
-    soContractSource:
+    contractNickname: Escrow
+    minAda: 3000000
+    roleCurrency: Escrow
+    contractSource:
       template:
         tag: UseEscrow
         utPrice: 256
@@ -60,12 +60,12 @@ operations:
           relative: 4000000
 
   - tag: AutoRun
-    soSubmitter: seller
-    soContractNickname: Escrow
+    submitter: seller
+    contractNickname: Escrow
 
   - tag: Prepare
-    soContractNickname: Escrow
-    soInputs:
+    contractNickname: Escrow
+    inputs:
       - input_from_party:
           role_token: buyer
         that_deposits: 256
@@ -74,30 +74,30 @@ operations:
           token_name: ""
         into_account:
           role_token: seller
-    soMinimumTime:
+    minimumTime:
       relative: -1000
-    soMaximumTime:
+    maximumTime:
       relative: 8000
 
   - tag: AutoRun
-    soSubmitter: buyer
-    soContractNickname: Escrow
+    submitter: buyer
+    contractNickname: Escrow
 
 
   # - tag: Prepare
-  #   soContractNickname: Escrow
-  #   soInputs:
+  #   contractNickname: Escrow
+  #   inputs:
   #     - input_from_party:
   #       for_choice_id:
   #         choice_name: "Report problem"
   #         choice_owner:
   #           tole_token: buyer
-  #   soMinimumTime:
+  #   minimumTime:
   #     relative: -1000
-  #   soMaximumTime:
+  #   maximumTime:
   #     relative: 8000
 
   # - tag: AutoRun
-  #   soContractNickname: Swap
+  #   contractNickname: Swap
 
 

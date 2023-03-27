@@ -25,7 +25,7 @@
 -- Stability   :  Experimental
 -- Portability :  Portable
 --
--- | Type safe list of transactions representing on chain Marlowe execution.
+-- | Interpreter for wallet related operations.
 --
 -----------------------------------------------------------------------------
 
@@ -49,7 +49,7 @@ import Cardano.Api
   , makeShelleyAddressInEra
   )
 import qualified Cardano.Api as C
-import Control.Lens (makeLenses, modifying, use, view)
+import Control.Lens (FunctorWithIndex(imap), makeLenses, modifying, use, view)
 import Control.Lens.Combinators (_1, _2)
 import Control.Monad.Except (MonadError)
 import Control.Monad.IO.Class (MonadIO(liftIO))
@@ -61,7 +61,7 @@ import qualified Data.Aeson.KeyMap as KeyMap
 import qualified Data.Aeson.Types as A
 import qualified Data.Fixed as F
 import qualified Data.Fixed as Fixed
-import Data.Foldable (fold, for_)
+import Data.Foldable (find, fold, for_)
 import Data.List.NonEmpty (NonEmpty((:|)))
 import qualified Data.List.NonEmpty as List
 import Data.Map (Map)
@@ -84,7 +84,7 @@ import Language.Marlowe.CLI.Test.Wallet.Types
   , TokenAssignment(TokenAssignment)
   , Wallet(Wallet, waAddress, waBalanceCheckBaseline, waMintedTokens, waSigningKey, waSubmittedTransactions)
   , WalletNickname(WalletNickname)
-  , WalletOperation(BurnAll, CheckBalance, CreateWallet, FundWallets, Mint, SplitWallet, woBalance, woCurrencyNickname, woIssuer, woMetadata, woMinLovelace, woTokenDistribution, woValues, woWalletNickname, woWalletNicknames)
+  , WalletOperation(..)
   , Wallets(Wallets)
   , emptyWallet
   , faucetNickname
@@ -95,13 +95,15 @@ import Language.Marlowe.CLI.Test.Wallet.Types
   , isCurrencies
   , isWallets
   )
-import Language.Marlowe.CLI.Transaction (buildFaucetImpl, buildMintingImpl, queryUtxos)
+import Language.Marlowe.CLI.Transaction (buildBody, buildFaucetImpl, buildMintingImpl, queryUtxos, submitBody)
 import Language.Marlowe.CLI.Types
-  ( CliEnv
+  ( AnUTxO(AnUTxO)
+  , CliEnv
   , CliError
   , CurrencyIssuer(CurrencyIssuer)
   , MarloweScriptsRefs
   , MarloweTransaction(MarloweTransaction, mtInputs)
+  , PayFromScript(PayFromScript)
   , PrintStats
   , Seconds
   , SomePaymentSigningKey
@@ -119,7 +121,7 @@ import Plutus.V1.Ledger.SlotConfig (SlotConfig)
 import qualified Plutus.V1.Ledger.Value as P
 import Text.Read (readMaybe)
 
-import Contrib.Data.Foldable (foldMapFlipped)
+import Contrib.Data.Foldable (foldMapFlipped, foldMapMFlipped)
 import Control.Concurrent.STM (TChan, TVar)
 import Control.Monad (forM, forM_, void, when)
 import Control.Monad.Error.Class (MonadError(throwError))
@@ -143,11 +145,12 @@ import qualified Language.Marlowe.Runtime.App.Stream as Runtime.App
 import Language.Marlowe.Runtime.App.Types (Client)
 import Language.Marlowe.Runtime.ChainSync.Api (SlotNo)
 import Language.Marlowe.Runtime.Core.Api (ContractId, MarloweVersionTag(V1))
-import Ledger.Tx.CardanoAPI (fromCardanoPolicyId)
+import Ledger.Tx.CardanoAPI (fromCardanoPolicyId, fromCardanoValue)
 import Observe.Event.Backend (EventBackend)
 import Observe.Event.Dynamic (DynamicEventSelector)
 import Observe.Event.Render.JSON.Handle (JSONRef)
 import qualified Plutus.V1.Ledger.Value as PV
+import qualified Plutus.V2.Ledger.Api as P
 import PlutusTx.Monoid (Group(inv))
 import System.IO.Temp (emptySystemTempFile, emptyTempFile)
 
@@ -183,61 +186,6 @@ updateFaucet
 updateFaucet update = do
   updateWallet faucetNickname update
 
--- findWalletByUniqueToken :: MonadError CliError m
---                         => MonadState (ScriptState lang era) m
---                         => CurrencyNickname
---                         -> TokenName
---                         -> m (WalletNickname, Wallet era)
--- findWalletByUniqueToken currencyNickname tokenName = do
---   Currency {..} <- findCurrency currencyNickname
---   let
---     check value = valueOf value ccCurrencySymbol tokenName == 1
---     step Nothing (n, wallet@(waMintedTokens -> tokens)) = pure $ if check tokens
---       then Just (n, wallet)
---       else Nothing
---     step res c@(n, waMintedTokens -> tokens) = if check tokens
---       then case res of
---         Just (n', _) ->
---           throwError $ CliError $ "[findByUniqueToken] Token is not unique - found in two wallets: " <> show n <> " and " <> show n' <> "."
---         Nothing ->
---           pure (Just c)
---       else pure res
---   wallets <- use ssWallets
---   walletInfo <- foldM step Nothing (Map.toList wallets)
---   liftCliMaybe
---     ("[findWalletByUniqueToken] Wallet not found for a given token: " <> show ccCurrencySymbol <> ":" <> show tokenName)
---     walletInfo
---
---
--- findWalletByAddress :: MonadError CliError m
---                 => MonadState (ScriptState lang era) m
---                 => C.AddressInEra era
---                 -> m (WalletNickname, Wallet era)
--- findWalletByAddress address = do
---   wallets <- use ssWallets
---   let
---     wallet = find (\(_, w) -> address == waAddress w) (Map.toList wallets)
---
---   liftCliMaybe
---     ("[findWalletByPkh] Wallet not found for a given address: " <> show address <> " in wallets: " <> show wallets)
---     wallet
---
---
---
--- selectWalletUTxOs :: MonadIO m
---                   => MonadReader (ScriptEnv era) m
---                   => MonadState (ScriptState lang era) m
---                   => MonadError CliError m
---                   => Either WalletNickname (Wallet era)
---                   -> T.OutputQuery era (OutputQueryResult era)
---                   -> m (T.OutputQueryResult era)
--- selectWalletUTxOs w q = do
---   (waAddress -> address) <- either findWallet pure w
---   connection <- view seConnection
---   runCli "[selectUtxosImpl]" $ selectUtxosImpl connection address q
---
---
-
 fetchWalletUTxOs
   :: InterpretMonad m era
   => Wallet era
@@ -269,6 +217,17 @@ findCurrency nickname = do
   (Currencies currencies) <- use isCurrencies
   liftCliMaybe ("[findCurrency] Unable to find currency:" <> show nickname) $ Map.lookup nickname currencies
 
+findCurrencyBySymbol
+  :: InterpretMonad m era
+  => CurrencySymbol
+  -> m (CurrencyNickname, Currency)
+findCurrencyBySymbol currencySymbol = do
+  (Currencies currencies) <- use isCurrencies
+  let
+    possibleCurrency = find
+      (\(n, c) -> ccCurrencySymbol c == currencySymbol) (Map.toList currencies)
+  liftCliMaybe ("[findCurrencyBySymbol] Unable to find currency:" <> show currencySymbol) possibleCurrency
+
 assetsToPlutusValue
   :: InterpretMonad m era
   => Assets
@@ -281,6 +240,22 @@ assetsToPlutusValue (Assets (Map.toList -> assets)) = do
       pure $ P.singleton ccCurrencySymbol tokenName amount
   fold <$> for assets (uncurry assetToValue)
 
+plutusValueToAssets
+  :: InterpretMonad m era
+  => P.Value
+  -> m Assets
+plutusValueToAssets value = do
+  let
+    valueToAsset (currencySymbol, tokenName, _) | currencySymbol == P.adaSymbol && tokenName == P.adaToken = do
+      pure (AdaAsset, P.fromBuiltin $ P.valueOf value currencySymbol tokenName)
+    valueToAsset (cCurrencySymbol, tokenName, amount) = do
+      let
+      (currencyNickname, currency) <- findCurrencyBySymbol cCurrencySymbol
+      pure (AssetId currencyNickname tokenName, amount)
+
+  assets <- for (P.flattenValue value) valueToAsset
+  pure $ Assets $ Map.fromList assets
+
 interpret
   :: forall env era st m
    . C.IsShelleyBasedEra era
@@ -290,7 +265,7 @@ interpret
 interpret so@CheckBalance {..} =
   view ieExecutionMode >>= skipInSimluationMode so do
     wallet@Wallet {..} <- findWallet woWalletNickname
-    utxos <- (fetchWalletUTxOs wallet :: m (C.UTxO era))
+    utxos <- fetchWalletUTxOs wallet :: m (C.UTxO era)
     let
       onChainTotal = CV.toPlutusValue $ foldMap txOutValueValue . Map.elems . C.unUTxO $ utxos
 
@@ -299,7 +274,6 @@ interpret so@CheckBalance {..} =
           C.TxFeeExplicit _ lovelace -> lovelace
           C.TxFeeImplicit _ -> C.Lovelace 0
 
-      actualBalance = onChainTotal <> lovelaceToPlutusValue fees <> inv waBalanceCheckBaseline
 
     logLabeledMsg so $ "Number of already submitted transactions: " <> show (length waSubmittedTransactions)
     logLabeledMsg so $ "Total transaction fees amount: " <> do
@@ -307,9 +281,20 @@ interpret so@CheckBalance {..} =
         C.Lovelace amount = fees
       show ((fromInteger amount / 1_000_000) :: F.Micro) <> " ADA"
 
-    expectedBalance <- assetsToPlutusValue woBalance
+    Assets actualTotalBalance <- plutusValueToAssets $ onChainTotal <> lovelaceToPlutusValue fees <> inv waBalanceCheckBaseline
+    let
+      ignore = fold woIgnore
+      expectedBalance = woBalance
+      -- Use roIgnore to skipe values
+      actualBalance = Assets $ Map.filterWithKey (\k _ -> k `notElem` ignore) actualTotalBalance
+
     when (expectedBalance /= actualBalance) do
-      throwLabeledError so $ "Balance check difference: expectedBalance - actualBalance = " <> show (expectedBalance <> inv actualBalance)
+      -- Plutus value implements Group instnace so it is easier to present the diff using this type
+      eb <- assetsToPlutusValue expectedBalance
+      ab <- assetsToPlutusValue actualBalance
+      let
+        diff = eb <> inv ab
+      throwLabeledError so $ "Balance check difference: expectedBalance - actualBalance = " <> show diff
 
 interpret so@CreateWallet {..} = do
   skey <- liftIO $ generateSigningKey AsPaymentKey
@@ -328,40 +313,42 @@ interpret so@CreateWallet {..} = do
   modifying isWallets \(Wallets wallets) -> Wallets (Map.insert woWalletNickname wallet wallets)
 
 interpret so@BurnAll {..} = do
-  Currency { ccCurrencySymbol, ccIssuer } <- findCurrency woCurrencyNickname
-  (Wallets allWallets :: Wallets era) <- use isWallets
-  Wallet { waAddress=issuerAddress, waSigningKey=issuerSigningKey } <- findWallet ccIssuer
-  let
-    providers = Map.elems allWallets <&> \Wallet { waAddress, waSigningKey } -> (waAddress, waSigningKey)
-    currencyIssuer = T.CurrencyIssuer issuerAddress issuerSigningKey
-    mintingAction = T.BurnAll currencyIssuer $ (issuerAddress, issuerSigningKey) :| filter ((/=) issuerAddress. fst) providers
-  connection <- view ieConnection
-  submitMode <- view ieExecutionMode <&> toSubmitMode
-  printStats <- view iePrintStats
-  era <- view ieEra
-  (burningTx, _) <- runLabeledCli era so $ buildMintingImpl
-    connection
-    mintingAction
-    woMetadata
-    Nothing
-    submitMode
-    printStats
-
-  -- We burn *all* the tokens so we have to drop them from the wallet balance baseline as well.
-  -- We should not include them in this reference of untracked funds from the chain because they
-  -- are not on the chain anymore.
-  for_ (Map.toList allWallets) \(walletNickname, Wallet { waBalanceCheckBaseline }) -> do
+  Currencies (Map.toList -> currencies) <- use isCurrencies
+  for_ currencies \(currencyNickname, currency) -> do
+    Currency { ccCurrencySymbol, ccIssuer } <- findCurrency currencyNickname
+    (Wallets allWallets :: Wallets era) <- use isWallets
+    Wallet { waAddress=issuerAddress, waSigningKey=issuerSigningKey } <- findWallet ccIssuer
     let
-      balanceCheckBaseline' = do
-        let
-          check (cs, _, _) = cs /= ccCurrencySymbol
-        foldMap (uncurry3 P.singleton) . filter check . P.flattenValue $ waBalanceCheckBaseline
+      providers = Map.elems allWallets <&> \Wallet { waAddress, waSigningKey } -> (waAddress, waSigningKey)
+      currencyIssuer = T.CurrencyIssuer issuerAddress issuerSigningKey
+      mintingAction = T.BurnAll currencyIssuer $ (issuerAddress, issuerSigningKey) :| filter ((/=) issuerAddress. fst) providers
+    connection <- view ieConnection
+    submitMode <- view ieExecutionMode <&> toSubmitMode
+    printStats <- view iePrintStats
+    era <- view ieEra
+    (burningTx, _) <- runLabeledCli era so $ buildMintingImpl
+      connection
+      mintingAction
+      woMetadata
+      Nothing
+      submitMode
+      printStats
 
-    updateWallet walletNickname \(wallet@Wallet {} :: Wallet era)->
-      wallet { waBalanceCheckBaseline = balanceCheckBaseline' }
+    -- We burn *all* the tokens so we have to drop them from the wallet balance baseline as well.
+    -- We should not include them in this reference of untracked funds from the chain because they
+    -- are not on the chain anymore.
+    for_ (Map.toList allWallets) \(walletNickname, Wallet { waBalanceCheckBaseline }) -> do
+      let
+        balanceCheckBaseline' = do
+          let
+            check (cs, _, _) = cs /= ccCurrencySymbol
+          foldMap (uncurry3 P.singleton) . filter check . P.flattenValue $ waBalanceCheckBaseline
 
-  updateWallet ccIssuer \issuer@Wallet {waSubmittedTransactions} ->
-    issuer { waSubmittedTransactions = burningTx : waSubmittedTransactions }
+      updateWallet walletNickname \(wallet@Wallet {} :: Wallet era)->
+        wallet { waBalanceCheckBaseline = balanceCheckBaseline' }
+
+    updateWallet ccIssuer \issuer@Wallet {waSubmittedTransactions} ->
+      issuer { waSubmittedTransactions = burningTx : waSubmittedTransactions }
 
 interpret FundWallets {..} = do
   let
@@ -463,6 +450,69 @@ interpret SplitWallet {..} = do
     skey
     defaultCoinSelectionStrategy
     submitMode
+
+interpret wo@ReturnFunds{} = do
+  Wallets wallets <- use isWallets
+
+  let
+    step :: (WalletNickname, Wallet era) -> m ([(C.TxIn, C.TxOut C.CtxUTxO era)], [SomePaymentSigningKey], C.Value)
+    step (walletNickname, wallet@Wallet { waSigningKey }) = do
+      if walletNickname == faucetNickname
+      then
+        pure ([], [], mempty)
+      else do
+        C.UTxO (Map.toList -> utxos) <- (fetchWalletUTxOs wallet :: m (C.UTxO era))
+        let
+          subtotal = foldMap (txOutValueValue . snd) utxos
+          tokens = subtotal <> C.negateValue (C.lovelaceToValue . C.selectLovelace $ subtotal)
+        pure (utxos, [waSigningKey], tokens)
+  (utxos, signingKeys, tokens) <- foldMapMFlipped (Map.toList wallets) step
+
+  Wallet { waAddress } <- getFaucet
+  let
+    total = foldMap (txOutValueValue . snd) utxos
+    inputs = map fst utxos
+    outputs = []
+    changeAddress = waAddress
+
+  if total == mempty
+  then
+    logLabeledMsg wo "Nothing to refund"
+  else do
+    connection <- view ieConnection
+    era <- view ieEra
+    body <- runLabeledCli era wo $ buildBody
+        connection
+        ([] :: [PayFromScript C.PlutusScriptV1])
+        Nothing
+        []
+        inputs
+        outputs
+        Nothing
+        changeAddress
+        Nothing
+        []
+        C.TxMintNone
+        C.TxMetadataNone
+        False
+        False
+
+    logLabeledMsg wo $ "Returning funds to the faucet: " <> show total
+
+    submitMode <- view ieExecutionMode <&> toSubmitMode
+    case submitMode of
+      T.DoSubmit timeout -> do
+        runLabeledCli era wo $ submitBody connection body signingKeys timeout
+        let
+          wallets' = Wallets $ flip imap wallets \walletNickname wallet@Wallet { waMintedTokens } -> do
+            if walletNickname == faucetNickname
+            then
+              wallet { waMintedTokens = waMintedTokens <> fromCardanoValue tokens }
+            else
+              wallet { waMintedTokens = mempty }
+        modifying isWallets (const wallets')
+      T.DontSubmit -> do
+        pure ()
 
 saveWalletFiles :: C.IsCardanoEra era => WalletNickname -> Wallet era -> Maybe FilePath -> IO (FilePath, T.SigningKeyFile)
 saveWalletFiles walletNickname wallet dir = do
