@@ -1,5 +1,3 @@
-
-
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
@@ -15,7 +13,7 @@ module Main
 
 import Control.Concurrent (myThreadId)
 import Control.Concurrent.Async (mapConcurrently)
-import Control.Monad (replicateM_, void)
+import Control.Monad (join, replicateM, unless)
 import Control.Monad.Except (MonadIO, liftIO, runExceptT, throwError)
 import Data.Time.Clock (nominalDiffTimeToSeconds)
 import Language.Marlowe.Core.V1.Semantics.Types
@@ -47,9 +45,11 @@ import System.Random (randomRIO)
 
 import qualified Cardano.Api as C
   (AsType(AsPaymentExtendedKey, AsSigningKey), PaymentExtendedKey, SigningKey, readFileTextEnvelope)
+import Data.Either (isRight)
 import qualified Data.Text as T (Text)
 import qualified Data.Time.Clock.POSIX as P (getPOSIXTime)
 import qualified Options.Applicative as O
+import System.Exit (exitFailure)
 
 
 makeContract
@@ -118,7 +118,7 @@ runOne
   -> Config
   -> Address
   -> C.SigningKey C.PaymentExtendedKey
-  -> IO ()
+  -> IO Bool
 runOne eventBackend config address key =
   withEvent eventBackend (DynamicEventSelector "Contract")
     $ \event ->
@@ -142,6 +142,7 @@ runOne eventBackend config address key =
         case result of
           Right contractId -> addField event $ ("success" :: T.Text) ≔ contractId
           Left message     -> addField event $ ("failure" :: T.Text) ≔ message
+        pure $ isRight result
 
 
 main :: IO ()
@@ -159,10 +160,10 @@ main =
           (address, keyFilename) <- parties
         ]
     eventBackend <- simpleJsonStderrBackend defaultRenderSelectorJSON
-    void
-      $ mapConcurrently
-        (uncurry $ (replicateM_ count .) . runOne eventBackend config)
-        addressKeys
+    results <- mapConcurrently
+      (uncurry $ (replicateM count .) . runOne eventBackend config)
+      addressKeys
+    unless (and $ join results) exitFailure
 
 
 data Command =

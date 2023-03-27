@@ -9,3 +9,4 @@ eval "$(ssh dev@dapps.aws.iohkdev.io -p 4022 \
 ssh -N dev@a.dapps.aws.iohkdev.io -p 4022 \
   -L "3700:$PROXY_IP:$PROXY_PORT" \
   -L "3715:$MARLOWE_CHAIN_SYNC_IP:$MARLOWE_CHAIN_SYNC_PORT" \
+  -L "3720:$MARLOWE_CHAIN_SYNC_COMMAND_IP:$MARLOWE_CHAIN_SYNC_COMMAND_PORT"
