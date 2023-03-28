@@ -72,6 +72,8 @@ executable marlowe-integration-tests
     Language.Marlowe.Runtime.Web.GetContract
     Language.Marlowe.Runtime.Web.GetTransactions
     Language.Marlowe.Runtime.Web.GetTransaction
+    Language.Marlowe.Runtime.Web.PostContracts
+    Language.Marlowe.Runtime.Web.PostTransactions
     Language.Marlowe.Runtime.CliSpec
   build-depends:
       base >= 4.9 && < 5
