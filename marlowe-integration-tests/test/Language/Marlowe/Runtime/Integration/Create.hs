@@ -133,7 +133,7 @@ setup runSpec = withLocalMarloweRuntime $ runIntegrationTest do
       , runtime
       }
 
-mkSpec :: CreateCase -> Either CreateErrorMatcher (SpecWith (TestData, ContractCreated BabbageEra v))
+mkSpec :: CreateCase -> Either CreateErrorMatcher (SpecWith (TestData, ContractCreated BabbageEra 'V1))
 mkSpec (CreateCase stakeCredential wallet (roleTokens, metadata) minLovelace) = mergeSpecs
   [ stakeCredentialsSpec stakeCredential
   , walletSpec roleTokens wallet
@@ -258,10 +258,10 @@ roleTokenSpec = \case
             $ fromCardanoTxOutValue value
       tokenDistribution `shouldBe` Map.singleton (changeAddress singleAddressInsufficientBalanceWallet, AssetId rolesCurrency "Role") 1
 
-metadataSpec :: RoleTokenCase -> MetadataCase -> Either CreateErrorMatcher (SpecWith (TestData, ContractCreated BabbageEra v))
+metadataSpec :: RoleTokenCase -> MetadataCase -> Either CreateErrorMatcher (SpecWith (TestData, ContractCreated BabbageEra 'V1))
 metadataSpec roleTokens metadataCase = Right do
-  it "Should write the expected metadata" \(_, ContractCreated{..}) -> do
-    metadata `shouldBe` addNFTMetadata roleTokens (expectedMetadata metadataCase)
+  it "Should write the expected metadata" \(_, contract@ContractCreated{..}) -> do
+    metadata `shouldBe` addNFTMetadata contract roleTokens (expectedMetadata metadataCase)
 
 expectedMetadata :: MetadataCase -> MarloweTransactionMetadata
 expectedMetadata (MetadataCase marloweMetadata extraMetadata) = MarloweTransactionMetadata
@@ -271,11 +271,19 @@ expectedMetadata (MetadataCase marloweMetadata extraMetadata) = MarloweTransacti
     EmptyTags -> TransactionMetadata $ Map.insert 1564 (encodeMarloweMetadata $ MarloweMetadata mempty Nothing) $ unTransactionMetadata $ mkExtraMetadata extraMetadata
     NonEmptyTags -> TransactionMetadata $ Map.insert 1564 (encodeMarloweMetadata testMarloweMetadata) $ unTransactionMetadata $ mkExtraMetadata extraMetadata
 
-addNFTMetadata :: RoleTokenCase -> MarloweTransactionMetadata -> MarloweTransactionMetadata
-addNFTMetadata = \case
+addNFTMetadata :: ContractCreated BabbageEra 'V1 -> RoleTokenCase -> MarloweTransactionMetadata -> MarloweTransactionMetadata
+addNFTMetadata ContractCreated{..} = \case
   MintRoleTokensMetadata -> \MarloweTransactionMetadata{..} ->
     MarloweTransactionMetadata
-      { transactionMetadata = TransactionMetadata $ Map.insert 721 (MetadataNumber 42) $ unTransactionMetadata transactionMetadata
+      { transactionMetadata = TransactionMetadata
+          $ Map.insert 721
+            ( MetadataMap
+              [ ( MetadataBytes $ unPolicyId rolesCurrency
+                , MetadataMap [(MetadataBytes "Role", MetadataNumber 42)]
+                )
+              ]
+            )
+          $ unTransactionMetadata transactionMetadata
       , ..
       }
   _ -> id

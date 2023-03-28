@@ -25,6 +25,7 @@ import Cardano.Api
   , Tx
   , TxBody(..)
   , TxBodyContent(..)
+  , TxMetadataInEra(..)
   , TxOut(..)
   , cardanoEra
   , getTxBody
@@ -50,7 +51,8 @@ import Data.Time (UTCTime)
 import Data.Void (Void)
 import Language.Marlowe.Runtime.Cardano.Api
   (fromCardanoAddressInEra, fromCardanoTxId, toCardanoPaymentCredential, toCardanoStakeCredential)
-import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainSyncQuery(..), Credential(..), TokenName, TxId(..))
+import Language.Marlowe.Runtime.ChainSync.Api
+  (BlockHeader, ChainSyncQuery(..), Credential(..), TokenName, TxId(..), fromCardanoTxMetadata)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Core.Api
   ( Contract
@@ -60,6 +62,7 @@ import Language.Marlowe.Runtime.Core.Api
   , MarloweVersion(MarloweV1)
   , Payout(Payout, datum)
   , TransactionScriptOutput(..)
+  , decodeMarloweTransactionMetadataLenient
   , withMarloweVersion
   )
 import Language.Marlowe.Runtime.Core.ScriptRegistry (MarloweScripts(..))
@@ -287,7 +290,10 @@ execCreate getCurrentScripts eventBackend ev solveConstraints loadWalletContext 
   pure ContractCreated
     { contractId = ContractId $ fromJust $ findMarloweOutput marloweAddress txBody
     , rolesCurrency
-    , metadata
+    , metadata = decodeMarloweTransactionMetadataLenient case txBody of
+        TxBody TxBodyContent{..} -> case txMetadata of
+          TxMetadataNone -> mempty
+          TxMetadataInEra _ m -> fromCardanoTxMetadata m
     , txBody
     , marloweScriptHash = Constraints.marloweScriptHash marloweContext
     , marloweScriptAddress
@@ -367,7 +373,13 @@ execApplyInputs
     let input = scriptOutput'
     let buildOutput (assets, datum) utxo = TransactionScriptOutput marloweAddress assets utxo datum
     let output = buildOutput <$> mAssetsAndDatum <*> findMarloweOutput marloweAddress txBody
-    pure InputsApplied{..}
+    pure InputsApplied
+      { metadata = decodeMarloweTransactionMetadataLenient case txBody of
+          TxBody TxBodyContent{..} -> case txMetadata of
+            TxMetadataNone -> mempty
+            TxMetadataInEra _ m -> fromCardanoTxMetadata m
+      , ..
+      }
 
 execWithdraw
   :: EventBackend IO r TransactionServerSelector
