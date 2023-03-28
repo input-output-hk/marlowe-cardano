@@ -14,7 +14,6 @@ module Test.Matcher
 import Cardano.Api.ChainSync.ClientPipelined (N(..), Nat(..))
 import Control.Exception (catch, throw)
 import Data.Kind (Type)
-import Data.Proxy (Proxy)
 import Test.HUnit.Lang (HUnitFailure)
 import Test.Hspec
 

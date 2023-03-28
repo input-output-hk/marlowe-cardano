@@ -1,4 +1,5 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE OverloadedLists #-}
 
 module Language.Marlowe.Runtime.Integration.Create
   where
@@ -6,18 +7,25 @@ module Language.Marlowe.Runtime.Integration.Create
 import Cardano.Api
   ( BabbageEra
   , CardanoEra(..)
+  , Script(..)
+  , SimpleScript(..)
+  , SimpleScriptVersion(..)
+  , SlotNo(..)
+  , TimeLocksSupported(..)
   , TxBody(..)
   , TxBodyContent(..)
   , TxInsCollateral(..)
   , TxMintValue(..)
   , TxOut(..)
   , TxOutValue(..)
+  , scriptPolicyId
   , valueToList
   )
 import qualified Cardano.Api as C
 import Cardano.Api.ChainSync.ClientPipelined (Nat(..))
 import Control.Monad (guard)
 import Control.Monad.IO.Class (liftIO)
+import Control.Monad.Reader (ask)
 import Data.Foldable (for_)
 import Data.Function ((&))
 import Data.Functor (($>), (<&>))
@@ -29,7 +37,7 @@ import qualified Data.Set as Set
 import Data.Void (Void)
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
 import Language.Marlowe.Runtime.Cardano.Api
-  (assetsFromCardanoValue, fromCardanoAddressInEra, fromCardanoTxIn, fromCardanoTxOutValue)
+  (assetsFromCardanoValue, fromCardanoAddressInEra, fromCardanoPolicyId, fromCardanoTxIn, fromCardanoTxOutValue)
 import Language.Marlowe.Runtime.ChainSync.Api
   ( AssetId(..)
   , Assets(..)
@@ -41,11 +49,13 @@ import Language.Marlowe.Runtime.ChainSync.Api
   , StakeReference(..)
   , Tokens(..)
   , TransactionMetadata(..)
+  , fromCardanoStakeCredential
   , stakeReference
   )
 import Language.Marlowe.Runtime.Client (runMarloweTxClient)
 import Language.Marlowe.Runtime.Core.Api
-import Language.Marlowe.Runtime.Integration.Common (runIntegrationTest)
+import Language.Marlowe.Runtime.Integration.Common
+  (Wallet(..), allocateWallet, getGenesisWallet, getStakeCredential, runIntegrationTest, submitBuilder)
 import Language.Marlowe.Runtime.Transaction.Api
 import Network.Protocol.Codec.Spec (varyAp)
 import Network.Protocol.Job.Client (liftCommand)
@@ -55,8 +65,8 @@ import Test.Matcher
   (CustomMatcher(..), EqMatcher(..), Matcher(..), TrivialMatcher(..), VariantMatcher(..), injectMatcher)
 
 spec :: Spec
-spec = describe "Create" $ aroundAll setup do
-  for_ allCreateCases \createCase -> aroundAllWith (runCreateCase createCase) do
+spec = focus $ describe "Create" $ aroundAll setup do
+  parallel $ for_ allCreateCases \createCase -> aroundAllWith (runCreateCase createCase) do
     describe (show createCase) do
       case mkSpec createCase of
         Left errorMatcher -> it "Should fail" \case
@@ -92,12 +102,41 @@ data TestData = TestData
 
 setup :: ActionWith TestData -> IO ()
 setup runSpec = withLocalMarloweRuntime $ runIntegrationTest do
-  pure ()
+  runtime <- ask
+  genesisWallet0 <- getGenesisWallet 0
+  genesisWallet1 <- getGenesisWallet 1
+  stakeCredential <- getStakeCredential 0
+  liftIO . runSpec . snd =<< submitBuilder (genesisWallet0 <> genesisWallet1) do
+    singleAddressInsufficientBalanceWallet <- fmap addresses $ allocateWallet [] [[857690]]
+    singleAddressSufficientBalanceOneInsufficientCollateralWallet <- fmap addresses $ allocateWallet [1] [[857690, 12_000_000]]
+    singleAddressSufficientBalanceMultiInsufficientCollateralWallet <- fmap addresses $ allocateWallet [3, 4] [[857690, 857690, 12_000_000]]
+    singleAddressSufficientBalanceOneSufficientCollateralWallet <- fmap addresses $ allocateWallet [6] [[12_000_000]]
+    singleAddressSufficientBalanceMultiSufficientCollateralWallet <- fmap addresses $ allocateWallet [7, 8] [[1_500_000, 2_000_000, 10_000_000]]
+    multiAddressInsufficientBalanceWallet <- fmap addresses $ allocateWallet [] [[857690], [], [1_000_000]]
+    multiAddressSufficientBalanceOneInsufficientCollateralWallet <- fmap addresses $ allocateWallet [11] [[857690, 1_000_000], [1_500_000, 10_000_000]]
+    multiAddressSufficientBalanceMultiInsufficientCollateralWallet <- fmap addresses $ allocateWallet [15, 16] [[857690, 857690], [11_000_000]]
+    multiAddressSufficientBalanceOneSufficientCollateralWallet <- fmap addresses $ allocateWallet [19] [[5_000_000], [2_000_000, 10_000_000]]
+    multiAddressSufficientBalanceMultiSufficientCollateralWallet <- fmap addresses $ allocateWallet [21, 22] [[1_000_000, 2_000_000], [], [10_000_000]]
+    pure TestData
+      { stakeCredential = fromCardanoStakeCredential stakeCredential
+      , singleAddressInsufficientBalanceWallet
+      , singleAddressSufficientBalanceOneInsufficientCollateralWallet
+      , singleAddressSufficientBalanceMultiInsufficientCollateralWallet
+      , singleAddressSufficientBalanceOneSufficientCollateralWallet
+      , singleAddressSufficientBalanceMultiSufficientCollateralWallet
+      , multiAddressInsufficientBalanceWallet
+      , multiAddressSufficientBalanceOneInsufficientCollateralWallet
+      , multiAddressSufficientBalanceMultiInsufficientCollateralWallet
+      , multiAddressSufficientBalanceOneSufficientCollateralWallet
+      , multiAddressSufficientBalanceMultiSufficientCollateralWallet
+      , existingRoleTokenPolicy = fromCardanoPolicyId $ scriptPolicyId $ SimpleScript SimpleScriptV2 $ RequireTimeAfter TimeLocksInSimpleScriptV2 $ SlotNo 0
+      , runtime
+      }
 
 mkSpec :: CreateCase -> Either CreateErrorMatcher (SpecWith (TestData, ContractCreated BabbageEra v))
 mkSpec (CreateCase stakeCredential wallet (roleTokens, metadata) minLovelace) = mergeSpecs
   [ stakeCredentialsSpec stakeCredential
-  , walletSpec wallet
+  , walletSpec roleTokens wallet
   , roleTokenSpec roleTokens
   , metadataSpec roleTokens metadata
   , minLovelaceSpec minLovelace
@@ -124,10 +163,10 @@ stakeCredentialsSpec = Right . \case
     it "Does not attach a stake credential to the Marlowe script address" \(_, ContractCreated{..}) -> do
       stakeReference marloweScriptAddress `shouldBe` Nothing
 
-walletSpec :: WalletCase -> Either CreateErrorMatcher (SpecWith (TestData, ContractCreated BabbageEra v))
-walletSpec (WalletCase balance addresses collateral) = mergeSpecs
+walletSpec :: RoleTokenCase -> WalletCase -> Either CreateErrorMatcher (SpecWith (TestData, ContractCreated BabbageEra v))
+walletSpec roleTokens (WalletCase balance addresses collateral) = mergeSpecs
   [ balanceSpec balance
-  , collateralSpec addresses collateral
+  , collateralSpec roleTokens addresses collateral
   ]
 
 balanceSpec :: WalletBalanceCase -> Either CreateErrorMatcher (SpecWith (TestData, ContractCreated BabbageEra v))
@@ -136,8 +175,10 @@ balanceSpec = \case
   BalanceInsufficient -> Left $ matchCreateConstraintError $ matchCoinSelectionFailed $ CustomMatcher \msg ->
     msg `shouldStartWith` "Insufficient lovelace available for coin selection:"
 
-collateralSpec :: WalletAddressesCase -> WalletCollateralUTxOCase -> Either CreateErrorMatcher (SpecWith (TestData, ContractCreated BabbageEra v))
-collateralSpec addresses = \case
+collateralSpec :: RoleTokenCase -> WalletAddressesCase -> WalletCollateralUTxOCase -> Either CreateErrorMatcher (SpecWith (TestData, ContractCreated BabbageEra v))
+collateralSpec NoRoleTokens _ = const $ Right $ pure ()
+collateralSpec ExistingPolicyRoleTokens _ = const $ Right $ pure ()
+collateralSpec _ addresses = \case
   NoCollateralUTxOs -> Right $ pure ()
   OneCollateralUTxOInsufficient -> Right do
     it "Should fail if there is insufficient collateral" $ const pending
@@ -221,7 +262,9 @@ metadataSpec :: RoleTokenCase -> MetadataCase -> Either CreateErrorMatcher (Spec
 metadataSpec _ _ = Right $ pure ()
 
 minLovelaceSpec :: MinLovelaceCase -> Either CreateErrorMatcher (SpecWith (TestData, ContractCreated BabbageEra v))
-minLovelaceSpec _ = Right $ pure ()
+minLovelaceSpec = \case
+  MinLovelaceSufficient -> Right $ pure ()
+  MinLovelaceInsufficient -> Left $ matchCreateConstraintError $ matchCalculateMinUtxoFailed $ CustomMatcher (`shouldBe` "Marlowe output value changed during output adjustment")
 
 type CreateErrorMatcher = VariantMatcher (CreateError 'V1)
   '[ ConstraintErrorMatcher
@@ -395,8 +438,8 @@ mkExtraMetadata (ExtraMetadataCase extraRandomMetadata extraMarloweMetadata extr
 
 mkMinLovelace :: MinLovelaceCase -> Lovelace
 mkMinLovelace = \case
-  MinLovelaceSufficient -> 2_000_000
-  MinLovelaceInsufficient -> 1_000_000
+  MinLovelaceSufficient -> 5_000_000
+  MinLovelaceInsufficient -> 500_000
 
 mkContract :: RoleTokenCase -> V1.Contract
 mkContract = \case

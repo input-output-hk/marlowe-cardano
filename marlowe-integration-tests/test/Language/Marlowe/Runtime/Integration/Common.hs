@@ -28,6 +28,7 @@ import Cardano.Api
   )
 import qualified Cardano.Api as C
 import Cardano.Api.Byron (deserialiseFromTextEnvelope)
+import qualified Cardano.Api.Shelley as C
 import Control.Concurrent (threadDelay)
 import Control.Monad (void, (<=<))
 import Control.Monad.IO.Class (MonadIO, liftIO)
@@ -41,6 +42,7 @@ import Data.Aeson.Types (parseFail)
 import Data.Bifunctor (first)
 import Data.ByteString (ByteString)
 import Data.ByteString.Base16 (decodeBase16)
+import Data.Function (on)
 import Data.Functor ((<&>))
 import Data.List.NonEmpty (NonEmpty)
 import qualified Data.List.NonEmpty as NE
@@ -74,7 +76,7 @@ import Language.Marlowe.Runtime.ChainSync.Api
   , BlockHeader(..)
   , BlockHeaderHash(..)
   , BlockNo(..)
-  , Lovelace(Lovelace)
+  , Lovelace
   , SlotNo(..)
   , TokenName
   , TxId
@@ -174,11 +176,7 @@ balanceTx (Wallet WalletAddresses{..} _) utxo txBodyContent = do
   history <- queryNode 0 $ C.QueryEraHistory C.CardanoModeIsMultiEra
   protocol <- queryBabbage 0 $ C.QueryInShelleyBasedEra C.ShelleyBasedEraBabbage C.QueryProtocolParameters
   changeAddr <- expectJust "Could not convert to Cardano address" $ toCardanoAddressInEra C.BabbageEra changeAddress
-  -- Contrary to the name, the resulting TxBody is not actually balanced... it
-  -- does not contain the extra change output - instead we have to add it back
-  -- to the original txBodyContent (with the estimated fees) and balance it
-  -- again... what a pain!
-  C.BalancedTxBody (TxBody TxBodyContent{txFee}) changeOut _ <- expectRight "Failed to balance Tx" $ C.makeTransactionBodyAutoBalance
+  C.BalancedTxBody txBody _ _ <- expectRight "Failed to balance Tx" $ C.makeTransactionBodyAutoBalance
     C.BabbageEraInCardanoMode
     start
     history
@@ -186,18 +184,6 @@ balanceTx (Wallet WalletAddresses{..} _) utxo txBodyContent = do
     mempty
     utxo
     txBodyContent
-    changeAddr
-    Nothing
-  -- Balance again, adding the change output and fees to the original tx body
-  -- content
-  C.BalancedTxBody txBody _ _ <- expectRight "Failed to re-balance Tx" $ C.makeTransactionBodyAutoBalance
-    C.BabbageEraInCardanoMode
-    start
-    history
-    protocol
-    mempty
-    utxo
-    txBodyContent { txOuts = changeOut : txOuts txBodyContent, txFee }
     changeAddr
     Nothing
   pure txBody
@@ -233,6 +219,16 @@ data Wallet = Wallet
   , signingKeys :: [ShelleyWitnessSigningKey]
   }
 
+instance Semigroup Wallet where
+  a <> b = Wallet
+    { addresses = WalletAddresses
+        { changeAddress = changeAddress $ addresses a
+        , extraAddresses = Set.insert (changeAddress (addresses b)) $ on (<>) (extraAddresses . addresses) a b
+        , collateralUtxos = on (<>) (collateralUtxos . addresses) a b
+        }
+    , signingKeys = on (<>) signingKeys a b
+    }
+
 runIntegrationTest :: Integration a -> MarloweRuntime -> IO a
 runIntegrationTest m runtime@MarloweRuntime.MarloweRuntime{protocolConnector} =
   runReaderT (runMarloweT m protocolConnector) runtime
@@ -252,6 +248,17 @@ expectRight msg = \case
 
 testnet :: Integration LocalTestnet
 testnet = asks MarloweRuntime.testnet
+
+getStakeCredential :: Int -> Integration C.StakeCredential
+getStakeCredential nodeNum = do
+  LocalTestnet{..} <- testnet
+  let SpoNode{..} = spoNodes !! nodeNum
+  C.StakeCredentialByKey <$> liftIO do
+    mTextEnvelope <- decodeFileStrict stakingRewardVKey
+    textEnvelope <- expectJust "Failed to decode staking verification key" mTextEnvelope
+    stakeKey <- expectRight "Failed to decode text envelope staking vkey"
+      $ deserialiseFromTextEnvelope (AsVerificationKey AsStakeKey) textEnvelope
+    pure $ verificationKeyHash stakeKey
 
 getGenesisWallet :: Int -> Integration Wallet
 getGenesisWallet walletIx = do
