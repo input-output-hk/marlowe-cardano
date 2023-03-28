@@ -4,7 +4,9 @@
 {-# LANGUAGE EmptyDataDeriving #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE ViewPatterns #-}
 
 module Language.Marlowe.Runtime.Transaction.Api
   ( ApplyInputsConstraintsBuildupError(..)
@@ -18,13 +20,16 @@ module Language.Marlowe.Runtime.Transaction.Api
   , LoadMarloweContextError(..)
   , MarloweTxCommand(..)
   , Mint(unMint)
-  , NFTMetadata(unNFTMetadata)
+  , NFTMetadata(..)
+  , NFTMetadataDetails(..)
+  , NFTMetadataFileDetails(..)
   , RoleTokensConfig(..)
   , SubmitError(..)
   , SubmitStatus(..)
   , Tag(..)
   , WalletAddresses(..)
   , WithdrawError(..)
+  , mkMetadata
   , mkMint
   , mkNFTMetadata
   ) where
@@ -40,7 +45,14 @@ import Cardano.Api
   , serialiseToCBOR
   , serialiseToTextEnvelope
   )
-import Data.Aeson (ToJSON(..), object, (.=))
+import Control.Applicative ((<|>))
+import Control.Arrow ((***))
+import Control.Monad ((<=<))
+import Data.Aeson (FromJSON, ToJSON(..), object, (.!=), (.:!), (.=))
+import qualified Data.Aeson as Aeson
+import qualified Data.Aeson.KeyMap as Aeson.KeyMap
+import Data.Aeson.Types ((.:))
+import qualified Data.Aeson.Types as Aeson.Types
 import Data.Binary (Binary, Get, get, getWord8, put)
 import Data.Binary.Put (Put, putWord8)
 import Data.ByteString (ByteString)
@@ -48,7 +60,10 @@ import Data.List.NonEmpty (NonEmpty)
 import qualified Data.List.NonEmpty as NonEmpty
 import Data.Map (Map)
 import qualified Data.Map.Strict as Map
+import Data.Maybe (fromMaybe, maybeToList)
 import Data.Set (Set)
+import Data.Text (Text)
+import qualified Data.Text as Text
 import Data.Time (UTCTime)
 import Data.Type.Equality (type (:~:)(Refl))
 import Data.Void (Void, absurd)
@@ -61,13 +76,13 @@ import Language.Marlowe.Runtime.ChainSync.Api
   , Assets
   , BlockHeader
   , Lovelace
-  , Metadata
+  , Metadata(..)
   , PlutusScript
-  , PolicyId
+  , PolicyId(..)
   , ScriptHash
   , SlotNo
   , StakeCredential
-  , TokenName
+  , TokenName(..)
   , TxId
   , TxOutRef
   , getUTCTime
@@ -77,13 +92,72 @@ import Language.Marlowe.Runtime.Core.Api
 import Language.Marlowe.Runtime.History.Api (ExtractCreationError, ExtractMarloweTransactionError)
 import Network.Protocol.Handshake.Types (HasSignature(..))
 import Network.Protocol.Job.Types
+import qualified Network.URI
 
--- CIP-25 metadata
-newtype NFTMetadata = NFTMetadata { unNFTMetadata :: Metadata }
+data NFTMetadataFileDetails = NFTMetadataFileDetails
+  { name :: Text
+  , mediaType :: Text
+  , src :: Text
+  }
   deriving stock (Show, Eq, Ord, Generic)
-  deriving newtype (Binary, ToJSON)
+  deriving (Binary, ToJSON)
 
--- FIXME: Validate the metadata format
+parseJSONURI :: Text -> Aeson.Types.Parser Text
+parseJSONURI uri@(Text.unpack -> s) =
+  if Network.URI.isURI s
+  then pure uri
+  else fail $ s <> " is not a valid URI!"
+
+instance Aeson.FromJSON NFTMetadataFileDetails where
+  parseJSON = Aeson.withObject "NFTMetadataFileDetails" \x ->
+    NFTMetadataFileDetails
+      <$> x .: "name"
+      <*> x .: "mediaType"
+      <*> (parseJSONURI =<< x .: "src")
+
+data NFTMetadataDetails = NFTMetadataDetails
+  { name :: Text
+  , image :: Text
+  , mediaType :: Maybe Text
+  , description :: Maybe Text
+  , files :: [NFTMetadataFileDetails]
+  }
+  deriving stock (Show, Eq, Ord, Generic)
+  deriving (Binary)
+
+instance Aeson.ToJSON NFTMetadataDetails where
+  toJSON NFTMetadataDetails {..} = Aeson.Object $ Aeson.KeyMap.fromList $
+    [ ("name", toJSON name)
+    , ("image", toJSON image)
+    ]
+    <> maybeToList (fmap (("mediaType",) . Aeson.String) mediaType)
+    <> maybeToList (fmap (("description",) . Aeson.String) description)
+    <> case files of
+      [] -> []
+      _ -> [("files", toJSON files)]
+
+instance Aeson.FromJSON NFTMetadataDetails where
+  parseJSON = Aeson.withObject "NFTMetadataDetails" \x ->
+    NFTMetadataDetails
+      <$> x .: "name"
+      <*> (parseJSONURI =<<  x .: "image")
+      <*> x .:! "mediaType"
+      <*> x .:! "description"
+      <*> x .:! "files" .!= []
+
+newtype NFTMetadata = NFTMetadata
+  { unNFTMetadata :: Map PolicyId (Map TokenName NFTMetadataDetails)
+  }
+  deriving stock (Show, Eq, Ord, Generic)
+  deriving newtype (Binary)
+
+instance Aeson.ToJSON NFTMetadata where
+  toJSON (NFTMetadata x) = Aeson.Object [("721", toJSON x)]
+
+instance Aeson.FromJSON NFTMetadata where
+  parseJSON = Aeson.withObject "NFTMetadata" \x ->
+    NFTMetadata <$> x .: "721"
+
 mkNFTMetadata :: Metadata -> Maybe NFTMetadata
 mkNFTMetadata = Just . NFTMetadata
 

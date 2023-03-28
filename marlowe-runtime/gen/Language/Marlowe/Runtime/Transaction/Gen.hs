@@ -23,10 +23,26 @@ instance Arbitrary WalletAddresses where
   arbitrary = WalletAddresses <$> arbitrary <*> arbitrary <*> arbitrary
   shrink = genericShrink
 
+instance Arbitrary NFTMetadataFileDetails where
+  arbitrary =
+    NFTMetadataFileDetails
+      <$> arbitrary
+      <*> arbitrary
+      <*> arbitrary
+  shrink = genericShrink
+
+instance Arbitrary NFTMetadataDetails where
+  arbitrary =
+    NFTMetadataDetails
+      <$> arbitrary
+      <*> arbitrary
+      <*> arbitrary
+      <*> arbitrary
+      <*> arbitrary
+  shrink = genericShrink
+
 instance Arbitrary NFTMetadata where
-  arbitrary = do
-    mMetadata <- mkNFTMetadata <$> arbitrary
-    maybe arbitrary pure mMetadata
+  arbitrary = NFTMetadata <$> arbitrary
   shrink = genericShrink
 
 instance Arbitrary Mint where

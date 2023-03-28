@@ -289,11 +289,13 @@ library tx-api
     , binary
     , cardano-api
     , bytestring
+    , text
     , containers
     , marlowe-chain-sync
     , marlowe-protocols
     , marlowe-runtime
     , marlowe-runtime:history-api
+    , network-uri
     , time
 
 library tx
@@ -538,6 +540,7 @@ test-suite marlowe-runtime-test
   other-modules:
     Language.Marlowe.Runtime.Core.MetadataSpec
     Language.Marlowe.Runtime.Core.ScriptRegistrySpec
+    Language.Marlowe.Runtime.Transaction.ApiSpec
     Language.Marlowe.Runtime.Transaction.BuildConstraintsSpec
     Language.Marlowe.Runtime.Transaction.ConstraintsSpec
     Language.Marlowe.Runtime.Transaction.CommandSpec
@@ -547,6 +550,8 @@ test-suite marlowe-runtime-test
     Paths_marlowe_runtime
   build-depends:
       base >= 4.9 && < 5
+    , base16
+    , aeson
     , bytestring
     , cardano-api
     , cardano-api:gen
@@ -568,14 +573,17 @@ test-suite marlowe-runtime-test
     , marlowe-runtime:tx
     , marlowe-runtime:tx-api
     , marlowe-test
+    , network-uri
     , ouroboros-consensus
     , plutus-tx
     , plutus-ledger-api
     , QuickCheck
     , quickcheck-instances
+    , text
     , time
     , tx-api
     , typed-protocols
+    , vector
   build-tool-depends: hspec-discover:hspec-discover
   ghc-options: -threaded
 
