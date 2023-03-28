@@ -5,7 +5,8 @@ module Language.Marlowe.Runtime.Transaction.ApiSpec
   ( spec
   ) where
 
-import Language.Marlowe.Runtime.Transaction.Api (NFTMetadata(..), NFTMetadataDetails(..), NFTMetadataFileDetails(..))
+import Language.Marlowe.Runtime.Transaction.Api
+  (NFTMetadata(..), NFTMetadataDetails(..), NFTMetadataFileDetails(..), mkMetadata, mkNFTMetadata)
 
 import Control.Arrow ((&&&), (***))
 import qualified Data.Aeson as Aeson
@@ -87,6 +88,7 @@ cip25MetadataValidityTests = Gen.checkCoverage $
     let document = Aeson.encode json
     Aeson.encode nftMetadata `shouldBe` document
     fmap show (Aeson.decode @NFTMetadata document) `shouldBe` Just (show nftMetadata)
+    let nftMetadata' = mkNFTMetadata $ mkMetadata nftMetadata
     nftMetadata' `shouldBe` Just nftMetadata
   where
   cip25MetadataJSONRelationGen :: Gen (NFTMetadata, Aeson.Value)

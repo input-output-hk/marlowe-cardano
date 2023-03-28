@@ -159,6 +159,30 @@ data Metadata
   deriving stock (Show, Eq, Ord, Generic)
   deriving anyclass (Binary)
 
+parseMetadataMap :: forall k v. Ord k => (Metadata -> Maybe k) -> (Metadata -> Maybe v) -> Metadata -> Maybe (Map k v)
+parseMetadataMap activeKeyPattern activeValuePattern = \case
+  MetadataMap entries ->
+    Map.fromList <$> for entries \case
+      (activeKeyPattern -> Just key, activeValuePattern -> Just value) -> Just (key, value)
+      _ -> Nothing
+  _ -> Nothing
+
+parseMetadataList :: (Metadata -> Maybe a) -> Metadata -> Maybe [a]
+parseMetadataList activeItemPattern = \case
+  MetadataList xs -> for xs \case
+    (activeItemPattern -> Just x) -> Just x
+    _ -> Nothing
+  _ -> Nothing
+
+parseMetadataNumber :: Metadata -> Maybe Integer
+parseMetadataNumber = \case MetadataNumber n -> Just n; _ -> Nothing
+
+parseMetadataBytes :: Metadata -> Maybe ByteString
+parseMetadataBytes = \case MetadataBytes bs -> Just bs; _ -> Nothing
+
+parseMetadataText :: Metadata -> Maybe Text
+parseMetadataText = \case MetadataText bs -> Just bs; _ -> Nothing
+
 -- Using the generic implementation produces an infinite list.
 instance Variations Metadata where
   variations = join $ NE.fromList

@@ -56,6 +56,7 @@ import qualified Data.Aeson.Types as Aeson.Types
 import Data.Binary (Binary, Get, get, getWord8, put)
 import Data.Binary.Put (Put, putWord8)
 import Data.ByteString (ByteString)
+import Data.Coerce (coerce)
 import Data.List.NonEmpty (NonEmpty)
 import qualified Data.List.NonEmpty as NonEmpty
 import Data.Map (Map)
@@ -86,6 +87,10 @@ import Language.Marlowe.Runtime.ChainSync.Api
   , TxId
   , TxOutRef
   , getUTCTime
+  , parseMetadataBytes
+  , parseMetadataList
+  , parseMetadataMap
+  , parseMetadataText
   , putUTCTime
   )
 import Language.Marlowe.Runtime.Core.Api
@@ -159,7 +164,94 @@ instance Aeson.FromJSON NFTMetadata where
     NFTMetadata <$> x .: "721"
 
 mkNFTMetadata :: Metadata -> Maybe NFTMetadata
-mkNFTMetadata = Just . NFTMetadata
+mkNFTMetadata =
+  fmap NFTMetadata . parsePolicies
+    <=< Map.lookup (MetadataNumber 721)
+    <=< parseMetadataMap Just Just
+  where
+    parsePolicies :: Metadata -> Maybe (Map PolicyId (Map TokenName NFTMetadataDetails))
+    parsePolicies = parseMetadataMap parsePolicyId parseTokens
+
+    parsePolicyId :: Metadata -> Maybe PolicyId
+    parsePolicyId = coerce parseMetadataBytes
+
+    parseTokens :: Metadata -> Maybe (Map TokenName NFTMetadataDetails)
+    parseTokens = parseMetadataMap parseTokenName parseNFTMetadataDetails
+
+    parseTokenName :: Metadata -> Maybe TokenName
+    parseTokenName = coerce parseMetadataBytes
+
+    parseNFTMetadataDetails :: Metadata -> Maybe NFTMetadataDetails
+    parseNFTMetadataDetails metadata = do
+      textKeyMap <- parseMetadataRecord metadata
+      name <- parseMetadataText =<< Map.lookup "name" textKeyMap
+      image <- parseSplittableText =<< Map.lookup "image" textKeyMap
+      let mediaType = parseMetadataText =<< Map.lookup "mediaType" textKeyMap
+          description = parseSplittableText =<< Map.lookup "description" textKeyMap
+          parseSingleFileDetails = fmap (:[]) . parseNFTMetadataFileDetails
+          parseManyFileDetails = parseMetadataList parseNFTMetadataFileDetails
+          parseFileDetails md = parseSingleFileDetails md <|> parseManyFileDetails md
+          files = fromMaybe [] $ parseFileDetails =<< Map.lookup "files" textKeyMap
+      Just $ NFTMetadataDetails {..}
+
+    parseNFTMetadataFileDetails :: Metadata -> Maybe NFTMetadataFileDetails
+    parseNFTMetadataFileDetails metadata = do
+      textKeyMap <- parseMetadataRecord metadata
+      name <- parseMetadataText =<< Map.lookup "name" textKeyMap
+      mediaType <- parseMetadataText =<< Map.lookup "mediaType" textKeyMap
+      src <- parseSplittableText =<< Map.lookup "src" textKeyMap
+      Just $ NFTMetadataFileDetails {..}
+
+    parseMetadataRecord :: Metadata -> Maybe (Map Text Metadata)
+    parseMetadataRecord = parseMetadataMap parseMetadataText Just
+
+    parseSplittableText :: Metadata -> Maybe Text
+    parseSplittableText md = parseMetadataText md <|> (mconcat <$> parseMetadataList parseMetadataText md)
+
+mkMetadata :: NFTMetadata -> Metadata
+mkMetadata (unNFTMetadata -> metadata) =
+  MetadataMap [(MetadataNumber 721, encodePolicies metadata)]
+  where
+  encodePolicies :: Map PolicyId (Map TokenName NFTMetadataDetails) -> Metadata
+  encodePolicies = MetadataMap . fmap (encodePolicyId *** encodeTokens) . Map.toList
+
+  encodePolicyId :: PolicyId -> Metadata
+  encodePolicyId = coerce MetadataBytes
+
+  encodeTokens :: Map TokenName NFTMetadataDetails -> Metadata
+  encodeTokens = MetadataMap . fmap (encodeTokenName *** encodeNFTMetadataDetails) . Map.toList
+
+  encodeTokenName :: TokenName -> Metadata
+  encodeTokenName = coerce MetadataBytes
+
+  encodeNFTMetadataDetails :: NFTMetadataDetails -> Metadata
+  encodeNFTMetadataDetails NFTMetadataDetails {..} = MetadataMap $
+    [ (MetadataText "name", MetadataText name)
+    , (MetadataText "image", encodeText image)
+    ]
+    <> maybeToList ((MetadataText "mediaType",) . MetadataText <$> mediaType)
+    <> maybeToList ((MetadataText "description",) . encodeText <$> description)
+    <> case files of
+        [] -> []
+        [fileDetails] ->
+          [(MetadataText "files", encodeNFTMetadataFileDetails fileDetails)]
+        fileDetails ->
+          [(MetadataText "files", MetadataList $ fmap encodeNFTMetadataFileDetails fileDetails)]
+
+  encodeNFTMetadataFileDetails :: NFTMetadataFileDetails -> Metadata
+  encodeNFTMetadataFileDetails NFTMetadataFileDetails {..} = MetadataMap
+    [ (MetadataText "name", MetadataText name)
+    , (MetadataText "mediaType", MetadataText mediaType)
+    , (MetadataText "src", encodeText src)
+    ]
+
+  encodeText :: Text -> Metadata
+  encodeText =
+    let loop acc t
+          | Text.length t <= 64 = MetadataText t:acc
+          | otherwise = let (t', ts) = Text.splitAt 64 t
+                         in loop (MetadataText t':acc) ts
+    in MetadataList . reverse . loop []
 
 -- | Non empty mint request.
 newtype Mint = Mint { unMint :: Map TokenName (Address, Either Natural (Maybe NFTMetadata)) }
