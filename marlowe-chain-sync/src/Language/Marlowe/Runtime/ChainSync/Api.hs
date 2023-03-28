@@ -43,7 +43,7 @@ import Control.Monad (guard, join, (<=<), (>=>))
 import Data.Aeson
   ( FromJSON(..)
   , FromJSONKey(..)
-  , FromJSONKeyFunction(FromJSONKeyTextParser)
+  , FromJSONKeyFunction(FromJSONKeyText, FromJSONKeyTextParser)
   , ToJSON
   , ToJSONKey
   , Value(..)
@@ -451,6 +451,12 @@ instance ToJSONKey TokenName where
 instance ToJSON TokenName where
   toJSON = Aeson.String . T.pack . BS.unpack . unTokenName
 
+instance FromJSON TokenName where
+  parseJSON = Aeson.withText "TokenName" (pure . TokenName . BS.pack . T.unpack)
+
+instance FromJSONKey TokenName where
+  fromJSONKey = FromJSONKeyText (TokenName . BS.pack . T.unpack)
+
 newtype Quantity = Quantity { unQuantity :: Word64 }
   deriving stock (Show, Eq, Ord, Generic)
   deriving newtype (Num, Integral, Real, Enum, Bounded, Binary, ToJSON, Variations)
@@ -462,7 +468,7 @@ newtype Lovelace = Lovelace { unLovelace :: Word64 }
 newtype Address = Address { unAddress :: ByteString }
   deriving stock (Eq, Ord, Generic)
   deriving newtype (Binary, Variations)
-  deriving (IsString, Show, ToJSON) via Base16
+  deriving (IsString, Show, ToJSON, FromJSON) via Base16
 
 toBech32 :: Address -> Maybe Text
 toBech32 = toCardanoAddress >=> \case

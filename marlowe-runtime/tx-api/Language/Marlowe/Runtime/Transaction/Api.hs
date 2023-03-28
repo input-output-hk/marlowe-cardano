@@ -90,7 +90,7 @@ mkNFTMetadata = Just . NFTMetadata
 -- | Non empty mint request.
 newtype Mint = Mint { unMint :: Map TokenName (Address, Either Natural (Maybe NFTMetadata)) }
   deriving stock (Show, Eq, Ord, Generic)
-  deriving newtype (Binary, Semigroup, Monoid, ToJSON)
+  deriving newtype (Binary, Semigroup, Monoid, ToJSON, FromJSON)
 
 mkMint :: NonEmpty (TokenName, (Address, Either Natural (Maybe NFTMetadata))) -> Mint
 mkMint = Mint . Map.fromList . NonEmpty.toList
@@ -100,7 +100,7 @@ data RoleTokensConfig
   | RoleTokensUsePolicy PolicyId
   | RoleTokensMint Mint
   deriving stock (Show, Eq, Ord, Generic)
-  deriving anyclass (Binary, ToJSON)
+  deriving anyclass (Binary, ToJSON, FromJSON)
 
 data ContractCreated era v = ContractCreated
   { contractId :: ContractId
