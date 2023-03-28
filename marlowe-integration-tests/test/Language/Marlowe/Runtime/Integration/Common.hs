@@ -2,6 +2,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecursiveDo #-}
+
 module Language.Marlowe.Runtime.Integration.Common
   where
 
@@ -44,9 +45,7 @@ import Data.ByteString (ByteString)
 import Data.ByteString.Base16 (decodeBase16)
 import Data.Foldable (fold)
 import Data.Function (on)
-import Data.Functor (($>), (<&>))
-import Data.List.NonEmpty (NonEmpty)
-import qualified Data.List.NonEmpty as NE
+import Data.Functor (($>))
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Maybe (catMaybes, fromJust)
