@@ -62,7 +62,7 @@ import Test.Hspec
 import Test.Integration.Marlowe (MarloweRuntime(..), withLocalMarloweRuntime)
 
 spec :: Spec
-spec = focus $ describe "Create" $ aroundAll setup do
+spec = describe "Create" $ aroundAll setup do
   parallel $ for_ allCreateCases \createCase -> aroundAllWith (runCreateCase createCase) do
     describe (show createCase) do
       case mkSpec createCase of
@@ -104,16 +104,16 @@ setup runSpec = withLocalMarloweRuntime $ runIntegrationTest do
   genesisWallet1 <- getGenesisWallet 1
   stakeCredential <- getStakeCredential 0
   liftIO . runSpec . snd =<< submitBuilder (genesisWallet0 <> genesisWallet1) do
-    singleAddressInsufficientBalanceWallet <- fmap addresses $ allocateWallet [] [[857690]]
-    singleAddressSufficientBalanceOneInsufficientCollateralWallet <- fmap addresses $ allocateWallet [1] [[857690, 12_000_000]]
-    singleAddressSufficientBalanceMultiInsufficientCollateralWallet <- fmap addresses $ allocateWallet [3, 4] [[857690, 857690, 12_000_000]]
-    singleAddressSufficientBalanceOneSufficientCollateralWallet <- fmap addresses $ allocateWallet [6] [[12_000_000]]
-    singleAddressSufficientBalanceMultiSufficientCollateralWallet <- fmap addresses $ allocateWallet [7, 8] [[1_500_000, 2_000_000, 10_000_000]]
-    multiAddressInsufficientBalanceWallet <- fmap addresses $ allocateWallet [] [[857690], [], [1_000_000]]
-    multiAddressSufficientBalanceOneInsufficientCollateralWallet <- fmap addresses $ allocateWallet [11] [[857690, 1_000_000], [1_500_000, 10_000_000]]
-    multiAddressSufficientBalanceMultiInsufficientCollateralWallet <- fmap addresses $ allocateWallet [15, 16] [[857690, 857690], [11_000_000]]
-    multiAddressSufficientBalanceOneSufficientCollateralWallet <- fmap addresses $ allocateWallet [19] [[5_000_000], [2_000_000, 10_000_000]]
-    multiAddressSufficientBalanceMultiSufficientCollateralWallet <- fmap addresses $ allocateWallet [21, 22] [[1_000_000, 2_000_000], [], [10_000_000]]
+    singleAddressInsufficientBalanceWallet <- fmap addresses $ allocateWallet [[(False, 857690)]]
+    singleAddressSufficientBalanceOneInsufficientCollateralWallet <- fmap addresses $ allocateWallet [[(True, 857690), (False, 12_000_000)]]
+    singleAddressSufficientBalanceMultiInsufficientCollateralWallet <- fmap addresses $ allocateWallet [[(True, 857690), (True, 857690), (False, 12_000_000)]]
+    singleAddressSufficientBalanceOneSufficientCollateralWallet <- fmap addresses $ allocateWallet [[(True, 12_000_000)]]
+    singleAddressSufficientBalanceMultiSufficientCollateralWallet <- fmap addresses $ allocateWallet [[(True, 1_500_000), (True, 2_000_000), (False, 10_000_000)]]
+    multiAddressInsufficientBalanceWallet <- fmap addresses $ allocateWallet [[(False, 857690)], [], [(False, 1_000_000)]]
+    multiAddressSufficientBalanceOneInsufficientCollateralWallet <- fmap addresses $ allocateWallet [[(True, 857690), (False, 1_000_000)], [(False, 1_500_000), (False, 10_000_000)]]
+    multiAddressSufficientBalanceMultiInsufficientCollateralWallet <- fmap addresses $ allocateWallet [[(True, 857690), (True, 857690)], [(False, 11_000_000)]]
+    multiAddressSufficientBalanceOneSufficientCollateralWallet <- fmap addresses $ allocateWallet [[(False, 5_000_000)], [(True, 2_000_000), (False, 10_000_000)]]
+    multiAddressSufficientBalanceMultiSufficientCollateralWallet <- fmap addresses $ allocateWallet [[(True, 1_000_000), (True, 2_000_000)], [], [(False, 10_000_000)]]
     pure TestData
       { stakeCredential = fromCardanoStakeCredential stakeCredential
       , singleAddressInsufficientBalanceWallet

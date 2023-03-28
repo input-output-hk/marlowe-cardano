@@ -30,25 +30,26 @@ import qualified Cardano.Api as C
 import Cardano.Api.Byron (deserialiseFromTextEnvelope)
 import qualified Cardano.Api.Shelley as C
 import Control.Concurrent (threadDelay)
-import Control.Monad (void, (<=<))
+import Control.Monad (guard, void, (<=<))
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Reader (ReaderT(..), ask, runReaderT)
 import qualified Control.Monad.Reader as Reader
 import Control.Monad.Reader.Class (asks)
+import Control.Monad.State (StateT, runStateT, state)
 import Control.Monad.Trans.Class (lift)
-import Control.Monad.Writer (MonadWriter(tell), WriterT(runWriterT))
 import Data.Aeson (FromJSON(..), Value(..), decodeFileStrict, eitherDecodeStrict)
 import Data.Aeson.Types (parseFail)
 import Data.Bifunctor (first)
 import Data.ByteString (ByteString)
 import Data.ByteString.Base16 (decodeBase16)
+import Data.Foldable (fold)
 import Data.Function (on)
-import Data.Functor ((<&>))
+import Data.Functor (($>), (<&>))
 import Data.List.NonEmpty (NonEmpty)
 import qualified Data.List.NonEmpty as NE
 import Data.Map (Map)
 import qualified Data.Map as Map
-import Data.Maybe (fromJust)
+import Data.Maybe (catMaybes, fromJust)
 import qualified Data.Set as Set
 import Data.String (fromString)
 import qualified Data.Text as T
@@ -119,31 +120,31 @@ type Integration = MarloweT (ReaderT MarloweRuntime IO)
 
 -- Important - the TxId is lazily computed and depends on the resulting Tx. So
 -- it should not be used to compute the transaction outputs written.
-type TxBuilder = ReaderT TxId (WriterT [Chain.TransactionOutput] Integration)
+type TxBuilder = ReaderT TxId (StateT [Chain.TransactionOutput] Integration)
 
-allocateWallet :: [TxIx] -> NonEmpty [Lovelace] -> TxBuilder Wallet
-allocateWallet collateralUtxoIndexes balances = do
-  addressesAndKeys <- for balances \utxos -> do
+allocateWallet :: [[(Bool, Lovelace)]] -> TxBuilder Wallet
+allocateWallet balances = do
+  txId <- ask
+  (addresses, signingKeys, collateralUtxos) <- unzip3 <$> for balances \utxos -> do
     signingKey <- liftIO $ generateSigningKey AsPaymentKey
     let verificationKey = getVerificationKey signingKey
     let paymentCredential = PaymentCredentialByKey $ verificationKeyHash verificationKey
     networkId' <- lift $ lift networkId
     let address = fromCardanoAddressAny $ AddressShelley $ makeShelleyAddress networkId' paymentCredential NoStakeAddress
-    tell $ utxos <&> \balance -> Chain.TransactionOutput address (Assets balance mempty) Nothing Nothing
-    pure (address, WitnessPaymentKey signingKey)
-  txId <- ask
+    collateralUtxos <- Set.fromList . catMaybes <$> for utxos \(isCollateral, balance) -> state \outputs ->
+      ( guard isCollateral $> Chain.TxOutRef txId (fromIntegral $ length outputs)
+      , Chain.TransactionOutput address (Assets balance mempty) Nothing Nothing : outputs
+      )
+    pure (address, WitnessPaymentKey signingKey, collateralUtxos)
   pure Wallet
-    { addresses = WalletAddresses
-        (fst $ NE.head addressesAndKeys)
-        (Set.fromList $ fst <$> NE.tail addressesAndKeys)
-        (Set.fromList $ Chain.TxOutRef txId <$> collateralUtxoIndexes)
-    , signingKeys = NE.toList $ snd <$> addressesAndKeys
+    { addresses = WalletAddresses (head addresses) (Set.fromList $ tail addresses) (fold collateralUtxos)
+    , signingKeys
     }
 
 submitBuilder :: Wallet -> TxBuilder a -> Integration (BlockHeader, a)
 submitBuilder wallet builder = mdo
   -- Note - the txId is not evaluated yet - we're referring to it lazily.
-  (a, txOuts) <- runWriterT $ runReaderT builder txId
+  (a, txOuts) <- runStateT (runReaderT builder txId) []
   utxo <- getUTxO wallet
   let
     txBodyContent = TxBodyContent
@@ -151,7 +152,7 @@ submitBuilder wallet builder = mdo
           <$> Map.toList (C.unUTxO utxo)
       , txInsCollateral = C.TxInsCollateralNone
       , txInsReference = C.TxInsReferenceNone
-      , txOuts = fromJust . toCardanoTxOut C.MultiAssetInBabbageEra <$> txOuts
+      , txOuts = fromJust . toCardanoTxOut C.MultiAssetInBabbageEra <$> reverse txOuts
       , txTotalCollateral = C.TxTotalCollateralNone
       , txReturnCollateral = C.TxReturnCollateralNone
       , txFee = C.TxFeeExplicit C.TxFeesExplicitInBabbageEra 0
