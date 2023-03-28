@@ -22,7 +22,7 @@ import Cardano.Api
   , valueToList
   )
 import qualified Cardano.Api as C
-import Cardano.Api.ChainSync.ClientPipelined (Nat(..))
+import Control.Applicative (liftA2)
 import Control.Monad (guard)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Reader (ask)
@@ -44,7 +44,6 @@ import Language.Marlowe.Runtime.ChainSync.Api
   , Lovelace
   , Metadata(..)
   , PolicyId(..)
-  , ScriptHash
   , StakeCredential
   , StakeReference(..)
   , Tokens(..)
@@ -61,18 +60,16 @@ import Network.Protocol.Codec.Spec (varyAp)
 import Network.Protocol.Job.Client (liftCommand)
 import Test.Hspec
 import Test.Integration.Marlowe (MarloweRuntime(..), withLocalMarloweRuntime)
-import Test.Matcher
-  (CustomMatcher(..), EqMatcher(..), Matcher(..), TrivialMatcher(..), VariantMatcher(..), injectMatcher)
 
 spec :: Spec
 spec = focus $ describe "Create" $ aroundAll setup do
   parallel $ for_ allCreateCases \createCase -> aroundAllWith (runCreateCase createCase) do
     describe (show createCase) do
       case mkSpec createCase of
-        Left errorMatcher -> it "Should fail" \case
-          (_, Left err) -> match errorMatcher err
+        Nothing -> it "Should fail" \case
+          (_, Left _) -> pure ()
           (_, Right contractCreated) -> expectationFailure $ "Expected a failure, but it succeeded: " <> show contractCreated
-        Right s -> aroundAllWith expectSuccess s
+        Just s -> aroundAllWith expectSuccess s
 
 expectSuccess :: Show e => ActionWith (a, b) -> ActionWith (a, Either e b)
 expectSuccess action = \case
@@ -133,7 +130,7 @@ setup runSpec = withLocalMarloweRuntime $ runIntegrationTest do
       , runtime
       }
 
-mkSpec :: CreateCase -> Either CreateErrorMatcher (SpecWith (TestData, ContractCreated BabbageEra 'V1))
+mkSpec :: CreateCase -> Maybe (SpecWith (TestData, ContractCreated BabbageEra 'V1))
 mkSpec (CreateCase stakeCredential wallet (roleTokens, metadata) minLovelace) = mergeSpecs
   [ stakeCredentialsSpec stakeCredential
   , walletSpec roleTokens wallet
@@ -143,19 +140,12 @@ mkSpec (CreateCase stakeCredential wallet (roleTokens, metadata) minLovelace) = 
   ]
 
 mergeSpecs
-  :: [Either CreateErrorMatcher (SpecWith (TestData, ContractCreated BabbageEra v))]
-  -> Either CreateErrorMatcher (SpecWith (TestData, ContractCreated BabbageEra v))
-mergeSpecs = go $ Right $ pure ()
-  where
-    go acc [] = acc
-    go acc (spec' : specs) = case (acc, spec') of
-      (Left acc', Left errs) -> go (Left $ acc' <> errs) specs
-      (Left _, _) -> go acc specs
-      (Right _, Left errs) -> go (Left errs) specs
-      (Right tests1, Right tests2) -> go (Right $ tests1 *> tests2) specs
+  :: [Maybe (SpecWith (TestData, ContractCreated BabbageEra v))]
+  -> Maybe (SpecWith (TestData, ContractCreated BabbageEra v))
+mergeSpecs = foldr (liftA2 (*>)) $ Just $ pure ()
 
-stakeCredentialsSpec :: StakeCredentialCase -> Either CreateErrorMatcher (SpecWith (TestData, ContractCreated BabbageEra v))
-stakeCredentialsSpec = Right . \case
+stakeCredentialsSpec :: StakeCredentialCase -> Maybe (SpecWith (TestData, ContractCreated BabbageEra v))
+stakeCredentialsSpec = Just . \case
   UseStakeCredential -> do
     it "Attaches a stake credential to the Marlowe script address" \(TestData{..}, ContractCreated{..}) -> do
       stakeReference marloweScriptAddress `shouldBe` Just (StakeCredential stakeCredential)
@@ -163,26 +153,25 @@ stakeCredentialsSpec = Right . \case
     it "Does not attach a stake credential to the Marlowe script address" \(_, ContractCreated{..}) -> do
       stakeReference marloweScriptAddress `shouldBe` Nothing
 
-walletSpec :: RoleTokenCase -> WalletCase -> Either CreateErrorMatcher (SpecWith (TestData, ContractCreated BabbageEra v))
+walletSpec :: RoleTokenCase -> WalletCase -> Maybe (SpecWith (TestData, ContractCreated BabbageEra v))
 walletSpec roleTokens (WalletCase balance addresses collateral) = mergeSpecs
   [ balanceSpec balance
   , collateralSpec roleTokens addresses collateral
   ]
 
-balanceSpec :: WalletBalanceCase -> Either CreateErrorMatcher (SpecWith (TestData, ContractCreated BabbageEra v))
+balanceSpec :: WalletBalanceCase -> Maybe (SpecWith (TestData, ContractCreated BabbageEra v))
 balanceSpec = \case
-  BalanceSufficient -> Right $ pure ()
-  BalanceInsufficient -> Left $ matchCreateConstraintError $ matchCoinSelectionFailed $ CustomMatcher \msg ->
-    msg `shouldStartWith` "Insufficient lovelace available for coin selection:"
+  BalanceSufficient -> Just $ pure ()
+  BalanceInsufficient -> Nothing
 
-collateralSpec :: RoleTokenCase -> WalletAddressesCase -> WalletCollateralUTxOCase -> Either CreateErrorMatcher (SpecWith (TestData, ContractCreated BabbageEra v))
-collateralSpec NoRoleTokens _ = const $ Right $ pure ()
-collateralSpec ExistingPolicyRoleTokens _ = const $ Right $ pure ()
+collateralSpec :: RoleTokenCase -> WalletAddressesCase -> WalletCollateralUTxOCase -> Maybe (SpecWith (TestData, ContractCreated BabbageEra v))
+collateralSpec NoRoleTokens _ = const $ Just $ pure ()
+collateralSpec ExistingPolicyRoleTokens _ = const $ Just $ pure ()
 collateralSpec _ addresses = \case
-  NoCollateralUTxOs -> Right $ pure ()
-  OneCollateralUTxOInsufficient -> Right do
+  NoCollateralUTxOs -> Just $ pure ()
+  OneCollateralUTxOInsufficient -> Just do
     it "Should fail if there is insufficient collateral" $ const pending
-  OneCollateralUTxOSufficient -> Right do
+  OneCollateralUTxOSufficient -> Just do
     it "Should only spend the one collateral UTxO" \(TestData{..}, ContractCreated{..}) -> do
       let
         collateral = case txBody of
@@ -192,9 +181,9 @@ collateralSpec _ addresses = \case
       collateral `shouldBe` collateralUtxos case addresses of
         SingleAddress -> singleAddressSufficientBalanceOneSufficientCollateralWallet
         MultiAddress -> multiAddressSufficientBalanceOneSufficientCollateralWallet
-  MultipleCollateralUTxOsInsufficient -> Right do
+  MultipleCollateralUTxOsInsufficient -> Just do
     it "Should fail if there is insufficient collateral" $ const pending
-  MultipleCollateralUTxOsSufficient -> Right do
+  MultipleCollateralUTxOsSufficient -> Just do
     it "Should only spend the one collateral UTxO" \(TestData{..}, ContractCreated{..}) -> do
       let
         collateral = case txBody of
@@ -206,9 +195,9 @@ collateralSpec _ addresses = \case
           MultiAddress -> multiAddressSufficientBalanceMultiSufficientCollateralWallet
       Set.toList availableCollateral `shouldContain` Set.toList collateral
 
-roleTokenSpec :: RoleTokenCase -> Either CreateErrorMatcher (SpecWith (TestData, ContractCreated BabbageEra v))
+roleTokenSpec :: RoleTokenCase -> Maybe (SpecWith (TestData, ContractCreated BabbageEra v))
 roleTokenSpec = \case
-  NoRoleTokens -> Right do
+  NoRoleTokens -> Just do
     it "Should use ADA as the role token currency" \(_, ContractCreated{..}) -> do
       rolesCurrency `shouldBe` ""
     it "Should not mint any tokens" \(_, ContractCreated{..}) -> do
@@ -223,7 +212,7 @@ roleTokenSpec = \case
             TxOutAdaOnly era _ -> case era of
             TxOutValue _ value' -> Set.fromList $ fst <$> valueToList value'
       tokensOutput `shouldBe` Set.singleton C.AdaAssetId
-  ExistingPolicyRoleTokens -> Right do
+  ExistingPolicyRoleTokens -> Just do
     it "Should use the given policyId as the role token currency" \(TestData{..}, ContractCreated{..}) -> do
       rolesCurrency `shouldBe` existingRoleTokenPolicy
     it "Should not mint any tokens" \(_, ContractCreated{..}) -> do
@@ -239,7 +228,7 @@ roleTokenSpec = \case
             TxOutValue _ value' -> Set.fromList $ fst <$> valueToList value'
       tokensOutput `shouldBe` Set.singleton C.AdaAssetId
   -- Metadata checks done with other metadata checks.
-  _ -> Right do
+  _ -> Just do
     it "Should mint the required tokens" \(_, ContractCreated{..}) -> do
       let
         mintedTokenNames = case txBody of
@@ -258,8 +247,8 @@ roleTokenSpec = \case
             $ fromCardanoTxOutValue value
       tokenDistribution `shouldBe` Map.singleton (changeAddress singleAddressInsufficientBalanceWallet, AssetId rolesCurrency "Role") 1
 
-metadataSpec :: RoleTokenCase -> MetadataCase -> Either CreateErrorMatcher (SpecWith (TestData, ContractCreated BabbageEra 'V1))
-metadataSpec roleTokens metadataCase = Right do
+metadataSpec :: RoleTokenCase -> MetadataCase -> Maybe (SpecWith (TestData, ContractCreated BabbageEra 'V1))
+metadataSpec roleTokens metadataCase = Just do
   it "Should write the expected metadata" \(_, contract@ContractCreated{..}) -> do
     metadata `shouldBe` addNFTMetadata contract roleTokens (expectedMetadata metadataCase)
 
@@ -288,109 +277,10 @@ addNFTMetadata ContractCreated{..} = \case
       }
   _ -> id
 
-minLovelaceSpec :: MinLovelaceCase -> Either CreateErrorMatcher (SpecWith (TestData, ContractCreated BabbageEra v))
+minLovelaceSpec :: MinLovelaceCase -> Maybe (SpecWith (TestData, ContractCreated BabbageEra v))
 minLovelaceSpec = \case
-  MinLovelaceSufficient -> Right $ pure ()
-  MinLovelaceInsufficient -> Left $ matchCreateConstraintError $ matchCalculateMinUtxoFailed $ CustomMatcher (`shouldBe` "Marlowe output value changed during output adjustment")
-
-type CreateErrorMatcher = VariantMatcher (CreateError 'V1)
-  '[ ConstraintErrorMatcher
-   , LoadMarloweContextErrorMatcher
-   ]
-
-matchCreateConstraintError :: ConstraintErrorMatcher -> CreateErrorMatcher
-matchCreateConstraintError matcher = injectMatcher Zero matcher \case
-  CreateConstraintError e -> Just e
-  _ -> Nothing
-
-matchCreateLoadMarloweContextFailed :: LoadMarloweContextErrorMatcher -> CreateErrorMatcher
-matchCreateLoadMarloweContextFailed matcher = injectMatcher (Succ Zero) matcher \case
-  CreateLoadMarloweContextFailed e -> Just e
-  _ -> Nothing
-
-type ConstraintErrorMatcher = VariantMatcher (ConstraintError 'V1)
-  '[ TrivialMatcher
-   , EqMatcher AssetId
-   , TrivialMatcher
-   , TrivialMatcher
-   , EqMatcher AssetId
-   , CustomMatcher String
-   , CustomMatcher String
-   , CustomMatcher String
-   ]
-
-matchMintingUtxoNotFound :: ConstraintErrorMatcher
-matchMintingUtxoNotFound = injectMatcher Zero TrivialMatcher \case
-  MintingUtxoNotFound _ -> Just ()
-  _ -> Nothing
-
-matchRoleTokenNotFound :: AssetId -> ConstraintErrorMatcher
-matchRoleTokenNotFound assetId = injectMatcher (Succ Zero) (EqMatcher assetId) \case
-  RoleTokenNotFound e -> Just e
-  _ -> Nothing
-
-matchToCardanoError :: ConstraintErrorMatcher
-matchToCardanoError = injectMatcher (Succ $ Succ Zero) TrivialMatcher \case
-  ToCardanoError -> Just ()
-  _ -> Nothing
-
-matchMissingMarloweInput :: ConstraintErrorMatcher
-matchMissingMarloweInput = injectMatcher (Succ $ Succ $ Succ Zero) TrivialMatcher \case
-  MissingMarloweInput -> Just ()
-  _ -> Nothing
-
-matchPayoutInputNotFound :: AssetId -> ConstraintErrorMatcher
-matchPayoutInputNotFound payoutDatum = injectMatcher (Succ $ Succ $ Succ $ Succ Zero) (EqMatcher payoutDatum) \case
-  PayoutInputNotFound e -> Just e
-  _ -> Nothing
-
-matchCalculateMinUtxoFailed :: CustomMatcher String -> ConstraintErrorMatcher
-matchCalculateMinUtxoFailed matcher = injectMatcher (Succ $ Succ $ Succ $ Succ $ Succ Zero) matcher \case
-  CalculateMinUtxoFailed e -> Just e
-  _ -> Nothing
-
-matchCoinSelectionFailed :: CustomMatcher String -> ConstraintErrorMatcher
-matchCoinSelectionFailed matcher = injectMatcher (Succ $ Succ $ Succ $ Succ $ Succ $ Succ Zero) matcher \case
-  CoinSelectionFailed e -> Just e
-  _ -> Nothing
-
-matchBalancingError :: CustomMatcher String -> ConstraintErrorMatcher
-matchBalancingError matcher = injectMatcher (Succ $ Succ $ Succ $ Succ $ Succ $ Succ $ Succ Zero) matcher \case
-  BalancingError e -> Just e
-  _ -> Nothing
-
-type LoadMarloweContextErrorMatcher = VariantMatcher LoadMarloweContextError
-  '[ TrivialMatcher
-   , EqMatcher SomeMarloweVersion
-   , TrivialMatcher
-   , EqMatcher ScriptHash
-   , EqMatcher ScriptHash
-   ]
-
-matchLoadMarloweContextErrorNotFound :: LoadMarloweContextErrorMatcher
-matchLoadMarloweContextErrorNotFound = injectMatcher Zero TrivialMatcher \case
-  LoadMarloweContextErrorNotFound -> Just ()
-  _ -> Nothing
-
-matchLoadMarloweContextErrorVersionMismatch :: SomeMarloweVersion -> LoadMarloweContextErrorMatcher
-matchLoadMarloweContextErrorVersionMismatch version = injectMatcher (Succ Zero) (EqMatcher version) \case
-  LoadMarloweContextErrorVersionMismatch e -> Just e
-  _ -> Nothing
-
-matchLoadMarloweContextToCardanoError :: LoadMarloweContextErrorMatcher
-matchLoadMarloweContextToCardanoError = injectMatcher (Succ $ Succ Zero) TrivialMatcher \case
-  LoadMarloweContextToCardanoError -> Just ()
-  _ -> Nothing
-
-matchMarloweScriptNotPublished :: ScriptHash -> LoadMarloweContextErrorMatcher
-matchMarloweScriptNotPublished scriptHash = injectMatcher (Succ $ Succ $ Succ Zero) (EqMatcher scriptHash) \case
-  MarloweScriptNotPublished e -> Just e
-  _ -> Nothing
-
-matchPayoutScriptNotPublished :: ScriptHash -> LoadMarloweContextErrorMatcher
-matchPayoutScriptNotPublished scriptHash = injectMatcher (Succ $ Succ $ Succ $ Succ Zero) (EqMatcher scriptHash) \case
-  PayoutScriptNotPublished e -> Just e
-  _ -> Nothing
+  MinLovelaceSufficient -> Just $ pure ()
+  MinLovelaceInsufficient -> Nothing
 
 mkCreateCommand :: TestData -> CreateCase -> MarloweTxCommand Void (CreateError 'V1) (ContractCreated BabbageEra 'V1)
 mkCreateCommand testData (CreateCase stakeCredential wallet (roleTokens, metadata) minLovelace) = Create

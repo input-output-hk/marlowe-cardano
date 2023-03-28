@@ -67,7 +67,6 @@ executable marlowe-integration-tests
     Language.Marlowe.Runtime.WebSpec
     Language.Marlowe.Runtime.Web.GetContracts
     Language.Marlowe.Runtime.CliSpec
-    Test.Matcher
   build-depends:
       base >= 4.9 && < 5
     , aeson
@@ -76,7 +75,6 @@ executable marlowe-integration-tests
     , containers
     , hspec
     , http-types
-    , HUnit
     , cardano-api
     , marlowe-cardano
     , marlowe-chain-sync
