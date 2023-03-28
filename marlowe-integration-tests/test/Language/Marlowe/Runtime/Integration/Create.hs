@@ -259,7 +259,26 @@ roleTokenSpec = \case
       tokenDistribution `shouldBe` Map.singleton (changeAddress singleAddressInsufficientBalanceWallet, AssetId rolesCurrency "Role") 1
 
 metadataSpec :: RoleTokenCase -> MetadataCase -> Either CreateErrorMatcher (SpecWith (TestData, ContractCreated BabbageEra v))
-metadataSpec _ _ = Right $ pure ()
+metadataSpec roleTokens metadataCase = Right do
+  it "Should write the expected metadata" \(_, ContractCreated{..}) -> do
+    metadata `shouldBe` addNFTMetadata roleTokens (expectedMetadata metadataCase)
+
+expectedMetadata :: MetadataCase -> MarloweTransactionMetadata
+expectedMetadata (MetadataCase marloweMetadata extraMetadata) = MarloweTransactionMetadata
+  (mkMarloweMetadata marloweMetadata)
+  case marloweMetadata of
+    NoMarloweMetadata -> mkExtraMetadata extraMetadata
+    EmptyTags -> TransactionMetadata $ Map.insert 1564 (encodeMarloweMetadata $ MarloweMetadata mempty Nothing) $ unTransactionMetadata $ mkExtraMetadata extraMetadata
+    NonEmptyTags -> TransactionMetadata $ Map.insert 1564 (encodeMarloweMetadata testMarloweMetadata) $ unTransactionMetadata $ mkExtraMetadata extraMetadata
+
+addNFTMetadata :: RoleTokenCase -> MarloweTransactionMetadata -> MarloweTransactionMetadata
+addNFTMetadata = \case
+  MintRoleTokensMetadata -> \MarloweTransactionMetadata{..} ->
+    MarloweTransactionMetadata
+      { transactionMetadata = TransactionMetadata $ Map.insert 721 (MetadataNumber 42) $ unTransactionMetadata transactionMetadata
+      , ..
+      }
+  _ -> id
 
 minLovelaceSpec :: MinLovelaceCase -> Either CreateErrorMatcher (SpecWith (TestData, ContractCreated BabbageEra v))
 minLovelaceSpec = \case
@@ -419,13 +438,16 @@ mkMarloweMetadata = \case
     { tags = mempty
     , continuations = Nothing
     }
-  NonEmptyTags -> Just MarloweMetadata
-    { tags = Map.fromList
-        [ ("tag1", Nothing)
-        , ("tag2", Just $ MetadataNumber 0)
-        ]
-    , continuations = Nothing
-    }
+  NonEmptyTags -> Just testMarloweMetadata
+
+testMarloweMetadata :: MarloweMetadata
+testMarloweMetadata = MarloweMetadata
+  { tags = Map.fromList
+      [ ("tag1", Nothing)
+      , ("tag2", Just $ MetadataNumber 0)
+      ]
+  , continuations = Nothing
+  }
 
 mkExtraMetadata :: ExtraMetadataCase -> TransactionMetadata
 mkExtraMetadata (ExtraMetadataCase extraRandomMetadata extraMarloweMetadata extraNFTMetadata) =
