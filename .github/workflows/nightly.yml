@@ -12,9 +12,6 @@ on:
     - cron: 0 0 * * *
   # Allow running manually
   workflow_dispatch:
-  push:
-    branches:
-      - plt-4246-nightly-tests
 
 jobs:
   check-deploy:
