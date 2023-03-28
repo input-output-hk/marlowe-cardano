@@ -76,7 +76,7 @@ data CreateCommandError v
   = CreateFailed (CreateError v)
   | ContractFileDecodingError Yaml.ParseException
   | TransactionFileWriteFailed (C.FileError ())
-  | RolesConfigNotSupportedYet RolesConfig
+  | RolesConfigFileDecodingError String
   | MetadataDecodingFailed (Maybe Yaml.ParseException)
   | TagsDecodingFailed (Maybe Yaml.ParseException)
   | ExtendedContractsAreNotSupportedYet
@@ -164,7 +164,8 @@ runCreateCommand TxCommand { walletAddresses, signingMethod, tagsFile, metadataF
         let toNFT addr = (addr, Left 1)
         pure $ RoleTokensMint $ mkMint $ fmap toNFT <$> tokens
       Just (UseExistingPolicyId policyId) -> pure $ RoleTokensUsePolicy policyId
-      Just roles'@(MintConfig _) -> throwE (RolesConfigNotSupportedYet roles')
+      Just (MintConfig roleTokensConfigFilePath) ->
+        ExceptT $ liftIO $ first RolesConfigFileDecodingError <$> A.eitherDecodeFileStrict roleTokensConfigFilePath
     ContractId contractId <- run MarloweV1 minting'
     liftIO . print $ A.encode (A.object [("contractId", toJSON . renderTxOutRef $ contractId)])
   where
