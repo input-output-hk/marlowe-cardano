@@ -12,6 +12,8 @@ on:
   push:
     branches:
       - main
+  tags:
+    - runtime@v*
 jobs:
   tests:
     uses: ./.github/workflows/test.yml
@@ -50,8 +52,8 @@ jobs:
             IMAGE_ID=$(echo $IMAGE_ID | tr '[A-Z]' '[a-z]')
             # Strip git ref prefix from version
             TAG=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')
-            # Strip "v" prefix from tag name
-            [[ "${{ github.ref }}" == "refs/tags/"* ]] && TAG=$(echo $TAG | sed -e 's/^v//')
+            # Strip "runtime@v" prefix from tag name
+            [[ "${{ github.ref }}" == "refs/tags/"* ]] && TAG=$(echo $TAG | sed -e 's/^runtime@v//')
             # Use Docker `latest` tag convention
             [ "$TAG" == "main" ] && TAG=latest
             echo IMAGE_ID=$IMAGE_ID
