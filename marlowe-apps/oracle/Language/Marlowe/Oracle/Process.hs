@@ -1,5 +1,3 @@
-
-
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -9,14 +7,13 @@ module Language.Marlowe.Oracle.Process
   where
 
 
-import Control.Concurrent.STM.TChan (TChan)
 import Control.Monad (void)
 import Control.Monad.Except (ExceptT(ExceptT), liftIO, runExceptT)
 import Data.Maybe (mapMaybe)
 import Data.Text (Text)
 import Language.Marlowe.Core.V1.Semantics.Types (ChoiceId(ChoiceId), Input(NormalInput), InputContent(IChoice), Party)
 import Language.Marlowe.Oracle.Detect (containsOracleAction, contractReadyForOracle)
-import Language.Marlowe.Runtime.App.Stream (ContractStream(..), contractFromStep)
+import Language.Marlowe.Runtime.App.Stream (ContractStream(..), TChanEOF, contractFromStep)
 import Language.Marlowe.Runtime.App.Transact (applyWithEvents)
 import Language.Marlowe.Runtime.App.Types (Config)
 import Language.Marlowe.Runtime.ChainSync.Api (Address)
@@ -37,8 +34,8 @@ runDetection
   -> EventBackend IO r DynamicEventSelector
   -> Config
   -> Int
-  -> TChan ContractId
-  -> IO (TChan (ContractStream 'V1))
+  -> TChanEOF ContractId
+  -> IO (TChanEOF (ContractStream 'V1))
 runDetection party =
   App.runDetection
     $ maybe False (not . null . containsOracleAction party) . contractFromStep
@@ -52,8 +49,9 @@ runOracle
   -> Party
   -> EventBackend IO r DynamicEventSelector
   -> Int
-  -> TChan (ContractStream 'V1)
-  -> TChan ContractId
+  -> Bool
+  -> TChanEOF (ContractStream 'V1)
+  -> TChanEOF ContractId
   -> IO ()
 runOracle oracleEnv config address key party eventBackend =
   App.runContractAction "OracleProcess" eventBackend

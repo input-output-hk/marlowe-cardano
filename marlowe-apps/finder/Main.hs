@@ -1,5 +1,3 @@
-
-
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -11,10 +9,9 @@ module Main
   ) where
 
 
-import Control.Concurrent.STM.TChan (TChan)
 import Data.Text (Text)
 import Language.Marlowe.Runtime.App.Parser (getConfigParser)
-import Language.Marlowe.Runtime.App.Stream (ContractStream(..))
+import Language.Marlowe.Runtime.App.Stream (ContractStream(..), TChanEOF)
 import Language.Marlowe.Runtime.App.Types (Config)
 import Language.Marlowe.Runtime.Core.Api (ContractId, MarloweVersionTag(V1))
 import Observe.Event (EventBackend, addField)
@@ -32,16 +29,17 @@ runDetection
   :: EventBackend IO r DynamicEventSelector
   -> Config
   -> Int
-  -> TChan ContractId
-  -> IO (TChan (ContractStream 'V1))
+  -> TChanEOF ContractId
+  -> IO (TChanEOF (ContractStream 'V1))
 runDetection = App.runDetection $ const True
 
 
 runFinder
   :: EventBackend IO r DynamicEventSelector
   -> Int
-  -> TChan (ContractStream 'V1)
-  -> TChan ContractId
+  -> Bool
+  -> TChanEOF (ContractStream 'V1)
+  -> TChanEOF ContractId
   -> IO ()
 runFinder eventBackend =
   App.runContractAction "FinderProcess" eventBackend
@@ -54,9 +52,9 @@ main =
   do
     Command{..} <- O.execParser =<< commandParser
     eventBackend <- simpleJsonStderrBackend defaultRenderSelectorJSON
-    discoveryChannel <- App.runDiscovery eventBackend config pollingFrequency
+    discoveryChannel <- App.runDiscovery eventBackend config pollingFrequency endOnWait
     detectionChannel <- runDetection eventBackend config pollingFrequency discoveryChannel
-    runFinder eventBackend requeueFrequency detectionChannel discoveryChannel
+    runFinder eventBackend requeueFrequency endOnWait detectionChannel discoveryChannel
 
 
 data Command =
@@ -65,6 +63,7 @@ data Command =
     config :: Config
   , pollingFrequency :: Int
   , requeueFrequency :: Int
+  , endOnWait :: Bool
   }
     deriving (Show)
 
@@ -79,6 +78,7 @@ commandParser =
           <$> configParser
           <*> O.option O.auto (O.long "polling" <> O.value 5_000_000 <> O.metavar "SECONDS" <> O.help "The polling frequency for waiting on Marlowe Runtime.")
           <*> O.option O.auto (O.long "requeue" <> O.value 20_000_000 <> O.metavar "SECONDS" <> O.help "The requeuing frequency for reviewing the progress of contracts on Marlowe Runtime.")
+          <*> O.flag False True (O.long "end-at-tip" <> O.help "Stop the process when the tip of all contracts has been reached.")
     pure
       $ O.info
         (O.helper {- <*> O.versionOption -} <*> commandOptions)

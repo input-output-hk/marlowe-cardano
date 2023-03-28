@@ -1,5 +1,3 @@
-
-
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -39,9 +37,9 @@ main =
     eventBackend <- simpleJsonStderrBackend defaultRenderSelectorJSON
     manager <- newTlsManager
     oracleEnv <- makeOracle manager
-    discoveryChannel <- runDiscovery eventBackend config pollingFrequency
+    discoveryChannel <- runDiscovery eventBackend config pollingFrequency False
     detectionChannel <- runDetection party eventBackend config pollingFrequency discoveryChannel
-    runOracle oracleEnv config address key party eventBackend requeueFrequency detectionChannel discoveryChannel
+    runOracle oracleEnv config address key party eventBackend requeueFrequency False detectionChannel discoveryChannel
 
 
 data Command =
