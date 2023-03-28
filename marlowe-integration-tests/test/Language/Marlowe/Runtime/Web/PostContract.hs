@@ -1,4 +1,4 @@
-module Language.Marlowe.Runtime.Web.PostContracts
+module Language.Marlowe.Runtime.Web.PostContract
   where
 
 import Control.Monad.IO.Class (MonadIO(liftIO))
@@ -13,11 +13,11 @@ import qualified Language.Marlowe.Runtime.Web as Web
 import Language.Marlowe.Runtime.Web.Client (postContract)
 import Language.Marlowe.Runtime.Web.Server.DTO (ToDTO(toDTO))
 import Language.Marlowe.Runtime.Web.StandardContract (standardContract)
-import Test.Hspec (Spec, describe, focus, it)
+import Test.Hspec (Spec, describe, it)
 import Test.Integration.Marlowe.Local (withLocalMarloweRuntime)
 
 spec :: Spec
-spec = focus $ describe "Valid POST /contracts" do
+spec = describe "Valid POST /contracts" do
     it "returns the contract header" $ withLocalMarloweRuntime $ runIntegrationTest do
       partyAWallet <- getGenesisWallet 0
       partyBWallet <- getGenesisWallet 1

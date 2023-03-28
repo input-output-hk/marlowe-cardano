@@ -1,19 +1,17 @@
-module Language.Marlowe.Runtime.Web.PostTransactions
+module Language.Marlowe.Runtime.Web.PutContract
   where
 
 import Control.Monad.IO.Class (MonadIO(liftIO))
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 import Data.Time (getCurrentTime, secondsToNominalDiffTime)
-import Language.Marlowe.Core.V1.Semantics.Types (Input(NormalInput), InputContent(IDeposit))
-import Language.Marlowe.Extended.V1 (ada)
 import Language.Marlowe.Runtime.Integration.Common
 import Language.Marlowe.Runtime.Plutus.V2.Api (toPlutusAddress)
 import Language.Marlowe.Runtime.Transaction.Api (WalletAddresses(..))
 import Language.Marlowe.Runtime.Web (RoleTokenConfig(RoleTokenSimple))
 import qualified Language.Marlowe.Runtime.Web as Web
-import Language.Marlowe.Runtime.Web.Client (postContract, postTransaction)
-import Language.Marlowe.Runtime.Web.Common (submitContract)
+import Language.Marlowe.Runtime.Web.Client (postContract, putContract)
+import Language.Marlowe.Runtime.Web.Common (signShelleyTransaction')
 import Language.Marlowe.Runtime.Web.Server.DTO (ToDTO(toDTO))
 import Language.Marlowe.Runtime.Web.StandardContract (standardContract)
 import Test.Hspec (Spec, describe, it)
@@ -22,7 +20,7 @@ import Test.Integration.Marlowe.Local (withLocalMarloweRuntime)
 spec :: Spec
 spec = describe "POST /contracts/{contractId}/transactions" do
   it "returns the transaction header" $ withLocalMarloweRuntime $ runIntegrationTest do
-    partyAWallet <- getGenesisWallet 0
+    partyAWallet@Wallet{signingKeys} <- getGenesisWallet 0
     partyBWallet <- getGenesisWallet 1
 
     result <- runWebClient do
@@ -36,9 +34,9 @@ spec = describe "POST /contracts/{contractId}/transactions" do
       partyBAddress <- liftIO $ expectJust "Failed to convert party B address" $ toPlutusAddress $ changeAddress partyBWalletAddresses
       now <- liftIO getCurrentTime
 
-      let (contract, partyA, _) = standardContract partyBAddress now $ secondsToNominalDiffTime 100
+      let (contract, _, _) = standardContract partyBAddress now $ secondsToNominalDiffTime 100
 
-      contractCreated@Web.CreateTxBody{contractId} <- postContract
+      Web.CreateTxBody{contractId, txBody} <- postContract
         partyAWebChangeAddress
         (Just partyAWebExtraAddresses)
         (Just partyAWebCollataralUtxos)
@@ -50,25 +48,9 @@ spec = describe "POST /contracts/{contractId}/transactions" do
           , minUTxODeposit = 2_000_000
           , tags = mempty
           }
-
-      _ <- submitContract partyAWallet contractCreated
-
-
-      let inputs = [NormalInput $ IDeposit partyA partyA ada 100_000_000]
-
-      postTransaction
-        partyAWebChangeAddress
-        (Just partyAWebExtraAddresses)
-        (Just partyAWebCollataralUtxos)
-        contractId
-        Web.PostTransactionsRequest
-          { version = Web.V1
-          , metadata = mempty
-          , invalidBefore = Nothing
-          , invalidHereafter = Nothing
-          , inputs
-          , tags = mempty
-          }
+      signedCreateTx <- liftIO $ signShelleyTransaction' txBody signingKeys
+      putContract contractId signedCreateTx
     case result of
       Left _ ->  fail $ "Expected 200 response code - got " <> show result
-      Right Web.ApplyInputsTxBody{} ->  pure ()
+      Right () ->  pure ()
+
