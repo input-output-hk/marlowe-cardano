@@ -12,8 +12,8 @@ on:
   push:
     branches:
       - main
-  tags:
-    - runtime@v*
+    tags:
+      - runtime@v*
 jobs:
   tests:
     uses: ./.github/workflows/test.yml
