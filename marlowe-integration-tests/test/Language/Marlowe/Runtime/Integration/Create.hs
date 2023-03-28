@@ -69,7 +69,6 @@ expectSuccess action = \case
   (_, Left err) -> expectationFailure $ "Expected success, but it failed: " <> show err
   (a, Right b) -> action (a, b)
 
-
 runCreateCase :: CreateCase -> ActionWith (TestData, Either (CreateError 'V1) (ContractCreated BabbageEra 'V1)) -> ActionWith TestData
 runCreateCase createCase action testData = flip runIntegrationTest (runtime testData) do
   result <- runMarloweTxClient $ liftCommand $ mkCreateCommand testData createCase
