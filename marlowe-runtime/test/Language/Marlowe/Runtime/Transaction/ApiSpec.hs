@@ -1,17 +1,20 @@
 {-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE ViewPatterns #-}
+{-# OPTIONS_GHC -Wno-unused-imports #-}
 
 module Language.Marlowe.Runtime.Transaction.ApiSpec
   ( spec
   ) where
 
 import Language.Marlowe.Runtime.Transaction.Api
-  (NFTMetadata(..), NFTMetadataDetails(..), NFTMetadataFileDetails(..), mkMetadata, mkNFTMetadata)
+  (NFTMetadata(..), NFTMetadataDetails(..), NFTMetadataFile(..), mkMetadata, mkNFTMetadata)
 
+import Control.Applicative (liftA2)
 import Control.Arrow ((&&&), (***))
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.Key as Aeson.Key
 import qualified Data.Aeson.KeyMap as Aeson.KeyMap
+import qualified Data.ByteString.Char8 as BS
 import Data.Coerce (coerce)
 import Data.Foldable (find)
 import Data.Map (Map)
@@ -25,6 +28,7 @@ import qualified Data.Text.Encoding as Text.Encoding
 import qualified Data.Text.Encoding.Base16 as Base16
 import qualified Data.Vector as Vector
 import Language.Marlowe.Runtime.ChainSync.Api (PolicyId(PolicyId), TokenName(TokenName))
+import Network.HTTP.Media (MediaType, (//))
 import qualified Network.URI as Network (URI(..), URIAuth(..))
 import qualified Network.URI hiding (URI(..), URIAuth(..))
 import Test.Hspec (Spec, shouldBe, shouldSatisfy)
@@ -34,27 +38,28 @@ import Test.QuickCheck (Gen)
 import qualified Test.QuickCheck as Gen
 
 spec :: Spec
-spec = do
+spec =
   Hspec.describe "CIP-25 Metadata" do
     prop "uriGen is valid" uriGenValidityTests
-    prop "NFTMetadataFileDetails is valid" cip25MetadataFileDetailsValidityTests
-    prop "NFTMetadataFileDetails is sound" cip25MetadataFileDetailsSoundnessTests
+    prop "NFTMetadataFile is valid" cip25MetadataFileDetailsValidityTests
+    prop "NFTMetadataFile is sound" cip25MetadataFileDetailsSoundnessTests
     prop "NFTMetadataDetails is valid" cip25MetadataDetailsValidityTests
     prop "NFTMetadata is valid" cip25MetadataValidityTests
+    prop "MediaType JSON instances" mediaTypeJSONInstancesTests
 
 cip25MetadataFileDetailsSoundnessTests :: Gen.Property
 cip25MetadataFileDetailsSoundnessTests =
-  -- FIXME: Improve notNFTMetadataFileDetailsGen quality:
-  Gen.forAll notNFTMetadataFileDetailsGen \json -> do
+  -- FIXME: Improve notNFTMetadataFileGen quality:
+  Gen.forAll notNFTMetadataFileGen \json -> do
     let document = Aeson.encode json
-    Aeson.decode @NFTMetadataFileDetails document `shouldBe` Nothing
+    Aeson.decode @NFTMetadataFile document `shouldBe` Nothing
   where
-  notNFTMetadataFileDetailsGen :: Gen Aeson.Value
-  notNFTMetadataFileDetailsGen =
-    Gen.arbitrary `Gen.suchThat` (not . isNFTMetadataFileDetailsJSON)
+  notNFTMetadataFileGen :: Gen Aeson.Value
+  notNFTMetadataFileGen =
+    Gen.arbitrary `Gen.suchThat` (not . isNFTMetadataFileJSON)
 
-  isNFTMetadataFileDetailsJSON :: Aeson.Value -> Bool
-  isNFTMetadataFileDetailsJSON = \case
+  isNFTMetadataFileJSON :: Aeson.Value -> Bool
+  isNFTMetadataFileJSON = \case
     Aeson.Object x ->
       and @[]
         [ maybe False isJSONString $ Aeson.KeyMap.lookup "name" x
@@ -134,26 +139,39 @@ cip25MetadataDetailsValidityTests = Gen.checkCoverage $
     Gen.cover 20.0 (maybe False Text.null description) "has empty description" $
     Gen.cover 20.0 (maybe False (not . Text.null) description) "has not empty description" $
     Gen.cover 20.0 (Maybe.isNothing mediaType) "has no mediaType" $
-    Gen.cover 20.0 (maybe False Text.null mediaType) "has empty mediaType" $
-    Gen.cover 20.0 (maybe False (not . Text.null) mediaType) "has not empty mediaType" $
     Gen.cover 30.0 (Text.null name) "has empty name" $
     Gen.cover 30.0 (not $ Text.null name) "has name" do
     let document = Aeson.encode json
     Aeson.encode details `shouldBe` document
     fmap show (Aeson.decode @NFTMetadataDetails document) `shouldBe` Just (show details)
 
+mediaTypeJSONInstancesTests :: Gen.Property
+mediaTypeJSONInstancesTests =
+  Gen.forAll mediaTypeJSONRelationGen \(mediaType, json) -> do
+    let document = Aeson.encode json
+    Aeson.encode mediaType `shouldBe` document
+    fmap show (Aeson.decode @MediaType document) `shouldBe` Just (show mediaType)
+
+mediaTypeJSONRelationGen :: Gen (MediaType, Aeson.Value)
+mediaTypeJSONRelationGen = do
+  let stringGen = do
+        n <- Gen.chooseInt (1, 127)
+        BS.pack <$> Gen.vectorOf n (Gen.elements ['a' .. 'z'])
+  mediaType <- liftA2 (//) stringGen stringGen
+  pure (mediaType, Aeson.String $ Text.pack $ show mediaType)
+
 cip25MetadataDetailsJSONRelationGen :: Gen (NFTMetadataDetails, Aeson.Value)
 cip25MetadataDetailsJSONRelationGen = do
   name <- Gen.oneof [pure "", fromString <$> Gen.listOf1 Gen.arbitrary]
   (image, imageJSON) <- uriJSONRelationGen
-  mediaType <- Gen.oneof [pure Nothing, pure (Just ""), Just . fromString <$> Gen.listOf1 Gen.arbitrary]
+  (mediaType, mediaTypeJSON) <- Gen.oneof [pure (Nothing, Nothing), (Just *** Just) <$> mediaTypeJSONRelationGen]
   description <- Gen.oneof [pure Nothing, pure (Just ""), Just . fromString <$> Gen.listOf1 Gen.arbitrary]
   (files, filesJSON) <- cip25MetadataFileDetailsJSONRelationGen
   let json = Aeson.Object $ Aeson.KeyMap.fromList $
         [ ("name", Aeson.String name)
         , ("image", imageJSON)
         ]
-        <> maybeToList (("mediaType",) . Aeson.String <$> mediaType)
+        <> maybeToList (("mediaType",) <$> mediaTypeJSON)
         <> maybeToList (("description",) . Aeson.String <$> description)
         <> [("files", filesJSON) | not (null files)]
   pure (NFTMetadataDetails {..}, json)
@@ -161,36 +179,34 @@ cip25MetadataDetailsJSONRelationGen = do
 cip25MetadataFileDetailsValidityTests :: Gen.Property
 cip25MetadataFileDetailsValidityTests = Gen.checkCoverage $
   Gen.forAll cip25MetadataFileDetailsJSONRelationGen \(fds, json) ->
-    Gen.cover 15.0 (Maybe.isJust $ find (\NFTMetadataFileDetails{..} -> Text.null name) fds) "some file details has empty name" $
-    Gen.cover 15.0 (Maybe.isJust $ find (\NFTMetadataFileDetails{..} -> not $ Text.null name) fds) "some file details has name" $
-    Gen.cover 15.0 (Maybe.isJust $ find (\NFTMetadataFileDetails{..} -> Text.null mediaType) fds) "some file details has empty mediaType" $
-    Gen.cover 15.0 (Maybe.isJust $ find (\NFTMetadataFileDetails{..} -> not $ Text.null mediaType) fds) "some file details has mediaType" $
+    Gen.cover 15.0 (Maybe.isJust $ find (\NFTMetadataFile{..} -> Text.null name) fds) "some file details has empty name" $
+    Gen.cover 15.0 (Maybe.isJust $ find (\NFTMetadataFile{..} -> not $ Text.null name) fds) "some file details has name" $
     Gen.cover 1.0 (null fds) "no file details" $
     Gen.cover 80.0 (not $ null fds) "some file details" do
     let document = Aeson.encode json
     Aeson.encode fds `shouldBe` document
-    fmap show (Aeson.decode @[NFTMetadataFileDetails] document) `shouldBe` Just (show fds)
+    fmap show (Aeson.decode @[NFTMetadataFile] document) `shouldBe` Just (show fds)
 
-cip25MetadataFileDetailsJSONRelationGen :: Gen ([NFTMetadataFileDetails], Aeson.Value)
+cip25MetadataFileDetailsJSONRelationGen :: Gen ([NFTMetadataFile], Aeson.Value)
 cip25MetadataFileDetailsJSONRelationGen = do
   let emptyGen = pure []
       nonEmptyGen = do
         n <- Gen.chooseInt (1, 10)
         Gen.vectorOf n do
           name <- Gen.oneof [pure "" ,fromString <$> Gen.listOf1 Gen.arbitrary]
-          mediaType <- Gen.oneof [pure "" ,fromString <$> Gen.listOf1 Gen.arbitrary]
+          (mediaType, mediaTypeJSON) <- mediaTypeJSONRelationGen
           (src, srcJSON) <- uriJSONRelationGen
           let json = Aeson.Object
                 [ ("name", Aeson.String name)
-                , ("mediaType", Aeson.String mediaType)
+                , ("mediaType", mediaTypeJSON)
                 , ("src", srcJSON)
                 ]
-          pure (NFTMetadataFileDetails {..}, json)
+          pure (NFTMetadataFile {..}, json)
   (cip25MetadataFileDetails, json) <- unzip <$> Gen.frequency [(1, emptyGen), (9, nonEmptyGen)]
   pure (cip25MetadataFileDetails, Aeson.Array $ Vector.fromList json)
 
-uriJSONRelationGen :: Gen (Text, Aeson.Value)
-uriJSONRelationGen = (id &&& Aeson.String) . fromString . show <$> uriGen
+uriJSONRelationGen :: Gen (Network.URI, Aeson.Value)
+uriJSONRelationGen = (id &&& Aeson.String . fromString . show) <$> uriGen
 
 uriGenValidityTests :: Gen.Property
 uriGenValidityTests = Gen.checkCoverage $
@@ -238,7 +254,7 @@ uriGen = do
 
   where
   specialCharGen :: Gen Char
-  specialCharGen = Gen.oneof [charLetterGen, charNumberGen, Gen.elements ['.', '/', '-', '_', '?', '=', ';']]
+  specialCharGen = Gen.oneof [charLetterGen, charNumberGen, Gen.elements ['.', '-', '_', '=', ';']]
 
   charLetterGen :: Gen Char
   charLetterGen = Gen.elements $ ['a' .. 'z'] <> ['A' .. 'Z']

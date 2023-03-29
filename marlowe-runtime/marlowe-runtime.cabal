@@ -102,6 +102,7 @@ library gen
     , cardano-api
     , cardano-api:gen
     , hedgehog-quickcheck
+    , http-media
     , marlowe-cardano
     , marlowe-chain-sync:gen
     , marlowe-chain-sync:plutus-compat
@@ -110,6 +111,7 @@ library gen
     , marlowe-runtime:discovery-api
     , marlowe-runtime:tx-api
     , marlowe-test
+    , network-uri
     , quickcheck-instances
 
 library history-api
@@ -289,6 +291,7 @@ library tx-api
     , binary
     , cardano-api
     , bytestring
+    , http-media
     , text
     , containers
     , marlowe-chain-sync
@@ -560,6 +563,7 @@ test-suite marlowe-runtime-test
     , errors
     , hedgehog-quickcheck
     , hspec
+    , http-media
     , marlowe-cardano
     , marlowe-chain-sync
     , marlowe-chain-sync:gen

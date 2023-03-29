@@ -7,6 +7,7 @@
 {-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ViewPatterns #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
 
 module Language.Marlowe.Runtime.Transaction.Api
   ( ApplyInputsConstraintsBuildupError(..)
@@ -22,7 +23,7 @@ module Language.Marlowe.Runtime.Transaction.Api
   , Mint(unMint)
   , NFTMetadata(..)
   , NFTMetadataDetails(..)
-  , NFTMetadataFileDetails(..)
+  , NFTMetadataFile(..)
   , RoleTokensConfig(..)
   , SubmitError(..)
   , SubmitStatus(..)
@@ -63,6 +64,7 @@ import Data.Map (Map)
 import qualified Data.Map.Strict as Map
 import Data.Maybe (fromMaybe, maybeToList)
 import Data.Set (Set)
+import Data.String (fromString)
 import Data.Text (Text)
 import qualified Data.Text as Text
 import Data.Time (UTCTime)
@@ -95,37 +97,56 @@ import Language.Marlowe.Runtime.ChainSync.Api
   )
 import Language.Marlowe.Runtime.Core.Api
 import Language.Marlowe.Runtime.History.Api (ExtractCreationError, ExtractMarloweTransactionError)
+import Network.HTTP.Media (MediaType)
 import Network.Protocol.Handshake.Types (HasSignature(..))
 import Network.Protocol.Job.Types
-import qualified Network.URI
+import qualified Network.URI as Network
 
-data NFTMetadataFileDetails = NFTMetadataFileDetails
+instance Binary Network.URIAuth
+instance Binary Network.URI
+
+instance Binary MediaType where
+  put = put . show
+  get = fromString <$> get
+
+instance Aeson.ToJSON MediaType where
+  toJSON = Aeson.String . Text.pack . show
+
+instance Aeson.FromJSON MediaType where
+  parseJSON = fmap fromString . Aeson.parseJSON
+
+data NFTMetadataFile = NFTMetadataFile
   { name :: Text
-  , mediaType :: Text
-  , src :: Text
+  , mediaType :: MediaType
+  , src :: Network.URI
   }
   deriving stock (Show, Eq, Ord, Generic)
-  deriving (Binary, ToJSON)
+  deriving (Binary)
 
-parseJSONURI :: Text -> Aeson.Types.Parser Text
-parseJSONURI uri@(Text.unpack -> s) =
-  if Network.URI.isURI s
-  then pure uri
-  else fail $ s <> " is not a valid URI!"
+instance Aeson.ToJSON NFTMetadataFile where
+  toJSON NFTMetadataFile {..} = Aeson.object
+    [ ("name", toJSON name)
+    , ("mediaType", toJSON mediaType)
+    , ("src", toJSON $ show src)
+    ]
 
-instance Aeson.FromJSON NFTMetadataFileDetails where
-  parseJSON = Aeson.withObject "NFTMetadataFileDetails" \x ->
-    NFTMetadataFileDetails
+parseJSONURI :: Text -> Aeson.Types.Parser Network.URI
+parseJSONURI (Text.unpack -> s) =
+  maybe (fail $ s <> " is not a valid URI!") pure $ Network.parseURI s
+
+instance Aeson.FromJSON NFTMetadataFile where
+  parseJSON = Aeson.withObject "NFTMetadataFile" \x ->
+    NFTMetadataFile
       <$> x .: "name"
       <*> x .: "mediaType"
       <*> (parseJSONURI =<< x .: "src")
 
 data NFTMetadataDetails = NFTMetadataDetails
   { name :: Text
-  , image :: Text
-  , mediaType :: Maybe Text
+  , image :: Network.URI
+  , mediaType :: Maybe MediaType
   , description :: Maybe Text
-  , files :: [NFTMetadataFileDetails]
+  , files :: [NFTMetadataFile]
   }
   deriving stock (Show, Eq, Ord, Generic)
   deriving (Binary)
@@ -133,9 +154,9 @@ data NFTMetadataDetails = NFTMetadataDetails
 instance Aeson.ToJSON NFTMetadataDetails where
   toJSON NFTMetadataDetails {..} = Aeson.Object $ Aeson.KeyMap.fromList $
     [ ("name", toJSON name)
-    , ("image", toJSON image)
+    , ("image", toJSON $ show image)
     ]
-    <> maybeToList (fmap (("mediaType",) . Aeson.String) mediaType)
+    <> maybeToList (fmap (("mediaType",) . toJSON) mediaType)
     <> maybeToList (fmap (("description",) . Aeson.String) description)
     <> case files of
       [] -> []
@@ -185,22 +206,25 @@ mkNFTMetadata =
     parseNFTMetadataDetails metadata = do
       textKeyMap <- parseMetadataRecord metadata
       name <- parseMetadataText =<< Map.lookup "name" textKeyMap
-      image <- parseSplittableText =<< Map.lookup "image" textKeyMap
-      let mediaType = parseMetadataText =<< Map.lookup "mediaType" textKeyMap
+      image <- Network.parseURI . Text.unpack =<< parseSplittableText =<< Map.lookup "image" textKeyMap
+      let mediaType = parseMediaType =<< Map.lookup "mediaType" textKeyMap
           description = parseSplittableText =<< Map.lookup "description" textKeyMap
-          parseSingleFileDetails = fmap (:[]) . parseNFTMetadataFileDetails
-          parseManyFileDetails = parseMetadataList parseNFTMetadataFileDetails
+          parseSingleFileDetails = fmap (:[]) . parseNFTMetadataFile
+          parseManyFileDetails = parseMetadataList parseNFTMetadataFile
           parseFileDetails md = parseSingleFileDetails md <|> parseManyFileDetails md
           files = fromMaybe [] $ parseFileDetails =<< Map.lookup "files" textKeyMap
       Just $ NFTMetadataDetails {..}
 
-    parseNFTMetadataFileDetails :: Metadata -> Maybe NFTMetadataFileDetails
-    parseNFTMetadataFileDetails metadata = do
+    parseNFTMetadataFile :: Metadata -> Maybe NFTMetadataFile
+    parseNFTMetadataFile metadata = do
       textKeyMap <- parseMetadataRecord metadata
       name <- parseMetadataText =<< Map.lookup "name" textKeyMap
-      mediaType <- parseMetadataText =<< Map.lookup "mediaType" textKeyMap
-      src <- parseSplittableText =<< Map.lookup "src" textKeyMap
-      Just $ NFTMetadataFileDetails {..}
+      mediaType <- parseMediaType =<< Map.lookup "mediaType" textKeyMap
+      src <- Network.parseURI . Text.unpack =<< parseSplittableText =<< Map.lookup "src" textKeyMap
+      Just $ NFTMetadataFile {..}
+
+    parseMediaType :: Metadata -> Maybe MediaType
+    parseMediaType = fmap (fromString . Text.unpack) . parseMetadataText
 
     parseMetadataRecord :: Metadata -> Maybe (Map Text Metadata)
     parseMetadataRecord = parseMetadataMap parseMetadataText Just
@@ -227,31 +251,29 @@ mkMetadata (unNFTMetadata -> metadata) =
   encodeNFTMetadataDetails :: NFTMetadataDetails -> Metadata
   encodeNFTMetadataDetails NFTMetadataDetails {..} = MetadataMap $
     [ (MetadataText "name", MetadataText name)
-    , (MetadataText "image", encodeText image)
+    , (MetadataText "image", encodeText $ fromString $ Network.uriToString id image "")
     ]
-    <> maybeToList ((MetadataText "mediaType",) . MetadataText <$> mediaType)
+    <> maybeToList ((MetadataText "mediaType",) . encodeMediaType <$> mediaType)
     <> maybeToList ((MetadataText "description",) . encodeText <$> description)
     <> case files of
         [] -> []
         [fileDetails] ->
-          [(MetadataText "files", encodeNFTMetadataFileDetails fileDetails)]
+          [(MetadataText "files", encodeNFTMetadataFile fileDetails)]
         fileDetails ->
-          [(MetadataText "files", MetadataList $ fmap encodeNFTMetadataFileDetails fileDetails)]
+          [(MetadataText "files", MetadataList $ fmap encodeNFTMetadataFile fileDetails)]
 
-  encodeNFTMetadataFileDetails :: NFTMetadataFileDetails -> Metadata
-  encodeNFTMetadataFileDetails NFTMetadataFileDetails {..} = MetadataMap
+  encodeNFTMetadataFile :: NFTMetadataFile -> Metadata
+  encodeNFTMetadataFile NFTMetadataFile {..} = MetadataMap
     [ (MetadataText "name", MetadataText name)
-    , (MetadataText "mediaType", MetadataText mediaType)
-    , (MetadataText "src", encodeText src)
+    , (MetadataText "mediaType", encodeMediaType mediaType)
+    , (MetadataText "src", encodeText $ fromString $ Network.uriToString id src "")
     ]
 
+  encodeMediaType :: MediaType -> Metadata
+  encodeMediaType = MetadataText . Text.pack . show
+
   encodeText :: Text -> Metadata
-  encodeText =
-    let loop acc t
-          | Text.length t <= 64 = MetadataText t:acc
-          | otherwise = let (t', ts) = Text.splitAt 64 t
-                         in loop (MetadataText t':acc) ts
-    in MetadataList . reverse . loop []
+  encodeText = MetadataList . fmap MetadataText . Text.chunksOf 64
 
 -- | Non empty mint request.
 newtype Mint = Mint { unMint :: Map TokenName (Address, Either Natural (Maybe NFTMetadata)) }
