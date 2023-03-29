@@ -911,7 +911,7 @@ instance Eq Contract where
     If obs1 cont1 cont2 == If obs2 cont3 cont4 =
         obs1 == obs2 && cont1 == cont3 && cont2 == cont4
     If{} == _ = False
-    When cases1 timeout1 cont1 == When cases2 timeout2 cont2 =
+    When cases1 timeout1 cont1 == When cases2 timeout2 cont2 =  -- The sequences of tests are ordered for efficiency.
         timeout1 == timeout2 && cont1 == cont2
         && length cases1 == length cases2
         && and (zipWith (==) cases1 cases2)
