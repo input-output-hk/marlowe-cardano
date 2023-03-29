@@ -78,9 +78,10 @@ import Language.Marlowe.Runtime.Transaction.Api
   , CreateBuildupError(AddressDecodingFailed, MintingScriptDecodingFailed, MintingUtxoSelectionFailed)
   , CreateError(..)
   , Mint(unMint)
-  , NFTMetadata(unNFTMetadata)
+  , NFTMetadata
   , RoleTokensConfig(..)
   , WithdrawError
+  , mkMetadata
   )
 import Language.Marlowe.Runtime.Transaction.Constraints
   ( TxConstraints(..)
@@ -166,7 +167,7 @@ buildCreateConstraintsV1 walletCtx roles metadata minAda contract = do
       RoleTokensMint (Map.toList . unMint -> minting) -> do
         let
           tokensMetadata = catMaybes $ minting <&> \case
-            (tokenName, (_, Right (Just (unNFTMetadata -> nftMetadata)))) -> do
+            (tokenName, (_, Right (Just (mkMetadata -> nftMetadata)))) -> do
               let
                 tokenName' = unTokenName tokenName
               -- From CIP-25: In version 2 the the raw bytes of the asset_name are used.

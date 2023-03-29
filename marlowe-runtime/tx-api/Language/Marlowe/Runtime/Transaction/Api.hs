@@ -4,7 +4,10 @@
 {-# LANGUAGE EmptyDataDeriving #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE ViewPatterns #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
 
 module Language.Marlowe.Runtime.Transaction.Api
   ( ApplyInputsConstraintsBuildupError(..)
@@ -18,13 +21,16 @@ module Language.Marlowe.Runtime.Transaction.Api
   , LoadMarloweContextError(..)
   , MarloweTxCommand(..)
   , Mint(unMint)
-  , NFTMetadata(unNFTMetadata)
+  , NFTMetadata(..)
+  , NFTMetadataDetails(..)
+  , NFTMetadataFile(..)
   , RoleTokensConfig(..)
   , SubmitError(..)
   , SubmitStatus(..)
   , Tag(..)
   , WalletAddresses(..)
   , WithdrawError(..)
+  , mkMetadata
   , mkMint
   , mkNFTMetadata
   ) where
@@ -40,15 +46,27 @@ import Cardano.Api
   , serialiseToCBOR
   , serialiseToTextEnvelope
   )
-import Data.Aeson (ToJSON(..), object, (.=))
+import Control.Applicative ((<|>))
+import Control.Arrow ((***))
+import Control.Monad ((<=<))
+import Data.Aeson (FromJSON, ToJSON(..), object, (.!=), (.:!), (.=))
+import qualified Data.Aeson as Aeson
+import qualified Data.Aeson.KeyMap as Aeson.KeyMap
+import Data.Aeson.Types ((.:))
+import qualified Data.Aeson.Types as Aeson.Types
 import Data.Binary (Binary, Get, get, getWord8, put)
 import Data.Binary.Put (Put, putWord8)
 import Data.ByteString (ByteString)
+import Data.Coerce (coerce)
 import Data.List.NonEmpty (NonEmpty)
 import qualified Data.List.NonEmpty as NonEmpty
 import Data.Map (Map)
 import qualified Data.Map.Strict as Map
+import Data.Maybe (fromMaybe, maybeToList)
 import Data.Set (Set)
+import Data.String (fromString)
+import Data.Text (Text)
+import qualified Data.Text as Text
 import Data.Time (UTCTime)
 import Data.Type.Equality (type (:~:)(Refl))
 import Data.Void (Void, absurd)
@@ -61,36 +79,206 @@ import Language.Marlowe.Runtime.ChainSync.Api
   , Assets
   , BlockHeader
   , Lovelace
-  , Metadata
+  , Metadata(..)
   , PlutusScript
-  , PolicyId
+  , PolicyId(..)
   , ScriptHash
   , SlotNo
   , StakeCredential
-  , TokenName
+  , TokenName(..)
   , TxId
   , TxOutRef
   , getUTCTime
+  , parseMetadataBytes
+  , parseMetadataList
+  , parseMetadataMap
+  , parseMetadataText
   , putUTCTime
   )
 import Language.Marlowe.Runtime.Core.Api
 import Language.Marlowe.Runtime.History.Api (ExtractCreationError, ExtractMarloweTransactionError)
+import Network.HTTP.Media (MediaType)
 import Network.Protocol.Handshake.Types (HasSignature(..))
 import Network.Protocol.Job.Types
+import qualified Network.URI as Network
 
--- CIP-25 metadata
-newtype NFTMetadata = NFTMetadata { unNFTMetadata :: Metadata }
+instance Binary Network.URIAuth
+instance Binary Network.URI
+
+instance Binary MediaType where
+  put = put . show
+  get = fromString <$> get
+
+instance Aeson.ToJSON MediaType where
+  toJSON = Aeson.String . Text.pack . show
+
+instance Aeson.FromJSON MediaType where
+  parseJSON = fmap fromString . Aeson.parseJSON
+
+data NFTMetadataFile = NFTMetadataFile
+  { name :: Text
+  , mediaType :: MediaType
+  , src :: Network.URI
+  }
   deriving stock (Show, Eq, Ord, Generic)
-  deriving newtype (Binary, ToJSON)
+  deriving (Binary)
 
--- FIXME: Validate the metadata format
+instance Aeson.ToJSON NFTMetadataFile where
+  toJSON NFTMetadataFile {..} = Aeson.object
+    [ ("name", toJSON name)
+    , ("mediaType", toJSON mediaType)
+    , ("src", toJSON $ show src)
+    ]
+
+parseJSONURI :: Text -> Aeson.Types.Parser Network.URI
+parseJSONURI (Text.unpack -> s) =
+  maybe (fail $ s <> " is not a valid URI!") pure $ Network.parseURI s
+
+instance Aeson.FromJSON NFTMetadataFile where
+  parseJSON = Aeson.withObject "NFTMetadataFile" \x ->
+    NFTMetadataFile
+      <$> x .: "name"
+      <*> x .: "mediaType"
+      <*> (parseJSONURI =<< x .: "src")
+
+data NFTMetadataDetails = NFTMetadataDetails
+  { name :: Text
+  , image :: Network.URI
+  , mediaType :: Maybe MediaType
+  , description :: Maybe Text
+  , files :: [NFTMetadataFile]
+  }
+  deriving stock (Show, Eq, Ord, Generic)
+  deriving (Binary)
+
+instance Aeson.ToJSON NFTMetadataDetails where
+  toJSON NFTMetadataDetails {..} = Aeson.Object $ Aeson.KeyMap.fromList $
+    [ ("name", toJSON name)
+    , ("image", toJSON $ show image)
+    ]
+    <> maybeToList (fmap (("mediaType",) . toJSON) mediaType)
+    <> maybeToList (fmap (("description",) . Aeson.String) description)
+    <> case files of
+      [] -> []
+      _ -> [("files", toJSON files)]
+
+instance Aeson.FromJSON NFTMetadataDetails where
+  parseJSON = Aeson.withObject "NFTMetadataDetails" \x ->
+    NFTMetadataDetails
+      <$> x .: "name"
+      <*> (parseJSONURI =<<  x .: "image")
+      <*> x .:! "mediaType"
+      <*> x .:! "description"
+      <*> x .:! "files" .!= []
+
+newtype NFTMetadata = NFTMetadata
+  { unNFTMetadata :: Map PolicyId (Map TokenName NFTMetadataDetails)
+  }
+  deriving stock (Show, Eq, Ord, Generic)
+  deriving newtype (Binary)
+
+instance Aeson.ToJSON NFTMetadata where
+  toJSON (NFTMetadata x) = Aeson.Object [("721", toJSON x)]
+
+instance Aeson.FromJSON NFTMetadata where
+  parseJSON = Aeson.withObject "NFTMetadata" \x ->
+    NFTMetadata <$> x .: "721"
+
 mkNFTMetadata :: Metadata -> Maybe NFTMetadata
-mkNFTMetadata = Just . NFTMetadata
+mkNFTMetadata =
+  fmap NFTMetadata . parsePolicies
+    <=< Map.lookup (MetadataNumber 721)
+    <=< parseMetadataMap Just Just
+  where
+    parsePolicies :: Metadata -> Maybe (Map PolicyId (Map TokenName NFTMetadataDetails))
+    parsePolicies = parseMetadataMap parsePolicyId parseTokens
+
+    parsePolicyId :: Metadata -> Maybe PolicyId
+    parsePolicyId = coerce parseMetadataBytes
+
+    parseTokens :: Metadata -> Maybe (Map TokenName NFTMetadataDetails)
+    parseTokens = parseMetadataMap parseTokenName parseNFTMetadataDetails
+
+    parseTokenName :: Metadata -> Maybe TokenName
+    parseTokenName = coerce parseMetadataBytes
+
+    parseNFTMetadataDetails :: Metadata -> Maybe NFTMetadataDetails
+    parseNFTMetadataDetails metadata = do
+      textKeyMap <- parseMetadataRecord metadata
+      name <- parseMetadataText =<< Map.lookup "name" textKeyMap
+      image <- Network.parseURI . Text.unpack =<< parseSplittableText =<< Map.lookup "image" textKeyMap
+      let mediaType = parseMediaType =<< Map.lookup "mediaType" textKeyMap
+          description = parseSplittableText =<< Map.lookup "description" textKeyMap
+          parseSingleFileDetails = fmap (:[]) . parseNFTMetadataFile
+          parseManyFileDetails = parseMetadataList parseNFTMetadataFile
+          parseFileDetails md = parseSingleFileDetails md <|> parseManyFileDetails md
+          files = fromMaybe [] $ parseFileDetails =<< Map.lookup "files" textKeyMap
+      Just $ NFTMetadataDetails {..}
+
+    parseNFTMetadataFile :: Metadata -> Maybe NFTMetadataFile
+    parseNFTMetadataFile metadata = do
+      textKeyMap <- parseMetadataRecord metadata
+      name <- parseMetadataText =<< Map.lookup "name" textKeyMap
+      mediaType <- parseMediaType =<< Map.lookup "mediaType" textKeyMap
+      src <- Network.parseURI . Text.unpack =<< parseSplittableText =<< Map.lookup "src" textKeyMap
+      Just $ NFTMetadataFile {..}
+
+    parseMediaType :: Metadata -> Maybe MediaType
+    parseMediaType = fmap (fromString . Text.unpack) . parseMetadataText
+
+    parseMetadataRecord :: Metadata -> Maybe (Map Text Metadata)
+    parseMetadataRecord = parseMetadataMap parseMetadataText Just
+
+    parseSplittableText :: Metadata -> Maybe Text
+    parseSplittableText md = parseMetadataText md <|> (mconcat <$> parseMetadataList parseMetadataText md)
+
+mkMetadata :: NFTMetadata -> Metadata
+mkMetadata (unNFTMetadata -> metadata) =
+  MetadataMap [(MetadataNumber 721, encodePolicies metadata)]
+  where
+  encodePolicies :: Map PolicyId (Map TokenName NFTMetadataDetails) -> Metadata
+  encodePolicies = MetadataMap . fmap (encodePolicyId *** encodeTokens) . Map.toList
+
+  encodePolicyId :: PolicyId -> Metadata
+  encodePolicyId = coerce MetadataBytes
+
+  encodeTokens :: Map TokenName NFTMetadataDetails -> Metadata
+  encodeTokens = MetadataMap . fmap (encodeTokenName *** encodeNFTMetadataDetails) . Map.toList
+
+  encodeTokenName :: TokenName -> Metadata
+  encodeTokenName = coerce MetadataBytes
+
+  encodeNFTMetadataDetails :: NFTMetadataDetails -> Metadata
+  encodeNFTMetadataDetails NFTMetadataDetails {..} = MetadataMap $
+    [ (MetadataText "name", MetadataText name)
+    , (MetadataText "image", encodeText $ fromString $ Network.uriToString id image "")
+    ]
+    <> maybeToList ((MetadataText "mediaType",) . encodeMediaType <$> mediaType)
+    <> maybeToList ((MetadataText "description",) . encodeText <$> description)
+    <> case files of
+        [] -> []
+        [fileDetails] ->
+          [(MetadataText "files", encodeNFTMetadataFile fileDetails)]
+        fileDetails ->
+          [(MetadataText "files", MetadataList $ fmap encodeNFTMetadataFile fileDetails)]
+
+  encodeNFTMetadataFile :: NFTMetadataFile -> Metadata
+  encodeNFTMetadataFile NFTMetadataFile {..} = MetadataMap
+    [ (MetadataText "name", MetadataText name)
+    , (MetadataText "mediaType", encodeMediaType mediaType)
+    , (MetadataText "src", encodeText $ fromString $ Network.uriToString id src "")
+    ]
+
+  encodeMediaType :: MediaType -> Metadata
+  encodeMediaType = MetadataText . Text.pack . show
+
+  encodeText :: Text -> Metadata
+  encodeText = MetadataList . fmap MetadataText . Text.chunksOf 64
 
 -- | Non empty mint request.
 newtype Mint = Mint { unMint :: Map TokenName (Address, Either Natural (Maybe NFTMetadata)) }
   deriving stock (Show, Eq, Ord, Generic)
-  deriving newtype (Binary, Semigroup, Monoid, ToJSON)
+  deriving newtype (Binary, Semigroup, Monoid, ToJSON, FromJSON)
 
 mkMint :: NonEmpty (TokenName, (Address, Either Natural (Maybe NFTMetadata))) -> Mint
 mkMint = Mint . Map.fromList . NonEmpty.toList
@@ -100,7 +288,7 @@ data RoleTokensConfig
   | RoleTokensUsePolicy PolicyId
   | RoleTokensMint Mint
   deriving stock (Show, Eq, Ord, Generic)
-  deriving anyclass (Binary, ToJSON)
+  deriving anyclass (Binary, ToJSON, FromJSON)
 
 data ContractCreated era v = ContractCreated
   { contractId :: ContractId

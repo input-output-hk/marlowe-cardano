@@ -66,6 +66,7 @@ spec = describe "Marlowe runtime CLI" do
 
         contractFilePath <- writeWorkspaceFileJSON workspace "close-contract.json" contract
         transactionMetadataFilePath <- writeWorkspaceFileJSON workspace "transaction-metadata.json" transactionMetadata
+        roleTokensConfigFilePath <- writeWorkspaceFileJSON workspace "role-tokens-config.json" roleTokensConfig
 
         let creationCommand :: MarloweTxCommand Void (CreateError 'V1) (ContractCreated BabbageEra 'V1)
             creationCommand =
@@ -85,13 +86,14 @@ spec = describe "Marlowe runtime CLI" do
                   <> ["--core-file", contractFilePath]
                   <> ["--metadata-file", transactionMetadataFilePath]
                   <> ["--manual-sign", txBodyEnvelopeFilePath]
+                  <> ["--roles-config-file", roleTokensConfigFilePath]
 
             jobClientEffect :: Integration (TxBody BabbageEra)
             jobClientEffect = marloweRuntimeJobClient creationCommand
 
         (_, expected) <- concurrently cliEffect jobClientEffect
 
-        (Either.fromRight (error "Some Runtime CLI creation error!") -> actual) <-
+        (either (error . show) id -> actual) <-
           Trans.liftBase $ readFileTextEnvelope (AsTxBody (cardanoEraToAsType BabbageEra)) txBodyEnvelopeFilePath
 
         Trans.liftBase $ shouldBe actual expected

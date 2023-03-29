@@ -43,7 +43,7 @@ import Control.Monad (guard, join, (<=<), (>=>))
 import Data.Aeson
   ( FromJSON(..)
   , FromJSONKey(..)
-  , FromJSONKeyFunction(FromJSONKeyTextParser)
+  , FromJSONKeyFunction(FromJSONKeyText, FromJSONKeyTextParser)
   , ToJSON
   , ToJSONKey
   , Value(..)
@@ -158,6 +158,30 @@ data Metadata
   | MetadataText Text
   deriving stock (Show, Eq, Ord, Generic)
   deriving anyclass (Binary)
+
+parseMetadataMap :: forall k v. Ord k => (Metadata -> Maybe k) -> (Metadata -> Maybe v) -> Metadata -> Maybe (Map k v)
+parseMetadataMap activeKeyPattern activeValuePattern = \case
+  MetadataMap entries ->
+    Map.fromList <$> for entries \case
+      (activeKeyPattern -> Just key, activeValuePattern -> Just value) -> Just (key, value)
+      _ -> Nothing
+  _ -> Nothing
+
+parseMetadataList :: (Metadata -> Maybe a) -> Metadata -> Maybe [a]
+parseMetadataList activeItemPattern = \case
+  MetadataList xs -> for xs \case
+    (activeItemPattern -> Just x) -> Just x
+    _ -> Nothing
+  _ -> Nothing
+
+parseMetadataNumber :: Metadata -> Maybe Integer
+parseMetadataNumber = \case MetadataNumber n -> Just n; _ -> Nothing
+
+parseMetadataBytes :: Metadata -> Maybe ByteString
+parseMetadataBytes = \case MetadataBytes bs -> Just bs; _ -> Nothing
+
+parseMetadataText :: Metadata -> Maybe Text
+parseMetadataText = \case MetadataText bs -> Just bs; _ -> Nothing
 
 -- Using the generic implementation produces an infinite list.
 instance Variations Metadata where
@@ -451,6 +475,12 @@ instance ToJSONKey TokenName where
 instance ToJSON TokenName where
   toJSON = Aeson.String . T.pack . BS.unpack . unTokenName
 
+instance FromJSON TokenName where
+  parseJSON = Aeson.withText "TokenName" (pure . TokenName . BS.pack . T.unpack)
+
+instance FromJSONKey TokenName where
+  fromJSONKey = FromJSONKeyText (TokenName . BS.pack . T.unpack)
+
 newtype Quantity = Quantity { unQuantity :: Word64 }
   deriving stock (Show, Eq, Ord, Generic)
   deriving newtype (Num, Integral, Real, Enum, Bounded, Binary, ToJSON, Variations)
@@ -462,7 +492,7 @@ newtype Lovelace = Lovelace { unLovelace :: Word64 }
 newtype Address = Address { unAddress :: ByteString }
   deriving stock (Eq, Ord, Generic)
   deriving newtype (Binary, Variations)
-  deriving (IsString, Show, ToJSON) via Base16
+  deriving (IsString, Show, ToJSON, FromJSON) via Base16
 
 toBech32 :: Address -> Maybe Text
 toBech32 = toCardanoAddress >=> \case

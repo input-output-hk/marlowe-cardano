@@ -6,6 +6,7 @@ module Language.Marlowe.Runtime.Transaction.Gen
 
 import Cardano.Api (IsCardanoEra, cardanoEra)
 import Data.Foldable (fold)
+import Data.String (fromString)
 import Gen.Cardano.Api.Typed (genTxBody)
 import Language.Marlowe.Runtime.ChainSync.Gen ()
 import qualified Language.Marlowe.Runtime.Core.Api as Core
@@ -14,19 +15,58 @@ import Language.Marlowe.Runtime.History.Gen ()
 import Language.Marlowe.Runtime.Transaction.Api
 import qualified Language.Marlowe.Runtime.Transaction.Api as ContractCreated (ContractCreated(..))
 import qualified Language.Marlowe.Runtime.Transaction.Api as InputsApplied (InputsApplied(..))
+import Network.HTTP.Media (MediaType)
+import qualified Network.URI as Network
 import Spec.Marlowe.Semantics.Arbitrary ()
 import Test.QuickCheck hiding (shrinkMap)
 import Test.QuickCheck.Hedgehog (hedgehog)
 import Test.QuickCheck.Instances ()
 
+instance Arbitrary MediaType where
+  arbitrary = fromString <$> arbitrary
+
+instance Arbitrary Network.URIAuth where
+  arbitrary =
+    Network.URIAuth
+      <$> arbitrary
+      <*> arbitrary
+      <*> arbitrary
+  shrink = genericShrink
+
+instance Arbitrary Network.URI where
+  arbitrary =
+    Network.URI
+      <$> arbitrary
+      <*> arbitrary
+      <*> arbitrary
+      <*> arbitrary
+      <*> arbitrary
+  shrink = genericShrink
+
 instance Arbitrary WalletAddresses where
   arbitrary = WalletAddresses <$> arbitrary <*> arbitrary <*> arbitrary
   shrink = genericShrink
 
+instance Arbitrary NFTMetadataFile where
+  arbitrary =
+    NFTMetadataFile
+      <$> arbitrary
+      <*> arbitrary
+      <*> arbitrary
+  shrink = genericShrink
+
+instance Arbitrary NFTMetadataDetails where
+  arbitrary =
+    NFTMetadataDetails
+      <$> arbitrary
+      <*> arbitrary
+      <*> arbitrary
+      <*> arbitrary
+      <*> arbitrary
+  shrink = genericShrink
+
 instance Arbitrary NFTMetadata where
-  arbitrary = do
-    mMetadata <- mkNFTMetadata <$> arbitrary
-    maybe arbitrary pure mMetadata
+  arbitrary = NFTMetadata <$> arbitrary
   shrink = genericShrink
 
 instance Arbitrary Mint where
