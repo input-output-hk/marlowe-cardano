@@ -109,6 +109,7 @@ library server
     , eventuo11y-batteries ^>= { 0.4 }
     , exceptions
     , general-allocate ^>= { 0.2 }
+    , http-media
     , lens
     , marlowe-cardano
     , marlowe-protocols

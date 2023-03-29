@@ -1,33 +1,27 @@
 {-# LANGUAGE OverloadedLists #-}
-{-# LANGUAGE ViewPatterns #-}
-{-# OPTIONS_GHC -Wno-unused-imports #-}
 
 module Language.Marlowe.Runtime.Transaction.ApiSpec
   ( spec
   ) where
 
-import Language.Marlowe.Runtime.Transaction.Api
-  (NFTMetadata(..), NFTMetadataDetails(..), NFTMetadataFile(..), mkMetadata, mkNFTMetadata)
-
 import Control.Applicative (liftA2)
 import Control.Arrow ((&&&), (***))
 import qualified Data.Aeson as Aeson
-import qualified Data.Aeson.Key as Aeson.Key
 import qualified Data.Aeson.KeyMap as Aeson.KeyMap
 import qualified Data.ByteString.Char8 as BS
 import Data.Coerce (coerce)
 import Data.Foldable (find)
-import Data.Map (Map)
-import qualified Data.Map as Map
 import Data.Maybe (maybeToList)
 import qualified Data.Maybe as Maybe
 import Data.String (fromString)
 import Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text.Encoding
-import qualified Data.Text.Encoding.Base16 as Base16
 import qualified Data.Vector as Vector
 import Language.Marlowe.Runtime.ChainSync.Api (PolicyId(PolicyId), TokenName(TokenName))
+import Language.Marlowe.Runtime.Transaction.Api
+  (NFTMetadataFile(..), RoleTokenMetadata(..), decodeRoleTokenMetadata, encodeRoleTokenMetadata)
+import Language.Marlowe.Runtime.Transaction.Gen ()
 import Network.HTTP.Media (MediaType, (//))
 import qualified Network.URI as Network (URI(..), URIAuth(..))
 import qualified Network.URI hiding (URI(..), URIAuth(..))
@@ -43,9 +37,9 @@ spec =
     prop "uriGen is valid" uriGenValidityTests
     prop "NFTMetadataFile is valid" cip25MetadataFileDetailsValidityTests
     prop "NFTMetadataFile is sound" cip25MetadataFileDetailsSoundnessTests
-    prop "NFTMetadataDetails is valid" cip25MetadataDetailsValidityTests
-    prop "NFTMetadata is valid" cip25MetadataValidityTests
-    prop "MediaType JSON instances" mediaTypeJSONInstancesTests
+    prop "RoleTokenMetadata JSON roundtrip" roleTokenMetadataJSONRoundtrip
+    prop "RoleTokenMetadata Metadata roundtrip" roleTokenMetadataMetadataRoundtrip
+    prop "MediaType JSON roundtrip" mediaTypeJSONInstancesTests
 
 cip25MetadataFileDetailsSoundnessTests :: Gen.Property
 cip25MetadataFileDetailsSoundnessTests =
@@ -83,58 +77,9 @@ mkTokenName = coerce Text.Encoding.encodeUtf8
 base16EncodedTextGen :: Int -> Gen Text
 base16EncodedTextGen n = fromString <$> Gen.vectorOf n (Gen.elements $ ['0' .. '9'] <> ['a' .. 'f'])
 
-cip25MetadataValidityTests :: Gen.Property
-cip25MetadataValidityTests = Gen.checkCoverage $
-  Gen.forAll cip25MetadataJSONRelationGen \(nftMetadata@(NFTMetadata policies), json) ->
-    Gen.cover 1.0 (Maybe.isJust $ find null policies) "some policy with no token" $
-    Gen.cover 40.0 (Maybe.isJust $ find (not . null) policies) "some policy with some token" $
-    Gen.cover 40.0 (not $ null policies) "some policies" $
-    Gen.cover 1.0 (null policies) "no policies" do
-    let document = Aeson.encode json
-    Aeson.encode nftMetadata `shouldBe` document
-    fmap show (Aeson.decode @NFTMetadata document) `shouldBe` Just (show nftMetadata)
-    let nftMetadata' = mkNFTMetadata $ mkMetadata nftMetadata
-    nftMetadata' `shouldBe` Just nftMetadata
-  where
-  cip25MetadataJSONRelationGen :: Gen (NFTMetadata, Aeson.Value)
-  cip25MetadataJSONRelationGen = do
-    let emptyGen = pure []
-        nonemptyGen = do
-          n <- Gen.chooseInt (1, 8)
-          Gen.vectorOf n do
-            (policyId, policyIdJSON) <- policyIdJSONKeyRelationGen
-            (tokenMetadata, tokenMetadataJSON) <- tokenMetadataJSONRelationGen
-            pure ((policyId, tokenMetadata), (policyIdJSON, tokenMetadataJSON))
-    (Map.fromList -> metadata, Aeson.Object . Aeson.KeyMap.fromList -> json) <-
-      unzip <$> Gen.frequency [(1, emptyGen), (4, nonemptyGen)]
-    pure (NFTMetadata metadata, Aeson.Object [("721", json)])
-
-  tokenMetadataJSONRelationGen :: Gen (Map TokenName NFTMetadataDetails, Aeson.Value)
-  tokenMetadataJSONRelationGen = do
-    let emptyGen = pure []
-        nonEmptyGen = do
-          n <- Gen.chooseInt (1, 8)
-          Gen.vectorOf n do
-            (tokenName, tokenNameJSON) <- tokenNameJSONKeyRelationGen
-            (metadataDetails, metadataDetailsJSON) <- cip25MetadataDetailsJSONRelationGen
-            pure ((tokenName, metadataDetails), (tokenNameJSON, metadataDetailsJSON))
-    (Map.fromList *** Aeson.Object . Aeson.KeyMap.fromList) .
-      unzip <$> Gen.frequency [(1, emptyGen),(4, nonEmptyGen)]
-
-  policyIdJSONKeyRelationGen :: Gen (PolicyId, Aeson.Key)
-  policyIdJSONKeyRelationGen =
-    (mkPolicyId &&& Aeson.Key.fromText . Base16.encodeBase16)
-      . fromString <$> Gen.arbitrary
-
-  tokenNameJSONKeyRelationGen :: Gen (TokenName, Aeson.Key)
-  tokenNameJSONKeyRelationGen = do
-    ((*2) -> n) <- Gen.chooseInt (0, 32)
-    (mkTokenName &&& Aeson.Key.fromText)
-      <$> base16EncodedTextGen n
-
-cip25MetadataDetailsValidityTests :: Gen.Property
-cip25MetadataDetailsValidityTests = Gen.checkCoverage $
-  Gen.forAll cip25MetadataDetailsJSONRelationGen \(details@NFTMetadataDetails{..}, json) ->
+roleTokenMetadataJSONRoundtrip :: Gen.Property
+roleTokenMetadataJSONRoundtrip = Gen.checkCoverage $
+  Gen.forAll cip25MetadataDetailsJSONRelationGen \(metadata@RoleTokenMetadata{..}, json) ->
     Gen.cover 20.0 (Maybe.isNothing description) "has no description" $
     Gen.cover 20.0 (maybe False Text.null description) "has empty description" $
     Gen.cover 20.0 (maybe False (not . Text.null) description) "has not empty description" $
@@ -142,8 +87,18 @@ cip25MetadataDetailsValidityTests = Gen.checkCoverage $
     Gen.cover 30.0 (Text.null name) "has empty name" $
     Gen.cover 30.0 (not $ Text.null name) "has name" do
     let document = Aeson.encode json
-    Aeson.encode details `shouldBe` document
-    fmap show (Aeson.decode @NFTMetadataDetails document) `shouldBe` Just (show details)
+    Aeson.encode metadata `shouldBe` document
+    Aeson.decode @RoleTokenMetadata document `shouldBe` Just metadata
+
+roleTokenMetadataMetadataRoundtrip :: Gen.Property
+roleTokenMetadataMetadataRoundtrip = Gen.checkCoverage \metadata@RoleTokenMetadata{..} ->
+    Gen.cover 20.0 (Maybe.isNothing description) "has no description" $
+    Gen.cover 20.0 (maybe False Text.null description) "has empty description" $
+    Gen.cover 20.0 (maybe False (not . Text.null) description) "has not empty description" $
+    Gen.cover 20.0 (Maybe.isNothing mediaType) "has no mediaType" $
+    Gen.cover 30.0 (Text.null name) "has empty name" $
+    Gen.cover 30.0 (not $ Text.null name) "has name" do
+    decodeRoleTokenMetadata (encodeRoleTokenMetadata metadata) `shouldBe` Just metadata
 
 mediaTypeJSONInstancesTests :: Gen.Property
 mediaTypeJSONInstancesTests =
@@ -160,7 +115,7 @@ mediaTypeJSONRelationGen = do
   mediaType <- liftA2 (//) stringGen stringGen
   pure (mediaType, Aeson.String $ Text.pack $ show mediaType)
 
-cip25MetadataDetailsJSONRelationGen :: Gen (NFTMetadataDetails, Aeson.Value)
+cip25MetadataDetailsJSONRelationGen :: Gen (RoleTokenMetadata, Aeson.Value)
 cip25MetadataDetailsJSONRelationGen = do
   name <- Gen.oneof [pure "", fromString <$> Gen.listOf1 Gen.arbitrary]
   (image, imageJSON) <- uriJSONRelationGen
@@ -174,7 +129,7 @@ cip25MetadataDetailsJSONRelationGen = do
         <> maybeToList (("mediaType",) <$> mediaTypeJSON)
         <> maybeToList (("description",) . Aeson.String <$> description)
         <> [("files", filesJSON) | not (null files)]
-  pure (NFTMetadataDetails {..}, json)
+  pure (RoleTokenMetadata {..}, json)
 
 cip25MetadataFileDetailsValidityTests :: Gen.Property
 cip25MetadataFileDetailsValidityTests = Gen.checkCoverage $

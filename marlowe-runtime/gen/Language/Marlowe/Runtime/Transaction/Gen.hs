@@ -55,18 +55,14 @@ instance Arbitrary NFTMetadataFile where
       <*> arbitrary
   shrink = genericShrink
 
-instance Arbitrary NFTMetadataDetails where
+instance Arbitrary RoleTokenMetadata where
   arbitrary =
-    NFTMetadataDetails
+    RoleTokenMetadata
       <$> arbitrary
       <*> arbitrary
       <*> arbitrary
       <*> arbitrary
       <*> arbitrary
-  shrink = genericShrink
-
-instance Arbitrary NFTMetadata where
-  arbitrary = NFTMetadata <$> arbitrary
   shrink = genericShrink
 
 instance Arbitrary Mint where

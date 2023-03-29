@@ -21,18 +21,17 @@ module Language.Marlowe.Runtime.Transaction.Api
   , LoadMarloweContextError(..)
   , MarloweTxCommand(..)
   , Mint(unMint)
-  , NFTMetadata(..)
-  , NFTMetadataDetails(..)
   , NFTMetadataFile(..)
+  , RoleTokenMetadata(..)
   , RoleTokensConfig(..)
   , SubmitError(..)
   , SubmitStatus(..)
   , Tag(..)
   , WalletAddresses(..)
   , WithdrawError(..)
-  , mkMetadata
+  , decodeRoleTokenMetadata
+  , encodeRoleTokenMetadata
   , mkMint
-  , mkNFTMetadata
   ) where
 
 import Cardano.Api
@@ -47,8 +46,6 @@ import Cardano.Api
   , serialiseToTextEnvelope
   )
 import Control.Applicative ((<|>))
-import Control.Arrow ((***))
-import Control.Monad ((<=<))
 import Data.Aeson (FromJSON, ToJSON(..), object, (.!=), (.:!), (.=))
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.KeyMap as Aeson.KeyMap
@@ -57,7 +54,6 @@ import qualified Data.Aeson.Types as Aeson.Types
 import Data.Binary (Binary, Get, get, getWord8, put)
 import Data.Binary.Put (Put, putWord8)
 import Data.ByteString (ByteString)
-import Data.Coerce (coerce)
 import Data.List.NonEmpty (NonEmpty)
 import qualified Data.List.NonEmpty as NonEmpty
 import Data.Map (Map)
@@ -71,7 +67,6 @@ import Data.Time (UTCTime)
 import Data.Type.Equality (type (:~:)(Refl))
 import Data.Void (Void, absurd)
 import GHC.Generics (Generic)
-import GHC.Natural (Natural)
 import Language.Marlowe.Runtime.Cardano.Api (cardanoEraToAsType)
 import Language.Marlowe.Runtime.ChainSync.Api
   ( Address
@@ -89,7 +84,6 @@ import Language.Marlowe.Runtime.ChainSync.Api
   , TxId
   , TxOutRef
   , getUTCTime
-  , parseMetadataBytes
   , parseMetadataList
   , parseMetadataMap
   , parseMetadataText
@@ -141,7 +135,7 @@ instance Aeson.FromJSON NFTMetadataFile where
       <*> x .: "mediaType"
       <*> (parseJSONURI =<< x .: "src")
 
-data NFTMetadataDetails = NFTMetadataDetails
+data RoleTokenMetadata = RoleTokenMetadata
   { name :: Text
   , image :: Network.URI
   , mediaType :: Maybe MediaType
@@ -151,8 +145,8 @@ data NFTMetadataDetails = NFTMetadataDetails
   deriving stock (Show, Eq, Ord, Generic)
   deriving (Binary)
 
-instance Aeson.ToJSON NFTMetadataDetails where
-  toJSON NFTMetadataDetails {..} = Aeson.Object $ Aeson.KeyMap.fromList $
+instance Aeson.ToJSON RoleTokenMetadata where
+  toJSON RoleTokenMetadata {..} = Aeson.Object $ Aeson.KeyMap.fromList $
     [ ("name", toJSON name)
     , ("image", toJSON $ show image)
     ]
@@ -162,47 +156,19 @@ instance Aeson.ToJSON NFTMetadataDetails where
       [] -> []
       _ -> [("files", toJSON files)]
 
-instance Aeson.FromJSON NFTMetadataDetails where
-  parseJSON = Aeson.withObject "NFTMetadataDetails" \x ->
-    NFTMetadataDetails
+instance Aeson.FromJSON RoleTokenMetadata where
+  parseJSON = Aeson.withObject "RoleTokenMetadata" \x ->
+    RoleTokenMetadata
       <$> x .: "name"
       <*> (parseJSONURI =<<  x .: "image")
       <*> x .:! "mediaType"
       <*> x .:! "description"
       <*> x .:! "files" .!= []
 
-newtype NFTMetadata = NFTMetadata
-  { unNFTMetadata :: Map PolicyId (Map TokenName NFTMetadataDetails)
-  }
-  deriving stock (Show, Eq, Ord, Generic)
-  deriving newtype (Binary)
-
-instance Aeson.ToJSON NFTMetadata where
-  toJSON (NFTMetadata x) = Aeson.Object [("721", toJSON x)]
-
-instance Aeson.FromJSON NFTMetadata where
-  parseJSON = Aeson.withObject "NFTMetadata" \x ->
-    NFTMetadata <$> x .: "721"
-
-mkNFTMetadata :: Metadata -> Maybe NFTMetadata
-mkNFTMetadata =
-  fmap NFTMetadata . parsePolicies
-    <=< Map.lookup (MetadataNumber 721)
-    <=< parseMetadataMap Just Just
+decodeRoleTokenMetadata :: Metadata -> Maybe RoleTokenMetadata
+decodeRoleTokenMetadata = parseNFTMetadataDetails
   where
-    parsePolicies :: Metadata -> Maybe (Map PolicyId (Map TokenName NFTMetadataDetails))
-    parsePolicies = parseMetadataMap parsePolicyId parseTokens
-
-    parsePolicyId :: Metadata -> Maybe PolicyId
-    parsePolicyId = coerce parseMetadataBytes
-
-    parseTokens :: Metadata -> Maybe (Map TokenName NFTMetadataDetails)
-    parseTokens = parseMetadataMap parseTokenName parseNFTMetadataDetails
-
-    parseTokenName :: Metadata -> Maybe TokenName
-    parseTokenName = coerce parseMetadataBytes
-
-    parseNFTMetadataDetails :: Metadata -> Maybe NFTMetadataDetails
+    parseNFTMetadataDetails :: Metadata -> Maybe RoleTokenMetadata
     parseNFTMetadataDetails metadata = do
       textKeyMap <- parseMetadataRecord metadata
       name <- parseMetadataText =<< Map.lookup "name" textKeyMap
@@ -213,7 +179,7 @@ mkNFTMetadata =
           parseManyFileDetails = parseMetadataList parseNFTMetadataFile
           parseFileDetails md = parseSingleFileDetails md <|> parseManyFileDetails md
           files = fromMaybe [] $ parseFileDetails =<< Map.lookup "files" textKeyMap
-      Just $ NFTMetadataDetails {..}
+      Just $ RoleTokenMetadata {..}
 
     parseNFTMetadataFile :: Metadata -> Maybe NFTMetadataFile
     parseNFTMetadataFile metadata = do
@@ -232,24 +198,11 @@ mkNFTMetadata =
     parseSplittableText :: Metadata -> Maybe Text
     parseSplittableText md = parseMetadataText md <|> (mconcat <$> parseMetadataList parseMetadataText md)
 
-mkMetadata :: NFTMetadata -> Metadata
-mkMetadata (unNFTMetadata -> metadata) =
-  MetadataMap [(MetadataNumber 721, encodePolicies metadata)]
+encodeRoleTokenMetadata :: RoleTokenMetadata -> Metadata
+encodeRoleTokenMetadata = encodeNFTMetadataDetails
   where
-  encodePolicies :: Map PolicyId (Map TokenName NFTMetadataDetails) -> Metadata
-  encodePolicies = MetadataMap . fmap (encodePolicyId *** encodeTokens) . Map.toList
-
-  encodePolicyId :: PolicyId -> Metadata
-  encodePolicyId = coerce MetadataBytes
-
-  encodeTokens :: Map TokenName NFTMetadataDetails -> Metadata
-  encodeTokens = MetadataMap . fmap (encodeTokenName *** encodeNFTMetadataDetails) . Map.toList
-
-  encodeTokenName :: TokenName -> Metadata
-  encodeTokenName = coerce MetadataBytes
-
-  encodeNFTMetadataDetails :: NFTMetadataDetails -> Metadata
-  encodeNFTMetadataDetails NFTMetadataDetails {..} = MetadataMap $
+  encodeNFTMetadataDetails :: RoleTokenMetadata -> Metadata
+  encodeNFTMetadataDetails RoleTokenMetadata {..} = MetadataMap $
     [ (MetadataText "name", MetadataText name)
     , (MetadataText "image", encodeText $ fromString $ Network.uriToString id image "")
     ]
@@ -276,11 +229,11 @@ mkMetadata (unNFTMetadata -> metadata) =
   encodeText = MetadataList . fmap MetadataText . Text.chunksOf 64
 
 -- | Non empty mint request.
-newtype Mint = Mint { unMint :: Map TokenName (Address, Either Natural (Maybe NFTMetadata)) }
+newtype Mint = Mint { unMint :: Map TokenName (Address, Maybe RoleTokenMetadata) }
   deriving stock (Show, Eq, Ord, Generic)
   deriving newtype (Binary, Semigroup, Monoid, ToJSON, FromJSON)
 
-mkMint :: NonEmpty (TokenName, (Address, Either Natural (Maybe NFTMetadata))) -> Mint
+mkMint :: NonEmpty (TokenName, (Address, Maybe RoleTokenMetadata)) -> Mint
 mkMint = Mint . Map.fromList . NonEmpty.toList
 
 data RoleTokensConfig

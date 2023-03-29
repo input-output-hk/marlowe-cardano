@@ -212,7 +212,7 @@ instance Arbitrary RoleTokensConfig where
   arbitrary = oneof
     [ pure RoleTokensNone
     , RoleTokensUsePolicy . Chain.PolicyId <$> byteStringGen
-    , RoleTokensMint . mkMint . NE.fromList <$> listOf1 ((,) <$> genRole <*> ((,Left 1) <$> arbitrary))
+    , RoleTokensMint . mkMint . NE.fromList <$> listOf1 ((,) <$> genRole <*> ((,Nothing) <$> arbitrary))
     ]
   shrink = \case
     RoleTokensNone -> []

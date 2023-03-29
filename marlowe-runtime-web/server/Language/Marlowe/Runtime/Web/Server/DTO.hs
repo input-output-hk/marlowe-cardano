@@ -30,7 +30,7 @@ import Control.Arrow (second)
 import Control.Error.Util (hush)
 import Control.Monad ((<=<))
 import Control.Monad.Except (MonadError, throwError)
-import Data.Aeson (ToJSON(toJSON), Value(..))
+import Data.Aeson (Value(..))
 import Data.Bifunctor (bimap)
 import Data.Coerce (coerce)
 import Data.List.NonEmpty (NonEmpty(..))
@@ -42,6 +42,7 @@ import qualified Data.Set as Set
 import Data.String (fromString)
 import Data.Text (Text)
 import qualified Data.Text as T
+import Data.Text.Encoding (encodeUtf8)
 import Data.Traversable (for)
 import Data.Word (Word16, Word64)
 import GHC.TypeLits (KnownSymbol)
@@ -67,6 +68,7 @@ import qualified Language.Marlowe.Runtime.Discovery.Api as Discovery
 import qualified Language.Marlowe.Runtime.Transaction.Api as Tx
 import qualified Language.Marlowe.Runtime.Web as Web
 import Language.Marlowe.Runtime.Web.Server.TxClient (TempTx(..), TempTxStatus(..), Withdrawn(..))
+import Network.HTTP.Media (MediaType, parseAccept)
 import Servant.Pagination (IsRangeType)
 import qualified Servant.Pagination as Pagination
 
@@ -536,16 +538,34 @@ instance FromDTO Tx.Mint where
     . Map.toList
     where
       convertConfig = \case
-        Web.RoleTokenSimple address -> (,Left 1) <$> fromDTO address
-        Web.RoleTokenAdvanced address metadata -> curry (second $ Right . Just)
+        Web.RoleTokenSimple address -> (,Nothing) <$> fromDTO address
+        Web.RoleTokenAdvanced address metadata -> curry (second Just)
           <$> fromDTO address
           <*> fromDTO metadata
 
-instance HasDTO Tx.NFTMetadata where
-  type DTO Tx.NFTMetadata = Web.TokenMetadata
+instance HasDTO Tx.RoleTokenMetadata where
+  type DTO Tx.RoleTokenMetadata = Web.TokenMetadata
 
-instance FromDTO Tx.NFTMetadata where
-  fromDTO = Tx.mkNFTMetadata <=< Chain.fromJSONEncodedMetadata . toJSON
+instance FromDTO Tx.RoleTokenMetadata where
+  fromDTO Web.TokenMetadata{..} = Tx.RoleTokenMetadata name image
+    <$> fromDTO mediaType
+    <*> pure description
+    <*> case files of
+          Nothing -> pure []
+          Just files' -> fromDTO files'
+
+instance HasDTO MediaType where
+  type DTO MediaType = Text
+
+instance FromDTO MediaType where
+  fromDTO = parseAccept . encodeUtf8
+
+instance HasDTO Tx.NFTMetadataFile where
+  type DTO Tx.NFTMetadataFile = Web.TokenMetadataFile
+
+instance FromDTO Tx.NFTMetadataFile where
+  fromDTO Web.TokenMetadataFile{..} =
+    Tx.NFTMetadataFile name <$> fromDTO mediaType <*> pure src
 
 instance HasDTO Query.Order where
   type DTO Query.Order = Pagination.RangeOrder

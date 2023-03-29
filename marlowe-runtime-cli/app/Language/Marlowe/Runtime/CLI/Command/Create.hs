@@ -8,15 +8,16 @@ import qualified Cardano.Api as C
 import Control.Error.Util (hoistMaybe, noteT)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Except (ExceptT(ExceptT), throwE)
-import Data.Aeson (toJSON)
+import Data.Aeson (FromJSON, toJSON)
 import qualified Data.Aeson as A
 import Data.Bifunctor (first)
-import Data.List.NonEmpty (NonEmpty)
+import Data.List.NonEmpty (NonEmpty(..))
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.String (fromString)
 import qualified Data.Yaml as Yaml
 import Data.Yaml.Aeson (decodeFileEither)
+import GHC.Generics (Generic)
 import Language.Marlowe (POSIXTime(POSIXTime))
 import Language.Marlowe.Runtime.CLI.Command.Tx (SigningMethod(Manual), TxCommand(..), txCommandParser)
 import Language.Marlowe.Runtime.CLI.Monad (CLI, runCLIExceptT)
@@ -41,7 +42,8 @@ import Language.Marlowe.Runtime.Core.Api
   , MarloweVersionTag(V1)
   , SomeMarloweVersion(SomeMarloweVersion)
   )
-import Language.Marlowe.Runtime.Transaction.Api (ContractCreated(..), CreateError, RoleTokensConfig(..), mkMint)
+import Language.Marlowe.Runtime.Transaction.Api
+  (ContractCreated(..), CreateError, RoleTokenMetadata, RoleTokensConfig(..), mkMint)
 import Options.Applicative
 import Options.Applicative.NonEmpty (some1)
 import Text.Read (readMaybe)
@@ -52,6 +54,11 @@ data CreateCommand = CreateCommand
   , contractFiles :: ContractFiles
   , minUTxO :: Lovelace
   }
+
+data RoleConfig = RoleConfig
+  { address :: Address
+  , metadata :: RoleTokenMetadata
+  } deriving (Generic, FromJSON)
 
 data RolesConfig
   = MintSimple (NonEmpty (TokenName, Address))
@@ -161,11 +168,14 @@ runCreateCommand TxCommand { walletAddresses, signingMethod, tagsFile, metadataF
     minting' <- case roles of
       Nothing -> pure RoleTokensNone
       Just (MintSimple tokens) -> do
-        let toNFT addr = (addr, Left 1)
+        let toNFT addr = (addr, Nothing)
         pure $ RoleTokensMint $ mkMint $ fmap toNFT <$> tokens
       Just (UseExistingPolicyId policyId) -> pure $ RoleTokensUsePolicy policyId
-      Just (MintConfig roleTokensConfigFilePath) ->
-        ExceptT $ liftIO $ first RolesConfigFileDecodingError <$> A.eitherDecodeFileStrict roleTokensConfigFilePath
+      Just (MintConfig roleTokensConfigFilePath) -> do
+        configMap <- ExceptT $ liftIO $ first RolesConfigFileDecodingError <$> A.eitherDecodeFileStrict roleTokensConfigFilePath
+        case Map.toList configMap of
+          [] -> throwE $ RolesConfigFileDecodingError "Empty role token config"
+          (x : xs) -> pure $ RoleTokensMint $ mkMint $ fmap (\RoleConfig{..} -> (address, Just metadata)) <$> x :| xs
     ContractId contractId <- run MarloweV1 minting'
     liftIO . print $ A.encode (A.object [("contractId", toJSON . renderTxOutRef $ contractId)])
   where
