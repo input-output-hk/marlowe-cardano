@@ -10,9 +10,10 @@ release (i.e. the most recent tag on `main`) is: a prerelease or a normal releas
 
 ### Process if the current release is a normal release
 
-Increment the version numbers in `marlowe-chain-sync.cabal`, `marlowe-runtime.cabal`,
-`marlowe-runtime-web.cabal`, `marlowe-client.cabal`, and `marlowe-runtime-cli.cabal`
-as prescribed by semantic versioning. Given a version number scheme `major.minor.patch`:
+For the `runtime` component, increment the version numbers in
+`marlowe-chain-sync.cabal`, `marlowe-runtime.cabal`, `marlowe-runtime-web.cabal`,
+`marlowe-client.cabal`, and `marlowe-runtime-cli.cabal` as prescribed by semantic
+versioning. Given a version number scheme `major.minor.patch`:
 
 - For API-preserving changes that do not add functionality, increment the `patch` number by one.
 - For API-preserving changes that add new functionality, increment the `minor` number by one.
@@ -94,7 +95,7 @@ dropped.
 
 ## Step 6: Publish Haskell Libraries to CHaP
 
-TODO
+See [here](https://input-output-hk.github.io/cardano-haskell-packages/#how-to-add-a-new-package-version).
 
 ## Step 7: Publish a Release on GitHub
 
