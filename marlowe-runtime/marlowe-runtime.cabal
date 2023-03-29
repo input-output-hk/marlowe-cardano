@@ -211,18 +211,12 @@ library load-api
   hs-source-dirs:   load-api
   visibility: public
   exposed-modules:
-    Data.Nat
-    Data.Vec
-    Data.ContractFragment
     Language.Marlowe.Protocol.Load.Client
     Language.Marlowe.Protocol.Load.Server
     Language.Marlowe.Protocol.Load.Types
   build-depends:
       base >= 4.9 && < 5
-    , aeson
     , binary
-    , bytestring
-    , cardano-api
     , marlowe-cardano
     , marlowe-chain-sync
     , marlowe-protocols

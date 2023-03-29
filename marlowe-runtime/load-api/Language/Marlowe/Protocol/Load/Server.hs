@@ -3,96 +3,145 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE TypeFamilyDependencies #-}
 {-# LANGUAGE TypeOperators #-}
 
 module Language.Marlowe.Protocol.Load.Server
   where
 
-import Cardano.Api (SerialiseAsRawBytes(serialiseToRawBytes), hashScriptData)
-import Data.ContractFragment
-  (ContractFragment, PartialContract(..), convertContract, fillNextHole, partialHoles, toPartial)
+import Data.Kind (Type)
+import Data.Type.Equality (type (:~:)(..))
 import Language.Marlowe.Core.V1.Semantics.Types
 import Language.Marlowe.Protocol.Load.Types
-import Language.Marlowe.Runtime.Cardano.Api (toCardanoScriptData)
-import Language.Marlowe.Runtime.ChainSync.Api (DatumHash(..), toDatum)
+import Language.Marlowe.Runtime.ChainSync.Api (DatumHash(..))
 import Network.TypedProtocol
+import Plutus.V2.Ledger.Api (toBuiltin)
 
-newtype MarloweLoadServer m a = MarloweLoadServer { runMarloweLoadServer :: m (ServerStLoad '[ 'S 'Z ] m a) }
-  deriving (Functor)
+newtype MarloweLoadServer m a = MarloweLoadServer
+  { runMarloweLoadServer :: m (ServerStCanPush 'StRoot m a)
+  }
 
-data ServerStLoad (state :: [N]) m a where
-  Push
-    :: (forall n'. ContractFragment n' -> ServerStLoad (n' ': 'S n ': state) m a)
-    -> ServerStLoad ('S n ': state) m a
-  Pop
-    :: DatumHash
-    -> Contract
-    -> m (ServerStLoad (Fill state) m a)
-    -> ServerStLoad ('Z ': state) m a
-  Return :: a -> ServerStLoad '[] m a
+type family ServerStPop (st :: MarloweLoad) = (c :: (Type -> Type) -> Type -> Type) | c -> st where
+  ServerStPop ('StCanPush st) = ServerStCanPush st
+  ServerStPop 'StComplete = ServerStComplete
 
-deriving instance Functor m => Functor (ServerStLoad state m)
+data ServerStCanPush (st :: CanPush) m a = ServerStCanPush
+  { pushClose :: m (ServerStPop (Pop st) m a)
+  , pushPay :: AccountId -> Payee -> Token -> Value Observation -> m (ServerStCanPush ('StPay st) m a)
+  , pushIf :: Observation -> m (ServerStCanPush ('StIfL st) m a)
+  , pushWhen :: Timeout -> m (ServerStCanPush ('StWhen st) m a)
+  , pushCase :: forall st'. st :~: 'StWhen st' -> Action -> m (ServerStCanPush ('StCase st') m a)
+  , pushLet :: ValueId -> Value Observation -> m (ServerStCanPush ('StLet st) m a)
+  , pushAssert :: Observation -> m (ServerStCanPush ('StAssert st) m a)
+  }
 
-hoistMarloweLoadServer
-  :: Functor m
-  => (forall x. m x -> n x)
-  -> MarloweLoadServer m a
-  -> MarloweLoadServer n a
-hoistMarloweLoadServer f = MarloweLoadServer . f . fmap (hoistServerStLoad f) . runMarloweLoadServer
-
-hoistServerStLoad
-  :: Functor m
-  => (forall x. m x -> n x)
-  -> ServerStLoad state m a
-  -> ServerStLoad state n a
-hoistServerStLoad f = \case
-  Push recvMsgPush -> Push $ hoistServerStLoad f . recvMsgPush
-  Pop hash contract next -> Pop hash contract $ f $ hoistServerStLoad f <$> next
-  Return a -> Return a
+data ServerStComplete m a where
+  SendMsgComplete :: DatumHash -> m a -> ServerStComplete m a
 
 marloweLoadServerPeer
   :: forall m a
    . Functor m
   => MarloweLoadServer m a
-  -> Peer MarloweLoad 'AsServer ('StLoad '[ 'S 'Z ]) m a
-marloweLoadServerPeer = Effect . fmap peerLoad . runMarloweLoadServer
+  -> Peer MarloweLoad 'AsServer ('StCanPush 'StRoot) m a
+marloweLoadServerPeer = Effect . fmap (peerCanPush TokRoot) . runMarloweLoadServer
   where
-  peerLoad :: ServerStLoad state m a -> Peer MarloweLoad 'AsServer ('StLoad state) m a
-  peerLoad = \case
-    Push recvMsgPush ->
-      Await (ClientAgency TokLoadClient) \(MsgPush fragment) -> peerLoad $ recvMsgPush fragment
-    Pop hash contract next ->
-      Effect $ Yield (ServerAgency TokLoadServer) (MsgPop hash contract) . peerLoad <$> next
-    Return a -> Done TokLoadNobody a
+  peerCanPush :: StCanPush st -> ServerStCanPush st m a -> Peer MarloweLoad 'AsServer ('StCanPush st) m a
+  peerCanPush st ServerStCanPush{..} = Await (ClientAgency $ TokCanPush st) $ Effect . \case
+    MsgPushClose -> peerPop st <$> pushClose
+    MsgPushPay payor payee token value ->
+      peerCanPush (TokPay st) <$> pushPay payor payee token value
+    MsgPushIf cond ->
+      peerCanPush (TokIfL st) <$> pushIf cond
+    MsgPushWhen timeout ->
+      peerCanPush (TokWhen st) <$> pushWhen timeout
+    MsgPushCase action -> case st of
+      TokWhen st' -> peerCanPush (TokCase st') <$> pushCase Refl action
+    MsgPushLet valueId value ->
+      peerCanPush (TokLet st) <$> pushLet valueId value
+    MsgPushAssert obs ->
+      peerCanPush (TokAssert st) <$> pushAssert obs
 
-loadContractServer
-  :: Monad m
-  => (DatumHash -> Contract -> m ())
-  -> MarloweLoadServer m (DatumHash, Contract)
-loadContractServer = MarloweLoadServer . pure . loadContractServer' (StateCons (Succ Zero) Root StateNil)
+  peerPop
+    :: StCanPush st
+    -> ServerStPop (Pop st) m a
+    -> Peer MarloweLoad 'AsServer (Pop st) m a
+  peerPop st client = case stPop st of
+    SomePeerHasAgency (ClientAgency (TokCanPush st')) -> peerCanPush st' client
+    SomePeerHasAgency (ServerAgency TokComplete) -> peerComplete client
 
-loadContractServer'
-  :: Monad m
-  => PeerState (n ': state)
-  -> (DatumHash -> Contract -> m ())
-  -> ServerStLoad (n ': state) m (DatumHash, Contract)
-loadContractServer' state save = case state of
-  StateCons Zero partialContract prevState ->
-    let
-      contract = convertContract partialContract
-      hash = DatumHash $ serialiseToRawBytes $ hashScriptData $ toCardanoScriptData $ toDatum contract
-    in
-      Pop hash contract do
-        save hash contract
-        pure case prevState of
-          StateNil -> Return (hash, contract)
-          StateCons Zero _ _  -> loadContractServer' prevState save
-          StateCons (Succ n) prevPartialContract prevState' -> loadContractServer'
-            (StateCons n (fillNextHole hash contract prevPartialContract) prevState')
+  peerComplete :: ServerStComplete m a -> Peer MarloweLoad 'AsServer 'StComplete m a
+  peerComplete (SendMsgComplete hash next) = Yield (ServerAgency TokComplete) (MsgComplete hash)
+    $ Effect
+    $ Done TokDone <$> next
+
+pullContract
+  :: Applicative m
+  => (Contract -> m DatumHash)
+  -> MarloweLoadServer m Contract
+pullContract = MarloweLoadServer . pure . pullContract' StateRoot
+  where
+    pullContract'
+      :: Applicative m
+      => PeerState st
+      -> (Contract -> m DatumHash)
+      -> ServerStCanPush st m Contract
+    pullContract' st save = ServerStCanPush
+      { pushClose = popState st save Close
+      , pushPay = \payor payee token value -> pure $ pullContract'
+          (StatePay payor payee token value st)
+          save
+      , pushIf = \cond -> pure $ pullContract'
+          (StateIfL cond st)
+          save
+      , pushWhen = \timeout -> pure $ pullContract'
+          (StateWhen timeout [] st)
+          save
+      , pushCase = \Refl action -> case st of
+          StateWhen timeout cases st' -> pure $ pullContract'
+            (StateCase action timeout cases st')
             save
-  StateCons Succ{} _ _ -> Push \template -> case toPartial template of
-      partialContract' -> loadContractServer' (StateCons (partialHoles partialContract') partialContract' state) save
+      , pushLet = \valueId value -> pure $ pullContract'
+          (StateLet valueId value st)
+          save
+      , pushAssert = \obs -> pure $ pullContract'
+          (StateAssert obs st)
+          save
+      }
 
-data PeerState (state :: [N]) where
-  StateNil :: PeerState '[]
-  StateCons :: Nat n -> PartialContract n -> PeerState state -> PeerState (n ': state)
+    popState
+      :: Applicative m
+      => PeerState st
+      -> (Contract -> m DatumHash)
+      -> Contract
+      -> m (ServerStPop (Pop st) m Contract)
+    popState st save contract = case st of
+      StateRoot -> do
+        hash <- save contract
+        pure $ SendMsgComplete hash $ pure contract
+      StatePay payor payee token value st' ->
+        popState st' save (Pay payor payee token value contract)
+      StateIfL cond st' ->
+        pure $ pullContract' (StateIfR cond contract st') save
+      StateIfR cond tru st' ->
+        popState st' save (If cond tru contract)
+      StateWhen timeout cases st' ->
+        popState st' save (When (reverse cases) timeout contract)
+      StateCase action timeout cases st' -> do
+        hash <- save contract
+        pure $ pullContract'
+          (StateWhen timeout (MerkleizedCase action (toBuiltin $ unDatumHash hash) : cases) st')
+          save
+      StateLet valueId value st' ->
+        popState st' save (Let valueId value contract)
+      StateAssert obs st' ->
+        popState st' save (Assert obs contract)
+
+data PeerState (st :: CanPush) where
+  StateRoot :: PeerState 'StRoot
+  StatePay :: AccountId -> Payee -> Token -> Value Observation -> PeerState st -> PeerState ('StPay st)
+  StateIfL :: Observation -> PeerState st -> PeerState ('StIfL st)
+  StateIfR :: Observation -> Contract -> PeerState st -> PeerState ('StIfR st)
+  StateWhen :: Timeout -> [Case Contract] -> PeerState st -> PeerState ('StWhen st)
+  StateCase :: Action -> Timeout -> [Case Contract] -> PeerState st -> PeerState ('StCase st)
+  StateLet :: ValueId -> Value Observation -> PeerState st -> PeerState ('StLet st)
+  StateAssert :: Observation -> PeerState st -> PeerState ('StAssert st)

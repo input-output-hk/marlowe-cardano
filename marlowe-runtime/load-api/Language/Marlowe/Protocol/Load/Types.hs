@@ -1,5 +1,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
 
@@ -9,86 +10,174 @@
 module Language.Marlowe.Protocol.Load.Types
   where
 
-import Data.Binary (Binary(..))
-import Data.ContractFragment (ContractFragment, SomeContractFragment(..), getContractFragment, putContractFragment)
+import Data.Binary (Binary(..), Get, Put, getWord8, putWord8)
 import Language.Marlowe.Core.V1.Semantics.Types
 import Language.Marlowe.Runtime.ChainSync.Api (DatumHash, fromDatum, toDatum)
 import Network.Protocol.Codec (BinaryMessage(..))
 import Network.Protocol.Handshake.Types (HasSignature(..))
 import Network.TypedProtocol
+import Plutus.V2.Ledger.Api (FromData, ToData)
 
--- | The protocol state of the MarloweLoad protocol. Consists of a stack of
--- natural numbers, representing the number of unfilled holes in successive
--- levels of the contract hierarchy for the current branch of the contract.
-newtype MarloweLoad = StLoad [N]
+data MarloweLoad where
+  StCanPush :: CanPush -> MarloweLoad
+  StDone :: MarloweLoad
+  StComplete :: MarloweLoad
+
+data CanPush where
+  StRoot :: CanPush
+  StPay :: CanPush -> CanPush
+  StIfL :: CanPush -> CanPush
+  StIfR :: CanPush -> CanPush
+  StWhen :: CanPush -> CanPush
+  StCase :: CanPush -> CanPush
+  StLet :: CanPush -> CanPush
+  StAssert :: CanPush -> CanPush
+
+data StCanPush (x :: CanPush) where
+  TokRoot :: StCanPush 'StRoot
+  TokPay :: StCanPush st -> StCanPush ('StPay st)
+  TokIfL :: StCanPush st -> StCanPush ('StIfL st)
+  TokIfR :: StCanPush st -> StCanPush ('StIfR st)
+  TokWhen :: StCanPush st -> StCanPush ('StWhen st)
+  TokCase :: StCanPush st -> StCanPush ('StCase st)
+  TokLet :: StCanPush st -> StCanPush ('StLet st)
+  TokAssert :: StCanPush st -> StCanPush ('StAssert st)
+
+type family Pop (st :: CanPush) :: MarloweLoad where
+  Pop 'StRoot = 'StComplete
+  Pop ('StPay st) = Pop st
+  Pop ('StIfL st) = 'StCanPush ('StIfR st)
+  Pop ('StIfR st) = Pop st
+  Pop ('StWhen st) = Pop st
+  Pop ('StCase st) = 'StCanPush ('StWhen st)
+  Pop ('StLet st) = Pop st
+  Pop ('StAssert st) = Pop st
 
 instance HasSignature MarloweLoad where
   signature _ = "MarloweLoad"
 
--- | A helper for computing the target state of the Pop message.
-type family Fill (ns :: [N]) :: [N] where
-  -- We have popped the root contract, do nothing.
-  Fill '[] = '[]
-  -- The parent contract is already filled, do nothing (TODO prove to GHC that
-  -- this case is impossible in practice).
-  Fill ('Z ': ns) = 'Z ': ns
-  -- The parent contract has at least one hole, fill the hole.
-  Fill ('S n ': ns) = n ': ns
-
 instance Protocol MarloweLoad where
   data Message MarloweLoad st st' where
-    -- | Push a contract fragment to fill the first hole of the current
-    -- contract.
-    MsgPush :: ContractFragment n -> Message MarloweLoad
-      -- Client can push when the current contract has more than zero holes to
-      -- fill.
-      ('StLoad ('S n' ': ns))
-      -- Push the number of holes in the new contract fragment onto the stack.
-      ('StLoad (n ': 'S n' ': ns))
-    -- | Pop a filled contract off the stack.
-    MsgPop
-      :: DatumHash
-      -- ^ The hash of the contract.
-      -> Contract
-      -- ^ The contract (merkleized).
-      -> Message MarloweLoad
-        -- Server will pop when the current contract has no more holes to fill.
-        ('StLoad ('Z ': ns))
-        -- Fill the first hole in the previous contract with the current
-        -- contract.
-        ('StLoad (Fill ns))
+    MsgPushClose :: Message MarloweLoad
+      ('StCanPush st)
+      (Pop st)
+    MsgPushPay :: AccountId -> Payee -> Token -> Value Observation -> Message MarloweLoad
+      ('StCanPush st)
+      ('StCanPush ('StPay st))
+    MsgPushIf :: Observation -> Message MarloweLoad
+      ('StCanPush st)
+      ('StCanPush ('StIfL st))
+    MsgPushWhen :: Timeout -> Message MarloweLoad
+      ('StCanPush st)
+      ('StCanPush ('StWhen st))
+    MsgPushCase :: Action -> Message MarloweLoad
+      ('StCanPush ('StWhen st))
+      ('StCanPush ('StCase st))
+    MsgPushLet :: ValueId -> Value Observation -> Message MarloweLoad
+      ('StCanPush st)
+      ('StCanPush ('StLet st))
+    MsgPushAssert :: Observation -> Message MarloweLoad
+      ('StCanPush st)
+      ('StCanPush ('StAssert st))
+    MsgComplete :: DatumHash -> Message MarloweLoad
+      'StComplete
+      'StDone
 
   data ClientHasAgency st where
-    -- | Client has agency when there are holes in the current contract.
-    TokLoadClient :: ClientHasAgency ('StLoad ('S n ': ns))
+    TokCanPush :: StCanPush st -> ClientHasAgency ('StCanPush st)
 
   data ServerHasAgency st where
-    -- | Server has agency when there are no holes in the current contract.
-    TokLoadServer :: ServerHasAgency ('StLoad ('Z ': ns))
+    TokComplete :: ServerHasAgency 'StComplete
 
   data NobodyHasAgency st where
-    -- | Nobody has agency when the stack is empty.
-    TokLoadNobody :: NobodyHasAgency ('StLoad '[])
+    TokDone :: NobodyHasAgency 'StDone
 
-  exclusionLemma_ClientAndServerHaveAgency TokLoadClient = \case
-  exclusionLemma_NobodyAndClientHaveAgency TokLoadNobody = \case
-  exclusionLemma_NobodyAndServerHaveAgency TokLoadNobody = \case
+  exclusionLemma_ClientAndServerHaveAgency TokCanPush{} = \case
+  exclusionLemma_NobodyAndClientHaveAgency TokDone = \case
+  exclusionLemma_NobodyAndServerHaveAgency TokDone = \case
+
+data SomePeerHasAgency (st :: k) = forall pr. SomePeerHasAgency (PeerHasAgency pr st)
+
+stPop :: StCanPush st -> SomePeerHasAgency (Pop st)
+stPop = \case
+  TokRoot -> SomePeerHasAgency $ ServerAgency TokComplete
+  TokPay st -> stPop st
+  TokIfL st -> SomePeerHasAgency $ ClientAgency $ TokCanPush $ TokIfR st
+  TokIfR st -> stPop st
+  TokWhen st -> stPop st
+  TokCase st -> SomePeerHasAgency $ ClientAgency $ TokCanPush $ TokWhen st
+  TokLet st -> stPop st
+  TokAssert st -> stPop st
 
 instance BinaryMessage MarloweLoad where
   putMessage = \case
-    ClientAgency TokLoadClient -> \case
-      MsgPush fragment -> putContractFragment fragment
-    ServerAgency TokLoadServer -> \case
-      MsgPop hash contract -> do
-        put hash
-        put $ toDatum contract
+    ClientAgency (TokCanPush _) -> \case
+      MsgPushClose -> putWord8 0x00
+      MsgPushPay payor payee token value -> do
+        putWord8 0x01
+        putDatum payor
+        putDatum payee
+        putDatum token
+        putDatum value
+      MsgPushIf cond -> do
+        putWord8 0x02
+        putDatum cond
+      MsgPushWhen timeout -> do
+        putWord8 0x03
+        putDatum timeout
+      MsgPushCase action -> do
+        putWord8 0x04
+        putDatum action
+      MsgPushLet valueId value -> do
+        putWord8 0x05
+        putDatum valueId
+        putDatum value
+      MsgPushAssert obs -> do
+        putWord8 0x06
+        putDatum obs
+    ServerAgency TokComplete -> \case
+      MsgComplete hash -> put hash
+
   getMessage = \case
-    ClientAgency TokLoadClient -> do
-      SomeContractFragment fragment <- getContractFragment
-      pure $ SomeMessage $ MsgPush fragment
-    ServerAgency TokLoadServer -> do
-      hash <- get
-      contract <- get >>= \datum -> case fromDatum datum of
-        Nothing -> fail "Invalid contract bytes"
-        Just contract -> pure contract
-      pure $ SomeMessage $ MsgPop hash contract
+    ClientAgency (TokCanPush tok) -> do
+      tag <- getWord8
+      case tag of
+        0x00 -> pure $ SomeMessage MsgPushClose
+        0x01 -> do
+          msg <- MsgPushPay
+            <$> getDatum "payor"
+            <*> getDatum "payee"
+            <*> getDatum "token"
+            <*> getDatum "value"
+          pure $ SomeMessage msg
+        0x02 -> do
+          msg <- MsgPushIf <$> getDatum "cond"
+          pure $ SomeMessage msg
+        0x03 -> do
+          msg <- MsgPushWhen <$> getDatum "timeout"
+          pure $ SomeMessage msg
+        0x04 -> case tok of
+          TokWhen _ -> do
+            msg <- MsgPushCase <$> getDatum "action"
+            pure $ SomeMessage msg
+          _ -> fail "Invalid protocol state for MsgPushCase"
+        0x05 -> do
+          msg <- MsgPushLet
+            <$> getDatum "valueId"
+            <*> getDatum "value"
+          pure $ SomeMessage msg
+        0x06 -> do
+          msg <- MsgPushAssert <$> getDatum "obs"
+          pure $ SomeMessage msg
+        _ -> fail $ "Invalid message tag " <> show tag
+    ServerAgency TokComplete -> SomeMessage . MsgComplete <$> get
+
+putDatum :: ToData a => a -> Put
+putDatum = put . toDatum
+
+getDatum :: FromData a => String -> Get a
+getDatum name = do
+  datum <- get
+  case fromDatum datum of
+    Nothing -> fail $ "invalid " <> name <> " datum"
+    Just a -> pure a
