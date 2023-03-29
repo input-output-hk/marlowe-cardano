@@ -4,7 +4,6 @@ env:
   ALLOWED_URIS: "https://github.com https://api.github.com"
   TRUSTED_PUBLIC_KEYS: "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ= marlowe-temp.cachix.org-1:1gPjVFpu4QjaAT3tRurCioX+BC23V7mjvFwpP5bV0Ec= loony-tools:pr9m4BkM/5/eSTZlkQyRt57Jz7OMBxNSUiMC4FkcNfk="
   SUBSTITUTERS: "https://cache.nixos.org/ https://cache.iog.io https://marlowe-temp.cachix.org https://cache.zw3rk.com/"
-  ENVIRONMENT: preview
 
 on:
   schedule:
@@ -33,6 +32,8 @@ jobs:
   marlowe-finder:
     runs-on: ubuntu-latest
     needs: [check-deploy]
+    env:
+      ENVIRONMENT: preprod
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -64,7 +65,7 @@ jobs:
           key: ${{ secrets.SSH_KEY }}
           known_hosts: ${{ secrets.KNOWN_HOSTS }}
 
-      - name: Run Marlowe Finder on Preview
+      - name: Run Marlowe Finder on Preprod
         run: |
           scripts/setup-dev-connection &
           while ! nc -zv 127.0.0.1 3700 > /dev/null 2>&1
@@ -76,6 +77,8 @@ jobs:
   marlowe-scaling:
     runs-on: ubuntu-latest
     needs: [check-deploy]
+    env:
+      ENVIRONMENT: preview
     steps:
       - name: Checkout
         uses: actions/checkout@v3
