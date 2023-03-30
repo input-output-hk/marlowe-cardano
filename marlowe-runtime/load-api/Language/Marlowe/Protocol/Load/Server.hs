@@ -5,34 +5,50 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeFamilyDependencies #-}
 {-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 module Language.Marlowe.Protocol.Load.Server
   where
 
+import Cardano.Api (hashScriptData)
 import Data.Kind (Type)
 import Data.Type.Equality (type (:~:)(..))
 import Language.Marlowe.Core.V1.Semantics.Types
 import Language.Marlowe.Protocol.Load.Types
-import Language.Marlowe.Runtime.ChainSync.Api (DatumHash(..))
+import Language.Marlowe.Runtime.Cardano.Api (fromCardanoDatumHash, toCardanoScriptData)
+import Language.Marlowe.Runtime.ChainSync.Api (DatumHash(..), toDatum)
 import Network.TypedProtocol
 import Plutus.V2.Ledger.Api (toBuiltin)
 
 newtype MarloweLoadServer m a = MarloweLoadServer
-  { runMarloweLoadServer :: m (ServerStCanPush 'StRoot m a)
+  { runMarloweLoadServer :: m (ServerStProcessing 'RootNode m a)
   }
 
-type family ServerStPop (st :: MarloweLoad) = (c :: (Type -> Type) -> Type -> Type) | c -> st where
-  ServerStPop ('StCanPush st) = ServerStCanPush st
-  ServerStPop 'StComplete = ServerStComplete
+data ServerStProcessing (node :: Node) m a where
+  SendMsgResume :: Nat ('S n) -> ServerStCanPush n node m a -> ServerStProcessing node m a
 
-data ServerStCanPush (st :: CanPush) m a = ServerStCanPush
-  { pushClose :: m (ServerStPop (Pop st) m a)
-  , pushPay :: AccountId -> Payee -> Token -> Value Observation -> m (ServerStCanPush ('StPay st) m a)
-  , pushIf :: Observation -> m (ServerStCanPush ('StIfL st) m a)
-  , pushWhen :: Timeout -> m (ServerStCanPush ('StWhen st) m a)
-  , pushCase :: forall st'. st :~: 'StWhen st' -> Action -> m (ServerStCanPush ('StCase st') m a)
-  , pushLet :: ValueId -> Value Observation -> m (ServerStCanPush ('StLet st) m a)
-  , pushAssert :: Observation -> m (ServerStCanPush ('StAssert st) m a)
+type family ServerStPop (n :: N) (node :: Node) :: (Type -> Type) -> Type -> Type where
+  ServerStPop n 'RootNode = ServerStComplete
+  ServerStPop n ('PayNode node) = ServerStPop n node
+  ServerStPop n ('IfLNode node) = ServerStPush n ('IfRNode node)
+  ServerStPop n ('IfRNode node) = ServerStPop n node
+  ServerStPop n ('WhenNode node) = ServerStPop n node
+  ServerStPop n ('CaseNode node) = ServerStPush n ('WhenNode node)
+  ServerStPop n ('LetNode node) = ServerStPop n node
+  ServerStPop n ('AssertNode node) = ServerStPop n node
+
+type family ServerStPush (n :: N) (node :: Node) = (c :: (Type -> Type) -> Type -> Type) | c -> n node where
+  ServerStPush 'Z node = ServerStProcessing node
+  ServerStPush ('S n) node = ServerStCanPush n node
+
+data ServerStCanPush (n :: N) (node :: Node) m a = ServerStCanPush
+  { recvClose :: m (ServerStPop n node m a)
+  , recvPay :: AccountId -> Payee -> Token -> Value Observation -> m (ServerStPush n ('PayNode node) m a)
+  , recvIf :: Observation -> m (ServerStPush n ('IfLNode node) m a)
+  , recvWhen :: Timeout -> m (ServerStPush n ('WhenNode node) m a)
+  , recvCase :: forall st'. node :~: 'WhenNode st' -> Action -> m (ServerStPush n ('CaseNode st') m a)
+  , recvLet :: ValueId -> Value Observation -> m (ServerStPush n ('LetNode node) m a)
+  , recvAssert :: Observation -> m (ServerStPush n ('AssertNode node) m a)
   }
 
 data ServerStComplete m a where
@@ -42,32 +58,57 @@ marloweLoadServerPeer
   :: forall m a
    . Functor m
   => MarloweLoadServer m a
-  -> Peer MarloweLoad 'AsServer ('StCanPush 'StRoot) m a
-marloweLoadServerPeer = Effect . fmap (peerCanPush TokRoot) . runMarloweLoadServer
+  -> Peer MarloweLoad 'AsServer ('StProcessing 'RootNode) m a
+marloweLoadServerPeer = Effect . fmap (peerProcessing SRootNode) . runMarloweLoadServer
   where
-  peerCanPush :: StCanPush st -> ServerStCanPush st m a -> Peer MarloweLoad 'AsServer ('StCanPush st) m a
-  peerCanPush st ServerStCanPush{..} = Await (ClientAgency $ TokCanPush st) $ Effect . \case
-    MsgPushClose -> peerPop st <$> pushClose
+  peerProcessing :: SNode node -> ServerStProcessing node m a -> Peer MarloweLoad 'AsServer ('StProcessing node) m a
+  peerProcessing node = \case
+    SendMsgResume (Succ n) next ->
+      Yield (ServerAgency $ TokProcessing node) (MsgResume (Succ n)) $ peerCanPush n node next
+
+  peerCanPush
+    :: Nat n
+    -> SNode node
+    -> ServerStCanPush n node m a
+    -> Peer MarloweLoad 'AsServer ('StCanPush n node) m a
+  peerCanPush n node ServerStCanPush{..} = Await (ClientAgency $ TokCanPush n node) $ Effect . \case
+    MsgPushClose -> peerPop n node <$> recvClose
     MsgPushPay payor payee token value ->
-      peerCanPush (TokPay st) <$> pushPay payor payee token value
+      peerPush n (SPayNode node) <$> recvPay payor payee token value
     MsgPushIf cond ->
-      peerCanPush (TokIfL st) <$> pushIf cond
+      peerPush n (SIfLNode node) <$> recvIf cond
     MsgPushWhen timeout ->
-      peerCanPush (TokWhen st) <$> pushWhen timeout
-    MsgPushCase action -> case st of
-      TokWhen st' -> peerCanPush (TokCase st') <$> pushCase Refl action
+      peerPush n (SWhenNode node) <$> recvWhen timeout
+    MsgPushCase action -> case node of
+      SWhenNode st' -> peerPush n (SCaseNode st') <$> recvCase Refl action
     MsgPushLet valueId value ->
-      peerCanPush (TokLet st) <$> pushLet valueId value
+      peerPush n (SLetNode node) <$> recvLet valueId value
     MsgPushAssert obs ->
-      peerCanPush (TokAssert st) <$> pushAssert obs
+      peerPush n (SAssertNode node) <$> recvAssert obs
 
   peerPop
-    :: StCanPush st
-    -> ServerStPop (Pop st) m a
-    -> Peer MarloweLoad 'AsServer (Pop st) m a
-  peerPop st client = case stPop st of
-    SomePeerHasAgency (ClientAgency (TokCanPush st')) -> peerCanPush st' client
-    SomePeerHasAgency (ServerAgency TokComplete) -> peerComplete client
+    :: Nat n
+    -> SNode node
+    -> ServerStPop n node m a
+    -> Peer MarloweLoad 'AsServer (Pop n node) m a
+  peerPop n node client = case node of
+    SRootNode -> peerComplete client
+    SPayNode node' -> peerPop n node' client
+    SIfLNode node' -> peerPush n (SIfRNode node') client
+    SIfRNode node' -> peerPop n node' client
+    SWhenNode node' -> peerPop n node' client
+    SCaseNode node' -> peerPush n (SWhenNode node') client
+    SLetNode node' -> peerPop n node' client
+    SAssertNode node' -> peerPop n node' client
+
+  peerPush
+    :: Nat n
+    -> SNode node
+    -> ServerStPush n node m a
+    -> Peer MarloweLoad 'AsServer (Push n node) m a
+  peerPush n node client = case n of
+    Zero -> peerProcessing node client
+    Succ n' -> peerCanPush n' node client
 
   peerComplete :: ServerStComplete m a -> Peer MarloweLoad 'AsServer 'StComplete m a
   peerComplete (SendMsgComplete hash next) = Yield (ServerAgency TokComplete) (MsgComplete hash)
@@ -75,73 +116,78 @@ marloweLoadServerPeer = Effect . fmap (peerCanPush TokRoot) . runMarloweLoadServ
     $ Done TokDone <$> next
 
 pullContract
-  :: Applicative m
-  => (Contract -> m DatumHash)
+  :: forall m batchSize
+   . Applicative m
+  => Nat ('S batchSize)
+  -> (Contract -> m DatumHash)
   -> MarloweLoadServer m Contract
-pullContract = MarloweLoadServer . pure . pullContract' StateRoot
+pullContract batchSize@(Succ batchSize') save =
+  MarloweLoadServer $ pure $ SendMsgResume batchSize $ pullContract' batchSize' StateRoot
   where
     pullContract'
-      :: Applicative m
-      => PeerState st
-      -> (Contract -> m DatumHash)
-      -> ServerStCanPush st m Contract
-    pullContract' st save = ServerStCanPush
-      { pushClose = popState st save Close
-      , pushPay = \payor payee token value -> pure $ pullContract'
-          (StatePay payor payee token value st)
-          save
-      , pushIf = \cond -> pure $ pullContract'
-          (StateIfL cond st)
-          save
-      , pushWhen = \timeout -> pure $ pullContract'
-          (StateWhen timeout [] st)
-          save
-      , pushCase = \Refl action -> case st of
-          StateWhen timeout cases st' -> pure $ pullContract'
-            (StateCase action timeout cases st')
-            save
-      , pushLet = \valueId value -> pure $ pullContract'
-          (StateLet valueId value st)
-          save
-      , pushAssert = \obs -> pure $ pullContract'
-          (StateAssert obs st)
-          save
+      :: Nat n
+      -> PeerState node
+      -> ServerStCanPush n node m Contract
+    pullContract' n state = ServerStCanPush
+      { recvClose = popState n state Close
+      , recvPay = \payor payee token value ->
+          pure $ pushState n (StatePay payor payee token value state)
+      , recvIf = \cond ->
+          pure $ pushState n (StateIfL cond state)
+      , recvWhen = \timeout ->
+          pure $ pushState n (StateWhen timeout [] state)
+      , recvCase = \Refl action -> case state of
+          StateWhen timeout cases st' ->
+            pure $ pushState n (StateCase action timeout cases st')
+      , recvLet = \valueId value ->
+          pure $ pushState n (StateLet valueId value state)
+      , recvAssert = \obs ->
+          pure $ pushState n (StateAssert obs state)
       }
 
-    popState
-      :: Applicative m
-      => PeerState st
-      -> (Contract -> m DatumHash)
-      -> Contract
-      -> m (ServerStPop (Pop st) m Contract)
-    popState st save contract = case st of
-      StateRoot -> do
-        hash <- save contract
-        pure $ SendMsgComplete hash $ pure contract
+    popState :: Nat n -> PeerState node -> Contract -> m (ServerStPop n node m Contract)
+    popState n state contract = case state of
+      StateRoot -> case contract of
+        Close -> pure $ SendMsgComplete closeHash $ pure contract
+        _ -> do
+          hash <- save contract
+          pure $ SendMsgComplete hash $ pure contract
       StatePay payor payee token value st' ->
-        popState st' save (Pay payor payee token value contract)
+        popState n st' (Pay payor payee token value contract)
       StateIfL cond st' ->
-        pure $ pullContract' (StateIfR cond contract st') save
+        pure $ pushState n (StateIfR cond contract st')
       StateIfR cond tru st' ->
-        popState st' save (If cond tru contract)
+        popState n st' (If cond tru contract)
       StateWhen timeout cases st' ->
-        popState st' save (When (reverse cases) timeout contract)
-      StateCase action timeout cases st' -> do
-        hash <- save contract
-        pure $ pullContract'
-          (StateWhen timeout (MerkleizedCase action (toBuiltin $ unDatumHash hash) : cases) st')
-          save
+        popState n st' (When (reverse cases) timeout contract)
+      StateCase action timeout cases st' -> case contract of
+        Close -> pure $ pushState
+          n
+          (StateWhen timeout (Case action Close : cases) st')
+        _ -> do
+          hash <- save contract
+          pure $ pushState
+            n
+            (StateWhen timeout (MerkleizedCase action (toBuiltin $ unDatumHash hash) : cases) st')
       StateLet valueId value st' ->
-        popState st' save (Let valueId value contract)
+        popState n st' (Let valueId value contract)
       StateAssert obs st' ->
-        popState st' save (Assert obs contract)
+        popState n st' (Assert obs contract)
 
-data PeerState (st :: CanPush) where
-  StateRoot :: PeerState 'StRoot
-  StatePay :: AccountId -> Payee -> Token -> Value Observation -> PeerState st -> PeerState ('StPay st)
-  StateIfL :: Observation -> PeerState st -> PeerState ('StIfL st)
-  StateIfR :: Observation -> Contract -> PeerState st -> PeerState ('StIfR st)
-  StateWhen :: Timeout -> [Case Contract] -> PeerState st -> PeerState ('StWhen st)
-  StateCase :: Action -> Timeout -> [Case Contract] -> PeerState st -> PeerState ('StCase st)
-  StateLet :: ValueId -> Value Observation -> PeerState st -> PeerState ('StLet st)
-  StateAssert :: Observation -> PeerState st -> PeerState ('StAssert st)
+    pushState :: Nat n -> PeerState node -> ServerStPush n node m Contract
+    pushState n state = case n of
+      Zero -> SendMsgResume batchSize $ pullContract' batchSize' state
+      Succ n' -> pullContract' n' state
+
+closeHash :: DatumHash
+closeHash = fromCardanoDatumHash $ hashScriptData $ toCardanoScriptData $ toDatum Close
+
+data PeerState (node :: Node) where
+  StateRoot :: PeerState 'RootNode
+  StatePay :: AccountId -> Payee -> Token -> Value Observation -> PeerState node -> PeerState ('PayNode node)
+  StateIfL :: Observation -> PeerState node -> PeerState ('IfLNode node)
+  StateIfR :: Observation -> Contract -> PeerState node -> PeerState ('IfRNode node)
+  StateWhen :: Timeout -> [Case Contract] -> PeerState node -> PeerState ('WhenNode node)
+  StateCase :: Action -> Timeout -> [Case Contract] -> PeerState node -> PeerState ('CaseNode node)
+  StateLet :: ValueId -> Value Observation -> PeerState node -> PeerState ('LetNode node)
+  StateAssert :: Observation -> PeerState node -> PeerState ('AssertNode node)

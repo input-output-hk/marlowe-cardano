@@ -217,6 +217,7 @@ library load-api
   build-depends:
       base >= 4.9 && < 5
     , binary
+    , cardano-api
     , marlowe-cardano
     , marlowe-chain-sync
     , marlowe-protocols

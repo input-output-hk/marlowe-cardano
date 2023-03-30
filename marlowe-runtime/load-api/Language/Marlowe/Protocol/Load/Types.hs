@@ -3,6 +3,7 @@
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 -- | The Marlowe load protocol is a protocol for incrementally loading and
 -- merkleizing large contracts in a space-efficient way.
@@ -19,74 +20,83 @@ import Network.TypedProtocol
 import Plutus.V2.Ledger.Api (FromData, ToData)
 
 data MarloweLoad where
-  StCanPush :: CanPush -> MarloweLoad
+  StProcessing :: Node -> MarloweLoad
+  StCanPush :: N -> Node -> MarloweLoad
   StDone :: MarloweLoad
   StComplete :: MarloweLoad
 
-data CanPush where
-  StRoot :: CanPush
-  StPay :: CanPush -> CanPush
-  StIfL :: CanPush -> CanPush
-  StIfR :: CanPush -> CanPush
-  StWhen :: CanPush -> CanPush
-  StCase :: CanPush -> CanPush
-  StLet :: CanPush -> CanPush
-  StAssert :: CanPush -> CanPush
+data Node where
+  RootNode :: Node
+  PayNode :: Node -> Node
+  IfLNode :: Node -> Node
+  IfRNode :: Node -> Node
+  WhenNode :: Node -> Node
+  CaseNode :: Node -> Node
+  LetNode :: Node -> Node
+  AssertNode :: Node -> Node
 
-data StCanPush (x :: CanPush) where
-  TokRoot :: StCanPush 'StRoot
-  TokPay :: StCanPush st -> StCanPush ('StPay st)
-  TokIfL :: StCanPush st -> StCanPush ('StIfL st)
-  TokIfR :: StCanPush st -> StCanPush ('StIfR st)
-  TokWhen :: StCanPush st -> StCanPush ('StWhen st)
-  TokCase :: StCanPush st -> StCanPush ('StCase st)
-  TokLet :: StCanPush st -> StCanPush ('StLet st)
-  TokAssert :: StCanPush st -> StCanPush ('StAssert st)
+data SNode (node :: Node) where
+  SRootNode :: SNode 'RootNode
+  SPayNode :: SNode node -> SNode ('PayNode node)
+  SIfLNode :: SNode node -> SNode ('IfLNode node)
+  SIfRNode :: SNode node -> SNode ('IfRNode node)
+  SWhenNode :: SNode node -> SNode ('WhenNode node)
+  SCaseNode :: SNode node -> SNode ('CaseNode node)
+  SLetNode :: SNode node -> SNode ('LetNode node)
+  SAssertNode :: SNode node -> SNode ('AssertNode node)
 
-type family Pop (st :: CanPush) :: MarloweLoad where
-  Pop 'StRoot = 'StComplete
-  Pop ('StPay st) = Pop st
-  Pop ('StIfL st) = 'StCanPush ('StIfR st)
-  Pop ('StIfR st) = Pop st
-  Pop ('StWhen st) = Pop st
-  Pop ('StCase st) = 'StCanPush ('StWhen st)
-  Pop ('StLet st) = Pop st
-  Pop ('StAssert st) = Pop st
+type family Pop (n :: N) (node :: Node) :: MarloweLoad where
+  Pop n 'RootNode = 'StComplete
+  Pop n ('PayNode node) = Pop n node
+  Pop n ('IfLNode node) = Push n ('IfRNode node)
+  Pop n ('IfRNode node) = Pop n node
+  Pop n ('WhenNode node) = Pop n node
+  Pop n ('CaseNode node) = Push n ('WhenNode node)
+  Pop n ('LetNode node) = Pop n node
+  Pop n ('AssertNode node) = Pop n node
+
+type family Push (n :: N) (node :: Node) :: MarloweLoad where
+  Push 'Z node = 'StProcessing node
+  Push ('S n) node = 'StCanPush n node
 
 instance HasSignature MarloweLoad where
   signature _ = "MarloweLoad"
 
 instance Protocol MarloweLoad where
   data Message MarloweLoad st st' where
+    MsgResume :: Nat ('S n) -> Message MarloweLoad
+      ('StProcessing node)
+      ('StCanPush n node)
     MsgPushClose :: Message MarloweLoad
-      ('StCanPush st)
-      (Pop st)
+      ('StCanPush n node)
+      (Pop n node)
     MsgPushPay :: AccountId -> Payee -> Token -> Value Observation -> Message MarloweLoad
-      ('StCanPush st)
-      ('StCanPush ('StPay st))
+      ('StCanPush n node)
+      (Push n ('PayNode node))
     MsgPushIf :: Observation -> Message MarloweLoad
-      ('StCanPush st)
-      ('StCanPush ('StIfL st))
+      ('StCanPush n node)
+      (Push n ('IfLNode node))
     MsgPushWhen :: Timeout -> Message MarloweLoad
-      ('StCanPush st)
-      ('StCanPush ('StWhen st))
+      ('StCanPush n node)
+      (Push n ('WhenNode node))
     MsgPushCase :: Action -> Message MarloweLoad
-      ('StCanPush ('StWhen st))
-      ('StCanPush ('StCase st))
+      ('StCanPush n ('WhenNode node))
+      (Push n ('CaseNode node))
     MsgPushLet :: ValueId -> Value Observation -> Message MarloweLoad
-      ('StCanPush st)
-      ('StCanPush ('StLet st))
+      ('StCanPush n node)
+      (Push n ('LetNode node))
     MsgPushAssert :: Observation -> Message MarloweLoad
-      ('StCanPush st)
-      ('StCanPush ('StAssert st))
+      ('StCanPush n node)
+      (Push n ('AssertNode node))
     MsgComplete :: DatumHash -> Message MarloweLoad
       'StComplete
       'StDone
 
   data ClientHasAgency st where
-    TokCanPush :: StCanPush st -> ClientHasAgency ('StCanPush st)
+    TokCanPush :: Nat n -> SNode node -> ClientHasAgency ('StCanPush n node)
 
   data ServerHasAgency st where
+    TokProcessing :: SNode node -> ServerHasAgency ('StProcessing node)
     TokComplete :: ServerHasAgency 'StComplete
 
   data NobodyHasAgency st where
@@ -98,20 +108,24 @@ instance Protocol MarloweLoad where
 
 data SomePeerHasAgency (st :: k) = forall pr. SomePeerHasAgency (PeerHasAgency pr st)
 
-stPop :: StCanPush st -> SomePeerHasAgency (Pop st)
-stPop = \case
-  TokRoot -> SomePeerHasAgency $ ServerAgency TokComplete
-  TokPay st -> stPop st
-  TokIfL st -> SomePeerHasAgency $ ClientAgency $ TokCanPush $ TokIfR st
-  TokIfR st -> stPop st
-  TokWhen st -> stPop st
-  TokCase st -> SomePeerHasAgency $ ClientAgency $ TokCanPush $ TokWhen st
-  TokLet st -> stPop st
-  TokAssert st -> stPop st
+sPop :: Nat n -> SNode node -> SomePeerHasAgency (Pop n node)
+sPop n = \case
+  SRootNode -> SomePeerHasAgency $ ServerAgency TokComplete
+  SPayNode node -> sPop n node
+  SIfLNode node -> sPush n $ SIfRNode node
+  SIfRNode node -> sPop n node
+  SWhenNode node -> sPop n node
+  SCaseNode node -> sPush n $ SWhenNode node
+  SLetNode node -> sPop n node
+  SAssertNode node -> sPop n node
+
+sPush :: Nat n -> SNode node -> SomePeerHasAgency (Push n node)
+sPush Zero node = SomePeerHasAgency $ ServerAgency $ TokProcessing node
+sPush (Succ n) node = SomePeerHasAgency $ ClientAgency $ TokCanPush n node
 
 instance BinaryMessage MarloweLoad where
   putMessage = \case
-    ClientAgency (TokCanPush _) -> \case
+    ClientAgency TokCanPush{} -> \case
       MsgPushClose -> putWord8 0x00
       MsgPushPay payor payee token value -> do
         putWord8 0x01
@@ -137,9 +151,11 @@ instance BinaryMessage MarloweLoad where
         putDatum obs
     ServerAgency TokComplete -> \case
       MsgComplete hash -> put hash
+    ServerAgency (TokProcessing _) -> \case
+      MsgResume n -> put $ natToInt n
 
   getMessage = \case
-    ClientAgency (TokCanPush tok) -> do
+    ClientAgency (TokCanPush _ tok) -> do
       tag <- getWord8
       case tag of
         0x00 -> pure $ SomeMessage MsgPushClose
@@ -157,7 +173,7 @@ instance BinaryMessage MarloweLoad where
           msg <- MsgPushWhen <$> getDatum "timeout"
           pure $ SomeMessage msg
         0x04 -> case tok of
-          TokWhen _ -> do
+          SWhenNode _ -> do
             msg <- MsgPushCase <$> getDatum "action"
             pure $ SomeMessage msg
           _ -> fail "Invalid protocol state for MsgPushCase"
@@ -171,6 +187,11 @@ instance BinaryMessage MarloweLoad where
           pure $ SomeMessage msg
         _ -> fail $ "Invalid message tag " <> show tag
     ServerAgency TokComplete -> SomeMessage . MsgComplete <$> get
+    -- unsafeIntToNat is actually safe here - why? Because we immediately
+    -- forget the type because of existential types. The correct type will
+    -- be brought into scope when pattern matching on the pattern synonyms
+    -- `Zero` or `Succ n`.
+    ServerAgency (TokProcessing _) -> SomeMessage . MsgResume . unsafeIntToNat <$> get
 
 putDatum :: ToData a => a -> Put
 putDatum = put . toDatum
