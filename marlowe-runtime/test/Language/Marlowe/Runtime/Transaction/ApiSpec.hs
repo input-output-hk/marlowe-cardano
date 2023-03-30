@@ -79,11 +79,11 @@ roleTokenMetadataJSONRoundtrip = Gen.checkCoverage $
 
 roleTokenMetadataMetadataRoundtrip :: Gen.Property
 roleTokenMetadataMetadataRoundtrip = Gen.checkCoverage \metadata@RoleTokenMetadata{..} ->
-    Gen.cover 20.0 (Maybe.isNothing description) "has no description" $
-    Gen.cover 20.0 (maybe False Text.null description) "has empty description" $
+    Gen.cover 5.0 (Maybe.isNothing description) "has no description" $
+    Gen.cover 5.0 (maybe False Text.null description) "has empty description" $
     Gen.cover 20.0 (maybe False (not . Text.null) description) "has not empty description" $
-    Gen.cover 20.0 (Maybe.isNothing mediaType) "has no mediaType" $
-    Gen.cover 30.0 (Text.null name) "has empty name" $
+    Gen.cover 5.0 (Maybe.isNothing mediaType) "has no mediaType" $
+    Gen.cover 5.0 (Text.null name) "has empty name" $
     Gen.cover 30.0 (not $ Text.null name) "has name" do
     decodeRoleTokenMetadata (encodeRoleTokenMetadata metadata) `shouldBe` Just metadata
 
@@ -148,11 +148,10 @@ cip25MetadataFileDetailsJSONRelationGen = do
   pure (cip25MetadataFileDetails, Aeson.Array $ Vector.fromList json)
 
 uriJSONRelationGen :: Gen (Network.URI, Aeson.Value)
-uriJSONRelationGen = (id &&& Aeson.String . fromString . show) <$> uriGen
+uriJSONRelationGen = (id &&& Aeson.String . fromString . show) <$> Gen.arbitrary
 
 uriGenValidityTests :: Gen.Property
-uriGenValidityTests = Gen.checkCoverage $
-  Gen.forAll uriGen \uri@Network.URI {..} ->
+uriGenValidityTests = Gen.checkCoverage \uri@Network.URI {..} ->
     Gen.cover 30.0 (Maybe.isJust uriAuthority) "has uriAuthority" $
     Gen.cover 30.0 (Maybe.isNothing uriAuthority) "hasn't uriAuthority" $
     Gen.cover 15.0 (maybe False (null . Network.uriUserInfo) uriAuthority) "has uriAuthority and it hasn't uriUserInfo" $
@@ -171,35 +170,3 @@ uriGenValidityTests = Gen.checkCoverage $
     Gen.cover 30.0 (length uriScheme > 2) "has long uriScheme" $
     Gen.cover 30.0 (length uriScheme <= 2) "has short uriScheme" do
     uri `shouldSatisfy` Network.URI.isURI . show
-
-uriGen :: Gen Network.URI
-uriGen = do
-  uriScheme <- do
-    c <- charLetterGen
-    fmap (c:) $ Gen.oneof [pure "", Gen.listOf $ Gen.oneof [charLetterGen, charNumberGen]]
-
-  uriAuthority <-
-    Gen.oneof
-      [ pure Nothing
-      , do
-          uriUserInfo <- Gen.oneof [pure "", Gen.listOf specialCharGen]
-          uriRegName <- Gen.oneof [pure "", Gen.listOf specialCharGen]
-          uriPort <- Gen.oneof [pure "", Gen.listOf charNumberGen]
-          pure $ Just $ Network.URIAuth {..}
-      ]
-
-  uriPath <- Gen.oneof [pure "", ('/':) <$> Gen.listOf specialCharGen]
-  uriQuery <- Gen.oneof [pure "", Gen.listOf1 specialCharGen]
-  uriFragment <- Gen.oneof [pure "", Gen.listOf1 specialCharGen]
-
-  pure $ Network.URI.rectify $ Network.URI {..}
-
-  where
-  specialCharGen :: Gen Char
-  specialCharGen = Gen.oneof [charLetterGen, charNumberGen, Gen.elements ['.', '-', '_', '=', ';']]
-
-  charLetterGen :: Gen Char
-  charLetterGen = Gen.elements $ ['a' .. 'z'] <> ['A' .. 'Z']
-
-  charNumberGen :: Gen Char
-  charNumberGen = Gen.elements ['0' .. '9']

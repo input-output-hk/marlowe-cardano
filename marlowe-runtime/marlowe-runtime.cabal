@@ -99,6 +99,7 @@ library gen
   build-depends:
       base >= 4.9 && < 5
     , QuickCheck
+    , bytestring
     , cardano-api
     , cardano-api:gen
     , hedgehog-quickcheck
