@@ -1,4 +1,4 @@
-module Language.Marlowe.Runtime.Web.PostTransaction
+module Language.Marlowe.Runtime.Web.PostWithdrawal
   where
 
 import Control.Monad.IO.Class (MonadIO(liftIO))

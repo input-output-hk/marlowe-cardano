@@ -6,12 +6,10 @@ module Language.Marlowe.Runtime.Web.StandardContract
 import Control.Monad.RWS.Strict (MonadIO(liftIO))
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
-import Data.Time
-  (NominalDiffTime, UTCTime, addUTCTime, getCurrentTime, nominalDiffTimeToSeconds, secondsToNominalDiffTime)
-import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
-import Language.Marlowe.Core.V1.Semantics.Types
+import Data.Time (getCurrentTime, secondsToNominalDiffTime)
 import Language.Marlowe.Extended.V1 (ada)
 import Language.Marlowe.Runtime.Integration.Common (Wallet(..), expectJust)
+import Language.Marlowe.Runtime.Integration.StandardContract (standardContract)
 import Language.Marlowe.Runtime.Plutus.V2.Api (toPlutusAddress)
 import Language.Marlowe.Runtime.Transaction.Api (WalletAddresses(..))
 import Language.Marlowe.Runtime.Web
@@ -21,7 +19,6 @@ import Language.Marlowe.Runtime.Web.Client (postContract)
 import Language.Marlowe.Runtime.Web.Common
   (choose, deposit, notify, submitContract, submitTransaction, submitWithdrawal, withdraw)
 import Language.Marlowe.Runtime.Web.Server.DTO (ToDTO(toDTO))
-import qualified Plutus.V2.Ledger.Api as PV2
 import Servant.Client (ClientM)
 
 data StandardContractInit = StandardContractInit
@@ -74,7 +71,7 @@ createStandardContract partyAWallet partyBWallet = do
     Web.PostContractsRequest
       { metadata = mempty
       , version = Web.V1
-      , roles = Just $ Web.Mint $ Map.singleton "PartyA" $ RoleTokenSimple partyAWebChangeAddress
+      , roles = Just $ Web.Mint $ Map.singleton "Party A" $ RoleTokenSimple partyAWebChangeAddress
       , contract = contract
       , minUTxODeposit = 2_000_000
       , tags = mempty
@@ -131,52 +128,13 @@ createStandardContract partyAWallet partyBWallet = do
                             { returnDepositBlock
                             , returnDeposited
                             , withdrawPartyAFunds = do
-                                withdrawTxBody <- withdraw partyAWallet contractId "PartyA"
+                                withdrawTxBody <- withdraw partyAWallet contractId "Party A"
                                 (withdrawTxBody,) <$> submitWithdrawal partyAWallet withdrawTxBody
                             }
                       }
                 }
           }
     }
-
-standardContract
-  :: PV2.Address
-  -> UTCTime
-  -> NominalDiffTime
-  -> (Contract, Party, Party)
-standardContract partyBAddress startTime timeoutLength = (contract, partyA, partyB)
-  where
-    toPosixTime t = PV2.POSIXTime $ floor $ 1000 * nominalDiffTimeToSeconds (utcTimeToPOSIXSeconds t)
-    contract = When
-      [ Case (Deposit partyA partyA ada (Constant 100_000_000))
-          ( When
-              [ Case (Choice (ChoiceId "Gimme the money" partyB) [Bound 0 0])
-                  ( When
-                      [ Case (Notify TrueObs)
-                          ( Pay partyA (Party partyB) ada (AvailableMoney partyA ada)
-                              ( When
-                                  [ Case (Deposit partyA partyB ada (Constant 100_000_000)) Close
-                                  ]
-                                  (toPosixTime $ timeoutLength `addUTCTime` (timeoutLength `addUTCTime` (timeoutLength `addUTCTime` (timeoutLength `addUTCTime` startTime))))
-                                  Close
-                              )
-                          )
-                      ]
-                      (toPosixTime $ timeoutLength `addUTCTime` (timeoutLength `addUTCTime` (timeoutLength `addUTCTime` startTime)))
-                      Close
-                  )
-              ]
-              (toPosixTime $ timeoutLength `addUTCTime` (timeoutLength `addUTCTime` startTime))
-              Close
-          )
-      ]
-      (toPosixTime $ timeoutLength `addUTCTime` startTime)
-      Close
-
-
-    partyA = Role "PartyA"
-    -- 0x00 = testnet
-    partyB = Address (toEnum 0x00) partyBAddress
 
 createFullyExecutedStandardContract :: Wallet -> Wallet -> ClientM (Web.TxOutRef, [Web.TxId])
 createFullyExecutedStandardContract partyAWallet partyBWallet = do

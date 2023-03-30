@@ -7,12 +7,12 @@ import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 import Data.Time (getCurrentTime, secondsToNominalDiffTime)
 import Language.Marlowe.Runtime.Integration.Common
+import Language.Marlowe.Runtime.Integration.StandardContract (standardContract)
 import Language.Marlowe.Runtime.Plutus.V2.Api (toPlutusAddress)
 import Language.Marlowe.Runtime.Transaction.Api (WalletAddresses(..))
 import qualified Language.Marlowe.Runtime.Web as Web
 import Language.Marlowe.Runtime.Web.Client (postContract)
 import Language.Marlowe.Runtime.Web.Server.DTO (ToDTO(toDTO))
-import Language.Marlowe.Runtime.Web.StandardContract (standardContract)
 import Test.Hspec (Spec, describe, it)
 import Test.Integration.Marlowe.Local (withLocalMarloweRuntime)
 

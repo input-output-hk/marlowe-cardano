@@ -8,7 +8,9 @@ import qualified Language.Marlowe.Runtime.Web.GetTransactions as GetTransaction
 import qualified Language.Marlowe.Runtime.Web.GetTransactions as GetTransactions
 import qualified Language.Marlowe.Runtime.Web.PostContract as PostContract
 import qualified Language.Marlowe.Runtime.Web.PostTransaction as PostTransaction
+import qualified Language.Marlowe.Runtime.Web.PostWithdrawal as PostWithdrawal
 import qualified Language.Marlowe.Runtime.Web.PutContract as PutContract
+import qualified Language.Marlowe.Runtime.Web.PutTransaction as PutTransaction
 import Test.Hspec (Spec, describe)
 
 spec :: Spec
@@ -20,3 +22,5 @@ spec = describe "Marlowe runtime Web API" do
   PostContract.spec
   PostTransaction.spec
   PutContract.spec
+  PutTransaction.spec
+  PostWithdrawal.spec

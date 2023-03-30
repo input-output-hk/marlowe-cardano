@@ -35,6 +35,7 @@ getTransactionsValidSpec = describe "Valid GET /contracts/{contractId}/transacti
 
 getTransactionsInvalidSpec :: Spec
 getTransactionsInvalidSpec = describe "Invalid GET /contracts/{contractId}/transactions" do
+  invalidContractIdSpec
   invalidTxIdSpec
 
 getTransactionsValidNextPageSpec :: Spec
@@ -205,12 +206,12 @@ multipleContractsMultipleTransactionsValidSpec  =  it "returns a list with multi
 
     liftIO $ fmap (\Web.TxHeader{..} -> transactionId) items `shouldBe` reverse expectedTransactionIds
 
-
-invalidTxIdSpec :: Spec
-invalidTxIdSpec = it "returns an error message when using an invalid tx id" $ withLocalMarloweRuntime $ runIntegrationTest do
+invalidContractIdSpec :: Spec
+invalidContractIdSpec = it "responds with a 404 when the contractId cannot be found" $ withLocalMarloweRuntime $ runIntegrationTest do
   result <- runWebClient do
     let
       invalidContractId = Web.TxOutRef (toDTO @Chain.TxId "0000000000000000000000000000000000000000000000000000000000000000") 1
+    let
       invalidRange =  Range
         {
           rangeValue = Just $ toDTO @Chain.TxId "0000000000000000000000000000000000000000000000000000000000000000"
@@ -225,3 +226,26 @@ invalidTxIdSpec = it "returns an error message when using an invalid tx id" $ wi
   case result of
     Left (FailureResponse _ Response { responseStatusCode = Status { statusCode = 404 } } ) ->  pure ()
     _ -> fail $ "Expected 404 response code - got " <> show result
+
+invalidTxIdSpec :: Spec
+invalidTxIdSpec = it "responds with a 416 when the transactionId cannot be found" $ withLocalMarloweRuntime $ runIntegrationTest do
+  wallet1 <- getGenesisWallet 0
+  wallet2 <- getGenesisWallet 1
+
+  result <- runWebClient do
+    (validContractId, _) <- createFullyExecutedStandardContract wallet1 wallet2
+    let
+      invalidRange =  Range
+        {
+          rangeValue = Just $ toDTO @Chain.TxId "0000000000000000000000000000000000000000000000000000000000000000"
+        , rangeOffset = 0
+        , rangeLimit = 1
+        , rangeOrder = RangeAsc
+        , rangeField = Proxy
+        }
+    getTransactions validContractId $ Just invalidRange
+
+
+  case result of
+    Left (FailureResponse _ Response { responseStatusCode = Status { statusCode = 416 } } ) ->  pure ()
+    _ -> fail $ "Expected 416 response code - got " <> show result
