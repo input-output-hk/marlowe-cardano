@@ -9,16 +9,12 @@ import Control.Arrow ((&&&), (***))
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.KeyMap as Aeson.KeyMap
 import qualified Data.ByteString.Char8 as BS
-import Data.Coerce (coerce)
 import Data.Foldable (find)
 import Data.Maybe (maybeToList)
 import qualified Data.Maybe as Maybe
 import Data.String (fromString)
-import Data.Text (Text)
 import qualified Data.Text as Text
-import qualified Data.Text.Encoding as Text.Encoding
 import qualified Data.Vector as Vector
-import Language.Marlowe.Runtime.ChainSync.Api (PolicyId(PolicyId), TokenName(TokenName))
 import Language.Marlowe.Runtime.Transaction.Api
   (NFTMetadataFile(..), RoleTokenMetadata(..), decodeRoleTokenMetadata, encodeRoleTokenMetadata)
 import Language.Marlowe.Runtime.Transaction.Gen ()
@@ -67,15 +63,6 @@ isJSONString = \case Aeson.String _ -> True; _ -> False
 
 isJSONURI :: Aeson.Value -> Bool
 isJSONURI = \case Aeson.String uri -> Network.URI.isURI $ Text.unpack uri; _ -> False
-
-mkPolicyId :: Text -> PolicyId
-mkPolicyId = coerce Text.Encoding.encodeUtf8
-
-mkTokenName :: Text -> TokenName
-mkTokenName = coerce Text.Encoding.encodeUtf8
-
-base16EncodedTextGen :: Int -> Gen Text
-base16EncodedTextGen n = fromString <$> Gen.vectorOf n (Gen.elements $ ['0' .. '9'] <> ['a' .. 'f'])
 
 roleTokenMetadataJSONRoundtrip :: Gen.Property
 roleTokenMetadataJSONRoundtrip = Gen.checkCoverage $

@@ -553,7 +553,6 @@ test-suite marlowe-runtime-test
     Paths_marlowe_runtime
   build-depends:
       base >= 4.9 && < 5
-    , base16
     , aeson
     , bytestring
     , cardano-api
