@@ -32,7 +32,7 @@ import Data.Functor (($>), (<&>))
 import Data.List.NonEmpty (NonEmpty)
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Map as Map
-import Data.Maybe (catMaybes)
+import Data.Maybe (catMaybes, fromJust)
 import qualified Data.Set as Set
 import Data.Void (Void)
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
@@ -58,11 +58,12 @@ import Language.Marlowe.Runtime.Integration.Common
 import Language.Marlowe.Runtime.Transaction.Api
 import Network.Protocol.Codec.Spec (varyAp)
 import Network.Protocol.Job.Client (liftCommand)
+import Network.URI (parseURI)
 import Test.Hspec
 import Test.Integration.Marlowe (MarloweRuntime(..), withLocalMarloweRuntime)
 
 spec :: Spec
-spec = describe "Create" $ aroundAll setup do
+spec = focus $ describe "Create" $ aroundAll setup do
   parallel $ for_ allCreateCases \createCase -> aroundAllWith (runCreateCase createCase) do
     describe (show createCase) do
       case mkSpec createCase of
@@ -268,7 +269,7 @@ addNFTMetadata ContractCreated{..} = \case
           $ Map.insert 721
             ( MetadataMap
               [ ( MetadataBytes $ unPolicyId rolesCurrency
-                , MetadataMap [(MetadataBytes "Role", MetadataNumber 42)]
+                , MetadataMap [(MetadataBytes "Role", encodeRoleTokenMetadata testNftMetadata)]
                 )
               ]
             )
@@ -317,11 +318,20 @@ mkRoleTokensConfig TestData{..} = \case
   NoRoleTokens -> RoleTokensNone
   ExistingPolicyRoleTokens -> RoleTokensUsePolicy existingRoleTokenPolicy
   MintRoleTokensSimple -> RoleTokensMint $ mkMint $ NE.fromList
-    [ ("Role", (changeAddress singleAddressInsufficientBalanceWallet, Left 1))
+    [ ("Role", (changeAddress singleAddressInsufficientBalanceWallet, Nothing))
     ]
   MintRoleTokensMetadata -> RoleTokensMint $ mkMint $ NE.fromList
-    [ ("Role", (changeAddress singleAddressInsufficientBalanceWallet, Right $ mkNFTMetadata $ MetadataNumber 42))
+    [ ("Role", (changeAddress singleAddressInsufficientBalanceWallet, Just testNftMetadata))
     ]
+
+testNftMetadata :: RoleTokenMetadata
+testNftMetadata = RoleTokenMetadata
+  { name = "Test token"
+  , image = fromJust $ parseURI "https://example.com/img.png"
+  , mediaType = Just "image/png"
+  , files = []
+  , description = Nothing
+  }
 
 mkMarloweTxMetadata :: MetadataCase -> MarloweTransactionMetadata
 mkMarloweTxMetadata (MetadataCase marloweMetadata extraMetadata) = MarloweTransactionMetadata

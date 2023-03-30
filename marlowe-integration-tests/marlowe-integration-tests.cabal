@@ -90,6 +90,7 @@ executable marlowe-integration-tests
     , marlowe-runtime-web
     , marlowe-runtime-web:server
     , mtl
+    , network-uri
     , plutus-ledger-api
     , servant-client
     , servant-pagination
