@@ -179,11 +179,10 @@ instance Arbitrary Web.TokenMetadata where
     <*> arbitrary
     <*> arbitrary
     <*> arbitrary
-    <*> arbitrary
   shrink = genericShrink
 
 instance Arbitrary Web.TokenMetadataFile where
-  arbitrary = Web.TokenMetadataFile <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
+  arbitrary = Web.TokenMetadataFile <$> arbitrary <*> arbitrary <*> arbitrary
   shrink = genericShrink
 
 instance Arbitrary Web.Address where

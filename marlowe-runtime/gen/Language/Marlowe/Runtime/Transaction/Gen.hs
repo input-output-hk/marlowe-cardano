@@ -5,8 +5,9 @@ module Language.Marlowe.Runtime.Transaction.Gen
   where
 
 import Cardano.Api (IsCardanoEra, cardanoEra)
+import Control.Applicative (liftA2)
+import qualified Data.ByteString.Char8 as BS
 import Data.Foldable (fold)
-import Data.String (fromString)
 import Gen.Cardano.Api.Typed (genTxBody)
 import Language.Marlowe.Runtime.ChainSync.Gen ()
 import qualified Language.Marlowe.Runtime.Core.Api as Core
@@ -15,7 +16,8 @@ import Language.Marlowe.Runtime.History.Gen ()
 import Language.Marlowe.Runtime.Transaction.Api
 import qualified Language.Marlowe.Runtime.Transaction.Api as ContractCreated (ContractCreated(..))
 import qualified Language.Marlowe.Runtime.Transaction.Api as InputsApplied (InputsApplied(..))
-import Network.HTTP.Media (MediaType)
+import Network.HTTP.Media (MediaType, (//))
+import qualified Network.URI
 import qualified Network.URI as Network
 import Spec.Marlowe.Semantics.Arbitrary ()
 import Test.QuickCheck hiding (shrinkMap)
@@ -23,7 +25,11 @@ import Test.QuickCheck.Hedgehog (hedgehog)
 import Test.QuickCheck.Instances ()
 
 instance Arbitrary MediaType where
-  arbitrary = fromString <$> arbitrary
+  arbitrary = do
+    let stringGen = do
+          n <- chooseInt (1, 127)
+          BS.pack <$> vectorOf n (elements ['a' .. 'z'])
+    liftA2 (//) stringGen stringGen
 
 instance Arbitrary Network.URIAuth where
   arbitrary =
@@ -34,13 +40,37 @@ instance Arbitrary Network.URIAuth where
   shrink = genericShrink
 
 instance Arbitrary Network.URI where
-  arbitrary =
-    Network.URI
-      <$> arbitrary
-      <*> arbitrary
-      <*> arbitrary
-      <*> arbitrary
-      <*> arbitrary
+  arbitrary = do
+    uriScheme <- do
+      c <- charLetterGen
+      fmap (c:) $ oneof [pure "", listOf $ oneof [charLetterGen, charNumberGen]]
+
+    uriAuthority <-
+      oneof
+        [ pure Nothing
+        , do
+            uriUserInfo <- oneof [pure "", listOf specialCharGen]
+            uriRegName <- oneof [pure "", listOf specialCharGen]
+            uriPort <- oneof [pure "", listOf charNumberGen]
+            pure $ Just $ Network.URIAuth {..}
+        ]
+
+    uriPath <- oneof [pure "", ('/':) <$> listOf specialCharGen]
+    uriQuery <- oneof [pure "", listOf1 specialCharGen]
+    uriFragment <- oneof [pure "", listOf1 specialCharGen]
+
+    pure $ Network.URI.rectify $ Network.URI {..}
+
+    where
+    specialCharGen :: Gen Char
+    specialCharGen = oneof [charLetterGen, charNumberGen, elements ['.', '-', '_', '=', ';']]
+
+    charLetterGen :: Gen Char
+    charLetterGen = elements $ ['a' .. 'z'] <> ['A' .. 'Z']
+
+    charNumberGen :: Gen Char
+    charNumberGen = elements ['0' .. '9']
+
   shrink = genericShrink
 
 instance Arbitrary WalletAddresses where
@@ -55,18 +85,14 @@ instance Arbitrary NFTMetadataFile where
       <*> arbitrary
   shrink = genericShrink
 
-instance Arbitrary NFTMetadataDetails where
+instance Arbitrary RoleTokenMetadata where
   arbitrary =
-    NFTMetadataDetails
-      <$> arbitrary
+    RoleTokenMetadata
+      <$> frequency [(1, pure ""), (9, arbitrary)]
       <*> arbitrary
+      <*> frequency [(1, pure Nothing), (9, arbitrary)]
+      <*> frequency [(1, pure (Just "")), (1, pure Nothing), (8, arbitrary)]
       <*> arbitrary
-      <*> arbitrary
-      <*> arbitrary
-  shrink = genericShrink
-
-instance Arbitrary NFTMetadata where
-  arbitrary = NFTMetadata <$> arbitrary
   shrink = genericShrink
 
 instance Arbitrary Mint where

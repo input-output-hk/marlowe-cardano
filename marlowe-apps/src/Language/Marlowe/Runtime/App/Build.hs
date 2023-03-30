@@ -58,7 +58,7 @@ buildCreation version' contract roles minUtxo metadata' =
     roles' =
       if M.null roles
         then RoleTokensNone
-        else RoleTokensMint . mkMint . fmap (second (, Left 1)) . NE.fromList . M.toList $ roles
+        else RoleTokensMint . mkMint . fmap (second (, Nothing)) . NE.fromList . M.toList $ roles
   in
     build show (\ContractCreated{..} -> (contractId, txBody))
       $ \w -> Create Nothing version' w roles' metadata' minUtxo contract

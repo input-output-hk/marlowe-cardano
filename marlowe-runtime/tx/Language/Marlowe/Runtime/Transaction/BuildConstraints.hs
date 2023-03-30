@@ -13,7 +13,6 @@ import Cardano.Api (CardanoMode, EraHistory(..))
 import qualified Cardano.Api.Byron as C
 import qualified Cardano.Api.Shelley as C
 import qualified Cardano.Ledger.BaseTypes as CL (Network(..))
-import Control.Arrow (Arrow((***)))
 import Control.Category ((>>>))
 import Control.Error (note)
 import Control.Monad (unless, (>=>))
@@ -31,7 +30,6 @@ import Data.Time (UTCTime, nominalDiffTimeToSeconds, secondsToNominalDiffTime)
 import Data.Time.Clock.POSIX (posixSecondsToUTCTime, utcTimeToPOSIXSeconds)
 import Data.Traversable (for)
 import GHC.Base (Alternative((<|>)))
-import GHC.Natural (Natural)
 import qualified Language.Marlowe.Core.V1.Semantics as V1
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
 import qualified Language.Marlowe.Core.V1.Semantics.Types.Address as V1
@@ -78,10 +76,9 @@ import Language.Marlowe.Runtime.Transaction.Api
   , CreateBuildupError(AddressDecodingFailed, MintingScriptDecodingFailed, MintingUtxoSelectionFailed)
   , CreateError(..)
   , Mint(unMint)
-  , NFTMetadata
   , RoleTokensConfig(..)
   , WithdrawError
-  , mkMetadata
+  , encodeRoleTokenMetadata
   )
 import Language.Marlowe.Runtime.Transaction.Constraints
   ( TxConstraints(..)
@@ -152,30 +149,30 @@ buildCreateConstraintsV1
   -> Contract 'V1 -- ^ The contract being instantiated.
   -> TxConstraintsBuilderM (CreateError 'V1) 'V1 (Datum 'V1, Assets, PolicyId)
 buildCreateConstraintsV1 walletCtx roles metadata minAda contract = do
-  tell . requiresMetadata $ metadata { transactionMetadata = transactionMetadata metadata <> nftsMetadata }
-
   -- Output constraints.
   -- Role tokens minting and distribution.
   policyId <- mintRoleTokens
+
+  tell . requiresMetadata $ metadata { transactionMetadata = nftsMetadata policyId <> transactionMetadata metadata }
 
   -- Marlowe script output.
   (datum, assets) <- sendMarloweOutput policyId
 
   pure (datum, assets, policyId)
   where
-    nftsMetadata = case roles of
+    nftsMetadata (PolicyId policyId) = case roles of
       RoleTokensMint (Map.toList . unMint -> minting) -> do
         let
           tokensMetadata = catMaybes $ minting <&> \case
-            (tokenName, (_, Right (Just (mkMetadata -> nftMetadata)))) -> do
+            (tokenName, (_, Just roleTokenMetadata)) -> do
               let
                 tokenName' = unTokenName tokenName
               -- From CIP-25: In version 2 the the raw bytes of the asset_name are used.
-              Just (MetadataBytes tokenName', nftMetadata)
+              Just (MetadataBytes tokenName', encodeRoleTokenMetadata roleTokenMetadata)
             _ -> Nothing
         case tokensMetadata of
           [] -> mempty
-          metadata' -> TransactionMetadata (Map.singleton 721 (MetadataMap metadata'))
+          metadata' -> TransactionMetadata (Map.singleton 721 (MetadataMap [(MetadataBytes policyId, MetadataMap metadata')]))
       _ -> mempty
 
     liftMaybe err = lift . note (CreateBuildupFailed err)
@@ -236,11 +233,7 @@ buildCreateConstraintsV1 walletCtx roles metadata minAda contract = do
         let
           txOutRef' = toPlutusTxOutRef txOutRef
 
-          tokenAmount :: (Address, Either Natural (Maybe NFTMetadata)) -> Integer
-          tokenAmount (_, Left amount) = toInteger amount
-          tokenAmount (_, Right _) = 1
-
-          roleTokens = RoleTokensPolicy.mkRoleTokens (map (toPlutusTokenName *** tokenAmount) . Map.toList $ minting)
+          roleTokens = RoleTokensPolicy.mkRoleTokens (map ((, 1) . toPlutusTokenName) . Map.keys $ minting)
           plutusScript = fromPlutusScript . PV2.getMintingPolicy . RoleTokensPolicy.policy roleTokens $ txOutRef'
 
         (script, scriptHash) <- liftMaybe (MintingScriptDecodingFailed plutusScript) do

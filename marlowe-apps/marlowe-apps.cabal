@@ -163,7 +163,6 @@ executable marlowe-finder
                     , marlowe-apps
                     , marlowe-runtime
                     , optparse-applicative
-                    , stm
                     , text
   ghc-options       : -Wall
                       -Wnoncanonical-monad-instances

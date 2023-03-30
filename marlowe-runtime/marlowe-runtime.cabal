@@ -99,6 +99,7 @@ library gen
   build-depends:
       base >= 4.9 && < 5
     , QuickCheck
+    , bytestring
     , cardano-api
     , cardano-api:gen
     , hedgehog-quickcheck
@@ -553,7 +554,6 @@ test-suite marlowe-runtime-test
     Paths_marlowe_runtime
   build-depends:
       base >= 4.9 && < 5
-    , base16
     , aeson
     , bytestring
     , cardano-api

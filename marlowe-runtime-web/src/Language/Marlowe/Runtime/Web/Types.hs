@@ -15,7 +15,6 @@ module Language.Marlowe.Runtime.Web.Types
 import Control.Lens hiding ((.=))
 import Control.Monad ((<=<))
 import Data.Aeson
-import Data.Aeson.KeyMap (toMap)
 import Data.Aeson.Types (Parser, parseFail)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
@@ -23,16 +22,13 @@ import Data.ByteString.Base16 (decodeBase16, encodeBase16)
 import Data.Char (isSpace)
 import Data.Foldable (fold)
 import Data.Map (Map)
-import qualified Data.Map as Map
 import Data.OpenApi
-  ( AdditionalProperties(..)
-  , HasType(..)
+  ( HasType(..)
   , NamedSchema(..)
   , OpenApiType(..)
   , Referenced(..)
   , ToParamSchema
   , ToSchema
-  , additionalProperties
   , declareSchema
   , declareSchemaRef
   , enum_
@@ -46,7 +42,6 @@ import Data.OpenApi
 import qualified Data.OpenApi as OpenApi
 import Data.OpenApi.Schema (ToSchema(..))
 import Data.Set (Set)
-import qualified Data.Set as Set
 import Data.String (IsString(..))
 import Data.Text (Text, intercalate, splitOn)
 import qualified Data.Text as T
@@ -513,7 +508,6 @@ data TokenMetadata = TokenMetadata
   , mediaType :: Maybe Text
   , description :: Maybe Text
   , files :: Maybe [TokenMetadataFile]
-  , otherProperties :: Map Key Metadata
   } deriving (Show, Eq, Ord, Generic)
 
 instance FromJSON TokenMetadata where
@@ -525,16 +519,15 @@ instance FromJSON TokenMetadata where
       <*> obj .:? "mediaType"
       <*> obj .:? "description"
       <*> obj .:? "files"
-      <*> pure (Metadata <$> Map.withoutKeys (toMap obj) (Set.fromList ["name", "image", "mediaType", "description", "files"]))
 
 instance ToJSON TokenMetadata where
-  toJSON TokenMetadata{..} = object $
+  toJSON TokenMetadata{..} = object
     [ ("name", toJSON name)
     , ("image", uriToJSON image)
     , ("mediaType", toJSON mediaType)
     , ("description", toJSON description)
     , ("files", toJSON files)
-    ] <> (fmap . fmap) unMetadata (Map.toList otherProperties)
+    ]
 
 instance ToSchema TokenMetadata where
   declareNamedSchema _ = do
@@ -551,13 +544,11 @@ instance ToSchema TokenMetadata where
           , ("description", stringSchema)
           , ("files", filesSchema)
           ]
-      & additionalProperties ?~ AdditionalPropertiesAllowed True
 
 data TokenMetadataFile = TokenMetadataFile
   { name :: Text
   , src :: URI
   , mediaType :: Text
-  , otherProperties :: Map Key Metadata
   } deriving (Show, Eq, Ord, Generic)
 
 instance FromJSON TokenMetadataFile where
@@ -567,14 +558,13 @@ instance FromJSON TokenMetadataFile where
       <$> obj .: "name"
       <*> uriFromJSON srcJSON
       <*> obj .: "mediaType"
-      <*> pure (Metadata <$> Map.withoutKeys (toMap obj) (Set.fromList ["name", "src", "mediaType"]))
 
 instance ToJSON TokenMetadataFile where
-  toJSON TokenMetadataFile{..} = object $
+  toJSON TokenMetadataFile{..} = object
     [ ("name", toJSON name)
     , ("src", uriToJSON src)
     , ("mediaType", toJSON mediaType)
-    ] <> (fmap . fmap) unMetadata (Map.toList otherProperties)
+    ]
 
 instance ToSchema TokenMetadataFile where
   declareNamedSchema _ = do
@@ -587,7 +577,6 @@ instance ToSchema TokenMetadataFile where
           , ("src", stringSchema)
           , ("mediaType", stringSchema)
           ]
-      & additionalProperties ?~ AdditionalPropertiesAllowed True
 
 uriFromJSON :: Value -> Parser URI
 uriFromJSON = withText "URI" $ maybe (parseFail "invalid URI") pure . parseURI . T.unpack
