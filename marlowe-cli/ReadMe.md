@@ -3,8 +3,6 @@ date: 17 September 2022
 version: marlowe-cli 0.0.8.0
 ---
 
-<div class="cell markdown">
-
 # Marlowe Command-Line Interface (CLI) Tool
 
 The `marlowe-cli` tool provides several utilities for serialising
@@ -15,7 +13,7 @@ to submit Marlowe transactions to the Cardano blockchain.
 
 See the [Marlowe Debugging Cookbook](../marlowe/debugging-cookbook.md)
 for troubleshooting information, or the [Marlowe CLI Pioneers
-Lectures](lectures/ReadMe.md).
+Lectures](https://github.com/input-output-hk/real-world-marlowe/tree/main/archives/marlowe-cli/lectures/ReadMe.md).
 
 </div>
 
@@ -228,12 +226,12 @@ workflow.](doc/diagrams/high-level-workflow.svg)
 
 #### Examples
 
--   [simple contract](examples/simple/ReadMe.md)
--   [escrow](examples/escrow/ReadMe.md)
--   [swap](examples/swap/ReadMe.md)
--   [zero-coupon bond](examples/zcb/ReadMe.md)
--   [contract for differences](examples/cfd/ReadMe.md)
--   [covered call](examples/coveredCall/ReadMe.md)
+-   [simple contract](https://github.com/input-output-hk/real-world-marlowe/tree/main/archives/marlowe-cli/examples/simple/ReadMe.md)
+-   [escrow](https://github.com/input-output-hk/real-world-marlowe/tree/main/archives/marlowe-cli/examples/escrow/ReadMe.md)
+-   [swap](https://github.com/input-output-hk/real-world-marlowe/tree/main/archives/marlowe-cli/examples/swap/ReadMe.md)
+-   [zero-coupon bond](https://github.com/input-output-hk/real-world-marlowe/tree/main/archives/marlowe-cli/examples/zcb/ReadMe.md)
+-   [contract for differences](https://github.com/input-output-hk/real-world-marlowe/tree/main/archives/marlowe-cli/examples/cfd/ReadMe.md)
+-   [covered call](https://github.com/input-output-hk/real-world-marlowe/tree/main/archives/marlowe-cli/examples/coveredCall/ReadMe.md)
 
 </div>
 
@@ -241,17 +239,17 @@ workflow.](doc/diagrams/high-level-workflow.svg)
 
 #### Test Cases
 
--   [simple contract](examples/simple/run-test.sh)
+-   [simple contract](https://github.com/input-output-hk/real-world-marlowe/tree/main/archives/marlowe-cli/examples/simple/run-test.sh)
 -   escrow
     -   ["everything is
-        alright"](examples/escrow/run-everything-is-alright.sh)
-    -   ["confirm problem"](examples/escrow/run-confirm-problem.sh)
-    -   ["dismiss claim"](examples/escrow/run-dimiss-claim.sh)
-    -   ["confirm claim"](examples/escrow/run-confirm-claim.sh)
--   [swap](examples/swap/run-swap.sh)
--   [zero-coupon bond](examples/zcb/run-zcb.sh)
--   [contract for differences](examples/cfd/run-cfd.sh)
--   [covered call](examples/coveredCall/run-coveredCall.sh)
+        alright"](https://github.com/input-output-hk/real-world-marlowe/tree/main/archives/marlowe-cli/xamples/escrow/run-everything-is-alright.sh)
+    -   ["confirm problem"](https://github.com/input-output-hk/real-world-marlowe/tree/main/archives/marlowe-cli/examples/escrow/run-confirm-problem.sh)
+    -   ["dismiss claim"](https://github.com/input-output-hk/real-world-marlowe/tree/main/archives/marlowe-cli/examples/escrow/run-dimiss-claim.sh)
+    -   ["confirm claim"](https://github.com/input-output-hk/real-world-marlowe/tree/main/archives/marlowe-cli/examples/escrow/run-confirm-claim.sh)
+-   [swap](https://github.com/input-output-hk/real-world-marlowe/tree/main/archives/marlowe-cli/examples/swap/run-swap.sh)
+-   [zero-coupon bond](https://github.com/input-output-hk/real-world-marlowe/tree/main/archives/marlowe-cli/examples/zcb/run-zcb.sh)
+-   [contract for differences](https://github.com/input-output-hk/real-world-marlowe/tree/main/archives/marlowe-cli/examples/cfd/run-cfd.sh)
+-   [covered call](https://github.com/input-output-hk/real-world-marlowe/tree/main/archives/marlowe-cli/examples/coveredCall/run-coveredCall.sh)
 
 </div>
 

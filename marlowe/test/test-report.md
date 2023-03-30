@@ -48,7 +48,7 @@ Marlowe transactions utilize one of two Plutus V2 validators, residing in the [`
 - The *Semantics Validator* is Plutus code that verifies that a transaction obeys the Marlowe DSL semantics along with the Cardano ledger rules. This validator resides in the `smallUntypedValidator` function that marshals Plutus types to call `computeTransaction` and checks constraints on input and output.
 - The *Payout Validator* is Plutus code that verifies that a transaction is properly authorized by a Marlowe role to withdraw funds paid by the Semantics Validator. This validator resides in the  `rolePayoutValidator`  function that simply verifies authorization.
 
-Marlowe's property-based and golden tests reside in the `marlowe-test` executable of the [marlowe-test](.) package of the [marlowe-cardano](https://github.com/input-output-hk/marlowe-cardano/) repository, while Marlowe's on-chain tests reside in the [`run-nonpab-test.sh`](../marlowe-cli/run-nonpab-tests.sh) script of the [marlowe-cli](../marlowe-cli/) package of the repository. Informal tests are scattered throughout the Marlowe repositories.
+Marlowe's property-based and golden tests reside in the `marlowe-test` executable of the [marlowe-test](.) package of the [marlowe-cardano](https://github.com/input-output-hk/marlowe-cardano/) repository, while Marlowe's on-chain tests reside in the [`run-nonpab-test.sh`](https://github.com/input-output-hk/real-world-marlowe/tree/main/archives/marlowe-cli/run-nonpab-tests.sh) script of the [marlowe-cli](https://github.com/input-output-hk/real-world-marlowe/tree/main/archives/marlowe-cli/) package of the repository. Informal tests are scattered throughout the Marlowe repositories.
 
 
 ## Formal Guarantees for Marlowe
@@ -405,7 +405,7 @@ Several other property-based tests, in the [`Spec.Marlowe.Marlowe`](src/Spec/Mar
 
 ## On-Chain Tests of Marlowe
 
-On-chain tests of Marlowe mostly center on verifying the execution of valid transactions, but some tests verify that invalid transactions fail. Formal tests are codified as scripts for the [`marlowe-cli`](../marlowe-cli/ReadMe.md) tool or as scripts for Marlowe's testing DSL.
+On-chain tests of Marlowe mostly center on verifying the execution of valid transactions, but some tests verify that invalid transactions fail. Formal tests are codified as scripts for the [`marlowe-cli`](https://github.com/input-output-hk/real-world-marlowe/tree/main/archives/marlowe-cli/ReadMe.md) tool or as scripts for Marlowe's testing DSL.
 
 
 ### Formal Tests
@@ -414,61 +414,61 @@ A dozen on-chain tests, embodied as `bash` scripts, are regularly run for qualit
 
 | File | Test |
 |-----|------|
-| [marlowe-cli/test/double-satisfaction.sh](../marlowe-cli/test/double-satisfaction.sh) | Double-satisfaction, where one Marlowe contract steals funds from another. |
-| [marlowe-cli/examples/actus/run-actus.sh](../marlowe-cli/examples/actus/run-actus.sh) | An ACTUS contract (Zero-Coupon Bond). |
-| [marlowe-cli/examples/cfd/run-cfd.sh](../marlowe-cli/examples/cfd/run-cfd.sh) | A contract for differences, using an oracle. |
-| [marlowe-cli/examples/coveredCall/run-coveredCall.sh](../marlowe-cli/examples/coveredCall/run-coveredCall.sh) | A covered-call contract. |
-| [marlowe-cli/examples/escrow/run-confirm-claim.sh](../marlowe-cli/examples/escrow/run-confirm-claim.sh) | The "confirm claim" path through the example escrow contract. |
-| [marlowe-cli/examples/escrow/run-confirm-problem.sh](../marlowe-cli/examples/escrow/run-confirm-problem.sh) | The "confirm problem" path through the example escrow contract. |
-| [marlowe-cli/examples/escrow/run-dismiss-claim.sh](../marlowe-cli/examples/escrow/run-dismiss-claim.sh) | The "dismiss claim" path through the example escrow contract. |
-| [marlowe-cli/examples/escrow/run-everything-is-alright.sh](../marlowe-cli/examples/escrow/run-everything-is-alright.sh) | The "everything is alright " path through the example escrow contract. |
-| [marlowe-cli/examples/simple/run-simple.sh](../marlowe-cli/examples/simple/run-simple.sh) | A simple notify-then-close contract. |
-| [marlowe-cli/examples/simpleSelcoins/run-simpleSelcoins.sh](../marlowe-cli/examples/simpleSelcoins/run-simpleSelcoins.sh) | A variant of the simple notify-and-close test. |
-| [marlowe-cli/examples/swap/run-swap.sh](../marlowe-cli/examples/swap/run-swap.sh) | A swap of two tokens. |
-| [marlowe-cli/examples/zcb/run-zcb.sh](../marlowe-cli/examples/zcb/run-zcb.sh) | A zero-coupon bond. |
+| [marlowe-cli/test/double-satisfaction.sh](https://github.com/input-output-hk/real-world-marlowe/tree/main/archives/marlowe-cli/test/double-satisfaction.sh) | Double-satisfaction, where one Marlowe contract steals funds from another. |
+| [marlowe-cli/examples/actus/run-actus.sh](https://github.com/input-output-hk/real-world-marlowe/tree/main/archives/marlowe-cli/examples/actus/run-actus.sh) | An ACTUS contract (Zero-Coupon Bond). |
+| [marlowe-cli/examples/cfd/run-cfd.sh](https://github.com/input-output-hk/real-world-marlowe/tree/main/archives/marlowe-cli/examples/cfd/run-cfd.sh) | A contract for differences, using an oracle. |
+| [marlowe-cli/examples/coveredCall/run-coveredCall.sh](https://github.com/input-output-hk/real-world-marlowe/tree/main/archives/marlowe-cli/examples/coveredCall/run-coveredCall.sh) | A covered-call contract. |
+| [marlowe-cli/examples/escrow/run-confirm-claim.sh](https://github.com/input-output-hk/real-world-marlowe/tree/main/archives/marlowe-cli/examples/escrow/run-confirm-claim.sh) | The "confirm claim" path through the example escrow contract. |
+| [marlowe-cli/examples/escrow/run-confirm-problem.sh](https://github.com/input-output-hk/real-world-marlowe/tree/main/archives/marlowe-cli/examples/escrow/run-confirm-problem.sh) | The "confirm problem" path through the example escrow contract. |
+| [marlowe-cli/examples/escrow/run-dismiss-claim.sh](https://github.com/input-output-hk/real-world-marlowe/tree/main/archives/marlowe-cli/examples/escrow/run-dismiss-claim.sh) | The "dismiss claim" path through the example escrow contract. |
+| [marlowe-cli/examples/escrow/run-everything-is-alright.sh](https://github.com/input-output-hk/real-world-marlowe/tree/main/archives/marlowe-cli/examples/escrow/run-everything-is-alright.sh) | The "everything is alright " path through the example escrow contract. |
+| [marlowe-cli/examples/simple/run-simple.sh](https://github.com/input-output-hk/real-world-marlowe/tree/main/archives/marlowe-cli/examples/simple/run-simple.sh) | A simple notify-then-close contract. |
+| [marlowe-cli/examples/simpleSelcoins/run-simpleSelcoins.sh](https://github.com/input-output-hk/real-world-marlowe/tree/main/archives/marlowe-cli/examples/simpleSelcoins/run-simpleSelcoins.sh) | A variant of the simple notify-and-close test. |
+| [marlowe-cli/examples/swap/run-swap.sh](https://github.com/input-output-hk/real-world-marlowe/tree/main/archives/marlowe-cli/examples/swap/run-swap.sh) | A swap of two tokens. |
+| [marlowe-cli/examples/zcb/run-zcb.sh](https://github.com/input-output-hk/real-world-marlowe/tree/main/archives/marlowe-cli/examples/zcb/run-zcb.sh) | A zero-coupon bond. |
 
 A new off- and on-chain testing DSL is being readied for release (executable via `marlowe-cli test script`) and will include tests migrated from Marlowe's previous PAB-based testing DSL:
 
 | File | Test |
 |-----|------|
-| [marlowe-cli/test/test-contract-for-differences-with-oracle.yaml](../marlowe-cli/test/test-contract-for-differences-with-oracle.yaml) | A contract for differences, with an oracle. |
-| [marlowe-cli/test/test-contract-for-differences.yaml](../marlowe-cli/test/test-contract-for-differences.yaml) | A contract for differences, without an oracle. |
-| [marlowe-cli/test/test-coupon-bond-guaranteed.yaml](../marlowe-cli/test/test-coupon-bond-guaranteed.yaml) | A guaranteed bond. |
-| [marlowe-cli/test/test-escrow-with-collateral.yaml](../marlowe-cli/test/test-escrow-with-collateral.yaml) | An escrow contract that includes collateral. |
-| [marlowe-cli/test/test-escrow.yaml](../marlowe-cli/test/test-escrow.yaml) | An escrow contract that does not include collateral. |
-| [marlowe-cli/test/test-simple.yaml](../marlowe-cli/test/test-simple.yaml) | A simple notify-then-close contract. |
-| [marlowe-cli/test/test-swap-of-ada-and-dollar-tokens.yaml](../marlowe-cli/test/test-swap-of-ada-and-dollar-tokens.yaml) | A swap of Ada for USD tokens. |
-| [marlowe-cli/test/test-swap-of-ada-for-ada.yaml](../marlowe-cli/test/test-swap-of-ada-for-ada.yaml) | A swap of Ada for Ada. |
-| [marlowe-cli/test/test-zero-coupon-bond-delayed-timeout.yaml](../marlowe-cli/test/test-zero-coupon-bond-delayed-timeout.yaml) | A zero-coupon bond where a timeout occurs late in the contract. |
-| [marlowe-cli/test/test-zero-coupon-bond-immediate-timeout.yaml](../marlowe-cli/test/test-zero-coupon-bond-immediate-timeout.yaml) | A zero-coupon bond where a timeout occurs early in the contract. |
-| [marlowe-cli/test/test-zero-coupon-bond-too-late.yaml](../marlowe-cli/test/test-zero-coupon-bond-too-late.yaml) | A zero-coupon bond where input fails due to a timeout. |
-| [marlowe-cli/test/test-zero-coupon-bond.yaml](../marlowe-cli/test/test-zero-coupon-bond.yaml) | A zero-coupon bond. |
+| [marlowe-cli/test/test-contract-for-differences-with-oracle.yaml](https://github.com/input-output-hk/real-world-marlowe/tree/main/archives/marlowe-cli/test/test-contract-for-differences-with-oracle.yaml) | A contract for differences, with an oracle. |
+| [marlowe-cli/test/test-contract-for-differences.yaml](https://github.com/input-output-hk/real-world-marlowe/tree/main/archives/marlowe-cli/test/test-contract-for-differences.yaml) | A contract for differences, without an oracle. |
+| [marlowe-cli/test/test-coupon-bond-guaranteed.yaml](https://github.com/input-output-hk/real-world-marlowe/tree/main/archives/marlowe-cli/test/test-coupon-bond-guaranteed.yaml) | A guaranteed bond. |
+| [marlowe-cli/test/test-escrow-with-collateral.yaml](https://github.com/input-output-hk/real-world-marlowe/tree/main/archives/marlowe-cli/test/test-escrow-with-collateral.yaml) | An escrow contract that includes collateral. |
+| [marlowe-cli/test/test-escrow.yaml](https://github.com/input-output-hk/real-world-marlowe/tree/main/archives/marlowe-cli/test/test-escrow.yaml) | An escrow contract that does not include collateral. |
+| [marlowe-cli/test/test-simple.yaml](https://github.com/input-output-hk/real-world-marlowe/tree/main/archives/marlowe-cli/test/test-simple.yaml) | A simple notify-then-close contract. |
+| [marlowe-cli/test/test-swap-of-ada-and-dollar-tokens.yaml](https://github.com/input-output-hk/real-world-marlowe/tree/main/archives/marlowe-cli/test/test-swap-of-ada-and-dollar-tokens.yaml) | A swap of Ada for USD tokens. |
+| [marlowe-cli/test/test-swap-of-ada-for-ada.yaml](https://github.com/input-output-hk/real-world-marlowe/tree/main/archives/marlowe-cli/test/test-swap-of-ada-for-ada.yaml) | A swap of Ada for Ada. |
+| [marlowe-cli/test/test-zero-coupon-bond-delayed-timeout.yaml](https://github.com/input-output-hk/real-world-marlowe/tree/main/archives/marlowe-cli/test/test-zero-coupon-bond-delayed-timeout.yaml) | A zero-coupon bond where a timeout occurs late in the contract. |
+| [marlowe-cli/test/test-zero-coupon-bond-immediate-timeout.yaml](https://github.com/input-output-hk/real-world-marlowe/tree/main/archives/marlowe-cli/test/test-zero-coupon-bond-immediate-timeout.yaml) | A zero-coupon bond where a timeout occurs early in the contract. |
+| [marlowe-cli/test/test-zero-coupon-bond-too-late.yaml](https://github.com/input-output-hk/real-world-marlowe/tree/main/archives/marlowe-cli/test/test-zero-coupon-bond-too-late.yaml) | A zero-coupon bond where input fails due to a timeout. |
+| [marlowe-cli/test/test-zero-coupon-bond.yaml](https://github.com/input-output-hk/real-world-marlowe/tree/main/archives/marlowe-cli/test/test-zero-coupon-bond.yaml) | A zero-coupon bond. |
 
 Two test scenarios are provided as Jupyter notebooks:
 
 | File | Test |
 |-----|------|
-| [marlowe-cli/test/min-ada.ipynb](../marlowe-cli/test/min-ada.ipynb) | Execution failure due to insufficient minimum UTxO value. |
-| [marlowe-cli/test/exceed-protocol-parameters.ipynb](../marlowe-cli/test/exceed-protocol-parameters.ipynb) | Execution failure due to exceeding protocol limits. |
+| [marlowe-cli/test/min-ada.ipynb](https://github.com/input-output-hk/real-world-marlowe/tree/main/archives/marlowe-cli/test/min-ada.ipynb) | Execution failure due to insufficient minimum UTxO value. |
+| [marlowe-cli/test/exceed-protocol-parameters.ipynb](https://github.com/input-output-hk/real-world-marlowe/tree/main/archives/marlowe-cli/test/exceed-protocol-parameters.ipynb) | Execution failure due to exceeding protocol limits. |
 
 
 ### Informal Tests
 
-A set of informal tests are provided in the [Marlowe Contract Cookbook](../marlowe-cli/cookbook/):
+A set of informal tests are provided in the [Marlowe Contract Cookbook](https://github.com/input-output-hk/real-world-marlowe/tree/main/archives/marlowe-cli/cookbook/):
 
 | File | Test |
 |-----|------|
-| [marlowe-cli/cookbook/collective-loan-30-70.ipynb](../marlowe-cli/cookbook/collective-loan-30-70.ipynb) | A collective loan involving over 500 transactions. |
-| [marlowe-cli/cookbook/collective-loan.ipynb](../marlowe-cli/cookbook/collective-loan.ipynb) | A collective loan with ad-hoc distribution of role tokens. |
-| [marlowe-cli/cookbook/english-auction.ipynb](../marlowe-cli/cookbook/english-auction.ipynb) | An English Auction involving massive merkleization. |
-| [marlowe-cli/cookbook/guessing-game.ipynb](../marlowe-cli/cookbook/guessing-game.ipynb) | A guessing game involving complex arithmetic. |
-| [marlowe-cli/cookbook/payment-using-djed.ipynb](../marlowe-cli/cookbook/payment-using-djed.ipynb) | Payments using the DJED stablecoin. |
-| [marlowe-cli/cookbook/reference-script.ipynb](../marlowe-cli/cookbook/reference-script.ipynb) | Using CIP-33 reference scripts with Marlowe. |
-| [marlowe-cli/cookbook/revenue-based-loan.ipynb](../marlowe-cli/cookbook/revenue-based-loan.ipynb) | A revenue-based loan. |
-| [marlowe-cli/cookbook/simple-babbage.ipynb](../marlowe-cli/cookbook/simple-babbage.ipynb) | A proof of Marlowe in the Babbage Era. |
-| [marlowe-cli/cookbook/stabilized-collective-loan.ipynb](../marlowe-cli/cookbook/stabilized-collective-loan.ipynb) | A stabilized collective loan that exceeds protocol limits. |
-| [marlowe-cli/cookbook/swap.ipynb](../marlowe-cli/cookbook/swap.ipynb) | A swap contract with automated coin selection. |
-| [marlowe-cli/cookbook/zcb.ipynb](../marlowe-cli/cookbook/zcb.ipynb) | A zero-coupon bond contract with automated coin selection. |
+| [marlowe-cli/cookbook/collective-loan-30-70.ipynb](https://github.com/input-output-hk/real-world-marlowe/tree/main/archives/marlowe-cli/cookbook/collective-loan-30-70.ipynb) | A collective loan involving over 500 transactions. |
+| [marlowe-cli/cookbook/collective-loan.ipynb](https://github.com/input-output-hk/real-world-marlowe/tree/main/archives/marlowe-cli/cookbook/collective-loan.ipynb) | A collective loan with ad-hoc distribution of role tokens. |
+| [marlowe-cli/cookbook/english-auction.ipynb](https://github.com/input-output-hk/real-world-marlowe/tree/main/archives/marlowe-cli/cookbook/english-auction.ipynb) | An English Auction involving massive merkleization. |
+| [marlowe-cli/cookbook/guessing-game.ipynb](https://github.com/input-output-hk/real-world-marlowe/tree/main/archives/marlowe-cli/cookbook/guessing-game.ipynb) | A guessing game involving complex arithmetic. |
+| [marlowe-cli/cookbook/payment-using-djed.ipynb](https://github.com/input-output-hk/real-world-marlowe/tree/main/archives/marlowe-cli/cookbook/payment-using-djed.ipynb) | Payments using the DJED stablecoin. |
+| [marlowe-cli/cookbook/reference-script.ipynb](https://github.com/input-output-hk/real-world-marlowe/tree/main/archives/marlowe-cli/cookbook/reference-script.ipynb) | Using CIP-33 reference scripts with Marlowe. |
+| [marlowe-cli/cookbook/revenue-based-loan.ipynb](https://github.com/input-output-hk/real-world-marlowe/tree/main/archives/marlowe-cli/cookbook/revenue-based-loan.ipynb) | A revenue-based loan. |
+| [marlowe-cli/cookbook/simple-babbage.ipynb](https://github.com/input-output-hk/real-world-marlowe/tree/main/archives/marlowe-cli/cookbook/simple-babbage.ipynb) | A proof of Marlowe in the Babbage Era. |
+| [marlowe-cli/cookbook/stabilized-collective-loan.ipynb](https://github.com/input-output-hk/real-world-marlowe/tree/main/archives/marlowe-cli/cookbook/stabilized-collective-loan.ipynb) | A stabilized collective loan that exceeds protocol limits. |
+| [marlowe-cli/cookbook/swap.ipynb](https://github.com/input-output-hk/real-world-marlowe/tree/main/archives/marlowe-cli/cookbook/swap.ipynb) | A swap contract with automated coin selection. |
+| [marlowe-cli/cookbook/zcb.ipynb](https://github.com/input-output-hk/real-world-marlowe/tree/main/archives/marlowe-cli/cookbook/zcb.ipynb) | A zero-coupon bond contract with automated coin selection. |
 
 
 ## Testing Tools
@@ -499,7 +499,7 @@ Issues 1 and 2 above have been eliminated. Issues 3.1, 3.2, 4, and 7 must be dea
 
 ### Funds Locked or Input Blocked Due to Exceeding Protocol Parameters
 
-Funds in a Marlowe contract on the Cardano blockchain may be forever *locked* (inaccessible) if all possible transactions exceed protocol parameters for script execution. Similarly, certain paths of contract execution will be *blocked* if some (but not all) semantically allowable transactions exceed protocol limits. This behavior is demonstrated on-chain in [marlowe-cli/test/exceed-protocol-parameters.ipynb](../marlowe-cli/test/exceed-protocol-parameters.ipynb).
+Funds in a Marlowe contract on the Cardano blockchain may be forever *locked* (inaccessible) if all possible transactions exceed protocol parameters for script execution. Similarly, certain paths of contract execution will be *blocked* if some (but not all) semantically allowable transactions exceed protocol limits. This behavior is demonstrated on-chain in [marlowe-cli/test/exceed-protocol-parameters.ipynb](https://github.com/input-output-hk/real-world-marlowe/tree/main/archives/marlowe-cli/test/exceed-protocol-parameters.ipynb).
 
 The following protocol parameters affect the viability of semantically-valid Marlowe transactions.
 1. Transaction size (`maxTxSize`)
