@@ -46,7 +46,7 @@ import Cardano.Api
   , serialiseToTextEnvelope
   )
 import Control.Applicative ((<|>))
-import Data.Aeson (FromJSON, ToJSON(..), object, (.!=), (.:!), (.=))
+import Data.Aeson (ToJSON(..), object, (.!=), (.:!), (.=))
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.KeyMap as Aeson.KeyMap
 import Data.Aeson.Types ((.:))
@@ -231,7 +231,7 @@ encodeRoleTokenMetadata = encodeNFTMetadataDetails
 -- | Non empty mint request.
 newtype Mint = Mint { unMint :: Map TokenName (Address, Maybe RoleTokenMetadata) }
   deriving stock (Show, Eq, Ord, Generic)
-  deriving newtype (Binary, Semigroup, Monoid, ToJSON, FromJSON)
+  deriving newtype (Binary, Semigroup, Monoid, ToJSON)
 
 mkMint :: NonEmpty (TokenName, (Address, Maybe RoleTokenMetadata)) -> Mint
 mkMint = Mint . Map.fromList . NonEmpty.toList
@@ -241,7 +241,7 @@ data RoleTokensConfig
   | RoleTokensUsePolicy PolicyId
   | RoleTokensMint Mint
   deriving stock (Show, Eq, Ord, Generic)
-  deriving anyclass (Binary, ToJSON, FromJSON)
+  deriving anyclass (Binary, ToJSON)
 
 data ContractCreated era v = ContractCreated
   { contractId :: ContractId

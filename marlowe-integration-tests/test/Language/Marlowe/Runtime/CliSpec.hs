@@ -52,10 +52,7 @@ spec = describe "Marlowe runtime CLI" do
 
         workspace <- Reader.asks $ workspace . testnet
 
-        let roleTokensConfig :: RoleTokensConfig
-            roleTokensConfig = RoleTokensNone
-
-            transactionMetadata :: TransactionMetadata
+        let transactionMetadata :: TransactionMetadata
             transactionMetadata = mempty
 
             contract :: V1.Contract
@@ -66,7 +63,6 @@ spec = describe "Marlowe runtime CLI" do
 
         contractFilePath <- writeWorkspaceFileJSON workspace "close-contract.json" contract
         transactionMetadataFilePath <- writeWorkspaceFileJSON workspace "transaction-metadata.json" transactionMetadata
-        roleTokensConfigFilePath <- writeWorkspaceFileJSON workspace "role-tokens-config.json" roleTokensConfig
 
         let creationCommand :: MarloweTxCommand Void (CreateError 'V1) (ContractCreated BabbageEra 'V1)
             creationCommand =
@@ -74,7 +70,7 @@ spec = describe "Marlowe runtime CLI" do
                 Nothing
                 MarloweV1
                 addresses
-                roleTokensConfig
+                RoleTokensNone
                 (MarloweTransactionMetadata Nothing transactionMetadata)
                 (Lovelace 2_000_000)
                 contract
@@ -86,7 +82,6 @@ spec = describe "Marlowe runtime CLI" do
                   <> ["--core-file", contractFilePath]
                   <> ["--metadata-file", transactionMetadataFilePath]
                   <> ["--manual-sign", txBodyEnvelopeFilePath]
-                  <> ["--roles-config-file", roleTokensConfigFilePath]
 
             jobClientEffect :: Integration (TxBody BabbageEra)
             jobClientEffect = marloweRuntimeJobClient creationCommand

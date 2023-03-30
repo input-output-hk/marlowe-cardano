@@ -149,18 +149,18 @@ buildCreateConstraintsV1
   -> Contract 'V1 -- ^ The contract being instantiated.
   -> TxConstraintsBuilderM (CreateError 'V1) 'V1 (Datum 'V1, Assets, PolicyId)
 buildCreateConstraintsV1 walletCtx roles metadata minAda contract = do
-  tell . requiresMetadata $ metadata { transactionMetadata = transactionMetadata metadata <> nftsMetadata }
-
   -- Output constraints.
   -- Role tokens minting and distribution.
   policyId <- mintRoleTokens
+
+  tell . requiresMetadata $ metadata { transactionMetadata = nftsMetadata policyId <> transactionMetadata metadata }
 
   -- Marlowe script output.
   (datum, assets) <- sendMarloweOutput policyId
 
   pure (datum, assets, policyId)
   where
-    nftsMetadata = case roles of
+    nftsMetadata (PolicyId policyId) = case roles of
       RoleTokensMint (Map.toList . unMint -> minting) -> do
         let
           tokensMetadata = catMaybes $ minting <&> \case
@@ -172,7 +172,7 @@ buildCreateConstraintsV1 walletCtx roles metadata minAda contract = do
             _ -> Nothing
         case tokensMetadata of
           [] -> mempty
-          metadata' -> TransactionMetadata (Map.singleton 721 (MetadataMap metadata'))
+          metadata' -> TransactionMetadata (Map.singleton 721 (MetadataMap [(MetadataBytes policyId, MetadataMap metadata')]))
       _ -> mempty
 
     liftMaybe err = lift . note (CreateBuildupFailed err)
