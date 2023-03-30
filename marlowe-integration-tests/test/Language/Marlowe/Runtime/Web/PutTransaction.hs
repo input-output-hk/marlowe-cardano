@@ -8,6 +8,7 @@ import Data.Time (getCurrentTime, secondsToNominalDiffTime)
 import Language.Marlowe.Core.V1.Semantics.Types (Input(NormalInput), InputContent(IDeposit))
 import Language.Marlowe.Extended.V1 (ada)
 import Language.Marlowe.Runtime.Integration.Common
+  (Wallet(Wallet, addresses, signingKeys), expectJust, getGenesisWallet, runIntegrationTest, runWebClient)
 import Language.Marlowe.Runtime.Integration.StandardContract (standardContract)
 import Language.Marlowe.Runtime.Plutus.V2.Api (toPlutusAddress)
 import Language.Marlowe.Runtime.Transaction.Api (WalletAddresses(..))
