@@ -62,6 +62,7 @@ executable marlowe-integration-tests
     Language.Marlowe.Runtime.Integration.Common
     Language.Marlowe.Runtime.Integration.StandardContract
     Language.Marlowe.Runtime.Integration.MarloweQuery
+    Language.Marlowe.Runtime.Integration.Create
     Language.Marlowe.Runtime.IntegrationSpec
     Language.Marlowe.Runtime.WebSpec
     Language.Marlowe.Runtime.Web.GetContracts
@@ -89,6 +90,7 @@ executable marlowe-integration-tests
     , marlowe-runtime-web
     , marlowe-runtime-web:server
     , mtl
+    , network-uri
     , plutus-ledger-api
     , servant-client
     , servant-pagination

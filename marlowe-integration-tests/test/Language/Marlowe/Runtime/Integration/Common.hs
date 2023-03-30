@@ -1,53 +1,82 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE RecursiveDo #-}
+
 module Language.Marlowe.Runtime.Integration.Common
   where
 
 import Cardano.Api
-  ( AsType(..)
+  ( AddressAny(AddressShelley)
+  , AsType(..)
   , BabbageEra
   , CardanoEra(..)
   , CtxTx
+  , Key(verificationKeyHash)
+  , NetworkId(Testnet)
+  , NetworkMagic(NetworkMagic)
+  , PaymentCredential(PaymentCredentialByKey)
   , ShelleyWitnessSigningKey(..)
+  , StakeAddressReference(NoStakeAddress)
   , TxBody(..)
   , TxBodyContent(..)
   , TxOut(..)
+  , generateSigningKey
   , getTxId
+  , getVerificationKey
+  , makeShelleyAddress
   , signShelleyTransaction
   )
+import qualified Cardano.Api as C
 import Cardano.Api.Byron (deserialiseFromTextEnvelope)
+import qualified Cardano.Api.Shelley as C
 import Control.Concurrent (threadDelay)
-import Control.Monad (void, (<=<))
+import Control.Monad (guard, void, (<=<))
 import Control.Monad.IO.Class (MonadIO, liftIO)
-import Control.Monad.Reader (ReaderT(..), runReaderT)
+import Control.Monad.Reader (ReaderT(..), ask, runReaderT)
 import qualified Control.Monad.Reader as Reader
 import Control.Monad.Reader.Class (asks)
+import Control.Monad.State (StateT, runStateT, state)
 import Control.Monad.Trans.Class (lift)
 import Data.Aeson (FromJSON(..), Value(..), decodeFileStrict, eitherDecodeStrict)
 import Data.Aeson.Types (parseFail)
 import Data.Bifunctor (first)
 import Data.ByteString (ByteString)
 import Data.ByteString.Base16 (decodeBase16)
+import Data.Foldable (fold)
+import Data.Function (on)
+import Data.Functor (($>))
 import Data.Map (Map)
 import qualified Data.Map as Map
+import Data.Maybe (catMaybes, fromJust)
+import qualified Data.Set as Set
 import Data.String (fromString)
 import qualified Data.Text as T
 import Data.Text.Encoding (encodeUtf8)
 import qualified Data.Text.Encoding as T
 import Data.Time (NominalDiffTime, diffUTCTime, getCurrentTime, secondsToNominalDiffTime)
+import Data.Traversable (for)
 import Data.Word (Word64)
 import GHC.Generics (Generic)
 import Language.Marlowe (ChoiceId(..), Input(..), InputContent(..), Party, Token)
 import qualified Language.Marlowe.Protocol.HeaderSync.Client as HeaderSync
 import qualified Language.Marlowe.Protocol.Sync.Client as MarloweSync
 import Language.Marlowe.Runtime.Cardano.Api
-  (fromCardanoAddressInEra, fromCardanoTxId, fromCardanoTxOutDatum, fromCardanoTxOutValue)
+  ( fromCardanoAddressAny
+  , fromCardanoAddressInEra
+  , fromCardanoTxId
+  , fromCardanoTxOutDatum
+  , fromCardanoTxOutValue
+  , toCardanoAddressAny
+  , toCardanoAddressInEra
+  , toCardanoTxOut
+  )
 import Language.Marlowe.Runtime.ChainSync.Api
   ( Assets(..)
   , BlockHeader(..)
   , BlockHeaderHash(..)
   , BlockNo(..)
+  , Lovelace
   , SlotNo(..)
   , TokenName
   , TxId
@@ -55,6 +84,7 @@ import Language.Marlowe.Runtime.ChainSync.Api
   , TxOutRef(..)
   , fromBech32
   )
+import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Client
   (MarloweT, applyInputs, runMarloweHeaderSyncClient, runMarloweSyncClient, runMarloweT, runMarloweTxClient)
 import qualified Language.Marlowe.Runtime.Client as Client
@@ -73,7 +103,7 @@ import Language.Marlowe.Runtime.Core.Api
 import Language.Marlowe.Runtime.Discovery.Api (ContractHeader(..))
 import Language.Marlowe.Runtime.History.Api (ContractStep, CreateStep(..))
 import Language.Marlowe.Runtime.Transaction.Api
-  (ContractCreated(..), InputsApplied(..), MarloweTxCommand(..), WalletAddresses(WalletAddresses))
+  (ContractCreated(..), InputsApplied(..), MarloweTxCommand(..), WalletAddresses(..))
 import Network.Protocol.Job.Client (liftCommandWait)
 import qualified Plutus.V2.Ledger.Api as PV2
 import Servant.Client (ClientError, ClientM)
@@ -87,10 +117,117 @@ import UnliftIO.Environment (setEnv, unsetEnv)
 
 type Integration = MarloweT (ReaderT MarloweRuntime IO)
 
+-- Important - the TxId is lazily computed and depends on the resulting Tx. So
+-- it should not be used to compute the transaction outputs written.
+type TxBuilder = ReaderT TxId (StateT [Chain.TransactionOutput] Integration)
+
+allocateWallet :: [[(Bool, Lovelace)]] -> TxBuilder Wallet
+allocateWallet balances = do
+  txId <- ask
+  (addresses, signingKeys, collateralUtxos) <- unzip3 <$> for balances \utxos -> do
+    signingKey <- liftIO $ generateSigningKey AsPaymentKey
+    let verificationKey = getVerificationKey signingKey
+    let paymentCredential = PaymentCredentialByKey $ verificationKeyHash verificationKey
+    networkId' <- lift $ lift networkId
+    let address = fromCardanoAddressAny $ AddressShelley $ makeShelleyAddress networkId' paymentCredential NoStakeAddress
+    collateralUtxos <- Set.fromList . catMaybes <$> for utxos \(isCollateral, balance) -> state \outputs ->
+      ( guard isCollateral $> Chain.TxOutRef txId (fromIntegral $ length outputs)
+      , Chain.TransactionOutput address (Assets balance mempty) Nothing Nothing : outputs
+      )
+    pure (address, WitnessPaymentKey signingKey, collateralUtxos)
+  pure Wallet
+    { addresses = WalletAddresses (head addresses) (Set.fromList $ tail addresses) (fold collateralUtxos)
+    , signingKeys
+    }
+
+submitBuilder :: Wallet -> TxBuilder a -> Integration (BlockHeader, a)
+submitBuilder wallet builder = mdo
+  -- Note - the txId is not evaluated yet - we're referring to it lazily.
+  (a, txOuts) <- runStateT (runReaderT builder txId) []
+  utxo <- getUTxO wallet
+  let
+    txBodyContent = TxBodyContent
+      { txIns = (, C.BuildTxWith $ C.KeyWitness C.KeyWitnessForSpending) . fst
+          <$> Map.toList (C.unUTxO utxo)
+      , txInsCollateral = C.TxInsCollateralNone
+      , txInsReference = C.TxInsReferenceNone
+      , txOuts = fromJust . toCardanoTxOut C.MultiAssetInBabbageEra <$> reverse txOuts
+      , txTotalCollateral = C.TxTotalCollateralNone
+      , txReturnCollateral = C.TxReturnCollateralNone
+      , txFee = C.TxFeeExplicit C.TxFeesExplicitInBabbageEra 0
+      , txValidityRange = (C.TxValidityNoLowerBound, C.TxValidityNoUpperBound C.ValidityNoUpperBoundInBabbageEra)
+      , txMetadata = C.TxMetadataNone
+      , txAuxScripts = C.TxAuxScriptsNone
+      , txExtraKeyWits = C.TxExtraKeyWitnessesNone
+      , txProtocolParams = C.BuildTxWith Nothing
+      , txWithdrawals = C.TxWithdrawalsNone
+      , txCertificates = C.TxCertificatesNone
+      , txUpdateProposal = C.TxUpdateProposalNone
+      , txMintValue = C.TxMintNone
+      , txScriptValidity = C.TxScriptValidityNone
+      }
+  txBody <- balanceTx wallet utxo txBodyContent
+  let txId = fromCardanoTxId $ getTxId txBody
+  (, a) <$> submit wallet txBody
+
+balanceTx :: Wallet -> C.UTxO BabbageEra -> TxBodyContent C.BuildTx BabbageEra -> Integration (TxBody BabbageEra)
+balanceTx (Wallet WalletAddresses{..} _) utxo txBodyContent = do
+  start <- queryNode 0 C.QuerySystemStart
+  history <- queryNode 0 $ C.QueryEraHistory C.CardanoModeIsMultiEra
+  protocol <- queryBabbage 0 $ C.QueryInShelleyBasedEra C.ShelleyBasedEraBabbage C.QueryProtocolParameters
+  changeAddr <- expectJust "Could not convert to Cardano address" $ toCardanoAddressInEra C.BabbageEra changeAddress
+  C.BalancedTxBody txBody _ _ <- expectRight "Failed to balance Tx" $ C.makeTransactionBodyAutoBalance
+    C.BabbageEraInCardanoMode
+    start
+    history
+    protocol
+    mempty
+    utxo
+    txBodyContent
+    changeAddr
+    Nothing
+  pure txBody
+
+getUTxO :: Wallet -> Integration (C.UTxO BabbageEra)
+getUTxO (Wallet WalletAddresses{..} _) = queryBabbage 0
+  $ C.QueryInShelleyBasedEra C.ShelleyBasedEraBabbage
+  $ C.QueryUTxO
+  $ C.QueryUTxOByAddress
+  $ Set.insert (fromJust $ toCardanoAddressAny changeAddress)
+  $ Set.map (fromJust . toCardanoAddressAny) extraAddresses
+
+queryBabbage :: Int -> C.QueryInEra C.BabbageEra a -> Integration a
+queryBabbage nodeNum =
+  either (fail . show) pure <=< queryNode nodeNum . C.QueryInEra C.BabbageEraInCardanoMode
+
+queryNode :: Int -> C.QueryInMode C.CardanoMode a -> Integration a
+queryNode nodeNum query = do
+  connectInfo <- nodeConnectInfo nodeNum
+  liftIO $ either (fail . show) pure =<< C.queryNodeLocalState connectInfo Nothing query
+
+nodeConnectInfo :: Int -> Integration (C.LocalNodeConnectInfo C.CardanoMode)
+nodeConnectInfo nodeNum = do
+  LocalTestnet{..} <- testnet
+  let SpoNode{..} = spoNodes !! nodeNum
+  C.LocalNodeConnectInfo (C.CardanoModeParams $ C.EpochSlots 21600) <$> networkId <*> pure socket
+
+networkId :: Integration NetworkId
+networkId = Testnet . NetworkMagic . fromIntegral . testnetMagic <$> testnet
+
 data Wallet = Wallet
   { addresses :: WalletAddresses
   , signingKeys :: [ShelleyWitnessSigningKey]
   }
+
+instance Semigroup Wallet where
+  a <> b = Wallet
+    { addresses = WalletAddresses
+        { changeAddress = changeAddress $ addresses a
+        , extraAddresses = Set.insert (changeAddress (addresses b)) $ on (<>) (extraAddresses . addresses) a b
+        , collateralUtxos = on (<>) (collateralUtxos . addresses) a b
+        }
+    , signingKeys = on (<>) signingKeys a b
+    }
 
 runIntegrationTest :: Integration a -> MarloweRuntime -> IO a
 runIntegrationTest m runtime@MarloweRuntime.MarloweRuntime{protocolConnector} =
@@ -111,6 +248,17 @@ expectRight msg = \case
 
 testnet :: Integration LocalTestnet
 testnet = asks MarloweRuntime.testnet
+
+getStakeCredential :: Int -> Integration C.StakeCredential
+getStakeCredential nodeNum = do
+  LocalTestnet{..} <- testnet
+  let SpoNode{..} = spoNodes !! nodeNum
+  C.StakeCredentialByKey <$> liftIO do
+    mTextEnvelope <- decodeFileStrict stakingRewardVKey
+    textEnvelope <- expectJust "Failed to decode staking verification key" mTextEnvelope
+    stakeKey <- expectRight "Failed to decode text envelope staking vkey"
+      $ deserialiseFromTextEnvelope (AsVerificationKey AsStakeKey) textEnvelope
+    pure $ verificationKeyHash stakeKey
 
 getGenesisWallet :: Int -> Integration Wallet
 getGenesisWallet walletIx = do
