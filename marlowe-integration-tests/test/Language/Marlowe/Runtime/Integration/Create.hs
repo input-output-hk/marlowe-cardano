@@ -63,7 +63,7 @@ import Test.Hspec
 import Test.Integration.Marlowe (MarloweRuntime(..), withLocalMarloweRuntime)
 
 spec :: Spec
-spec = focus $ describe "Create" $ aroundAll setup do
+spec = describe "Create" $ aroundAll setup do
   parallel $ for_ allCreateCases \createCase -> aroundAllWith (runCreateCase createCase) do
     describe (show createCase) do
       case mkSpec createCase of
