@@ -35,9 +35,7 @@ instance Arbitrary MarloweTransactionMetadata where
   shrink = fmap patchMarloweTransactionMetadata . genericShrink
 
 patchMarloweTransactionMetadata :: MarloweTransactionMetadata -> MarloweTransactionMetadata
-patchMarloweTransactionMetadata metadata = metadata
-  { transactionMetadata = encodeMarloweTransactionMetadata metadata
-  }
+patchMarloweTransactionMetadata = decodeMarloweTransactionMetadataLenient . encodeMarloweTransactionMetadata
 
 instance Arbitrary MarloweMetadataTag where
   arbitrary = MarloweMetadataTag <$> arbitrary
