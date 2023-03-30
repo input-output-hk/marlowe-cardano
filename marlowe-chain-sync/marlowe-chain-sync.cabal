@@ -1,6 +1,6 @@
 cabal-version: 3.0
 name: marlowe-chain-sync
-version: 0.0.0.0
+version: 0.0.1
 synopsis:
   Cardano chain sync system for thee Marlowe Runtime
 description:

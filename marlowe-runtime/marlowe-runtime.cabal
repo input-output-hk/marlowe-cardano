@@ -1,6 +1,6 @@
 cabal-version: 3.0
 name: marlowe-runtime
-version: 0.0.0.0
+version: 0.0.1
 synopsis:
   Runtime system for running Marlowe financial contracts on the Cardano Computation Layer
 description:

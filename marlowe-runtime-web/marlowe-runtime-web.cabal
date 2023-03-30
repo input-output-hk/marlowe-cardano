@@ -1,6 +1,6 @@
 cabal-version: 3.0
 name: marlowe-runtime-web
-version: 0.0.0.0
+version: 0.0.1
 synopsis:
   Web server for Marlowe Runtime on Cardano.
 bug-reports: https://github.com/input-output-hk/marlowe-cardano/issues
