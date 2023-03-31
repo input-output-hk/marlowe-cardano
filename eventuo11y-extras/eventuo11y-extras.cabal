@@ -51,18 +51,18 @@ library
     Observe.Event.Component
   build-depends:
       base >= 4.9 && < 5
-    , aeson
-    , async-components
-    , containers
-    , directory
+    , aeson >= 2 && < 3
+    , async-components ==0.1.0.0
+    , containers >= 0.6.5 && < 0.7
+    , directory >= 1.3 && < 1.4
     , eventuo11y ^>= { 0.9, 0.10 }
-    , filepath
-    , fsnotify
+    , filepath >= 1.4 && < 1.5
+    , fsnotify >= 0.4.1 && < 0.5
     , general-allocate ^>= { 0.2 }
-    , lifted-base
-    , monad-control
-    , some
-    , stm
-    , text
-    , time
-    , transformers-base
+    , lifted-base >= 0.2.3 && < 0.3
+    , monad-control >= 1 && < 1.1
+    , some >= 1 && < 2
+    , stm >= 2.5 && < 2.6
+    , text >= 1.2.4 && < 2
+    , time >= 1.9 && < 2
+    , transformers-base >= 0.4 && < 0.5
