@@ -174,7 +174,7 @@ library indexer
     , marlowe-protocols ==0.1.0.0
     , marlowe-runtime ==0.0.1
     , marlowe-runtime:history-api ==0.0.1
-    , mtl >= 2.2 && < 3
+    , mtl
     , nonempty-containers >= 0.3.4 && < 0.4
     , plutus-ledger-api ==1.0.0.1
     , stm >= 2.5 && < 2.6

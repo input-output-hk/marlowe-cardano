@@ -146,32 +146,32 @@ library
     Spec.Marlowe.Service.Serialization
     Spec.Marlowe.Service.Types
   build-depends:
-      base >=4.9 && <5
-    , aeson
-    , bytestring
-    , cardano-api
-    , containers
-    , data-default
-    , directory
-    , filepath
-    , hint
-    , lens
-    , marlowe-cardano
-    , marlowe-spec-test
-    , mtl
-    , plutus-ledger
-    , plutus-ledger-api
-    , plutus-script-utils
-    , plutus-tx
-    , QuickCheck
-    , quickcheck-instances
+    , base >=4.9 && <5
+    , aeson >= 2 && < 3
+    , bytestring >= 0.10.12 && < 0.12
+    , cardano-api ==1.35.4
+    , containers >= 0.6.5 && < 0.7
+    , data-default >= 0.7.1 && < 0.8
+    , directory >= 1.3 && < 1.4
+    , filepath >= 1.4 && < 1.5
+    , hint >= 0.1 && < 0.2
+    , lens >= 5.2 && < 6
+    , marlowe-cardano ==0.1.0.3
+    , marlowe-spec-test ==0.1.0.0
+    , mtl >= 2.2 && < 3
+    , plutus-ledger ^>= 1.2
+    , plutus-ledger-api ==1.0.0.1
+    , plutus-script-utils ==1.2.0.0
+    , plutus-tx ==1.0.0.0
+    , QuickCheck >= 2.14 && < 3
+    , quickcheck-instances >= 0.3.29 && < 0.4
     , sbv >=8.4
-    , serialise
-    , tasty
-    , tasty-hunit
-    , tasty-quickcheck
-    , text
-    , these
+    , serialise >= 0.2.6 && < 0.3
+    , tasty >= 1.4.2 && < 1.5
+    , tasty-hunit >= 0.10 && < 0.11
+    , tasty-quickcheck >= 0.10 && < 0.11
+    , text >= 1.2.4 && < 2
+    , these >= 1.1 && < 2
 
 
 test-suite marlowe-test
