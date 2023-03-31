@@ -58,7 +58,7 @@ Tag the latest commit on `main` with a pre-release tag. A pre-release tag has
 the following format:
 
 ```
-<component>@v<major>.<minor>.<patch>-prerelease<n>
+<component>@v<major>.<minor>.<patch>-rc<n>
 ```
 
 where `<component>` is the name of the component being released. Currently, the
