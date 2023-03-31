@@ -73,7 +73,7 @@ library
     , async-components ==0.1.0.0
     , base16 >= 0.3.2 && < 0.4
     , binary >= 0.8.8 && < 0.9
-    , bytestring >= 0.10.12 && < 0.11
+    , bytestring >= 0.10.12 && < 0.12
     , containers >= 0.6.5 && < 0.7
     , eventuo11y ^>= { 0.9, 0.10 }
     , eventuo11y-extras ==0.1.0.0

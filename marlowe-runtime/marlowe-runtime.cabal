@@ -76,7 +76,7 @@ library
     , base16 >= 0.3.2 && < 0.4
     , binary >= 0.8.8 && < 0.9
     , cardano-api ==1.35.4
-    , bytestring >= 0.10.12 && < 0.11
+    , bytestring >= 0.10.12 && < 0.12
     , containers >= 0.6.5 && < 0.7
     , marlowe-cardano ==0.1.0.3
     , marlowe-chain-sync ==0.0.1
@@ -99,7 +99,7 @@ library gen
   build-depends:
     , QuickCheck >= 2.14 && < 3
     , base >= 4.9 && < 5
-    , bytestring >= 0.10.12 && < 0.11
+    , bytestring >= 0.10.12 && < 0.12
     , cardano-api ==1.35.4
     , cardano-api:gen ==1.35.4
     , hedgehog-quickcheck >= 0.1 && < 0.2
@@ -161,7 +161,7 @@ library indexer
     , async-components ==0.1.0.0
     , base >= 4.9 && < 5
     , binary >= 0.8.8 && < 0.9
-    , bytestring >= 0.10.12 && < 0.11
+    , bytestring >= 0.10.12 && < 0.12
     , cardano-api ==1.35.4
     , containers >= 0.6.5 && < 0.7
     , eventuo11y ^>= { 0.9, 0.10 }
@@ -197,7 +197,7 @@ library sync-api
     , base >= 4.9 && < 5
     , binary >= 0.8.8 && < 0.9
     , containers >= 0.6.5 && < 0.7
-    , lifted-async >= 0.10 && < 0.11
+    , lifted-async >= 0.10 && < 0.12
     , marlowe-chain-sync ==0.0.1
     , marlowe-protocols ==0.1.0.0
     , marlowe-runtime ==0.0.1
@@ -236,7 +236,7 @@ library sync
     , async-components ==0.1.0.0
     , base >= 4.9 && < 5
     , binary >= 0.8.8 && < 0.9
-    , bytestring >= 0.10.12 && < 0.11
+    , bytestring >= 0.10.12 && < 0.12
     , containers >= 0.6.5 && < 0.7
     , eventuo11y ^>= { 0.9, 0.10 }
     , eventuo11y-extras ==0.1.0.0
@@ -287,7 +287,7 @@ library tx-api
     , aeson >= 2 && < 3
     , base >= 4.9 && < 5
     , binary >= 0.8.8 && < 0.9
-    , bytestring >= 0.10.12 && < 0.11
+    , bytestring >= 0.10.12 && < 0.12
     , cardano-api ==1.35.4
     , containers >= 0.6.5 && < 0.7
     , http-media >= 0.8 && < 0.9
@@ -369,7 +369,7 @@ library proxy
   build-depends:
     , async-components ==0.1.0.0
     , base >= 4.9 && < 5
-    , exceptions >= 0.10 && < 0.11
+    , exceptions >= 0.10 && < 0.12
     , general-allocate ^>= { 0.2 }
     , marlowe-protocols ==0.1.0.0
     , marlowe-runtime:discovery-api ==0.0.1
@@ -515,7 +515,7 @@ executable marlowe-proxy
     , aeson-pretty
     , async-components ==0.1.0.0
     , containers >= 0.6.5 && < 0.7
-    , bytestring >= 0.10.12 && < 0.11
+    , bytestring >= 0.10.12 && < 0.12
     , eventuo11y ^>= { 0.9, 0.10 }
     , eventuo11y-extras ==0.1.0.0
     , marlowe-protocols ==0.1.0.0
@@ -549,7 +549,7 @@ test-suite marlowe-runtime-test
   build-depends:
     , base >= 4.9 && < 5
     , aeson >= 2 && < 3
-    , bytestring >= 0.10.12 && < 0.11
+    , bytestring >= 0.10.12 && < 0.12
     , cardano-api ==1.35.4
     , cardano-api:gen ==1.35.4
     , cardano-slotting
