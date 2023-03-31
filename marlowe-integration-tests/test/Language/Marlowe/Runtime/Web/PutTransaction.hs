@@ -20,6 +20,7 @@ import Language.Marlowe.Runtime.Web.Server.DTO (ToDTO(toDTO))
 import Test.Hspec (Spec, describe, it)
 import Test.Integration.Marlowe.Local (withLocalMarloweRuntime)
 
+
 spec :: Spec
 spec = describe "PUT /contracts/{contractId}/transactions/{transaction}" do
   it "returns the transaction header" $ withLocalMarloweRuntime $ runIntegrationTest do
