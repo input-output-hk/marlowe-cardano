@@ -97,7 +97,7 @@ submitContract Wallet{..} Web.CreateTxBody{contractId, txBody}= do
   signedCreateTx <- liftIO $ signShelleyTransaction' txBody signingKeys
   putContract contractId signedCreateTx
   Web.ContractState{block} <- waitUntilConfirmed (\Web.ContractState{status} -> status) $ getContract contractId
-  liftIO $ expectJust "Expected a block header" block
+  liftIO $ expectJust "Expected block header" block
 
 submitTransaction
   :: Wallet
