@@ -9,13 +9,14 @@
 module Language.Marlowe.Runtime.Web.Server.REST.Withdrawals
   where
 
-import Cardano.Api
-  (AsType(..), BabbageEra, TxBody, deserialiseFromTextEnvelope, getTxBody, getTxId, makeSignedTransaction)
+import Cardano.Api (BabbageEra, TxBody, getTxBody, getTxId, makeSignedTransaction)
+import qualified Cardano.Api as Cardano
 import qualified Cardano.Api.SerialiseTextEnvelope as Cardano
+import Cardano.Ledger.Alonzo.TxWitness
 import Control.Monad (unless)
 import Control.Monad.IO.Class (liftIO)
 import Data.Aeson (Value(..))
-import Data.Foldable (traverse_)
+import Data.Foldable (for_, traverse_)
 import Data.Maybe (fromMaybe)
 import qualified Data.Set as Set
 import Language.Marlowe.Protocol.Query.Types (Page(..), WithdrawalFilter(..))
@@ -30,6 +31,7 @@ import Language.Marlowe.Runtime.Web.Server.REST.ApiError
 import qualified Language.Marlowe.Runtime.Web.Server.REST.ApiError as ApiError
 import qualified Language.Marlowe.Runtime.Web.Server.REST.Transactions as Transactions
 import Language.Marlowe.Runtime.Web.Server.TxClient (TempTx(..), TempTxStatus(..), TxClientSelector, Withdrawn(..))
+import Language.Marlowe.Runtime.Web.Server.Util
 import Observe.Event.Backend (Event)
 import Observe.Event.DSL (FieldSpec(..), SelectorField(..), SelectorSpec(..))
 import Observe.Event.Explicit
@@ -203,10 +205,23 @@ put eb contractId body = withEvent (hoistEventBackend liftIO eb) Put \ev -> do
   loadWithdrawal contractId' >>= \case
     Nothing -> throwError $ notFound' "Withdrawal not found"
     Just (Left (TempTx _ Unsigned (Withdrawn txBody))) -> do
-      textEnvelope <- fromDTOThrow (badRequest' "Invalid body value") body
-      addField ev $ Body textEnvelope
-      tx <- either (const $ throwError $ badRequest' "Invalid body text envelope content") pure $ deserialiseFromTextEnvelope (AsTx AsBabbage) textEnvelope
-      unless (getTxBody tx == txBody) $ throwError (badRequest' "Provided transaction body differs from the original one")
+      (req :: Maybe (Either (Cardano.Tx BabbageEra) (ShelleyTxWitness BabbageEra))) <- case teType body of
+        "Tx BabbageEra" -> pure $ Left <$> fromDTO body
+        "ShelleyTxWitness BabbageEra" -> pure $ Right <$> fromDTO body
+        _ -> throwError $ badRequest' "Unknown envelope type - allowed types are: \"Tx BabbageEra\", \"ShelleyTxWitness BabbageEra\""
+
+      for_ (fromDTO body :: Maybe Cardano.TextEnvelope) \te ->
+        addField ev $ Body te
+
+      tx <- case req of
+        Nothing -> throwError $ badRequest' "Invalid text envelope cbor value"
+        Just (Left tx) -> do
+          unless (getTxBody tx == txBody) $ throwError (badRequest' "Provided transaction body differs from the original one")
+          pure tx
+        Just (Right (ShelleyTxWitness (TxWitness wtKeys _ _ _ _))) -> do
+          case makeSignedTxWithWitnessKeys txBody wtKeys of
+            Just tx -> pure tx
+            Nothing -> throwError $ badRequest' "Invalid witness keys"
       submitWithdrawal contractId' (narrowEventBackend (injectSelector RunTx) $ setAncestorEventBackend (reference ev) eb) tx >>= \case
         Nothing -> pure NoContent
         Just err -> do
