@@ -46,7 +46,7 @@ spec = describe "PUT /contracts/{contractId}/transactions/{transaction}" do
         Web.PostContractsRequest
           { metadata = mempty
           , version = Web.V1
-          , roles = Just $ Web.Mint $ Map.singleton "PartyA" $ RoleTokenSimple partyAWebChangeAddress
+          , roles = Just $ Web.Mint $ Map.singleton "Party A" $ RoleTokenSimple partyAWebChangeAddress
           , contract = contract
           , minUTxODeposit = 2_000_000
           , tags = mempty
