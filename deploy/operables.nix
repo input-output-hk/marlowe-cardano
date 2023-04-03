@@ -162,8 +162,11 @@ in
       BYRON_GENESIS_CONFIG="$NODE_CONFIG_DIR/$(jq -r .ByronGenesisFile "$NODE_CONFIG")"
       SHELLEY_GENESIS_CONFIG="$NODE_CONFIG_DIR/$(jq -r .ShelleyGenesisFile "$NODE_CONFIG")"
       BYRON_GENESIS_HASH=$(jq -r '.ByronGenesisHash' "$NODE_CONFIG")
-      CARDANO_TESTNET_MAGIC=$(jq -r '.networkMagic' "$SHELLEY_GENESIS_CONFIG");
-      export CARDANO_TESTNET_MAGIC
+      if [[ $(jq -r .networkId "$SHELLEY_GENESIS_CONFIG") != "Mainnet" ]]
+      then
+        CARDANO_TESTNET_MAGIC=$(jq -r '.networkMagic' "$SHELLEY_GENESIS_CONFIG");
+        export CARDANO_TESTNET_MAGIC
+      fi
 
       ${wait-for-socket}/bin/wait-for-socket "$CARDANO_NODE_SOCKET_PATH"
 
@@ -227,8 +230,11 @@ in
 
       NODE_CONFIG_DIR=$(dirname "$NODE_CONFIG")
       SHELLEY_GENESIS_CONFIG="$NODE_CONFIG_DIR/$(jq -r .ShelleyGenesisFile "$NODE_CONFIG")"
-      CARDANO_TESTNET_MAGIC=$(jq -r '.networkMagic' "$SHELLEY_GENESIS_CONFIG");
-      export CARDANO_TESTNET_MAGIC
+      if [[ $(jq -r .networkId "$SHELLEY_GENESIS_CONFIG") != "Mainnet" ]]
+      then
+        CARDANO_TESTNET_MAGIC=$(jq -r '.networkMagic' "$SHELLEY_GENESIS_CONFIG");
+        export CARDANO_TESTNET_MAGIC
+      fi
 
       ${wait-for-socket}/bin/wait-for-socket "$CARDANO_NODE_SOCKET_PATH"
 
