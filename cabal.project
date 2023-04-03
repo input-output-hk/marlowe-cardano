@@ -11,10 +11,6 @@ repository cardano-haskell-packages
 
 -- run `nix flake lock --update-input hackage` after updating the hackage index-state.
 -- run `nix flake lock --update-input CHaP` after updating the cardano-haskell-packages index-state.
--- Things to check when updating hackage index-state:
---  * If https://github.com/hedgehogqa/haskell-hedgehog/pull/478 is in a hackage release, the allow-newer for hedgehog:resourcet can be removed
---  * If https://github.com/haskell-servant/servant/pull/1632 is in a hackage release, the allow-newer for servant-server:resourcet can be removed
---  * If https://github.com/erikd/vector-algorithms/pull/43 is in a hackage release, the allow-newer for vector-algorithms:primitive can be removed
 -- We duplicate the hackage index-state first for haskell.nix, even though cabal ignores it.
 -- This must always match the hackage index-state on the next line.
 -- See https://github.com/input-output-hk/haskell.nix/issues/1869#issuecomment-1449272480
@@ -22,12 +18,6 @@ index-state: 2023-03-05T00:00:00Z
 index-state:
   , hackage.haskell.org      2023-03-05T00:00:00Z
   , cardano-haskell-packages 2023-04-03T17:08:55Z
-
-allow-newer: hedgehog:resourcet,
-             servant-server:resourcet,
-             vector-algorithms:primitive,
-             ekg:aeson,
-             ekg-json:aeson
 
 -- with-compiler: ghc-8.10.7
 

@@ -180,14 +180,7 @@ let
       marloweCore = develShell { buildInputs = marloweCoreBuildInputs; name = "core"; packages = cmps: [ cmps.marlowe ]; };
     };
 in
-(defaultShell // {
+defaultShell // {
   marlowe-cli = develShells.marloweCli;
   marlowe-core = develShells.marloweCore;
-}).overrideAttrs (attrs: attrs // {
-  # The shell should never depend on any of our Haskell packages, which can
-  # sometimes happen by accident. we only specify Marlowe because it is the
-  # most downstream package.
-  disallowedRequisites = [
-    haskell.packages.marlowe.components.library
-  ];
-})
+}
