@@ -82,9 +82,12 @@ library
   exposed-modules:
     Language.Marlowe
     Language.Marlowe.Analysis.FSSemantics
-    Language.Marlowe.Analysis.Safety
+    Language.Marlowe.Analysis.Safety.Ledger
+    Language.Marlowe.Analysis.Safety.Transaction
+    Language.Marlowe.Analysis.Safety.Types
     Language.Marlowe.Client
     Language.Marlowe.Client.History
+    Language.Marlowe.Core.V1.Merkle
     Language.Marlowe.Core.V1.Plate
     Language.Marlowe.Core.V1.Semantics
     Language.Marlowe.Core.V1.Semantics.Types

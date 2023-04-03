@@ -5,24 +5,20 @@
 
 
 module Language.Marlowe.Core.V1.Plate
-  ( Continuations
-  , Extract(..)
+  ( Extract(..)
   , MarlowePlate(..)
   , extractAllWithContinuations
   ) where
 
 
 import Data.Generics.Multiplate (Multiplate(..), foldFor, mChildren, preorderFold, purePlate)
+import Language.Marlowe.Core.V1.Merkle (Continuations)
 import Language.Marlowe.Core.V1.Semantics.Types
-import Plutus.V1.Ledger.Api (DatumHash, TokenName)
+import Plutus.V1.Ledger.Api (TokenName)
 
 import qualified Data.Functor.Constant as F (Constant(..))
-import qualified Data.Map.Strict as M (Map, foldr)
+import qualified Data.Map.Strict as M (foldr)
 import qualified Data.Set as S (Set, empty, fromList, singleton, union)
-
-
--- | Hasked continuations of a Marlowe contract.
-type Continuations = M.Map DatumHash Contract
 
 
 -- | A mutltiplate for a Marlowe contract.

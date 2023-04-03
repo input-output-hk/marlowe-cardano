@@ -6,7 +6,7 @@
 -- Stability   :  Experimental
 -- Portability :  Portable
 --
--- | Safety analysis for Marlowe contracts.
+-- | Safety analysis of ledger rules for Marlowe contracts.
 --
 -----------------------------------------------------------------------------
 
@@ -16,11 +16,9 @@
 {-# LANGUAGE TupleSections #-}
 
 
-module Language.Marlowe.Analysis.Safety
-  ( -- * Types
-    SafetyError(..)
-    -- * Checks for Contracts
-  , checkMaximumValueBound
+module Language.Marlowe.Analysis.Safety.Ledger
+  ( -- * Checks for Contracts
+    checkMaximumValueBound
   , checkRoleNames
   , checkSafety
   , checkTokens
@@ -44,7 +42,9 @@ module Language.Marlowe.Analysis.Safety
 import Data.Foldable (maximumBy, toList)
 import Data.Function (on)
 import Data.List (nub)
-import Language.Marlowe.Core.V1.Plate (Continuations, Extract, extractAllWithContinuations)
+import Language.Marlowe.Analysis.Safety.Types (SafetyError(..), SafetyReport(..))
+import Language.Marlowe.Core.V1.Merkle (Continuations)
+import Language.Marlowe.Core.V1.Plate (Extract, extractAllWithContinuations)
 import Language.Marlowe.Core.V1.Semantics (MarloweData(..), MarloweParams(..))
 import Language.Marlowe.Core.V1.Semantics.Types
   (Action(..), Bound(..), Case(..), Contract, InputContent(..), State(..), Token(..))
@@ -68,35 +68,6 @@ import qualified Plutus.V1.Ledger.Value as V (singleton)
 import qualified Plutus.V2.Ledger.Api as P (Address(..), Value)
 import qualified PlutusTx.AssocMap as AM
 import qualified PlutusTx.Prelude as P
-
-
--- | Information on the safety of a Marlowe contract and state.
-data SafetyReport =
-  SafetyReport
-  {
-    safetyErrors :: [SafetyError]  -- ^ Safety-related errors in the contract.
-  , boundOnMinimumUtxo :: Int  -- ^ A bound on the minimum-UTxO value, over all execution paths.
-  , boundOnDatumSize :: Int  -- ^ A bound (in bytes) on the size of the datum, over all execution paths.
-  , boundOnRedeemerSize :: Int  -- ^ A bound (in bytes) on the size of the redeemer, over all execution paths.
-  }
-    deriving (Eq, Ord, Show)
-
-
--- | An unsafe aspect of a Marlowe contract.
-data SafetyError =
-    -- | Roles are present but there is no roles currency.
-    MissingRolesCurrency
-    -- | A role name is longer than the 32 bytes allowed by the ledger.
-  | RoleNameTooLong TokenName
-    -- | The currency symbol for a native asset is not 28 bytes long.
-  | InvalidCurrencySymbol CurrencySymbol
-    -- | A token name is longer than the 32 bytes allowed by the ledger.
-  | TokenNameTooLong TokenName
-    -- | A token name is associated with the ada symbol.
-  | InvalidToken Token
-    -- | Too many tokens might be stored at some point in the contract.
-  | MaximumValueMayExceedProtocol Int Int
-    deriving (Eq, Ord, Show)
 
 
 -- | Check the safety of a Marlowe contract and state.
@@ -163,7 +134,7 @@ checkMaximumValueBound maxValueSize contract continuations =
   in
     if actual <= maxValueSize
       then mempty
-      else pure $ MaximumValueMayExceedProtocol actual maxValueSize
+      else pure $ MaximumValueMayExceedProtocol actual
 
 
 -- | Compute a bound on the value size for a contract.
