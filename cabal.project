@@ -21,7 +21,7 @@ repository cardano-haskell-packages
 index-state: 2023-03-05T00:00:00Z
 index-state:
   , hackage.haskell.org      2023-03-05T00:00:00Z
-  , cardano-haskell-packages 2023-04-03T13:30:28Z
+  , cardano-haskell-packages 2023-04-03T17:08:55Z
 
 allow-newer: hedgehog:resourcet,
              servant-server:resourcet,
