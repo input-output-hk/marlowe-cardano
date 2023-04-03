@@ -51,12 +51,12 @@ library
     Control.Concurrent.Component.Probes
   build-depends:
       base >= 4.9 && < 5
-    , lifted-async
-    , lifted-base
-    , monad-control
-    , stm
-    , transformers-base
-    , servant
-    , servant-server
-    , servant-client
-    , warp
+    , lifted-async >= 0.10 && < 0.11
+    , lifted-base >= 0.2.3 && < 0.3
+    , monad-control >= 1 && < 1.1
+    , servant >= 0.19 && < 0.20
+    , servant-client >= 0.19 && < 0.20
+    , servant-server >= 0.19 && < 0.20
+    , stm >= 2.5 && < 2.6
+    , transformers-base >= 0.4 && < 0.5
+    , warp >= 3.3 && < 4

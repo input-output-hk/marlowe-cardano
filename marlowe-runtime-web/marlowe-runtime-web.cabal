@@ -59,23 +59,23 @@ library
     Language.Marlowe.Runtime.Web.Types
     Language.Marlowe.Runtime.Web.Orphans
   build-depends:
-      base >= 4.9 && < 5
-    , aeson
-    , base16
-    , bytestring
-    , containers
-    , lens
-    , marlowe-cardano
-    , mtl
-    , network-uri
-    , openapi3
-    , parsec
-    , servant
-    , servant-client
-    , servant-pagination
-    , servant-server
-    , text
-    , time
+    , base >= 4.9 && < 5
+    , aeson >= 2 && < 3
+    , base16 >= 0.3.2 && < 0.4
+    , bytestring >= 0.10.12 && < 0.12
+    , containers >= 0.6.5 && < 0.7
+    , lens >= 5.2 && < 6
+    , marlowe-cardano ==0.1.0.3
+    , mtl >= 2.2 && < 3
+    , network-uri >= 2.6 && < 3
+    , openapi3 >= 3.2 && < 4
+    , parsec >= 3.1.14 && < 3.2
+    , servant >= 0.19 && < 0.20
+    , servant-client >= 0.19 && < 0.20
+    , servant-pagination >= 2.5 && < 3
+    , servant-server >= 0.19 && < 0.20
+    , text >= 1.2.4 && < 2
+    , time >= 1.9 && < 2
 
 library server
   import: lang
@@ -96,46 +96,46 @@ library server
     Language.Marlowe.Runtime.Web.Server.SyncClient
     Language.Marlowe.Runtime.Web.Server.TxClient
   build-depends:
-      base >= 4.9 && < 5
-    , aeson
-    , async
-    , async-components
-    , cardano-api
-    , containers
-    , errors
+    , base >= 4.9 && < 5
+    , aeson >= 2 && < 3
+    , async >= 2.2 && < 3
+    , async-components ==0.1.0.0
+    , cardano-api ==1.35.4
+    , containers >= 0.6.5 && < 0.7
+    , errors >= 2.3 && < 3
     , eventuo11y ^>= { 0.9, 0.10 }
     , eventuo11y-dsl ^>= { 0.2 }
     , eventuo11y-json ^>= { 0.3 }
     , eventuo11y-batteries ^>= { 0.4 }
-    , exceptions
+    , exceptions >= 0.10 && < 0.12
     , general-allocate ^>= { 0.2 }
-    , http-media
-    , lens
-    , marlowe-cardano
-    , marlowe-protocols
-    , marlowe-runtime-web
-    , marlowe-runtime
-    , marlowe-runtime:discovery-api
-    , marlowe-runtime:proxy-api
-    , marlowe-runtime:sync-api
-    , marlowe-runtime:tx-api
-    , marlowe-chain-sync
-    , monad-control
-    , mtl
-    , openapi3
-    , servant
-    , servant-server
-    , servant-openapi3
-    , servant-pagination
-    , stm
-    , stm-delay
-    , text
-    , time
-    , transformers
-    , transformers-base
+    , http-media >= 0.8 && < 0.9
+    , lens >= 5.2 && < 6
+    , marlowe-cardano ==0.1.0.3
+    , marlowe-protocols ==0.1.0.0
+    , marlowe-runtime-web ==0.0.1
+    , marlowe-runtime ==0.0.1
+    , marlowe-runtime:discovery-api ==0.0.1
+    , marlowe-runtime:proxy-api ==0.0.1
+    , marlowe-runtime:sync-api ==0.0.1
+    , marlowe-runtime:tx-api ==0.0.1
+    , marlowe-chain-sync ==0.0.1
+    , monad-control >= 1 && < 1.1
+    , mtl >= 2.2 && < 3
+    , openapi3 >= 3.2 && < 4
+    , servant >= 0.19 && < 0.20
+    , servant-server >= 0.19 && < 0.20
+    , servant-openapi3 >= 2.0 && < 2.1
+    , servant-pagination >= 2.5 && < 3
+    , stm >= 2.5 && < 2.6
+    , stm-delay >= 0.1.1 && < 0.2
+    , text >= 1.2.4 && < 2
+    , time >= 1.9 && < 2
+    , transformers >= 0.5.6 && < 0.6
+    , transformers-base >= 0.4 && < 0.5
     , unliftio-core ^>= { 0.2 }
-    , wai
-    , wai-cors
+    , wai >= 3.2 && < 4
+    , wai-cors >= 0.2 && < 0.3
 
 executable marlowe-web-server
   import: lang
@@ -147,13 +147,13 @@ executable marlowe-web-server
   autogen-modules:
     Paths_marlowe_runtime_web
   build-depends:
-      base >= 4.9 && < 5
-    , async-components
+    , base >= 4.9 && < 5
+    , async-components ==0.1.0.0
     , eventuo11y-json ^>= { 0.3 }
     , marlowe-client
     , marlowe-runtime-web:server
     , marlowe-runtime:config
-    , mtl
+    , mtl >= 2.2 && < 3
     , network
     , optparse-applicative
     , warp
@@ -167,18 +167,18 @@ test-suite marlowe-runtime-web-test
   other-modules:
     Paths_marlowe_runtime_web
   build-depends:
-      base >= 4.9 && < 5
+    , base >= 4.9 && < 5
     , QuickCheck
-    , aeson
-    , bytestring
+    , aeson >= 2 && < 3
+    , bytestring >= 0.10.12 && < 0.12
     , hspec
-    , marlowe-cardano
+    , marlowe-cardano ==0.1.0.3
     , marlowe-runtime-web
     , marlowe-test
     , network-arbitrary
-    , openapi3
+    , openapi3 >= 3.2 && < 4
     , quickcheck-instances
     , regex-posix
     , servant-openapi3
-    , text
+    , text >= 1.2.4 && < 2
   ghc-options: -threaded

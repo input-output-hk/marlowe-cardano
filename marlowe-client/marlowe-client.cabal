@@ -51,23 +51,23 @@ library
     Control.Monad.Trans.Marlowe.Class
     Language.Marlowe.Runtime.Client
   build-depends:
-      base >= 4.9 && < 5
-    , cardano-api
-    , exceptions
+    , base >= 4.9 && < 5
+    , cardano-api ==1.35.4
+    , exceptions >= 0.10 && < 0.11
     , general-allocate ^>= { 0.2 }
-    , marlowe-protocols
-    , marlowe-chain-sync
-    , marlowe-runtime
-    , marlowe-runtime:discovery-api
-    , marlowe-runtime:history-api
-    , marlowe-runtime:sync-api
-    , marlowe-runtime:tx-api
-    , marlowe-runtime:proxy-api
-    , mtl
-    , monad-control
-    , network
-    , resourcet
-    , time
-    , transformers
-    , transformers-base
-    , unliftio
+    , marlowe-chain-sync ==0.0.1
+    , marlowe-protocols ==0.1.0.0
+    , marlowe-runtime ==0.0.1
+    , marlowe-runtime:discovery-api ==0.0.1
+    , marlowe-runtime:history-api ==0.0.1
+    , marlowe-runtime:proxy-api ==0.0.1
+    , marlowe-runtime:sync-api ==0.0.1
+    , marlowe-runtime:tx-api ==0.0.1
+    , monad-control >= 1 && < 1.1
+    , mtl >= 2.2 && < 3
+    , network >= 3.1 && < 4
+    , resourcet >= 1.3 && < 2
+    , time >= 1.9 && < 2
+    , transformers >= 0.5.6 && < 0.6
+    , transformers-base >= 0.4 && < 0.5
+    , unliftio >= 0.2.1 && < 0.3
