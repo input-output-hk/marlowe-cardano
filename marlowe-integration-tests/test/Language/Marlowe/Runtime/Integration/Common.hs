@@ -636,10 +636,10 @@ prepareCliArgs args = do
   pure $ ["--marlowe-runtime-port", show proxyPort] <> args
 
 execMarlowe :: [String] -> Integration String
-execMarlowe = exec "marlowe" <=< prepareCliArgs
+execMarlowe = exec "marlowe-runtime-cli" <=< prepareCliArgs
 
 execMarlowe_ :: [String] -> Integration ()
 execMarlowe_ = void . execMarlowe
 
 execMarlowe' :: [String] -> Integration (ExitCode, String, String)
-execMarlowe' = exec' "marlowe" <=< prepareCliArgs
+execMarlowe' = exec' "marlowe-runtime-cli" <=< prepareCliArgs

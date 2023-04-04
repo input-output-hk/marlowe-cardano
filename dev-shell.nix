@@ -15,7 +15,7 @@ let
     mkdir -p "''${XDG_RUNTIME_DIR}"
   '';
 
-  marlowe-runtime-cli = mkCabalExeScript "marlowe" "marlowe-runtime-cli";
+  marlowe-runtime-cli = mkCabalExeScript "marlowe-runtime-cli" "marlowe-runtime-cli";
 
   # For Sphinx, and ad-hoc usage
   sphinxTools = python3.withPackages (ps: [

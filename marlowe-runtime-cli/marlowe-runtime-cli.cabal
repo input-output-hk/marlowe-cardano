@@ -47,7 +47,7 @@ common lang
     -Wincomplete-uni-patterns -Wincomplete-record-updates
     -Wredundant-constraints -Widentities
 
-executable marlowe
+executable marlowe-runtime-cli
   import: lang
   hs-source-dirs: app
   main-is: Main.hs

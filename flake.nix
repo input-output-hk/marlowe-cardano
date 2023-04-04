@@ -132,9 +132,9 @@
             program = "${packages.marlowe-web-server}/bin/marlowe-web-server";
           };
 
-          marlowe = {
+          marlowe-runtime-cli = {
             type = "app";
-            program = "${packages.marlowe-rt}/bin/marlowe";
+            program = "${packages.marlowe-runtime-cli}/bin/marlowe-runtime-cli";
           };
 
           marlowe-integration-tests = {
