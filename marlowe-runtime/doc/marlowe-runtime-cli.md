@@ -1,6 +1,6 @@
 # Command-Line Interface to Marlowe Runtime
 
-The `marlowe` executable provides a command-line interface to interacting with Marlowe Runtime services. All communication is via TCP sockets.
+The `marlowe-runtime-cli` executable provides a command-line interface to interacting with Marlowe Runtime services. All communication is via TCP sockets.
 
 - Building transactions
 	- [Create a contract](marlowe/create.md)

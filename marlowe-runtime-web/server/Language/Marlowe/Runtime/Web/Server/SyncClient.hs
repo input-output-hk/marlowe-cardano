@@ -12,7 +12,7 @@ import Control.Error (note)
 import Control.Monad (guard, mfilter)
 import Control.Monad.IO.Class (liftIO)
 import Data.List (uncons)
-import Language.Marlowe.Protocol.Client (MarloweClient(..))
+import Language.Marlowe.Protocol.Client (MarloweRuntimeClient(..))
 import Language.Marlowe.Protocol.Query.Client
   (getContractHeaders, getContractState, getTransaction, getTransactions, getWithdrawal, getWithdrawals)
 import Language.Marlowe.Protocol.Query.Types
@@ -29,7 +29,7 @@ import Network.Protocol.Driver (runSomeConnector)
 import Servant.Pagination
 
 data SyncClientDependencies = SyncClientDependencies
-  { connector :: SomeClientConnector MarloweClient IO
+  { connector :: SomeClientConnector MarloweRuntimeClient IO
   , lookupTempContract :: ContractId -> STM (Maybe (TempTx ContractCreated))
   , lookupTempTransaction :: ContractId -> TxId -> STM (Maybe (TempTx InputsApplied))
   , lookupTempWithdrawal :: TxId -> STM (Maybe (TempTx Withdrawn))

@@ -103,7 +103,7 @@ Create a new release on GitHub that points to the release tag. Include a
 high-level summary description and a detailed change log (from the main
 changelog).
 
-Attach the binary files for the CLI tools (`marlowe-cli` and `marlowe`) to the
+Attach the binary files for the CLI tools (`marlowe-cli` and `marlowe-runtime-cli`) to the
 release for Mac and Linux.
 
 ## Step 8: Update documentation

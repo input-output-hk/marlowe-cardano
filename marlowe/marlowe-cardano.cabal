@@ -46,7 +46,7 @@ library
   hs-source-dirs: src
 
   if !(impl(ghcjs) || os(ghcjs))
-    build-depends: plutus-tx-plugin -any
+    build-depends: plutus-tx-plugin ==1.0.0.0
 
   build-depends:
     base >= 4.9 && < 5,

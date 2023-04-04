@@ -10,7 +10,7 @@ import Control.Monad.Trans.Reader (ReaderT(..))
 import Control.Monad.Trans.Resource.Internal (ResourceT(..))
 import Data.Coerce (coerce)
 import Data.Time (UTCTime)
-import Language.Marlowe.Protocol.Client (MarloweClient(..), hoistMarloweClient)
+import Language.Marlowe.Protocol.Client (MarloweRuntimeClient(..), hoistMarloweRuntimeClient)
 import Language.Marlowe.Protocol.HeaderSync.Client (MarloweHeaderSyncClient)
 import Language.Marlowe.Protocol.Query.Client (MarloweQueryClient)
 import Language.Marlowe.Protocol.Sync.Client (MarloweSyncClient)
@@ -38,40 +38,40 @@ import UnliftIO (MonadIO, MonadUnliftIO, liftIO, newIORef, readIORef, withRunInI
 -- Runtime instance.
 class Monad m => MonadMarlowe m where
   -- ^ Run a client of the Marlowe protocol.
-  runMarloweClient :: MarloweClient m a -> m a
+  runMarloweRuntimeClient :: MarloweRuntimeClient m a -> m a
 
 instance MonadUnliftIO m => MonadMarlowe (MarloweT m) where
-  runMarloweClient client = MarloweT $ ReaderT \connector -> withRunInIO \runInIO ->
-    runSomeConnector connector $ hoistMarloweClient (runInIO . flip runMarloweT connector) client
+  runMarloweRuntimeClient client = MarloweT $ ReaderT \connector -> withRunInIO \runInIO ->
+    runSomeConnector connector $ hoistMarloweRuntimeClient (runInIO . flip runMarloweT connector) client
 
 instance MonadMarlowe m => MonadMarlowe (ReaderT r m) where
-  runMarloweClient client = ReaderT \r ->
-    runMarloweClient $ hoistMarloweClient (flip runReaderT r) client
+  runMarloweRuntimeClient client = ReaderT \r ->
+    runMarloweRuntimeClient $ hoistMarloweRuntimeClient (flip runReaderT r) client
 
 instance MonadMarlowe m => MonadMarlowe (ResourceT m) where
-  runMarloweClient client = ResourceT \rm ->
-    runMarloweClient $ hoistMarloweClient (flip unResourceT rm) client
+  runMarloweRuntimeClient client = ResourceT \rm ->
+    runMarloweRuntimeClient $ hoistMarloweRuntimeClient (flip unResourceT rm) client
 
 instance MonadMarlowe m => MonadMarlowe (IdentityT m) where
-  runMarloweClient = coerce runMarloweClient
+  runMarloweRuntimeClient = coerce runMarloweRuntimeClient
 
 -- ^ Run a MarloweSyncClient. Used to synchronize with history for a specific
 -- contract.
 runMarloweSyncClient :: MonadMarlowe m => MarloweSyncClient m a -> m a
-runMarloweSyncClient = runMarloweClient . RunMarloweSyncClient
+runMarloweSyncClient = runMarloweRuntimeClient . RunMarloweSyncClient
 
 -- ^ Run a MarloweHeaderSyncClient. Used to synchronize with contract creation
 -- transactions.
 runMarloweHeaderSyncClient :: MonadMarlowe m => MarloweHeaderSyncClient m a -> m a
-runMarloweHeaderSyncClient = runMarloweClient . RunMarloweHeaderSyncClient
+runMarloweHeaderSyncClient = runMarloweRuntimeClient . RunMarloweHeaderSyncClient
 
 -- ^ Run a MarloweQueryClient.
 runMarloweQueryClient :: MonadMarlowe m => MarloweQueryClient m a -> m a
-runMarloweQueryClient = runMarloweClient . RunMarloweQueryClient
+runMarloweQueryClient = runMarloweRuntimeClient . RunMarloweQueryClient
 
 -- ^ Run a MarloweTxCommand job client.
 runMarloweTxClient :: MonadMarlowe m => JobClient MarloweTxCommand m a -> m a
-runMarloweTxClient = runMarloweClient . RunTxClient
+runMarloweTxClient = runMarloweRuntimeClient . RunTxClient
 
 -- ^ Create a new contract.
 createContract

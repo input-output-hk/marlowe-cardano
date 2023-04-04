@@ -13,7 +13,7 @@ import Control.Monad.Trans.Except (ExceptT, runExceptT)
 import Control.Monad.Trans.Marlowe (MarloweT)
 import Control.Monad.Trans.Marlowe.Class (MonadMarlowe(..))
 import Control.Monad.Trans.Reader (ReaderT)
-import Language.Marlowe.Protocol.Client (hoistMarloweClient)
+import Language.Marlowe.Protocol.Client (hoistMarloweRuntimeClient)
 import Language.Marlowe.Runtime.CLI.Env (Env(..))
 import Options.Applicative (Alternative)
 import System.Exit (die)
@@ -34,7 +34,7 @@ newtype CLI a = CLI { runCLI :: MarloweT (ReaderT Env IO) a }
     )
 
 instance MonadMarlowe CLI where
-  runMarloweClient client = CLI $ runMarloweClient $ hoistMarloweClient runCLI client
+  runMarloweRuntimeClient client = CLI $ runMarloweRuntimeClient $ hoistMarloweRuntimeClient runCLI client
 
 -- | Get the environment.
 askEnv :: CLI Env
