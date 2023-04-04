@@ -516,7 +516,7 @@ evalObservation env state obs = let
         FalseObs                -> False
 
 
--- | Pick the first account with money in it.
+-- | Pick the first account with money in it, discarding any accounts prior to that if they have a non-positive balance.
 refundOne :: Accounts -> Maybe ((Party, Token, Integer), Accounts)
 refundOne accounts = case Map.toList accounts of
     [] -> Nothing
