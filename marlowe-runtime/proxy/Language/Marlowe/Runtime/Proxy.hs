@@ -18,7 +18,7 @@ import Control.Monad.With (MonadWith(..))
 import Data.GeneralAllocate (GeneralAllocate(..), GeneralAllocated(..), GeneralReleaseType(..))
 import Language.Marlowe.Protocol.HeaderSync.Types (MarloweHeaderSync)
 import Language.Marlowe.Protocol.Query.Types (MarloweQuery)
-import Language.Marlowe.Protocol.Server (MarloweServer(..))
+import Language.Marlowe.Protocol.Server (MarloweRuntimeServer(..))
 import Language.Marlowe.Protocol.Sync.Types (MarloweSync)
 import Language.Marlowe.Runtime.Transaction.Api (MarloweTxCommand)
 import Network.Protocol.Connection (SomeConnectionSource, SomeServerConnector, acceptSomeConnector)
@@ -55,7 +55,7 @@ data ProxyDependencies = forall dState. ProxyDependencies
   , getMarloweHeaderSyncDriver :: ServerM (Driver (Handshake MarloweHeaderSync) dState ServerM)
   , getMarloweQueryDriver :: ServerM (Driver (Handshake MarloweQuery) dState ServerM)
   , getTxJobDriver :: ServerM (Driver (Handshake (Job MarloweTxCommand)) dState ServerM)
-  , connectionSource :: SomeConnectionSource MarloweServer ServerM
+  , connectionSource :: SomeConnectionSource MarloweRuntimeServer ServerM
   , httpPort :: Int
   }
 
@@ -78,8 +78,8 @@ data WorkerDependencies = forall dState. WorkerDependencies
   , getMarloweHeaderSyncDriver :: ServerM (Driver (Handshake MarloweHeaderSync) dState ServerM)
   , getMarloweQueryDriver :: ServerM (Driver (Handshake MarloweQuery) dState ServerM)
   , getTxJobDriver :: ServerM (Driver (Handshake (Job MarloweTxCommand)) dState ServerM)
-  , connector :: SomeServerConnector MarloweServer ServerM
+  , connector :: SomeServerConnector MarloweRuntimeServer ServerM
   }
 
 worker :: WorkerDependencies -> IO ()
-worker WorkerDependencies{..} = runResourceT $ runWrappedUnliftIO $ runSomeConnector connector MarloweServer{result = (), ..}
+worker WorkerDependencies{..} = runResourceT $ runWrappedUnliftIO $ runSomeConnector connector MarloweRuntimeServer{result = (), ..}

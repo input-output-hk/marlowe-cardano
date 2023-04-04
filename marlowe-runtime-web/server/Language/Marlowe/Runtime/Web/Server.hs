@@ -27,7 +27,7 @@ import Control.Concurrent.Component
 import Control.Monad.IO.Unlift (withRunInIO)
 import Control.Monad.Reader (runReaderT)
 import Data.Void (Void)
-import Language.Marlowe.Protocol.Client (MarloweClient)
+import Language.Marlowe.Protocol.Client (MarloweRuntimeClient)
 import qualified Language.Marlowe.Runtime.Web as Web
 import Language.Marlowe.Runtime.Web.Server.Monad (AppEnv(..), AppM(..))
 import qualified Language.Marlowe.Runtime.Web.Server.OpenAPI as OpenAPI
@@ -108,7 +108,7 @@ data ServerDependencies r = ServerDependencies
   { openAPIEnabled :: Bool
   , accessControlAllowOriginAll :: Bool
   , runApplication :: Application -> IO ()
-  , connector :: SomeClientConnector MarloweClient IO
+  , connector :: SomeClientConnector MarloweRuntimeClient IO
   , eventBackend :: EventBackend IO r ServerSelector
   }
 

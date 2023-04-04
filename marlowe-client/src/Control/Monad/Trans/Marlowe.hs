@@ -25,11 +25,11 @@ import Control.Monad.Trans.Resource (MonadResource)
 import Control.Monad.With (MonadWith(..))
 import Control.Monad.Writer (MonadWriter)
 import Data.GeneralAllocate (GeneralAllocate(..), GeneralAllocated(..))
-import Language.Marlowe.Protocol.Client (MarloweClient)
+import Language.Marlowe.Protocol.Client (MarloweRuntimeClient)
 import Network.Protocol.Connection (SomeClientConnector)
 import UnliftIO (MonadUnliftIO)
 
-newtype MarloweT m a = MarloweT { unMarloweT :: ReaderT (SomeClientConnector MarloweClient IO) m a }
+newtype MarloweT m a = MarloweT { unMarloweT :: ReaderT (SomeClientConnector MarloweRuntimeClient IO) m a }
   deriving newtype
     ( Functor
     , Applicative
@@ -84,5 +84,5 @@ instance MonadReader r m => MonadReader r (MarloweT m) where
 mapMarloweT :: (m a -> n b) -> MarloweT m a -> MarloweT n b
 mapMarloweT f = MarloweT . mapReaderT f . unMarloweT
 
-runMarloweT :: MarloweT m a -> SomeClientConnector MarloweClient IO -> m a
+runMarloweT :: MarloweT m a -> SomeClientConnector MarloweRuntimeClient IO -> m a
 runMarloweT = runReaderT . unMarloweT

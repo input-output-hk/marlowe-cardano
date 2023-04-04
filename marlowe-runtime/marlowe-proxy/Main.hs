@@ -12,7 +12,7 @@ import qualified Data.Text.Lazy as T
 import Data.Text.Lazy.Encoding (decodeUtf8)
 import qualified Data.Text.Lazy.IO as TL
 import Data.UUID.V4 (nextRandom)
-import Language.Marlowe.Protocol.Server (marloweServerPeer)
+import Language.Marlowe.Protocol.Server (marloweRuntimeServerPeer)
 import Language.Marlowe.Runtime.CLI.Option (optParserWithEnvDefault)
 import qualified Language.Marlowe.Runtime.CLI.Option as O
 import Language.Marlowe.Runtime.Proxy
@@ -73,7 +73,7 @@ run = runComponent_ proc Options{..} -> do
     }
 
   connectionSource <- tcpServer -< TcpServerDependencies
-    { toPeer = marloweServerPeer
+    { toPeer = marloweRuntimeServerPeer
     , ..
     }
 
@@ -83,7 +83,7 @@ run = runComponent_ proc Options{..} -> do
     , getMarloweQueryDriver = driverFactory syncHost marloweQueryPort
     , getTxJobDriver = driverFactory txHost txPort
     , connectionSource = SomeConnectionSource
-        $ logConnectionSource (hoistEventBackend liftIO $ narrowEventBackend (injectSelector MarloweServer) eventBackend)
+        $ logConnectionSource (hoistEventBackend liftIO $ narrowEventBackend (injectSelector MarloweRuntimeServer) eventBackend)
         $ handshakeConnectionSource connectionSource
     , httpPort = fromIntegral httpPort
     }

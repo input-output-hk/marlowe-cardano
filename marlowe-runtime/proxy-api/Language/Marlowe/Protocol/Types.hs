@@ -24,23 +24,23 @@ import qualified Network.Protocol.Job.Types as Job
 import Network.TypedProtocol
 import Observe.Event.Network.Protocol (MessageToJSON(..))
 
-data Marlowe where
-  StInit :: Marlowe
-  StMarloweSync :: MarloweSync -> Marlowe
-  StMarloweHeaderSync :: MarloweHeaderSync -> Marlowe
-  StMarloweQuery :: MarloweQuery -> Marlowe
-  StTxJob :: Job MarloweTxCommand -> Marlowe
+data MarloweRuntime where
+  StInit :: MarloweRuntime
+  StMarloweSync :: MarloweSync -> MarloweRuntime
+  StMarloweHeaderSync :: MarloweHeaderSync -> MarloweRuntime
+  StMarloweQuery :: MarloweQuery -> MarloweRuntime
+  StTxJob :: Job MarloweTxCommand -> MarloweRuntime
 
-instance Protocol Marlowe where
-  data Message Marlowe st st' where
-    MsgRunMarloweSync :: Message Marlowe 'StInit ('StMarloweSync 'MarloweSync.StInit)
-    MsgRunMarloweHeaderSync :: Message Marlowe 'StInit ('StMarloweHeaderSync 'MarloweHeaderSync.StIdle)
-    MsgRunMarloweQuery :: Message Marlowe 'StInit ('StMarloweQuery 'MarloweQuery.StReq)
-    MsgRunTxJob :: Message Marlowe 'StInit ('StTxJob 'Job.StInit)
-    MsgMarloweSync :: Message MarloweSync st st' -> Message Marlowe ('StMarloweSync st) ('StMarloweSync st')
-    MsgMarloweHeaderSync :: Message MarloweHeaderSync st st' -> Message Marlowe ('StMarloweHeaderSync st) ('StMarloweHeaderSync st')
-    MsgMarloweQuery :: Message MarloweQuery st st' -> Message Marlowe ('StMarloweQuery st) ('StMarloweQuery st')
-    MsgTxJob :: Message (Job MarloweTxCommand) st st' -> Message Marlowe ('StTxJob st) ('StTxJob st')
+instance Protocol MarloweRuntime where
+  data Message MarloweRuntime st st' where
+    MsgRunMarloweSync :: Message MarloweRuntime 'StInit ('StMarloweSync 'MarloweSync.StInit)
+    MsgRunMarloweHeaderSync :: Message MarloweRuntime 'StInit ('StMarloweHeaderSync 'MarloweHeaderSync.StIdle)
+    MsgRunMarloweQuery :: Message MarloweRuntime 'StInit ('StMarloweQuery 'MarloweQuery.StReq)
+    MsgRunTxJob :: Message MarloweRuntime 'StInit ('StTxJob 'Job.StInit)
+    MsgMarloweSync :: Message MarloweSync st st' -> Message MarloweRuntime ('StMarloweSync st) ('StMarloweSync st')
+    MsgMarloweHeaderSync :: Message MarloweHeaderSync st st' -> Message MarloweRuntime ('StMarloweHeaderSync st) ('StMarloweHeaderSync st')
+    MsgMarloweQuery :: Message MarloweQuery st st' -> Message MarloweRuntime ('StMarloweQuery st) ('StMarloweQuery st')
+    MsgTxJob :: Message (Job MarloweTxCommand) st st' -> Message MarloweRuntime ('StTxJob st) ('StTxJob st')
 
   data ClientHasAgency st where
     TokInit :: ClientHasAgency 'StInit
@@ -92,7 +92,7 @@ instance Protocol Marlowe where
     TokNobodyTxJob tok -> \case
       TokServerTxJob tok' -> exclusionLemma_NobodyAndServerHaveAgency tok tok'
 
-instance BinaryMessage Marlowe where
+instance BinaryMessage MarloweRuntime where
   putMessage = \case
     ClientAgency TokInit -> \case
       MsgRunMarloweSync -> putWord8 0x00
@@ -148,7 +148,7 @@ instance BinaryMessage Marlowe where
       SomeMessage msg <- getMessage (ServerAgency tok)
       pure $ SomeMessage $ MsgTxJob msg
 
-instance MessageToJSON Marlowe where
+instance MessageToJSON MarloweRuntime where
   messageToJSON = \case
     ClientAgency TokInit -> \case
       MsgRunMarloweSync -> String "run-marlowe-sync"
@@ -188,9 +188,9 @@ instance MessageToJSON Marlowe where
         [ "tx-job" .= messageToJSON (ServerAgency tok) msg
         ]
 
-instance HasSignature Marlowe where
+instance HasSignature MarloweRuntime where
   signature _ = fold $ intersperse " "
-    [ "Marlowe"
+    [ "MarloweRuntime"
     , signature $ Proxy @MarloweSync
     , signature $ Proxy @MarloweHeaderSync
     , signature $ Proxy @MarloweQuery

@@ -21,7 +21,7 @@ import Network.Protocol.Job.Types (Job)
 import qualified Network.Protocol.Job.Types as Job
 import Network.TypedProtocol
 
-data MarloweServer m a = forall dState. MarloweServer
+data MarloweRuntimeServer m a = forall dState. MarloweRuntimeServer
   { getMarloweSyncDriver :: m (Driver (Handshake MarloweSync) dState m)
   , getMarloweHeaderSyncDriver :: m (Driver (Handshake MarloweHeaderSync) dState m)
   , getMarloweQueryDriver :: m (Driver (Handshake MarloweQuery) dState m)
@@ -29,8 +29,8 @@ data MarloweServer m a = forall dState. MarloweServer
   , result :: a
   }
 
-hoistMarloweServer :: Functor m => (forall x. m x -> n x) -> MarloweServer m a -> MarloweServer n a
-hoistMarloweServer f MarloweServer{..} = MarloweServer
+hoistMarloweRuntimeServer :: Functor m => (forall x. m x -> n x) -> MarloweRuntimeServer m a -> MarloweRuntimeServer n a
+hoistMarloweRuntimeServer f MarloweRuntimeServer{..} = MarloweRuntimeServer
   { getMarloweSyncDriver = f $ hoistDriver f <$> getMarloweSyncDriver
   , getMarloweHeaderSyncDriver = f $ hoistDriver f <$> getMarloweHeaderSyncDriver
   , getMarloweQueryDriver = f $ hoistDriver f <$> getMarloweQueryDriver
@@ -38,8 +38,8 @@ hoistMarloweServer f MarloweServer{..} = MarloweServer
   , ..
   }
 
-marloweServerPeer :: Monad m => MarloweServer m a -> Peer Marlowe 'AsServer 'StInit m a
-marloweServerPeer MarloweServer{..} = Await (ClientAgency TokInit) \case
+marloweRuntimeServerPeer :: Monad m => MarloweRuntimeServer m a -> Peer MarloweRuntime 'AsServer 'StInit m a
+marloweRuntimeServerPeer MarloweRuntimeServer{..} = Await (ClientAgency TokInit) \case
   MsgRunMarloweSync -> result <$ withHandshake (marloweSyncPeer (ClientAgency Sync.TokInit)) getMarloweSyncDriver
   MsgRunMarloweHeaderSync -> result <$ withHandshake (marloweHeaderSyncPeer (ClientAgency Header.TokIdle)) getMarloweHeaderSyncDriver
   MsgRunMarloweQuery -> result <$ withHandshake (marloweQueryPeer (ClientAgency Query.TokReq)) getMarloweQueryDriver
@@ -48,9 +48,9 @@ marloweServerPeer MarloweServer{..} = Await (ClientAgency TokInit) \case
 withHandshake
   :: forall ps dState st m a
    . (Monad m, Handshake.HasSignature ps)
-  => (dState -> Driver ps dState m -> Peer Marlowe 'AsServer st m a)
+  => (dState -> Driver ps dState m -> Peer MarloweRuntime 'AsServer st m a)
   -> m (Driver (Handshake ps) dState m)
-  -> Peer Marlowe 'AsServer st m a
+  -> Peer MarloweRuntime 'AsServer st m a
 withHandshake main getDriver = Effect do
   driver <- getDriver
   sendMessage driver (ClientAgency Handshake.TokInit) $ Handshake.MsgHandshake $ signature $ Proxy @ps
@@ -79,7 +79,7 @@ marloweSyncPeer
   => PeerHasAgency pr st
   -> dState
   -> Driver MarloweSync dState m
-  -> Peer Marlowe 'AsServer ('StMarloweSync st) m ()
+  -> Peer MarloweRuntime 'AsServer ('StMarloweSync st) m ()
 marloweSyncPeer tok dState driver = case tok of
   ClientAgency tok' -> Await (ClientAgency $ TokClientMarloweSync tok') \case
     MsgMarloweSync msg -> Effect do
@@ -108,7 +108,7 @@ marloweHeaderSyncPeer
   => PeerHasAgency pr st
   -> dState
   -> Driver MarloweHeaderSync dState m
-  -> Peer Marlowe 'AsServer ('StMarloweHeaderSync st) m ()
+  -> Peer MarloweRuntime 'AsServer ('StMarloweHeaderSync st) m ()
 marloweHeaderSyncPeer tok dState driver = case tok of
   ClientAgency tok' -> Await (ClientAgency $ TokClientMarloweHeaderSync tok') \case
     MsgMarloweHeaderSync msg -> Effect do
@@ -133,7 +133,7 @@ marloweQueryPeer
   => PeerHasAgency pr st
   -> dState
   -> Driver MarloweQuery dState m
-  -> Peer Marlowe 'AsServer ('StMarloweQuery st) m ()
+  -> Peer MarloweRuntime 'AsServer ('StMarloweQuery st) m ()
 marloweQueryPeer tok dState driver = case tok of
   ClientAgency tok' -> Await (ClientAgency $ TokClientMarloweQuery tok') \case
     MsgMarloweQuery msg -> Effect do
@@ -151,7 +151,7 @@ jobPeer
   => PeerHasAgency pr st
   -> dState
   -> Driver (Job MarloweTxCommand) dState m
-  -> Peer Marlowe 'AsServer ('StTxJob st) m ()
+  -> Peer MarloweRuntime 'AsServer ('StTxJob st) m ()
 jobPeer tok dState driver = case tok of
   ClientAgency tok' -> Await (ClientAgency $ TokClientTxJob tok') \case
     MsgTxJob msg -> Effect do

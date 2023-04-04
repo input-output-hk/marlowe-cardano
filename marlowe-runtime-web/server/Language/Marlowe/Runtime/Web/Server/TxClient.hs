@@ -32,7 +32,7 @@ import Data.Foldable (for_)
 import qualified Data.Map as Map
 import Data.Time (UTCTime)
 import Data.Void (Void)
-import Language.Marlowe.Protocol.Client (MarloweClient(..))
+import Language.Marlowe.Protocol.Client (MarloweRuntimeClient(..))
 import Language.Marlowe.Runtime.Cardano.Api (fromCardanoTxId)
 import Language.Marlowe.Runtime.ChainSync.Api (Lovelace, StakeCredential, TokenName, TxId)
 import Language.Marlowe.Runtime.Core.Api
@@ -65,7 +65,7 @@ compile $ SelectorSpec ["tx", "client"]
   ]
 
 newtype TxClientDependencies r = TxClientDependencies
-  { connector :: SomeClientConnector MarloweClient IO
+  { connector :: SomeClientConnector MarloweRuntimeClient IO
   }
 
 type CreateContract m

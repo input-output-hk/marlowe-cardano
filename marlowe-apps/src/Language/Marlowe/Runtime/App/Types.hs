@@ -88,7 +88,7 @@ import qualified Data.Aeson.Types as A
 import Data.Foldable (fold)
 import qualified Data.Map.Strict as M (Map, map, mapKeys)
 import qualified Data.Text as T (Text)
-import Language.Marlowe.Protocol.Client (hoistMarloweClient)
+import Language.Marlowe.Protocol.Client (hoistMarloweRuntimeClient)
 import Language.Marlowe.Protocol.Query.Types (ContractFilter)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as CS (Transaction)
 
@@ -157,7 +157,7 @@ instance MonadWith Client where
       restore' = Client . restore . runClient
 
 instance MonadMarlowe Client where
-  runMarloweClient client = Client $ runMarloweClient $ hoistMarloweClient runClient client
+  runMarloweRuntimeClient client = Client $ runMarloweRuntimeClient $ hoistMarloweRuntimeClient runClient client
 
 
 -- | A function signature for running a client for some protocol in some monad m.

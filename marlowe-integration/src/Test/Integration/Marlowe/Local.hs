@@ -88,18 +88,18 @@ import Language.Marlowe.CLI.Types
   , ValidatorInfo(..)
   , defaultCoinSelectionStrategy
   )
-import Language.Marlowe.Protocol.Client (MarloweClient, hoistMarloweClient, marloweClientPeer)
+import Language.Marlowe.Protocol.Client (MarloweRuntimeClient, hoistMarloweRuntimeClient, marloweRuntimeClientPeer)
 import Language.Marlowe.Protocol.HeaderSync.Client (MarloweHeaderSyncClient, marloweHeaderSyncClientPeer)
 import Language.Marlowe.Protocol.HeaderSync.Server (MarloweHeaderSyncServer, marloweHeaderSyncServerPeer)
 import Language.Marlowe.Protocol.HeaderSync.Types (MarloweHeaderSync)
 import Language.Marlowe.Protocol.Query.Client (MarloweQueryClient(..), marloweQueryClientPeer)
 import Language.Marlowe.Protocol.Query.Server (MarloweQueryServer)
 import Language.Marlowe.Protocol.Query.Types (MarloweQuery)
-import Language.Marlowe.Protocol.Server (MarloweServer, marloweServerPeer)
+import Language.Marlowe.Protocol.Server (MarloweRuntimeServer, marloweRuntimeServerPeer)
 import Language.Marlowe.Protocol.Sync.Client (MarloweSyncClient, marloweSyncClientPeer)
 import Language.Marlowe.Protocol.Sync.Server (MarloweSyncServer, marloweSyncServerPeer)
 import Language.Marlowe.Protocol.Sync.Types (MarloweSync)
-import Language.Marlowe.Protocol.Types (Marlowe)
+import qualified Language.Marlowe.Protocol.Types as Protocol
 import Language.Marlowe.Runtime.Cardano.Api (fromCardanoAddressInEra, fromCardanoLovelace, fromCardanoTxId)
 import Language.Marlowe.Runtime.ChainIndexer
   (ChainIndexerDependencies(..), ChainIndexerSelector, chainIndexer, getChainIndexerSelectorConfig)
@@ -180,7 +180,7 @@ import Text.Read (readMaybe)
 import UnliftIO (MonadUnliftIO, withRunInIO)
 
 data MarloweRuntime = MarloweRuntime
-  { protocolConnector :: SomeClientConnector MarloweClient IO
+  { protocolConnector :: SomeClientConnector MarloweRuntimeClient IO
   , proxyPort :: Int
   , runWebClient :: forall a. ClientM a -> IO (Either ClientError a)
   , marloweScripts :: MarloweScripts
@@ -299,7 +299,7 @@ withLocalMarloweRuntime' MarloweRuntimeOptions{..} test = withRunInIO \runInIO -
             else liftIO $ threadDelay 1000 *> waitForWebServer (counter + 1)
         | otherwise = fail "Unable to connect to web server"
 
-    let protocolConnector = SomeConnector $ ihoistConnector hoistMarloweClient (runResourceT . runWrappedUnliftIO) liftIO $ clientConnector marlowePair
+    let protocolConnector = SomeConnector $ ihoistConnector hoistMarloweRuntimeClient (runResourceT . runWrappedUnliftIO) liftIO $ clientConnector marlowePair
 
     -- Persist the genesis block before starting the services so that they
     -- exist already and no database queries fail.
@@ -451,9 +451,9 @@ data RuntimeSelector f where
   HeaderSyncPair :: ClientServerPairSelector (Handshake MarloweHeaderSync) f -> RuntimeSelector f
   MarloweSyncPair :: ClientServerPairSelector (Handshake MarloweSync) f -> RuntimeSelector f
   MarloweQueryPair :: ClientServerPairSelector (Handshake MarloweQuery) f -> RuntimeSelector f
-  MarlowePair :: ClientServerPairSelector (Handshake Marlowe) f -> RuntimeSelector f
+  MarlowePair :: ClientServerPairSelector (Handshake Protocol.MarloweRuntime) f -> RuntimeSelector f
   TxJobPair :: ClientServerPairSelector (Handshake (Job MarloweTxCommand)) f -> RuntimeSelector f
-  MarloweTCP :: ConnectorSelector (Handshake Marlowe) f -> RuntimeSelector f
+  MarloweTCP :: ConnectorSelector (Handshake Protocol.MarloweRuntime) f -> RuntimeSelector f
   TxEvent :: TransactionServerSelector f -> RuntimeSelector f
   ChainIndexerEvent :: ChainIndexerSelector f -> RuntimeSelector f
   MarloweIndexerEvent :: MarloweIndexerSelector f -> RuntimeSelector f
@@ -466,7 +466,7 @@ data RuntimeDependencies r = RuntimeDependencies
   , chainSyncQueryPair :: ClientServerPair (Handshake (Query ChainSyncQuery)) (QueryServer ChainSyncQuery) (QueryClient ChainSyncQuery) IO
   , marloweHeaderSyncPair :: ClientServerPair (Handshake MarloweHeaderSync) MarloweHeaderSyncServer MarloweHeaderSyncClient IO
   , marloweSyncPair :: ClientServerPair (Handshake MarloweSync) MarloweSyncServer MarloweSyncClient IO
-  , marlowePair :: ClientServerPair (Handshake Marlowe) MarloweServer MarloweClient ServerM
+  , marlowePair :: ClientServerPair (Handshake Protocol.MarloweRuntime) MarloweRuntimeServer MarloweRuntimeClient ServerM
   , marloweQueryPair :: ClientServerPair (Handshake MarloweQuery) MarloweQueryServer MarloweQueryClient IO
   , txJobPair :: ClientServerPair (Handshake (Job MarloweTxCommand)) (JobServer MarloweTxCommand) (JobClient MarloweTxCommand) IO
   , chainIndexerDatabaseQueries :: ChainIndexer.DatabaseQueries IO
@@ -494,7 +494,7 @@ runtime = proc RuntimeDependencies{..} -> do
 
     LocalNodeConnectInfo{..} = localNodeConnectInfo
 
-  marloweServerSource <- handshakeConnectionSource <$> tcpServer -< TcpServerDependencies "127.0.0.1" (fromIntegral proxyPort) marloweServerPeer
+  marloweRuntimeServerSource <- handshakeConnectionSource <$> tcpServer -< TcpServerDependencies "127.0.0.1" (fromIntegral proxyPort) marloweRuntimeServerPeer
 
   chainIndexer -<
     let
@@ -583,7 +583,7 @@ runtime = proc RuntimeDependencies{..} -> do
     , getMarloweHeaderSyncDriver = driverFactory $ clientConnector marloweHeaderSyncPair
     , getMarloweQueryDriver = driverFactory $ clientConnector marloweQueryPair
     , getTxJobDriver = driverFactory $ clientConnector txJobPair
-    , connectionSource = SomeConnectionSource (logConnectionSource (narrowEventBackend (injectSelector MarloweTCP) $ hoistEventBackend liftIO rootEventBackend) marloweServerSource <> Connection.connectionSource marlowePair)
+    , connectionSource = SomeConnectionSource (logConnectionSource (narrowEventBackend (injectSelector MarloweTCP) $ hoistEventBackend liftIO rootEventBackend) marloweRuntimeServerSource <> Connection.connectionSource marlowePair)
     , httpPort = webPort + 6
     }
 
@@ -591,7 +591,7 @@ runtime = proc RuntimeDependencies{..} -> do
     { openAPIEnabled = False
     , accessControlAllowOriginAll = False
     , runApplication = run webPort
-    , connector = SomeConnector $ ihoistConnector hoistMarloweClient (runResourceT . runWrappedUnliftIO) liftIO $ clientConnector marlowePair
+    , connector = SomeConnector $ ihoistConnector hoistMarloweRuntimeClient (runResourceT . runWrappedUnliftIO) liftIO $ clientConnector marlowePair
     , eventBackend = noopEventBackend ()
     }
 
@@ -608,7 +608,7 @@ data Channels = Channels
   , marloweSyncPair :: ClientServerPair (Handshake MarloweSync) MarloweSyncServer MarloweSyncClient IO
   , marloweQueryPair :: ClientServerPair (Handshake MarloweQuery) MarloweQueryServer MarloweQueryClient IO
   , txJobPair :: ClientServerPair (Handshake (Job MarloweTxCommand)) (JobServer MarloweTxCommand) (JobClient MarloweTxCommand) IO
-  , marlowePair :: ClientServerPair (Handshake Marlowe) MarloweServer MarloweClient ServerM
+  , marlowePair :: ClientServerPair (Handshake Protocol.MarloweRuntime) MarloweRuntimeServer MarloweRuntimeClient ServerM
   }
 
 setupChannels :: EventBackend IO r RuntimeSelector -> STM Channels
@@ -635,8 +635,8 @@ setupChannels eventBackend = do
     jobServerPeer
     jobClientPeer
   marlowePair <- logClientServerPair (hoistEventBackend liftIO $ narrowEventBackend (injectSelector MarlowePair) eventBackend) . handshakeClientServerPair <$> clientServerPair
-    marloweServerPeer
-    marloweClientPeer
+    marloweRuntimeServerPeer
+    marloweRuntimeClientPeer
   pure Channels{..}
 
 getRuntimeSelectorConfig :: RuntimeSelector f -> SelectorConfig f

@@ -9,7 +9,7 @@ module Logging
 import Data.Foldable (fold)
 import Data.Map (Map)
 import Data.Text (Text)
-import Language.Marlowe.Protocol.Types (Marlowe)
+import Language.Marlowe.Protocol.Types (MarloweRuntime)
 import Network.Protocol.Connection (ConnectorSelector, getConnectorSelectorConfig, getDefaultConnectorLogConfig)
 import Network.Protocol.Handshake.Types (Handshake)
 import Observe.Event.Component
@@ -23,16 +23,16 @@ import Observe.Event.Component
   )
 
 data RootSelector f where
-  MarloweServer :: ConnectorSelector (Handshake Marlowe) f -> RootSelector f
+  MarloweRuntimeServer :: ConnectorSelector (Handshake MarloweRuntime) f -> RootSelector f
   ConfigWatcher :: ConfigWatcherSelector f -> RootSelector f
 
 getRootSelectorConfig :: GetSelectorConfig RootSelector
 getRootSelectorConfig = \case
-  MarloweServer sel -> prependKey "proxy-server" $ getConnectorSelectorConfig False False sel
+  MarloweRuntimeServer sel -> prependKey "proxy-server" $ getConnectorSelectorConfig False False sel
   ConfigWatcher ReloadConfig -> SelectorConfig "reload-log-config" True $ singletonFieldConfig "config" True
 
 defaultRootSelectorLogConfig :: Map Text SelectorLogConfig
 defaultRootSelectorLogConfig = fold
-  [ getDefaultConnectorLogConfig getRootSelectorConfig MarloweServer
+  [ getDefaultConnectorLogConfig getRootSelectorConfig MarloweRuntimeServer
   , getDefaultLogConfig getRootSelectorConfig $ ConfigWatcher ReloadConfig
   ]
