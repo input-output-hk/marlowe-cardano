@@ -2,7 +2,7 @@
 , packages
 }:
 let
-  inherit (packages) pkgs marlowe docs marlowe-cli dev-scripts network;
+  inherit (packages) pkgs marlowe docs dev-scripts network;
   inherit (dev-scripts) nix-flakes-alias start-cardano-node mkCabalExeScript;
   inherit (pkgs) stdenv lib utillinux python3 nixpkgs-fmt writeShellScriptBin networks;
   inherit (marlowe) haskell cabal-install stylish-haskell sphinxcontrib-haddock sphinx-markdown-tables sphinxemoji nix-pre-commit-hooks cardano-address;
@@ -16,6 +16,7 @@ let
   '';
 
   marlowe-runtime-cli = mkCabalExeScript "marlowe-runtime-cli" "marlowe-runtime-cli";
+  marlowe-cli = mkCabalExeScript "marlowe-cli" "marlowe-cli";
 
   # For Sphinx, and ad-hoc usage
   sphinxTools = python3.withPackages (ps: [
