@@ -1,6 +1,7 @@
 module Language.Marlowe.Runtime.IntegrationSpec
   where
 
+import qualified Language.Marlowe.Runtime.Integration.ApplyInputs as Apply
 import qualified Language.Marlowe.Runtime.Integration.Basic as Basic
 import qualified Language.Marlowe.Runtime.Integration.Create as Create
 import qualified Language.Marlowe.Runtime.Integration.Intersections as Integrations
@@ -15,3 +16,4 @@ spec = describe "Marlowe runtime API" do
   MarloweQuery.spec
   describe "MarloweTxCommand" do
     Create.spec
+    Apply.spec
