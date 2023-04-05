@@ -11,7 +11,6 @@ module Language.Marlowe.Runtime.Web.Server.REST.Withdrawals
 
 import Cardano.Api (BabbageEra, TxBody, getTxBody, getTxId, makeSignedTransaction)
 import qualified Cardano.Api as Cardano
-import qualified Cardano.Api.SerialiseTextEnvelope as Cardano
 import Cardano.Ledger.Alonzo.TxWitness
 import Control.Monad (unless)
 import Control.Monad.IO.Class (liftIO)
