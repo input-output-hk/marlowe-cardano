@@ -89,8 +89,8 @@ import qualified Data.Aeson.Types as A
 import Data.Foldable (fold)
 import qualified Data.Map.Strict as M (Map, map, mapKeys)
 import qualified Data.Text as T (Text)
-import Language.Marlowe.Protocol.Client (hoistMarloweRuntimeClient)
 import Data.Time.Units (Second)
+import Language.Marlowe.Protocol.Client (hoistMarloweRuntimeClient)
 import Language.Marlowe.Protocol.Query.Types (ContractFilter)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as CS (Transaction)
 
