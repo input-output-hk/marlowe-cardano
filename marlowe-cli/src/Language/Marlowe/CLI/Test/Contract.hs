@@ -16,18 +16,6 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TemplateHaskell #-}
 
------------------------------------------------------------------------------
---
--- Module      :  $Headers
--- License     :  Apache 2.0
---
--- Stability   :  Experimental
--- Portability :  Portable
---
--- | Helper to work with contracts in the testing context.
---
------------------------------------------------------------------------------
-
 module Language.Marlowe.CLI.Test.Contract
   where
 

@@ -17,17 +17,6 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE ViewPatterns #-}
 
------------------------------------------------------------------------------
---
--- Module      :  $Headers
--- License     :  Apache 2.0
---
--- Stability   :  Experimental
--- Portability :  Portable
---
--- | Interpreter for wallet related operations.
---
------------------------------------------------------------------------------
 
 module Language.Marlowe.CLI.Test.Wallet.Interpret
   where

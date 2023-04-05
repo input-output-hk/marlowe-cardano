@@ -1,16 +1,3 @@
------------------------------------------------------------------------------
---
--- Module      :  $Headers
--- License     :  Apache 2.0
---
--- Stability   :  Experimental
--- Portability :  Portable
---
--- | Runtime monitoring thread for the test suite.
---
------------------------------------------------------------------------------
-
-
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveAnyClass #-}
@@ -32,8 +19,6 @@
 
 module Language.Marlowe.CLI.Test.Runtime.Monitor
   where
---  (mkRuntimeMonitor)
--- where
 
 import Language.Marlowe.Extended.V1 as E (ChoiceId(ChoiceId), Contract(Close), Party, Value(Constant))
 import Marlowe.Contracts (escrow, swap, trivial)

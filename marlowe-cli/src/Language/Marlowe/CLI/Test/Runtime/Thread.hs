@@ -1,16 +1,3 @@
------------------------------------------------------------------------------
---
--- Module      :  $Headers
--- License     :  Apache 2.0
---
--- Stability   :  Experimental
--- Portability :  Portable
---
--- | Types for testing Marlowe contracts.
---
------------------------------------------------------------------------------
-
-
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
@@ -26,10 +13,8 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TemplateHaskell #-}
 
-
 module Language.Marlowe.CLI.Test.Runtime.Thread
   where
-
 
 -- Curretly we don't need any extra information for the runtime thread.
 type RuntimeTxInfo = ()

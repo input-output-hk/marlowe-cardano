@@ -18,21 +18,8 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE ViewPatterns #-}
 
------------------------------------------------------------------------------
---
--- Module      :  $Headers
--- License     :  Apache 2.0
---
--- Stability   :  Experimental
--- Portability :  Portable
---
--- | Tooling around contracts.
---
------------------------------------------------------------------------------
-
 module Language.Marlowe.CLI.Test.Contract.ParametrizedMarloweJSON
   where
-
 
 import Cardano.Api
   ( AddressInEra(AddressInEra)

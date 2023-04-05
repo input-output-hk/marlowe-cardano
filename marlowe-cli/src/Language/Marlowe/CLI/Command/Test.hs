@@ -63,22 +63,22 @@ parseTestCommand :: IsShelleyBasedEra era => O.Mod O.OptionFields NetworkId
                  -> O.Mod O.OptionFields FilePath
                  -> IO (O.Parser (TestCommand era))
 parseTestCommand network socket = do
-  scriptsCommandParser <- scriptsCommand network socket
+  testSuiteCommandParser <- testSuiteCommand network socket
   pure $ O.hsubparser
     $ O.commandGroup "Commands for testing contracts:"
-    <> scriptsCommandParser
+    <> testSuiteCommandParser
 
 
--- | Parser for the "scripts" command.
-scriptsCommand :: IsShelleyBasedEra era
+-- | Parser for the "testSuite" command.
+testSuiteCommand :: IsShelleyBasedEra era
                => O.Mod O.OptionFields NetworkId
                -> O.Mod O.OptionFields FilePath
                -> IO (O.Mod O.CommandFields (TestCommand era))
-scriptsCommand network socket = do
-  scriptOptionsParser <- scriptsOptions network socket
-  pure $ O.command "scripts"
+testSuiteCommand network socket = do
+  scriptOptionsParser <- testSuiteOptions network socket
+  pure $ O.command "testSuite"
     $ O.info scriptOptionsParser
-    $ O.progDesc "Test Marlowe scripts on-chain."
+    $ O.progDesc "Test Marlowe testSuite on-chain."
 
 
 executionModeParser :: O.Parser ExecutionMode
@@ -89,12 +89,12 @@ simulationModeOpt :: O.Parser (Maybe ExecutionMode)
 simulationModeOpt = O.optional (O.flag' SimulationMode  (O.long "simulation-mode" <> O.help "Run test suite in simulation mode by ignoring the transaction submission timeout"))
 
 
--- | Parser for the "scripts" options.
-scriptsOptions :: IsShelleyBasedEra era
+-- | Parser for the "testSuite" options.
+testSuiteOptions :: IsShelleyBasedEra era
                => O.Mod O.OptionFields NetworkId
                -> O.Mod O.OptionFields FilePath
                -> IO (O.Parser (TestCommand era))
-scriptsOptions network socket = do
+testSuiteOptions network socket = do
   let
     chainSeekSyncPort :: CliOption OptionFields PortNumber
     chainSeekSyncPort = port "chain-seek-sync" "CHAIN_SEEK_SYNC" 3715 "The port number of the chain-seek server's synchronization API."

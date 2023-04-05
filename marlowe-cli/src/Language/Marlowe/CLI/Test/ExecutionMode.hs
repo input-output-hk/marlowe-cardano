@@ -15,18 +15,6 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TemplateHaskell #-}
 
------------------------------------------------------------------------------
---
--- Module      :  $Headers
--- License     :  Apache 2.0
---
--- Stability   :  Experimental
--- Portability :  Portable
---
--- | Test runner execution mode.
---
------------------------------------------------------------------------------
-
 module Language.Marlowe.CLI.Test.ExecutionMode
   where
 

@@ -10,14 +10,12 @@
 --
 -----------------------------------------------------------------------------
 
-
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# OPTIONS_GHC -Wno-unused-imports #-}
 {-# LANGUAGE NamedFieldPuns #-}
-
 
 module Language.Marlowe.CLI.Test
   ( -- * Testing
@@ -125,19 +123,16 @@ runTests era TestSuite{..} =
       liftIO . putStrLn $ "***** Test " <> show testName <> " *****"
 
       let
-        host = "127.0.0.1"
-        port = 33239
-
         connector :: Network.Protocol.SomeClientConnector Marlowe.Protocol.MarloweRuntimeClient IO
         connector = Network.Protocol.SomeConnector
           $ Network.Protocol.handshakeClientConnector
-          $ Network.Protocol.tcpClient host port Marlowe.Protocol.marloweRuntimeClientPeer
+          $ Network.Protocol.tcpClient rcRuntimeHost rcRuntimePort Marlowe.Protocol.marloweRuntimeClientPeer
         RuntimeConfig { .. } = stRuntime
         config = def
           { Apps.chainSeekHost = rcRuntimeHost
-          , Apps.runtimePort = rcRuntimePort -- 33239 -- 3700
-          , Apps.chainSeekSyncPort = rcChainSeekSyncPort -- 33235 -- 3715
-          , Apps.chainSeekCommandPort = rcChainSeekCommandPort -- 33233 -- 3720
+          , Apps.runtimePort = rcRuntimePort
+          , Apps.chainSeekSyncPort = rcChainSeekSyncPort
+          , Apps.chainSeekCommandPort = rcChainSeekCommandPort
           }
 
       (runtimeMonitorInput, runtimeMonitorContracts, runtimeMonitor) <- liftIO $ Runtime.Monitor.mkRuntimeMonitor config
@@ -151,9 +146,6 @@ runTests era TestSuite{..} =
           , _isWallets = Wallet.Wallets $ Map.singleton Wallet.faucetNickname faucet
           , _isKnownContracts = mempty
           }
-      -- Currently only the interpreter thread has access to the state
-      -- so it is safe and much easier to just use an `IORef` and not a `TVar`.
-      -- stRef <- liftIO $ newIORef state
 
       let
         env :: InterpretEnv MarlowePlutusVersion era
@@ -167,7 +159,6 @@ runTests era TestSuite{..} =
           , _iePrintStats=printStats
           , _ieRuntimeMonitor = Just (runtimeMonitorInput, runtimeMonitorContracts)
           , _ieRuntimeClientConnector = Just connector
-          -- , _isStateRef = stRef
           }
         maxRetries = 4
 
@@ -187,7 +178,7 @@ runTests era TestSuite{..} =
           liftIO (print err)
           liftIO (putStrLn "***** FAILED *****")
         Nothing -> do
-          liftIO (putStrLn "***** FAILED: Unreachable case *****")
+          liftIO (putStrLn "***** FAILED? <Unreachable case> *****")
 
 runTest
   :: IsShelleyBasedEra era

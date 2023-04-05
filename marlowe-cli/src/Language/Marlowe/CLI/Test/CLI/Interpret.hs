@@ -17,18 +17,6 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE ViewPatterns #-}
 
------------------------------------------------------------------------------
---
--- Module      :  $Headers
--- License     :  Apache 2.0
---
--- Stability   :  Experimental
--- Portability :  Portable
---
--- | Type safe list of transactions representing on chain Marlowe execution.
---
------------------------------------------------------------------------------
-
 module Language.Marlowe.CLI.Test.CLI.Interpret
   where
 

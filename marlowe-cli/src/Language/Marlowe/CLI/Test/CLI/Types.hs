@@ -13,37 +13,8 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE ViewPatterns #-}
 
------------------------------------------------------------------------------
---
--- Module      :  $Headers
--- License     :  Apache 2.0
---
--- Stability   :  Experimental
--- Portability :  Portable
---
--- | Type safe list of transactions representing on chain Marlowe execution.
---
------------------------------------------------------------------------------
-
 module Language.Marlowe.CLI.Test.CLI.Types
   where
-  -- ( AnyCLIMarloweThread
-  -- , ContractNickname(..)
-  -- , ContractSource(..)
-  -- , CLIOperation(..)
-  -- , CLIContracts(..)
-  -- , Currency(..)
-  -- , CLIContractInfo(..)
-  -- , MarloweReferenceScripts(..)
-  -- , MarloweThread(..)
-  -- , PartyRef(..)
-  -- , TokenName(..)
-  -- , UseTemplate(..)
-  -- , WalletNickname(..)
-  -- , anyCLIMarloweThread
-  -- , getCLIMarloweThreadTransaction
-  -- , getCLIMarloweThreadTxBody
-  -- ) where
 
 import Cardano.Api (CardanoMode, LocalNodeConnectInfo, Lovelace, PolicyId, ScriptDataSupportedInEra)
 import qualified Cardano.Api as C

@@ -15,18 +15,6 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TemplateHaskell #-}
 
------------------------------------------------------------------------------
---
--- Module      :  $Headers
--- License     :  Apache 2.0
---
--- Stability   :  Experimental
--- Portability :  Portable
---
--- | Type safe list of transactions representing on chain Marlowe execution.
---
------------------------------------------------------------------------------
-
 module Language.Marlowe.CLI.Test.CLI.Monad
   where
 
@@ -64,7 +52,6 @@ runTraceCli
   -> m a
 runTraceCli era trace action = do
   withCliErrorMsg (printTraceMsg trace) $ runReaderT action (CliEnv era)
-
 
 runLabeledCli
   :: MonadError CliError m

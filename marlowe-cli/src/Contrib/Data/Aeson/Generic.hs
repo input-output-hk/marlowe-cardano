@@ -35,17 +35,3 @@ constructorName = getConName . from
 class GetConNames (rep :: * -> *) where
     getConNames :: [String]
 
-
--- marlowe-cli/src/Language/Marlowe/CLI/Test/Wallet/Types.hs|256 col 12| • No instance for (GetConNames                     (GHC.Generics.M1                        GHC.Generics.C                        ('GHC.Generics.MetaCons "BurnAll" 'GHC.Generics.PrefixI 'True)                        (GHC.Generics.S1                           ('GHC.Generics.MetaSel                              ('Just "soCurrencyNickname")                              'GHC.Generics.NoSourceUnpackedness                              'GHC.Generics.NoSourceStrictness                              'GHC.Generics.DecidedLazy)                           (GHC.Generics.Rec0 CurrencyNickname)                         GHC.Generics.:*: GHC.Generics.S1                                            ('GHC.Generics.MetaSel                                               ('Just "soMetadata")                                               'GHC.Generics.NoSourceUnpackedness                                               'GHC.Generics.NoSourceStrictness
--- instance (GetConNames c) => GetConNames (M1 i c f p) where
---     getConNames = getConNames @c
---
--- instance (GetConNames a) => GetConNames (D1 d a) where
---     getConNames = getConNames @a
---
--- instance (GetConNames a, GetConNames b) => GetConNames (a :+: b) where
---     getConNames = getConNames @a <> getConNames @b
---
--- instance (KnownSymbol s) => GetConNames (C1 ('MetaData s x y z) a) where
---     getConNames = [ reflect (Proxy :: Proxy s) ]
---
