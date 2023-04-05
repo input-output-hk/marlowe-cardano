@@ -9,10 +9,10 @@
 
 module Language.Marlowe.Runtime.App.Stream
   ( ContractStream(..)
-  , EOF(..)
-  , TChanEOF
   , ContractStreamError(..)
+  , EOF(..)
   , SyncEvent
+  , TChanEOF
   , contractFromStep
   , contractFromStream
   , datumFromStep
@@ -86,7 +86,6 @@ streamAllContractIds
   :: EventBackend IO r DynamicEventSelector
   -> PollingFrequency
   -> Bool
-  -> TChanEOF ContractId
   -> TChanEOF (SyncEvent ContractId)
   -> Client (Maybe ContractStreamError)
 streamAllContractIds eventBackend pollingFrequency endOnWait = streamContractHeaders eventBackend pollingFrequency endOnWait $ Just . fmap (blockHeader &&& contractId)
@@ -98,7 +97,7 @@ streamAllContractIdsClient
   -> Bool
   -> TChanEOF (SyncEvent ContractId)
   -> MarloweHeaderSyncClient Client (Maybe ContractStreamError)
-streamAllContractIdsClient eventBackend pollingFrequency endOnWait = streamContractHeadersClient eventBackend pollingFrequency endOnWait $ Just . contractId
+streamAllContractIdsClient eventBackend pollingFrequency endOnWait = streamContractHeadersClient eventBackend pollingFrequency endOnWait $ Just . fmap (blockHeader &&& contractId)
 -- streamAllContractIdsClient eventBackend pollingFrequency = streamContractHeadersClient eventBackend pollingFrequency $ Just . fmap (blockHeader &&& contractId)
 
 
@@ -130,7 +129,7 @@ streamContractHeadersClient eventBackend (PollingFrequency pollingFrequency) end
     clientWait
       | endOnWait = do
           atomically $ writeTChan channel $ Left EOF
-          pure $ HSync.SendMsgCancel $ HSync.SendMsgDone $ Right ()
+          pure $ HSync.SendMsgCancel $ HSync.SendMsgDone Nothing
       | otherwise = HSync.SendMsgPoll clientNext <$ threadDelay (fromIntegral pollingFrequency)
     clientNext =
       HSync.ClientStNext
@@ -153,7 +152,7 @@ streamContractHeadersClient eventBackend (PollingFrequency pollingFrequency) end
                 addField event $ ("blockHeader" :: Text) ≔ chainPoint
                 let
                   extracted = extract $ Left chainPoint
-                atomically $ mapM_ (writeTChan channel) extracted
+                atomically $ mapM_ (writeTChan channel . Right) extracted
                 pure clientIdle
       , HSync.recvMsgWait =
           liftIO

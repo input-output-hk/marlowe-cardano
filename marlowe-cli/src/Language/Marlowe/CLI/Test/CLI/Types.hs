@@ -76,7 +76,8 @@ import Language.Marlowe.CLI.Test.Contract.ParametrizedMarloweJSON (ParametrizedM
 import Language.Marlowe.CLI.Test.ExecutionMode
 import qualified Language.Marlowe.CLI.Test.Operation.Aeson as Operation
 import Language.Marlowe.CLI.Test.Wallet.Types
-  ( Currencies(Currencies)
+  ( AssetId(AssetId)
+  , Currencies(Currencies)
   , CurrencyNickname
   , WalletNickname(WalletNickname)
   , Wallets(Wallets)

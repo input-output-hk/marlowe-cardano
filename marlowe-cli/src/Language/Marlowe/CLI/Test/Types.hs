@@ -220,7 +220,7 @@ data InterpretState lang era = InterpretState
 data InterpretEnv lang era = InterpretEnv
   {
     _ieRuntimeMonitor :: Maybe (RuntimeMonitorInput, RuntimeMonitorState lang era)
-  , _ieRuntimeClientConnector :: Maybe (Network.Protocol.SomeClientConnector Marlowe.Protocol.MarloweClient IO)
+  , _ieRuntimeClientConnector :: Maybe (Network.Protocol.SomeClientConnector Marlowe.Protocol.MarloweRuntimeClient IO)
   , _ieExecutionMode :: ExecutionMode
   , _ieConnection :: LocalNodeConnectInfo CardanoMode
   , _ieEra :: ScriptDataSupportedInEra era

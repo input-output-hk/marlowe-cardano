@@ -470,7 +470,7 @@ makeTxOut
 makeTxOut address datum value referenceScript = do
   cardanoAddress <- note
     (CalculateMinUtxoFailed $ "Unable to convert address: " <> show address)
-    $ C.anyAddressInShelleyBasedEra <$> Chain.toCardanoAddress address
+    $ C.anyAddressInShelleyBasedEra <$> Chain.toCardanoAddressAny address
   Right $ C.TxOut
     cardanoAddress
     (C.TxOutValue C.MultiAssetInBabbageEra value)

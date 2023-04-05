@@ -128,10 +128,10 @@ runTests era TestSuite{..} =
         host = "127.0.0.1"
         port = 33239
 
-        connector :: Network.Protocol.SomeClientConnector Marlowe.Protocol.MarloweClient IO
+        connector :: Network.Protocol.SomeClientConnector Marlowe.Protocol.MarloweRuntimeClient IO
         connector = Network.Protocol.SomeConnector
           $ Network.Protocol.handshakeClientConnector
-          $ Network.Protocol.tcpClient host port Marlowe.Protocol.marloweClientPeer
+          $ Network.Protocol.tcpClient host port Marlowe.Protocol.marloweRuntimeClientPeer
         RuntimeConfig { .. } = stRuntime
         config = def
           { Apps.chainSeekHost = rcRuntimeHost

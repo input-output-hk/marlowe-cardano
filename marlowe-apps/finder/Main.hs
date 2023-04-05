@@ -40,7 +40,6 @@ runDetection = App.runDetection $ const True
 runFinder
   :: EventBackend IO r DynamicEventSelector
   -> RequeueFrequency
-  -> Int
   -> Bool
   -> TChanEOF (ContractStream 'V1)
   -> TChanEOF ContractId

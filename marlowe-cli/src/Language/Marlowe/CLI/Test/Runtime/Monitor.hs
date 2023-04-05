@@ -117,7 +117,8 @@ import Language.Marlowe.Pretty (pretty)
 import Language.Marlowe.Runtime.App.Channel (mkDetection)
 import qualified Language.Marlowe.Runtime.App.Run as Apps
 import qualified Language.Marlowe.Runtime.App.Run as Apps.Run
-import Language.Marlowe.Runtime.App.Stream (ContractStream(..), ContractStreamError(..), streamAllContractSteps)
+import Language.Marlowe.Runtime.App.Stream
+  (ContractStream(..), ContractStreamError(..), EOF(EOF), streamAllContractSteps)
 import Language.Marlowe.Runtime.App.Types (PollingFrequency(PollingFrequency), runClient)
 import qualified Language.Marlowe.Runtime.App.Types as Apps
 import qualified Language.Marlowe.Runtime.Cardano.Api as Runtime.Cardano.Api
@@ -172,13 +173,13 @@ mkRuntimeMonitor config = do
 
         case processMarloweStreamEvent knownContracts contracts contractStreamEvent of
           Left (RuntimeContractNotFound contractId) -> do
-            writeTChan detectionInputChannel contractId
+            writeTChan detectionInputChannel (Right contractId)
             pure $ pure Nothing
           Left err -> pure $ pure $ Just err
           Right (Just (Revisit contractId)) -> pure $ do
               void . forkIO
                 $ threadDelay (fromIntegral microseconds)
-                >> atomically (writeTChan detectionInputChannel contractId)
+                >> atomically (writeTChan detectionInputChannel $ Right contractId)
               pure Nothing
           Right (Just (RuntimeContractUpdate contractId contractInfo)) -> do
             for_ (Map.lookup contractId knownContracts) \contractNickname ->
@@ -193,7 +194,7 @@ mkRuntimeMonitor config = do
         case Map.lookup contractId knownContracts of
           Just _ -> pure Nothing
           Nothing -> do
-            writeTChan detectionInputChannel contractId
+            writeTChan detectionInputChannel (Right contractId)
             writeTVar knownContractsRef (Map.insert contractId contractNickname knownContracts)
             pure $ Just c
       for possibleAddition \c -> do
@@ -223,7 +224,7 @@ processMarloweStreamEvent
   :: forall era lang v
    . M.Map ContractId ContractNickname
   -> M.Map ContractNickname (RuntimeContractInfo era lang)
-  -> ContractStream v
+  -> Either EOF (ContractStream v)
   -> Either RuntimeError (Maybe (RuntimeContractUpdate era lang))
 processMarloweStreamEvent knownContracts contracts = do
   let
@@ -247,35 +248,37 @@ processMarloweStreamEvent knownContracts contracts = do
       pure $ Just $ RuntimeContractUpdate contractId contractInfo
 
   \case
-    ContractStreamStart{csContractId, csCreateStep=RH.CreateStep{ RH.createOutput=scriptOutput}} -> do
-      txIn <- scriptOutputToCardanoTxIn scriptOutput
-      let th = anyMarloweThreadCreated () txIn
-      returnContractUpdate csContractId (RuntimeContractInfo th)
-    ContractStreamContinued{csContractId, csContractStep=RH.RedeemPayout{}} -> pure Nothing
-    ContractStreamContinued{csContractId, csContractStep=RH.ApplyTransaction R.Transaction {R.output=R.TransactionOutput{ scriptOutput=scriptOutput}}} -> do
-      mTxIn <- for scriptOutput scriptOutputToCardanoTxIn
-      RuntimeContractInfo th <- getContractInfo csContractId
-      case anyRuntimeMarloweThread mTxIn [] th of
-        Just th' -> returnContractUpdate csContractId (RuntimeContractInfo th')
-        Nothing -> do
-          throwError $ RuntimeExecutionFailure $ "Thread contination failed: " <> show csContractId
-    ContractStreamRolledBack{csContractId} -> do
-      -- Is it even possible that we have not yet started the thread?
-      case lookupContractNickname csContractId of
-        Just contractNickname -> throwError $ RuntimeRollbackError contractNickname
-        Nothing -> pure Nothing
-    ContractStreamWait {csContractId} -> pure $ Just (Revisit csContractId)
-    ContractStreamFinish{csFinish=Nothing, csContractId} -> do
-      -- We should ignore this event because we are closing the thread
-      -- from the `ContractStreamContinued` handler.
-      -- RuntimeContractInfo th <- getContractInfo csContractId
-      -- unless (isRunning th) do
-      --   throwError $ RuntimeExecutionFailure $ "Thread already closed: " <> show csContractId
-      pure Nothing
-    ContractStreamFinish{csFinish=Just creationError, csContractId} -> do
-      case creationError of
-        ContractNotFound -> do
-          throwError $ RuntimeContractNotFound csContractId
-        err -> do
-          throwError $ RuntimeExecutionFailure $ "Contract error: " <> show err
+    Left eof -> throwError $ RuntimeExecutionFailure "Detection thread finished unexpectedly.."
+    Right ev -> case ev of
+      ContractStreamStart{csContractId, csCreateStep=RH.CreateStep{ RH.createOutput=scriptOutput}} -> do
+        txIn <- scriptOutputToCardanoTxIn scriptOutput
+        let th = anyMarloweThreadCreated () txIn
+        returnContractUpdate csContractId (RuntimeContractInfo th)
+      ContractStreamContinued{csContractId, csContractStep=RH.RedeemPayout{}} -> pure Nothing
+      ContractStreamContinued{csContractId, csContractStep=RH.ApplyTransaction R.Transaction {R.output=R.TransactionOutput{ scriptOutput=scriptOutput}}} -> do
+        mTxIn <- for scriptOutput scriptOutputToCardanoTxIn
+        RuntimeContractInfo th <- getContractInfo csContractId
+        case anyRuntimeMarloweThread mTxIn [] th of
+          Just th' -> returnContractUpdate csContractId (RuntimeContractInfo th')
+          Nothing -> do
+            throwError $ RuntimeExecutionFailure $ "Thread contination failed: " <> show csContractId
+      ContractStreamRolledBack{csContractId} -> do
+        -- Is it even possible that we have not yet started the thread?
+        case lookupContractNickname csContractId of
+          Just contractNickname -> throwError $ RuntimeRollbackError contractNickname
+          Nothing -> pure Nothing
+      ContractStreamWait {csContractId} -> pure $ Just (Revisit csContractId)
+      ContractStreamFinish{csFinish=Nothing, csContractId} -> do
+        -- We should ignore this event because we are closing the thread
+        -- from the `ContractStreamContinued` handler.
+        -- RuntimeContractInfo th <- getContractInfo csContractId
+        -- unless (isRunning th) do
+        --   throwError $ RuntimeExecutionFailure $ "Thread already closed: " <> show csContractId
+        pure Nothing
+      ContractStreamFinish{csFinish=Just creationError, csContractId} -> do
+        case creationError of
+          ContractNotFound -> do
+            throwError $ RuntimeContractNotFound csContractId
+          err -> do
+            throwError $ RuntimeExecutionFailure $ "Contract error: " <> show err
 

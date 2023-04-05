@@ -22,13 +22,14 @@ module Language.Marlowe.Runtime.App.Channel
 import Control.Concurrent (forkIO, threadDelay)
 import Control.Concurrent.STM (atomically)
 import Control.Concurrent.STM.TChan (newTChanIO, readTChan, writeTChan)
-import Control.Monad (join, unless, void)
+import Control.Monad (forever, join, unless, void)
 import Control.Monad.Except (ExceptT(ExceptT), runExceptT)
 import Control.Monad.IO.Class (liftIO)
 import Data.Aeson (object, (.=))
 import qualified Data.Map.Strict as M (Map, adjust, delete, insert, lookup)
 import qualified Data.Set as S (Set, insert, member)
 import Data.Text (Text)
+import Data.Time.Units (Second)
 import Language.Marlowe.Core.V1.Semantics.Types (Contract)
 import Language.Marlowe.Runtime.App.Run (runClientWithConfig)
 import Language.Marlowe.Runtime.App.Stream
@@ -40,6 +41,7 @@ import Language.Marlowe.Runtime.App.Stream
   , streamContractSteps
   , transactionIdFromStream
   )
+import Language.Marlowe.Runtime.App.Types
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainPoint, TxId)
 import Language.Marlowe.Runtime.Core.Api (ContractId, MarloweVersionTag(V1))
 import Language.Marlowe.Runtime.History.Api (ContractStep, CreateStep)
@@ -48,10 +50,6 @@ import Observe.Event.Dynamic (DynamicEventSelector(..), DynamicField)
 import Observe.Event.Explicit (Event, EventBackend, addField, withEvent)
 import Observe.Event.Syntax ((≔))
 
-import qualified Data.Map.Strict as M (Map, adjust, delete, insert, lookup)
-import qualified Data.Set as S (Set, insert, member)
-import Data.Time.Units (Second)
-
 
 -- `mk*` functions are useful if you want to manage the threads yourself.
 mkDiscovery
@@ -59,12 +57,12 @@ mkDiscovery
   -> Config
   -> PollingFrequency
   -> Bool
-  -> IO (TChan (Either ChainPoint (BlockHeader, ContractId)), IO ())
+  -> IO (TChanEOF (Either ChainPoint (BlockHeader, ContractId)), IO ())
 mkDiscovery eventBackend config pollingFrequency endOnWait =
   do
     channel <- newTChanIO
     let
-      discovery = do
+      discovery =
         withEvent (hoistEventBackend liftIO eventBackend) (DynamicEventSelector "DiscoveryProcess")
         $ \event ->
           addField event
@@ -78,8 +76,8 @@ runDiscovery
   -> Config
   -> PollingFrequency
   -> Bool
-  -> IO (TChan (Either ChainPoint (BlockHeader, ContractId)))
-runDiscovery eventBackend config pollingFrequency endOnwait = do
+  -> IO (TChanEOF (Either ChainPoint (BlockHeader, ContractId)))
+runDiscovery eventBackend config pollingFrequency endOnWait = do
   (channel, discovery) <- mkDiscovery eventBackend config pollingFrequency endOnWait
   void . forkIO $ discovery
   pure channel
@@ -90,14 +88,16 @@ runDiscovery'
   :: EventBackend IO r DynamicEventSelector
   -> Config
   -> PollingFrequency
-  -> IO (TChan ContractId)
-runDiscovery' eventBackend config pollingFrequency = do
+  -> Bool
+  -> IO (TChanEOF ContractId)
+runDiscovery' eventBackend config pollingFrequency endOnWait = do
   contractIdChannel <- newTChanIO
-  runDiscovery eventBackend config pollingFrequency >>= \discoveryChannel -> do
+  runDiscovery eventBackend config pollingFrequency endOnWait >>= \discoveryChannel ->
     void . forkIO . forever $ atomically do
-      readTChan discoveryChannel >>= \case
-        Left _ -> pure ()
-        Right (_, contractId) -> writeTChan contractIdChannel contractId
+    readTChan discoveryChannel >>= \case
+      Left EOF -> writeTChan contractIdChannel (Left EOF)
+      Right (Right (_, contractId)) -> writeTChan contractIdChannel (Right contractId)
+      Right (Left _) -> pure ()
   pure contractIdChannel
 
 
@@ -112,22 +112,23 @@ mkDetection accept eventBackend config pollingFrequency inChannel =
   do
     outChannel <- newTChanIO
     let
-      detection =
-        forever
-        . runClientWithConfig config
-        -- FIXME: If `MarloweSyncClient` were a `Monad`, then we could run
-        --        multiple actions sequentially in a single connection.
+      threadAction = join
         . withEvent (hoistEventBackend liftIO eventBackend) (DynamicEventSelector "DetectionProcess")
         $ \event ->
-          do
-            contractId <- liftIO . atomically $ readTChan inChannel
-            addField event $ ("contractId" :: Text) ≔ contractId
-            -- FIXME: If there were concurrency combinators for `MarloweSyncClient`, then we
-            --        could follow multiple contracts in parallel using the same connection.
-            let
-              finishOnClose = True
-              finishOnWait = True
-            streamContractSteps eventBackend pollingFrequency finishOnClose finishOnWait accept contractId outChannel
+            liftIO (atomically $ readTChan inChannel) >>= \case
+        Left _ -> do
+          liftIO . atomically $ writeTChan outChannel $ Left EOF
+          pure $ pure ()
+        Right contractId -> do
+          addField event $ ("contractId" :: Text) ≔ contractId
+          -- FIXME: If there were concurrency combinators for `MarloweSyncClient`, then we
+          --        could follow multiple contracts in parallel using the same connection.
+          let
+            finishOnClose = True
+            finishOnWait = True
+          streamContractSteps eventBackend pollingFrequency finishOnClose finishOnWait accept contractId outChannel
+          pure threadAction
+      detection = runClientWithConfig config threadAction
     pure (outChannel, detection)
 
 runDetection
@@ -137,41 +138,10 @@ runDetection
   -> PollingFrequency
   -> TChanEOF ContractId
   -> IO (TChanEOF (ContractStream 'V1))
--- runDetection accept eventBackend config pollingFrequency inChannel =
---   do
---     outChannel <- newTChanIO
---     let
---       -- FIXME: If `MarloweSyncClient` were a `Monad`, then we could run
---       --        multiple actions sequentially in a single connection.
---       threadAction = join
---         . withEvent (hoistEventBackend liftIO eventBackend) (DynamicEventSelector "DetectionProcess")
---         $ \event ->
---           do
---             liftIO (atomically $ readTChan inChannel) >>= \case
---               Left _ -> do
---                 liftIO . atomically $ writeTChan outChannel $ Left EOF
---                 pure $ pure ()
---               Right contractId -> do
---                 addField event $ ("contractId" :: Text) ≔ contractId
---                 -- FIXME: If there were concurrency combinators for `MarloweSyncClient`, then we
---                 --        could follow multiple contracts in parallel using the same connection.
---                 let
---                   finishOnClose = True
---                   finishOnWait = True
---                 streamContractSteps eventBackend pollingFrequency finishOnClose finishOnWait accept contractId outChannel
---                 pure threadAction
---     void $ forkIO $ runClientWithConfig config threadAction
---     pure outChannel
--- 
--- =======
---   -> TChan ContractId
---   -> IO (TChan (ContractStream 'V1))
--- =======
 runDetection accept eventBackend config pollingFrequency inChannel = do
   (outChannel, detection) <- mkDetection accept eventBackend config pollingFrequency inChannel
   void . forkIO $ detection
   pure outChannel
--- >>>>>>> 370a69813 (WIP. Introduce runtime to the DSL. Ongoing split of the interpreters.)
 
 data LastSeen =
   LastSeen
