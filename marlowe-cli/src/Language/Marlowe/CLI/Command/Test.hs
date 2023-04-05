@@ -19,7 +19,7 @@
 module Language.Marlowe.CLI.Command.Test
   ( -- * Marlowe CLI Commands
     TestCommand
-  , parseTestCommand
+  , mkParseTestCommand
   , runTestCommand
   ) where
 
@@ -58,29 +58,6 @@ runTestCommand cmd = do
   runTests era cmd
 
 
--- | Parser for test commands.
-parseTestCommand :: IsShelleyBasedEra era => O.Mod O.OptionFields NetworkId
-                 -> O.Mod O.OptionFields FilePath
-                 -> IO (O.Parser (TestCommand era))
-parseTestCommand network socket = do
-  testSuiteCommandParser <- testSuiteCommand network socket
-  pure $ O.hsubparser
-    $ O.commandGroup "Commands for testing contracts:"
-    <> testSuiteCommandParser
-
-
--- | Parser for the "testSuite" command.
-testSuiteCommand :: IsShelleyBasedEra era
-               => O.Mod O.OptionFields NetworkId
-               -> O.Mod O.OptionFields FilePath
-               -> IO (O.Mod O.CommandFields (TestCommand era))
-testSuiteCommand network socket = do
-  scriptOptionsParser <- testSuiteOptions network socket
-  pure $ O.command "testSuite"
-    $ O.info scriptOptionsParser
-    $ O.progDesc "Test Marlowe testSuite on-chain."
-
-
 executionModeParser :: O.Parser ExecutionMode
 executionModeParser = fmap (fromMaybe (OnChainMode (fromMicroseconds 120_000_000))) simulationModeOpt
 
@@ -90,11 +67,11 @@ simulationModeOpt = O.optional (O.flag' SimulationMode  (O.long "simulation-mode
 
 
 -- | Parser for the "testSuite" options.
-testSuiteOptions :: IsShelleyBasedEra era
+mkParseTestCommand :: IsShelleyBasedEra era
                => O.Mod O.OptionFields NetworkId
                -> O.Mod O.OptionFields FilePath
                -> IO (O.Parser (TestCommand era))
-testSuiteOptions network socket = do
+mkParseTestCommand network socket = do
   let
     chainSeekSyncPort :: CliOption OptionFields PortNumber
     chainSeekSyncPort = port "chain-seek-sync" "CHAIN_SEEK_SYNC" 3715 "The port number of the chain-seek server's synchronization API."

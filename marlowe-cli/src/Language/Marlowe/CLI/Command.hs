@@ -36,7 +36,7 @@ import Language.Marlowe.CLI.Command.Role (RoleCommand, parseRoleCommand, runRole
 import Language.Marlowe.CLI.Command.Run (RunCommand, parseRunCommand, runRunCommand)
 import Language.Marlowe.CLI.Command.Template
   (OutputFiles(..), TemplateCommand, parseTemplateCommand, parseTemplateCommandOutputFiles, runTemplateCommand)
-import Language.Marlowe.CLI.Command.Test (TestCommand, parseTestCommand, runTestCommand)
+import Language.Marlowe.CLI.Command.Test (TestCommand, mkParseTestCommand, runTestCommand)
 import Language.Marlowe.CLI.Command.Transaction (TransactionCommand, parseTransactionCommand, runTransactionCommand)
 import Language.Marlowe.CLI.Command.Util (UtilCommand, parseUtilCommand, runUtilCommand)
 import Language.Marlowe.CLI.IO (getNetworkMagic, getNodeSocketPath)
@@ -147,11 +147,11 @@ mkCommandParser networkId socketPath version = do
     mkSomeCommandParser :: IO (O.Parser SomeCommand)
     mkSomeCommandParser = do
       let
-        mkTestCommandParser :: forall era lang. IsShelleyBasedEra era => IO (O.Parser (TestCommand era))
-        mkTestCommandParser = parseTestCommand networkId socketPath
+        parseTestCommand :: forall era lang. IsShelleyBasedEra era => IO (O.Parser (TestCommand era))
+        parseTestCommand = mkParseTestCommand networkId socketPath
       -- FIXME: Is is possible to aviod this duplication?
       -- It seems to be hard to mix `BindP` and `IO`.
-      testCommandParsers <- (,) <$> mkTestCommandParser <*> mkTestCommandParser
+      testCommandParsers <- (,) <$> parseTestCommand <*> parseTestCommand
       pure $ O.BindP eraOption (mkSomeCommandParser' testCommandParsers)
 
     mkSomeCommandParser' :: (O.Parser (TestCommand AlonzoEra), O.Parser (TestCommand BabbageEra)) -> SomeEra -> O.Parser SomeCommand
@@ -167,7 +167,7 @@ mkCommandParser networkId socketPath version = do
           [ O.commandGroup "High-level commands:"
           , O.command "run"         $ O.info (RunCommand      <$> parseRunCommand networkId socketPath )                     $ O.progDesc "Run a contract."
           , O.command "template"    $ O.info (TemplateCommand <$> parseTemplateCommand <*> parseTemplateCommandOutputFiles)  $ O.progDesc "Create a contract from a template."
-          , O.command "test"        $ O.info (TestCommand     <$> testCommandParser)                                         $ O.progDesc "Test contracts."
+          , O.command "test"        $ O.info (TestCommand     <$> testCommandParser)                                         $ O.progDesc "Run test scenario described using yaml based DSL."
           ]
       , O.hsubparser $ fold
           [ O.commandGroup "Low-level commands:"
