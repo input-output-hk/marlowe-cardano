@@ -138,7 +138,7 @@ defaultOptions :: LocalTestnetOptions
 defaultOptions = LocalTestnetOptions
   { slotDuration = 100
   , securityParameter = 10
-  , numSpoNodes = 3
+  , numSpoNodes = 1
   , numDelegators = 3
   , numWallets = 3
   , totalBalance = 10020000000
