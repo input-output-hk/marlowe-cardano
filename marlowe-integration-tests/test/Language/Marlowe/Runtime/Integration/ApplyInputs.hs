@@ -26,7 +26,17 @@ import Language.Marlowe.Runtime.ChainSync.Api (AssetId(AssetId), Assets(Assets),
 import Language.Marlowe.Runtime.Client (applyInputs, createContract)
 import Language.Marlowe.Runtime.Core.Api hiding (Contract)
 import Language.Marlowe.Runtime.Integration.Common
-  (Integration, Wallet(..), expectJust, expectLeft, expectRight, getGenesisWallet, runIntegrationTest, submit, submit')
+  ( Integration
+  , Wallet(..)
+  , deposit
+  , expectJust
+  , expectLeft
+  , expectRight
+  , getGenesisWallet
+  , runIntegrationTest
+  , submit
+  , submit'
+  )
 import Language.Marlowe.Runtime.Plutus.V2.Api (toPlutusAddress)
 import Language.Marlowe.Runtime.Transaction.Api
 import Plutus.V2.Ledger.Api (POSIXTime(POSIXTime), toBuiltin)
@@ -403,6 +413,7 @@ whenSpec = describe "When contracts" do
   whenEmptySpec
   whenNonEmptySpec
   merkleizedSpec
+  multiInputsSpec
 
 data TimeoutTestData = TimeoutTestData
   { depth1Created :: ContractCreated BabbageEra 'V1
@@ -833,7 +844,6 @@ merkleizedSpec = parallel $ describe "Merkleized contracts" $ aroundAll setup do
     setup runTests = withLocalMarloweRuntime $ runIntegrationTest do
       startTime <- liftIO getCurrentTime
       wallet <- getGenesisWallet 0
-      let
       contract <-
         expectRight "Failed to create contract" =<< createContract
           Nothing
@@ -846,6 +856,56 @@ merkleizedSpec = parallel $ describe "Merkleized contracts" $ aroundAll setup do
       submitCreate wallet contract
       runtime <- ask
       liftIO $ runTests (runtime, let ContractCreated{..} = contract in contractId)
+
+multiInputsSpec :: Spec
+multiInputsSpec = parallel $ describe "Multi inputs" $ aroundAll setup do
+  it "should accept one input" $ runAsIntegration \(startTime, contractId) -> do
+    wallet <- getGenesisWallet 0
+    InputsApplied{output} <- deposit wallet contractId (Role "role") (Role "role") ada 1_000_000
+    TransactionScriptOutput{..} <- expectJust "Expected an output" output
+    liftIO $ marloweContract datum `shouldBe` When
+      [Case (Choice (ChoiceId "choice" (Role "role")) [Bound 0 0]) Close]
+      (utcTimeToPOSIXTime $ addUTCTime (secondsToNominalDiffTime 100) startTime)
+      Close
+  it "should accept two inputs" $ runAsIntegration \(_, contractId) -> do
+    wallet <- getGenesisWallet 0
+    InputsApplied{output} <- expectRight "Failed to apply inputs" =<< applyInputs
+      MarloweV1
+      (addresses wallet)
+      contractId
+      emptyMarloweTransactionMetadata
+      [NormalInput $ IDeposit (Role "role") (Role "role") ada 1_000_000, NormalInput $ IChoice (ChoiceId "choice" (Role "role")) 0]
+    liftIO $ output `shouldBe` Nothing
+  it "should reject an invalid second input" $ runAsIntegration \(_, contractId) -> do
+    wallet <- getGenesisWallet 0
+    result <- applyInputs
+      MarloweV1
+      (addresses wallet)
+      contractId
+      emptyMarloweTransactionMetadata
+      [NormalInput $ IDeposit (Role "role") (Role "role") ada 1_000_000, NormalInput $ IDeposit (Role "role") (Role "role") ada 1_000_000]
+    liftIO $ result `shouldBe` Left (ApplyInputsConstraintsBuildupFailed $ MarloweComputeTransactionFailed "TEApplyNoMatchError")
+  where
+    setup :: ActionWith (MarloweRuntime, (UTCTime, ContractId)) -> IO ()
+    setup runTests = withLocalMarloweRuntime $ runIntegrationTest do
+      startTime <- liftIO getCurrentTime
+      wallet <- getGenesisWallet 0
+      let
+        timeout = utcTimeToPOSIXTime $ addUTCTime (secondsToNominalDiffTime 100) startTime
+        action1 = Deposit (Role "role") (Role "role") ada (Constant 1_000_000)
+        action2 = Choice (ChoiceId "choice" (Role "role")) [Bound 0 0]
+      contract <-
+        expectRight "Failed to create contract" =<< createContract
+          Nothing
+          MarloweV1
+          (addresses wallet)
+          (mkRoleTokens [("role", wallet)])
+          emptyMarloweTransactionMetadata
+          2_000_000
+          (When [Case action1 $ When [Case action2 Close] timeout Close, Case action2 $ When [Case action1 Close] timeout Close] timeout Close)
+      submitCreate wallet contract
+      runtime <- ask
+      liftIO $ runTests (runtime, let ContractCreated{..} = contract in (startTime, contractId))
 
 utcTimeToPOSIXTime :: UTCTime -> POSIXTime
 utcTimeToPOSIXTime = POSIXTime . floor . (* 1000) . utcTimeToPOSIXSeconds
