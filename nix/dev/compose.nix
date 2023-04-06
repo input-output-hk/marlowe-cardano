@@ -22,17 +22,19 @@ let
     exec -a $PROG $BIN "$@"
   '';
 
+  # We assume that all the components are versioned together.
+  marloweRuntimeVersion = "0.0.1";
   symlinks = runCommand "symlinks" { } ''
     mkdir -p $out
     ln -sv ${run-sqitch}/bin/run-sqitch $out
     ln -sv ${run-sqitch-marlowe-indexer}/bin/run-sqitch-marlowe-indexer $out
-    ln -sv ${run-local-service "marlowe-chain-sync" "0.0.0.0" "marlowe-chain-indexer"}/bin/run-marlowe-chain-indexer $out
-    ln -sv ${run-local-service "marlowe-chain-sync" "0.0.0.0" "marlowe-chain-sync"}/bin/run-marlowe-chain-sync $out
-    ln -sv ${run-local-service "marlowe-runtime" "0.0.0.0" "marlowe-sync"}/bin/run-marlowe-sync $out
-    ln -sv ${run-local-service "marlowe-runtime" "0.0.0.0" "marlowe-tx"}/bin/run-marlowe-tx $out
-    ln -sv ${run-local-service "marlowe-runtime-web" "0.0.0.0" "marlowe-web-server"}/bin/run-marlowe-web-server $out
-    ln -sv ${run-local-service "marlowe-runtime" "0.0.0.0" "marlowe-indexer"}/bin/run-marlowe-indexer $out
-    ln -sv ${run-local-service "marlowe-runtime" "0.0.0.0" "marlowe-proxy"}/bin/run-marlowe-proxy $out
+    ln -sv ${run-local-service "marlowe-chain-sync" marloweRuntimeVersion "marlowe-chain-indexer"}/bin/run-marlowe-chain-indexer $out
+    ln -sv ${run-local-service "marlowe-chain-sync" marloweRuntimeVersion "marlowe-chain-sync"}/bin/run-marlowe-chain-sync $out
+    ln -sv ${run-local-service "marlowe-runtime" marloweRuntimeVersion "marlowe-sync"}/bin/run-marlowe-sync $out
+    ln -sv ${run-local-service "marlowe-runtime" marloweRuntimeVersion "marlowe-tx"}/bin/run-marlowe-tx $out
+    ln -sv ${run-local-service "marlowe-runtime-web" marloweRuntimeVersion "marlowe-web-server"}/bin/run-marlowe-web-server $out
+    ln -sv ${run-local-service "marlowe-runtime" marloweRuntimeVersion "marlowe-indexer"}/bin/run-marlowe-indexer $out
+    ln -sv ${run-local-service "marlowe-runtime" marloweRuntimeVersion "marlowe-proxy"}/bin/run-marlowe-proxy $out
   '';
 
   node-service = {
