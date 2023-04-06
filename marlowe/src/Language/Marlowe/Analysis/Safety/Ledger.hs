@@ -49,6 +49,7 @@ import Language.Marlowe.Core.V1.Semantics (MarloweData(..), MarloweParams(..))
 import Language.Marlowe.Core.V1.Semantics.Types
   (Action(..), Bound(..), Case(..), Contract, InputContent(..), State(..), Token(..))
 import Language.Marlowe.Scripts (MarloweTxInput(..))
+import Numeric.Natural (Natural)
 import Plutus.V2.Ledger.Api
   ( Credential(PubKeyCredential)
   , CurrencySymbol(..)
@@ -72,8 +73,8 @@ import qualified PlutusTx.Prelude as P
 
 -- | Check the safety of a Marlowe contract and state.
 checkSafety
-  :: Int  -- ^ The `maxValueSize` protocol parameter.
-  -> Int  -- ^ The `utxoCostPerByte` protocol parameter.
+  :: Natural  -- ^ The `maxValueSize` protocol parameter.
+  -> Integer  -- ^ The `utxoCostPerByte` protocol parameter.
   -> MarloweData  -- ^ The initial Marlowe data for the contract and state.
   -> Continuations  -- ^ The merkleized continuations of the contract.
   -> SafetyReport  -- ^ The report on the contract's safety.
@@ -124,7 +125,7 @@ checkTokens =
 
 -- | Check that a contract satisfies the maximum value ledger constraint.
 checkMaximumValueBound
-  :: Int  -- ^ The `maxValueSize` protocol parameter.
+  :: Natural  -- ^ The `maxValueSize` protocol parameter.
   -> Contract  -- ^ The contract.
   -> Continuations  -- ^ The merkleized continuations.
   -> [SafetyError]  -- ^ The safety messages.
@@ -141,7 +142,7 @@ checkMaximumValueBound maxValueSize contract continuations =
 worstMaximumValue
   :: Contract  -- ^ The contract.
   -> Continuations  -- ^ The merkleized continuations.
-  -> Int  -- ^ A bound on the value size (in bytes).
+  -> Natural  -- ^ A bound on the value size (in bytes).
 worstMaximumValue = (worstValueSize .) . extractAllWithContinuations
 
 
@@ -181,12 +182,13 @@ worstTxOut contract continuations =
 
 -- | Compute a bound on the minimum UTxO that might be required for a Marlowe contract.
 worstMinimumUtxo
-  :: Int  -- ^ The `utxoCostPerByte` protocol parameter.
+  :: Integer  -- ^ The `utxoCostPerByte` protocol parameter.
   -> Contract  -- ^ The contract.
   -> Continuations  -- ^ The merkleized continuations.
-  -> Int  -- ^ A worst-case bound on the minimum UTxO lovelace for the contract.
+  -> Integer  -- ^ A worst-case bound on the minimum UTxO lovelace for the contract.
 worstMinimumUtxo utxoCostPerByte contract continuations =
-  utxoCostPerByte *
+  toInteger
+    $ fromInteger utxoCostPerByte *
     (
         155                                       -- Offset.
       + 28                                        -- Worst case for stake address.
@@ -198,13 +200,13 @@ worstMinimumUtxo utxoCostPerByte contract continuations =
 -- | Compute a bound on the size of a multi-asset value.
 worstValueSize
   :: S.Set Token  -- ^ The tokens present.
-  -> Int          -- ^ The number of bytes on the ledger.
+  -> Natural      -- ^ The number of bytes on the ledger.
 worstValueSize tokens =
   let
     -- Number of tokens.
-    nTokens = S.size tokens
+    nTokens = toInteger $ S.size tokens
     -- Number of bytes needed to store the policy IDs.
-    nPolicies = S.size $ S.map (\(Token c _) -> c) tokens
+    nPolicies = toInteger . S.size $ S.map (\(Token c _) -> c) tokens
     -- Number of bytes needed to store the token names.
     nNames = sum . fmap P.lengthOfByteString . toList $ S.map (\(Token _ (TokenName n)) -> n) tokens
     -- Round bytes up to whole words.
@@ -212,7 +214,7 @@ worstValueSize tokens =
   in
     -- This is the ledger formula for computing the size of a token bundle.
     -- See <https://github.com/input-output-hk/cardano-ledger/blob/863f1d2f53852369802f070e16509ba3c896b47a/doc/explanations/min-utxo-alonzo.rst>.
-    8 * (6 + padWords (12 * nTokens + 28 * nPolicies + fromInteger nNames))
+    fromInteger $ 8 * (6 + padWords (12 * nTokens + 28 * nPolicies + nNames))
 
 
 -- | Find a representative Marlowe state with worst-case size.
@@ -250,7 +252,7 @@ worstDatumSize
   :: MarloweParams  -- ^ The Marlowe parameters.
   -> Contract  -- ^ The contract.
   -> Continuations  -- ^ The merkleized continuations.
-  -> Int  -- ^ A worst-case bound on the size (in bytes) of the Marlowe datum.
+  -> Natural  -- ^ A worst-case bound on the size (in bytes) of the Marlowe datum.
 worstDatumSize = ((dataSize .) .) . worstMarloweData
 
 
@@ -277,12 +279,12 @@ possibleRedeemers =
 worstRedeemerSize
   :: Contract  -- ^ The contract.
   -> Continuations  -- ^ The merkleized continuations.
-  -> Int  -- ^ A worst-case bound on the size (in bytes) of the Marlowe redeemer.
+  -> Natural  -- ^ A worst-case bound on the size (in bytes) of the Marlowe redeemer.
 worstRedeemerSize = ((maximum . fmap dataSize) .) . possibleRedeemers
 
 
 -- | Measure the size of Plutus data.
-dataSize :: ToData a => a -> Int
+dataSize :: ToData a => a -> Natural
 dataSize = fromInteger . P.lengthOfByteString . serialiseData . toBuiltinData
 
 
