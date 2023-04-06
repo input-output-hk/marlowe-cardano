@@ -239,12 +239,6 @@ instance MimeRender (TxJSON WithdrawTx) (PostWithdrawalsResponse CardanoTx) wher
 instance MimeUnrender (TxJSON WithdrawTx) (PostWithdrawalsResponse CardanoTx) where
   mimeUnrender _ bs = eitherDecode bs
 
--- instance HasNamedLink (CreateTxEnvelope tx) API "contract" where
---   type Endpoint (CreateTxEnvelope tx) API "contract" =
---     "contracts" :> Capture "contractId" TxOutRef :> GetContractAPI
---   namedLink _ _ mkLink CreateTxEnvelope{..} = Just $ mkLink contractId
---
-
 instance HasNamedLink (WithdrawTxEnvelope tx) API "withdrawal" where
   type Endpoint (WithdrawTxEnvelope tx) API "withdrawal" =
     "withdrawals" :> Capture "withdrawalId" TxId :> GetWithdrawalAPI
