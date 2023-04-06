@@ -40,9 +40,10 @@ import Control.Concurrent.STM
   (STM, atomically, modifyTVar, newEmptyTMVar, newTVar, putTMVar, readTMVar, readTVar, retry)
 import Control.Error.Util (hoistMaybe, note, noteT)
 import Control.Exception (Exception(..))
+import Control.Monad (unless)
 import Control.Monad.IO.Class (MonadIO(liftIO))
 import Control.Monad.Trans.Class (lift)
-import Control.Monad.Trans.Except (ExceptT(..), except, runExceptT, withExceptT)
+import Control.Monad.Trans.Except (ExceptT(..), except, runExceptT, throwE, withExceptT)
 import Data.Bifunctor (first)
 import Data.List (find)
 import qualified Data.Map as Map
@@ -91,6 +92,7 @@ import Language.Marlowe.Runtime.Transaction.Query
   , lookupMarloweScriptUtxo
   , lookupPayoutScriptUtxo
   )
+import Language.Marlowe.Runtime.Transaction.Safety (checkContract, checkTransactions, noContinuations)
 import Language.Marlowe.Runtime.Transaction.Submit (SubmitJob(..), SubmitJobStatus(..))
 import Network.Protocol.Connection (SomeConnectionSource(..), SomeServerConnector, acceptSomeConnector)
 import Network.Protocol.Driver (runSomeConnector)
@@ -283,6 +285,21 @@ execCreate getCurrentScripts eventBackend ev solveConstraints loadWalletContext 
       , marloweScriptHash = marloweScript
       , payoutScriptHash = payoutScript
       }
+  let
+    continuations = noContinuations version  -- FIXME: Revise this when continuations are available at creation.
+    contractSafetyErrors = checkContract roleTokens version contract continuations
+  -- FIXME: The is a placeholder until we design safety-analysis reporting.
+  unless (null contractSafetyErrors)
+    . throwE . CreateSafetyAnalysisError
+    $ show contractSafetyErrors
+  transactionSafetyErrors <-
+    ExceptT
+      $ first CreateSafetyAnalysisError
+      <$> checkTransactions solveConstraints version marloweContext rolesCurrency (changeAddress addresses) contract continuations
+  -- FIXME: The is a placeholder until we design safety-analysis reporting.
+  unless (null transactionSafetyErrors)
+    . throwE . CreateSafetyAnalysisError
+    $ show transactionSafetyErrors
   txBody <- except
     $ first CreateConstraintError
     $ solveConstraints version marloweContext walletContext constraints
