@@ -1,5 +1,6 @@
 {-# LANGUAGE ApplicativeDo #-}
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DuplicateRecordFields #-}
 
 module Language.Marlowe.Runtime.Integration.ApplyInputs
   where
@@ -35,6 +36,7 @@ spec = describe "ApplyInputs" do
   closedSpec
   closeSpec
   paySpec
+  whenSpec
 
 closedSpec :: Spec
 closedSpec = describe "Closed contract" $ aroundAll setup do
@@ -142,7 +144,7 @@ data PayTestData = PayTestData
   }
 
 paySpec :: Spec
-paySpec = focus $ describe "Pay contracts" $ aroundAll setup do
+paySpec = describe "Pay contracts" $ aroundAll setup do
   describe "Pay to role account" do
     it "should contain no output" $ runAsIntegration \PayTestData{..} -> do
       let InputsApplied{..} = payRoleAccountApplied
@@ -391,6 +393,110 @@ paySpec = focus $ describe "Pay contracts" $ aroundAll setup do
           emptyMarloweTransactionMetadata
           [NormalInput INotify]
         pure $ runTests (runtime, PayTestData{..})
+
+whenSpec :: Spec
+whenSpec = describe "When contracts" do
+  whenTimeoutSpec
+
+data TimeoutTestData = TimeoutTestData
+  { depth1Created :: ContractCreated BabbageEra 'V1
+  , depth1Applied :: InputsApplied BabbageEra 'V1
+  , depth2InnerTimeoutCreated :: ContractCreated BabbageEra 'V1
+  , depth2InnerTimeoutApplied :: InputsApplied BabbageEra 'V1
+  , depth2Created :: ContractCreated BabbageEra 'V1
+  , depth2Applied :: InputsApplied BabbageEra 'V1
+  , startTime :: UTCTime
+  }
+
+whenTimeoutSpec :: Spec
+whenTimeoutSpec = focus $ describe "Timed out contracts" $ aroundAll setup do
+  describe "Close continuation" do
+    it "should contain no output" $ runAsIntegration \TimeoutTestData{..} -> do
+      let InputsApplied{..} = depth1Applied
+      liftIO $ output `shouldBe` Nothing
+    it "should not accept any otherwise valid inputs" $ runAsIntegration \TimeoutTestData{..} -> do
+      let ContractCreated{..} = depth1Created
+      wallet <- getGenesisWallet 0
+      result <- applyInputs
+        MarloweV1
+        (addresses wallet)
+        contractId
+        emptyMarloweTransactionMetadata
+        [NormalInput INotify]
+      liftIO $ result `shouldBe` Left (ApplyInputsConstraintsBuildupFailed $ MarloweComputeTransactionFailed "TEApplyNoMatchError")
+  describe "Timed out continuation" do
+    it "should contain no output" $ runAsIntegration \TimeoutTestData{..} -> do
+      let InputsApplied{..} = depth2InnerTimeoutApplied
+      liftIO $ output `shouldBe` Nothing
+  describe "Non-timed out continuation" do
+    it "should contain the correct output" $ runAsIntegration \TimeoutTestData{..} -> do
+      let ContractCreated{marloweScriptAddress, assets} = depth2Created
+      let InputsApplied{..} = depth2Applied
+      TransactionScriptOutput address assets' utxo' MarloweData{..} <- expectJust "Expected an output" output
+      liftIO $ address `shouldBe` marloweScriptAddress
+      liftIO $ assets' `shouldBe` assets
+      liftIO $ utxo' `shouldBe` TxOutRef (fromCardanoTxId $ getTxId txBody) 1
+      liftIO $ marloweContract `shouldBe` When [] (utcTimeToPOSIXTime $ addUTCTime (secondsToNominalDiffTime 200) startTime) Close
+  where
+    setup :: ActionWith (MarloweRuntime, TimeoutTestData) -> IO ()
+    setup runTests = withLocalMarloweRuntime $ runIntegrationTest do
+      startTime <- liftIO getCurrentTime
+      wallet <- getGenesisWallet 0
+      depth1Created <-
+        expectRight "Failed to create depth1 contract" =<< createContract
+          Nothing
+          MarloweV1
+          (addresses wallet)
+          RoleTokensNone
+          emptyMarloweTransactionMetadata
+          2_000_000
+          (When [Case (Notify TrueObs) Close] (utcTimeToPOSIXTime startTime) Close)
+      submitCreate wallet depth1Created
+      depth2InnerTimeoutCreated <-
+        expectRight "Failed to create depth 2 contract" =<< createContract
+          Nothing
+          MarloweV1
+          (addresses wallet)
+          RoleTokensNone
+          emptyMarloweTransactionMetadata
+          2_000_000
+          (When [Case (Notify TrueObs) Close] (utcTimeToPOSIXTime startTime) $
+             When [] (utcTimeToPOSIXTime startTime) Close
+          )
+      submitCreate wallet depth2InnerTimeoutCreated
+      depth2Created <-
+        expectRight "Failed to create depth 2 contract" =<< createContract
+          Nothing
+          MarloweV1
+          (addresses wallet)
+          RoleTokensNone
+          emptyMarloweTransactionMetadata
+          2_000_000
+          (When [Case (Notify TrueObs) Close] (utcTimeToPOSIXTime startTime) $
+             When [] (utcTimeToPOSIXTime $ addUTCTime (secondsToNominalDiffTime 200) startTime) Close
+          )
+      submitCreate wallet depth2Created
+      runtime <- ask
+      liftIO =<< runConcurrently do
+        depth1Applied <- Concurrently $ expectRight "Failed to apply inputs" =<< applyInputs
+          MarloweV1
+          (addresses wallet)
+          (let ContractCreated{..} = depth1Created in contractId)
+          emptyMarloweTransactionMetadata
+          []
+        depth2InnerTimeoutApplied <- Concurrently $ expectRight "Failed to apply inputs" =<< applyInputs
+          MarloweV1
+          (addresses wallet)
+          (let ContractCreated{..} = depth2InnerTimeoutCreated in contractId)
+          emptyMarloweTransactionMetadata
+          []
+        depth2Applied <- Concurrently $ expectRight "Failed to apply inputs" =<< applyInputs
+          MarloweV1
+          (addresses wallet)
+          (let ContractCreated{..} = depth2Created in contractId)
+          emptyMarloweTransactionMetadata
+          []
+        pure $ runTests (runtime, TimeoutTestData{..})
 
 utcTimeToPOSIXTime :: UTCTime -> POSIXTime
 utcTimeToPOSIXTime = POSIXTime . floor . (* 1000) . utcTimeToPOSIXSeconds
