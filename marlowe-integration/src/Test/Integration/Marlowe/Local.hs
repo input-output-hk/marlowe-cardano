@@ -278,8 +278,8 @@ withLocalMarloweRuntime' MarloweRuntimeOptions{..} test = withRunInIO \runInIO -
         (either (fail . show) pure <=< Pool.use pool)
         Sync.databaseQueries
 
-    webPort <- liftIO $ randomRIO (4000, 5000)
-    proxyPort <- liftIO $ randomRIO (5000, 6000)
+    webPort <- liftIO $ randomRIO (4000, 4999)
+    proxyPort <- liftIO $ randomRIO (5433, 6000)
     manager <- liftIO $ newManager defaultManagerSettings
 
     let chainSyncConnector = SomeConnector $ clientConnector chainSyncPair
