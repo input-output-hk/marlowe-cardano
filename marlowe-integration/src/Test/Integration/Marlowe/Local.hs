@@ -50,7 +50,7 @@ import Control.Concurrent.Async (race_)
 import Control.Concurrent.Async.Lifted (Concurrently(..))
 import Control.Concurrent.Component
 import Control.Concurrent.STM (STM, atomically)
-import Control.Exception (SomeException(..), bracket, bracketOnError, catch, onException, throw, throwIO, try)
+import Control.Exception (SomeException(..), bracketOnError, catch, onException, throw, throwIO, try)
 import Control.Monad (when, (<=<))
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Except (runExceptT)
