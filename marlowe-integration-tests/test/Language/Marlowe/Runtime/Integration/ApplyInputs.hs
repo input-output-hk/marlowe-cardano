@@ -397,6 +397,7 @@ paySpec = describe "Pay contracts" $ aroundAll setup do
 whenSpec :: Spec
 whenSpec = describe "When contracts" do
   whenTimeoutSpec
+  whenEmptySpec
 
 data TimeoutTestData = TimeoutTestData
   { depth1Created :: ContractCreated BabbageEra 'V1
@@ -409,7 +410,7 @@ data TimeoutTestData = TimeoutTestData
   }
 
 whenTimeoutSpec :: Spec
-whenTimeoutSpec = focus $ describe "Timed out contracts" $ aroundAll setup do
+whenTimeoutSpec = describe "Timed out contracts" $ aroundAll setup do
   describe "Close continuation" do
     it "should contain no output" $ runAsIntegration \TimeoutTestData{..} -> do
       let InputsApplied{..} = depth1Applied
@@ -497,6 +498,62 @@ whenTimeoutSpec = focus $ describe "Timed out contracts" $ aroundAll setup do
           emptyMarloweTransactionMetadata
           []
         pure $ runTests (runtime, TimeoutTestData{..})
+
+whenEmptySpec :: Spec
+whenEmptySpec = focus $ describe "Empty When contracts" $ aroundAll setup do
+  it "should not accept empty inputs" $ runAsIntegration \contractId -> do
+    wallet <- getGenesisWallet 0
+    result <- applyInputs
+      MarloweV1
+      (addresses wallet)
+      contractId
+      emptyMarloweTransactionMetadata
+      []
+    liftIO $ result `shouldBe` Left (ApplyInputsConstraintsBuildupFailed $ MarloweComputeTransactionFailed "TEUselessTransaction")
+  it "should not accept a notify" $ runAsIntegration \contractId -> do
+    wallet <- getGenesisWallet 0
+    result <- applyInputs
+      MarloweV1
+      (addresses wallet)
+      contractId
+      emptyMarloweTransactionMetadata
+      [NormalInput INotify]
+    liftIO $ result `shouldBe` Left (ApplyInputsConstraintsBuildupFailed $ MarloweComputeTransactionFailed "TEApplyNoMatchError")
+  it "should not accept a deposit" $ runAsIntegration \contractId -> do
+    wallet <- getGenesisWallet 0
+    result <- applyInputs
+      MarloweV1
+      (addresses wallet)
+      contractId
+      emptyMarloweTransactionMetadata
+      [NormalInput $ IDeposit (Role "Role") (Role "Role") ada 1_000_000]
+    liftIO $ result `shouldBe` Left (ApplyInputsConstraintsBuildupFailed $ MarloweComputeTransactionFailed "TEApplyNoMatchError")
+  it "should not accept a choice" $ runAsIntegration \contractId -> do
+    wallet <- getGenesisWallet 0
+    result <- applyInputs
+      MarloweV1
+      (addresses wallet)
+      contractId
+      emptyMarloweTransactionMetadata
+      [NormalInput $ IChoice (ChoiceId "Choice" (Role "Role")) 0]
+    liftIO $ result `shouldBe` Left (ApplyInputsConstraintsBuildupFailed $ MarloweComputeTransactionFailed "TEApplyNoMatchError")
+  where
+    setup :: ActionWith (MarloweRuntime, ContractId) -> IO ()
+    setup runTests = withLocalMarloweRuntime $ runIntegrationTest do
+      startTime <- liftIO getCurrentTime
+      wallet <- getGenesisWallet 0
+      ContractCreated{..} <-
+        expectRight "Failed to create contract" =<< createContract
+          Nothing
+          MarloweV1
+          (addresses wallet)
+          RoleTokensNone
+          emptyMarloweTransactionMetadata
+          2_000_000
+          (When [] (utcTimeToPOSIXTime $ addUTCTime (secondsToNominalDiffTime 200) startTime) Close)
+      submitCreate wallet ContractCreated{..}
+      runtime <- ask
+      liftIO $ runTests (runtime, contractId)
 
 utcTimeToPOSIXTime :: UTCTime -> POSIXTime
 utcTimeToPOSIXTime = POSIXTime . floor . (* 1000) . utcTimeToPOSIXSeconds
