@@ -50,7 +50,7 @@ import Control.Concurrent.Async (race_)
 import Control.Concurrent.Async.Lifted (Concurrently(..))
 import Control.Concurrent.Component
 import Control.Concurrent.STM (STM, atomically)
-import Control.Exception (SomeException(..), catch, onException, throw, throwIO)
+import Control.Exception (SomeException(..), bracket, bracketOnError, catch, onException, throw, throwIO, try)
 import Control.Monad (when, (<=<))
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Except (runExceptT)
@@ -159,6 +159,19 @@ import Network.Protocol.Job.Types (Job)
 import Network.Protocol.Query.Client (QueryClient, liftQuery, queryClientPeer)
 import Network.Protocol.Query.Server (QueryServer, queryServerPeer)
 import Network.Protocol.Query.Types (Query)
+import Network.Socket
+  ( AddrInfo(..)
+  , SocketOption(ReuseAddr)
+  , SocketType(..)
+  , bind
+  , close
+  , defaultHints
+  , getAddrInfo
+  , openSocket
+  , setCloseOnExecIfNeeded
+  , setSocketOption
+  , withFdSocket
+  )
 import Network.TypedProtocol (Driver)
 import Network.Wai.Handler.Warp (run)
 import Observe.Event.Backend (noopEventBackend)
@@ -278,8 +291,8 @@ withLocalMarloweRuntime' MarloweRuntimeOptions{..} test = withRunInIO \runInIO -
         (either (fail . show) pure <=< Pool.use pool)
         Sync.databaseQueries
 
-    webPort <- liftIO $ randomRIO (4000, 4999)
-    proxyPort <- liftIO $ randomRIO (5433, 6000)
+    webPort <- liftIO $ randomPort 4000 4999
+    proxyPort <- liftIO $ randomPort 5000 5999
     manager <- liftIO $ newManager defaultManagerSettings
 
     let chainSyncConnector = SomeConnector $ clientConnector chainSyncPair
@@ -374,6 +387,24 @@ withLocalMarloweRuntime' MarloweRuntimeOptions{..} test = withRunInIO \runInIO -
           case exitCode' of
             ExitFailure _ -> fail $ "marlowe sqitch failed: \n" <> stderr'
             ExitSuccess -> pure ()
+
+randomPort :: Int -> Int -> IO Int
+randomPort lo hi = do
+  candidate <- randomRIO (lo, hi)
+  result <- try @SomeException do
+    let hints = defaultHints { addrSocketType = Stream }
+    addr <- head <$> getAddrInfo (Just hints) (Just "127.0.0.1") (Just $ show candidate)
+    close =<< open addr
+  case result of
+    Left _ -> randomPort lo hi
+    _ -> pure candidate
+  where
+    open addr = bracketOnError (openSocket addr) close \socket -> do
+      setSocketOption socket ReuseAddr 1
+      withFdSocket socket setCloseOnExecIfNeeded
+      bind socket $ addrAddress addr
+      pure socket
+
 
 publishCurrentScripts :: LocalTestnet -> LocalNodeConnectInfo CardanoMode -> IO MarloweScripts
 publishCurrentScripts LocalTestnet{..} localNodeConnectInfo = do

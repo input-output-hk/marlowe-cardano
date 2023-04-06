@@ -83,6 +83,7 @@ library
     , marlowe-runtime:proxy-api
     , marlowe-runtime-web
     , marlowe-runtime-web:server
+    , network
     , nonempty-containers
     , ouroboros-network
     , postgresql-libpq
