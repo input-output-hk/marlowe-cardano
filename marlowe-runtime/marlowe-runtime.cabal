@@ -543,6 +543,7 @@ test-suite marlowe-runtime-test
     Language.Marlowe.Runtime.Transaction.BuildConstraintsSpec
     Language.Marlowe.Runtime.Transaction.ConstraintsSpec
     Language.Marlowe.Runtime.Transaction.CommandSpec
+    Language.Marlowe.Runtime.Transaction.SafetySpec
     Language.Marlowe.Protocol.HeaderSyncSpec
     Language.Marlowe.Protocol.SyncSpec
     Language.Marlowe.Protocol.QuerySpec

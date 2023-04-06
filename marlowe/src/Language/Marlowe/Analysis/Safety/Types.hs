@@ -68,7 +68,7 @@ data SafetyError =
   | TransactionCostMayExceedProtocol Transaction ExBudget
     -- | The transaction does not validate.
   | TransactionValidationError Transaction String
-    deriving Show
+    deriving (Eq, Show)
 
 
 -- | A Marlowe transaction.
@@ -80,7 +80,7 @@ data Transaction =
   , txInput :: TransactionInput
   , txOutput :: TransactionOutput
   }
-    deriving (Show)
+    deriving (Eq, Show)
 
 instance ToJSON Transaction where
   toJSON Transaction{..} =

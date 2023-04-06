@@ -190,11 +190,10 @@ worstMinimumUtxo utxoCostPerByte contract continuations =
   toInteger
     $ fromInteger utxoCostPerByte *
     (
-        155                                       -- Offset.
-      + 28                                        -- Worst case for stake address.
+        27 * 8                                    -- Worst case for stake address and ada.
       + worstMaximumValue contract continuations  -- Worst case for size of value.
-      + 64                                        -- Worst case for length of datum hash.
-    )  -- FIXME: Depends upon the era.
+      + 10 * 8                                    -- Worst case for length of datum hash.
+    )  -- This assumes that the size computed for the Alonzo era serves as an upper-bound for future eras.
 
 
 -- | Compute a bound on the size of a multi-asset value.
@@ -210,11 +209,11 @@ worstValueSize tokens =
     -- Number of bytes needed to store the token names.
     nNames = sum . fmap P.lengthOfByteString . toList $ S.map (\(Token _ (TokenName n)) -> n) tokens
     -- Round bytes up to whole words.
-    padWords x = (x + 7) `div` 8
+    padWords x = maximum [(x + 7) `div` 8, 1]
   in
     -- This is the ledger formula for computing the size of a token bundle.
     -- See <https://github.com/input-output-hk/cardano-ledger/blob/863f1d2f53852369802f070e16509ba3c896b47a/doc/explanations/min-utxo-alonzo.rst>.
-    fromInteger $ 8 * (6 + padWords (12 * nTokens + 28 * nPolicies + nNames))
+    fromInteger $ 8 * (6 + padWords (13 * nTokens + 29 * nPolicies + nNames))
 
 
 -- | Find a representative Marlowe state with worst-case size.

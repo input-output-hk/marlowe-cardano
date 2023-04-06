@@ -358,7 +358,7 @@ data TransactionOutput =
         , txOutState    :: State
         , txOutContract :: Contract }
     | Error TransactionError
-  deriving stock (Haskell.Show)
+  deriving stock (Haskell.Eq, Haskell.Show)
 
 instance ToJSON TransactionOutput where
   toJSON TransactionOutput{..} =

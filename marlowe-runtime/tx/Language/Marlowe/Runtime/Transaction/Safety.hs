@@ -124,6 +124,7 @@ checkContract config MarloweV1 contract continuations =
     mintCheck =
       case (config, null roles) of
         (RoleTokensNone     , False) -> pure MissingRolesCurrency
+        (RoleTokensNone     , True ) -> mempty
         (_                  , True ) -> pure ContractHasNoRoles
         (RoleTokensMint mint, False) -> let
                                           minted = Plutus.TokenName . Plutus.toBuiltin . Chain.unTokenName <$> M.keys (unMint mint)
