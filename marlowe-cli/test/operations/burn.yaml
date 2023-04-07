@@ -1,0 +1,25 @@
+testName: Burning operation with a single party
+
+operations:
+
+  - tag: Mint
+    currencyNickname: Currency
+    minLovelace: 2000000
+    tokenDistribution:
+      - [Faucet, Token-1, 1]
+      - [Faucet, Token-2, 2]
+      - [Faucet, Token-3, 3]
+
+  - tag: CheckBalance
+    walletNickname: Faucet
+    balance:
+      - [Currency, Token-1, 1]
+      - [Currency, Token-2, 2]
+      - [Currency, Token-3, 3]
+
+  - tag: BurnAll
+
+  - tag: CheckBalance
+    walletNickname: Faucet
+    balance: []
+

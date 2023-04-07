@@ -140,13 +140,11 @@ See `marlowe-runtime-web`.
 
 -   [Marlowe-Cardano specification](../../marlowe/specification/marlowe-cardano-specification.md)
 -   [Marlowe-Cardano github repository](https://github.com/input-output-hk/marlowe-cardano/)
--   [Test report](../../marlowe/test/test-report.md)
 -   [Testing framework](../../marlowe/test/)
 
 
 ### Testing tools:
 
 -   [Marlowe CLI](../../marlowe-cli/ReadMe.md)
--   [Scripted on-chain tests](../../marlowe-cli/run-nonpab-tests.sh)
--   [DSL-based off- and on-chain tests](../../marlowe-cli/test/non-pab)
+-   [DSL-based off- and on-chain tests](../../marlowe-cli/test/)
 -   [Debugging cookbook](../../marlowe/debugging-cookbook.md)

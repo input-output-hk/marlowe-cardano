@@ -1,0 +1,88 @@
+testName: CLI Escrow Contract Test
+
+operations:
+  - tag: CreateWallet
+    walletNickname: Buyer
+
+  - tag: CreateWallet
+    walletNickname: Seller
+
+  - tag: CreateWallet
+    walletNickname: Mediator
+
+  - tag: FundWallets
+    values: [10000000, 10000000, 10000000]
+    walletNicknames: [Buyer]
+
+  - tag: Mint
+    currencyNickname: ContractCurrency
+    # Let's send also some ADA to the wallets so they an act in the contract
+    minLovelace: 6000000
+    tokenDistribution:
+      - [Buyer, Buyer, 1]
+      - [Seller, Seller, 1]
+      - [Mediator, Mediator, 1]
+
+
+  - tag: Initialize
+    contractNickname: Escrow
+    marloweValidators: referenceCurrent
+    roleCurrency: ContractCurrency
+    minLovelace: 2000000
+    contractSource:
+      template:
+        tag: "UseEscrow"
+        seller:
+          address: Seller
+        buyer:
+          address: Buyer
+        mediator:
+          address: Mediator
+        price: 20000000
+        paymentDeadline:
+          relative: 20000
+        complaintDeadline:
+          relative: 30000
+        disputeDeadline:
+          relative: 30000
+        mediationDeadline:
+          relative: 30000
+
+  - tag: Prepare
+    contractNickname: Escrow
+    inputs:
+      - input_from_party:
+          address: Buyer
+        that_deposits: 20000000
+        of_token:
+          currency_symbol: ""
+          token_name: ""
+        into_account:
+          address: Seller
+    minimumTime:
+      relative: -100
+    maximumTime:
+      relative: 240
+
+  - tag: AutoRun
+    contractNickname: Escrow
+
+  - tag: Prepare
+    contractNickname: Escrow
+    inputs:
+      - for_choice_id:
+          choice_name: Everything is alright
+          choice_owner:
+            address: Buyer
+        input_that_chooses_num: 0
+    minimumTime:
+      relative: -100
+    maximumTime:
+      relative: 240
+
+  - tag: AutoRun
+    contractNickname: Escrow
+
+  - tag: BurnAll
+
+  - tag: ReturnFunds

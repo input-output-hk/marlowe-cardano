@@ -1,0 +1,36 @@
+testName: Fund return operation which involves multiple parties
+
+operations:
+
+  - tag: CreateWallet
+    walletNickname: Party-1
+
+  - tag: CreateWallet
+    walletNickname: Party-2
+
+  - tag: Mint
+    currencyNickname: Currency
+    minLovelace: 10000000
+    tokenDistribution:
+      - [Party-1, Token-1, 1]
+      - [Party-2, Token-2, 2]
+      - [Faucet, Token-3, 3]
+
+  - tag: ReturnFunds
+
+  - tag: CheckBalance
+    walletNickname: Party-1
+    balance: []
+
+  - tag: CheckBalance
+    walletNickname: Party-2
+    balance: []
+
+  - tag: CheckBalance
+    walletNickname: Faucet
+    balance:
+      - [Currency, Token-1, 1]
+      - [Currency, Token-2, 2]
+      - [Currency, Token-3, 3]
+      - [ADA, [-2, 0]]
+
