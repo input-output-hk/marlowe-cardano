@@ -123,18 +123,17 @@ runTests era TestSuite{..} =
       liftIO . putStrLn $ "***** Test " <> show testName <> " *****"
 
       let
+        RuntimeConfig { .. } = stRuntime
         connector :: Network.Protocol.SomeClientConnector Marlowe.Protocol.MarloweRuntimeClient IO
         connector = Network.Protocol.SomeConnector
           $ Network.Protocol.handshakeClientConnector
           $ Network.Protocol.tcpClient rcRuntimeHost rcRuntimePort Marlowe.Protocol.marloweRuntimeClientPeer
-        RuntimeConfig { .. } = stRuntime
         config = def
           { Apps.chainSeekHost = rcRuntimeHost
           , Apps.runtimePort = rcRuntimePort
           , Apps.chainSeekSyncPort = rcChainSeekSyncPort
           , Apps.chainSeekCommandPort = rcChainSeekCommandPort
           }
-
       (runtimeMonitorInput, runtimeMonitorContracts, runtimeMonitor) <- liftIO $ Runtime.Monitor.mkRuntimeMonitor config
 
       let
@@ -168,8 +167,11 @@ runTests era TestSuite{..} =
           Right (RuntimeRollbackError _) | retry + 1 <= maxRetries -> do
             liftIO $ putStrLn "Re running the test case because the rollback occured."
             pure Nothing
-          Right runtimeError -> pure $ Just $ TestFailed . CliError . show $ runtimeError
-          Left testResult -> pure $ Just testResult
+          Right runtimeError -> do
+            liftIO $ putStrLn "Runtime monitor execution failed."
+            pure $ Just $ TestFailed . CliError . show $ runtimeError
+          Left testResult ->
+            pure $ Just testResult
 
       case result of
         Just TestSucceeded -> do

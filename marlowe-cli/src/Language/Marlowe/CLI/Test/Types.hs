@@ -149,6 +149,7 @@ data TestOperation =
     }
   deriving stock (Eq, Generic, Show)
 
+-- | FIXME: Constructor names could be generically derived from the types.
 cliConstructors :: [String]
 cliConstructors =
   [ "AutoRun"

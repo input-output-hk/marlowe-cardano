@@ -117,11 +117,11 @@ data RuntimeOperation =
 
 instance FromJSON RuntimeOperation where
   parseJSON = do
-    A.genericParseJSON $ Operation.genericParseJSONOptions "ro"
+    A.genericParseJSON $ Operation.genericJSONOptions "ro"
 
 instance ToJSON RuntimeOperation where
   toJSON = do
-    A.genericToJSON $ Operation.genericParseJSONOptions "ro"
+    A.genericToJSON $ Operation.genericJSONOptions "ro"
 
 
 data InterpretState era = InterpretState

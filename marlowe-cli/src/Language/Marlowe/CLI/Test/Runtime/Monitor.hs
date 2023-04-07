@@ -141,11 +141,8 @@ mkRuntimeMonitor config = do
   let
     eventBackend = unitEventBackend
 
-    seconds :: Second
-    seconds = 5
-
-    microseconds = fromMicroseconds $ toMicroseconds seconds
-    pollingFrequency = PollingFrequency microseconds
+    pollingMicroseconds = fromMicroseconds $ toMicroseconds (5 :: Second)
+    pollingFrequency = PollingFrequency pollingMicroseconds
 
   (contractStream, detection) <- mkDetection (const True) eventBackend config pollingFrequency detectionInputChannel
 
@@ -157,13 +154,15 @@ mkRuntimeMonitor config = do
         knownContracts <- readTVar knownContractsRef
 
         case processMarloweStreamEvent knownContracts contracts contractStreamEvent of
-          Left (RuntimeContractNotFound contractId) -> do
-            writeTChan detectionInputChannel (Right contractId)
-            pure $ pure Nothing
+          Left (RuntimeContractNotFound contractId) -> pure $ do
+            void . forkIO $ do
+              threadDelay . fromIntegral . toMicroseconds $ (10 :: Second)
+              atomically $ writeTChan detectionInputChannel (Right contractId)
+            pure Nothing
           Left err -> pure $ pure $ Just err
           Right (Just (Revisit contractId)) -> pure $ do
               void . forkIO
-                $ threadDelay (fromIntegral microseconds)
+                $ threadDelay (fromIntegral pollingMicroseconds)
                 >> atomically (writeTChan detectionInputChannel $ Right contractId)
               pure Nothing
           Right (Just (RuntimeContractUpdate contractId contractInfo)) -> do

@@ -140,6 +140,7 @@ library
     marlowe-chain-sync,
     marlowe-client,
     marlowe-protocols,
+    marlowe-test,
 
     marlowe-runtime:config,
     marlowe-runtime:discovery-api,
@@ -167,6 +168,7 @@ library
     plutus-tx,
     plutus-tx-plugin,
     prettyprinter,
+    profunctors,
     reflection,
     QuickCheck,
     regex-posix,

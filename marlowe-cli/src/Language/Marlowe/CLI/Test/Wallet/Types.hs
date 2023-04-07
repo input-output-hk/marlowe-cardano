@@ -19,6 +19,7 @@ module Language.Marlowe.CLI.Test.Wallet.Types
 import Cardano.Api
   (AddressInEra, CardanoMode, LocalNodeConnectInfo, Lovelace, PolicyId, ScriptDataSupportedInEra, TxBody, UTxO(UTxO))
 import Contrib.Data.Aeson.Generic (getConName)
+import Control.Applicative ((<|>))
 import Control.Lens (makeLenses)
 import Control.Monad.Except (MonadError)
 import Control.Monad.IO.Class (MonadIO)
@@ -30,6 +31,7 @@ import Control.Monad.Trans.State.Strict (StateT)
 import Data.Aeson (FromJSON(..), ToJSON(..))
 import qualified Data.Aeson as A
 import qualified Data.Aeson as Aeson
+import qualified Data.Aeson.OneLine as A
 import qualified Data.Aeson.Types as A
 import qualified Data.Char as Char
 import qualified Data.Fixed as F
@@ -130,60 +132,137 @@ instance ToJSON AssetId where
     toJSON (AssetId currencyNickname tokenName) =
       toJSON [ toJSON currencyNickname, tokenNameToJSON tokenName ]
 
--- | Yaml friendly representation of assets which we use in balance checking.
-newtype Assets = Assets (Map AssetId Integer)
+data Asset = Asset AssetId Integer
   deriving (Eq, Ord, Show)
+
+instance FromJSON Asset where
+  parseJSON = \case
+    A.Array (V.toList -> [assetJSON, amountJSON]) -> do
+      -- Matches ADA asset
+      parseJSON assetJSON >>= \case
+        AdaAsset -> pure ()
+        _ -> fail "Expecting ADA asset"
+      (MicroValue amount) <- parseJSON amountJSON
+      pure $ Asset AdaAsset (floor $ 1_000_000 * amount)
+    A.Array (V.toList -> [assetNameJSON, tokenNameJSON, amountJSON]) -> do
+      assetId <- parseJSON $ A.Array $ V.fromList [assetNameJSON, tokenNameJSON]
+      amount <- parseJSON amountJSON
+      pure $ Asset assetId amount
+    _ -> fail "Expecting an assets map encoding."
+
+instance ToJSON Asset where
+    toJSON (Asset AdaAsset amount) = toJSON
+      [ toJSON ("ADA" :: String)
+      , toJSON $ show (fromInteger amount :: F.Micro)
+      ]
+    toJSON (Asset (AssetId currencyNickname tokenName) amount) = toJSON
+      [ toJSON currencyNickname, toJSON tokenName, toJSON amount ]
+
+data Balance value
+  = ExactValue value
+  | ValueRange value value
+  | AnyBalance
+  deriving stock (Generic, Eq, Show)
+
+instance Functor Balance where
+  fmap f = \case
+    ExactValue v -> ExactValue (f v)
+    ValueRange v1 v2 -> ValueRange (f v1) (f v2)
+    AnyBalance -> AnyBalance
+
+newtype MicroValue = MicroValue { unMicroValue :: Fixed.Micro }
+  deriving stock (Eq, Ord, Show)
+
+instance FromJSON MicroValue where
+  parseJSON = \case
+    A.String str -> do
+      let
+        str' = T.replace "_" "" str
+      case readMaybe (T.unpack str') of
+        Just a -> pure $ MicroValue a
+        Nothing -> fail "Unable to parse ADA amount"
+    json -> MicroValue <$> parseJSON json
+
+instance ToJSON MicroValue where
+  toJSON (MicroValue amount) = toJSON $ show amount
+
+instance FromJSON value => FromJSON (Balance value) where
+  parseJSON json = do
+    let
+      parseValue = \case
+        A.String str -> do
+          let
+            str' = T.replace "_" "" str
+          parseJSON (A.String str')
+        n@(A.Number _) -> parseJSON n
+        json -> fail $ "Expecting a number or a string but got:" <> T.unpack (A.renderValue json)
+    case json of
+      A.String (T.toLower -> "*") -> pure AnyBalance
+      A.Array (V.toList -> [min, max]) -> ValueRange <$> parseValue min <*> parseValue max
+      _ -> ExactValue <$> parseValue json
+
+type Balance' = Balance Integer
+
+checkBalance :: Eq value => Ord value => Balance value -> value -> Bool
+checkBalance expected actual = case expected of
+  ExactValue v -> v == actual
+  ValueRange min max -> min <= actual && actual <= max
+  AnyBalance -> True
+
+-- | Yaml friendly representation of assets which we use in balance checking.
+newtype AssetsBalance = AssetsBalance (Map AssetId (Balance Integer))
+  deriving (Eq, Show)
   deriving newtype (Semigroup, Monoid)
 
-assetsSingleton :: AssetId -> Integer -> Assets
-assetsSingleton assetId = Assets . Map.singleton assetId
+assetsSingleton :: AssetId -> Balance' -> AssetsBalance
+assetsSingleton assetId = AssetsBalance . Map.singleton assetId
 
-lovelaceAssets :: Integer -> Assets
+lovelaceAssets :: Balance' -> AssetsBalance
 lovelaceAssets = assetsSingleton AdaAsset
 
-instance FromJSON Assets where
+instance FromJSON AssetsBalance where
   parseJSON json = do
     (assetsEntries :: [A.Value]) <- parseJSON json
     assets <- for assetsEntries parseAssetEntry
     pure $ fold assets
     where
       parseAssetEntry = \case
-        lovelaceJSON@(Aeson.Number _) -> do
-          lovelaceAssets <$> parseJSON lovelaceJSON
-        Aeson.String txt -> do
-          let
-            txt' = T.replace "_" "" txt
-          lovelaceAssets <$> parseJSON (A.String txt')
-        A.Array (V.toList -> [assetJSON, amountJSON]) -> do
+        lovelaceJSON@(Aeson.Number _) -> lovelaceAssets <$> parseJSON lovelaceJSON
+        loveLaceJSON@(Aeson.String _) -> lovelaceAssets <$> parseJSON loveLaceJSON
+        A.Array (V.toList -> [assetJSON, balanceJSON]) -> do
           -- Matches ADA asset
           parseJSON assetJSON >>= \case
             AdaAsset -> pure ()
             _ -> fail "Expecting ADA asset"
-          (_ :: AssetId) <- parseJSON assetJSON
-          (amount :: Fixed.Micro) <- case amountJSON of
-            -- Handle decimal as String
-            A.String str -> case readMaybe (T.unpack str) of
-              Just a -> pure a
-              Nothing -> fail "Unable to parse ADA amount"
-            -- Handle plain Integer
-            _ -> parseJSON amountJSON
-          pure $ lovelaceAssets (floor $ 1_000_000 * amount)
-        A.Array (V.toList -> [assetNameJSON, tokenNameJSON, amountJSON]) -> do
+          (amount :: Balance MicroValue) <- parseJSON balanceJSON
+          pure $ lovelaceAssets $ fmap (floor . (1_000_000 *) . unMicroValue) amount
+        A.Array (V.toList -> [assetNameJSON, tokenNameJSON, balanceJSON]) -> do
           assetId <- parseJSON $ A.Array $ V.fromList [assetNameJSON, tokenNameJSON]
-          amount <- parseJSON amountJSON
-          pure $ assetsSingleton assetId amount
+          balance <- parseJSON balanceJSON
+          pure $ assetsSingleton assetId balance
         _ -> fail "Expecting an assets map encoding."
 
-
-instance ToJSON Assets where
-    toJSON (Assets (Map.toList -> assetsList)) = toJSON $ map assetToJSON assetsList
+instance ToJSON AssetsBalance where
+    toJSON (AssetsBalance (Map.toList -> assetsList)) = toJSON $ map assetToJSON assetsList
       where
-        assetToJSON (AdaAsset, amount) = toJSON
+        assetToJSON (AdaAsset, ExactValue amount) = toJSON
           [ toJSON ("ADA" :: String)
           , toJSON $ show (fromInteger amount :: F.Micro)
           ]
-        assetToJSON (AssetId currencyNickname tokenName, amount) = toJSON
+        assetToJSON (AssetId currencyNickname tokenName, ExactValue amount) = toJSON
           [ toJSON currencyNickname, toJSON tokenName, toJSON amount ]
+        assetToJSON (AdaAsset, AnyBalance) = toJSON
+          [ toJSON ("ADA" :: String)
+          , toJSON ("*" :: String)
+          ]
+        assetToJSON (AssetId currencyNickname tokenName, AnyBalance) = toJSON
+          [ toJSON currencyNickname, toJSON tokenName, toJSON ("*" :: String) ]
+        assetToJSON (AdaAsset, ValueRange min max) = toJSON
+          [ toJSON ("ADA" :: String)
+          , toJSON [ toJSON min, toJSON max ]
+          ]
+        assetToJSON (AssetId currencyNickname tokenName, ValueRange min max) = toJSON
+          [ toJSON currencyNickname, toJSON tokenName, toJSON [ toJSON min, toJSON max ] ]
 
 data TokenAssignment = TokenAssignment
   { taWalletNickname :: WalletNickname  -- ^ Default to the same wallet nickname as a token name.
@@ -219,7 +298,7 @@ data WalletOperation =
   | CheckBalance
     { woWalletNickname  :: WalletNickname
     , woIgnore          :: Maybe [AssetId]  -- ^ Ignore these assets when checking the balance.
-    , woBalance         :: Assets           -- ^ Expected delta of funds:
+    , woBalance         :: AssetsBalance    -- ^ Expected delta of funds:
                                             -- * We exclude tx fees from this calculation.
                                             -- * We DON'T subtract the minimum lovelace amount (attached when tokens are
                                             --  sent or attached to the contract during the execution).
@@ -251,10 +330,10 @@ data WalletOperation =
 
 instance FromJSON WalletOperation where
   parseJSON = do
-    A.genericParseJSON $ Operation.genericParseJSONOptions "wo"
+    A.genericParseJSON $ Operation.genericJSONOptions "wo"
 
 instance ToJSON WalletOperation where
-  toJSON = A.genericToJSON $ Operation.genericParseJSONOptions "wo"
+  toJSON = A.genericToJSON $ Operation.genericJSONOptions "wo"
 
 newtype Wallets era = Wallets (Map WalletNickname (Wallet era))
 

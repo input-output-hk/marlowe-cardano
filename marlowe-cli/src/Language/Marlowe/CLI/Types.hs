@@ -101,6 +101,7 @@ module Language.Marlowe.CLI.Types
   , toMarloweTimeout
   , toPOSIXTime
   , toPaymentVerificationKey
+  , toSlotRoundedMarloweTimeout
   , toUTxO
   , validatorInfoScriptOrReference
     -- * constructors and defaults
@@ -137,7 +138,7 @@ import Cardano.Api
   , ShelleyBasedEra(..)
   , SigningKey
   , SimpleScriptV2
-  , SlotNo
+  , SlotNo(SlotNo)
   , TxExtraKeyWitnessesSupportedInEra(..)
   , TxFeesExplicitInEra(..)
   , TxIn
@@ -167,7 +168,7 @@ import Language.Marlowe.Core.V1.Semantics.Types (Contract, Input, State)
 import Ledger.Orphans ()
 import Plutus.V1.Ledger.Api (CurrencySymbol, Datum, DatumHash, ExBudget, Redeemer)
 import qualified Plutus.V1.Ledger.Api as P
-import Plutus.V1.Ledger.SlotConfig (SlotConfig)
+import Plutus.V1.Ledger.SlotConfig (SlotConfig, posixTimeToEnclosingSlot, slotToBeginPOSIXTime)
 
 import qualified Cardano.Api as Api (Value)
 import qualified Cardano.Api as C
@@ -691,6 +692,17 @@ toMarloweTimeout t = POSIXTime <$> someTimeoutToMilliseconds t
 
 toPOSIXTime :: MonadIO m => SomeTimeout -> m P.POSIXTime
 toPOSIXTime t = P.POSIXTime <$> someTimeoutToMilliseconds t
+
+
+toSlotRoundedMarloweTimeout :: MonadIO m => SlotConfig -> SomeTimeout -> m E.Timeout
+toSlotRoundedMarloweTimeout slotConfig t = do
+  let
+    toSlot = posixTimeToEnclosingSlot slotConfig
+    toSlotNo = SlotNo . fromIntegral . toSlot
+  t' <- someTimeoutToMilliseconds t
+  let
+    P.POSIXTime t'' = slotToBeginPOSIXTime slotConfig . toSlot $ P.POSIXTime t'
+  pure $ POSIXTime t''
 
 
 data PublishingStrategy era =

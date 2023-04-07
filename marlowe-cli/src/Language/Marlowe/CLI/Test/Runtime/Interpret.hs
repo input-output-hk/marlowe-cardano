@@ -251,6 +251,7 @@ interpret ro@RuntimeCreateContract {..} = do
       possibleChangeAddress = toChainSyncAddress waAddress
     changeAddress <- liftCliMaybe "Failed to create change address" possibleChangeAddress
 
+    logLabeledMsg ro $ "Invoking contract creation: " <> show roContractNickname
     result <- liftIO $ flip runMarloweT connector do
       let
         stakeCredential = Nothing
@@ -295,7 +296,7 @@ interpret ro@RuntimeCreateContract {..} = do
       --   , txBody :: TxBody era
       --   }
       Right Transaction.ContractCreated { txBody, contractId } -> do
-        -- logLabeledMsg ro $ "Contract created: " <> show res
+        logLabeledMsg ro $ "Creating contract: " <> show contractId
         let
           witness = somePaymentsigningKeyToTxWitness waSigningKey
           tx = withShelleyBasedEra era . C.signShelleyTransaction txBody $ [witness]

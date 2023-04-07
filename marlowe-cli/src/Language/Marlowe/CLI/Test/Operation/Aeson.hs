@@ -19,8 +19,8 @@ import Data.Char as Char
 import Data.List as List
 import Data.Maybe (fromMaybe)
 
-genericParseJSONOptions :: String -> A.Options
-genericParseJSONOptions prefix = do
+genericJSONOptions :: String -> A.Options
+genericJSONOptions prefix = do
   let
     lowerCaseFirstChar :: String -> String
     lowerCaseFirstChar (c:cs) = Char.toLower c : cs
@@ -30,5 +30,9 @@ genericParseJSONOptions prefix = do
     { A.fieldLabelModifier = \label ->
         lowerCaseFirstChar $
         fromMaybe label (List.stripPrefix prefix label)
+    -- , A.sumEncoding = A.defaultTaggedObject
+    --   { A.tagFieldName = "action" }
     }
+
+
 

@@ -47,7 +47,8 @@ import Language.Marlowe.CLI.Test.Contract.ParametrizedMarloweJSON (ParametrizedM
 import Language.Marlowe.CLI.Test.ExecutionMode
 import qualified Language.Marlowe.CLI.Test.Operation.Aeson as Operation
 import Language.Marlowe.CLI.Test.Wallet.Types
-  ( AssetId(AssetId)
+  ( Asset
+  , AssetId(AssetId)
   , Currencies(Currencies)
   , CurrencyNickname
   , WalletNickname(WalletNickname)
@@ -203,11 +204,11 @@ data CLIOperation =
 
 instance FromJSON CLIOperation where
   parseJSON = do
-    A.genericParseJSON $ Operation.genericParseJSONOptions "co"
+    A.genericParseJSON $ Operation.genericJSONOptions "co"
 
 instance ToJSON CLIOperation where
   toJSON = do
-    A.genericToJSON $ Operation.genericParseJSONOptions "co"
+    A.genericToJSON $ Operation.genericJSONOptions "co"
 
 -- | We encode `PartyRef` as `Party` so we can use role based contracts
 -- | without any change in the JSON structure.
@@ -241,19 +242,18 @@ instance ToJSON PartyRef where
 data UseTemplate =
     UseTrivial
     {
-      -- utBystander          :: Maybe WalletNickname        -- ^ The party providing the min-ADA. Falls back to the faucet wallet.
       utParty              :: Maybe PartyRef              -- ^ The party. Falls back to the faucet wallet pkh.
     , utDepositLovelace    :: Integer                     -- ^ Lovelace in the deposit.
     , utWithdrawalLovelace :: Integer                     -- ^ Lovelace in the withdrawal.
-    , utTimeout            :: SomeTimeout                  -- ^ The timeout.
+    , utTimeout            :: SomeTimeout                 -- ^ The timeout.
     }
     -- | Use for escrow contract.
   | UseEscrow
     {
       utPrice             :: Integer          -- ^ Price of the item for sale, in lovelace.
-    , utSeller            :: Maybe PartyRef   -- ^ Defaults to a wallet with the "Buyer" nickname.
-    , utBuyer             :: Maybe PartyRef   -- ^ Defaults to a wallet with the "Seller" ncikname.
-    , utMediator          :: Maybe PartyRef   -- ^ The mediator.
+    , utSeller            :: PartyRef         -- ^ Defaults to a wallet with the "Buyer" nickname.
+    , utBuyer             :: PartyRef         -- ^ Defaults to a wallet with the "Seller" ncikname.
+    , utMediator          :: PartyRef         -- ^ The mediator.
     , utPaymentDeadline   :: SomeTimeout      -- ^ The deadline for the buyer to pay.
     , utComplaintDeadline :: SomeTimeout      -- ^ The deadline for the buyer to complain.
     , utDisputeDeadline   :: SomeTimeout      -- ^ The deadline for the seller to dispute a complaint.
@@ -262,15 +262,11 @@ data UseTemplate =
     -- | Use for swap contract.
   | UseSwap
     {
-      utAParty            :: Maybe PartyRef     -- ^ First party. Falls back to wallet with "A" nickname.
-    , utACurrencyNickname :: CurrencyNickname
-    , utATokenName        :: TokenName
-    , utAAmount           :: Integer            -- ^ Amount of first party's token.
+      utAParty            :: PartyRef           -- ^ First party
+    , utAAsset            :: Asset
     , utATimeout          :: SomeTimeout        -- ^ Timeout for first party's deposit.
-    , utBParty            :: Maybe PartyRef     -- ^ Second party. Falls back to wallet with "B" nickname.
-    , utBCurrencyNickname :: CurrencyNickname
-    , utBTokenName        :: TokenName
-    , utBAmount           :: Integer            -- ^ Amount of second party's token.
+    , utBParty            :: PartyRef           -- ^ Second party. Falls back to wallet with "B" nickname.
+    , utBAsset            :: Asset
     , utBTimeout          :: SomeTimeout        -- ^ Timeout for second party's deposit.
     }
     -- | Use for zero-coupon bond.
@@ -286,12 +282,12 @@ data UseTemplate =
     -- | Use for covered call.
   | UseCoveredCall
     {
-      utIssuer         :: PartyRef  -- ^ The issuer.
-    , utCounterParty   :: PartyRef  -- ^ The counter-party.
-    , utCurrency       :: AssetId   -- ^ The currency token.
-    , utUnderlying     :: AssetId   -- ^ The underlying token.
-    , utStrike         :: Integer    -- ^ The strike in currency.
-    , utAmount         :: Integer    -- ^ The amount of underlying.
+      utIssuer         :: PartyRef    -- ^ The issuer.
+    , utCounterParty   :: PartyRef    -- ^ The counter-party.
+    , utCurrency       :: AssetId     -- ^ The currency token.
+    , utStrike         :: Integer     -- ^ The strike in currency.
+    , utUnderlying     :: AssetId     -- ^ The underlying token.
+    , utAmount         :: Integer     -- ^ The amount of underlying.
     , utIssueDate      :: SomeTimeout -- ^ The issue date.
     , utMaturityDate   :: SomeTimeout -- ^ The maturity date.
     , utSettlementDate :: SomeTimeout -- ^ The settlement date.
@@ -307,10 +303,10 @@ data UseTemplate =
 
 instance FromJSON UseTemplate where
   parseJSON = do
-    A.genericParseJSON $ Operation.genericParseJSONOptions "ut"
+    A.genericParseJSON $ Operation.genericJSONOptions "ut"
 
 instance ToJSON UseTemplate where
-  toJSON = A.genericToJSON $ Operation.genericParseJSONOptions "ut"
+  toJSON = A.genericToJSON $ Operation.genericJSONOptions "ut"
 
 data CLIContractInfo lang era = CLIContractInfo
   {

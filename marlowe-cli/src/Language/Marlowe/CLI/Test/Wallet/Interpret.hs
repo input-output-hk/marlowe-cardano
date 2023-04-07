@@ -64,8 +64,9 @@ import GHC.Generics (Generic)
 import GHC.Num (Natural)
 import Language.Marlowe.CLI.Cardano.Api.Value (lovelaceToPlutusValue, toPlutusValue, txOutValueValue)
 import Language.Marlowe.CLI.Test.Wallet.Types
-  ( AssetId(AdaAsset, AssetId)
-  , Assets(Assets)
+  ( Asset(Asset)
+  , AssetId(AdaAsset, AssetId)
+  , AssetsBalance(AssetsBalance)
   , Currencies(Currencies)
   , Currency(Currency, ccCurrencySymbol, ccIssuer)
   , CurrencyNickname
@@ -75,6 +76,7 @@ import Language.Marlowe.CLI.Test.Wallet.Types
   , WalletNickname(WalletNickname)
   , WalletOperation(..)
   , Wallets(Wallets)
+  , checkBalance
   , emptyWallet
   , faucetNickname
   , ieConnection
@@ -112,7 +114,7 @@ import Text.Read (readMaybe)
 
 import Contrib.Data.Foldable (foldMapFlipped, foldMapMFlipped)
 import Control.Concurrent.STM (TChan, TVar)
-import Control.Monad (forM, forM_, void, when)
+import Control.Monad (forM, forM_, unless, void, when)
 import Control.Monad.Error.Class (MonadError(throwError))
 import Control.Monad.Reader.Class (asks)
 import Control.Monad.State.Class (MonadState, gets, modify)
@@ -217,33 +219,28 @@ findCurrencyBySymbol currencySymbol = do
       (\(n, c) -> ccCurrencySymbol c == currencySymbol) (Map.toList currencies)
   liftCliMaybe ("[findCurrencyBySymbol] Unable to find currency:" <> show currencySymbol) possibleCurrency
 
-assetsToPlutusValue
+assetToPlutusValue
   :: InterpretMonad m era
-  => Assets
+  => Asset
   -> m P.Value
-assetsToPlutusValue (Assets (Map.toList -> assets)) = do
-  let
-    assetToValue AdaAsset amount = pure $ P.singleton P.adaSymbol P.adaToken amount
-    assetToValue (AssetId currencyNickname tokenName) amount = do
-      Currency { ccCurrencySymbol } <- findCurrency currencyNickname
-      pure $ P.singleton ccCurrencySymbol tokenName amount
-  fold <$> for assets (uncurry assetToValue)
+assetToPlutusValue (Asset AdaAsset amount) = pure $ P.singleton P.adaSymbol P.adaToken amount
+assetToPlutusValue (Asset (AssetId currencyNickname tokenName) amount) = do
+  Currency { ccCurrencySymbol } <- findCurrency currencyNickname
+  pure $ P.singleton ccCurrencySymbol tokenName amount
 
 plutusValueToAssets
   :: InterpretMonad m era
   => P.Value
-  -> m Assets
+  -> m [Asset]
 plutusValueToAssets value = do
   let
     valueToAsset (currencySymbol, tokenName, _) | currencySymbol == P.adaSymbol && tokenName == P.adaToken = do
-      pure (AdaAsset, P.fromBuiltin $ P.valueOf value currencySymbol tokenName)
+      pure (Asset AdaAsset (P.fromBuiltin $ P.valueOf value currencySymbol tokenName))
     valueToAsset (cCurrencySymbol, tokenName, amount) = do
       let
       (currencyNickname, currency) <- findCurrencyBySymbol cCurrencySymbol
-      pure (AssetId currencyNickname tokenName, amount)
-
-  assets <- for (P.flattenValue value) valueToAsset
-  pure $ Assets $ Map.fromList assets
+      pure (Asset (AssetId currencyNickname tokenName) amount)
+  for (P.flattenValue value) valueToAsset
 
 interpret
   :: forall env era st m
@@ -270,22 +267,27 @@ interpret so@CheckBalance {..} =
         C.Lovelace amount = fees
       show ((fromInteger amount / 1_000_000) :: F.Micro) <> " ADA"
 
-    Assets actualTotalBalance <- plutusValueToAssets $ onChainTotal <> lovelaceToPlutusValue fees <> inv waBalanceCheckBaseline
+    actualBalance <- plutusValueToAssets $ onChainTotal <> lovelaceToPlutusValue fees <> inv waBalanceCheckBaseline
     let
-      ignore = fold woIgnore
-      expectedBalance = woBalance
-      -- Use roIgnore to skipe values
-      actualBalance = Assets $ Map.filterWithKey (\k _ -> k `notElem` ignore) actualTotalBalance
+      AssetsBalance expectedBalance = woBalance
 
-    logLabeledMsg so $ "Expected balance: " <> show expectedBalance
-    when (expectedBalance /= actualBalance) do
-      -- Plutus value implements Group instnace so it is easier to present the diff using this type
-      eb <- assetsToPlutusValue expectedBalance
-      ab <- assetsToPlutusValue actualBalance
+    for_ actualBalance \(Asset assetId v) -> do
+      -- logLabeledMsg so $ "Actual balance of asset:" <> show k <> " is:" <> show v
+      case Map.lookup assetId expectedBalance of
+        Nothing -> do
+          logLabeledMsg so $ "Actual balance of asset:" <> show assetId <> " is:" <> show v
+          throwLabeledError so $ "Unexpected asset in balance check:" <> show assetId
+        Just expectedValue -> do
+          unless (checkBalance expectedValue v) do
+            logLabeledMsg so $ "Actual balance of asset:" <> show assetId <> " is:" <> show v
+            throwLabeledError so $ "Balance check failed for an asset:" <> show assetId
+
+    for_ (Map.toList expectedBalance) \(assetId, expectedValue) -> do
       let
-        diff = eb <> inv ab
-      logLabeledMsg so $ "Actual balance: " <> show actualBalance
-      throwLabeledError so $ "Balance check difference: expectedBalance - actualBalance = " <> show diff
+        actualAssets = map (\(Asset k _) -> k) actualBalance
+      unless (assetId `elem` actualAssets) do
+        logLabeledMsg so $ "Expected balance of asset:" <> show assetId <> " is:" <> show expectedValue
+        throwLabeledError so $ "Expected asset is missing in balance check:" <> show assetId
 
 interpret so@CreateWallet {..} = do
   skey <- liftIO $ generateSigningKey AsPaymentKey

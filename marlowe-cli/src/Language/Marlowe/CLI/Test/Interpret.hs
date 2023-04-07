@@ -22,6 +22,7 @@ import Control.Monad.Reader (MonadReader(ask), ReaderT(runReaderT))
 import Control.Monad.State (MonadState(get, put), StateT(runStateT), evalStateT, execStateT)
 import Language.Marlowe.CLI.Cardano.Api.PlutusScript (IsPlutusScriptLanguage)
 import qualified Language.Marlowe.CLI.Test.CLI.Interpret as CLI
+import Language.Marlowe.CLI.Test.Log (logLabeledMsg)
 import qualified Language.Marlowe.CLI.Test.Runtime.Interpret as Runtime
 import Language.Marlowe.CLI.Test.Types
   ( InterpretMonad
@@ -46,6 +47,7 @@ interpret
 interpret (RuntimeOperation ro) = do
   state <- get
   env <- ask
+  logLabeledMsg ro ""
   case toRuntimeInterpretEnv env of
     Nothing -> throwError $ CliError "Runtime env not initialized. Aborting."
     Just env' -> do
@@ -54,6 +56,7 @@ interpret (RuntimeOperation ro) = do
       e <- liftIO $ runExceptT (runReaderT (execStateT interpret' state) env')
       either throwError put e
 interpret (WalletOperation wo) = do
+  logLabeledMsg wo ""
   state <- get
   env <- ask
   let
@@ -61,11 +64,12 @@ interpret (WalletOperation wo) = do
     env' = toWalletInterpretEnv env
   e <- liftIO $ runExceptT (runReaderT (execStateT interpret' state) env')
   either throwError put e
-interpret (CLIOperation wo) = do
+interpret (CLIOperation co) = do
+  logLabeledMsg co ""
   state <- get
   env <- ask
   let
-    interpret' = zoom cliInpterpretStateL (CLI.interpret wo)
+    interpret' = zoom cliInpterpretStateL (CLI.interpret co)
     env' = toCLIInterpretEnv env
   e <- liftIO $ runExceptT (runReaderT (execStateT interpret' state) env')
   either throwError put e

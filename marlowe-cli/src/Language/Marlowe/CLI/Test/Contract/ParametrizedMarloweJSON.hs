@@ -182,40 +182,4 @@ doRewriteParametrizedMarloweJSON _ json = do
     Left err -> throwError $ CliError $ "Error rewriting parametrized Marlowe JSON: " <> show err
     Right json' -> pure json'
 
--- doDecodeParametrizedContractJSON
---   :: forall env era st m
---    . MonadIO m
---   => MonadError CliError m
---   => MonadReader env m
---   => Has (LocalNodeConnectInfo CardanoMode) env
---   => MonadState st m
---   => Has (Wallets era) st
---   => Has Currencies st
---   => Proxy era
---   -> ParametrizedMarloweJSON
---   -> m Marlowe.Contract
--- doDecodeParametrizedContractJSON p json = do
---   (doRewriteParametrizedMarloweJSON p json :: m ParametrizedMarloweJSON) >>= \(ParametrizedMarloweJSON contractJSON) ->
---     case A.fromJSON contractJSON of
---       A.Error err -> throwError $ CliError $ "Error decoding parametrized Marlowe Contract: " <> err <> ". JSON: " <> (Text.unpack $ A.renderValue contractJSON)
---       A.Success contract -> pure contract
---
---
--- doDecodeParametrizedInputJSON
---   :: forall env era st m
---    . MonadIO m
---   => MonadError CliError m
---   => MonadReader env m
---   => Has (LocalNodeConnectInfo CardanoMode) env
---   => MonadState st m
---   => Has (Wallets era) st
---   => Has Currencies st
---   => Proxy era
---   -> ParametrizedMarloweJSON
---   -> m Marlowe.Input
--- doDecodeParametrizedInputJSON p json = do
---   (doRewriteParametrizedMarloweJSON p json :: m ParametrizedMarloweJSON) >>= \(ParametrizedMarloweJSON contractJSON) ->
---     case A.fromJSON contractJSON of
---       A.Error err -> throwError $ CliError $ "Error decoding parametrized Marlowe Input: " <> err <> ". JSON: " <> (Text.unpack $ A.renderValue contractJSON)
---       A.Success contract -> pure contract
---
+

@@ -100,8 +100,9 @@ import GHC.Generics (Generic)
 import GHC.Num (Natural)
 import Language.Marlowe.CLI.Cardano.Api.Value (lovelaceToPlutusValue, toPlutusValue, txOutValueValue)
 import Language.Marlowe.CLI.Test.Wallet.Types
-  ( AssetId(AdaAsset, AssetId)
-  , Assets(Assets)
+  ( Asset(Asset)
+  , AssetId(AdaAsset, AssetId)
+  , AssetsBalance(AssetsBalance)
   , Currencies(Currencies)
   , Currency(Currency, ccCurrencySymbol, ccIssuer)
   , CurrencyNickname
@@ -210,7 +211,7 @@ import Language.Marlowe.Protocol.Sync.Client (MarloweSyncClient)
 import qualified Language.Marlowe.Runtime.App.Stream as Runtime.App
 import Language.Marlowe.Runtime.ChainSync.Api (SlotNo)
 import Language.Marlowe.Runtime.Core.Api (ContractId, MarloweVersionTag(V1))
-import Marlowe.Contracts (coveredCall, escrow, swap, trivial)
+import Marlowe.Contracts (coveredCall, escrow, swap, trivial, zeroCouponBond)
 import Observe.Event.Backend (EventBackend)
 import Observe.Event.Dynamic (DynamicEventSelector)
 import Observe.Event.Render.JSON.Handle (JSONRef)
@@ -251,6 +252,18 @@ findCurrency
 findCurrency nickname = do
   (Currencies currencies) <- use isCurrencies
   liftCliMaybe ("[findCurrency] Unable to find currency:" <> show nickname) $ Map.lookup nickname currencies
+
+adaToken :: M.Token
+adaToken = M.Token "" ""
+
+assetIdToToken
+  :: InterpretMonad m lang era
+  => AssetId
+  -> m M.Token
+assetIdToToken (AssetId currencyNickname currencyToken) = do
+  Currency { ccCurrencySymbol=currencySymbol } <- findCurrency currencyNickname
+  pure $ M.Token currencySymbol currencyToken
+assetIdToToken AdaAsset = pure adaToken
 
 findWalletByUniqueToken
   :: InterpretMonad m lang era
@@ -444,21 +457,25 @@ useTemplate currency =
   UseSwap{..} -> do
     aTimeout' <- toMarloweTimeout utATimeout
     bTimeout' <- toMarloweTimeout utBTimeout
-    Currency { ccCurrencySymbol=aCurrencySymbol } <- findCurrency utACurrencyNickname
-    Currency { ccCurrencySymbol=bCurrencySymbol } <- findCurrency utBCurrencyNickname
+
     let
-      aPartyRef = fromMaybe (WalletRef "aParty") utAParty
-      bPartyRef = fromMaybe (WalletRef "bParty") utBParty
-    aParty <- buildParty currency aPartyRef
-    bParty <- buildParty currency bPartyRef
+      Asset aAssetId aAmount = utAAsset
+      Asset bAssetId bAmount = utBAsset
+
+    aToken <- assetIdToToken aAssetId
+    bToken <- assetIdToToken bAssetId
+
+    aParty <- buildParty currency utAParty
+    bParty <- buildParty currency utBParty
+
     makeContract $ swap
         aParty
-        (M.Token aCurrencySymbol utATokenName)
-        (E.Constant utAAmount)
+        aToken
+        (E.Constant aAmount)
         aTimeout'
         bParty
-        (M.Token bCurrencySymbol utBTokenName)
-        (E.Constant utBAmount)
+        bToken
+        (E.Constant bAmount)
         bTimeout'
         E.Close
   UseEscrow{..} -> do
@@ -466,13 +483,10 @@ useTemplate currency =
     complaintDeadline' <- toMarloweTimeout utComplaintDeadline
     disputeDeadline' <- toMarloweTimeout utDisputeDeadline
     mediationDeadline' <- toMarloweTimeout utMediationDeadline
-    let
-      sellerRef = fromMaybe (WalletRef "Seller") utSeller
-      buyerRef = fromMaybe (WalletRef "Buyer") utBuyer
-      mediatorRef = fromMaybe (WalletRef "Mediator") utMediator
-    seller <- buildParty currency sellerRef
-    buyer <- buildParty currency buyerRef
-    mediator <- buildParty currency mediatorRef
+
+    seller <- buildParty currency utSeller
+    buyer <- buildParty currency utBuyer
+    mediator <- buildParty currency utMediator
 
     makeContract $ escrow
       (E.Constant utPrice)
@@ -483,42 +497,44 @@ useTemplate currency =
       complaintDeadline'
       disputeDeadline'
       mediationDeadline'
-  -- UseCoveredCall{..} -> do
-  --   issueDate' <- toMarloweTimeout utIssueDate
-  --   maturityDate' <- toMarloweTimeout utMaturityDate
-  --   settlementDate' <- toMarloweTimeout utSettlementDate
-  --   issuer <- buildParty currency utIssuer
-  --   counterParty <- buildParty currency utCounterParty
+  UseCoveredCall{..} -> do
+    issueDate <- toMarloweTimeout utIssueDate
+    maturityDate <- toMarloweTimeout utMaturityDate
+    settlementDate <- toMarloweTimeout utSettlementDate
+    issuer <- buildParty currency utIssuer
+    counterParty <- buildParty currency utCounterParty
 
-  --   case utCurrency of
-  --
+    currency <- assetIdToToken utCurrency
+    underlying <- assetIdToToken utUnderlying
 
-  --   Currency { ccCurrencySymbol=currency } <- findCurrency utCurrency
-  --   Currency { ccCurrencySymbol=underlying } <- findCurrency utUnderlying
+    makeContract $ coveredCall
+        issuer
+        counterParty
+        Nothing
+        currency
+        underlying
+        (E.Constant utStrike)
+        (E.Constant utAmount)
+        issueDate
+        maturityDate
+        settlementDate
+  UseZeroCouponBond{..} -> do
+    lendingDeadline <- toMarloweTimeout utLendingDeadline
+    paybackDeadline <- toMarloweTimeout utPaybackDeadline
 
-  --   makeContract $ coveredCall
-  --       issuer
-  --       counterParty
-  --       Nothing
-  --       currency
-  --       underlying
-  --       (Constant strike)
-  --       (Constant amount)
-  --       issueDate'
-  --       maturityDate'
-  --       settlementDate'
-  --UseZeroCouponBond{..} -> do  lendingDeadline' <- toMarloweTimeout lendingDeadline
-  --                             paybackDeadline' <- toMarloweTimeout paybackDeadline
-  --                             makeContract $
-  --                               zeroCouponBond
-  --                                 lender
-  --                                 borrower
-  --                                 lendingDeadline'
-  --                                 paybackDeadline'
-  --                                 (Constant principal)
-  --                                 (Constant principal `AddValue` Constant interest)
-  --                                 ada
-  --                                 Close
+    lender <- buildParty currency utLender
+    borrower <- buildParty currency utBorrower
+
+    makeContract $
+      zeroCouponBond
+        lender
+        borrower
+        lendingDeadline
+        paybackDeadline
+        (E.Constant utPrincipal)
+        (E.Constant utPrincipal `E.AddValue` E.Constant utInterest)
+        adaToken
+        E.Close
   template -> throwError $ CliError $ "Template not implemented: " <> show template
 
 publishCurrentValidators
@@ -668,6 +684,7 @@ interpret co@Prepare {..} = do
   minimumTime <- toPOSIXTime coMinimumTime
   maximumTime <- toPOSIXTime coMaximumTime
   era <- view ieEra
+  logLabeledMsg co $ "Inputs: " <> show (pretty inputs)
   new <- runLabeledCli era co $ prepareTransactionImpl
     curr
     inputs
