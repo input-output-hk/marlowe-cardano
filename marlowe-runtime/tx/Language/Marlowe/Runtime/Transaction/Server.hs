@@ -295,7 +295,7 @@ execCreate getCurrentScripts eventBackend ev solveConstraints loadWalletContext 
   transactionSafetyErrors <-
     ExceptT
       $ first CreateSafetyAnalysisError
-      <$> checkTransactions solveConstraints version marloweContext rolesCurrency (changeAddress addresses) contract continuations
+      <$> checkTransactions solveConstraints version marloweContext rolesCurrency (changeAddress addresses) (toInteger minAda) contract continuations
   -- FIXME: The is a placeholder until we design safety-analysis reporting.
   unless (null transactionSafetyErrors)
     . throwE . CreateSafetyAnalysisError

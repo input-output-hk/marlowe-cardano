@@ -23,14 +23,16 @@ module Language.Marlowe.Analysis.Safety.Transaction
   ( -- * Plutus Transactions
     executeTransaction
   , findTransactions
+  , findTransactions'
   , foldTransactionsM
   ) where
 
 
 import Control.Monad.Except (MonadError(throwError), MonadIO(..), foldM, liftEither, liftIO)
-import Data.Bifunctor (first)
+import Data.Bifunctor (first, second)
 import Data.List (nub, nubBy)
 import Data.String (IsString(..))
+import Language.Marlowe.Analysis.Safety.Ledger
 import Language.Marlowe.Analysis.Safety.Types
 import Language.Marlowe.Core.V1.Merkle
 import Language.Marlowe.Core.V1.Semantics
@@ -43,7 +45,9 @@ import Language.Marlowe.Core.V1.Semantics
   , totalBalance
   )
 import Language.Marlowe.Core.V1.Semantics.Types
-  ( ChoiceId(ChoiceId)
+  ( Action(Deposit)
+  , Case(Case)
+  , ChoiceId(ChoiceId)
   , Contract(..)
   , Input(MerkleizedInput)
   , InputContent(IChoice, IDeposit)
@@ -51,6 +55,7 @@ import Language.Marlowe.Core.V1.Semantics.Types
   , Payee(Party)
   , State(..)
   , Token(..)
+  , Value(Constant)
   , getInputContent
   )
 import Language.Marlowe.FindInputs (getAllInputs)
@@ -203,17 +208,16 @@ foldTransactionsM f =
 findTransactions :: IsString e
                  => MonadError e m
                  => MonadIO m
-                 => MerkleizedContract  -- ^ The bundle of contract information.
+                 => Party               -- ^ The contract creator.
+                 -> Integer             -- ^ The initial lovelace for the creator's account.
+                 -> MerkleizedContract  -- ^ The bundle of contract information.
                  -> m [Transaction]     -- ^ Action for computing the initial state, initial contract, perhaps-merkleized input, and the output for the transactions.
-findTransactions mc@MerkleizedContract{..} =
+findTransactions creatorAddress minAda mc@MerkleizedContract{..} =
   do
     let
-      creatorAddress =
-        P.Address
-          (P.PubKeyCredential "88888888888888888888888888888888888888888888888888888888")
-          (Just . P.StakingHash $ P.PubKeyCredential "99999999999999999999999999999999999999999999999999999999")
+      ada = Token P.adaSymbol P.adaToken
       prune (Transaction s c i _) (Transaction s' c' i' _) = s == s' && c == c' && i == i'
-    paths <- findPaths mc
+    paths <- findPaths creatorAddress minAda mc
     nubBy prune
       . concat
       <$> sequence
@@ -221,8 +225,27 @@ findTransactions mc@MerkleizedContract{..} =
          findTransactionPath mcContinuations state mcContract inputs
       |
         (minTime, inputs) <- paths
-      , let state = State (AM.singleton (Address True creatorAddress, Token P.adaSymbol P.adaToken) 1) AM.empty AM.empty minTime
+      , let state = State (AM.singleton (creatorAddress, ada) minAda) AM.empty AM.empty minTime
       ]
+
+
+-- | Find transactions along all execution paths of a contract.
+findTransactions' :: IsString e
+                  => MonadError e m
+                  => MonadIO m
+                  => MerkleizedContract  -- ^ The bundle of contract information.
+                  -> m [Transaction]     -- ^ Action for computing the initial state, initial contract, perhaps-merkleized input, and the output for the transactions.
+findTransactions' mc@MerkleizedContract{..} =
+  let
+    utxoCostPerByte = 4310
+    creatorAddress =
+      Address True
+        $ P.Address
+            (P.PubKeyCredential "88888888888888888888888888888888888888888888888888888888")
+            (Just . P.StakingHash $ P.PubKeyCredential "99999999999999999999999999999999999999999999999999999999")
+    minAda = worstMinimumUtxo utxoCostPerByte mcContract mcContinuations
+  in
+    findTransactions creatorAddress minAda mc
 
 
 -- | Find the transactions corresponding to a path of demerkleized inputs.
@@ -263,12 +286,24 @@ findTransaction continuations state contract TransactionInput{..} =
 findPaths :: IsString e
           => MonadError e m
           => MonadIO m
-          => MerkleizedContract                     -- ^ The bundle of contract information.
+          => Party                                  -- ^ The creator.
+          -> Integer                                -- ^ The initial lovelace in the creator's account.
+          -> MerkleizedContract                     -- ^ The bundle of contract information.
           -> m [(P.POSIXTime, [TransactionInput])]  -- ^ The paths throught the Marlowe contract.
-findPaths MerkleizedContract{..} =
-  liftEither . first (fromString . show)
-    =<< liftIO . getAllInputs
-    =<< demerkleizeContract mcContinuations (deepDemerkleize mcContract)
+findPaths creatorAddress minAda MerkleizedContract{..} =
+  do
+    let
+      ada = Token P.adaSymbol P.adaToken
+      forever = 10^(20::Int)
+      -- Add an initial deposit so that `getAllInputs` accounts for the initial state in its analysis.
+      contract = When [Case (Deposit creatorAddress creatorAddress ada $ Constant minAda) mcContract] forever Close
+    paths <-
+      liftEither . first (fromString . show)
+        =<< liftIO . getAllInputs
+        =<< demerkleizeContract mcContinuations (deepDemerkleize contract)
+    pure
+      . filter (not . null . snd)  -- Discard the input that is only the initial deposit.
+      $ second tail <$> paths      -- Discard the initial deposit from each path.
 
 
 -- | Run the Plutus evaluator on the Marlowe semantics validator.

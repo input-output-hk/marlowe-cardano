@@ -64,11 +64,11 @@ import Plutus.V2.Ledger.Api
   )
 import PlutusTx.Builtins (serialiseData)
 
-import qualified Data.Set as S
+import qualified Data.Set as S (Set, filter, map, null, size)
 import qualified Plutus.V1.Ledger.Value as V (singleton)
 import qualified Plutus.V2.Ledger.Api as P (Address(..), Value)
-import qualified PlutusTx.AssocMap as AM
-import qualified PlutusTx.Prelude as P
+import qualified PlutusTx.AssocMap as AM (Map, fromList)
+import qualified PlutusTx.Prelude as P (lengthOfByteString)
 
 
 -- | Check the safety of a Marlowe contract and state.

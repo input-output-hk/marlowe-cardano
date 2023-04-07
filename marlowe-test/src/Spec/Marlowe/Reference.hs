@@ -27,6 +27,8 @@ module Spec.Marlowe.Reference
   , processContract
     -- * Testing
   , arbitraryReferenceTransaction
+  , readReferenceContracts
+  , readReferenceContracts'
   , readReferencePaths
   , referenceFolder
   ) where
@@ -52,6 +54,23 @@ import qualified PlutusTx.AssocMap as AM (empty, singleton)
 
 referenceFolder :: FilePath
 referenceFolder = "reference" </> "data"
+
+
+readReferenceContracts :: IO [Contract]
+readReferenceContracts = readReferenceContracts' referenceFolder
+
+
+readReferenceContracts' :: FilePath -> IO [Contract]
+readReferenceContracts' folder =
+  do
+    contractFiles <- fmap (folder </>) . filter (".contract" `isSuffixOf`) <$> listDirectory folder
+    forM contractFiles
+      $ \contractFile ->
+        eitherDecodeFileStrict contractFile
+          >>= \case
+            Right contract -> pure contract
+            Left msg -> error $ "Failed parsing " <> contractFile <> ": " <> msg <> "."
+
 
 
 readReferencePaths :: IO [ReferencePath]

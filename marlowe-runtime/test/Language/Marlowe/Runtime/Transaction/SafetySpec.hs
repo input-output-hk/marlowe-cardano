@@ -8,16 +8,20 @@ module Language.Marlowe.Runtime.Transaction.SafetySpec
 
 import Data.List (nub)
 import Data.Maybe (fromJust)
+import Data.Time.Clock.POSIX (posixSecondsToUTCTime)
 import Language.Marlowe.Analysis.Safety.Types
 import Language.Marlowe.Runtime.Core.Api (MarloweVersion(MarloweV1))
+import Language.Marlowe.Runtime.Core.ScriptRegistry (MarloweScripts(..), getCurrentScripts)
 import Language.Marlowe.Runtime.Transaction.Api (Mint(..), RoleTokensConfig(..))
 import Language.Marlowe.Runtime.Transaction.BuildConstraintsSpec ()
+import Language.Marlowe.Runtime.Transaction.Constraints (MarloweContext(..), solveConstraints)
 import Language.Marlowe.Runtime.Transaction.ConstraintsSpec (protocolTestnet)
 import Language.Marlowe.Runtime.Transaction.Safety
+import Spec.Marlowe.Reference
 import Spec.Marlowe.Semantics.Arbitrary ()
 import Test.Hspec
 import Test.Hspec.QuickCheck
-import Test.QuickCheck (counterexample, discard, sublistOf, suchThat, (===))
+import Test.QuickCheck (counterexample, discard, elements, generate, ioProperty, sublistOf, suchThat, (===))
 
 import qualified Cardano.Api as Cardano
 import qualified Cardano.Api.Shelley as Shelley
@@ -35,7 +39,7 @@ spec =
 
     let
       version = MarloweV1
-      noContinuations' = noContinuations version
+      continuations = noContinuations version
       party = V1.Role "x"
       payee = V1.Party party
       payToken token = V1.Pay party payee token $ V1.Constant 1
@@ -68,7 +72,7 @@ spec =
                         protocolTestnet
                    :: Cardano.Lovelace
                 contract = foldr payToken V1.Close tokens  -- The tokens just need to appear somewhere in the contract.
-                actual = fromJust $ minAdaUpperBound protocolTestnet version contract noContinuations' :: Cardano.Lovelace
+                actual = fromJust $ minAdaUpperBound protocolTestnet version contract continuations :: Cardano.Lovelace
               counterexample ("Expected minUTxO = " <> show expected)
                 $ counterexample ("Actual minUTxO = " <> show actual)
                 $ actual >= expected
@@ -78,7 +82,7 @@ spec =
         prop "Contract without roles" $ \roleTokensConfig ->
           let
             contract = V1.Close
-            actual = checkContract roleTokensConfig version contract noContinuations'
+            actual = checkContract roleTokensConfig version contract continuations
           in
             counterexample ("Contract = " <> show contract)
               $ case roleTokensConfig of
@@ -90,7 +94,7 @@ spec =
               let
                 roles = Plutus.TokenName . Plutus.toBuiltin . Chain.unTokenName <$> M.keys (unMint mint)
                 contract = foldr payRole V1.Close roles
-                actual = checkContract roleTokensConfig version contract noContinuations'
+                actual = checkContract roleTokensConfig version contract continuations
               in
                 counterexample ("Contract = " <> show contract)
                   $ actual === mempty
@@ -101,7 +105,7 @@ spec =
               let
                 roles = Plutus.TokenName . Plutus.toBuiltin . Chain.unTokenName <$> M.keys (unMint mint)
                 contract = foldr payRole V1.Close $ extra <> roles
-                actual = checkContract roleTokensConfig version contract noContinuations'
+                actual = checkContract roleTokensConfig version contract continuations
                 expected =
                   (MissingRoleToken <$> nub extra)
                     <> [RoleNameTooLong role | role@(Plutus.TokenName name) <- nub extra, Plutus.lengthOfByteString name > 32]
@@ -121,7 +125,7 @@ spec =
                 let
                   extra = filter (`notElem` roles) roles'
                   contract = foldr payRole V1.Close roles
-                  actual = checkContract roleTokensConfig version contract noContinuations'
+                  actual = checkContract roleTokensConfig version contract continuations
                   expected = ExtraRoleToken <$> extra
                 pure
                   . counterexample ("Contract = " <> show contract)
@@ -132,7 +136,7 @@ spec =
         prop "Contract with role name too long" $ \roles ->
           let
             contract = foldr payRole V1.Close roles
-            actual = checkContract (RoleTokensUsePolicy "") version contract noContinuations'
+            actual = checkContract (RoleTokensUsePolicy "") version contract continuations
             expected =
               if null roles
                 then [ContractHasNoRoles]
@@ -145,7 +149,7 @@ spec =
         prop "Contract with illegal token" $ \tokens ->
           let
             contract = foldr payToken V1.Close tokens
-            actual = checkContract (RoleTokensUsePolicy "") version contract noContinuations'
+            actual = checkContract (RoleTokensUsePolicy "") version contract continuations
             expected =
               if contract == V1.Close
                 then [ContractHasNoRoles]
@@ -170,3 +174,47 @@ spec =
               . counterexample ("Actual = " <> show actual)
               . counterexample ("Expected = " <> show expected)
               $ actual `same` expected
+
+    describe "checkTransactions"
+      $ do
+        referenceContracts <- runIO $ readReferenceContracts' "../marlowe-test/reference/data"
+        let
+          zeroTime = posixSecondsToUTCTime 0
+          (systemStart, eraHistory) = makeSystemHistory zeroTime
+          solveConstraints' = solveConstraints systemStart eraHistory protocolTestnet
+          networkId = Cardano.Testnet $ Cardano.NetworkMagic 1
+          MarloweScripts{..} = getCurrentScripts version
+          stakeReference = Shelley.NoStakeAddress
+          marloweContext =
+            MarloweContext
+            {
+              scriptOutput = Nothing
+            , payoutOutputs = mempty
+            , marloweAddress = Chain.fromCardanoAddressInEra Cardano.BabbageEra
+                                 . Cardano.AddressInEra (Cardano.ShelleyAddressInEra Cardano.ShelleyBasedEraBabbage)
+                                 $ Cardano.makeShelleyAddress
+                                     networkId
+                                     (fromJust . Chain.toCardanoPaymentCredential $ Chain.ScriptCredential marloweScript)
+                                     stakeReference
+            , payoutAddress = Chain.fromCardanoAddressInEra Cardano.BabbageEra
+                                . Cardano.AddressInEra (Cardano.ShelleyAddressInEra Cardano.ShelleyBasedEraBabbage)
+                                $ Cardano.makeShelleyAddress
+                                    networkId
+                                    (fromJust . Chain.toCardanoPaymentCredential $ Chain.ScriptCredential payoutScript)
+                                    Cardano.NoStakeAddress
+            , marloweScriptUTxO = fromJust $ M.lookup networkId marloweScriptUTxOs
+            , payoutScriptUTxO = fromJust $ M.lookup networkId payoutScriptUTxOs
+            , marloweScriptHash = marloweScript
+            , payoutScriptHash = payoutScript
+            }
+        prop "Placeholder" $ \(policy, address) ->
+          ioProperty $ do
+            _contract <- generate $ elements referenceContracts
+            let
+              contract = V1.When [V1.Case (V1.Notify V1.TrueObs) V1.Close] (10^(15::Int)) V1.Close
+              minAda = maybe 0 toInteger $ minAdaUpperBound protocolTestnet version contract continuations
+            actual <- checkTransactions solveConstraints' version marloweContext policy address minAda contract continuations
+            pure
+              . counterexample ("Contract = " <> show contract)
+              . counterexample ("Actual = " <> show actual)
+              $ null actual

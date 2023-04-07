@@ -8,6 +8,7 @@ module Language.Marlowe.Runtime.Transaction.Safety
   ( Continuations
   , checkContract
   , checkTransactions
+  , makeSystemHistory
   , minAdaUpperBound
   , noContinuations
   ) where
@@ -17,9 +18,11 @@ import Control.Monad (forM)
 import Control.Monad.Trans.Except (runExceptT, throwE)
 import Data.Bifunctor (bimap, first)
 import Data.Foldable (toList)
+import Data.Maybe (fromJust)
 import Data.SOP.Strict (K(..), NP(..))
 import Data.Time (UTCTime, addUTCTime, secondsToNominalDiffTime)
 import Data.Time.Clock.POSIX (posixSecondsToUTCTime)
+import Debug.Trace
 import Language.Marlowe.Analysis.Safety.Ledger (checkRoleNames, checkTokens, worstMinimumUtxo)
 import Language.Marlowe.Analysis.Safety.Transaction (findTransactions)
 import Language.Marlowe.Analysis.Safety.Types (SafetyError(..), Transaction(..))
@@ -49,9 +52,10 @@ import qualified Data.Set as S (singleton)
 import qualified Language.Marlowe.Core.V1.Merkle as V1 (MerkleizedContract(..))
 import qualified Language.Marlowe.Core.V1.Plate as V1 (extractAllWithContinuations)
 import qualified Language.Marlowe.Core.V1.Semantics as V1 (MarloweData(..), MarloweParams(..), TransactionInput(..))
-import qualified Language.Marlowe.Core.V1.Semantics.Types as V1 (State(..), Token(..))
+import qualified Language.Marlowe.Core.V1.Semantics.Types as V1 (Party(Address), State(..), Token(..))
+import qualified Language.Marlowe.Core.V1.Semantics.Types.Address as V1 (deserialiseAddress)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
-  ( Address
+  ( Address(..)
   , AssetId(..)
   , Assets(..)
   , DatumHash(..)
@@ -146,15 +150,18 @@ checkTransactions
   -> MarloweContext v
   -> Chain.PolicyId
   -> Chain.Address
+  -> Integer
   -> Contract v
   -> Continuations v
   -> IO (Either String [SafetyError])
-checkTransactions solveConstraints version@MarloweV1 marloweContext rolesCurrency changeAddress contract continuations =
+checkTransactions solveConstraints version@MarloweV1 marloweContext rolesCurrency changeAddress minAda contract continuations =
   runExceptT
     $ do
+      let
+        changeAddress' = uncurry V1.Address . fromJust . V1.deserialiseAddress $ Chain.unAddress changeAddress
       -- FIXME: The `findTransactions` function may be a long-running process if the
       --        contract is complex. Where should we guard against this with a timeout?
-      transactions <- findTransactions . V1.MerkleizedContract contract $ remapContinuations continuations
+      transactions <- findTransactions changeAddress' minAda . V1.MerkleizedContract contract $ remapContinuations continuations
       either throwE (pure . mconcat)
         . forM transactions
         $ checkTransaction solveConstraints version marloweContext rolesCurrency changeAddress
@@ -179,16 +186,16 @@ checkTransaction solveConstraints version@MarloweV1 marloweContext@MarloweContex
         marloweContext' = marloweContext {scriptOutput = Just marloweOutput}
         metadata = MarloweTransactionMetadata Nothing $ Chain.TransactionMetadata mempty
         begin = posixTimeToUTCTime $ fst txInterval
-        intervalBegin = Just begin
-        intervalEnd = Just . posixTimeToUTCTime $ snd txInterval
+        intervalBegin = Just . posixTimeToUTCTime $ snd txInterval
+        intervalEnd = Just . addUTCTime 1 . posixTimeToUTCTime $ snd txInterval
         (start, history) = makeSystemHistory begin
-      tipSlot <- utcTimeToSlotNo start history . posixTimeToUTCTime $ fst txInterval
+      tipSlot <- traceShow transaction $ traceShow intervalBegin $ traceShow intervalEnd $ utcTimeToSlotNo start history . posixTimeToUTCTime $ fst txInterval
       constraints <-
         bimap show snd
           $ buildApplyInputsConstraints start history version marloweOutput tipSlot metadata intervalBegin intervalEnd txInputs
       let
         walletContext = walletForConstraints version marloweContext changeAddress constraints
-      pure
+      traceShow walletContext $ traceShow marloweContext' $ traceShow constraints $ traceShow scriptIncoming $ pure
         . either (pure . TransactionValidationError transaction . show) (const mempty)
         $ solveConstraints version marloweContext' walletContext constraints
 
