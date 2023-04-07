@@ -120,7 +120,7 @@ checkTokens =
       | P.lengthOfByteString unTokenName > 32 = pure $ TokenNameTooLong name
       | otherwise = mempty
   in
-   ((foldMap invalidToken . toList) .) . extractAllWithContinuations
+   ((nub . foldMap invalidToken . toList) .) . extractAllWithContinuations
 
 
 -- | Check that a contract satisfies the maximum value ledger constraint.
