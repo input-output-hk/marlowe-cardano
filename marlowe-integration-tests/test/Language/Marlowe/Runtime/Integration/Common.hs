@@ -40,7 +40,6 @@ import Control.Monad.State (StateT, runStateT, state)
 import Control.Monad.Trans.Class (lift)
 import Data.Aeson (FromJSON(..), Value(..), decodeFileStrict, eitherDecodeStrict)
 import Data.Aeson.Types (parseFail)
-import Data.Bifunctor (first)
 import Data.ByteString (ByteString)
 import Data.ByteString.Base16 (decodeBase16)
 import Data.Foldable (fold)
@@ -103,7 +102,7 @@ import Language.Marlowe.Runtime.Core.Api
 import Language.Marlowe.Runtime.Discovery.Api (ContractHeader(..))
 import Language.Marlowe.Runtime.History.Api (ContractStep, CreateStep(..))
 import Language.Marlowe.Runtime.Transaction.Api
-  (ContractCreated(..), InputsApplied(..), MarloweTxCommand(..), WalletAddresses(..))
+  (ContractCreated(..), InputsApplied(..), MarloweTxCommand(..), SubmitError, WalletAddresses(..))
 import Network.Protocol.Job.Client (liftCommandWait)
 import qualified Plutus.V2.Ledger.Api as PV2
 import Servant.Client (ClientError, ClientM)
@@ -246,6 +245,11 @@ expectRight msg = \case
   Left a -> fail $ msg <> ": " <> show a
   Right b -> pure b
 
+expectLeft :: MonadFail m => Show b => String -> Either a b -> m a
+expectLeft msg = \case
+  Left a -> pure a
+  Right b -> fail $ msg <> ": " <> show b
+
 testnet :: Integration LocalTestnet
 testnet = asks MarloweRuntime.testnet
 
@@ -308,10 +312,15 @@ submit
   :: Wallet
   -> TxBody BabbageEra
   -> Integration BlockHeader
-submit Wallet{..} txBody = do
+submit wallet = expectRight "failed to submit tx" <=< submit' wallet
+
+submit'
+  :: Wallet
+  -> TxBody BabbageEra
+  -> Integration (Either SubmitError BlockHeader)
+submit' Wallet{..} txBody = do
   let tx = signShelleyTransaction txBody signingKeys
-  submitResult <- runMarloweTxClient $ liftCommandWait $ Submit tx
-  expectRight "failed to submit tx" $ first (tx,) submitResult
+  runMarloweTxClient $ liftCommandWait $ Submit tx
 
 deposit
   :: Wallet

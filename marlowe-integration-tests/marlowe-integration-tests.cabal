@@ -57,6 +57,7 @@ executable marlowe-integration-tests
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
+    Language.Marlowe.Runtime.Integration.ApplyInputs
     Language.Marlowe.Runtime.Integration.Basic
     Language.Marlowe.Runtime.Integration.Intersections
     Language.Marlowe.Runtime.Integration.Common
