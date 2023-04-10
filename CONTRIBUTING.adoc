@@ -381,3 +381,17 @@ Michael also has permissions to restart failed builds.
 ==== Github Actions
 
 These perform some of the same checks as Hydra, but Github Actions is often more available, so they return faster and act as a "smoke check".
+
+==== Changelogs
+
+All changes to the product require changelog entries. We use Scriv to manage changelog fragments and then assemble them when cutting a release.
+For more information please see https://scriv.readthedocs.io/en/1.1.0/index.html
+
+The components that require changelogs are:
+
+- marlowe-runtime (incl chain-sync, cli, web, client). Use `changelog.d` in `marlowe-runtime`
+- marlowe-cardano. Use `changelog.d` in `marlowe`
+- marlowe-actus. Use `changelog.d` in `marlowe-actus`
+- marlowe-cli. Use `changelog.d` in `marlowe-cli`
+
+CI will check that you have updated the changelog in a PR. If your PR doesn't require a changelog entry, add the "No Changelog Required" label to it.

@@ -8,6 +8,8 @@ let
   inherit (marlowe) haskell cabal-install stylish-haskell sphinxcontrib-haddock sphinx-markdown-tables sphinxemoji nix-pre-commit-hooks cardano-address;
   inherit (marlowe) writeShellScriptBinInRepoRoot;
 
+  scriv = import ./nix/pkgs/scriv.nix { inherit pkgs; };
+
   set-xdg = ''
     export XDG_DATA_HOME="''${XDG_DATA_HOME:-''${HOME}/.local/share}"
     mkdir -p "''${XDG_DATA_HOME}"
@@ -97,6 +99,7 @@ let
     pkgs.postgresql
     pkgs.json2yaml
     pkgs.yaml2json
+    scriv
   ]);
 
   defaultShellHook = ''
