@@ -2,9 +2,12 @@
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
@@ -18,7 +21,7 @@ module Language.Marlowe.CLI.Test.CLI.Types
 
 import Cardano.Api (CardanoMode, LocalNodeConnectInfo, Lovelace, PolicyId, ScriptDataSupportedInEra)
 import qualified Cardano.Api as C
-import Control.Lens (makeLenses)
+import Control.Lens (Lens', makeLenses)
 import Control.Monad.Except (MonadError)
 import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.Reader.Class (MonadReader)
@@ -43,6 +46,7 @@ import GHC.Base (Alternative((<|>)))
 import GHC.Generics (Generic)
 import GHC.Num (Natural)
 import Language.Marlowe.CLI.Test.Contract (ContractNickname(ContractNickname))
+import qualified Language.Marlowe.CLI.Test.Contract as Contract
 import Language.Marlowe.CLI.Test.Contract.ParametrizedMarloweJSON (ParametrizedMarloweJSON)
 import Language.Marlowe.CLI.Test.ExecutionMode
 import qualified Language.Marlowe.CLI.Test.Operation.Aeson as Operation
@@ -56,6 +60,7 @@ import Language.Marlowe.CLI.Test.Wallet.Types
   , parseTokenNameJSON
   , tokenNameToJSON
   )
+import qualified Language.Marlowe.CLI.Test.Wallet.Types as Wallet
 import Language.Marlowe.CLI.Types
   ( CliError(CliError)
   , MarlowePlutusVersion
@@ -105,26 +110,6 @@ anyCLIMarloweThread :: CLITxInfo lang era
                     -> Maybe (AnyCLIMarloweThread lang era)
 anyCLIMarloweThread txInfo@(MarloweTransaction{..}, _) mTxIn = anyMarloweThread txInfo mTxIn mtInputs
 
-data ContractSource =
-    InlineContract ParametrizedMarloweJSON
-  | UseTemplate UseTemplate
-    deriving stock (Eq, Generic, Show)
-
-
-instance ToJSON ContractSource where
-    toJSON (InlineContract c)            = Aeson.object [("inline", toJSON c)]
-    toJSON (UseTemplate templateCommand) = Aeson.object [("template", toJSON templateCommand)]
-
-instance FromJSON ContractSource where
-    parseJSON json = case json of
-      Aeson.Object (KeyMap.toList -> [("inline", contractJson)]) -> do
-        parsedContract <- parseJSON contractJson
-        pure $ InlineContract parsedContract
-      Aeson.Object (KeyMap.toList -> [("template", templateCommandJson)]) -> do
-        parsedTemplateCommand <- parseJSON templateCommandJson
-        pure $ UseTemplate parsedTemplateCommand
-      _ -> fail "Expected object with a single field of either `inline` or `template`"
-
 data MarloweValidators
   = InTxCurrentValidators                           -- ^ Embed Marlowe validator in the applying transaction.
   | ReferenceCurrentValidators                      -- ^ Use already published validator or publish a new one.
@@ -173,7 +158,7 @@ data CLIOperation =
       coMinLovelace         :: Lovelace                -- ^ Minimum lovelace to be sent to the contract.
     , coContractNickname    :: ContractNickname        -- ^ The name of the wallet's owner.
     , coRoleCurrency        :: Maybe CurrencyNickname  -- ^ If contract uses roles then currency is required.
-    , coContractSource      :: ContractSource          -- ^ The Marlowe contract to be created.
+    , coContractSource      :: Contract.Source         -- ^ The Marlowe contract to be created.
     , coSubmitter           :: Maybe WalletNickname    -- ^ A wallet which gonna submit the initial transaction.
     , coMarloweValidators   :: MarloweValidators
     }
@@ -340,30 +325,28 @@ cliContractsIds :: CLIContracts lang era -> Map ContractNickname ContractId
 cliContractsIds (CLIContracts contracts) =
   Map.fromList $ mapMaybe (\(k, v) -> (k,) . cliMarloweThreadContractId  <$> ciThread v) $ Map.toList contracts
 
-data InterpretState lang era = InterpretState
-  { _isWallets :: Wallets era
-  , _isCurrencies :: Currencies
-  , _isContracts :: CLIContracts lang era
-  , _isPublishedScripts :: Maybe (MarloweScriptsRefs MarlowePlutusVersion era)
-  }
+class HasInterpretState st lang era | st -> lang era where
+  walletsL :: Lens' st (Wallets era)
+  currenciesL :: Lens' st Currencies
+  contractsL :: Lens' st (CLIContracts lang era)
+  publishedScriptsL :: Lens' st (Maybe (MarloweScriptsRefs MarlowePlutusVersion era))
 
-data InterpretEnv lang era = InterpretEnv
-  { _ieConnection :: LocalNodeConnectInfo CardanoMode
-  , _ieEra :: ScriptDataSupportedInEra era
-  , _iePrintStats :: PrintStats
-  , _ieExecutionMode :: ExecutionMode
-  , _ieSlotConfig :: SlotConfig
-  , _ieCostModelParams :: CostModelParams
-  , _ieProtocolVersion :: ProtocolVersion
-  }
+class HasInterpretEnv env lang era | env -> lang era where
+  connectionL :: Lens' env (LocalNodeConnectInfo CardanoMode)
+  eraL :: Lens' env (ScriptDataSupportedInEra era)
+  printStatsL :: Lens' env PrintStats
+  executionModeL :: Lens' env ExecutionMode
+  slotConfigL :: Lens' env SlotConfig
+  costModelParamsL :: Lens' env CostModelParams
+  protocolVersionL :: Lens' env ProtocolVersion
 
-type InterpretMonad m lang era =
-  ( MonadState (InterpretState lang era) m
-  , MonadReader (InterpretEnv lang era) m
+type InterpretMonad env st m lang era =
+  ( MonadState st m
+  , HasInterpretState st lang era
+  , MonadReader env m
+  , HasInterpretEnv env lang era
+  , Wallet.InterpretMonad env st m era
   , MonadError CliError m
   , MonadIO m
   )
-
-makeLenses 'InterpretState
-makeLenses 'InterpretEnv
 

@@ -1,5 +1,5 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE BlockArguments #-}
-{-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
@@ -16,16 +16,8 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TemplateHaskell #-}
 
-module Language.Marlowe.CLI.Test.Contract
-  ( ContractNickname(..)
-  , Source(..)
-  ) where
 
-import Data.Aeson (FromJSON, ToJSON)
-import Data.String (IsString)
-import GHC.Exts (IsString(fromString))
-import GHC.Generics (Generic)
-import Language.Marlowe.CLI.Test.Contract.ContractNickname (ContractNickname(..))
-import Language.Marlowe.CLI.Test.Contract.Source (Source(..))
+module Language.Marlowe.CLI.Test.Wallet.Generator
+  where
 
 

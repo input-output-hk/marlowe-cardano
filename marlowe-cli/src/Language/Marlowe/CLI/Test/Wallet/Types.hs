@@ -2,9 +2,11 @@
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
@@ -20,7 +22,7 @@ import Cardano.Api
   (AddressInEra, CardanoMode, LocalNodeConnectInfo, Lovelace, PolicyId, ScriptDataSupportedInEra, TxBody, UTxO(UTxO))
 import Contrib.Data.Aeson.Generic (getConName)
 import Control.Applicative ((<|>))
-import Control.Lens (makeLenses)
+import Control.Lens (Lens', makeLenses)
 import Control.Monad.Except (MonadError)
 import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.Reader.Class (MonadReader)
@@ -48,6 +50,7 @@ import Data.Traversable (for)
 import qualified Data.Vector as V
 import GHC.Generics (Generic(from))
 import GHC.Natural (Natural)
+import qualified Language.Marlowe as M
 import Language.Marlowe.CLI.Cardano.Api.Value (lovelaceToPlutusValue, toPlutusValue, txOutValueValue)
 import Language.Marlowe.CLI.Test.ExecutionMode (ExecutionMode)
 import qualified Language.Marlowe.CLI.Test.Operation.Aeson as Operation
@@ -337,25 +340,25 @@ instance ToJSON WalletOperation where
 
 newtype Wallets era = Wallets (Map WalletNickname (Wallet era))
 
-data InterpretState era = InterpretState
-  { _isWallets :: Wallets era
-  , _isCurrencies :: Currencies
-  }
+class HasInterpretState st era | st -> era where
+  walletsL :: Lens' st (Wallets era)
+  currenciesL :: Lens' st Currencies
 
-data InterpretEnv era = InterpretEnv
-  { _ieConnection :: LocalNodeConnectInfo CardanoMode
-  , _ieEra :: ScriptDataSupportedInEra era
-  , _iePrintStats :: PrintStats
-  , _ieExecutionMode :: ExecutionMode
-  }
+class HasInterpretEnv env era | env -> era where
+  connectionL :: Lens' env (LocalNodeConnectInfo CardanoMode)
+  eraL :: Lens' env (ScriptDataSupportedInEra era)
+  printStatsL :: Lens' env PrintStats
+  executionModeL :: Lens' env ExecutionMode
 
-
-type InterpretMonad m era =
-  ( MonadState (InterpretState era) m
-  , MonadReader (InterpretEnv era) m
+type InterpretMonad env st m era =
+  ( MonadState st m
+  , HasInterpretState st era
+  , MonadReader env m
+  , HasInterpretEnv env era
   , MonadError CliError m
   , MonadIO m
   )
 
-makeLenses 'InterpretState
-makeLenses 'InterpretEnv
+adaToken :: M.Token
+adaToken = M.Token "" ""
+

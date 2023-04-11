@@ -86,7 +86,9 @@ library
     Language.Marlowe.CLI.Sync.Types
     Language.Marlowe.CLI.Test
     Language.Marlowe.CLI.Test.Contract
+    Language.Marlowe.CLI.Test.Contract.ContractNickname
     Language.Marlowe.CLI.Test.Contract.ParametrizedMarloweJSON
+    Language.Marlowe.CLI.Test.Contract.Source
     Language.Marlowe.CLI.Test.CLI.Interpret
     Language.Marlowe.CLI.Test.CLI.Monad
     Language.Marlowe.CLI.Test.CLI.Types

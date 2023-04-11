@@ -15,7 +15,6 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TupleSections #-}
-{-# LANGUAGE ViewPatterns #-}
 
 module Language.Marlowe.CLI.Test.CLI.Interpret
   where
@@ -111,6 +110,7 @@ import Language.Marlowe.CLI.Test.Wallet.Types
   , WalletNickname(WalletNickname)
   , WalletOperation(BurnAll, CheckBalance, CreateWallet, FundWallets, Mint, SplitWallet, woBalance, woCurrencyNickname, woIssuer, woMetadata, woMinLovelace, woTokenDistribution, woValues, woWalletNickname, woWalletNicknames)
   , Wallets(Wallets)
+  , adaToken
   , emptyWallet
   , faucetNickname
   )
@@ -178,32 +178,43 @@ import Language.Marlowe.CLI.Test.CLI.Types
   ( CLIContractInfo(CLIContractInfo, ciContract, ciCurrency, ciPlan, ciSubmitter, ciThread, ciWithdrawalsCheckPoints)
   , CLIContracts(CLIContracts)
   , CLIOperation(..)
-  , ContractSource(InlineContract, UseTemplate)
   , InterpretMonad
   , MarloweValidators(..)
   , PartyRef(RoleRef, WalletRef)
-  , UseTemplate(..)
   , anyCLIMarloweThread
+  , connectionL
+  , contractsL
+  , costModelParamsL
+  , currenciesL
+  , eraL
+  , executionModeL
   , getCLIMarloweThreadTransaction
   , getCLIMarloweThreadTxBody
-  , ieConnection
-  , ieCostModelParams
-  , ieEra
-  , ieExecutionMode
-  , iePrintStats
-  , ieProtocolVersion
-  , ieSlotConfig
-  , isContracts
-  , isCurrencies
-  , isPublishedScripts
-  , isWallets
+  , printStatsL
+  , protocolVersionL
+  , publishedScriptsL
+  , slotConfigL
+  , walletsL
   )
 import Language.Marlowe.CLI.Test.Contract (ContractNickname(..))
 import Language.Marlowe.CLI.Test.Contract.ParametrizedMarloweJSON
   (ParametrizedMarloweJSON(ParametrizedMarloweJSON), decodeParametrizedContractJSON, decodeParametrizedInputJSON)
+import Language.Marlowe.CLI.Test.Contract.Source (Source(InlineContract, UseTemplate), useTemplate)
 import Language.Marlowe.CLI.Test.ExecutionMode
   (ExecutionMode(OnChainMode, SimulationMode), skipInSimluationMode, toSubmitMode)
 import Language.Marlowe.CLI.Test.Log (logLabeledMsg, logTraceMsg, throwLabeledError, throwTraceError)
+import Language.Marlowe.CLI.Test.Wallet.Interpret
+  ( assetIdToToken
+  , decodeContractJSON
+  , decodeInputJSON
+  , findCurrency
+  , findWallet
+  , findWalletByAddress
+  , findWalletByUniqueToken
+  , getFaucet
+  , getSingletonCurrency
+  , updateWallet
+  )
 import Language.Marlowe.Cardano (marloweNetworkFromLocalNodeConnectInfo)
 import Language.Marlowe.Cardano.Thread
   (anyMarloweThreadCreated, foldrMarloweThread, marloweThreadTxIn, overAnyMarloweThread)
@@ -218,136 +229,20 @@ import Observe.Event.Render.JSON.Handle (JSONRef)
 import qualified Plutus.V1.Ledger.Value as PV
 import PlutusTx.Monoid (Group(inv))
 
-findWallet
-  :: InterpretMonad m lang era
-  => WalletNickname
-  -> m (Wallet era)
-findWallet nickname =
-  use isWallets >>= \(Wallets wallets) ->
-  liftCliMaybe ("[findWallet] Unable to find wallet:" <> show nickname) $ Map.lookup nickname wallets
-
-getFaucet
-  :: InterpretMonad m lang era
-  => m (Wallet era)
-getFaucet =
-  findWallet faucetNickname
-
-findWalletByAddress
-  :: InterpretMonad m lang era
-  => C.AddressInEra era
-  -> m (WalletNickname, Wallet era)
-findWalletByAddress address = do
-  Wallets wallets <- use isWallets
-  let
-    wallet = find (\(_, w) -> address == waAddress w) (Map.toList wallets)
-
-  liftCliMaybe
-    ("[findWalletByPkh] Wallet not found for a given address: " <> show address <> " in wallets: " <> show wallets)
-    wallet
-
-findCurrency
-  :: InterpretMonad m lang era
-  => CurrencyNickname
-  -> m Currency
-findCurrency nickname = do
-  (Currencies currencies) <- use isCurrencies
-  liftCliMaybe ("[findCurrency] Unable to find currency:" <> show nickname) $ Map.lookup nickname currencies
-
-adaToken :: M.Token
-adaToken = M.Token "" ""
-
-assetIdToToken
-  :: InterpretMonad m lang era
-  => AssetId
-  -> m M.Token
-assetIdToToken (AssetId currencyNickname currencyToken) = do
-  Currency { ccCurrencySymbol=currencySymbol } <- findCurrency currencyNickname
-  pure $ M.Token currencySymbol currencyToken
-assetIdToToken AdaAsset = pure adaToken
-
-findWalletByUniqueToken
-  :: InterpretMonad m lang era
-  => CurrencyNickname
-  -> TokenName
-  -> m (WalletNickname, Wallet era)
-findWalletByUniqueToken currencyNickname tokenName = do
-  Currency {..} <- findCurrency currencyNickname
-  let
-    check value = valueOf value ccCurrencySymbol tokenName == 1
-    step Nothing (n, wallet@(waMintedTokens -> tokens)) = pure $ if check tokens
-      then Just (n, wallet)
-      else Nothing
-    step res c@(n, waMintedTokens -> tokens) = if check tokens
-      then case res of
-        Just (n', _) ->
-          throwError $ CliError $ "[findByUniqueToken] Token is not unique - found in two wallets: " <> show n <> " and " <> show n' <> "."
-        Nothing ->
-          pure (Just c)
-      else pure res
-  Wallets wallets <- use isWallets
-  walletInfo <- foldM step Nothing (Map.toList wallets)
-  liftCliMaybe
-    ("[findWalletByUniqueToken] Wallet not found for a given token: " <> show ccCurrencySymbol <> ":" <> show tokenName)
-    walletInfo
-
-updateWallet
-  :: InterpretMonad m lang era
-  => WalletNickname
-  -> (Wallet era -> Wallet era)
-  -> m ()
-updateWallet nickname update = do
-  wallet <- findWallet nickname
-  let
-    wallet' = update wallet
-  modifying isWallets \(Wallets wallets) -> Wallets (Map.insert nickname wallet' wallets)
-
 findCLIContractInfo
-  :: InterpretMonad m lang era
+  :: InterpretMonad env st m lang era
   => ContractNickname
   -> m (CLIContractInfo lang era)
 findCLIContractInfo nickname = do
-  CLIContracts contracts <- use isContracts
+  CLIContracts contracts <- use contractsL
   liftCliMaybe
     ("[findCLIContractInfo] Marlowe contract structure was not found for a given nickname " <> show (coerce nickname :: String) <> ".")
     $ Map.lookup nickname contracts
 
-getSingletonCurrency
-  :: InterpretMonad m lang era
-  => m (CurrencyNickname, Currency)
-getSingletonCurrency = do
-  Currencies currencies <- use isCurrencies
-  case Map.toList currencies of
-    [c] -> pure c
-    _   -> throwError "Ambigious currency lookup."
-
-decodeInputJSON
-  :: InterpretMonad m lang era
-  => ParametrizedMarloweJSON
-  -> m M.Input
-decodeInputJSON json = do
-  currencies <- use isCurrencies
-  wallets <- use isWallets
-  network <- view ieConnection <&> marloweNetworkFromLocalNodeConnectInfo
-  case decodeParametrizedInputJSON network wallets currencies json of
-    Left err -> throwError $ CliError $ "Failed to decode input: " <> show err
-    Right i  -> pure i
-
-decodeContractJSON
-  :: InterpretMonad m lang era
-  => ParametrizedMarloweJSON
-  -> m M.Contract
-decodeContractJSON json = do
-  currencies <- use isCurrencies
-  wallets <- use isWallets
-  network <- view ieConnection <&> marloweNetworkFromLocalNodeConnectInfo
-  case decodeParametrizedContractJSON network wallets currencies json of
-    Left err -> throwError $ CliError $ "Failed to decode contract: " <> show err
-    Right c  -> pure c
-
-autoRunTransaction :: forall era lang m
+autoRunTransaction :: forall era env lang m st
                     . IsShelleyBasedEra era
                    => IsPlutusScriptLanguage lang
-                   => InterpretMonad m lang era
+                   => InterpretMonad env st m lang era
                    => Maybe CurrencyNickname
                    -> WalletNickname
                    -> Maybe (MarloweTransaction lang era, C.TxIn)
@@ -387,9 +282,9 @@ autoRunTransaction currency defaultSubmitter prev curr@T.MarloweTransaction {..}
 
   log' $ "Submitter: " <> case submitterNickname of WalletNickname n -> n
 
-  connection <- view ieConnection
-  submitMode <- view ieExecutionMode <&> toSubmitMode
-  era <- view ieEra
+  connection <- view connectionL
+  submitMode <- view executionModeL <&> toSubmitMode
+  era <- view eraL
   txBody <- runCli era "[AutoRun] " $ autoRunTransactionImpl
       connection
       prev
@@ -420,7 +315,7 @@ autoRunTransaction currency defaultSubmitter prev curr@T.MarloweTransaction {..}
     _                         -> throwError "[AutoRun] Multiple Marlowe outputs detected - unable to handle them yet."
 
 buildParty
-  :: InterpretMonad m lang era
+  :: InterpretMonad env st m lang era
   => Maybe CurrencyNickname
   -> PartyRef
   -> m M.Party
@@ -437,110 +332,10 @@ buildParty mRoleCurrency = \case
     -- We are allowed to use this M.Role
     pure $ M.Role token
 
-useTemplate
-  :: InterpretMonad m lang era
-  => Maybe CurrencyNickname
-  -> UseTemplate
-  -> m M.Contract
-useTemplate currency =
-  \case
-  UseTrivial{..} -> do
-    timeout' <- toMarloweTimeout utTimeout
-    let
-      partyRef = fromMaybe (WalletRef faucetNickname) utParty
-    party <- buildParty currency partyRef
-    makeContract $ trivial
-      party
-      utDepositLovelace
-      utWithdrawalLovelace
-      timeout'
-  UseSwap{..} -> do
-    aTimeout' <- toMarloweTimeout utATimeout
-    bTimeout' <- toMarloweTimeout utBTimeout
-
-    let
-      Asset aAssetId aAmount = utAAsset
-      Asset bAssetId bAmount = utBAsset
-
-    aToken <- assetIdToToken aAssetId
-    bToken <- assetIdToToken bAssetId
-
-    aParty <- buildParty currency utAParty
-    bParty <- buildParty currency utBParty
-
-    makeContract $ swap
-        aParty
-        aToken
-        (E.Constant aAmount)
-        aTimeout'
-        bParty
-        bToken
-        (E.Constant bAmount)
-        bTimeout'
-        E.Close
-  UseEscrow{..} -> do
-    paymentDeadline' <- toMarloweTimeout utPaymentDeadline
-    complaintDeadline' <- toMarloweTimeout utComplaintDeadline
-    disputeDeadline' <- toMarloweTimeout utDisputeDeadline
-    mediationDeadline' <- toMarloweTimeout utMediationDeadline
-
-    seller <- buildParty currency utSeller
-    buyer <- buildParty currency utBuyer
-    mediator <- buildParty currency utMediator
-
-    makeContract $ escrow
-      (E.Constant utPrice)
-      seller
-      buyer
-      mediator
-      paymentDeadline'
-      complaintDeadline'
-      disputeDeadline'
-      mediationDeadline'
-  UseCoveredCall{..} -> do
-    issueDate <- toMarloweTimeout utIssueDate
-    maturityDate <- toMarloweTimeout utMaturityDate
-    settlementDate <- toMarloweTimeout utSettlementDate
-    issuer <- buildParty currency utIssuer
-    counterParty <- buildParty currency utCounterParty
-
-    currency <- assetIdToToken utCurrency
-    underlying <- assetIdToToken utUnderlying
-
-    makeContract $ coveredCall
-        issuer
-        counterParty
-        Nothing
-        currency
-        underlying
-        (E.Constant utStrike)
-        (E.Constant utAmount)
-        issueDate
-        maturityDate
-        settlementDate
-  UseZeroCouponBond{..} -> do
-    lendingDeadline <- toMarloweTimeout utLendingDeadline
-    paybackDeadline <- toMarloweTimeout utPaybackDeadline
-
-    lender <- buildParty currency utLender
-    borrower <- buildParty currency utBorrower
-
-    makeContract $
-      zeroCouponBond
-        lender
-        borrower
-        lendingDeadline
-        paybackDeadline
-        (E.Constant utPrincipal)
-        (E.Constant utPrincipal `E.AddValue` E.Constant utInterest)
-        adaToken
-        E.Close
-  template -> throwError $ CliError $ "Template not implemented: " <> show template
-
 publishCurrentValidators
   :: forall env era lang st m
    . C.IsShelleyBasedEra era
-  => InterpretMonad m lang era
+  => InterpretMonad env st m lang era
   => Maybe Bool
   -> Maybe WalletNickname
   -> m (MarloweScriptsRefs MarlowePlutusVersion era)
@@ -550,9 +345,9 @@ publishCurrentValidators publishPermanently possiblePublisher = do
     publishingStrategy = case publishPermanently of
       Just True -> PublishPermanently NoStakeAddress
       _         -> PublishAtAddress waAddress
-  connection <- view ieConnection
-  printStats <- view iePrintStats
-  era <- view ieEra
+  connection <- view connectionL
+  printStats <- view printStatsL
+  era <- view eraL
   let
     fnName = "publishCurrentValidators"
     logTraceMsg' = logTraceMsg fnName
@@ -569,7 +364,7 @@ publishCurrentValidators publishPermanently possiblePublisher = do
       logValidatorInfo pv
       pure marloweScriptRefs
 
-    Nothing -> view ieExecutionMode >>= \case
+    Nothing -> view executionModeL >>= \case
       SimulationMode -> throwTraceError fnName "Can't perform on chain script publishing in simulation mode"
       OnChainMode timeout -> do
         logTraceMsg fnName "Scripts not found so publishing them."
@@ -587,7 +382,7 @@ interpret
   :: forall env era lang st m
    . C.IsShelleyBasedEra era
   => IsPlutusScriptLanguage lang
-  => InterpretMonad m lang era
+  => InterpretMonad env st m lang era
   => CLIOperation
   -> m ()
 interpret co@Initialize {..} = do
@@ -613,20 +408,20 @@ interpret co@Initialize {..} = do
     marloweState = initialMarloweState submitterParty minAda
     marloweParams = Client.marloweParams currencySymbol
 
-  era <- view ieEra
-  slotConfig <- view ieSlotConfig
-  costModelParams <- view ieCostModelParams
-  protocolVersion <- view ieProtocolVersion
-  LocalNodeConnectInfo { localNodeNetworkId } <- view ieConnection
+  era <- view eraL
+  slotConfig <- view slotConfigL
+  costModelParams <- view costModelParamsL
+  protocolVersion <- view protocolVersionL
+  LocalNodeConnectInfo { localNodeNetworkId } <- view connectionL
 
   marloweTransaction <- case coMarloweValidators of
     ReferenceCurrentValidators publishPermanently possiblePublisher -> do
       logLabeledMsg co "Using reference scripts to the current Marlowe validator."
-      refs <- use isPublishedScripts >>= \case
+      refs <- use publishedScriptsL >>= \case
         Nothing -> do
           logLabeledMsg co "Publishing the scripts."
           marloweScriptRefs <- publishCurrentValidators publishPermanently possiblePublisher
-          assign isPublishedScripts (Just marloweScriptRefs)
+          assign publishedScriptsL (Just marloweScriptRefs)
           pure marloweScriptRefs
         Just refs -> do
           logLabeledMsg co "Scripts were already published so using them."
@@ -644,7 +439,7 @@ interpret co@Initialize {..} = do
 
     InTxCurrentValidators -> do
       logLabeledMsg co "Using in Tx scripts embeding strategy to initialize Marlowe contract."
-      era <- view ieEra
+      era <- view eraL
       runLabeledCli era co $ initializeTransactionImpl
         marloweParams
         slotConfig
@@ -661,12 +456,12 @@ interpret co@Initialize {..} = do
     ReferenceRuntimeValidators -> do
       throwLabeledError co "Usage of reference runtime scripts is not supported yet."
 
-  CLIContracts contracts <- use isContracts
+  CLIContracts contracts <- use contractsL
   when (isJust . Map.lookup coContractNickname $ contracts) do
     throwLabeledError co "Contract with a given nickname already exist."
 
   logLabeledMsg co $ "Saving initialized contract " <> show (coerce coContractNickname :: String)
-  modifying (isContracts . coerced) $ Map.insert coContractNickname $ CLIContractInfo
+  modifying (contractsL . coerced) $ Map.insert coContractNickname $ CLIContractInfo
     {
       ciContract = marloweContract
     , ciPlan = marloweTransaction :| []
@@ -683,7 +478,7 @@ interpret co@Prepare {..} = do
   inputs <- for coInputs decodeInputJSON
   minimumTime <- toPOSIXTime coMinimumTime
   maximumTime <- toPOSIXTime coMaximumTime
-  era <- view ieEra
+  era <- view eraL
   logLabeledMsg co $ "Inputs: " <> show (pretty inputs)
   new <- runLabeledCli era co $ prepareTransactionImpl
     curr
@@ -699,20 +494,20 @@ interpret co@Prepare {..} = do
     plan = new' <| ciPlan
     marloweContract' = marloweContract{ ciPlan = plan }
 
-  modifying (isContracts . coerced) $ Map.insert coContractNickname marloweContract'
+  modifying (contractsL . coerced) $ Map.insert coContractNickname marloweContract'
 
 interpret co@Publish {..} = do
   logLabeledMsg co "Using reference scripts to the current Marlowe validator."
-  use isPublishedScripts >>= \case
+  use publishedScriptsL >>= \case
     Nothing -> do
       logLabeledMsg co "Publishing the scripts."
       marloweScriptRefs <- publishCurrentValidators coPublishPermanently coPublisher
-      assign isPublishedScripts (Just marloweScriptRefs)
+      assign publishedScriptsL (Just marloweScriptRefs)
     Just refs -> do
       throwLabeledError co "Scripts were already published during this test scenario."
 
 interpret co@AutoRun {..} = do
-  executionMode <- view ieExecutionMode
+  executionMode <- view executionModeL
   case executionMode of
     OnChainMode {} -> do
       marloweContract@CLIContractInfo {..} <- findCLIContractInfo coContractNickname
@@ -747,13 +542,13 @@ interpret co@AutoRun {..} = do
       thread' <- foldM step ciThread plan
       let
         marloweContract' = marloweContract { ciThread = thread' }
-      modifying (isContracts . coerced)  $ Map.insert coContractNickname marloweContract'
+      modifying (contractsL . coerced)  $ Map.insert coContractNickname marloweContract'
     SimulationMode -> do
       -- TODO: We should be able to run balancing in here even in the simulation mode
       pure ()
 
 interpret co@Withdraw {..} =
-  view ieExecutionMode >>= skipInSimluationMode co do
+  view executionModeL >>= skipInSimluationMode co do
   marloweContract@CLIContractInfo {..} <- findCLIContractInfo coContractNickname
 
   marloweThread <- case ciThread of
@@ -774,8 +569,8 @@ interpret co@Withdraw {..} =
     , show coContractNickname
     ]
 
-  submitMode <- view ieExecutionMode <&> toSubmitMode
-  connection <- view ieConnection
+  submitMode <- view executionModeL <&> toSubmitMode
+  connection <- view connectionL
   txBodies <- foldMapMFlipped roles \role -> do
     let
       lastWithdrawalCheckPoint = Map.lookup role ciWithdrawalsCheckPoints
@@ -812,7 +607,7 @@ interpret co@Withdraw {..} =
           let
             inputs = foldMapFlipped possibleWithdrawals \(T.MarloweTransaction { mtInputs }, _) -> mtInputs
           show inputs
-        era <- view ieEra
+        era <- view eraL
         txBody <- runLabeledCli era co $ autoWithdrawFundsImpl
           connection
           roleToken
@@ -836,5 +631,5 @@ interpret co@Withdraw {..} =
     newWithdrawals = foldMapFlipped roles \role ->
       Map.singleton role (C.getTxId . overAnyMarloweThread getCLIMarloweThreadTxBody $ marloweThread)
     marloweContract' = marloweContract{ ciWithdrawalsCheckPoints = newWithdrawals <> ciWithdrawalsCheckPoints }
-  modifying (isContracts . coerced) $ Map.insert coContractNickname marloweContract'
+  modifying (contractsL . coerced) $ Map.insert coContractNickname marloweContract'
 

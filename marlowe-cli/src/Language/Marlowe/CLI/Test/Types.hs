@@ -4,9 +4,11 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -21,7 +23,7 @@ module Language.Marlowe.CLI.Test.Types
 import Cardano.Api
   (AddressInEra, CardanoMode, LocalNodeConnectInfo, Lovelace, NetworkId, PolicyId, ScriptDataSupportedInEra, TxBody)
 import qualified Cardano.Api as C
-import Control.Lens (Lens', makeLenses)
+import Control.Lens (Lens', Prism', _1, _2, _Just, makeLenses, prism)
 import Control.Monad.Except (MonadError)
 import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.Reader (MonadReader)
@@ -69,6 +71,7 @@ import qualified Plutus.V1.Ledger.Value as P
 import Text.Read (readMaybe)
 
 import Control.Applicative (Alternative((<|>)))
+import Control.Category ((<<<))
 import Control.Concurrent.STM (TChan, TVar)
 import Control.Lens.Lens (lens)
 import Control.Monad.State.Class (MonadState)
@@ -83,6 +86,7 @@ import Language.Marlowe.CLI.Test.Runtime.Types
 import qualified Language.Marlowe.CLI.Test.Runtime.Types as Runtime
 import Language.Marlowe.CLI.Test.Wallet.Types
   (Currencies(Currencies), CurrencyNickname, WalletOperation, Wallets(Wallets))
+import Language.Marlowe.CLI.Test.Wallet.Types as Wallet
 import qualified Language.Marlowe.CLI.Test.Wallet.Types as Wallet
 import qualified Language.Marlowe.Protocol.Client as Marlowe.Protocol
 import Language.Marlowe.Protocol.Sync.Client (MarloweSyncClient)
@@ -225,75 +229,43 @@ type InterpretMonad m lang era =
   , MonadIO m
   )
 
-toCLIInterpretEnv :: InterpretEnv lang era -> CLI.InterpretEnv lang era
-toCLIInterpretEnv InterpretEnv { _ieConnection, _ieEra, _iePrintStats, _ieExecutionMode, _ieSlotConfig, _ieCostModelParams, _ieProtocolVersion } =
-  CLI.InterpretEnv
-    { CLI._ieConnection = _ieConnection
-    , CLI._ieEra = _ieEra
-    , CLI._iePrintStats = _iePrintStats
-    , CLI._ieExecutionMode = _ieExecutionMode
-    , CLI._ieSlotConfig = _ieSlotConfig
-    , CLI._ieCostModelParams = _ieCostModelParams
-    , CLI._ieProtocolVersion = _ieProtocolVersion
-    }
-
-toRuntimeInterpretEnv :: InterpretEnv lang era -> Maybe (Runtime.InterpretEnv lang era)
-toRuntimeInterpretEnv InterpretEnv { _ieRuntimeMonitor = Just (runtimeMonitorInput, runtimeMonitorState), _ieRuntimeClientConnector = Just _ieRuntimeClientConnector, .. } =
-  Just $ Runtime.InterpretEnv
-    { Runtime._ieRuntimeMonitorInput = runtimeMonitorInput
-    , Runtime._ieRuntimeMonitorState = runtimeMonitorState
-    , Runtime._ieExecutionMode = _ieExecutionMode
-    , Runtime._ieRuntimeClientConnector = _ieRuntimeClientConnector
-    , Runtime._ieConnection = _ieConnection
-    , Runtime._ieEra = _ieEra
-    }
-toRuntimeInterpretEnv _ = Nothing
-
-toWalletInterpretEnv :: InterpretEnv lang era -> Wallet.InterpretEnv era
-toWalletInterpretEnv InterpretEnv { _ieConnection, _ieEra, _iePrintStats, _ieExecutionMode } =
-  Wallet.InterpretEnv
-    { Wallet._ieConnection = _ieConnection
-    , Wallet._ieEra = _ieEra
-    , Wallet._iePrintStats = _iePrintStats
-    , Wallet._ieExecutionMode = _ieExecutionMode
-    }
-
-cliInpterpretStateL :: Lens' (InterpretState lang era) (CLI.InterpretState lang era)
-cliInpterpretStateL = lens toCLIInterpretState fromCLIInterpretState
-  where
-    toCLIInterpretState (InterpretState contracts referenceScripts currencies wallets knownContracts) =
-      CLI.InterpretState wallets currencies contracts referenceScripts
-    fromCLIInterpretState
-      InterpretState {_isKnownContracts=knownContracts}
-      (CLI.InterpretState wallets currencies contracts referenceScripts) = do
-      let
-        knownContracts' = knownContracts <> cliContractsIds contracts
-      InterpretState contracts referenceScripts currencies wallets knownContracts'
-
-runtimeInpterpretStateL :: Lens' (InterpretState lang era) (Runtime.InterpretState era)
-runtimeInpterpretStateL = lens toRuntimeInterpretState fromRuntimeInterpretState
-  where
-    toRuntimeInterpretState InterpretState { .. } =
-      Runtime.InterpretState
-        { Runtime._isKnownContracts = _isKnownContracts
-        , Runtime._isWallets = _isWallets
-        , Runtime._isCurrencies = _isCurrencies
-        }
-    fromRuntimeInterpretState
-      InterpretState {..}
-      Runtime.InterpretState { Runtime._isKnownContracts = knownContracts, Runtime._isWallets = wallets, Runtime._isCurrencies = currencies } =
-      InterpretState { _isKnownContracts = knownContracts, _isWallets = wallets, _isCurrencies = currencies, .. }
-
-walletInpterpretStateL :: Lens' (InterpretState lang era) (Wallet.InterpretState era)
-walletInpterpretStateL = lens toWalletInterpretState fromWalletInterpretState
-  where
-    toWalletInterpretState (InterpretState contracts referenceScripts currencies wallets knownContracts) =
-      Wallet.InterpretState wallets currencies
-    fromWalletInterpretState
-      (InterpretState contracts referenceScripts _ _ knownContracts)
-      (Wallet.InterpretState wallets currencies) =
-      InterpretState contracts referenceScripts currencies wallets knownContracts
-
 makeLenses 'InterpretEnv
 makeLenses 'InterpretState
 
+instance Wallet.HasInterpretEnv (InterpretEnv lang era) era where
+  connectionL = ieConnection
+  eraL = ieEra
+  printStatsL = iePrintStats
+  executionModeL = ieExecutionMode
+
+instance Wallet.HasInterpretState (InterpretState lang era) era where
+  walletsL = isWallets
+  currenciesL = isCurrencies
+
+instance CLI.HasInterpretEnv (InterpretEnv lang era) lang era where
+  connectionL = ieConnection
+  eraL = ieEra
+  printStatsL = iePrintStats
+  executionModeL = ieExecutionMode
+  slotConfigL = ieSlotConfig
+  costModelParamsL = ieCostModelParams
+  protocolVersionL = ieProtocolVersion
+
+instance CLI.HasInterpretState (InterpretState lang era) lang era where
+  walletsL = isWallets
+  currenciesL = isCurrencies
+  contractsL = isCLIContracts
+  publishedScriptsL = isPublishedScripts
+
+instance Runtime.HasInterpretState (InterpretState lang era) lang era where
+  knownContractsL = isKnownContracts
+  walletsL = isWallets
+  currenciesL = isCurrencies
+
+instance Runtime.HasInterpretEnv (InterpretEnv lang era) lang era where
+  runtimeMonitorStateT = ieRuntimeMonitor <<< _Just <<< _2
+  runtimeMonitorInputT = ieRuntimeMonitor <<< _Just <<< _1
+  runtimeClientConnectorT = ieRuntimeClientConnector . _Just
+  executionModeL = ieExecutionMode
+  connectionT = ieConnection
+  eraL = ieEra

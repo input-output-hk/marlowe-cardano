@@ -18,11 +18,11 @@ module Language.Marlowe.CLI.Test.Runtime.Interpret
   where
 
 import Actus.Marlowe (getContractIdentifier)
-import Cardano.Api (toAddressAny)
+import Cardano.Api (CardanoMode, toAddressAny)
 import qualified Cardano.Api as C
 import Contrib.Control.Concurrent.Async (timeoutIO)
 import Control.Concurrent.STM (TVar, atomically, readTVar, retry, writeTChan)
-import Control.Lens (modifying, use, view)
+import Control.Lens (modifying, preview, use, view)
 import Control.Monad (join, when)
 import Control.Monad.Except (throwError)
 import Control.Monad.IO.Class (MonadIO(liftIO))
@@ -40,9 +40,10 @@ import Data.Time.Units (Microsecond, Second, TimeUnit(fromMicroseconds, toMicros
 import Data.Traversable (for)
 import Language.Marlowe.CLI.Cardano.Api (withShelleyBasedEra)
 import Language.Marlowe.CLI.IO (liftCliMaybe)
-import Language.Marlowe.CLI.Test.Contract (ContractNickname(ContractNickname))
+import Language.Marlowe.CLI.Test.Contract (ContractNickname(ContractNickname), Source(InlineContract, UseTemplate))
 import Language.Marlowe.CLI.Test.Contract.ParametrizedMarloweJSON
   (ParametrizedMarloweJSON(ParametrizedMarloweJSON), decodeParametrizedContractJSON, decodeParametrizedInputJSON)
+import Language.Marlowe.CLI.Test.Contract.Source (useTemplate)
 import Language.Marlowe.CLI.Test.ExecutionMode (skipInSimluationMode)
 import Language.Marlowe.CLI.Test.Log (logLabeledMsg, throwLabeledError, throwTraceError)
 import Language.Marlowe.CLI.Test.Runtime.Types
@@ -51,17 +52,18 @@ import Language.Marlowe.CLI.Test.Runtime.Types
   , RuntimeMonitorInput(RuntimeMonitorInput)
   , RuntimeMonitorState(RuntimeMonitorState)
   , RuntimeOperation(..)
-  , ieConnection
-  , ieEra
-  , ieExecutionMode
-  , ieRuntimeClientConnector
-  , ieRuntimeMonitorInput
-  , ieRuntimeMonitorState
-  , isCurrencies
-  , isKnownContracts
-  , isWallets
+  , connectionT
+  , currenciesL
+  , eraL
+  , executionModeL
+  , knownContractsL
   , rcMarloweThread
+  , runtimeClientConnectorT
+  , runtimeMonitorInputT
+  , runtimeMonitorStateT
+  , walletsL
   )
+import Language.Marlowe.CLI.Test.Wallet.Interpret (decodeContractJSON, decodeInputJSON, findWallet, getFaucet)
 import Language.Marlowe.CLI.Test.Wallet.Types
   (Wallet(..), WalletNickname(WalletNickname), Wallets(Wallets), faucetNickname)
 import Language.Marlowe.CLI.Types (CliError(CliError), somePaymentsigningKeyToTxWitness)
@@ -69,59 +71,63 @@ import Language.Marlowe.Cardano (marloweNetworkFromLocalNodeConnectInfo)
 import Language.Marlowe.Cardano.Thread (overAnyMarloweThread)
 import qualified Language.Marlowe.Cardano.Thread as Marlowe.Cardano.Thread
 import qualified Language.Marlowe.Core.V1.Semantics.Types as M
+import qualified Language.Marlowe.Protocol.Client as Marlowe.Protocol
 import qualified Language.Marlowe.Runtime.ChainSync.Api as ChainSync
 import Language.Marlowe.Runtime.Core.Api
   (ContractId, MarloweVersion(MarloweV1), MarloweVersionTag(V1), emptyMarloweTransactionMetadata)
 import Language.Marlowe.Runtime.Transaction.Api
   (RoleTokensConfig(RoleTokensNone), WalletAddresses(WalletAddresses, changeAddress, collateralUtxos, extraAddresses))
 import qualified Language.Marlowe.Runtime.Transaction.Api as Transaction
+import qualified Network.Protocol.Connection as ChainSync
+import qualified Network.Protocol.Connection as Network.Protocol
 
+-- connectionP :: Prism' env (LocalNodeConnectInfo CardanoMode)
+getConnection
+  :: forall env st m lang era
+   . InterpretMonad env st m lang era
+  => m (C.LocalNodeConnectInfo CardanoMode)
+getConnection = do
+  preview connectionT >>= \case
+    Just conn -> pure conn
+    Nothing -> throwTraceError "getConnection" "Connection not found"
 
-findWallet
-  :: InterpretMonad m lang era
-  => WalletNickname
-  -> m (Wallet era)
-findWallet nickname =
-  use isWallets >>= \(Wallets wallets) ->
-  liftCliMaybe ("[findWallet] Unable to find wallet:" <> show nickname) $ Map.lookup nickname wallets
+-- runtimeClientConnectorP :: Prism' env (Network.Protocol.SomeClientConnector Marlowe.Protocol.MarloweRuntimeClient IO)
+getConnector
+  :: forall env st m lang era
+   . InterpretMonad env st m lang era
+  => m (Network.Protocol.SomeClientConnector Marlowe.Protocol.MarloweRuntimeClient IO)
+getConnector = do
+  preview runtimeClientConnectorT >>= \case
+    Just conn -> pure conn
+    Nothing -> throwTraceError "getConnector" "Connector not found"
 
-getFaucet
-  :: InterpretMonad m lang era
-  => m (Wallet era)
-getFaucet =
-  findWallet faucetNickname
+-- runtimeMonitorStateP :: Prism' env (RuntimeMonitorState lang era)
+getMonitorState
+  :: forall env st m lang era
+   . InterpretMonad env st m lang era
+  => m (RuntimeMonitorState lang era)
+getMonitorState = do
+  preview runtimeMonitorStateT >>= \case
+    Just state -> pure state
+    Nothing -> throwTraceError "getMonitorState" "Monitor state not found"
 
-decodeContractJSON
-  :: InterpretMonad m lang era
-  => ParametrizedMarloweJSON
-  -> m M.Contract
-decodeContractJSON json = do
-  currencies <- use isCurrencies
-  wallets <- use isWallets
-  network <- view ieConnection <&> marloweNetworkFromLocalNodeConnectInfo
-  case decodeParametrizedContractJSON network wallets currencies json of
-    Left err -> throwError $ CliError $ "Failed to decode contract: " <> show err
-    Right c  -> pure c
-
-decodeInputJSON
-  :: InterpretMonad m lang era
-  => ParametrizedMarloweJSON
-  -> m M.Input
-decodeInputJSON json = do
-  currencies <- use isCurrencies
-  wallets <- use isWallets
-  network <- view ieConnection <&> marloweNetworkFromLocalNodeConnectInfo
-  case decodeParametrizedInputJSON network wallets currencies json of
-    Left err -> throwError $ CliError $ "Failed to decode inputs: " <> show err
-    Right c  -> pure c
+--runtimeMonitorInputP :: Prism' env RuntimeMonitorInput
+getMonitorInput
+  :: forall env st m lang era
+   . InterpretMonad env st m lang era
+  => m RuntimeMonitorInput
+getMonitorInput = do
+  preview runtimeMonitorInputT >>= \case
+    Just input -> pure input
+    Nothing -> throwTraceError "getMonitorInput" "Monitor input not found"
 
 getContractId
-  :: forall era lang m
-   . InterpretMonad m lang era
+  :: forall era env lang m st
+   . InterpretMonad env st m lang era
   => ContractNickname
   -> m ContractId
 getContractId nickname = do
-  knownContracts <- use isKnownContracts
+  knownContracts <- use knownContractsL
   case Map.lookup nickname knownContracts of
     Just contractId -> pure contractId
     Nothing ->
@@ -137,7 +143,7 @@ toChainSyncAddress (C.AddressInEra (C.ShelleyAddressInEra _) address') = do
 
 startMonitoring contractNickname = do
   contractId <- getContractId contractNickname
-  RuntimeMonitorInput runtimeMonitorInput <- view ieRuntimeMonitorInput
+  RuntimeMonitorInput runtimeMonitorInput <- getMonitorInput
   liftIO $ atomically $ do
     writeTChan runtimeMonitorInput (contractNickname, contractId)
 
@@ -168,7 +174,7 @@ operationTimeout seconds ro = do
   fromMicroseconds . (toMicroseconds :: Second -> Integer) $ seconds'
 
 operationTimeoutLogged
-  :: InterpretMonad m lang era
+  :: InterpretMonad env st m lang era
   => Second -> RuntimeOperation ->  m Microsecond
 operationTimeoutLogged seconds ro = do
   let
@@ -177,15 +183,15 @@ operationTimeoutLogged seconds ro = do
   pure $ fromMicroseconds . (toMicroseconds :: Second -> Integer) $ seconds'
 
 interpret
-  :: forall era lang m
-   . InterpretMonad m lang era
+  :: forall era env lang m st
+   . InterpretMonad env st m lang era
   => C.IsShelleyBasedEra era
   => RuntimeOperation
   -> m ()
 interpret ro@RuntimeAwaitCreated {..} = do
-  view ieExecutionMode >>= skipInSimluationMode ro do
+  view executionModeL >>= skipInSimluationMode ro do
     startMonitoring roContractNickname
-    rms <- view ieRuntimeMonitorState
+    rms <- getMonitorState
     let
       getContractInfo = awaitNonEmptyContractInfo rms roContractNickname (const True)
     logLabeledMsg ro $ "Waiting for contract instance: " <> show (coerce roContractNickname :: String)
@@ -196,9 +202,9 @@ interpret ro@RuntimeAwaitCreated {..} = do
       _ -> throwLabeledError ro $ "Timeout reached while waiting for contract instance creation: " <> show roContractNickname
 
 interpret ro@RuntimeAwaitInputsApplied {..} = do
-  view ieExecutionMode >>= skipInSimluationMode ro do
+  view executionModeL >>= skipInSimluationMode ro do
     startMonitoring roContractNickname
-    rms <- view ieRuntimeMonitorState
+    rms <- getMonitorState
     timeout <- operationTimeoutLogged 60 ro
     let
       joinInputs thread = do
@@ -224,16 +230,16 @@ interpret ro@RuntimeAwaitInputsApplied {..} = do
 
 
 interpret ro@RuntimeAwaitClosed {..} = do
-  view ieExecutionMode >>= skipInSimluationMode ro do
+  view executionModeL >>= skipInSimluationMode ro do
     startMonitoring roContractNickname
-    rms <- view ieRuntimeMonitorState
+    rms <- getMonitorState
     logLabeledMsg ro $ "Waiting till contract instance is closed: " <> show (coerce roContractNickname :: String)
     timeout <- operationTimeoutLogged 60 ro
     let
-      isClosed :: RuntimeContractInfo lang era -> Bool
-      isClosed = not . Marlowe.Cardano.Thread.isRunning . view rcMarloweThread
+      closedL :: RuntimeContractInfo lang era -> Bool
+      closedL = not . Marlowe.Cardano.Thread.isRunning . view rcMarloweThread
 
-    res <- liftIO $ timeoutIO timeout $ atomically (awaitNonEmptyContractInfo rms roContractNickname isClosed)
+    res <- liftIO $ timeoutIO timeout $ atomically (awaitNonEmptyContractInfo rms roContractNickname closedL)
     when (isNothing res) do
       let
         getContractInfo = awaitContractInfo rms roContractNickname (const True)
@@ -243,10 +249,12 @@ interpret ro@RuntimeAwaitClosed {..} = do
       throwLabeledError ro $ "Timeout reached while waiting for contract instance to be closed: " <> show roContractNickname <> ". Contract info: " <> contractState
 
 interpret ro@RuntimeCreateContract {..} = do
-  view ieExecutionMode >>= skipInSimluationMode ro do
+  view executionModeL >>= skipInSimluationMode ro do
     Wallet { waAddress, waSigningKey } <- maybe getFaucet findWallet roSubmitter
-    connector <- view ieRuntimeClientConnector
-    contract <- decodeContractJSON roContract
+    connector <- getConnector
+    contract <- case roContractSource of
+      InlineContract json -> decodeContractJSON json
+      UseTemplate setup   -> useTemplate roRoleCurrency setup
     let
       possibleChangeAddress = toChainSyncAddress waAddress
     changeAddress <- liftCliMaybe "Failed to create change address" possibleChangeAddress
@@ -262,39 +270,9 @@ interpret ro@RuntimeCreateContract {..} = do
           , extraAddresses = mempty
           , collateralUtxos = mempty
           }
-      -- createContract
-      --   :: MonadMarlowe m
-      --   => Maybe StakeCredential
-      --   -- ^ A reference to the stake address to use for script addresses.
-      --   -> MarloweVersion v
-      --   -- ^ The Marlowe version to use
-      --   -> WalletAddresses
-      --   -- ^ The wallet addresses to use when constructing the transaction
-      --   -> RoleTokensConfig
-      --   -- ^ How to initialize role tokens
-      --   -> MarloweTransactionMetadata
-      --   -- ^ Optional metadata to attach to the transaction
-      --   -> Lovelace
-      --   -- ^ Min Lovelace which should be used for the contract output.
-      --   -> Contract v
-      --   -- ^ The contract to run
-      --   -> m (Either (CreateError v) (ContractCreated BabbageEra v))
       Marlowe.Class.createContract Nothing MarloweV1 walletAddresses roleTokensConfig emptyMarloweTransactionMetadata minLovelace contract
-    era <- view ieEra
+    era <- view eraL
     case result of
-      -- data ContractCreated era v = ContractCreated
-      --   { contractId :: ContractId
-      --   , rolesCurrency :: PolicyId
-      --   , metadata :: MarloweTransactionMetadata
-      --   , marloweScriptHash :: ScriptHash
-      --   , marloweScriptAddress :: Address
-      --   , payoutScriptHash :: ScriptHash
-      --   , payoutScriptAddress :: Address
-      --   , version :: MarloweVersion v
-      --   , datum :: Datum v
-      --   , assets :: Assets
-      --   , txBody :: TxBody era
-      --   }
       Right Transaction.ContractCreated { txBody, contractId } -> do
         logLabeledMsg ro $ "Creating contract: " <> show contractId
         let
@@ -306,7 +284,7 @@ interpret ro@RuntimeCreateContract {..} = do
         case res of
           Right _ -> do
             logLabeledMsg ro $ "Contract created: " <> show tx
-            modifying isKnownContracts $ Map.insert roContractNickname contractId
+            modifying knownContractsL $ Map.insert roContractNickname contractId
             pure ()
           Left err ->
             throwLabeledError ro $ "Failed to submit contract: " <> show err
@@ -315,9 +293,9 @@ interpret ro@RuntimeCreateContract {..} = do
         throwLabeledError ro $ "Failed to create contract: " <> show err
 
 interpret ro@RuntimeApplyInputs {..} = do
-  view ieExecutionMode >>= skipInSimluationMode ro do
+  view executionModeL >>= skipInSimluationMode ro do
     Wallet { waAddress, waSigningKey } <- maybe getFaucet findWallet roSubmitter
-    connector <- view ieRuntimeClientConnector
+    connector <- getConnector
     inputs <- for roInputs decodeInputJSON
     contractId <- getContractId roContractNickname
     let
@@ -332,42 +310,9 @@ interpret ro@RuntimeApplyInputs {..} = do
           , extraAddresses = mempty
           , collateralUtxos = mempty
           }
-
-      -- -- ^ Apply inputs to a contract, with custom validity interval bounds.
-      -- applyInputs'
-      --   :: MonadMarlowe m
-      --   => MarloweVersion v
-      --   -- ^ The Marlowe version to use
-      --   -> WalletAddresses
-      --   -- ^ The wallet addresses to use when constructing the transaction
-      --   -> ContractId
-      --   -- ^ The ID of the contract to apply the inputs to.
-      --   -> MarloweTransactionMetadata
-      --   -- ^ Optional metadata to attach to the transaction
-      --   -> Maybe UTCTime
-      --   -- ^ The "invalid before" bound of the validity interval. If omitted, this
-      --   -- is computed from the contract.
-      --   -> Maybe UTCTime
-      --   -- ^ The "invalid hereafter" bound of the validity interval. If omitted, this
-      --   -- is computed from the contract.
-      --   -> Inputs v
-      --   -- ^ The inputs to apply.
-      --   -> m (Either (ApplyInputsError v) (InputsApplied BabbageEra v))
-
       Marlowe.Class.applyInputs' MarloweV1 walletAddresses contractId emptyMarloweTransactionMetadata Nothing Nothing inputs
-    era <- view ieEra
+    era <- view eraL
     case result of
-      --  data InputsApplied era v = InputsApplied
-      --    { version :: MarloweVersion v
-      --    , contractId :: ContractId
-      --    , metadata :: MarloweTransactionMetadata
-      --    , input :: TransactionScriptOutput v
-      --    , output :: Maybe (TransactionScriptOutput v)
-      --    , invalidBefore :: UTCTime
-      --    , invalidHereafter :: UTCTime
-      --    , inputs :: Inputs v
-      --    , txBody :: TxBody era
-      --    }
       Right Transaction.InputsApplied { txBody, contractId } -> do
         -- logLabeledMsg ro $ "Contract created: " <> show res
         let
@@ -381,7 +326,7 @@ interpret ro@RuntimeApplyInputs {..} = do
         case res of
           Right _ -> do
             logLabeledMsg ro $ "Inputs applied: " <> show tx
-            modifying isKnownContracts $ Map.insert roContractNickname contractId
+            modifying knownContractsL $ Map.insert roContractNickname contractId
             pure ()
           Left err ->
             throwLabeledError ro $ "Failed to submit contract: " <> show err

@@ -107,7 +107,7 @@ import Language.Marlowe.Runtime.App.Stream
 import Language.Marlowe.Runtime.App.Types (PollingFrequency(PollingFrequency), runClient)
 import qualified Language.Marlowe.Runtime.App.Types as Apps
 import qualified Language.Marlowe.Runtime.Cardano.Api as Runtime.Cardano.Api
-import Language.Marlowe.Runtime.Core.Api (ContractId(ContractId))
+import Language.Marlowe.Runtime.Core.Api (ContractId(ContractId), MarloweVersionTag(V1))
 import qualified Language.Marlowe.Runtime.Core.Api as R
 import qualified Language.Marlowe.Runtime.Core.Api as Runtime.Core.Api
 import qualified Language.Marlowe.Runtime.History.Api as RH
@@ -208,7 +208,7 @@ processMarloweStreamEvent
   :: forall era lang v
    . M.Map ContractId ContractNickname
   -> M.Map ContractNickname (RuntimeContractInfo era lang)
-  -> Either EOF (ContractStream v)
+  -> Either EOF (ContractStream V1)
   -> Either RuntimeError (Maybe (RuntimeContractUpdate era lang))
 processMarloweStreamEvent knownContracts contracts = do
   let
@@ -239,13 +239,13 @@ processMarloweStreamEvent knownContracts contracts = do
         let th = anyMarloweThreadCreated () txIn
         returnContractUpdate csContractId (RuntimeContractInfo th)
       ContractStreamContinued{csContractId, csContractStep=RH.RedeemPayout{}} -> pure Nothing
-      ContractStreamContinued{csContractId, csContractStep=RH.ApplyTransaction R.Transaction {R.output=R.TransactionOutput{ scriptOutput=scriptOutput}}} -> do
+      ContractStreamContinued{csContractId, csContractStep=RH.ApplyTransaction R.Transaction {R.inputs=inputs, R.output=R.TransactionOutput{ scriptOutput=scriptOutput}}} -> do
         mTxIn <- for scriptOutput scriptOutputToCardanoTxIn
         RuntimeContractInfo th <- getContractInfo csContractId
-        case anyRuntimeMarloweThread mTxIn [] th of
+        case anyRuntimeMarloweThread mTxIn inputs th of
           Just th' -> returnContractUpdate csContractId (RuntimeContractInfo th')
           Nothing -> do
-            throwError $ RuntimeExecutionFailure $ "Thread contination failed: " <> show csContractId
+            throwError $ RuntimeExecutionFailure $ "Thread continuation failed: " <> show csContractId
       ContractStreamRolledBack{csContractId} -> do
         -- Is it even possible that we have not yet started the thread?
         case lookupContractNickname csContractId of

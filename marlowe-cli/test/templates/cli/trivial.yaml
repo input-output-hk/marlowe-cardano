@@ -1,4 +1,4 @@
-testName: Trivial contract without roles using reference scripts
+testName: Trivial contract using CLI without roles
 
 operations:
 
@@ -50,3 +50,5 @@ operations:
 
   - tag: AutoRun
     contractNickname: Trivial
+
+  - tag: ReturnFunds

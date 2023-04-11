@@ -5,7 +5,8 @@ operations:
   - tag: RuntimeCreateContract
     contractNickname: "Runtime"
     minLovelace: 2000000
-    contract: "close"
+    contractSource:
+      inline: "close"
 
   - tag: RuntimeAwaitCreated
     timeout: 360

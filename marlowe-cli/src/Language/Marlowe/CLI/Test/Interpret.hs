@@ -25,15 +25,7 @@ import qualified Language.Marlowe.CLI.Test.CLI.Interpret as CLI
 import Language.Marlowe.CLI.Test.Log (logLabeledMsg)
 import qualified Language.Marlowe.CLI.Test.Runtime.Interpret as Runtime
 import Language.Marlowe.CLI.Test.Types
-  ( InterpretMonad
-  , TestOperation(CLIOperation, Fail, RuntimeOperation, WalletOperation)
-  , cliInpterpretStateL
-  , runtimeInpterpretStateL
-  , toCLIInterpretEnv
-  , toRuntimeInterpretEnv
-  , toWalletInterpretEnv
-  , walletInpterpretStateL
-  )
+  (InterpretMonad, TestOperation(CLIOperation, Fail, RuntimeOperation, WalletOperation))
 import qualified Language.Marlowe.CLI.Test.Wallet.Interpret as Wallet
 import Language.Marlowe.CLI.Types (CliError(CliError))
 
@@ -45,34 +37,14 @@ interpret
   => TestOperation
   -> m ()
 interpret (RuntimeOperation ro) = do
-  state <- get
-  env <- ask
   logLabeledMsg ro ""
-  case toRuntimeInterpretEnv env of
-    Nothing -> throwError $ CliError "Runtime env not initialized. Aborting."
-    Just env' -> do
-      let
-        interpret' = zoom runtimeInpterpretStateL (Runtime.interpret ro)
-      e <- liftIO $ runExceptT (runReaderT (execStateT interpret' state) env')
-      either throwError put e
+  Runtime.interpret ro
 interpret (WalletOperation wo) = do
   logLabeledMsg wo ""
-  state <- get
-  env <- ask
-  let
-    interpret' = zoom walletInpterpretStateL (Wallet.interpret wo)
-    env' = toWalletInterpretEnv env
-  e <- liftIO $ runExceptT (runReaderT (execStateT interpret' state) env')
-  either throwError put e
+  Wallet.interpret wo
 interpret (CLIOperation co) = do
   logLabeledMsg co ""
-  state <- get
-  env <- ask
-  let
-    interpret' = zoom cliInpterpretStateL (CLI.interpret co)
-    env' = toCLIInterpretEnv env
-  e <- liftIO $ runExceptT (runReaderT (execStateT interpret' state) env')
-  either throwError put e
+  CLI.interpret co
 interpret (Fail message) =
   throwError $ CliError message
 

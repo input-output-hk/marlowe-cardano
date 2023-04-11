@@ -4,9 +4,11 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -20,7 +22,7 @@ module Language.Marlowe.CLI.Test.Runtime.Types
 import Cardano.Api (CardanoMode, LocalNodeConnectInfo, ScriptDataSupportedInEra)
 import qualified Cardano.Api as C
 import Control.Concurrent.STM (TChan, TVar)
-import Control.Lens (makeLenses)
+import Control.Lens (Lens', Prism', Traversal, Traversal', makeLenses)
 import Control.Monad.Except (MonadError)
 import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.Reader.Class (MonadReader)
@@ -33,10 +35,13 @@ import Data.Time.Units (Second)
 import Data.Word (Word64)
 import GHC.Generics (Generic)
 import Language.Marlowe.CLI.Test.Contract (ContractNickname)
+import qualified Language.Marlowe.CLI.Test.Contract as Contract
 import Language.Marlowe.CLI.Test.Contract.ParametrizedMarloweJSON
 import Language.Marlowe.CLI.Test.ExecutionMode (ExecutionMode)
 import qualified Language.Marlowe.CLI.Test.Operation.Aeson as Operation
-import Language.Marlowe.CLI.Test.Wallet.Types (Currencies(Currencies), WalletNickname(WalletNickname), Wallets(Wallets))
+import Language.Marlowe.CLI.Test.Wallet.Types
+  (Currencies(Currencies), CurrencyNickname(CurrencyNickname), WalletNickname(WalletNickname), Wallets(Wallets))
+import qualified Language.Marlowe.CLI.Test.Wallet.Types as Wallet
 import Language.Marlowe.CLI.Types (CliError)
 import Language.Marlowe.Cardano.Thread (AnyMarloweThread, MarloweThread, anyMarloweThread)
 import qualified Language.Marlowe.Core.V1.Semantics.Types as M
@@ -99,7 +104,9 @@ data RuntimeOperation =
       roContractNickname :: ContractNickname
     , roSubmitter :: Maybe WalletNickname -- ^ A wallet which gonna submit the initial transaction.
     , roMinLovelace :: Word64
-    , roContract :: ParametrizedMarloweJSON -- ^ The Marlowe contract to be created.
+    -- , roContract :: ParametrizedMarloweJSON -- ^ The Marlowe contract to be created.
+    , roRoleCurrency :: Maybe CurrencyNickname  -- ^ If contract uses roles then currency is required.
+    , roContractSource :: Contract.Source         -- ^ The Marlowe contract to be created.
     -- , roTimeout :: Maybe Integer
     }
   | RuntimeApplyInputs
@@ -123,32 +130,27 @@ instance ToJSON RuntimeOperation where
   toJSON = do
     A.genericToJSON $ Operation.genericJSONOptions "ro"
 
+class HasInterpretState st lang era | st -> lang era where
+  knownContractsL :: Lens' st (Map ContractNickname ContractId)
+  walletsL :: Lens' st (Wallets era)
+  currenciesL :: Lens' st Currencies
 
-data InterpretState era = InterpretState
-  {
-    _isKnownContracts :: Map ContractNickname ContractId
-  , _isWallets :: Wallets era
-  , _isCurrencies :: Currencies
-  }
+class HasInterpretEnv env lang era | env -> lang era where
+  runtimeMonitorStateT :: Traversal' env (RuntimeMonitorState lang era)
+  runtimeMonitorInputT :: Traversal' env RuntimeMonitorInput
+  runtimeClientConnectorT :: Traversal' env (Network.Protocol.SomeClientConnector Marlowe.Protocol.MarloweRuntimeClient IO)
+  executionModeL :: Lens' env ExecutionMode
+  connectionT :: Traversal' env (LocalNodeConnectInfo CardanoMode)
+  eraL :: Lens' env (ScriptDataSupportedInEra era)
 
-data InterpretEnv lang era = InterpretEnv
-  {
-    _ieRuntimeMonitorState :: RuntimeMonitorState lang era
-  , _ieRuntimeMonitorInput :: RuntimeMonitorInput
-  , _ieRuntimeClientConnector :: Network.Protocol.SomeClientConnector Marlowe.Protocol.MarloweRuntimeClient IO
-  , _ieExecutionMode :: ExecutionMode
-  , _ieConnection :: LocalNodeConnectInfo CardanoMode
-  , _ieEra :: ScriptDataSupportedInEra era
-  }
-
-type InterpretMonad m lang era =
-  ( MonadState (InterpretState era) m
-  , MonadReader (InterpretEnv lang era) m
+type InterpretMonad env st m lang era =
+  ( MonadState st m
+  , HasInterpretState st lang era
+  , MonadReader env m
+  , HasInterpretEnv env lang era
+  , Wallet.InterpretMonad env st m era
   , MonadError CliError m
   , MonadIO m
   )
 
 makeLenses 'RuntimeContractInfo
-makeLenses 'InterpretState
-makeLenses 'InterpretEnv
-
