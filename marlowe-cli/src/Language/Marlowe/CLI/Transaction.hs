@@ -50,6 +50,7 @@ module Language.Marlowe.CLI.Transaction
   , findPublished
     -- * Low-Level Functions
   , buildBody
+  , buildBodyWithContent
   , buildPayFromScript
   , buildPayToScript
   , hashSigningKey
@@ -61,6 +62,7 @@ module Language.Marlowe.CLI.Transaction
   , selectUtxos
   , selectUtxosImpl
   , submitBody
+  , submitBody'
     -- * Balancing
   , ensureMinUtxo
   , findMinUtxo
@@ -745,32 +747,7 @@ buildMintingImpl connection mintingAction metadataProps expires submitMode (Prin
       DontSubmit -> pure body
       DoSubmit t -> do
         -- We attempt to increase fees by arbitrary amount on submission failure.
-        (submitBody connection body signingKeys t $> body) `catchError` \err -> do
-          liftIO $ hPutStrLn stderr "Adjusting the fees and resubmitting failing transaction."
-          liftIO $ hPrint stderr err
-          let
-            feeBalancingMargin = C.Lovelace 10000
-            C.TxBodyContent{..} = bodyContent
-            -- Find change UTxO and subtract the fee margin.
-            step (TxOut addr value datum refScript) (False, outs)
-              | addr == changeAddress && (fromMaybe 0 . C.valueToLovelace $ C.txOutValueToValue value) > feeBalancingMargin = do
-              let
-                value' = txOutValueToValue value <> C.negateValue (C.lovelaceToValue feeBalancingMargin)
-                out' = TxOut addr (TxOutValue (toMultiAssetSupportedInEra era) value') datum refScript
-              (True, out' : outs)
-            step out (flag, outs) = (flag, out : outs)
-
-            (adjusted, txOuts') = foldr step (False, []) txOuts
-          -- Increase the transaction fee by the chosen margin.
-          txFee' <- case (adjusted, txFee) of
-            (True, TxFeeExplicit feesInEra value) -> pure $ TxFeeExplicit feesInEra (value + feeBalancingMargin)
-            _ -> throwError . CliError $ "Unable to adjust the change during resubmission attempt."
-
-          withCardanoEra era $ case C.makeTransactionBody (C.TxBodyContent{..} { txOuts = txOuts', txFee = txFee' }) of
-            Left err' -> throwError . CliError $ "Failure during reconstruction of the failing tx body: " <> show err'
-            Right body' -> do
-              void $ submitBody connection body' signingKeys t
-              pure body'
+        submitBody' connection body bodyContent changeAddress signingKeys t $> body
     pure (body', policy)
 
 
@@ -1486,6 +1463,47 @@ submitBody connection body signings timeout =
         liftIO $ hPutStrLn stderr "Submission of the transaction failed:"
         liftIO $ hPrint stderr body
         throwError . CliError $ show reason
+
+-- A vesrion of submit which performs an attempt to extra fee balancing on failure
+-- (we experienced failures on the cardano-node for already balanced transactions).
+submitBody' :: MonadError CliError m
+           => MonadIO m
+           => MonadReader (CliEnv era) m
+           => LocalNodeConnectInfo CardanoMode  -- ^ The connection info for the local node.
+           -> TxBody era                        -- ^ The transaction body.
+           -> C.TxBodyContent C.BuildTx era
+           -> AddressInEra era                  -- ^ The change address.
+           -> [SomePaymentSigningKey]           -- ^ The signing keys.
+           -> Second                            -- ^ Number of seconds to wait for the transaction to be confirmed.
+           -> m (TxId, TxBody era)              -- ^ The action to submit the transaction.
+submitBody' connection body bodyContent changeAddress signingKeys timeout = do
+  era <- askEra
+  ((, body) <$> submitBody connection body signingKeys timeout) `catchError` \err -> do
+    liftIO $ hPutStrLn stderr "Adjusting the fees and resubmitting failing transaction."
+    liftIO $ hPrint stderr err
+    let
+      feeBalancingMargin = C.Lovelace 10000
+      C.TxBodyContent{..} = bodyContent
+      -- Find change UTxO and subtract the fee margin.
+      step (TxOut addr value datum refScript) (False, outs)
+        | addr == changeAddress && (fromMaybe 0 . C.valueToLovelace $ C.txOutValueToValue value) > feeBalancingMargin = do
+        let
+          value' = txOutValueToValue value <> C.negateValue (C.lovelaceToValue feeBalancingMargin)
+          out' = TxOut addr (TxOutValue (toMultiAssetSupportedInEra era) value') datum refScript
+        (True, out' : outs)
+      step out (flag, outs) = (flag, out : outs)
+
+      (adjusted, txOuts') = foldr step (False, []) txOuts
+    -- Increase the transaction fee by the chosen margin.
+    txFee' <- case (adjusted, txFee) of
+      (True, TxFeeExplicit feesInEra value) -> pure $ TxFeeExplicit feesInEra (value + feeBalancingMargin)
+      _ -> throwError . CliError $ "Unable to adjust the change during resubmission attempt."
+
+    withCardanoEra era $ case C.makeTransactionBody (C.TxBodyContent{..} { txOuts = txOuts', txFee = txFee' }) of
+      Left err' -> throwError . CliError $ "Failure during reconstruction of the failing tx body: " <> show err'
+      Right body' -> do
+        txId <- submitBody connection body' signingKeys timeout
+        pure (txId, body')
 
 
 -- | Wait for transactions to be confirmed as UTxOs.

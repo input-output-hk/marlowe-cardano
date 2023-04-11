@@ -71,6 +71,7 @@ import Language.Marlowe.CLI.Test.Wallet.Types
   , Currency(Currency, ccCurrencySymbol, ccIssuer)
   , CurrencyNickname
   , InterpretMonad
+  , SomeTxBody(..)
   , TokenAssignment(TokenAssignment)
   , Wallet(Wallet, waAddress, waBalanceCheckBaseline, waMintedTokens, waSigningKey, waSubmittedTransactions)
   , WalletNickname(WalletNickname)
@@ -87,7 +88,8 @@ import Language.Marlowe.CLI.Test.Wallet.Types
   , printStatsL
   , walletsL
   )
-import Language.Marlowe.CLI.Transaction (buildBody, buildFaucetImpl, buildMintingImpl, queryUtxos, submitBody)
+import Language.Marlowe.CLI.Transaction
+  (buildBody, buildBodyWithContent, buildFaucetImpl, buildMintingImpl, queryUtxos, submitBody, submitBody')
 import Language.Marlowe.CLI.Types
   ( AnUTxO(AnUTxO)
   , CliEnv
@@ -318,6 +320,7 @@ decodeContractJSON json = do
     Left err -> throwError $ CliError $ "Failed to decode contract: " <> show err
     Right c  -> pure c
 
+
 interpret
   :: forall env era st m
    . C.IsShelleyBasedEra era
@@ -331,10 +334,15 @@ interpret so@CheckBalance {..} =
     let
       onChainTotal = CV.toPlutusValue $ foldMap txOutValueValue . Map.elems . C.unUTxO $ utxos
 
-      fees = waSubmittedTransactions `foldMapFlipped` \(C.TxBody txBodyContent) -> do
+      txFee :: forall era'. C.IsShelleyBasedEra era' => TxBody era' -> Lovelace
+      txFee (C.TxBody txBodyContent) =
         case C.txFee txBodyContent of
           C.TxFeeExplicit _ lovelace -> lovelace
           C.TxFeeImplicit _ -> C.Lovelace 0
+
+      fees = waSubmittedTransactions `foldMapFlipped` \case
+        (BabbageTxBody txBody) -> txFee txBody
+        (SomeTxBody txBody) -> txFee txBody
 
     logLabeledMsg so $ "Checking balance of wallet:" <> show case woWalletNickname of WalletNickname n -> n
     logLabeledMsg so $ "Number of already submitted transactions: " <> show (length waSubmittedTransactions)
@@ -348,14 +356,13 @@ interpret so@CheckBalance {..} =
       AssetsBalance expectedBalance = woBalance
 
     for_ actualBalance \(Asset assetId v) -> do
-      -- logLabeledMsg so $ "Actual balance of asset:" <> show k <> " is:" <> show v
       case Map.lookup assetId expectedBalance of
         Nothing -> do
-          logLabeledMsg so $ "Actual balance of asset:" <> show assetId <> " is:" <> show v
           throwLabeledError so $ "Unexpected asset in balance check:" <> show assetId
         Just expectedValue -> do
           unless (checkBalance expectedValue v) do
             logLabeledMsg so $ "Actual balance of asset:" <> show assetId <> " is:" <> show v
+            logLabeledMsg so $ "Expected balance of asset:" <> show assetId <> " is: " <> show expectedValue
             throwLabeledError so $ "Balance check failed for an asset:" <> show assetId
 
     for_ (Map.toList expectedBalance) \(assetId, expectedValue) -> do
@@ -417,7 +424,7 @@ interpret so@BurnAll {..} = do
         wallet { waBalanceCheckBaseline = balanceCheckBaseline' }
 
     updateWallet ccIssuer \issuer@Wallet {waSubmittedTransactions} ->
-      issuer { waSubmittedTransactions = burningTx : waSubmittedTransactions }
+      issuer { waSubmittedTransactions = SomeTxBody burningTx : waSubmittedTransactions }
 
 interpret FundWallets {..} = do
   let
@@ -440,7 +447,7 @@ interpret FundWallets {..} = do
     submitMode
 
   updateFaucet \faucet@(Wallet _ _ _ _ faucetTransactions) ->
-    faucet { waSubmittedTransactions = txBody : faucetTransactions }
+    faucet { waSubmittedTransactions = SomeTxBody txBody : faucetTransactions }
 
 interpret so@Mint {..} = do
   let
@@ -501,7 +508,7 @@ interpret so@Mint {..} = do
           then lovelaceToPlutusValue . C.selectLovelace . C.txOutValueToValue $ value
           else mempty
     issuer
-      { waSubmittedTransactions = mintingTx : waSubmittedTransactions
+      { waSubmittedTransactions = SomeTxBody mintingTx : waSubmittedTransactions
       }
   modifying currenciesL \(Currencies currencies) ->
     Currencies $ Map.insert woCurrencyNickname currency currencies
@@ -525,7 +532,6 @@ interpret SplitWallet {..} = do
 
 interpret wo@ReturnFunds{} = do
   Wallets wallets <- use walletsL
-
   let
     step :: (WalletNickname, Wallet era) -> m ([(C.TxIn, C.TxOut C.CtxUTxO era)], [SomePaymentSigningKey], C.Value)
     step (walletNickname, wallet@Wallet { waSigningKey }) = do
@@ -553,28 +559,28 @@ interpret wo@ReturnFunds{} = do
   else do
     connection <- view connectionL
     era <- view eraL
-    body <- runLabeledCli era wo $ buildBody
-        connection
-        ([] :: [PayFromScript C.PlutusScriptV1])
-        Nothing
-        []
-        inputs
-        outputs
-        Nothing
-        changeAddress
-        Nothing
-        []
-        C.TxMintNone
-        C.TxMetadataNone
-        False
-        False
+    (bodyContent, body) <- runLabeledCli era wo $ buildBodyWithContent
+      connection
+      ([] :: [PayFromScript C.PlutusScriptV1])
+      Nothing
+      []
+      inputs
+      outputs
+      Nothing
+      changeAddress
+      Nothing
+      []
+      C.TxMintNone
+      C.TxMetadataNone
+      False
+      False
 
     logLabeledMsg wo $ "Returning funds to the faucet: " <> show total
 
     submitMode <- view executionModeL <&> toSubmitMode
     case submitMode of
       T.DoSubmit timeout -> do
-        runLabeledCli era wo $ submitBody connection body signingKeys timeout
+        runLabeledCli era wo $ submitBody' connection body bodyContent changeAddress signingKeys timeout
         let
           wallets' = Wallets $ flip imap wallets \walletNickname wallet@Wallet { waMintedTokens } -> do
             if walletNickname == faucetNickname

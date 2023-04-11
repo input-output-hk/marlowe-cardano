@@ -55,7 +55,6 @@ import Language.Marlowe.CLI.Types
   , MarloweScriptsRefs
   , MarloweTransaction(MarloweTransaction, mtInputs)
   , PrintStats
-  , Seconds
   , SomePaymentSigningKey
   , SomeTimeout
   )
@@ -76,6 +75,7 @@ import Control.Concurrent.STM (TChan, TVar)
 import Control.Lens.Lens (lens)
 import Control.Monad.State.Class (MonadState)
 import Data.Set (Set)
+import Data.Time.Units (Second, TimeUnit(fromMicroseconds, toMicroseconds))
 import Language.Marlowe.CLI.Test.CLI.Types
   (AnyCLIMarloweThread, CLIContracts(CLIContracts), CLIOperation, cliContractsIds)
 import qualified Language.Marlowe.CLI.Test.CLI.Types as CLI
@@ -151,6 +151,10 @@ data TestOperation =
     {
       soFailureMessage :: String
     }
+  | Sleep
+    {
+      soDelay :: Second
+    }
   deriving stock (Eq, Generic, Show)
 
 -- | FIXME: Constructor names could be generically derived from the types.
@@ -192,6 +196,9 @@ instance FromJSON TestOperation where
       tag | tag `List.elem` runtimeConstructors -> RuntimeOperation <$> parseJSON json
       tag | tag `List.elem` walletConstructors -> WalletOperation <$> parseJSON json
       tag | tag == "Fail" -> Fail <$> obj .: "failureMessage"
+      tag | tag == "Sleep" -> Sleep <$> do
+        (seconds :: Integer) <- obj .: "seconds"
+        pure $ fromMicroseconds (seconds * 10^6)
       _ -> fail $ "Unknown tag: " <> tag
 
 instance ToJSON TestOperation where
@@ -199,6 +206,7 @@ instance ToJSON TestOperation where
   toJSON (RuntimeOperation op) = toJSON op
   toJSON (WalletOperation op) = toJSON op
   toJSON (Fail msg) = A.object [("failureMessage", toJSON msg)]
+  toJSON (Sleep seconds) = A.object [("seconds", toJSON $ toMicroseconds seconds `div` 10^6)]
 
 data InterpretState lang era = InterpretState
   {

@@ -14,20 +14,9 @@ operations:
     values: [10000000, 10000000, 10000000]
     walletNicknames: [Buyer]
 
-  - tag: Mint
-    currencyNickname: ContractCurrency
-    # Let's send also some ADA to the wallets so they an act in the contract
-    minLovelace: 6000000
-    tokenDistribution:
-      - [Buyer, Buyer, 1]
-      - [Seller, Seller, 1]
-      - [Mediator, Mediator, 1]
-
-
   - tag: Initialize
     contractNickname: Escrow
     marloweValidators: referenceCurrent
-    roleCurrency: ContractCurrency
     minLovelace: 2000000
     contractSource:
       template:
@@ -83,6 +72,14 @@ operations:
   - tag: AutoRun
     contractNickname: Escrow
 
-  - tag: BurnAll
+  - tag: CheckBalance
+    walletNickname: Buyer
+    balance:
+      - [ADA, [11, 13]]
+
+  - tag: CheckBalance
+    walletNickname: Seller
+    balance:
+      - [ADA, [51, 53]]
 
   - tag: ReturnFunds

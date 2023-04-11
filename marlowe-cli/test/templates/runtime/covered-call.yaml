@@ -1,4 +1,4 @@
-testName: Covered Call Contract using CLI
+testName: Covered Call Contract Test
 
 operations:
   - tag: CreateWallet
@@ -28,9 +28,8 @@ operations:
       - [CounterParty, Swan, 500]
 
   # Transaction 1. Create the Contract by Providing the Minimum ADA.
-  - tag: Initialize
+  - tag: RuntimeCreateContract
     contractNickname: Covered Call
-    marloweValidators: referenceCurrent
     minLovelace: 2000000
     contractSource:
       template:
@@ -50,9 +49,14 @@ operations:
         settlementDate:
           relative: 36000 # now + 10h
 
-  # Transaction 2. The issuer deposits Tokens into the Contract.
-  - tag: Prepare
+  - tag: RuntimeAwaitCreated
+    timeout: 360
     contractNickname: Covered Call
+
+  # Transaction 2. The issuer deposits Tokens into the Contract.
+  - tag: RuntimeApplyInputs
+    contractNickname: Covered Call
+    submitter: Issuer
     inputs:
       - input_from_party:
           address: Issuer
@@ -62,35 +66,53 @@ operations:
           token_name: Globe
         into_account:
           address: Issuer
-    minimumTime:
-      relative: 0
-    maximumTime:
-      relative: 3600
 
-  - tag: AutoRun
+  - tag: RuntimeAwaitInputsApplied
+    timeout: 360
     contractNickname: Covered Call
+    allInputs:
+      - input_from_party:
+          address: Issuer
+        that_deposits: 300
+        of_token:
+          currency_symbol: CurrencyA
+          token_name: Globe
+        into_account:
+          address: Issuer
 
   # Transaction 3. The Counter-Party chooses to exercise the option.
-  - tag: Prepare
+  - tag: RuntimeApplyInputs
     contractNickname: Covered Call
-
+    submitter: CounterParty
     inputs:
       - for_choice_id:
           choice_name: "Exercise Call"
           choice_owner:
             address: CounterParty
         input_that_chooses_num: 1
-    minimumTime:
-      relative: 0
-    maximumTime:
-      relative: 3600
 
-  - tag: AutoRun
+  - tag: RuntimeAwaitInputsApplied
+    timeout: 360
     contractNickname: Covered Call
+    allInputs:
+      - input_from_party:
+          address: Issuer
+        that_deposits: 300
+        of_token:
+          currency_symbol: CurrencyA
+          token_name: Globe
+        into_account:
+          address: Issuer
+      - for_choice_id:
+          choice_name: "Exercise Call"
+          choice_owner:
+            address: CounterParty
+        input_that_chooses_num: 1
 
   # Transaction 4. The Counter-Party Deposits their Tokens."
-  - tag: Prepare
+  - tag: RuntimeApplyInputs
     contractNickname: Covered Call
+    submitter: CounterParty
     inputs:
       - input_from_party:
           address: CounterParty
@@ -100,13 +122,34 @@ operations:
           token_name: Swan
         into_account:
           address: CounterParty
-    minimumTime:
-      relative: 0
-    maximumTime:
-      relative: 28800
 
-  - tag: AutoRun
+  - tag: RuntimeAwaitInputsApplied
+    timeout: 360
     contractNickname: Covered Call
+    allInputs:
+      - input_from_party:
+          address: Issuer
+        that_deposits: 300
+        of_token:
+          currency_symbol: CurrencyA
+          token_name: Globe
+        into_account:
+          address: Issuer
+
+      - for_choice_id:
+          choice_name: "Exercise Call"
+          choice_owner:
+            address: CounterParty
+        input_that_chooses_num: 1
+
+      - input_from_party:
+          address: CounterParty
+        that_deposits: 500
+        of_token:
+          currency_symbol: CurrencyB
+          token_name: Swan
+        into_account:
+          address: CounterParty
 
   - tag: CheckBalance
     walletNickname: Issuer

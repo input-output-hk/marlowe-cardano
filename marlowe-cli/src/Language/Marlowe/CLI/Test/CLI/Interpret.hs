@@ -105,6 +105,7 @@ import Language.Marlowe.CLI.Test.Wallet.Types
   , Currencies(Currencies)
   , Currency(Currency, ccCurrencySymbol, ccIssuer)
   , CurrencyNickname
+  , SomeTxBody(..)
   , TokenAssignment(TokenAssignment)
   , Wallet(Wallet, waAddress, waBalanceCheckBaseline, waMintedTokens, waSigningKey, waSubmittedTransactions)
   , WalletNickname(WalletNickname)
@@ -304,7 +305,7 @@ autoRunTransaction currency defaultSubmitter prev curr@T.MarloweTransaction {..}
   log' $ "TxId:" <> show mTxId
 
   updateWallet submitterNickname \submitter@Wallet {..} ->
-    submitter { waSubmittedTransactions = txBody : waSubmittedTransactions }
+    submitter { waSubmittedTransactions = SomeTxBody txBody : waSubmittedTransactions }
 
   let meOuts = classifyOutputs mTxId txOuts
   case filter isMarloweOut meOuts of
@@ -625,7 +626,7 @@ interpret co@Withdraw {..} =
         pure []
 
   updateWallet coWalletNickname \wallet@Wallet {waSubmittedTransactions} ->
-    wallet { waSubmittedTransactions = txBodies <> waSubmittedTransactions }
+    wallet { waSubmittedTransactions = map SomeTxBody txBodies <> waSubmittedTransactions }
 
   let
     newWithdrawals = foldMapFlipped roles \role ->

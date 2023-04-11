@@ -1,4 +1,4 @@
-testName: CLI Escrow Contract Test using Runtime
+testName: Escrow Contract using Runtime
 
 operations:
   - tag: CreateWallet
@@ -14,14 +14,8 @@ operations:
     values: [10000000, 10000000, 10000000]
     walletNicknames: [Buyer]
 
-  - tag: Mint
-    currencyNickname: ContractCurrency
-    # Let's send also some ADA to the wallets so they an act in the contract
-    minLovelace: 6000000
-    tokenDistribution:
-      - [Buyer, Buyer, 1]
-      - [Seller, Seller, 1]
-      - [Mediator, Mediator, 1]
+  - tag: Sleep
+    seconds: 30
 
   - tag: RuntimeCreateContract
     contractNickname: Escrow
@@ -51,6 +45,7 @@ operations:
 
   - tag: RuntimeApplyInputs
     contractNickname: Escrow
+    submitter: Buyer
     inputs:
       - input_from_party:
           address: Buyer
@@ -76,6 +71,7 @@ operations:
 
   - tag: RuntimeApplyInputs
     contractNickname: Escrow
+    submitter: Buyer
     inputs:
       - for_choice_id:
           choice_name: Everything is alright
@@ -85,7 +81,7 @@ operations:
 
   - tag: RuntimeAwaitInputsApplied
     timeout: 360
-    contractNickname: Trivial
+    contractNickname: Escrow
     allInputs:
       - input_from_party:
           address: Buyer
@@ -101,6 +97,14 @@ operations:
             address: Buyer
         input_that_chooses_num: 0
 
-  - tag: BurnAll
+  - tag: CheckBalance
+    walletNickname: Buyer
+    balance:
+      - [ADA, [9, 11]]
+
+  - tag: CheckBalance
+    walletNickname: Seller
+    balance:
+      - [ADA, [19, 21]]
 
   - tag: ReturnFunds

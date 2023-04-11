@@ -18,7 +18,7 @@ module Language.Marlowe.CLI.Test.Runtime.Interpret
   where
 
 import Actus.Marlowe (getContractIdentifier)
-import Cardano.Api (CardanoMode, toAddressAny)
+import Cardano.Api (CardanoMode, Tx, toAddressAny)
 import qualified Cardano.Api as C
 import Contrib.Control.Concurrent.Async (timeoutIO)
 import Control.Concurrent.STM (TVar, atomically, readTVar, retry, writeTChan)
@@ -63,9 +63,10 @@ import Language.Marlowe.CLI.Test.Runtime.Types
   , runtimeMonitorStateT
   , walletsL
   )
-import Language.Marlowe.CLI.Test.Wallet.Interpret (decodeContractJSON, decodeInputJSON, findWallet, getFaucet)
+import Language.Marlowe.CLI.Test.Wallet.Interpret
+  (decodeContractJSON, decodeInputJSON, findWallet, getFaucet, updateWallet)
 import Language.Marlowe.CLI.Test.Wallet.Types
-  (Wallet(..), WalletNickname(WalletNickname), Wallets(Wallets), faucetNickname)
+  (SomeTxBody(BabbageTxBody), Wallet(..), WalletNickname(WalletNickname), Wallets(Wallets), faucetNickname)
 import Language.Marlowe.CLI.Types (CliError(CliError), somePaymentsigningKeyToTxWitness)
 import Language.Marlowe.Cardano (marloweNetworkFromLocalNodeConnectInfo)
 import Language.Marlowe.Cardano.Thread (overAnyMarloweThread)
@@ -278,6 +279,7 @@ interpret ro@RuntimeCreateContract {..} = do
         let
           witness = somePaymentsigningKeyToTxWitness waSigningKey
           tx = withShelleyBasedEra era . C.signShelleyTransaction txBody $ [witness]
+          submitterNickname = fromMaybe faucetNickname roSubmitter
         res <- liftIO $ flip runMarloweT connector do
           Marlowe.Class.submitAndWait tx
 
@@ -285,6 +287,8 @@ interpret ro@RuntimeCreateContract {..} = do
           Right _ -> do
             logLabeledMsg ro $ "Contract created: " <> show tx
             modifying knownContractsL $ Map.insert roContractNickname contractId
+            updateWallet submitterNickname \submitter@Wallet {..} -> do
+              submitter { waSubmittedTransactions = BabbageTxBody txBody : waSubmittedTransactions }
             pure ()
           Left err ->
             throwLabeledError ro $ "Failed to submit contract: " <> show err
@@ -318,15 +322,19 @@ interpret ro@RuntimeApplyInputs {..} = do
         let
           witness = somePaymentsigningKeyToTxWitness waSigningKey
           tx = withShelleyBasedEra era . C.signShelleyTransaction txBody $ [witness]
+          submitterNickname = fromMaybe faucetNickname roSubmitter
+
         logLabeledMsg ro "Submitting.."
         res <- liftIO $ flip runMarloweT connector do
           Marlowe.Class.submitAndWait tx
         logLabeledMsg ro "Submited and confirmed.."
 
         case res of
-          Right _ -> do
+          Right tx -> do
             logLabeledMsg ro $ "Inputs applied: " <> show tx
             modifying knownContractsL $ Map.insert roContractNickname contractId
+            updateWallet submitterNickname \submitter@Wallet {..} -> do
+              submitter { waSubmittedTransactions = BabbageTxBody txBody : waSubmittedTransactions }
             pure ()
           Left err ->
             throwLabeledError ro $ "Failed to submit contract: " <> show err

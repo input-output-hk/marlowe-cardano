@@ -1,7 +1,6 @@
 testName: Swap Contract without roles using runtime
 
 operations:
-
   - tag: CreateWallet
     walletNickname: AParty
 
@@ -71,6 +70,7 @@ operations:
 
   - tag: RuntimeApplyInputs
     contractNickname: Swap
+    submitter: AParty
     inputs:
       - input_from_party:
           address: AParty
@@ -96,6 +96,7 @@ operations:
 
   - tag: RuntimeApplyInputs
     contractNickname: Swap
+    submitter: BParty
     inputs:
       - input_from_party:
           address: BParty

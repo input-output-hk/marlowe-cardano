@@ -19,7 +19,17 @@ module Language.Marlowe.CLI.Test.Wallet.Types
   where
 
 import Cardano.Api
-  (AddressInEra, CardanoMode, LocalNodeConnectInfo, Lovelace, PolicyId, ScriptDataSupportedInEra, TxBody, UTxO(UTxO))
+  ( AddressInEra
+  , BabbageEra
+  , CardanoMode
+  , LocalNodeConnectInfo
+  , Lovelace
+  , PolicyId
+  , ScriptDataSupportedInEra
+  , Tx
+  , TxBody
+  , UTxO(UTxO)
+  )
 import Contrib.Data.Aeson.Generic (getConName)
 import Control.Applicative ((<|>))
 import Control.Lens (Lens', makeLenses)
@@ -60,6 +70,14 @@ import Plutus.V1.Ledger.Api (CurrencySymbol, TokenName)
 import qualified Plutus.V1.Ledger.Value as P
 import Text.Read (readMaybe)
 
+-- | Runtime interaction (submission) works against specific era (Babbage).
+-- | On the other hand CLI is more flexible and is able to decode and handle
+-- | transactions from different eras.
+data SomeTxBody era
+  = BabbageTxBody (TxBody BabbageEra)
+  | SomeTxBody (TxBody era)
+  deriving stock (Generic, Show)
+
 data Wallet era =
   Wallet
   { waAddress                   :: AddressInEra era
@@ -68,7 +86,7 @@ data Wallet era =
                                                             -- it is only used in the case of the faucet wallet.
   , waMintedTokens              :: P.Value                  -- ^ Tracks all the minted tokens to simplify auto run flow.
   , waSigningKey                :: SomePaymentSigningKey
-  , waSubmittedTransactions     :: [TxBody era]             -- ^ We keep track of all the transactions so we can
+  , waSubmittedTransactions     :: [SomeTxBody era]             -- ^ We keep track of all the transactions so we can
                                                             -- discard fees from the balance check calculation.
   }
   deriving stock (Generic, Show)

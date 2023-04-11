@@ -15,17 +15,19 @@ module Language.Marlowe.CLI.Test.Interpret
   where
 
 import Cardano.Api (IsShelleyBasedEra)
+import Control.Concurrent (threadDelay)
 import Control.Lens (zoom)
 import Control.Monad.Except (runExceptT, throwError)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Reader (MonadReader(ask), ReaderT(runReaderT))
 import Control.Monad.State (MonadState(get, put), StateT(runStateT), evalStateT, execStateT)
+import Data.Time.Units (TimeUnit(toMicroseconds))
 import Language.Marlowe.CLI.Cardano.Api.PlutusScript (IsPlutusScriptLanguage)
 import qualified Language.Marlowe.CLI.Test.CLI.Interpret as CLI
 import Language.Marlowe.CLI.Test.Log (logLabeledMsg)
 import qualified Language.Marlowe.CLI.Test.Runtime.Interpret as Runtime
 import Language.Marlowe.CLI.Test.Types
-  (InterpretMonad, TestOperation(CLIOperation, Fail, RuntimeOperation, WalletOperation))
+  (InterpretMonad, TestOperation(CLIOperation, Fail, RuntimeOperation, Sleep, WalletOperation))
 import qualified Language.Marlowe.CLI.Test.Wallet.Interpret as Wallet
 import Language.Marlowe.CLI.Types (CliError(CliError))
 
@@ -45,6 +47,12 @@ interpret (WalletOperation wo) = do
 interpret (CLIOperation co) = do
   logLabeledMsg co ""
   CLI.interpret co
+interpret o@(Sleep seconds) = do
+  let
+    microseconds = toMicroseconds seconds
+  logLabeledMsg o ""
+  logLabeledMsg o $ "Sleeping for " <> show seconds
+  liftIO $ threadDelay (fromInteger microseconds)
 interpret (Fail message) =
   throwError $ CliError message
 

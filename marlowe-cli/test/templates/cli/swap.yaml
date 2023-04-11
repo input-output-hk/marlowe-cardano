@@ -1,4 +1,4 @@
-testName: Swap Contract without roles using reference scripts
+testName: Swap Contract using CLI
 
 operations:
   - tag: CreateWallet
