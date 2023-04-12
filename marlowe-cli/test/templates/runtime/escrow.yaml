@@ -68,14 +68,12 @@ operations:
   - tag: CheckBalance
     walletNickname: Buyer
     balance:
-      - [ADA, 12]
-      - [ContractCurrency, SellerRole, 1]
+      - [ADA, 10]
 
   - tag: CheckBalance
     walletNickname: Seller
     balance:
-      - [ADA, 2]
-      - [ContractCurrency, SellerRole, 1]
+      - [ADA, 20]
 
   # Let's send Lovelace only UTxO to the seller
   # so it can be used as collateral later.
@@ -87,6 +85,6 @@ operations:
   - tag: CheckBalance
     walletNickname: Seller
     balance:
-      - [ADA, 20]
+      - [ADA, 25]
 
   - tag: ReturnFunds
