@@ -20,9 +20,7 @@ module Language.Marlowe.CLI.Test.CLI.Monad
 
 import Cardano.Api (ScriptDataSupportedInEra)
 import Control.Monad.Except (MonadError(catchError, throwError))
-import Control.Monad.Reader (MonadReader, ReaderT(runReaderT))
-import Control.Monad.Reader.Class (asks)
-import Data.Has (Has(getter))
+import Control.Monad.Reader (ReaderT(runReaderT))
 import Language.Marlowe.CLI.Test.Log (Label, LabelFormat(LabelConstructorName), printLabeledMsg, printTraceMsg)
 import Language.Marlowe.CLI.Types (CliEnv(CliEnv), CliError(CliError))
 import Ledger.Orphans ()

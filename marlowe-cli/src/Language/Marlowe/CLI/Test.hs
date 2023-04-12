@@ -83,6 +83,12 @@ import Observe.Event.Render.JSON.Handle (simpleJsonStderrBackend)
 import PlutusCore (defaultCostModelParams)
 
 
+mkWallet
+  :: (MonadError CliError m, MonadIO m, MonadReader (CliEnv era) m)
+  => LocalNodeConnectInfo C.CardanoMode
+  -> C.AddressInEra era
+  -> T.SomePaymentSigningKey
+  -> m (Wallet era)
 mkWallet connection address signingKey = do
   utxos <- queryUtxos connection address
   pure $ Wallet.fromUTxO address signingKey utxos
@@ -162,7 +168,7 @@ runTests era TestSuite{..} =
         maxRetries = 4
 
       result <- retryTillJust (MaxRetries maxRetries) \(RetryCounter retry) -> do
-        result <- liftIO $ runTest env state faucet testCase `race` Runtime.runMonitor runtimeMonitor
+        result <- liftIO $ runTest env state testCase `race` Runtime.runMonitor runtimeMonitor
         case result of
           Right (RuntimeRollbackError _) | retry + 1 <= maxRetries -> do
             liftIO $ putStrLn "Re running the test case because the rollback occured."
@@ -187,10 +193,9 @@ runTest
   => IsPlutusScriptLanguage lang
   => InterpretEnv lang era
   -> InterpretState lang era
-  -> Wallet era
   -> TestCase
   -> IO TestResult
-runTest env state faucet (TestCase testName testOperations) = do
+runTest env state (TestCase _ testOperations) = do
   res <- runExceptT $ flip runReaderT env $ flip execStateT state $ for testOperations \operation -> do
     interpret operation
   case res of

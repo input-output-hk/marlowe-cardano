@@ -147,7 +147,7 @@ mkCommandParser networkId socketPath version = do
     mkSomeCommandParser :: IO (O.Parser SomeCommand)
     mkSomeCommandParser = do
       let
-        parseTestCommand :: forall era lang. IsShelleyBasedEra era => IO (O.Parser (TestCommand era))
+        parseTestCommand :: forall era. IsShelleyBasedEra era => IO (O.Parser (TestCommand era))
         parseTestCommand = mkParseTestCommand networkId socketPath
       -- FIXME: Is is possible to aviod this duplication?
       -- It seems to be hard to mix `BindP` and `IO`.

@@ -20,12 +20,9 @@ module Language.Marlowe.CLI.Test.ExecutionMode
 
 
 import Control.Monad.IO.Class (MonadIO)
-import Control.Monad.Reader (MonadReader)
-import Control.Monad.Reader.Class (asks)
-import Data.Has (Has(getter))
 import Data.Time.Units (Second)
-import Language.Marlowe.CLI.Test.Log (Label, logLabeledMsg, logTraceMsg)
-import Language.Marlowe.CLI.Types (Seconds(Seconds), SubmitMode(DoSubmit, DontSubmit))
+import Language.Marlowe.CLI.Test.Log (Label, logLabeledMsg)
+import Language.Marlowe.CLI.Types (SubmitMode(DoSubmit, DontSubmit))
 
 -- | Configuration for executing Marlowe CLI DSL commands on the blockchain
 -- | The idea behind simulation mode is to use it as a "first line of defense" to detect
@@ -44,7 +41,7 @@ toSubmitMode SimulationMode = DontSubmit
 toSubmitMode (OnChainMode timeout) = DoSubmit timeout
 
 skipInSimluationMode
-  :: forall env l m
+  :: forall l m
    . Label l
   => MonadIO m
   => l

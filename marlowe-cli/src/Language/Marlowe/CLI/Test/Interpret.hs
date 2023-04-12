@@ -16,11 +16,8 @@ module Language.Marlowe.CLI.Test.Interpret
 
 import Cardano.Api (IsShelleyBasedEra)
 import Control.Concurrent (threadDelay)
-import Control.Lens (zoom)
-import Control.Monad.Except (runExceptT, throwError)
+import Control.Monad.Except (throwError)
 import Control.Monad.IO.Class (liftIO)
-import Control.Monad.Reader (MonadReader(ask), ReaderT(runReaderT))
-import Control.Monad.State (MonadState(get, put), StateT(runStateT), evalStateT, execStateT)
 import Data.Time.Units (TimeUnit(toMicroseconds))
 import Language.Marlowe.CLI.Cardano.Api.PlutusScript (IsPlutusScriptLanguage)
 import qualified Language.Marlowe.CLI.Test.CLI.Interpret as CLI

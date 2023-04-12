@@ -16,82 +16,38 @@
 module Language.Marlowe.CLI.Test.Contract.Source
   where
 
-import Cardano.Api (CardanoMode, LocalNodeConnectInfo, Lovelace, PolicyId, ScriptDataSupportedInEra)
-import qualified Cardano.Api as C
-import Control.Lens (makeLenses)
 import Control.Monad (void)
-import Control.Monad.Except (MonadError, throwError)
-import Control.Monad.IO.Class (MonadIO)
-import Control.Monad.Reader.Class (MonadReader)
-import Control.Monad.State.Class (MonadState)
-import Data.Aeson (FromJSON(..), ToJSON(..), (.:?), (.=))
+import Control.Monad.Except (throwError)
+import Data.Aeson (FromJSON(..), ToJSON(..), (.=))
 import qualified Data.Aeson as A
-import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.KeyMap as KeyMap
-import qualified Data.Aeson.Types as A
-import qualified Data.Fixed as F
-import qualified Data.Fixed as Fixed
-import Data.Foldable (fold)
-import qualified Data.List.NonEmpty as List
-import Data.Map (Map)
-import qualified Data.Map.Strict as Map
-import Data.Maybe (catMaybes, fromMaybe, mapMaybe)
-import Data.String (IsString(fromString))
+import Data.Maybe (fromMaybe)
 import qualified Data.Text as T
-import Data.Traversable (for)
-import qualified Data.Vector as V
-import GHC.Base (Alternative((<|>)))
 import GHC.Generics (Generic)
-import GHC.Num (Natural)
 import Language.Marlowe.CLI.Command.Template (makeContract)
 import Language.Marlowe.CLI.Run (marloweAddressFromCardanoAddress)
-import Language.Marlowe.CLI.Test.Contract.ContractNickname (ContractNickname(ContractNickname))
 import Language.Marlowe.CLI.Test.Contract.ParametrizedMarloweJSON (ParametrizedMarloweJSON)
-import Language.Marlowe.CLI.Test.ExecutionMode
 import qualified Language.Marlowe.CLI.Test.Operation.Aeson as Operation
 import Language.Marlowe.CLI.Test.Wallet.Interpret
   (assetIdToToken, findWallet, findWalletByUniqueToken, getSingletonCurrency)
 import Language.Marlowe.CLI.Test.Wallet.Types
   ( Asset(Asset)
-  , AssetId(AssetId)
-  , Currencies(Currencies)
+  , AssetId
   , CurrencyNickname
   , Wallet(waAddress)
   , WalletNickname(WalletNickname)
-  , Wallets(Wallets)
   , adaToken
   , faucetNickname
   , parseTokenNameJSON
   , tokenNameToJSON
   )
 import qualified Language.Marlowe.CLI.Test.Wallet.Types as Wallet
-import Language.Marlowe.CLI.Types
-  ( CliError(CliError)
-  , MarlowePlutusVersion
-  , MarloweScriptsRefs
-  , MarloweTransaction(MarloweTransaction, mtInputs)
-  , PrintStats(PrintStats)
-  , SomeTimeout
-  , toMarloweTimeout
-  )
-import Language.Marlowe.Cardano.Thread
-  ( AnyMarloweThread
-  , MarloweThread(Closed, Created, InputsApplied)
-  , anyMarloweThread
-  , marloweThreadInitialTxIn
-  , overAnyMarloweThread
-  )
+import Language.Marlowe.CLI.Types (CliError(CliError), SomeTimeout, toMarloweTimeout)
 import qualified Language.Marlowe.Core.V1.Semantics.Types as M
 import qualified Language.Marlowe.Extended.V1 as E
-import qualified Language.Marlowe.Runtime.Cardano.Api as Runtime.Api
-import Language.Marlowe.Runtime.Core.Api (ContractId)
-import qualified Language.Marlowe.Runtime.Core.Api as Runtime.Api
 import Ledger.Orphans ()
 import Marlowe.Contracts (coveredCall, escrow, swap, trivial, zeroCouponBond)
-import Plutus.V1.Ledger.Api (CostModelParams, CurrencySymbol, ProtocolVersion, TokenName)
-import Plutus.V1.Ledger.SlotConfig (SlotConfig)
-import qualified Plutus.V1.Ledger.Value as P
-import Text.Read (readMaybe)
+import Plutus.V1.Ledger.Api (TokenName)
 
 -- | We encode `PartyRef` as `Party` so we can use role based contracts
 -- | without any change in the JSON structure.
@@ -108,9 +64,9 @@ data PartyRef =
 -- FIXME: We don't parse currency symbol yet.
 instance FromJSON PartyRef where
   parseJSON = \case
-    Aeson.Object (KeyMap.toList -> [("address", A.String walletNickname)]) ->
+    A.Object (KeyMap.toList -> [("address", A.String walletNickname)]) ->
       pure . WalletRef . WalletNickname . T.unpack $ walletNickname
-    Aeson.Object (KeyMap.toList -> [("role_token", roleTokenJSON)]) -> do
+    A.Object (KeyMap.toList -> [("role_token", roleTokenJSON)]) -> do
       roleToken <- parseTokenNameJSON roleTokenJSON
       pure $ RoleRef roleToken
     _ -> fail "Expecting a Party object."
@@ -197,15 +153,15 @@ data Source =
 
 
 instance ToJSON Source where
-    toJSON (InlineContract c)            = Aeson.object [("inline", toJSON c)]
-    toJSON (UseTemplate templateCommand) = Aeson.object [("template", toJSON templateCommand)]
+    toJSON (InlineContract c)            = A.object [("inline", toJSON c)]
+    toJSON (UseTemplate templateCommand) = A.object [("template", toJSON templateCommand)]
 
 instance FromJSON Source where
     parseJSON json = case json of
-      Aeson.Object (KeyMap.toList -> [("inline", contractJson)]) -> do
+      A.Object (KeyMap.toList -> [("inline", contractJson)]) -> do
         parsedContract <- parseJSON contractJson
         pure $ InlineContract parsedContract
-      Aeson.Object (KeyMap.toList -> [("template", templateCommandJson)]) -> do
+      A.Object (KeyMap.toList -> [("template", templateCommandJson)]) -> do
         parsedTemplateCommand <- parseJSON templateCommandJson
         pure $ UseTemplate parsedTemplateCommand
       _ -> fail "Expected object with a single field of either `inline` or `template`"
@@ -295,14 +251,14 @@ useTemplate currency =
     issuer <- buildParty currency utIssuer
     counterParty <- buildParty currency utCounterParty
 
-    currency <- assetIdToToken utCurrency
+    ccCurrency <- assetIdToToken utCurrency
     underlying <- assetIdToToken utUnderlying
 
     makeContract $ coveredCall
         issuer
         counterParty
         Nothing
-        currency
+        ccCurrency
         underlying
         (E.Constant utStrike)
         (E.Constant utAmount)

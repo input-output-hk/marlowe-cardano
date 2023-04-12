@@ -68,11 +68,11 @@ operations:
   - tag: CheckBalance
     walletNickname: Buyer
     balance:
-      - [ADA, [9, 11]]
+      - [ADA, 10]
 
   - tag: CheckBalance
     walletNickname: Seller
     balance:
-      - [ADA, [19, 21]]
+      - [ADA, 20]
 
   - tag: ReturnFunds

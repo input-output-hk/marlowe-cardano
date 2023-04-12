@@ -21,21 +21,8 @@
 module Language.Marlowe.CLI.Test.Contract.ParametrizedMarloweJSON
   where
 
-import Cardano.Api
-  ( AddressInEra(AddressInEra)
-  , CardanoMode
-  , IsShelleyBasedEra
-  , LocalNodeConnectInfo(LocalNodeConnectInfo)
-  , NetworkId(Mainnet)
-  , ScriptDataSupportedInEra
-  )
-import qualified Cardano.Api as C
-import qualified Cardano.Api.Shelley as CS
-import qualified Cardano.Ledger.BaseTypes as LC (Network(..))
-import Cardano.Ledger.Shelley.API (Network)
+import Cardano.Api (AddressInEra, CardanoMode, LocalNodeConnectInfo)
 import qualified Contrib.Data.Aeson.Traversals as A
-import Control.Error (note)
-import Control.Error.Util (hush)
 import Control.Monad.Except (MonadError(throwError))
 import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.Reader.Class (MonadReader, asks)
@@ -52,8 +39,6 @@ import Data.Proxy (Proxy)
 import qualified Data.Text as Text
 import GHC.Generics (Generic)
 import qualified Language.Marlowe as Marlowe
-import Language.Marlowe.CLI.IO (liftCli)
-import Language.Marlowe.CLI.Test.CLI.Monad (runCli)
 import Language.Marlowe.CLI.Test.Wallet.Types
   ( Currencies(Currencies)
   , Currency(Currency, ccCurrencySymbol)

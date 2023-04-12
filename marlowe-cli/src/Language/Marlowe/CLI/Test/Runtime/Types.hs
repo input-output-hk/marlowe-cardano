@@ -23,7 +23,7 @@ import Cardano.Api (CardanoMode, LocalNodeConnectInfo, ScriptDataSupportedInEra)
 import qualified Cardano.Api as C
 import qualified Contrib.Data.Time.Units.Aeson as A
 import Control.Concurrent.STM (TChan, TVar)
-import Control.Lens (Lens', Prism', Traversal, Traversal', makeLenses)
+import Control.Lens (Lens', Traversal', makeLenses)
 import Control.Monad.Except (MonadError)
 import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.Reader.Class (MonadReader)
@@ -40,19 +40,15 @@ import qualified Language.Marlowe.CLI.Test.Contract as Contract
 import Language.Marlowe.CLI.Test.Contract.ParametrizedMarloweJSON
 import Language.Marlowe.CLI.Test.ExecutionMode (ExecutionMode)
 import qualified Language.Marlowe.CLI.Test.Operation.Aeson as Operation
-import Language.Marlowe.CLI.Test.Wallet.Types
-  (Currencies(Currencies), CurrencyNickname(CurrencyNickname), WalletNickname(WalletNickname), Wallets(Wallets))
+import Language.Marlowe.CLI.Test.Wallet.Types (Currencies, CurrencyNickname, WalletNickname, Wallets)
 import qualified Language.Marlowe.CLI.Test.Wallet.Types as Wallet
 import Language.Marlowe.CLI.Types (CliError)
 import Language.Marlowe.Cardano.Thread (AnyMarloweThread, MarloweThread, anyMarloweThread)
 import qualified Language.Marlowe.Core.V1.Semantics.Types as M
 import qualified Language.Marlowe.Protocol.Client as Marlowe.Protocol
-import qualified Language.Marlowe.Runtime.ChainSync.Api as ChainSync
 import Language.Marlowe.Runtime.Core.Api (ContractId)
 import Ledger.Orphans ()
 import qualified Network.Protocol.Connection as Network.Protocol
-import qualified Network.Protocol.Driver as Network.Protocol
-import qualified Network.Protocol.Handshake.Client as Network.Protocol
 
 -- Curretly we don't need any extra information for the runtime thread.
 type RuntimeTxInfo = ()

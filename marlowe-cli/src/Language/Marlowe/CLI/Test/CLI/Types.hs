@@ -19,9 +19,9 @@
 module Language.Marlowe.CLI.Test.CLI.Types
   where
 
-import Cardano.Api (CardanoMode, LocalNodeConnectInfo, Lovelace, PolicyId, ScriptDataSupportedInEra)
+import Cardano.Api (AssetId, CardanoMode, LocalNodeConnectInfo, Lovelace, PolicyId, ScriptDataSupportedInEra)
 import qualified Cardano.Api as C
-import Control.Lens (Lens', makeLenses)
+import Control.Lens (Lens')
 import Control.Monad.Except (MonadError)
 import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.Reader.Class (MonadReader)
@@ -30,43 +30,27 @@ import Data.Aeson (FromJSON(..), ToJSON(..), (.:?), (.=))
 import qualified Data.Aeson as A
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.KeyMap as KeyMap
-import qualified Data.Aeson.Types as A
-import qualified Data.Fixed as F
-import qualified Data.Fixed as Fixed
-import Data.Foldable (fold)
 import qualified Data.List.NonEmpty as List
 import Data.Map (Map)
 import qualified Data.Map.Strict as Map
-import Data.Maybe (catMaybes, mapMaybe)
-import Data.String (IsString(fromString))
+import Data.Maybe (mapMaybe)
 import qualified Data.Text as T
-import Data.Traversable (for)
-import qualified Data.Vector as V
 import GHC.Base (Alternative((<|>)))
 import GHC.Generics (Generic)
-import GHC.Num (Natural)
-import Language.Marlowe.CLI.Test.Contract (ContractNickname(ContractNickname))
+import Language.Marlowe.CLI.Test.Contract (ContractNickname)
 import qualified Language.Marlowe.CLI.Test.Contract as Contract
 import Language.Marlowe.CLI.Test.Contract.ParametrizedMarloweJSON (ParametrizedMarloweJSON)
 import Language.Marlowe.CLI.Test.ExecutionMode
 import qualified Language.Marlowe.CLI.Test.Operation.Aeson as Operation
 import Language.Marlowe.CLI.Test.Wallet.Types
-  ( Asset
-  , AssetId(AssetId)
-  , Currencies(Currencies)
-  , CurrencyNickname
-  , WalletNickname(WalletNickname)
-  , Wallets(Wallets)
-  , parseTokenNameJSON
-  , tokenNameToJSON
-  )
+  (Asset, Currencies, CurrencyNickname, WalletNickname(WalletNickname), Wallets, parseTokenNameJSON, tokenNameToJSON)
 import qualified Language.Marlowe.CLI.Test.Wallet.Types as Wallet
 import Language.Marlowe.CLI.Types
-  ( CliError(CliError)
+  ( CliError
   , MarlowePlutusVersion
   , MarloweScriptsRefs
   , MarloweTransaction(MarloweTransaction, mtInputs)
-  , PrintStats(PrintStats)
+  , PrintStats
   , SomeTimeout
   )
 import Language.Marlowe.Cardano.Thread
@@ -77,15 +61,12 @@ import Language.Marlowe.Cardano.Thread
   , overAnyMarloweThread
   )
 import qualified Language.Marlowe.Core.V1.Semantics.Types as M
-import qualified Language.Marlowe.Extended.V1 as E
 import qualified Language.Marlowe.Runtime.Cardano.Api as Runtime.Api
 import Language.Marlowe.Runtime.Core.Api (ContractId)
 import qualified Language.Marlowe.Runtime.Core.Api as Runtime.Api
 import Ledger.Orphans ()
 import Plutus.V1.Ledger.Api (CostModelParams, CurrencySymbol, ProtocolVersion, TokenName)
 import Plutus.V1.Ledger.SlotConfig (SlotConfig)
-import qualified Plutus.V1.Ledger.Value as P
-import Text.Read (readMaybe)
 
 
 type CLITxInfo lang era = (MarloweTransaction lang era, C.TxBody era)
@@ -130,8 +111,8 @@ instance FromJSON MarloweValidators where
         Aeson.String "referenceCurrent" -> pure $ ReferenceCurrentValidators Nothing Nothing
         _ -> fail "Expected string `referenceRuntime`"
       fromPublished = parseJSON json >>= \case
-        Aeson.Object (KeyMap.toList -> [("referenceCurrent", json)]) -> do
-          obj <- parseJSON json
+        Aeson.Object (KeyMap.toList -> [("referenceCurrent", objJson)]) -> do
+          obj <- parseJSON objJson
           publisher <- obj .:? "publisher"
           permanent <- obj .:? "permanent"
           pure $ ReferenceCurrentValidators permanent publisher

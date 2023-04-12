@@ -29,8 +29,7 @@ import Data.Maybe (fromMaybe)
 import Language.Marlowe.CLI.Command.Parse (parseAddress, parseNetworkId)
 import Language.Marlowe.CLI.Test (runTests)
 import Language.Marlowe.CLI.Test.ExecutionMode (ExecutionMode(OnChainMode, SimulationMode))
-import Language.Marlowe.CLI.Test.Types
-  (RuntimeConfig(RuntimeConfig, rcRuntimeHost, rcRuntimePort), TestSuite(TestSuite))
+import Language.Marlowe.CLI.Test.Types (RuntimeConfig(RuntimeConfig), TestSuite(TestSuite))
 import Language.Marlowe.CLI.Types (CliEnv, CliError, askEra)
 
 import Control.Monad.Reader.Class (MonadReader)

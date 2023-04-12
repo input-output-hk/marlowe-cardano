@@ -19,150 +19,59 @@
 module Language.Marlowe.CLI.Test.CLI.Interpret
   where
 
-import Control.Category ((>>>))
-import Control.Concurrent (forkFinally)
-import Control.Concurrent.Async (async, cancel, concurrently, race, waitCatch)
-import Control.Concurrent.STM
-  (TChan, TVar, atomically, modifyTVar', newTChanIO, newTVarIO, readTChan, writeTChan, writeTVar)
-import Control.Concurrent.STM.TVar (readTVar)
-import Control.Exception (Exception(displayException))
-import Control.Lens.Setter ((%=))
-import Control.Monad.Loops (untilJust)
-import Control.Monad.STM (STM)
-import Control.Monad.Trans (MonadTrans(lift))
-import Data.Default (Default(def))
-import qualified Data.Map.Strict as M
-import Language.Marlowe.CLI.Transaction
-  (buildFaucetImpl, buildMintingImpl, findMarloweScriptsRefs, publishImpl, queryUtxos, selectUtxosImpl)
+import Language.Marlowe.CLI.Transaction (findMarloweScriptsRefs, publishImpl)
 import qualified Language.Marlowe.CLI.Types as T
 import qualified Language.Marlowe.Client as Client
 import qualified Language.Marlowe.Core.V1.Semantics as M
 import qualified Language.Marlowe.Core.V1.Semantics.Types as M
 import Language.Marlowe.Pretty (pretty)
-import Language.Marlowe.Runtime.App.Channel (mkDetection)
-import qualified Language.Marlowe.Runtime.App.Run as Apps
-import qualified Language.Marlowe.Runtime.App.Run as Apps.Run
-import Language.Marlowe.Runtime.App.Stream (ContractStream(..), ContractStreamError(..), streamAllContractSteps)
-import Language.Marlowe.Runtime.App.Types (Client, runClient)
-import qualified Language.Marlowe.Runtime.App.Types as Apps
-import qualified Language.Marlowe.Runtime.History.Api as RH
-import Ledger.Tx.CardanoAPI (fromCardanoPolicyId)
-import Observe.Event.Render.JSON (defaultRenderSelectorJSON)
-import Plutus.V1.Ledger.Value (valueOf)
 import qualified Plutus.V1.Ledger.Value as P
-import qualified Plutus.V1.Ledger.Value as Value
-import PlutusPrelude (foldMapM)
-import PlutusTx.Prelude (inv)
-import qualified PlutusTx.Prelude as PTx
-import System.IO.Temp (emptySystemTempFile, emptyTempFile)
 
 import Cardano.Api
-  ( AddressInEra
-  , AsType(AsPaymentKey)
-  , CardanoMode
-  , IsShelleyBasedEra
-  , Key(getVerificationKey, verificationKeyHash)
+  ( IsShelleyBasedEra
   , LocalNodeConnectInfo(LocalNodeConnectInfo)
   , Lovelace(Lovelace)
-  , NetworkId
-  , PaymentCredential(PaymentCredentialByKey)
-  , PolicyId
-  , ScriptDataSupportedInEra
   , StakeAddressReference(NoStakeAddress)
-  , TxBody
-  , generateSigningKey
-  , makeShelleyAddressInEra
   )
 import qualified Cardano.Api as C
-import Control.Lens (assign, coerced, makeLenses, modifying, use, view)
-import Control.Monad.Except (MonadError)
-import Control.Monad.IO.Class (MonadIO(liftIO))
-import Control.Monad.Reader (MonadReader)
-import Data.Aeson (FromJSON(..), ToJSON(..), (.=))
-import qualified Data.Aeson as A
-import qualified Data.Aeson as Aeson
-import qualified Data.Aeson.KeyMap as KeyMap
-import qualified Data.Aeson.Types as A
-import qualified Data.Fixed as F
-import qualified Data.Fixed as Fixed
-import Data.Foldable (find, fold, for_)
+import Control.Lens (assign, coerced, modifying, use, view)
+import Data.Foldable (fold)
 import Data.List.NonEmpty (NonEmpty((:|)), (<|))
-import qualified Data.List.NonEmpty as List
-import Data.Map (Map)
 import qualified Data.Map.Strict as Map
-import qualified Data.Set as S (singleton)
-import Data.String (IsString(fromString))
-import qualified Data.Text as T
 import Data.Traversable (for)
-import qualified Data.Vector as V
-import GHC.Generics (Generic)
-import GHC.Num (Natural)
-import Language.Marlowe.CLI.Cardano.Api.Value (lovelaceToPlutusValue, toPlutusValue, txOutValueValue)
 import Language.Marlowe.CLI.Test.Wallet.Types
-  ( Asset(Asset)
-  , AssetId(AdaAsset, AssetId)
-  , AssetsBalance(AssetsBalance)
-  , Currencies(Currencies)
-  , Currency(Currency, ccCurrencySymbol, ccIssuer)
+  ( Currency(Currency, ccCurrencySymbol)
   , CurrencyNickname
   , SomeTxBody(..)
-  , TokenAssignment(TokenAssignment)
   , Wallet(Wallet, waAddress, waBalanceCheckBaseline, waMintedTokens, waSigningKey, waSubmittedTransactions)
   , WalletNickname(WalletNickname)
-  , WalletOperation(BurnAll, CheckBalance, CreateWallet, FundWallets, Mint, SplitWallet, woBalance, woCurrencyNickname, woIssuer, woMetadata, woMinLovelace, woTokenDistribution, woValues, woWalletNickname, woWalletNicknames)
-  , Wallets(Wallets)
-  , adaToken
-  , emptyWallet
   , faucetNickname
   )
 import Language.Marlowe.CLI.Types
   ( AnUTxO(AnUTxO, unAnUTxO)
-  , CliEnv
   , CliError(CliError)
   , CoinSelectionStrategy(CoinSelectionStrategy)
-  , CurrencyIssuer(CurrencyIssuer)
   , MarlowePlutusVersion
   , MarloweScriptsRefs(MarloweScriptsRefs)
-  , MarloweTransaction(MarloweTransaction, mtInputs, mtState)
+  , MarloweTransaction(mtState)
   , PrintStats(PrintStats)
   , PublishingStrategy(PublishAtAddress, PublishPermanently)
-  , Seconds
-  , SomePaymentSigningKey
-  , SomeTimeout
   , ValidatorInfo(ValidatorInfo)
-  , defaultCoinSelectionStrategy
-  , toMarloweTimeout
   , toPOSIXTime
   )
-import qualified Language.Marlowe.Extended.V1 as E
-import qualified Language.Marlowe.Runtime.Cardano.Api as Runtime.Cardano.Api
-import qualified Language.Marlowe.Runtime.Core.Api as Runtime.Core.Api
 import Ledger.Orphans ()
-import Plutus.ApiCommon (ProtocolVersion)
-import Plutus.V1.Ledger.Api (CostModelParams, CurrencySymbol, TokenName)
-import Plutus.V1.Ledger.SlotConfig (SlotConfig)
-import Text.Read (readMaybe)
 
 import Contrib.Data.Foldable (anyFlipped, foldMapFlipped, foldMapMFlipped)
-import Control.Monad (foldM, forM, forM_, void, when)
+import Control.Monad (foldM, void, when)
 import Control.Monad.Error.Class (MonadError(throwError))
-import Control.Monad.Extra (whenM)
-import Control.Monad.Reader.Class (asks)
-import Control.Monad.State.Class (MonadState, gets, modify)
 import Data.Coerce (coerce)
 import Data.Functor ((<&>))
-import Data.Has (Has(getter), modifier)
 import qualified Data.List.NonEmpty as List.NonEmpty
 import Data.Maybe (fromMaybe, isJust, mapMaybe)
-import Data.Proxy (Proxy(Proxy))
-import Data.Set (Set)
 import qualified Data.Text as Text
-import Data.Tuple.Extra (uncurry3)
-import qualified Language.Marlowe as Marlowe
 import Language.Marlowe.CLI.Cardano.Api.PlutusScript (IsPlutusScriptLanguage)
-import qualified Language.Marlowe.CLI.Cardano.Api.Value as CV
-import Language.Marlowe.CLI.Command.Template (initialMarloweState, makeContract)
-import Language.Marlowe.CLI.IO (liftCliMaybe, queryInEra)
+import Language.Marlowe.CLI.Command.Template (initialMarloweState)
+import Language.Marlowe.CLI.IO (liftCliMaybe)
 import Language.Marlowe.CLI.Run
   ( autoRunTransactionImpl
   , autoWithdrawFundsImpl
@@ -186,7 +95,6 @@ import Language.Marlowe.CLI.Test.CLI.Types
   , connectionL
   , contractsL
   , costModelParamsL
-  , currenciesL
   , eraL
   , executionModeL
   , getCLIMarloweThreadTransaction
@@ -195,18 +103,14 @@ import Language.Marlowe.CLI.Test.CLI.Types
   , protocolVersionL
   , publishedScriptsL
   , slotConfigL
-  , walletsL
   )
 import Language.Marlowe.CLI.Test.Contract (ContractNickname(..))
-import Language.Marlowe.CLI.Test.Contract.ParametrizedMarloweJSON
-  (ParametrizedMarloweJSON(ParametrizedMarloweJSON), decodeParametrizedContractJSON, decodeParametrizedInputJSON)
 import Language.Marlowe.CLI.Test.Contract.Source (Source(InlineContract, UseTemplate), useTemplate)
 import Language.Marlowe.CLI.Test.ExecutionMode
   (ExecutionMode(OnChainMode, SimulationMode), skipInSimluationMode, toSubmitMode)
 import Language.Marlowe.CLI.Test.Log (logLabeledMsg, logTraceMsg, throwLabeledError, throwTraceError)
 import Language.Marlowe.CLI.Test.Wallet.Interpret
-  ( assetIdToToken
-  , decodeContractJSON
+  ( decodeContractJSON
   , decodeInputJSON
   , findCurrency
   , findWallet
@@ -216,19 +120,8 @@ import Language.Marlowe.CLI.Test.Wallet.Interpret
   , getSingletonCurrency
   , updateWallet
   )
-import Language.Marlowe.Cardano (marloweNetworkFromLocalNodeConnectInfo)
 import Language.Marlowe.Cardano.Thread
   (anyMarloweThreadCreated, foldrMarloweThread, marloweThreadTxIn, overAnyMarloweThread)
-import Language.Marlowe.Protocol.Sync.Client (MarloweSyncClient)
-import qualified Language.Marlowe.Runtime.App.Stream as Runtime.App
-import Language.Marlowe.Runtime.ChainSync.Api (SlotNo)
-import Language.Marlowe.Runtime.Core.Api (ContractId, MarloweVersionTag(V1))
-import Marlowe.Contracts (coveredCall, escrow, swap, trivial, zeroCouponBond)
-import Observe.Event.Backend (EventBackend)
-import Observe.Event.Dynamic (DynamicEventSelector)
-import Observe.Event.Render.JSON.Handle (JSONRef)
-import qualified Plutus.V1.Ledger.Value as PV
-import PlutusTx.Monoid (Group(inv))
 
 findCLIContractInfo
   :: InterpretMonad env st m lang era
@@ -440,7 +333,6 @@ interpret co@Initialize {..} = do
 
     InTxCurrentValidators -> do
       logLabeledMsg co "Using in Tx scripts embeding strategy to initialize Marlowe contract."
-      era <- view eraL
       runLabeledCli era co $ initializeTransactionImpl
         marloweParams
         slotConfig
@@ -504,10 +396,10 @@ interpret co@Publish {..} = do
       logLabeledMsg co "Publishing the scripts."
       marloweScriptRefs <- publishCurrentValidators coPublishPermanently coPublisher
       assign publishedScriptsL (Just marloweScriptRefs)
-    Just refs -> do
+    Just _ -> do
       throwLabeledError co "Scripts were already published during this test scenario."
 
-interpret co@AutoRun {..} = do
+interpret AutoRun {..} = do
   executionMode <- view executionModeL
   case executionMode of
     OnChainMode {} -> do

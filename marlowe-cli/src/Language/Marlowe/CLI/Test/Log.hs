@@ -20,7 +20,7 @@ module Language.Marlowe.CLI.Test.Log
   where
 
 import Contrib.Data.Aeson.Generic (GetConName, constructorName)
-import Control.Monad.Error.Class (MonadError(throwError), catchError)
+import Control.Monad.Error.Class (MonadError(throwError))
 import Control.Monad.IO.Class (MonadIO(liftIO))
 import GHC.Generics (Generic(Rep))
 import Language.Marlowe.CLI.Types (CliError(CliError))

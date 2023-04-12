@@ -121,7 +121,6 @@ import Language.Marlowe.CLI.Types
   , PrintStats(PrintStats)
   , PublishingStrategy
   , RedeemerInfo(..)
-  , Seconds(Seconds)
   , SigningKeyFile(..)
   , SomeMarloweTransaction(..)
   , SomePaymentSigningKey

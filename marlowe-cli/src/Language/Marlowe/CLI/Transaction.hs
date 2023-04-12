@@ -258,7 +258,6 @@ import Language.Marlowe.CLI.Types
   , PublishMarloweScripts(PublishMarloweScripts)
   , PublishScript(..)
   , PublishingStrategy(..)
-  , Seconds(Seconds)
   , SigningKeyFile
   , SomePaymentSigningKey
   , SubmitMode(DoSubmit, DontSubmit)

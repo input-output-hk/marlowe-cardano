@@ -72,14 +72,25 @@ operations:
   - tag: AutoRun
     contractNickname: Escrow
 
+  # Buery account started with 30 ADA.
+  # Seller account was empty.
+  # We transfered 20 ADA for the goodies to the Seller.
   - tag: CheckBalance
     walletNickname: Buyer
     balance:
-      - [ADA, [11, 13]]
+      - [ADA, 10]
+
+  - tag: CheckBalance
+    walletNickname: Seller
+    balance: []
+
+  - tag: Withdraw
+    contractNickname: Escrow
+    walletNickname: Seller
 
   - tag: CheckBalance
     walletNickname: Seller
     balance:
-      - [ADA, [51, 53]]
+      - [ADA, 20]
 
   - tag: ReturnFunds

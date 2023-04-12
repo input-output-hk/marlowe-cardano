@@ -30,6 +30,7 @@ genericJSONOptions prefix = do
     { A.fieldLabelModifier = \label ->
         lowerCaseFirstChar $
         fromMaybe label (List.stripPrefix prefix label)
+    -- , rejectUnknownFields = True
     -- , A.sumEncoding = A.defaultTaggedObject
     --   { A.tagFieldName = "action" }
     }

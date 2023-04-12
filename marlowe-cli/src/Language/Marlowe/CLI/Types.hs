@@ -138,7 +138,7 @@ import Cardano.Api
   , ShelleyBasedEra(..)
   , SigningKey
   , SimpleScriptV2
-  , SlotNo(SlotNo)
+  , SlotNo
   , TxExtraKeyWitnessesSupportedInEra(..)
   , TxFeesExplicitInEra(..)
   , TxIn
@@ -190,7 +190,7 @@ import qualified Data.Map.Strict as Map
 import Data.Proxy (Proxy(Proxy))
 import Data.Time (NominalDiffTime, UTCTime, addUTCTime, getCurrentTime, nominalDiffTimeToSeconds)
 import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
-import Data.Time.Units (Second, TimeUnit(fromMicroseconds))
+import Data.Time.Units (Second)
 import GHC.Exts (IsString(fromString))
 import GHC.Natural (Natural)
 import Language.Marlowe.CLI.Cardano.Api (toMultiAssetSupportedInEra, withShelleyBasedEra)
@@ -198,7 +198,6 @@ import Language.Marlowe.CLI.Cardano.Api.PlutusScript
   (IsPlutusScriptLanguage, plutusScriptVersion, withPlutusScriptVersion)
 import Language.Marlowe.Extended.V1 (Timeout(POSIXTime))
 import qualified Language.Marlowe.Extended.V1 as E
-import PlutusCore (Some)
 
 
 -- | Exception for Marlowe CLI.
@@ -698,7 +697,6 @@ toSlotRoundedMarloweTimeout :: MonadIO m => SlotConfig -> SomeTimeout -> m E.Tim
 toSlotRoundedMarloweTimeout slotConfig t = do
   let
     toSlot = posixTimeToEnclosingSlot slotConfig
-    toSlotNo = SlotNo . fromIntegral . toSlot
   t' <- someTimeoutToMilliseconds t
   let
     P.POSIXTime t'' = slotToBeginPOSIXTime slotConfig . toSlot $ P.POSIXTime t'

@@ -3,7 +3,7 @@ module Contrib.Control.Concurrent.Async
 
 import Control.Concurrent (threadDelay)
 import Control.Concurrent.Async (race)
-import Data.Time.Units (Microsecond, TimeUnit(toMicroseconds))
+import Data.Time.Units (Microsecond)
 
 -- | Race two `IO a` actions.
 altIO :: IO a -> IO a -> IO a

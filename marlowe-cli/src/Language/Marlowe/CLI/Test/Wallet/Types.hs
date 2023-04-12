@@ -26,45 +26,35 @@ import Cardano.Api
   , Lovelace
   , PolicyId
   , ScriptDataSupportedInEra
-  , Tx
   , TxBody
   , UTxO(UTxO)
   )
-import Contrib.Data.Aeson.Generic (getConName)
-import Control.Applicative ((<|>))
-import Control.Lens (Lens', makeLenses)
+import Control.Lens (Lens')
 import Control.Monad.Except (MonadError)
 import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.Reader.Class (MonadReader)
 import Control.Monad.State.Class (MonadState)
-import Control.Monad.Trans.Except (ExceptT)
-import Control.Monad.Trans.Reader (ReaderT)
-import Control.Monad.Trans.State.Strict (StateT)
 import Data.Aeson (FromJSON(..), ToJSON(..))
 import qualified Data.Aeson as A
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.OneLine as A
 import qualified Data.Aeson.Types as A
-import qualified Data.Char as Char
 import qualified Data.Fixed as F
 import qualified Data.Fixed as Fixed
 import Data.Foldable (fold)
-import qualified Data.List as List
 import Data.Map (Map)
 import qualified Data.Map.Strict as Map
-import Data.Maybe (fromMaybe)
 import Data.String (IsString(fromString))
 import qualified Data.Text as T
-import qualified Data.Text as Text
 import Data.Traversable (for)
 import qualified Data.Vector as V
-import GHC.Generics (Generic(from))
+import GHC.Generics (Generic)
 import GHC.Natural (Natural)
 import qualified Language.Marlowe as M
-import Language.Marlowe.CLI.Cardano.Api.Value (lovelaceToPlutusValue, toPlutusValue, txOutValueValue)
+import Language.Marlowe.CLI.Cardano.Api.Value (toPlutusValue, txOutValueValue)
 import Language.Marlowe.CLI.Test.ExecutionMode (ExecutionMode)
 import qualified Language.Marlowe.CLI.Test.Operation.Aeson as Operation
-import Language.Marlowe.CLI.Types (CliError(CliError), PrintStats(PrintStats), SomePaymentSigningKey)
+import Language.Marlowe.CLI.Types (CliError, PrintStats, SomePaymentSigningKey)
 import Ledger.Orphans ()
 import Plutus.V1.Ledger.Api (CurrencySymbol, TokenName)
 import qualified Plutus.V1.Ledger.Value as P
@@ -216,18 +206,18 @@ instance FromJSON value => FromJSON (Balance value) where
             str' = T.replace "_" "" str
           parseJSON (A.String str')
         n@(A.Number _) -> parseJSON n
-        json -> fail $ "Expecting a number or a string but got:" <> T.unpack (A.renderValue json)
+        _ -> fail $ "Expecting a number or a string but got:" <> T.unpack (A.renderValue json)
     case json of
       A.String (T.toLower -> "*") -> pure AnyBalance
-      A.Array (V.toList -> [min, max]) -> ValueRange <$> parseValue min <*> parseValue max
+      A.Array (V.toList -> [minJson, maxJson]) -> ValueRange <$> parseValue minJson <*> parseValue maxJson
       _ -> ExactValue <$> parseValue json
 
 type Balance' = Balance Integer
 
-checkBalance :: Eq value => Ord value => Balance value -> value -> Bool
+checkBalance :: Ord value => Balance value -> value -> Bool
 checkBalance expected actual = case expected of
   ExactValue v -> v == actual
-  ValueRange min max -> min <= actual && actual <= max
+  ValueRange minValue maxValue -> minValue <= actual && actual <= maxValue
   AnyBalance -> True
 
 -- | Yaml friendly representation of assets which we use in balance checking.
@@ -278,12 +268,12 @@ instance ToJSON AssetsBalance where
           ]
         assetToJSON (AssetId currencyNickname tokenName, AnyBalance) = toJSON
           [ toJSON currencyNickname, toJSON tokenName, toJSON ("*" :: String) ]
-        assetToJSON (AdaAsset, ValueRange min max) = toJSON
+        assetToJSON (AdaAsset, ValueRange minValue maxValue) = toJSON
           [ toJSON ("ADA" :: String)
-          , toJSON [ toJSON min, toJSON max ]
+          , toJSON [ toJSON minValue, toJSON maxValue ]
           ]
-        assetToJSON (AssetId currencyNickname tokenName, ValueRange min max) = toJSON
-          [ toJSON currencyNickname, toJSON tokenName, toJSON [ toJSON min, toJSON max ] ]
+        assetToJSON (AssetId currencyNickname tokenName, ValueRange minValue maxValue) = toJSON
+          [ toJSON currencyNickname, toJSON tokenName, toJSON [ toJSON minValue, toJSON maxValue ] ]
 
 data TokenAssignment = TokenAssignment
   { taWalletNickname :: WalletNickname  -- ^ Default to the same wallet nickname as a token name.

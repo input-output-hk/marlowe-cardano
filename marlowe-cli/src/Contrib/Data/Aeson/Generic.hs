@@ -8,10 +8,7 @@
 module Contrib.Data.Aeson.Generic
   where
 
-import Data.Data (Proxy(Proxy))
-import Data.Reflection (reflect)
-import GHC.Generics (C1, Constructor(conName), D1, Generic(Rep, from), M1(M1), Meta(MetaData), type (:+:)(L1, R1))
-import GHC.TypeLits (KnownSymbol)
+import GHC.Generics (C1, Constructor(conName), D1, Generic(Rep, from), M1(M1), type (:+:)(L1, R1))
 
 -- | No exported by Aeson lib.
 class GetConName f where
