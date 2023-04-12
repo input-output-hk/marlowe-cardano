@@ -61,7 +61,6 @@ data PartyRef =
   | RoleRef TokenName
   deriving stock (Eq, Generic, Show)
 
--- FIXME: We don't parse currency symbol yet.
 instance FromJSON PartyRef where
   parseJSON = \case
     A.Object (KeyMap.toList -> [("address", A.String walletNickname)]) ->

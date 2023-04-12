@@ -33,7 +33,7 @@ import Language.Marlowe.CLI.Test.Types (RuntimeConfig(RuntimeConfig), TestSuite(
 import Language.Marlowe.CLI.Types (CliEnv, CliError, askEra)
 
 import Control.Monad.Reader.Class (MonadReader)
-import Data.Time.Units (TimeUnit(fromMicroseconds))
+import Data.Time.Units (Second)
 import Language.Marlowe.Runtime.CLI.Option (CliOption, optParserWithEnvDefault, port)
 import qualified Language.Marlowe.Runtime.CLI.Option as Runtime.CLI.Option
 import Network.Socket (PortNumber)
@@ -58,7 +58,7 @@ runTestCommand cmd = do
 
 
 executionModeParser :: O.Parser ExecutionMode
-executionModeParser = fmap (fromMaybe (OnChainMode (fromMicroseconds 120_000_000))) simulationModeOpt
+executionModeParser = fmap (fromMaybe (OnChainMode (120 :: Second))) simulationModeOpt
 
 
 simulationModeOpt :: O.Parser (Maybe ExecutionMode)
@@ -91,11 +91,9 @@ mkParseTestCommand network socket = do
       <*> chainSeekCmdPortParser
   pure $ TestSuite
     <$> parseNetworkId network
-    -- <$> O.option parseNetworkId  (O.long "testnet-magic"  <> O.metavar "INTEGER"      <> network <> O.help "Network magic. Defaults to the CARDANO_TESTNET_MAGIC environment variable's value."                              )
     <*> O.strOption              (O.long "socket-path"    <> O.metavar "SOCKET_FILE"  <> socket  <> O.help "Location of the cardano-node socket file. Defaults to the CARDANO_NODE_SOCKET_PATH environment variable's value.")
     <*> O.strOption              (O.long "faucet-key"     <> O.metavar "SIGNING_FILE"            <> O.help "The file containing the signing key for the faucet."                                                             )
     <*> O.option parseAddress    (O.long "faucet-address" <> O.metavar "ADDRESS"                 <> O.help "The address of the faucet."                                                                                      )
-    -- <*> O.option parseAddress    (O.long "burn-address"   <> O.metavar "ADDRESS"                 <> O.help "Burn address for discarding used tokens."                                                                        )
     <*> executionModeParser
     <*> (O.some . O.strArgument) (                           O.metavar "TEST_FILE"               <> O.help "JSON file containing a test case."                                                                               )
     <*> runtimeConfigParser

@@ -19,7 +19,7 @@
 module Language.Marlowe.CLI.Test.CLI.Types
   where
 
-import Cardano.Api (AssetId, CardanoMode, LocalNodeConnectInfo, Lovelace, PolicyId, ScriptDataSupportedInEra)
+import Cardano.Api (CardanoMode, LocalNodeConnectInfo, Lovelace, PolicyId, ScriptDataSupportedInEra)
 import qualified Cardano.Api as C
 import Control.Lens (Lens')
 import Control.Monad.Except (MonadError)
@@ -34,7 +34,6 @@ import qualified Data.List.NonEmpty as List
 import Data.Map (Map)
 import qualified Data.Map.Strict as Map
 import Data.Maybe (mapMaybe)
-import qualified Data.Text as T
 import GHC.Base (Alternative((<|>)))
 import GHC.Generics (Generic)
 import Language.Marlowe.CLI.Test.Contract (ContractNickname)
@@ -42,8 +41,7 @@ import qualified Language.Marlowe.CLI.Test.Contract as Contract
 import Language.Marlowe.CLI.Test.Contract.ParametrizedMarloweJSON (ParametrizedMarloweJSON)
 import Language.Marlowe.CLI.Test.ExecutionMode
 import qualified Language.Marlowe.CLI.Test.Operation.Aeson as Operation
-import Language.Marlowe.CLI.Test.Wallet.Types
-  (Asset, Currencies, CurrencyNickname, WalletNickname(WalletNickname), Wallets, parseTokenNameJSON, tokenNameToJSON)
+import Language.Marlowe.CLI.Test.Wallet.Types (Currencies, CurrencyNickname, WalletNickname, Wallets)
 import qualified Language.Marlowe.CLI.Test.Wallet.Types as Wallet
 import Language.Marlowe.CLI.Types
   ( CliError
@@ -186,92 +184,6 @@ data PartyRef =
     WalletRef WalletNickname
   | RoleRef TokenName
   deriving stock (Eq, Generic, Show)
-
-
--- FIXME: We don't parse currency symbol yet.
-instance FromJSON PartyRef where
-  parseJSON = \case
-    Aeson.Object (KeyMap.toList -> [("address", A.String walletNickname)]) ->
-      pure . WalletRef . WalletNickname . T.unpack $ walletNickname
-    Aeson.Object (KeyMap.toList -> [("role_token", roleTokenJSON)]) -> do
-      roleToken <- parseTokenNameJSON roleTokenJSON
-      pure $ RoleRef roleToken
-    _ -> fail "Expecting a Party object."
-
-instance ToJSON PartyRef where
-    toJSON (WalletRef (WalletNickname walletNickname)) = A.object
-        [ "address" .= A.String (T.pack walletNickname) ]
-    toJSON (RoleRef tokenName) = A.object
-        [ "role_token" .= tokenNameToJSON tokenName ]
-
-data UseTemplate =
-    UseTrivial
-    {
-      utParty              :: Maybe PartyRef              -- ^ The party. Falls back to the faucet wallet pkh.
-    , utDepositLovelace    :: Integer                     -- ^ Lovelace in the deposit.
-    , utWithdrawalLovelace :: Integer                     -- ^ Lovelace in the withdrawal.
-    , utTimeout            :: SomeTimeout                 -- ^ The timeout.
-    }
-    -- | Use for escrow contract.
-  | UseEscrow
-    {
-      utPrice             :: Integer          -- ^ Price of the item for sale, in lovelace.
-    , utSeller            :: PartyRef         -- ^ Defaults to a wallet with the "Buyer" nickname.
-    , utBuyer             :: PartyRef         -- ^ Defaults to a wallet with the "Seller" ncikname.
-    , utMediator          :: PartyRef         -- ^ The mediator.
-    , utPaymentDeadline   :: SomeTimeout      -- ^ The deadline for the buyer to pay.
-    , utComplaintDeadline :: SomeTimeout      -- ^ The deadline for the buyer to complain.
-    , utDisputeDeadline   :: SomeTimeout      -- ^ The deadline for the seller to dispute a complaint.
-    , utMediationDeadline :: SomeTimeout      -- ^ The deadline for the mediator to decide.
-    }
-    -- | Use for swap contract.
-  | UseSwap
-    {
-      utAParty            :: PartyRef           -- ^ First party
-    , utAAsset            :: Asset
-    , utATimeout          :: SomeTimeout        -- ^ Timeout for first party's deposit.
-    , utBParty            :: PartyRef           -- ^ Second party. Falls back to wallet with "B" nickname.
-    , utBAsset            :: Asset
-    , utBTimeout          :: SomeTimeout        -- ^ Timeout for second party's deposit.
-    }
-    -- | Use for zero-coupon bond.
-  | UseZeroCouponBond
-    {
-      utLender          :: PartyRef    -- ^ The lender.
-    , utBorrower        :: PartyRef    -- ^ The borrower.
-    , utPrincipal       :: Integer    -- ^ The principal.
-    , utInterest        :: Integer    -- ^ The interest.
-    , utLendingDeadline :: SomeTimeout -- ^ The lending deadline.
-    , utPaybackDeadline :: SomeTimeout -- ^ The payback deadline.
-    }
-    -- | Use for covered call.
-  | UseCoveredCall
-    {
-      utIssuer         :: PartyRef    -- ^ The issuer.
-    , utCounterParty   :: PartyRef    -- ^ The counter-party.
-    , utCurrency       :: AssetId     -- ^ The currency token.
-    , utStrike         :: Integer     -- ^ The strike in currency.
-    , utUnderlying     :: AssetId     -- ^ The underlying token.
-    , utAmount         :: Integer     -- ^ The amount of underlying.
-    , utIssueDate      :: SomeTimeout -- ^ The issue date.
-    , utMaturityDate   :: SomeTimeout -- ^ The maturity date.
-    , utSettlementDate :: SomeTimeout -- ^ The settlement date.
-    }
-    -- | Use for actus contracts.
-  | UseActus
-    {
-      utParty          :: Maybe PartyRef   -- ^ The party. Fallsback to the faucet wallet.
-    , utCounterParty   :: PartyRef         -- ^ The counter-party.
-    , utActusTermsFile :: FilePath         -- ^ The Actus contract terms.
-    }
-    deriving stock (Eq, Generic, Show)
-
-instance FromJSON UseTemplate where
-  parseJSON = do
-    A.genericParseJSON $ Operation.genericJSONOptions "ut"
-
-instance ToJSON UseTemplate where
-  toJSON = A.genericToJSON $ Operation.genericJSONOptions "ut"
 
 data CLIContractInfo lang era = CLIContractInfo
   {

@@ -53,8 +53,8 @@ import qualified Language.Marlowe.Core.V1.Semantics.Types.Address as Marlowe
 import Ledger.Address (toPlutusAddress)
 import qualified Plutus.V1.Ledger.Value as PV
 
--- Either an JSON of the Input or a JSON of the Contract.
-
+-- | Either a JSON of the Input or a JSON of the Contract which
+-- | is parametrized by the currencies and wallets.
 newtype ParametrizedMarloweJSON = ParametrizedMarloweJSON { unParametrizedMarloweJSON :: A.Value }
     deriving stock (Eq, Ord, Generic, Show)
 
@@ -89,8 +89,6 @@ rewriteCurrencyRefs (Currencies currencies) (ParametrizedMarloweJSON json) = Par
 
 data RewritePartyError era = WalletNotFound WalletNickname | InvalidWalletAddress WalletNickname (AddressInEra era)
   deriving stock (Eq, Generic, Show)
-
-newtype OnMainnet = OnMainnet Bool
 
 rewritePartyRefs :: Marlowe.Network -> Wallets era -> ParametrizedMarloweJSON -> Either (RewritePartyError era) ParametrizedMarloweJSON
 rewritePartyRefs network (Wallets wallets) (ParametrizedMarloweJSON json) = ParametrizedMarloweJSON <$> A.rewriteBottomUp rewrite json
@@ -166,5 +164,4 @@ doRewriteParametrizedMarloweJSON _ json = do
   case rewriteParametrizedMarloweJSON network wallets currencies json of
     Left err -> throwError $ CliError $ "Error rewriting parametrized Marlowe JSON: " <> show err
     Right json' -> pure json'
-
 

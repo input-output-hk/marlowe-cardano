@@ -15,6 +15,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# OPTIONS_GHC -Wno-unused-imports #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NamedFieldPuns #-}
 
 module Language.Marlowe.CLI.Test
@@ -179,14 +180,12 @@ runTests era TestSuite{..} =
           Left testResult ->
             pure $ Just testResult
 
-      case result of
-        Just TestSucceeded -> do
+      for_ result \case
+        TestSucceeded -> do
           liftIO $ putStrLn "***** PASSED *****"
-        Just (TestFailed err) -> do
+        TestFailed err -> do
           liftIO (print err)
           liftIO (putStrLn "***** FAILED *****")
-        Nothing -> do
-          liftIO (putStrLn "***** FAILED? <Unreachable case> *****")
 
 runTest
   :: IsShelleyBasedEra era

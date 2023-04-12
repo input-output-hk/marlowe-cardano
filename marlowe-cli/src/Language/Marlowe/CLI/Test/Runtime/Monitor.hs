@@ -64,11 +64,8 @@ mkRuntimeMonitor config = do
   detectionInputChannel <- newTChanIO
   knownContractsRef <- newTVarIO Map.empty
   contractsRef <- newTVarIO Map.empty
-  -- let
-  --   simpleJsonDevnullBackend :: RenderSelectorJSON s -> IO (EventBackend IO JSONRef s)
-  --   simpleJsonDevnullBackend = jsonHandleBackend stderr (toJSON @SomeJSONException)
-  -- eventBackend <- liftIO $ simpleJsonStderrBackend defaultRenderSelectorJSON
   let
+    -- FIXME: Unify all the logging.
     eventBackend = unitEventBackend
 
     pollingMicroseconds = fromMicroseconds $ toMicroseconds (5 :: Second)
@@ -183,11 +180,8 @@ processMarloweStreamEvent knownContracts contracts = do
           Nothing -> pure Nothing
       ContractStreamWait {csContractId} -> pure $ Just (Revisit csContractId)
       ContractStreamFinish{csFinish=Nothing} -> do
-        -- We should ignore this event because we are closing the thread
+        -- We are ignoring this event because we are closing the thread
         -- from the `ContractStreamContinued` handler.
-        -- RuntimeContractInfo th <- getContractInfo csContractId
-        -- unless (isRunning th) do
-        --   throwError $ RuntimeExecutionFailure $ "Thread already closed: " <> show csContractId
         pure Nothing
       ContractStreamFinish{csFinish=Just creationError, csContractId} -> do
         case creationError of

@@ -50,7 +50,7 @@ import Language.Marlowe.Runtime.Core.Api (ContractId)
 import Ledger.Orphans ()
 import qualified Network.Protocol.Connection as Network.Protocol
 
--- Curretly we don't need any extra information for the runtime thread.
+-- Curretly we don't use any extra execution information from the Runtime.
 type RuntimeTxInfo = ()
 
 type RuntimeMarloweThread lang era = MarloweThread RuntimeTxInfo lang era
@@ -104,11 +104,9 @@ data RuntimeOperation =
       roContractNickname :: ContractNickname
     , roSubmitter :: Maybe WalletNickname -- ^ A wallet which gonna submit the initial transaction.
     , roMinLovelace :: Word64
-    -- , roContract :: ParametrizedMarloweJSON -- ^ The Marlowe contract to be created.
     , roRoleCurrency :: Maybe CurrencyNickname  -- ^ If contract uses roles then currency is required.
     , roContractSource :: Contract.Source         -- ^ The Marlowe contract to be created.
     , roAwaitConfirmed :: Maybe A.Second -- ^ How long to wait for the transaction to be confirmed in the Runtime. By default we don't wait.
-    -- , roTimeout :: Maybe Integer
     }
   | RuntimeApplyInputs
     {
@@ -116,9 +114,6 @@ data RuntimeOperation =
     , roInputs :: [ParametrizedMarloweJSON]  -- ^ Inputs to the contract.
     , roSubmitter :: Maybe WalletNickname -- ^ A wallet which gonna submit the initial transaction.
     , roAwaitConfirmed :: Maybe A.Second -- ^ How long to wait for the transaction to be confirmed in the Runtime. By default we wait 30s.
-    -- , roTimeout :: Maybe Integer
-    -- , coMinimumTime          :: SomeTimeout
-    -- , coMaximumTime          :: SomeTimeout
     }
   deriving stock (Eq, Generic, Show)
 

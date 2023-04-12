@@ -37,7 +37,6 @@ module Language.Marlowe.CLI.Types
   , MarlowePlutusVersion
   , MarloweTransaction(..)
   , RedeemerInfo(..)
-  , Seconds(..)
   , SomeMarloweTransaction(..)
   , SomeTimeout(..)
   , SubmitMode(..)
@@ -784,9 +783,6 @@ data MintingAction era =
     , maProviders :: L.NonEmpty (AddressInEra era, SomePaymentSigningKey)
     }
   -- ^ Burn all found tokens on the providers UTxOs of a given "private currency".
-
-newtype Seconds = Seconds Int
-    deriving stock (Eq, Show)
 
 data SubmitMode = DontSubmit | DoSubmit Second
 

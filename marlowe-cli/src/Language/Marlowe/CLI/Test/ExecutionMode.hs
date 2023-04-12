@@ -53,4 +53,3 @@ skipInSimluationMode label action = \case
     logLabeledMsg label "Skipping in simulation mode."
   OnChainMode {} -> action
 
-

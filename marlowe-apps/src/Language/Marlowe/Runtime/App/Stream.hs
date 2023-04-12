@@ -98,7 +98,6 @@ streamAllContractIdsClient
   -> TChanEOF (SyncEvent ContractId)
   -> MarloweHeaderSyncClient Client (Maybe ContractStreamError)
 streamAllContractIdsClient eventBackend pollingFrequency endOnWait = streamContractHeadersClient eventBackend pollingFrequency endOnWait $ Just . fmap (blockHeader &&& contractId)
--- streamAllContractIdsClient eventBackend pollingFrequency = streamContractHeadersClient eventBackend pollingFrequency $ Just . fmap (blockHeader &&& contractId)
 
 
 streamContractHeaders
@@ -110,10 +109,6 @@ streamContractHeaders
   -> Client (Maybe ContractStreamError)
 streamContractHeaders eventBackend pollingFrequency endOnWait extract channel =
   runMarloweHeaderSyncClient $ streamContractHeadersClient eventBackend pollingFrequency endOnWait extract channel
--- =======
--- streamContractHeaders eventBackend pollingFrequency extract channel =
---   runMarloweHeaderSyncClient $ streamContractHeadersClient eventBackend pollingFrequency extract channel
--- >>>>>>> cd334ba81 (Add rollback info to the marlowe-apps discovery stream)
 
 
 streamContractHeadersClient

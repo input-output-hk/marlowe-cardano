@@ -20,7 +20,7 @@ cabal run marlowe-cli -- \
   --babbage-era test \
   --testnet-magic 2 \
   --socket-path $CARDANO_NODE_SOCKET_PATH \
-  --faucet-key ../../treasuries/preprod-I/payment.skey \
+  --faucet-key $FAUCET_SKEY_FILE \
   --faucet-address $(cat $FAUCET_VKEY_FILE) \
   --marlowe-runtime-port $MARLOWE_RT_PORT \
   --chain-seek-sync-port $MARLOWE_CHAIN_SYNC_PORT \
@@ -31,7 +31,7 @@ cabal run marlowe-cli -- \
   --babbage-era test \
   --testnet-magic 2 \
   --socket-path $CARDANO_NODE_SOCKET_PATH \
-  --faucet-key ../../treasuries/preprod-I/payment.skey \
+  --faucet-key $FAUCET_SKEY_FILE \
   --faucet-address $(cat $FAUCET_VKEY_FILE) \
   --marlowe-runtime-port $MARLOWE_RT_PORT \
   --chain-seek-sync-port $MARLOWE_CHAIN_SYNC_PORT \
@@ -42,7 +42,7 @@ cabal run marlowe-cli -- \
   --babbage-era test \
   --testnet-magic 2 \
   --socket-path $CARDANO_NODE_SOCKET_PATH \
-  --faucet-key ../../treasuries/preprod-I/payment.skey \
+  --faucet-key $FAUCET_SKEY_FILE \
   --faucet-address $(cat $FAUCET_VKEY_FILE) \
   --marlowe-runtime-port $MARLOWE_RT_PORT \
   --chain-seek-sync-port $MARLOWE_CHAIN_SYNC_PORT \
@@ -53,7 +53,7 @@ cabal run marlowe-cli -- \
   --babbage-era test \
   --testnet-magic 2 \
   --socket-path $CARDANO_NODE_SOCKET_PATH \
-  --faucet-key ../../treasuries/preprod-I/payment.skey \
+  --faucet-key $FAUCET_SKEY_FILE \
   --faucet-address $(cat $FAUCET_VKEY_FILE) \
   --marlowe-runtime-port $MARLOWE_RT_PORT \
   --chain-seek-sync-port $MARLOWE_CHAIN_SYNC_PORT \
@@ -64,7 +64,7 @@ cabal run marlowe-cli -- \
   --babbage-era test \
   --testnet-magic 2 \
   --socket-path $CARDANO_NODE_SOCKET_PATH \
-  --faucet-key ../../treasuries/preprod-I/payment.skey \
+  --faucet-key $FAUCET_SKEY_FILE \
   --faucet-address $(cat $FAUCET_VKEY_FILE) \
   --marlowe-runtime-port $MARLOWE_RT_PORT \
   --chain-seek-sync-port $MARLOWE_CHAIN_SYNC_PORT \
@@ -75,7 +75,7 @@ cabal run marlowe-cli -- \
   --babbage-era test \
   --testnet-magic 2 \
   --socket-path $CARDANO_NODE_SOCKET_PATH \
-  --faucet-key ../../treasuries/preprod-I/payment.skey \
+  --faucet-key $FAUCET_SKEY_FILE \
   --faucet-address $(cat $FAUCET_VKEY_FILE) \
   --marlowe-runtime-port $MARLOWE_RT_PORT \
   --chain-seek-sync-port $MARLOWE_CHAIN_SYNC_PORT \
@@ -86,7 +86,7 @@ cabal run marlowe-cli -- \
   --babbage-era test \
   --testnet-magic 2 \
   --socket-path $CARDANO_NODE_SOCKET_PATH \
-  --faucet-key ../../treasuries/preprod-I/payment.skey \
+  --faucet-key $FAUCET_SKEY_FILE \
   --faucet-address $(cat $FAUCET_VKEY_FILE) \
   --marlowe-runtime-port $MARLOWE_RT_PORT \
   --chain-seek-sync-port $MARLOWE_CHAIN_SYNC_PORT \
@@ -97,7 +97,7 @@ cabal run marlowe-cli -- \
   --babbage-era test \
   --testnet-magic 2 \
   --socket-path $CARDANO_NODE_SOCKET_PATH \
-  --faucet-key ../../treasuries/preprod-I/payment.skey \
+  --faucet-key $FAUCET_SKEY_FILE \
   --faucet-address $(cat $FAUCET_VKEY_FILE) \
   --marlowe-runtime-port $MARLOWE_RT_PORT \
   --chain-seek-sync-port $MARLOWE_CHAIN_SYNC_PORT \
@@ -108,7 +108,7 @@ cabal run marlowe-cli -- \
   --babbage-era test \
   --testnet-magic 2 \
   --socket-path $CARDANO_NODE_SOCKET_PATH \
-  --faucet-key ../../treasuries/preprod-I/payment.skey \
+  --faucet-key $FAUCET_SKEY_FILE \
   --faucet-address $(cat $FAUCET_VKEY_FILE) \
   --marlowe-runtime-port $MARLOWE_RT_PORT \
   --chain-seek-sync-port $MARLOWE_CHAIN_SYNC_PORT \
@@ -119,7 +119,7 @@ cabal run marlowe-cli -- \
   --babbage-era test \
   --testnet-magic 2 \
   --socket-path $CARDANO_NODE_SOCKET_PATH \
-  --faucet-key ../../treasuries/preprod-I/payment.skey \
+  --faucet-key $FAUCET_SKEY_FILE \
   --faucet-address $(cat $FAUCET_VKEY_FILE) \
   --marlowe-runtime-port $MARLOWE_RT_PORT \
   --chain-seek-sync-port $MARLOWE_CHAIN_SYNC_PORT \
@@ -130,7 +130,7 @@ cabal run marlowe-cli -- \
   --babbage-era test \
   --testnet-magic 2 \
   --socket-path $CARDANO_NODE_SOCKET_PATH \
-  --faucet-key ../../treasuries/preprod-I/payment.skey \
+  --faucet-key $FAUCET_SKEY_FILE \
   --faucet-address $(cat $FAUCET_VKEY_FILE) \
   --marlowe-runtime-port $MARLOWE_RT_PORT \
   --chain-seek-sync-port $MARLOWE_CHAIN_SYNC_PORT \
@@ -141,7 +141,7 @@ cabal run marlowe-cli -- \
  --babbage-era test \
  --testnet-magic 2 \
  --socket-path $CARDANO_NODE_SOCKET_PATH \
- --faucet-key ../../treasuries/preprod-I/payment.skey \
+ --faucet-key $FAUCET_SKEY_FILE \
  --faucet-address $(cat $FAUCET_VKEY_FILE) \
  --marlowe-runtime-port $MARLOWE_RT_PORT \
  --chain-seek-sync-port $MARLOWE_CHAIN_SYNC_PORT \
@@ -152,7 +152,7 @@ cabal run marlowe-cli -- \
   --babbage-era test \
   --testnet-magic 2 \
   --socket-path $CARDANO_NODE_SOCKET_PATH \
-  --faucet-key ../../treasuries/preprod-I/payment.skey \
+  --faucet-key $FAUCET_SKEY_FILE \
   --faucet-address $(cat $FAUCET_VKEY_FILE) \
   --marlowe-runtime-port $MARLOWE_RT_PORT \
   --chain-seek-sync-port $MARLOWE_CHAIN_SYNC_PORT \
@@ -163,7 +163,7 @@ cabal run marlowe-cli -- \
   --babbage-era test \
   --testnet-magic 2 \
   --socket-path $CARDANO_NODE_SOCKET_PATH \
-  --faucet-key ../../treasuries/preprod-I/payment.skey \
+  --faucet-key $FAUCET_SKEY_FILE \
   --faucet-address $(cat $FAUCET_VKEY_FILE) \
   --marlowe-runtime-port $MARLOWE_RT_PORT \
   --chain-seek-sync-port $MARLOWE_CHAIN_SYNC_PORT \
@@ -174,7 +174,7 @@ cabal run marlowe-cli -- \
   --babbage-era test \
   --testnet-magic 2 \
   --socket-path $CARDANO_NODE_SOCKET_PATH \
-  --faucet-key ../../treasuries/preprod-I/payment.skey \
+  --faucet-key $FAUCET_SKEY_FILE \
   --faucet-address $(cat $FAUCET_VKEY_FILE) \
   --marlowe-runtime-port $MARLOWE_RT_PORT \
   --chain-seek-sync-port $MARLOWE_CHAIN_SYNC_PORT \
@@ -185,7 +185,7 @@ cabal run marlowe-cli -- \
   --babbage-era test \
   --testnet-magic 2 \
   --socket-path $CARDANO_NODE_SOCKET_PATH \
-  --faucet-key ../../treasuries/preprod-I/payment.skey \
+  --faucet-key $FAUCET_SKEY_FILE \
   --faucet-address $(cat $FAUCET_VKEY_FILE) \
   --marlowe-runtime-port $MARLOWE_RT_PORT \
   --chain-seek-sync-port $MARLOWE_CHAIN_SYNC_PORT \
@@ -196,7 +196,7 @@ cabal run marlowe-cli -- \
   --babbage-era test \
   --testnet-magic 2 \
   --socket-path $CARDANO_NODE_SOCKET_PATH \
-  --faucet-key ../../treasuries/preprod-I/payment.skey \
+  --faucet-key $FAUCET_SKEY_FILE \
   --faucet-address $(cat $FAUCET_VKEY_FILE) \
   --marlowe-runtime-port $MARLOWE_RT_PORT \
   --chain-seek-sync-port $MARLOWE_CHAIN_SYNC_PORT \
@@ -208,7 +208,7 @@ cabal run marlowe-cli -- \
 #   --babbage-era test \
 #   --testnet-magic 2 \
 #   --socket-path $CARDANO_NODE_SOCKET_PATH \
-#   --faucet-key ../../treasuries/preprod-I/payment.skey \
+#   --faucet-key $FAUCET_SKEY_FILE \
 #   --faucet-address $(cat $FAUCET_VKEY_FILE) \
 #   --marlowe-runtime-port $MARLOWE_RT_PORT \
 #   --chain-seek-sync-port $MARLOWE_CHAIN_SYNC_PORT \
