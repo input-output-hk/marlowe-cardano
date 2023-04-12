@@ -31,6 +31,7 @@ operations:
   - tag: RuntimeCreateContract
     contractNickname: Covered Call
     minLovelace: 2000000
+    awaitConfirmed: 120
     contractSource:
       template:
         tag: UseCoveredCall
@@ -49,28 +50,12 @@ operations:
         settlementDate:
           relative: 36000 # now + 10h
 
-  - tag: RuntimeAwaitCreated
-    timeout: 360
-    contractNickname: Covered Call
-
   # Transaction 2. The issuer deposits Tokens into the Contract.
   - tag: RuntimeApplyInputs
     contractNickname: Covered Call
     submitter: Issuer
+    awaitConfirmed: 120
     inputs:
-      - input_from_party:
-          address: Issuer
-        that_deposits: 300
-        of_token:
-          currency_symbol: CurrencyA
-          token_name: Globe
-        into_account:
-          address: Issuer
-
-  - tag: RuntimeAwaitInputsApplied
-    timeout: 360
-    contractNickname: Covered Call
-    allInputs:
       - input_from_party:
           address: Issuer
         that_deposits: 300
@@ -84,25 +69,8 @@ operations:
   - tag: RuntimeApplyInputs
     contractNickname: Covered Call
     submitter: CounterParty
+    awaitConfirmed: 120
     inputs:
-      - for_choice_id:
-          choice_name: "Exercise Call"
-          choice_owner:
-            address: CounterParty
-        input_that_chooses_num: 1
-
-  - tag: RuntimeAwaitInputsApplied
-    timeout: 360
-    contractNickname: Covered Call
-    allInputs:
-      - input_from_party:
-          address: Issuer
-        that_deposits: 300
-        of_token:
-          currency_symbol: CurrencyA
-          token_name: Globe
-        into_account:
-          address: Issuer
       - for_choice_id:
           choice_name: "Exercise Call"
           choice_owner:
@@ -113,35 +81,8 @@ operations:
   - tag: RuntimeApplyInputs
     contractNickname: Covered Call
     submitter: CounterParty
+    awaitConfirmed: 120
     inputs:
-      - input_from_party:
-          address: CounterParty
-        that_deposits: 500
-        of_token:
-          currency_symbol: CurrencyB
-          token_name: Swan
-        into_account:
-          address: CounterParty
-
-  - tag: RuntimeAwaitInputsApplied
-    timeout: 360
-    contractNickname: Covered Call
-    allInputs:
-      - input_from_party:
-          address: Issuer
-        that_deposits: 300
-        of_token:
-          currency_symbol: CurrencyA
-          token_name: Globe
-        into_account:
-          address: Issuer
-
-      - for_choice_id:
-          choice_name: "Exercise Call"
-          choice_owner:
-            address: CounterParty
-        input_that_chooses_num: 1
-
       - input_from_party:
           address: CounterParty
         that_deposits: 500

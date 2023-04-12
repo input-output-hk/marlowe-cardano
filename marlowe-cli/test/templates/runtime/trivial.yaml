@@ -4,6 +4,7 @@ operations:
   - tag: RuntimeCreateContract
     contractNickname: Trivial
     minLovelace: 2000000
+    awaitConfirmed: 120
     contractSource:
       template:
         tag: "UseTrivial"
@@ -12,26 +13,10 @@ operations:
         timeout:
           relative: 1000000
 
-  - tag: RuntimeAwaitCreated
-    timeout: 360
-    contractNickname: Trivial
-
   - tag: RuntimeApplyInputs
     contractNickname: Trivial
+    awaitConfirmed: 120
     inputs:
-      - input_from_party:
-          address: Faucet
-        that_deposits: 15000000
-        of_token:
-          currency_symbol: ""
-          token_name: ""
-        into_account:
-          address: Faucet
-
-  - tag: RuntimeAwaitInputsApplied
-    timeout: 360
-    contractNickname: Trivial
-    allInputs:
       - input_from_party:
           address: Faucet
         that_deposits: 15000000
@@ -43,21 +28,7 @@ operations:
 
   - tag: RuntimeApplyInputs
     contractNickname: Trivial
+    awaitConfirmed: 120
     inputs:
       - "input_notify"
 
-  - tag: RuntimeAwaitInputsApplied
-    timeout: 360
-    contractNickname: Trivial
-    allInputs:
-      - input_from_party:
-          address: Faucet
-        that_deposits: 15000000
-        of_token:
-          currency_symbol: ""
-          token_name: ""
-        into_account:
-          address: Faucet
-      - "input_notify"
-
-  - tag: ReturnFunds

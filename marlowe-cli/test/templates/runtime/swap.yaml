@@ -43,6 +43,7 @@ operations:
   - tag: RuntimeCreateContract
     contractNickname: Swap
     minLovelace: 2000000
+    awaitConfirmed: 120
     contractSource:
       template:
         tag: UseSwap
@@ -64,27 +65,11 @@ operations:
         bTimeout:
           relative: 1000000
 
-  - tag: RuntimeAwaitCreated
-    timeout: 360
-    contractNickname: Swap
-
   - tag: RuntimeApplyInputs
     contractNickname: Swap
     submitter: AParty
+    awaitConfirmed: 120
     inputs:
-      - input_from_party:
-          address: AParty
-        that_deposits: 50
-        of_token:
-          currency_symbol: APartyCurrency
-          token_name: APartyTokenName
-        into_account:
-          address: AParty
-
-  - tag: RuntimeAwaitInputsApplied
-    timeout: 360
-    contractNickname: Swap
-    allInputs:
       - input_from_party:
           address: AParty
         that_deposits: 50
@@ -97,28 +82,8 @@ operations:
   - tag: RuntimeApplyInputs
     contractNickname: Swap
     submitter: BParty
+    awaitConfirmed: 120
     inputs:
-      - input_from_party:
-          address: BParty
-        that_deposits: 40
-        of_token:
-          currency_symbol: BPartyCurrency
-          token_name: BPartyTokenName
-        into_account:
-          address: BParty
-
-  - tag: RuntimeAwaitInputsApplied
-    timeout: 360
-    contractNickname: Swap
-    allInputs:
-      - input_from_party:
-          address: AParty
-        that_deposits: 50
-        of_token:
-          currency_symbol: APartyCurrency
-          token_name: APartyTokenName
-        into_account:
-          address: AParty
       - input_from_party:
           address: BParty
         that_deposits: 40

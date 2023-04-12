@@ -21,6 +21,7 @@ module Language.Marlowe.CLI.Test.Runtime.Types
 
 import Cardano.Api (CardanoMode, LocalNodeConnectInfo, ScriptDataSupportedInEra)
 import qualified Cardano.Api as C
+import qualified Contrib.Data.Time.Units.Aeson as A
 import Control.Concurrent.STM (TChan, TVar)
 import Control.Lens (Lens', Prism', Traversal, Traversal', makeLenses)
 import Control.Monad.Except (MonadError)
@@ -31,7 +32,7 @@ import Data.Aeson (FromJSON)
 import qualified Data.Aeson as A
 import Data.Aeson.Types (ToJSON)
 import Data.Map (Map)
-import Data.Time.Units (Second)
+import Data.Time.Units
 import Data.Word (Word64)
 import GHC.Generics (Generic)
 import Language.Marlowe.CLI.Test.Contract (ContractNickname)
@@ -73,6 +74,7 @@ data RuntimeError
   | RuntimeRollbackError ContractNickname
   deriving stock (Eq, Generic, Show)
 
+-- FIXME: Drop this
 newtype RuntimeContractInfo lang era =
   RuntimeContractInfo { _rcMarloweThread :: AnyRuntimeMarloweThread lang era }
 
@@ -82,22 +84,24 @@ newtype RuntimeMonitorState lang era = RuntimeMonitorState (TVar (Map ContractNi
 
 newtype RuntimeMonitor = RuntimeMonitor { runMonitor :: IO RuntimeError }
 
+defaultOperationTimeout :: Second
+defaultOperationTimeout = 30
+
 data RuntimeOperation =
     RuntimeAwaitCreated
     {
       roContractNickname :: ContractNickname
-    , roTimeout :: Maybe Integer
+    , roTimeout :: Maybe A.Second -- ^ Submission timeout.
     }
   | RuntimeAwaitInputsApplied
     {
       roContractNickname :: ContractNickname
-    , roAllInputs :: [ParametrizedMarloweJSON] -- ^ Inputs to the contract.
-    , roTimeout :: Maybe Integer
+    , roTimeout :: Maybe A.Second
     }
   | RuntimeAwaitClosed
     {
       roContractNickname :: ContractNickname
-    , roTimeout :: Maybe Integer
+    , roTimeout :: Maybe A.Second
     }
   | RuntimeCreateContract
     {
@@ -107,6 +111,7 @@ data RuntimeOperation =
     -- , roContract :: ParametrizedMarloweJSON -- ^ The Marlowe contract to be created.
     , roRoleCurrency :: Maybe CurrencyNickname  -- ^ If contract uses roles then currency is required.
     , roContractSource :: Contract.Source         -- ^ The Marlowe contract to be created.
+    , roAwaitConfirmed :: Maybe A.Second -- ^ How long to wait for the transaction to be confirmed in the Runtime. By default we don't wait.
     -- , roTimeout :: Maybe Integer
     }
   | RuntimeApplyInputs
@@ -114,13 +119,12 @@ data RuntimeOperation =
       roContractNickname :: ContractNickname
     , roInputs :: [ParametrizedMarloweJSON]  -- ^ Inputs to the contract.
     , roSubmitter :: Maybe WalletNickname -- ^ A wallet which gonna submit the initial transaction.
+    , roAwaitConfirmed :: Maybe A.Second -- ^ How long to wait for the transaction to be confirmed in the Runtime. By default we wait 30s.
     -- , roTimeout :: Maybe Integer
     -- , coMinimumTime          :: SomeTimeout
     -- , coMaximumTime          :: SomeTimeout
     }
-
   deriving stock (Eq, Generic, Show)
-
 
 instance FromJSON RuntimeOperation where
   parseJSON = do
@@ -130,8 +134,13 @@ instance ToJSON RuntimeOperation where
   toJSON = do
     A.genericToJSON $ Operation.genericJSONOptions "ro"
 
+data ContractInfo = ContractInfo
+  { ciContractId :: ContractId
+  , ciAppliedInputs :: [M.Input] -- ^ Inputs which we applied. Possibly unconfirmed yet.
+  }
+
 class HasInterpretState st lang era | st -> lang era where
-  knownContractsL :: Lens' st (Map ContractNickname ContractId)
+  knownContractsL :: Lens' st (Map ContractNickname ContractInfo)
   walletsL :: Lens' st (Wallets era)
   currenciesL :: Lens' st Currencies
 

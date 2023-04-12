@@ -174,7 +174,6 @@ data CLIOperation =
     { coPublisher          :: Maybe WalletNickname   -- ^ Wallet used to cover fees. Falls back to faucet wallet.
     , coPublishPermanently :: Maybe Bool             -- ^ Whether to publish script permanently.
     }
-
   | AutoRun
     {
       coContractNickname :: ContractNickname
@@ -299,7 +298,7 @@ data CLIContractInfo lang era = CLIContractInfo
   , ciCurrency                :: Maybe CurrencyNickname
   , ciPlan                    :: List.NonEmpty (MarloweTransaction lang era)
   , ciThread                  :: Maybe (AnyCLIMarloweThread lang era)
-  , ciWithdrawalsCheckPoints  :: Map TokenName C.TxId                           -- ^ Track of last withrawal on chain point.
+  , ciWithdrawalsCheckPoints  :: Map TokenName C.TxId -- ^ Track a point of the last withdrawal on the chain.
   , ciSubmitter               :: WalletNickname
   }
 

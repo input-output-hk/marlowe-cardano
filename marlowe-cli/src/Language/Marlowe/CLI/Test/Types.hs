@@ -214,7 +214,7 @@ data InterpretState lang era = InterpretState
   , _isPublishedScripts :: Maybe (MarloweScriptsRefs MarlowePlutusVersion era)
   , _isCurrencies :: Currencies
   , _isWallets :: Wallets era
-  , _isKnownContracts :: Map ContractNickname ContractId
+  , _isKnownContracts :: Map ContractNickname Runtime.ContractInfo
   }
 
 data InterpretEnv lang era = InterpretEnv

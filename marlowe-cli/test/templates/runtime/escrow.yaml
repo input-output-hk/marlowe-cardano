@@ -20,6 +20,7 @@ operations:
   - tag: RuntimeCreateContract
     contractNickname: Escrow
     minLovelace: 2000000
+    awaitConfirmed: 120
     contractSource:
       template:
         tag: "UseEscrow"
@@ -39,27 +40,11 @@ operations:
         mediationDeadline:
           relative: 30000
 
-  - tag: RuntimeAwaitCreated
-    timeout: 360
-    contractNickname: Escrow
-
   - tag: RuntimeApplyInputs
     contractNickname: Escrow
     submitter: Buyer
+    awaitConfirmed: 120
     inputs:
-      - input_from_party:
-          address: Buyer
-        that_deposits: 20000000
-        of_token:
-          currency_symbol: ""
-          token_name: ""
-        into_account:
-          address: Seller
-
-  - tag: RuntimeAwaitInputsApplied
-    timeout: 360
-    contractNickname: Escrow
-    allInputs:
       - input_from_party:
           address: Buyer
         that_deposits: 20000000
@@ -72,25 +57,8 @@ operations:
   - tag: RuntimeApplyInputs
     contractNickname: Escrow
     submitter: Buyer
+    awaitConfirmed: 120
     inputs:
-      - for_choice_id:
-          choice_name: Everything is alright
-          choice_owner:
-            address: Buyer
-        input_that_chooses_num: 0
-
-  - tag: RuntimeAwaitInputsApplied
-    timeout: 360
-    contractNickname: Escrow
-    allInputs:
-      - input_from_party:
-          address: Buyer
-        that_deposits: 20000000
-        of_token:
-          currency_symbol: ""
-          token_name: ""
-        into_account:
-          address: Seller
       - for_choice_id:
           choice_name: Everything is alright
           choice_owner:

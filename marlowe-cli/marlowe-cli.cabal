@@ -54,6 +54,7 @@ library
     Contrib.Data.Aeson.Generic
     Contrib.Data.Aeson.Traversals
     Contrib.Data.Foldable
+    Contrib.Data.Time.Units.Aeson
     Contrib.Monad.Loops
     Language.Marlowe.CLI.Analyze
     Language.Marlowe.Cardano
