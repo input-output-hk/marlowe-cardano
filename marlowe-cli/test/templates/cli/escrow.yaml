@@ -82,14 +82,6 @@ operations:
 
   - tag: CheckBalance
     walletNickname: Seller
-    balance: []
-
-  - tag: Withdraw
-    contractNickname: Escrow
-    walletNickname: Seller
-
-  - tag: CheckBalance
-    walletNickname: Seller
     balance:
       - [ADA, 20]
 

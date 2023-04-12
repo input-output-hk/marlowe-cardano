@@ -1882,7 +1882,10 @@ selectCoins connection inputs outputs pay changeAddress CoinSelectionStrategy {.
     collateral <-
       case filter (\candidate -> let value = txOutToValue $ snd candidate in onlyLovelace value && selectLovelace value >= selectLovelace fee) utxos of
         utxo : _ -> pure $ fst utxo
-        []       -> throwError . CliError $ "No collateral found in " <> show utxos <> "."
+        []       -> do
+          let
+            adaOnlyUtxos = filter (\candidate -> let value = txOutToValue $ snd candidate in onlyLovelace value) utxos
+          throwError . CliError $ "No collateral found in " <> show utxos <> ". Ada only utxos: " <> show adaOnlyUtxos <> ". Fee is " <> show fee <> "."
       :: m TxIn
     -- Bound the lovelace that must be included with change
     minUtxo <-
