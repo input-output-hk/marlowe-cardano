@@ -1,0 +1,81 @@
+testName: Zero Coupon Bond Contract Test
+
+operations:
+  - tag: CreateWallet
+    walletNickname: Lender
+
+  - tag: CreateWallet
+    walletNickname: Borrower
+
+  - tag: FundWallets
+    values:
+      - 10000000
+      - 10000000
+    walletNicknames: [Lender, Borrower]
+
+  - tag: Sleep
+    seconds: 30
+
+  # Transaction 1. Create the Contract by Providing the Minimum ADA
+  - tag: RuntimeCreateContract
+    contractNickname: ZCB
+    minLovelace: 2000000
+    submitter: Lender
+    awaitConfirmed: 120
+    contractSource:
+      template:
+        tag: UseZeroCouponBond
+        lender:
+          address: Lender
+        borrower:
+          address: Borrower
+        principal: 10000000
+        interest: 5000000
+        lendingDeadline:
+          relative: 20000
+        paybackDeadline:
+          relative: 30000
+
+  # Transaction 2. Lender Deposits the Loan Amount
+  - tag: RuntimeApplyInputs
+    contractNickname: ZCB
+    submitter: Lender
+    awaitConfirmed: 120
+    inputs:
+      - input_from_party:
+          address: Lender
+        that_deposits: 10000000
+        of_token:
+          currency_symbol: ""
+          token_name: ""
+        into_account:
+          address: Lender
+
+  # Transaction 3. Borrower Repays the Loan's Principal and Interest"
+  - tag: RuntimeApplyInputs
+    contractNickname: ZCB
+    submitter: Borrower
+    awaitConfirmed: 120
+    inputs:
+      - input_from_party:
+          address: Borrower
+        that_deposits: 15000000
+        of_token:
+          currency_symbol: ""
+          token_name: ""
+        into_account:
+          address: Borrower
+
+  - tag: CheckBalance
+    walletNickname: Borrower
+    balance:
+      - [ADA, [14, 15]]
+
+  - tag: CheckBalance
+    walletNickname: Lender
+    balance:
+      - [ADA, [24, 25]]
+
+  - tag: BurnAll
+
+  - tag: ReturnFunds

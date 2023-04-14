@@ -50,6 +50,7 @@ module Language.Marlowe.CLI.Transaction
   , findPublished
     -- * Low-Level Functions
   , buildBody
+  , buildBodyWithContent
   , buildPayFromScript
   , buildPayToScript
   , hashSigningKey
@@ -61,6 +62,7 @@ module Language.Marlowe.CLI.Transaction
   , selectUtxos
   , selectUtxosImpl
   , submitBody
+  , submitBody'
     -- * Balancing
   , ensureMinUtxo
   , findMinUtxo
@@ -216,6 +218,7 @@ import qualified Data.Set as S (empty, fromList, singleton)
 import qualified Data.Text as T
 import Data.Time.Clock (nominalDiffTimeToSeconds)
 import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
+import Data.Time.Units (Second, TimeUnit(toMicroseconds))
 import Data.Traversable (for)
 import Data.Tuple.Extra (uncurry3)
 import GHC.Natural (Natural)
@@ -257,6 +260,7 @@ import Language.Marlowe.CLI.Types
   , PublishingStrategy(..)
   , SigningKeyFile
   , SomePaymentSigningKey
+  , SubmitMode(DoSubmit, DontSubmit)
   , TxBodyFile(TxBodyFile)
   , ValidatorInfo(ValidatorInfo, viHash, viScript)
   , askEra
@@ -264,6 +268,7 @@ import Language.Marlowe.CLI.Types
   , defaultCoinSelectionStrategy
   , doWithCardanoEra
   , marlowePlutusVersion
+  , submitModeFromTimeout
   , toAddressAny'
   , toAsType
   , toCollateralSupportedInEra
@@ -302,7 +307,7 @@ buildSimple :: forall era m
             -> AddressInEra era                          -- ^ The change address.
             -> Maybe FilePath                            -- ^ The file containing JSON metadata, if any.
             -> TxBodyFile                                -- ^ The output file for the transaction body.
-            -> Maybe Int                                 -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
+            -> Maybe Second                              -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
             -> Bool                                      -- ^ Whether to print statistics about the transaction.
             -> Bool                                      -- ^ Assertion that the transaction is invalid.
             -> m TxId                                    -- ^ Action to build the transaction body.
@@ -344,8 +349,8 @@ buildClean :: MonadError CliError m
            -> Maybe (SlotNo, SlotNo)            -- ^ The valid slot range, if any.
            -> TxMintValue BuildTx era           -- ^ The mint value.
            -> TxMetadataInEra era               -- ^ The metadata.
-           -> TxBodyFile                          -- ^ The output file for the transaction body.
-           -> Maybe Int                         -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
+           -> TxBodyFile                        -- ^ The output file for the transaction body.
+           -> Maybe Second                      -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
            -> m TxId                            -- ^ Action to build the transaction body.
 buildClean connection signingKeyFiles lovelace changeAddress range mintValue metadata (TxBodyFile bodyFile) timeout =
   do
@@ -400,7 +405,7 @@ buildFaucet :: MonadError CliError m
             -> [AddressInEra era]                -- ^ The addresses to receive funds.
             -> AddressInEra era                  -- ^ The faucet address.
             -> SigningKeyFile                    -- ^ The required signing key.
-            -> Maybe Int                         -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
+            -> Maybe Second                      -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
             -> m TxId                            -- ^ Action to build the transaction body.
 buildFaucet connection possibleValue destAddresses fundAddress fundSigningKeyFile timeout =
   do
@@ -415,7 +420,7 @@ buildFaucet connection possibleValue destAddresses fundAddress fundSigningKeyFil
         fundAddress
         fundSigningKey
         defaultCoinSelectionStrategy
-        timeout
+        (submitModeFromTimeout timeout)
     pure
       $ getTxId body
 
@@ -429,9 +434,9 @@ buildFaucetImpl :: MonadError CliError m
             -> AddressInEra era                   -- ^ The faucet address.
             -> SomePaymentSigningKey              -- ^ The required signing key.
             -> CoinSelectionStrategy
-            -> Maybe Int                          -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
+            -> SubmitMode                         -- ^ A possible number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
             -> m (TxBody era)                                -- ^ Action to build the transaction body.
-buildFaucetImpl connection possibleValues destAddresses fundAddress fundSigningKey coinSelectionStrategy timeout =
+buildFaucetImpl connection possibleValues destAddresses fundAddress fundSigningKey coinSelectionStrategy submitMode =
   do
     (inputs, outputs', changeAddress) <- case (possibleValues, destAddresses) of
       (Nothing, [destAddress]) -> do
@@ -477,8 +482,9 @@ buildFaucetImpl connection possibleValues destAddresses fundAddress fundSigningK
         TxMetadataNone
         False
         False
-    forM_ timeout
-      $ submitBody connection body [fundSigningKey]
+    case submitMode of
+      DoSubmit timeout -> void $ submitBody connection body [fundSigningKey] timeout
+      DontSubmit -> pure ()
     pure body
 
 -- | Build a non-Marlowe transaction that fills and address from a faucet.
@@ -487,9 +493,9 @@ buildFaucet' :: MonadError CliError m
              => MonadReader (CliEnv era) m
              => LocalNodeConnectInfo CardanoMode  -- ^ The connection info for the local node.
              -> Value                             -- ^ The value to be sent to the funded addresses.
-             -> [AddressInEra era]                      -- ^ The funded addresses.
-             -> TxBodyFile                          -- ^ The output file for the transaction body.
-             -> Maybe Int                         -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
+             -> [AddressInEra era]                -- ^ The funded addresses.
+             -> TxBodyFile                        -- ^ The output file for the transaction body.
+             -> Maybe Second                      -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
              -> m TxId                            -- ^ Action to build the transaction body.
 buildFaucet' connection value addresses (TxBodyFile bodyFile) timeout =
   do
@@ -559,7 +565,7 @@ buildMinting :: MonadError CliError m
              -> Maybe SlotNo                                        -- ^ The slot number after which minting is no longer possible.
              -> AddressInEra era                                    -- ^ The change address.
              -> TxBodyFile                                          -- ^ The output file for the transaction body.
-             -> Maybe Int                                           -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
+             -> Maybe Second                                        -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
              -> m ()                                                -- ^ Action to build the transaction body.
 buildMinting connection signingKeyFile mintingAction metadataFile expires changeAddress (TxBodyFile bodyFile) timeout = do
   signingKey <- readSigningKey signingKeyFile
@@ -577,12 +583,13 @@ buildMinting connection signingKeyFile mintingAction metadataFile expires change
     Left _ -> do
       throwError "Token provider set is empty."
     Right tokenDistribution -> do
-      pure $ Mint currencyIssuer tokenDistribution
+      pure $ Mint currencyIssuer $ tokenDistribution <&> \(name, amount, addr) -> (name, amount, addr, Nothing)
   metadataJson <- sequence $ decodeFileStrict <$> metadataFile
   metadata <- forM metadataJson \case
     A.Object metadataProps -> pure metadataProps
     _                      -> throwError "Metadata should file should contain a json object"
-  (body, policy) <- buildMintingImpl connection mintingAction' metadata expires timeout (PrintStats True)
+  let submitMode = submitModeFromTimeout timeout
+  (body, policy) <- buildMintingImpl connection mintingAction' metadata expires submitMode (PrintStats True)
   doWithCardanoEra $ liftCliIO $ writeFileTextEnvelope bodyFile Nothing body
   liftIO . putStrLn $ "PolicyID " <> show policy
 
@@ -598,10 +605,10 @@ buildMintingImpl :: MonadError CliError m
              -> MintingAction era                                 -- ^ The token names, amount and a possible receipient addresses.
              -> Maybe Aeson.Object                                -- ^ The CIP-25 metadata for the minting, with keys for each token name.
              -> Maybe SlotNo                                      -- ^ The slot number after which minting is no longer possible.
-             -> Maybe Int                                         -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
+             -> SubmitMode                                         -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
              -> PrintStats
              -> m (TxBody era, PolicyId)                          -- ^ Action to build the transaction body.
-buildMintingImpl connection mintingAction metadataProps expires timeout (PrintStats printStats) =
+buildMintingImpl connection mintingAction metadataProps expires submitMode (PrintStats printStats) =
   do
     era <- askEra
     protocol <- queryInEra connection QueryProtocolParameters
@@ -619,11 +626,11 @@ buildMintingImpl connection mintingAction metadataProps expires timeout (PrintSt
     (inputs, outputs, signingKeys, mint) <- case mintingAction of
         Mint _ tokenDistribution -> do
             let
-              tokenDistribution' = tokenDistribution <&> \(TokenName name, count, recipient) -> do
+              tokenDistribution' = tokenDistribution <&> \(TokenName name, count, recipient, minAda) -> do
                 let
                   value = valueFromList . pure $
                       (AssetId policy (AssetName $ fromBuiltin name) , C.Quantity $ toInteger count)
-                (recipient, value)
+                (recipient, value, minAda)
 
             -- TODO: use sensible coin selection here. Currently coin selection fails in the context of minting.
             utxos <-
@@ -642,10 +649,16 @@ buildMintingImpl connection mintingAction metadataProps expires timeout (PrintSt
                 then Just <$> makeBalancedTxOut era protocol addr Nothing assetsValue ReferenceScriptNone
                 else pure Nothing
 
-            outputs' <- fmap NonEmpty.toList $ for tokenDistribution' \(address, mintedValue) ->
+            outputs' <- fmap NonEmpty.toList $ for tokenDistribution' \(address, mintedValue, minAda) -> case minAda of
+              Just minAda' -> do
+                let
+                  adaValue = C.lovelaceToValue minAda'
+                  value = adaValue <> mintedValue
+                makeTxOut' address Nothing value
+              Nothing ->
                 makeBalancedTxOut era protocol address Nothing mintedValue ReferenceScriptNone
 
-            pure (map fst utxos, assetsOutputs <> outputs', [signingKey], foldMap snd tokenDistribution')
+            pure (map fst utxos, assetsOutputs <> outputs', [signingKey], foldMap (\(_, m, _) -> m) tokenDistribution')
 
         BurnAll _ providers -> do
             let
@@ -729,36 +742,11 @@ buildMintingImpl connection mintingAction metadataProps expires timeout (PrintSt
         printStats
         False
 
-    body' <- case timeout of
-      Nothing -> pure body
-      Just t -> do
+    body' <- case submitMode of
+      DontSubmit -> pure body
+      DoSubmit t -> do
         -- We attempt to increase fees by arbitrary amount on submission failure.
-        (submitBody connection body signingKeys t $> body) `catchError` \err -> do
-          liftIO $ hPutStrLn stderr "Adjusting the fees and resubmitting failing transaction."
-          liftIO $ hPrint stderr err
-          let
-            feeBalancingMargin = C.Lovelace 10000
-            C.TxBodyContent{..} = bodyContent
-            -- Find change UTxO and subtract the fee margin.
-            step (TxOut addr value datum refScript) (False, outs)
-              | addr == changeAddress && (fromMaybe 0 . C.valueToLovelace $ C.txOutValueToValue value) > feeBalancingMargin = do
-              let
-                value' = txOutValueToValue value <> C.negateValue (C.lovelaceToValue feeBalancingMargin)
-                out' = TxOut addr (TxOutValue (toMultiAssetSupportedInEra era) value') datum refScript
-              (True, out' : outs)
-            step out (flag, outs) = (flag, out : outs)
-
-            (adjusted, txOuts') = foldr step (False, []) txOuts
-          -- Increase the transaction fee by the chosen margin.
-          txFee' <- case (adjusted, txFee) of
-            (True, TxFeeExplicit feesInEra value) -> pure $ TxFeeExplicit feesInEra (value + feeBalancingMargin)
-            _ -> throwError . CliError $ "Unable to adjust the change during resubmission attempt."
-
-          withCardanoEra era $ case C.makeTransactionBody (C.TxBodyContent{..} { txOuts = txOuts', txFee = txFee' }) of
-            Left err' -> throwError . CliError $ "Failure during reconstruction of the failing tx body: " <> show err'
-            Right body' -> do
-              void $ submitBody connection body' signingKeys t
-              pure body'
+        submitBody' connection body bodyContent changeAddress signingKeys t $> body
     pure (body', policy)
 
 
@@ -803,7 +791,7 @@ buildIncoming :: MonadError CliError m
               -> AddressInEra era                          -- ^ The change address.
               -> Maybe FilePath                            -- ^ The file containing JSON metadata, if any.
               -> TxBodyFile                                -- ^ The output file for the transaction body.
-              -> Maybe Int                                 -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
+              -> Maybe Second                              -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
               -> Bool                                      -- ^ Whether to print statistics about the transaction.
               -> Bool                                      -- ^ Assertion that the transaction is invalid.
               -> m TxId                                    -- ^ Action to build the transaction body.
@@ -972,7 +960,7 @@ buildPublishing :: forall era m
         -> AddressInEra era                  -- ^ The change address.
         -> Maybe (PublishingStrategy era)
         -> TxBodyFile
-        -> Maybe Int
+        -> Maybe Second
         -> PrintStats
         -> m ()
 buildPublishing connection signingKeyFile expires changeAddress strategy (TxBodyFile bodyFile) timeout printStats = do
@@ -1004,7 +992,7 @@ publishImpl :: forall era m
             -> AddressInEra era                  -- ^ The change address.
             -> PublishingStrategy era
             -> CoinSelectionStrategy
-            -> Int
+            -> Second
             -> PrintStats
             -> m (MarloweScriptsRefs MarlowePlutusVersion era)
 publishImpl connection signingKey expires changeAddress publishingStrategy coinSelectionStrategy timeout printStats = do
@@ -1119,7 +1107,7 @@ buildContinuing :: MonadError CliError m
                 -> SlotNo                              -- ^ The last valid slot for the transaction.
                 -> Maybe FilePath                      -- ^ The file containing JSON metadata, if any.
                 -> TxBodyFile                          -- ^ The output file for the transaction body.
-                -> Maybe Int                           -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
+                -> Maybe Second                        -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
                 -> Bool                                -- ^ Whether to print statistics about the transaction.
                 -> Bool                                -- ^ Assertion that the transaction is invalid.
                 -> m TxId                              -- ^ Action to build the transaction body.
@@ -1172,7 +1160,7 @@ buildOutgoing :: MonadError CliError m
               -> SlotNo                              -- ^ The last valid slot for the transaction.
               -> Maybe FilePath                      -- ^ The file containing JSON metadata, if any.
               -> TxBodyFile                          -- ^ The output file for the transaction body.
-              -> Maybe Int                           -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
+              -> Maybe Second                        -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
               -> Bool                                -- ^ Whether to print statistics about the transaction.
               -> Bool                                -- ^ Assertion that the transaction is invalid.
               -> m TxId                              -- ^ Action to build the transaction body.
@@ -1431,7 +1419,7 @@ submit :: MonadError CliError m
        => LocalNodeConnectInfo CardanoMode  -- ^ The connection info for the local node.
        -> TxBodyFile                        -- ^ The transaction body file.
        -> [SigningKeyFile]                  -- ^ The signing key files.
-       -> Int                               -- ^ Number of seconds to wait for the transaction to be confirmed.
+       -> Second                            -- ^ Number of seconds to wait for the transaction to be confirmed.
        -> m TxId                            -- ^ The action to submit the transaction.
 submit connection (TxBodyFile bodyFile) signingKeyFiles timeout =
   do
@@ -1446,9 +1434,9 @@ submitBody :: MonadError CliError m
            => MonadIO m
            => MonadReader (CliEnv era) m
            => LocalNodeConnectInfo CardanoMode  -- ^ The connection info for the local node.
-           -> TxBody era                 -- ^ The transaction body.
+           -> TxBody era                        -- ^ The transaction body.
            -> [SomePaymentSigningKey]           -- ^ The signing keys.
-           -> Int                               -- ^ Number of seconds to wait for the transaction to be confirmed.
+           -> Second                            -- ^ Number of seconds to wait for the transaction to be confirmed.
            -> m TxId                            -- ^ The action to submit the transaction.
 submitBody connection body signings timeout =
   do
@@ -1475,22 +1463,64 @@ submitBody connection body signings timeout =
         liftIO $ hPrint stderr body
         throwError . CliError $ show reason
 
+-- A vesrion of submit which performs an attempt to extra fee balancing on failure
+-- (we experienced failures on the cardano-node for already balanced transactions).
+submitBody' :: MonadError CliError m
+           => MonadIO m
+           => MonadReader (CliEnv era) m
+           => LocalNodeConnectInfo CardanoMode  -- ^ The connection info for the local node.
+           -> TxBody era                        -- ^ The transaction body.
+           -> C.TxBodyContent C.BuildTx era
+           -> AddressInEra era                  -- ^ The change address.
+           -> [SomePaymentSigningKey]           -- ^ The signing keys.
+           -> Second                            -- ^ Number of seconds to wait for the transaction to be confirmed.
+           -> m (TxId, TxBody era)              -- ^ The action to submit the transaction.
+submitBody' connection body bodyContent changeAddress signingKeys timeout = do
+  era <- askEra
+  ((, body) <$> submitBody connection body signingKeys timeout) `catchError` \err -> do
+    liftIO $ hPutStrLn stderr "Adjusting the fees and resubmitting failing transaction."
+    liftIO $ hPrint stderr err
+    let
+      feeBalancingMargin = C.Lovelace 10000
+      C.TxBodyContent{..} = bodyContent
+      -- Find change UTxO and subtract the fee margin.
+      step (TxOut addr value datum refScript) (False, outs)
+        | addr == changeAddress && (fromMaybe 0 . C.valueToLovelace $ C.txOutValueToValue value) > feeBalancingMargin = do
+        let
+          value' = txOutValueToValue value <> C.negateValue (C.lovelaceToValue feeBalancingMargin)
+          out' = TxOut addr (TxOutValue (toMultiAssetSupportedInEra era) value') datum refScript
+        (True, out' : outs)
+      step out (flag, outs) = (flag, out : outs)
+
+      (adjusted, txOuts') = foldr step (False, []) txOuts
+    -- Increase the transaction fee by the chosen margin.
+    txFee' <- case (adjusted, txFee) of
+      (True, TxFeeExplicit feesInEra value) -> pure $ TxFeeExplicit feesInEra (value + feeBalancingMargin)
+      _ -> throwError . CliError $ "Unable to adjust the change during resubmission attempt."
+
+    withCardanoEra era $ case C.makeTransactionBody (C.TxBodyContent{..} { txOuts = txOuts', txFee = txFee' }) of
+      Left err' -> throwError . CliError $ "Failure during reconstruction of the failing tx body: " <> show err'
+      Right body' -> do
+        txId <- submitBody connection body' signingKeys timeout
+        pure (txId, body')
+
 
 -- | Wait for transactions to be confirmed as UTxOs.
 waitForUtxos :: MonadError CliError m
              => MonadIO m
              => MonadReader (CliEnv era) m
              => LocalNodeConnectInfo CardanoMode  -- ^ The connection info for the local node.
-             -> Int                               -- ^ Number of seconds to wait for the transaction to be confirmed.
+             -> Second                            -- ^ Number of seconds to wait for the transaction to be confirmed.
              -> [TxIn]                            -- ^ The transactions to wait for.
              -> m ()                              -- ^ Action to wait for the transaction confirmations.
 waitForUtxos connection timeout txIns =
   let
     pause = 5
+    timeout' = fromInteger $ toMicroseconds timeout
     txIns' = S.fromList txIns
     go 0 = throwError "Timeout waiting for transaction to be confirmed."
     go n = do
-             liftIO . threadDelay $ pause * 1_000_000
+             liftIO . threadDelay $ pause
              utxos <-
                queryInEra connection
                  . QueryUTxO
@@ -1500,7 +1530,7 @@ waitForUtxos connection timeout txIns =
                then pure ()
                else go (n - 1 :: Int)
   in
-    go . ceiling $ fromIntegral timeout / (fromIntegral pause :: Double)
+    go . ceiling $ timeout' / (fromIntegral pause :: Double)
 
 
 -- | TxIn for transaction body.
@@ -1852,7 +1882,10 @@ selectCoins connection inputs outputs pay changeAddress CoinSelectionStrategy {.
     collateral <-
       case filter (\candidate -> let value = txOutToValue $ snd candidate in onlyLovelace value && selectLovelace value >= selectLovelace fee) utxos of
         utxo : _ -> pure $ fst utxo
-        []       -> throwError . CliError $ "No collateral found in " <> show utxos <> "."
+        []       -> do
+          let
+            adaOnlyUtxos = filter (\candidate -> let value = txOutToValue $ snd candidate in onlyLovelace value) utxos
+          throwError . CliError $ "No collateral found in " <> show utxos <> ". Ada only utxos: " <> show adaOnlyUtxos <> ". Fee is " <> show fee <> "."
       :: m TxIn
     -- Bound the lovelace that must be included with change
     minUtxo <-

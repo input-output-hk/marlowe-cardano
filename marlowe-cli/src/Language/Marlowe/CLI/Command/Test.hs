@@ -12,13 +12,14 @@
 
 
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 
 module Language.Marlowe.CLI.Command.Test
   ( -- * Marlowe CLI Commands
     TestCommand
-  , parseTestCommand
+  , mkParseTestCommand
   , runTestCommand
   ) where
 
@@ -27,15 +28,21 @@ import Control.Monad.Except (MonadError, MonadIO)
 import Data.Maybe (fromMaybe)
 import Language.Marlowe.CLI.Command.Parse (parseAddress, parseNetworkId)
 import Language.Marlowe.CLI.Test (runTests)
-import Language.Marlowe.CLI.Test.Types (ExecutionMode(..), MarloweTests(ScriptTests), Seconds(..))
+import Language.Marlowe.CLI.Test.ExecutionMode (ExecutionMode(OnChainMode, SimulationMode))
+import Language.Marlowe.CLI.Test.Types (RuntimeConfig(RuntimeConfig), TestSuite(TestSuite))
 import Language.Marlowe.CLI.Types (CliEnv, CliError, askEra)
 
 import Control.Monad.Reader.Class (MonadReader)
+import Data.Time.Units (Second)
+import Language.Marlowe.Runtime.CLI.Option (CliOption, optParserWithEnvDefault, port)
+import qualified Language.Marlowe.Runtime.CLI.Option as Runtime.CLI.Option
+import Network.Socket (PortNumber)
+import Options.Applicative (OptionFields)
 import qualified Options.Applicative as O
 
 
 -- | Marlowe CLI commands and options for testing contracts.
-type TestCommand era = MarloweTests era FilePath
+type TestCommand era = TestSuite era FilePath
 
 
 -- | Run a contract-testing command.
@@ -50,42 +57,43 @@ runTestCommand cmd = do
   runTests era cmd
 
 
--- | Parser for test commands.
-parseTestCommand :: IsShelleyBasedEra era => O.Mod O.OptionFields NetworkId
-                 -> O.Mod O.OptionFields FilePath
-                 -> O.Parser (TestCommand era)
-parseTestCommand network socket =
-  O.hsubparser
-    $ O.commandGroup "Commands for testing contracts:"
-    <> scriptsCommand network socket
-
-
--- | Parser for the "scripts" command.
-scriptsCommand :: IsShelleyBasedEra era => O.Mod O.OptionFields NetworkId
-                -> O.Mod O.OptionFields FilePath
-                -> O.Mod O.CommandFields (TestCommand era)
-scriptsCommand network socket =
-  O.command "scripts"
-    $ O.info (scriptsOptions network socket)
-    $ O.progDesc "Test Marlowe scripts on-chain."
-
 executionModeParser :: O.Parser ExecutionMode
-executionModeParser = fmap (fromMaybe (OnChainMode (Seconds 120))) simulationModeOpt
+executionModeParser = fmap (fromMaybe (OnChainMode (120 :: Second))) simulationModeOpt
+
 
 simulationModeOpt :: O.Parser (Maybe ExecutionMode)
 simulationModeOpt = O.optional (O.flag' SimulationMode  (O.long "simulation-mode" <> O.help "Run test suite in simulation mode by ignoring the transaction submission timeout"))
 
--- | Parser for the "scripts" options.
-scriptsOptions :: IsShelleyBasedEra era
+
+-- | Parser for the "testSuite" options.
+mkParseTestCommand :: IsShelleyBasedEra era
                => O.Mod O.OptionFields NetworkId
                -> O.Mod O.OptionFields FilePath
-               -> O.Parser (TestCommand era)
-scriptsOptions network socket =
-  ScriptTests
+               -> IO (O.Parser (TestCommand era))
+mkParseTestCommand network socket = do
+  let
+    chainSeekSyncPort :: CliOption OptionFields PortNumber
+    chainSeekSyncPort = port "chain-seek-sync" "CHAIN_SEEK_SYNC" 3715 "The port number of the chain-seek server's synchronization API."
+
+    chainSeekCmdPort :: CliOption OptionFields PortNumber
+    chainSeekCmdPort = port "chain-seek-cmd" "CHAIN_SEEK_CMD" 3720 "The port number of the chain-seek server's command API."
+
+  runtimePortParser <- optParserWithEnvDefault Runtime.CLI.Option.runtimePort
+  runtimeHostParser <- optParserWithEnvDefault Runtime.CLI.Option.runtimeHost
+  chainSeekSyncPortParser <- optParserWithEnvDefault chainSeekSyncPort
+  chainSeekCmdPortParser <- optParserWithEnvDefault chainSeekCmdPort
+
+  let
+    runtimeConfigParser = RuntimeConfig
+      <$> runtimeHostParser
+      <*> runtimePortParser
+      <*> chainSeekSyncPortParser
+      <*> chainSeekCmdPortParser
+  pure $ TestSuite
     <$> parseNetworkId network
     <*> O.strOption              (O.long "socket-path"    <> O.metavar "SOCKET_FILE"  <> socket  <> O.help "Location of the cardano-node socket file. Defaults to the CARDANO_NODE_SOCKET_PATH environment variable's value.")
     <*> O.strOption              (O.long "faucet-key"     <> O.metavar "SIGNING_FILE"            <> O.help "The file containing the signing key for the faucet."                                                             )
     <*> O.option parseAddress    (O.long "faucet-address" <> O.metavar "ADDRESS"                 <> O.help "The address of the faucet."                                                                                      )
-    <*> O.option parseAddress    (O.long "burn-address"   <> O.metavar "ADDRESS"                 <> O.help "Burn address for discarding used tokens."                                                                        )
     <*> executionModeParser
     <*> (O.some . O.strArgument) (                           O.metavar "TEST_FILE"               <> O.help "JSON file containing a test case."                                                                               )
+    <*> runtimeConfigParser

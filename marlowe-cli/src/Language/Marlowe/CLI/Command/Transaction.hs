@@ -57,6 +57,7 @@ import Language.Marlowe.CLI.Types
 
 import qualified Cardano.Api as Api (Value)
 import Control.Monad.Reader.Class (MonadReader)
+import Data.Time.Units (Second)
 import qualified Options.Applicative as O
 
 
@@ -73,7 +74,7 @@ data TransactionCommand era =
     , change          :: AddressInEra era                 -- ^ The change address.
     , metadataFile    :: Maybe FilePath             -- ^ The file containing JSON metadata, if any.
     , bodyFile        :: TxBodyFile                   -- ^ The output file for the transaction body.
-    , submitTimeout   :: Maybe Int                  -- ^ Whether to submit the transaction, and its confirmation timeout in seconds.
+    , submitTimeout   :: Maybe Second               -- ^ Whether to submit the transaction, and its confirmation timeout in seconds.
     , printStats      :: Bool                       -- ^ Whether to print statistics about the contract and transaction.
     , invalid         :: Bool                       -- ^ Assertion that the transaction is invalid.
     }
@@ -91,7 +92,7 @@ data TransactionCommand era =
     , change          :: AddressInEra era                 -- ^ The change address.
     , metadataFile    :: Maybe FilePath             -- ^ The file containing JSON metadata, if any.
     , bodyFile        :: TxBodyFile                   -- ^ The output file for the transaction body.
-    , submitTimeout   :: Maybe Int                  -- ^ Whether to submit the transaction, and its confirmation timeout in seconds.
+    , submitTimeout   :: Maybe Second               -- ^ Whether to submit the transaction, and its confirmation timeout in seconds.
     , printStats      :: Bool                       -- ^ Whether to print statistics about the contract and transaction.
     , invalid         :: Bool                       -- ^ Assertion that the transaction is invalid.
     }
@@ -116,7 +117,7 @@ data TransactionCommand era =
     , maximumSlot     :: SlotNo                     -- ^ The last valid slot for the transaction.
     , metadataFile    :: Maybe FilePath             -- ^ The file containing JSON metadata, if any.
     , bodyFile        :: TxBodyFile                   -- ^ The output file for the transaction body.
-    , submitTimeout   :: Maybe Int                  -- ^ Whether to submit the transaction, and its confirmation timeout in seconds.
+    , submitTimeout   :: Maybe Second               -- ^ Whether to submit the transaction, and its confirmation timeout in seconds.
     , printStats      :: Bool                       -- ^ Whether to print statistics about the contract and transaction.
     , invalid         :: Bool                       -- ^ Assertion that the transaction is invalid.
     }
@@ -138,7 +139,7 @@ data TransactionCommand era =
     , maximumSlot     :: SlotNo                     -- ^ The last valid slot for the transaction.
     , metadataFile    :: Maybe FilePath             -- ^ The file containing JSON metadata, if any.
     , bodyFile        :: TxBodyFile                   -- ^ The output file for the transaction body.
-    , submitTimeout   :: Maybe Int                  -- ^ Whether to submit the transaction, and its confirmation timeout in seconds.
+    , submitTimeout   :: Maybe Second               -- ^ Whether to submit the transaction, and its confirmation timeout in seconds.
     , printStats      :: Bool                       -- ^ Whether to print statistics about the contract and transaction.
     , invalid         :: Bool                       -- ^ Assertion that the transaction is invalid.
     }
@@ -149,7 +150,7 @@ data TransactionCommand era =
     , socketPath      :: FilePath    -- ^ The path to the node socket.
     , bodyFile        :: TxBodyFile    -- ^ The JSON file containing the transaction body.
     , signingKeyFiles :: [SigningKeyFile]  -- ^ The signing key files.
-    , submitTimeout   :: Maybe Int   -- ^ Whether to submit the transaction, and its confirmation timeout in seconds.
+    , submitTimeout   :: Maybe Second-- ^ Whether to submit the transaction, and its confirmation timeout in seconds.
     }
   | Publish
     {
@@ -159,7 +160,7 @@ data TransactionCommand era =
     , change         :: AddressInEra era                -- ^ The change address.
     , strategy       :: Maybe (PublishingStrategy era)
     , bodyFile       :: TxBodyFile                      -- ^ The output file for the transaction body.
-    , submitTimeout  :: Maybe Int                       -- ^ Whether to submit the transaction, and its confirmation timeout in seconds.
+    , submitTimeout  :: Maybe Second                    -- ^ Whether to submit the transaction, and its confirmation timeout in seconds.
     , expires        :: Maybe SlotNo                    -- ^ The slot number after which minting is no longer possible.
     }
   | FindPublished

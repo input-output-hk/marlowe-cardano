@@ -53,6 +53,7 @@ library
                     , stm
                     , text
                     , time
+                    , time-units
                     , transformers
                     , transformers-base
   ghc-options       : -Wall
@@ -144,6 +145,7 @@ executable marlowe-oracle
                     , servant
                     , servant-client
                     , text
+                    , time-units
   ghc-options       : -Wall
                       -Wnoncanonical-monad-instances
                       -Wincomplete-uni-patterns
@@ -164,6 +166,7 @@ executable marlowe-finder
                     , marlowe-runtime
                     , optparse-applicative
                     , text
+                    , time-units
   ghc-options       : -Wall
                       -Wnoncanonical-monad-instances
                       -Wincomplete-uni-patterns

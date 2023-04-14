@@ -22,12 +22,12 @@ module Language.Marlowe.CLI.Command
     runCLI
     -- * Marlowe CLI Commands
   , Command(..)
-  , parseCommand
+  , mkCommandParser
   , runCommand
   ) where
 
 
-import Cardano.Api (IsShelleyBasedEra, NetworkId, ScriptDataSupportedInEra(..))
+import Cardano.Api (AlonzoEra, BabbageEra, IsShelleyBasedEra, NetworkId, ScriptDataSupportedInEra(..))
 import Control.Monad.Except (MonadError, MonadIO, liftIO, runExceptT)
 import Data.Foldable (Foldable(fold), asum)
 import Language.Marlowe.CLI.Command.Contract (ContractCommand, parseContractCommand, runContractCommand)
@@ -36,7 +36,7 @@ import Language.Marlowe.CLI.Command.Role (RoleCommand, parseRoleCommand, runRole
 import Language.Marlowe.CLI.Command.Run (RunCommand, parseRunCommand, runRunCommand)
 import Language.Marlowe.CLI.Command.Template
   (OutputFiles(..), TemplateCommand, parseTemplateCommand, parseTemplateCommandOutputFiles, runTemplateCommand)
-import Language.Marlowe.CLI.Command.Test (TestCommand, parseTestCommand, runTestCommand)
+import Language.Marlowe.CLI.Command.Test (TestCommand, mkParseTestCommand, runTestCommand)
 import Language.Marlowe.CLI.Command.Transaction (TransactionCommand, parseTransactionCommand, runTransactionCommand)
 import Language.Marlowe.CLI.Command.Util (UtilCommand, parseUtilCommand, runUtilCommand)
 import Language.Marlowe.CLI.IO (getNetworkMagic, getNodeSocketPath)
@@ -80,11 +80,12 @@ runCLI :: String  -- ^ The version of the tool.
        -> IO ()   -- ^ Action to run the tool.
 runCLI version =
   do
-    hSetBuffering stdout LineBuffering
-    hSetBuffering stderr LineBuffering
     networkId <- maybe mempty O.value <$> liftIO getNetworkMagic
     socketPath <- maybe mempty O.value <$> liftIO getNodeSocketPath
-    SomeCommand era command <- O.execParser $ parseCommand networkId socketPath version
+    commandParser <- mkCommandParser networkId socketPath version
+    hSetBuffering stdout LineBuffering
+    hSetBuffering stderr LineBuffering
+    SomeCommand era command <- O.execParser commandParser
     result <- runExceptT $ withShelleyBasedEra era $ runCommand era command
     case result of
       Right ()      -> return ()
@@ -111,12 +112,13 @@ runCommand era cmd = flip runReaderT CliEnv{..} case cmd of
   UtilCommand command                 -> runUtilCommand command
 
 -- | Command parseCommand for the tool version.
-parseCommand :: O.Mod O.OptionFields NetworkId  -- ^ The default network ID.
-             -> O.Mod O.OptionFields FilePath   -- ^ The default node socket path.
-             -> String                          -- ^ The tool version.
-             -> O.ParserInfo SomeCommand        -- ^ The command parseCommand.
-parseCommand networkId socketPath version =
-  O.info
+mkCommandParser :: O.Mod O.OptionFields NetworkId  -- ^ The default network ID.
+                -> O.Mod O.OptionFields FilePath   -- ^ The default node socket path.
+                -> String                          -- ^ The tool version.
+                -> IO (O.ParserInfo SomeCommand)   -- ^ The command parseCommand.
+mkCommandParser networkId socketPath version = do
+  someCommandParser <- mkSomeCommandParser
+  pure $ O.info
     (
           O.helper
       <*> versionOption version
@@ -142,19 +144,30 @@ parseCommand networkId socketPath version =
              )
          , pure (SomeEra ScriptDataInBabbageEra)
          ]
-    someCommandParser :: O.Parser SomeCommand
-    someCommandParser = O.BindP eraOption mkSomeCommandParser
-    mkSomeCommandParser :: SomeEra -> O.Parser SomeCommand
-    mkSomeCommandParser (SomeEra ScriptDataInAlonzoEra ) = SomeCommand ScriptDataInAlonzoEra  <$> commandParser
-    mkSomeCommandParser (SomeEra ScriptDataInBabbageEra) = SomeCommand ScriptDataInBabbageEra <$> commandParser
-    commandParser :: IsShelleyBasedEra era => O.Parser (Command era)
-    commandParser = asum
+    mkSomeCommandParser :: IO (O.Parser SomeCommand)
+    mkSomeCommandParser = do
+      let
+        parseTestCommand :: forall era. IsShelleyBasedEra era => IO (O.Parser (TestCommand era))
+        parseTestCommand = mkParseTestCommand networkId socketPath
+      -- FIXME: Is is possible to aviod this duplication?
+      -- It seems to be hard to mix `BindP` and `IO`.
+      testCommandParsers <- (,) <$> parseTestCommand <*> parseTestCommand
+      pure $ O.BindP eraOption (mkSomeCommandParser' testCommandParsers)
+
+    mkSomeCommandParser' :: (O.Parser (TestCommand AlonzoEra), O.Parser (TestCommand BabbageEra)) -> SomeEra -> O.Parser SomeCommand
+    mkSomeCommandParser' (testCommandParser, _) (SomeEra ScriptDataInAlonzoEra ) = do
+      SomeCommand ScriptDataInAlonzoEra  <$> commandParser testCommandParser
+    mkSomeCommandParser' (_, testCommandParser) (SomeEra ScriptDataInBabbageEra) = do
+      SomeCommand ScriptDataInBabbageEra <$> commandParser testCommandParser
+
+    commandParser :: IsShelleyBasedEra era => O.Parser (TestCommand era) -> O.Parser (Command era)
+    commandParser testCommandParser = asum
       [
         O.hsubparser $ fold
           [ O.commandGroup "High-level commands:"
           , O.command "run"         $ O.info (RunCommand      <$> parseRunCommand networkId socketPath )                     $ O.progDesc "Run a contract."
           , O.command "template"    $ O.info (TemplateCommand <$> parseTemplateCommand <*> parseTemplateCommandOutputFiles)  $ O.progDesc "Create a contract from a template."
-          , O.command "test"        $ O.info (TestCommand     <$> parseTestCommand networkId socketPath)                     $ O.progDesc "Test contracts."
+          , O.command "test"        $ O.info (TestCommand     <$> testCommandParser)                                         $ O.progDesc "Run test scenario described using yaml based DSL."
           ]
       , O.hsubparser $ fold
           [ O.commandGroup "Low-level commands:"

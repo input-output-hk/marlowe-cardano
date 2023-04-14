@@ -1,0 +1,54 @@
+testName: Trivial contract using CLI without roles
+
+operations:
+
+  - tag: Initialize
+    contractNickname: Trivial
+    minLovelace: 10000000
+    marloweValidators: referenceCurrent
+    contractSource:
+      template:
+        tag: "UseTrivial"
+        depositLovelace: 15000000
+        withdrawalLovelace: 15000000
+        timeout:
+          relative: 1000000
+
+  - tag: Prepare
+    contractNickname: Trivial
+    inputs:
+      - input_from_party:
+          address: Faucet
+        that_deposits: 15000000
+        of_token:
+          currency_symbol: ""
+          token_name: ""
+        into_account:
+          address: Faucet
+    minimumTime:
+      relative: -1000
+    maximumTime:
+      relative: 8000
+
+  - tag: Prepare
+    contractNickname: Trivial
+    inputs:
+      - "input_notify"
+    minimumTime:
+      relative: -1000
+    maximumTime:
+      relative: 8000
+
+  - tag: Prepare
+    contractNickname: Trivial
+    inputs:
+      - "input_notify"
+    minimumTime:
+      relative: -1000
+    maximumTime:
+      relative: 8000
+
+  - tag: AutoRun
+    contractNickname: Trivial
+
+  - tag: ReturnFunds

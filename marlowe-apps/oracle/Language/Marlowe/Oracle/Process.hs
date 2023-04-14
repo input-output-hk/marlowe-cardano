@@ -15,7 +15,7 @@ import Language.Marlowe.Core.V1.Semantics.Types (ChoiceId(ChoiceId), Input(Norma
 import Language.Marlowe.Oracle.Detect (containsOracleAction, contractReadyForOracle)
 import Language.Marlowe.Runtime.App.Stream (ContractStream(..), TChanEOF, contractFromStep)
 import Language.Marlowe.Runtime.App.Transact (applyWithEvents)
-import Language.Marlowe.Runtime.App.Types (Config)
+import Language.Marlowe.Runtime.App.Types (Config, PollingFrequency)
 import Language.Marlowe.Runtime.ChainSync.Api (Address)
 import Language.Marlowe.Runtime.Core.Api (ContractId, MarloweVersionTag(V1))
 import Network.Oracle (OracleEnv, readOracle, toOracleSymbol)
@@ -26,6 +26,7 @@ import Plutus.V2.Ledger.Api (toBuiltin)
 
 import qualified Cardano.Api as C (PaymentExtendedKey, SigningKey)
 import qualified Data.ByteString.Char8 as BS8 (pack)
+import Language.Marlowe.Runtime.App.Channel (RequeueFrequency)
 import qualified Language.Marlowe.Runtime.App.Channel as App (LastSeen(..), runContractAction, runDetection)
 
 
@@ -33,7 +34,7 @@ runDetection
   :: Party
   -> EventBackend IO r DynamicEventSelector
   -> Config
-  -> Int
+  -> PollingFrequency
   -> TChanEOF ContractId
   -> IO (TChanEOF (ContractStream 'V1))
 runDetection party =
@@ -48,7 +49,7 @@ runOracle
   -> C.SigningKey C.PaymentExtendedKey
   -> Party
   -> EventBackend IO r DynamicEventSelector
-  -> Int
+  -> RequeueFrequency
   -> Bool
   -> TChanEOF (ContractStream 'V1)
   -> TChanEOF ContractId

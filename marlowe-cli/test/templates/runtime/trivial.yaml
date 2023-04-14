@@ -1,0 +1,34 @@
+testName: Trivial contract using runtime without roles
+
+operations:
+  - tag: RuntimeCreateContract
+    contractNickname: Trivial
+    minLovelace: 2000000
+    awaitConfirmed: 120
+    contractSource:
+      template:
+        tag: "UseTrivial"
+        depositLovelace: 15000000
+        withdrawalLovelace: 15000000
+        timeout:
+          relative: 1000000
+
+  - tag: RuntimeApplyInputs
+    contractNickname: Trivial
+    awaitConfirmed: 120
+    inputs:
+      - input_from_party:
+          address: Faucet
+        that_deposits: 15000000
+        of_token:
+          currency_symbol: ""
+          token_name: ""
+        into_account:
+          address: Faucet
+
+  - tag: RuntimeApplyInputs
+    contractNickname: Trivial
+    awaitConfirmed: 120
+    inputs:
+      - "input_notify"
+

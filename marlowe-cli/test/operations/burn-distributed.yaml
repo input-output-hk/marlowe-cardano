@@ -1,0 +1,36 @@
+testName: Burning operation which involves multiple parties
+
+operations:
+
+  - tag: CreateWallet
+    walletNickname: Party-1
+
+  - tag: CreateWallet
+    walletNickname: Party-2
+
+  - tag: Mint
+    currencyNickname: Currency
+    minLovelace: 2000000
+    tokenDistribution:
+      - [Party-1, Token-1, 1]
+      - [Party-2, Token-2, 2]
+      - [Faucet, Token-3, 3]
+
+  - tag: BurnAll
+
+  - tag: CheckBalance
+    walletNickname: Party-1
+    balance:
+      - ["ADA", 2]
+
+  - tag: CheckBalance
+    walletNickname: Party-2
+    balance:
+      - ["ADA", 2]
+
+  - tag: CheckBalance
+    walletNickname: Faucet
+    balance:
+      - ["ADA", -4]
+
+  - tag: ReturnFunds

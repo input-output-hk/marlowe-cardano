@@ -1,0 +1,125 @@
+testName: Covered Call Contract using CLI
+
+operations:
+  - tag: CreateWallet
+    walletNickname: Issuer
+
+  - tag: CreateWallet
+    walletNickname: CounterParty
+
+  - tag: FundWallets
+    values:
+      - 100000000
+    walletNicknames: [Issuer, CounterParty]
+
+  # Minting tokens aParty will use in the swap
+  - tag: Mint
+    issuer: Issuer
+    currencyNickname: CurrencyA
+    minLovelace: 2000000
+    tokenDistribution:
+      - [Issuer, Globe, 300]
+
+  - tag: Mint
+    issuer: CounterParty
+    currencyNickname: CurrencyB
+    minLovelace: 2000000
+    tokenDistribution:
+      - [CounterParty, Swan, 500]
+
+  # Transaction 1. Create the Contract by Providing the Minimum ADA.
+  - tag: Initialize
+    contractNickname: Covered Call
+    marloweValidators: referenceCurrent
+    minLovelace: 2000000
+    contractSource:
+      template:
+        tag: UseCoveredCall
+        issuer:
+          address: Issuer
+        counterParty:
+          address: CounterParty
+        currency: [CurrencyB, Swan]
+        underlying: [CurrencyA, Globe]
+        amount: 300
+        strike: 500
+        issueDate:
+          relative: 18000 # now + 5h
+        maturityDate:
+          relative: 0 # now
+        settlementDate:
+          relative: 36000 # now + 10h
+
+  # Transaction 2. The issuer deposits Tokens into the Contract.
+  - tag: Prepare
+    contractNickname: Covered Call
+    inputs:
+      - input_from_party:
+          address: Issuer
+        that_deposits: 300
+        of_token:
+          currency_symbol: CurrencyA
+          token_name: Globe
+        into_account:
+          address: Issuer
+    minimumTime:
+      relative: 0
+    maximumTime:
+      relative: 3600
+
+  - tag: AutoRun
+    contractNickname: Covered Call
+
+  # Transaction 3. The Counter-Party chooses to exercise the option.
+  - tag: Prepare
+    contractNickname: Covered Call
+
+    inputs:
+      - for_choice_id:
+          choice_name: "Exercise Call"
+          choice_owner:
+            address: CounterParty
+        input_that_chooses_num: 1
+    minimumTime:
+      relative: 0
+    maximumTime:
+      relative: 3600
+
+  - tag: AutoRun
+    contractNickname: Covered Call
+
+  # Transaction 4. The Counter-Party Deposits their Tokens."
+  - tag: Prepare
+    contractNickname: Covered Call
+    inputs:
+      - input_from_party:
+          address: CounterParty
+        that_deposits: 500
+        of_token:
+          currency_symbol: CurrencyB
+          token_name: Swan
+        into_account:
+          address: CounterParty
+    minimumTime:
+      relative: 0
+    maximumTime:
+      relative: 28800
+
+  - tag: AutoRun
+    contractNickname: Covered Call
+
+  - tag: CheckBalance
+    walletNickname: Issuer
+    balance:
+      - [CurrencyB, Swan, 500]
+      - [ADA, "*"]
+
+  - tag: CheckBalance
+    walletNickname: CounterParty
+    balance:
+      - [CurrencyA, Globe, 300]
+      - [ADA, "*"]
+
+  - tag: BurnAll
+
+  - tag: ReturnFunds

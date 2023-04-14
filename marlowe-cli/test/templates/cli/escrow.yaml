@@ -1,0 +1,88 @@
+testName: CLI Escrow Contract Test
+
+operations:
+  - tag: CreateWallet
+    walletNickname: Buyer
+
+  - tag: CreateWallet
+    walletNickname: Seller
+
+  - tag: CreateWallet
+    walletNickname: Mediator
+
+  - tag: FundWallets
+    values: [10000000, 10000000, 10000000]
+    walletNicknames: [Buyer]
+
+  - tag: Initialize
+    contractNickname: Escrow
+    marloweValidators: referenceCurrent
+    minLovelace: 2000000
+    contractSource:
+      template:
+        tag: "UseEscrow"
+        seller:
+          address: Seller
+        buyer:
+          address: Buyer
+        mediator:
+          address: Mediator
+        price: 20000000
+        paymentDeadline:
+          relative: 20000
+        complaintDeadline:
+          relative: 30000
+        disputeDeadline:
+          relative: 30000
+        mediationDeadline:
+          relative: 30000
+
+  - tag: Prepare
+    contractNickname: Escrow
+    inputs:
+      - input_from_party:
+          address: Buyer
+        that_deposits: 20000000
+        of_token:
+          currency_symbol: ""
+          token_name: ""
+        into_account:
+          address: Seller
+    minimumTime:
+      relative: -100
+    maximumTime:
+      relative: 240
+
+  - tag: AutoRun
+    contractNickname: Escrow
+
+  - tag: Prepare
+    contractNickname: Escrow
+    inputs:
+      - for_choice_id:
+          choice_name: Everything is alright
+          choice_owner:
+            address: Buyer
+        input_that_chooses_num: 0
+    minimumTime:
+      relative: -100
+    maximumTime:
+      relative: 240
+
+  - tag: AutoRun
+    contractNickname: Escrow
+
+  # Buery account started with 30 ADA.
+  # Seller account was empty.
+  # We transfered 20 ADA for the goodies to the Seller.
+  - tag: CheckBalance
+    walletNickname: Buyer
+    balance:
+      - [ADA, 10]
+
+  - tag: CheckBalance
+    walletNickname: Seller
+    balance:
+      - [ADA, 20]
+
+  - tag: ReturnFunds

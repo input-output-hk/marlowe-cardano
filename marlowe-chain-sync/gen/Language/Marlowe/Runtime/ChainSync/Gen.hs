@@ -40,7 +40,8 @@ import Data.Word (Word64)
 import GHC.Show (showSpace)
 import Gen.Cardano.Api.Typed
   (genAddressShelley, genPlutusScript, genProtocolParameters, genScriptHash, genTx, genVerificationKey)
-import Language.Marlowe.Runtime.Cardano.Api (fromCardanoAddressAny, fromCardanoDatumHash, toCardanoScriptData)
+import Language.Marlowe.Runtime.Cardano.Api (fromCardanoDatumHash, toCardanoScriptData)
+import qualified Language.Marlowe.Runtime.Cardano.Api as Cardano.Api
 import Language.Marlowe.Runtime.ChainSync.Api
 import qualified Network.Protocol.ChainSeek.Types as ChainSeek
 import qualified Network.Protocol.Job.Types as Command
@@ -124,7 +125,7 @@ instance Arbitrary CertIx where
   arbitrary = CertIx <$> arbitrary
 
 instance Arbitrary Address where
-  arbitrary = hedgehog $ fromCardanoAddressAny . AddressShelley <$> genAddressShelley
+  arbitrary = hedgehog $ Cardano.Api.fromCardanoAddressAny . AddressShelley <$> genAddressShelley
 
 instance Arbitrary Assets where
   arbitrary = Assets <$> arbitrary <*> arbitrary

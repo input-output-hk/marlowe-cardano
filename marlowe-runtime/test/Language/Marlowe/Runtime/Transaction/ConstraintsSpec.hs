@@ -532,7 +532,7 @@ spec = do
         do
          inAddress' <-
            maybe (Left "Failed to convert address.") (Right . anyAddressInShelleyBasedEra)
-             $ Chain.toCardanoAddress inAddress
+             $ Chain.toCardanoAddressAny inAddress
          expected <-
            first show
              $ calculateMinimumUTxO
@@ -567,7 +567,7 @@ spec = do
         do
          inAddress' <-
            maybe (Left "Failed to convert address.") (Right . anyAddressInShelleyBasedEra)
-             $ Chain.toCardanoAddress inAddress
+             $ Chain.toCardanoAddressAny inAddress
          expected <-
            first show
              $ calculateMinimumUTxO
@@ -729,7 +729,7 @@ maxFee ProtocolParameters{..} = 2 * (txFee + round executionFee)
         _ -> 0
 
 changeAddressFromWallet :: WalletContext -> AddressInEra BabbageEra
-changeAddressFromWallet = anyAddressInShelleyBasedEra . fromJust . Chain.toCardanoAddress . changeAddress
+changeAddressFromWallet = anyAddressInShelleyBasedEra . fromJust . Chain.toCardanoAddressAny . changeAddress
 
 -- FIXME: It's risky to copy-and-paste code being tested into the test suite so that it can be used for other tests.
 findMinUtxo' :: ProtocolParameters -> AddressInEra BabbageEra -> Value -> Value

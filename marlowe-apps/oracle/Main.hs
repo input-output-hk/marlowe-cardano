@@ -11,9 +11,9 @@ module Main
 import Language.Marlowe.Core.V1.Semantics.Types (Party(Address))
 import Language.Marlowe.Core.V1.Semantics.Types.Address (deserialiseAddress)
 import Language.Marlowe.Oracle.Process (runDetection, runOracle)
-import Language.Marlowe.Runtime.App.Channel (runDiscovery)
+import Language.Marlowe.Runtime.App.Channel (RequeueFrequency(RequeueFrequency), runDiscovery')
 import Language.Marlowe.Runtime.App.Parser (addressParser, getConfigParser)
-import Language.Marlowe.Runtime.App.Types (Config)
+import Language.Marlowe.Runtime.App.Types (Config, PollingFrequency(PollingFrequency))
 import Language.Marlowe.Runtime.ChainSync.Api (Address(unAddress))
 import Network.HTTP.Client.TLS (newTlsManager)
 import Network.Oracle (makeOracle)
@@ -21,6 +21,7 @@ import Observe.Event.Render.JSON (DefaultRenderSelectorJSON(defaultRenderSelecto
 import Observe.Event.Render.JSON.Handle (simpleJsonStderrBackend)
 
 import qualified Cardano.Api as C (AsType(AsPaymentExtendedKey, AsSigningKey), readFileTextEnvelope)
+import Data.Time.Units (Second)
 import qualified Options.Applicative as O
 
 
@@ -28,6 +29,9 @@ main :: IO ()
 main =
   do
     Command{..} <- O.execParser =<< commandParser
+    let
+      pollingFrequency' = PollingFrequency pollingFrequency
+      requeueFrequency' = RequeueFrequency requeueFrequency
     key <-
       C.readFileTextEnvelope (C.AsSigningKey C.AsPaymentExtendedKey) keyFile
         >>= \case
@@ -37,17 +41,17 @@ main =
     eventBackend <- simpleJsonStderrBackend defaultRenderSelectorJSON
     manager <- newTlsManager
     oracleEnv <- makeOracle manager
-    discoveryChannel <- runDiscovery eventBackend config pollingFrequency False
-    detectionChannel <- runDetection party eventBackend config pollingFrequency discoveryChannel
-    runOracle oracleEnv config address key party eventBackend requeueFrequency False detectionChannel discoveryChannel
+    discoveryChannel <- runDiscovery' eventBackend config pollingFrequency' False
+    detectionChannel <- runDetection party eventBackend config pollingFrequency' discoveryChannel
+    runOracle oracleEnv config address key party eventBackend requeueFrequency' False detectionChannel discoveryChannel
 
 
 data Command =
   Command
   {
     config :: Config
-  , pollingFrequency :: Int
-  , requeueFrequency :: Int
+  , pollingFrequency :: Second
+  , requeueFrequency :: Second
   , address :: Address
   , keyFile :: FilePath
   }
@@ -62,8 +66,8 @@ commandParser =
       commandOptions =
         Command
           <$> configParser
-          <*> O.option O.auto (O.long "polling" <> O.value 5_000_000 <> O.metavar "SECONDS" <> O.help "The polling frequency for waiting on Marlowe Runtime.")
-          <*> O.option O.auto (O.long "requeue" <> O.value 20_000_000 <> O.metavar "SECONDS" <> O.help "The requeuing frequency for reviewing the progress of contracts on Marlowe Runtime.")
+          <*> fmap fromInteger (O.option O.auto (O.long "polling" <> O.value 5 <> O.metavar "SECONDS" <> O.help "The polling frequency for waiting on Marlowe Runtime."))
+          <*> fmap fromInteger (O.option O.auto (O.long "requeue" <> O.value 20 <> O.metavar "SECONDS" <> O.help "The requeuing frequency for reviewing the progress of contracts on Marlowe Runtime."))
           <*> O.argument addressParser (O.metavar "ADDRESS" <> O.help "The Bech32 address of the oracle.")
           <*> O.strArgument (O.metavar "KEYFILE" <> O.help "The extended payment signing key file for the oracle.")
     pure

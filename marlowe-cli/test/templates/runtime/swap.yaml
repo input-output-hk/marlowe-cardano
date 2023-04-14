@@ -1,0 +1,113 @@
+testName: Swap Contract without roles using runtime
+
+operations:
+  - tag: CreateWallet
+    walletNickname: AParty
+
+  - tag: CreateWallet
+    walletNickname: BParty
+
+  - tag: FundWallets
+    values:
+      - 100000000
+    walletNicknames: [AParty, BParty]
+
+  # Minting tokens AParty will use in the swap
+  - tag: Mint
+    issuer: AParty
+    currencyNickname: APartyCurrency
+    minLovelace: 2000000
+    tokenDistribution:
+      - [AParty, APartyTokenName, 100]
+
+  # Minting tokens BParty will use in the swap
+  - tag: Mint
+    issuer: BParty
+    currencyNickname: BPartyCurrency
+    minLovelace: 2000000
+    tokenDistribution:
+      - [BParty, BPartyTokenName, 100]
+
+  - tag: CheckBalance
+    walletNickname: AParty
+    balance:
+      - [APartyCurrency, APartyTokenName, 100]
+      - [ADA, "*"]
+
+  - tag: CheckBalance
+    walletNickname: BParty
+    balance:
+      - [BPartyCurrency, BPartyTokenName, 100]
+      - [ADA, "*"]
+
+  - tag: RuntimeCreateContract
+    contractNickname: Swap
+    minLovelace: 2000000
+    awaitConfirmed: 120
+    contractSource:
+      template:
+        tag: UseSwap
+        aParty:
+          address: AParty
+        aAsset: [APartyCurrency, APartyTokenName, 50]
+
+        # There are three timeouts in the contract calculated from this value:
+        # `timeout`, `timeout-1000`, `timeout-2000`
+        aTimeout:
+          relative: 1000000
+
+        bParty:
+          address: BParty
+        bAsset: [ BPartyCurrency, BPartyTokenName, 40]
+
+        # Threre are three timeouts in the contract calculated from this value:
+        # `timeout`, `timeout-1000`, `timeout-2000`
+        bTimeout:
+          relative: 1000000
+
+  - tag: RuntimeApplyInputs
+    contractNickname: Swap
+    submitter: AParty
+    awaitConfirmed: 120
+    inputs:
+      - input_from_party:
+          address: AParty
+        that_deposits: 50
+        of_token:
+          currency_symbol: APartyCurrency
+          token_name: APartyTokenName
+        into_account:
+          address: AParty
+
+  - tag: RuntimeApplyInputs
+    contractNickname: Swap
+    submitter: BParty
+    awaitConfirmed: 120
+    inputs:
+      - input_from_party:
+          address: BParty
+        that_deposits: 40
+        of_token:
+          currency_symbol: BPartyCurrency
+          token_name: BPartyTokenName
+        into_account:
+          address: BParty
+
+  - tag: CheckBalance
+    walletNickname: BParty
+    balance:
+      - [APartyCurrency, APartyTokenName, 50]
+      - [BPartyCurrency, BPartyTokenName, 60]
+      - [ADA, "*"]
+
+  - tag: CheckBalance
+    walletNickname: AParty
+    balance:
+      - [APartyCurrency, APartyTokenName, 50]
+      - [BPartyCurrency, BPartyTokenName, 40]
+      - [ADA, "*"]
+
+  - tag: BurnAll
+
+  - tag: ReturnFunds
+

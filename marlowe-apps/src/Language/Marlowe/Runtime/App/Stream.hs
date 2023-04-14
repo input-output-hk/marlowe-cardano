@@ -9,7 +9,9 @@
 
 module Language.Marlowe.Runtime.App.Stream
   ( ContractStream(..)
+  , ContractStreamError(..)
   , EOF(..)
+  , SyncEvent
   , TChanEOF
   , contractFromStep
   , contractFromStream
@@ -40,8 +42,8 @@ import Data.Type.Equality ((:~:)(Refl))
 import Language.Marlowe.Core.V1.Semantics (MarloweData(marloweContract))
 import Language.Marlowe.Protocol.HeaderSync.Client (MarloweHeaderSyncClient)
 import Language.Marlowe.Protocol.Sync.Client (MarloweSyncClient)
-import Language.Marlowe.Runtime.App.Types (Client)
-import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, TxId, TxOutRef(TxOutRef, txId))
+import Language.Marlowe.Runtime.App.Types (Client, PollingFrequency(PollingFrequency))
+import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainPoint, TxId, TxOutRef(TxOutRef, txId))
 import Language.Marlowe.Runtime.Core.Api
   ( ContractId
   , IsMarloweVersion(..)
@@ -52,12 +54,13 @@ import Language.Marlowe.Runtime.Core.Api
   , TransactionScriptOutput(TransactionScriptOutput, datum, utxo)
   , assertVersionsEqual
   )
-import Language.Marlowe.Runtime.Discovery.Api (ContractHeader(contractId))
+import Language.Marlowe.Runtime.Discovery.Api (ContractHeader(blockHeader, contractId))
 import Language.Marlowe.Runtime.History.Api (ContractStep(ApplyTransaction), CreateStep(CreateStep, createOutput))
 import Observe.Event.Dynamic (DynamicEventSelector(..))
 import Observe.Event.Explicit (EventBackend, addField, withEvent)
 import Observe.Event.Syntax ((≔))
 
+import Control.Arrow ((&&&))
 import qualified Data.ByteString.Lazy.Char8 as LBS8 (unpack)
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1 (Contract)
 import qualified Language.Marlowe.Protocol.HeaderSync.Client as HSync
@@ -72,6 +75,8 @@ import qualified Language.Marlowe.Protocol.Sync.Client as CSync
   )
 import Language.Marlowe.Runtime.Client (runMarloweHeaderSyncClient, runMarloweSyncClient)
 
+-- | Either a rollback or some new contract data
+type SyncEvent a = Either ChainPoint (BlockHeader, a)
 
 data EOF = EOF
 
@@ -79,48 +84,48 @@ type TChanEOF a = TChan (Either EOF a)
 
 streamAllContractIds
   :: EventBackend IO r DynamicEventSelector
-  -> Int
+  -> PollingFrequency
   -> Bool
-  -> TChanEOF ContractId
-  -> Client (Either String ())
-streamAllContractIds eventBackend pollingFrequency endOnWait = streamContractHeaders eventBackend pollingFrequency endOnWait $ Just . contractId
+  -> TChanEOF (SyncEvent ContractId)
+  -> Client (Maybe ContractStreamError)
+streamAllContractIds eventBackend pollingFrequency endOnWait = streamContractHeaders eventBackend pollingFrequency endOnWait $ Just . fmap (blockHeader &&& contractId)
 
 
 streamAllContractIdsClient
   :: EventBackend IO r DynamicEventSelector
-  -> Int
+  -> PollingFrequency
   -> Bool
-  -> TChanEOF ContractId
-  -> MarloweHeaderSyncClient Client (Either String ())
-streamAllContractIdsClient eventBackend pollingFrequency endOnWait = streamContractHeadersClient eventBackend pollingFrequency endOnWait $ Just . contractId
+  -> TChanEOF (SyncEvent ContractId)
+  -> MarloweHeaderSyncClient Client (Maybe ContractStreamError)
+streamAllContractIdsClient eventBackend pollingFrequency endOnWait = streamContractHeadersClient eventBackend pollingFrequency endOnWait $ Just . fmap (blockHeader &&& contractId)
 
 
 streamContractHeaders
   :: EventBackend IO r DynamicEventSelector
-  -> Int
+  -> PollingFrequency
   -> Bool
-  -> (ContractHeader -> Maybe a)
+  -> (Either ChainPoint ContractHeader -> Maybe a)
   -> TChanEOF a
-  -> Client (Either String ())
+  -> Client (Maybe ContractStreamError)
 streamContractHeaders eventBackend pollingFrequency endOnWait extract channel =
   runMarloweHeaderSyncClient $ streamContractHeadersClient eventBackend pollingFrequency endOnWait extract channel
 
 
 streamContractHeadersClient
   :: EventBackend IO r DynamicEventSelector
-  -> Int
+  -> PollingFrequency
   -> Bool
-  -> (ContractHeader -> Maybe a)
+  -> (Either ChainPoint ContractHeader -> Maybe a)
   -> TChanEOF a
-  -> MarloweHeaderSyncClient Client (Either String ())
-streamContractHeadersClient eventBackend pollingFrequency endOnWait extract channel =
+  -> MarloweHeaderSyncClient Client (Maybe ContractStreamError)
+streamContractHeadersClient eventBackend (PollingFrequency pollingFrequency) endOnWait extract channel =
   let
     clientIdle = HSync.SendMsgRequestNext clientNext
     clientWait
       | endOnWait = do
           atomically $ writeTChan channel $ Left EOF
-          pure $ HSync.SendMsgCancel $ HSync.SendMsgDone $ Right ()
-      | otherwise = HSync.SendMsgPoll clientNext <$ threadDelay pollingFrequency
+          pure $ HSync.SendMsgCancel $ HSync.SendMsgDone Nothing
+      | otherwise = HSync.SendMsgPoll clientNext <$ threadDelay (fromIntegral pollingFrequency)
     clientNext =
       HSync.ClientStNext
       {
@@ -131,15 +136,18 @@ streamContractHeadersClient eventBackend pollingFrequency endOnWait extract chan
                 addField event $ ("blockHeader" :: Text) ≔ blockHeader
                 addField event $ ("preFilterCount" :: Text) ≔ length results
                 let
-                  extracted = mapMaybe extract results
+                  extracted = mapMaybe (extract . Right) results
                 addField event $ ("postFilterCount" :: Text) ≔ length extracted
                 atomically $ mapM_ (writeTChan channel . Right) extracted
                 pure clientIdle
-      , HSync.recvMsgRollBackward = \blockHeader ->
+      , HSync.recvMsgRollBackward = \chainPoint ->
           liftIO . withEvent eventBackend (DynamicEventSelector "HeadersClientRollback")
             $ \event ->
               do
-                addField event $ ("blockHeader" :: Text) ≔ blockHeader
+                addField event $ ("blockHeader" :: Text) ≔ chainPoint
+                let
+                  extracted = extract $ Left chainPoint
+                atomically $ mapM_ (writeTChan channel . Right) extracted
                 pure clientIdle
       , HSync.recvMsgWait =
           liftIO
@@ -177,8 +185,9 @@ data ContractStream v =
   | ContractStreamFinish
     {
       csContractId :: ContractId
-    , csFinish :: Either String Bool  -- ^ Either an error message or an indication whether the contract closed.
+    , csFinish :: Maybe ContractStreamError
     }
+
 instance Show (ContractStream 'V1) where
   show = LBS8.unpack . encode
 
@@ -215,6 +224,16 @@ instance ToJSON (ContractStream 'V1) where
       , "finish" .= csFinish
       ]
 
+
+data ContractStreamError =
+    ContractNotFound
+  | ContractCreationRolledback
+  | ContractMarloweVersionMismatch
+  | ContractRejected
+  deriving Show
+
+instance ToJSON ContractStreamError where
+  toJSON = toJSON . show
 
 transactionIdFromStream
   :: ContractStream v
@@ -262,7 +281,7 @@ contractFromStream = fmap marloweContract . datumFromStream
 streamAllContractSteps
   :: IsMarloweVersion v
   => EventBackend IO r DynamicEventSelector
-  -> Int
+  -> PollingFrequency
   -> Bool
   -> ContractId
   -> TChanEOF (ContractStream v)
@@ -275,7 +294,7 @@ streamAllContractSteps eventBackend pollingFrequency finishOnWait =
 streamAllContractStepsClient
   :: IsMarloweVersion v
   => EventBackend IO r DynamicEventSelector
-  -> Int
+  -> PollingFrequency
   -> Bool
   -> ContractId
   -> TChanEOF (ContractStream v)
@@ -293,7 +312,7 @@ hasClosed  _ = False
 streamContractSteps
   :: IsMarloweVersion v
   => EventBackend IO r DynamicEventSelector
-  -> Int
+  -> PollingFrequency
   -> Bool
   -> Bool
   -> (Either (CreateStep v) (ContractStep v) -> Bool)
@@ -308,14 +327,14 @@ streamContractStepsClient
   :: forall v r
   .  IsMarloweVersion v
   => EventBackend IO r DynamicEventSelector
-  -> Int
+  -> PollingFrequency
   -> Bool
   -> Bool
   -> (Either (CreateStep v) (ContractStep v) -> Bool)
   -> ContractId
   -> TChanEOF (ContractStream v)
   -> MarloweSyncClient Client ()
-streamContractStepsClient eventBackend pollingFrequency finishOnClose finishOnWait accept csContractId channel =
+streamContractStepsClient eventBackend (PollingFrequency pollingFrequency) finishOnClose finishOnWait accept csContractId channel =
   let
     clientInit =
       CSync.SendMsgFollowContract csContractId
@@ -329,7 +348,7 @@ streamContractStepsClient eventBackend pollingFrequency finishOnClose finishOnWa
                   atomically . writeTChan channel
                     . Right
                     . ContractStreamFinish csContractId
-                    $ Left "Contract not found."
+                    $ Just ContractNotFound
         , CSync.recvMsgContractFound = \csBlockHeader version csCreateStep ->
             liftIO . withEvent eventBackend (DynamicEventSelector "StepsClientContractFound")
               $ \event ->
@@ -351,7 +370,7 @@ streamContractStepsClient eventBackend pollingFrequency finishOnClose finishOnWa
                                        atomically . writeTChan channel
                                          . Right
                                          . ContractStreamFinish csContractId
-                                         $ Right False
+                                         $ Just ContractMarloweVersionMismatch
                                        pure $ CSync.SendMsgDone ()
         }
     clientIdle = CSync.SendMsgRequestNext . clientNext
@@ -368,7 +387,7 @@ streamContractStepsClient eventBackend pollingFrequency finishOnClose finishOnWa
                 atomically . writeTChan channel
                   . Right
                   . ContractStreamFinish csContractId
-                  $ Left "Creation transaction was rolled back."
+                  $ Just ContractCreationRolledback
       , CSync.recvMsgRollBackward = \csBlockHeader ->
           liftIO . withEvent eventBackend (DynamicEventSelector "StepsClientApplyRollback")
             $ \event ->
@@ -399,14 +418,14 @@ streamContractStepsClient eventBackend pollingFrequency finishOnClose finishOnWa
                                 atomically . writeTChan channel
                                   . Right
                                   . ContractStreamFinish csContractId
-                                  $ Right True
+                                  $ Nothing
                                 pure $ CSync.SendMsgDone ()
                          else pure $ clientIdle version
                   else do
                          atomically . writeTChan channel
                            . Right
                            . ContractStreamFinish csContractId
-                           $ Right False
+                           $ Just ContractRejected
                          pure $ CSync.SendMsgDone ()
       , CSync.recvMsgWait =
           liftIO . withEvent eventBackend (DynamicEventSelector "StepsClientWait")
@@ -419,7 +438,7 @@ streamContractStepsClient eventBackend pollingFrequency finishOnClose finishOnWa
                   $ ContractStreamWait csContractId
                 if finishOnWait
                   then pure . CSync.SendMsgCancel $ CSync.SendMsgDone ()
-                  else clientWait version <$ threadDelay pollingFrequency
+                  else clientWait version <$ threadDelay (fromIntegral pollingFrequency)
       }
   in
     CSync.MarloweSyncClient

@@ -20,6 +20,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -38,6 +39,7 @@ module Language.Marlowe.CLI.Types
   , RedeemerInfo(..)
   , SomeMarloweTransaction(..)
   , SomeTimeout(..)
+  , SubmitMode(..)
   , ValidatorInfo(..)
     -- * eUTxOs
   , AnUTxO(..)
@@ -72,6 +74,7 @@ module Language.Marlowe.CLI.Types
   , asksEra
   , doWithCardanoEra
   , doWithShelleyBasedEra
+  , somePaymentsigningKeyToTxWitness
   , toAddressAny'
   , toAsType
   , toCardanoEra
@@ -93,9 +96,11 @@ module Language.Marlowe.CLI.Types
     -- * accessors and converters
   , anUTxOValue
   , getVerificationKey
+  , submitModeFromTimeout
   , toMarloweTimeout
   , toPOSIXTime
   , toPaymentVerificationKey
+  , toSlotRoundedMarloweTimeout
   , toUTxO
   , validatorInfoScriptOrReference
     -- * constructors and defaults
@@ -162,7 +167,7 @@ import Language.Marlowe.Core.V1.Semantics.Types (Contract, Input, State)
 import Ledger.Orphans ()
 import Plutus.V1.Ledger.Api (CurrencySymbol, Datum, DatumHash, ExBudget, Redeemer)
 import qualified Plutus.V1.Ledger.Api as P
-import Plutus.V1.Ledger.SlotConfig (SlotConfig)
+import Plutus.V1.Ledger.SlotConfig (SlotConfig, posixTimeToEnclosingSlot, slotToBeginPOSIXTime)
 
 import qualified Cardano.Api as Api (Value)
 import qualified Cardano.Api as C
@@ -184,6 +189,7 @@ import qualified Data.Map.Strict as Map
 import Data.Proxy (Proxy(Proxy))
 import Data.Time (NominalDiffTime, UTCTime, addUTCTime, getCurrentTime, nominalDiffTimeToSeconds)
 import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
+import Data.Time.Units (Second)
 import GHC.Exts (IsString(fromString))
 import GHC.Natural (Natural)
 import Language.Marlowe.CLI.Cardano.Api (toMultiAssetSupportedInEra, withShelleyBasedEra)
@@ -217,6 +223,8 @@ getVerificationKey :: SomePaymentSigningKey -> SomePaymentVerificationKey
 getVerificationKey (Left skey)  = Left $ C.getVerificationKey skey
 getVerificationKey (Right skey) = Right $ C.getVerificationKey skey
 
+somePaymentsigningKeyToTxWitness :: SomePaymentSigningKey -> CS.ShelleyWitnessSigningKey
+somePaymentsigningKeyToTxWitness = either C.WitnessPaymentKey C.WitnessPaymentExtendedKey
 
 -- | Continuations for contracts.
 type Continuations = M.Map DatumHash Contract
@@ -684,6 +692,16 @@ toPOSIXTime :: MonadIO m => SomeTimeout -> m P.POSIXTime
 toPOSIXTime t = P.POSIXTime <$> someTimeoutToMilliseconds t
 
 
+toSlotRoundedMarloweTimeout :: MonadIO m => SlotConfig -> SomeTimeout -> m E.Timeout
+toSlotRoundedMarloweTimeout slotConfig t = do
+  let
+    toSlot = posixTimeToEnclosingSlot slotConfig
+  t' <- someTimeoutToMilliseconds t
+  let
+    P.POSIXTime t'' = slotToBeginPOSIXTime slotConfig . toSlot $ P.POSIXTime t'
+  pure $ POSIXTime t''
+
+
 data PublishingStrategy era =
     PublishPermanently C.StakeAddressReference
   | PublishAtAddress (AddressInEra era)
@@ -756,7 +774,7 @@ data MintingAction era =
     Mint
     {
       maIssuer :: CurrencyIssuer era
-    , maTokenDistribution :: L.NonEmpty (P.TokenName, Natural, AddressInEra era)
+    , maTokenDistribution :: L.NonEmpty (P.TokenName, Natural, AddressInEra era, Maybe Lovelace)
     }
   -- ^ The token names, amount and a possible receipient addresses.
   | BurnAll
@@ -765,3 +783,9 @@ data MintingAction era =
     , maProviders :: L.NonEmpty (AddressInEra era, SomePaymentSigningKey)
     }
   -- ^ Burn all found tokens on the providers UTxOs of a given "private currency".
+
+data SubmitMode = DontSubmit | DoSubmit Second
+
+submitModeFromTimeout :: Maybe Second -> SubmitMode
+submitModeFromTimeout Nothing = DontSubmit
+submitModeFromTimeout (Just timeout) = DoSubmit timeout

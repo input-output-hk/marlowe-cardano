@@ -64,6 +64,7 @@ import Control.Monad.Reader (MonadReader)
 import qualified Data.List.NonEmpty as L
 import Data.List.Split (splitOn)
 import Data.Maybe (fromMaybe)
+import Data.Time.Units (Second)
 import GHC.Natural (Natural)
 import qualified Options.Applicative as O
 import qualified Options.Applicative.NonEmpty as O
@@ -80,7 +81,7 @@ data UtilCommand era =
     , lovelace        :: Lovelace                                       -- ^ The lovelace to send with each bundle of tokens.
     , change          :: AddressInEra era                               -- ^ The change address.
     , bodyFile        :: TxBodyFile                                     -- ^ The output file for the transaction body.
-    , submitTimeout   :: Maybe Int                                      -- ^ Whether to submit the transaction, and its confirmation timeout in seconds.
+    , submitTimeout   :: Maybe Second                                   -- ^ Whether to submit the transaction, and its confirmation timeout in seconds.
     }
     -- | Mint tokens.
   | Mint
@@ -93,7 +94,7 @@ data UtilCommand era =
     , count          :: Natural                                         -- ^ The number of each token to mint.
     , expires        :: Maybe SlotNo                                    -- ^ The slot number after which minting is no longer possible.
     , bodyFile       :: TxBodyFile                                      -- ^ The output file for the transaction body.
-    , submitTimeout  :: Maybe Int                                       -- ^ Whether to submit the transaction, and its confirmation timeout in seconds.
+    , submitTimeout  :: Maybe Second                                    -- ^ Whether to submit the transaction, and its confirmation timeout in seconds.
     , tokenDistribution :: L.NonEmpty (TokenName, AddressInEra era)                            -- ^ The token names.
     }
   | Burn
@@ -105,7 +106,7 @@ data UtilCommand era =
     , metadataFile          :: Maybe FilePath                           -- ^ The CIP-25 metadata for the minting, with keys for each token name.
     , bodyFile              :: TxBodyFile            -- ^ The output file for the transaction body.
     , expires               :: Maybe SlotNo                             -- ^ The slot number after which minting is no longer possible.
-    , submitTimeout         :: Maybe Int             -- ^ Whether to submit the transaction, and its confirmation timeout in seconds.
+    , submitTimeout         :: Maybe Second          -- ^ Whether to submit the transaction, and its confirmation timeout in seconds.
     }
     -- | Fund an address from a source wallet.
   | Fund
@@ -114,7 +115,7 @@ data UtilCommand era =
     , socketPath         :: FilePath                                      -- ^ The path to the node socket.
     , amount             :: Maybe Lovelace                                -- ^ The lovelace to send to the address. By default we drain out the address.
     , bodyFile           :: TxBodyFile                                    -- ^ The output file for the transaction body.
-    , submitTimeout      :: Maybe Int                                     -- ^ Whether to submit the transaction, and its confirmation timeout in seconds.
+    , submitTimeout      :: Maybe Second                                  -- ^ Whether to submit the transaction, and its confirmation timeout in seconds.
     , faucetCredentials  :: (AddressInEra era, SigningKeyFile)            -- ^ The change address.
     , destAddresses      :: [AddressInEra era]                            -- ^ The addresses.
     }
