@@ -86,8 +86,9 @@ import Contrib.Data.Foldable (foldMapFlipped, foldMapMFlipped)
 import Control.Monad (foldM, forM, forM_, unless, void, when)
 import Control.Monad.Error.Class (MonadError(throwError))
 import Data.Functor ((<&>))
+import qualified Data.List.NonEmpty as List
 import qualified Data.List.NonEmpty as List.NonEmpty
-import Data.Maybe (fromMaybe)
+import Data.Maybe (catMaybes, fromMaybe)
 import qualified Data.Text as Text
 import Data.Tuple.Extra (uncurry3)
 import qualified Language.Marlowe.CLI.Cardano.Api.Value as CV
@@ -103,6 +104,7 @@ import Ledger.Tx.CardanoAPI (fromCardanoPolicyId, fromCardanoValue)
 import Plutus.V1.Ledger.Value (valueOf)
 import qualified Plutus.V1.Ledger.Value as PV
 import qualified Plutus.V2.Ledger.Api as P
+import qualified PlutusTx.AssocMap as AssocMap
 import PlutusTx.Monoid (Group(inv))
 import System.IO.Temp (emptySystemTempFile, emptyTempFile)
 
@@ -218,6 +220,33 @@ findWalletByUniqueToken currencyNickname tokenName = do
     ("[findWalletByUniqueToken] Wallet not found for a given token: " <> show ccCurrencySymbol <> ":" <> show tokenName)
     walletInfo
 
+findWalletsByCurrencyTokens
+  :: InterpretMonad env st m era
+  => CurrencyNickname
+  -- ^ Currency to look for
+  -> Maybe [TokenName]
+  -- ^ If Nothing, then we check if the wallet has any tokens of the given currency.
+  -> m [(WalletNickname, Wallet era, List.NonEmpty P.TokenName)]
+findWalletsByCurrencyTokens currencyNickname possibleTokenNames = do
+  Currency {..} <- findCurrency currencyNickname
+  let
+    findTokens :: P.Value -> Maybe (List.NonEmpty P.TokenName)
+    findTokens value@(P.Value valueMap) = do
+      let
+        valueTokenNames = case possibleTokenNames of
+          Just tokenNames ->
+            filter (\tokenName -> valueOf value ccCurrencySymbol tokenName > 0) tokenNames
+          Nothing -> do
+            case AssocMap.lookup ccCurrencySymbol valueMap of
+              Just tokenMap -> AssocMap.keys tokenMap
+              _ -> []
+      List.NonEmpty.nonEmpty valueTokenNames
+
+  Wallets wallets <- use walletsL
+  pure $ catMaybes $ Map.toList wallets <&> \(n, wallet@(waMintedTokens -> tokensValue)) -> do
+    tokenNames <- findTokens tokensValue
+    pure (n, wallet, tokenNames)
+
 assetToPlutusValue
   :: InterpretMonad env st m era
   => Asset
@@ -298,7 +327,7 @@ interpret so@CheckBalance {..} =
         (BabbageTxBody txBody) -> txFee txBody
         (SomeTxBody txBody) -> txFee txBody
 
-    logLabeledMsg so $ "Checking balance of wallet:" <> show case woWalletNickname of WalletNickname n -> n
+    logLabeledMsg so $ "Checking balance of a wallet: " <> show case woWalletNickname of WalletNickname n -> n
     logLabeledMsg so $ "Number of already submitted transactions: " <> show (length waSubmittedTransactions)
     logLabeledMsg so $ "Total transaction fees amount: " <> do
       let

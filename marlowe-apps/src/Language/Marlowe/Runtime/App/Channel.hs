@@ -29,7 +29,7 @@ import Data.Aeson (object, (.=))
 import qualified Data.Map.Strict as M (Map, adjust, delete, insert, lookup)
 import qualified Data.Set as S (Set, insert, member)
 import Data.Text (Text)
-import Data.Time.Units (Second)
+import Data.Time.Units (Second, toMicroseconds)
 import Language.Marlowe.Core.V1.Semantics.Types (Contract)
 import Language.Marlowe.Runtime.App.Run (runClientWithConfig)
 import Language.Marlowe.Runtime.App.Stream
@@ -205,7 +205,7 @@ runContractAction selectorName eventBackend runInput (RequeueFrequency requeueFr
       | endOnWait = pure ()
       -- FIXME: This is a workaround for contract discovery not tailing past the tip of the blockchain.
       | otherwise = void . forkIO
-        $ threadDelay (fromIntegral requeueFrequency)
+        $ threadDelay (fromIntegral . toMicroseconds $ requeueFrequency)
         >> atomically (writeTChan outChannel $ Right contractId)
     go :: M.Map ContractId LastSeen -> IO ()
     go lastSeen =

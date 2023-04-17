@@ -74,7 +74,8 @@ data Wallet era =
   , waBalanceCheckBaseline      :: P.Value                  -- ^ This value should reflect all the assets from the wallet which
                                                             -- were on the chain when we started a particular scenario. Currently
                                                             -- it is only used in the case of the faucet wallet.
-  , waMintedTokens              :: P.Value                  -- ^ Tracks all the minted tokens to simplify auto run flow.
+  , waMintedTokens              :: P.Value                  -- TODO: Replace this with dynamic chain query. We have no ability to track
+                                                            -- this state really and we use this info to simplify auto run flows (apply inputs and withdrawals).
   , waSigningKey                :: SomePaymentSigningKey
   , waSubmittedTransactions     :: [SomeTxBody era]             -- ^ We keep track of all the transactions so we can
                                                             -- discard fees from the balance check calculation.
@@ -113,8 +114,8 @@ instance IsString CurrencyNickname where fromString = CurrencyNickname
 data Currency = Currency
   {
     ccCurrencySymbol :: CurrencySymbol
-  , ccIssuer         :: WalletNickname
-  , ccPolicyId       :: PolicyId
+  , ccIssuer :: WalletNickname
+  , ccPolicyId :: PolicyId
   }
 
 newtype Currencies = Currencies (Map CurrencyNickname Currency)

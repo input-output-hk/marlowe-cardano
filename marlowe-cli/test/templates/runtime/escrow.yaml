@@ -14,6 +14,10 @@ operations:
     values: [10000000, 10000000, 10000000]
     walletNicknames: [Buyer]
 
+  # We don't have a way to automatically await till the Runtime
+  # is synced the node state which we know about yet.
+  # We wait here till the Runtime catches up with the prev
+  # funding transaction.
   - tag: Sleep
     seconds: 30
 
@@ -74,17 +78,5 @@ operations:
     walletNickname: Seller
     balance:
       - [ADA, 20]
-
-  # Let's send Lovelace only UTxO to the seller
-  # so it can be used as collateral later.
-  - tag: FundWallets
-    values:
-      - 5000000
-    walletNicknames: [Seller]
-
-  - tag: CheckBalance
-    walletNickname: Seller
-    balance:
-      - [ADA, 25]
 
   - tag: ReturnFunds

@@ -143,6 +143,7 @@ library
     marlowe-cardano,
     marlowe-contracts,
     marlowe-chain-sync,
+    marlowe-chain-sync:plutus-compat,
     marlowe-client,
     marlowe-protocols,
     marlowe-test,

@@ -91,7 +91,7 @@ import Language.Marlowe.CLI.Test.CLI.Types
   , InterpretMonad
   , MarloweValidators(..)
   , PartyRef(RoleRef, WalletRef)
-  , anyCLIMarloweThread
+  , anyCLIMarloweThreadInputsApplied
   , connectionL
   , contractsL
   , costModelParamsL
@@ -428,7 +428,7 @@ interpret AutoRun {..} = do
           case (mTh, mTxIn) of
             (Nothing, Nothing) -> throwError "[AutoRun] Creation of the Marlowe thread failed."
             (Nothing, Just txIn) -> pure $ Just $ anyMarloweThreadCreated (mt, txBody) txIn
-            (Just th, _) -> case anyCLIMarloweThread (mt, txBody) mTxIn th of
+            (Just th, _) -> case anyCLIMarloweThreadInputsApplied (mt, txBody) mTxIn th of
               Just th' -> pure $ Just th'
               Nothing  -> throwError "[AutoRun] Extending of the Marlowe thread failed."
 

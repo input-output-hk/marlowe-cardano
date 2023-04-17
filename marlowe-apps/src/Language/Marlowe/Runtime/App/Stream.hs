@@ -38,6 +38,7 @@ import Control.Monad.IO.Class (liftIO)
 import Data.Aeson (ToJSON(..), encode, object, (.=))
 import Data.Maybe (isNothing, mapMaybe)
 import Data.Text (Text)
+import Data.Time.Units (toMicroseconds)
 import Data.Type.Equality ((:~:)(Refl))
 import Language.Marlowe.Core.V1.Semantics (MarloweData(marloweContract))
 import Language.Marlowe.Protocol.HeaderSync.Client (MarloweHeaderSyncClient)
@@ -125,7 +126,7 @@ streamContractHeadersClient eventBackend (PollingFrequency pollingFrequency) end
       | endOnWait = do
           atomically $ writeTChan channel $ Left EOF
           pure $ HSync.SendMsgCancel $ HSync.SendMsgDone Nothing
-      | otherwise = HSync.SendMsgPoll clientNext <$ threadDelay (fromIntegral pollingFrequency)
+      | otherwise = HSync.SendMsgPoll clientNext <$ threadDelay (fromIntegral . toMicroseconds $ pollingFrequency)
     clientNext =
       HSync.ClientStNext
       {
@@ -438,7 +439,7 @@ streamContractStepsClient eventBackend (PollingFrequency pollingFrequency) finis
                   $ ContractStreamWait csContractId
                 if finishOnWait
                   then pure . CSync.SendMsgCancel $ CSync.SendMsgDone ()
-                  else clientWait version <$ threadDelay (fromIntegral pollingFrequency)
+                  else clientWait version <$ threadDelay (fromIntegral . toMicroseconds $ pollingFrequency)
       }
   in
     CSync.MarloweSyncClient

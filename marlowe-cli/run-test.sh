@@ -203,7 +203,17 @@ cabal run marlowe-cli -- \
   --chain-seek-cmd-port "$MARLOWE_CHAIN_SYNC_COMMAND_PORT" \
   ./test/templates/cli/role-based/escrow.yaml
 
-# WIP: PLT-5528
+cabal run marlowe-cli -- \
+  --babbage-era test \
+  --testnet-magic 2 \
+  --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+  --faucet-key "$FAUCET_SKEY_FILE" \
+  --faucet-address "$FAUCET_VKEY" \
+  --marlowe-runtime-port "$MARLOWE_RT_PORT" \
+  --chain-seek-sync-port "$MARLOWE_CHAIN_SYNC_PORT" \
+  --chain-seek-cmd-port "$MARLOWE_CHAIN_SYNC_COMMAND_PORT" \
+  ./test/templates/runtime/role-based/escrow.yaml
+
 # cabal run marlowe-cli -- \
 #   --babbage-era test \
 #   --testnet-magic 2 \
@@ -213,4 +223,4 @@ cabal run marlowe-cli -- \
 #   --marlowe-runtime-port "$MARLOWE_RT_PORT" \
 #   --chain-seek-sync-port "$MARLOWE_CHAIN_SYNC_PORT" \
 #   --chain-seek-cmd-port "$MARLOWE_CHAIN_SYNC_COMMAND_PORT" \
-#   ./test/templates/runtime/role-based/escrow.yaml
+#   ./test/templates/runtime/role-based/swap.yaml

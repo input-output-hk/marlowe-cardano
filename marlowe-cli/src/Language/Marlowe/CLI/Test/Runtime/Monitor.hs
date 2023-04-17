@@ -21,6 +21,7 @@ module Language.Marlowe.CLI.Test.Runtime.Monitor
   where
 
 import Contrib.Control.Concurrent (threadDelay)
+import qualified Cardano.Api as C
 import Contrib.Control.Concurrent.Async (altIO)
 import Control.Concurrent (forkIO)
 import Control.Concurrent.Async (async, waitCatch)
@@ -30,10 +31,16 @@ import Control.Error (note)
 import Control.Monad (forever, join, void)
 import Control.Monad.Except (MonadError(throwError))
 import Control.Monad.Loops (untilJust)
+import Data.Aeson (toJSON)
+import qualified Data.Aeson.OneLine as A
 import Data.Foldable.Extra (for_)
+import Data.Functor ((<&>))
 import qualified Data.Map.Strict as M
 import qualified Data.Map.Strict as Map
 import Data.Time.Units (Second)
+import qualified Data.Text as T
+import Data.Time.Units (Second, TimeUnit(fromMicroseconds, toMicroseconds))
+>>>>>>> 910aca7a0 ( Implement pooc role based runtime test and add withdraw to the marlowe thread structure)
 import Data.Traversable (for)
 import Language.Marlowe.CLI.Test.Contract (ContractNickname)
 import Language.Marlowe.CLI.Test.Log (logTraceMsg)
@@ -43,19 +50,22 @@ import Language.Marlowe.CLI.Test.Runtime.Types
   , RuntimeMonitor(RuntimeMonitor)
   , RuntimeMonitorInput(RuntimeMonitorInput)
   , RuntimeMonitorState(RuntimeMonitorState)
-  , anyRuntimeMarloweThread
+  , anyRuntimeMonitorMarloweThreadInputsApplied
   )
-import Language.Marlowe.Cardano.Thread (anyMarloweThreadCreated)
+import Language.Marlowe.Cardano.Thread
+  (anyMarloweThreadCreated, anyMarloweThreadRedeemed, marloweThreadToJSON, overAnyMarloweThread)
 import Language.Marlowe.Runtime.App.Channel (mkDetection)
 import Language.Marlowe.Runtime.App.Stream (ContractStream(..), ContractStreamError(..), EOF)
 import Language.Marlowe.Runtime.App.Types (Config, PollingFrequency(PollingFrequency))
-import qualified Language.Marlowe.Runtime.Cardano.Api as Runtime.Cardano.Api
+import qualified Language.Marlowe.Runtime.Cardano.Api as RCA
+import qualified Language.Marlowe.Runtime.ChainSync.Api as MCS
 import Language.Marlowe.Runtime.Core.Api (ContractId, MarloweVersionTag(V1))
 import qualified Language.Marlowe.Runtime.Core.Api as R
 import qualified Language.Marlowe.Runtime.History.Api as RH
+import qualified Language.Marlowe.Runtime.Plutus.V2.Api as RP
 import Observe.Event.Backend (unitEventBackend)
 
-mkRuntimeMonitor ::Config -> IO (RuntimeMonitorInput, RuntimeMonitorState lang era, RuntimeMonitor)
+mkRuntimeMonitor ::Config -> IO (RuntimeMonitorInput, RuntimeMonitorState, RuntimeMonitor)
 mkRuntimeMonitor config = do
   -- Runtime intput channel and detection input channel differ:
   --  * test runner gonna put contract id only once into the runtime input channel
@@ -73,7 +83,6 @@ mkRuntimeMonitor config = do
     pollingFrequency = PollingFrequency pollingFrequencySeconds
 
   (contractStream, detection) <- mkDetection (const True) eventBackend config pollingFrequency detectionInputChannel
-
   let
     runtime = untilJust $ do
       join $ atomically do
@@ -125,35 +134,35 @@ mkRuntimeMonitor config = do
     , RuntimeMonitor (runtime `altIO` detection' `altIO` input)
     )
 
-data RuntimeContractUpdate era lang
+data RuntimeContractUpdate
   = RuntimeContractUpdate
       { rcuContractId :: ContractId
-      , rcuContractInfo :: RuntimeContractInfo era lang
+      , rcuContractInfo :: RuntimeContractInfo
       }
   | Revisit ContractId
 
 processMarloweStreamEvent
-  :: forall era lang
+  :: forall
    . M.Map ContractId ContractNickname
-  -> M.Map ContractNickname (RuntimeContractInfo era lang)
+  -> M.Map ContractNickname RuntimeContractInfo
   -> Either EOF (ContractStream 'V1)
-  -> Either RuntimeError (Maybe (RuntimeContractUpdate era lang))
+  -> Either RuntimeError (Maybe RuntimeContractUpdate)
 processMarloweStreamEvent knownContracts contracts = do
   let
     scriptOutputToCardanoTxIn R.TransactionScriptOutput{ R.utxo=utxo } =
-      case Runtime.Cardano.Api.toCardanoTxIn utxo of
+      case RCA.toCardanoTxIn utxo of
         Just txIn -> pure txIn
         Nothing -> throwError $ RuntimeExecutionFailure "Failed to convert runtime utxo to Cardano TxIn"
 
     lookupContractNickname :: ContractId -> Maybe ContractNickname
     lookupContractNickname contractId = M.lookup contractId knownContracts
 
-    lookupContractInfo :: ContractId -> Maybe (RuntimeContractInfo era lang)
+    lookupContractInfo :: ContractId -> Maybe RuntimeContractInfo
     lookupContractInfo contractId = do
       contractNickname <- lookupContractNickname contractId
       M.lookup contractNickname contracts
 
-    getContractInfo :: ContractId -> Either RuntimeError (RuntimeContractInfo era lang)
+    getContractInfo :: ContractId -> Either RuntimeError RuntimeContractInfo
     getContractInfo contractId = note (RuntimeContractNotFound contractId) $ lookupContractInfo contractId
 
     returnContractUpdate contractId contractInfo = do
@@ -163,19 +172,40 @@ processMarloweStreamEvent knownContracts contracts = do
     Left _ -> throwError $ RuntimeExecutionFailure "Detection thread finished unexpectedly.."
     Right ev -> case ev of
       ContractStreamStart{csContractId, csCreateStep=RH.CreateStep{ RH.createOutput=scriptOutput}} -> do
-        txIn <- scriptOutputToCardanoTxIn scriptOutput
-        let th = anyMarloweThreadCreated () txIn
+        txIn@(C.TxIn txId _) <- scriptOutputToCardanoTxIn scriptOutput
+        let th = anyMarloweThreadCreated txId txIn
         returnContractUpdate csContractId (RuntimeContractInfo th)
-      ContractStreamContinued{csContractStep=RH.RedeemPayout{}} -> pure Nothing
-      ContractStreamContinued{csContractId, csContractStep=RH.ApplyTransaction R.Transaction {R.inputs=inputs, R.output=R.TransactionOutput{ scriptOutput=scriptOutput}}} -> do
-        mTxIn <- for scriptOutput scriptOutputToCardanoTxIn
+
+      ContractStreamContinued{csContractId, csContractStep=RH.RedeemPayout RH.RedeemStep { RH.redeemingTx=txId, datum=MCS.AssetId { tokenName }}} -> do
         RuntimeContractInfo th <- getContractInfo csContractId
-        case anyRuntimeMarloweThread mTxIn inputs th of
+        let
+          tokenName' = RP.toPlutusTokenName tokenName
+        case RCA.toCardanoTxId txId of
+          Just txId' -> do
+            let
+              th' = anyMarloweThreadRedeemed txId' tokenName' th
+            returnContractUpdate csContractId (RuntimeContractInfo th')
+          Nothing -> throwError $ RuntimeExecutionFailure "Failed to convert runtime txId to Cardano TxId"
+      ContractStreamContinued{csContractId, csContractStep=RH.ApplyTransaction R.Transaction {R.transactionId=txId, R.inputs=inputs, R.output=R.TransactionOutput{ scriptOutput=scriptOutput}}} -> do
+        possibleTxIn <- for scriptOutput scriptOutputToCardanoTxIn
+        RuntimeContractInfo th <- getContractInfo csContractId
+        let
+          possibleTxIx = possibleTxIn <&> \(C.TxIn _ txIx) -> txIx
+        case RCA.toCardanoTxId txId >>= \txId' -> anyRuntimeMonitorMarloweThreadInputsApplied txId' possibleTxIx inputs th of
           Just th' -> returnContractUpdate csContractId (RuntimeContractInfo th')
           Nothing -> do
-            throwError $ RuntimeExecutionFailure $ "Thread continuation failed: " <> show csContractId
+            let
+              threadJson = overAnyMarloweThread marloweThreadToJSON th
+              inputsJson = toJSON inputs
+              jsonStr = T.unpack . A.renderValue
+              threadStr = jsonStr threadJson
+              inputsStr = jsonStr inputsJson
+
+            throwError $ RuntimeExecutionFailure $ "Thread continuation failed: " <> show csContractId <> ", " <> threadStr <> ", " <> inputsStr
       ContractStreamRolledBack{csContractId} -> do
         -- Is it even possible that we have not yet started the thread?
+        for_ (lookupContractNickname csContractId) \contractNickname ->
+          throwError $ RuntimeRollbackError contractNickname
         case lookupContractNickname csContractId of
           Just contractNickname -> throwError $ RuntimeRollbackError contractNickname
           Nothing -> pure Nothing
@@ -190,4 +220,5 @@ processMarloweStreamEvent knownContracts contracts = do
             throwError $ RuntimeContractNotFound csContractId
           err -> do
             throwError $ RuntimeExecutionFailure $ "Contract error: " <> show err
+
 

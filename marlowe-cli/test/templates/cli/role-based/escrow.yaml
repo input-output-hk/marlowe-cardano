@@ -1,0 +1,122 @@
+testName: CLI Escrow Contract Test with role tokens
+
+operations:
+  - tag: CreateWallet
+    walletNickname: Buyer
+
+  - tag: CreateWallet
+    walletNickname: Seller
+
+  - tag: CreateWallet
+    walletNickname: Mediator
+
+  - tag: FundWallets
+    values: [10000000, 10000000, 10000000]
+    walletNicknames: [Buyer]
+
+  # Minting role tokens
+  - tag: Mint
+    issuer: Faucet
+    currencyNickname: ContractCurrency
+    minLovelace: 2000000
+    tokenDistribution:
+      - [Buyer, BuyerRole, 1]
+      - [Seller, SellerRole, 1]
+      - [Mediator, MediatorRole, 1]
+
+  - tag: Initialize
+    contractNickname: Escrow
+    marloweValidators: referenceCurrent
+    minLovelace: 2000000
+    roleCurrency: ContractCurrency
+    submitter: Faucet
+    contractSource:
+      template:
+        tag: "UseEscrow"
+        seller:
+          role_token: SellerRole
+        buyer:
+          role_token: BuyerRole
+        mediator:
+          role_token: MediatorRole
+        price: 20000000
+        paymentDeadline:
+          relative: 20000
+        complaintDeadline:
+          relative: 30000
+        disputeDeadline:
+          relative: 30000
+        mediationDeadline:
+          relative: 30000
+
+  - tag: Prepare
+    contractNickname: Escrow
+    inputs:
+      - input_from_party:
+          role_token: BuyerRole
+        that_deposits: 20000000
+        of_token:
+          currency_symbol: ""
+          token_name: ""
+        into_account:
+          role_token: SellerRole
+    minimumTime:
+      relative: -100
+    maximumTime:
+      relative: 240
+
+  - tag: AutoRun
+    contractNickname: Escrow
+
+  - tag: Prepare
+    contractNickname: Escrow
+    inputs:
+      - for_choice_id:
+          choice_name: Everything is alright
+          choice_owner:
+            role_token: BuyerRole
+        input_that_chooses_num: 0
+    minimumTime:
+      relative: -100
+    maximumTime:
+      relative: 240
+
+  - tag: AutoRun
+    contractNickname: Escrow
+
+  # * Buery account started with 30 ADA.
+  # * Seller account received 4 ADA which so we have a utxo for withdrawal collateral.
+  # * Every account received role token and 2 ADA min utxo.
+  # * We transfered 20 ADA for the goodies to the Seller.
+  - tag: CheckBalance
+    walletNickname: Buyer
+    balance:
+      - [ADA, 12]
+      - [ContractCurrency, BuyerRole, 1]
+
+  - tag: CheckBalance
+    walletNickname: Seller
+    balance:
+      - [ADA, 2]
+      - [ContractCurrency, SellerRole, 1]
+
+  # Let's send Lovelace only UTxO to the seller
+  # so it can be used as collateral later.
+  - tag: FundWallets
+    values:
+      - 5000000
+    walletNicknames: [Seller]
+
+  - tag: Withdraw
+    contractNickname: Escrow
+    walletNickname: Seller
+
+  - tag: CheckBalance
+    walletNickname: Seller
+    balance:
+      - [ADA, 27]
+      - [ContractCurrency, SellerRole, 1]
+
+  - tag: BurnAll
+
+  - tag: ReturnFunds

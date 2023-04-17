@@ -43,7 +43,7 @@ import qualified Language.Marlowe.CLI.Test.Operation.Aeson as Operation
 import Language.Marlowe.CLI.Test.Wallet.Types (Currencies, CurrencyNickname, WalletNickname, Wallets)
 import qualified Language.Marlowe.CLI.Test.Wallet.Types as Wallet
 import Language.Marlowe.CLI.Types (CliError)
-import Language.Marlowe.Cardano.Thread (AnyMarloweThread, MarloweThread, anyMarloweThread)
+import Language.Marlowe.Cardano.Thread (AnyMarloweThread, MarloweThread, anyMarloweThreadInputsApplied)
 import qualified Language.Marlowe.Core.V1.Semantics.Types as M
 import qualified Language.Marlowe.Protocol.Client as Marlowe.Protocol
 import qualified Language.Marlowe.Protocol.Types as Marlowe.Protocol
@@ -52,18 +52,44 @@ import Ledger.Orphans ()
 import qualified Network.Protocol.Connection as Network.Protocol
 import Network.Protocol.Handshake.Types (Handshake)
 
--- Curretly we don't use any extra execution information from the Runtime.
-type RuntimeTxInfo = ()
+-- | We use TxId in the thread to perform awaits for a particular marlowe transaction.
+type RuntimeMonitorTxInfo = C.TxId
 
-type RuntimeMarloweThread lang era = MarloweThread RuntimeTxInfo lang era
+type RuntimeMonitorMarloweThread = MarloweThread RuntimeMonitorTxInfo
 
-type AnyRuntimeMarloweThread lang era = AnyMarloweThread RuntimeTxInfo lang era
+type AnyRuntimeMonitorMarloweThread = AnyMarloweThread RuntimeMonitorTxInfo
 
-anyRuntimeMarloweThread :: Maybe C.TxIn
-                        -> [M.Input]
-                        -> AnyRuntimeMarloweThread lang era
-                        -> Maybe (AnyRuntimeMarloweThread lang era)
-anyRuntimeMarloweThread = anyMarloweThread ()
+anyRuntimeMonitorMarloweThreadInputsApplied
+  :: C.TxId
+  -> Maybe C.TxIx
+  -> [M.Input]
+  -> AnyRuntimeMonitorMarloweThread
+  -> Maybe AnyRuntimeMonitorMarloweThread
+anyRuntimeMonitorMarloweThreadInputsApplied txId possibleTxIx = do
+  let
+    possibleTxIn = C.TxIn txId <$> possibleTxIx
+  anyMarloweThreadInputsApplied txId possibleTxIn
+
+data RuntimeTxInfo = RuntimeTxInfo
+  { rtConfirmed :: Bool
+  , rtTxId :: C.TxId
+  } deriving stock (Eq, Generic, Show)
+
+type RuntimeInterpreterMarloweThread = MarloweThread RuntimeTxInfo
+
+type AnyRuntimeInterpreterMarloweThread = AnyMarloweThread RuntimeTxInfo
+
+anyRuntimeInterpreterMarloweThreadInputsApplied
+  :: C.TxId
+  -> Maybe C.TxIx
+  -> [M.Input]
+  -> AnyRuntimeInterpreterMarloweThread
+  -> Maybe AnyRuntimeInterpreterMarloweThread
+anyRuntimeInterpreterMarloweThreadInputsApplied txId possibleTxIx = do
+  let
+    possibleTxIn = C.TxIn txId <$> possibleTxIx
+    txInfo = RuntimeTxInfo False txId
+  anyMarloweThreadInputsApplied txInfo possibleTxIn
 
 data RuntimeError
   = RuntimeConnectionError
@@ -72,26 +98,28 @@ data RuntimeError
   | RuntimeRollbackError ContractNickname
   deriving stock (Eq, Generic, Show)
 
--- FIXME: Drop this
-newtype RuntimeContractInfo lang era =
-  RuntimeContractInfo { _rcMarloweThread :: AnyRuntimeMarloweThread lang era }
+-- data RedeemStep v = RedeemStep
+--   { utxo        :: TxOutRef
+--   , redeemingTx :: TxId
+--   , datum       :: PayoutDatum v
+--   } deriving Generic
+
+newtype RuntimeContractInfo =
+  RuntimeContractInfo
+    { _rcMarloweThread :: AnyRuntimeMonitorMarloweThread
+    }
 
 newtype RuntimeMonitorInput = RuntimeMonitorInput (TChan (ContractNickname, ContractId))
 
-newtype RuntimeMonitorState lang era = RuntimeMonitorState (TVar (Map ContractNickname (RuntimeContractInfo lang era)))
+newtype RuntimeMonitorState = RuntimeMonitorState (TVar (Map ContractNickname RuntimeContractInfo))
 
 newtype RuntimeMonitor = RuntimeMonitor { runMonitor :: IO RuntimeError }
 
 defaultOperationTimeout :: Second
 defaultOperationTimeout = 30
 
-data RuntimeOperation =
-    RuntimeAwaitCreated
-    {
-      roContractNickname :: ContractNickname
-    , roTimeout :: Maybe A.Second -- ^ Submission timeout.
-    }
-  | RuntimeAwaitInputsApplied
+data RuntimeOperation
+  = RuntimeAwaitTxsConfirmed
     {
       roContractNickname :: ContractNickname
     , roTimeout :: Maybe A.Second
@@ -104,18 +132,31 @@ data RuntimeOperation =
   | RuntimeCreateContract
     {
       roContractNickname :: ContractNickname
-    , roSubmitter :: Maybe WalletNickname -- ^ A wallet which gonna submit the initial transaction.
+    , roSubmitter :: Maybe WalletNickname
+    -- ^ A wallet which gonna submit the initial transaction.
     , roMinLovelace :: Word64
-    , roRoleCurrency :: Maybe CurrencyNickname  -- ^ If contract uses roles then currency is required.
-    , roContractSource :: Contract.Source         -- ^ The Marlowe contract to be created.
-    , roAwaitConfirmed :: Maybe A.Second -- ^ How long to wait for the transaction to be confirmed in the Runtime. By default we don't wait.
+    , roRoleCurrency :: Maybe CurrencyNickname
+    -- ^ If contract uses roles then currency is required.
+    , roContractSource :: Contract.Source
+    -- ^ The Marlowe contract to be created.
+    , roAwaitConfirmed :: Maybe A.Second
+    -- ^ How long to wait for the transaction to be confirmed in the Runtime. By default we don't wait.
     }
   | RuntimeApplyInputs
     {
       roContractNickname :: ContractNickname
-    , roInputs :: [ParametrizedMarloweJSON]  -- ^ Inputs to the contract.
-    , roSubmitter :: Maybe WalletNickname -- ^ A wallet which gonna submit the initial transaction.
-    , roAwaitConfirmed :: Maybe A.Second -- ^ How long to wait for the transaction to be confirmed in the Runtime. By default we wait 30s.
+    , roInputs :: [ParametrizedMarloweJSON]
+    -- ^ Inputs to the contract.
+    , roSubmitter :: Maybe WalletNickname
+    -- ^ A wallet which gonna submit the initial transaction.
+    , roAwaitConfirmed :: Maybe A.Second
+    -- ^ How long to wait for the transaction to be confirmed in the Runtime. By default we don't wait.
+    }
+  | RuntimeWithdraw
+    {
+      roContractNickname :: ContractNickname
+    , roWallets :: Maybe [WalletNickname] -- ^ Wallets with role tokens. By default we find all the role tokens and use them.
+    , roAwaitConfirmed :: Maybe A.Second -- ^ How long to wait for the transactions to be confirmed in the Runtime. By default we don't wait.
     }
   deriving stock (Eq, Generic, Show)
 
@@ -129,27 +170,29 @@ instance ToJSON RuntimeOperation where
 
 data ContractInfo = ContractInfo
   { ciContractId :: ContractId
-  , ciAppliedInputs :: [M.Input] -- ^ Inputs which we applied. Possibly unconfirmed yet.
+  , ciRoleCurrency :: Maybe CurrencyNickname  -- ^ If contract uses roles then currency is required.
+  -- , ciAppliedInputs :: [M.Input] -- ^ Inputs which we applied. Possibly unconfirmed yet.
+  , ciMarloweThread :: AnyRuntimeInterpreterMarloweThread
   }
 
-class HasInterpretState st lang era | st -> lang era where
+class HasInterpretState st era | st -> era where
   knownContractsL :: Lens' st (Map ContractNickname ContractInfo)
   walletsL :: Lens' st (Wallets era)
   currenciesL :: Lens' st Currencies
 
-class HasInterpretEnv env lang era | env -> lang era where
-  runtimeMonitorStateT :: Traversal' env (RuntimeMonitorState lang era)
+class HasInterpretEnv env era | env -> era where
+  runtimeMonitorStateT :: Traversal' env RuntimeMonitorState
   runtimeMonitorInputT :: Traversal' env RuntimeMonitorInput
   runtimeClientConnectorT :: Traversal' env (Network.Protocol.ClientConnector (Handshake Marlowe.Protocol.MarloweRuntime) Marlowe.Protocol.MarloweRuntimeClient IO)
   executionModeL :: Lens' env ExecutionMode
   connectionT :: Traversal' env (LocalNodeConnectInfo CardanoMode)
   eraL :: Lens' env (ScriptDataSupportedInEra era)
 
-type InterpretMonad env st m lang era =
+type InterpretMonad env st m era =
   ( MonadState st m
-  , HasInterpretState st lang era
+  , HasInterpretState st era
   , MonadReader env m
-  , HasInterpretEnv env lang era
+  , HasInterpretEnv env era
   , Wallet.InterpretMonad env st m era
   , MonadError CliError m
   , MonadIO m

@@ -120,11 +120,10 @@ cliConstructors =
 
 runtimeConstructors :: [String]
 runtimeConstructors =
-  [ "RuntimeAwaitCreated"
-  , "RuntimeAwaitInputsApplied"
-  , "RuntimeAwaitClosed"
+  [ "RuntimeAwaitClosed"
   , "RuntimeCreateContract"
   , "RuntimeApplyInputs"
+  , "RuntimeWithdraw"
   ]
 
 walletConstructors :: [String]
@@ -170,8 +169,8 @@ data InterpretState lang era = InterpretState
 
 data InterpretEnv lang era = InterpretEnv
   {
-    _ieRuntimeMonitor :: Maybe (RuntimeMonitorInput, RuntimeMonitorState lang era)
-  , _ieRuntimeClientConnector :: Maybe (Network.Protocol.ClientConnector (Handshake Marlowe.Protocol.MarloweRuntime) Marlowe.Protocol.MarloweRuntimeClient IO)
+    _ieRuntimeMonitor :: Maybe (RuntimeMonitorInput, RuntimeMonitorState)
+  , _ieRuntimeClientConnector :: Maybe (Network.Protocol.SomeClientConnector Marlowe.Protocol.MarloweRuntimeClient IO)
   , _ieExecutionMode :: ExecutionMode
   , _ieConnection :: LocalNodeConnectInfo CardanoMode
   , _ieEra :: ScriptDataSupportedInEra era
@@ -216,12 +215,12 @@ instance CLI.HasInterpretState (InterpretState lang era) lang era where
   contractsL = isCLIContracts
   publishedScriptsL = isPublishedScripts
 
-instance Runtime.HasInterpretState (InterpretState lang era) lang era where
+instance Runtime.HasInterpretState (InterpretState lang era) era where
   knownContractsL = isKnownContracts
   walletsL = isWallets
   currenciesL = isCurrencies
 
-instance Runtime.HasInterpretEnv (InterpretEnv lang era) lang era where
+instance Runtime.HasInterpretEnv (InterpretEnv lang era) era where
   runtimeMonitorStateT = ieRuntimeMonitor <<< _Just <<< _2
   runtimeMonitorInputT = ieRuntimeMonitor <<< _Just <<< _1
   runtimeClientConnectorT = ieRuntimeClientConnector . _Just

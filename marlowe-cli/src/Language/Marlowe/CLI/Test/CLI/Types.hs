@@ -19,7 +19,7 @@
 module Language.Marlowe.CLI.Test.CLI.Types
   where
 
-import Cardano.Api (CardanoMode, LocalNodeConnectInfo, Lovelace, PolicyId, ScriptDataSupportedInEra)
+import Cardano.Api (CardanoMode, LocalNodeConnectInfo, Lovelace, ScriptDataSupportedInEra)
 import qualified Cardano.Api as C
 import Control.Lens (Lens')
 import Control.Monad.Except (MonadError)
@@ -53,8 +53,8 @@ import Language.Marlowe.CLI.Types
   )
 import Language.Marlowe.Cardano.Thread
   ( AnyMarloweThread
-  , MarloweThread(Closed, Created, InputsApplied)
-  , anyMarloweThread
+  , MarloweThread(Closed, Created, InputsApplied, Redemption)
+  , anyMarloweThreadInputsApplied
   , marloweThreadInitialTxIn
   , overAnyMarloweThread
   )
@@ -63,31 +63,34 @@ import qualified Language.Marlowe.Runtime.Cardano.Api as Runtime.Api
 import Language.Marlowe.Runtime.Core.Api (ContractId)
 import qualified Language.Marlowe.Runtime.Core.Api as Runtime.Api
 import Ledger.Orphans ()
-import Plutus.V1.Ledger.Api (CostModelParams, CurrencySymbol, ProtocolVersion, TokenName)
+import Plutus.V1.Ledger.Api (CostModelParams, ProtocolVersion, TokenName)
 import Plutus.V1.Ledger.SlotConfig (SlotConfig)
 
 
 type CLITxInfo lang era = (MarloweTransaction lang era, C.TxBody era)
 
-type CLIMarloweThread lang era status = MarloweThread (CLITxInfo lang era) lang era status
+type CLIMarloweThread lang era status = MarloweThread (CLITxInfo lang era) status
 
 getCLIMarloweThreadTransaction :: CLIMarloweThread lang era status -> MarloweTransaction lang era
-getCLIMarloweThreadTransaction (Created (mt, _) _)           = mt
+getCLIMarloweThreadTransaction (Created (mt, _) _)  = mt
 getCLIMarloweThreadTransaction (InputsApplied (mt, _) _ _ _) = mt
-getCLIMarloweThreadTransaction (Closed (mt, _) _ _)          = mt
+getCLIMarloweThreadTransaction (Redemption (mt, _) _ _) = mt
+getCLIMarloweThreadTransaction (Closed (mt, _) _ _) = mt
 
 getCLIMarloweThreadTxBody :: CLIMarloweThread lang era status -> C.TxBody era
-getCLIMarloweThreadTxBody (Created (_, txBody) _)           = txBody
+getCLIMarloweThreadTxBody (Created (_, txBody) _) = txBody
 getCLIMarloweThreadTxBody (InputsApplied (_, txBody) _ _ _) = txBody
-getCLIMarloweThreadTxBody (Closed (_, txBody) _ _)          = txBody
+getCLIMarloweThreadTxBody (Redemption (_, txBody) _ _) = txBody
+getCLIMarloweThreadTxBody (Closed (_, txBody) _ _) = txBody
 
-type AnyCLIMarloweThread lang era = AnyMarloweThread (CLITxInfo lang era) lang era
+type AnyCLIMarloweThread lang era = AnyMarloweThread (CLITxInfo lang era)
 
-anyCLIMarloweThread :: CLITxInfo lang era
-                    -> Maybe C.TxIn
-                    -> AnyCLIMarloweThread lang era
-                    -> Maybe (AnyCLIMarloweThread lang era)
-anyCLIMarloweThread txInfo@(MarloweTransaction{..}, _) mTxIn = anyMarloweThread txInfo mTxIn mtInputs
+anyCLIMarloweThreadInputsApplied
+  :: CLITxInfo lang era
+  -> Maybe C.TxIn
+  -> AnyCLIMarloweThread lang era
+  -> Maybe (AnyCLIMarloweThread lang era)
+anyCLIMarloweThreadInputsApplied txInfo@(MarloweTransaction{..}, _) mTxIn = anyMarloweThreadInputsApplied txInfo mTxIn mtInputs
 
 data MarloweValidators
   = InTxCurrentValidators                           -- ^ Embed Marlowe validator in the applying transaction.
@@ -193,13 +196,6 @@ data CLIContractInfo lang era = CLIContractInfo
   , ciThread                  :: Maybe (AnyCLIMarloweThread lang era)
   , ciWithdrawalsCheckPoints  :: Map TokenName C.TxId -- ^ Track a point of the last withdrawal on the chain.
   , ciSubmitter               :: WalletNickname
-  }
-
-data Currency = Currency
-  {
-    ccCurrencySymbol :: CurrencySymbol
-  , ccIssuer         :: WalletNickname
-  , ccPolicyId       :: PolicyId
   }
 
 data MarloweReferenceScripts = MarloweReferenceScripts
