@@ -1,12 +1,27 @@
 {-# LANGUAGE Arrows #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 module Main
   where
 
 import Control.Concurrent.Component
+import Control.Concurrent.Component.Probes (ProbeServerDependencies(..), probeServer)
+import Control.Concurrent.Component.UnliftIO (convertComponent)
+import Control.Monad.Base (MonadBase)
+import Control.Monad.Event.Class
+import Control.Monad.IO.Class (MonadIO, liftIO)
+import Control.Monad.Trans.Control (MonadBaseControl)
+import Control.Monad.Trans.Reader (ReaderT(..))
+import Control.Monad.With
 import Data.Aeson.Encode.Pretty (encodePretty)
 import Data.Either (fromRight)
+import Data.GeneralAllocate
 import qualified Data.Text.Lazy as T
 import Data.Text.Lazy.Encoding (decodeUtf8)
 import qualified Data.Text.Lazy.IO as TL
@@ -27,8 +42,9 @@ import Network.Protocol.Job.Client (jobClientPeer)
 import Network.Protocol.Job.Server (jobServerPeer)
 import Network.Protocol.Query.Client (QueryClient, liftQuery, queryClientPeer)
 import Network.Socket (HostName, PortNumber)
-import Observe.Event.Backend (injectSelector, narrowEventBackend)
-import Observe.Event.Component (LoggerDependencies(..), logger)
+import Observe.Event (EventBackend)
+import Observe.Event.Backend (hoistEventBackend, injectSelector)
+import Observe.Event.Component (LoggerDependencies(..), withLogger)
 import Options.Applicative
   ( auto
   , execParser
@@ -49,54 +65,88 @@ import Options.Applicative
   , value
   )
 import System.IO (stderr)
+import UnliftIO (MonadUnliftIO)
 
 main :: IO ()
 main = run =<< getOptions
 
 run :: Options -> IO ()
-run = runComponent_ proc Options{..} -> do
-  eventBackend <- logger -< LoggerDependencies
-    { configFilePath = logConfigFile
-    , getSelectorConfig = getRootSelectorConfig
-    , newRef = nextRandom
-    , writeText = TL.hPutStr stderr
-    , injectConfigWatcherSelector = injectSelector ConfigWatcher
-    }
+run Options{..} = flip runComponent_ () $ withLogger loggerDependencies runAppM proc _ -> do
   serverSource <- tcpServer -< TcpServerDependencies host port jobServerPeer
   let
-    chainSyncConnector :: SomeClientConnector RuntimeChainSeekClient IO
+    chainSyncConnector :: SomeClientConnector RuntimeChainSeekClient (AppM r)
     chainSyncConnector = SomeConnector
-      $ logConnector (narrowEventBackend (injectSelector ChainSeekClient) eventBackend)
+      $ logConnector (injectSelector ChainSeekClient)
       $ handshakeClientConnector
       $ tcpClient chainSeekHost chainSeekPort chainSeekClientPeer
 
-    chainSyncQueryConnector :: SomeClientConnector (QueryClient ChainSyncQuery) IO
+    chainSyncQueryConnector :: SomeClientConnector (QueryClient ChainSyncQuery) (AppM r)
     chainSyncQueryConnector = SomeConnector
-      $ logConnector (narrowEventBackend (injectSelector ChainSyncQueryClient) eventBackend)
+      $ logConnector (injectSelector ChainSyncQueryClient)
       $ handshakeClientConnector
       $ tcpClient chainSeekHost chainSeekQueryPort queryClientPeer
 
     queryChainSync = fmap (fromRight $ error "failed to query chain sync server") . runSomeConnector chainSyncQueryConnector . liftQuery
-  transaction -< TransactionDependencies
+  probes <- convertComponent transaction -< TransactionDependencies
     { connectionSource = SomeConnectionSource
-        $ logConnectionSource (narrowEventBackend (injectSelector Server) eventBackend)
+        $ logConnectionSource (injectSelector Server)
         $ handshakeConnectionSource serverSource
     , mkSubmitJob = Submit.mkSubmitJob Submit.SubmitJobDependencies
         { chainSyncJobConnector = SomeConnector
-            $ logConnector (narrowEventBackend (injectSelector ChainSyncJobClient) eventBackend)
+            $ logConnector (injectSelector ChainSyncJobClient)
             $ handshakeClientConnector
             $ tcpClient chainSeekHost chainSeekCommandPort jobClientPeer
         , ..
         }
-    , loadMarloweContext = \eb version contractId -> do
+    , loadMarloweContext = \version contractId -> do
         networkId <- queryChainSync GetNetworkId
-        Query.loadMarloweContext ScriptRegistry.getScripts networkId chainSyncConnector chainSyncQueryConnector eb version contractId
+        Query.loadMarloweContext ScriptRegistry.getScripts networkId chainSyncConnector chainSyncQueryConnector version contractId
     , loadWalletContext = Query.loadWalletContext $ queryChainSync . GetUTxOs
-    , eventBackend = narrowEventBackend (injectSelector App) eventBackend
     , getCurrentScripts = ScriptRegistry.getCurrentScripts
-    , httpPort = fromIntegral httpPort
     , ..
     }
+
+  probeServer -< ProbeServerDependencies { port = fromIntegral httpPort, .. }
+
+  where
+    loggerDependencies = LoggerDependencies
+      { configFilePath = logConfigFile
+      , getSelectorConfig = getRootSelectorConfig
+      , newRef = nextRandom
+      , writeText = TL.hPutStr stderr
+      , injectConfigWatcherSelector = injectSelector ConfigWatcher
+      }
+
+runAppM :: EventBackend IO r RootSelector -> AppM r a -> IO a
+runAppM eventBackend = flip runReaderT (hoistEventBackend liftIO eventBackend) . unAppM
+
+newtype AppM r a = AppM
+  { unAppM :: ReaderT (EventBackend (AppM r) r RootSelector) IO a
+  } deriving newtype (Functor, Applicative, Monad, MonadBase IO, MonadBaseControl IO, MonadIO, MonadUnliftIO, MonadFail)
+
+instance MonadWith (AppM r) where
+  type WithException (AppM r) = WithException IO
+  stateThreadingGeneralWith
+    :: forall a b releaseReturn
+     . GeneralAllocate (AppM r) (WithException IO) releaseReturn b a
+    -> (a -> AppM r b)
+    -> AppM r (b, releaseReturn)
+  stateThreadingGeneralWith (GeneralAllocate allocA) go = AppM . ReaderT $ \r -> do
+    let
+      allocA' :: (forall x. IO x -> IO x) -> IO (GeneralAllocated IO (WithException IO) releaseReturn b a)
+      allocA' restore = do
+        let
+          restore' :: forall x. AppM r x -> AppM r x
+          restore' mx = AppM . ReaderT $ restore . (runReaderT . unAppM) mx
+        GeneralAllocated a releaseA <- (runReaderT . unAppM) (allocA restore') r
+        let
+          releaseA' relTy = (runReaderT . unAppM) (releaseA relTy) r
+        pure $ GeneralAllocated a releaseA'
+    stateThreadingGeneralWith (GeneralAllocate allocA') (flip (runReaderT . unAppM) r . go)
+
+instance MonadEvent r RootSelector (AppM r) where
+  askBackend = askBackendReaderT AppM id
+  localBackend = localBackendReaderT AppM unAppM id
 
 data Options = Options
   { chainSeekPort :: PortNumber

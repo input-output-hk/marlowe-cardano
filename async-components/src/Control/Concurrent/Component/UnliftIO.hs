@@ -1,4 +1,5 @@
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecursiveDo #-}
 {-# LANGUAGE UndecidableInstances #-}
 
@@ -108,3 +109,6 @@ serverComponentWithSetup worker mkAccept = component \a -> do
 
 convertComponent :: Component m a b -> Component.Component m a b
 convertComponent = unsafeCoerce
+
+hoistComponent :: (forall x. m x -> n x) -> Component m a b -> Component n a b
+hoistComponent f = Component . (fmap . fmap . first) (Concurrently . f . runConcurrently) . unComponent

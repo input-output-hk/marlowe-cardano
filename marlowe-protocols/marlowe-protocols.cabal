@@ -77,7 +77,6 @@ library
     , containers >= 0.6.5 && < 0.7
     , eventuo11y ^>= { 0.9, 0.10 }
     , eventuo11y-extras ==0.1.0.0
-    , general-allocate ^>= { 0.2 }
     , hspec >= 2.10 && < 3
     , hspec-golden >= 0.2 && < 0.3
     , lifted-base >= 0.2.3 && < 0.3

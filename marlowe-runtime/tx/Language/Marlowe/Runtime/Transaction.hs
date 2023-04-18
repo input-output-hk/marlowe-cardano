@@ -1,4 +1,5 @@
 {-# LANGUAGE Arrows #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE RankNTypes #-}
 
@@ -8,9 +9,12 @@ module Language.Marlowe.Runtime.Transaction
 import Cardano.Api (Tx)
 import qualified Cardano.Api as C
 import Cardano.Api.Byron (BabbageEra)
-import Control.Concurrent.Component
+import Control.Arrow (returnA)
 import Control.Concurrent.Component.Probes
+import Control.Concurrent.Component.UnliftIO
 import Control.Concurrent.STM (STM, atomically)
+import Control.Monad.Event.Class (MonadInjectEvent)
+import Control.Monad.Trans.Control (MonadBaseControl)
 import Data.Text (Text)
 import Data.Void
 import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncQuery, RuntimeChainSeekClient)
@@ -19,45 +23,33 @@ import Language.Marlowe.Runtime.Core.ScriptRegistry (MarloweScripts)
 import Language.Marlowe.Runtime.Transaction.Api (MarloweTxCommand)
 import Language.Marlowe.Runtime.Transaction.Chain
 import Language.Marlowe.Runtime.Transaction.Query (LoadMarloweContext, LoadWalletContext)
-import qualified Language.Marlowe.Runtime.Transaction.Query as Q
 import Language.Marlowe.Runtime.Transaction.Server
 import Language.Marlowe.Runtime.Transaction.Submit (SubmitJob)
 import Network.Protocol.Connection (SomeClientConnector, SomeConnectionSource)
 import Network.Protocol.Job.Server (JobServer)
-import Observe.Event (EventBackend)
-import Observe.Event.Component
-  ( FieldConfig(..)
-  , GetSelectorConfig
-  , SelectorConfig(..)
-  , SomeJSON(..)
-  , absurdFieldConfig
-  , prependKey
-  , singletonFieldConfig
-  )
+import Observe.Event.Component (FieldConfig(..), GetSelectorConfig, SelectorConfig(..), SomeJSON(..))
+import UnliftIO (MonadUnliftIO)
 
-data TransactionDependencies r = TransactionDependencies
-  { chainSyncConnector :: SomeClientConnector RuntimeChainSeekClient IO
-  , connectionSource :: SomeConnectionSource (JobServer MarloweTxCommand) IO
-  , mkSubmitJob :: Tx BabbageEra -> STM SubmitJob
-  , loadWalletContext :: LoadWalletContext r
-  , loadMarloweContext :: LoadMarloweContext r
-  , queryChainSync :: forall e a. ChainSyncQuery Void e a -> IO a
-  , eventBackend :: EventBackend IO r TransactionServerSelector
+data TransactionDependencies m = TransactionDependencies
+  { chainSyncConnector :: SomeClientConnector RuntimeChainSeekClient m
+  , connectionSource :: SomeConnectionSource (JobServer MarloweTxCommand) m
+  , mkSubmitJob :: Tx BabbageEra -> STM (SubmitJob m)
+  , loadWalletContext :: LoadWalletContext m
+  , loadMarloweContext :: LoadMarloweContext m
+  , queryChainSync :: forall e a. ChainSyncQuery Void e a -> m a
   , getCurrentScripts :: forall v. MarloweVersion v -> MarloweScripts
-  , httpPort :: Int
   }
 
-transaction :: Component IO (TransactionDependencies r) ()
+transaction
+  :: (MonadUnliftIO m, MonadBaseControl IO m, MonadInjectEvent r TransactionServerSelector s m)
+  => Component m (TransactionDependencies m) Probes
 transaction = proc TransactionDependencies{..} -> do
   (connected, getTip) <- transactionChainClient -< TransactionChainClientDependencies{..}
   transactionServer -< TransactionServerDependencies{..}
-  probeServer -< ProbeServerDependencies
-    { probes = Probes
-        { startup = pure True
-        , liveness = atomically connected
-        , readiness = atomically connected
-        }
-    , port = httpPort
+  returnA -< Probes
+    { startup = pure True
+    , liveness = atomically connected
+    , readiness = atomically connected
     }
 
 getTransactionSererSelectorConfig :: GetSelectorConfig TransactionServerSelector
@@ -79,41 +71,6 @@ getTransactionSererSelectorConfig = \case
   ExecCreate -> SelectorConfig "exec-create" True buildTxFieldConfig
   ExecApplyInputs -> SelectorConfig "exec-apply-inputs" True buildTxFieldConfig
   ExecWithdraw -> SelectorConfig "exec-withdraw" True buildTxFieldConfig
-  LoadWalletContext Q.LoadWalletContext -> SelectorConfig "load-wallet-context" True FieldConfig
-    { fieldKey = \case
-        Q.ForAddresses _ -> "for-addresses"
-        Q.WalletContextLoaded _ -> "wallet-context"
-    , fieldDefaultEnabled = const True
-    , toSomeJSON = \case
-        Q.ForAddresses addresses -> SomeJSON addresses
-        Q.WalletContextLoaded context -> SomeJSON context
-    }
-  LoadMarloweContext sel -> prependKey "load-marlowe-context" $ getLoadMarloweContextSelectorConfig sel
-
-getLoadMarloweContextSelectorConfig :: GetSelectorConfig Q.LoadMarloweContextSelector
-getLoadMarloweContextSelectorConfig = \case
-  Q.ExtractCreationFailed -> SelectorConfig "extract-creation-failed" True $ singletonFieldConfig "error" True
-  Q.ExtractMarloweTransactionFailed -> SelectorConfig "extract-transaction-failed" True $ singletonFieldConfig "error" True
-  Q.ContractNotFound -> SelectorConfig "contract-not-found" True absurdFieldConfig
-  Q.ContractFound -> SelectorConfig "contract-found" True FieldConfig
-    { fieldKey = \case
-        Q.ActualVersion _ -> "actual-version"
-        Q.MarloweScriptAddress _ -> "marlowe-script-address"
-        Q.PayoutScriptHash _ -> "payout-script-hash"
-        Q.ContractUTxO _ -> "contract-utxo"
-    , fieldDefaultEnabled = const True
-    , toSomeJSON = \case
-        Q.ActualVersion version -> SomeJSON version
-        Q.MarloweScriptAddress address -> SomeJSON address
-        Q.PayoutScriptHash hash -> SomeJSON hash
-        Q.ContractUTxO utxo -> SomeJSON utxo
-    }
-  Q.ContractTipFound version -> SelectorConfig "contract-tip-found" True FieldConfig
-    { fieldKey = const "context"
-    , fieldDefaultEnabled = const True
-    , toSomeJSON = \ctx -> case version of
-        MarloweV1 -> SomeJSON ctx
-    }
 
 buildTxFieldConfig :: FieldConfig BuildTxField
 buildTxFieldConfig = FieldConfig
