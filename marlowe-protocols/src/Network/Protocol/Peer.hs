@@ -5,11 +5,11 @@
 module Network.Protocol.Peer
   where
 
-import Control.Monad.With (MonadWithExceptable)
+import Control.Monad.Event.Class (MonadEvent, withEvent)
 import Network.TypedProtocol
 import Network.TypedProtocol.Codec (AnyMessageAndAgency(..))
 import Observe.Event.Component (GetSelectorConfig, SelectorConfig(..), SomeJSON(..), singletonFieldConfigWith)
-import Observe.Event.Explicit (EventBackend, addField, withEvent)
+import Observe.Event.Explicit (InjectSelector, addField)
 import Observe.Event.Network.Protocol (MessageToJSON(..))
 
 data PeerSelector ps f where
@@ -35,16 +35,16 @@ hoistPeer f = \case
   Await ta handle -> Await ta $ hoistPeer f . handle
 
 logPeer
-  :: (MonadWithExceptable m)
-  => EventBackend m r (PeerSelector ps)
+  :: MonadEvent r s m
+  => InjectSelector (PeerSelector ps) s
   -> Peer ps pr st m a
   -> Peer ps pr st m a
-logPeer eventBackend = \case
-  Effect m -> Effect $ logPeer eventBackend <$> m
+logPeer inject = \case
+  Effect m -> Effect $ logPeer inject <$> m
   Done tok a -> Done tok a
-  Yield tok msg peer -> Effect $ withEvent eventBackend Send \ev -> do
-    addField ev $ AnyMessageAndAgency tok msg
-    pure $ Yield tok msg $ logPeer eventBackend peer
-  Await tok handle -> Await tok \msg -> Effect $ withEvent eventBackend Recv \ev -> do
-    addField ev $ AnyMessageAndAgency tok msg
-    pure $ logPeer eventBackend $ handle msg
+  Yield tok msg peer -> Effect $ inject Send \s injField -> withEvent s \ev -> do
+    addField ev $ injField $ AnyMessageAndAgency tok msg
+    pure $ Yield tok msg $ logPeer inject peer
+  Await tok handle -> Await tok \msg -> Effect $ inject Recv \s injField -> withEvent s \ev -> do
+    addField ev $ injField $ AnyMessageAndAgency tok msg
+    pure $ logPeer inject $ handle msg

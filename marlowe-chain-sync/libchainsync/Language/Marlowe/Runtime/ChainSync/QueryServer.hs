@@ -1,5 +1,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE StrictData #-}
@@ -22,7 +23,8 @@ import Cardano.Api
   )
 import qualified Cardano.Api as Cardano
 import Cardano.Api.Shelley (AcquiringFailure)
-import Control.Concurrent.Component
+import Control.Concurrent.Component.UnliftIO
+import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Monad.Trans.Except (ExceptT(ExceptT), except, runExceptT, throwE, withExceptT)
 import Data.Bifunctor (first)
 import Data.Void (Void, absurd)
@@ -32,36 +34,37 @@ import Network.Protocol.Connection (SomeConnectionSource, SomeServerConnector, a
 import Network.Protocol.Driver (runSomeConnector)
 import Network.Protocol.Query.Server (QueryServer(..), ServerStInit(..), ServerStNext(..), ServerStPage(..))
 import Network.Protocol.Query.Types (StNextKind(..))
+import UnliftIO (MonadUnliftIO)
 
-data ChainSyncQueryServerDependencies = ChainSyncQueryServerDependencies
-  { querySource :: SomeConnectionSource (QueryServer ChainSyncQuery) IO
+data ChainSyncQueryServerDependencies m = ChainSyncQueryServerDependencies
+  { querySource :: SomeConnectionSource (QueryServer ChainSyncQuery) m
   , queryLocalNodeState
       :: forall result
        . Maybe Cardano.ChainPoint
       -> QueryInMode CardanoMode result
-      -> IO (Either AcquiringFailure result)
-  , getUTxOs :: !(Database.GetUTxOs IO)
+      -> m (Either AcquiringFailure result)
+  , getUTxOs :: Database.GetUTxOs m
   }
 
-chainSyncQueryServer :: Component IO ChainSyncQueryServerDependencies ()
+chainSyncQueryServer :: (MonadBaseControl IO m, MonadUnliftIO m) => Component m (ChainSyncQueryServerDependencies m) ()
 chainSyncQueryServer = serverComponent worker \ChainSyncQueryServerDependencies{..} -> do
   connector <- acceptSomeConnector querySource
   pure WorkerDependencies {..}
 
-data WorkerDependencies = WorkerDependencies
-  { connector :: SomeServerConnector (QueryServer ChainSyncQuery) IO
+data WorkerDependencies m = WorkerDependencies
+  { connector :: SomeServerConnector (QueryServer ChainSyncQuery) m
   , queryLocalNodeState
       :: forall result
        . Maybe Cardano.ChainPoint
       -> QueryInMode CardanoMode result
-      -> IO (Either AcquiringFailure result)
-  , getUTxOs :: !(Database.GetUTxOs IO)
+      -> m (Either AcquiringFailure result)
+  , getUTxOs :: Database.GetUTxOs m
   }
 
-worker :: Component IO WorkerDependencies ()
+worker :: forall m. MonadBaseControl IO m => Component m (WorkerDependencies m) ()
 worker = component_ \WorkerDependencies{..} -> do
   let
-    server :: QueryServer ChainSyncQuery IO ()
+    server :: QueryServer ChainSyncQuery m ()
     server = QueryServer $ pure $ ServerStInit \case
       GetSecurityParameter -> queryGenesisParameters protocolParamSecurity
       GetNetworkId -> queryGenesisParameters protocolParamNetworkId
@@ -74,7 +77,7 @@ worker = component_ \WorkerDependencies{..} -> do
         utxos <- Database.runGetUTxOs getUTxOs utxosQuery
         pure $ toServerStNext $ Right utxos
 
-    toServerStNext :: Either () a -> ServerStNext ChainSyncQuery 'CanReject Void () a IO ()
+    toServerStNext :: Either () a -> ServerStNext ChainSyncQuery 'CanReject Void () a m ()
     toServerStNext = \case
       Left _ -> SendMsgReject () ()
       Right a -> SendMsgNextPage a Nothing $ ServerStPage
@@ -82,12 +85,12 @@ worker = component_ \WorkerDependencies{..} -> do
         , recvMsgRequestNext = absurd
         }
 
-    queryGenesisParameters :: (GenesisParameters -> a) -> IO (ServerStNext ChainSyncQuery 'CanReject Void () a IO ())
+    queryGenesisParameters :: (GenesisParameters -> a) -> m (ServerStNext ChainSyncQuery 'CanReject Void () a m ())
     queryGenesisParameters f = toServerStNext . fmap f <$> queryShelley (const QueryGenesisParameters)
 
     queryShelley
       :: (forall era. ShelleyBasedEra era -> QueryInShelleyBasedEra era result)
-      -> IO (Either () result)
+      -> m (Either () result)
     queryShelley query = runExceptT do
       AnyCardanoEra era <- withExceptT (const ())
         $ ExceptT

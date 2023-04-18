@@ -13,7 +13,7 @@ import Data.Foldable (fold)
 import Data.Map (Map)
 import Data.Text (Text)
 import Language.Marlowe.Runtime.ChainIndexer (ChainIndexerSelector(..), getChainIndexerSelectorConfig)
-import Language.Marlowe.Runtime.ChainIndexer.Database.PostgreSQL (QuerySelector, getQuerySelectorConfig)
+import Language.Marlowe.Runtime.ChainIndexer.Database.PostgreSQL (QuerySelector(..), getQuerySelectorConfig)
 import Language.Marlowe.Runtime.ChainIndexer.NodeClient (NodeClientSelector(..))
 import Language.Marlowe.Runtime.ChainIndexer.Store (ChainStoreSelector(..))
 import Observe.Event.Component
@@ -41,7 +41,12 @@ getRootSelectorConfig = \case
 
 defaultRootSelectorLogConfig :: Map Text SelectorLogConfig
 defaultRootSelectorLogConfig = fold
-  [ getDefaultLogConfig getRootSelectorConfig (App $ NodeClientEvent Intersect)
+  [ getDefaultLogConfig getRootSelectorConfig $ Database $ Query "commitRollback"
+  , getDefaultLogConfig getRootSelectorConfig $ Database $ Query "commitBlocks"
+  , getDefaultLogConfig getRootSelectorConfig $ Database $ Query "commitGenesisBlock"
+  , getDefaultLogConfig getRootSelectorConfig $ Database $ Query "getIntersectionPoints"
+  , getDefaultLogConfig getRootSelectorConfig $ Database $ Query "getGenesisBlock"
+  , getDefaultLogConfig getRootSelectorConfig (App $ NodeClientEvent Intersect)
   , getDefaultLogConfig getRootSelectorConfig (App $ NodeClientEvent IntersectFound)
   , getDefaultLogConfig getRootSelectorConfig (App $ NodeClientEvent IntersectNotFound)
   , getDefaultLogConfig getRootSelectorConfig (App $ NodeClientEvent RollForward)

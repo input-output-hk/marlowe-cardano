@@ -169,7 +169,6 @@ databaseQueries pool genesisBlock = DatabaseQueries
           throwIO ex
         Right a -> pure a
 
-
 -- GetGenesisBlock
 
 getGenesisBlock :: GetGenesisBlock Transaction

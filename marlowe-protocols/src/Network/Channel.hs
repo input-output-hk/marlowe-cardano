@@ -5,7 +5,7 @@ module Network.Channel
 
 import Control.Concurrent.STM (STM, newTChan, readTChan, writeTChan)
 import Control.Monad (mfilter, (>=>))
-import Control.Monad.With (MonadWithExceptable)
+import Control.Monad.Event.Class (MonadEvent, withEvent)
 import Data.Aeson (Value(..))
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as LBS
@@ -15,7 +15,7 @@ import Data.Text.Internal.Lazy (smallChunkSize)
 import Network.Socket (Socket)
 import qualified Network.Socket.ByteString.Lazy as Socket
 import Observe.Event.Component (GetSelectorConfig, SelectorConfig(..), SomeJSON(SomeJSON), singletonFieldConfigWith)
-import Observe.Event.Explicit (EventBackend, addField, withEvent)
+import Observe.Event.Explicit (InjectSelector, addField)
 import qualified System.IO as IO
 
 data Channel m a = Channel
@@ -113,17 +113,17 @@ data ChannelSelector bytes f where
   Recv :: ChannelSelector bytes (Maybe bytes)
 
 logChannel
-  :: MonadWithExceptable m
-  => EventBackend m r (ChannelSelector bytes)
+  :: MonadEvent r s  m
+  => InjectSelector (ChannelSelector bytes) s
   -> Channel m bytes
   -> Channel m bytes
-logChannel eventBackend Channel{..} = Channel
-  { send = \bytes -> withEvent eventBackend Send \ev -> do
-      addField ev bytes
+logChannel inject Channel{..} = Channel
+  { send = \bytes -> inject Send \s injField -> withEvent s \ev -> do
+      addField ev $ injField bytes
       send bytes
-  , recv = withEvent eventBackend Recv \ev -> do
+  , recv = inject Recv \s injField -> withEvent s \ev -> do
       mBytes <- recv
-      addField ev mBytes
+      addField ev $ injField mBytes
       pure mBytes
   }
 

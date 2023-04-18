@@ -13,6 +13,8 @@ import Data.Foldable (fold)
 import Data.Map (Map)
 import Data.Text (Text)
 import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncCommand, ChainSyncQuery, RuntimeChainSeek)
+import Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL (getQuerySelectorConfig)
+import qualified Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL as DB
 import Language.Marlowe.Runtime.ChainSync.NodeClient (NodeClientSelector(..), getNodeClientSelectorConfig)
 import Network.Protocol.Connection (ConnectorSelector, getConnectorSelectorConfig, getDefaultConnectorLogConfig)
 import Network.Protocol.Handshake.Types (Handshake)
@@ -31,6 +33,7 @@ import Observe.Event.Component
 data RootSelector f where
   ChainSeekServer :: ConnectorSelector (Handshake RuntimeChainSeek) f -> RootSelector f
   QueryServer :: ConnectorSelector (Handshake (Query ChainSyncQuery)) f -> RootSelector f
+  Database :: DB.QuerySelector f -> RootSelector f
   JobServer :: ConnectorSelector (Handshake (Job ChainSyncCommand)) f -> RootSelector f
   NodeService :: NodeClientSelector f -> RootSelector f
   ConfigWatcher :: ConfigWatcherSelector f -> RootSelector f
@@ -40,6 +43,7 @@ getRootSelectorConfig :: GetSelectorConfig RootSelector
 getRootSelectorConfig = \case
   ChainSeekServer sel -> prependKey "chain-sync" $ getConnectorSelectorConfig False False sel
   QueryServer sel -> prependKey "query" $ getConnectorSelectorConfig False False sel
+  Database sel -> prependKey "database" $ getQuerySelectorConfig sel
   JobServer sel -> prependKey "job" $ getConnectorSelectorConfig False False sel
   NodeService sel -> prependKey "node" $ getNodeClientSelectorConfig sel
   ConfigWatcher ReloadConfig -> SelectorConfig "reload-log-config" True
@@ -47,10 +51,12 @@ getRootSelectorConfig = \case
 
 defaultRootSelectorLogConfig :: Map Text SelectorLogConfig
 defaultRootSelectorLogConfig = fold
-  [ getDefaultConnectorLogConfig getRootSelectorConfig ChainSeekServer
+  [ getDefaultLogConfig getRootSelectorConfig $ Database $ DB.Query "getUTxOs"
+  , getDefaultLogConfig getRootSelectorConfig $ Database $ DB.Query "getTip"
+  , getDefaultLogConfig getRootSelectorConfig $ Database $ DB.Query "moveClient"
+  , getDefaultConnectorLogConfig getRootSelectorConfig ChainSeekServer
   , getDefaultConnectorLogConfig getRootSelectorConfig QueryServer
   , getDefaultConnectorLogConfig getRootSelectorConfig JobServer
-  , getDefaultLogConfig getRootSelectorConfig $ NodeService Connect
   , getDefaultLogConfig getRootSelectorConfig $ NodeService Submit
   , getDefaultLogConfig getRootSelectorConfig $ NodeService Query
   , getDefaultLogConfig getRootSelectorConfig $ ConfigWatcher ReloadConfig

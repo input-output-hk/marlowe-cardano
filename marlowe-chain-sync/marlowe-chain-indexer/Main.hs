@@ -20,10 +20,10 @@ import Control.Concurrent.Component.Probes (ProbeServerDependencies(..), probeSe
 import Control.Concurrent.Component.UnliftIO (convertComponent)
 import Control.Exception (bracket)
 import Control.Monad.Base (MonadBase)
-import Control.Monad.Event.Class (MonadBackend(..), MonadEvent(..))
+import Control.Monad.Event.Class (MonadBackend(..), MonadEvent(..), askBackendReaderT, localBackendReaderT)
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Monad.Trans.Except (ExceptT(ExceptT), runExceptT, withExceptT)
-import Control.Monad.Trans.Reader (ReaderT(..), asks)
+import Control.Monad.Trans.Reader (ReaderT(..))
 import Control.Monad.With (MonadWith, WithException, stateThreadingGeneralWith)
 import Data.Aeson (eitherDecodeFileStrict)
 import Data.GeneralAllocate (GeneralAllocate(..), GeneralAllocated(GeneralAllocated))
@@ -42,7 +42,7 @@ import Language.Marlowe.Runtime.ChainIndexer.NodeClient (NodeClientSelector)
 import Language.Marlowe.Runtime.ChainIndexer.Store (ChainStoreSelector)
 import Logging (RootSelector(..), getRootSelectorConfig)
 import Observe.Event (EventBackend, injectSelector)
-import Observe.Event.Backend (hoistEventBackend, narrowEventBackend)
+import Observe.Event.Backend (hoistEventBackend)
 import Observe.Event.Component (LoggerDependencies(..), withLogger)
 import Options (Options(..), getOptions)
 import System.IO (stderr)
@@ -78,7 +78,7 @@ run Options{..} = do
 
   bracket (Pool.acquire 100 (Just 5000000) (fromString databaseUri)) Pool.release
     $ runComponent_
-    $ withLogger loggerDependencies runChainIndexerM appComponent
+    $ withLogger loggerDependencies runAppM appComponent
   where
     loggerDependencies = LoggerDependencies
       { configFilePath = logConfigFile
@@ -98,42 +98,41 @@ run Options{..} = do
 
     persistRateLimit = secondsToNominalDiffTime 1
 
-runChainIndexerM :: EventBackend IO r RootSelector -> ChainIndexerM r a -> IO a
-runChainIndexerM eventBackend = flip runReaderT eventBackend. unChainIndexerM
+runAppM :: EventBackend IO r RootSelector -> AppM r a -> IO a
+runAppM eventBackend = flip runReaderT (hoistEventBackend liftIO eventBackend) . unAppM
 
-newtype ChainIndexerM r a = ChainIndexerM
-  { unChainIndexerM :: ReaderT (EventBackend IO r RootSelector) IO a
+newtype AppM r a = AppM
+  { unAppM :: ReaderT (EventBackend (AppM r) r RootSelector) IO a
   } deriving newtype (Functor, Applicative, Monad, MonadBase IO, MonadBaseControl IO, MonadIO, MonadUnliftIO)
 
-instance MonadWith (ChainIndexerM r) where
-  type WithException (ChainIndexerM r) = WithException IO
+instance MonadWith (AppM r) where
+  type WithException (AppM r) = WithException IO
   stateThreadingGeneralWith
     :: forall a b releaseReturn
-     . GeneralAllocate (ChainIndexerM r) (WithException IO) releaseReturn b a
-    -> (a -> ChainIndexerM r b)
-    -> ChainIndexerM r (b, releaseReturn)
-  stateThreadingGeneralWith (GeneralAllocate allocA) go = ChainIndexerM . ReaderT $ \r -> do
+     . GeneralAllocate (AppM r) (WithException IO) releaseReturn b a
+    -> (a -> AppM r b)
+    -> AppM r (b, releaseReturn)
+  stateThreadingGeneralWith (GeneralAllocate allocA) go = AppM . ReaderT $ \r -> do
     let
       allocA' :: (forall x. IO x -> IO x) -> IO (GeneralAllocated IO (WithException IO) releaseReturn b a)
       allocA' restore = do
         let
-          restore' :: forall x. ChainIndexerM r x -> ChainIndexerM r x
-          restore' mx = ChainIndexerM . ReaderT $ restore . (runReaderT . unChainIndexerM) mx
-        GeneralAllocated a releaseA <- (runReaderT . unChainIndexerM) (allocA restore') r
+          restore' :: forall x. AppM r x -> AppM r x
+          restore' mx = AppM . ReaderT $ restore . (runReaderT . unAppM) mx
+        GeneralAllocated a releaseA <- (runReaderT . unAppM) (allocA restore') r
         let
-          releaseA' relTy = (runReaderT . unChainIndexerM) (releaseA relTy) r
+          releaseA' relTy = (runReaderT . unAppM) (releaseA relTy) r
         pure $ GeneralAllocated a releaseA'
-    stateThreadingGeneralWith (GeneralAllocate allocA') (flip (runReaderT . unChainIndexerM) r . go)
+    stateThreadingGeneralWith (GeneralAllocate allocA') (flip (runReaderT . unAppM) r . go)
 
-instance MonadBackend r (ChainIndexerM r) where
-  localBackend f (ChainIndexerM (ReaderT m)) = ChainIndexerM $ ReaderT \r ->
-    m $ hoistEventBackend (flip runReaderT r . unChainIndexerM) $ f $ hoistEventBackend liftIO r
+instance MonadBackend r (AppM r) where
+  localBackend = localBackendReaderT AppM unAppM id
 
-instance MonadEvent r QuerySelector (ChainIndexerM r) where
-  askBackend = ChainIndexerM $ asks $ hoistEventBackend liftIO . narrowEventBackend (injectSelector Database)
+instance MonadEvent r QuerySelector (AppM r) where
+  askBackend = askBackendReaderT AppM id $ injectSelector Database
 
-instance MonadEvent r NodeClientSelector (ChainIndexerM r) where
-  askBackend = ChainIndexerM $ asks $ hoistEventBackend liftIO . narrowEventBackend (injectSelector $ App . NodeClientEvent)
+instance MonadEvent r NodeClientSelector (AppM r) where
+  askBackend = askBackendReaderT AppM id $ injectSelector $ App . NodeClientEvent
 
-instance MonadEvent r ChainStoreSelector (ChainIndexerM r) where
-  askBackend = ChainIndexerM $ asks $ hoistEventBackend liftIO . narrowEventBackend (injectSelector $ App . ChainStoreEvent)
+instance MonadEvent r ChainStoreSelector (AppM r) where
+  askBackend = askBackendReaderT AppM id $ injectSelector $ App . ChainStoreEvent

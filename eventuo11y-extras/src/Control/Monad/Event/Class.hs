@@ -1,9 +1,11 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE MonoLocalBinds #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 module Control.Monad.Event.Class
@@ -11,11 +13,12 @@ module Control.Monad.Event.Class
 
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Identity (IdentityT(..))
-import Control.Monad.Trans.Reader (ReaderT(..))
+import Control.Monad.Trans.Reader (ReaderT(..), asks)
 import Control.Monad.With (MonadWithExceptable)
 import Data.Functor (void)
-import Observe.Event (Event, EventBackend, NewEventArgs(..))
-import Observe.Event.Backend (Event(..), hoistEventBackend, setAncestorEventBackend, simpleNewEventArgs)
+import Observe.Event (Event, EventBackend, InjectSelector, NewEventArgs(..))
+import Observe.Event.Backend
+  (Event(..), hoistEventBackend, narrowEventBackend, setAncestorEventBackend, simpleNewEventArgs)
 import qualified Observe.Event.Explicit as Explicit
 import Unsafe.Coerce (unsafeCoerce)
 
@@ -74,3 +77,26 @@ newEventArgs args = do
 
 newEvent :: MonadEvent r s m => s f -> m (Event m r f)
 newEvent = newEventArgs . simpleNewEventArgs
+
+-- Implementation helpers
+
+localBackendReaderT
+  :: (forall x. ReaderT env m x -> n x) -- ^ Constructor
+  -> (forall x. n x -> ReaderT env m x) -- ^ Destructor
+  -> ((forall s. EventBackend n r s -> EventBackend n r s) -> env -> env) -- ^ Modify backend within env
+  -> (forall s. EventBackend n r s -> EventBackend n r s)
+  -> n a
+  -> n a
+localBackendReaderT wrap unwrap zoom f go =
+  wrap $ ReaderT \env -> runReaderT (unwrap go) $ zoom f env
+
+askBackendReaderT
+  :: (Functor n, Monad m)
+  => (forall x. ReaderT env m x -> n x) -- ^ Constructor
+  -> (env -> EventBackend n r t) -- ^ Access root backend from env
+  -> InjectSelector s t
+  -> n (EventBackend n r s)
+askBackendReaderT wrap get inject = wrap $ asks $ narrowEventBackend inject . get
+
+composeInjectSelector :: InjectSelector t u -> InjectSelector s t -> InjectSelector s u
+composeInjectSelector tu st s withInjF = st s \t injF -> tu t \u injG -> withInjF u $ injG . injF
