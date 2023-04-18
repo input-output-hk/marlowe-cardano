@@ -128,9 +128,9 @@ library chain-indexer
     Language.Marlowe.Runtime.ChainIndexer.Store
   other-modules:
   build-depends:
-    , base >= 4.9 && < 5
     , aeson >= 2 && < 3
     , async-components ==0.1.0.0
+    , base >= 4.9 && < 5
     , base16 >= 0.3.2 && < 0.4
     , bytestring >= 0.10.12 && < 0.12
     , cardano-api ==1.35.4
@@ -156,6 +156,7 @@ library chain-indexer
     , time >= 1.9 && < 2
     , transformers >= 0.5.6 && < 0.6
     , typed-protocols ==0.1.0.0
+    , unliftio >= 0.2.1 && < 0.3
     , vector >= 0.12.3 && < 0.13
     , witherable >= 0.4 && < 0.5
 

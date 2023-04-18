@@ -1,5 +1,7 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE RankNTypes #-}
 
 module Language.Marlowe.Runtime.ChainIndexer.NodeClient
   ( Changes(..)
@@ -42,19 +44,18 @@ import Cardano.Api.ChainSync.ClientPipelined
   )
 import Control.Arrow ((&&&))
 import Control.Concurrent.Component
-import Control.Concurrent.STM (STM, TVar, atomically, modifyTVar, newTVar, readTVar, writeTVar)
-import Control.Exception (SomeException, mask, throw, try)
+import Control.Concurrent.STM (STM, TVar, modifyTVar, newTVar, readTVar, writeTVar)
 import Control.Monad (guard)
+import Control.Monad.Event.Class (MonadEvent, emitImmediateEventArgs_, withEvent)
 import Data.IntMap.Lazy (IntMap)
 import qualified Data.IntMap.Lazy as IntMap
 import Data.List (sortOn)
 import Data.Maybe (mapMaybe)
 import Data.Ord (Down(..))
-import Data.Void (Void)
 import Language.Marlowe.Runtime.ChainIndexer.Database (CardanoBlock, GetIntersectionPoints(..))
-import Observe.Event.Backend (simpleNewEventArgs)
-import Observe.Event.Explicit (EventBackend, addField, finalize, newEvent, withEvent)
+import Observe.Event (NewEventArgs(..), addField, reference)
 import Ouroboros.Network.Point (WithOrigin(..))
+import UnliftIO (MonadIO, MonadUnliftIO, atomically, withRunInIO)
 
 type NumberedCardanoBlock = (BlockNo, CardanoBlock)
 type NumberedChainTip = (WithOrigin BlockNo, ChainTip)
@@ -99,14 +100,13 @@ cost :: CostModel -> Changes -> Int
 cost CostModel{..} Changes{..} = changesBlockCount * blockCost + changesTxCount * txCost
 
 -- | The set of dependencies needed by the NodeClient component.
-data NodeClientDependencies r = NodeClientDependencies
+data NodeClientDependencies m = NodeClientDependencies
   { connectToLocalNode    :: !(LocalNodeClientProtocolsInMode CardanoMode -> IO ()) -- ^ Connect to the local node.
-  , getIntersectionPoints :: !(GetIntersectionPoints IO)                            -- ^ How to load the set of initial intersection points for the chain sync client.
+  , getIntersectionPoints :: !(GetIntersectionPoints m)                            -- ^ How to load the set of initial intersection points for the chain sync client.
   -- | The maximum cost a set of changes is allowed to incur before the
   -- NodeClient blocks.
   , maxCost               :: Int
   , costModel             :: CostModel
-  , eventBackend          :: !(EventBackend IO r NodeClientSelector)
   }
 
 -- | The public API of the NodeClient component.
@@ -116,10 +116,9 @@ data NodeClient = NodeClient
   }
 
 data NodeClientSelector f where
-  Connect :: NodeClientSelector Void
   Intersect :: NodeClientSelector [ChainPoint]
-  IntersectFound :: NodeClientSelector ChainPoint
-  IntersectNotFound :: NodeClientSelector Void
+  IntersectFound :: NodeClientSelector (ChainPoint, ChainTip)
+  IntersectNotFound :: NodeClientSelector ChainTip
   RollForward :: NodeClientSelector RollForwardField
   RollBackward :: NodeClientSelector RollBackwardField
 
@@ -134,7 +133,10 @@ data RollBackwardField
   | RollBackwardNewCost Int
 
 -- | Create a new NodeClient component.
-nodeClient :: Component IO (NodeClientDependencies r) NodeClient
+nodeClient
+  :: forall r m
+   . (MonadEvent r NodeClientSelector m, MonadUnliftIO m)
+  => Component m (NodeClientDependencies m) NodeClient
 nodeClient = component \NodeClientDependencies{..} -> do
   changesVar <- newTVar emptyChanges
   connectedVar <- newTVar False
@@ -146,32 +148,53 @@ nodeClient = component \NodeClientDependencies{..} -> do
       modifyTVar changesVar toEmptyChanges
       pure changes
 
-    pipelinedClient' :: ChainSyncClientPipelined CardanoBlock ChainPoint ChainTip IO ()
+    pipelinedClient' :: ChainSyncClientPipelined CardanoBlock ChainPoint ChainTip m ()
     pipelinedClient' = mapChainSyncClientPipelined id id (blockToBlockNo &&& id) (chainTipToBlockNo &&& id)
-        $ pipelinedClient eventBackend costModel maxCost changesVar getIntersectionPoints
+        $ pipelinedClient costModel maxCost changesVar getIntersectionPoints
 
-    runNodeClient :: IO ()
-    runNodeClient = mask \restore -> do
-      ev <- newEvent eventBackend $ simpleNewEventArgs Connect
-      result <- try @SomeException $ restore $ connectToLocalNode LocalNodeClientProtocols
+    runNodeClient :: m ()
+    runNodeClient = withRunInIO \runInIO -> connectToLocalNode LocalNodeClientProtocols
         { localChainSyncClient =
             let ChainSyncClientPipelined client = pipelinedClient'
-              in LocalChainSyncClientPipelined $ ChainSyncClientPipelined do
-                finalize ev Nothing
+              in LocalChainSyncClientPipelined $ hoistClient runInIO $ ChainSyncClientPipelined do
                 atomically $ writeTVar connectedVar True
                 client
         , localTxSubmissionClient = Nothing
         , localTxMonitoringClient = Nothing
         , localStateQueryClient   = Nothing
         }
-      atomically $ writeTVar connectedVar False
-      case result of
-        Left ex -> finalize ev (Just ex) *> throw ex
-        Right _ -> pure ()
 
     connected = readTVar connectedVar
 
   pure (runNodeClient, NodeClient { getChanges, connected })
+
+hoistClient
+  :: forall block point tip m n a
+   . Functor m
+  => (forall x. m x -> n x)
+  -> ChainSyncClientPipelined block point tip m a
+  -> ChainSyncClientPipelined block point tip n a
+hoistClient f (ChainSyncClientPipelined m) = ChainSyncClientPipelined $ f $ hoistIdle <$> m
+  where
+    hoistIdle :: ClientPipelinedStIdle i block point tip m a -> ClientPipelinedStIdle i block point tip n a
+    hoistIdle = \case
+      SendMsgRequestNext next mNext -> SendMsgRequestNext (hoistNext next) (f $ hoistNext <$> mNext)
+      SendMsgRequestNextPipelined idle -> SendMsgRequestNextPipelined $ hoistIdle idle
+      SendMsgFindIntersect points intersect -> SendMsgFindIntersect points $ hoistIntersect intersect
+      SendMsgDone a -> SendMsgDone a
+      CollectResponse mIdle next -> CollectResponse (fmap (f . fmap hoistIdle) mIdle) (hoistNext next)
+
+    hoistNext :: ClientStNext i block point tip m a -> ClientStNext i block point tip n a
+    hoistNext ClientStNext{..} = ClientStNext
+      { recvMsgRollForward = fmap (f . fmap hoistIdle) . recvMsgRollForward
+      , recvMsgRollBackward = fmap (f . fmap hoistIdle) . recvMsgRollBackward
+      }
+
+    hoistIntersect :: ClientPipelinedStIntersect block point tip m a -> ClientPipelinedStIntersect block point tip n a
+    hoistIntersect ClientPipelinedStIntersect{..} = ClientPipelinedStIntersect
+      { recvMsgIntersectFound = fmap (f . fmap hoistIdle) . recvMsgIntersectFound
+      , recvMsgIntersectNotFound = f . fmap hoistIdle . recvMsgIntersectNotFound
+      }
 
 blockHeaderToBlockNo :: BlockHeader -> BlockNo
 blockHeaderToBlockNo (BlockHeader _ _ blockNo) = blockNo
@@ -185,20 +208,27 @@ chainTipToBlockNo = \case
   ChainTip _ _ blockNo -> At blockNo
 
 pipelinedClient
-  :: EventBackend IO r NodeClientSelector
-  -> CostModel
+  :: forall r m
+   . (MonadEvent r NodeClientSelector m, MonadIO m)
+  => CostModel
   -> Int
   -> TVar Changes
-  -> GetIntersectionPoints IO
-  -> ChainSyncClientPipelined NumberedCardanoBlock ChainPoint NumberedChainTip IO ()
-pipelinedClient eventBackend costModel maxCost changesVar getIntersectionPoints =
+  -> GetIntersectionPoints m
+  -> ChainSyncClientPipelined NumberedCardanoBlock ChainPoint NumberedChainTip m ()
+pipelinedClient costModel maxCost changesVar getIntersectionPoints =
   ChainSyncClientPipelined do
-    headers <- withEvent eventBackend Intersect \ev -> do
+    (r, headers) <- withEvent Intersect \ev -> do
       headers <- sortOn (Down . fmap blockHeaderToBlockNo) <$> runGetIntersectionPoints getIntersectionPoints
       addField ev $ headerToPoint <$> headers
-      pure headers
+      pure (reference ev, headers)
     pure $ SendMsgFindIntersect (headerToPoint <$> headers) ClientPipelinedStIntersect
-      { recvMsgIntersectFound = \point tip -> withEvent eventBackend IntersectFound \ev -> do
+      { recvMsgIntersectFound = \point tip -> do
+          emitImmediateEventArgs_ NewEventArgs
+            { newEventSelector = IntersectFound
+            , newEventParent = Nothing
+            , newEventCauses = [r]
+            , newEventInitialFields = [(point, snd tip)]
+            }
           let
             getSlotAndBlock = case point of
               ChainPointAtGenesis -> const Nothing
@@ -208,16 +238,22 @@ pipelinedClient eventBackend costModel maxCost changesVar getIntersectionPoints 
                   | SlotNo s <= pointSlot -> Just (fromIntegral s, b)
                   | otherwise -> Nothing
             slotNoToBlockNo = IntMap.fromList $ mapMaybe getSlotAndBlock headers
-          addField ev point
           clientStIdle slotNoToBlockNo point tip
-      , recvMsgIntersectNotFound = withEvent eventBackend IntersectNotFound . const . clientStIdle mempty ChainPointAtGenesis
+      , recvMsgIntersectNotFound = \tip -> do
+          emitImmediateEventArgs_ NewEventArgs
+            { newEventSelector = IntersectNotFound
+            , newEventParent = Nothing
+            , newEventCauses = [r]
+            , newEventInitialFields = [snd tip]
+            }
+          clientStIdle mempty ChainPointAtGenesis tip
       }
   where
     clientStIdle
       :: IntMap BlockNo
       -> ChainPoint
       -> NumberedChainTip
-      -> IO (ClientPipelinedStIdle 'Z NumberedCardanoBlock ChainPoint NumberedChainTip IO ())
+      -> m (ClientPipelinedStIdle 'Z NumberedCardanoBlock ChainPoint NumberedChainTip m ())
     clientStIdle slotNoToBlockNo point nodeTip = do
       let
         clientTip = case point of
@@ -225,7 +261,7 @@ pipelinedClient eventBackend costModel maxCost changesVar getIntersectionPoints 
           ChainPoint (SlotNo s) _ -> case IntMap.lookup (fromIntegral s) slotNoToBlockNo of
             Nothing -> error $ "Unable to find block number for chain point " <> show point
             Just b -> At b
-      pure $ mkClientStIdle eventBackend costModel maxCost changesVar slotNoToBlockNo pipelinePolicy Zero clientTip nodeTip
+      pure $ mkClientStIdle costModel maxCost changesVar slotNoToBlockNo pipelinePolicy Zero clientTip nodeTip
 
     headerToPoint Origin = ChainPointAtGenesis
     headerToPoint (At (BlockHeader s h _)) = ChainPoint s h
@@ -238,9 +274,9 @@ pipelinedClient eventBackend costModel maxCost changesVar getIntersectionPoints 
     pipelinePolicy = pipelineDecisionLowHighMark 1 50
 
 mkClientStIdle
-  :: forall r n
-   . EventBackend IO r NodeClientSelector
-  -> CostModel
+  :: forall r m n
+   . (MonadEvent r NodeClientSelector m, MonadIO m)
+  => CostModel
   -> Int
   -> TVar Changes
   -> IntMap BlockNo
@@ -248,8 +284,8 @@ mkClientStIdle
   -> Nat n
   -> WithOrigin BlockNo
   -> NumberedChainTip
-  -> ClientPipelinedStIdle n NumberedCardanoBlock ChainPoint NumberedChainTip IO ()
-mkClientStIdle eventBackend costModel maxCost changesVar slotNoToBlockNo pipelineDecision n clientTip nodeTip =
+  -> ClientPipelinedStIdle n NumberedCardanoBlock ChainPoint NumberedChainTip m ()
+mkClientStIdle costModel maxCost changesVar slotNoToBlockNo pipelineDecision n clientTip nodeTip =
   case (n, runPipelineDecision pipelineDecision n clientTip (fst nodeTip)) of
     (_, (Request, pipelineDecision')) ->
       SendMsgRequestNext (collect pipelineDecision' n) $ pure (collect pipelineDecision' n)
@@ -268,28 +304,28 @@ mkClientStIdle eventBackend costModel maxCost changesVar slotNoToBlockNo pipelin
   where
     nextPipelineRequest
       :: MkPipelineDecision
-      -> ClientPipelinedStIdle n NumberedCardanoBlock ChainPoint NumberedChainTip IO ()
+      -> ClientPipelinedStIdle n NumberedCardanoBlock ChainPoint NumberedChainTip m ()
     nextPipelineRequest pipelineDecision' = SendMsgRequestNextPipelined
-      $ mkClientStIdle eventBackend costModel maxCost changesVar slotNoToBlockNo pipelineDecision' (Succ n) clientTip nodeTip
+      $ mkClientStIdle costModel maxCost changesVar slotNoToBlockNo pipelineDecision' (Succ n) clientTip nodeTip
 
     collect
       :: forall n'
         . MkPipelineDecision
         -> Nat n'
-        -> ClientStNext n' NumberedCardanoBlock ChainPoint NumberedChainTip IO ()
-    collect pipelineDecision' = mkClientStNext eventBackend costModel maxCost changesVar slotNoToBlockNo pipelineDecision'
+        -> ClientStNext n' NumberedCardanoBlock ChainPoint NumberedChainTip m ()
+    collect pipelineDecision' = mkClientStNext costModel maxCost changesVar slotNoToBlockNo pipelineDecision'
 
 mkClientStNext
-  :: EventBackend IO r NodeClientSelector
-  -> CostModel
+  :: (MonadIO m, MonadEvent r NodeClientSelector m)
+  => CostModel
   -> Int
   -> TVar Changes
   -> IntMap BlockNo
   -> MkPipelineDecision
   -> Nat n
-  -> ClientStNext n NumberedCardanoBlock ChainPoint NumberedChainTip IO ()
-mkClientStNext eventBackend costModel maxCost changesVar slotNoToBlockNo pipelineDecision n = ClientStNext
-  { recvMsgRollForward = \(blockNo, block@(BlockInMode (Block header@(BlockHeader slotNo hash _) txs) _)) tip -> withEvent eventBackend RollForward \ev -> do
+  -> ClientStNext n NumberedCardanoBlock ChainPoint NumberedChainTip m ()
+mkClientStNext costModel maxCost changesVar slotNoToBlockNo pipelineDecision n = ClientStNext
+  { recvMsgRollForward = \(blockNo, block@(BlockInMode (Block header@(BlockHeader slotNo hash _) txs) _)) tip -> withEvent RollForward \ev -> do
       addField ev $ RollForwardBlock header
       addField ev $ RollForwardTip $ snd tip
       nextChanges <- atomically do
@@ -311,8 +347,8 @@ mkClientStNext eventBackend costModel maxCost changesVar slotNoToBlockNo pipelin
       let clientTip = At blockNo
       let slotNoToInt (SlotNo s) = fromIntegral s
       let slotNoToBlockNo' = IntMap.insert (slotNoToInt slotNo) blockNo slotNoToBlockNo
-      pure $ mkClientStIdle eventBackend costModel maxCost changesVar slotNoToBlockNo' pipelineDecision n clientTip tip
-  , recvMsgRollBackward = \point tip -> withEvent eventBackend RollBackward \ev -> do
+      pure $ mkClientStIdle costModel maxCost changesVar slotNoToBlockNo' pipelineDecision n clientTip tip
+  , recvMsgRollBackward = \point tip -> withEvent RollBackward \ev -> do
       addField ev $ RollBackwardPoint point
       addField ev $ RollBackwardTip $ snd tip
       let
@@ -356,7 +392,7 @@ mkClientStNext eventBackend costModel maxCost changesVar slotNoToBlockNo pipelin
             $ reverse
             $ dropWhile ((s <) . fromIntegral . fst)
             $ IntMap.toDescList slotNoToBlockNo
-      pure $ mkClientStIdle eventBackend costModel maxCost changesVar slotNoToBlockNo' pipelineDecision n clientTip tip
+      pure $ mkClientStIdle costModel maxCost changesVar slotNoToBlockNo' pipelineDecision n clientTip tip
   }
 
 minPoint :: ChainPoint -> ChainPoint -> ChainPoint
