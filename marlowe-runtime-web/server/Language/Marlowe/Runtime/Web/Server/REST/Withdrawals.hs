@@ -9,12 +9,13 @@
 module Language.Marlowe.Runtime.Web.Server.REST.Withdrawals
   where
 
-import Cardano.Api (AsType(..), deserialiseFromTextEnvelope, getTxBody, getTxId)
-import qualified Cardano.Api.SerialiseTextEnvelope as Cardano
+import Cardano.Api (BabbageEra, TxBody, getTxBody, getTxId, makeSignedTransaction)
+import qualified Cardano.Api as Cardano
+import Cardano.Ledger.Alonzo.TxWitness
 import Control.Monad (unless)
 import Control.Monad.IO.Class (liftIO)
 import Data.Aeson (Value(..))
-import Data.Foldable (traverse_)
+import Data.Foldable (for_, traverse_)
 import Data.Maybe (fromMaybe)
 import qualified Data.Set as Set
 import Language.Marlowe.Protocol.Query.Types (Page(..), WithdrawalFilter(..))
@@ -29,6 +30,8 @@ import Language.Marlowe.Runtime.Web.Server.REST.ApiError
 import qualified Language.Marlowe.Runtime.Web.Server.REST.ApiError as ApiError
 import qualified Language.Marlowe.Runtime.Web.Server.REST.Transactions as Transactions
 import Language.Marlowe.Runtime.Web.Server.TxClient (TempTx(..), TempTxStatus(..), TxClientSelector, Withdrawn(..))
+import Language.Marlowe.Runtime.Web.Server.Util
+import Observe.Event.Backend (Event)
 import Observe.Event.DSL (FieldSpec(..), SelectorField(..), SelectorSpec(..))
 import Observe.Event.Explicit
   ( EventBackend
@@ -65,7 +68,8 @@ compile $ SelectorSpec "withdrawals"
       , "addresses" ≔ ''Addresses
       , "collateral" ≔ ''TxOutRefs
       , ["post", "error"] ≔ ''String
-      , ["post", "response"] ≔ ''WithdrawTxBody
+      , ["post", "response", "txBody"] ≔ [t|WithdrawTxEnvelope CardanoTxBody|]
+      , ["post", "response", "tx"] ≔ [t|WithdrawTxEnvelope CardanoTx|]
       ]
   , ["get", "one"] ≔ FieldSpec ["get", "one"]
       [ ["get", "id"] ≔ ''TxId
@@ -84,17 +88,17 @@ server
   :: EventBackend IO r WithdrawalsSelector
   -> ServerT WithdrawalsAPI (AppM r)
 server eb = get eb
-       :<|> post eb
+       :<|> (postCreateTxBodyResponse eb :<|> postCreateTxResponse eb)
        :<|> withdrawalServer eb
 
-post
-  :: EventBackend IO r WithdrawalsSelector
+postCreateTxBody
+  :: Event (AppM r) r' PostField
   -> PostWithdrawalsRequest
   -> Address
   -> Maybe (CommaList Address)
   -> Maybe (CommaList TxOutRef)
-  -> AppM r PostWithdrawalsResponse
-post eb req@PostWithdrawalsRequest{..} changeAddressDTO mAddresses mCollateralUtxos = withEvent (hoistEventBackend liftIO eb) Post \ev -> do
+  -> AppM r (TxBody BabbageEra)
+postCreateTxBody ev req@PostWithdrawalsRequest{..} changeAddressDTO mAddresses mCollateralUtxos = do
   addField ev $ NewWithdrawal req
   addField ev $ ChangeAddress changeAddressDTO
   traverse_ (addField ev . Addresses) mAddresses
@@ -108,11 +112,37 @@ post eb req@PostWithdrawalsRequest{..} changeAddressDTO mAddresses mCollateralUt
     Left err -> do
       addField ev $ PostError $ show err
       throwDTOError err
-    Right txBody -> do
-      let (withdrawalId', txBody') = toDTO (fromCardanoTxId $ getTxId txBody, txBody)
-      let body = WithdrawTxBody withdrawalId' txBody'
-      addField ev $ PostResponse body
-      pure $ IncludeLink (Proxy @"withdrawal") body
+    Right txBody -> pure txBody
+
+postCreateTxBodyResponse
+  :: EventBackend IO r WithdrawalsSelector
+  -> PostWithdrawalsRequest
+  -> Address
+  -> Maybe (CommaList Address)
+  -> Maybe (CommaList TxOutRef)
+  -> AppM r (PostWithdrawalsResponse CardanoTxBody)
+postCreateTxBodyResponse eb req changeAddressDTO mAddresses mCollateralUtxos = withEvent (hoistEventBackend liftIO eb) Post \ev -> do
+  txBody <- postCreateTxBody ev req changeAddressDTO mAddresses mCollateralUtxos
+  let (withdrawalId, txBody') = toDTO (fromCardanoTxId $ getTxId txBody, txBody)
+  let body = WithdrawTxEnvelope withdrawalId txBody'
+  addField ev $ PostResponseTxBody body
+  pure $ IncludeLink (Proxy @"withdrawal") body
+
+postCreateTxResponse
+  :: EventBackend IO r WithdrawalsSelector
+  -> PostWithdrawalsRequest
+  -> Address
+  -> Maybe (CommaList Address)
+  -> Maybe (CommaList TxOutRef)
+  -> AppM r (PostWithdrawalsResponse CardanoTx)
+postCreateTxResponse eb req changeAddressDTO mAddresses mCollateralUtxos = withEvent (hoistEventBackend liftIO eb) Post \ev -> do
+  txBody <- postCreateTxBody ev req changeAddressDTO mAddresses mCollateralUtxos
+  let tx = makeSignedTransaction [] txBody
+  let (withdrawalId, tx') = toDTO (fromCardanoTxId $ getTxId txBody, tx)
+  let body = WithdrawTxEnvelope withdrawalId tx'
+  addField ev $ PostResponseTx body
+  pure $ IncludeLink (Proxy @"withdrawal") body
+
 
 get
   :: EventBackend IO r WithdrawalsSelector
@@ -174,10 +204,23 @@ put eb contractId body = withEvent (hoistEventBackend liftIO eb) Put \ev -> do
   loadWithdrawal contractId' >>= \case
     Nothing -> throwError $ notFound' "Withdrawal not found"
     Just (Left (TempTx _ Unsigned (Withdrawn txBody))) -> do
-      textEnvelope <- fromDTOThrow (badRequest' "Invalid body value") body
-      addField ev $ Body textEnvelope
-      tx <- either (const $ throwError $ badRequest' "Invalid body text envelope content") pure $ deserialiseFromTextEnvelope (AsTx AsBabbage) textEnvelope
-      unless (getTxBody tx == txBody) $ throwError (badRequest' "Provided transaction body differs from the original one")
+      (req :: Maybe (Either (Cardano.Tx BabbageEra) (ShelleyTxWitness BabbageEra))) <- case teType body of
+        "Tx BabbageEra" -> pure $ Left <$> fromDTO body
+        "ShelleyTxWitness BabbageEra" -> pure $ Right <$> fromDTO body
+        _ -> throwError $ badRequest' "Unknown envelope type - allowed types are: \"Tx BabbageEra\", \"ShelleyTxWitness BabbageEra\""
+
+      for_ (fromDTO body :: Maybe Cardano.TextEnvelope) \te ->
+        addField ev $ Body te
+
+      tx <- case req of
+        Nothing -> throwError $ badRequest' "Invalid text envelope cbor value"
+        Just (Left tx) -> do
+          unless (getTxBody tx == txBody) $ throwError (badRequest' "Provided transaction body differs from the original one")
+          pure tx
+        Just (Right (ShelleyTxWitness (TxWitness wtKeys _ _ _ _))) -> do
+          case makeSignedTxWithWitnessKeys txBody wtKeys of
+            Just tx -> pure tx
+            Nothing -> throwError $ badRequest' "Invalid witness keys"
       submitWithdrawal contractId' (narrowEventBackend (injectSelector RunTx) $ setAncestorEventBackend (reference ev) eb) tx >>= \case
         Nothing -> pure NoContent
         Just err -> do

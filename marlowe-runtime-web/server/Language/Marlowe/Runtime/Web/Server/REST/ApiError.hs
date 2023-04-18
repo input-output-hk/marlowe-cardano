@@ -7,11 +7,6 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
--- | This module defines the data-transfer object (DTO) translation layer for
--- the web server. DTOs are the types served by the API, which notably include
--- no cardano-api dependencies and have nice JSON representations. This module
--- describes how they are mapped to the internal API types of the runtime.
-
 module Language.Marlowe.Runtime.Web.Server.REST.ApiError
   where
 
@@ -178,7 +173,7 @@ instance ToDTO (ApplyInputsError 'V1) where
     ApplyInputsLoadMarloweContextFailed (PayoutScriptNotPublished _) -> ApiError "Internal error" "InternalError" Null 500
     ApplyInputsLoadMarloweContextFailed (ExtractCreationError _) -> ApiError "Internal error" "InternalError" Null 500
     ApplyInputsLoadMarloweContextFailed (ExtractMarloweTransactionError _) -> ApiError "Internal error" "InternalError" Null 500
-    ApplyInputsConstraintsBuildupFailed (MarloweComputeTransactionFailed _) -> ApiError "Marlowe compute transaction failed" "MarloweComputeTransactionFailed" Null 400
+    ApplyInputsConstraintsBuildupFailed (MarloweComputeTransactionFailed err) -> ApiError ("Marlowe compute transaction failed: " <> err) "MarloweComputeTransactionFailed" Null 400
     ApplyInputsConstraintsBuildupFailed UnableToDetermineTransactionTimeout -> ApiError "Unable to determine transaction timeout" "UnableToDetermineTransactionTimeout" Null 400
     SlotConversionFailed _ -> ApiError "Slot conversion failed" "SlotConversionFailed" Null 400
     TipAtGenesis -> ApiError "Internal error" "InternalError" Null 500
