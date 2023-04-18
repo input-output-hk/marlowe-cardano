@@ -40,7 +40,7 @@ import qualified Data.Text as T (pack)
 import Observe.Event (addField)
 import Observe.Event.Component (GetSelectorConfig, SelectorConfig(..), SomeJSON(..), singletonFieldConfigWith)
 
-import Control.Monad.Event.Class (MonadEvent, withEvent)
+import Control.Monad.Event.Class (MonadInjectEvent, withEvent)
 import qualified Ouroboros.Network.Protocol.LocalStateQuery.Client as Q
 import qualified Ouroboros.Network.Protocol.LocalStateQuery.Type as Q
 import qualified Ouroboros.Network.Protocol.LocalTxSubmission.Client as S
@@ -93,7 +93,7 @@ getNodeClientSelectorConfig Query =
     queryToJSON (Q.Some query) = String . T.pack $ show query
 
 
-nodeClient :: (MonadEvent r NodeClientSelector m, MonadIO m) => Component m NodeClientDependencies (NodeClient m)
+nodeClient :: (MonadInjectEvent r NodeClientSelector s m, MonadIO m) => Component m NodeClientDependencies (NodeClient m)
 nodeClient =
   component \NodeClientDependencies{..} ->
     do
@@ -134,7 +134,7 @@ data SubmitJob =
 
 
 submitTxToNodeChannel
-  :: (MonadIO m, MonadEvent r NodeClientSelector m)
+  :: (MonadIO m, MonadInjectEvent r NodeClientSelector s m)
   => SubmitChannel
   -> TxInMode CardanoMode
   -> m (S.SubmitResult (TxValidationErrorInMode CardanoMode))
@@ -178,7 +178,7 @@ data QueryJob = forall result .
 
 
 queryNodeChannel
-  :: (MonadIO m, MonadEvent r NodeClientSelector m)
+  :: (MonadIO m, MonadInjectEvent r NodeClientSelector s m)
   => QueryChannel
   -> Maybe ChainPoint
   -> QueryInMode CardanoMode result

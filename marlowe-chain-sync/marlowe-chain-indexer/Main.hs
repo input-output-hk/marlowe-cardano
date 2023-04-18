@@ -20,7 +20,7 @@ import Control.Concurrent.Component.Probes (ProbeServerDependencies(..), probeSe
 import Control.Concurrent.Component.UnliftIO (convertComponent)
 import Control.Exception (bracket)
 import Control.Monad.Base (MonadBase)
-import Control.Monad.Event.Class (MonadBackend(..), MonadEvent(..), askBackendReaderT, localBackendReaderT)
+import Control.Monad.Event.Class (MonadEvent(..), askBackendReaderT, localBackendReaderT)
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Monad.Trans.Except (ExceptT(ExceptT), runExceptT, withExceptT)
 import Control.Monad.Trans.Reader (ReaderT(..))
@@ -34,12 +34,9 @@ import qualified Data.Text.Lazy.IO as TL
 import Data.Time (secondsToNominalDiffTime)
 import Data.UUID.V4 (nextRandom)
 import qualified Hasql.Pool as Pool
-import Language.Marlowe.Runtime.ChainIndexer (ChainIndexerDependencies(..), ChainIndexerSelector(..), chainIndexer)
-import Language.Marlowe.Runtime.ChainIndexer.Database.PostgreSQL (QuerySelector)
+import Language.Marlowe.Runtime.ChainIndexer (ChainIndexerDependencies(..), chainIndexer)
 import qualified Language.Marlowe.Runtime.ChainIndexer.Database.PostgreSQL as PostgreSQL
 import Language.Marlowe.Runtime.ChainIndexer.Genesis (computeGenesisBlock)
-import Language.Marlowe.Runtime.ChainIndexer.NodeClient (NodeClientSelector)
-import Language.Marlowe.Runtime.ChainIndexer.Store (ChainStoreSelector)
 import Logging (RootSelector(..), getRootSelectorConfig)
 import Observe.Event (EventBackend, injectSelector)
 import Observe.Event.Backend (hoistEventBackend)
@@ -125,14 +122,6 @@ instance MonadWith (AppM r) where
         pure $ GeneralAllocated a releaseA'
     stateThreadingGeneralWith (GeneralAllocate allocA') (flip (runReaderT . unAppM) r . go)
 
-instance MonadBackend r (AppM r) where
+instance MonadEvent r RootSelector (AppM r) where
+  askBackend = askBackendReaderT AppM id
   localBackend = localBackendReaderT AppM unAppM id
-
-instance MonadEvent r QuerySelector (AppM r) where
-  askBackend = askBackendReaderT AppM id $ injectSelector Database
-
-instance MonadEvent r NodeClientSelector (AppM r) where
-  askBackend = askBackendReaderT AppM id $ injectSelector $ App . NodeClientEvent
-
-instance MonadEvent r ChainStoreSelector (AppM r) where
-  askBackend = askBackendReaderT AppM id $ injectSelector $ App . ChainStoreEvent

@@ -17,7 +17,7 @@ import Control.Arrow (returnA)
 import Control.Concurrent.Component.Probes
 import Control.Concurrent.Component.UnliftIO
 import Control.Concurrent.STM (atomically)
-import Control.Monad.Event.Class (MonadEvent)
+import Control.Monad.Event.Class (Inject, MonadEvent)
 import Data.Aeson (Value(..), object, (.=))
 import Data.Time (NominalDiffTime)
 import Language.Marlowe.Runtime.Cardano.Api
@@ -55,8 +55,9 @@ data ChainIndexerDependencies m = ChainIndexerDependencies
 
 chainIndexer
   :: ( MonadUnliftIO m
-     , MonadEvent r NodeClientSelector m
-     , MonadEvent r ChainStoreSelector m
+     , MonadEvent r s m
+     , Inject NodeClientSelector s
+     , Inject ChainStoreSelector s
      )
   => Component m (ChainIndexerDependencies m) Probes
 chainIndexer = proc ChainIndexerDependencies{..} -> do

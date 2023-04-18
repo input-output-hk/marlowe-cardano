@@ -1,6 +1,7 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE RankNTypes #-}
 
 module Logging
@@ -9,6 +10,7 @@ module Logging
   , getRootSelectorConfig
   ) where
 
+import Control.Monad.Event.Class (Inject(..))
 import Data.Foldable (fold)
 import Data.Map (Map)
 import Data.Text (Text)
@@ -16,6 +18,7 @@ import Language.Marlowe.Runtime.ChainIndexer (ChainIndexerSelector(..), getChain
 import Language.Marlowe.Runtime.ChainIndexer.Database.PostgreSQL (QuerySelector(..), getQuerySelectorConfig)
 import Language.Marlowe.Runtime.ChainIndexer.NodeClient (NodeClientSelector(..))
 import Language.Marlowe.Runtime.ChainIndexer.Store (ChainStoreSelector(..))
+import Observe.Event (injectSelector)
 import Observe.Event.Component
   ( ConfigWatcherSelector(..)
   , GetSelectorConfig
@@ -30,6 +33,15 @@ data RootSelector f where
   App :: ChainIndexerSelector f -> RootSelector f
   Database :: QuerySelector f -> RootSelector f
   ConfigWatcher :: ConfigWatcherSelector f -> RootSelector f
+
+instance Inject QuerySelector RootSelector where
+  inject = injectSelector Database
+
+instance Inject NodeClientSelector RootSelector where
+  inject = injectSelector $ App . NodeClientEvent
+
+instance Inject ChainStoreSelector RootSelector where
+  inject = injectSelector $ App . ChainStoreEvent
 
 -- TODO automate this boilerplate with Template Haskell
 getRootSelectorConfig :: GetSelectorConfig RootSelector

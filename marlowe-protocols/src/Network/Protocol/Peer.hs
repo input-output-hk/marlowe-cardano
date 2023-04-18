@@ -5,7 +5,7 @@
 module Network.Protocol.Peer
   where
 
-import Control.Monad.Event.Class (MonadEvent, withEvent)
+import Control.Monad.Event.Class (MonadInjectEvent, withEvent)
 import Network.TypedProtocol
 import Network.TypedProtocol.Codec (AnyMessageAndAgency(..))
 import Observe.Event.Component (GetSelectorConfig, SelectorConfig(..), SomeJSON(..), singletonFieldConfigWith)
@@ -35,7 +35,7 @@ hoistPeer f = \case
   Await ta handle -> Await ta $ hoistPeer f . handle
 
 logPeer
-  :: MonadEvent r s m
+  :: MonadInjectEvent r s s m
   => InjectSelector (PeerSelector ps) s
   -> Peer ps pr st m a
   -> Peer ps pr st m a

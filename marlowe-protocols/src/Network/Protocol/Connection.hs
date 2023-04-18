@@ -11,7 +11,7 @@ import Control.Applicative (Alternative(empty), (<|>))
 import Control.Concurrent.STM (STM, TQueue, atomically, newTQueue, readTQueue, writeTQueue)
 import Control.Exception (SomeException)
 import Control.Monad.Base (MonadBase, liftBase)
-import Control.Monad.Event.Class (MonadEvent, composeInjectSelector, withEvent)
+import Control.Monad.Event.Class (MonadInjectEvent, composeInjectSelector, withEvent)
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Data.ByteString.Lazy (ByteString)
 import Data.ByteString.Lazy.Base16 (encodeBase16)
@@ -97,7 +97,7 @@ getConnectorSelectorConfig channelEnabled peerEnabled = \case
   ConnectionSelector sel -> prependKey "connection" $ getConnectionSelectorConfig channelEnabled peerEnabled sel
 
 logConnector
-  :: MonadEvent r s m
+  :: MonadInjectEvent r s s m
   => InjectSelector (ConnectorSelector ps) s
   -> Connector ps pr peer m
   -> Connector ps pr peer m
@@ -107,7 +107,7 @@ logConnector inject Connector{..} = Connector
   }
 
 logConnectionSource
-  :: MonadEvent r s m
+  :: MonadInjectEvent r s s m
   => InjectSelector (ConnectorSelector ps) s
   -> ConnectionSource ps server m
   -> ConnectionSource ps server m
@@ -150,7 +150,7 @@ getConnectionSelectorConfig channelEnabled peerEnabled = \case
   Close -> SelectorConfig "close" True absurdFieldConfig
 
 logConnection
-  :: MonadEvent r s m
+  :: MonadInjectEvent r s s m
   => InjectSelector (ConnectionSelector ps) s
   -> Connection ps pr peer m
   -> Connection ps pr peer m
@@ -221,7 +221,7 @@ getClientServerPairSelectorConfig channelEnabled peerEnabled = \case
 
 logClientServerPair
   :: forall ps server client m r s
-   . MonadEvent r s m
+   . MonadInjectEvent r s s m
   => InjectSelector (ClientServerPairSelector ps) s
   -> ClientServerPair ps server client m
   -> ClientServerPair ps server client m

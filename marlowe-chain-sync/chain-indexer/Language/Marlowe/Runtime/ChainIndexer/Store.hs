@@ -14,7 +14,7 @@ import Control.Concurrent.STM (STM, newTVar, readTVar)
 import Control.Concurrent.STM.Delay (Delay, newDelay, waitDelay)
 import Control.Concurrent.STM.TVar (writeTVar)
 import Control.Monad (guard, unless, when)
-import Control.Monad.Event.Class (MonadEvent, withEvent)
+import Control.Monad.Event.Class (MonadInjectEvent, withEvent)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Maybe (MaybeT(..))
@@ -48,7 +48,7 @@ data ChainStoreDependencies m = ChainStoreDependencies
   }
 
 -- | Create a ChainStore component.
-chainStore :: forall r m. (MonadIO m, MonadEvent r ChainStoreSelector m) => Component m (ChainStoreDependencies m) (STM Bool)
+chainStore :: forall r s m. (MonadIO m, MonadInjectEvent r ChainStoreSelector s m) => Component m (ChainStoreDependencies m) (STM Bool)
 chainStore = component \ChainStoreDependencies{..} -> do
   readyVar <- newTVar False
   let

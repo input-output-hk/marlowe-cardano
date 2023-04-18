@@ -1,11 +1,12 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE RankNTypes #-}
+
 module Network.Channel
   where
 
 import Control.Concurrent.STM (STM, newTChan, readTChan, writeTChan)
 import Control.Monad (mfilter, (>=>))
-import Control.Monad.Event.Class (MonadEvent, withEvent)
+import Control.Monad.Event.Class (MonadInjectEvent, withEvent)
 import Data.Aeson (Value(..))
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as LBS
@@ -113,7 +114,7 @@ data ChannelSelector bytes f where
   Recv :: ChannelSelector bytes (Maybe bytes)
 
 logChannel
-  :: MonadEvent r s  m
+  :: MonadInjectEvent r s s m
   => InjectSelector (ChannelSelector bytes) s
   -> Channel m bytes
   -> Channel m bytes

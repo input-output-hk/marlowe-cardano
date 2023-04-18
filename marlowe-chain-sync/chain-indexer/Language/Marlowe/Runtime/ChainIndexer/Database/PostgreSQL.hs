@@ -84,7 +84,7 @@ import qualified Cardano.Ledger.Babbage.Tx as Babbage
 import qualified Cardano.Ledger.Babbage.TxBody as Babbage
 import Cardano.Ledger.SafeHash (originalBytes)
 import Cardano.Ledger.Shelley.API.Types (StrictMaybe(..))
-import Control.Monad.Event.Class (MonadEvent, withEvent)
+import Control.Monad.Event.Class (MonadInjectEvent, withEvent)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
@@ -148,7 +148,7 @@ getQuerySelectorConfig = \case
     }
 
 -- | PostgreSQL implementation for the chain sync database queries.
-databaseQueries :: forall r m. (MonadEvent r QuerySelector m, MonadIO m) => Pool -> GenesisBlock -> DatabaseQueries m
+databaseQueries :: forall r s m. (MonadInjectEvent r QuerySelector s m, MonadIO m) => Pool -> GenesisBlock -> DatabaseQueries m
 databaseQueries pool genesisBlock = DatabaseQueries
   (hoistCommitRollback (transact "commitRollback" TS.Write) $ commitRollback genesisBlock)
   (hoistCommitBlocks (transact "commitBlocks" TS.Write) commitBlocks)

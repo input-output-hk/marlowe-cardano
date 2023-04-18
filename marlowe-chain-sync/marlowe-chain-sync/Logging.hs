@@ -1,6 +1,7 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE RankNTypes #-}
 
 module Logging
@@ -9,6 +10,7 @@ module Logging
   , getRootSelectorConfig
   ) where
 
+import Control.Monad.Event.Class (Inject(..))
 import Data.Foldable (fold)
 import Data.Map (Map)
 import Data.Text (Text)
@@ -20,6 +22,7 @@ import Network.Protocol.Connection (ConnectorSelector, getConnectorSelectorConfi
 import Network.Protocol.Handshake.Types (Handshake)
 import Network.Protocol.Job.Types (Job)
 import Network.Protocol.Query.Types (Query)
+import Observe.Event (idInjectSelector, injectSelector)
 import Observe.Event.Component
   ( ConfigWatcherSelector(..)
   , GetSelectorConfig
@@ -37,6 +40,15 @@ data RootSelector f where
   JobServer :: ConnectorSelector (Handshake (Job ChainSyncCommand)) f -> RootSelector f
   NodeService :: NodeClientSelector f -> RootSelector f
   ConfigWatcher :: ConfigWatcherSelector f -> RootSelector f
+
+instance Inject RootSelector RootSelector where
+  inject = idInjectSelector
+
+instance Inject DB.QuerySelector RootSelector where
+  inject = injectSelector Database
+
+instance Inject NodeClientSelector RootSelector where
+  inject = injectSelector NodeService
 
 -- TODO automate this boilerplate with Template Haskell
 getRootSelectorConfig :: GetSelectorConfig RootSelector

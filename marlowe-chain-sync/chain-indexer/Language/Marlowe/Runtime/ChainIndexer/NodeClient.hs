@@ -46,7 +46,7 @@ import Control.Arrow ((&&&))
 import Control.Concurrent.Component.UnliftIO
 import Control.Concurrent.STM (STM, TVar, modifyTVar, newTVar, readTVar, writeTVar)
 import Control.Monad (guard)
-import Control.Monad.Event.Class (MonadEvent, emitImmediateEventArgs_, withEvent)
+import Control.Monad.Event.Class (MonadInjectEvent, emitImmediateEventArgs_, withEvent)
 import Data.IntMap.Lazy (IntMap)
 import qualified Data.IntMap.Lazy as IntMap
 import Data.List (sortOn)
@@ -134,8 +134,8 @@ data RollBackwardField
 
 -- | Create a new NodeClient component.
 nodeClient
-  :: forall r m
-   . (MonadEvent r NodeClientSelector m, MonadUnliftIO m)
+  :: forall r s m
+   . (MonadInjectEvent r NodeClientSelector s m, MonadUnliftIO m)
   => Component m (NodeClientDependencies m) NodeClient
 nodeClient = component \NodeClientDependencies{..} -> do
   changesVar <- newTVar emptyChanges
@@ -208,8 +208,8 @@ chainTipToBlockNo = \case
   ChainTip _ _ blockNo -> At blockNo
 
 pipelinedClient
-  :: forall r m
-   . (MonadEvent r NodeClientSelector m, MonadIO m)
+  :: forall r s m
+   . (MonadInjectEvent r NodeClientSelector s m, MonadIO m)
   => CostModel
   -> Int
   -> TVar Changes
@@ -274,8 +274,8 @@ pipelinedClient costModel maxCost changesVar getIntersectionPoints =
     pipelinePolicy = pipelineDecisionLowHighMark 1 50
 
 mkClientStIdle
-  :: forall r m n
-   . (MonadEvent r NodeClientSelector m, MonadIO m)
+  :: forall r s m n
+   . (MonadInjectEvent r NodeClientSelector s m, MonadIO m)
   => CostModel
   -> Int
   -> TVar Changes
@@ -316,7 +316,7 @@ mkClientStIdle costModel maxCost changesVar slotNoToBlockNo pipelineDecision n c
     collect pipelineDecision' = mkClientStNext costModel maxCost changesVar slotNoToBlockNo pipelineDecision'
 
 mkClientStNext
-  :: (MonadIO m, MonadEvent r NodeClientSelector m)
+  :: (MonadIO m, MonadInjectEvent r NodeClientSelector s m)
   => CostModel
   -> Int
   -> TVar Changes

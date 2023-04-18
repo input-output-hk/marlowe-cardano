@@ -37,10 +37,8 @@ import qualified Data.Text.Lazy.IO as TL
 import Data.UUID.V4 (nextRandom)
 import qualified Hasql.Pool as Pool
 import Language.Marlowe.Runtime.ChainSync (ChainSyncDependencies(..), chainSync)
-import qualified Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL as DB
 import qualified Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL as PostgreSQL
-import Language.Marlowe.Runtime.ChainSync.NodeClient
-  (NodeClient(..), NodeClientDependencies(..), NodeClientSelector, nodeClient)
+import Language.Marlowe.Runtime.ChainSync.NodeClient (NodeClient(..), NodeClientDependencies(..), nodeClient)
 import Logging (RootSelector(..), getRootSelectorConfig)
 import Network.Protocol.ChainSeek.Server (chainSeekServerPeer)
 import Network.Protocol.Connection (SomeConnectionSource(..), logConnectionSource)
@@ -48,7 +46,7 @@ import Network.Protocol.Driver (TcpServerDependencies(..), tcpServer)
 import Network.Protocol.Handshake.Server (handshakeConnectionSource)
 import Network.Protocol.Job.Server (jobServerPeer)
 import Network.Protocol.Query.Server (queryServerPeer)
-import Observe.Event (EventBackend, idInjectSelector)
+import Observe.Event (EventBackend)
 import Observe.Event.Component (LoggerDependencies(..), withLogger)
 import Observe.Event.Explicit (hoistEventBackend, injectSelector)
 import Options (Options(..), getOptions)
@@ -152,14 +150,6 @@ instance MonadWith (AppM r) where
         pure $ GeneralAllocated a releaseA'
     stateThreadingGeneralWith (GeneralAllocate allocA') (flip (runReaderT . unAppM) r . go)
 
-instance MonadBackend r (AppM r) where
-  localBackend = localBackendReaderT AppM unAppM id
-
 instance MonadEvent r RootSelector (AppM r) where
-  askBackend = askBackendReaderT AppM id idInjectSelector
-
-instance MonadEvent r DB.QuerySelector (AppM r) where
-  askBackend = askBackendReaderT AppM id $ injectSelector Database
-
-instance MonadEvent r NodeClientSelector (AppM r) where
-  askBackend = askBackendReaderT AppM id $ injectSelector NodeService
+  localBackend = localBackendReaderT AppM unAppM id
+  askBackend = askBackendReaderT AppM id
