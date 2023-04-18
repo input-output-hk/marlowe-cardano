@@ -1,6 +1,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE RankNTypes #-}
@@ -8,7 +9,7 @@
 module Language.Marlowe.Runtime.Sync.Database
   where
 
-import Control.Monad.With (MonadWithExceptable)
+import Control.Monad.Event.Class (MonadInjectEvent, withEvent)
 import Data.Aeson (ToJSON)
 import Data.Text (Text)
 import Data.Void (Void)
@@ -19,8 +20,8 @@ import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainPoint, TxId)
 import Language.Marlowe.Runtime.Core.Api (ContractId, MarloweVersion(..), SomeMarloweVersion)
 import Language.Marlowe.Runtime.Discovery.Api (ContractHeader)
 import Language.Marlowe.Runtime.History.Api (ContractStep, SomeCreateStep)
+import Observe.Event (addField)
 import Observe.Event.Component (FieldConfig(..), GetSelectorConfig, SelectorConfig(..), SomeJSON(..))
-import Observe.Event.Explicit (EventBackend, addField, withEvent)
 
 data DatabaseSelector f where
   GetTip :: DatabaseSelector (QueryField Void ChainPoint)
@@ -84,68 +85,68 @@ data GetNextStepsArguments v = GetNextStepsArguments
   deriving stock (Generic)
   deriving anyclass (ToJSON)
 
-logDatabaseQueries :: MonadWithExceptable m => EventBackend m r DatabaseSelector -> DatabaseQueries m -> DatabaseQueries m
-logDatabaseQueries eventBackend DatabaseQueries{..} = DatabaseQueries
-  { getTip = withEvent eventBackend GetTip \ev -> do
+logDatabaseQueries :: (MonadInjectEvent r DatabaseSelector s m) => DatabaseQueries m -> DatabaseQueries m
+logDatabaseQueries DatabaseQueries{..} = DatabaseQueries
+  { getTip = withEvent GetTip \ev -> do
       result <- getTip
       addField ev $ Result result
       pure result
-  , getTipForContract = \contractId -> withEvent eventBackend GetTipForContract \ev -> do
+  , getTipForContract = \contractId -> withEvent GetTipForContract \ev -> do
       addField ev $ Arguments contractId
       result <- getTipForContract contractId
       addField ev $ Result result
       pure result
-  , getCreateStep = \contractId -> withEvent eventBackend GetCreateStep \ev -> do
+  , getCreateStep = \contractId -> withEvent GetCreateStep \ev -> do
       addField ev $ Arguments contractId
       result <- getCreateStep contractId
       addField ev $ Result $ uncurry GetCreateStepResult <$> result
       pure result
-  , getIntersection = \points -> withEvent eventBackend GetIntersection \ev -> do
+  , getIntersection = \points -> withEvent GetIntersection \ev -> do
       addField ev $ Arguments points
       result <- getIntersection points
       addField ev $ Result result
       pure result
-  , getIntersectionForContract = \contractId points -> withEvent eventBackend GetIntersectionForContract \ev -> do
+  , getIntersectionForContract = \contractId points -> withEvent GetIntersectionForContract \ev -> do
       addField ev $ Arguments $ GetIntersectionForContractArguments{..}
       result <- getIntersectionForContract contractId points
       addField ev $ Result $ uncurry GetIntersectionForContractResult <$> result
       pure result
-  , getNextHeaders = \fromPoint -> withEvent eventBackend GetNextHeaders \ev -> do
+  , getNextHeaders = \fromPoint -> withEvent GetNextHeaders \ev -> do
       addField ev $ Arguments fromPoint
       result <- getNextHeaders fromPoint
       addField ev $ Result result
       pure result
-  , getNextSteps = \version contractId fromPoint -> withEvent eventBackend (GetNextSteps version) \ev -> do
+  , getNextSteps = \version contractId fromPoint -> withEvent (GetNextSteps version) \ev -> do
       addField ev $ Arguments $ GetNextStepsArguments{..}
       result <- getNextSteps version contractId fromPoint
       addField ev $ Result result
       pure result
-  , getHeaders = \cFilter range -> withEvent eventBackend GetHeaders \ev -> do
+  , getHeaders = \cFilter range -> withEvent GetHeaders \ev -> do
       addField ev $ Arguments $ GetHeadersArguments cFilter range
       result <- getHeaders cFilter range
       addField ev $ Result result
       pure result
-  , getContractState = \contractId -> withEvent eventBackend GetContractState \ev -> do
+  , getContractState = \contractId -> withEvent GetContractState \ev -> do
       addField ev $ Arguments contractId
       result <- getContractState contractId
       addField ev $ Result result
       pure result
-  , getTransaction = \txId -> withEvent eventBackend GetTransaction \ev -> do
+  , getTransaction = \txId -> withEvent GetTransaction \ev -> do
       addField ev $ Arguments txId
       result <- getTransaction txId
       addField ev $ Result result
       pure result
-  , getTransactions = \contractId -> withEvent eventBackend GetTransactions \ev -> do
+  , getTransactions = \contractId -> withEvent GetTransactions \ev -> do
       addField ev $ Arguments contractId
       result <- getTransactions contractId
       addField ev $ Result result
       pure result
-  , getWithdrawal = \txId -> withEvent eventBackend GetWithdrawal \ev -> do
+  , getWithdrawal = \txId -> withEvent GetWithdrawal \ev -> do
       addField ev $ Arguments txId
       result <- getWithdrawal txId
       addField ev $ Result result
       pure result
-  , getWithdrawals = \wFilter range -> withEvent eventBackend GetWithdrawals \ev -> do
+  , getWithdrawals = \wFilter range -> withEvent GetWithdrawals \ev -> do
       addField ev $ Arguments $ GetWithdrawalsArguments wFilter range
       result <- getWithdrawals wFilter range
       addField ev $ Result result

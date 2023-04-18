@@ -1,30 +1,33 @@
 {-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE FlexibleContexts #-}
 
 module Language.Marlowe.Runtime.Sync.QueryServer
   where
 
-import Control.Concurrent.Component
+import Control.Concurrent.Component.UnliftIO
+import Control.Monad.Trans.Control (MonadBaseControl)
 import Language.Marlowe.Protocol.Query.Server (MarloweQueryServer, marloweQueryServer)
 import Language.Marlowe.Runtime.Sync.Database (DatabaseQueries(..))
 import Network.Protocol.Connection (SomeConnectionSource, SomeServerConnector, acceptSomeConnector)
 import Network.Protocol.Driver (runSomeConnector)
+import UnliftIO (MonadUnliftIO)
 
-data QueryServerDependencies = QueryServerDependencies
-  { databaseQueries :: DatabaseQueries IO
-  , querySource :: SomeConnectionSource MarloweQueryServer IO
+data QueryServerDependencies m = QueryServerDependencies
+  { databaseQueries :: DatabaseQueries m
+  , querySource :: SomeConnectionSource MarloweQueryServer m
   }
 
-queryServer :: Component IO QueryServerDependencies ()
+queryServer :: (MonadBaseControl IO m, MonadUnliftIO m) => Component m (QueryServerDependencies m) ()
 queryServer = serverComponent (component_ worker) \QueryServerDependencies{..} -> do
   connector <- acceptSomeConnector querySource
   pure WorkerDependencies{..}
 
-data WorkerDependencies = WorkerDependencies
-  { databaseQueries :: DatabaseQueries IO
-  , connector :: SomeServerConnector MarloweQueryServer IO
+data WorkerDependencies m = WorkerDependencies
+  { databaseQueries :: DatabaseQueries m
+  , connector :: SomeServerConnector MarloweQueryServer m
   }
 
-worker :: WorkerDependencies -> IO ()
+worker :: MonadBaseControl IO m => WorkerDependencies m -> m ()
 worker WorkerDependencies{..} = do
   let DatabaseQueries{..} = databaseQueries
   runSomeConnector connector $ marloweQueryServer

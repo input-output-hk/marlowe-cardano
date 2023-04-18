@@ -167,6 +167,7 @@ library indexer
     , eventuo11y ^>= { 0.9, 0.10 }
     , eventuo11y-extras ==0.1.0.0
     , hasql >= 1.6 && < 2
+    , hasql-pool ^>= 0.8
     , hasql-th >= 0.4 && < 0.5
     , hasql-transaction >= 1 && < 1.1
     , marlowe-cardano ==0.1.0.3
@@ -174,6 +175,7 @@ library indexer
     , marlowe-protocols ==0.1.0.0
     , marlowe-runtime ==0.0.1
     , marlowe-runtime:history-api ==0.0.1
+    , monad-control >= 1 && < 1.1
     , mtl
     , nonempty-containers >= 0.3.4 && < 0.4
     , plutus-ledger-api ==1.0.0.1
@@ -181,6 +183,7 @@ library indexer
     , text >= 1.2.4 && < 2
     , time >= 1.9 && < 2
     , transformers >= 0.5.6 && < 0.6
+    , unliftio >= 0.2.1 && < 0.3
     , vector >= 0.12.3 && < 0.13
     , witherable >= 0.4 && < 0.5
 
@@ -241,7 +244,6 @@ library sync
     , eventuo11y ^>= { 0.9, 0.10 }
     , eventuo11y-extras ==0.1.0.0
     , foldl >= 1.4 && < 2
-    , general-allocate ^>= { 0.2 }
     , hasql >= 1.6 && < 2
     , hasql-th >= 0.4 && < 0.5
     , hasql-transaction >= 1 && < 1.1
@@ -252,10 +254,12 @@ library sync
     , marlowe-runtime:discovery-api ==0.0.1
     , marlowe-runtime:history-api ==0.0.1
     , marlowe-runtime:sync-api ==0.0.1
+    , monad-control >= 1 && < 1.1
     , plutus-ledger-api ==1.0.0.1
     , text >= 1.2.4 && < 2
     , time >= 1.9 && < 2
     , transformers >= 0.5.6 && < 0.6
+    , unliftio >= 0.2.1 && < 0.3
     , vector >= 0.12.3 && < 0.13
     , witherable >= 0.4 && < 0.5
 
@@ -426,22 +430,26 @@ executable marlowe-indexer
   autogen-modules:
     Paths_marlowe_runtime
   build-depends:
-    , base >= 4.9 && < 5
     , aeson-pretty
     , async-components ==0.1.0.0
+    , base >= 4.9 && < 5
     , containers >= 0.6.5 && < 0.7
     , eventuo11y ^>= { 0.9, 0.10 }
     , eventuo11y-extras ==0.1.0.0
-    , hasql >= 1.6 && < 2
+    , general-allocate ^>= { 0.2 }
     , hasql-pool ^>= 0.8
     , marlowe-chain-sync ==0.0.1
     , marlowe-protocols ==0.1.0.0
     , marlowe-runtime ==0.0.1
     , marlowe-runtime:indexer ==0.0.1
+    , monad-control >= 1 && < 1.1
     , network >= 3.1 && < 4
     , nonempty-containers >= 0.3.4 && < 0.4
     , optparse-applicative >= 0.17 && < 0.18
     , text >= 1.2.4 && < 2
+    , transformers >= 0.5.6 && < 0.6
+    , transformers-base >= 0.4 && < 0.5
+    , unliftio >= 0.2.1 && < 0.3
     , uuid
   ghc-options: -threaded
 
@@ -455,12 +463,13 @@ executable marlowe-sync
   autogen-modules:
     Paths_marlowe_runtime
   build-depends:
-    , base >= 4.9 && < 5
     , aeson-pretty
     , async-components ==0.1.0.0
+    , base >= 4.9 && < 5
     , containers >= 0.6.5 && < 0.7
     , eventuo11y ^>= { 0.9, 0.10 }
     , eventuo11y-extras ==0.1.0.0
+    , general-allocate ^>= { 0.2 }
     , hasql >= 1.6 && < 2
     , hasql-pool ^>= 0.8
     , marlowe-protocols ==0.1.0.0
@@ -469,9 +478,13 @@ executable marlowe-sync
     , marlowe-runtime:history-api ==0.0.1
     , marlowe-runtime:sync ==0.0.1
     , marlowe-runtime:sync-api ==0.0.1
+    , monad-control >= 1 && < 1.1
     , network >= 3.1 && < 4
     , optparse-applicative >= 0.17 && < 0.18
     , text >= 1.2.4 && < 2
+    , transformers >= 0.5.6 && < 0.6
+    , transformers-base >= 0.4 && < 0.5
+    , unliftio >= 0.2.1 && < 0.3
     , uuid
   ghc-options: -threaded
 

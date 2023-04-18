@@ -1,4 +1,5 @@
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 
 module Logging
   ( RootSelector(..)
@@ -6,16 +7,19 @@ module Logging
   , getRootSelectorConfig
   ) where
 
+import Control.Monad.Event.Class (Inject(..))
 import Data.Foldable (fold)
 import Data.Map (Map)
 import Data.Text (Text)
 import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncQuery, RuntimeChainSeek)
 import Language.Marlowe.Runtime.Indexer (MarloweIndexerSelector(..), getMarloweIndexerSelectorConfig)
 import Language.Marlowe.Runtime.Indexer.ChainSeekClient (ChainSeekClientSelector(..))
+import Language.Marlowe.Runtime.Indexer.Database.PostgreSQL (QuerySelector(..), getQuerySelectorConfig)
 import Language.Marlowe.Runtime.Indexer.Store (StoreSelector(..))
 import Network.Protocol.Connection (ConnectorSelector, getConnectorSelectorConfig, getDefaultConnectorLogConfig)
 import Network.Protocol.Handshake.Types (Handshake)
 import Network.Protocol.Query.Types (Query)
+import Observe.Event (idInjectSelector, injectSelector)
 import Observe.Event.Component
   ( ConfigWatcherSelector(..)
   , GetSelectorConfig
@@ -29,14 +33,28 @@ import Observe.Event.Component
 data RootSelector f where
   ChainSeekClient :: ConnectorSelector (Handshake RuntimeChainSeek) f -> RootSelector f
   ChainQueryClient :: ConnectorSelector (Handshake (Query ChainSyncQuery)) f -> RootSelector f
+  Database :: QuerySelector f -> RootSelector f
   App :: MarloweIndexerSelector f -> RootSelector f
   ConfigWatcher :: ConfigWatcherSelector f -> RootSelector f
+
+instance Inject RootSelector RootSelector where
+  inject = idInjectSelector
+
+instance Inject StoreSelector RootSelector where
+  inject = injectSelector $ App . StoreEvent
+
+instance Inject ChainSeekClientSelector RootSelector where
+  inject = injectSelector $ App . ChainSeekClientEvent
+
+instance Inject QuerySelector RootSelector where
+  inject = injectSelector Database
 
 getRootSelectorConfig :: GetSelectorConfig RootSelector
 getRootSelectorConfig = \case
   ChainSeekClient sel -> prependKey "chain-sync" $ getConnectorSelectorConfig False False sel
   ChainQueryClient sel -> prependKey "chain-query" $ getConnectorSelectorConfig False False sel
   App sel -> prependKey "marlowe-indexer" $ getMarloweIndexerSelectorConfig sel
+  Database sel -> prependKey "database" $ getQuerySelectorConfig sel
   ConfigWatcher ReloadConfig -> SelectorConfig "reload-log-config" True
     $ singletonFieldConfig "config" True
 
@@ -44,6 +62,10 @@ defaultRootSelectorLogConfig :: Map Text SelectorLogConfig
 defaultRootSelectorLogConfig = fold
   [ getDefaultConnectorLogConfig getRootSelectorConfig ChainSeekClient
   , getDefaultConnectorLogConfig getRootSelectorConfig ChainQueryClient
+  , getDefaultLogConfig getRootSelectorConfig $ Database $ Query "commitRollback"
+  , getDefaultLogConfig getRootSelectorConfig $ Database $ Query "commitBlocks"
+  , getDefaultLogConfig getRootSelectorConfig $ Database $ Query "getIntersectionPoints"
+  , getDefaultLogConfig getRootSelectorConfig $ Database $ Query "getMarloweUTxO"
   , getDefaultLogConfig getRootSelectorConfig $ App $ StoreEvent Save
   , getDefaultLogConfig getRootSelectorConfig $ App $ ChainSeekClientEvent LoadMarloweUTxO
   , getDefaultLogConfig getRootSelectorConfig $ ConfigWatcher ReloadConfig

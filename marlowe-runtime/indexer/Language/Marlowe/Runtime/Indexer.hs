@@ -1,4 +1,5 @@
 {-# LANGUAGE Arrows #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE StrictData #-}
@@ -6,9 +7,12 @@
 module Language.Marlowe.Runtime.Indexer
   where
 
-import Control.Concurrent.Component
+import Control.Arrow (returnA)
 import Control.Concurrent.Component.Probes
+import Control.Concurrent.Component.UnliftIO
 import Control.Concurrent.STM (atomically)
+import Control.Monad.Event.Class (Inject, MonadEvent)
+import Control.Monad.Trans.Control (MonadBaseControl)
 import Data.Set.NonEmpty (NESet)
 import Data.Time (NominalDiffTime)
 import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncQuery, RuntimeChainSeekClient, ScriptHash)
@@ -18,40 +22,37 @@ import Language.Marlowe.Runtime.Indexer.Store
 import Network.Protocol.Connection (SomeClientConnector)
 import Network.Protocol.Query.Client (QueryClient)
 import Observe.Event.Component (FieldConfig(..), GetSelectorConfig, SelectorConfig(..), SomeJSON(SomeJSON), prependKey)
-import Observe.Event.Explicit (EventBackend, injectSelector, narrowEventBackend)
+import UnliftIO (MonadUnliftIO)
 
 data MarloweIndexerSelector f where
   StoreEvent :: StoreSelector f -> MarloweIndexerSelector f
   ChainSeekClientEvent :: ChainSeekClientSelector f -> MarloweIndexerSelector f
 
-data MarloweIndexerDependencies r = MarloweIndexerDependencies
-  { eventBackend :: EventBackend IO r MarloweIndexerSelector
-  , databaseQueries :: DatabaseQueries IO
-  , chainSyncConnector :: SomeClientConnector RuntimeChainSeekClient IO
-  , chainSyncQueryConnector :: SomeClientConnector (QueryClient ChainSyncQuery) IO
+data MarloweIndexerDependencies m = MarloweIndexerDependencies
+  { databaseQueries :: DatabaseQueries m
+  , chainSyncConnector :: SomeClientConnector RuntimeChainSeekClient m
+  , chainSyncQueryConnector :: SomeClientConnector (QueryClient ChainSyncQuery) m
   , pollingInterval :: NominalDiffTime
   , marloweScriptHashes :: NESet ScriptHash
   , payoutScriptHashes :: NESet ScriptHash
-  , httpPort :: Int
   }
 
-marloweIndexer :: Component IO (MarloweIndexerDependencies r) ()
+marloweIndexer
+  :: ( MonadEvent r s m
+     , MonadUnliftIO m
+     , MonadBaseControl IO m
+     , Inject StoreSelector s
+     , Inject ChainSeekClientSelector s
+     , MonadFail m
+     )
+  => Component m (MarloweIndexerDependencies m) Probes
 marloweIndexer = proc MarloweIndexerDependencies{..} -> do
-  (connected, pullEvent) <- chainSeekClient -< ChainSeekClientDependencies
-    { eventBackend = narrowEventBackend (injectSelector ChainSeekClientEvent) eventBackend
-    , ..
-    }
-  store -< StoreDependencies
-    { eventBackend = narrowEventBackend (injectSelector StoreEvent) eventBackend
-    , ..
-    }
-  probeServer -< ProbeServerDependencies
-    { probes = Probes
-        { startup = pure True
-        , liveness = atomically connected
-        , readiness = pure True
-        }
-    , port = httpPort
+  (connected, pullEvent) <- chainSeekClient -< ChainSeekClientDependencies {..}
+  store -< StoreDependencies {..}
+  returnA -< Probes
+    { startup = pure True
+    , liveness = atomically connected
+    , readiness = pure True
     }
 
 getMarloweIndexerSelectorConfig :: GetSelectorConfig MarloweIndexerSelector

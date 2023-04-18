@@ -1,21 +1,33 @@
 {-# LANGUAGE Arrows #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 module Main
   where
 
 import Control.Concurrent.Component
+import Control.Concurrent.Component.Probes (ProbeServerDependencies(..), probeServer)
+import Control.Concurrent.Component.UnliftIO (convertComponent)
 import Control.Exception (bracket)
 import Control.Monad ((<=<))
+import Control.Monad.Base (MonadBase)
+import Control.Monad.Event.Class
+import Control.Monad.Trans.Control (MonadBaseControl)
+import Control.Monad.Trans.Reader (ReaderT(..))
+import Control.Monad.With
 import Data.Aeson.Encode.Pretty (encodePretty)
+import Data.GeneralAllocate
 import Data.String (fromString)
 import qualified Data.Text.Lazy as T
 import Data.Text.Lazy.Encoding (decodeUtf8)
 import qualified Data.Text.Lazy.IO as TL
 import Data.UUID.V4 (nextRandom)
-import Hasql.Pool (UsageError(..))
 import qualified Hasql.Pool as Pool
-import qualified Hasql.Session as Session
 import Language.Marlowe.Protocol.HeaderSync.Server (marloweHeaderSyncServerPeer)
 import Language.Marlowe.Protocol.Sync.Server (marloweSyncServerPeer)
 import Language.Marlowe.Runtime.Sync (SyncDependencies(..), sync)
@@ -26,8 +38,8 @@ import Network.Protocol.Connection (SomeConnectionSource(..), logConnectionSourc
 import Network.Protocol.Driver (TcpServerDependencies(..), tcpServer)
 import Network.Protocol.Handshake.Server (handshakeConnectionSource)
 import Network.Socket (HostName, PortNumber)
-import Observe.Event.Backend (injectSelector, narrowEventBackend)
-import Observe.Event.Component (LoggerDependencies(..), logger)
+import Observe.Event.Backend (EventBackend, hoistEventBackend, injectSelector)
+import Observe.Event.Component (LoggerDependencies(..), withLogger)
 import Options.Applicative
   ( auto
   , execParser
@@ -48,21 +60,14 @@ import Options.Applicative
   , value
   )
 import System.IO (stderr)
+import UnliftIO (MonadIO, MonadUnliftIO, liftIO, throwIO)
 
 main :: IO ()
 main = run =<< getOptions
 
 run :: Options -> IO ()
 run Options{..} = bracket (Pool.acquire 100 (Just 5000000) (fromString databaseUri)) Pool.release $
-  runComponent_ proc pool -> do
-    eventBackend <- logger -< LoggerDependencies
-      { configFilePath = logConfigFile
-      , getSelectorConfig = getRootSelectorConfig
-      , newRef = nextRandom
-      , writeText = TL.hPutStr stderr
-      , injectConfigWatcherSelector = injectSelector ConfigWatcher
-      }
-
+  runComponent_ $ withLogger loggerDependencies runAppM proc pool -> do
     marloweSyncSource <- tcpServer -< TcpServerDependencies
       { host
       , port = marloweSyncPort
@@ -81,26 +86,61 @@ run Options{..} = bracket (Pool.acquire 100 (Just 5000000) (fromString databaseU
       , toPeer = id
       }
 
-    sync -< SyncDependencies
-      { databaseQueries = logDatabaseQueries (narrowEventBackend (injectSelector Database) eventBackend) $ hoistDatabaseQueries
-            (either throwUsageError pure <=< Pool.use pool)
+    probes <- convertComponent sync -< SyncDependencies
+      { databaseQueries = logDatabaseQueries $ hoistDatabaseQueries
+            (either throwIO pure <=< liftIO . Pool.use pool)
             Postgres.databaseQueries
       , syncSource = SomeConnectionSource
-          $ logConnectionSource (narrowEventBackend (injectSelector MarloweSyncServer) eventBackend)
+          $ logConnectionSource (injectSelector MarloweSyncServer)
           $ handshakeConnectionSource marloweSyncSource
       , headerSyncSource = SomeConnectionSource
-          $ logConnectionSource (narrowEventBackend (injectSelector MarloweHeaderSyncServer) eventBackend)
+          $ logConnectionSource (injectSelector MarloweHeaderSyncServer)
           $ handshakeConnectionSource headerSyncSource
       , querySource = SomeConnectionSource
-          $ logConnectionSource (narrowEventBackend (injectSelector MarloweQueryServer) eventBackend)
+          $ logConnectionSource (injectSelector MarloweQueryServer)
           $ handshakeConnectionSource querySource
-      , httpPort = fromIntegral httpPort
       }
-  where
-    throwUsageError (ConnectionUsageError err)                       = error $ show err
-    throwUsageError (SessionUsageError (Session.QueryError _ _ err)) = error $ show err
-    throwUsageError AcquisitionTimeoutUsageError                     = error "hasql-timeout"
 
+    probeServer -< ProbeServerDependencies { port = fromIntegral httpPort, .. }
+  where
+    loggerDependencies = LoggerDependencies
+      { configFilePath = logConfigFile
+      , getSelectorConfig = getRootSelectorConfig
+      , newRef = nextRandom
+      , writeText = TL.hPutStr stderr
+      , injectConfigWatcherSelector = injectSelector ConfigWatcher
+      }
+
+runAppM :: EventBackend IO r RootSelector -> AppM r a -> IO a
+runAppM eventBackend = flip runReaderT (hoistEventBackend liftIO eventBackend) . unAppM
+
+newtype AppM r a = AppM
+  { unAppM :: ReaderT (EventBackend (AppM r) r RootSelector) IO a
+  } deriving newtype (Functor, Applicative, Monad, MonadBase IO, MonadBaseControl IO, MonadIO, MonadUnliftIO, MonadFail)
+
+instance MonadWith (AppM r) where
+  type WithException (AppM r) = WithException IO
+  stateThreadingGeneralWith
+    :: forall a b releaseReturn
+     . GeneralAllocate (AppM r) (WithException IO) releaseReturn b a
+    -> (a -> AppM r b)
+    -> AppM r (b, releaseReturn)
+  stateThreadingGeneralWith (GeneralAllocate allocA) go = AppM . ReaderT $ \r -> do
+    let
+      allocA' :: (forall x. IO x -> IO x) -> IO (GeneralAllocated IO (WithException IO) releaseReturn b a)
+      allocA' restore = do
+        let
+          restore' :: forall x. AppM r x -> AppM r x
+          restore' mx = AppM . ReaderT $ restore . (runReaderT . unAppM) mx
+        GeneralAllocated a releaseA <- (runReaderT . unAppM) (allocA restore') r
+        let
+          releaseA' relTy = (runReaderT . unAppM) (releaseA relTy) r
+        pure $ GeneralAllocated a releaseA'
+    stateThreadingGeneralWith (GeneralAllocate allocA') (flip (runReaderT . unAppM) r . go)
+
+instance MonadEvent r RootSelector (AppM r) where
+  askBackend = askBackendReaderT AppM id
+  localBackend = localBackendReaderT AppM unAppM id
 
 data Options = Options
   { databaseUri :: String

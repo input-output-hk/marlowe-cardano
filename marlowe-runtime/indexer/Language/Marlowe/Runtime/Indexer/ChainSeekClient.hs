@@ -1,4 +1,5 @@
 {-# LANGUAGE ApplicativeDo #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE StrictData #-}
@@ -7,10 +8,10 @@ module Language.Marlowe.Runtime.Indexer.ChainSeekClient
   where
 
 import Cardano.Api (SystemStart)
-import Control.Concurrent (threadDelay)
-import Control.Concurrent.Component
-import Control.Concurrent.STM (STM, TVar, atomically, newTQueue, newTVar, readTQueue, readTVar, writeTQueue, writeTVar)
-import Control.Exception (finally)
+import Control.Concurrent.Component.UnliftIO
+import Control.Concurrent.STM (STM, TVar, newTQueue, newTVar, readTQueue, readTVar, writeTQueue, writeTVar)
+import Control.Monad.Event.Class (MonadInjectEvent, withEvent)
+import Control.Monad.Trans.Control (MonadBaseControl)
 import Data.Set (Set)
 import Data.Set.NonEmpty (NESet)
 import qualified Data.Set.NonEmpty as NESet
@@ -23,21 +24,22 @@ import Network.Protocol.ChainSeek.Client
 import Network.Protocol.Connection (SomeClientConnector)
 import Network.Protocol.Driver (runSomeConnector)
 import Network.Protocol.Query.Client (QueryClient, liftQuery)
-import Observe.Event.Backend (EventBackend)
-import Observe.Event.Explicit (addField, withEvent)
+import Observe.Event.Explicit (addField)
+import UnliftIO (MonadUnliftIO, atomically, finally)
+import UnliftIO.Concurrent (threadDelay)
 
 data ChainSeekClientSelector f where
   LoadMarloweUTxO :: ChainSeekClientSelector MarloweUTxO
 
 -- | Injectable dependencies for the chain sync client
-data ChainSeekClientDependencies r = ChainSeekClientDependencies
-  { databaseQueries :: DatabaseQueries IO
+data ChainSeekClientDependencies m = ChainSeekClientDependencies
+  { databaseQueries :: DatabaseQueries m
   -- ^ Implementations of the database queries.
 
-  , chainSyncConnector :: SomeClientConnector RuntimeChainSeekClient IO
+  , chainSyncConnector :: SomeClientConnector RuntimeChainSeekClient m
   -- ^ A connector that connects a client of the chain sync protocol.
 
-  , chainSyncQueryConnector :: SomeClientConnector (QueryClient ChainSyncQuery) IO
+  , chainSyncQueryConnector :: SomeClientConnector (QueryClient ChainSyncQuery) m
   -- ^ A connector that connects a client of the chain sync query protocol.
 
   , pollingInterval :: NominalDiffTime
@@ -48,8 +50,6 @@ data ChainSeekClientDependencies r = ChainSeekClientDependencies
 
   , payoutScriptHashes :: NESet ScriptHash
   -- ^ The set of known payout script hashes.
-
-  , eventBackend :: EventBackend IO r ChainSeekClientSelector
   }
 
 -- | A change to the chain with respect to Marlowe contracts
@@ -63,7 +63,10 @@ data ChainEvent
 -- | A component that runs a chain sync client to traverse the blockchain and
 -- extract blocks of Marlowe transactions. The sequence of changes to the chain
 -- can be read by repeatedly running the resulting STM action.
-chainSeekClient :: forall r. Component IO (ChainSeekClientDependencies r) (STM Bool, STM ChainEvent)
+chainSeekClient
+  :: forall r s m
+   . (MonadBaseControl IO m, MonadUnliftIO m, MonadInjectEvent r ChainSeekClientSelector s m, MonadFail m)
+  => Component m (ChainSeekClientDependencies m) (STM Bool, STM ChainEvent)
 chainSeekClient = component \ChainSeekClientDependencies{..} -> do
   -- Initialize a TQueue for emitting ChainEvents.
   eventQueue <- newTQueue
@@ -84,26 +87,24 @@ chainSeekClient = component \ChainSeekClientDependencies{..} -> do
           marloweScriptHashes
           payoutScriptHashes
           chainSyncQueryConnector
-          eventBackend
           connectedVar
     , (readTVar connectedVar, readTQueue eventQueue)
     )
   where
   -- | A chain sync client that discovers and follows all Marlowe contracts
   client
-    :: (ChainEvent -> IO ())
-    -> DatabaseQueries IO
+    :: (ChainEvent -> m ())
+    -> DatabaseQueries m
     -> NominalDiffTime
     -> NESet ScriptHash
     -> NESet ScriptHash
-    -> SomeClientConnector (QueryClient ChainSyncQuery) IO
-    -> EventBackend IO r ChainSeekClientSelector
+    -> SomeClientConnector (QueryClient ChainSyncQuery) m
     -> TVar Bool
-    -> RuntimeChainSeekClient IO ()
-  client emit DatabaseQueries{..} pollingInterval marloweScriptHashes payoutScriptHashes chainSyncQueryConnector eventBackend connectedVar =
+    -> RuntimeChainSeekClient m ()
+  client emit DatabaseQueries{..} pollingInterval marloweScriptHashes payoutScriptHashes chainSyncQueryConnector connectedVar =
     ChainSeekClient do
       let
-        queryChainSync :: ChainSyncQuery Void err a -> IO a
+        queryChainSync :: ChainSyncQuery Void err a -> m a
         queryChainSync query = do
           result <- runSomeConnector chainSyncQueryConnector $ liftQuery query
           case result of
@@ -133,7 +134,7 @@ chainSeekClient = component \ChainSeekClientDependencies{..} -> do
               emit $ RollBackward point tip
 
               -- Load the MarloweUTxO
-              utxo <- withEvent eventBackend LoadMarloweUTxO \ev -> case point of
+              utxo <- withEvent LoadMarloweUTxO \ev -> case point of
                 -- If the intersection point is at Genesis, return an empty MarloweUTxO.
                 Genesis -> pure $ MarloweUTxO mempty mempty
 
@@ -168,8 +169,8 @@ chainSeekClient = component \ChainSeekClientDependencies{..} -> do
       -- A helper function to poll pending query results after a set timeout and
       -- continue with the given ClientStNext.
       pollWithNext
-        :: ClientStNext Move err res ChainPoint (WithGenesis BlockHeader) IO a
-        -> IO (ClientStPoll Move err res ChainPoint (WithGenesis BlockHeader) IO a)
+        :: ClientStNext Move err res ChainPoint (WithGenesis BlockHeader) m a
+        -> m (ClientStPoll Move err res ChainPoint (WithGenesis BlockHeader) m a)
       pollWithNext next = do
         -- Wait for the polling interval to elapse (converted from seconds to
         -- milliseconds).
@@ -184,18 +185,18 @@ chainSeekClient = component \ChainSeekClientDependencies{..} -> do
       clientIdle
         :: Int
         -> SystemStart
-        -> (forall err x. ChainSyncQuery Void err x -> IO x)
+        -> (forall err x. ChainSyncQuery Void err x -> m x)
         -> MarloweUTxO
-        -> ClientStIdle Move ChainPoint (WithGenesis BlockHeader) IO a
+        -> ClientStIdle Move ChainPoint (WithGenesis BlockHeader) m a
       clientIdle securityParameter systemStart queryChainSync = SendMsgQueryNext (FindTxsFor allScriptCredentials) . clientNext securityParameter systemStart queryChainSync
 
       -- Handles responses from the main synchronization loop query.
       clientNext
         :: Int
         -> SystemStart
-        -> (forall err x. ChainSyncQuery Void err x -> IO x)
+        -> (forall err x. ChainSyncQuery Void err x -> m x)
         -> MarloweUTxO
-        -> ClientStNext Move Void (Set Transaction) ChainPoint (WithGenesis BlockHeader) IO a
+        -> ClientStNext Move Void (Set Transaction) ChainPoint (WithGenesis BlockHeader) m a
       clientNext securityParameter systemStart queryChainSync utxo = ClientStNext
         -- Fail with an error if marlowe-chain-sync rejects the query. This is safe
         -- from bad user input, because our queries are derived from the ledger
