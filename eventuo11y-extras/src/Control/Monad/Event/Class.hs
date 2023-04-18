@@ -10,7 +10,7 @@ module Control.Monad.Event.Class
   where
 
 import Control.Monad.Trans.Class (lift)
-import Control.Monad.Trans.Identity (IdentityT)
+import Control.Monad.Trans.Identity (IdentityT(..))
 import Control.Monad.Trans.Reader (ReaderT(..))
 import Control.Monad.With (MonadWithExceptable)
 import Data.Functor (void)
@@ -19,19 +19,25 @@ import Observe.Event.Backend (Event(..), hoistEventBackend, setAncestorEventBack
 import qualified Observe.Event.Explicit as Explicit
 import Unsafe.Coerce (unsafeCoerce)
 
-class MonadWithExceptable m => MonadEvent r s m | m -> r where
+class MonadWithExceptable m => MonadBackend r m | m -> r where
+  localBackend :: (forall t. EventBackend m r t -> EventBackend m r t) -> m a -> m a
+
+class MonadBackend r m => MonadEvent r s m | m -> r where
   askBackend :: m (EventBackend m r s)
-  localBackend :: (EventBackend m r s -> EventBackend m r s) -> m a -> m a
+
+instance MonadBackend r m => MonadBackend r (IdentityT m) where
+  localBackend f = IdentityT . localBackend (unsafeCoerce f) . runIdentityT
 
 instance MonadEvent r s m => MonadEvent r s (IdentityT m) where
   askBackend = unsafeCoerce $ askBackend @r @s @m
-  localBackend = unsafeCoerce $ localBackend @r @s @m
 
-instance MonadEvent r s m => MonadEvent r s (ReaderT r' m) where
-  askBackend = hoistEventBackend lift <$> lift askBackend
+instance MonadBackend r m => MonadBackend r (ReaderT r' m) where
   localBackend f m = ReaderT \r -> localBackend
     (hoistEventBackend (flip runReaderT r) . f . hoistEventBackend lift)
     (runReaderT m r)
+
+instance MonadEvent r s m => MonadEvent r s (ReaderT r' m) where
+  askBackend = hoistEventBackend lift <$> lift askBackend
 
 emitImmediateEventArgs_ :: MonadEvent r s m => NewEventArgs r s f -> m ()
 emitImmediateEventArgs_ = void . emitImmediateEventArgs
@@ -56,7 +62,7 @@ withEventArgs
 withEventArgs args f = do
   backend <- askBackend
   Explicit.withEventArgs backend args \ev ->
-    localBackend @r @s (setAncestorEventBackend (reference ev)) $ f ev
+    localBackend (setAncestorEventBackend (reference ev)) $ f ev
 
 withEvent :: MonadEvent r s m => s f -> (Event m r f -> m a) -> m a
 withEvent = withEventArgs . simpleNewEventArgs

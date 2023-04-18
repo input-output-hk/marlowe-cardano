@@ -1,6 +1,7 @@
 {-# LANGUAGE Arrows #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE RankNTypes #-}
 
@@ -12,9 +13,11 @@ module Language.Marlowe.Runtime.ChainIndexer
   ) where
 
 import Cardano.Api (CardanoMode, ChainPoint(..), ChainTip(..), LocalNodeClientProtocolsInMode)
-import Control.Concurrent.Component
+import Control.Arrow (returnA)
 import Control.Concurrent.Component.Probes
+import Control.Concurrent.Component.UnliftIO
 import Control.Concurrent.STM (atomically)
+import Control.Monad.Event.Class (MonadEvent)
 import Data.Aeson (Value(..), object, (.=))
 import Data.Time (NominalDiffTime)
 import Language.Marlowe.Runtime.Cardano.Api
@@ -22,7 +25,8 @@ import Language.Marlowe.Runtime.Cardano.Api
 import Language.Marlowe.Runtime.ChainIndexer.Database (DatabaseQueries(..))
 import Language.Marlowe.Runtime.ChainIndexer.Genesis (GenesisBlock)
 import Language.Marlowe.Runtime.ChainIndexer.NodeClient
-  ( CostModel
+  ( Changes(..)
+  , CostModel
   , NodeClient(..)
   , NodeClientDependencies(..)
   , NodeClientSelector(..)
@@ -31,35 +35,30 @@ import Language.Marlowe.Runtime.ChainIndexer.NodeClient
   , nodeClient
   )
 import Language.Marlowe.Runtime.ChainIndexer.Store
-  (ChainStoreDependencies(..), ChainStoreSelector(..), SaveField(..), chainStore)
+  (ChainStoreDependencies(..), ChainStoreSelector(..), CheckGenesisBlockField(..), chainStore)
 import Observe.Event.Component
-  ( FieldConfig(..)
-  , GetSelectorConfig
-  , SelectorConfig(..)
-  , SomeJSON(..)
-  , absurdFieldConfig
-  , prependKey
-  , singletonFieldConfig
-  , singletonFieldConfigWith
-  )
-import Observe.Event.Explicit (EventBackend, injectSelector, narrowEventBackend)
+  (FieldConfig(..), GetSelectorConfig, SelectorConfig(..), SomeJSON(..), prependKey, singletonFieldConfigWith)
+import UnliftIO (MonadUnliftIO)
 
 data ChainIndexerSelector f where
   NodeClientEvent :: NodeClientSelector f -> ChainIndexerSelector f
   ChainStoreEvent :: ChainStoreSelector f -> ChainIndexerSelector f
 
-data ChainIndexerDependencies r = ChainIndexerDependencies
+data ChainIndexerDependencies m = ChainIndexerDependencies
   { connectToLocalNode       :: !(LocalNodeClientProtocolsInMode CardanoMode -> IO ())
   , maxCost                  :: !Int
   , costModel                :: !CostModel
-  , databaseQueries          :: !(DatabaseQueries IO)
+  , databaseQueries          :: !(DatabaseQueries m)
   , persistRateLimit         :: !NominalDiffTime
   , genesisBlock             :: !GenesisBlock
-  , eventBackend          :: !(EventBackend IO r ChainIndexerSelector)
-  , httpPort :: Int
   }
 
-chainIndexer :: Component IO (ChainIndexerDependencies r) ()
+chainIndexer
+  :: ( MonadUnliftIO m
+     , MonadEvent r NodeClientSelector m
+     , MonadEvent r ChainStoreSelector m
+     )
+  => Component m (ChainIndexerDependencies m) Probes
 chainIndexer = proc ChainIndexerDependencies{..} -> do
   let DatabaseQueries{..} = databaseQueries
   NodeClient{..} <- nodeClient -< NodeClientDependencies
@@ -67,7 +66,6 @@ chainIndexer = proc ChainIndexerDependencies{..} -> do
     , getIntersectionPoints
     , maxCost
     , costModel
-    , eventBackend = narrowEventBackend (injectSelector NodeClientEvent) eventBackend
     }
   let rateLimit = persistRateLimit
   ready <- chainStore -< ChainStoreDependencies
@@ -78,15 +76,11 @@ chainIndexer = proc ChainIndexerDependencies{..} -> do
     , getGenesisBlock
     , genesisBlock
     , commitGenesisBlock
-    , eventBackend = narrowEventBackend (injectSelector ChainStoreEvent) eventBackend
     }
-  probeServer -< ProbeServerDependencies
-    { probes = Probes
-        { liveness = atomically connected
-        , startup = pure True
-        , readiness = atomically ready
-        }
-    , port = httpPort
+  returnA -< Probes
+    { liveness = atomically connected
+    , startup = pure True
+    , readiness = atomically ready
     }
 
 getChainIndexerSelectorConfig :: GetSelectorConfig ChainIndexerSelector
@@ -96,12 +90,12 @@ getChainIndexerSelectorConfig = \case
 
 getNodeClientSelectorConfig :: GetSelectorConfig NodeClientSelector
 getNodeClientSelectorConfig = \case
-  Connect -> SelectorConfig "connect" True absurdFieldConfig
   Intersect -> SelectorConfig "intersect" True
     $ singletonFieldConfigWith (SomeJSON . fmap pointToJSON) "points" False
   IntersectFound -> SelectorConfig "intersect-found" True
-    $ singletonFieldConfigWith (SomeJSON . pointToJSON) "point" True
-  IntersectNotFound -> SelectorConfig "intersect-not-found" True absurdFieldConfig
+    $ singletonFieldConfigWith (uncurry tipsToJSON) "tips" True
+  IntersectNotFound -> SelectorConfig "intersect-not-found" True
+    $ singletonFieldConfigWith (SomeJSON . tipToJSON) "remote-tip" True
   RollForward -> SelectorConfig "roll-forward" False FieldConfig
     { fieldKey = \case
         RollForwardBlock _ -> "block-header"
@@ -131,24 +125,35 @@ getNodeClientSelectorConfig = \case
         RollBackwardNewCost cost -> SomeJSON cost
     }
 
+tipsToJSON :: ChainPoint -> ChainTip -> SomeJSON
+tipsToJSON local remote = SomeJSON $ object
+  [ "local" .= pointToJSON local
+  , "remote" .= tipToJSON remote
+  ]
+
 getChainStoreSelectorConfig :: GetSelectorConfig ChainStoreSelector
 getChainStoreSelectorConfig = \case
-  CheckGenesisBlock -> SelectorConfig "check-genesis-block" True
-    $ singletonFieldConfig "genesis-block-exists" True
-  Save -> SelectorConfig "save" True FieldConfig
+  CheckGenesisBlock -> SelectorConfig "check-genesis-block" True FieldConfig
     { fieldKey = \case
-        RollbackPoint _ -> "rollback-point"
-        BlockCount _ -> "block-count"
-        LocalTip _ -> "local-tip"
-        RemoteTip _ -> "remote-tip"
-        TxCount _ -> "tx-count"
-    , fieldDefaultEnabled = const True
+        Computed _ -> "computed"
+        Saved _ -> "saved"
+    , fieldDefaultEnabled = \case
+        Computed _ -> True
+        Saved _ -> False
     , toSomeJSON = \case
-        RollbackPoint point -> SomeJSON $ pointToJSON point
-        BlockCount count -> SomeJSON count
-        LocalTip tip -> SomeJSON $ tipToJSON tip
-        RemoteTip tip -> SomeJSON $ tipToJSON tip
-        TxCount count -> SomeJSON count
+        Computed block -> SomeJSON $ show block
+        Saved block -> SomeJSON $ show block
+    }
+  Save -> SelectorConfig "save" True FieldConfig
+    { fieldKey = const "changes"
+    , fieldDefaultEnabled = const True
+    , toSomeJSON = \Changes{..} -> SomeJSON $ object
+        [ "rollback-point" .= (pointToJSON <$> changesRollback)
+        , "block-count" .= changesBlockCount
+        , "local-tip" .= tipToJSON changesLocalTip
+        , "remote-tip" .= tipToJSON changesTip
+        , "tx-count" .= changesTxCount
+        ]
     }
 
 pointToJSON :: ChainPoint -> Value

@@ -43,7 +43,7 @@ import Cardano.Api.ChainSync.ClientPipelined
   , runPipelineDecision
   )
 import Control.Arrow ((&&&))
-import Control.Concurrent.Component
+import Control.Concurrent.Component.UnliftIO
 import Control.Concurrent.STM (STM, TVar, modifyTVar, newTVar, readTVar, writeTVar)
 import Control.Monad (guard)
 import Control.Monad.Event.Class (MonadEvent, emitImmediateEventArgs_, withEvent)

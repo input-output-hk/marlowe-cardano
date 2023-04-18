@@ -9,7 +9,7 @@ module Language.Marlowe.Runtime.ChainIndexer.Store
   , chainStore
   ) where
 
-import Control.Concurrent.Component
+import Control.Concurrent.Component.UnliftIO
 import Control.Concurrent.STM (STM, newTVar, readTVar)
 import Control.Concurrent.STM.Delay (Delay, newDelay, waitDelay)
 import Control.Concurrent.STM.TVar (writeTVar)

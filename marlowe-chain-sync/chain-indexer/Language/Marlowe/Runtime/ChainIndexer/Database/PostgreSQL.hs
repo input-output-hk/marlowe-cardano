@@ -26,7 +26,10 @@
 -}
 
 module Language.Marlowe.Runtime.ChainIndexer.Database.PostgreSQL
-  ( databaseQueries
+  ( QueryField(..)
+  , QuerySelector(..)
+  , databaseQueries
+  , getQuerySelectorConfig
   ) where
 
 import Cardano.Api
@@ -81,6 +84,8 @@ import qualified Cardano.Ledger.Babbage.Tx as Babbage
 import qualified Cardano.Ledger.Babbage.TxBody as Babbage
 import Cardano.Ledger.SafeHash (originalBytes)
 import Cardano.Ledger.Shelley.API.Types (StrictMaybe(..))
+import Control.Monad.Event.Class (MonadEvent, withEvent)
+import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import Data.ByteString.Base16 (encodeBase16)
@@ -91,9 +96,12 @@ import qualified Data.Map.Strict as M
 import Data.Profunctor (rmap)
 import qualified Data.Set as Set
 import Data.Text (Text)
+import Data.Text.Encoding (decodeUtf8)
 import Data.Vector (Vector)
 import qualified Data.Vector as V
-import Hasql.Session (Session)
+import Hasql.Pool (Pool)
+import qualified Hasql.Pool as Pool
+import qualified Hasql.Session as Session
 import Hasql.Statement (refineResult)
 import Hasql.TH (resultlessStatement, vectorStatement)
 import Hasql.Transaction (Transaction)
@@ -114,17 +122,52 @@ import Language.Marlowe.Runtime.ChainIndexer.Database
   , hoistGetIntersectionPoints
   )
 import Language.Marlowe.Runtime.ChainIndexer.Genesis (GenesisBlock(..), GenesisTx(..))
+import Observe.Event (addField)
+import Observe.Event.Component (FieldConfig(..), GetSelectorConfig, SelectorConfig(SelectorConfig), SomeJSON(SomeJSON))
 import Ouroboros.Network.Point (WithOrigin(..))
 import Prelude hiding (init)
+import UnliftIO (throwIO)
+
+data QuerySelector f where
+  Query :: Text -> QuerySelector QueryField
+
+data QueryField
+  = SqlStatement ByteString
+  | Parameters [Text]
+
+getQuerySelectorConfig :: GetSelectorConfig QuerySelector
+getQuerySelectorConfig = \case
+  Query name -> SelectorConfig name True FieldConfig
+    { fieldKey = \case
+        SqlStatement _ -> "sql"
+        Parameters _ -> "parameters"
+    , fieldDefaultEnabled = const True
+    , toSomeJSON = \case
+        SqlStatement sql -> SomeJSON $ decodeUtf8 sql
+        Parameters parameters -> SomeJSON parameters
+    }
 
 -- | PostgreSQL implementation for the chain sync database queries.
-databaseQueries :: GenesisBlock -> DatabaseQueries Session
-databaseQueries genesisBlock = DatabaseQueries
-  (hoistCommitRollback (TS.transaction TS.ReadCommitted TS.Write) $ commitRollback genesisBlock)
-  (hoistCommitBlocks (TS.transaction TS.ReadCommitted TS.Write) commitBlocks)
-  (hoistCommitGenesisBlock (TS.transaction TS.ReadCommitted TS.Write) commitGenesisBlock)
-  (hoistGetIntersectionPoints (TS.transaction TS.ReadCommitted TS.Read) getIntersectionPoints)
-  (hoistGetGenesisBlock (TS.transaction TS.ReadCommitted TS.Read) getGenesisBlock)
+databaseQueries :: forall r m. (MonadEvent r QuerySelector m, MonadIO m) => Pool -> GenesisBlock -> DatabaseQueries m
+databaseQueries pool genesisBlock = DatabaseQueries
+  (hoistCommitRollback (transact "commitRollback" TS.Write) $ commitRollback genesisBlock)
+  (hoistCommitBlocks (transact "commitBlocks" TS.Write) commitBlocks)
+  (hoistCommitGenesisBlock (transact "commitGenesisBlock" TS.Write) commitGenesisBlock)
+  (hoistGetIntersectionPoints (transact "getIntersectionPoints" TS.Read) getIntersectionPoints)
+  (hoistGetGenesisBlock (transact "getGenesisBlock" TS.Read) getGenesisBlock)
+  where
+    transact :: Text -> TS.Mode -> Transaction a -> m a
+    transact queryName mode m = withEvent (Query queryName) \ev -> do
+      result <- liftIO $ Pool.use pool $ TS.transaction TS.Serializable mode m
+      case result of
+        Left ex -> do
+          case ex of
+            (Pool.SessionUsageError (Session.QueryError sql params _)) -> do
+              addField ev $ SqlStatement sql
+              addField ev $ Parameters params
+            _ -> pure ()
+          throwIO ex
+        Right a -> pure a
 
 
 -- GetGenesisBlock

@@ -26,13 +26,13 @@ import qualified Data.Set as Set
 data GenesisBlock = GenesisBlock
   { genesisBlockHash :: !(Hash BlockHeader)
   , genesisBlockTxs  :: !(Set GenesisTx)
-  } deriving (Eq)
+  } deriving (Eq, Show)
 
 data GenesisTx = GenesisTx
   { genesisTxId       :: !TxId
   , genesisTxLovelace :: !Lovelace
   , genesisTxAddress  :: !AddressAny
-  } deriving (Eq, Ord)
+  } deriving (Eq, Ord, Show)
 
 computeGenesisBlock :: ByteString -> Byron.Config -> ShelleyGenesis (ShelleyEra StandardCrypto) -> GenesisBlock
 computeGenesisBlock genesisFileHash byronGenesis shelleyGenesis = GenesisBlock

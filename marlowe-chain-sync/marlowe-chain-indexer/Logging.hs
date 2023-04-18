@@ -13,6 +13,7 @@ import Data.Foldable (fold)
 import Data.Map (Map)
 import Data.Text (Text)
 import Language.Marlowe.Runtime.ChainIndexer (ChainIndexerSelector(..), getChainIndexerSelectorConfig)
+import Language.Marlowe.Runtime.ChainIndexer.Database.PostgreSQL (QuerySelector, getQuerySelectorConfig)
 import Language.Marlowe.Runtime.ChainIndexer.NodeClient (NodeClientSelector(..))
 import Language.Marlowe.Runtime.ChainIndexer.Store (ChainStoreSelector(..))
 import Observe.Event.Component
@@ -21,24 +22,26 @@ import Observe.Event.Component
   , SelectorConfig(..)
   , SelectorLogConfig
   , getDefaultLogConfig
+  , prependKey
   , singletonFieldConfig
   )
 
 data RootSelector f where
   App :: ChainIndexerSelector f -> RootSelector f
+  Database :: QuerySelector f -> RootSelector f
   ConfigWatcher :: ConfigWatcherSelector f -> RootSelector f
 
 -- TODO automate this boilerplate with Template Haskell
 getRootSelectorConfig :: GetSelectorConfig RootSelector
 getRootSelectorConfig = \case
   App sel -> getChainIndexerSelectorConfig sel
+  Database sel -> prependKey "database" $ getQuerySelectorConfig sel
   ConfigWatcher ReloadConfig -> SelectorConfig "reload-log-config" True
     $ singletonFieldConfig "config" True
 
 defaultRootSelectorLogConfig :: Map Text SelectorLogConfig
 defaultRootSelectorLogConfig = fold
-  [ getDefaultLogConfig getRootSelectorConfig (App $ NodeClientEvent Connect)
-  , getDefaultLogConfig getRootSelectorConfig (App $ NodeClientEvent Intersect)
+  [ getDefaultLogConfig getRootSelectorConfig (App $ NodeClientEvent Intersect)
   , getDefaultLogConfig getRootSelectorConfig (App $ NodeClientEvent IntersectFound)
   , getDefaultLogConfig getRootSelectorConfig (App $ NodeClientEvent IntersectNotFound)
   , getDefaultLogConfig getRootSelectorConfig (App $ NodeClientEvent RollForward)

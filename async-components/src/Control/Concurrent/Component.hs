@@ -1,4 +1,5 @@
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecursiveDo #-}
 {-# LANGUAGE UndecidableInstances #-}
 module Control.Concurrent.Component
@@ -144,3 +145,6 @@ serverComponentWithSetup worker mkAccept = component \a -> do
       b <- accept
       void $ fork $ runComponent_ (suppressErrors worker) b
   pure (run, ())
+
+hoistComponent :: (forall x. m x -> n x) -> Component m a b -> Component n a b
+hoistComponent f = Component . (fmap . fmap . first) (Concurrently . f . runConcurrently) . unComponent

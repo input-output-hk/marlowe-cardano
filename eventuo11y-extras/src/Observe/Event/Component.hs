@@ -18,9 +18,10 @@ module Observe.Event.Component
   , prependKey
   , singletonFieldConfig
   , singletonFieldConfigWith
+  , withLogger
   ) where
 
-import Control.Arrow (returnA, (&&&))
+import Control.Arrow (app, returnA, (&&&))
 import Control.Concurrent (threadDelay)
 import Control.Concurrent.Component
 import Control.Concurrent.STM (STM, atomically, newTVar, readTVar, writeTVar)
@@ -41,7 +42,8 @@ import Data.Text (Text)
 import qualified Data.Text.Lazy as TL
 import Data.Time (diffUTCTime)
 import Data.Void (Void, absurd)
-import Observe.Event.Backend (InjectSelector, narrowEventBackend)
+import Observe.Event (InjectSelector)
+import Observe.Event.Backend (narrowEventBackend)
 import Observe.Event.Backend.Extra
 import Observe.Event.Explicit (EventBackend, addField, withEvent)
 import System.Directory (canonicalizePath)
@@ -146,6 +148,16 @@ logger = proc LoggerDependencies{..} -> case configFilePath of
       getLogConfig <- configWatcher -< (narrowEventBackend injectConfigWatcherSelector eventBackend, configFile)
       eventBackend <- logAppender -< LogAppenderDependencies{..}
     returnA -< eventBackend
+
+withLogger
+  :: (MonadWithExceptable m, MonadBaseControl IO m, ToJSON r)
+  => LoggerDependencies m r s
+  -> (EventBackend m (Maybe r) s -> forall x. n x -> m x)
+  -> Component n a b
+  -> Component m a b
+withLogger dependencies runAppMonad appComponent = proc a -> do
+  eventBackend <- logger -< dependencies
+  app -< (hoistComponent (runAppMonad eventBackend) appComponent, a)
 
 data ConfigWatcherSelector f where
   ReloadConfig :: ConfigWatcherSelector (Either String LogConfig)
