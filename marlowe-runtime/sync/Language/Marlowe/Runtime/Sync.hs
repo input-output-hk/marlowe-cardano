@@ -5,9 +5,8 @@ module Language.Marlowe.Runtime.Sync
   where
 
 import Control.Arrow (returnA)
+import Control.Concurrent.Component
 import Control.Concurrent.Component.Probes
-import Control.Concurrent.Component.UnliftIO
-import Control.Monad.Trans.Control (MonadBaseControl)
 import Language.Marlowe.Protocol.HeaderSync.Server (MarloweHeaderSyncServer)
 import Language.Marlowe.Protocol.Query.Server (MarloweQueryServer)
 import Language.Marlowe.Protocol.Sync.Server (MarloweSyncServer)
@@ -25,7 +24,7 @@ data SyncDependencies m = SyncDependencies
   , querySource :: SomeConnectionSource MarloweQueryServer m
   }
 
-sync :: (MonadBaseControl IO m, MonadUnliftIO m) => Component m (SyncDependencies m) Probes
+sync :: MonadUnliftIO m => Component m (SyncDependencies m) Probes
 sync = proc SyncDependencies{..} -> do
   marloweSyncServer -< MarloweSyncServerDependencies{..}
   marloweHeaderSyncServer -< MarloweHeaderSyncServerDependencies{..}

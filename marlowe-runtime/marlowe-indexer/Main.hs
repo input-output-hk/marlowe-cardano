@@ -13,12 +13,9 @@ module Main
 
 import Control.Concurrent.Component
 import Control.Concurrent.Component.Probes (ProbeServerDependencies(..), probeServer)
-import Control.Concurrent.Component.UnliftIO (convertComponent)
 import Control.Exception (bracket)
-import Control.Monad.Base (MonadBase)
 import Control.Monad.Event.Class
 import Control.Monad.IO.Class (MonadIO, liftIO)
-import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Monad.Trans.Reader (ReaderT(..))
 import Control.Monad.With
 import Data.Aeson.Encode.Pretty (encodePretty)
@@ -85,7 +82,7 @@ run Options{..} = withSocketsDo do
   bracket (Pool.acquire 100 (Just 5000000) (fromString databaseUri)) Pool.release
     $ runComponent_
     $ withLogger loggerDependencies runAppM proc pool -> do
-        probes <- convertComponent marloweIndexer -< MarloweIndexerDependencies
+        probes <- marloweIndexer -< MarloweIndexerDependencies
           { chainSyncConnector = SomeConnector
               $ logConnector (injectSelector ChainSeekClient)
               $ handshakeClientConnector
@@ -107,7 +104,7 @@ run Options{..} = withSocketsDo do
       , injectConfigWatcherSelector = injectSelector ConfigWatcher
       }
 
-    chainSyncQueryConnector :: (MonadFail m, MonadBase IO m) => ClientConnector (Handshake (Query ChainSyncQuery)) (QueryClient ChainSyncQuery) m
+    chainSyncQueryConnector :: (MonadFail m, MonadIO m) => ClientConnector (Handshake (Query ChainSyncQuery)) (QueryClient ChainSyncQuery) m
     chainSyncQueryConnector = handshakeClientConnector $ tcpClient chainSeekHost chainSeekQueryPort queryClientPeer
 
     queryChainSync :: ChainSyncQuery Void e a -> IO a
@@ -120,7 +117,7 @@ runAppM eventBackend = flip runReaderT (hoistEventBackend liftIO eventBackend) .
 
 newtype AppM r a = AppM
   { unAppM :: ReaderT (EventBackend (AppM r) r RootSelector) IO a
-  } deriving newtype (Functor, Applicative, Monad, MonadBase IO, MonadBaseControl IO, MonadIO, MonadUnliftIO, MonadFail)
+  } deriving newtype (Functor, Applicative, Monad, MonadIO, MonadUnliftIO, MonadFail)
 
 instance MonadWith (AppM r) where
   type WithException (AppM r) = WithException IO

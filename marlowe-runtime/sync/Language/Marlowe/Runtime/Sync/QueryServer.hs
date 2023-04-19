@@ -4,8 +4,7 @@
 module Language.Marlowe.Runtime.Sync.QueryServer
   where
 
-import Control.Concurrent.Component.UnliftIO
-import Control.Monad.Trans.Control (MonadBaseControl)
+import Control.Concurrent.Component
 import Language.Marlowe.Protocol.Query.Server (MarloweQueryServer, marloweQueryServer)
 import Language.Marlowe.Runtime.Sync.Database (DatabaseQueries(..))
 import Network.Protocol.Connection (SomeConnectionSource, SomeServerConnector, acceptSomeConnector)
@@ -17,7 +16,7 @@ data QueryServerDependencies m = QueryServerDependencies
   , querySource :: SomeConnectionSource MarloweQueryServer m
   }
 
-queryServer :: (MonadBaseControl IO m, MonadUnliftIO m) => Component m (QueryServerDependencies m) ()
+queryServer :: MonadUnliftIO m => Component m (QueryServerDependencies m) ()
 queryServer = serverComponent (component_ worker) \QueryServerDependencies{..} -> do
   connector <- acceptSomeConnector querySource
   pure WorkerDependencies{..}
@@ -27,7 +26,7 @@ data WorkerDependencies m = WorkerDependencies
   , connector :: SomeServerConnector MarloweQueryServer m
   }
 
-worker :: MonadBaseControl IO m => WorkerDependencies m -> m ()
+worker :: MonadUnliftIO m => WorkerDependencies m -> m ()
 worker WorkerDependencies{..} = do
   let DatabaseQueries{..} = databaseQueries
   runSomeConnector connector $ marloweQueryServer

@@ -8,7 +8,6 @@ module Language.Marlowe.Runtime.Transaction.Submit
 import Cardano.Api (BabbageEra, ScriptDataSupportedInEra(..), Tx)
 import qualified Cardano.Api as C
 import Control.Concurrent.STM (STM, newTVar, readTVar, writeTVar)
-import Control.Monad.Trans.Control (MonadBaseControl)
 import Data.Functor (($>))
 import Data.Void (absurd)
 import Language.Marlowe.Runtime.ChainSync.Api
@@ -37,7 +36,7 @@ data SubmitJob m = SubmitJob
   }
 
 mkSubmitJob
-  :: (MonadUnliftIO m, MonadBaseControl IO m)
+  :: MonadUnliftIO m
   => SubmitJobDependencies m
   -> Tx BabbageEra
   -> STM (SubmitJob m)
@@ -47,7 +46,7 @@ mkSubmitJob deps tx = do
 
 doSubmit
   :: forall m era
-   . (MonadUnliftIO m, MonadBaseControl IO m)
+   . MonadUnliftIO m
   => SubmitJobDependencies m
   -> (SubmitJobStatus -> m ())
   -> ScriptDataSupportedInEra era

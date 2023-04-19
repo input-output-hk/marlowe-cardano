@@ -23,12 +23,9 @@ import Cardano.Api
 import qualified Cardano.Api as Cardano (connectToLocalNode)
 import Control.Concurrent.Component
 import Control.Concurrent.Component.Probes (ProbeServerDependencies(..), probeServer)
-import Control.Concurrent.Component.UnliftIO (convertComponent)
 import Control.Exception (bracket)
-import Control.Monad.Base (MonadBase)
 import Control.Monad.Event.Class
 import Control.Monad.IO.Class (MonadIO, liftIO)
-import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Monad.Trans.Reader (ReaderT(..))
 import Control.Monad.With (MonadWith(..))
 import Data.GeneralAllocate
@@ -88,11 +85,11 @@ run Options{..} = bracket (Pool.acquire 100 (Just 5000000) (fromString databaseU
         , toPeer = jobServerPeer
         }
 
-      NodeClient{..} <- convertComponent nodeClient -< NodeClientDependencies
+      NodeClient{..} <- nodeClient -< NodeClientDependencies
         { connectToLocalNode = Cardano.connectToLocalNode localNodeConnectInfo
         }
 
-      probes <- convertComponent chainSync -< ChainSyncDependencies
+      probes <- chainSync -< ChainSyncDependencies
         { databaseQueries = PostgreSQL.databaseQueries pool networkId
         , syncSource = SomeConnectionSource
             $ logConnectionSource (injectSelector ChainSeekServer)
@@ -128,7 +125,7 @@ runAppM eventBackend = flip runReaderT (hoistEventBackend liftIO eventBackend). 
 
 newtype AppM r a = AppM
   { unAppM :: ReaderT (EventBackend (AppM r) r RootSelector) IO a
-  } deriving newtype (Functor, Applicative, Monad, MonadBase IO, MonadBaseControl IO, MonadIO, MonadUnliftIO, MonadFail)
+  } deriving newtype (Functor, Applicative, Monad, MonadIO, MonadUnliftIO, MonadFail)
 
 instance MonadWith (AppM r) where
   type WithException (AppM r) = WithException IO

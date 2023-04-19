@@ -25,7 +25,7 @@ import Control.Concurrent.STM
 import Control.Concurrent.STM.TMVar (tryReadTMVar)
 import Control.Exception (SomeException)
 import Control.Monad (filterM, join, mfilter, unless)
-import Control.Monad.Base (MonadBase, liftBase)
+import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.Maybe (catMaybes, isJust, maybeToList)
 import Data.Some (Some(Some))
 import Data.Time (UTCTime, getCurrentTime)
@@ -101,7 +101,7 @@ data EventRecord r s f = EventRecord
 -- | Create an event backend that writes events to a queue for processing in a
 -- separate thread.
 proxyEventBackend
-  :: MonadBase IO m
+  :: MonadIO m
   => m r
   -> STM (STM [Some (EventRecord r s)], EventBackend m r s)
 proxyEventBackend newReference = do
@@ -109,7 +109,7 @@ proxyEventBackend newReference = do
   pure (flushTQueueNonEmpty queue, EventBackend
     { newEvent = \NewEventArgs{..} -> do
         ref <- newReference
-        liftBase do
+        liftIO do
           start <- getCurrentTime
           fieldsVar <- newTVarIO newEventInitialFields
           endedVar <- newEmptyTMVarIO
@@ -122,8 +122,8 @@ proxyEventBackend newReference = do
             selector = newEventSelector
           pure Event
             { reference = ref
-            , addField = liftBase . atomically . unlessEnded . modifyTVar fieldsVar . (:)
-            , finalize = \exception -> liftBase do
+            , addField = liftIO . atomically . unlessEnded . modifyTVar fieldsVar . (:)
+            , finalize = \exception -> liftIO do
                 end <- getCurrentTime
                 atomically $ unlessEnded do
                   fields <- readTVar fieldsVar

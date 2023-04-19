@@ -14,6 +14,7 @@ module Control.Monad.Event.Class
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Identity (IdentityT(..))
 import Control.Monad.Trans.Reader (ReaderT(..), asks)
+import Control.Monad.Trans.Resource.Internal (ResourceT(..))
 import Control.Monad.With (MonadWithExceptable)
 import Data.Functor (void)
 import Observe.Event (Event, EventBackend, InjectSelector, NewEventArgs(..))
@@ -35,6 +36,12 @@ instance MonadEvent r s m => MonadEvent r s (ReaderT r' m) where
   localBackend f m = ReaderT \r -> localBackend
     (hoistEventBackend (flip runReaderT r) . f . hoistEventBackend lift)
     (runReaderT m r)
+
+instance MonadEvent r s m => MonadEvent r s (ResourceT m) where
+  askBackend = hoistEventBackend lift <$> lift askBackend
+  localBackend f m = ResourceT \releaseMap -> localBackend
+    (hoistEventBackend (flip unResourceT releaseMap) . f . hoistEventBackend lift)
+    (unResourceT m releaseMap)
 
 class Inject s t where
   inject :: InjectSelector s t

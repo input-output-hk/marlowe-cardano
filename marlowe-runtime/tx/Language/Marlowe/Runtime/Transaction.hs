@@ -10,11 +10,10 @@ import Cardano.Api (Tx)
 import qualified Cardano.Api as C
 import Cardano.Api.Byron (BabbageEra)
 import Control.Arrow (returnA)
+import Control.Concurrent.Component
 import Control.Concurrent.Component.Probes
-import Control.Concurrent.Component.UnliftIO
 import Control.Concurrent.STM (STM, atomically)
 import Control.Monad.Event.Class (MonadInjectEvent)
-import Control.Monad.Trans.Control (MonadBaseControl)
 import Data.Text (Text)
 import Data.Void
 import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncQuery, RuntimeChainSeekClient)
@@ -41,7 +40,7 @@ data TransactionDependencies m = TransactionDependencies
   }
 
 transaction
-  :: (MonadUnliftIO m, MonadBaseControl IO m, MonadInjectEvent r TransactionServerSelector s m)
+  :: (MonadUnliftIO m, MonadInjectEvent r TransactionServerSelector s m)
   => Component m (TransactionDependencies m) Probes
 transaction = proc TransactionDependencies{..} -> do
   (connected, getTip) <- transactionChainClient -< TransactionChainClientDependencies{..}

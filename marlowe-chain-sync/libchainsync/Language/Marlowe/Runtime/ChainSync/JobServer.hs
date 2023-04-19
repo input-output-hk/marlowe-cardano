@@ -10,8 +10,7 @@ module Language.Marlowe.Runtime.ChainSync.JobServer
   where
 
 import Cardano.Api (CardanoEra(..), CardanoMode, ScriptDataSupportedInEra(..), Tx, TxValidationErrorInMode)
-import Control.Concurrent.Component.UnliftIO
-import Control.Monad.Trans.Control (MonadBaseControl)
+import Control.Concurrent.Component
 import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncCommand(..))
 import Network.Protocol.Connection (SomeConnectionSource, SomeServerConnector, acceptSomeConnector)
 import Network.Protocol.Driver (runSomeConnector)
@@ -28,7 +27,7 @@ data ChainSyncJobServerDependencies m = ChainSyncJobServerDependencies
       -> m (SubmitResult (TxValidationErrorInMode CardanoMode))
   }
 
-chainSyncJobServer :: (MonadBaseControl IO m, MonadUnliftIO m) => Component m (ChainSyncJobServerDependencies m) ()
+chainSyncJobServer :: MonadUnliftIO m => Component m (ChainSyncJobServerDependencies m) ()
 chainSyncJobServer = serverComponent worker \ChainSyncJobServerDependencies{..} -> do
   connector <- acceptSomeConnector jobSource
   pure WorkerDependencies {..}
@@ -42,7 +41,7 @@ data WorkerDependencies m = WorkerDependencies
       -> m (SubmitResult (TxValidationErrorInMode CardanoMode))
   }
 
-worker :: forall m. MonadBaseControl IO m => Component m (WorkerDependencies m) ()
+worker :: forall m. MonadUnliftIO m => Component m (WorkerDependencies m) ()
 worker = component_ \WorkerDependencies{..} -> do
   let
     server :: JobServer ChainSyncCommand m ()

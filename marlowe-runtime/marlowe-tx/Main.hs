@@ -12,11 +12,8 @@ module Main
 
 import Control.Concurrent.Component
 import Control.Concurrent.Component.Probes (ProbeServerDependencies(..), probeServer)
-import Control.Concurrent.Component.UnliftIO (convertComponent)
-import Control.Monad.Base (MonadBase)
 import Control.Monad.Event.Class
 import Control.Monad.IO.Class (MonadIO, liftIO)
-import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Monad.Trans.Reader (ReaderT(..))
 import Control.Monad.With
 import Data.Aeson.Encode.Pretty (encodePretty)
@@ -87,7 +84,7 @@ run Options{..} = flip runComponent_ () $ withLogger loggerDependencies runAppM 
       $ tcpClient chainSeekHost chainSeekQueryPort queryClientPeer
 
     queryChainSync = fmap (fromRight $ error "failed to query chain sync server") . runSomeConnector chainSyncQueryConnector . liftQuery
-  probes <- convertComponent transaction -< TransactionDependencies
+  probes <- transaction -< TransactionDependencies
     { connectionSource = SomeConnectionSource
         $ logConnectionSource (injectSelector Server)
         $ handshakeConnectionSource serverSource
@@ -122,7 +119,7 @@ runAppM eventBackend = flip runReaderT (hoistEventBackend liftIO eventBackend) .
 
 newtype AppM r a = AppM
   { unAppM :: ReaderT (EventBackend (AppM r) r RootSelector) IO a
-  } deriving newtype (Functor, Applicative, Monad, MonadBase IO, MonadBaseControl IO, MonadIO, MonadUnliftIO, MonadFail)
+  } deriving newtype (Functor, Applicative, Monad, MonadIO, MonadUnliftIO, MonadFail)
 
 instance MonadWith (AppM r) where
   type WithException (AppM r) = WithException IO

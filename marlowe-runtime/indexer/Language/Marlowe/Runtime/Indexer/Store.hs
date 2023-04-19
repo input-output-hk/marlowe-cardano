@@ -8,7 +8,7 @@
 module Language.Marlowe.Runtime.Indexer.Store
   where
 
-import Control.Concurrent.Component.UnliftIO
+import Control.Concurrent.Component
 import Control.Concurrent.STM (STM, modifyTVar, newTVar, readTVar, writeTVar)
 import Control.Monad (forever, guard, unless)
 import Control.Monad.Event.Class (MonadInjectEvent, withEvent)

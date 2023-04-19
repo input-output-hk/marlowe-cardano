@@ -14,8 +14,8 @@ module Language.Marlowe.Runtime.ChainIndexer
 
 import Cardano.Api (CardanoMode, ChainPoint(..), ChainTip(..), LocalNodeClientProtocolsInMode)
 import Control.Arrow (returnA)
+import Control.Concurrent.Component
 import Control.Concurrent.Component.Probes
-import Control.Concurrent.Component.UnliftIO
 import Control.Concurrent.STM (atomically)
 import Control.Monad.Event.Class (Inject, MonadEvent)
 import Data.Aeson (Value(..), object, (.=))

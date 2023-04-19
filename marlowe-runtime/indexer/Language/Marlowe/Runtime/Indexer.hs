@@ -8,11 +8,10 @@ module Language.Marlowe.Runtime.Indexer
   where
 
 import Control.Arrow (returnA)
+import Control.Concurrent.Component
 import Control.Concurrent.Component.Probes
-import Control.Concurrent.Component.UnliftIO
 import Control.Concurrent.STM (atomically)
 import Control.Monad.Event.Class (Inject, MonadEvent)
-import Control.Monad.Trans.Control (MonadBaseControl)
 import Data.Set.NonEmpty (NESet)
 import Data.Time (NominalDiffTime)
 import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncQuery, RuntimeChainSeekClient, ScriptHash)
@@ -40,7 +39,6 @@ data MarloweIndexerDependencies m = MarloweIndexerDependencies
 marloweIndexer
   :: ( MonadEvent r s m
      , MonadUnliftIO m
-     , MonadBaseControl IO m
      , Inject StoreSelector s
      , Inject ChainSeekClientSelector s
      , MonadFail m

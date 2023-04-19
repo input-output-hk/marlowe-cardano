@@ -6,8 +6,7 @@
 module Language.Marlowe.Runtime.Sync.MarloweHeaderSyncServer
   where
 
-import Control.Concurrent.Component.UnliftIO
-import Control.Monad.Trans.Control (MonadBaseControl)
+import Control.Concurrent.Component
 import Language.Marlowe.Protocol.HeaderSync.Server
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainPoint, WithGenesis(..))
 import Language.Marlowe.Runtime.Sync.Database (DatabaseQueries(..), Next(..))
@@ -20,7 +19,7 @@ data MarloweHeaderSyncServerDependencies m = MarloweHeaderSyncServerDependencies
   , headerSyncSource :: SomeConnectionSource MarloweHeaderSyncServer m
   }
 
-marloweHeaderSyncServer :: (MonadBaseControl IO m, MonadUnliftIO m) => Component m (MarloweHeaderSyncServerDependencies m) ()
+marloweHeaderSyncServer :: MonadUnliftIO m => Component m (MarloweHeaderSyncServerDependencies m) ()
 marloweHeaderSyncServer = serverComponent (component_ worker) \MarloweHeaderSyncServerDependencies{..} -> do
   connector <- acceptSomeConnector headerSyncSource
   pure WorkerDependencies{..}
@@ -30,7 +29,7 @@ data WorkerDependencies m = WorkerDependencies
   , connector :: SomeServerConnector MarloweHeaderSyncServer m
   }
 
-worker :: forall m. MonadBaseControl IO m => WorkerDependencies m -> m ()
+worker :: forall m. MonadUnliftIO m => WorkerDependencies m -> m ()
 worker WorkerDependencies{..} = do
   runSomeConnector connector $ MarloweHeaderSyncServer $ pure $ serverIdle Genesis
   where

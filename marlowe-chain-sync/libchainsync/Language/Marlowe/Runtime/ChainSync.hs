@@ -15,9 +15,8 @@ import Cardano.Api (CardanoEra, CardanoMode, Tx, TxValidationErrorInMode)
 import qualified Cardano.Api as Cardano
 import Cardano.Api.Shelley (AcquiringFailure)
 import Control.Arrow (returnA)
+import Control.Concurrent.Component
 import Control.Concurrent.Component.Probes
-import Control.Concurrent.Component.UnliftIO
-import Control.Monad.Trans.Control (MonadBaseControl)
 import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncCommand, ChainSyncQuery, RuntimeChainSeekServer)
 import Language.Marlowe.Runtime.ChainSync.Database (DatabaseQueries(..))
 import Language.Marlowe.Runtime.ChainSync.JobServer (ChainSyncJobServerDependencies(..), chainSyncJobServer)
@@ -46,7 +45,7 @@ data ChainSyncDependencies m = ChainSyncDependencies
       -> m (SubmitResult (TxValidationErrorInMode CardanoMode))
   }
 
-chainSync :: (MonadUnliftIO m, MonadBaseControl IO m) => Component m (ChainSyncDependencies m) Probes
+chainSync :: MonadUnliftIO m => Component m (ChainSyncDependencies m) Probes
 chainSync = proc ChainSyncDependencies{..} -> do
   let DatabaseQueries{..} = databaseQueries
   chainSyncServer -< ChainSyncServerDependencies{..}

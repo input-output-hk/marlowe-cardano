@@ -12,12 +12,9 @@ module Main
 
 import Control.Concurrent.Component
 import Control.Concurrent.Component.Probes (ProbeServerDependencies(..), probeServer)
-import Control.Concurrent.Component.UnliftIO (convertComponent)
 import Control.Exception (bracket)
 import Control.Monad ((<=<))
-import Control.Monad.Base (MonadBase)
 import Control.Monad.Event.Class
-import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Monad.Trans.Reader (ReaderT(..))
 import Control.Monad.With
 import Data.Aeson.Encode.Pretty (encodePretty)
@@ -86,7 +83,7 @@ run Options{..} = bracket (Pool.acquire 100 (Just 5000000) (fromString databaseU
       , toPeer = id
       }
 
-    probes <- convertComponent sync -< SyncDependencies
+    probes <- sync -< SyncDependencies
       { databaseQueries = logDatabaseQueries $ hoistDatabaseQueries
             (either throwIO pure <=< liftIO . Pool.use pool)
             Postgres.databaseQueries
@@ -116,7 +113,7 @@ runAppM eventBackend = flip runReaderT (hoistEventBackend liftIO eventBackend) .
 
 newtype AppM r a = AppM
   { unAppM :: ReaderT (EventBackend (AppM r) r RootSelector) IO a
-  } deriving newtype (Functor, Applicative, Monad, MonadBase IO, MonadBaseControl IO, MonadIO, MonadUnliftIO, MonadFail)
+  } deriving newtype (Functor, Applicative, Monad, MonadIO, MonadUnliftIO, MonadFail)
 
 instance MonadWith (AppM r) where
   type WithException (AppM r) = WithException IO

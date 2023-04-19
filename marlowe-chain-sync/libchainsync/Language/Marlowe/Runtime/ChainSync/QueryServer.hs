@@ -23,8 +23,7 @@ import Cardano.Api
   )
 import qualified Cardano.Api as Cardano
 import Cardano.Api.Shelley (AcquiringFailure)
-import Control.Concurrent.Component.UnliftIO
-import Control.Monad.Trans.Control (MonadBaseControl)
+import Control.Concurrent.Component
 import Control.Monad.Trans.Except (ExceptT(ExceptT), except, runExceptT, throwE, withExceptT)
 import Data.Bifunctor (first)
 import Data.Void (Void, absurd)
@@ -46,7 +45,7 @@ data ChainSyncQueryServerDependencies m = ChainSyncQueryServerDependencies
   , getUTxOs :: Database.GetUTxOs m
   }
 
-chainSyncQueryServer :: (MonadBaseControl IO m, MonadUnliftIO m) => Component m (ChainSyncQueryServerDependencies m) ()
+chainSyncQueryServer :: MonadUnliftIO m => Component m (ChainSyncQueryServerDependencies m) ()
 chainSyncQueryServer = serverComponent worker \ChainSyncQueryServerDependencies{..} -> do
   connector <- acceptSomeConnector querySource
   pure WorkerDependencies {..}
@@ -61,7 +60,7 @@ data WorkerDependencies m = WorkerDependencies
   , getUTxOs :: Database.GetUTxOs m
   }
 
-worker :: forall m. MonadBaseControl IO m => Component m (WorkerDependencies m) ()
+worker :: forall m. MonadUnliftIO m => Component m (WorkerDependencies m) ()
 worker = component_ \WorkerDependencies{..} -> do
   let
     server :: QueryServer ChainSyncQuery m ()

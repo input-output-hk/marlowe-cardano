@@ -1,4 +1,5 @@
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 
 module Logging
   ( RootSelector(..)
@@ -6,12 +7,14 @@ module Logging
   , getRootSelectorConfig
   ) where
 
+import Control.Monad.Event.Class
 import Data.Foldable (fold)
 import Data.Map (Map)
 import Data.Text (Text)
 import Language.Marlowe.Protocol.Types (MarloweRuntime)
 import Network.Protocol.Connection (ConnectorSelector, getConnectorSelectorConfig, getDefaultConnectorLogConfig)
 import Network.Protocol.Handshake.Types (Handshake)
+import Observe.Event (idInjectSelector)
 import Observe.Event.Component
   ( ConfigWatcherSelector(ReloadConfig)
   , GetSelectorConfig
@@ -25,6 +28,9 @@ import Observe.Event.Component
 data RootSelector f where
   MarloweRuntimeServer :: ConnectorSelector (Handshake MarloweRuntime) f -> RootSelector f
   ConfigWatcher :: ConfigWatcherSelector f -> RootSelector f
+
+instance Inject RootSelector RootSelector where
+  inject = idInjectSelector
 
 getRootSelectorConfig :: GetSelectorConfig RootSelector
 getRootSelectorConfig = \case

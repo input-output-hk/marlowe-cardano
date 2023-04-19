@@ -12,7 +12,6 @@ import qualified Cardano.Api as C
 import Control.Error (hush)
 import Control.Error.Util (note)
 import Control.Monad.Event.Class
-import Control.Monad.Trans.Control (MonadBaseControl)
 import Data.Foldable (find)
 import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.List.NonEmpty as NE
@@ -58,6 +57,7 @@ import Network.Protocol.Connection (SomeClientConnector)
 import Network.Protocol.Driver (runSomeConnector)
 import Network.Protocol.Query.Client (QueryClient, liftQuery)
 import Observe.Event.Explicit (addField)
+import UnliftIO (MonadUnliftIO)
 
 data LoadWalletContextSelector f where
   LoadWalletContext :: LoadWalletContextSelector LoadWalletContextField
@@ -113,7 +113,7 @@ loadWalletContext runQuery WalletAddresses{..} =
 -- | Loads the current MarloweContext for a contract by its ID.
 loadMarloweContext
   :: forall m r s
-   . (MonadBaseControl IO m, MonadInjectEvent r LoadMarloweContextSelector s m)
+   . (MonadUnliftIO m, MonadInjectEvent r LoadMarloweContextSelector s m)
   => (forall v. MarloweVersion v -> Set MarloweScripts)
   -> C.NetworkId
   -> SomeClientConnector RuntimeChainSeekClient m

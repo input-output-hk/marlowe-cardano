@@ -31,7 +31,7 @@ import Cardano.Api
   )
 import Cardano.Api.ChainSync.Client (ChainSyncClient(..), ClientStIdle(..), ClientStIntersect(..), ClientStNext(..))
 import Cardano.Api.Shelley (AcquiringFailure(..))
-import Control.Concurrent.Component.UnliftIO (Component, component)
+import Control.Concurrent.Component (Component, component)
 import Control.Concurrent.STM.TChan (TChan, newTChan, readTChan, writeTChan)
 import Control.Concurrent.STM.TMVar (TMVar, putTMVar, takeTMVar)
 import Data.Aeson (Value(String), toJSON)

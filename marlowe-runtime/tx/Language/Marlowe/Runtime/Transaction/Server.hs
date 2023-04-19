@@ -34,7 +34,7 @@ import Cardano.Api
   )
 import Cardano.Api.Shelley (ProtocolParameters)
 import Control.Applicative ((<|>))
-import Control.Concurrent.Component.UnliftIO
+import Control.Concurrent.Component
 import Control.Concurrent.STM (STM, modifyTVar, newEmptyTMVar, newTVar, putTMVar, readTMVar, readTVar, retry)
 import Control.Error.Util (hoistMaybe, note, noteT)
 import Control.Exception (Exception(..))
@@ -42,7 +42,6 @@ import Control.Monad (unless)
 import Control.Monad.Event.Class
 import Control.Monad.IO.Class (MonadIO(liftIO))
 import Control.Monad.Trans.Class (lift)
-import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Monad.Trans.Except (ExceptT(..), except, runExceptT, throwE, withExceptT)
 import Data.Bifunctor (first)
 import Data.List (find)
@@ -124,7 +123,7 @@ data TransactionServerDependencies m = TransactionServerDependencies
   }
 
 transactionServer
-  :: (MonadBaseControl IO m, MonadInjectEvent r TransactionServerSelector s m, MonadUnliftIO m)
+  :: (MonadInjectEvent r TransactionServerSelector s m, MonadUnliftIO m)
   => Component m (TransactionServerDependencies m) ()
 transactionServer = serverComponentWithSetup worker \TransactionServerDependencies{..} -> do
   submitJobsVar <- newTVar mempty
@@ -149,7 +148,7 @@ data WorkerDependencies m = WorkerDependencies
 
 worker
   :: forall r s m
-   . (MonadBaseControl IO m, MonadInjectEvent r TransactionServerSelector s m, MonadUnliftIO m)
+   . (MonadInjectEvent r TransactionServerSelector s m, MonadUnliftIO m)
   => Component m (WorkerDependencies m) ()
 worker = component_ \WorkerDependencies{..} -> do
   let

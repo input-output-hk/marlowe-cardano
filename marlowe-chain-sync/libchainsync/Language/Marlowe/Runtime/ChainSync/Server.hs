@@ -7,8 +7,7 @@
 module Language.Marlowe.Runtime.ChainSync.Server
   where
 
-import Control.Concurrent.Component.UnliftIO
-import Control.Monad.Trans.Control (MonadBaseControl)
+import Control.Concurrent.Component
 import Data.Functor (void, (<&>))
 import Language.Marlowe.Runtime.ChainSync.Api (ChainPoint, Move, RuntimeChainSeekServer, WithGenesis(..))
 import Language.Marlowe.Runtime.ChainSync.Database (GetTip(..), MoveClient(..), MoveResult(..))
@@ -23,7 +22,7 @@ data ChainSyncServerDependencies m = ChainSyncServerDependencies
   , getTip :: GetTip m
   }
 
-chainSyncServer :: (MonadBaseControl IO m, MonadUnliftIO m) => Component m (ChainSyncServerDependencies m) ()
+chainSyncServer :: MonadUnliftIO m => Component m (ChainSyncServerDependencies m) ()
 chainSyncServer = serverComponent worker \ChainSyncServerDependencies{..} -> do
   connector <- acceptSomeConnector syncSource
   pure WorkerDependencies{..}
@@ -34,7 +33,7 @@ data WorkerDependencies m = WorkerDependencies
   , getTip :: GetTip m
   }
 
-worker :: forall m. MonadBaseControl IO m => Component m (WorkerDependencies m) ()
+worker :: forall m. MonadUnliftIO m => Component m (WorkerDependencies m) ()
 worker = component_ \WorkerDependencies{..} -> do
   let
     runWorker = void $ runSomeConnector connector $ ChainSeekServer $ stIdle Genesis

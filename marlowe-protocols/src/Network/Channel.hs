@@ -18,6 +18,7 @@ import qualified Network.Socket.ByteString.Lazy as Socket
 import Observe.Event.Component (GetSelectorConfig, SelectorConfig(..), SomeJSON(SomeJSON), singletonFieldConfigWith)
 import Observe.Event.Explicit (InjectSelector, addField)
 import qualified System.IO as IO
+import UnliftIO (MonadIO, liftIO)
 
 data Channel m a = Channel
   { send :: a -> m ()
@@ -46,31 +47,33 @@ hoistChannel nat Channel{..} = Channel
   }
 
 handlesAsChannel
-  :: IO.Handle -- ^ Read handle
+  :: forall m
+   . MonadIO m
+  => IO.Handle -- ^ Read handle
   -> IO.Handle -- ^ Write handle
-  -> Channel IO LBS.ByteString
+  -> Channel m LBS.ByteString
 handlesAsChannel hread hwrite = Channel {..}
   where
-    send :: LBS.ByteString -> IO ()
-    send chunk = do
+    send :: LBS.ByteString -> m ()
+    send chunk = liftIO do
       LBS.hPut hwrite chunk
       IO.hFlush hwrite
 
-    recv :: IO (Maybe LBS.ByteString)
-    recv = do
+    recv :: m (Maybe LBS.ByteString)
+    recv = liftIO do
       eof <- IO.hIsEOF hread
       if eof
         then pure Nothing
         else Just . LBS.fromStrict <$> BS.hGetSome hread smallChunkSize
 
-socketAsChannel :: Socket -> Channel IO LBS.ByteString
+socketAsChannel :: forall m. MonadIO m => Socket -> Channel m LBS.ByteString
 socketAsChannel sock = Channel {..}
   where
-    send :: LBS.ByteString -> IO ()
-    send = Socket.sendAll sock
+    send :: LBS.ByteString -> m ()
+    send = liftIO . Socket.sendAll sock
 
-    recv :: IO (Maybe LBS.ByteString)
-    recv = mfilter (not . LBS.null) . pure <$> Socket.recv sock (fromIntegral smallChunkSize)
+    recv :: m (Maybe LBS.ByteString)
+    recv = liftIO $ mfilter (not . LBS.null) . pure <$> Socket.recv sock (fromIntegral smallChunkSize)
 
 effectChannel
   :: Monad m

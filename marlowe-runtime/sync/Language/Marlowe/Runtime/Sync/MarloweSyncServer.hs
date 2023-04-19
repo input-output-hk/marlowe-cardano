@@ -6,8 +6,7 @@
 module Language.Marlowe.Runtime.Sync.MarloweSyncServer
   where
 
-import Control.Concurrent.Component.UnliftIO
-import Control.Monad.Trans.Control (MonadBaseControl)
+import Control.Concurrent.Component
 import Data.Type.Equality (testEquality, type (:~:)(Refl))
 import Language.Marlowe.Protocol.Sync.Server
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainPoint, WithGenesis(..))
@@ -23,7 +22,7 @@ data MarloweSyncServerDependencies m = MarloweSyncServerDependencies
   , syncSource :: SomeConnectionSource MarloweSyncServer m
   }
 
-marloweSyncServer :: (MonadUnliftIO m, MonadBaseControl IO m) => Component m (MarloweSyncServerDependencies m) ()
+marloweSyncServer :: MonadUnliftIO m => Component m (MarloweSyncServerDependencies m) ()
 marloweSyncServer = serverComponent (component_ worker) \MarloweSyncServerDependencies{..} -> do
   connector <- acceptSomeConnector syncSource
   pure WorkerDependencies{..}
@@ -33,7 +32,7 @@ data WorkerDependencies m = WorkerDependencies
   , connector :: SomeServerConnector MarloweSyncServer m
   }
 
-worker :: forall m. MonadBaseControl IO m => WorkerDependencies m -> m ()
+worker :: forall m. MonadUnliftIO m => WorkerDependencies m -> m ()
 worker WorkerDependencies{..} = do
   runSomeConnector connector $ MarloweSyncServer $ pure serverInit
   where

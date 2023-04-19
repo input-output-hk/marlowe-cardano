@@ -17,11 +17,8 @@ import qualified Cardano.Chain.Genesis as Byron
 import Cardano.Crypto (abstractHashToBytes, decodeAbstractHash)
 import Control.Concurrent.Component
 import Control.Concurrent.Component.Probes (ProbeServerDependencies(..), probeServer)
-import Control.Concurrent.Component.UnliftIO (convertComponent)
 import Control.Exception (bracket)
-import Control.Monad.Base (MonadBase)
 import Control.Monad.Event.Class (MonadEvent(..), askBackendReaderT, localBackendReaderT)
-import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Monad.Trans.Except (ExceptT(ExceptT), runExceptT, withExceptT)
 import Control.Monad.Trans.Reader (ReaderT(..))
 import Control.Monad.With (MonadWith, WithException, stateThreadingGeneralWith)
@@ -60,7 +57,7 @@ run Options{..} = do
   let
     genesisBlock = computeGenesisBlock (abstractHashToBytes hash) genesisConfig shelleyGenesis
     appComponent = proc pool -> do
-      probes <- convertComponent chainIndexer -< ChainIndexerDependencies
+      probes <- chainIndexer -< ChainIndexerDependencies
         { connectToLocalNode = Cardano.connectToLocalNode localNodeConnectInfo
         , databaseQueries = PostgreSQL.databaseQueries pool genesisBlock
         , persistRateLimit
@@ -100,7 +97,7 @@ runAppM eventBackend = flip runReaderT (hoistEventBackend liftIO eventBackend) .
 
 newtype AppM r a = AppM
   { unAppM :: ReaderT (EventBackend (AppM r) r RootSelector) IO a
-  } deriving newtype (Functor, Applicative, Monad, MonadBase IO, MonadBaseControl IO, MonadIO, MonadUnliftIO)
+  } deriving newtype (Functor, Applicative, Monad, MonadIO, MonadUnliftIO)
 
 instance MonadWith (AppM r) where
   type WithException (AppM r) = WithException IO

@@ -4,9 +4,8 @@
 module Language.Marlowe.Runtime.Transaction.Chain
   where
 
-import Control.Concurrent.Component.UnliftIO
+import Control.Concurrent.Component
 import Control.Concurrent.STM (STM, newTVar, readTVar, writeTVar)
-import Control.Monad.Trans.Control (MonadBaseControl)
 import Data.Functor (($>))
 import Data.Void (absurd)
 import Language.Marlowe.Runtime.ChainSync.Api (Move(..), RuntimeChainSeekClient)
@@ -22,7 +21,7 @@ newtype TransactionChainClientDependencies m = TransactionChainClientDependencie
   }
 
 transactionChainClient
-  :: (MonadUnliftIO m, MonadBaseControl IO m)
+  :: MonadUnliftIO m
   => Component m (TransactionChainClientDependencies m) (STM Bool, STM Chain.ChainPoint)
 transactionChainClient = component \TransactionChainClientDependencies{..} -> do
   tipVar <- newTVar Chain.Genesis
