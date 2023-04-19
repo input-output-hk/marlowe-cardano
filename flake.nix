@@ -56,6 +56,7 @@
     std.url = "github:divnix/std";
     data-merge.url = "github:divnix/data-merge";
     bitte-cells.url = "github:input-output-hk/bitte-cells";
+    iogx.url = path:./__iogx__;
   };
 
   outputs = { self, flake-utils, nosys, tullia, ... }@inputs:
