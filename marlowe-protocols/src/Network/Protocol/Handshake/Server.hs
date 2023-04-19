@@ -11,6 +11,7 @@
 module Network.Protocol.Handshake.Server
   where
 
+import Control.Monad.Event.Class
 import Data.Bifunctor (Bifunctor(bimap))
 import Data.Functor ((<&>))
 import Data.Proxy (Proxy(..))
@@ -19,6 +20,36 @@ import Network.Protocol.Connection (ClientServerPair(..), Connection(..), Connec
 import Network.Protocol.Handshake.Client (handshakeClientConnector)
 import Network.Protocol.Handshake.Types
 import Network.TypedProtocol
+import Observe.Event (InjectSelector, NewEventArgs(..), injectSelector, reference)
+import Observe.Event.Backend (setInitialCauseEventBackend, simpleNewEventArgs)
+
+data HandshakeServerSelector server f where
+  Handshake :: HandshakeServerSelector server Text
+  AcceptHandshake :: HandshakeServerSelector server ()
+  RejectHandshake :: HandshakeServerSelector server ()
+  Server :: server f -> HandshakeServerSelector server f
+
+traceHandshakeServer
+  :: MonadEvent r s m
+  => InjectSelector (HandshakeServerSelector serverSelector) s
+  -> (forall n x. (forall y. m y -> n y) -> server m x -> server n x)
+  -> (forall x. InjectSelector serverSelector s -> server m x -> server m x)
+  -> HandshakeServer server m a
+  -> HandshakeServer server m a
+traceHandshakeServer inj hoistServer traceServer HandshakeServer{..} = HandshakeServer
+  { recvMsgHandshake = \sig ->
+      withInjectEventArgs inj (simpleNewEventArgs Handshake) { newEventInitialFields = [sig] } \ev ->
+        recvMsgHandshake sig >>= \case
+          Left ma -> do
+            emitImmediateInjectEvent_ inj RejectHandshake
+            pure $ Left ma
+          Right server -> do
+            emitImmediateInjectEvent_ inj AcceptHandshake
+            pure
+              $ Right
+              $ hoistServer (localBackend (setInitialCauseEventBackend [reference ev]))
+              $ traceServer (composeInjectSelector inj $ injectSelector Server) server
+  }
 
 -- | A generic server for the handshake protocol.
 newtype HandshakeServer server m a = HandshakeServer
