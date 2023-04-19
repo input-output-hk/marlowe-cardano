@@ -11,6 +11,7 @@
 -----------------------------------------------------------------------------
 
 
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DoAndIfThenElse #-}
 {-# LANGUAGE NamedFieldPuns #-}
@@ -145,19 +146,30 @@ tests = testGroup "Contracts"
   ]
 
 
+maxAlternateMarloweValidatorSize :: Int
+maxMarloweValidatorSize :: Int
+#ifdef TRACE_PLUTUS
+maxAlternateMarloweValidatorSize = 15361
+maxMarloweValidatorSize = 12840
+#else
+maxAlternateMarloweValidatorSize = 14821
+maxMarloweValidatorSize = 12296
+#endif
+
+
 -- | Test that the typed validator is not too large.
 alternateMarloweValidatorSize :: IO ()
 alternateMarloweValidatorSize = do
     let validator = Scripts.validatorScript alternateMarloweValidator
     let vsize = SBS.length . SBS.toShort . LB.toStrict $ Serialise.serialise validator
-    assertBool ("alternateMarloweValidator is too large " <> show vsize) (vsize <= 14821)
+    assertBool ("alternateMarloweValidator is too large " <> show vsize) (vsize <= maxAlternateMarloweValidatorSize)
 
 -- | Test that the untyped validator is not too large.
 marloweValidatorSize :: IO ()
 marloweValidatorSize = do
     let validator = Scripts.validatorScript marloweValidator
     let vsize = SBS.length . SBS.toShort . LB.toStrict $ Serialise.serialise validator
-    assertBool ("marloweValidator is too large " <> show vsize) (vsize <= 12296)
+    assertBool ("marloweValidator is too large " <> show vsize) (vsize <= maxMarloweValidatorSize)
 
 
 -- | Test `extractNonMerkleizedContractRoles`.

@@ -11,6 +11,7 @@
 -----------------------------------------------------------------------------
 
 
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DefaultSignatures #-}
@@ -100,7 +101,13 @@ import qualified Prelude as Haskell
 import Unsafe.Coerce (unsafeCoerce)
 
 
--- Suppress traces, in order to save bytes.
+-- Conditionally suppress traces, in order to save bytes.
+
+#ifdef TRACE_PLUTUS
+
+import PlutusTx.Prelude (traceError, traceIfFalse)
+
+#else
 
 {-# INLINABLE traceError #-}
 traceError :: BuiltinString -> a
@@ -109,6 +116,8 @@ traceError _ = error ()
 {-# INLINABLE traceIfFalse #-}
 traceIfFalse :: BuiltinString -> a -> a
 traceIfFalse _ = id
+
+#endif
 
 
 -- | Input to a Marlowe transaction.
