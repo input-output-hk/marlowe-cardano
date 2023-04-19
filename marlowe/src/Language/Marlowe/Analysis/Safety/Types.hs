@@ -25,7 +25,7 @@ module Language.Marlowe.Analysis.Safety.Types
 
 import Data.Aeson (ToJSON(..), object, (.=))
 import Language.Marlowe.Core.V1.Semantics (TransactionInput, TransactionOutput)
-import Language.Marlowe.Core.V1.Semantics.Types (Contract, State, Token)
+import Language.Marlowe.Core.V1.Semantics.Types (AccountId, ChoiceId, Contract, State, Token, ValueId)
 import Numeric.Natural (Natural)
 import Plutus.V2.Ledger.Api (CurrencySymbol, ExBudget, TokenName)
 
@@ -62,6 +62,14 @@ data SafetyError =
   | TokenNameTooLong TokenName
     -- | A token name is associated with the ada symbol.
   | InvalidToken Token
+    -- | Initial account balance is not positive.
+  | NonPositiveBalance AccountId Token
+    -- | Duplicate account in state.
+  | DuplicateAccount AccountId Token
+    -- | Duplicate choice in state.
+  | DuplicateChoice ChoiceId
+    -- | Duplicate bound value in state.
+  | DuplicateBoundValue ValueId
     -- | Too many tokens might be stored at some point in the contract.
   | MaximumValueMayExceedProtocol Natural
     -- | The transaction size (in bytes) might be too large.

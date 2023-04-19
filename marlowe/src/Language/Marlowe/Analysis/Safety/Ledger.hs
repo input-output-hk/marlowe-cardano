@@ -14,6 +14,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TupleSections #-}
+{-# LANGUAGE ViewPatterns #-}
 
 
 module Language.Marlowe.Analysis.Safety.Ledger
@@ -41,7 +42,7 @@ module Language.Marlowe.Analysis.Safety.Ledger
 
 import Data.Foldable (maximumBy, toList)
 import Data.Function (on)
-import Data.List (nub)
+import Data.List (nub, (\\))
 import Language.Marlowe.Analysis.Safety.Types (SafetyError(..), SafetyReport(..))
 import Language.Marlowe.Core.V1.Merkle (Continuations)
 import Language.Marlowe.Core.V1.Plate (Extract, extractAllWithContinuations)
@@ -67,7 +68,7 @@ import PlutusTx.Builtins (serialiseData)
 import qualified Data.Set as S (Set, filter, map, null, size)
 import qualified Plutus.V1.Ledger.Value as V (singleton)
 import qualified Plutus.V2.Ledger.Api as P (Address(..), Value)
-import qualified PlutusTx.AssocMap as AM (Map, fromList)
+import qualified PlutusTx.AssocMap as AM (Map, fromList, keys, toList)
 import qualified PlutusTx.Prelude as P (lengthOfByteString)
 
 
@@ -84,11 +85,34 @@ checkSafety maxValueSize utxoCostPerByte MarloweData{..} continuations =
          checkRoleNames (rolesCurrency marloweParams /= adaSymbol) marloweContract continuations
       <> checkTokens marloweContract continuations
       <> checkMaximumValueBound maxValueSize marloweContract continuations
+      <> checkPositiveBalance marloweState
+      <> checkDuplicates marloweState
     boundOnMinimumUtxo = worstMinimumUtxo utxoCostPerByte marloweContract continuations
     boundOnDatumSize = worstDatumSize marloweParams marloweContract continuations
     boundOnRedeemerSize = worstRedeemerSize marloweContract continuations
   in
     SafetyReport{..}
+
+
+checkPositiveBalance
+  :: State
+  -> [SafetyError]
+checkPositiveBalance State{..} =
+  fmap (uncurry NonPositiveBalance . fst)
+    . filter ((<= 0) . snd)
+    $ AM.toList accounts
+
+
+checkDuplicates
+  :: State
+  -> [SafetyError]
+checkDuplicates State{..} =
+  let
+    duplicates (AM.keys -> x) = x \\ nub x
+  in
+    fmap (uncurry DuplicateAccount) (duplicates accounts)
+      <> fmap DuplicateChoice (duplicates choices)
+      <> fmap DuplicateBoundValue (duplicates boundValues)
 
 
 -- | Check that role names are not too long, and that roles are not present if a roles currency is not specified.
