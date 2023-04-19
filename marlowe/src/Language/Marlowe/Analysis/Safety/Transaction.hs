@@ -14,6 +14,7 @@
 
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -294,7 +295,7 @@ findPaths creatorAddress minAda MerkleizedContract{..} =
   do
     let
       ada = Token P.adaSymbol P.adaToken
-      forever = 10^(20::Int)
+      forever = 4_102_444_800_000 {- 1 Jan 2100 -}
       -- Add an initial deposit so that `getAllInputs` accounts for the initial state in its analysis.
       contract = When [Case (Deposit creatorAddress creatorAddress ada $ Constant minAda) mcContract] forever Close
     paths <-

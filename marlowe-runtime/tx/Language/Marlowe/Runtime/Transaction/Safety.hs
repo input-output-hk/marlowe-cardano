@@ -20,9 +20,9 @@ import Data.Bifunctor (bimap, first)
 import Data.Foldable (toList)
 import Data.Maybe (fromJust)
 import Data.SOP.Strict (K(..), NP(..))
+import Data.String (fromString)
 import Data.Time (UTCTime, addUTCTime, secondsToNominalDiffTime)
 import Data.Time.Clock.POSIX (posixSecondsToUTCTime)
-import Debug.Trace
 import Language.Marlowe.Analysis.Safety.Ledger (checkRoleNames, checkTokens, worstMinimumUtxo)
 import Language.Marlowe.Analysis.Safety.Transaction (findTransactions)
 import Language.Marlowe.Analysis.Safety.Types (SafetyError(..), Transaction(..))
@@ -47,7 +47,7 @@ import qualified Cardano.Api.Shelley as Shelley
   , ProtocolParameters(ProtocolParameters, protocolParamUTxOCostPerByte)
   , SystemStart(..)
   )
-import qualified Data.Map.Strict as M (Map, elems, empty, fromList, keys, map, mapKeys, singleton)
+import qualified Data.Map.Strict as M (Map, elems, empty, fromList, keys, map, mapKeys, singleton, size)
 import qualified Data.Set as S (singleton)
 import qualified Language.Marlowe.Core.V1.Merkle as V1 (MerkleizedContract(..))
 import qualified Language.Marlowe.Core.V1.Plate as V1 (extractAllWithContinuations)
@@ -180,22 +180,41 @@ checkTransaction solveConstraints version@MarloweV1 marloweContext@MarloweContex
       let
         V1.TransactionInput{..} = txInput
         rolesCurrency' = V1.MarloweParams . Plutus.CurrencySymbol $ Plutus.toBuiltin rolesCurrency
+        -- Truncate updward to slot number.
+        earliest = posixTimeToUTCTime . (* 1000) . (`div` 1000) . (+ 999) . V1.minTime $ V1.marloweState marloweData
+        -- Truncate inward to the slot number (inclusive).
+        begin = posixTimeToUTCTime . (* 1000) . (`div` 1000) . (+ 999) $ fst txInterval
+        -- Truncate inward to the slot number (exclusive).
+        end = posixTimeToUTCTime . (* 1000) . (+ 2) . (`div` 1000) . (+ (-999)) $ snd txInterval
+        -- Find the current time and slot-compatible interval.
+        (now, intervalBegin, intervalEnd)
+          -- For a timeout, the current time must not be before the timeout.
+          | null txInputs = (
+                              begin
+                            , Just begin
+                            , Just $ maximum [addUTCTime 1 begin, end]
+                            )
+          -- For application of input, the current time must not be before the minimum time.
+          | otherwise = (
+                          maximum [begin, earliest]
+                        , Just $ minimum [begin, addUTCTime (-1) end]
+                        , Just $ maximum [end, addUTCTime 1 earliest]
+                        )
         marloweData = V1.MarloweData rolesCurrency' txState txContract
         scriptIncoming = foldMap (uncurry makeValue . first snd) . AM.toList . V1.accounts $ V1.marloweState marloweData
         marloweOutput = TransactionScriptOutput marloweAddress scriptIncoming scriptTxOutRef marloweData
         marloweContext' = marloweContext {scriptOutput = Just marloweOutput}
         metadata = MarloweTransactionMetadata Nothing $ Chain.TransactionMetadata mempty
-        begin = posixTimeToUTCTime $ fst txInterval
-        intervalBegin = Just . posixTimeToUTCTime $ snd txInterval
-        intervalEnd = Just . addUTCTime 1 . posixTimeToUTCTime $ snd txInterval
-        (start, history) = makeSystemHistory begin
-      tipSlot <- traceShow transaction $ traceShow intervalBegin $ traceShow intervalEnd $ utcTimeToSlotNo start history . posixTimeToUTCTime $ fst txInterval
+        (start, history) =
+          makeSystemHistory . posixTimeToUTCTime $ Plutus.POSIXTime 0
+      tipSlot <-
+        utcTimeToSlotNo start history now
       constraints <-
         bimap show snd
           $ buildApplyInputsConstraints start history version marloweOutput tipSlot metadata intervalBegin intervalEnd txInputs
       let
         walletContext = walletForConstraints version marloweContext changeAddress constraints
-      traceShow walletContext $ traceShow marloweContext' $ traceShow constraints $ traceShow scriptIncoming $ pure
+      pure
         . either (pure . TransactionValidationError transaction . show) (const mempty)
         $ solveConstraints version marloweContext' walletContext constraints
 
@@ -208,6 +227,7 @@ walletForConstraints
   -> WalletContext
 walletForConstraints MarloweV1 MarloweContext{scriptOutput} changeAddress TxConstraints{..} =
   let
+    padValue assets@(Chain.Assets _ (Chain.Tokens tokens)) = assets <> makeLovelace (toInteger $ 2_000_000 * M.size tokens)
     scriptIncoming = maybe (makeLovelace 0) (\(TransactionScriptOutput _ assets _ _) -> assets) scriptOutput
     scriptOutgoing =
       case marloweOutputConstraints of
@@ -220,14 +240,22 @@ walletForConstraints MarloweV1 MarloweContext{scriptOutput} changeAddress TxCons
     payments = mconcat $ M.elems payToAddresses <> M.elems payToRoles
     requiredValue = roles <> payments <> scriptOutgoing <> negateAssets scriptIncoming
     bufferValue = makeLovelace 50_000_000  -- Generously cover min-UTxO and fee.
+    workaround = True
     collateralUtxos = S.singleton collateralTxOutRef
     availableUtxos =
       Chain.UTxOs
         $ M.fromList
-        [
-          (collateralTxOutRef, Chain.TransactionOutput changeAddress bufferValue Nothing Nothing)
-        , (fundingTxOutRef, Chain.TransactionOutput changeAddress requiredValue Nothing Nothing)
-        ]
+        $ if workaround  -- FIXME: Workaround for coin-selection bug.
+            then [
+                   (collateralTxOutRef, Chain.TransactionOutput changeAddress bufferValue Nothing Nothing)
+                 , (fundingTxOutRef 0, Chain.TransactionOutput changeAddress (padValue roles) Nothing Nothing)
+                 , (fundingTxOutRef 1, Chain.TransactionOutput changeAddress (padValue payments) Nothing Nothing)
+                 , (fundingTxOutRef 2, Chain.TransactionOutput changeAddress (padValue $ scriptOutgoing <> negateAssets scriptIncoming) Nothing Nothing)
+                 ]
+            else [
+                   (collateralTxOutRef, Chain.TransactionOutput changeAddress bufferValue Nothing Nothing)
+                 , (fundingTxOutRef 0, Chain.TransactionOutput changeAddress (padValue requiredValue) Nothing Nothing)
+                 ]
   in
     WalletContext{..}
 
@@ -287,7 +315,7 @@ makeSystemHistory
   -> (Shelley.SystemStart, Shelley.EraHistory Shelley.CardanoMode)
 makeSystemHistory time =
   let
-    systemStart = Shelley.SystemStart $ (-10) `addUTCTime` time
+    systemStart = Shelley.SystemStart $ addUTCTime (-1000) time
     eraParams =
       Ouroboros.EraParams
       {
@@ -340,5 +368,5 @@ scriptTxOutRef :: Chain.TxOutRef
 scriptTxOutRef = "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF#1"
 
 
-fundingTxOutRef :: Chain.TxOutRef
-fundingTxOutRef = "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF#2"
+fundingTxOutRef :: Int -> Chain.TxOutRef
+fundingTxOutRef = fromString . ("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF#" <>) . show . (2 +)

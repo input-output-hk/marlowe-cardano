@@ -40,7 +40,7 @@ import Data.List (maximumBy, nub, (\\))
 import Data.Maybe (catMaybes)
 import Data.String (IsString(..))
 import Language.Marlowe.Analysis.Safety.Ledger (worstValueSize)
-import Language.Marlowe.Analysis.Safety.Transaction (executeTransaction, findTransactions, foldTransactionsM)
+import Language.Marlowe.Analysis.Safety.Transaction (executeTransaction, findTransactions', foldTransactionsM)
 import Language.Marlowe.Analysis.Safety.Types (Transaction(..))
 import Language.Marlowe.CLI.Cardano.Api.PlutusScript (IsPlutusScriptLanguage(..), toScriptLanguageInEra)
 import Language.Marlowe.CLI.IO (decodeFileStrict, liftCli, liftCliIO, liftCliMaybe)
@@ -174,7 +174,7 @@ analyzeImpl era protocol MarloweTransaction{..} preconditions roles tokens maxim
       ci = ContractInstance mtRolesCurrency mtState mtContract mtContinuations mtValidator mtRoleValidator mtSlotConfig
     transactions <-
       if checkAll || executionCost || transactionSize || best && (maximumValue || minimumUtxo)
-        then findTransactions $ MerkleizedContract mtContract mtContinuations
+        then findTransactions' $ MerkleizedContract mtContract mtContinuations
         else pure mempty
     let
       perhapsTransactions = if best then Right transactions else Left ci
@@ -310,7 +310,7 @@ checkMaximumValue Api.ProtocolParameters{protocolParamMaxValueSize=Just maxValue
           "Actual"     .= size
         , "Maximum"    .= maxValue
         , "Unit"       .= ("byte" :: String)
-        , "Invalid"    .= (size > fromEnum maxValue)
+        , "Invalid"    .= (size > maxValue)
         , "Percentage" .= (100 * fromIntegral size / fromIntegral maxValue :: Double)
         ]
       <> maybe [] (pure . ("Worst case" .=)) (guard verbose >> worst)

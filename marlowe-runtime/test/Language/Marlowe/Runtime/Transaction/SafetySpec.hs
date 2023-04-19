@@ -6,7 +6,7 @@ module Language.Marlowe.Runtime.Transaction.SafetySpec
   where
 
 
-import Data.List (nub)
+import Data.List (isInfixOf, nub)
 import Data.Maybe (fromJust)
 import Data.Time.Clock.POSIX (posixSecondsToUTCTime)
 import Language.Marlowe.Analysis.Safety.Types
@@ -28,7 +28,7 @@ import qualified Cardano.Api.Shelley as Shelley
 import qualified Data.Map.Strict as M
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
 import qualified Language.Marlowe.Runtime.Cardano.Api as Chain
-import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
+import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain hiding (toCardanoAddressAny)
 import qualified Plutus.V2.Ledger.Api as Plutus
 import qualified PlutusTx.Builtins as Plutus
 
@@ -44,7 +44,7 @@ spec =
       payee = V1.Party party
       payToken token = V1.Pay party payee token $ V1.Constant 1
       payRole role = V1.Pay (V1.Role role) (V1.Party $ V1.Role role) (V1.Token "" "") $ V1.Constant 1
-      same x y = nub x == x && nub y == y && null (filter (`notElem` x) y) && null (filter (`notElem` y) x)
+      same x y = nub x == x && nub y == y && not (any (`notElem` x) y) && not (any (`notElem` y) x)
 
     describe "minAdaUpperBound"
       $ do
@@ -64,7 +64,7 @@ spec =
                         Cardano.ShelleyBasedEraBabbage
                         (
                           Cardano.TxOut
-                            (Cardano.anyAddressInShelleyBasedEra . fromJust $ Chain.toCardanoAddress address)
+                            (Cardano.anyAddressInShelleyBasedEra . fromJust $ Chain.toCardanoAddressAny address)
                             (Cardano.TxOutValue Cardano.MultiAssetInBabbageEra value)
                             (Cardano.TxOutDatumHash Cardano.ScriptDataInBabbageEra . fromJust $ Chain.toCardanoDatumHash hash)
                             Shelley.ReferenceScriptNone
@@ -207,14 +207,21 @@ spec =
             , marloweScriptHash = marloweScript
             , payoutScriptHash = payoutScript
             }
-        prop "Placeholder" $ \(policy, address) ->
+        prop "Reference contracts" $ \(policy, address) ->
           ioProperty $ do
-            _contract <- generate $ elements referenceContracts
+            contract <- generate $ elements referenceContracts
             let
-              contract = V1.When [V1.Case (V1.Notify V1.TrueObs) V1.Close] (10^(15::Int)) V1.Close
               minAda = maybe 0 toInteger $ minAdaUpperBound protocolTestnet version contract continuations
+              overspent (TransactionValidationError _ msg) = "The machine terminated part way through evaluation due to overspending the budget." `isInfixOf` msg
+              overspent _ = False
             actual <- checkTransactions solveConstraints' version marloweContext policy address minAda contract continuations
             pure
               . counterexample ("Contract = " <> show contract)
               . counterexample ("Actual = " <> show actual)
-              $ null actual
+              $ case actual of
+                  -- Overspending is not a test failure.
+                  Right errs -> all overspent errs
+                  -- An ambiguous time interval occurs when the timeouts have non-zero milliseconds are too close for there to be a valid slot for a transaction.
+                  Left "ApplyInputsConstraintsBuildupFailed (MarloweComputeTransactionFailed \"TEAmbiguousTimeIntervalError\")" -> True
+                  -- All other results are test failures.
+                  _ -> False
