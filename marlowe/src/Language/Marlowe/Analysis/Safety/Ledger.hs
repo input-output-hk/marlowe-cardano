@@ -94,18 +94,20 @@ checkSafety maxValueSize utxoCostPerByte MarloweData{..} continuations =
     SafetyReport{..}
 
 
+-- | Check that all account balances are positive.
 checkPositiveBalance
-  :: State
-  -> [SafetyError]
+  :: State  -- ^ The contract's state.
+  -> [SafetyError]  -- ^ Any reports of non-positive balances.
 checkPositiveBalance State{..} =
   fmap (uncurry NonPositiveBalance . fst)
     . filter ((<= 0) . snd)
     $ AM.toList accounts
 
 
+-- | Check that accounts, choices, or bound values in the contract's state are duplicated.
 checkDuplicates
-  :: State
-  -> [SafetyError]
+  :: State  -- ^ The contract's state.
+  -> [SafetyError]  -- ^ Any reports of duplicates.
 checkDuplicates State{..} =
   let
     duplicates (AM.keys -> x) = x \\ nub x
