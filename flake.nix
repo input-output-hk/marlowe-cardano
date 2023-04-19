@@ -165,17 +165,27 @@
         };
 
         # Export ciJobs for tullia to parse
-        ciJobs = self.hydraJobs {
+        ciJobs = self.hydraJobsFunc {
           supportedSystems = [ system ];
         };
       }
       // tullia.fromSimple system (import ./nix/tullia.nix)
-    )) // {
-      hydraJobs = import ./hydra-jobs.nix {
+    )) // rec {
+      hydraJobsFunc = import ./hydra-jobs.nix {
         inherit inputs;
         inherit (self) internal;
         marlowe-cardano = self;
       };
+      hydraJobs =
+        let
+          makeHydraJobsForSystem = system:
+            hydraJobsFunc { supportedSystems = [ system ]; } //
+            { __iogx__ = inputs.iogx.hydraJobs.${system}; };
+        in
+        {
+          x86_64-linux = makeHydraJobsForSystem "x86_64-linux";
+          x86_64-darwin = makeHydraJobsForSystem "x86_64-darwin";
+        };
       inherit inputs;
       internal.packagesFun =
         { system
