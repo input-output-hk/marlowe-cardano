@@ -212,15 +212,16 @@ spec =
             contract <- generate $ elements referenceContracts
             let
               minAda = maybe 0 toInteger $ minAdaUpperBound protocolTestnet version contract continuations
-              overspent (TransactionValidationError _ msg) = "The machine terminated part way through evaluation due to overspending the budget." `isInfixOf` msg
-              overspent _ = False
+              overspentOrWarning (TransactionValidationError _ msg) = "The machine terminated part way through evaluation due to overspending the budget." `isInfixOf` msg
+              overspentOrWarning (TransactionWarning _) = True
+              overspentOrWarning _ = False
             actual <- checkTransactions solveConstraints' version marloweContext policy address minAda contract continuations
             pure
               . counterexample ("Contract = " <> show contract)
               . counterexample ("Actual = " <> show actual)
               $ case actual of
-                  -- Overspending is not a test failure.
-                  Right errs -> all overspent errs
+                  -- Overspending or warnings are not a test failures.
+                  Right errs -> all overspentOrWarning errs
                   -- An ambiguous time interval occurs when the timeouts have non-zero milliseconds are too close for there to be a valid slot for a transaction.
                   Left "ApplyInputsConstraintsBuildupFailed (MarloweComputeTransactionFailed \"TEAmbiguousTimeIntervalError\")" -> True
                   -- All other results are test failures.

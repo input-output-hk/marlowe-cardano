@@ -29,6 +29,8 @@ import Language.Marlowe.Core.V1.Semantics.Types (Contract, State, Token)
 import Numeric.Natural (Natural)
 import Plutus.V2.Ledger.Api (CurrencySymbol, ExBudget, TokenName)
 
+import qualified Language.Marlowe.Core.V1.Semantics as V1 (TransactionWarning)
+
 
 -- | Information on the safety of a Marlowe contract and state.
 data SafetyReport =
@@ -68,6 +70,8 @@ data SafetyError =
   | TransactionCostMayExceedProtocol Transaction ExBudget
     -- | The transaction does not validate.
   | TransactionValidationError Transaction String
+    -- | The transacttion has warnings.
+  | TransactionWarning V1.TransactionWarning
     deriving (Eq, Show)
 
 

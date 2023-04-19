@@ -51,7 +51,8 @@ import qualified Data.Map.Strict as M (Map, elems, empty, fromList, keys, map, m
 import qualified Data.Set as S (singleton)
 import qualified Language.Marlowe.Core.V1.Merkle as V1 (MerkleizedContract(..))
 import qualified Language.Marlowe.Core.V1.Plate as V1 (extractAllWithContinuations)
-import qualified Language.Marlowe.Core.V1.Semantics as V1 (MarloweData(..), MarloweParams(..), TransactionInput(..))
+import qualified Language.Marlowe.Core.V1.Semantics as V1
+  (MarloweData(..), MarloweParams(..), TransactionInput(..), TransactionOutput(..))
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1 (Party(Address), State(..), Token(..))
 import qualified Language.Marlowe.Core.V1.Semantics.Types.Address as V1 (deserialiseAddress)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
@@ -91,18 +92,21 @@ import qualified PlutusTx.AssocMap as AM (toList)
 type Continuations v = M.Map Chain.DatumHash (Contract v)
 
 
+-- | No continuations for a contract.
 noContinuations
   :: MarloweVersion v
   -> Continuations v
 noContinuations MarloweV1 = M.empty
 
 
+-- | Map Plutus continuations into chain-sync continuations.
 remapContinuations
   :: M.Map Chain.DatumHash contract
   -> M.Map Plutus.DatumHash contract
 remapContinuations = M.mapKeys $ Plutus.DatumHash . Plutus.toBuiltin . Chain.unDatumHash
 
 
+-- | Compute a worst-case bound on the minimum UTxO value for a contract.
 minAdaUpperBound
  :: Shelley.ProtocolParameters
  -> MarloweVersion v
@@ -115,6 +119,7 @@ minAdaUpperBound Shelley.ProtocolParameters{protocolParamUTxOCostPerByte} Marlow
     <$> protocolParamUTxOCostPerByte
 
 
+-- | Check a contract for design errors and ledger violations.
 checkContract
   :: RoleTokensConfig
   -> MarloweVersion v
@@ -144,6 +149,7 @@ checkContract config MarloweV1 contract continuations =
     mintCheck <> nameCheck <> tokenCheck
 
 
+-- | Mock-execute all possible transactions for a contract.
 checkTransactions
   :: SolveConstraints
   -> MarloweVersion v
@@ -167,6 +173,7 @@ checkTransactions solveConstraints version@MarloweV1 marloweContext rolesCurrenc
         $ checkTransaction solveConstraints version marloweContext rolesCurrency changeAddress
 
 
+-- | Check a transaction for safety issues.
 checkTransaction
   :: SolveConstraints
   -> MarloweVersion v
@@ -215,10 +222,11 @@ checkTransaction solveConstraints version@MarloweV1 marloweContext@MarloweContex
       let
         walletContext = walletForConstraints version marloweContext changeAddress constraints
       pure
-        . either (pure . TransactionValidationError transaction . show) (const mempty)
+        . either (pure . TransactionValidationError transaction . show) (const $ TransactionWarning <$> V1.txOutWarnings txOutput)
         $ solveConstraints version marloweContext' walletContext constraints
 
 
+-- | Create a wallet context that will satisfy the given constraints.
 walletForConstraints
   :: MarloweVersion v
   -> MarloweContext v
@@ -260,6 +268,7 @@ walletForConstraints MarloweV1 MarloweContext{scriptOutput} changeAddress TxCons
     WalletContext{..}
 
 
+-- | Negate asset values.
 negateAssets
   :: Chain.Assets
   -> Chain.Assets
@@ -271,12 +280,14 @@ negateAssets Chain.Assets{..} =
   }
 
 
+-- | Convert an integer to lovelace.
 makeLovelace
   :: Integer
   -> Chain.Assets
 makeLovelace quantity = Chain.Assets (fromInteger quantity) $ Chain.Tokens M.empty
 
 
+-- | Make a given quantity of token.
 makeValue
   :: V1.Token
   -> Integer
@@ -289,6 +300,7 @@ makeValue (V1.Token (Plutus.CurrencySymbol p) (Plutus.TokenName n)) quantity =
       (fromInteger quantity)
 
 
+-- | Convert UTC time to a slot number.
 utcTimeToSlotNo
   :: Shelley.SystemStart
   -> Shelley.EraHistory Shelley.CardanoMode
@@ -304,12 +316,14 @@ utcTimeToSlotNo systemStart (Shelley.EraHistory _ interpreter) time =
     pure . Chain.SlotNo $ Ouroboros.unSlotNo slotNo
 
 
+-- | Convert POSIX time to UTC time.
 posixTimeToUTCTime
   :: Plutus.POSIXTime
   -> UTCTime
 posixTimeToUTCTime (Plutus.POSIXTime t) = posixSecondsToUTCTime . secondsToNominalDiffTime $ fromInteger t / 1000
 
 
+-- | Make a system start and error history for the given start time.
 makeSystemHistory
   :: UTCTime
   -> (Shelley.SystemStart, Shelley.EraHistory Shelley.CardanoMode)
@@ -360,13 +374,16 @@ makeSystemHistory time =
     (systemStart, eraHistory)
 
 
+-- | A dummy collateral UTxO.
 collateralTxOutRef :: Chain.TxOutRef
 collateralTxOutRef = "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF#0"
 
 
+-- | A dummy script reference.
 scriptTxOutRef :: Chain.TxOutRef
 scriptTxOutRef = "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF#1"
 
 
+-- | A dummy TxOut reference.
 fundingTxOutRef :: Int -> Chain.TxOutRef
 fundingTxOutRef = fromString . ("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF#" <>) . show . (2 +)
