@@ -1,6 +1,6 @@
 {
   "then": {
-    "timeout": 100,
+    "timeout": 100000,
     "when": [
       {
         "then": {

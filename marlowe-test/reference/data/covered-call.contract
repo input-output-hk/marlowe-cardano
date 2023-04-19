@@ -39,7 +39,7 @@
                             },
                             "then": {
                                 "else": {
-                                    "timeout": 1655621700000,
+                                    "timeout": 1655721700000,
                                     "timeout_continuation": "close",
                                     "when": [
                                         {
