@@ -1,5 +1,4 @@
 {-# LANGUAGE DataKinds #-}
-{-# LANGUAGE EmptyCase #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE PolyKinds #-}
@@ -12,20 +11,14 @@
 module Network.Protocol.Handshake.Server
   where
 
-import Control.Monad.Event.Class
 import Data.Bifunctor (Bifunctor(bimap))
 import Data.Functor ((<&>))
 import Data.Proxy (Proxy(..))
 import Data.Text (Text)
-import Data.Void (Void)
 import Network.Protocol.Connection (ClientServerPair(..), Connection(..), ConnectionSource(..), Connector(..))
 import Network.Protocol.Handshake.Client (handshakeClientConnector)
 import Network.Protocol.Handshake.Types
 import Network.TypedProtocol
-import Observe.Event (InjectSelector, NewEventArgs(..), injectSelector)
-import Observe.Event.Backend (simpleNewEventArgs)
-import Observe.Event.Render.OpenTelemetry
-import OpenTelemetry.Trace.Core (SpanKind(..), toAttribute)
 
 -- | A generic server for the handshake protocol.
 newtype HandshakeServer server m a = HandshakeServer
@@ -108,47 +101,3 @@ handshakeServerPeer serverPeer HandshakeServer{..} =
       Done tok a -> Done (TokLiftNobody tok) a
       Yield (ServerAgency tok) msg next -> Yield (ServerAgency $ TokLiftServer tok) (MsgLift msg) $ liftPeer next
       Await (ClientAgency tok) next -> Await (ClientAgency $ TokLiftClient tok) \(MsgLift msg) -> liftPeer $ next msg
-
-data HandshakeServerSelector server f where
-  Handshake :: HandshakeServerSelector server Text
-  AcceptHandshake :: HandshakeServerSelector server Void
-  RejectHandshake :: HandshakeServerSelector server Void
-  LiftServer :: server f -> HandshakeServerSelector server f
-
-traceHandshakeServer
-  :: MonadEvent r s m
-  => (forall x. InjectSelector serverSelector s -> r -> server m x -> server m x)
-  -> InjectSelector (HandshakeServerSelector serverSelector) s
-  -> r
-  -> HandshakeServer server m a
-  -> HandshakeServer server m a
-traceHandshakeServer traceServer inj rootCause HandshakeServer{..} = HandshakeServer
-  { recvMsgHandshake = \sig ->
-      withInjectEventArgs inj (simpleNewEventArgs Handshake) { newEventInitialFields = [sig], newEventCauses = [rootCause] } \_ ->
-        recvMsgHandshake sig >>= \case
-          Left ma -> do
-            emitImmediateInjectEvent_ inj RejectHandshake
-            pure $ Left ma
-          Right server -> do
-            emitImmediateInjectEvent_ inj AcceptHandshake
-            pure $ Right $ traceServer (composeInjectSelector inj $ injectSelector LiftServer) rootCause server
-  }
-
-renderHandshakeServerSelectorOTel :: RenderSelectorOTel server -> RenderSelectorOTel (HandshakeServerSelector server)
-renderHandshakeServerSelectorOTel renderServer = \case
-  Handshake -> OTelRendered
-    { eventName = "handshake"
-    , eventKind = Server
-    , renderField = \sig -> [("handshake.signature", toAttribute sig)]
-    }
-  AcceptHandshake -> OTelRendered
-    { eventName = "accept_handshake"
-    , eventKind = Internal
-    , renderField = \case
-    }
-  RejectHandshake -> OTelRendered
-    { eventName = "reject_handshake"
-    , eventKind = Internal
-    , renderField = \case
-    }
-  LiftServer sel -> renderServer sel

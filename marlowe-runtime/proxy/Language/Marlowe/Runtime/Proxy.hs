@@ -11,7 +11,7 @@ import Control.Concurrent.Component.Probes
 import Control.Monad.Trans.Resource (ResourceT, runResourceT)
 import Language.Marlowe.Protocol.HeaderSync.Types (MarloweHeaderSync)
 import Language.Marlowe.Protocol.Query.Types (MarloweQuery)
-import Language.Marlowe.Protocol.Server (MarloweRuntimeServer(..), wrapDriver)
+import Language.Marlowe.Protocol.Server (MarloweRuntimeServer(..))
 import Language.Marlowe.Protocol.Sync.Types (MarloweSync)
 import Language.Marlowe.Runtime.Transaction.Api (MarloweTxCommand)
 import Network.Protocol.Connection (SomeConnectionSource, SomeServerConnector, acceptSomeConnector)
@@ -49,10 +49,4 @@ data WorkerDependencies m = forall dState. WorkerDependencies
   }
 
 worker :: MonadUnliftIO m => WorkerDependencies (ResourceT m) -> m ()
-worker WorkerDependencies{..} = runResourceT $ runSomeConnector connector MarloweRuntimeServer
-  { result = ()
-  , getMarloweSyncDriver = wrapDriver <$> getMarloweSyncDriver
-  , getMarloweHeaderSyncDriver = wrapDriver <$> getMarloweHeaderSyncDriver
-  , getMarloweQueryDriver = wrapDriver <$> getMarloweQueryDriver
-  , getTxJobDriver = wrapDriver <$> getTxJobDriver
-  }
+worker WorkerDependencies{..} = runResourceT $ runSomeConnector connector MarloweRuntimeServer{result = (), ..}

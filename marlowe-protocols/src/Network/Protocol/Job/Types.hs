@@ -25,6 +25,7 @@ import Data.Functor ((<&>))
 import Data.List.NonEmpty
 import Data.Maybe (catMaybes)
 import Data.Proxy (Proxy(..))
+import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Type.Equality (type (:~:)(Refl))
 import GHC.Show (showSpace)
@@ -32,6 +33,7 @@ import Network.Protocol.Codec (BinaryMessage(..))
 import Network.Protocol.Codec.Spec
   (ArbitraryMessage(..), MessageEq(..), MessageVariations(..), ShowProtocol(..), SomePeerHasAgency(..))
 import Network.Protocol.Handshake.Types (HasSignature(..))
+import Network.Protocol.Trace (OTelMessage(..))
 import Network.TypedProtocol
 import Network.TypedProtocol.Codec (AnyMessageAndAgency(..))
 import Observe.Event.Network.Protocol (MessageToJSON(..))
@@ -78,6 +80,23 @@ class Command cmd => CommandToJSON cmd where
   errToJSON :: Tag cmd status err result -> err -> Value
   resultToJSON :: Tag cmd status err result -> result -> Value
   statusToJSON :: Tag cmd status err result -> status -> Value
+
+class Command cmd => OTelCommand cmd where
+  commandProtocolName :: Proxy cmd -> Text
+  commandType :: Tag cmd status err result -> Text
+
+instance OTelCommand cmd => OTelMessage (Job cmd) where
+  protocolName _ = "job " <> commandProtocolName (Proxy @cmd)
+  messageType = \case
+    MsgExec cmd -> "exec " <> commandType (tagFromCommand cmd)
+    MsgAttach jobId -> "attach " <> commandType (tagFromJobId jobId)
+    MsgAttached{} -> "attached"
+    MsgAttachFailed{} -> "attach_failed"
+    MsgFail{} -> "fail"
+    MsgSucceed{} -> "succeed"
+    MsgAwait{} -> "await"
+    MsgPoll{} -> "poll"
+    MsgDetach{} -> "detach"
 
 -- | A state kind for the job protocol.
 data Job (cmd :: * -> * -> * -> *) where

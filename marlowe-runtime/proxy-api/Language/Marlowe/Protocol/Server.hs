@@ -5,12 +5,7 @@
 module Language.Marlowe.Protocol.Server
   where
 
-import Control.Monad.Event.Class
-import Data.Functor (($>))
 import Data.Proxy (Proxy(Proxy))
-import Data.String (fromString)
-import Data.Text (Text)
-import Data.Void (Void)
 import Language.Marlowe.Protocol.HeaderSync.Types (MarloweHeaderSync)
 import qualified Language.Marlowe.Protocol.HeaderSync.Types as Header
 import Language.Marlowe.Protocol.Query.Types (MarloweQuery)
@@ -19,38 +14,28 @@ import Language.Marlowe.Protocol.Sync.Types (MarloweSync)
 import qualified Language.Marlowe.Protocol.Sync.Types as Sync
 import Language.Marlowe.Protocol.Types
 import Language.Marlowe.Runtime.Transaction.Api (MarloweTxCommand)
-import Network.Protocol.Codec.Spec (showsPrecMessage)
-import Network.Protocol.Handshake.Types
-  (ClientHasAgency(TokLiftClient), Handshake, HasSignature, Message(MsgLift), ServerHasAgency(TokLiftServer), signature)
+import Network.Protocol.Driver (hoistDriver)
+import Network.Protocol.Handshake.Types (Handshake, signature)
 import qualified Network.Protocol.Handshake.Types as Handshake
 import Network.Protocol.Job.Types (Job)
 import qualified Network.Protocol.Job.Types as Job
 import Network.TypedProtocol
-import Observe.Event (InjectSelector, NewEventArgs(..), addField, reference)
-import Observe.Event.Backend (setInitialCauseEventBackend, simpleNewEventArgs)
-import Observe.Event.Render.OpenTelemetry
-import OpenTelemetry.Attributes (toAttribute)
-import OpenTelemetry.Trace.Core (SpanKind(..))
-
-type RunHandshake m = forall r. (Text -> m () -> m () -> m r) -> m r
-
-data DriverWithRunHandshake ps dState m = DriverWithRunHandshake
-  { driver :: Driver (Handshake ps) dState m
-  , runHandshake :: RunHandshake m
-  }
-
-wrapDriver :: forall ps dState m. (HasSignature ps, Applicative m) => Driver (Handshake ps) dState m -> DriverWithRunHandshake ps dState m
-wrapDriver driver = DriverWithRunHandshake
-  { driver
-  , runHandshake = \handshake -> handshake (signature $ Proxy @ps) (pure ()) (pure ())
-  }
 
 data MarloweRuntimeServer m a = forall dState. MarloweRuntimeServer
-  { getMarloweSyncDriver :: m (DriverWithRunHandshake MarloweSync dState m)
-  , getMarloweHeaderSyncDriver :: m (DriverWithRunHandshake MarloweHeaderSync dState m)
-  , getMarloweQueryDriver :: m (DriverWithRunHandshake MarloweQuery dState m)
-  , getTxJobDriver :: m (DriverWithRunHandshake (Job MarloweTxCommand) dState m)
+  { getMarloweSyncDriver :: m (Driver (Handshake MarloweSync) dState m)
+  , getMarloweHeaderSyncDriver :: m (Driver (Handshake MarloweHeaderSync) dState m)
+  , getMarloweQueryDriver :: m (Driver (Handshake MarloweQuery) dState m)
+  , getTxJobDriver :: m (Driver (Handshake (Job MarloweTxCommand)) dState m)
   , result :: a
+  }
+
+hoistMarloweRuntimeServer :: Functor m => (forall x. m x -> n x) -> MarloweRuntimeServer m a -> MarloweRuntimeServer n a
+hoistMarloweRuntimeServer f MarloweRuntimeServer{..} = MarloweRuntimeServer
+  { getMarloweSyncDriver = f $ hoistDriver f <$> getMarloweSyncDriver
+  , getMarloweHeaderSyncDriver = f $ hoistDriver f <$> getMarloweHeaderSyncDriver
+  , getMarloweQueryDriver = f $ hoistDriver f <$> getMarloweQueryDriver
+  , getTxJobDriver = f $ hoistDriver f <$> getTxJobDriver
+  , ..
   }
 
 marloweRuntimeServerPeer :: Monad m => MarloweRuntimeServer m a -> Peer MarloweRuntime 'AsServer 'StInit m a
@@ -62,33 +47,32 @@ marloweRuntimeServerPeer MarloweRuntimeServer{..} = Await (ClientAgency TokInit)
 
 withHandshake
   :: forall ps dState st m a
-   . Monad m
+   . (Monad m, Handshake.HasSignature ps)
   => (dState -> Driver ps dState m -> Peer MarloweRuntime 'AsServer st m a)
-  -> m (DriverWithRunHandshake ps dState m)
+  -> m (Driver (Handshake ps) dState m)
   -> Peer MarloweRuntime 'AsServer st m a
 withHandshake main getDriver = Effect do
-  DriverWithRunHandshake{..} <- getDriver
-  runHandshake \sig onReject onAccept -> do
-    sendMessage driver (ClientAgency Handshake.TokInit) $ Handshake.MsgHandshake sig
-    (SomeMessage handshakeResponse, dState') <- recvMessage driver (ServerAgency Handshake.TokHandshake) (startDState driver)
-    case handshakeResponse of
-      Handshake.MsgReject -> onReject *> error "Handshake rejected by upstream server"
-      Handshake.MsgAccept -> onAccept $> main dState' case driver of
-        Driver{..} -> Driver
-          { sendMessage = \case
-              ClientAgency tok -> \msg -> sendMessage (ClientAgency $ Handshake.TokLiftClient tok) $ Handshake.MsgLift msg
-              ServerAgency tok -> \msg -> sendMessage (ServerAgency $ Handshake.TokLiftServer tok) $ Handshake.MsgLift msg
-          , recvMessage = \case
-              ClientAgency tok -> \dState -> do
-                (SomeMessage msg, dState'') <- recvMessage (ClientAgency $ Handshake.TokLiftClient tok) dState
-                case msg of
-                  Handshake.MsgLift msg' -> pure (SomeMessage msg', dState'')
-              ServerAgency tok -> \dState -> do
-                (SomeMessage msg, dState'') <- recvMessage (ServerAgency $ Handshake.TokLiftServer tok) dState
-                case msg of
-                  Handshake.MsgLift msg' -> pure (SomeMessage msg', dState'')
-          , ..
-          }
+  driver <- getDriver
+  sendMessage driver (ClientAgency Handshake.TokInit) $ Handshake.MsgHandshake $ signature $ Proxy @ps
+  (SomeMessage handshakeResponse, dState') <- recvMessage driver (ServerAgency Handshake.TokHandshake) (startDState driver)
+  case handshakeResponse of
+    Handshake.MsgReject -> error "Handshake rejected by upstream server"
+    Handshake.MsgAccept -> pure $ main dState' $ case driver of
+      Driver{..} -> Driver
+        { sendMessage = \case
+            ClientAgency tok -> \msg -> sendMessage (ClientAgency $ Handshake.TokLiftClient tok) $ Handshake.MsgLift msg
+            ServerAgency tok -> \msg -> sendMessage (ServerAgency $ Handshake.TokLiftServer tok) $ Handshake.MsgLift msg
+        , recvMessage = \case
+            ClientAgency tok -> \dState -> do
+              (SomeMessage msg, dState'') <- recvMessage (ClientAgency $ Handshake.TokLiftClient tok) dState
+              case msg of
+                Handshake.MsgLift msg' -> pure (SomeMessage msg', dState'')
+            ServerAgency tok -> \dState -> do
+              (SomeMessage msg, dState'') <- recvMessage (ServerAgency $ Handshake.TokLiftServer tok) dState
+              case msg of
+                Handshake.MsgLift msg' -> pure (SomeMessage msg', dState'')
+        , ..
+        }
 
 marloweSyncPeer
   :: Monad m
@@ -185,156 +169,3 @@ jobPeer tok dState driver = case tok of
       (Job.TokCmd tag, Job.MsgAwait{}) -> jobPeer (ClientAgency $ Job.TokAwait tag) dState' driver
       (Job.TokAttach tag, Job.MsgAttached{}) -> jobPeer (ServerAgency $ Job.TokCmd tag) dState' driver
       (_, Job.MsgAttachFailed{}) -> Done (TokNobodyTxJob Job.TokDone) ()
-
-data MarloweRuntimeServerSelector f where
-  RunMarloweSync :: MarloweRuntimeServerSelector Void
-  RunMarloweHeaderSync :: MarloweRuntimeServerSelector Void
-  RunMarloweQuery :: MarloweRuntimeServerSelector Void
-  RunTxJob :: MarloweRuntimeServerSelector Void
-  Handshake :: MarloweRuntimeServerSelector Text
-  HandshakeRejected :: MarloweRuntimeServerSelector Void
-  HandshakeAccepted :: MarloweRuntimeServerSelector Void
-  ProxyClientMsg :: MarloweRuntimeServerSelector ClientMsg
-  ProxyServerMsg :: MarloweRuntimeServerSelector ServerMsg
-
-data ClientMsg where
-  MarloweSyncClientMsg :: ClientHasAgency st -> Message MarloweSync st st' -> ClientMsg
-  MarloweHeaderSyncClientMsg :: ClientHasAgency st -> Message MarloweHeaderSync st st' -> ClientMsg
-  MarloweQueryClientMsg :: ClientHasAgency st -> Message MarloweQuery st st' -> ClientMsg
-  TxJobClientMsg :: ClientHasAgency st -> Message (Job MarloweTxCommand) st st' -> ClientMsg
-
-data ServerMsg where
-  MarloweSyncServerMsg :: ServerHasAgency st -> Message MarloweSync st st' -> ServerMsg
-  MarloweHeaderSyncServerMsg :: ServerHasAgency st -> Message MarloweHeaderSync st st' -> ServerMsg
-  MarloweQueryServerMsg :: ServerHasAgency st -> Message MarloweQuery st st' -> ServerMsg
-  TxJobServerMsg :: ServerHasAgency st -> Message (Job MarloweTxCommand) st st' -> ServerMsg
-
-traceMarloweRuntimeServer
-  :: MonadEvent r s m
-  => InjectSelector MarloweRuntimeServerSelector s
-  -> r
-  -> MarloweRuntimeServer m a
-  -> MarloweRuntimeServer m a
-traceMarloweRuntimeServer inj rootCause MarloweRuntimeServer{..} = MarloweRuntimeServer
-  { getMarloweSyncDriver = traceDriver inj rootCause RunMarloweSync MarloweSyncClientMsg MarloweSyncServerMsg getMarloweSyncDriver
-  , getMarloweHeaderSyncDriver = traceDriver inj rootCause RunMarloweHeaderSync MarloweHeaderSyncClientMsg MarloweHeaderSyncServerMsg getMarloweHeaderSyncDriver
-  , getMarloweQueryDriver = traceDriver inj rootCause RunMarloweQuery MarloweQueryClientMsg MarloweQueryServerMsg getMarloweQueryDriver
-  , getTxJobDriver = traceDriver inj rootCause RunTxJob TxJobClientMsg TxJobServerMsg getTxJobDriver
-  , result
-  }
-
-traceDriver
-  :: MonadEvent r s m
-  => InjectSelector MarloweRuntimeServerSelector s
-  -> r
-  -> MarloweRuntimeServerSelector Void
-  -> (forall st st'. ClientHasAgency st -> Message ps st st' -> ClientMsg)
-  -> (forall st st'. ServerHasAgency st -> Message ps st st' -> ServerMsg)
-  -> m (DriverWithRunHandshake ps dState m)
-  -> m (DriverWithRunHandshake ps dState m)
-traceDriver inj rootCause acquireEvent clientMsg serverMsg getDriver =
-  withInjectEventArgs inj (simpleNewEventArgs acquireEvent) { newEventCauses = [rootCause] } \ev -> do
-    DriverWithRunHandshake Driver{..} runHandshake <- getDriver
-    pure DriverWithRunHandshake
-      { driver = Driver
-        { sendMessage = \case
-            ClientAgency (TokLiftClient tok) -> \(MsgLift msg) ->
-              withInjectEventArgs inj (simpleNewEventArgs ProxyClientMsg) { newEventInitialFields = [clientMsg tok msg], newEventCauses = [rootCause, reference ev] } \_ -> do
-                sendMessage (ClientAgency $ TokLiftClient tok) $ MsgLift msg
-            tok -> sendMessage tok
-        , recvMessage = \case
-            ServerAgency (TokLiftServer tok) -> \dState -> withInjectEventArgs inj (simpleNewEventArgs ProxyServerMsg) { newEventCauses = [rootCause, reference ev] } \ev' -> do
-              (SomeMessage msg, dState') <- recvMessage (ServerAgency $ TokLiftServer tok) dState
-              _ :: () <- case msg of
-                MsgLift msg' -> addField ev' $ serverMsg tok msg'
-              pure (SomeMessage msg, dState')
-            tok -> recvMessage tok
-        , ..
-        }
-      , runHandshake = \handshake -> localBackend (setInitialCauseEventBackend [rootCause, reference ev]) do
-          runHandshake \sig onReject onAccept ->
-            withInjectEventArgs inj (simpleNewEventArgs Handshake) { newEventInitialFields = [sig], newEventCauses = [rootCause, reference ev] } \_ -> do
-              handshake sig
-                (emitImmediateInjectEventArgs_ inj (simpleNewEventArgs HandshakeRejected) { newEventCauses = [rootCause, reference ev] } *> onReject)
-                (emitImmediateInjectEventArgs_ inj (simpleNewEventArgs HandshakeAccepted) { newEventCauses = [rootCause, reference ev] } *> onAccept)
-      }
-
-renderMarloweRuntimeServerSelectorOTel :: RenderSelectorOTel MarloweRuntimeServerSelector
-renderMarloweRuntimeServerSelectorOTel = \case
-  RunMarloweSync -> OTelRendered
-    { eventName = "run_marlowe_sync"
-    , eventKind = Server
-    , renderField = \case
-    }
-  RunMarloweHeaderSync -> OTelRendered
-    { eventName = "run_marlowe_header_sync"
-    , eventKind = Server
-    , renderField = \case
-    }
-  RunMarloweQuery -> OTelRendered
-    { eventName = "run_marlowe_query"
-    , eventKind = Server
-    , renderField = \case
-    }
-  RunTxJob -> OTelRendered
-    { eventName = "run_tx_job"
-    , eventKind = Server
-    , renderField = \case
-    }
-  Handshake -> OTelRendered
-    { eventName = "handshake"
-    , eventKind = Server
-    , renderField = \sig -> [("handshake.signature", toAttribute sig)]
-    }
-  HandshakeRejected -> OTelRendered
-    { eventName = "handshake_rejected"
-    , eventKind = Internal
-    , renderField = \case
-    }
-  HandshakeAccepted -> OTelRendered
-    { eventName = "handshake_accepted"
-    , eventKind = Internal
-    , renderField = \case
-    }
-  ProxyClientMsg -> OTelRendered
-    { eventName = "proxy_client_msg"
-    , eventKind = Internal
-    , renderField = \case
-        MarloweSyncClientMsg tok msg ->
-          [ ("marlowe_runtime.sub_protocol", "marlowe_sync")
-          , ("protocol.msg", fromString $ showsPrecMessage 0 (ClientAgency tok) msg "")
-          ]
-        MarloweHeaderSyncClientMsg tok msg ->
-          [ ("marlowe_runtime.sub_protocol", "marlowe_header_sync")
-          , ("protocol.msg", fromString $ showsPrecMessage 0 (ClientAgency tok) msg "")
-          ]
-        MarloweQueryClientMsg tok msg ->
-          [ ("marlowe_runtime.sub_protocol", "marlowe_query")
-          , ("protocol.msg", fromString $ showsPrecMessage 0 (ClientAgency tok) msg "")
-          ]
-        TxJobClientMsg tok msg ->
-          [ ("marlowe_runtime.sub_protocol", "tx_job")
-          , ("protocol.msg", fromString $ showsPrecMessage 0 (ClientAgency tok) msg "")
-          ]
-    }
-  ProxyServerMsg -> OTelRendered
-    { eventName = "proxy_server_msg"
-    , eventKind = Internal
-    , renderField = \case
-        MarloweSyncServerMsg tok msg ->
-          [ ("marlowe_runtime.sub_protocol", "marlowe_sync")
-          , ("protocol.msg", fromString $ showsPrecMessage 0 (ServerAgency tok) msg "")
-          ]
-        MarloweHeaderSyncServerMsg tok msg ->
-          [ ("marlowe_runtime.sub_protocol", "marlowe_header_sync")
-          , ("protocol.msg", fromString $ showsPrecMessage 0 (ServerAgency tok) msg "")
-          ]
-        MarloweQueryServerMsg tok msg ->
-          [ ("marlowe_runtime.sub_protocol", "marlowe_query")
-          , ("protocol.msg", fromString $ showsPrecMessage 0 (ServerAgency tok) msg "")
-          ]
-        TxJobServerMsg tok msg ->
-          [ ("marlowe_runtime.sub_protocol", "tx_job")
-          , ("protocol.msg", fromString $ showsPrecMessage 0 (ServerAgency tok) msg "")
-          ]
-    }

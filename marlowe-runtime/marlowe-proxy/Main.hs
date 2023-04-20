@@ -20,7 +20,7 @@ import Data.ByteString.Lazy (ByteString)
 import Data.GeneralAllocate
 import qualified Data.Text as T
 import Data.Version (showVersion)
-import Language.Marlowe.Protocol.Server (marloweRuntimeServerPeer, traceMarloweRuntimeServer)
+import Language.Marlowe.Protocol.Server (marloweRuntimeServerPeer)
 import Language.Marlowe.Runtime.CLI.Option (optParserWithEnvDefault)
 import qualified Language.Marlowe.Runtime.CLI.Option as O
 import Language.Marlowe.Runtime.Proxy
@@ -85,7 +85,7 @@ main = do
 
 run :: Options -> AppM Span ()
 run = runComponent_ proc Options{..} -> do
-  connectionSource <- tcpServerTrace traceMarloweRuntimeServer -< TcpServerDependencies
+  connectionSource <- tcpServerTrace -< TcpServerDependencies
     { toPeer = marloweRuntimeServerPeer
     , ..
     }

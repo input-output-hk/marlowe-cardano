@@ -17,6 +17,7 @@ import Network.Protocol.Codec (BinaryMessage(..))
 import Network.Protocol.Codec.Spec
   (MessageEq(..), MessageVariations(..), ShowProtocol(..), SomePeerHasAgency(..), Variations(..), varyAp)
 import Network.Protocol.Handshake.Types (HasSignature(..))
+import Network.Protocol.Trace (OTelMessage(..))
 import Network.TypedProtocol (PeerHasAgency(..), Protocol(..))
 import Network.TypedProtocol.Codec (AnyMessageAndAgency(AnyMessageAndAgency), SomeMessage(..))
 import Observe.Event.Network.Protocol (MessageToJSON(..))
@@ -81,6 +82,20 @@ instance Protocol MarloweHeaderSync where
   exclusionLemma_NobodyAndClientHaveAgency TokDone = \case
 
   exclusionLemma_NobodyAndServerHaveAgency TokDone = \case
+
+instance OTelMessage MarloweHeaderSync where
+  protocolName _ = "marlowe_header_sync"
+  messageType = \case
+    MsgIntersect{} -> "intersect"
+    MsgDone{} -> "done"
+    MsgRequestNext{} -> "request_next"
+    MsgNewHeaders{} -> "new_headers"
+    MsgRollBackward{} -> "roll_backward"
+    MsgWait{} -> "wait"
+    MsgPoll{} -> "poll"
+    MsgCancel{} -> "cancel"
+    MsgIntersectFound{} -> "intersect_found"
+    MsgIntersectNotFound{} -> "intersect_not_found"
 
 instance BinaryMessage MarloweHeaderSync where
   putMessage = \case

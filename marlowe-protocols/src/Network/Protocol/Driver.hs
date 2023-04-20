@@ -30,14 +30,9 @@ import Data.Void (Void)
 import Network.Channel (Channel(..), socketAsChannel)
 import Network.Protocol.Codec (BinaryMessage, DeserializeError, binaryCodec)
 import Network.Protocol.Connection (Connection(..), ConnectionSource(..), Connector(..), SomeConnector(..), ToPeer)
-import Network.Protocol.Handshake.Server
-  ( HandshakeServerSelector
-  , handshakeServerPeer
-  , renderHandshakeServerSelectorOTel
-  , simpleHandshakeServer
-  , traceHandshakeServer
-  )
+import Network.Protocol.Handshake.Server (handshakeServerPeer, simpleHandshakeServer)
 import Network.Protocol.Handshake.Types (Handshake, HasSignature, signature)
+import Network.Protocol.Trace (HasSpanContext, OTelMessage, PeerSelector, Trace, renderPeerSelectorOTel, traceServer)
 import Network.Run.TCP (runTCPServer)
 import Network.Socket
   ( AddrInfo(..)
@@ -141,17 +136,17 @@ tcpServer = component \TcpServerDependencies{..} -> do
           }
     )
 
-data TcpServerSelector server f where
-  SetupServer :: TcpServerSelector server SetupServerField
-  ServerResolve :: TcpServerSelector server AddrInfo
-  ServerBind :: TcpServerSelector server Void
-  ServerClose :: TcpServerSelector server Void
-  ServerAccept :: TcpServerSelector server SockAddr
-  ServerCloseConnection :: TcpServerSelector server SockAddr
-  LiftServer :: HandshakeServerSelector server f -> TcpServerSelector server (LiftServerField f)
+data TcpServerSelector ps f where
+  SetupServer :: TcpServerSelector ps SetupServerField
+  ServerResolve :: TcpServerSelector ps AddrInfo
+  ServerBind :: TcpServerSelector ps Void
+  ServerClose :: TcpServerSelector ps Void
+  ServerAccept :: TcpServerSelector ps SockAddr
+  ServerCloseConnection :: TcpServerSelector ps SockAddr
+  LiftPeer :: SockAddr -> PeerSelector (Handshake ps) f -> TcpServerSelector ps (LiftServerField f)
 
-injectServer :: InjectSelector (HandshakeServerSelector server) (TcpServerSelector server)
-injectServer sel withInjField = withInjField (LiftServer sel) LiftServerApp
+injectPeer :: SockAddr -> InjectSelector (PeerSelector (Handshake ps)) (TcpServerSelector ps)
+injectPeer peer sel withInjField = withInjField (LiftPeer peer sel) LiftServerApp
 
 data LiftServerField f
   = LiftServerHost AddrInfo
@@ -163,23 +158,23 @@ data SetupServerField
   | ServerPort PortNumber
 
 tcpServerTrace
-  :: forall ps server r s t m m'
+  :: forall ps server r s m m'
    . ( MonadUnliftIO m'
      , MonadUnliftIO m
-     , MonadInjectEvent r (TcpServerSelector s) t m
-     , MonadInjectEvent r (TcpServerSelector s) t m'
+     , MonadInjectEvent r (TcpServerSelector ps) s m
+     , MonadInjectEvent r (TcpServerSelector ps) s m'
      , HasSignature ps
      , MonadFail m'
+     , HasSpanContext r
      )
-  => (forall a. InjectSelector s t -> r -> server m' a -> server m' a)
-  -> Component m (TcpServerDependencies ps server m') (ConnectionSource (Handshake ps) server m')
-tcpServerTrace traceServer = component \TcpServerDependencies{..} -> do
+  => Component m (TcpServerDependencies ps server m') (ConnectionSource (Trace (Handshake ps)) server m')
+tcpServerTrace = component \TcpServerDependencies{..} -> do
   socketQueue <- newTQueue
   pure
     ( withRunInIO \runInIO -> withSocketsDo $ runInIO do
-        join $ withEventFields (SetupServer @s) [ServerHost host, ServerPort port] \setupEv -> do
+        join $ withEventFields (SetupServer @ps) [ServerHost host, ServerPort port] \setupEv -> do
           let hints = defaultHints { addrSocketType = Stream, addrFlags = [AI_PASSIVE] }
-          addr <- withEvent (ServerResolve @s) \ev -> do
+          addr <- withEvent (ServerResolve @ps) \ev -> do
             addr <- liftIO $ head <$> getAddrInfo (Just hints) (Just host) (Just $ show port)
             addField ev addr
             pure addr
@@ -188,17 +183,17 @@ tcpServerTrace traceServer = component \TcpServerDependencies{..} -> do
           socket <- open setupEv addr
           pure $ bracket (pure socket) (close' setupEv) $ loop setupEv socketQueue
     , ConnectionSource do
-        (acceptEv, socket, closeConnection) <- readTQueue socketQueue
+        (peer, socket, closeConnection) <- readTQueue socketQueue
         pure $ Connector $ pure Connection
           { closeConnection = atomically . closeConnection
           , channel = socketAsChannel socket
-          , toPeer = handshakeServerPeer toPeer
-              . traceHandshakeServer traceServer (composeInjectSelector inject $ injectServer @s) (reference acceptEv)
+          , toPeer = traceServer (composeInjectSelector inject (injectPeer peer))
+              . handshakeServerPeer toPeer
               . simpleHandshakeServer (signature $ Proxy @ps)
           }
     )
     where
-      open setupEv addr = withEvent (ServerBind @s) \_ ->
+      open setupEv addr = withEvent (ServerBind @ps) \_ ->
         bracketOnError (liftIO $ openSocket addr) (close' setupEv) \socket -> liftIO do
           setSocketOption socket ReuseAddr 1
           withFdSocket socket setCloseOnExecIfNeeded
@@ -206,9 +201,9 @@ tcpServerTrace traceServer = component \TcpServerDependencies{..} -> do
           listen socket 1024
           pure socket
 
-      close' setupEv socket = withEventArgs (simpleNewEventArgs $ ServerClose @s) { newEventCauses = [reference setupEv] } $ const $ liftIO $ close socket
+      close' setupEv socket = withEventArgs (simpleNewEventArgs $ ServerClose @ps) { newEventCauses = [reference setupEv] } $ const $ liftIO $ close socket
 
-      loop setupEv socketQueue socket = join $ withEventArgs (simpleNewEventArgs $ ServerAccept @s) { newEventCauses = [reference setupEv] } \ev ->
+      loop setupEv socketQueue socket = join $ withEventArgs (simpleNewEventArgs $ ServerAccept @ps) { newEventCauses = [reference setupEv] } \ev ->
         bracketOnError (liftIO $ accept socket) (close' setupEv . fst) \(conn, peer) -> do
           addField ev peer
           -- pure / join is so that ServerAccept doesn't become the parent
@@ -219,7 +214,7 @@ tcpServerTrace traceServer = component \TcpServerDependencies{..} -> do
             $ serve ev socketQueue conn peer `catch` (gracefulClose' ev conn peer . Just)
 
       gracefulClose' acceptEv conn peer ex =
-        withEventArgs (simpleNewEventArgs (ServerCloseConnection @s)) { newEventCauses = [reference acceptEv] } \ev -> do
+        withEventArgs (simpleNewEventArgs (ServerCloseConnection @ps)) { newEventCauses = [reference acceptEv] } \ev -> do
           addField ev peer
           liftIO $ gracefulClose conn 5000
           finalize ev ex
@@ -227,7 +222,7 @@ tcpServerTrace traceServer = component \TcpServerDependencies{..} -> do
       serve acceptEv socketQueue conn peer = do
         closeTMVar <- atomically do
           closeTMVar <- newEmptyTMVar
-          writeTQueue socketQueue (acceptEv, conn, void . tryPutTMVar closeTMVar)
+          writeTQueue socketQueue (peer, conn, void . tryPutTMVar closeTMVar)
           pure closeTMVar
         ex <- atomically $ readTMVar closeTMVar
         gracefulClose' acceptEv conn peer ex
@@ -270,11 +265,8 @@ runConnector Connector{..} peer = flip runConnection peer =<< openConnection
 runSomeConnector :: MonadUnliftIO m => SomeConnector pr peer m -> peer m a -> m a
 runSomeConnector (SomeConnector connector) = runConnector connector
 
-renderTcpServerSelectorOTel
-  :: Text
-  -> RenderSelectorOTel server
-  -> RenderSelectorOTel (TcpServerSelector server)
-renderTcpServerSelectorOTel serviceName renderServer = \case
+renderTcpServerSelectorOTel :: OTelMessage ps => Text -> RenderSelectorOTel (TcpServerSelector ps)
+renderTcpServerSelectorOTel selfName = \case
   SetupServer -> OTelRendered
     { eventName = "server.setup"
     , eventKind = Internal
@@ -285,7 +277,7 @@ renderTcpServerSelectorOTel serviceName renderServer = \case
   ServerResolve -> OTelRendered
     { eventName = "server.tcp.resolve"
     , eventKind = Internal
-    , renderField = addrInfoToAttributes serviceName
+    , renderField = addrInfoToAttributes
     }
   ServerBind -> OTelRendered
     { eventName = "server.tcp.bind"
@@ -307,28 +299,23 @@ renderTcpServerSelectorOTel serviceName renderServer = \case
     , eventKind = Internal
     , renderField = sockAddrToAttributes True
     }
-  LiftServer sel ->
-    let rendered = renderHandshakeServerSelectorOTel renderServer sel
+  LiftPeer peer sel ->
+    let rendered = renderPeerSelectorOTel selfName (peerName peer) sel
      in rendered
-      { eventName = case eventKind rendered of
-          Server -> serviceName <> "/" <> eventName rendered
-          _ -> eventName rendered
-      , renderField = \case
-          LiftServerHost addr -> addrInfoToAttributes serviceName addr
-          LiftServerPeer peer -> sockAddrToAttributes True peer
+      { renderField = \case
+          LiftServerHost addr -> addrInfoToAttributes addr
+          LiftServerPeer peer' -> sockAddrToAttributes True peer'
           LiftServerApp f -> renderField rendered f
       }
 
-addrInfoToAttributes :: Text -> AddrInfo -> [(T.Text, Attribute)]
-addrInfoToAttributes serviceName AddrInfo{..} =
+addrInfoToAttributes :: AddrInfo -> [(T.Text, Attribute)]
+addrInfoToAttributes AddrInfo{..} =
   ( "net.transport"
   , case addrSocketType of
     Stream -> "ip_tcp"
     Datagram -> "ip_udp"
     _ -> "other"
   )
-  : ("rpc.system", "typed-protocols")
-  : ("rpc.service", toAttribute serviceName)
   : sockAddrToAttributes False addrAddress
 
 
@@ -356,3 +343,9 @@ sockAddrToAttributes isRemote = \case
     sockPrefix
       | isRemote = "net.sock.peer."
       | otherwise = "net.sock.host."
+
+peerName :: SockAddr -> Text
+peerName = \case
+  SockAddrInet _ (hostAddressToTuple -> (a, b, c, d)) -> fromString $ intercalate "." $ show <$> [a, b, c, d]
+  SockAddrInet6 _ _ (hostAddress6ToTuple -> (a, b, c, d, e, f, g, h)) _ -> fromString $ intercalate ":" $ flip showHex "" <$> [a, b, c, d, e, f, g, h]
+  SockAddrUnix name -> fromString name

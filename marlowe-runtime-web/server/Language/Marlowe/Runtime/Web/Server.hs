@@ -35,7 +35,8 @@ import Language.Marlowe.Runtime.Web.Server.REST (ApiSelector)
 import qualified Language.Marlowe.Runtime.Web.Server.REST as REST
 import Language.Marlowe.Runtime.Web.Server.SyncClient (SyncClient(..), SyncClientDependencies(..), syncClient)
 import Language.Marlowe.Runtime.Web.Server.TxClient (TxClient(..), TxClientDependencies(..), txClient)
-import Network.Protocol.Connection (SomeClientConnector)
+import Network.Protocol.Codec (BinaryMessage)
+import Network.Protocol.Connection (ClientConnector, SomeConnector(SomeConnector))
 import qualified Network.Wai as WAI
 import Network.Wai.Middleware.Cors (CorsResourcePolicy(..), cors, simpleCorsResourcePolicy)
 import Observe.Event.Class (EventT, backend, runEventT, withModifiedBackend)
@@ -104,11 +105,11 @@ app openAPIEnabled accessControlAllowOriginAll env req handleRes = withRunInIO $
 instance DefaultRenderSelectorJSON ServeRequest where
   defaultRenderSelectorJSON = renderServeRequest
 
-data ServerDependencies r = ServerDependencies
+data ServerDependencies r = forall ps. BinaryMessage ps => ServerDependencies
   { openAPIEnabled :: Bool
   , accessControlAllowOriginAll :: Bool
   , runApplication :: Application -> IO ()
-  , connector :: SomeClientConnector MarloweRuntimeClient IO
+  , connector :: ClientConnector ps MarloweRuntimeClient IO
   , eventBackend :: EventBackend IO r ServerSelector
   }
 
@@ -124,36 +125,38 @@ data ServerDependencies r = ServerDependencies
 -}
 
 server :: Component IO (ServerDependencies r) ()
-server = proc ServerDependencies{..} -> do
+server = proc deps -> do
   TxClient{..} <- txClient -< TxClientDependencies
-    { connector
+    { connector = case deps of ServerDependencies{..} -> SomeConnector connector
     }
   SyncClient{..} <- syncClient -< SyncClientDependencies
-    { connector
+    { connector = case deps of ServerDependencies{..} -> SomeConnector connector
     , lookupTempContract
     , lookupTempTransaction
     , lookupTempWithdrawal
     }
-  webServer -< WebServerDependencies
-    { env = AppEnv
-        { _loadContractHeaders = loadContractHeaders
-        , _loadContract = loadContract
-        , _loadTransactions = loadTransactions
-        , _loadTransaction = loadTransaction
-        , _loadWithdrawals = loadWithdrawals
-        , _loadWithdrawal = loadWithdrawal
-        , _createContract = createContract
-        , _applyInputs = applyInputs
-        , _withdraw = withdraw
-        , _submitContract = submitContract
-        , _submitTransaction = submitTransaction
-        , _submitWithdrawal = submitWithdrawal
+  webServer -< case deps of
+    ServerDependencies{..} ->
+      WebServerDependencies
+        { env = AppEnv
+            { _loadContractHeaders = loadContractHeaders
+            , _loadContract = loadContract
+            , _loadTransactions = loadTransactions
+            , _loadTransaction = loadTransaction
+            , _loadWithdrawals = loadWithdrawals
+            , _loadWithdrawal = loadWithdrawal
+            , _createContract = createContract
+            , _applyInputs = applyInputs
+            , _withdraw = withdraw
+            , _submitContract = submitContract
+            , _submitTransaction = submitTransaction
+            , _submitWithdrawal = submitWithdrawal
+            }
+        , eventBackend
+        , openAPIEnabled
+        , accessControlAllowOriginAll
+        , runApplication
         }
-    , eventBackend
-    , openAPIEnabled
-    , accessControlAllowOriginAll
-    , runApplication
-    }
 
 data WebServerDependencies r = WebServerDependencies
   { env :: AppEnv r

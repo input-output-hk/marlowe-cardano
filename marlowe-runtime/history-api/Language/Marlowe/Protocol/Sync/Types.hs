@@ -18,6 +18,7 @@ import Network.Protocol.Codec (BinaryMessage(..))
 import Network.Protocol.Codec.Spec
   (MessageEq(..), MessageVariations(..), ShowProtocol(..), SomePeerHasAgency(SomePeerHasAgency), Variations(..), varyAp)
 import Network.Protocol.Handshake.Types (HasSignature(..))
+import Network.Protocol.Trace (OTelMessage(..))
 import Network.TypedProtocol (PeerHasAgency(..), Protocol(..), SomeMessage(..))
 import Network.TypedProtocol.Codec (AnyMessageAndAgency(AnyMessageAndAgency))
 import Observe.Event.Network.Protocol (MessageToJSON(..))
@@ -99,6 +100,24 @@ instance Protocol MarloweSync where
   exclusionLemma_NobodyAndClientHaveAgency TokDone = \case
 
   exclusionLemma_NobodyAndServerHaveAgency TokDone = \case
+
+instance OTelMessage MarloweSync where
+  protocolName _ = "marlowe_sync"
+  messageType = \case
+    MsgFollowContract{} -> "follow_contract"
+    MsgIntersect{} -> "intersect"
+    MsgContractNotFound{} -> "contract_not_found"
+    MsgContractFound{} -> "contract_found"
+    MsgDone{} -> "done"
+    MsgRequestNext{} -> "request_next"
+    MsgRollForward{} -> "roll_forward"
+    MsgRollBackward{} -> "roll_backward"
+    MsgRollBackCreation{} -> "roll_back_creation"
+    MsgWait{} -> "wait"
+    MsgPoll{} -> "poll"
+    MsgCancel{} -> "cancel"
+    MsgIntersectFound{} -> "intersect_found"
+    MsgIntersectNotFound{} -> "intersect_not_found"
 
 instance BinaryMessage MarloweSync where
   putMessage = \case

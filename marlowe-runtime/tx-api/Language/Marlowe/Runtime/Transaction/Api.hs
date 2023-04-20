@@ -477,6 +477,13 @@ instance CommandToJSON MarloweTxCommand where
     TagWithdraw _ -> toJSON
     TagSubmit -> toJSON
 
+instance OTelCommand MarloweTxCommand where
+  commandProtocolName _ = "marlowe_tx_command"
+  commandType = \case
+    TagCreate _ -> "create"
+    TagApplyInputs _ -> "apply_inputs"
+    TagWithdraw _ -> "withdraw"
+    TagSubmit -> "submit"
 
 instance Command MarloweTxCommand where
   data Tag MarloweTxCommand status err result where

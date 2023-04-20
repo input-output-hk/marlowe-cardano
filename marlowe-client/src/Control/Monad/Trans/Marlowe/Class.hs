@@ -29,10 +29,10 @@ import Language.Marlowe.Runtime.Transaction.Api
   , WalletAddresses
   , WithdrawError
   )
-import Network.Protocol.Driver (runSomeConnector)
+import Network.Protocol.Driver (runConnector)
 import Network.Protocol.Job.Client (ClientStAwait(..), ClientStInit(..), JobClient(..), liftCommand)
 import qualified Network.Protocol.Job.Client as Job
-import UnliftIO (MonadIO, MonadUnliftIO, liftIO, newIORef, readIORef, withRunInIO, writeIORef)
+import UnliftIO (MonadIO, MonadUnliftIO, liftIO, newIORef, readIORef, writeIORef)
 
 -- ^ A class for monadic contexts that provide a connection to a Marlowe
 -- Runtime instance.
@@ -41,8 +41,8 @@ class Monad m => MonadMarlowe m where
   runMarloweRuntimeClient :: MarloweRuntimeClient m a -> m a
 
 instance MonadUnliftIO m => MonadMarlowe (MarloweT m) where
-  runMarloweRuntimeClient client = MarloweT $ ReaderT \connector -> withRunInIO \runInIO ->
-    runSomeConnector connector $ hoistMarloweRuntimeClient (runInIO . flip runMarloweT connector) client
+  runMarloweRuntimeClient client = MarloweT $ ReaderT \connector ->
+    runConnector connector $ hoistMarloweRuntimeClient (flip runMarloweT connector) client
 
 instance MonadMarlowe m => MonadMarlowe (ReaderT r m) where
   runMarloweRuntimeClient client = ReaderT \r ->

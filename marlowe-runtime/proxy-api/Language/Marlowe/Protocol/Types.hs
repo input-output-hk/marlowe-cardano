@@ -21,6 +21,7 @@ import Network.Protocol.Codec
 import Network.Protocol.Handshake.Types (HasSignature(..))
 import Network.Protocol.Job.Types (Job)
 import qualified Network.Protocol.Job.Types as Job
+import Network.Protocol.Trace (OTelMessage(..))
 import Network.TypedProtocol
 import Observe.Event.Network.Protocol (MessageToJSON(..))
 
@@ -91,6 +92,18 @@ instance Protocol MarloweRuntime where
       TokServerMarloweQuery tok' -> exclusionLemma_NobodyAndServerHaveAgency tok tok'
     TokNobodyTxJob tok -> \case
       TokServerTxJob tok' -> exclusionLemma_NobodyAndServerHaveAgency tok tok'
+
+instance OTelMessage MarloweRuntime where
+  protocolName _ = "marlowe_runtime"
+  messageType = \case
+    MsgRunMarloweSync -> "run_marlowe_sync"
+    MsgRunMarloweHeaderSync -> "run_marlowe_header_sync"
+    MsgRunMarloweQuery -> "run_marlowe_query"
+    MsgRunTxJob -> "run_tx_job"
+    MsgMarloweSync msg -> "marlowe_sync:" <> messageType msg
+    MsgMarloweHeaderSync msg -> "marlowe_header_sync:" <> messageType msg
+    MsgMarloweQuery msg -> "marlowe_query:" <> messageType msg
+    MsgTxJob msg -> "tx_job:" <> messageType msg
 
 instance BinaryMessage MarloweRuntime where
   putMessage = \case
