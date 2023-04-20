@@ -262,43 +262,43 @@ traceDriver inj rootCause acquireEvent clientMsg serverMsg getDriver =
 renderMarloweRuntimeServerSelectorOTel :: RenderSelectorOTel MarloweRuntimeServerSelector
 renderMarloweRuntimeServerSelectorOTel = \case
   RunMarloweSync -> OTelRendered
-    { eventName = "marlowe_runtime/proxy/run_marlowe_sync"
+    { eventName = "run_marlowe_sync"
     , eventKind = Server
     , renderField = \case
     }
   RunMarloweHeaderSync -> OTelRendered
-    { eventName = "marlowe_runtime/proxy/run_marlowe_header_sync"
+    { eventName = "run_marlowe_header_sync"
     , eventKind = Server
     , renderField = \case
     }
   RunMarloweQuery -> OTelRendered
-    { eventName = "marlowe_runtime/proxy/run_marlowe_query"
+    { eventName = "run_marlowe_query"
     , eventKind = Server
     , renderField = \case
     }
   RunTxJob -> OTelRendered
-    { eventName = "marlowe_runtime/proxy/run_tx_job"
+    { eventName = "run_tx_job"
     , eventKind = Server
     , renderField = \case
     }
   Handshake -> OTelRendered
-    { eventName = "marlowe_runtime/proxy/handshake"
+    { eventName = "handshake"
     , eventKind = Server
     , renderField = \sig -> [("handshake.signature", toAttribute sig)]
     }
   HandshakeRejected -> OTelRendered
-    { eventName = "marlowe_runtime/proxy/handshake_rejected"
+    { eventName = "handshake_rejected"
     , eventKind = Internal
     , renderField = \case
     }
   HandshakeAccepted -> OTelRendered
-    { eventName = "marlowe_runtime/proxy/handshake_accepted"
+    { eventName = "handshake_accepted"
     , eventKind = Internal
     , renderField = \case
     }
   ProxyClientMsg -> OTelRendered
-    { eventName = "marlowe_runtime/proxy/proxy_client_msg"
-    , eventKind = Server
+    { eventName = "proxy_client_msg"
+    , eventKind = Internal
     , renderField = \case
         MarloweSyncClientMsg tok msg ->
           [ ("marlowe_runtime.sub_protocol", "marlowe_sync")
@@ -318,8 +318,8 @@ renderMarloweRuntimeServerSelectorOTel = \case
           ]
     }
   ProxyServerMsg -> OTelRendered
-    { eventName = "marlowe_runtime/proxy/proxy_server_msg"
-    , eventKind = Server
+    { eventName = "proxy_server_msg"
+    , eventKind = Internal
     , renderField = \case
         MarloweSyncServerMsg tok msg ->
           [ ("marlowe_runtime.sub_protocol", "marlowe_sync")

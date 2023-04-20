@@ -58,7 +58,7 @@ let
     };
   };
 
-  dev-service = { ports, depends_on, command }: {
+  dev-service = { ports, depends_on, command, environment ? [ ] }: {
     inherit command;
     image = "alpine:3.16.2";
     volumes = [
@@ -78,7 +78,7 @@ let
     depends_on = lib.genAttrs depends_on (_: { condition = "service_healthy"; });
     environment = [
       "OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318"
-    ];
+    ] ++ environment;
   };
 
   chain-indexer-service = {
@@ -213,6 +213,7 @@ let
       "--log-config-file"
       "./marlowe-proxy.log.config"
     ];
+    environment = [ "OTEL_SERVICE_NAME=marlowe-proxy" ];
   };
 
   web-service = dev-service {
