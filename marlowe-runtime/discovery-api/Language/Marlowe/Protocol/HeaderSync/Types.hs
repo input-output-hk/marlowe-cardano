@@ -10,13 +10,15 @@ import Data.Aeson (Value(..), object, (.=))
 import Data.Binary (get, put, putWord8)
 import Data.Binary.Get (getWord8)
 import qualified Data.List.NonEmpty as NE
+import GHC.Show (showSpace)
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainPoint)
 import Language.Marlowe.Runtime.Discovery.Api (ContractHeader)
 import Network.Protocol.Codec (BinaryMessage(..))
-import Network.Protocol.Codec.Spec (MessageVariations(..), SomePeerHasAgency(SomePeerHasAgency), Variations(..), varyAp)
+import Network.Protocol.Codec.Spec
+  (MessageEq(..), MessageVariations(..), ShowProtocol(..), SomePeerHasAgency(..), Variations(..), varyAp)
 import Network.Protocol.Handshake.Types (HasSignature(..))
 import Network.TypedProtocol (PeerHasAgency(..), Protocol(..))
-import Network.TypedProtocol.Codec (SomeMessage(..))
+import Network.TypedProtocol.Codec (AnyMessageAndAgency(AnyMessageAndAgency), SomeMessage(..))
 import Observe.Event.Network.Protocol (MessageToJSON(..))
 
 data MarloweHeaderSync where
@@ -197,3 +199,76 @@ instance MessageToJSON MarloweHeaderSync where
     ServerAgency TokIntersect -> \case
       MsgIntersectFound blockHeader -> object [ "intersect-found" .= blockHeader ]
       MsgIntersectNotFound -> String "intersect-not-found"
+
+instance MessageEq MarloweHeaderSync where
+  messageEq = \case
+    AnyMessageAndAgency _ (MsgIntersect points) -> \case
+      AnyMessageAndAgency _ (MsgIntersect points') -> points == points'
+      _ -> False
+    AnyMessageAndAgency _ MsgDone -> \case
+      AnyMessageAndAgency _ MsgDone -> True
+      _ -> False
+    AnyMessageAndAgency _ MsgRequestNext -> \case
+      AnyMessageAndAgency _ MsgRequestNext -> True
+      _ -> False
+    AnyMessageAndAgency agency (MsgNewHeaders blockHeader headers) -> \case
+      AnyMessageAndAgency agency' (MsgNewHeaders blockHeader' contractSteps') -> blockHeader == blockHeader' && case (agency, agency') of
+        (ServerAgency TokNext, ServerAgency TokNext) -> headers == contractSteps'
+      _ -> False
+    AnyMessageAndAgency _ (MsgRollBackward point) -> \case
+      AnyMessageAndAgency _ (MsgRollBackward point') -> point == point'
+      _ -> False
+    AnyMessageAndAgency _ MsgWait -> \case
+      AnyMessageAndAgency _ MsgWait -> True
+      _ -> False
+    AnyMessageAndAgency _ MsgPoll -> \case
+      AnyMessageAndAgency _ MsgPoll -> True
+      _ -> False
+    AnyMessageAndAgency _ MsgCancel -> \case
+      AnyMessageAndAgency _ MsgCancel -> True
+      _ -> False
+    AnyMessageAndAgency _ (MsgIntersectFound point) -> \case
+      AnyMessageAndAgency _ (MsgIntersectFound point') -> point == point'
+      _ -> False
+    AnyMessageAndAgency _ MsgIntersectNotFound -> \case
+      AnyMessageAndAgency _ MsgIntersectNotFound -> True
+      _ -> False
+
+instance ShowProtocol MarloweHeaderSync where
+  showsPrecMessage p agency = \case
+    MsgIntersect points -> showParen (p >= 11)
+      ( showString "MsgIntersect"
+      . showSpace
+      . showsPrec 11 points
+      )
+    MsgDone -> showString "MsgDone"
+    MsgRequestNext -> showString "MsgRequestNext"
+    MsgNewHeaders blockHeader headers -> showParen (p >= 11)
+      ( showString "MsgNewHeaders"
+      . showSpace
+      . showsPrec 11 blockHeader
+      . showSpace
+      . case agency of ServerAgency TokNext -> showsPrec 11 headers
+      )
+    MsgRollBackward point -> showParen (p >= 11)
+      ( showString "MsgRollBackward"
+      . showSpace
+      . showsPrec 11 point
+      )
+    MsgWait -> showString "MsgWait"
+    MsgPoll -> showString "MsgPoll"
+    MsgCancel -> showString "MsgCancel"
+    MsgIntersectFound point -> showParen (p >= 11)
+      ( showString "MsgIntersectFound"
+      . showSpace
+      . showsPrec 11 point
+      )
+    MsgIntersectNotFound -> showString "MsgIntersectNotFound"
+
+  showsPrecServerHasAgency _ = showString . \case
+    TokNext -> "TokNext"
+    TokIntersect -> "TokIntersect"
+
+  showsPrecClientHasAgency _ = showString . \case
+    TokIdle -> "TokIdle"
+    TokWait -> "TokWait"

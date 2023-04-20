@@ -78,6 +78,8 @@ library
     , containers >= 0.6.5 && < 0.7
     , eventuo11y ^>= { 0.9, 0.10 }
     , eventuo11y-extras ==0.1.0.0
+    , eventuo11y-otel ^>= 0.1
+    , hs-opentelemetry-api >= 0.0.3 && < 0.0.4
     , hspec >= 2.10 && < 3
     , hspec-golden >= 0.2 && < 0.3
     , network >= 3.1 && < 4

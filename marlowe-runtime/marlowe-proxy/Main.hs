@@ -11,27 +11,24 @@ module Main
 
 import Control.Concurrent.Component
 import Control.Concurrent.Component.Probes (ProbeServerDependencies(..), probeServer)
+import Control.Exception (bracket)
 import Control.Monad.Event.Class
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Trans.Reader (ReaderT(..))
 import Control.Monad.With
-import Data.Aeson.Encode.Pretty (encodePretty)
 import Data.ByteString.Lazy (ByteString)
 import Data.GeneralAllocate
-import qualified Data.Text.Lazy as T
-import Data.Text.Lazy.Encoding (decodeUtf8)
-import qualified Data.Text.Lazy.IO as TL
-import Data.UUID.V4 (nextRandom)
-import Language.Marlowe.Protocol.Server (marloweRuntimeServerPeer)
+import qualified Data.Text as T
+import Data.Version (showVersion)
+import Language.Marlowe.Protocol.Server (marloweRuntimeServerPeer, traceMarloweRuntimeServer)
 import Language.Marlowe.Runtime.CLI.Option (optParserWithEnvDefault)
 import qualified Language.Marlowe.Runtime.CLI.Option as O
 import Language.Marlowe.Runtime.Proxy
-import Logging (RootSelector(..), defaultRootSelectorLogConfig, getRootSelectorConfig)
+import Logging (RootSelector(..), renderRootSelectorOTel)
 import Network.Channel (hoistChannel, socketAsChannel)
 import Network.Protocol.Codec (BinaryMessage)
-import Network.Protocol.Connection (SomeConnectionSource(..), logConnectionSource)
-import Network.Protocol.Driver (TcpServerDependencies(..), mkDriver, tcpServer)
-import Network.Protocol.Handshake.Server (handshakeConnectionSource)
+import Network.Protocol.Connection (SomeConnectionSource(..))
+import Network.Protocol.Driver (TcpServerDependencies(..), mkDriver, tcpServerTrace)
 import Network.Protocol.Handshake.Types (Handshake)
 import Network.Socket
   ( AddrInfo(addrAddress, addrSocketType)
@@ -45,8 +42,9 @@ import Network.Socket
   , openSocket
   )
 import Network.TypedProtocol (Driver)
-import Observe.Event.Backend (EventBackend, hoistEventBackend, injectSelector)
-import Observe.Event.Component (LoggerDependencies(..), withLogger)
+import Observe.Event.Backend (EventBackend, hoistEventBackend)
+import Observe.Event.Render.OpenTelemetry (tracerEventBackend)
+import OpenTelemetry.Trace
 import Options.Applicative
   ( auto
   , execParser
@@ -55,7 +53,6 @@ import Options.Applicative
   , help
   , helper
   , info
-  , infoOption
   , long
   , metavar
   , option
@@ -66,16 +63,29 @@ import Options.Applicative
   , strOption
   , value
   )
-import System.IO (stderr)
+import Paths_marlowe_runtime
 import UnliftIO (MonadUnliftIO)
 import UnliftIO.Resource (MonadResource, allocate)
 
 main :: IO ()
-main = run =<< getOptions
+main = do
+  options <- getOptions
+  withTracer \tracer ->
+    runAppM (tracerEventBackend tracer renderRootSelectorOTel) $ run options
+  where
+    withTracer f = bracket
+      initializeGlobalTracerProvider
+      shutdownTracerProvider
+      \provider -> f $ makeTracer provider instrumentationLibrary tracerOptions
 
-run :: Options -> IO ()
-run Options{..} = flip runComponent_ () $ withLogger loggerDependencies runAppM proc _ -> do
-  connectionSource <- tcpServer -< TcpServerDependencies
+    instrumentationLibrary = InstrumentationLibrary
+      { libraryName = "marlowe-proxy"
+      , libraryVersion = T.pack $ showVersion version
+      }
+
+run :: Options -> AppM Span ()
+run = runComponent_ proc Options{..} -> do
+  connectionSource <- tcpServerTrace traceMarloweRuntimeServer -< TcpServerDependencies
     { toPeer = marloweRuntimeServerPeer
     , ..
     }
@@ -85,20 +95,10 @@ run Options{..} = flip runComponent_ () $ withLogger loggerDependencies runAppM 
     , getMarloweHeaderSyncDriver = driverFactory syncHost marloweHeaderSyncPort
     , getMarloweQueryDriver = driverFactory syncHost marloweQueryPort
     , getTxJobDriver = driverFactory txHost txPort
-    , connectionSource = SomeConnectionSource
-        $ logConnectionSource (injectSelector MarloweRuntimeServer)
-        $ handshakeConnectionSource connectionSource
+    , connectionSource = SomeConnectionSource connectionSource
     }
 
   probeServer -< ProbeServerDependencies { port = fromIntegral httpPort, .. }
-  where
-    loggerDependencies = LoggerDependencies
-      { configFilePath = logConfigFile
-      , getSelectorConfig = getRootSelectorConfig
-      , newRef = nextRandom
-      , writeText = TL.hPutStr stderr
-      , injectConfigWatcherSelector = injectSelector ConfigWatcher
-      }
 
 driverFactory
   :: (BinaryMessage ps, MonadResource m)
@@ -167,7 +167,7 @@ getOptions = do
   txHostParser <- optParserWithEnvDefault O.txHost
   txPortParser <- optParserWithEnvDefault O.txCommandPort
   execParser $ info
-    ( helper <*> printLogConfigOption <*>
+    ( helper <*>
       ( Options
           <$> hostParser
           <*> portParser
@@ -183,10 +183,6 @@ getOptions = do
     )
     infoMod
   where
-    printLogConfigOption = infoOption
-      (T.unpack $ decodeUtf8 $ encodePretty defaultRootSelectorLogConfig)
-      (long "print-log-config" <> help "Print the default log configuration.")
-
     hostParser = strOption $ mconcat
       [ long "host"
       , short 'h'

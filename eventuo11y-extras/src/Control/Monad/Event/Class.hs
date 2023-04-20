@@ -48,19 +48,52 @@ class Inject s t where
 
 type MonadInjectEvent r s t m = (MonadEvent r t m, Inject s t)
 
+emitImmediateEventFields :: MonadInjectEvent r s t m => s f -> [f] -> m r
+emitImmediateEventFields s fs = emitImmediateEventArgs (simpleNewEventArgs s) { newEventInitialFields = fs }
+
+emitImmediateEventArgs :: MonadInjectEvent r s t m => NewEventArgs r s f -> m r
+emitImmediateEventArgs = emitImmediateInjectEventArgs inject
+
+emitImmediateInjectEventFields :: MonadEvent r t m => InjectSelector s t -> s f -> [f] -> m r
+emitImmediateInjectEventFields inj s fs = emitImmediateInjectEventArgs inj (simpleNewEventArgs s) { newEventInitialFields = fs }
+
+emitImmediateInjectEventArgs :: MonadEvent r t m => InjectSelector s t -> NewEventArgs r s f -> m r
+emitImmediateInjectEventArgs inj args = do
+  backend <- askBackend
+  Explicit.emitImmediateEvent (narrowEventBackend inj backend) args
+
+emitImmediateEventFields_ :: MonadInjectEvent r s t m => s f -> [f] -> m ()
+emitImmediateEventFields_ s fs = emitImmediateEventArgs_ (simpleNewEventArgs s) { newEventInitialFields = fs }
+
 emitImmediateEventArgs_ :: MonadInjectEvent r s t m => NewEventArgs r s f -> m ()
 emitImmediateEventArgs_ = void . emitImmediateEventArgs
 
-emitImmediateEventArgs :: MonadInjectEvent r s t m => NewEventArgs r s f -> m r
-emitImmediateEventArgs args = do
-  backend <- askBackend
-  Explicit.emitImmediateEvent (narrowEventBackend inject backend) args
+emitImmediateInjectEventFields_ :: MonadEvent r t m => InjectSelector s t -> s f -> [f] -> m ()
+emitImmediateInjectEventFields_ inj s fs = emitImmediateInjectEventArgs_ inj (simpleNewEventArgs s) { newEventInitialFields = fs }
+
+emitImmediateInjectEventArgs_ :: MonadEvent r t m => InjectSelector s t -> NewEventArgs r s f -> m ()
+emitImmediateInjectEventArgs_ inj = void . emitImmediateInjectEventArgs inj
 
 emitImmediateEvent_ :: MonadInjectEvent r s t m => s f -> m ()
 emitImmediateEvent_ = void . emitImmediateEvent
 
+emitImmediateInjectEvent_ :: MonadEvent r t m => InjectSelector s t -> s f -> m ()
+emitImmediateInjectEvent_ inj = void . emitImmediateInjectEvent inj
+
 emitImmediateEvent ::MonadInjectEvent r s t m => s f -> m r
 emitImmediateEvent = emitImmediateEventArgs . simpleNewEventArgs
+
+emitImmediateInjectEvent ::MonadEvent r t m => InjectSelector s t -> s f -> m r
+emitImmediateInjectEvent inj = emitImmediateInjectEventArgs inj . simpleNewEventArgs
+
+withEventFields
+  :: forall r s t m f a
+   . MonadInjectEvent r s t m
+  => s f
+  -> [f]
+  -> (Event m r f -> m a)
+  -> m a
+withEventFields s fs = withEventArgs (simpleNewEventArgs s) { newEventInitialFields = fs }
 
 withEventArgs
   :: forall r s t m f a
@@ -68,21 +101,55 @@ withEventArgs
   => NewEventArgs r s f
   -> (Event m r f -> m a)
   -> m a
-withEventArgs args f = do
+withEventArgs = withInjectEventArgs inject
+
+withInjectEventFields
+  :: forall r s t m f a
+   . MonadEvent r t m
+  => InjectSelector s t
+  -> s f
+  -> [f]
+  -> (Event m r f -> m a)
+  -> m a
+withInjectEventFields inj s fs = withInjectEventArgs inj (simpleNewEventArgs s) { newEventInitialFields = fs }
+
+withInjectEventArgs
+  :: forall r s t m f a
+   . MonadEvent r t m
+  => InjectSelector s t
+  -> NewEventArgs r s f
+  -> (Event m r f -> m a)
+  -> m a
+withInjectEventArgs inj args f = do
   backend <- askBackend
-  Explicit.withEventArgs (narrowEventBackend inject backend) args \ev ->
+  Explicit.withEventArgs (narrowEventBackend inj backend) args \ev ->
     localBackend (setAncestorEventBackend (reference ev)) $ f ev
 
 withEvent :: MonadInjectEvent r s t m => s f -> (Event m r f -> m a) -> m a
 withEvent = withEventArgs . simpleNewEventArgs
 
+withInjectEvent :: MonadEvent r t m => InjectSelector s t -> s f -> (Event m r f -> m a) -> m a
+withInjectEvent inj = withInjectEventArgs inj . simpleNewEventArgs
+
+newEventFields :: MonadInjectEvent r s t m => s f -> [f] -> m (Event m r f)
+newEventFields s fs = newEventArgs (simpleNewEventArgs s) { newEventInitialFields = fs }
+
 newEventArgs :: MonadInjectEvent r s t m => NewEventArgs r s f -> m (Event m r f)
-newEventArgs args = do
+newEventArgs = newInjectEventArgs inject
+
+newInjectEventFields :: MonadEvent r t m => InjectSelector s t -> s f -> [f] -> m (Event m r f)
+newInjectEventFields inj s fs = newInjectEventArgs inj (simpleNewEventArgs s) { newEventInitialFields = fs }
+
+newInjectEventArgs :: MonadEvent r t m => InjectSelector s t -> NewEventArgs r s f -> m (Event m r f)
+newInjectEventArgs inj args = do
   backend <- askBackend
-  Explicit.newEvent (narrowEventBackend inject backend) args
+  Explicit.newEvent (narrowEventBackend inj backend) args
 
 newEvent :: MonadInjectEvent r s t m => s f -> m (Event m r f)
 newEvent = newEventArgs . simpleNewEventArgs
+
+newInjectEvent :: MonadEvent r t m => InjectSelector s t -> s f -> m (Event m r f)
+newInjectEvent inj = newInjectEventArgs inj . simpleNewEventArgs
 
 -- Implementation helpers
 

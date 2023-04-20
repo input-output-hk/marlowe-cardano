@@ -76,6 +76,9 @@ let
       retries = 5;
     };
     depends_on = lib.genAttrs depends_on (_: { condition = "service_healthy"; });
+    environment = [
+      "OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318"
+    ];
   };
 
   chain-indexer-service = {
