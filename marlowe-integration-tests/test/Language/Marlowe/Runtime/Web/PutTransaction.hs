@@ -40,7 +40,7 @@ spec = describe "PUT /contracts/{contractId}/transactions/{transaction}" do
 
       let (contract, partyA, _) = standardContract partyBAddress now $ secondsToNominalDiffTime 100
 
-      contractCreated@Web.CreateTxBody{contractId} <- postContract
+      contractCreated@Web.CreateTxEnvelope{contractId} <- postContract
         partyAWebChangeAddress
         (Just partyAWebExtraAddresses)
         (Just partyAWebCollataralUtxos)
@@ -58,7 +58,7 @@ spec = describe "PUT /contracts/{contractId}/transactions/{transaction}" do
 
       let inputs = [NormalInput $ IDeposit partyA partyA ada 100_000_000]
 
-      Web.ApplyInputsTxBody{transactionId, txBody = applyTxBody} <- postTransaction
+      Web.ApplyInputsTxEnvelope{transactionId, txEnvelope} <- postTransaction
         partyAWebChangeAddress
         (Just partyAWebExtraAddresses)
         (Just partyAWebCollataralUtxos)
@@ -71,7 +71,7 @@ spec = describe "PUT /contracts/{contractId}/transactions/{transaction}" do
           , inputs
           , tags = mempty
           }
-      applyTx <- liftIO $ signShelleyTransaction' applyTxBody signingKeys
+      applyTx <- liftIO $ signShelleyTransaction' txEnvelope signingKeys
       putTransaction contractId transactionId applyTx
     case result of
       Left _ ->  fail $ "Expected 200 response code - got " <> show result

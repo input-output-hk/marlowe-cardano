@@ -13,7 +13,13 @@ import Language.Marlowe.Runtime.Integration.StandardContract (standardContract)
 import Language.Marlowe.Runtime.Plutus.V2.Api (toPlutusAddress)
 import Language.Marlowe.Runtime.Transaction.Api (WalletAddresses(..))
 import Language.Marlowe.Runtime.Web
-  (ApplyInputsTxBody, BlockHeader, CreateTxBody, RoleTokenConfig(RoleTokenSimple), WithdrawTxBody)
+  ( ApplyInputsTxEnvelope
+  , BlockHeader
+  , CardanoTxBody
+  , CreateTxEnvelope
+  , RoleTokenConfig(RoleTokenSimple)
+  , WithdrawTxEnvelope
+  )
 import qualified Language.Marlowe.Runtime.Web as Web
 import Language.Marlowe.Runtime.Web.Client (postContract)
 import Language.Marlowe.Runtime.Web.Common
@@ -23,31 +29,31 @@ import Servant.Client (ClientM)
 
 data StandardContractInit = StandardContractInit
   { makeInitialDeposit :: ClientM StandardContractFundsDeposited
-  , contractCreated :: CreateTxBody
+  , contractCreated :: CreateTxEnvelope CardanoTxBody
   , createdBlock :: BlockHeader
   }
 
 data StandardContractFundsDeposited  = StandardContractFundsDeposited
   { chooseGimmeTheMoney :: ClientM StandardContractChoiceMade
-  , initialFundsDeposited :: ApplyInputsTxBody
+  , initialFundsDeposited :: ApplyInputsTxEnvelope CardanoTxBody
   , initialDepositBlock :: BlockHeader
   }
 
 data StandardContractChoiceMade  = StandardContractChoiceMade
   { sendNotify :: ClientM StandardContractNotified
-  , gimmeTheMoneyChosen :: ApplyInputsTxBody
+  , gimmeTheMoneyChosen :: ApplyInputsTxEnvelope CardanoTxBody
   , choiceBlock :: BlockHeader
   }
 
 data StandardContractNotified = StandardContractNotified
   { makeReturnDeposit :: ClientM StandardContractClosed
-  , notified :: ApplyInputsTxBody
+  , notified :: ApplyInputsTxEnvelope CardanoTxBody
   , notifiedBlock :: BlockHeader
   }
 
 data StandardContractClosed = StandardContractClosed
-  { withdrawPartyAFunds :: ClientM (WithdrawTxBody, BlockHeader)
-  , returnDeposited :: ApplyInputsTxBody
+  { withdrawPartyAFunds :: ClientM (WithdrawTxEnvelope CardanoTxBody, BlockHeader)
+  , returnDeposited :: ApplyInputsTxEnvelope CardanoTxBody
   , returnDepositBlock :: BlockHeader
   }
 
@@ -64,7 +70,7 @@ createStandardContract partyAWallet partyBWallet = do
   now <- liftIO getCurrentTime
   let (contract, partyA, partyB) = standardContract partyBAddress now $ secondsToNominalDiffTime 100
 
-  contractCreated@Web.CreateTxBody{contractId} <- postContract
+  contractCreated@Web.CreateTxEnvelope{contractId} <- postContract
     partyAWebChangeAddress
     (Just partyAWebExtraAddresses)
     (Just partyAWebCollataralUtxos)
@@ -145,15 +151,15 @@ createFullyExecutedStandardContract partyAWallet partyBWallet = do
     StandardContractClosed{returnDeposited, withdrawPartyAFunds} <- makeReturnDeposit
     (_, _) <- withdrawPartyAFunds
     createContractId <- case contractCreated of
-      Web.CreateTxBody{contractId} -> pure contractId
+      Web.CreateTxEnvelope{contractId} -> pure contractId
     transactionId1 <- case initialFundsDeposited of
-      Web.ApplyInputsTxBody{transactionId} -> pure transactionId
+      Web.ApplyInputsTxEnvelope{transactionId} -> pure transactionId
     transactionId2 <- case gimmeTheMoneyChosen of
-      Web.ApplyInputsTxBody{transactionId} -> pure transactionId
+      Web.ApplyInputsTxEnvelope{transactionId} -> pure transactionId
     transactionId3 <- case notified of
-      Web.ApplyInputsTxBody{transactionId} -> pure transactionId
+      Web.ApplyInputsTxEnvelope{transactionId} -> pure transactionId
     transactionId4 <- case returnDeposited of
-      Web.ApplyInputsTxBody{transactionId} -> pure transactionId
+      Web.ApplyInputsTxEnvelope{transactionId} -> pure transactionId
     let
       transactionIds = [transactionId1, transactionId2, transactionId3, transactionId4]
     pure (createContractId, transactionIds)

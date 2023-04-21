@@ -48,5 +48,5 @@ spec = describe "Valid POST /contracts" do
             }
       case result of
         Left _ ->  fail $ "Expected 200 response code - got " <> show result
-        Right Web.CreateTxBody{} ->  pure ()
+        Right Web.CreateTxEnvelope{} ->  pure ()
 

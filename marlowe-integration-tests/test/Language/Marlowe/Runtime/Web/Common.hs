@@ -44,7 +44,7 @@ createCloseContract Wallet{..} = do
   let webExtraAddresses = Set.map toDTO extraAddresses
   let webCollataralUtxos = Set.map toDTO collateralUtxos
 
-  Web.CreateTxBody{txBody = createTxBody, ..} <- postContract
+  Web.CreateTxEnvelope{txEnvelope, ..} <- postContract
     webChangeAddress
     (Just webExtraAddresses)
     (Just webCollataralUtxos)
@@ -57,7 +57,7 @@ createCloseContract Wallet{..} = do
       , tags = mempty
       }
 
-  createTx <- liftIO $ signShelleyTransaction' createTxBody signingKeys
+  createTx <- liftIO $ signShelleyTransaction' txEnvelope signingKeys
   putContract contractId createTx
   _ <- waitUntilConfirmed (\Web.ContractState{status} -> status) $ getContract contractId
   pure contractId
@@ -68,7 +68,7 @@ applyCloseTransaction  Wallet{..} contractId = do
   let webChangeAddress = toDTO changeAddress
   let webExtraAddresses = Set.map toDTO extraAddresses
   let webCollataralUtxos = Set.map toDTO collateralUtxos
-  Web.ApplyInputsTxBody{transactionId, txBody = applyTxBody} <- postTransaction
+  Web.ApplyInputsTxEnvelope{transactionId, txEnvelope} <- postTransaction
     webChangeAddress
     (Just webExtraAddresses)
     (Just webCollataralUtxos)
@@ -82,7 +82,7 @@ applyCloseTransaction  Wallet{..} contractId = do
       , tags = mempty
       }
 
-  applyTx <- liftIO $ signShelleyTransaction' applyTxBody signingKeys
+  applyTx <- liftIO $ signShelleyTransaction' txEnvelope signingKeys
 
   putTransaction contractId transactionId applyTx
 
@@ -91,30 +91,30 @@ applyCloseTransaction  Wallet{..} contractId = do
 
 submitContract
   :: Wallet
-  -> Web.CreateTxBody
+  -> Web.CreateTxEnvelope Web.CardanoTxBody
   -> ClientM Web.BlockHeader
-submitContract Wallet{..} Web.CreateTxBody{contractId, txBody}= do
-  signedCreateTx <- liftIO $ signShelleyTransaction' txBody signingKeys
+submitContract Wallet{..} Web.CreateTxEnvelope{contractId, txEnvelope}= do
+  signedCreateTx <- liftIO $ signShelleyTransaction' txEnvelope signingKeys
   putContract contractId signedCreateTx
   Web.ContractState{block} <- waitUntilConfirmed (\Web.ContractState{status} -> status) $ getContract contractId
   liftIO $ expectJust "Expected block header" block
 
 submitTransaction
   :: Wallet
-  -> Web.ApplyInputsTxBody
+  -> Web.ApplyInputsTxEnvelope Web.CardanoTxBody
   -> ClientM Web.BlockHeader
-submitTransaction Wallet{..} Web.ApplyInputsTxBody{contractId, transactionId, txBody} = do
-  signedTx <- liftIO $ signShelleyTransaction' txBody signingKeys
+submitTransaction Wallet{..} Web.ApplyInputsTxEnvelope{contractId, transactionId, txEnvelope} = do
+  signedTx <- liftIO $ signShelleyTransaction' txEnvelope signingKeys
   putTransaction contractId transactionId signedTx
   Web.Tx{block} <- waitUntilConfirmed (\Web.Tx{status} -> status) $ getTransaction contractId transactionId
   liftIO $ expectJust "Expected a block header" block
 
 submitWithdrawal
   :: Wallet
-  -> Web.WithdrawTxBody
+  -> Web.WithdrawTxEnvelope Web.CardanoTxBody
   -> ClientM Web.BlockHeader
-submitWithdrawal Wallet{..} Web.WithdrawTxBody{withdrawalId, txBody = withdrawTxBody}  = do
-  signedWithdrawalTx <- liftIO $ signShelleyTransaction' withdrawTxBody signingKeys
+submitWithdrawal Wallet{..} Web.WithdrawTxEnvelope{withdrawalId, txEnvelope}  = do
+  signedWithdrawalTx <- liftIO $ signShelleyTransaction' txEnvelope signingKeys
   putWithdrawal withdrawalId signedWithdrawalTx
   Web.Withdrawal{block} <- waitUntilConfirmed (\Web.Withdrawal{status} -> status) $ getWithdrawal withdrawalId
   liftIO $ expectJust "Expected a block header" block
@@ -126,7 +126,7 @@ deposit
   -> V1.Party
   -> V1.Token
   -> Integer
-  -> ClientM Web.ApplyInputsTxBody
+  -> ClientM (Web.ApplyInputsTxEnvelope Web.CardanoTxBody)
 deposit wallet contractId intoAccount fromParty ofToken quantity =
   applyInputs wallet contractId [NormalInput $ IDeposit intoAccount fromParty ofToken quantity]
 
@@ -136,21 +136,21 @@ choose
   -> PV2.BuiltinByteString
   -> V1.Party
   -> Integer
-  -> ClientM Web.ApplyInputsTxBody
+  -> ClientM (Web.ApplyInputsTxEnvelope Web.CardanoTxBody)
 choose wallet contractId choice party chosenNum =
   applyInputs wallet contractId [NormalInput $ IChoice (ChoiceId choice party) chosenNum]
 
 notify
   :: Wallet
   -> Web.TxOutRef
-  -> ClientM Web.ApplyInputsTxBody
+  -> ClientM (Web.ApplyInputsTxEnvelope Web.CardanoTxBody)
 notify wallet contractId = applyInputs wallet contractId [NormalInput INotify]
 
 withdraw
   :: Wallet
   -> Web.TxOutRef
   -> T.Text
-  -> ClientM Web.WithdrawTxBody
+  -> ClientM (Web.WithdrawTxEnvelope Web.CardanoTxBody)
 withdraw Wallet{..} contractId role = do
   let WalletAddresses{..} = addresses
   let webChangeAddress = toDTO changeAddress
@@ -169,7 +169,7 @@ applyInputs
   :: Wallet
   -> Web.TxOutRef
   -> [V1.Input]
-  -> ClientM Web.ApplyInputsTxBody
+  -> ClientM (Web.ApplyInputsTxEnvelope Web.CardanoTxBody)
 applyInputs Wallet{..} contractId inputs = do
   let WalletAddresses{..} = addresses
   let webChangeAddress = toDTO changeAddress

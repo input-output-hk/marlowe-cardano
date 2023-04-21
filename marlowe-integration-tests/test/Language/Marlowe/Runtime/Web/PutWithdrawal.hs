@@ -38,9 +38,9 @@ spec = describe "PUT /contracts/{contractId}/withdrawals/{withdrawalId}" do
       StandardContractClosed{} <- makeReturnDeposit
 
       contractId <- case contractCreated of
-        Web.CreateTxBody{contractId} -> pure contractId
+        Web.CreateTxEnvelope{contractId} -> pure contractId
 
-      Web.WithdrawTxBody{withdrawalId, txBody = withdrawTxBody} <- postWithdrawal
+      Web.WithdrawTxEnvelope{withdrawalId, txEnvelope} <- postWithdrawal
         webChangeAddress
         (Just webExtraAddresses)
         (Just webCollataralUtxos)
@@ -48,7 +48,7 @@ spec = describe "PUT /contracts/{contractId}/withdrawals/{withdrawalId}" do
           { role = "Party A"
           , contractId
           }
-      signedWithdrawalTx <- liftIO $ signShelleyTransaction' withdrawTxBody signingKeys
+      signedWithdrawalTx <- liftIO $ signShelleyTransaction' txEnvelope signingKeys
       putWithdrawal withdrawalId signedWithdrawalTx
 
     case result of

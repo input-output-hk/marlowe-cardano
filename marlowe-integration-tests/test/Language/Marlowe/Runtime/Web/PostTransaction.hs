@@ -38,7 +38,7 @@ spec = describe "POST /contracts/{contractId}/transactions" do
 
       let (contract, partyA, _) = standardContract partyBAddress now $ secondsToNominalDiffTime 100
 
-      contractCreated@Web.CreateTxBody{contractId} <- postContract
+      contractCreated@Web.CreateTxEnvelope{contractId} <- postContract
         partyAWebChangeAddress
         (Just partyAWebExtraAddresses)
         (Just partyAWebCollataralUtxos)
@@ -71,4 +71,4 @@ spec = describe "POST /contracts/{contractId}/transactions" do
           }
     case result of
       Left _ ->  fail $ "Expected 200 response code - got " <> show result
-      Right Web.ApplyInputsTxBody{} ->  pure ()
+      Right Web.ApplyInputsTxEnvelope{} ->  pure ()

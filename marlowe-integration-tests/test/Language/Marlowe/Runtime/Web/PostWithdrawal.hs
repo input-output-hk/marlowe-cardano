@@ -36,7 +36,7 @@ spec = describe "POST /contracts/{contractId}/withdrawal" do
       StandardContractNotified{makeReturnDeposit} <- sendNotify
       StandardContractClosed{} <- makeReturnDeposit
       contractId <- case contractCreated of
-        Web.CreateTxBody{contractId} -> pure contractId
+        Web.CreateTxEnvelope{contractId} -> pure contractId
       postWithdrawal
         webChangeAddress
         (Just webExtraAddresses)
@@ -48,4 +48,4 @@ spec = describe "POST /contracts/{contractId}/withdrawal" do
 
     case result of
       Left _ ->  fail $ "Expected 200 response code - got " <> show result
-      Right Web.WithdrawTxBody{} ->  pure ()
+      Right Web.WithdrawTxEnvelope{} ->  pure ()
