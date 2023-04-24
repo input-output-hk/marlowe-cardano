@@ -112,20 +112,20 @@ instance ToDTO (WithdrawError 'V1) where
   toDTO = \case
     WithdrawConstraintError (MintingUtxoNotFound _) -> ApiError "Minting UTxO not found" "MintingUtxoNotFound" Null 500
     WithdrawConstraintError (RoleTokenNotFound _) -> ApiError "Role token not found" "RoleTokenNotFound" Null 403
-    WithdrawConstraintError ToCardanoError -> ApiError "Internal error" "InternalError" Null 500
-    WithdrawConstraintError MissingMarloweInput -> ApiError "Internal error" "InternalError" Null 500
-    WithdrawConstraintError (PayoutInputNotFound _) -> ApiError "Internal error" "InternalError" Null 500
-    WithdrawConstraintError (CalculateMinUtxoFailed _) -> ApiError "Internal error" "InternalError" Null 500
+    WithdrawConstraintError ToCardanoError -> ApiError "Internal error" "ToCardanoError" Null 500
+    WithdrawConstraintError MissingMarloweInput -> ApiError "Internal error" "MissingMarloweInput" Null 500
+    WithdrawConstraintError (PayoutInputNotFound _) -> ApiError "Internal error" "PayoutInputNotFound" Null 500
+    WithdrawConstraintError (CalculateMinUtxoFailed _) -> ApiError "Internal error" "CalculateMinUtxoFailed" Null 500
     WithdrawConstraintError (CoinSelectionFailed msg) -> ApiError ("Coin selection failed: " <> msg) "CoinSelectionFailed" Null 400
-    WithdrawConstraintError (BalancingError _) -> ApiError "Internal error" "InternalError" Null 500
+    WithdrawConstraintError (BalancingError _) -> ApiError "Internal error" "BalancingError" Null 500
     WithdrawLoadMarloweContextFailed LoadMarloweContextErrorNotFound -> ApiError "Marlowe contract not found" "MarloweContractNotFound" Null 404
     WithdrawLoadMarloweContextFailed (LoadMarloweContextErrorVersionMismatch _) -> ApiError "Marlowe contract version mismatch" "MarloweContractVersionMismatch" Null 400
-    WithdrawLoadMarloweContextFailed LoadMarloweContextToCardanoError -> ApiError "Internal error" "InternalError" Null 500
-    WithdrawLoadMarloweContextFailed (MarloweScriptNotPublished _) -> ApiError "Internal error" "InternalError" Null 500
-    WithdrawLoadMarloweContextFailed (PayoutScriptNotPublished _) -> ApiError "Internal error" "InternalError" Null 500
-    WithdrawLoadMarloweContextFailed (ExtractCreationError _) -> ApiError "Internal error" "InternalError" Null 500
-    WithdrawLoadMarloweContextFailed (ExtractMarloweTransactionError _) -> ApiError "Internal error" "InternalError" Null 500
-    UnableToFindPayoutForAGivenRole _ -> ApiError "No payouts available for given role" "InternalError" Null 409
+    WithdrawLoadMarloweContextFailed LoadMarloweContextToCardanoError -> ApiError "Internal error" "LoadMarloweContextToCardanoError" Null 500
+    WithdrawLoadMarloweContextFailed (MarloweScriptNotPublished _) -> ApiError "Internal error" "MarloweScriptNotPublished" Null 500
+    WithdrawLoadMarloweContextFailed (PayoutScriptNotPublished _) -> ApiError "Internal error" "PayoutScriptNotPublished" Null 500
+    WithdrawLoadMarloweContextFailed (ExtractCreationError _) -> ApiError "Internal error" "ExtractCreationError" Null 500
+    WithdrawLoadMarloweContextFailed (ExtractMarloweTransactionError _) -> ApiError "Internal error" "ExtractMarloweTransactionError" Null 500
+    UnableToFindPayoutForAGivenRole _ -> ApiError "No payouts available for given role" "UnableToFindPayoutForAGivenRole" Null 409
 
 instance HasDTO (CreateError 'V1) where
   type DTO (CreateError 'V1) = ApiError
@@ -134,23 +134,23 @@ instance ToDTO (CreateError 'V1) where
   toDTO = \case
     CreateConstraintError (MintingUtxoNotFound _) -> ApiError "Minting UTxO not found" "MintingUtxoNotFound" Null 500
     CreateConstraintError (RoleTokenNotFound _) -> ApiError "Role token not found" "RoleTokenNotFound" Null 403
-    CreateConstraintError ToCardanoError -> ApiError "Internal error" "InternalError" Null 500
-    CreateConstraintError MissingMarloweInput -> ApiError "Internal error" "InternalError" Null 500
-    CreateConstraintError (PayoutInputNotFound _) -> ApiError "Internal error" "InternalError" Null 500
-    CreateConstraintError (CalculateMinUtxoFailed _) -> ApiError "Internal error" "InternalError" Null 500
+    CreateConstraintError ToCardanoError -> ApiError "Internal error" "ToCardanoError" Null 500
+    CreateConstraintError MissingMarloweInput -> ApiError "Internal error" "MissingMarloweInput" Null 500
+    CreateConstraintError (PayoutInputNotFound _) -> ApiError "Internal error" "PayoutInputNotFound" Null 500
+    CreateConstraintError (CalculateMinUtxoFailed _) -> ApiError "Internal error" "CalculateMinUtxoFailed" Null 500
     CreateConstraintError (CoinSelectionFailed msg) -> ApiError ("Coin selection failed: " <> msg) "CoinSelectionFailed" Null 400
-    CreateConstraintError (BalancingError _) -> ApiError "Internal error" "InternalError" Null 500
+    CreateConstraintError (BalancingError _) -> ApiError "Internal error" "BalancingError" Null 500
     CreateLoadMarloweContextFailed LoadMarloweContextErrorNotFound -> ApiError "Marlowe contract not found" "MarloweContractNotFound" Null 404
     CreateLoadMarloweContextFailed (LoadMarloweContextErrorVersionMismatch _) -> ApiError "Marlowe contract version mismatch" "MarloweContractVersionMismatch" Null 400
-    CreateLoadMarloweContextFailed LoadMarloweContextToCardanoError -> ApiError "Internal error" "InternalError" Null 500
-    CreateLoadMarloweContextFailed (MarloweScriptNotPublished _) -> ApiError "Internal error" "InternalError" Null 500
-    CreateLoadMarloweContextFailed (PayoutScriptNotPublished _) -> ApiError "Internal error" "InternalError" Null 500
-    CreateLoadMarloweContextFailed (ExtractCreationError _) -> ApiError "Internal error" "InternalError" Null 500
-    CreateLoadMarloweContextFailed (ExtractMarloweTransactionError _) -> ApiError "Internal error" "InternalError" Null 500
+    CreateLoadMarloweContextFailed LoadMarloweContextToCardanoError -> ApiError "Internal error" "LoadMarloweContextToCardanoError" Null 500
+    CreateLoadMarloweContextFailed (MarloweScriptNotPublished _) -> ApiError "Internal error" "MarloweScriptNotPublished" Null 500
+    CreateLoadMarloweContextFailed (PayoutScriptNotPublished _) -> ApiError "Internal error" "PayoutScriptNotPublished" Null 500
+    CreateLoadMarloweContextFailed (ExtractCreationError _) -> ApiError "Internal error" "ExtractCreationError" Null 500
+    CreateLoadMarloweContextFailed (ExtractMarloweTransactionError _) -> ApiError "Internal error" "ExtractMarloweTransactionError" Null 500
     CreateBuildupFailed MintingUtxoSelectionFailed -> ApiError "Minting UTxO selection failed" "MintingUtxoSelectionFailed" Null 400
-    CreateBuildupFailed (AddressDecodingFailed _) -> ApiError "Internal error" "InternalError" Null 500
-    CreateBuildupFailed (MintingScriptDecodingFailed _) -> ApiError "Internal error" "InternalError" Null 500
-    CreateToCardanoError -> ApiError "Internal error" "InternalError" Null 400
+    CreateBuildupFailed (AddressDecodingFailed _) -> ApiError "Internal error" "AddressDecodingFailed" Null 500
+    CreateBuildupFailed (MintingScriptDecodingFailed _) -> ApiError "Internal error" "MintingScriptDecodingFailed" Null 500
+    CreateToCardanoError -> ApiError "Internal error" "CreateToCardanoError" Null 400
 
 instance HasDTO (ApplyInputsError 'V1) where
   type DTO (ApplyInputsError 'V1) = ApiError
@@ -159,22 +159,22 @@ instance ToDTO (ApplyInputsError 'V1) where
   toDTO = \case
     ApplyInputsConstraintError (MintingUtxoNotFound _) -> ApiError "Minting UTxO not found" "MintingUtxoNotFound" Null 500
     ApplyInputsConstraintError (RoleTokenNotFound _) -> ApiError "Role token not found" "RoleTokenNotFound" Null 403
-    ApplyInputsConstraintError ToCardanoError -> ApiError "Internal error" "InternalError" Null 500
-    ApplyInputsConstraintError MissingMarloweInput -> ApiError "Internal error" "InternalError" Null 500
-    ApplyInputsConstraintError (PayoutInputNotFound _) -> ApiError "Internal error" "InternalError" Null 500
-    ApplyInputsConstraintError (CalculateMinUtxoFailed _) -> ApiError "Internal error" "InternalError" Null 500
+    ApplyInputsConstraintError ToCardanoError -> ApiError "Internal error" "ToCardnoError" Null 500
+    ApplyInputsConstraintError MissingMarloweInput -> ApiError "Internal error" "MissingMarloweInput" Null 500
+    ApplyInputsConstraintError (PayoutInputNotFound _) -> ApiError "Internal error" "PayoutInputNotFound" Null 500
+    ApplyInputsConstraintError (CalculateMinUtxoFailed _) -> ApiError "Internal error" "CalculateMinUtxoFailed" Null 500
     ApplyInputsConstraintError (CoinSelectionFailed msg) -> ApiError ("Coin selection failed: " <> msg) "CoinSelectionFailed" Null 400
-    ApplyInputsConstraintError (BalancingError _) -> ApiError "Internal error" "InternalError" Null 500
+    ApplyInputsConstraintError (BalancingError _) -> ApiError "Internal error" "BalancingError" Null 500
     ScriptOutputNotFound -> ApiError "Script output not found" "ScriptOutputNotFound" Null 400
     ApplyInputsLoadMarloweContextFailed LoadMarloweContextErrorNotFound -> ApiError "Marlowe contract not found" "MarloweContractNotFound" Null 404
     ApplyInputsLoadMarloweContextFailed (LoadMarloweContextErrorVersionMismatch _) -> ApiError "Marlowe contract version mismatch" "MarloweContractVersionMismatch" Null 400
-    ApplyInputsLoadMarloweContextFailed LoadMarloweContextToCardanoError -> ApiError "Internal error" "InternalError" Null 500
-    ApplyInputsLoadMarloweContextFailed (MarloweScriptNotPublished _) -> ApiError "Internal error" "InternalError" Null 500
-    ApplyInputsLoadMarloweContextFailed (PayoutScriptNotPublished _) -> ApiError "Internal error" "InternalError" Null 500
-    ApplyInputsLoadMarloweContextFailed (ExtractCreationError _) -> ApiError "Internal error" "InternalError" Null 500
-    ApplyInputsLoadMarloweContextFailed (ExtractMarloweTransactionError _) -> ApiError "Internal error" "InternalError" Null 500
+    ApplyInputsLoadMarloweContextFailed LoadMarloweContextToCardanoError -> ApiError "Internal error" "LoadMarloweContextToCardanoError" Null 500
+    ApplyInputsLoadMarloweContextFailed (MarloweScriptNotPublished _) -> ApiError "Internal error" "MarloweScriptNotPublished" Null 500
+    ApplyInputsLoadMarloweContextFailed (PayoutScriptNotPublished _) -> ApiError "Internal error" "PayoutScriptNotPublished" Null 500
+    ApplyInputsLoadMarloweContextFailed (ExtractCreationError _) -> ApiError "Internal error" "ExtractCreationError" Null 500
+    ApplyInputsLoadMarloweContextFailed (ExtractMarloweTransactionError _) -> ApiError "Internal error" "ExtractMarloweTransactionError" Null 500
     ApplyInputsConstraintsBuildupFailed (MarloweComputeTransactionFailed err) -> ApiError ("Marlowe compute transaction failed: " <> err) "MarloweComputeTransactionFailed" Null 400
     ApplyInputsConstraintsBuildupFailed UnableToDetermineTransactionTimeout -> ApiError "Unable to determine transaction timeout" "UnableToDetermineTransactionTimeout" Null 400
     SlotConversionFailed _ -> ApiError "Slot conversion failed" "SlotConversionFailed" Null 400
-    TipAtGenesis -> ApiError "Internal error" "InternalError" Null 500
+    TipAtGenesis -> ApiError "Internal error" "TipAtGenesis" Null 500
     ValidityLowerBoundTooHigh _ _ -> ApiError "Validity lower bound too high" "ValidityLowerBoundTooHigh" Null 400
