@@ -4,8 +4,10 @@ module Language.Marlowe.Runtime.Web.StandardContract
   where
 
 import Control.Monad.RWS.Strict (MonadIO(liftIO))
+import Data.Map (Map)
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
+import Data.Text (Text)
 import Data.Time (getCurrentTime, secondsToNominalDiffTime)
 import Language.Marlowe.Extended.V1 (ada)
 import Language.Marlowe.Runtime.Integration.Common (Wallet(..), expectJust)
@@ -58,7 +60,10 @@ data StandardContractClosed = StandardContractClosed
   }
 
 createStandardContract :: Wallet -> Wallet -> ClientM StandardContractInit
-createStandardContract partyAWallet partyBWallet = do
+createStandardContract = createStandardContractWithTags mempty
+
+createStandardContractWithTags :: Map Text Web.Metadata -> Wallet -> Wallet -> ClientM StandardContractInit
+createStandardContractWithTags tags partyAWallet partyBWallet = do
   let partyAWalletAddresses = addresses partyAWallet
   let partyAWebChangeAddress = toDTO $ changeAddress partyAWalletAddresses
   let partyAWebExtraAddresses = Set.map toDTO $ extraAddresses partyAWalletAddresses
@@ -80,7 +85,7 @@ createStandardContract partyAWallet partyBWallet = do
       , roles = Just $ Web.Mint $ Map.singleton "Party A" $ RoleTokenSimple partyAWebChangeAddress
       , contract = contract
       , minUTxODeposit = 2_000_000
-      , tags = mempty
+      , tags = tags
       }
 
   createdBlock <- submitContract partyAWallet contractCreated
