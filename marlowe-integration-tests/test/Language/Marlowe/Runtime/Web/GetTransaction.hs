@@ -9,35 +9,32 @@ import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Integration.Common (getGenesisWallet, runIntegrationTest, runWebClient)
 import qualified Language.Marlowe.Runtime.Web as Web
 import Language.Marlowe.Runtime.Web.Client (getTransaction)
-import Language.Marlowe.Runtime.Web.Common (createCloseContract, waitUntilConfirmed)
+import Language.Marlowe.Runtime.Web.Common (MarloweWebTestData(..), createCloseContract, setup, waitUntilConfirmed)
 import Language.Marlowe.Runtime.Web.Server.DTO (ToDTO(toDTO))
 import Language.Marlowe.Runtime.Web.StandardContract (createFullyExecutedStandardContract)
 import Network.HTTP.Types (Status(..))
 import Servant.Client (ClientError(FailureResponse))
 import Servant.Client.Streaming (ResponseF(Response, responseStatusCode))
-import Test.Hspec (Spec, describe, it, shouldBe)
+import Test.Hspec (Spec, SpecWith, aroundAll, describe, it, shouldBe)
 import Test.Integration.Marlowe.Local (withLocalMarloweRuntime)
 
 spec :: Spec
-spec = describe "GET /contract/{contractId}/transactions/{transactionId}" do
+spec = describe "GET /contract/{contractId}/transactions/{transactionId}" $ aroundAll setup do
   getTransactionValidSpec
   getTransactionInvalidSpec
 
-getTransactionValidSpec :: Spec
+getTransactionValidSpec :: SpecWith MarloweWebTestData
 getTransactionValidSpec = describe "Valid GET /contract/{contractId}/transactions/{transactionId}" do
   getsFirstTransactionValidSpec
   getsSecondTransactionValidSpec
   getsThirdTransactionValidSpec
 
-getTransactionInvalidSpec :: Spec
+getTransactionInvalidSpec :: SpecWith MarloweWebTestData
 getTransactionInvalidSpec = describe "Invalid GET /contract/{contractId}/transactions/{transactionId}" do
   invalidTxIdSpec
 
-getsFirstTransactionValidSpec :: Spec
-getsFirstTransactionValidSpec = it "returns the first transaction" $ withLocalMarloweRuntime $ runIntegrationTest do
-  wallet1 <- getGenesisWallet 0
-  wallet2 <- getGenesisWallet 1
-
+getsFirstTransactionValidSpec :: SpecWith MarloweWebTestData
+getsFirstTransactionValidSpec = it "returns the first transaction" \MarloweWebTestData{..} -> flip runIntegrationTest runtime do
   either throw pure =<< runWebClient do
     (contractId, transactionIds) <- createFullyExecutedStandardContract wallet1 wallet2
     case transactionIds of
@@ -49,11 +46,8 @@ getsFirstTransactionValidSpec = it "returns the first transaction" $ withLocalMa
       _ -> do
         liftIO $ fail "Expected at least two transactions"
 
-getsSecondTransactionValidSpec :: Spec
-getsSecondTransactionValidSpec = it "returns the second transaction" $ withLocalMarloweRuntime $ runIntegrationTest do
-  wallet1 <- getGenesisWallet 0
-  wallet2 <- getGenesisWallet 1
-
+getsSecondTransactionValidSpec :: SpecWith MarloweWebTestData
+getsSecondTransactionValidSpec = it "returns the second transaction" \MarloweWebTestData{..} -> flip runIntegrationTest runtime do
   either throw pure =<< runWebClient do
     (contractId, transactionIds) <- createFullyExecutedStandardContract wallet1 wallet2
     case transactionIds of
@@ -66,11 +60,8 @@ getsSecondTransactionValidSpec = it "returns the second transaction" $ withLocal
         liftIO $ fail "Expected at least two transactions"
 
 
-getsThirdTransactionValidSpec :: Spec
-getsThirdTransactionValidSpec = it "returns the third transaction" $ withLocalMarloweRuntime $ runIntegrationTest do
-  wallet1 <- getGenesisWallet 0
-  wallet2 <- getGenesisWallet 1
-
+getsThirdTransactionValidSpec :: SpecWith MarloweWebTestData
+getsThirdTransactionValidSpec = it "returns the third transaction" \MarloweWebTestData{..} -> flip runIntegrationTest runtime do
   either throw pure =<< runWebClient do
     (contractId, transactionIds) <- createFullyExecutedStandardContract wallet1 wallet2
     case transactionIds of
@@ -83,12 +74,8 @@ getsThirdTransactionValidSpec = it "returns the third transaction" $ withLocalMa
         liftIO $ fail "Expected at least three transactions"
 
 
-invalidTxIdSpec :: Spec
-invalidTxIdSpec = it "returns not found for invalid transaction id" $ withLocalMarloweRuntime $ runIntegrationTest do
-  wallet1 <- getGenesisWallet 0
-  wallet2 <- getGenesisWallet 1
-
-
+invalidTxIdSpec :: SpecWith MarloweWebTestData
+invalidTxIdSpec = it "returns not found for invalid transaction id" \MarloweWebTestData{..} -> flip runIntegrationTest runtime do
   result <- runWebClient do
     (contractId, _) <- createFullyExecutedStandardContract wallet1 wallet2
 

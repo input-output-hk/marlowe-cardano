@@ -8,24 +8,28 @@ import Data.Time (getCurrentTime, secondsToNominalDiffTime)
 import Language.Marlowe.Core.V1.Semantics.Types (Input(NormalInput), InputContent(IDeposit))
 import Language.Marlowe.Extended.V1 (ada)
 import Language.Marlowe.Runtime.Integration.Common
-  (Wallet(Wallet, addresses, signingKeys), expectJust, getGenesisWallet, runIntegrationTest, runWebClient)
+  (Wallet(Wallet, addresses, signingKeys), expectJust, runIntegrationTest, runWebClient)
 import Language.Marlowe.Runtime.Integration.StandardContract (standardContract)
 import Language.Marlowe.Runtime.Plutus.V2.Api (toPlutusAddress)
 import Language.Marlowe.Runtime.Transaction.Api (WalletAddresses(..))
 import Language.Marlowe.Runtime.Web (RoleTokenConfig(RoleTokenSimple))
 import qualified Language.Marlowe.Runtime.Web as Web
 import Language.Marlowe.Runtime.Web.Client (postContract, postTransaction, putTransaction)
-import Language.Marlowe.Runtime.Web.Common (signShelleyTransaction', submitContract)
+import Language.Marlowe.Runtime.Web.Common (MarloweWebTestData(..), setup, signShelleyTransaction', submitContract)
 import Language.Marlowe.Runtime.Web.Server.DTO (ToDTO(toDTO))
-import Test.Hspec (Spec, describe, it)
-import Test.Integration.Marlowe.Local (withLocalMarloweRuntime)
+import Test.Hspec (Spec, SpecWith, aroundAll, describe, it)
 
 
 spec :: Spec
-spec = describe "PUT /contracts/{contractId}/transactions/{transaction}" do
-  it "returns the transaction header" $ withLocalMarloweRuntime $ runIntegrationTest do
-    partyAWallet@Wallet{signingKeys} <- getGenesisWallet 0
-    partyBWallet <- getGenesisWallet 1
+spec = describe "PUT /contracts/{contractId}/transactions/{transaction}" $ aroundAll setup do
+  putContractTransactionValidSpec
+
+putContractTransactionValidSpec :: SpecWith MarloweWebTestData
+putContractTransactionValidSpec = describe "Valid PUT /contracts/{contractId}" do
+  it "returns the transaction header" \MarloweWebTestData{..} -> flip runIntegrationTest runtime do
+    let
+      partyAWallet@Wallet{signingKeys} = wallet1
+      partyBWallet = wallet2
 
     result <- runWebClient do
       let partyAWalletAddresses = addresses partyAWallet

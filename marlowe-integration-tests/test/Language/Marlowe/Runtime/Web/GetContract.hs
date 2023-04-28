@@ -5,38 +5,33 @@ import Control.Monad.IO.Class (MonadIO(liftIO))
 
 import Control.Exception (throw)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
-import Language.Marlowe.Runtime.Integration.Common (getGenesisWallet, runIntegrationTest, runWebClient)
+import Language.Marlowe.Runtime.Integration.Common (runIntegrationTest, runWebClient)
 import qualified Language.Marlowe.Runtime.Web as Web
 import Language.Marlowe.Runtime.Web.Client (getContract)
-import Language.Marlowe.Runtime.Web.Common (createCloseContract, waitUntilConfirmed)
+import Language.Marlowe.Runtime.Web.Common (MarloweWebTestData(..), createCloseContract, setup, waitUntilConfirmed)
 import Language.Marlowe.Runtime.Web.Server.DTO (ToDTO(toDTO))
 import Network.HTTP.Types (Status(..))
 import Servant.Client (ClientError(FailureResponse))
 import Servant.Client.Streaming (ResponseF(Response, responseStatusCode))
-import Test.Hspec (Spec, describe, it, shouldBe)
-import Test.Integration.Marlowe.Local (withLocalMarloweRuntime)
+import Test.Hspec (Spec, SpecWith, aroundAll, describe, it, shouldBe)
 
 spec :: Spec
-spec = describe "GET /contract/{contractId}" do
+spec = describe "GET /contract/{contractId}" $ aroundAll setup do
   getContractValidSpec
   getContractInvalidSpec
 
-getContractValidSpec :: Spec
+getContractValidSpec :: SpecWith MarloweWebTestData
 getContractValidSpec = describe "Valid GET /contract" do
   getsFirstContractValidSpec
   getsSecondContractValidSpec
   getsThirdContractValidSpec
 
-getContractInvalidSpec :: Spec
+getContractInvalidSpec :: SpecWith MarloweWebTestData
 getContractInvalidSpec = describe "Invalid GET /contract" do
   invalidTxIdSpec
 
-getsFirstContractValidSpec :: Spec
-getsFirstContractValidSpec = it "returns the first contract" $ withLocalMarloweRuntime $ runIntegrationTest do
-  wallet1 <- getGenesisWallet 0
-  wallet2 <- getGenesisWallet 1
-  wallet3 <- getGenesisWallet 2
-
+getsFirstContractValidSpec :: SpecWith MarloweWebTestData
+getsFirstContractValidSpec = it "returns the first contract" \MarloweWebTestData{..} -> flip runIntegrationTest runtime do
   either throw pure =<< runWebClient do
     expectedContractId1 <- createCloseContract wallet1
     _ <- createCloseContract wallet2
@@ -46,11 +41,8 @@ getsFirstContractValidSpec = it "returns the first contract" $ withLocalMarloweR
 
     liftIO $ contractId `shouldBe` expectedContractId1
 
-getsSecondContractValidSpec :: Spec
-getsSecondContractValidSpec = it "returns the second contract" $ withLocalMarloweRuntime $ runIntegrationTest do
-  wallet1 <- getGenesisWallet 0
-  wallet2 <- getGenesisWallet 1
-  wallet3 <- getGenesisWallet 2
+getsSecondContractValidSpec :: SpecWith MarloweWebTestData
+getsSecondContractValidSpec = it "returns the second contract" \MarloweWebTestData{..} -> flip runIntegrationTest runtime do
 
   either throw pure =<< runWebClient do
     _ <- createCloseContract wallet1
@@ -61,12 +53,8 @@ getsSecondContractValidSpec = it "returns the second contract" $ withLocalMarlow
 
     liftIO $ contractId `shouldBe` expectedContractId2
 
-getsThirdContractValidSpec :: Spec
-getsThirdContractValidSpec = it "returns the third contract" $ withLocalMarloweRuntime $ runIntegrationTest do
-  wallet1 <- getGenesisWallet 0
-  wallet2 <- getGenesisWallet 1
-  wallet3 <- getGenesisWallet 2
-
+getsThirdContractValidSpec :: SpecWith MarloweWebTestData
+getsThirdContractValidSpec = it "returns the third contract" \MarloweWebTestData{..} -> flip runIntegrationTest runtime do
   either throw pure =<< runWebClient do
     _ <- createCloseContract wallet1
     _ <- createCloseContract wallet2
@@ -76,8 +64,8 @@ getsThirdContractValidSpec = it "returns the third contract" $ withLocalMarloweR
 
     liftIO $ contractId `shouldBe` expectedContractId3
 
-invalidTxIdSpec :: Spec
-invalidTxIdSpec = it "returns not found for invalid contract id" $ withLocalMarloweRuntime $ runIntegrationTest do
+invalidTxIdSpec :: SpecWith MarloweWebTestData
+invalidTxIdSpec = it "returns not found for invalid contract id" \MarloweWebTestData{..} -> flip runIntegrationTest runtime do
   result <- runWebClient do
     let
       invalidTxId = Web.TxOutRef (toDTO @Chain.TxId "0000000000000000000000000000000000000000000000000000000000000000") 1

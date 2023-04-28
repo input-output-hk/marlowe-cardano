@@ -4,20 +4,18 @@ module Language.Marlowe.Runtime.Web.GetContracts
 import Control.Monad.IO.Class (MonadIO(liftIO))
 
 import Control.Exception (throw)
-import qualified Control.Monad.Reader as Reader
 import Data.Proxy (Proxy(Proxy))
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Integration.Common
 import qualified Language.Marlowe.Runtime.Web as Web
 import Language.Marlowe.Runtime.Web.Client (Page(..), getContracts)
-import Language.Marlowe.Runtime.Web.Common (createCloseContract)
+import Language.Marlowe.Runtime.Web.Common (MarloweWebTestData(..), createCloseContract, setup)
 import Language.Marlowe.Runtime.Web.Server.DTO (ToDTO(toDTO))
 import Network.HTTP.Types (Status(..))
 import Servant.Client (ClientError(FailureResponse))
 import Servant.Client.Streaming (ResponseF(Response, responseStatusCode))
 import Servant.Pagination (Range(..), RangeOrder(..))
-import Test.Hspec (ActionWith, Spec, SpecWith, aroundAll, describe, it, shouldBe)
-import Test.Integration.Marlowe.Local (MarloweRuntime, withLocalMarloweRuntime)
+import Test.Hspec (Spec, SpecWith, aroundAll, describe, it, shouldBe)
 
 spec :: Spec
 spec = describe "GET /contracts" $ aroundAll setup do
@@ -159,19 +157,3 @@ invalidTxIdSpec = it "returns an error message" \MarloweWebTestData{..} -> flip 
   case result of
     Left (FailureResponse _ Response { responseStatusCode = Status { statusCode = 416 } } ) ->  pure ()
     _ -> fail $ "Expected 416 response code - got " <> show result
-
-
-setup :: ActionWith MarloweWebTestData -> IO ()
-setup runSpec = withLocalMarloweRuntime $ runIntegrationTest do
-  runtime <- Reader.ask
-  wallet1 <- getGenesisWallet 0
-  wallet2 <- getGenesisWallet 1
-  wallet3 <- getGenesisWallet 2
-  liftIO $ runSpec MarloweWebTestData{..}
-
-data MarloweWebTestData = MarloweWebTestData
-  { runtime :: MarloweRuntime
-  , wallet1 :: Wallet
-  , wallet2 :: Wallet
-  , wallet3 :: Wallet
-  }
