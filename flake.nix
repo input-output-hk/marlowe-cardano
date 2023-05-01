@@ -198,16 +198,30 @@
               systems);
           };
       };
+
+      newFlake = iogx.mkFlake {
+        inherit inputs;
+        repoRoot = ./.;
+        shellName = "marlowe-cardano";
+        haskellProjectFile = import ./__iogx__/haskell-project.nix;
+        perSystemOutputs = import ./__iogx__/per-system-outputs.nix;
+        shellModule = import ./__iogx__/shell-module.nix;
+      };
     in
-    iogx.mkFlake {
-      inherit inputs;
-      repoRoot = ./.;
-      shellName = "marlowe-cardano";
-      baseFlake = originalFlake;
-      haskellProjectFile = import ./__iogx__/haskell-project.nix;
-      perSystemOutputs = import ./__iogx__/per-system-outputs.nix;
-      shellModule = import ./__iogx__/shell-module.nix;
+    inputs.nixpkgs.lib.recursiveUpdate originalFlake {
+      devShells.x86_64-darwin.new = newFlake.devShells.x86_64-linux.ghc8107-default;
+      devShells.x86_64-darwin.new-profiled = newFlake.devShells.x86_64-linux.ghc8107-default-profiled;
+      devShells.x86_64-linux.new = newFlake.devShells.x86_64-linux.ghc8107-default;
+      devShells.x86_64-linux.new-profiled = newFlake.devShells.x86_64-linux.ghc8107-default-profiled;
+
+      hydraJobs.x86_64-darwin = (originalFlake.hydraJobs { supportedSystems = [ "x86_64-darwin" ]; }).x86_64-darwin // {
+        iogx = newFlake.hydraJobs.x86_64-darwin;
+      };
+      hydraJobs.x86_64-linux = (originalFlake.hydraJobs { supportedSystems = [ "x86_64-linux" ]; }).x86_64-linux // {
+        iogx = newFlake.hydraJobs.x86_64-linux;
+      };
     };
+
 
   nixConfig = {
     extra-substituters = [
