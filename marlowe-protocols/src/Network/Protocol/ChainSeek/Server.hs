@@ -226,7 +226,7 @@ chainSeekServerPeerTraced = fmap peerIdle . runChainSeekServer
       :: forall err result
        . Tag query err result
       -> ServerStNext query err result point tip m a
-      -> Response (ChainSeek query point tip) ('StNext err result :: ChainSeek query point tip) r m a
+      -> Response (ChainSeek query point tip) 'AsServer ('StNext err result :: ChainSeek query point tip) r m a
     peerNext tag = \case
       SendMsgQueryRejected err tip idle ->
         Response (MsgRejectQuery err tip) $ peerIdle idle

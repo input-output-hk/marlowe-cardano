@@ -9,6 +9,7 @@ import Language.Marlowe.Protocol.Sync.Types
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader)
 import Language.Marlowe.Runtime.Core.Api (ContractId, MarloweVersion)
 import Language.Marlowe.Runtime.History.Api (ContractStep, CreateStep)
+import Network.Protocol.Peer.Trace
 import Network.TypedProtocol
 
 newtype MarloweSyncServer m a = MarloweSyncServer { runMarloweSyncServer :: m (ServerStInit m a) }
@@ -142,3 +143,68 @@ marloweSyncServerPeer = Effect . fmap peerInit . runMarloweSyncServer
     peerWait version ServerStWait{..} = Await (ClientAgency (TokWait version)) $ Effect . \case
       MsgPoll   -> peerNext version <$> recvMsgPoll
       MsgCancel -> peerIdle version <$> recvMsgCancel
+
+marloweSyncServerPeerTraced
+  :: forall r m a
+   . Functor m
+  => MarloweSyncServer m a
+  -> m (PeerTraced MarloweSync 'AsServer 'StInit r m a)
+marloweSyncServerPeerTraced = fmap peerInit . runMarloweSyncServer
+  where
+    peerInit
+      :: ServerStInit m a
+      -> PeerTraced MarloweSync 'AsServer 'StInit r m a
+    peerInit ServerStInit{..} = AwaitTraced (ClientAgency TokInit) \case
+      MsgFollowContract contractId ->
+        Respond (ServerAgency TokFollow) $ peerFollow <$> recvMsgFollowContract contractId
+      MsgIntersect contractId version headers ->
+        Respond (ServerAgency $ TokIntersect version) $ peerIntersect version <$> recvMsgIntersect contractId version headers
+
+    peerFollow
+      :: ServerStFollow m a
+      -> Response MarloweSync 'AsServer 'StFollow r m a
+    peerFollow = \case
+      SendMsgContractFound blockHeader version createStep idle ->
+        Response (MsgContractFound blockHeader version createStep) $ peerIdle version idle
+      SendMsgContractNotFound a ->
+        Response MsgContractNotFound $ DoneTraced TokDone a
+
+    peerIntersect
+      :: MarloweVersion v
+      -> ServerStIntersect v m a
+      -> Response MarloweSync 'AsServer ('StIntersect v) r m a
+    peerIntersect version = \case
+      SendMsgIntersectFound blockHeader idle ->
+        Response (MsgIntersectFound blockHeader) $ peerIdle version idle
+      SendMsgIntersectNotFound a ->
+        Response MsgIntersectNotFound $ DoneTraced TokDone a
+
+    peerIdle
+      :: MarloweVersion v
+      -> ServerStIdle v m a
+      -> PeerTraced MarloweSync 'AsServer ('StIdle v) r m a
+    peerIdle version ServerStIdle{..} = AwaitTraced (ClientAgency (TokIdle version)) \case
+      MsgDone -> Closed TokDone recvMsgDone
+      MsgRequestNext -> Respond (ServerAgency $ TokNext version) $ peerNext version <$> recvMsgRequestNext
+
+    peerNext
+      :: MarloweVersion v
+      -> ServerStNext v m a
+      -> Response MarloweSync 'AsServer ('StNext v) r m a
+    peerNext version = \case
+      SendMsgRollForward blockHeader steps idle ->
+        Response (MsgRollForward blockHeader steps) $ peerIdle version idle
+      SendMsgRollBackward blockHeader idle ->
+        Response (MsgRollBackward blockHeader) $ peerIdle version idle
+      SendMsgRollBackCreation a ->
+        Response MsgRollBackCreation $ DoneTraced TokDone a
+      SendMsgWait wait ->
+        Response MsgWait $ peerWait version wait
+
+    peerWait
+      :: MarloweVersion v
+      -> ServerStWait v m a
+      -> PeerTraced MarloweSync 'AsServer ('StWait v) r m a
+    peerWait version ServerStWait{..} = AwaitTraced (ClientAgency (TokWait version)) \case
+      MsgPoll -> Respond (ServerAgency $ TokNext version) $ peerNext version <$> recvMsgPoll
+      MsgCancel -> Receive $ peerIdle version <$> recvMsgCancel

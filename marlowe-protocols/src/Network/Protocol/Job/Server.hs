@@ -201,7 +201,7 @@ jobServerPeerTraced JobServer{..} =
   peerAttach
     :: Tag cmd status err result
     -> ServerStAttach cmd status err result m a
-    -> Response (Job cmd) ('StAttach status err result :: Job cmd) r m a
+    -> Response (Job cmd) 'AsServer ('StAttach status err result :: Job cmd) r m a
   peerAttach tag = \case
     SendMsgAttachFailed a -> Response MsgAttachFailed $ DoneTraced TokDone a
     SendMsgAttached cmd -> Response MsgAttached case cmd of
@@ -216,7 +216,7 @@ jobServerPeerTraced JobServer{..} =
   peerCmd
     :: Tag cmd status err result
     -> ServerStCmd cmd status err result m a
-    -> Response (Job cmd) ('StCmd status err result :: Job cmd) r m a
+    -> Response (Job cmd) 'AsServer ('StCmd status err result :: Job cmd) r m a
   peerCmd tag = \case
     SendMsgFail err a -> Response (MsgFail err) $ DoneTraced TokDone a
     SendMsgSucceed result a -> Response (MsgSucceed result) $ DoneTraced TokDone a

@@ -56,12 +56,10 @@ data YieldTraced ps (pr :: PeerRole) (st :: ps) r m a where
     -> (forall st'. Message ps st st' -> m (PeerTraced ps pr st' r m a))
     -> YieldTraced ps pr st r m a
   Cast
-    :: WeHaveAgency pr st
-    -> PeerTraced ps pr st' r m a
+    :: PeerTraced ps pr st' r m a
     -> YieldTraced ps pr st r m a
   CastDo
-    :: WeHaveAgency pr st
-    -> m (PeerTraced ps pr st' r m a)
+    :: m (PeerTraced ps pr st' r m a)
     -> YieldTraced ps pr st r m a
   Close
     :: NobodyHasAgency st
@@ -73,7 +71,7 @@ deriving instance Functor m => Functor (YieldTraced ps pr st r m)
 data AwaitTraced ps pr st r m a where
   Respond
     :: WeHaveAgency pr st
-    -> m (Response ps st r m a)
+    -> m (Response ps pr st r m a)
     -> AwaitTraced ps 'AsServer st r m a
   Receive
     :: m (PeerTraced ps pr st r m a)
@@ -85,13 +83,13 @@ data AwaitTraced ps pr st r m a where
 
 deriving instance Functor m => Functor (AwaitTraced ps pr st r m)
 
-data Response ps st r m a where
+data Response ps pr st r m a where
   Response
     :: Message ps st st'
-    -> PeerTraced ps 'AsServer st' r m a
-    -> Response ps st r m a
+    -> PeerTraced ps pr st' r m a
+    -> Response ps pr st r m a
 
-deriving instance Functor m => Functor (Response ps st r m)
+deriving instance Functor m => Functor (Response ps pr st r m)
 
 data DriverTraced ps dState r m = DriverTraced
   { sendMessageTraced
@@ -158,10 +156,10 @@ runYieldPeerWithDriverTraced inj parent driver tok msg dState = \case
     (_, SomeMessage msg', dState') <- recvMessageTraced driver tok' dState
     addField callEv $ Just $ SomeMessage msg'
     pure $ runPeerWithDriverTraced inj (reference callEv) driver (Right $ k msg') dState'
-  Cast _ m -> join $ withInjectEventArgs inj castArgs \castEv -> do
+  Cast m -> join $ withInjectEventArgs inj castArgs \castEv -> do
     sendMessageTraced driver (Just $ reference castEv) tok msg
     pure $ runPeerWithDriverTraced inj (reference castEv) driver (Left m) dState
-  CastDo _ m -> join $ withInjectEventArgs inj castArgs \castEv -> do
+  CastDo m -> join $ withInjectEventArgs inj castArgs \castEv -> do
     sendMessageTraced driver (Just $ reference castEv) tok msg
     pure $ runPeerWithDriverTraced inj (reference castEv) driver (Right m) dState
   Close _ a -> withInjectEventArgs inj closeArgs \closeEv -> do
