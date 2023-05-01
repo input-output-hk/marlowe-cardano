@@ -217,5 +217,5 @@ chainSeekClientPeerTraced = fmap peerIdle . runChainSeekClient
         $ Call (ServerAgency $ TokNext tag)
         $ peerNext tag next
       SendMsgCancel idle -> YieldTraced (ClientAgency TokPoll) MsgCancel
-        $ Cast (ClientAgency TokIdle)
+        $ Cast
         $ peerIdle idle

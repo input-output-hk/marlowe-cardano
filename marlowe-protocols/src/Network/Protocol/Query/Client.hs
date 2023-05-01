@@ -3,7 +3,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE RankNTypes #-}
 
--- | A generc client for the query protocol. Includes a function for
+-- | A generic client for the query protocol. Includes a function for
 -- interpreting a client as a typed-protocols peer that can be executed with a
 -- driver and a codec.
 

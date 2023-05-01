@@ -245,5 +245,5 @@ chainSeekServerPeerTraced = fmap peerIdle . runChainSeekServer
     peerPoll tag ServerStPoll{..} = AwaitTraced (ClientAgency TokPoll) \case
       MsgPoll -> Respond (ServerAgency $ TokNext tag)
         $ peerNext tag <$> recvMsgPoll
-      MsgCancel -> Receive (ClientAgency TokIdle)
+      MsgCancel -> Receive
         $ peerIdle <$> recvMsgCancel

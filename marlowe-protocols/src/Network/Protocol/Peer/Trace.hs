@@ -76,8 +76,7 @@ data AwaitTraced ps pr st r m a where
     -> m (Response ps st r m a)
     -> AwaitTraced ps 'AsServer st r m a
   Receive
-    :: TheyHaveAgency pr st
-    -> m (PeerTraced ps pr st r m a)
+    :: m (PeerTraced ps pr st r m a)
     -> AwaitTraced ps pr st r m a
   Closed
     :: NobodyHasAgency st
@@ -202,7 +201,7 @@ runAwaitPeerWithDriverTraced inj parent driver tok k dState =
         addField respondEv $ Just $ SomeMessage msg'
         sendMessageTraced driver (Just $ reference respondEv) tok' msg'
         pure $ runPeerWithDriverTraced inj (reference respondEv) driver (Left nextPeer) dState'
-      Receive _ nextPeer ->
+      Receive nextPeer ->
         runPeerWithDriverTraced inj (reference awaitEv) driver (Right nextPeer) dState'
       Closed _ ma -> withInjectEventArgs inj (closeArgs parent' msg) $ const ma
   where
