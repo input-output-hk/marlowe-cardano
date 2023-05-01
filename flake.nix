@@ -168,6 +168,7 @@
           # Export ciJobs for tullia to parse
           ciJobs = self.hydraJobsFunc {
             supportedSystems = [ system ];
+            evalSystem = system;
           };
 
           hydraJobs = ciJobs;
