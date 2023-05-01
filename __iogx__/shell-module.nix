@@ -33,9 +33,7 @@ in
     inputs.cardano-world.cardano.packages.cardano-cli
   ];
 
-  enterShell = ''
-    export PGUSER=postgres
-  '';
+  env.PGUSER = "postgres";
 
   scripts = {
     re-up = {

@@ -2,7 +2,7 @@
 
 let
   lib = pkgs.lib;
-  network = inputs.self.networks.preview; # TODO remove the __iogx__ when merged
+  network = inputs.self.networks.__iogx__.preview; # TODO remove the __iogx__ when merged
 
   mkSqitchRunner = name: path: pkgs.writeShellScriptBin name ''
     export PATH="$PATH:${lib.makeBinPath [ pkgs.sqitchPg pkgs.postgresql ]}"

@@ -17986,11 +17986,11 @@
         "tullia": "tullia_10"
       },
       "locked": {
-        "lastModified": 1682954731,
-        "narHash": "sha256-ZgAhyXb2I9G/kfyx+8DVxjoYuKdbMkNEtqxzFYCVaZA=",
+        "lastModified": 1682961278,
+        "narHash": "sha256-q0qN5iSPMXoZQdcy+KY+LaU+XWsH+uCD+zNLYw+UVFY=",
         "owner": "zeme-iohk",
         "repo": "iogx",
-        "rev": "09bcbf14ed57d1f23e9e1203a395b0d7d877603a",
+        "rev": "6f76594acf955f06c3faa177e30c21ccfd25c4cb",
         "type": "github"
       },
       "original": {

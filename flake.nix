@@ -69,7 +69,7 @@
           packagesLinux = self.internal.packagesFun { system = "x86_64-linux"; };
           packagesProf = self.internal.packagesFun { inherit system; enableHaskellProfiling = true; };
         in
-        {
+        rec {
           inherit packages;
 
           apps = rec {
@@ -166,17 +166,22 @@
           };
 
           # Export ciJobs for tullia to parse
-          ciJobs = self.hydraJobs {
+          ciJobs = self.hydraJobsFunc {
             supportedSystems = [ system ];
           };
+
+          hydraJobs = ciJobs;
         }
         // tullia.fromSimple system (import ./nix/tullia.nix)
-      )) // {
-        hydraJobs = import ./hydra-jobs.nix {
+      )) // rec {
+        hydraJobsFunc = import ./hydra-jobs.nix {
           inherit inputs;
           inherit (self) internal;
           marlowe-cardano = self;
         };
+        # hydraJobs = hydraJobsFunc {
+        #   supportedSystems = [ system ];
+        # };
         inherit inputs;
         internal.packagesFun =
           { system
@@ -206,21 +211,11 @@
         haskellProjectFile = import ./__iogx__/haskell-project.nix;
         perSystemOutputs = import ./__iogx__/per-system-outputs.nix;
         shellModule = import ./__iogx__/shell-module.nix;
+        flakeOutputsPrefix = "__iogx__";
       };
     in
-    inputs.nixpkgs.lib.recursiveUpdate originalFlake {
-      devShells.x86_64-darwin.new = newFlake.devShells.x86_64-linux.ghc8107-default;
-      devShells.x86_64-darwin.new-profiled = newFlake.devShells.x86_64-linux.ghc8107-default-profiled;
-      devShells.x86_64-linux.new = newFlake.devShells.x86_64-linux.ghc8107-default;
-      devShells.x86_64-linux.new-profiled = newFlake.devShells.x86_64-linux.ghc8107-default-profiled;
+    inputs.nixpkgs.lib.recursiveUpdate originalFlake newFlake;
 
-      hydraJobs.x86_64-darwin = (originalFlake.hydraJobs { supportedSystems = [ "x86_64-darwin" ]; }).x86_64-darwin // {
-        iogx = newFlake.hydraJobs.x86_64-darwin;
-      };
-      hydraJobs.x86_64-linux = (originalFlake.hydraJobs { supportedSystems = [ "x86_64-linux" ]; }).x86_64-linux // {
-        iogx = newFlake.hydraJobs.x86_64-linux;
-      };
-    };
 
 
   nixConfig = {

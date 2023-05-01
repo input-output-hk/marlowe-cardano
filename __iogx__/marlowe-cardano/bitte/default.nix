@@ -45,7 +45,7 @@ let
   runs = builtins.listToAttrs (map
     (name: {
       inherit name;
-      value = run-entrypoints inputs.self.networks.${name};
+      value = run-entrypoints inputs.self.networks.__iogx__.${name};
     }) [ "testnet-dev" "testnet-pioneers" "preprod" ]);
 in
 {
