@@ -186,9 +186,9 @@ jobServerPeerTraced
   :: forall cmd r m a
    . (Monad m, Command cmd)
   => JobServer cmd m a
-  -> m (PeerTraced (Job cmd) 'AsServer 'StInit r m a)
+  -> PeerTraced (Job cmd) 'AsServer 'StInit r m a
 jobServerPeerTraced JobServer{..} =
-  peerInit <$> runJobServer
+  EffectTraced $ peerInit <$> runJobServer
   where
   peerInit :: ServerStInit cmd m a -> PeerTraced (Job cmd) 'AsServer 'StInit r m a
   peerInit ServerStInit{..} =

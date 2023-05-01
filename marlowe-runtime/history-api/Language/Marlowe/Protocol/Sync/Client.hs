@@ -143,8 +143,8 @@ marloweSyncClientPeerTraced
   :: forall r m a
    . Functor m
   => MarloweSyncClient m a
-  -> m (PeerTraced MarloweSync 'AsClient 'StInit r m a)
-marloweSyncClientPeerTraced = fmap peerInit . runMarloweSyncClient
+  -> PeerTraced MarloweSync 'AsClient 'StInit r m a
+marloweSyncClientPeerTraced = EffectTraced . fmap peerInit . runMarloweSyncClient
   where
     peerInit :: ClientStInit m a -> PeerTraced MarloweSync 'AsClient 'StInit r m a
     peerInit = \case
@@ -160,8 +160,8 @@ marloweSyncClientPeerTraced = fmap peerInit . runMarloweSyncClient
     peerFollow
       :: ClientStFollow m a
       -> Message MarloweSync 'StFollow st
-      -> m (PeerTraced MarloweSync 'AsClient st r m a)
-    peerFollow ClientStFollow{..} = \case
+      -> PeerTraced MarloweSync 'AsClient st r m a
+    peerFollow ClientStFollow{..} = EffectTraced . \case
       MsgContractFound header version step ->
         peerIdle version <$> recvMsgContractFound header version step
       MsgContractNotFound ->
@@ -171,8 +171,8 @@ marloweSyncClientPeerTraced = fmap peerInit . runMarloweSyncClient
       :: MarloweVersion v
       -> ClientStIntersect v m a
       -> Message MarloweSync ('StIntersect v) st
-      -> m (PeerTraced MarloweSync 'AsClient st r m a)
-    peerIntersect version ClientStIntersect{..} = \case
+      -> PeerTraced MarloweSync 'AsClient st r m a
+    peerIntersect version ClientStIntersect{..} = EffectTraced . \case
       MsgIntersectFound header -> peerIdle version <$> recvMsgIntersectFound header
       MsgIntersectNotFound -> DoneTraced TokDone <$> recvMsgIntersectNotFound
 
@@ -190,8 +190,8 @@ marloweSyncClientPeerTraced = fmap peerInit . runMarloweSyncClient
       :: MarloweVersion v
       -> ClientStNext v m a
       -> Message MarloweSync ('StNext v) st
-      -> m (PeerTraced MarloweSync 'AsClient st r m a)
-    peerNext version ClientStNext{..} = \case
+      -> PeerTraced MarloweSync 'AsClient st r m a
+    peerNext version ClientStNext{..} = EffectTraced . \case
       MsgRollForward header steps -> peerIdle version <$> recvMsgRollForward header steps
       MsgRollBackward header -> peerIdle version <$> recvMsgRollBackward header
       MsgRollBackCreation -> DoneTraced TokDone <$> recvMsgRollBackCreation

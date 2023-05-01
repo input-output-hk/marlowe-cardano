@@ -132,9 +132,9 @@ queryServerPeerTraced
   :: forall query r m a
    . (Functor m, IsQuery query)
   => QueryServer query m a
-  -> m (PeerTraced (Query query) 'AsServer 'StInit r m a)
+  -> PeerTraced (Query query) 'AsServer 'StInit r m a
 queryServerPeerTraced QueryServer{..} =
-  peerInit <$> runQueryServer
+  EffectTraced $ peerInit <$> runQueryServer
   where
   peerInit :: ServerStInit query m a -> PeerTraced (Query query) 'AsServer 'StInit r m a
   peerInit ServerStInit{..} =

@@ -184,8 +184,8 @@ chainSeekClientPeerTraced
   :: forall query point tip r m a
    . (Functor m, Query query)
   => ChainSeekClient query point tip m a
-  -> m (PeerTraced (ChainSeek query point tip) 'AsClient 'StIdle r m a)
-chainSeekClientPeerTraced = fmap peerIdle . runChainSeekClient
+  -> PeerTraced (ChainSeek query point tip) 'AsClient 'StIdle r m a
+chainSeekClientPeerTraced = EffectTraced . fmap peerIdle . runChainSeekClient
   where
     peerIdle
       :: ClientStIdle query point tip m a
@@ -201,12 +201,12 @@ chainSeekClientPeerTraced = fmap peerIdle . runChainSeekClient
       :: Tag query err result
       -> ClientStNext query err result point tip m a
       -> Message (ChainSeek query point tip) ('StNext err result) st
-      -> m (PeerTraced (ChainSeek query point tip) 'AsClient st r m a)
-    peerNext tag ClientStNext{..} = \case
-      MsgRejectQuery err tip         -> peerIdle <$> recvMsgQueryRejected err tip
+      -> PeerTraced (ChainSeek query point tip) 'AsClient st r m a
+    peerNext tag ClientStNext{..} = EffectTraced . \case
+      MsgRejectQuery err tip -> peerIdle <$> recvMsgQueryRejected err tip
       MsgRollForward result point tip -> peerIdle <$> recvMsgRollForward result point tip
-      MsgRollBackward point tip       -> peerIdle <$> recvMsgRollBackward point tip
-      MsgWait                        -> peerPoll tag <$> recvMsgWait
+      MsgRollBackward point tip -> peerIdle <$> recvMsgRollBackward point tip
+      MsgWait -> peerPoll tag <$> recvMsgWait
 
     peerPoll
       :: Tag query err result

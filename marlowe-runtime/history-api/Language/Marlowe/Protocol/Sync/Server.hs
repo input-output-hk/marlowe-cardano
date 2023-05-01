@@ -148,8 +148,8 @@ marloweSyncServerPeerTraced
   :: forall r m a
    . Functor m
   => MarloweSyncServer m a
-  -> m (PeerTraced MarloweSync 'AsServer 'StInit r m a)
-marloweSyncServerPeerTraced = fmap peerInit . runMarloweSyncServer
+  -> PeerTraced MarloweSync 'AsServer 'StInit r m a
+marloweSyncServerPeerTraced = EffectTraced . fmap peerInit . runMarloweSyncServer
   where
     peerInit
       :: ServerStInit m a
@@ -207,4 +207,4 @@ marloweSyncServerPeerTraced = fmap peerInit . runMarloweSyncServer
       -> PeerTraced MarloweSync 'AsServer ('StWait v) r m a
     peerWait version ServerStWait{..} = AwaitTraced (ClientAgency (TokWait version)) \case
       MsgPoll -> Respond (ServerAgency $ TokNext version) $ peerNext version <$> recvMsgPoll
-      MsgCancel -> Receive $ peerIdle version <$> recvMsgCancel
+      MsgCancel -> Receive $ EffectTraced $ peerIdle version <$> recvMsgCancel

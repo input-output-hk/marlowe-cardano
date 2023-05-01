@@ -209,8 +209,8 @@ chainSeekServerPeerTraced
   :: forall query point tip r m a
    . (Functor m, Query query)
   => ChainSeekServer query point tip m a
-  -> m (PeerTraced (ChainSeek query point tip) 'AsServer 'StIdle r m a)
-chainSeekServerPeerTraced = fmap peerIdle . runChainSeekServer
+  -> PeerTraced (ChainSeek query point tip) 'AsServer 'StIdle r m a
+chainSeekServerPeerTraced = EffectTraced . fmap peerIdle . runChainSeekServer
   where
     peerIdle
       :: ServerStIdle query point tip m a
@@ -246,4 +246,5 @@ chainSeekServerPeerTraced = fmap peerIdle . runChainSeekServer
       MsgPoll -> Respond (ServerAgency $ TokNext tag)
         $ peerNext tag <$> recvMsgPoll
       MsgCancel -> Receive
+        $ EffectTraced
         $ peerIdle <$> recvMsgCancel

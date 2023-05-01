@@ -144,8 +144,8 @@ queryClientPeerTraced
   :: forall query r m a
    . (Monad m, IsQuery query)
   => QueryClient query m a
-  -> m (PeerTraced (Query query) 'AsClient 'StInit r m a)
-queryClientPeerTraced QueryClient{..} = peerInit <$> runQueryClient
+  -> PeerTraced (Query query) 'AsClient 'StInit r m a
+queryClientPeerTraced QueryClient{..} = EffectTraced $ peerInit <$> runQueryClient
   where
   peerInit :: ClientStInit query m a -> PeerTraced (Query query) 'AsClient 'StInit r m a
   peerInit (SendMsgRequest query next) =
@@ -157,8 +157,8 @@ queryClientPeerTraced QueryClient{..} = peerInit <$> runQueryClient
     :: Tag query delimiter err results
     -> ClientStNextCanReject delimiter err results m a
     -> Message (Query query) ('StNext 'CanReject delimiter err results) st
-    -> m (PeerTraced (Query query) 'AsClient st r m a)
-  peerNextCanReject tag ClientStNextCanReject{..} = \case
+    -> PeerTraced (Query query) 'AsClient st r m a
+  peerNextCanReject tag ClientStNextCanReject{..} = EffectTraced . \case
     MsgReject err                 -> DoneTraced TokDone <$> recvMsgReject err
     MsgNextPage results delimiter -> peerPage tag <$> recvMsgNextPage results delimiter
 
@@ -179,8 +179,8 @@ queryClientPeerTraced QueryClient{..} = peerInit <$> runQueryClient
     :: Tag query delimiter err results
     -> ClientStNext delimiter err results m a
     -> Message (Query query) ('StNext 'MustReply delimiter err results) st
-    -> m (PeerTraced (Query query) 'AsClient st r m a)
-  peerNext query ClientStNext{..} = \case
+    -> PeerTraced (Query query) 'AsClient st r m a
+  peerNext query ClientStNext{..} = EffectTraced . \case
     MsgNextPage results delimiter -> peerPage query <$> recvMsgNextPage results delimiter
 
 -- | Create a client that runs a query that cannot have multiple pages.
