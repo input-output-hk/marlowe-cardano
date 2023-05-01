@@ -8,14 +8,14 @@ module Network.Protocol.Peer.Trace
   where
 
 import Control.Monad (join, replicateM)
-import Control.Monad.Event.Class (MonadEvent, emitImmediateInjectEventArgs_, withInjectEventArgs)
+import Control.Monad.Event.Class (MonadEvent, withInjectEventArgs)
 import Control.Monad.IO.Class (MonadIO)
 import Data.Binary (Binary, get, getWord8, put)
 import Data.Binary.Put (putWord8, runPut)
 import qualified Data.ByteString as B
 import Data.ByteString.Lazy (ByteString)
 import Data.Foldable (traverse_)
-import Data.Void (Void)
+import Data.Maybe (fromMaybe)
 import Network.Channel
 import Network.Protocol.Codec (BinaryMessage, DeserializeError, binaryCodec, decodeGet)
 import Network.TypedProtocol
@@ -40,6 +40,12 @@ data PeerTraced ps (pr :: PeerRole) (st :: ps) r m a where
   AwaitTraced
     :: TheyHaveAgency pr st
     -> (forall (st' :: ps). Message ps st st' -> AwaitTraced ps pr st' r m a)
+    -> PeerTraced ps pr st r m a
+
+  -- | The session is done.
+  DoneTraced
+    :: NobodyHasAgency st
+    -> a
     -> PeerTraced ps pr st r m a
 
 deriving instance Functor m => Functor (PeerTraced ps pr st r m)
@@ -91,7 +97,7 @@ deriving instance Functor m => Functor (Response ps st r m)
 data DriverTraced ps dState r m = DriverTraced
   { sendMessageTraced
       :: forall pr st st'
-       . r
+       . Maybe r
       -> PeerHasAgency pr st
       -> Message ps st st'
       -> m ()
@@ -99,7 +105,7 @@ data DriverTraced ps dState r m = DriverTraced
       :: forall pr (st :: ps)
        . PeerHasAgency pr st
       -> dState
-      -> m (r, SomeMessage st, dState)
+      -> m (Maybe r, SomeMessage st, dState)
   , startDStateTraced :: dState
   }
 
@@ -130,6 +136,7 @@ runPeerWithDriverTraced inj parent driver mPeer dState = do
       runYieldPeerWithDriverTraced inj parent' driver tok msg dState yield
     AwaitTraced tok k ->
       runAwaitPeerWithDriverTraced inj parent' driver tok k dState
+    DoneTraced _ a -> pure a
   where
     processArgs = (simpleNewEventArgs ProcessSelector)
       { newEventParent = Just parent
@@ -148,18 +155,18 @@ runYieldPeerWithDriverTraced
   -> m a
 runYieldPeerWithDriverTraced inj parent driver tok msg dState = \case
   Call tok' k -> join $ withInjectEventArgs inj callArgs \callEv -> do
-    sendMessageTraced driver (reference callEv) tok msg
+    sendMessageTraced driver (Just $ reference callEv) tok msg
     (_, SomeMessage msg', dState') <- recvMessageTraced driver tok' dState
     addField callEv $ Just $ SomeMessage msg'
     pure $ runPeerWithDriverTraced inj (reference callEv) driver (Right $ k msg') dState'
   Cast _ m -> join $ withInjectEventArgs inj castArgs \castEv -> do
-    sendMessageTraced driver (reference castEv) tok msg
+    sendMessageTraced driver (Just $ reference castEv) tok msg
     pure $ runPeerWithDriverTraced inj (reference castEv) driver (Left m) dState
   CastDo _ m -> join $ withInjectEventArgs inj castArgs \castEv -> do
-    sendMessageTraced driver (reference castEv) tok msg
+    sendMessageTraced driver (Just $ reference castEv) tok msg
     pure $ runPeerWithDriverTraced inj (reference castEv) driver (Right m) dState
   Close _ a -> withInjectEventArgs inj closeArgs \closeEv -> do
-    sendMessageTraced driver (reference closeEv) tok msg
+    sendMessageTraced driver (Just $ reference closeEv) tok msg
     pure a
   where
     callArgs = (simpleNewEventArgs (CallSelector msg))
@@ -186,28 +193,29 @@ runAwaitPeerWithDriverTraced
   -> m a
 runAwaitPeerWithDriverTraced inj parent driver tok k dState =
   join $ withInjectEventArgs inj awaitArgs \awaitEv -> do
-    (sendRef, SomeMessage msg, dState') <- recvMessageTraced driver tok dState
+    (mSendRef, SomeMessage msg, dState') <- recvMessageTraced driver tok dState
+    let parent' = fromMaybe (reference awaitEv) mSendRef
     addField awaitEv $ Just $ SomeMessage msg
     pure case k msg of
-      Respond tok' m -> join $ withInjectEventArgs inj (respondArgs sendRef msg) \respondEv -> do
+      Respond tok' m -> join $ withInjectEventArgs inj (respondArgs parent' msg) \respondEv -> do
         Response msg' nextPeer <- m
         addField respondEv $ Just $ SomeMessage msg'
-        sendMessageTraced driver (reference respondEv) tok' msg'
+        sendMessageTraced driver (Just $ reference respondEv) tok' msg'
         pure $ runPeerWithDriverTraced inj (reference respondEv) driver (Left nextPeer) dState'
       Receive _ nextPeer ->
         runPeerWithDriverTraced inj (reference awaitEv) driver (Right nextPeer) dState'
-      Closed _ ma -> withInjectEventArgs inj (closeArgs sendRef msg) $ const ma
+      Closed _ ma -> withInjectEventArgs inj (closeArgs parent' msg) $ const ma
   where
-    respondArgs sendRef msg = (simpleNewEventArgs (RespondSelector msg))
-      { newEventParent = Just sendRef
+    respondArgs parent' msg = (simpleNewEventArgs (RespondSelector msg))
+      { newEventParent = Just parent'
       , newEventInitialFields = [Nothing]
       }
     awaitArgs = (simpleNewEventArgs AwaitSelector)
       { newEventParent = Just parent
       , newEventInitialFields = [Nothing]
       }
-    closeArgs sendRef msg = (simpleNewEventArgs (CloseSelector msg))
-      { newEventParent = Just sendRef
+    closeArgs parent' msg = (simpleNewEventArgs (CloseSelector msg))
+      { newEventParent = Just parent'
       , newEventInitialFields = [()]
       }
 
@@ -223,6 +231,43 @@ instance (Monoid b, HasSpanContext a) => HasSpanContext (a, b) where
   context = context . fst
   wrapContext = (,mempty) . wrapContext
 
+mkDriverCompat
+  :: forall ps m
+   . (MonadIO m, BinaryMessage ps)
+  => Channel m ByteString
+  -> Driver ps (Maybe ByteString) m
+mkDriverCompat Channel{..} = Driver{..}
+  where
+    Codec{..} = binaryCodec
+    sendMessage
+      :: forall (pr :: PeerRole) (st :: ps) (st' :: ps)
+       . PeerHasAgency pr st
+      -> Message ps st st'
+      -> m ()
+    sendMessage tok msg = send $ runPut (put $ Nothing @SpanContext) <> encode tok msg
+
+    recvMessage
+      :: forall (pr :: PeerRole) (st :: ps)
+       . PeerHasAgency pr st
+      -> Maybe ByteString
+      -> m (SomeMessage st, Maybe ByteString)
+    recvMessage tok trailing = do
+      (_ :: Maybe SpanContext, trailing') <- decodeChannel trailing =<< decodeGet get
+      (msg, trailing'') <- decodeChannel trailing' =<< decode tok
+      pure (msg, trailing'')
+
+    decodeChannel
+      :: Maybe ByteString
+      -> DecodeStep ByteString DeserializeError m a
+      -> m (a, Maybe ByteString)
+    decodeChannel _ (DecodeDone a trailing)     = pure (a, trailing)
+    decodeChannel _ (DecodeFail failure)        = throwIO failure
+    decodeChannel Nothing (DecodePartial next)  = recv >>= next >>= decodeChannel Nothing
+    decodeChannel trailing (DecodePartial next) = next trailing >>= decodeChannel Nothing
+
+    startDState :: Maybe ByteString
+    startDState = Nothing
+
 mkDriverTraced
   :: forall ps r m
    . (MonadIO m, BinaryMessage ps, HasSpanContext r)
@@ -233,21 +278,21 @@ mkDriverTraced Channel{..} = DriverTraced{..}
     Codec{..} = binaryCodec
     sendMessageTraced
       :: forall (pr :: PeerRole) (st :: ps) (st' :: ps)
-       . r
+       . Maybe r
       -> PeerHasAgency pr st
       -> Message ps st st'
       -> m ()
     sendMessageTraced r tok msg = do
-      spanContext <- context r
+      spanContext <- traverse context r
       send $ runPut (put spanContext) <> encode tok msg
 
     recvMessageTraced
       :: forall (pr :: PeerRole) (st :: ps)
        . PeerHasAgency pr st
       -> Maybe ByteString
-      -> m (r, SomeMessage st, Maybe ByteString)
+      -> m (Maybe r, SomeMessage st, Maybe ByteString)
     recvMessageTraced tok trailing = do
-      (r, trailing') <- decodeChannel trailing =<< decodeGet (wrapContext <$> get)
+      (r, trailing') <- decodeChannel trailing =<< decodeGet (fmap wrapContext <$> get)
       (msg, trailing'') <- decodeChannel trailing' =<< decode tok
       pure (r, msg, trailing'')
 

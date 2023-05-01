@@ -4,13 +4,14 @@
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE RankNTypes #-}
 
--- | A generc server for the query protocol. Includes a function for
+-- | A generic server for the query protocol. Includes a function for
 -- interpreting a server as a typed-protocols peer that can be executed with a
 -- driver and a codec.
 
 module Network.Protocol.Query.Server
   where
 
+import Network.Protocol.Peer.Trace
 import Network.Protocol.Query.Types
 import Network.TypedProtocol
 
@@ -126,8 +127,44 @@ queryServerPeer QueryServer{..} =
       MsgRequestNext delimiter -> peerNext TokMustReply tag $ recvMsgRequestNext delimiter
       MsgDone                  -> Effect $ Done TokDone <$> recvMsgDone
 
+-- | Interpret a server as a typed-protocols peer.
+queryServerPeerTraced
+  :: forall query r m a
+   . (Functor m, IsQuery query)
+  => QueryServer query m a
+  -> m (PeerTraced (Query query) 'AsServer 'StInit r m a)
+queryServerPeerTraced QueryServer{..} =
+  peerInit <$> runQueryServer
+  where
+  peerInit :: ServerStInit query m a -> PeerTraced (Query query) 'AsServer 'StInit r m a
+  peerInit ServerStInit{..} =
+    AwaitTraced (ClientAgency TokInit) \(MsgRequest query) ->
+      peerNext TokCanReject (tagFromQuery query) $ recvMsgRequest query
+
+  peerNext
+    :: forall k delimiter err results
+     . TokNextKind k
+    -> Tag query delimiter err results
+    -> m (ServerStNext query k delimiter err results m a)
+    -> AwaitTraced (Query query) 'AsServer ('StNext k delimiter err results :: Query query) r m a
+  peerNext k tag = Respond (ServerAgency $ TokNext k tag) . fmap \case
+    SendMsgReject err a ->
+      Response (MsgReject err) $ DoneTraced TokDone a
+    SendMsgNextPage results delimiter page ->
+      Response (MsgNextPage results delimiter) $ peerPage tag page
+
+  peerPage
+    :: Tag query delimiter err results
+    -> ServerStPage query delimiter err results m a
+    -> PeerTraced (Query query) 'AsServer ('StPage delimiter err results) r m a
+  peerPage tag ServerStPage{..} =
+    AwaitTraced (ClientAgency (TokPage tag)) \case
+      MsgRequestNext delimiter -> peerNext TokMustReply tag $ recvMsgRequestNext delimiter
+      MsgDone                  -> Closed TokDone recvMsgDone
+
 -- | Create a server that does not return results in multiple pages. Requesting
 -- next will always return the same results as the first page.
+
 liftHandler
   :: forall query m a
    . Monad m

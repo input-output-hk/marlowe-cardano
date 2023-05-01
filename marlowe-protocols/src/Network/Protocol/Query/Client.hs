@@ -11,6 +11,7 @@ module Network.Protocol.Query.Client
   where
 
 import Data.Void (Void)
+import Network.Protocol.Peer.Trace
 import Network.Protocol.Query.Types
 import Network.TypedProtocol
 
@@ -137,6 +138,50 @@ queryClientPeer QueryClient{..} =
   peerNext query ClientStNext{..} =
     Await (ServerAgency (TokNext TokMustReply query)) $ Effect . \case
       MsgNextPage results delimiter -> peerPage query <$> recvMsgNextPage results delimiter
+
+-- | Interpret a client as a typed-protocols peer.
+queryClientPeerTraced
+  :: forall query r m a
+   . (Monad m, IsQuery query)
+  => QueryClient query m a
+  -> m (PeerTraced (Query query) 'AsClient 'StInit r m a)
+queryClientPeerTraced QueryClient{..} = peerInit <$> runQueryClient
+  where
+  peerInit :: ClientStInit query m a -> PeerTraced (Query query) 'AsClient 'StInit r m a
+  peerInit (SendMsgRequest query next) =
+    YieldTraced (ClientAgency TokInit) (MsgRequest query)
+      $ Call (ServerAgency (TokNext TokCanReject (tagFromQuery query)))
+      $ peerNextCanReject (tagFromQuery query) next
+
+  peerNextCanReject
+    :: Tag query delimiter err results
+    -> ClientStNextCanReject delimiter err results m a
+    -> Message (Query query) ('StNext 'CanReject delimiter err results) st
+    -> m (PeerTraced (Query query) 'AsClient st r m a)
+  peerNextCanReject tag ClientStNextCanReject{..} = \case
+    MsgReject err                 -> DoneTraced TokDone <$> recvMsgReject err
+    MsgNextPage results delimiter -> peerPage tag <$> recvMsgNextPage results delimiter
+
+  peerPage
+    :: Tag query delimiter err results
+    -> ClientStPage delimiter err results m a
+    -> PeerTraced (Query query) 'AsClient ('StPage delimiter err results) r m a
+  peerPage tag = \case
+    SendMsgRequestNext delimiter next ->
+      YieldTraced (ClientAgency (TokPage tag)) (MsgRequestNext delimiter)
+        $ Call (ServerAgency $ TokNext TokMustReply tag)
+        $ peerNext tag next
+    SendMsgDone a  ->
+      YieldTraced (ClientAgency (TokPage tag)) MsgDone
+        $ Close TokDone a
+
+  peerNext
+    :: Tag query delimiter err results
+    -> ClientStNext delimiter err results m a
+    -> Message (Query query) ('StNext 'MustReply delimiter err results) st
+    -> m (PeerTraced (Query query) 'AsClient st r m a)
+  peerNext query ClientStNext{..} = \case
+    MsgNextPage results delimiter -> peerPage query <$> recvMsgNextPage results delimiter
 
 -- | Create a client that runs a query that cannot have multiple pages.
 liftQuery :: Monad m => query Void err results -> QueryClient query m (Either err results)
