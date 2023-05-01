@@ -29,72 +29,64 @@ import UnliftIO (throwIO)
 
 -- | A peer in a protocol session which is suitable for tracing.
 data PeerTraced ps (pr :: PeerRole) (st :: ps) r m a where
-  -- | The client is sending a message to the server and expects a response. The
-  -- entire call will occur inside a call span.
-  Call
-    :: ClientHasAgency st
-    -- ^ Witness of the proof that the client is allowed to act in this state.
-    -> ServerHasAgency st'
-    -- ^ Witness of the proof that the server is allowed to act in the next state.
-    -> Message ps st st'
-    -- ^ Message to send to the server
-    -> (forall (st'' :: ps). Message ps st' st'' -> m (PeerTraced ps 'AsClient st'' r m a))
-    -- ^ Handler for the response from the server. The action will run inside a
-    -- process span, the parent of which will be the respond span from the
-    -- server.
-    -> PeerTraced ps 'AsClient st r m a
-
-  -- | The peer is sending a message to the other peer.
-  -- The sending will occur inside a publish span.
-  Publish
+  -- | A peer sends a message to the other peer.
+  YieldTraced
     :: WeHaveAgency pr st
-    -- ^ Witness of the proof that the peer is allowed to act in this state.
     -> Message ps st st'
-    -- ^ Message to send to the server
-    -> m (PeerTraced ps pr st' r m a)
-    -- ^ Next peer to run. Runs inside a process span, the parent of which will
-    -- be the publish span.
+    -> YieldTraced ps pr st' r m a
     -> PeerTraced ps pr st r m a
 
-  -- | The peer is ready to handle a message from the other peer. The receipt
-  -- of the message will run inside a receive span.
-  Receive
+  -- | A peer awaits a message from the other peer.
+  AwaitTraced
     :: TheyHaveAgency pr st
-    -- ^ Witness of the proof that the other peer is allowed to act in this state.
-    -> (forall (st' :: ps). Message ps st st' -> HandleMessage ps pr st' r m a)
-    -- ^ Handler for the message from the server. The action will run inside a
-    -- process span, the parent of which will be the span carried by the
-    -- message.
-    -> PeerTraced ps pr st r m a
-
-  -- | The session is complete and the connection will be terminated.
-  DoneTraced
-    :: NobodyHasAgency st
-    -- ^ Witness of the proof that neither peer is allowed to act in this state.
-    -> a
-    -- ^ The result of the session.
+    -> (forall (st' :: ps). Message ps st st' -> AwaitTraced ps pr st' r m a)
     -> PeerTraced ps pr st r m a
 
 deriving instance Functor m => Functor (PeerTraced ps pr st r m)
 
-data HandleMessage ps pr st r m a where
+data YieldTraced ps (pr :: PeerRole) (st :: ps) r m a where
+  Call
+    :: TheyHaveAgency pr st
+    -> (forall st'. Message ps st st' -> m (PeerTraced ps pr st' r m a))
+    -> YieldTraced ps pr st r m a
+  Cast
+    :: WeHaveAgency pr st
+    -> PeerTraced ps pr st' r m a
+    -> YieldTraced ps pr st r m a
+  CastDo
+    :: WeHaveAgency pr st
+    -> m (PeerTraced ps pr st' r m a)
+    -> YieldTraced ps pr st r m a
+  Close
+    :: NobodyHasAgency st
+    -> a
+    -> YieldTraced ps pr st r m a
+
+deriving instance Functor m => Functor (YieldTraced ps pr st r m)
+
+data AwaitTraced ps pr st r m a where
   Respond
-    :: ServerHasAgency st
-    -> m (ResponseContinuation ps st r m a)
-    -> HandleMessage ps 'AsServer st r m a
-  Process
-    :: m (PeerTraced ps pr st r m a)
-    -> HandleMessage ps pr st r m a
+    :: WeHaveAgency pr st
+    -> m (Response ps st r m a)
+    -> AwaitTraced ps 'AsServer st r m a
+  Receive
+    :: TheyHaveAgency pr st
+    -> m (PeerTraced ps pr st r m a)
+    -> AwaitTraced ps pr st r m a
+  Closed
+    :: NobodyHasAgency st
+    -> m a
+    -> AwaitTraced ps pr st r m a
 
-deriving instance Functor m => Functor (HandleMessage ps pr st r m)
+deriving instance Functor m => Functor (AwaitTraced ps pr st r m)
 
-data ResponseContinuation ps st r m a where
-  ResponseContinuation
+data Response ps st r m a where
+  Response
     :: Message ps st st'
     -> PeerTraced ps 'AsServer st' r m a
-    -> ResponseContinuation ps st r m a
+    -> Response ps st r m a
 
-deriving instance Functor m => Functor (ResponseContinuation ps st r m)
+deriving instance Functor m => Functor (Response ps st r m)
 
 data DriverTraced ps dState r m = DriverTraced
   { sendMessageTraced
@@ -112,119 +104,110 @@ data DriverTraced ps dState r m = DriverTraced
   }
 
 data TypedProtocolsSelector ps f where
-  CallSelector :: Message ps st st' -> TypedProtocolsSelector ps (SomeMessage st')
-  RespondSelector :: Message ps st st' -> Message ps st' st'' -> TypedProtocolsSelector ps ()
-  PublishSelector :: Message ps st st' -> TypedProtocolsSelector ps ()
-  ReceiveSelector :: TypedProtocolsSelector ps ()
-  ProcessSelector :: Message ps st st' -> TypedProtocolsSelector ps ()
-  DoneSelector :: TypedProtocolsSelector ps Void
+  ProcessSelector :: TypedProtocolsSelector ps ()
+  AwaitSelector :: TypedProtocolsSelector ps (Maybe (SomeMessage st'))
+  CallSelector :: Message ps st st' -> TypedProtocolsSelector ps (Maybe (SomeMessage st'))
+  RespondSelector :: Message ps st st' -> TypedProtocolsSelector ps (Maybe (SomeMessage st'))
+  CastSelector :: Message ps st st' -> TypedProtocolsSelector ps ()
+  CloseSelector :: Message ps st st' -> TypedProtocolsSelector ps ()
 
 runPeerWithDriverTraced
   :: MonadEvent r s m
   => InjectSelector (TypedProtocolsSelector ps) s
   -> r
   -> DriverTraced ps dState r m
-  -> PeerTraced ps pr st r m a
+  -> Either (PeerTraced ps pr st r m a) (m (PeerTraced ps pr st r m a))
   -> dState
   -> m a
-runPeerWithDriverTraced inj parent driver = \case
-  Call tok1 tok2 msg k -> runCallPeerWithDriverTraced inj driver parent tok1 tok2 msg k
-  Receive tok k -> runReceivePeerWithDriverTraced inj driver parent tok k
-  Publish tok msg m -> runPublishPeerWithDriverTraced inj driver parent tok msg m
-  DoneTraced _ a -> \_ -> do
-    emitImmediateInjectEventArgs_ inj doneArgs
-    pure a
+runPeerWithDriverTraced inj parent driver mPeer dState = do
+  (peer, parent') <- case mPeer of
+    Left peer -> pure (peer, parent)
+    Right m -> withInjectEventArgs inj processArgs \ev -> do
+      peer <- m
+      pure (peer, reference ev)
+  case peer of
+    YieldTraced tok msg yield ->
+      runYieldPeerWithDriverTraced inj parent' driver tok msg dState yield
+    AwaitTraced tok k ->
+      runAwaitPeerWithDriverTraced inj parent' driver tok k dState
   where
-    doneArgs = (simpleNewEventArgs DoneSelector) { newEventParent = Just parent }
+    processArgs = (simpleNewEventArgs ProcessSelector)
+      { newEventParent = Just parent
+      , newEventInitialFields = [()]
+      }
 
-runCallPeerWithDriverTraced
+runYieldPeerWithDriverTraced
   :: MonadEvent r s m
   => InjectSelector (TypedProtocolsSelector ps) s
-  -> DriverTraced ps dState r m
   -> r
-  -> ClientHasAgency st
-  -> ServerHasAgency st'
+  -> DriverTraced ps dState r m
+  -> WeHaveAgency pr st
   -> Message ps st st'
-  -> (forall st''. Message ps st' st'' -> m (PeerTraced ps 'AsClient st'' r m a))
   -> dState
+  -> YieldTraced ps pr st' r m a
   -> m a
-runCallPeerWithDriverTraced inj driver parent tok1 tok2 msg k dState = do
-  (respondRef, SomeMessage msg', dState') <- withInjectEventArgs inj callArgs \ev -> do
-    sendMessageTraced driver (reference ev) (ClientAgency tok1) msg
-    (respondRef, msg', dState') <- recvMessageTraced driver (ServerAgency tok2) dState
-    addField ev msg'
-    pure (respondRef, msg', dState')
-  join $ withInjectEventArgs inj (processArgs respondRef msg') \ev -> do
-    nextPeer <- k msg'
-    pure $ runPeerWithDriverTraced inj (reference ev) driver nextPeer dState'
+runYieldPeerWithDriverTraced inj parent driver tok msg dState = \case
+  Call tok' k -> join $ withInjectEventArgs inj callArgs \callEv -> do
+    sendMessageTraced driver (reference callEv) tok msg
+    (_, SomeMessage msg', dState') <- recvMessageTraced driver tok' dState
+    addField callEv $ Just $ SomeMessage msg'
+    pure $ runPeerWithDriverTraced inj (reference callEv) driver (Right $ k msg') dState'
+  Cast _ m -> join $ withInjectEventArgs inj castArgs \castEv -> do
+    sendMessageTraced driver (reference castEv) tok msg
+    pure $ runPeerWithDriverTraced inj (reference castEv) driver (Left m) dState
+  CastDo _ m -> join $ withInjectEventArgs inj castArgs \castEv -> do
+    sendMessageTraced driver (reference castEv) tok msg
+    pure $ runPeerWithDriverTraced inj (reference castEv) driver (Right m) dState
+  Close _ a -> withInjectEventArgs inj closeArgs \closeEv -> do
+    sendMessageTraced driver (reference closeEv) tok msg
+    pure a
   where
     callArgs = (simpleNewEventArgs (CallSelector msg))
       { newEventParent = Just parent
+      , newEventInitialFields = [Nothing]
       }
-    processArgs respondRef msg' = (simpleNewEventArgs (ProcessSelector msg'))
-      { newEventParent = Just respondRef
-      , newEventInitialFields = [()]
-      }
-
-runPublishPeerWithDriverTraced
-  :: MonadEvent r s m
-  => InjectSelector (TypedProtocolsSelector ps) s
-  -> DriverTraced ps dState r m
-  -> r
-  -> WeHaveAgency pr st
-  -> Message ps st st'
-  -> m (PeerTraced ps pr st' r m a)
-  -> dState
-  -> m a
-runPublishPeerWithDriverTraced inj driver parent tok msg m dState =
-  join $ withInjectEventArgs inj publishArgs \publishEv -> do
-    sendMessageTraced driver (reference publishEv) tok msg
-    pure $ join $ withInjectEventArgs inj (processArgs (reference publishEv) msg) \processEv -> do
-      nextPeer <- m
-      pure $ runPeerWithDriverTraced inj (reference processEv) driver nextPeer dState
-  where
-    publishArgs = (simpleNewEventArgs (PublishSelector msg))
+    castArgs = (simpleNewEventArgs (CastSelector msg))
       { newEventParent = Just parent
+      , newEventInitialFields = [()]
       }
-    processArgs respondRef msg' = (simpleNewEventArgs (ProcessSelector msg'))
-      { newEventParent = Just respondRef
+    closeArgs = (simpleNewEventArgs (CloseSelector msg))
+      { newEventParent = Just parent
       , newEventInitialFields = [()]
       }
 
-runReceivePeerWithDriverTraced
+runAwaitPeerWithDriverTraced
   :: MonadEvent r s m
   => InjectSelector (TypedProtocolsSelector ps) s
-  -> DriverTraced ps dState r m
   -> r
+  -> DriverTraced ps dState r m
   -> TheyHaveAgency pr st
-  -> (forall (st' :: ps). Message ps st st' -> HandleMessage ps pr st' r m a)
+  -> (forall (st' :: ps). Message ps st st' -> AwaitTraced ps pr st' r m a)
   -> dState
   -> m a
-runReceivePeerWithDriverTraced inj driver parent tok k dState = do
-  (senderRef, SomeMessage msg, dState') <- withInjectEventArgs inj receiveArgs
-    $ const
-    $ recvMessageTraced driver tok dState
-  join $ withInjectEventArgs inj (processArgs senderRef msg) \processEv -> do
-    case k msg of
-      Respond tok' m -> do
-        ResponseContinuation msg' nextPeer <- m
-        pure $ join $ withInjectEventArgs inj (respondArgs (reference processEv) msg msg') \respondEv -> do
-          sendMessageTraced driver (reference respondEv) (ServerAgency tok') msg'
-          pure $ runPeerWithDriverTraced inj (reference respondEv) driver nextPeer dState'
-      Process m -> do
-        nextPeer <- m
-        pure $ runPeerWithDriverTraced inj (reference processEv) driver nextPeer dState'
+runAwaitPeerWithDriverTraced inj parent driver tok k dState =
+  join $ withInjectEventArgs inj awaitArgs \awaitEv -> do
+    (sendRef, SomeMessage msg, dState') <- recvMessageTraced driver tok dState
+    addField awaitEv $ Just $ SomeMessage msg
+    pure case k msg of
+      Respond tok' m -> join $ withInjectEventArgs inj (respondArgs sendRef msg) \respondEv -> do
+        Response msg' nextPeer <- m
+        addField respondEv $ Just $ SomeMessage msg'
+        sendMessageTraced driver (reference respondEv) tok' msg'
+        pure $ runPeerWithDriverTraced inj (reference respondEv) driver (Left nextPeer) dState'
+      Receive _ nextPeer ->
+        runPeerWithDriverTraced inj (reference awaitEv) driver (Right nextPeer) dState'
+      Closed _ ma -> withInjectEventArgs inj (closeArgs sendRef msg) $ const ma
   where
-    receiveArgs = (simpleNewEventArgs ReceiveSelector)
+    respondArgs sendRef msg = (simpleNewEventArgs (RespondSelector msg))
+      { newEventParent = Just sendRef
+      , newEventInitialFields = [Nothing]
+      }
+    awaitArgs = (simpleNewEventArgs AwaitSelector)
       { newEventParent = Just parent
-      , newEventInitialFields = [()]
+      , newEventInitialFields = [Nothing]
       }
-    processArgs senderRef msg' = (simpleNewEventArgs (ProcessSelector msg'))
-      { newEventParent = Just senderRef
-      , newEventInitialFields = [()]
-      }
-    respondArgs senderRef msg msg' = (simpleNewEventArgs (RespondSelector msg msg'))
-      { newEventParent = Just senderRef
+    closeArgs sendRef msg = (simpleNewEventArgs (CloseSelector msg))
+      { newEventParent = Just sendRef
       , newEventInitialFields = [()]
       }
 
