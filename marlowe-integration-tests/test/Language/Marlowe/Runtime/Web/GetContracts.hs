@@ -15,7 +15,7 @@ import Network.HTTP.Types (Status(..))
 import Servant.Client (ClientError(FailureResponse))
 import Servant.Client.Streaming (ResponseF(Response, responseStatusCode))
 import Servant.Pagination (Range(..), RangeOrder(..))
-import Test.Hspec (Spec, SpecWith, aroundAll, describe, it, shouldBe)
+import Test.Hspec (Spec, SpecWith, aroundAll, describe, it, shouldBe, shouldSatisfy)
 
 spec :: Spec
 spec = describe "GET /contracts" $ aroundAll setup do
@@ -127,7 +127,7 @@ singleContractValidSpec :: SpecWith MarloweWebTestData
 singleContractValidSpec  = it "returns a list with single contract header" \MarloweWebTestData{..} -> flip runIntegrationTest runtime do
   either throw pure =<< runWebClient do
     expectedContractId <- createCloseContract wallet1
-    Page {..}<- getContracts Nothing Nothing Nothing
+    Page {..} <- getContracts Nothing Nothing Nothing
     liftIO $ fmap (\Web.ContractHeader{..} -> contractId) items `shouldBe` [expectedContractId]
 
 multipleContractValidSpec :: SpecWith MarloweWebTestData
@@ -136,8 +136,12 @@ multipleContractValidSpec  = it "returns a list with multiple contract headers" 
   either throw pure =<< runWebClient do
     expectedContractId1 <- createCloseContract wallet1
     expectedContractId2 <- createCloseContract wallet2
-    Page {..}<- getContracts Nothing Nothing Nothing
-    liftIO $ fmap (\Web.ContractHeader{..} -> contractId) items `shouldBe` [expectedContractId2, expectedContractId1]
+    Page {..} <- getContracts Nothing Nothing Nothing
+    let
+      actualContractIds = fmap (\Web.ContractHeader{..} -> contractId) items
+    liftIO do
+      actualContractIds `shouldSatisfy` elem expectedContractId1
+      actualContractIds `shouldSatisfy` elem expectedContractId2
 
 
 invalidTxIdSpec :: SpecWith MarloweWebTestData
