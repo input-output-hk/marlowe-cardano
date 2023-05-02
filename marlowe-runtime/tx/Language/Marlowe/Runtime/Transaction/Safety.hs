@@ -23,7 +23,7 @@ import Data.SOP.Strict (K(..), NP(..))
 import Data.String (fromString)
 import Data.Time (UTCTime, addUTCTime, secondsToNominalDiffTime)
 import Data.Time.Clock.POSIX (posixSecondsToUTCTime)
-import Language.Marlowe.Analysis.Safety.Ledger (checkRoleNames, checkTokens, worstMinimumUtxo)
+import Language.Marlowe.Analysis.Safety.Ledger (checkRoleNames, checkTokens, worstMinimumUtxo')
 import Language.Marlowe.Analysis.Safety.Transaction (findTransactions)
 import Language.Marlowe.Analysis.Safety.Types (SafetyError(..), Transaction(..))
 import Language.Marlowe.Runtime.Core.Api
@@ -106,7 +106,7 @@ remapContinuations
 remapContinuations = M.mapKeys $ Plutus.DatumHash . Plutus.toBuiltin . Chain.unDatumHash
 
 
--- | Compute a worst-case bound on the minimum UTxO value for a contract.
+-- | Compute a worst-case bound on the minimum UTxO value for a contract, assuming that the contract does not pay from the account in the initial state and that account only contains lovelace.
 minAdaUpperBound
  :: Shelley.ProtocolParameters
  -> MarloweVersion v
@@ -115,7 +115,7 @@ minAdaUpperBound
  -> Maybe Cardano.Lovelace
 minAdaUpperBound Shelley.ProtocolParameters{protocolParamUTxOCostPerByte} MarloweV1 contract continuations =
   fromInteger
-    . (\utxoCostPerByte -> worstMinimumUtxo (toInteger utxoCostPerByte) contract $ remapContinuations continuations)
+    . (\utxoCostPerByte -> worstMinimumUtxo' (toInteger utxoCostPerByte) contract $ remapContinuations continuations)
     <$> protocolParamUTxOCostPerByte
 
 

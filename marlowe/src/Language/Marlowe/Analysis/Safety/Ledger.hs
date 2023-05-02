@@ -11,6 +11,7 @@
 -----------------------------------------------------------------------------
 
 
+{-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TupleSections #-}
@@ -28,6 +29,7 @@ module Language.Marlowe.Analysis.Safety.Ledger
   , worstMarloweData
   , worstMaximumValue
   , worstMinimumUtxo
+  , worstMinimumUtxo'
   , worstRedeemerSize
   , worstState
   , worstTxOut
@@ -43,12 +45,13 @@ module Language.Marlowe.Analysis.Safety.Ledger
 import Data.Foldable (maximumBy, toList)
 import Data.Function (on)
 import Data.List (nub, (\\))
+import Data.Maybe (fromJust)
 import Language.Marlowe.Analysis.Safety.Types (SafetyError(..), SafetyReport(..))
 import Language.Marlowe.Core.V1.Merkle (Continuations)
 import Language.Marlowe.Core.V1.Plate (Extract, extractAllWithContinuations)
 import Language.Marlowe.Core.V1.Semantics (MarloweData(..), MarloweParams(..))
 import Language.Marlowe.Core.V1.Semantics.Types
-  (Action(..), Bound(..), Case(..), Contract, InputContent(..), State(..), Token(..))
+  (Action(..), Bound(..), Case(..), Contract, InputContent(..), State(..), Token(..), emptyState)
 import Language.Marlowe.Scripts (MarloweTxInput(..))
 import Numeric.Natural (Natural)
 import Plutus.V2.Ledger.Api
@@ -65,7 +68,7 @@ import Plutus.V2.Ledger.Api
   )
 import PlutusTx.Builtins (serialiseData)
 
-import qualified Data.Set as S (Set, filter, map, null, size)
+import qualified Data.Set as S (Set, filter, fromList, map, null, size)
 import qualified Plutus.V1.Ledger.Value as V (singleton)
 import qualified Plutus.V2.Ledger.Api as P (Address(..), Value)
 import qualified PlutusTx.AssocMap as AM (Map, fromList, keys, toList)
@@ -84,10 +87,10 @@ checkSafety maxValueSize utxoCostPerByte MarloweData{..} continuations =
     safetyErrors =
          checkRoleNames (rolesCurrency marloweParams /= adaSymbol) marloweContract continuations
       <> checkTokens marloweContract continuations
-      <> checkMaximumValueBound maxValueSize marloweContract continuations
+      <> checkMaximumValueBound maxValueSize marloweState marloweContract continuations
       <> checkPositiveBalance marloweState
       <> checkDuplicates marloweState
-    boundOnMinimumUtxo = worstMinimumUtxo utxoCostPerByte marloweContract continuations
+    boundOnMinimumUtxo = worstMinimumUtxo utxoCostPerByte marloweState marloweContract continuations
     boundOnDatumSize = worstDatumSize marloweParams marloweContract continuations
     boundOnRedeemerSize = worstRedeemerSize marloweContract continuations
   in
@@ -152,12 +155,13 @@ checkTokens =
 -- | Check that a contract satisfies the maximum value ledger constraint.
 checkMaximumValueBound
   :: Natural  -- ^ The `maxValueSize` protocol parameter.
+  -> State  -- ^ The initial state.
   -> Contract  -- ^ The contract.
   -> Continuations  -- ^ The merkleized continuations.
   -> [SafetyError]  -- ^ The safety messages.
-checkMaximumValueBound maxValueSize contract continuations =
+checkMaximumValueBound maxValueSize state contract continuations =
   let
-    actual = worstMaximumValue contract continuations
+    actual = worstMaximumValue state contract continuations
   in
     if actual <= maxValueSize
       then mempty
@@ -166,10 +170,16 @@ checkMaximumValueBound maxValueSize contract continuations =
 
 -- | Compute a bound on the value size for a contract.
 worstMaximumValue
-  :: Contract  -- ^ The contract.
+  :: State  -- ^ The initial state.
+  -> Contract  -- ^ The contract.
   -> Continuations  -- ^ The merkleized continuations.
   -> Natural  -- ^ A bound on the value size (in bytes).
-worstMaximumValue = (worstValueSize .) . extractAllWithContinuations
+worstMaximumValue State{accounts} =
+  let
+    initial = S.fromList $ snd <$> AM.keys accounts
+  in
+    ((worstValueSize . (initial <>)) .)
+      . extractAllWithContinuations
 
 
 -- | Find a representative value with worst-case size.
@@ -206,20 +216,36 @@ worstTxOut contract continuations =
   }
 
 
--- | Compute a bound on the minimum UTxO that might be required for a Marlowe contract.
+-- | Compute a bound on the minimum UTxO that might be required for a Marlowe contract, under the assumption that the contract does not pay funds from the accounts in the initial state.
 worstMinimumUtxo
+  :: Integer  -- ^ The `utxoCostPerByte` protocol parameter.
+  -> State  -- ^ The initial state.
+  -> Contract  -- ^ The contract.
+  -> Continuations  -- ^ The merkleized continuations.
+  -> Maybe Integer  -- ^ A worst-case bound on the minimum UTxO lovelace for the contract, provided initial accounts are not payable in the contract.
+worstMinimumUtxo utxoCostPerByte state@State{accounts} contract continuations =
+  let
+    accountTokens = extractAllWithContinuations contract continuations
+  in
+    if any (`elem` accountTokens) $ AM.keys accounts
+      then Nothing
+      else Just
+             . toInteger
+             $ fromInteger utxoCostPerByte *
+             (
+                 27 * 8                                          -- Worst case for stake address and ada.
+               + worstMaximumValue state contract continuations  -- Worst case for size of value.
+               + 10 * 8                                          -- Worst case for length of datum hash.
+             )  -- This assumes that the size computed for the Alonzo era serves as an upper-bound for future eras.
+
+
+-- | Compute a bound on the minimum UTxO that might be required for a Marlowe contract, under the assumption that the contract does not pay funds from the accounts in the initial state.
+worstMinimumUtxo'
   :: Integer  -- ^ The `utxoCostPerByte` protocol parameter.
   -> Contract  -- ^ The contract.
   -> Continuations  -- ^ The merkleized continuations.
-  -> Integer  -- ^ A worst-case bound on the minimum UTxO lovelace for the contract.
-worstMinimumUtxo utxoCostPerByte contract continuations =
-  toInteger
-    $ fromInteger utxoCostPerByte *
-    (
-        27 * 8                                    -- Worst case for stake address and ada.
-      + worstMaximumValue contract continuations  -- Worst case for size of value.
-      + 10 * 8                                    -- Worst case for length of datum hash.
-    )  -- This assumes that the size computed for the Alonzo era serves as an upper-bound for future eras.
+  -> Integer  -- ^ A worst-case bound on the minimum UTxO lovelace for the contract, provided initial accounts are not payable in the contract.
+worstMinimumUtxo' utxoCostPerByte = (fromJust .) . worstMinimumUtxo utxoCostPerByte (emptyState 0)
 
 
 -- | Compute a bound on the size of a multi-asset value.

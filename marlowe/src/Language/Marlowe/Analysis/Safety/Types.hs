@@ -37,7 +37,7 @@ data SafetyReport =
   SafetyReport
   {
     safetyErrors :: [SafetyError]  -- ^ Safety-related errors in the contract.
-  , boundOnMinimumUtxo :: Integer  -- ^ A bound on the minimum-UTxO value, over all execution paths.
+  , boundOnMinimumUtxo :: Maybe Integer  -- ^ A bound on the minimum-UTxO value, over all execution paths.
   , boundOnDatumSize :: Natural  -- ^ A bound (in bytes) on the size of the datum, over all execution paths.
   , boundOnRedeemerSize :: Natural  -- ^ A bound (in bytes) on the size of the redeemer, over all execution paths.
   }

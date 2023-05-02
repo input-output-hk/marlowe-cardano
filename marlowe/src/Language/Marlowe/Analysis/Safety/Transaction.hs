@@ -33,9 +33,10 @@ import Control.Monad.Except (MonadError(throwError), MonadIO(..), foldM, liftEit
 import Data.Bifunctor (first, second)
 import Data.List (nub, nubBy)
 import Data.String (IsString(..))
-import Language.Marlowe.Analysis.Safety.Ledger
-import Language.Marlowe.Analysis.Safety.Types
+import Language.Marlowe.Analysis.Safety.Ledger (worstMinimumUtxo')
+import Language.Marlowe.Analysis.Safety.Types (Transaction(..))
 import Language.Marlowe.Core.V1.Merkle
+  (Continuations, MerkleizedContract(..), deepDemerkleize, demerkleizeContract, merkleizeInput)
 import Language.Marlowe.Core.V1.Semantics
   ( MarloweData(MarloweData, marloweContract, marloweParams, marloweState)
   , MarloweParams(..)
@@ -244,7 +245,7 @@ findTransactions' mc@MerkleizedContract{..} =
         $ P.Address
             (P.PubKeyCredential "88888888888888888888888888888888888888888888888888888888")
             (Just . P.StakingHash $ P.PubKeyCredential "99999999999999999999999999999999999999999999999999999999")
-    minAda = worstMinimumUtxo utxoCostPerByte mcContract mcContinuations
+    minAda = worstMinimumUtxo' utxoCostPerByte mcContract mcContinuations
   in
     findTransactions creatorAddress minAda mc
 
