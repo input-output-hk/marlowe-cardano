@@ -44,6 +44,9 @@ ihoistConnector hoistPeer' f f' Connector{..} = Connector $ f $ ihoistConnection
 type ClientConnector ps = Connector ps 'AsClient
 type ServerConnector ps = Connector ps 'AsServer
 
+type ClientConnectorTraced ps = ConnectorTraced ps 'AsClient
+type ServerConnectorTraced ps = ConnectorTraced ps 'AsServer
+
 data SomeConnector pr peer r m =
   forall ps. BinaryMessage ps => SomeConnector (Connector ps pr peer m)
 
