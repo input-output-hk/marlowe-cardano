@@ -356,11 +356,14 @@ library proxy-api
     , aeson >= 2 && < 3
     , base >= 4.9 && < 5
     , binary >= 0.8.8 && < 0.9
+    , eventuo11y ^>= { 0.9, 0.10 }
+    , eventuo11y-extras ==0.1.0.0
     , marlowe-protocols ==0.1.0.0
     , marlowe-runtime:discovery-api ==0.0.1
     , marlowe-runtime:history-api ==0.0.1
     , marlowe-runtime:sync-api ==0.0.1
     , marlowe-runtime:tx-api ==0.0.1
+    , text >= 1.2.4 && < 2
     , typed-protocols ==0.1.0.0
 
 library proxy

@@ -18,6 +18,7 @@ import Data.Text (Text)
 import Network.Protocol.Connection (ClientServerPair(..), Connection(..), ConnectionSource(..), Connector(..))
 import Network.Protocol.Handshake.Client (handshakeClientConnector)
 import Network.Protocol.Handshake.Types
+import Network.Protocol.Peer.Trace
 import Network.TypedProtocol
 
 -- | A generic server for the handshake protocol.
@@ -101,3 +102,31 @@ handshakeServerPeer serverPeer HandshakeServer{..} =
       Done tok a -> Done (TokLiftNobody tok) a
       Yield (ServerAgency tok) msg next -> Yield (ServerAgency $ TokLiftServer tok) (MsgLift msg) $ liftPeer next
       Await (ClientAgency tok) next -> Await (ClientAgency $ TokLiftClient tok) \(MsgLift msg) -> liftPeer $ next msg
+
+handshakeServerPeerTraced
+  :: forall client r m ps st a
+   . Functor m
+  => (forall x. client m x -> PeerTraced ps 'AsServer st r m x)
+  -> HandshakeServer client m a
+  -> PeerTraced (Handshake ps) 'AsServer ('StInit st) r m a
+handshakeServerPeerTraced serverPeer HandshakeServer{..} =
+  AwaitTraced (ClientAgency TokInit) \case
+    MsgHandshake sig -> Respond (ServerAgency TokHandshake) $ recvMsgHandshake sig <&> \case
+      Left a ->
+        Response MsgReject $ EffectTraced $ DoneTraced TokDone <$> a
+      Right server ->
+        Response MsgAccept $ liftPeer $ serverPeer server
+  where
+    liftPeer :: forall st'. PeerTraced ps 'AsServer st' r m a -> PeerTraced (Handshake ps) 'AsServer ('StLift st') r m a
+    liftPeer = \case
+      EffectTraced m -> EffectTraced $ liftPeer <$> m
+      DoneTraced tok a -> DoneTraced (TokLiftNobody tok) a
+      YieldTraced (ServerAgency tok) msg yield -> YieldTraced (ServerAgency $ TokLiftServer tok) (MsgLift msg) case yield of
+        Call (ClientAgency tok') next -> Call (ClientAgency $ TokLiftClient tok') \(MsgLift msg') -> liftPeer $ next msg'
+        Cast next -> Cast $ liftPeer next
+        Close tok' a -> Close (TokLiftNobody tok') a
+      AwaitTraced (ClientAgency tok) k -> AwaitTraced (ClientAgency $ TokLiftClient tok) \(MsgLift msg) -> case k msg of
+        Respond (ServerAgency tok') next -> Respond (ServerAgency $ TokLiftServer tok') $ next <&> \case
+          Response msg' next' -> Response (MsgLift msg') $ liftPeer next'
+        Receive next -> Receive $ liftPeer next
+        Closed tok' ma -> Closed (TokLiftNobody tok') ma

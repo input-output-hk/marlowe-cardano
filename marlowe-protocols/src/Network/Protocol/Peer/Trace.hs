@@ -15,6 +15,7 @@ import Data.Binary.Put (putWord8, runPut)
 import qualified Data.ByteString as B
 import Data.ByteString.Lazy (ByteString)
 import Data.Foldable (traverse_)
+import Data.Functor ((<&>))
 import Data.Maybe (fromMaybe)
 import Network.Channel
 import Network.Protocol.Codec (BinaryMessage, DeserializeError, binaryCodec, decodeGet)
@@ -61,7 +62,7 @@ data YieldTraced ps (pr :: PeerRole) (st :: ps) r m a where
     -> (forall st'. Message ps st st' -> PeerTraced ps pr st' r m a)
     -> YieldTraced ps pr st r m a
   Cast
-    :: PeerTraced ps pr st' r m a
+    :: PeerTraced ps pr st r m a
     -> YieldTraced ps pr st r m a
   Close
     :: NobodyHasAgency st
@@ -74,7 +75,7 @@ data AwaitTraced ps pr st r m a where
   Respond
     :: WeHaveAgency pr st
     -> m (Response ps pr st r m a)
-    -> AwaitTraced ps 'AsServer st r m a
+    -> AwaitTraced ps pr st r m a
   Receive
     :: PeerTraced ps pr st r m a
     -> AwaitTraced ps pr st r m a
@@ -93,6 +94,20 @@ data Response ps pr st r m a where
 
 deriving instance Functor m => Functor (Response ps pr st r m)
 
+peerTracedToPeer :: Functor m => PeerTraced ps pr st r m a -> Peer ps pr st m a
+peerTracedToPeer = \case
+  YieldTraced tok msg yield -> Yield tok msg case yield of
+    Call tok' k -> Await tok' $ peerTracedToPeer . k
+    Cast next -> peerTracedToPeer next
+    Close tok' a -> Done tok' a
+  AwaitTraced tok k -> Await tok \msg -> case k msg of
+    Respond tok' m -> Effect $ m <&> \case
+      Response msg' next -> Yield tok' msg' $ peerTracedToPeer next
+    Receive next -> peerTracedToPeer next
+    Closed tok' ma -> Effect $ Done tok' <$> ma
+  DoneTraced tok a -> Done tok a
+  EffectTraced m -> Effect $ peerTracedToPeer <$> m
+
 data DriverTraced ps dState r m = DriverTraced
   { sendMessageTraced
       :: forall pr st st'
@@ -106,6 +121,13 @@ data DriverTraced ps dState r m = DriverTraced
       -> dState
       -> m (r, SomeMessage st, dState)
   , startDStateTraced :: dState
+  }
+
+hoistDriverTraced :: (forall x. m x -> n x) -> DriverTraced ps dState r m -> DriverTraced ps dState r n
+hoistDriverTraced f DriverTraced{..} = DriverTraced
+  { sendMessageTraced = \r tok -> f . sendMessageTraced r tok
+  , recvMessageTraced = \tok -> f . recvMessageTraced tok
+  , ..
   }
 
 data TypedProtocolsSelector ps f where
