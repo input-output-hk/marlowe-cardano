@@ -94,6 +94,24 @@ data Response ps pr st r m a where
 
 deriving instance Functor m => Functor (Response ps pr st r m)
 
+hoistPeerTraced
+  :: Functor m
+  => (forall x. m x -> n x)
+  -> PeerTraced ps pr st r m a
+  -> PeerTraced ps pr st r n a
+hoistPeerTraced f = \case
+  YieldTraced tok msg yield -> YieldTraced tok msg case yield of
+    Call tok' k -> Call tok' $ hoistPeerTraced f . k
+    Cast next -> Cast $ hoistPeerTraced f next
+    Close tok' a -> Close tok' a
+  AwaitTraced tok k -> AwaitTraced tok \msg -> case k msg of
+    Respond tok' m -> Respond tok' $ f $ m <&> \case
+      Response msg' next -> Response msg' $ hoistPeerTraced f next
+    Receive next -> Receive $ hoistPeerTraced f next
+    Closed tok' ma -> Closed tok' $ f ma
+  DoneTraced tok a -> DoneTraced tok a
+  EffectTraced m -> EffectTraced $ f $ hoistPeerTraced f <$> m
+
 peerTracedToPeer :: Functor m => PeerTraced ps pr st r m a -> Peer ps pr st m a
 peerTracedToPeer = \case
   YieldTraced tok msg yield -> Yield tok msg case yield of

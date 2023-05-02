@@ -24,19 +24,21 @@ import Cardano.Api
 import qualified Cardano.Api as Cardano
 import Cardano.Api.Shelley (AcquiringFailure)
 import Control.Concurrent.Component
+import Control.Monad.Event.Class
 import Control.Monad.Trans.Except (ExceptT(ExceptT), except, runExceptT, throwE, withExceptT)
 import Data.Bifunctor (first)
 import Data.Void (Void, absurd)
 import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncQuery(..))
 import qualified Language.Marlowe.Runtime.ChainSync.Database as Database
-import Network.Protocol.Connection (SomeConnectionSource, SomeServerConnector, acceptSomeConnector)
-import Network.Protocol.Driver (runSomeConnector)
+import Network.Protocol.Connection (SomeConnectionSourceTraced, SomeServerConnectorTraced, acceptSomeConnectorTraced)
+import Network.Protocol.Driver (runSomeConnectorTraced)
+import Network.Protocol.Peer.Trace
 import Network.Protocol.Query.Server (QueryServer(..), ServerStInit(..), ServerStNext(..), ServerStPage(..))
 import Network.Protocol.Query.Types (StNextKind(..))
 import UnliftIO (MonadUnliftIO)
 
-data ChainSyncQueryServerDependencies m = ChainSyncQueryServerDependencies
-  { querySource :: SomeConnectionSource (QueryServer ChainSyncQuery) m
+data ChainSyncQueryServerDependencies r s m = ChainSyncQueryServerDependencies
+  { querySource :: SomeConnectionSourceTraced (QueryServer ChainSyncQuery) r s m
   , queryLocalNodeState
       :: forall result
        . Maybe Cardano.ChainPoint
@@ -45,13 +47,15 @@ data ChainSyncQueryServerDependencies m = ChainSyncQueryServerDependencies
   , getUTxOs :: Database.GetUTxOs m
   }
 
-chainSyncQueryServer :: MonadUnliftIO m => Component m (ChainSyncQueryServerDependencies m) ()
+chainSyncQueryServer
+  :: (MonadUnliftIO m, MonadEvent r s m, HasSpanContext r)
+  => Component m (ChainSyncQueryServerDependencies r s m) ()
 chainSyncQueryServer = serverComponent worker \ChainSyncQueryServerDependencies{..} -> do
-  connector <- acceptSomeConnector querySource
+  connector <- acceptSomeConnectorTraced querySource
   pure WorkerDependencies {..}
 
-data WorkerDependencies m = WorkerDependencies
-  { connector :: SomeServerConnector (QueryServer ChainSyncQuery) m
+data WorkerDependencies r s m = WorkerDependencies
+  { connector :: SomeServerConnectorTraced (QueryServer ChainSyncQuery) r s m
   , queryLocalNodeState
       :: forall result
        . Maybe Cardano.ChainPoint
@@ -60,7 +64,9 @@ data WorkerDependencies m = WorkerDependencies
   , getUTxOs :: Database.GetUTxOs m
   }
 
-worker :: forall m. MonadUnliftIO m => Component m (WorkerDependencies m) ()
+worker
+  :: forall r s m. (MonadUnliftIO m, MonadEvent r s m, HasSpanContext r)
+  => Component m (WorkerDependencies r s m) ()
 worker = component_ \WorkerDependencies{..} -> do
   let
     server :: QueryServer ChainSyncQuery m ()
@@ -111,4 +117,4 @@ worker = component_ \WorkerDependencies{..} -> do
         $ QueryInEra eraInMode
         $ QueryInShelleyBasedEra shelleyBasedEra $ query shelleyBasedEra
       withExceptT (const ()) $ except result
-  runSomeConnector connector server
+  runSomeConnectorTraced connector server

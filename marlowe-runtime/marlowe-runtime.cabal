@@ -204,7 +204,6 @@ library sync-api
     , marlowe-runtime ==0.0.1
     , marlowe-runtime:discovery-api ==0.0.1
     , transformers >= 0.5.6 && < 0.6
-    , text >= 1.2.4 && < 2
     , typed-protocols ==0.1.0.0
     , unliftio >= 0.2.1 && < 0.3
 
@@ -375,6 +374,7 @@ library proxy
   build-depends:
     , async-components ==0.1.0.0
     , base >= 4.9 && < 5
+    , eventuo11y-extras ==0.1.0.0
     , marlowe-protocols ==0.1.0.0
     , marlowe-runtime:discovery-api ==0.0.1
     , marlowe-runtime:history-api ==0.0.1

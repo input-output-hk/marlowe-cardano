@@ -18,7 +18,8 @@ import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncQuery, RuntimeChainSeekC
 import Language.Marlowe.Runtime.Indexer.ChainSeekClient
 import Language.Marlowe.Runtime.Indexer.Database (DatabaseQueries)
 import Language.Marlowe.Runtime.Indexer.Store
-import Network.Protocol.Connection (SomeClientConnector)
+import Network.Protocol.Connection (SomeClientConnectorTraced)
+import Network.Protocol.Peer.Trace (HasSpanContext)
 import Network.Protocol.Query.Client (QueryClient)
 import Observe.Event.Component (FieldConfig(..), GetSelectorConfig, SelectorConfig(..), SomeJSON(SomeJSON), prependKey)
 import UnliftIO (MonadUnliftIO)
@@ -27,10 +28,10 @@ data MarloweIndexerSelector f where
   StoreEvent :: StoreSelector f -> MarloweIndexerSelector f
   ChainSeekClientEvent :: ChainSeekClientSelector f -> MarloweIndexerSelector f
 
-data MarloweIndexerDependencies m = MarloweIndexerDependencies
+data MarloweIndexerDependencies r s m = MarloweIndexerDependencies
   { databaseQueries :: DatabaseQueries m
-  , chainSyncConnector :: SomeClientConnector RuntimeChainSeekClient m
-  , chainSyncQueryConnector :: SomeClientConnector (QueryClient ChainSyncQuery) m
+  , chainSyncConnector :: SomeClientConnectorTraced RuntimeChainSeekClient r s m
+  , chainSyncQueryConnector :: SomeClientConnectorTraced (QueryClient ChainSyncQuery) r s m
   , pollingInterval :: NominalDiffTime
   , marloweScriptHashes :: NESet ScriptHash
   , payoutScriptHashes :: NESet ScriptHash
@@ -42,8 +43,9 @@ marloweIndexer
      , Inject StoreSelector s
      , Inject ChainSeekClientSelector s
      , MonadFail m
+     , HasSpanContext r
      )
-  => Component m (MarloweIndexerDependencies m) Probes
+  => Component m (MarloweIndexerDependencies r s m) Probes
 marloweIndexer = proc MarloweIndexerDependencies{..} -> do
   (connected, pullEvent) <- chainSeekClient -< ChainSeekClientDependencies {..}
   store -< StoreDependencies {..}

@@ -86,10 +86,12 @@ import Language.Marlowe.Runtime.Transaction.Query
   (LoadMarloweContext, LoadWalletContext, lookupMarloweScriptUtxo, lookupPayoutScriptUtxo)
 import Language.Marlowe.Runtime.Transaction.Safety (checkContract, checkTransactions, noContinuations)
 import Language.Marlowe.Runtime.Transaction.Submit (SubmitJob(..), SubmitJobStatus(..))
-import Network.Protocol.Connection (SomeConnectionSource(..), SomeServerConnector, acceptSomeConnector)
-import Network.Protocol.Driver (runSomeConnector)
+import Network.Protocol.Connection
+  (SomeConnectionSourceTraced(..), SomeServerConnectorTraced, acceptSomeConnectorTraced)
+import Network.Protocol.Driver (runSomeConnectorTraced)
 import Network.Protocol.Job.Server
   (JobServer(..), ServerStAttach(..), ServerStAwait(..), ServerStCmd(..), ServerStInit(..), hoistAttach, hoistCmd)
+import Network.Protocol.Peer.Trace (HasSpanContext)
 import Observe.Event.Explicit (addField)
 import Ouroboros.Consensus.BlockchainTime (SystemStart)
 import UnliftIO (MonadUnliftIO, atomically)
@@ -111,8 +113,8 @@ data BuildTxField where
   Constraints :: MarloweVersion v -> TxConstraints v -> BuildTxField
   ResultingTxBody :: TxBody BabbageEra -> BuildTxField
 
-data TransactionServerDependencies m = TransactionServerDependencies
-  { connectionSource :: SomeConnectionSource (JobServer MarloweTxCommand) m
+data TransactionServerDependencies r s m = TransactionServerDependencies
+  { connectionSource :: SomeConnectionSourceTraced (JobServer MarloweTxCommand) r s m
   , mkSubmitJob :: Tx BabbageEra -> STM (SubmitJob m)
   , loadWalletContext :: LoadWalletContext m
   , loadMarloweContext :: LoadMarloweContext m
@@ -122,19 +124,19 @@ data TransactionServerDependencies m = TransactionServerDependencies
   }
 
 transactionServer
-  :: (MonadInjectEvent r TransactionServerSelector s m, MonadUnliftIO m)
-  => Component m (TransactionServerDependencies m) ()
+  :: (MonadInjectEvent r TransactionServerSelector s m, MonadUnliftIO m, HasSpanContext r)
+  => Component m (TransactionServerDependencies r s m) ()
 transactionServer = serverComponentWithSetup worker \TransactionServerDependencies{..} -> do
   submitJobsVar <- newTVar mempty
   let
     getSubmitJob txId = Map.lookup txId <$> readTVar submitJobsVar
     trackSubmitJob txId = modifyTVar submitJobsVar . Map.insert txId
   pure do
-    connector <- acceptSomeConnector connectionSource
+    connector <- acceptSomeConnectorTraced connectionSource
     pure WorkerDependencies {..}
 
-data WorkerDependencies m = WorkerDependencies
-  { connector :: SomeServerConnector (JobServer MarloweTxCommand) m
+data WorkerDependencies r s m = WorkerDependencies
+  { connector :: SomeServerConnectorTraced (JobServer MarloweTxCommand) r s m
   , getSubmitJob :: TxId -> STM (Maybe (SubmitJob m))
   , trackSubmitJob :: TxId -> SubmitJob m -> STM ()
   , mkSubmitJob :: Tx BabbageEra -> STM (SubmitJob m)
@@ -147,8 +149,8 @@ data WorkerDependencies m = WorkerDependencies
 
 worker
   :: forall r s m
-   . (MonadInjectEvent r TransactionServerSelector s m, MonadUnliftIO m)
-  => Component m (WorkerDependencies m) ()
+   . (MonadInjectEvent r TransactionServerSelector s m, MonadUnliftIO m, HasSpanContext r)
+  => Component m (WorkerDependencies r s m) ()
 worker = component_ \WorkerDependencies{..} -> do
   let
     server :: JobServer MarloweTxCommand m ()
@@ -215,7 +217,7 @@ worker = component_ \WorkerDependencies{..} -> do
           jobId@(JobIdSubmit txId) ->
             attachSubmit jobId $ getSubmitJob txId
       }
-  runSomeConnector connector server
+  runSomeConnectorTraced connector server
 
 attachSubmit
   :: MonadIO m

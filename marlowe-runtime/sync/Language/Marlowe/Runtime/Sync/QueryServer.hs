@@ -5,31 +5,33 @@ module Language.Marlowe.Runtime.Sync.QueryServer
   where
 
 import Control.Concurrent.Component
+import Control.Monad.Event.Class
 import Language.Marlowe.Protocol.Query.Server (MarloweQueryServer, marloweQueryServer)
 import Language.Marlowe.Runtime.Sync.Database (DatabaseQueries(..))
-import Network.Protocol.Connection (SomeConnectionSource, SomeServerConnector, acceptSomeConnector)
-import Network.Protocol.Driver (runSomeConnector)
+import Network.Protocol.Connection (SomeConnectionSourceTraced, SomeServerConnectorTraced, acceptSomeConnectorTraced)
+import Network.Protocol.Driver (runSomeConnectorTraced)
+import Network.Protocol.Peer.Trace (HasSpanContext)
 import UnliftIO (MonadUnliftIO)
 
-data QueryServerDependencies m = QueryServerDependencies
+data QueryServerDependencies r s m = QueryServerDependencies
   { databaseQueries :: DatabaseQueries m
-  , querySource :: SomeConnectionSource MarloweQueryServer m
+  , querySource :: SomeConnectionSourceTraced (MarloweQueryServer r) r s m
   }
 
-queryServer :: MonadUnliftIO m => Component m (QueryServerDependencies m) ()
+queryServer :: (MonadUnliftIO m, MonadEvent r s m, HasSpanContext r) => Component m (QueryServerDependencies r s m) ()
 queryServer = serverComponent (component_ worker) \QueryServerDependencies{..} -> do
-  connector <- acceptSomeConnector querySource
+  connector <- acceptSomeConnectorTraced querySource
   pure WorkerDependencies{..}
 
-data WorkerDependencies m = WorkerDependencies
+data WorkerDependencies r s m = WorkerDependencies
   { databaseQueries :: DatabaseQueries m
-  , connector :: SomeServerConnector MarloweQueryServer m
+  , connector :: SomeServerConnectorTraced (MarloweQueryServer r) r s m
   }
 
-worker :: MonadUnliftIO m => WorkerDependencies m -> m ()
+worker :: (MonadUnliftIO m, MonadEvent r s m, HasSpanContext r) => WorkerDependencies r s m -> m ()
 worker WorkerDependencies{..} = do
   let DatabaseQueries{..} = databaseQueries
-  runSomeConnector connector $ marloweQueryServer
+  runSomeConnectorTraced connector $ marloweQueryServer
     getHeaders
     getContractState
     getTransaction

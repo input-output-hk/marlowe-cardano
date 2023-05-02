@@ -20,8 +20,9 @@ import Language.Marlowe.Runtime.ChainSync.Api
 import Language.Marlowe.Runtime.Indexer.Database (DatabaseQueries(..))
 import Language.Marlowe.Runtime.Indexer.Types (MarloweBlock(..), MarloweUTxO(..), extractMarloweBlock)
 import Network.Protocol.ChainSeek.Client
-import Network.Protocol.Connection (SomeClientConnector)
-import Network.Protocol.Driver (runSomeConnector)
+import Network.Protocol.Connection (SomeClientConnectorTraced)
+import Network.Protocol.Driver (runSomeConnectorTraced)
+import Network.Protocol.Peer.Trace (HasSpanContext)
 import Network.Protocol.Query.Client (QueryClient, liftQuery)
 import Observe.Event.Explicit (addField)
 import UnliftIO (MonadUnliftIO, atomically, finally)
@@ -31,14 +32,14 @@ data ChainSeekClientSelector f where
   LoadMarloweUTxO :: ChainSeekClientSelector MarloweUTxO
 
 -- | Injectable dependencies for the chain sync client
-data ChainSeekClientDependencies m = ChainSeekClientDependencies
+data ChainSeekClientDependencies r s m = ChainSeekClientDependencies
   { databaseQueries :: DatabaseQueries m
   -- ^ Implementations of the database queries.
 
-  , chainSyncConnector :: SomeClientConnector RuntimeChainSeekClient m
+  , chainSyncConnector :: SomeClientConnectorTraced RuntimeChainSeekClient r s m
   -- ^ A connector that connects a client of the chain sync protocol.
 
-  , chainSyncQueryConnector :: SomeClientConnector (QueryClient ChainSyncQuery) m
+  , chainSyncQueryConnector :: SomeClientConnectorTraced (QueryClient ChainSyncQuery) r s m
   -- ^ A connector that connects a client of the chain sync query protocol.
 
   , pollingInterval :: NominalDiffTime
@@ -64,8 +65,8 @@ data ChainEvent
 -- can be read by repeatedly running the resulting STM action.
 chainSeekClient
   :: forall r s m
-   . (MonadUnliftIO m, MonadInjectEvent r ChainSeekClientSelector s m, MonadFail m)
-  => Component m (ChainSeekClientDependencies m) (STM Bool, STM ChainEvent)
+   . (MonadUnliftIO m, MonadInjectEvent r ChainSeekClientSelector s m, MonadFail m, HasSpanContext r)
+  => Component m (ChainSeekClientDependencies r s m) (STM Bool, STM ChainEvent)
 chainSeekClient = component \ChainSeekClientDependencies{..} -> do
   -- Initialize a TQueue for emitting ChainEvents.
   eventQueue <- newTQueue
@@ -79,7 +80,7 @@ chainSeekClient = component \ChainSeekClientDependencies{..} -> do
     -- In this component's thread, run the chain sync client that will pull the
     -- transactions for discovering and following Marlowe contracts
     ( flip finally (atomically $ writeTVar connectedVar False) do
-        runSomeConnector chainSyncConnector $ client
+        runSomeConnectorTraced chainSyncConnector $ client
           (atomically . writeTQueue eventQueue)
           databaseQueries
           pollingInterval
@@ -97,7 +98,7 @@ chainSeekClient = component \ChainSeekClientDependencies{..} -> do
     -> NominalDiffTime
     -> NESet ScriptHash
     -> NESet ScriptHash
-    -> SomeClientConnector (QueryClient ChainSyncQuery) m
+    -> SomeClientConnectorTraced (QueryClient ChainSyncQuery) r s m
     -> TVar Bool
     -> RuntimeChainSeekClient m ()
   client emit DatabaseQueries{..} pollingInterval marloweScriptHashes payoutScriptHashes chainSyncQueryConnector connectedVar =
@@ -105,7 +106,7 @@ chainSeekClient = component \ChainSeekClientDependencies{..} -> do
       let
         queryChainSync :: ChainSyncQuery Void err a -> m a
         queryChainSync query = do
-          result <- runSomeConnector chainSyncQueryConnector $ liftQuery query
+          result <- runSomeConnectorTraced chainSyncQueryConnector $ liftQuery query
           case result of
             Left _ -> fail "Failed to query chain sync"
             Right a -> pure a

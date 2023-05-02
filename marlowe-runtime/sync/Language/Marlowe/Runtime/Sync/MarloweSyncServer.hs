@@ -7,34 +7,40 @@ module Language.Marlowe.Runtime.Sync.MarloweSyncServer
   where
 
 import Control.Concurrent.Component
+import Control.Monad.Event.Class
 import Data.Type.Equality (testEquality, type (:~:)(Refl))
 import Language.Marlowe.Protocol.Sync.Server
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainPoint, WithGenesis(..))
 import Language.Marlowe.Runtime.Core.Api (ContractId, MarloweVersion, SomeMarloweVersion(..))
 import Language.Marlowe.Runtime.History.Api (SomeCreateStep(..))
 import Language.Marlowe.Runtime.Sync.Database (DatabaseQueries(..), Next(..))
-import Network.Protocol.Connection (SomeConnectionSource, SomeServerConnector, acceptSomeConnector)
-import Network.Protocol.Driver (runSomeConnector)
+import Network.Protocol.Connection (SomeConnectionSourceTraced, SomeServerConnectorTraced, acceptSomeConnectorTraced)
+import Network.Protocol.Driver (runSomeConnectorTraced)
+import Network.Protocol.Peer.Trace (HasSpanContext)
 import UnliftIO (MonadUnliftIO)
 
-data MarloweSyncServerDependencies m = MarloweSyncServerDependencies
+data MarloweSyncServerDependencies r s m = MarloweSyncServerDependencies
   { databaseQueries :: DatabaseQueries m
-  , syncSource :: SomeConnectionSource MarloweSyncServer m
+  , syncSource :: SomeConnectionSourceTraced MarloweSyncServer r s m
   }
 
-marloweSyncServer :: MonadUnliftIO m => Component m (MarloweSyncServerDependencies m) ()
+marloweSyncServer
+  :: (MonadUnliftIO m, MonadEvent r s m, HasSpanContext r)
+  => Component m (MarloweSyncServerDependencies r s m) ()
 marloweSyncServer = serverComponent (component_ worker) \MarloweSyncServerDependencies{..} -> do
-  connector <- acceptSomeConnector syncSource
+  connector <- acceptSomeConnectorTraced syncSource
   pure WorkerDependencies{..}
 
-data WorkerDependencies m = WorkerDependencies
+data WorkerDependencies r s m = WorkerDependencies
   { databaseQueries :: DatabaseQueries m
-  , connector :: SomeServerConnector MarloweSyncServer m
+  , connector :: SomeServerConnectorTraced MarloweSyncServer r s m
   }
 
-worker :: forall m. MonadUnliftIO m => WorkerDependencies m -> m ()
+worker
+  :: forall r s m. (MonadUnliftIO m, MonadEvent r s m, HasSpanContext r)
+  => WorkerDependencies r s m -> m ()
 worker WorkerDependencies{..} = do
-  runSomeConnector connector $ MarloweSyncServer $ pure serverInit
+  runSomeConnectorTraced connector $ MarloweSyncServer $ pure serverInit
   where
     DatabaseQueries{..} = databaseQueries
 

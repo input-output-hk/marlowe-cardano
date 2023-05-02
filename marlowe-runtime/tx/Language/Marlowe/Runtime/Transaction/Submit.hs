@@ -8,14 +8,16 @@ module Language.Marlowe.Runtime.Transaction.Submit
 import Cardano.Api (BabbageEra, ScriptDataSupportedInEra(..), Tx)
 import qualified Cardano.Api as C
 import Control.Concurrent.STM (STM, newTVar, readTVar, writeTVar)
+import Control.Monad.Event.Class (MonadEvent)
 import Data.Functor (($>))
 import Data.Void (absurd)
 import Language.Marlowe.Runtime.ChainSync.Api
 import Language.Marlowe.Runtime.Transaction.Api (SubmitError(..), SubmitStatus(..))
 import Network.Protocol.ChainSeek.Client
-import Network.Protocol.Connection (SomeClientConnector)
-import Network.Protocol.Driver (runSomeConnector)
+import Network.Protocol.Connection (SomeClientConnectorTraced)
+import Network.Protocol.Driver (runSomeConnectorTraced)
 import Network.Protocol.Job.Client (JobClient, liftCommand)
+import Network.Protocol.Peer.Trace (HasSpanContext)
 import UnliftIO (MonadUnliftIO, atomically, race)
 import UnliftIO.Concurrent (threadDelay)
 
@@ -24,9 +26,9 @@ data SubmitJobStatus
   | Succeeded BlockHeader
   | Failed SubmitError
 
-data SubmitJobDependencies m = SubmitJobDependencies
-  { chainSyncConnector :: SomeClientConnector RuntimeChainSeekClient m
-  , chainSyncJobConnector :: SomeClientConnector (JobClient ChainSyncCommand) m
+data SubmitJobDependencies r s m = SubmitJobDependencies
+  { chainSyncConnector :: SomeClientConnectorTraced RuntimeChainSeekClient r s m
+  , chainSyncJobConnector :: SomeClientConnectorTraced (JobClient ChainSyncCommand) r s m
   , submitConfirmationBlocks :: BlockNo
   }
 
@@ -36,8 +38,8 @@ data SubmitJob m = SubmitJob
   }
 
 mkSubmitJob
-  :: MonadUnliftIO m
-  => SubmitJobDependencies m
+  :: (MonadUnliftIO m, MonadEvent r s m, HasSpanContext r)
+  => SubmitJobDependencies r s m
   -> Tx BabbageEra
   -> STM (SubmitJob m)
 mkSubmitJob deps tx = do
@@ -45,15 +47,15 @@ mkSubmitJob deps tx = do
   pure $ SubmitJob (readTVar statusVar) $ doSubmit deps (atomically . writeTVar statusVar) ScriptDataInBabbageEra tx
 
 doSubmit
-  :: forall m era
-   . MonadUnliftIO m
-  => SubmitJobDependencies m
+  :: forall r s m era
+   . (MonadUnliftIO m, MonadEvent r s m, HasSpanContext r)
+  => SubmitJobDependencies r s m
   -> (SubmitJobStatus -> m ())
   -> ScriptDataSupportedInEra era
   -> Tx era
   -> m ()
 doSubmit SubmitJobDependencies{..} tellStatus era tx= do
-  result <- runSomeConnector chainSyncJobConnector $ liftCommand $ SubmitTx era tx
+  result <- runSomeConnectorTraced chainSyncJobConnector $ liftCommand $ SubmitTx era tx
   case result of
     Left msg -> tellStatus $ Failed $ SubmitFailed msg
     Right _ -> do
@@ -66,7 +68,7 @@ doSubmit SubmitJobDependencies{..} tellStatus era tx= do
     timeout = threadDelay $ 10 * 60 * 1_000_000 -- 10 minutes in microseconds
 
     waitForTx :: m BlockHeader
-    waitForTx = runSomeConnector chainSyncConnector client
+    waitForTx = runSomeConnectorTraced chainSyncConnector client
       where
         client = ChainSeekClient $ pure clientIdleAwaitConfirmation
 

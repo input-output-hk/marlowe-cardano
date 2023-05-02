@@ -11,15 +11,17 @@ module Language.Marlowe.Runtime.ChainSync.JobServer
 
 import Cardano.Api (CardanoEra(..), CardanoMode, ScriptDataSupportedInEra(..), Tx, TxValidationErrorInMode)
 import Control.Concurrent.Component
+import Control.Monad.Event.Class
 import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncCommand(..))
-import Network.Protocol.Connection (SomeConnectionSource, SomeServerConnector, acceptSomeConnector)
-import Network.Protocol.Driver (runSomeConnector)
+import Network.Protocol.Connection (SomeConnectionSourceTraced, SomeServerConnectorTraced, acceptSomeConnectorTraced)
+import Network.Protocol.Driver (runSomeConnectorTraced)
 import Network.Protocol.Job.Server
+import Network.Protocol.Peer.Trace (HasSpanContext)
 import Ouroboros.Network.Protocol.LocalTxSubmission.Client (SubmitResult(..))
 import UnliftIO (MonadUnliftIO)
 
-data ChainSyncJobServerDependencies m = ChainSyncJobServerDependencies
-  { jobSource :: SomeConnectionSource (JobServer ChainSyncCommand) m
+data ChainSyncJobServerDependencies r s m = ChainSyncJobServerDependencies
+  { jobSource :: SomeConnectionSourceTraced (JobServer ChainSyncCommand) r s m
   , submitTxToNodeLocal
       :: forall era
        . CardanoEra era
@@ -27,13 +29,15 @@ data ChainSyncJobServerDependencies m = ChainSyncJobServerDependencies
       -> m (SubmitResult (TxValidationErrorInMode CardanoMode))
   }
 
-chainSyncJobServer :: MonadUnliftIO m => Component m (ChainSyncJobServerDependencies m) ()
+chainSyncJobServer
+  :: (MonadUnliftIO m, MonadEvent r s m, HasSpanContext r)
+  => Component m (ChainSyncJobServerDependencies r s m) ()
 chainSyncJobServer = serverComponent worker \ChainSyncJobServerDependencies{..} -> do
-  connector <- acceptSomeConnector jobSource
+  connector <- acceptSomeConnectorTraced jobSource
   pure WorkerDependencies {..}
 
-data WorkerDependencies m = WorkerDependencies
-  { connector :: SomeServerConnector (JobServer ChainSyncCommand) m
+data WorkerDependencies r s m = WorkerDependencies
+  { connector :: SomeServerConnectorTraced (JobServer ChainSyncCommand) r s m
   , submitTxToNodeLocal
       :: forall era
        . CardanoEra era
@@ -41,7 +45,9 @@ data WorkerDependencies m = WorkerDependencies
       -> m (SubmitResult (TxValidationErrorInMode CardanoMode))
   }
 
-worker :: forall m. MonadUnliftIO m => Component m (WorkerDependencies m) ()
+worker
+  :: forall r s m. (MonadUnliftIO m, MonadEvent r s m, HasSpanContext r)
+  => Component m (WorkerDependencies r s m) ()
 worker = component_ \WorkerDependencies{..} -> do
   let
     server :: JobServer ChainSyncCommand m ()
@@ -55,4 +61,4 @@ worker = component_ \WorkerDependencies{..} -> do
         pure case result of
           SubmitFail err -> Left $ show err
           SubmitSuccess -> Right ()
-  runSomeConnector connector server
+  runSomeConnectorTraced connector server

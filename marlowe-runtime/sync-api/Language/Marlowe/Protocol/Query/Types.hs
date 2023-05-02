@@ -15,7 +15,6 @@ import Data.Function (on)
 import qualified Data.List.NonEmpty as NE
 import Data.Map (Map)
 import Data.Set (Set)
-import Data.Text (Text)
 import Data.Type.Equality (testEquality, type (:~:)(Refl))
 import GHC.Generics (Generic)
 import GHC.Show (showCommaSpace, showSpace)
@@ -36,7 +35,6 @@ import Network.Protocol.Codec (BinaryMessage(..))
 import Network.Protocol.Codec.Spec
   (MessageEq(..), MessageVariations(..), ShowProtocol(..), SomePeerHasAgency(..), Variations(..), varyAp)
 import Network.Protocol.Handshake.Types (HasSignature(..))
-import Network.Protocol.Trace (OTelMessage(..))
 import Network.TypedProtocol
 import Network.TypedProtocol.Codec (AnyMessageAndAgency(..))
 import Observe.Event.Network.Protocol (MessageToJSON(..))
@@ -224,23 +222,6 @@ instance Protocol MarloweQuery where
   exclusionLemma_ClientAndServerHaveAgency TokReq = \case
   exclusionLemma_NobodyAndClientHaveAgency TokDone = \case
   exclusionLemma_NobodyAndServerHaveAgency TokDone = \case
-
-instance OTelMessage MarloweQuery where
-  protocolName _ = "marlowe_query"
-  messageType = \case
-    MsgRequest req -> "request " <> requestType req
-    MsgRespond{} -> "respond"
-    MsgDone -> "done"
-
-requestType :: Request a -> Text
-requestType = \case
-  ReqBoth a b -> "(" <> requestType a <> "AND" <> requestType b <>")"
-  ReqContractHeaders{} -> "contract-headers"
-  ReqContractState{} -> "contract-state"
-  ReqTransaction{} -> "transaction"
-  ReqTransactions{} -> "transactions"
-  ReqWithdrawal{} -> "withdrawal"
-  ReqWithdrawals{} -> "withdrawals"
 
 data Range a = Range
   { rangeStart :: Maybe a

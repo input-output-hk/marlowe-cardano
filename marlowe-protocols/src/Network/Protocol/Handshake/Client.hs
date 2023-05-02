@@ -35,19 +35,19 @@ simpleHandshakeClient sig client = HandshakeClient
   }
 
 handshakeClientConnector
-  :: forall ps client m
+  :: forall ps client r m
    . (HasSignature ps, MonadFail m)
-  => Connector ps 'AsClient client m
-  -> Connector (Handshake ps) 'AsClient client m
+  => Connector ps 'AsClient client r m
+  -> Connector (Handshake ps) 'AsClient client r m
 handshakeClientConnector Connector{..} = Connector $ handshakeClientConnection <$> openConnection
 
 handshakeClientConnection
-  :: forall ps peer m
+  :: forall ps peer r m
    . (HasSignature ps, MonadFail m)
-  => Connection ps 'AsClient peer m
-  -> Connection (Handshake ps) 'AsClient peer m
+  => Connection ps 'AsClient peer r m
+  -> Connection (Handshake ps) 'AsClient peer r m
 handshakeClientConnection Connection{..} = Connection
-  { toPeer = handshakeClientPeer id . simpleHandshakeClient (signature $ Proxy @ps) . toPeer
+  { toPeer = handshakeClientPeerTraced id . simpleHandshakeClient (signature $ Proxy @ps) . toPeer
   , ..
   }
 

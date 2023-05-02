@@ -23,7 +23,6 @@ import qualified Data.Text as T
 import GHC.Show (showSpace)
 import Network.Protocol.Codec (BinaryMessage(..))
 import Network.Protocol.Codec.Spec (ArbitraryMessage(..), MessageEq(..), ShowProtocol(..))
-import Network.Protocol.Trace (OTelMessage(..))
 import Network.TypedProtocol
 import Network.TypedProtocol.Codec (AnyMessageAndAgency(..))
 import Observe.Event.Network.Protocol (MessageToJSON(..))
@@ -79,14 +78,6 @@ instance Protocol ps => Protocol (Handshake ps) where
     TokDone -> \case
     TokLiftNobody n_tok -> \case
       TokLiftServer s_tok -> exclusionLemma_NobodyAndServerHaveAgency n_tok s_tok
-
-instance OTelMessage ps => OTelMessage (Handshake ps) where
-  protocolName _ = protocolName $ Proxy @ps
-  messageType = \case
-    MsgHandshake{} -> "handshake"
-    MsgAccept -> "accept_handshake"
-    MsgReject -> "reject_handshake"
-    MsgLift msg -> messageType msg
 
 instance ArbitraryMessage ps => ArbitraryMessage (Handshake ps) where
   arbitraryMessage = oneof

@@ -53,8 +53,9 @@ import Language.Marlowe.Runtime.History.Api
 import Language.Marlowe.Runtime.Transaction.Api
 import Language.Marlowe.Runtime.Transaction.Constraints
 import Network.Protocol.ChainSeek.Client
-import Network.Protocol.Connection (SomeClientConnector)
-import Network.Protocol.Driver (runSomeConnector)
+import Network.Protocol.Connection (SomeClientConnectorTraced)
+import Network.Protocol.Driver (runSomeConnectorTraced)
+import Network.Protocol.Peer.Trace (HasSpanContext)
 import Network.Protocol.Query.Client (QueryClient, liftQuery)
 import Observe.Event.Explicit (addField)
 import UnliftIO (MonadUnliftIO)
@@ -113,14 +114,14 @@ loadWalletContext runQuery WalletAddresses{..} =
 -- | Loads the current MarloweContext for a contract by its ID.
 loadMarloweContext
   :: forall m r s
-   . (MonadUnliftIO m, MonadInjectEvent r LoadMarloweContextSelector s m)
+   . (MonadUnliftIO m, MonadInjectEvent r LoadMarloweContextSelector s m, HasSpanContext r)
   => (forall v. MarloweVersion v -> Set MarloweScripts)
   -> C.NetworkId
-  -> SomeClientConnector RuntimeChainSeekClient m
-  -> SomeClientConnector (QueryClient ChainSyncQuery) m
+  -> SomeClientConnectorTraced RuntimeChainSeekClient r s m
+  -> SomeClientConnectorTraced (QueryClient ChainSyncQuery) r s m
   -> LoadMarloweContext m
 loadMarloweContext getScripts networkId chainSyncConnector chainSyncQueryConnector desiredVersion contractId =
-  runSomeConnector chainSyncConnector client
+  runSomeConnectorTraced chainSyncConnector client
   where
     TxOutRef creationTxId _ = unContractId contractId
     client = ChainSeekClient $ pure clientFindContract
@@ -207,8 +208,8 @@ loadMarloweContext getScripts networkId chainSyncConnector chainSyncQueryConnect
           At blockHeader -> case scriptUtxo >>= \u -> (u,) <$> Map.lookup u txs of
             Nothing -> pure $ clientFollowContract version $ updateContext blockHeader Nothing txs contexts
             Just (u, scriptConsumer) -> do
-              systemStart <- fromJust . hush <$> runSomeConnector chainSyncQueryConnector (liftQuery GetSystemStart)
-              eraHistory <- fromJust . hush <$> runSomeConnector chainSyncQueryConnector (liftQuery GetEraHistory)
+              systemStart <- fromJust . hush <$> runSomeConnectorTraced chainSyncQueryConnector (liftQuery GetSystemStart)
+              eraHistory <- fromJust . hush <$> runSomeConnectorTraced chainSyncQueryConnector (liftQuery GetEraHistory)
               case extractMarloweTransaction version systemStart eraHistory contractId marloweAddress payoutScriptHash u blockHeader scriptConsumer of
                 Left e -> withEvent ExtractMarloweTransactionFailed \ev' -> do
                   addField ev' e

@@ -39,34 +39,34 @@ simpleHandshakeServer expected server = HandshakeServer
   }
 
 handshakeConnectionSource
-  :: forall ps server m
+  :: forall ps server r m
    . (HasSignature ps, MonadFail m)
-  => ConnectionSource ps server m
-  -> ConnectionSource (Handshake ps) server m
+  => ConnectionSource ps server r m
+  -> ConnectionSource (Handshake ps) server r m
 handshakeConnectionSource = ConnectionSource . fmap handshakeServerConnector . acceptConnector
 
 handshakeServerConnector
-  :: forall ps server m
+  :: forall ps server r m
    . (HasSignature ps, MonadFail m)
-  => Connector ps 'AsServer server m
-  -> Connector (Handshake ps) 'AsServer server m
+  => Connector ps 'AsServer server r m
+  -> Connector (Handshake ps) 'AsServer server r m
 handshakeServerConnector Connector{..} = Connector $ handshakeServerConnection <$> openConnection
 
 handshakeServerConnection
-  :: forall ps peer m
+  :: forall ps peer r m
    . (HasSignature ps, MonadFail m)
-  => Connection ps 'AsServer peer m
-  -> Connection (Handshake ps) 'AsServer peer m
+  => Connection ps 'AsServer peer r m
+  -> Connection (Handshake ps) 'AsServer peer r m
 handshakeServerConnection Connection{..} = Connection
-  { toPeer = handshakeServerPeer id . simpleHandshakeServer (signature $ Proxy @ps) . toPeer
+  { toPeer = handshakeServerPeerTraced id . simpleHandshakeServer (signature $ Proxy @ps) . toPeer
   , ..
   }
 
 handshakeClientServerPair
-  :: forall ps client server m
+  :: forall ps client server r m
    . (HasSignature ps, MonadFail m)
-  => ClientServerPair ps client server m
-  -> ClientServerPair (Handshake ps) client server m
+  => ClientServerPair ps client server r m
+  -> ClientServerPair (Handshake ps) client server r m
 handshakeClientServerPair ClientServerPair{..} = ClientServerPair
   { connectionSource = handshakeConnectionSource connectionSource
   , clientConnector = handshakeClientConnector clientConnector
