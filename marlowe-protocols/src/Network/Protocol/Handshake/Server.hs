@@ -15,7 +15,15 @@ import Data.Bifunctor (Bifunctor(bimap))
 import Data.Functor ((<&>))
 import Data.Proxy (Proxy(..))
 import Data.Text (Text)
-import Network.Protocol.Connection (ClientServerPair(..), Connection(..), ConnectionSource(..), Connector(..))
+import Network.Protocol.Connection
+  ( ClientServerPair(..)
+  , Connection(..)
+  , ConnectionSource(..)
+  , ConnectionSourceTraced(..)
+  , ConnectionTraced(..)
+  , Connector(..)
+  , ConnectorTraced(..)
+  )
 import Network.Protocol.Handshake.Client (handshakeClientConnector)
 import Network.Protocol.Handshake.Types
 import Network.Protocol.Peer.Trace
@@ -39,34 +47,58 @@ simpleHandshakeServer expected server = HandshakeServer
   }
 
 handshakeConnectionSource
-  :: forall ps server r m
+  :: forall ps server m
    . (HasSignature ps, MonadFail m)
-  => ConnectionSource ps server r m
-  -> ConnectionSource (Handshake ps) server r m
+  => ConnectionSource ps server m
+  -> ConnectionSource (Handshake ps) server m
 handshakeConnectionSource = ConnectionSource . fmap handshakeServerConnector . acceptConnector
 
 handshakeServerConnector
-  :: forall ps server r m
+  :: forall ps server m
    . (HasSignature ps, MonadFail m)
-  => Connector ps 'AsServer server r m
-  -> Connector (Handshake ps) 'AsServer server r m
+  => Connector ps 'AsServer server m
+  -> Connector (Handshake ps) 'AsServer server m
 handshakeServerConnector Connector{..} = Connector $ handshakeServerConnection <$> openConnection
 
 handshakeServerConnection
-  :: forall ps peer r m
+  :: forall ps peer m
    . (HasSignature ps, MonadFail m)
-  => Connection ps 'AsServer peer r m
-  -> Connection (Handshake ps) 'AsServer peer r m
+  => Connection ps 'AsServer peer m
+  -> Connection (Handshake ps) 'AsServer peer m
 handshakeServerConnection Connection{..} = Connection
+  { toPeer = handshakeServerPeer id . simpleHandshakeServer (signature $ Proxy @ps) . toPeer
+  , ..
+  }
+
+handshakeConnectionSourceTraced
+  :: forall ps server r s m
+   . (HasSignature ps, MonadFail m)
+  => ConnectionSourceTraced ps server r s m
+  -> ConnectionSourceTraced (Handshake ps) server r s m
+handshakeConnectionSourceTraced = ConnectionSourceTraced . fmap handshakeServerConnectorTraced . acceptConnectorTraced
+
+handshakeServerConnectorTraced
+  :: forall ps server r s m
+   . (HasSignature ps, MonadFail m)
+  => ConnectorTraced ps 'AsServer server r s m
+  -> ConnectorTraced (Handshake ps) 'AsServer server r s m
+handshakeServerConnectorTraced ConnectorTraced{..} = ConnectorTraced $ handshakeServerConnectionTraced <$> openConnectionTraced
+
+handshakeServerConnectionTraced
+  :: forall ps peer r s m
+   . (HasSignature ps, MonadFail m)
+  => ConnectionTraced ps 'AsServer peer r s m
+  -> ConnectionTraced (Handshake ps) 'AsServer peer r s m
+handshakeServerConnectionTraced ConnectionTraced{..} = ConnectionTraced
   { toPeer = handshakeServerPeerTraced id . simpleHandshakeServer (signature $ Proxy @ps) . toPeer
   , ..
   }
 
 handshakeClientServerPair
-  :: forall ps client server r m
+  :: forall ps client server m
    . (HasSignature ps, MonadFail m)
-  => ClientServerPair ps client server r m
-  -> ClientServerPair (Handshake ps) client server r m
+  => ClientServerPair ps client server m
+  -> ClientServerPair (Handshake ps) client server m
 handshakeClientServerPair ClientServerPair{..} = ClientServerPair
   { connectionSource = handshakeConnectionSource connectionSource
   , clientConnector = handshakeClientConnector clientConnector

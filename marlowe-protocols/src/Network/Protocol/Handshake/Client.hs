@@ -14,7 +14,7 @@ module Network.Protocol.Handshake.Client
 import Data.Functor ((<&>))
 import Data.Proxy (Proxy(..))
 import Data.Text (Text)
-import Network.Protocol.Connection (Connection(..), Connector(..))
+import Network.Protocol.Connection (Connection(..), ConnectionTraced(..), Connector(..), ConnectorTraced(..))
 import Network.Protocol.Handshake.Types
 import Network.Protocol.Peer.Trace
 import Network.TypedProtocol
@@ -35,18 +35,35 @@ simpleHandshakeClient sig client = HandshakeClient
   }
 
 handshakeClientConnector
-  :: forall ps client r m
+  :: forall ps client m
    . (HasSignature ps, MonadFail m)
-  => Connector ps 'AsClient client r m
-  -> Connector (Handshake ps) 'AsClient client r m
+  => Connector ps 'AsClient client m
+  -> Connector (Handshake ps) 'AsClient client m
 handshakeClientConnector Connector{..} = Connector $ handshakeClientConnection <$> openConnection
 
 handshakeClientConnection
-  :: forall ps peer r m
+  :: forall ps peer m
    . (HasSignature ps, MonadFail m)
-  => Connection ps 'AsClient peer r m
-  -> Connection (Handshake ps) 'AsClient peer r m
+  => Connection ps 'AsClient peer m
+  -> Connection (Handshake ps) 'AsClient peer m
 handshakeClientConnection Connection{..} = Connection
+  { toPeer = handshakeClientPeer id . simpleHandshakeClient (signature $ Proxy @ps) . toPeer
+  , ..
+  }
+
+handshakeClientConnectorTraced
+  :: forall ps client r s m
+   . (HasSignature ps, MonadFail m)
+  => ConnectorTraced ps 'AsClient client r s m
+  -> ConnectorTraced (Handshake ps) 'AsClient client r s m
+handshakeClientConnectorTraced ConnectorTraced{..} = ConnectorTraced $ handshakeClientConnectionTraced <$> openConnectionTraced
+
+handshakeClientConnectionTraced
+  :: forall ps peer r s m
+   . (HasSignature ps, MonadFail m)
+  => ConnectionTraced ps 'AsClient peer r s m
+  -> ConnectionTraced (Handshake ps) 'AsClient peer r s m
+handshakeClientConnectionTraced ConnectionTraced{..} = ConnectionTraced
   { toPeer = handshakeClientPeerTraced id . simpleHandshakeClient (signature $ Proxy @ps) . toPeer
   , ..
   }

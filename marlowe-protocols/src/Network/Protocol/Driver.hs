@@ -28,7 +28,17 @@ import qualified Data.Text as T
 import Network.Channel (Channel(..), socketAsChannel)
 import Network.Protocol.Codec (BinaryMessage, DeserializeError, binaryCodec)
 import Network.Protocol.Connection
-  (Connection(..), ConnectionSource(..), Connector(..), SomeConnector(..), SomeConnectorTraced(..), ToPeer)
+  ( Connection(..)
+  , ConnectionSource(..)
+  , ConnectionTraced(..)
+  , Connector(..)
+  , ConnectorTraced(..)
+  , SomeConnector(..)
+  , SomeConnectorTraced(..)
+  , ToPeer
+  , ToPeerTraced
+  )
+import Network.Protocol.Handshake.Types (Handshake)
 import Network.Protocol.Peer.Trace
 import Network.Run.TCP (runTCPServer)
 import Network.Socket
@@ -60,7 +70,7 @@ import Network.TypedProtocol (Message, PeerHasAgency, PeerRole(..), SomeMessage(
 import Network.TypedProtocol.Codec (Codec(..), DecodeStep(..))
 import Network.TypedProtocol.Driver (Driver(..))
 import Numeric (showHex)
-import Observe.Event (Event(finalize, reference), InjectSelector, NewEventArgs(..), addField)
+import Observe.Event (Event(finalize, reference), InjectSelector, NewEventArgs(..), addField, injectSelector)
 import Observe.Event.Backend (simpleNewEventArgs)
 import Observe.Event.Render.OpenTelemetry
 import OpenTelemetry.Trace.Core (Attribute, SpanKind(..), toAttribute)
@@ -108,15 +118,15 @@ hoistDriver f Driver{..} = Driver
   , ..
   }
 
-data TcpServerDependencies ps server r m = forall (st :: ps). TcpServerDependencies
+data TcpServerDependencies ps server m = forall (st :: ps). TcpServerDependencies
   { host :: HostName
   , port :: PortNumber
-  , toPeer :: ToPeer server ps 'AsServer st r m
+  , toPeer :: ToPeer server ps 'AsServer st m
   }
 
 tcpServer
   :: (MonadIO m', MonadIO m)
-  => Component m (TcpServerDependencies ps server () m') (ConnectionSource ps server () m')
+  => Component m (TcpServerDependencies ps server m') (ConnectionSource ps server m')
 tcpServer = component \TcpServerDependencies{..} -> do
   socketQueue <- newTQueue
   pure
@@ -131,7 +141,6 @@ tcpServer = component \TcpServerDependencies{..} -> do
         pure $ Connector $ pure Connection
           { closeConnection = \_ -> atomically closeConnection
           , channel = socketAsChannel socket
-          , openRef = ()
           , ..
           }
     )
@@ -140,8 +149,8 @@ tcpClient
   :: MonadIO m
   => HostName
   -> PortNumber
-  -> ToPeer client ps 'AsClient st () m
-  -> Connector ps 'AsClient client () m
+  -> ToPeer client ps 'AsClient st m
+  -> Connector ps 'AsClient client m
 tcpClient host port toPeer = Connector $ liftIO $ do
   addr <- head <$> getAddrInfo
     (Just defaultHints { addrSocketType = Stream })
@@ -152,20 +161,57 @@ tcpClient host port toPeer = Connector $ liftIO $ do
   pure Connection
     { closeConnection = \_ -> liftIO $ close socket
     , channel = socketAsChannel socket
-    , openRef = ()
     , ..
     }
 
+type InjectProtocolSelector s = forall ps. InjectSelector (TypedProtocolsSelector ps) (s ps)
+
+data TcpClientSelector ps f where
+  Connect :: TcpClientSelector ps ConnectField
+  ClientPeer
+    :: HostName
+    -> PortNumber
+    -> AddrInfo
+    -> TypedProtocolsSelector ps f
+    -> TcpClientSelector ps f
+
+data ConnectField
+  = ConnectHost HostName
+  | ConnectPort PortNumber
+
+tcpClientTraced
+  :: (MonadIO m, MonadEvent r s m)
+  => InjectSelector (TcpClientSelector (Handshake ps)) s
+  -> HostName
+  -> PortNumber
+  -> ToPeerTraced client ps 'AsClient st r m
+  -> ConnectorTraced ps 'AsClient client r TcpClientSelector m
+tcpClientTraced inj host port toPeer = ConnectorTraced
+  $ withInjectEventFields inj Connect [ConnectHost host, ConnectPort port] \ev -> do
+    addr <- liftIO $ head <$> getAddrInfo
+      (Just defaultHints { addrSocketType = Stream })
+      (Just host)
+      (Just $ show port)
+    socket <- liftIO $ openSocket addr
+    liftIO $ connect socket $ addrAddress addr
+    pure ConnectionTraced
+      { closeConnection = \_ -> liftIO $ close socket
+      , channel = socketAsChannel socket
+      , openRef = reference ev
+      , injectProtocolSelector = injectSelector $ ClientPeer host port addr
+      , ..
+      }
+
 runConnectionTraced
   :: (MonadUnliftIO m, BinaryMessage ps, MonadEvent r s m, HasSpanContext r)
-  => InjectSelector (TypedProtocolsSelector ps) s
-  -> Connection ps pr peer r m
+  => InjectSelector (s' ps) s
+  -> ConnectionTraced ps pr peer r s' m
   -> peer m a
   -> m a
-runConnectionTraced inj Connection{..} peer = do
+runConnectionTraced inj ConnectionTraced{..} peer = do
   let driver = mkDriverTraced channel
   mask \restore -> do
-    result <- try $ restore $ runPeerWithDriverTraced inj openRef driver (toPeer peer) (startDStateTraced driver)
+    result <- try $ restore $ runPeerWithDriverTraced (composeInjectSelector inj injectProtocolSelector) openRef driver (toPeer peer) (startDStateTraced driver)
     case result of
       Left ex -> do
         closeConnection $ Just ex
@@ -174,11 +220,11 @@ runConnectionTraced inj Connection{..} peer = do
         closeConnection Nothing
         pure a
 
-runConnection :: (MonadUnliftIO m, BinaryMessage ps) => Connection ps pr peer r m -> peer m a -> m a
+runConnection :: (MonadUnliftIO m, BinaryMessage ps) => Connection ps pr peer m -> peer m a -> m a
 runConnection Connection{..} peer = do
   let driver = mkDriver channel
   mask \restore -> do
-    result <- try $ restore $ runPeerWithDriver driver (peerTracedToPeer $ toPeer peer) (startDState driver)
+    result <- try $ restore $ runPeerWithDriver driver (toPeer peer) (startDState driver)
     case result of
       Left ex -> do
         closeConnection $ Just ex
@@ -187,16 +233,16 @@ runConnection Connection{..} peer = do
         closeConnection Nothing
         pure a
 
-runConnector :: (MonadUnliftIO m, BinaryMessage ps) => Connector ps pr peer r m -> peer m a -> m a
+runConnector :: (MonadUnliftIO m, BinaryMessage ps) => Connector ps pr peer m -> peer m a -> m a
 runConnector Connector{..} peer = flip runConnection peer =<< openConnection
 
 runConnectorTraced
   :: (MonadUnliftIO m, BinaryMessage ps, MonadEvent r s m, HasSpanContext r)
-  => InjectSelector (TypedProtocolsSelector ps) s
-  -> Connector ps pr peer r m
+  => InjectSelector (s' ps) s
+  -> ConnectorTraced ps pr peer r s' m
   -> peer m a
   -> m a
-runConnectorTraced inj Connector{..} peer = flip (runConnectionTraced inj) peer =<< openConnection
+runConnectorTraced inj ConnectorTraced{..} peer = flip (runConnectionTraced inj) peer =<< openConnectionTraced
 
 runSomeConnector :: MonadUnliftIO m => SomeConnector pr peer r m -> peer m a -> m a
 runSomeConnector (SomeConnector connector) = runConnector connector
