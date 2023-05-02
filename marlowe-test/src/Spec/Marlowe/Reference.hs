@@ -28,7 +28,6 @@ module Spec.Marlowe.Reference
     -- * Testing
   , arbitraryReferenceTransaction
   , readReferenceContracts
-  , readReferenceContracts'
   , readReferencePaths
   , referenceFolder
   ) where
@@ -43,6 +42,7 @@ import GHC.Generics (Generic)
 import Language.Marlowe.Core.V1.Semantics (TransactionInput, TransactionOutput(..), computeTransaction)
 import Language.Marlowe.Core.V1.Semantics.Types (Contract, Party(Role), State(..), Token(..))
 import Language.Marlowe.FindInputs (getAllInputs)
+import Paths_marlowe_test (getDataDir)
 import Plutus.V2.Ledger.Api (POSIXTime)
 import Spec.Marlowe.Semantics.Golden (GoldenTransaction)
 import System.Directory (listDirectory)
@@ -57,7 +57,7 @@ referenceFolder = "reference" </> "data"
 
 
 readReferenceContracts :: IO [Contract]
-readReferenceContracts = readReferenceContracts' referenceFolder
+readReferenceContracts = readReferenceContracts' . (</> referenceFolder) =<< getDataDir
 
 
 readReferenceContracts' :: FilePath -> IO [Contract]

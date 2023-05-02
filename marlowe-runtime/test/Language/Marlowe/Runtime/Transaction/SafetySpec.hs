@@ -9,7 +9,7 @@ module Language.Marlowe.Runtime.Transaction.SafetySpec
 import Data.List (isInfixOf, nub)
 import Data.Maybe (fromJust)
 import Data.Time.Clock.POSIX (posixSecondsToUTCTime)
-import Language.Marlowe.Analysis.Safety.Types
+import Language.Marlowe.Analysis.Safety.Types (SafetyError(..))
 import Language.Marlowe.Runtime.Core.Api (MarloweVersion(MarloweV1))
 import Language.Marlowe.Runtime.Core.ScriptRegistry (MarloweScripts(..), getCurrentScripts)
 import Language.Marlowe.Runtime.Transaction.Api (Mint(..), RoleTokensConfig(..))
@@ -17,20 +17,42 @@ import Language.Marlowe.Runtime.Transaction.BuildConstraintsSpec ()
 import Language.Marlowe.Runtime.Transaction.Constraints (MarloweContext(..), solveConstraints)
 import Language.Marlowe.Runtime.Transaction.ConstraintsSpec (protocolTestnet)
 import Language.Marlowe.Runtime.Transaction.Safety
-import Spec.Marlowe.Reference
+  (checkContract, checkTransactions, makeSystemHistory, minAdaUpperBound, noContinuations)
+import Spec.Marlowe.Reference (readReferenceContracts)
 import Spec.Marlowe.Semantics.Arbitrary ()
-import Test.Hspec
-import Test.Hspec.QuickCheck
+import Test.Hspec (Spec, describe, runIO)
+import Test.Hspec.QuickCheck (prop)
 import Test.QuickCheck (counterexample, discard, elements, generate, ioProperty, sublistOf, suchThat, (===))
 
 import qualified Cardano.Api as Cardano
-import qualified Cardano.Api.Shelley as Shelley
-import qualified Data.Map.Strict as M
+  ( AddressInEra(..)
+  , AddressTypeInEra(..)
+  , CardanoEra(..)
+  , Lovelace(..)
+  , MultiAssetSupportedInEra(..)
+  , NetworkId(..)
+  , NetworkMagic(..)
+  , ScriptDataSupportedInEra(..)
+  , ShelleyBasedEra(..)
+  , StakeAddressReference(..)
+  , TxOut(..)
+  , TxOutDatum(..)
+  , TxOutValue(..)
+  , anyAddressInShelleyBasedEra
+  , calculateMinimumUTxO
+  , makeShelleyAddress
+  , selectLovelace
+  )
+import qualified Cardano.Api.Shelley as Shelley (ReferenceScript(..), StakeAddressReference(..))
+import qualified Data.Map.Strict as M (keys, lookup)
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
+  (Contract(..), Party(..), Payee(..), Token(..), Value(..))
 import qualified Language.Marlowe.Runtime.Cardano.Api as Chain
-import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain hiding (toCardanoAddressAny)
-import qualified Plutus.V2.Ledger.Api as Plutus
-import qualified PlutusTx.Builtins as Plutus
+  (assetsToCardanoValue, fromCardanoAddressInEra, toCardanoAddressAny, toCardanoDatumHash, toCardanoPaymentCredential)
+import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
+  (AssetId(..), Assets(..), Credential(..), PolicyId(..), TokenName(..), Tokens(..))
+import qualified Plutus.V2.Ledger.Api as Plutus (CurrencySymbol(..), TokenName(..))
+import qualified PlutusTx.Builtins as Plutus (lengthOfByteString, toBuiltin)
 
 
 spec :: Spec
@@ -177,7 +199,7 @@ spec =
 
     describe "checkTransactions"
       $ do
-        referenceContracts <- runIO $ readReferenceContracts' "../marlowe-test/reference/data"
+        referenceContracts <- runIO readReferenceContracts
         let
           zeroTime = posixSecondsToUTCTime 0
           (systemStart, eraHistory) = makeSystemHistory zeroTime
