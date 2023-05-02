@@ -13,7 +13,6 @@ import Cardano.Api
 import Cardano.Api.SerialiseTextEnvelope (TextEnvelopeDescr(..))
 import Control.Concurrent (threadDelay)
 import Control.Monad.IO.Class (MonadIO(liftIO))
-import qualified Control.Monad.Reader as Reader
 import qualified Data.Set as Set
 import qualified Data.Text as T
 import qualified Language.Marlowe as V1
@@ -36,8 +35,6 @@ import Language.Marlowe.Runtime.Web.Client
 import Language.Marlowe.Runtime.Web.Server.DTO (ToDTO(toDTO))
 import qualified Plutus.V2.Ledger.Api as PV2
 import Servant.Client (ClientM)
-import Test.Hspec (ActionWith)
-import Test.Integration.Marlowe.Local (MarloweRuntime, withLocalMarloweRuntime)
 
 createCloseContract :: Wallet -> ClientM Web.TxOutRef
 createCloseContract Wallet{..} = do
@@ -209,18 +206,3 @@ waitUntilConfirmed getStatus getResource = do
     _ -> do
       liftIO $ threadDelay 1000
       waitUntilConfirmed getStatus getResource
-
-setup :: ActionWith MarloweWebTestData -> IO ()
-setup runSpec = withLocalMarloweRuntime $ runIntegrationTest do
-  runtime <- Reader.ask
-  wallet1 <- getGenesisWallet 0
-  wallet2 <- getGenesisWallet 1
-  wallet3 <- getGenesisWallet 2
-  liftIO $ runSpec MarloweWebTestData{..}
-
-data MarloweWebTestData = MarloweWebTestData
-  { runtime :: MarloweRuntime
-  , wallet1 :: Wallet
-  , wallet2 :: Wallet
-  , wallet3 :: Wallet
-  }

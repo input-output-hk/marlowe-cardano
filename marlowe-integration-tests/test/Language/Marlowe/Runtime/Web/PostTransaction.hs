@@ -14,20 +14,16 @@ import Language.Marlowe.Runtime.Transaction.Api (WalletAddresses(..))
 import Language.Marlowe.Runtime.Web (RoleTokenConfig(RoleTokenSimple))
 import qualified Language.Marlowe.Runtime.Web as Web
 import Language.Marlowe.Runtime.Web.Client (postContract, postTransaction)
-import Language.Marlowe.Runtime.Web.Common (MarloweWebTestData(..), setup, submitContract)
+import Language.Marlowe.Runtime.Web.Common (submitContract)
 import Language.Marlowe.Runtime.Web.Server.DTO (ToDTO(toDTO))
-import Test.Hspec (Spec, SpecWith, aroundAll, describe, it)
+import Test.Hspec (Spec, describe, it)
+import Test.Integration.Marlowe.Local (withLocalMarloweRuntime)
 
 spec :: Spec
-spec = describe "POST /contracts/{contractId}/transactions" $ aroundAll setup do
-  postContractTransactionValidSpec
-
-postContractTransactionValidSpec :: SpecWith MarloweWebTestData
-postContractTransactionValidSpec = describe "Valid POST /contracts" do
-  it "returns the transaction header" \MarloweWebTestData{..} -> flip runIntegrationTest runtime do
-    let
-      partyAWallet = wallet1
-      partyBWallet = wallet2
+spec = describe "POST /contracts/{contractId}/transactions" do
+  it "returns the transaction header" $ withLocalMarloweRuntime $ runIntegrationTest do
+    partyAWallet <- getGenesisWallet 0
+    partyBWallet <- getGenesisWallet 1
 
     result <- runWebClient do
       let partyAWalletAddresses = addresses partyAWallet

@@ -2,21 +2,23 @@ module Language.Marlowe.Runtime.Web.GetTransactions
   where
 
 import Control.Monad.IO.Class (MonadIO(liftIO))
+import qualified Control.Monad.Reader as Reader
 
 import Control.Exception (throw)
 import Data.Proxy (Proxy(Proxy))
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
-import Language.Marlowe.Runtime.Integration.Common
+import Language.Marlowe.Runtime.Integration.Common (Wallet, getGenesisWallet, runIntegrationTest, runWebClient)
 import qualified Language.Marlowe.Runtime.Web as Web
 import Language.Marlowe.Runtime.Web.Client (Page(..), getTransactions)
-import Language.Marlowe.Runtime.Web.Common (MarloweWebTestData(..), applyCloseTransaction, createCloseContract, setup)
+import Language.Marlowe.Runtime.Web.Common (applyCloseTransaction, createCloseContract)
 import Language.Marlowe.Runtime.Web.Server.DTO (ToDTO(toDTO))
 import Language.Marlowe.Runtime.Web.StandardContract (createFullyExecutedStandardContract)
 import Network.HTTP.Types (Status(..))
 import Servant.Client (ClientError(FailureResponse))
 import Servant.Client.Streaming (ResponseF(Response, responseStatusCode))
 import Servant.Pagination (Range(..), RangeOrder(..))
-import Test.Hspec (Spec, SpecWith, aroundAll, describe, it, shouldBe)
+import Test.Hspec (ActionWith, Spec, SpecWith, aroundAll, describe, it, shouldBe)
+import Test.Integration.Marlowe.Local (MarloweRuntime, withLocalMarloweRuntime)
 
 spec :: Spec
 spec = describe "GET /contracts/{contractId}/transactions" $ aroundAll setup do
@@ -47,7 +49,6 @@ getTransactionsValidNextPageSpec = describe "Valid Pagination of GET /contracts/
 firstPageAscValidSpec :: SpecWith MarloweWebTestData
 firstPageAscValidSpec = it "returns the first page of transactions in ascending order" \MarloweWebTestData{..} -> flip runIntegrationTest runtime do
   either throw pure =<< runWebClient do
-    (sampleContractId, expectedTransactionIds) <- createFullyExecutedStandardContract wallet1 wallet2
     case expectedTransactionIds of
       (txId1:txId2:_) -> do
         let
@@ -59,7 +60,7 @@ firstPageAscValidSpec = it "returns the first page of transactions in ascending 
             , rangeOrder = RangeAsc
             , rangeField = Proxy
             }
-        Page {..} <- getTransactions sampleContractId (Just testRange)
+        Page {..} <- getTransactions expectedContractId (Just testRange)
 
         liftIO $ fmap (\Web.TxHeader{..} -> transactionId) items `shouldBe` [txId1, txId2]
 
@@ -69,7 +70,6 @@ firstPageAscValidSpec = it "returns the first page of transactions in ascending 
 secondPageAscValidSpec :: SpecWith MarloweWebTestData
 secondPageAscValidSpec = it "returns the second page of transactions in ascending order" \MarloweWebTestData{..} -> flip runIntegrationTest runtime do
   either throw pure =<< runWebClient do
-    (sampleContractId, expectedTransactionIds) <- createFullyExecutedStandardContract wallet1 wallet2
     case reverse expectedTransactionIds of
       (txId4:txId3:_) -> do
         let
@@ -81,7 +81,7 @@ secondPageAscValidSpec = it "returns the second page of transactions in ascendin
             , rangeOrder = RangeAsc
             , rangeField = Proxy
             }
-        Page {..} <- getTransactions sampleContractId (Just testRange)
+        Page {..} <- getTransactions expectedContractId (Just testRange)
 
         liftIO $ fmap (\Web.TxHeader{..} -> transactionId) items `shouldBe` [txId3, txId4]
 
@@ -91,7 +91,6 @@ secondPageAscValidSpec = it "returns the second page of transactions in ascendin
 firstPageDescValidSpec :: SpecWith MarloweWebTestData
 firstPageDescValidSpec = it "returns the first page of transactions in descending order" \MarloweWebTestData{..} -> flip runIntegrationTest runtime do
   either throw pure =<< runWebClient do
-    (sampleContractId, expectedTransactionIds) <- createFullyExecutedStandardContract wallet1 wallet2
     case reverse expectedTransactionIds of
       (txId4:txId3:_) -> do
         let
@@ -103,7 +102,7 @@ firstPageDescValidSpec = it "returns the first page of transactions in descendin
             , rangeOrder = RangeDesc
             , rangeField = Proxy
             }
-        Page {..} <- getTransactions sampleContractId (Just testRange)
+        Page {..} <- getTransactions expectedContractId (Just testRange)
 
         liftIO $ fmap (\Web.TxHeader{..} -> transactionId) items `shouldBe` [txId4, txId3]
 
@@ -114,7 +113,6 @@ firstPageDescValidSpec = it "returns the first page of transactions in descendin
 secondPageDescValidSpec :: SpecWith MarloweWebTestData
 secondPageDescValidSpec = it "returns the second page of transactions in descending order" \MarloweWebTestData{..} -> flip runIntegrationTest runtime do
   either throw pure =<< runWebClient do
-    (sampleContractId, expectedTransactionIds) <- createFullyExecutedStandardContract wallet1 wallet2
     case expectedTransactionIds of
       (txId1:txId2:_) -> do
         let
@@ -126,7 +124,7 @@ secondPageDescValidSpec = it "returns the second page of transactions in descend
             , rangeOrder = RangeDesc
             , rangeField = Proxy
             }
-        Page {..} <- getTransactions sampleContractId (Just testRange)
+        Page {..} <- getTransactions expectedContractId (Just testRange)
 
         liftIO $ fmap (\Web.TxHeader{..} -> transactionId) items `shouldBe` [txId2, txId1]
 
@@ -153,8 +151,6 @@ singleTransactionValidSpec  = it "returns a list with single transaction when th
 multipleContractsSingleTransactionsValidSpec :: SpecWith MarloweWebTestData
 multipleContractsSingleTransactionsValidSpec  =  it "returns a list with single transaction when there are multiple contracts on chain" \MarloweWebTestData{..} -> flip runIntegrationTest runtime do
   either throw pure =<< runWebClient do
-    expectedContractId1 <- createCloseContract wallet1
-    _ <- applyCloseTransaction wallet1 expectedContractId1
     expectedContractId2 <- createCloseContract wallet2
     expectedTxId <- applyCloseTransaction wallet2 expectedContractId2
     Page {..} <- getTransactions expectedContractId2 Nothing
@@ -163,21 +159,18 @@ multipleContractsSingleTransactionsValidSpec  =  it "returns a list with single 
 singleContractMultipleTransactionsValidSpec :: SpecWith MarloweWebTestData
 singleContractMultipleTransactionsValidSpec  =  it "returns a list with multiple transaction when a single contract is on chain" \MarloweWebTestData{..} -> flip runIntegrationTest runtime do
   either throw pure =<< runWebClient do
-    (createContractId, expectedTransactionIds) <- createFullyExecutedStandardContract wallet1 wallet2
-
-    Page {..} <- getTransactions createContractId Nothing
+    Page {..} <- getTransactions expectedContractId Nothing
 
     liftIO $ fmap (\Web.TxHeader{..} -> transactionId) items `shouldBe` reverse expectedTransactionIds
 
 multipleContractsMultipleTransactionsValidSpec :: SpecWith MarloweWebTestData
 multipleContractsMultipleTransactionsValidSpec  =  it "returns a list with multiple transaction when multiple contracts are on chain" \MarloweWebTestData{..} -> flip runIntegrationTest runtime do
   either throw pure =<< runWebClient do
-    _ <- createFullyExecutedStandardContract wallet1 wallet2
-    (createContractId, expectedTransactionIds) <- createFullyExecutedStandardContract wallet1 wallet2
+    (createContractId, testTransactionIds) <- createFullyExecutedStandardContract wallet1 wallet2
 
     Page {..} <- getTransactions createContractId Nothing
 
-    liftIO $ fmap (\Web.TxHeader{..} -> transactionId) items `shouldBe` reverse expectedTransactionIds
+    liftIO $ fmap (\Web.TxHeader{..} -> transactionId) items `shouldBe` reverse testTransactionIds
 
 invalidContractIdSpec :: SpecWith MarloweWebTestData
 invalidContractIdSpec = it "responds with a 404 when the contractId cannot be found" \MarloweWebTestData{..} -> flip runIntegrationTest runtime do
@@ -203,7 +196,6 @@ invalidContractIdSpec = it "responds with a 404 when the contractId cannot be fo
 invalidTxIdSpec :: SpecWith MarloweWebTestData
 invalidTxIdSpec = it "responds with a 416 when the transactionId cannot be found" \MarloweWebTestData{..} -> flip runIntegrationTest runtime do
   result <- runWebClient do
-    (validContractId, _) <- createFullyExecutedStandardContract wallet1 wallet2
     let
       invalidRange =  Range
         {
@@ -213,9 +205,27 @@ invalidTxIdSpec = it "responds with a 416 when the transactionId cannot be found
         , rangeOrder = RangeAsc
         , rangeField = Proxy
         }
-    getTransactions validContractId $ Just invalidRange
+    getTransactions expectedContractId $ Just invalidRange
 
 
   case result of
     Left (FailureResponse _ Response { responseStatusCode = Status { statusCode = 416 } } ) ->  pure ()
     _ -> fail $ "Expected 416 response code - got " <> show result
+
+setup :: ActionWith MarloweWebTestData -> IO ()
+setup runSpec = withLocalMarloweRuntime $ runIntegrationTest do
+  runtime <- Reader.ask
+  wallet1 <- getGenesisWallet 0
+  wallet2 <- getGenesisWallet 1
+  either throw pure =<< runWebClient do
+    (expectedContractId, expectedTransactionIds) <- createFullyExecutedStandardContract wallet1 wallet2
+    liftIO $ runSpec MarloweWebTestData{..}
+
+data MarloweWebTestData = MarloweWebTestData
+  { runtime :: MarloweRuntime
+  , expectedContractId :: Web.TxOutRef
+  , expectedTransactionIds :: [Web.TxId]
+  , wallet1 :: Wallet
+  , wallet2 :: Wallet
+  }
+

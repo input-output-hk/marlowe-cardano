@@ -1,40 +1,41 @@
 module Language.Marlowe.Runtime.Web.GetContracts
   where
 
-import Control.Monad.IO.Class (MonadIO(liftIO))
-
 import Control.Exception (throw)
+import Control.Monad.IO.Class (MonadIO(liftIO))
+import qualified Control.Monad.Reader as Reader
 import Data.Proxy (Proxy(Proxy))
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
-import Language.Marlowe.Runtime.Integration.Common
+import Language.Marlowe.Runtime.Integration.Common (Wallet, getGenesisWallet, runIntegrationTest, runWebClient)
 import qualified Language.Marlowe.Runtime.Web as Web
 import Language.Marlowe.Runtime.Web.Client (Page(..), getContracts)
-import Language.Marlowe.Runtime.Web.Common (MarloweWebTestData(..), createCloseContract, setup)
+import Language.Marlowe.Runtime.Web.Common (createCloseContract)
 import Language.Marlowe.Runtime.Web.Server.DTO (ToDTO(toDTO))
 import Network.HTTP.Types (Status(..))
 import Servant.Client (ClientError(FailureResponse))
 import Servant.Client.Streaming (ResponseF(Response, responseStatusCode))
 import Servant.Pagination (Range(..), RangeOrder(..))
-import Test.Hspec (Spec, SpecWith, aroundAll, describe, it, shouldBe, shouldSatisfy)
+import Test.Hspec (ActionWith, Spec, SpecWith, aroundAll, describe, it, shouldBe)
+import Test.Integration.Marlowe.Local (MarloweRuntime, withLocalMarloweRuntime)
 
 spec :: Spec
-spec = describe "GET /contracts" $ aroundAll setup do
+spec = describe "GET /contracts" do
   getContractsValidSpec
   getContractsInvalidSpec
   getContractsValidNextPageSpec
 
-getContractsValidSpec :: SpecWith MarloweWebTestData
+getContractsValidSpec :: Spec
 getContractsValidSpec = describe "Valid GET /contracts" do
   noContractsValidSpec
   singleContractValidSpec
   multipleContractValidSpec
 
-getContractsInvalidSpec :: SpecWith MarloweWebTestData
-getContractsInvalidSpec = describe "Invalid GET /contracts" do
+getContractsInvalidSpec :: Spec
+getContractsInvalidSpec = describe "Invalid GET /contracts" $ aroundAll setup  do
   invalidTxIdSpec
 
-getContractsValidNextPageSpec :: SpecWith MarloweWebTestData
-getContractsValidNextPageSpec = describe "Valid Pagination of GET /contracts" do
+getContractsValidNextPageSpec :: Spec
+getContractsValidNextPageSpec = describe "Valid Pagination of GET /contracts" $ aroundAll setup do
   firstPageAscValidSpec
   secondPageAscValidSpec
   firstPageDescValidSpec
@@ -43,9 +44,6 @@ getContractsValidNextPageSpec = describe "Valid Pagination of GET /contracts" do
 firstPageAscValidSpec :: SpecWith MarloweWebTestData
 firstPageAscValidSpec = it "returns the first page of contract headers in ascending order" \MarloweWebTestData{..} -> flip runIntegrationTest runtime do
   either throw pure =<< runWebClient do
-    expectedContractId1 <- createCloseContract wallet1
-    expectedContractId2 <- createCloseContract wallet2
-    _ <- createCloseContract wallet3
     let
       testRange =  Range
         {
@@ -62,9 +60,6 @@ firstPageAscValidSpec = it "returns the first page of contract headers in ascend
 secondPageAscValidSpec :: SpecWith MarloweWebTestData
 secondPageAscValidSpec = it "returns the second page of contract headers in ascending order" \MarloweWebTestData{..} -> flip runIntegrationTest runtime do
   either throw pure =<< runWebClient do
-    expectedContractId1 <- createCloseContract wallet1
-    expectedContractId2 <- createCloseContract wallet2
-    expectedContractId3 <- createCloseContract wallet3
     let
       testRange =  Range
         {
@@ -81,9 +76,6 @@ secondPageAscValidSpec = it "returns the second page of contract headers in asce
 firstPageDescValidSpec :: SpecWith MarloweWebTestData
 firstPageDescValidSpec = it "returns the first page of contract headers in descending order" \MarloweWebTestData{..} -> flip runIntegrationTest runtime do
   either throw pure =<< runWebClient do
-    _ <- createCloseContract wallet1
-    expectedContractId2 <- createCloseContract wallet2
-    expectedContractId3 <- createCloseContract wallet3
     let
       testRange =  Range
         {
@@ -100,9 +92,6 @@ firstPageDescValidSpec = it "returns the first page of contract headers in desce
 secondPageDescValidSpec :: SpecWith MarloweWebTestData
 secondPageDescValidSpec = it "returns the second page of contract headers in descending order" \MarloweWebTestData{..} -> flip runIntegrationTest runtime do
   either throw pure =<< runWebClient do
-    expectedContractId1 <- createCloseContract wallet1
-    expectedContractId2 <- createCloseContract wallet2
-    expectedContractId3 <- createCloseContract wallet3
     let
       testRange =  Range
         {
@@ -117,31 +106,30 @@ secondPageDescValidSpec = it "returns the second page of contract headers in des
     liftIO $ fmap (\Web.ContractHeader{..} -> contractId) items `shouldBe` [expectedContractId2, expectedContractId1]
 
 
-noContractsValidSpec :: SpecWith MarloweWebTestData
-noContractsValidSpec = it "returns an empty list" \MarloweWebTestData{..} -> flip runIntegrationTest runtime do
+noContractsValidSpec :: Spec
+noContractsValidSpec = it "returns an empty list" $ withLocalMarloweRuntime $ runIntegrationTest   do
   either throw pure =<< runWebClient do
     Page {..}<- getContracts Nothing Nothing Nothing
     liftIO $ fmap (\Web.ContractHeader{..} -> contractId) items `shouldBe` []
 
-singleContractValidSpec :: SpecWith MarloweWebTestData
-singleContractValidSpec  = it "returns a list with single contract header" \MarloweWebTestData{..} -> flip runIntegrationTest runtime do
+singleContractValidSpec :: Spec
+singleContractValidSpec  = it "returns a list with single contract header" $ withLocalMarloweRuntime $ runIntegrationTest  do
+  wallet1 <- getGenesisWallet 0
   either throw pure =<< runWebClient do
     expectedContractId <- createCloseContract wallet1
     Page {..} <- getContracts Nothing Nothing Nothing
     liftIO $ fmap (\Web.ContractHeader{..} -> contractId) items `shouldBe` [expectedContractId]
 
-multipleContractValidSpec :: SpecWith MarloweWebTestData
-multipleContractValidSpec  = it "returns a list with multiple contract headers" \MarloweWebTestData{..} -> flip runIntegrationTest runtime do
+multipleContractValidSpec :: Spec
+multipleContractValidSpec  = it "returns a list with multiple contract headers" $ withLocalMarloweRuntime $ runIntegrationTest  do
+  wallet1 <- getGenesisWallet 0
+  wallet2 <- getGenesisWallet 1
 
   either throw pure =<< runWebClient do
     expectedContractId1 <- createCloseContract wallet1
     expectedContractId2 <- createCloseContract wallet2
     Page {..} <- getContracts Nothing Nothing Nothing
-    let
-      actualContractIds = fmap (\Web.ContractHeader{..} -> contractId) items
-    liftIO do
-      actualContractIds `shouldSatisfy` elem expectedContractId1
-      actualContractIds `shouldSatisfy` elem expectedContractId2
+    liftIO $ fmap (\Web.ContractHeader{..} -> contractId) items `shouldBe` [expectedContractId2, expectedContractId1]
 
 
 invalidTxIdSpec :: SpecWith MarloweWebTestData
@@ -161,3 +149,25 @@ invalidTxIdSpec = it "returns an error message" \MarloweWebTestData{..} -> flip 
   case result of
     Left (FailureResponse _ Response { responseStatusCode = Status { statusCode = 416 } } ) ->  pure ()
     _ -> fail $ "Expected 416 response code - got " <> show result
+
+setup :: ActionWith MarloweWebTestData -> IO ()
+setup runSpec = withLocalMarloweRuntime $ runIntegrationTest do
+  runtime <- Reader.ask
+  wallet1 <- getGenesisWallet 0
+  wallet2 <- getGenesisWallet 1
+  wallet3 <- getGenesisWallet 2
+  either throw pure =<< runWebClient do
+    expectedContractId1 <- createCloseContract wallet1
+    expectedContractId2 <- createCloseContract wallet2
+    expectedContractId3 <- createCloseContract wallet3
+    liftIO $ runSpec MarloweWebTestData{..}
+
+data MarloweWebTestData = MarloweWebTestData
+  { runtime :: MarloweRuntime
+  , wallet1 :: Wallet
+  , wallet2 :: Wallet
+  , wallet3 :: Wallet
+  , expectedContractId1 :: Web.TxOutRef
+  , expectedContractId2 :: Web.TxOutRef
+  , expectedContractId3 :: Web.TxOutRef
+  }

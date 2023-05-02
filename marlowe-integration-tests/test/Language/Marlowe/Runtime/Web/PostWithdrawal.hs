@@ -6,7 +6,6 @@ import Language.Marlowe.Runtime.Integration.Common
 import Language.Marlowe.Runtime.Transaction.Api (WalletAddresses(..))
 import qualified Language.Marlowe.Runtime.Web as Web
 import Language.Marlowe.Runtime.Web.Client (postWithdrawal)
-import Language.Marlowe.Runtime.Web.Common (MarloweWebTestData(..), setup)
 import Language.Marlowe.Runtime.Web.Server.DTO (ToDTO(toDTO))
 import Language.Marlowe.Runtime.Web.StandardContract
   ( StandardContractChoiceMade(..)
@@ -16,18 +15,14 @@ import Language.Marlowe.Runtime.Web.StandardContract
   , StandardContractNotified(..)
   , createStandardContract
   )
-import Test.Hspec (Spec, SpecWith, aroundAll, describe, it)
+import Test.Hspec (Spec, describe, it)
+import Test.Integration.Marlowe.Local (withLocalMarloweRuntime)
 
 spec :: Spec
-spec = describe "POST /contracts/{contractId}/withdrawal" $ aroundAll setup do
-  postContractWithdrawalValidSpec
-
-postContractWithdrawalValidSpec :: SpecWith MarloweWebTestData
-postContractWithdrawalValidSpec = describe "Valid POST /contracts" do
-  it "returns a withdraw TX Body" \MarloweWebTestData{..} -> flip runIntegrationTest runtime do
-    let
-      partyAWallet = wallet1
-      partyBWallet = wallet2
+spec = describe "POST /contracts/{contractId}/withdrawal" do
+  it "returns a withdraw TX Body" $ withLocalMarloweRuntime $ runIntegrationTest do
+    partyAWallet <- getGenesisWallet 0
+    partyBWallet <- getGenesisWallet 1
 
     result <- runWebClient do
       let WalletAddresses{..} = addresses partyAWallet
