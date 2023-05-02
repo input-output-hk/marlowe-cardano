@@ -15,6 +15,7 @@ import Language.Marlowe.Protocol.Query.Types
 import Language.Marlowe.Runtime.ChainSync.Api (TxId)
 import Language.Marlowe.Runtime.Core.Api (ContractId)
 import Language.Marlowe.Runtime.Discovery.Api (ContractHeader)
+import Network.Protocol.Peer.Trace
 import Network.TypedProtocol
 
 data MarloweQueryClient m a where
@@ -82,3 +83,18 @@ marloweQueryClientPeer = \case
     Yield (ClientAgency TokReq) (MsgRequest req) $
     Await (ServerAgency (TokRes $ requestToSt req)) \case
       MsgRespond r -> Effect $ marloweQueryClientPeer <$> cont r
+
+marloweQueryClientPeerTraced
+  :: Functor m
+  => MarloweQueryClient m a
+  -> PeerTraced MarloweQuery 'AsClient 'StReq r m a
+marloweQueryClientPeerTraced = \case
+  ClientPure a ->
+    YieldTraced (ClientAgency TokReq) MsgDone
+      $ Close TokDone a
+  ClientLift m ->
+    EffectTraced $ marloweQueryClientPeerTraced <$> m
+  ClientRequest req cont ->
+    YieldTraced (ClientAgency TokReq) (MsgRequest req) $
+      Call (ServerAgency (TokRes $ requestToSt req)) \case
+        MsgRespond r -> EffectTraced $ marloweQueryClientPeerTraced <$> cont r
