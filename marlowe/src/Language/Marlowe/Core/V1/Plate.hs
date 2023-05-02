@@ -14,7 +14,7 @@ module Language.Marlowe.Core.V1.Plate
 import Data.Generics.Multiplate (Multiplate(..), foldFor, mChildren, preorderFold, purePlate)
 import Language.Marlowe.Core.V1.Merkle (Continuations)
 import Language.Marlowe.Core.V1.Semantics.Types
-import Plutus.V1.Ledger.Api (TokenName)
+import Plutus.V1.Ledger.Api (BuiltinByteString, TokenName)
 
 import qualified Data.Functor.Constant as F (Constant(..))
 import qualified Data.Map.Strict as M (foldr)
@@ -199,6 +199,18 @@ instance Extract (Case Contract) where
       purePlate
       {
         contractPlate = contractPlate'
+      }
+
+
+instance Extract BuiltinByteString where
+  extractor =
+    let
+      casePlate' (MerkleizedCase _ hash) = F.Constant $ S.singleton hash
+      casePlate' x = pure x
+    in
+      purePlate
+      {
+        casePlate = casePlate'
       }
 
 

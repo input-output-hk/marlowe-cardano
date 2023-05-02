@@ -44,15 +44,15 @@ import qualified Cardano.Api as Cardano
   , selectLovelace
   )
 import qualified Cardano.Api.Shelley as Shelley (ReferenceScript(..), StakeAddressReference(..))
-import qualified Data.Map.Strict as M (keys, lookup)
+import qualified Data.Map.Strict as M (fromList, keys, lookup, mapKeys, toList)
+import Language.Marlowe.Core.V1.Merkle as V1 (MerkleizedContract(..), deepMerkleize, merkleizedContract)
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
-  (Contract(..), Party(..), Payee(..), Token(..), Value(..))
 import qualified Language.Marlowe.Runtime.Cardano.Api as Chain
   (assetsToCardanoValue, fromCardanoAddressInEra, toCardanoAddressAny, toCardanoDatumHash, toCardanoPaymentCredential)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
-  (AssetId(..), Assets(..), Credential(..), PolicyId(..), TokenName(..), Tokens(..))
-import qualified Plutus.V2.Ledger.Api as Plutus (CurrencySymbol(..), TokenName(..))
-import qualified PlutusTx.Builtins as Plutus (lengthOfByteString, toBuiltin)
+  (AssetId(..), Assets(..), Credential(..), DatumHash(..), PolicyId(..), TokenName(..), Tokens(..))
+import qualified Plutus.V2.Ledger.Api as Plutus (CurrencySymbol(..), DatumHash(..), TokenName(..))
+import qualified PlutusTx.Builtins as Plutus (fromBuiltin, lengthOfByteString, toBuiltin)
 
 
 spec :: Spec
@@ -193,6 +193,28 @@ spec =
                      ]
           in
             counterexample ("Contract = " <> show contract)
+              . counterexample ("Actual = " <> show actual)
+              . counterexample ("Expected = " <> show expected)
+              $ actual `same` expected
+        prop "Contract with missing continuation" $ \contract ->
+          do
+            let
+              V1.MerkleizedContract{..} = V1.merkleizedContract $ V1.deepMerkleize contract
+              toChainDatumHash (Plutus.DatumHash x) = Chain.DatumHash $ Plutus.fromBuiltin x
+              continuations' = M.toList $ M.mapKeys toChainDatumHash mcContinuations
+            missing <- if null continuations' then pure mempty else pure <$> elements continuations'
+            let
+              remaining = filter (`notElem` missing) continuations'
+              relevant ContractHasNoRoles = False
+              relevant (RoleNameTooLong _) = False
+              relevant (InvalidCurrencySymbol _) = False
+              relevant (TokenNameTooLong _) = False
+              relevant _ = True
+              actual = filter relevant $ checkContract (RoleTokensUsePolicy "") version mcContract (M.fromList remaining)
+              expected = MissingContinuation . Plutus.DatumHash . Plutus.toBuiltin . Chain.unDatumHash . fst <$> missing
+            pure . counterexample ("Contract = " <> show mcContract)
+              . counterexample ("Missing = " <> show missing)
+              . counterexample ("Remaining = " <> show remaining)
               . counterexample ("Actual = " <> show actual)
               . counterexample ("Expected = " <> show expected)
               $ actual `same` expected

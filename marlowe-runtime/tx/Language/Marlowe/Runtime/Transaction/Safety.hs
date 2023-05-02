@@ -23,7 +23,7 @@ import Data.SOP.Strict (K(..), NP(..))
 import Data.String (fromString)
 import Data.Time (UTCTime, addUTCTime, secondsToNominalDiffTime)
 import Data.Time.Clock.POSIX (posixSecondsToUTCTime)
-import Language.Marlowe.Analysis.Safety.Ledger (checkRoleNames, checkTokens, worstMinimumUtxo')
+import Language.Marlowe.Analysis.Safety.Ledger (checkContinuations, checkRoleNames, checkTokens, worstMinimumUtxo')
 import Language.Marlowe.Analysis.Safety.Transaction (findTransactions)
 import Language.Marlowe.Analysis.Safety.Types (SafetyError(..), Transaction(..))
 import Language.Marlowe.Runtime.Core.Api
@@ -145,8 +145,9 @@ checkContract config MarloweV1 contract continuations =
     avoidDuplicateReport = True
     nameCheck = checkRoleNames avoidDuplicateReport contract continuations'
     tokenCheck = checkTokens contract continuations'
+    continuationCheck = checkContinuations contract continuations'
   in
-    mintCheck <> nameCheck <> tokenCheck
+    mintCheck <> nameCheck <> tokenCheck <> continuationCheck
 
 
 -- | Mock-execute all possible transactions for a contract.

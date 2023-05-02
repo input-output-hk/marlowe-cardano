@@ -20,7 +20,8 @@
 
 module Language.Marlowe.Analysis.Safety.Ledger
   ( -- * Checks for Contracts
-    checkMaximumValueBound
+    checkContinuations
+  , checkMaximumValueBound
   , checkRoleNames
   , checkSafety
   , checkTokens
@@ -57,6 +58,7 @@ import Numeric.Natural (Natural)
 import Plutus.V2.Ledger.Api
   ( Credential(PubKeyCredential)
   , CurrencySymbol(..)
+  , DatumHash(..)
   , OutputDatum(OutputDatumHash)
   , StakingCredential(StakingHash)
   , ToData
@@ -68,7 +70,8 @@ import Plutus.V2.Ledger.Api
   )
 import PlutusTx.Builtins (serialiseData)
 
-import qualified Data.Set as S (Set, filter, fromList, map, null, size)
+import qualified Data.Map as M (keys)
+import qualified Data.Set as S (Set, filter, fromList, map, null, size, toList)
 import qualified Plutus.V1.Ledger.Value as V (singleton)
 import qualified Plutus.V2.Ledger.Api as P (Address(..), Value)
 import qualified PlutusTx.AssocMap as AM (Map, fromList, keys, toList)
@@ -90,11 +93,24 @@ checkSafety maxValueSize utxoCostPerByte MarloweData{..} continuations =
       <> checkMaximumValueBound maxValueSize marloweState marloweContract continuations
       <> checkPositiveBalance marloweState
       <> checkDuplicates marloweState
+      <> checkContinuations marloweContract continuations
     boundOnMinimumUtxo = worstMinimumUtxo utxoCostPerByte marloweState marloweContract continuations
     boundOnDatumSize = worstDatumSize marloweParams marloweContract continuations
     boundOnRedeemerSize = worstRedeemerSize marloweContract continuations
   in
     SafetyReport{..}
+
+
+-- | Check that all continuations are present.
+checkContinuations
+  :: Contract  -- ^ The contract.
+  -> Continuations  -- ^ The merkleized continuations of the contract.
+  -> [SafetyError]  -- ^ Any reports of missing continuations.
+checkContinuations contract continuations =
+  let
+    hashes = fmap DatumHash . S.toList $ extractAllWithContinuations contract continuations
+  in
+    MissingContinuation <$> filter (`notElem` M.keys continuations) hashes
 
 
 -- | Check that all account balances are positive.

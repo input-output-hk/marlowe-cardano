@@ -27,7 +27,7 @@ import Data.Aeson (ToJSON(..), object, (.=))
 import Language.Marlowe.Core.V1.Semantics (TransactionInput, TransactionOutput)
 import Language.Marlowe.Core.V1.Semantics.Types (AccountId, ChoiceId, Contract, State, Token, ValueId)
 import Numeric.Natural (Natural)
-import Plutus.V2.Ledger.Api (CurrencySymbol, ExBudget, TokenName)
+import Plutus.V2.Ledger.Api (CurrencySymbol, DatumHash, ExBudget, TokenName)
 
 import qualified Language.Marlowe.Core.V1.Semantics as V1 (TransactionWarning)
 
@@ -80,6 +80,8 @@ data SafetyError =
   | TransactionValidationError Transaction String
     -- | The transacttion has warnings.
   | TransactionWarning V1.TransactionWarning
+    -- | The contract is missing a continuation not present in its continuation map.
+  | MissingContinuation DatumHash
     deriving (Eq, Show)
 
 
