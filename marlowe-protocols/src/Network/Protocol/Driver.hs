@@ -1,5 +1,6 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE EmptyCase #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
@@ -8,7 +9,6 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE ViewPatterns #-}
-{-# OPTIONS_GHC -Wno-unused-imports #-}
 
 module Network.Protocol.Driver
   where
@@ -22,6 +22,7 @@ import Data.ByteString.Lazy (ByteString)
 import Data.Functor (void)
 import Data.Int (Int64)
 import Data.List (intercalate)
+import Data.Proxy
 import Data.String (fromString)
 import Data.Text (Text)
 import qualified Data.Text as T
@@ -30,6 +31,7 @@ import Network.Protocol.Codec (BinaryMessage, DeserializeError, binaryCodec)
 import Network.Protocol.Connection
   ( Connection(..)
   , ConnectionSource(..)
+  , ConnectionSourceTraced(..)
   , ConnectionTraced(..)
   , Connector(..)
   , ConnectorTraced(..)
@@ -47,35 +49,25 @@ import Network.Socket
   , HostName
   , PortNumber
   , SockAddr(..)
-  , SocketOption(ReuseAddr)
   , SocketType(..)
-  , accept
   , addrAddress
   , close
   , connect
   , defaultHints
   , getAddrInfo
-  , gracefulClose
+  , getPeerName
   , hostAddress6ToTuple
   , hostAddressToTuple
-  , listen
   , openSocket
-  , setCloseOnExecIfNeeded
-  , setSocketOption
-  , withFdSocket
-  , withSocketsDo
   )
-import Network.Socket.Address (bind)
 import Network.TypedProtocol (Message, PeerHasAgency, PeerRole(..), SomeMessage(..), runPeerWithDriver)
 import Network.TypedProtocol.Codec (Codec(..), DecodeStep(..))
 import Network.TypedProtocol.Driver (Driver(..))
 import Numeric (showHex)
-import Observe.Event (Event(finalize, reference), InjectSelector, NewEventArgs(..), addField, injectSelector)
-import Observe.Event.Backend (simpleNewEventArgs)
+import Observe.Event (Event(..), InjectSelector, addField, injectSelector)
 import Observe.Event.Render.OpenTelemetry
 import OpenTelemetry.Trace.Core (Attribute, SpanKind(..), toAttribute)
-import UnliftIO
-  (MonadIO, MonadUnliftIO, atomically, bracket, bracketOnError, catch, concurrently, mask, throwIO, try, withRunInIO)
+import UnliftIO (MonadIO, MonadUnliftIO, atomically, mask, throwIO, try)
 
 mkDriver
   :: forall ps m
@@ -164,20 +156,62 @@ tcpClient host port toPeer = Connector $ liftIO $ do
     , ..
     }
 
-type InjectProtocolSelector s = forall ps. InjectSelector (TypedProtocolsSelector ps) (s ps)
-
 data TcpClientSelector ps f where
-  Connect :: TcpClientSelector ps ConnectField
+  Connect :: TcpClientSelector ps AddrInfo
   ClientPeer
-    :: HostName
-    -> PortNumber
-    -> AddrInfo
+    :: AddrInfo
     -> TypedProtocolsSelector ps f
     -> TcpClientSelector ps f
 
-data ConnectField
-  = ConnectHost HostName
-  | ConnectPort PortNumber
+data TcpServerSelector ps f where
+  Connected :: TcpServerSelector ps ConnectedField
+  ServerPeer
+    :: AddrInfo
+    -> SockAddr
+    -> TypedProtocolsSelector ps f
+    -> TcpServerSelector ps f
+
+data ConnectedField
+  = ConnectedAddr AddrInfo
+  | ConnectedPeer SockAddr
+
+data TcpServerDependenciesTraced ps server r m = forall (st :: ps). TcpServerDependenciesTraced
+  { host :: HostName
+  , port :: PortNumber
+  , toPeer :: ToPeerTraced server ps 'AsServer st r m
+  }
+
+tcpServerTraced
+  :: (MonadIO m', MonadIO m, MonadEvent r s m')
+  => InjectSelector (TcpServerSelector (Handshake ps)) s
+  -> Component m (TcpServerDependenciesTraced ps server r m') (ConnectionSourceTraced ps server r TcpServerSelector m')
+tcpServerTraced inj = component \TcpServerDependenciesTraced{..} -> do
+  socketQueue <- newTQueue
+  pure
+    ( liftIO $ runTCPServer (Just host) (show port) \socket -> do
+        closeTMVar <- atomically do
+          closeTMVar <- newEmptyTMVar
+          writeTQueue socketQueue (socket, void $ tryPutTMVar closeTMVar ())
+          pure closeTMVar
+        atomically $ readTMVar closeTMVar
+    , ConnectionSourceTraced do
+        (socket, closeConnection) <- readTQueue socketQueue
+        pure $ ConnectorTraced $ withInjectEvent inj Connected \ev -> do
+          addr <- liftIO $ head <$> getAddrInfo
+            (Just defaultHints { addrSocketType = Stream, addrFlags = [AI_PASSIVE] })
+            (Just host)
+            (Just $ show port)
+          addField ev $ ConnectedAddr addr
+          peer <- liftIO $ getPeerName socket
+          addField ev $ ConnectedPeer peer
+          pure ConnectionTraced
+            { closeConnection = \_ -> atomically closeConnection
+            , channel = socketAsChannel socket
+            , injectProtocolSelector = injectSelector $ ServerPeer addr peer
+            , openRef = reference ev
+            , ..
+            }
+    )
 
 tcpClientTraced
   :: (MonadIO m, MonadEvent r s m)
@@ -187,18 +221,19 @@ tcpClientTraced
   -> ToPeerTraced client ps 'AsClient st r m
   -> ConnectorTraced ps 'AsClient client r TcpClientSelector m
 tcpClientTraced inj host port toPeer = ConnectorTraced
-  $ withInjectEventFields inj Connect [ConnectHost host, ConnectPort port] \ev -> do
+  $ withInjectEvent inj Connect \ev -> do
     addr <- liftIO $ head <$> getAddrInfo
       (Just defaultHints { addrSocketType = Stream })
       (Just host)
       (Just $ show port)
+    addField ev addr
     socket <- liftIO $ openSocket addr
     liftIO $ connect socket $ addrAddress addr
     pure ConnectionTraced
       { closeConnection = \_ -> liftIO $ close socket
       , channel = socketAsChannel socket
       , openRef = reference ev
-      , injectProtocolSelector = injectSelector $ ClientPeer host port addr
+      , injectProtocolSelector = injectSelector $ ClientPeer addr
       , ..
       }
 
@@ -253,6 +288,40 @@ runSomeConnectorTraced
   -> peer m a
   -> m a
 runSomeConnectorTraced (SomeConnectorTraced inj connector) = runConnectorTraced inj connector
+
+renderTcpClientSelectorOTel :: forall ps. OTelProtocol ps => RenderSelectorOTel (TcpClientSelector ps)
+renderTcpClientSelectorOTel = \case
+  Connect -> OTelRendered
+    { eventName = "connect " <> protocolName (Proxy @ps)
+    , eventKind = Producer
+    , renderField = \addr ->
+        ("net.protocol.name", toAttribute $ protocolName (Proxy @ps)) : addrInfoToAttributes addr
+    }
+  ClientPeer addr sel -> case renderTypedProtocolSelectorOTel sel of
+    OTelRendered{..} -> OTelRendered
+      { renderField = \f ->
+          (("net.protocol.name", toAttribute $ protocolName (Proxy @ps)) : addrInfoToAttributes addr)
+            <> renderField f
+      , ..
+      }
+
+renderTcpServerSelectorOTel :: forall ps. OTelProtocol ps => RenderSelectorOTel (TcpServerSelector ps)
+renderTcpServerSelectorOTel = \case
+  Connected -> OTelRendered
+    { eventName = "connected " <> protocolName (Proxy @ps)
+    , eventKind = Consumer
+    , renderField = \case
+        ConnectedAddr addr -> ("net.protocol.name", toAttribute $ protocolName (Proxy @ps)) : addrInfoToAttributes addr
+        ConnectedPeer peer -> sockAddrToAttributes True peer
+    }
+  ServerPeer addr peer sel -> case renderTypedProtocolSelectorOTel sel of
+    OTelRendered{..} -> OTelRendered
+      { renderField = \f ->
+          (("net.protocol.name", toAttribute $ protocolName (Proxy @ps)) : addrInfoToAttributes addr)
+            <> sockAddrToAttributes True peer
+            <> renderField f
+      , ..
+      }
 
 addrInfoToAttributes :: AddrInfo -> [(T.Text, Attribute)]
 addrInfoToAttributes AddrInfo{..} =

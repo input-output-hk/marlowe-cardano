@@ -17,12 +17,15 @@ import Data.ByteString.Lazy (ByteString)
 import Data.Foldable (traverse_)
 import Data.Functor ((<&>))
 import Data.Maybe (fromMaybe)
+import Data.Proxy
+import Data.Text (Text)
 import Network.Channel
 import Network.Protocol.Codec (BinaryMessage, DeserializeError, binaryCodec, decodeGet)
 import Network.TypedProtocol
 import Network.TypedProtocol.Codec
 import Observe.Event (Event(addField), InjectSelector, NewEventArgs(..), reference)
 import Observe.Event.Backend (simpleNewEventArgs)
+import Observe.Event.Render.OpenTelemetry
 import OpenTelemetry.Trace.Core
 import OpenTelemetry.Trace.Id (SpanId, TraceId, bytesToSpanId, bytesToTraceId, spanIdBytes, traceIdBytes)
 import OpenTelemetry.Trace.TraceState (Key(..), TraceState, Value(..), empty, insert, toList)
@@ -150,11 +153,11 @@ hoistDriverTraced f DriverTraced{..} = DriverTraced
 
 data TypedProtocolsSelector ps f where
   ProcessSelector :: TypedProtocolsSelector ps ()
-  AwaitSelector :: TypedProtocolsSelector ps (Maybe (SomeMessage st'))
-  CallSelector :: Message ps st st' -> TypedProtocolsSelector ps (Maybe (SomeMessage st'))
-  RespondSelector :: Message ps st st' -> TypedProtocolsSelector ps (Maybe (SomeMessage st'))
-  CastSelector :: Message ps st st' -> TypedProtocolsSelector ps ()
-  CloseSelector :: Message ps st st' -> TypedProtocolsSelector ps ()
+  AwaitSelector :: TypedProtocolsSelector ps (Maybe (AnyMessageAndAgency ps))
+  CallSelector :: PeerHasAgency pr st -> Message ps st st' -> TypedProtocolsSelector ps (Maybe (AnyMessageAndAgency ps))
+  RespondSelector :: PeerHasAgency pr st -> Message ps st st' -> TypedProtocolsSelector ps (Maybe (AnyMessageAndAgency ps))
+  CastSelector :: PeerHasAgency pr st -> Message ps st st' -> TypedProtocolsSelector ps ()
+  CloseSelector :: PeerHasAgency pr st -> Message ps st st' -> TypedProtocolsSelector ps ()
 
 runPeerWithDriverTraced
   :: forall ps dState pr st r s m a
@@ -197,7 +200,7 @@ runYieldPeerWithDriverTraced inj parent driver tok msg dState = \case
   Call tok' k -> join $ withInjectEventArgs inj callArgs \callEv -> do
     sendMessageTraced driver (reference callEv) tok msg
     (_, SomeMessage msg', dState') <- recvMessageTraced driver tok' dState
-    addField callEv $ Just $ SomeMessage msg'
+    addField callEv $ Just $ AnyMessageAndAgency tok' msg'
     pure $ runPeerWithDriverTraced inj (reference callEv) driver (k msg') dState'
   Cast peer -> join $ withInjectEventArgs inj castArgs \castEv -> do
     sendMessageTraced driver (reference castEv) tok msg
@@ -206,15 +209,15 @@ runYieldPeerWithDriverTraced inj parent driver tok msg dState = \case
     sendMessageTraced driver (reference closeEv) tok msg
     pure a
   where
-    callArgs = (simpleNewEventArgs (CallSelector msg))
+    callArgs = (simpleNewEventArgs (CallSelector tok msg))
       { newEventParent = Just parent
       , newEventInitialFields = [Nothing]
       }
-    castArgs = (simpleNewEventArgs (CastSelector msg))
+    castArgs = (simpleNewEventArgs (CastSelector tok msg))
       { newEventParent = Just parent
       , newEventInitialFields = [()]
       }
-    closeArgs = (simpleNewEventArgs (CloseSelector msg))
+    closeArgs = (simpleNewEventArgs (CloseSelector tok msg))
       { newEventParent = Just parent
       , newEventInitialFields = [()]
       }
@@ -231,18 +234,18 @@ runAwaitPeerWithDriverTraced
 runAwaitPeerWithDriverTraced inj parent driver tok k dState =
   join $ withInjectEventArgs inj awaitArgs \awaitEv -> do
     (sendRef, SomeMessage msg, dState') <- recvMessageTraced driver tok dState
-    addField awaitEv $ Just $ SomeMessage msg
+    addField awaitEv $ Just $ AnyMessageAndAgency tok msg
     pure case k msg of
-      Respond tok' m -> join $ withInjectEventArgs inj (respondArgs sendRef msg) \respondEv -> do
+      Respond tok' m -> join $ withInjectEventArgs inj (respondArgs sendRef tok msg) \respondEv -> do
         Response msg' nextPeer <- m
-        addField respondEv $ Just $ SomeMessage msg'
+        addField respondEv $ Just $ AnyMessageAndAgency tok' msg'
         sendMessageTraced driver (reference respondEv) tok' msg'
         pure $ runPeerWithDriverTraced inj (reference respondEv) driver nextPeer dState'
       Receive nextPeer ->
         runPeerWithDriverTraced inj (reference awaitEv) driver nextPeer dState'
-      Closed _ ma -> withInjectEventArgs inj (closeArgs sendRef msg) $ const ma
+      Closed _ ma -> withInjectEventArgs inj (closeArgs sendRef tok msg) $ const ma
   where
-    respondArgs sendRef msg = (simpleNewEventArgs (RespondSelector msg))
+    respondArgs sendRef tok' msg = (simpleNewEventArgs (RespondSelector tok' msg))
       { newEventParent = Just sendRef
       , newEventInitialFields = [Nothing]
       }
@@ -250,7 +253,7 @@ runAwaitPeerWithDriverTraced inj parent driver tok k dState =
       { newEventParent = Just parent
       , newEventInitialFields = [Nothing]
       }
-    closeArgs sendRef msg = (simpleNewEventArgs (CloseSelector msg))
+    closeArgs sendRef tok' msg = (simpleNewEventArgs (CloseSelector tok' msg))
       { newEventParent = Just sendRef
       , newEventInitialFields = [()]
       }
@@ -258,6 +261,15 @@ runAwaitPeerWithDriverTraced inj parent driver tok k dState =
 class HasSpanContext r where
   context :: MonadIO m => r -> m SpanContext
   wrapContext :: SpanContext -> r
+
+data MessageAttributes = MessageAttributes
+  { messageType :: Text
+  , messageParameters :: [PrimitiveAttribute]
+  }
+
+class Protocol ps => OTelProtocol ps where
+  protocolName :: Proxy ps -> Text
+  messageAttributes :: PeerHasAgency pr st -> Message ps st st' -> MessageAttributes
 
 instance HasSpanContext Span where
   context = getSpanContext
@@ -384,3 +396,50 @@ instance Binary SpanContext where
     spanId <- get
     traceState <- get
     pure SpanContext{..}
+
+renderTypedProtocolSelectorOTel
+  :: forall ps. OTelProtocol ps => RenderSelectorOTel (TypedProtocolsSelector ps)
+renderTypedProtocolSelectorOTel = \case
+  ProcessSelector -> OTelRendered
+    { eventName = "process " <> protocolName (Proxy @ps)
+    , eventKind = Consumer
+    , renderField = const []
+    }
+  AwaitSelector -> OTelRendered
+    { eventName = "await " <> protocolName (Proxy @ps)
+    , eventKind = Consumer
+    , renderField = \case
+        Nothing -> []
+        Just msg -> messageToAttributes "recv" msg
+    }
+  CallSelector tok msg -> OTelRendered
+    { eventName = "call " <> protocolName (Proxy @ps) <> ":" <> messageType (messageAttributes tok msg)
+    , eventKind = Client
+    , renderField = \case
+        Nothing -> messageToAttributes "send" $ AnyMessageAndAgency tok msg
+        Just msg' -> messageToAttributes "recv" msg'
+    }
+  RespondSelector tok msg -> OTelRendered
+    { eventName = "respond " <> protocolName (Proxy @ps) <> ":" <> messageType (messageAttributes tok msg)
+    , eventKind = Server
+    , renderField = \case
+        Nothing -> messageToAttributes "recv" $ AnyMessageAndAgency tok msg
+        Just msg' -> messageToAttributes "send" msg'
+    }
+  CastSelector tok msg -> OTelRendered
+    { eventName = "cast " <> protocolName (Proxy @ps) <> ":" <> messageType (messageAttributes tok msg)
+    , eventKind = Producer
+    , renderField = const []
+    }
+  CloseSelector tok msg -> OTelRendered
+    { eventName = "close " <> protocolName (Proxy @ps) <> ":" <> messageType (messageAttributes tok msg)
+    , eventKind = Producer
+    , renderField = const []
+    }
+
+messageToAttributes :: Text -> OTelProtocol ps => AnyMessageAndAgency ps -> [(Text, Attribute)]
+messageToAttributes prefix (AnyMessageAndAgency tok msg) = case messageAttributes tok msg of
+  MessageAttributes{..} ->
+    [ ("typed-protocols.message." <> prefix <> ".type", toAttribute messageType)
+    , ("typed-protocols.message." <> prefix <> ".parameters", toAttribute messageParameters)
+    ]
