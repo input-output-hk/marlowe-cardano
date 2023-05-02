@@ -4,11 +4,7 @@ module Options
   ) where
 
 import Cardano.Api (NetworkId(..), NetworkMagic(..))
-import Data.Aeson.Encode.Pretty (encodePretty)
 import Data.Maybe (fromMaybe)
-import qualified Data.Text.Lazy as T
-import Data.Text.Lazy.Encoding (decodeUtf8)
-import Logging (defaultRootSelectorLogConfig)
 import Network.Socket (HostName, PortNumber)
 import qualified Options.Applicative as O
 import System.Environment (lookupEnv)
@@ -93,7 +89,6 @@ parseOptions defaultNetworkId defaultSocketPath defaultDatabaseUri defaultHost d
     parser :: O.Parser Options
     parser = O.helper
       <*> versionOption
-      <*> printLogConfigOption
       <*> ( Options
               <$> socketPathOption
               <*> networkIdOption
@@ -110,11 +105,6 @@ parseOptions defaultNetworkId defaultSocketPath defaultDatabaseUri defaultHost d
         versionOption = O.infoOption
           ("marlowe-chain-sync " <> version)
           (O.long "version" <> O.help "Show version.")
-
-        printLogConfigOption :: O.Parser (a -> a)
-        printLogConfigOption = O.infoOption
-          (T.unpack $ decodeUtf8 $ encodePretty defaultRootSelectorLogConfig)
-          (O.long "print-log-config" <> O.help "Print the default log configuration.")
 
         socketPathOption :: O.Parser FilePath
         socketPathOption = O.strOption options
