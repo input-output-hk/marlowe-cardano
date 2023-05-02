@@ -359,61 +359,6 @@ instance ChainSeek.QueryEq Move where
     TagFindTxsFor -> (==)
     TagAdvanceToTip -> (==)
 
-instance ChainSeek.ShowQuery Move where
-  showsPrecTag _ = showString . \case
-    TagAdvanceBlocks -> "TagAdvanceBlocks"
-    TagIntersect -> "TagIntersect"
-    TagFindConsumingTxs -> "TagFindConsumingTxs"
-    TagFindTx -> "TagFindTx"
-    TagFindTxsFor -> "TagFindTxsFor"
-    TagAdvanceToTip -> "TagAdvanceToTip"
-
-  showsPrecQuery p = \case
-    AdvanceBlocks blocks -> showParen (p >= 11)
-      ( showString "AdvanceBlocks"
-      . showSpace
-      . showsPrec 11 blocks
-      )
-    Intersect blocks -> showParen (p >= 11)
-      ( showString "Intersect"
-      . showSpace
-      . showsPrec 11 blocks
-      )
-    FindConsumingTxs txOuts -> showParen (p >= 11)
-      ( showString "FindConsumingTxs"
-      . showSpace
-      . showsPrec 11 txOuts
-      )
-    FindTx wait txId -> showParen (p >= 11)
-      ( showString "FindTx"
-      . showSpace
-      . showsPrec 11 wait
-      . showSpace
-      . showsPrec 11 txId
-      )
-    FindTxsFor credentials -> showParen (p >= 11)
-      ( showString "FindTxsFor"
-      . showSpace
-      . showsPrec 11 credentials
-      )
-    AdvanceToTip -> showString "AdvanceToTip"
-
-  showsPrecErr p = \case
-    TagAdvanceBlocks -> showsPrec p
-    TagIntersect -> showsPrec p
-    TagFindConsumingTxs -> showsPrec p
-    TagFindTx -> showsPrec p
-    TagFindTxsFor -> showsPrec p
-    TagAdvanceToTip -> showsPrec p
-
-  showsPrecResult p = \case
-    TagAdvanceBlocks -> showsPrec p
-    TagIntersect -> showsPrec p
-    TagFindConsumingTxs -> showsPrec p
-    TagFindTx -> showsPrec p
-    TagFindTxsFor -> showsPrec p
-    TagAdvanceToTip -> showsPrec p
-
 instance Query.ArbitraryQuery ChainSyncQuery where
   arbitraryTag = elements
     [ Query.SomeTag TagGetSecurityParameter
@@ -586,61 +531,6 @@ instance Query.QueryEq ChainSyncQuery where
 unInterpreter :: Interpreter xs -> Summary xs
 unInterpreter = unsafeCoerce
 
-instance Query.ShowQuery ChainSyncQuery where
-  showsPrecTag _ = showString . \case
-    TagGetSecurityParameter -> "TagGetSecurityParameter"
-    TagGetNetworkId -> "TagGetNetworkId"
-    TagGetProtocolParameters -> "TagGetProtocolParameters"
-    TagGetSystemStart -> "TagGetSystemStart"
-    TagGetEraHistory -> "TagGetEraHistory"
-    TagGetUTxOs -> "TagGetUTxOs"
-
-  showsPrecQuery p = \case
-    GetSecurityParameter -> showString "GetSecurityParameter"
-    GetNetworkId -> showString "GetNetworkId"
-    GetProtocolParameters -> showString "GetProtocolParameters"
-    GetSystemStart -> showString "GetSystemStart"
-    GetEraHistory -> showString "GetEraHistory"
-    GetUTxOs query -> showParen (p >= 11)
-      ( showString "TagGetUTxOs"
-      . showSpace
-      . showsPrec 11 query
-      )
-
-  showsPrecDelimiter _ = \case
-    TagGetSecurityParameter -> absurd
-    TagGetNetworkId -> absurd
-    TagGetProtocolParameters -> absurd
-    TagGetSystemStart -> absurd
-    TagGetEraHistory -> absurd
-    TagGetUTxOs -> absurd
-
-  showsPrecErr p = \case
-    TagGetSecurityParameter -> showsPrec p
-    TagGetNetworkId -> showsPrec p
-    TagGetProtocolParameters -> showsPrec p
-    TagGetSystemStart -> showsPrec p
-    TagGetEraHistory -> showsPrec p
-    TagGetUTxOs -> showsPrec p
-
-  showsPrecResult p = \case
-    TagGetSecurityParameter -> showsPrec p
-    TagGetNetworkId -> showsPrec p
-    TagGetProtocolParameters -> showsPrec p
-    TagGetSystemStart -> showsPrec p
-    TagGetEraHistory -> \(EraHistory CardanoMode interpreter) -> showParen (p >= 11)
-      ( showString "EraHistory"
-      . showSpace
-      . showString "CardanoMode"
-      . showSpace
-      . showParen True
-        ( showString "mkInterpreter"
-        . showSpace
-        . showsPrec 11 (unInterpreter interpreter)
-        )
-      )
-    TagGetUTxOs -> showsPrec p
-
 instance Command.ArbitraryCommand ChainSyncCommand where
   arbitraryTag = elements
     [ Command.SomeTag $ TagSubmitTx ScriptDataInAlonzoEra
@@ -680,66 +570,6 @@ instance Command.CommandEq ChainSyncCommand where
     TagSubmitTx _ -> (==)
   resultEq = \case
     TagSubmitTx _ -> (==)
-
-instance Command.ShowCommand ChainSyncCommand where
-  showsPrecTag p = showParen (p >= 11) . showString . \case
-    TagSubmitTx ScriptDataInAlonzoEra -> "TagSubmitTx ScriptDataInAlonzoEra"
-    TagSubmitTx ScriptDataInBabbageEra -> "TagSubmitTx ScriptDataInBabbageEra"
-  showsPrecCommand p = showParen (p >= 11) . \case
-    SubmitTx ScriptDataInAlonzoEra tx ->
-      ( showString "TagSubmitTx ScriptDataInAlonzoEra"
-      . showSpace
-      . showsPrec p tx
-      )
-    SubmitTx ScriptDataInBabbageEra tx ->
-      ( showString "TagSubmitTx ScriptDataInBabbageEra"
-      . showSpace
-      . showsPrec p tx
-      )
-  showsPrecJobId _ = \case
-  showsPrecStatus _ = \case
-    TagSubmitTx _ -> absurd
-  showsPrecErr p = \case
-    TagSubmitTx _ -> showsPrec p
-  showsPrecResult p = \case
-    TagSubmitTx _ -> showsPrec p
-
-showsPrecThese :: Int -> (Int -> a -> ShowS) -> (Int -> b -> ShowS) -> These a b -> ShowS
-showsPrecThese p showsPrecA showsPrecB = showParen (p >= 11) . \case
-  This a -> (showString "This" . showSpace . showsPrecA 11 a)
-  That b -> (showString "That" . showSpace . showsPrecB 11 b)
-  These a b ->
-    ( showString "These"
-    . showSpace
-    . showsPrecA 11 a
-    . showSpace
-    . showsPrecB 11 b
-    )
-
-theseEq :: (a -> a -> Bool) -> (b -> b -> Bool) -> These a b -> These a b -> Bool
-theseEq eqA eqB = \case
-  This a -> \case
-    This a' -> eqA a a'
-    _ -> False
-  That b -> \case
-    That b' -> eqB b b'
-    _ -> False
-  These a b -> \case
-    These a' b' -> eqA a a' == eqB b b'
-    _ -> False
-
-
-genThese :: Gen a -> Gen b -> Gen (These a b)
-genThese a b = oneof [This <$> a, That <$> b, resized (`div` 2) $ These <$> a <*> b]
-
-shrinkThese :: (a -> [a]) -> (b -> [b]) -> These a b -> [These a b]
-shrinkThese shrinkA shrinkB = \case
-  This a -> This <$> shrinkA a
-  That b -> That <$> shrinkB b
-  These a b -> This a : That b : fold
-    [ [ These a' b | a' <- shrinkA a ]
-    , [ These a b' | b' <- shrinkB b ]
-    ]
 
 genNBytes :: Int -> Gen ByteString
 genNBytes len = BS.pack <$> replicateM len (chooseBoundedIntegral (minBound, maxBound))
