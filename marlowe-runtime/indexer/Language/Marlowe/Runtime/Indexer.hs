@@ -21,7 +21,6 @@ import Language.Marlowe.Runtime.Indexer.Store
 import Network.Protocol.Connection (SomeClientConnectorTraced)
 import Network.Protocol.Peer.Trace (HasSpanContext)
 import Network.Protocol.Query.Client (QueryClient)
-import Observe.Event.Component (FieldConfig(..), GetSelectorConfig, SelectorConfig(..), SomeJSON(SomeJSON), prependKey)
 import UnliftIO (MonadUnliftIO)
 
 data MarloweIndexerSelector f where
@@ -53,43 +52,4 @@ marloweIndexer = proc MarloweIndexerDependencies{..} -> do
     { startup = pure True
     , liveness = atomically connected
     , readiness = pure True
-    }
-
-getMarloweIndexerSelectorConfig :: GetSelectorConfig MarloweIndexerSelector
-getMarloweIndexerSelectorConfig = \case
-  StoreEvent sel -> prependKey "store" $ getStoreSelectorConfig sel
-  ChainSeekClientEvent sel -> prependKey "chain-sync-client" $ getChainSeekClientSelectorConfig sel
-
-getStoreSelectorConfig :: GetSelectorConfig StoreSelector
-getStoreSelectorConfig = \case
-  Save -> SelectorConfig "save" True FieldConfig
-    { fieldKey = \case
-        RollbackPoint _ -> "rollback-point"
-        Stats _ -> "stats"
-        LocalTip _ -> "local-tip"
-        RemoteTip _ -> "remote-tip"
-        InvalidCreateTxs _ -> "invalid-create-txs"
-        InvalidApplyInputsTxs _ -> "invalid-apply-inputs-txs"
-    , fieldDefaultEnabled = \case
-        RollbackPoint _ -> True
-        Stats _ -> True
-        LocalTip _ -> True
-        RemoteTip _ -> True
-        InvalidCreateTxs _ -> True
-        InvalidApplyInputsTxs _ -> True
-    , toSomeJSON = \case
-        RollbackPoint point -> SomeJSON point
-        Stats stats -> SomeJSON stats
-        LocalTip point -> SomeJSON point
-        RemoteTip point -> SomeJSON point
-        InvalidCreateTxs errs -> SomeJSON errs
-        InvalidApplyInputsTxs errs -> SomeJSON errs
-    }
-
-getChainSeekClientSelectorConfig :: GetSelectorConfig ChainSeekClientSelector
-getChainSeekClientSelectorConfig = \case
-  LoadMarloweUTxO -> SelectorConfig "load-marlowe-utxo" True FieldConfig
-    { fieldKey = const "marlowe-utxo"
-    , fieldDefaultEnabled = const True
-    , toSomeJSON = SomeJSON
     }

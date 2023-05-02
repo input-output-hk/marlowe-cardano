@@ -76,7 +76,7 @@ run Options{..} = bracket (Pool.acquire 100 (Just 5000000) (fromString databaseU
       \provider -> f $ makeTracer provider instrumentationLibrary tracerOptions
 
     instrumentationLibrary = InstrumentationLibrary
-      { libraryName = "marlowe-proxy"
+      { libraryName = "marlowe-chain-sync"
       , libraryVersion = T.pack $ showVersion version
       }
 
