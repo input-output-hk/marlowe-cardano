@@ -16,22 +16,23 @@ module Network.Protocol.Query.Types
   where
 
 import Control.Monad (join)
-import Data.Aeson (Value(..), object, (.=))
 import Data.Binary (Get, Put, getWord8, putWord8)
 import Data.Data (type (:~:)(Refl))
 import Data.Functor ((<&>))
 import Data.List.NonEmpty (NonEmpty((:|)))
-import Data.Maybe (catMaybes)
+import Data.Maybe (catMaybes, maybeToList)
 import Data.Proxy (Proxy(..))
+import Data.Text (Text)
 import qualified Data.Text as T
 import GHC.Show (showSpace)
 import Network.Protocol.Codec (BinaryMessage(..))
 import Network.Protocol.Codec.Spec
   (ArbitraryMessage(..), MessageEq(..), MessageVariations(..), ShowProtocol(..), SomePeerHasAgency(..))
 import Network.Protocol.Handshake.Types (HasSignature(..))
+import Network.Protocol.Peer.Trace
 import Network.TypedProtocol
 import Network.TypedProtocol.Codec (AnyMessageAndAgency(..))
-import Observe.Event.Network.Protocol (MessageToJSON(..))
+import OpenTelemetry.Attributes (toPrimitiveAttribute)
 import Test.QuickCheck (Gen, oneof)
 
 data SomeTag q = forall delimiter err result. SomeTag (Tag q delimiter err result)
@@ -50,12 +51,6 @@ class IsQuery (q :: * -> * -> * -> *) where
   getErr :: Tag q delimiter err result -> Get err
   putResult :: Tag q delimiter err result -> result -> Put
   getResult :: Tag q delimiter err result -> Get result
-
-class IsQuery q => QueryToJSON q where
-  queryToJSON :: q delimiter err result -> Value
-  errToJSON :: Tag q delimiter err result -> err -> Value
-  resultToJSON :: Tag q delimiter err result -> result -> Value
-  delimiterToJSON :: Tag q delimiter err result -> delimiter -> Value
 
 -- | A state kind for the query protocol.
 data Query (query :: * -> * -> * -> *) where
@@ -205,21 +200,33 @@ instance IsQuery query => BinaryMessage (Query query) where
         _                        -> fail "Invalid protocol state for MsgDone"
       _ -> fail $ "Invalid msg tag " <> show tag
 
-instance QueryToJSON query => MessageToJSON (Query query) where
-  messageToJSON = \case
-    ClientAgency TokInit -> \case
-      MsgRequest q -> object [ "request" .= queryToJSON q ]
-    ClientAgency (TokPage tag) -> \case
-      MsgRequestNext d -> object [ "delimiter" .= delimiterToJSON tag d ]
-      MsgDone -> String "done"
-    ServerAgency (TokNext _ tag)-> \case
-      MsgReject err -> object [ "reject" .= errToJSON tag err ]
-      MsgNextPage results d -> object
-        [ "reject" .= object
-            [ "results" .= resultToJSON tag results
-            , "next" .= (delimiterToJSON tag <$> d)
-            ]
-        ]
+class ShowQuery query => OTelQuery query where
+  queryTypeName :: Proxy query -> Text
+  queryName :: Tag query delimiter err result -> Text
+
+instance OTelQuery query => OTelProtocol (Query query) where
+  protocolName _ = "query." <> queryTypeName (Proxy @query)
+  messageAttributes = curry \case
+    (_, MsgRequest query) -> MessageAttributes
+      { messageType = "request/" <> queryName (tagFromQuery query)
+      , messageParameters = [toPrimitiveAttribute $ T.pack $ showsPrecQuery 0 query ""]
+      }
+    (ServerAgency (TokNext _ tag), MsgReject err) -> MessageAttributes
+      { messageType = "request/" <> queryName tag <> "/reject"
+      , messageParameters = toPrimitiveAttribute . T.pack <$> [showsPrecErr 0 tag err ""]
+      }
+    (ServerAgency (TokNext _ tag), MsgNextPage result mDelimiter) -> MessageAttributes
+      { messageType = "request/" <> queryName tag <> "/next_page"
+      , messageParameters = toPrimitiveAttribute . T.pack <$> showsPrecResult 0 tag result "" : ((\d -> showsPrecDelimiter 0 tag d "")<$> maybeToList mDelimiter)
+      }
+    (ClientAgency (TokPage tag), MsgRequestNext delimiter) -> MessageAttributes
+      { messageType = "request/" <> queryName tag <> "/next"
+      , messageParameters = [toPrimitiveAttribute $ T.pack $ showsPrecDelimiter 0 tag delimiter ""]
+      }
+    (_, MsgDone) -> MessageAttributes
+      { messageType = "done"
+      , messageParameters = []
+      }
 
 class IsQuery query => ArbitraryQuery query where
   arbitraryTag :: Gen (SomeTag query)
