@@ -97,7 +97,7 @@ import Language.Marlowe.CLI.Export
   (buildMarloweDatum, buildRedeemer, buildRoleDatum, buildRoleRedeemer, marloweValidatorInfo, roleValidatorInfo)
 import Language.Marlowe.CLI.IO
   (decodeFileStrict, liftCli, liftCliIO, maybeWriteJson, queryInEra, readMaybeMetadata, readSigningKey)
-import Language.Marlowe.CLI.Merkle (merkleizeInputs, merkleizeMarlowe)
+import Language.Marlowe.CLI.Merkle (merkleizeMarlowe)
 import Language.Marlowe.CLI.Orphans ()
 import Language.Marlowe.CLI.Transaction
   ( buildBody
@@ -138,6 +138,7 @@ import Language.Marlowe.CLI.Types
   , withShelleyBasedEra
   )
 import qualified Language.Marlowe.Client as MC
+import Language.Marlowe.Core.V1.Merkle (MerkleizedContract(..), merkleizeInputs)
 import Language.Marlowe.Core.V1.Semantics
   ( MarloweParams(rolesCurrency)
   , Payment(..)
@@ -460,7 +461,7 @@ makeMarlowe marloweIn@MarloweTransaction{..} transactionInput =
     transactionInput' <- roundTxInterval transactionInput
     liftIO $ print transactionInput'
     transactionInput''@TransactionInput{..} <-
-      merkleizeInputs marloweIn transactionInput'
+      merkleizeInputs (MerkleizedContract mtContract mtContinuations) mtState transactionInput'
         `catchError` (const $ pure transactionInput')  -- TODO: Consider not catching errors here.
 
     case computeTransaction transactionInput'' mtState mtContract of

@@ -83,6 +83,10 @@ let
               PATH=${lib.makeBinPath [ z3 ]}:$PATH
             '';
 
+            marlowe-runtime.components.tests.marlowe-runtime-test.preCheck = ''
+              PATH=${lib.makeBinPath [ z3 ]}:$PATH
+            '';
+
             # Relies on cabal-doctest, just turn it off in the Nix build
             prettyprinter-configurable.components.tests.prettyprinter-configurable-doctest.buildable = lib.mkForce false;
 

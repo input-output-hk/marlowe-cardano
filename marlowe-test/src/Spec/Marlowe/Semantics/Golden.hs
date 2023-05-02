@@ -100,9 +100,6 @@ testGolden name printIt contract valids invalids =
 type GoldenCase = (POSIXTime, [TransactionInput], TransactionOutput)
 
 
-deriving instance Eq TransactionOutput
-
-
 -- | Use static analysis to generate and print successful golden test cases for a contract. This may take many minutes to execute.
 printValids :: Contract -> IO ()
 printValids contract =

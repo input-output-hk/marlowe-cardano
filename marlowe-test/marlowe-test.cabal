@@ -153,6 +153,8 @@ library
     Spec.Marlowe.Service.Random
     Spec.Marlowe.Service.Serialization
     Spec.Marlowe.Service.Types
+  other-modules:
+    Paths_marlowe_test
   build-depends:
     , base >=4.9 && <5
     , aeson >= 2 && < 3

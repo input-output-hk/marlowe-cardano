@@ -309,6 +309,7 @@ library tx
     Language.Marlowe.Runtime.Transaction.Chain
     Language.Marlowe.Runtime.Transaction.Constraints
     Language.Marlowe.Runtime.Transaction.Query
+    Language.Marlowe.Runtime.Transaction.Safety
     Language.Marlowe.Runtime.Transaction.Server
     Language.Marlowe.Runtime.Transaction.Submit
   build-depends:
@@ -542,6 +543,7 @@ test-suite marlowe-runtime-test
     Language.Marlowe.Runtime.Transaction.BuildConstraintsSpec
     Language.Marlowe.Runtime.Transaction.ConstraintsSpec
     Language.Marlowe.Runtime.Transaction.CommandSpec
+    Language.Marlowe.Runtime.Transaction.SafetySpec
     Language.Marlowe.Protocol.HeaderSyncSpec
     Language.Marlowe.Protocol.SyncSpec
     Language.Marlowe.Protocol.QuerySpec

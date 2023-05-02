@@ -56,8 +56,6 @@ module Language.Marlowe.CLI.Types
     -- * Queries
   , OutputQuery(..)
   , OutputQueryResult(..)
-    -- * Merklization
-  , Continuations
     -- * Publishing
   , MarloweScriptsRefs(..)
   , PublishMarloweScripts(..)
@@ -162,6 +160,7 @@ import Data.Maybe (fromMaybe)
 import Data.String (IsString)
 import GHC.Generics (Generic)
 import Language.Marlowe.CLI.Orphans ()
+import Language.Marlowe.Core.V1.Merkle (Continuations)
 import Language.Marlowe.Core.V1.Semantics (Payment)
 import Language.Marlowe.Core.V1.Semantics.Types (Contract, Input, State)
 import Ledger.Orphans ()
@@ -184,7 +183,6 @@ import qualified Data.Bifunctor as Bifunctor
 import qualified Data.ByteString.Lazy as LBS (fromStrict)
 import qualified Data.ByteString.Short as SBS (fromShort, length)
 import qualified Data.List.NonEmpty as L
-import qualified Data.Map.Strict as M (Map)
 import qualified Data.Map.Strict as Map
 import Data.Proxy (Proxy(Proxy))
 import Data.Time (NominalDiffTime, UTCTime, addUTCTime, getCurrentTime, nominalDiffTimeToSeconds)
@@ -225,10 +223,6 @@ getVerificationKey (Right skey) = Right $ C.getVerificationKey skey
 
 somePaymentsigningKeyToTxWitness :: SomePaymentSigningKey -> CS.ShelleyWitnessSigningKey
 somePaymentsigningKeyToTxWitness = either C.WitnessPaymentKey C.WitnessPaymentExtendedKey
-
--- | Continuations for contracts.
-type Continuations = M.Map DatumHash Contract
-
 
 -- | A marlowe transaction in an existentially quantified era
 data SomeMarloweTransaction = forall era lang. IsPlutusScriptLanguage lang => SomeMarloweTransaction

@@ -670,6 +670,7 @@ data CreateError v
   | CreateLoadMarloweContextFailed LoadMarloweContextError
   | CreateBuildupFailed CreateBuildupError
   | CreateToCardanoError
+  | CreateSafetyAnalysisError String  -- FIXME: This is a placeholder, pending design of error handling for safety analysis.
   deriving (Generic)
 
 deriving instance Eq (CreateError 'V1)
