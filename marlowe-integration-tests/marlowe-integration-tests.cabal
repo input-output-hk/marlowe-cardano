@@ -66,7 +66,18 @@ executable marlowe-integration-tests
     Language.Marlowe.Runtime.Integration.Create
     Language.Marlowe.Runtime.IntegrationSpec
     Language.Marlowe.Runtime.WebSpec
+    Language.Marlowe.Runtime.Web.Common
+    Language.Marlowe.Runtime.Web.StandardContract
     Language.Marlowe.Runtime.Web.GetContracts
+    Language.Marlowe.Runtime.Web.GetContract
+    Language.Marlowe.Runtime.Web.GetTransactions
+    Language.Marlowe.Runtime.Web.GetTransaction
+    Language.Marlowe.Runtime.Web.PostContract
+    Language.Marlowe.Runtime.Web.PostTransaction
+    Language.Marlowe.Runtime.Web.PutContract
+    Language.Marlowe.Runtime.Web.PutTransaction
+    Language.Marlowe.Runtime.Web.PostWithdrawal
+    Language.Marlowe.Runtime.Web.PutWithdrawal
     Language.Marlowe.Runtime.CliSpec
   build-depends:
       base >= 4.9 && < 5
