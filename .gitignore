@@ -90,6 +90,7 @@ marlowe-dashboard-server/config.json
 .virtualenv
 .vscode/
 .hsenv
+.devenv
 TAGS
 .DS_Store
 .uuid

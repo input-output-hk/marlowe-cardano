@@ -56,152 +56,174 @@
     std.url = "github:divnix/std";
     data-merge.url = "github:divnix/data-merge";
     bitte-cells.url = "github:input-output-hk/bitte-cells";
+
+    iogx.url = "github:zeme-iohk/iogx";
   };
 
-  outputs = { self, flake-utils, nosys, tullia, ... }@inputs:
+  outputs = { self, flake-utils, nosys, tullia, iogx, ... }@inputs:
     let
       systems = [ "x86_64-linux" "x86_64-darwin" ];
-    in
-    (flake-utils.lib.eachSystem systems (system:
-      let
-        packages = self.internal.packagesFun { inherit system; };
-        packagesLinux = self.internal.packagesFun { system = "x86_64-linux"; };
-        packagesProf = self.internal.packagesFun { inherit system; enableHaskellProfiling = true; };
-      in
-      {
-        inherit packages;
+      originalFlake = (flake-utils.lib.eachSystem systems (system:
+        let
+          packages = self.internal.packagesFun { inherit system; };
+          packagesLinux = self.internal.packagesFun { system = "x86_64-linux"; };
+          packagesProf = self.internal.packagesFun { inherit system; enableHaskellProfiling = true; };
+        in
+        rec {
+          inherit packages;
 
-        apps = rec {
-          nixpkgs-fmt = {
-            type = "app";
-            program =
-              "${packages.pkgs.nixpkgs-fmt}/bin/nixpkgs-fmt";
+          apps = rec {
+            nixpkgs-fmt = {
+              type = "app";
+              program =
+                "${packages.pkgs.nixpkgs-fmt}/bin/nixpkgs-fmt";
+            };
+
+            refresh-compose = {
+              type = "app";
+              program = (packages.pkgs.writeShellScript "refresh-compose" ''
+                cd $(git rev-parse --show-toplevel)
+
+                nix-store --realise ${packagesLinux.compose-spec} --add-root compose.yaml --indirect
+              '').outPath;
+            };
+
+            re-up = {
+              type = "app";
+              program = (packages.pkgs.writeShellScript "re-up" ''
+                cd $(git rev-parse --show-toplevel)
+
+                ${refresh-compose.program}
+                docker compose up --detach
+              '').outPath;
+            };
+
+            marlowe-chain-sync = {
+              type = "app";
+              program = "${packages.marlowe-chain-sync}/bin/marlowe-chain-sync";
+            };
+
+            marlowe-chain-indexer = {
+              type = "app";
+              program = "${packages.marlowe-chain-indexer}/bin/marlowe-chain-indexer";
+            };
+
+            marlowe-indexer = {
+              type = "app";
+              program = "${packages.marlowe-indexer}/bin/marlowe-indexer";
+            };
+
+            marlowe-sync = {
+              type = "app";
+              program = "${packages.marlowe-sync}/bin/marlowe-sync";
+            };
+
+            marlowe-tx = {
+              type = "app";
+              program = "${packages.marlowe-tx}/bin/marlowe-tx";
+            };
+
+            marlowe-proxy = {
+              type = "app";
+              program = "${packages.marlowe-proxy}/bin/marlowe-proxy";
+            };
+
+            marlowe-web-server = {
+              type = "app";
+              program = "${packages.marlowe-web-server}/bin/marlowe-web-server";
+            };
+
+            marlowe-runtime-cli = {
+              type = "app";
+              program = "${packages.marlowe-runtime-cli}/bin/marlowe-runtime-cli";
+            };
+
+            marlowe-integration-tests = {
+              type = "app";
+              program = "${packages.marlowe-integration-tests}/bin/marlowe-integration-tests";
+            };
           };
 
-          refresh-compose = {
-            type = "app";
-            program = (packages.pkgs.writeShellScript "refresh-compose" ''
-              cd $(git rev-parse --show-toplevel)
-
-              nix-store --realise ${packagesLinux.compose-spec} --add-root compose.yaml --indirect
-            '').outPath;
+          devShells.default = import ./dev-shell.nix {
+            inherit system packages;
           };
 
-          re-up = {
-            type = "app";
-            program = (packages.pkgs.writeShellScript "re-up" ''
-              cd $(git rev-parse --show-toplevel)
-
-              ${refresh-compose.program}
-              docker compose up --detach
-            '').outPath;
+          devShells.prof = import ./dev-shell.nix {
+            inherit system;
+            packages = packagesProf;
           };
 
-          marlowe-chain-sync = {
-            type = "app";
-            program = "${packages.marlowe-chain-sync}/bin/marlowe-chain-sync";
+          # first 3 Layers of Packaging
+          # https://std.divnix.com/patterns/four-packaging-layers.html
+          operables = import ./deploy/operables.nix {
+            inputs = nosys.lib.deSys system inputs;
+          };
+          oci-images = import ./deploy/oci-images.nix {
+            inputs = nosys.lib.deSys system inputs;
+          };
+          nomadTasks = import ./deploy/nomadTasks.nix {
+            inputs = nosys.lib.deSys system inputs;
           };
 
-          marlowe-chain-indexer = {
-            type = "app";
-            program = "${packages.marlowe-chain-indexer}/bin/marlowe-chain-indexer";
+          # Export ciJobs for tullia to parse
+          ciJobs = self.hydraJobsFunc {
+            supportedSystems = [ system ];
+            evalSystem = system;
           };
 
-          marlowe-indexer = {
-            type = "app";
-            program = "${packages.marlowe-indexer}/bin/marlowe-indexer";
-          };
-
-          marlowe-sync = {
-            type = "app";
-            program = "${packages.marlowe-sync}/bin/marlowe-sync";
-          };
-
-          marlowe-tx = {
-            type = "app";
-            program = "${packages.marlowe-tx}/bin/marlowe-tx";
-          };
-
-          marlowe-proxy = {
-            type = "app";
-            program = "${packages.marlowe-proxy}/bin/marlowe-proxy";
-          };
-
-          marlowe-contract = {
-            type = "app";
-            program = "${packages.marlowe-contract}/bin/marlowe-contract";
-          };
-
-          marlowe-web-server = {
-            type = "app";
-            program = "${packages.marlowe-web-server}/bin/marlowe-web-server";
-          };
-
-          marlowe-runtime-cli = {
-            type = "app";
-            program = "${packages.marlowe-runtime-cli}/bin/marlowe-runtime-cli";
-          };
-
-          marlowe-integration-tests = {
-            type = "app";
-            program = "${packages.marlowe-integration-tests}/bin/marlowe-integration-tests";
-          };
+          hydraJobs = ciJobs;
+        }
+        // tullia.fromSimple system (import ./nix/tullia.nix)
+      )) // rec {
+        hydraJobsFunc = import ./hydra-jobs.nix {
+          inherit inputs;
+          inherit (self) internal;
+          marlowe-cardano = self;
         };
-
-        devShells.default = import ./dev-shell.nix {
-          inherit system packages;
-        };
-
-        devShells.prof = import ./dev-shell.nix {
-          inherit system;
-          packages = packagesProf;
-        };
-
-        # first 3 Layers of Packaging
-        # https://std.divnix.com/patterns/four-packaging-layers.html
-        operables = import ./deploy/operables.nix {
-          inputs = nosys.lib.deSys system inputs;
-        };
-        oci-images = import ./deploy/oci-images.nix {
-          inputs = nosys.lib.deSys system inputs;
-        };
-        nomadTasks = import ./deploy/nomadTasks.nix {
-          inputs = nosys.lib.deSys system inputs;
-        };
-
-        # Export ciJobs for tullia to parse
-        ciJobs = self.hydraJobs {
-          supportedSystems = [ system ];
-        };
-      }
-      // tullia.fromSimple system (import ./nix/tullia.nix)
-    )) // {
-      hydraJobs = import ./hydra-jobs.nix {
         inherit inputs;
-        inherit (self) internal;
-        marlowe-cardano = self;
+        internal.packagesFun =
+          { system
+          , enableHaskellProfiling ? false
+          , source-repo-override ? { }
+          , crossSystem ? null
+          , evalSystem ? system
+          }: import ./packages.nix {
+            inherit system inputs;
+            packagesBySystem = builtins.listToAttrs (map
+              (system': {
+                name = system';
+                value = import ./nix {
+                  system = system';
+                  inherit enableHaskellProfiling source-repo-override inputs crossSystem evalSystem;
+                  inherit (inputs) haskell-nix;
+                };
+              })
+              systems);
+          };
       };
-      inherit inputs;
-      internal.packagesFun =
-        { system
-        , enableHaskellProfiling ? false
-        , source-repo-override ? { }
-        , crossSystem ? null
-        , evalSystem ? system
-        }: import ./packages.nix {
-          inherit system inputs;
-          packagesBySystem = builtins.listToAttrs (map
-            (system': {
-              name = system';
-              value = import ./nix {
-                system = system';
-                inherit enableHaskellProfiling source-repo-override inputs crossSystem evalSystem;
-                inherit (inputs) haskell-nix;
-              };
-            })
-            systems);
+
+      newFlake = iogx.mkFlake {
+        inherit inputs;
+        repoRoot = ./.;
+        enableHydraPreCommitCheck = false;
+        shellName = "marlowe-cardano";
+        haskellProjectFile = import ./__iogx__/haskell-project.nix;
+        perSystemOutputs = import ./__iogx__/per-system-outputs.nix;
+        shellModule = import ./__iogx__/shell-module.nix;
+        flakeOutputsPrefix = "__iogx__";
+      };
+
+      pkgs = inputs.nixpkgs.legacyPackages.x86_64-linux;
+      ci-lib = pkgs.callPackage ./nix/lib/ci.nix { };
+      originalFlake' = originalFlake // {
+        hydraJobs = originalFlake.hydraJobs // {
+          required = ci-lib.derivationAggregate "required-marlowe" originalFlake.hydraJobs;
         };
-    };
+      };
+    in
+    inputs.nixpkgs.lib.recursiveUpdate originalFlake' newFlake;
+
+
 
   nixConfig = {
     extra-substituters = [
