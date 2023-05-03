@@ -11,7 +11,6 @@ module Language.Marlowe.Runtime.Sync.Database
 
 import Control.Monad.Event.Class (MonadInjectEvent, withEvent)
 import Data.Aeson (ToJSON)
-import Data.Text (Text)
 import GHC.Generics (Generic)
 import Language.Marlowe.Protocol.Query.Types
   (ContractFilter, Page, Range, SomeContractState, SomeTransaction, SomeTransactions, Withdrawal, WithdrawalFilter)
@@ -20,7 +19,6 @@ import Language.Marlowe.Runtime.Core.Api (ContractId, MarloweVersion(..), SomeMa
 import Language.Marlowe.Runtime.Discovery.Api (ContractHeader)
 import Language.Marlowe.Runtime.History.Api (ContractStep, SomeCreateStep)
 import Observe.Event (addField)
-import Observe.Event.Component (FieldConfig(..), GetSelectorConfig, SelectorConfig(..), SomeJSON(..))
 
 data DatabaseSelector f where
   GetTip :: DatabaseSelector (QueryField () ChainPoint)
@@ -192,30 +190,3 @@ data Next a
   | Next BlockHeader [a]
   deriving stock (Generic, Functor)
   deriving anyclass (ToJSON)
-
-getDatabaseSelectorConfig :: GetSelectorConfig DatabaseSelector
-getDatabaseSelectorConfig = \case
-  GetTip -> getQuerySelectorConfig "get-tip"
-  GetTipForContract -> getQuerySelectorConfig "get-tip-for-contract"
-  GetCreateStep -> getQuerySelectorConfig "get-create-step"
-  GetIntersectionForContract -> getQuerySelectorConfig "get-intersection-for-contract"
-  GetIntersection -> getQuerySelectorConfig "get-intersection"
-  GetNextHeaders -> getQuerySelectorConfig "get-next-headers"
-  GetNextSteps MarloweV1 -> getQuerySelectorConfig "get-next-steps"
-  GetHeaders -> getQuerySelectorConfig "get-headers"
-  GetContractState -> getQuerySelectorConfig "get-contract-state"
-  GetTransaction -> getQuerySelectorConfig "get-transaction"
-  GetTransactions -> getQuerySelectorConfig "get-transactions"
-  GetWithdrawal -> getQuerySelectorConfig "get-withdrawal"
-  GetWithdrawals -> getQuerySelectorConfig "get-withdrawals"
-
-getQuerySelectorConfig :: (ToJSON p, ToJSON r) => Text -> SelectorConfig (QueryField p r)
-getQuerySelectorConfig key = SelectorConfig key True FieldConfig
-  { fieldKey = \case
-      Arguments _ -> "arguments"
-      Result _ -> "result"
-  , fieldDefaultEnabled = const True
-  , toSomeJSON = \case
-      Arguments args -> SomeJSON args
-      Result result -> SomeJSON result
-  }

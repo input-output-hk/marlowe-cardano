@@ -57,7 +57,6 @@ import Options.Applicative
   , long
   , metavar
   , option
-  , optional
   , progDesc
   , short
   , showDefault
@@ -164,7 +163,6 @@ data Options = Options
   , marloweQueryPort :: PortNumber
   , txHost :: HostName
   , txPort :: PortNumber
-  , logConfigFile :: Maybe FilePath
   , httpPort :: PortNumber
   }
 
@@ -188,7 +186,6 @@ getOptions = do
           <*> marloweQueryPortParser
           <*> txHostParser
           <*> txPortParser
-          <*> logConfigFileParser
           <*> httpPortParser
       )
     )
@@ -218,12 +215,6 @@ getOptions = do
       , metavar "PORT_NUMBER"
       , help "The port number to run the server with tracing on."
       , showDefault
-      ]
-
-    logConfigFileParser = optional $ strOption $ mconcat
-      [ long "log-config-file"
-      , metavar "FILE_PATH"
-      , help "The logging configuration JSON file."
       ]
 
     httpPortParser = option auto $ mconcat

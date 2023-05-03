@@ -18,7 +18,6 @@ data Options = Options
   , port              :: !PortNumber
   , queryPort         :: !PortNumber
   , commandPort       :: !PortNumber
-  , logConfigFile     :: !(Maybe FilePath)
   , httpPort :: !PortNumber
   } deriving (Show, Eq)
 
@@ -97,7 +96,6 @@ parseOptions defaultNetworkId defaultSocketPath defaultDatabaseUri defaultHost d
               <*> portOption
               <*> queryPortOption
               <*> jobPortOption
-              <*> logConfigFileParser
               <*> httpPortOption
           )
       where
@@ -181,16 +179,6 @@ parseOptions defaultNetworkId defaultSocketPath defaultDatabaseUri defaultHost d
           , O.help "The hostname to serve the chain sync protocol on."
           , O.showDefault
           ]
-
-        logConfigFileParser :: O.Parser (Maybe FilePath)
-        logConfigFileParser = O.optional $ O.strOption options
-          where
-            options :: O.Mod O.OptionFields FilePath
-            options = mconcat
-              [ O.long "log-config-file"
-              , O.metavar "FILE_PATH"
-              , O.help "Path to the log configuration JSON file."
-              ]
 
         httpPortOption :: O.Parser PortNumber
         httpPortOption = O.option O.auto $ mconcat

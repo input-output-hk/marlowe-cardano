@@ -1,7 +1,7 @@
 cabal-version: 3.0
 name: marlowe-integration-tests
 version: 0.1.0.0
-ynopsis:
+synopsis:
   End to end integration tests for the Marlowe Runtime
 bug-reports: https://github.com/input-output-hk/marlowe-marlowe/issues
 license: Apache-2.0
@@ -54,7 +54,6 @@ executable marlowe-integration-tests
   if flag(defer-plugin-errors)
     ghc-options: -fplugin-opt PlutusTx.Plugin:defer-errors
   hs-source-dirs: test
-  type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
     Language.Marlowe.Runtime.Integration.ApplyInputs

@@ -57,7 +57,6 @@ import Options.Applicative
   , long
   , metavar
   , option
-  , optional
   , progDesc
   , short
   , showDefault
@@ -167,7 +166,6 @@ data Options = Options
   , chainSeekQueryPort :: PortNumber
   , chainSeekHost :: HostName
   , databaseUri :: String
-  , logConfigFile :: Maybe FilePath
   , httpPort :: PortNumber
   }
 
@@ -179,7 +177,6 @@ getOptions = execParser $ info (helper <*> parser) infoMod
       <*> chainSeekQueryPortParser
       <*> chainSeekHostParser
       <*> databaseUriParser
-      <*> logConfigFileParser
       <*> httpPortParser
 
     chainSeekPortParser = option auto $ mconcat
@@ -211,12 +208,6 @@ getOptions = execParser $ info (helper <*> parser) infoMod
       , short 'd'
       , metavar "DATABASE_URI"
       , help "URI of the database where the contract information is saved."
-      ]
-
-    logConfigFileParser = optional $ strOption $ mconcat
-      [ long "log-config-file"
-      , metavar "FILE_PATH"
-      , help "The logging configuration JSON file."
       ]
 
     httpPortParser = option auto $ mconcat
