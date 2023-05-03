@@ -68,6 +68,7 @@ data LoadWalletContextField
   | WalletContextLoaded WalletContext
 
 data LoadMarloweContextSelector f where
+  LoadMarloweContext :: LoadMarloweContextSelector LoadMarloweContextField
   ContractNotFound :: LoadMarloweContextSelector Void
   ContractFound :: LoadMarloweContextSelector ContractFoundField
   ExtractCreationFailed :: LoadMarloweContextSelector ExtractCreationError
@@ -82,7 +83,6 @@ data ContractFoundField where
   ActualVersion :: MarloweVersion v -> ContractFoundField
   MarloweScriptAddress :: Address -> ContractFoundField
   PayoutScriptHash :: ScriptHash -> ContractFoundField
-  ContractUTxO :: TxOutRef -> ContractFoundField
 
 type LoadWalletContext m = WalletAddresses -> m WalletContext
 
@@ -121,68 +121,73 @@ loadMarloweContext
   -> SomeClientConnectorTraced (QueryClient ChainSyncQuery) r s m
   -> LoadMarloweContext m
 loadMarloweContext getScripts networkId chainSyncConnector chainSyncQueryConnector desiredVersion contractId =
-  runSomeConnectorTraced chainSyncConnector client
+  withEventFields LoadMarloweContext [DesiredVersion desiredVersion, Contract contractId]
+    $ const
+    $ runSomeConnectorTraced chainSyncConnector client
   where
     TxOutRef creationTxId _ = unContractId contractId
     client = ChainSeekClient $ pure clientFindContract
 
     clientFindContract = SendMsgQueryNext (FindTx creationTxId False) ClientStNext
-      { recvMsgQueryRejected = \_ _ -> withEvent ContractNotFound
-          $ const
-          $ pure
-          $ SendMsgDone
-          $ Left LoadMarloweContextErrorNotFound
+      { recvMsgQueryRejected = \_ _ -> do
+          emitImmediateEvent_ ContractNotFound
+          pure $ SendMsgDone $ Left LoadMarloweContextErrorNotFound
       , recvMsgRollBackward = \_ _ -> pure clientFindContract
       , recvMsgRollForward = \tx point _ -> case point of
           Genesis -> error "Roll forward to Genesis"
-          At blockHeader -> withEvent ContractFound \_ -> case extractCreation contractId tx of
-            Left e -> withEvent ExtractCreationFailed \ev' -> do
-              addField ev' e
-              pure $ SendMsgDone $ Left $ ExtractCreationError e
-            Right (SomeCreateStep actualVersion CreateStep{..}) -> do
-              let TransactionScriptOutput{..} = createOutput
-              let
-                marloweScriptHash = fromJust $ paymentCredential address >>= \case
-                  ScriptCredential hash -> pure hash
-                  _ -> Nothing
-                matchesScriptHash MarloweScripts{..} = marloweScript == marloweScriptHash
-                scripts = getScripts actualVersion
-                marloweScripts = fromJust $ find matchesScriptHash scripts
-              let marloweScriptUTxO = fromJust $ hush $ lookupMarloweScriptUtxo networkId marloweScripts
-              let payoutScriptUTxO = fromJust $ hush $ lookupPayoutScriptUtxo networkId marloweScripts
-              pure case testEquality desiredVersion actualVersion of
-                Nothing -> SendMsgDone
-                  $ Left
-                  $ LoadMarloweContextErrorVersionMismatch
-                  $ SomeMarloweVersion actualVersion
-                Just Refl -> clientFollowContract actualVersion $ pure
-                  ( blockHeader
-                  , MarloweContext
-                    { marloweAddress = address
-                    , payoutScriptHash = payoutValidatorHash
-                    , marloweScriptHash = fromJust $ paymentCredential address >>= \case
-                        ScriptCredential hash -> pure hash
-                        _ -> Nothing
-                    , payoutAddress = fromCardanoAddressInEra C.BabbageEra
-                        $ C.AddressInEra (C.ShelleyAddressInEra C.ShelleyBasedEraBabbage)
-                        $ C.makeShelleyAddress
-                            networkId
-                            (C.PaymentCredentialByScript $ fromJust $ toCardanoScriptHash payoutValidatorHash)
-                            C.NoStakeAddress
-                    -- Get the script output of the create event.
-                    , scriptOutput = Just createOutput
-                    -- No payouts to start with
-                    , payoutOutputs = mempty
-                    , marloweScriptUTxO
-                    , payoutScriptUTxO
-                    }
-                  )
-      , recvMsgWait = withEvent ContractNotFound
-          $ const
-          $ pure
-          $ SendMsgCancel
-          $ SendMsgDone
-          $ Left LoadMarloweContextErrorNotFound
+          At blockHeader -> do
+            case extractCreation contractId tx of
+              Left e -> do
+                emitImmediateEventFields_ ExtractCreationFailed [e]
+                pure $ SendMsgDone $ Left $ ExtractCreationError e
+              Right (SomeCreateStep actualVersion CreateStep{..}) -> do
+                let TransactionScriptOutput{..} = createOutput
+                let
+                  marloweScriptHash = fromJust $ paymentCredential address >>= \case
+                    ScriptCredential hash -> pure hash
+                    _ -> Nothing
+                  matchesScriptHash MarloweScripts{..} = marloweScript == marloweScriptHash
+                  scripts = getScripts actualVersion
+                  marloweScripts = fromJust $ find matchesScriptHash scripts
+                let marloweScriptUTxO = fromJust $ hush $ lookupMarloweScriptUtxo networkId marloweScripts
+                let payoutScriptUTxO = fromJust $ hush $ lookupPayoutScriptUtxo networkId marloweScripts
+                case testEquality desiredVersion actualVersion of
+                  Nothing -> pure
+                    $ SendMsgDone
+                    $ Left
+                    $ LoadMarloweContextErrorVersionMismatch
+                    $ SomeMarloweVersion actualVersion
+                  Just Refl -> do
+                    emitImmediateEventFields_ ContractFound
+                      [ ActualVersion actualVersion
+                      , MarloweScriptAddress address
+                      , PayoutScriptHash payoutValidatorHash
+                      ]
+                    pure $ clientFollowContract actualVersion $ pure
+                      ( blockHeader
+                      , MarloweContext
+                        { marloweAddress = address
+                        , payoutScriptHash = payoutValidatorHash
+                        , marloweScriptHash = fromJust $ paymentCredential address >>= \case
+                            ScriptCredential hash -> pure hash
+                            _ -> Nothing
+                        , payoutAddress = fromCardanoAddressInEra C.BabbageEra
+                            $ C.AddressInEra (C.ShelleyAddressInEra C.ShelleyBasedEraBabbage)
+                            $ C.makeShelleyAddress
+                                networkId
+                                (C.PaymentCredentialByScript $ fromJust $ toCardanoScriptHash payoutValidatorHash)
+                                C.NoStakeAddress
+                        -- Get the script output of the create event.
+                        , scriptOutput = Just createOutput
+                        -- No payouts to start with
+                        , payoutOutputs = mempty
+                        , marloweScriptUTxO
+                        , payoutScriptUTxO
+                        }
+                      )
+      , recvMsgWait = do
+          emitImmediateEvent_ ContractNotFound
+          pure $ SendMsgCancel $ SendMsgDone $ Left LoadMarloweContextErrorNotFound
       }
 
     clientFollowContract
@@ -191,17 +196,13 @@ loadMarloweContext getScripts networkId chainSyncConnector chainSyncQueryConnect
       -> NonEmpty (BlockHeader, MarloweContext v)
       -> ClientStIdle Move ChainPoint ChainPoint m (Either LoadMarloweContextError (MarloweContext v))
     clientFollowContract version contexts = SendMsgQueryNext (FindConsumingTxs utxos) ClientStNext
-      { recvMsgQueryRejected = \_ _ -> withEvent ContractNotFound
-          $ const
-          $ pure
-          $ SendMsgDone
-          $ Left LoadMarloweContextErrorNotFound
+      { recvMsgQueryRejected = \_ _ -> do
+        emitImmediateEvent_ ContractNotFound
+        pure $ SendMsgDone $ Left LoadMarloweContextErrorNotFound
       , recvMsgRollBackward = \point _ -> case rollbackContexts point contexts of
-          Nothing -> withEvent ContractNotFound
-            $ const
-            $ pure
-            $ SendMsgDone
-            $ Left LoadMarloweContextErrorNotFound
+          Nothing -> do
+            emitImmediateEvent_ ContractNotFound
+            pure $ SendMsgDone $ Left LoadMarloweContextErrorNotFound
           Just contexts' -> pure $ clientFollowContract version contexts'
       , recvMsgRollForward = \txs point _ -> case point of
           Genesis -> error "Roll forward to Genesis"
@@ -211,12 +212,12 @@ loadMarloweContext getScripts networkId chainSyncConnector chainSyncQueryConnect
               systemStart <- fromJust . hush <$> runSomeConnectorTraced chainSyncQueryConnector (liftQuery GetSystemStart)
               eraHistory <- fromJust . hush <$> runSomeConnectorTraced chainSyncQueryConnector (liftQuery GetEraHistory)
               case extractMarloweTransaction version systemStart eraHistory contractId marloweAddress payoutScriptHash u blockHeader scriptConsumer of
-                Left e -> withEvent ExtractMarloweTransactionFailed \ev' -> do
-                  addField ev' e
+                Left e -> do
+                  emitImmediateEventFields_ ExtractMarloweTransactionFailed [e]
                   pure $ SendMsgDone $ Left $ ExtractMarloweTransactionError e
                 Right marloweTransaction -> pure $ clientFollowContract version $ updateContext blockHeader (Just marloweTransaction) txs contexts
-      , recvMsgWait = withEvent (ContractTipFound version) \ev -> do
-          addField ev context
+      , recvMsgWait = do
+          emitImmediateEventFields_ (ContractTipFound version) [context]
           pure $ SendMsgCancel $ SendMsgDone $ Right context
       }
       where

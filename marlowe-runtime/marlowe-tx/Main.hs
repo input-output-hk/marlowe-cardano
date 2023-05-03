@@ -16,32 +16,30 @@ import Control.Monad.Event.Class
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Trans.Reader (ReaderT(..))
 import Control.Monad.With
-import Data.Aeson.Encode.Pretty (encodePretty)
 import Data.Either (fromRight)
 import Data.GeneralAllocate
-import qualified Data.Text.Lazy as T
-import Data.Text.Lazy.Encoding (decodeUtf8)
-import qualified Data.Text.Lazy.IO as TL
-import Data.UUID.V4 (nextRandom)
+import qualified Data.Text as T
+import Data.Version (showVersion)
 import Language.Marlowe.Runtime.ChainSync.Api (BlockNo(..), ChainSyncQuery(..), RuntimeChainSeekClient)
 import qualified Language.Marlowe.Runtime.Core.ScriptRegistry as ScriptRegistry
 import Language.Marlowe.Runtime.Transaction (TransactionDependencies(..), transaction)
 import qualified Language.Marlowe.Runtime.Transaction.Query as Query
 import qualified Language.Marlowe.Runtime.Transaction.Submit as Submit
-import Logging (RootSelector(..), defaultRootSelectorLogConfig, getRootSelectorConfig)
-import Network.Protocol.ChainSeek.Client (chainSeekClientPeer)
-import Network.Protocol.Connection
-  (SomeClientConnector, SomeConnectionSource(..), SomeConnector(SomeConnector), logConnectionSource, logConnector)
-import Network.Protocol.Driver (TcpServerDependencies(..), runSomeConnector, tcpClient, tcpServer)
-import Network.Protocol.Handshake.Client (handshakeClientConnector)
-import Network.Protocol.Handshake.Server (handshakeConnectionSource)
-import Network.Protocol.Job.Client (jobClientPeer)
-import Network.Protocol.Job.Server (jobServerPeer)
-import Network.Protocol.Query.Client (QueryClient, liftQuery, queryClientPeer)
+import Logging (RootSelector(..), renderRootSelectorOTel)
+import Network.Protocol.ChainSeek.Client (chainSeekClientPeerTraced)
+import Network.Protocol.Connection (SomeClientConnectorTraced, SomeConnectionSourceTraced(..), SomeConnectorTraced(..))
+import Network.Protocol.Driver
+  (TcpServerDependenciesTraced(..), runSomeConnectorTraced, tcpClientTraced, tcpServerTraced)
+import Network.Protocol.Handshake.Client (handshakeClientConnectorTraced)
+import Network.Protocol.Handshake.Server (handshakeConnectionSourceTraced)
+import Network.Protocol.Job.Client (jobClientPeerTraced)
+import Network.Protocol.Job.Server (jobServerPeerTraced)
+import Network.Protocol.Query.Client (QueryClient, liftQuery, queryClientPeerTraced)
 import Network.Socket (HostName, PortNumber)
 import Observe.Event (EventBackend)
 import Observe.Event.Backend (hoistEventBackend, injectSelector)
-import Observe.Event.Component (LoggerDependencies(..), withLogger)
+import Observe.Event.Render.OpenTelemetry (tracerEventBackend)
+import OpenTelemetry.Trace hiding (Server)
 import Options.Applicative
   ( auto
   , execParser
@@ -50,69 +48,70 @@ import Options.Applicative
   , help
   , helper
   , info
-  , infoOption
   , long
   , metavar
   , option
-  , optional
   , progDesc
   , short
   , showDefault
   , strOption
   , value
   )
-import System.IO (stderr)
-import UnliftIO (MonadUnliftIO)
+import Paths_marlowe_runtime (version)
+import UnliftIO (MonadUnliftIO, bracket)
 
 main :: IO ()
-main = run =<< getOptions
+main = do
+  options <- getOptions
+  withTracer \tracer ->
+    runAppM (tracerEventBackend tracer renderRootSelectorOTel) $ run options
+  where
+    withTracer f = bracket
+      initializeGlobalTracerProvider
+      shutdownTracerProvider
+      \provider -> f $ makeTracer provider instrumentationLibrary tracerOptions
 
-run :: Options -> IO ()
-run Options{..} = flip runComponent_ () $ withLogger loggerDependencies runAppM proc _ -> do
-  serverSource <- tcpServer -< TcpServerDependencies host port jobServerPeer
+    instrumentationLibrary = InstrumentationLibrary
+      { libraryName = "marlowe-proxy"
+      , libraryVersion = T.pack $ showVersion version
+      }
+
+run :: Options -> AppM Span ()
+run Options{..} = flip runComponent_ () proc _ -> do
+  serverSource <- tcpServerTraced (injectSelector Server) -< TcpServerDependenciesTraced
+    host
+    port
+    jobServerPeerTraced
   let
-    chainSyncConnector :: SomeClientConnector RuntimeChainSeekClient (AppM r)
-    chainSyncConnector = SomeConnector
-      $ logConnector (injectSelector ChainSeekClient)
-      $ handshakeClientConnector
-      $ tcpClient chainSeekHost chainSeekPort chainSeekClientPeer
+    chainSyncConnector :: SomeClientConnectorTraced RuntimeChainSeekClient r RootSelector (AppM r)
+    chainSyncConnector = SomeConnectorTraced (injectSelector ChainSeekClient)
+      $ handshakeClientConnectorTraced
+      $ tcpClientTraced (injectSelector ChainSeekClient) chainSeekHost chainSeekPort chainSeekClientPeerTraced
 
-    chainSyncQueryConnector :: SomeClientConnector (QueryClient ChainSyncQuery) (AppM r)
-    chainSyncQueryConnector = SomeConnector
-      $ logConnector (injectSelector ChainSyncQueryClient)
-      $ handshakeClientConnector
-      $ tcpClient chainSeekHost chainSeekQueryPort queryClientPeer
+    chainSyncQueryConnector :: SomeClientConnectorTraced (QueryClient ChainSyncQuery) r RootSelector (AppM r)
+    chainSyncQueryConnector = SomeConnectorTraced (injectSelector ChainSyncQueryClient)
+      $ handshakeClientConnectorTraced
+      $ tcpClientTraced (injectSelector ChainSyncQueryClient) chainSeekHost chainSeekQueryPort queryClientPeerTraced
 
-    queryChainSync = fmap (fromRight $ error "failed to query chain sync server") . runSomeConnector chainSyncQueryConnector . liftQuery
+    queryChainSync = fmap (fromRight $ error "failed to query chain sync server") . runSomeConnectorTraced chainSyncQueryConnector . liftQuery
   probes <- transaction -< TransactionDependencies
-    { connectionSource = SomeConnectionSource
-        $ logConnectionSource (injectSelector Server)
-        $ handshakeConnectionSource serverSource
+    { connectionSource = SomeConnectionSourceTraced (injectSelector Server)
+        $ handshakeConnectionSourceTraced serverSource
     , mkSubmitJob = Submit.mkSubmitJob Submit.SubmitJobDependencies
-        { chainSyncJobConnector = SomeConnector
-            $ logConnector (injectSelector ChainSyncJobClient)
-            $ handshakeClientConnector
-            $ tcpClient chainSeekHost chainSeekCommandPort jobClientPeer
+        { chainSyncJobConnector = SomeConnectorTraced (injectSelector ChainSyncJobClient)
+            $ handshakeClientConnectorTraced
+            $ tcpClientTraced (injectSelector ChainSyncJobClient) chainSeekHost chainSeekCommandPort jobClientPeerTraced
         , ..
         }
-    , loadMarloweContext = \version contractId -> do
+    , loadMarloweContext = \v contractId -> do
         networkId <- queryChainSync GetNetworkId
-        Query.loadMarloweContext ScriptRegistry.getScripts networkId chainSyncConnector chainSyncQueryConnector version contractId
+        Query.loadMarloweContext ScriptRegistry.getScripts networkId chainSyncConnector chainSyncQueryConnector v contractId
     , loadWalletContext = Query.loadWalletContext $ queryChainSync . GetUTxOs
     , getCurrentScripts = ScriptRegistry.getCurrentScripts
     , ..
     }
 
   probeServer -< ProbeServerDependencies { port = fromIntegral httpPort, .. }
-
-  where
-    loggerDependencies = LoggerDependencies
-      { configFilePath = logConfigFile
-      , getSelectorConfig = getRootSelectorConfig
-      , newRef = nextRandom
-      , writeText = TL.hPutStr stderr
-      , injectConfigWatcherSelector = injectSelector ConfigWatcher
-      }
 
 runAppM :: EventBackend IO r RootSelector -> AppM r a -> IO a
 runAppM eventBackend = flip runReaderT (hoistEventBackend liftIO eventBackend) . unAppM
@@ -152,18 +151,13 @@ data Options = Options
   , chainSeekHost :: HostName
   , port :: PortNumber
   , host :: HostName
-  , logConfigFile :: Maybe FilePath
   , submitConfirmationBlocks :: BlockNo
   , httpPort :: PortNumber
   }
 
 getOptions :: IO Options
-getOptions = execParser $ info (helper <*> printLogConfigOption <*> parser) infoMod
+getOptions = execParser $ info (helper <*> parser) infoMod
   where
-    printLogConfigOption = infoOption
-      (T.unpack $ decodeUtf8 $ encodePretty defaultRootSelectorLogConfig)
-      (long "print-log-config" <> help "Print the default log configuration.")
-
     parser = Options
       <$> chainSeekPortParser
       <*> chainSeekQueryPortParser
@@ -171,7 +165,6 @@ getOptions = execParser $ info (helper <*> printLogConfigOption <*> parser) info
       <*> chainSeekHostParser
       <*> portParser
       <*> hostParser
-      <*> logConfigFileParser
       <*> submitConfirmationBlocksParser
       <*> httpPortParser
 
@@ -222,12 +215,6 @@ getOptions = execParser $ info (helper <*> printLogConfigOption <*> parser) info
       , metavar "HOST_NAME"
       , help "The host name to run the tx server on."
       , showDefault
-      ]
-
-    logConfigFileParser = optional $ strOption $ mconcat
-      [ long "log-config-file"
-      , metavar "FILE_PATH"
-      , help "The logging configuration JSON file."
       ]
 
     httpPortParser = option auto $ mconcat

@@ -426,60 +426,9 @@ data MarloweTxCommand status err result where
 instance HasSignature MarloweTxCommand where
   signature _ = "MarloweTxCommand"
 
-instance CommandToJSON MarloweTxCommand where
-  commandToJSON = \case
-    Create mStakeCredential version walletAddresses roles metadata minAda contract -> object
-      [ "create" .= object
-          [ "stake-credential" .= mStakeCredential
-          , "wallet-addresses" .= walletAddresses
-          , "roles" .= roles
-          , "metadata" .= metadata
-          , "min-ada-deposit" .= minAda
-          , "contract" .= contractToJSON version contract
-          , "version" .= version
-          ]
-      ]
-    ApplyInputs MarloweV1 walletAddresses contractId metadata invalidBefore invalidHereafter redeemer -> object
-      [ "apply-inputs" .= object
-          [ "wallet-addresses" .= walletAddresses
-          , "contract-id" .= contractId
-          , "metadata" .= metadata
-          , "invalid-before" .= invalidBefore
-          , "invalid-hereafter" .= invalidHereafter
-          , "redeemer" .= toJSON redeemer
-          , "version" .= MarloweV1
-          ]
-      ]
-    Withdraw version walletAddresses contractId tokenName -> object
-      [ "withdraw" .= object
-          [ "wallet-addresses" .= walletAddresses
-          , "contract-id" .= contractId
-          , "token-name" .= tokenName
-          , "version" .= version
-          ]
-      ]
-    Submit tx -> object [ "submit" .= serialiseToTextEnvelope Nothing tx ]
-  jobIdToJSON = \case
-    JobIdSubmit i -> object [ "submit" .= i ]
-  errToJSON = \case
-    TagCreate MarloweV1 -> toJSON
-    TagApplyInputs MarloweV1 -> toJSON
-    TagWithdraw MarloweV1 -> toJSON
-    TagSubmit -> toJSON
-  resultToJSON = \case
-    TagCreate MarloweV1 -> toJSON
-    TagApplyInputs MarloweV1 -> toJSON
-    TagWithdraw MarloweV1 -> toJSON . serialiseToTextEnvelope Nothing
-    TagSubmit -> toJSON
-  statusToJSON = \case
-    TagCreate _ -> toJSON
-    TagApplyInputs _ -> toJSON
-    TagWithdraw _ -> toJSON
-    TagSubmit -> toJSON
-
 instance OTelCommand MarloweTxCommand where
-  commandProtocolName _ = "marlowe_tx_command"
-  commandType = \case
+  commandTypeName _ = "marlowe_tx_command"
+  commandName = \case
     TagCreate _ -> "create"
     TagApplyInputs _ -> "apply_inputs"
     TagWithdraw _ -> "withdraw"
