@@ -20,16 +20,18 @@ import Data.ByteString.Lazy (ByteString)
 import Data.GeneralAllocate
 import qualified Data.Text as T
 import Data.Version (showVersion)
-import Language.Marlowe.Protocol.Server (marloweRuntimeServerPeer)
+import Language.Marlowe.Protocol.Server (marloweRuntimeServerPeer, marloweRuntimeServerPeerTraced)
 import Language.Marlowe.Runtime.CLI.Option (optParserWithEnvDefault)
 import qualified Language.Marlowe.Runtime.CLI.Option as O
 import Language.Marlowe.Runtime.Proxy
 import Logging (RootSelector(..), renderRootSelectorOTel)
 import Network.Channel (hoistChannel, socketAsChannel)
 import Network.Protocol.Codec (BinaryMessage)
-import Network.Protocol.Connection (SomeConnectionSource(..))
-import Network.Protocol.Driver (TcpServerDependencies(..), mkDriver, tcpServerTrace)
+import Network.Protocol.Connection (SomeConnectionSource(..), SomeConnectionSourceTraced(..))
+import Network.Protocol.Driver (TcpServerDependencies(..), TcpServerDependenciesTraced(..), tcpServer, tcpServerTraced)
+import Network.Protocol.Handshake.Server (handshakeConnectionSource, handshakeConnectionSourceTraced)
 import Network.Protocol.Handshake.Types (Handshake)
+import Network.Protocol.Peer.Trace (DriverTraced(..), HasSpanContext, mkDriverTraced)
 import Network.Socket
   ( AddrInfo(addrAddress, addrSocketType)
   , HostName
@@ -41,8 +43,7 @@ import Network.Socket
   , getAddrInfo
   , openSocket
   )
-import Network.TypedProtocol (Driver)
-import Observe.Event.Backend (EventBackend, hoistEventBackend)
+import Observe.Event.Backend (EventBackend, hoistEventBackend, injectSelector)
 import Observe.Event.Render.OpenTelemetry (tracerEventBackend)
 import OpenTelemetry.Trace
 import Options.Applicative
@@ -85,8 +86,13 @@ main = do
 
 run :: Options -> AppM Span ()
 run = runComponent_ proc Options{..} -> do
-  connectionSource <- tcpServerTrace -< TcpServerDependencies
-    { toPeer = marloweRuntimeServerPeer
+  connectionSource <- tcpServer -< TcpServerDependencies
+    { toPeer = marloweRuntimeServerPeer $ injectSelector ProxySelector
+    , ..
+    }
+
+  connectionSourceTraced <- tcpServerTraced $ injectSelector MarloweRuntimeServer -< TcpServerDependenciesTraced
+    { toPeer = marloweRuntimeServerPeerTraced $ injectSelector ProxySelector
     , ..
     }
 
@@ -95,16 +101,19 @@ run = runComponent_ proc Options{..} -> do
     , getMarloweHeaderSyncDriver = driverFactory syncHost marloweHeaderSyncPort
     , getMarloweQueryDriver = driverFactory syncHost marloweQueryPort
     , getTxJobDriver = driverFactory txHost txPort
-    , connectionSource = SomeConnectionSource connectionSource
+    , connectionSource = SomeConnectionSource
+        $ handshakeConnectionSource connectionSource
+    , connectionSourceTraced = SomeConnectionSourceTraced (injectSelector MarloweRuntimeServer)
+        $ handshakeConnectionSourceTraced connectionSourceTraced
     }
 
   probeServer -< ProbeServerDependencies { port = fromIntegral httpPort, .. }
 
 driverFactory
-  :: (BinaryMessage ps, MonadResource m)
+  :: (BinaryMessage ps, MonadResource m, HasSpanContext r)
   => HostName
   -> PortNumber
-  -> m (Driver (Handshake ps) (Maybe ByteString) m)
+  -> m (DriverTraced (Handshake ps) (Maybe ByteString) r m)
 driverFactory host port = do
   addr <- liftIO $ head <$> getAddrInfo
     (Just defaultHints { addrSocketType = Stream })
@@ -112,7 +121,7 @@ driverFactory host port = do
     (Just $ show port)
   (_, socket) <- allocate (openSocket addr) close
   liftIO $ connect socket $ addrAddress addr
-  pure $ mkDriver $ hoistChannel liftIO $ socketAsChannel socket
+  pure $ mkDriverTraced $ hoistChannel liftIO $ socketAsChannel socket
 
 runAppM :: EventBackend IO r RootSelector -> AppM r a -> IO a
 runAppM eventBackend = flip runReaderT (hoistEventBackend liftIO eventBackend) . unAppM
@@ -148,6 +157,7 @@ instance MonadEvent r RootSelector (AppM r) where
 data Options = Options
   { host :: HostName
   , port :: PortNumber
+  , portTraced :: PortNumber
   , syncHost :: HostName
   , marloweSyncPort :: PortNumber
   , marloweHeaderSyncPort :: PortNumber
@@ -171,6 +181,7 @@ getOptions = do
       ( Options
           <$> hostParser
           <*> portParser
+          <*> portTracedParser
           <*> syncHostParser
           <*> marloweSyncPortParser
           <*> marloweHeaderSyncPortParser
@@ -198,6 +209,14 @@ getOptions = do
       , value 3700
       , metavar "PORT_NUMBER"
       , help "The port number to run the server on."
+      , showDefault
+      ]
+
+    portTracedParser = option auto $ mconcat
+      [ long "port-traced"
+      , value 3701
+      , metavar "PORT_NUMBER"
+      , help "The port number to run the server with tracing on."
       , showDefault
       ]
 
