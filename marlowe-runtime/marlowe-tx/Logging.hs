@@ -13,7 +13,7 @@ import Data.Maybe (catMaybes, mapMaybe, maybeToList)
 import qualified Data.Set as Set
 import Data.String (fromString)
 import Language.Marlowe.Runtime.ChainSync.Api
-  (ChainSyncCommand, ChainSyncQuery, RuntimeChainSeek, UTxOs(unUTxOs), renderTxOutRef, toBech32)
+  (ChainSyncCommand, ChainSyncQuery, RuntimeChainSeek, UTxOs(unUTxOs), renderTxOutRef, toBech32, unInterpreter)
 import Language.Marlowe.Runtime.Core.Api (MarloweVersion(..), renderContractId)
 import Language.Marlowe.Runtime.Core.ScriptRegistry (ReferenceScriptUtxo(..))
 import Language.Marlowe.Runtime.Transaction.Api (MarloweTxCommand)
@@ -29,8 +29,6 @@ import Observe.Event (idInjectSelector, injectSelector)
 import Observe.Event.Render.OpenTelemetry
 import OpenTelemetry.Trace (SpanKind(Client, Internal), toAttribute)
 import qualified OpenTelemetry.Trace as OTel
-import Ouroboros.Consensus.HardFork.History (Interpreter, Summary)
-import Unsafe.Coerce (unsafeCoerce)
 
 data RootSelector f where
   ChainSeekClient :: TcpClientSelector (Handshake RuntimeChainSeek) f -> RootSelector f
@@ -62,9 +60,6 @@ renderRootSelectorOTel = \case
   App sel -> renderAppSelectorOTel sel
   LoadWalletContext sel -> renderLoadWalletContextSelectorOTel sel
   LoadMarloweContext sel -> renderLoadMarloweContextSelectorOTel sel
-
-unInterpreter :: Interpreter xs -> Summary xs
-unInterpreter = unsafeCoerce
 
 renderAppSelectorOTel :: RenderSelectorOTel TransactionServerSelector
 renderAppSelectorOTel = \case

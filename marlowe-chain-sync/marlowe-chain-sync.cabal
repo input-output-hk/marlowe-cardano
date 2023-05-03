@@ -200,7 +200,6 @@ library gen
     , ouroboros-consensus ==0.1.0.1
     , QuickCheck >= 2.14 && < 3
     , text >= 1.2.4 && < 2
-    , these >= 1.1 && < 2
     , time >= 1.9 && < 2
 
 test-suite marlowe-chain-sync-test

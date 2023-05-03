@@ -27,17 +27,14 @@ import Data.Bifunctor (first)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import Data.ByteString.Short (fromShort)
-import Data.Foldable (fold)
 import qualified Data.List.NonEmpty as NE
 import Data.Maybe (mapMaybe)
 import Data.SOP.Strict (K(..), NP(..))
 import qualified Data.Set.NonEmpty as NESet
 import qualified Data.Text as T
-import Data.These (These(..))
 import Data.Time.Clock.POSIX (posixSecondsToUTCTime)
 import Data.Void (absurd)
 import Data.Word (Word64)
-import GHC.Show (showSpace)
 import Gen.Cardano.Api.Typed
   (genAddressShelley, genPlutusScript, genProtocolParameters, genScriptHash, genTx, genVerificationKey)
 import Language.Marlowe.Runtime.Cardano.Api (fromCardanoDatumHash, toCardanoScriptData)
@@ -49,21 +46,11 @@ import qualified Network.Protocol.Query.Types as Query
 import Ouroboros.Consensus.Block (EpochSize(..))
 import Ouroboros.Consensus.BlockchainTime (RelativeTime(..), SlotLength(..), mkSlotLength)
 import Ouroboros.Consensus.HardFork.History
-  ( Bound(..)
-  , EraEnd(..)
-  , EraParams(..)
-  , EraSummary(..)
-  , Interpreter
-  , SafeZone(..)
-  , Summary
-  , mkInterpreter
-  , summaryWithExactly
-  )
+  (Bound(..), EraEnd(..), EraParams(..), EraSummary(..), SafeZone(..), mkInterpreter, summaryWithExactly)
 import Ouroboros.Consensus.Util.Counting (Exactly(..))
 import Test.QuickCheck hiding (shrinkMap)
 import Test.QuickCheck.Gen (chooseWord64)
 import Test.QuickCheck.Hedgehog (hedgehog)
-import Unsafe.Coerce (unsafeCoerce)
 
 instance Arbitrary a => Arbitrary (WithGenesis a) where
   arbitrary = oneof [pure Genesis, At <$> arbitrary]
@@ -527,9 +514,6 @@ instance Query.QueryEq ChainSyncQuery where
     TagGetEraHistory -> \(EraHistory CardanoMode interpreter1) (EraHistory CardanoMode interpreter2) ->
       unInterpreter interpreter1 == unInterpreter interpreter2
     TagGetUTxOs -> (==)
-
-unInterpreter :: Interpreter xs -> Summary xs
-unInterpreter = unsafeCoerce
 
 instance Command.ArbitraryCommand ChainSyncCommand where
   arbitraryTag = elements

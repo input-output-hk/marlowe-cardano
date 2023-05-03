@@ -518,7 +518,6 @@ executable marlowe-tx
     , marlowe-runtime:tx-api ==0.0.1
     , network >= 3.1 && < 4
     , optparse-applicative >= 0.17 && < 0.18
-    , ouroboros-consensus ==0.1.0.1
     , text >= 1.2.4 && < 2
     , transformers >= 0.5.6 && < 0.6
     , unliftio >= 0.2.1 && < 0.3
