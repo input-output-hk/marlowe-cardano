@@ -50,7 +50,12 @@ in
       description = "re-up";
       exec = scripts.re-up;
       enabled = pkgs.stdenv.system == "x86_64-linux";
+      group = "marlowe";
     };
-    start-cardano-node.exec = scripts.start-cardano-node;
+    start-cardano-node = {
+      description = "does what it says";
+      exec = scripts.start-cardano-node;
+      group = "marlowe";
+    };
   };
 }
