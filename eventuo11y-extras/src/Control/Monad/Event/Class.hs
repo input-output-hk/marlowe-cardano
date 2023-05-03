@@ -2,6 +2,7 @@
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE RankNTypes #-}
@@ -11,21 +12,67 @@
 module Control.Monad.Event.Class
   where
 
+import Control.Applicative (Alternative)
+import Control.Monad (MonadPlus)
+import Control.Monad.Allocate (MonadAllocate)
+import Control.Monad.Fix (MonadFix)
+import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Identity (IdentityT(..))
 import Control.Monad.Trans.Reader (ReaderT(..), asks)
-import Control.Monad.Trans.Resource.Internal (ResourceT(..))
-import Control.Monad.With (MonadWithExceptable)
+import Control.Monad.Trans.Resource.Internal (MonadResource, ResourceT(..))
+import Control.Monad.With
 import Data.Functor (void)
+import Data.GeneralAllocate
 import Observe.Event (Event, EventBackend, InjectSelector, NewEventArgs(..))
 import Observe.Event.Backend
-  (Event(..), hoistEventBackend, narrowEventBackend, setAncestorEventBackend, simpleNewEventArgs)
+  (Event(..), hoistEventBackend, narrowEventBackend, noopEventBackend, setAncestorEventBackend, simpleNewEventArgs)
 import qualified Observe.Event.Explicit as Explicit
+import UnliftIO (MonadUnliftIO)
 import Unsafe.Coerce (unsafeCoerce)
 
 class MonadWithExceptable m => MonadEvent r s m | m -> r s where
   askBackend :: m (EventBackend m r s)
   localBackend :: (forall t. EventBackend m r t -> EventBackend m r t) -> m a -> m a
+
+newtype NoopEventT r (s :: * -> *) m a = NoopEventT { runNoopEventT :: m a }
+  deriving newtype
+    ( Functor
+    , Applicative
+    , Monad
+    , Alternative
+    , MonadFail
+    , MonadFix
+    , MonadIO
+    , MonadPlus
+    , MonadUnliftIO
+    , MonadResource
+    , MonadAllocate
+    )
+
+instance MonadWith m => MonadWith (NoopEventT r s m) where
+  type WithException (NoopEventT r s m) = WithException m
+  stateThreadingGeneralWith
+    :: forall a b releaseReturn
+     . GeneralAllocate (NoopEventT r s m) (WithException m) releaseReturn b a
+    -> (a -> NoopEventT r s m b)
+    -> NoopEventT r s m (b, releaseReturn)
+  stateThreadingGeneralWith (GeneralAllocate allocA) go = NoopEventT do
+    let
+      allocA' :: (forall x. m x -> m x) -> m (GeneralAllocated m (WithException m) releaseReturn b a)
+      allocA' restore = do
+        let
+          restore' :: forall x. NoopEventT r s m x -> NoopEventT r s m x
+          restore' mx = NoopEventT $ restore $ runNoopEventT mx
+        GeneralAllocated a releaseA <- runNoopEventT (allocA restore')
+        let
+          releaseA' relTy = runNoopEventT (releaseA relTy)
+        pure $ GeneralAllocated a releaseA'
+    stateThreadingGeneralWith (GeneralAllocate allocA') (runNoopEventT . go)
+
+instance (Monoid r, MonadWithExceptable m) => MonadEvent r s (NoopEventT r s m) where
+  askBackend = pure $ noopEventBackend mempty
+  localBackend = const id
 
 instance MonadEvent r s m => MonadEvent r s (IdentityT m) where
   askBackend = unsafeCoerce $ askBackend @r @s @m

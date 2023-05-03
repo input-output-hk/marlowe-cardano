@@ -1,5 +1,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE EmptyCase #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE PolyKinds #-}
@@ -40,6 +41,16 @@ ihoistConnector
   -> Connector ps pr peer m
   -> Connector ps pr peer n
 ihoistConnector hoistPeer' f f' Connector{..} = Connector $ f $ ihoistConnection hoistPeer' f f' <$> openConnection
+
+ihoistConnectorTraced
+  :: (Functor m, Functor n)
+  => (forall p q a. Functor p => (forall x. p x -> q x) -> peer p a -> peer q a)
+  -> (forall x. m x -> n x)
+  -> (forall x. n x -> m x)
+  -> ConnectorTraced ps pr peer r s m
+  -> ConnectorTraced ps pr peer r s n
+ihoistConnectorTraced hoistPeer' f f' ConnectorTraced{..} =
+  ConnectorTraced $ f $ ihoistConnectionTraced hoistPeer' f f' <$> openConnectionTraced
 
 type ClientConnector ps = Connector ps 'AsClient
 type ServerConnector ps = Connector ps 'AsServer
@@ -146,52 +157,59 @@ acceptSomeConnectorTraced (SomeConnectionSourceTraced inj ConnectionSourceTraced
   SomeConnectorTraced inj <$> atomically acceptConnectorTraced
 
 stmConnectionSource
-  :: MonadIO m
+  :: (MonadIO m, Monoid r)
   => TQueue (STMChannel ByteString)
-  -> ToPeer server ps 'AsServer st m
-  -> ConnectionSource ps server m
-stmConnectionSource queue toPeer = ConnectionSource do
+  -> ToPeerTraced server ps 'AsServer st r m
+  -> ConnectionSourceTraced ps server r IdSelector m
+stmConnectionSource queue toPeer = ConnectionSourceTraced do
   channel <- readTQueue queue
   pure $ stmServerConnector channel toPeer
 
 stmServerConnector
-  :: MonadIO m
+  :: (Monoid r, MonadIO m)
   => STMChannel ByteString
-  -> ToPeer client ps 'AsServer st m
-  -> ServerConnector ps client m
-stmServerConnector (STMChannel channel closeChannel) toPeer = Connector $ pure Connection
+  -> ToPeerTraced client ps 'AsServer st r m
+  -> ServerConnectorTraced ps client r IdSelector m
+stmServerConnector (STMChannel channel closeChannel) toPeer = ConnectorTraced $ pure ConnectionTraced
   { closeConnection = const $ atomically closeChannel
   , channel = hoistChannel atomically channel
+  , openRef = mempty
+  , injectProtocolSelector = \s withInjectField -> withInjectField (Lift s) id
   , ..
   }
 
 stmClientConnector
-  :: MonadIO m
+  :: (MonadIO m, Monoid r)
   => TQueue (STMChannel ByteString)
-  -> ToPeer client ps 'AsClient st m
-  -> ClientConnector ps client m
-stmClientConnector queue toPeer = Connector do
+  -> ToPeerTraced client ps 'AsClient st r m
+  -> ClientConnectorTraced ps client r IdSelector m
+stmClientConnector queue toPeer = ConnectorTraced do
   STMChannel channel closeChannel <- atomically do
     (clientChannel, serverChannel) <- channelPair
     writeTQueue queue serverChannel
     pure clientChannel
-  pure Connection
+  pure ConnectionTraced
     { closeConnection = \_ -> atomically closeChannel
     , channel = hoistChannel atomically channel
+    , openRef = mempty
+    , injectProtocolSelector = \s f -> f (Lift s) id
     , ..
     }
 
-data ClientServerPair ps server client m = ClientServerPair
-  { connectionSource :: ConnectionSource ps server m
-  , clientConnector :: ClientConnector ps client m
+data IdSelector ps f where
+  Lift :: TypedProtocolsSelector ps f -> IdSelector ps f
+
+data ClientServerPair ps server client r m = ClientServerPair
+  { connectionSource :: ConnectionSourceTraced ps server r IdSelector m
+  , clientConnector :: ClientConnectorTraced ps client r IdSelector m
   }
 
 clientServerPair
-  :: forall ps server client m st
-   . MonadUnliftIO m
-  => ToPeer server ps 'AsServer st m
-  -> ToPeer client ps 'AsClient st m
-  -> STM (ClientServerPair ps server client m)
+  :: forall ps server client r m st
+   . (MonadUnliftIO m, Monoid r)
+  => ToPeerTraced server ps 'AsServer st r m
+  -> ToPeerTraced client ps 'AsClient st r m
+  -> STM (ClientServerPair ps server client r m)
 clientServerPair serverToPeer clientToPeer = do
   serverChannelQueue <- newTQueue
   let
@@ -199,3 +217,26 @@ clientServerPair serverToPeer clientToPeer = do
     { connectionSource = stmConnectionSource serverChannelQueue serverToPeer
     , clientConnector = stmClientConnector serverChannelQueue clientToPeer
     }
+
+tracedConnectionSourceToConnectionSource
+  :: Functor m
+  => ConnectionSourceTraced ps peer r s m
+  -> ConnectionSource ps peer m
+tracedConnectionSourceToConnectionSource ConnectionSourceTraced{..} =
+  ConnectionSource $ tracedConnectorToConnector <$> acceptConnectorTraced
+
+tracedConnectorToConnector
+  :: Functor m
+  => ConnectorTraced ps pr peer r s m
+  -> Connector ps pr peer m
+tracedConnectorToConnector ConnectorTraced{..} =
+  Connector $ tracedConnectionToConnection <$> openConnectionTraced
+
+tracedConnectionToConnection
+  :: Functor m
+  => ConnectionTraced ps pr peer r s m
+  -> Connection ps pr peer m
+tracedConnectionToConnection ConnectionTraced{..} = Connection
+  { toPeer = peerTracedToPeer . toPeer
+  , ..
+  }

@@ -35,7 +35,7 @@ data ProxyDependencies r s m = forall dState. ProxyDependencies
   , getMarloweQueryDriver :: m (DriverTraced (Handshake MarloweQuery) dState r m)
   , getTxJobDriver :: m (DriverTraced (Handshake (Job MarloweTxCommand)) dState r m)
   , connectionSourceTraced :: SomeConnectionSourceTraced (MarloweRuntimeServer r) r s m
-  , connectionSource :: SomeConnectionSource (MarloweRuntimeServer r) r m
+  , connectionSource :: SomeConnectionSource (MarloweRuntimeServer r) m
   }
 
 proxy :: (MonadUnliftIO m, MonadEvent r s m, HasSpanContext r) => Component m (ProxyDependencies r s (ResourceT m)) Probes
@@ -65,7 +65,7 @@ data WorkerDependencies r m = forall dState. WorkerDependencies
   , getMarloweHeaderSyncDriver :: m (DriverTraced (Handshake MarloweHeaderSync) dState r m)
   , getMarloweQueryDriver :: m (DriverTraced (Handshake MarloweQuery) dState r m)
   , getTxJobDriver :: m (DriverTraced (Handshake (Job MarloweTxCommand)) dState r m)
-  , connector :: SomeServerConnector (MarloweRuntimeServer r) r m
+  , connector :: SomeServerConnector (MarloweRuntimeServer r) m
   }
 
 workerTraced :: (MonadUnliftIO m, MonadEvent r s m, HasSpanContext r) => WorkerDependenciesTraced r s (ResourceT m) -> m ()

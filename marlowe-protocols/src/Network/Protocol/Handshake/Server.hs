@@ -24,7 +24,7 @@ import Network.Protocol.Connection
   , Connector(..)
   , ConnectorTraced(..)
   )
-import Network.Protocol.Handshake.Client (handshakeClientConnector)
+import Network.Protocol.Handshake.Client (handshakeClientConnectorTraced)
 import Network.Protocol.Handshake.Types
 import Network.Protocol.Peer.Trace
 import Network.TypedProtocol
@@ -95,13 +95,13 @@ handshakeServerConnectionTraced ConnectionTraced{..} = ConnectionTraced
   }
 
 handshakeClientServerPair
-  :: forall ps client server m
+  :: forall ps client server r m
    . (HasSignature ps, MonadFail m)
-  => ClientServerPair ps client server m
-  -> ClientServerPair (Handshake ps) client server m
+  => ClientServerPair ps client server r m
+  -> ClientServerPair (Handshake ps) client server r m
 handshakeClientServerPair ClientServerPair{..} = ClientServerPair
-  { connectionSource = handshakeConnectionSource connectionSource
-  , clientConnector = handshakeClientConnector clientConnector
+  { connectionSource = handshakeConnectionSourceTraced connectionSource
+  , clientConnector = handshakeClientConnectorTraced clientConnector
   }
 
 hoistHandshakeServer

@@ -1,7 +1,7 @@
 cabal-version: 3.0
 name: marlowe-integration-tests
 version: 0.1.0.0
-synopsis:
+ynopsis:
   End to end integration tests for the Marlowe Runtime
 bug-reports: https://github.com/input-output-hk/marlowe-marlowe/issues
 license: Apache-2.0
@@ -84,10 +84,11 @@ executable marlowe-integration-tests
     , aeson
     , base16
     , bytestring
+    , cardano-api
     , containers
+    , eventuo11y-extras
     , hspec
     , http-types
-    , cardano-api
     , marlowe-cardano
     , marlowe-chain-sync
     , marlowe-chain-sync:plutus-compat
@@ -95,21 +96,19 @@ executable marlowe-integration-tests
     , marlowe-integration
     , marlowe-protocols
     , marlowe-runtime
+    , marlowe-runtime-web
+    , marlowe-runtime-web:server
     , marlowe-runtime:discovery-api
     , marlowe-runtime:history-api
     , marlowe-runtime:sync-api
     , marlowe-runtime:tx-api
-    , marlowe-runtime-web
-    , marlowe-runtime-web:server
     , mtl
     , network-uri
     , plutus-ledger-api
     , servant-client
     , servant-pagination
-    , unliftio
     , text
     , time
     , transformers
-    , transformers-base
-    , lifted-async
+    , unliftio
   build-tool-depends: hspec-discover:hspec-discover

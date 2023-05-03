@@ -95,8 +95,6 @@ library
     , general-allocate
     , time
     , transformers
-    , typed-protocols
-    , uuid
     , unliftio
     , warp
 

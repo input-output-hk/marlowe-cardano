@@ -29,6 +29,7 @@ import Observe.Event.Render.OpenTelemetry
 import OpenTelemetry.Trace.Core
 import OpenTelemetry.Trace.Id (SpanId, TraceId, bytesToSpanId, bytesToTraceId, spanIdBytes, traceIdBytes)
 import OpenTelemetry.Trace.TraceState (Key(..), TraceState, Value(..), empty, insert, toList)
+import qualified OpenTelemetry.Trace.TraceState as TraceState
 import UnliftIO (throwIO)
 
 -- | A peer in a protocol session which is suitable for tracing.
@@ -261,6 +262,14 @@ runAwaitPeerWithDriverTraced inj parent driver tok k dState =
 class HasSpanContext r where
   context :: MonadIO m => r -> m SpanContext
   wrapContext :: SpanContext -> r
+
+defaultSpanContext :: SpanContext
+defaultSpanContext = SpanContext
+  defaultTraceFlags
+  False
+  "00000000000000000000000000000000"
+  "0000000000000000"
+  TraceState.empty
 
 data MessageAttributes = MessageAttributes
   { messageType :: Text
