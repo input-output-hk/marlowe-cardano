@@ -29,7 +29,6 @@ module Language.Marlowe.Runtime.ChainIndexer.Database.PostgreSQL
   ( QueryField(..)
   , QuerySelector(..)
   , databaseQueries
-  , getQuerySelectorConfig
   ) where
 
 import Cardano.Api
@@ -96,7 +95,6 @@ import qualified Data.Map.Strict as M
 import Data.Profunctor (rmap)
 import qualified Data.Set as Set
 import Data.Text (Text)
-import Data.Text.Encoding (decodeUtf8)
 import Data.Vector (Vector)
 import qualified Data.Vector as V
 import Hasql.Pool (Pool)
@@ -123,7 +121,6 @@ import Language.Marlowe.Runtime.ChainIndexer.Database
   )
 import Language.Marlowe.Runtime.ChainIndexer.Genesis (GenesisBlock(..), GenesisTx(..))
 import Observe.Event (addField)
-import Observe.Event.Component (FieldConfig(..), GetSelectorConfig, SelectorConfig(SelectorConfig), SomeJSON(SomeJSON))
 import Ouroboros.Network.Point (WithOrigin(..))
 import Prelude hiding (init)
 import UnliftIO (throwIO)
@@ -134,30 +131,20 @@ data QuerySelector f where
 data QueryField
   = SqlStatement ByteString
   | Parameters [Text]
-
-getQuerySelectorConfig :: GetSelectorConfig QuerySelector
-getQuerySelectorConfig = \case
-  Query name -> SelectorConfig name True FieldConfig
-    { fieldKey = \case
-        SqlStatement _ -> "sql"
-        Parameters _ -> "parameters"
-    , fieldDefaultEnabled = const True
-    , toSomeJSON = \case
-        SqlStatement sql -> SomeJSON $ decodeUtf8 sql
-        Parameters parameters -> SomeJSON parameters
-    }
+  | Operation Text
 
 -- | PostgreSQL implementation for the chain sync database queries.
 databaseQueries :: forall r s m. (MonadInjectEvent r QuerySelector s m, MonadIO m) => Pool -> GenesisBlock -> DatabaseQueries m
 databaseQueries pool genesisBlock = DatabaseQueries
-  (hoistCommitRollback (transact "commitRollback" TS.Write) $ commitRollback genesisBlock)
-  (hoistCommitBlocks (transact "commitBlocks" TS.Write) commitBlocks)
-  (hoistCommitGenesisBlock (transact "commitGenesisBlock" TS.Write) commitGenesisBlock)
-  (hoistGetIntersectionPoints (transact "getIntersectionPoints" TS.Read) getIntersectionPoints)
-  (hoistGetGenesisBlock (transact "getGenesisBlock" TS.Read) getGenesisBlock)
+  (hoistCommitRollback (transact "commitRollback" "INSERT" TS.Write) $ commitRollback genesisBlock)
+  (hoistCommitBlocks (transact "commitBlocks" "INSERT" TS.Write) commitBlocks)
+  (hoistCommitGenesisBlock (transact "commitGenesisBlock" "INSERT" TS.Write) commitGenesisBlock)
+  (hoistGetIntersectionPoints (transact "getIntersectionPoints" "SELECT" TS.Read) getIntersectionPoints)
+  (hoistGetGenesisBlock (transact "getGenesisBlock" "SELECT" TS.Read) getGenesisBlock)
   where
-    transact :: Text -> TS.Mode -> Transaction a -> m a
-    transact queryName mode m = withEvent (Query queryName) \ev -> do
+    transact :: Text -> Text -> TS.Mode -> Transaction a -> m a
+    transact operation queryName mode m = withEvent (Query queryName) \ev -> do
+      addField ev $ Operation operation
       result <- liftIO $ Pool.use pool $ TS.transaction TS.Serializable mode m
       case result of
         Left ex -> do

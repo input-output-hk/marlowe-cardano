@@ -14,45 +14,47 @@ import Control.Concurrent.STM (STM, newTVar, readTVar)
 import Control.Concurrent.STM.Delay (Delay, newDelay, waitDelay)
 import Control.Concurrent.STM.TVar (writeTVar)
 import Control.Monad (guard, unless, when)
-import Control.Monad.Event.Class (MonadInjectEvent, withEvent)
+import Control.Monad.Event.Class (MonadInjectEvent, withEvent, withEventArgs)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Maybe (MaybeT(..))
 import Data.Foldable (traverse_)
+import Data.Maybe (listToMaybe)
 import Data.Time (NominalDiffTime, UTCTime, addUTCTime, diffUTCTime, getCurrentTime, nominalDiffTimeToSeconds)
 import Language.Marlowe.Runtime.ChainIndexer.Database
 import Language.Marlowe.Runtime.ChainIndexer.Genesis (GenesisBlock)
 import Language.Marlowe.Runtime.ChainIndexer.NodeClient (Changes(..), isEmptyChanges)
-import Observe.Event (addField)
+import Observe.Event (NewEventArgs(..), addField)
+import Observe.Event.Backend (simpleNewEventArgs)
 import Prelude hiding (filter)
 import UnliftIO (atomically)
 import Witherable (Witherable(..))
 
-data ChainStoreSelector f where
-  CheckGenesisBlock :: ChainStoreSelector CheckGenesisBlockField
-  Save :: ChainStoreSelector Changes
+data ChainStoreSelector r f where
+  CheckGenesisBlock :: ChainStoreSelector r CheckGenesisBlockField
+  Save :: ChainStoreSelector r (Changes r)
 
 data CheckGenesisBlockField
   = Computed GenesisBlock
   | Saved GenesisBlock
 
 -- | Set of dependencies required by the ChainStore
-data ChainStoreDependencies m = ChainStoreDependencies
+data ChainStoreDependencies r m = ChainStoreDependencies
   { commitRollback :: !(CommitRollback m) -- ^ How to persist rollbacks in the database backend
   , commitBlocks   :: !(CommitBlocks m)   -- ^ How to commit blocks in bulk in the database backend
   , rateLimit      :: !NominalDiffTime     -- ^ The minimum time between database writes
-  , getChanges     :: !(STM Changes)       -- ^ A source of changes to commit
+  , getChanges     :: !(STM (Changes r))       -- ^ A source of changes to commit
   , getGenesisBlock :: !(GetGenesisBlock m)
   , genesisBlock :: !GenesisBlock
   , commitGenesisBlock :: !(CommitGenesisBlock m)
   }
 
 -- | Create a ChainStore component.
-chainStore :: forall r s m. (MonadIO m, MonadInjectEvent r ChainStoreSelector s m) => Component m (ChainStoreDependencies m) (STM Bool)
+chainStore :: forall r s m. (MonadIO m, MonadInjectEvent r (ChainStoreSelector r) s m) => Component m (ChainStoreDependencies r m) (STM Bool)
 chainStore = component \ChainStoreDependencies{..} -> do
   readyVar <- newTVar False
   let
-    awaitChanges :: Maybe Delay -> STM Changes
+    awaitChanges :: Maybe Delay -> STM (Changes r)
     awaitChanges delay = do
       -- Wait until allowed to write again (determined by rateLimit).
       traverse_ waitDelay delay
@@ -63,7 +65,7 @@ chainStore = component \ChainStoreDependencies{..} -> do
 
     runChainStore :: m ()
     runChainStore = do
-      withEvent CheckGenesisBlock \ev -> do
+      withEvent (CheckGenesisBlock @r) \ev -> do
         addField ev $ Computed genesisBlock
         mDbGenesisBlock <- runGetGenesisBlock getGenesisBlock
         traverse_ (addField ev . Saved) mDbGenesisBlock
@@ -78,7 +80,12 @@ chainStore = component \ChainStoreDependencies{..} -> do
         go lastWrite = do
           delay <- liftIO $ wither computeDelay lastWrite
           changes@Changes{..} <- atomically $ awaitChanges delay
-          withEvent Save \ev -> do
+          let
+            args = (simpleNewEventArgs Save)
+              { newEventCauses = changesEvents
+              , newEventParent = listToMaybe changesEvents
+              }
+          withEventArgs args \ev -> do
             addField ev changes
             traverse_ (runCommitRollback commitRollback) changesRollback
             when (changesBlockCount > 0) do

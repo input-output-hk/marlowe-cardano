@@ -61,31 +61,33 @@ type NumberedCardanoBlock = (BlockNo, CardanoBlock)
 type NumberedChainTip = (WithOrigin BlockNo, ChainTip)
 
 -- | Describes a batch of chain data changes to write.
-data Changes = Changes
+data Changes r = Changes
   { changesRollback   :: !(Maybe ChainPoint) -- ^ Point to rollback to before writing any blocks.
   , changesBlocks     :: ![CardanoBlock]     -- ^ New blocks to write.
   , changesTip        :: !ChainTip           -- ^ Most recently observed tip of the local node.
   , changesLocalTip   :: !ChainTip           -- ^ Chain tip the changes will advance the local state to.
   , changesBlockCount :: !Int                -- ^ Number of blocks in the change set.
   , changesTxCount    :: !Int                -- ^ Number of transactions in the change set.
+  , changesEvents     :: ![r]                -- ^ References to the events that have touched these changes
   }
 
 -- | An empty Changes collection.
-emptyChanges :: Changes
-emptyChanges = Changes Nothing [] ChainTipAtGenesis ChainTipAtGenesis 0 0
+emptyChanges :: Changes r
+emptyChanges = Changes Nothing [] ChainTipAtGenesis ChainTipAtGenesis 0 0 []
 
 -- | Make a set of changes into an empty set (preserves the tip and point fields).
-toEmptyChanges :: Changes -> Changes
+toEmptyChanges :: Changes r -> Changes r
 toEmptyChanges changes = changes
   { changesRollback = Nothing
   , changesBlocks = []
   , changesBlockCount = 0
   , changesTxCount = 0
+  , changesEvents = []
   }
 
 -- | Returns True if the change set is empty.
-isEmptyChanges :: Changes -> Bool
-isEmptyChanges (Changes Nothing [] _ _ _ _) = True
+isEmptyChanges :: Changes r -> Bool
+isEmptyChanges (Changes Nothing [] _ _ _ _ _) = True
 isEmptyChanges _                            = False
 
 -- | Parameters for estimating the cost of writing a batch of changes.
@@ -96,7 +98,7 @@ data CostModel = CostModel
 
 -- | Computes the cost of a change set. The value is a unitless heuristic.
 --   Prevents large numbers of transactions and blocks being held in memory.
-cost :: CostModel -> Changes -> Int
+cost :: CostModel -> Changes r -> Int
 cost CostModel{..} Changes{..} = changesBlockCount * blockCost + changesTxCount * txCost
 
 -- | The set of dependencies needed by the NodeClient component.
@@ -110,8 +112,8 @@ data NodeClientDependencies m = NodeClientDependencies
   }
 
 -- | The public API of the NodeClient component.
-data NodeClient = NodeClient
-  { getChanges    :: STM Changes -- ^ An STM action that atomically reads and clears the current change set.
+data NodeClient r = NodeClient
+  { getChanges    :: STM (Changes r) -- ^ An STM action that atomically reads and clears the current change set.
   , connected :: STM Bool
   }
 
@@ -136,13 +138,13 @@ data RollBackwardField
 nodeClient
   :: forall r s m
    . (MonadInjectEvent r NodeClientSelector s m, MonadUnliftIO m)
-  => Component m (NodeClientDependencies m) NodeClient
+  => Component m (NodeClientDependencies m) (NodeClient r)
 nodeClient = component \NodeClientDependencies{..} -> do
   changesVar <- newTVar emptyChanges
   connectedVar <- newTVar False
 
   let
-    getChanges :: STM Changes
+    getChanges :: STM (Changes r)
     getChanges = do
       changes <- readTVar changesVar
       modifyTVar changesVar toEmptyChanges
@@ -212,7 +214,7 @@ pipelinedClient
    . (MonadInjectEvent r NodeClientSelector s m, MonadIO m)
   => CostModel
   -> Int
-  -> TVar Changes
+  -> TVar (Changes r)
   -> GetIntersectionPoints m
   -> ChainSyncClientPipelined NumberedCardanoBlock ChainPoint NumberedChainTip m ()
 pipelinedClient costModel maxCost changesVar getIntersectionPoints =
@@ -278,7 +280,7 @@ mkClientStIdle
    . (MonadInjectEvent r NodeClientSelector s m, MonadIO m)
   => CostModel
   -> Int
-  -> TVar Changes
+  -> TVar (Changes r)
   -> IntMap BlockNo
   -> MkPipelineDecision
   -> Nat n
@@ -319,7 +321,7 @@ mkClientStNext
   :: (MonadIO m, MonadInjectEvent r NodeClientSelector s m)
   => CostModel
   -> Int
-  -> TVar Changes
+  -> TVar (Changes r)
   -> IntMap BlockNo
   -> MkPipelineDecision
   -> Nat n
@@ -337,6 +339,7 @@ mkClientStNext costModel maxCost changesVar slotNoToBlockNo pipelineDecision n =
             , changesLocalTip = ChainTip slotNo hash blockNo
             , changesBlockCount = changesBlockCount changes + 1
             , changesTxCount = changesTxCount changes + length txs
+            , changesEvents = reference ev : changesEvents changes
             }
         -- Retry unless either the current change set is empty, or the next
         -- change set would not be too expensive.
@@ -381,6 +384,7 @@ mkClientStNext costModel maxCost changesVar slotNoToBlockNo pipelineDecision n =
                 (ChainPoint slotNo hash, At blockNo) -> ChainTip slotNo hash blockNo
             , changesBlockCount = length changesBlocks'
             , changesTxCount = sum $ blockTxCount <$> changesBlocks
+            , changesEvents = reference ev : changesEvents
             }
         writeTVar changesVar newChanges
         pure newChanges

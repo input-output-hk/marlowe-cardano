@@ -4,13 +4,9 @@ module Options
   ) where
 
 import Cardano.Api (NetworkId(..), NetworkMagic(..))
-import Data.Aeson.Encode.Pretty (encodePretty)
 import Data.Maybe (fromMaybe)
 import Data.Text (Text)
-import qualified Data.Text.Lazy as T
-import Data.Text.Lazy.Encoding (decodeUtf8)
 import Language.Marlowe.Runtime.ChainIndexer.NodeClient (CostModel(..))
-import Logging (defaultRootSelectorLogConfig)
 import qualified Options.Applicative as O
 import System.Environment (lookupEnv)
 import Text.Read (readMaybe)
@@ -24,7 +20,6 @@ data Options = Options
   , shelleyGenesisFile :: !FilePath
   , costModel         :: !CostModel
   , maxCost           :: !Int
-  , logConfigFile     :: !(Maybe FilePath)
   , httpPort :: !Int
   } deriving (Show, Eq)
 
@@ -65,7 +60,6 @@ parseOptions defaultNetworkId defaultSocketPath defaultDatabaseUri version = O.i
     parser :: O.Parser Options
     parser = O.helper
       <*> versionOption
-      <*> printLogConfigOption
       <*> ( Options
               <$> socketPathOption
               <*> networkIdOption
@@ -75,7 +69,6 @@ parseOptions defaultNetworkId defaultSocketPath defaultDatabaseUri version = O.i
               <*> shelleyGenesisFileOption
               <*> costModelParser
               <*> maxCostParser
-              <*> logConfigFileParser
               <*> httpPortParser
           )
       where
@@ -83,11 +76,6 @@ parseOptions defaultNetworkId defaultSocketPath defaultDatabaseUri version = O.i
         versionOption = O.infoOption
           ("marlowe-chain-indexer " <> version)
           (O.long "version" <> O.help "Show version.")
-
-        printLogConfigOption :: O.Parser (a -> a)
-        printLogConfigOption = O.infoOption
-          (T.unpack $ decodeUtf8 $ encodePretty defaultRootSelectorLogConfig)
-          (O.long "print-log-config" <> O.help "Print the default log configuration.")
 
         socketPathOption :: O.Parser FilePath
         socketPathOption = O.strOption options
@@ -199,16 +187,6 @@ parseOptions defaultNetworkId defaultSocketPath defaultDatabaseUri version = O.i
           , O.help "The maximum number of cost units that can be batched when persisting blocks. If the cost of the current batch would exceed this value, the chain sync client will wait until the current batch is persisted before requesting another block."
           , O.showDefault
           ]
-
-        logConfigFileParser :: O.Parser (Maybe FilePath)
-        logConfigFileParser = O.optional $ O.strOption options
-          where
-            options :: O.Mod O.OptionFields FilePath
-            options = mconcat
-              [ O.long "log-config-file"
-              , O.metavar "FILE_PATH"
-              , O.help "Path to the log configuration JSON file."
-              ]
 
     infoMod :: O.InfoMod Options
     infoMod = mconcat

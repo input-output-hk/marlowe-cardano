@@ -19,6 +19,7 @@ import Control.Concurrent.Component
 import Control.Concurrent.Component.Probes (ProbeServerDependencies(..), probeServer)
 import Control.Exception (bracket)
 import Control.Monad.Event.Class (MonadEvent(..), askBackendReaderT, localBackendReaderT)
+import Control.Monad.Reader (ask)
 import Control.Monad.Trans.Except (ExceptT(ExceptT), runExceptT, withExceptT)
 import Control.Monad.Trans.Reader (ReaderT(..))
 import Control.Monad.With (MonadWith, WithException, stateThreadingGeneralWith)
@@ -27,23 +28,25 @@ import Data.GeneralAllocate (GeneralAllocate(..), GeneralAllocated(GeneralAlloca
 import Data.String (IsString(fromString))
 import Data.Text (unpack)
 import qualified Data.Text as T
-import qualified Data.Text.Lazy.IO as TL
 import Data.Time (secondsToNominalDiffTime)
-import Data.UUID.V4 (nextRandom)
+import Data.Version (showVersion)
+import qualified Database.PostgreSQL.LibPQ as PQ
+import Hasql.Connection (withLibPQConnection)
 import qualified Hasql.Pool as Pool
 import Language.Marlowe.Runtime.ChainIndexer (ChainIndexerDependencies(..), chainIndexer)
 import qualified Language.Marlowe.Runtime.ChainIndexer.Database.PostgreSQL as PostgreSQL
 import Language.Marlowe.Runtime.ChainIndexer.Genesis (computeGenesisBlock)
-import Logging (RootSelector(..), getRootSelectorConfig)
-import Observe.Event (EventBackend, injectSelector)
+import Logging (RootSelector(..), renderRootSelectorOTel)
+import Observe.Event (EventBackend)
 import Observe.Event.Backend (hoistEventBackend)
-import Observe.Event.Component (LoggerDependencies(..), withLogger)
+import Observe.Event.Render.OpenTelemetry (tracerEventBackend)
+import OpenTelemetry.Trace
 import Options (Options(..), getOptions)
-import System.IO (stderr)
-import UnliftIO (MonadIO, MonadUnliftIO, liftIO)
+import Paths_marlowe_chain_sync (version)
+import UnliftIO (MonadIO, MonadUnliftIO, liftIO, throwIO)
 
 main :: IO ()
-main = run =<< getOptions "0.0.0.0"
+main = run =<< getOptions (showVersion version)
 
 run :: Options -> IO ()
 run Options{..} = do
@@ -70,16 +73,26 @@ run Options{..} = do
         , port = httpPort
         }
 
-  bracket (Pool.acquire 100 (Just 5000000) (fromString databaseUri)) Pool.release
-    $ runComponent_
-    $ withLogger loggerDependencies runAppM appComponent
+  bracket (Pool.acquire 100 (Just 5000000) (fromString databaseUri)) Pool.release \pool -> do
+    (dbName, dbUser, dbHost, dbPort) <- either throwIO pure =<< Pool.use pool do
+      connection <- ask
+      liftIO $ withLibPQConnection connection \conn -> (,,,)
+        <$> PQ.db conn
+        <*> PQ.user conn
+        <*> PQ.host conn
+        <*> PQ.port conn
+    withTracer \tracer ->
+      runAppM (tracerEventBackend tracer $ renderRootSelectorOTel dbName dbUser dbHost dbPort)
+        $ runComponent_ appComponent pool
   where
-    loggerDependencies = LoggerDependencies
-      { configFilePath = logConfigFile
-      , getSelectorConfig = getRootSelectorConfig
-      , newRef = nextRandom
-      , writeText = TL.hPutStr stderr
-      , injectConfigWatcherSelector = injectSelector ConfigWatcher
+    withTracer f = bracket
+      initializeGlobalTracerProvider
+      shutdownTracerProvider
+      \provider -> f $ makeTracer provider instrumentationLibrary tracerOptions
+
+    instrumentationLibrary = InstrumentationLibrary
+      { libraryName = "marlowe-chain-indexer"
+      , libraryVersion = T.pack $ showVersion version
       }
 
     localNodeConnectInfo :: LocalNodeConnectInfo CardanoMode
@@ -92,11 +105,11 @@ run Options{..} = do
 
     persistRateLimit = secondsToNominalDiffTime 1
 
-runAppM :: EventBackend IO r RootSelector -> AppM r a -> IO a
+runAppM :: EventBackend IO r (RootSelector r) -> AppM r a -> IO a
 runAppM eventBackend = flip runReaderT (hoistEventBackend liftIO eventBackend) . unAppM
 
 newtype AppM r a = AppM
-  { unAppM :: ReaderT (EventBackend (AppM r) r RootSelector) IO a
+  { unAppM :: ReaderT (EventBackend (AppM r) r (RootSelector r)) IO a
   } deriving newtype (Functor, Applicative, Monad, MonadIO, MonadUnliftIO)
 
 instance MonadWith (AppM r) where
@@ -119,6 +132,6 @@ instance MonadWith (AppM r) where
         pure $ GeneralAllocated a releaseA'
     stateThreadingGeneralWith (GeneralAllocate allocA') (flip (runReaderT . unAppM) r . go)
 
-instance MonadEvent r RootSelector (AppM r) where
+instance MonadEvent r (RootSelector r) (AppM r) where
   askBackend = askBackendReaderT AppM id
   localBackend = localBackendReaderT AppM unAppM id

@@ -99,7 +99,6 @@ import Ouroboros.Consensus.HardFork.History
   ( Bound(..)
   , EraEnd(..)
   , EraSummary(..)
-  , Interpreter
   , PastHorizonException(..)
   , Summary(..)
   , interpretQuery
@@ -111,7 +110,6 @@ import qualified Ouroboros.Network.Block as O
 import qualified Plutus.V2.Ledger.Api as P
 import qualified Plutus.V2.Ledger.Api as PV2
 import qualified PlutusTx.AssocMap as AM
-import Unsafe.Coerce (unsafeCoerce)
 
 maxFees :: Lovelace
 maxFees = Lovelace 2_170_000
