@@ -355,7 +355,6 @@ library proxy-api
     Language.Marlowe.Protocol.Server
     Language.Marlowe.Protocol.Types
   build-depends:
-    , aeson >= 2 && < 3
     , base >= 4.9 && < 5
     , binary >= 0.8.8 && < 0.9
     , eventuo11y ^>= { 0.9, 0.10 }

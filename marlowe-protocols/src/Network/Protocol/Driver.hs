@@ -279,7 +279,7 @@ runConnectorTraced
   -> m a
 runConnectorTraced inj ConnectorTraced{..} peer = flip (runConnectionTraced inj) peer =<< openConnectionTraced
 
-runSomeConnector :: MonadUnliftIO m => SomeConnector pr peer r m -> peer m a -> m a
+runSomeConnector :: MonadUnliftIO m => SomeConnector pr peer m -> peer m a -> m a
 runSomeConnector (SomeConnector connector) = runConnector connector
 
 runSomeConnectorTraced

@@ -47,7 +47,7 @@ type ServerConnector ps = Connector ps 'AsServer
 type ClientConnectorTraced ps = ConnectorTraced ps 'AsClient
 type ServerConnectorTraced ps = ConnectorTraced ps 'AsServer
 
-data SomeConnector pr peer r m =
+data SomeConnector pr peer m =
   forall ps. BinaryMessage ps => SomeConnector (Connector ps pr peer m)
 
 data SomeConnectorTraced pr peer r s m =
@@ -81,7 +81,7 @@ instance Semigroup (ConnectionSourceTraced ps server r s m) where
 instance Monoid (ConnectionSourceTraced ps server r s m) where
   mempty = ConnectionSourceTraced empty
 
-data SomeConnectionSource server r m =
+data SomeConnectionSource server m =
   forall ps. BinaryMessage ps => SomeConnectionSource (ConnectionSource ps server m)
 
 data SomeConnectionSourceTraced server r s m =
@@ -133,8 +133,8 @@ ihoistConnection hoistPeer' f f' Connection{..} = Connection
 
 acceptSomeConnector
   :: MonadUnliftIO m
-  => SomeConnectionSource server r m
-  -> m (SomeServerConnector server r m)
+  => SomeConnectionSource server m
+  -> m (SomeServerConnector server m)
 acceptSomeConnector (SomeConnectionSource ConnectionSource{..}) =
   SomeConnector <$> atomically acceptConnector
 
