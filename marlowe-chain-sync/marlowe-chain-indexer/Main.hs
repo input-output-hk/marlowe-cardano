@@ -1,4 +1,11 @@
+{-# LANGUAGE Arrows #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 module Main
   where
@@ -8,37 +15,38 @@ import qualified Cardano.Api as Cardano
 import Cardano.Api.Byron (toByronRequiresNetworkMagic)
 import qualified Cardano.Chain.Genesis as Byron
 import Cardano.Crypto (abstractHashToBytes, decodeAbstractHash)
-import Control.Arrow (arr)
-import Control.Category ((<<<))
 import Control.Concurrent.Component
-import Control.Monad ((<=<))
+import Control.Concurrent.Component.Probes (ProbeServerDependencies(..), probeServer)
+import Control.Exception (bracket)
+import Control.Monad.Event.Class (MonadEvent(..), askBackendReaderT, localBackendReaderT)
 import Control.Monad.Trans.Except (ExceptT(ExceptT), runExceptT, withExceptT)
+import Control.Monad.Trans.Reader (ReaderT(..))
+import Control.Monad.With (MonadWith, WithException, stateThreadingGeneralWith)
 import Data.Aeson (eitherDecodeFileStrict)
+import Data.GeneralAllocate (GeneralAllocate(..), GeneralAllocated(GeneralAllocated))
 import Data.String (IsString(fromString))
 import Data.Text (unpack)
 import qualified Data.Text as T
 import qualified Data.Text.Lazy.IO as TL
 import Data.Time (secondsToNominalDiffTime)
 import Data.UUID.V4 (nextRandom)
-import Hasql.Pool (UsageError(..))
 import qualified Hasql.Pool as Pool
-import qualified Hasql.Session as Session
 import Language.Marlowe.Runtime.ChainIndexer (ChainIndexerDependencies(..), chainIndexer)
-import Language.Marlowe.Runtime.ChainIndexer.Database (hoistDatabaseQueries)
 import qualified Language.Marlowe.Runtime.ChainIndexer.Database.PostgreSQL as PostgreSQL
 import Language.Marlowe.Runtime.ChainIndexer.Genesis (computeGenesisBlock)
 import Logging (RootSelector(..), getRootSelectorConfig)
-import Observe.Event.Component (LoggerDependencies(..), logger)
-import Observe.Event.Explicit (injectSelector, narrowEventBackend)
+import Observe.Event (EventBackend, injectSelector)
+import Observe.Event.Backend (hoistEventBackend)
+import Observe.Event.Component (LoggerDependencies(..), withLogger)
 import Options (Options(..), getOptions)
 import System.IO (stderr)
+import UnliftIO (MonadIO, MonadUnliftIO, liftIO)
 
 main :: IO ()
 main = run =<< getOptions "0.0.0.0"
 
 run :: Options -> IO ()
 run Options{..} = do
-  pool <- Pool.acquire 100 (Just 5000000) (fromString databaseUri)
   genesisConfigResult <- runExceptT do
     hash <- ExceptT $ pure $ decodeAbstractHash genesisConfigHash
     (hash,) <$> withExceptT
@@ -46,20 +54,26 @@ run Options{..} = do
       (Byron.mkConfigFromFile (toByronRequiresNetworkMagic networkId) genesisConfigFile hash)
   (hash, genesisConfig) <- either (fail . unpack) pure genesisConfigResult
   shelleyGenesis <- either error id <$> eitherDecodeFileStrict shelleyGenesisFile
-  let genesisBlock = computeGenesisBlock (abstractHashToBytes hash) genesisConfig shelleyGenesis
   let
-    chainIndexerDependencies eventBackend = ChainIndexerDependencies
-      { connectToLocalNode = Cardano.connectToLocalNode localNodeConnectInfo
-      , databaseQueries = hoistDatabaseQueries
-          (either throwUsageError pure <=< Pool.use pool)
-          (PostgreSQL.databaseQueries genesisBlock)
-      , persistRateLimit
-      , genesisBlock
-      , maxCost
-      , costModel
-      , eventBackend = narrowEventBackend (injectSelector App) eventBackend
-      , httpPort
-      }
+    genesisBlock = computeGenesisBlock (abstractHashToBytes hash) genesisConfig shelleyGenesis
+    appComponent = proc pool -> do
+      probes <- chainIndexer -< ChainIndexerDependencies
+        { connectToLocalNode = Cardano.connectToLocalNode localNodeConnectInfo
+        , databaseQueries = PostgreSQL.databaseQueries pool genesisBlock
+        , persistRateLimit
+        , genesisBlock
+        , maxCost
+        , costModel
+        }
+      probeServer -< ProbeServerDependencies
+        { probes
+        , port = httpPort
+        }
+
+  bracket (Pool.acquire 100 (Just 5000000) (fromString databaseUri)) Pool.release
+    $ runComponent_
+    $ withLogger loggerDependencies runAppM appComponent
+  where
     loggerDependencies = LoggerDependencies
       { configFilePath = logConfigFile
       , getSelectorConfig = getRootSelectorConfig
@@ -67,12 +81,6 @@ run Options{..} = do
       , writeText = TL.hPutStr stderr
       , injectConfigWatcherSelector = injectSelector ConfigWatcher
       }
-    appComponent = chainIndexer <<< arr chainIndexerDependencies <<< logger
-  runComponent_ appComponent loggerDependencies
-  where
-    throwUsageError (ConnectionUsageError err)                       = error $ show err
-    throwUsageError (SessionUsageError (Session.QueryError _ _ err)) = error $ show err
-    throwUsageError AcquisitionTimeoutUsageError                     = error "hasql-timeout"
 
     localNodeConnectInfo :: LocalNodeConnectInfo CardanoMode
     localNodeConnectInfo = LocalNodeConnectInfo
@@ -83,3 +91,34 @@ run Options{..} = do
       }
 
     persistRateLimit = secondsToNominalDiffTime 1
+
+runAppM :: EventBackend IO r RootSelector -> AppM r a -> IO a
+runAppM eventBackend = flip runReaderT (hoistEventBackend liftIO eventBackend) . unAppM
+
+newtype AppM r a = AppM
+  { unAppM :: ReaderT (EventBackend (AppM r) r RootSelector) IO a
+  } deriving newtype (Functor, Applicative, Monad, MonadIO, MonadUnliftIO)
+
+instance MonadWith (AppM r) where
+  type WithException (AppM r) = WithException IO
+  stateThreadingGeneralWith
+    :: forall a b releaseReturn
+     . GeneralAllocate (AppM r) (WithException IO) releaseReturn b a
+    -> (a -> AppM r b)
+    -> AppM r (b, releaseReturn)
+  stateThreadingGeneralWith (GeneralAllocate allocA) go = AppM . ReaderT $ \r -> do
+    let
+      allocA' :: (forall x. IO x -> IO x) -> IO (GeneralAllocated IO (WithException IO) releaseReturn b a)
+      allocA' restore = do
+        let
+          restore' :: forall x. AppM r x -> AppM r x
+          restore' mx = AppM . ReaderT $ restore . (runReaderT . unAppM) mx
+        GeneralAllocated a releaseA <- (runReaderT . unAppM) (allocA restore') r
+        let
+          releaseA' relTy = (runReaderT . unAppM) (releaseA relTy) r
+        pure $ GeneralAllocated a releaseA'
+    stateThreadingGeneralWith (GeneralAllocate allocA') (flip (runReaderT . unAppM) r . go)
+
+instance MonadEvent r RootSelector (AppM r) where
+  askBackend = askBackendReaderT AppM id
+  localBackend = localBackendReaderT AppM unAppM id

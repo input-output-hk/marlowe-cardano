@@ -9,7 +9,6 @@ module Language.Marlowe.Protocol.Query.Client
   where
 
 import Control.Applicative (liftA2)
-import Control.Monad.Base (MonadBase(..))
 import Control.Monad.IO.Class (MonadIO(..))
 import Control.Monad.Trans.Class (MonadTrans(..))
 import Language.Marlowe.Protocol.Query.Types
@@ -44,9 +43,6 @@ instance MonadTrans MarloweQueryClient where
 
 instance MonadIO m => MonadIO (MarloweQueryClient m) where
   liftIO = lift . liftIO
-
-instance MonadBase b m => MonadBase b (MarloweQueryClient m) where
-  liftBase = lift . liftBase
 
 request :: Applicative m => Request a -> MarloweQueryClient m a
 request req = ClientRequest req $ pure . pure

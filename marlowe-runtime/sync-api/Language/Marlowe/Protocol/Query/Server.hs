@@ -5,19 +5,18 @@
 module Language.Marlowe.Protocol.Query.Server
   where
 
-import Control.Concurrent.Async.Lifted (concurrently)
-import Control.Monad.Trans.Control (MonadBaseControl)
 import Language.Marlowe.Protocol.Query.Types
 import Language.Marlowe.Runtime.ChainSync.Api (TxId)
 import Language.Marlowe.Runtime.Core.Api (ContractId)
 import Language.Marlowe.Runtime.Discovery.Api (ContractHeader)
 import Network.TypedProtocol
+import UnliftIO (MonadUnliftIO, concurrently)
 
 type MarloweQueryServer = Peer MarloweQuery 'AsServer 'StReq
 
 marloweQueryServer
   :: forall m
-   . MonadBaseControl IO m
+   . MonadUnliftIO m
   => (ContractFilter -> Range ContractId -> m (Maybe (Page ContractId ContractHeader)))
   -> (ContractId -> m (Maybe SomeContractState))
   -> (TxId -> m (Maybe SomeTransaction))

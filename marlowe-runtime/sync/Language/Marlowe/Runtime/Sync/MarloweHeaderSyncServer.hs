@@ -1,5 +1,6 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE ExplicitNamespaces #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 
 module Language.Marlowe.Runtime.Sync.MarloweHeaderSyncServer
@@ -11,29 +12,30 @@ import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainPoint, WithGene
 import Language.Marlowe.Runtime.Sync.Database (DatabaseQueries(..), Next(..))
 import Network.Protocol.Connection (SomeConnectionSource, SomeServerConnector, acceptSomeConnector)
 import Network.Protocol.Driver (runSomeConnector)
+import UnliftIO (MonadUnliftIO)
 
-data MarloweHeaderSyncServerDependencies = MarloweHeaderSyncServerDependencies
-  { databaseQueries :: DatabaseQueries IO
-  , headerSyncSource :: SomeConnectionSource MarloweHeaderSyncServer IO
+data MarloweHeaderSyncServerDependencies m = MarloweHeaderSyncServerDependencies
+  { databaseQueries :: DatabaseQueries m
+  , headerSyncSource :: SomeConnectionSource MarloweHeaderSyncServer m
   }
 
-marloweHeaderSyncServer :: Component IO MarloweHeaderSyncServerDependencies ()
+marloweHeaderSyncServer :: MonadUnliftIO m => Component m (MarloweHeaderSyncServerDependencies m) ()
 marloweHeaderSyncServer = serverComponent (component_ worker) \MarloweHeaderSyncServerDependencies{..} -> do
   connector <- acceptSomeConnector headerSyncSource
   pure WorkerDependencies{..}
 
-data WorkerDependencies = WorkerDependencies
-  { databaseQueries :: DatabaseQueries IO
-  , connector :: SomeServerConnector MarloweHeaderSyncServer IO
+data WorkerDependencies m = WorkerDependencies
+  { databaseQueries :: DatabaseQueries m
+  , connector :: SomeServerConnector MarloweHeaderSyncServer m
   }
 
-worker :: WorkerDependencies -> IO ()
+worker :: forall m. MonadUnliftIO m => WorkerDependencies m -> m ()
 worker WorkerDependencies{..} = do
   runSomeConnector connector $ MarloweHeaderSyncServer $ pure $ serverIdle Genesis
   where
     DatabaseQueries{..} = databaseQueries
 
-    serverIdle :: ChainPoint -> ServerStIdle IO ()
+    serverIdle :: ChainPoint -> ServerStIdle m ()
     serverIdle clientPos = ServerStIdle
       { recvMsgRequestNext
       , recvMsgIntersect
@@ -50,7 +52,7 @@ worker WorkerDependencies{..} = do
               }
             Next nextBlock headers -> SendMsgNewHeaders nextBlock headers $ serverIdle $ At nextBlock
 
-        recvMsgIntersect :: [BlockHeader] -> IO (ServerStIntersect IO ())
+        recvMsgIntersect :: [BlockHeader] -> m (ServerStIntersect m ())
         recvMsgIntersect points = do
           mIntersection <- getIntersection points
           pure case mIntersection of

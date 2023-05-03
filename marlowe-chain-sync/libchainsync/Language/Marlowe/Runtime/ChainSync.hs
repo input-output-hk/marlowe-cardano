@@ -1,6 +1,7 @@
 {-# LANGUAGE Arrows #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE StrictData #-}
@@ -13,6 +14,7 @@ module Language.Marlowe.Runtime.ChainSync
 import Cardano.Api (CardanoEra, CardanoMode, Tx, TxValidationErrorInMode)
 import qualified Cardano.Api as Cardano
 import Cardano.Api.Shelley (AcquiringFailure)
+import Control.Arrow (returnA)
 import Control.Concurrent.Component
 import Control.Concurrent.Component.Probes
 import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncCommand, ChainSyncQuery, RuntimeChainSeekServer)
@@ -24,36 +26,33 @@ import Network.Protocol.Connection (SomeConnectionSource)
 import Network.Protocol.Job.Server (JobServer)
 import Network.Protocol.Query.Server (QueryServer)
 import Ouroboros.Network.Protocol.LocalTxSubmission.Client (SubmitResult)
+import UnliftIO (MonadUnliftIO)
 
-data ChainSyncDependencies r = ChainSyncDependencies
-  { databaseQueries :: DatabaseQueries IO
-  , syncSource :: SomeConnectionSource RuntimeChainSeekServer IO
-  , querySource :: SomeConnectionSource (QueryServer ChainSyncQuery) IO
-  , jobSource :: SomeConnectionSource (JobServer ChainSyncCommand) IO
+data ChainSyncDependencies m = ChainSyncDependencies
+  { databaseQueries :: DatabaseQueries m
+  , syncSource :: SomeConnectionSource RuntimeChainSeekServer m
+  , querySource :: SomeConnectionSource (QueryServer ChainSyncQuery) m
+  , jobSource :: SomeConnectionSource (JobServer ChainSyncCommand) m
   , queryLocalNodeState
-      :: forall result
-       . Maybe Cardano.ChainPoint
-      -> Cardano.QueryInMode CardanoMode result
-      -> IO (Either AcquiringFailure result)
+      :: Maybe Cardano.ChainPoint
+      -> forall result
+       . Cardano.QueryInMode CardanoMode result
+      -> m (Either AcquiringFailure result)
   , submitTxToNodeLocal
       :: forall era
        . CardanoEra era
       -> Tx era
-      -> IO (SubmitResult (TxValidationErrorInMode CardanoMode))
-  , httpPort :: Int
+      -> m (SubmitResult (TxValidationErrorInMode CardanoMode))
   }
 
-chainSync :: Component IO (ChainSyncDependencies r) ()
+chainSync :: MonadUnliftIO m => Component m (ChainSyncDependencies m) Probes
 chainSync = proc ChainSyncDependencies{..} -> do
   let DatabaseQueries{..} = databaseQueries
   chainSyncServer -< ChainSyncServerDependencies{..}
   chainSyncQueryServer -< ChainSyncQueryServerDependencies{..}
   chainSyncJobServer -< ChainSyncJobServerDependencies{..}
-  probeServer -< ProbeServerDependencies
-    { probes = Probes
-        { startup = pure True
-        , liveness = pure True
-        , readiness = pure True
-        }
-    , port = httpPort
+  returnA -< Probes
+    { startup = pure True
+    , liveness = pure True
+    , readiness = pure True
     }

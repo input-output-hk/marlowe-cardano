@@ -1,5 +1,6 @@
 {-# LANGUAGE Arrows #-}
 {-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE StrictData #-}
@@ -8,8 +9,9 @@ module Language.Marlowe.Runtime.Indexer.Store
   where
 
 import Control.Concurrent.Component
-import Control.Concurrent.STM (STM, atomically, modifyTVar, newTVar, readTVar, writeTVar)
+import Control.Concurrent.STM (STM, modifyTVar, newTVar, readTVar, writeTVar)
 import Control.Monad (forever, guard, unless)
+import Control.Monad.Event.Class (MonadInjectEvent, withEvent)
 import Data.Aeson (ToJSON)
 import Data.Foldable (for_, traverse_)
 import Data.Function (on)
@@ -24,7 +26,8 @@ import Language.Marlowe.Runtime.History.Api (ExtractCreationError, ExtractMarlow
 import Language.Marlowe.Runtime.Indexer.ChainSeekClient (ChainEvent(..))
 import Language.Marlowe.Runtime.Indexer.Database (DatabaseQueries(..))
 import Language.Marlowe.Runtime.Indexer.Types (MarloweBlock(..), MarloweTransaction(..))
-import Observe.Event.Explicit (EventBackend, addField, withEvent)
+import Observe.Event.Explicit (addField)
+import UnliftIO (MonadIO, MonadUnliftIO, atomically)
 
 data StoreSelector f where
   Save :: StoreSelector SaveField
@@ -37,15 +40,14 @@ data SaveField
   | InvalidCreateTxs (Map ContractId ExtractCreationError)
   | InvalidApplyInputsTxs (Map TxId ExtractMarloweTransactionError)
 
-data StoreDependencies r = StoreDependencies
-  { databaseQueries :: DatabaseQueries IO
-  , eventBackend :: EventBackend IO r StoreSelector
+data StoreDependencies m = StoreDependencies
+  { databaseQueries :: DatabaseQueries m
   , pullEvent :: STM ChainEvent
   }
 
 -- | The store component aggregates changes into batches in one thread, and
 -- pulls batches to save in another.
-store :: Component IO (StoreDependencies r) ()
+store :: (MonadUnliftIO m, MonadInjectEvent r StoreSelector s m) => Component m (StoreDependencies m) ()
 store = proc StoreDependencies{..} -> do
   -- Spawn the aggregator thread
   readChanges <- aggregator -< pullEvent
@@ -55,7 +57,7 @@ store = proc StoreDependencies{..} -> do
 
 -- | The aggregator component pulls chain events and accumulates a batch of
 -- changes to persist.
-aggregator :: Component IO (STM ChainEvent) (STM Changes)
+aggregator :: MonadIO m => Component m (STM ChainEvent) (STM Changes)
 aggregator = component \pullEvent -> do
   -- A variable which will hold the accumulated changes.
   changesVar <- newTVar mempty
@@ -106,20 +108,19 @@ aggregator = component \pullEvent -> do
       atomically $ modifyTVar changesVar (<> changes)
   pure (runAggregator, readChanges)
 
-data PersisterDependencies r = PersisterDependencies
-  { databaseQueries :: DatabaseQueries IO
-  , eventBackend :: EventBackend IO r StoreSelector
+data PersisterDependencies m = PersisterDependencies
+  { databaseQueries :: DatabaseQueries m
   , readChanges :: STM Changes
   }
 
 -- | A component to save batches of changes to the database.
-persister :: Component IO (PersisterDependencies r) ()
+persister :: (MonadIO m, MonadInjectEvent r StoreSelector s m) => Component m (PersisterDependencies m) ()
 persister = component_ \PersisterDependencies{..} -> forever do
   -- Read the next batch of changes.
   Changes{..} <- atomically readChanges
 
   -- Log a save event.
-  withEvent eventBackend Save \ev -> do
+  withEvent Save \ev -> do
     traverse_ (addField ev . LocalTip) localTip
     traverse_ (addField ev . RemoteTip) remoteTip
     addField ev $ Stats statistics

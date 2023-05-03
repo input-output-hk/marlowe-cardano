@@ -1,6 +1,7 @@
 {-# LANGUAGE ApplicativeDo #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE QuasiQuotes #-}
@@ -25,7 +26,10 @@
 -}
 
 module Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL
-  ( databaseQueries
+  ( QueryField(..)
+  , QuerySelector(..)
+  , databaseQueries
+  , getQuerySelectorConfig
   ) where
 
 import qualified Cardano.Api.Shelley as C
@@ -34,6 +38,8 @@ import Control.Applicative ((<|>))
 import Control.Arrow ((***))
 import Control.Foldl (Fold(Fold))
 import qualified Control.Foldl as Fold
+import Control.Monad.Event.Class (MonadInjectEvent, withEvent)
+import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import Data.Int (Int16, Int64)
@@ -46,9 +52,13 @@ import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.Set.NonEmpty (NESet)
 import qualified Data.Set.NonEmpty as NESet
+import Data.Text (Text)
+import Data.Text.Encoding (decodeUtf8)
 import qualified Data.Vector as V
 import Data.Void (Void)
-import Hasql.Session (Session)
+import Hasql.Pool (Pool)
+import qualified Hasql.Pool as Pool
+import qualified Hasql.Session as Session
 import Hasql.TH (foldStatement, maybeStatement, singletonStatement)
 import qualified Hasql.Transaction as HT
 import qualified Hasql.Transaction.Sessions as TS
@@ -66,14 +76,49 @@ import Language.Marlowe.Runtime.ChainSync.Database
   )
 import qualified Language.Marlowe.Runtime.ChainSync.Database as Database
 import Numeric.Natural (Natural)
+import Observe.Event (addField)
+import Observe.Event.Component (FieldConfig(..), GetSelectorConfig, SelectorConfig(SelectorConfig), SomeJSON(SomeJSON))
 import Prelude hiding (init)
+import UnliftIO (throwIO)
+
+data QuerySelector f where
+  Query :: Text -> QuerySelector QueryField
+
+data QueryField
+  = SqlStatement ByteString
+  | Parameters [Text]
+
+getQuerySelectorConfig :: GetSelectorConfig QuerySelector
+getQuerySelectorConfig = \case
+  Query name -> SelectorConfig name True FieldConfig
+    { fieldKey = \case
+        SqlStatement _ -> "sql"
+        Parameters _ -> "parameters"
+    , fieldDefaultEnabled = const True
+    , toSomeJSON = \case
+        SqlStatement sql -> SomeJSON $ decodeUtf8 sql
+        Parameters parameters -> SomeJSON parameters
+    }
 
 -- | PostgreSQL implementation for the marlowe-chain-sync database queries.
-databaseQueries :: C.NetworkId -> DatabaseQueries Session
-databaseQueries networkId = DatabaseQueries
-  (hoistGetUTxOs (TS.transaction TS.Serializable TS.Read) getUTxOs)
-  (hoistGetTip (TS.transaction TS.Serializable TS.Read) getTip)
-  (hoistMoveClient (TS.transaction TS.Serializable TS.Read) $ moveClient networkId)
+databaseQueries :: forall r s m. (MonadInjectEvent r QuerySelector s m, MonadIO m) => Pool -> C.NetworkId -> DatabaseQueries m
+databaseQueries pool networkId = DatabaseQueries
+  (hoistGetUTxOs (transact "getUTxOs") getUTxOs)
+  (hoistGetTip (transact "getTip") getTip)
+  (hoistMoveClient (transact "moveClient") $ moveClient networkId)
+  where
+    transact :: Text -> HT.Transaction a -> m a
+    transact queryName m = withEvent (Query queryName) \ev -> do
+      result <- liftIO $ Pool.use pool $ TS.transaction TS.Serializable TS.Read m
+      case result of
+        Left ex -> do
+          case ex of
+            (Pool.SessionUsageError (Session.QueryError sql params _)) -> do
+              addField ev $ SqlStatement sql
+              addField ev $ Parameters params
+            _ -> pure ()
+          throwIO ex
+        Right a -> pure a
 
 -- MoveClient
 

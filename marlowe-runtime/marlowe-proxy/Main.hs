@@ -1,13 +1,23 @@
 {-# LANGUAGE Arrows #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE TypeFamilies #-}
 
 module Main
   where
 
 import Control.Concurrent.Component
-import Control.Monad.IO.Class (liftIO)
+import Control.Concurrent.Component.Probes (ProbeServerDependencies(..), probeServer)
+import Control.Monad.Event.Class
+import Control.Monad.IO.Class (MonadIO, liftIO)
+import Control.Monad.Trans.Reader (ReaderT(..))
+import Control.Monad.With
 import Data.Aeson.Encode.Pretty (encodePretty)
 import Data.ByteString.Lazy (ByteString)
+import Data.GeneralAllocate
 import qualified Data.Text.Lazy as T
 import Data.Text.Lazy.Encoding (decodeUtf8)
 import qualified Data.Text.Lazy.IO as TL
@@ -35,8 +45,8 @@ import Network.Socket
   , openSocket
   )
 import Network.TypedProtocol (Driver)
-import Observe.Event.Backend (hoistEventBackend, injectSelector, narrowEventBackend)
-import Observe.Event.Component (LoggerDependencies(..), logger)
+import Observe.Event.Backend (EventBackend, hoistEventBackend, injectSelector)
+import Observe.Event.Component (LoggerDependencies(..), withLogger)
 import Options.Applicative
   ( auto
   , execParser
@@ -57,50 +67,83 @@ import Options.Applicative
   , value
   )
 import System.IO (stderr)
-import UnliftIO.Resource (allocate)
+import UnliftIO (MonadUnliftIO)
+import UnliftIO.Resource (MonadResource, allocate)
 
 main :: IO ()
 main = run =<< getOptions
 
 run :: Options -> IO ()
-run = runComponent_ proc Options{..} -> do
-  eventBackend <- logger -< LoggerDependencies
-    { configFilePath = logConfigFile
-    , getSelectorConfig = getRootSelectorConfig
-    , newRef = nextRandom
-    , writeText = TL.hPutStr stderr
-    , injectConfigWatcherSelector = injectSelector ConfigWatcher
-    }
-
+run Options{..} = flip runComponent_ () $ withLogger loggerDependencies runAppM proc _ -> do
   connectionSource <- tcpServer -< TcpServerDependencies
     { toPeer = marloweRuntimeServerPeer
     , ..
     }
 
-  proxy -< ProxyDependencies
+  probes <- proxy -< ProxyDependencies
     { getMarloweSyncDriver = driverFactory syncHost marloweSyncPort
     , getMarloweHeaderSyncDriver = driverFactory syncHost marloweHeaderSyncPort
     , getMarloweQueryDriver = driverFactory syncHost marloweQueryPort
     , getTxJobDriver = driverFactory txHost txPort
     , connectionSource = SomeConnectionSource
-        $ logConnectionSource (hoistEventBackend liftIO $ narrowEventBackend (injectSelector MarloweRuntimeServer) eventBackend)
+        $ logConnectionSource (injectSelector MarloweRuntimeServer)
         $ handshakeConnectionSource connectionSource
-    , httpPort = fromIntegral httpPort
     }
 
+  probeServer -< ProbeServerDependencies { port = fromIntegral httpPort, .. }
+  where
+    loggerDependencies = LoggerDependencies
+      { configFilePath = logConfigFile
+      , getSelectorConfig = getRootSelectorConfig
+      , newRef = nextRandom
+      , writeText = TL.hPutStr stderr
+      , injectConfigWatcherSelector = injectSelector ConfigWatcher
+      }
+
 driverFactory
-  :: BinaryMessage ps
+  :: (BinaryMessage ps, MonadResource m)
   => HostName
   -> PortNumber
-  -> ServerM (Driver (Handshake ps) (Maybe ByteString) ServerM)
+  -> m (Driver (Handshake ps) (Maybe ByteString) m)
 driverFactory host port = do
   addr <- liftIO $ head <$> getAddrInfo
     (Just defaultHints { addrSocketType = Stream })
     (Just host)
     (Just $ show port)
-  (_, socket) <- WrappedUnliftIO $ allocate (openSocket addr) close
+  (_, socket) <- allocate (openSocket addr) close
   liftIO $ connect socket $ addrAddress addr
   pure $ mkDriver $ hoistChannel liftIO $ socketAsChannel socket
+
+runAppM :: EventBackend IO r RootSelector -> AppM r a -> IO a
+runAppM eventBackend = flip runReaderT (hoistEventBackend liftIO eventBackend) . unAppM
+
+newtype AppM r a = AppM
+  { unAppM :: ReaderT (EventBackend (AppM r) r RootSelector) IO a
+  } deriving newtype (Functor, Applicative, Monad, MonadIO, MonadUnliftIO, MonadFail)
+
+instance MonadWith (AppM r) where
+  type WithException (AppM r) = WithException IO
+  stateThreadingGeneralWith
+    :: forall a b releaseReturn
+     . GeneralAllocate (AppM r) (WithException IO) releaseReturn b a
+    -> (a -> AppM r b)
+    -> AppM r (b, releaseReturn)
+  stateThreadingGeneralWith (GeneralAllocate allocA) go = AppM . ReaderT $ \r -> do
+    let
+      allocA' :: (forall x. IO x -> IO x) -> IO (GeneralAllocated IO (WithException IO) releaseReturn b a)
+      allocA' restore = do
+        let
+          restore' :: forall x. AppM r x -> AppM r x
+          restore' mx = AppM . ReaderT $ restore . (runReaderT . unAppM) mx
+        GeneralAllocated a releaseA <- (runReaderT . unAppM) (allocA restore') r
+        let
+          releaseA' relTy = (runReaderT . unAppM) (releaseA relTy) r
+        pure $ GeneralAllocated a releaseA'
+    stateThreadingGeneralWith (GeneralAllocate allocA') (flip (runReaderT . unAppM) r . go)
+
+instance MonadEvent r RootSelector (AppM r) where
+  askBackend = askBackendReaderT AppM id
+  localBackend = localBackendReaderT AppM unAppM id
 
 data Options = Options
   { host :: HostName

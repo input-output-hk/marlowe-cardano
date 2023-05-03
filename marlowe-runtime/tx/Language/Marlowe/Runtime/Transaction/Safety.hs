@@ -1,4 +1,3 @@
-
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -47,6 +46,7 @@ import qualified Cardano.Api.Shelley as Shelley
   , ProtocolParameters(ProtocolParameters, protocolParamUTxOCostPerByte)
   , SystemStart(..)
   )
+import Control.Monad.IO.Class (MonadIO)
 import qualified Data.Map.Strict as M (Map, elems, empty, fromList, keys, map, mapKeys, singleton, size)
 import qualified Data.Set as S (singleton)
 import qualified Language.Marlowe.Core.V1.Merkle as V1 (MerkleizedContract(..))
@@ -152,7 +152,8 @@ checkContract config MarloweV1 contract continuations =
 
 -- | Mock-execute all possible transactions for a contract.
 checkTransactions
-  :: SolveConstraints
+  :: MonadIO m
+  => SolveConstraints
   -> MarloweVersion v
   -> MarloweContext v
   -> Chain.PolicyId
@@ -160,7 +161,7 @@ checkTransactions
   -> Integer
   -> Contract v
   -> Continuations v
-  -> IO (Either String [SafetyError])
+  -> m (Either String [SafetyError])
 checkTransactions solveConstraints version@MarloweV1 marloweContext rolesCurrency changeAddress minAda contract continuations =
   runExceptT
     $ do

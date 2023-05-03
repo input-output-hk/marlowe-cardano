@@ -18,17 +18,16 @@ module Observe.Event.Component
   , prependKey
   , singletonFieldConfig
   , singletonFieldConfigWith
+  , withLogger
   ) where
 
-import Control.Arrow (returnA, (&&&))
+import Control.Arrow (app, returnA, (&&&))
 import Control.Concurrent (threadDelay)
 import Control.Concurrent.Component
 import Control.Concurrent.STM (STM, atomically, newTVar, readTVar, writeTVar)
 import Control.Exception (SomeException, displayException)
-import Control.Exception.Lifted (try)
 import Control.Monad (forever, mfilter, void)
-import Control.Monad.Base (MonadBase, liftBase)
-import Control.Monad.Trans.Control (MonadBaseControl, control)
+import Control.Monad.IO.Class (liftIO)
 import Control.Monad.With (MonadWithExceptable)
 import Data.Aeson (FromJSON(..), ToJSON(..), Value(..), eitherDecodeFileStrict')
 import Data.Aeson.Text (encodeToLazyText)
@@ -41,12 +40,14 @@ import Data.Text (Text)
 import qualified Data.Text.Lazy as TL
 import Data.Time (diffUTCTime)
 import Data.Void (Void, absurd)
-import Observe.Event.Backend (InjectSelector, narrowEventBackend)
+import Observe.Event (InjectSelector)
+import Observe.Event.Backend (narrowEventBackend)
 import Observe.Event.Backend.Extra
 import Observe.Event.Explicit (EventBackend, addField, withEvent)
 import System.Directory (canonicalizePath)
 import System.FSNotify (Event(..), EventIsDirectory(..), watchDir, withManager)
 import System.FilePath (dropFileName)
+import UnliftIO (MonadIO, MonadUnliftIO, try, withRunInIO)
 
 type GetSelectorConfig s = forall f. s f -> SelectorConfig f
 
@@ -137,7 +138,7 @@ data LoggerDependencies m r s = LoggerDependencies
   }
 
 logger
-  :: (MonadWithExceptable m, MonadBaseControl IO m, ToJSON r)
+  :: (MonadWithExceptable m, MonadUnliftIO m, ToJSON r)
   => Component m (LoggerDependencies m r s) (EventBackend m (Maybe r) s)
 logger = proc LoggerDependencies{..} -> case configFilePath of
   Nothing -> logAppender -< let getLogConfig = pure mempty in LogAppenderDependencies{..}
@@ -147,20 +148,30 @@ logger = proc LoggerDependencies{..} -> case configFilePath of
       eventBackend <- logAppender -< LogAppenderDependencies{..}
     returnA -< eventBackend
 
+withLogger
+  :: (MonadWithExceptable m, MonadUnliftIO m, ToJSON r)
+  => LoggerDependencies m r s
+  -> (EventBackend m (Maybe r) s -> forall x. n x -> m x)
+  -> Component n a b
+  -> Component m a b
+withLogger dependencies runAppMonad appComponent = proc a -> do
+  eventBackend <- logger -< dependencies
+  app -< (hoistComponent (runAppMonad eventBackend) appComponent, a)
+
 data ConfigWatcherSelector f where
   ReloadConfig :: ConfigWatcherSelector (Either String LogConfig)
 
 configWatcher
   :: forall m r
-   . (MonadWithExceptable m, MonadBaseControl IO m)
+   . (MonadWithExceptable m, MonadUnliftIO m)
   => Component m (EventBackend m r ConfigWatcherSelector, FilePath) (STM LogConfig)
 configWatcher = component \(eventBackend, configFile) -> do
   configVar <- newTVar mempty
   let
     runConfigWatcher :: m ()
     runConfigWatcher = do
-      configFile' <- liftBase $ canonicalizePath configFile
-      control \runInBase -> forever $ void $ try @_ @IOError $ withManager \manager -> do
+      configFile' <- liftIO $ canonicalizePath configFile
+      withRunInIO \runInIO -> forever $ void $ try @_ @IOError $ withManager \manager -> do
         let dir = dropFileName configFile'
         let
           predicate = \case
@@ -170,15 +181,15 @@ configWatcher = component \(eventBackend, configFile) -> do
             _ -> False
           reloadConfig :: IO ()
           reloadConfig = void
-            $ runInBase
+            $ runInIO
             $ try @_ @SomeException
             $ withEvent eventBackend ReloadConfig \ev -> do
-                newConfig <- liftBase
+                newConfig <- liftIO
                   $ fmap (either (Left . displayException) id) . try @_ @IOError
                   $ eitherDecodeFileStrict' configFile
                 addField ev newConfig
-                liftBase $ traverse_ (atomically . writeTVar configVar) newConfig
-        _ <- liftBase $ watchDir manager dir predicate $ const reloadConfig
+                liftIO $ traverse_ (atomically . writeTVar configVar) newConfig
+        _ <- liftIO $ watchDir manager dir predicate $ const reloadConfig
         reloadConfig
         forever $ threadDelay 1_000_000_000_000
   pure (runConfigWatcher, readTVar configVar)
@@ -192,16 +203,16 @@ data LogAppenderDependencies m r s = LogAppenderDependencies
 
 logAppender
   :: forall m r s
-   . (MonadBase IO m, ToJSON r)
+   . (MonadIO m, ToJSON r)
   => Component m (LogAppenderDependencies m r s) (EventBackend m (Maybe r) s)
 logAppender = component \LogAppenderDependencies{..} -> do
   (pullEvents, eventBackend) <- proxyEventBackend newRef
   let
     eventFilter :: s f -> m (Maybe (f -> m Bool))
-    eventFilter = configFilter getSelectorConfig $ liftBase $ atomically getLogConfig
+    eventFilter = configFilter getSelectorConfig $ liftIO $ atomically getLogConfig
   pure
     ( forever do
-        events <- liftBase $ atomically pullEvents
+        events <- liftIO $ atomically pullEvents
         writeText $ TL.unlines $ encodeToLazyText . withSomeFlipped (renderEvent getSelectorConfig) <$> events
     , filterEventBackendM eventFilter eventBackend
     )

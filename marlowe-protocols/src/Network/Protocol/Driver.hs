@@ -10,14 +10,12 @@ module Network.Protocol.Driver
   where
 
 import Control.Concurrent.Component
-import Control.Concurrent.STM (atomically, newEmptyTMVar, newTQueue, readTMVar, readTQueue, tryPutTMVar)
+import Control.Concurrent.STM (newEmptyTMVar, newTQueue, readTMVar, readTQueue, tryPutTMVar)
 import Control.Concurrent.STM.TQueue (writeTQueue)
-import Control.Exception.Lifted (mask, throwIO, try)
-import Control.Monad.Base (MonadBase(liftBase))
-import Control.Monad.Trans.Control (MonadBaseControl)
+import Control.Monad.IO.Class (liftIO)
 import Data.ByteString.Lazy (ByteString)
 import Data.Functor (void)
-import Network.Channel (Channel(..), hoistChannel, socketAsChannel)
+import Network.Channel (Channel(..), socketAsChannel)
 import Network.Protocol.Codec (BinaryMessage, DeserializeError, binaryCodec)
 import Network.Protocol.Connection (Connection(..), ConnectionSource(..), Connector(..), SomeConnector(..), ToPeer)
 import Network.Run.TCP (runTCPServer)
@@ -36,10 +34,11 @@ import Network.Socket
 import Network.TypedProtocol (Message, PeerHasAgency, PeerRole(..), SomeMessage(..), runPeerWithDriver)
 import Network.TypedProtocol.Codec (Codec(..), DecodeStep(..))
 import Network.TypedProtocol.Driver (Driver(..))
+import UnliftIO (MonadIO, MonadUnliftIO, atomically, mask, throwIO, try)
 
 mkDriver
   :: forall ps m
-   . (MonadBase IO m, BinaryMessage ps)
+   . (MonadIO m, BinaryMessage ps)
   => Channel m ByteString
   -> Driver ps (Maybe ByteString) m
 mkDriver  Channel{..} = Driver{..}
@@ -84,11 +83,11 @@ data TcpServerDependencies ps server m = forall (st :: ps). TcpServerDependencie
   , toPeer :: ToPeer server ps 'AsServer st m
   }
 
-tcpServer :: (MonadBase IO m', MonadBase IO m) => Component m (TcpServerDependencies ps server m') (ConnectionSource ps server m')
+tcpServer :: (MonadIO m', MonadIO m) => Component m (TcpServerDependencies ps server m') (ConnectionSource ps server m')
 tcpServer = component \TcpServerDependencies{..} -> do
   socketQueue <- newTQueue
   pure
-    ( liftBase $ runTCPServer (Just host) (show port) \socket -> do
+    ( liftIO $ runTCPServer (Just host) (show port) \socket -> do
         closeTMVar <- atomically do
           closeTMVar <- newEmptyTMVar
           writeTQueue socketQueue (socket, void $ tryPutTMVar closeTMVar ())
@@ -97,32 +96,32 @@ tcpServer = component \TcpServerDependencies{..} -> do
     , ConnectionSource do
         (socket, closeConnection) <- readTQueue socketQueue
         pure $ Connector $ pure Connection
-          { closeConnection = \_ -> liftBase $ atomically closeConnection
-          , channel = hoistChannel liftBase $ socketAsChannel socket
+          { closeConnection = \_ -> atomically closeConnection
+          , channel = socketAsChannel socket
           , ..
           }
     )
 
 tcpClient
-  :: MonadBase IO m
+  :: MonadIO m
   => HostName
   -> PortNumber
   -> ToPeer client ps 'AsClient st m
   -> Connector ps 'AsClient client m
-tcpClient host port toPeer = Connector do
-  addr <- liftBase $ head <$> getAddrInfo
+tcpClient host port toPeer = Connector $ liftIO $ do
+  addr <- head <$> getAddrInfo
     (Just defaultHints { addrSocketType = Stream })
     (Just host)
     (Just $ show port)
-  socket <- liftBase $ openSocket addr
-  liftBase $ connect socket $ addrAddress addr
+  socket <- openSocket addr
+  connect socket $ addrAddress addr
   pure Connection
-    { closeConnection = \_ -> liftBase $ close socket
-    , channel = hoistChannel liftBase $ socketAsChannel socket
+    { closeConnection = \_ -> liftIO $ close socket
+    , channel = socketAsChannel socket
     , ..
     }
 
-runConnection :: (MonadBaseControl IO m, BinaryMessage ps) => Connection ps pr peer m -> peer m a -> m a
+runConnection :: (MonadUnliftIO m, BinaryMessage ps) => Connection ps pr peer m -> peer m a -> m a
 runConnection Connection{..} peer = do
   let driver = mkDriver channel
   mask \restore -> do
@@ -135,8 +134,8 @@ runConnection Connection{..} peer = do
         closeConnection Nothing
         pure a
 
-runConnector :: (MonadBaseControl IO m, BinaryMessage ps) => Connector ps pr peer m -> peer m a -> m a
+runConnector :: (MonadUnliftIO m, BinaryMessage ps) => Connector ps pr peer m -> peer m a -> m a
 runConnector Connector{..} peer = flip runConnection peer =<< openConnection
 
-runSomeConnector :: MonadBaseControl IO m => SomeConnector pr peer m -> peer m a -> m a
+runSomeConnector :: MonadUnliftIO m => SomeConnector pr peer m -> peer m a -> m a
 runSomeConnector (SomeConnector connector) = runConnector connector

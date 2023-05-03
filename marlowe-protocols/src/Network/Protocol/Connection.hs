@@ -8,11 +8,9 @@ module Network.Protocol.Connection
   where
 
 import Control.Applicative (Alternative(empty), (<|>))
-import Control.Concurrent.STM (STM, TQueue, atomically, newTQueue, readTQueue, writeTQueue)
+import Control.Concurrent.STM (STM, TQueue, newTQueue, readTQueue, writeTQueue)
 import Control.Exception (SomeException)
-import Control.Monad.Base (MonadBase, liftBase)
-import Control.Monad.Trans.Control (MonadBaseControl)
-import Control.Monad.With (MonadWithExceptable)
+import Control.Monad.Event.Class (MonadInjectEvent, composeInjectSelector, withEvent)
 import Data.ByteString.Lazy (ByteString)
 import Data.ByteString.Lazy.Base16 (encodeBase16)
 import Data.Foldable (fold)
@@ -27,11 +25,12 @@ import Network.Protocol.Codec (BinaryMessage)
 import Network.Protocol.Peer (PeerSelector, getPeerSelectorConfig, hoistPeer, logPeer)
 import qualified Network.Protocol.Peer as Peer
 import Network.TypedProtocol
-import Observe.Event.Backend (narrowEventBackend)
+import Observe.Event.Backend (InjectSelector)
 import Observe.Event.Component
   (GetSelectorConfig, SelectorConfig(..), SelectorLogConfig, absurdFieldConfig, getDefaultLogConfig, prependKey)
-import Observe.Event.Explicit (EventBackend, causedEventBackend, finalize, injectSelector, withEvent)
+import Observe.Event.Explicit (finalize, injectSelector)
 import Observe.Event.Network.Protocol (MessageToJSON)
+import UnliftIO (MonadIO, MonadUnliftIO, atomically)
 
 type ToPeer peer protocol pr st m = forall a. peer m a -> Peer protocol pr st m a
 
@@ -97,22 +96,22 @@ getConnectorSelectorConfig channelEnabled peerEnabled = \case
   ConnectionSelector sel -> prependKey "connection" $ getConnectionSelectorConfig channelEnabled peerEnabled sel
 
 logConnector
-  :: (MonadWithExceptable m)
-  => EventBackend m r (ConnectorSelector ps)
+  :: MonadInjectEvent r s s m
+  => InjectSelector (ConnectorSelector ps) s
   -> Connector ps pr peer m
   -> Connector ps pr peer m
-logConnector eventBackend Connector{..} = Connector
-  { openConnection = withEvent eventBackend Connect \ev ->
-      logConnection (causedEventBackend (injectSelector ConnectionSelector) [ev] eventBackend) <$> openConnection
+logConnector inject Connector{..} = Connector
+  { openConnection = inject Connect \s _ -> withEvent s \_ ->
+      logConnection (composeInjectSelector inject $ injectSelector ConnectionSelector) <$> openConnection
   }
 
 logConnectionSource
-  :: (MonadWithExceptable m)
-  => EventBackend m r (ConnectorSelector ps)
+  :: MonadInjectEvent r s s m
+  => InjectSelector (ConnectorSelector ps) s
   -> ConnectionSource ps server m
   -> ConnectionSource ps server m
-logConnectionSource eventBackend ConnectionSource{..} = ConnectionSource
-  { acceptConnector = logConnector eventBackend <$> acceptConnector
+logConnectionSource inject ConnectionSource{..} = ConnectionSource
+  { acceptConnector = logConnector inject <$> acceptConnector
   }
 
 data Connection ps pr peer m = forall (st :: ps). Connection
@@ -150,23 +149,23 @@ getConnectionSelectorConfig channelEnabled peerEnabled = \case
   Close -> SelectorConfig "close" True absurdFieldConfig
 
 logConnection
-  :: (MonadWithExceptable m)
-  => EventBackend m r (ConnectionSelector ps)
+  :: MonadInjectEvent r s s m
+  => InjectSelector (ConnectionSelector ps) s
   -> Connection ps pr peer m
   -> Connection ps pr peer m
-logConnection eventBackend Connection{..} = Connection
-  { channel = logChannel (narrowEventBackend (injectSelector ChannelSelector) eventBackend) channel
-  , toPeer = logPeer (narrowEventBackend (injectSelector PeerSelector) eventBackend) . toPeer
+logConnection inject Connection{..} = Connection
+  { channel = logChannel (composeInjectSelector inject $ injectSelector ChannelSelector) channel
+  , toPeer = logPeer (composeInjectSelector inject $ injectSelector PeerSelector) . toPeer
   , closeConnection = \mError -> do
-      withEvent eventBackend Close $ flip finalize mError
+      inject Close \s _ -> withEvent s $ flip finalize mError
       closeConnection mError
   }
 
-acceptSomeConnector :: MonadBaseControl IO m => SomeConnectionSource server m -> m (SomeServerConnector server m)
-acceptSomeConnector (SomeConnectionSource ConnectionSource{..}) = liftBase $ SomeConnector <$> atomically acceptConnector
+acceptSomeConnector :: MonadUnliftIO m => SomeConnectionSource server m -> m (SomeServerConnector server m)
+acceptSomeConnector (SomeConnectionSource ConnectionSource{..}) = SomeConnector <$> atomically acceptConnector
 
 stmConnectionSource
-  :: MonadBase IO m
+  :: MonadIO m
   => TQueue (STMChannel ByteString)
   -> ToPeer server ps 'AsServer st m
   -> ConnectionSource ps server m
@@ -175,29 +174,29 @@ stmConnectionSource queue toPeer = ConnectionSource do
   pure $ stmServerConnector channel toPeer
 
 stmServerConnector
-  :: MonadBase IO m
+  :: MonadIO m
   => STMChannel ByteString
   -> ToPeer client ps 'AsServer st m
   -> ServerConnector ps client m
 stmServerConnector (STMChannel channel closeChannel) toPeer = Connector $ pure Connection
-  { closeConnection = const $ liftBase $ atomically closeChannel
-  , channel = hoistChannel (liftBase . atomically) channel
+  { closeConnection = const $ atomically closeChannel
+  , channel = hoistChannel atomically channel
   , ..
   }
 
 stmClientConnector
-  :: MonadBase IO m
+  :: MonadIO m
   => TQueue (STMChannel ByteString)
   -> ToPeer client ps 'AsClient st m
   -> ClientConnector ps client m
 stmClientConnector queue toPeer = Connector do
-  STMChannel channel closeChannel <- liftBase $ atomically do
+  STMChannel channel closeChannel <- atomically do
     (clientChannel, serverChannel) <- channelPair
     writeTQueue queue serverChannel
     pure clientChannel
   pure Connection
-    { closeConnection = \_ -> liftBase $ atomically closeChannel
-    , channel = hoistChannel (liftBase . atomically) channel
+    { closeConnection = \_ -> atomically closeChannel
+    , channel = hoistChannel atomically channel
     , ..
     }
 
@@ -220,19 +219,19 @@ getClientServerPairSelectorConfig channelEnabled peerEnabled = \case
   ServerEvent sel -> prependKey "server" $ getConnectorSelectorConfig channelEnabled peerEnabled sel
 
 logClientServerPair
-  :: forall ps server client m r
-   . (MonadWithExceptable m)
-  => EventBackend m r (ClientServerPairSelector ps)
+  :: forall ps server client m r s
+   . MonadInjectEvent r s s m
+  => InjectSelector (ClientServerPairSelector ps) s
   -> ClientServerPair ps server client m
   -> ClientServerPair ps server client m
-logClientServerPair eventBackend ClientServerPair{..} = ClientServerPair
-  { connectionSource = logConnectionSource (narrowEventBackend (injectSelector ServerEvent) eventBackend) connectionSource
-  , clientConnector = logConnector (narrowEventBackend (injectSelector ClientEvent) eventBackend) clientConnector
+logClientServerPair inject ClientServerPair{..} = ClientServerPair
+  { connectionSource = logConnectionSource (composeInjectSelector inject $ injectSelector ServerEvent) connectionSource
+  , clientConnector = logConnector (composeInjectSelector inject $ injectSelector ClientEvent) clientConnector
   }
 
 clientServerPair
   :: forall ps server client m st
-   . MonadBaseControl IO m
+   . MonadUnliftIO m
   => ToPeer server ps 'AsServer st m
   -> ToPeer client ps 'AsClient st m
   -> STM (ClientServerPair ps server client m)

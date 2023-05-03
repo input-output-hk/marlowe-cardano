@@ -1,4 +1,5 @@
 {-# LANGUAGE ExplicitNamespaces #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ViewPatterns #-}
@@ -10,6 +11,7 @@ import Cardano.Api (NetworkId)
 import qualified Cardano.Api as C
 import Control.Error (hush)
 import Control.Error.Util (note)
+import Control.Monad.Event.Class
 import Data.Foldable (find)
 import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.List.NonEmpty as NE
@@ -54,7 +56,8 @@ import Network.Protocol.ChainSeek.Client
 import Network.Protocol.Connection (SomeClientConnector)
 import Network.Protocol.Driver (runSomeConnector)
 import Network.Protocol.Query.Client (QueryClient, liftQuery)
-import Observe.Event.Explicit (EventBackend, addField, idInjectSelector, subEventBackend, withEvent)
+import Observe.Event.Explicit (addField)
+import UnliftIO (MonadUnliftIO)
 
 data LoadWalletContextSelector f where
   LoadWalletContext :: LoadWalletContextSelector LoadWalletContextField
@@ -80,21 +83,20 @@ data ContractFoundField where
   PayoutScriptHash :: ScriptHash -> ContractFoundField
   ContractUTxO :: TxOutRef -> ContractFoundField
 
-type LoadWalletContext r
-   = EventBackend IO r LoadWalletContextSelector
-  -> WalletAddresses
-  -> IO WalletContext
+type LoadWalletContext m = WalletAddresses -> m WalletContext
 
-type LoadMarloweContext r
+type LoadMarloweContext m
    = forall v
-   . EventBackend IO r LoadMarloweContextSelector
-  -> MarloweVersion v
+   . MarloweVersion v
   -> ContractId
-  -> IO (Either LoadMarloweContextError (MarloweContext v))
+  -> m (Either LoadMarloweContextError (MarloweContext v))
 
-loadWalletContext :: (GetUTxOsQuery -> IO UTxOs) -> LoadWalletContext r
-loadWalletContext runQuery eventBackend WalletAddresses{..} =
-  withEvent eventBackend LoadWalletContext \ev -> do
+loadWalletContext
+  :: MonadInjectEvent r LoadWalletContextSelector s m
+  => (GetUTxOsQuery -> m UTxOs)
+  -> LoadWalletContext m
+loadWalletContext runQuery WalletAddresses{..} =
+  withEvent LoadWalletContext \ev -> do
     let addresses = Set.insert changeAddress extraAddresses
     addField ev $ ForAddresses addresses
     availableUtxos@(UTxOs (Map.keys -> txOutRefs)) <- runQuery $ GetUTxOsAtAddresses addresses
@@ -110,19 +112,21 @@ loadWalletContext runQuery eventBackend WalletAddresses{..} =
 
 -- | Loads the current MarloweContext for a contract by its ID.
 loadMarloweContext
-  :: (forall v. MarloweVersion v -> Set MarloweScripts)
+  :: forall m r s
+   . (MonadUnliftIO m, MonadInjectEvent r LoadMarloweContextSelector s m)
+  => (forall v. MarloweVersion v -> Set MarloweScripts)
   -> C.NetworkId
-  -> SomeClientConnector RuntimeChainSeekClient IO
-  -> SomeClientConnector (QueryClient ChainSyncQuery) IO
-  -> LoadMarloweContext r
-loadMarloweContext getScripts networkId chainSyncConnector chainSyncQueryConnector eventBackend desiredVersion contractId =
+  -> SomeClientConnector RuntimeChainSeekClient m
+  -> SomeClientConnector (QueryClient ChainSyncQuery) m
+  -> LoadMarloweContext m
+loadMarloweContext getScripts networkId chainSyncConnector chainSyncQueryConnector desiredVersion contractId =
   runSomeConnector chainSyncConnector client
   where
     TxOutRef creationTxId _ = unContractId contractId
     client = ChainSeekClient $ pure clientFindContract
 
     clientFindContract = SendMsgQueryNext (FindTx creationTxId False) ClientStNext
-      { recvMsgQueryRejected = \_ _ -> withEvent eventBackend ContractNotFound
+      { recvMsgQueryRejected = \_ _ -> withEvent ContractNotFound
           $ const
           $ pure
           $ SendMsgDone
@@ -130,8 +134,8 @@ loadMarloweContext getScripts networkId chainSyncConnector chainSyncQueryConnect
       , recvMsgRollBackward = \_ _ -> pure clientFindContract
       , recvMsgRollForward = \tx point _ -> case point of
           Genesis -> error "Roll forward to Genesis"
-          At blockHeader -> withEvent eventBackend ContractFound \ev -> case extractCreation contractId tx of
-            Left e -> withEvent (subEventBackend idInjectSelector ev eventBackend) ExtractCreationFailed \ev' -> do
+          At blockHeader -> withEvent ContractFound \_ -> case extractCreation contractId tx of
+            Left e -> withEvent ExtractCreationFailed \ev' -> do
               addField ev' e
               pure $ SendMsgDone $ Left $ ExtractCreationError e
             Right (SomeCreateStep actualVersion CreateStep{..}) -> do
@@ -172,7 +176,7 @@ loadMarloweContext getScripts networkId chainSyncConnector chainSyncQueryConnect
                     , payoutScriptUTxO
                     }
                   )
-      , recvMsgWait = withEvent eventBackend ContractNotFound
+      , recvMsgWait = withEvent ContractNotFound
           $ const
           $ pure
           $ SendMsgCancel
@@ -184,15 +188,15 @@ loadMarloweContext getScripts networkId chainSyncConnector chainSyncQueryConnect
       :: forall v
        . MarloweVersion v
       -> NonEmpty (BlockHeader, MarloweContext v)
-      -> ClientStIdle Move ChainPoint ChainPoint IO (Either LoadMarloweContextError (MarloweContext v))
+      -> ClientStIdle Move ChainPoint ChainPoint m (Either LoadMarloweContextError (MarloweContext v))
     clientFollowContract version contexts = SendMsgQueryNext (FindConsumingTxs utxos) ClientStNext
-      { recvMsgQueryRejected = \_ _ -> withEvent eventBackend ContractNotFound
+      { recvMsgQueryRejected = \_ _ -> withEvent ContractNotFound
           $ const
           $ pure
           $ SendMsgDone
           $ Left LoadMarloweContextErrorNotFound
       , recvMsgRollBackward = \point _ -> case rollbackContexts point contexts of
-          Nothing -> withEvent eventBackend ContractNotFound
+          Nothing -> withEvent ContractNotFound
             $ const
             $ pure
             $ SendMsgDone
@@ -206,11 +210,11 @@ loadMarloweContext getScripts networkId chainSyncConnector chainSyncQueryConnect
               systemStart <- fromJust . hush <$> runSomeConnector chainSyncQueryConnector (liftQuery GetSystemStart)
               eraHistory <- fromJust . hush <$> runSomeConnector chainSyncQueryConnector (liftQuery GetEraHistory)
               case extractMarloweTransaction version systemStart eraHistory contractId marloweAddress payoutScriptHash u blockHeader scriptConsumer of
-                Left e -> withEvent eventBackend ExtractMarloweTransactionFailed \ev' -> do
+                Left e -> withEvent ExtractMarloweTransactionFailed \ev' -> do
                   addField ev' e
                   pure $ SendMsgDone $ Left $ ExtractMarloweTransactionError e
                 Right marloweTransaction -> pure $ clientFollowContract version $ updateContext blockHeader (Just marloweTransaction) txs contexts
-      , recvMsgWait = withEvent eventBackend (ContractTipFound version) \ev -> do
+      , recvMsgWait = withEvent (ContractTipFound version) \ev -> do
           addField ev context
           pure $ SendMsgCancel $ SendMsgDone $ Right context
       }
