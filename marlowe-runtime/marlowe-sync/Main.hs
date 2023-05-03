@@ -15,28 +15,29 @@ import Control.Concurrent.Component.Probes (ProbeServerDependencies(..), probeSe
 import Control.Exception (bracket)
 import Control.Monad ((<=<))
 import Control.Monad.Event.Class
+import Control.Monad.Reader (ask)
 import Control.Monad.Trans.Reader (ReaderT(..))
 import Control.Monad.With
-import Data.Aeson.Encode.Pretty (encodePretty)
 import Data.GeneralAllocate
 import Data.String (fromString)
-import qualified Data.Text.Lazy as T
-import Data.Text.Lazy.Encoding (decodeUtf8)
-import qualified Data.Text.Lazy.IO as TL
-import Data.UUID.V4 (nextRandom)
+import qualified Data.Text as T
+import Data.Version (showVersion)
+import qualified Database.PostgreSQL.LibPQ as PQ
+import Hasql.Connection (withLibPQConnection)
 import qualified Hasql.Pool as Pool
-import Language.Marlowe.Protocol.HeaderSync.Server (marloweHeaderSyncServerPeer)
-import Language.Marlowe.Protocol.Sync.Server (marloweSyncServerPeer)
+import Language.Marlowe.Protocol.HeaderSync.Server (marloweHeaderSyncServerPeerTraced)
+import Language.Marlowe.Protocol.Sync.Server (marloweSyncServerPeerTraced)
 import Language.Marlowe.Runtime.Sync (SyncDependencies(..), sync)
 import Language.Marlowe.Runtime.Sync.Database (hoistDatabaseQueries, logDatabaseQueries)
 import qualified Language.Marlowe.Runtime.Sync.Database.PostgreSQL as Postgres
-import Logging (RootSelector(..), defaultRootSelectorLogConfig, getRootSelectorConfig)
-import Network.Protocol.Connection (SomeConnectionSource(..), logConnectionSource)
-import Network.Protocol.Driver (TcpServerDependencies(..), tcpServer)
-import Network.Protocol.Handshake.Server (handshakeConnectionSource)
+import Logging (RootSelector(..), renderRootSelectorOTel)
+import Network.Protocol.Connection (SomeConnectionSourceTraced(..))
+import Network.Protocol.Driver (TcpServerDependenciesTraced(..), tcpServerTraced)
+import Network.Protocol.Handshake.Server (handshakeConnectionSourceTraced)
 import Network.Socket (HostName, PortNumber)
 import Observe.Event.Backend (EventBackend, hoistEventBackend, injectSelector)
-import Observe.Event.Component (LoggerDependencies(..), withLogger)
+import Observe.Event.Render.OpenTelemetry (tracerEventBackend)
+import OpenTelemetry.Trace
 import Options.Applicative
   ( auto
   , execParser
@@ -45,67 +46,73 @@ import Options.Applicative
   , help
   , helper
   , info
-  , infoOption
   , long
   , metavar
   , option
-  , optional
   , progDesc
   , short
   , showDefault
   , strOption
   , value
   )
-import System.IO (stderr)
+import Paths_marlowe_runtime (version)
 import UnliftIO (MonadIO, MonadUnliftIO, liftIO, throwIO)
 
 main :: IO ()
 main = run =<< getOptions
 
 run :: Options -> IO ()
-run Options{..} = bracket (Pool.acquire 100 (Just 5000000) (fromString databaseUri)) Pool.release $
-  runComponent_ $ withLogger loggerDependencies runAppM proc pool -> do
-    marloweSyncSource <- tcpServer -< TcpServerDependencies
-      { host
-      , port = marloweSyncPort
-      , toPeer = marloweSyncServerPeer
-      }
+run Options{..} = bracket (Pool.acquire 100 (Just 5000000) (fromString databaseUri)) Pool.release \pool -> do
+  (dbName, dbUser, dbHost, dbPort) <- either throwIO pure =<< Pool.use pool do
+    connection <- ask
+    liftIO $ withLibPQConnection connection \conn -> (,,,)
+      <$> PQ.db conn
+      <*> PQ.user conn
+      <*> PQ.host conn
+      <*> PQ.port conn
+  withTracer \tracer ->
+    runAppM (tracerEventBackend tracer $ renderRootSelectorOTel dbName dbUser dbHost dbPort) do
+      flip runComponent_ () proc _ -> do
+        marloweSyncSource <- tcpServerTraced (injectSelector MarloweSyncServer) -< TcpServerDependenciesTraced
+          { host
+          , port = marloweSyncPort
+          , toPeer = marloweSyncServerPeerTraced
+          }
 
-    headerSyncSource <- tcpServer -< TcpServerDependencies
-      { host
-      , port = marloweHeaderSyncPort
-      , toPeer = marloweHeaderSyncServerPeer
-      }
+        headerSyncSource <- tcpServerTraced (injectSelector MarloweHeaderSyncServer) -< TcpServerDependenciesTraced
+          { host
+          , port = marloweHeaderSyncPort
+          , toPeer = marloweHeaderSyncServerPeerTraced
+          }
 
-    querySource <- tcpServer -< TcpServerDependencies
-      { host
-      , port = queryPort
-      , toPeer = id
-      }
+        querySource <- tcpServerTraced (injectSelector MarloweQueryServer) -< TcpServerDependenciesTraced
+          { host
+          , port = queryPort
+          , toPeer = id
+          }
 
-    probes <- sync -< SyncDependencies
-      { databaseQueries = logDatabaseQueries $ hoistDatabaseQueries
-            (either throwIO pure <=< liftIO . Pool.use pool)
-            Postgres.databaseQueries
-      , syncSource = SomeConnectionSource
-          $ logConnectionSource (injectSelector MarloweSyncServer)
-          $ handshakeConnectionSource marloweSyncSource
-      , headerSyncSource = SomeConnectionSource
-          $ logConnectionSource (injectSelector MarloweHeaderSyncServer)
-          $ handshakeConnectionSource headerSyncSource
-      , querySource = SomeConnectionSource
-          $ logConnectionSource (injectSelector MarloweQueryServer)
-          $ handshakeConnectionSource querySource
-      }
+        probes <- sync -< SyncDependencies
+          { databaseQueries = logDatabaseQueries $ hoistDatabaseQueries
+                (either throwIO pure <=< liftIO . Pool.use pool)
+                Postgres.databaseQueries
+          , syncSource = SomeConnectionSourceTraced (injectSelector MarloweSyncServer)
+              $ handshakeConnectionSourceTraced marloweSyncSource
+          , headerSyncSource = SomeConnectionSourceTraced (injectSelector MarloweHeaderSyncServer)
+              $ handshakeConnectionSourceTraced headerSyncSource
+          , querySource = SomeConnectionSourceTraced (injectSelector MarloweQueryServer)
+              $ handshakeConnectionSourceTraced querySource
+          }
 
-    probeServer -< ProbeServerDependencies { port = fromIntegral httpPort, .. }
+        probeServer -< ProbeServerDependencies { port = fromIntegral httpPort, .. }
   where
-    loggerDependencies = LoggerDependencies
-      { configFilePath = logConfigFile
-      , getSelectorConfig = getRootSelectorConfig
-      , newRef = nextRandom
-      , writeText = TL.hPutStr stderr
-      , injectConfigWatcherSelector = injectSelector ConfigWatcher
+    withTracer f = bracket
+      initializeGlobalTracerProvider
+      shutdownTracerProvider
+      \provider -> f $ makeTracer provider instrumentationLibrary tracerOptions
+
+    instrumentationLibrary = InstrumentationLibrary
+      { libraryName = "marlowe-sync"
+      , libraryVersion = T.pack $ showVersion version
       }
 
 runAppM :: EventBackend IO r RootSelector -> AppM r a -> IO a
@@ -145,24 +152,18 @@ data Options = Options
   , marloweHeaderSyncPort :: PortNumber
   , queryPort :: PortNumber
   , host :: HostName
-  , logConfigFile :: Maybe FilePath
   , httpPort :: PortNumber
   }
 
 getOptions :: IO Options
-getOptions = execParser $ info (helper <*> printLogConfigOption <*> parser) infoMod
+getOptions = execParser $ info (helper <*> parser) infoMod
   where
-    printLogConfigOption = infoOption
-      (T.unpack $ decodeUtf8 $ encodePretty defaultRootSelectorLogConfig)
-      (long "print-log-config" <> help "Print the default log configuration.")
-
     parser = Options
       <$> databaseUriParser
       <*> marloweSyncPortParser
       <*> marloweHeaderSyncPortParser
       <*> queryPort
       <*> hostParser
-      <*> logConfigFileParser
       <*> httpPortParser
 
     databaseUriParser = strOption $ mconcat
@@ -203,12 +204,6 @@ getOptions = execParser $ info (helper <*> printLogConfigOption <*> parser) info
       , metavar "HOST_NAME"
       , help "The host name to run the server on."
       , showDefault
-      ]
-
-    logConfigFileParser = optional $ strOption $ mconcat
-      [ long "log-config-file"
-      , metavar "FILE_PATH"
-      , help "The logging configuration JSON file."
       ]
 
     httpPortParser = option auto $ mconcat

@@ -9,18 +9,22 @@ import Control.Monad (join)
 import Data.Aeson (Key, ToJSON, Value(..), object, (.=))
 import Data.Binary (get, getWord8, put, putWord8)
 import qualified Data.List.NonEmpty as NE
+import Data.String (IsString(fromString))
 import GHC.Show (showSpace)
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader)
-import Language.Marlowe.Runtime.Core.Api (ContractId(..), MarloweVersion(..), MarloweVersionTag, SomeMarloweVersion(..))
+import Language.Marlowe.Runtime.Core.Api
+  (ContractId(..), MarloweVersion(..), MarloweVersionTag, SomeMarloweVersion(..), renderContractId)
 import qualified Language.Marlowe.Runtime.Core.Api as Core
 import Language.Marlowe.Runtime.History.Api
 import Network.Protocol.Codec (BinaryMessage(..))
 import Network.Protocol.Codec.Spec
   (MessageEq(..), MessageVariations(..), ShowProtocol(..), SomePeerHasAgency(SomePeerHasAgency), Variations(..), varyAp)
 import Network.Protocol.Handshake.Types (HasSignature(..))
+import Network.Protocol.Peer.Trace
 import Network.TypedProtocol (PeerHasAgency(..), Protocol(..), SomeMessage(..))
 import Network.TypedProtocol.Codec (AnyMessageAndAgency(AnyMessageAndAgency))
 import Observe.Event.Network.Protocol (MessageToJSON(..))
+import OpenTelemetry.Attributes
 data MarloweSync where
   StInit :: MarloweSync
   StFollow :: MarloweSync
@@ -344,6 +348,77 @@ instance MessageEq MarloweSync where
     AnyMessageAndAgency _ MsgIntersectNotFound -> \case
       AnyMessageAndAgency _ MsgIntersectNotFound -> True
       _ -> False
+
+instance OTelProtocol MarloweSync where
+  protocolName _ = "marlowe_sync"
+  messageAttributes = \case
+    ClientAgency tok -> case tok of
+      TokInit -> \case
+        MsgFollowContract contractId -> MessageAttributes
+          { messageType = "follow"
+          , messageParameters = [toPrimitiveAttribute $ renderContractId contractId]
+          }
+        MsgIntersect contractId version points-> MessageAttributes
+          { messageType = "intersect"
+          , messageParameters = toPrimitiveAttribute <$>
+              [renderContractId contractId, fromString $ show version, fromString $ show points]
+          }
+      TokIdle _ -> \case
+        MsgRequestNext -> MessageAttributes
+          { messageType = "request_next"
+          , messageParameters = []
+          }
+        MsgDone -> MessageAttributes
+          { messageType = "done"
+          , messageParameters = []
+          }
+      TokWait _ -> \case
+        MsgPoll -> MessageAttributes
+          { messageType = "poll"
+          , messageParameters = []
+          }
+        MsgCancel -> MessageAttributes
+          { messageType = "cancel"
+          , messageParameters = []
+          }
+    ServerAgency tok -> case tok of
+      TokFollow -> \case
+        MsgContractFound block MarloweV1 createStep-> MessageAttributes
+          { messageType = "follow/found"
+          , messageParameters = TextAttribute <$>
+              [fromString $ show block, fromString $ show MarloweV1, fromString $ show createStep]
+          }
+        MsgContractNotFound -> MessageAttributes
+          { messageType = "follow/not_found"
+          , messageParameters = []
+          }
+      TokNext MarloweV1 -> \case
+        MsgRollForward block steps-> MessageAttributes
+          { messageType = "request_next/roll_forward"
+          , messageParameters = TextAttribute <$>
+              [fromString $ show block, fromString $ show steps]
+          }
+        MsgRollBackward block -> MessageAttributes
+          { messageType = "request_next/roll_backward"
+          , messageParameters = TextAttribute <$> [fromString $ show block]
+          }
+        MsgRollBackCreation -> MessageAttributes
+          { messageType = "request_next/roll_back_creation"
+          , messageParameters = []
+          }
+        MsgWait -> MessageAttributes
+          { messageType = "request_next/wait"
+          , messageParameters = []
+          }
+      TokIntersect _ -> \case
+        MsgIntersectFound block -> MessageAttributes
+          { messageType = "intersect/found"
+          , messageParameters = TextAttribute <$> [fromString $ show block]
+          }
+        MsgIntersectNotFound -> MessageAttributes
+          { messageType = "intersect/not_found"
+          , messageParameters = []
+          }
 
 instance ShowProtocol MarloweSync where
   showsPrecMessage p agency = \case

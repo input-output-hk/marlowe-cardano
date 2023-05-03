@@ -10,6 +10,7 @@ import Data.Aeson (Value(..), object, (.=))
 import Data.Binary (get, put, putWord8)
 import Data.Binary.Get (getWord8)
 import qualified Data.List.NonEmpty as NE
+import Data.String (fromString)
 import GHC.Show (showSpace)
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainPoint)
 import Language.Marlowe.Runtime.Discovery.Api (ContractHeader)
@@ -17,9 +18,11 @@ import Network.Protocol.Codec (BinaryMessage(..))
 import Network.Protocol.Codec.Spec
   (MessageEq(..), MessageVariations(..), ShowProtocol(..), SomePeerHasAgency(..), Variations(..), varyAp)
 import Network.Protocol.Handshake.Types (HasSignature(..))
+import Network.Protocol.Peer.Trace
 import Network.TypedProtocol (PeerHasAgency(..), Protocol(..))
 import Network.TypedProtocol.Codec (AnyMessageAndAgency(AnyMessageAndAgency), SomeMessage(..))
 import Observe.Event.Network.Protocol (MessageToJSON(..))
+import OpenTelemetry.Attributes
 
 data MarloweHeaderSync where
   StIdle :: MarloweHeaderSync
@@ -233,6 +236,57 @@ instance MessageEq MarloweHeaderSync where
     AnyMessageAndAgency _ MsgIntersectNotFound -> \case
       AnyMessageAndAgency _ MsgIntersectNotFound -> True
       _ -> False
+
+instance OTelProtocol MarloweHeaderSync where
+  protocolName _ = "marlowe_header_sync"
+  messageAttributes = \case
+    ClientAgency tok -> case tok of
+      TokIdle -> \case
+        MsgRequestNext -> MessageAttributes
+          { messageType = "request_next"
+          , messageParameters = []
+          }
+        MsgIntersect blocks -> MessageAttributes
+          { messageType = "intersect"
+          , messageParameters = TextAttribute . fromString . show <$> blocks
+          }
+        MsgDone -> MessageAttributes
+          { messageType = "done"
+          , messageParameters = []
+          }
+      TokWait -> \case
+        MsgPoll -> MessageAttributes
+          { messageType = "poll"
+          , messageParameters = []
+          }
+        MsgCancel -> MessageAttributes
+          { messageType = "cancel"
+          , messageParameters = []
+          }
+    ServerAgency tok -> case tok of
+      TokNext -> \case
+        MsgNewHeaders block headers-> MessageAttributes
+          { messageType = "request_next/new_headers"
+          , messageParameters = TextAttribute <$>
+              [fromString $ show block, fromString $ show headers]
+          }
+        MsgRollBackward block -> MessageAttributes
+          { messageType = "request_next/roll_backward"
+          , messageParameters = TextAttribute <$> [fromString $ show block]
+          }
+        MsgWait -> MessageAttributes
+          { messageType = "request_next/wait"
+          , messageParameters = []
+          }
+      TokIntersect -> \case
+        MsgIntersectFound block -> MessageAttributes
+          { messageType = "intersect/found"
+          , messageParameters = TextAttribute <$> [fromString $ show block]
+          }
+        MsgIntersectNotFound -> MessageAttributes
+          { messageType = "intersect/not_found"
+          , messageParameters = []
+          }
 
 instance ShowProtocol MarloweHeaderSync where
   showsPrecMessage p agency = \case

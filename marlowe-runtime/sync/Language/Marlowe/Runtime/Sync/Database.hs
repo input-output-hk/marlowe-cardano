@@ -12,7 +12,6 @@ module Language.Marlowe.Runtime.Sync.Database
 import Control.Monad.Event.Class (MonadInjectEvent, withEvent)
 import Data.Aeson (ToJSON)
 import Data.Text (Text)
-import Data.Void (Void)
 import GHC.Generics (Generic)
 import Language.Marlowe.Protocol.Query.Types
   (ContractFilter, Page, Range, SomeContractState, SomeTransaction, SomeTransactions, Withdrawal, WithdrawalFilter)
@@ -24,7 +23,7 @@ import Observe.Event (addField)
 import Observe.Event.Component (FieldConfig(..), GetSelectorConfig, SelectorConfig(..), SomeJSON(..))
 
 data DatabaseSelector f where
-  GetTip :: DatabaseSelector (QueryField Void ChainPoint)
+  GetTip :: DatabaseSelector (QueryField () ChainPoint)
   GetTipForContract :: DatabaseSelector (QueryField ContractId ChainPoint)
   GetCreateStep :: DatabaseSelector (QueryField ContractId (Maybe GetCreateStepResult))
   GetIntersectionForContract :: DatabaseSelector (QueryField GetIntersectionForContractArguments (Maybe GetIntersectionForContractResult))
@@ -88,6 +87,7 @@ data GetNextStepsArguments v = GetNextStepsArguments
 logDatabaseQueries :: (MonadInjectEvent r DatabaseSelector s m) => DatabaseQueries m -> DatabaseQueries m
 logDatabaseQueries DatabaseQueries{..} = DatabaseQueries
   { getTip = withEvent GetTip \ev -> do
+      addField ev $ Arguments ()
       result <- getTip
       addField ev $ Result result
       pure result
