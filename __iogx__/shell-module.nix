@@ -53,7 +53,6 @@ in
       group = "marlowe";
     };
     start-cardano-node = {
-      description = "does what it says";
       exec = scripts.start-cardano-node;
       group = "marlowe";
     };
