@@ -23,9 +23,9 @@ import Network.Protocol.Peer.Trace (HasSpanContext)
 import Network.Protocol.Query.Client (QueryClient)
 import UnliftIO (MonadUnliftIO)
 
-data MarloweIndexerSelector f where
-  StoreEvent :: StoreSelector f -> MarloweIndexerSelector f
-  ChainSeekClientEvent :: ChainSeekClientSelector f -> MarloweIndexerSelector f
+data MarloweIndexerSelector r f where
+  StoreEvent :: StoreSelector f -> MarloweIndexerSelector r f
+  ChainSeekClientEvent :: ChainSeekClientSelector r f -> MarloweIndexerSelector r f
 
 data MarloweIndexerDependencies r s m = MarloweIndexerDependencies
   { databaseQueries :: DatabaseQueries m
@@ -40,7 +40,7 @@ marloweIndexer
   :: ( MonadEvent r s m
      , MonadUnliftIO m
      , Inject StoreSelector s
-     , Inject ChainSeekClientSelector s
+     , Inject (ChainSeekClientSelector r) s
      , MonadFail m
      , HasSpanContext r
      )

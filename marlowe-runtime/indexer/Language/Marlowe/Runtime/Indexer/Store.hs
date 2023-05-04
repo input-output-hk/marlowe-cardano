@@ -11,13 +11,14 @@ module Language.Marlowe.Runtime.Indexer.Store
 import Control.Concurrent.Component
 import Control.Concurrent.STM (STM, modifyTVar, newTVar, readTVar, writeTVar)
 import Control.Monad (forever, guard, unless)
-import Control.Monad.Event.Class (MonadInjectEvent, withEvent)
+import Control.Monad.Event.Class
 import Data.Aeson (ToJSON)
 import Data.Foldable (for_, traverse_)
 import Data.Function (on)
 import Data.List (partition)
 import Data.Map (Map)
 import qualified Data.Map as Map
+import Data.Maybe (listToMaybe)
 import Data.Semigroup (Last(..))
 import GHC.Generics (Generic)
 import Language.Marlowe.Runtime.ChainSync.Api (ChainPoint, TxId, WithGenesis(..))
@@ -26,7 +27,7 @@ import Language.Marlowe.Runtime.History.Api (ExtractCreationError, ExtractMarlow
 import Language.Marlowe.Runtime.Indexer.ChainSeekClient (ChainEvent(..))
 import Language.Marlowe.Runtime.Indexer.Database (DatabaseQueries(..))
 import Language.Marlowe.Runtime.Indexer.Types (MarloweBlock(..), MarloweTransaction(..))
-import Observe.Event.Explicit (addField)
+import Observe.Event.Explicit (addField, setAncestorEventBackend, setInitialCauseEventBackend)
 import UnliftIO (MonadIO, MonadUnliftIO, atomically)
 
 data StoreSelector f where
@@ -40,14 +41,14 @@ data SaveField
   | InvalidCreateTxs (Map ContractId ExtractCreationError)
   | InvalidApplyInputsTxs (Map TxId ExtractMarloweTransactionError)
 
-data StoreDependencies m = StoreDependencies
+data StoreDependencies r m = StoreDependencies
   { databaseQueries :: DatabaseQueries m
-  , pullEvent :: STM ChainEvent
+  , pullEvent :: STM (ChainEvent r)
   }
 
 -- | The store component aggregates changes into batches in one thread, and
 -- pulls batches to save in another.
-store :: (MonadUnliftIO m, MonadInjectEvent r StoreSelector s m) => Component m (StoreDependencies m) ()
+store :: (MonadUnliftIO m, MonadInjectEvent r StoreSelector s m) => Component m (StoreDependencies r m) ()
 store = proc StoreDependencies{..} -> do
   -- Spawn the aggregator thread
   readChanges <- aggregator -< pullEvent
@@ -57,7 +58,7 @@ store = proc StoreDependencies{..} -> do
 
 -- | The aggregator component pulls chain events and accumulates a batch of
 -- changes to persist.
-aggregator :: MonadIO m => Component m (STM ChainEvent) (STM Changes)
+aggregator :: MonadIO m => Component m (STM (ChainEvent r)) (STM (Changes r))
 aggregator = component \pullEvent -> do
   -- A variable which will hold the accumulated changes.
   changesVar <- newTVar mempty
@@ -70,7 +71,7 @@ aggregator = component \pullEvent -> do
 
       -- Retry the STM transaction if the changes are empty
       guard case changes of
-        Changes Nothing [] _ _ _ invalidCreateTxs invalidApplyInputsTxs ->
+        Changes Nothing [] _ _ _ invalidCreateTxs invalidApplyInputsTxs _ ->
           not $ Map.null invalidCreateTxs && Map.null invalidApplyInputsTxs
         _ -> True
 
@@ -88,7 +89,7 @@ aggregator = component \pullEvent -> do
       let
         -- Compute the changes for the pulled event.
         changes = case event of
-          RollForward block point tip ->
+          RollForward block point tip parent ->
             mempty
               { blocks = [block]
               , statistics = computeStats block
@@ -100,27 +101,28 @@ aggregator = component \pullEvent -> do
               , invalidApplyInputsTxs = flip foldMap (transactions block) \case
                   InvalidApplyInputsTransaction txId _ err -> Map.singleton txId err
                   _ -> mempty
+              , events = [parent]
               }
-          RollBackward point tip ->
-            mempty { rollbackTo = Just point, localTip = Just point, remoteTip = Just tip }
+          RollBackward point tip parent ->
+            mempty { rollbackTo = Just point, localTip = Just point, remoteTip = Just tip, events = [parent] }
 
       -- Append the new changes to the existing changes.
       atomically $ modifyTVar changesVar (<> changes)
   pure (runAggregator, readChanges)
 
-data PersisterDependencies m = PersisterDependencies
+data PersisterDependencies r m = PersisterDependencies
   { databaseQueries :: DatabaseQueries m
-  , readChanges :: STM Changes
+  , readChanges :: STM (Changes r)
   }
 
 -- | A component to save batches of changes to the database.
-persister :: (MonadIO m, MonadInjectEvent r StoreSelector s m) => Component m (PersisterDependencies m) ()
+persister :: (MonadIO m, MonadInjectEvent r StoreSelector s m) => Component m (PersisterDependencies r m) ()
 persister = component_ \PersisterDependencies{..} -> forever do
   -- Read the next batch of changes.
   Changes{..} <- atomically readChanges
 
   -- Log a save event.
-  withEvent Save \ev -> do
+  localBackend (maybe id setAncestorEventBackend (listToMaybe events) . setInitialCauseEventBackend events) $ withEvent Save \ev -> do
     traverse_ (addField ev . LocalTip) localTip
     traverse_ (addField ev . RemoteTip) remoteTip
     addField ev $ Stats statistics
@@ -136,7 +138,7 @@ persister = component_ \PersisterDependencies{..} -> forever do
     -- If there are blocks to save, save them.
     unless (null blocks) $ commitBlocks databaseQueries blocks
 
-data Changes = Changes
+data Changes r = Changes
   { rollbackTo :: Maybe ChainPoint
   , blocks :: [MarloweBlock]
   , statistics :: ChangesStatistics
@@ -144,9 +146,10 @@ data Changes = Changes
   , remoteTip :: Maybe ChainPoint
   , invalidCreateTxs :: Map ContractId ExtractCreationError
   , invalidApplyInputsTxs :: Map TxId ExtractMarloweTransactionError
+  , events :: [r]
   } deriving (Show, Eq, Generic)
 
-instance Semigroup Changes where
+instance Semigroup (Changes r) where
   a <> b =
     let
       a' = maybe id applyRollback (rollbackTo b) a
@@ -159,9 +162,10 @@ instance Semigroup Changes where
         , remoteTip = getLast $ on (<>) (Last . remoteTip) a b
         , invalidCreateTxs = on (<>) invalidCreateTxs a b
         , invalidApplyInputsTxs = on (<>) invalidApplyInputsTxs a b
+        , events = on (<>) events a b
         }
 
-applyRollback :: ChainPoint -> Changes -> Changes
+applyRollback :: ChainPoint -> Changes r -> Changes r
 applyRollback Genesis _ = mempty { rollbackTo = Just Genesis }
 applyRollback (At block) Changes{..} = if null blocksNotRolledBack
   then mempty { rollbackTo = Just (At block) }
@@ -190,8 +194,8 @@ computeStats MarloweBlock{..} = (foldMap computeTxStats transactions) { blockCou
     computeTxStats WithdrawTransaction{} = mempty { withdrawTxCount = 1 }
     computeTxStats _ = mempty
 
-instance Monoid Changes where
-  mempty = Changes Nothing mempty mempty Nothing Nothing mempty mempty
+instance Monoid (Changes r) where
+  mempty = Changes Nothing mempty mempty Nothing Nothing mempty mempty mempty
 
 data ChangesStatistics = ChangesStatistics
   { blockCount :: Int

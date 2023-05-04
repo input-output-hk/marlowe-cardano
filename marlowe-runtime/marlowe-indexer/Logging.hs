@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE RankNTypes #-}
@@ -29,7 +30,7 @@ data RootSelector f where
   ChainSeekClient :: TcpClientSelector (Handshake RuntimeChainSeek) f -> RootSelector f
   ChainQueryClient :: TcpClientSelector (Handshake (Query ChainSyncQuery)) f -> RootSelector f
   Database :: QuerySelector f -> RootSelector f
-  App :: MarloweIndexerSelector f -> RootSelector f
+  App :: MarloweIndexerSelector Span f -> RootSelector f
 
 instance Inject RootSelector RootSelector where
   inject = idInjectSelector
@@ -37,7 +38,7 @@ instance Inject RootSelector RootSelector where
 instance Inject StoreSelector RootSelector where
   inject = injectSelector $ App . StoreEvent
 
-instance Inject ChainSeekClientSelector RootSelector where
+instance Inject (ChainSeekClientSelector Span) RootSelector where
   inject = injectSelector $ App . ChainSeekClientEvent
 
 instance Inject QuerySelector RootSelector where
@@ -79,7 +80,7 @@ renderDatabaseSelectorOTel dbName dbUser host port = \case
           ]
     }
 
-renderAppSelectorOTel :: RenderSelectorOTel MarloweIndexerSelector
+renderAppSelectorOTel :: RenderSelectorOTel (MarloweIndexerSelector Span)
 renderAppSelectorOTel = \case
   StoreEvent sel -> renderStoreSelectorOTel sel
   ChainSeekClientEvent sel -> renderChainSeekClientSelectorOTel sel
@@ -88,7 +89,7 @@ renderStoreSelectorOTel :: RenderSelectorOTel StoreSelector
 renderStoreSelectorOTel = \case
   Save -> OTelRendered
     { eventName = "marlowe_indexer/save"
-    , eventKind = Internal
+    , eventKind = Consumer
     , renderField = \case
         RollbackPoint point -> [("cardano.sync.rollback_point", toAttribute $ T.pack $ show point)]
         Stats ChangesStatistics{..} ->
@@ -105,10 +106,15 @@ renderStoreSelectorOTel = \case
           [("marlowe.indexer.invalid_apply_inputs_txs", toAttribute $ T.pack . show <$> Map.toList errors)]
     }
 
-renderChainSeekClientSelectorOTel :: RenderSelectorOTel ChainSeekClientSelector
+renderChainSeekClientSelectorOTel :: RenderSelectorOTel (ChainSeekClientSelector Span)
 renderChainSeekClientSelectorOTel = \case
   LoadMarloweUTxO -> OTelRendered
     { eventName = "marlowe_indexer/load_marlowe_utxo"
     , eventKind = Internal
     , renderField = pure . ("marlowe.marlowe_utxo",) . toAttribute . T.pack . show
+    }
+  EmitEvent -> OTelRendered
+    { eventName = "marlowe_indexer/emit_event"
+    , eventKind = Producer
+    , renderField = const []
     }
