@@ -83,12 +83,12 @@ run Options{..} = flip runComponent_ () proc _ -> do
     port
     jobServerPeerTraced
   let
-    chainSyncConnector :: SomeClientConnectorTraced RuntimeChainSeekClient r RootSelector (AppM r)
+    chainSyncConnector :: SomeClientConnectorTraced RuntimeChainSeekClient Span RootSelector (AppM Span)
     chainSyncConnector = SomeConnectorTraced (injectSelector ChainSeekClient)
       $ handshakeClientConnectorTraced
       $ tcpClientTraced (injectSelector ChainSeekClient) chainSeekHost chainSeekPort chainSeekClientPeerTraced
 
-    chainSyncQueryConnector :: SomeClientConnectorTraced (QueryClient ChainSyncQuery) r RootSelector (AppM r)
+    chainSyncQueryConnector :: SomeClientConnectorTraced (QueryClient ChainSyncQuery) Span RootSelector (AppM Span)
     chainSyncQueryConnector = SomeConnectorTraced (injectSelector ChainSyncQueryClient)
       $ handshakeClientConnectorTraced
       $ tcpClientTraced (injectSelector ChainSyncQueryClient) chainSeekHost chainSeekQueryPort queryClientPeerTraced

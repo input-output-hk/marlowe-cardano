@@ -30,10 +30,10 @@ import Network.Protocol.Peer.Trace (DriverTraced, HasSpanContext)
 import UnliftIO (MonadUnliftIO(..))
 
 data ProxyDependencies r s m = forall dState. ProxyDependencies
-  { getMarloweSyncDriver :: m (DriverTraced (Handshake MarloweSync) dState r m)
-  , getMarloweHeaderSyncDriver :: m (DriverTraced (Handshake MarloweHeaderSync) dState r m)
-  , getMarloweQueryDriver :: m (DriverTraced (Handshake MarloweQuery) dState r m)
-  , getTxJobDriver :: m (DriverTraced (Handshake (Job MarloweTxCommand)) dState r m)
+  { getMarloweSyncDriver :: r -> m (DriverTraced (Handshake MarloweSync) dState r m)
+  , getMarloweHeaderSyncDriver :: r -> m (DriverTraced (Handshake MarloweHeaderSync) dState r m)
+  , getMarloweQueryDriver :: r -> m (DriverTraced (Handshake MarloweQuery) dState r m)
+  , getTxJobDriver :: r -> m (DriverTraced (Handshake (Job MarloweTxCommand)) dState r m)
   , connectionSourceTraced :: SomeConnectionSourceTraced (MarloweRuntimeServer r) r s m
   , connectionSource :: SomeConnectionSource (MarloweRuntimeServer r) m
   }
@@ -53,18 +53,18 @@ proxy = proc deps -> do
     }
 
 data WorkerDependenciesTraced r s m = forall dState. WorkerDependenciesTraced
-  { getMarloweSyncDriver :: m (DriverTraced (Handshake MarloweSync) dState r m)
-  , getMarloweHeaderSyncDriver :: m (DriverTraced (Handshake MarloweHeaderSync) dState r m)
-  , getMarloweQueryDriver :: m (DriverTraced (Handshake MarloweQuery) dState r m)
-  , getTxJobDriver :: m (DriverTraced (Handshake (Job MarloweTxCommand)) dState r m)
+  { getMarloweSyncDriver :: r -> m (DriverTraced (Handshake MarloweSync) dState r m)
+  , getMarloweHeaderSyncDriver :: r -> m (DriverTraced (Handshake MarloweHeaderSync) dState r m)
+  , getMarloweQueryDriver :: r -> m (DriverTraced (Handshake MarloweQuery) dState r m)
+  , getTxJobDriver :: r -> m (DriverTraced (Handshake (Job MarloweTxCommand)) dState r m)
   , connector :: SomeServerConnectorTraced (MarloweRuntimeServer r) r s m
   }
 
 data WorkerDependencies r m = forall dState. WorkerDependencies
-  { getMarloweSyncDriver :: m (DriverTraced (Handshake MarloweSync) dState r m)
-  , getMarloweHeaderSyncDriver :: m (DriverTraced (Handshake MarloweHeaderSync) dState r m)
-  , getMarloweQueryDriver :: m (DriverTraced (Handshake MarloweQuery) dState r m)
-  , getTxJobDriver :: m (DriverTraced (Handshake (Job MarloweTxCommand)) dState r m)
+  { getMarloweSyncDriver :: r -> m (DriverTraced (Handshake MarloweSync) dState r m)
+  , getMarloweHeaderSyncDriver :: r -> m (DriverTraced (Handshake MarloweHeaderSync) dState r m)
+  , getMarloweQueryDriver :: r -> m (DriverTraced (Handshake MarloweQuery) dState r m)
+  , getTxJobDriver :: r -> m (DriverTraced (Handshake (Job MarloweTxCommand)) dState r m)
   , connector :: SomeServerConnector (MarloweRuntimeServer r) m
   }
 

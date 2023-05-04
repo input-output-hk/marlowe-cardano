@@ -17,11 +17,12 @@ import Language.Marlowe.Protocol.Types (MarloweRuntime)
 import Network.Protocol.Driver (TcpClientSelector, tcpClient, tcpClientTraced)
 import Network.Protocol.Handshake.Client (handshakeClientConnector, handshakeClientConnectorTraced)
 import Network.Protocol.Handshake.Types (Handshake)
+import Network.Protocol.Peer.Trace (HasSpanContext)
 import Network.Socket (HostName, PortNumber)
 import Observe.Event (InjectSelector)
 
 connectToMarloweRuntimeTraced
-  :: (MonadEvent r s m, MonadIO m, MonadFail m)
+  :: (MonadEvent r s m, MonadIO m, MonadFail m, HasSpanContext r)
   => InjectSelector (TcpClientSelector (Handshake MarloweRuntime)) s
   -> HostName
   -> PortNumber

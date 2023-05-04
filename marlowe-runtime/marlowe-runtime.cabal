@@ -531,6 +531,7 @@ executable marlowe-proxy
   build-depends:
     , async-components ==0.1.0.0
     , base >= 4.9 && < 5
+    , binary >= 0.8.8 && < 0.9
     , bytestring >= 0.10.12 && < 0.12
     , eventuo11y ^>= { 0.9, 0.10 }
     , eventuo11y-extras ==0.1.0.0

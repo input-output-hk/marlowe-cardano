@@ -16,7 +16,10 @@ import Control.Monad.Event.Class
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Trans.Reader (ReaderT(..))
 import Control.Monad.With
+import Data.Binary (put)
+import Data.Binary.Put (runPut)
 import Data.ByteString.Lazy (ByteString)
+import qualified Data.ByteString.Lazy as LBS
 import Data.GeneralAllocate
 import qualified Data.Text as T
 import Data.Version (showVersion)
@@ -31,7 +34,7 @@ import Network.Protocol.Connection (SomeConnectionSource(..), SomeConnectionSour
 import Network.Protocol.Driver (TcpServerDependencies(..), TcpServerDependenciesTraced(..), tcpServer, tcpServerTraced)
 import Network.Protocol.Handshake.Server (handshakeConnectionSource, handshakeConnectionSourceTraced)
 import Network.Protocol.Handshake.Types (Handshake)
-import Network.Protocol.Peer.Trace (DriverTraced(..), HasSpanContext, mkDriverTraced)
+import Network.Protocol.Peer.Trace
 import Network.Socket
   ( AddrInfo(addrAddress, addrSocketType)
   , HostName
@@ -43,6 +46,7 @@ import Network.Socket
   , getAddrInfo
   , openSocket
   )
+import qualified Network.Socket.ByteString.Lazy as Socket
 import Observe.Event.Backend (EventBackend, hoistEventBackend, injectSelector)
 import Observe.Event.Render.OpenTelemetry (tracerEventBackend)
 import OpenTelemetry.Trace
@@ -113,15 +117,23 @@ driverFactory
   :: (BinaryMessage ps, MonadResource m, HasSpanContext r)
   => HostName
   -> PortNumber
+  -> r
   -> m (DriverTraced (Handshake ps) (Maybe ByteString) r m)
-driverFactory host port = do
+driverFactory host port parent = do
   addr <- liftIO $ head <$> getAddrInfo
     (Just defaultHints { addrSocketType = Stream })
     (Just host)
     (Just $ show port)
   (_, socket) <- allocate (openSocket addr) close
-  liftIO $ connect socket $ addrAddress addr
-  pure $ mkDriverTraced $ hoistChannel liftIO $ socketAsChannel socket
+  liftIO do
+    connect socket $ addrAddress addr
+    spanContext <- context parent
+    let spanContextBytes = runPut $ put spanContext
+    let spanContextLength = LBS.length spanContextBytes
+    Socket.sendAll socket $ runPut $ put spanContextLength
+    Socket.sendAll socket spanContextBytes
+    _ <- Socket.recv socket 1
+    pure $ mkDriverTraced $ hoistChannel liftIO $ socketAsChannel socket
 
 runAppM :: EventBackend IO r RootSelector -> AppM r a -> IO a
 runAppM eventBackend = flip runReaderT (hoistEventBackend liftIO eventBackend) . unAppM
