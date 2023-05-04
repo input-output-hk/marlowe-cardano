@@ -51,7 +51,8 @@ data ApplyCommand = V1ApplyCommand
 
 data ApplyCommandError v
   = ApplyFailed (ApplyInputsError v)
-  | PlainInputsSupportedOnly (ContractInputs v)
+  | InputsWithContinuationsUnsupported (ContractInputs v)
+  | InputsDecodingFailed (Maybe Yaml.ParseException)
   | TransactionFileWriteFailed (C.FileError ())
   | MetadataDecodingFailed (Maybe Yaml.ParseException)
   | TagsDecodingFailed (Maybe Yaml.ParseException)
@@ -224,8 +225,9 @@ readRole = V1.Role . P.TokenName <$> str
 runApplyCommand :: TxCommand ApplyCommand -> CLI ()
 runApplyCommand TxCommand { walletAddresses, signingMethod, tagsFile, metadataFile, subCommand=V1ApplyCommand{..}} = runCLIExceptT do
   inputs' <- case inputs of
+    ContractInputsByFile filePath  -> ExceptT $ liftIO $ first (InputsDecodingFailed . Just) <$> decodeFileEither filePath
     ContractInputsByValue inputs' -> pure inputs'
-    _ -> throwE (PlainInputsSupportedOnly inputs)
+    _ -> throwE (InputsWithContinuationsUnsupported inputs)
   metadata <- MarloweTransactionMetadata <$> readTags <*> readMetadata
   let
     validityLowerBound'= posixTimeToUTCTime <$> validityLowerBound
