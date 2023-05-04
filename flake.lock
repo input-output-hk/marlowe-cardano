@@ -7845,11 +7845,11 @@
         "tullia": "tullia_4"
       },
       "locked": {
-        "lastModified": 1683166669,
-        "narHash": "sha256-j8j/xIoayYB7t8u4Fi1ImQSbXJoQwcfzo2S+ewvtR98=",
+        "lastModified": 1683221797,
+        "narHash": "sha256-Jf3gb547CMiAsF/sW3cpr89Z+KbfJrX0Jvpo3xbUuP4=",
         "owner": "zeme-iohk",
         "repo": "iogx",
-        "rev": "8648598968894cab488140e80e9177df0245615d",
+        "rev": "5fe85c245932584eaa1613d1be47de670c5896de",
         "type": "github"
       },
       "original": {

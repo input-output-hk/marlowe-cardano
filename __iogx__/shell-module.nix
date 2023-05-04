@@ -41,6 +41,9 @@ in
     inputs.cardano-world.cardano.packages.cardano-address
     inputs.cardano-world.cardano.packages.cardano-node
     inputs.cardano-world.cardano.packages.cardano-cli
+
+    pkgs.sqitchPg
+    pkgs.postgresql
   ];
 
   env.PGUSER = "postgres";
@@ -54,6 +57,7 @@ in
     };
     start-cardano-node = {
       exec = scripts.start-cardano-node;
+      description = "Start cardano-node";
       group = "marlowe";
     };
   };
