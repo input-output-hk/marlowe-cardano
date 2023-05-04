@@ -21,7 +21,7 @@ portOption = O.port "http" "WEB" 8080 "The port number to serve the HTTP API on.
 getOptions :: IO Options
 getOptions = do
   runtimeHostParser <- O.optParserWithEnvDefault O.runtimeHost
-  runtimePortParser <- O.optParserWithEnvDefault O.runtimePort
+  runtimePortParser <- O.optParserWithEnvDefault O.runtimePortTraced
   portParser <- O.optParserWithEnvDefault portOption
   let
     openAPIParser = flag False True $ mconcat

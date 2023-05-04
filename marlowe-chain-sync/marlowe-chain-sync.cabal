@@ -93,7 +93,6 @@ library libchainsync
     Language.Marlowe.Runtime.ChainSync.QueryServer
   other-modules:
   build-depends:
-    , aeson >= 2 && < 3
     , async-components ==0.1.0.0
     , base >= 4.9 && < 5
     , bytestring >= 0.10.12 && < 0.12

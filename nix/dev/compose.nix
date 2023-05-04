@@ -91,6 +91,8 @@ let
     ];
     environment = [
       "TZ=UTC"
+      "OTEL_SERVICE_NAME=marlowe-chain-indexer"
+      "OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318"
     ];
     restart = "unless-stopped";
     depends_on = {
@@ -111,8 +113,6 @@ let
       network.nodeConfig.ByronGenesisHash
       "--shelley-genesis-config-file"
       network.nodeConfig.ShelleyGenesisFile
-      "--log-config-file"
-      "./marlowe-chain-indexer.log.config"
     ];
     healthcheck = {
       test = "/exec/run-sqitch -h postgres";
@@ -131,6 +131,8 @@ let
     ];
     environment = [
       "TZ=UTC"
+      "OTEL_SERVICE_NAME=marlowe-indexer"
+      "OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318"
     ];
     restart = "unless-stopped";
     depends_on = {
@@ -141,8 +143,6 @@ let
       "/exec/run-marlowe-indexer"
       "--chain-sync-host"
       "marlowe-chain-sync"
-      "--log-config-file"
-      "./marlowe-indexer.log.config"
       "--database-uri"
       "postgresql://postgres@postgres/chain"
     ];
@@ -166,9 +166,8 @@ let
       "postgresql://postgres@postgres/chain"
       "--host"
       "0.0.0.0"
-      "--log-config-file"
-      "./marlowe-chain-sync.log.config"
     ];
+    environment = [ "OTEL_SERVICE_NAME=marlowe-chain-sync" ];
   };
 
   sync-service = dev-service {
@@ -180,9 +179,8 @@ let
       "postgresql://postgres@postgres/chain"
       "--host"
       "0.0.0.0"
-      "--log-config-file"
-      "./marlowe-sync.log.config"
     ];
+    environment = [ "OTEL_SERVICE_NAME=marlowe-sync" ];
   };
 
   tx-service = dev-service {
@@ -194,13 +192,12 @@ let
       "marlowe-chain-sync"
       "--host"
       "0.0.0.0"
-      "--log-config-file"
-      "./marlowe-tx.log.config"
     ];
+    environment = [ "OTEL_SERVICE_NAME=marlowe-tx" ];
   };
 
   proxy-service = dev-service {
-    ports = [ 3700 ];
+    ports = [ 3700 3701 ];
     depends_on = [ "marlowe-sync" "marlowe-tx" ];
     command = [
       "/exec/run-marlowe-proxy"
@@ -210,8 +207,6 @@ let
       "marlowe-sync"
       "--tx-host"
       "marlowe-tx"
-      "--log-config-file"
-      "./marlowe-proxy.log.config"
     ];
     environment = [ "OTEL_SERVICE_NAME=marlowe-proxy" ];
   };
@@ -226,6 +221,7 @@ let
       "--enable-open-api"
       "--access-control-allow-origin-all"
     ];
+    environment = [ "OTEL_SERVICE_NAME=marlowe-web-server" ];
   };
 
   spec = {
@@ -270,6 +266,27 @@ let
           max-file = "10";
         };
       };
+    };
+
+    services.jaeger = {
+      image = "jaegertracing/all-in-one";
+      restart = "unless-stopped";
+      command = [
+        "--memory.max-traces"
+        "10000"
+        "--query.base-path"
+        "/jaeger/ui"
+      ];
+      environment = [ "COLLECTOR_OTLP_ENABLED=true" ];
+      ports = [ 16686 ];
+    };
+
+    services.otel-collector = {
+      image = "otel/opentelemetry-collector-contrib:0.76.1";
+      restart = "unless-stopped";
+      command = [ "--config=/etc/otel-collector-config.yml" ];
+      volumes = [ "./otel/otel-collector-config.yml:/etc/otel-collector-config.yml" ];
+      depends_on = [ "jaeger" ];
     };
 
     volumes.postgres = null;

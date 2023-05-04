@@ -92,6 +92,7 @@ run = runComponent_ proc Options{..} -> do
 
   connectionSourceTraced <- tcpServerTraced $ injectSelector MarloweRuntimeServer -< TcpServerDependenciesTraced
     { toPeer = marloweRuntimeServerPeerTraced $ injectSelector ProxySelector
+    , port = portTraced
     , ..
     }
 
