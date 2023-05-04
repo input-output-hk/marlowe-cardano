@@ -46,5 +46,4 @@
 
   packages.entrypoints = import ./marlowe-cardano/bitte
     { inherit inputs pkgs; };
-
-} // inputs.tullia.fromSimple pkgs.stdenv.system (import ./tullia.nix)
+} 

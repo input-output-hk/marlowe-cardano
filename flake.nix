@@ -165,15 +165,11 @@
             inputs = nosys.lib.deSys system inputs;
           };
 
-          # Export ciJobs for tullia to parse
-          ciJobs = self.hydraJobsFunc {
+          hydraJobs = self.hydraJobsFunc {
             supportedSystems = [ system ];
             evalSystem = system;
           };
-
-          hydraJobs = ciJobs;
         }
-        // tullia.fromSimple system (import ./nix/tullia.nix)
       )) // rec {
         hydraJobsFunc = import ./hydra-jobs.nix {
           inherit inputs;
