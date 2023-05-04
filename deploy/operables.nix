@@ -239,7 +239,6 @@ in
         --socket-path "$CARDANO_NODE_SOCKET_PATH" \
         --database-uri  "$DATABASE_URI" \
         --http-port "$HTTP_PORT"
-      fi
     '';
   };
 
@@ -297,7 +296,6 @@ in
         --chain-sync-query-port "$MARLOWE_CHAIN_SYNC_QUERY_PORT" \
         --chain-sync-host "$MARLOWE_CHAIN_SYNC_HOST" \
         --http-port "$HTTP_PORT"
-      fi
     '';
   };
 
@@ -346,7 +344,6 @@ in
         --header-sync-port "$MARLOWE_HEADER_SYNC_PORT" \
         --query-port "$MARLOWE_QUERY_PORT" \
         --http-port "$HTTP_PORT"
-      fi
     '';
   };
 
@@ -385,7 +382,6 @@ in
         --chain-sync-command-port "$MARLOWE_CHAIN_SYNC_COMMAND_PORT" \
         --chain-sync-host "$MARLOWE_CHAIN_SYNC_HOST" \
         --http-port "$HTTP_PORT"
-      fi
     '';
   };
 
@@ -430,7 +426,6 @@ in
         --tx-host "$TX_HOST" \
         --tx-command-port "$TX_PORT" \
         --http-port "$HTTP_PORT"
-      fi
     '';
   };
 
