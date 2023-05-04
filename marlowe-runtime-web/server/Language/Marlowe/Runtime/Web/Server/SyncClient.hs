@@ -10,7 +10,9 @@ import Control.Concurrent.Component
 import Control.Concurrent.STM (STM, atomically)
 import Control.Error (note)
 import Control.Monad (guard, mfilter)
+import Control.Monad.Event.Class (MonadEvent)
 import Control.Monad.IO.Class (liftIO)
+import Control.Monad.IO.Unlift (MonadUnliftIO)
 import Data.List (uncons)
 import Language.Marlowe.Protocol.Client (MarloweRuntimeClient(..))
 import Language.Marlowe.Protocol.Query.Client
@@ -24,12 +26,13 @@ import Language.Marlowe.Runtime.Discovery.Api (ContractHeader)
 import Language.Marlowe.Runtime.Transaction.Api (ContractCreated, InputsApplied(..))
 import Language.Marlowe.Runtime.Web.Server.TxClient (TempTx(..), Withdrawn)
 import Language.Marlowe.Runtime.Web.Server.Util (applyRangeToAscList)
-import Network.Protocol.Connection (SomeClientConnector)
-import Network.Protocol.Driver (runSomeConnector)
+import Network.Protocol.Connection (SomeClientConnectorTraced)
+import Network.Protocol.Driver (runSomeConnectorTraced)
+import Network.Protocol.Peer.Trace (HasSpanContext)
 import Servant.Pagination
 
-data SyncClientDependencies = SyncClientDependencies
-  { connector :: SomeClientConnector MarloweRuntimeClient IO
+data SyncClientDependencies r s m = SyncClientDependencies
+  { connector :: SomeClientConnectorTraced MarloweRuntimeClient r s m
   , lookupTempContract :: ContractId -> STM (Maybe (TempTx ContractCreated))
   , lookupTempTransaction :: ContractId -> TxId -> STM (Maybe (TempTx InputsApplied))
   , lookupTempWithdrawal :: TxId -> STM (Maybe (TempTx Withdrawn))
@@ -74,30 +77,30 @@ type LoadTransaction m
   -> m (Maybe (Either (TempTx InputsApplied) SomeTransaction))
 
 -- | Public API of the SyncClient
-data SyncClient = SyncClient
-  { loadContract :: LoadContract IO
-  , loadTransactions :: LoadTransactions IO
-  , loadTransaction :: LoadTransaction IO
-  , loadContractHeaders :: LoadContractHeaders IO
-  , loadWithdrawals :: LoadWithdrawals IO
-  , loadWithdrawal :: LoadWithdrawal IO
+data SyncClient m = SyncClient
+  { loadContract :: LoadContract m
+  , loadTransactions :: LoadTransactions m
+  , loadTransaction :: LoadTransaction m
+  , loadContractHeaders :: LoadContractHeaders m
+  , loadWithdrawals :: LoadWithdrawals m
+  , loadWithdrawal :: LoadWithdrawal m
   }
 
-syncClient :: Component IO SyncClientDependencies SyncClient
+syncClient :: (MonadUnliftIO m, MonadEvent r s m, HasSpanContext r) => Component m (SyncClientDependencies r s m) (SyncClient m)
 syncClient = arr \SyncClientDependencies{..} -> SyncClient
-  { loadContractHeaders = \cFilter -> runSomeConnector connector . RunMarloweQueryClient . getContractHeaders cFilter
-  , loadContract = \contractId -> runSomeConnector connector $ RunMarloweQueryClient do
+  { loadContractHeaders = \cFilter -> runSomeConnectorTraced connector . RunMarloweQueryClient . getContractHeaders cFilter
+  , loadContract = \contractId -> runSomeConnectorTraced connector $ RunMarloweQueryClient do
       result <- getContractState contractId
       case result of
         Nothing -> liftIO $ atomically $ fmap Left <$> lookupTempContract contractId
         Just contract -> pure $ Just $ Right contract
-  , loadTransaction = \contractId txId -> runSomeConnector connector $ RunMarloweQueryClient do
+  , loadTransaction = \contractId txId -> runSomeConnectorTraced connector $ RunMarloweQueryClient do
       result <- getTransaction txId
       let matchesContract (SomeTransaction _ _ _ Transaction{contractId=cid}) = cid == contractId
       case mfilter matchesContract result of
         Nothing -> liftIO $ atomically $ fmap Left <$> lookupTempTransaction contractId txId
         Just contract -> pure $ Just $ Right contract
-  , loadTransactions = \contractId Query.Range{..} -> runSomeConnector  connector $ RunMarloweQueryClient do
+  , loadTransactions = \contractId Query.Range{..} -> runSomeConnectorTraced  connector $ RunMarloweQueryClient do
       mTxs <- getTransactions contractId
       pure do
         SomeTransactions MarloweV1 txs <- note ContractNotFound mTxs
@@ -118,8 +121,8 @@ syncClient = arr \SyncClientDependencies{..} -> SyncClient
                 }
           , totalCount
           }
-  , loadWithdrawals = fmap (runSomeConnector connector . RunMarloweQueryClient) . getWithdrawals
-  , loadWithdrawal = \txId -> runSomeConnector connector $ RunMarloweQueryClient do
+  , loadWithdrawals = fmap (runSomeConnectorTraced connector . RunMarloweQueryClient) . getWithdrawals
+  , loadWithdrawal = \txId -> runSomeConnectorTraced connector $ RunMarloweQueryClient do
       result <- getWithdrawal txId
       case result of
         Nothing -> liftIO $ atomically $ fmap Left <$> lookupTempWithdrawal txId
