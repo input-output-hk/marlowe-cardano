@@ -536,7 +536,7 @@ runtime = proc RuntimeDependencies{..} -> do
       costModel = CostModel 1 10
       persistRateLimit = secondsToNominalDiffTime 0.1
       databaseQueries = chainIndexerDatabaseQueries
-      connectToLocalNode = Cardano.connectToLocalNode localNodeConnectInfo
+      connectToLocalNode client = liftIO $ Cardano.connectToLocalNode localNodeConnectInfo $ client mempty
      in
       ChainIndexerDependencies{..}
 
@@ -626,8 +626,9 @@ runtime = proc RuntimeDependencies{..} -> do
 driverFactory
   :: (BinaryMessage ps, MonadUnliftIO m, HasSpanContext r)
   => ClientConnectorTraced ps client r IdSelector m
+  -> r
   -> ResourceT m (DriverTraced ps (Maybe LBS.ByteString) r (ResourceT m))
-driverFactory ConnectorTraced{..} = withRunInIO \runInIO -> do
+driverFactory ConnectorTraced{..} _ = withRunInIO \runInIO -> do
   (_, ConnectionTraced{..}) <- runInIO $ allocate (runInIO $ lift openConnectionTraced) \ConnectionTraced{..} -> runInIO $ lift $ closeConnection Nothing
   pure $ mkDriverTraced $ hoistChannel lift channel
 
