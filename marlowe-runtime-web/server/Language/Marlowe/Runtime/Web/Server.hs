@@ -51,7 +51,6 @@ import Language.Marlowe.Runtime.Web.Server.SyncClient
 import Language.Marlowe.Runtime.Web.Server.TxClient
   (ApplyInputs, CreateContract, Submit, TxClient(..), TxClientDependencies(..), Withdraw, txClient)
 import Network.Protocol.Connection (SomeConnectorTraced(..))
-import Network.Protocol.Driver (TcpClientSelector)
 import Network.Protocol.Handshake.Types (Handshake)
 import Network.Protocol.Peer.Trace (HasSpanContext)
 import Network.Wai (Request, Response)
@@ -59,13 +58,8 @@ import qualified Network.Wai as WAI
 import Network.Wai.Middleware.Cors (CorsResourcePolicy(..), cors, simpleCorsResourcePolicy)
 import Observe.Event (reference)
 import Observe.Event.Backend (Event(addField))
-import Observe.Event.DSL (SelectorField(Inject), SelectorSpec(SelectorSpec))
-import Observe.Event.DSL.Compile (compile)
 import Observe.Event.Explicit (injectSelector)
-import Observe.Event.Syntax ((≔))
 import Servant hiding (Server, respond)
-
-type RuntimeClientSelector f = TcpClientSelector (Handshake MarloweRuntime) f
 
 data ServeRequest f where
   -- We need the request in the selector constructor as well because we need it
@@ -76,12 +70,11 @@ data ServeRequestField
   = ReqField Request
   | ResField Response
 
-compile $ SelectorSpec "server"
-  [ "http" ≔ Inject ''ServeRequest
-  , ["runtime", "client"] ≔ Inject ''RuntimeClientSelector
-  ]
+data ServerSelector transport f where
+  Http :: ServeRequest f -> ServerSelector transport f
+  RuntimeClient :: transport (Handshake MarloweRuntime) f -> ServerSelector transport f
 
-instance Inject ServeRequest ServerSelector where
+instance Inject ServeRequest (ServerSelector transport) where
   inject = injectSelector Http
 
 type APIWithOpenAPI = OpenAPI.API :<|>  Web.API
@@ -120,11 +113,11 @@ corsMiddleware accessControlAllowOriginAll =
     cors (const $ Just policy)
   else id
 
-data ServerDependencies r s = ServerDependencies
+data ServerDependencies transport r s = ServerDependencies
   { openAPIEnabled :: Bool
   , accessControlAllowOriginAll :: Bool
   , runApplication :: Application -> IO ()
-  , marloweTracedContext :: MarloweTracedContext r s ServerSelector (BackendM r ServerSelector)
+  , marloweTracedContext :: MarloweTracedContext r s (ServerSelector transport) (BackendM r (ServerSelector transport))
   }
 
 {- Architecture notes:
@@ -138,7 +131,7 @@ data ServerDependencies r s = ServerDependencies
     process having its own event backend injected via its parameters.
 -}
 
-server :: HasSpanContext r => Component (BackendM r ServerSelector) (ServerDependencies r s) ()
+server :: HasSpanContext r => Component (BackendM r (ServerSelector transport)) (ServerDependencies transport r s) ()
 server = proc deps@ServerDependencies{marloweTracedContext = MarloweTracedContext{..}} -> do
   TxClient{..} <- txClient -< TxClientDependencies
     { connector = SomeConnectorTraced injector connector
@@ -187,7 +180,7 @@ data WebServerDependencies r s = WebServerDependencies
   , runApplication :: Application -> IO ()
   }
 
-webServer :: Component (BackendM r ServerSelector) (WebServerDependencies r ServerSelector) ()
+webServer :: Component (BackendM r (ServerSelector transport)) (WebServerDependencies r (ServerSelector transport)) ()
 webServer = component_ \WebServerDependencies{..} -> withRunInIO \runInIO ->
   -- Observe.Event.Wai does not expose a reference to the ServeRequest field, which we
   -- need because of the asynchronous processing of submit jobs. So, we have to

@@ -66,6 +66,7 @@ library
     , hasql-pool
     , http-client
     , marlowe-cli
+    , marlowe-client
     , marlowe-chain-sync
     , marlowe-chain-sync:chain-indexer
     , marlowe-chain-sync:libchainsync

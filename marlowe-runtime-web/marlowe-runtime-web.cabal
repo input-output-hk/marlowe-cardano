@@ -110,7 +110,6 @@ library server
     , containers >= 0.6.5 && < 0.7
     , errors >= 2.3 && < 3
     , eventuo11y ^>= { 0.9, 0.10 }
-    , eventuo11y-dsl ^>= { 0.2 }
     , eventuo11y-extras ==0.1.0.0
     , exceptions >= 0.10 && < 0.12
     , general-allocate ^>= { 0.2 }

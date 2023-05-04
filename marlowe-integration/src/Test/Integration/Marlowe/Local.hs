@@ -61,6 +61,7 @@ import Control.Monad.Event.Class
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except (runExceptT)
+import Control.Monad.Trans.Marlowe (MarloweTracedContext(MarloweTracedContext))
 import Control.Monad.Trans.Reader (ReaderT(..), runReaderT)
 import Control.Monad.Trans.Resource (ResourceT, allocate, runResourceT, unprotect)
 import Control.Monad.With
@@ -147,7 +148,8 @@ import qualified Language.Marlowe.Runtime.Transaction.Query as Query
 import Language.Marlowe.Runtime.Transaction.Submit (SubmitJob, SubmitJobDependencies(..))
 import qualified Language.Marlowe.Runtime.Transaction.Submit as Submit
 import Language.Marlowe.Runtime.Web.Client (healthcheck)
-import Language.Marlowe.Runtime.Web.Server (ServerDependencies(..), server)
+import Language.Marlowe.Runtime.Web.Server (ServerDependencies(..), ServerSelector(RuntimeClient), server)
+import Language.Marlowe.Runtime.Web.Server.Monad (BackendM(runBackendM))
 import Network.Channel (hoistChannel)
 import Network.HTTP.Client (defaultManagerSettings, newManager)
 import Network.Protocol.ChainSeek.Client (chainSeekClientPeerTraced)
@@ -500,7 +502,6 @@ data RuntimeDependencies r m = RuntimeDependencies
   , marloweHeaderSyncPair :: ClientServerPair (Handshake MarloweHeaderSync) MarloweHeaderSyncServer MarloweHeaderSyncClient r m
   , marloweSyncPair :: ClientServerPair (Handshake MarloweSync) MarloweSyncServer MarloweSyncClient r m
   , marlowePair :: ClientServerPair (Handshake Protocol.MarloweRuntime) (MarloweRuntimeServer r) MarloweRuntimeClient r (ResourceT m)
-  , marlowePairNonTraced :: ClientServerPair (Handshake Protocol.MarloweRuntime) (MarloweRuntimeServer r) MarloweRuntimeClient r (ResourceT m)
   , marloweQueryPair :: ClientServerPair (Handshake MarloweQuery) (MarloweQueryServer r) MarloweQueryClient r m
   , txJobPair :: ClientServerPair (Handshake (Job MarloweTxCommand)) (JobServer MarloweTxCommand) (JobClient MarloweTxCommand) r m
   , chainIndexerDatabaseQueries :: ChainIndexer.DatabaseQueries m
@@ -608,19 +609,18 @@ runtime = proc RuntimeDependencies{..} -> do
     , getMarloweHeaderSyncDriver = driverFactory $ clientConnector marloweHeaderSyncPair
     , getMarloweQueryDriver = driverFactory $ clientConnector marloweQueryPair
     , getTxJobDriver = driverFactory $ clientConnector txJobPair
-    , connectionSource = SomeConnectionSource $ marloweRuntimeServerSource <> tracedConnectionSourceToConnectionSource (Connection.connectionSource marlowePairNonTraced)
+    , connectionSource = SomeConnectionSource marloweRuntimeServerSource
     , connectionSourceTraced = SomeConnectionSourceTraced inject $ Connection.connectionSource marlowePair
     }
 
-  hoistComponent liftIO server -< ServerDependencies
+  hoistComponent (liftIO . flip runReaderT (noopEventBackend mempty) . runBackendM) server -< ServerDependencies
     { openAPIEnabled = False
     , accessControlAllowOriginAll = False
     , runApplication = run webPort
-    , connector = ihoistConnector hoistMarloweRuntimeClient
-        (runRuntimeM . runResourceT)
-        liftIO
-        (tracedConnectorToConnector $ clientConnector marlowePairNonTraced)
-    , eventBackend = noopEventBackend ()
+    , marloweTracedContext = MarloweTracedContext (injectSelector RuntimeClient) $ ihoistConnectorTraced hoistMarloweRuntimeClient
+        (liftIO . runRuntimeM . runResourceT)
+        (liftIO . flip runReaderT (noopEventBackend mempty) . runBackendM)
+        (clientConnector marlowePair)
     }
 
 driverFactory
@@ -640,7 +640,6 @@ data Channels r m = Channels
   , marloweQueryPair :: ClientServerPair (Handshake MarloweQuery) (MarloweQueryServer r) MarloweQueryClient r m
   , txJobPair :: ClientServerPair (Handshake (Job MarloweTxCommand)) (JobServer MarloweTxCommand) (JobClient MarloweTxCommand) r m
   , marlowePair :: ClientServerPair (Handshake Protocol.MarloweRuntime) (MarloweRuntimeServer r) MarloweRuntimeClient r (ResourceT m)
-  , marlowePairNonTraced :: ClientServerPair (Handshake Protocol.MarloweRuntime) (MarloweRuntimeServer r) MarloweRuntimeClient r (ResourceT m)
   }
 
 setupChannels :: Monoid r => STM (Channels r (RuntimeM r))
@@ -667,9 +666,6 @@ setupChannels = do
     jobServerPeerTraced
     jobClientPeerTraced
   marlowePair <- handshakeClientServerPair <$> clientServerPair
-    (marloweRuntimeServerPeerTraced inject)
-    marloweRuntimeClientPeerTraced
-  marlowePairNonTraced <- handshakeClientServerPair <$> clientServerPair
     (marloweRuntimeServerPeerTraced inject)
     marloweRuntimeClientPeerTraced
   pure Channels{..}

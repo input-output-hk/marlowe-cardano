@@ -20,7 +20,7 @@ import Language.Marlowe.Runtime.Client (connectToMarloweRuntimeTraced)
 import Language.Marlowe.Runtime.Web.Server
 import Language.Marlowe.Runtime.Web.Server.Monad (runBackendM)
 import Network.HTTP.Types
-import Network.Protocol.Driver (renderTcpClientSelectorOTel, sockAddrToAttributes)
+import Network.Protocol.Driver (TcpClientSelector, renderTcpClientSelectorOTel, sockAddrToAttributes)
 import Network.Socket (PortNumber)
 import Network.Wai
 import Network.Wai.Handler.Warp (run)
@@ -60,7 +60,7 @@ main = do
       , libraryVersion = fromString $ showVersion version
       }
 
-renderServerSelectorOTel :: PortNumber -> RenderSelectorOTel ServerSelector
+renderServerSelectorOTel :: PortNumber -> RenderSelectorOTel (ServerSelector TcpClientSelector)
 renderServerSelectorOTel port = \case
   Http sel -> renderServeRequestOTel port sel
   RuntimeClient sel -> renderTcpClientSelectorOTel sel
