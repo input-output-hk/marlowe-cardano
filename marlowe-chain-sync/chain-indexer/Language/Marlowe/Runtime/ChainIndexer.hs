@@ -29,8 +29,8 @@ data ChainIndexerSelector r f where
   NodeClientEvent :: NodeClientSelector f -> ChainIndexerSelector r f
   ChainStoreEvent :: ChainStoreSelector r f -> ChainIndexerSelector r f
 
-data ChainIndexerDependencies m = ChainIndexerDependencies
-  { connectToLocalNode       :: !(LocalNodeClientProtocolsInMode CardanoMode -> IO ())
+data ChainIndexerDependencies r m = ChainIndexerDependencies
+  { connectToLocalNode       :: !((r -> LocalNodeClientProtocolsInMode CardanoMode) -> m ())
   , maxCost                  :: !Int
   , costModel                :: !CostModel
   , databaseQueries          :: !(DatabaseQueries m)
@@ -44,7 +44,7 @@ chainIndexer
      , Inject NodeClientSelector s
      , Inject (ChainStoreSelector r) s
      )
-  => Component m (ChainIndexerDependencies m) Probes
+  => Component m (ChainIndexerDependencies r m) Probes
 chainIndexer = proc ChainIndexerDependencies{..} -> do
   let DatabaseQueries{..} = databaseQueries
   NodeClient{..} <- nodeClient -< NodeClientDependencies

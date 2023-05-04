@@ -18,7 +18,7 @@ import Cardano.Crypto (abstractHashToBytes, decodeAbstractHash)
 import Control.Concurrent.Component
 import Control.Concurrent.Component.Probes (ProbeServerDependencies(..), probeServer)
 import Control.Exception (bracket)
-import Control.Monad.Event.Class (MonadEvent(..), askBackendReaderT, localBackendReaderT)
+import Control.Monad.Event.Class
 import Control.Monad.Reader (ask)
 import Control.Monad.Trans.Except (ExceptT(ExceptT), runExceptT, withExceptT)
 import Control.Monad.Trans.Reader (ReaderT(..))
@@ -61,7 +61,9 @@ run Options{..} = do
     genesisBlock = computeGenesisBlock (abstractHashToBytes hash) genesisConfig shelleyGenesis
     appComponent = proc pool -> do
       probes <- chainIndexer -< ChainIndexerDependencies
-        { connectToLocalNode = Cardano.connectToLocalNode localNodeConnectInfo
+        { connectToLocalNode = \client -> do
+            connectRef <- emitImmediateEventFields (ConnectToNode @Span) [localNodeConnectInfo]
+            liftIO $ Cardano.connectToLocalNode localNodeConnectInfo $ client connectRef
         , databaseQueries = PostgreSQL.databaseQueries pool genesisBlock
         , persistRateLimit
         , genesisBlock

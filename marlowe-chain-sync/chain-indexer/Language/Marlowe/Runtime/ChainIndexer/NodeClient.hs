@@ -46,7 +46,7 @@ import Control.Arrow ((&&&))
 import Control.Concurrent.Component
 import Control.Concurrent.STM (STM, TVar, modifyTVar, newTVar, readTVar, writeTVar)
 import Control.Monad (guard)
-import Control.Monad.Event.Class (MonadInjectEvent, emitImmediateEventArgs_, withEvent)
+import Control.Monad.Event.Class
 import Data.IntMap.Lazy (IntMap)
 import qualified Data.IntMap.Lazy as IntMap
 import Data.List (sortOn)
@@ -54,6 +54,7 @@ import Data.Maybe (mapMaybe)
 import Data.Ord (Down(..))
 import Language.Marlowe.Runtime.ChainIndexer.Database (CardanoBlock, GetIntersectionPoints(..))
 import Observe.Event (NewEventArgs(..), addField, reference)
+import Observe.Event.Backend (setAncestorEventBackend)
 import Ouroboros.Network.Point (WithOrigin(..))
 import UnliftIO (MonadIO, MonadUnliftIO, atomically, withRunInIO)
 
@@ -102,8 +103,8 @@ cost :: CostModel -> Changes r -> Int
 cost CostModel{..} Changes{..} = changesBlockCount * blockCost + changesTxCount * txCost
 
 -- | The set of dependencies needed by the NodeClient component.
-data NodeClientDependencies m = NodeClientDependencies
-  { connectToLocalNode    :: !(LocalNodeClientProtocolsInMode CardanoMode -> IO ()) -- ^ Connect to the local node.
+data NodeClientDependencies r m = NodeClientDependencies
+  { connectToLocalNode    :: !((r -> LocalNodeClientProtocolsInMode CardanoMode) -> m ()) -- ^ Connect to the local node.
   , getIntersectionPoints :: !(GetIntersectionPoints m)                            -- ^ How to load the set of initial intersection points for the chain sync client.
   -- | The maximum cost a set of changes is allowed to incur before the
   -- NodeClient blocks.
@@ -138,7 +139,7 @@ data RollBackwardField
 nodeClient
   :: forall r s m
    . (MonadInjectEvent r NodeClientSelector s m, MonadUnliftIO m)
-  => Component m (NodeClientDependencies m) (NodeClient r)
+  => Component m (NodeClientDependencies r m) (NodeClient r)
 nodeClient = component \NodeClientDependencies{..} -> do
   changesVar <- newTVar emptyChanges
   connectedVar <- newTVar False
@@ -155,10 +156,10 @@ nodeClient = component \NodeClientDependencies{..} -> do
         $ pipelinedClient costModel maxCost changesVar getIntersectionPoints
 
     runNodeClient :: m ()
-    runNodeClient = withRunInIO \runInIO -> connectToLocalNode LocalNodeClientProtocols
+    runNodeClient = withRunInIO \runInIO -> runInIO $ connectToLocalNode \r -> LocalNodeClientProtocols
         { localChainSyncClient =
             let ChainSyncClientPipelined client = pipelinedClient'
-              in LocalChainSyncClientPipelined $ hoistClient runInIO $ ChainSyncClientPipelined do
+              in LocalChainSyncClientPipelined $ hoistClient (runInIO . localBackend (setAncestorEventBackend r)) $ ChainSyncClientPipelined do
                 atomically $ writeTVar connectedVar True
                 client
         , localTxSubmissionClient = Nothing
