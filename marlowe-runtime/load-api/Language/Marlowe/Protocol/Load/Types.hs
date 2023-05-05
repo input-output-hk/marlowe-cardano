@@ -19,22 +19,54 @@ import Network.Protocol.Handshake.Types (HasSignature(..))
 import Network.TypedProtocol
 import Plutus.V2.Ledger.Api (FromData, ToData)
 
+-- | A kind-level datatype for the states in the MarloweLoad protocol.
 data MarloweLoad where
+  -- | In this state, the server is processing contract nodes pushed by the
+  -- client.
   StProcessing :: Node -> MarloweLoad
+  -- | In this state, the client cab push N more nodes to the server before the
+  -- server needs to process them.
   StCanPush :: N -> Node -> MarloweLoad
+  -- | The terminal state
   StDone :: MarloweLoad
+  -- | In this state, there are no more nodes to push, and the server is
+  -- preparing to send the hash of the contract to the client.
   StComplete :: MarloweLoad
 
+-- | A location in a marlowe contract.
 data Node where
+  -- | The root of the contract
   RootNode :: Node
-  PayNode :: Node -> Node
-  IfLNode :: Node -> Node
-  IfRNode :: Node -> Node
-  WhenNode :: Node -> Node
-  CaseNode :: Node -> Node
-  LetNode :: Node -> Node
-  AssertNode :: Node -> Node
+  -- | A pay contract.
+  PayNode
+    :: Node -- ^ The parent node.
+    -> Node
+  -- | An if contract with an incomplete "then" clause.
+  IfLNode
+    :: Node -- ^ The parent node.
+    -> Node
+  -- | An if contract with an complete "then" clause.
+  IfRNode
+    :: Node -- ^ The parent node.
+    -> Node
+  -- | A when contract somewhere in a contract, with completed cases.
+  WhenNode
+    :: Node -- ^ The parent node.
+    -> Node
+  -- | A case in a when contract somewhere in a contract.
+  CaseNode
+    :: Node -- ^ The parent node of the when node above this case.
+    -> Node
+  -- | A let contract somewhere in a contract.
+  LetNode
+    :: Node -- ^ The parent node.
+    -> Node
+  -- | An assert contract somewhere in a contract.
+  AssertNode
+    :: Node -- ^ The parent node.
+    -> Node
 
+-- A singleton version of @@Node@@
 data SNode (node :: Node) where
   SRootNode :: SNode 'RootNode
   SPayNode :: SNode node -> SNode ('PayNode node)
@@ -45,18 +77,34 @@ data SNode (node :: Node) where
   SLetNode :: SNode node -> SNode ('LetNode node)
   SAssertNode :: SNode node -> SNode ('AssertNode node)
 
+-- A type family that computes the next protocol state when popping
+-- (completing) a node.
 type family Pop (n :: N) (node :: Node) :: MarloweLoad where
+  -- Popping the root node transitions to the complete state.
   Pop n 'RootNode = 'StComplete
+  -- Popping a pay node pops its parent node.
   Pop n ('PayNode node) = Pop n node
+  -- Popping an ifL node transitions to pushing to the else clause.
   Pop n ('IfLNode node) = Push n ('IfRNode node)
+  -- Popping an ifR node pops its parent node.
   Pop n ('IfRNode node) = Pop n node
+  -- Popping a when node pops its parent node.
   Pop n ('WhenNode node) = Pop n node
+  -- Popping a case node transitions to pushing to the when clause (pushing the
+  -- timeout fallback case).
   Pop n ('CaseNode node) = Push n ('WhenNode node)
+  -- Popping a let node pops its parent node.
   Pop n ('LetNode node) = Pop n node
+  -- Popping an assert node pops its parent node.
   Pop n ('AssertNode node) = Pop n node
 
+-- A type family that computes the next protocol state given a node an the
+-- number of remaining pushes the client may perform.
 type family Push (n :: N) (node :: Node) :: MarloweLoad where
+  -- When there are no pushes available, transition to the processing state.
   Push 'Z node = 'StProcessing node
+  -- When there are pushes available, transition to the can push state and
+  -- decrement the number of available pushes.
   Push ('S n) node = 'StCanPush n node
 
 instance HasSignature MarloweLoad where
@@ -64,39 +112,53 @@ instance HasSignature MarloweLoad where
 
 instance Protocol MarloweLoad where
   data Message MarloweLoad st st' where
-    MsgResume :: Nat ('S n) -> Message MarloweLoad
-      ('StProcessing node)
-      ('StCanPush n node)
+    -- | The server tells the client to resume pushing.
+    MsgResume
+      :: Nat ('S n) -- ^ The number of pushes the client is allowed to perform.
+      -> Message MarloweLoad ('StProcessing node) ('StCanPush n node)
+    -- | Push a close node to the stack. This closes the current stack and pops
+    -- until the next incomplete location in the contract is reached.
     MsgPushClose :: Message MarloweLoad
       ('StCanPush n node)
       (Pop n node)
+    -- | Push a pay node to the stack.
     MsgPushPay :: AccountId -> Payee -> Token -> Value Observation -> Message MarloweLoad
       ('StCanPush n node)
       (Push n ('PayNode node))
+    -- | Push an if node to the stack.
     MsgPushIf :: Observation -> Message MarloweLoad
       ('StCanPush n node)
       (Push n ('IfLNode node))
+    -- | Push a when node to the stack
     MsgPushWhen :: Timeout -> Message MarloweLoad
       ('StCanPush n node)
       (Push n ('WhenNode node))
+    -- | Push a case node to the stack. Only available if currently on a when node.
     MsgPushCase :: Action -> Message MarloweLoad
       ('StCanPush n ('WhenNode node))
       (Push n ('CaseNode node))
+    -- | Push a let node to the stack.
     MsgPushLet :: ValueId -> Value Observation -> Message MarloweLoad
       ('StCanPush n node)
       (Push n ('LetNode node))
+    -- | Push an assert node to the stack.
     MsgPushAssert :: Observation -> Message MarloweLoad
       ('StCanPush n node)
       (Push n ('AssertNode node))
+    -- | The server sends the hash of the completed (merkleized) contract back
+    -- to the client.
     MsgComplete :: DatumHash -> Message MarloweLoad
       'StComplete
       'StDone
 
   data ClientHasAgency st where
+    -- | The client has agency in the CanPush state.
     TokCanPush :: Nat n -> SNode node -> ClientHasAgency ('StCanPush n node)
 
   data ServerHasAgency st where
+    -- | The server has agency in the Processing state.
     TokProcessing :: SNode node -> ServerHasAgency ('StProcessing node)
+    -- | The server has agency in the Complete state.
     TokComplete :: ServerHasAgency 'StComplete
 
   data NobodyHasAgency st where
@@ -108,6 +170,7 @@ instance Protocol MarloweLoad where
 
 data SomePeerHasAgency (st :: k) = forall pr. SomePeerHasAgency (PeerHasAgency pr st)
 
+-- | A term-level version of the @@Pop@@ type family using singleton types.
 sPop :: Nat n -> SNode node -> SomePeerHasAgency (Pop n node)
 sPop n = \case
   SRootNode -> SomePeerHasAgency $ ServerAgency TokComplete
@@ -119,6 +182,7 @@ sPop n = \case
   SLetNode node -> sPop n node
   SAssertNode node -> sPop n node
 
+-- | A term-level version of the @@Push@@ type family using singleton types.
 sPush :: Nat n -> SNode node -> SomePeerHasAgency (Push n node)
 sPush Zero node = SomePeerHasAgency $ ServerAgency $ TokProcessing node
 sPush (Succ n) node = SomePeerHasAgency $ ClientAgency $ TokCanPush n node
