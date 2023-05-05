@@ -209,6 +209,22 @@ library sync-api
     , typed-protocols ==0.1.0.0
     , unliftio >= 0.2.1 && < 0.3
 
+library load-api
+  import: lang
+  hs-source-dirs:   load-api
+  visibility: public
+  exposed-modules:
+    Language.Marlowe.Protocol.Load.Types
+  build-depends:
+      base >= 4.9 && < 5
+    , binary
+    , cardano-api
+    , marlowe-cardano
+    , marlowe-chain-sync
+    , marlowe-protocols
+    , plutus-ledger-api
+    , typed-protocols
+
 library sync
   import: lang
   hs-source-dirs:   sync
