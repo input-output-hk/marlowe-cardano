@@ -215,6 +215,7 @@ library load-api
   visibility: public
   exposed-modules:
     Language.Marlowe.Protocol.Load.Client
+    Language.Marlowe.Protocol.Load.Server
     Language.Marlowe.Protocol.Load.Types
   build-depends:
       base >= 4.9 && < 5
