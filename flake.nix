@@ -200,13 +200,27 @@
 
       newFlake = iogx.mkFlake {
         inherit inputs;
+        debug = true;
         repoRoot = ./.;
-        enableHydraPreCommitCheck = false;
-        shellName = "marlowe-cardano";
-        haskellProjectFile = import ./__iogx__/haskell-project.nix;
-        perSystemOutputs = import ./__iogx__/per-system-outputs.nix;
-        shellModule = import ./__iogx__/shell-module.nix;
         flakeOutputsPrefix = "__iogx__";
+        systems = [ "x86_64-darwin" "x86_64-linux" ];
+        haskellCompilers = [ "ghc8107" ];
+        defaultHaskellCompiler = "ghc8107";
+        haskellCrossSystem = null;
+        haskellProjectFile = ./__iogx__/haskell-project.nix;
+        perSystemOutputsFile = ./__iogx__/per-system-outputs.nix;
+        shellName = "marlowe-cardano";
+        shellPrompt = "\n\\[\\033[1;32m\\][marlowe-cardano:\\w]\\$\\[\\033[0m\\] ";
+        shellWelcomeMessage = "🤟 \\033[1;31mWelcome to marlowe-cardano\\033[0m 🤟";
+        shellModuleFile = ./__iogx__/shell-module.nix;
+        includeHydraJobs = true;
+        excludeProfiledHaskellFromHydraJobs = true;
+        blacklistedHydraJobs = [ ];
+        enableHydraPreCommitCheck = false;
+        includeReadTheDocsSite = false;
+        readTheDocsSiteDir = null;
+        readTheDocsHaddockPrologue = "";
+        readTheDocsExtraHaddockPackages = _: { };
       };
 
       pkgs = inputs.nixpkgs.legacyPackages.x86_64-linux;
