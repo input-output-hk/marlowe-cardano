@@ -214,6 +214,7 @@ library load-api
   hs-source-dirs:   load-api
   visibility: public
   exposed-modules:
+    Language.Marlowe.Protocol.Load.Client
     Language.Marlowe.Protocol.Load.Types
   build-depends:
       base >= 4.9 && < 5
