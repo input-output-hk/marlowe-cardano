@@ -11,12 +11,26 @@
 module Language.Marlowe.Protocol.Load.Types
   where
 
+import Control.Monad (join)
+import Data.Aeson (encode, toJSON)
+import qualified Data.Aeson as Aeson
 import Data.Binary (Binary(..), Get, Put, getWord8, putWord8)
+import qualified Data.List.NonEmpty as NE
+import Data.String (fromString)
+import Data.Text.Lazy (toStrict)
+import Data.Text.Lazy.Encoding (decodeUtf8)
+import GHC.Show (showSpace)
 import Language.Marlowe.Core.V1.Semantics.Types
 import Language.Marlowe.Runtime.ChainSync.Api (DatumHash, fromDatum, toDatum)
+import Language.Marlowe.Runtime.Core.Api ()
 import Network.Protocol.Codec (BinaryMessage(..))
+import Network.Protocol.Codec.Spec hiding (SomePeerHasAgency)
+import qualified Network.Protocol.Codec.Spec as Codec
 import Network.Protocol.Handshake.Types (HasSignature(..))
+import Network.Protocol.Peer.Trace
 import Network.TypedProtocol
+import Network.TypedProtocol.Codec (AnyMessageAndAgency(..))
+import OpenTelemetry.Attributes
 import Plutus.V2.Ledger.Api (FromData, ToData)
 
 -- | A kind-level datatype for the states in the MarloweLoad protocol.
@@ -266,3 +280,215 @@ getDatum name = do
   case fromDatum datum of
     Nothing -> fail $ "invalid " <> name <> " datum"
     Just a -> pure a
+
+instance OTelProtocol MarloweLoad where
+  protocolName _ = "marlowe_load"
+  messageAttributes _ = \case
+    MsgPushClose -> MessageAttributes
+      { messageType = "push_close"
+      , messageParameters = []
+      }
+    MsgPushPay accountId payee token value -> MessageAttributes
+      { messageType = "push_pay"
+      , messageParameters = jsonToPrimitiveAttribute <$> [toJSON accountId, toJSON payee, toJSON token, toJSON value]
+      }
+    MsgPushIf obs -> MessageAttributes
+      { messageType = "push_close"
+      , messageParameters = [jsonToPrimitiveAttribute $ toJSON obs]
+      }
+    MsgPushWhen timeout -> MessageAttributes
+      { messageType = "push_close"
+      , messageParameters = [IntAttribute $ fromIntegral timeout]
+      }
+    MsgPushCase action -> MessageAttributes
+      { messageType = "push_close"
+      , messageParameters = [jsonToPrimitiveAttribute $ toJSON action]
+      }
+    MsgPushLet valueId value -> MessageAttributes
+      { messageType = "push_close"
+      , messageParameters = jsonToPrimitiveAttribute <$> [toJSON valueId, toJSON value]
+      }
+    MsgPushAssert obs -> MessageAttributes
+      { messageType = "push_close"
+      , messageParameters = [jsonToPrimitiveAttribute $ toJSON obs]
+      }
+    MsgResume n -> MessageAttributes
+      { messageType = "push_close"
+      , messageParameters = [IntAttribute $ fromIntegral $ natToInt n]
+      }
+    MsgComplete hash -> MessageAttributes
+      { messageType = "push_close"
+      , messageParameters = [fromString $ show hash]
+      }
+
+jsonToPrimitiveAttribute :: Aeson.Value -> PrimitiveAttribute
+jsonToPrimitiveAttribute = \case
+  Aeson.String s -> TextAttribute s
+  Aeson.Bool b -> BoolAttribute b
+  Aeson.Number n -> DoubleAttribute $ realToFrac n
+  v -> TextAttribute $ toStrict $ decodeUtf8 $ encode v
+
+instance MessageEq MarloweLoad where
+  messageEq (AnyMessageAndAgency _ msg) (AnyMessageAndAgency _ msg') = case msg of
+    MsgPushClose -> case msg' of
+      MsgPushClose -> True
+      _ -> False
+    MsgPushPay accountId payee token value -> case msg' of
+      MsgPushPay accountId' payee' token' value' ->
+        (accountId, payee, token, value) == (accountId', payee', token', value')
+      _ -> False
+    MsgPushIf obs -> case msg' of
+      MsgPushIf obs' ->
+        obs == obs'
+      _ -> False
+    MsgPushWhen timeout -> case msg' of
+      MsgPushWhen timeout' ->
+        timeout == timeout'
+      _ -> False
+    MsgPushCase action -> case msg' of
+      MsgPushCase action' ->
+        action == action'
+      _ -> False
+    MsgPushLet valueId value -> case msg' of
+      MsgPushLet valueId' value' ->
+        (valueId, value) == (valueId', value')
+      _ -> False
+    MsgPushAssert obs -> case msg' of
+      MsgPushAssert obs' ->
+        obs == obs'
+      _ -> False
+    MsgResume n -> case msg' of
+      MsgResume n' ->
+        natToInt n == natToInt n'
+      _ -> False
+    MsgComplete hash -> case msg' of
+      MsgComplete hash' ->
+        hash == hash'
+      _ -> False
+
+instance MessageVariations MarloweLoad where
+  messageVariations = \case
+    ClientAgency (TokCanPush _ node) -> join $ NE.fromList
+      [ pure $ SomeMessage MsgPushClose
+      , SomeMessage <$>
+          (MsgPushPay <$> variations `varyAp` variations `varyAp` variations `varyAp` variations)
+      , SomeMessage . MsgPushIf <$> variations
+      , case node of
+          SWhenNode _ -> join $ NE.fromList
+            [ SomeMessage . MsgPushCase <$> variations
+            , SomeMessage . MsgPushWhen <$> variations
+            ]
+          _ -> SomeMessage . MsgPushWhen <$> variations
+      , SomeMessage <$> (MsgPushLet <$> variations `varyAp` variations)
+      , SomeMessage . MsgPushAssert <$> variations
+      ]
+
+    ServerAgency (TokProcessing _) ->
+      pure $ SomeMessage $ MsgResume $ Succ Zero
+
+    ServerAgency TokComplete -> SomeMessage . MsgComplete <$> variations
+
+  agencyVariations = NE.fromList
+    [ Codec.SomePeerHasAgency $ ClientAgency $ TokCanPush Zero $ SWhenNode SRootNode
+    , Codec.SomePeerHasAgency $ ServerAgency $ TokProcessing SRootNode
+    , Codec.SomePeerHasAgency $ ServerAgency TokComplete
+    ]
+
+instance ShowProtocol MarloweLoad where
+  showsPrecMessage p = \case
+    ClientAgency (TokCanPush _ _) -> \case
+      MsgPushClose -> showString "MsgPushClose"
+      MsgPushPay accountId payee token value -> showParen (p >= 11)
+        ( showString "MsgPushPay"
+        . showSpace
+        . showsPrec 11 accountId
+        . showSpace
+        . showsPrec 11 payee
+        . showSpace
+        . showsPrec 11 token
+        . showSpace
+        . showsPrec 11 value
+        )
+      MsgPushIf obs -> showParen (p >= 11)
+        ( showString "MsgPushIf"
+        . showSpace
+        . showsPrec 11 obs
+        )
+      MsgPushWhen timeout -> showParen (p >= 11)
+        ( showString "MsgPushWhen"
+        . showSpace
+        . showsPrec 11 timeout
+        )
+      MsgPushCase action -> showParen (p >= 11)
+        ( showString "MsgPushCase"
+        . showSpace
+        . showsPrec 11 action
+        )
+      MsgPushLet valueId value -> showParen (p >= 11)
+        ( showString "MsgPushLet"
+        . showSpace
+        . showsPrec 11 valueId
+        . showSpace
+        . showsPrec 11 value
+        )
+      MsgPushAssert obs -> showParen (p >= 11)
+        ( showString "MsgPushAssert"
+        . showSpace
+        . showsPrec 11 obs
+        )
+
+    ServerAgency (TokProcessing _) -> \case
+      MsgResume n -> showParen (p >= 11)
+        ( showString "MsgResume"
+        . showSpace
+        . showParen True
+            ( showString "unsafeIntToNat"
+            . showSpace
+            . showsPrec 11 (natToInt n)
+            )
+        )
+
+    ServerAgency TokComplete -> \case
+      MsgComplete hash -> showParen (p >= 11)
+        ( showString "MsgComplete"
+        . showSpace
+        . showsPrec 11 hash
+        )
+
+  showsPrecServerHasAgency p = \case
+    TokProcessing node -> showParen (p >= 11)
+      ( showString "TokProcessing"
+      . showSpace
+      . showsPrecSNode p node
+      )
+    TokComplete -> showString "TokComplete"
+  showsPrecClientHasAgency p = \case
+    TokCanPush n node -> showParen (p >= 11)
+      ( showString "TokCanPush"
+      . showSpace
+      . showParen True
+          ( showString "unsafeIntToNat"
+          . showSpace
+          . showsPrec 11 (natToInt n)
+          )
+      . showSpace
+      . showsPrecSNode p node
+      )
+
+showsPrecSNode :: Int -> SNode node -> ShowS
+showsPrecSNode p = \case
+  SRootNode -> showString "SRootNode"
+  SPayNode node ->
+    showParen (p >= 11) (showString "SPayNode" . showSpace . showsPrecSNode 11 node)
+  SIfLNode node ->
+    showParen (p >= 11) (showString "SIfLNode" . showSpace . showsPrecSNode 11 node)
+  SIfRNode node ->
+    showParen (p >= 11) (showString "SIfRNode" . showSpace . showsPrecSNode 11 node)
+  SWhenNode node ->
+    showParen (p >= 11) (showString "SWhenNode" . showSpace . showsPrecSNode 11 node)
+  SCaseNode node ->
+    showParen (p >= 11) (showString "SCaseNode" . showSpace . showsPrecSNode 11 node)
+  SLetNode node ->
+    showParen (p >= 11) (showString "SLetNode" . showSpace . showsPrecSNode 11 node)
+  SAssertNode node ->
+    showParen (p >= 11) (showString "SAssertNode" . showSpace . showsPrecSNode 11 node)
