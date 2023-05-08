@@ -209,6 +209,28 @@ library sync-api
     , typed-protocols ==0.1.0.0
     , unliftio >= 0.2.1 && < 0.3
 
+library load-api
+  import: lang
+  hs-source-dirs:   load-api
+  visibility: public
+  exposed-modules:
+    Language.Marlowe.Protocol.Load.Client
+    Language.Marlowe.Protocol.Load.Server
+    Language.Marlowe.Protocol.Load.Types
+  build-depends:
+    , aeson >= 2 && < 3
+    , base >= 4.9 && < 5
+    , binary >= 0.8.8 && < 0.9
+    , cardano-api ==1.35.4
+    , hs-opentelemetry-api >= 0.0.3 && < 0.0.4
+    , marlowe-cardano ==0.1.0.3
+    , marlowe-chain-sync ==0.0.1
+    , marlowe-protocols ==0.1.0.0
+    , marlowe-runtime ==0.0.1
+    , plutus-ledger-api ==1.0.0.1
+    , text >= 1.2.4 && < 2
+    , typed-protocols ==0.1.0.0
+
 library sync
   import: lang
   hs-source-dirs:   sync
@@ -558,6 +580,7 @@ test-suite marlowe-runtime-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
+    Language.Marlowe.Protocol.LoadSpec
     Language.Marlowe.Runtime.Core.MetadataSpec
     Language.Marlowe.Runtime.Core.ScriptRegistrySpec
     Language.Marlowe.Runtime.Transaction.ApiSpec
@@ -570,8 +593,9 @@ test-suite marlowe-runtime-test
     Language.Marlowe.Protocol.QuerySpec
     Paths_marlowe_runtime
   build-depends:
-    , base >= 4.9 && < 5
+    , QuickCheck >= 2.14 && < 3
     , aeson >= 2 && < 3
+    , base >= 4.9 && < 5
     , bytestring >= 0.10.12 && < 0.12
     , cardano-api ==1.35.4
     , cardano-api:gen ==1.35.4
@@ -587,21 +611,22 @@ test-suite marlowe-runtime-test
     , marlowe-chain-sync:plutus-compat ==0.0.1
     , marlowe-protocols ==0.1.0.0
     , marlowe-runtime ==0.0.1
-    , marlowe-runtime:gen ==0.0.1
     , marlowe-runtime:discovery-api ==0.0.1
+    , marlowe-runtime:gen ==0.0.1
     , marlowe-runtime:history-api ==0.0.1
+    , marlowe-runtime:load-api ==0.0.1
     , marlowe-runtime:sync-api ==0.0.1
     , marlowe-runtime:tx ==0.0.1
     , marlowe-runtime:tx-api ==0.0.1
     , marlowe-test ==0.1.1.0
     , network-uri >= 2.6 && < 3
     , ouroboros-consensus ==0.1.0.1
-    , plutus-tx ==1.0.0.0
     , plutus-ledger-api ==1.0.0.1
-    , QuickCheck >= 2.14 && < 3
+    , plutus-tx ==1.0.0.0
     , quickcheck-instances >= 0.3.29 && < 0.4
     , text >= 1.2.4 && < 2
     , time >= 1.9 && < 2
+    , transformers >= 0.5.6 && < 0.6
     , typed-protocols ==0.1.0.0
     , vector >= 0.12.3 && < 0.13
   build-tool-depends: hspec-discover:hspec-discover
