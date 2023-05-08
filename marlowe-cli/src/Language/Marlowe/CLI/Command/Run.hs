@@ -44,6 +44,7 @@ import Language.Marlowe.CLI.Command.Parse
   , parseInput
   , parseNetworkId
   , parsePOSIXTime
+  , parseSecond
   , parseStakeAddressReference
   , parseTokenName
   , parseTxIn
@@ -385,7 +386,7 @@ runOptions network socket =
     <*> (O.optional . O.strOption)             (O.long "metadata-file"    <> O.metavar "METADATA_FILE"           <> O.help "JSON file containing metadata."                                                                                  )
     <*> txBodyFileOpt
 
-    <*> (O.optional . O.option O.auto)         (O.long "submit"          <> O.metavar "SECONDS"                  <> O.help "Also submit the transaction, and wait for confirmation."                                                         )
+    <*> (O.optional . O.option parseSecond)    (O.long "submit"          <> O.metavar "SECONDS"                  <> O.help "Also submit the transaction, and wait for confirmation."                                                         )
     <*> O.switch                               (O.long "print-stats"                                             <> O.help "Print statistics."                                                                                               )
     <*> O.switch                               (O.long "script-invalid"                                          <> O.help "Assert that the transaction is invalid."                                                                         )
     where
