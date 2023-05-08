@@ -1,3 +1,5 @@
+Show: MsgRequestResume
+Binary: 07
 Show: MsgPushClose
 Binary: 00
 Show: MsgPushPay "\"addr_test1vqylkdml\"" (Account "\"addr_test1vqylkdml\"") (Token "" "") (AvailableMoney "\"addr_test1vqylkdml\"" (Token "" ""))

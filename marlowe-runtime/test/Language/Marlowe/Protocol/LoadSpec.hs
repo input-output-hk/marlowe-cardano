@@ -59,7 +59,7 @@ hashContract = fromCardanoDatumHash . hashScriptData . toCardanoScriptData . toD
 merkleizeWithPeers :: Contract -> WriterT Continuations Maybe DatumHash
 merkleizeWithPeers contract = go
   (peerTracedToPeer $ marloweLoadClientPeer $ pushContract contract)
-  (peerTracedToPeer $ marloweLoadServerPeer $ pullContract (unsafeIntToNat 100) tellContract)
+  (peerTracedToPeer $ marloweLoadServerPeer $ pullContract (unsafeIntToNat 100) save)
   where
     go
       :: Peer MarloweLoad 'AsClient st (WriterT Continuations Maybe) DatumHash
@@ -79,11 +79,10 @@ merkleizeWithPeers contract = go
       (Await (ServerAgency tok) _, Await (ClientAgency tok') _) -> absurd $ exclusionLemma_ClientAndServerHaveAgency tok' tok
       (Yield (ClientAgency tok) _ _, Yield (ServerAgency tok') _ _g) -> absurd $ exclusionLemma_ClientAndServerHaveAgency tok tok'
 
-    tellContract :: Contract -> WriterT Continuations Maybe DatumHash
-    tellContract c = do
+    save :: Contract -> (DatumHash, WriterT Continuations Maybe ())
+    save c = do
       let hash = hashContract c
-      tell $ Map.singleton (PV2.DatumHash $ PV2.toBuiltin $ unDatumHash hash) c
-      pure hash
+       in (hash, tell $ Map.singleton (PV2.DatumHash $ PV2.toBuiltin $ unDatumHash hash) c)
 
 nobodyAndSomebodyHaveAgency :: forall (st :: MarloweLoad) pr. NobodyHasAgency st -> PeerHasAgency pr st -> Void
 nobodyAndSomebodyHaveAgency tok = \case
@@ -95,31 +94,33 @@ instance ArbitraryMessage MarloweLoad where
     [ withArbitraryNodeAndNat \n node ->
         pure $ AnyMessageAndAgency (ServerAgency $ TokProcessing node) $ MsgResume $ Succ n
     , withArbitraryNodeAndNat \n node ->
-        pure $ AnyMessageAndAgency (ClientAgency $ TokCanPush n node) MsgPushClose
+        pure $ AnyMessageAndAgency (ClientAgency $ TokCanPush (Succ n) node) MsgPushClose
     , withArbitraryNodeAndNat \n node ->
-        AnyMessageAndAgency (ClientAgency $ TokCanPush n node) <$> do
+        AnyMessageAndAgency (ClientAgency $ TokCanPush (Succ n) node) <$> do
           accountId <- arbitrary
           payee <- arbitrary
           token <- arbitrary
           value <- arbitrary
           pure $ MsgPushPay accountId payee token value
     , withArbitraryNodeAndNat \n node ->
-        AnyMessageAndAgency (ClientAgency $ TokCanPush n node) <$> do
+        AnyMessageAndAgency (ClientAgency $ TokCanPush (Succ n) node) <$> do
           obs <- arbitrary
           pure $ MsgPushIf obs
     , withArbitraryNodeAndNat \n node ->
-        AnyMessageAndAgency (ClientAgency $ TokCanPush n node) <$> do
+        AnyMessageAndAgency (ClientAgency $ TokCanPush (Succ n) node) <$> do
           timeout <- arbitrary
           pure $ MsgPushWhen timeout
     , withArbitraryNodeAndNat \n node ->
-        AnyMessageAndAgency (ClientAgency $ TokCanPush n $ SWhenNode node) <$> do
+        AnyMessageAndAgency (ClientAgency $ TokCanPush (Succ n) $ SWhenNode node) <$> do
           action <- arbitrary
           pure $ MsgPushCase action
     , withArbitraryNodeAndNat \n node ->
-        AnyMessageAndAgency (ClientAgency $ TokCanPush n node) <$> do
+        AnyMessageAndAgency (ClientAgency $ TokCanPush (Succ n) node) <$> do
           valueId <- arbitrary
           value <- arbitrary
           pure $ MsgPushLet valueId value
+    , withArbitraryNodeAndNat \_ node ->
+        pure $ AnyMessageAndAgency (ClientAgency $ TokCanPush Zero node) MsgRequestResume
     , AnyMessageAndAgency (ServerAgency TokComplete) . MsgComplete <$> arbitrary
     ]
     where
@@ -129,6 +130,7 @@ instance ArbitraryMessage MarloweLoad where
           f' (SomeNat n) (SomeSNode node) = f n node
 
   shrinkMessage _ = \case
+    MsgRequestResume -> []
     MsgResume _ -> []
     MsgPushClose -> []
     MsgPushPay accountId payee token value -> MsgPushPay accountId payee token <$> shrink value
@@ -143,7 +145,7 @@ data SomeNat = forall n. SomeNat (Nat n)
 data SomeSNode = forall node. SomeSNode (SNode node)
 
 instance Arbitrary SomeNat where
-  arbitrary = SomeNat . unsafeIntToNat <$> arbitrary
+  arbitrary = SomeNat . unsafeIntToNat <$> chooseInt (0, 100)
   shrink (SomeNat Zero) = []
   shrink (SomeNat (Succ n)) = [SomeNat n]
 

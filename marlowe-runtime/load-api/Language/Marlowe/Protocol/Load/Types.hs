@@ -1,6 +1,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE PolyKinds #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE UndecidableInstances #-}
@@ -38,7 +39,7 @@ data MarloweLoad where
   -- | In this state, the server is processing contract nodes pushed by the
   -- client.
   StProcessing :: Node -> MarloweLoad
-  -- | In this state, the client cab push N more nodes to the server before the
+  -- | In this state, the client can push N more nodes to the server before the
   -- server needs to process them.
   StCanPush :: N -> Node -> MarloweLoad
   -- | The terminal state
@@ -99,27 +100,18 @@ type family Pop (n :: N) (node :: Node) :: MarloweLoad where
   -- Popping a pay node pops its parent node.
   Pop n ('PayNode node) = Pop n node
   -- Popping an ifL node transitions to pushing to the else clause.
-  Pop n ('IfLNode node) = Push n ('IfRNode node)
+  Pop n ('IfLNode node) = 'StCanPush n ('IfRNode node)
   -- Popping an ifR node pops its parent node.
   Pop n ('IfRNode node) = Pop n node
   -- Popping a when node pops its parent node.
   Pop n ('WhenNode node) = Pop n node
   -- Popping a case node transitions to pushing to the when clause (pushing the
   -- timeout fallback case).
-  Pop n ('CaseNode node) = Push n ('WhenNode node)
+  Pop n ('CaseNode node) = 'StCanPush n ('WhenNode node)
   -- Popping a let node pops its parent node.
   Pop n ('LetNode node) = Pop n node
   -- Popping an assert node pops its parent node.
   Pop n ('AssertNode node) = Pop n node
-
--- A type family that computes the next protocol state given a node an the
--- number of remaining pushes the client may perform.
-type family Push (n :: N) (node :: Node) :: MarloweLoad where
-  -- When there are no pushes available, transition to the processing state.
-  Push 'Z node = 'StProcessing node
-  -- When there are pushes available, transition to the can push state and
-  -- decrement the number of available pushes.
-  Push ('S n) node = 'StCanPush n node
 
 instance HasSignature MarloweLoad where
   signature _ = "MarloweLoad"
@@ -129,36 +121,40 @@ instance Protocol MarloweLoad where
     -- | The server tells the client to resume pushing.
     MsgResume
       :: Nat ('S n) -- ^ The number of pushes the client is allowed to perform.
-      -> Message MarloweLoad ('StProcessing node) ('StCanPush n node)
+      -> Message MarloweLoad ('StProcessing node) ('StCanPush ('S n) node)
     -- | Push a close node to the stack. This closes the current stack and pops
     -- until the next incomplete location in the contract is reached.
     MsgPushClose :: Message MarloweLoad
-      ('StCanPush n node)
+      ('StCanPush ('S n) node)
       (Pop n node)
     -- | Push a pay node to the stack.
     MsgPushPay :: AccountId -> Payee -> Token -> Value Observation -> Message MarloweLoad
-      ('StCanPush n node)
-      (Push n ('PayNode node))
+      ('StCanPush ('S n) node)
+      ('StCanPush n ('PayNode node))
     -- | Push an if node to the stack.
     MsgPushIf :: Observation -> Message MarloweLoad
-      ('StCanPush n node)
-      (Push n ('IfLNode node))
+      ('StCanPush ('S n) node)
+      ('StCanPush n ('IfLNode node))
     -- | Push a when node to the stack
     MsgPushWhen :: Timeout -> Message MarloweLoad
-      ('StCanPush n node)
-      (Push n ('WhenNode node))
+      ('StCanPush ('S n) node)
+      ('StCanPush n ('WhenNode node))
     -- | Push a case node to the stack. Only available if currently on a when node.
     MsgPushCase :: Action -> Message MarloweLoad
-      ('StCanPush n ('WhenNode node))
-      (Push n ('CaseNode node))
+      ('StCanPush ('S n) ('WhenNode node))
+      ('StCanPush n ('CaseNode node))
     -- | Push a let node to the stack.
     MsgPushLet :: ValueId -> Value Observation -> Message MarloweLoad
-      ('StCanPush n node)
-      (Push n ('LetNode node))
+      ('StCanPush ('S n) node)
+      ('StCanPush n ('LetNode node))
     -- | Push an assert node to the stack.
     MsgPushAssert :: Observation -> Message MarloweLoad
-      ('StCanPush n node)
-      (Push n ('AssertNode node))
+      ('StCanPush ('S n) node)
+      ('StCanPush n ('AssertNode node))
+    -- | Request to resume pushing.
+    MsgRequestResume :: Message MarloweLoad
+      ('StCanPush 'Z node)
+      ('StProcessing node)
     -- | The server sends the hash of the completed (merkleized) contract back
     -- to the client.
     MsgComplete :: DatumHash -> Message MarloweLoad
@@ -189,17 +185,12 @@ sPop :: Nat n -> SNode node -> SomePeerHasAgency (Pop n node)
 sPop n = \case
   SRootNode -> SomePeerHasAgency $ ServerAgency TokComplete
   SPayNode node -> sPop n node
-  SIfLNode node -> sPush n $ SIfRNode node
+  SIfLNode node -> SomePeerHasAgency $ ClientAgency $ TokCanPush n $ SIfRNode node
   SIfRNode node -> sPop n node
   SWhenNode node -> sPop n node
-  SCaseNode node -> sPush n $ SWhenNode node
+  SCaseNode node -> SomePeerHasAgency $ ClientAgency $ TokCanPush n $ SWhenNode node
   SLetNode node -> sPop n node
   SAssertNode node -> sPop n node
-
--- | A term-level version of the @@Push@@ type family using singleton types.
-sPush :: Nat n -> SNode node -> SomePeerHasAgency (Push n node)
-sPush Zero node = SomePeerHasAgency $ ServerAgency $ TokProcessing node
-sPush (Succ n) node = SomePeerHasAgency $ ClientAgency $ TokCanPush n node
 
 instance BinaryMessage MarloweLoad where
   putMessage = \case
@@ -227,42 +218,46 @@ instance BinaryMessage MarloweLoad where
       MsgPushAssert obs -> do
         putWord8 0x06
         putDatum obs
+      MsgRequestResume -> putWord8 0x07
     ServerAgency TokComplete -> \case
       MsgComplete hash -> put hash
     ServerAgency (TokProcessing _) -> \case
       MsgResume n -> put $ natToInt n
 
   getMessage = \case
-    ClientAgency (TokCanPush _ tok) -> do
+    ClientAgency (TokCanPush n tok) -> do
       tag <- getWord8
       case tag of
-        0x00 -> pure $ SomeMessage MsgPushClose
-        0x01 -> do
+        0x00 -> getPushMsg n $ \k -> k $ pure $ SomeMessage MsgPushClose
+        0x01 -> getPushMsg n \k -> k do
           msg <- MsgPushPay
             <$> getDatum "payor"
             <*> getDatum "payee"
             <*> getDatum "token"
             <*> getDatum "value"
           pure $ SomeMessage msg
-        0x02 -> do
+        0x02 -> getPushMsg n \k -> k do
           msg <- MsgPushIf <$> getDatum "cond"
           pure $ SomeMessage msg
-        0x03 -> do
+        0x03 -> getPushMsg n \k -> k do
           msg <- MsgPushWhen <$> getDatum "timeout"
           pure $ SomeMessage msg
-        0x04 -> case tok of
+        0x04 -> getPushMsg n \k -> k case tok of
           SWhenNode _ -> do
             msg <- MsgPushCase <$> getDatum "action"
             pure $ SomeMessage msg
           _ -> fail "Invalid protocol state for MsgPushCase"
-        0x05 -> do
+        0x05 -> getPushMsg n \k -> k do
           msg <- MsgPushLet
             <$> getDatum "valueId"
             <*> getDatum "value"
           pure $ SomeMessage msg
-        0x06 -> do
+        0x06 -> getPushMsg n \k -> k do
           msg <- MsgPushAssert <$> getDatum "obs"
           pure $ SomeMessage msg
+        0x07 -> case n of
+          Zero -> pure $ SomeMessage MsgRequestResume
+          _ -> fail "Must push"
         _ -> fail $ "Invalid message tag " <> show tag
     ServerAgency TokComplete -> SomeMessage . MsgComplete <$> get
     -- unsafeIntToNat is actually safe here - why? Because we immediately
@@ -270,6 +265,10 @@ instance BinaryMessage MarloweLoad where
     -- be brought into scope when pattern matching on the pattern synonyms
     -- `Zero` or `Succ n`.
     ServerAgency (TokProcessing _) -> SomeMessage . MsgResume . unsafeIntToNat <$> get
+
+getPushMsg :: Nat n -> (forall n' r. (Get (SomeMessage ('StCanPush ('S n') node)) -> r) -> r) -> Get (SomeMessage ('StCanPush n node))
+getPushMsg Zero _ = fail "No pushes left"
+getPushMsg Succ{} handle = handle id
 
 putDatum :: ToData a => a -> Put
 putDatum = put . toDatum
@@ -320,6 +319,10 @@ instance OTelProtocol MarloweLoad where
       { messageType = "push_close"
       , messageParameters = [fromString $ show hash]
       }
+    MsgRequestResume -> MessageAttributes
+      { messageType = "request_resume"
+      , messageParameters = []
+      }
 
 jsonToPrimitiveAttribute :: Aeson.Value -> PrimitiveAttribute
 jsonToPrimitiveAttribute = \case
@@ -365,10 +368,13 @@ instance MessageEq MarloweLoad where
       MsgComplete hash' ->
         hash == hash'
       _ -> False
+    MsgRequestResume -> case msg' of
+      MsgRequestResume -> True
+      _ -> False
 
 instance MessageVariations MarloweLoad where
   messageVariations = \case
-    ClientAgency (TokCanPush _ node) -> join $ NE.fromList
+    ClientAgency (TokCanPush Succ{} node) -> join $ NE.fromList
       [ pure $ SomeMessage MsgPushClose
       , SomeMessage <$>
           (MsgPushPay <$> variations `varyAp` variations `varyAp` variations `varyAp` variations)
@@ -382,14 +388,15 @@ instance MessageVariations MarloweLoad where
       , SomeMessage <$> (MsgPushLet <$> variations `varyAp` variations)
       , SomeMessage . MsgPushAssert <$> variations
       ]
+    ClientAgency (TokCanPush Zero _) -> pure $ SomeMessage MsgRequestResume
 
-    ServerAgency (TokProcessing _) ->
-      pure $ SomeMessage $ MsgResume $ Succ Zero
+    ServerAgency (TokProcessing _) -> pure $ SomeMessage $ MsgResume $ Succ Zero
 
     ServerAgency TokComplete -> SomeMessage . MsgComplete <$> variations
 
   agencyVariations = NE.fromList
     [ Codec.SomePeerHasAgency $ ClientAgency $ TokCanPush Zero $ SWhenNode SRootNode
+    , Codec.SomePeerHasAgency $ ClientAgency $ TokCanPush (Succ Zero) $ SWhenNode SRootNode
     , Codec.SomePeerHasAgency $ ServerAgency $ TokProcessing SRootNode
     , Codec.SomePeerHasAgency $ ServerAgency TokComplete
     ]
@@ -398,6 +405,7 @@ instance ShowProtocol MarloweLoad where
   showsPrecMessage p = \case
     ClientAgency (TokCanPush _ _) -> \case
       MsgPushClose -> showString "MsgPushClose"
+      MsgRequestResume -> showString "MsgRequestResume"
       MsgPushPay accountId payee token value -> showParen (p >= 11)
         ( showString "MsgPushPay"
         . showSpace
