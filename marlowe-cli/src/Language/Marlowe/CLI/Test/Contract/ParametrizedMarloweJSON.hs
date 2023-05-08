@@ -43,9 +43,10 @@ import Language.Marlowe.CLI.Test.Wallet.Types
   ( Currencies(Currencies)
   , Currency(Currency, ccCurrencySymbol)
   , CurrencyNickname(CurrencyNickname)
-  , Wallet(waAddress)
+  , Wallet(_waAddress)
   , WalletNickname(WalletNickname)
-  , Wallets(Wallets)
+  , Wallets
+  , getAllWallets
   )
 import Language.Marlowe.CLI.Types (CliError(CliError))
 import Language.Marlowe.Cardano (marloweNetworkFromLocalNodeConnectInfo)
@@ -91,16 +92,16 @@ data RewritePartyError era = WalletNotFound WalletNickname | InvalidWalletAddres
   deriving stock (Eq, Generic, Show)
 
 rewritePartyRefs :: Marlowe.Network -> Wallets era -> ParametrizedMarloweJSON -> Either (RewritePartyError era) ParametrizedMarloweJSON
-rewritePartyRefs network (Wallets wallets) (ParametrizedMarloweJSON json) = ParametrizedMarloweJSON <$> A.rewriteBottomUp rewrite json
+rewritePartyRefs network wallets (ParametrizedMarloweJSON json) = ParametrizedMarloweJSON <$> A.rewriteBottomUp rewrite json
   where
-    findWallet nickname = case M.lookup nickname wallets of
+    findWallet nickname = case M.lookup nickname $ getAllWallets wallets of
       Nothing -> Left $ WalletNotFound nickname
       Just wallet -> pure wallet
     rewrite = \case
       A.Object (KeyMap.toList -> [("address", A.String walletNickname)]) -> do
         wallet <- findWallet (WalletNickname $ Text.unpack walletNickname)
         let
-          address = toPlutusAddress. waAddress $ wallet
+          address = toPlutusAddress . _waAddress $ wallet
         pure $ A.toJSON (Marlowe.Address network address)
       v -> do
         pure v

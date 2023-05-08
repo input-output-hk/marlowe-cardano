@@ -43,7 +43,7 @@ import Data.Time.Units (Second, TimeUnit(fromMicroseconds, toMicroseconds))
 >>>>>>> 910aca7a0 ( Implement pooc role based runtime test and add withdraw to the marlowe thread structure)
 import Data.Traversable (for)
 import Language.Marlowe.CLI.Test.Contract (ContractNickname)
-import Language.Marlowe.CLI.Test.Log (logTraceMsg)
+import Language.Marlowe.CLI.Test.Log (logLabeledMsg)
 import Language.Marlowe.CLI.Test.Runtime.Types
   ( RuntimeContractInfo(RuntimeContractInfo)
   , RuntimeError(..)
@@ -119,7 +119,7 @@ mkRuntimeMonitor config = do
             writeTVar knownContractsRef (Map.insert contractId contractNickname knownContracts)
             pure $ Just c
       for possibleAddition \c -> do
-        logTraceMsg "RuntimeMonitor" $ "Contract " <> show c <> " added to the runtime monitor."
+        logLabeledMsg ("RuntimeMonitor" :: String) $ "Contract " <> show c <> " added to the runtime monitor."
 
   detection' <- do
     asyncDetection <- async detection

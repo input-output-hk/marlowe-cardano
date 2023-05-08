@@ -19,9 +19,11 @@ module Language.Marlowe.CLI.Test.CLI.Monad
   where
 
 import Cardano.Api (ScriptDataSupportedInEra)
-import Control.Monad.Except (MonadError(catchError, throwError))
+import Control.Monad.Except (ExceptT, MonadError(catchError, throwError), runExceptT)
 import Control.Monad.Reader (ReaderT(runReaderT))
-import Language.Marlowe.CLI.Test.Log (Label, LabelFormat(LabelConstructorName), printLabeledMsg, printTraceMsg)
+import qualified Data.Aeson as A
+import Language.Marlowe.CLI.Test.InterpreterError (InterpreterError, fromCliError)
+import Language.Marlowe.CLI.Test.Log (Label(label), printLabeledMsg)
 import Language.Marlowe.CLI.Types (CliEnv(CliEnv), CliError(CliError))
 import Ledger.Orphans ()
 
@@ -33,31 +35,29 @@ withError modifyError action =
 withCliErrorMsg :: MonadError CliError m => (String -> String) -> m a -> m a
 withCliErrorMsg f = withError (\(CliError msg) -> CliError (f msg))
 
+-- `modifyError` was added to the newer version of mtl
+-- So we have to do some gimnastics here.
 runCli
-  :: MonadError CliError m
+  :: MonadError InterpreterError m
   => ScriptDataSupportedInEra era
   -> String
-  -> ReaderT (CliEnv era) m a
+  -> ReaderT (CliEnv era) (ExceptT CliError m) a
   -> m a
 runCli era msg action = do
-  withCliErrorMsg (mappend msg) $ runReaderT action (CliEnv era)
-
-runTraceCli
-  :: MonadError CliError m
-  => ScriptDataSupportedInEra era
-  -> String
-  -> ReaderT (CliEnv era) m a
-  -> m a
-runTraceCli era trace action = do
-  withCliErrorMsg (printTraceMsg trace) $ runReaderT action (CliEnv era)
+  res <- runExceptT (runReaderT action (CliEnv era))
+  case res of
+    Left err -> do
+      let
+        info = [("label", A.toJSON msg)]
+      throwError $ fromCliError err info
+    Right a -> pure a
 
 runLabeledCli
-  :: MonadError CliError m
+  :: MonadError InterpreterError m
   => Label l
   => ScriptDataSupportedInEra era
   -> l
-  -> ReaderT (CliEnv era) m a
+  -> ReaderT (CliEnv era) (ExceptT CliError m) a
   -> m a
-runLabeledCli era l action = do
-  withCliErrorMsg (printLabeledMsg LabelConstructorName l) $ runReaderT action (CliEnv era)
+runLabeledCli era l = runCli era (label l)
 

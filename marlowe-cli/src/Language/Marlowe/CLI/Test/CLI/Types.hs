@@ -21,7 +21,8 @@ module Language.Marlowe.CLI.Test.CLI.Types
 
 import Cardano.Api (CardanoMode, LocalNodeConnectInfo, Lovelace, ScriptDataSupportedInEra)
 import qualified Cardano.Api as C
-import Control.Lens (Lens')
+import Control.Concurrent (MVar)
+import Control.Lens (Lens', makeLenses)
 import Control.Monad.Except (MonadError)
 import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.Reader.Class (MonadReader)
@@ -40,6 +41,7 @@ import Language.Marlowe.CLI.Test.Contract (ContractNickname)
 import qualified Language.Marlowe.CLI.Test.Contract as Contract
 import Language.Marlowe.CLI.Test.Contract.ParametrizedMarloweJSON (ParametrizedMarloweJSON)
 import Language.Marlowe.CLI.Test.ExecutionMode
+import Language.Marlowe.CLI.Test.InterpreterError (InterpreterError)
 import qualified Language.Marlowe.CLI.Test.Operation.Aeson as Operation
 import Language.Marlowe.CLI.Test.Wallet.Types (Currencies, CurrencyNickname, WalletNickname, Wallets)
 import qualified Language.Marlowe.CLI.Test.Wallet.Types as Wallet
@@ -169,12 +171,10 @@ data CLIOperation =
   deriving stock (Eq, Generic, Show)
 
 instance FromJSON CLIOperation where
-  parseJSON = do
-    A.genericParseJSON $ Operation.genericJSONOptions "co"
+  parseJSON = Operation.parseConstructorBasedJSON "co"
 
 instance ToJSON CLIOperation where
-  toJSON = do
-    A.genericToJSON $ Operation.genericJSONOptions "co"
+  toJSON = Operation.toConstructorBasedJSON "co"
 
 -- | We encode `PartyRef` as `Party` so we can use role based contracts
 -- | without any change in the JSON structure.
@@ -190,20 +190,25 @@ data PartyRef =
 
 data CLIContractInfo lang era = CLIContractInfo
   {
-    ciContract                :: M.Contract
-  , ciCurrency                :: Maybe CurrencyNickname
-  , ciPlan                    :: List.NonEmpty (MarloweTransaction lang era)
-  , ciThread                  :: Maybe (AnyCLIMarloweThread lang era)
-  , ciWithdrawalsCheckPoints  :: Map TokenName C.TxId -- ^ Track a point of the last withdrawal on the chain.
-  , ciSubmitter               :: WalletNickname
+    _ciContract                :: M.Contract
+  , _ciCurrency                :: Maybe CurrencyNickname
+  , _ciPlan                    :: List.NonEmpty (MarloweTransaction lang era)
+  , _ciThread                  :: Maybe (AnyCLIMarloweThread lang era)
+  , _ciWithdrawalsCheckPoints  :: Map TokenName C.TxId
+  -- ^ TODO: Currently we track a point of the last withdrawal on the chain.
+  -- We should use new marlowe thread data type support for withdrawals tracking instead.
+  , _ciSubmitter               :: WalletNickname
   }
+makeLenses 'CLIContractInfo
 
 data MarloweReferenceScripts = MarloweReferenceScripts
   { mrsMarloweValidator :: C.TxIn
   , mrsPayoutValidator  :: C.TxIn
   }
 
-newtype CLIContracts lang era = CLIContracts (Map ContractNickname (CLIContractInfo lang era))
+newtype CLIContracts lang era = CLIContracts { _unCLIContracts :: Map ContractNickname (CLIContractInfo lang era) }
+
+makeLenses 'CLIContracts
 
 cliMarloweThreadContractId :: AnyCLIMarloweThread lang era -> ContractId
 cliMarloweThreadContractId =
@@ -211,7 +216,7 @@ cliMarloweThreadContractId =
 
 cliContractsIds :: CLIContracts lang era -> Map ContractNickname ContractId
 cliContractsIds (CLIContracts contracts) =
-  Map.fromList $ mapMaybe (\(k, v) -> (k,) . cliMarloweThreadContractId  <$> ciThread v) $ Map.toList contracts
+  Map.fromList $ mapMaybe (\(k, v) -> (k,) . cliMarloweThreadContractId  <$> _ciThread v) $ Map.toList contracts
 
 class HasInterpretState st lang era | st -> lang era where
   walletsL :: Lens' st (Wallets era)
@@ -234,7 +239,7 @@ type InterpretMonad env st m lang era =
   , MonadReader env m
   , HasInterpretEnv env lang era
   , Wallet.InterpretMonad env st m era
-  , MonadError CliError m
+  , MonadError InterpreterError m
   , MonadIO m
   )
 

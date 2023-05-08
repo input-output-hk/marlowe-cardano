@@ -15,212 +15,37 @@
 #
 # FAUCET_SKEY_FILE - private key file for the faucet.
 # FAUCET_VKEY - public key for the faucet.
-
+#
 cabal run marlowe-cli -- \
   --babbage-era test \
   --testnet-magic 2 \
+  --concurrent-runners 6 \
   --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-  --faucet-key "$FAUCET_SKEY_FILE" \
+  --faucet-skey-file "$FAUCET_SKEY_FILE" \
   --faucet-address "$FAUCET_VKEY" \
   --marlowe-runtime-port "$MARLOWE_RT_PORT" \
   --chain-seek-sync-port "$MARLOWE_CHAIN_SYNC_PORT" \
   --chain-seek-cmd-port "$MARLOWE_CHAIN_SYNC_COMMAND_PORT" \
-  ./test/operations/burn.yaml
+  --write-to-json-file report.json \
+  --stream-json \
+  ./test/operations/return-funds.yaml \
+  ./test/templates/cli/swap.yaml \
+  ./test/templates/cli/escrow.yaml \
+  ./test/templates/cli/trivial.yaml \
+  ./test/templates/cli/zero-coupon-bond.yaml \
+  ./test/templates/runtime/covered-call.yaml \
+  ./test/templates/runtime/swap.yaml \
+  ./test/templates/runtime/trivial.yaml \
+  ./test/templates/runtime/zero-coupon-bond.yaml \
+  ./test/templates/cli/role-based/escrow.yaml \
+  ./test/operations/burn.yaml \
+  ./test/operations/burn-distributed.yaml \
+  ./test/operations/burn-multi-asset.yaml \
+  ./test/operations/mint.yaml \
+  ./test/operations/mint-distributed.yaml \
+  ./test/operations/runtime.yaml \
 
-cabal run marlowe-cli -- \
-  --babbage-era test \
-  --testnet-magic 2 \
-  --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-  --faucet-key "$FAUCET_SKEY_FILE" \
-  --faucet-address "$FAUCET_VKEY" \
-  --marlowe-runtime-port "$MARLOWE_RT_PORT" \
-  --chain-seek-sync-port "$MARLOWE_CHAIN_SYNC_PORT" \
-  --chain-seek-cmd-port "$MARLOWE_CHAIN_SYNC_COMMAND_PORT" \
-  ./test/operations/burn-distributed.yaml
+  # ./test/templates/cli/covered-call.yaml \
+  # ./test/templates/runtime/escrow.yaml \
+  # ./test/templates/runtime/role-based/escrow.yaml \
 
-cabal run marlowe-cli -- \
-  --babbage-era test \
-  --testnet-magic 2 \
-  --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-  --faucet-key "$FAUCET_SKEY_FILE" \
-  --faucet-address "$FAUCET_VKEY" \
-  --marlowe-runtime-port "$MARLOWE_RT_PORT" \
-  --chain-seek-sync-port "$MARLOWE_CHAIN_SYNC_PORT" \
-  --chain-seek-cmd-port "$MARLOWE_CHAIN_SYNC_COMMAND_PORT" \
-  ./test/operations/burn-multi-asset.yaml
-
-cabal run marlowe-cli -- \
-  --babbage-era test \
-  --testnet-magic 2 \
-  --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-  --faucet-key "$FAUCET_SKEY_FILE" \
-  --faucet-address "$FAUCET_VKEY" \
-  --marlowe-runtime-port "$MARLOWE_RT_PORT" \
-  --chain-seek-sync-port "$MARLOWE_CHAIN_SYNC_PORT" \
-  --chain-seek-cmd-port "$MARLOWE_CHAIN_SYNC_COMMAND_PORT" \
-  ./test/operations/mint.yaml
-
-cabal run marlowe-cli -- \
-  --babbage-era test \
-  --testnet-magic 2 \
-  --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-  --faucet-key "$FAUCET_SKEY_FILE" \
-  --faucet-address "$FAUCET_VKEY" \
-  --marlowe-runtime-port "$MARLOWE_RT_PORT" \
-  --chain-seek-sync-port "$MARLOWE_CHAIN_SYNC_PORT" \
-  --chain-seek-cmd-port "$MARLOWE_CHAIN_SYNC_COMMAND_PORT" \
-  ./test/operations/mint-distributed.yaml
-
-cabal run marlowe-cli -- \
-  --babbage-era test \
-  --testnet-magic 2 \
-  --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-  --faucet-key "$FAUCET_SKEY_FILE" \
-  --faucet-address "$FAUCET_VKEY" \
-  --marlowe-runtime-port "$MARLOWE_RT_PORT" \
-  --chain-seek-sync-port "$MARLOWE_CHAIN_SYNC_PORT" \
-  --chain-seek-cmd-port "$MARLOWE_CHAIN_SYNC_COMMAND_PORT" \
-  ./test/operations/return-funds.yaml
-
-cabal run marlowe-cli -- \
-  --babbage-era test \
-  --testnet-magic 2 \
-  --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-  --faucet-key "$FAUCET_SKEY_FILE" \
-  --faucet-address "$FAUCET_VKEY" \
-  --marlowe-runtime-port "$MARLOWE_RT_PORT" \
-  --chain-seek-sync-port "$MARLOWE_CHAIN_SYNC_PORT" \
-  --chain-seek-cmd-port "$MARLOWE_CHAIN_SYNC_COMMAND_PORT" \
-  ./test/operations/runtime.yaml
-
-cabal run marlowe-cli -- \
-  --babbage-era test \
-  --testnet-magic 2 \
-  --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-  --faucet-key "$FAUCET_SKEY_FILE" \
-  --faucet-address "$FAUCET_VKEY" \
-  --marlowe-runtime-port "$MARLOWE_RT_PORT" \
-  --chain-seek-sync-port "$MARLOWE_CHAIN_SYNC_PORT" \
-  --chain-seek-cmd-port "$MARLOWE_CHAIN_SYNC_COMMAND_PORT" \
-  ./test/templates/cli/trivial.yaml
-
-cabal run marlowe-cli -- \
-  --babbage-era test \
-  --testnet-magic 2 \
-  --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-  --faucet-key "$FAUCET_SKEY_FILE" \
-  --faucet-address "$FAUCET_VKEY" \
-  --marlowe-runtime-port "$MARLOWE_RT_PORT" \
-  --chain-seek-sync-port "$MARLOWE_CHAIN_SYNC_PORT" \
-  --chain-seek-cmd-port "$MARLOWE_CHAIN_SYNC_COMMAND_PORT" \
-  ./test/templates/cli/escrow.yaml
-
-cabal run marlowe-cli -- \
-  --babbage-era test \
-  --testnet-magic 2 \
-  --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-  --faucet-key "$FAUCET_SKEY_FILE" \
-  --faucet-address "$FAUCET_VKEY" \
-  --marlowe-runtime-port "$MARLOWE_RT_PORT" \
-  --chain-seek-sync-port "$MARLOWE_CHAIN_SYNC_PORT" \
-  --chain-seek-cmd-port "$MARLOWE_CHAIN_SYNC_COMMAND_PORT" \
-  ./test/templates/cli/covered-call.yaml
-
-cabal run marlowe-cli -- \
-  --babbage-era test \
-  --testnet-magic 2 \
-  --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-  --faucet-key "$FAUCET_SKEY_FILE" \
-  --faucet-address "$FAUCET_VKEY" \
-  --marlowe-runtime-port "$MARLOWE_RT_PORT" \
-  --chain-seek-sync-port "$MARLOWE_CHAIN_SYNC_PORT" \
-  --chain-seek-cmd-port "$MARLOWE_CHAIN_SYNC_COMMAND_PORT" \
-  ./test/templates/cli/zero-coupon-bond.yaml
-
-cabal run marlowe-cli -- \
- --babbage-era test \
- --testnet-magic 2 \
- --socket-path "$CARDANO_NODE_SOCKET_PATH" \
- --faucet-key "$FAUCET_SKEY_FILE" \
- --faucet-address "$FAUCET_VKEY" \
- --marlowe-runtime-port "$MARLOWE_RT_PORT" \
- --chain-seek-sync-port "$MARLOWE_CHAIN_SYNC_PORT" \
- --chain-seek-cmd-port "$MARLOWE_CHAIN_SYNC_COMMAND_PORT" \
- ./test/templates/runtime/trivial.yaml
-
-cabal run marlowe-cli -- \
-  --babbage-era test \
-  --testnet-magic 2 \
-  --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-  --faucet-key "$FAUCET_SKEY_FILE" \
-  --faucet-address "$FAUCET_VKEY" \
-  --marlowe-runtime-port "$MARLOWE_RT_PORT" \
-  --chain-seek-sync-port "$MARLOWE_CHAIN_SYNC_PORT" \
-  --chain-seek-cmd-port "$MARLOWE_CHAIN_SYNC_COMMAND_PORT" \
-  ./test/templates/runtime/swap.yaml
-
-cabal run marlowe-cli -- \
-  --babbage-era test \
-  --testnet-magic 2 \
-  --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-  --faucet-key "$FAUCET_SKEY_FILE" \
-  --faucet-address "$FAUCET_VKEY" \
-  --marlowe-runtime-port "$MARLOWE_RT_PORT" \
-  --chain-seek-sync-port "$MARLOWE_CHAIN_SYNC_PORT" \
-  --chain-seek-cmd-port "$MARLOWE_CHAIN_SYNC_COMMAND_PORT" \
-  ./test/templates/runtime/escrow.yaml
-
-cabal run marlowe-cli -- \
-  --babbage-era test \
-  --testnet-magic 2 \
-  --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-  --faucet-key "$FAUCET_SKEY_FILE" \
-  --faucet-address "$FAUCET_VKEY" \
-  --marlowe-runtime-port "$MARLOWE_RT_PORT" \
-  --chain-seek-sync-port "$MARLOWE_CHAIN_SYNC_PORT" \
-  --chain-seek-cmd-port "$MARLOWE_CHAIN_SYNC_COMMAND_PORT" \
-  ./test/templates/runtime/zero-coupon-bond.yaml
-
-cabal run marlowe-cli -- \
-  --babbage-era test \
-  --testnet-magic 2 \
-  --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-  --faucet-key "$FAUCET_SKEY_FILE" \
-  --faucet-address "$FAUCET_VKEY" \
-  --marlowe-runtime-port "$MARLOWE_RT_PORT" \
-  --chain-seek-sync-port "$MARLOWE_CHAIN_SYNC_PORT" \
-  --chain-seek-cmd-port "$MARLOWE_CHAIN_SYNC_COMMAND_PORT" \
-  ./test/templates/runtime/covered-call.yaml
-
-cabal run marlowe-cli -- \
-  --babbage-era test \
-  --testnet-magic 2 \
-  --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-  --faucet-key "$FAUCET_SKEY_FILE" \
-  --faucet-address "$FAUCET_VKEY" \
-  --marlowe-runtime-port "$MARLOWE_RT_PORT" \
-  --chain-seek-sync-port "$MARLOWE_CHAIN_SYNC_PORT" \
-  --chain-seek-cmd-port "$MARLOWE_CHAIN_SYNC_COMMAND_PORT" \
-  ./test/templates/cli/role-based/escrow.yaml
-
-cabal run marlowe-cli -- \
-  --babbage-era test \
-  --testnet-magic 2 \
-  --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-  --faucet-key "$FAUCET_SKEY_FILE" \
-  --faucet-address "$FAUCET_VKEY" \
-  --marlowe-runtime-port "$MARLOWE_RT_PORT" \
-  --chain-seek-sync-port "$MARLOWE_CHAIN_SYNC_PORT" \
-  --chain-seek-cmd-port "$MARLOWE_CHAIN_SYNC_COMMAND_PORT" \
-  ./test/templates/runtime/role-based/escrow.yaml
-
-# cabal run marlowe-cli -- \
-#   --babbage-era test \
-#   --testnet-magic 2 \
-#   --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-#   --faucet-key "$FAUCET_SKEY_FILE" \
-#   --faucet-address "$FAUCET_VKEY" \
-#   --marlowe-runtime-port "$MARLOWE_RT_PORT" \
-#   --chain-seek-sync-port "$MARLOWE_CHAIN_SYNC_PORT" \
-#   --chain-seek-cmd-port "$MARLOWE_CHAIN_SYNC_COMMAND_PORT" \
-#   ./test/templates/runtime/role-based/swap.yaml

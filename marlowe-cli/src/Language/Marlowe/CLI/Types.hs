@@ -199,7 +199,8 @@ import qualified Language.Marlowe.Extended.V1 as E
 
 -- | Exception for Marlowe CLI.
 newtype CliError = CliError {unCliError :: String}
-  deriving (Eq, Ord, Read, Show)
+  deriving (Eq, Ord, Read, Show, Generic)
+  deriving anyclass (ToJSON, FromJSON)
 
 instance IsString CliError where
   fromString = CliError
@@ -738,7 +739,7 @@ toUTxO :: [AnUTxO era] -> C.UTxO era
 toUTxO (map unAnUTxO -> utxos) = C.UTxO . Map.fromList $ utxos
 
 
-anUTxOValue :: AnUTxO era -> C.Value
+anUTxOValue :: forall era. AnUTxO era -> C.Value
 anUTxOValue (AnUTxO (_, C.TxOut _ v _ _)) = C.txOutValueToValue v
 
 

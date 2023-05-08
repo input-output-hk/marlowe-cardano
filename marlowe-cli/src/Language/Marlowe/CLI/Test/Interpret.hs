@@ -20,6 +20,7 @@ import Control.Monad.Except (throwError)
 import Control.Monad.IO.Class (liftIO)
 import Language.Marlowe.CLI.Cardano.Api.PlutusScript (IsPlutusScriptLanguage)
 import qualified Language.Marlowe.CLI.Test.CLI.Interpret as CLI
+import Language.Marlowe.CLI.Test.InterpreterError (testExecutionFailed')
 import Language.Marlowe.CLI.Test.Log (logLabeledMsg)
 import qualified Language.Marlowe.CLI.Test.Runtime.Interpret as Runtime
 import Language.Marlowe.CLI.Test.Types
@@ -48,5 +49,5 @@ interpret o@(Sleep seconds) = do
   logLabeledMsg o $ "Sleeping for " <> show seconds
   liftIO $ threadDelay seconds
 interpret (Fail message) =
-  throwError $ CliError message
+  throwError $ testExecutionFailed' message
 

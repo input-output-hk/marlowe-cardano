@@ -11,7 +11,9 @@
 -----------------------------------------------------------------------------
 
 
+{-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
 
@@ -27,9 +29,10 @@ import Cardano.Api (IsShelleyBasedEra, NetworkId)
 import Control.Monad.Except (MonadError, MonadIO)
 import Data.Maybe (fromMaybe)
 import Language.Marlowe.CLI.Command.Parse (parseAddress, parseNetworkId)
-import Language.Marlowe.CLI.Test (runTests)
+import Language.Marlowe.CLI.Test (runTestSuite)
 import Language.Marlowe.CLI.Test.ExecutionMode (ExecutionMode(OnChainMode, SimulationMode))
-import Language.Marlowe.CLI.Test.Types (RuntimeConfig(RuntimeConfig), TestSuite(TestSuite))
+import Language.Marlowe.CLI.Test.Types
+  (ConcurrentRunners(ConcurrentRunners), ReportingStrategy(..), RuntimeConfig(RuntimeConfig), TestSuite(TestSuite))
 import Language.Marlowe.CLI.Types (CliEnv, CliError, askEra)
 
 import Control.Monad.Reader.Class (MonadReader)
@@ -39,6 +42,7 @@ import qualified Language.Marlowe.Runtime.CLI.Option as Runtime.CLI.Option
 import Network.Socket (PortNumber)
 import Options.Applicative (OptionFields)
 import qualified Options.Applicative as O
+import Options.Applicative.Types (Parser(BindP))
 
 
 -- | Marlowe CLI commands and options for testing contracts.
@@ -54,7 +58,7 @@ runTestCommand :: IsShelleyBasedEra era
                -> m ()         -- ^ Action for running the command.
 runTestCommand cmd = do
   era <- askEra
-  runTests era cmd
+  runTestSuite era cmd
 
 
 executionModeParser :: O.Parser ExecutionMode
@@ -89,11 +93,28 @@ mkParseTestCommand network socket = do
       <*> runtimePortParser
       <*> chainSeekSyncPortParser
       <*> chainSeekCmdPortParser
+
+    reportingStrategyParser = do
+      let
+        streamJsonOpt = O.optional (O.flag' ()  (O.long "stream-json" <> O.help "Stream result json objects to stdout as they are produced."))
+        writeToJsonFile = O.optional (O.strOption (O.long "write-to-json-file" <> O.metavar "FILE" <> O.help "Write result result json objects list to a report file."))
+      BindP ((,) <$> streamJsonOpt <*> writeToJsonFile) \case
+        (Nothing, Nothing) -> pure Nothing
+        (Just (), Nothing) -> pure $ Just StreamJSON
+        (Nothing, Just file) -> pure $ Just $ WriteJSONFile file
+        (Just (), Just file) -> pure $ Just $ StreamAndWriteJSONFile file
+
   pure $ TestSuite
     <$> parseNetworkId network
-    <*> O.strOption              (O.long "socket-path"    <> O.metavar "SOCKET_FILE"  <> socket  <> O.help "Location of the cardano-node socket file. Defaults to the CARDANO_NODE_SOCKET_PATH environment variable's value.")
-    <*> O.strOption              (O.long "faucet-key"     <> O.metavar "SIGNING_FILE"            <> O.help "The file containing the signing key for the faucet."                                                             )
-    <*> O.option parseAddress    (O.long "faucet-address" <> O.metavar "ADDRESS"                 <> O.help "The address of the faucet."                                                                                      )
+    <*> O.strOption              (O.long "socket-path"      <> O.metavar "SOCKET_FILE"  <> socket   <> O.help "Location of the cardano-node socket file. Defaults to the CARDANO_NODE_SOCKET_PATH environment variable's value.")
+    <*> O.strOption              (O.long "faucet-skey-file" <> O.metavar "FAUCET_SIGNING_KEY_FILE"  <> O.help "The file containing the signing key for the faucet."                                                             )
+    <*> O.option parseAddress    (O.long "faucet-address"   <> O.metavar "FAUCET_ADDRESS"           <> O.help "The address of the faucet."                                                                                      )
     <*> executionModeParser
-    <*> (O.some . O.strArgument) (                           O.metavar "TEST_FILE"               <> O.help "JSON file containing a test case."                                                                               )
+    <*> (O.some . O.strArgument) (                           O.metavar "TEST_FILE"                  <> O.help "JSON file containing a test case."                                                                               )
     <*> runtimeConfigParser
+    <*> do
+      let
+        parser = ConcurrentRunners <$> O.auto
+        defaultValue = ConcurrentRunners 3
+      O.option parser            (O.value defaultValue <> O.long "concurrent-runners" <> O.metavar "INTEGER" <> O.help "The number of concurrent test runners."                                                                         )
+    <*> reportingStrategyParser

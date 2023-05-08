@@ -39,10 +39,11 @@ import Language.Marlowe.CLI.Test.Contract (ContractNickname)
 import qualified Language.Marlowe.CLI.Test.Contract as Contract
 import Language.Marlowe.CLI.Test.Contract.ParametrizedMarloweJSON
 import Language.Marlowe.CLI.Test.ExecutionMode (ExecutionMode)
+import Language.Marlowe.CLI.Test.InterpreterError (InterpreterError)
+import qualified Language.Marlowe.CLI.Test.Log as Log
 import qualified Language.Marlowe.CLI.Test.Operation.Aeson as Operation
 import Language.Marlowe.CLI.Test.Wallet.Types (Currencies, CurrencyNickname, WalletNickname, Wallets)
 import qualified Language.Marlowe.CLI.Test.Wallet.Types as Wallet
-import Language.Marlowe.CLI.Types (CliError)
 import Language.Marlowe.Cardano.Thread (AnyMarloweThread, MarloweThread, anyMarloweThreadInputsApplied)
 import qualified Language.Marlowe.Core.V1.Semantics.Types as M
 import qualified Language.Marlowe.Protocol.Client as Marlowe.Protocol
@@ -70,10 +71,11 @@ anyRuntimeMonitorMarloweThreadInputsApplied txId possibleTxIx = do
     possibleTxIn = C.TxIn txId <$> possibleTxIx
   anyMarloweThreadInputsApplied txId possibleTxIn
 
-data RuntimeTxInfo = RuntimeTxInfo
-  { rtConfirmed :: Bool
-  , rtTxId :: C.TxId
-  } deriving stock (Eq, Generic, Show)
+-- | To avoid confusion we have a separate type for submitted transaction
+-- | in the main interpreter thread. We use these to await for runtime
+-- | confirmations.
+newtype RuntimeTxInfo = RuntimeTxInfo C.TxId
+  deriving stock (Eq, Generic, Show)
 
 type RuntimeInterpreterMarloweThread = MarloweThread RuntimeTxInfo
 
@@ -88,7 +90,7 @@ anyRuntimeInterpreterMarloweThreadInputsApplied
 anyRuntimeInterpreterMarloweThreadInputsApplied txId possibleTxIx = do
   let
     possibleTxIn = C.TxIn txId <$> possibleTxIx
-    txInfo = RuntimeTxInfo False txId
+    txInfo = RuntimeTxInfo txId
   anyMarloweThreadInputsApplied txInfo possibleTxIn
 
 data RuntimeError
@@ -97,12 +99,7 @@ data RuntimeError
   | RuntimeContractNotFound ContractId
   | RuntimeRollbackError ContractNickname
   deriving stock (Eq, Generic, Show)
-
--- data RedeemStep v = RedeemStep
---   { utxo        :: TxOutRef
---   , redeemingTx :: TxId
---   , datum       :: PayoutDatum v
---   } deriving Generic
+  deriving anyclass (A.ToJSON, A.FromJSON)
 
 newtype RuntimeContractInfo =
   RuntimeContractInfo
@@ -161,19 +158,19 @@ data RuntimeOperation
   deriving stock (Eq, Generic, Show)
 
 instance FromJSON RuntimeOperation where
-  parseJSON = do
-    A.genericParseJSON $ Operation.genericJSONOptions "ro"
+  parseJSON = Operation.parseConstructorBasedJSON "ro"
 
 instance ToJSON RuntimeOperation where
-  toJSON = do
-    A.genericToJSON $ Operation.genericJSONOptions "ro"
+  toJSON = Operation.toConstructorBasedJSON "ro"
 
 data ContractInfo = ContractInfo
-  { ciContractId :: ContractId
-  , ciRoleCurrency :: Maybe CurrencyNickname  -- ^ If contract uses roles then currency is required.
-  -- , ciAppliedInputs :: [M.Input] -- ^ Inputs which we applied. Possibly unconfirmed yet.
-  , ciMarloweThread :: AnyRuntimeInterpreterMarloweThread
+  { _ciContractId :: ContractId
+  , _ciRoleCurrency :: Maybe CurrencyNickname
+  -- ^ If the contract uses roles then currency is required.
+  , _ciMarloweThread :: AnyRuntimeInterpreterMarloweThread
   }
+
+makeLenses 'ContractInfo
 
 class HasInterpretState st era | st -> era where
   knownContractsL :: Lens' st (Map ContractNickname ContractInfo)
@@ -194,8 +191,9 @@ type InterpretMonad env st m era =
   , MonadReader env m
   , HasInterpretEnv env era
   , Wallet.InterpretMonad env st m era
-  , MonadError CliError m
+  , MonadError InterpreterError m
   , MonadIO m
+  , Log.HasLogStore st
   )
 
 makeLenses 'RuntimeContractInfo

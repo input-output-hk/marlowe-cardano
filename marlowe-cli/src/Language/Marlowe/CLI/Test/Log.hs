@@ -6,6 +6,7 @@
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase #-}
@@ -15,46 +16,81 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TypeSynonymInstances #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 module Language.Marlowe.CLI.Test.Log
   where
 
 import Contrib.Data.Aeson.Generic (GetConName, constructorName)
+import Control.Lens (Lens', (%=))
 import Control.Monad.Error.Class (MonadError(throwError))
 import Control.Monad.IO.Class (MonadIO(liftIO))
+import Control.Monad.State.Class (MonadState)
+import qualified Data.Aeson.Types as A
 import GHC.Generics (Generic(Rep))
+import GHC.IO.Handle.FD (stderr)
+import Language.Marlowe.CLI.Test.InterpreterError (InterpreterError(ieInfo, ieMessage))
 import Language.Marlowe.CLI.Types (CliError(CliError))
+import System.IO (hPutStrLn)
 
-printTraceMsg :: String -> String -> String
-printTraceMsg loc msg = "[" <> loc <> "]" <> " " <> msg
+-- We should use proper tracing or nested namespace tracking
+-- but for now we just use a string label.
+class Label l where
+  label :: l -> String
 
-logTraceMsg :: MonadIO m => String -> String -> m ()
-logTraceMsg loc msg = liftIO . putStrLn $ printTraceMsg loc msg
+instance {-# OVERLAPPABLE #-} (Generic l, GetConName (Rep l)) => Label l where
+  label = constructorName
 
-throwTraceError :: MonadError CliError m => String -> String -> m a
-throwTraceError loc msg = throwError
-    $ CliError
-    $ printTraceMsg loc msg
+instance {-# OVERLAPPING #-} Label String where
+  label = id
 
-data LabelFormat = LabelShow | LabelConstructorName
+printLabeledMsg :: (Label l) => l -> String -> String
+printLabeledMsg l msg = do
+  let
+    l' = label l
+  "[" <> l' <> "]" <> " " <> msg
 
-type Label l = (Show l, Generic l, GetConName (Rep l))
+throwLabeledError :: Label l => MonadError InterpreterError m => l -> InterpreterError -> m a
+throwLabeledError loc err = do
+  let
+    info' = ("label", A.toJSON $ label loc) : ieInfo err
+    msg' = printLabeledMsg loc $ ieMessage err
+    err' = err { ieInfo = info', ieMessage = msg' }
+  throwError err'
 
-printLabel :: Label l => LabelFormat -> l -> String
-printLabel LabelShow l = show l
-printLabel LabelConstructorName l = constructorName l
+type LogEntry = (String, String, [A.Pair])
 
-printLabeledMsg :: (Label l) => LabelFormat -> l -> String -> String
-printLabeledMsg format l = printTraceMsg (printLabel format l)
+type Logs = [LogEntry]
 
-throwLabeledError :: Label l => MonadError CliError m => l -> String -> m a
-throwLabeledError loc msg = throwError
-    $ CliError
-    $ printLabeledMsg LabelConstructorName loc msg
-
-exceptLabeledMaybe :: Label l => MonadError CliError m => l -> String -> Maybe a -> m a
-exceptLabeledMaybe _ _ (Just a) = pure a
-exceptLabeledMaybe label msg _ = throwLabeledError label msg
+class HasLogStore st where
+  logStoreL :: Lens' st Logs
 
 logLabeledMsg :: Label l => MonadIO m => l -> String -> m ()
-logLabeledMsg l msg = liftIO . putStrLn $ printLabeledMsg LabelConstructorName l msg
+logLabeledMsg l msg = liftIO . hPutStrLn stderr $ printLabeledMsg l msg
+
+logStoreMsgWith
+  :: MonadIO m
+  => HasLogStore st
+  => MonadState st m
+  => Label l
+  => l
+  -> String
+  -> [A.Pair]
+  -> m ()
+logStoreMsgWith l msg pairs = do
+  let
+    l' = label l
+  logStoreL %= ((l', msg, pairs) :)
+  liftIO . hPutStrLn stderr $ printLabeledMsg l msg
+
+logStoreLabeledMsg
+  :: MonadIO m
+  => HasLogStore st
+  => MonadState st m
+  => Label l
+  => l
+  -> String
+  -> m ()
+logStoreLabeledMsg l msg = logStoreMsgWith l msg []
+
