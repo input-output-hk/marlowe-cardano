@@ -43,7 +43,6 @@ import Network.Protocol.Connection
   , SomeConnector(..)
   , SomeConnectorTraced(..)
   , ToPeer
-  , ToPeerTraced
   )
 import Network.Protocol.Handshake.Types (Handshake)
 import Network.Protocol.Peer.Trace
@@ -184,17 +183,11 @@ data ConnectedField
   = ConnectedAddr AddrInfo
   | ConnectedPeer SockAddr
 
-data TcpServerDependenciesTraced ps server r m = forall (st :: ps). TcpServerDependenciesTraced
-  { host :: HostName
-  , port :: PortNumber
-  , toPeer :: ToPeerTraced server ps 'AsServer st r m
-  }
-
 tcpServerTraced
   :: (MonadIO m', MonadIO m, MonadEvent r s m', HasSpanContext r)
   => InjectSelector (TcpServerSelector (Handshake ps)) s
-  -> Component m (TcpServerDependenciesTraced ps server r m') (ConnectionSourceTraced ps server r TcpServerSelector m')
-tcpServerTraced inj = component \TcpServerDependenciesTraced{..} -> do
+  -> Component m (TcpServerDependencies ps server m') (ConnectionSourceTraced ps server r TcpServerSelector m')
+tcpServerTraced inj = component \TcpServerDependencies{..} -> do
   socketQueue <- newTQueue
   pure
     ( liftIO $ runTCPServer (Just host) (show port) \socket -> do
@@ -232,7 +225,7 @@ tcpClientTraced
   => InjectSelector (TcpClientSelector (Handshake ps)) s
   -> HostName
   -> PortNumber
-  -> ToPeerTraced client ps 'AsClient st r m
+  -> ToPeer client ps 'AsClient st m
   -> ConnectorTraced ps 'AsClient client r TcpClientSelector m
 tcpClientTraced inj host port toPeer = ConnectorTraced
   $ withInjectEvent inj Connect \ev -> do
@@ -282,7 +275,7 @@ runConnection :: (MonadUnliftIO m, BinaryMessage ps) => Connection ps pr peer m 
 runConnection Connection{..} peer = do
   let driver = mkDriver channel
   mask \restore -> do
-    result <- try $ restore $ runPeerWithDriver driver (toPeer peer) (startDState driver)
+    result <- try $ restore $ runPeerWithDriver driver (peerTracedToPeer $ toPeer peer) (startDState driver)
     case result of
       Left ex -> do
         closeConnection $ Just ex

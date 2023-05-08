@@ -31,7 +31,7 @@ import Logging (RootSelector(..), renderRootSelectorOTel)
 import Network.Channel (hoistChannel, socketAsChannel)
 import Network.Protocol.Codec (BinaryMessage)
 import Network.Protocol.Connection (SomeConnectionSource(..), SomeConnectionSourceTraced(..))
-import Network.Protocol.Driver (TcpServerDependencies(..), TcpServerDependenciesTraced(..), tcpServer, tcpServerTraced)
+import Network.Protocol.Driver (TcpServerDependencies(..), tcpServer, tcpServerTraced)
 import Network.Protocol.Handshake.Server (handshakeConnectionSource, handshakeConnectionSourceTraced)
 import Network.Protocol.Handshake.Types (Handshake)
 import Network.Protocol.Peer.Trace
@@ -94,7 +94,7 @@ run = runComponent_ proc Options{..} -> do
     , ..
     }
 
-  connectionSourceTraced <- tcpServerTraced $ injectSelector MarloweRuntimeServer -< TcpServerDependenciesTraced
+  connectionSourceTraced <- tcpServerTraced $ injectSelector MarloweRuntimeServer -< TcpServerDependencies
     { toPeer = marloweRuntimeServerPeerTraced $ injectSelector ProxySelector
     , port = portTraced
     , ..

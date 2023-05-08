@@ -15,7 +15,7 @@ import UnliftIO (MonadUnliftIO)
 
 data QueryServerDependencies r s m = QueryServerDependencies
   { databaseQueries :: DatabaseQueries m
-  , querySource :: SomeConnectionSourceTraced (MarloweQueryServer r) r s m
+  , querySource :: SomeConnectionSourceTraced MarloweQueryServer r s m
   }
 
 queryServer :: (MonadUnliftIO m, MonadEvent r s m, HasSpanContext r) => Component m (QueryServerDependencies r s m) ()
@@ -25,7 +25,7 @@ queryServer = serverComponent (component_ worker) \QueryServerDependencies{..} -
 
 data WorkerDependencies r s m = WorkerDependencies
   { databaseQueries :: DatabaseQueries m
-  , connector :: SomeServerConnectorTraced (MarloweQueryServer r) r s m
+  , connector :: SomeServerConnectorTraced MarloweQueryServer r s m
   }
 
 worker :: (MonadUnliftIO m, MonadEvent r s m, HasSpanContext r) => WorkerDependencies r s m -> m ()

@@ -72,29 +72,17 @@ hoistMarloweQueryClient f = \case
   ClientLift m -> ClientLift $ f $ hoistMarloweQueryClient f <$> m
   ClientRequest req cont -> ClientRequest req $ f . fmap (hoistMarloweQueryClient f) . cont
 
-marloweQueryClientPeer :: Functor m => MarloweQueryClient m a -> Peer MarloweQuery 'AsClient 'StReq m a
-marloweQueryClientPeer = \case
-  ClientPure a ->
-    Yield (ClientAgency TokReq) MsgDone $
-    Done TokDone a
-  ClientLift m ->
-    Effect $ marloweQueryClientPeer <$> m
-  ClientRequest req cont ->
-    Yield (ClientAgency TokReq) (MsgRequest req) $
-    Await (ServerAgency (TokRes $ requestToSt req)) \case
-      MsgRespond r -> Effect $ marloweQueryClientPeer <$> cont r
-
-marloweQueryClientPeerTraced
+marloweQueryClientPeer
   :: Functor m
   => MarloweQueryClient m a
-  -> PeerTraced MarloweQuery 'AsClient 'StReq r m a
-marloweQueryClientPeerTraced = \case
+  -> PeerTraced MarloweQuery 'AsClient 'StReq m a
+marloweQueryClientPeer = \case
   ClientPure a ->
     YieldTraced (ClientAgency TokReq) MsgDone
       $ Close TokDone a
   ClientLift m ->
-    EffectTraced $ marloweQueryClientPeerTraced <$> m
+    EffectTraced $ marloweQueryClientPeer <$> m
   ClientRequest req cont ->
     YieldTraced (ClientAgency TokReq) (MsgRequest req) $
       Call (ServerAgency (TokRes $ requestToSt req)) \case
-        MsgRespond r -> EffectTraced $ marloweQueryClientPeerTraced <$> cont r
+        MsgRespond r -> EffectTraced $ marloweQueryClientPeer <$> cont r

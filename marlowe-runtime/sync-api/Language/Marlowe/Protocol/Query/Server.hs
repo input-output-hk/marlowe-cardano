@@ -13,10 +13,10 @@ import Network.Protocol.Peer.Trace
 import Network.TypedProtocol
 import UnliftIO (MonadUnliftIO, concurrently)
 
-type MarloweQueryServer r = PeerTraced MarloweQuery 'AsServer 'StReq r
+type MarloweQueryServer = PeerTraced MarloweQuery 'AsServer 'StReq
 
 marloweQueryServer
-  :: forall r m
+  :: forall m
    . MonadUnliftIO m
   => (ContractFilter -> Range ContractId -> m (Maybe (Page ContractId ContractHeader)))
   -> (ContractId -> m (Maybe SomeContractState))
@@ -24,7 +24,7 @@ marloweQueryServer
   -> (ContractId -> m (Maybe SomeTransactions))
   -> (TxId -> m (Maybe Withdrawal))
   -> (WithdrawalFilter -> Range TxId -> m (Maybe (Page TxId Withdrawal)))
-  -> MarloweQueryServer r m ()
+  -> MarloweQueryServer m ()
 marloweQueryServer getContractHeaders getContractState getTransaction getTransactions getWithdrawal getWithdrawals = go
   where
     go = AwaitTraced (ClientAgency TokReq) \case

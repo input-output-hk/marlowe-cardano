@@ -23,7 +23,7 @@ data SyncDependencies r s m = SyncDependencies
   { databaseQueries :: DatabaseQueries m
   , syncSource :: SomeConnectionSourceTraced MarloweSyncServer r s m
   , headerSyncSource :: SomeConnectionSourceTraced MarloweHeaderSyncServer r s m
-  , querySource :: SomeConnectionSourceTraced (MarloweQueryServer r) r s m
+  , querySource :: SomeConnectionSourceTraced MarloweQueryServer r s m
   }
 
 sync :: (MonadUnliftIO m, HasSpanContext r, MonadEvent r s m) => Component m (SyncDependencies r s m) Probes

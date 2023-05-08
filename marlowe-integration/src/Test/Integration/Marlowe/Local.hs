@@ -96,17 +96,16 @@ import Language.Marlowe.CLI.Types
   , ValidatorInfo(..)
   , defaultCoinSelectionStrategy
   )
-import Language.Marlowe.Protocol.Client
-  (MarloweRuntimeClient, hoistMarloweRuntimeClient, marloweRuntimeClientPeerTraced)
-import Language.Marlowe.Protocol.HeaderSync.Client (MarloweHeaderSyncClient, marloweHeaderSyncClientPeerTraced)
-import Language.Marlowe.Protocol.HeaderSync.Server (MarloweHeaderSyncServer, marloweHeaderSyncServerPeerTraced)
+import Language.Marlowe.Protocol.Client (MarloweRuntimeClient, hoistMarloweRuntimeClient, marloweRuntimeClientPeer)
+import Language.Marlowe.Protocol.HeaderSync.Client (MarloweHeaderSyncClient, marloweHeaderSyncClientPeer)
+import Language.Marlowe.Protocol.HeaderSync.Server (MarloweHeaderSyncServer, marloweHeaderSyncServerPeer)
 import Language.Marlowe.Protocol.HeaderSync.Types (MarloweHeaderSync)
-import Language.Marlowe.Protocol.Query.Client (MarloweQueryClient(..), marloweQueryClientPeerTraced)
+import Language.Marlowe.Protocol.Query.Client (MarloweQueryClient(..), marloweQueryClientPeer)
 import Language.Marlowe.Protocol.Query.Server (MarloweQueryServer)
 import Language.Marlowe.Protocol.Query.Types (MarloweQuery)
 import Language.Marlowe.Protocol.Server (MarloweRuntimeServer, marloweRuntimeServerPeer, marloweRuntimeServerPeerTraced)
-import Language.Marlowe.Protocol.Sync.Client (MarloweSyncClient, marloweSyncClientPeerTraced)
-import Language.Marlowe.Protocol.Sync.Server (MarloweSyncServer, marloweSyncServerPeerTraced)
+import Language.Marlowe.Protocol.Sync.Client (MarloweSyncClient, marloweSyncClientPeer)
+import Language.Marlowe.Protocol.Sync.Server (MarloweSyncServer, marloweSyncServerPeer)
 import Language.Marlowe.Protocol.Sync.Types (MarloweSync)
 import qualified Language.Marlowe.Protocol.Types as Protocol
 import Language.Marlowe.Runtime.Cardano.Api (fromCardanoAddressInEra, fromCardanoLovelace, fromCardanoTxId)
@@ -152,20 +151,20 @@ import Language.Marlowe.Runtime.Web.Server (ServerDependencies(..), ServerSelect
 import Language.Marlowe.Runtime.Web.Server.Monad (BackendM(runBackendM))
 import Network.Channel (hoistChannel)
 import Network.HTTP.Client (defaultManagerSettings, newManager)
-import Network.Protocol.ChainSeek.Client (chainSeekClientPeerTraced)
-import Network.Protocol.ChainSeek.Server (chainSeekServerPeerTraced)
+import Network.Protocol.ChainSeek.Client (chainSeekClientPeer)
+import Network.Protocol.ChainSeek.Server (chainSeekServerPeer)
 import Network.Protocol.Codec (BinaryMessage)
 import Network.Protocol.Connection
 import qualified Network.Protocol.Connection as Connection
 import Network.Protocol.Driver
 import Network.Protocol.Handshake.Server (handshakeClientServerPair, handshakeConnectionSource)
 import Network.Protocol.Handshake.Types (Handshake)
-import Network.Protocol.Job.Client (JobClient, jobClientPeerTraced)
-import Network.Protocol.Job.Server (JobServer, jobServerPeerTraced)
+import Network.Protocol.Job.Client (JobClient, jobClientPeer)
+import Network.Protocol.Job.Server (JobServer, jobServerPeer)
 import Network.Protocol.Job.Types (Job)
 import Network.Protocol.Peer.Trace (DriverTraced, HasSpanContext(..), defaultSpanContext, mkDriverTraced)
-import Network.Protocol.Query.Client (QueryClient, liftQuery, queryClientPeerTraced)
-import Network.Protocol.Query.Server (QueryServer, queryServerPeerTraced)
+import Network.Protocol.Query.Client (QueryClient, liftQuery, queryClientPeer)
+import Network.Protocol.Query.Server (QueryServer, queryServerPeer)
 import Network.Protocol.Query.Types (Query)
 import Network.Socket
   ( AddrInfo(..)
@@ -502,7 +501,7 @@ data RuntimeDependencies r m = RuntimeDependencies
   , marloweHeaderSyncPair :: ClientServerPair (Handshake MarloweHeaderSync) MarloweHeaderSyncServer MarloweHeaderSyncClient r m
   , marloweSyncPair :: ClientServerPair (Handshake MarloweSync) MarloweSyncServer MarloweSyncClient r m
   , marlowePair :: ClientServerPair (Handshake Protocol.MarloweRuntime) (MarloweRuntimeServer r) MarloweRuntimeClient r (ResourceT m)
-  , marloweQueryPair :: ClientServerPair (Handshake MarloweQuery) (MarloweQueryServer r) MarloweQueryClient r m
+  , marloweQueryPair :: ClientServerPair (Handshake MarloweQuery) MarloweQueryServer MarloweQueryClient r m
   , txJobPair :: ClientServerPair (Handshake (Job MarloweTxCommand)) (JobServer MarloweTxCommand) (JobClient MarloweTxCommand) r m
   , chainIndexerDatabaseQueries :: ChainIndexer.DatabaseQueries m
   , chainSeekDatabaseQueries :: ChainSync.DatabaseQueries m
@@ -638,7 +637,7 @@ data Channels r m = Channels
   , chainSyncQueryPair :: ClientServerPair (Handshake (Query ChainSyncQuery)) (QueryServer ChainSyncQuery) (QueryClient ChainSyncQuery) r m
   , marloweHeaderSyncPair :: ClientServerPair (Handshake MarloweHeaderSync) MarloweHeaderSyncServer MarloweHeaderSyncClient r m
   , marloweSyncPair :: ClientServerPair (Handshake MarloweSync) MarloweSyncServer MarloweSyncClient r m
-  , marloweQueryPair :: ClientServerPair (Handshake MarloweQuery) (MarloweQueryServer r) MarloweQueryClient r m
+  , marloweQueryPair :: ClientServerPair (Handshake MarloweQuery) MarloweQueryServer MarloweQueryClient r m
   , txJobPair :: ClientServerPair (Handshake (Job MarloweTxCommand)) (JobServer MarloweTxCommand) (JobClient MarloweTxCommand) r m
   , marlowePair :: ClientServerPair (Handshake Protocol.MarloweRuntime) (MarloweRuntimeServer r) MarloweRuntimeClient r (ResourceT m)
   }
@@ -646,29 +645,29 @@ data Channels r m = Channels
 setupChannels :: Monoid r => STM (Channels r (RuntimeM r))
 setupChannels = do
   chainSyncPair <- handshakeClientServerPair <$> clientServerPair
-    chainSeekServerPeerTraced
-    chainSeekClientPeerTraced
+    chainSeekServerPeer
+    chainSeekClientPeer
   chainSyncJobPair <- handshakeClientServerPair <$> clientServerPair
-    jobServerPeerTraced
-    jobClientPeerTraced
+    jobServerPeer
+    jobClientPeer
   chainSyncQueryPair <- handshakeClientServerPair <$> clientServerPair
-    queryServerPeerTraced
-    queryClientPeerTraced
+    queryServerPeer
+    queryClientPeer
   marloweHeaderSyncPair <- handshakeClientServerPair <$> clientServerPair
-    marloweHeaderSyncServerPeerTraced
-    marloweHeaderSyncClientPeerTraced
+    marloweHeaderSyncServerPeer
+    marloweHeaderSyncClientPeer
   marloweSyncPair <- handshakeClientServerPair <$> clientServerPair
-    marloweSyncServerPeerTraced
-    marloweSyncClientPeerTraced
+    marloweSyncServerPeer
+    marloweSyncClientPeer
   marloweQueryPair <- handshakeClientServerPair <$> clientServerPair
     id
-    marloweQueryClientPeerTraced
+    marloweQueryClientPeer
   txJobPair <- handshakeClientServerPair <$> clientServerPair
-    jobServerPeerTraced
-    jobClientPeerTraced
+    jobServerPeer
+    jobClientPeer
   marlowePair <- handshakeClientServerPair <$> clientServerPair
     (marloweRuntimeServerPeerTraced inject)
-    marloweRuntimeClientPeerTraced
+    marloweRuntimeClientPeer
   pure Channels{..}
 
 newtype RuntimeM r a = RuntimeM { runRuntimeM :: IO a }

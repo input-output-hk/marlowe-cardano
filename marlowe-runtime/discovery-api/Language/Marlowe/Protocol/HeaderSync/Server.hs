@@ -70,49 +70,14 @@ hoistMarloweHeaderSyncServer nat = MarloweHeaderSyncServer . nat . fmap hoistIdl
       , recvMsgCancel = nat $ fmap hoistIdle recvMsgCancel
       }
 
-marloweHeaderSyncServerPeer :: forall m a. Functor m => MarloweHeaderSyncServer m a -> Peer MarloweHeaderSync 'AsServer 'StIdle m a
-marloweHeaderSyncServerPeer = Effect . fmap peerIdle . runMarloweHeaderSyncServer
-  where
-    peerIdle :: ServerStIdle m a -> Peer MarloweHeaderSync 'AsServer 'StIdle m a
-    peerIdle ServerStIdle{..} = Await (ClientAgency TokIdle) $ Effect . \case
-      MsgDone -> Done TokDone <$> recvMsgDone
-      MsgIntersect blocks -> peerIntersect <$> recvMsgIntersect blocks
-      MsgRequestNext -> peerNext <$> recvMsgRequestNext
-
-    peerIntersect :: ServerStIntersect m a -> Peer MarloweHeaderSync 'AsServer 'StIntersect m a
-    peerIntersect = \case
-      SendMsgIntersectFound block idle ->
-        Yield (ServerAgency TokIntersect) (MsgIntersectFound block) $
-        peerIdle idle
-      SendMsgIntersectNotFound idle ->
-        Yield (ServerAgency TokIntersect) MsgIntersectNotFound $
-        peerIdle idle
-
-    peerNext :: ServerStNext m a -> Peer MarloweHeaderSync 'AsServer 'StNext m a
-    peerNext = \case
-      SendMsgNewHeaders block headers idle ->
-        Yield (ServerAgency TokNext) (MsgNewHeaders block headers) $
-        peerIdle idle
-      SendMsgRollBackward block idle ->
-        Yield (ServerAgency TokNext) (MsgRollBackward block) $
-        peerIdle idle
-      SendMsgWait wait ->
-        Yield (ServerAgency TokNext) MsgWait $
-        peerWait wait
-
-    peerWait :: ServerStWait m a -> Peer MarloweHeaderSync 'AsServer 'StWait m a
-    peerWait ServerStWait{..} = Await (ClientAgency TokWait) $ Effect . \case
-      MsgPoll   -> peerNext <$> recvMsgPoll
-      MsgCancel -> peerIdle <$> recvMsgCancel
-
-marloweHeaderSyncServerPeerTraced
-  :: forall r m a
+marloweHeaderSyncServerPeer
+  :: forall m a
    . Functor m
   => MarloweHeaderSyncServer m a
-  -> PeerTraced MarloweHeaderSync 'AsServer 'StIdle r m a
-marloweHeaderSyncServerPeerTraced = EffectTraced . fmap peerIdle . runMarloweHeaderSyncServer
+  -> PeerTraced MarloweHeaderSync 'AsServer 'StIdle m a
+marloweHeaderSyncServerPeer = EffectTraced . fmap peerIdle . runMarloweHeaderSyncServer
   where
-    peerIdle :: ServerStIdle m a -> PeerTraced MarloweHeaderSync 'AsServer 'StIdle r m a
+    peerIdle :: ServerStIdle m a -> PeerTraced MarloweHeaderSync 'AsServer 'StIdle m a
     peerIdle ServerStIdle{..} = AwaitTraced (ClientAgency TokIdle) \case
       MsgDone -> Closed TokDone recvMsgDone
       MsgIntersect blocks -> Respond (ServerAgency TokIntersect) $ peerIntersect <$> recvMsgIntersect blocks
@@ -120,7 +85,7 @@ marloweHeaderSyncServerPeerTraced = EffectTraced . fmap peerIdle . runMarloweHea
 
     peerIntersect
       :: ServerStIntersect m a
-      -> Response MarloweHeaderSync 'AsServer 'StIntersect r m a
+      -> Response MarloweHeaderSync 'AsServer 'StIntersect m a
     peerIntersect = \case
       SendMsgIntersectFound block idle ->
         Response (MsgIntersectFound block) $ peerIdle idle
@@ -129,7 +94,7 @@ marloweHeaderSyncServerPeerTraced = EffectTraced . fmap peerIdle . runMarloweHea
 
     peerNext
       :: ServerStNext m a
-      -> Response MarloweHeaderSync 'AsServer 'StNext r m a
+      -> Response MarloweHeaderSync 'AsServer 'StNext m a
     peerNext = \case
       SendMsgNewHeaders block headers idle ->
         Response (MsgNewHeaders block headers) $ peerIdle idle
@@ -138,7 +103,7 @@ marloweHeaderSyncServerPeerTraced = EffectTraced . fmap peerIdle . runMarloweHea
       SendMsgWait wait ->
         Response MsgWait $ peerWait wait
 
-    peerWait :: ServerStWait m a -> PeerTraced MarloweHeaderSync 'AsServer 'StWait r m a
+    peerWait :: ServerStWait m a -> PeerTraced MarloweHeaderSync 'AsServer 'StWait m a
     peerWait ServerStWait{..} = AwaitTraced (ClientAgency TokWait) \case
       MsgPoll   -> Respond (ServerAgency TokNext) $ peerNext <$> recvMsgPoll
       MsgCancel -> Receive $ EffectTraced $ peerIdle <$> recvMsgCancel

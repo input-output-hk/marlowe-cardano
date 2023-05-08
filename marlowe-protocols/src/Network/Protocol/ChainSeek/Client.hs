@@ -12,7 +12,7 @@ module Network.Protocol.ChainSeek.Client
 
 import Network.Protocol.ChainSeek.Types
 import Network.Protocol.Peer.Trace
-import Network.TypedProtocol (Peer(..), PeerHasAgency(..))
+import Network.TypedProtocol (PeerHasAgency(..))
 import Network.TypedProtocol.Core (PeerRole(..))
 
 -- | A chain seek protocol client that runs in some monad 'm'.
@@ -137,59 +137,16 @@ hoistChainSeekClient f ChainSeekClient{..} =
       SendMsgPoll next -> SendMsgPoll $ hoistNext next
       SendMsgCancel idle -> SendMsgCancel $ hoistIdle idle
 
--- | Interpret the client as a 'typed-protocols' 'Peer'.
 chainSeekClientPeer
   :: forall query point tip m a
-   . (Monad m, Query query)
-  => ChainSeekClient query point tip m a
-  -> Peer (ChainSeek query point tip) 'AsClient 'StIdle m a
-chainSeekClientPeer (ChainSeekClient mClient) = peerIdle mClient
-  where
-  peerIdle
-    :: m (ClientStIdle query point tip m a)
-    -> Peer (ChainSeek query point tip) 'AsClient 'StIdle m a
-  peerIdle = Effect . fmap peerIdle_
-
-  peerIdle_
-    :: ClientStIdle query point tip m a
-    -> Peer (ChainSeek query point tip) 'AsClient 'StIdle m a
-  peerIdle_ = \case
-    SendMsgQueryNext query next ->
-      Yield (ClientAgency TokIdle) (MsgQueryNext query) $ peerNext query next
-    SendMsgDone a -> Yield (ClientAgency TokIdle) MsgDone (Done TokDone a)
-
-  peerNext
-    :: query err result
-    -> ClientStNext query err result point tip m a
-    -> Peer (ChainSeek query point tip) 'AsClient ('StNext err result) m a
-  peerNext query ClientStNext{..} =
-    Await (ServerAgency (TokNext (tagFromQuery query))) \case
-      MsgRejectQuery err tip         -> peerIdle $ recvMsgQueryRejected err tip
-      MsgRollForward result point tip -> peerIdle $ recvMsgRollForward result point tip
-      MsgRollBackward point tip       -> peerIdle $ recvMsgRollBackward point tip
-      MsgWait                        -> peerPoll query recvMsgWait
-
-  peerPoll
-    :: forall err result
-     . query err result
-    -> m (ClientStPoll query err result point tip m a)
-    -> Peer (ChainSeek query point tip) 'AsClient ('StPoll err result) m a
-  peerPoll query mnext = Effect do
-    poll <- mnext
-    pure case poll of
-      SendMsgPoll next -> Yield (ClientAgency TokPoll) MsgPoll $ peerNext query next
-      SendMsgCancel idle -> Yield (ClientAgency TokPoll) MsgCancel $ peerIdle_ idle
-
-chainSeekClientPeerTraced
-  :: forall query point tip r m a
    . (Functor m, Query query)
   => ChainSeekClient query point tip m a
-  -> PeerTraced (ChainSeek query point tip) 'AsClient 'StIdle r m a
-chainSeekClientPeerTraced = EffectTraced . fmap peerIdle . runChainSeekClient
+  -> PeerTraced (ChainSeek query point tip) 'AsClient 'StIdle m a
+chainSeekClientPeer = EffectTraced . fmap peerIdle . runChainSeekClient
   where
     peerIdle
       :: ClientStIdle query point tip m a
-      -> PeerTraced (ChainSeek query point tip) 'AsClient 'StIdle r m a
+      -> PeerTraced (ChainSeek query point tip) 'AsClient 'StIdle m a
     peerIdle = \case
       SendMsgQueryNext query next -> YieldTraced (ClientAgency TokIdle) (MsgQueryNext query)
         $ Call (ServerAgency $ TokNext $ tagFromQuery query)
@@ -201,7 +158,7 @@ chainSeekClientPeerTraced = EffectTraced . fmap peerIdle . runChainSeekClient
       :: Tag query err result
       -> ClientStNext query err result point tip m a
       -> Message (ChainSeek query point tip) ('StNext err result) st
-      -> PeerTraced (ChainSeek query point tip) 'AsClient st r m a
+      -> PeerTraced (ChainSeek query point tip) 'AsClient st m a
     peerNext tag ClientStNext{..} = EffectTraced . \case
       MsgRejectQuery err tip -> peerIdle <$> recvMsgQueryRejected err tip
       MsgRollForward result point tip -> peerIdle <$> recvMsgRollForward result point tip
@@ -211,7 +168,7 @@ chainSeekClientPeerTraced = EffectTraced . fmap peerIdle . runChainSeekClient
     peerPoll
       :: Tag query err result
       -> ClientStPoll query err result point tip m a
-      -> PeerTraced (ChainSeek query point tip) 'AsClient ('StPoll err result) r m a
+      -> PeerTraced (ChainSeek query point tip) 'AsClient ('StPoll err result) m a
     peerPoll tag = \case
       SendMsgPoll next -> YieldTraced (ClientAgency TokPoll) MsgPoll
         $ Call (ServerAgency $ TokNext tag)

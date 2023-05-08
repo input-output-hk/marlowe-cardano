@@ -35,12 +35,12 @@ import qualified Language.Marlowe.Runtime.Core.ScriptRegistry as ScriptRegistry
 import Language.Marlowe.Runtime.Indexer (MarloweIndexerDependencies(..), marloweIndexer)
 import qualified Language.Marlowe.Runtime.Indexer.Database.PostgreSQL as PostgreSQL
 import Logging (RootSelector(..), renderRootSelectorOTel)
-import Network.Protocol.ChainSeek.Client (chainSeekClientPeerTraced)
+import Network.Protocol.ChainSeek.Client (chainSeekClientPeer)
 import Network.Protocol.Connection (ClientConnectorTraced, SomeConnectorTraced(..))
 import Network.Protocol.Driver (TcpClientSelector, runConnectorTraced, tcpClientTraced)
 import Network.Protocol.Handshake.Client (handshakeClientConnectorTraced)
 import Network.Protocol.Handshake.Types (Handshake)
-import Network.Protocol.Query.Client (QueryClient, liftQuery, queryClientPeerTraced)
+import Network.Protocol.Query.Client (QueryClient, liftQuery, queryClientPeer)
 import Network.Protocol.Query.Types (Query)
 import Network.Socket (AddrInfo(..), HostName, PortNumber, SocketType(..), defaultHints)
 import Observe.Event.Backend (EventBackend, hoistEventBackend, injectSelector)
@@ -95,7 +95,7 @@ run Options{..} = bracket (Pool.acquire 100 (Just 5000000) (fromString databaseU
                   (injectSelector ChainSeekClient)
                   chainSeekHost
                   chainSeekPort
-                  chainSeekClientPeerTraced
+                  chainSeekClientPeer
           , chainSyncQueryConnector = SomeConnectorTraced
               (injectSelector ChainQueryClient)
               chainSyncQueryConnector
@@ -123,7 +123,7 @@ run Options{..} = bracket (Pool.acquire 100 (Just 5000000) (fromString databaseU
       TcpClientSelector
       (AppM Span)
     chainSyncQueryConnector = handshakeClientConnectorTraced
-      $ tcpClientTraced (injectSelector ChainQueryClient) chainSeekHost chainSeekQueryPort queryClientPeerTraced
+      $ tcpClientTraced (injectSelector ChainQueryClient) chainSeekHost chainSeekQueryPort queryClientPeer
 
     queryChainSync :: ChainSyncQuery Void e a -> AppM Span a
     queryChainSync = fmap (fromRight $ error "failed to query chain sync server")

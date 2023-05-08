@@ -12,7 +12,7 @@ import Control.Monad.Event.Class
 import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.Trans.Marlowe
 import Control.Monad.Trans.Marlowe.Class
-import Language.Marlowe.Protocol.Client (marloweRuntimeClientPeer, marloweRuntimeClientPeerTraced)
+import Language.Marlowe.Protocol.Client (marloweRuntimeClientPeer)
 import Language.Marlowe.Protocol.Types (MarloweRuntime)
 import Network.Protocol.Driver (TcpClientSelector, tcpClient, tcpClientTraced)
 import Network.Protocol.Handshake.Client (handshakeClientConnector, handshakeClientConnectorTraced)
@@ -30,7 +30,7 @@ connectToMarloweRuntimeTraced
   -> m a
 connectToMarloweRuntimeTraced inj host port action = runMarloweTracedT action inj
   $ handshakeClientConnectorTraced
-  $ tcpClientTraced inj host port marloweRuntimeClientPeerTraced
+  $ tcpClientTraced inj host port marloweRuntimeClientPeer
 
 connectToMarloweRuntime :: (MonadIO m, MonadFail m) => HostName -> PortNumber -> MarloweT m a -> m a
 connectToMarloweRuntime host port action = runMarloweT action

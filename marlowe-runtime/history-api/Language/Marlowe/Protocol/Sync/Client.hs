@@ -93,60 +93,14 @@ hoistMarloweSyncClient nat = MarloweSyncClient . nat . fmap hoistInit . runMarlo
       SendMsgPoll next   -> SendMsgPoll $ hoistNext next
       SendMsgCancel idle -> SendMsgCancel $ hoistIdle idle
 
-marloweSyncClientPeer :: forall m a. Functor m => MarloweSyncClient m a -> Peer MarloweSync 'AsClient 'StInit m a
-marloweSyncClientPeer = Effect . fmap peerInit . runMarloweSyncClient
-  where
-    peerInit :: ClientStInit m a -> Peer MarloweSync 'AsClient 'StInit m a
-    peerInit = \case
-      SendMsgFollowContract contractId follow ->
-        Yield (ClientAgency TokInit) (MsgFollowContract contractId) $
-        peerFollow follow
-      SendMsgIntersect contractId version headers intersect ->
-        Yield (ClientAgency TokInit) (MsgIntersect contractId version headers) $
-        peerIntersect version intersect
-
-    peerFollow :: ClientStFollow m a -> Peer MarloweSync 'AsClient 'StFollow m a
-    peerFollow ClientStFollow{..} = Await (ServerAgency TokFollow) $ Effect . \case
-      MsgContractFound header version step ->
-        peerIdle version <$> recvMsgContractFound header version step
-      MsgContractNotFound ->
-        Done TokDone <$> recvMsgContractNotFound
-
-    peerIntersect :: MarloweVersion v -> ClientStIntersect v m a -> Peer MarloweSync 'AsClient ('StIntersect v) m a
-    peerIntersect version ClientStIntersect{..} =
-      Await (ServerAgency (TokIntersect version)) $ Effect . \case
-        MsgIntersectFound header -> peerIdle version <$> recvMsgIntersectFound header
-        MsgIntersectNotFound     -> Done TokDone <$> recvMsgIntersectNotFound
-
-    peerIdle :: MarloweVersion v -> ClientStIdle v m a -> Peer MarloweSync 'AsClient ('StIdle v) m a
-    peerIdle version = \case
-      SendMsgRequestNext next ->
-        Yield (ClientAgency (TokIdle version)) MsgRequestNext $ peerNext version next
-      SendMsgDone a ->
-        Yield (ClientAgency (TokIdle version)) MsgDone $ Done TokDone a
-
-    peerNext :: MarloweVersion v -> ClientStNext v m a -> Peer MarloweSync 'AsClient ('StNext v) m a
-    peerNext version ClientStNext{..} = Await (ServerAgency (TokNext version)) $ Effect . \case
-      MsgRollForward header steps -> peerIdle version <$> recvMsgRollForward header steps
-      MsgRollBackward header      -> peerIdle version <$> recvMsgRollBackward header
-      MsgRollBackCreation         -> Done TokDone <$> recvMsgRollBackCreation
-      MsgWait                     -> peerWait version <$> recvMsgWait
-
-    peerWait :: MarloweVersion v -> ClientStWait v m a -> Peer MarloweSync 'AsClient ('StWait v) m a
-    peerWait version = \case
-      SendMsgPoll next ->
-        Yield (ClientAgency (TokWait version)) MsgPoll $ peerNext version next
-      SendMsgCancel idle ->
-        Yield (ClientAgency (TokWait version)) MsgCancel $ peerIdle version idle
-
-marloweSyncClientPeerTraced
-  :: forall r m a
+marloweSyncClientPeer
+  :: forall m a
    . Functor m
   => MarloweSyncClient m a
-  -> PeerTraced MarloweSync 'AsClient 'StInit r m a
-marloweSyncClientPeerTraced = EffectTraced . fmap peerInit . runMarloweSyncClient
+  -> PeerTraced MarloweSync 'AsClient 'StInit m a
+marloweSyncClientPeer = EffectTraced . fmap peerInit . runMarloweSyncClient
   where
-    peerInit :: ClientStInit m a -> PeerTraced MarloweSync 'AsClient 'StInit r m a
+    peerInit :: ClientStInit m a -> PeerTraced MarloweSync 'AsClient 'StInit m a
     peerInit = \case
       SendMsgFollowContract contractId follow ->
         YieldTraced (ClientAgency TokInit) (MsgFollowContract contractId)
@@ -160,7 +114,7 @@ marloweSyncClientPeerTraced = EffectTraced . fmap peerInit . runMarloweSyncClien
     peerFollow
       :: ClientStFollow m a
       -> Message MarloweSync 'StFollow st
-      -> PeerTraced MarloweSync 'AsClient st r m a
+      -> PeerTraced MarloweSync 'AsClient st m a
     peerFollow ClientStFollow{..} = EffectTraced . \case
       MsgContractFound header version step ->
         peerIdle version <$> recvMsgContractFound header version step
@@ -171,12 +125,12 @@ marloweSyncClientPeerTraced = EffectTraced . fmap peerInit . runMarloweSyncClien
       :: MarloweVersion v
       -> ClientStIntersect v m a
       -> Message MarloweSync ('StIntersect v) st
-      -> PeerTraced MarloweSync 'AsClient st r m a
+      -> PeerTraced MarloweSync 'AsClient st m a
     peerIntersect version ClientStIntersect{..} = EffectTraced . \case
       MsgIntersectFound header -> peerIdle version <$> recvMsgIntersectFound header
       MsgIntersectNotFound -> DoneTraced TokDone <$> recvMsgIntersectNotFound
 
-    peerIdle :: MarloweVersion v -> ClientStIdle v m a -> PeerTraced MarloweSync 'AsClient ('StIdle v) r m a
+    peerIdle :: MarloweVersion v -> ClientStIdle v m a -> PeerTraced MarloweSync 'AsClient ('StIdle v) m a
     peerIdle version = \case
       SendMsgRequestNext next ->
         YieldTraced (ClientAgency (TokIdle version)) MsgRequestNext
@@ -190,7 +144,7 @@ marloweSyncClientPeerTraced = EffectTraced . fmap peerInit . runMarloweSyncClien
       :: MarloweVersion v
       -> ClientStNext v m a
       -> Message MarloweSync ('StNext v) st
-      -> PeerTraced MarloweSync 'AsClient st r m a
+      -> PeerTraced MarloweSync 'AsClient st m a
     peerNext version ClientStNext{..} = EffectTraced . \case
       MsgRollForward header steps -> peerIdle version <$> recvMsgRollForward header steps
       MsgRollBackward header -> peerIdle version <$> recvMsgRollBackward header
@@ -200,7 +154,7 @@ marloweSyncClientPeerTraced = EffectTraced . fmap peerInit . runMarloweSyncClien
     peerWait
       :: MarloweVersion v
       -> ClientStWait v m a
-      -> PeerTraced MarloweSync 'AsClient ('StWait v) r m a
+      -> PeerTraced MarloweSync 'AsClient ('StWait v) m a
     peerWait version = \case
       SendMsgPoll next ->
         YieldTraced (ClientAgency (TokWait version)) MsgPoll

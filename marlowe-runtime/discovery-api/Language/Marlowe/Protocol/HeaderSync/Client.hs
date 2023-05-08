@@ -70,39 +70,14 @@ hoistMarloweHeaderSyncClient nat = MarloweHeaderSyncClient . nat . fmap hoistIdl
       SendMsgPoll next -> SendMsgPoll $ hoistNext next
       SendMsgCancel idle -> SendMsgCancel $ hoistIdle idle
 
-marloweHeaderSyncClientPeer :: forall m a. Functor m => MarloweHeaderSyncClient m a -> Peer MarloweHeaderSync 'AsClient 'StIdle m a
-marloweHeaderSyncClientPeer = Effect . fmap peerIdle . runMarloweHeaderSyncClient
-  where
-    peerIdle :: ClientStIdle m a -> Peer MarloweHeaderSync 'AsClient 'StIdle m a
-    peerIdle = \case
-      SendMsgDone a -> Yield (ClientAgency TokIdle) MsgDone $ Done TokDone a
-      SendMsgIntersect blocks intersect-> Yield (ClientAgency TokIdle) (MsgIntersect blocks) $ peerIntersect intersect
-      SendMsgRequestNext next -> Yield (ClientAgency TokIdle) MsgRequestNext $ peerNext next
-
-    peerIntersect :: ClientStIntersect m a -> Peer MarloweHeaderSync 'AsClient 'StIntersect m a
-    peerIntersect ClientStIntersect{..} = Await (ServerAgency TokIntersect) $ Effect . \case
-      MsgIntersectFound block -> peerIdle <$> recvMsgIntersectFound block
-      MsgIntersectNotFound -> peerIdle <$> recvMsgIntersectNotFound
-
-    peerNext :: ClientStNext m a -> Peer MarloweHeaderSync 'AsClient 'StNext m a
-    peerNext ClientStNext{..} = Await (ServerAgency TokNext) $ Effect . \case
-      MsgNewHeaders block headers -> peerIdle <$> recvMsgNewHeaders block headers
-      MsgRollBackward block -> peerIdle <$> recvMsgRollBackward block
-      MsgWait -> peerWait <$> recvMsgWait
-
-    peerWait :: ClientStWait m a -> Peer MarloweHeaderSync 'AsClient 'StWait m a
-    peerWait = \case
-      SendMsgPoll next -> Yield (ClientAgency TokWait) MsgPoll $ peerNext next
-      SendMsgCancel idle -> Yield (ClientAgency TokWait) MsgCancel $ peerIdle idle
-
-marloweHeaderSyncClientPeerTraced
-  :: forall r m a
+marloweHeaderSyncClientPeer
+  :: forall m a
    . Functor m
   => MarloweHeaderSyncClient m a
-  -> PeerTraced MarloweHeaderSync 'AsClient 'StIdle r m a
-marloweHeaderSyncClientPeerTraced = EffectTraced . fmap peerIdle . runMarloweHeaderSyncClient
+  -> PeerTraced MarloweHeaderSync 'AsClient 'StIdle m a
+marloweHeaderSyncClientPeer = EffectTraced . fmap peerIdle . runMarloweHeaderSyncClient
   where
-    peerIdle :: ClientStIdle m a -> PeerTraced MarloweHeaderSync 'AsClient 'StIdle r m a
+    peerIdle :: ClientStIdle m a -> PeerTraced MarloweHeaderSync 'AsClient 'StIdle m a
     peerIdle = \case
       SendMsgDone a -> YieldTraced (ClientAgency TokIdle) MsgDone
         $ Close TokDone a
@@ -116,7 +91,7 @@ marloweHeaderSyncClientPeerTraced = EffectTraced . fmap peerIdle . runMarloweHea
     peerIntersect
       :: ClientStIntersect m a
       -> Message MarloweHeaderSync 'StIntersect st
-      -> PeerTraced MarloweHeaderSync 'AsClient st r m a
+      -> PeerTraced MarloweHeaderSync 'AsClient st m a
     peerIntersect ClientStIntersect{..} = EffectTraced . \case
       MsgIntersectFound block -> peerIdle <$> recvMsgIntersectFound block
       MsgIntersectNotFound -> peerIdle <$> recvMsgIntersectNotFound
@@ -124,13 +99,13 @@ marloweHeaderSyncClientPeerTraced = EffectTraced . fmap peerIdle . runMarloweHea
     peerNext
       :: ClientStNext m a
       -> Message MarloweHeaderSync 'StNext st
-      -> PeerTraced MarloweHeaderSync 'AsClient st r m a
+      -> PeerTraced MarloweHeaderSync 'AsClient st m a
     peerNext ClientStNext{..} = EffectTraced . \case
       MsgNewHeaders block headers -> peerIdle <$> recvMsgNewHeaders block headers
       MsgRollBackward block -> peerIdle <$> recvMsgRollBackward block
       MsgWait -> peerWait <$> recvMsgWait
 
-    peerWait :: ClientStWait m a -> PeerTraced MarloweHeaderSync 'AsClient 'StWait r m a
+    peerWait :: ClientStWait m a -> PeerTraced MarloweHeaderSync 'AsClient 'StWait m a
     peerWait = \case
       SendMsgPoll next -> YieldTraced (ClientAgency TokWait) MsgPoll
         $ Call (ServerAgency TokNext)

@@ -64,7 +64,7 @@ handshakeClientConnectionTraced
   => ConnectionTraced ps 'AsClient peer r s m
   -> ConnectionTraced (Handshake ps) 'AsClient peer r s m
 handshakeClientConnectionTraced ConnectionTraced{..} = ConnectionTraced
-  { toPeer = handshakeClientPeerTraced id . simpleHandshakeClient (signature $ Proxy @ps) . toPeer
+  { toPeer = handshakeClientPeer id . simpleHandshakeClient (signature $ Proxy @ps) . toPeer
   , ..
   }
 
@@ -83,43 +83,20 @@ hoistHandshakeClient hoistClient f HandshakeClient{..} = HandshakeClient
 handshakeClientPeer
   :: forall client m ps st a
    . Functor m
-  => (forall x. client m x -> Peer ps 'AsClient st m x)
+  => (forall x. client m x -> PeerTraced ps 'AsClient st m x)
   -> HandshakeClient client m a
-  -> Peer (Handshake ps) 'AsClient ('StInit st) m a
+  -> PeerTraced (Handshake ps) 'AsClient ('StInit st) m a
 handshakeClientPeer clientPeer HandshakeClient{..} =
-  Effect $ peerInit <$> handshake
-  where
-    peerInit :: Text -> Peer (Handshake ps) 'AsClient ('StInit st) m a
-    peerInit sig =
-      Yield (ClientAgency TokInit) (MsgHandshake sig) $
-      Await (ServerAgency TokHandshake) \case
-        MsgReject -> Effect $ Done TokDone <$> recvMsgReject
-        MsgAccept -> Effect $ liftPeer . clientPeer <$> recvMsgAccept
-
-    liftPeer :: forall st'. Peer ps 'AsClient st' m a -> Peer (Handshake ps) 'AsClient ('StLift st') m a
-    liftPeer = \case
-      Effect m -> Effect $ liftPeer <$> m
-      Done tok a -> Done (TokLiftNobody tok) a
-      Yield (ClientAgency tok) msg next -> Yield (ClientAgency $ TokLiftClient tok) (MsgLift msg) $ liftPeer next
-      Await (ServerAgency tok) next -> Await (ServerAgency $ TokLiftServer tok) \(MsgLift msg) -> liftPeer $ next msg
-
-handshakeClientPeerTraced
-  :: forall client r m ps st a
-   . Functor m
-  => (forall x. client m x -> PeerTraced ps 'AsClient st r m x)
-  -> HandshakeClient client m a
-  -> PeerTraced (Handshake ps) 'AsClient ('StInit st) r m a
-handshakeClientPeerTraced clientPeer HandshakeClient{..} =
   EffectTraced $ peerInit <$> handshake
   where
-    peerInit :: Text -> PeerTraced (Handshake ps) 'AsClient ('StInit st) r m a
+    peerInit :: Text -> PeerTraced (Handshake ps) 'AsClient ('StInit st) m a
     peerInit sig =
       YieldTraced (ClientAgency TokInit) (MsgHandshake sig) $
         Call (ServerAgency TokHandshake) \case
           MsgReject -> EffectTraced $ DoneTraced TokDone <$> recvMsgReject
           MsgAccept -> EffectTraced $ liftPeer . clientPeer <$> recvMsgAccept
 
-    liftPeer :: forall st'. PeerTraced ps 'AsClient st' r m a -> PeerTraced (Handshake ps) 'AsClient ('StLift st') r m a
+    liftPeer :: forall st'. PeerTraced ps 'AsClient st' m a -> PeerTraced (Handshake ps) 'AsClient ('StLift st') m a
     liftPeer = \case
       EffectTraced m -> EffectTraced $ liftPeer <$> m
       DoneTraced tok a -> DoneTraced (TokLiftNobody tok) a

@@ -25,14 +25,14 @@ import Data.Version (showVersion)
 import qualified Database.PostgreSQL.LibPQ as PQ
 import Hasql.Connection (withLibPQConnection)
 import qualified Hasql.Pool as Pool
-import Language.Marlowe.Protocol.HeaderSync.Server (marloweHeaderSyncServerPeerTraced)
-import Language.Marlowe.Protocol.Sync.Server (marloweSyncServerPeerTraced)
+import Language.Marlowe.Protocol.HeaderSync.Server (marloweHeaderSyncServerPeer)
+import Language.Marlowe.Protocol.Sync.Server (marloweSyncServerPeer)
 import Language.Marlowe.Runtime.Sync (SyncDependencies(..), sync)
 import Language.Marlowe.Runtime.Sync.Database (hoistDatabaseQueries, logDatabaseQueries)
 import qualified Language.Marlowe.Runtime.Sync.Database.PostgreSQL as Postgres
 import Logging (RootSelector(..), renderRootSelectorOTel)
 import Network.Protocol.Connection (SomeConnectionSourceTraced(..))
-import Network.Protocol.Driver (TcpServerDependenciesTraced(..), tcpServerTraced)
+import Network.Protocol.Driver (TcpServerDependencies(..), tcpServerTraced)
 import Network.Protocol.Handshake.Server (handshakeConnectionSourceTraced)
 import Network.Socket (HostName, PortNumber)
 import Observe.Event.Backend (EventBackend, hoistEventBackend, injectSelector)
@@ -73,19 +73,19 @@ run Options{..} = bracket (Pool.acquire 100 (Just 5000000) (fromString databaseU
   withTracer \tracer ->
     runAppM (tracerEventBackend tracer $ renderRootSelectorOTel dbName dbUser dbHost dbPort) do
       flip runComponent_ () proc _ -> do
-        marloweSyncSource <- tcpServerTraced (injectSelector MarloweSyncServer) -< TcpServerDependenciesTraced
+        marloweSyncSource <- tcpServerTraced (injectSelector MarloweSyncServer) -< TcpServerDependencies
           { host
           , port = marloweSyncPort
-          , toPeer = marloweSyncServerPeerTraced
+          , toPeer = marloweSyncServerPeer
           }
 
-        headerSyncSource <- tcpServerTraced (injectSelector MarloweHeaderSyncServer) -< TcpServerDependenciesTraced
+        headerSyncSource <- tcpServerTraced (injectSelector MarloweHeaderSyncServer) -< TcpServerDependencies
           { host
           , port = marloweHeaderSyncPort
-          , toPeer = marloweHeaderSyncServerPeerTraced
+          , toPeer = marloweHeaderSyncServerPeer
           }
 
-        querySource <- tcpServerTraced (injectSelector MarloweQueryServer) -< TcpServerDependenciesTraced
+        querySource <- tcpServerTraced (injectSelector MarloweQueryServer) -< TcpServerDependencies
           { host
           , port = queryPort
           , toPeer = id

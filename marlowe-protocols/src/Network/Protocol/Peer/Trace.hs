@@ -32,76 +32,76 @@ import qualified OpenTelemetry.Trace.TraceState as TraceState
 import UnliftIO (throwIO)
 
 -- | A peer in a protocol session which is suitable for tracing.
-data PeerTraced ps (pr :: PeerRole) (st :: ps) r m a where
+data PeerTraced ps (pr :: PeerRole) (st :: ps) m a where
   -- | A peer sends a message to the other peer.
   YieldTraced
     :: WeHaveAgency pr st
     -> Message ps st st'
-    -> YieldTraced ps pr st' r m a
-    -> PeerTraced ps pr st r m a
+    -> YieldTraced ps pr st' m a
+    -> PeerTraced ps pr st m a
 
   -- | A peer awaits a message from the other peer.
   AwaitTraced
     :: TheyHaveAgency pr st
-    -> (forall (st' :: ps). Message ps st st' -> AwaitTraced ps pr st' r m a)
-    -> PeerTraced ps pr st r m a
+    -> (forall (st' :: ps). Message ps st st' -> AwaitTraced ps pr st' m a)
+    -> PeerTraced ps pr st m a
 
   -- | A peer is processing information.
   EffectTraced
-    :: m (PeerTraced ps pr st r m a)
-    -> PeerTraced ps pr st r m a
+    :: m (PeerTraced ps pr st m a)
+    -> PeerTraced ps pr st m a
 
   -- | The session is done.
   DoneTraced
     :: NobodyHasAgency st
     -> a
-    -> PeerTraced ps pr st r m a
+    -> PeerTraced ps pr st m a
 
-deriving instance Functor m => Functor (PeerTraced ps pr st r m)
+deriving instance Functor m => Functor (PeerTraced ps pr st m)
 
-data YieldTraced ps (pr :: PeerRole) (st :: ps) r m a where
+data YieldTraced ps (pr :: PeerRole) (st :: ps) m a where
   Call
     :: TheyHaveAgency pr st
-    -> (forall st'. Message ps st st' -> PeerTraced ps pr st' r m a)
-    -> YieldTraced ps pr st r m a
+    -> (forall st'. Message ps st st' -> PeerTraced ps pr st' m a)
+    -> YieldTraced ps pr st m a
   Cast
-    :: PeerTraced ps pr st r m a
-    -> YieldTraced ps pr st r m a
+    :: PeerTraced ps pr st m a
+    -> YieldTraced ps pr st m a
   Close
     :: NobodyHasAgency st
     -> a
-    -> YieldTraced ps pr st r m a
+    -> YieldTraced ps pr st m a
 
-deriving instance Functor m => Functor (YieldTraced ps pr st r m)
+deriving instance Functor m => Functor (YieldTraced ps pr st m)
 
-data AwaitTraced ps pr st r m a where
+data AwaitTraced ps pr st m a where
   Respond
     :: WeHaveAgency pr st
-    -> m (Response ps pr st r m a)
-    -> AwaitTraced ps pr st r m a
+    -> m (Response ps pr st m a)
+    -> AwaitTraced ps pr st m a
   Receive
-    :: PeerTraced ps pr st r m a
-    -> AwaitTraced ps pr st r m a
+    :: PeerTraced ps pr st m a
+    -> AwaitTraced ps pr st m a
   Closed
     :: NobodyHasAgency st
     -> m a
-    -> AwaitTraced ps pr st r m a
+    -> AwaitTraced ps pr st m a
 
-deriving instance Functor m => Functor (AwaitTraced ps pr st r m)
+deriving instance Functor m => Functor (AwaitTraced ps pr st m)
 
-data Response ps pr st r m a where
+data Response ps pr st m a where
   Response
     :: Message ps st st'
-    -> PeerTraced ps pr st' r m a
-    -> Response ps pr st r m a
+    -> PeerTraced ps pr st' m a
+    -> Response ps pr st m a
 
-deriving instance Functor m => Functor (Response ps pr st r m)
+deriving instance Functor m => Functor (Response ps pr st m)
 
 hoistPeerTraced
   :: Functor m
   => (forall x. m x -> n x)
-  -> PeerTraced ps pr st r m a
-  -> PeerTraced ps pr st r n a
+  -> PeerTraced ps pr st m a
+  -> PeerTraced ps pr st n a
 hoistPeerTraced f = \case
   YieldTraced tok msg yield -> YieldTraced tok msg case yield of
     Call tok' k -> Call tok' $ hoistPeerTraced f . k
@@ -115,7 +115,7 @@ hoistPeerTraced f = \case
   DoneTraced tok a -> DoneTraced tok a
   EffectTraced m -> EffectTraced $ f $ hoistPeerTraced f <$> m
 
-peerTracedToPeer :: Functor m => PeerTraced ps pr st r m a -> Peer ps pr st m a
+peerTracedToPeer :: Functor m => PeerTraced ps pr st m a -> Peer ps pr st m a
 peerTracedToPeer = \case
   YieldTraced tok msg yield -> Yield tok msg case yield of
     Call tok' k -> Await tok' $ peerTracedToPeer . k
@@ -163,7 +163,7 @@ runPeerWithDriverTraced
    . MonadEvent r s m
   => InjectSelector (TypedProtocolsSelector ps) s
   -> DriverTraced ps dState r m
-  -> PeerTraced ps pr st r m a
+  -> PeerTraced ps pr st m a
   -> dState
   -> m a
 runPeerWithDriverTraced inj driver peer dState = case peer of
@@ -179,7 +179,7 @@ runYieldPeerWithDriverTraced
   -> WeHaveAgency pr st
   -> Message ps st st'
   -> dState
-  -> YieldTraced ps pr st' r m a
+  -> YieldTraced ps pr st' m a
   -> m a
 runYieldPeerWithDriverTraced inj driver tok msg dState = \case
   Call tok' k -> join $ withInjectEventFields inj (CallSelector tok msg) [Nothing] \callEv -> do
@@ -202,7 +202,7 @@ runAwaitPeerWithDriverTraced
   => InjectSelector (TypedProtocolsSelector ps) s
   -> DriverTraced ps dState r m
   -> TheyHaveAgency pr st
-  -> (forall (st' :: ps). Message ps st st' -> AwaitTraced ps pr st' r m a)
+  -> (forall (st' :: ps). Message ps st st' -> AwaitTraced ps pr st' m a)
   -> dState
   -> m a
 runAwaitPeerWithDriverTraced inj driver tok k dState = do
@@ -216,7 +216,7 @@ runAwaitPeerWithDriverTraced inj driver tok k dState = do
     Receive nextPeer -> join $ withInjectEventArgs inj (receiveArgs sendRef tok msg) $ const $ receive nextPeer
     Closed _ ma -> withInjectEventArgs inj (closeArgs sendRef tok msg) $ const ma
   where
-    receive :: PeerTraced ps pr st' r m a -> m (m a)
+    receive :: PeerTraced ps pr st' m a -> m (m a)
     receive = \case
       EffectTraced m -> receive =<< m
       peer -> pure $ runPeerWithDriverTraced inj driver peer dState

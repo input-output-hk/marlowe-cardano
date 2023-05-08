@@ -90,7 +90,7 @@ handshakeServerConnectionTraced
   => ConnectionTraced ps 'AsServer peer r s m
   -> ConnectionTraced (Handshake ps) 'AsServer peer r s m
 handshakeServerConnectionTraced ConnectionTraced{..} = ConnectionTraced
-  { toPeer = handshakeServerPeerTraced id . simpleHandshakeServer (signature $ Proxy @ps) . toPeer
+  { toPeer = handshakeServerPeer id . simpleHandshakeServer (signature $ Proxy @ps) . toPeer
   , ..
   }
 
@@ -117,31 +117,10 @@ hoistHandshakeServer hoistServer f HandshakeServer{..} = HandshakeServer
 handshakeServerPeer
   :: forall client m ps st a
    . Functor m
-  => (forall x. client m x -> Peer ps 'AsServer st m x)
+  => (forall x. client m x -> PeerTraced ps 'AsServer st m x)
   -> HandshakeServer client m a
-  -> Peer (Handshake ps) 'AsServer ('StInit st) m a
+  -> PeerTraced (Handshake ps) 'AsServer ('StInit st) m a
 handshakeServerPeer serverPeer HandshakeServer{..} =
-  Await (ClientAgency TokInit) \case
-    MsgHandshake sig -> Effect $ recvMsgHandshake sig <&> \case
-      Left a ->
-        Yield (ServerAgency TokHandshake) MsgReject $ Effect $ Done TokDone <$> a
-      Right server ->
-        Yield (ServerAgency TokHandshake) MsgAccept $ liftPeer $ serverPeer server
-  where
-    liftPeer :: forall st'. Peer ps 'AsServer st' m a -> Peer (Handshake ps) 'AsServer ('StLift st') m a
-    liftPeer = \case
-      Effect m -> Effect $ liftPeer <$> m
-      Done tok a -> Done (TokLiftNobody tok) a
-      Yield (ServerAgency tok) msg next -> Yield (ServerAgency $ TokLiftServer tok) (MsgLift msg) $ liftPeer next
-      Await (ClientAgency tok) next -> Await (ClientAgency $ TokLiftClient tok) \(MsgLift msg) -> liftPeer $ next msg
-
-handshakeServerPeerTraced
-  :: forall client r m ps st a
-   . Functor m
-  => (forall x. client m x -> PeerTraced ps 'AsServer st r m x)
-  -> HandshakeServer client m a
-  -> PeerTraced (Handshake ps) 'AsServer ('StInit st) r m a
-handshakeServerPeerTraced serverPeer HandshakeServer{..} =
   AwaitTraced (ClientAgency TokInit) \case
     MsgHandshake sig -> Respond (ServerAgency TokHandshake) $ recvMsgHandshake sig <&> \case
       Left a ->
@@ -149,7 +128,7 @@ handshakeServerPeerTraced serverPeer HandshakeServer{..} =
       Right server ->
         Response MsgAccept $ liftPeer $ serverPeer server
   where
-    liftPeer :: forall st'. PeerTraced ps 'AsServer st' r m a -> PeerTraced (Handshake ps) 'AsServer ('StLift st') r m a
+    liftPeer :: forall st'. PeerTraced ps 'AsServer st' m a -> PeerTraced (Handshake ps) 'AsServer ('StLift st') m a
     liftPeer = \case
       EffectTraced m -> EffectTraced $ liftPeer <$> m
       DoneTraced tok a -> DoneTraced (TokLiftNobody tok) a

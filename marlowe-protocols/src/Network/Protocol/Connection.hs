@@ -15,15 +15,12 @@ import Control.Exception (SomeException)
 import Data.ByteString.Lazy (ByteString)
 import Network.Channel (Channel(..), STMChannel(..), channelPair, hoistChannel)
 import Network.Protocol.Codec (BinaryMessage)
-import Network.Protocol.Peer (hoistPeer)
 import Network.Protocol.Peer.Trace
 import Network.TypedProtocol
 import Observe.Event (InjectSelector)
 import UnliftIO (MonadIO, MonadUnliftIO, atomically)
 
-type ToPeer peer protocol pr st m = forall a. peer m a -> Peer protocol pr st m a
-
-type ToPeerTraced peer protocol pr st r m = forall a. peer m a -> PeerTraced protocol pr st r m a
+type ToPeer peer protocol pr st m = forall a. peer m a -> PeerTraced protocol pr st m a
 
 newtype Connector ps pr peer m = Connector
   { openConnection :: m (Connection ps pr peer m)
@@ -109,7 +106,7 @@ data Connection ps pr peer m = forall (st :: ps). Connection
 data ConnectionTraced ps pr peer r s m = forall (st :: ps). ConnectionTraced
   { closeConnection :: Maybe SomeException -> m ()
   , channel :: Channel m ByteString
-  , toPeer :: ToPeerTraced  peer ps pr st r m
+  , toPeer :: ToPeer  peer ps pr st m
   , openRef :: r
   , injectProtocolSelector :: forall ps'. InjectSelector (TypedProtocolsSelector ps') (s ps')
   }
@@ -138,7 +135,7 @@ ihoistConnection
 ihoistConnection hoistPeer' f f' Connection{..} = Connection
   { closeConnection = f . closeConnection
   , channel = hoistChannel f channel
-  , toPeer = hoistPeer f . toPeer . hoistPeer' f'
+  , toPeer = hoistPeerTraced f . toPeer . hoistPeer' f'
   , ..
   }
 
@@ -159,7 +156,7 @@ acceptSomeConnectorTraced (SomeConnectionSourceTraced inj ConnectionSourceTraced
 stmConnectionSource
   :: (MonadIO m, Monoid r)
   => TQueue (STMChannel ByteString)
-  -> ToPeerTraced server ps 'AsServer st r m
+  -> ToPeer server ps 'AsServer st m
   -> ConnectionSourceTraced ps server r IdSelector m
 stmConnectionSource queue toPeer = ConnectionSourceTraced do
   channel <- readTQueue queue
@@ -168,7 +165,7 @@ stmConnectionSource queue toPeer = ConnectionSourceTraced do
 stmServerConnector
   :: (Monoid r, MonadIO m)
   => STMChannel ByteString
-  -> ToPeerTraced client ps 'AsServer st r m
+  -> ToPeer client ps 'AsServer st m
   -> ServerConnectorTraced ps client r IdSelector m
 stmServerConnector (STMChannel channel closeChannel) toPeer = ConnectorTraced $ pure ConnectionTraced
   { closeConnection = const $ atomically closeChannel
@@ -181,7 +178,7 @@ stmServerConnector (STMChannel channel closeChannel) toPeer = ConnectorTraced $ 
 stmClientConnector
   :: (MonadIO m, Monoid r)
   => TQueue (STMChannel ByteString)
-  -> ToPeerTraced client ps 'AsClient st r m
+  -> ToPeer client ps 'AsClient st m
   -> ClientConnectorTraced ps client r IdSelector m
 stmClientConnector queue toPeer = ConnectorTraced do
   STMChannel channel closeChannel <- atomically do
@@ -207,8 +204,8 @@ data ClientServerPair ps server client r m = ClientServerPair
 clientServerPair
   :: forall ps server client r m st
    . (MonadUnliftIO m, Monoid r)
-  => ToPeerTraced server ps 'AsServer st r m
-  -> ToPeerTraced client ps 'AsClient st r m
+  => ToPeer server ps 'AsServer st m
+  -> ToPeer client ps 'AsClient st m
   -> STM (ClientServerPair ps server client r m)
 clientServerPair serverToPeer clientToPeer = do
   serverChannelQueue <- newTQueue
@@ -233,10 +230,6 @@ tracedConnectorToConnector ConnectorTraced{..} =
   Connector $ tracedConnectionToConnection <$> openConnectionTraced
 
 tracedConnectionToConnection
-  :: Functor m
-  => ConnectionTraced ps pr peer r s m
+  :: ConnectionTraced ps pr peer r s m
   -> Connection ps pr peer m
-tracedConnectionToConnection ConnectionTraced{..} = Connection
-  { toPeer = peerTracedToPeer . toPeer
-  , ..
-  }
+tracedConnectionToConnection ConnectionTraced{..} = Connection{..}

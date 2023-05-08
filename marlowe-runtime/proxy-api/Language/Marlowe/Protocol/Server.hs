@@ -50,14 +50,14 @@ marloweRuntimeServerPeer
   :: (MonadEvent r s m, MonadFail m)
   => InjectSelector ProxySelector s
   -> MarloweRuntimeServer r m a
-  -> Peer MarloweRuntime 'AsServer 'StInit m a
-marloweRuntimeServerPeer inj = peerTracedToPeer . marloweRuntimeServerPeerTraced' True inj
+  -> PeerTraced MarloweRuntime 'AsServer 'StInit m a
+marloweRuntimeServerPeer = marloweRuntimeServerPeerTraced' True
 
 marloweRuntimeServerPeerTraced
   :: (MonadEvent r s m, MonadFail m)
   => InjectSelector ProxySelector s
   -> MarloweRuntimeServer r m a
-  -> PeerTraced MarloweRuntime 'AsServer 'StInit r m a
+  -> PeerTraced MarloweRuntime 'AsServer 'StInit m a
 marloweRuntimeServerPeerTraced = marloweRuntimeServerPeerTraced' False
 
 marloweRuntimeServerPeerTraced'
@@ -65,7 +65,7 @@ marloweRuntimeServerPeerTraced'
   => Bool
   -> InjectSelector ProxySelector s
   -> MarloweRuntimeServer r m a
-  -> PeerTraced MarloweRuntime 'AsServer 'StInit r m a
+  -> PeerTraced MarloweRuntime 'AsServer 'StInit m a
 marloweRuntimeServerPeerTraced' linkHandshakeEventAsParent inj MarloweRuntimeServer{..} = AwaitTraced (ClientAgency TokInit) $ Receive . \case
   MsgRunMarloweSync -> result <$ withHandshake linkHandshakeEventAsParent inj SendMarloweSync RecvMarloweSync (marloweSyncPeerTraced (ClientAgency Sync.TokInit)) getMarloweSyncDriver
   MsgRunMarloweHeaderSync -> result <$ withHandshake linkHandshakeEventAsParent inj SendMarloweHeaderSync RecvMarloweHeaderSync (marloweHeaderSyncPeerTraced (ClientAgency Header.TokIdle)) getMarloweHeaderSyncDriver
@@ -92,9 +92,9 @@ withHandshake
   -> InjectSelector ProxySelector s
   -> ProxySelector (AnyMessageAndAgency ps)
   -> ProxySelector (AnyMessageAndAgency ps)
-  -> (dState -> Driver ps dState m -> PeerTraced MarloweRuntime 'AsServer st r m a)
+  -> (dState -> Driver ps dState m -> PeerTraced MarloweRuntime 'AsServer st m a)
   -> (r -> m (DriverTraced (Handshake ps) dState r m))
-  -> PeerTraced MarloweRuntime 'AsServer st r m a
+  -> PeerTraced MarloweRuntime 'AsServer st m a
 withHandshake linkHandshakeEventAsParent inj sendSelector recvSelector main getDriver = EffectTraced do
   withInjectEventFields inj Handshake [signature $ Proxy @ps] \ev -> do
     driver <- getDriver $ reference ev
@@ -145,7 +145,7 @@ marloweSyncPeerTraced
   => PeerHasAgency pr st
   -> dState
   -> Driver MarloweSync dState m
-  -> PeerTraced MarloweRuntime 'AsServer ('StMarloweSync st) r m ()
+  -> PeerTraced MarloweRuntime 'AsServer ('StMarloweSync st) m ()
 marloweSyncPeerTraced tok dState driver = case tok of
   ClientAgency tok' -> AwaitTraced (ClientAgency $ TokClientMarloweSync tok') \case
     MsgMarloweSync msg -> case (tok', msg) of
@@ -199,7 +199,7 @@ marloweHeaderSyncPeerTraced
   => PeerHasAgency pr st
   -> dState
   -> Driver MarloweHeaderSync dState m
-  -> PeerTraced MarloweRuntime 'AsServer ('StMarloweHeaderSync st) r m ()
+  -> PeerTraced MarloweRuntime 'AsServer ('StMarloweHeaderSync st) m ()
 marloweHeaderSyncPeerTraced tok dState driver = case tok of
   ClientAgency tok' -> AwaitTraced (ClientAgency $ TokClientMarloweHeaderSync tok') \case
     MsgMarloweHeaderSync msg -> case msg of
@@ -242,7 +242,7 @@ marloweQueryPeerTraced
   => PeerHasAgency pr st
   -> dState
   -> Driver MarloweQuery dState m
-  -> PeerTraced MarloweRuntime 'AsServer ('StMarloweQuery st) r m ()
+  -> PeerTraced MarloweRuntime 'AsServer ('StMarloweQuery st) m ()
 marloweQueryPeerTraced tok dState driver = case tok of
   ClientAgency tok' -> AwaitTraced (ClientAgency $ TokClientMarloweQuery tok') \case
     MsgMarloweQuery msg -> case msg of
@@ -263,7 +263,7 @@ jobPeerTraced
   => PeerHasAgency pr st
   -> dState
   -> Driver (Job MarloweTxCommand) dState m
-  -> PeerTraced MarloweRuntime 'AsServer ('StTxJob st) r m ()
+  -> PeerTraced MarloweRuntime 'AsServer ('StTxJob st) m ()
 jobPeerTraced tok dState driver = case tok of
   ClientAgency tok' -> AwaitTraced (ClientAgency $ TokClientTxJob tok') \case
     MsgTxJob msg -> case (tok', msg) of

@@ -93,67 +93,16 @@ hoistMarloweSyncServer nat = MarloweSyncServer . nat . fmap hoistInit . runMarlo
       , recvMsgCancel = nat $ fmap hoistIdle recvMsgCancel
       }
 
-marloweSyncServerPeer :: forall m a. Functor m => MarloweSyncServer m a -> Peer MarloweSync 'AsServer 'StInit m a
-marloweSyncServerPeer = Effect . fmap peerInit . runMarloweSyncServer
-  where
-    peerInit :: ServerStInit m a -> Peer MarloweSync 'AsServer 'StInit m a
-    peerInit ServerStInit{..} = Await (ClientAgency TokInit) $ Effect . \case
-      MsgFollowContract contractId ->
-        peerFollow <$> recvMsgFollowContract contractId
-      MsgIntersect contractId version headers ->
-        peerIntersect version <$> recvMsgIntersect contractId version headers
-
-    peerFollow :: ServerStFollow m a -> Peer MarloweSync 'AsServer 'StFollow m a
-    peerFollow = \case
-      SendMsgContractFound blockHeader version createStep idle ->
-        Yield (ServerAgency TokFollow) (MsgContractFound blockHeader version createStep) $
-        peerIdle version idle
-      SendMsgContractNotFound a ->
-        Yield (ServerAgency TokFollow) MsgContractNotFound $ Done TokDone a
-
-    peerIntersect :: MarloweVersion v -> ServerStIntersect v m a -> Peer MarloweSync 'AsServer ('StIntersect v) m a
-    peerIntersect version = \case
-      SendMsgIntersectFound blockHeader idle ->
-        Yield (ServerAgency (TokIntersect version)) (MsgIntersectFound blockHeader) $
-        peerIdle version idle
-      SendMsgIntersectNotFound a ->
-        Yield (ServerAgency (TokIntersect version)) MsgIntersectNotFound $ Done TokDone a
-
-    peerIdle :: MarloweVersion v -> ServerStIdle v m a -> Peer MarloweSync 'AsServer ('StIdle v) m a
-    peerIdle version ServerStIdle{..} = Await (ClientAgency (TokIdle version)) $ Effect . \case
-      MsgDone        -> Done TokDone <$> recvMsgDone
-      MsgRequestNext -> peerNext version <$> recvMsgRequestNext
-
-    peerNext :: MarloweVersion v -> ServerStNext v m a -> Peer MarloweSync 'AsServer ('StNext v) m a
-    peerNext version = \case
-      SendMsgRollForward blockHeader steps idle ->
-        Yield (ServerAgency (TokNext version)) (MsgRollForward blockHeader steps) $
-        peerIdle version idle
-      SendMsgRollBackward blockHeader idle ->
-        Yield (ServerAgency (TokNext version)) (MsgRollBackward blockHeader) $
-        peerIdle version idle
-      SendMsgRollBackCreation a ->
-        Yield (ServerAgency (TokNext version)) MsgRollBackCreation $
-        Done TokDone a
-      SendMsgWait wait ->
-        Yield (ServerAgency (TokNext version)) MsgWait $
-        peerWait version wait
-
-    peerWait :: MarloweVersion v -> ServerStWait v m a -> Peer MarloweSync 'AsServer ('StWait v) m a
-    peerWait version ServerStWait{..} = Await (ClientAgency (TokWait version)) $ Effect . \case
-      MsgPoll   -> peerNext version <$> recvMsgPoll
-      MsgCancel -> peerIdle version <$> recvMsgCancel
-
-marloweSyncServerPeerTraced
-  :: forall r m a
+marloweSyncServerPeer
+  :: forall m a
    . Functor m
   => MarloweSyncServer m a
-  -> PeerTraced MarloweSync 'AsServer 'StInit r m a
-marloweSyncServerPeerTraced = EffectTraced . fmap peerInit . runMarloweSyncServer
+  -> PeerTraced MarloweSync 'AsServer 'StInit m a
+marloweSyncServerPeer = EffectTraced . fmap peerInit . runMarloweSyncServer
   where
     peerInit
       :: ServerStInit m a
-      -> PeerTraced MarloweSync 'AsServer 'StInit r m a
+      -> PeerTraced MarloweSync 'AsServer 'StInit m a
     peerInit ServerStInit{..} = AwaitTraced (ClientAgency TokInit) \case
       MsgFollowContract contractId ->
         Respond (ServerAgency TokFollow) $ peerFollow <$> recvMsgFollowContract contractId
@@ -162,7 +111,7 @@ marloweSyncServerPeerTraced = EffectTraced . fmap peerInit . runMarloweSyncServe
 
     peerFollow
       :: ServerStFollow m a
-      -> Response MarloweSync 'AsServer 'StFollow r m a
+      -> Response MarloweSync 'AsServer 'StFollow m a
     peerFollow = \case
       SendMsgContractFound blockHeader version createStep idle ->
         Response (MsgContractFound blockHeader version createStep) $ peerIdle version idle
@@ -172,7 +121,7 @@ marloweSyncServerPeerTraced = EffectTraced . fmap peerInit . runMarloweSyncServe
     peerIntersect
       :: MarloweVersion v
       -> ServerStIntersect v m a
-      -> Response MarloweSync 'AsServer ('StIntersect v) r m a
+      -> Response MarloweSync 'AsServer ('StIntersect v) m a
     peerIntersect version = \case
       SendMsgIntersectFound blockHeader idle ->
         Response (MsgIntersectFound blockHeader) $ peerIdle version idle
@@ -182,7 +131,7 @@ marloweSyncServerPeerTraced = EffectTraced . fmap peerInit . runMarloweSyncServe
     peerIdle
       :: MarloweVersion v
       -> ServerStIdle v m a
-      -> PeerTraced MarloweSync 'AsServer ('StIdle v) r m a
+      -> PeerTraced MarloweSync 'AsServer ('StIdle v) m a
     peerIdle version ServerStIdle{..} = AwaitTraced (ClientAgency (TokIdle version)) \case
       MsgDone -> Closed TokDone recvMsgDone
       MsgRequestNext -> Respond (ServerAgency $ TokNext version) $ peerNext version <$> recvMsgRequestNext
@@ -190,7 +139,7 @@ marloweSyncServerPeerTraced = EffectTraced . fmap peerInit . runMarloweSyncServe
     peerNext
       :: MarloweVersion v
       -> ServerStNext v m a
-      -> Response MarloweSync 'AsServer ('StNext v) r m a
+      -> Response MarloweSync 'AsServer ('StNext v) m a
     peerNext version = \case
       SendMsgRollForward blockHeader steps idle ->
         Response (MsgRollForward blockHeader steps) $ peerIdle version idle
@@ -204,7 +153,7 @@ marloweSyncServerPeerTraced = EffectTraced . fmap peerInit . runMarloweSyncServe
     peerWait
       :: MarloweVersion v
       -> ServerStWait v m a
-      -> PeerTraced MarloweSync 'AsServer ('StWait v) r m a
+      -> PeerTraced MarloweSync 'AsServer ('StWait v) m a
     peerWait version ServerStWait{..} = AwaitTraced (ClientAgency (TokWait version)) \case
       MsgPoll -> Respond (ServerAgency $ TokNext version) $ peerNext version <$> recvMsgPoll
       MsgCancel -> Receive $ EffectTraced $ peerIdle version <$> recvMsgCancel

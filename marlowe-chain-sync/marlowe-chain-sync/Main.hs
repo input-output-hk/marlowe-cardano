@@ -40,12 +40,12 @@ import Language.Marlowe.Runtime.ChainSync (ChainSyncDependencies(..), chainSync)
 import qualified Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL as PostgreSQL
 import Language.Marlowe.Runtime.ChainSync.NodeClient (NodeClient(..), NodeClientDependencies(..), nodeClient)
 import Logging (RootSelector(..), renderRootSelectorOTel)
-import Network.Protocol.ChainSeek.Server (chainSeekServerPeerTraced)
+import Network.Protocol.ChainSeek.Server (chainSeekServerPeer)
 import Network.Protocol.Connection (SomeConnectionSourceTraced(..))
-import Network.Protocol.Driver (TcpServerDependenciesTraced(..), tcpServerTraced)
+import Network.Protocol.Driver (TcpServerDependencies(..), tcpServerTraced)
 import Network.Protocol.Handshake.Server (handshakeConnectionSourceTraced)
-import Network.Protocol.Job.Server (jobServerPeerTraced)
-import Network.Protocol.Query.Server (queryServerPeerTraced)
+import Network.Protocol.Job.Server (jobServerPeer)
+import Network.Protocol.Query.Server (queryServerPeer)
 import Observe.Event (EventBackend)
 import Observe.Event.Explicit (hoistEventBackend, injectSelector)
 import Observe.Event.Render.OpenTelemetry (tracerEventBackend)
@@ -82,22 +82,22 @@ run Options{..} = bracket (Pool.acquire 100 (Just 5000000) (fromString databaseU
 
     appComponent :: Component (AppM Span) Pool.Pool ()
     appComponent = proc pool -> do
-      syncSource <- tcpServerTraced $ injectSelector ChainSeekServer -< TcpServerDependenciesTraced
+      syncSource <- tcpServerTraced $ injectSelector ChainSeekServer -< TcpServerDependencies
         { host
         , port
-        , toPeer = chainSeekServerPeerTraced
+        , toPeer = chainSeekServerPeer
         }
 
-      querySource <- tcpServerTraced $ injectSelector QueryServer -< TcpServerDependenciesTraced
+      querySource <- tcpServerTraced $ injectSelector QueryServer -< TcpServerDependencies
         { host
         , port = queryPort
-        , toPeer = queryServerPeerTraced
+        , toPeer = queryServerPeer
         }
 
-      jobSource <- tcpServerTraced $ injectSelector JobServer -< TcpServerDependenciesTraced
+      jobSource <- tcpServerTraced $ injectSelector JobServer -< TcpServerDependencies
         { host
         , port = commandPort
-        , toPeer = jobServerPeerTraced
+        , toPeer = jobServerPeer
         }
 
       NodeClient{..} <- nodeClient -< NodeClientDependencies

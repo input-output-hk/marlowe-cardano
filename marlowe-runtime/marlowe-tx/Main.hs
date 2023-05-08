@@ -26,15 +26,14 @@ import Language.Marlowe.Runtime.Transaction (TransactionDependencies(..), transa
 import qualified Language.Marlowe.Runtime.Transaction.Query as Query
 import qualified Language.Marlowe.Runtime.Transaction.Submit as Submit
 import Logging (RootSelector(..), renderRootSelectorOTel)
-import Network.Protocol.ChainSeek.Client (chainSeekClientPeerTraced)
+import Network.Protocol.ChainSeek.Client (chainSeekClientPeer)
 import Network.Protocol.Connection (SomeClientConnectorTraced, SomeConnectionSourceTraced(..), SomeConnectorTraced(..))
-import Network.Protocol.Driver
-  (TcpServerDependenciesTraced(..), runSomeConnectorTraced, tcpClientTraced, tcpServerTraced)
+import Network.Protocol.Driver (TcpServerDependencies(..), runSomeConnectorTraced, tcpClientTraced, tcpServerTraced)
 import Network.Protocol.Handshake.Client (handshakeClientConnectorTraced)
 import Network.Protocol.Handshake.Server (handshakeConnectionSourceTraced)
-import Network.Protocol.Job.Client (jobClientPeerTraced)
-import Network.Protocol.Job.Server (jobServerPeerTraced)
-import Network.Protocol.Query.Client (QueryClient, liftQuery, queryClientPeerTraced)
+import Network.Protocol.Job.Client (jobClientPeer)
+import Network.Protocol.Job.Server (jobServerPeer)
+import Network.Protocol.Query.Client (QueryClient, liftQuery, queryClientPeer)
 import Network.Socket (HostName, PortNumber)
 import Observe.Event (EventBackend)
 import Observe.Event.Backend (hoistEventBackend, injectSelector)
@@ -78,20 +77,20 @@ main = do
 
 run :: Options -> AppM Span ()
 run Options{..} = flip runComponent_ () proc _ -> do
-  serverSource <- tcpServerTraced (injectSelector Server) -< TcpServerDependenciesTraced
+  serverSource <- tcpServerTraced (injectSelector Server) -< TcpServerDependencies
     host
     port
-    jobServerPeerTraced
+    jobServerPeer
   let
     chainSyncConnector :: SomeClientConnectorTraced RuntimeChainSeekClient Span RootSelector (AppM Span)
     chainSyncConnector = SomeConnectorTraced (injectSelector ChainSeekClient)
       $ handshakeClientConnectorTraced
-      $ tcpClientTraced (injectSelector ChainSeekClient) chainSeekHost chainSeekPort chainSeekClientPeerTraced
+      $ tcpClientTraced (injectSelector ChainSeekClient) chainSeekHost chainSeekPort chainSeekClientPeer
 
     chainSyncQueryConnector :: SomeClientConnectorTraced (QueryClient ChainSyncQuery) Span RootSelector (AppM Span)
     chainSyncQueryConnector = SomeConnectorTraced (injectSelector ChainSyncQueryClient)
       $ handshakeClientConnectorTraced
-      $ tcpClientTraced (injectSelector ChainSyncQueryClient) chainSeekHost chainSeekQueryPort queryClientPeerTraced
+      $ tcpClientTraced (injectSelector ChainSyncQueryClient) chainSeekHost chainSeekQueryPort queryClientPeer
 
     queryChainSync = fmap (fromRight $ error "failed to query chain sync server") . runSomeConnectorTraced chainSyncQueryConnector . liftQuery
   probes <- transaction -< TransactionDependencies
@@ -100,7 +99,7 @@ run Options{..} = flip runComponent_ () proc _ -> do
     , mkSubmitJob = Submit.mkSubmitJob Submit.SubmitJobDependencies
         { chainSyncJobConnector = SomeConnectorTraced (injectSelector ChainSyncJobClient)
             $ handshakeClientConnectorTraced
-            $ tcpClientTraced (injectSelector ChainSyncJobClient) chainSeekHost chainSeekCommandPort jobClientPeerTraced
+            $ tcpClientTraced (injectSelector ChainSyncJobClient) chainSeekHost chainSeekCommandPort jobClientPeer
         , ..
         }
     , loadMarloweContext = \v contractId -> do
