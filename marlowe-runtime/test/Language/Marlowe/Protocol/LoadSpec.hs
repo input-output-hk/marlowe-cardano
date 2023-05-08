@@ -24,6 +24,7 @@ import Language.Marlowe.Runtime.ChainSync.Api (DatumHash(unDatumHash), toDatum)
 import Language.Marlowe.Runtime.ChainSync.Gen (StructureType(..), oneofStructured, resized)
 import Network.Protocol.Codec.Spec
 import Network.Protocol.Handshake.Types (Handshake)
+import Network.Protocol.Peer.Trace (peerTracedToPeer)
 import Network.TypedProtocol
 import Network.TypedProtocol.Codec
 import qualified Plutus.V2.Ledger.Api as PV2
@@ -37,7 +38,7 @@ spec = do
   describe "MarloweLoad protocol" do
     prop "Has a lawful codec" $ checkPropCodec @(Handshake MarloweLoad)
     codecGoldenTests @MarloweLoad "MarloweLoad"
-    prop "Merkleizes the  the correct contract hash" \contract ->
+    prop "Merkleizes contract correctly" \contract ->
       merkleizeWithPeers contract === mapWriterT (Just . runIdentity) (merkleizeWithLibrary contract)
 
 merkleizeWithLibrary :: Contract -> Writer Continuations DatumHash
@@ -57,8 +58,8 @@ hashContract = fromCardanoDatumHash . hashScriptData . toCardanoScriptData . toD
 
 merkleizeWithPeers :: Contract -> WriterT Continuations Maybe DatumHash
 merkleizeWithPeers contract = go
-  (marloweLoadClientPeer $ pushContract contract)
-  (marloweLoadServerPeer $ pullContract (unsafeIntToNat 100) tellContract)
+  (peerTracedToPeer $ marloweLoadClientPeer $ pushContract contract)
+  (peerTracedToPeer $ marloweLoadServerPeer $ pullContract (unsafeIntToNat 100) tellContract)
   where
     go
       :: Peer MarloweLoad 'AsClient st (WriterT Continuations Maybe) DatumHash

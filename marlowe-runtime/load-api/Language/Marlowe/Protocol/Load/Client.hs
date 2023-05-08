@@ -97,78 +97,19 @@ newtype ClientStComplete m a = ClientStComplete
     -- ^ The server sends the hash of the merkleized root contract.
   }
 
--- ^ Interpret a client as a typed-protocols peer.
+-- ^ Interpret a client as a traced typed-protocols peer.
 marloweLoadClientPeer
   :: forall m a
    . Functor m
   => MarloweLoadClient m a
-  -> Peer MarloweLoad 'AsClient ('StProcessing 'RootNode) m a
-marloweLoadClientPeer = Effect . fmap (peerProcessing SRootNode) . runMarloweLoadClient
+  -> PeerTraced MarloweLoad 'AsClient ('StProcessing 'RootNode) m a
+marloweLoadClientPeer = EffectTraced . fmap (peerProcessing SRootNode) . runMarloweLoadClient
   where
-  peerProcessing :: SNode node -> ClientStProcessing node m a -> Peer MarloweLoad 'AsClient ('StProcessing node) m a
-  peerProcessing node ClientStProcessing{..} = Await (ServerAgency $ TokProcessing node) \case
-    MsgResume (Succ n) -> Effect $ peerCanPush n node <$> recvMsgResume (Succ n)
-
-  peerCanPush :: Nat n -> SNode node -> ClientStCanPush n node m a -> Peer MarloweLoad 'AsClient ('StCanPush n node) m a
-  peerCanPush n node = \case
-    PushClose next ->
-      Yield tok MsgPushClose $ peerPop n node next
-    PushPay payor payee token value next ->
-      Yield tok (MsgPushPay payor payee token value) $ peerPush n (SPayNode node) next
-    PushIf cond next ->
-      Yield tok (MsgPushIf cond) $ peerPush n (SIfLNode node) next
-    PushWhen timeout next ->
-      Yield tok (MsgPushWhen timeout) $ peerPush n (SWhenNode node) next
-    PushCase action next -> case node of
-      SWhenNode node' -> Effect $ Yield tok (MsgPushCase action) . peerPush n (SCaseNode node') <$> next
-    PushLet valueId value next ->
-      Yield tok (MsgPushLet valueId value) $ peerPush n (SLetNode node) next
-    PushAssert obs next ->
-      Yield tok (MsgPushAssert obs) $ peerPush n (SAssertNode node) next
-    where
-      tok = ClientAgency $ TokCanPush n node
-
-  peerPop
-    :: Nat n
-    -> SNode node
-    -> ClientStPop n node m a
-    -> Peer MarloweLoad 'AsClient (Pop n node) m a
-  peerPop n node client = case node of
-    SRootNode -> peerComplete client
-    SPayNode node' -> peerPop n node' client
-    SIfLNode node' -> peerPush n (SIfRNode node') client
-    SIfRNode node' -> peerPop n node' client
-    SWhenNode node' -> peerPop n node' client
-    SCaseNode node' -> peerPush n (SWhenNode node') client
-    SLetNode node' -> peerPop n node' client
-    SAssertNode node' -> peerPop n node' client
-
-  peerPush
-    :: Nat n
-    -> SNode node
-    -> ClientStPush n node m a
-    -> Peer MarloweLoad 'AsClient (Push n node) m a
-  peerPush n node client = case n of
-    Zero -> peerProcessing node client
-    Succ n' -> peerCanPush n' node client
-
-  peerComplete :: ClientStComplete m a -> Peer MarloweLoad 'AsClient 'StComplete m a
-  peerComplete ClientStComplete{..} = Await (ServerAgency TokComplete) \case
-    MsgComplete hash -> Effect $ Done TokDone <$> recvMsgComplete hash
-
--- ^ Interpret a client as a traced typed-protocols peer.
-marloweLoadClientPeerTraced
-  :: forall r m a
-   . Functor m
-  => MarloweLoadClient m a
-  -> PeerTraced MarloweLoad 'AsClient ('StProcessing 'RootNode) r m a
-marloweLoadClientPeerTraced = EffectTraced . fmap (peerProcessing SRootNode) . runMarloweLoadClient
-  where
-  peerProcessing :: SNode node -> ClientStProcessing node m a -> PeerTraced MarloweLoad 'AsClient ('StProcessing node) r m a
+  peerProcessing :: SNode node -> ClientStProcessing node m a -> PeerTraced MarloweLoad 'AsClient ('StProcessing node) m a
   peerProcessing node ClientStProcessing{..} = AwaitTraced (ServerAgency $ TokProcessing node) \case
     MsgResume (Succ n) -> Receive $ EffectTraced $ peerCanPush n node <$> recvMsgResume (Succ n)
 
-  peerCanPush :: Nat n -> SNode node -> ClientStCanPush n node m a -> PeerTraced MarloweLoad 'AsClient ('StCanPush n node) r m a
+  peerCanPush :: Nat n -> SNode node -> ClientStCanPush n node m a -> PeerTraced MarloweLoad 'AsClient ('StCanPush n node) m a
   peerCanPush n node = \case
     PushClose next ->
       YieldTraced tok MsgPushClose $ Cast $ peerPop n node next
@@ -191,7 +132,7 @@ marloweLoadClientPeerTraced = EffectTraced . fmap (peerProcessing SRootNode) . r
     :: Nat n
     -> SNode node
     -> ClientStPop n node m a
-    -> PeerTraced MarloweLoad 'AsClient (Pop n node) r m a
+    -> PeerTraced MarloweLoad 'AsClient (Pop n node) m a
   peerPop n node client = case node of
     SRootNode -> peerComplete client
     SPayNode node' -> peerPop n node' client
@@ -206,12 +147,12 @@ marloweLoadClientPeerTraced = EffectTraced . fmap (peerProcessing SRootNode) . r
     :: Nat n
     -> SNode node
     -> ClientStPush n node m a
-    -> PeerTraced MarloweLoad 'AsClient (Push n node) r m a
+    -> PeerTraced MarloweLoad 'AsClient (Push n node) m a
   peerPush n node client = case n of
     Zero -> peerProcessing node client
     Succ n' -> peerCanPush n' node client
 
-  peerComplete :: ClientStComplete m a -> PeerTraced MarloweLoad 'AsClient 'StComplete r m a
+  peerComplete :: ClientStComplete m a -> PeerTraced MarloweLoad 'AsClient 'StComplete m a
   peerComplete ClientStComplete{..} = AwaitTraced (ServerAgency TokComplete) \case
     MsgComplete hash -> Closed TokDone $ recvMsgComplete hash
 
