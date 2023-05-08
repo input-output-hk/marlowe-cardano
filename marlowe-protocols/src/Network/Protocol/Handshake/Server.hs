@@ -15,9 +15,18 @@ import Data.Bifunctor (Bifunctor(bimap))
 import Data.Functor ((<&>))
 import Data.Proxy (Proxy(..))
 import Data.Text (Text)
-import Network.Protocol.Connection (ClientServerPair(..), Connection(..), ConnectionSource(..), Connector(..))
-import Network.Protocol.Handshake.Client (handshakeClientConnector)
+import Network.Protocol.Connection
+  ( ClientServerPair(..)
+  , Connection(..)
+  , ConnectionSource(..)
+  , ConnectionSourceTraced(..)
+  , ConnectionTraced(..)
+  , Connector(..)
+  , ConnectorTraced(..)
+  )
+import Network.Protocol.Handshake.Client (handshakeClientConnectorTraced)
 import Network.Protocol.Handshake.Types
+import Network.Protocol.Peer.Trace
 import Network.TypedProtocol
 
 -- | A generic server for the handshake protocol.
@@ -61,14 +70,38 @@ handshakeServerConnection Connection{..} = Connection
   , ..
   }
 
-handshakeClientServerPair
-  :: forall ps client server m
+handshakeConnectionSourceTraced
+  :: forall ps server r s m
    . (HasSignature ps, MonadFail m)
-  => ClientServerPair ps client server m
-  -> ClientServerPair (Handshake ps) client server m
+  => ConnectionSourceTraced ps server r s m
+  -> ConnectionSourceTraced (Handshake ps) server r s m
+handshakeConnectionSourceTraced = ConnectionSourceTraced . fmap handshakeServerConnectorTraced . acceptConnectorTraced
+
+handshakeServerConnectorTraced
+  :: forall ps server r s m
+   . (HasSignature ps, MonadFail m)
+  => ConnectorTraced ps 'AsServer server r s m
+  -> ConnectorTraced (Handshake ps) 'AsServer server r s m
+handshakeServerConnectorTraced ConnectorTraced{..} = ConnectorTraced $ handshakeServerConnectionTraced <$> openConnectionTraced
+
+handshakeServerConnectionTraced
+  :: forall ps peer r s m
+   . (HasSignature ps, MonadFail m)
+  => ConnectionTraced ps 'AsServer peer r s m
+  -> ConnectionTraced (Handshake ps) 'AsServer peer r s m
+handshakeServerConnectionTraced ConnectionTraced{..} = ConnectionTraced
+  { toPeer = handshakeServerPeer id . simpleHandshakeServer (signature $ Proxy @ps) . toPeer
+  , ..
+  }
+
+handshakeClientServerPair
+  :: forall ps client server r m
+   . (HasSignature ps, MonadFail m)
+  => ClientServerPair ps client server r m
+  -> ClientServerPair (Handshake ps) client server r m
 handshakeClientServerPair ClientServerPair{..} = ClientServerPair
-  { connectionSource = handshakeConnectionSource connectionSource
-  , clientConnector = handshakeClientConnector clientConnector
+  { connectionSource = handshakeConnectionSourceTraced connectionSource
+  , clientConnector = handshakeClientConnectorTraced clientConnector
   }
 
 hoistHandshakeServer
@@ -84,20 +117,27 @@ hoistHandshakeServer hoistServer f HandshakeServer{..} = HandshakeServer
 handshakeServerPeer
   :: forall client m ps st a
    . Functor m
-  => (forall x. client m x -> Peer ps 'AsServer st m x)
+  => (forall x. client m x -> PeerTraced ps 'AsServer st m x)
   -> HandshakeServer client m a
-  -> Peer (Handshake ps) 'AsServer ('StInit st) m a
+  -> PeerTraced (Handshake ps) 'AsServer ('StInit st) m a
 handshakeServerPeer serverPeer HandshakeServer{..} =
-  Await (ClientAgency TokInit) \case
-    MsgHandshake sig -> Effect $ recvMsgHandshake sig <&> \case
+  AwaitTraced (ClientAgency TokInit) \case
+    MsgHandshake sig -> Respond (ServerAgency TokHandshake) $ recvMsgHandshake sig <&> \case
       Left a ->
-        Yield (ServerAgency TokHandshake) MsgReject $ Effect $ Done TokDone <$> a
+        Response MsgReject $ EffectTraced $ DoneTraced TokDone <$> a
       Right server ->
-        Yield (ServerAgency TokHandshake) MsgAccept $ liftPeer $ serverPeer server
+        Response MsgAccept $ liftPeer $ serverPeer server
   where
-    liftPeer :: forall st'. Peer ps 'AsServer st' m a -> Peer (Handshake ps) 'AsServer ('StLift st') m a
+    liftPeer :: forall st'. PeerTraced ps 'AsServer st' m a -> PeerTraced (Handshake ps) 'AsServer ('StLift st') m a
     liftPeer = \case
-      Effect m -> Effect $ liftPeer <$> m
-      Done tok a -> Done (TokLiftNobody tok) a
-      Yield (ServerAgency tok) msg next -> Yield (ServerAgency $ TokLiftServer tok) (MsgLift msg) $ liftPeer next
-      Await (ClientAgency tok) next -> Await (ClientAgency $ TokLiftClient tok) \(MsgLift msg) -> liftPeer $ next msg
+      EffectTraced m -> EffectTraced $ liftPeer <$> m
+      DoneTraced tok a -> DoneTraced (TokLiftNobody tok) a
+      YieldTraced (ServerAgency tok) msg yield -> YieldTraced (ServerAgency $ TokLiftServer tok) (MsgLift msg) case yield of
+        Call (ClientAgency tok') next -> Call (ClientAgency $ TokLiftClient tok') \(MsgLift msg') -> liftPeer $ next msg'
+        Cast next -> Cast $ liftPeer next
+        Close tok' a -> Close (TokLiftNobody tok') a
+      AwaitTraced (ClientAgency tok) k -> AwaitTraced (ClientAgency $ TokLiftClient tok) \(MsgLift msg) -> case k msg of
+        Respond (ServerAgency tok') next -> Respond (ServerAgency $ TokLiftServer tok') $ next <&> \case
+          Response msg' next' -> Response (MsgLift msg') $ liftPeer next'
+        Receive next -> Receive $ liftPeer next
+        Closed tok' ma -> Closed (TokLiftNobody tok') ma

@@ -7,8 +7,6 @@ module Language.Marlowe.Runtime.CliSpec
 
 import Cardano.Api (AsType(AsTxBody), BabbageEra, CardanoEra(BabbageEra), TxBody, readFileTextEnvelope)
 import qualified Cardano.Api.Shelley
-import Control.Concurrent.Async.Lifted (concurrently)
-import qualified Control.Monad.Base as Trans
 import qualified Control.Monad.Reader as Reader
 import Data.Map (Map)
 import qualified Data.Map as Map
@@ -42,6 +40,7 @@ import Test.Hspec (Spec, describe, it, shouldBe)
 import qualified Test.Hspec as Hspec
 import Test.Integration.Marlowe
   (LocalTestnet(..), MarloweRuntime, resolveWorkspacePath, testnet, withLocalMarloweRuntime, writeWorkspaceFileJSON)
+import UnliftIO (concurrently, liftIO)
 
 data CLISpecTestData = CLISpecTestData
   { partyAWallet :: Wallet
@@ -63,7 +62,7 @@ spec = Hspec.describe "Marlowe runtime CLI" $ Hspec.aroundAll setup do
     runtime <- Reader.ask
     partyAWallet <- getGenesisWallet 0
     partyBWallet <- getGenesisWallet 1
-    Trans.liftBase $ runSpec CLISpecTestData {..}
+    liftIO $ runSpec CLISpecTestData {..}
 
 serializeAddress :: ChainSync.Api.Address -> String
 serializeAddress = Text.unpack . Maybe.fromJust . ChainSync.Api.toBech32
@@ -146,9 +145,9 @@ expectSameResultFromCLIandJobClient outputFile extraCliArgs command = do
   (_, expected) <- concurrently cliEffect jobClientEffect
 
   (either (error . show) id -> actual) <-
-    Trans.liftBase $ readFileTextEnvelope (AsTxBody (cardanoEraToAsType BabbageEra)) txBodyEnvelopeFilePath
+    liftIO $ readFileTextEnvelope (AsTxBody (cardanoEraToAsType BabbageEra)) txBodyEnvelopeFilePath
 
-  Trans.liftBase do
+  liftIO do
     let
       Cardano.Api.Shelley.ShelleyTxBody
         actualEra
@@ -233,7 +232,7 @@ createSpec = describe "create" $
 depositSpec :: Hspec.SpecWith CLISpecTestData
 depositSpec = describe "deposit" $
   it "generates a deposit tx body envelope" \CLISpecTestData {..} -> flip runIntegrationTest runtime do
-    now <- Trans.liftBase Time.getCurrentTime
+    now <- liftIO Time.getCurrentTime
 
     let
       partyA :: V1.Party
@@ -285,7 +284,7 @@ depositSpec = describe "deposit" $
 chooseSpec :: Hspec.SpecWith CLISpecTestData
 chooseSpec = describe "choose" $
   it "generates a choose tx body envelope" \CLISpecTestData {..} -> flip runIntegrationTest runtime do
-    now <- Trans.liftBase Time.getCurrentTime
+    now <- liftIO Time.getCurrentTime
 
     let
       partyA :: V1.Party
@@ -337,7 +336,7 @@ chooseSpec = describe "choose" $
 notifySpec :: Hspec.SpecWith CLISpecTestData
 notifySpec = describe "notify" $
   it "generates a notify tx body envelope" \CLISpecTestData {..} -> flip runIntegrationTest runtime do
-    now <- Trans.liftBase Time.getCurrentTime
+    now <- liftIO Time.getCurrentTime
 
     let
       contract :: V1.Contract
@@ -386,7 +385,7 @@ notifySpec = describe "notify" $
 applySpec :: Hspec.SpecWith CLISpecTestData
 applySpec = describe "apply" $
   it "generates a deposit-choose-notify tx body envelope" \CLISpecTestData {..} -> flip runIntegrationTest runtime do
-    now <- Trans.liftBase Time.getCurrentTime
+    now <- liftIO Time.getCurrentTime
 
     let
       partyA :: V1.Party
@@ -461,7 +460,7 @@ applySpec = describe "apply" $
 withdrawSpec :: Hspec.SpecWith CLISpecTestData
 withdrawSpec = describe "withdraw" $
   it "generates a withdraw tx body envelope" \CLISpecTestData {..} -> flip runIntegrationTest runtime do
-    now <- Trans.liftBase Time.getCurrentTime
+    now <- liftIO Time.getCurrentTime
 
     let
       partyA :: V1.Party

@@ -8,7 +8,6 @@ import Control.Monad.Event.Class (MonadInjectEvent, withEvent)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.ByteString (ByteString)
 import Data.Text (Text)
-import Data.Text.Encoding (decodeUtf8)
 import Hasql.Pool (Pool)
 import qualified Hasql.Pool as Pool
 import qualified Hasql.Session as Session
@@ -21,7 +20,6 @@ import Language.Marlowe.Runtime.Indexer.Database.PostgreSQL.CommitRollback (comm
 import Language.Marlowe.Runtime.Indexer.Database.PostgreSQL.GetIntersectionPoints (getIntersectionPoints)
 import Language.Marlowe.Runtime.Indexer.Database.PostgreSQL.GetMarloweUTxO (getMarloweUTxO)
 import Observe.Event (addField)
-import Observe.Event.Component (FieldConfig(..), GetSelectorConfig, SelectorConfig(SelectorConfig), SomeJSON(SomeJSON))
 import UnliftIO (throwIO)
 
 data QuerySelector f where
@@ -30,29 +28,19 @@ data QuerySelector f where
 data QueryField
   = SqlStatement ByteString
   | Parameters [Text]
-
-getQuerySelectorConfig :: GetSelectorConfig QuerySelector
-getQuerySelectorConfig = \case
-  Query name -> SelectorConfig name True FieldConfig
-    { fieldKey = \case
-        SqlStatement _ -> "sql"
-        Parameters _ -> "parameters"
-    , fieldDefaultEnabled = const True
-    , toSomeJSON = \case
-        SqlStatement sql -> SomeJSON $ decodeUtf8 sql
-        Parameters parameters -> SomeJSON parameters
-    }
+  | Operation Text
 
 databaseQueries :: forall r s m. (MonadInjectEvent r QuerySelector s m, MonadIO m) => Pool -> Int -> DB.DatabaseQueries m
 databaseQueries pool securityParameter = DB.DatabaseQueries
-  { commitRollback = transact "commitRollback" H.Write . commitRollback
-  , commitBlocks = transact "commitBlocks" H.Write . commitBlocks
-  , getIntersectionPoints = transact "getIntersectionPoints" H.Read $ getIntersectionPoints securityParameter
-  , getMarloweUTxO = transact "getMarloweUTxO" H.Read . getMarloweUTxO
+  { commitRollback = transact "commitRollback" "INSERT" H.Write . commitRollback
+  , commitBlocks = transact "commitBlocks" "INSERT" H.Write . commitBlocks
+  , getIntersectionPoints = transact "getIntersectionPoints" "SELECT" H.Read $ getIntersectionPoints securityParameter
+  , getMarloweUTxO = transact "getMarloweUTxO" "SELECT" H.Read . getMarloweUTxO
   }
   where
-    transact :: Text -> TS.Mode -> Transaction a -> m a
-    transact queryName mode m = withEvent (Query queryName) \ev -> do
+    transact :: Text -> Text-> TS.Mode -> Transaction a -> m a
+    transact queryName operation mode m = withEvent (Query queryName) \ev -> do
+      addField ev $ Operation operation
       result <- liftIO $ Pool.use pool $ TS.transaction TS.Serializable mode m
       case result of
         Left ex -> do

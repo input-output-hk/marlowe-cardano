@@ -1,8 +1,5 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
-{-# LANGUAGE OverloadedLists #-}
-{-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE TypeOperators #-}
 
 -- | This module defines a server for the /contracts/:contractId/transactions REST API.
 
@@ -13,9 +10,7 @@ import Cardano.Api (BabbageEra, TxBody, getTxBody, getTxId, makeSignedTransactio
 import qualified Cardano.Api as Cardano
 import Cardano.Ledger.Alonzo.TxWitness (TxWitness(TxWitness))
 import Control.Monad (unless)
-import Control.Monad.IO.Class (liftIO)
 import Data.Aeson (Value(Null))
-import Data.Foldable (for_, traverse_)
 import qualified Data.Map as Map
 import Data.Maybe (fromMaybe)
 import qualified Data.Set as Set
@@ -34,83 +29,24 @@ import Language.Marlowe.Runtime.Web.Server.REST.ApiError
   (ApiError(ApiError), badRequest', notFound', rangeNotSatisfiable', throwDTOError)
 import qualified Language.Marlowe.Runtime.Web.Server.REST.ApiError as ApiError
 import Language.Marlowe.Runtime.Web.Server.SyncClient (LoadTxError(..))
-import Language.Marlowe.Runtime.Web.Server.TxClient (TempTx(TempTx), TempTxStatus(..), TxClientSelector)
+import Language.Marlowe.Runtime.Web.Server.TxClient (TempTx(TempTx), TempTxStatus(..))
 import Language.Marlowe.Runtime.Web.Server.Util (makeSignedTxWithWitnessKeys)
-import Observe.Event.DSL (FieldSpec(..), SelectorField(Inject), SelectorSpec(..))
-import Observe.Event.Explicit
-  ( Event
-  , EventBackend
-  , addField
-  , hoistEventBackend
-  , injectSelector
-  , narrowEventBackend
-  , reference
-  , setAncestorEventBackend
-  , withEvent
-  )
-import Observe.Event.Render.JSON.DSL.Compile (compile)
-import Observe.Event.Syntax ((≔))
 import Servant
 import Servant.Pagination
 
-type TxHeaders = [TxHeader]
-type Addresses = CommaList Address
-type TxOutRefs = CommaList TxOutRef
-
-compile $ SelectorSpec "transactions"
-  [ "get" ≔ FieldSpec "get"
-      [ ["get", "contract", "id"] ≔ ''TxOutRef
-      , ["start", "from"] ≔ ''TxId
-      , "limit" ≔ ''Int
-      , "offset" ≔ ''Int
-      , "order" ≔ ''String
-      , ["tx", "headers"] ≔ ''TxHeaders
-      ]
-  , "post" ≔ FieldSpec "post"
-      [ ["new", "contract"] ≔ ''PostTransactionsRequest
-      , ["change", "address"] ≔ ''Address
-      , "addresses" ≔ ''Addresses
-      , "collateral" ≔ ''TxOutRefs
-      , ["post", "error"] ≔ ''String
-      , ["post", "response", "txBody"] ≔ [t|ApplyInputsTxEnvelope CardanoTxBody|]
-      , ["post", "response", "tx"] ≔ [t|ApplyInputsTxEnvelope CardanoTx|]
-      ]
-  , ["get", "one"] ≔ FieldSpec ["get", "one"]
-      [ ["get", "one", "contract", "id"] ≔ ''TxOutRef
-      , ["get", "tx", "id"] ≔ ''TxId
-      , ["get", "result"] ≔ ''Tx
-      ]
-  , "put" ≔ FieldSpec "put"
-      [ ["put", "contract", "id"] ≔ ''TxOutRef
-      , ["put", "tx", "id"] ≔ ''TxId
-      , "body" ≔ ''Cardano.TextEnvelope
-      , "error" ≔ ''String
-      ]
-  , ["run", "tx" ] ≔ Inject ''TxClientSelector
-  ]
-
-server
-  :: EventBackend IO r TransactionsSelector
-  -> TxOutRef
-  -> ServerT TransactionsAPI (AppM r)
-server eb contractId = get eb contractId
-                  :<|> (postCreateTxBodyResponse eb contractId :<|> postCreateTxResponse eb contractId)
-                  :<|> transactionServer eb contractId
+server :: TxOutRef -> ServerT TransactionsAPI AppM
+server contractId = get contractId
+                  :<|> (postCreateTxBodyResponse contractId :<|> postCreateTxResponse contractId)
+                  :<|> transactionServer contractId
 
 get
-  :: EventBackend IO r TransactionsSelector
-  -> TxOutRef
+  :: TxOutRef
   -> Maybe (Ranges '["transactionId"] GetTransactionsResponse)
-  -> AppM r (PaginatedResponse '["transactionId"] GetTransactionsResponse)
-get eb contractId ranges = withEvent (hoistEventBackend liftIO eb) Get \ev -> do
+  -> AppM (PaginatedResponse '["transactionId"] GetTransactionsResponse)
+get contractId ranges = do
   let
     range :: Range "transactionId" TxId
-    range@Range{..} = fromMaybe (getDefaultRange (Proxy @TxHeader)) $ extractRange =<< ranges
-  traverse_ (addField ev . StartFrom) rangeValue
-  addField ev $ GetContractId contractId
-  addField ev $ Limit rangeLimit
-  addField ev $ Offset rangeOffset
-  addField ev $ Order $ show rangeOrder
+    range = fromMaybe (getDefaultRange (Proxy @TxHeader)) $ extractRange =<< ranges
   contractId' <- fromDTOThrow (badRequest' "Invalid contract id value") contractId
   range' <- maybe (throwError $ rangeNotSatisfiable' "Invalid range value") pure $ fromPaginationRange range
   loadTransactions contractId' range' >>= \case
@@ -118,22 +54,16 @@ get eb contractId ranges = withEvent (hoistEventBackend liftIO eb) Get \ev -> do
     Left TxNotFound -> throwError $ rangeNotSatisfiable' "Starting transaction not found"
     Right Page{..} -> do
       let headers' = toDTO items
-      addField ev $ TxHeaders headers'
       addHeader totalCount . fmap ListObject <$> returnRange range (IncludeLink (Proxy @"transaction") <$> headers')
 
 postCreateTxBody
-  :: Event (AppM r) r' PostField
-  -> TxOutRef
+  :: TxOutRef
   -> PostTransactionsRequest
   -> Address
   -> Maybe (CommaList Address)
   -> Maybe (CommaList TxOutRef)
-  -> AppM r (TxBody BabbageEra)
-postCreateTxBody ev contractId req@PostTransactionsRequest{..} changeAddressDTO mAddresses mCollateralUtxos = do
-  addField ev $ NewContract req
-  addField ev $ ChangeAddress changeAddressDTO
-  traverse_ (addField ev . Addresses) mAddresses
-  traverse_ (addField ev . Collateral) mCollateralUtxos
+  -> AppM (TxBody BabbageEra)
+postCreateTxBody contractId PostTransactionsRequest{..} changeAddressDTO mAddresses mCollateralUtxos = do
   SomeMarloweVersion v@MarloweV1  <- fromDTOThrow (badRequest' "Invalid Marlowe version") version
   changeAddress <- fromDTOThrow (badRequest' "Invalid change address") changeAddressDTO
   extraAddresses <- Set.fromList <$> fromDTOThrow (badRequest' "Invalid addresses header value") (maybe [] unCommaList mAddresses)
@@ -144,81 +74,56 @@ postCreateTxBody ev contractId req@PostTransactionsRequest{..} changeAddressDTO 
     (badRequest' "Invalid tags value")
     if Map.null tags then Nothing else Just (tags, Nothing)
   applyInputs v WalletAddresses{..} contractId' MarloweTransactionMetadata{..} invalidBefore invalidHereafter inputs >>= \case
-    Left err -> do
-      addField ev $ PostError $ show err
-      throwDTOError err
-    Right InputsApplied{txBody} -> do
-      pure txBody
+    Left err -> throwDTOError err
+    Right InputsApplied{txBody} -> pure txBody
 
 postCreateTxBodyResponse
-  :: EventBackend IO r TransactionsSelector
-  -> TxOutRef
+  :: TxOutRef
   -> PostTransactionsRequest
   -> Address
   -> Maybe (CommaList Address)
   -> Maybe (CommaList TxOutRef)
-  -> AppM r (PostTransactionsResponse CardanoTxBody)
-postCreateTxBodyResponse eb contractId req changeAddressDTO mAddresses mCollateralUtxos = withEvent (hoistEventBackend liftIO eb) Post \ev -> do
-  txBody <- postCreateTxBody ev contractId req changeAddressDTO mAddresses mCollateralUtxos
+  -> AppM (PostTransactionsResponse CardanoTxBody)
+postCreateTxBodyResponse contractId req changeAddressDTO mAddresses mCollateralUtxos = do
+  txBody <- postCreateTxBody contractId req changeAddressDTO mAddresses mCollateralUtxos
   let txBody' = toDTO txBody
   let txId = toDTO $ fromCardanoTxId $ getTxId txBody
   let body = ApplyInputsTxEnvelope contractId txId txBody'
-  addField ev $ PostResponseTxBody body
   pure $ IncludeLink (Proxy @"transaction") body
 
 postCreateTxResponse
-  :: EventBackend IO r TransactionsSelector
-  -> TxOutRef
+  :: TxOutRef
   -> PostTransactionsRequest
   -> Address
   -> Maybe (CommaList Address)
   -> Maybe (CommaList TxOutRef)
-  -> AppM r (PostTransactionsResponse CardanoTx)
-postCreateTxResponse eb contractId req changeAddressDTO mAddresses mCollateralUtxos = withEvent (hoistEventBackend liftIO eb) Post \ev -> do
-  txBody <- postCreateTxBody ev contractId req changeAddressDTO mAddresses mCollateralUtxos
+  -> AppM (PostTransactionsResponse CardanoTx)
+postCreateTxResponse contractId req changeAddressDTO mAddresses mCollateralUtxos = do
+  txBody <- postCreateTxBody contractId req changeAddressDTO mAddresses mCollateralUtxos
   let txId = toDTO $ fromCardanoTxId $ getTxId txBody
   let tx = makeSignedTransaction [] txBody
   let tx' = toDTO tx
   let body = ApplyInputsTxEnvelope contractId txId tx'
-  addField ev $ PostResponseTx body
   pure $ IncludeLink (Proxy @"transaction") body
 
-transactionServer
-  :: EventBackend IO r TransactionsSelector
-  -> TxOutRef
-  -> TxId
-  -> ServerT TransactionAPI (AppM r)
-transactionServer eb contractId txId = getOne eb contractId txId
-                                  :<|> put eb contractId txId
+transactionServer :: TxOutRef -> TxId -> ServerT TransactionAPI AppM
+transactionServer contractId txId = getOne contractId txId
+                               :<|> put contractId txId
 
-getOne
-  :: EventBackend IO r TransactionsSelector
-  -> TxOutRef
-  -> TxId
-  -> AppM r GetTransactionResponse
-getOne eb contractId txId = withEvent (hoistEventBackend liftIO eb) GetOne \ev -> do
-  addField ev $ GetOneContractId contractId
-  addField ev $ GetTxId txId
+getOne :: TxOutRef -> TxId -> AppM GetTransactionResponse
+getOne contractId txId = do
   contractId' <- fromDTOThrow (badRequest' "Invalid contract id value") contractId
   txId' <- fromDTOThrow (badRequest' "Invalid transaction id value") txId
   loadTransaction contractId' txId' >>= \case
     Nothing -> throwError $ notFound' "Transaction not found"
     Just result -> do
       let contractState = either toDTO toDTO result
-      addField ev $ GetResult contractState
       pure
         $ IncludeLink (Proxy @"previous")
         $ IncludeLink (Proxy @"next") contractState
 
-put
-  :: EventBackend IO r TransactionsSelector
-  -> TxOutRef
-  -> TxId
-  -> TextEnvelope
-  -> AppM r NoContent
-put eb contractId txId body = withEvent (hoistEventBackend liftIO eb) Put \ev -> do
-  addField ev $ PutContractId contractId
-  addField ev $ PutTxId txId
+put :: TxOutRef -> TxId -> TextEnvelope -> AppM NoContent
+put contractId txId body = do
   contractId' <- fromDTOThrow (badRequest' "Invalid contract id value") contractId
   txId' <- fromDTOThrow (badRequest' "Invalid transaction id value") txId
   loadTransaction contractId' txId' >>= \case
@@ -229,9 +134,6 @@ put eb contractId txId body = withEvent (hoistEventBackend liftIO eb) Put \ev ->
         "ShelleyTxWitness BabbageEra" -> pure $ Right <$> fromDTO body
         _ -> throwError $ badRequest' "Unknown envelope type - allowed types are: \"Tx BabbageEra\", \"ShelleyTxWitness BabbageEra\""
 
-      for_ (fromDTO body :: Maybe Cardano.TextEnvelope) \te ->
-        addField ev $ Body te
-
       tx <- case req of
         Nothing -> throwError $ badRequest' "Invalid text envelope cbor value"
         Just (Left tx) -> do
@@ -241,11 +143,9 @@ put eb contractId txId body = withEvent (hoistEventBackend liftIO eb) Put \ev ->
           case makeSignedTxWithWitnessKeys txBody wtKeys of
             Just tx -> pure tx
             Nothing -> throwError $ badRequest' "Invalid witness keys"
-      submitTransaction contractId' txId' (narrowEventBackend (injectSelector RunTx) $ setAncestorEventBackend (reference ev) eb) tx >>= \case
+      submitTransaction contractId' txId' tx >>= \case
         Nothing -> pure NoContent
-        Just err -> do
-          addField ev $ Error $ show err
-          throwError $ ApiError.toServerError $ ApiError (show err) "SubmissionError" Null 403
+        Just err -> throwError $ ApiError.toServerError $ ApiError (show err) "SubmissionError" Null 403
     Just _  -> throwError $
       ApiError.toServerError $
       ApiError "Transaction already submitted" "ContractAlreadySubmitted" Null 409

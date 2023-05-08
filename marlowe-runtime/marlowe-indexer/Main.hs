@@ -16,35 +16,36 @@ import Control.Concurrent.Component.Probes (ProbeServerDependencies(..), probeSe
 import Control.Exception (bracket)
 import Control.Monad.Event.Class
 import Control.Monad.IO.Class (MonadIO, liftIO)
+import Control.Monad.Reader (ask)
 import Control.Monad.Trans.Reader (ReaderT(..))
 import Control.Monad.With
-import Data.Aeson.Encode.Pretty (encodePretty)
 import Data.Either (fromRight)
 import Data.GeneralAllocate
 import qualified Data.Set.NonEmpty as NESet
 import Data.String (fromString)
-import qualified Data.Text.Lazy as T
-import Data.Text.Lazy.Encoding (decodeUtf8)
-import qualified Data.Text.Lazy.IO as TL
-import Data.UUID.V4 (nextRandom)
+import qualified Data.Text as T
+import Data.Version (showVersion)
 import Data.Void (Void)
+import qualified Database.PostgreSQL.LibPQ as PQ
+import Hasql.Connection (withLibPQConnection)
 import qualified Hasql.Pool as Pool
 import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncQuery(..))
 import Language.Marlowe.Runtime.Core.Api (MarloweVersion(..))
 import qualified Language.Marlowe.Runtime.Core.ScriptRegistry as ScriptRegistry
 import Language.Marlowe.Runtime.Indexer (MarloweIndexerDependencies(..), marloweIndexer)
 import qualified Language.Marlowe.Runtime.Indexer.Database.PostgreSQL as PostgreSQL
-import Logging (RootSelector(..), defaultRootSelectorLogConfig, getRootSelectorConfig)
+import Logging (RootSelector(..), renderRootSelectorOTel)
 import Network.Protocol.ChainSeek.Client (chainSeekClientPeer)
-import Network.Protocol.Connection (ClientConnector, SomeConnector(..), logConnector)
-import Network.Protocol.Driver (runConnector, tcpClient)
-import Network.Protocol.Handshake.Client (handshakeClientConnector)
+import Network.Protocol.Connection (ClientConnectorTraced, SomeConnectorTraced(..))
+import Network.Protocol.Driver (TcpClientSelector, runConnectorTraced, tcpClientTraced)
+import Network.Protocol.Handshake.Client (handshakeClientConnectorTraced)
 import Network.Protocol.Handshake.Types (Handshake)
 import Network.Protocol.Query.Client (QueryClient, liftQuery, queryClientPeer)
 import Network.Protocol.Query.Types (Query)
-import Network.Socket (AddrInfo(..), HostName, PortNumber, SocketType(..), defaultHints, withSocketsDo)
+import Network.Socket (AddrInfo(..), HostName, PortNumber, SocketType(..), defaultHints)
 import Observe.Event.Backend (EventBackend, hoistEventBackend, injectSelector)
-import Observe.Event.Component (LoggerDependencies(..), withLogger)
+import Observe.Event.Render.OpenTelemetry (tracerEventBackend)
+import OpenTelemetry.Trace
 import Options.Applicative
   ( auto
   , execParser
@@ -53,19 +54,17 @@ import Options.Applicative
   , help
   , helper
   , info
-  , infoOption
   , long
   , metavar
   , option
-  , optional
   , progDesc
   , short
   , showDefault
   , strOption
   , value
   )
-import System.IO (stderr)
-import UnliftIO (MonadUnliftIO)
+import Paths_marlowe_runtime (version)
+import UnliftIO (MonadUnliftIO, throwIO)
 
 main :: IO ()
 main = run =<< getOptions
@@ -74,21 +73,32 @@ clientHints :: AddrInfo
 clientHints = defaultHints { addrSocketType = Stream }
 
 run :: Options -> IO ()
-run Options{..} = withSocketsDo do
+run Options{..} = bracket (Pool.acquire 100 (Just 5000000) (fromString databaseUri)) Pool.release \pool -> do
+  (dbName, dbUser, dbHost, dbPort) <- either throwIO pure =<< Pool.use pool do
+    connection <- ask
+    liftIO $ withLibPQConnection connection \conn -> (,,,)
+      <$> PQ.db conn
+      <*> PQ.user conn
+      <*> PQ.host conn
+      <*> PQ.port conn
   scripts <- case ScriptRegistry.getScripts MarloweV1 of
     NESet.IsEmpty -> fail "No known marlowe scripts"
     NESet.IsNonEmpty scripts -> pure scripts
-  securityParameter <- queryChainSync GetSecurityParameter
-  bracket (Pool.acquire 100 (Just 5000000) (fromString databaseUri)) Pool.release
-    $ runComponent_
-    $ withLogger loggerDependencies runAppM proc pool -> do
+  withTracer \tracer ->
+    runAppM (tracerEventBackend tracer $ renderRootSelectorOTel dbName dbUser dbHost dbPort) do
+      securityParameter <- queryChainSync GetSecurityParameter
+      flip runComponent_ () proc _ -> do
         probes <- marloweIndexer -< MarloweIndexerDependencies
-          { chainSyncConnector = SomeConnector
-              $ logConnector (injectSelector ChainSeekClient)
-              $ handshakeClientConnector
-              $ tcpClient chainSeekHost chainSeekPort chainSeekClientPeer
-          , chainSyncQueryConnector = SomeConnector
-              $ logConnector (injectSelector ChainQueryClient) chainSyncQueryConnector
+          { chainSyncConnector = SomeConnectorTraced (injectSelector ChainSeekClient)
+              $ handshakeClientConnectorTraced
+              $ tcpClientTraced
+                  (injectSelector ChainSeekClient)
+                  chainSeekHost
+                  chainSeekPort
+                  chainSeekClientPeer
+          , chainSyncQueryConnector = SomeConnectorTraced
+              (injectSelector ChainQueryClient)
+              chainSyncQueryConnector
           , databaseQueries = PostgreSQL.databaseQueries pool securityParameter
           , pollingInterval = 1
           , marloweScriptHashes = NESet.map ScriptRegistry.marloweScript scripts
@@ -96,20 +106,28 @@ run Options{..} = withSocketsDo do
           }
         probeServer -< ProbeServerDependencies { port = fromIntegral httpPort, .. }
   where
-    loggerDependencies = LoggerDependencies
-      { configFilePath = logConfigFile
-      , getSelectorConfig = getRootSelectorConfig
-      , newRef = nextRandom
-      , writeText = TL.hPutStr stderr
-      , injectConfigWatcherSelector = injectSelector ConfigWatcher
+    withTracer f = bracket
+      initializeGlobalTracerProvider
+      shutdownTracerProvider
+      \provider -> f $ makeTracer provider instrumentationLibrary tracerOptions
+
+    instrumentationLibrary = InstrumentationLibrary
+      { libraryName = "marlowe-indexer"
+      , libraryVersion = T.pack $ showVersion version
       }
 
-    chainSyncQueryConnector :: (MonadFail m, MonadIO m) => ClientConnector (Handshake (Query ChainSyncQuery)) (QueryClient ChainSyncQuery) m
-    chainSyncQueryConnector = handshakeClientConnector $ tcpClient chainSeekHost chainSeekQueryPort queryClientPeer
+    chainSyncQueryConnector :: ClientConnectorTraced
+      (Handshake (Query ChainSyncQuery))
+      (QueryClient ChainSyncQuery)
+      Span
+      TcpClientSelector
+      (AppM Span)
+    chainSyncQueryConnector = handshakeClientConnectorTraced
+      $ tcpClientTraced (injectSelector ChainQueryClient) chainSeekHost chainSeekQueryPort queryClientPeer
 
-    queryChainSync :: ChainSyncQuery Void e a -> IO a
+    queryChainSync :: ChainSyncQuery Void e a -> AppM Span a
     queryChainSync = fmap (fromRight $ error "failed to query chain sync server")
-      . runConnector chainSyncQueryConnector
+      . runConnectorTraced (injectSelector ChainQueryClient) chainSyncQueryConnector
       . liftQuery
 
 runAppM :: EventBackend IO r RootSelector -> AppM r a -> IO a
@@ -148,23 +166,17 @@ data Options = Options
   , chainSeekQueryPort :: PortNumber
   , chainSeekHost :: HostName
   , databaseUri :: String
-  , logConfigFile :: Maybe FilePath
   , httpPort :: PortNumber
   }
 
 getOptions :: IO Options
-getOptions = execParser $ info (helper <*> printLogConfigOption <*> parser) infoMod
+getOptions = execParser $ info (helper <*> parser) infoMod
   where
-    printLogConfigOption = infoOption
-      (T.unpack $ decodeUtf8 $ encodePretty defaultRootSelectorLogConfig)
-      (long "print-log-config" <> help "Print the default log configuration.")
-
     parser = Options
       <$> chainSeekPortParser
       <*> chainSeekQueryPortParser
       <*> chainSeekHostParser
       <*> databaseUriParser
-      <*> logConfigFileParser
       <*> httpPortParser
 
     chainSeekPortParser = option auto $ mconcat
@@ -196,12 +208,6 @@ getOptions = execParser $ info (helper <*> printLogConfigOption <*> parser) info
       , short 'd'
       , metavar "DATABASE_URI"
       , help "URI of the database where the contract information is saved."
-      ]
-
-    logConfigFileParser = optional $ strOption $ mconcat
-      [ long "log-config-file"
-      , metavar "FILE_PATH"
-      , help "The logging configuration JSON file."
       ]
 
     httpPortParser = option auto $ mconcat

@@ -50,6 +50,7 @@ import Language.Marlowe.Runtime.ChainSync.Api
   , TransactionOutput(..)
   , UTxO(UTxO)
   , toUTxOsList
+  , unInterpreter
   )
 import qualified Language.Marlowe.Runtime.ChainSync.Api as CS
 import Language.Marlowe.Runtime.Core.Api
@@ -98,7 +99,6 @@ import Ouroboros.Consensus.HardFork.History
   ( Bound(..)
   , EraEnd(..)
   , EraSummary(..)
-  , Interpreter
   , PastHorizonException(..)
   , Summary(..)
   , interpretQuery
@@ -110,7 +110,6 @@ import qualified Ouroboros.Network.Block as O
 import qualified Plutus.V2.Ledger.Api as P
 import qualified Plutus.V2.Ledger.Api as PV2
 import qualified PlutusTx.AssocMap as AM
-import Unsafe.Coerce (unsafeCoerce)
 
 maxFees :: Lovelace
 maxFees = Lovelace 2_170_000
@@ -437,12 +436,6 @@ buildApplyInputsConstraintsV1 systemStart eraHistory marloweOutput tipSlot metad
 
     maxSafeSlot :: O.SlotNo
     maxSafeSlot = getMaxSafeSlotFromSummary $ unInterpreter interpreter
-
-    unInterpreter :: Interpreter xs -> Summary xs
-    unInterpreter = unsafeCoerce -- Interpreter xs is a newtype wrapper around Summary xs.
-                                 -- Unfortunately, the provided query language is not able to extract the max safe slot,
-                                 -- So we have to reach unsafely into the internals to get
-                                 -- it ourselves. https://input-output-hk.github.io/ouroboros-network/ouroboros-consensus/Ouroboros-Consensus-HardFork-History-Qry.html#t:Interpreter
 
     getMaxSafeSlotFromSummary :: Summary xs -> O.SlotNo
     getMaxSafeSlotFromSummary (Summary eras) = case eras of

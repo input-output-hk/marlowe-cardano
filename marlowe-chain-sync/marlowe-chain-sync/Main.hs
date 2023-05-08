@@ -7,7 +7,6 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-
 module Main
   where
 
@@ -26,60 +25,76 @@ import Control.Concurrent.Component.Probes (ProbeServerDependencies(..), probeSe
 import Control.Exception (bracket)
 import Control.Monad.Event.Class
 import Control.Monad.IO.Class (MonadIO, liftIO)
+import Control.Monad.Reader (ask)
 import Control.Monad.Trans.Reader (ReaderT(..))
 import Control.Monad.With (MonadWith(..))
 import Data.GeneralAllocate
 import Data.String (IsString(fromString))
-import qualified Data.Text.Lazy.IO as TL
-import Data.UUID.V4 (nextRandom)
+import qualified Data.Text as T
+import Data.Version (showVersion)
+import Database.PostgreSQL.LibPQ (db, user)
+import qualified Database.PostgreSQL.LibPQ as PQ
+import Hasql.Connection (withLibPQConnection)
 import qualified Hasql.Pool as Pool
 import Language.Marlowe.Runtime.ChainSync (ChainSyncDependencies(..), chainSync)
 import qualified Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL as PostgreSQL
 import Language.Marlowe.Runtime.ChainSync.NodeClient (NodeClient(..), NodeClientDependencies(..), nodeClient)
-import Logging (RootSelector(..), getRootSelectorConfig)
+import Logging (RootSelector(..), renderRootSelectorOTel)
 import Network.Protocol.ChainSeek.Server (chainSeekServerPeer)
-import Network.Protocol.Connection (SomeConnectionSource(..), logConnectionSource)
-import Network.Protocol.Driver (TcpServerDependencies(..), tcpServer)
-import Network.Protocol.Handshake.Server (handshakeConnectionSource)
+import Network.Protocol.Connection (SomeConnectionSourceTraced(..))
+import Network.Protocol.Driver (TcpServerDependencies(..), tcpServerTraced)
+import Network.Protocol.Handshake.Server (handshakeConnectionSourceTraced)
 import Network.Protocol.Job.Server (jobServerPeer)
 import Network.Protocol.Query.Server (queryServerPeer)
 import Observe.Event (EventBackend)
-import Observe.Event.Component (LoggerDependencies(..), withLogger)
 import Observe.Event.Explicit (hoistEventBackend, injectSelector)
+import Observe.Event.Render.OpenTelemetry (tracerEventBackend)
+import OpenTelemetry.Trace
 import Options (Options(..), getOptions)
-import System.IO (stderr)
-import UnliftIO (MonadUnliftIO)
+import Paths_marlowe_chain_sync (version)
+import UnliftIO (MonadUnliftIO, throwIO)
 
 main :: IO ()
-main = run =<< getOptions "0.0.0.0"
+main = run =<< getOptions (showVersion version)
 
 run :: Options -> IO ()
-run Options{..} = bracket (Pool.acquire 100 (Just 5000000) (fromString databaseUri)) Pool.release $
-  runComponent_ $ withLogger loggerDependencies runAppM appComponent
+run Options{..} = bracket (Pool.acquire 100 (Just 5000000) (fromString databaseUri)) Pool.release \pool -> do
+  (dbName, dbUser, dbHost, dbPort) <- either throwIO pure =<< Pool.use pool do
+    connection <- ask
+    liftIO $ withLibPQConnection connection \conn -> (,,,)
+      <$> db conn
+      <*> user conn
+      <*> PQ.host conn
+      <*> PQ.port conn
+  withTracer \tracer ->
+    runAppM (tracerEventBackend tracer $ renderRootSelectorOTel dbName dbUser dbHost dbPort)
+      $ runComponent_ appComponent pool
   where
-    loggerDependencies = LoggerDependencies
-      { configFilePath = logConfigFile
-      , getSelectorConfig = getRootSelectorConfig
-      , newRef = nextRandom
-      , writeText = TL.hPutStr stderr
-      , injectConfigWatcherSelector = injectSelector ConfigWatcher
+    withTracer f = bracket
+      initializeGlobalTracerProvider
+      shutdownTracerProvider
+      \provider -> f $ makeTracer provider instrumentationLibrary tracerOptions
+
+    instrumentationLibrary = InstrumentationLibrary
+      { libraryName = "marlowe-chain-sync"
+      , libraryVersion = T.pack $ showVersion version
       }
 
-    appComponent :: Component (AppM r) Pool.Pool ()
+    appComponent :: Component (AppM Span) Pool.Pool ()
     appComponent = proc pool -> do
-      syncSource <- tcpServer -< TcpServerDependencies
+      syncSource <- tcpServerTraced $ injectSelector ChainSeekServer -< TcpServerDependencies
         { host
         , port
         , toPeer = chainSeekServerPeer
         }
 
-      querySource <- tcpServer -< TcpServerDependencies
+      querySource <- tcpServerTraced $ injectSelector QueryServer -< TcpServerDependencies
         { host
         , port = queryPort
         , toPeer = queryServerPeer
         }
 
-      jobSource <- tcpServer -< TcpServerDependencies
+      jobSource <- tcpServerTraced $ injectSelector JobServer -< TcpServerDependencies
         { host
         , port = commandPort
         , toPeer = jobServerPeer
@@ -91,15 +106,12 @@ run Options{..} = bracket (Pool.acquire 100 (Just 5000000) (fromString databaseU
 
       probes <- chainSync -< ChainSyncDependencies
         { databaseQueries = PostgreSQL.databaseQueries pool networkId
-        , syncSource = SomeConnectionSource
-            $ logConnectionSource (injectSelector ChainSeekServer)
-            $ handshakeConnectionSource syncSource
-        , querySource = SomeConnectionSource
-            $ logConnectionSource (injectSelector QueryServer)
-            $ handshakeConnectionSource querySource
-        , jobSource = SomeConnectionSource
-            $ logConnectionSource (injectSelector JobServer)
-            $ handshakeConnectionSource jobSource
+        , syncSource = SomeConnectionSourceTraced (injectSelector ChainSeekServer)
+            $ handshakeConnectionSourceTraced syncSource
+        , querySource = SomeConnectionSourceTraced (injectSelector QueryServer)
+            $ handshakeConnectionSourceTraced querySource
+        , jobSource = SomeConnectionSourceTraced (injectSelector JobServer)
+            $ handshakeConnectionSourceTraced jobSource
         , queryLocalNodeState = queryNode
         , submitTxToNodeLocal = \era tx -> submitTxToNode $ TxInMode tx case era of
             ByronEra -> ByronEraInCardanoMode

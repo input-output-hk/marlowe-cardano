@@ -11,8 +11,10 @@ module Network.Protocol.Job.Client
 
 import Control.Concurrent (threadDelay)
 import Control.Monad.IO.Class (MonadIO, liftIO)
+import Data.Functor ((<&>))
 import Data.Void (Void, absurd)
 import Network.Protocol.Job.Types
+import Network.Protocol.Peer.Trace
 import Network.TypedProtocol
 
 -- | A generic client for the job protocol.
@@ -121,41 +123,52 @@ jobClientPeer
   :: forall cmd m a
    . (Monad m, Command cmd)
   => JobClient cmd m a
-  -> Peer (Job cmd) 'AsClient 'StInit m a
+  -> PeerTraced (Job cmd) 'AsClient 'StInit m a
 jobClientPeer JobClient{..} =
-  Effect $ peerInit <$> runJobClient
+  EffectTraced $ peerInit <$> runJobClient
   where
-  peerInit :: ClientStInit cmd m a -> Peer (Job cmd) 'AsClient 'StInit m a
+  peerInit :: ClientStInit cmd m a -> PeerTraced (Job cmd) 'AsClient 'StInit m a
   peerInit = \case
-    SendMsgExec cmd stCmd     -> Yield (ClientAgency TokInit) (MsgExec cmd) $ peerCmd (tagFromCommand cmd) stCmd
-    SendMsgAttach jobId stAttach -> Yield (ClientAgency TokInit) (MsgAttach jobId) $ peerAttach (tagFromJobId jobId) stAttach
+    SendMsgExec cmd stCmd -> YieldTraced (ClientAgency TokInit) (MsgExec cmd)
+      $ Call (ServerAgency $ TokCmd $ tagFromCommand cmd)
+      $ peerCmd (tagFromCommand cmd) stCmd
+    SendMsgAttach jobId stAttach -> YieldTraced (ClientAgency TokInit) (MsgAttach jobId)
+      $ Call (ServerAgency $ TokAttach $ tagFromJobId jobId)
+      $ peerAttach (tagFromJobId jobId) stAttach
 
   peerCmd
     :: Tag cmd status err result
     -> ClientStCmd cmd status err result m a
-    -> Peer (Job cmd) 'AsClient ('StCmd status err result) m a
-  peerCmd tag ClientStCmd{..} =
-    Await (ServerAgency (TokCmd tag)) $ Effect . \case
-      MsgFail err           -> Done TokDone <$> recvMsgFail err
-      MsgSucceed result     -> Done TokDone <$> recvMsgSucceed result
-      MsgAwait status jobId -> peerAwait tag <$> recvMsgAwait status jobId
+    -> Message (Job cmd) ('StCmd status err result) st
+    -> PeerTraced (Job cmd) 'AsClient st m a
+  peerCmd tag ClientStCmd{..} = EffectTraced . \case
+    MsgFail err           -> DoneTraced TokDone <$> recvMsgFail err
+    MsgSucceed result     -> DoneTraced TokDone <$> recvMsgSucceed result
+    MsgAwait status jobId -> peerAwait tag <$> recvMsgAwait status jobId
 
   peerAttach
     :: Tag cmd status err result
     -> ClientStAttach cmd status err result m a
-    -> Peer (Job cmd) 'AsClient ('StAttach status err result) m a
-  peerAttach tag ClientStAttach{..} =
-    Await (ServerAgency (TokAttach tag)) $ Effect . \case
-      MsgAttachFailed -> Done TokDone <$> recvMsgAttachFailed
-      MsgAttached     -> peerCmd tag <$> recvMsgAttached
+    -> Message (Job cmd) ('StAttach status err result) st
+    -> PeerTraced (Job cmd) 'AsClient st m a
+  peerAttach tag ClientStAttach{..} = EffectTraced . \case
+    MsgAttachFailed -> DoneTraced TokDone <$> recvMsgAttachFailed
+    MsgAttached     -> recvMsgAttached <&> \ClientStCmd{..} ->
+      AwaitTraced (ServerAgency $ TokCmd tag) \case
+        MsgFail err           -> Closed TokDone $ recvMsgFail err
+        MsgSucceed result     -> Closed TokDone $ recvMsgSucceed result
+        MsgAwait status jobId -> Receive $ EffectTraced $ peerAwait tag <$> recvMsgAwait status jobId
 
   peerAwait
     :: Tag cmd status err result
     -> ClientStAwait cmd status err result m a
-    -> Peer (Job cmd) 'AsClient ('StAwait status err result) m a
+    -> PeerTraced (Job cmd) 'AsClient ('StAwait status err result) m a
   peerAwait tag = \case
-    SendMsgPoll stCmd -> Yield (ClientAgency (TokAwait tag)) MsgPoll $ peerCmd tag stCmd
-    SendMsgDetach a   -> Yield (ClientAgency (TokAwait tag)) MsgDetach $ Done TokDone a
+    SendMsgPoll stCmd -> YieldTraced (ClientAgency (TokAwait tag)) MsgPoll
+      $ Call (ServerAgency $ TokCmd tag)
+      $ peerCmd tag stCmd
+    SendMsgDetach a -> YieldTraced (ClientAgency (TokAwait tag)) MsgDetach
+      $ Close TokDone a
 
 -- | Create a client that runs a command that cannot await to completion and
 -- returns the result.

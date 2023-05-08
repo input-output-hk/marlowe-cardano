@@ -4,13 +4,14 @@
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE RankNTypes #-}
 
--- | A generc server for the query protocol. Includes a function for
+-- | A generic server for the query protocol. Includes a function for
 -- interpreting a server as a typed-protocols peer that can be executed with a
 -- driver and a codec.
 
 module Network.Protocol.Query.Server
   where
 
+import Network.Protocol.Peer.Trace
 import Network.Protocol.Query.Types
 import Network.TypedProtocol
 
@@ -87,47 +88,41 @@ hoistQueryServer phi = QueryServer . phi . fmap hoistInit . runQueryServer
 -- | Interpret a server as a typed-protocols peer.
 queryServerPeer
   :: forall query m a
-   . (Monad m, IsQuery query)
+   . (Functor m, IsQuery query)
   => QueryServer query m a
-  -> Peer (Query query) 'AsServer 'StInit m a
+  -> PeerTraced (Query query) 'AsServer 'StInit m a
 queryServerPeer QueryServer{..} =
-  Effect $ peerInit <$> runQueryServer
+  EffectTraced $ peerInit <$> runQueryServer
   where
-  peerInit :: ServerStInit query m a -> Peer (Query query) 'AsServer 'StInit m a
+  peerInit :: ServerStInit query m a -> PeerTraced (Query query) 'AsServer 'StInit m a
   peerInit ServerStInit{..} =
-    Await (ClientAgency TokInit) \(MsgRequest query) ->
+    AwaitTraced (ClientAgency TokInit) \(MsgRequest query) ->
       peerNext TokCanReject (tagFromQuery query) $ recvMsgRequest query
 
   peerNext
-    :: TokNextKind k
-    -> Tag query delimiter err results
-    -> m (ServerStNext query k delimiter err results m a)
-    -> Peer (Query query) 'AsServer ('StNext k delimiter err results) m a
-  peerNext tok tag = Effect . fmap (peerNext_ tok tag)
-
-  peerNext_
     :: forall k delimiter err results
      . TokNextKind k
     -> Tag query delimiter err results
-    -> ServerStNext query k delimiter err results m a
-    -> Peer (Query query) 'AsServer ('StNext k delimiter err results) m a
-  peerNext_ k tag = \case
+    -> m (ServerStNext query k delimiter err results m a)
+    -> AwaitTraced (Query query) 'AsServer ('StNext k delimiter err results :: Query query) m a
+  peerNext k tag = Respond (ServerAgency $ TokNext k tag) . fmap \case
     SendMsgReject err a ->
-      Yield (ServerAgency (TokNext k tag)) (MsgReject err) $ Done TokDone a
+      Response (MsgReject err) $ DoneTraced TokDone a
     SendMsgNextPage results delimiter page ->
-      Yield (ServerAgency (TokNext k tag)) (MsgNextPage results delimiter) $ peerPage tag page
+      Response (MsgNextPage results delimiter) $ peerPage tag page
 
   peerPage
     :: Tag query delimiter err results
     -> ServerStPage query delimiter err results m a
-    -> Peer (Query query) 'AsServer ('StPage delimiter err results) m a
+    -> PeerTraced (Query query) 'AsServer ('StPage delimiter err results) m a
   peerPage tag ServerStPage{..} =
-    Await (ClientAgency (TokPage tag)) \case
+    AwaitTraced (ClientAgency (TokPage tag)) \case
       MsgRequestNext delimiter -> peerNext TokMustReply tag $ recvMsgRequestNext delimiter
-      MsgDone                  -> Effect $ Done TokDone <$> recvMsgDone
+      MsgDone                  -> Closed TokDone recvMsgDone
 
 -- | Create a server that does not return results in multiple pages. Requesting
 -- next will always return the same results as the first page.
+
 liftHandler
   :: forall query m a
    . Monad m

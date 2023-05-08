@@ -4,6 +4,7 @@ module Control.Monad.Trans.Marlowe.Class
 
 import Cardano.Api (BabbageEra, Tx, TxBody)
 import Control.Concurrent (threadDelay)
+import Control.Monad.Event.Class (MonadEvent)
 import Control.Monad.Identity (IdentityT(..))
 import Control.Monad.Trans.Marlowe
 import Control.Monad.Trans.Reader (ReaderT(..))
@@ -29,10 +30,11 @@ import Language.Marlowe.Runtime.Transaction.Api
   , WalletAddresses
   , WithdrawError
   )
-import Network.Protocol.Driver (runSomeConnector)
+import Network.Protocol.Driver (runConnector, runConnectorTraced)
 import Network.Protocol.Job.Client (ClientStAwait(..), ClientStInit(..), JobClient(..), liftCommand)
 import qualified Network.Protocol.Job.Client as Job
-import UnliftIO (MonadIO, MonadUnliftIO, liftIO, newIORef, readIORef, withRunInIO, writeIORef)
+import Network.Protocol.Peer.Trace (HasSpanContext)
+import UnliftIO (MonadIO, MonadUnliftIO, liftIO, newIORef, readIORef, writeIORef)
 
 -- ^ A class for monadic contexts that provide a connection to a Marlowe
 -- Runtime instance.
@@ -41,8 +43,12 @@ class Monad m => MonadMarlowe m where
   runMarloweRuntimeClient :: MarloweRuntimeClient m a -> m a
 
 instance MonadUnliftIO m => MonadMarlowe (MarloweT m) where
-  runMarloweRuntimeClient client = MarloweT $ ReaderT \connector -> withRunInIO \runInIO ->
-    runSomeConnector connector $ hoistMarloweRuntimeClient (runInIO . flip runMarloweT connector) client
+  runMarloweRuntimeClient client = MarloweT $ ReaderT \connector ->
+    runConnector connector $ hoistMarloweRuntimeClient (flip runMarloweT connector) client
+
+instance (MonadEvent r t m, MonadUnliftIO m, HasSpanContext r) => MonadMarlowe (MarloweTracedT r s t m) where
+  runMarloweRuntimeClient client = MarloweTracedT $ ReaderT \MarloweTracedContext{..} ->
+    runConnectorTraced injector connector $ hoistMarloweRuntimeClient (\m -> runMarloweTracedT m injector connector) client
 
 instance MonadMarlowe m => MonadMarlowe (ReaderT r m) where
   runMarloweRuntimeClient client = ReaderT \r ->

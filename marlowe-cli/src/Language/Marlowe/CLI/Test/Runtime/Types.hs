@@ -46,9 +46,11 @@ import Language.Marlowe.CLI.Types (CliError)
 import Language.Marlowe.Cardano.Thread (AnyMarloweThread, MarloweThread, anyMarloweThread)
 import qualified Language.Marlowe.Core.V1.Semantics.Types as M
 import qualified Language.Marlowe.Protocol.Client as Marlowe.Protocol
+import qualified Language.Marlowe.Protocol.Types as Marlowe.Protocol
 import Language.Marlowe.Runtime.Core.Api (ContractId)
 import Ledger.Orphans ()
 import qualified Network.Protocol.Connection as Network.Protocol
+import Network.Protocol.Handshake.Types (Handshake)
 
 -- Curretly we don't use any extra execution information from the Runtime.
 type RuntimeTxInfo = ()
@@ -138,7 +140,7 @@ class HasInterpretState st lang era | st -> lang era where
 class HasInterpretEnv env lang era | env -> lang era where
   runtimeMonitorStateT :: Traversal' env (RuntimeMonitorState lang era)
   runtimeMonitorInputT :: Traversal' env RuntimeMonitorInput
-  runtimeClientConnectorT :: Traversal' env (Network.Protocol.SomeClientConnector Marlowe.Protocol.MarloweRuntimeClient IO)
+  runtimeClientConnectorT :: Traversal' env (Network.Protocol.ClientConnector (Handshake Marlowe.Protocol.MarloweRuntime) Marlowe.Protocol.MarloweRuntimeClient IO)
   executionModeL :: Lens' env ExecutionMode
   connectionT :: Traversal' env (LocalNodeConnectInfo CardanoMode)
   eraL :: Lens' env (ScriptDataSupportedInEra era)

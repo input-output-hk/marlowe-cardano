@@ -131,6 +131,7 @@ library history-api
     , cardano-api ==1.35.4
     , containers >= 0.6.5 && < 0.7
     , errors >= 2.3 && < 3
+    , hs-opentelemetry-api >= 0.0.3 && < 0.0.4
     , marlowe-cardano ==0.1.0.3
     , marlowe-chain-sync ==0.0.1
     , marlowe-protocols ==0.1.0.0
@@ -199,6 +200,7 @@ library sync-api
     , base >= 4.9 && < 5
     , binary >= 0.8.8 && < 0.9
     , containers >= 0.6.5 && < 0.7
+    , hs-opentelemetry-api >= 0.0.3 && < 0.0.4
     , marlowe-chain-sync ==0.0.1
     , marlowe-protocols ==0.1.0.0
     , marlowe-runtime ==0.0.1
@@ -252,7 +254,6 @@ library sync
     , marlowe-runtime:history-api ==0.0.1
     , marlowe-runtime:sync-api ==0.0.1
     , plutus-ledger-api ==1.0.0.1
-    , text >= 1.2.4 && < 2
     , time >= 1.9 && < 2
     , transformers >= 0.5.6 && < 0.6
     , unliftio >= 0.2.1 && < 0.3
@@ -275,6 +276,7 @@ library discovery-api
     , marlowe-chain-sync ==0.0.1
     , marlowe-protocols ==0.1.0.0
     , marlowe-runtime ==0.0.1
+    , hs-opentelemetry-api >= 0.0.3 && < 0.0.4
     , typed-protocols ==0.1.0.0
 
 library tx-api
@@ -314,7 +316,6 @@ library tx
     Language.Marlowe.Runtime.Transaction.Submit
   build-depends:
     , aeson >= 2 && < 3
-    , async >= 2.2 && < 3
     , async-components ==0.1.0.0
     , base >= 4.9 && < 5
     , cardano-api ==1.35.4
@@ -337,7 +338,6 @@ library tx
     , plutus-tx ==1.0.0.0
     , semialign >= 1.2 && < 2
     , stm >= 2.5 && < 2.6
-    , text >= 1.2.4 && < 2
     , time >= 1.9 && < 2
     , transformers >= 0.5.6 && < 0.6
     , unliftio >= 0.2.1 && < 0.3
@@ -352,14 +352,16 @@ library proxy-api
     Language.Marlowe.Protocol.Server
     Language.Marlowe.Protocol.Types
   build-depends:
-    , aeson >= 2 && < 3
     , base >= 4.9 && < 5
     , binary >= 0.8.8 && < 0.9
+    , eventuo11y ^>= { 0.9, 0.10 }
+    , eventuo11y-extras ==0.1.0.0
     , marlowe-protocols ==0.1.0.0
     , marlowe-runtime:discovery-api ==0.0.1
     , marlowe-runtime:history-api ==0.0.1
     , marlowe-runtime:sync-api ==0.0.1
     , marlowe-runtime:tx-api ==0.0.1
+    , text >= 1.2.4 && < 2
     , typed-protocols ==0.1.0.0
 
 library proxy
@@ -371,6 +373,7 @@ library proxy
   build-depends:
     , async-components ==0.1.0.0
     , base >= 4.9 && < 5
+    , eventuo11y-extras ==0.1.0.0
     , marlowe-protocols ==0.1.0.0
     , marlowe-runtime:discovery-api ==0.0.1
     , marlowe-runtime:history-api ==0.0.1
@@ -378,7 +381,6 @@ library proxy
     , marlowe-runtime:sync-api ==0.0.1
     , marlowe-runtime:tx-api ==0.0.1
     , resourcet >= 1.3 && < 2
-    , typed-protocols ==0.1.0.0
     , unliftio >= 0.2.1 && < 0.3
 
 library plutus-scripts
@@ -423,25 +425,30 @@ executable marlowe-indexer
   autogen-modules:
     Paths_marlowe_runtime
   build-depends:
-    , aeson-pretty
     , async-components ==0.1.0.0
     , base >= 4.9 && < 5
+    , bytestring >= 0.10.12 && < 0.12
     , containers >= 0.6.5 && < 0.7
     , eventuo11y ^>= { 0.9, 0.10 }
     , eventuo11y-extras ==0.1.0.0
+    , eventuo11y-otel ^>= 0.1
     , general-allocate ^>= { 0.2 }
+    , hasql >= 1.6 && < 2
     , hasql-pool ^>= 0.8
+    , hs-opentelemetry-api >= 0.0.3 && < 0.0.4
+    , hs-opentelemetry-sdk >= 0.0.3 && < 0.0.4
     , marlowe-chain-sync ==0.0.1
     , marlowe-protocols ==0.1.0.0
     , marlowe-runtime ==0.0.1
     , marlowe-runtime:indexer ==0.0.1
+    , mtl >= 2.2 && < 3
     , network >= 3.1 && < 4
     , nonempty-containers >= 0.3.4 && < 0.4
     , optparse-applicative >= 0.17 && < 0.18
+    , postgresql-libpq >= 0.9 && < 0.10
     , text >= 1.2.4 && < 2
     , transformers >= 0.5.6 && < 0.6
     , unliftio >= 0.2.1 && < 0.3
-    , uuid
   ghc-options: -threaded
 
 executable marlowe-sync
@@ -454,26 +461,30 @@ executable marlowe-sync
   autogen-modules:
     Paths_marlowe_runtime
   build-depends:
-    , aeson-pretty
     , async-components ==0.1.0.0
     , base >= 4.9 && < 5
-    , containers >= 0.6.5 && < 0.7
+    , bytestring >= 0.10.12 && < 0.12
     , eventuo11y ^>= { 0.9, 0.10 }
     , eventuo11y-extras ==0.1.0.0
+    , eventuo11y-otel ^>= 0.1
     , general-allocate ^>= { 0.2 }
+    , hasql >= 1.6 && < 2
     , hasql-pool ^>= 0.8
+    , hs-opentelemetry-api >= 0.0.3 && < 0.0.4
+    , hs-opentelemetry-sdk >= 0.0.3 && < 0.0.4
     , marlowe-protocols ==0.1.0.0
     , marlowe-runtime ==0.0.1
     , marlowe-runtime:discovery-api ==0.0.1
     , marlowe-runtime:history-api ==0.0.1
     , marlowe-runtime:sync ==0.0.1
     , marlowe-runtime:sync-api ==0.0.1
+    , mtl >= 2.2 && < 3
     , network >= 3.1 && < 4
     , optparse-applicative >= 0.17 && < 0.18
+    , postgresql-libpq >= 0.9 && < 0.10
     , text >= 1.2.4 && < 2
     , transformers >= 0.5.6 && < 0.6
     , unliftio >= 0.2.1 && < 0.3
-    , uuid
   ghc-options: -threaded
 
 executable marlowe-tx
@@ -486,13 +497,16 @@ executable marlowe-tx
   autogen-modules:
     Paths_marlowe_runtime
   build-depends:
-    , aeson-pretty
     , async-components ==0.1.0.0
     , base >= 4.9 && < 5
+    , cardano-api ==1.35.4
     , containers >= 0.6.5 && < 0.7
     , eventuo11y ^>= { 0.9, 0.10 }
     , eventuo11y-extras ==0.1.0.0
+    , eventuo11y-otel ^>= 0.1
     , general-allocate ^>= { 0.2 }
+    , hs-opentelemetry-api >= 0.0.3 && < 0.0.4
+    , hs-opentelemetry-sdk >= 0.0.3 && < 0.0.4
     , marlowe-chain-sync ==0.0.1
     , marlowe-protocols ==0.1.0.0
     , marlowe-runtime ==0.0.1
@@ -503,7 +517,6 @@ executable marlowe-tx
     , text >= 1.2.4 && < 2
     , transformers >= 0.5.6 && < 0.6
     , unliftio >= 0.2.1 && < 0.3
-    , uuid
   ghc-options: -threaded
 
 executable marlowe-proxy
@@ -516,14 +529,16 @@ executable marlowe-proxy
   autogen-modules:
     Paths_marlowe_runtime
   build-depends:
-    , aeson-pretty
     , async-components ==0.1.0.0
     , base >= 4.9 && < 5
+    , binary >= 0.8.8 && < 0.9
     , bytestring >= 0.10.12 && < 0.12
-    , containers >= 0.6.5 && < 0.7
     , eventuo11y ^>= { 0.9, 0.10 }
     , eventuo11y-extras ==0.1.0.0
+    , eventuo11y-otel ^>=  0.1
     , general-allocate ^>= { 0.2 }
+    , hs-opentelemetry-api >= 0.0.3 && < 0.0.4
+    , hs-opentelemetry-sdk >= 0.0.3 && < 0.0.4
     , marlowe-protocols ==0.1.0.0
     , marlowe-runtime:config ==0.0.1
     , marlowe-runtime:proxy ==0.0.1
@@ -535,7 +550,6 @@ executable marlowe-proxy
     , transformers >= 0.5.6 && < 0.6
     , typed-protocols ==0.1.0.0
     , unliftio >= 0.2.1 && < 0.3
-    , uuid
   ghc-options: -threaded
 
 test-suite marlowe-runtime-test

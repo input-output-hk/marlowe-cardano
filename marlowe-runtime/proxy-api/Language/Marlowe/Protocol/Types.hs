@@ -5,7 +5,6 @@
 module Language.Marlowe.Protocol.Types
   where
 
-import Data.Aeson (Value(..), object, (.=))
 import Data.Binary (getWord8, putWord8)
 import Data.Foldable (fold)
 import Data.List (intersperse)
@@ -21,8 +20,8 @@ import Network.Protocol.Codec
 import Network.Protocol.Handshake.Types (HasSignature(..))
 import Network.Protocol.Job.Types (Job)
 import qualified Network.Protocol.Job.Types as Job
+import Network.Protocol.Peer.Trace
 import Network.TypedProtocol
-import Observe.Event.Network.Protocol (MessageToJSON(..))
 
 data MarloweRuntime where
   StInit :: MarloweRuntime
@@ -92,6 +91,47 @@ instance Protocol MarloweRuntime where
     TokNobodyTxJob tok -> \case
       TokServerTxJob tok' -> exclusionLemma_NobodyAndServerHaveAgency tok tok'
 
+instance OTelProtocol MarloweRuntime where
+  protocolName _ = "marlowe_runtime"
+  messageAttributes tok = \case
+    MsgRunMarloweSync -> MessageAttributes
+      { messageType = "run_marlowe_sync"
+      , messageParameters = []
+      }
+    MsgRunMarloweHeaderSync -> MessageAttributes
+      { messageType = "run_marlowe_header_sync"
+      , messageParameters = []
+      }
+    MsgRunMarloweQuery -> MessageAttributes
+      { messageType = "run_marlowe_query"
+      , messageParameters = []
+      }
+    MsgRunTxJob -> MessageAttributes
+      { messageType = "run_tx_job"
+      , messageParameters = []
+      }
+    MsgMarloweSync msg -> case tok of
+      ClientAgency (TokClientMarloweSync tok') ->
+        messageAttributes (ClientAgency tok') msg
+      ServerAgency (TokServerMarloweSync tok') ->
+        messageAttributes (ServerAgency tok') msg
+    MsgMarloweHeaderSync msg -> case tok of
+      ClientAgency (TokClientMarloweHeaderSync tok') ->
+        messageAttributes (ClientAgency tok') msg
+      ServerAgency (TokServerMarloweHeaderSync tok') ->
+        messageAttributes (ServerAgency tok') msg
+    MsgMarloweQuery msg -> case tok of
+      ClientAgency (TokClientMarloweQuery tok') ->
+        messageAttributes (ClientAgency tok') msg
+      ServerAgency (TokServerMarloweQuery tok') ->
+        messageAttributes (ServerAgency tok') msg
+    MsgTxJob msg -> case tok of
+      ClientAgency (TokClientTxJob tok') ->
+        messageAttributes (ClientAgency tok') msg
+      ServerAgency (TokServerTxJob tok') ->
+        messageAttributes (ServerAgency tok') msg
+
+
 instance BinaryMessage MarloweRuntime where
   putMessage = \case
     ClientAgency TokInit -> \case
@@ -147,46 +187,6 @@ instance BinaryMessage MarloweRuntime where
     ServerAgency (TokServerTxJob tok) -> do
       SomeMessage msg <- getMessage (ServerAgency tok)
       pure $ SomeMessage $ MsgTxJob msg
-
-instance MessageToJSON MarloweRuntime where
-  messageToJSON = \case
-    ClientAgency TokInit -> \case
-      MsgRunMarloweSync -> String "run-marlowe-sync"
-      MsgRunMarloweHeaderSync -> String "run-marlowe-header-sync"
-      MsgRunMarloweQuery -> String "run-marlowe-query"
-      MsgRunTxJob -> String "run-tx-job"
-    ClientAgency (TokClientMarloweSync tok) -> \case
-      MsgMarloweSync msg -> object
-        [ "marlowe-sync" .= messageToJSON (ClientAgency tok) msg
-        ]
-    ClientAgency (TokClientMarloweHeaderSync tok) -> \case
-      MsgMarloweHeaderSync msg -> object
-        [ "marlowe-header-sync" .= messageToJSON (ClientAgency tok) msg
-        ]
-    ClientAgency (TokClientMarloweQuery tok) -> \case
-      MsgMarloweQuery msg -> object
-        [ "marlowe-query" .= messageToJSON (ClientAgency tok) msg
-        ]
-    ClientAgency (TokClientTxJob tok) -> \case
-      MsgTxJob msg -> object
-        [ "tx-job" .= messageToJSON (ClientAgency tok) msg
-        ]
-    ServerAgency (TokServerMarloweSync tok) -> \case
-      MsgMarloweSync msg -> object
-        [ "marlowe-sync" .= messageToJSON (ServerAgency tok) msg
-        ]
-    ServerAgency (TokServerMarloweHeaderSync tok) -> \case
-      MsgMarloweHeaderSync msg -> object
-        [ "marlowe-header-sync" .= messageToJSON (ServerAgency tok) msg
-        ]
-    ServerAgency (TokServerMarloweQuery tok) -> \case
-      MsgMarloweQuery msg -> object
-        [ "marlowe-query" .= messageToJSON (ServerAgency tok) msg
-        ]
-    ServerAgency (TokServerTxJob tok) -> \case
-      MsgTxJob msg -> object
-        [ "tx-job" .= messageToJSON (ServerAgency tok) msg
-        ]
 
 instance HasSignature MarloweRuntime where
   signature _ = fold $ intersperse " "

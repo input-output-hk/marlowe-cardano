@@ -15,6 +15,7 @@ import Data.Function (on)
 import qualified Data.List.NonEmpty as NE
 import Data.Map (Map)
 import Data.Set (Set)
+import Data.String (fromString)
 import Data.Type.Equality (testEquality, type (:~:)(Refl))
 import GHC.Generics (Generic)
 import GHC.Show (showCommaSpace, showSpace)
@@ -35,9 +36,11 @@ import Network.Protocol.Codec (BinaryMessage(..))
 import Network.Protocol.Codec.Spec
   (MessageEq(..), MessageVariations(..), ShowProtocol(..), SomePeerHasAgency(..), Variations(..), varyAp)
 import Network.Protocol.Handshake.Types (HasSignature(..))
+import Network.Protocol.Peer.Trace
 import Network.TypedProtocol
 import Network.TypedProtocol.Codec (AnyMessageAndAgency(..))
 import Observe.Event.Network.Protocol (MessageToJSON(..))
+import OpenTelemetry.Attributes
 
 data MarloweQuery where
   StReq :: MarloweQuery
@@ -494,6 +497,36 @@ instance MessageToJSON MarloweQuery where
         TokWithdrawals -> toJSON
         TokBoth a b -> toJSON . bimap (responseToJSON a) (responseToJSON b)
 
+instance OTelProtocol MarloweQuery where
+  protocolName _ = "marlowe_query"
+  messageAttributes = \case
+    ClientAgency tok -> case tok of
+      TokReq -> \case
+        MsgDone -> MessageAttributes
+          { messageType = "done"
+          , messageParameters = []
+          }
+        MsgRequest req -> MessageAttributes
+          { messageType = "request/" <> fromString (reqName $ requestToSt req)
+          , messageParameters = [TextAttribute $ fromString $ show req]
+          }
+    ServerAgency tok -> case tok of
+      TokRes tag -> \case
+        MsgRespond res -> MessageAttributes
+          { messageType = "request/" <> fromString (reqName tag) <> "/respond"
+          , messageParameters = [TextAttribute $ fromString $ showsPrecResult tag 0 res ""]
+          }
+
+reqName :: StRes a -> String
+reqName = \case
+  TokContractHeaders -> "contract_headers"
+  TokContractState -> "contract_state"
+  TokTransaction -> "transaction"
+  TokTransactions -> "transactions"
+  TokWithdrawal -> "withdrawal"
+  TokWithdrawals -> "withdrawals"
+  TokBoth ta tb -> reqName ta <> "&" <> reqName tb
+
 instance ShowProtocol MarloweQuery where
   showsPrecMessage p =  \case
     ClientAgency TokReq -> \case
@@ -501,18 +534,18 @@ instance ShowProtocol MarloweQuery where
       MsgDone -> showString "MsgDone"
     ServerAgency (TokRes req) -> \case
       MsgRespond a -> showParen (p >= 11) (showString "MsgRespond" . showSpace . showsPrecResult req 11 a)
-    where
-      showsPrecResult :: StRes a -> Int -> a -> String -> String
-      showsPrecResult = \case
-        TokContractHeaders -> showsPrec
-        TokContractState -> showsPrec
-        TokTransaction -> showsPrec
-        TokTransactions -> showsPrec
-        TokWithdrawal -> showsPrec
-        TokWithdrawals -> showsPrec
-        TokBoth ta tb -> \_ (a, b) -> showParen True (showsPrecResult ta 0 a . showCommaSpace . showsPrecResult tb 0 b)
   showsPrecServerHasAgency p (TokRes req) = showParen (p >= 11) (showString "TokRes" . showSpace . showsPrec 11 req)
   showsPrecClientHasAgency _ TokReq = showString "TokReq"
+
+showsPrecResult :: StRes a -> Int -> a -> String -> String
+showsPrecResult = \case
+  TokContractHeaders -> showsPrec
+  TokContractState -> showsPrec
+  TokTransaction -> showsPrec
+  TokTransactions -> showsPrec
+  TokWithdrawal -> showsPrec
+  TokWithdrawals -> showsPrec
+  TokBoth ta tb -> \_ (a, b) -> showParen True (showsPrecResult ta 0 a . showCommaSpace . showsPrecResult tb 0 b)
 
 instance MessageEq MarloweQuery where
   messageEq = \case

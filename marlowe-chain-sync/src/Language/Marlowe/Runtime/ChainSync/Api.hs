@@ -46,10 +46,7 @@ import Data.Aeson
   , FromJSONKeyFunction(FromJSONKeyText, FromJSONKeyTextParser)
   , ToJSON
   , ToJSONKey
-  , Value(..)
-  , object
   , toJSON
-  , (.=)
   )
 import qualified Data.Aeson as A
 import qualified Data.Aeson as Aeson
@@ -83,13 +80,13 @@ import Data.Void (Void, absurd)
 import Data.Word (Word16, Word64)
 import GHC.Generics (Generic)
 import GHC.Natural (Natural)
+import GHC.Show (showSpace)
 import Network.Protocol.ChainSeek.Client
 import Network.Protocol.ChainSeek.Server
 import Network.Protocol.ChainSeek.Types
 import qualified Network.Protocol.ChainSeek.Types as ChainSeek
 import Network.Protocol.Codec.Spec
 import Network.Protocol.Handshake.Types (HasSignature(..))
-import Network.Protocol.Job.Types (CommandToJSON)
 import qualified Network.Protocol.Job.Types as Job
 import qualified Network.Protocol.Query.Types as Query
 import Ouroboros.Consensus.BlockchainTime (RelativeTime, SlotLength, SystemStart(..))
@@ -98,6 +95,7 @@ import Ouroboros.Consensus.HardFork.History
 import qualified Ouroboros.Consensus.Util.Counting as Counting
 import qualified Plutus.V1.Ledger.Api as Plutus
 import Text.Read (readMaybe)
+import Unsafe.Coerce (unsafeCoerce)
 
 -- | Extends a type with a "Genesis" member.
 data WithGenesis a = Genesis | At a
@@ -688,34 +686,6 @@ instance ChainSeek.QueryVariations Move where
     TagFindTxsFor -> variations
     TagAdvanceToTip -> variations
 
-instance QueryToJSON Move where
-  queryToJSON = \case
-    AdvanceBlocks offset -> object [ "advanceBlocks" .= toJSON offset ]
-    Intersect blocks -> object [ "intersect" .= toJSON blocks ]
-    FindConsumingTxs refs -> object [ "findConsumingTxs" .= toJSON refs ]
-    FindTx txId wait -> object
-      [ "findTx" .= object
-        [ "txId" .= toJSON txId
-        , "wait" .= toJSON wait
-        ]
-      ]
-    AdvanceToTip -> String "advanceToTip"
-    FindTxsFor c -> object [ "findTxsFor" .= toJSON c ]
-  errToJSON = \case
-    TagAdvanceBlocks -> toJSON
-    TagIntersect -> toJSON
-    TagFindConsumingTxs -> toJSON
-    TagFindTx -> toJSON
-    TagFindTxsFor -> toJSON
-    TagAdvanceToTip -> toJSON
-  resultToJSON = \case
-    TagAdvanceBlocks -> toJSON
-    TagIntersect -> toJSON
-    TagFindConsumingTxs -> toJSON
-    TagFindTx -> toJSON
-    TagFindTxsFor -> toJSON
-    TagAdvanceToTip -> toJSON
-
 type RuntimeChainSeek = ChainSeek Move ChainPoint ChainPoint
 
 type RuntimeChainSeekClient = ChainSeekClient Move ChainPoint ChainPoint
@@ -823,6 +793,71 @@ instance Query Move where
     TagFindTxsFor -> get
     TagAdvanceToTip -> get
 
+instance ChainSeek.ShowQuery Move where
+  showsPrecTag _ = showString . \case
+    TagAdvanceBlocks -> "TagAdvanceBlocks"
+    TagIntersect -> "TagIntersect"
+    TagFindConsumingTxs -> "TagFindConsumingTxs"
+    TagFindTx -> "TagFindTx"
+    TagFindTxsFor -> "TagFindTxsFor"
+    TagAdvanceToTip -> "TagAdvanceToTip"
+
+  showsPrecQuery p = \case
+    AdvanceBlocks blocks -> showParen (p >= 11)
+      ( showString "AdvanceBlocks"
+      . showSpace
+      . showsPrec 11 blocks
+      )
+    Intersect blocks -> showParen (p >= 11)
+      ( showString "Intersect"
+      . showSpace
+      . showsPrec 11 blocks
+      )
+    FindConsumingTxs txOuts -> showParen (p >= 11)
+      ( showString "FindConsumingTxs"
+      . showSpace
+      . showsPrec 11 txOuts
+      )
+    FindTx wait txId -> showParen (p >= 11)
+      ( showString "FindTx"
+      . showSpace
+      . showsPrec 11 wait
+      . showSpace
+      . showsPrec 11 txId
+      )
+    FindTxsFor credentials -> showParen (p >= 11)
+      ( showString "FindTxsFor"
+      . showSpace
+      . showsPrec 11 credentials
+      )
+    AdvanceToTip -> showString "AdvanceToTip"
+
+  showsPrecErr p = \case
+    TagAdvanceBlocks -> showsPrec p
+    TagIntersect -> showsPrec p
+    TagFindConsumingTxs -> showsPrec p
+    TagFindTx -> showsPrec p
+    TagFindTxsFor -> showsPrec p
+    TagAdvanceToTip -> showsPrec p
+
+  showsPrecResult p = \case
+    TagAdvanceBlocks -> showsPrec p
+    TagIntersect -> showsPrec p
+    TagFindConsumingTxs -> showsPrec p
+    TagFindTx -> showsPrec p
+    TagFindTxsFor -> showsPrec p
+    TagAdvanceToTip -> showsPrec p
+
+instance ChainSeek.OTelQuery Move where
+  queryTypeName _ = "marlowe_chain_sync_query"
+  queryName = \case
+    TagAdvanceBlocks -> "advance_blocks"
+    TagIntersect -> "intersect"
+    TagFindConsumingTxs -> "find_consuming_txs"
+    TagFindTx -> "find_tx"
+    TagFindTxsFor -> "find_txs_for"
+    TagAdvanceToTip -> "advance_to_tip"
+
 putUTCTime :: UTCTime -> Put
 putUTCTime UTCTime{..} = do
   let (year, dayOfYear) = toOrdinalDate utctDay
@@ -878,46 +913,6 @@ data ChainSyncQuery delimiter err result where
 
 instance HasSignature ChainSyncQuery where
   signature _ = "ChainSyncQuery"
-
-instance Query.QueryToJSON ChainSyncQuery where
-  queryToJSON = \case
-    GetSecurityParameter -> String "get-security-parameter"
-    GetNetworkId -> String "get-network-id"
-    GetProtocolParameters -> String "get-protocol-parameters"
-    GetSystemStart -> String "get-system-start"
-    GetEraHistory -> String "get-era-history"
-    GetUTxOs subQuery -> object
-      [ "get-utxos" .= case subQuery of
-          GetUTxOsAtAddresses addresses -> object
-            [ "at-address" .= addresses
-            ]
-          GetUTxOsForTxOutRefs txOutRefs -> object
-            [ "for-tx-out-refs" .= txOutRefs
-            ]
-      ]
-  errToJSON = \case
-    TagGetSecurityParameter -> toJSON
-    TagGetNetworkId -> toJSON
-    TagGetProtocolParameters -> toJSON
-    TagGetSystemStart -> toJSON
-    TagGetEraHistory -> toJSON
-    TagGetUTxOs -> toJSON
-  resultToJSON = \case
-    TagGetSecurityParameter -> toJSON
-    TagGetNetworkId -> \case
-      Mainnet -> String "mainnet"
-      Testnet (NetworkMagic n) -> object ["testnet" .= n]
-    TagGetProtocolParameters -> toJSON
-    TagGetSystemStart -> toJSON
-    TagGetEraHistory -> const $ String "<era-history>"
-    TagGetUTxOs -> toJSON
-  delimiterToJSON = \case
-    TagGetSecurityParameter -> toJSON
-    TagGetNetworkId -> toJSON
-    TagGetProtocolParameters -> toJSON
-    TagGetSystemStart -> toJSON
-    TagGetEraHistory -> toJSON
-    TagGetUTxOs -> toJSON
 
 instance Query.QueryVariations ChainSyncQuery where
   tags = NE.fromList
@@ -1082,22 +1077,79 @@ instance Query.IsQuery ChainSyncQuery where
     GetSystemStart -> TagGetSystemStart
     GetUTxOs _ -> TagGetUTxOs
 
+instance Query.ShowQuery ChainSyncQuery where
+  showsPrecTag _ = showString . \case
+    TagGetSecurityParameter -> "TagGetSecurityParameter"
+    TagGetNetworkId -> "TagGetNetworkId"
+    TagGetProtocolParameters -> "TagGetProtocolParameters"
+    TagGetSystemStart -> "TagGetSystemStart"
+    TagGetEraHistory -> "TagGetEraHistory"
+    TagGetUTxOs -> "TagGetUTxOs"
+
+  showsPrecQuery p = \case
+    GetSecurityParameter -> showString "GetSecurityParameter"
+    GetNetworkId -> showString "GetNetworkId"
+    GetProtocolParameters -> showString "GetProtocolParameters"
+    GetSystemStart -> showString "GetSystemStart"
+    GetEraHistory -> showString "GetEraHistory"
+    GetUTxOs query -> showParen (p >= 11)
+      ( showString "TagGetUTxOs"
+      . showSpace
+      . showsPrec 11 query
+      )
+
+  showsPrecDelimiter _ = \case
+    TagGetSecurityParameter -> absurd
+    TagGetNetworkId -> absurd
+    TagGetProtocolParameters -> absurd
+    TagGetSystemStart -> absurd
+    TagGetEraHistory -> absurd
+    TagGetUTxOs -> absurd
+
+  showsPrecErr p = \case
+    TagGetSecurityParameter -> showsPrec p
+    TagGetNetworkId -> showsPrec p
+    TagGetProtocolParameters -> showsPrec p
+    TagGetSystemStart -> showsPrec p
+    TagGetEraHistory -> showsPrec p
+    TagGetUTxOs -> showsPrec p
+
+  showsPrecResult p = \case
+    TagGetSecurityParameter -> showsPrec p
+    TagGetNetworkId -> showsPrec p
+    TagGetProtocolParameters -> showsPrec p
+    TagGetSystemStart -> showsPrec p
+    TagGetEraHistory -> \(EraHistory CardanoMode interpreter) -> showParen (p >= 11)
+      ( showString "EraHistory"
+      . showSpace
+      . showString "CardanoMode"
+      . showSpace
+      . showParen True
+        ( showString "mkInterpreter"
+        . showSpace
+        . showsPrec 11 (unInterpreter interpreter)
+        )
+      )
+    TagGetUTxOs -> showsPrec p
+
+instance Query.OTelQuery ChainSyncQuery where
+  queryTypeName _ = "chain_sync"
+  queryName = \case
+    TagGetSecurityParameter -> "security_parameter"
+    TagGetNetworkId -> "network_id"
+    TagGetProtocolParameters -> "protocol_parameters"
+    TagGetSystemStart -> "system_start"
+    TagGetEraHistory -> "era_history"
+    TagGetUTxOs -> "utxos"
+
+unInterpreter :: Interpreter xs -> Summary xs
+unInterpreter = unsafeCoerce
+
 data ChainSyncCommand status err result where
   SubmitTx :: ScriptDataSupportedInEra era -> Tx era -> ChainSyncCommand Void String ()
 
 instance HasSignature ChainSyncCommand where
   signature _ = "ChainSyncCommand"
-
-instance CommandToJSON ChainSyncCommand where
-  commandToJSON = \case
-    SubmitTx _ tx -> object [ "submit-tx" .= show tx ]
-  jobIdToJSON = \case
-  errToJSON = \case
-    TagSubmitTx _ -> toJSON
-  resultToJSON = \case
-    TagSubmitTx _ -> toJSON
-  statusToJSON = \case
-    TagSubmitTx _ -> toJSON
 
 instance Job.Command ChainSyncCommand where
   data Tag ChainSyncCommand status err result where
@@ -1151,6 +1203,36 @@ instance Job.Command ChainSyncCommand where
     TagSubmitTx _ -> mempty
   getResult = \case
     TagSubmitTx _ -> pure ()
+
+instance Job.ShowCommand ChainSyncCommand where
+  showsPrecTag p = showParen (p >= 11) . showString . \case
+    TagSubmitTx ScriptDataInAlonzoEra -> "TagSubmitTx ScriptDataInAlonzoEra"
+    TagSubmitTx ScriptDataInBabbageEra -> "TagSubmitTx ScriptDataInBabbageEra"
+  showsPrecCommand p = showParen (p >= 11) . \case
+    SubmitTx ScriptDataInAlonzoEra tx ->
+      ( showString "TagSubmitTx ScriptDataInAlonzoEra"
+      . showSpace
+      . showsPrec p tx
+      )
+    SubmitTx ScriptDataInBabbageEra tx ->
+      ( showString "TagSubmitTx ScriptDataInBabbageEra"
+      . showSpace
+      . showsPrec p tx
+      )
+  showsPrecJobId _ = \case
+  showsPrecStatus _ = \case
+    TagSubmitTx _ -> absurd
+  showsPrecErr p = \case
+    TagSubmitTx _ -> showsPrec p
+  showsPrecResult p = \case
+    TagSubmitTx _ -> showsPrec p
+
+instance Job.OTelCommand ChainSyncCommand where
+  commandTypeName _ = "chain_sync"
+  commandName = \case
+    TagSubmitTx era -> "submit_tx/" <> case era of
+      ScriptDataInAlonzoEra -> "alonzo"
+      ScriptDataInBabbageEra -> "babbage"
 
 eraEq :: ScriptDataSupportedInEra era1 -> ScriptDataSupportedInEra era2 -> Maybe (era1 :~: era2)
 eraEq ScriptDataInAlonzoEra ScriptDataInAlonzoEra   = Just Refl

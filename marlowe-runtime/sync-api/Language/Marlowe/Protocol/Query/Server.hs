@@ -9,10 +9,11 @@ import Language.Marlowe.Protocol.Query.Types
 import Language.Marlowe.Runtime.ChainSync.Api (TxId)
 import Language.Marlowe.Runtime.Core.Api (ContractId)
 import Language.Marlowe.Runtime.Discovery.Api (ContractHeader)
+import Network.Protocol.Peer.Trace
 import Network.TypedProtocol
 import UnliftIO (MonadUnliftIO, concurrently)
 
-type MarloweQueryServer = Peer MarloweQuery 'AsServer 'StReq
+type MarloweQueryServer = PeerTraced MarloweQuery 'AsServer 'StReq
 
 marloweQueryServer
   :: forall m
@@ -26,11 +27,11 @@ marloweQueryServer
   -> MarloweQueryServer m ()
 marloweQueryServer getContractHeaders getContractState getTransaction getTransactions getWithdrawal getWithdrawals = go
   where
-    go = Await (ClientAgency TokReq) \case
-      MsgRequest req -> Effect do
+    go = AwaitTraced (ClientAgency TokReq) \case
+      MsgRequest req -> Respond (ServerAgency $ TokRes $ requestToSt req) do
         result <- serviceRequest req
-        pure $ Yield (ServerAgency $ TokRes $ requestToSt req) (MsgRespond result) go
-      MsgDone -> Done TokDone ()
+        pure $ Response (MsgRespond result) go
+      MsgDone -> Closed TokDone $ pure ()
     serviceRequest :: Request a -> m a
     serviceRequest = \case
       ReqContractHeaders cFilter range -> getContractHeaders cFilter range

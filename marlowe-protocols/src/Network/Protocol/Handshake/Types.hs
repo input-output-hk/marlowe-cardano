@@ -17,15 +17,17 @@ module Network.Protocol.Handshake.Types
 import Control.Monad (unless)
 import Data.Aeson (Value(..), object, (.=))
 import Data.Binary (get, getWord8, put, putWord8)
-import Data.Proxy (Proxy)
+import Data.Proxy (Proxy(..))
 import Data.Text (Text)
 import qualified Data.Text as T
 import GHC.Show (showSpace)
 import Network.Protocol.Codec (BinaryMessage(..))
 import Network.Protocol.Codec.Spec (ArbitraryMessage(..), MessageEq(..), ShowProtocol(..))
+import Network.Protocol.Peer.Trace (MessageAttributes(..), OTelProtocol(..))
 import Network.TypedProtocol
 import Network.TypedProtocol.Codec (AnyMessageAndAgency(..))
 import Observe.Event.Network.Protocol (MessageToJSON(..))
+import OpenTelemetry.Attributes (toPrimitiveAttribute)
 import Test.QuickCheck (Arbitrary(arbitrary), oneof, shrink)
 
 data Handshake ps where
@@ -118,6 +120,24 @@ instance MessageEq ps => MessageEq (Handshake ps) where
       (MsgLift msg1', MsgLift msg2') ->
         messageEq (AnyMessageAndAgency (ServerAgency tok1') msg1') (AnyMessageAndAgency (ServerAgency tok2') msg2')
     (ServerAgency (TokLiftServer _), _) -> False
+
+instance OTelProtocol ps => OTelProtocol (Handshake ps) where
+  protocolName _ = "handshake." <> protocolName (Proxy @ps)
+  messageAttributes = curry \case
+    (ClientAgency TokInit, MsgHandshake sig) -> MessageAttributes
+      { messageType = "handshake"
+      , messageParameters = [toPrimitiveAttribute sig]
+      }
+    (ClientAgency (TokLiftClient tok), MsgLift msg) -> messageAttributes (ClientAgency tok) msg
+    (ServerAgency TokHandshake, MsgAccept) -> MessageAttributes
+      { messageType = "handshake/accept"
+      , messageParameters = []
+      }
+    (ServerAgency TokHandshake, MsgReject) -> MessageAttributes
+      { messageType = "handshake/reject"
+      , messageParameters = []
+      }
+    (ServerAgency (TokLiftServer tok), MsgLift msg) -> messageAttributes (ServerAgency tok) msg
 
 instance ShowProtocol ps => ShowProtocol (Handshake ps) where
   showsPrecMessage p tok = \case

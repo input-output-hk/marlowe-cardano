@@ -30,6 +30,9 @@ runtimeHost = host "marlowe-runtime" "" "127.0.0.1" "The hostname of the Marlowe
 runtimePort :: CliOption OptionFields PortNumber
 runtimePort = port "marlowe-runtime" "" 3700 "The port number of the Marlowe Runtime server."
 
+runtimePortTraced :: CliOption OptionFields PortNumber
+runtimePortTraced = port "marlowe-runtime" "TRACED" 3701 "The port number of the Marlowe Runtime server with tracing enabled."
+
 syncHost :: CliOption OptionFields HostName
 syncHost = host "marlowe-sync" "SYNC" "127.0.0.1" "The hostname of the Marlowe Runtime marlowe-sync server."
 

@@ -3,7 +3,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE RankNTypes #-}
 
--- | A generc client for the query protocol. Includes a function for
+-- | A generic client for the query protocol. Includes a function for
 -- interpreting a client as a typed-protocols peer that can be executed with a
 -- driver and a codec.
 
@@ -11,6 +11,7 @@ module Network.Protocol.Query.Client
   where
 
 import Data.Void (Void)
+import Network.Protocol.Peer.Trace
 import Network.Protocol.Query.Types
 import Network.TypedProtocol
 
@@ -104,39 +105,44 @@ queryClientPeer
   :: forall query m a
    . (Monad m, IsQuery query)
   => QueryClient query m a
-  -> Peer (Query query) 'AsClient 'StInit m a
-queryClientPeer QueryClient{..} =
-  Effect $ peerInit <$> runQueryClient
+  -> PeerTraced (Query query) 'AsClient 'StInit m a
+queryClientPeer QueryClient{..} = EffectTraced $ peerInit <$> runQueryClient
   where
-  peerInit :: ClientStInit query m a -> Peer (Query query) 'AsClient 'StInit m a
+  peerInit :: ClientStInit query m a -> PeerTraced (Query query) 'AsClient 'StInit m a
   peerInit (SendMsgRequest query next) =
-    Yield (ClientAgency TokInit) (MsgRequest query) $ peerNextCanReject (tagFromQuery query) next
+    YieldTraced (ClientAgency TokInit) (MsgRequest query)
+      $ Call (ServerAgency (TokNext TokCanReject (tagFromQuery query)))
+      $ peerNextCanReject (tagFromQuery query) next
 
   peerNextCanReject
     :: Tag query delimiter err results
     -> ClientStNextCanReject delimiter err results m a
-    -> Peer (Query query) 'AsClient ('StNext 'CanReject delimiter err results) m a
-  peerNextCanReject tag ClientStNextCanReject{..} =
-    Await (ServerAgency (TokNext TokCanReject tag)) $ Effect . \case
-      MsgReject err                 -> Done TokDone <$> recvMsgReject err
-      MsgNextPage results delimiter -> peerPage tag <$> recvMsgNextPage results delimiter
+    -> Message (Query query) ('StNext 'CanReject delimiter err results) st
+    -> PeerTraced (Query query) 'AsClient st m a
+  peerNextCanReject tag ClientStNextCanReject{..} = EffectTraced . \case
+    MsgReject err                 -> DoneTraced TokDone <$> recvMsgReject err
+    MsgNextPage results delimiter -> peerPage tag <$> recvMsgNextPage results delimiter
 
   peerPage
     :: Tag query delimiter err results
     -> ClientStPage delimiter err results m a
-    -> Peer (Query query) 'AsClient ('StPage delimiter err results) m a
+    -> PeerTraced (Query query) 'AsClient ('StPage delimiter err results) m a
   peerPage tag = \case
     SendMsgRequestNext delimiter next ->
-      Yield (ClientAgency (TokPage tag)) (MsgRequestNext delimiter) $ peerNext tag next
-    SendMsgDone a  -> Yield (ClientAgency (TokPage tag)) MsgDone $ Done TokDone a
+      YieldTraced (ClientAgency (TokPage tag)) (MsgRequestNext delimiter)
+        $ Call (ServerAgency $ TokNext TokMustReply tag)
+        $ peerNext tag next
+    SendMsgDone a  ->
+      YieldTraced (ClientAgency (TokPage tag)) MsgDone
+        $ Close TokDone a
 
   peerNext
     :: Tag query delimiter err results
     -> ClientStNext delimiter err results m a
-    -> Peer (Query query) 'AsClient ('StNext 'MustReply delimiter err results) m a
-  peerNext query ClientStNext{..} =
-    Await (ServerAgency (TokNext TokMustReply query)) $ Effect . \case
-      MsgNextPage results delimiter -> peerPage query <$> recvMsgNextPage results delimiter
+    -> Message (Query query) ('StNext 'MustReply delimiter err results) st
+    -> PeerTraced (Query query) 'AsClient st m a
+  peerNext query ClientStNext{..} = EffectTraced . \case
+    MsgNextPage results delimiter -> peerPage query <$> recvMsgNextPage results delimiter
 
 -- | Create a client that runs a query that cannot have multiple pages.
 liftQuery :: Monad m => query Void err results -> QueryClient query m (Either err results)

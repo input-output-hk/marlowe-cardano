@@ -6,17 +6,12 @@ module Network.Channel
 
 import Control.Concurrent.STM (STM, newTChan, readTChan, writeTChan)
 import Control.Monad (mfilter, (>=>))
-import Control.Monad.Event.Class (MonadInjectEvent, withEvent)
-import Data.Aeson (Value(..))
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as LBS
 import Data.Functor (($>))
-import Data.Text (Text)
 import Data.Text.Internal.Lazy (smallChunkSize)
 import Network.Socket (Socket)
 import qualified Network.Socket.ByteString.Lazy as Socket
-import Observe.Event.Component (GetSelectorConfig, SelectorConfig(..), SomeJSON(SomeJSON), singletonFieldConfigWith)
-import Observe.Event.Explicit (InjectSelector, addField)
 import qualified System.IO as IO
 import UnliftIO (MonadIO, liftIO)
 
@@ -111,27 +106,3 @@ channelPair = do
       , close = writeTChan ch2 Nothing
       }
     )
-
-data ChannelSelector bytes f where
-  Send :: ChannelSelector bytes bytes
-  Recv :: ChannelSelector bytes (Maybe bytes)
-
-logChannel
-  :: MonadInjectEvent r s s m
-  => InjectSelector (ChannelSelector bytes) s
-  -> Channel m bytes
-  -> Channel m bytes
-logChannel inject Channel{..} = Channel
-  { send = \bytes -> inject Send \s injField -> withEvent s \ev -> do
-      addField ev $ injField bytes
-      send bytes
-  , recv = inject Recv \s injField -> withEvent s \ev -> do
-      mBytes <- recv
-      addField ev $ injField mBytes
-      pure mBytes
-  }
-
-getChannelSelectorConfig :: (bytes -> Text) -> Bool -> GetSelectorConfig (ChannelSelector bytes)
-getChannelSelectorConfig renderBytes defaultEnabled = \case
-  Send -> SelectorConfig "send" defaultEnabled $ singletonFieldConfigWith (SomeJSON . String . renderBytes) "bytes" True
-  Recv -> SelectorConfig "recv" defaultEnabled $ singletonFieldConfigWith (SomeJSON . fmap (String . renderBytes)) "bytes" True

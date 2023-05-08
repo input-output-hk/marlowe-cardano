@@ -93,7 +93,6 @@ library libchainsync
     Language.Marlowe.Runtime.ChainSync.QueryServer
   other-modules:
   build-depends:
-    , aeson >= 2 && < 3
     , async-components ==0.1.0.0
     , base >= 4.9 && < 5
     , bytestring >= 0.10.12 && < 0.12
@@ -130,7 +129,6 @@ library chain-indexer
     Language.Marlowe.Runtime.ChainIndexer.Store
   other-modules:
   build-depends:
-    , aeson >= 2 && < 3
     , async-components ==0.1.0.0
     , base >= 4.9 && < 5
     , base16 >= 0.3.2 && < 0.4
@@ -150,7 +148,6 @@ library chain-indexer
     , hasql-pool ^>= 0.8
     , hasql-th >= 0.4 && < 0.5
     , hasql-transaction >= 1 && < 1.1
-    , marlowe-chain-sync ==0.0.1
     , ouroboros-network ==0.1.0.1
     , profunctors >= 5.6 && < 6
     , stm >= 2.5 && < 2.6
@@ -200,7 +197,6 @@ library gen
     , ouroboros-consensus ==0.1.0.1
     , QuickCheck >= 2.14 && < 3
     , text >= 1.2.4 && < 2
-    , these >= 1.1 && < 2
     , time >= 1.9 && < 2
 
 test-suite marlowe-chain-sync-test
@@ -233,25 +229,29 @@ executable marlowe-chain-indexer
     Paths_marlowe_chain_sync
   build-depends:
     , aeson >= 2 && < 3
-    , aeson-pretty
     , async-components ==0.1.0.0
     , base >= 4.9 && < 5
+    , bytestring >= 0.10.12 && < 0.12
     , cardano-api ==1.35.4
     , cardano-crypto-wrapper ==1.3.0
     , cardano-ledger-byron ==0.1.0.0
-    , containers >= 0.6.5 && < 0.7
     , eventuo11y ^>= { 0.9, 0.10 }
     , eventuo11y-extras ==0.1.0.0
+    , eventuo11y-otel ^>= 0.1
     , general-allocate ^>= { 0.2 }
+    , hasql >= 1.6 && < 2
     , hasql-pool ^>= 0.8
+    , hs-opentelemetry-api >= 0.0.3 && < 0.0.4
+    , hs-opentelemetry-sdk >= 0.0.3 && < 0.0.4
     , marlowe-chain-sync:chain-indexer
+    , mtl >= 2.2 && < 3
     , optparse-applicative
     , ouroboros-network ==0.1.0.1
+    , postgresql-libpq >= 0.9 && < 0.10
     , text >= 1.2.4 && < 2
     , time >= 1.9 && < 2
     , transformers >= 0.5.6 && < 0.6
     , unliftio >= 0.2.1 && < 0.3
-    , uuid
 
 executable marlowe-chain-sync
   import: lang
@@ -265,23 +265,27 @@ executable marlowe-chain-sync
   autogen-modules:
     Paths_marlowe_chain_sync
   build-depends:
-    , aeson-pretty
     , async-components ==0.1.0.0
     , base >= 4.9 && < 5
+    , bytestring >= 0.10.12 && < 0.12
     , cardano-api ==1.35.4
     , cardano-ledger-byron ==0.1.0.0
-    , containers >= 0.6.5 && < 0.7
     , eventuo11y ^>= { 0.9, 0.10 }
     , eventuo11y-extras ==0.1.0.0
+    , eventuo11y-otel ^>= 0.1
     , general-allocate ^>= { 0.2 }
+    , hasql >= 1.6 && < 2
     , hasql-pool ^>= 0.8
+    , hs-opentelemetry-api >= 0.0.3 && < 0.0.4
+    , hs-opentelemetry-sdk >= 0.0.3 && < 0.0.4
     , marlowe-chain-sync ==0.0.1
     , marlowe-chain-sync:libchainsync ==0.0.1
     , marlowe-protocols ==0.1.0.0
+    , mtl >= 2.2 && < 3
     , network >= 3.1 && < 4
     , optparse-applicative
     , ouroboros-network ==0.1.0.1
+    , postgresql-libpq >= 0.9 && < 0.10
     , text >= 1.2.4 && < 2
     , transformers >= 0.5.6 && < 0.6
     , unliftio >= 0.2.1 && < 0.3
-    , uuid

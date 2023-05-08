@@ -4,11 +4,7 @@ module Options
   ) where
 
 import Cardano.Api (NetworkId(..), NetworkMagic(..))
-import Data.Aeson.Encode.Pretty (encodePretty)
 import Data.Maybe (fromMaybe)
-import qualified Data.Text.Lazy as T
-import Data.Text.Lazy.Encoding (decodeUtf8)
-import Logging (defaultRootSelectorLogConfig)
 import Network.Socket (HostName, PortNumber)
 import qualified Options.Applicative as O
 import System.Environment (lookupEnv)
@@ -22,7 +18,6 @@ data Options = Options
   , port              :: !PortNumber
   , queryPort         :: !PortNumber
   , commandPort       :: !PortNumber
-  , logConfigFile     :: !(Maybe FilePath)
   , httpPort :: !PortNumber
   } deriving (Show, Eq)
 
@@ -93,7 +88,6 @@ parseOptions defaultNetworkId defaultSocketPath defaultDatabaseUri defaultHost d
     parser :: O.Parser Options
     parser = O.helper
       <*> versionOption
-      <*> printLogConfigOption
       <*> ( Options
               <$> socketPathOption
               <*> networkIdOption
@@ -102,7 +96,6 @@ parseOptions defaultNetworkId defaultSocketPath defaultDatabaseUri defaultHost d
               <*> portOption
               <*> queryPortOption
               <*> jobPortOption
-              <*> logConfigFileParser
               <*> httpPortOption
           )
       where
@@ -110,11 +103,6 @@ parseOptions defaultNetworkId defaultSocketPath defaultDatabaseUri defaultHost d
         versionOption = O.infoOption
           ("marlowe-chain-sync " <> version)
           (O.long "version" <> O.help "Show version.")
-
-        printLogConfigOption :: O.Parser (a -> a)
-        printLogConfigOption = O.infoOption
-          (T.unpack $ decodeUtf8 $ encodePretty defaultRootSelectorLogConfig)
-          (O.long "print-log-config" <> O.help "Print the default log configuration.")
 
         socketPathOption :: O.Parser FilePath
         socketPathOption = O.strOption options
@@ -191,16 +179,6 @@ parseOptions defaultNetworkId defaultSocketPath defaultDatabaseUri defaultHost d
           , O.help "The hostname to serve the chain sync protocol on."
           , O.showDefault
           ]
-
-        logConfigFileParser :: O.Parser (Maybe FilePath)
-        logConfigFileParser = O.optional $ O.strOption options
-          where
-            options :: O.Mod O.OptionFields FilePath
-            options = mconcat
-              [ O.long "log-config-file"
-              , O.metavar "FILE_PATH"
-              , O.help "Path to the log configuration JSON file."
-              ]
 
         httpPortOption :: O.Parser PortNumber
         httpPortOption = O.option O.auto $ mconcat

@@ -1,5 +1,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE RankNTypes #-}
 
 -- | A generic server for the job protocol. Includes a function for
@@ -10,6 +11,7 @@ module Network.Protocol.Job.Server
   where
 
 import Network.Protocol.Job.Types
+import Network.Protocol.Peer.Trace
 import Network.TypedProtocol
 
 -- | A generic server for the job protocol.
@@ -143,43 +145,53 @@ jobServerPeer
   :: forall cmd m a
    . (Monad m, Command cmd)
   => JobServer cmd m a
-  -> Peer (Job cmd) 'AsServer 'StInit m a
+  -> PeerTraced (Job cmd) 'AsServer 'StInit m a
 jobServerPeer JobServer{..} =
-  Effect $ peerInit <$> runJobServer
+  EffectTraced $ peerInit <$> runJobServer
   where
-  peerInit :: ServerStInit cmd m a -> Peer (Job cmd) 'AsServer 'StInit m a
+  peerInit :: ServerStInit cmd m a -> PeerTraced (Job cmd) 'AsServer 'StInit m a
   peerInit ServerStInit{..} =
-    Await (ClientAgency TokInit) $ Effect . \case
-      MsgExec cmd     -> peerCmd (tagFromCommand cmd) <$> recvMsgExec cmd
-      MsgAttach cmdId -> peerAttach (tagFromJobId cmdId) <$> recvMsgAttach cmdId
+    AwaitTraced (ClientAgency TokInit) \case
+      MsgExec cmd     -> Respond (ServerAgency $ TokCmd (tagFromCommand cmd))
+        $ peerCmd (tagFromCommand cmd) <$> recvMsgExec cmd
+      MsgAttach jobId -> Respond (ServerAgency $ TokAttach (tagFromJobId jobId))
+        $ peerAttach (tagFromJobId jobId) <$> recvMsgAttach jobId
 
   peerAttach
     :: Tag cmd status err result
     -> ServerStAttach cmd status err result m a
-    -> Peer (Job cmd) 'AsServer ('StAttach status err result) m a
+    -> Response (Job cmd) 'AsServer ('StAttach status err result :: Job cmd) m a
   peerAttach tag = \case
-    SendMsgAttachFailed a -> Yield (ServerAgency (TokAttach tag)) MsgAttachFailed $ Done TokDone a
-    SendMsgAttached await -> Yield (ServerAgency (TokAttach tag)) MsgAttached $ peerCmd tag await
+    SendMsgAttachFailed a -> Response MsgAttachFailed $ DoneTraced TokDone a
+    SendMsgAttached cmd -> Response MsgAttached case cmd of
+      SendMsgFail err a -> YieldTraced (ServerAgency $ TokCmd tag) (MsgFail err)
+        $ Close TokDone a
+      SendMsgSucceed result a -> YieldTraced (ServerAgency $ TokCmd tag) (MsgSucceed result)
+        $ Close TokDone a
+      SendMsgAwait status cmdId await -> YieldTraced (ServerAgency $ TokCmd tag) (MsgAwait status cmdId)
+        $ Cast
+        $ peerAwait tag await
 
   peerCmd
     :: Tag cmd status err result
     -> ServerStCmd cmd status err result m a
-    -> Peer (Job cmd) 'AsServer ('StCmd status err result) m a
+    -> Response (Job cmd) 'AsServer ('StCmd status err result :: Job cmd) m a
   peerCmd tag = \case
-    SendMsgFail err a               -> Yield (ServerAgency (TokCmd tag)) (MsgFail err) $ Done TokDone a
-    SendMsgSucceed result a         -> Yield (ServerAgency (TokCmd tag)) (MsgSucceed result) $ Done TokDone a
-    SendMsgAwait status cmdId await -> Yield (ServerAgency (TokCmd tag)) (MsgAwait status cmdId) $ peerAwait tag await
+    SendMsgFail err a -> Response (MsgFail err) $ DoneTraced TokDone a
+    SendMsgSucceed result a -> Response (MsgSucceed result) $ DoneTraced TokDone a
+    SendMsgAwait status cmdId await -> Response (MsgAwait status cmdId) $ peerAwait tag await
 
   peerAwait
     :: Tag cmd status err result
     -> ServerStAwait cmd status err result m a
-    -> Peer (Job cmd) 'AsServer ('StAwait status err result) m a
-  peerAwait tokCmd ServerStAwait{..} =
-    Await (ClientAgency (TokAwait tokCmd)) $ Effect . \case
-      MsgPoll   -> peerCmd tokCmd <$> recvMsgPoll
-      MsgDetach -> Done TokDone <$> recvMsgDetach
+    -> PeerTraced (Job cmd) 'AsServer ('StAwait status err result) m a
+  peerAwait tag ServerStAwait{..} =
+    AwaitTraced (ClientAgency (TokAwait tag)) \case
+      MsgPoll -> Respond (ServerAgency $ TokCmd tag) $ peerCmd tag <$> recvMsgPoll
+      MsgDetach -> Closed TokDone recvMsgDetach
 
 -- | Lift a function that executes a command directly into a command server.
+
 liftCommandHandler
   :: Monad m
   => (forall status err result. Either (cmd status err result) (JobId cmd status err result) -> m (a, Either err result))

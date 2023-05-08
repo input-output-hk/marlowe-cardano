@@ -6,40 +6,32 @@
 
 module Logging
   ( RootSelector(..)
-  , defaultRootSelectorLogConfig
-  , getRootSelectorConfig
+  , renderRootSelectorOTel
   ) where
 
 import Control.Monad.Event.Class (Inject(..))
-import Data.Foldable (fold)
-import Data.Map (Map)
-import Data.Text (Text)
+import Data.ByteString (ByteString)
+import Data.Maybe (catMaybes)
+import qualified Data.Text as T
+import Data.Text.Encoding (decodeUtf8)
 import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncCommand, ChainSyncQuery, RuntimeChainSeek)
-import Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL (getQuerySelectorConfig)
 import qualified Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL as DB
-import Language.Marlowe.Runtime.ChainSync.NodeClient (NodeClientSelector(..), getNodeClientSelectorConfig)
-import Network.Protocol.Connection (ConnectorSelector, getConnectorSelectorConfig, getDefaultConnectorLogConfig)
+import Language.Marlowe.Runtime.ChainSync.NodeClient (NodeClientSelector(..))
+import Network.Protocol.Driver (TcpServerSelector, renderTcpServerSelectorOTel)
 import Network.Protocol.Handshake.Types (Handshake)
 import Network.Protocol.Job.Types (Job)
 import Network.Protocol.Query.Types (Query)
 import Observe.Event (idInjectSelector, injectSelector)
-import Observe.Event.Component
-  ( ConfigWatcherSelector(..)
-  , GetSelectorConfig
-  , SelectorConfig(..)
-  , SelectorLogConfig
-  , getDefaultLogConfig
-  , prependKey
-  , singletonFieldConfig
-  )
+import Observe.Event.Render.OpenTelemetry
+import OpenTelemetry.Trace
+import Ouroboros.Network.Protocol.LocalStateQuery.Codec (Some(..))
 
 data RootSelector f where
-  ChainSeekServer :: ConnectorSelector (Handshake RuntimeChainSeek) f -> RootSelector f
-  QueryServer :: ConnectorSelector (Handshake (Query ChainSyncQuery)) f -> RootSelector f
+  ChainSeekServer :: TcpServerSelector (Handshake RuntimeChainSeek) f -> RootSelector f
+  QueryServer :: TcpServerSelector (Handshake (Query ChainSyncQuery)) f -> RootSelector f
+  JobServer :: TcpServerSelector (Handshake (Job ChainSyncCommand)) f -> RootSelector f
   Database :: DB.QuerySelector f -> RootSelector f
-  JobServer :: ConnectorSelector (Handshake (Job ChainSyncCommand)) f -> RootSelector f
   NodeService :: NodeClientSelector f -> RootSelector f
-  ConfigWatcher :: ConfigWatcherSelector f -> RootSelector f
 
 instance Inject RootSelector RootSelector where
   inject = idInjectSelector
@@ -50,26 +42,52 @@ instance Inject DB.QuerySelector RootSelector where
 instance Inject NodeClientSelector RootSelector where
   inject = injectSelector NodeService
 
--- TODO automate this boilerplate with Template Haskell
-getRootSelectorConfig :: GetSelectorConfig RootSelector
-getRootSelectorConfig = \case
-  ChainSeekServer sel -> prependKey "chain-sync" $ getConnectorSelectorConfig False False sel
-  QueryServer sel -> prependKey "query" $ getConnectorSelectorConfig False False sel
-  Database sel -> prependKey "database" $ getQuerySelectorConfig sel
-  JobServer sel -> prependKey "job" $ getConnectorSelectorConfig False False sel
-  NodeService sel -> prependKey "node" $ getNodeClientSelectorConfig sel
-  ConfigWatcher ReloadConfig -> SelectorConfig "reload-log-config" True
-    $ singletonFieldConfig "config" True
+renderRootSelectorOTel
+  :: Maybe ByteString
+  -> Maybe ByteString
+  -> Maybe ByteString
+  -> Maybe ByteString
+  -> RenderSelectorOTel RootSelector
+renderRootSelectorOTel dbName dbUser host port = \case
+  ChainSeekServer sel -> renderTcpServerSelectorOTel sel
+  QueryServer sel -> renderTcpServerSelectorOTel sel
+  JobServer sel -> renderTcpServerSelectorOTel sel
+  Database sel -> renderDatabaseSelectorOTel dbName dbUser host port sel
+  NodeService sel -> renderNodeServiceSelectorOTel sel
 
-defaultRootSelectorLogConfig :: Map Text SelectorLogConfig
-defaultRootSelectorLogConfig = fold
-  [ getDefaultLogConfig getRootSelectorConfig $ Database $ DB.Query "getUTxOs"
-  , getDefaultLogConfig getRootSelectorConfig $ Database $ DB.Query "getTip"
-  , getDefaultLogConfig getRootSelectorConfig $ Database $ DB.Query "moveClient"
-  , getDefaultConnectorLogConfig getRootSelectorConfig ChainSeekServer
-  , getDefaultConnectorLogConfig getRootSelectorConfig QueryServer
-  , getDefaultConnectorLogConfig getRootSelectorConfig JobServer
-  , getDefaultLogConfig getRootSelectorConfig $ NodeService Submit
-  , getDefaultLogConfig getRootSelectorConfig $ NodeService Query
-  , getDefaultLogConfig getRootSelectorConfig $ ConfigWatcher ReloadConfig
-  ]
+renderNodeServiceSelectorOTel :: RenderSelectorOTel NodeClientSelector
+renderNodeServiceSelectorOTel = \case
+  Submit -> OTelRendered
+    { eventName = "cardano/submit_tx"
+    , eventKind = Client
+    , renderField = pure . ("cardano.transaction",) . toAttribute . T.pack . show
+    }
+  Query -> OTelRendered
+    { eventName = "cardano/query_node_local_state"
+    , eventKind = Client
+    , renderField = \(Some query) -> [("cardano.query", toAttribute $ T.pack $ show query)]
+    }
+
+renderDatabaseSelectorOTel
+  :: Maybe ByteString
+  -> Maybe ByteString
+  -> Maybe ByteString
+  -> Maybe ByteString
+  -> RenderSelectorOTel DB.QuerySelector
+renderDatabaseSelectorOTel dbName dbUser host port = \case
+  DB.Query queryName -> OTelRendered
+    { eventName = queryName <> " " <> maybe "chain" decodeUtf8 dbName
+    , eventKind = Client
+    , renderField = \case
+        DB.SqlStatement sql -> [ ("db.statement", toAttribute $ decodeUtf8 sql) ]
+        DB.Parameters params -> [ ("db.parameters", toAttribute params) ]
+        DB.QueryName _ -> catMaybes
+          [ Just ("db.system", "postgresql")
+          , ("db.user",) . toAttribute . decodeUtf8 <$> dbUser
+          , ("net.peer.name",) . toAttribute . decodeUtf8 <$> host
+          , ("net.peer.port",) . toAttribute . decodeUtf8 <$> port
+          , ("db.name",) . toAttribute . decodeUtf8 <$> dbName
+          , Just ("net.transport", "ip_tcp")
+          , Just ("db.operation", "SELECT")
+          ]
+    }

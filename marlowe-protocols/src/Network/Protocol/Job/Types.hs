@@ -17,7 +17,6 @@ module Network.Protocol.Job.Types
   where
 
 import Control.Monad (join)
-import Data.Aeson (Value(..), object, (.=))
 import Data.Binary (Put, getWord8, putWord8)
 import Data.Binary.Get (Get)
 import Data.Foldable (fold)
@@ -25,6 +24,7 @@ import Data.Functor ((<&>))
 import Data.List.NonEmpty
 import Data.Maybe (catMaybes)
 import Data.Proxy (Proxy(..))
+import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Type.Equality (type (:~:)(Refl))
 import GHC.Show (showSpace)
@@ -32,9 +32,10 @@ import Network.Protocol.Codec (BinaryMessage(..))
 import Network.Protocol.Codec.Spec
   (ArbitraryMessage(..), MessageEq(..), MessageVariations(..), ShowProtocol(..), SomePeerHasAgency(..))
 import Network.Protocol.Handshake.Types (HasSignature(..))
+import Network.Protocol.Peer.Trace
 import Network.TypedProtocol
 import Network.TypedProtocol.Codec (AnyMessageAndAgency(..))
-import Observe.Event.Network.Protocol (MessageToJSON(..))
+import OpenTelemetry.Attributes (toPrimitiveAttribute)
 import Test.QuickCheck (Gen, oneof)
 
 data SomeTag cmd = forall status err result. SomeTag (Tag cmd status err result)
@@ -71,13 +72,6 @@ class Command (cmd :: * -> * -> * -> *) where
   getErr :: Tag cmd status err result -> Get err
   putResult :: Tag cmd status err result -> result -> Put
   getResult :: Tag cmd status err result -> Get result
-
-class Command cmd => CommandToJSON cmd where
-  commandToJSON :: cmd status err result -> Value
-  jobIdToJSON :: JobId cmd status err result -> Value
-  errToJSON :: Tag cmd status err result -> err -> Value
-  resultToJSON :: Tag cmd status err result -> result -> Value
-  statusToJSON :: Tag cmd status err result -> status -> Value
 
 -- | A state kind for the job protocol.
 data Job (cmd :: * -> * -> * -> *) where
@@ -254,26 +248,50 @@ instance Command cmd => BinaryMessage (Job cmd) where
         _                          -> fail "Invalid protocol state for MsgAttachFailed"
       _ -> fail $ "Invalid msg tag " <> show tag
 
-instance CommandToJSON cmd => MessageToJSON (Job cmd) where
-  messageToJSON = \case
-    ClientAgency TokInit -> \case
-      MsgExec cmd -> object [ "exec" .= commandToJSON cmd ]
-      MsgAttach jobId -> object [ "attach" .= jobIdToJSON jobId ]
-    ClientAgency (TokAwait _) -> String . \case
-      MsgPoll -> "poll"
-      MsgDetach -> "detach"
-    ServerAgency (TokCmd tag)-> \case
-      MsgFail err -> object [ "fail" .= errToJSON tag err ]
-      MsgSucceed result -> object [ "succeed" .= resultToJSON tag result ]
-      MsgAwait status jobId -> object
-        [ "await" .= object
-            [ "status" .= statusToJSON tag status
-            , "jobId" .= jobIdToJSON jobId
-            ]
-        ]
-    ServerAgency (TokAttach _) -> String . \case
-      MsgAttached -> "attached"
-      MsgAttachFailed -> "attachFailed"
+class ShowCommand cmd => OTelCommand cmd where
+  commandTypeName :: Proxy cmd -> Text
+  commandName :: Tag cmd delimiter err result -> Text
+
+instance OTelCommand cmd => OTelProtocol (Job cmd) where
+  protocolName _ = "cmd." <> commandTypeName (Proxy @cmd)
+  messageAttributes = curry \case
+    (_, MsgExec cmd) -> MessageAttributes
+      { messageType = "exec/" <> commandName (tagFromCommand cmd)
+      , messageParameters = [toPrimitiveAttribute $ T.pack $ showsPrecCommand 0 cmd ""]
+      }
+    (_, MsgAttach jobId) -> MessageAttributes
+      { messageType = "attach/" <> commandName (tagFromJobId jobId)
+      , messageParameters = [toPrimitiveAttribute $ T.pack $ showsPrecJobId 0 jobId ""]
+      }
+    (ServerAgency (TokAttach tag), MsgAttached) -> MessageAttributes
+      { messageType = "attach/" <> commandName tag <> "/attached"
+      , messageParameters = []
+      }
+    (ServerAgency (TokAttach tag), MsgAttachFailed) -> MessageAttributes
+      { messageType = "attach/" <> commandName tag <> "/failed"
+      , messageParameters = []
+      }
+    (ServerAgency (TokCmd tag), MsgFail err) -> MessageAttributes
+      { messageType = "exec/" <> commandName tag <> "/fail"
+      , messageParameters = [toPrimitiveAttribute $ T.pack $ showsPrecErr 0 tag err ""]
+      }
+    (ServerAgency (TokCmd tag), MsgSucceed result) -> MessageAttributes
+      { messageType = "exec/" <> commandName tag <> "/succeed"
+      , messageParameters = [toPrimitiveAttribute $ T.pack $ showsPrecResult 0 tag result ""]
+      }
+    (ServerAgency (TokCmd tag), MsgAwait status jobId) -> MessageAttributes
+      { messageType = "exec/" <> commandName tag <> "/await"
+      , messageParameters = toPrimitiveAttribute . T.pack <$>
+          [showsPrecStatus 0 tag status "", showsPrecJobId 0 jobId ""]
+      }
+    (ClientAgency (TokAwait tag), MsgPoll) -> MessageAttributes
+      { messageType = "exec/" <> commandName tag <> "/poll"
+      , messageParameters = []
+      }
+    (ClientAgency (TokAwait tag), MsgDetach) -> MessageAttributes
+      { messageType = "exec/" <> commandName tag <> "/detach"
+      , messageParameters = []
+      }
 
 class Command cmd => ArbitraryCommand cmd where
   arbitraryTag :: Gen (SomeTag cmd)

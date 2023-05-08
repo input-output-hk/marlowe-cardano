@@ -75,10 +75,12 @@ import Language.Marlowe.CLI.Types
   (CliEnv(CliEnv), CliError(..), MarlowePlutusVersion, PrintStats(PrintStats), SigningKeyFile(SigningKeyFile))
 import qualified Language.Marlowe.CLI.Types as T
 import qualified Language.Marlowe.Protocol.Client as Marlowe.Protocol
+import qualified Language.Marlowe.Protocol.Types as Marlowe.Protocol
 import qualified Language.Marlowe.Runtime.App.Types as Apps
 import qualified Network.Protocol.Connection as Network.Protocol
 import qualified Network.Protocol.Driver as Network.Protocol
 import qualified Network.Protocol.Handshake.Client as Network.Protocol
+import Network.Protocol.Handshake.Types (Handshake)
 import Observe.Event.Render.JSON (defaultRenderSelectorJSON)
 import Observe.Event.Render.JSON.Handle (simpleJsonStderrBackend)
 import PlutusCore (defaultCostModelParams)
@@ -131,9 +133,8 @@ runTests era TestSuite{..} =
 
       let
         RuntimeConfig { .. } = stRuntime
-        connector :: Network.Protocol.SomeClientConnector Marlowe.Protocol.MarloweRuntimeClient IO
-        connector = Network.Protocol.SomeConnector
-          $ Network.Protocol.handshakeClientConnector
+        connector :: Network.Protocol.ClientConnector (Handshake Marlowe.Protocol.MarloweRuntime) Marlowe.Protocol.MarloweRuntimeClient IO
+        connector = Network.Protocol.handshakeClientConnector
           $ Network.Protocol.tcpClient rcRuntimeHost rcRuntimePort Marlowe.Protocol.marloweRuntimeClientPeer
         config = def
           { Apps.chainSeekHost = rcRuntimeHost
@@ -200,5 +201,3 @@ runTest env state (TestCase _ testOperations) = do
   case res of
     Left err -> pure $ TestFailed err
     Right _ -> pure TestSucceeded
-
-

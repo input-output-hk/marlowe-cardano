@@ -9,7 +9,6 @@ module Language.Marlowe.Runtime.ChainSync.NodeClient
   , NodeClientSelector(..)
   , QueryNode
   , SubmitToNode
-  , getNodeClientSelectorConfig
   , nodeClient
   ) where
 
@@ -19,26 +18,21 @@ import Cardano.Api
   , CardanoMode
   , ChainPoint
   , ChainTip
-  , EraInMode(..)
   , LocalChainSyncClient(LocalChainSyncClient)
   , LocalNodeClientProtocols(..)
   , LocalNodeClientProtocolsInMode
   , QueryInMode
-  , TxInMode(TxInMode)
+  , TxInMode
   , TxValidationErrorInMode
   , chainTipToChainPoint
-  , serialiseToTextEnvelope
   )
 import Cardano.Api.ChainSync.Client (ChainSyncClient(..), ClientStIdle(..), ClientStIntersect(..), ClientStNext(..))
 import Cardano.Api.Shelley (AcquiringFailure(..))
 import Control.Concurrent.Component (Component, component)
 import Control.Concurrent.STM.TChan (TChan, newTChan, readTChan, writeTChan)
 import Control.Concurrent.STM.TMVar (TMVar, putTMVar, takeTMVar)
-import Data.Aeson (Value(String), toJSON)
 import Data.Bifunctor (first)
-import qualified Data.Text as T (pack)
 import Observe.Event (addField)
-import Observe.Event.Component (GetSelectorConfig, SelectorConfig(..), SomeJSON(..), singletonFieldConfigWith)
 
 import Control.Monad.Event.Class (MonadInjectEvent, withEvent)
 import qualified Ouroboros.Network.Protocol.LocalStateQuery.Client as Q
@@ -73,24 +67,6 @@ newtype NodeClientDependencies = NodeClientDependencies
 data NodeClientSelector f where
   Submit :: NodeClientSelector (TxInMode CardanoMode)
   Query :: NodeClientSelector (Q.Some (QueryInMode CardanoMode))
-
-
-getNodeClientSelectorConfig :: GetSelectorConfig NodeClientSelector
-getNodeClientSelectorConfig Submit =
-  SelectorConfig "submit" True $ singletonFieldConfigWith (SomeJSON . txToJSON) "tx" True
-  where
-    txToJSON :: TxInMode CardanoMode -> Value
-    txToJSON (TxInMode tx ShelleyEraInCardanoMode) = toJSON $ serialiseToTextEnvelope Nothing tx
-    txToJSON (TxInMode tx AllegraEraInCardanoMode) = toJSON $ serialiseToTextEnvelope Nothing tx
-    txToJSON (TxInMode tx MaryEraInCardanoMode) = toJSON $ serialiseToTextEnvelope Nothing tx
-    txToJSON (TxInMode tx AlonzoEraInCardanoMode) = toJSON $ serialiseToTextEnvelope Nothing tx
-    txToJSON (TxInMode tx BabbageEraInCardanoMode) = toJSON $ serialiseToTextEnvelope Nothing tx
-    txToJSON _ = String "<<a transaction>>"
-getNodeClientSelectorConfig Query =
-  SelectorConfig "query" True $ singletonFieldConfigWith (SomeJSON . queryToJSON) "query" True
-  where
-    queryToJSON :: Q.Some (QueryInMode CardanoMode) -> Value
-    queryToJSON (Q.Some query) = String . T.pack $ show query
 
 
 nodeClient :: (MonadInjectEvent r NodeClientSelector s m, MonadIO m) => Component m NodeClientDependencies (NodeClient m)

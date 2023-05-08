@@ -48,7 +48,9 @@ import Language.Marlowe.CLI.Test.Runtime.Types (RuntimeMonitorInput, RuntimeMoni
 import qualified Language.Marlowe.CLI.Test.Runtime.Types as Runtime
 import Language.Marlowe.CLI.Test.Wallet.Types as Wallet
 import qualified Language.Marlowe.Protocol.Client as Marlowe.Protocol
+import qualified Language.Marlowe.Protocol.Types as Marlowe.Protocol
 import qualified Network.Protocol.Connection as Network.Protocol
+import Network.Protocol.Handshake.Types (Handshake)
 import Network.Socket (PortNumber)
 
 data RuntimeConfig = RuntimeConfig
@@ -169,7 +171,7 @@ data InterpretState lang era = InterpretState
 data InterpretEnv lang era = InterpretEnv
   {
     _ieRuntimeMonitor :: Maybe (RuntimeMonitorInput, RuntimeMonitorState lang era)
-  , _ieRuntimeClientConnector :: Maybe (Network.Protocol.SomeClientConnector Marlowe.Protocol.MarloweRuntimeClient IO)
+  , _ieRuntimeClientConnector :: Maybe (Network.Protocol.ClientConnector (Handshake Marlowe.Protocol.MarloweRuntime) Marlowe.Protocol.MarloweRuntimeClient IO)
   , _ieExecutionMode :: ExecutionMode
   , _ieConnection :: LocalNodeConnectInfo CardanoMode
   , _ieEra :: ScriptDataSupportedInEra era

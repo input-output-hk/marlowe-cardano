@@ -1,4 +1,5 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE OverloadedLists #-}
@@ -13,6 +14,7 @@ import Control.Concurrent.Async (concurrently_)
 import Control.Concurrent.Component
 import Control.Concurrent.STM
   ( STM
+  , TMVar
   , TVar
   , atomically
   , modifyTVar
@@ -28,10 +30,11 @@ import Control.Concurrent.STM
 import Control.Concurrent.STM.Delay (newDelay, waitDelay)
 import Control.Exception (SomeException, try)
 import Control.Monad (when, (<=<))
+import Control.Monad.Event.Class
+import Control.Monad.IO.Unlift (MonadUnliftIO, liftIO, withRunInIO)
 import Data.Foldable (for_)
 import qualified Data.Map as Map
 import Data.Time (UTCTime)
-import Data.Void (Void)
 import Language.Marlowe.Protocol.Client (MarloweRuntimeClient(..))
 import Language.Marlowe.Runtime.Cardano.Api (fromCardanoTxId)
 import Language.Marlowe.Runtime.ChainSync.Api (Lovelace, StakeCredential, TokenName, TxId)
@@ -49,23 +52,14 @@ import Language.Marlowe.Runtime.Transaction.Api
   , WalletAddresses
   , WithdrawError
   )
-import Network.Protocol.Connection (SomeClientConnector)
-import Network.Protocol.Driver (runSomeConnector)
+import Network.Protocol.Connection (SomeClientConnectorTraced)
+import Network.Protocol.Driver (runSomeConnectorTraced)
 import Network.Protocol.Job.Client
-import Observe.Event.DSL (SelectorSpec(..))
-import Observe.Event.Explicit (EventBackend, addField, idInjectSelector, subEventBackend, withEvent)
-import Observe.Event.Render.JSON.DSL.Compile (compile)
-import Observe.Event.Syntax ((≔))
+import Network.Protocol.Peer.Trace (HasSpanContext)
+import Observe.Event.Backend (setAncestorEventBackend)
 
-compile $ SelectorSpec ["tx", "client"]
-  [ ["submit", "tx"] ≔ ''Void
-  , ["submit", "success"] ≔ ''Void
-  , ["submit", "fail"] ≔ ''String
-  , ["submit", "await"] ≔ ''String
-  ]
-
-newtype TxClientDependencies r = TxClientDependencies
-  { connector :: SomeClientConnector MarloweRuntimeClient IO
+newtype TxClientDependencies r s m = TxClientDependencies
+  { connector :: SomeClientConnectorTraced MarloweRuntimeClient r s m
   }
 
 type CreateContract m
@@ -100,14 +94,9 @@ type Withdraw m
 
 data TempTxStatus = Unsigned | Submitted
 
--- Note that we hard-code 'IO' as the monad for
--- the 'EventBackend'... This should be fixed by
--- instead using a 'MonadEvent' (whose 'BackendMonad'
--- is 'IO')
-type Submit r m
-   = EventBackend IO r TxClientSelector
-  -> Tx BabbageEra
-  -> m (Maybe SubmitError)
+type Submit r m = r -> Submit' m
+
+type Submit' m = Tx BabbageEra -> m (Maybe SubmitError)
 
 newtype Withdrawn era (v :: MarloweVersionTag) = Withdrawn { unWithdrawn :: TxBody era }
 
@@ -115,13 +104,13 @@ data TempTx (tx :: * -> MarloweVersionTag -> *) where
   TempTx :: MarloweVersion v -> TempTxStatus -> tx BabbageEra v -> TempTx tx
 
 -- | Public API of the TxClient
-data TxClient r = TxClient
-  { createContract :: CreateContract IO
-  , applyInputs :: ApplyInputs IO
-  , withdraw :: Withdraw IO
-  , submitContract :: ContractId -> Submit r IO
-  , submitTransaction :: ContractId -> TxId -> Submit r IO
-  , submitWithdrawal :: TxId -> Submit r IO
+data TxClient r m = TxClient
+  { createContract :: CreateContract m
+  , applyInputs :: ApplyInputs m
+  , withdraw :: Withdraw m
+  , submitContract :: ContractId -> Submit r m
+  , submitTransaction :: ContractId -> TxId -> Submit r m
+  , submitWithdrawal :: TxId -> Submit r m
   , lookupTempContract :: ContractId -> STM (Maybe (TempTx ContractCreated))
   , getTempContracts :: STM [TempTx ContractCreated]
   , lookupTempTransaction :: ContractId -> TxId -> STM (Maybe (TempTx InputsApplied))
@@ -142,7 +131,10 @@ type WithMapUpdate k tx a
 -- existentialize the type parameters.
 data SomeTVarWithMapUpdate = forall k tx a. Ord k => SomeTVarWithMapUpdate (TVar a) (WithMapUpdate k tx a)
 
-txClient :: forall r. Component IO (TxClientDependencies r) (TxClient r)
+txClient
+  :: forall r s m
+   . (MonadEvent r s m, MonadUnliftIO m, HasSpanContext r)
+  => Component m (TxClientDependencies r s m) (TxClient r m)
 txClient = component \TxClientDependencies{..} -> do
   tempContracts <- newTVar mempty
   tempTransactions <- newTVar mempty
@@ -150,75 +142,68 @@ txClient = component \TxClientDependencies{..} -> do
   submitQueue <- newTQueue
 
   let
-    runSubmitGeneric
-      (SomeTVarWithMapUpdate tempVar updateTemp)
-      tx
-      sender
-      eb = do
+    runSubmitGeneric :: SomeTVarWithMapUpdate -> Tx BabbageEra -> TMVar (Maybe SubmitError) -> m ()
+    runSubmitGeneric (SomeTVarWithMapUpdate tempVar updateTemp) tx sender = do
       let
         cmd = Submit tx
         client = JobClient $ pure $ SendMsgExec cmd $ clientCmd True
         clientCmd report = ClientStCmd
-          { recvMsgFail = \err -> withEvent eb SubmitFail \ev -> do
-              addField ev $ show err
-              atomically do
-                when report $ putTMVar sender $ Just err
-                modifyTVar tempVar $ updateTemp $ Map.update (Just . toUnsigned)
-          , recvMsgSucceed = \_ -> withEvent eb SubmitSuccess \_ -> do
-              atomically do
-                modifyTVar tempVar $ updateTemp Map.delete
-                when report $ putTMVar sender Nothing
-          , recvMsgAwait = \status _ -> withEvent eb SubmitAwait \ev -> do
-              addField ev $ show status
-              report' <- case status of
+          { recvMsgFail = \err -> liftIO $ atomically do
+              when report $ putTMVar sender $ Just err
+              modifyTVar tempVar $ updateTemp $ Map.update (Just . toUnsigned)
+          , recvMsgSucceed = \_ -> liftIO $ atomically do
+              modifyTVar tempVar $ updateTemp Map.delete
+              when report $ putTMVar sender Nothing
+          , recvMsgAwait = \status _ -> do
+              report' <- liftIO case status of
                 Accepted -> do
                   when report $ atomically do
                     putTMVar sender Nothing
                     modifyTVar tempVar $ updateTemp $ Map.update (Just . toSubmitted)
                   pure False
                 _ -> pure report
-              delay <- newDelay 1_000_000
-              atomically $ waitDelay delay
+              delay <- liftIO $ newDelay 1_000_000
+              liftIO $ atomically $ waitDelay delay
               pure $ SendMsgPoll $ clientCmd report'
           }
-      runSomeConnector connector $ RunTxClient client
+      runSomeConnectorTraced connector $ RunTxClient client
 
     genericSubmit
       :: SomeTVarWithMapUpdate
-      -> EventBackend IO r TxClientSelector
+      -> r
       -> Tx BabbageEra
-      -> IO (Maybe SubmitError)
-    genericSubmit tVarWithUpdate eventBackend tx =
-      withEvent eventBackend SubmitTx \ev -> do
+      -> m (Maybe SubmitError)
+    genericSubmit tVarWithUpdate currentParent tx = do
+      liftIO do
         sender <- atomically do
           sender <- newEmptyTMVar
-          writeTQueue submitQueue (tVarWithUpdate, tx, sender, subEventBackend idInjectSelector ev eventBackend)
+          writeTQueue submitQueue (tVarWithUpdate, tx, sender, currentParent)
           pure sender
         atomically $ takeTMVar sender
 
-    runTxClient = do
-      (tVarWithUpdate, tx, sender, eventBackend) <- atomically $ readTQueue submitQueue
+    runTxClient = withRunInIO \runInIO -> do
+      (tVarWithUpdate, tx, sender, currentParent) <- atomically $ readTQueue submitQueue
       concurrently_
-        (try @SomeException $ runSubmitGeneric tVarWithUpdate tx sender eventBackend)
-        runTxClient
+        (try @SomeException $ runInIO $ localBackend (setAncestorEventBackend currentParent) $ runSubmitGeneric tVarWithUpdate tx sender)
+        (runInIO runTxClient)
 
   pure (runTxClient, TxClient
     { createContract = \stakeCredential version addresses roles metadata minUTxODeposit contract -> do
-        response <- runSomeConnector connector
+        response <- runSomeConnectorTraced connector
           $ RunTxClient
           $ liftCommand
           $ Create stakeCredential version addresses roles metadata minUTxODeposit contract
-        for_ response \creation@ContractCreated{contractId} -> atomically
+        liftIO $ for_ response \creation@ContractCreated{contractId} -> atomically
           $ modifyTVar tempContracts
           $ Map.insert contractId
           $ TempTx version Unsigned creation
         pure response
     , applyInputs = \version addresses contractId metadata invalidBefore invalidHereafter inputs -> do
-        response <- runSomeConnector connector
+        response <- runSomeConnectorTraced connector
           $ RunTxClient
           $ liftCommand
           $ ApplyInputs version addresses contractId metadata invalidBefore invalidHereafter inputs
-        for_ response \application@InputsApplied{txBody} -> do
+        liftIO $ for_ response \application@InputsApplied{txBody} -> do
           let txId = fromCardanoTxId $ getTxId txBody
           let tempTx = TempTx version Unsigned application
           atomically
@@ -226,11 +211,11 @@ txClient = component \TxClientDependencies{..} -> do
             $ Map.alter (Just . maybe (Map.singleton txId tempTx) (Map.insert txId tempTx)) contractId
         pure response
     , withdraw = \version addresses contractId role -> do
-        response <- runSomeConnector connector
+        response <- runSomeConnectorTraced connector
           $ RunTxClient
           $ liftCommand
           $ Withdraw version addresses contractId role
-        for_ response \txBody-> atomically
+        liftIO $ for_ response \txBody-> atomically
           $ modifyTVar tempWithdrawals
           $ Map.insert (fromCardanoTxId $ getTxId txBody)
           $ TempTx version Unsigned

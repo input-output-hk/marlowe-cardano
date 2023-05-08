@@ -86,8 +86,8 @@ library server
     Language.Marlowe.Runtime.Web.Server
     Language.Marlowe.Runtime.Web.Server.DTO
     Language.Marlowe.Runtime.Web.Server.Util
-  other-modules:
     Language.Marlowe.Runtime.Web.Server.Monad
+  other-modules:
     Language.Marlowe.Runtime.Web.Server.OpenAPI
     Language.Marlowe.Runtime.Web.Server.REST
     Language.Marlowe.Runtime.Web.Server.REST.ApiError
@@ -97,42 +97,41 @@ library server
     Language.Marlowe.Runtime.Web.Server.SyncClient
     Language.Marlowe.Runtime.Web.Server.TxClient
   build-depends:
-    , base >= 4.9 && < 5
-    , bytestring >= 0.10.12 && < 0.12
     , aeson >= 2 && < 3
     , async >= 2.2 && < 3
     , async-components ==0.1.0.0
+    , base >= 4.9 && < 5
+    , bytestring >= 0.10.12 && < 0.12
     , cardano-api ==1.35.4
-    , containers >= 0.6.5 && < 0.7
     , cardano-binary ==1.5.0
     , cardano-ledger-alonzo ==0.1.0.0
     , cardano-ledger-core ==0.1.0.0
     , cardano-ledger-shelley ==0.1.0.0
+    , containers >= 0.6.5 && < 0.7
     , errors >= 2.3 && < 3
     , eventuo11y ^>= { 0.9, 0.10 }
-    , eventuo11y-dsl ^>= { 0.2 }
-    , eventuo11y-json ^>= { 0.3 }
-    , eventuo11y-batteries ^>= { 0.4 }
+    , eventuo11y-extras ==0.1.0.0
     , exceptions >= 0.10 && < 0.12
     , general-allocate ^>= { 0.2 }
     , http-media >= 0.8 && < 0.9
     , lens >= 5.2 && < 6
     , marlowe-cardano ==0.1.0.3
+    , marlowe-chain-sync ==0.0.1
+    , marlowe-client ==0.0.1
     , marlowe-protocols ==0.1.0.0
-    , marlowe-runtime-web ==0.0.1
     , marlowe-runtime ==0.0.1
+    , marlowe-runtime-web ==0.0.1
     , marlowe-runtime:discovery-api ==0.0.1
     , marlowe-runtime:proxy-api ==0.0.1
     , marlowe-runtime:sync-api ==0.0.1
     , marlowe-runtime:tx-api ==0.0.1
-    , marlowe-chain-sync ==0.0.1
     , monad-control >= 1 && < 1.1
     , mtl >= 2.2 && < 3
     , openapi3 >= 3.2 && < 4
     , servant >= 0.19 && < 0.20
-    , servant-server >= 0.19 && < 0.20
     , servant-openapi3 >= 2.0 && < 2.1
     , servant-pagination >= 2.5 && < 3
+    , servant-server >= 0.19 && < 0.20
     , stm >= 2.5 && < 2.6
     , stm-delay >= 0.1.1 && < 0.2
     , text >= 1.2.4 && < 2
@@ -153,15 +152,22 @@ executable marlowe-web-server
   autogen-modules:
     Paths_marlowe_runtime_web
   build-depends:
-    , base >= 4.9 && < 5
     , async-components ==0.1.0.0
-    , eventuo11y-json ^>= { 0.3 }
+    , base >= 4.9 && < 5
+    , eventuo11y ^>= { 0.9, 0.10 }
+    , eventuo11y-otel ^>= 0.1
+    , hs-opentelemetry-api >= 0.0.3 && < 0.0.4
+    , hs-opentelemetry-sdk >= 0.0.3 && < 0.0.4
+    , http-types
     , marlowe-client
+    , marlowe-protocols
     , marlowe-runtime-web:server
     , marlowe-runtime:config
     , mtl >= 2.2 && < 3
     , network
     , optparse-applicative
+    , text >= 1.2.4 && < 2
+    , wai >= 3.2 && < 4
     , warp
   ghc-options: -threaded
 

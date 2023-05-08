@@ -14,7 +14,6 @@ module Network.Protocol.ChainSeek.Types
   where
 
 import Control.Monad (join)
-import Data.Aeson (ToJSON(..), Value(..), object, (.=))
 import Data.Binary (Binary(..), Get, Put, getWord8, putWord8)
 import Data.Data (type (:~:)(Refl))
 import Data.Foldable (fold)
@@ -23,15 +22,17 @@ import Data.Kind (Type)
 import Data.List.NonEmpty (NonEmpty((:|)))
 import Data.Maybe (catMaybes)
 import Data.Proxy (Proxy(..))
+import Data.Text (Text)
 import qualified Data.Text as T
 import GHC.Show (showSpace)
 import Network.Protocol.Codec (BinaryMessage(..))
 import Network.Protocol.Codec.Spec
   (ArbitraryMessage(..), MessageEq(..), MessageVariations(..), ShowProtocol(..), SomePeerHasAgency(..), Variations(..))
 import Network.Protocol.Handshake.Types (HasSignature(..))
+import Network.Protocol.Peer.Trace (MessageAttributes(..), OTelProtocol(..))
 import Network.TypedProtocol (PeerHasAgency(..), Protocol(..), SomeMessage(SomeMessage))
 import Network.TypedProtocol.Codec (AnyMessageAndAgency(..))
-import Observe.Event.Network.Protocol (MessageToJSON(..))
+import OpenTelemetry.Attributes (ToPrimitiveAttribute(toPrimitiveAttribute))
 import Test.QuickCheck (Arbitrary, Gen, arbitrary, oneof, shrink)
 
 data SomeTag q = forall err result. SomeTag (Tag q err result)
@@ -48,11 +49,6 @@ class Query (q :: * -> * -> *) where
   getErr :: Tag q err result -> Get err
   putResult :: Tag q err result -> result -> Put
   getResult :: Tag q err result -> Get result
-
-class Query q => QueryToJSON (q :: * -> * -> *) where
-  queryToJSON :: q err result -> Value
-  errToJSON :: Tag q err result -> err -> Value
-  resultToJSON :: Tag q err result -> result -> Value
 
 -- | The type of states in the protocol.
 data ChainSeek (query :: Type -> Type -> Type) point tip where
@@ -226,39 +222,49 @@ instance
 
         _ -> fail $ "Unexpected tag " <> show tag
 
+class ShowQuery query => OTelQuery query where
+  queryTypeName :: Proxy query -> Text
+  queryName :: Tag query err result -> Text
+
 instance
-  ( QueryToJSON query
-  , ToJSON tip
-  , ToJSON point
-  ) => MessageToJSON (ChainSeek query point tip) where
-  messageToJSON = \case
-    ClientAgency TokIdle -> \case
-      MsgQueryNext query -> object [ "queryNext" .= queryToJSON query ]
-      MsgDone -> String "done"
-    ClientAgency TokPoll -> \case
-      MsgPoll -> String "poll"
-      MsgCancel -> String "cancel"
-    ServerAgency (TokNext tag) -> \case
-      MsgRejectQuery err tip -> object
-        [ "rejectQuery" .= object
-            [ "error" .= errToJSON tag err
-            , "tip" .= toJSON tip
-            ]
-        ]
-      MsgRollForward result point tip -> object
-        [ "rollForward" .= object
-            [ "result" .= resultToJSON tag result
-            , "point" .= toJSON point
-            , "tip" .= toJSON tip
-            ]
-        ]
-      MsgRollBackward point tip -> object
-        [ "rollBackward" .= object
-            [ "point" .= toJSON point
-            , "tip" .= toJSON tip
-            ]
-        ]
-      MsgWait -> String "wait"
+  ( OTelQuery query
+  , Show point
+  , Show tip
+  ) => OTelProtocol (ChainSeek query point tip) where
+  protocolName _ = "chain_seek." <> queryTypeName (Proxy @query)
+  messageAttributes = curry \case
+    (_, MsgQueryNext query) -> MessageAttributes
+      { messageType = "query/" <> queryName (tagFromQuery query)
+      , messageParameters = [toPrimitiveAttribute $ T.pack $ showsPrecQuery 0 query ""]
+      }
+    (ServerAgency (TokNext tag), MsgRejectQuery err tip) -> MessageAttributes
+      { messageType = "query/" <> queryName tag <> "/reject"
+      , messageParameters = toPrimitiveAttribute . T.pack <$> [showsPrecErr 0 tag err "", show tip]
+      }
+    (ServerAgency (TokNext tag), MsgRollForward result point tip) -> MessageAttributes
+      { messageType = "query/" <> queryName tag <> "/roll_forward"
+      , messageParameters = toPrimitiveAttribute . T.pack <$> [showsPrecResult 0 tag result "", show point, show tip]
+      }
+    (ServerAgency (TokNext tag), MsgRollBackward point tip) -> MessageAttributes
+      { messageType = "query/" <> queryName tag <> "/roll_backward"
+      , messageParameters = toPrimitiveAttribute . T.pack <$> [show point, show tip]
+      }
+    (ServerAgency (TokNext tag), MsgWait) -> MessageAttributes
+      { messageType = "query/" <> queryName tag <> "/wait"
+      , messageParameters = []
+      }
+    (_, MsgDone) -> MessageAttributes
+      { messageType = "done"
+      , messageParameters = []
+      }
+    (_, MsgPoll) -> MessageAttributes
+      { messageType = "poll"
+      , messageParameters = []
+      }
+    (_, MsgCancel) -> MessageAttributes
+      { messageType = "cancel"
+      , messageParameters = []
+      }
 
 class Query query => ArbitraryQuery query where
   arbitraryTag :: Gen (SomeTag query)

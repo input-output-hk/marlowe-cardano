@@ -66,12 +66,14 @@ import Language.Marlowe.CLI.Types (somePaymentsigningKeyToTxWitness)
 import Language.Marlowe.Cardano.Thread (overAnyMarloweThread)
 import qualified Language.Marlowe.Cardano.Thread as Marlowe.Cardano.Thread
 import qualified Language.Marlowe.Protocol.Client as Marlowe.Protocol
+import qualified Language.Marlowe.Protocol.Types as Marlowe.Protocol
 import qualified Language.Marlowe.Runtime.ChainSync.Api as ChainSync
 import Language.Marlowe.Runtime.Core.Api (ContractId, MarloweVersion(MarloweV1), emptyMarloweTransactionMetadata)
 import Language.Marlowe.Runtime.Transaction.Api
   (RoleTokensConfig(RoleTokensNone), WalletAddresses(WalletAddresses, changeAddress, collateralUtxos, extraAddresses))
 import qualified Language.Marlowe.Runtime.Transaction.Api as Transaction
 import qualified Network.Protocol.Connection as Network.Protocol
+import Network.Protocol.Handshake.Types (Handshake)
 
 -- connectionP :: Prism' env (LocalNodeConnectInfo CardanoMode)
 getConnection
@@ -87,7 +89,7 @@ getConnection = do
 getConnector
   :: forall env st m lang era
    . InterpretMonad env st m lang era
-  => m (Network.Protocol.SomeClientConnector Marlowe.Protocol.MarloweRuntimeClient IO)
+  => m (Network.Protocol.ClientConnector (Handshake Marlowe.Protocol.MarloweRuntime) Marlowe.Protocol.MarloweRuntimeClient IO)
 getConnector = do
   preview runtimeClientConnectorT >>= \case
     Just conn -> pure conn
@@ -197,7 +199,7 @@ operationTimeoutLogged'
   => RuntimeOperation ->  m Microsecond
 operationTimeoutLogged' = operationTimeoutLogged defaultOperationTimeout
 
--- We want to avoid recursive calls in the `interpret` function but reuse this functionallity.
+-- We want to avoid recursive calls in the `interpret` function but reuse this functionality.
 awaitInputsApplied
   :: forall era env lang m st
    . InterpretMonad env st m lang era
@@ -392,4 +394,3 @@ interpret ro@RuntimeApplyInputs {..} = do
             throwLabeledError ro $ "Failed to submit contract: " <> show err
       Left err ->
         throwLabeledError ro $ "Failed to create contract: " <> show err
-

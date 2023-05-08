@@ -53,6 +53,8 @@ library
   build-depends:
     , base >= 4.9 && < 5
     , cardano-api ==1.35.4
+    , eventuo11y ^>= { 0.9, 0.10 }
+    , eventuo11y-extras ==0.1.0.0
     , exceptions >= 0.10 && < 0.11
     , general-allocate ^>= { 0.2 }
     , marlowe-chain-sync ==0.0.1
