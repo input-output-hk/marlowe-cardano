@@ -47,7 +47,7 @@ operations:
             issueDate:
               relative: 18000 # now + 5h
             maturityDate:
-              relative: 0 # now
+              relative: -15 # ~ now
             settlementDate:
               relative: 36000 # now + 10h
 
@@ -64,7 +64,7 @@ operations:
           into_account:
             address: Issuer
       minimumTime:
-        relative: -1000
+        relative: -15
       maximumTime:
         relative: 3600
 
@@ -82,7 +82,7 @@ operations:
               address: CounterParty
           input_that_chooses_num: 1
       minimumTime:
-        relative: -1000
+        relative: -15
       maximumTime:
         relative: 3600
 
@@ -102,7 +102,7 @@ operations:
           into_account:
             address: CounterParty
       minimumTime:
-        relative: -1000
+        relative: -15
       maximumTime:
         relative: 28800
 

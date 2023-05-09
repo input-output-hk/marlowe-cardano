@@ -1,0 +1,142 @@
+testName: Zero Coupon Bond Contract Test
+
+operations:
+  - CreateWallet:
+      walletNickname: Lender
+
+  - CreateWallet:
+      walletNickname: Borrower
+
+  - FundWallets:
+      values:
+        - 10000000
+        - 10000000
+      walletNicknames: [Lender, Borrower]
+
+  # Minting role tokens
+  - Mint:
+      currencyNickname: RoleCurrency
+      minLovelace: 2000000
+      tokenDistribution:
+        - [ Lender, LenderRoleToken, 1 ]
+        - [ Borrower, BorrowerRoleToken, 1 ]
+
+  # We sleep here till runtime catches up with the blockchain state.
+  - Sleep:
+      seconds: 30
+
+  - CheckBalance:
+      walletNickname: Lender
+      balance:
+        - [RoleCurrency, LenderRoleToken, 1]
+        - [ADA, 22]
+
+  - CheckBalance:
+      walletNickname: Borrower
+      balance:
+        - [RoleCurrency, BorrowerRoleToken, 1]
+        - [ADA, 22]
+
+  # Transaction 1. Create the Contract by Providing the Minimum ADA
+  - RuntimeCreateContract:
+      contractNickname: ZCB
+      roleCurrency: RoleCurrency
+      minLovelace: 2000000
+      submitter: Lender
+      awaitConfirmed: 120
+      contractSource:
+        template:
+          UseZeroCouponBond:
+            lender:
+              role_token: LenderRoleToken
+            borrower:
+              role_token: BorrowerRoleToken
+            principal: 10000000
+            interest: 5000000
+            lendingDeadline:
+              relative: 20000
+            paybackDeadline:
+              relative: 30000
+
+  # Transaction 2. Lender Deposits the Loan Amount
+  - RuntimeApplyInputs:
+      contractNickname: ZCB
+      submitter: Lender
+      awaitConfirmed: 120
+      inputs:
+        - input_from_party:
+            role_token: LenderRoleToken
+          that_deposits: 10000000
+          of_token:
+            currency_symbol: ""
+            token_name: ""
+          into_account:
+            role_token: LenderRoleToken
+
+  # Lender sent 10 ADA to the contract + put 2 ADA as min ADA
+  - CheckBalance:
+      walletNickname: Lender
+      balance:
+        - [RoleCurrency, LenderRoleToken, 1]
+        - [ADA, 10]
+
+  - CheckBalance:
+      walletNickname: Borrower
+      balance:
+        - [RoleCurrency, BorrowerRoleToken, 1]
+        - [ADA, 22]
+
+  - RuntimeWithdraw:
+      contractNickname: ZCB
+      wallets:
+        - Borrower
+      awaitConfirmed: 120
+
+  - CheckBalance:
+      walletNickname: Borrower
+      balance:
+        - [RoleCurrency, BorrowerRoleToken, 1]
+        - [ADA, 32]
+
+  # Transaction 3. Borrower Repays the Loan's Principal and Interest"
+  - RuntimeApplyInputs:
+      contractNickname: ZCB
+      submitter: Borrower
+      awaitConfirmed: 120
+      inputs:
+        - input_from_party:
+            role_token: BorrowerRoleToken
+          that_deposits: 15000000
+          of_token:
+            currency_symbol: ""
+            token_name: ""
+          into_account:
+            role_token: BorrowerRoleToken
+
+  - CheckBalance:
+      walletNickname: Borrower
+      balance:
+        - [RoleCurrency, BorrowerRoleToken, 1]
+        - [ADA, 17]
+
+  # At this point the min ADA was sent to the
+  # Lender address. He was submitting the initial
+  # transaction.
+  - CheckBalance:
+      walletNickname: Lender
+      balance:
+        - [RoleCurrency, LenderRoleToken, 1]
+        - [ADA, 12]
+
+  - RuntimeWithdraw:
+      contractNickname: ZCB
+      wallets:
+        - Lender
+      awaitConfirmed: 120
+
+  - CheckBalance:
+      walletNickname: Lender
+      balance:
+        - [RoleCurrency, LenderRoleToken, 1]
+        - [ADA, 27]
+

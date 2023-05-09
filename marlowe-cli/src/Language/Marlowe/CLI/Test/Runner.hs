@@ -1,6 +1,8 @@
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE NumericUnderscores #-}
@@ -14,87 +16,56 @@ module Language.Marlowe.CLI.Test.Runner
   where
 
 import Cardano.Api
-  ( AddressInEra
-  , ConsensusModeParams(CardanoModeParams)
-  , EpochSlots(..)
-  , IsShelleyBasedEra
-  , Key(getVerificationKey, verificationKeyHash)
-  , LocalNodeConnectInfo(..)
-  , Lovelace(Lovelace)
-  , ScriptDataSupportedInEra
-  , lovelaceToValue
-  )
+  (AddressInEra, IsShelleyBasedEra, LocalNodeConnectInfo(..), Lovelace(Lovelace), ScriptDataSupportedInEra)
 import qualified Cardano.Api as C
 import Cardano.Api.Shelley (protocolParamProtocolVersion)
-import Contrib.Cardano.Api (lovelaceFromInt, lovelaceToInt)
-import Contrib.Control.Concurrent.Async (altIO)
-import Contrib.Control.Monad.Trans.State.IO (IOStateT, unsafeExecIOStateT)
-import Contrib.Data.Foldable (foldMapFlipped, foldMapM, foldMapMFlipped)
-import Contrib.Monad.Loops
-  (MaxRetries(MaxRetries), PrevResult(PrevResult), RetryCounter(RetryCounter), retryTillJust, retryTillRight)
-import Contrib.UnliftIO.Control.Concurrent (threadDelayBy)
--- import Control.Concurrent.Async.Pool (mapTasks, mapTasks_, withTaskGroup)
 import qualified Cardano.Api.Shelley as CS
-import qualified Cardano.Api.Shelley as S
-import Contrib.Control.Exception (liftEitherIO, noteIO)
+import Contrib.Cardano.Api (lovelaceFromInt, lovelaceToInt)
+import Contrib.Control.Exception (liftEitherIO)
+import Contrib.Control.Monad.Trans.State.IO (unsafeExecIOStateT)
+import Contrib.Data.Foldable (foldMapFlipped)
+import Contrib.Monad.Loops (MaxRetries(..), PrevResult(PrevResult), retryTillJust, retryTillRight)
 import qualified Contrib.UnliftIO.Async.Pool as UnlifIO
-import Control.Concurrent.STM
-  (STM, TVar, modifyTVar, modifyTVar', newTVar, newTVarIO, readTVar, readTVarIO, retry, writeTVar)
-import Control.Error (ExceptT, hush, note)
-import Control.Exception (Exception, SomeException, mask, onException, throwIO)
-import Control.Lens
-  (At(at), Bifunctor(bimap), Each(each), _2, _Just, coerced, makeLenses, non, over, traversed, view, views, (^.), (^..))
-import qualified Control.Lens as L
-import qualified Control.Lens as Lens
-import Control.Monad (replicateM, unless, void, when)
+import Contrib.UnliftIO.Control.Concurrent (threadDelayBy)
+import Control.Concurrent.STM (TVar, modifyTVar, modifyTVar', newTVarIO, readTVar, readTVarIO, retry, writeTVar)
+import Control.Exception (Exception, onException, throwIO)
+import Control.Lens (makeLenses, view, views, (^.))
+import Control.Monad (unless, void, when)
 import Control.Monad.Error.Class (throwError)
-import Control.Monad.Except (MonadError, MonadIO, catchError, liftEither, runExceptT, withExceptT)
+import Control.Monad.Except (MonadError, MonadIO, runExceptT)
+import Control.Monad.Extra (whenM)
 import Control.Monad.IO.Class (liftIO)
-import Control.Monad.Reader (MonadReader(ask), ReaderT(runReaderT), runReader, withReaderT)
-import Control.Monad.Reader.Class (MonadReader)
-import Control.Monad.State (execStateT)
+import Control.Monad.Reader (MonadReader, ReaderT(runReaderT), withReaderT)
 import Control.Monad.Trans.Class (lift)
 import Data.Aeson (FromJSON, ToJSON, (.=))
 import qualified Data.Aeson as A
-import qualified Data.Aeson.Encode.Pretty as A
 import qualified Data.Aeson.OneLine as A
 import Data.Bifunctor (first)
-import qualified Data.ByteString.Lazy as B
 import Data.Coerce (coerce)
 import Data.Default (Default(def))
-import Data.Foldable (Foldable(fold), for_, toList)
 import qualified Data.Foldable as Foldable
 import Data.Functor ((<&>))
-import Data.IORef (IORef, atomicModifyIORef', newIORef, readIORef)
-import Data.List.NonEmpty (NonEmpty((:|)))
-import qualified Data.List.NonEmpty as List
+import Data.IORef (IORef, newIORef, readIORef)
 import qualified Data.Map.Strict as Map
-import Data.Maybe (fromMaybe)
 import qualified Data.Set as S (singleton)
 import qualified Data.Text as Text
-import Data.Time.Units (Second, TimeUnit(toMicroseconds))
+import Data.Time.Units (Second)
 import Data.Traversable (for)
 import GHC.Generics (Generic)
 import GHC.IO.Handle.FD (stderr)
 import Language.Marlowe.CLI.Cardano.Api (toPlutusProtocolVersion, txOutValueValue)
 import Language.Marlowe.CLI.Cardano.Api.PlutusScript (IsPlutusScriptLanguage)
 import Language.Marlowe.CLI.Cardano.Api.Value (lovelaceToPlutusValue, toPlutusValue)
-import qualified Language.Marlowe.CLI.Cardano.Api.Value as CV
-import Language.Marlowe.CLI.IO (decodeFileStrict, getDefaultCostModel, queryInEra, readSigningKey)
-import Language.Marlowe.CLI.Test.CLI.Types
-  (CLIContractInfo(CLIContractInfo), CLIContracts(CLIContracts), CLITxInfo, ciPlan, ciThread, unCLIContracts)
-import Language.Marlowe.CLI.Test.ExecutionMode (ExecutionMode(OnChainMode), toSubmitMode)
+import Language.Marlowe.CLI.IO (queryInEra)
+import Language.Marlowe.CLI.Test.ExecutionMode (ExecutionMode)
 import Language.Marlowe.CLI.Test.Interpret (interpret)
-import Language.Marlowe.CLI.Test.InterpreterError (InterpreterError(CliOperationFailed))
-import Language.Marlowe.CLI.Test.Log (logLabeledMsg)
+import Language.Marlowe.CLI.Test.InterpreterError (InterpreterError(CliOperationFailed, TimeOutReached))
 import qualified Language.Marlowe.CLI.Test.Runtime.Monitor as Runtime.Monitor
-import Language.Marlowe.CLI.Test.Runtime.Types (RuntimeError(RuntimeRollbackError), RuntimeMonitor)
+import Language.Marlowe.CLI.Test.Runtime.Types (RuntimeError(RuntimeRollbackError))
 import qualified Language.Marlowe.CLI.Test.Runtime.Types as R
 import qualified Language.Marlowe.CLI.Test.Runtime.Types as Runtime
-import qualified Language.Marlowe.CLI.Test.Runtime.Types as Runtime.Monitor
 import Language.Marlowe.CLI.Test.TestCase
   (TransactionCostUpperBound(TransactionCostUpperBound), testTxsFeesUpperBound, testsFaucetBudgetUpperBound)
-import qualified Language.Marlowe.CLI.Test.TestCase as TestCase
 import Language.Marlowe.CLI.Test.Types
   ( ConcurrentRunners(ConcurrentRunners)
   , FailureError(InterpreterError, RuntimeMonitorError)
@@ -102,80 +73,42 @@ import Language.Marlowe.CLI.Test.Types
   , FaucetsNumber(FaucetsNumber)
   , InterpretEnv(..)
   , InterpretState(..)
-  , ReportingStrategy(..)
   , RuntimeConfig(..)
   , TestCase(..)
   , TestName(TestName)
   , TestOperation(WalletOperation)
   , TestResult(TestFailed, TestSucceeded)
-  , TestSuite(..)
-  , failureReportToJSON
-  , ieConnection
-  , ieEra
-  , ieExecutionMode
-  , iePrintStats
-  , isCLIContracts
-  , isCurrencies
-  , isKnownContracts
-  , isLogs
-  , isWallets
   , mkInterpretState
   , plutusValueToJSON
   , someTxBodyToJSON
   , testResultToJSON
-  , walletToJSON
   )
-import Language.Marlowe.CLI.Test.Wallet.Interpret (createWallet)
 import Language.Marlowe.CLI.Test.Wallet.Types
-  ( Currencies(Currencies)
-  , Currency(Currency)
-  , CurrencyNickname(CurrencyNickname)
-  , SomeTxBody(SomeTxBody)
+  ( SomeTxBody
   , Wallet(Wallet, _waAddress, _waBalanceCheckBaseline)
   , WalletNickname(WalletNickname)
   , Wallets(Wallets)
-  , faucetNickname
   , getFaucet
   , getNonFaucetWallets
   , mkWallets
-  , overSomeTxBody
   , overSomeTxBody'
   , txBodyFee
   , waSubmittedTransactions
-  , walletTxFees
   )
 import qualified Language.Marlowe.CLI.Test.Wallet.Types as Wallet
-import Language.Marlowe.CLI.Transaction
-  (buildBodyWithContent, buildFaucetImpl, buildMintingImpl, querySlotConfig, queryUtxos, submitBody')
-import Language.Marlowe.CLI.Types
-  ( CliEnv(CliEnv)
-  , CliError(..)
-  , MarlowePlutusVersion
-  , MarloweTransaction(MarloweTransaction)
-  , PayFromScript(PayFromScript)
-  , PrintStats(PrintStats)
-  , SigningKeyFile(SigningKeyFile)
-  , SomePaymentSigningKey
-  , defaultCoinSelectionStrategy
-  )
+import Language.Marlowe.CLI.Transaction (queryUtxos)
+import Language.Marlowe.CLI.Types (CliEnv(CliEnv), CliError(..), PrintStats, SomePaymentSigningKey)
 import qualified Language.Marlowe.CLI.Types as T
-import Language.Marlowe.Cardano.Thread (marloweThreadTxInfos, overAnyMarloweThread)
 import qualified Language.Marlowe.Protocol.Client as Marlowe.Protocol
 import qualified Language.Marlowe.Runtime.App.Types as Apps
 import qualified Network.Protocol.Connection as Network.Protocol
 import qualified Network.Protocol.Driver as Network.Protocol
 import qualified Network.Protocol.Handshake.Client as Network.Protocol
-import Observe.Event.Render.JSON (defaultRenderSelectorJSON)
-import Observe.Event.Render.JSON.Handle (simpleJsonStderrBackend)
-import qualified Plutus.V1.Ledger.Ada as PV
 import Plutus.V1.Ledger.SlotConfig (SlotConfig)
-import qualified Plutus.V1.Ledger.Value as PV
 import qualified Plutus.V2.Ledger.Api as P
-import PlutusCore (defaultCostModelParams)
 import qualified PlutusTx.Monoid as P
 import System.IO (hPrint, hPutStrLn)
-import UnliftIO (IOException, MonadUnliftIO(withRunInIO), atomically, bracket, race, writeIORef)
-import qualified UnliftIO as UnlifIO
+import UnliftIO (MonadUnliftIO(withRunInIO), atomically, race, writeIORef)
 
 data TestRunnerError
   = TestRunnerError String
@@ -202,8 +135,6 @@ makeLenses 'TestRunnerFaucet
 
 testRunnerFaucetToJSON :: C.IsCardanoEra era => TestRunnerFaucet era -> A.Value
 testRunnerFaucetToJSON TestRunnerFaucet {..} = do
-  let
-    getTxIds = overSomeTxBody (const C.getTxId)
   A.object
     [ "address" .= _trAddress
     , "initialBalance" .= plutusValueToJSON _trInitialBalance
@@ -232,6 +163,7 @@ data Env lang era resource = Env
   , _envSlotConfig :: SlotConfig
   , _envProtocolParams :: CS.ProtocolParameters
   , _envCostModelParams :: P.CostModelParams
+  , _envMaxRetries :: Int
   }
 
 makeLenses 'Env
@@ -245,6 +177,7 @@ setEnvResource Env{..} resource = Env{_envResource=resource,..}
 -- * test interpreter can only access its interpret state reference.
 type EnvReader lang era resource a = ReaderT (Env lang era resource) IO a
 
+withReaderEnvResource :: resource' -> EnvReader lang era resource' a -> EnvReader lang era resource a
 withReaderEnvResource resource = withReaderT (`setEnvResource` resource)
 
 data FaucetToWalletConversion = IncludeAllTransactions | ExcludeAllTransactions
@@ -441,7 +374,7 @@ setupTestInterpretEnv = do
 -- This `IORef` implies that the test operations are executed sequentially and not in parallel.
 -- Internally we call `unsafeExecIOStateT` but we don't leak this reference anywhere outside this context.
 -- We use it to reference the interpreter state even in a case of a exception or a rollback.
-type TestInterpreterM lang era a = EnvReader lang era (IORef (InterpretState lang era)) a
+type TestInterpreterM lang era a = EnvReader lang era (TestRunId, IORef (InterpretState lang era)) a
 
 -- The resulting `Either a a` is the way to express
 -- retries with short circuiting (by using `retryTillRight` somewhere below).
@@ -456,7 +389,7 @@ interpretTest
   -> PrevResult (TestResult lang era) (TestResult lang era)
   -> TestInterpreterM lang era (Either (TestResult lang era) (TestResult lang era))
 interpretTest testOperations (PrevResult possiblePrevResult) = do
-  stateRef <- view envResource
+  stateRef <- views envResource snd
   (testEnv, possibleRuntimeMonitor) <- setupTestInterpretEnv
   let
     runInterpretLoop = do
@@ -466,12 +399,6 @@ interpretTest testOperations (PrevResult possiblePrevResult) = do
     Just runtimeMonitor -> runInterpretLoop `race` liftIO (Runtime.runMonitor runtimeMonitor)
     Nothing -> Left <$> runInterpretLoop
 
-  -- data TestResult lang era
-  --   = TestSucceeded (InterpretState lang era) -- { retries :: RetryCounter, time :: Second }
-  --   | TestFailed
-  --     { result :: FailureReport lang era
-  --     , retries :: [FailureReport lang era]
-  --     }
   let
     prevFailures = case either id id <$> possiblePrevResult of
       Just TestSucceeded {} -> []
@@ -487,6 +414,7 @@ interpretTest testOperations (PrevResult possiblePrevResult) = do
   pure $ case res of
     Left testInterpretResult -> case testInterpretResult of
       Left err@CliOperationFailed {} -> Left $ testFailed (FailureReport (InterpreterError err) state)
+      Left err@TimeOutReached {} -> Left $ testFailed (FailureReport (InterpreterError err) state)
       Left err -> Right $ testFailed (FailureReport (InterpreterError err) state)
       Right _ -> Right $ TestSucceeded state
     Right runtimeMonitorError -> case runtimeMonitorError of
@@ -495,15 +423,27 @@ interpretTest testOperations (PrevResult possiblePrevResult) = do
       runtimeError ->
         Right $ testFailed (FailureReport (RuntimeMonitorError runtimeError) state)
 
+newtype TestRunId = TestRunId Int
+  deriving (Eq, Ord, Show)
+  deriving newtype (Enum)
+
 -- Test runner modifies the results and some faucets (used during testing and retries).
-type TestRunnerEnv lang era = Env lang era (TVar [TestRunnerFaucet era], TVar (TestsResults lang era))
+data TestRunnerEnvCtx lang era = TestRunnerEnvCtx
+  { _trcFaucets :: TVar [TestRunnerFaucet era]
+  , _trcRunId :: TVar TestRunId
+  , _trcResults :: TVar (TestsResults lang era)
+  }
+
+makeLenses ''TestRunnerEnvCtx
+
+type TestRunnerEnv lang era = Env lang era (TestRunnerEnvCtx lang era)
 
 acquireFaucet
   :: MonadIO m
   => MonadReader (TestRunnerEnv lang era) m
   => m (TestRunnerFaucet era)
 acquireFaucet = do
-  faucetsRef <- views envResource fst
+  faucetsRef <- view (envResource . trcFaucets)
   atomically $ do
     faucets <- readTVar faucetsRef
     case faucets of
@@ -512,9 +452,13 @@ acquireFaucet = do
         writeTVar faucetsRef faucets'
         pure faucet
 
--- releaseFaucet :: TVar [TestRunnerFaucet era] -> TestRunnerFaucet era -> STM ()
+releaseFaucet
+  :: MonadIO m
+  => MonadReader (TestRunnerEnv lang era) m
+  => TestRunnerFaucet era
+  -> m ()
 releaseFaucet faucet = do
-  faucetsRef <- views envResource fst
+  faucetsRef <- view (envResource . trcFaucets)
   atomically $ modifyTVar faucetsRef (++ [faucet])
 
 -- Resource which we acquire during the test execution is a faucet. We also
@@ -546,8 +490,9 @@ releaseTestInterpretContext
 releaseTestInterpretContext (stateRef, faucet) = do
   let
     -- In the last phase we execute two cleanup operations
-    -- using the test interpreter state so we extend the
-    -- tx set with these two.
+    -- using existing test interpreter state so we extend the
+    -- tx set with these two and perform a full faucet update
+    -- at the end.
     operations =
       [ Wallet.BurnAll mempty
       , Wallet.ReturnFunds
@@ -572,29 +517,38 @@ releaseTestInterpretContext (stateRef, faucet) = do
 type TestRunnerM lang era a = ReaderT (TestRunnerEnv lang era) IO a
 
 runTest
-  :: forall era lang m
+  :: forall era lang
    . IsPlutusScriptLanguage lang
   => IsShelleyBasedEra era
   => (FilePath, TestCase)
   -> TestRunnerM lang era ()
 runTest (testFile, TestCase { testName, operations=testOperations }) = do
-  let
-    maxRollbackRetries = MaxRetries 4
   liftIO $ hPutStrLn stderr ""
   liftIO $ hPutStrLn stderr $ "***** Test " <> coerce testName <> " *****"
-  result <- either id id <$> retryTillRight maxRollbackRetries \_ prevResult ->
-    unmaskedReleaseBracket' acquireTestInterpretContext releaseTestInterpretContext \(stateRef, _) ->
-      withReaderEnvResource stateRef (interpretTest testOperations prevResult)
+  maxRetries <- view envMaxRetries
+  result <- either id id <$> retryTillRight (MaxRetries maxRetries) \_ prevResult ->
+    unmaskedReleaseBracket' acquireTestInterpretContext releaseTestInterpretContext \(stateRef, _) -> do
+      testRunIdRef <- view (envResource . trcRunId)
+      testRunId <- atomically $ do
+        testRunId <- readTVar testRunIdRef
+        writeTVar testRunIdRef (succ testRunId)
+        pure testRunId
+      withReaderEnvResource (testRunId, stateRef) (interpretTest testOperations prevResult)
 
-  resultsRef <- views envResource snd
+  resultsRef <- view (envResource . trcResults)
   atomically $
     modifyTVar' resultsRef (Map.insert (testFile, testName) result)
 
-  streamJson <- view envStreamJSON
-  when streamJson $ do
+  whenM (view envStreamJSON) do
     let
       resultJson = testResultToJSON testFile testName result
     liftIO $ putStrLn $ Text.unpack $ A.renderValue resultJson
+
+  let
+    printResultMsg msg = liftIO $ hPutStrLn stderr $ "***** " <> coerce testName <> ": " <> msg <> " *****"
+  case result of
+    TestSucceeded {} -> printResultMsg "SUCCEEDED"
+    TestFailed {} -> printResultMsg "FAILED"
 
 -- Internally we pass a reference to a master faucet through `bracket`
 -- so we can record all the txs.
@@ -632,14 +586,14 @@ acquireFaucets (TestFaucetBudget testFaucetBudget) (FaucetsNumber faucetNumber) 
       Left (err, interpretState') -> do
         updateMasterFaucet interpretState'
         liftIO $ throwIO $ TestRunnerError $ "Failed to create faucet wallets: " <> show err
-      Right interpretState'@InterpretState { _isWallets=wallets } -> do
+      Right interpretState'@InterpretState { _isWallets=ws } -> do
         updateMasterFaucet interpretState'
-        pure wallets
+        pure ws
 
   let
     subFaucetsWallets = getNonFaucetWallets wallets
 
-    fromFreshWallet wallet@Wallet{..} = do
+    fromFreshWallet Wallet{..} = do
       unless (null _waSubmittedTransactions) $
         liftIO $ throwIO $ TestRunnerError "TestRunnerFaucet should be initialized from a fresh wallet"
       initialBalance <- toPlutusValue <$> fetchAddressTotalValue _waAddress
@@ -667,7 +621,7 @@ releaseFaucets subfaucetsRef = do
 
   masterFaucetWallet <- toTestWallet masterFaucet ExcludeAllTransactions
   subfaucets <- liftIO $ readTVarIO subfaucetsRef
-  subfaucetsWallets <- fmap Map.fromList $ for (zip [1..] subfaucets) \(i, subfaucet) -> do
+  subfaucetsWallets <- fmap Map.fromList $ for (zip [(1 :: Integer) ..] subfaucets) \(i, subfaucet) -> do
     -- We include all the transactions because we want to update the master wallet using the state.
     subfaucetWallet <- toTestWallet subfaucet IncludeAllTransactions
     pure (WalletNickname ("Faucet-" <> show i), subfaucetWallet)
@@ -702,6 +656,7 @@ type TestSuiteRunnerEnv lang era = Env lang era (AddressInEra era, SomePaymentSi
 
 type TestSuiteRunnerM lang era a = ReaderT (TestSuiteRunnerEnv lang era) IO a
 
+fetchBalance :: MonadReader (Env lang era resource) m => MonadIO m => AddressInEra era -> m P.Value
 fetchBalance address = do
   connection <- view envConnection
   C.UTxO utxo <- runCli $ queryUtxos connection address
@@ -768,8 +723,16 @@ unmaskedReleaseBracket before after thing = do
   _ <- after a
   return r
 
+unmaskedReleaseBracket'
+  :: MonadUnliftIO m
+  => m a
+  -> (a -> m b)
+  -> (a -> m c)
+  -> m c
 unmaskedReleaseBracket' before after thing = withRunInIO \run -> do
   unmaskedReleaseBracket (run before) (run . after) (run . thing)
+
+makeLenses ''TestSuiteResult
 
 runTests
   :: forall era lang
@@ -778,8 +741,9 @@ runTests
   => [(FilePath, TestCase)]
   -> ConcurrentRunners
   -> TestSuiteRunnerM lang era (TestSuiteResult lang era)
-runTests tests (ConcurrentRunners concurrentRunners) = do
+runTests tests (ConcurrentRunners maxConcurrentRunners) = do
   let
+    concurrentRunners = min maxConcurrentRunners (length tests)
     txCosts = TransactionCostUpperBound (Lovelace 3_000_000) (Lovelace 70_000_000)
     subfaucetBudget = testsFaucetBudgetUpperBound txCosts (map snd tests)
     requiredFunds = lovelaceFromInt (lovelaceToInt subfaucetBudget * concurrentRunners)
@@ -796,8 +760,15 @@ runTests tests (ConcurrentRunners concurrentRunners) = do
   masterFaucetRef <- liftIO $ newTVarIO masterFaucet
   resultsRef <- liftIO $ newTVarIO mempty
 
-  withReaderEnvResource masterFaucetRef $ unmaskedReleaseBracket' acquireFaucets' releaseFaucets \subfaucetsRef -> do
-    withReaderEnvResource (subfaucetsRef, resultsRef) $ UnlifIO.withTaskGroup concurrentRunners \taskGroup -> do
+  void $ withReaderEnvResource masterFaucetRef $ unmaskedReleaseBracket' acquireFaucets' releaseFaucets \subfaucetsRef -> do
+    runCounterRef <- liftIO $ newTVarIO (TestRunId 1)
+    let
+      testRunnerEnvCtx = TestRunnerEnvCtx
+        { _trcFaucets = subfaucetsRef
+        , _trcRunId = runCounterRef
+        , _trcResults = resultsRef
+        }
+    withReaderEnvResource testRunnerEnvCtx $ UnlifIO.withTaskGroup concurrentRunners \taskGroup -> do
       UnlifIO.mapTasksE taskGroup $ fmap runTest tests
 
   masterFaucet' <- liftIO $ readTVarIO masterFaucetRef

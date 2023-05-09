@@ -26,7 +26,6 @@ import qualified Language.Marlowe.CLI.Test.Runtime.Interpret as Runtime
 import Language.Marlowe.CLI.Test.Types
   (InterpretMonad, TestOperation(CLIOperation, Fail, RuntimeOperation, Sleep, WalletOperation))
 import qualified Language.Marlowe.CLI.Test.Wallet.Interpret as Wallet
-import Language.Marlowe.CLI.Types (CliError(CliError))
 
 interpret
   :: forall m lang era

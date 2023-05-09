@@ -43,7 +43,7 @@ operations:
           into_account:
             address: Lender
       minimumTime:
-        relative: 0
+        relative: -15
       maximumTime:
         relative: 3600
 
@@ -63,7 +63,7 @@ operations:
           into_account:
             address: Borrower
       minimumTime:
-        relative: 0
+        relative: -15
       maximumTime:
         relative: 3600
 

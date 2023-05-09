@@ -96,13 +96,33 @@ mkParseTestCommand network socket = do
 
     reportingStrategyParser = do
       let
-        streamJsonOpt = O.optional (O.flag' ()  (O.long "stream-json" <> O.help "Stream result json objects to stdout as they are produced."))
+        streamJsonOpt = O.optional (O.flag' ()  (O.long "stream-json" <> O.help "Stream result json objects to the stdout as they are produced. All the other debug logs are outputed to stderr."))
         writeToJsonFile = O.optional (O.strOption (O.long "write-to-json-file" <> O.metavar "FILE" <> O.help "Write result result json objects list to a report file."))
       BindP ((,) <$> streamJsonOpt <*> writeToJsonFile) \case
         (Nothing, Nothing) -> pure Nothing
         (Just (), Nothing) -> pure $ Just StreamJSON
         (Nothing, Just file) -> pure $ Just $ WriteJSONFile file
         (Just (), Just file) -> pure $ Just $ StreamAndWriteJSONFile file
+
+  -- data TestSuite era a =
+  --     TestSuite
+  --     {
+  --       tsNetwork :: NetworkId
+  --     -- ^ The network ID, if any.
+  --     , tsSocketPath :: FilePath
+  --     -- ^ The path to the node socket.
+  --     , tsFaucetSigningKeyFile :: FilePath
+  --     -- ^ The file containing the faucet's signing key.
+  --     , tsFaucetAddress :: AddressInEra era
+  --     -- ^ The faucet address.
+  --     , tsExecutionMode :: ExecutionMode
+  --     , tsTests :: [a]
+  --     -- ^ Input for the tests.
+  --     , tsRuntime :: RuntimeConfig
+  --     , tsConcurrentRunners :: ConcurrentRunners
+  --     , tsReportingStrategy :: Maybe ReportingStrategy
+  --     , tsMaxRetries :: Int
+  --     }
 
   pure $ TestSuite
     <$> parseNetworkId network
@@ -118,3 +138,4 @@ mkParseTestCommand network socket = do
         defaultValue = ConcurrentRunners 3
       O.option parser            (O.value defaultValue <> O.long "concurrent-runners" <> O.metavar "INTEGER" <> O.help "The number of concurrent test runners."                                                                         )
     <*> reportingStrategyParser
+    <*> O.option O.auto          (O.value 3            <> O.long "max-retries"      <> O.metavar "INTEGER"                  <> O.help "The maximum number of retries for each test case."                                                              )

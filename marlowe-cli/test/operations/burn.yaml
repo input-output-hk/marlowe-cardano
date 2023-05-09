@@ -3,7 +3,7 @@ testName: Burning operation with a single party
 operations:
 
   - Mint:
-      soCurrencyNickname: Currency
+      currencyNickname: Currency
       minLovelace: 2000000
       tokenDistribution:
         - [Faucet, Token-1, 1]

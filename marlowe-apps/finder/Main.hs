@@ -14,7 +14,8 @@ module Main
 import Data.Text (Text)
 import Language.Marlowe.Runtime.App.Parser (getConfigParser)
 import Language.Marlowe.Runtime.App.Stream (ContractStream(..), TChanEOF)
-import Language.Marlowe.Runtime.App.Types (Config, PollingFrequency(PollingFrequency))
+import Language.Marlowe.Runtime.App.Types
+  (Config, FinishOnClose(FinishOnClose), FinishOnWait(FinishOnWait), PollingFrequency(PollingFrequency))
 import Language.Marlowe.Runtime.Core.Api (ContractId, MarloweVersionTag(V1))
 import Observe.Event (EventBackend, addField)
 import Observe.Event.Dynamic (DynamicEventSelector(..))
@@ -35,12 +36,18 @@ runDetection
   -> PollingFrequency
   -> TChanEOF ContractId
   -> IO (TChanEOF (ContractStream 'V1))
-runDetection = App.runDetection $ const True
+runDetection eventBackend config pollingFrequency = do
+  let
+    finishOnWait = FinishOnWait True
+    finishOnClose = FinishOnClose True
+  App.runDetection (const True) eventBackend config pollingFrequency finishOnClose finishOnWait
+
+
 
 runFinder
   :: EventBackend IO r DynamicEventSelector
   -> RequeueFrequency
-  -> Bool
+  -> FinishOnWait
   -> TChanEOF (ContractStream 'V1)
   -> TChanEOF ContractId
   -> IO ()
@@ -69,7 +76,7 @@ data Command =
     config :: Config
   , pollingFrequency :: Second
   , requeueFrequency :: Second
-  , endOnWait :: Bool
+  , endOnWait :: FinishOnWait
   }
     deriving (Show)
 
@@ -84,7 +91,7 @@ commandParser =
           <$> configParser
           <*> fmap fromInteger (O.option O.auto (O.long "polling" <> O.value 5 <> O.metavar "SECONDS" <> O.help "The polling frequency for waiting on Marlowe Runtime."))
           <*> fmap fromInteger (O.option O.auto (O.long "requeue" <> O.value 20 <> O.metavar "SECONDS" <> O.help "The requeuing frequency for reviewing the progress of contracts on Marlowe Runtime."))
-          <*> O.flag False True (O.long "end-at-tip" <> O.help "Stop the process when the tip of all contracts has been reached.")
+          <*> O.flag (FinishOnWait False) (FinishOnWait True) (O.long "end-at-tip" <> O.help "Stop the process when the tip of all contracts has been reached.")
     pure
       $ O.info
         (O.helper {- <*> O.versionOption -} <*> commandOptions)

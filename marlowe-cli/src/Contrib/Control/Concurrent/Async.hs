@@ -11,3 +11,4 @@ altIO a b = either id id <$> race a b
 
 timeoutIO :: TimeUnit t => t -> IO a -> IO (Maybe a)
 timeoutIO timeout io = altIO (threadDelay timeout >> pure Nothing) (Just <$> io)
+

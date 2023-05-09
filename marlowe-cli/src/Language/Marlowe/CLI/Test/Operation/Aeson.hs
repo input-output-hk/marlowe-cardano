@@ -15,13 +15,13 @@
 module Language.Marlowe.CLI.Test.Operation.Aeson
   where
 
-import Data.Aeson as A
+import qualified Data.Aeson as A
 import qualified Data.Aeson.Key as Key
 import qualified Data.Aeson.KeyMap as KeyMap
 import qualified Data.Aeson.OneLine as A
-import Data.Aeson.Types as A
-import Data.Char as Char
-import Data.List as List
+import qualified Data.Aeson.Types as A
+import qualified Data.Char as Char
+import qualified Data.List as List
 import qualified Data.Map.Strict as Map
 import Data.Maybe (fromMaybe)
 import qualified Data.Text as Text
@@ -38,10 +38,10 @@ genericJSONOptions prefix = do
     { A.fieldLabelModifier = \label ->
         lowerCaseFirstChar $
         fromMaybe label (List.stripPrefix prefix label)
-    , rejectUnknownFields = True
+    , A.rejectUnknownFields = True
     }
 
-parseConstructorBasedJSON :: forall a. GFromJSON Zero (Rep a) => Generic a => String -> A.Value -> A.Parser a
+parseConstructorBasedJSON :: forall a. A.GFromJSON A.Zero (Rep a) => Generic a => String -> A.Value -> A.Parser a
 parseConstructorBasedJSON prefix = \case
   (A.Object (KeyMap.toList -> [(k, A.Object o)])) -> do
     let
@@ -55,7 +55,7 @@ parseConstructorBasedJSON prefix = \case
     A.genericParseJSON (genericJSONOptions prefix) o
   json -> fail $ "Expecting an object when parsing constructor based JSON, got: " <> Text.unpack (A.renderValue json)
 
-toConstructorBasedJSON :: forall a. GToJSON Zero (Rep a) => Generic a => String -> a -> A.Value
+toConstructorBasedJSON :: forall a. A.GToJSON A.Zero (Rep a) => Generic a => String -> a -> A.Value
 toConstructorBasedJSON prefix a = do
   let
     json = A.genericToJSON (genericJSONOptions prefix) a
@@ -72,7 +72,7 @@ toConstructorBasedJSON prefix a = do
         else A.Object $ KeyMap.fromList [(Key.fromText constructorName', A.object $ Map.toList km')]
     _ -> Nothing
 
-parseSingleFieldConstructorBasedJSON :: forall a. GFromJSON Zero (Rep a) => Generic a => A.Value -> A.Parser a
+parseSingleFieldConstructorBasedJSON :: forall a. A.GFromJSON A.Zero (Rep a) => Generic a => A.Value -> A.Parser a
 parseSingleFieldConstructorBasedJSON = \case
   (A.Object (KeyMap.toList -> [(k, A.Object o)])) -> do
     let
@@ -86,7 +86,7 @@ parseSingleFieldConstructorBasedJSON = \case
     A.genericParseJSON A.defaultOptions o
   _ -> fail "Expecting an object"
 
-toSingleFieldConstructorBasedJSON :: forall a. GToJSON Zero (Rep a) => Generic a => a -> A.Value
+toSingleFieldConstructorBasedJSON :: forall a. A.GToJSON A.Zero (Rep a) => Generic a => a -> A.Value
 toSingleFieldConstructorBasedJSON a = do
   let
     json = A.genericToJSON A.defaultOptions a

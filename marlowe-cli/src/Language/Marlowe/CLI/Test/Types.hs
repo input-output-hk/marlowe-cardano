@@ -22,7 +22,7 @@ module Language.Marlowe.CLI.Test.Types
   where
 
 import Cardano.Api (AddressInEra, CardanoMode, IsCardanoEra, LocalNodeConnectInfo, NetworkId, ScriptDataSupportedInEra)
-import Control.Lens (_1, _2, _Just, makeLenses)
+import Control.Lens (_1, _2, _Just, makeLenses, (^.))
 import Control.Monad.Except (MonadError)
 import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.Reader (MonadReader)
@@ -32,7 +32,7 @@ import qualified Data.Aeson as Aeson
 import qualified Data.List as List
 import Data.Map (Map)
 import GHC.Generics (Generic)
-import Language.Marlowe.CLI.Types (CliError, MarlowePlutusVersion, MarloweScriptsRefs, PrintStats)
+import Language.Marlowe.CLI.Types (MarlowePlutusVersion, MarloweScriptsRefs, PrintStats)
 import Ledger.Orphans ()
 import Plutus.ApiCommon (ProtocolVersion)
 import Plutus.V1.Ledger.Api (CostModelParams)
@@ -48,13 +48,12 @@ import Data.Functor ((<&>))
 import qualified Data.Map.Strict as Map
 import Data.Text (Text)
 import qualified Data.Text as T
-import Data.Text.Encoding (decodeUtf8, decodeUtf8')
 import Data.Time.Units (Second, TimeUnit(fromMicroseconds, toMicroseconds))
 import Language.Marlowe.CLI.Test.CLI.Types (CLIContracts(CLIContracts), CLIOperation)
 import qualified Language.Marlowe.CLI.Test.CLI.Types as CLI
 import Language.Marlowe.CLI.Test.Contract (ContractNickname)
 import Language.Marlowe.CLI.Test.ExecutionMode (ExecutionMode)
-import Language.Marlowe.CLI.Test.InterpreterError (InterpreterError)
+import Language.Marlowe.CLI.Test.InterpreterError (InterpreterError, ieMessage)
 import Language.Marlowe.CLI.Test.Log (Logs)
 import qualified Language.Marlowe.CLI.Test.Log as Log
 import qualified Language.Marlowe.CLI.Test.Operation.Aeson as Operation
@@ -69,7 +68,6 @@ import Network.Socket (PortNumber)
 import qualified Plutus.V1.Ledger.Value as P.Value
 import qualified Plutus.V2.Ledger.Api as P
 import qualified PlutusTx.AssocMap as P.AssocMap
-import qualified PlutusTx.Prelude as P.Map
 
 data RuntimeConfig = RuntimeConfig
   { rcRuntimeHost :: String
@@ -91,15 +89,21 @@ data ReportingStrategy
 data TestSuite era a =
     TestSuite
     {
-      tsNetwork :: NetworkId              -- ^ The network ID, if any.
-    , tsSocketPath :: FilePath            -- ^ The path to the node socket.
-    , tsFaucetSigningKeyFile :: FilePath  -- ^ The file containing the faucet's signing key.
-    , tsFaucetAddress :: AddressInEra era -- ^ The faucet address.
+      tsNetwork :: NetworkId
+    -- ^ The network ID, if any.
+    , tsSocketPath :: FilePath
+    -- ^ The path to the node socket.
+    , tsFaucetSigningKeyFile :: FilePath
+    -- ^ The file containing the faucet's signing key.
+    , tsFaucetAddress :: AddressInEra era
+    -- ^ The faucet address.
     , tsExecutionMode :: ExecutionMode
-    , tsTests :: [a]                      -- ^ Input for the tests.
+    , tsTests :: [a]
+    -- ^ Input for the tests.
     , tsRuntime :: RuntimeConfig
     , tsConcurrentRunners :: ConcurrentRunners
     , tsReportingStrategy :: Maybe ReportingStrategy
+    , tsMaxRetries :: Int
     }
     deriving stock (Eq, Generic, Show)
 
@@ -195,10 +199,10 @@ divideEightBy x = 8.0 / x
 instance FromJSON TestOperation where
   parseJSON json = do
     let
-      parseSubobject _ (A.Object (A.KeyMap.toList -> [(k, v)])) = do
+      parseSubobject _ (A.Object (A.KeyMap.toList -> [(_, v)])) = do
         parseJSON v
       parseSubobject name _ = fail $ "Expecting object with a single key for an operation: " <> name
-      parseTaggedJson tag json = case (tag, json) of
+      parseTaggedJson tag = case (tag, json) of
         _ | tag `List.elem` cliConstructors -> CLIOperation <$> parseJSON json
         _ | tag `List.elem` runtimeConstructors -> RuntimeOperation <$> parseJSON json
         _ | tag `List.elem` walletConstructors -> WalletOperation <$> parseJSON json
@@ -212,12 +216,12 @@ instance FromJSON TestOperation where
             pure $ fromMicroseconds (seconds * 1_000_000)
         _ -> fail $ "Unknown tag: " <> T.unpack tag
     case json of
-      (A.Object (A.KeyMap.toList -> [(k, v)])) -> do
+      (A.Object (A.KeyMap.toList -> [(k, _)])) -> do
         let
           tag = A.Key.toText k
-        parseTaggedJson tag json
+        parseTaggedJson tag
       (A.String tag) -> do
-        parseTaggedJson tag json
+        parseTaggedJson tag
       _ -> fail $ "Expected a tagged object or string, got: " <> show json
 
 instance ToJSON TestOperation where
@@ -371,14 +375,20 @@ failureReportToJSON
   -> FailureReport lang era
   -> [FailureReport lang era]
   -> Aeson.Value
-failureReportToJSON testFile (TestName name) failure@FailureReport{ _frInterpretState = interpretState@InterpretState{..} } retries =
+failureReportToJSON testFile (TestName name) failure@FailureReport{ _frInterpretState = interpretState@InterpretState{..} } retries = do
+  let
+    err = _frErr failure
+    -- It is a bit easier to read the log when we have the error message itself at the end.
+    logs = case err of
+      InterpreterError err' -> reverse (("Error", err' ^. ieMessage, []) : _isLogs)
+      _ -> reverse _isLogs
   A.object $
     [ "name" .= name
     , "testSource" .= testFile
     , "result" A..= ("failed" :: String)
-    , "error" .= _frErr failure
+    , "error" .= err
     , "retries" .= fmap _frErr retries
-    , "logs" .= reverse _isLogs
+    , "logs" .= logs
     ]
     <> interpretStateToJSONPairs interpretState
 

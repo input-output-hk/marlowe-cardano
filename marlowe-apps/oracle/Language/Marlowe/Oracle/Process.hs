@@ -15,7 +15,8 @@ import Language.Marlowe.Core.V1.Semantics.Types (ChoiceId(ChoiceId), Input(Norma
 import Language.Marlowe.Oracle.Detect (containsOracleAction, contractReadyForOracle)
 import Language.Marlowe.Runtime.App.Stream (ContractStream(..), TChanEOF, contractFromStep)
 import Language.Marlowe.Runtime.App.Transact (applyWithEvents)
-import Language.Marlowe.Runtime.App.Types (Config, PollingFrequency)
+import Language.Marlowe.Runtime.App.Types
+  (Config, FinishOnClose(FinishOnClose), FinishOnWait(FinishOnWait), PollingFrequency)
 import Language.Marlowe.Runtime.ChainSync.Api (Address)
 import Language.Marlowe.Runtime.Core.Api (ContractId, MarloweVersionTag(V1))
 import Network.Oracle (OracleEnv, readOracle, toOracleSymbol)
@@ -37,9 +38,14 @@ runDetection
   -> PollingFrequency
   -> TChanEOF ContractId
   -> IO (TChanEOF (ContractStream 'V1))
-runDetection party =
+runDetection party eventBackend config pollingFrequency =
   App.runDetection
-    $ maybe False (not . null . containsOracleAction party) . contractFromStep
+    (maybe False (not . null . containsOracleAction party) . contractFromStep)
+    eventBackend
+    config
+    pollingFrequency
+    (FinishOnClose True)
+    (FinishOnWait True)
 
 
 runOracle
@@ -50,7 +56,7 @@ runOracle
   -> Party
   -> EventBackend IO r DynamicEventSelector
   -> RequeueFrequency
-  -> Bool
+  -> FinishOnWait
   -> TChanEOF (ContractStream 'V1)
   -> TChanEOF ContractId
   -> IO ()

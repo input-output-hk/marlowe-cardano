@@ -1,127 +1,121 @@
 testName: Escrow Contract using Runtime
 
 operations:
-  - tag: CreateWallet
-    walletNickname: Buyer
+  - CreateWallet:
+      walletNickname: Buyer
 
-  - tag: CreateWallet
-    walletNickname: Seller
+  - CreateWallet:
+      walletNickname: Seller
 
-  - tag: CreateWallet
-    walletNickname: Mediator
+  - CreateWallet:
+      walletNickname: Mediator
 
-  - tag: FundWallets
-    values: [10000000, 10000000, 10000000]
-    walletNicknames: [Buyer]
+  - FundWallets:
+      values: [10000000, 10000000, 10000000]
+      walletNicknames: [Buyer]
 
   # Minting role tokens
-  - tag: Mint
-    issuer: Faucet
-    currencyNickname: RoleCurrency
-    minLovelace: 2000000
-    tokenDistribution:
-      - [Buyer, BuyerRoleToken, 1]
-      - [Seller, SellerRoleToken, 1]
-      - [Mediator, MediatorRoleToken, 1]
+  - Mint:
+      issuer: Faucet
+      currencyNickname: RoleCurrency
+      minLovelace: 2000000
+      tokenDistribution:
+        - [Buyer, BuyerRoleToken, 1]
+        - [Seller, SellerRoleToken, 1]
+        - [Mediator, MediatorRoleToken, 1]
 
-  - tag: Sleep
-    seconds: 120
+  - CheckBalance:
+      walletNickname: Buyer
+      balance:
+        - [RoleCurrency, BuyerRoleToken, 1]
+        - [ADA, 32]
 
-  - tag: CheckBalance
-    walletNickname: Buyer
-    balance:
-      - [RoleCurrency, BuyerRoleToken, 1]
-      - [ADA, 32]
-
-  - tag: CheckBalance
-    walletNickname: Seller
-    balance:
-      - [RoleCurrency, SellerRoleToken, 1]
-      - [ADA, 2]
+  - CheckBalance:
+      walletNickname: Seller
+      balance:
+        - [RoleCurrency, SellerRoleToken, 1]
+        - [ADA, 2]
 
   # We have no other way to wait till runtime is synced
   # with the tip.
-  - tag: RuntimeCreateContract
-    contractNickname: Escrow
-    minLovelace: 2000000
-    awaitConfirmed: 120
-    roleCurrency: RoleCurrency
-    contractSource:
-      template:
-        tag: "UseEscrow"
-        seller:
-          role_token: SellerRoleToken
-        buyer:
-          role_token: BuyerRoleToken
-        mediator:
-          role_token: MediatorRoleToken
-        price: 20000000
-        paymentDeadline:
-          relative: 20000
-        complaintDeadline:
-          relative: 30000
-        disputeDeadline:
-          relative: 30000
-        mediationDeadline:
-          relative: 30000
+  - RuntimeCreateContract:
+      contractNickname: Escrow
+      minLovelace: 2000000
+      awaitConfirmed: 120
+      roleCurrency: RoleCurrency
+      contractSource:
+        template:
+          UseEscrow:
+            seller:
+              role_token: SellerRoleToken
+            buyer:
+              role_token: BuyerRoleToken
+            mediator:
+              role_token: MediatorRoleToken
+            price: 20000000
+            paymentDeadline:
+              relative: 20000
+            complaintDeadline:
+              relative: 30000
+            disputeDeadline:
+              relative: 30000
+            mediationDeadline:
+              relative: 30000
 
-  - tag: RuntimeApplyInputs
-    contractNickname: Escrow
-    submitter: Buyer
-    awaitConfirmed: 120
-    inputs:
-      - input_from_party:
-          role_token: BuyerRoleToken
-        that_deposits: 20000000
-        of_token:
-          currency_symbol: ""
-          token_name: ""
-        into_account:
-          role_token: SellerRoleToken
-
-  - tag: RuntimeApplyInputs
-    contractNickname: Escrow
-    submitter: Buyer
-    awaitConfirmed: 120
-    inputs:
-      - for_choice_id:
-          choice_name: Everything is alright
-          choice_owner:
+  - RuntimeApplyInputs:
+      contractNickname: Escrow
+      submitter: Buyer
+      awaitConfirmed: 120
+      inputs:
+        - input_from_party:
             role_token: BuyerRoleToken
-        input_that_chooses_num: 0
+          that_deposits: 20000000
+          of_token:
+            currency_symbol: ""
+            token_name: ""
+          into_account:
+            role_token: SellerRoleToken
 
-  - tag: CheckBalance
-    walletNickname: Buyer
-    balance:
-      - [RoleCurrency, BuyerRoleToken, 1]
-      - [ADA, 12]
+  - RuntimeApplyInputs:
+      contractNickname: Escrow
+      submitter: Buyer
+      awaitConfirmed: 120
+      inputs:
+        - for_choice_id:
+            choice_name: Everything is alright
+            choice_owner:
+              role_token: BuyerRoleToken
+          input_that_chooses_num: 0
+
+  - CheckBalance:
+      walletNickname: Buyer
+      balance:
+        - [RoleCurrency, BuyerRoleToken, 1]
+        - [ADA, 12]
 
   # The Seller has not withdrawed yet.
-  - tag: CheckBalance
-    walletNickname: Seller
-    balance:
-      - [ADA, 2]
-      - [RoleCurrency, SellerRoleToken, 1]
+  - CheckBalance:
+      walletNickname: Seller
+      balance:
+        - [ADA, 2]
+        - [RoleCurrency, SellerRoleToken, 1]
 
   # Let's send Lovelace only UTxO to the seller
   # so it can be used as a collateral in the next step.
-  - tag: FundWallets
-    values:
-      - 5000000
-    walletNicknames: [Seller]
+  - FundWallets:
+      values:
+        - 5000000
+      walletNicknames: [Seller]
 
-  - tag: RuntimeWithdraw
-    contractNickname: Escrow
-    wallets:
-      - Seller
-    awaitConfirmed: 120
+  - RuntimeWithdraw:
+      contractNickname: Escrow
+      wallets:
+        - Seller
+      awaitConfirmed: 120
 
-  - tag: CheckBalance
-    walletNickname: Seller
-    balance:
-      - [ADA, 27]
-      - [RoleCurrency, SellerRoleToken, 1]
+  - CheckBalance:
+      walletNickname: Seller
+      balance:
+        - [ADA, 27]
+        - [RoleCurrency, SellerRoleToken, 1]
 
-  - tag: BurnAll
-
-  - tag: ReturnFunds

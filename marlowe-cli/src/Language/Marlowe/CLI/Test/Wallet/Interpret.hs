@@ -31,7 +31,6 @@ import Cardano.Api
   , PaymentCredential(PaymentCredentialByKey)
   , ScriptDataSupportedInEra
   , StakeAddressReference(NoStakeAddress)
-  , TxBody
   , generateSigningKey
   , makeShelleyAddressInEra
   )
@@ -75,8 +74,7 @@ import Language.Marlowe.CLI.Test.Wallet.Types
   )
 import qualified Language.Marlowe.CLI.Test.Wallet.Types as T
 import Language.Marlowe.CLI.Transaction (buildBodyWithContent, buildFaucetImpl, buildMintingImpl, submitBody')
-import Language.Marlowe.CLI.Types
-  (AnUTxO, CliError(CliError), CurrencyIssuer(CurrencyIssuer), PayFromScript, defaultCoinSelectionStrategy)
+import Language.Marlowe.CLI.Types (AnUTxO, CurrencyIssuer(CurrencyIssuer), PayFromScript, defaultCoinSelectionStrategy)
 import qualified Language.Marlowe.Core.V1.Semantics.Types as M
 import Ledger.Orphans ()
 import Plutus.V1.Ledger.Api (CurrencySymbol, TokenName)
@@ -404,6 +402,7 @@ interpret so@CheckBalance {..} =
     let
       AssetsBalance expectedBalance = woBalance
 
+    -- Iterate over assets in the wallet and check if we meet the expected balance.
     for_ actualBalance \(Asset assetId v) -> do
       case Map.lookup assetId expectedBalance of
         Nothing -> do
@@ -411,16 +410,19 @@ interpret so@CheckBalance {..} =
             throwLabeledError so $ assertionFailed' ("Unexpected asset in balance check:" <> show v <> " of asset: " <> show assetId)
         Just expectedValue -> do
           unless (checkBalance expectedValue v) do
-            logStoreLabeledMsg so $ "Actual balance of asset:" <> show assetId <> " is:" <> show v
-            logStoreLabeledMsg so $ "Expected balance of asset:" <> show assetId <> " is: " <> show expectedValue
+            logStoreLabeledMsg so $ "Actual balance of asset " <> show assetId <> " is:" <> show v
+            logStoreLabeledMsg so $ "Expected balance of asset " <> show assetId <> " is: " <> show expectedValue
             throwLabeledError so $ assertionFailed' $ "Balance check failed for an asset: " <> show assetId
 
+    -- Iterate over expected assets and check if we have them in the wallet.
+    --  * If we have them then we already checked the balance above.
+    --  * If we miss an asset, we check if the expected balance is 0.
     for_ (Map.toList expectedBalance) \(assetId, expectedValue) -> do
       let
         actualAssets = map (\(Asset k _) -> k) actualBalance
-      unless (assetId `elem` actualAssets) do
-        logStoreLabeledMsg so $ "Expected balance of asset:" <> show assetId <> " is:" <> show expectedValue
-        throwLabeledError so $ assertionFailed' $ "Expected asset is missing in balance check:" <> show assetId
+      unless (assetId `elem` actualAssets || checkBalance expectedValue 0) do
+        logStoreLabeledMsg so $ "Expected balance of an asset " <> show assetId <> " is:" <> show expectedValue
+        throwLabeledError so $ assertionFailed' $ "Asset is missing from the wallet on chain balance:" <> show assetId
 
 interpret so@CreateWallet {..} = do
   (connection :: LocalNodeConnectInfo CardanoMode) <- view connectionL

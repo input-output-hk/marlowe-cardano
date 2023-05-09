@@ -56,7 +56,7 @@ mkDiscovery
   :: EventBackend IO r DynamicEventSelector
   -> Config
   -> PollingFrequency
-  -> Bool
+  -> FinishOnWait
   -> IO (TChanEOF (Either ChainPoint (BlockHeader, ContractId)), IO ())
 mkDiscovery eventBackend config pollingFrequency endOnWait =
   do
@@ -75,7 +75,7 @@ runDiscovery
   :: EventBackend IO r DynamicEventSelector
   -> Config
   -> PollingFrequency
-  -> Bool
+  -> FinishOnWait
   -> IO (TChanEOF (Either ChainPoint (BlockHeader, ContractId)))
 runDiscovery eventBackend config pollingFrequency endOnWait = do
   (channel, discovery) <- mkDiscovery eventBackend config pollingFrequency endOnWait
@@ -88,7 +88,7 @@ runDiscovery'
   :: EventBackend IO r DynamicEventSelector
   -> Config
   -> PollingFrequency
-  -> Bool
+  -> FinishOnWait
   -> IO (TChanEOF ContractId)
 runDiscovery' eventBackend config pollingFrequency endOnWait = do
   contractIdChannel <- newTChanIO
@@ -106,9 +106,11 @@ mkDetection
   -> EventBackend IO r DynamicEventSelector
   -> Config
   -> PollingFrequency
+  -> FinishOnClose
+  -> FinishOnWait
   -> TChanEOF ContractId
   -> IO (TChanEOF (ContractStream 'V1), IO ())
-mkDetection accept eventBackend config pollingFrequency inChannel =
+mkDetection accept eventBackend config pollingFrequency finishOnClose finishOnWait inChannel =
   do
     outChannel <- newTChanIO
     let
@@ -123,9 +125,6 @@ mkDetection accept eventBackend config pollingFrequency inChannel =
           addField event $ ("contractId" :: Text) ≔ contractId
           -- FIXME: If there were concurrency combinators for `MarloweSyncClient`, then we
           --        could follow multiple contracts in parallel using the same connection.
-          let
-            finishOnClose = True
-            finishOnWait = True
           streamContractSteps eventBackend pollingFrequency finishOnClose finishOnWait accept contractId outChannel
           pure threadAction
       detection = runClientWithConfig config threadAction
@@ -136,10 +135,12 @@ runDetection
   -> EventBackend IO r DynamicEventSelector
   -> Config
   -> PollingFrequency
+  -> FinishOnClose
+  -> FinishOnWait
   -> TChanEOF ContractId
   -> IO (TChanEOF (ContractStream 'V1))
-runDetection accept eventBackend config pollingFrequency inChannel = do
-  (outChannel, detection) <- mkDetection accept eventBackend config pollingFrequency inChannel
+runDetection accept eventBackend config pollingFrequency finishOnClose finishOnWait inChannel = do
+  (outChannel, detection) <- mkDetection accept eventBackend config pollingFrequency finishOnClose finishOnWait inChannel
   void . forkIO $ detection
   pure outChannel
 
@@ -163,7 +164,7 @@ runContractAction
   -> EventBackend IO r DynamicEventSelector
   -> (Event IO r DynamicField -> LastSeen -> IO ())
   -> RequeueFrequency
-  -> Bool
+  -> FinishOnWait
   -> TChanEOF (ContractStream 'V1)
   -> TChanEOF ContractId
   -> IO ()
@@ -202,7 +203,7 @@ runContractAction selectorName eventBackend runInput (RequeueFrequency requeueFr
     -- Revisit a contract later.
     revisit :: ContractId -> IO ()
     revisit contractId
-      | endOnWait = pure ()
+      | unFinishOnWait endOnWait = pure ()
       -- FIXME: This is a workaround for contract discovery not tailing past the tip of the blockchain.
       | otherwise = void . forkIO
         $ threadDelay (fromIntegral . toMicroseconds $ requeueFrequency)

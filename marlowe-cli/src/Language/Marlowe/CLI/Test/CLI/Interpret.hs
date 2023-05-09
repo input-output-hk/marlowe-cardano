@@ -49,7 +49,6 @@ import Language.Marlowe.CLI.Test.Wallet.Types
   )
 import Language.Marlowe.CLI.Types
   ( AnUTxO(AnUTxO, unAnUTxO)
-  , CliError(CliError)
   , CoinSelectionStrategy(CoinSelectionStrategy)
   , MarlowePlutusVersion
   , MarloweScriptsRefs(MarloweScriptsRefs)
@@ -57,7 +56,7 @@ import Language.Marlowe.CLI.Types
   , PrintStats(PrintStats)
   , PublishingStrategy(PublishAtAddress, PublishPermanently)
   , ValidatorInfo(ValidatorInfo)
-  , toPOSIXTime
+  , toSlotRoundedPlutusPOSIXTime
   )
 import Ledger.Orphans ()
 
@@ -72,7 +71,6 @@ import Data.Maybe (fromMaybe, isJust, mapMaybe)
 import qualified Data.Text as Text
 import Language.Marlowe.CLI.Cardano.Api.PlutusScript (IsPlutusScriptLanguage)
 import Language.Marlowe.CLI.Command.Template (initialMarloweState)
-import Language.Marlowe.CLI.IO (liftCliMaybe)
 import Language.Marlowe.CLI.Run
   ( autoRunTransactionImpl
   , autoWithdrawFundsImpl
@@ -375,8 +373,9 @@ interpret co@Prepare {..} = do
   let
     curr = List.NonEmpty.head _ciPlan
   inputs <- for coInputs decodeInputJSON
-  minimumTime <- toPOSIXTime coMinimumTime
-  maximumTime <- toPOSIXTime coMaximumTime
+  slotConfig <- view slotConfigL
+  minimumTime <- toSlotRoundedPlutusPOSIXTime slotConfig coMinimumTime
+  maximumTime <- toSlotRoundedPlutusPOSIXTime slotConfig coMaximumTime
   era <- view eraL
   logStoreLabeledMsg co $ "Inputs: " <> show (pretty inputs)
   new <- runLabeledCli era co $ prepareTransactionImpl

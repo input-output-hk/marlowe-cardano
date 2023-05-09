@@ -67,8 +67,10 @@ import Data.Default (Default(def))
 import Data.Foldable (for_, toList)
 import Data.Functor ((<&>))
 import Data.IORef (IORef, atomicModifyIORef', newIORef, readIORef)
+import Data.List (intercalate)
 import Data.List.NonEmpty (NonEmpty((:|)))
 import qualified Data.Map.Strict as Map
+import Data.Maybe (mapMaybe)
 import qualified Data.Set as S (singleton)
 import qualified Data.Text as Text
 import Data.Time.Units (Second, TimeUnit(toMicroseconds))
@@ -86,7 +88,7 @@ import Language.Marlowe.CLI.Test.ExecutionMode (ExecutionMode(OnChainMode), toSu
 import Language.Marlowe.CLI.Test.Interpret (interpret)
 import Language.Marlowe.CLI.Test.Log (logLabeledMsg)
 import Language.Marlowe.CLI.Test.Runner
-  (Env(..), TestSuiteResult(TestSuiteResult), TestSuiteRunnerEnv, runTests, testSuiteResultToJSON)
+  (Env(..), TestSuiteResult(TestSuiteResult), TestSuiteRunnerEnv, runTests, testSuiteResultToJSON, tsResult)
 import qualified Language.Marlowe.CLI.Test.Runtime.Monitor as Runtime.Monitor
 import Language.Marlowe.CLI.Test.Runtime.Types (RuntimeError(RuntimeRollbackError))
 import qualified Language.Marlowe.CLI.Test.Runtime.Types as R
@@ -154,6 +156,7 @@ import Observe.Event.Render.JSON.Handle (simpleJsonStderrBackend)
 import qualified Plutus.V1.Ledger.Ada as PV
 import qualified Plutus.V1.Ledger.Value as PV
 import PlutusCore (defaultCostModelParams)
+import System.Exit (exitFailure, exitSuccess)
 import System.IO (hPrint, hPutStrLn)
 
 -- | Run tests of a Marlowe contract.
@@ -203,6 +206,7 @@ runTestSuite era TestSuite{..} = do
       , _envRuntimeConfig = Just tsRuntime
       , _envPrintStats = printStats
       , _envStreamJSON = True
+      , _envMaxRetries = tsMaxRetries
       }
 
   testSuiteResult <- liftIO $ flip runReaderT env $ runTests tests tsConcurrentRunners
@@ -217,4 +221,20 @@ runTestSuite era TestSuite{..} = do
     StreamAndWriteJSONFile filePath -> writeReportFile filePath
     WriteJSONFile filePath -> writeReportFile filePath
     StreamJSON -> pure ()
+
+  let
+    failures = do
+      let
+        testResults = Map.toList $ testSuiteResult ^. tsResult
+        failedTestName = \case
+          ((name, _), TestFailed {}) -> Just name
+          _ -> Nothing
+      mapMaybe failedTestName testResults
+  if not (null failures)
+    then liftIO $ do
+      hPutStrLn stderr $ "Some tests failed: " <> intercalate ", " failures
+      exitFailure
+    else liftIO do
+      hPutStrLn stderr "All tests succeeded."
+      exitSuccess
 

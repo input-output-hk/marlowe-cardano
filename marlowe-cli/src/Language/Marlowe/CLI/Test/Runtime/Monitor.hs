@@ -56,7 +56,8 @@ import Language.Marlowe.Cardano.Thread
   (anyMarloweThreadCreated, anyMarloweThreadRedeemed, marloweThreadToJSON, overAnyMarloweThread)
 import Language.Marlowe.Runtime.App.Channel (mkDetection)
 import Language.Marlowe.Runtime.App.Stream (ContractStream(..), ContractStreamError(..), EOF)
-import Language.Marlowe.Runtime.App.Types (Config, PollingFrequency(PollingFrequency))
+import Language.Marlowe.Runtime.App.Types
+  (Config, FinishOnClose(FinishOnClose), FinishOnWait(FinishOnWait), PollingFrequency(PollingFrequency))
 import qualified Language.Marlowe.Runtime.Cardano.Api as RCA
 import qualified Language.Marlowe.Runtime.ChainSync.Api as MCS
 import Language.Marlowe.Runtime.Core.Api (ContractId, MarloweVersionTag(V1))
@@ -82,7 +83,17 @@ mkRuntimeMonitor config = do
     pollingFrequencySeconds = 5 :: Second
     pollingFrequency = PollingFrequency pollingFrequencySeconds
 
-  (contractStream, detection) <- mkDetection (const True) eventBackend config pollingFrequency detectionInputChannel
+    dontFinishOnClose = FinishOnClose False
+    dontFinishOnWait = FinishOnWait False
+
+  (contractStream, detection) <- mkDetection
+    (const True)
+    eventBackend
+    config
+    pollingFrequency
+    dontFinishOnClose
+    dontFinishOnWait
+    detectionInputChannel
   let
     runtime = untilJust $ do
       join $ atomically do
@@ -147,7 +158,7 @@ processMarloweStreamEvent
   -> M.Map ContractNickname RuntimeContractInfo
   -> Either EOF (ContractStream 'V1)
   -> Either RuntimeError (Maybe RuntimeContractUpdate)
-processMarloweStreamEvent knownContracts contracts = do
+processMarloweStreamEvent knownContracts contractsInfo = do
   let
     scriptOutputToCardanoTxIn R.TransactionScriptOutput{ R.utxo=utxo } =
       case RCA.toCardanoTxIn utxo of
@@ -160,7 +171,7 @@ processMarloweStreamEvent knownContracts contracts = do
     lookupContractInfo :: ContractId -> Maybe RuntimeContractInfo
     lookupContractInfo contractId = do
       contractNickname <- lookupContractNickname contractId
-      M.lookup contractNickname contracts
+      M.lookup contractNickname contractsInfo
 
     getContractInfo :: ContractId -> Either RuntimeError RuntimeContractInfo
     getContractInfo contractId = note (RuntimeContractNotFound contractId) $ lookupContractInfo contractId
@@ -210,10 +221,7 @@ processMarloweStreamEvent knownContracts contracts = do
           Just contractNickname -> throwError $ RuntimeRollbackError contractNickname
           Nothing -> pure Nothing
       ContractStreamWait {csContractId} -> pure $ Just (Revisit csContractId)
-      ContractStreamFinish{csFinish=Nothing} -> do
-        -- We are ignoring this event because we are closing the thread
-        -- from the `ContractStreamContinued` handler.
-        pure Nothing
+      ContractStreamFinish{csFinish=Nothing} -> pure Nothing
       ContractStreamFinish{csFinish=Just creationError, csContractId} -> do
         case creationError of
           ContractNotFound -> do

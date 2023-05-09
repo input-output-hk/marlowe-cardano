@@ -35,9 +35,9 @@ common lang
                       DeriveFunctor DeriveFoldable
                       DeriveTraversable
   ghc-options:
-    -- -Wall -Wnoncanonical-monad-instances
+    -Wall -Wnoncanonical-monad-instances
     -Wincomplete-uni-patterns -Wincomplete-record-updates
-    -- -Wredundant-constraints -Widentities
+    -Wredundant-constraints -Widentities
   if flag(defer-plugin-errors)
     ghc-options: -fplugin-opt PlutusTx.Plugin:defer-errors
 
@@ -59,7 +59,6 @@ library
     Contrib.Data.Aeson.Traversals
     Contrib.Data.Foldable
     Contrib.Data.Time.Units.Aeson
-    Contrib.Colog.Message.Aeson
     Contrib.Monad.Loops
     Contrib.UnliftIO.Control.Concurrent
     Contrib.UnliftIO.Async.Pool

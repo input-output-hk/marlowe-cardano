@@ -20,7 +20,7 @@
 module Language.Marlowe.CLI.Test.TestCase
   where
 
-import Cardano.Api (Lovelace(Lovelace))
+import Cardano.Api (Lovelace)
 import GHC.Generics (Generic)
 import Ledger.Orphans ()
 
@@ -29,11 +29,7 @@ import Data.Maybe (isNothing)
 import Language.Marlowe.CLI.Test.CLI.Types (CLIOperation(..), MarloweValidators(..))
 import Language.Marlowe.CLI.Test.Runtime.Types (RuntimeOperation(..))
 import Language.Marlowe.CLI.Test.Types
-  ( FaucetsNumber(FaucetsNumber)
-  , TestCase(TestCase, operations)
-  , TestOperation(CLIOperation, Fail, RuntimeOperation, Sleep, WalletOperation)
-  , TestSuite(TestSuite)
-  )
+  (TestCase(TestCase, operations), TestOperation(CLIOperation, Fail, RuntimeOperation, Sleep, WalletOperation))
 import Language.Marlowe.CLI.Test.Wallet.Types as Wallet
   ( WalletOperation(BurnAll, CheckBalance, CreateWallet, FundWallets, Mint, ReturnFunds, SplitWallet, woIssuer, woWalletNickname)
   , faucetNickname
@@ -51,7 +47,7 @@ operationFaucetBudget (TransactionCostUpperBound _ publishingMinAda) = lovelaceF
   where
   fauceOperation possibleNickname = possibleNickname == Just faucetNickname || isNothing possibleNickname
 
-  operationBudget' (WalletOperation (FundWallets nicknames values issuer)) = (sum . map lovelaceToInt $ values) * length nicknames
+  operationBudget' (WalletOperation (FundWallets nicknames values _)) = (sum . map lovelaceToInt $ values) * length nicknames
   operationBudget' (WalletOperation (Mint _ issuer _ tokenDistribution minLovelace)) =
     if fauceOperation issuer
       then lovelaceToInt minLovelace * length tokenDistribution
@@ -69,9 +65,9 @@ operationFaucetBudget (TransactionCostUpperBound _ publishingMinAda) = lovelaceF
   -- `Runtime.RuntimeApplyInputs` and `CLI.Prepare` should be analyzed.
   operationBudget' _ = 0
 
--- | A *realy* rough and quick estimation of the budget required to run a test case.
+-- | A *really* rough and quick estimation of the budget required to run a test case.
 testFaucetBudgetUpperBound :: TransactionCostUpperBound -> TestCase -> Lovelace
-testFaucetBudgetUpperBound tub@(TransactionCostUpperBound txCost txPublishingMinAda) testCase@TestCase {operations} =
+testFaucetBudgetUpperBound tub@(TransactionCostUpperBound txCost _) TestCase {operations} =
   sum (map (operationFaucetBudget tub) operations) <> faucetTxsFees
   where
   faucetTxsFees =

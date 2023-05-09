@@ -21,14 +21,12 @@ module Language.Marlowe.CLI.Test.CLI.Types
 
 import Cardano.Api (CardanoMode, LocalNodeConnectInfo, Lovelace, ScriptDataSupportedInEra)
 import qualified Cardano.Api as C
-import Control.Concurrent (MVar)
 import Control.Lens (Lens', makeLenses)
 import Control.Monad.Except (MonadError)
 import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.Reader.Class (MonadReader)
 import Control.Monad.State.Class (MonadState)
 import Data.Aeson (FromJSON(..), ToJSON(..), (.:?), (.=))
-import qualified Data.Aeson as A
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.KeyMap as KeyMap
 import qualified Data.List.NonEmpty as List
@@ -46,13 +44,7 @@ import qualified Language.Marlowe.CLI.Test.Operation.Aeson as Operation
 import Language.Marlowe.CLI.Test.Wallet.Types (Currencies, CurrencyNickname, WalletNickname, Wallets)
 import qualified Language.Marlowe.CLI.Test.Wallet.Types as Wallet
 import Language.Marlowe.CLI.Types
-  ( CliError
-  , MarlowePlutusVersion
-  , MarloweScriptsRefs
-  , MarloweTransaction(MarloweTransaction, mtInputs)
-  , PrintStats
-  , SomeTimeout
-  )
+  (MarlowePlutusVersion, MarloweScriptsRefs, MarloweTransaction(MarloweTransaction, mtInputs), PrintStats, SomeTimeout)
 import Language.Marlowe.Cardano.Thread
   ( AnyMarloweThread
   , MarloweThread(Closed, Created, InputsApplied, Redemption)

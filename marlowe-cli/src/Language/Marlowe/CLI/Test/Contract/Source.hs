@@ -17,7 +17,7 @@ module Language.Marlowe.CLI.Test.Contract.Source
   where
 
 import Control.Monad (void)
-import Control.Monad.Except (ExceptT, MonadError, runExceptT, throwError)
+import Control.Monad.Except (MonadError, throwError)
 import Data.Aeson (FromJSON(..), ToJSON(..), (.=))
 import qualified Data.Aeson as A
 import qualified Data.Aeson.KeyMap as KeyMap
@@ -43,7 +43,7 @@ import Language.Marlowe.CLI.Test.Wallet.Types
   , tokenNameToJSON
   )
 import qualified Language.Marlowe.CLI.Test.Wallet.Types as Wallet
-import Language.Marlowe.CLI.Types (CliError(CliError), SomeTimeout, toMarloweTimeout)
+import Language.Marlowe.CLI.Types (SomeTimeout, toMarloweTimeout)
 import qualified Language.Marlowe.Core.V1.Semantics.Types as C
 import qualified Language.Marlowe.Core.V1.Semantics.Types as M
 import qualified Language.Marlowe.Extended.V1 as E
@@ -191,8 +191,7 @@ useTemplate
   => Maybe CurrencyNickname
   -> UseTemplate
   -> m M.Contract
-useTemplate currency =
-  \case
+useTemplate currency = \case
   UseTrivial{..} -> do
     timeout' <- toMarloweTimeout utTimeout
     let

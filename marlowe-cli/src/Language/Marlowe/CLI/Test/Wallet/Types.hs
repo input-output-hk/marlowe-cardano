@@ -23,7 +23,6 @@ import Cardano.Api
   (AddressInEra, CardanoMode, LocalNodeConnectInfo, Lovelace, PolicyId, ScriptDataSupportedInEra, TxBody, UTxO(UTxO))
 import qualified Cardano.Api as C
 import Contrib.Data.Foldable (foldMapFlipped)
-import Control.Concurrent (MVar)
 import Control.Lens (Lens', makeLenses)
 import Control.Monad.Except (MonadError)
 import Control.Monad.IO.Class (MonadIO)
@@ -53,7 +52,7 @@ import Language.Marlowe.CLI.Test.ExecutionMode (ExecutionMode)
 import Language.Marlowe.CLI.Test.InterpreterError (InterpreterError)
 import qualified Language.Marlowe.CLI.Test.Log as Log
 import qualified Language.Marlowe.CLI.Test.Operation.Aeson as Operation
-import Language.Marlowe.CLI.Types (CliError, PrintStats, SomePaymentSigningKey)
+import Language.Marlowe.CLI.Types (PrintStats, SomePaymentSigningKey)
 import Ledger.Orphans ()
 import Plutus.V1.Ledger.Api (CurrencySymbol, TokenName)
 import qualified Plutus.V1.Ledger.Value as P

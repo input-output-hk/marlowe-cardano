@@ -31,15 +31,13 @@ data Finished
 
 -- | TODO:
 -- | We should actually store all the info
--- | about the contract source, state etc.
+-- | about the contract source, state and the currency
+-- | symbol.
 -- | so we can validate the transitions and redemptions.
 data MarloweThread txInfo status where
   Created
     :: txInfo
     -> TxIn
-    -- -> M.Contract
-    -- -> M.State
-    -- -> Maybe P.CurrencySymbol
     -> MarloweThread txInfo Running
   InputsApplied
     :: txInfo

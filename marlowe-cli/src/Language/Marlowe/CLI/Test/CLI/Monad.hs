@@ -23,7 +23,7 @@ import Control.Monad.Except (ExceptT, MonadError(catchError, throwError), runExc
 import Control.Monad.Reader (ReaderT(runReaderT))
 import qualified Data.Aeson as A
 import Language.Marlowe.CLI.Test.InterpreterError (InterpreterError, fromCliError)
-import Language.Marlowe.CLI.Test.Log (Label(label), printLabeledMsg)
+import Language.Marlowe.CLI.Test.Log (Label(label))
 import Language.Marlowe.CLI.Types (CliEnv(CliEnv), CliError(CliError))
 import Ledger.Orphans ()
 

@@ -39,7 +39,6 @@ import qualified Data.Text as Text
 import Data.Time.Units (Microsecond, Second, TimeUnit(fromMicroseconds, toMicroseconds))
 import Data.Traversable (for)
 import Language.Marlowe.CLI.Cardano.Api (withShelleyBasedEra)
-import Language.Marlowe.CLI.IO (liftCliMaybe)
 import Language.Marlowe.CLI.Test.Contract (ContractNickname(ContractNickname), Source(InlineContract, UseTemplate))
 import Language.Marlowe.CLI.Test.Contract.Source (useTemplate)
 import Language.Marlowe.CLI.Test.ExecutionMode (skipInSimluationMode)
@@ -69,7 +68,8 @@ import Language.Marlowe.CLI.Test.Wallet.Interpret
 import Language.Marlowe.CLI.Test.Wallet.Types
   (Currency(Currency, ccPolicyId), SomeTxBody(SomeTxBody), Wallet(..), WalletNickname, faucetNickname)
 import Language.Marlowe.CLI.Types (somePaymentsigningKeyToTxWitness)
-import Language.Marlowe.Cardano.Thread (anyMarloweThreadCreated, marloweThreadTxInfos, overAnyMarloweThread)
+import Language.Marlowe.Cardano.Thread
+  (anyMarloweThreadCreated, anyMarloweThreadRedeemed, marloweThreadTxInfos, overAnyMarloweThread)
 import qualified Language.Marlowe.Cardano.Thread as Marlowe.Cardano.Thread
 import qualified Language.Marlowe.Protocol.Client as Marlowe.Protocol
 import qualified Language.Marlowe.Protocol.Types as Marlowe.Protocol
@@ -216,12 +216,13 @@ operationTimeoutLogged'
 operationTimeoutLogged' = operationTimeoutLogged defaultOperationTimeout
 
 runtimeAwaitTxsConfirmed
-  :: forall era env l m st
+  :: forall era env l m st t
    . InterpretMonad env st m era
+  => TimeUnit t
   => Label l
   => l
   -> ContractNickname
-  -> Microsecond
+  -> t
   -> m ()
 runtimeAwaitTxsConfirmed ro contractNickname timeout = do
   startMonitoring contractNickname
@@ -245,8 +246,12 @@ runtimeAwaitTxsConfirmed ro contractNickname timeout = do
       getRuntimeContractInfo = awaitRuntimeContractInfo rms contractNickname (const True)
     thread <- liftIO $ atomically getRuntimeContractInfo
     let
-      contractState = maybe "<empty>" (Text.unpack . A.renderValue . anyMarloweThreadToJSON . view rcMarloweThread) thread
-    throwLabeledError ro $ timeoutReached' $ "Timeout reached while waiting for txs confirmation: " <> show contractNickname <> ". Contract info: " <> contractState
+      monitorContractInfo = maybe "<empty>" (Text.unpack . A.renderValue . anyMarloweThreadToJSON . view rcMarloweThread) thread
+      interpreterContractInfo = Text.unpack . A.renderValue . anyMarloweThreadToJSON $ interpreterMarloweThread
+    throwLabeledError ro $ timeoutReached'
+      $ "Timeout reached while waiting for txs confirmation: " <> show contractNickname
+      <> ". Monitor contract info: " <> monitorContractInfo
+      <> ". Interpreter contract info: " <> interpreterContractInfo
 
 withdraw
   :: forall env era st m
@@ -256,7 +261,7 @@ withdraw
   -> P.TokenName
   -> WalletNickname
   -> Wallet era
-  -> m ()
+  -> m C.TxId
 withdraw ro contractId tokenName walletNickname Wallet { _waAddress, _waSigningKey } = do
   connector <- getConnector
   let
@@ -282,8 +287,10 @@ withdraw ro contractId tokenName walletNickname Wallet { _waAddress, _waSigningK
       case res of
         Right bl -> do
           logStoreLabeledMsg ro $ "Withdrawal submitted and confirmed: " <> show bl
+
           updateWallet walletNickname \wallet'@Wallet {_waSubmittedTransactions} -> do
             wallet' { _waSubmittedTransactions = SomeTxBody ScriptDataInBabbageEra txBody : _waSubmittedTransactions }
+          pure $ C.getTxId txBody
         Left err ->
           throwLabeledError ro $ runtimeOperationFailed' $ "Failed to submit withdrawal: " <> show err
     Left err ->
@@ -296,11 +303,11 @@ interpret
   -> m ()
 interpret ro@RuntimeAwaitTxsConfirmed {..} = do
   let
-    microseconds = fromMicroseconds . toMicroseconds $ maybe defaultOperationTimeout A.toSecond roTimeout
-  runtimeAwaitTxsConfirmed ro roContractNickname microseconds
+    timeout = maybe defaultOperationTimeout A.toSecond roTimeout
+  runtimeAwaitTxsConfirmed ro roContractNickname timeout
 
 interpret ro@RuntimeWithdraw {..} = do
-  ContractInfo{_ciContractId=contractId, _ciRoleCurrency=possibleRoleCurrecy} <- getContractInfo roContractNickname
+  contractInfo@ContractInfo{_ciContractId=contractId, _ciRoleCurrency=possibleRoleCurrecy, _ciMarloweThread=th} <- getContractInfo roContractNickname
   case possibleRoleCurrecy of
     Nothing -> throwLabeledError ro $ testExecutionFailed' $ "Unable to withdraw from contract: " <> show roContractNickname <> ". Role currency is not set."
     Just roleCurrency -> do
@@ -312,13 +319,21 @@ interpret ro@RuntimeWithdraw {..} = do
 
       for_ wallets \(walletNickname, wallet, tokenNames) -> do
         for_ tokenNames \tokenName -> do
-          withdraw ro contractId tokenName walletNickname wallet
+          txId <- withdraw ro contractId tokenName walletNickname wallet
+          let
+            th' = anyMarloweThreadRedeemed (RuntimeTxInfo txId) tokenName th
+          modifying knownContractsL $ \contracts -> do
+            let
+              contractInfo' = do
+                let
+                  c = fromMaybe contractInfo (Map.lookup roContractNickname contracts)
+                c { _ciMarloweThread=th' }
+            Map.insert roContractNickname contractInfo' contracts
+
       case roAwaitConfirmed of
         Nothing -> pure ()
         Just timeout -> do
-          let
-            microseconds = fromMicroseconds . toMicroseconds . A.toSecond $ timeout
-          runtimeAwaitTxsConfirmed ro roContractNickname microseconds
+          runtimeAwaitTxsConfirmed ro roContractNickname (A.toSecond timeout)
 
 interpret ro@RuntimeAwaitClosed {..} = do
   view executionModeL >>= skipInSimluationMode ro do
@@ -409,9 +424,7 @@ interpret ro@RuntimeCreateContract {..} = do
                 case roAwaitConfirmed of
                   Nothing -> pure ()
                   Just timeout -> do
-                    let
-                      microseconds = fromMicroseconds . toMicroseconds . A.toSecond $ timeout
-                    runtimeAwaitTxsConfirmed ro roContractNickname microseconds
+                    runtimeAwaitTxsConfirmed ro roContractNickname $ A.toSecond timeout
           Left err ->
             throwLabeledError ro $ runtimeOperationFailed' $ "Failed to submit contract: " <> show err
         pure ()
@@ -470,16 +483,20 @@ interpret ro@RuntimeApplyInputs {..} = do
                     $ "Failed to extend the marlowe thread with the applied inputs: "
                       <> (Text.unpack . A.renderValue . anyMarloweThreadToJSON $ th)
                   Just th' -> do
-                    modifying knownContractsL $ Map.insert roContractNickname $ contractInfo { _ciMarloweThread=th' }
+                    modifying knownContractsL \contracts -> do
+                      let
+                        contractInfo' = do
+                          let
+                            c = fromMaybe contractInfo $ Map.lookup roContractNickname contracts
+                          c { _ciMarloweThread=th' }
+                      Map.insert roContractNickname contractInfo' contracts
             updateWallet submitterNickname \submitter@Wallet {_waSubmittedTransactions} -> do
               submitter { _waSubmittedTransactions = SomeTxBody ScriptDataInBabbageEra txBody : _waSubmittedTransactions }
 
             case roAwaitConfirmed of
               Nothing -> pure ()
               Just timeout -> do
-                let
-                  microseconds = fromMicroseconds . toMicroseconds . A.toSecond $ timeout
-                runtimeAwaitTxsConfirmed ro roContractNickname microseconds
+                runtimeAwaitTxsConfirmed ro roContractNickname $ A.toSecond timeout
           Left err ->
             throwLabeledError ro $ runtimeOperationFailed' $ "Failed to submit contract: " <> show err
       Left err ->
