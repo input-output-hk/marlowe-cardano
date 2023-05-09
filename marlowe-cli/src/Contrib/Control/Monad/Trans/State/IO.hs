@@ -47,6 +47,3 @@ evalIOStateT s (IOStateT m) = do
 unsafeExecIOStateT :: (MonadIO m) => IORef s -> IOStateT s m a -> m a
 unsafeExecIOStateT ref (IOStateT m) = evalStateT m ref
 
--- instance Monad m => Zoom (IOStateT s m) (IOStateT t ) s t where
---   zoom l (IOStateT m) = IOStateT $ unfocusing #. l (Focusing #. m)
---   {-# INLINE zoom #-}

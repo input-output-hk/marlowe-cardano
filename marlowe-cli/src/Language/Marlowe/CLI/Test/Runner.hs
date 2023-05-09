@@ -185,7 +185,6 @@ data FaucetToWalletConversion = IncludeAllTransactions | ExcludeAllTransactions
 -- When we run test we use a faucet from our pool and we turn
 -- it into a test faucet. At the end of the test we update
 -- the faucet with the transactions it submitted and funded.
--- toTestWallet :: TestRunnerFaucet era -> FaucetToWalletConversion -> Wallet era
 toTestWallet
   :: C.IsCardanoEra era
   => MonadIO m
@@ -410,7 +409,7 @@ interpretTest testOperations (PrevResult possiblePrevResult) = do
   state <- liftIO $ readIORef stateRef
   -- We perform retries only when meaningful rollback occures
   -- throughout the excution (indicated by the runtime monitor) or
-  -- ulon `CliOperationFailed`.
+  -- upon `CliOperationFailed` or operation timeout.
   pure $ case res of
     Left testInterpretResult -> case testInterpretResult of
       Left err@CliOperationFailed {} -> Left $ testFailed (FailureReport (InterpreterError err) state)
@@ -423,20 +422,21 @@ interpretTest testOperations (PrevResult possiblePrevResult) = do
       runtimeError ->
         Right $ testFailed (FailureReport (RuntimeMonitorError runtimeError) state)
 
+-- Shared counter which we can use to possibly mark stderr debug logs etc.
 newtype TestRunId = TestRunId Int
   deriving (Eq, Ord, Show)
   deriving newtype (Enum)
 
 -- Test runner modifies the results and some faucets (used during testing and retries).
-data TestRunnerEnvCtx lang era = TestRunnerEnvCtx
+data TestRunnerEnvResource lang era = TestRunnerEnvResource
   { _trcFaucets :: TVar [TestRunnerFaucet era]
   , _trcRunId :: TVar TestRunId
   , _trcResults :: TVar (TestsResults lang era)
   }
 
-makeLenses ''TestRunnerEnvCtx
+makeLenses ''TestRunnerEnvResource
 
-type TestRunnerEnv lang era = Env lang era (TestRunnerEnvCtx lang era)
+type TestRunnerEnv lang era = Env lang era (TestRunnerEnvResource lang era)
 
 acquireFaucet
   :: MonadIO m
@@ -763,12 +763,12 @@ runTests tests (ConcurrentRunners maxConcurrentRunners) = do
   void $ withReaderEnvResource masterFaucetRef $ unmaskedReleaseBracket' acquireFaucets' releaseFaucets \subfaucetsRef -> do
     runCounterRef <- liftIO $ newTVarIO (TestRunId 1)
     let
-      testRunnerEnvCtx = TestRunnerEnvCtx
+      testRunnerEnvResource = TestRunnerEnvResource
         { _trcFaucets = subfaucetsRef
         , _trcRunId = runCounterRef
         , _trcResults = resultsRef
         }
-    withReaderEnvResource testRunnerEnvCtx $ UnlifIO.withTaskGroup concurrentRunners \taskGroup -> do
+    withReaderEnvResource testRunnerEnvResource $ UnlifIO.withTaskGroup concurrentRunners \taskGroup -> do
       UnlifIO.mapTasksE taskGroup $ fmap runTest tests
 
   masterFaucet' <- liftIO $ readTVarIO masterFaucetRef

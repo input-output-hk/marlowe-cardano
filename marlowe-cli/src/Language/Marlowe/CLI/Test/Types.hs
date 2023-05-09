@@ -144,7 +144,7 @@ data FailureReport lang era = FailureReport
 
 data TestResult lang era
   = TestSucceeded
-    (InterpretState lang era) -- { retries :: RetryCounter, time :: Second }
+    (InterpretState lang era)
   | TestFailed
     { result :: FailureReport lang era
     , retries :: [FailureReport lang era]
@@ -192,9 +192,6 @@ walletConstructors =
   , "SplitWallet"
   , "ReturnFunds"
   ]
-
-divideEightBy :: Float -> Float
-divideEightBy x = 8.0 / x
 
 instance FromJSON TestOperation where
   parseJSON json = do

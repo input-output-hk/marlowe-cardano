@@ -104,26 +104,6 @@ mkParseTestCommand network socket = do
         (Nothing, Just file) -> pure $ Just $ WriteJSONFile file
         (Just (), Just file) -> pure $ Just $ StreamAndWriteJSONFile file
 
-  -- data TestSuite era a =
-  --     TestSuite
-  --     {
-  --       tsNetwork :: NetworkId
-  --     -- ^ The network ID, if any.
-  --     , tsSocketPath :: FilePath
-  --     -- ^ The path to the node socket.
-  --     , tsFaucetSigningKeyFile :: FilePath
-  --     -- ^ The file containing the faucet's signing key.
-  --     , tsFaucetAddress :: AddressInEra era
-  --     -- ^ The faucet address.
-  --     , tsExecutionMode :: ExecutionMode
-  --     , tsTests :: [a]
-  --     -- ^ Input for the tests.
-  --     , tsRuntime :: RuntimeConfig
-  --     , tsConcurrentRunners :: ConcurrentRunners
-  --     , tsReportingStrategy :: Maybe ReportingStrategy
-  --     , tsMaxRetries :: Int
-  --     }
-
   pure $ TestSuite
     <$> parseNetworkId network
     <*> O.strOption              (O.long "socket-path"      <> O.metavar "SOCKET_FILE"  <> socket   <> O.help "Location of the cardano-node socket file. Defaults to the CARDANO_NODE_SOCKET_PATH environment variable's value.")
