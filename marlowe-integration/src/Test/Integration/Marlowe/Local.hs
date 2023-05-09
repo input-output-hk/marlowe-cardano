@@ -80,6 +80,7 @@ import qualified Data.Set.NonEmpty as NESet
 import Data.String (fromString)
 import qualified Data.Text as T
 import Data.Time.Clock (secondsToNominalDiffTime)
+import Data.Time.Units (Second)
 import Data.Void (Void)
 import Data.Word (Word16)
 import Database.PostgreSQL.LibPQ (connectdb, errorMessage, exec, finish, resultErrorMessage)
@@ -451,7 +452,7 @@ publishCurrentScripts LocalTestnet{..} localNodeConnectInfo = do
         publishingStrategy
         coinSelectionStrategy
         (PrintStats False)
-      void $ submitBody localNodeConnectInfo txBody [signingKey] 30
+      void $ submitBody localNodeConnectInfo txBody [signingKey] (30 :: Second)
       pure $ toMarloweScripts testnetMagic txBody publishScripts
 
 toMarloweScripts :: Int -> TxBody BabbageEra -> PublishMarloweScripts MarlowePlutusVersion BabbageEra -> MarloweScripts
