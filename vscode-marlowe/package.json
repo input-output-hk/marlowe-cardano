@@ -1,0 +1,38 @@
+{
+  "name": "vscode-marlowe",
+  "displayName": "Cardano Marlowe IDE",
+  "description": "Language support for Cardano Marlowe",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.76.0"
+  },
+  "main": "extension.js",
+  "scripts": {
+    "prebuild": "npm i",
+    "build": "esbuild ./src/extension.ts --bundle --tsconfig=./tsconfig.json --external:vscode --format=cjs --platform=node --outfile=./extension.js",
+    "build:watch": "npm run build -- --watch"
+  },
+  "devDependencies": {
+    "@types/node": "^15.14.9",
+    "@types/vscode": "^1.76.0",
+    "esbuild": "^0.17.18"
+  },
+  "contributes": {
+    "languages": [
+      {
+        "id": "marlowe",
+        "extensions": [
+          ".marlowe"
+        ],
+        "configuration": "marlowe-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "marlowe",
+        "scopeName": "source.marlowe",
+        "path": "marlowe.tmLanguage.json"
+      }
+    ]
+  }
+}

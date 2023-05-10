@@ -1,0 +1,24 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "scopeName": "source.marlowe",
+  "uuid": "7430ea99-a8e2-458c-9bbc-442a5f1cf492",
+  "patterns": [
+    {
+      "name": "keyword",
+      "match": "Close|If|Let|Pay|When|TimeParam|TimeValue|Case|Choice|Deposit|Notify"
+    },
+    {
+      "name": "string",
+      "begin": "\"",
+      "end": "\""
+    },
+    {
+      "name": "constant.numeric",
+      "match": "\\d+"
+    },
+    {
+      "name": "entity.name.class",
+      "match": "Role|PK|Token|Account|Party"
+    }
+  ]
+}

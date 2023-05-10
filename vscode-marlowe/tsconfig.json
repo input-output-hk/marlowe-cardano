@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "noImplicitAny": true,
+    "noUncheckedIndexedAccess": true,
+    "strict": true,
+    "lib": [
+      "ES2022",
+      "WebWorker"
+    ]
+  },
+  "exclude": [
+    "node_modules"
+  ]
+}
