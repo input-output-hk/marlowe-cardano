@@ -8,7 +8,7 @@
   },
   "main": "extension.js",
   "scripts": {
-    "prebuild": "npm i",
+    "prebuild": "npm i && mkdir ws -p",
     "build": "esbuild ./src/extension.ts --bundle --tsconfig=./tsconfig.json --external:vscode --format=cjs --platform=node --outfile=./extension.js",
     "build:watch": "npm run build -- --watch"
   },
