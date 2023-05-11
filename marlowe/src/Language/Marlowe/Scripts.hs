@@ -48,18 +48,23 @@ module Language.Marlowe.Scripts
   , alternateMarloweValidator
   , alternateMarloweValidatorHash
   , marloweValidator
+  , marloweValidatorBytes
   , marloweValidatorCompiled
   , marloweValidatorHash
   , mkMarloweValidator
     -- * Payout Validator
   , TypedRolePayoutValidator
   , rolePayoutValidator
+  , rolePayoutValidatorBytes
   , rolePayoutValidatorHash
     -- * Utilities
   , marloweTxInputsFromInputs
   ) where
 
 
+import Codec.Serialise (serialise)
+import qualified Data.ByteString.Lazy as LBS
+import qualified Data.ByteString.Short as SBS
 import GHC.Generics (Generic)
 import Language.Marlowe.Core.V1.Semantics as Semantics
 import Language.Marlowe.Core.V1.Semantics.Types as Semantics
@@ -82,11 +87,13 @@ import Plutus.V2.Ledger.Api
   , POSIXTimeRange
   , ScriptContext(ScriptContext, scriptContextPurpose, scriptContextTxInfo)
   , ScriptPurpose(Spending)
+  , SerializedScript
   , TokenName
   , TxInInfo(TxInInfo, txInInfoOutRef, txInInfoResolved)
   , TxInfo(TxInfo, txInfoInputs, txInfoOutputs, txInfoValidRange)
   , UpperBound(..)
   , ValidatorHash
+  , getValidator
   , mkValidatorScript
   )
 import qualified Plutus.V2.Ledger.Api as Ledger (Address(Address))
@@ -177,6 +184,11 @@ mkRolePayoutValidator (currency, role) _ ctx =
 -- | The hash of the Marlowe payout validator.
 rolePayoutValidatorHash :: ValidatorHash
 rolePayoutValidatorHash = Scripts.validatorHash rolePayoutValidator
+
+
+-- | The serialisation of the Marlowe payout validator.
+rolePayoutValidatorBytes :: SerializedScript
+rolePayoutValidatorBytes = SBS.toShort . LBS.toStrict . serialise . getValidator $ Scripts.validatorScript rolePayoutValidator
 
 
 {-# INLINABLE closeInterval #-}
@@ -504,6 +516,11 @@ marloweValidatorCompiled =
 -- | The hash of the Marlowe semantics validator.
 marloweValidatorHash :: ValidatorHash
 marloweValidatorHash = Scripts.validatorHash marloweValidator
+
+
+-- | The serialisat of the Marlowe payout validator.
+marloweValidatorBytes :: SerializedScript
+marloweValidatorBytes = SBS.toShort . LBS.toStrict . serialise . getValidator $ Scripts.validatorScript marloweValidator
 
 
 {-# DEPRECATED alternateMarloweValidator "This validator is too large. Use `marloweValidator` instead." #-}

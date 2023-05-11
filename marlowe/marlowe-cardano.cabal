@@ -103,3 +103,24 @@ library
 
   if flag(trace-plutus)
      cpp-options: -DTRACE_PLUTUS
+
+executable marlowe-validators
+  import:         lang
+  hs-source-dirs: app
+  main-is:        Main.hs
+  other-modules:
+    Benchmark.Marlowe
+    Benchmark.Marlowe.RolePayout
+    Benchmark.Marlowe.Types
+    Benchmark.Marlowe.Util
+  build-depends:
+    , base
+    , base16-bytestring
+    , bytestring
+    , cardano-binary
+    , marlowe-cardano
+    , mtl
+    , plutus-core
+    , plutus-ledger-api
+    , plutus-tx
+    , serialise
