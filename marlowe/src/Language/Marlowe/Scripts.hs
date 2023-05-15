@@ -38,6 +38,12 @@
 
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
 
+-- Enable the following options to dump the Plutus code for the validators.
+--
+-- {-# OPTIONS_GHC -fplugin-opt PlutusTx.Plugin:dump-pir #-}
+-- {-# OPTIONS_GHC -fplugin-opt PlutusTx.Plugin:dump-plc #-}
+-- {-# OPTIONS_GHC -fplugin-opt PlutusTx.Plugin:dump-uplc #-}
+
 
 module Language.Marlowe.Scripts
   ( -- * Types
