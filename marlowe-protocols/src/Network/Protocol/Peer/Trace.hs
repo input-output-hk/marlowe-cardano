@@ -213,13 +213,13 @@ runAwaitPeerWithDriverTraced inj driver tok k dState = do
       addField respondEv $ Just $ AnyMessageAndAgency tok' msg'
       sendMessageTraced driver (reference respondEv) tok' msg'
       pure $ runPeerWithDriverTraced inj driver nextPeer dState'
-    Receive nextPeer -> join $ withInjectEventArgs inj (receiveArgs sendRef tok msg) $ const $ receive nextPeer
+    Receive nextPeer -> join $ withInjectEventArgs inj (receiveArgs sendRef tok msg) $ const $ receive dState' nextPeer
     Closed _ ma -> withInjectEventArgs inj (closeArgs sendRef tok msg) $ const ma
   where
-    receive :: PeerTraced ps pr st' m a -> m (m a)
-    receive = \case
-      EffectTraced m -> receive =<< m
-      peer -> pure $ runPeerWithDriverTraced inj driver peer dState
+    receive :: dState -> PeerTraced ps pr st' m a -> m (m a)
+    receive dState' = \case
+      EffectTraced m -> receive dState' =<< m
+      peer -> pure $ runPeerWithDriverTraced inj driver peer dState'
     respondArgs sendRef tok' msg = (simpleNewEventArgs (RespondSelector tok' msg))
       { newEventParent = Just sendRef
       , newEventInitialFields = [Nothing]
