@@ -20,8 +20,8 @@
 module Language.Marlowe.CLI.Test.Runtime.Monitor
   where
 
-import Contrib.Control.Concurrent (threadDelay)
 import qualified Cardano.Api as C
+import Contrib.Control.Concurrent (threadDelay)
 import Contrib.Control.Concurrent.Async (altIO)
 import Control.Concurrent (forkIO)
 import Control.Concurrent.Async (async, waitCatch)
@@ -37,10 +37,8 @@ import Data.Foldable.Extra (for_)
 import Data.Functor ((<&>))
 import qualified Data.Map.Strict as M
 import qualified Data.Map.Strict as Map
-import Data.Time.Units (Second)
 import qualified Data.Text as T
-import Data.Time.Units (Second, TimeUnit(fromMicroseconds, toMicroseconds))
->>>>>>> 910aca7a0 ( Implement pooc role based runtime test and add withdraw to the marlowe thread structure)
+import Data.Time.Units (Second)
 import Data.Traversable (for)
 import Language.Marlowe.CLI.Test.Contract (ContractNickname)
 import Language.Marlowe.CLI.Test.Log (logLabeledMsg)

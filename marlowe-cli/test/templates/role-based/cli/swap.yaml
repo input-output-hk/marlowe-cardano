@@ -1,0 +1,146 @@
+testName: Swap Contract using CLI
+
+operations:
+
+- CreateWallet: AParty
+
+- CreateWallet: BParty
+
+- Fund:
+    utxos:
+      - 10000000
+      - 4000000
+    wallets: [AParty, BParty]
+
+# Minting tokens AParty will use in the swap
+- Mint:
+    issuer: AParty
+    currencyNickname: APartyCurrency
+    minLovelace: 2000000
+    tokenDistribution:
+      - [AParty, APartyTokenName, 100]
+
+# Minting tokens BParty will use in the swap
+- Mint:
+    issuer: BParty
+    currencyNickname: BPartyCurrency
+    minLovelace: 2000000
+    tokenDistribution:
+      - [BParty, BPartyTokenName, 100]
+
+# Minting role tokens
+- Mint:
+    issuer: Faucet
+    currencyNickname: ContractCurrency
+    minLovelace: 2000000
+    tokenDistribution:
+      - [AParty, APartyRole, 1]
+      - [BParty, BPartyRole, 1]
+
+- CheckBalance:
+    walletNickname: AParty
+    balance:
+      - [APartyCurrency, APartyTokenName, 100]
+      - [ContractCurrency, APartyRole, 1]
+      - [ADA, "*"]
+
+- CheckBalance:
+    walletNickname: BParty
+    balance:
+      - [BPartyCurrency, BPartyTokenName, 100]
+      - [ContractCurrency, BPartyRole, 1]
+      - [ADA, "*"]
+
+- Initialize:
+    minLovelace: 3000000
+    submitter: Faucet
+    roleCurrency: ContractCurrency
+    template:
+      UseSwap:
+        aParty:
+          role_token: APartyRole
+        aAsset: [APartyCurrency, APartyTokenName, 50]
+
+        # There are three timeouts in the contract calculated from this value:
+        # `timeout`, `timeout-1000`, `timeout-2000`
+        aTimeout:
+          relative: 1000000
+
+        bParty:
+          role_token: BPartyRole
+        bAsset: [ BPartyCurrency, BPartyTokenName, 40]
+
+        # Threre are three timeouts in the contract calculated from this value:
+        # `timeout`, `timeout-1000`, `timeout-2000`
+        bTimeout:
+          relative: 1000000
+
+- Prepare:
+    inputs:
+      - input_from_party:
+          role_token: APartyRole
+        that_deposits: 50
+        of_token:
+          currency_symbol: APartyCurrency
+          token_name: APartyTokenName
+        into_account:
+          role_token: APartyRole
+    minimumTime:
+      relative: -15
+    maximumTime:
+      relative: 8000
+
+- Prepare:
+    inputs:
+      - input_from_party:
+          role_token: BPartyRole
+        that_deposits: 40
+        of_token:
+          currency_symbol: BPartyCurrency
+          token_name: BPartyTokenName
+        into_account:
+          role_token: BPartyRole
+    minimumTime:
+      relative: -15
+    maximumTime:
+      relative: 8000
+
+- AutoRun
+
+- CheckBalance:
+    walletNickname: AParty
+    balance:
+      - [APartyCurrency, APartyTokenName, 50]
+      - [ContractCurrency, APartyRole, 1]
+      - [ADA, "*"]
+
+- Withdraw: AParty
+
+
+- CheckBalance:
+    walletNickname: AParty
+    balance:
+      - [APartyCurrency, APartyTokenName, 50]
+      - [BPartyCurrency, BPartyTokenName, 40]
+      - [ContractCurrency, APartyRole, 1]
+      - [ADA, "*"]
+
+- CheckBalance:
+    walletNickname: BParty
+    balance:
+      - [BPartyCurrency, BPartyTokenName, 60]
+      - [ContractCurrency, BPartyRole, 1]
+      - [ADA, "*"]
+
+- Withdraw: BParty
+
+- CheckBalance:
+    walletNickname: BParty
+    balance:
+      - [APartyCurrency, APartyTokenName, 50]
+      - [BPartyCurrency, BPartyTokenName, 60]
+      - [ContractCurrency, BPartyRole, 1]
+      - [ADA, "*"]
+
+
+

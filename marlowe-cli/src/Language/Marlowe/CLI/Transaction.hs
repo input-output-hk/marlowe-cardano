@@ -57,6 +57,7 @@ module Language.Marlowe.CLI.Transaction
   , makeBalancedTxOut
   , makeTxOut
   , makeTxOut'
+  , maximumFee
   , querySlotConfig
   , queryUtxos
   , selectUtxos
@@ -1524,7 +1525,7 @@ waitForUtxos connection timeout txIns = do
     txIns' = S.fromList txIns
     go 0 = throwError "Timeout waiting for transaction to be confirmed."
     go n = do
-             liftIO . threadDelay $ fromInteger $ toMicroseconds pause
+             liftIO . threadDelay $ pause
              utxos <- do
                queryInEra connection
                  . QueryUTxO
@@ -1534,8 +1535,7 @@ waitForUtxos connection timeout txIns = do
                then do
                  pure ()
                else go (n - 1 :: Int)
-  in
-    go . ceiling $ (fromIntegral timeoutMicroseconds / fromIntegral pauseMicroseconds :: Double)
+  go . ceiling $ (fromIntegral timeoutMicroseconds / fromIntegral pauseMicroseconds :: Double)
 
 
 -- | TxIn for transaction body.

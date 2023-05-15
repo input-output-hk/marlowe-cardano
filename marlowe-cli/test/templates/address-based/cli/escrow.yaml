@@ -1,0 +1,78 @@
+testName: CLI Escrow Contract Test
+
+operations:
+
+- CreateWallet: Buyer
+
+- CreateWallet: Seller
+
+- CreateWallet: Mediator
+
+- Fund:
+    utxos: [10000000, 10000000, 10000000]
+    wallet: Buyer
+
+- Initialize:
+    minLovelace: 2000000
+    template:
+      UseEscrow:
+        seller:
+          address: Seller
+        buyer:
+          address: Buyer
+        mediator:
+          address: Mediator
+        price: 20000000
+        paymentDeadline:
+          relative: 20000
+        complaintDeadline:
+          relative: 30000
+        disputeDeadline:
+          relative: 30000
+        mediationDeadline:
+          relative: 30000
+
+- Prepare:
+    inputs:
+      - input_from_party:
+          address: Buyer
+        that_deposits: 20000000
+        of_token:
+          currency_symbol: ""
+          token_name: ""
+        into_account:
+          address: Seller
+    minimumTime:
+      relative: -100
+    maximumTime:
+      relative: 240
+
+- AutoRun
+
+- Prepare:
+    inputs:
+      - for_choice_id:
+          choice_name: Everything is alright
+          choice_owner:
+            address: Buyer
+        input_that_chooses_num: 0
+    minimumTime:
+      relative: -100
+    maximumTime:
+      relative: 240
+
+- AutoRun
+
+# Buery account started with 30 ADA.
+# Seller account was empty.
+# We transfered 20 ADA for the goodies to the Seller.
+- CheckBalance:
+    wallet: Buyer
+    balance:
+      - [ADA, 10]
+
+- CheckBalance:
+    wallet: Seller
+    balance:
+      - [ADA, 20]
+

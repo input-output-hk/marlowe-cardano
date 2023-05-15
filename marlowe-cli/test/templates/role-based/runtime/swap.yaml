@@ -1,0 +1,135 @@
+testName: Swap Contract with Roles Using The Runtime
+
+operations:
+
+- CreateWallet: AParty
+
+- CreateWallet: BParty
+
+- Fund:
+    utxo: 100000000
+    wallets: [AParty, BParty]
+
+# Minting role tokens
+- Mint:
+    nickname: RoleCurrency
+    minLovelace: 2000000
+    tokenDistribution:
+      - [ AParty, APartyRoleToken, 1 ]
+      - [ BParty, BPartyRoleToken, 1 ]
+
+# Minting tokens AParty will use in the swap
+- Mint:
+    issuer: AParty
+    nickname: APartyCurrency
+    minLovelace: 2000000
+    tokenDistribution:
+      - [AParty, APartyTokenName, 100]
+
+# Minting tokens BParty will use in the swap
+- Mint:
+    issuer: BParty
+    nickname: BPartyCurrency
+    minLovelace: 2000000
+    tokenDistribution:
+      - [BParty, BPartyTokenName, 100]
+
+# Sanity balance check
+- CheckBalance:
+    wallet: AParty
+    balance:
+      - [APartyCurrency, APartyTokenName, 100]
+      - [RoleCurrency, APartyRoleToken, 1]
+      - [ADA, "*"]
+
+# Sanity balance check
+- CheckBalance:
+    wallet: BParty
+    balance:
+      - [BPartyCurrency, BPartyTokenName, 100]
+      - [RoleCurrency, BPartyRoleToken, 1]
+      - [ADA, "*"]
+
+- RuntimeCreateContract:
+    minLovelace: 2000000
+    awaitConfirmed: 120
+    roleCurrency: RoleCurrency
+    template:
+      UseSwap:
+        aParty:
+          role_token: APartyRoleToken
+        aAsset: [APartyCurrency, APartyTokenName, 50]
+
+        # There are three timeouts in the contract calculated from this value:
+        # `timeout`, `timeout-1000`, `timeout-2000`
+        aTimeout:
+          relative: 1000000
+
+        bParty:
+          role_token: BPartyRoleToken
+        bAsset: [ BPartyCurrency, BPartyTokenName, 40]
+
+        # Threre are three timeouts in the contract calculated from this value:
+        # `timeout`, `timeout-1000`, `timeout-2000`
+        bTimeout:
+          relative: 1000000
+
+- RuntimeApplyInputs:
+    submitter: AParty
+    awaitConfirmed: 120
+    inputs:
+      - input_from_party:
+          role_token: APartyRoleToken
+        that_deposits: 50
+        of_token:
+          currency_symbol: APartyCurrency
+          token_name: APartyTokenName
+        into_account:
+          role_token: APartyRoleToken
+
+- RuntimeApplyInputs:
+    submitter: BParty
+    awaitConfirmed: 120
+    inputs:
+      - input_from_party:
+          role_token: BPartyRoleToken
+        that_deposits: 40
+        of_token:
+          currency_symbol: BPartyCurrency
+          token_name: BPartyTokenName
+        into_account:
+          role_token: BPartyRoleToken
+
+- CheckBalance:
+    wallet: BParty
+    balance:
+      - [BPartyCurrency, BPartyTokenName, 60]
+      - [RoleCurrency, BPartyRoleToken, 1]
+      - [ADA, "*"]
+
+- CheckBalance:
+    wallet: AParty
+    balance:
+      - [APartyCurrency, APartyTokenName, 50]
+      - [RoleCurrency, APartyRoleToken, 1]
+      - [ADA, "*"]
+
+- RuntimeWithdraw:
+    awaitConfirmed: 120
+
+- CheckBalance:
+    wallet: BParty
+    balance:
+      - [APartyCurrency, APartyTokenName, 50]
+      - [BPartyCurrency, BPartyTokenName, 60]
+      - [RoleCurrency, BPartyRoleToken, 1]
+      - [ADA, "*"]
+
+- CheckBalance:
+    wallet: AParty
+    balance:
+      - [APartyCurrency, APartyTokenName, 50]
+      - [BPartyCurrency, BPartyTokenName, 40]
+      - [RoleCurrency, APartyRoleToken, 1]
+      - [ADA, "*"]
+

@@ -43,9 +43,11 @@ import qualified Data.Aeson.OneLine as A
 import Data.Bifunctor (first)
 import Data.Coerce (coerce)
 import Data.Default (Default(def))
+import Data.Foldable (for_)
 import qualified Data.Foldable as Foldable
 import Data.Functor ((<&>))
 import Data.IORef (IORef, newIORef, readIORef)
+import qualified Data.List.Extra as List
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as S (singleton)
 import qualified Data.Text as Text
@@ -65,7 +67,11 @@ import Language.Marlowe.CLI.Test.Runtime.Types (RuntimeError(RuntimeRollbackErro
 import qualified Language.Marlowe.CLI.Test.Runtime.Types as R
 import qualified Language.Marlowe.CLI.Test.Runtime.Types as Runtime
 import Language.Marlowe.CLI.Test.TestCase
-  (TransactionCostUpperBound(TransactionCostUpperBound), testTxsFeesUpperBound, testsFaucetBudgetUpperBound)
+  ( TxCostsUpperBounds(TxCostsUpperBounds)
+  , testFaucetBudgetUpperBound
+  , testTxsFeesUpperBound
+  , testsFaucetBudgetUpperBound
+  )
 import Language.Marlowe.CLI.Test.Types
   ( ConcurrentRunners(ConcurrentRunners)
   , FailureError(InterpreterError, RuntimeMonitorError)
@@ -96,14 +102,16 @@ import Language.Marlowe.CLI.Test.Wallet.Types
   , waSubmittedTransactions
   )
 import qualified Language.Marlowe.CLI.Test.Wallet.Types as Wallet
-import Language.Marlowe.CLI.Transaction (queryUtxos)
+import Language.Marlowe.CLI.Transaction (maximumFee, queryUtxos)
 import Language.Marlowe.CLI.Types (CliEnv(CliEnv), CliError(..), PrintStats, SomePaymentSigningKey)
 import qualified Language.Marlowe.CLI.Types as T
 import qualified Language.Marlowe.Protocol.Client as Marlowe.Protocol
+import qualified Language.Marlowe.Protocol.Types as Marlowe.Protocol
 import qualified Language.Marlowe.Runtime.App.Types as Apps
 import qualified Network.Protocol.Connection as Network.Protocol
 import qualified Network.Protocol.Driver as Network.Protocol
 import qualified Network.Protocol.Handshake.Client as Network.Protocol
+import Network.Protocol.Handshake.Types (Handshake)
 import Plutus.V1.Ledger.SlotConfig (SlotConfig)
 import qualified Plutus.V2.Ledger.Api as P
 import qualified PlutusTx.Monoid as P
@@ -336,9 +344,9 @@ setupTestInterpretEnv = do
   possibleRuntimeConfig <- view envRuntimeConfig
   runtimeSetup <- for possibleRuntimeConfig \RuntimeConfig {..} -> do
     let
-      connector :: Network.Protocol.SomeClientConnector Marlowe.Protocol.MarloweRuntimeClient IO
-      connector = Network.Protocol.SomeConnector
-        $ Network.Protocol.handshakeClientConnector
+      connector :: (Network.Protocol.ClientConnector (Handshake Marlowe.Protocol.MarloweRuntime) Marlowe.Protocol.MarloweRuntimeClient IO)
+      connector = --Network.Protocol.SomeConnector
+        Network.Protocol.handshakeClientConnector
         $ Network.Protocol.tcpClient rcRuntimeHost rcRuntimePort Marlowe.Protocol.marloweRuntimeClientPeer
       config = def
         { Apps.chainSeekHost = rcRuntimeHost
@@ -570,10 +578,11 @@ acquireFaucets (TestFaucetBudget testFaucetBudget) (FaucetsNumber faucetNumber) 
   wallets <- do
     let
       faucetNicknames = [1..faucetNumber] <&> \i -> WalletNickname ("Faucet-" <> show i)
-      createWallets = faucetNicknames <&> \walletNickname -> Wallet.CreateWallet walletNickname
-      operations =
-        createWallets
-        <> [Wallet.FundWallets faucetNicknames [testFaucetBudget] (Just False)]
+      operations = do
+        let
+          createWallets =
+            faucetNicknames <&> \walletNickname -> Wallet.CreateWallet walletNickname Nothing
+        List.snoc createWallets  (Wallet.Fund faucetNicknames [testFaucetBudget])
     faucetWallet <- toTestWallet masterFaucet ExcludeAllTransactions
     let
       updateMasterFaucet interpretState' =
@@ -742,9 +751,11 @@ runTests
   -> ConcurrentRunners
   -> TestSuiteRunnerM lang era (TestSuiteResult lang era)
 runTests tests (ConcurrentRunners maxConcurrentRunners) = do
+  protocolParams <- view envProtocolParams
   let
     concurrentRunners = min maxConcurrentRunners (length tests)
-    txCosts = TransactionCostUpperBound (Lovelace 3_000_000) (Lovelace 70_000_000)
+    -- Our coin selection algorithm bounds the tx fees using this 2x factor.
+    txCosts = TxCostsUpperBounds (2 * maximumFee protocolParams) (Lovelace 75_000_000)
     subfaucetBudget = testsFaucetBudgetUpperBound txCosts (map snd tests)
     requiredFunds = lovelaceFromInt (lovelaceToInt subfaucetBudget * concurrentRunners)
     totalTxCost = sum (testTxsFeesUpperBound txCosts <$> map snd tests)
@@ -755,6 +766,15 @@ runTests tests (ConcurrentRunners maxConcurrentRunners) = do
     hPutStrLn stderr $ "Estimated subfaucet budget: " <> show (toInteger subfaucetBudget `div` 1_000_000) <> " ADA"
     hPutStrLn stderr $ "Estimated test total tx fees: " <> show (toInteger totalTxCost `div` 1_000_000) <> " ADA"
     hPutStrLn stderr $ "Concurrent runners: " <> show concurrentRunners
+
+    for_ tests $ \(testFile, operations) -> do
+      let
+        budgetUpperBound = testFaucetBudgetUpperBound txCosts operations
+        txsFeesUpperBound = testTxsFeesUpperBound txCosts operations
+
+      hPutStrLn stderr $ testFile <> ":"
+      hPutStrLn stderr $ "Estimated test budget: " <> show (toInteger budgetUpperBound `div` 1_000_000) <> " ADA"
+      hPutStrLn stderr $ "Estimated test tx fees: " <> show (toInteger txsFeesUpperBound `div` 1_000_000) <> " ADA"
 
   masterFaucet <- mkMasterFaucet
   masterFaucetRef <- liftIO $ newTVarIO masterFaucet

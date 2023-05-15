@@ -62,8 +62,11 @@ import Ledger.Orphans ()
 
 import Contrib.Control.Monad.Except (note)
 import Contrib.Data.Foldable (anyFlipped, foldMapFlipped, foldMapMFlipped)
+import Contrib.Data.List.Random (combinationWithRepetitions)
 import Control.Monad (foldM, void, when)
 import Control.Monad.Error.Class (MonadError(throwError))
+import Control.Monad.IO.Class (liftIO)
+import Control.Monad.Loops (untilJust)
 import Data.Coerce (coerce)
 import Data.Functor ((<&>))
 import qualified Data.List.NonEmpty as List.NonEmpty
@@ -126,13 +129,23 @@ import Language.Marlowe.Cardano.Thread
 
 findCLIContractInfo
   :: InterpretMonad env st m lang era
-  => ContractNickname
-  -> m (CLIContractInfo lang era)
-findCLIContractInfo nickname = do
+  => Maybe ContractNickname
+  -> m (ContractNickname, CLIContractInfo lang era)
+findCLIContractInfo (Just nickname) = do
   CLIContracts contracts <- use contractsL
   note
     (testExecutionFailed' $ "[findCLIContractInfo] Marlowe contract structure was not found for a given nickname " <> show (coerce nickname :: String) <> ".")
-    (Map.lookup nickname contracts)
+    ((nickname,) <$> Map.lookup nickname contracts)
+findCLIContractInfo Nothing = do
+  CLIContracts contracts <- use contractsL
+  let
+    fnName :: String
+    fnName = "findCLIContractInfo"
+  case Map.toList contracts of
+    [] -> throwLabeledError fnName (testExecutionFailed' "No contracts found.")
+    [pair] -> pure pair
+    _ -> throwLabeledError fnName (testExecutionFailed' "Multiple contracts found. Please specify a contract nickname.")
+
 
 autoRunTransaction
   :: forall era env lang m st
@@ -312,7 +325,26 @@ interpret co@Initialize {..} = do
   protocolVersion <- view protocolVersionL
   LocalNodeConnectInfo { localNodeNetworkId } <- view connectionL
 
-  marloweTransaction <- case coMarloweValidators of
+  let
+    marloweValidators = fromMaybe (ReferenceCurrentValidators Nothing Nothing) coMarloweValidators
+
+    mkContractNickname = do
+      CLIContracts contracts <- use contractsL
+      case coContractNickname of
+        Nothing -> do
+          liftIO $ untilJust do
+            suffix <- combinationWithRepetitions 8 ['a'..'z']
+            let
+              nickname = ContractNickname $ "contract-" <> suffix
+            if isJust $ Map.lookup nickname contracts
+              then pure Nothing
+              else pure $ Just nickname
+        Just nickname -> do
+          when (isJust . Map.lookup nickname $ contracts) do
+            throwLabeledError co $ testExecutionFailed' "Contract with a given nickname already exist."
+          pure nickname
+
+  marloweTransaction <- case marloweValidators of
     ReferenceCurrentValidators publishPermanently possiblePublisher -> do
       logStoreLabeledMsg co "Using reference scripts to the current Marlowe validator."
       refs <- use publishedScriptsL >>= \case
@@ -353,12 +385,10 @@ interpret co@Initialize {..} = do
     ReferenceRuntimeValidators -> do
       throwLabeledError co $ testExecutionFailed' "Usage of reference runtime scripts is not supported yet."
 
-  CLIContracts contracts <- use contractsL
-  when (isJust . Map.lookup coContractNickname $ contracts) do
-    throwLabeledError co $ testExecutionFailed' "Contract with a given nickname already exist."
+  contractNickname <- mkContractNickname
 
-  logStoreLabeledMsg co $ "Saving initialized contract " <> show (coerce coContractNickname :: String)
-  modifying (contractsL . coerced) $ Map.insert coContractNickname $ CLIContractInfo
+  logStoreLabeledMsg co $ "Saving initialized contract " <> show (coerce contractNickname :: String)
+  modifying (contractsL . coerced) $ Map.insert contractNickname $ CLIContractInfo
     {
       _ciContract = marloweContract
     , _ciPlan = marloweTransaction :| []
@@ -369,7 +399,7 @@ interpret co@Initialize {..} = do
     }
 
 interpret co@Prepare {..} = do
-  marloweContract@CLIContractInfo {..} <- findCLIContractInfo coContractNickname
+  (contractNickname, marloweContract@CLIContractInfo {..}) <- findCLIContractInfo coContractNickname
   let
     curr = List.NonEmpty.head _ciPlan
   inputs <- for coInputs decodeInputJSON
@@ -392,7 +422,7 @@ interpret co@Prepare {..} = do
     plan = new' <| _ciPlan
     marloweContract' = marloweContract{ _ciPlan = plan }
 
-  modifying (contractsL . coerced) $ Map.insert coContractNickname marloweContract'
+  modifying (contractsL . coerced) $ Map.insert contractNickname marloweContract'
 
 interpret co@Publish {..} = do
   logStoreLabeledMsg co "Using reference scripts to the current Marlowe validator."
@@ -408,7 +438,7 @@ interpret AutoRun {..} = do
   executionMode <- view executionModeL
   case executionMode of
     OnChainMode {} -> do
-      marloweContract@CLIContractInfo {..} <- findCLIContractInfo coContractNickname
+      (contractNickname, marloweContract@CLIContractInfo {..}) <- findCLIContractInfo coContractNickname
       let
         plan = do
           let
@@ -440,14 +470,14 @@ interpret AutoRun {..} = do
       thread' <- foldM step _ciThread plan
       let
         marloweContract' = marloweContract { _ciThread = thread' }
-      modifying (contractsL . coerced)  $ Map.insert coContractNickname marloweContract'
+      modifying (contractsL . coerced)  $ Map.insert contractNickname marloweContract'
     SimulationMode -> do
       -- TODO: We should be able to run balancing in here even in the simulation mode
       pure ()
 
 interpret co@Withdraw {..} =
   view executionModeL >>= skipInSimluationMode co do
-  marloweContract@CLIContractInfo {..} <- findCLIContractInfo coContractNickname
+  (contractNickname, marloweContract@CLIContractInfo {..}) <- findCLIContractInfo coContractNickname
 
   marloweThread <- case _ciThread of
     Just marloweThread -> pure marloweThread
@@ -531,5 +561,5 @@ interpret co@Withdraw {..} =
     newWithdrawals = foldMapFlipped roles \role ->
       Map.singleton role (C.getTxId . overAnyMarloweThread getCLIMarloweThreadTxBody $ marloweThread)
     marloweContract' = marloweContract{ _ciWithdrawalsCheckPoints = newWithdrawals <> _ciWithdrawalsCheckPoints }
-  modifying (contractsL . coerced) $ Map.insert coContractNickname marloweContract'
+  modifying (contractsL . coerced) $ Map.insert contractNickname marloweContract'
 

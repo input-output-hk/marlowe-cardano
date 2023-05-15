@@ -55,7 +55,7 @@ data InterpreterError
 makeLenses ''InterpreterError
 
 instance A.FromJSON InterpreterError where
-  parseJSON = Operations.parseConstructorBasedJSON "_ie"
+  parseJSON = Operations.parseConstructorBasedJSON' "_ie"
 
 instance A.ToJSON InterpreterError where
   toJSON = Operations.toConstructorBasedJSON "_ie"

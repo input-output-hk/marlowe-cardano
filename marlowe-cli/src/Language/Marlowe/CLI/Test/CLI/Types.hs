@@ -21,12 +21,14 @@ module Language.Marlowe.CLI.Test.CLI.Types
 
 import Cardano.Api (CardanoMode, LocalNodeConnectInfo, Lovelace, ScriptDataSupportedInEra)
 import qualified Cardano.Api as C
+import qualified Contrib.Data.List as List
 import Control.Lens (Lens', makeLenses)
 import Control.Monad.Except (MonadError)
 import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.Reader.Class (MonadReader)
 import Control.Monad.State.Class (MonadState)
 import Data.Aeson (FromJSON(..), ToJSON(..), (.:?), (.=))
+import qualified Data.Aeson as A
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.KeyMap as KeyMap
 import qualified Data.List.NonEmpty as List
@@ -40,6 +42,16 @@ import qualified Language.Marlowe.CLI.Test.Contract as Contract
 import Language.Marlowe.CLI.Test.Contract.ParametrizedMarloweJSON (ParametrizedMarloweJSON)
 import Language.Marlowe.CLI.Test.ExecutionMode
 import Language.Marlowe.CLI.Test.InterpreterError (InterpreterError)
+import Language.Marlowe.CLI.Test.Operation.Aeson
+  ( ConstructorName(ConstructorName)
+  , NewPropName(NewPropName)
+  , OldPropName(OldPropName)
+  , PropName(PropName)
+  , rewriteProp
+  , rewritePropWith
+  , rewriteToEmptyObject
+  , rewriteToSingletonObject
+  )
 import qualified Language.Marlowe.CLI.Test.Operation.Aeson as Operation
 import Language.Marlowe.CLI.Test.Wallet.Types (Currencies, CurrencyNickname, WalletNickname, Wallets)
 import qualified Language.Marlowe.CLI.Test.Wallet.Types as Wallet
@@ -132,19 +144,19 @@ data CLIOperation =
     Initialize
     {
       coMinLovelace         :: Lovelace                -- ^ Minimum lovelace to be sent to the contract.
-    , coContractNickname    :: ContractNickname        -- ^ The name of the wallet's owner.
+    , coContractNickname    :: Maybe ContractNickname  -- ^ The name of the wallet's owner.
     , coRoleCurrency        :: Maybe CurrencyNickname  -- ^ If contract uses roles then currency is required.
     , coContractSource      :: Contract.Source         -- ^ The Marlowe contract to be created.
     , coSubmitter           :: Maybe WalletNickname    -- ^ A wallet which gonna submit the initial transaction.
-    , coMarloweValidators   :: MarloweValidators
+    , coMarloweValidators   :: Maybe MarloweValidators
     }
   | Prepare
     {
-      coContractNickname     :: ContractNickname  -- ^ The name of the contract.
-    , coInputs               :: [ParametrizedMarloweJSON]         -- ^ Inputs to the contract.
+      coContractNickname     :: Maybe ContractNickname      -- ^ The name of the contract.
+    , coInputs               :: [ParametrizedMarloweJSON]   -- ^ Inputs to the contract.
     , coMinimumTime          :: SomeTimeout
     , coMaximumTime          :: SomeTimeout
-    , coOverrideMarloweState :: Maybe M.State -- ^ Useful for testing scenarios with non standard initial state.
+    , coOverrideMarloweState :: Maybe M.State               -- ^ Useful for testing scenarios with non standard initial state.
     }
   | Publish                                          -- ^ Publishing can be a part of `Initialize` operation but we can also test it separately.
     { coPublisher          :: Maybe WalletNickname   -- ^ Wallet used to cover fees. Falls back to faucet wallet.
@@ -152,18 +164,56 @@ data CLIOperation =
     }
   | AutoRun
     {
-      coContractNickname :: ContractNickname
+      coContractNickname :: Maybe ContractNickname
     , coInvalid          :: Maybe Bool
     }
   | Withdraw
    {
-     coContractNickname :: ContractNickname
+     coContractNickname :: Maybe ContractNickname
    , coWalletNickname   :: WalletNickname
    }
   deriving stock (Eq, Generic, Show)
 
 instance FromJSON CLIOperation where
-  parseJSON = Operation.parseConstructorBasedJSON "co"
+  parseJSON = do
+    let
+      preprocess = do
+        let
+          rewriteInitialize = do
+            let
+              constructorName = ConstructorName "Initialize"
+              rewriteTemplate = rewritePropWith
+                constructorName
+                (OldPropName "template")
+                (NewPropName "contractSource")
+                (A.object . List.singleton . ("template",))
+              rewriteContract = rewritePropWith
+                constructorName
+                (OldPropName "source")
+                (NewPropName "contractSource")
+                (A.object . List.singleton . ("inline",))
+              rewriteContractNickname = rewriteProp
+                constructorName
+                (OldPropName "nickname")
+                (NewPropName "contractNickname")
+            rewriteTemplate <> rewriteContract <> rewriteContractNickname
+
+          rewriteAutoRun = do
+            let
+              constructorName = ConstructorName "AutoRun"
+              rewriteToContractNickname = rewriteToSingletonObject constructorName (PropName "contractNickname")
+            rewriteToContractNickname <> rewriteToEmptyObject constructorName
+          rewriteWithdraw = do
+            let
+              constructorName = ConstructorName "Withdraw"
+              rewriteToWalletNickname = rewriteToSingletonObject constructorName (PropName "walletNickname")
+              rewriteWallet = rewriteProp
+                constructorName
+                (OldPropName "wallet")
+                (NewPropName "walletNickname")
+            rewriteToWalletNickname <> rewriteWallet
+        rewriteAutoRun <> rewriteWithdraw <> rewriteInitialize
+    Operation.parseConstructorBasedJSON "co" preprocess
 
 instance ToJSON CLIOperation where
   toJSON = Operation.toConstructorBasedJSON "co"

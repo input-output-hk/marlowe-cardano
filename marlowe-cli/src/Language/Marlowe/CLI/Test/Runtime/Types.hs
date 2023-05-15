@@ -15,12 +15,14 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TupleSections #-}
 
 module Language.Marlowe.CLI.Test.Runtime.Types
   where
 
 import Cardano.Api (CardanoMode, LocalNodeConnectInfo, ScriptDataSupportedInEra)
 import qualified Cardano.Api as C
+import qualified Contrib.Data.List as List
 import qualified Contrib.Data.Time.Units.Aeson as A
 import Control.Concurrent.STM (TChan, TVar)
 import Control.Lens (Lens', Traversal', makeLenses)
@@ -41,6 +43,8 @@ import Language.Marlowe.CLI.Test.Contract.ParametrizedMarloweJSON
 import Language.Marlowe.CLI.Test.ExecutionMode (ExecutionMode)
 import Language.Marlowe.CLI.Test.InterpreterError (InterpreterError)
 import qualified Language.Marlowe.CLI.Test.Log as Log
+import Language.Marlowe.CLI.Test.Operation.Aeson
+  (ConstructorName(ConstructorName), NewPropName(NewPropName), OldPropName(OldPropName), rewriteProp, rewritePropWith)
 import qualified Language.Marlowe.CLI.Test.Operation.Aeson as Operation
 import Language.Marlowe.CLI.Test.Wallet.Types (Currencies, CurrencyNickname, WalletNickname, Wallets)
 import qualified Language.Marlowe.CLI.Test.Wallet.Types as Wallet
@@ -118,17 +122,17 @@ defaultOperationTimeout = 30
 data RuntimeOperation
   = RuntimeAwaitTxsConfirmed
     {
-      roContractNickname :: ContractNickname
+      roContractNickname :: Maybe ContractNickname
     , roTimeout :: Maybe A.Second
     }
   | RuntimeAwaitClosed
     {
-      roContractNickname :: ContractNickname
+      roContractNickname :: Maybe ContractNickname
     , roTimeout :: Maybe A.Second
     }
   | RuntimeCreateContract
     {
-      roContractNickname :: ContractNickname
+      roContractNickname :: Maybe ContractNickname
     , roSubmitter :: Maybe WalletNickname
     -- ^ A wallet which gonna submit the initial transaction.
     , roMinLovelace :: Word64
@@ -141,7 +145,7 @@ data RuntimeOperation
     }
   | RuntimeApplyInputs
     {
-      roContractNickname :: ContractNickname
+      roContractNickname :: Maybe ContractNickname
     , roInputs :: [ParametrizedMarloweJSON]
     -- ^ Inputs to the contract.
     , roSubmitter :: Maybe WalletNickname
@@ -151,14 +155,46 @@ data RuntimeOperation
     }
   | RuntimeWithdraw
     {
-      roContractNickname :: ContractNickname
+      roContractNickname :: Maybe ContractNickname
     , roWallets :: Maybe [WalletNickname] -- ^ Wallets with role tokens. By default we find all the role tokens and use them.
     , roAwaitConfirmed :: Maybe A.Second -- ^ How long to wait for the transactions to be confirmed in the Runtime. By default we don't wait.
     }
   deriving stock (Eq, Generic, Show)
 
 instance FromJSON RuntimeOperation where
-  parseJSON = Operation.parseConstructorBasedJSON "ro"
+  parseJSON = do
+    let
+      preprocess = do
+        let
+          rewriteCreate = do
+            let
+              constructorName = ConstructorName "RuntimeCreateContract"
+              rewriteTemplate = rewritePropWith
+                constructorName
+                (OldPropName "template")
+                (NewPropName "contractSource")
+                (A.object . List.singleton . ("template",))
+              rewriteContract = rewritePropWith
+                constructorName
+                (OldPropName "source")
+                (NewPropName "contractSource")
+                (A.object . List.singleton . ("inline",))
+              rewriteContractNickname = rewriteProp
+                constructorName
+                (OldPropName "nickname")
+                (NewPropName "contractNickname")
+            rewriteTemplate <> rewriteContract <> rewriteContractNickname
+          rewriteWithdraw = do
+            let
+              constructorName = ConstructorName "RuntimeWithdraw"
+              rewriteWallet = rewritePropWith
+                constructorName
+                (OldPropName "wallet")
+                (NewPropName "wallets")
+                (A.toJSON . List.singleton)
+            rewriteWallet
+        rewriteCreate <> rewriteWithdraw
+    Operation.parseConstructorBasedJSON "ro" preprocess
 
 instance ToJSON RuntimeOperation where
   toJSON = Operation.toConstructorBasedJSON "ro"
@@ -181,6 +217,7 @@ class HasInterpretEnv env era | env -> era where
   runtimeMonitorStateT :: Traversal' env RuntimeMonitorState
   runtimeMonitorInputT :: Traversal' env RuntimeMonitorInput
   runtimeClientConnectorT :: Traversal' env (Network.Protocol.ClientConnector (Handshake Marlowe.Protocol.MarloweRuntime) Marlowe.Protocol.MarloweRuntimeClient IO)
+  -- runtimeClientConnectorT :: Traversal' env (Network.Protocol.SomeClientConnector Marlowe.Protocol.MarloweRuntimeClient IO)
   executionModeL :: Lens' env ExecutionMode
   connectionT :: Traversal' env (LocalNodeConnectInfo CardanoMode)
   eraL :: Lens' env (ScriptDataSupportedInEra era)

@@ -1,0 +1,186 @@
+testName: Swap of ADA for ADA
+
+operations:
+
+- Comment: Create the wallet for the ADA provider, fund it with 50 ADA, and activate the Marlowe endpoints.
+
+- CreateWallet: Ada provider
+
+- Fund:
+    wallet: Ada provider
+    utxo: 50000000
+
+- Comment: Create the wallet for the other provider, fund it with 40 ADA, and activate the Marlowe endpoints.
+
+- CreateWallet: Other provider
+
+- Fund:
+    wallet: Other provider
+    utxo: 40000000
+
+- Mint:
+    issuer: Ada provider
+    nickname: RoleTokenCurrency
+    minLovelace: 2000000
+    tokenDistribution:
+      - [Other provider, Other provider, 1]
+      - [Ada provider, Ada provider, 1]
+
+- Comment: The ADA provider creates the swap contract for 30 ADA to 25 ADA.
+
+- Initialize:
+    minLovelace: 2000000
+    roleCurrency: RoleTokenCurrency
+    submitter: Ada provider
+    source:
+      when:
+      - case:
+          party:
+            role_token: Ada provider
+          deposits:
+            multiply: 1000000
+            times: 30
+          of_token:
+            currency_symbol: ''
+            token_name: ''
+          into_account:
+            role_token: Ada provider
+        then:
+          when:
+          - case:
+              party:
+                role_token: Other provider
+              deposits:
+                multiply: 1000000
+                times: 25
+              of_token:
+                currency_symbol: ''
+                token_name: ''
+              into_account:
+                role_token: Other provider
+            then:
+              pay:
+                multiply: 1000000
+                times: 30
+              token:
+                currency_symbol: ''
+                token_name: ''
+              from_account:
+                role_token: Ada provider
+              to:
+                party:
+                  role_token: Other provider
+              then:
+                pay:
+                  multiply: 1000000
+                  times: 25
+                token:
+                  currency_symbol: ''
+                  token_name: ''
+                from_account:
+                  role_token: Other provider
+                to:
+                  party:
+                    role_token: Ada provider
+                then: close
+          timeout: 1961123625000
+          timeout_continuation: close
+      timeout: 1929587625000
+      timeout_continuation: close
+
+- AutoRun
+
+- Comment: The ADA provider should have 46 ADA now, since 2 ADA was sent to the script when creating the contract and 2 ADA was sent to the other provider along with their role token, and up to 1 ADA in fees might have been paid.
+
+- CheckBalance:
+    wallet: Ada provider
+    balance:
+      - [ADA, 46]
+      - [RoleTokenCurrency, Ada provider, 1]
+
+- Comment: The other provider should have 42 ADA.
+
+- CheckBalance:
+    wallet: Other provider
+    balance:
+      - [ADA, 42]
+      - [RoleTokenCurrency, Other provider, 1]
+
+- Comment: The ADA provider deposits their 30 ADA for the swap.
+
+- Prepare:
+    inputs:
+      - input_from_party:
+          role_token: Ada provider
+        that_deposits: 30000000
+        of_token:
+          currency_symbol: ''
+          token_name: ''
+        into_account:
+          role_token: Ada provider
+    minimumTime:
+      relative: -15
+    maximumTime:
+      relative: 120
+
+- AutoRun
+
+- Comment: The ADA provider should have 16 ADA now, since they paid 30 ADA for the swap, minus up to an additional 2 ADA in fees.
+
+- CheckBalance:
+    wallet: Ada provider
+    balance:
+      - [ADA, 16]
+      - [RoleTokenCurrency, Ada provider, 1]
+
+- Comment: The other provider deposits their 25 ADA for the swap.
+
+- Prepare:
+    inputs:
+      - input_from_party:
+          role_token: Other provider
+        that_deposits: 25000000
+        of_token:
+          currency_symbol: ''
+          token_name: ''
+        into_account:
+          role_token: Other provider
+    minimumTime:
+      relative: -15
+    maximumTime:
+      relative: 120
+
+- AutoRun
+
+- Comment: The other provider should have 17 ADA, since they paid 25 USD for the swap, minus up to an additional 2 ADA in fees.
+
+- CheckBalance:
+    wallet: Other provider
+    balance:
+      - [ADA, 17]
+      - [RoleTokenCurrency, Other provider, 1]
+
+- Comment: Now the ADA provider redeems the 27 ADA from the payout script.
+
+- Withdraw: Ada provider
+
+- Comment: The ADA provider should now have 43 ADA.
+
+- CheckBalance:
+    wallet: Ada provider
+    balance:
+      - [ADA, 43]
+      - [RoleTokenCurrency, Ada provider, 1]
+
+- Comment: Now the other provider redeems the 30 ADA from the payout script.
+
+- Withdraw: Other provider
+
+- Comment: The other provider should now have 47 ADA, but they may have paid up to 3 ADA in fees.
+
+- CheckBalance:
+    wallet: Other provider
+    balance:
+      - [ADA, 47]
+      - [RoleTokenCurrency, Other provider, 1]
+

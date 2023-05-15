@@ -2,20 +2,15 @@ testName: Runtime operations test case
 
 operations:
 
-  - RuntimeCreateContract:
-      contractNickname: "Runtime"
-      minLovelace: 2000000
-      awaitConfirmed: 120
-      contractSource:
-        inline: "close"
+- RuntimeCreateContract:
+    minLovelace: 2000000
+    awaitConfirmed: 120
+    contractSource:
+      inline: "close"
 
-  - RuntimeApplyInputs:
-      contractNickname: "Runtime"
-      awaitConfirmed: 120
-      inputs: []
+- RuntimeApplyInputs:
+    awaitConfirmed: 120
+    inputs: []
 
-  - RuntimeAwaitClosed:
-      timeout: 120
-      contractNickname: "Runtime"
-
-  - ReturnFunds
+- RuntimeAwaitClosed:
+    timeout: 120

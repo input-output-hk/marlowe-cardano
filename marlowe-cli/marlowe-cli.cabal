@@ -58,6 +58,9 @@ library
     Contrib.Data.Aeson.Generic
     Contrib.Data.Aeson.Traversals
     Contrib.Data.Foldable
+    Contrib.Data.List
+    Contrib.Data.List.Random
+    Contrib.Data.Time.Clock
     Contrib.Data.Time.Units.Aeson
     Contrib.Monad.Loops
     Contrib.UnliftIO.Control.Concurrent
@@ -186,6 +189,7 @@ library
     plutus-tx-plugin,
     prettyprinter,
     profunctors,
+    random,
     reflection,
     QuickCheck,
     regex-posix,

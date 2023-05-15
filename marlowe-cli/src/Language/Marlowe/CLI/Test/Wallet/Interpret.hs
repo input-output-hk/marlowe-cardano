@@ -84,6 +84,7 @@ import Contrib.Control.Monad.Except (note)
 import Contrib.Data.Foldable (foldMapFlipped, ifoldMapMFlipped)
 import Control.Monad (forM, unless, void, when)
 import Control.Monad.Error.Class (MonadError(throwError))
+import Data.Coerce (coerce)
 import qualified Data.Foldable as Foldable
 import Data.Foldable.WithIndex (ifoldrM)
 import Data.Functor ((<&>))
@@ -97,10 +98,10 @@ import qualified Language.Marlowe.CLI.Cardano.Api.Value as CV
 import Language.Marlowe.CLI.IO (queryInEra)
 import Language.Marlowe.CLI.Test.CLI.Monad (runCli, runLabeledCli)
 import Language.Marlowe.CLI.Test.Contract.ParametrizedMarloweJSON
-  (ParametrizedMarloweJSON, decodeParametrizedContractJSON, decodeParametrizedInputJSON)
+  (ParametrizedMarloweJSON, decodeParametrizedContractJSON, decodeParametrizedInputJSON, now)
 import Language.Marlowe.CLI.Test.ExecutionMode (skipInSimluationMode, toSubmitMode)
 import Language.Marlowe.CLI.Test.InterpreterError (assertionFailed', testExecutionFailed')
-import Language.Marlowe.CLI.Test.Log (logStoreLabeledMsg, throwLabeledError)
+import Language.Marlowe.CLI.Test.Log (Label, logStoreLabeledMsg, throwLabeledError)
 import qualified Language.Marlowe.CLI.Types as CT
 import Language.Marlowe.Cardano (marloweNetworkFromLocalNodeConnectInfo)
 import Ledger.Tx.CardanoAPI (fromCardanoPolicyId)
@@ -361,7 +362,8 @@ decodeInputJSON json = do
   currencies <- use currenciesL
   wallets <- use walletsL
   network <- view connectionL <&> marloweNetworkFromLocalNodeConnectInfo
-  case decodeParametrizedInputJSON network wallets currencies json of
+  n <- now
+  case decodeParametrizedInputJSON network wallets currencies n json of
     Left err -> throwError $ testExecutionFailed' $ "Failed to decode input: " <> show err
     Right i  -> pure i
 
@@ -373,7 +375,8 @@ decodeContractJSON json = do
   currencies <- use currenciesL
   wallets <- use walletsL
   network <- view connectionL <&> marloweNetworkFromLocalNodeConnectInfo
-  case decodeParametrizedContractJSON network wallets currencies json of
+  n <- now
+  case decodeParametrizedContractJSON network wallets currencies n json of
     Left err -> throwError $ testExecutionFailed' $ "Failed to decode contract: " <> show err
     Right c  -> pure c
 
@@ -424,7 +427,7 @@ interpret so@CheckBalance {..} =
         logStoreLabeledMsg so $ "Expected balance of an asset " <> show assetId <> " is:" <> show expectedValue
         throwLabeledError so $ assertionFailed' $ "Asset is missing from the wallet on chain balance:" <> show assetId
 
-interpret so@CreateWallet {..} = do
+interpret so@(CreateWallet woWalletNickname possibleUTxOs) = do
   (connection :: LocalNodeConnectInfo CardanoMode) <- view connectionL
   let
     WalletNickname rawNickname = woWalletNickname
@@ -440,6 +443,12 @@ interpret so@CreateWallet {..} = do
   case insertWallet woWalletNickname wallet wallets of
     Nothing -> throwError $ testExecutionFailed' $ "Wallet with nickname " <> show rawNickname <> " already exists"
     Just wallets' -> walletsL .= wallets'
+
+  case possibleUTxOs of
+    Nothing -> pure ()
+    Just utxos -> do
+      logStoreLabeledMsg so $ "Funding wallet " <> show rawNickname <> " with " <> show (length utxos) <> " UTxOs"
+      fundWallets so [woWalletNickname] utxos
 
 interpret so@BurnAll {..} = do
   Currencies (Map.toList -> currencies) <- use currenciesL
@@ -485,28 +494,8 @@ interpret so@BurnAll {..} = do
         updateWallet ccIssuer \issuer@Wallet {_waSubmittedTransactions} ->
           issuer { _waSubmittedTransactions = SomeTxBody era burningTx : _waSubmittedTransactions }
 
-interpret FundWallets {..} = do
-  let
-    values = [ C.lovelaceToValue v | v <- woValues ]
-
-  (Wallet faucetAddress _ faucetSigningKey _ :: Wallet era) <- getFaucet
-  addresses <- for woWalletNicknames \walletNickname -> do
-    (Wallet address _ _ _) <- findWallet walletNickname
-    pure address
-  connection <- view connectionL
-  submitMode <- view executionModeL <&> toSubmitMode
-  era <- view eraL
-  txBody <- runCli era "[FundWallet] " $ buildFaucetImpl
-    connection
-    (Just values)
-    addresses
-    faucetAddress
-    faucetSigningKey
-    defaultCoinSelectionStrategy
-    submitMode
-
-  updateFaucet \faucet@(Wallet _ _ _ faucetTransactions) ->
-    faucet { _waSubmittedTransactions = SomeTxBody era txBody : faucetTransactions }
+interpret wo@Fund {..} = do
+  fundWallets wo woWalletNicknames woUTxOs
 
 interpret so@Mint {..} = do
   let
@@ -527,7 +516,8 @@ interpret so@Mint {..} = do
     Wallet destAddress _ _ _ <- findWallet owner
     pure (tokenName, amount, destAddress, Just woMinLovelace)
 
-  logStoreLabeledMsg so $ "Minting currency " <> show woCurrencyNickname <> " with tokens distribution: " <> show woTokenDistribution
+  logStoreLabeledMsg so $ "Minting currency " <> coerce woCurrencyNickname <> " with tokens distribution: " <> show woTokenDistribution
+  logStoreLabeledMsg so $ "The issuer is " <> coerce issuerNickname
   let
     mintingAction = CT.Mint
       (CurrencyIssuer issuerAddress issuerSigningKey)
@@ -562,7 +552,7 @@ interpret SplitWallet {..} = do
   connection <- view connectionL
   submitMode <- view executionModeL <&> toSubmitMode
   let
-    values = [ C.lovelaceToValue v | v <- woValues ]
+    values = [ C.lovelaceToValue v | v <- woUTxOs ]
 
   era <- view eraL
   void $ runCli era "[createCollaterals] " $ buildFaucetImpl
@@ -662,3 +652,33 @@ createWallet _ connection = do
     (address :: AddressInEra era) = makeShelleyAddressInEra localNodeNetworkId (PaymentCredentialByKey (verificationKeyHash vkey)) NoStakeAddress
   pure $ emptyWallet address (Left skey)
 
+
+fundWallets
+  :: InterpretMonad env st m era
+  => Label l
+  => l
+  -> [WalletNickname]
+  -> [C.Lovelace]
+  -> m ()
+fundWallets label walletNicknames utxos = do
+  let
+    values = [ C.lovelaceToValue v | v <- utxos ]
+
+  (Wallet faucetAddress _ faucetSigningKey _ :: Wallet era) <- getFaucet
+  addresses <- for walletNicknames \walletNickname -> do
+    (Wallet address _ _ _) <- findWallet walletNickname
+    pure address
+  connection <- view connectionL
+  submitMode <- view executionModeL <&> toSubmitMode
+  era <- view eraL
+  txBody <- runLabeledCli era label $ buildFaucetImpl
+    connection
+    (Just values)
+    addresses
+    faucetAddress
+    faucetSigningKey
+    defaultCoinSelectionStrategy
+    submitMode
+
+  updateFaucet \faucet@(Wallet _ _ _ faucetTransactions) ->
+    faucet { _waSubmittedTransactions = SomeTxBody era txBody : faucetTransactions }

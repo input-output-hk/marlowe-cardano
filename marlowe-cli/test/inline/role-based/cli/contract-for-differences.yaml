@@ -1,0 +1,335 @@
+testName: Contract for Differences using CLI
+
+operations:
+
+- Comment: Create the wallet for the party, fund it with 80 ADA.
+
+- CreateWallet:
+    nickname: Party
+    utxo: 80000000
+
+- Comment: Create the wallet for the counterparty, fund it with 60 ADA.
+
+- CreateWallet:
+    nickname: Counterparty
+    utxo: 60000000
+
+- Comment: Create the wallet for the oracle, fund it with 20 ADA.
+
+- CreateWallet:
+    nickname: Oracle
+    utxo: 20000000
+
+- Comment: Oracle mints role tokens and distribute them between wallets
+
+- Mint:
+    issuer: Oracle
+    nickname: RoleTokenCurrency
+    minLovelace: 2000000
+    tokenDistribution:
+      - [Party, PartyRoleToken, 1]
+      - [Counterparty, CounterpartyRoleToken, 1]
+      - [Oracle, OracleRoleToken, 1]
+
+- Comment: The oracle creates the contract with differences, which was downloaded from Marlowe Playground. The party deposits 20 ADA to cover the margin collateral and the counterparty deposits 30 ADA.
+
+- Initialize:
+    submitter: Oracle
+    roleCurrency: RoleTokenCurrency
+    minLovelace: 2000000
+    source:
+      when:
+      - case:
+          party:
+            role_token: PartyRoleToken
+          deposits: 20000000
+          of_token:
+            currency_symbol: ''
+            token_name: ''
+          into_account:
+            role_token: PartyRoleToken
+        then:
+          when:
+          - case:
+              party:
+                role_token: CounterpartyRoleToken
+              deposits: 30000000
+              of_token:
+                currency_symbol: ''
+                token_name: ''
+              into_account:
+                role_token: CounterpartyRoleToken
+            then:
+              when: []
+              timeout: 1645590825000
+              timeout_continuation:
+                when:
+                - case:
+                    choose_between:
+                    - from: 0
+                      to: 1000000000
+                    for_choice:
+                      choice_name: Price in first window
+                      choice_owner:
+                        role_token: OracleRoleToken
+                  then:
+                    when: []
+                    timeout: 1645590885000
+                    timeout_continuation:
+                      when:
+                      - case:
+                          choose_between:
+                          - from: 0
+                            to: 1000000000
+                          for_choice:
+                            choice_name: Price in second window
+                            choice_owner:
+                              role_token: OracleRoleToken
+                        then:
+                          if:
+                            value:
+                              value_of_choice:
+                                choice_name: Price in first window
+                                choice_owner:
+                                  role_token: OracleRoleToken
+                            gt:
+                              value_of_choice:
+                                choice_name: Price in second window
+                                choice_owner:
+                                  role_token: OracleRoleToken
+                          then:
+                            let: Decrease in price
+                            be:
+                              value:
+                                value_of_choice:
+                                  choice_name: Price in first window
+                                  choice_owner:
+                                    role_token: OracleRoleToken
+                              minus:
+                                value_of_choice:
+                                  choice_name: Price in second window
+                                  choice_owner:
+                                    role_token: OracleRoleToken
+                            then:
+                              pay:
+                                if:
+                                  value:
+                                    use_value: Decrease in price
+                                  lt: 30000000
+                                then:
+                                  use_value: Decrease in price
+                                else: 30000000
+                              token:
+                                currency_symbol: ''
+                                token_name: ''
+                              from_account:
+                                role_token: CounterpartyRoleToken
+                              to:
+                                account:
+                                  role_token: PartyRoleToken
+                              then: close
+                          else:
+                            if:
+                              value:
+                                value_of_choice:
+                                  choice_name: Price in first window
+                                  choice_owner:
+                                    role_token: OracleRoleToken
+                              lt:
+                                value_of_choice:
+                                  choice_name: Price in second window
+                                  choice_owner:
+                                    role_token: OracleRoleToken
+                            then:
+                              be:
+                                value:
+                                  value_of_choice:
+                                    choice_name: Price in second window
+                                    choice_owner:
+                                      role_token: OracleRoleToken
+                                minus:
+                                  value_of_choice:
+                                    choice_name: Price in first window
+                                    choice_owner:
+                                      role_token: OracleRoleToken
+                              let: Increase in price
+                              then:
+                                pay:
+                                  if:
+                                    value:
+                                      use_value: Increase in price
+                                    lt: 20000000
+                                  then:
+                                    use_value: Increase in price
+                                  else: 20000000
+                                token:
+                                  currency_symbol: ''
+                                  token_name: ''
+                                from_account:
+                                  role_token: PartyRoleToken
+                                to:
+                                  account:
+                                    role_token: CounterpartyRoleToken
+                                then: close
+                            else: close
+                      timeout: 2087267625000
+                      timeout_continuation: close
+                timeout: 2024195625000
+                timeout_continuation: close
+          timeout: 1961123625000
+          timeout_continuation: close
+      timeout: 1929587625000
+      timeout_continuation: close
+
+- AutoRun
+
+- Comment: The oracle should have 14 ADA now, since 2 ADA was sent to the script address when creating the contract and 2 ADA each was sent to the party and counterparty along with their role tokens. We can ignore tx fees as they are automatically handled in the balance checking.
+
+- CheckBalance:
+    wallet: Oracle
+    balance:
+      - [RoleTokenCurrency, OracleRoleToken, 1]
+      - [ADA, 14]
+
+- Comment: The party and counterpary should each now have an additional 2 ADA that arrived with their role token.
+
+- CheckBalance:
+    wallet: Party
+    balance:
+      - [RoleTokenCurrency, PartyRoleToken, 1]
+      - [ADA, 82]
+
+- CheckBalance:
+    wallet: Counterparty
+    balance:
+      - [RoleTokenCurrency, CounterpartyRoleToken, 1]
+      - [ADA, 62]
+
+- Comment: The party deposits their 20 ADA margin.
+
+- Prepare:
+    inputs:
+      - input_from_party:
+          role_token: PartyRoleToken
+        that_deposits: 20000000
+        of_token:
+          currency_symbol: ''
+          token_name: ''
+        into_account:
+          role_token: PartyRoleToken
+    minimumTime:
+      relative: -15
+    maximumTime:
+      relative: 120
+
+- AutoRun
+
+- Comment: The party should have about 62 ADA now, since they paid 20 ADA for the margin (we ignore the tx fees cost in balance checks).
+
+- CheckBalance:
+    wallet: Party
+    balance:
+      - [RoleTokenCurrency, PartyRoleToken, 1]
+      - [ADA, 62]
+
+- Comment: The counterparty deposits their 30 ADA margin.
+
+- Prepare:
+    inputs:
+      - input_from_party:
+          role_token: CounterpartyRoleToken
+        that_deposits: 30000000
+        of_token:
+          currency_symbol: ''
+          token_name: ''
+        into_account:
+          role_token: CounterpartyRoleToken
+    minimumTime:
+      relative: -15
+    maximumTime:
+      relative: 120
+
+- AutoRun
+
+- Comment: The counterparty should have about 32 ADA now, since they paid 30 ADA for the margin purchase (again we ignore the tx fees in balance checks).
+
+- CheckBalance:
+    wallet: Counterparty
+    balance:
+      - [RoleTokenCurrency, CounterpartyRoleToken, 1]
+      - [ADA, 32]
+
+- Comment: The oracle reports that the price is 10 ADA in the first window.
+
+- Prepare:
+    inputs:
+      - for_choice_id:
+          choice_name: Price in first window
+          choice_owner:
+            role_token: OracleRoleToken
+        input_that_chooses_num: 10000000
+    minimumTime:
+      relative: -15
+    maximumTime:
+      relative: 120
+
+- AutoRun
+
+- Comment: The oracle should still have 14 ADA now.
+
+- CheckBalance:
+    wallet: Oracle
+    balance:
+      - [RoleTokenCurrency, OracleRoleToken, 1]
+      - [ADA, 14]
+
+- Comment: The oracle reports that the price is 25 ADA in the second window.
+
+- Prepare:
+    inputs:
+      - for_choice_id:
+          choice_name: Price in second window
+          choice_owner:
+            role_token: OracleRoleToken
+        input_that_chooses_num: 25000000
+    minimumTime:
+      relative: -15
+    maximumTime:
+      relative: 120
+
+- AutoRun
+
+- Comment: The oracle should have 16 ADA now because they received their original min-ADA deposit back.
+
+- CheckBalance:
+    wallet: Oracle
+    balance:
+      - [RoleTokenCurrency, OracleRoleToken, 1]
+      - [ADA, 16]
+
+- Comment: Now the party redeems from the payout script the 5 ADA remaining from their margin.
+
+- Withdraw:
+    wallet: Party
+
+- Comment: The party should now have 67 ADA.
+
+- CheckBalance:
+    wallet: Party
+    balance:
+      - [RoleTokenCurrency, PartyRoleToken, 1]
+      - [ADA, 67]
+
+- Comment: Now the counterparty redeems their 45 ADA from the payout script.
+
+- Withdraw:
+    wallet: Counterparty
+
+- Comment: The counterparty should now have 77 ADA.
+
+- CheckBalance:
+    wallet: Counterparty
+    balance:
+      - [RoleTokenCurrency, CounterpartyRoleToken, 1]
+      - [ADA, 77]
+

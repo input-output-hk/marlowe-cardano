@@ -1,0 +1,343 @@
+testName: Coupon Bond Guaranteed
+
+operations:
+
+- CreateWallet:
+    nickname: Lender
+    utxo: 70000000
+
+- CreateWallet:
+    nickname: Borrower
+    utxo: 40000000
+
+- CreateWallet:
+    nickname: Guarantor
+    utxo: 90000000
+
+- Mint:
+    issuer: Guarantor
+    nickname: RoleTokenCurrency
+    minLovelace: 2000000
+    tokenDistribution:
+      - [Lender, LenderRoleToken, 1]
+      - [Borrower, BorrowerRoleToken, 1]
+      - [Guarantor, GuarantorRoleToken, 1]
+
+- Initialize:
+    submitter: Guarantor
+    roleCurrency: RoleTokenCurrency
+    minLovelace: 2000000
+    source:
+      let: Principal
+      be: 50000000
+      then:
+        let: Interest
+        be: 4000000
+        then:
+          when:
+          - case:
+              party:
+                role_token: GuarantorRoleToken
+              deposits:
+                add:
+                  use_value: Principal
+                and:
+                  multiply:
+                    use_value: Interest
+                  times: 3
+              of_token:
+                currency_symbol: ''
+                token_name: ''
+              into_account:
+                role_token: LenderRoleToken
+            then:
+              when:
+              - case:
+                  party:
+                    role_token: LenderRoleToken
+                  deposits:
+                    use_value: Principal
+                  of_token:
+                    currency_symbol: ''
+                    token_name: ''
+                  into_account:
+                    role_token: BorrowerRoleToken
+                then:
+                  pay:
+                    use_value: Principal
+                  token:
+                    currency_symbol: ''
+                    token_name: ''
+                  from_account:
+                    role_token: BorrowerRoleToken
+                  to:
+                    party:
+                      role_token: BorrowerRoleToken
+                  then:
+                    when:
+                    - case:
+                        party:
+                          role_token: BorrowerRoleToken
+                        deposits:
+                          use_value: Interest
+                        of_token:
+                          currency_symbol: ''
+                          token_name: ''
+                        into_account:
+                          role_token: LenderRoleToken
+                      then:
+                        pay:
+                          use_value: Interest
+                        token:
+                          currency_symbol: ''
+                          token_name: ''
+                        from_account:
+                          role_token: LenderRoleToken
+                        to:
+                          party:
+                            role_token: GuarantorRoleToken
+                        then:
+                          when:
+                          - case:
+                              party:
+                                role_token: BorrowerRoleToken
+                              deposits:
+                                use_value: Interest
+                              of_token:
+                                currency_symbol: ''
+                                token_name: ''
+                              into_account:
+                                role_token: LenderRoleToken
+                            then:
+                              pay:
+                                use_value: Interest
+                              token:
+                                currency_symbol: ''
+                                token_name: ''
+                              from_account:
+                                role_token: LenderRoleToken
+                              to:
+                                party:
+                                  role_token: GuarantorRoleToken
+                              then:
+                                when:
+                                - case:
+                                    party:
+                                      role_token: BorrowerRoleToken
+                                    deposits:
+                                      add:
+                                        use_value: Principal
+                                      and:
+                                        use_value: Interest
+                                    of_token:
+                                      currency_symbol: ''
+                                      token_name: ''
+                                    into_account:
+                                      role_token: LenderRoleToken
+                                  then:
+                                    pay:
+                                      add:
+                                        use_value: Principal
+                                      and:
+                                        use_value: Interest
+                                    token:
+                                      currency_symbol: ''
+                                      token_name: ''
+                                    from_account:
+                                      role_token: LenderRoleToken
+                                    to:
+                                      party:
+                                        role_token: GuarantorRoleToken
+                                    then: close
+                                timeout: 2055731625000
+                                timeout_continuation: close
+                          timeout: 2024195625000
+                          timeout_continuation: close
+                    timeout: 1992659625000
+                    timeout_continuation: close
+              timeout: 1961123625000
+              timeout_continuation:
+                pay:
+                  add:
+                    use_value: Principal
+                  and:
+                    multiply:
+                      use_value: Interest
+                    times: 3
+                token:
+                  currency_symbol: ''
+                  token_name: ''
+                from_account:
+                  role_token: LenderRoleToken
+                to:
+                  party:
+                    role_token: GuarantorRoleToken
+                then: close
+          timeout: 1929587625000
+          timeout_continuation: close
+
+- AutoRun
+
+- CheckBalance:
+    wallet: Lender
+    balance:
+      - [RoleTokenCurrency, LenderRoleToken, 1]
+      - [ADA, 72]
+
+- CheckBalance:
+    wallet: Borrower
+    balance:
+      - [RoleTokenCurrency, BorrowerRoleToken, 1]
+      - [ADA, 42]
+
+- CheckBalance:
+    wallet: Guarantor
+    balance:
+      - [RoleTokenCurrency, GuarantorRoleToken, 1]
+      - [ADA, 84]
+
+- Prepare:
+    inputs:
+      - input_from_party:
+          role_token: GuarantorRoleToken
+        that_deposits: 62000000
+        of_token:
+          currency_symbol: ''
+          token_name: ''
+        into_account:
+          role_token: LenderRoleToken
+    minimumTime:
+      relative: -15
+    maximumTime:
+      relative: 120
+
+- AutoRun
+
+- CheckBalance:
+    wallet: Guarantor
+    balance:
+      - [RoleTokenCurrency, GuarantorRoleToken, 1]
+      - [ADA, 22]
+
+- Prepare:
+    inputs:
+      - input_from_party:
+          role_token: LenderRoleToken
+        that_deposits: 50000000
+        of_token:
+          currency_symbol: ''
+          token_name: ''
+        into_account:
+          role_token: BorrowerRoleToken
+    minimumTime:
+      relative: -15
+    maximumTime:
+      relative: 120
+
+- AutoRun
+
+- CheckBalance:
+    wallet: Lender
+    balance:
+      - [RoleTokenCurrency, LenderRoleToken, 1]
+      - [ADA, 22]
+
+- Withdraw: Borrower
+
+- CheckBalance:
+    wallet: Borrower
+    balance:
+      - [RoleTokenCurrency, BorrowerRoleToken, 1]
+      - [ADA, 92]
+
+- Prepare:
+    inputs:
+      - input_from_party:
+          role_token: BorrowerRoleToken
+        that_deposits: 4000000
+        of_token:
+          currency_symbol: ''
+          token_name: ''
+        into_account:
+          role_token: LenderRoleToken
+    minimumTime:
+      relative: -15
+    maximumTime:
+      relative: 120
+
+- AutoRun
+
+- CheckBalance:
+    wallet: Borrower
+    balance:
+      - [RoleTokenCurrency, BorrowerRoleToken, 1]
+      - [ADA, 88]
+
+- Prepare:
+    inputs:
+      - input_from_party:
+          role_token: BorrowerRoleToken
+        that_deposits: 4000000
+        of_token:
+          currency_symbol: ''
+          token_name: ''
+        into_account:
+          role_token: LenderRoleToken
+    minimumTime:
+      relative: -15
+    maximumTime:
+      relative: 120
+
+- AutoRun
+
+- CheckBalance:
+    wallet: Borrower
+    balance:
+      - [RoleTokenCurrency, BorrowerRoleToken, 1]
+      - [ADA, 84]
+
+- Prepare:
+    inputs:
+      - input_from_party:
+          role_token: BorrowerRoleToken
+        that_deposits: 54000000
+        of_token:
+          currency_symbol: ''
+          token_name: ''
+        into_account:
+          role_token: LenderRoleToken
+    minimumTime:
+      relative: -15
+    maximumTime:
+      relative: 120
+
+- AutoRun
+
+- CheckBalance:
+    wallet: Borrower
+    balance:
+      - [RoleTokenCurrency, BorrowerRoleToken, 1]
+      - [ADA, 30]
+
+- CheckBalance:
+    wallet: Guarantor
+    balance:
+      - [RoleTokenCurrency, GuarantorRoleToken, 1]
+      - [ADA, 24]
+
+- Withdraw: Lender
+
+- CheckBalance:
+    wallet: Lender
+    balance:
+      - [RoleTokenCurrency, LenderRoleToken, 1]
+      - [ADA, 84]
+
+- Withdraw: Guarantor
+
+- CheckBalance:
+    wallet: Guarantor
+    balance:
+      - [RoleTokenCurrency, GuarantorRoleToken, 1]
+      - [ADA, 86]
+

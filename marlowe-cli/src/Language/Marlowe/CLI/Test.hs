@@ -37,12 +37,10 @@ import Cardano.Api
 import qualified Cardano.Api as C
 import Cardano.Api.Shelley (protocolParamProtocolVersion)
 import Contrib.Cardano.Api (lovelaceFromInt, lovelaceToInt)
-import Contrib.Control.Concurrent (threadDelayBy)
 import Contrib.Control.Concurrent.Async (altIO)
 import Contrib.Control.Monad.Trans.State.IO (IOStateT, unsafeExecIOStateT)
 import Contrib.Data.Foldable (foldMapMFlipped)
 import Contrib.Monad.Loops (MaxRetries(MaxRetries), RetryCounter(RetryCounter), retryTillJust, retryTillRight)
-import Control.Concurrent (threadDelay)
 import Control.Concurrent.Async (race)
 import Control.Concurrent.Async.Pool (mapTasks, mapTasks_, withTaskGroup)
 import Control.Concurrent.STM
@@ -94,7 +92,6 @@ import Language.Marlowe.CLI.Test.Runtime.Types (RuntimeError(RuntimeRollbackErro
 import qualified Language.Marlowe.CLI.Test.Runtime.Types as R
 import qualified Language.Marlowe.CLI.Test.Runtime.Types as Runtime
 import qualified Language.Marlowe.CLI.Test.Runtime.Types as Runtime.Monitor
-import Language.Marlowe.CLI.Test.TestCase (TransactionCostUpperBound(TransactionCostUpperBound))
 import qualified Language.Marlowe.CLI.Test.TestCase as TestCase
 import Language.Marlowe.CLI.Test.Types
   ( ConcurrentRunners(ConcurrentRunners)

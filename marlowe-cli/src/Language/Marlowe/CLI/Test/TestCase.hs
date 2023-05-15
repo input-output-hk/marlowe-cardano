@@ -29,45 +29,50 @@ import Data.Maybe (isNothing)
 import Language.Marlowe.CLI.Test.CLI.Types (CLIOperation(..), MarloweValidators(..))
 import Language.Marlowe.CLI.Test.Runtime.Types (RuntimeOperation(..))
 import Language.Marlowe.CLI.Test.Types
-  (TestCase(TestCase, operations), TestOperation(CLIOperation, Fail, RuntimeOperation, Sleep, WalletOperation))
+  ( TestCase(TestCase, operations)
+  , TestOperation(CLIOperation, Comment, Fail, RuntimeOperation, ShouldFail, Sleep, WalletOperation)
+  )
 import Language.Marlowe.CLI.Test.Wallet.Types as Wallet
-  ( WalletOperation(BurnAll, CheckBalance, CreateWallet, FundWallets, Mint, ReturnFunds, SplitWallet, woIssuer, woWalletNickname)
+  ( WalletOperation(BurnAll, CheckBalance, CreateWallet, Fund, Mint, ReturnFunds, SplitWallet, woIssuer, woPossibleUTxOs, woWalletNickname)
   , faucetNickname
   )
 
-data TransactionCostUpperBound = TransactionCostUpperBound
-  { _tcTxCostUpperBound :: Lovelace
+data TxCostsUpperBounds = TxCostsUpperBounds
+  { _tcTxMaximumFee :: Lovelace
   , _tcPublishingUTxOMinAda :: Lovelace
   }
   deriving stock (Eq, Generic, Show)
 
 -- A quick estimate of the budget required to run an test operation from a faucet perspective.
-operationFaucetBudget :: TransactionCostUpperBound -> TestOperation  -> Lovelace
-operationFaucetBudget (TransactionCostUpperBound _ publishingMinAda) = lovelaceFromInt . operationBudget'
+operationFaucetBudget :: TxCostsUpperBounds -> TestOperation  -> Lovelace
+operationFaucetBudget (TxCostsUpperBounds _ publishingMinAda) = lovelaceFromInt . operationBudget'
   where
-  fauceOperation possibleNickname = possibleNickname == Just faucetNickname || isNothing possibleNickname
+  faucetOperation possibleNickname = possibleNickname == Just faucetNickname || isNothing possibleNickname
 
-  operationBudget' (WalletOperation (FundWallets nicknames values _)) = (sum . map lovelaceToInt $ values) * length nicknames
+  operationBudget' (WalletOperation (CreateWallet _ possibleValues)) = sum . maybe [] (map lovelaceToInt) $ possibleValues
+  operationBudget' (WalletOperation (Fund nicknames values)) = (sum . map lovelaceToInt $ values) * length nicknames
   operationBudget' (WalletOperation (Mint _ issuer _ tokenDistribution minLovelace)) =
-    if fauceOperation issuer
+    if faucetOperation issuer
       then lovelaceToInt minLovelace * length tokenDistribution
       else 0
+  operationBudget' (ShouldFail operation) = operationBudget' operation
   -- FIXME: Publishing should be managed by the test runner probably separately...
-  operationBudget' (CLIOperation Initialize {coMarloweValidators = marloweValidators, coSubmitter=submitter}) =
-    if fauceOperation submitter
-      then case marloweValidators of
-        InTxCurrentValidators -> 0
-        ReferenceCurrentValidators {} -> lovelaceToInt publishingMinAda
-        ReferenceRuntimeValidators -> 0
-    else
-      0
+  operationBudget' (CLIOperation Initialize {coMarloweValidators = marloweValidators}) =
+    case marloweValidators of
+        Just InTxCurrentValidators -> 0
+        Just ReferenceRuntimeValidators -> 0
+        Just (ReferenceCurrentValidators _ publisher) -> if faucetOperation publisher
+          then lovelaceToInt publishingMinAda
+          else 0
+        -- By default we publish validators
+        Nothing -> lovelaceToInt publishingMinAda
   -- FIXME: We should also consider the cost of Marlowe deposits performed by Facuet so:
   -- `Runtime.RuntimeApplyInputs` and `CLI.Prepare` should be analyzed.
   operationBudget' _ = 0
 
 -- | A *really* rough and quick estimation of the budget required to run a test case.
-testFaucetBudgetUpperBound :: TransactionCostUpperBound -> TestCase -> Lovelace
-testFaucetBudgetUpperBound tub@(TransactionCostUpperBound txCost _) TestCase {operations} =
+testFaucetBudgetUpperBound :: TxCostsUpperBounds -> TestCase -> Lovelace
+testFaucetBudgetUpperBound tub@(TxCostsUpperBounds txCost _) TestCase {operations} =
   sum (map (operationFaucetBudget tub) operations) <> faucetTxsFees
   where
   faucetTxsFees =
@@ -75,10 +80,13 @@ testFaucetBudgetUpperBound tub@(TransactionCostUpperBound txCost _) TestCase {op
     where
     -- This is also really quick estimate.
     possibleFaucetTx :: TestOperation -> Bool
-    possibleFaucetTx (WalletOperation CreateWallet {}) = False
+    possibleFaucetTx (WalletOperation CreateWallet {..}) = case woPossibleUTxOs of
+      Nothing -> False
+      Just [] -> False
+      _ -> True
     possibleFaucetTx (WalletOperation CheckBalance {}) = False
     possibleFaucetTx (WalletOperation ReturnFunds {}) = False
-    possibleFaucetTx (WalletOperation FundWallets {}) = True
+    possibleFaucetTx (WalletOperation Fund {}) = True
     possibleFaucetTx (WalletOperation BurnAll {}) = True
     possibleFaucetTx (WalletOperation Mint { woIssuer=issuer}) = maybe True ((==) faucetNickname) issuer
     possibleFaucetTx (WalletOperation SplitWallet { woWalletNickname=walletNickname }) = walletNickname == faucetNickname
@@ -96,10 +104,12 @@ testFaucetBudgetUpperBound tub@(TransactionCostUpperBound txCost _) TestCase {op
     possibleFaucetTx (RuntimeOperation RuntimeAwaitClosed {}) = False
     possibleFaucetTx Sleep {} = False
     possibleFaucetTx Fail {} = False
+    possibleFaucetTx Comment {} = False
+    possibleFaucetTx (ShouldFail operation) = possibleFaucetTx operation
 
 -- FIXME: We should probably include permanent lose when we publish marlowe on unspendable address.
-testTxsFeesUpperBound :: TransactionCostUpperBound -> TestCase -> Lovelace
-testTxsFeesUpperBound (TransactionCostUpperBound txCost _) TestCase {operations} =
+testTxsFeesUpperBound :: TxCostsUpperBounds -> TestCase -> Lovelace
+testTxsFeesUpperBound (TxCostsUpperBounds txCost _) TestCase {operations} =
   lovelaceFromInt (lovelaceToInt txCost * length (filter possibleTx operations))
   where
   -- This is also really quick estimate.
@@ -107,7 +117,7 @@ testTxsFeesUpperBound (TransactionCostUpperBound txCost _) TestCase {operations}
   possibleTx (WalletOperation CreateWallet {}) = False
   possibleTx (WalletOperation CheckBalance {}) = False
   possibleTx (WalletOperation ReturnFunds {}) = False
-  possibleTx (WalletOperation FundWallets {}) = True
+  possibleTx (WalletOperation Fund {}) = True
   possibleTx (WalletOperation BurnAll {}) = True
   possibleTx (WalletOperation Mint {}) = True
   possibleTx (WalletOperation SplitWallet {}) = True
@@ -123,8 +133,10 @@ testTxsFeesUpperBound (TransactionCostUpperBound txCost _) TestCase {operations}
   possibleTx (RuntimeOperation RuntimeAwaitClosed {}) = False
   possibleTx Sleep {} = False
   possibleTx Fail {} = False
+  possibleTx Comment {} = False
+  possibleTx (ShouldFail operation) = possibleTx operation
 
-testsFaucetBudgetUpperBound :: TransactionCostUpperBound -> [TestCase] -> Lovelace
+testsFaucetBudgetUpperBound :: TxCostsUpperBounds -> [TestCase] -> Lovelace
 testsFaucetBudgetUpperBound txCosts tests = do
   let
     maximumTestBudget = maximum (map (testFaucetBudgetUpperBound txCosts) tests)

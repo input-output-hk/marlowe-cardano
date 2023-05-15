@@ -1,0 +1,132 @@
+testName: Zero-Coupon Bond with Immediate Timeout
+
+operations:
+
+- Comment: is test case closes the contract immediately after creation.
+
+- Comment: Create the wallet for the lender, fund it with 80 ADA, and activate the Marlowe endpoints.
+
+- CreateWallet:
+    nickname: Lender
+    utxo: 80000000
+
+- Comment: Create the wallet for the borrower and fund it with 10 ADA, and activate the Marlowe endpoints.
+
+- CreateWallet:
+    nickname: Borrower
+    utxo: 10000000
+
+- Comment: Lender mints role tokens
+
+- Mint:
+    issuer: Lender
+    nickname: RoleTokenCurrency
+    minLovelace: 2000000
+    tokenDistribution:
+      - [Lender, LenderRoleToken, 1]
+      - [Borrower, BorrowerRoleToken, 1]
+
+- Comment: The lender creates the ZCB contract, which was downloaded from Marlowe Playground. The loan amount is 50 ADA and the interest amount is 3 ADA.
+
+- Initialize:
+    minLovelace: 2000000
+    roleCurrency: RoleTokenCurrency
+    submitter: Lender
+    source:
+      when:
+      - case:
+          party:
+            role_token: LenderRoleToken
+          deposits: 50000000
+          of_token:
+            currency_symbol: ''
+            token_name: ''
+          into_account:
+            role_token: LenderRoleToken
+        then:
+          pay: 50000000
+          token:
+            currency_symbol: ''
+            token_name: ''
+          from_account:
+            role_token: LenderRoleToken
+          to:
+            party:
+              role_token: BorrowerRoleToken
+          then:
+            when:
+            - case:
+                party:
+                  role_token: BorrowerRoleToken
+                deposits:
+                  add: 50000000
+                  and: 3000000
+                of_token:
+                  currency_symbol: ''
+                  token_name: ''
+                into_account:
+                  role_token: BorrowerRoleToken
+              then:
+                pay:
+                  add: 50000000
+                  and: 3000000
+                token:
+                  currency_symbol: ''
+                  token_name: ''
+                from_account:
+                  role_token: BorrowerRoleToken
+                to:
+                  party:
+                    role_token: LenderRoleToken
+                then: close
+            timeout: 1646094121000
+            timeout_continuation: close
+      timeout: 1646094120000
+      timeout_continuation: close
+
+- AutoRun
+
+- Comment: The lender should have about 76 ADA now, since 2 ADA was sent to the script address when creating the contract, 2 ADA was sent the borrower along with the role token, and up to 1 ADA in fees might have been paid.
+
+- CheckBalance:
+    wallet: Lender
+    balance:
+      - [ADA, 76]
+      - [RoleTokenCurrency, LenderRoleToken, 1]
+
+- Comment: The borrower should now have their original 10 ADA plus the 2 ADA that arrived with the role token.
+
+- CheckBalance:
+    wallet: Borrower
+    balance:
+      - [ADA, 12]
+      - [RoleTokenCurrency, BorrowerRoleToken, 1]
+
+- Comment: Since the timeout has expired, the lender closes the contract, receiving their 2 ADA back.
+
+- Prepare:
+    inputs: []
+    minimumTime:
+      relative: -15
+    maximumTime:
+      relative: 120
+
+- AutoRun
+
+- Comment: The lender now has paid up to another 2 ADA in fees.
+
+- CheckBalance:
+    wallet: Lender
+    balance:
+      - [ADA, 78]
+      - [RoleTokenCurrency, LenderRoleToken, 1]
+
+- Comment: The borrower's funds are unchanged.
+
+- CheckBalance:
+    wallet: Borrower
+    balance:
+      - [ADA, 12]
+      - [RoleTokenCurrency, BorrowerRoleToken, 1]
+
+

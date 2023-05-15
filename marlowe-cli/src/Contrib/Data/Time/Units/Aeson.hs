@@ -4,6 +4,7 @@ module Contrib.Data.Time.Units.Aeson
   where
 
 import Data.Aeson (FromJSON(parseJSON), ToJSON(toJSON))
+import Data.Time.Units (TimeUnit)
 import qualified Data.Time.Units as Time.Units
 import GHC.Generics (Generic)
 
@@ -21,6 +22,10 @@ instance ToJSON Second where
       micro = Time.Units.toMicroseconds s
     toJSON (micro `div` 1_000_000)
 
+instance TimeUnit Second where
+  toMicroseconds = Time.Units.toMicroseconds . toSecond
+  fromMicroseconds = Second . Time.Units.fromMicroseconds
+
 newtype Millisecond = Millisecond { toMillisecond :: Time.Units.Millisecond }
   deriving stock (Eq, Generic, Show)
 
@@ -35,6 +40,10 @@ instance ToJSON Millisecond where
       micro = Time.Units.toMicroseconds s
     toJSON (micro `div` 1_000)
 
+instance TimeUnit Millisecond where
+  toMicroseconds = Time.Units.toMicroseconds . toMillisecond
+  fromMicroseconds = Millisecond . Time.Units.fromMicroseconds
+
 newtype Microsecond = Microsecond { toMicrosecond :: Time.Units.Microsecond }
   deriving stock (Eq, Generic, Show)
 
@@ -46,3 +55,7 @@ instance FromJSON Microsecond where
 instance ToJSON Microsecond where
   toJSON (Microsecond s) = do
     toJSON $ Time.Units.toMicroseconds s
+
+instance TimeUnit Microsecond where
+  toMicroseconds = Time.Units.toMicroseconds . toMicrosecond
+  fromMicroseconds = Microsecond . Time.Units.fromMicroseconds

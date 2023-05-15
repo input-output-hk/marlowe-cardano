@@ -1,0 +1,107 @@
+testName: Swap Contract using CLI
+
+operations:
+
+- CreateWallet: AParty
+
+- CreateWallet: BParty
+
+- Fund:
+    utxo: 100000000
+    wallets: [AParty, BParty]
+
+# Minting tokens AParty will use in the swap
+- Mint:
+    issuer: AParty
+    nickname: APartyCurrency
+    minLovelace: 2000000
+    tokenDistribution:
+      - [AParty, APartyTokenName, 100]
+
+# Minting tokens BParty will use in the swap
+- Mint:
+    issuer: BParty
+    nickname: BPartyCurrency
+    minLovelace: 2000000
+    tokenDistribution:
+      - [BParty, BPartyTokenName, 100]
+
+- CheckBalance:
+    wallet: AParty
+    balance:
+      - [APartyCurrency, APartyTokenName, 100]
+      - [ADA, "*"]
+
+- CheckBalance:
+    wallet: BParty
+    balance:
+      - [BPartyCurrency, BPartyTokenName, 100]
+      - [ADA, "*"]
+
+- Initialize:
+    minLovelace: 3000000
+    template:
+      UseSwap:
+        aParty:
+          address: AParty
+        aAsset: [APartyCurrency, APartyTokenName, 50]
+
+        # There are three timeouts in the contract calculated from this value:
+        # `timeout`, `timeout-1000`, `timeout-2000`
+        aTimeout:
+          relative: 1000000
+
+        bParty:
+          address: BParty
+        bAsset: [ BPartyCurrency, BPartyTokenName, 40]
+
+        # Threre are three timeouts in the contract calculated from this value:
+        # `timeout`, `timeout-1000`, `timeout-2000`
+        bTimeout:
+          relative: 1000000
+
+- Prepare:
+    inputs:
+      - input_from_party:
+          address: AParty
+        that_deposits: 50
+        of_token:
+          currency_symbol: APartyCurrency
+          token_name: APartyTokenName
+        into_account:
+          address: AParty
+    minimumTime:
+      relative: -1000
+    maximumTime:
+      relative: 8000
+
+- Prepare:
+    inputs:
+      - input_from_party:
+          address: BParty
+        that_deposits: 40
+        of_token:
+          currency_symbol: BPartyCurrency
+          token_name: BPartyTokenName
+        into_account:
+          address: BParty
+    minimumTime:
+      relative: -1000
+    maximumTime:
+      relative: 8000
+
+- AutoRun
+
+- CheckBalance:
+    wallet: BParty
+    balance:
+      - [APartyCurrency, APartyTokenName, 50]
+      - [BPartyCurrency, BPartyTokenName, 60]
+      - [ADA, "*"]
+
+- CheckBalance:
+    wallet: AParty
+    balance:
+      - [APartyCurrency, APartyTokenName, 50]
+      - [BPartyCurrency, BPartyTokenName, 40]
+      - [ADA, "*"]

@@ -2,34 +2,32 @@ testName: Fund return operation which involves multiple parties
 
 operations:
 
-  - CreateWallet:
-      walletNickname: Party-1
+- CreateWallet: Party-1
 
-  - CreateWallet:
-      walletNickname: Party-2
+- CreateWallet: Party-2
 
-  - Mint:
-      currencyNickname: Currency
-      minLovelace: 10000000
-      tokenDistribution:
-        - [Party-1, Token-1, 1]
-        - [Party-2, Token-2, 2]
-        - [Faucet, Token-3, 3]
+- Mint:
+    nickname: Currency
+    minLovelace: 10000000
+    tokenDistribution:
+      - [Party-1, Token-1, 1]
+      - [Party-2, Token-2, 2]
+      - [Faucet, Token-3, 3]
 
-  - ReturnFunds
+- ReturnFunds
 
-  - CheckBalance:
-      walletNickname: Party-1
-      balance: []
+- CheckBalance:
+    wallet: Party-1
+    balance: []
 
-  - CheckBalance:
-      walletNickname: Party-2
-      balance: []
+- CheckBalance:
+    wallet: Party-2
+    balance: []
 
-  - CheckBalance:
-      walletNickname: Faucet
-      balance:
-        - [Currency, Token-1, 1]
-        - [Currency, Token-2, 2]
-        - [Currency, Token-3, 3]
+- CheckBalance:
+    wallet: Faucet
+    balance:
+      - [Currency, Token-1, 1]
+      - [Currency, Token-2, 2]
+      - [Currency, Token-3, 3]
 

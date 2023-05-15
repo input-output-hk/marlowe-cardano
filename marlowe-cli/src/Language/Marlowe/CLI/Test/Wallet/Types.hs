@@ -23,6 +23,7 @@ import Cardano.Api
   (AddressInEra, CardanoMode, LocalNodeConnectInfo, Lovelace, PolicyId, ScriptDataSupportedInEra, TxBody, UTxO(UTxO))
 import qualified Cardano.Api as C
 import Contrib.Data.Foldable (foldMapFlipped)
+import qualified Contrib.Data.List as List
 import Control.Lens (Lens', makeLenses)
 import Control.Monad.Except (MonadError)
 import Control.Monad.IO.Class (MonadIO)
@@ -51,6 +52,15 @@ import Language.Marlowe.CLI.Cardano.Api.Value (toPlutusValue, txOutValueValue)
 import Language.Marlowe.CLI.Test.ExecutionMode (ExecutionMode)
 import Language.Marlowe.CLI.Test.InterpreterError (InterpreterError)
 import qualified Language.Marlowe.CLI.Test.Log as Log
+import Language.Marlowe.CLI.Test.Operation.Aeson
+  ( ConstructorName(ConstructorName)
+  , NewPropName(NewPropName)
+  , OldPropName(OldPropName)
+  , PropName(PropName)
+  , rewriteProp
+  , rewritePropWith
+  , rewriteToSingletonObject
+  )
 import qualified Language.Marlowe.CLI.Test.Operation.Aeson as Operation
 import Language.Marlowe.CLI.Types (PrintStats, SomePaymentSigningKey)
 import Ledger.Orphans ()
@@ -327,15 +337,14 @@ instance ToJSON TokenAssignment where
 data WalletOperation =
     BurnAll
     {
-     woMetadata            :: Maybe Aeson.Object
+     woMetadata         :: Maybe Aeson.Object
     }
   | CreateWallet
-    {
-      woWalletNickname  :: WalletNickname
+    { woWalletNickname  :: WalletNickname
+    , woPossibleUTxOs   :: Maybe [Lovelace]
     }
   | CheckBalance
     { woWalletNickname  :: WalletNickname
-    , woIgnore          :: Maybe [AssetId]  -- ^ Ignore these assets when checking the balance.
     , woBalance         :: AssetsBalance    -- ^ Expected delta of funds:
                                             -- * We exclude tx fees from this calculation.
                                             -- * We DON'T subtract the minimum lovelace amount (attached when tokens are
@@ -343,11 +352,10 @@ data WalletOperation =
                                             -- * In the case of `Faucet` wallet we subtract the baseline
                                             --  funds so they are not included in this balance.
     }
-  | FundWallets
+  | Fund
     {
       woWalletNicknames  :: [WalletNickname]
-    , woValues           :: [Lovelace]
-    , woCreateCollateral :: Maybe Bool
+    , woUTxOs            :: [Lovelace]
     }
   | Mint
     {
@@ -361,13 +369,83 @@ data WalletOperation =
   | SplitWallet
     {
       woWalletNickname :: WalletNickname
-    , woValues         :: [Lovelace]
+    , woUTxOs          :: [Lovelace]
     }
   | ReturnFunds
   deriving stock (Eq, Generic, Show)
 
+rewriteWalletProp :: (Ord k, IsString k) => Map k A.Value -> Bool -> Maybe (Map k A.Value)
+rewriteWalletProp props toPlural = case Map.lookup "wallet" props of
+  Just (A.String walletNickname) -> do
+    let
+      props' = Map.delete "wallet" props
+      (key, value) = if toPlural
+        then ("walletNicknames", toJSON [toJSON walletNickname])
+        else ("walletNickname", toJSON walletNickname)
+    Just $ Map.insert key value props'
+  _ -> Nothing
+
+
 instance A.FromJSON WalletOperation where
-  parseJSON = Operation.parseConstructorBasedJSON "wo"
+  parseJSON = do
+    let
+      preprocess = do
+        let
+          rewriteCreateWallet = do
+            let
+              constructorName = ConstructorName "CreateWallet"
+              rewriteUTxOs = rewriteProp
+                constructorName
+                (OldPropName "utxos")
+                (NewPropName "possibleUTxOs")
+              rewriteUTxO = rewritePropWith
+                constructorName
+                (OldPropName "utxo")
+                (NewPropName "possibleUTxOs")
+                (toJSON . List.singleton)
+              rewriteNickname = rewriteProp
+                constructorName
+                (OldPropName "nickname")
+                (NewPropName "walletNickname")
+              rewriteToNickname = rewriteToSingletonObject
+                constructorName
+                (PropName "walletNickname")
+            rewriteUTxOs <> rewriteUTxO <> rewriteNickname <> rewriteToNickname
+
+          rewriteFund = do
+            let
+              constructorName = ConstructorName "Fund"
+              rewriteUTxOs = rewriteProp
+                constructorName
+                (OldPropName "utxos")
+                (NewPropName "uTxOs")
+              rewriteUTxO = rewritePropWith
+                constructorName
+                (OldPropName "utxo")
+                (NewPropName "uTxOs")
+                (toJSON . List.singleton)
+              rewriteWallets = rewriteProp
+                constructorName
+                (OldPropName "wallets")
+                (NewPropName "walletNicknames")
+              rewriteWallet = rewritePropWith
+                constructorName
+                (OldPropName "wallet")
+                (NewPropName "walletNicknames")
+                (toJSON . List.singleton)
+            rewriteUTxOs <> rewriteUTxO <> rewriteWallets <> rewriteWallet
+
+          rewriteCheckBalance = rewriteProp
+            (ConstructorName "CheckBalance")
+            (OldPropName "wallet")
+            (NewPropName "walletNickname")
+
+          rewriteMint = rewriteProp
+            (ConstructorName "Mint")
+            (OldPropName "nickname")
+            (NewPropName "currencyNickname")
+        rewriteCreateWallet <> rewriteFund <> rewriteCheckBalance <> rewriteMint
+    Operation.parseConstructorBasedJSON "wo" preprocess
 
 instance A.ToJSON WalletOperation where
   toJSON = Operation.toConstructorBasedJSON "wo"

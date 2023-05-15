@@ -141,7 +141,7 @@ data UseTemplate =
     deriving stock (Eq, Generic, Show)
 
 instance FromJSON UseTemplate where
-  parseJSON = Operation.parseConstructorBasedJSON "ut"
+  parseJSON = Operation.parseConstructorBasedJSON' "ut"
 
 instance ToJSON UseTemplate where
   toJSON = Operation.toConstructorBasedJSON "ut"

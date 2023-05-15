@@ -1,0 +1,74 @@
+testName: Zero Coupon Bond Contract Test
+
+operations:
+
+- CreateWallet: Lender
+
+- CreateWallet: Borrower
+
+- Fund:
+    utxo: 20000000
+    wallets: [Lender, Borrower]
+
+# Transaction 1. Create the Contract by Providing the Minimum ADA
+- Initialize:
+    minLovelace: 2000000
+    contractSource:
+      template:
+        UseZeroCouponBond:
+          lender:
+            address: Lender
+          borrower:
+            address: Borrower
+          principal: 10000000
+          interest: 5000000
+          lendingDeadline:
+            relative: 20000
+          paybackDeadline:
+            relative: 30000
+
+# Transaction 2. Lender Deposits the Loan Amount
+- Prepare:
+    inputs:
+      - input_from_party:
+          address: Lender
+        that_deposits: 10000000
+        of_token:
+          currency_symbol: ""
+          token_name: ""
+        into_account:
+          address: Lender
+    minimumTime:
+      relative: -15
+    maximumTime:
+      relative: 3600
+
+- AutoRun
+
+# Transaction 3. Borrower Repays the Loan's Principal and Interest"
+- Prepare:
+    inputs:
+      - input_from_party:
+          address: Borrower
+        that_deposits: 15000000
+        of_token:
+          currency_symbol: ""
+          token_name: ""
+        into_account:
+          address: Borrower
+    minimumTime:
+      relative: -15
+    maximumTime:
+      relative: 3600
+
+- AutoRun
+
+- CheckBalance:
+    wallet: Borrower
+    balance:
+      - [ADA, 15]
+
+- CheckBalance:
+    wallet: Lender
+    balance:
+      - [ADA, 25]
