@@ -302,6 +302,7 @@ library
     Language.Marlowe.Pretty
     Language.Marlowe.Scripts
     Language.Marlowe.Util
+    Paths_marlowe_cardano
     Plutus.Debug
 
   if flag(trace-plutus)
@@ -317,7 +318,6 @@ executable marlowe-validators
     Benchmark.Marlowe.Semantics
     Benchmark.Marlowe.Types
     Benchmark.Marlowe.Util
-    Paths_marlowe_cardano
   build-depends:
     , base
     , base16-bytestring
