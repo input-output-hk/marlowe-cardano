@@ -35,6 +35,7 @@ let
     ln -sv ${run-local-service "marlowe-runtime-web" marloweRuntimeVersion "marlowe-web-server"}/bin/run-marlowe-web-server $out
     ln -sv ${run-local-service "marlowe-runtime" marloweRuntimeVersion "marlowe-indexer"}/bin/run-marlowe-indexer $out
     ln -sv ${run-local-service "marlowe-runtime" marloweRuntimeVersion "marlowe-proxy"}/bin/run-marlowe-proxy $out
+    ln -sv ${run-local-service "marlowe-runtime" marloweRuntimeVersion "marlowe-contract"}/bin/run-marlowe-contract $out
   '';
 
   node-service = {
@@ -58,7 +59,7 @@ let
     };
   };
 
-  dev-service = { ports, depends_on, command, environment ? [ ] }: {
+  dev-service = { ports, depends_on ? [ ], command, environment ? [ ], volumes ? [ ] }: {
     inherit command;
     image = "alpine:3.16.2";
     volumes = [
@@ -66,7 +67,7 @@ let
       "/nix:/nix"
       "${symlinks}:/exec"
       "shared:/ipc"
-    ];
+    ] ++ volumes;
     restart = "unless-stopped";
     ports = map toString ports;
     healthcheck = {
@@ -171,7 +172,7 @@ let
   };
 
   sync-service = dev-service {
-    ports = [ 3724 3725 ];
+    ports = [ 3724 3725 3726 ];
     depends_on = [ "marlowe-indexer" "postgres" ];
     command = [
       "/exec/run-marlowe-sync"
@@ -181,6 +182,21 @@ let
       "0.0.0.0"
     ];
     environment = [ "OTEL_SERVICE_NAME=marlowe-sync" ];
+  };
+
+  contract-service = dev-service {
+    ports = [ 3727 ];
+    command = [
+      "/exec/run-marlowe-contract"
+      "--store-dir"
+      "/store"
+      "--host"
+      "0.0.0.0"
+    ];
+    volumes = [
+      "marlowe-contract-store:/store"
+    ];
+    environment = [ "OTEL_SERVICE_NAME=marlowe-contract" ];
   };
 
   tx-service = dev-service {
@@ -298,10 +314,12 @@ let
     services.web = web-service;
     services.marlowe-indexer = marlowe-indexer-service;
     services.marlowe-sync = sync-service;
+    services.marlowe-contract = contract-service;
 
     services.node = node-service;
     volumes.shared = null;
     volumes.node-db = null;
+    volumes.marlowe-contract-store = null;
   };
 in
 writeText "compose.yaml" (builtins.toJSON spec)

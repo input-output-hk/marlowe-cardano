@@ -14,7 +14,7 @@ import Language.Marlowe.Protocol.Load.Server (MarloweLoadServer)
 import Language.Marlowe.Runtime.Contract.LoadServer
 import Language.Marlowe.Runtime.Contract.Store
 import Network.Protocol.Connection (SomeConnectionSourceTraced)
-import Network.Protocol.Peer.Trace (HasSpanContext)
+import Network.Protocol.Driver.Trace (HasSpanContext)
 import Network.TypedProtocol
 import UnliftIO (MonadUnliftIO)
 

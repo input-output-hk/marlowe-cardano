@@ -41,6 +41,10 @@ let
       name = "marlowe-tx";
       description = "A Marlowe transaction creation service for the Marlowe Runtime.";
     };
+    marlowe-contract = mkImage {
+      name = "marlowe-contract";
+      description = "A content-addressable contract store service for the Marlowe runtime.";
+    };
     marlowe-proxy = mkImage {
       name = "marlowe-proxy";
       description = "An API Gateway service for the Marlowe Runtime.";

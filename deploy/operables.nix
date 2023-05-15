@@ -384,6 +384,38 @@ in
     '';
   };
 
+  marlowe-contract = mkOperableWithProbes {
+    package = packages.marlowe-contract;
+    runtimeInputs = [ coreutils ];
+    runtimeScript = ''
+      #################
+      # REQUIRED VARS #
+      #################
+      # HOST, PORT: network binding
+      # STORE_DIR: location of the contract store directory
+      # HTTP_PORT: port number for the HTTP healthcheck server
+
+      #################
+      # OPTIONAL VARS #
+      #################
+      OTEL_EXPORTER_OTLP_ENDPOINT: The url of the open telemetry collector
+
+      [ -z "''${HOST:-}" ] && echo "HOST env var must be set -- aborting" && exit 1
+      [ -z "''${PORT:-}" ] && echo "PORT env var must be set -- aborting" && exit 1
+      [ -z "''${STORE_DIR:-}" ] && echo "STORE_DIR env var must be set -- aborting" && exit 1
+      [ -z "''${HTTP_PORT:-}" ] && echo "HTTP_PORT env var must be set -- aborting" && exit 1
+
+      mkdir -p /tmp
+      export OTEL_SERVICE_NAME=marlowe-contract
+
+      ${packages.marlowe-contract}/bin/marlowe-contract \
+        --host "$HOST" \
+        --port "$PORT" \
+        --store-dir "$STORE_DIR" \
+        --http-port "$HTTP_PORT"
+    '';
+  };
+
   marlowe-proxy = mkOperableWithProbes {
     package = packages.marlowe-proxy;
     runtimeScript = ''
