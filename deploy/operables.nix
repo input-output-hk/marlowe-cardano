@@ -130,7 +130,7 @@ in
       #################
       # OPTIONAL VARS #
       #################
-      OTEL_EXPORTER_OTLP_ENDPOINT: The url of the open telemetry collector
+      # OTEL_EXPORTER_OTLP_ENDPOINT: The url of the open telemetry collector
 
       [ -z "''${NODE_CONFIG:-}" ] && echo "NODE_CONFIG env var must be set -- aborting" && exit 1
       [ -z "''${CARDANO_NODE_SOCKET_PATH:-}" ] && echo "CARDANO_NODE_SOCKET_PATH env var must be set -- aborting" && exit 1
@@ -197,7 +197,7 @@ in
       #################
       # OPTIONAL VARS #
       #################
-      OTEL_EXPORTER_OTLP_ENDPOINT: The url of the open telemetry collector
+      # OTEL_EXPORTER_OTLP_ENDPOINT: The url of the open telemetry collector
 
       [ -z "''${HOST:-}" ] && echo "HOST env var must be set -- aborting" && exit 1
       [ -z "''${PORT:-}" ] && echo "PORT env var must be set -- aborting" && exit 1
@@ -256,7 +256,7 @@ in
       #################
       # OPTIONAL VARS #
       #################
-      OTEL_EXPORTER_OTLP_ENDPOINT: The url of the open telemetry collector
+      # OTEL_EXPORTER_OTLP_ENDPOINT: The url of the open telemetry collector
 
       [ -z "''${DB_NAME:-}" ] && echo "DB_NAME env var must be set -- aborting" && exit 1
       [ -z "''${DB_USER:-}" ] && echo "DB_USER env var must be set -- aborting" && exit 1
@@ -313,7 +313,7 @@ in
       #################
       # OPTIONAL VARS #
       #################
-      OTEL_EXPORTER_OTLP_ENDPOINT: The url of the open telemetry collector
+      # OTEL_EXPORTER_OTLP_ENDPOINT: The url of the open telemetry collector
 
       [ -z "''${HOST:-}" ] && echo "HOST env var must be set -- aborting" && exit 1
       [ -z "''${MARLOWE_SYNC_PORT:-}" ] && echo "MARLOWE_SYNC_PORT env var must be set -- aborting" && exit 1
@@ -359,7 +359,7 @@ in
       #################
       # OPTIONAL VARS #
       #################
-      OTEL_EXPORTER_OTLP_ENDPOINT: The url of the open telemetry collector
+      # OTEL_EXPORTER_OTLP_ENDPOINT: The url of the open telemetry collector
 
       [ -z "''${HOST:-}" ] && echo "HOST env var must be set -- aborting" && exit 1
       [ -z "''${PORT:-}" ] && echo "PORT env var must be set -- aborting" && exit 1
@@ -398,7 +398,7 @@ in
       #################
       # OPTIONAL VARS #
       #################
-      OTEL_EXPORTER_OTLP_ENDPOINT: The url of the open telemetry collector
+      # OTEL_EXPORTER_OTLP_ENDPOINT: The url of the open telemetry collector
 
       [ -z "''${HOST:-}" ] && echo "HOST env var must be set -- aborting" && exit 1
       [ -z "''${PORT:-}" ] && echo "PORT env var must be set -- aborting" && exit 1
@@ -440,7 +440,7 @@ in
       #################
       # OPTIONAL VARS #
       #################
-      OTEL_EXPORTER_OTLP_ENDPOINT: The url of the open telemetry collector
+      # OTEL_EXPORTER_OTLP_ENDPOINT: The url of the open telemetry collector
 
       [ -z "''${PORT:-}" ] && echo "PORT env var must be set -- aborting" && exit 1
       [ -z "''${RUNTIME_HOST:-}" ] && echo "RUNTIME_HOST env var must be set -- aborting" && exit 1
