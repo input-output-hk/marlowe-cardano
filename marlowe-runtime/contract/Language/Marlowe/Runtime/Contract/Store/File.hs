@@ -63,7 +63,7 @@ defaultContractStoreOptions = ContractStoreOptions
 -- in a bottom-up, depth-first manner (i.e. all sub-contracts of any contract c
 -- must be staged before c its self). This allows for a significant performance
 -- optimization for computing closures that uses dynamic programming.
-createContractStore :: forall m. (MonadUnliftIO m, MonadMask m) => ContractStoreOptions -> m (ContractStore m)
+createContractStore :: forall m' m. (MonadIO m', MonadUnliftIO m, MonadMask m) => ContractStoreOptions -> m' (ContractStore m)
 createContractStore ContractStoreOptions{..} = do
   -- Create the root directories if they do not exist.
   createDirectoryIfMissing True contractStoreDirectory
