@@ -1,4 +1,6 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
+
 module Control.Monad.Trans.Marlowe.Class
   where
 
@@ -13,10 +15,12 @@ import Data.Coerce (coerce)
 import Data.Time (UTCTime)
 import Language.Marlowe.Protocol.Client (MarloweRuntimeClient(..), hoistMarloweRuntimeClient)
 import Language.Marlowe.Protocol.HeaderSync.Client (MarloweHeaderSyncClient)
+import Language.Marlowe.Protocol.Load.Client (MarloweLoadClient, pushContract)
 import Language.Marlowe.Protocol.Query.Client (MarloweQueryClient)
 import Language.Marlowe.Protocol.Sync.Client (MarloweSyncClient)
-import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, Lovelace, StakeCredential, TokenName, TxId)
-import Language.Marlowe.Runtime.Core.Api (Contract, ContractId, Inputs, MarloweTransactionMetadata, MarloweVersion)
+import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, DatumHash, Lovelace, StakeCredential, TokenName, TxId)
+import Language.Marlowe.Runtime.Core.Api
+  (Contract, ContractId, Inputs, MarloweTransactionMetadata, MarloweVersion, MarloweVersionTag(..))
 import Language.Marlowe.Runtime.Transaction.Api
   ( ApplyInputsError
   , ContractCreated
@@ -75,9 +79,19 @@ runMarloweHeaderSyncClient = runMarloweRuntimeClient . RunMarloweHeaderSyncClien
 runMarloweQueryClient :: MonadMarlowe m => MarloweQueryClient m a -> m a
 runMarloweQueryClient = runMarloweRuntimeClient . RunMarloweQueryClient
 
+-- ^ Run a MarloweLoadClient.
+runMarloweLoadClient :: MonadMarlowe m => MarloweLoadClient m a -> m a
+runMarloweLoadClient = runMarloweRuntimeClient . RunMarloweLoadClient
+
 -- ^ Run a MarloweTxCommand job client.
 runMarloweTxClient :: MonadMarlowe m => JobClient MarloweTxCommand m a -> m a
 runMarloweTxClient = runMarloweRuntimeClient . RunTxClient
+
+-- ^ Load a contract incrementally into the runtime, obtaining the hash of the
+-- deeply merkleized version of the contract. Returns nothing if the contract
+-- is already merkleized.
+loadContract :: MonadMarlowe m => Contract 'V1 -> m (Maybe DatumHash)
+loadContract = runMarloweLoadClient . pushContract
 
 -- ^ Create a new contract.
 createContract

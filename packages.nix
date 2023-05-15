@@ -18,7 +18,7 @@ rec {
 
   inherit (haskell.packages.marlowe-cli.components.exes) marlowe-cli;
   inherit (haskell.packages.marlowe-chain-sync.components.exes) marlowe-chain-sync marlowe-chain-indexer;
-  inherit (haskell.packages.marlowe-runtime.components.exes) marlowe-sync marlowe-indexer marlowe-tx marlowe-proxy;
+  inherit (haskell.packages.marlowe-runtime.components.exes) marlowe-sync marlowe-indexer marlowe-tx marlowe-proxy marlowe-contract;
   inherit (haskell.packages.marlowe-runtime-web.components.exes) marlowe-web-server;
   inherit (haskell.packages.marlowe-runtime-cli.components.exes) marlowe-runtime-cli;
   marlowe-integration-tests = pkgs.writeShellScriptBin "marlowe-integration-tests" ''

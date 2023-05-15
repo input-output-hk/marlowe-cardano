@@ -60,6 +60,7 @@ library
     , marlowe-chain-sync ==0.0.1
     , marlowe-protocols ==0.1.0.0
     , marlowe-runtime ==0.0.1
+    , marlowe-runtime:contract-api ==0.0.1
     , marlowe-runtime:discovery-api ==0.0.1
     , marlowe-runtime:history-api ==0.0.1
     , marlowe-runtime:proxy-api ==0.0.1

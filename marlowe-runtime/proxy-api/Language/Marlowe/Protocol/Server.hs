@@ -5,9 +5,12 @@
 module Language.Marlowe.Protocol.Server
   where
 
-import Language.Marlowe.Protocol.Client (liftMarloweHeaderSync, liftMarloweQuery, liftMarloweSync, liftTxJob)
+import Language.Marlowe.Protocol.Client
+  (liftMarloweHeaderSync, liftMarloweLoad, liftMarloweQuery, liftMarloweSync, liftTxJob)
 import Language.Marlowe.Protocol.HeaderSync.Types (MarloweHeaderSync)
 import qualified Language.Marlowe.Protocol.HeaderSync.Types as Header
+import Language.Marlowe.Protocol.Load.Types (MarloweLoad)
+import qualified Language.Marlowe.Protocol.Load.Types as Load
 import Language.Marlowe.Protocol.Query.Types (MarloweQuery)
 import qualified Language.Marlowe.Protocol.Query.Types as Query
 import Language.Marlowe.Protocol.Sync.Types (MarloweSync)
@@ -23,6 +26,7 @@ data MarloweRuntimeServer m a = MarloweRuntimeServer
   { recvMsgRunMarloweSync :: m (PeerTraced MarloweSync 'AsServer 'Sync.StInit m a)
   , recvMsgRunMarloweHeaderSync :: m (PeerTraced MarloweHeaderSync 'AsServer 'Header.StIdle m a)
   , recvMsgRunMarloweQuery :: m (PeerTraced MarloweQuery 'AsServer 'Query.StReq m a)
+  , recvMsgRunMarloweLoad :: m (PeerTraced MarloweLoad 'AsServer ('Load.StProcessing 'Load.RootNode) m a)
   , recvMsgRunTxJob :: m (PeerTraced (Job MarloweTxCommand) 'AsServer 'Job.StInit m a)
   } deriving Functor
 
@@ -31,6 +35,7 @@ hoistMarloweRuntimeServer f MarloweRuntimeServer{..} = MarloweRuntimeServer
   { recvMsgRunMarloweSync = f $ hoistPeerTraced f <$> recvMsgRunMarloweSync
   , recvMsgRunMarloweHeaderSync = f $ hoistPeerTraced f <$> recvMsgRunMarloweHeaderSync
   , recvMsgRunMarloweQuery = f $ hoistPeerTraced f <$> recvMsgRunMarloweQuery
+  , recvMsgRunMarloweLoad = f $ hoistPeerTraced f <$> recvMsgRunMarloweLoad
   , recvMsgRunTxJob = f $ hoistPeerTraced f <$> recvMsgRunTxJob
   , ..
   }
@@ -41,4 +46,5 @@ marloweRuntimeServerPeer MarloweRuntimeServer{..} =
     MsgRunMarloweSync -> liftPeerTraced liftMarloweSync <$> recvMsgRunMarloweSync
     MsgRunMarloweHeaderSync -> liftPeerTraced liftMarloweHeaderSync <$> recvMsgRunMarloweHeaderSync
     MsgRunMarloweQuery -> liftPeerTraced liftMarloweQuery <$> recvMsgRunMarloweQuery
+    MsgRunMarloweLoad -> liftPeerTraced liftMarloweLoad <$> recvMsgRunMarloweLoad
     MsgRunTxJob -> liftPeerTraced liftTxJob <$> recvMsgRunTxJob

@@ -214,7 +214,7 @@ let
 
   proxy-service = dev-service {
     ports = [ 3700 3701 ];
-    depends_on = [ "marlowe-sync" "marlowe-tx" ];
+    depends_on = [ "marlowe-sync" "marlowe-tx" "marlowe-contract" ];
     command = [
       "/exec/run-marlowe-proxy"
       "--host"
@@ -223,6 +223,8 @@ let
       "marlowe-sync"
       "--tx-host"
       "marlowe-tx"
+      "--marlowe-contract-host"
+      "marlowe-contract"
     ];
     environment = [ "OTEL_SERVICE_NAME=marlowe-proxy" ];
   };

@@ -87,6 +87,7 @@ run = runComponent_ proc Options{..} -> do
         { connectMarloweSync = tcpClientChannel (injectSelector MarloweSyncClient) syncHost marloweSyncPort
         , connectMarloweHeaderSync = tcpClientChannel (injectSelector MarloweHeaderSyncClient) syncHost marloweHeaderSyncPort
         , connectMarloweQuery = tcpClientChannel (injectSelector MarloweQueryClient) syncHost marloweQueryPort
+        , connectMarloweLoad = tcpClientChannel (injectSelector MarloweLoadClient) contractHost marloweLoadPort
         , connectTxJob = tcpClientChannel (injectSelector TxJobClient) txHost txPort
         }
     , connectionSource = SomeConnectionSource
@@ -136,6 +137,8 @@ data Options = Options
   , marloweSyncPort :: PortNumber
   , marloweHeaderSyncPort :: PortNumber
   , marloweQueryPort :: PortNumber
+  , contractHost :: HostName
+  , marloweLoadPort :: PortNumber
   , txHost :: HostName
   , txPort :: PortNumber
   , httpPort :: PortNumber
@@ -147,6 +150,8 @@ getOptions = do
   marloweSyncPortParser <- optParserWithEnvDefault O.syncSyncPort
   marloweHeaderSyncPortParser <- optParserWithEnvDefault O.syncHeaderPort
   marloweQueryPortParser <- optParserWithEnvDefault O.syncQueryPort
+  contractHostParser <- optParserWithEnvDefault O.contractHost
+  marloweLoadPortParser <- optParserWithEnvDefault O.loadPort
   txHostParser <- optParserWithEnvDefault O.txHost
   txPortParser <- optParserWithEnvDefault O.txCommandPort
   execParser $ info
@@ -159,6 +164,8 @@ getOptions = do
           <*> marloweSyncPortParser
           <*> marloweHeaderSyncPortParser
           <*> marloweQueryPortParser
+          <*> contractHostParser
+          <*> marloweLoadPortParser
           <*> txHostParser
           <*> txPortParser
           <*> httpPortParser

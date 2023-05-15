@@ -100,6 +100,9 @@ import Language.Marlowe.Protocol.Client (MarloweRuntimeClient, hoistMarloweRunti
 import Language.Marlowe.Protocol.HeaderSync.Client (MarloweHeaderSyncClient, marloweHeaderSyncClientPeer)
 import Language.Marlowe.Protocol.HeaderSync.Server (MarloweHeaderSyncServer, marloweHeaderSyncServerPeer)
 import Language.Marlowe.Protocol.HeaderSync.Types (MarloweHeaderSync)
+import Language.Marlowe.Protocol.Load.Client (MarloweLoadClient, marloweLoadClientPeer)
+import Language.Marlowe.Protocol.Load.Server (MarloweLoadServer, marloweLoadServerPeer)
+import Language.Marlowe.Protocol.Load.Types (MarloweLoad)
 import Language.Marlowe.Protocol.Query.Client (MarloweQueryClient(..), marloweQueryClientPeer)
 import Language.Marlowe.Protocol.Query.Server (MarloweQueryServer)
 import Language.Marlowe.Protocol.Query.Types (MarloweQuery)
@@ -504,6 +507,7 @@ data RuntimeDependencies r m = RuntimeDependencies
   , marloweSyncPair :: ClientServerPair (Handshake MarloweSync) MarloweSyncServer MarloweSyncClient r m
   , marloweRuntimePair :: ClientServerPair (Handshake Protocol.MarloweRuntime) MarloweRuntimeServer MarloweRuntimeClient r (ResourceT m)
   , marloweQueryPair :: ClientServerPair (Handshake MarloweQuery) MarloweQueryServer MarloweQueryClient r m
+  , marloweLoadPair :: ClientServerPair (Handshake MarloweLoad) MarloweLoadServer MarloweLoadClient r m
   , txJobPair :: ClientServerPair (Handshake (Job MarloweTxCommand)) (JobServer MarloweTxCommand) (JobClient MarloweTxCommand) r m
   , chainIndexerDatabaseQueries :: ChainIndexer.DatabaseQueries m
   , chainSeekDatabaseQueries :: ChainSync.DatabaseQueries m
@@ -641,8 +645,15 @@ data Channels r m = Channels
   , marloweHeaderSyncPair :: ClientServerPair (Handshake MarloweHeaderSync) MarloweHeaderSyncServer MarloweHeaderSyncClient r m
   , marloweSyncPair :: ClientServerPair (Handshake MarloweSync) MarloweSyncServer MarloweSyncClient r m
   , marloweQueryPair :: ClientServerPair (Handshake MarloweQuery) MarloweQueryServer MarloweQueryClient r m
+  , marloweLoadPair :: ClientServerPair (Handshake MarloweLoad) MarloweLoadServer MarloweLoadClient r m
   , txJobPair :: ClientServerPair (Handshake (Job MarloweTxCommand)) (JobServer MarloweTxCommand) (JobClient MarloweTxCommand) r m
+<<<<<<< HEAD
   , marloweRuntimePair :: ClientServerPair (Handshake Protocol.MarloweRuntime) MarloweRuntimeServer MarloweRuntimeClient r (ResourceT m)
+||||||| parent of 91f916ee1 (Add MarloweLoad to MarloweRuntime protocol)
+  , marlowePair :: ClientServerPair (Handshake Protocol.MarloweRuntime) (MarloweRuntimeServer r) MarloweRuntimeClient r (ResourceT m)
+=======
+  , marloweRuntimePair :: ClientServerPair (Handshake Protocol.MarloweRuntime) (MarloweRuntimeServer r) MarloweRuntimeClient r (ResourceT m)
+>>>>>>> 91f916ee1 (Add MarloweLoad to MarloweRuntime protocol)
   }
 
 setupChannels :: Monoid r => STM (Channels r (RuntimeM r))
@@ -665,6 +676,9 @@ setupChannels = do
   marloweQueryPair <- handshakeClientServerPair <$> clientServerPair
     id
     marloweQueryClientPeer
+  marloweLoadPair <- handshakeClientServerPair <$> clientServerPair
+    marloweLoadServerPeer
+    marloweLoadClientPeer
   txJobPair <- handshakeClientServerPair <$> clientServerPair
     jobServerPeer
     jobClientPeer

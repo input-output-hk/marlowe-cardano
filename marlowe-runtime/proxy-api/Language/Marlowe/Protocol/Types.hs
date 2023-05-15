@@ -12,6 +12,8 @@ import Data.Proxy (Proxy(..))
 import GHC.Show (showSpace)
 import Language.Marlowe.Protocol.HeaderSync.Types (MarloweHeaderSync)
 import qualified Language.Marlowe.Protocol.HeaderSync.Types as MarloweHeaderSync
+import Language.Marlowe.Protocol.Load.Types (MarloweLoad)
+import qualified Language.Marlowe.Protocol.Load.Types as MarloweLoad
 import Language.Marlowe.Protocol.Query.Types (MarloweQuery)
 import qualified Language.Marlowe.Protocol.Query.Types as MarloweQuery
 import Language.Marlowe.Protocol.Sync.Types (MarloweSync)
@@ -31,16 +33,19 @@ data MarloweRuntime where
   StMarloweHeaderSync :: MarloweHeaderSync -> MarloweRuntime
   StMarloweQuery :: MarloweQuery -> MarloweRuntime
   StTxJob :: Job MarloweTxCommand -> MarloweRuntime
+  StMarloweLoad :: MarloweLoad -> MarloweRuntime
 
 instance Protocol MarloweRuntime where
   data Message MarloweRuntime st st' where
     MsgRunMarloweSync :: Message MarloweRuntime 'StInit ('StMarloweSync 'MarloweSync.StInit)
     MsgRunMarloweHeaderSync :: Message MarloweRuntime 'StInit ('StMarloweHeaderSync 'MarloweHeaderSync.StIdle)
     MsgRunMarloweQuery :: Message MarloweRuntime 'StInit ('StMarloweQuery 'MarloweQuery.StReq)
+    MsgRunMarloweLoad :: Message MarloweRuntime 'StInit ('StMarloweLoad ('MarloweLoad.StProcessing 'MarloweLoad.RootNode))
     MsgRunTxJob :: Message MarloweRuntime 'StInit ('StTxJob 'Job.StInit)
     MsgMarloweSync :: Message MarloweSync st st' -> Message MarloweRuntime ('StMarloweSync st) ('StMarloweSync st')
     MsgMarloweHeaderSync :: Message MarloweHeaderSync st st' -> Message MarloweRuntime ('StMarloweHeaderSync st) ('StMarloweHeaderSync st')
     MsgMarloweQuery :: Message MarloweQuery st st' -> Message MarloweRuntime ('StMarloweQuery st) ('StMarloweQuery st')
+    MsgMarloweLoad :: Message MarloweLoad st st' -> Message MarloweRuntime ('StMarloweLoad st) ('StMarloweLoad st')
     MsgTxJob :: Message (Job MarloweTxCommand) st st' -> Message MarloweRuntime ('StTxJob st) ('StTxJob st')
 
   data ClientHasAgency st where
@@ -48,18 +53,21 @@ instance Protocol MarloweRuntime where
     TokClientMarloweSync :: MarloweSync.ClientHasAgency st -> ClientHasAgency ('StMarloweSync st)
     TokClientMarloweHeaderSync :: MarloweHeaderSync.ClientHasAgency st -> ClientHasAgency ('StMarloweHeaderSync st)
     TokClientMarloweQuery :: MarloweQuery.ClientHasAgency st -> ClientHasAgency ('StMarloweQuery st)
+    TokClientMarloweLoad :: MarloweLoad.ClientHasAgency st -> ClientHasAgency ('StMarloweLoad st)
     TokClientTxJob :: Job.ClientHasAgency st -> ClientHasAgency ('StTxJob st)
 
   data ServerHasAgency st where
     TokServerMarloweSync :: MarloweSync.ServerHasAgency st -> ServerHasAgency ('StMarloweSync st)
     TokServerMarloweHeaderSync :: MarloweHeaderSync.ServerHasAgency st -> ServerHasAgency ('StMarloweHeaderSync st)
     TokServerMarloweQuery :: MarloweQuery.ServerHasAgency st -> ServerHasAgency ('StMarloweQuery st)
+    TokServerMarloweLoad :: MarloweLoad.ServerHasAgency st -> ServerHasAgency ('StMarloweLoad st)
     TokServerTxJob :: Job.ServerHasAgency st -> ServerHasAgency ('StTxJob st)
 
   data NobodyHasAgency st where
     TokNobodyMarloweSync :: MarloweSync.NobodyHasAgency st -> NobodyHasAgency ('StMarloweSync st)
     TokNobodyMarloweHeaderSync :: MarloweHeaderSync.NobodyHasAgency st -> NobodyHasAgency ('StMarloweHeaderSync st)
     TokNobodyMarloweQuery :: MarloweQuery.NobodyHasAgency st -> NobodyHasAgency ('StMarloweQuery st)
+    TokNobodyMarloweLoad :: MarloweLoad.NobodyHasAgency st -> NobodyHasAgency ('StMarloweLoad st)
     TokNobodyTxJob :: Job.NobodyHasAgency st -> NobodyHasAgency ('StTxJob st)
 
   exclusionLemma_ClientAndServerHaveAgency = \case
@@ -70,6 +78,8 @@ instance Protocol MarloweRuntime where
       TokServerMarloweHeaderSync tok' -> exclusionLemma_ClientAndServerHaveAgency tok tok'
     TokClientMarloweQuery tok -> \case
       TokServerMarloweQuery tok' -> exclusionLemma_ClientAndServerHaveAgency tok tok'
+    TokClientMarloweLoad tok -> \case
+      TokServerMarloweLoad tok' -> exclusionLemma_ClientAndServerHaveAgency tok tok'
     TokClientTxJob tok -> \case
       TokServerTxJob tok' -> exclusionLemma_ClientAndServerHaveAgency tok tok'
 
@@ -80,6 +90,8 @@ instance Protocol MarloweRuntime where
       TokClientMarloweHeaderSync tok' -> exclusionLemma_NobodyAndClientHaveAgency tok tok'
     TokNobodyMarloweQuery tok -> \case
       TokClientMarloweQuery tok' -> exclusionLemma_NobodyAndClientHaveAgency tok tok'
+    TokNobodyMarloweLoad tok -> \case
+      TokClientMarloweLoad tok' -> exclusionLemma_NobodyAndClientHaveAgency tok tok'
     TokNobodyTxJob tok -> \case
       TokClientTxJob tok' -> exclusionLemma_NobodyAndClientHaveAgency tok tok'
 
@@ -90,6 +102,8 @@ instance Protocol MarloweRuntime where
       TokServerMarloweHeaderSync tok' -> exclusionLemma_NobodyAndServerHaveAgency tok tok'
     TokNobodyMarloweQuery tok -> \case
       TokServerMarloweQuery tok' -> exclusionLemma_NobodyAndServerHaveAgency tok tok'
+    TokNobodyMarloweLoad tok -> \case
+      TokServerMarloweLoad tok' -> exclusionLemma_NobodyAndServerHaveAgency tok tok'
     TokNobodyTxJob tok -> \case
       TokServerTxJob tok' -> exclusionLemma_NobodyAndServerHaveAgency tok tok'
 
@@ -98,6 +112,7 @@ instance ShowProtocol MarloweRuntime where
     MsgRunMarloweSync -> showString "MsgRunMarloweSync"
     MsgRunMarloweHeaderSync -> showString "MsgRunMarloweHeaderSync"
     MsgRunMarloweQuery -> showString "MsgRunMarloweQuery"
+    MsgRunMarloweLoad -> showString "MsgRunMarloweLoad"
     MsgRunTxJob -> showString "MsgRunTxJob"
     MsgMarloweSync msg -> showParen (p >= 11)
       ( showString "MsgMarloweSync"
@@ -120,6 +135,13 @@ instance ShowProtocol MarloweRuntime where
           ClientAgency (TokClientMarloweQuery tok') -> showsPrecMessage p (ClientAgency tok') msg
           ServerAgency (TokServerMarloweQuery tok') -> showsPrecMessage p (ServerAgency tok') msg
       )
+    MsgMarloweLoad msg -> showParen (p >= 11)
+      ( showString "MsgMarloweLoad"
+      . showSpace
+      . case tok of
+          ClientAgency (TokClientMarloweLoad tok') -> showsPrecMessage p (ClientAgency tok') msg
+          ServerAgency (TokServerMarloweLoad tok') -> showsPrecMessage p (ServerAgency tok') msg
+      )
     MsgTxJob msg -> showParen (p >= 11)
       ( showString "MsgTxJob"
       . showSpace
@@ -140,6 +162,11 @@ instance ShowProtocol MarloweRuntime where
       )
     TokServerMarloweQuery tok -> showParen (p >= 11)
       ( showString "TokServerMarloweQuery"
+      . showSpace
+      . showsPrecServerHasAgency 11 tok
+      )
+    TokServerMarloweLoad tok -> showParen (p >= 11)
+      ( showString "TokServerMarloweLoad"
       . showSpace
       . showsPrecServerHasAgency 11 tok
       )
@@ -165,6 +192,11 @@ instance ShowProtocol MarloweRuntime where
       . showSpace
       . showsPrecClientHasAgency 11 tok
       )
+    TokClientMarloweLoad tok -> showParen (p >= 11)
+      ( showString "TokClientMarloweLoad"
+      . showSpace
+      . showsPrecClientHasAgency 11 tok
+      )
     TokClientTxJob tok ->  showParen (p >= 11)
       ( showString "TokClientTxJob"
       . showSpace
@@ -187,6 +219,10 @@ instance OTelProtocol MarloweRuntime where
       { messageType = "run_marlowe_query"
       , messageParameters = []
       }
+    MsgRunMarloweLoad -> MessageAttributes
+      { messageType = "run_marlowe_load"
+      , messageParameters = []
+      }
     MsgRunTxJob -> MessageAttributes
       { messageType = "run_tx_job"
       , messageParameters = []
@@ -206,6 +242,11 @@ instance OTelProtocol MarloweRuntime where
         subMessageAttributes "marlowe_query" $ messageAttributes (ClientAgency tok') msg
       ServerAgency (TokServerMarloweQuery tok') ->
         subMessageAttributes "marlowe_query" $ messageAttributes (ServerAgency tok') msg
+    MsgMarloweLoad msg -> case tok of
+      ClientAgency (TokClientMarloweLoad tok') ->
+        subMessageAttributes "marlowe_load" $ messageAttributes (ClientAgency tok') msg
+      ServerAgency (TokServerMarloweLoad tok') ->
+        subMessageAttributes "marlowe_load" $ messageAttributes (ServerAgency tok') msg
     MsgTxJob msg -> case tok of
       ClientAgency (TokClientTxJob tok') ->
         subMessageAttributes "tx_job" $ messageAttributes (ClientAgency tok') msg
@@ -225,12 +266,15 @@ instance BinaryMessage MarloweRuntime where
       MsgRunMarloweHeaderSync -> putWord8 0x01
       MsgRunMarloweQuery -> putWord8 0x02
       MsgRunTxJob -> putWord8 0x03
+      MsgRunMarloweLoad -> putWord8 0x04
     ClientAgency (TokClientMarloweSync tok) -> \case
       MsgMarloweSync msg -> putMessage (ClientAgency tok) msg
     ClientAgency (TokClientMarloweHeaderSync tok) -> \case
       MsgMarloweHeaderSync msg -> putMessage (ClientAgency tok) msg
     ClientAgency (TokClientMarloweQuery tok) -> \case
       MsgMarloweQuery msg -> putMessage (ClientAgency tok) msg
+    ClientAgency (TokClientMarloweLoad tok) -> \case
+      MsgMarloweLoad msg -> putMessage (ClientAgency tok) msg
     ClientAgency (TokClientTxJob tok) -> \case
       MsgTxJob msg -> putMessage (ClientAgency tok) msg
     ServerAgency (TokServerMarloweSync tok) -> \case
@@ -239,6 +283,8 @@ instance BinaryMessage MarloweRuntime where
       MsgMarloweHeaderSync msg -> putMessage (ServerAgency tok) msg
     ServerAgency (TokServerMarloweQuery tok) -> \case
       MsgMarloweQuery msg -> putMessage (ServerAgency tok) msg
+    ServerAgency (TokServerMarloweLoad tok) -> \case
+      MsgMarloweLoad msg -> putMessage (ServerAgency tok) msg
     ServerAgency (TokServerTxJob tok) -> \case
       MsgTxJob msg -> putMessage (ServerAgency tok) msg
 
@@ -248,6 +294,7 @@ instance BinaryMessage MarloweRuntime where
       0x01 -> pure $ SomeMessage MsgRunMarloweHeaderSync
       0x02 -> pure $ SomeMessage MsgRunMarloweQuery
       0x03 -> pure $ SomeMessage MsgRunTxJob
+      0x04 -> pure $ SomeMessage MsgRunMarloweLoad
       tag -> fail $ "invalid message tag " <> show tag
     ClientAgency (TokClientMarloweSync tok) -> do
       SomeMessage msg <- getMessage (ClientAgency tok)
@@ -258,6 +305,9 @@ instance BinaryMessage MarloweRuntime where
     ClientAgency (TokClientMarloweQuery tok) -> do
       SomeMessage msg <- getMessage (ClientAgency tok)
       pure $ SomeMessage $ MsgMarloweQuery msg
+    ClientAgency (TokClientMarloweLoad tok) -> do
+      SomeMessage msg <- getMessage (ClientAgency tok)
+      pure $ SomeMessage $ MsgMarloweLoad msg
     ClientAgency (TokClientTxJob tok) -> do
       SomeMessage msg <- getMessage (ClientAgency tok)
       pure $ SomeMessage $ MsgTxJob msg
@@ -270,6 +320,9 @@ instance BinaryMessage MarloweRuntime where
     ServerAgency (TokServerMarloweQuery tok) -> do
       SomeMessage msg <- getMessage (ServerAgency tok)
       pure $ SomeMessage $ MsgMarloweQuery msg
+    ServerAgency (TokServerMarloweLoad tok) -> do
+      SomeMessage msg <- getMessage (ServerAgency tok)
+      pure $ SomeMessage $ MsgMarloweLoad msg
     ServerAgency (TokServerTxJob tok) -> do
       SomeMessage msg <- getMessage (ServerAgency tok)
       pure $ SomeMessage $ MsgTxJob msg
@@ -280,5 +333,6 @@ instance HasSignature MarloweRuntime where
     , signature $ Proxy @MarloweSync
     , signature $ Proxy @MarloweHeaderSync
     , signature $ Proxy @MarloweQuery
+    , signature $ Proxy @MarloweLoad
     , signature $ Proxy @(Job MarloweTxCommand)
     ]

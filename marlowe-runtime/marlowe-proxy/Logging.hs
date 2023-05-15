@@ -8,6 +8,7 @@ module Logging
 
 import Control.Monad.Event.Class
 import Language.Marlowe.Protocol.HeaderSync.Types (MarloweHeaderSync)
+import Language.Marlowe.Protocol.Load.Types (MarloweLoad)
 import Language.Marlowe.Protocol.Query.Types (MarloweQuery)
 import Language.Marlowe.Protocol.Sync.Types (MarloweSync)
 import Language.Marlowe.Protocol.Types (MarloweRuntime)
@@ -24,6 +25,7 @@ data RootSelector f where
   MarloweSyncClient :: TcpClientSelector (Handshake MarloweSync) f -> RootSelector f
   MarloweHeaderSyncClient :: TcpClientSelector (Handshake MarloweHeaderSync) f -> RootSelector f
   MarloweQueryClient :: TcpClientSelector (Handshake MarloweQuery) f -> RootSelector f
+  MarloweLoadClient :: TcpClientSelector (Handshake MarloweLoad) f -> RootSelector f
   TxJobClient :: TcpClientSelector (Handshake (Job MarloweTxCommand)) f -> RootSelector f
 
 instance Inject (TcpServerSelector (Handshake MarloweRuntime)) RootSelector where
@@ -35,4 +37,5 @@ renderRootSelectorOTel = \case
   MarloweSyncClient sel -> renderTcpClientSelectorOTel sel
   MarloweHeaderSyncClient sel -> renderTcpClientSelectorOTel sel
   MarloweQueryClient sel -> renderTcpClientSelectorOTel sel
+  MarloweLoadClient sel -> renderTcpClientSelectorOTel sel
   TxJobClient sel -> renderTcpClientSelectorOTel sel

@@ -413,6 +413,7 @@ library proxy-api
     , marlowe-protocols ==0.1.0.0
     , marlowe-runtime:discovery-api ==0.0.1
     , marlowe-runtime:history-api ==0.0.1
+    , marlowe-runtime:contract-api ==0.0.1
     , marlowe-runtime:sync-api ==0.0.1
     , marlowe-runtime:tx-api ==0.0.1
     , typed-protocols ==0.1.0.0
@@ -626,6 +627,7 @@ executable marlowe-proxy
     , hs-opentelemetry-sdk >= 0.0.3 && < 0.0.4
     , marlowe-protocols ==0.1.0.0
     , marlowe-runtime:config ==0.0.1
+    , marlowe-runtime:contract-api ==0.0.1
     , marlowe-runtime:discovery-api ==0.0.1
     , marlowe-runtime:history-api ==0.0.1
     , marlowe-runtime:proxy ==0.0.1
