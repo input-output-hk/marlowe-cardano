@@ -209,9 +209,9 @@ library sync-api
     , typed-protocols ==0.1.0.0
     , unliftio >= 0.2.1 && < 0.3
 
-library load-api
+library contract-api
   import: lang
-  hs-source-dirs:   load-api
+  hs-source-dirs:   contract-api
   visibility: public
   exposed-modules:
     Language.Marlowe.Protocol.Load.Client
@@ -611,10 +611,10 @@ test-suite marlowe-runtime-test
     , marlowe-chain-sync:plutus-compat ==0.0.1
     , marlowe-protocols ==0.1.0.0
     , marlowe-runtime ==0.0.1
+    , marlowe-runtime:contract-api ==0.0.1
     , marlowe-runtime:discovery-api ==0.0.1
     , marlowe-runtime:gen ==0.0.1
     , marlowe-runtime:history-api ==0.0.1
-    , marlowe-runtime:load-api ==0.0.1
     , marlowe-runtime:sync-api ==0.0.1
     , marlowe-runtime:tx ==0.0.1
     , marlowe-runtime:tx-api ==0.0.1
