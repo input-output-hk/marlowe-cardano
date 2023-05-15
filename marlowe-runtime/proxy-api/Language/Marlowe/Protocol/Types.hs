@@ -9,6 +9,7 @@ import Data.Binary (getWord8, putWord8)
 import Data.Foldable (fold)
 import Data.List (intersperse)
 import Data.Proxy (Proxy(..))
+import GHC.Show (showSpace)
 import Language.Marlowe.Protocol.HeaderSync.Types (MarloweHeaderSync)
 import qualified Language.Marlowe.Protocol.HeaderSync.Types as MarloweHeaderSync
 import Language.Marlowe.Protocol.Query.Types (MarloweQuery)
@@ -17,6 +18,7 @@ import Language.Marlowe.Protocol.Sync.Types (MarloweSync)
 import qualified Language.Marlowe.Protocol.Sync.Types as MarloweSync
 import Language.Marlowe.Runtime.Transaction.Api (MarloweTxCommand)
 import Network.Protocol.Codec
+import Network.Protocol.Codec.Spec (ShowProtocol(..))
 import Network.Protocol.Handshake.Types (HasSignature(..))
 import Network.Protocol.Job.Types (Job)
 import qualified Network.Protocol.Job.Types as Job
@@ -91,6 +93,85 @@ instance Protocol MarloweRuntime where
     TokNobodyTxJob tok -> \case
       TokServerTxJob tok' -> exclusionLemma_NobodyAndServerHaveAgency tok tok'
 
+instance ShowProtocol MarloweRuntime where
+  showsPrecMessage p tok = \case
+    MsgRunMarloweSync -> showString "MsgRunMarloweSync"
+    MsgRunMarloweHeaderSync -> showString "MsgRunMarloweHeaderSync"
+    MsgRunMarloweQuery -> showString "MsgRunMarloweQuery"
+    MsgRunTxJob -> showString "MsgRunTxJob"
+    MsgMarloweSync msg -> showParen (p >= 11)
+      ( showString "MsgMarloweSync"
+      . showSpace
+      . case tok of
+          ClientAgency (TokClientMarloweSync tok') -> showsPrecMessage p (ClientAgency tok') msg
+          ServerAgency (TokServerMarloweSync tok') -> showsPrecMessage p (ServerAgency tok') msg
+      )
+    MsgMarloweHeaderSync msg -> showParen (p >= 11)
+      ( showString "MsgMarloweHeaderSync"
+      . showSpace
+      . case tok of
+          ClientAgency (TokClientMarloweHeaderSync tok') -> showsPrecMessage p (ClientAgency tok') msg
+          ServerAgency (TokServerMarloweHeaderSync tok') -> showsPrecMessage p (ServerAgency tok') msg
+      )
+    MsgMarloweQuery msg -> showParen (p >= 11)
+      ( showString "MsgMarloweQuery"
+      . showSpace
+      . case tok of
+          ClientAgency (TokClientMarloweQuery tok') -> showsPrecMessage p (ClientAgency tok') msg
+          ServerAgency (TokServerMarloweQuery tok') -> showsPrecMessage p (ServerAgency tok') msg
+      )
+    MsgTxJob msg -> showParen (p >= 11)
+      ( showString "MsgTxJob"
+      . showSpace
+      . case tok of
+          ClientAgency (TokClientTxJob tok') -> showsPrecMessage p (ClientAgency tok') msg
+          ServerAgency (TokServerTxJob tok') -> showsPrecMessage p (ServerAgency tok') msg
+      )
+  showsPrecServerHasAgency p = \case
+    TokServerMarloweSync tok -> showParen (p >= 11)
+      ( showString "TokServerMarloweSync"
+      . showSpace
+      . showsPrecServerHasAgency 11 tok
+      )
+    TokServerMarloweHeaderSync tok -> showParen (p >= 11)
+      ( showString "TokServerMarloweHeaderSync"
+      . showSpace
+      . showsPrecServerHasAgency 11 tok
+      )
+    TokServerMarloweQuery tok -> showParen (p >= 11)
+      ( showString "TokServerMarloweQuery"
+      . showSpace
+      . showsPrecServerHasAgency 11 tok
+      )
+    TokServerTxJob tok ->  showParen (p >= 11)
+      ( showString "TokServerTxJob"
+      . showSpace
+      . showsPrecServerHasAgency 11 tok
+      )
+  showsPrecClientHasAgency p = \case
+    TokInit -> showString "TokInit"
+    TokClientMarloweSync tok -> showParen (p >= 11)
+      ( showString "TokClientMarloweSync"
+      . showSpace
+      . showsPrecClientHasAgency 11 tok
+      )
+    TokClientMarloweHeaderSync tok -> showParen (p >= 11)
+      ( showString "TokClientMarloweHeaderSync"
+      . showSpace
+      . showsPrecClientHasAgency 11 tok
+      )
+    TokClientMarloweQuery tok -> showParen (p >= 11)
+      ( showString "TokClientMarloweQuery"
+      . showSpace
+      . showsPrecClientHasAgency 11 tok
+      )
+    TokClientTxJob tok ->  showParen (p >= 11)
+      ( showString "TokClientTxJob"
+      . showSpace
+      . showsPrecClientHasAgency 11 tok
+      )
+
+
 instance OTelProtocol MarloweRuntime where
   protocolName _ = "marlowe_runtime"
   messageAttributes tok = \case
@@ -112,24 +193,29 @@ instance OTelProtocol MarloweRuntime where
       }
     MsgMarloweSync msg -> case tok of
       ClientAgency (TokClientMarloweSync tok') ->
-        messageAttributes (ClientAgency tok') msg
+        subMessageAttributes "marlowe_sync" $ messageAttributes (ClientAgency tok') msg
       ServerAgency (TokServerMarloweSync tok') ->
-        messageAttributes (ServerAgency tok') msg
+        subMessageAttributes "marlowe_sync" $ messageAttributes (ServerAgency tok') msg
     MsgMarloweHeaderSync msg -> case tok of
       ClientAgency (TokClientMarloweHeaderSync tok') ->
-        messageAttributes (ClientAgency tok') msg
+        subMessageAttributes "marlowe_header_sync" $ messageAttributes (ClientAgency tok') msg
       ServerAgency (TokServerMarloweHeaderSync tok') ->
-        messageAttributes (ServerAgency tok') msg
+        subMessageAttributes "marlowe_header_sync" $ messageAttributes (ServerAgency tok') msg
     MsgMarloweQuery msg -> case tok of
       ClientAgency (TokClientMarloweQuery tok') ->
-        messageAttributes (ClientAgency tok') msg
+        subMessageAttributes "marlowe_query" $ messageAttributes (ClientAgency tok') msg
       ServerAgency (TokServerMarloweQuery tok') ->
-        messageAttributes (ServerAgency tok') msg
+        subMessageAttributes "marlowe_query" $ messageAttributes (ServerAgency tok') msg
     MsgTxJob msg -> case tok of
       ClientAgency (TokClientTxJob tok') ->
-        messageAttributes (ClientAgency tok') msg
+        subMessageAttributes "tx_job" $ messageAttributes (ClientAgency tok') msg
       ServerAgency (TokServerTxJob tok') ->
-        messageAttributes (ServerAgency tok') msg
+        subMessageAttributes "tx_job" $ messageAttributes (ServerAgency tok') msg
+
+    where
+      subMessageAttributes subProtocol attrs@MessageAttributes{..} = attrs
+        { messageType = subProtocol <> "." <> messageType
+        }
 
 
 instance BinaryMessage MarloweRuntime where
