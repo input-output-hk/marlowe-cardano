@@ -1,14 +1,14 @@
 module Contrib.Control.Concurrent.Async
   where
 
-import Control.Concurrent (threadDelay)
+import Contrib.Control.Concurrent (threadDelay)
 import Control.Concurrent.Async (race)
-import Data.Time.Units (Microsecond)
+import Data.Time.Units (TimeUnit)
 
 -- | Race two `IO a` actions.
 altIO :: IO a -> IO a -> IO a
 altIO a b = either id id <$> race a b
 
-timeoutIO :: Microsecond -> IO a -> IO (Maybe a)
-timeoutIO timeout io = altIO (threadDelay (fromIntegral timeout) >> pure Nothing) (Just <$> io)
+timeoutIO :: TimeUnit t => t -> IO a -> IO (Maybe a)
+timeoutIO timeout io = altIO (threadDelay timeout >> pure Nothing) (Just <$> io)
 

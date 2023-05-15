@@ -15,10 +15,9 @@ module Language.Marlowe.CLI.Test.Interpret
   where
 
 import Cardano.Api (IsShelleyBasedEra)
-import Control.Concurrent (threadDelay)
+import Contrib.Control.Concurrent (threadDelay)
 import Control.Monad.Except (throwError)
 import Control.Monad.IO.Class (liftIO)
-import Data.Time.Units (TimeUnit(toMicroseconds))
 import Language.Marlowe.CLI.Cardano.Api.PlutusScript (IsPlutusScriptLanguage)
 import qualified Language.Marlowe.CLI.Test.CLI.Interpret as CLI
 import Language.Marlowe.CLI.Test.Log (logLabeledMsg)
@@ -45,11 +44,9 @@ interpret (CLIOperation co) = do
   logLabeledMsg co ""
   CLI.interpret co
 interpret o@(Sleep seconds) = do
-  let
-    microseconds = toMicroseconds seconds
   logLabeledMsg o ""
   logLabeledMsg o $ "Sleeping for " <> show seconds
-  liftIO $ threadDelay (fromInteger microseconds)
+  liftIO $ threadDelay seconds
 interpret (Fail message) =
   throwError $ CliError message
 

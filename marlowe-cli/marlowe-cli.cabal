@@ -48,7 +48,8 @@ common lang
 library
   import: lang
   hs-source-dirs: src
-  exposed-modules:
+  other-modules:
+    Contrib.Control.Concurrent
     Contrib.Control.Concurrent.Async
     Contrib.Control.Monad.Except
     Contrib.Data.Aeson.Generic
@@ -56,6 +57,7 @@ library
     Contrib.Data.Foldable
     Contrib.Data.Time.Units.Aeson
     Contrib.Monad.Loops
+  exposed-modules:
     Language.Marlowe.CLI.Analyze
     Language.Marlowe.Cardano
     Language.Marlowe.Cardano.Thread

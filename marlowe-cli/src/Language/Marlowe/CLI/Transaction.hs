@@ -187,8 +187,8 @@ import qualified Cardano.Api.Shelley as C
 import Cardano.Ledger.Alonzo.Scripts (ExUnits(..))
 import Cardano.Ledger.Alonzo.TxWitness (Redeemers(..))
 import Cardano.Slotting.EpochInfo.API (epochInfoRange, epochInfoSlotToUTCTime, hoistEpochInfo)
+import Contrib.Control.Concurrent (threadDelay)
 import Control.Arrow ((***))
-import Control.Concurrent (threadDelay)
 import Control.Error (MaybeT(MaybeT, runMaybeT), hoistMaybe, note)
 import Control.Monad (forM, forM_, unless, void, when)
 import Control.Monad.Except (MonadError(catchError), MonadIO, liftEither, liftIO, runExcept, throwError)
@@ -435,7 +435,7 @@ buildFaucetImpl :: MonadError CliError m
             -> SomePaymentSigningKey              -- ^ The required signing key.
             -> CoinSelectionStrategy
             -> SubmitMode                         -- ^ A possible number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
-            -> m (TxBody era)                                -- ^ Action to build the transaction body.
+            -> m (TxBody era)                     -- ^ Action to build the transaction body.
 buildFaucetImpl connection possibleValues destAddresses fundAddress fundSigningKey coinSelectionStrategy submitMode =
   do
     (inputs, outputs', changeAddress) <- case (possibleValues, destAddresses) of
@@ -605,7 +605,7 @@ buildMintingImpl :: MonadError CliError m
              -> MintingAction era                                 -- ^ The token names, amount and a possible receipient addresses.
              -> Maybe Aeson.Object                                -- ^ The CIP-25 metadata for the minting, with keys for each token name.
              -> Maybe SlotNo                                      -- ^ The slot number after which minting is no longer possible.
-             -> SubmitMode                                         -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
+             -> SubmitMode                                        -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
              -> PrintStats
              -> m (TxBody era, PolicyId)                          -- ^ Action to build the transaction body.
 buildMintingImpl connection mintingAction metadataProps expires submitMode (PrintStats printStats) =
@@ -1430,13 +1430,14 @@ submit connection (TxBodyFile bodyFile) signingKeyFiles timeout =
 
 
 -- | Sign and submit a transaction.
-submitBody :: MonadError CliError m
+submitBody :: TimeUnit a
+           => MonadError CliError m
            => MonadIO m
            => MonadReader (CliEnv era) m
            => LocalNodeConnectInfo CardanoMode  -- ^ The connection info for the local node.
            -> TxBody era                        -- ^ The transaction body.
            -> [SomePaymentSigningKey]           -- ^ The signing keys.
-           -> Second                            -- ^ Number of seconds to wait for the transaction to be confirmed.
+           -> a                                 -- ^ The time interval to wait for the transaction to be confirmed.
            -> m TxId                            -- ^ The action to submit the transaction.
 submitBody connection body signings timeout =
   do
@@ -1455,7 +1456,7 @@ submitBody connection body signings timeout =
       SubmitSuccess     -> do
                              let
                                txId = getTxId body
-                             when (timeout > 0)
+                             when (toMicroseconds timeout > 0)
                                $ waitForUtxos connection timeout [TxIn txId $ TxIx 0]
                              pure txId
       SubmitFail reason -> do
@@ -1465,7 +1466,8 @@ submitBody connection body signings timeout =
 
 -- A vesrion of submit which performs an attempt to extra fee balancing on failure
 -- (we experienced failures on the cardano-node for already balanced transactions).
-submitBody' :: MonadError CliError m
+submitBody' :: TimeUnit a
+           => MonadError CliError m
            => MonadIO m
            => MonadReader (CliEnv era) m
            => LocalNodeConnectInfo CardanoMode  -- ^ The connection info for the local node.
@@ -1473,7 +1475,7 @@ submitBody' :: MonadError CliError m
            -> C.TxBodyContent C.BuildTx era
            -> AddressInEra era                  -- ^ The change address.
            -> [SomePaymentSigningKey]           -- ^ The signing keys.
-           -> Second                            -- ^ Number of seconds to wait for the transaction to be confirmed.
+           -> a                                 -- ^ The time interval to wait for the transaction to be confirmed.
            -> m (TxId, TxBody era)              -- ^ The action to submit the transaction.
 submitBody' connection body bodyContent changeAddress signingKeys timeout = do
   era <- askEra
@@ -1506,17 +1508,19 @@ submitBody' connection body bodyContent changeAddress signingKeys timeout = do
 
 
 -- | Wait for transactions to be confirmed as UTxOs.
-waitForUtxos :: MonadError CliError m
+waitForUtxos :: TimeUnit a
+             => MonadError CliError m
              => MonadIO m
              => MonadReader (CliEnv era) m
              => LocalNodeConnectInfo CardanoMode  -- ^ The connection info for the local node.
-             -> Second                            -- ^ Number of seconds to wait for the transaction to be confirmed.
+             -> a                                 -- ^ The time interval to wait for the transaction to be confirmed.
              -> [TxIn]                            -- ^ The transactions to wait for.
              -> m ()                              -- ^ Action to wait for the transaction confirmations.
 waitForUtxos connection timeout txIns =
   let
-    pause = 5
-    timeout' = fromInteger $ toMicroseconds timeout
+    timeoutMicroseconds = toMicroseconds timeout
+    pause = 5 :: Second
+    pauseMicroseconds = toMicroseconds pause
     txIns' = S.fromList txIns
     go 0 = throwError "Timeout waiting for transaction to be confirmed."
     go n = do
@@ -1530,7 +1534,7 @@ waitForUtxos connection timeout txIns =
                then pure ()
                else go (n - 1 :: Int)
   in
-    go . ceiling $ timeout' / (fromIntegral pause :: Double)
+    go . ceiling $ (fromIntegral timeoutMicroseconds / fromIntegral pauseMicroseconds :: Double)
 
 
 -- | TxIn for transaction body.

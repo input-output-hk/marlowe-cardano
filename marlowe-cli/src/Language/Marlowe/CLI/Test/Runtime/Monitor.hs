@@ -20,8 +20,9 @@
 module Language.Marlowe.CLI.Test.Runtime.Monitor
   where
 
+import Contrib.Control.Concurrent (threadDelay)
 import Contrib.Control.Concurrent.Async (altIO)
-import Control.Concurrent (forkIO, threadDelay)
+import Control.Concurrent (forkIO)
 import Control.Concurrent.Async (async, waitCatch)
 import Control.Concurrent.STM (atomically, modifyTVar', newTChanIO, newTVarIO, readTChan, writeTChan, writeTVar)
 import Control.Concurrent.STM.TVar (readTVar)
@@ -32,7 +33,7 @@ import Control.Monad.Loops (untilJust)
 import Data.Foldable.Extra (for_)
 import qualified Data.Map.Strict as M
 import qualified Data.Map.Strict as Map
-import Data.Time.Units (Second, TimeUnit(fromMicroseconds, toMicroseconds))
+import Data.Time.Units (Second)
 import Data.Traversable (for)
 import Language.Marlowe.CLI.Test.Contract (ContractNickname)
 import Language.Marlowe.CLI.Test.Log (logTraceMsg)
@@ -68,8 +69,8 @@ mkRuntimeMonitor config = do
     -- FIXME: Unify all the logging.
     eventBackend = unitEventBackend
 
-    pollingMicroseconds = fromMicroseconds $ toMicroseconds (5 :: Second)
-    pollingFrequency = PollingFrequency pollingMicroseconds
+    pollingFrequencySeconds = 5 :: Second
+    pollingFrequency = PollingFrequency pollingFrequencySeconds
 
   (contractStream, detection) <- mkDetection (const True) eventBackend config pollingFrequency detectionInputChannel
 
@@ -83,13 +84,13 @@ mkRuntimeMonitor config = do
         case processMarloweStreamEvent knownContracts contracts contractStreamEvent of
           Left (RuntimeContractNotFound contractId) -> pure $ do
             void . forkIO $ do
-              threadDelay . fromIntegral . toMicroseconds $ (10 :: Second)
+              threadDelay (10 :: Second)
               atomically $ writeTChan detectionInputChannel (Right contractId)
             pure Nothing
           Left err -> pure $ pure $ Just err
           Right (Just (Revisit contractId)) -> pure $ do
               void . forkIO
-                $ threadDelay (fromIntegral pollingMicroseconds)
+                $ threadDelay pollingFrequencySeconds
                 >> atomically (writeTChan detectionInputChannel $ Right contractId)
               pure Nothing
           Right (Just (RuntimeContractUpdate contractId contractInfo)) -> do

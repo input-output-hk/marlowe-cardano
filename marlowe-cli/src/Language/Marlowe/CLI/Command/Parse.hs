@@ -29,6 +29,7 @@ module Language.Marlowe.CLI.Command.Parse
   , parseParty
   , parseProtocolVersion
   , parseRole
+  , parseSecond
   , parseSlot
   , parseSlotNo
   , parseStakeAddressReference
@@ -105,6 +106,7 @@ import qualified Data.ByteString.Base16 as Base16 (decode)
 import qualified Data.ByteString.Char8 as BS8 (pack)
 import Data.Maybe (fromMaybe)
 import qualified Data.Text as T (pack)
+import Data.Time.Units (Second)
 import qualified Options.Applicative as O
 import Plutus.ApiCommon (ProtocolVersion)
 import Plutus.V1.Ledger.ProtocolVersions (alonzoPV, vasilPV)
@@ -459,6 +461,7 @@ parseWallet =
 walletOpt :: IsShelleyBasedEra era => O.Mod O.OptionFields (AddressInEra era, SigningKeyFile) -> O.Parser (AddressInEra era, SigningKeyFile)
 walletOpt = O.option parseWallet
 
+
 txBodyFileOpt :: O.Parser TxBodyFile
 txBodyFileOpt = TxBodyFile <$> O.strOption (O.long "out-file" <> O.metavar "FILE"         <> O.help "Output file for transaction body.")
 
@@ -468,4 +471,8 @@ publishingStrategyOpt =
       PublishAtAddress <$> O.option parseAddress                 (O.long "at-address"                     <> O.metavar "ADDRESS"          <> O.help "Publish script at a given address. This is a default strategy which uses change address as a destination.")
   <|> PublishPermanently <$> O.option parseStakeAddressReference (O.long "permanently"                    <> O.metavar "STAKING_ADDRESS"  <> O.help "Publish permanently at unspendable script address staking the min. ADA value.")
   <|> O.flag' (PublishPermanently C.NoStakeAddress)              (O.long "permanently-without-staking"                                    <> O.help "Publish permanently at unspendable script address without min. ADA staking.")
+
+
+parseSecond :: O.ReadM Second
+parseSecond = fromInteger <$> O.auto
 

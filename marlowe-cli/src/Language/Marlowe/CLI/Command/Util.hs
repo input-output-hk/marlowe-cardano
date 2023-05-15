@@ -45,6 +45,7 @@ import Language.Marlowe.CLI.Command.Parse
   ( parseAddress
   , parseNetworkId
   , parseOutputQuery
+  , parseSecond
   , parseSlotNo
   , readAddressEither
   , readTokenName
@@ -385,12 +386,12 @@ fundAddressOptions :: IsShelleyBasedEra era => O.Mod O.OptionFields NetworkId ->
 fundAddressOptions network socket =
   Fund
     <$> parseNetworkId network
-    <*> O.strOption                        (O.long "socket-path"     <> O.metavar "SOCKET_FILE" <> socket                <> O.help "Location of the cardano-node socket file. Defaults to the CARDANO_NODE_SOCKET_PATH environment variable's value.")
+    <*> O.strOption                             (O.long "socket-path"     <> O.metavar "SOCKET_FILE" <> socket                <> O.help "Location of the cardano-node socket file. Defaults to the CARDANO_NODE_SOCKET_PATH environment variable's value.")
     <*> (lovelaceOpt <|> sendAllOpt)
     <*> txBodyFileOpt
-    <*> (O.optional . O.option O.auto)     (O.long "submit"          <> O.metavar "SECONDS"                              <> O.help "Also submit the transaction, and wait for confirmation."                                                         )
-    <*> walletOpt                          (O.long "source-wallet-credentials" <> O.metavar "ADDRESS:SIGNING_FILE"       <> O.help "Credentials for the source wallet that will send the funds")
-    <*> O.some                             (O.argument parseAddress $ O.metavar "ADDRESS"                                <> O.help "The addresses to receive the funds."                                                                               )
+    <*> (O.optional . O.option parseSecond)     (O.long "submit"          <> O.metavar "SECONDS"                              <> O.help "Also submit the transaction, and wait for confirmation."                                                         )
+    <*> walletOpt                               (O.long "source-wallet-credentials" <> O.metavar "ADDRESS:SIGNING_FILE"       <> O.help "Credentials for the source wallet that will send the funds")
+    <*> O.some                                  (O.argument parseAddress $ O.metavar "ADDRESS"                                <> O.help "The addresses to receive the funds."                                                                               )
   where
     lovelaceOpt = fmap Just . (O.option $ Lovelace <$> O.auto) $
       O.long "lovelace"
