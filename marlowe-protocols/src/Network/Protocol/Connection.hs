@@ -109,6 +109,7 @@ data ConnectionTraced ps pr peer r s m = forall (st :: ps). ConnectionTraced
   , toPeer :: ToPeer  peer ps pr st m
   , openRef :: r
   , injectProtocolSelector :: forall ps'. InjectSelector (TypedProtocolsSelector ps') (s ps')
+  , injectDriverSelector :: forall ps'. InjectSelector (DriverSelector ps') (s ps')
   }
 
 ihoistConnectionTraced
@@ -157,7 +158,7 @@ stmConnectionSource
   :: (MonadIO m, Monoid r)
   => TQueue (STMChannel ByteString)
   -> ToPeer server ps 'AsServer st m
-  -> ConnectionSourceTraced ps server r IdSelector m
+  -> ConnectionSourceTraced ps server r STMConnectorSelector m
 stmConnectionSource queue toPeer = ConnectionSourceTraced do
   channel <- readTQueue queue
   pure $ stmServerConnector channel toPeer
@@ -166,12 +167,13 @@ stmServerConnector
   :: (Monoid r, MonadIO m)
   => STMChannel ByteString
   -> ToPeer client ps 'AsServer st m
-  -> ServerConnectorTraced ps client r IdSelector m
+  -> ServerConnectorTraced ps client r STMConnectorSelector m
 stmServerConnector (STMChannel channel closeChannel) toPeer = ConnectorTraced $ pure ConnectionTraced
   { closeConnection = const $ atomically closeChannel
   , channel = hoistChannel atomically channel
   , openRef = mempty
-  , injectProtocolSelector = \s withInjectField -> withInjectField (Lift s) id
+  , injectProtocolSelector = \s f -> f (Protocol s) id
+  , injectDriverSelector = \s f -> f (DriverSelector s) id
   , ..
   }
 
@@ -179,7 +181,7 @@ stmClientConnector
   :: (MonadIO m, Monoid r)
   => TQueue (STMChannel ByteString)
   -> ToPeer client ps 'AsClient st m
-  -> ClientConnectorTraced ps client r IdSelector m
+  -> ClientConnectorTraced ps client r STMConnectorSelector m
 stmClientConnector queue toPeer = ConnectorTraced do
   STMChannel channel closeChannel <- atomically do
     (clientChannel, serverChannel) <- channelPair
@@ -189,16 +191,28 @@ stmClientConnector queue toPeer = ConnectorTraced do
     { closeConnection = \_ -> atomically closeChannel
     , channel = hoistChannel atomically channel
     , openRef = mempty
-    , injectProtocolSelector = \s f -> f (Lift s) id
+    , injectProtocolSelector = \s f -> f (Protocol s) id
+    , injectDriverSelector = \s f -> f (DriverSelector s) id
     , ..
     }
 
-data IdSelector ps f where
-  Lift :: TypedProtocolsSelector ps f -> IdSelector ps f
+data DriverSelector ps f where
+  SendMessage :: PeerHasAgency pr st -> Message ps st st' -> DriverSelector ps ()
+  RecvMessage :: PeerHasAgency pr (st :: ps) -> DriverSelector ps (RecvMessageField ps st)
+
+data RecvMessageField ps st where
+  RecvMessageStateBeforeSpan :: Maybe ByteString -> RecvMessageField ps st
+  RecvMessageStateBeforeMessage :: Maybe ByteString -> RecvMessageField ps st
+  RecvMessageStateAfterMessage :: Maybe ByteString -> RecvMessageField ps st
+  RecvMessageMessage :: Message ps st st' -> RecvMessageField ps st
+
+data STMConnectorSelector ps f where
+  Protocol :: TypedProtocolsSelector ps f -> STMConnectorSelector ps f
+  DriverSelector :: DriverSelector ps f -> STMConnectorSelector ps f
 
 data ClientServerPair ps server client r m = ClientServerPair
-  { connectionSource :: ConnectionSourceTraced ps server r IdSelector m
-  , clientConnector :: ClientConnectorTraced ps client r IdSelector m
+  { connectionSource :: ConnectionSourceTraced ps server r STMConnectorSelector m
+  , clientConnector :: ClientConnectorTraced ps client r STMConnectorSelector m
   }
 
 clientServerPair
