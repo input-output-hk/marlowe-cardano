@@ -614,6 +614,7 @@ runtime = proc RuntimeDependencies{..} -> do
         { connectMarloweSync = driverFactory $ clientConnector marloweSyncPair
         , connectMarloweHeaderSync = driverFactory $ clientConnector marloweHeaderSyncPair
         , connectMarloweQuery = driverFactory $ clientConnector marloweQueryPair
+        , connectMarloweLoad = driverFactory $ clientConnector marloweLoadPair
         , connectTxJob = driverFactory $ clientConnector txJobPair
         }
     , connectionSource = SomeConnectionSource marloweRuntimeServerSource
@@ -647,13 +648,7 @@ data Channels r m = Channels
   , marloweQueryPair :: ClientServerPair (Handshake MarloweQuery) MarloweQueryServer MarloweQueryClient r m
   , marloweLoadPair :: ClientServerPair (Handshake MarloweLoad) MarloweLoadServer MarloweLoadClient r m
   , txJobPair :: ClientServerPair (Handshake (Job MarloweTxCommand)) (JobServer MarloweTxCommand) (JobClient MarloweTxCommand) r m
-<<<<<<< HEAD
   , marloweRuntimePair :: ClientServerPair (Handshake Protocol.MarloweRuntime) MarloweRuntimeServer MarloweRuntimeClient r (ResourceT m)
-||||||| parent of 91f916ee1 (Add MarloweLoad to MarloweRuntime protocol)
-  , marlowePair :: ClientServerPair (Handshake Protocol.MarloweRuntime) (MarloweRuntimeServer r) MarloweRuntimeClient r (ResourceT m)
-=======
-  , marloweRuntimePair :: ClientServerPair (Handshake Protocol.MarloweRuntime) (MarloweRuntimeServer r) MarloweRuntimeClient r (ResourceT m)
->>>>>>> 91f916ee1 (Add MarloweLoad to MarloweRuntime protocol)
   }
 
 setupChannels :: Monoid r => STM (Channels r (RuntimeM r))
