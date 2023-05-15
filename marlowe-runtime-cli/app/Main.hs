@@ -10,8 +10,8 @@ import Control.Concurrent.STM (atomically, newEmptyTMVarIO, putTMVar, takeTMVar)
 #endif
 import GHC.IO.Handle (hSetBuffering)
 import Language.Marlowe.Runtime.CLI.Command
-import System.IO (BufferMode(LineBuffering), stderr, stdout)
-import System.Posix (Handler(Catch), installHandler, sigINT)
+import System.IO (BufferMode(..), stderr, stdout)
+import System.Posix (Handler(..), installHandler, sigINT)
 
 main :: IO ()
 main = do
@@ -23,7 +23,7 @@ main = do
   let sigInt = retry
 #else
   sigIntVar <- newEmptyTMVarIO
-  _ <- installHandler sigINT (Catch $ atomically $ putTMVar sigIntVar ()) Nothing
+  _ <- installHandler sigINT (CatchOnce $ atomically $ putTMVar sigIntVar ()) Nothing
   let sigInt = takeTMVar sigIntVar
 #endif
   runCLIWithOptions sigInt options $ runCommand cmd
