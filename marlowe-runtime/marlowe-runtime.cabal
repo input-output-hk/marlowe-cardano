@@ -238,6 +238,7 @@ library contract
   exposed-modules:
     Language.Marlowe.Runtime.Contract.LoadServer
     Language.Marlowe.Runtime.Contract.Store
+    Language.Marlowe.Runtime.Contract.Store.Memory
   build-depends:
     , async-components ==0.1.0.0
     , base >= 4.9 && < 5
