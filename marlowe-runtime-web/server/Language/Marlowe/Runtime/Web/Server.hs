@@ -51,8 +51,8 @@ import Language.Marlowe.Runtime.Web.Server.SyncClient
 import Language.Marlowe.Runtime.Web.Server.TxClient
   (ApplyInputs, CreateContract, Submit, TxClient(..), TxClientDependencies(..), Withdraw, txClient)
 import Network.Protocol.Connection (SomeConnectorTraced(..))
+import Network.Protocol.Driver.Trace (HasSpanContext)
 import Network.Protocol.Handshake.Types (Handshake)
-import Network.Protocol.Peer.Trace (HasSpanContext)
 import Network.Wai (Request, Response)
 import qualified Network.Wai as WAI
 import Network.Wai.Middleware.Cors (CorsResourcePolicy(..), cors, simpleCorsResourcePolicy)

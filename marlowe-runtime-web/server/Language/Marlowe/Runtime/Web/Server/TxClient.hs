@@ -53,9 +53,8 @@ import Language.Marlowe.Runtime.Transaction.Api
   , WithdrawError
   )
 import Network.Protocol.Connection (SomeClientConnectorTraced)
-import Network.Protocol.Driver (runSomeConnectorTraced)
+import Network.Protocol.Driver.Trace (HasSpanContext, runSomeConnectorTraced)
 import Network.Protocol.Job.Client
-import Network.Protocol.Peer.Trace (HasSpanContext)
 import Observe.Event.Backend (setAncestorEventBackend)
 
 newtype TxClientDependencies r s m = TxClientDependencies

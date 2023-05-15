@@ -88,10 +88,9 @@ import Language.Marlowe.Runtime.Transaction.Safety (checkContract, checkTransact
 import Language.Marlowe.Runtime.Transaction.Submit (SubmitJob(..), SubmitJobStatus(..))
 import Network.Protocol.Connection
   (SomeConnectionSourceTraced(..), SomeServerConnectorTraced, acceptSomeConnectorTraced)
-import Network.Protocol.Driver (runSomeConnectorTraced)
+import Network.Protocol.Driver.Trace (HasSpanContext, runSomeConnectorTraced)
 import Network.Protocol.Job.Server
   (JobServer(..), ServerStAttach(..), ServerStAwait(..), ServerStCmd(..), ServerStInit(..), hoistAttach, hoistCmd)
-import Network.Protocol.Peer.Trace (HasSpanContext)
 import Observe.Event.Explicit (addField)
 import Ouroboros.Consensus.BlockchainTime (SystemStart)
 import UnliftIO (MonadUnliftIO, atomically)

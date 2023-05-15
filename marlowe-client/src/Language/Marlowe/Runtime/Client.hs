@@ -14,10 +14,10 @@ import Control.Monad.Trans.Marlowe
 import Control.Monad.Trans.Marlowe.Class
 import Language.Marlowe.Protocol.Client (marloweRuntimeClientPeer)
 import Language.Marlowe.Protocol.Types (MarloweRuntime)
-import Network.Protocol.Driver (TcpClientSelector, tcpClient, tcpClientTraced)
+import Network.Protocol.Driver (tcpClient)
+import Network.Protocol.Driver.Trace (HasSpanContext, TcpClientSelector, tcpClientTraced)
 import Network.Protocol.Handshake.Client (handshakeClientConnector, handshakeClientConnectorTraced)
 import Network.Protocol.Handshake.Types (Handshake)
-import Network.Protocol.Peer.Trace (HasSpanContext)
 import Network.Socket (HostName, PortNumber)
 import Observe.Event (InjectSelector)
 

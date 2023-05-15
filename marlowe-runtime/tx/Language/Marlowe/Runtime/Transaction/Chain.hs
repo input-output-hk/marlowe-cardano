@@ -13,8 +13,7 @@ import Language.Marlowe.Runtime.ChainSync.Api (Move(..), RuntimeChainSeekClient)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Network.Protocol.ChainSeek.Client
 import Network.Protocol.Connection (SomeClientConnectorTraced)
-import Network.Protocol.Driver (runSomeConnectorTraced)
-import Network.Protocol.Peer.Trace (HasSpanContext)
+import Network.Protocol.Driver.Trace (HasSpanContext, runSomeConnectorTraced)
 import UnliftIO (MonadUnliftIO, atomically, finally)
 import UnliftIO.Concurrent (threadDelay)
 

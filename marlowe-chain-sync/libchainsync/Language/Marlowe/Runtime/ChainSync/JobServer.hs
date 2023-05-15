@@ -14,9 +14,8 @@ import Control.Concurrent.Component
 import Control.Monad.Event.Class
 import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncCommand(..))
 import Network.Protocol.Connection (SomeConnectionSourceTraced, SomeServerConnectorTraced, acceptSomeConnectorTraced)
-import Network.Protocol.Driver (runSomeConnectorTraced)
+import Network.Protocol.Driver.Trace (HasSpanContext, runSomeConnectorTraced)
 import Network.Protocol.Job.Server
-import Network.Protocol.Peer.Trace (HasSpanContext)
 import Ouroboros.Network.Protocol.LocalTxSubmission.Client (SubmitResult(..))
 import UnliftIO (MonadUnliftIO)
 

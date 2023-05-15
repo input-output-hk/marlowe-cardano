@@ -14,8 +14,7 @@ import Language.Marlowe.Runtime.ChainSync.Api (ChainPoint, Move, RuntimeChainSee
 import Language.Marlowe.Runtime.ChainSync.Database (GetTip(..), MoveClient(..), MoveResult(..))
 import Network.Protocol.ChainSeek.Server
 import Network.Protocol.Connection (SomeConnectionSourceTraced, SomeServerConnectorTraced, acceptSomeConnectorTraced)
-import Network.Protocol.Driver (runSomeConnectorTraced)
-import Network.Protocol.Peer.Trace (HasSpanContext)
+import Network.Protocol.Driver.Trace (HasSpanContext, runSomeConnectorTraced)
 import UnliftIO (MonadUnliftIO)
 
 data ChainSyncServerDependencies r s m = ChainSyncServerDependencies

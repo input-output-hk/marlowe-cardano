@@ -18,7 +18,7 @@ import Language.Marlowe.Protocol.Query.Types (MarloweQuery)
 import Language.Marlowe.Protocol.Sync.Types (MarloweSync)
 import Language.Marlowe.Runtime.Core.Api (MarloweVersion(..), renderContractId)
 import Language.Marlowe.Runtime.Sync.Database
-import Network.Protocol.Driver (TcpServerSelector, renderTcpServerSelectorOTel)
+import Network.Protocol.Driver.Trace (TcpServerSelector, renderTcpServerSelectorOTel)
 import Network.Protocol.Handshake.Types (Handshake)
 import Observe.Event (idInjectSelector, injectSelector)
 import Observe.Event.Render.OpenTelemetry

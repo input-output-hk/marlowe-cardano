@@ -37,7 +37,7 @@ import qualified Language.Marlowe.Runtime.Indexer.Database.PostgreSQL as Postgre
 import Logging (RootSelector(..), renderRootSelectorOTel)
 import Network.Protocol.ChainSeek.Client (chainSeekClientPeer)
 import Network.Protocol.Connection (ClientConnectorTraced, SomeConnectorTraced(..))
-import Network.Protocol.Driver (TcpClientSelector, runConnectorTraced, tcpClientTraced)
+import Network.Protocol.Driver.Trace (TcpClientSelector, runConnectorTraced, tcpClientTraced)
 import Network.Protocol.Handshake.Client (handshakeClientConnectorTraced)
 import Network.Protocol.Handshake.Types (Handshake)
 import Network.Protocol.Query.Client (QueryClient, liftQuery, queryClientPeer)

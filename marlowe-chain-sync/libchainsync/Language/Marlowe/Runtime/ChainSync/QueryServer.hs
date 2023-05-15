@@ -31,8 +31,7 @@ import Data.Void (Void, absurd)
 import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncQuery(..))
 import qualified Language.Marlowe.Runtime.ChainSync.Database as Database
 import Network.Protocol.Connection (SomeConnectionSourceTraced, SomeServerConnectorTraced, acceptSomeConnectorTraced)
-import Network.Protocol.Driver (runSomeConnectorTraced)
-import Network.Protocol.Peer.Trace
+import Network.Protocol.Driver.Trace (HasSpanContext, runSomeConnectorTraced)
 import Network.Protocol.Query.Server (QueryServer(..), ServerStInit(..), ServerStNext(..), ServerStPage(..))
 import Network.Protocol.Query.Types (StNextKind(..))
 import UnliftIO (MonadUnliftIO)

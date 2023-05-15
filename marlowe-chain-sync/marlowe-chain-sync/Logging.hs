@@ -17,7 +17,7 @@ import Data.Text.Encoding (decodeUtf8)
 import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncCommand, ChainSyncQuery, RuntimeChainSeek)
 import qualified Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL as DB
 import Language.Marlowe.Runtime.ChainSync.NodeClient (NodeClientSelector(..))
-import Network.Protocol.Driver (TcpServerSelector, renderTcpServerSelectorOTel)
+import Network.Protocol.Driver.Trace (TcpServerSelector, renderTcpServerSelectorOTel)
 import Network.Protocol.Handshake.Types (Handshake)
 import Network.Protocol.Job.Types (Job)
 import Network.Protocol.Query.Types (Query)
