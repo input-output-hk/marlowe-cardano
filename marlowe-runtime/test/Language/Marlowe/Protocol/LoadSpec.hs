@@ -11,7 +11,6 @@ module Language.Marlowe.Protocol.LoadSpec
 import Cardano.Api (hashScriptData)
 import Control.Monad (join)
 import Control.Monad.Trans.Writer
-import Data.Functor.Identity (runIdentity)
 import qualified Data.Map as Map
 import Data.Void (Void, absurd)
 import Language.Marlowe.Core.V1.Merkle (Continuations, deepMerkleize)
@@ -39,7 +38,7 @@ spec = do
     prop "Has a lawful codec" $ checkPropCodec @(Handshake MarloweLoad)
     codecGoldenTests @MarloweLoad "MarloweLoad"
     prop "Merkleizes contract correctly" \contract ->
-      merkleizeWithPeers contract === mapWriterT (Just . runIdentity) (merkleizeWithLibrary contract)
+      merkleizeWithPeers contract === (Just <$> merkleizeWithLibrary contract)
 
 merkleizeWithLibrary :: Contract -> Writer Continuations DatumHash
 merkleizeWithLibrary = mapWriter (fmap removeClose . addRoot) . deepMerkleize
@@ -56,15 +55,15 @@ merkleizeWithLibrary = mapWriter (fmap removeClose . addRoot) . deepMerkleize
 hashContract :: Contract -> DatumHash
 hashContract = fromCardanoDatumHash . hashScriptData . toCardanoScriptData . toDatum
 
-merkleizeWithPeers :: Contract -> WriterT Continuations Maybe DatumHash
+merkleizeWithPeers :: Contract -> Writer Continuations (Maybe DatumHash)
 merkleizeWithPeers contract = go
   (peerTracedToPeer $ marloweLoadClientPeer $ pushContract contract)
-  (peerTracedToPeer $ marloweLoadServerPeer $ pullContract (unsafeIntToNat 100) save)
+  (peerTracedToPeer $ marloweLoadServerPeer $ pullContract (unsafeIntToNat 100) save $ pure ())
   where
     go
-      :: Peer MarloweLoad 'AsClient st (WriterT Continuations Maybe) DatumHash
-      -> Peer MarloweLoad 'AsServer st (WriterT Continuations Maybe) Contract
-      -> WriterT Continuations Maybe DatumHash
+      :: Peer MarloweLoad 'AsClient st (Writer Continuations) (Maybe DatumHash)
+      -> Peer MarloweLoad 'AsServer st (Writer Continuations) (Maybe Contract)
+      -> Writer Continuations (Maybe DatumHash)
     go c s = case (c, s) of
       (Effect mc, Effect ms) -> join $ go <$> mc <*> ms
       (Effect mc, _) -> flip go s =<< mc
@@ -79,10 +78,11 @@ merkleizeWithPeers contract = go
       (Await (ServerAgency tok) _, Await (ClientAgency tok') _) -> absurd $ exclusionLemma_ClientAndServerHaveAgency tok' tok
       (Yield (ClientAgency tok) _ _, Yield (ServerAgency tok') _ _g) -> absurd $ exclusionLemma_ClientAndServerHaveAgency tok tok'
 
-    save :: Contract -> (DatumHash, WriterT Continuations Maybe ())
+    save :: Contract -> Writer Continuations DatumHash
     save c = do
       let hash = hashContract c
-       in (hash, tell $ Map.singleton (PV2.DatumHash $ PV2.toBuiltin $ unDatumHash hash) c)
+      tell $ Map.singleton (PV2.DatumHash $ PV2.toBuiltin $ unDatumHash hash) c
+      pure hash
 
 nobodyAndSomebodyHaveAgency :: forall (st :: MarloweLoad) pr. NobodyHasAgency st -> PeerHasAgency pr st -> Void
 nobodyAndSomebodyHaveAgency tok = \case
@@ -121,6 +121,8 @@ instance ArbitraryMessage MarloweLoad where
           pure $ MsgPushLet valueId value
     , withArbitraryNodeAndNat \_ node ->
         pure $ AnyMessageAndAgency (ClientAgency $ TokCanPush Zero node) MsgRequestResume
+    , withArbitraryNodeAndNat \n node ->
+        pure $ AnyMessageAndAgency (ClientAgency $ TokCanPush n node) MsgAbort
     , AnyMessageAndAgency (ServerAgency TokComplete) . MsgComplete <$> arbitrary
     ]
     where
@@ -130,6 +132,7 @@ instance ArbitraryMessage MarloweLoad where
           f' (SomeNat n) (SomeSNode node) = f n node
 
   shrinkMessage _ = \case
+    MsgAbort -> []
     MsgRequestResume -> []
     MsgResume _ -> []
     MsgPushClose -> []

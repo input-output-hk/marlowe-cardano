@@ -155,6 +155,10 @@ instance Protocol MarloweLoad where
     MsgRequestResume :: Message MarloweLoad
       ('StCanPush 'Z node)
       ('StProcessing node)
+    -- | Abort the load
+    MsgAbort :: Message MarloweLoad
+      ('StCanPush n node)
+      'StDone
     -- | The server sends the hash of the completed (merkleized) contract back
     -- to the client.
     MsgComplete :: DatumHash -> Message MarloweLoad
@@ -219,6 +223,7 @@ instance BinaryMessage MarloweLoad where
         putWord8 0x06
         putDatum obs
       MsgRequestResume -> putWord8 0x07
+      MsgAbort -> putWord8 0x08
     ServerAgency TokComplete -> \case
       MsgComplete hash -> put hash
     ServerAgency (TokProcessing _) -> \case
@@ -258,6 +263,7 @@ instance BinaryMessage MarloweLoad where
         0x07 -> case n of
           Zero -> pure $ SomeMessage MsgRequestResume
           _ -> fail "Must push"
+        0x08 -> pure $ SomeMessage MsgAbort
         _ -> fail $ "Invalid message tag " <> show tag
     ServerAgency TokComplete -> SomeMessage . MsgComplete <$> get
     -- unsafeIntToNat is actually safe here - why? Because we immediately
@@ -292,35 +298,39 @@ instance OTelProtocol MarloweLoad where
       , messageParameters = jsonToPrimitiveAttribute <$> [toJSON accountId, toJSON payee, toJSON token, toJSON value]
       }
     MsgPushIf obs -> MessageAttributes
-      { messageType = "push_close"
+      { messageType = "push_if"
       , messageParameters = [jsonToPrimitiveAttribute $ toJSON obs]
       }
     MsgPushWhen timeout -> MessageAttributes
-      { messageType = "push_close"
+      { messageType = "push_when"
       , messageParameters = [IntAttribute $ fromIntegral timeout]
       }
     MsgPushCase action -> MessageAttributes
-      { messageType = "push_close"
+      { messageType = "push_case"
       , messageParameters = [jsonToPrimitiveAttribute $ toJSON action]
       }
     MsgPushLet valueId value -> MessageAttributes
-      { messageType = "push_close"
+      { messageType = "push_let"
       , messageParameters = jsonToPrimitiveAttribute <$> [toJSON valueId, toJSON value]
       }
     MsgPushAssert obs -> MessageAttributes
-      { messageType = "push_close"
+      { messageType = "push_assert"
       , messageParameters = [jsonToPrimitiveAttribute $ toJSON obs]
       }
     MsgResume n -> MessageAttributes
-      { messageType = "push_close"
+      { messageType = "resume"
       , messageParameters = [IntAttribute $ fromIntegral $ natToInt n]
       }
     MsgComplete hash -> MessageAttributes
-      { messageType = "push_close"
+      { messageType = "complete"
       , messageParameters = [fromString $ show hash]
       }
     MsgRequestResume -> MessageAttributes
       { messageType = "request_resume"
+      , messageParameters = []
+      }
+    MsgAbort -> MessageAttributes
+      { messageType = "abort"
       , messageParameters = []
       }
 
@@ -371,6 +381,9 @@ instance MessageEq MarloweLoad where
     MsgRequestResume -> case msg' of
       MsgRequestResume -> True
       _ -> False
+    MsgAbort -> case msg' of
+      MsgAbort -> True
+      _ -> False
 
 instance MessageVariations MarloweLoad where
   messageVariations = \case
@@ -388,7 +401,10 @@ instance MessageVariations MarloweLoad where
       , SomeMessage <$> (MsgPushLet <$> variations `varyAp` variations)
       , SomeMessage . MsgPushAssert <$> variations
       ]
-    ClientAgency (TokCanPush Zero _) -> pure $ SomeMessage MsgRequestResume
+    ClientAgency (TokCanPush Zero _) -> NE.fromList
+      [ SomeMessage MsgRequestResume
+      , SomeMessage MsgAbort
+      ]
 
     ServerAgency (TokProcessing _) -> pure $ SomeMessage $ MsgResume $ Succ Zero
 
@@ -406,6 +422,7 @@ instance ShowProtocol MarloweLoad where
     ClientAgency (TokCanPush _ _) -> \case
       MsgPushClose -> showString "MsgPushClose"
       MsgRequestResume -> showString "MsgRequestResume"
+      MsgAbort -> showString "MsgAbort"
       MsgPushPay accountId payee token value -> showParen (p >= 11)
         ( showString "MsgPushPay"
         . showSpace

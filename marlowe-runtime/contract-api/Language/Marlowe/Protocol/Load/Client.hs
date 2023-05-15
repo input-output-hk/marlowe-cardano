@@ -1,6 +1,7 @@
 {-# LANGUAGE ApplicativeDo #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -18,12 +19,48 @@ import Language.Marlowe.Core.V1.Semantics.Types
 import Language.Marlowe.Protocol.Load.Types
 import Language.Marlowe.Runtime.ChainSync.Api (DatumHash)
 import Network.Protocol.Peer.Trace hiding (Close)
+import qualified Network.Protocol.Peer.Trace as Peer
 import Network.TypedProtocol
 
 -- A client of the MarloweLoad protocol.
 newtype MarloweLoadClient m a = MarloweLoadClient
   { runMarloweLoadClient :: m (ClientStProcessing 'RootNode m a)
   }
+
+instance Functor m => Functor (MarloweLoadClient m) where
+  fmap :: forall a b. (a -> b) -> MarloweLoadClient m a -> MarloweLoadClient m b
+  fmap f = MarloweLoadClient . fmap (mapProcessing SRootNode) . runMarloweLoadClient
+    where
+      mapProcessing :: SNode node -> ClientStProcessing node m a -> ClientStProcessing node m b
+      mapProcessing node ClientStProcessing{..} = ClientStProcessing
+        { recvMsgResume = \n -> mapCanPush n node <$> recvMsgResume n
+        }
+
+      mapCanPush :: Nat n -> SNode node -> ClientStCanPush n node m a -> ClientStCanPush n node m b
+      mapCanPush Zero node = \case
+        Abort a -> Abort $ f a
+        RequestResume processing -> RequestResume $ mapProcessing node processing
+      mapCanPush (Succ n) node = \case
+        Abort a -> Abort $ f a
+        PushClose next -> PushClose $ mapPop n node <$> next
+        PushPay payor payee token value next -> PushPay payor payee token value $ mapCanPush n (SPayNode node) <$> next
+        PushIf cond next -> PushIf cond $ mapCanPush n (SIfLNode node) <$> next
+        PushWhen timeout next -> PushWhen timeout $ mapCanPush n (SWhenNode node) <$> next
+        PushCase action next -> PushCase action case node of
+          SWhenNode node' -> mapCanPush n (SCaseNode node') <$> next
+        PushLet valueId value next -> PushLet valueId value $ mapCanPush n (SLetNode node) <$> next
+        PushAssert obs next -> PushAssert obs $ mapCanPush n (SAssertNode node) <$> next
+
+      mapPop :: Nat n -> SNode node -> ClientStPop n node m a -> ClientStPop n node m b
+      mapPop n node = case node of
+        SRootNode -> ClientStComplete . (fmap . fmap) f . recvMsgComplete
+        SPayNode node' -> mapPop n node'
+        SIfLNode node' -> mapCanPush n (SIfRNode node')
+        SIfRNode node' -> mapPop n node'
+        SWhenNode node' -> mapPop n node'
+        SCaseNode node' -> mapCanPush n (SWhenNode node')
+        SLetNode node' -> mapPop n node'
+        SAssertNode node' -> mapPop n node'
 
 -- A client in the Processing state.
 newtype ClientStProcessing (node :: Node) m a = ClientStProcessing
@@ -48,7 +85,7 @@ data ClientStCanPush (n :: N) (node :: Node) m a where
   -- | Push a close node to the stack. This closes the current stack and pops
   -- until the next incomplete location in the contract is reached.
   PushClose
-    :: ClientStPop n node m a -- ^ The next client to run after popping the current stack.
+    :: m (ClientStPop n node m a) -- ^ The next client to run after popping the current stack.
     -> ClientStCanPush ('S n) node m a
   -- | Push a pay node to the stack.
   PushPay
@@ -56,17 +93,17 @@ data ClientStCanPush (n :: N) (node :: Node) m a where
     -> Payee -- ^ To whom send the payment.
     -> Token -- ^ The token to be paid.
     -> Value Observation -- ^ The amount to be paid.
-    -> ClientStCanPush n ('PayNode node) m a -- ^ The next client to push the sub-contract.
+    -> m (ClientStCanPush n ('PayNode node) m a) -- ^ The next client to push the sub-contract.
     -> ClientStCanPush ('S n) node m a
   -- | Push an if node to the stack.
   PushIf
     :: Observation -- ^ The observation to choose which branch to follow.
-    -> ClientStCanPush n ('IfLNode node) m a -- ^ The next client to push the "then" sub-contract.
+    -> m (ClientStCanPush n ('IfLNode node) m a) -- ^ The next client to push the "then" sub-contract.
     -> ClientStCanPush ('S n) node m a
   -- | Push a when node to the stack
   PushWhen
     :: Timeout -- ^ The time (in POSIX milliseconds) after which this contract will time out.
-    -> ClientStCanPush n ('WhenNode node) m a -- ^ The next client to push either the first case or the timeout continuation.
+    -> m (ClientStCanPush n ('WhenNode node) m a) -- ^ The next client to push either the first case or the timeout continuation.
     -> ClientStCanPush ('S n) node m a
   -- | Push a case node to the stack. Only available if currently on a when node.
   PushCase
@@ -77,23 +114,66 @@ data ClientStCanPush (n :: N) (node :: Node) m a where
   PushLet
     :: ValueId -- ^ The name that refers to the value.
     -> Value Observation -- ^ The value to bind to the name.
-    -> ClientStCanPush n ('LetNode node) m a -- ^ The next client to push the sub-contract.
+    -> m (ClientStCanPush n ('LetNode node) m a) -- ^ The next client to push the sub-contract.
     -> ClientStCanPush ('S n) node m a
   -- | Push an assert node to the stack.
   PushAssert
     :: Observation -- ^ The observation to assert.
-    -> ClientStCanPush n ('AssertNode node) m a -- ^ The next client to push the sub-contract.
+    -> m (ClientStCanPush n ('AssertNode node) m a) -- ^ The next client to push the sub-contract.
     -> ClientStCanPush ('S n) node m a
   -- | Request to resume pushing.
   RequestResume
     :: ClientStProcessing node m a -- ^ The next client to run on resume
     -> ClientStCanPush 'Z node m a
+  -- | Abort the load.
+  Abort :: a -> ClientStCanPush n node m a
 
 -- A client in the Complete state.
 newtype ClientStComplete m a = ClientStComplete
   { recvMsgComplete :: DatumHash -> m a
     -- ^ The server sends the hash of the merkleized root contract.
   }
+
+hoistMarloweLoadClient
+  :: forall m n a
+   . Functor m
+  => (forall x. m x -> n x)
+  -> MarloweLoadClient m a
+  -> MarloweLoadClient n a
+hoistMarloweLoadClient f = MarloweLoadClient . f . fmap (hoistProcessing SRootNode) . runMarloweLoadClient
+  where
+    hoistProcessing :: SNode node -> ClientStProcessing node m a -> ClientStProcessing node n a
+    hoistProcessing node ClientStProcessing{..} =
+      ClientStProcessing \n -> f $ fmap (hoistCanPush node n) $ recvMsgResume n
+
+    hoistCanPush :: SNode node -> Nat i -> ClientStCanPush i node m a -> ClientStCanPush i node n a
+    hoistCanPush node Zero = \case
+      Abort a -> Abort a
+      RequestResume processing -> RequestResume $ hoistProcessing node processing
+    hoistCanPush node (Succ n) = \case
+      Abort a -> Abort a
+      PushClose next -> PushClose $ f $ hoistPop node n <$> next
+      PushPay payor payee token value next -> PushPay payor payee token value $ f $ hoistCanPush (SPayNode node) n <$> next
+      PushIf cond next -> PushIf cond $ f $ hoistCanPush (SIfLNode node) n <$> next
+      PushWhen timeout next -> PushWhen timeout $ f $ hoistCanPush (SWhenNode node) n <$> next
+      PushCase action next -> PushCase action case node of
+        SWhenNode node' -> f $ hoistCanPush (SCaseNode node') n <$> next
+      PushLet valueId value next -> PushLet valueId value $ f $ hoistCanPush (SLetNode node) n <$> next
+      PushAssert obs next -> PushAssert obs $ f $ hoistCanPush (SAssertNode node) n <$> next
+
+    hoistPop :: SNode node -> Nat i -> ClientStPop i node m a -> ClientStPop i node n a
+    hoistPop node n = case node of
+      SRootNode -> hoistComplete
+      SPayNode node' -> hoistPop node' n
+      SIfLNode node' -> hoistCanPush (SIfRNode node') n
+      SIfRNode node' -> hoistPop node' n
+      SWhenNode node' -> hoistPop node' n
+      SCaseNode node' -> hoistCanPush (SWhenNode node') n
+      SLetNode node' -> hoistPop node' n
+      SAssertNode node' -> hoistPop node' n
+
+    hoistComplete :: ClientStComplete m a -> ClientStComplete n a
+    hoistComplete = ClientStComplete . fmap f . recvMsgComplete
 
 -- ^ Interpret a client as a traced typed-protocols peer.
 marloweLoadClientPeer
@@ -109,25 +189,31 @@ marloweLoadClientPeer = EffectTraced . fmap (peerProcessing SRootNode) . runMarl
 
   peerCanPush :: Nat n -> SNode node -> ClientStCanPush n node m a -> PeerTraced MarloweLoad 'AsClient ('StCanPush n node) m a
   peerCanPush Zero node = \case
+    Abort a ->
+      YieldTraced (ClientAgency $ TokCanPush Zero node) MsgAbort
+        $ Peer.Close TokDone a
     RequestResume ClientStProcessing{..} ->
       YieldTraced (ClientAgency $ TokCanPush Zero node) MsgRequestResume
         $ Call (ServerAgency $ TokProcessing node) \case
           MsgResume n -> EffectTraced $ peerCanPush n node <$> recvMsgResume n
   peerCanPush (Succ n) node = \case
+    Abort a ->
+      YieldTraced (ClientAgency $ TokCanPush (Succ n) node) MsgAbort
+        $ Peer.Close TokDone a
     PushClose next ->
-      YieldTraced tok MsgPushClose $ Cast $ peerPop n node next
+      YieldTraced tok MsgPushClose $ Cast $ EffectTraced $ peerPop n node <$> next
     PushPay payor payee token value next ->
-      YieldTraced tok (MsgPushPay payor payee token value) $ Cast $ peerCanPush n (SPayNode node) next
+      YieldTraced tok (MsgPushPay payor payee token value) $ Cast $ EffectTraced $ peerCanPush n (SPayNode node) <$> next
     PushIf cond next ->
-      YieldTraced tok (MsgPushIf cond) $ Cast $ peerCanPush n (SIfLNode node) next
+      YieldTraced tok (MsgPushIf cond) $ Cast $ EffectTraced $ peerCanPush n (SIfLNode node) <$> next
     PushWhen timeout next ->
-      YieldTraced tok (MsgPushWhen timeout) $ Cast $ peerCanPush n (SWhenNode node) next
+      YieldTraced tok (MsgPushWhen timeout) $ Cast $ EffectTraced $ peerCanPush n (SWhenNode node) <$> next
     PushCase action next -> case node of
-      SWhenNode node' -> EffectTraced $ YieldTraced tok (MsgPushCase action) . Cast . peerCanPush n (SCaseNode node') <$> next
+      SWhenNode node' -> YieldTraced tok (MsgPushCase action) $ Cast $ EffectTraced $ peerCanPush n (SCaseNode node') <$> next
     PushLet valueId value next ->
-      YieldTraced tok (MsgPushLet valueId value) $ Cast $ peerCanPush n (SLetNode node) next
+      YieldTraced tok (MsgPushLet valueId value) $ Cast $ EffectTraced $ peerCanPush n (SLetNode node) <$> next
     PushAssert obs next ->
-      YieldTraced tok (MsgPushAssert obs) $ Cast $ peerCanPush n (SAssertNode node) next
+      YieldTraced tok (MsgPushAssert obs) $ Cast $ EffectTraced $ peerCanPush n (SAssertNode node) <$> next
     where
       tok = ClientAgency $ TokCanPush (Succ n) node
 
@@ -156,14 +242,15 @@ marloweLoadClientPeer = EffectTraced . fmap (peerProcessing SRootNode) . runMarl
 -- onto a reference to the input contract (e.g. in a let-binding). Preferably,
 -- the return value of a function that generates the contract should be passed
 -- directly to this function.
+--
+-- Returns the hash of the merkleized contract, or nothing if the contract is
+-- already merkleized.
 pushContract
   :: forall m
-   . MonadFail m
-  -- The unmerkleized contract to load.
+   . Applicative m
   => Contract
-  -- A client that loads the entire contract into the runtime, returning the hash
-  -- of the merkleized contract.
-  -> MarloweLoadClient m DatumHash
+  -- ^ The unmerkleized contract to load.
+  -> MarloweLoadClient m (Maybe DatumHash)
 pushContract root = MarloweLoadClient $ pure $ ClientStProcessing \n ->
   pure $ push n StateRoot root
   where
@@ -171,27 +258,27 @@ pushContract root = MarloweLoadClient $ pure $ ClientStProcessing \n ->
       :: Nat n
       -> PeerState node
       -> Contract
-      -> ClientStCanPush n node m DatumHash
+      -> ClientStCanPush n node m (Maybe DatumHash)
     push Zero state = \contract -> RequestResume $ ClientStProcessing \n ->
       pure $ push n state contract
     push (Succ n) state = \case
       Close ->
-        PushClose $ pop n state
+        PushClose $ pure $ pop n state
       Pay payee payor token value next ->
-        PushPay payee payor token value $ push n (StatePay state) next
+        PushPay payee payor token value $ pure $ push n (StatePay state) next
       If obs tru fal ->
-        PushIf obs $ push n (StateIfL fal state) tru
+        PushIf obs $ pure $ push n (StateIfL fal state) tru
       When cases timeout fallback -> PushWhen timeout case cases of
-        [] -> push n (StateWhen state) fallback
-        (c : cs) -> pushCase n c cs fallback state
+        [] -> pure $ push n (StateWhen state) fallback
+        (c : cs) -> pure $ pushCase n c cs fallback state
       Let valueId value next ->
-        PushLet valueId value $ push n (StateLet state) next
+        PushLet valueId value $ pure $ push n (StateLet state) next
       Assert obs next ->
-        PushAssert obs $ push n (StateAssert state) next
+        PushAssert obs $ pure $ push n (StateAssert state) next
 
-    pop :: Nat n -> PeerState node -> ClientStPop n node m DatumHash
+    pop :: Nat n -> PeerState node -> ClientStPop n node m (Maybe DatumHash)
     pop n = \case
-      StateRoot -> ClientStComplete pure
+      StateRoot -> ClientStComplete $ pure . Just
       StatePay state -> pop n state
       StateIfL fal state -> push n (StateIfR state) fal
       StateIfR state -> pop n state
@@ -207,7 +294,7 @@ pushContract root = MarloweLoadClient $ pure $ ClientStProcessing \n ->
       -> [Case Contract]
       -> Contract
       -> PeerState node
-      -> ClientStCanPush n ('WhenNode node) m DatumHash
+      -> ClientStCanPush n ('WhenNode node) m (Maybe DatumHash)
     pushCase n c cs fallback state = case n of
       Zero -> RequestResume $ ClientStProcessing \n' ->
         pure $ pushCase' n' c cs fallback state
@@ -219,10 +306,10 @@ pushContract root = MarloweLoadClient $ pure $ ClientStProcessing \n ->
       -> [Case Contract]
       -> Contract
       -> PeerState node
-      -> ClientStCanPush ('S n) ('WhenNode node) m DatumHash
+      -> ClientStCanPush ('S n) ('WhenNode node) m (Maybe DatumHash)
     pushCase' (Succ n) c cs fallback state = case c of
       Case action next -> PushCase action $ pure $ push n (StateCase cs fallback state) next
-      MerkleizedCase action _ -> PushCase action $ fail "merkleized contract detected"
+      MerkleizedCase _ _ -> Abort Nothing
 
 data PeerState (node :: Node) where
   StateRoot :: PeerState 'RootNode
