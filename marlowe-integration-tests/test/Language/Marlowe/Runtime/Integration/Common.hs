@@ -104,7 +104,7 @@ import Language.Marlowe.Runtime.Discovery.Api (ContractHeader(..))
 import Language.Marlowe.Runtime.History.Api (ContractStep, CreateStep(..))
 import Language.Marlowe.Runtime.Transaction.Api
   (ContractCreated(..), InputsApplied(..), MarloweTxCommand(..), SubmitError, WalletAddresses(..))
-import Network.Protocol.Connection (IdSelector)
+import Network.Protocol.Connection (STMConnectorSelector)
 import Network.Protocol.Job.Client (liftCommandWait)
 import qualified Plutus.V2.Ledger.Api as PV2
 import Servant.Client (ClientError, ClientM)
@@ -125,7 +125,7 @@ import qualified Test.Integration.Marlowe.Local as MarloweRuntime
 import UnliftIO (bracket_)
 import UnliftIO.Environment (setEnv, unsetEnv)
 
-type Integration = ReaderT MarloweRuntime (MarloweTracedT RuntimeRef IdSelector RuntimeSelector (NoopEventT RuntimeRef RuntimeSelector IO))
+type Integration = ReaderT MarloweRuntime (MarloweTracedT RuntimeRef STMConnectorSelector RuntimeSelector (NoopEventT RuntimeRef RuntimeSelector IO))
 
 -- Important - the TxId is lazily computed and depends on the resulting Tx. So
 -- it should not be used to compute the transaction outputs written.
