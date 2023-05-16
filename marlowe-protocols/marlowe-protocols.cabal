@@ -56,6 +56,7 @@ library
     Network.Protocol.Codec.Spec
     Network.Protocol.Connection
     Network.Protocol.Driver
+    Network.Protocol.Driver.Trace
     Network.Protocol.Handshake.Client
     Network.Protocol.Handshake.Server
     Network.Protocol.Handshake.Types

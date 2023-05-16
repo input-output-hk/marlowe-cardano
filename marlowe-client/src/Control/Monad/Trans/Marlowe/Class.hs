@@ -30,10 +30,10 @@ import Language.Marlowe.Runtime.Transaction.Api
   , WalletAddresses
   , WithdrawError
   )
-import Network.Protocol.Driver (runConnector, runConnectorTraced)
+import Network.Protocol.Driver (runConnector)
+import Network.Protocol.Driver.Trace (HasSpanContext, runConnectorTraced)
 import Network.Protocol.Job.Client (ClientStAwait(..), ClientStInit(..), JobClient(..), liftCommand)
 import qualified Network.Protocol.Job.Client as Job
-import Network.Protocol.Peer.Trace (HasSpanContext)
 import UnliftIO (MonadIO, MonadUnliftIO, liftIO, newIORef, readIORef, writeIORef)
 
 -- ^ A class for monadic contexts that provide a connection to a Marlowe

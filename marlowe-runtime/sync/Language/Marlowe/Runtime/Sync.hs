@@ -16,7 +16,7 @@ import Language.Marlowe.Runtime.Sync.MarloweHeaderSyncServer
 import Language.Marlowe.Runtime.Sync.MarloweSyncServer
 import Language.Marlowe.Runtime.Sync.QueryServer
 import Network.Protocol.Connection (SomeConnectionSourceTraced)
-import Network.Protocol.Peer.Trace (HasSpanContext)
+import Network.Protocol.Driver.Trace (HasSpanContext)
 import UnliftIO (MonadUnliftIO)
 
 data SyncDependencies r s m = SyncDependencies

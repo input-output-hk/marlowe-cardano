@@ -23,10 +23,10 @@ import Network.Protocol.Connection
   , acceptSomeConnector
   , acceptSomeConnectorTraced
   )
-import Network.Protocol.Driver (runSomeConnector, runSomeConnectorTraced)
+import Network.Protocol.Driver (runSomeConnector)
+import Network.Protocol.Driver.Trace (DriverTraced, HasSpanContext, runSomeConnectorTraced)
 import Network.Protocol.Handshake.Types (Handshake)
 import Network.Protocol.Job.Types (Job)
-import Network.Protocol.Peer.Trace (DriverTraced, HasSpanContext)
 import UnliftIO (MonadUnliftIO(..))
 
 data ProxyDependencies r s m = forall dState. ProxyDependencies

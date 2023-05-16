@@ -31,10 +31,10 @@ import Logging (RootSelector(..), renderRootSelectorOTel)
 import Network.Channel (hoistChannel, socketAsChannel)
 import Network.Protocol.Codec (BinaryMessage)
 import Network.Protocol.Connection (SomeConnectionSource(..), SomeConnectionSourceTraced(..))
-import Network.Protocol.Driver (TcpServerDependencies(..), tcpServer, tcpServerTraced)
+import Network.Protocol.Driver (TcpServerDependencies(..), tcpServer)
+import Network.Protocol.Driver.Trace
 import Network.Protocol.Handshake.Server (handshakeConnectionSource, handshakeConnectionSourceTraced)
 import Network.Protocol.Handshake.Types (Handshake)
-import Network.Protocol.Peer.Trace
 import Network.Socket
   ( AddrInfo(addrAddress, addrSocketType)
   , HostName

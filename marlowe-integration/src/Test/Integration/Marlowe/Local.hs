@@ -158,12 +158,13 @@ import Network.Protocol.Codec (BinaryMessage)
 import Network.Protocol.Connection
 import qualified Network.Protocol.Connection as Connection
 import Network.Protocol.Driver
+import Network.Protocol.Driver.Trace (DriverTraced, HasSpanContext(..), mkDriverTraced, runConnectorTraced)
 import Network.Protocol.Handshake.Server (handshakeClientServerPair, handshakeConnectionSource)
 import Network.Protocol.Handshake.Types (Handshake)
 import Network.Protocol.Job.Client (JobClient, jobClientPeer)
 import Network.Protocol.Job.Server (JobServer, jobServerPeer)
 import Network.Protocol.Job.Types (Job)
-import Network.Protocol.Peer.Trace (DriverTraced, HasSpanContext(..), defaultSpanContext, mkDriverTraced)
+import Network.Protocol.Peer.Trace (defaultSpanContext)
 import Network.Protocol.Query.Client (QueryClient, liftQuery, queryClientPeer)
 import Network.Protocol.Query.Server (QueryServer, queryServerPeer)
 import Network.Protocol.Query.Types (Query)

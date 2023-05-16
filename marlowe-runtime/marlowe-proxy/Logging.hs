@@ -9,7 +9,7 @@ module Logging
 import Control.Monad.Event.Class
 import Language.Marlowe.Protocol.Server (ProxySelector(..))
 import Language.Marlowe.Protocol.Types (MarloweRuntime)
-import Network.Protocol.Driver (TcpServerSelector, renderTcpServerSelectorOTel)
+import Network.Protocol.Driver.Trace (TcpServerSelector, renderTcpServerSelectorOTel)
 import Network.Protocol.Handshake.Types (Handshake)
 import Network.Protocol.Peer.Trace
 import Network.TypedProtocol.Codec (AnyMessageAndAgency(AnyMessageAndAgency))

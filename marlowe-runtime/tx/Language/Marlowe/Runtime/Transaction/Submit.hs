@@ -15,9 +15,8 @@ import Language.Marlowe.Runtime.ChainSync.Api
 import Language.Marlowe.Runtime.Transaction.Api (SubmitError(..), SubmitStatus(..))
 import Network.Protocol.ChainSeek.Client
 import Network.Protocol.Connection (SomeClientConnectorTraced)
-import Network.Protocol.Driver (runSomeConnectorTraced)
+import Network.Protocol.Driver.Trace (HasSpanContext, runSomeConnectorTraced)
 import Network.Protocol.Job.Client (JobClient, liftCommand)
-import Network.Protocol.Peer.Trace (HasSpanContext)
 import UnliftIO (MonadUnliftIO, atomically, race)
 import UnliftIO.Concurrent (threadDelay)
 

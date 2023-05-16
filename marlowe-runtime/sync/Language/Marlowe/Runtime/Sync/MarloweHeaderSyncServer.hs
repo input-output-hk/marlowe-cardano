@@ -12,8 +12,7 @@ import Language.Marlowe.Protocol.HeaderSync.Server
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainPoint, WithGenesis(..))
 import Language.Marlowe.Runtime.Sync.Database (DatabaseQueries(..), Next(..))
 import Network.Protocol.Connection (SomeConnectionSourceTraced, SomeServerConnectorTraced, acceptSomeConnectorTraced)
-import Network.Protocol.Driver (runSomeConnectorTraced)
-import Network.Protocol.Peer.Trace (HasSpanContext)
+import Network.Protocol.Driver.Trace (HasSpanContext, runSomeConnectorTraced)
 import UnliftIO (MonadUnliftIO)
 
 data MarloweHeaderSyncServerDependencies r s m = MarloweHeaderSyncServerDependencies

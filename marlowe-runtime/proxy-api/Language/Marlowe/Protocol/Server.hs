@@ -19,6 +19,7 @@ import Language.Marlowe.Protocol.Sync.Types (MarloweSync)
 import qualified Language.Marlowe.Protocol.Sync.Types as Sync
 import Language.Marlowe.Protocol.Types
 import Language.Marlowe.Runtime.Transaction.Api (MarloweTxCommand)
+import Network.Protocol.Driver.Trace
 import Network.Protocol.Handshake.Types (Handshake, signature)
 import qualified Network.Protocol.Handshake.Types as Handshake
 import Network.Protocol.Job.Types (Job)

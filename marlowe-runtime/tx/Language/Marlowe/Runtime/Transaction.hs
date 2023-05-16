@@ -23,8 +23,8 @@ import Language.Marlowe.Runtime.Transaction.Query (LoadMarloweContext, LoadWalle
 import Language.Marlowe.Runtime.Transaction.Server
 import Language.Marlowe.Runtime.Transaction.Submit (SubmitJob)
 import Network.Protocol.Connection (SomeClientConnectorTraced, SomeConnectionSourceTraced)
+import Network.Protocol.Driver.Trace (HasSpanContext)
 import Network.Protocol.Job.Server (JobServer)
-import Network.Protocol.Peer.Trace (HasSpanContext)
 import UnliftIO (MonadUnliftIO)
 
 data TransactionDependencies r s m = TransactionDependencies

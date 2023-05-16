@@ -20,7 +20,7 @@ import Language.Marlowe.Runtime.Transaction.Api (MarloweTxCommand)
 import Language.Marlowe.Runtime.Transaction.Constraints (MarloweContext(..), WalletContext(..))
 import qualified Language.Marlowe.Runtime.Transaction.Query as Q
 import Language.Marlowe.Runtime.Transaction.Server
-import Network.Protocol.Driver
+import Network.Protocol.Driver.Trace
   (TcpClientSelector, TcpServerSelector, renderTcpClientSelectorOTel, renderTcpServerSelectorOTel)
 import Network.Protocol.Handshake.Types (Handshake)
 import Network.Protocol.Job.Types (Job)

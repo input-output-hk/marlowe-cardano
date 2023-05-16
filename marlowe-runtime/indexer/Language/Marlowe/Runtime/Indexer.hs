@@ -19,7 +19,7 @@ import Language.Marlowe.Runtime.Indexer.ChainSeekClient
 import Language.Marlowe.Runtime.Indexer.Database (DatabaseQueries)
 import Language.Marlowe.Runtime.Indexer.Store
 import Network.Protocol.Connection (SomeClientConnectorTraced)
-import Network.Protocol.Peer.Trace (HasSpanContext)
+import Network.Protocol.Driver.Trace (HasSpanContext)
 import Network.Protocol.Query.Client (QueryClient)
 import UnliftIO (MonadUnliftIO)
 

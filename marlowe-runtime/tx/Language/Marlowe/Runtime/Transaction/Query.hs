@@ -54,8 +54,7 @@ import Language.Marlowe.Runtime.Transaction.Api
 import Language.Marlowe.Runtime.Transaction.Constraints
 import Network.Protocol.ChainSeek.Client
 import Network.Protocol.Connection (SomeClientConnectorTraced)
-import Network.Protocol.Driver (runSomeConnectorTraced)
-import Network.Protocol.Peer.Trace (HasSpanContext)
+import Network.Protocol.Driver.Trace (HasSpanContext, runSomeConnectorTraced)
 import Network.Protocol.Query.Client (QueryClient, liftQuery)
 import Observe.Event.Explicit (addField)
 import UnliftIO (MonadUnliftIO)

@@ -2,34 +2,18 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE RankNTypes #-}
-{-# OPTIONS_GHC -Wno-orphans #-}
 
 module Network.Protocol.Peer.Trace
   where
 
-import Control.Monad (join, replicateM)
-import Control.Monad.Event.Class (MonadEvent, withInjectEventArgs, withInjectEventFields)
-import Control.Monad.IO.Class (MonadIO)
-import Data.Binary (Binary, get, getWord8, put)
-import Data.Binary.Put (putWord8, runPut)
-import qualified Data.ByteString as B
-import Data.ByteString.Lazy (ByteString)
-import Data.Foldable (traverse_)
 import Data.Functor ((<&>))
 import Data.Proxy
 import Data.Text (Text)
-import Network.Channel
-import Network.Protocol.Codec (BinaryMessage, DeserializeError, binaryCodec, decodeGet)
 import Network.TypedProtocol
 import Network.TypedProtocol.Codec
-import Observe.Event (Event(addField), InjectSelector, NewEventArgs(..), reference)
-import Observe.Event.Backend (simpleNewEventArgs)
 import Observe.Event.Render.OpenTelemetry
 import OpenTelemetry.Trace.Core
-import OpenTelemetry.Trace.Id (SpanId, TraceId, bytesToSpanId, bytesToTraceId, spanIdBytes, traceIdBytes)
-import OpenTelemetry.Trace.TraceState (Key(..), TraceState, Value(..), empty, insert, toList)
 import qualified OpenTelemetry.Trace.TraceState as TraceState
-import UnliftIO (throwIO)
 
 -- | A peer in a protocol session which is suitable for tracing.
 data PeerTraced ps (pr :: PeerRole) (st :: ps) m a where
@@ -129,113 +113,12 @@ peerTracedToPeer = \case
   DoneTraced tok a -> Done tok a
   EffectTraced m -> Effect $ peerTracedToPeer <$> m
 
-data DriverTraced ps dState r m = DriverTraced
-  { sendMessageTraced
-      :: forall pr st st'
-       . r
-      -> PeerHasAgency pr st
-      -> Message ps st st'
-      -> m ()
-  , recvMessageTraced
-      :: forall pr (st :: ps)
-       . PeerHasAgency pr st
-      -> dState
-      -> m (r, SomeMessage st, dState)
-  , startDStateTraced :: dState
-  }
-
-hoistDriverTraced :: (forall x. m x -> n x) -> DriverTraced ps dState r m -> DriverTraced ps dState r n
-hoistDriverTraced f DriverTraced{..} = DriverTraced
-  { sendMessageTraced = \r tok -> f . sendMessageTraced r tok
-  , recvMessageTraced = \tok -> f . recvMessageTraced tok
-  , ..
-  }
-
 data TypedProtocolsSelector ps f where
   ReceiveSelector :: PeerHasAgency pr st -> Message ps st st' -> TypedProtocolsSelector ps ()
   CallSelector :: PeerHasAgency pr st -> Message ps st st' -> TypedProtocolsSelector ps (Maybe (AnyMessageAndAgency ps))
   RespondSelector :: PeerHasAgency pr st -> Message ps st st' -> TypedProtocolsSelector ps (Maybe (AnyMessageAndAgency ps))
   CastSelector :: PeerHasAgency pr st -> Message ps st st' -> TypedProtocolsSelector ps ()
   CloseSelector :: PeerHasAgency pr st -> Message ps st st' -> TypedProtocolsSelector ps ()
-
-runPeerWithDriverTraced
-  :: forall ps dState pr st r s m a
-   . MonadEvent r s m
-  => InjectSelector (TypedProtocolsSelector ps) s
-  -> DriverTraced ps dState r m
-  -> PeerTraced ps pr st m a
-  -> dState
-  -> m a
-runPeerWithDriverTraced inj driver peer dState = case peer of
-  EffectTraced m -> flip (runPeerWithDriverTraced inj driver) dState =<< m
-  YieldTraced tok msg yield -> runYieldPeerWithDriverTraced inj driver tok msg dState yield
-  AwaitTraced tok k -> runAwaitPeerWithDriverTraced inj driver tok k dState
-  DoneTraced _ a -> pure a
-
-runYieldPeerWithDriverTraced
-  :: MonadEvent r s m
-  => InjectSelector (TypedProtocolsSelector ps) s
-  -> DriverTraced ps dState r m
-  -> WeHaveAgency pr st
-  -> Message ps st st'
-  -> dState
-  -> YieldTraced ps pr st' m a
-  -> m a
-runYieldPeerWithDriverTraced inj driver tok msg dState = \case
-  Call tok' k -> join $ withInjectEventFields inj (CallSelector tok msg) [Nothing] \callEv -> do
-    sendMessageTraced driver (reference callEv) tok msg
-    (_, SomeMessage msg', dState') <- recvMessageTraced driver tok' dState
-    addField callEv $ Just $ AnyMessageAndAgency tok' msg'
-    pure $ runPeerWithDriverTraced inj driver (k msg') dState'
-
-  Cast peer -> join $ withInjectEventFields inj (CastSelector tok msg) [()] \castEv -> do
-    sendMessageTraced driver (reference castEv) tok msg
-    pure $ runPeerWithDriverTraced inj driver peer dState
-
-  Close _ a -> withInjectEventFields inj (CloseSelector tok msg) [()] \closeEv -> do
-    sendMessageTraced driver (reference closeEv) tok msg
-    pure a
-
-runAwaitPeerWithDriverTraced
-  :: forall ps pr st dState r s m a
-   . MonadEvent r s m
-  => InjectSelector (TypedProtocolsSelector ps) s
-  -> DriverTraced ps dState r m
-  -> TheyHaveAgency pr st
-  -> (forall (st' :: ps). Message ps st st' -> AwaitTraced ps pr st' m a)
-  -> dState
-  -> m a
-runAwaitPeerWithDriverTraced inj driver tok k dState = do
-  (sendRef, SomeMessage msg, dState') <- recvMessageTraced driver tok dState
-  case k msg of
-    Respond tok' m -> join $ withInjectEventArgs inj (respondArgs sendRef tok msg) \respondEv -> do
-      Response msg' nextPeer <- m
-      addField respondEv $ Just $ AnyMessageAndAgency tok' msg'
-      sendMessageTraced driver (reference respondEv) tok' msg'
-      pure $ runPeerWithDriverTraced inj driver nextPeer dState'
-    Receive nextPeer -> join $ withInjectEventArgs inj (receiveArgs sendRef tok msg) $ const $ receive dState' nextPeer
-    Closed _ ma -> withInjectEventArgs inj (closeArgs sendRef tok msg) $ const ma
-  where
-    receive :: dState -> PeerTraced ps pr st' m a -> m (m a)
-    receive dState' = \case
-      EffectTraced m -> receive dState' =<< m
-      peer -> pure $ runPeerWithDriverTraced inj driver peer dState'
-    respondArgs sendRef tok' msg = (simpleNewEventArgs (RespondSelector tok' msg))
-      { newEventParent = Just sendRef
-      , newEventInitialFields = [Nothing]
-      }
-    receiveArgs sendRef tok' msg = (simpleNewEventArgs (ReceiveSelector tok' msg))
-      { newEventParent = Just sendRef
-      , newEventInitialFields = [()]
-      }
-    closeArgs sendRef tok' msg = (simpleNewEventArgs (CloseSelector tok' msg))
-      { newEventParent = Just sendRef
-      , newEventInitialFields = [()]
-      }
-
-class HasSpanContext r where
-  context :: MonadIO m => r -> m SpanContext
-  wrapContext :: SpanContext -> r
 
 defaultSpanContext :: SpanContext
 defaultSpanContext = SpanContext
@@ -253,95 +136,6 @@ data MessageAttributes = MessageAttributes
 class Protocol ps => OTelProtocol ps where
   protocolName :: Proxy ps -> Text
   messageAttributes :: PeerHasAgency pr st -> Message ps st st' -> MessageAttributes
-
-instance HasSpanContext Span where
-  context = getSpanContext
-  wrapContext = wrapSpanContext
-
-instance (Monoid b, HasSpanContext a) => HasSpanContext (a, b) where
-  context = context . fst
-  wrapContext = (,mempty) . wrapContext
-
-mkDriverTraced
-  :: forall ps r m
-   . (MonadIO m, BinaryMessage ps, HasSpanContext r)
-  => Channel m ByteString
-  -> DriverTraced ps (Maybe ByteString) r m
-mkDriverTraced Channel{..} = DriverTraced{..}
-  where
-    Codec{..} = binaryCodec
-    sendMessageTraced
-      :: forall (pr :: PeerRole) (st :: ps) (st' :: ps)
-       . r
-      -> PeerHasAgency pr st
-      -> Message ps st st'
-      -> m ()
-    sendMessageTraced r tok msg = do
-      spanContext <- context r
-      send $ runPut (put spanContext) <> encode tok msg
-
-    recvMessageTraced
-      :: forall (pr :: PeerRole) (st :: ps)
-       . PeerHasAgency pr st
-      -> Maybe ByteString
-      -> m (r, SomeMessage st, Maybe ByteString)
-    recvMessageTraced tok trailing = do
-      (r, trailing') <- decodeChannel trailing =<< decodeGet (wrapContext <$> get)
-      (msg, trailing'') <- decodeChannel trailing' =<< decode tok
-      pure (r, msg, trailing'')
-
-    decodeChannel
-      :: Maybe ByteString
-      -> DecodeStep ByteString DeserializeError m a
-      -> m (a, Maybe ByteString)
-    decodeChannel _ (DecodeDone a trailing)     = pure (a, trailing)
-    decodeChannel _ (DecodeFail failure)        = throwIO failure
-    decodeChannel Nothing (DecodePartial next)  = recv >>= next >>= decodeChannel Nothing
-    decodeChannel trailing (DecodePartial next) = next trailing >>= decodeChannel Nothing
-
-    startDStateTraced :: Maybe ByteString
-    startDStateTraced = Nothing
-
-instance Binary TraceFlags where
-  put = putWord8 . traceFlagsValue
-  get = traceFlagsFromWord8 <$> getWord8
-
-instance Binary TraceId where
-  put = traverse_ putWord8 . B.unpack . traceIdBytes
-  get = either fail pure . bytesToTraceId . B.pack =<< replicateM 16 getWord8
-
-instance Binary SpanId where
-  put = traverse_ putWord8 . B.unpack . spanIdBytes
-  get = either fail pure . bytesToSpanId . B.pack =<< replicateM 8 getWord8
-
-instance Binary TraceState where
-  put = put . toList
-  get = fromList <$> get
-    where
-      fromList :: [(Key, Value)] -> TraceState
-      fromList = foldr (uncurry insert) empty
-
-instance Binary Key where
-  put (Key t) = put t
-  get = Key <$> get
-
-instance Binary Value where
-  put (Value t) = put t
-  get = Value <$> get
-
-instance Binary SpanContext where
-  put SpanContext{..} = do
-    put traceFlags
-    put traceId
-    put spanId
-    put traceState
-  get = do
-    traceFlags <- get
-    let isRemote = True
-    traceId <- get
-    spanId <- get
-    traceState <- get
-    pure SpanContext{..}
 
 renderTypedProtocolSelectorOTel
   :: forall ps. OTelProtocol ps => RenderSelectorOTel (TypedProtocolsSelector ps)

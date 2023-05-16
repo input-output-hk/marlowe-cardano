@@ -32,7 +32,8 @@ import Language.Marlowe.Runtime.Sync.Database (hoistDatabaseQueries, logDatabase
 import qualified Language.Marlowe.Runtime.Sync.Database.PostgreSQL as Postgres
 import Logging (RootSelector(..), renderRootSelectorOTel)
 import Network.Protocol.Connection (SomeConnectionSourceTraced(..))
-import Network.Protocol.Driver (TcpServerDependencies(..), tcpServerTraced)
+import Network.Protocol.Driver (TcpServerDependencies(..))
+import Network.Protocol.Driver.Trace (tcpServerTraced)
 import Network.Protocol.Handshake.Server (handshakeConnectionSourceTraced)
 import Network.Socket (HostName, PortNumber)
 import Observe.Event.Backend (EventBackend, hoistEventBackend, injectSelector)
