@@ -49,14 +49,22 @@ library
   import: lang
   hs-source-dirs: src
   other-modules:
+    Contrib.Cardano.Api
     Contrib.Control.Concurrent
     Contrib.Control.Concurrent.Async
+    Contrib.Control.Exception
     Contrib.Control.Monad.Except
+    Contrib.Control.Monad.Trans.State.IO
     Contrib.Data.Aeson.Generic
     Contrib.Data.Aeson.Traversals
     Contrib.Data.Foldable
+    Contrib.Data.List
+    Contrib.Data.List.Random
+    Contrib.Data.Time.Clock
     Contrib.Data.Time.Units.Aeson
     Contrib.Monad.Loops
+    Contrib.UnliftIO.Control.Concurrent
+    Contrib.UnliftIO.Async.Pool
   exposed-modules:
     Language.Marlowe.CLI.Analyze
     Language.Marlowe.Cardano
@@ -97,11 +105,14 @@ library
     Language.Marlowe.CLI.Test.CLI.Types
     Language.Marlowe.CLI.Test.ExecutionMode
     Language.Marlowe.CLI.Test.Interpret
+    Language.Marlowe.CLI.Test.InterpreterError
     Language.Marlowe.CLI.Test.Log
     Language.Marlowe.CLI.Test.Operation.Aeson
+    Language.Marlowe.CLI.Test.Runner
     Language.Marlowe.CLI.Test.Runtime.Interpret
     Language.Marlowe.CLI.Test.Runtime.Monitor
     Language.Marlowe.CLI.Test.Runtime.Types
+    Language.Marlowe.CLI.Test.TestCase
     Language.Marlowe.CLI.Test.Wallet.Interpret
     Language.Marlowe.CLI.Test.Wallet.Types
     Language.Marlowe.CLI.Test.Types
@@ -114,6 +125,7 @@ library
     aeson-pretty,
     appendmap -any,
     async,
+    async-pool,
     base16-bytestring,
     bech32,
     bytestring,
@@ -137,12 +149,14 @@ library
     extra -any,
     freer-simple,
     http-client,
+    indexed-traversable,
     lens,
     marlowe-actus,
     marlowe-apps,
     marlowe-cardano,
     marlowe-contracts,
     marlowe-chain-sync,
+    marlowe-chain-sync:plutus-compat,
     marlowe-client,
     marlowe-protocols,
     marlowe-test,
@@ -158,6 +172,7 @@ library
     memory,
     mtl,
     monad-loops,
+    mono-traversable,
     network,
     one-line-aeson-text,
     openapi3,
@@ -174,6 +189,7 @@ library
     plutus-tx-plugin,
     prettyprinter,
     profunctors,
+    random,
     reflection,
     QuickCheck,
     regex-posix,
@@ -189,7 +205,9 @@ library
     transformers,
     unordered-containers,
     uuid,
+    unliftio,
     websockets,
+    witherable,
     vector,
     yaml,
 

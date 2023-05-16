@@ -1,29 +1,27 @@
 testName: Escrow Contract using Runtime
 
 operations:
-  - tag: CreateWallet
-    walletNickname: Buyer
 
-  - tag: CreateWallet
-    walletNickname: Seller
+- CreateWallet:
+    nickname: Buyer
+    utxos: [10000000, 10000000, 10000000]
 
-  - tag: CreateWallet
-    walletNickname: Mediator
+- CreateWallet: Seller
 
-  - tag: FundWallets
-    values: [10000000, 10000000, 10000000]
-    walletNicknames: [Buyer]
+- CreateWallet:
+    nickname: Mediator
+    utxo: 1000000
 
-  - tag: Sleep
-    seconds: 30
+# We don't have a way to automatically await till the Runtime
+# is synced the node state which we know about yet.
+# funding transaction.
+- Sleep: 30
 
-  - tag: RuntimeCreateContract
-    contractNickname: Escrow
+- RuntimeCreateContract:
     minLovelace: 2000000
     awaitConfirmed: 120
-    contractSource:
-      template:
-        tag: "UseEscrow"
+    template:
+      UseEscrow:
         seller:
           address: Seller
         buyer:
@@ -40,8 +38,7 @@ operations:
         mediationDeadline:
           relative: 30000
 
-  - tag: RuntimeApplyInputs
-    contractNickname: Escrow
+- RuntimeApplyInputs:
     submitter: Buyer
     awaitConfirmed: 120
     inputs:
@@ -54,8 +51,7 @@ operations:
         into_account:
           address: Seller
 
-  - tag: RuntimeApplyInputs
-    contractNickname: Escrow
+- RuntimeApplyInputs:
     submitter: Buyer
     awaitConfirmed: 120
     inputs:
@@ -65,26 +61,13 @@ operations:
             address: Buyer
         input_that_chooses_num: 0
 
-  - tag: CheckBalance
-    walletNickname: Buyer
+- CheckBalance:
+    wallet: Buyer
     balance:
       - [ADA, 10]
 
-  - tag: CheckBalance
-    walletNickname: Seller
+- CheckBalance:
+    wallet: Seller
     balance:
       - [ADA, 20]
 
-  # Let's send Lovelace only UTxO to the seller
-  # so it can be used as collateral later.
-  - tag: FundWallets
-    values:
-      - 5000000
-    walletNicknames: [Seller]
-
-  - tag: CheckBalance
-    walletNickname: Seller
-    balance:
-      - [ADA, 25]
-
-  - tag: ReturnFunds

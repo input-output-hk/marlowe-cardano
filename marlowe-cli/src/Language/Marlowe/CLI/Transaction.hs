@@ -57,6 +57,7 @@ module Language.Marlowe.CLI.Transaction
   , makeBalancedTxOut
   , makeTxOut
   , makeTxOut'
+  , maximumFee
   , querySlotConfig
   , queryUtxos
   , selectUtxos
@@ -591,7 +592,7 @@ buildMinting connection signingKeyFile mintingAction metadataFile expires change
   let submitMode = submitModeFromTimeout timeout
   (body, policy) <- buildMintingImpl connection mintingAction' metadata expires submitMode (PrintStats True)
   doWithCardanoEra $ liftCliIO $ writeFileTextEnvelope bodyFile Nothing body
-  liftIO . putStrLn $ "PolicyID " <> show policy
+  liftIO . hPutStrLn stderr $ "PolicyID " <> show policy
 
 nonAdaValue :: Value -> Value
 nonAdaValue value = value <> C.negateValue (C.lovelaceToValue (fromMaybe 0 $ C.valueToLovelace value))
@@ -1516,7 +1517,7 @@ waitForUtxos :: TimeUnit a
              -> a                                 -- ^ The time interval to wait for the transaction to be confirmed.
              -> [TxIn]                            -- ^ The transactions to wait for.
              -> m ()                              -- ^ Action to wait for the transaction confirmations.
-waitForUtxos connection timeout txIns =
+waitForUtxos connection timeout txIns = do
   let
     timeoutMicroseconds = toMicroseconds timeout
     pause = 5 :: Second
@@ -1525,16 +1526,16 @@ waitForUtxos connection timeout txIns =
     go 0 = throwError "Timeout waiting for transaction to be confirmed."
     go n = do
              liftIO . threadDelay $ pause
-             utxos <-
+             utxos <- do
                queryInEra connection
                  . QueryUTxO
                  . QueryUTxOByTxIn
                  $ txIns'
              if M.keysSet (unUTxO utxos) == txIns'
-               then pure ()
+               then do
+                 pure ()
                else go (n - 1 :: Int)
-  in
-    go . ceiling $ (fromIntegral timeoutMicroseconds / fromIntegral pauseMicroseconds :: Double)
+  go . ceiling $ (fromIntegral timeoutMicroseconds / fromIntegral pauseMicroseconds :: Double)
 
 
 -- | TxIn for transaction body.

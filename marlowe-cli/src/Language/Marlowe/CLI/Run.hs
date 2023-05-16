@@ -416,10 +416,12 @@ prepareTransactionImpl marloweIn txInputs minimumTime maximumTime printStats =
         sequence_
           [
             do
-              putStrLn $ "Payment " <> show (i :: Int)
-              putStrLn $ "  Acccount: " <> show accountId
-              putStrLn $ "  Payee: " <> show payee
-              putStrLn $ "  Ada: " <> show (fromValue money)
+              when printStats
+                $ do
+                  hPutStrLn stderr $ "Payment " <> show (i :: Int)
+                  hPutStrLn stderr $ "  Acccount: " <> show accountId
+                  hPutStrLn stderr $ "  Payee: " <> show payee
+                  hPutStrLn stderr $ "  Ada: " <> show (fromValue money)
               sequence_
                 [
                   hPutStrLn stderr $ "  " <> show (pretty symbol) <> "." <> show (pretty token) <> ": " <> show amount

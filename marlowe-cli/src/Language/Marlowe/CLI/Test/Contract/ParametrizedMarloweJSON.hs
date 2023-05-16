@@ -23,8 +23,9 @@ module Language.Marlowe.CLI.Test.Contract.ParametrizedMarloweJSON
 
 import Cardano.Api (AddressInEra, CardanoMode, LocalNodeConnectInfo)
 import qualified Contrib.Data.Aeson.Traversals as A
+import Contrib.Data.Time.Clock (nominalDiffTimeToMilliseconds)
 import Control.Monad.Except (MonadError(throwError))
-import Control.Monad.IO.Class (MonadIO)
+import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Reader.Class (MonadReader, asks)
 import Control.Monad.State.Class (MonadState, gets)
 import Data.Aeson (FromJSON, ToJSON)
@@ -37,15 +38,18 @@ import Data.Has (Has(getter))
 import qualified Data.Map.Strict as M
 import Data.Proxy (Proxy)
 import qualified Data.Text as Text
+import Data.Time (NominalDiffTime)
+import Data.Time.Clock.POSIX (POSIXTime, getPOSIXTime)
 import GHC.Generics (Generic)
 import qualified Language.Marlowe as Marlowe
 import Language.Marlowe.CLI.Test.Wallet.Types
   ( Currencies(Currencies)
   , Currency(Currency, ccCurrencySymbol)
   , CurrencyNickname(CurrencyNickname)
-  , Wallet(waAddress)
+  , Wallet(_waAddress)
   , WalletNickname(WalletNickname)
-  , Wallets(Wallets)
+  , Wallets
+  , getAllWallets
   )
 import Language.Marlowe.CLI.Types (CliError(CliError))
 import Language.Marlowe.Cardano (marloweNetworkFromLocalNodeConnectInfo)
@@ -91,29 +95,47 @@ data RewritePartyError era = WalletNotFound WalletNickname | InvalidWalletAddres
   deriving stock (Eq, Generic, Show)
 
 rewritePartyRefs :: Marlowe.Network -> Wallets era -> ParametrizedMarloweJSON -> Either (RewritePartyError era) ParametrizedMarloweJSON
-rewritePartyRefs network (Wallets wallets) (ParametrizedMarloweJSON json) = ParametrizedMarloweJSON <$> A.rewriteBottomUp rewrite json
+rewritePartyRefs network wallets (ParametrizedMarloweJSON json) = ParametrizedMarloweJSON <$> A.rewriteBottomUp rewrite json
   where
-    findWallet nickname = case M.lookup nickname wallets of
+    findWallet nickname = case M.lookup nickname $ getAllWallets wallets of
       Nothing -> Left $ WalletNotFound nickname
       Just wallet -> pure wallet
     rewrite = \case
       A.Object (KeyMap.toList -> [("address", A.String walletNickname)]) -> do
         wallet <- findWallet (WalletNickname $ Text.unpack walletNickname)
         let
-          address = toPlutusAddress. waAddress $ wallet
+          address = toPlutusAddress . _waAddress $ wallet
         pure $ A.toJSON (Marlowe.Address network address)
       v -> do
         pure v
+
+newtype Now = Now POSIXTime
+
+rewriteTimeouts :: Monad m => Now -> ParametrizedMarloweJSON -> m ParametrizedMarloweJSON
+rewriteTimeouts (Now n) (ParametrizedMarloweJSON json) = ParametrizedMarloweJSON <$> A.rewriteBottomUp rewrite json
+  where
+    rewrite = \case
+      A.Object (KeyMap.toList -> [("relative", A.Number difference)]) -> do
+        let
+          -- Diff is expressed in seconds
+          diff :: NominalDiffTime
+          diff = fromInteger (ceiling difference)
+
+          t = n + diff
+        pure $ A.toJSON $ nominalDiffTimeToMilliseconds t
+      v -> pure v
 
 rewriteParametrizedMarloweJSON
   :: Marlowe.Network
   -> Wallets era
   -> Currencies
+  -> Now
   -> ParametrizedMarloweJSON
   -> Either (ParametrizedMarloweJSONDecodeError era) ParametrizedMarloweJSON
-rewriteParametrizedMarloweJSON network wallets currencies json = do
+rewriteParametrizedMarloweJSON network wallets currencies n json = do
   json' <- first RewritePartyFailure $ rewritePartyRefs network wallets json
-  first CurrencyNotFound $ rewriteCurrencyRefs currencies json'
+  json'' <- first CurrencyNotFound $ rewriteCurrencyRefs currencies json'
+  rewriteTimeouts n json''
 
 data ParametrizedMarloweJSONDecodeError era =
     RewritePartyFailure (RewritePartyError era)
@@ -125,10 +147,11 @@ decodeParametrizedContractJSON
   :: Marlowe.Network
   -> Wallets era
   -> Currencies
+  -> Now
   -> ParametrizedMarloweJSON
   -> Either (ParametrizedMarloweJSONDecodeError era) Marlowe.Contract
-decodeParametrizedContractJSON network wallets currencies json = do
-  rewriteParametrizedMarloweJSON network wallets currencies json >>= \(ParametrizedMarloweJSON contractJSON) ->
+decodeParametrizedContractJSON network wallets currencies n json = do
+  rewriteParametrizedMarloweJSON network wallets currencies n json >>= \(ParametrizedMarloweJSON contractJSON) ->
     case A.fromJSON contractJSON of
       A.Error err -> Left $ InvalidMarloweJSON err (Text.unpack $ A.renderValue contractJSON)
       A.Success contract -> pure contract
@@ -137,10 +160,11 @@ decodeParametrizedInputJSON
   :: Marlowe.Network
   -> Wallets era
   -> Currencies
+  -> Now
   -> ParametrizedMarloweJSON
   -> Either (ParametrizedMarloweJSONDecodeError era) Marlowe.Input
-decodeParametrizedInputJSON network wallets currencies json = do
-  rewriteParametrizedMarloweJSON network wallets currencies json >>= \(ParametrizedMarloweJSON contractJSON) ->
+decodeParametrizedInputJSON network wallets currencies n json = do
+  rewriteParametrizedMarloweJSON network wallets currencies n json >>= \(ParametrizedMarloweJSON contractJSON) ->
     case A.fromJSON contractJSON of
       A.Error err -> Left $ InvalidMarloweJSON err (Text.unpack $ A.renderValue contractJSON)
       A.Success input -> pure input
@@ -161,7 +185,10 @@ doRewriteParametrizedMarloweJSON _ json = do
   network <- (asks getter :: m (LocalNodeConnectInfo CardanoMode)) <&> marloweNetworkFromLocalNodeConnectInfo
   (wallets :: Wallets era) <- gets getter
   (currencies :: Currencies) <- gets getter
-  case rewriteParametrizedMarloweJSON network wallets currencies json of
+  n <- now
+  case rewriteParametrizedMarloweJSON network wallets currencies n json of
     Left err -> throwError $ CliError $ "Error rewriting parametrized Marlowe JSON: " <> show err
     Right json' -> pure json'
 
+now :: MonadIO m => m Now
+now = liftIO $ Now <$> getPOSIXTime

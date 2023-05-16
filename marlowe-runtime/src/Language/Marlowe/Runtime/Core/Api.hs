@@ -67,6 +67,13 @@ instance ToJSON ContractId where
 instance ToJSONKey ContractId where
   toJSONKey = toJSONKeyText renderContractId
 
+instance FromJSON ContractId where
+  parseJSON json = do
+    t <- parseJSON json
+    case parseContractId t of
+      Nothing -> fail $ "Invalid ContractId JSON: " <> t
+      Just cid -> pure cid
+
 parseContractId :: String -> Maybe ContractId
 parseContractId = fmap ContractId . parseTxOutRef . T.pack
 

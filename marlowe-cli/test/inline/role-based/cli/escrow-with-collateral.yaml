@@ -1,0 +1,327 @@
+testName: Escrow with Collateral
+
+operations:
+
+- Comment: Create the wallet for the buyer, fund it with 90 ADA, and activate the Marlowe endpoints.
+
+- CreateWallet:
+    nickname: Buyer
+    utxo: 90000000
+
+- Comment: Create the wallet for the seller, fund it with 25 ADA, and activate the Marlowe endpoints.
+
+- CreateWallet:
+    nickname: Seller
+    utxo: 25000000
+
+- Comment: Create the wallet for the mediator, fund it with 20 ADA, and activate the Marlowe endpoints.
+
+- CreateWallet:
+    nickname: Mediator
+    utxo: 20000000
+
+- Comment: The mediator creates the escrow contract, which was downloaded from Marlowe Playground. The purchase price is 50 ADA, and each party must deposit 10 ADA of collateral.
+
+- Mint:
+    issuer: Mediator
+    nickname: RoleTokenCurrency
+    minLovelace: 2000000
+    tokenDistribution:
+      - [Seller, SellerRoleToken, 1]
+      - [Buyer, BuyerRoleToken, 1]
+      - [Mediator, MediatorRoleToken, 1]
+
+- Initialize:
+    submitter: Mediator
+    roleCurrency: RoleTokenCurrency
+    minLovelace: 2000000
+    source:
+      when:
+      - case:
+          party:
+            role_token: SellerRoleToken
+          deposits: 10000000
+          of_token:
+            currency_symbol: ''
+            token_name: ''
+          into_account:
+            role_token: SellerRoleToken
+        then:
+          when:
+          - case:
+              party:
+                role_token: BuyerRoleToken
+              deposits: 10000000
+              of_token:
+                currency_symbol: ''
+                token_name: ''
+              into_account:
+                role_token: BuyerRoleToken
+            then:
+              when:
+              - case:
+                  party:
+                    role_token: BuyerRoleToken
+                  deposits: 50000000
+                  into_account:
+                    role_token: SellerRoleToken
+                  of_token:
+                    currency_symbol: ''
+                    token_name: ''
+                then:
+                  when:
+                  - case:
+                      choose_between:
+                      - from: 0
+                        to: 0
+                      for_choice:
+                        choice_name: Everything is alright
+                        choice_owner:
+                          role_token: BuyerRoleToken
+                    then: close
+                  - case:
+                      choose_between:
+                      - from: 1
+                        to: 1
+                      for_choice:
+                        choice_name: Report problem
+                        choice_owner:
+                          role_token: BuyerRoleToken
+                    then:
+                      pay: 50000000
+                      token:
+                        currency_symbol: ''
+                        token_name: ''
+                      from_account:
+                        role_token: SellerRoleToken
+                      to:
+                        account:
+                          role_token: BuyerRoleToken
+                      then:
+                        when:
+                        - case:
+                            choose_between:
+                            - from: 1
+                              to: 1
+                            for_choice:
+                              choice_name: Confirm problem
+                              choice_owner:
+                                role_token: SellerRoleToken
+                          then: close
+                        - case:
+                            choose_between:
+                            - from: 0
+                              to: 0
+                            for_choice:
+                              choice_name: Dispute problem
+                              choice_owner:
+                                role_token: SellerRoleToken
+                          then:
+                            pay: 10000000
+                            token:
+                              currency_symbol: ''
+                              token_name: ''
+                            from_account:
+                              role_token: SellerRoleToken
+                            to:
+                              party:
+                                role_token: MediatorRoleToken
+                            then:
+                              pay: 10000000
+                              token:
+                                currency_symbol: ''
+                                token_name: ''
+                              from_account:
+                                role_token: BuyerRoleToken
+                              to:
+                                party:
+                                  role_token: MediatorRoleToken
+                              then: close
+                        timeout: 2055731625000
+                        timeout_continuation: close
+                  timeout: 2024195625000
+                  timeout_continuation: close
+              timeout: 1992659625000
+              timeout_continuation: close
+          timeout: 1961123625000
+          timeout_continuation: close
+      timeout: 1929587625000
+      timeout_continuation: close
+
+- AutoRun
+
+- Comment: The mediator should have 14 ADA now, since 2 ADA was sent to the script address when creating the contract and 2 ADA each was sent to the buyer and seller along with their role tokens, and up to 1 ADA in fees might have been paid.
+
+- CheckBalance:
+    wallet: Mediator
+    balance:
+      - [ADA, 14]
+      - [RoleTokenCurrency, MediatorRoleToken, 1]
+
+- Comment: The buyer and seller should each now have an additional 2 ADA that arrived with their role token.
+
+- CheckBalance:
+    wallet: Buyer
+    balance:
+      - [ADA, 92]
+      - [RoleTokenCurrency, BuyerRoleToken, 1]
+
+- CheckBalance:
+    wallet: Seller
+    balance:
+      - [ADA, 27]
+      - [RoleTokenCurrency, SellerRoleToken, 1]
+
+- Comment: The seller deposits the 10 ADA collateral.
+
+- Prepare:
+    inputs:
+      - input_from_party:
+          role_token: SellerRoleToken
+        that_deposits: 10000000
+        of_token:
+          currency_symbol: ''
+          token_name: ''
+        into_account:
+          role_token: SellerRoleToken
+    minimumTime:
+      relative: -15
+    maximumTime:
+      relative: 120
+
+- AutoRun
+
+- Comment: The seller should have about 17 ADA now, since they paid 10 ADA of collateral, but there is up to an additional 2 ADA in fees.
+
+- CheckBalance:
+    wallet: Seller
+    balance:
+      - [ADA, 17]
+      - [RoleTokenCurrency, SellerRoleToken, 1]
+
+- Comment: The buyer deposits the 10 ADA collateral.
+
+- Prepare:
+    inputs:
+      - input_from_party:
+          role_token: BuyerRoleToken
+        that_deposits: 10000000
+        of_token:
+          currency_symbol: ''
+          token_name: ''
+        into_account:
+          role_token: BuyerRoleToken
+    minimumTime:
+      relative: -15
+    maximumTime:
+      relative: 120
+
+- AutoRun
+
+- Comment: The buyer should have about 82 ADA now, since they paid 10 ADA of collateral, but there is up to an additional 2 ADA in fees.
+
+- CheckBalance:
+    wallet: Buyer
+    balance:
+      - [ADA, 82]
+      - [RoleTokenCurrency, BuyerRoleToken, 1]
+
+- Comment: The buyer deposits the 50 ADA purchase price.
+
+- Prepare:
+    inputs:
+      - input_from_party:
+          role_token: BuyerRoleToken
+        that_deposits: 50000000
+        of_token:
+          currency_symbol: ''
+          token_name: ''
+        into_account:
+          role_token: SellerRoleToken
+    minimumTime:
+      relative: -15
+    maximumTime:
+      relative: 120
+
+- AutoRun
+
+- Comment: The buyer should have about 32 ADA now, since they paid 50 ADA for the purchase, but there is up to an additional 2 ADA in fees.
+
+- CheckBalance:
+    wallet: Buyer
+    balance:
+      - [ADA, 32]
+      - [RoleTokenCurrency, BuyerRoleToken, 1]
+
+- Comment: The buyer receives the purchase and reports that there is a problem.
+
+- Prepare:
+    inputs:
+      - for_choice_id:
+          choice_name: Report problem
+          choice_owner:
+            role_token: BuyerRoleToken
+        input_that_chooses_num: 1
+    minimumTime:
+      relative: -15
+    maximumTime:
+      relative: 120
+
+- AutoRun
+
+- Comment: The buyer should have 32 ADA now, but they may have paid up to another 2 ADA in fees.
+
+- CheckBalance:
+    wallet: Buyer
+    balance:
+      - [ADA, 32]
+      - [RoleTokenCurrency, BuyerRoleToken, 1]
+
+- Comment: The seller disputes that there is a problem.
+
+- Prepare:
+    inputs:
+      - for_choice_id:
+          choice_name: Dispute problem
+          choice_owner:
+            role_token: SellerRoleToken
+        input_that_chooses_num: 0
+    minimumTime:
+      relative: -15
+    maximumTime:
+      relative: 120
+
+- AutoRun
+
+- Comment: The seller should still have 5 ADA now, but they may have paid up to another 2 ADA in fees.
+
+- CheckBalance:
+    wallet: Seller
+    balance:
+      - [ADA, 17]
+      - [RoleTokenCurrency, SellerRoleToken, 1]
+
+- Comment: Now the mediator redeems the 22 ADA from the payout script.
+
+- Withdraw: Mediator
+
+- Comment: The mediator should have 36 ADA now because they received back their initial 2 ADA that was contributed when creating the contract and they received all of the collateral, but they paid additional fees.
+
+- CheckBalance:
+    wallet: Mediator
+    balance:
+      - [ADA, 36]
+      - [RoleTokenCurrency, MediatorRoleToken, 1]
+
+- Comment: Now the buyer redeems the 50 ADA from the payout script.
+
+- Withdraw: Buyer
+
+- Comment: The seller should now have 62 ADA, but they may have paid up to 1 ADA in fees.
+
+- CheckBalance:
+    wallet: Buyer
+    balance:
+      - [ADA, 82]
+      - [RoleTokenCurrency, BuyerRoleToken, 1]
+

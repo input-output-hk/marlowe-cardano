@@ -13,7 +13,7 @@ import Language.Marlowe.Core.V1.Semantics.Types.Address (deserialiseAddress)
 import Language.Marlowe.Oracle.Process (runDetection, runOracle)
 import Language.Marlowe.Runtime.App.Channel (RequeueFrequency(RequeueFrequency), runDiscovery')
 import Language.Marlowe.Runtime.App.Parser (addressParser, getConfigParser)
-import Language.Marlowe.Runtime.App.Types (Config, PollingFrequency(PollingFrequency))
+import Language.Marlowe.Runtime.App.Types (Config, FinishOnWait(FinishOnWait), PollingFrequency(PollingFrequency))
 import Language.Marlowe.Runtime.ChainSync.Api (Address(unAddress))
 import Network.HTTP.Client.TLS (newTlsManager)
 import Network.Oracle (makeOracle)
@@ -32,6 +32,7 @@ main =
     let
       pollingFrequency' = PollingFrequency pollingFrequency
       requeueFrequency' = RequeueFrequency requeueFrequency
+      dontFinishOnWait = FinishOnWait False
     key <-
       C.readFileTextEnvelope (C.AsSigningKey C.AsPaymentExtendedKey) keyFile
         >>= \case
@@ -41,9 +42,9 @@ main =
     eventBackend <- simpleJsonStderrBackend defaultRenderSelectorJSON
     manager <- newTlsManager
     oracleEnv <- makeOracle manager
-    discoveryChannel <- runDiscovery' eventBackend config pollingFrequency' False
+    discoveryChannel <- runDiscovery' eventBackend config pollingFrequency' dontFinishOnWait
     detectionChannel <- runDetection party eventBackend config pollingFrequency' discoveryChannel
-    runOracle oracleEnv config address key party eventBackend requeueFrequency' False detectionChannel discoveryChannel
+    runOracle oracleEnv config address key party eventBackend requeueFrequency' dontFinishOnWait detectionChannel discoveryChannel
 
 
 data Command =

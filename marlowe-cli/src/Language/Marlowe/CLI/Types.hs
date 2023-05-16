@@ -96,9 +96,10 @@ module Language.Marlowe.CLI.Types
   , getVerificationKey
   , submitModeFromTimeout
   , toMarloweTimeout
-  , toPOSIXTime
   , toPaymentVerificationKey
+  , toPlutusPOSIXTime
   , toSlotRoundedMarloweTimeout
+  , toSlotRoundedPlutusPOSIXTime
   , toUTxO
   , validatorInfoScriptOrReference
     -- * constructors and defaults
@@ -193,13 +194,13 @@ import GHC.Natural (Natural)
 import Language.Marlowe.CLI.Cardano.Api (toMultiAssetSupportedInEra, withShelleyBasedEra)
 import Language.Marlowe.CLI.Cardano.Api.PlutusScript
   (IsPlutusScriptLanguage, plutusScriptVersion, withPlutusScriptVersion)
-import Language.Marlowe.Extended.V1 (Timeout(POSIXTime))
 import qualified Language.Marlowe.Extended.V1 as E
 
 
 -- | Exception for Marlowe CLI.
 newtype CliError = CliError {unCliError :: String}
-  deriving (Eq, Ord, Read, Show)
+  deriving (Eq, Ord, Read, Show, Generic)
+  deriving anyclass (ToJSON, FromJSON)
 
 instance IsString CliError where
   fromString = CliError
@@ -678,22 +679,29 @@ someTimeoutToMilliseconds (RelativeTimeout seconds) = do
     utcToMilliseconds = floor . (1000 *) . nominalDiffTimeToSeconds . utcTimeToPOSIXSeconds
 
 
+marloweTimeoutFromPlutusPOSIXTime :: P.POSIXTime -> E.Timeout
+marloweTimeoutFromPlutusPOSIXTime = E.POSIXTime . P.getPOSIXTime
+
+
+toPlutusPOSIXTime :: MonadIO m => SomeTimeout -> m P.POSIXTime
+toPlutusPOSIXTime t = P.POSIXTime <$> someTimeoutToMilliseconds t
+
+
 toMarloweTimeout :: MonadIO m => SomeTimeout -> m E.Timeout
-toMarloweTimeout t = POSIXTime <$> someTimeoutToMilliseconds t
+toMarloweTimeout t = marloweTimeoutFromPlutusPOSIXTime <$> toPlutusPOSIXTime t
 
 
-toPOSIXTime :: MonadIO m => SomeTimeout -> m P.POSIXTime
-toPOSIXTime t = P.POSIXTime <$> someTimeoutToMilliseconds t
-
-
-toSlotRoundedMarloweTimeout :: MonadIO m => SlotConfig -> SomeTimeout -> m E.Timeout
-toSlotRoundedMarloweTimeout slotConfig t = do
+toSlotRoundedPlutusPOSIXTime :: MonadIO m => SlotConfig -> SomeTimeout -> m P.POSIXTime
+toSlotRoundedPlutusPOSIXTime slotConfig t = do
   let
     toSlot = posixTimeToEnclosingSlot slotConfig
   t' <- someTimeoutToMilliseconds t
-  let
-    P.POSIXTime t'' = slotToBeginPOSIXTime slotConfig . toSlot $ P.POSIXTime t'
-  pure $ POSIXTime t''
+  pure . slotToBeginPOSIXTime slotConfig . toSlot $ P.POSIXTime t'
+
+
+toSlotRoundedMarloweTimeout :: MonadIO m => SlotConfig -> SomeTimeout -> m E.Timeout
+toSlotRoundedMarloweTimeout slotConfig t =
+  marloweTimeoutFromPlutusPOSIXTime <$> toSlotRoundedPlutusPOSIXTime slotConfig t
 
 
 data PublishingStrategy era =
@@ -738,7 +746,7 @@ toUTxO :: [AnUTxO era] -> C.UTxO era
 toUTxO (map unAnUTxO -> utxos) = C.UTxO . Map.fromList $ utxos
 
 
-anUTxOValue :: AnUTxO era -> C.Value
+anUTxOValue :: forall era. AnUTxO era -> C.Value
 anUTxOValue (AnUTxO (_, C.TxOut _ v _ _)) = C.txOutValueToValue v
 
 

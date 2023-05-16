@@ -17,10 +17,11 @@
 {-# OPTIONS_GHC -Wno-unused-imports #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE NumericUnderscores #-}
 
 module Language.Marlowe.CLI.Test
   ( -- * Testing
-    runTests
+    runTestSuite
   ) where
 
 
@@ -30,50 +31,116 @@ import Cardano.Api
   , IsShelleyBasedEra
   , Key(getVerificationKey, verificationKeyHash)
   , LocalNodeConnectInfo(..)
+  , Lovelace(Lovelace)
   , ScriptDataSupportedInEra
   )
 import qualified Cardano.Api as C
 import Cardano.Api.Shelley (protocolParamProtocolVersion)
+import Contrib.Cardano.Api (lovelaceFromInt, lovelaceToInt)
 import Contrib.Control.Concurrent.Async (altIO)
-import Contrib.Monad.Loops (MaxRetries(MaxRetries), RetryCounter(RetryCounter), retryTillJust)
+import Contrib.Control.Monad.Trans.State.IO (IOStateT, unsafeExecIOStateT)
+import Contrib.Data.Foldable (foldMapMFlipped)
+import Contrib.Monad.Loops (MaxRetries(MaxRetries), RetryCounter(RetryCounter), retryTillJust, retryTillRight)
 import Control.Concurrent.Async (race)
-import Control.Error (hush)
-import Control.Lens (Bifunctor(bimap))
+import Control.Concurrent.Async.Pool (mapTasks, mapTasks_, withTaskGroup)
+import Control.Concurrent.STM
+  (TVar, atomically, modifyTVar', newTVar, newTVarIO, readTVar, readTVarIO, retry, writeTVar)
+import Control.Error (ExceptT, hush, note)
+import Control.Lens (At(at), Bifunctor(bimap), Each(each), _2, _Just, coerced, non, traversed, (^.), (^..))
+import qualified Control.Lens as L
+import qualified Control.Lens as Lens
+import Control.Monad (replicateM, void, when)
 import Control.Monad.Error.Class (throwError)
-import Control.Monad.Except (MonadError, MonadIO, runExceptT)
+import Control.Monad.Except (MonadError, MonadIO, catchError, liftEither, runExceptT)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Reader (ReaderT(runReaderT), runReader)
 import Control.Monad.Reader.Class (MonadReader)
 import Control.Monad.State (execStateT)
+import qualified Data.Aeson as A
+import qualified Data.Aeson.Encode.Pretty as A
+import qualified Data.Aeson.OneLine as A
+import qualified Data.ByteString.Lazy as B
+import Data.Coerce (coerce)
 import Data.Default (Default(def))
-import Data.Foldable (for_)
+import Data.Foldable (for_, toList)
+import Data.Functor ((<&>))
+import Data.IORef (IORef, atomicModifyIORef', newIORef, readIORef)
+import Data.List (intercalate)
+import Data.List.NonEmpty (NonEmpty((:|)))
 import qualified Data.Map.Strict as Map
+import Data.Maybe (mapMaybe)
+import qualified Data.Set as S (singleton)
+import qualified Data.Text as Text
+import Data.Time.Units (Second, TimeUnit(toMicroseconds))
 import Data.Traversable (for)
-import Language.Marlowe.CLI.Cardano.Api (toPlutusProtocolVersion)
+import GHC.IO (bracket)
+import GHC.IO.Handle.FD (stderr)
+import Language.Marlowe.CLI.Cardano.Api (toPlutusProtocolVersion, txOutValueValue)
 import Language.Marlowe.CLI.Cardano.Api.PlutusScript (IsPlutusScriptLanguage)
+import Language.Marlowe.CLI.Cardano.Api.Value (toPlutusValue)
+import qualified Language.Marlowe.CLI.Cardano.Api.Value as CV
 import Language.Marlowe.CLI.IO (decodeFileStrict, getDefaultCostModel, queryInEra, readSigningKey)
-import Language.Marlowe.CLI.Test.CLI.Types (CLIContracts(CLIContracts))
-import Language.Marlowe.CLI.Test.ExecutionMode (ExecutionMode)
+import Language.Marlowe.CLI.Test.CLI.Types
+  (CLIContractInfo(CLIContractInfo), CLIContracts(CLIContracts), CLITxInfo, ciPlan, ciThread, unCLIContracts)
+import Language.Marlowe.CLI.Test.ExecutionMode (ExecutionMode(OnChainMode), toSubmitMode)
 import Language.Marlowe.CLI.Test.Interpret (interpret)
 import Language.Marlowe.CLI.Test.Log (logLabeledMsg)
+import Language.Marlowe.CLI.Test.Runner
+  (Env(..), TestSuiteResult(TestSuiteResult), TestSuiteRunnerEnv, runTests, testSuiteResultToJSON, tsResult)
 import qualified Language.Marlowe.CLI.Test.Runtime.Monitor as Runtime.Monitor
 import Language.Marlowe.CLI.Test.Runtime.Types (RuntimeError(RuntimeRollbackError))
+import qualified Language.Marlowe.CLI.Test.Runtime.Types as R
 import qualified Language.Marlowe.CLI.Test.Runtime.Types as Runtime
 import qualified Language.Marlowe.CLI.Test.Runtime.Types as Runtime.Monitor
+import qualified Language.Marlowe.CLI.Test.TestCase as TestCase
 import Language.Marlowe.CLI.Test.Types
-  ( InterpretEnv(..)
+  ( ConcurrentRunners(ConcurrentRunners)
+  , FailureReport(FailureReport)
+  , InterpretEnv(..)
   , InterpretState(..)
+  , ReportingStrategy(..)
   , RuntimeConfig(..)
   , TestCase(..)
+  , TestName(TestName)
   , TestResult(TestFailed, TestSucceeded)
   , TestSuite(..)
+  , failureReportToJSON
+  , ieConnection
+  , ieEra
+  , ieExecutionMode
+  , iePrintStats
+  , isCLIContracts
+  , isCurrencies
+  , isKnownContracts
+  , isLogs
+  , isWallets
+  , testResultToJSON
   )
-import Language.Marlowe.CLI.Test.Wallet.Types (Currencies(Currencies), Wallet)
+import Language.Marlowe.CLI.Test.Wallet.Interpret (createWallet)
+import Language.Marlowe.CLI.Test.Wallet.Types
+  ( Currencies(Currencies)
+  , Currency(Currency)
+  , CurrencyNickname(CurrencyNickname)
+  , Wallet(Wallet, _waAddress, _waBalanceCheckBaseline)
+  , WalletNickname(WalletNickname)
+  , waSubmittedTransactions
+  )
 import qualified Language.Marlowe.CLI.Test.Wallet.Types as Wallet
-import Language.Marlowe.CLI.Transaction (querySlotConfig, queryUtxos)
+import Language.Marlowe.CLI.Transaction
+  (buildBodyWithContent, buildFaucetImpl, buildMintingImpl, querySlotConfig, queryUtxos, submitBody')
 import Language.Marlowe.CLI.Types
-  (CliEnv(CliEnv), CliError(..), MarlowePlutusVersion, PrintStats(PrintStats), SigningKeyFile(SigningKeyFile))
+  ( CliEnv(CliEnv)
+  , CliError(..)
+  , MarlowePlutusVersion
+  , MarloweTransaction(MarloweTransaction)
+  , PayFromScript(PayFromScript)
+  , PrintStats(PrintStats)
+  , SigningKeyFile(SigningKeyFile)
+  , SomePaymentSigningKey
+  , defaultCoinSelectionStrategy
+  )
 import qualified Language.Marlowe.CLI.Types as T
+import Language.Marlowe.Cardano.Thread (marloweThreadTxInfos, overAnyMarloweThread)
 import qualified Language.Marlowe.Protocol.Client as Marlowe.Protocol
 import qualified Language.Marlowe.Protocol.Types as Marlowe.Protocol
 import qualified Language.Marlowe.Runtime.App.Types as Apps
@@ -83,21 +150,14 @@ import qualified Network.Protocol.Handshake.Client as Network.Protocol
 import Network.Protocol.Handshake.Types (Handshake)
 import Observe.Event.Render.JSON (defaultRenderSelectorJSON)
 import Observe.Event.Render.JSON.Handle (simpleJsonStderrBackend)
+import qualified Plutus.V1.Ledger.Ada as PV
+import qualified Plutus.V1.Ledger.Value as PV
 import PlutusCore (defaultCostModelParams)
-
-
-mkWallet
-  :: (MonadError CliError m, MonadIO m, MonadReader (CliEnv era) m)
-  => LocalNodeConnectInfo C.CardanoMode
-  -> C.AddressInEra era
-  -> T.SomePaymentSigningKey
-  -> m (Wallet era)
-mkWallet connection address signingKey = do
-  utxos <- queryUtxos connection address
-  pure $ Wallet.fromUTxO address signingKey utxos
+import System.Exit (exitFailure, exitSuccess)
+import System.IO (hPrint, hPutStrLn)
 
 -- | Run tests of a Marlowe contract.
-runTests
+runTestSuite
   :: forall era m
    . IsShelleyBasedEra era
   => MonadError CliError m
@@ -106,98 +166,72 @@ runTests
   => ScriptDataSupportedInEra era
   -> TestSuite era FilePath  -- ^ The tests.
   -> m ()                   -- ^ Action for running the tests.
-runTests era TestSuite{..} =
-  do
-    costModel <- getDefaultCostModel
+runTestSuite era TestSuite{..} = do
+  faucetSigningKey <- readSigningKey (SigningKeyFile tsFaucetSigningKeyFile)
+  tests <- do
     let
-      runCli action = runReaderT action (CliEnv era)
-      connection =
-        LocalNodeConnectInfo
-        {
-          localConsensusModeParams = CardanoModeParams $ EpochSlots 21600
-        , localNodeNetworkId       = stNetwork
-        , localNodeSocketPath      = stSocketPath
-        }
-    protocol <- runCli $ queryInEra connection C.QueryProtocolParameters
-    faucetSigningKey <- readSigningKey (SigningKeyFile stFaucetSigningKeyFile)
-    faucet <- mkWallet connection stFaucetAddress faucetSigningKey
-    slotConfig <- runCli $ querySlotConfig connection
-    tests' <- mapM decodeFileStrict stTests
-    let
-      printStats = PrintStats True
-      protocolVersion = toPlutusProtocolVersion $ protocolParamProtocolVersion protocol
+      step fileName = do
+        content <- decodeFileStrict fileName `catchError` \e ->
+          throwError $ CliError $ "Failed to decode test case file: " <> fileName <> " " <> show e
+        pure (fileName, content)
+    mapM step tsTests
 
-    for_ tests' \testCase@TestCase { testName } -> do
-      liftIO $ putStrLn ""
-      liftIO . putStrLn $ "***** Test " <> show testName <> " *****"
+  let
+    printStats = PrintStats True
+    connection =
+      LocalNodeConnectInfo
+      { localConsensusModeParams = CardanoModeParams $ EpochSlots 21600
+      , localNodeNetworkId = tsNetwork
+      , localNodeSocketPath = tsSocketPath
+      }
+    resource = (tsFaucetAddress, faucetSigningKey)
 
+  protocolParameters <- queryInEra connection C.QueryProtocolParameters
+  slotConfig <- querySlotConfig connection
+  costModel <- getDefaultCostModel
+
+  let
+    env :: TestSuiteRunnerEnv MarlowePlutusVersion era
+    env = Env
+      { _envEra = era
+      , _envConnection = connection
+      , _envSlotConfig = slotConfig
+      , _envProtocolParams = protocolParameters
+      , _envCostModelParams = costModel
+      , _envExecutionMode = tsExecutionMode
+      , _envResource = resource
+      , _envRuntimeConfig = Just tsRuntime
+      , _envPrintStats = printStats
+      , _envStreamJSON = True
+      , _envMaxRetries = tsMaxRetries
+      }
+
+  testSuiteResult <- liftIO $ flip runReaderT env $ runTests tests tsConcurrentRunners
+
+  let
+    writeReportFile filePath = do
       let
-        RuntimeConfig { .. } = stRuntime
-        connector :: Network.Protocol.ClientConnector (Handshake Marlowe.Protocol.MarloweRuntime) Marlowe.Protocol.MarloweRuntimeClient IO
-        connector = Network.Protocol.handshakeClientConnector
-          $ Network.Protocol.tcpClient rcRuntimeHost rcRuntimePort Marlowe.Protocol.marloweRuntimeClientPeer
-        config = def
-          { Apps.chainSeekHost = rcRuntimeHost
-          , Apps.runtimePort = rcRuntimePort
-          , Apps.chainSeekSyncPort = rcChainSeekSyncPort
-          , Apps.chainSeekCommandPort = rcChainSeekCommandPort
-          }
-      (runtimeMonitorInput, runtimeMonitorContracts, runtimeMonitor) <- liftIO $ Runtime.Monitor.mkRuntimeMonitor config
+        json = testSuiteResultToJSON testSuiteResult
+      liftIO $ B.writeFile filePath (A.encodePretty json)
 
+  for_ tsReportingStrategy \case
+    StreamAndWriteJSONFile filePath -> writeReportFile filePath
+    WriteJSONFile filePath -> writeReportFile filePath
+    StreamJSON -> pure ()
+
+  let
+    failures = do
       let
-        state = InterpretState
-          {
-            _isCLIContracts = CLIContracts mempty
-          , _isPublishedScripts = Nothing
-          , _isCurrencies = Currencies mempty
-          , _isWallets = Wallet.Wallets $ Map.singleton Wallet.faucetNickname faucet
-          , _isKnownContracts = mempty
-          }
+        testResults = Map.toList $ testSuiteResult ^. tsResult
+        failedTestName = \case
+          ((name, _), TestFailed {}) -> Just name
+          _ -> Nothing
+      mapMaybe failedTestName testResults
+  if not (null failures)
+    then liftIO $ do
+      hPutStrLn stderr $ "Some tests failed: " <> intercalate ", " failures
+      exitFailure
+    else liftIO do
+      hPutStrLn stderr "All tests succeeded."
+      exitSuccess
 
-      let
-        env :: InterpretEnv MarlowePlutusVersion era
-        env = InterpretEnv
-          { _ieConnection=connection
-          , _ieCostModelParams=costModel
-          , _ieEra=era
-          , _ieProtocolVersion=protocolVersion
-          , _ieSlotConfig=slotConfig
-          , _ieExecutionMode=stExecutionMode
-          , _iePrintStats=printStats
-          , _ieRuntimeMonitor = Just (runtimeMonitorInput, runtimeMonitorContracts)
-          , _ieRuntimeClientConnector = Just connector
-          }
-        maxRetries = 4
-
-      result <- retryTillJust (MaxRetries maxRetries) \(RetryCounter retry) -> do
-        result <- liftIO $ runTest env state testCase `race` Runtime.runMonitor runtimeMonitor
-        case result of
-          Right (RuntimeRollbackError _) | retry + 1 <= maxRetries -> do
-            liftIO $ putStrLn "Re running the test case because the rollback occured."
-            pure Nothing
-          Right runtimeError -> do
-            liftIO $ putStrLn "Runtime monitor execution failed."
-            pure $ Just $ TestFailed . CliError . show $ runtimeError
-          Left testResult ->
-            pure $ Just testResult
-
-      for_ result \case
-        TestSucceeded -> do
-          liftIO $ putStrLn "***** PASSED *****"
-        TestFailed err -> do
-          liftIO (print err)
-          liftIO (putStrLn "***** FAILED *****")
-
-runTest
-  :: IsShelleyBasedEra era
-  => IsPlutusScriptLanguage lang
-  => InterpretEnv lang era
-  -> InterpretState lang era
-  -> TestCase
-  -> IO TestResult
-runTest env state (TestCase _ testOperations) = do
-  res <- runExceptT $ flip runReaderT env $ flip execStateT state $ for testOperations \operation -> do
-    interpret operation
-  case res of
-    Left err -> pure $ TestFailed err
-    Right _ -> pure TestSucceeded

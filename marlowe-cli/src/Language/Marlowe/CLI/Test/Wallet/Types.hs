@@ -13,35 +13,32 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE ViewPatterns #-}
 
 module Language.Marlowe.CLI.Test.Wallet.Types
   where
 
 import Cardano.Api
-  ( AddressInEra
-  , BabbageEra
-  , CardanoMode
-  , LocalNodeConnectInfo
-  , Lovelace
-  , PolicyId
-  , ScriptDataSupportedInEra
-  , TxBody
-  , UTxO(UTxO)
-  )
-import Control.Lens (Lens')
+  (AddressInEra, CardanoMode, LocalNodeConnectInfo, Lovelace, PolicyId, ScriptDataSupportedInEra, TxBody, UTxO(UTxO))
+import qualified Cardano.Api as C
+import Contrib.Data.Foldable (foldMapFlipped)
+import qualified Contrib.Data.List as List
+import Control.Lens (Lens', makeLenses)
 import Control.Monad.Except (MonadError)
 import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.Reader.Class (MonadReader)
 import Control.Monad.State.Class (MonadState)
-import Data.Aeson (FromJSON(..), ToJSON(..))
+import Data.Aeson (FromJSON(..), ToJSON(..), ToJSONKey)
 import qualified Data.Aeson as A
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.OneLine as A
+import Data.Aeson.Types (toJSONKeyText)
 import qualified Data.Aeson.Types as A
 import qualified Data.Fixed as F
 import qualified Data.Fixed as Fixed
 import Data.Foldable (fold)
+import qualified Data.List.NonEmpty as List
 import Data.Map (Map)
 import qualified Data.Map.Strict as Map
 import Data.String (IsString(fromString))
@@ -53,8 +50,19 @@ import GHC.Natural (Natural)
 import qualified Language.Marlowe as M
 import Language.Marlowe.CLI.Cardano.Api.Value (toPlutusValue, txOutValueValue)
 import Language.Marlowe.CLI.Test.ExecutionMode (ExecutionMode)
+import Language.Marlowe.CLI.Test.InterpreterError (InterpreterError)
+import qualified Language.Marlowe.CLI.Test.Log as Log
+import Language.Marlowe.CLI.Test.Operation.Aeson
+  ( ConstructorName(ConstructorName)
+  , NewPropName(NewPropName)
+  , OldPropName(OldPropName)
+  , PropName(PropName)
+  , rewriteProp
+  , rewritePropWith
+  , rewriteToSingletonObject
+  )
 import qualified Language.Marlowe.CLI.Test.Operation.Aeson as Operation
-import Language.Marlowe.CLI.Types (CliError, PrintStats, SomePaymentSigningKey)
+import Language.Marlowe.CLI.Types (PrintStats, SomePaymentSigningKey)
 import Ledger.Orphans ()
 import Plutus.V1.Ledger.Api (CurrencySymbol, TokenName)
 import qualified Plutus.V1.Ledger.Value as P
@@ -63,63 +71,92 @@ import Text.Read (readMaybe)
 -- | Runtime interaction (submission) works against specific era (Babbage).
 -- | On the other hand CLI is more flexible and is able to decode and handle
 -- | transactions from different eras.
-data SomeTxBody era
-  = BabbageTxBody (TxBody BabbageEra)
-  | SomeTxBody (TxBody era)
-  deriving stock (Generic, Show)
+data SomeTxBody = forall era. SomeTxBody
+  (ScriptDataSupportedInEra era)
+  (TxBody era)
+
+overSomeTxBody :: forall a. (forall era. ScriptDataSupportedInEra era -> TxBody era -> a) -> SomeTxBody -> a
+overSomeTxBody f (SomeTxBody era txBody) = f era txBody
+
+overSomeTxBody' :: forall a. (forall era. TxBody era -> a) -> SomeTxBody -> a
+overSomeTxBody' f (SomeTxBody _era txBody) = f txBody
+
+instance Show SomeTxBody where
+  show (SomeTxBody era txBody) = "SomeTxBody (" <> show era <> ")" <> "(" <> show txBody <> ")"
 
 data Wallet era =
   Wallet
-  { waAddress                   :: AddressInEra era
-  , waBalanceCheckBaseline      :: P.Value                  -- ^ This value should reflect all the assets from the wallet which
+  { _waAddress                   :: AddressInEra era
+  , _waBalanceCheckBaseline      :: P.Value                  -- ^ This value should reflect all the assets from the wallet which
                                                             -- were on the chain when we started a particular scenario. Currently
                                                             -- it is only used in the case of the faucet wallet.
-  , waMintedTokens              :: P.Value                  -- ^ Tracks all the minted tokens to simplify auto run flow.
-  , waSigningKey                :: SomePaymentSigningKey
-  , waSubmittedTransactions     :: [SomeTxBody era]             -- ^ We keep track of all the transactions so we can
-                                                            -- discard fees from the balance check calculation.
+  , _waSigningKey                :: SomePaymentSigningKey
+  , _waSubmittedTransactions     :: [SomeTxBody]         -- ^ We keep track of all the transactions so we can
+                                                         -- discard fees from the balance check calculation.
   }
   deriving stock (Generic, Show)
 
+makeLenses ''Wallet
+
 emptyWallet :: AddressInEra era -> SomePaymentSigningKey -> Wallet era
-emptyWallet address signignKey = Wallet address mempty mempty signignKey mempty -- mempty
+emptyWallet address signignKey = Wallet address mempty signignKey mempty -- mempty
 
 fromUTxO :: AddressInEra era -> SomePaymentSigningKey -> UTxO era -> Wallet era
 fromUTxO address signignKey (UTxO utxo) = do
   let
     total = foldMap (toPlutusValue . txOutValueValue) (Map.elems utxo)
-  Wallet address total mempty signignKey mempty
+  Wallet address total signignKey mempty
 
 -- | In many contexts this defaults to the `RoleName` but at some
 -- | point we want to also support multiple marlowe contracts scenarios
 -- | in a one transaction.
-newtype WalletNickname = WalletNickname String
+newtype WalletNickname = WalletNickname { unWalletNickname :: String }
     deriving stock (Eq, Ord, Generic, Show)
-    deriving anyclass (FromJSON, ToJSON)
 
 instance IsString WalletNickname where fromString = WalletNickname
 
-faucetNickname :: WalletNickname
-faucetNickname = "Faucet"
+instance ToJSON WalletNickname where
+  toJSON = toJSON . unWalletNickname
+
+instance FromJSON WalletNickname where
+  parseJSON json = do
+    str <- parseJSON json
+    pure $ WalletNickname str
+
+instance ToJSONKey WalletNickname where
+  toJSONKey = toJSONKeyText $ T.pack . unWalletNickname
 
 -- In the current setup we use really a unique currency
 -- per issuer. Should we drop this and identify currencies
 -- using `WalletNickname`?
-newtype CurrencyNickname = CurrencyNickname String
+newtype CurrencyNickname = CurrencyNickname { unCurrencyNickname :: String }
     deriving stock (Eq, Ord, Generic, Show)
-    deriving anyclass (FromJSON, ToJSON)
+
+instance FromJSON CurrencyNickname where
+  parseJSON json = do
+    str <- parseJSON json
+    pure $ CurrencyNickname str
+
+instance ToJSON CurrencyNickname where
+  toJSON = toJSON . unCurrencyNickname
+
 instance IsString CurrencyNickname where fromString = CurrencyNickname
+
+instance ToJSONKey CurrencyNickname where
+  toJSONKey = toJSONKeyText $ T.pack . unCurrencyNickname
 
 data Currency = Currency
   {
     ccCurrencySymbol :: CurrencySymbol
-  , ccIssuer         :: WalletNickname
-  , ccPolicyId       :: PolicyId
+  , ccIssuer :: WalletNickname
+  , ccPolicyId :: PolicyId
   }
+  deriving stock (Eq, Ord, Generic, Show)
+  deriving anyclass (FromJSON, ToJSON)
 
-newtype Currencies = Currencies (Map CurrencyNickname Currency)
+newtype Currencies = Currencies { unCurrencies :: Map CurrencyNickname Currency }
 
-data AssetId = AdaAsset | AssetId CurrencyNickname TokenName
+data AssetId = AdaAssetId | AssetId CurrencyNickname TokenName
   deriving (Eq, Ord, Show)
 
 parseTokenNameJSON :: Aeson.Value -> A.Parser P.TokenName
@@ -131,7 +168,7 @@ tokenNameToJSON (P.TokenName tokenName) = toJSON tokenName
 
 instance FromJSON AssetId where
   parseJSON = \case
-    A.String (T.toLower -> "ada") -> pure AdaAsset
+    A.String (T.toLower -> "ada") -> pure AdaAssetId
     A.Array (V.toList -> [currencyNicknameJSON, tokenNameJSON]) -> do
       currencyNickname <- parseJSON currencyNicknameJSON
       tokenName <- parseTokenNameJSON tokenNameJSON
@@ -139,7 +176,7 @@ instance FromJSON AssetId where
     _ -> fail "Expecting an AssetId \"tuple\" or \"ada\"."
 
 instance ToJSON AssetId where
-    toJSON AdaAsset = A.String "ADA"
+    toJSON AdaAssetId = A.String "ADA"
     toJSON (AssetId currencyNickname tokenName) =
       toJSON [ toJSON currencyNickname, tokenNameToJSON tokenName ]
 
@@ -151,10 +188,10 @@ instance FromJSON Asset where
     A.Array (V.toList -> [assetJSON, amountJSON]) -> do
       -- Matches ADA asset
       parseJSON assetJSON >>= \case
-        AdaAsset -> pure ()
+        AdaAssetId -> pure ()
         _ -> fail "Expecting ADA asset"
       (MicroValue amount) <- parseJSON amountJSON
-      pure $ Asset AdaAsset (floor $ 1_000_000 * amount)
+      pure $ Asset AdaAssetId (floor $ 1_000_000 * amount)
     A.Array (V.toList -> [assetNameJSON, tokenNameJSON, amountJSON]) -> do
       assetId <- parseJSON $ A.Array $ V.fromList [assetNameJSON, tokenNameJSON]
       amount <- parseJSON amountJSON
@@ -162,7 +199,7 @@ instance FromJSON Asset where
     _ -> fail "Expecting an assets map encoding."
 
 instance ToJSON Asset where
-    toJSON (Asset AdaAsset amount) = toJSON
+    toJSON (Asset AdaAssetId amount) = toJSON
       [ toJSON ("ADA" :: String)
       , toJSON $ show (fromInteger amount :: F.Micro)
       ]
@@ -229,7 +266,7 @@ assetsSingleton :: AssetId -> Balance' -> AssetsBalance
 assetsSingleton assetId = AssetsBalance . Map.singleton assetId
 
 lovelaceAssets :: Balance' -> AssetsBalance
-lovelaceAssets = assetsSingleton AdaAsset
+lovelaceAssets = assetsSingleton AdaAssetId
 
 instance FromJSON AssetsBalance where
   parseJSON json = do
@@ -243,7 +280,7 @@ instance FromJSON AssetsBalance where
         A.Array (V.toList -> [assetJSON, balanceJSON]) -> do
           -- Matches ADA asset
           parseJSON assetJSON >>= \case
-            AdaAsset -> pure ()
+            AdaAssetId -> pure ()
             _ -> fail "Expecting ADA asset"
           (amount :: Balance MicroValue) <- parseJSON balanceJSON
           pure $ lovelaceAssets $ fmap (floor . (1_000_000 *) . unMicroValue) amount
@@ -256,19 +293,19 @@ instance FromJSON AssetsBalance where
 instance ToJSON AssetsBalance where
     toJSON (AssetsBalance (Map.toList -> assetsList)) = toJSON $ map assetToJSON assetsList
       where
-        assetToJSON (AdaAsset, ExactValue amount) = toJSON
+        assetToJSON (AdaAssetId, ExactValue amount) = toJSON
           [ toJSON ("ADA" :: String)
           , toJSON $ show (fromInteger amount :: F.Micro)
           ]
         assetToJSON (AssetId currencyNickname tokenName, ExactValue amount) = toJSON
           [ toJSON currencyNickname, toJSON tokenName, toJSON amount ]
-        assetToJSON (AdaAsset, AnyBalance) = toJSON
+        assetToJSON (AdaAssetId, AnyBalance) = toJSON
           [ toJSON ("ADA" :: String)
           , toJSON ("*" :: String)
           ]
         assetToJSON (AssetId currencyNickname tokenName, AnyBalance) = toJSON
           [ toJSON currencyNickname, toJSON tokenName, toJSON ("*" :: String) ]
-        assetToJSON (AdaAsset, ValueRange minValue maxValue) = toJSON
+        assetToJSON (AdaAssetId, ValueRange minValue maxValue) = toJSON
           [ toJSON ("ADA" :: String)
           , toJSON [ toJSON minValue, toJSON maxValue ]
           ]
@@ -300,15 +337,14 @@ instance ToJSON TokenAssignment where
 data WalletOperation =
     BurnAll
     {
-     woMetadata            :: Maybe Aeson.Object
+     woMetadata         :: Maybe Aeson.Object
     }
   | CreateWallet
-    {
-      woWalletNickname  :: WalletNickname
+    { woWalletNickname  :: WalletNickname
+    , woPossibleUTxOs   :: Maybe [Lovelace]
     }
   | CheckBalance
     { woWalletNickname  :: WalletNickname
-    , woIgnore          :: Maybe [AssetId]  -- ^ Ignore these assets when checking the balance.
     , woBalance         :: AssetsBalance    -- ^ Expected delta of funds:
                                             -- * We exclude tx fees from this calculation.
                                             -- * We DON'T subtract the minimum lovelace amount (attached when tokens are
@@ -316,37 +352,148 @@ data WalletOperation =
                                             -- * In the case of `Faucet` wallet we subtract the baseline
                                             --  funds so they are not included in this balance.
     }
-  | FundWallets
+  | Fund
     {
       woWalletNicknames  :: [WalletNickname]
-    , woValues           :: [Lovelace]
-    , woCreateCollateral :: Maybe Bool
+    , woUTxOs            :: [Lovelace]
     }
   | Mint
     {
       woCurrencyNickname  :: CurrencyNickname
     , woIssuer            :: Maybe WalletNickname   -- ^ Fallbacks to faucet
     , woMetadata          :: Maybe Aeson.Object
-    , woTokenDistribution :: [TokenAssignment]
+    , woTokenDistribution :: List.NonEmpty TokenAssignment
     , woMinLovelace       :: Lovelace
     }
 
   | SplitWallet
     {
       woWalletNickname :: WalletNickname
-    , woValues         :: [Lovelace]
+    , woUTxOs          :: [Lovelace]
     }
   | ReturnFunds
   deriving stock (Eq, Generic, Show)
 
-instance FromJSON WalletOperation where
+rewriteWalletProp :: (Ord k, IsString k) => Map k A.Value -> Bool -> Maybe (Map k A.Value)
+rewriteWalletProp props toPlural = case Map.lookup "wallet" props of
+  Just (A.String walletNickname) -> do
+    let
+      props' = Map.delete "wallet" props
+      (key, value) = if toPlural
+        then ("walletNicknames", toJSON [toJSON walletNickname])
+        else ("walletNickname", toJSON walletNickname)
+    Just $ Map.insert key value props'
+  _ -> Nothing
+
+
+instance A.FromJSON WalletOperation where
   parseJSON = do
-    A.genericParseJSON $ Operation.genericJSONOptions "wo"
+    let
+      preprocess = do
+        let
+          rewriteCreateWallet = do
+            let
+              constructorName = ConstructorName "CreateWallet"
+              rewriteUTxOs = rewriteProp
+                constructorName
+                (OldPropName "utxos")
+                (NewPropName "possibleUTxOs")
+              rewriteUTxO = rewritePropWith
+                constructorName
+                (OldPropName "utxo")
+                (NewPropName "possibleUTxOs")
+                (toJSON . List.singleton)
+              rewriteNickname = rewriteProp
+                constructorName
+                (OldPropName "nickname")
+                (NewPropName "walletNickname")
+              rewriteToNickname = rewriteToSingletonObject
+                constructorName
+                (PropName "walletNickname")
+            rewriteUTxOs <> rewriteUTxO <> rewriteNickname <> rewriteToNickname
 
-instance ToJSON WalletOperation where
-  toJSON = A.genericToJSON $ Operation.genericJSONOptions "wo"
+          rewriteFund = do
+            let
+              constructorName = ConstructorName "Fund"
+              rewriteUTxOs = rewriteProp
+                constructorName
+                (OldPropName "utxos")
+                (NewPropName "uTxOs")
+              rewriteUTxO = rewritePropWith
+                constructorName
+                (OldPropName "utxo")
+                (NewPropName "uTxOs")
+                (toJSON . List.singleton)
+              rewriteWallets = rewriteProp
+                constructorName
+                (OldPropName "wallets")
+                (NewPropName "walletNicknames")
+              rewriteWallet = rewritePropWith
+                constructorName
+                (OldPropName "wallet")
+                (NewPropName "walletNicknames")
+                (toJSON . List.singleton)
+            rewriteUTxOs <> rewriteUTxO <> rewriteWallets <> rewriteWallet
 
-newtype Wallets era = Wallets (Map WalletNickname (Wallet era))
+          rewriteCheckBalance = rewriteProp
+            (ConstructorName "CheckBalance")
+            (OldPropName "wallet")
+            (NewPropName "walletNickname")
+
+          rewriteMint = rewriteProp
+            (ConstructorName "Mint")
+            (OldPropName "nickname")
+            (NewPropName "currencyNickname")
+        rewriteCreateWallet <> rewriteFund <> rewriteCheckBalance <> rewriteMint
+    Operation.parseConstructorBasedJSON "wo" preprocess
+
+instance A.ToJSON WalletOperation where
+  toJSON = Operation.toConstructorBasedJSON "wo"
+
+faucetNickname :: WalletNickname
+faucetNickname = "Faucet"
+
+data Wallets era = Wallets
+  { _wsWallets :: Map WalletNickname (Wallet era)
+  , _wsFaucet  :: Wallet era
+  }
+
+mkWallets :: Wallet era -> Wallets era
+mkWallets = Wallets Map.empty
+
+mapWallets :: (Wallet era -> Wallet era) -> Wallets era -> Wallets era
+mapWallets f (Wallets wallets faucet) = Wallets (Map.map f wallets) (f faucet)
+
+mapWalletsWithKey :: (WalletNickname -> Wallet era -> Wallet era) -> Wallets era -> Wallets era
+mapWalletsWithKey f (Wallets wallets faucet) = Wallets (Map.mapWithKey f wallets) (f faucetNickname faucet)
+
+insertWallet :: WalletNickname -> Wallet era -> Wallets era -> Maybe (Wallets era)
+insertWallet walletNickname wallet (Wallets wallets faucet)
+  | walletNickname `Map.member` wallets = Nothing
+  | walletNickname == faucetNickname = Nothing
+  | otherwise = Just $ Wallets (Map.insert walletNickname wallet wallets) faucet
+
+updateWallet :: WalletNickname -> Wallet era -> Wallets era -> Maybe (Wallets era)
+updateWallet walletNickname wallet (Wallets wallets faucet)
+  | walletNickname `Map.member` wallets = Just $ Wallets (Map.insert walletNickname wallet wallets) faucet
+  | walletNickname == faucetNickname = Just $ Wallets wallets wallet
+  | otherwise = Nothing
+
+lookupWallet :: WalletNickname -> Wallets era -> Maybe (Wallet era)
+lookupWallet walletNickname (Wallets wallets faucet)
+  | walletNickname == faucetNickname = Just faucet
+  | otherwise = Map.lookup walletNickname wallets
+
+getAllWallets :: Wallets era -> Map WalletNickname (Wallet era)
+getAllWallets (Wallets wallets faucet) = Map.insert faucetNickname faucet wallets
+
+getNonFaucetWallets :: Wallets era -> Map WalletNickname (Wallet era)
+getNonFaucetWallets (Wallets wallets _) = wallets
+
+getFaucet :: Wallets era -> Wallet era
+getFaucet (Wallets _ f) = f
+
+makeLenses ''Wallets
 
 class HasInterpretState st era | st -> era where
   walletsL :: Lens' st (Wallets era)
@@ -363,10 +510,23 @@ type InterpretMonad env st m era =
   , HasInterpretState st era
   , MonadReader env m
   , HasInterpretEnv env era
-  , MonadError CliError m
+  , MonadError InterpreterError m
   , MonadIO m
+  , Log.HasLogStore st
   )
 
 adaToken :: M.Token
 adaToken = M.Token "" ""
+
+txBodyFee :: forall era. TxBody era -> C.Lovelace
+txBodyFee (C.TxBody txBodyContent) =
+  case C.txFee txBodyContent of
+    C.TxFeeExplicit _ lovelace -> lovelace
+    C.TxFeeImplicit _ -> C.Lovelace 0
+
+walletTxFees :: Wallet era' -> C.Lovelace
+walletTxFees Wallet{..} = do
+  let
+  _waSubmittedTransactions `foldMapFlipped` \case
+    (SomeTxBody _ txBody) -> txBodyFee txBody
 

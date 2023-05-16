@@ -1,40 +1,36 @@
-testName: Covered Call Contract Test
+testName: Covered Call Contract Test Using The Runtime
 
 operations:
-  - tag: CreateWallet
-    walletNickname: Issuer
 
-  - tag: CreateWallet
-    walletNickname: CounterParty
+- CreateWallet: Issuer
 
-  - tag: FundWallets
-    values:
-      - 100000000
-    walletNicknames: [Issuer, CounterParty]
+- CreateWallet: CounterParty
 
-  # Minting tokens aParty will use in the swap
-  - tag: Mint
+- Fund:
+    utxo: 100000000
+    wallets: [Issuer, CounterParty]
+
+# Minting tokens aParty will use in the swap
+- Mint:
     issuer: Issuer
-    currencyNickname: CurrencyA
+    nickname: CurrencyA
     minLovelace: 2000000
     tokenDistribution:
       - [Issuer, Globe, 300]
 
-  - tag: Mint
+- Mint:
     issuer: CounterParty
-    currencyNickname: CurrencyB
+    nickname: CurrencyB
     minLovelace: 2000000
     tokenDistribution:
       - [CounterParty, Swan, 500]
 
-  # Transaction 1. Create the Contract by Providing the Minimum ADA.
-  - tag: RuntimeCreateContract
-    contractNickname: Covered Call
+# Transaction 1. Create the Contract by Providing the Minimum ADA.
+- RuntimeCreateContract:
     minLovelace: 2000000
     awaitConfirmed: 120
-    contractSource:
-      template:
-        tag: UseCoveredCall
+    template:
+      UseCoveredCall:
         issuer:
           address: Issuer
         counterParty:
@@ -50,9 +46,8 @@ operations:
         settlementDate:
           relative: 36000 # now + 10h
 
-  # Transaction 2. The issuer deposits Tokens into the Contract.
-  - tag: RuntimeApplyInputs
-    contractNickname: Covered Call
+# Transaction 2. The issuer deposits Tokens into the Contract.
+- RuntimeApplyInputs:
     submitter: Issuer
     awaitConfirmed: 120
     inputs:
@@ -65,9 +60,8 @@ operations:
         into_account:
           address: Issuer
 
-  # Transaction 3. The Counter-Party chooses to exercise the option.
-  - tag: RuntimeApplyInputs
-    contractNickname: Covered Call
+# Transaction 3. The Counter-Party chooses to exercise the option.
+- RuntimeApplyInputs:
     submitter: CounterParty
     awaitConfirmed: 120
     inputs:
@@ -77,9 +71,8 @@ operations:
             address: CounterParty
         input_that_chooses_num: 1
 
-  # Transaction 4. The Counter-Party Deposits their Tokens."
-  - tag: RuntimeApplyInputs
-    contractNickname: Covered Call
+# Transaction 4. The Counter-Party Deposits their Tokens."
+- RuntimeApplyInputs:
     submitter: CounterParty
     awaitConfirmed: 120
     inputs:
@@ -92,18 +85,15 @@ operations:
         into_account:
           address: CounterParty
 
-  - tag: CheckBalance
-    walletNickname: Issuer
+- CheckBalance:
+    wallet: Issuer
     balance:
       - [CurrencyB, Swan, 500]
       - [ADA, "*"]
 
-  - tag: CheckBalance
-    walletNickname: CounterParty
+- CheckBalance:
+    wallet: CounterParty
     balance:
       - [CurrencyA, Globe, 300]
       - [ADA, "*"]
 
-  - tag: BurnAll
-
-  - tag: ReturnFunds

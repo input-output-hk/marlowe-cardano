@@ -16,6 +16,8 @@ module Language.Marlowe.Runtime.App.Types
   ( App
   , Client(..)
   , Config(..)
+  , FinishOnClose(..)
+  , FinishOnWait(..)
   , MarloweRequest(..)
   , MarloweResponse(..)
   , PollingFrequency(..)
@@ -412,8 +414,14 @@ instance A.ToJSON (MarloweResponse 'V1) where
       , "transaction" A..= resTransaction
       ]
 
+newtype FinishOnWait = FinishOnWait { unFinishOnWait :: Bool }
+  deriving (Eq, Show)
 
-newtype PollingFrequency = PollingFrequency Second
+newtype FinishOnClose = FinishOnClose { unFinishOnClose :: Bool }
+  deriving (Eq, Show)
+
+newtype PollingFrequency = PollingFrequency { unPollingFrequency :: Second }
+  deriving (Eq, Ord, Show)
 
 
 contractCreationToJSON :: CreateStep 'V1-> A.Value

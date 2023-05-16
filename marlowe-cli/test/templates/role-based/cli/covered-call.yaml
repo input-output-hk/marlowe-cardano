@@ -1,0 +1,136 @@
+testName: Covered Call Contract using CLI and role tokens
+
+operations:
+
+- CreateWallet: Issuer
+
+- CreateWallet: CounterParty
+
+- Fund:
+    utxo: 100000000
+    wallets: [Issuer, CounterParty]
+
+# Minting role tokens
+- Mint:
+    issuer: Faucet
+    nickname: ContractCurrency
+    minLovelace: 2000000
+    tokenDistribution:
+      - [Issuer, IssuerRole, 1]
+      - [CounterParty, CounterPartyRole, 1]
+
+- Mint:
+    issuer: Issuer
+    nickname: CurrencyA
+    minLovelace: 2000000
+    tokenDistribution:
+      - [Issuer, Globe, 300]
+
+- Mint:
+    issuer: CounterParty
+    nickname: CurrencyB
+    minLovelace: 2000000
+    tokenDistribution:
+      - [CounterParty, Swan, 500]
+
+# Transaction 1. Create the Contract by Providing the Minimum ADA.
+- Initialize:
+    roleCurrency: ContractCurrency
+    minLovelace: 2000000
+    template:
+      UseCoveredCall:
+        issuer:
+          role_token: IssuerRole
+        counterParty:
+          role_token: CounterPartyRole
+        currency: [CurrencyB, Swan]
+        underlying: [CurrencyA, Globe]
+        amount: 300
+        strike: 500
+        issueDate:
+          relative: 18000 # now + 5h
+        maturityDate:
+          relative: -15 # ~ now
+        settlementDate:
+          relative: 36000 # now + 10h
+
+# Transaction 2. The issuer deposits Tokens into the Contract.
+- Prepare:
+    inputs:
+      - input_from_party:
+          role_token: IssuerRole
+        that_deposits: 300
+        of_token:
+          currency_symbol: CurrencyA
+          token_name: Globe
+        into_account:
+          role_token: IssuerRole
+    minimumTime:
+      relative: -15 # ~ now
+    maximumTime:
+      relative: 3600
+
+- AutoRun
+
+# Transaction 3. The Counter-Party chooses to exercise the option.
+- Prepare:
+    inputs:
+      - for_choice_id:
+          choice_name: "Exercise Call"
+          choice_owner:
+            role_token: CounterPartyRole
+        input_that_chooses_num: 1
+    minimumTime:
+      relative: -15
+    maximumTime:
+      relative: 3600
+
+- AutoRun
+
+# Transaction 4. The Counter-Party Deposits their Tokens."
+- Prepare:
+    inputs:
+      - input_from_party:
+          role_token: CounterPartyRole
+        that_deposits: 500
+        of_token:
+          currency_symbol: CurrencyB
+          token_name: Swan
+        into_account:
+          role_token: CounterPartyRole
+    minimumTime:
+      relative: -15
+    maximumTime:
+      relative: 28800
+
+- AutoRun
+
+- CheckBalance:
+    wallet: Issuer
+    balance:
+      - [ContractCurrency, IssuerRole, 1]
+      - [ADA, "*"]
+
+- CheckBalance:
+    wallet: CounterParty
+    balance:
+      - [ContractCurrency, CounterPartyRole, 1]
+      - [ADA, "*"]
+
+- Withdraw: Issuer
+
+- CheckBalance:
+    wallet: Issuer
+    balance:
+      - [ContractCurrency, IssuerRole, 1]
+      - [ADA, "*"]
+      - [CurrencyB, Swan, 500]
+
+- Withdraw: CounterParty
+
+- CheckBalance:
+    wallet: CounterParty
+    balance:
+      - [ContractCurrency, CounterPartyRole, 1]
+      - [ADA, "*"]
+      - [CurrencyA, Globe, 300]

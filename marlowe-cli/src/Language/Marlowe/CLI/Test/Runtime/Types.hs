@@ -15,12 +15,14 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TupleSections #-}
 
 module Language.Marlowe.CLI.Test.Runtime.Types
   where
 
 import Cardano.Api (CardanoMode, LocalNodeConnectInfo, ScriptDataSupportedInEra)
 import qualified Cardano.Api as C
+import qualified Contrib.Data.List as List
 import qualified Contrib.Data.Time.Units.Aeson as A
 import Control.Concurrent.STM (TChan, TVar)
 import Control.Lens (Lens', Traversal', makeLenses)
@@ -39,11 +41,14 @@ import Language.Marlowe.CLI.Test.Contract (ContractNickname)
 import qualified Language.Marlowe.CLI.Test.Contract as Contract
 import Language.Marlowe.CLI.Test.Contract.ParametrizedMarloweJSON
 import Language.Marlowe.CLI.Test.ExecutionMode (ExecutionMode)
+import Language.Marlowe.CLI.Test.InterpreterError (InterpreterError)
+import qualified Language.Marlowe.CLI.Test.Log as Log
+import Language.Marlowe.CLI.Test.Operation.Aeson
+  (ConstructorName(ConstructorName), NewPropName(NewPropName), OldPropName(OldPropName), rewriteProp, rewritePropWith)
 import qualified Language.Marlowe.CLI.Test.Operation.Aeson as Operation
 import Language.Marlowe.CLI.Test.Wallet.Types (Currencies, CurrencyNickname, WalletNickname, Wallets)
 import qualified Language.Marlowe.CLI.Test.Wallet.Types as Wallet
-import Language.Marlowe.CLI.Types (CliError)
-import Language.Marlowe.Cardano.Thread (AnyMarloweThread, MarloweThread, anyMarloweThread)
+import Language.Marlowe.Cardano.Thread (AnyMarloweThread, MarloweThread, anyMarloweThreadInputsApplied)
 import qualified Language.Marlowe.Core.V1.Semantics.Types as M
 import qualified Language.Marlowe.Protocol.Client as Marlowe.Protocol
 import qualified Language.Marlowe.Protocol.Types as Marlowe.Protocol
@@ -52,18 +57,45 @@ import Ledger.Orphans ()
 import qualified Network.Protocol.Connection as Network.Protocol
 import Network.Protocol.Handshake.Types (Handshake)
 
--- Curretly we don't use any extra execution information from the Runtime.
-type RuntimeTxInfo = ()
+-- | We use TxId in the thread to perform awaits for a particular marlowe transaction.
+type RuntimeMonitorTxInfo = C.TxId
 
-type RuntimeMarloweThread lang era = MarloweThread RuntimeTxInfo lang era
+type RuntimeMonitorMarloweThread = MarloweThread RuntimeMonitorTxInfo
 
-type AnyRuntimeMarloweThread lang era = AnyMarloweThread RuntimeTxInfo lang era
+type AnyRuntimeMonitorMarloweThread = AnyMarloweThread RuntimeMonitorTxInfo
 
-anyRuntimeMarloweThread :: Maybe C.TxIn
-                        -> [M.Input]
-                        -> AnyRuntimeMarloweThread lang era
-                        -> Maybe (AnyRuntimeMarloweThread lang era)
-anyRuntimeMarloweThread = anyMarloweThread ()
+anyRuntimeMonitorMarloweThreadInputsApplied
+  :: C.TxId
+  -> Maybe C.TxIx
+  -> [M.Input]
+  -> AnyRuntimeMonitorMarloweThread
+  -> Maybe AnyRuntimeMonitorMarloweThread
+anyRuntimeMonitorMarloweThreadInputsApplied txId possibleTxIx = do
+  let
+    possibleTxIn = C.TxIn txId <$> possibleTxIx
+  anyMarloweThreadInputsApplied txId possibleTxIn
+
+-- | To avoid confusion we have a separate type for submitted transaction
+-- | in the main interpreter thread. We use these to await for runtime
+-- | confirmations.
+newtype RuntimeTxInfo = RuntimeTxInfo C.TxId
+  deriving stock (Eq, Generic, Show)
+
+type RuntimeInterpreterMarloweThread = MarloweThread RuntimeTxInfo
+
+type AnyRuntimeInterpreterMarloweThread = AnyMarloweThread RuntimeTxInfo
+
+anyRuntimeInterpreterMarloweThreadInputsApplied
+  :: C.TxId
+  -> Maybe C.TxIx
+  -> [M.Input]
+  -> AnyRuntimeInterpreterMarloweThread
+  -> Maybe AnyRuntimeInterpreterMarloweThread
+anyRuntimeInterpreterMarloweThreadInputsApplied txId possibleTxIx = do
+  let
+    possibleTxIn = C.TxIn txId <$> possibleTxIx
+    txInfo = RuntimeTxInfo txId
+  anyMarloweThreadInputsApplied txInfo possibleTxIn
 
 data RuntimeError
   = RuntimeConnectionError
@@ -71,88 +103,134 @@ data RuntimeError
   | RuntimeContractNotFound ContractId
   | RuntimeRollbackError ContractNickname
   deriving stock (Eq, Generic, Show)
+  deriving anyclass (A.ToJSON, A.FromJSON)
 
--- FIXME: Drop this
-newtype RuntimeContractInfo lang era =
-  RuntimeContractInfo { _rcMarloweThread :: AnyRuntimeMarloweThread lang era }
+newtype RuntimeContractInfo =
+  RuntimeContractInfo
+    { _rcMarloweThread :: AnyRuntimeMonitorMarloweThread
+    }
 
 newtype RuntimeMonitorInput = RuntimeMonitorInput (TChan (ContractNickname, ContractId))
 
-newtype RuntimeMonitorState lang era = RuntimeMonitorState (TVar (Map ContractNickname (RuntimeContractInfo lang era)))
+newtype RuntimeMonitorState = RuntimeMonitorState (TVar (Map ContractNickname RuntimeContractInfo))
 
 newtype RuntimeMonitor = RuntimeMonitor { runMonitor :: IO RuntimeError }
 
 defaultOperationTimeout :: Second
 defaultOperationTimeout = 30
 
-data RuntimeOperation =
-    RuntimeAwaitCreated
+data RuntimeOperation
+  = RuntimeAwaitTxsConfirmed
     {
-      roContractNickname :: ContractNickname
-    , roTimeout :: Maybe A.Second -- ^ Submission timeout.
-    }
-  | RuntimeAwaitInputsApplied
-    {
-      roContractNickname :: ContractNickname
+      roContractNickname :: Maybe ContractNickname
     , roTimeout :: Maybe A.Second
     }
   | RuntimeAwaitClosed
     {
-      roContractNickname :: ContractNickname
+      roContractNickname :: Maybe ContractNickname
     , roTimeout :: Maybe A.Second
     }
   | RuntimeCreateContract
     {
-      roContractNickname :: ContractNickname
-    , roSubmitter :: Maybe WalletNickname -- ^ A wallet which gonna submit the initial transaction.
+      roContractNickname :: Maybe ContractNickname
+    , roSubmitter :: Maybe WalletNickname
+    -- ^ A wallet which gonna submit the initial transaction.
     , roMinLovelace :: Word64
-    , roRoleCurrency :: Maybe CurrencyNickname  -- ^ If contract uses roles then currency is required.
-    , roContractSource :: Contract.Source         -- ^ The Marlowe contract to be created.
-    , roAwaitConfirmed :: Maybe A.Second -- ^ How long to wait for the transaction to be confirmed in the Runtime. By default we don't wait.
+    , roRoleCurrency :: Maybe CurrencyNickname
+    -- ^ If contract uses roles then currency is required.
+    , roContractSource :: Contract.Source
+    -- ^ The Marlowe contract to be created.
+    , roAwaitConfirmed :: Maybe A.Second
+    -- ^ How long to wait for the transaction to be confirmed in the Runtime. By default we don't wait.
     }
   | RuntimeApplyInputs
     {
-      roContractNickname :: ContractNickname
-    , roInputs :: [ParametrizedMarloweJSON]  -- ^ Inputs to the contract.
-    , roSubmitter :: Maybe WalletNickname -- ^ A wallet which gonna submit the initial transaction.
-    , roAwaitConfirmed :: Maybe A.Second -- ^ How long to wait for the transaction to be confirmed in the Runtime. By default we wait 30s.
+      roContractNickname :: Maybe ContractNickname
+    , roInputs :: [ParametrizedMarloweJSON]
+    -- ^ Inputs to the contract.
+    , roSubmitter :: Maybe WalletNickname
+    -- ^ A wallet which gonna submit the initial transaction.
+    , roAwaitConfirmed :: Maybe A.Second
+    -- ^ How long to wait for the transaction to be confirmed in the Runtime. By default we don't wait.
+    }
+  | RuntimeWithdraw
+    {
+      roContractNickname :: Maybe ContractNickname
+    , roWallets :: Maybe [WalletNickname] -- ^ Wallets with role tokens. By default we find all the role tokens and use them.
+    , roAwaitConfirmed :: Maybe A.Second -- ^ How long to wait for the transactions to be confirmed in the Runtime. By default we don't wait.
     }
   deriving stock (Eq, Generic, Show)
 
 instance FromJSON RuntimeOperation where
   parseJSON = do
-    A.genericParseJSON $ Operation.genericJSONOptions "ro"
+    let
+      preprocess = do
+        let
+          rewriteCreate = do
+            let
+              constructorName = ConstructorName "RuntimeCreateContract"
+              rewriteTemplate = rewritePropWith
+                constructorName
+                (OldPropName "template")
+                (NewPropName "contractSource")
+                (A.object . List.singleton . ("template",))
+              rewriteContract = rewritePropWith
+                constructorName
+                (OldPropName "source")
+                (NewPropName "contractSource")
+                (A.object . List.singleton . ("inline",))
+              rewriteContractNickname = rewriteProp
+                constructorName
+                (OldPropName "nickname")
+                (NewPropName "contractNickname")
+            rewriteTemplate <> rewriteContract <> rewriteContractNickname
+          rewriteWithdraw = do
+            let
+              constructorName = ConstructorName "RuntimeWithdraw"
+              rewriteWallet = rewritePropWith
+                constructorName
+                (OldPropName "wallet")
+                (NewPropName "wallets")
+                (A.toJSON . List.singleton)
+            rewriteWallet
+        rewriteCreate <> rewriteWithdraw
+    Operation.parseConstructorBasedJSON "ro" preprocess
 
 instance ToJSON RuntimeOperation where
-  toJSON = do
-    A.genericToJSON $ Operation.genericJSONOptions "ro"
+  toJSON = Operation.toConstructorBasedJSON "ro"
 
 data ContractInfo = ContractInfo
-  { ciContractId :: ContractId
-  , ciAppliedInputs :: [M.Input] -- ^ Inputs which we applied. Possibly unconfirmed yet.
+  { _ciContractId :: ContractId
+  , _ciRoleCurrency :: Maybe CurrencyNickname
+  -- ^ If the contract uses roles then currency is required.
+  , _ciMarloweThread :: AnyRuntimeInterpreterMarloweThread
   }
 
-class HasInterpretState st lang era | st -> lang era where
+makeLenses 'ContractInfo
+
+class HasInterpretState st era | st -> era where
   knownContractsL :: Lens' st (Map ContractNickname ContractInfo)
   walletsL :: Lens' st (Wallets era)
   currenciesL :: Lens' st Currencies
 
-class HasInterpretEnv env lang era | env -> lang era where
-  runtimeMonitorStateT :: Traversal' env (RuntimeMonitorState lang era)
+class HasInterpretEnv env era | env -> era where
+  runtimeMonitorStateT :: Traversal' env RuntimeMonitorState
   runtimeMonitorInputT :: Traversal' env RuntimeMonitorInput
   runtimeClientConnectorT :: Traversal' env (Network.Protocol.ClientConnector (Handshake Marlowe.Protocol.MarloweRuntime) Marlowe.Protocol.MarloweRuntimeClient IO)
+  -- runtimeClientConnectorT :: Traversal' env (Network.Protocol.SomeClientConnector Marlowe.Protocol.MarloweRuntimeClient IO)
   executionModeL :: Lens' env ExecutionMode
   connectionT :: Traversal' env (LocalNodeConnectInfo CardanoMode)
   eraL :: Lens' env (ScriptDataSupportedInEra era)
 
-type InterpretMonad env st m lang era =
+type InterpretMonad env st m era =
   ( MonadState st m
-  , HasInterpretState st lang era
+  , HasInterpretState st era
   , MonadReader env m
-  , HasInterpretEnv env lang era
+  , HasInterpretEnv env era
   , Wallet.InterpretMonad env st m era
-  , MonadError CliError m
+  , MonadError InterpreterError m
   , MonadIO m
+  , Log.HasLogStore st
   )
 
 makeLenses 'RuntimeContractInfo

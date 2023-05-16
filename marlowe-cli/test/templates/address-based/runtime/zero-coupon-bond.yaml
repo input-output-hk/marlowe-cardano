@@ -1,30 +1,26 @@
 testName: Zero Coupon Bond Contract Test
 
 operations:
-  - tag: CreateWallet
-    walletNickname: Lender
 
-  - tag: CreateWallet
-    walletNickname: Borrower
+- CreateWallet: Lender
 
-  - tag: FundWallets
-    values:
+- CreateWallet: Borrower
+
+- Fund:
+    utxos:
       - 10000000
       - 10000000
-    walletNicknames: [Lender, Borrower]
+    wallets: [Lender, Borrower]
 
-  - tag: Sleep
-    seconds: 30
+- Sleep: 30
 
-  # Transaction 1. Create the Contract by Providing the Minimum ADA
-  - tag: RuntimeCreateContract
-    contractNickname: ZCB
+# Transaction 1. Create the Contract by Providing the Minimum ADA
+- RuntimeCreateContract:
     minLovelace: 2000000
     submitter: Lender
     awaitConfirmed: 120
-    contractSource:
-      template:
-        tag: UseZeroCouponBond
+    template:
+      UseZeroCouponBond:
         lender:
           address: Lender
         borrower:
@@ -36,9 +32,8 @@ operations:
         paybackDeadline:
           relative: 30000
 
-  # Transaction 2. Lender Deposits the Loan Amount
-  - tag: RuntimeApplyInputs
-    contractNickname: ZCB
+# Transaction 2. Lender Deposits the Loan Amount
+- RuntimeApplyInputs:
     submitter: Lender
     awaitConfirmed: 120
     inputs:
@@ -51,9 +46,8 @@ operations:
         into_account:
           address: Lender
 
-  # Transaction 3. Borrower Repays the Loan's Principal and Interest"
-  - tag: RuntimeApplyInputs
-    contractNickname: ZCB
+# Transaction 3. Borrower Repays the Loan's Principal and Interest"
+- RuntimeApplyInputs:
     submitter: Borrower
     awaitConfirmed: 120
     inputs:
@@ -66,16 +60,13 @@ operations:
         into_account:
           address: Borrower
 
-  - tag: CheckBalance
-    walletNickname: Borrower
+- CheckBalance:
+    wallet: Borrower
     balance:
       - [ADA, [14, 15]]
 
-  - tag: CheckBalance
-    walletNickname: Lender
+- CheckBalance:
+    wallet: Lender
     balance:
       - [ADA, [24, 25]]
 
-  - tag: BurnAll
-
-  - tag: ReturnFunds

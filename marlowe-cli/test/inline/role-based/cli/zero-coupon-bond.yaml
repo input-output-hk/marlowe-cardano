@@ -1,0 +1,215 @@
+testName: Zero-Coupon Bond
+
+operations:
+
+- Comment: Create the wallet for the lender, fund it with 80 ADA, and activate the Marlowe endpoints.
+
+- CreateWallet:
+    nickname: Lender
+    utxo: 80000000
+
+- Comment: Create the wallet for the borrower and fund it with 10 ADA, and activate the Marlowe endpoints.
+
+- CreateWallet:
+    nickname: Borrower
+    utxo: 10000000
+
+- Comment: Lender mints role tokens
+
+- Mint:
+    issuer: Lender
+    nickname: RoleTokenCurrency
+    minLovelace: 2000000
+    tokenDistribution:
+      - [Lender, LenderRoleToken, 1]
+      - [Borrower, BorrowerRoleToken, 1]
+
+- Comment: The lender creates the ZCB contract, which was downloaded from Marlowe Playground. The loan amount is 50 ADA and the interest amount is 3 ADA.
+
+- Initialize:
+    minLovelace: 2000000
+    roleCurrency: RoleTokenCurrency
+    submitter: Lender
+    source:
+      when:
+        - case:
+            party:
+              role_token: LenderRoleToken
+            deposits: 50000000
+            of_token:
+              currency_symbol: ""
+              token_name: ""
+            into_account:
+              role_token: LenderRoleToken
+          then:
+            pay: 50000000
+            token:
+              currency_symbol: ""
+              token_name: ""
+            from_account:
+              role_token: LenderRoleToken
+            to:
+              party:
+                role_token: BorrowerRoleToken
+            then:
+              when:
+                - case:
+                    party:
+                      role_token: BorrowerRoleToken
+                    deposits:
+                      add: 50000000
+                      and: 3000000
+                    of_token:
+                      currency_symbol: ""
+                      token_name: ""
+                    into_account:
+                      role_token: BorrowerRoleToken
+                  then:
+                    pay:
+                      add: 50000000
+                      and: 3000000
+                    token:
+                      currency_symbol: ""
+                      token_name: ""
+                    from_account:
+                      role_token: BorrowerRoleToken
+                    to:
+                      party:
+                        role_token: LenderRoleToken
+                    then: close
+              timeout: 1961123625000
+              timeout_continuation: close
+      timeout: 1929587625000
+      timeout_continuation: close
+
+- AutoRun
+
+- Comment: The lender should have about 76 ADA now, since 2 ADA was sent to the script address when creating the contract, 2 ADA was sent the borrower along with the role token, and up to 1 ADA in fees might have been paid.
+
+- CheckBalance:
+    wallet: Lender
+    balance:
+      - [ADA, 76]
+      - [RoleTokenCurrency, LenderRoleToken, 1]
+
+- Comment: The borrower should now have their original 10 ADA plus the 2 ADA that arrived with the role token.
+
+- CheckBalance:
+    wallet: Borrower
+    balance:
+      - [ADA, 12]
+      - [RoleTokenCurrency, BorrowerRoleToken, 1]
+
+- Comment: The lender deposits the 50 ADA loan amount.
+
+- Prepare:
+    inputs:
+      - input_from_party:
+          role_token: LenderRoleToken
+        that_deposits: 50000000
+        of_token:
+          currency_symbol: ""
+          token_name: ""
+        into_account:
+          role_token: LenderRoleToken
+    minimumTime:
+      relative: -15
+    maximumTime:
+      relative: 120
+
+- AutoRun
+
+- Comment: The lender will have 50 ADA less for the loan and may have paid up to another 2 ADA in fees, leaving a balance of 26 ADA minus up to 3 ADA in fees.
+
+- CheckBalance:
+    wallet: Lender
+    balance:
+      - [ADA, 26]
+      - [RoleTokenCurrency, LenderRoleToken, 1]
+
+- Comment: The borrower's funds are unchanged.
+
+- CheckBalance:
+    wallet: Borrower
+    balance:
+      - [ADA, 12]
+      - [RoleTokenCurrency, BorrowerRoleToken, 1]
+
+- Comment: Now the borrower redeems the 50 ADA from the payout script.
+
+- Withdraw: Borrower
+
+- Comment: "The lender's funds are unchanged."
+
+- CheckBalance:
+    wallet: Lender
+    balance:
+      - [ADA, 26]
+      - [RoleTokenCurrency, LenderRoleToken, 1]
+
+- Comment: The borrower has an additional 50 ADA but may have paid up to 1 ADA in fees for the redemption, leaving a balance of 62 ADA minus up to 1 ADA in fees.
+
+- CheckBalance:
+    wallet: Borrower
+    balance:
+      - [ADA, 62]
+      - [RoleTokenCurrency, BorrowerRoleToken, 1]
+
+- Comment: The borrower pays back the 53 ADA of loan plus interest.
+
+- Prepare:
+    inputs:
+      - input_from_party:
+          role_token: BorrowerRoleToken
+        that_deposits: 53000000
+        of_token:
+          currency_symbol: ""
+          token_name: ""
+        into_account:
+          role_token: BorrowerRoleToken
+    minimumTime:
+      relative: -15
+    maximumTime:
+      relative: 120
+
+- AutoRun
+
+- Comment: Because the contract is closed when the borrower makes their deposit, the lender receives back their 2 ADA that they contributed to create the contract.
+
+- CheckBalance:
+    wallet: Lender
+    balance:
+      - [ADA, 28]
+      - [RoleTokenCurrency, LenderRoleToken, 1]
+
+- Comment: The borrower has 53 ADA less and may have paid another 2 ADA in fees, leaving a balance of 9 ADA minus up to 3 ADA in fees.
+
+- CheckBalance:
+    wallet: Borrower
+    balance:
+      - [ADA, 9]
+      - [RoleTokenCurrency, BorrowerRoleToken, 1]
+
+- Comment: Both followers should notify that we have a payout back to the Lender.
+
+
+- Comment: The lender redeems the 53 ADA.
+
+- Withdraw: Lender
+
+- Comment: The lender now has an additional 53 ADA but may have paid another 1 ADA in fees, leaving a balance of 81 ADA minus up to 4 ADA in fees.
+
+- CheckBalance:
+    wallet: Lender
+    balance:
+      - [ADA, 81]
+      - [RoleTokenCurrency, LenderRoleToken, 1]
+
+- Comment: The borrower's funds are unchanged.
+
+- CheckBalance:
+    wallet: Borrower
+    balance:
+      - [ADA, 9]
+      - [RoleTokenCurrency, BorrowerRoleToken, 1]
+

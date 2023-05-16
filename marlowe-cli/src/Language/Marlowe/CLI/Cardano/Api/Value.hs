@@ -5,6 +5,7 @@ module Language.Marlowe.CLI.Cardano.Api.Value
 import qualified Cardano.Api as C
 import Language.Marlowe.CLI.Orphans ()
 import qualified Ledger.Tx.CardanoAPI as L
+import qualified Plutus.V1.Ledger.Ada as PA
 import qualified Plutus.V1.Ledger.Value as P
 import qualified PlutusTx.Prelude as PlutusTx
 
@@ -19,10 +20,11 @@ txOutValueValue (C.TxOut _ v _ _) = C.txOutValueToValue v
 toPlutusValue :: C.Value -> P.Value
 toPlutusValue (C.valueToList -> assets) = foldMap (uncurry assetToValue) assets
 
+lovelaceToPlutusAda :: C.Lovelace -> PA.Ada
+lovelaceToPlutusAda (C.Lovelace v) = PA.Lovelace v
 
 lovelaceToPlutusValue :: C.Lovelace -> P.Value
 lovelaceToPlutusValue (C.Lovelace v) = P.singleton P.adaSymbol P.adaToken v
-
 
 assetToValue :: C.AssetId -> C.Quantity -> P.Value
 assetToValue (C.AssetId policyId assetName) (C.Quantity quantity) =

@@ -17,16 +17,17 @@ module Language.Marlowe.CLI.Test.Contract.Source
   where
 
 import Control.Monad (void)
-import Control.Monad.Except (throwError)
+import Control.Monad.Except (MonadError, throwError)
 import Data.Aeson (FromJSON(..), ToJSON(..), (.=))
 import qualified Data.Aeson as A
 import qualified Data.Aeson.KeyMap as KeyMap
 import Data.Maybe (fromMaybe)
 import qualified Data.Text as T
 import GHC.Generics (Generic)
-import Language.Marlowe.CLI.Command.Template (makeContract)
+import qualified Language.Marlowe.CLI.Command.Template as Template
 import Language.Marlowe.CLI.Run (marloweAddressFromCardanoAddress)
 import Language.Marlowe.CLI.Test.Contract.ParametrizedMarloweJSON (ParametrizedMarloweJSON)
+import Language.Marlowe.CLI.Test.InterpreterError (InterpreterError, rethrowCliError, testExecutionFailed')
 import qualified Language.Marlowe.CLI.Test.Operation.Aeson as Operation
 import Language.Marlowe.CLI.Test.Wallet.Interpret
   (assetIdToToken, findWallet, findWalletByUniqueToken, getSingletonCurrency)
@@ -34,7 +35,7 @@ import Language.Marlowe.CLI.Test.Wallet.Types
   ( Asset(Asset)
   , AssetId
   , CurrencyNickname
-  , Wallet(waAddress)
+  , Wallet(_waAddress)
   , WalletNickname(WalletNickname)
   , adaToken
   , faucetNickname
@@ -42,7 +43,8 @@ import Language.Marlowe.CLI.Test.Wallet.Types
   , tokenNameToJSON
   )
 import qualified Language.Marlowe.CLI.Test.Wallet.Types as Wallet
-import Language.Marlowe.CLI.Types (CliError(CliError), SomeTimeout, toMarloweTimeout)
+import Language.Marlowe.CLI.Types (SomeTimeout, toMarloweTimeout)
+import qualified Language.Marlowe.Core.V1.Semantics.Types as C
 import qualified Language.Marlowe.Core.V1.Semantics.Types as M
 import qualified Language.Marlowe.Extended.V1 as E
 import Ledger.Orphans ()
@@ -139,31 +141,32 @@ data UseTemplate =
     deriving stock (Eq, Generic, Show)
 
 instance FromJSON UseTemplate where
-  parseJSON = do
-    A.genericParseJSON $ Operation.genericJSONOptions "ut"
+  parseJSON = Operation.parseConstructorBasedJSON' "ut"
 
 instance ToJSON UseTemplate where
-  toJSON = A.genericToJSON $ Operation.genericJSONOptions "ut"
+  toJSON = Operation.toConstructorBasedJSON "ut"
 
 data Source =
     InlineContract ParametrizedMarloweJSON
   | UseTemplate UseTemplate
     deriving stock (Eq, Generic, Show)
 
-
 instance ToJSON Source where
-    toJSON (InlineContract c)            = A.object [("inline", toJSON c)]
-    toJSON (UseTemplate templateCommand) = A.object [("template", toJSON templateCommand)]
+  toJSON (InlineContract c)            = A.object [("inline", toJSON c)]
+  toJSON (UseTemplate templateCommand) = A.object [("template", toJSON templateCommand)]
 
 instance FromJSON Source where
-    parseJSON json = case json of
-      A.Object (KeyMap.toList -> [("inline", contractJson)]) -> do
-        parsedContract <- parseJSON contractJson
-        pure $ InlineContract parsedContract
-      A.Object (KeyMap.toList -> [("template", templateCommandJson)]) -> do
-        parsedTemplateCommand <- parseJSON templateCommandJson
-        pure $ UseTemplate parsedTemplateCommand
-      _ -> fail "Expected object with a single field of either `inline` or `template`"
+  parseJSON json = case json of
+    A.Object (KeyMap.toList -> [("inline", contractJson)]) -> do
+      parsedContract <- parseJSON contractJson
+      pure $ InlineContract parsedContract
+    A.Object (KeyMap.toList -> [("template", templateCommandJson)]) -> do
+      parsedTemplateCommand <- parseJSON templateCommandJson
+      pure $ UseTemplate parsedTemplateCommand
+    _ -> fail "Expected object with a single field of either `inline` or `template`"
+
+makeContract :: MonadError InterpreterError m => E.Contract -> m C.Contract
+makeContract template = rethrowCliError $ Template.makeContract template
 
 buildParty
   :: Wallet.InterpretMonad env st m era
@@ -173,7 +176,7 @@ buildParty
 buildParty mRoleCurrency = \case
   WalletRef nickname -> do
       wallet <- findWallet nickname
-      uncurry M.Address <$> marloweAddressFromCardanoAddress (waAddress wallet)
+      uncurry M.Address <$> rethrowCliError (marloweAddressFromCardanoAddress (_waAddress wallet))
   RoleRef token -> do
     -- Cosistency check
     currency <- case mRoleCurrency of
@@ -188,8 +191,7 @@ useTemplate
   => Maybe CurrencyNickname
   -> UseTemplate
   -> m M.Contract
-useTemplate currency =
-  \case
+useTemplate currency = \case
   UseTrivial{..} -> do
     timeout' <- toMarloweTimeout utTimeout
     let
@@ -280,5 +282,5 @@ useTemplate currency =
       (E.Constant utPrincipal `E.AddValue` E.Constant utInterest)
       adaToken
       E.Close
-  template -> throwError $ CliError $ "Template not implemented: " <> show template
+  template -> throwError $ testExecutionFailed' $ "Template not implemented: " <> show template
 

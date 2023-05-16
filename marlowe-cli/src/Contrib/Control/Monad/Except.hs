@@ -3,5 +3,6 @@ module Contrib.Control.Monad.Except
 
 import Control.Monad.Except (MonadError(throwError))
 
-exceptMaybe :: MonadError e m => e -> Maybe a -> m a
-exceptMaybe e = maybe (throwError e) pure
+-- MTL generalized version of `Control.Error.note`
+note :: MonadError e m => e -> Maybe a -> m a
+note e = maybe (throwError e) pure
