@@ -66,7 +66,7 @@ jobs:
           tagAndPush "marlowe-web-server"
 
   deploy:
-    if: github.ref == 'main'
+    if: github.ref_name == 'main'
     strategy:
       matrix:
         network: [ preview, preprod, mainnet ]
