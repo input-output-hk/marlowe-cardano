@@ -653,7 +653,6 @@ test-suite marlowe-runtime-test
     Language.Marlowe.Protocol.SyncSpec
     Language.Marlowe.Runtime.Core.MetadataSpec
     Language.Marlowe.Runtime.Core.ScriptRegistrySpec
-    Language.Marlowe.Runtime.ContractSpec
     Language.Marlowe.Runtime.Transaction.ApiSpec
     Language.Marlowe.Runtime.Transaction.BuildConstraintsSpec
     Language.Marlowe.Runtime.Transaction.CommandSpec
@@ -663,28 +662,22 @@ test-suite marlowe-runtime-test
   build-depends:
     , QuickCheck >= 2.14 && < 3
     , aeson >= 2 && < 3
-    , async-components ==0.1.0.0
     , base >= 4.9 && < 5
     , bytestring >= 0.10.12 && < 0.12
     , cardano-api ==1.35.4
     , cardano-api:gen ==1.35.4
-    , cardano-integration
     , cardano-slotting
     , containers >= 0.6.5 && < 0.7
-    , data-default >= 0.7.1 && < 0.8
     , errors >= 2.3 && < 3
-    , eventuo11y-extras ==0.1.0.0
     , hedgehog-quickcheck >= 0.1 && < 0.2
     , hspec
     , http-media >= 0.8 && < 0.9
-    , lock-file >= 0.7 && < 0.8
     , marlowe-cardano ==0.1.0.3
     , marlowe-chain-sync ==0.0.1
     , marlowe-chain-sync:gen ==0.0.1
     , marlowe-chain-sync:plutus-compat ==0.0.1
     , marlowe-protocols ==0.1.0.0
     , marlowe-runtime ==0.0.1
-    , marlowe-runtime:contract ==0.0.1
     , marlowe-runtime:contract-api ==0.0.1
     , marlowe-runtime:discovery-api ==0.0.1
     , marlowe-runtime:gen ==0.0.1
@@ -698,12 +691,10 @@ test-suite marlowe-runtime-test
     , plutus-ledger-api ==1.0.0.1
     , plutus-tx ==1.0.0.0
     , quickcheck-instances >= 0.3.29 && < 0.4
-    , resourcet >= 1.3 && < 2
     , text >= 1.2.4 && < 2
     , time >= 1.9 && < 2
     , transformers >= 0.5.6 && < 0.6
     , typed-protocols ==0.1.0.0
-    , unliftio >= 0.2.1 && < 0.3
     , vector >= 0.12.3 && < 0.13
   build-tool-depends: hspec-discover:hspec-discover
   ghc-options: -threaded
