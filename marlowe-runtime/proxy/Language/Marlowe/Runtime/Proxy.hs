@@ -196,7 +196,7 @@ withHandshake useOpenRefAsParent agency openConnection nextAgency = do
   (Channel{..}, openRef) <- openConnection
   let
     runMain
-      | useOpenRefAsParent = localBackend (setAncestorEventBackend openRef)
+      | useOpenRefAsParent = fmap (hoistPeerTraced (localBackend (setAncestorEventBackend openRef))) . localBackend (setAncestorEventBackend openRef)
       | otherwise = id
   runMain do
     let OutboundChannel{..} = yield (ClientAgency Handshake.TokInit) $ Handshake.MsgHandshake $ Handshake.signature $ Proxy @ps

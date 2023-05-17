@@ -35,7 +35,7 @@ import System.FilePath (takeDirectory)
 import System.IO (hFlush, hPutStrLn, stderr)
 import Text.Printf (hPrintf)
 import UnliftIO (MonadUnliftIO, atomicModifyIORef, liftIO, newIORef)
-import UnliftIO.Directory (doesFileExist, getCurrentDirectory, makeAbsolute, withCurrentDirectory)
+import UnliftIO.Directory (doesFileExist, makeAbsolute, withCurrentDirectory)
 
 newtype LoadCommand = LoadCommand
   { contractFile :: FilePath
@@ -68,7 +68,7 @@ runLoadCommand LoadCommand{..} = do
             | otherwise = reverse $ '>' : replicate ((newProgress * 32 `div` nodeCount) - 1) '='
         liftIO $ hPrintf stderr printStr bar newProgress
         liftIO $ hFlush stderr
-    fmap (nodeCount,) $ lift $ ExceptT $ runMarloweLoadClient $ loadClient incrementProgress contractFile
+    lift $ ExceptT $ runMarloweLoadClient $ loadClient incrementProgress contractFile
   liftIO case result of
     Left err -> do
       case err of
@@ -82,9 +82,8 @@ runLoadCommand LoadCommand{..} = do
           hPrintf stderr "Cyclic import detected of file %s" path
       hPutStrLn stderr ""
       exitFailure
-    Right (nodeCount, hash) -> do
-      let width = nodeCount * 2 + length @[] " []  of  nodes transferred." + 32
-      hPrintf stderr ("%-" <> show width <> "s\n") ("Done." :: String)
+    Right hash -> do
+      hPutStrLn stderr "\nDone."
       putStrLn $ read $ show hash
 
 type CountM = ReaderT [FilePath] (ExceptT LoadError CLI)
@@ -142,8 +141,7 @@ loadClient
 loadClient incrementProgress rootFile =
   MarloweLoadClient do
     incrementProgress
-    startDir <- getCurrentDirectory
-    pure $ processing [startDir] (Import rootFile) StateRoot
+    pure $ processing [] (Import rootFile) StateRoot
   where
     processing
       :: [FilePath]
