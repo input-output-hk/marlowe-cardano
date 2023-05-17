@@ -14,8 +14,6 @@ import qualified Control.Monad as Monad
 import Control.Monad.Except (ExceptT(ExceptT), runExceptT, throwError, withExceptT)
 import Control.Monad.Reader (MonadReader(ask), ReaderT, local, runReaderT)
 import Control.Monad.Trans (lift)
-import Control.Monad.Trans.Control (control)
-import Control.Monad.Trans.Reader (mapReaderT)
 import Data.Aeson hiding (Value)
 import qualified Data.Aeson.KeyMap as KM
 import Data.Aeson.Types hiding (Value)
@@ -36,8 +34,8 @@ import System.Exit (exitFailure)
 import System.FilePath (takeDirectory)
 import System.IO (hFlush, hPutStrLn, stderr)
 import Text.Printf (hPrintf)
-import UnliftIO (atomicModifyIORef, liftIO, newIORef)
-import UnliftIO.Directory (doesFileExist, getCurrentDirectory, makeAbsolute, setCurrentDirectory, withCurrentDirectory)
+import UnliftIO (MonadUnliftIO, atomicModifyIORef, liftIO, newIORef)
+import UnliftIO.Directory (doesFileExist, getCurrentDirectory, makeAbsolute, withCurrentDirectory)
 
 newtype LoadCommand = LoadCommand
   { contractFile :: FilePath
@@ -70,12 +68,7 @@ runLoadCommand LoadCommand{..} = do
             | otherwise = reverse $ '>' : replicate ((newProgress * 32 `div` nodeCount) - 1) '='
         liftIO $ hPrintf stderr printStr bar newProgress
         liftIO $ hFlush stderr
-    fmap (nodeCount,)
-      $ lift
-      $ ExceptT
-      $ withCurrentDirectory "."
-      $ runMarloweLoadClient
-      $ loadClient incrementProgress contractFile
+    fmap (nodeCount,) $ lift $ ExceptT $ runMarloweLoadClient $ loadClient incrementProgress contractFile
   liftIO case result of
     Left err -> do
       case err of
@@ -119,18 +112,23 @@ countCase count (LoadCase _ c) = countNodes' (count + 1) c
 
 withContract :: FilePath -> (LoadContract -> CountM a) -> CountM a
 withContract path m = do
-  fileExists <- doesFileExist path
   breadcrumb <- ask
+  (breadcrumb', contract) <- lift $ openFile breadcrumb path
+  local (const breadcrumb') $ m contract
+
+openFile :: MonadUnliftIO m => [FilePath] -> FilePath -> ExceptT LoadError m ([FilePath], LoadContract)
+openFile breadcrumb path = do
+  fileExists <- doesFileExist path
   unless fileExists $ throwError $ FileNotFound breadcrumb path
-  absPath <- makeAbsolute path
+  absPath <- case breadcrumb of
+    [] -> makeAbsolute path
+    current : _ -> lift $ withCurrentDirectory (takeDirectory current) $ makeAbsolute path
   Monad.when (absPath `elem` breadcrumb) $ throwError $ CyclicImport absPath
-  control \runInBase -> withCurrentDirectory (takeDirectory path) $ runInBase do
-    contract <- mapReaderT (withExceptT (FileInvalid absPath))
-      $ lift
-      $ ExceptT
-      $ liftIO
-      $ decodeFileEither absPath
-    local (absPath :) $ m contract
+  contract <- withExceptT (FileInvalid absPath)
+    $ ExceptT
+    $ liftIO
+    $ decodeFileEither absPath
+  pure (absPath : breadcrumb, contract)
 
 data LoadError
   = FileNotFound [FilePath] FilePath
@@ -187,16 +185,10 @@ loadClient incrementProgress rootFile =
         incrementProgress
         pure $ PushAssert obs $ push breadcrumb next (StateAssert state) n
       Import path -> do
-        result <- runExceptT do
-          fileExists <- doesFileExist path
-          unless fileExists $ throwError $ FileNotFound breadcrumb path
-          absPath <- makeAbsolute path
-          Monad.when (absPath `elem` breadcrumb) $ throwError $ CyclicImport absPath
-          setCurrentDirectory $ takeDirectory path
-          fmap (absPath,) $ withExceptT (FileInvalid absPath) $ ExceptT $ liftIO $ decodeFileEither absPath
+        result <- runExceptT $ openFile breadcrumb path
         case result of
           Left err -> pure $ Abort $ Left err
-          Right (absPath, contract') -> push (absPath : breadcrumb) contract' (StateImport breadcrumb state) (Succ n)
+          Right (breadcrumb', contract') -> push breadcrumb' contract' (StateImport breadcrumb state) (Succ n)
 
     pop
       :: [FilePath]
@@ -213,11 +205,7 @@ loadClient incrementProgress rootFile =
       StateCase (c : cs) fallback state' -> pushCase breadcrumb n c cs fallback state'
       StateLet state' -> pop breadcrumb state' n
       StateAssert state' -> pop breadcrumb state' n
-      StateImport prevBreadcrumb state' -> do
-        case prevBreadcrumb of
-          [] -> pure ()
-          prevPath : _ -> setCurrentDirectory $ takeDirectory prevPath
-        pop prevBreadcrumb state' n
+      StateImport prevBreadcrumb state' -> pop prevBreadcrumb state' n
 
     pushCase
       :: [FilePath]
