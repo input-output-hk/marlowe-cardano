@@ -21,6 +21,7 @@ import Data.Binary.Put (putWord8, runPut)
 import qualified Data.ByteString as B
 import Data.ByteString.Lazy (ByteString)
 import qualified Data.ByteString.Lazy as LBS
+import Data.ByteString.Lazy.Base16 (encodeBase16)
 import Data.Foldable (traverse_)
 import Data.Functor (void)
 import Data.Int (Int64)
@@ -29,11 +30,20 @@ import Data.Proxy
 import Data.String (fromString)
 import Data.Text (Text)
 import qualified Data.Text as T
+import qualified Data.Text.Lazy as TL
 import Data.Void (Void)
 import Network.Channel hiding (close)
 import Network.Protocol.Codec (BinaryMessage, DeserializeError, decodeGet, getMessage, putMessage)
+import Network.Protocol.Codec.Spec (ShowProtocol(..))
 import Network.Protocol.Connection
-  (ConnectionSourceTraced(..), ConnectionTraced(..), ConnectorTraced(..), SomeConnectorTraced(..), ToPeer)
+  ( ConnectionSourceTraced(..)
+  , ConnectionTraced(..)
+  , ConnectorTraced(..)
+  , DriverSelector(..)
+  , RecvMessageField(..)
+  , SomeConnectorTraced(..)
+  , ToPeer
+  )
 import Network.Protocol.Driver (TcpServerDependencies(..))
 import Network.Protocol.Handshake.Types (Handshake)
 import Network.Protocol.Peer.Trace
@@ -113,10 +123,9 @@ runYieldPeerWithDriverTraced
   -> YieldTraced ps pr st' m a
   -> m a
 runYieldPeerWithDriverTraced inj driver tok msg dState = \case
-  Call tok' k -> join $ withInjectEventFields inj (CallSelector tok msg) [Nothing] \callEv -> do
+  Call tok' k -> join $ withInjectEventFields inj (CallSelector tok msg) [()] \callEv -> do
     sendMessageTraced driver (reference callEv) tok msg
     (_, SomeMessage msg', dState') <- recvMessageTraced driver tok' dState
-    addField callEv $ Just $ AnyMessageAndAgency tok' msg'
     pure $ runPeerWithDriverTraced inj driver (k msg') dState'
 
   Cast peer -> join $ withInjectEventFields inj (CastSelector tok msg) [()] \castEv -> do
@@ -141,7 +150,6 @@ runAwaitPeerWithDriverTraced inj driver tok k dState = do
   case k msg of
     Respond tok' m -> join $ withInjectEventArgs inj (respondArgs sendRef tok msg) \respondEv -> do
       Response msg' nextPeer <- m
-      addField respondEv $ Just $ AnyMessageAndAgency tok' msg'
       sendMessageTraced driver (reference respondEv) tok' msg'
       pure $ runPeerWithDriverTraced inj driver nextPeer dState'
     Receive nextPeer -> join $ withInjectEventArgs inj (receiveArgs sendRef tok msg) $ const $ receive dState' nextPeer
@@ -153,7 +161,7 @@ runAwaitPeerWithDriverTraced inj driver tok k dState = do
       peer -> pure $ runPeerWithDriverTraced inj driver peer dState'
     respondArgs sendRef tok' msg = (simpleNewEventArgs (RespondSelector tok' msg))
       { newEventParent = Just sendRef
-      , newEventInitialFields = [Nothing]
+      , newEventInitialFields = [()]
       }
     receiveArgs sendRef tok' msg = (simpleNewEventArgs (ReceiveSelector tok' msg))
       { newEventParent = Just sendRef
@@ -186,6 +194,10 @@ data TcpClientSelector ps f where
     -> TypedProtocolsSelector ps f
     -> TcpClientSelector ps f
   CloseClient :: TcpClientSelector ps Void
+  ClientDriver
+    :: AddrInfo
+    -> DriverSelector ps f
+    -> TcpClientSelector ps f
 
 data TcpServerSelector ps f where
   Connected :: TcpServerSelector ps ConnectedField
@@ -195,6 +207,11 @@ data TcpServerSelector ps f where
     -> TypedProtocolsSelector ps f
     -> TcpServerSelector ps f
   CloseServer :: TcpServerSelector ps Void
+  ServerDriver
+    :: AddrInfo
+    -> SockAddr
+    -> DriverSelector ps f
+    -> TcpServerSelector ps f
 
 data ConnectedField
   = ConnectedAddr AddrInfo
@@ -232,6 +249,7 @@ tcpServerTraced inj = component \TcpServerDependencies{..} -> do
               { closeConnection = \_ -> atomically closeConnection
               , channel = socketAsChannel socket
               , injectProtocolSelector = injectSelector $ ServerPeer addr peer
+              , injectDriverSelector = injectSelector $ ServerDriver addr peer
               , openRef = parentRef
               , ..
               }
@@ -267,6 +285,7 @@ tcpClientTraced inj host port toPeer = ConnectorTraced
       , channel = socketAsChannel socket
       , openRef = reference ev
       , injectProtocolSelector = injectSelector $ ClientPeer addr
+      , injectDriverSelector = injectSelector $ ClientDriver addr
       , ..
       }
 
@@ -277,7 +296,7 @@ runConnectionTraced
   -> peer m a
   -> m a
 runConnectionTraced inj ConnectionTraced{..} peer = localBackend (setAncestorEventBackend openRef) do
-  let driver = mkDriverTraced channel
+  let driver = mkDriverTraced (composeInjectSelector inj injectDriverSelector) channel
   mask \restore -> do
     result <- try $ restore $ runPeerWithDriverTraced (composeInjectSelector inj injectProtocolSelector) driver (toPeer peer) (startDStateTraced driver)
     case result of
@@ -301,11 +320,12 @@ instance (Monoid b, HasSpanContext a) => HasSpanContext (a, b) where
   wrapContext = (,mempty) . wrapContext
 
 mkDriverTraced
-  :: forall ps r m
-   . (MonadIO m, BinaryMessage ps, HasSpanContext r)
-  => Channel m ByteString
+  :: forall ps r s m
+   . (MonadIO m, BinaryMessage ps, HasSpanContext r, MonadEvent r s m)
+  => InjectSelector (DriverSelector ps) s
+  -> Channel m ByteString
   -> DriverTraced ps (Maybe ByteString) r m
-mkDriverTraced Channel{..} = DriverTraced{..}
+mkDriverTraced inj Channel{..} = DriverTraced{..}
   where
     sendMessageTraced
       :: forall (pr :: PeerRole) (st :: ps) (st' :: ps)
@@ -313,9 +333,9 @@ mkDriverTraced Channel{..} = DriverTraced{..}
       -> PeerHasAgency pr st
       -> Message ps st st'
       -> m ()
-    sendMessageTraced r tok msg = do
+    sendMessageTraced r tok msg = withInjectEventFields inj (SendMessage tok msg) [()] \ev -> do
       spanContext <- context r
-      send $ runPut $ put spanContext *> putMessage tok msg
+      addField ev =<< send (runPut $ put spanContext *> putMessage tok msg)
 
     recvMessageTraced
       :: forall (pr :: PeerRole) (st :: ps)
@@ -323,18 +343,43 @@ mkDriverTraced Channel{..} = DriverTraced{..}
       -> Maybe ByteString
       -> m (r, SomeMessage st, Maybe ByteString)
     recvMessageTraced tok trailing = do
-      (r, trailing') <- decodeChannel trailing =<< decodeGet (wrapContext <$> get)
-      (msg, trailing'') <- decodeChannel trailing' =<< decodeGet (getMessage tok)
-      pure (r, msg, trailing'')
+      let
+      (ctx, trailing') <- decodeChannel trailing =<< decodeGet get
+      let r = wrapContext ctx
+      let
+        args = (simpleNewEventArgs $ RecvMessage tok)
+          { newEventParent = Just r
+          , newEventInitialFields =
+              [ RecvMessageStateBeforeSpan trailing
+              , RecvMessageStateBeforeMessage trailing'
+              ]
+          }
+      withInjectEventArgs inj args \ev -> do
+        (SomeMessage msg, trailing'') <- decodeChannel trailing' =<< decodeGet (getMessage tok)
+        addField ev $ RecvMessageStateAfterMessage trailing''
+        addField ev $ RecvMessageMessage msg
+        pure (r, SomeMessage msg, trailing'')
 
     decodeChannel
       :: Maybe ByteString
       -> DecodeStep ByteString DeserializeError m a
       -> m (a, Maybe ByteString)
-    decodeChannel _ (DecodeDone a trailing)     = pure (a, trailing)
-    decodeChannel _ (DecodeFail failure)        = throwIO failure
-    decodeChannel Nothing (DecodePartial next)  = recv >>= next >>= decodeChannel Nothing
-    decodeChannel trailing (DecodePartial next) = next trailing >>= decodeChannel Nothing
+    decodeChannel trailing (DecodeDone a _) = pure (a, trailing)
+    decodeChannel _ (DecodeFail failure) = throwIO failure
+    decodeChannel trailing (DecodePartial p) =
+      case trailing of
+        Nothing -> go $ DecodePartial p
+        Just trailing' -> go =<< p (Just trailing')
+      where
+        go = \case
+          DecodeDone a Nothing -> pure (a, Nothing)
+          DecodeDone a (Just trailing') -> do
+            pure (a, Just trailing')
+          DecodeFail failure -> throwIO failure
+          DecodePartial next -> do
+            mBytes <- recv
+            nextStep <- next mBytes
+            go nextStep
 
     startDStateTraced :: Maybe ByteString
     startDStateTraced = Nothing
@@ -380,7 +425,7 @@ instance Binary SpanContext where
     traceState <- get
     pure SpanContext{..}
 
-renderTcpClientSelectorOTel :: forall ps. OTelProtocol ps => RenderSelectorOTel (TcpClientSelector ps)
+renderTcpClientSelectorOTel :: forall ps. (OTelProtocol ps, ShowProtocol ps) => RenderSelectorOTel (TcpClientSelector ps)
 renderTcpClientSelectorOTel = \case
   Connect -> OTelRendered
     { eventName = "tcp/connect " <> protocolName (Proxy @ps)
@@ -400,8 +445,15 @@ renderTcpClientSelectorOTel = \case
     , eventKind = Producer
     , renderField = \case
     }
+  ClientDriver addr sel -> case renderDriverSelectorOTel sel of
+    OTelRendered{..} -> OTelRendered
+      { renderField = \f ->
+          (("net.protocol.name", toAttribute $ protocolName (Proxy @ps)) : addrInfoToAttributes addr)
+            <> renderField f
+      , ..
+      }
 
-renderTcpServerSelectorOTel :: forall ps. OTelProtocol ps => RenderSelectorOTel (TcpServerSelector ps)
+renderTcpServerSelectorOTel :: forall ps. (OTelProtocol ps, ShowProtocol ps) => RenderSelectorOTel (TcpServerSelector ps)
 renderTcpServerSelectorOTel = \case
   Connected -> OTelRendered
     { eventName = "tcp/connected " <> protocolName (Proxy @ps)
@@ -423,6 +475,50 @@ renderTcpServerSelectorOTel = \case
     , eventKind = Producer
     , renderField = \case
     }
+  ServerDriver addr peer sel -> case renderDriverSelectorOTel sel of
+    OTelRendered{..} -> OTelRendered
+      { renderField = \f ->
+          (("net.protocol.name", toAttribute $ protocolName (Proxy @ps)) : addrInfoToAttributes addr)
+            <> sockAddrToAttributes True peer
+            <> renderField f
+      , ..
+      }
+
+renderDriverSelectorOTel :: (ShowProtocol ps, OTelProtocol ps) => RenderSelectorOTel (DriverSelector ps)
+renderDriverSelectorOTel = \case
+  SendMessage tok msg -> OTelRendered
+    { eventName = "send_message " <> messageType (messageAttributes tok msg)
+    , eventKind = Producer
+    , renderField = const $ messageToAttributes $ AnyMessageAndAgency tok msg
+    }
+  RecvMessage tok -> OTelRendered
+    { eventName = "recv_message"
+    , eventKind = Consumer
+    , renderField = \case
+        RecvMessageStateBeforeSpan state ->
+          [ ( "typed-protocols.state"
+            , fromString case tok of
+                ClientAgency tok' -> showsPrecClientHasAgency 0 tok' ""
+                ServerAgency tok' -> showsPrecServerHasAgency 0 tok' ""
+            )
+          , ("typed-protocols.driver_state_before_span", toAttribute $ TL.toStrict $ foldMap encodeBase16 state)
+          ]
+        RecvMessageStateBeforeMessage state -> [("typed-protocols.driver_state_before_message", toAttribute $ TL.toStrict $ foldMap encodeBase16 state)]
+        RecvMessageStateAfterMessage state -> [("typed-protocols.driver_state_after_message", toAttribute $ TL.toStrict $ foldMap encodeBase16 state)]
+        RecvMessageMessage msg -> messageToAttributes $ AnyMessageAndAgency tok msg
+    }
+
+messageToAttributes :: (OTelProtocol ps, ShowProtocol ps) => AnyMessageAndAgency ps -> [(Text, Attribute)]
+messageToAttributes (AnyMessageAndAgency tok msg) = case messageAttributes tok msg of
+  MessageAttributes{..} ->
+    [ ("typed-protocols.message.type", toAttribute messageType)
+    , ("typed-protocols.message.parameters", toAttribute messageParameters)
+    , ( "typed-protocols.state"
+      , fromString case tok of
+          ClientAgency tok' -> showsPrecClientHasAgency 0 tok' ""
+          ServerAgency tok' -> showsPrecServerHasAgency 0 tok' ""
+      )
+    ]
 
 addrInfoToAttributes :: AddrInfo -> [(T.Text, Attribute)]
 addrInfoToAttributes AddrInfo{..} =

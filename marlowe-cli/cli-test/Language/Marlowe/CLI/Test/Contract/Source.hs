@@ -24,7 +24,7 @@ import qualified Data.Aeson.KeyMap as KeyMap
 import Data.Maybe (fromMaybe)
 import qualified Data.Text as T
 import GHC.Generics (Generic)
-import qualified Language.Marlowe.CLI.Command.Template as Template
+import Language.Marlowe.CLI.IO (liftCliMaybe)
 import Language.Marlowe.CLI.Run (marloweAddressFromCardanoAddress)
 import Language.Marlowe.CLI.Test.Contract.ParametrizedMarloweJSON (ParametrizedMarloweJSON)
 import Language.Marlowe.CLI.Test.InterpreterError (InterpreterError, rethrowCliError, testExecutionFailed')
@@ -43,9 +43,10 @@ import Language.Marlowe.CLI.Test.Wallet.Types
   , tokenNameToJSON
   )
 import qualified Language.Marlowe.CLI.Test.Wallet.Types as Wallet
-import Language.Marlowe.CLI.Types (SomeTimeout, toMarloweTimeout)
+import Language.Marlowe.CLI.Types (CliError, SomeTimeout, toMarloweTimeout)
 import qualified Language.Marlowe.Core.V1.Semantics.Types as C
 import qualified Language.Marlowe.Core.V1.Semantics.Types as M
+import Language.Marlowe.Extended.V1 (toCore)
 import qualified Language.Marlowe.Extended.V1 as E
 import Ledger.Orphans ()
 import Marlowe.Contracts (coveredCall, escrow, swap, trivial, zeroCouponBond)
@@ -91,7 +92,7 @@ data UseTemplate =
     {
       utPrice             :: Integer          -- ^ Price of the item for sale, in lovelace.
     , utSeller            :: PartyRef         -- ^ Defaults to a wallet with the "Buyer" nickname.
-    , utBuyer             :: PartyRef         -- ^ Defaults to a wallet with the "Seller" ncikname.
+    , utBuyer             :: PartyRef         -- ^ Defaults to a wallet with the "Seller" nickname.
     , utMediator          :: PartyRef         -- ^ The mediator.
     , utPaymentDeadline   :: SomeTimeout      -- ^ The deadline for the buyer to pay.
     , utComplaintDeadline :: SomeTimeout      -- ^ The deadline for the buyer to complain.
@@ -134,7 +135,7 @@ data UseTemplate =
     -- | Use for actus contracts.
   | UseActus
     {
-      utParty          :: Maybe PartyRef   -- ^ The party. Fallsback to the faucet wallet.
+      utParty          :: Maybe PartyRef   -- ^ The party. Falls back to the faucet wallet.
     , utCounterParty   :: PartyRef         -- ^ The counter-party.
     , utActusTermsFile :: FilePath         -- ^ The Actus contract terms.
     }
@@ -165,8 +166,12 @@ instance FromJSON Source where
       pure $ UseTemplate parsedTemplateCommand
     _ -> fail "Expected object with a single field of either `inline` or `template`"
 
-makeContract :: MonadError InterpreterError m => E.Contract -> m C.Contract
-makeContract template = rethrowCliError $ Template.makeContract template
+makeContract' :: MonadError InterpreterError m => E.Contract -> m C.Contract
+makeContract' = rethrowCliError . makeContract
+
+-- | Conversion from Extended to Core Marlowe.
+makeContract :: MonadError CliError m => E.Contract -> m C.Contract
+makeContract = liftCliMaybe "Conversion from Extended to Core Marlowe failed!" . toCore
 
 buildParty
   :: Wallet.InterpretMonad env st m era
@@ -178,7 +183,7 @@ buildParty mRoleCurrency = \case
       wallet <- findWallet nickname
       uncurry M.Address <$> rethrowCliError (marloweAddressFromCardanoAddress (_waAddress wallet))
   RoleRef token -> do
-    -- Cosistency check
+    -- Consistency check
     currency <- case mRoleCurrency of
       Nothing -> fst <$> getSingletonCurrency
       Just cn -> pure cn
@@ -197,7 +202,7 @@ useTemplate currency = \case
     let
       partyRef = fromMaybe (WalletRef faucetNickname) utParty
     party <- buildParty currency partyRef
-    makeContract $ trivial
+    makeContract' $ trivial
       party
       utDepositLovelace
       utWithdrawalLovelace
@@ -216,7 +221,7 @@ useTemplate currency = \case
     aParty <- buildParty currency utAParty
     bParty <- buildParty currency utBParty
 
-    makeContract $ swap
+    makeContract' $ swap
         aParty
         aToken
         (E.Constant aAmount)
@@ -236,7 +241,7 @@ useTemplate currency = \case
     buyer <- buildParty currency utBuyer
     mediator <- buildParty currency utMediator
 
-    makeContract $ escrow
+    makeContract' $ escrow
       (E.Constant utPrice)
       seller
       buyer
@@ -255,7 +260,7 @@ useTemplate currency = \case
     ccCurrency <- assetIdToToken utCurrency
     underlying <- assetIdToToken utUnderlying
 
-    makeContract $ coveredCall
+    makeContract' $ coveredCall
         issuer
         counterParty
         Nothing
@@ -273,7 +278,7 @@ useTemplate currency = \case
     lender <- buildParty currency utLender
     borrower <- buildParty currency utBorrower
 
-    makeContract $ zeroCouponBond
+    makeContract' $ zeroCouponBond
       lender
       borrower
       lendingDeadline
@@ -283,4 +288,3 @@ useTemplate currency = \case
       adaToken
       E.Close
   template -> throwError $ testExecutionFailed' $ "Template not implemented: " <> show template
-

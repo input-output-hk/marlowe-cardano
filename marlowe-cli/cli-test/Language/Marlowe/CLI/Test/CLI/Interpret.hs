@@ -73,7 +73,6 @@ import qualified Data.List.NonEmpty as List.NonEmpty
 import Data.Maybe (fromMaybe, isJust, mapMaybe)
 import qualified Data.Text as Text
 import Language.Marlowe.CLI.Cardano.Api.PlutusScript (IsPlutusScriptLanguage)
-import Language.Marlowe.CLI.Command.Template (initialMarloweState)
 import Language.Marlowe.CLI.Run
   ( autoRunTransactionImpl
   , autoWithdrawFundsImpl
@@ -126,6 +125,21 @@ import Language.Marlowe.CLI.Test.Wallet.Interpret
   )
 import Language.Marlowe.Cardano.Thread
   (anyMarloweThreadCreated, foldrMarloweThread, marloweThreadTxIn, overAnyMarloweThread)
+import Language.Marlowe.Core.V1.Semantics.Types (AccountId, State(..))
+import Language.Marlowe.Extended.V1 (ada)
+import qualified PlutusTx.AssocMap as AM
+
+-- | Build the initial Marlowe state.
+initialMarloweState :: AccountId -> Integer -> State
+initialMarloweState party minAda =
+  State
+  {
+    accounts    = AM.singleton (party, ada) minAda
+  , choices     = AM.empty
+  , boundValues = AM.empty
+  , minTime     = 1
+  }
+
 
 findCLIContractInfo
   :: InterpretMonad env st m lang era
@@ -562,4 +576,3 @@ interpret co@Withdraw {..} =
       Map.singleton role (C.getTxId . overAnyMarloweThread getCLIMarloweThreadTxBody $ marloweThread)
     marloweContract' = marloweContract{ _ciWithdrawalsCheckPoints = newWithdrawals <> _ciWithdrawalsCheckPoints }
   modifying (contractsL . coerced) $ Map.insert contractNickname marloweContract'
-

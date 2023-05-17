@@ -1,20 +1,30 @@
 {-# LANGUAGE Arrows #-}
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE PolyKinds #-}
+{-# LANGUAGE RankNTypes #-}
 
 module Language.Marlowe.Runtime.Proxy
   where
 
 import Control.Arrow (returnA)
 import Control.Concurrent.Component
-import Control.Concurrent.Component.Probes
-import Control.Monad.Event.Class (MonadEvent)
+import Control.Concurrent.Component.Probes (Probes(..))
+import Control.Monad.Event.Class (MonadEvent, localBackend)
 import Control.Monad.Trans.Resource (ResourceT, runResourceT)
+import Data.Proxy (Proxy(..))
 import Language.Marlowe.Protocol.HeaderSync.Types (MarloweHeaderSync)
+import qualified Language.Marlowe.Protocol.HeaderSync.Types as Header
+import Language.Marlowe.Protocol.Load.Types (SomePeerHasAgency(..))
 import Language.Marlowe.Protocol.Query.Types (MarloweQuery)
+import qualified Language.Marlowe.Protocol.Query.Types as Query
 import Language.Marlowe.Protocol.Server (MarloweRuntimeServer(..))
 import Language.Marlowe.Protocol.Sync.Types (MarloweSync)
+import qualified Language.Marlowe.Protocol.Sync.Types as Sync
 import Language.Marlowe.Runtime.Transaction.Api (MarloweTxCommand)
+import Network.Channel.Typed
 import Network.Protocol.Connection
   ( SomeConnectionSource
   , SomeConnectionSourceTraced
@@ -24,21 +34,25 @@ import Network.Protocol.Connection
   , acceptSomeConnectorTraced
   )
 import Network.Protocol.Driver (runSomeConnector)
-import Network.Protocol.Driver.Trace (DriverTraced, HasSpanContext, runSomeConnectorTraced)
+import Network.Protocol.Driver.Trace
 import Network.Protocol.Handshake.Types (Handshake)
+import qualified Network.Protocol.Handshake.Types as Handshake
 import Network.Protocol.Job.Types (Job)
+import qualified Network.Protocol.Job.Types as Job
+import Network.Protocol.Peer.Trace
+import Network.TypedProtocol
+import Observe.Event.Backend (setAncestorEventBackend)
 import UnliftIO (MonadUnliftIO(..))
 
-data ProxyDependencies r s m = forall dState. ProxyDependencies
-  { getMarloweSyncDriver :: r -> m (DriverTraced (Handshake MarloweSync) dState r m)
-  , getMarloweHeaderSyncDriver :: r -> m (DriverTraced (Handshake MarloweHeaderSync) dState r m)
-  , getMarloweQueryDriver :: r -> m (DriverTraced (Handshake MarloweQuery) dState r m)
-  , getTxJobDriver :: r -> m (DriverTraced (Handshake (Job MarloweTxCommand)) dState r m)
-  , connectionSourceTraced :: SomeConnectionSourceTraced (MarloweRuntimeServer r) r s m
-  , connectionSource :: SomeConnectionSource (MarloweRuntimeServer r) m
+data ProxyDependencies r s m = ProxyDependencies
+  { router :: Router r m
+  , connectionSourceTraced :: SomeConnectionSourceTraced MarloweRuntimeServer r s m
+  , connectionSource :: SomeConnectionSource MarloweRuntimeServer m
   }
 
-proxy :: (MonadUnliftIO m, MonadEvent r s m, HasSpanContext r) => Component m (ProxyDependencies r s (ResourceT m)) Probes
+proxy
+  :: (MonadUnliftIO m, MonadEvent r s m, HasSpanContext r, MonadFail m)
+  => Component m (ProxyDependencies r s (ResourceT m)) Probes
 proxy = proc deps -> do
   (serverComponent (component_ workerTraced) \ProxyDependencies{..} -> do
     connector <- runResourceT $ acceptSomeConnectorTraced connectionSourceTraced
@@ -52,24 +66,170 @@ proxy = proc deps -> do
     , readiness = pure True
     }
 
-data WorkerDependenciesTraced r s m = forall dState. WorkerDependenciesTraced
-  { getMarloweSyncDriver :: r -> m (DriverTraced (Handshake MarloweSync) dState r m)
-  , getMarloweHeaderSyncDriver :: r -> m (DriverTraced (Handshake MarloweHeaderSync) dState r m)
-  , getMarloweQueryDriver :: r -> m (DriverTraced (Handshake MarloweQuery) dState r m)
-  , getTxJobDriver :: r -> m (DriverTraced (Handshake (Job MarloweTxCommand)) dState r m)
-  , connector :: SomeServerConnectorTraced (MarloweRuntimeServer r) r s m
+data WorkerDependenciesTraced r s m = WorkerDependenciesTraced
+  { router :: Router r m
+  , connector :: SomeServerConnectorTraced MarloweRuntimeServer r s m
   }
 
-data WorkerDependencies r m = forall dState. WorkerDependencies
-  { getMarloweSyncDriver :: r -> m (DriverTraced (Handshake MarloweSync) dState r m)
-  , getMarloweHeaderSyncDriver :: r -> m (DriverTraced (Handshake MarloweHeaderSync) dState r m)
-  , getMarloweQueryDriver :: r -> m (DriverTraced (Handshake MarloweQuery) dState r m)
-  , getTxJobDriver :: r -> m (DriverTraced (Handshake (Job MarloweTxCommand)) dState r m)
-  , connector :: SomeServerConnector (MarloweRuntimeServer r) m
+data WorkerDependencies r m = WorkerDependencies
+  { router :: Router r m
+  , connector :: SomeServerConnector MarloweRuntimeServer m
   }
 
-workerTraced :: (MonadUnliftIO m, MonadEvent r s m, HasSpanContext r) => WorkerDependenciesTraced r s (ResourceT m) -> m ()
-workerTraced WorkerDependenciesTraced{..} = runResourceT $ runSomeConnectorTraced connector MarloweRuntimeServer{result = (), ..}
+data Router r m = Router
+  { connectMarloweSync :: m (Channel (Handshake MarloweSync) 'AsClient ('Handshake.StInit 'Sync.StInit) m, r)
+  , connectMarloweHeaderSync :: m (Channel (Handshake MarloweHeaderSync) 'AsClient ('Handshake.StInit 'Header.StIdle) m, r)
+  , connectMarloweQuery :: m (Channel (Handshake MarloweQuery) 'AsClient ('Handshake.StInit 'Query.StReq) m, r)
+  , connectTxJob :: m (Channel (Handshake (Job MarloweTxCommand)) 'AsClient ('Handshake.StInit 'Job.StInit) m, r)
+  }
 
-worker :: MonadUnliftIO m => WorkerDependencies r (ResourceT m) -> m ()
-worker WorkerDependencies{..} = runResourceT $ runSomeConnector connector MarloweRuntimeServer{result = (), ..}
+workerTraced
+  :: (MonadUnliftIO m, MonadEvent r s m, HasSpanContext r, MonadFail m)
+  => WorkerDependenciesTraced r s (ResourceT m)
+  -> m ()
+workerTraced WorkerDependenciesTraced{..} = runResourceT $ runSomeConnectorTraced connector $ server False router
+
+worker
+  :: (MonadUnliftIO m, MonadFail m, MonadEvent r s m)
+  => WorkerDependencies r (ResourceT m)
+  -> m ()
+worker WorkerDependencies{..} = runResourceT $ runSomeConnector connector $ server True router
+
+server :: (MonadFail m, MonadEvent r s0 m) => Bool -> Router r m -> MarloweRuntimeServer m ()
+server useOpenRefAsParent Router{..} = MarloweRuntimeServer
+  { recvMsgRunMarloweSync = withHandshake useOpenRefAsParent (ClientAgency Sync.TokInit) connectMarloweSync \case
+      ClientAgency Sync.TokInit -> \case
+        Sync.MsgFollowContract _ -> NextCall $ ServerAgency Sync.TokFollow
+        Sync.MsgIntersect _ v _ -> NextCall $ ServerAgency $ Sync.TokIntersect v
+      ClientAgency (Sync.TokIdle v) -> \case
+        Sync.MsgRequestNext -> NextCall $ ServerAgency $ Sync.TokNext v
+        Sync.MsgDone -> NextClose Sync.TokDone
+      ClientAgency (Sync.TokWait v) -> \case
+        Sync.MsgPoll -> NextCall $ ServerAgency $ Sync.TokNext v
+        Sync.MsgCancel -> NextCast $ ClientAgency $ Sync.TokIdle v
+      ServerAgency Sync.TokFollow -> \case
+        Sync.MsgContractNotFound -> NextClosed Sync.TokDone
+        Sync.MsgContractFound _ v _ -> NextReceive $ ClientAgency $ Sync.TokIdle v
+      ServerAgency (Sync.TokIntersect v) -> \case
+        Sync.MsgIntersectNotFound -> NextClosed Sync.TokDone
+        Sync.MsgIntersectFound{} -> NextReceive $ ClientAgency $ Sync.TokIdle v
+      ServerAgency (Sync.TokNext v) -> \case
+        Sync.MsgRollBackCreation -> NextClosed Sync.TokDone
+        Sync.MsgRollForward{} -> NextReceive $ ClientAgency $ Sync.TokIdle v
+        Sync.MsgRollBackward{} -> NextReceive $ ClientAgency $ Sync.TokIdle v
+        Sync.MsgWait{} -> NextReceive $ ClientAgency $ Sync.TokWait v
+  , recvMsgRunMarloweHeaderSync = withHandshake useOpenRefAsParent (ClientAgency Header.TokIdle) connectMarloweHeaderSync \case
+      ClientAgency _ -> \case
+        Header.MsgIntersect _ -> NextCall $ ServerAgency Header.TokIntersect
+        Header.MsgRequestNext -> NextCall $ ServerAgency Header.TokNext
+        Header.MsgDone -> NextClose Header.TokDone
+        Header.MsgPoll -> NextCall $ ServerAgency Header.TokNext
+        Header.MsgCancel -> NextCast $ ClientAgency Header.TokIdle
+      ServerAgency _ -> \case
+        Header.MsgIntersectNotFound -> NextReceive $ ClientAgency Header.TokIdle
+        Header.MsgIntersectFound{} -> NextReceive $ ClientAgency Header.TokIdle
+        Header.MsgNewHeaders{} -> NextReceive $ ClientAgency Header.TokIdle
+        Header.MsgRollBackward{} -> NextReceive $ ClientAgency Header.TokIdle
+        Header.MsgWait{} -> NextReceive $ ClientAgency Header.TokWait
+  , recvMsgRunMarloweQuery = withHandshake useOpenRefAsParent (ClientAgency Query.TokReq) connectMarloweQuery \case
+      ClientAgency _ -> \case
+        Query.MsgRequest req -> NextCall $ ServerAgency $ Query.TokRes $ Query.requestToSt req
+        Query.MsgDone -> NextClose Query.TokDone
+      ServerAgency _ -> \case
+        Query.MsgRespond _ -> NextReceive $ ClientAgency Query.TokReq
+  , recvMsgRunTxJob = withHandshake useOpenRefAsParent (ClientAgency Job.TokInit) connectTxJob \case
+      ClientAgency Job.TokInit -> \case
+        Job.MsgExec cmd -> NextCall $ ServerAgency $ Job.TokCmd $ Job.tagFromCommand cmd
+        Job.MsgAttach jobId -> NextCall $ ServerAgency $ Job.TokAttach $ Job.tagFromJobId jobId
+      ClientAgency (Job.TokAwait tag) -> \case
+        Job.MsgPoll -> NextCall $ ServerAgency $ Job.TokCmd tag
+        Job.MsgDetach -> NextClose Job.TokDone
+      ServerAgency (Job.TokCmd tag) -> \case
+        Job.MsgFail _ -> NextClosed Job.TokDone
+        Job.MsgSucceed _ -> NextClosed Job.TokDone
+        Job.MsgAwait _ _ -> NextReceive $ ClientAgency $ Job.TokAwait tag
+      ServerAgency (Job.TokAttach tag) -> \case
+        Job.MsgAttached -> NextReceive $ ServerAgency $ Job.TokCmd tag
+        Job.MsgAttachFailed -> NextClosed Job.TokDone
+  }
+
+data NextAgency ps pr (st :: ps) (st' :: ps) where
+  NextCall :: PeerHasAgency 'AsServer st' -> NextAgency ps 'AsClient st st'
+  NextCast :: PeerHasAgency pr st' -> NextAgency ps 'AsClient st st'
+  NextClose :: NobodyHasAgency st' -> NextAgency ps 'AsClient st st'
+  NextRespond :: PeerHasAgency 'AsClient st' -> NextAgency ps 'AsServer st st'
+  NextReceive :: PeerHasAgency pr st' -> NextAgency ps 'AsServer st st'
+  NextClosed :: NobodyHasAgency st' -> NextAgency ps 'AsServer st st'
+
+
+withHandshake
+  :: forall ps pr st r s m
+   . (Handshake.HasSignature ps, MonadFail m, MonadEvent r s m)
+  => Bool
+  -> PeerHasAgency pr st
+  -> m (Channel (Handshake ps) 'AsClient ('Handshake.StInit st) m, r)
+  -> (forall pr' st' st''. PeerHasAgency pr' st' -> Message ps st' st'' -> NextAgency ps pr' st' st'')
+  -> m (PeerTraced ps 'AsServer st m ())
+withHandshake useOpenRefAsParent agency openConnection nextAgency = do
+  (Channel{..}, openRef) <- openConnection
+  let
+    runMain
+      | useOpenRefAsParent = localBackend (setAncestorEventBackend openRef)
+      | otherwise = id
+  runMain do
+    let OutboundChannel{..} = yield (ClientAgency Handshake.TokInit) $ Handshake.MsgHandshake $ Handshake.signature $ Proxy @ps
+    ResponseChannel msg' coPeer <- call $ ServerAgency Handshake.TokHandshake
+    case msg' of
+      Handshake.MsgAccept -> pure $ proxyProtocol agency (lowerChannel liftHandshake coPeer) nextAgency
+      Handshake.MsgReject-> fail "Handshake rejected by server"
+
+liftHandshake :: LiftProtocol ps (Handshake ps) 'Handshake.StLift
+liftHandshake =
+  LiftProtocol Handshake.TokLiftClient Handshake.TokLiftServer Handshake.TokLiftNobody Handshake.MsgLift \case
+    Handshake.MsgLift msg -> SomeSubMessage msg
+
+proxyProtocol
+  :: Monad m
+  => PeerHasAgency pr st
+  -> Channel ps 'AsClient st m
+  -> (forall pr' st' st''. PeerHasAgency pr' st' -> Message ps st' st'' -> NextAgency ps pr' st' st'')
+  -> PeerTraced ps 'AsServer st m ()
+proxyProtocol agency Channel{..} nextAgency = case agency of
+  ClientAgency _ -> AwaitTraced agency \msg ->
+    let
+      OutboundChannel{..} = yield agency msg
+    in case nextAgency agency msg of
+      NextCall tok' -> Respond tok' do
+        ResponseChannel msg' coPeer <- call tok'
+        pure $ Response msg' case toAgency $ nextAgency tok' msg' of
+          Left tok'' -> DoneTraced tok'' ()
+          Right (SomePeerHasAgency tok'') -> proxyProtocol tok'' coPeer nextAgency
+      NextCast tok' -> Receive $ EffectTraced do
+        coPeer <- cast
+        pure $ proxyProtocol tok' coPeer nextAgency
+      NextClose tok' -> Closed tok' $ close tok'
+  ServerAgency _ -> EffectTraced do
+    InboundChannel{..} <- await agency
+    YieldTraced agency message <$> case nextAgency agency message of
+      NextRespond tok' -> respond tok' Handler
+        { withSendResponse = \sendResponse -> pure $ Call tok' \msg -> EffectTraced do
+            coPeer <- sendResponse msg
+            pure case toAgency $ nextAgency tok' msg of
+              Left tok'' -> DoneTraced tok'' ()
+              Right (SomePeerHasAgency tok'') -> proxyProtocol tok'' coPeer nextAgency
+        }
+      NextReceive tok' -> do
+        coPeer <- receive
+        pure $ Cast $ proxyProtocol tok' coPeer nextAgency
+      NextClosed tok' -> do
+        closed tok'
+        pure $ Close tok' ()
+
+toAgency :: NextAgency ps pr st st' -> Either (NobodyHasAgency st') (SomePeerHasAgency st')
+toAgency = \case
+  NextCall tok -> Right $ SomePeerHasAgency tok
+  NextCast tok -> Right $ SomePeerHasAgency tok
+  NextClose tok -> Left tok
+  NextRespond tok -> Right $ SomePeerHasAgency tok
+  NextReceive tok -> Right $ SomePeerHasAgency tok
+  NextClosed tok -> Left tok

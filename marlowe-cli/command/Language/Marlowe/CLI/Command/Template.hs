@@ -23,8 +23,6 @@ module Language.Marlowe.CLI.Command.Template
   ( -- * Marlowe CLI Commands
     OutputFiles(..)
   , TemplateCommand(..)
-  , initialMarloweState
-  , makeContract
   , parseTemplateCommand
   , parseTemplateCommandOutputFiles
   , runTemplateCommand
@@ -37,15 +35,15 @@ import Data.Aeson (FromJSON(..), ToJSON(..))
 import GHC.Generics (Generic)
 import Language.Marlowe.CLI.Command.Parse (parseParty, parseTimeout, parseToken, timeoutHelpMsg)
 import Language.Marlowe.CLI.Examples (makeExample)
-import Language.Marlowe.CLI.IO (decodeFileStrict, liftCliMaybe)
+import Language.Marlowe.CLI.IO (decodeFileStrict)
 import Language.Marlowe.CLI.Types (CliError(..), SomeTimeout, toMarloweTimeout)
-import Language.Marlowe.Core.V1.Semantics.Types as C (Contract, State(..))
-import Language.Marlowe.Extended.V1 as E (AccountId, Contract(..), Party, Token, Value(..), toCore)
+import Language.Marlowe.Extended.V1 as E (Contract(..), Party, Token, Value(..))
 import Language.Marlowe.Util (ada)
 import Marlowe.Contracts (coveredCall, escrow, swap, trivial, zeroCouponBond)
 
+import Language.Marlowe.CLI.Test.CLI.Interpret (initialMarloweState)
+import Language.Marlowe.CLI.Test.Contract.Source (makeContract)
 import qualified Options.Applicative as O
-import qualified PlutusTx.AssocMap as AM (empty, singleton)
 
 
 -- | Marlowe CLI commands and options for contract templates.
@@ -212,22 +210,6 @@ runTemplateCommand TemplateActus{..}      OutputFiles{..} = do ct <- decodeFileS
                                                                marloweContract <- makeContract $ genContract' (party, counterparty) defaultRiskFactors ct
                                                                let marloweState = initialMarloweState party minAda
                                                                makeExample contractFile stateFile (marloweContract, marloweState)
-
-
--- | Conversion from Extended to Core Marlowe.
-makeContract :: MonadError CliError m => E.Contract -> m C.Contract
-makeContract = liftCliMaybe "Conversion from Extended to Core Marlowe failed!" . toCore
-
--- | Build the initial Marlowe state.
-initialMarloweState :: AccountId -> Integer -> State
-initialMarloweState party minAda =
-  State
-  {
-    accounts    = AM.singleton (party, ada) minAda
-  , choices     = AM.empty
-  , boundValues = AM.empty
-  , minTime     = 1
-  }
 
 
 -- | Parser for template commands.

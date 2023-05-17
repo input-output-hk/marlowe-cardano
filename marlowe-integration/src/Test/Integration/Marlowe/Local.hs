@@ -68,7 +68,6 @@ import Control.Monad.With
 import Data.Aeson (eitherDecodeFileStrict)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as BS
-import qualified Data.ByteString.Lazy as LBS
 import Data.Either (fromRight)
 import Data.Functor (void)
 import Data.GeneralAllocate
@@ -104,7 +103,7 @@ import Language.Marlowe.Protocol.HeaderSync.Types (MarloweHeaderSync)
 import Language.Marlowe.Protocol.Query.Client (MarloweQueryClient(..), marloweQueryClientPeer)
 import Language.Marlowe.Protocol.Query.Server (MarloweQueryServer)
 import Language.Marlowe.Protocol.Query.Types (MarloweQuery)
-import Language.Marlowe.Protocol.Server (MarloweRuntimeServer, marloweRuntimeServerPeer, marloweRuntimeServerPeerTraced)
+import Language.Marlowe.Protocol.Server (MarloweRuntimeServer, marloweRuntimeServerPeer)
 import Language.Marlowe.Protocol.Sync.Client (MarloweSyncClient, marloweSyncClientPeer)
 import Language.Marlowe.Protocol.Sync.Server (MarloweSyncServer, marloweSyncServerPeer)
 import Language.Marlowe.Protocol.Sync.Types (MarloweSync)
@@ -137,7 +136,7 @@ import qualified Language.Marlowe.Runtime.Core.ScriptRegistry as ScriptRegistry
 import Language.Marlowe.Runtime.Indexer (MarloweIndexerDependencies(..), marloweIndexer)
 import qualified Language.Marlowe.Runtime.Indexer.Database as Indexer
 import qualified Language.Marlowe.Runtime.Indexer.Database.PostgreSQL as IndexerDB
-import Language.Marlowe.Runtime.Proxy (ProxyDependencies(..), proxy)
+import Language.Marlowe.Runtime.Proxy (ProxyDependencies(..), Router(..), proxy)
 import Language.Marlowe.Runtime.Sync (SyncDependencies(..), sync)
 import qualified Language.Marlowe.Runtime.Sync.Database as Sync
 import qualified Language.Marlowe.Runtime.Sync.Database.PostgreSQL as Sync
@@ -151,6 +150,7 @@ import Language.Marlowe.Runtime.Web.Client (healthcheck)
 import Language.Marlowe.Runtime.Web.Server (ServerDependencies(..), ServerSelector(RuntimeClient), server)
 import Language.Marlowe.Runtime.Web.Server.Monad (BackendM(runBackendM))
 import Network.Channel (hoistChannel)
+import Network.Channel.Typed (Channel, driverToChannel)
 import Network.HTTP.Client (defaultManagerSettings, newManager)
 import Network.Protocol.ChainSeek.Client (chainSeekClientPeer)
 import Network.Protocol.ChainSeek.Server (chainSeekServerPeer)
@@ -158,13 +158,13 @@ import Network.Protocol.Codec (BinaryMessage)
 import Network.Protocol.Connection
 import qualified Network.Protocol.Connection as Connection
 import Network.Protocol.Driver
-import Network.Protocol.Driver.Trace (DriverTraced, HasSpanContext(..), mkDriverTraced, runConnectorTraced)
+import Network.Protocol.Driver.Trace (HasSpanContext(..), mkDriverTraced, runConnectorTraced)
 import Network.Protocol.Handshake.Server (handshakeClientServerPair, handshakeConnectionSource)
 import Network.Protocol.Handshake.Types (Handshake)
 import Network.Protocol.Job.Client (JobClient, jobClientPeer)
 import Network.Protocol.Job.Server (JobServer, jobServerPeer)
 import Network.Protocol.Job.Types (Job)
-import Network.Protocol.Peer.Trace (defaultSpanContext)
+import Network.Protocol.Peer.Trace (TypedProtocolsSelector, defaultSpanContext)
 import Network.Protocol.Query.Client (QueryClient, liftQuery, queryClientPeer)
 import Network.Protocol.Query.Server (QueryServer, queryServerPeer)
 import Network.Protocol.Query.Types (Query)
@@ -215,7 +215,7 @@ data MarloweRuntime = MarloweRuntime
       (Handshake Protocol.MarloweRuntime)
       MarloweRuntimeClient
       RuntimeRef
-      IdSelector
+      STMConnectorSelector
       (NoopEventT RuntimeRef RuntimeSelector IO)
   , proxyPort :: Int
   , runWebClient :: forall a. ClientM a -> IO (Either ClientError a)
@@ -327,7 +327,7 @@ withLocalMarloweRuntime' MarloweRuntimeOptions{..} test = withRunInIO \runInIO -
         hoistMarloweRuntimeClient
         (NoopEventT . runRuntimeM @RuntimeRef . runResourceT)
         (liftIO . runNoopEventT)
-        (clientConnector marlowePair)
+        (clientConnector marloweRuntimePair)
 
     -- Persist the genesis block before starting the services so that they
     -- exist already and no database queries fail.
@@ -502,7 +502,7 @@ data RuntimeDependencies r m = RuntimeDependencies
   , chainSyncQueryPair :: ClientServerPair (Handshake (Query ChainSyncQuery)) (QueryServer ChainSyncQuery) (QueryClient ChainSyncQuery) r m
   , marloweHeaderSyncPair :: ClientServerPair (Handshake MarloweHeaderSync) MarloweHeaderSyncServer MarloweHeaderSyncClient r m
   , marloweSyncPair :: ClientServerPair (Handshake MarloweSync) MarloweSyncServer MarloweSyncClient r m
-  , marlowePair :: ClientServerPair (Handshake Protocol.MarloweRuntime) (MarloweRuntimeServer r) MarloweRuntimeClient r (ResourceT m)
+  , marloweRuntimePair :: ClientServerPair (Handshake Protocol.MarloweRuntime) MarloweRuntimeServer MarloweRuntimeClient r (ResourceT m)
   , marloweQueryPair :: ClientServerPair (Handshake MarloweQuery) MarloweQueryServer MarloweQueryClient r m
   , txJobPair :: ClientServerPair (Handshake (Job MarloweTxCommand)) (JobServer MarloweTxCommand) (JobClient MarloweTxCommand) r m
   , chainIndexerDatabaseQueries :: ChainIndexer.DatabaseQueries m
@@ -529,7 +529,7 @@ runtime = proc RuntimeDependencies{..} -> do
 
     LocalNodeConnectInfo{..} = localNodeConnectInfo
 
-  marloweRuntimeServerSource <- handshakeConnectionSource <$> tcpServer -< TcpServerDependencies "127.0.0.1" (fromIntegral proxyPort) $ marloweRuntimeServerPeer inject
+  marloweRuntimeServerSource <- handshakeConnectionSource <$> tcpServer -< TcpServerDependencies "127.0.0.1" (fromIntegral proxyPort) marloweRuntimeServerPeer
 
   chainIndexer -<
     let
@@ -606,12 +606,14 @@ runtime = proc RuntimeDependencies{..} -> do
         }
 
   proxy -< ProxyDependencies
-    { getMarloweSyncDriver = driverFactory $ clientConnector marloweSyncPair
-    , getMarloweHeaderSyncDriver = driverFactory $ clientConnector marloweHeaderSyncPair
-    , getMarloweQueryDriver = driverFactory $ clientConnector marloweQueryPair
-    , getTxJobDriver = driverFactory $ clientConnector txJobPair
+    { router = Router
+        { connectMarloweSync = driverFactory $ clientConnector marloweSyncPair
+        , connectMarloweHeaderSync = driverFactory $ clientConnector marloweHeaderSyncPair
+        , connectMarloweQuery = driverFactory $ clientConnector marloweQueryPair
+        , connectTxJob = driverFactory $ clientConnector txJobPair
+        }
     , connectionSource = SomeConnectionSource marloweRuntimeServerSource
-    , connectionSourceTraced = SomeConnectionSourceTraced inject $ Connection.connectionSource marlowePair
+    , connectionSourceTraced = SomeConnectionSourceTraced inject $ Connection.connectionSource marloweRuntimePair
     }
 
   hoistComponent (liftIO . flip runReaderT (noopEventBackend mempty) . runBackendM) server -< ServerDependencies
@@ -621,17 +623,16 @@ runtime = proc RuntimeDependencies{..} -> do
     , marloweTracedContext = MarloweTracedContext (injectSelector RuntimeClient) $ ihoistConnectorTraced hoistMarloweRuntimeClient
         (liftIO . runRuntimeM . runResourceT)
         (liftIO . flip runReaderT (noopEventBackend mempty) . runBackendM)
-        (clientConnector marlowePair)
+        (clientConnector marloweRuntimePair)
     }
 
 driverFactory
-  :: (BinaryMessage ps, MonadUnliftIO m, HasSpanContext r)
-  => ClientConnectorTraced ps client r IdSelector m
-  -> r
-  -> ResourceT m (DriverTraced ps (Maybe LBS.ByteString) r (ResourceT m))
-driverFactory ConnectorTraced{..} _ = withRunInIO \runInIO -> do
+  :: (BinaryMessage ps, MonadUnliftIO m, HasSpanContext r, Monoid r, MonadEvent r s m, Inject (TypedProtocolsSelector ps) s, Inject (DriverSelector ps) s)
+  => ClientConnectorTraced ps client r STMConnectorSelector m
+  -> ResourceT m (Channel ps pr st (ResourceT m), r)
+driverFactory ConnectorTraced{..} = withRunInIO \runInIO -> do
   (_, ConnectionTraced{..}) <- runInIO $ allocate (runInIO $ lift openConnectionTraced) \ConnectionTraced{..} -> runInIO $ lift $ closeConnection Nothing
-  pure $ mkDriverTraced $ hoistChannel lift channel
+  pure (driverToChannel inject $ mkDriverTraced inject $ hoistChannel lift channel, mempty)
 
 data Channels r m = Channels
   { chainSyncPair :: ClientServerPair (Handshake RuntimeChainSeek) RuntimeChainSeekServer RuntimeChainSeekClient r m
@@ -641,7 +642,7 @@ data Channels r m = Channels
   , marloweSyncPair :: ClientServerPair (Handshake MarloweSync) MarloweSyncServer MarloweSyncClient r m
   , marloweQueryPair :: ClientServerPair (Handshake MarloweQuery) MarloweQueryServer MarloweQueryClient r m
   , txJobPair :: ClientServerPair (Handshake (Job MarloweTxCommand)) (JobServer MarloweTxCommand) (JobClient MarloweTxCommand) r m
-  , marlowePair :: ClientServerPair (Handshake Protocol.MarloweRuntime) (MarloweRuntimeServer r) MarloweRuntimeClient r (ResourceT m)
+  , marloweRuntimePair :: ClientServerPair (Handshake Protocol.MarloweRuntime) MarloweRuntimeServer MarloweRuntimeClient r (ResourceT m)
   }
 
 setupChannels :: Monoid r => STM (Channels r (RuntimeM r))
@@ -667,8 +668,8 @@ setupChannels = do
   txJobPair <- handshakeClientServerPair <$> clientServerPair
     jobServerPeer
     jobClientPeer
-  marlowePair <- handshakeClientServerPair <$> clientServerPair
-    (marloweRuntimeServerPeerTraced inject)
+  marloweRuntimePair <- handshakeClientServerPair <$> clientServerPair
+    marloweRuntimeServerPeer
     marloweRuntimeClientPeer
   pure Channels{..}
 

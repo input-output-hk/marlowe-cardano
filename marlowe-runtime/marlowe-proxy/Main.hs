@@ -1,4 +1,5 @@
 {-# LANGUAGE Arrows #-}
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE InstanceSigs #-}
@@ -16,37 +17,20 @@ import Control.Monad.Event.Class
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Trans.Reader (ReaderT(..))
 import Control.Monad.With
-import Data.Binary (put)
-import Data.Binary.Put (runPut)
-import Data.ByteString.Lazy (ByteString)
-import qualified Data.ByteString.Lazy as LBS
 import Data.GeneralAllocate
 import qualified Data.Text as T
 import Data.Version (showVersion)
-import Language.Marlowe.Protocol.Server (marloweRuntimeServerPeer, marloweRuntimeServerPeerTraced)
+import Language.Marlowe.Protocol.Server (marloweRuntimeServerPeer)
 import Language.Marlowe.Runtime.CLI.Option (optParserWithEnvDefault)
 import qualified Language.Marlowe.Runtime.CLI.Option as O
 import Language.Marlowe.Runtime.Proxy
 import Logging (RootSelector(..), renderRootSelectorOTel)
-import Network.Channel (hoistChannel, socketAsChannel)
-import Network.Protocol.Codec (BinaryMessage)
+import Network.Channel.Typed
 import Network.Protocol.Connection (SomeConnectionSource(..), SomeConnectionSourceTraced(..))
 import Network.Protocol.Driver (TcpServerDependencies(..), tcpServer)
-import Network.Protocol.Driver.Trace
+import Network.Protocol.Driver.Trace (tcpServerTraced)
 import Network.Protocol.Handshake.Server (handshakeConnectionSource, handshakeConnectionSourceTraced)
-import Network.Protocol.Handshake.Types (Handshake)
-import Network.Socket
-  ( AddrInfo(addrAddress, addrSocketType)
-  , HostName
-  , PortNumber
-  , SocketType(Stream)
-  , close
-  , connect
-  , defaultHints
-  , getAddrInfo
-  , openSocket
-  )
-import qualified Network.Socket.ByteString.Lazy as Socket
+import Network.Socket (HostName, PortNumber)
 import Observe.Event.Backend (EventBackend, hoistEventBackend, injectSelector)
 import Observe.Event.Render.OpenTelemetry (tracerEventBackend)
 import OpenTelemetry.Trace
@@ -69,7 +53,6 @@ import Options.Applicative
   )
 import Paths_marlowe_runtime
 import UnliftIO (MonadUnliftIO)
-import UnliftIO.Resource (MonadResource, allocate)
 
 main :: IO ()
 main = do
@@ -90,21 +73,22 @@ main = do
 run :: Options -> AppM Span ()
 run = runComponent_ proc Options{..} -> do
   connectionSource <- tcpServer -< TcpServerDependencies
-    { toPeer = marloweRuntimeServerPeer $ injectSelector ProxySelector
+    { toPeer = marloweRuntimeServerPeer
     , ..
     }
 
   connectionSourceTraced <- tcpServerTraced $ injectSelector MarloweRuntimeServer -< TcpServerDependencies
-    { toPeer = marloweRuntimeServerPeerTraced $ injectSelector ProxySelector
+    { toPeer = marloweRuntimeServerPeer
     , port = portTraced
     , ..
     }
-
   probes <- proxy -< ProxyDependencies
-    { getMarloweSyncDriver = driverFactory syncHost marloweSyncPort
-    , getMarloweHeaderSyncDriver = driverFactory syncHost marloweHeaderSyncPort
-    , getMarloweQueryDriver = driverFactory syncHost marloweQueryPort
-    , getTxJobDriver = driverFactory txHost txPort
+    { router = Router
+        { connectMarloweSync = tcpClientChannel (injectSelector MarloweSyncClient) syncHost marloweSyncPort
+        , connectMarloweHeaderSync = tcpClientChannel (injectSelector MarloweHeaderSyncClient) syncHost marloweHeaderSyncPort
+        , connectMarloweQuery = tcpClientChannel (injectSelector MarloweQueryClient) syncHost marloweQueryPort
+        , connectTxJob = tcpClientChannel (injectSelector TxJobClient) txHost txPort
+        }
     , connectionSource = SomeConnectionSource
         $ handshakeConnectionSource connectionSource
     , connectionSourceTraced = SomeConnectionSourceTraced (injectSelector MarloweRuntimeServer)
@@ -112,28 +96,6 @@ run = runComponent_ proc Options{..} -> do
     }
 
   probeServer -< ProbeServerDependencies { port = fromIntegral httpPort, .. }
-
-driverFactory
-  :: (BinaryMessage ps, MonadResource m, HasSpanContext r)
-  => HostName
-  -> PortNumber
-  -> r
-  -> m (DriverTraced (Handshake ps) (Maybe ByteString) r m)
-driverFactory host port parent = do
-  addr <- liftIO $ head <$> getAddrInfo
-    (Just defaultHints { addrSocketType = Stream })
-    (Just host)
-    (Just $ show port)
-  (_, socket) <- allocate (openSocket addr) close
-  liftIO do
-    connect socket $ addrAddress addr
-    spanContext <- context parent
-    let spanContextBytes = runPut $ put spanContext
-    let spanContextLength = LBS.length spanContextBytes
-    Socket.sendAll socket $ runPut $ put spanContextLength
-    Socket.sendAll socket spanContextBytes
-    _ <- Socket.recv socket 1
-    pure $ mkDriverTraced $ hoistChannel liftIO $ socketAsChannel socket
 
 runAppM :: EventBackend IO r RootSelector -> AppM r a -> IO a
 runAppM eventBackend = flip runReaderT (hoistEventBackend liftIO eventBackend) . unAppM

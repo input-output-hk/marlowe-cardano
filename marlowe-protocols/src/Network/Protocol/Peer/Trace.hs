@@ -10,7 +10,6 @@ import Data.Functor ((<&>))
 import Data.Proxy
 import Data.Text (Text)
 import Network.TypedProtocol
-import Network.TypedProtocol.Codec
 import Observe.Event.Render.OpenTelemetry
 import OpenTelemetry.Trace.Core
 import qualified OpenTelemetry.Trace.TraceState as TraceState
@@ -113,10 +112,67 @@ peerTracedToPeer = \case
   DoneTraced tok a -> Done tok a
   EffectTraced m -> Effect $ peerTracedToPeer <$> m
 
+peerToPeerTraced :: Functor m => Peer ps pr st m a -> PeerTraced ps pr st m a
+peerToPeerTraced = \case
+  Yield tok msg next -> YieldTraced tok msg $ Cast $ peerToPeerTraced next
+  Await tok k -> AwaitTraced tok \msg -> Receive $ peerToPeerTraced $ k msg
+  Done tok a -> DoneTraced tok a
+  Effect m -> EffectTraced $ peerToPeerTraced <$> m
+
+data SomeSubMessage ps ps' (x :: ps) (stLift :: ps -> ps') (st' :: ps') where
+  SomeSubMessage :: Message ps x x' -> SomeSubMessage ps ps' x stLift (stLift x')
+
+data LiftProtocol ps ps' (stLift :: ps -> ps') = LiftProtocol
+  { liftClient :: forall (x :: ps). ClientHasAgency x -> ClientHasAgency (stLift x)
+  -- ^ Lift a client agency token from the sub-protocol.
+  , liftServer :: forall (x :: ps). ServerHasAgency x -> ServerHasAgency (stLift x)
+  -- ^ Lift a server agency token from the sub-protocol.
+  , liftNobody :: forall (x :: ps). NobodyHasAgency x -> NobodyHasAgency (stLift x)
+  -- ^ Lift a nobody agency token from the sub-protocol.
+  , liftMessage :: forall (x :: ps) (x' :: ps). Message ps x x' -> Message ps' (stLift x) (stLift x')
+  -- ^ Lift a message from the sub-protocol.
+  , unliftMessage :: forall (x :: ps) (st' :: ps'). Message ps' (stLift x) st' -> SomeSubMessage ps ps' x stLift st'
+  -- ^ Unlift a message back into the sub protocol. The return type must include a proof
+  -- that the target state of any message from this state embeds a state from
+  -- the sub protocol.
+  }
+
+-- | Lift a peer from one protocol into a protocol that embeds it as a
+-- sub-protocol.
+liftPeerTraced
+  :: forall ps ps' pr (st :: ps) (stLift :: ps -> ps') m a
+   . Functor m
+  => LiftProtocol ps ps' stLift
+  -> PeerTraced ps pr st m a
+  -> PeerTraced ps' pr (stLift st) m a
+liftPeerTraced LiftProtocol{..} = go
+  where
+    go :: PeerTraced ps pr st' m a -> PeerTraced ps' pr (stLift st') m a
+    go = \case
+      YieldTraced tok msg yield -> YieldTraced (liftAgency tok) (liftMessage msg) case yield of
+        Call tok' k ->
+          Call (liftAgency tok') \msg' -> case unliftMessage msg' of
+            SomeSubMessage subMsg -> go $ k subMsg
+        Cast next -> Cast $ go next
+        Close tok' a -> Close (liftNobody tok') a
+      AwaitTraced tok k -> AwaitTraced (liftAgency tok) \msg -> case unliftMessage msg of
+        SomeSubMessage subMsg ->  case k subMsg of
+          Respond tok' m -> Respond (liftAgency tok') $ m <&> \case
+            Response msg' next -> Response (liftMessage msg') $ go next
+          Receive next -> Receive $ go next
+          Closed tok' ma -> Closed (liftNobody tok') ma
+      DoneTraced tok a -> DoneTraced (liftNobody tok) a
+      EffectTraced m -> EffectTraced $ go <$> m
+
+    liftAgency :: PeerHasAgency pr' x -> PeerHasAgency pr' (stLift x)
+    liftAgency = \case
+      ClientAgency tok -> ClientAgency $ liftClient tok
+      ServerAgency tok -> ServerAgency $ liftServer tok
+
 data TypedProtocolsSelector ps f where
   ReceiveSelector :: PeerHasAgency pr st -> Message ps st st' -> TypedProtocolsSelector ps ()
-  CallSelector :: PeerHasAgency pr st -> Message ps st st' -> TypedProtocolsSelector ps (Maybe (AnyMessageAndAgency ps))
-  RespondSelector :: PeerHasAgency pr st -> Message ps st st' -> TypedProtocolsSelector ps (Maybe (AnyMessageAndAgency ps))
+  CallSelector :: PeerHasAgency pr st -> Message ps st st' -> TypedProtocolsSelector ps ()
+  RespondSelector :: PeerHasAgency pr st -> Message ps st st' -> TypedProtocolsSelector ps ()
   CastSelector :: PeerHasAgency pr st -> Message ps st st' -> TypedProtocolsSelector ps ()
   CloseSelector :: PeerHasAgency pr st -> Message ps st st' -> TypedProtocolsSelector ps ()
 
@@ -148,16 +204,12 @@ renderTypedProtocolSelectorOTel = \case
   CallSelector tok msg -> OTelRendered
     { eventName = "call " <> protocolName (Proxy @ps) <> ":" <> messageType (messageAttributes tok msg)
     , eventKind = Client
-    , renderField = \case
-        Nothing -> messageToAttributes "send" $ AnyMessageAndAgency tok msg
-        Just msg' -> messageToAttributes "recv" msg'
+    , renderField = const []
     }
   RespondSelector tok msg -> OTelRendered
     { eventName = "respond " <> protocolName (Proxy @ps) <> ":" <> messageType (messageAttributes tok msg)
     , eventKind = Server
-    , renderField = \case
-        Nothing -> messageToAttributes "recv" $ AnyMessageAndAgency tok msg
-        Just msg' -> messageToAttributes "send" msg'
+    , renderField = const []
     }
   CastSelector tok msg -> OTelRendered
     { eventName = "cast " <> protocolName (Proxy @ps) <> ":" <> messageType (messageAttributes tok msg)
@@ -169,10 +221,3 @@ renderTypedProtocolSelectorOTel = \case
     , eventKind = Producer
     , renderField = const []
     }
-
-messageToAttributes :: Text -> OTelProtocol ps => AnyMessageAndAgency ps -> [(Text, Attribute)]
-messageToAttributes prefix (AnyMessageAndAgency tok msg) = case messageAttributes tok msg of
-  MessageAttributes{..} ->
-    [ ("typed-protocols.message." <> prefix <> ".type", toAttribute messageType)
-    , ("typed-protocols.message." <> prefix <> ".parameters", toAttribute messageParameters)
-    ]
