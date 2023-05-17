@@ -165,12 +165,33 @@ rec
     resources.memory = 1024;
   };
 
+  marlowe-contract = {
+    env = {
+      HOST = "0.0.0.0";
+      PORT = "\${NOMAD_PORT_marlowe_load}";
+      # TODO replace with a persistent volume
+      STORE_DIR = "/tmp/store";
+      HTTP_PORT = "\${NOMAD_PORT_contract_http}";
+    };
+    config.image = ociNamer oci-images.marlowe-contract;
+    config.ports = [ "marlowe_load" "contract_http" ];
+    service.port = "marlowe_load";
+    user = "0:0";
+    driver = "docker";
+    kill_signal = "SIGINT";
+    kill_timeout = "30s";
+    resources.cpu = 1000;
+    resources.memory = 1024;
+  };
+
   marlowe-proxy = {
     env = {
       HOST = "0.0.0.0";
       PORT = "\${NOMAD_PORT_proxy}";
       TX_HOST = "localhost";
       TX_PORT = "\${NOMAD_PORT_tx}";
+      CONTRACT_HOST = "localhost";
+      LOAD_PORT = "\${NOMAD_PORT_marlowe_load}";
       SYNC_HOST = "localhost";
       MARLOWE_SYNC_PORT = "\${NOMAD_PORT_marlowe_sync}";
       MARLOWE_HEADER_SYNC_PORT = "\${NOMAD_PORT_marlowe_header_sync}";
