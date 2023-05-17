@@ -28,8 +28,8 @@ import Network.Protocol.Connection
   , clientServerPair
   , connectionSource
   )
-import Network.Protocol.Driver (runConnectorTraced)
-import Network.Protocol.Peer.Trace (HasSpanContext(..), defaultSpanContext)
+import Network.Protocol.Driver.Trace (HasSpanContext(..), runConnectorTraced)
+import Network.Protocol.Peer.Trace (defaultSpanContext)
 import Network.TypedProtocol (unsafeIntToNat)
 import System.IO.LockFile (LockingParameters(..), withLockFile)
 import Test.Hspec
