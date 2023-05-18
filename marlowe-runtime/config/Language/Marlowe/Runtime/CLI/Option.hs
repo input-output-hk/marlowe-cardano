@@ -49,25 +49,19 @@ contractHost :: CliOption OptionFields HostName
 contractHost = host "marlowe-contract" "CONTRACT" "127.0.0.1" "The hostname of the Marlowe Runtime marlowe-contract server."
 
 loadPort :: CliOption OptionFields PortNumber
-loadPort = port "marlowe-load" "LOAD_MARLOWE_LOAD" 3727 "The port number of the marlowe-contract server's load API."
+loadPort = port "marlowe-load" "CONTRACT_MARLOWE_LOAD" 3727 "The port number of the marlowe-contract server's load API."
+
+contractQueryPort :: CliOption OptionFields PortNumber
+contractQueryPort = port "contract-query" "CONTRACT_QUERY" 3728 "The port number of the marlowe-contract server's query API."
 
 historyHost :: CliOption OptionFields HostName
 historyHost = host "history" "HISTORY" "127.0.0.1" "The hostname of the Marlowe Runtime history server."
-
-historyCommandPort :: CliOption OptionFields PortNumber
-historyCommandPort = port "history-command" "HISTORY_COMMAND" 3717 "The port number of the history server's job API."
-
-historyQueryPort :: CliOption OptionFields PortNumber
-historyQueryPort = port "history-query" "HISTORY_QUERY" 3718 "The port number of the history server's query API."
 
 historySyncPort :: CliOption OptionFields PortNumber
 historySyncPort = port "history-sync" "HISTORY_SYNC" 3719 "The port number of the history server's synchronization API."
 
 discoveryHost :: CliOption OptionFields HostName
 discoveryHost = host "discovery" "DISCOVERY" "127.0.0.1" "The hostname of the Marlowe Runtime discovery server."
-
-discoveryQueryPort :: CliOption OptionFields PortNumber
-discoveryQueryPort = port "discovery-query" "DISCOVERY_QUERY" 3721 "The port number of the discovery server's query API."
 
 discoverySyncPort :: CliOption OptionFields PortNumber
 discoverySyncPort = port "discovery-sync" "DISCOVERY_SYNC" 3722 "The port number of the discovery server's synchronization API."
