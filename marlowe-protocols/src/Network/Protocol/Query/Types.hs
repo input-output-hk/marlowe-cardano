@@ -1,401 +1,386 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE EmptyCase #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
-{-# LANGUAGE OverloadedLists #-}
+{-# LANGUAGE MonadComprehensions #-}
 {-# LANGUAGE PolyKinds #-}
+{-# LANGUAGE QuantifiedConstraints #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 -- | The type of the query protocol.
 --
--- The query protocol is used to stream paginated query results. A client can
--- query resources from a server and collect the results incrementally in pages.
--- The server is expected to provide transactional reads to the client while the
--- query is active.
+-- The query protocol is a simple call-and-response one with a polymorphic request type.
 module Network.Protocol.Query.Types
   where
 
 import Control.Monad (join)
-import Data.Binary (Get, Put, getWord8, putWord8)
+import Data.Binary (Binary, Get, Put, get, getWord8, put, putWord8)
 import Data.Data (type (:~:)(Refl))
-import Data.Functor ((<&>))
-import Data.List.NonEmpty (NonEmpty((:|)))
-import Data.Maybe (catMaybes, maybeToList)
+import Data.Foldable (fold)
+import Data.Kind (Type)
+import Data.List.NonEmpty (NonEmpty)
+import qualified Data.List.NonEmpty as NE
+import Data.Maybe (catMaybes)
 import Data.Proxy (Proxy(..))
 import Data.Text (Text)
 import qualified Data.Text as T
-import GHC.Show (showSpace)
+import GHC.Show (showCommaSpace, showSpace)
 import Network.Protocol.Codec (BinaryMessage(..))
 import Network.Protocol.Codec.Spec
-  (ArbitraryMessage(..), MessageEq(..), MessageVariations(..), ShowProtocol(..), SomePeerHasAgency(..))
+  (ArbitraryMessage(..), MessageEq(..), MessageVariations(..), ShowProtocol(..), SomePeerHasAgency(..), varyAp)
 import Network.Protocol.Handshake.Types (HasSignature(..))
 import Network.Protocol.Peer.Trace
 import Network.TypedProtocol
 import Network.TypedProtocol.Codec (AnyMessageAndAgency(..))
 import OpenTelemetry.Attributes (toPrimitiveAttribute)
-import Test.QuickCheck (Gen, oneof)
-
-data SomeTag q = forall delimiter err result. SomeTag (Tag q delimiter err result)
-
-class IsQuery (q :: * -> * -> * -> *) where
-  data Tag q :: * -> * -> * -> *
-  tagFromQuery :: q delimiter err result -> Tag q delimiter err result
-  tagEq :: Tag q delimiter err result -> Tag q delimiter' err' result' -> Maybe (delimiter :~: delimiter', err :~: err', result :~: result')
-  putTag :: Tag q delimiter err result -> Put
-  getTag :: Get (SomeTag q)
-  putQuery :: q delimiter err result -> Put
-  getQuery :: Tag q delimiter err result -> Get (q delimiter err result)
-  putDelimiter :: Tag q delimiter err result -> delimiter -> Put
-  getDelimiter :: Tag q delimiter err result -> Get delimiter
-  putErr :: Tag q delimiter err result -> err -> Put
-  getErr :: Tag q delimiter err result -> Get err
-  putResult :: Tag q delimiter err result -> result -> Put
-  getResult :: Tag q delimiter err result -> Get result
+import Test.QuickCheck (Gen, oneof, resize, sized)
 
 -- | A state kind for the query protocol.
-data Query (query :: * -> * -> * -> *) where
+data Query (req :: Type -> Type) where
 
-  -- | The initial state of the protocol.
-  StInit :: Query query
+  -- | The client can send a request.
+  StReq :: Query req
 
-  -- | In the 'StNext' state, the server has agency. It is loading a page of
-  -- results and preparing to send them to the client. It may also reject the
-  -- query.
-  StNext :: StNextKind -> delimiter -> err -> results -> Query query
-
-  -- | In the 'StPage' state, the client has agency. It is processing a page
-  -- of results and preparing to load another page, or to exit early.
-  StPage :: delimiter -> err -> results -> Query query
+  -- | The server is responding to a request.
+  StRes :: Type -> Query req
 
   -- | The terminal state of the protocol.
-  StDone :: Query query
+  StDone :: Query req
 
-instance HasSignature query => HasSignature (Query query) where
-  signature _ = T.intercalate " " ["Query", signature $ Proxy @query]
+instance HasSignature req => HasSignature (Query req) where
+  signature _ = T.intercalate " " ["Query", signature $ Proxy @req]
 
-data StNextKind
-  = CanReject
-  | MustReply
-
-instance Protocol (Query query) where
-
+instance Protocol (Query req) where
   -- | The type of messages in the protocol. Corresponds to state transition in
   -- the state machine diagram of the protocol.
-  data Message (Query query) from to where
+  data Message (Query req) from to where
 
-    -- | Query resources from the server.
-    MsgRequest :: query delimiter err results -> Message (Query query)
-      'StInit
-      ('StNext 'CanReject delimiter err results)
+    -- | Send a request. Transitions from the req state to the res state, with the result type being determined by the
+    -- request.
+    MsgRequest :: ReqTree req a -> Message (Query req)
+      'StReq
+      ('StRes a)
 
-    -- | Reject the query with an error message.
-    MsgReject :: err -> Message (Query query)
-      ('StNext 'CanReject delimiter err results)
-      'StDone
+    -- | Respond to a request. Transitions from the res state back to the req state.
+    MsgRespond :: a -> Message (Query req)
+      ('StRes a)
+      'StReq
 
-    -- | Send the next page of results to the client
-    MsgNextPage :: results -> Maybe delimiter -> Message (Query query)
-      ('StNext nextKind delimiter err results)
-      ('StPage delimiter err results)
-
-    -- | Request the next page of results starting from the delimiter
-    MsgRequestNext :: delimiter -> Message (Query query)
-      ('StPage delimiter err results)
-      ('StNext 'MustReply delimiter err results)
-
-    -- | Stop collecting results.
+    -- | End the session
     MsgDone :: Message (Query query)
-      ('StPage delimiter err results)
+      'StReq
       'StDone
 
   data ClientHasAgency st where
-    TokInit :: ClientHasAgency 'StInit
-    TokPage :: Tag query delimiter err results -> ClientHasAgency ('StPage delimiter err results :: Query query)
+    -- | Client has agency in the req state.
+    TokReq :: ClientHasAgency 'StReq
 
   data ServerHasAgency st where
-    TokNext :: TokNextKind k -> Tag query delimiter err results -> ServerHasAgency ('StNext k delimiter err results :: Query query)
+    -- | Server has agency in the res state.
+    TokRes :: Tag (ReqTree req) a -> ServerHasAgency ('StRes a :: Query req)
 
   data NobodyHasAgency st where
+    -- | Nobody has agency in the done state.
     TokDone :: NobodyHasAgency 'StDone
 
-  exclusionLemma_ClientAndServerHaveAgency TokInit     = \case
-  exclusionLemma_ClientAndServerHaveAgency (TokPage _) = \case
-
+  exclusionLemma_ClientAndServerHaveAgency TokReq     = \case
   exclusionLemma_NobodyAndClientHaveAgency TokDone = \case
-
   exclusionLemma_NobodyAndServerHaveAgency TokDone = \case
 
-data TokNextKind k where
-  TokCanReject :: TokNextKind 'CanReject
-  TokMustReply :: TokNextKind 'MustReply
+deriving instance Show (ClientHasAgency (st :: Query req))
+deriving instance forall req (st :: Query req). (forall a. Show (Tag req a)) => Show (ServerHasAgency st)
+deriving instance Show (NobodyHasAgency (st :: Query req))
 
-deriving instance Show (TokNextKind k)
+-- | Basic class for requests.
+class Request (req :: * -> *) where
+  -- | A data family that represents which request was issued, but lacks the data associated with the request.
+  data Tag req :: * -> *
+  -- | Given a request, provide a tag for the request.
+  tagFromReq :: req a -> Tag req a
+  -- | Propositional equality for request tags.
+  tagEq :: Tag req a -> Tag req b -> Maybe (a :~: b)
 
-instance IsQuery query => BinaryMessage (Query query) where
+-- | Existential version of a tag.
+data SomeTag req = forall a. SomeTag (Tag req a)
+
+-- | Existential version of a request.
+data SomeRequest req where
+  SomeRequest :: req a -> SomeRequest req
+
+deriving instance (forall x. Show (req x)) => Show (SomeRequest req)
+
+-- | One or more requests in a tree structure.
+data ReqTree req a where
+  -- | A single request at a leaf of a tree.
+  ReqLeaf :: req a -> ReqTree req a
+  -- | A request tree consisting of two subtrees.
+  ReqBin :: ReqTree req a -> ReqTree req b -> ReqTree req (a, b)
+
+deriving instance (forall x. Show (req x)) => Show (ReqTree req a)
+deriving instance (forall x. Eq (req x)) => Eq (ReqTree req a)
+
+instance Request req => Request (ReqTree req) where
+  data Tag (ReqTree req) a where
+    TagLeaf :: Tag req a -> Tag (ReqTree req) a
+    TagBin :: Tag (ReqTree req) a -> Tag (ReqTree req) b -> Tag (ReqTree req) (a, b)
+  tagFromReq = \case
+    ReqLeaf req -> TagLeaf $ tagFromReq req
+    ReqBin req reqs -> TagBin (tagFromReq req) $ tagFromReq reqs
+  tagEq = \case
+    TagLeaf req -> \case
+      TagLeaf req' -> case tagEq req req' of
+        Just Refl -> Just Refl
+        _ -> Nothing
+      _ -> Nothing
+    TagBin req reqs -> \case
+      TagBin req' reqs' -> case (tagEq req req', tagEq reqs reqs') of
+        (Just Refl, Just Refl) -> Just Refl
+        _ -> Nothing
+      _ -> Nothing
+
+deriving instance (forall x. Show (Tag req x)) => Show (Tag (ReqTree req) a)
+
+class Request req => BinaryRequest (req :: * -> *) where
+  putReq :: req a -> Put
+  getReq :: Get (SomeRequest req)
+  putResult :: Tag req a -> a -> Put
+  getResult :: Tag req a -> Get a
+
+instance BinaryRequest req => BinaryRequest (ReqTree req) where
+  putReq = \case
+    ReqLeaf req -> do
+      put False
+      putReq req
+    ReqBin l r -> do
+      put True
+      putReq l
+      putReq r
+  getReq = do
+    isBin <- get
+    if isBin
+      then do
+        SomeRequest l <- getReq
+        SomeRequest r <- getReq
+        pure $ SomeRequest $ ReqBin l r
+      else do
+        SomeRequest req <- getReq
+        pure $ SomeRequest $ ReqLeaf req
+
+  putResult = \case
+    TagLeaf tag -> putResult tag
+    TagBin l r -> \(a, b) -> do
+      putResult l a
+      putResult r b
+  getResult = \case
+    TagLeaf tag -> getResult tag
+    TagBin l r -> (,) <$> getResult l <*> getResult r
+
+foldPutRequestList :: BinaryRequest req => ReqTree req a -> Put
+foldPutRequestList = \case
+  ReqLeaf req -> putReq req
+  ReqBin req reqs -> putReq req *> foldPutRequestList reqs
+
+-- reqAppend :: ReqTree req a -> ReqTree req b -> ReqTree req (a, b)
+-- reqAppend acc = \case
+--   ReqLeaf _ -> acc
+--   ReqBin _ reqs -> reqLength (acc + 1) reqs
+
+instance BinaryRequest req => Binary (SomeRequest req) where
+  put (SomeRequest req) = putReq req
+  get = getReq
+
+instance BinaryRequest req => BinaryMessage (Query req) where
   putMessage = \case
-    ClientAgency TokInit -> \case
-      MsgRequest query -> do
+    ClientAgency TokReq -> \case
+      MsgDone -> putWord8 0x00
+
+      MsgRequest req -> do
         putWord8 0x01
-        putTag (tagFromQuery query)
-        putQuery query
-    ServerAgency (TokNext _ tag) -> \case
-      MsgReject err -> do
-        putWord8 0x02
-        putTag tag
-        putErr tag err
-      MsgNextPage results delimiter -> do
-        putWord8 0x03
-        putTag tag
-        putResult tag results
-        case delimiter of
-          Nothing -> putWord8 0x01
-          Just d  -> do
-            putWord8 0x02
-            putDelimiter tag d
-    ClientAgency (TokPage tag) -> \case
-      MsgRequestNext delimiter -> do
-        putWord8 0x04
-        putTag tag
-        putDelimiter tag delimiter
-      MsgDone -> putWord8 0x05
+        put $ SomeRequest req
 
-  getMessage tok = do
-    tag <- getWord8
-    case tag of
-      0x01 -> case tok of
-        ClientAgency TokInit -> do
-          SomeTag qtag <- getTag
-          SomeMessage . MsgRequest <$> getQuery qtag
-        _ -> fail "Invalid protocol state for MsgRequest"
-      0x02 -> case tok of
-        ServerAgency (TokNext TokCanReject qtag) -> do
-          SomeTag qtag' :: SomeTag query <- getTag
-          case tagEq qtag qtag' of
-            Nothing                 -> fail "decoded query tag does not match expected query tag"
-            Just (Refl, Refl, Refl) -> SomeMessage . MsgReject <$> getErr qtag'
-        _ -> fail "Invalid protocol state for MsgReject"
-      0x03 -> case tok of
-        ServerAgency (TokNext _ qtag) -> do
-          SomeTag qtag' :: SomeTag query <- getTag
-          case tagEq qtag qtag' of
-            Nothing   -> fail "decoded query tag does not match expected query tag"
-            Just (Refl, Refl, Refl) -> do
-              result <- getResult qtag'
-              maybeTag <- getWord8
-              delimiter <- case maybeTag of
-                0x01 -> pure Nothing
-                0x02 -> Just <$> getDelimiter qtag'
-                _    -> fail $ "Invalid maybe tag: " <> show maybeTag
-              pure $ SomeMessage $ MsgNextPage result delimiter
-        _ -> fail "Invalid protocol state for MsgNextPage"
-      0x04 -> case tok of
-        ClientAgency (TokPage qtag) -> do
-          SomeTag qtag' :: SomeTag query <- getTag
-          case tagEq qtag qtag' of
-            Nothing                 -> fail "decoded query tag does not match expected query tag"
-            Just (Refl, Refl, Refl) -> SomeMessage . MsgRequestNext <$> getDelimiter qtag'
-        _                            -> fail "Invalid protocol state for MsgRequestNext"
-      0x05 -> case tok of
-        ClientAgency (TokPage _) -> pure $ SomeMessage MsgDone
-        _                        -> fail "Invalid protocol state for MsgDone"
-      _ -> fail $ "Invalid msg tag " <> show tag
+    ServerAgency (TokRes tag) -> \case
+      MsgRespond a -> putResult tag a
 
-class ShowQuery query => OTelQuery query where
-  queryTypeName :: Proxy query -> Text
-  queryName :: Tag query delimiter err result -> Text
+  getMessage = \case
+    ClientAgency TokReq -> do
+      tag <- getWord8
+      case tag of
+        0x00 -> pure $ SomeMessage MsgDone
 
-instance OTelQuery query => OTelProtocol (Query query) where
-  protocolName _ = "query." <> queryTypeName (Proxy @query)
+        0x01 -> do
+          SomeRequest req <- get
+          pure $ SomeMessage $ MsgRequest req
+
+        _ -> fail $ "Invalid message tag " <> show tag
+    ServerAgency (TokRes tag) -> SomeMessage . MsgRespond <$> getResult tag
+
+class ShowRequest req => OTelRequest req where
+  reqTypeName :: Proxy req -> Text
+  reqName :: Tag req a -> Text
+
+instance OTelRequest req => OTelRequest (ReqTree req) where
+  reqTypeName _ = reqTypeName (Proxy @req)
+  reqName = \case
+    TagLeaf tag -> reqName tag
+    TagBin l r -> "(" <> reqName l <> " AND " <> reqName r <> ")"
+
+instance OTelRequest req => OTelProtocol (Query req) where
+  protocolName _ = "query." <> reqTypeName (Proxy @req)
   messageAttributes = curry \case
-    (_, MsgRequest query) -> MessageAttributes
-      { messageType = "request/" <> queryName (tagFromQuery query)
-      , messageParameters = [toPrimitiveAttribute $ T.pack $ showsPrecQuery 0 query ""]
+    (_, MsgRequest req) -> MessageAttributes
+      { messageType = "request/" <> reqName (tagFromReq req)
+      , messageParameters = [toPrimitiveAttribute $ T.pack $ show req]
       }
-    (ServerAgency (TokNext _ tag), MsgReject err) -> MessageAttributes
-      { messageType = "request/" <> queryName tag <> "/reject"
-      , messageParameters = toPrimitiveAttribute . T.pack <$> [showsPrecErr 0 tag err ""]
-      }
-    (ServerAgency (TokNext _ tag), MsgNextPage result mDelimiter) -> MessageAttributes
-      { messageType = "request/" <> queryName tag <> "/next_page"
-      , messageParameters = toPrimitiveAttribute . T.pack <$> showsPrecResult 0 tag result "" : ((\d -> showsPrecDelimiter 0 tag d "")<$> maybeToList mDelimiter)
-      }
-    (ClientAgency (TokPage tag), MsgRequestNext delimiter) -> MessageAttributes
-      { messageType = "request/" <> queryName tag <> "/next"
-      , messageParameters = [toPrimitiveAttribute $ T.pack $ showsPrecDelimiter 0 tag delimiter ""]
+    (ServerAgency (TokRes tag), MsgRespond a) -> MessageAttributes
+      { messageType = "request/" <> reqName tag <> "/respond"
+      , messageParameters = toPrimitiveAttribute . T.pack <$> [showsPrecResult 0 tag a ""]
       }
     (_, MsgDone) -> MessageAttributes
       { messageType = "done"
       , messageParameters = []
       }
 
-class IsQuery query => ArbitraryQuery query where
-  arbitraryTag :: Gen (SomeTag query)
-  arbitraryQuery :: Tag query delimiter err results -> Gen (query delimiter err results)
-  arbitraryDelimiter :: Tag query delimiter err results -> Maybe (Gen delimiter)
-  arbitraryErr :: Tag query delimiter err results -> Maybe (Gen err)
-  arbitraryResults :: Tag query delimiter err results -> Gen results
-  shrinkQuery :: query delimiter err results -> [query delimiter err results]
-  shrinkErr :: Tag query delimiter err results -> err -> [err]
-  shrinkResults :: Tag query delimiter err results -> results -> [results]
-  shrinkDelimiter :: Tag query delimiter err results -> delimiter -> [delimiter]
+class Request req => ArbitraryRequest req where
+  arbitraryTag :: Gen (SomeTag req)
+  arbitraryReq :: Tag req a -> Gen (req a)
+  arbitraryResult :: Tag req a -> Gen a
+  shrinkReq :: req a -> [req a]
+  shrinkResult :: Tag req a -> a -> [a]
 
-class IsQuery query => QueryVariations query where
-  tags :: NonEmpty (SomeTag query)
-  queryVariations :: Tag query delimiter err results -> NonEmpty (query delimiter err results)
-  delimiterVariations :: Tag query delimiter err results -> [delimiter]
-  errVariations :: Tag query delimiter err results -> [err]
-  resultsVariations :: Tag query delimiter err results -> NonEmpty results
+instance ArbitraryRequest req => ArbitraryRequest (ReqTree req) where
+  arbitraryTag = sized \i -> if i <= 1
+    then do
+      SomeTag tag <- arbitraryTag
+      pure $ SomeTag $ TagLeaf tag
+    else oneof
+      [ resize (i `div` 2) do
+          SomeTag l <- arbitraryTag
+          SomeTag r <- arbitraryTag
+          pure $ SomeTag $ TagBin l r
+      , do
+          SomeTag tag <- arbitraryTag
+          pure $ SomeTag $ TagLeaf tag
+      ]
+  arbitraryReq = \case
+    TagLeaf tag -> ReqLeaf <$> arbitraryReq tag
+    TagBin l r -> sized \i -> resize (i `div` 2) $ ReqBin
+      <$> arbitraryReq l
+      <*> arbitraryReq r
+  arbitraryResult = \case
+    TagLeaf tag -> arbitraryResult tag
+    TagBin l r -> sized \i -> resize (i `div` 2) $ (,)
+      <$> arbitraryResult l
+      <*> arbitraryResult r
+  shrinkReq = \case
+    ReqLeaf req -> ReqLeaf <$> shrinkReq req
+    ReqBin req reqs -> fold
+      [ ReqBin <$> shrinkReq req <*> pure reqs
+      , ReqBin req <$> shrinkReq reqs
+      ]
+  shrinkResult = \case
+    TagLeaf tag -> shrinkResult tag
+    TagBin l r -> \(a, b) -> fold
+      [ (,) <$> shrinkResult l a <*> pure b
+      , (,) a <$> shrinkResult r b
+      ]
 
-instance ArbitraryQuery query => ArbitraryMessage (Query query) where
+class Request req => RequestVariations req where
+  tagVariations :: NonEmpty (SomeTag req)
+  requestVariations :: Tag req a -> NonEmpty (req a)
+  resultVariations :: Tag req a -> NonEmpty a
+
+instance RequestVariations req => RequestVariations (ReqTree req) where
+  tagVariations = NE.cons
+    (NE.head [ SomeTag $ TagBin (TagLeaf tag) (TagLeaf tag) | SomeTag tag <- tagVariations])
+    [ SomeTag $ TagLeaf tag | SomeTag tag <- tagVariations ]
+  requestVariations = \case
+    TagLeaf tag -> ReqLeaf <$> requestVariations tag
+    TagBin l r -> ReqBin <$> requestVariations l `varyAp` requestVariations r
+  resultVariations = \case
+    TagLeaf tag -> resultVariations tag
+    TagBin l r -> (,) <$> resultVariations l `varyAp` resultVariations r
+
+instance ArbitraryRequest req => ArbitraryMessage (Query req) where
   arbitraryMessage = do
     SomeTag tag <- arbitraryTag
-    let mGenError = arbitraryErr tag
-    let mGenDelimiter = arbitraryDelimiter tag
     oneof $ catMaybes
-      [ Just $ AnyMessageAndAgency (ClientAgency TokInit) . MsgRequest <$> arbitraryQuery tag
-      , mGenError <&> \genErr -> do
-          err <- genErr
-          pure $ AnyMessageAndAgency (ServerAgency $ TokNext TokCanReject tag) $ MsgReject err
-      , Just $ do
-          results <- arbitraryResults tag
-          AnyMessageAndAgency (ServerAgency $ TokNext TokCanReject tag) . MsgNextPage results
-            <$> oneof [pure Nothing, maybe (pure Nothing) (fmap Just) mGenDelimiter]
-      , mGenDelimiter <&> \genDelimiter -> do
-          delimiter <- genDelimiter
-          pure $ AnyMessageAndAgency (ClientAgency $ TokPage tag) $ MsgRequestNext delimiter
-      , Just $ pure $ AnyMessageAndAgency (ClientAgency $ TokPage tag) MsgDone
+      [ Just $ AnyMessageAndAgency (ClientAgency TokReq) . MsgRequest <$> arbitraryReq tag
+      , Just $ AnyMessageAndAgency (ServerAgency $ TokRes tag) . MsgRespond <$> arbitraryResult tag
+      , Just $ pure $ AnyMessageAndAgency (ClientAgency TokReq) MsgDone
       ]
   shrinkMessage agency = \case
-    MsgRequest query -> MsgRequest <$> shrinkQuery query
-    MsgReject err -> MsgReject <$> case agency of ServerAgency (TokNext _ tag) -> shrinkErr tag err
-    MsgNextPage results mDelimiter -> []
-      <> [ MsgNextPage results' mDelimiter | results' <- case agency of ServerAgency (TokNext _ tag) -> shrinkResults tag results ]
-      <> case mDelimiter of
-          Nothing -> []
-          Just delimiter -> MsgNextPage results Nothing
-            : [ MsgNextPage results (Just delimiter') | delimiter' <- case agency of ServerAgency (TokNext _ tag) -> shrinkDelimiter tag delimiter ]
-    MsgRequestNext delimiter -> MsgRequestNext <$> case agency of ClientAgency (TokPage tag) -> shrinkDelimiter tag delimiter
+    MsgRequest query -> MsgRequest <$> shrinkReq query
+    MsgRespond result -> case agency of
+      (ServerAgency (TokRes tag)) -> MsgRespond <$> shrinkResult tag result
     _ -> []
 
-instance QueryVariations query => MessageVariations (Query query) where
-  agencyVariations = join
-    [ pure $ SomePeerHasAgency $ ClientAgency TokInit
+instance RequestVariations req => MessageVariations (Query req) where
+  agencyVariations = join $ NE.fromList
+    [ pure $ SomePeerHasAgency $ ClientAgency TokReq
     , do
-        SomeTag tag <- tags
-        pure $ SomePeerHasAgency $ ClientAgency $ TokPage tag
-    , do
-        SomeTag tag <- tags
-        [
-            SomePeerHasAgency $ ServerAgency $ TokNext TokCanReject tag
-          , SomePeerHasAgency $ ServerAgency $ TokNext TokMustReply tag
-          ]
+        SomeTag tag <- tagVariations
+        pure $ SomePeerHasAgency $ ServerAgency $ TokRes tag
     ]
   messageVariations = \case
-    ClientAgency TokInit -> do
-      SomeTag tag <- tags
-      SomeMessage . MsgRequest <$> queryVariations tag
-    ClientAgency (TokPage tag) ->
-      SomeMessage MsgDone :| (SomeMessage . MsgRequestNext <$> delimiterVariations tag)
-    ServerAgency (TokNext nextKind tag) -> case resultsVariations tag of
-      result :| results -> SomeMessage (MsgNextPage result Nothing) :| join
-        [ SomeMessage . MsgNextPage result . Just <$> delimiterVariations tag
-        , SomeMessage . flip MsgNextPage Nothing <$> results
-        , case nextKind of
-            TokCanReject -> SomeMessage . MsgReject <$> errVariations tag
-            TokMustReply -> []
-        ]
+    ClientAgency TokReq -> NE.cons (SomeMessage MsgDone) do
+      SomeTag tag <- tagVariations
+      SomeMessage . MsgRequest <$> requestVariations tag
+    ServerAgency (TokRes tag) -> SomeMessage . MsgRespond <$> resultVariations tag
 
-class IsQuery query => QueryEq query where
-  queryEq :: query delimiter err result -> query delimiter err result -> Bool
-  delimiterEq :: Tag query delimiter err result -> delimiter -> delimiter -> Bool
-  errEq :: Tag query delimiter err result -> err -> err -> Bool
-  resultEq :: Tag query delimiter err result -> result -> result -> Bool
+class (forall a. Eq (req a), Request req) => RequestEq req where
+  resultEq :: Tag req a -> a -> a -> Bool
 
-instance QueryEq query => MessageEq (Query query) where
+instance RequestEq req => RequestEq (ReqTree req) where
+  resultEq = \case
+    TagLeaf tag -> resultEq tag
+    TagBin l r -> \(a, b) (a', b') -> resultEq l a a' && resultEq r b b'
+
+instance (RequestEq req) => MessageEq (Query req) where
   messageEq (AnyMessageAndAgency agency msg) = case (agency, msg) of
-    (_, MsgRequest query) -> \case
-      AnyMessageAndAgency _ (MsgRequest query') ->
-        case tagEq (tagFromQuery query) (tagFromQuery query') of
-          Just (Refl, Refl, Refl) -> queryEq query query'
+    (_, MsgRequest req) -> \case
+      AnyMessageAndAgency _ (MsgRequest req') ->
+        case tagEq (tagFromReq req) (tagFromReq req') of
+          Just Refl -> req == req'
           Nothing -> False
       _ -> False
-    (ServerAgency (TokNext _ tag), MsgReject err) -> \case
-      AnyMessageAndAgency (ServerAgency (TokNext _ tag')) (MsgReject err') ->
+    (ServerAgency (TokRes tag), MsgRespond a) -> \case
+      AnyMessageAndAgency (ServerAgency (TokRes tag')) (MsgRespond a') ->
         case tagEq tag tag' of
-          Just (Refl, Refl, Refl) -> errEq tag err err'
-          Nothing -> False
-      _ -> False
-    (ServerAgency (TokNext _ tag), MsgNextPage result mDelimiter) -> \case
-      AnyMessageAndAgency (ServerAgency (TokNext _ tag')) (MsgNextPage result' mDelimiter') ->
-        case tagEq tag tag' of
-          Just (Refl, Refl, Refl) -> resultEq tag result result' && case (mDelimiter, mDelimiter') of
-            (Nothing, Nothing) -> True
-            (Just delimiter, Just delimiter') -> delimiterEq tag delimiter delimiter'
-            _ -> False
-          Nothing -> False
-      _ -> False
-    (ClientAgency (TokPage tag), MsgRequestNext delimiter) -> \case
-      AnyMessageAndAgency (ClientAgency (TokPage tag')) (MsgRequestNext delimiter') ->
-        case tagEq tag tag' of
-          Just (Refl, Refl, Refl) -> delimiterEq tag delimiter delimiter'
+          Just Refl -> resultEq tag a a'
           Nothing -> False
       _ -> False
     (_, MsgDone) -> \case
       AnyMessageAndAgency _ MsgDone -> True
       _ -> False
 
-class IsQuery query => ShowQuery query where
-  showsPrecTag :: Int -> Tag query delimiter err result -> ShowS
-  showsPrecQuery :: Int -> query delimiter err result -> ShowS
-  showsPrecDelimiter :: Int -> Tag query delimiter err result -> delimiter -> ShowS
-  showsPrecErr :: Int -> Tag query delimiter err result -> err -> ShowS
-  showsPrecResult :: Int -> Tag query delimiter err result -> result -> ShowS
+class (forall a. Show (req a), forall a. Show (Tag req a), Request req) => ShowRequest req where
+  showsPrecResult :: Int -> Tag req a -> a -> ShowS
 
-instance ShowQuery query => ShowProtocol (Query query) where
+instance ShowRequest req => ShowRequest (ReqTree req) where
+  showsPrecResult p = \case
+    TagLeaf tag -> showsPrecResult p tag
+    TagBin l r -> \(a, b) -> showParen True
+      ( showsPrecResult 0 l a
+      . showCommaSpace
+      . showsPrecResult 0 r b
+      )
+
+instance (ShowRequest req) => ShowProtocol (Query req) where
   showsPrecMessage p agency = \case
     MsgRequest query -> showParen (p >= 11)
       ( showString "MsgRequest"
       . showSpace
-      . showsPrecQuery 11 query
+      . showsPrec 11 query
       )
-    MsgReject err -> showParen (p >= 11)
-      ( showString "MsgReject"
+    MsgRespond a -> showParen (p >= 11)
+      ( showString "MsgRespond"
       . showSpace
-      . case agency of ServerAgency (TokNext _ tag) -> showsPrecErr 11 tag err
-      )
-    MsgNextPage result mDelimiter -> showParen (p >= 11)
-      ( showString "MsgNextPage"
-      . showSpace
-      . case agency of ServerAgency (TokNext _ tag) -> showsPrecResult 11 tag result
-      . showSpace
-      . case mDelimiter of
-          Nothing -> showString "Nothing"
-          Just delimiter -> showParen True
-            ( showString "Just"
-            . showSpace
-            . case agency of ServerAgency (TokNext _ tag) -> showsPrecDelimiter 11 tag delimiter
-            )
-      )
-    MsgRequestNext delimiter -> showParen (p >= 11)
-      ( showString "MsgRequestNext"
-      . showSpace
-      . case agency of ClientAgency (TokPage tag) -> showsPrecDelimiter 11 tag delimiter
+      . case agency of ServerAgency (TokRes tag) -> showsPrecResult 11 tag a
       )
     MsgDone -> showString "MsgDone"
 
-  showsPrecServerHasAgency p = \case
-    TokNext k tag -> showParen (p >= 11)
-      ( showString "TokNext"
-      . showSpace
-      . showsPrec 11 k
-      . showSpace
-      . showsPrecTag p tag
-      )
-
-  showsPrecClientHasAgency p = \case
-    TokInit -> showString "TokInit"
-    TokPage tag -> showParen (p >= 11)
-      ( showString "TokPage"
-      . showSpace
-      . showsPrecTag p tag
-      )
+  showsPrecServerHasAgency = showsPrec
+  showsPrecClientHasAgency = showsPrec

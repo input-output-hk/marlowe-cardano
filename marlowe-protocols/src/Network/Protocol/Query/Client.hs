@@ -10,159 +10,61 @@
 module Network.Protocol.Query.Client
   where
 
-import Data.Void (Void)
+import Control.Applicative (liftA2)
+import Control.Monad.IO.Class (MonadIO(..))
+import Control.Monad.Trans.Class (MonadTrans(..))
 import Network.Protocol.Peer.Trace
 import Network.Protocol.Query.Types
 import Network.TypedProtocol
 
 -- | A generic client for the query protocol.
-newtype QueryClient query m a = QueryClient { runQueryClient :: m (ClientStInit query m a) }
+data QueryClient req m a where
+  ClientRequest :: ReqTree req x -> (x -> m (QueryClient req m a)) -> QueryClient req m a
+  ClientLift :: m (QueryClient req m a) -> QueryClient req m a
+  ClientPure :: a -> QueryClient req m a
 
--- | In the 'StInit' state, the client has agency. It can send:
---
--- * A request message
-data ClientStInit query m a where
-  -- | Request the results of a query.
-  SendMsgRequest
-    :: query delimiter err results
-    -> ClientStNextCanReject delimiter err results m a
-    -> ClientStInit query m a
+deriving instance Functor m => Functor (QueryClient req m)
 
-deriving instance Functor m => Functor (ClientStInit query m)
+instance Applicative m => Applicative (QueryClient req m) where
+  pure = ClientPure
+  ClientPure f <*> a = f <$> a
+  f <*> ClientPure a = ($ a) <$> f
+  f <*> ClientLift a = ClientLift $ (f <*>) <$> a
+  ClientLift f <*> a = ClientLift $ (<*> a) <$> f
+  ClientRequest req1 contF <*> ClientRequest req2 contA =
+    ClientRequest (ReqBin req1 req2) \(r1, r2) -> liftA2 (<*>) (contF r1) (contA r2)
 
--- | In the 'StNext CanReject' state, the server has agency. The client must be prepared
--- to handle either:
---
--- * A next page message with a page of results
--- * A rejection message with an error
-data ClientStNextCanReject delimiter err results m a = ClientStNextCanReject
-  { recvMsgReject   :: err -> m a
-  , recvMsgNextPage :: results -> Maybe delimiter -> m (ClientStPage delimiter err results m a)
-  }
+instance Monad m => Monad (QueryClient req m) where
+  ClientPure a >>= k = k a
+  ClientLift m >>= k = ClientLift $ (>>= k) <$> m
+  ClientRequest req cont >>= k = ClientRequest req $ fmap (>>= k) . cont
 
-deriving instance Functor m => Functor (ClientStNextCanReject delimiter err results m)
+instance MonadTrans (QueryClient req) where
+  lift = ClientLift . fmap pure
 
--- | In the 'StPage' state, the client has agency. It can send either:
---
--- * A request next message
--- * A done message
-data ClientStPage delimiter err results m a where
-  -- | Request the next page of results..
-  SendMsgRequestNext :: delimiter -> ClientStNext delimiter err results m a -> ClientStPage delimiter err results m a
+instance MonadIO m => MonadIO (QueryClient req m) where
+  liftIO = lift . liftIO
 
-  -- | Exit the reading loop.
-  SendMsgDone :: a -> ClientStPage delimiter err results m a
+hoistQueryClient :: Functor m => (forall x. m x -> n x) -> QueryClient req m a -> QueryClient req n a
+hoistQueryClient f = \case
+  ClientPure a -> ClientPure a
+  ClientLift m -> ClientLift $ f $ hoistQueryClient f <$> m
+  ClientRequest req cont -> ClientRequest req $ f . fmap (hoistQueryClient f) . cont
 
-deriving instance Functor m => Functor (ClientStPage delimiter err results m)
+request :: Applicative m => req a -> QueryClient req m a
+request req = ClientRequest (ReqLeaf req) $ pure . pure
 
--- | In the 'StNext MustReply state, the server has agency. The client must be prepared
--- to handle
---
--- * A next page message with a page of results
-newtype ClientStNext delimiter err results m a = ClientStNext
-  { recvMsgNextPage :: results -> Maybe delimiter -> m (ClientStPage delimiter err results m a)
-  }
-
-deriving instance Functor m => Functor (ClientStNext delimiter err results m)
-
--- | Change the underlying monad type a server runs in with a natural
--- transformation.
-hoistQueryClient
-  :: forall query m n a
-   . Functor m
-  => (forall x. m x -> n x)
-  -> QueryClient query m a
-  -> QueryClient query n a
-hoistQueryClient phi = QueryClient . phi . fmap hoistInit . runQueryClient
-  where
-  hoistInit = \case
-    SendMsgRequest query next   -> SendMsgRequest query $ hoistNextCanReject next
-
-  hoistNextCanReject
-    :: ClientStNextCanReject delimiter err results m a
-    -> ClientStNextCanReject delimiter err results n a
-  hoistNextCanReject ClientStNextCanReject{..} = ClientStNextCanReject
-    { recvMsgReject = phi . recvMsgReject
-    , recvMsgNextPage = \results -> phi . fmap hoistPage . recvMsgNextPage results
-    }
-
-  hoistPage
-    :: ClientStPage delimiter err results m a
-    -> ClientStPage delimiter err results n a
-  hoistPage = \case
-    SendMsgRequestNext delimiter next -> SendMsgRequestNext delimiter $ hoistNext next
-    SendMsgDone a                     -> SendMsgDone a
-
-  hoistNext
-    :: ClientStNext delimiter err results m a
-    -> ClientStNext delimiter err results n a
-  hoistNext ClientStNext{..} = ClientStNext
-    { recvMsgNextPage = \results -> phi . fmap hoistPage . recvMsgNextPage results
-    }
-
--- | Interpret a client as a typed-protocols peer.
 queryClientPeer
-  :: forall query m a
-   . (Monad m, IsQuery query)
-  => QueryClient query m a
-  -> PeerTraced (Query query) 'AsClient 'StInit m a
-queryClientPeer QueryClient{..} = EffectTraced $ peerInit <$> runQueryClient
-  where
-  peerInit :: ClientStInit query m a -> PeerTraced (Query query) 'AsClient 'StInit m a
-  peerInit (SendMsgRequest query next) =
-    YieldTraced (ClientAgency TokInit) (MsgRequest query)
-      $ Call (ServerAgency (TokNext TokCanReject (tagFromQuery query)))
-      $ peerNextCanReject (tagFromQuery query) next
-
-  peerNextCanReject
-    :: Tag query delimiter err results
-    -> ClientStNextCanReject delimiter err results m a
-    -> Message (Query query) ('StNext 'CanReject delimiter err results) st
-    -> PeerTraced (Query query) 'AsClient st m a
-  peerNextCanReject tag ClientStNextCanReject{..} = EffectTraced . \case
-    MsgReject err                 -> DoneTraced TokDone <$> recvMsgReject err
-    MsgNextPage results delimiter -> peerPage tag <$> recvMsgNextPage results delimiter
-
-  peerPage
-    :: Tag query delimiter err results
-    -> ClientStPage delimiter err results m a
-    -> PeerTraced (Query query) 'AsClient ('StPage delimiter err results) m a
-  peerPage tag = \case
-    SendMsgRequestNext delimiter next ->
-      YieldTraced (ClientAgency (TokPage tag)) (MsgRequestNext delimiter)
-        $ Call (ServerAgency $ TokNext TokMustReply tag)
-        $ peerNext tag next
-    SendMsgDone a  ->
-      YieldTraced (ClientAgency (TokPage tag)) MsgDone
-        $ Close TokDone a
-
-  peerNext
-    :: Tag query delimiter err results
-    -> ClientStNext delimiter err results m a
-    -> Message (Query query) ('StNext 'MustReply delimiter err results) st
-    -> PeerTraced (Query query) 'AsClient st m a
-  peerNext query ClientStNext{..} = EffectTraced . \case
-    MsgNextPage results delimiter -> peerPage query <$> recvMsgNextPage results delimiter
-
--- | Create a client that runs a query that cannot have multiple pages.
-liftQuery :: Monad m => query Void err results -> QueryClient query m (Either err results)
-liftQuery = QueryClient . pure . ($ next) . SendMsgRequest
-  where
-    next = ClientStNextCanReject
-      { recvMsgNextPage = const . pure . SendMsgDone . Right
-      , recvMsgReject = pure . Left
-      }
-
--- | Create a client that runs a query that can have multiple pages by
--- enumerating through all the pages and appending the results.
-liftFoldQuery :: (Monad m, Monoid results) => query delimiter err results -> QueryClient query m (Either err results)
-liftFoldQuery = QueryClient . pure . ($ next) . SendMsgRequest
-  where
-    next = ClientStNextCanReject
-      { recvMsgNextPage = handleNext mempty
-      , recvMsgReject = pure . Left
-      }
-    handleNext agg results Nothing = pure $ SendMsgDone $ Right $ agg <> results
-    handleNext agg results (Just d) = pure $ SendMsgRequestNext d ClientStNext
-      { recvMsgNextPage = handleNext (agg <> results)
-      }
+  :: (Functor m, Request req)
+  => QueryClient req m a
+  -> PeerTraced (Query req) 'AsClient 'StReq m a
+queryClientPeer = \case
+  ClientPure a ->
+    YieldTraced (ClientAgency TokReq) MsgDone
+      $ Close TokDone a
+  ClientLift m ->
+    EffectTraced $ queryClientPeer <$> m
+  ClientRequest req cont ->
+    YieldTraced (ClientAgency TokReq) (MsgRequest req) $
+      Call (ServerAgency (TokRes $ tagFromReq req)) \case
+        MsgRespond r -> EffectTraced $ queryClientPeer <$> cont r
