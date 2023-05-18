@@ -200,13 +200,10 @@ library sync-api
     , base >= 4.9 && < 5
     , binary >= 0.8.8 && < 0.9
     , containers >= 0.6.5 && < 0.7
-    , hs-opentelemetry-api >= 0.0.3 && < 0.0.4
     , marlowe-chain-sync ==0.0.1
     , marlowe-protocols ==0.1.0.0
     , marlowe-runtime ==0.0.1
     , marlowe-runtime:discovery-api ==0.0.1
-    , transformers >= 0.5.6 && < 0.6
-    , typed-protocols ==0.1.0.0
     , unliftio >= 0.2.1 && < 0.3
 
 library contract-api
@@ -412,9 +409,9 @@ library proxy-api
     , base >= 4.9 && < 5
     , binary >= 0.8.8 && < 0.9
     , marlowe-protocols ==0.1.0.0
+    , marlowe-runtime:contract-api ==0.0.1
     , marlowe-runtime:discovery-api ==0.0.1
     , marlowe-runtime:history-api ==0.0.1
-    , marlowe-runtime:contract-api ==0.0.1
     , marlowe-runtime:sync-api ==0.0.1
     , marlowe-runtime:tx-api ==0.0.1
     , typed-protocols ==0.1.0.0

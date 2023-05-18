@@ -55,3 +55,19 @@ queryServerPeer QueryServer{..} =
       MsgRequest req -> Respond (ServerAgency $ TokRes $ tagFromReq req)
         $ uncurry Response . (MsgRespond *** peerReq) <$> recvMsgRequest req
       MsgDone -> Closed TokDone recvMsgDone
+
+respond
+  :: forall req m
+   . Applicative m
+  => (forall a b. m a -> m b -> m (a, b))
+  -> (forall a. req a -> m a)
+  -> QueryServer req m ()
+respond merge handle = QueryServer $ pure server
+  where
+    server = ServerStReq
+      { recvMsgDone = pure ()
+      , recvMsgRequest = fmap (,server) . handle'      }
+    handle' :: ReqTree req a -> m a
+    handle' = \case
+      ReqLeaf req -> handle req
+      ReqBin l r -> handle' l `merge` handle' r

@@ -20,7 +20,6 @@ import qualified Language.Marlowe.Protocol.HeaderSync.Types as Header
 import Language.Marlowe.Protocol.Load.Types (MarloweLoad, SomePeerHasAgency(..))
 import qualified Language.Marlowe.Protocol.Load.Types as Load
 import Language.Marlowe.Protocol.Query.Types (MarloweQuery)
-import qualified Language.Marlowe.Protocol.Query.Types as Query
 import Language.Marlowe.Protocol.Server (MarloweRuntimeServer(..))
 import Language.Marlowe.Protocol.Sync.Types (MarloweSync)
 import qualified Language.Marlowe.Protocol.Sync.Types as Sync
@@ -41,6 +40,7 @@ import qualified Network.Protocol.Handshake.Types as Handshake
 import Network.Protocol.Job.Types (Job)
 import qualified Network.Protocol.Job.Types as Job
 import Network.Protocol.Peer.Trace
+import qualified Network.Protocol.Query.Types as Query
 import Network.TypedProtocol
 import Observe.Event.Backend (setAncestorEventBackend)
 import UnliftIO (MonadUnliftIO(..))
@@ -135,7 +135,7 @@ server useOpenRefAsParent Router{..} = MarloweRuntimeServer
         Header.MsgWait{} -> NextReceive $ ClientAgency Header.TokWait
   , recvMsgRunMarloweQuery = withHandshake useOpenRefAsParent (ClientAgency Query.TokReq) connectMarloweQuery \case
       ClientAgency _ -> \case
-        Query.MsgRequest req -> NextCall $ ServerAgency $ Query.TokRes $ Query.requestToSt req
+        Query.MsgRequest req -> NextCall $ ServerAgency $ Query.TokRes $ Query.tagFromReq req
         Query.MsgDone -> NextClose Query.TokDone
       ServerAgency _ -> \case
         Query.MsgRespond _ -> NextReceive $ ClientAgency Query.TokReq

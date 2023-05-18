@@ -12,7 +12,6 @@ import qualified Language.Marlowe.Protocol.HeaderSync.Types as Header
 import Language.Marlowe.Protocol.Load.Types (MarloweLoad)
 import qualified Language.Marlowe.Protocol.Load.Types as Load
 import Language.Marlowe.Protocol.Query.Types (MarloweQuery)
-import qualified Language.Marlowe.Protocol.Query.Types as Query
 import Language.Marlowe.Protocol.Sync.Types (MarloweSync)
 import qualified Language.Marlowe.Protocol.Sync.Types as Sync
 import Language.Marlowe.Protocol.Types
@@ -20,6 +19,7 @@ import Language.Marlowe.Runtime.Transaction.Api (MarloweTxCommand)
 import Network.Protocol.Job.Types (Job)
 import qualified Network.Protocol.Job.Types as Job
 import Network.Protocol.Peer.Trace
+import qualified Network.Protocol.Query.Types as Query
 import Network.TypedProtocol
 
 data MarloweRuntimeServer m a = MarloweRuntimeServer

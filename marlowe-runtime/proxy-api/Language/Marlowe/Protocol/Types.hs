@@ -15,7 +15,6 @@ import qualified Language.Marlowe.Protocol.HeaderSync.Types as MarloweHeaderSync
 import Language.Marlowe.Protocol.Load.Types (MarloweLoad)
 import qualified Language.Marlowe.Protocol.Load.Types as MarloweLoad
 import Language.Marlowe.Protocol.Query.Types (MarloweQuery)
-import qualified Language.Marlowe.Protocol.Query.Types as MarloweQuery
 import Language.Marlowe.Protocol.Sync.Types (MarloweSync)
 import qualified Language.Marlowe.Protocol.Sync.Types as MarloweSync
 import Language.Marlowe.Runtime.Transaction.Api (MarloweTxCommand)
@@ -25,6 +24,7 @@ import Network.Protocol.Handshake.Types (HasSignature(..))
 import Network.Protocol.Job.Types (Job)
 import qualified Network.Protocol.Job.Types as Job
 import Network.Protocol.Peer.Trace
+import qualified Network.Protocol.Query.Types as Query
 import Network.TypedProtocol
 
 data MarloweRuntime where
@@ -39,7 +39,7 @@ instance Protocol MarloweRuntime where
   data Message MarloweRuntime st st' where
     MsgRunMarloweSync :: Message MarloweRuntime 'StInit ('StMarloweSync 'MarloweSync.StInit)
     MsgRunMarloweHeaderSync :: Message MarloweRuntime 'StInit ('StMarloweHeaderSync 'MarloweHeaderSync.StIdle)
-    MsgRunMarloweQuery :: Message MarloweRuntime 'StInit ('StMarloweQuery 'MarloweQuery.StReq)
+    MsgRunMarloweQuery :: Message MarloweRuntime 'StInit ('StMarloweQuery 'Query.StReq)
     MsgRunMarloweLoad :: Message MarloweRuntime 'StInit ('StMarloweLoad ('MarloweLoad.StProcessing 'MarloweLoad.RootNode))
     MsgRunTxJob :: Message MarloweRuntime 'StInit ('StTxJob 'Job.StInit)
     MsgMarloweSync :: Message MarloweSync st st' -> Message MarloweRuntime ('StMarloweSync st) ('StMarloweSync st')
@@ -52,21 +52,21 @@ instance Protocol MarloweRuntime where
     TokInit :: ClientHasAgency 'StInit
     TokClientMarloweSync :: MarloweSync.ClientHasAgency st -> ClientHasAgency ('StMarloweSync st)
     TokClientMarloweHeaderSync :: MarloweHeaderSync.ClientHasAgency st -> ClientHasAgency ('StMarloweHeaderSync st)
-    TokClientMarloweQuery :: MarloweQuery.ClientHasAgency st -> ClientHasAgency ('StMarloweQuery st)
+    TokClientMarloweQuery :: Query.ClientHasAgency st -> ClientHasAgency ('StMarloweQuery st)
     TokClientMarloweLoad :: MarloweLoad.ClientHasAgency st -> ClientHasAgency ('StMarloweLoad st)
     TokClientTxJob :: Job.ClientHasAgency st -> ClientHasAgency ('StTxJob st)
 
   data ServerHasAgency st where
     TokServerMarloweSync :: MarloweSync.ServerHasAgency st -> ServerHasAgency ('StMarloweSync st)
     TokServerMarloweHeaderSync :: MarloweHeaderSync.ServerHasAgency st -> ServerHasAgency ('StMarloweHeaderSync st)
-    TokServerMarloweQuery :: MarloweQuery.ServerHasAgency st -> ServerHasAgency ('StMarloweQuery st)
+    TokServerMarloweQuery :: Query.ServerHasAgency st -> ServerHasAgency ('StMarloweQuery st)
     TokServerMarloweLoad :: MarloweLoad.ServerHasAgency st -> ServerHasAgency ('StMarloweLoad st)
     TokServerTxJob :: Job.ServerHasAgency st -> ServerHasAgency ('StTxJob st)
 
   data NobodyHasAgency st where
     TokNobodyMarloweSync :: MarloweSync.NobodyHasAgency st -> NobodyHasAgency ('StMarloweSync st)
     TokNobodyMarloweHeaderSync :: MarloweHeaderSync.NobodyHasAgency st -> NobodyHasAgency ('StMarloweHeaderSync st)
-    TokNobodyMarloweQuery :: MarloweQuery.NobodyHasAgency st -> NobodyHasAgency ('StMarloweQuery st)
+    TokNobodyMarloweQuery :: Query.NobodyHasAgency st -> NobodyHasAgency ('StMarloweQuery st)
     TokNobodyMarloweLoad :: MarloweLoad.NobodyHasAgency st -> NobodyHasAgency ('StMarloweLoad st)
     TokNobodyTxJob :: Job.NobodyHasAgency st -> NobodyHasAgency ('StTxJob st)
 

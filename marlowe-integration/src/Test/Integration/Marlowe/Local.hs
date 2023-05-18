@@ -102,7 +102,7 @@ import Language.Marlowe.Protocol.HeaderSync.Types (MarloweHeaderSync)
 import Language.Marlowe.Protocol.Load.Client (MarloweLoadClient, marloweLoadClientPeer)
 import Language.Marlowe.Protocol.Load.Server (MarloweLoadServer, marloweLoadServerPeer)
 import Language.Marlowe.Protocol.Load.Types (MarloweLoad)
-import Language.Marlowe.Protocol.Query.Client (MarloweQueryClient(..), marloweQueryClientPeer)
+import Language.Marlowe.Protocol.Query.Client (MarloweQueryClient)
 import Language.Marlowe.Protocol.Query.Server (MarloweQueryServer)
 import Language.Marlowe.Protocol.Query.Types (MarloweQuery)
 import Language.Marlowe.Protocol.Server (MarloweRuntimeServer, marloweRuntimeServerPeer)
@@ -681,8 +681,8 @@ setupChannels = do
     marloweSyncServerPeer
     marloweSyncClientPeer
   marloweQueryPair <- handshakeClientServerPair <$> clientServerPair
-    id
-    marloweQueryClientPeer
+    queryServerPeer
+    queryClientPeer
   marloweLoadPair <- handshakeClientServerPair <$> clientServerPair
     marloweLoadServerPeer
     marloweLoadClientPeer

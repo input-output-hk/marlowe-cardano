@@ -8,11 +8,10 @@ module Language.Marlowe.Protocol.QuerySpec
 
 import Data.Foldable (fold)
 import Language.Marlowe.Protocol.Query.Types
-import Language.Marlowe.Runtime.ChainSync.Gen (StructureType(..), oneofStructured, resized)
 import Language.Marlowe.Runtime.Core.Api (MarloweVersion(..), MarloweVersionTag(V1))
 import Language.Marlowe.Runtime.Discovery.Gen ()
 import Network.Protocol.Codec.Spec
-import Network.TypedProtocol.Codec
+import Network.Protocol.Query.Types
 import Spec.Marlowe.Semantics.Arbitrary ()
 import Test.Hspec (Spec, describe)
 import Test.Hspec.QuickCheck (prop)
@@ -23,22 +22,52 @@ spec = describe "MarloweQuery protocol" do
   prop "Has a lawful codec" $ checkPropCodec @MarloweQuery
   codecGoldenTests @MarloweQuery "MarloweQuery"
 
-instance ArbitraryMessage MarloweQuery where
-  arbitraryMessage = resized (min 30) $ oneof
-    [ do
-        SomeStRes tok <- arbitrary
-        AnyMessageAndAgency (ClientAgency TokReq) . MsgRequest <$> arbitraryRequest tok
-    , pure $ AnyMessageAndAgency (ClientAgency TokReq) MsgDone
-    , do
-        SomeStRes req <- arbitrary
-        AnyMessageAndAgency (ServerAgency (TokRes req)) . MsgRespond <$> arbitraryResponse req
+instance ArbitraryRequest MarloweSyncRequest where
+  arbitraryTag = elements
+    [ SomeTag TagContractHeaders
+    , SomeTag TagContractState
+    , SomeTag TagTransaction
+    , SomeTag TagTransactions
+    , SomeTag TagWithdrawal
+    , SomeTag TagWithdrawals
     ]
-  shrinkMessage = \case
-    ClientAgency TokReq -> \case
-      MsgRequest req -> MsgRequest <$> shrinkRequest req
-      MsgDone -> []
-    ServerAgency (TokRes req) -> \case
-      MsgRespond a -> MsgRespond <$> shrinkResponse req a
+  arbitraryReq = \case
+    TagContractHeaders -> ReqContractHeaders <$> arbitrary <*> arbitrary
+    TagContractState -> ReqContractState <$> arbitrary
+    TagTransaction -> ReqTransaction <$> arbitrary
+    TagTransactions -> ReqTransactions <$> arbitrary
+    TagWithdrawal -> ReqWithdrawal <$> arbitrary
+    TagWithdrawals -> ReqWithdrawals <$> arbitrary <*> arbitrary
+
+  shrinkReq = \case
+    ReqContractHeaders cFilter range -> fold
+      [  ReqContractHeaders <$> shrink cFilter <*> pure range
+      , ReqContractHeaders cFilter <$> shrink range
+      ]
+    ReqContractState contractId -> ReqContractState <$> shrink contractId
+    ReqTransaction txId -> ReqTransaction <$> shrink txId
+    ReqTransactions contractId -> ReqTransactions <$> shrink contractId
+    ReqWithdrawal txId -> ReqWithdrawal <$> shrink txId
+    ReqWithdrawals wFilter range -> fold
+      [ ReqWithdrawals <$> shrink wFilter <*> pure range
+      , ReqWithdrawals wFilter <$> shrink range
+      ]
+
+  arbitraryResult = \case
+    TagContractHeaders -> arbitrary
+    TagContractState -> arbitrary
+    TagTransaction -> arbitrary
+    TagTransactions -> arbitrary
+    TagWithdrawal -> arbitrary
+    TagWithdrawals -> arbitrary
+
+  shrinkResult = \case
+    TagContractHeaders -> shrink
+    TagContractState -> shrink
+    TagTransaction -> shrink
+    TagTransactions -> shrink
+    TagWithdrawal -> shrink
+    TagWithdrawals -> shrink
 
 instance Arbitrary SomeContractState where
   arbitrary = SomeContractState MarloweV1 <$> arbitrary
@@ -67,20 +96,6 @@ instance Arbitrary (ContractState 'V1) where
     <*> arbitrary
   shrink = genericShrink
 
-instance Arbitrary SomeStRes where
-  arbitrary = oneofStructured
-    [ ( Node
-      , resize 0 do
-          SomeStRes a <- arbitrary
-          SomeStRes b <- arbitrary
-          pure $ SomeStRes $ TokBoth a b
-      )
-    , (Leaf, pure $ SomeStRes TokContractHeaders)
-    , (Leaf, pure $ SomeStRes TokContractState)
-    , (Leaf, pure $ SomeStRes TokTransaction)
-    , (Leaf, pure $ SomeStRes TokTransactions)
-    ]
-
 instance (Arbitrary a, Arbitrary b) => Arbitrary (Page a b) where
   arbitrary = Page <$> arbitrary <*> arbitrary <*> arbitrary
   shrink = genericShrink
@@ -107,55 +122,3 @@ instance Arbitrary ContractFilter where
 instance Arbitrary WithdrawalFilter where
   arbitrary = WithdrawalFilter <$> arbitrary
   shrink = genericShrink
-
-arbitraryRequest :: StRes a -> Gen (Request a)
-arbitraryRequest = \case
-  TokContractHeaders -> ReqContractHeaders <$> arbitrary <*> arbitrary
-  TokContractState -> ReqContractState <$> arbitrary
-  TokTransaction -> ReqTransaction <$> arbitrary
-  TokTransactions -> ReqTransactions <$> arbitrary
-  TokWithdrawal -> ReqWithdrawal <$> arbitrary
-  TokWithdrawals -> ReqWithdrawals <$> arbitrary <*> arbitrary
-  TokBoth a b -> resized (`div` 2) $ ReqBoth <$> arbitraryRequest a <*> arbitraryRequest b
-
-shrinkRequest :: Request a -> [Request a]
-shrinkRequest = \case
-  ReqContractHeaders cFilter range -> fold
-    [  ReqContractHeaders <$> shrink cFilter <*> pure range
-    , ReqContractHeaders cFilter <$> shrink range
-    ]
-  ReqContractState contractId -> ReqContractState <$> shrink contractId
-  ReqTransaction txId -> ReqTransaction <$> shrink txId
-  ReqTransactions contractId -> ReqTransactions <$> shrink contractId
-  ReqWithdrawal txId -> ReqWithdrawal <$> shrink txId
-  ReqWithdrawals wFilter range -> fold
-    [ ReqWithdrawals <$> shrink wFilter <*> pure range
-    , ReqWithdrawals wFilter <$> shrink range
-    ]
-  ReqBoth a b -> fold
-    [ [ ReqBoth a' b | a' <- shrinkRequest a ]
-    , [ ReqBoth a b' | b' <- shrinkRequest b ]
-    ]
-
-arbitraryResponse :: StRes a -> Gen a
-arbitraryResponse = \case
-  TokContractHeaders -> arbitrary
-  TokContractState -> arbitrary
-  TokTransaction -> arbitrary
-  TokTransactions -> arbitrary
-  TokWithdrawal -> arbitrary
-  TokWithdrawals -> arbitrary
-  TokBoth a b -> resized (`div` 2) $ (,) <$> arbitraryResponse a <*> arbitraryResponse b
-
-shrinkResponse :: StRes a -> a -> [a]
-shrinkResponse = \case
-  TokContractHeaders -> shrink
-  TokContractState -> shrink
-  TokTransaction -> shrink
-  TokTransactions -> shrink
-  TokWithdrawal -> shrink
-  TokWithdrawals -> shrink
-  TokBoth ta tb -> \(a, b) -> fold
-    [ [ (a', b) | a' <- shrinkResponse ta a ]
-    , [ (a, b') | b' <- shrinkResponse tb b ]
-    ]
