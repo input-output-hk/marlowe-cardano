@@ -211,6 +211,7 @@ library contract-api
   hs-source-dirs:   contract-api
   visibility: public
   exposed-modules:
+    Language.Marlowe.Runtime.Contract.Api
     Language.Marlowe.Protocol.Load.Client
     Language.Marlowe.Protocol.Load.Server
     Language.Marlowe.Protocol.Load.Types
@@ -219,6 +220,7 @@ library contract-api
     , base >= 4.9 && < 5
     , binary >= 0.8.8 && < 0.9
     , cardano-api ==1.35.4
+    , containers >= 0.6.5 && < 0.7
     , hs-opentelemetry-api >= 0.0.3 && < 0.0.4
     , marlowe-cardano ==0.1.0.3
     , marlowe-chain-sync ==0.0.1
