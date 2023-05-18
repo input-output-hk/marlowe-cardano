@@ -11,6 +11,7 @@ import Cardano.Api (SystemStart)
 import Control.Concurrent.Component
 import Control.Concurrent.STM (STM, TVar, newTQueue, newTVar, readTQueue, readTVar, writeTQueue, writeTVar)
 import Control.Monad.Event.Class (MonadInjectEvent, withEvent)
+import Control.Monad.Trans (lift)
 import Data.Set (Set)
 import Data.Set.NonEmpty (NESet)
 import qualified Data.Set.NonEmpty as NESet
@@ -22,7 +23,7 @@ import Language.Marlowe.Runtime.Indexer.Types (MarloweBlock(..), MarloweUTxO(..)
 import Network.Protocol.ChainSeek.Client
 import Network.Protocol.Connection (SomeClientConnectorTraced)
 import Network.Protocol.Driver.Trace (HasSpanContext, runSomeConnectorTraced)
-import Network.Protocol.Query.Client (QueryClient, liftQuery)
+import Network.Protocol.Query.Client (QueryClient, request)
 import Observe.Event (addField, reference)
 import UnliftIO (MonadUnliftIO, atomically, finally)
 import UnliftIO.Concurrent (threadDelay)
@@ -106,19 +107,12 @@ chainSeekClient = component \ChainSeekClientDependencies{..} -> do
     -> TVar Bool
     -> RuntimeChainSeekClient m ()
   client emit DatabaseQueries{..} pollingInterval marloweScriptHashes payoutScriptHashes chainSyncQueryConnector connectedVar =
-    ChainSeekClient do
-      let
-        queryChainSync :: ChainSyncQuery Void err a -> m a
-        queryChainSync query = do
-          result <- runSomeConnectorTraced chainSyncQueryConnector $ liftQuery query
-          case result of
-            Left _ -> fail "Failed to query chain sync"
-            Right a -> pure a
+    ChainSeekClient $ runSomeConnectorTraced chainSyncQueryConnector do
       atomically $ writeTVar connectedVar True
-      systemStart <- queryChainSync GetSystemStart
-      securityParameter <- queryChainSync GetSecurityParameter
+      systemStart <- request GetSystemStart
+      securityParameter <- request GetSecurityParameter
       -- Get the intersection points - the most recent block headers stored locally.
-      intersectionPoints <- getIntersectionPoints
+      intersectionPoints <- lift getIntersectionPoints
       let
         -- A client state for handling the intersect response.
         clientNextIntersect = ClientStNext
@@ -129,7 +123,7 @@ chainSeekClient = component \ChainSeekClientDependencies{..} -> do
               emit $ RollBackward Genesis tip
 
               -- Start the main synchronization loop
-              pure $ clientIdle securityParameter systemStart queryChainSync $ MarloweUTxO mempty mempty
+              pure $ clientIdle securityParameter systemStart $ MarloweUTxO mempty mempty
 
           -- An intersection point was found, resume synchronization from
           -- that point.
@@ -149,7 +143,7 @@ chainSeekClient = component \ChainSeekClientDependencies{..} -> do
                   pure utxo
 
               -- Start the main synchronization loop.
-              pure $ clientIdle securityParameter systemStart queryChainSync utxo
+              pure $ clientIdle securityParameter systemStart utxo
 
           -- Since the client is at Genesis at the start of this request,
           -- it will never be rolled back. Handle the perfunctory case by
@@ -165,7 +159,7 @@ chainSeekClient = component \ChainSeekClientDependencies{..} -> do
 
       pure case intersectionPoints of
         -- Just start the loop right away with an empty UTxO.
-        [] -> clientIdle securityParameter systemStart queryChainSync $ MarloweUTxO mempty mempty
+        [] -> clientIdle securityParameter systemStart $ MarloweUTxO mempty mempty
         -- Request an intersection
         _ -> clientIdleIntersect
       where
@@ -189,19 +183,17 @@ chainSeekClient = component \ChainSeekClientDependencies{..} -> do
       clientIdle
         :: Int
         -> SystemStart
-        -> (forall err x. ChainSyncQuery Void err x -> m x)
         -> MarloweUTxO
         -> ClientStIdle Move ChainPoint (WithGenesis BlockHeader) m a
-      clientIdle securityParameter systemStart queryChainSync = SendMsgQueryNext (FindTxsFor allScriptCredentials) . clientNext securityParameter systemStart queryChainSync
+      clientIdle securityParameter systemStart = SendMsgQueryNext (FindTxsFor allScriptCredentials) . clientNext securityParameter systemStart
 
       -- Handles responses from the main synchronization loop query.
       clientNext
         :: Int
         -> SystemStart
-        -> (forall err x. ChainSyncQuery Void err x -> m x)
         -> MarloweUTxO
         -> ClientStNext Move Void (Set Transaction) ChainPoint (WithGenesis BlockHeader) m a
-      clientNext securityParameter systemStart queryChainSync utxo = ClientStNext
+      clientNext securityParameter systemStart utxo = ClientStNext
         -- Fail with an error if marlowe-chain-sync rejects the query. This is safe
         -- from bad user input, because our queries are derived from the ledger
         -- state, and so will only be rejected if the query derivation is
@@ -218,7 +210,7 @@ chainSeekClient = component \ChainSeekClientDependencies{..} -> do
               At block -> pure block
 
             -- Get the era history
-            eraHistory <- queryChainSync GetEraHistory
+            eraHistory <- runSomeConnectorTraced  chainSyncQueryConnector $ request GetEraHistory
 
             -- Extract the Marlowe block and compute the next MarloweUTxO.
             nextUtxo <- case extractMarloweBlock systemStart eraHistory (NESet.toSet marloweScriptHashes) block txs utxo of
@@ -235,14 +227,14 @@ chainSeekClient = component \ChainSeekClientDependencies{..} -> do
 
             -- Loop back into the main synchronization loop with an updated
             -- rollback state.
-            pure $ clientIdle securityParameter systemStart queryChainSync nextUtxo
+            pure $ clientIdle securityParameter systemStart nextUtxo
 
         , recvMsgRollBackward = \point tip -> do
             emit $ RollBackward point tip
             nextUtxo <- case point of
               Genesis -> pure $ MarloweUTxO mempty mempty
               At block -> getMarloweUTxO block
-            pure $ clientIdle securityParameter systemStart queryChainSync nextUtxo
+            pure $ clientIdle securityParameter systemStart nextUtxo
 
-        , recvMsgWait = pollWithNext $ clientNext securityParameter systemStart queryChainSync utxo
+        , recvMsgWait = pollWithNext $ clientNext securityParameter systemStart utxo
         }

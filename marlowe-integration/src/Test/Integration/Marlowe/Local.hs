@@ -69,7 +69,6 @@ import Control.Monad.With
 import Data.Aeson (eitherDecodeFileStrict)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as BS
-import Data.Either (fromRight)
 import Data.Functor (void)
 import Data.GeneralAllocate
 import qualified Data.Map as Map
@@ -81,7 +80,6 @@ import Data.String (fromString)
 import qualified Data.Text as T
 import Data.Time.Clock (secondsToNominalDiffTime)
 import Data.Time.Units (Second)
-import Data.Void (Void)
 import Data.Word (Word16)
 import Database.PostgreSQL.LibPQ (connectdb, errorMessage, exec, finish, resultErrorMessage)
 import Hasql.Connection (settings)
@@ -165,14 +163,14 @@ import Network.Protocol.Codec (BinaryMessage)
 import Network.Protocol.Connection
 import qualified Network.Protocol.Connection as Connection
 import Network.Protocol.Driver
-import Network.Protocol.Driver.Trace (HasSpanContext(..), mkDriverTraced, runConnectorTraced)
+import Network.Protocol.Driver.Trace (HasSpanContext(..), mkDriverTraced, runSomeConnectorTraced)
 import Network.Protocol.Handshake.Server (handshakeClientServerPair, handshakeConnectionSource)
 import Network.Protocol.Handshake.Types (Handshake)
 import Network.Protocol.Job.Client (JobClient, jobClientPeer)
 import Network.Protocol.Job.Server (JobServer, jobServerPeer)
 import Network.Protocol.Job.Types (Job)
 import Network.Protocol.Peer.Trace (TypedProtocolsSelector, defaultSpanContext)
-import Network.Protocol.Query.Client (QueryClient, liftQuery, queryClientPeer)
+import Network.Protocol.Query.Client (QueryClient, queryClientPeer, request)
 import Network.Protocol.Query.Server (QueryServer, queryServerPeer)
 import Network.Protocol.Query.Types (Query)
 import Network.Socket
@@ -597,12 +595,9 @@ runtime = proc RuntimeDependencies{..} -> do
 
   transaction -<
     let
-      queryChainSync :: ChainSyncQuery Void err results -> RuntimeM r results
-      queryChainSync = fmap (fromRight $ error "failed to query chain sync server")
-        . runConnectorTraced inject (clientConnector chainSyncQueryPair)
-        . liftQuery
+      chainSyncQueryConnector = SomeConnectorTraced inject (clientConnector chainSyncQueryPair)
 
-      loadWalletContext = Query.loadWalletContext $ queryChainSync . GetUTxOs
+      loadWalletContext = Query.loadWalletContext $ runSomeConnectorTraced chainSyncQueryConnector . request . GetUTxOs
 
       networkId = localNodeNetworkId
 
