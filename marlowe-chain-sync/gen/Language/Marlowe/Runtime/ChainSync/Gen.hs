@@ -346,7 +346,7 @@ instance ChainSeek.QueryEq Move where
     TagFindTxsFor -> (==)
     TagAdvanceToTip -> (==)
 
-instance Query.ArbitraryQuery ChainSyncQuery where
+instance Query.ArbitraryRequest ChainSyncQuery where
   arbitraryTag = elements
     [ Query.SomeTag TagGetSecurityParameter
     , Query.SomeTag TagGetNetworkId
@@ -356,7 +356,7 @@ instance Query.ArbitraryQuery ChainSyncQuery where
     , Query.SomeTag TagGetUTxOs
     ]
 
-  arbitraryQuery = \case
+  arbitraryReq = \case
     TagGetSecurityParameter -> pure GetSecurityParameter
     TagGetNetworkId -> pure GetNetworkId
     TagGetProtocolParameters -> pure GetProtocolParameters
@@ -364,23 +364,7 @@ instance Query.ArbitraryQuery ChainSyncQuery where
     TagGetEraHistory -> pure GetEraHistory
     TagGetUTxOs -> GetUTxOs <$> arbitrary
 
-  arbitraryDelimiter = \case
-    TagGetSecurityParameter -> Nothing
-    TagGetNetworkId -> Nothing
-    TagGetProtocolParameters -> Nothing
-    TagGetSystemStart -> Nothing
-    TagGetEraHistory -> Nothing
-    TagGetUTxOs -> Nothing
-
-  arbitraryErr = \case
-    TagGetSecurityParameter -> Just arbitrary
-    TagGetNetworkId -> Just arbitrary
-    TagGetProtocolParameters -> Just arbitrary
-    TagGetSystemStart -> Just arbitrary
-    TagGetEraHistory -> Just arbitrary
-    TagGetUTxOs -> Just arbitrary
-
-  arbitraryResults = \case
+  arbitraryResult = \case
     TagGetSecurityParameter -> arbitrary
     TagGetNetworkId -> oneof
       [ pure Mainnet
@@ -391,7 +375,7 @@ instance Query.ArbitraryQuery ChainSyncQuery where
     TagGetEraHistory -> genEraHistory
     TagGetUTxOs -> arbitrary
 
-  shrinkQuery = \case
+  shrinkReq = \case
     GetSecurityParameter -> []
     GetNetworkId -> []
     GetProtocolParameters -> []
@@ -399,15 +383,7 @@ instance Query.ArbitraryQuery ChainSyncQuery where
     GetEraHistory -> []
     GetUTxOs query -> GetUTxOs <$> shrink query
 
-  shrinkErr = \case
-    TagGetSecurityParameter -> shrink
-    TagGetNetworkId -> shrink
-    TagGetProtocolParameters -> shrink
-    TagGetSystemStart -> shrink
-    TagGetEraHistory -> shrink
-    TagGetUTxOs -> shrink
-
-  shrinkResults = \case
+  shrinkResult = \case
     TagGetSecurityParameter -> shrink
     TagGetNetworkId -> \case
       Mainnet -> []
@@ -416,14 +392,6 @@ instance Query.ArbitraryQuery ChainSyncQuery where
     TagGetSystemStart -> const []
     TagGetEraHistory -> const []
     TagGetUTxOs -> shrink
-
-  shrinkDelimiter = \case
-    TagGetSecurityParameter -> absurd
-    TagGetNetworkId -> absurd
-    TagGetProtocolParameters -> absurd
-    TagGetSystemStart -> absurd
-    TagGetEraHistory -> absurd
-    TagGetUTxOs -> absurd
 
 genEraHistory :: Gen (EraHistory CardanoMode)
 genEraHistory = EraHistory CardanoMode <$> do
@@ -478,34 +446,7 @@ genEpochSize = EpochSize <$> arbitrary
 genSlotLength :: Gen SlotLength
 genSlotLength = mkSlotLength . fromIntegral <$> arbitrary @Word64
 
-instance Query.QueryEq ChainSyncQuery where
-  queryEq = \case
-    GetSecurityParameter -> \case
-      GetSecurityParameter -> True
-    GetNetworkId -> \case
-      GetNetworkId -> True
-    GetProtocolParameters -> \case
-      GetProtocolParameters -> True
-    GetSystemStart -> \case
-      GetSystemStart -> True
-    GetEraHistory -> \case
-      GetEraHistory -> True
-    GetUTxOs query -> \case
-      GetUTxOs query' -> query == query'
-  delimiterEq = \case
-    TagGetSecurityParameter -> absurd
-    TagGetNetworkId -> absurd
-    TagGetProtocolParameters -> absurd
-    TagGetSystemStart -> absurd
-    TagGetEraHistory -> absurd
-    TagGetUTxOs -> absurd
-  errEq = \case
-    TagGetSecurityParameter -> (==)
-    TagGetNetworkId -> (==)
-    TagGetProtocolParameters -> (==)
-    TagGetSystemStart -> (==)
-    TagGetEraHistory -> (==)
-    TagGetUTxOs -> (==)
+instance Query.RequestEq ChainSyncQuery where
   resultEq = \case
     TagGetSecurityParameter -> (==)
     TagGetNetworkId -> (==)

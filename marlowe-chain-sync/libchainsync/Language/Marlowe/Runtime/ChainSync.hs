@@ -48,7 +48,7 @@ data ChainSyncDependencies r s m = ChainSyncDependencies
   }
 
 chainSync
-  :: (MonadUnliftIO m, MonadEvent r s m, HasSpanContext r)
+  :: (MonadUnliftIO m, MonadEvent r s m, HasSpanContext r, MonadFail m)
   => Component m (ChainSyncDependencies r s m) Probes
 chainSync = proc ChainSyncDependencies{..} -> do
   let DatabaseQueries{..} = databaseQueries
