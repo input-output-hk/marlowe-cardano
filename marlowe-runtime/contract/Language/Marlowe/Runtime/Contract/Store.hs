@@ -5,19 +5,23 @@ module Language.Marlowe.Runtime.Contract.Store
   where
 
 import Control.Monad.Event.Class
+import Data.Foldable (traverse_)
 import Data.Set (Set)
 import Data.Void (Void)
 import Language.Marlowe.Core.V1.Semantics.Types (Contract)
 import Language.Marlowe.Runtime.ChainSync.Api (DatumHash)
+import Language.Marlowe.Runtime.Contract.Api (ContractWithAdjacency)
 import Observe.Event (InjectSelector, addField, injectSelector, reference)
 import Observe.Event.Backend (setInitialCauseEventBackend)
 
 data ContractStoreSelector f where
   CreateContractStagingArea :: ContractStoreSelector Void
   ContractStagingAreaSelector :: ContractStagingAreaSelector f -> ContractStoreSelector f
+  GetContract :: DatumHash -> ContractStoreSelector ContractWithAdjacency
 
-newtype ContractStore m = ContractStore
+data ContractStore m = ContractStore
   { createContractStagingArea :: m (ContractStagingArea m)
+  , getContract :: DatumHash -> m (Maybe ContractWithAdjacency)
   }
 
 hoistContractStore
@@ -27,6 +31,7 @@ hoistContractStore
   -> ContractStore n
 hoistContractStore f ContractStore{..} = ContractStore
   { createContractStagingArea = f $ hoistContractStagingArea f <$> createContractStagingArea
+  , getContract = f . getContract
   }
 
 traceContractStore
@@ -39,6 +44,10 @@ traceContractStore inj ContractStore{..} = ContractStore
       hoistContractStagingArea (localBackend $ setInitialCauseEventBackend [reference ev])
         . traceContractStagingArea (composeInjectSelector inj $ injectSelector ContractStagingAreaSelector)
         <$> createContractStagingArea
+  , getContract = \hash -> withInjectEvent inj (GetContract hash) \ev -> do
+      result <- getContract hash
+      traverse_ (addField ev) result
+      pure result
   }
 
 data ContractStagingAreaSelector f where

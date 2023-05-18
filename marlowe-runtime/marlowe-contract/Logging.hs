@@ -14,11 +14,13 @@ import qualified Data.Text as T
 import Data.Text.Lazy (toStrict)
 import Data.Void (absurd)
 import Language.Marlowe.Protocol.Load.Types (MarloweLoad)
+import Language.Marlowe.Runtime.Contract.Api (ContractRequest)
 import Language.Marlowe.Runtime.Contract.LoadServer (LoadServerSelector(..))
 import Language.Marlowe.Runtime.Contract.Store
   (ContractStagingAreaSelector(..), ContractStoreSelector(..), StageContractField(..))
 import Network.Protocol.Driver.Trace (TcpServerSelector, renderTcpServerSelectorOTel)
 import Network.Protocol.Handshake.Types (Handshake)
+import Network.Protocol.Query.Types (Query)
 import Observe.Event.Explicit (injectSelector)
 import Observe.Event.Render.OpenTelemetry (OTelRendered(..), RenderSelectorOTel)
 import OpenTelemetry.Trace
@@ -27,6 +29,10 @@ data RootSelector f where
   ContractStoreSelector :: ContractStoreSelector f -> RootSelector f
   LoadServerSelector :: LoadServerSelector f -> RootSelector f
   MarloweLoadServer :: TcpServerSelector (Handshake MarloweLoad) f -> RootSelector f
+  QueryServer :: TcpServerSelector (Handshake (Query ContractRequest)) f -> RootSelector f
+
+instance Inject (TcpServerSelector (Handshake (Query ContractRequest))) RootSelector where
+  inject = injectSelector QueryServer
 
 instance Inject (TcpServerSelector (Handshake MarloweLoad)) RootSelector where
   inject = injectSelector MarloweLoadServer
@@ -40,6 +46,7 @@ instance Inject LoadServerSelector RootSelector where
 renderRootSelectorOTel :: RenderSelectorOTel RootSelector
 renderRootSelectorOTel = \case
   MarloweLoadServer sel -> renderTcpServerSelectorOTel sel
+  QueryServer sel -> renderTcpServerSelectorOTel sel
   ContractStoreSelector sel -> renderContractStoreSelectorOTel sel
   LoadServerSelector sel -> renderLoadServerSelectorOTel sel
 
@@ -60,6 +67,11 @@ renderContractStoreSelectorOTel = \case
     , renderField = absurd
     }
   ContractStagingAreaSelector sel -> renderContractStagingAreaSelectorOTel sel
+  GetContract hash -> OTelRendered
+    { eventName = "marlowe/contract/get_contract " <> read (show hash)
+    , eventKind = Client
+    , renderField = const [("marlowe.contract.contract_exists", toAttribute True)]
+    }
 
 renderContractStagingAreaSelectorOTel :: RenderSelectorOTel ContractStagingAreaSelector
 renderContractStagingAreaSelectorOTel = \case

@@ -1,5 +1,6 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE StrictData #-}
 {-# LANGUAGE TypeFamilies #-}
 
 module Language.Marlowe.Runtime.Contract.Api
@@ -14,18 +15,22 @@ import Language.Marlowe.Core.V1.Semantics.Types
 import Language.Marlowe.Runtime.ChainSync.Api (DatumHash)
 import Language.Marlowe.Runtime.Core.Api ()
 import Network.Protocol.Codec.Spec (Variations(variations))
+import Network.Protocol.Handshake.Types (HasSignature, signature)
 import Network.Protocol.Query.Types
 
 data ContractRequest a where
-  GetContract :: DatumHash -> ContractRequest ContractWithAdjacency
+  GetContract :: DatumHash -> ContractRequest (Maybe ContractWithAdjacency)
 
 deriving instance Show (ContractRequest a)
 deriving instance Eq (ContractRequest a)
 deriving instance Ord (ContractRequest a)
 
+instance HasSignature ContractRequest where
+  signature _ = "ContractRequest"
+
 instance Request ContractRequest where
   data Tag ContractRequest a where
-    TagGetContract :: Tag ContractRequest ContractWithAdjacency
+    TagGetContract :: Tag ContractRequest (Maybe ContractWithAdjacency)
   tagFromReq = \case
     GetContract{} -> TagGetContract
   tagEq = \case
@@ -74,8 +79,8 @@ instance RequestEq ContractRequest where
     TagGetContract -> (==)
 
 -- | A contract with its adjacency and closure information.
-data ContractWithAdjacency = ContractRecord
-  { hash :: DatumHash
+data ContractWithAdjacency = ContractWithAdjacency
+  { contractHash :: DatumHash
   -- ^ The hash of the contract (script datum hash)
   , contract :: Contract
   -- ^ The contract.
