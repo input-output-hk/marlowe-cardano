@@ -133,6 +133,7 @@ import Language.Marlowe.Runtime.ChainSync.Api
 import qualified Language.Marlowe.Runtime.ChainSync.Database as ChainSync
 import qualified Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL as ChainSync
 import Language.Marlowe.Runtime.Contract (ContractDependencies(..), contract)
+import Language.Marlowe.Runtime.Contract.Api (ContractRequest)
 import Language.Marlowe.Runtime.Contract.Store (ContractStore)
 import Language.Marlowe.Runtime.Contract.Store.File (ContractStoreOptions(..), createContractStore)
 import Language.Marlowe.Runtime.Core.Api (MarloweVersion(..))
@@ -511,6 +512,7 @@ data RuntimeDependencies r m = RuntimeDependencies
   { chainSyncPair :: ClientServerPair (Handshake RuntimeChainSeek) RuntimeChainSeekServer RuntimeChainSeekClient r m
   , chainSyncJobPair :: ClientServerPair (Handshake (Job ChainSyncCommand)) (JobServer ChainSyncCommand) (JobClient ChainSyncCommand) r m
   , chainSyncQueryPair :: ClientServerPair (Handshake (Query ChainSyncQuery)) (QueryServer ChainSyncQuery) (QueryClient ChainSyncQuery) r m
+  , contractQueryPair :: ClientServerPair (Handshake (Query ContractRequest)) (QueryServer ContractRequest) (QueryClient ContractRequest) r m
   , marloweHeaderSyncPair :: ClientServerPair (Handshake MarloweHeaderSync) MarloweHeaderSyncServer MarloweHeaderSyncClient r m
   , marloweSyncPair :: ClientServerPair (Handshake MarloweSync) MarloweSyncServer MarloweSyncClient r m
   , marloweRuntimePair :: ClientServerPair (Handshake Protocol.MarloweRuntime) MarloweRuntimeServer MarloweRuntimeClient r (ResourceT m)
@@ -618,6 +620,7 @@ runtime = proc RuntimeDependencies{..} -> do
   contract -< ContractDependencies
     { batchSize = unsafeIntToNat 1024
     , loadSource = SomeConnectionSourceTraced inject $ Connection.connectionSource marloweLoadPair
+    , querySource = SomeConnectionSourceTraced inject $ Connection.connectionSource contractQueryPair
     , ..
     }
 
@@ -628,6 +631,7 @@ runtime = proc RuntimeDependencies{..} -> do
         , connectMarloweQuery = driverFactory $ clientConnector marloweQueryPair
         , connectMarloweLoad = driverFactory $ clientConnector marloweLoadPair
         , connectTxJob = driverFactory $ clientConnector txJobPair
+        , connectContractQuery = driverFactory $ clientConnector contractQueryPair
         }
     , connectionSource = SomeConnectionSource marloweRuntimeServerSource
     , connectionSourceTraced = SomeConnectionSourceTraced inject $ Connection.connectionSource marloweRuntimePair
@@ -655,6 +659,7 @@ data Channels r m = Channels
   { chainSyncPair :: ClientServerPair (Handshake RuntimeChainSeek) RuntimeChainSeekServer RuntimeChainSeekClient r m
   , chainSyncJobPair :: ClientServerPair (Handshake (Job ChainSyncCommand)) (JobServer ChainSyncCommand) (JobClient ChainSyncCommand) r m
   , chainSyncQueryPair :: ClientServerPair (Handshake (Query ChainSyncQuery)) (QueryServer ChainSyncQuery) (QueryClient ChainSyncQuery) r m
+  , contractQueryPair :: ClientServerPair (Handshake (Query ContractRequest)) (QueryServer ContractRequest) (QueryClient ContractRequest) r m
   , marloweHeaderSyncPair :: ClientServerPair (Handshake MarloweHeaderSync) MarloweHeaderSyncServer MarloweHeaderSyncClient r m
   , marloweSyncPair :: ClientServerPair (Handshake MarloweSync) MarloweSyncServer MarloweSyncClient r m
   , marloweQueryPair :: ClientServerPair (Handshake MarloweQuery) MarloweQueryServer MarloweQueryClient r m
@@ -672,6 +677,9 @@ setupChannels = do
     jobServerPeer
     jobClientPeer
   chainSyncQueryPair <- handshakeClientServerPair <$> clientServerPair
+    queryServerPeer
+    queryClientPeer
+  contractQueryPair <- handshakeClientServerPair <$> clientServerPair
     queryServerPeer
     queryClientPeer
   marloweHeaderSyncPair <- handshakeClientServerPair <$> clientServerPair
