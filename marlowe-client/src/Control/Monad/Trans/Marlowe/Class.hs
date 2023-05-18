@@ -19,6 +19,7 @@ import Language.Marlowe.Protocol.Load.Client (MarloweLoadClient, pushContract)
 import Language.Marlowe.Protocol.Query.Client (MarloweQueryClient)
 import Language.Marlowe.Protocol.Sync.Client (MarloweSyncClient)
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, DatumHash, Lovelace, StakeCredential, TokenName, TxId)
+import Language.Marlowe.Runtime.Contract.Api (ContractRequest)
 import Language.Marlowe.Runtime.Core.Api
   (Contract, ContractId, Inputs, MarloweTransactionMetadata, MarloweVersion, MarloweVersionTag(..))
 import Language.Marlowe.Runtime.Transaction.Api
@@ -38,6 +39,7 @@ import Network.Protocol.Driver (runConnector)
 import Network.Protocol.Driver.Trace (HasSpanContext, runConnectorTraced)
 import Network.Protocol.Job.Client (ClientStAwait(..), ClientStInit(..), JobClient(..), liftCommand)
 import qualified Network.Protocol.Job.Client as Job
+import Network.Protocol.Query.Client (QueryClient)
 import UnliftIO (MonadIO, MonadUnliftIO, liftIO, newIORef, readIORef, writeIORef)
 
 -- ^ A class for monadic contexts that provide a connection to a Marlowe
@@ -78,6 +80,10 @@ runMarloweHeaderSyncClient = runMarloweRuntimeClient . RunMarloweHeaderSyncClien
 -- ^ Run a MarloweQueryClient.
 runMarloweQueryClient :: MonadMarlowe m => MarloweQueryClient m a -> m a
 runMarloweQueryClient = runMarloweRuntimeClient . RunMarloweQueryClient
+
+-- ^ Run a ContractQueryClient.
+runContractQueryClient :: MonadMarlowe m => QueryClient ContractRequest m a -> m a
+runContractQueryClient = runMarloweRuntimeClient . RunContractQueryClient
 
 -- ^ Run a MarloweLoadClient.
 runMarloweLoadClient :: MonadMarlowe m => MarloweLoadClient m a -> m a
