@@ -15,14 +15,14 @@ module Language.Marlowe.Protocol.Load.Types
 import Control.Monad (join)
 import Data.Aeson (encode, toJSON)
 import qualified Data.Aeson as Aeson
-import Data.Binary (Binary(..), Get, Put, getWord8, putWord8)
+import Data.Binary (Binary(..), Get, getWord8, putWord8)
 import qualified Data.List.NonEmpty as NE
 import Data.String (fromString)
 import Data.Text.Lazy (toStrict)
 import Data.Text.Lazy.Encoding (decodeUtf8)
 import GHC.Show (showSpace)
 import Language.Marlowe.Core.V1.Semantics.Types
-import Language.Marlowe.Runtime.ChainSync.Api (DatumHash, fromDatum, toDatum)
+import Language.Marlowe.Runtime.ChainSync.Api (DatumHash)
 import Language.Marlowe.Runtime.Core.Api ()
 import Network.Protocol.Codec (BinaryMessage(..))
 import Network.Protocol.Codec.Spec hiding (SomePeerHasAgency)
@@ -32,7 +32,6 @@ import Network.Protocol.Peer.Trace
 import Network.TypedProtocol
 import Network.TypedProtocol.Codec (AnyMessageAndAgency(..))
 import OpenTelemetry.Attributes
-import Plutus.V2.Ledger.Api (FromData, ToData)
 
 -- | A kind-level datatype for the states in the MarloweLoad protocol.
 data MarloweLoad where
@@ -202,26 +201,26 @@ instance BinaryMessage MarloweLoad where
       MsgPushClose -> putWord8 0x00
       MsgPushPay payor payee token value -> do
         putWord8 0x01
-        putDatum payor
-        putDatum payee
-        putDatum token
-        putDatum value
+        put payor
+        put payee
+        put token
+        put value
       MsgPushIf cond -> do
         putWord8 0x02
-        putDatum cond
+        put cond
       MsgPushWhen timeout -> do
         putWord8 0x03
-        putDatum timeout
+        put timeout
       MsgPushCase action -> do
         putWord8 0x04
-        putDatum action
+        put action
       MsgPushLet valueId value -> do
         putWord8 0x05
-        putDatum valueId
-        putDatum value
+        put valueId
+        put value
       MsgPushAssert obs -> do
         putWord8 0x06
-        putDatum obs
+        put obs
       MsgRequestResume -> putWord8 0x07
       MsgAbort -> putWord8 0x08
     ServerAgency TokComplete -> \case
@@ -235,30 +234,24 @@ instance BinaryMessage MarloweLoad where
       case tag of
         0x00 -> getPushMsg n $ \k -> k $ pure $ SomeMessage MsgPushClose
         0x01 -> getPushMsg n \k -> k do
-          msg <- MsgPushPay
-            <$> getDatum "payor"
-            <*> getDatum "payee"
-            <*> getDatum "token"
-            <*> getDatum "value"
+          msg <- MsgPushPay <$> get <*> get <*> get <*> get
           pure $ SomeMessage msg
         0x02 -> getPushMsg n \k -> k do
-          msg <- MsgPushIf <$> getDatum "cond"
+          msg <- MsgPushIf <$> get
           pure $ SomeMessage msg
         0x03 -> getPushMsg n \k -> k do
-          msg <- MsgPushWhen <$> getDatum "timeout"
+          msg <- MsgPushWhen <$> get
           pure $ SomeMessage msg
         0x04 -> getPushMsg n \k -> k case tok of
           SWhenNode _ -> do
-            msg <- MsgPushCase <$> getDatum "action"
+            msg <- MsgPushCase <$> get
             pure $ SomeMessage msg
           _ -> fail "Invalid protocol state for MsgPushCase"
         0x05 -> getPushMsg n \k -> k do
-          msg <- MsgPushLet
-            <$> getDatum "valueId"
-            <*> getDatum "value"
+          msg <- MsgPushLet <$> get <*> get
           pure $ SomeMessage msg
         0x06 -> getPushMsg n \k -> k do
-          msg <- MsgPushAssert <$> getDatum "obs"
+          msg <- MsgPushAssert <$> get
           pure $ SomeMessage msg
         0x07 -> case n of
           Zero -> pure $ SomeMessage MsgRequestResume
@@ -275,16 +268,6 @@ instance BinaryMessage MarloweLoad where
 getPushMsg :: Nat n -> (forall n' r. (Get (SomeMessage ('StCanPush ('S n') node)) -> r) -> r) -> Get (SomeMessage ('StCanPush n node))
 getPushMsg Zero _ = fail "No pushes left"
 getPushMsg Succ{} handle = handle id
-
-putDatum :: ToData a => a -> Put
-putDatum = put . toDatum
-
-getDatum :: FromData a => String -> Get a
-getDatum name = do
-  datum <- get
-  case fromDatum datum of
-    Nothing -> fail $ "invalid " <> name <> " datum"
-    Just a -> pure a
 
 instance OTelProtocol MarloweLoad where
   protocolName _ = "marlowe_load"
