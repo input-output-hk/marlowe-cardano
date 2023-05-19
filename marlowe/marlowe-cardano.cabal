@@ -19,6 +19,11 @@ category: Language
 extra-doc-files: README.md
                  CHANGELOG.md
 
+data-dir:        benchmarks
+data-files:
+  rolepayout/*.benchmark
+  semantics/*.benchmark
+
 source-repository head
   type: git
   location: https://github.com/input-output-hk/marlowe-cardano
@@ -45,7 +50,7 @@ common lang
     -Wall -Wnoncanonical-monad-instances
     -Wincomplete-uni-patterns -Wincomplete-record-updates
     -Wredundant-constraints -Widentities
-    -Wunused-packages
+    -Wunused-packages -Werror
 
 library
   import: lang
@@ -99,7 +104,35 @@ library
     Language.Marlowe.Pretty
     Language.Marlowe.Scripts
     Language.Marlowe.Util
+    Paths_marlowe_cardano
     Plutus.Debug
 
   if flag(trace-plutus)
      cpp-options: -DTRACE_PLUTUS
+
+executable marlowe-validators
+  import:         lang
+  hs-source-dirs: app
+  main-is:        Main.hs
+  other-modules:
+    Benchmark.Marlowe
+    Benchmark.Marlowe.RolePayout
+    Benchmark.Marlowe.Semantics
+    Benchmark.Marlowe.Types
+    Benchmark.Marlowe.Util
+    Paths_marlowe_cardano
+  build-depends:
+    , base
+    , base16-bytestring
+    , bytestring
+    , cardano-binary
+    , containers
+    , directory
+    , filepath
+    , marlowe-cardano
+    , mtl
+    , plutus-core
+    , plutus-ledger-api
+    , plutus-tx
+    , serialise
+    , text

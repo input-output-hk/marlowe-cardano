@@ -35,8 +35,15 @@
 
 {-# OPTIONS_GHC -fno-ignore-interface-pragmas #-}
 {-# OPTIONS_GHC -fplugin-opt PlutusTx.Plugin:defer-errors #-}
+{-# OPTIONS_GHC -fplugin-opt PlutusTx.Plugin:dump-uplc #-}
 
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
+
+-- Enable the following options to dump the Plutus code for the validators.
+--
+-- {-# OPTIONS_GHC -fplugin-opt PlutusTx.Plugin:dump-pir #-}
+-- {-# OPTIONS_GHC -fplugin-opt PlutusTx.Plugin:dump-plc #-}
+-- {-# OPTIONS_GHC -fplugin-opt PlutusTx.Plugin:dump-uplc #-}
 
 
 module Language.Marlowe.Scripts
@@ -48,18 +55,23 @@ module Language.Marlowe.Scripts
   , alternateMarloweValidator
   , alternateMarloweValidatorHash
   , marloweValidator
+  , marloweValidatorBytes
   , marloweValidatorCompiled
   , marloweValidatorHash
   , mkMarloweValidator
     -- * Payout Validator
   , TypedRolePayoutValidator
   , rolePayoutValidator
+  , rolePayoutValidatorBytes
   , rolePayoutValidatorHash
     -- * Utilities
   , marloweTxInputsFromInputs
   ) where
 
 
+import Codec.Serialise (serialise)
+import qualified Data.ByteString.Lazy as LBS
+import qualified Data.ByteString.Short as SBS
 import GHC.Generics (Generic)
 import Language.Marlowe.Core.V1.Semantics as Semantics
 import Language.Marlowe.Core.V1.Semantics.Types as Semantics
@@ -82,11 +94,13 @@ import Plutus.V2.Ledger.Api
   , POSIXTimeRange
   , ScriptContext(ScriptContext, scriptContextPurpose, scriptContextTxInfo)
   , ScriptPurpose(Spending)
+  , SerializedScript
   , TokenName
   , TxInInfo(TxInInfo, txInInfoOutRef, txInInfoResolved)
   , TxInfo(TxInfo, txInfoInputs, txInfoOutputs, txInfoValidRange)
   , UpperBound(..)
   , ValidatorHash
+  , getValidator
   , mkValidatorScript
   )
 import qualified Plutus.V2.Ledger.Api as Ledger (Address(Address))
@@ -177,6 +191,11 @@ mkRolePayoutValidator (currency, role) _ ctx =
 -- | The hash of the Marlowe payout validator.
 rolePayoutValidatorHash :: ValidatorHash
 rolePayoutValidatorHash = Scripts.validatorHash rolePayoutValidator
+
+
+-- | The serialisation of the Marlowe payout validator.
+rolePayoutValidatorBytes :: SerializedScript
+rolePayoutValidatorBytes = SBS.toShort . LBS.toStrict . serialise . getValidator $ Scripts.validatorScript rolePayoutValidator
 
 
 {-# INLINABLE closeInterval #-}
@@ -493,12 +512,12 @@ marloweValidator =
 
 
 marloweValidatorCompiled :: PlutusTx.CompiledCode (ValidatorHash -> PlutusTx.BuiltinData -> PlutusTx.BuiltinData -> PlutusTx.BuiltinData -> ())
-marloweValidatorCompiled =
-  let
-    mkUntypedMarloweValidator :: ValidatorHash -> PlutusTx.BuiltinData -> PlutusTx.BuiltinData -> PlutusTx.BuiltinData -> ()
-    mkUntypedMarloweValidator rp = Scripts.mkUntypedValidator (mkMarloweValidator rp)
-  in
-    $$(PlutusTx.compile [|| mkUntypedMarloweValidator ||])
+marloweValidatorCompiled = Haskell.undefined
+--  let
+--    mkUntypedMarloweValidator :: ValidatorHash -> PlutusTx.BuiltinData -> PlutusTx.BuiltinData -> PlutusTx.BuiltinData -> ()
+--    mkUntypedMarloweValidator rp = Scripts.mkUntypedValidator (mkMarloweValidator rp)
+--  in
+--    $$(PlutusTx.compile [|| mkUntypedMarloweValidator ||])
 
 
 -- | The hash of the Marlowe semantics validator.
@@ -506,11 +525,18 @@ marloweValidatorHash :: ValidatorHash
 marloweValidatorHash = Scripts.validatorHash marloweValidator
 
 
+-- | The serialisat of the Marlowe payout validator.
+marloweValidatorBytes :: SerializedScript
+marloweValidatorBytes = SBS.toShort . LBS.toStrict . serialise . getValidator $ Scripts.validatorScript marloweValidator
+
+
 {-# DEPRECATED alternateMarloweValidator "This validator is too large. Use `marloweValidator` instead." #-}
+
 -- | An alternative version of the Marlowe semantics validator that does uses straightforward validator
 -- typing, but at the expense of a larger size.
 alternateMarloweValidator :: Scripts.TypedValidator TypedMarloweValidator
-alternateMarloweValidator = Scripts.mkTypedValidator
+alternateMarloweValidator =
+  Scripts.mkTypedValidator
     @TypedMarloweValidator
     compiledMarloweValidator
     compiledArgsValidator
@@ -525,6 +551,7 @@ alternateMarloweValidator = Scripts.mkTypedValidator
 
 
 {-# DEPRECATED alternateMarloweValidatorHash "This validator is too large. Use `marloweValidatorHash` instead." #-}
+
 -- | Hash of the alaternative Marlowe semantics validator.
 alternateMarloweValidatorHash :: ValidatorHash
 alternateMarloweValidatorHash = Scripts.validatorHash alternateMarloweValidator
