@@ -16,10 +16,14 @@ import Language.Marlowe.Runtime.ChainSync.Api (DatumHash)
 import Language.Marlowe.Runtime.Core.Api ()
 import Network.Protocol.Codec.Spec (Variations(variations))
 import Network.Protocol.Handshake.Types (HasSignature, signature)
+import Network.Protocol.Query.Client (QueryClient, request)
 import Network.Protocol.Query.Types
 
 data ContractRequest a where
   GetContract :: DatumHash -> ContractRequest (Maybe ContractWithAdjacency)
+
+getContract :: Applicative m => DatumHash -> QueryClient ContractRequest m (Maybe ContractWithAdjacency)
+getContract = request . GetContract
 
 deriving instance Show (ContractRequest a)
 deriving instance Eq (ContractRequest a)

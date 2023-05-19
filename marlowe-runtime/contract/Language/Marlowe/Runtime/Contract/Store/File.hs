@@ -28,7 +28,7 @@ import GHC.IO (mkUserError)
 import Language.Marlowe (Case(..), Contract(..))
 import Language.Marlowe.Runtime.Cardano.Api (fromCardanoDatumHash, toCardanoScriptData)
 import Language.Marlowe.Runtime.ChainSync.Api (DatumHash(DatumHash), toDatum)
-import Language.Marlowe.Runtime.Contract.Api
+import Language.Marlowe.Runtime.Contract.Api hiding (getContract)
 import Language.Marlowe.Runtime.Contract.Store
 import Language.Marlowe.Runtime.Core.Api ()
 import Plutus.V2.Ledger.Api (fromBuiltin)

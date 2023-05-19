@@ -8,7 +8,7 @@ module Language.Marlowe.Runtime.Contract.QueryServer
 
 import Control.Concurrent.Component
 import Control.Monad.Event.Class
-import Language.Marlowe.Runtime.Contract.Api
+import Language.Marlowe.Runtime.Contract.Api hiding (getContract)
 import Language.Marlowe.Runtime.Contract.Store (ContractStore(..))
 import Network.Protocol.Connection
 import Network.Protocol.Driver.Trace (HasSpanContext, runSomeConnectorTraced)

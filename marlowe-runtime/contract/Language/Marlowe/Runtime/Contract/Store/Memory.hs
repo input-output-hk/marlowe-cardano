@@ -13,7 +13,7 @@ import Language.Marlowe.Core.V1.Plate (Extract(extractAll))
 import Language.Marlowe.Core.V1.Semantics.Types (Case(..), Contract)
 import Language.Marlowe.Runtime.Cardano.Api (fromCardanoDatumHash, toCardanoScriptData)
 import Language.Marlowe.Runtime.ChainSync.Api (DatumHash(DatumHash), toDatum)
-import Language.Marlowe.Runtime.Contract.Api
+import Language.Marlowe.Runtime.Contract.Api hiding (getContract)
 import Language.Marlowe.Runtime.Contract.Store
 import qualified Plutus.V2.Ledger.Api as PV2
 import UnliftIO (STM, TVar, modifyTVar, newTVar, readTVar, writeTVar)
