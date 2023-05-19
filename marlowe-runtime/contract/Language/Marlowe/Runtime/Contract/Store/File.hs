@@ -27,7 +27,7 @@ import Data.UUID.V4 (nextRandom)
 import GHC.IO (mkUserError)
 import Language.Marlowe (Case(..), Contract(..))
 import Language.Marlowe.Runtime.Cardano.Api (fromCardanoDatumHash, toCardanoScriptData)
-import Language.Marlowe.Runtime.ChainSync.Api (DatumHash(DatumHash), toDatum)
+import Language.Marlowe.Runtime.ChainSync.Api (DatumHash(..), toDatum)
 import Language.Marlowe.Runtime.Contract.Api hiding (getContract)
 import Language.Marlowe.Runtime.Contract.Store
 import Language.Marlowe.Runtime.Core.Api ()
@@ -84,21 +84,29 @@ createContractStore ContractStoreOptions{..} = do
   where
     lockingParameters = def { sleepBetweenRetries = lockingSleepBetweenRetries }
 
-    getContract lockfile contractHash = runMaybeT $ withLockFile lockingParemeters lockfile do
-      let mkFilePath = (contractStoreDirectory </>) . (read (show contractHash) <.>)
-      let contractFilePath = mkFilePath "contract"
-      let adjacencyFilePath = mkFilePath "adjacency"
-      let closureFilePath = mkFilePath "closure"
-      guard =<< doesFileExist contractFilePath
-      guard =<< doesFileExist adjacencyFilePath
-      guard =<< doesFileExist closureFilePath
-      contractBytesCompressed <- liftIO $ LBS.readFile contractFilePath
-      adjacencyBytes <- liftIO $ LBS.readFile adjacencyFilePath
-      closureBytes <- liftIO $ LBS.readFile closureFilePath
-      let contract = runGet get $ decompress contractBytesCompressed
-      let adjacency = runGet get adjacencyBytes
-      let closure = runGet get closureBytes
-      pure ContractWithAdjacency{..}
+    getContract lockfile contractHash
+      | contractHash == closeHash = pure $ Just ContractWithAdjacency
+          { contract = Close
+          , contractHash = closeHash
+          , adjacency = mempty
+          , closure = Set.singleton closeHash
+          }
+      | otherwise = runMaybeT $ withLockFile lockingParameters lockfile do
+        let mkFilePath = (contractStoreDirectory </>) . (read (show contractHash) <.>)
+        let contractFilePath = mkFilePath "contract"
+        let adjacencyFilePath = mkFilePath "adjacency"
+        let closureFilePath = mkFilePath "closure"
+        guard =<< doesFileExist contractFilePath
+        guard =<< doesFileExist adjacencyFilePath
+        guard =<< doesFileExist closureFilePath
+        contractBytesCompressed <- liftIO $ LBS.readFile contractFilePath
+        adjacencyBytes <- liftIO $ LBS.readFile adjacencyFilePath
+        closureBytes <- liftIO $ LBS.readFile closureFilePath
+        let contract = runGet get $ decompress contractBytesCompressed
+        --- Must decode as list, not set. Set's Get instance apparently uses fromDistinctAscList.
+        let adjacency = Set.fromList $ runGet get adjacencyBytes
+        let closure = Set.fromList $ runGet get closureBytes
+        pure ContractWithAdjacency{..}
 
     createContractStagingArea storeLockfile = do
       -- Use a UUID as the staging area directory name.

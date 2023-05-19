@@ -15,6 +15,7 @@ module Control.Monad.Event.Class
 import Control.Applicative (Alternative)
 import Control.Monad (MonadPlus)
 import Control.Monad.Allocate (MonadAllocate)
+import Control.Monad.Catch (MonadCatch, MonadMask, MonadThrow)
 import Control.Monad.Fix (MonadFix)
 import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.Trans.Class (lift)
@@ -41,6 +42,9 @@ newtype NoopEventT r (s :: * -> *) m a = NoopEventT { runNoopEventT :: m a }
     , Applicative
     , Monad
     , Alternative
+    , MonadThrow
+    , MonadCatch
+    , MonadMask
     , MonadFail
     , MonadFix
     , MonadIO

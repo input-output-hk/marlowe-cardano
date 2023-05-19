@@ -60,6 +60,7 @@ executable marlowe-integration-tests
     Language.Marlowe.Runtime.Integration.Basic
     Language.Marlowe.Runtime.Integration.Intersections
     Language.Marlowe.Runtime.Integration.Common
+    Language.Marlowe.Runtime.Integration.Contract
     Language.Marlowe.Runtime.Integration.StandardContract
     Language.Marlowe.Runtime.Integration.MarloweQuery
     Language.Marlowe.Runtime.Integration.Create
@@ -79,8 +80,9 @@ executable marlowe-integration-tests
     Language.Marlowe.Runtime.Web.PutWithdrawal
     Language.Marlowe.Runtime.CliSpec
   build-depends:
-      base >= 4.9 && < 5
     , aeson
+    , async-components
+    , base >= 4.9 && < 5
     , base16
     , bytestring
     , cardano-api
@@ -97,6 +99,8 @@ executable marlowe-integration-tests
     , marlowe-runtime
     , marlowe-runtime-web
     , marlowe-runtime-web:server
+    , marlowe-runtime:contract
+    , marlowe-runtime:contract-api
     , marlowe-runtime:discovery-api
     , marlowe-runtime:history-api
     , marlowe-runtime:sync-api
@@ -104,10 +108,12 @@ executable marlowe-integration-tests
     , mtl
     , network-uri
     , plutus-ledger-api
+    , resourcet
     , servant-client
     , servant-pagination
     , text
     , time
     , transformers
+    , typed-protocols
     , unliftio
   build-tool-depends: hspec-discover:hspec-discover
