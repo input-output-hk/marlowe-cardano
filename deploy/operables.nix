@@ -398,7 +398,7 @@ in
       #################
       # OPTIONAL VARS #
       #################
-      OTEL_EXPORTER_OTLP_ENDPOINT: The url of the open telemetry collector
+      # OTEL_EXPORTER_OTLP_ENDPOINT: The url of the open telemetry collector
 
       [ -z "''${HOST:-}" ] && echo "HOST env var must be set -- aborting" && exit 1
       [ -z "''${PORT:-}" ] && echo "PORT env var must be set -- aborting" && exit 1
