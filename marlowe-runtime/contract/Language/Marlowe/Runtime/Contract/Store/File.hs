@@ -79,7 +79,7 @@ createContractStore ContractStoreOptions{..} = do
     createContractStagingArea storeLockfile = do
       -- Use a UUID as the staging area directory name.
       uuid <- liftIO nextRandom
-      let directory = "staging-area-" <> show uuid
+      let directory = contractStoreStagingDirectory </> "staging-area-" <> show uuid
       -- Create the staging directory
       createDirectory directory
       -- State variable to control when the staging area can be accessed.
