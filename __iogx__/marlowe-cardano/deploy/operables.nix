@@ -137,7 +137,7 @@ in
       #################
       # OPTIONAL VARS #
       #################
-      # LOG_CONFIG_FILE: The path to the JSON logging config file
+      # OTEL_EXPORTER_OTLP_ENDPOINT: The url of the open telemetry collector
 
       [ -z "''${NODE_CONFIG:-}" ] && echo "NODE_CONFIG env var must be set -- aborting" && exit 1
       [ -z "''${CARDANO_NODE_SOCKET_PATH:-}" ] && echo "CARDANO_NODE_SOCKET_PATH env var must be set -- aborting" && exit 1
@@ -169,30 +169,22 @@ in
       BYRON_GENESIS_CONFIG="$NODE_CONFIG_DIR/$(jq -r .ByronGenesisFile "$NODE_CONFIG")"
       SHELLEY_GENESIS_CONFIG="$NODE_CONFIG_DIR/$(jq -r .ShelleyGenesisFile "$NODE_CONFIG")"
       BYRON_GENESIS_HASH=$(jq -r '.ByronGenesisHash' "$NODE_CONFIG")
-      CARDANO_TESTNET_MAGIC=$(jq -r '.networkMagic' "$SHELLEY_GENESIS_CONFIG");
-      export CARDANO_TESTNET_MAGIC
+      if [[ $(jq -r .networkId "$SHELLEY_GENESIS_CONFIG") != "Mainnet" ]]
+      then
+        CARDANO_TESTNET_MAGIC=$(jq -r '.networkMagic' "$SHELLEY_GENESIS_CONFIG");
+        export CARDANO_TESTNET_MAGIC
+      fi
 
       ${wait-for-socket}/bin/wait-for-socket "$CARDANO_NODE_SOCKET_PATH"
 
-      if [ -z "''${LOG_CONFIG_FILE:-}" ]
-      then
-        ${marlowe-chain-indexer}/bin/marlowe-chain-indexer \
-          --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-          --database-uri  "$DATABASE_URI" \
-          --shelley-genesis-config-file "$SHELLEY_GENESIS_CONFIG" \
-          --genesis-config-file "$BYRON_GENESIS_CONFIG" \
-          --genesis-config-file-hash "$BYRON_GENESIS_HASH" \
-          --http-port "$HTTP_PORT"
-      else
-        ${marlowe-chain-indexer}/bin/marlowe-chain-indexer \
-          --log-config-file "$LOG_CONFIG_FILE" \
-          --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-          --database-uri  "$DATABASE_URI" \
-          --shelley-genesis-config-file "$SHELLEY_GENESIS_CONFIG" \
-          --genesis-config-file "$BYRON_GENESIS_CONFIG" \
-          --genesis-config-file-hash "$BYRON_GENESIS_HASH" \
-          --http-port "$HTTP_PORT"
-      fi
+      export OTEL_SERVICE_NAME=marlowe-chain-indexer
+      ${marlowe-chain-indexer}/bin/marlowe-chain-indexer \
+        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+        --database-uri  "$DATABASE_URI" \
+        --shelley-genesis-config-file "$SHELLEY_GENESIS_CONFIG" \
+        --genesis-config-file "$BYRON_GENESIS_CONFIG" \
+        --genesis-config-file-hash "$BYRON_GENESIS_HASH" \
+        --http-port "$HTTP_PORT"
     '';
   };
 
@@ -212,7 +204,7 @@ in
       #################
       # OPTIONAL VARS #
       #################
-      # LOG_CONFIG_FILE: The path to the JSON logging config file
+      # OTEL_EXPORTER_OTLP_ENDPOINT: The url of the open telemetry collector
 
       [ -z "''${HOST:-}" ] && echo "HOST env var must be set -- aborting" && exit 1
       [ -z "''${PORT:-}" ] && echo "PORT env var must be set -- aborting" && exit 1
@@ -234,33 +226,25 @@ in
 
       NODE_CONFIG_DIR=$(dirname "$NODE_CONFIG")
       SHELLEY_GENESIS_CONFIG="$NODE_CONFIG_DIR/$(jq -r .ShelleyGenesisFile "$NODE_CONFIG")"
-      CARDANO_TESTNET_MAGIC=$(jq -r '.networkMagic' "$SHELLEY_GENESIS_CONFIG");
-      export CARDANO_TESTNET_MAGIC
+      if [[ $(jq -r .networkId "$SHELLEY_GENESIS_CONFIG") != "Mainnet" ]]
+      then
+        CARDANO_TESTNET_MAGIC=$(jq -r '.networkMagic' "$SHELLEY_GENESIS_CONFIG");
+        export CARDANO_TESTNET_MAGIC
+      fi
 
       ${wait-for-socket}/bin/wait-for-socket "$CARDANO_NODE_SOCKET_PATH"
 
+      export OTEL_SERVICE_NAME=marlowe-chain-sync
+
       DATABASE_URI=${database-uri}
-      if [ -z "''${LOG_CONFIG_FILE:-}" ]
-      then
-        ${marlowe-chain-sync}/bin/marlowe-chain-sync \
-          --host "$HOST" \
-          --port "$PORT" \
-          --query-port "$QUERY_PORT" \
-          --job-port "$JOB_PORT" \
-          --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-          --database-uri  "$DATABASE_URI" \
-          --http-port "$HTTP_PORT"
-      else
-        ${marlowe-chain-sync}/bin/marlowe-chain-sync \
-          --log-config-file "$LOG_CONFIG_FILE" \
-          --host "$HOST" \
-          --port "$PORT" \
-          --query-port "$QUERY_PORT" \
-          --job-port "$JOB_PORT" \
-          --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-          --database-uri  "$DATABASE_URI" \
-          --http-port "$HTTP_PORT"
-      fi
+      ${marlowe-chain-sync}/bin/marlowe-chain-sync \
+        --host "$HOST" \
+        --port "$PORT" \
+        --query-port "$QUERY_PORT" \
+        --job-port "$JOB_PORT" \
+        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+        --database-uri  "$DATABASE_URI" \
+        --http-port "$HTTP_PORT"
     '';
   };
 
@@ -279,7 +263,7 @@ in
       #################
       # OPTIONAL VARS #
       #################
-      # LOG_CONFIG_FILE: The path to the JSON logging config file
+      # OTEL_EXPORTER_OTLP_ENDPOINT: The url of the open telemetry collector
 
       [ -z "''${DB_NAME:-}" ] && echo "DB_NAME env var must be set -- aborting" && exit 1
       [ -z "''${DB_USER:-}" ] && echo "DB_USER env var must be set -- aborting" && exit 1
@@ -310,23 +294,14 @@ in
 
       ${wait-for-tcp}/bin/wait-for-tcp "$MARLOWE_CHAIN_SYNC_HOST" "$MARLOWE_CHAIN_SYNC_PORT"
 
-      if [ -z "''${LOG_CONFIG_FILE:-}" ]
-      then
-        ${marlowe-indexer}/bin/marlowe-indexer \
-          --database-uri  "$DATABASE_URI" \
-          --chain-sync-port "$MARLOWE_CHAIN_SYNC_PORT" \
-          --chain-sync-query-port "$MARLOWE_CHAIN_SYNC_QUERY_PORT" \
-          --chain-sync-host "$MARLOWE_CHAIN_SYNC_HOST" \
-          --http-port "$HTTP_PORT"
-      else
-        ${marlowe-indexer}/bin/marlowe-indexer \
-          --log-config-file "$LOG_CONFIG_FILE" \
-          --database-uri  "$DATABASE_URI" \
-          --chain-sync-port "$MARLOWE_CHAIN_SYNC_PORT" \
-          --chain-sync-query-port "$MARLOWE_CHAIN_SYNC_QUERY_PORT" \
-          --chain-sync-host "$MARLOWE_CHAIN_SYNC_HOST" \
-          --http-port "$HTTP_PORT"
-      fi
+      export OTEL_SERVICE_NAME=marlowe-indexer
+
+      ${marlowe-indexer}/bin/marlowe-indexer \
+        --database-uri  "$DATABASE_URI" \
+        --chain-sync-port "$MARLOWE_CHAIN_SYNC_PORT" \
+        --chain-sync-query-port "$MARLOWE_CHAIN_SYNC_QUERY_PORT" \
+        --chain-sync-host "$MARLOWE_CHAIN_SYNC_HOST" \
+        --http-port "$HTTP_PORT"
     '';
   };
 
@@ -345,7 +320,7 @@ in
       #################
       # OPTIONAL VARS #
       #################
-      # LOG_CONFIG_FILE: The path to the JSON logging config file
+      # OTEL_EXPORTER_OTLP_ENDPOINT: The url of the open telemetry collector
 
       [ -z "''${HOST:-}" ] && echo "HOST env var must be set -- aborting" && exit 1
       [ -z "''${MARLOWE_SYNC_PORT:-}" ] && echo "MARLOWE_SYNC_PORT env var must be set -- aborting" && exit 1
@@ -365,26 +340,16 @@ in
 
       [ -z "''${DB_HOST:-}" ] && echo "DB_HOST env var must be set -- aborting" && exit 1
 
+      export OTEL_SERVICE_NAME=marlowe-sync
+
       DATABASE_URI=${database-uri}
-      if [ -z "''${LOG_CONFIG_FILE:-}" ]
-      then
-        ${marlowe-sync}/bin/marlowe-sync \
-          --database-uri  "$DATABASE_URI" \
-          --host "$HOST" \
-          --sync-port "$MARLOWE_SYNC_PORT" \
-          --header-sync-port "$MARLOWE_HEADER_SYNC_PORT" \
-          --query-port "$MARLOWE_QUERY_PORT" \
-          --http-port "$HTTP_PORT"
-      else
-        ${marlowe-sync}/bin/marlowe-sync \
-          --log-config-file "$LOG_CONFIG_FILE" \
-          --database-uri  "$DATABASE_URI" \
-          --host "$HOST" \
-          --sync-port "$MARLOWE_SYNC_PORT" \
-          --header-sync-port "$MARLOWE_HEADER_SYNC_PORT" \
-          --query-port "$MARLOWE_QUERY_PORT" \
-          --http-port "$HTTP_PORT"
-      fi
+      ${marlowe-sync}/bin/marlowe-sync \
+        --database-uri  "$DATABASE_URI" \
+        --host "$HOST" \
+        --sync-port "$MARLOWE_SYNC_PORT" \
+        --header-sync-port "$MARLOWE_HEADER_SYNC_PORT" \
+        --query-port "$MARLOWE_QUERY_PORT" \
+        --http-port "$HTTP_PORT"
     '';
   };
 
@@ -401,7 +366,7 @@ in
       #################
       # OPTIONAL VARS #
       #################
-      # LOG_CONFIG_FILE: The path to the JSON logging config file
+      # OTEL_EXPORTER_OTLP_ENDPOINT: The url of the open telemetry collector
 
       [ -z "''${HOST:-}" ] && echo "HOST env var must be set -- aborting" && exit 1
       [ -z "''${PORT:-}" ] && echo "PORT env var must be set -- aborting" && exit 1
@@ -413,27 +378,16 @@ in
 
       ${wait-for-tcp}/bin/wait-for-tcp "$MARLOWE_CHAIN_SYNC_HOST" "$MARLOWE_CHAIN_SYNC_PORT"
 
-      if [ -z "''${LOG_CONFIG_FILE:-}" ]
-      then
-        ${marlowe-tx}/bin/marlowe-tx \
-          --host "$HOST" \
-          --command-port "$PORT" \
-          --chain-sync-port "$MARLOWE_CHAIN_SYNC_PORT" \
-          --chain-sync-query-port "$MARLOWE_CHAIN_SYNC_QUERY_PORT" \
-          --chain-sync-command-port "$MARLOWE_CHAIN_SYNC_COMMAND_PORT" \
-          --chain-sync-host "$MARLOWE_CHAIN_SYNC_HOST" \
-          --http-port "$HTTP_PORT"
-      else
-        ${marlowe-tx}/bin/marlowe-tx \
-          --log-config-file "$LOG_CONFIG_FILE" \
-          --host "$HOST" \
-          --command-port "$PORT" \
-          --chain-sync-port "$MARLOWE_CHAIN_SYNC_PORT" \
-          --chain-sync-query-port "$MARLOWE_CHAIN_SYNC_QUERY_PORT" \
-          --chain-sync-command-port "$MARLOWE_CHAIN_SYNC_COMMAND_PORT" \
-          --chain-sync-host "$MARLOWE_CHAIN_SYNC_HOST" \
-          --http-port "$HTTP_PORT"
-      fi
+      export OTEL_SERVICE_NAME=marlowe-tx
+
+      ${marlowe-tx}/bin/marlowe-tx \
+        --host "$HOST" \
+        --command-port "$PORT" \
+        --chain-sync-port "$MARLOWE_CHAIN_SYNC_PORT" \
+        --chain-sync-query-port "$MARLOWE_CHAIN_SYNC_QUERY_PORT" \
+        --chain-sync-command-port "$MARLOWE_CHAIN_SYNC_COMMAND_PORT" \
+        --chain-sync-host "$MARLOWE_CHAIN_SYNC_HOST" \
+        --http-port "$HTTP_PORT"
     '';
   };
 
@@ -451,7 +405,7 @@ in
       #################
       # OPTIONAL VARS #
       #################
-      # LOG_CONFIG_FILE: The path to the JSON logging config file
+      # OTEL_EXPORTER_OTLP_ENDPOINT: The url of the open telemetry collector
 
       [ -z "''${HOST:-}" ] && echo "HOST env var must be set -- aborting" && exit 1
       [ -z "''${PORT:-}" ] && echo "PORT env var must be set -- aborting" && exit 1
@@ -466,31 +420,18 @@ in
       ${wait-for-tcp}/bin/wait-for-tcp "$TX_HOST" "$TX_PORT"
       ${wait-for-tcp}/bin/wait-for-tcp "$SYNC_HOST" "$MARLOWE_QUERY_PORT"
 
-      if [ -z "''${LOG_CONFIG_FILE:-}" ]
-      then
-        ${marlowe-proxy}/bin/marlowe-proxy \
-          --host "$HOST" \
-          --port "$PORT" \
-          --marlowe-sync-host "$SYNC_HOST" \
-          --marlowe-sync-port "$MARLOWE_SYNC_PORT" \
-          --marlowe-header-port "$MARLOWE_HEADER_SYNC_PORT" \
-          --marlowe-query-port "$MARLOWE_QUERY_PORT" \
-          --tx-host "$TX_HOST" \
-          --tx-command-port "$TX_PORT" \
-          --http-port "$HTTP_PORT"
-      else
-        ${marlowe-proxy}/bin/marlowe-proxy \
-          --log-config-file "$LOG_CONFIG_FILE" \
-          --host "$HOST" \
-          --port "$PORT" \
-          --marlowe-sync-host "$SYNC_HOST" \
-          --marlowe-sync-port "$MARLOWE_SYNC_PORT" \
-          --marlowe-header-port "$MARLOWE_HEADER_SYNC_PORT" \
-          --marlowe-query-port "$MARLOWE_QUERY_PORT" \
-          --tx-host "$TX_HOST" \
-          --tx-command-port "$TX_PORT" \
-          --http-port "$HTTP_PORT"
-      fi
+      export OTEL_SERVICE_NAME=marlowe-proxy
+
+      ${marlowe-proxy}/bin/marlowe-proxy \
+        --host "$HOST" \
+        --port "$PORT" \
+        --marlowe-sync-host "$SYNC_HOST" \
+        --marlowe-sync-port "$MARLOWE_SYNC_PORT" \
+        --marlowe-header-port "$MARLOWE_HEADER_SYNC_PORT" \
+        --marlowe-query-port "$MARLOWE_QUERY_PORT" \
+        --tx-host "$TX_HOST" \
+        --tx-command-port "$TX_PORT" \
+        --http-port "$HTTP_PORT"
     '';
   };
 
@@ -503,11 +444,18 @@ in
       # PORT: network binding
       # RUNTIME_HOST, RUNTIME_PORT: connection info to marlowe-proxy
 
+      #################
+      # OPTIONAL VARS #
+      #################
+      # OTEL_EXPORTER_OTLP_ENDPOINT: The url of the open telemetry collector
+
       [ -z "''${PORT:-}" ] && echo "PORT env var must be set -- aborting" && exit 1
       [ -z "''${RUNTIME_HOST:-}" ] && echo "RUNTIME_HOST env var must be set -- aborting" && exit 1
       [ -z "''${RUNTIME_PORT:-}" ] && echo "RUNTIME_PORT env var must be set -- aborting" && exit 1
 
       ${wait-for-tcp}/bin/wait-for-tcp "$RUNTIME_HOST" "$RUNTIME_PORT"
+
+      export OTEL_SERVICE_NAME=marlowe-web-server
 
       ${marlowe-web-server}/bin/marlowe-web-server \
         --http-port "$PORT" \

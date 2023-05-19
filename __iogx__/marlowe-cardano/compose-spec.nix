@@ -1,12 +1,12 @@
 { inputs, pkgs }:
 
 let
-  lib = pkgs.lib;
+  inherit (pkgs) sqitchPg postgresql runCommand writeShellScriptBin writeText lib glibcLocales;
   network = inputs.self.networks.__iogx__.preview; # TODO remove the __iogx__ when merged
 
-  mkSqitchRunner = name: path: pkgs.writeShellScriptBin name ''
-    export PATH="$PATH:${lib.makeBinPath [ pkgs.sqitchPg pkgs.postgresql ]}"
-    export LOCALE_ARCHIVE="${pkgs.glibcLocales}/lib/locale/locale-archive"
+  mkSqitchRunner = name: path: writeShellScriptBin name ''
+    export PATH="$PATH:${lib.makeBinPath [ sqitchPg postgresql ]}"
+    export LOCALE_ARCHIVE="${glibcLocales}/lib/locale/locale-archive"
     cd ${path}
     exec sqitch deploy "$@"
   '';
@@ -14,7 +14,7 @@ let
   run-sqitch = mkSqitchRunner "run-sqitch" "/src/marlowe-chain-sync";
   run-sqitch-marlowe-indexer = mkSqitchRunner "run-sqitch-marlowe-indexer" "/src/marlowe-runtime/marlowe-indexer";
 
-  run-local-service = project: version: prog: pkgs.writeShellScriptBin "run-${prog}" ''
+  run-local-service = project: version: prog: writeShellScriptBin "run-${prog}" ''
     set -e
     PROG=${lib.escapeShellArg prog}
     PKG=${lib.escapeShellArg project}-${lib.escapeShellArg version}
@@ -25,17 +25,19 @@ let
     exec -a $PROG $BIN "$@"
   '';
 
-  symlinks = pkgs.runCommand "symlinks" { } ''
+  # We assume that all the components are versioned together.
+  marloweRuntimeVersion = "0.0.1";
+  symlinks = runCommand "symlinks" { } ''
     mkdir -p $out
     ln -sv ${run-sqitch}/bin/run-sqitch $out
     ln -sv ${run-sqitch-marlowe-indexer}/bin/run-sqitch-marlowe-indexer $out
-    ln -sv ${run-local-service "marlowe-chain-sync" "0.0.0.0" "marlowe-chain-indexer"}/bin/run-marlowe-chain-indexer $out
-    ln -sv ${run-local-service "marlowe-chain-sync" "0.0.0.0" "marlowe-chain-sync"}/bin/run-marlowe-chain-sync $out
-    ln -sv ${run-local-service "marlowe-runtime" "0.0.0.0" "marlowe-sync"}/bin/run-marlowe-sync $out
-    ln -sv ${run-local-service "marlowe-runtime" "0.0.0.0" "marlowe-tx"}/bin/run-marlowe-tx $out
-    ln -sv ${run-local-service "marlowe-runtime-web" "0.0.0.0" "marlowe-web-server"}/bin/run-marlowe-web-server $out
-    ln -sv ${run-local-service "marlowe-runtime" "0.0.0.0" "marlowe-indexer"}/bin/run-marlowe-indexer $out
-    ln -sv ${run-local-service "marlowe-runtime" "0.0.0.0" "marlowe-proxy"}/bin/run-marlowe-proxy $out
+    ln -sv ${run-local-service "marlowe-chain-sync" marloweRuntimeVersion "marlowe-chain-indexer"}/bin/run-marlowe-chain-indexer $out
+    ln -sv ${run-local-service "marlowe-chain-sync" marloweRuntimeVersion "marlowe-chain-sync"}/bin/run-marlowe-chain-sync $out
+    ln -sv ${run-local-service "marlowe-runtime" marloweRuntimeVersion "marlowe-sync"}/bin/run-marlowe-sync $out
+    ln -sv ${run-local-service "marlowe-runtime" marloweRuntimeVersion "marlowe-tx"}/bin/run-marlowe-tx $out
+    ln -sv ${run-local-service "marlowe-runtime-web" marloweRuntimeVersion "marlowe-web-server"}/bin/run-marlowe-web-server $out
+    ln -sv ${run-local-service "marlowe-runtime" marloweRuntimeVersion "marlowe-indexer"}/bin/run-marlowe-indexer $out
+    ln -sv ${run-local-service "marlowe-runtime" marloweRuntimeVersion "marlowe-proxy"}/bin/run-marlowe-proxy $out
   '';
 
   node-service = {
@@ -59,7 +61,7 @@ let
     };
   };
 
-  dev-service = { ports, depends_on, command }: {
+  dev-service = { ports, depends_on, command, environment ? [ ] }: {
     inherit command;
     image = "alpine:3.16.2";
     volumes = [
@@ -77,6 +79,9 @@ let
       retries = 5;
     };
     depends_on = lib.genAttrs depends_on (_: { condition = "service_healthy"; });
+    environment = [
+      "OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318"
+    ] ++ environment;
   };
 
   chain-indexer-service = {
@@ -89,6 +94,8 @@ let
     ];
     environment = [
       "TZ=UTC"
+      "OTEL_SERVICE_NAME=marlowe-chain-indexer"
+      "OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318"
     ];
     restart = "unless-stopped";
     depends_on = {
@@ -109,8 +116,6 @@ let
       network.nodeConfig.ByronGenesisHash
       "--shelley-genesis-config-file"
       network.nodeConfig.ShelleyGenesisFile
-      "--log-config-file"
-      "./marlowe-chain-indexer.log.config"
     ];
     healthcheck = {
       test = "/exec/run-sqitch -h postgres";
@@ -129,6 +134,8 @@ let
     ];
     environment = [
       "TZ=UTC"
+      "OTEL_SERVICE_NAME=marlowe-indexer"
+      "OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318"
     ];
     restart = "unless-stopped";
     depends_on = {
@@ -139,8 +146,6 @@ let
       "/exec/run-marlowe-indexer"
       "--chain-sync-host"
       "marlowe-chain-sync"
-      "--log-config-file"
-      "./marlowe-indexer.log.config"
       "--database-uri"
       "postgresql://postgres@postgres/chain"
     ];
@@ -164,9 +169,8 @@ let
       "postgresql://postgres@postgres/chain"
       "--host"
       "0.0.0.0"
-      "--log-config-file"
-      "./marlowe-chain-sync.log.config"
     ];
+    environment = [ "OTEL_SERVICE_NAME=marlowe-chain-sync" ];
   };
 
   sync-service = dev-service {
@@ -178,9 +182,8 @@ let
       "postgresql://postgres@postgres/chain"
       "--host"
       "0.0.0.0"
-      "--log-config-file"
-      "./marlowe-sync.log.config"
     ];
+    environment = [ "OTEL_SERVICE_NAME=marlowe-sync" ];
   };
 
   tx-service = dev-service {
@@ -192,13 +195,12 @@ let
       "marlowe-chain-sync"
       "--host"
       "0.0.0.0"
-      "--log-config-file"
-      "./marlowe-tx.log.config"
     ];
+    environment = [ "OTEL_SERVICE_NAME=marlowe-tx" ];
   };
 
   proxy-service = dev-service {
-    ports = [ 3700 ];
+    ports = [ 3700 3701 ];
     depends_on = [ "marlowe-sync" "marlowe-tx" ];
     command = [
       "/exec/run-marlowe-proxy"
@@ -208,9 +210,8 @@ let
       "marlowe-sync"
       "--tx-host"
       "marlowe-tx"
-      "--log-config-file"
-      "./marlowe-proxy.log.config"
     ];
+    environment = [ "OTEL_SERVICE_NAME=marlowe-proxy" ];
   };
 
   web-service = dev-service {
@@ -223,6 +224,7 @@ let
       "--enable-open-api"
       "--access-control-allow-origin-all"
     ];
+    environment = [ "OTEL_SERVICE_NAME=marlowe-web-server" ];
   };
 
   spec = {
@@ -269,6 +271,27 @@ let
       };
     };
 
+    services.jaeger = {
+      image = "jaegertracing/all-in-one";
+      restart = "unless-stopped";
+      command = [
+        "--memory.max-traces"
+        "10000"
+        "--query.base-path"
+        "/jaeger/ui"
+      ];
+      environment = [ "COLLECTOR_OTLP_ENABLED=true" ];
+      ports = [ 16686 ];
+    };
+
+    services.otel-collector = {
+      image = "otel/opentelemetry-collector-contrib:0.76.1";
+      restart = "unless-stopped";
+      command = [ "--config=/etc/otel-collector-config.yml" ];
+      volumes = [ "./otel/otel-collector-config.yml:/etc/otel-collector-config.yml" ];
+      depends_on = [ "jaeger" ];
+    };
+
     volumes.postgres = null;
 
     services.marlowe-chain-indexer = chain-indexer-service;
@@ -284,4 +307,4 @@ let
     volumes.node-db = null;
   };
 in
-pkgs.writeText "compose.yaml" (builtins.toJSON spec)
+writeText "compose.yaml" (builtins.toJSON spec)
