@@ -35,6 +35,7 @@
 
 {-# OPTIONS_GHC -fno-ignore-interface-pragmas #-}
 {-# OPTIONS_GHC -fplugin-opt PlutusTx.Plugin:defer-errors #-}
+{-# OPTIONS_GHC -fplugin-opt PlutusTx.Plugin:dump-uplc #-}
 
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
 
@@ -511,12 +512,12 @@ marloweValidator =
 
 
 marloweValidatorCompiled :: PlutusTx.CompiledCode (ValidatorHash -> PlutusTx.BuiltinData -> PlutusTx.BuiltinData -> PlutusTx.BuiltinData -> ())
-marloweValidatorCompiled =
-  let
-    mkUntypedMarloweValidator :: ValidatorHash -> PlutusTx.BuiltinData -> PlutusTx.BuiltinData -> PlutusTx.BuiltinData -> ()
-    mkUntypedMarloweValidator rp = Scripts.mkUntypedValidator (mkMarloweValidator rp)
-  in
-    $$(PlutusTx.compile [|| mkUntypedMarloweValidator ||])
+marloweValidatorCompiled = Haskell.undefined
+--  let
+--    mkUntypedMarloweValidator :: ValidatorHash -> PlutusTx.BuiltinData -> PlutusTx.BuiltinData -> PlutusTx.BuiltinData -> ()
+--    mkUntypedMarloweValidator rp = Scripts.mkUntypedValidator (mkMarloweValidator rp)
+--  in
+--    $$(PlutusTx.compile [|| mkUntypedMarloweValidator ||])
 
 
 -- | The hash of the Marlowe semantics validator.
@@ -529,22 +530,23 @@ marloweValidatorBytes :: SerializedScript
 marloweValidatorBytes = SBS.toShort . LBS.toStrict . serialise . getValidator $ Scripts.validatorScript marloweValidator
 
 
-{-# DEPRECATED alternateMarloweValidator "This validator is too large. Use `marloweValidator` instead." #-}
+--{-# DEPRECATED alternateMarloweValidator "This validator is too large. Use `marloweValidator` instead." #-}
 -- | An alternative version of the Marlowe semantics validator that does uses straightforward validator
 -- typing, but at the expense of a larger size.
 alternateMarloweValidator :: Scripts.TypedValidator TypedMarloweValidator
-alternateMarloweValidator = Scripts.mkTypedValidator
-    @TypedMarloweValidator
-    compiledMarloweValidator
-    compiledArgsValidator
-    where
-        compiledMarloweValidator =
-          $$(PlutusTx.compile [|| mkMarloweValidator ||])
-            `PlutusTx.applyCode`
-              PlutusTx.liftCode rolePayoutValidatorHash
-        mkArgsValidator = Scripts.mkUntypedValidator @_ @MarloweData @MarloweInput
-        compiledArgsValidator =
-          $$(PlutusTx.compile [|| mkArgsValidator ||])
+alternateMarloweValidator = Haskell.undefined
+--Scripts.mkTypedValidator
+--    @TypedMarloweValidator
+--    compiledMarloweValidator
+--    compiledArgsValidator
+--    where
+--        compiledMarloweValidator =
+--          $$(PlutusTx.compile [|| mkMarloweValidator ||])
+--            `PlutusTx.applyCode`
+--              PlutusTx.liftCode rolePayoutValidatorHash
+--        mkArgsValidator = Scripts.mkUntypedValidator @_ @MarloweData @MarloweInput
+--        compiledArgsValidator =
+--          $$(PlutusTx.compile [|| mkArgsValidator ||])
 
 
 {-# DEPRECATED alternateMarloweValidatorHash "This validator is too large. Use `marloweValidatorHash` instead." #-}

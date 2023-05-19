@@ -37,22 +37,44 @@ main :: IO ()
 main =
   do
 
+    -- Read the semantics benchmarks.
     benchmarks <- either error id <$> Semantics.benchmarks
+
+    -- Write the tabulation of semantics benchmark results.
     writeFile "marlowe-semantics.tsv"
       . unlines . fmap (intercalate "\t")
       $ tabulateResults "Semantics" Semantics.validatorHash Semantics.validatorBytes benchmarks
 
+{-
+    -- Write the flat UPLC files for the semantics benchmarks.
+    writeFlatUPLCs Semantics.writeUPLC benchmarks
+      . (</> "semantics")
+      =<< getDataDir
+-}
+
+    -- Print the semantics validator, and write the plutus file.
     printValidator
       "Semantics"
       "marlowe-semantics"
       Semantics.validatorHash
       Semantics.validatorBytes
 
+    -- Read the role-payout benchmarks.
     benchmarks' <- either error id <$> RolePayout.benchmarks
+
+    -- Write the tabulation of role-payout benchmark results.
     writeFile "marlowe-rolepayout.tsv"
       . unlines . fmap (intercalate "\t")
       $ tabulateResults "Role Payout" RolePayout.validatorHash RolePayout.validatorBytes benchmarks'
 
+{-
+    -- Write the flat UPLC files for the role-payout benchmarks.
+    writeFlatUPLCs RolePayout.writeUPLC benchmarks'
+      . (</> "rolepayout")
+      =<< getDataDir
+-}
+
+    -- Print the role-payout validator, and write the plutus file.
     printValidator
       "Role payout"
       "marlowe-rolepayout"
