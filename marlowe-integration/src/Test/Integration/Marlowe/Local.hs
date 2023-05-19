@@ -315,6 +315,7 @@ withLocalMarloweRuntime' MarloweRuntimeOptions{..} test = withRunInIO \runInIO -
     contractStore <- createContractStore ContractStoreOptions
       { contractStoreDirectory = resolveWorkspacePath workspace "contract-store"
       , contractStoreStagingDirectory = resolveWorkspacePath workspace "contract-staging-area"
+      , lockingSleepBetweenRetries = 100_000
       }
 
     let chainSyncConnector = SomeConnectorTraced inject $ clientConnector chainSyncPair

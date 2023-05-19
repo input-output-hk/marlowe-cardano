@@ -21,6 +21,7 @@ import Control.Monad.With
 import Data.GeneralAllocate
 import qualified Data.Text as T
 import Data.Version (showVersion)
+import Data.Word (Word64)
 import Language.Marlowe.Protocol.Load.Server (marloweLoadServerPeer)
 import Language.Marlowe.Runtime.Contract
 import Language.Marlowe.Runtime.Contract.Store (traceContractStore)
@@ -139,6 +140,7 @@ data Options = Options
   , bufferSize :: Int
   , contractStoreDirectory :: FilePath
   , contractStoreStagingDirectory :: FilePath
+  , lockingSleepBetweenRetries :: Word64
   , httpPort :: PortNumber
   }
 
@@ -154,6 +156,7 @@ getOptions = do
           <*> bufferSizeParser
           <*> contractStoreDirectoryParser contractStoreDirectory
           <*> contractStoreStagingDirectoryParser contractStoreStagingDirectory
+          <*> lockingSleepBetweenRetriesParser lockingSleepBetweenRetries
           <*> httpPortParser
       )
     )
@@ -214,6 +217,14 @@ getOptions = do
       , value defaultValue
       , metavar "DIR"
       , help "The root directory of the contract store staging areas"
+      , showDefault
+      ]
+
+    lockingSleepBetweenRetriesParser defaultValue = option auto $ mconcat
+      [ long "store-lock-sleep-between-retries"
+      , value defaultValue
+      , metavar "MICRO_SECONDS"
+      , help "The number of microseconds to wait between retries when acquiring the store lock"
       , showDefault
       ]
 

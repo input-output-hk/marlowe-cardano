@@ -9,7 +9,7 @@ import Codec.Compression.GZip (compress, decompress)
 import Control.Monad (guard, unless)
 import Control.Monad.Catch (MonadMask)
 import Control.Monad.Trans.Maybe (MaybeT(runMaybeT))
-import Data.Binary (get, put)
+import Data.Binary (Word64, get, put)
 import Data.Binary.Get (runGet)
 import Data.Binary.Put (runPut)
 import qualified Data.ByteString.Lazy as LBS
@@ -33,7 +33,7 @@ import Language.Marlowe.Runtime.Contract.Store
 import Language.Marlowe.Runtime.Core.Api ()
 import Plutus.V2.Ledger.Api (fromBuiltin)
 import System.FilePath (takeBaseName, (<.>), (</>))
-import System.IO.LockFile (withLockFile)
+import System.IO.LockFile (LockingParameters(..), withLockFile)
 import UnliftIO
 import UnliftIO.Directory
   ( XdgDirectory(XdgData)
@@ -52,6 +52,7 @@ import UnliftIO.Directory
 data ContractStoreOptions = ContractStoreOptions
   { contractStoreDirectory :: FilePath -- ^ The directory to store the contract files
   , contractStoreStagingDirectory :: FilePath -- ^ The directory to create staging areas
+  , lockingSleepBetweenRetries :: Word64
   }
 
 -- | Default options. uses $XDG_DATA/marlowe/runtime/marlowe-contract/store for the
@@ -60,6 +61,7 @@ defaultContractStoreOptions :: MonadIO m => m ContractStoreOptions
 defaultContractStoreOptions = ContractStoreOptions
   <$> getXdgDirectory XdgData ("marlowe" </> "runtime" </> "marlowe-contract" </> "store")
   <*> getTemporaryDirectory
+  <*> pure 500_000
 
 -- | Create a contract store that uses the file system.
 --
@@ -80,7 +82,9 @@ createContractStore ContractStoreOptions{..} = do
     }
 
   where
-    getContract lockfile contractHash = runMaybeT $ withLockFile def lockfile do
+    lockingParameters = def { sleepBetweenRetries = lockingSleepBetweenRetries }
+
+    getContract lockfile contractHash = runMaybeT $ withLockFile lockingParemeters lockfile do
       let mkFilePath = (contractStoreDirectory </>) . (read (show contractHash) <.>)
       let contractFilePath = mkFilePath "contract"
       let adjacencyFilePath = mkFilePath "adjacency"
@@ -188,7 +192,7 @@ createContractStore ContractStoreOptions{..} = do
               -- get all files in the staging area
               files <- listDirectory directory
               -- lock the store
-              withLockFile def storeLockfile do
+              withLockFile lockingParameters storeLockfile do
                 -- concurrently move all files from the staging area to the store
                 results <- pooledMapConcurrently moveStagingFile files
                 -- Extract the hashes which were moved.
