@@ -50,7 +50,7 @@ common lang
     -Wall -Wnoncanonical-monad-instances
     -Wincomplete-uni-patterns -Wincomplete-record-updates
     -Wredundant-constraints -Widentities
-    -Wunused-packages
+    -Wunused-packages -Werror
 
 library
   import: lang

@@ -31,7 +31,7 @@ import Benchmark.Marlowe.Types (Benchmark(..), makeBenchmark)
 import Benchmark.Marlowe.Util
   (lovelace, makeBuiltinData, makeDatumMap, makeInput, makeOutput, makeRedeemerMap, updateScriptHash)
 import Data.Bifunctor (second)
-import Language.Marlowe.Scripts (marloweValidator, marloweValidatorBytes, marloweValidatorHash, rolePayoutValidatorHash)
+import Language.Marlowe.Scripts (marloweValidatorBytes, marloweValidatorHash, rolePayoutValidatorHash)
 import Plutus.V2.Ledger.Api
   ( Credential(PubKeyCredential, ScriptCredential)
   , ExBudget(ExBudget)
