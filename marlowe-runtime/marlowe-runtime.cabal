@@ -257,6 +257,7 @@ library contract
     , marlowe-cardano ==0.1.0.3
     , marlowe-chain-sync ==0.0.1
     , marlowe-protocols ==0.1.0.0
+    , marlowe-runtime ==0.0.1
     , marlowe-runtime:contract-api ==0.0.1
     , plutus-ledger-api ==1.0.0.1
     , typed-protocols ==0.1.0.0

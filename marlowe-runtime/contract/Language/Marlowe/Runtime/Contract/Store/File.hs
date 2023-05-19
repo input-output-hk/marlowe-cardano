@@ -27,6 +27,7 @@ import Language.Marlowe (Case(..), Contract(..))
 import Language.Marlowe.Runtime.Cardano.Api (fromCardanoDatumHash, toCardanoScriptData)
 import Language.Marlowe.Runtime.ChainSync.Api (DatumHash(DatumHash), toDatum)
 import Language.Marlowe.Runtime.Contract.Store
+import Language.Marlowe.Runtime.Core.Api ()
 import Plutus.V2.Ledger.Api (fromBuiltin)
 import System.FilePath (takeBaseName, (<.>), (</>))
 import System.IO.LockFile (withLockFile)
@@ -117,7 +118,7 @@ createContractStore ContractStoreOptions{..} = do
             [ do
                 let filePath = basePath <.> "contract"
                 -- Compress the contract file for size efficiency.
-                liftIO $ LBS.writeFile filePath $ compress $ runPut $ put $ toDatum contract
+                liftIO $ LBS.writeFile filePath $ compress $ runPut $ put contract
             , writeIndex "adjacency" adjacency
             , writeIndex "closure" closure
             ]
