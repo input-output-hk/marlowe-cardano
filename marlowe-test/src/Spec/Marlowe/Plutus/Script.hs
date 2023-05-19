@@ -76,39 +76,38 @@ import qualified Data.ByteString.Short as SBS (ShortByteString, toShort)
 import qualified Data.Map.Strict as M (fromList)
 
 
-{-# NOINLINE dumpBenchmark #-}
+{-# NOINLINE unsafeDumpBenchmark #-}
 
 -- Dump data files for benchmarking Plutus execution cost.
-dumpBenchmark :: FilePath                -- ^ Name of folder the benchmarks.
+unsafeDumpBenchmark :: FilePath                -- ^ Name of folder the benchmarks.
               -> Data                    -- ^ The datum.
               -> Data                    -- ^ The redeemer.
               -> Data                    -- ^ The script context.
               -> ExBudget                -- ^ The Plutus execution cost.
               -> a                       -- ^ A value.
               -> a                       -- ^ The same value.
-dumpBenchmark folder datum redeemer context ExBudget{..} x
-  | dumpBenchmarks = unsafePerformIO  -- ☹
-                       $ do
-                           let
-                             i = txInfoId . scriptContextTxInfo . fromJust $ fromData context
-                             ExCPU cpu = exBudgetCPU
-                             ExMemory memory = exBudgetMemory
-                             result =
-                               Constr 0
-                                 [
-                                   datum
-                                 , redeemer
-                                 , context
-                                 , I $ toInteger cpu
-                                 , I $ toInteger memory
-                                 ]
-                             payload = serialise result
-                           folder' <- (</> folder) <$> getDataDir
-                           LBS.writeFile
-                             (folder' </> show i <.> "benchmark")
-                             payload
-                           pure x
-  | otherwise = x
+unsafeDumpBenchmark folder datum redeemer context ExBudget{..} x =
+  unsafePerformIO  -- ☹
+    $ do
+        let
+          i = txInfoId . scriptContextTxInfo . fromJust $ fromData context
+          ExCPU cpu = exBudgetCPU
+          ExMemory memory = exBudgetMemory
+          result =
+            Constr 0
+              [
+                datum
+              , redeemer
+              , context
+              , I $ toInteger cpu
+              , I $ toInteger memory
+              ]
+          payload = serialise result
+        folder' <- (</> folder) <$> getDataDir
+        LBS.writeFile
+          (folder' </> show i <.> "benchmark")
+          payload
+        pure x
 
 
 -- | Dump benchmarking files.
@@ -130,8 +129,11 @@ evaluateSemantics datum redeemer context =
   case evaluationContext of
     Left message -> This message
     Right ec     -> case evaluateScriptCounting PlutusV2 (ProtocolVersion 8 0) Verbose ec serialiseSemanticsValidator [datum, redeemer, context] of
-                      (logOutput, Right ex@ExBudget{..}) -> dumpBenchmark "semantics" datum redeemer context ex
-                                                              $ if enforceBudget && (exBudgetCPU > 10_000_000_000 || exBudgetMemory > 14_000_000)
+                      (logOutput, Right ex@ExBudget{..}) -> (
+                                                              if dumpBenchmarks
+                                                                then unsafeDumpBenchmark "semantics" datum redeemer context ex
+                                                                else id
+                                                            ) $ if enforceBudget && (exBudgetCPU > 10_000_000_000 || exBudgetMemory > 14_000_000)
                                                                   then These ("Exceeded Plutus budget: " <> show ex) logOutput
                                                                   else That logOutput
                       (logOutput, Left message         ) -> These (show message) logOutput
@@ -146,8 +148,11 @@ evaluatePayout datum redeemer context =
   case evaluationContext of
     Left message -> This message
     Right ec     -> case evaluateScriptCounting PlutusV2 (ProtocolVersion 8 0) Verbose ec serialisePayoutValidator [datum, redeemer, context] of
-                      (logOutput, Right ex)     -> dumpBenchmark "rolepayout" datum redeemer context ex
-                                                     $ That logOutput
+                      (logOutput, Right ex)     -> (
+                                                     if dumpBenchmarks
+                                                       then unsafeDumpBenchmark "rolepayout" datum redeemer context ex
+                                                       else id
+                                                   ) $ That logOutput
                       (logOutput, Left message) -> These (show message) logOutput
 
 
