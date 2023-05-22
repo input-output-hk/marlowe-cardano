@@ -24,6 +24,7 @@ module Language.Marlowe.Analysis.Safety.Ledger
   , checkAddresses
   , checkContinuations
   , checkMaximumValueBound
+  , checkNetwork
   , checkRoleNames
   , checkSafety
   , checkTokens
@@ -56,7 +57,8 @@ import Language.Marlowe.Core.V1.Plate
 import Language.Marlowe.Core.V1.Semantics (MarloweData(..), MarloweParams(..))
 import Language.Marlowe.Core.V1.Semantics.Types
   (Action(..), Bound(..), Case(..), Contract, InputContent(..), State(..), Token(..), emptyState)
-import Language.Marlowe.Core.V1.Semantics.Types.Address (Network, deserialiseAddressBech32, serialiseAddressBech32)
+import Language.Marlowe.Core.V1.Semantics.Types.Address
+  (Network, deserialiseAddressBech32, mainnet, serialiseAddressBech32, testnet)
 import Language.Marlowe.Scripts (MarloweTxInput(..))
 import Numeric.Natural (Natural)
 import Plutus.V2.Ledger.Api
@@ -106,6 +108,25 @@ checkSafety maxValueSize utxoCostPerByte MarloweData{..} continuations =
     boundOnRedeemerSize = worstRedeemerSize marloweContract continuations
   in
     SafetyReport{..}
+
+
+-- | Check a contract for consistency with the network where it will be run.
+checkNetwork
+  :: Bool  -- ^ Whether the network is mainnet.
+  -> Maybe State  -- ^ The contract's initial state.
+  -> Contract  -- ^ The contract.
+  -> Continuations  -- ^ The merkleized continuations of the contract.
+  -> [SafetyError]  -- ^ A safety error if the network is incorrect.
+checkNetwork isMainnet state contract continuations =
+  let
+    networks = S.toList $ extractNetworks state contract continuations
+    target
+      | isMainnet = mainnet
+      | otherwise = testnet
+  in
+    if all (== target) networks
+      then mempty
+      else pure WrongNetwork
 
 
 -- | Check that networks are consistently used in a contract.

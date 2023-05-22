@@ -35,7 +35,6 @@
 
 {-# OPTIONS_GHC -fno-ignore-interface-pragmas #-}
 {-# OPTIONS_GHC -fplugin-opt PlutusTx.Plugin:defer-errors #-}
-{-# OPTIONS_GHC -fplugin-opt PlutusTx.Plugin:dump-uplc #-}
 
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
 

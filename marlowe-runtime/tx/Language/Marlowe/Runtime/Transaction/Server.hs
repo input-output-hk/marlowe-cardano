@@ -306,7 +306,7 @@ execCreate contractQueryConnector getCurrentScripts solveConstraints loadWalletC
   let
     contractSafetyErrors =
       if False  -- FIXME: Disabled because of incompatibility with integration tests.
-        then checkContract roleTokens version contract' continuations
+        then checkContract networkId roleTokens version contract' continuations
         else mempty
   -- FIXME: The is a placeholder until we design safety-analysis reporting.
   unless (null contractSafetyErrors)

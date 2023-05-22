@@ -105,7 +105,7 @@ spec =
         prop "Contract without roles" $ \roleTokensConfig ->
           let
             contract = V1.Close
-            actual = checkContract roleTokensConfig version contract continuations
+            actual = checkContract (Cardano.Testnet $ Cardano.NetworkMagic 1) roleTokensConfig version contract continuations
           in
             counterexample ("Contract = " <> show contract)
               $ case roleTokensConfig of
@@ -117,7 +117,7 @@ spec =
               let
                 roles = Plutus.TokenName . Plutus.toBuiltin . Chain.unTokenName <$> M.keys (unMint mint)
                 contract = foldr payRole V1.Close roles
-                actual = checkContract roleTokensConfig version contract continuations
+                actual = checkContract (Cardano.Testnet $ Cardano.NetworkMagic 1) roleTokensConfig version contract continuations
               in
                 counterexample ("Contract = " <> show contract)
                   $ actual === mempty
@@ -128,7 +128,7 @@ spec =
               let
                 roles = Plutus.TokenName . Plutus.toBuiltin . Chain.unTokenName <$> M.keys (unMint mint)
                 contract = foldr payRole V1.Close $ extra <> roles
-                actual = checkContract roleTokensConfig version contract continuations
+                actual = checkContract (Cardano.Testnet $ Cardano.NetworkMagic 1) roleTokensConfig version contract continuations
                 expected =
                   (MissingRoleToken <$> nub extra)
                     <> [RoleNameTooLong role | role@(Plutus.TokenName name) <- nub extra, Plutus.lengthOfByteString name > 32]
@@ -148,7 +148,7 @@ spec =
                 let
                   extra = filter (`notElem` roles) roles'
                   contract = foldr payRole V1.Close roles
-                  actual = checkContract roleTokensConfig version contract continuations
+                  actual = checkContract (Cardano.Testnet $ Cardano.NetworkMagic 1) roleTokensConfig version contract continuations
                   expected = ExtraRoleToken <$> extra
                 pure
                   . counterexample ("Contract = " <> show contract)
@@ -159,7 +159,7 @@ spec =
         prop "Contract with role name too long" $ \roles ->
           let
             contract = foldr payRole V1.Close roles
-            actual = checkContract (RoleTokensUsePolicy "") version contract continuations
+            actual = checkContract (Cardano.Testnet $ Cardano.NetworkMagic 1) (RoleTokensUsePolicy "") version contract continuations
             expected =
               if null roles
                 then [ContractHasNoRoles]
@@ -172,7 +172,7 @@ spec =
         prop "Contract with illegal token" $ \tokens ->
           let
             contract = foldr payToken V1.Close tokens
-            actual = checkContract (RoleTokensUsePolicy "") version contract continuations
+            actual = checkContract (Cardano.Testnet $ Cardano.NetworkMagic 1) (RoleTokensUsePolicy "") version contract continuations
             expected =
               if contract == V1.Close
                 then [ContractHasNoRoles]
@@ -211,7 +211,7 @@ spec =
               relevant (InvalidCurrencySymbol _) = False
               relevant (TokenNameTooLong _) = False
               relevant _ = True
-              actual = filter relevant $ checkContract (RoleTokensUsePolicy "") version mcContract (M.fromList remaining)
+              actual = filter relevant $ checkContract (Cardano.Testnet $ Cardano.NetworkMagic 1) (RoleTokensUsePolicy "") version mcContract (M.fromList remaining)
               expected = MissingContinuation . Plutus.DatumHash . Plutus.toBuiltin . Chain.unDatumHash . fst <$> missing
             pure . counterexample ("Contract = " <> show mcContract)
               . counterexample ("Missing = " <> show missing)

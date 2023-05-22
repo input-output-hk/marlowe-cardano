@@ -87,6 +87,8 @@ data SafetyError =
   | MissingContinuation DatumHash
     -- | The contract contains both mainnet and testnet addresses.
   | InconsistentNetworks
+    -- | The contract contains invalid addresses for the network.
+  | WrongNetwork
     -- | The contract contains an illegal ledger address.
   | IllegalAddress Ledger.Address
     deriving (Eq, Show)

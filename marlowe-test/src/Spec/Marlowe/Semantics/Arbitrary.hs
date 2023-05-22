@@ -90,6 +90,7 @@ import Language.Marlowe.Core.V1.Semantics.Types
   , ValueId(..)
   , getAction
   )
+import Language.Marlowe.Core.V1.Semantics.Types.Address (testnet)
 import Plutus.Script.Utils.Scripts (dataHash)
 import Plutus.V2.Ledger.Api
   ( Credential(..)
@@ -394,6 +395,16 @@ instance Arbitrary Party where
     ]
   shrink (Address _ _) = []
   shrink (Role x)      = Role <$> shrinkByteString unTokenName randomRoleNames x
+{- FIXME: Formerly . . .
+  arbitrary =
+    do
+       isPubKeyHash <- frequency [(2, pure True), (8, pure False)]
+       if isPubKeyHash
+         then Address testnet <$> arbitrary
+         else Role <$> arbitraryFibonacci randomRoleNames
+  shrink (Address _ _) = Role <$> randomRoleNames
+  shrink (Role x)      = Role <$> shrinkByteString (\(TokenName y) -> y) randomRoleNames x
+-}
 
 instance SemiArbitrary Party where
   fromContext = parties
