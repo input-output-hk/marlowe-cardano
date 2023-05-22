@@ -144,8 +144,8 @@ checkContract config MarloweV1 contract continuations =
                                           missing <> extra
         _                            -> mempty
     avoidDuplicateReport = True
-    nameCheck = checkRoleNames avoidDuplicateReport contract continuations'
-    tokenCheck = checkTokens contract continuations'
+    nameCheck = checkRoleNames avoidDuplicateReport Nothing contract continuations'
+    tokenCheck = checkTokens Nothing contract continuations'
     continuationCheck = checkContinuations contract continuations'
   in
     mintCheck <> nameCheck <> tokenCheck <> continuationCheck

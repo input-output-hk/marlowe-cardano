@@ -26,10 +26,12 @@ module Language.Marlowe.Analysis.Safety.Types
 import Data.Aeson (ToJSON(..), object, (.=))
 import Language.Marlowe.Core.V1.Semantics (TransactionInput, TransactionOutput)
 import Language.Marlowe.Core.V1.Semantics.Types (AccountId, ChoiceId, Contract, State, Token, ValueId)
+import Language.Marlowe.Core.V1.Semantics.Types.Address (Network)
 import Numeric.Natural (Natural)
 import Plutus.V2.Ledger.Api (CurrencySymbol, DatumHash, ExBudget, TokenName)
 
 import qualified Language.Marlowe.Core.V1.Semantics as V1 (TransactionWarning)
+import qualified Plutus.V2.Ledger.Api as Ledger (Address)
 
 
 -- | Information on the safety of a Marlowe contract and state.
@@ -40,6 +42,7 @@ data SafetyReport =
   , boundOnMinimumUtxo :: Maybe Integer  -- ^ A bound on the minimum-UTxO value, over all execution paths.
   , boundOnDatumSize :: Natural  -- ^ A bound (in bytes) on the size of the datum, over all execution paths.
   , boundOnRedeemerSize :: Natural  -- ^ A bound (in bytes) on the size of the redeemer, over all execution paths.
+  , networks :: [Network]  -- ^ Which network the contract must use.
   }
     deriving Show
 
@@ -82,6 +85,10 @@ data SafetyError =
   | TransactionWarning V1.TransactionWarning
     -- | The contract is missing a continuation not present in its continuation map.
   | MissingContinuation DatumHash
+    -- | The contract contains both mainnet and testnet addresses.
+  | InconsistentNetworks
+    -- | The contract contains an illegal ledger address.
+  | IllegalAddress Ledger.Address
     deriving (Eq, Show)
 
 
