@@ -227,6 +227,7 @@ instance Extract Party where
       contractPlate' (Pay p (Party p') _ _ _) = F.Constant $ S.fromList [p, p']
       contractPlate' x = pure x
       actionPlate' (Deposit p p' _ _) = F.Constant $ S.fromList [p, p']
+      actionPlate' (Choice (ChoiceId _ p) _) = F.Constant $ S.singleton p
       actionPlate' x = pure x
       valuePlate' (AvailableMoney p _) = F.Constant $ S.singleton p
       valuePlate' (ChoiceValue (ChoiceId _ p)) = F.Constant $ S.singleton p
