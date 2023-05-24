@@ -25,6 +25,7 @@ module Language.Marlowe.Analysis.Safety.Ledger
   , checkContinuations
   , checkMaximumValueBound
   , checkNetwork
+  , checkNetworks
   , checkRoleNames
   , checkSafety
   , checkTokens
@@ -159,13 +160,14 @@ checkAddress address =
 
 -- | Check that all addresses can be serialized round trip.
 checkAddresses
-  :: MarloweData  -- ^ The initial Marlowe data for the contract and state.
+  :: Maybe State  -- ^ The contract's initial state.
+  -> Contract  -- ^ The contract.
   -> Continuations  -- ^ The merkleized continuations of the contract.
   -> [SafetyError]  -- ^ Any safety errors for the addresses in the contract.
-checkAddresses MarloweData{..} =
+checkAddresses state contract =
   nub
     . S.foldr ((<>) . checkAddress) mempty
-    . extractAddresses (Just marloweState) marloweContract
+    . extractAddresses state contract
 
 
 -- | Check that all continuations are present.

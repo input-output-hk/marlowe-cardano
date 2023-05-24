@@ -23,7 +23,7 @@ import Data.String (fromString)
 import Data.Time (UTCTime, addUTCTime, secondsToNominalDiffTime)
 import Data.Time.Clock.POSIX (posixSecondsToUTCTime)
 import Language.Marlowe.Analysis.Safety.Ledger
-  (checkContinuations, checkNetwork, checkRoleNames, checkTokens, worstMinimumUtxo')
+  (checkAddresses, checkContinuations, checkNetwork, checkNetworks, checkRoleNames, checkTokens, worstMinimumUtxo')
 import Language.Marlowe.Analysis.Safety.Transaction (findTransactions)
 import Language.Marlowe.Analysis.Safety.Types (SafetyError(..), Transaction(..))
 import Language.Marlowe.Runtime.Core.Api
@@ -149,9 +149,12 @@ checkContract network config MarloweV1 contract continuations =
     nameCheck = checkRoleNames avoidDuplicateReport Nothing contract continuations'
     tokenCheck = checkTokens Nothing contract continuations'
     continuationCheck = checkContinuations contract continuations'
-    networkCheck = checkNetwork (network == Cardano.Mainnet) Nothing contract continuations'
+    networksCheck =
+      checkNetwork (network == Cardano.Mainnet) Nothing contract continuations'
+        <> snd (checkNetworks Nothing contract continuations')
+    addressCheck = checkAddresses Nothing contract continuations'
   in
-    mintCheck <> nameCheck <> tokenCheck <> continuationCheck <> networkCheck
+    mintCheck <> nameCheck <> tokenCheck <> continuationCheck <> networksCheck <> addressCheck
 
 
 -- | Mock-execute all possible transactions for a contract.
