@@ -169,7 +169,7 @@ getOptions = do
     bufferSizeParser = option readOption $ mconcat
       [ long "buffer-size"
       , short 'b'
-      , value 4098
+      , value 512
       , metavar "INTEGER"
       , help "The number of contracts to accept from the client before flushing to disk."
       , showDefault
