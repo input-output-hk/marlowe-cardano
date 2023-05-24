@@ -1,0 +1,4 @@
+Added
+-----
+
+- Added simple transaction signing service for use in demonstrations.
