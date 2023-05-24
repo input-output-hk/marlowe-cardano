@@ -95,11 +95,6 @@ See `marlowe-tx`'s various [help pages](marlowe-tx.md) for more information, or 
 	- [Output the History of a contract](marlowe/log.md)
 
 
-## AWS Lambda Interface
-
-The Marlowe Runtime client for AWS Lambda is documented in a separate repository, [`marlowe-lambda`](https://github.com/input-output-hk/marlowe-lambda). In brief, it enables users to create, apply inputs to, and withdraw funds from Marlowe contract instances; it also lets them list all of the Marlowe contracts on the blockchain and to examine their on-chain status and contents.
-
-
 ## Web Services
 
 See `marlowe-runtime-web`.
