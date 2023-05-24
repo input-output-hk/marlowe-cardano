@@ -7,18 +7,16 @@
 module Language.Marlowe.Protocol.Query.Types
   where
 
-import Control.Monad (join)
-import Data.Aeson (FromJSON, ToJSON(..), Value(..), object, (.=))
+import Data.Aeson (FromJSON, ToJSON(..), object, (.=))
 import Data.Bifunctor (Bifunctor(..))
-import Data.Binary (Binary(..), Get, Put, getWord8, putWord8)
+import Data.Binary (Binary(..), getWord8, putWord8)
 import Data.Function (on)
 import qualified Data.List.NonEmpty as NE
 import Data.Map (Map)
 import Data.Set (Set)
-import Data.String (fromString)
 import Data.Type.Equality (testEquality, type (:~:)(Refl))
 import GHC.Generics (Generic)
-import GHC.Show (showCommaSpace, showSpace)
+import GHC.Show (showSpace)
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, PolicyId, TokenName, TxId, TxOutRef)
 import Language.Marlowe.Runtime.Core.Api
   ( ContractId
@@ -32,23 +30,14 @@ import Language.Marlowe.Runtime.Core.Api
   , TransactionScriptOutput
   )
 import Language.Marlowe.Runtime.Discovery.Api (ContractHeader)
-import Network.Protocol.Codec (BinaryMessage(..))
-import Network.Protocol.Codec.Spec
-  (MessageEq(..), MessageVariations(..), ShowProtocol(..), SomePeerHasAgency(..), Variations(..), varyAp)
+import Network.Protocol.Codec.Spec (Variations(..), varyAp)
 import Network.Protocol.Handshake.Types (HasSignature(..))
-import Network.Protocol.Peer.Trace
-import Network.TypedProtocol
-import Network.TypedProtocol.Codec (AnyMessageAndAgency(..))
-import Observe.Event.Network.Protocol (MessageToJSON(..))
-import OpenTelemetry.Attributes
+import Network.Protocol.Query.Types
 
-data MarloweQuery where
-  StReq :: MarloweQuery
-  StRes :: a -> MarloweQuery
-  StDone :: MarloweQuery
+type MarloweQuery = Query MarloweSyncRequest
 
-instance HasSignature MarloweQuery where
-  signature _ = "MarloweQuery"
+instance HasSignature MarloweSyncRequest where
+  signature _ = "MarloweSyncRequest"
 
 newtype WithdrawalFilter = WithdrawalFilter
   { roleCurrencies :: Set PolicyId
@@ -76,39 +65,68 @@ instance Monoid ContractFilter where
     , roleCurrencies = mempty
     }
 
-data Request a where
-  ReqContractHeaders :: ContractFilter -> Range ContractId -> Request (Maybe (Page ContractId ContractHeader))
-  ReqContractState :: ContractId -> Request (Maybe SomeContractState)
-  ReqTransaction :: TxId -> Request (Maybe SomeTransaction)
-  ReqTransactions :: ContractId -> Request (Maybe SomeTransactions)
-  ReqWithdrawal :: TxId -> Request (Maybe Withdrawal)
-  ReqWithdrawals :: WithdrawalFilter -> Range TxId -> Request (Maybe (Page TxId Withdrawal))
-  ReqBoth :: Request a -> Request b -> Request (a, b)
+data MarloweSyncRequest a where
+  ReqContractHeaders :: ContractFilter -> Range ContractId -> MarloweSyncRequest (Maybe (Page ContractId ContractHeader))
+  ReqContractState :: ContractId -> MarloweSyncRequest (Maybe SomeContractState)
+  ReqTransaction :: TxId -> MarloweSyncRequest (Maybe SomeTransaction)
+  ReqTransactions :: ContractId -> MarloweSyncRequest (Maybe SomeTransactions)
+  ReqWithdrawal :: TxId -> MarloweSyncRequest (Maybe Withdrawal)
+  ReqWithdrawals :: WithdrawalFilter -> Range TxId -> MarloweSyncRequest (Maybe (Page TxId Withdrawal))
 
-data SomeRequest where
-  SomeRequest :: Request a -> SomeRequest
+deriving instance Show (MarloweSyncRequest a)
+deriving instance Eq (MarloweSyncRequest a)
 
-instance Binary SomeRequest where
-  get = do
+instance Request MarloweSyncRequest where
+  data Tag MarloweSyncRequest a where
+    TagContractHeaders :: Tag MarloweSyncRequest (Maybe (Page ContractId ContractHeader))
+    TagContractState :: Tag MarloweSyncRequest (Maybe SomeContractState)
+    TagTransaction :: Tag MarloweSyncRequest (Maybe SomeTransaction)
+    TagTransactions :: Tag MarloweSyncRequest (Maybe SomeTransactions)
+    TagWithdrawal :: Tag MarloweSyncRequest (Maybe Withdrawal)
+    TagWithdrawals :: Tag MarloweSyncRequest (Maybe (Page TxId Withdrawal))
+  tagFromReq = \case
+    ReqContractHeaders _ _ -> TagContractHeaders
+    ReqContractState _ -> TagContractState
+    ReqTransaction _ -> TagTransaction
+    ReqTransactions _ -> TagTransactions
+    ReqWithdrawal _ -> TagWithdrawal
+    ReqWithdrawals _ _ -> TagWithdrawals
+  tagEq = \case
+    TagContractHeaders -> \case
+      TagContractHeaders -> Just Refl
+      _ -> Nothing
+    TagContractState -> \case
+      TagContractState -> Just Refl
+      _ -> Nothing
+    TagTransaction -> \case
+      TagTransaction -> Just Refl
+      _ -> Nothing
+    TagTransactions -> \case
+      TagTransactions -> Just Refl
+      _ -> Nothing
+    TagWithdrawal -> \case
+      TagWithdrawal -> Just Refl
+      _ -> Nothing
+    TagWithdrawals -> \case
+      TagWithdrawals -> Just Refl
+      _ -> Nothing
+
+deriving instance Show (Tag MarloweSyncRequest a)
+deriving instance Eq (Tag MarloweSyncRequest a)
+
+instance BinaryRequest MarloweSyncRequest where
+  getReq = do
     tag <- getWord8
     case tag of
-      0x00 -> do
-        SomeRequest a <- get
-        SomeRequest b <- get
-        pure $ SomeRequest $ ReqBoth a b
       0x01 -> SomeRequest <$> (ReqContractHeaders <$> get <*> get)
       0x02 -> SomeRequest . ReqContractState <$> get
       0x03 -> SomeRequest . ReqTransaction <$> get
       0x04 -> SomeRequest . ReqTransactions <$> get
       0x05 -> SomeRequest . ReqWithdrawal <$> get
       0x06 -> SomeRequest <$> (ReqWithdrawals <$> get <*> get)
-      _ -> fail "Invalid Request tag"
+      _ -> fail "Invalid MarloweSyncRequest tag"
 
-  put (SomeRequest req) = case req of
-    ReqBoth a b -> do
-      putWord8 0x00
-      put $ SomeRequest a
-      put $ SomeRequest b
+  putReq req = case req of
     ReqContractHeaders cFilter range -> do
       putWord8 0x01
       put cFilter
@@ -130,25 +148,48 @@ instance Binary SomeRequest where
       put wFilter
       put range
 
-deriving instance Eq (Request a)
-deriving instance Show (Request a)
+  getResult = \case
+    TagContractHeaders -> get
+    TagContractState -> get
+    TagTransaction -> get
+    TagTransactions -> get
+    TagWithdrawal -> get
+    TagWithdrawals -> get
 
-instance Variations SomeRequest where
-  variations = join $ NE.fromList
-    [ fmap SomeRequest $ ReqBoth <$> (ReqTransactions <$> variations) `varyAp` (ReqTransactions <$> variations)
-    , fmap SomeRequest $ ReqContractHeaders <$> variations `varyAp` variations
-    , SomeRequest . ReqContractState <$> variations
-    , SomeRequest . ReqTransaction <$> variations
-    , SomeRequest . ReqTransactions <$> variations
-    , SomeRequest . ReqWithdrawal <$> variations
-    , fmap SomeRequest $ ReqWithdrawals <$> variations `varyAp` variations
+  putResult = \case
+    TagContractHeaders -> put
+    TagContractState -> put
+    TagTransaction -> put
+    TagTransactions -> put
+    TagWithdrawal -> put
+    TagWithdrawals -> put
+
+instance RequestVariations MarloweSyncRequest where
+  tagVariations = NE.fromList
+    [ SomeTag TagContractHeaders
+    , SomeTag TagContractState
+    , SomeTag TagTransaction
+    , SomeTag TagTransactions
+    , SomeTag TagWithdrawal
+    , SomeTag TagWithdrawals
     ]
+  requestVariations = \case
+    TagContractHeaders -> ReqContractHeaders <$> variations `varyAp` variations
+    TagContractState -> ReqContractState <$> variations
+    TagTransaction -> ReqTransaction <$> variations
+    TagTransactions -> ReqTransactions <$> variations
+    TagWithdrawal -> ReqWithdrawal <$> variations
+    TagWithdrawals -> ReqWithdrawals <$> variations `varyAp` variations
+  resultVariations = \case
+    TagContractHeaders -> variations
+    TagContractState -> variations
+    TagTransaction -> variations
+    TagTransactions -> variations
+    TagWithdrawal -> variations
+    TagWithdrawals -> variations
 
-instance ToJSON (Request a) where
+instance ToJSON (MarloweSyncRequest a) where
   toJSON = \case
-    ReqBoth a b -> object
-      [ "req-both" .= (toJSON a, toJSON b)
-      ]
     ReqContractHeaders cFilter range -> object
       [ "get-contract-headers" .= object
         [ "filter" .= cFilter
@@ -174,58 +215,6 @@ instance ToJSON (Request a) where
         ]
       ]
 
-data StRes a where
-  TokContractHeaders :: StRes (Maybe (Page ContractId ContractHeader))
-  TokContractState :: StRes (Maybe SomeContractState)
-  TokTransaction :: StRes (Maybe SomeTransaction)
-  TokTransactions :: StRes (Maybe SomeTransactions)
-  TokWithdrawal :: StRes (Maybe Withdrawal)
-  TokWithdrawals :: StRes (Maybe (Page TxId Withdrawal))
-  TokBoth :: StRes a -> StRes b -> StRes (a, b)
-
-data SomeStRes = forall a. SomeStRes (StRes a)
-
-instance Variations SomeStRes where
-  variations = NE.fromList
-    [ SomeStRes $ TokBoth TokTransactions TokTransactions
-    , SomeStRes TokContractHeaders
-    , SomeStRes TokContractState
-    , SomeStRes TokTransaction
-    , SomeStRes TokTransactions
-    , SomeStRes TokWithdrawal
-    , SomeStRes TokWithdrawals
-    ]
-
-deriving instance Show (StRes a)
-deriving instance Eq (StRes a)
-
-instance Protocol MarloweQuery where
-  data Message MarloweQuery st st' where
-    MsgRequest :: Request a -> Message MarloweQuery
-      'StReq
-      ('StRes a)
-
-    MsgRespond :: a -> Message MarloweQuery
-      ('StRes a)
-      'StReq
-
-    MsgDone :: Message MarloweQuery
-      'StReq
-      'StDone
-
-  data ClientHasAgency ps where
-    TokReq :: ClientHasAgency 'StReq
-
-  data ServerHasAgency ps where
-    TokRes :: StRes a -> ServerHasAgency ('StRes a)
-
-  data NobodyHasAgency ps where
-    TokDone :: NobodyHasAgency 'StDone
-
-  exclusionLemma_ClientAndServerHaveAgency TokReq = \case
-  exclusionLemma_NobodyAndClientHaveAgency TokDone = \case
-  exclusionLemma_NobodyAndServerHaveAgency TokDone = \case
-
 data Range a = Range
   { rangeStart :: Maybe a
   , rangeOffset :: Int
@@ -247,59 +236,6 @@ instance Bifunctor Page where
   bimap f g Page{..} = Page{items = g <$> items, nextRange = fmap f <$> nextRange, ..}
 
 data SomeContractState = forall v. SomeContractState (MarloweVersion v) (ContractState v)
-
-instance BinaryMessage MarloweQuery where
-  putMessage = \case
-    ClientAgency TokReq -> \case
-      MsgRequest req -> do
-        putWord8 0x01
-        put $ SomeRequest req
-
-      MsgDone -> putWord8 0x03
-
-    ServerAgency (TokRes req) -> \case
-      MsgRespond a -> do
-        putWord8 0x02
-        putResult req a
-
-  getMessage tok = do
-    tag <- getWord8
-    case tag of
-      0x01 -> case tok of
-        ClientAgency TokReq -> do
-          SomeRequest req <- get
-          pure $ SomeMessage $ MsgRequest req
-        _ -> fail "Invalid protocol state for MsgRequest"
-
-      0x02 -> case tok of
-        ServerAgency (TokRes req) -> SomeMessage . MsgRespond <$> getResult req
-        ClientAgency _  -> fail "Invalid protocol state for MsgRespond"
-
-      0x03 -> case tok of
-        ClientAgency TokReq -> pure $ SomeMessage MsgDone
-        _ -> fail "Invalid protocol state for MsgDone"
-
-      _ -> fail $ "Invalid message tag " <> show tag
-
-getResult :: StRes a -> Get a
-getResult = \case
-  TokBoth a b -> (,) <$> getResult a <*> getResult b
-  TokContractHeaders -> get
-  TokContractState -> get
-  TokTransaction -> get
-  TokTransactions -> get
-  TokWithdrawal -> get
-  TokWithdrawals -> get
-
-putResult :: StRes a -> a -> Put
-putResult = \case
-  TokBoth ta tb -> \(a, b) -> putResult ta a *> putResult tb b
-  TokContractHeaders -> put
-  TokContractState -> put
-  TokTransaction -> put
-  TokTransactions -> put
-  TokWithdrawal -> put
-  TokWithdrawals -> put
 
 instance Show SomeContractState where
   showsPrec p (SomeContractState MarloweV1 state) = showParen (p >= 11)
@@ -452,152 +388,29 @@ data Order = Ascending | Descending
   deriving stock (Eq, Show, Read, Ord, Enum, Bounded, Generic)
   deriving anyclass (ToJSON, Binary, Variations)
 
-instance MessageVariations MarloweQuery where
-  agencyVariations = join $ NE.fromList
-    [ pure $ SomePeerHasAgency $ ClientAgency TokReq
-    , do
-        SomeStRes tok <- variations
-        pure $ SomePeerHasAgency $ ServerAgency $ TokRes tok
-    ]
-  messageVariations = \case
-    ClientAgency TokReq -> join $ NE.fromList
-      [ pure $ SomeMessage MsgDone
-      , do
-          SomeRequest req <- variations
-          pure $ SomeMessage $ MsgRequest req
-      ]
-    ServerAgency (TokRes tok) -> SomeMessage . MsgRespond <$> resultVariations tok
+instance OTelRequest MarloweSyncRequest where
+  reqTypeName _ = "marlowe_sync_request"
+  reqName = \case
+    TagContractHeaders -> "contract_headers"
+    TagContractState -> "contract_state"
+    TagTransaction -> "transaction"
+    TagTransactions -> "transactions"
+    TagWithdrawal -> "withdrawal"
+    TagWithdrawals -> "withdrawals"
 
-resultVariations :: StRes a -> NE.NonEmpty a
-resultVariations = \case
-  TokBoth a b -> (,) <$> resultVariations a `varyAp` resultVariations b
-  TokContractHeaders -> variations
-  TokContractState -> variations
-  TokTransaction -> variations
-  TokTransactions -> variations
-  TokWithdrawal -> variations
-  TokWithdrawals -> variations
+instance ShowRequest MarloweSyncRequest where
+  showsPrecResult p = \case
+    TagContractHeaders -> showsPrec p
+    TagContractState -> showsPrec p
+    TagTransaction -> showsPrec p
+    TagTransactions -> showsPrec p
+    TagWithdrawal -> showsPrec p
+    TagWithdrawals -> showsPrec p
 
-instance MessageToJSON MarloweQuery where
-  messageToJSON = \case
-    ClientAgency TokReq -> \case
-      MsgRequest req -> object [ "request" .= req ]
-      MsgDone -> String "done"
-    ServerAgency (TokRes req) -> \case
-      MsgRespond a -> object [ "respond" .= responseToJSON req a ]
-
-    where
-      responseToJSON :: StRes a -> a -> Value
-      responseToJSON = \case
-        TokContractHeaders -> toJSON
-        TokContractState -> toJSON
-        TokTransaction -> toJSON
-        TokTransactions -> toJSON
-        TokWithdrawal -> toJSON
-        TokWithdrawals -> toJSON
-        TokBoth a b -> toJSON . bimap (responseToJSON a) (responseToJSON b)
-
-instance OTelProtocol MarloweQuery where
-  protocolName _ = "marlowe_query"
-  messageAttributes = \case
-    ClientAgency tok -> case tok of
-      TokReq -> \case
-        MsgDone -> MessageAttributes
-          { messageType = "done"
-          , messageParameters = []
-          }
-        MsgRequest req -> MessageAttributes
-          { messageType = "request/" <> fromString (reqName $ requestToSt req)
-          , messageParameters = [TextAttribute $ fromString $ show req]
-          }
-    ServerAgency tok -> case tok of
-      TokRes tag -> \case
-        MsgRespond res -> MessageAttributes
-          { messageType = "request/" <> fromString (reqName tag) <> "/respond"
-          , messageParameters = [TextAttribute $ fromString $ showsPrecResult tag 0 res ""]
-          }
-
-reqName :: StRes a -> String
-reqName = \case
-  TokContractHeaders -> "contract_headers"
-  TokContractState -> "contract_state"
-  TokTransaction -> "transaction"
-  TokTransactions -> "transactions"
-  TokWithdrawal -> "withdrawal"
-  TokWithdrawals -> "withdrawals"
-  TokBoth ta tb -> reqName ta <> "&" <> reqName tb
-
-instance ShowProtocol MarloweQuery where
-  showsPrecMessage p =  \case
-    ClientAgency TokReq -> \case
-      MsgRequest req -> showParen (p >= 11) (showString "MsgRequest" . showSpace . showsPrec 11 req)
-      MsgDone -> showString "MsgDone"
-    ServerAgency (TokRes req) -> \case
-      MsgRespond a -> showParen (p >= 11) (showString "MsgRespond" . showSpace . showsPrecResult req 11 a)
-  showsPrecServerHasAgency p (TokRes req) = showParen (p >= 11) (showString "TokRes" . showSpace . showsPrec 11 req)
-  showsPrecClientHasAgency _ TokReq = showString "TokReq"
-
-showsPrecResult :: StRes a -> Int -> a -> String -> String
-showsPrecResult = \case
-  TokContractHeaders -> showsPrec
-  TokContractState -> showsPrec
-  TokTransaction -> showsPrec
-  TokTransactions -> showsPrec
-  TokWithdrawal -> showsPrec
-  TokWithdrawals -> showsPrec
-  TokBoth ta tb -> \_ (a, b) -> showParen True (showsPrecResult ta 0 a . showCommaSpace . showsPrecResult tb 0 b)
-
-instance MessageEq MarloweQuery where
-  messageEq = \case
-    AnyMessageAndAgency (ClientAgency TokReq) (MsgRequest req) -> \case
-      AnyMessageAndAgency (ClientAgency TokReq) (MsgRequest req') -> reqEq req req'
-      _ -> False
-    AnyMessageAndAgency (ClientAgency TokReq) MsgDone -> \case
-      AnyMessageAndAgency (ClientAgency TokReq) MsgDone -> True
-      _ -> False
-    AnyMessageAndAgency (ServerAgency (TokRes req)) (MsgRespond a) -> \case
-      AnyMessageAndAgency (ServerAgency (TokRes req')) (MsgRespond a') -> resultEq req req' a a'
-      _ -> False
-    where
-      reqEq :: Request a -> Request a1 -> Bool
-      reqEq (ReqBoth a b) (ReqBoth a' b') = reqEq a a' && reqEq b b'
-      reqEq (ReqBoth _ _) _ = False
-      reqEq (ReqContractHeaders cFilter range) (ReqContractHeaders cFilter' range') = range == range' && cFilter == cFilter'
-      reqEq (ReqContractHeaders _ _) _ = False
-      reqEq (ReqContractState contractId) (ReqContractState contractId') = contractId == contractId'
-      reqEq (ReqContractState _) _ = False
-      reqEq (ReqTransaction txId) (ReqTransaction txId') = txId == txId'
-      reqEq (ReqTransaction _) _ = False
-      reqEq (ReqTransactions contractId) (ReqTransactions contractId') = contractId == contractId'
-      reqEq (ReqTransactions _) _ = False
-      reqEq (ReqWithdrawal txId) (ReqWithdrawal txId') = txId == txId'
-      reqEq (ReqWithdrawal _) _ = False
-      reqEq (ReqWithdrawals wFilter range) (ReqWithdrawals filter' range') = wFilter == filter' && range == range'
-      reqEq (ReqWithdrawals _ _) _ = False
-
-      resultEq :: StRes a -> StRes b -> a -> b -> Bool
-      resultEq (TokBoth ta tb) (TokBoth ta' tb') = \(a, b) (a', b') ->
-        resultEq ta ta' a a' && resultEq tb tb' b b'
-      resultEq (TokBoth _ _) _ = const $ const False
-      resultEq TokContractHeaders TokContractHeaders = (==)
-      resultEq TokContractHeaders _ = const $ const False
-      resultEq TokContractState TokContractState = (==)
-      resultEq TokContractState _ = const $ const False
-      resultEq TokTransaction TokTransaction = (==)
-      resultEq TokTransaction _ = const $ const False
-      resultEq TokTransactions TokTransactions = (==)
-      resultEq TokTransactions _ = const $ const False
-      resultEq TokWithdrawal TokWithdrawal = (==)
-      resultEq TokWithdrawal _ = const $ const False
-      resultEq TokWithdrawals TokWithdrawals = (==)
-      resultEq TokWithdrawals _ = const $ const False
-
-requestToSt :: Request x -> StRes x
-requestToSt = \case
-  ReqContractHeaders _ _ -> TokContractHeaders
-  ReqContractState _ -> TokContractState
-  ReqTransaction _ -> TokTransaction
-  ReqTransactions _ -> TokTransactions
-  ReqWithdrawal _ -> TokWithdrawal
-  ReqWithdrawals _ _ -> TokWithdrawals
-  ReqBoth r1 r2 -> TokBoth (requestToSt r1) (requestToSt r2)
+instance RequestEq MarloweSyncRequest where
+  resultEq TagContractHeaders = (==)
+  resultEq TagContractState = (==)
+  resultEq TagTransaction = (==)
+  resultEq TagTransactions = (==)
+  resultEq TagWithdrawal = (==)
+  resultEq TagWithdrawals = (==)

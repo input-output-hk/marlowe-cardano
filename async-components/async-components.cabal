@@ -54,6 +54,5 @@ library
     , servant >= 0.19 && < 0.20
     , servant-client >= 0.19 && < 0.20
     , servant-server >= 0.19 && < 0.20
-    , stm >= 2.5 && < 2.6
     , unliftio >= 0.2.1 && < 0.3
     , warp >= 3.3 && < 4

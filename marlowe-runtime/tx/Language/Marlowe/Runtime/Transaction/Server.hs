@@ -87,10 +87,11 @@ import Language.Marlowe.Runtime.Transaction.Query
 import Language.Marlowe.Runtime.Transaction.Safety (checkContract, checkTransactions, noContinuations)
 import Language.Marlowe.Runtime.Transaction.Submit (SubmitJob(..), SubmitJobStatus(..))
 import Network.Protocol.Connection
-  (SomeConnectionSourceTraced(..), SomeServerConnectorTraced, acceptSomeConnectorTraced)
+  (SomeClientConnectorTraced, SomeConnectionSourceTraced(..), SomeServerConnectorTraced, acceptSomeConnectorTraced)
 import Network.Protocol.Driver.Trace (HasSpanContext, runSomeConnectorTraced)
 import Network.Protocol.Job.Server
   (JobServer(..), ServerStAttach(..), ServerStAwait(..), ServerStCmd(..), ServerStInit(..), hoistAttach, hoistCmd)
+import Network.Protocol.Query.Client (QueryClient, request)
 import Observe.Event.Explicit (addField)
 import Ouroboros.Consensus.BlockchainTime (SystemStart)
 import UnliftIO (MonadUnliftIO, atomically)
@@ -117,7 +118,7 @@ data TransactionServerDependencies r s m = TransactionServerDependencies
   , mkSubmitJob :: Tx BabbageEra -> STM (SubmitJob m)
   , loadWalletContext :: LoadWalletContext m
   , loadMarloweContext :: LoadMarloweContext m
-  , queryChainSync :: forall e a. ChainSyncQuery Void e a -> m a
+  , chainSyncQueryConnector :: SomeClientConnectorTraced (QueryClient ChainSyncQuery) r s m
   , getTip :: STM Chain.ChainPoint
   , getCurrentScripts :: forall v. MarloweVersion v -> MarloweScripts
   }
@@ -141,7 +142,7 @@ data WorkerDependencies r s m = WorkerDependencies
   , mkSubmitJob :: Tx BabbageEra -> STM (SubmitJob m)
   , loadWalletContext :: LoadWalletContext m
   , loadMarloweContext :: LoadMarloweContext m
-  , queryChainSync :: forall e a. ChainSyncQuery Void e a -> m a
+  , chainSyncQueryConnector :: SomeClientConnectorTraced (QueryClient ChainSyncQuery) r s m
   , getTip :: STM Chain.ChainPoint
   , getCurrentScripts :: forall v. MarloweVersion v -> MarloweScripts
   }
@@ -158,13 +159,14 @@ worker = component_ \WorkerDependencies{..} -> do
     serverInit :: ServerStInit MarloweTxCommand m ()
     serverInit = ServerStInit
       { recvMsgExec = \command -> withEvent Exec \ev -> do
-          systemStart <- queryChainSync GetSystemStart
+          (systemStart, eraHistory, protocolParameters, networkId) <- runSomeConnectorTraced chainSyncQueryConnector $ (,,,)
+            <$> request GetSystemStart
+            <*> request GetEraHistory
+            <*> request GetProtocolParameters
+            <*> request GetNetworkId
           addField ev $ SystemStart systemStart
-          eraHistory <- queryChainSync GetEraHistory
           addField ev $ EraHistory eraHistory
-          protocolParameters <- queryChainSync GetProtocolParameters
           addField ev $ ProtocolParameters protocolParameters
-          networkId <- queryChainSync GetNetworkId
           addField ev $ NetworkId networkId
           let
             solveConstraints :: Constraints.SolveConstraints

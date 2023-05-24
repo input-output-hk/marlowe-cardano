@@ -8,45 +8,13 @@
 module Language.Marlowe.Protocol.Query.Client
   where
 
-import Control.Applicative (liftA2)
-import Control.Monad.IO.Class (MonadIO(..))
-import Control.Monad.Trans.Class (MonadTrans(..))
 import Language.Marlowe.Protocol.Query.Types
 import Language.Marlowe.Runtime.ChainSync.Api (TxId)
 import Language.Marlowe.Runtime.Core.Api (ContractId)
 import Language.Marlowe.Runtime.Discovery.Api (ContractHeader)
-import Network.Protocol.Peer.Trace
-import Network.TypedProtocol
+import Network.Protocol.Query.Client
 
-data MarloweQueryClient m a where
-  ClientRequest :: Request x -> (x -> m (MarloweQueryClient m a)) -> MarloweQueryClient m a
-  ClientLift :: m (MarloweQueryClient m a) -> MarloweQueryClient m a
-  ClientPure :: a -> MarloweQueryClient m a
-
-deriving instance Functor m => Functor (MarloweQueryClient m)
-
-instance Applicative m => Applicative (MarloweQueryClient m) where
-  pure = ClientPure
-  ClientPure f <*> a = f <$> a
-  f <*> ClientPure a = ($ a) <$> f
-  f <*> ClientLift a = ClientLift $ (f <*>) <$> a
-  ClientLift f <*> a = ClientLift $ (<*> a) <$> f
-  ClientRequest req1 contF <*> ClientRequest req2 contA =
-    ClientRequest (ReqBoth req1 req2) \(r1, r2) -> liftA2 (<*>) (contF r1) (contA r2)
-
-instance Monad m => Monad (MarloweQueryClient m) where
-  ClientPure a >>= k = k a
-  ClientLift m >>= k = ClientLift $ (>>= k) <$> m
-  ClientRequest req cont >>= k = ClientRequest req $ fmap (>>= k) . cont
-
-instance MonadTrans MarloweQueryClient where
-  lift = ClientLift . fmap pure
-
-instance MonadIO m => MonadIO (MarloweQueryClient m) where
-  liftIO = lift . liftIO
-
-request :: Applicative m => Request a -> MarloweQueryClient m a
-request req = ClientRequest req $ pure . pure
+type MarloweQueryClient = QueryClient MarloweSyncRequest
 
 getWithdrawal :: Applicative m => TxId -> MarloweQueryClient m (Maybe Withdrawal)
 getWithdrawal = request . ReqWithdrawal
@@ -65,24 +33,3 @@ getTransactions = request . ReqTransactions
 
 getTransaction :: Applicative m => TxId -> MarloweQueryClient m (Maybe SomeTransaction)
 getTransaction = request . ReqTransaction
-
-hoistMarloweQueryClient :: Functor m => (forall x. m x -> n x) -> MarloweQueryClient m a -> MarloweQueryClient n a
-hoistMarloweQueryClient f = \case
-  ClientPure a -> ClientPure a
-  ClientLift m -> ClientLift $ f $ hoistMarloweQueryClient f <$> m
-  ClientRequest req cont -> ClientRequest req $ f . fmap (hoistMarloweQueryClient f) . cont
-
-marloweQueryClientPeer
-  :: Functor m
-  => MarloweQueryClient m a
-  -> PeerTraced MarloweQuery 'AsClient 'StReq m a
-marloweQueryClientPeer = \case
-  ClientPure a ->
-    YieldTraced (ClientAgency TokReq) MsgDone
-      $ Close TokDone a
-  ClientLift m ->
-    EffectTraced $ marloweQueryClientPeer <$> m
-  ClientRequest req cont ->
-    YieldTraced (ClientAgency TokReq) (MsgRequest req) $
-      Call (ServerAgency (TokRes $ requestToSt req)) \case
-        MsgRespond r -> EffectTraced $ marloweQueryClientPeer <$> cont r

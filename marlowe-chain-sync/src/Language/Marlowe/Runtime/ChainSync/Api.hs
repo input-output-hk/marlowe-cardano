@@ -89,6 +89,7 @@ import qualified Network.Protocol.ChainSeek.Types as ChainSeek
 import Network.Protocol.Codec.Spec
 import Network.Protocol.Handshake.Types (HasSignature(..))
 import qualified Network.Protocol.Job.Types as Job
+import Network.Protocol.Query.Types (OTelRequest(reqTypeName))
 import qualified Network.Protocol.Query.Types as Query
 import Ouroboros.Consensus.BlockchainTime (RelativeTime, SlotLength, SystemStart(..))
 import Ouroboros.Consensus.HardFork.History
@@ -905,19 +906,22 @@ data UTxO = UTxO
 toUTxOTuple :: UTxO -> (TxOutRef, TransactionOutput)
 toUTxOTuple (UTxO txOutRef transactionOutput) = (txOutRef, transactionOutput)
 
-data ChainSyncQuery delimiter err result where
-  GetSecurityParameter :: ChainSyncQuery Void () Int
-  GetNetworkId :: ChainSyncQuery Void () NetworkId
-  GetProtocolParameters :: ChainSyncQuery Void () ProtocolParameters
-  GetSystemStart :: ChainSyncQuery Void () SystemStart
-  GetEraHistory :: ChainSyncQuery Void () (EraHistory CardanoMode)
-  GetUTxOs :: GetUTxOsQuery -> ChainSyncQuery Void () UTxOs
+data ChainSyncQuery a where
+  GetSecurityParameter :: ChainSyncQuery Int
+  GetNetworkId :: ChainSyncQuery NetworkId
+  GetProtocolParameters :: ChainSyncQuery ProtocolParameters
+  GetSystemStart :: ChainSyncQuery SystemStart
+  GetEraHistory :: ChainSyncQuery (EraHistory CardanoMode)
+  GetUTxOs :: GetUTxOsQuery -> ChainSyncQuery UTxOs
+
+deriving instance Show (ChainSyncQuery a)
+deriving instance Eq (ChainSyncQuery a)
 
 instance HasSignature ChainSyncQuery where
   signature _ = "ChainSyncQuery"
 
-instance Query.QueryVariations ChainSyncQuery where
-  tags = NE.fromList
+instance Query.RequestVariations ChainSyncQuery where
+  tagVariations = NE.fromList
     [ Query.SomeTag TagGetSecurityParameter
     , Query.SomeTag TagGetNetworkId
     , Query.SomeTag TagGetProtocolParameters
@@ -925,28 +929,14 @@ instance Query.QueryVariations ChainSyncQuery where
     , Query.SomeTag TagGetEraHistory
     , Query.SomeTag TagGetUTxOs
     ]
-  queryVariations = \case
+  requestVariations = \case
     TagGetSecurityParameter -> pure GetSecurityParameter
     TagGetNetworkId -> pure GetNetworkId
     TagGetProtocolParameters -> pure GetProtocolParameters
     TagGetSystemStart -> pure GetSystemStart
     TagGetEraHistory -> pure GetEraHistory
     TagGetUTxOs -> GetUTxOs <$> variations
-  errVariations = \case
-    TagGetSecurityParameter -> NE.toList variations
-    TagGetNetworkId -> NE.toList variations
-    TagGetProtocolParameters -> NE.toList variations
-    TagGetSystemStart -> NE.toList variations
-    TagGetEraHistory -> NE.toList variations
-    TagGetUTxOs -> NE.toList variations
-  delimiterVariations = \case
-    TagGetSecurityParameter -> []
-    TagGetNetworkId -> []
-    TagGetProtocolParameters -> []
-    TagGetSystemStart -> []
-    TagGetEraHistory -> []
-    TagGetUTxOs -> []
-  resultsVariations = \case
+  resultVariations = \case
     TagGetSecurityParameter -> variations
     TagGetNetworkId -> Mainnet NE.:| [Testnet $ NetworkMagic 0]
     TagGetProtocolParameters -> variations
@@ -954,97 +944,70 @@ instance Query.QueryVariations ChainSyncQuery where
     TagGetEraHistory -> variations
     TagGetUTxOs -> variations
 
-instance Query.IsQuery ChainSyncQuery where
-  data Tag ChainSyncQuery delimiter err result where
-    TagGetSecurityParameter :: Query.Tag ChainSyncQuery Void () Int
-    TagGetNetworkId :: Query.Tag ChainSyncQuery Void () NetworkId
-    TagGetProtocolParameters :: Query.Tag ChainSyncQuery Void () ProtocolParameters
-    TagGetSystemStart :: Query.Tag ChainSyncQuery Void () SystemStart
-    TagGetEraHistory :: Query.Tag ChainSyncQuery Void () (EraHistory CardanoMode)
-    TagGetUTxOs :: Query.Tag ChainSyncQuery Void () UTxOs
-  tagEq TagGetSecurityParameter TagGetSecurityParameter = Just (Refl, Refl, Refl)
+instance Query.Request ChainSyncQuery where
+  data Tag ChainSyncQuery result where
+    TagGetSecurityParameter :: Query.Tag ChainSyncQuery Int
+    TagGetNetworkId :: Query.Tag ChainSyncQuery NetworkId
+    TagGetProtocolParameters :: Query.Tag ChainSyncQuery ProtocolParameters
+    TagGetSystemStart :: Query.Tag ChainSyncQuery SystemStart
+    TagGetEraHistory :: Query.Tag ChainSyncQuery (EraHistory CardanoMode)
+    TagGetUTxOs :: Query.Tag ChainSyncQuery UTxOs
+  tagEq TagGetSecurityParameter TagGetSecurityParameter = Just Refl
   tagEq TagGetSecurityParameter _                       = Nothing
-  tagEq TagGetNetworkId TagGetNetworkId = Just (Refl, Refl, Refl)
+  tagEq TagGetNetworkId TagGetNetworkId = Just Refl
   tagEq TagGetNetworkId _                       = Nothing
-  tagEq TagGetProtocolParameters TagGetProtocolParameters = Just (Refl, Refl, Refl)
+  tagEq TagGetProtocolParameters TagGetProtocolParameters = Just Refl
   tagEq TagGetProtocolParameters _                       = Nothing
-  tagEq TagGetEraHistory TagGetEraHistory = Just (Refl, Refl, Refl)
+  tagEq TagGetEraHistory TagGetEraHistory = Just Refl
   tagEq TagGetEraHistory _                       = Nothing
-  tagEq TagGetSystemStart TagGetSystemStart = Just (Refl, Refl, Refl)
+  tagEq TagGetSystemStart TagGetSystemStart = Just Refl
   tagEq TagGetSystemStart _                       = Nothing
-  tagEq TagGetUTxOs TagGetUTxOs = Just (Refl, Refl, Refl)
+  tagEq TagGetUTxOs TagGetUTxOs = Just Refl
   tagEq TagGetUTxOs _ = Nothing
-  putTag = \case
-    TagGetSecurityParameter -> putWord8 0x01
-    TagGetNetworkId -> putWord8 0x02
-    TagGetProtocolParameters -> putWord8 0x03
-    TagGetSystemStart -> putWord8 0x04
-    TagGetEraHistory -> putWord8 0x05
-    TagGetUTxOs -> putWord8 0x06
-  getTag = do
-    word <- getWord8
-    case word of
-      0x01 -> pure $ Query.SomeTag TagGetSecurityParameter
-      0x02 -> pure $ Query.SomeTag TagGetNetworkId
-      0x03 -> pure $ Query.SomeTag TagGetProtocolParameters
-      0x04 -> pure $ Query.SomeTag TagGetSystemStart
-      0x05 -> pure $ Query.SomeTag TagGetEraHistory
-      0x06 -> pure $ Query.SomeTag TagGetUTxOs
+  tagFromReq = \case
+    GetSecurityParameter -> TagGetSecurityParameter
+    GetNetworkId -> TagGetNetworkId
+    GetProtocolParameters -> TagGetProtocolParameters
+    GetEraHistory -> TagGetEraHistory
+    GetSystemStart -> TagGetSystemStart
+    GetUTxOs _ -> TagGetUTxOs
+
+deriving instance Show (Query.Tag ChainSyncQuery a)
+deriving instance Eq (Query.Tag ChainSyncQuery a)
+
+instance Query.BinaryRequest ChainSyncQuery where
+  putReq = \case
+    GetSecurityParameter -> putWord8 0x01
+    GetNetworkId -> putWord8 0x02
+    GetProtocolParameters -> putWord8 0x03
+    GetSystemStart -> putWord8 0x04
+    GetEraHistory -> putWord8 0x05
+    GetUTxOs q -> do
+      putWord8 0x06
+      case q of
+        (GetUTxOsAtAddresses addresses) -> do
+          putWord8 0x01
+          put addresses
+        (GetUTxOsForTxOutRefs txOutRefs) -> do
+          putWord8 0x02
+          put txOutRefs
+  getReq = do
+    tag <- getWord8
+    case tag of
+      0x01 -> pure $ Query.SomeRequest GetSecurityParameter
+      0x02 -> pure $ Query.SomeRequest GetNetworkId
+      0x03 -> pure $ Query.SomeRequest GetProtocolParameters
+      0x04 -> pure $ Query.SomeRequest GetSystemStart
+      0x05 -> pure $ Query.SomeRequest GetEraHistory
+      0x06 -> do
+        tag' <- getWord8
+        Query.SomeRequest . GetUTxOs <$> case tag' of
+          0x01 -> do
+            GetUTxOsAtAddresses <$> get
+          0x02 -> do
+            GetUTxOsForTxOutRefs <$> get
+          _    -> fail "Invalid GetUTxOsQuery tag"
       _    -> fail "Invalid ChainSyncQuery tag"
-  putQuery = \case
-    GetSecurityParameter -> mempty
-    GetNetworkId -> mempty
-    GetProtocolParameters -> mempty
-    GetSystemStart -> mempty
-    GetEraHistory -> mempty
-    GetUTxOs (GetUTxOsAtAddresses addresses) -> do
-      putWord8 0x01
-      put addresses
-    GetUTxOs (GetUTxOsForTxOutRefs txOutRefs) -> do
-      putWord8 0x02
-      put txOutRefs
-  getQuery = \case
-    TagGetSecurityParameter -> pure GetSecurityParameter
-    TagGetNetworkId -> pure GetNetworkId
-    TagGetProtocolParameters -> pure GetProtocolParameters
-    TagGetSystemStart -> pure GetSystemStart
-    TagGetEraHistory -> pure GetEraHistory
-    TagGetUTxOs -> do
-      word <- getWord8
-      GetUTxOs <$> case word of
-        0x01 -> do
-          GetUTxOsAtAddresses <$> get
-        0x02 -> do
-          GetUTxOsForTxOutRefs <$> get
-        _    -> fail "Invalid GetUTxOsQuery tag"
-  putDelimiter = \case
-    TagGetSecurityParameter -> absurd
-    TagGetNetworkId -> absurd
-    TagGetProtocolParameters -> absurd
-    TagGetSystemStart -> absurd
-    TagGetEraHistory -> absurd
-    TagGetUTxOs -> absurd
-  getDelimiter = \case
-    TagGetSecurityParameter -> fail "no delimiter defined"
-    TagGetNetworkId -> fail "no delimiter defined"
-    TagGetProtocolParameters -> fail "no delimiter defined"
-    TagGetSystemStart -> fail "no delimiter defined"
-    TagGetEraHistory -> fail "no delimiter defined"
-    TagGetUTxOs -> fail "no delimiter defined"
-  putErr = \case
-    TagGetSecurityParameter -> put
-    TagGetNetworkId -> put
-    TagGetProtocolParameters -> put
-    TagGetSystemStart -> put
-    TagGetEraHistory -> put
-    TagGetUTxOs -> put
-  getErr = \case
-    TagGetSecurityParameter -> get
-    TagGetNetworkId -> get
-    TagGetProtocolParameters -> get
-    TagGetSystemStart -> get
-    TagGetEraHistory -> get
-    TagGetUTxOs -> get
   putResult = \case
     TagGetSecurityParameter -> put
     TagGetNetworkId -> put . \case
@@ -1071,51 +1034,8 @@ instance Query.IsQuery ChainSyncQuery where
         Right interpreter -> pure $ EraHistory CardanoMode interpreter
     TagGetSystemStart -> SystemStart <$> getUTCTime
     TagGetUTxOs -> get
-  tagFromQuery = \case
-    GetSecurityParameter -> TagGetSecurityParameter
-    GetNetworkId -> TagGetNetworkId
-    GetProtocolParameters -> TagGetProtocolParameters
-    GetEraHistory -> TagGetEraHistory
-    GetSystemStart -> TagGetSystemStart
-    GetUTxOs _ -> TagGetUTxOs
 
-instance Query.ShowQuery ChainSyncQuery where
-  showsPrecTag _ = showString . \case
-    TagGetSecurityParameter -> "TagGetSecurityParameter"
-    TagGetNetworkId -> "TagGetNetworkId"
-    TagGetProtocolParameters -> "TagGetProtocolParameters"
-    TagGetSystemStart -> "TagGetSystemStart"
-    TagGetEraHistory -> "TagGetEraHistory"
-    TagGetUTxOs -> "TagGetUTxOs"
-
-  showsPrecQuery p = \case
-    GetSecurityParameter -> showString "GetSecurityParameter"
-    GetNetworkId -> showString "GetNetworkId"
-    GetProtocolParameters -> showString "GetProtocolParameters"
-    GetSystemStart -> showString "GetSystemStart"
-    GetEraHistory -> showString "GetEraHistory"
-    GetUTxOs query -> showParen (p >= 11)
-      ( showString "TagGetUTxOs"
-      . showSpace
-      . showsPrec 11 query
-      )
-
-  showsPrecDelimiter _ = \case
-    TagGetSecurityParameter -> absurd
-    TagGetNetworkId -> absurd
-    TagGetProtocolParameters -> absurd
-    TagGetSystemStart -> absurd
-    TagGetEraHistory -> absurd
-    TagGetUTxOs -> absurd
-
-  showsPrecErr p = \case
-    TagGetSecurityParameter -> showsPrec p
-    TagGetNetworkId -> showsPrec p
-    TagGetProtocolParameters -> showsPrec p
-    TagGetSystemStart -> showsPrec p
-    TagGetEraHistory -> showsPrec p
-    TagGetUTxOs -> showsPrec p
-
+instance Query.ShowRequest ChainSyncQuery where
   showsPrecResult p = \case
     TagGetSecurityParameter -> showsPrec p
     TagGetNetworkId -> showsPrec p
@@ -1134,9 +1054,9 @@ instance Query.ShowQuery ChainSyncQuery where
       )
     TagGetUTxOs -> showsPrec p
 
-instance Query.OTelQuery ChainSyncQuery where
-  queryTypeName _ = "chain_sync"
-  queryName = \case
+instance Query.OTelRequest ChainSyncQuery where
+  reqTypeName _ = "chain_sync"
+  reqName = \case
     TagGetSecurityParameter -> "security_parameter"
     TagGetNetworkId -> "network_id"
     TagGetProtocolParameters -> "protocol_parameters"

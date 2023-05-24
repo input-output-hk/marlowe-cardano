@@ -21,6 +21,7 @@ import Control.Monad.With
 import Data.GeneralAllocate
 import qualified Data.Text as T
 import Data.Version (showVersion)
+import Data.Word (Word64)
 import Language.Marlowe.Protocol.Load.Server (marloweLoadServerPeer)
 import Language.Marlowe.Runtime.Contract
 import Language.Marlowe.Runtime.Contract.Store (traceContractStore)
@@ -31,6 +32,7 @@ import Network.Protocol.Connection (SomeConnectionSourceTraced(..))
 import Network.Protocol.Driver (TcpServerDependencies(..))
 import Network.Protocol.Driver.Trace (tcpServerTraced)
 import Network.Protocol.Handshake.Server (handshakeConnectionSourceTraced)
+import Network.Protocol.Query.Server (queryServerPeer)
 import Network.Socket (HostName, PortNumber)
 import Network.TypedProtocol (unsafeIntToNat)
 import Observe.Event.Backend (EventBackend, hoistEventBackend)
@@ -83,9 +85,17 @@ run Options{..} = do
       , ..
       }
 
+    querySource <- tcpServerTraced inject -< TcpServerDependencies
+      { toPeer = queryServerPeer
+      , port = queryPort
+      , ..
+      }
+
     probes <- contract -< ContractDependencies
       { loadSource = SomeConnectionSourceTraced inject
           $ handshakeConnectionSourceTraced loadSource
+      , querySource = SomeConnectionSourceTraced inject
+          $ handshakeConnectionSourceTraced querySource
       , contractStore
       , batchSize = unsafeIntToNat bufferSize
       }
@@ -126,9 +136,11 @@ instance MonadEvent r RootSelector (AppM r) where
 data Options = Options
   { host :: HostName
   , port :: PortNumber
+  , queryPort :: PortNumber
   , bufferSize :: Int
   , contractStoreDirectory :: FilePath
   , contractStoreStagingDirectory :: FilePath
+  , lockingMicrosecondsBetweenRetries :: Word64
   , httpPort :: PortNumber
   }
 
@@ -140,9 +152,11 @@ getOptions = do
       ( Options
           <$> hostParser
           <*> portParser
+          <*> queryPortParser
           <*> bufferSizeParser
           <*> contractStoreDirectoryParser contractStoreDirectory
           <*> contractStoreStagingDirectoryParser contractStoreStagingDirectory
+          <*> lockingMicrosecondsBetweenRetriesParser lockingMicrosecondsBetweenRetries
           <*> httpPortParser
       )
     )
@@ -163,6 +177,14 @@ getOptions = do
       , value 3727
       , metavar "PORT_NUMBER"
       , help "The port number to run the marlowe load server on."
+      , showDefault
+      ]
+
+    queryPortParser = option auto $ mconcat
+      [ long "query-port"
+      , value 3728
+      , metavar "PORT_NUMBER"
+      , help "The port number to run the query server on."
       , showDefault
       ]
 
@@ -195,6 +217,14 @@ getOptions = do
       , value defaultValue
       , metavar "DIR"
       , help "The root directory of the contract store staging areas"
+      , showDefault
+      ]
+
+    lockingMicrosecondsBetweenRetriesParser defaultValue = option auto $ mconcat
+      [ long "store-lock-microseconds-between-retries"
+      , value defaultValue
+      , metavar "MICRO_SECONDS"
+      , help "The number of microseconds to wait between retries when acquiring the store lock"
       , showDefault
       ]
 

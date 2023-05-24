@@ -5,13 +5,14 @@ module Language.Marlowe.Runtime.Contract.Store.File
   ) where
 
 import Cardano.Api (hashScriptData)
-import Codec.Compression.GZip (compress)
-import Control.Monad (unless)
+import Codec.Compression.GZip (compress, decompress)
+import Control.Monad (guard, unless)
 import Control.Monad.Catch (MonadMask)
-import Data.Binary (put)
+import Control.Monad.Trans.Maybe (MaybeT(runMaybeT))
+import Data.Binary (Word64, get, put)
+import Data.Binary.Get (runGet)
 import Data.Binary.Put (runPut)
 import qualified Data.ByteString.Lazy as LBS
-import Data.Default (def)
 import Data.Foldable (fold, foldl')
 import Data.HashMap.Strict (HashMap)
 import qualified Data.HashMap.Strict as HashMap
@@ -25,12 +26,13 @@ import Data.UUID.V4 (nextRandom)
 import GHC.IO (mkUserError)
 import Language.Marlowe (Case(..), Contract(..))
 import Language.Marlowe.Runtime.Cardano.Api (fromCardanoDatumHash, toCardanoScriptData)
-import Language.Marlowe.Runtime.ChainSync.Api (DatumHash(DatumHash), toDatum)
+import Language.Marlowe.Runtime.ChainSync.Api (DatumHash(..), toDatum)
+import Language.Marlowe.Runtime.Contract.Api hiding (getContract)
 import Language.Marlowe.Runtime.Contract.Store
 import Language.Marlowe.Runtime.Core.Api ()
 import Plutus.V2.Ledger.Api (fromBuiltin)
 import System.FilePath (takeBaseName, (<.>), (</>))
-import System.IO.LockFile (withLockFile)
+import System.IO.LockFile (LockingParameters(..), RetryStrategy(NumberOfTimes), withLockFile)
 import UnliftIO
 import UnliftIO.Directory
   ( XdgDirectory(XdgData)
@@ -49,6 +51,7 @@ import UnliftIO.Directory
 data ContractStoreOptions = ContractStoreOptions
   { contractStoreDirectory :: FilePath -- ^ The directory to store the contract files
   , contractStoreStagingDirectory :: FilePath -- ^ The directory to create staging areas
+  , lockingMicrosecondsBetweenRetries :: Word64
   }
 
 -- | Default options. uses $XDG_DATA/marlowe/runtime/marlowe-contract/store for the
@@ -57,6 +60,7 @@ defaultContractStoreOptions :: MonadIO m => m ContractStoreOptions
 defaultContractStoreOptions = ContractStoreOptions
   <$> getXdgDirectory XdgData ("marlowe" </> "runtime" </> "marlowe-contract" </> "store")
   <*> getTemporaryDirectory
+  <*> pure 500_000
 
 -- | Create a contract store that uses the file system.
 --
@@ -73,9 +77,40 @@ createContractStore ContractStoreOptions{..} = do
   let lockfile = contractStoreDirectory </> "lockfile"
   pure ContractStore
     { createContractStagingArea = createContractStagingArea lockfile
+    , getContract = getContract lockfile
     }
 
   where
+    lockingParameters = LockingParameters
+      { sleepBetweenRetries = lockingMicrosecondsBetweenRetries
+      , retryToAcquireLock = NumberOfTimes 20
+      }
+
+    getContract lockfile contractHash
+      | contractHash == closeHash = pure $ Just ContractWithAdjacency
+          { contract = Close
+          , contractHash = closeHash
+          , adjacency = mempty
+          , closure = Set.singleton closeHash
+          }
+      | otherwise = withLockFile lockingParameters lockfile $ runMaybeT do
+          let mkFilePath = (contractStoreDirectory </>) . (read (show contractHash) <.>)
+          let contractFilePath = mkFilePath "contract"
+          let adjacencyFilePath = mkFilePath "adjacency"
+          let closureFilePath = mkFilePath "closure"
+          guard =<< doesFileExist contractFilePath
+          guard =<< doesFileExist adjacencyFilePath
+          guard =<< doesFileExist closureFilePath
+          contractBytesCompressed <- liftIO $ LBS.readFile contractFilePath
+          adjacencyBytes <- liftIO $ LBS.readFile adjacencyFilePath
+          closureBytes <- liftIO $ LBS.readFile closureFilePath
+          let contractBytes = decompress contractBytesCompressed
+          let contract = runGet get contractBytes
+          --- Must decode as list, not set. Set's Get instance apparently uses fromDistinctAscList.
+          let adjacency = Set.fromList $ runGet get adjacencyBytes
+          let closure = Set.fromList $ runGet get closureBytes
+          pure ContractWithAdjacency{..}
+
     createContractStagingArea storeLockfile = do
       -- Use a UUID as the staging area directory name.
       uuid <- liftIO nextRandom
@@ -119,8 +154,8 @@ createContractStore ContractStoreOptions{..} = do
                 let filePath = basePath <.> "contract"
                 -- Compress the contract file for size efficiency.
                 liftIO $ LBS.writeFile filePath $ compress $ runPut $ put contract
-            , writeIndex "adjacency" adjacency
-            , writeIndex "closure" closure
+            , writeIndex "adjacency" adjacencyHM
+            , writeIndex "closure" closureHM
             ]
 
         -- | Move a file from the staging area to the store. Do not use rename
@@ -154,7 +189,7 @@ createContractStore ContractStoreOptions{..} = do
                       -- Compute the adjacency and closure information.
                       record <- computeRecord closures hash contract
                       -- Update the closures and buffer.
-                      pure ((HashMap.insert hash (closure record) closures, HashMap.insert hash record buffer), hash)
+                      pure ((HashMap.insert hash (closureHM record) closures, HashMap.insert hash record buffer), hash)
         , flush =
             -- only run when open, leave staging area open.
             whenOpen True do
@@ -168,7 +203,7 @@ createContractStore ContractStoreOptions{..} = do
               -- get all files in the staging area
               files <- listDirectory directory
               -- lock the store
-              withLockFile def storeLockfile do
+              withLockFile lockingParameters storeLockfile do
                 -- concurrently move all files from the staging area to the store
                 results <- pooledMapConcurrently moveStagingFile files
                 -- Extract the hashes which were moved.
@@ -186,8 +221,8 @@ createContractStore ContractStoreOptions{..} = do
 -- | Computes the adjacency and closure information for a merkleized contract.
 computeRecord :: MonadIO m => HashMap DatumHash (HashSet DatumHash) -> DatumHash -> Contract -> m ContractRecord
 computeRecord closures hash contract = do
-  let adjacency = computeAdjacency mempty contract
-  closure <- computeClosure hash closures adjacency
+  let adjacencyHM = computeAdjacency mempty contract
+  closureHM <- computeClosure hash closures adjacencyHM
   pure ContractRecord{..}
 
 -- | Computes the adjacency information for a merkleized contract.
@@ -229,12 +264,12 @@ computeClosure rootHash closures = fmap (HashSet.insert rootHash . fold) . trave
 closeHash :: DatumHash
 closeHash = fromCardanoDatumHash $ hashScriptData $ toCardanoScriptData $ toDatum Close
 
--- | A contract with its adjacency and closure information.
+-- | A contract with its adjacency and closure information. Like ContractWithAdjacency but uses Hash Maps.
 data ContractRecord = ContractRecord
   { contract :: Contract -- ^ The contract.
   , hash :: DatumHash  -- ^ The hash of the contract (script datum hash)
-  , adjacency :: HashSet DatumHash -- ^ The set of continuation hashes explicitly contained in the contract.
-  , closure :: HashSet DatumHash -- ^ The set of hashes contained in the contract and all recursive continuations of the contract.
+  , adjacencyHM :: HashSet DatumHash -- ^ The set of continuation hashes explicitly contained in the contract.
+  , closureHM :: HashSet DatumHash -- ^ The set of hashes contained in the contract and all recursive continuations of the contract.
                                  -- includes the hash of the contract its self.
                                  -- Does not contain the hash of the close contract.
   }

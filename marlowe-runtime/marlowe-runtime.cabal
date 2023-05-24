@@ -200,13 +200,10 @@ library sync-api
     , base >= 4.9 && < 5
     , binary >= 0.8.8 && < 0.9
     , containers >= 0.6.5 && < 0.7
-    , hs-opentelemetry-api >= 0.0.3 && < 0.0.4
     , marlowe-chain-sync ==0.0.1
     , marlowe-protocols ==0.1.0.0
     , marlowe-runtime ==0.0.1
     , marlowe-runtime:discovery-api ==0.0.1
-    , transformers >= 0.5.6 && < 0.6
-    , typed-protocols ==0.1.0.0
     , unliftio >= 0.2.1 && < 0.3
 
 library contract-api
@@ -214,6 +211,7 @@ library contract-api
   hs-source-dirs:   contract-api
   visibility: public
   exposed-modules:
+    Language.Marlowe.Runtime.Contract.Api
     Language.Marlowe.Protocol.Load.Client
     Language.Marlowe.Protocol.Load.Server
     Language.Marlowe.Protocol.Load.Types
@@ -222,6 +220,7 @@ library contract-api
     , base >= 4.9 && < 5
     , binary >= 0.8.8 && < 0.9
     , cardano-api ==1.35.4
+    , containers >= 0.6.5 && < 0.7
     , hs-opentelemetry-api >= 0.0.3 && < 0.0.4
     , marlowe-cardano ==0.1.0.3
     , marlowe-chain-sync ==0.0.1
@@ -238,6 +237,7 @@ library contract
   exposed-modules:
     Language.Marlowe.Runtime.Contract
     Language.Marlowe.Runtime.Contract.LoadServer
+    Language.Marlowe.Runtime.Contract.QueryServer
     Language.Marlowe.Runtime.Contract.Store
     Language.Marlowe.Runtime.Contract.Store.Memory
     Language.Marlowe.Runtime.Contract.Store.File
@@ -248,7 +248,6 @@ library contract
     , bytestring >= 0.10.12 && < 0.12
     , cardano-api ==1.35.4
     , containers >= 0.6.5 && < 0.7
-    , data-default >= 0.7.1 && < 0.8
     , eventuo11y ^>= { 0.9, 0.10 }
     , eventuo11y-extras ==0.1.0.0
     , exceptions >= 0.10 && < 0.11
@@ -260,6 +259,7 @@ library contract
     , marlowe-runtime ==0.0.1
     , marlowe-runtime:contract-api ==0.0.1
     , plutus-ledger-api ==1.0.0.1
+    , transformers >= 0.5.6 && < 0.6
     , typed-protocols ==0.1.0.0
     , unliftio >= 0.2.1 && < 0.3
     , unordered-containers >= 0.2.19 && < 0.3
@@ -412,9 +412,9 @@ library proxy-api
     , base >= 4.9 && < 5
     , binary >= 0.8.8 && < 0.9
     , marlowe-protocols ==0.1.0.0
+    , marlowe-runtime:contract-api ==0.0.1
     , marlowe-runtime:discovery-api ==0.0.1
     , marlowe-runtime:history-api ==0.0.1
-    , marlowe-runtime:contract-api ==0.0.1
     , marlowe-runtime:sync-api ==0.0.1
     , marlowe-runtime:tx-api ==0.0.1
     , typed-protocols ==0.1.0.0

@@ -19,13 +19,11 @@ import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Reader (ask)
 import Control.Monad.Trans.Reader (ReaderT(..))
 import Control.Monad.With
-import Data.Either (fromRight)
 import Data.GeneralAllocate
 import qualified Data.Set.NonEmpty as NESet
 import Data.String (fromString)
 import qualified Data.Text as T
 import Data.Version (showVersion)
-import Data.Void (Void)
 import qualified Database.PostgreSQL.LibPQ as PQ
 import Hasql.Connection (withLibPQConnection)
 import qualified Hasql.Pool as Pool
@@ -40,7 +38,7 @@ import Network.Protocol.Connection (ClientConnectorTraced, SomeConnectorTraced(.
 import Network.Protocol.Driver.Trace (TcpClientSelector, runConnectorTraced, tcpClientTraced)
 import Network.Protocol.Handshake.Client (handshakeClientConnectorTraced)
 import Network.Protocol.Handshake.Types (Handshake)
-import Network.Protocol.Query.Client (QueryClient, liftQuery, queryClientPeer)
+import Network.Protocol.Query.Client (QueryClient, queryClientPeer, request)
 import Network.Protocol.Query.Types (Query)
 import Network.Socket (AddrInfo(..), HostName, PortNumber, SocketType(..), defaultHints)
 import Observe.Event.Backend (EventBackend, hoistEventBackend, injectSelector)
@@ -86,7 +84,7 @@ run Options{..} = bracket (Pool.acquire 100 (Just 5000000) (fromString databaseU
     NESet.IsNonEmpty scripts -> pure scripts
   withTracer \tracer ->
     runAppM (tracerEventBackend tracer $ renderRootSelectorOTel dbName dbUser dbHost dbPort) do
-      securityParameter <- queryChainSync GetSecurityParameter
+      securityParameter <- queryChainSync $ request GetSecurityParameter
       flip runComponent_ () proc _ -> do
         probes <- marloweIndexer -< MarloweIndexerDependencies
           { chainSyncConnector = SomeConnectorTraced (injectSelector ChainSeekClient)
@@ -125,10 +123,8 @@ run Options{..} = bracket (Pool.acquire 100 (Just 5000000) (fromString databaseU
     chainSyncQueryConnector = handshakeClientConnectorTraced
       $ tcpClientTraced (injectSelector ChainQueryClient) chainSeekHost chainSeekQueryPort queryClientPeer
 
-    queryChainSync :: ChainSyncQuery Void e a -> AppM Span a
-    queryChainSync = fmap (fromRight $ error "failed to query chain sync server")
-      . runConnectorTraced (injectSelector ChainQueryClient) chainSyncQueryConnector
-      . liftQuery
+    queryChainSync :: QueryClient ChainSyncQuery (AppM Span) a -> AppM Span a
+    queryChainSync = runConnectorTraced (injectSelector ChainQueryClient) chainSyncQueryConnector
 
 runAppM :: EventBackend IO r RootSelector -> AppM r a -> IO a
 runAppM eventBackend = flip runReaderT (hoistEventBackend liftIO eventBackend) . unAppM

@@ -13,7 +13,6 @@ import Control.Concurrent.Component
 import Control.Concurrent.Component.Probes
 import Control.Concurrent.STM (STM, atomically)
 import Control.Monad.Event.Class (MonadInjectEvent)
-import Data.Void
 import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncQuery, RuntimeChainSeekClient)
 import Language.Marlowe.Runtime.Core.Api (MarloweVersion(..))
 import Language.Marlowe.Runtime.Core.ScriptRegistry (MarloweScripts)
@@ -25,6 +24,7 @@ import Language.Marlowe.Runtime.Transaction.Submit (SubmitJob)
 import Network.Protocol.Connection (SomeClientConnectorTraced, SomeConnectionSourceTraced)
 import Network.Protocol.Driver.Trace (HasSpanContext)
 import Network.Protocol.Job.Server (JobServer)
+import Network.Protocol.Query.Client (QueryClient)
 import UnliftIO (MonadUnliftIO)
 
 data TransactionDependencies r s m = TransactionDependencies
@@ -33,7 +33,7 @@ data TransactionDependencies r s m = TransactionDependencies
   , mkSubmitJob :: Tx BabbageEra -> STM (SubmitJob m)
   , loadWalletContext :: LoadWalletContext m
   , loadMarloweContext :: LoadMarloweContext m
-  , queryChainSync :: forall e a. ChainSyncQuery Void e a -> m a
+  , chainSyncQueryConnector :: SomeClientConnectorTraced (QueryClient ChainSyncQuery) r s m
   , getCurrentScripts :: forall v. MarloweVersion v -> MarloweScripts
   }
 

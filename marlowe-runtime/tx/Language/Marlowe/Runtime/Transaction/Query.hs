@@ -1,3 +1,4 @@
+{-# LANGUAGE ApplicativeDo #-}
 {-# LANGUAGE ExplicitNamespaces #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
@@ -12,6 +13,7 @@ import qualified Cardano.Api as C
 import Control.Error (hush)
 import Control.Error.Util (note)
 import Control.Monad.Event.Class
+import Control.Monad.Trans.Class (lift)
 import Data.Foldable (find)
 import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.List.NonEmpty as NE
@@ -55,7 +57,7 @@ import Language.Marlowe.Runtime.Transaction.Constraints
 import Network.Protocol.ChainSeek.Client
 import Network.Protocol.Connection (SomeClientConnectorTraced)
 import Network.Protocol.Driver.Trace (HasSpanContext, runSomeConnectorTraced)
-import Network.Protocol.Query.Client (QueryClient, liftQuery)
+import Network.Protocol.Query.Client (QueryClient, request)
 import Observe.Event.Explicit (addField)
 import UnliftIO (MonadUnliftIO)
 
@@ -207,10 +209,10 @@ loadMarloweContext getScripts networkId chainSyncConnector chainSyncQueryConnect
           Genesis -> error "Roll forward to Genesis"
           At blockHeader -> case scriptUtxo >>= \u -> (u,) <$> Map.lookup u txs of
             Nothing -> pure $ clientFollowContract version $ updateContext blockHeader Nothing txs contexts
-            Just (u, scriptConsumer) -> do
-              systemStart <- fromJust . hush <$> runSomeConnectorTraced chainSyncQueryConnector (liftQuery GetSystemStart)
-              eraHistory <- fromJust . hush <$> runSomeConnectorTraced chainSyncQueryConnector (liftQuery GetEraHistory)
-              case extractMarloweTransaction version systemStart eraHistory contractId marloweAddress payoutScriptHash u blockHeader scriptConsumer of
+            Just (u, scriptConsumer) -> runSomeConnectorTraced chainSyncQueryConnector do
+              systemStart <- request GetSystemStart
+              eraHistory <- request GetEraHistory
+              lift case extractMarloweTransaction version systemStart eraHistory contractId marloweAddress payoutScriptHash u blockHeader scriptConsumer of
                 Left e -> do
                   emitImmediateEventFields_ ExtractMarloweTransactionFailed [e]
                   pure $ SendMsgDone $ Left $ ExtractMarloweTransactionError e

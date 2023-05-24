@@ -11,131 +11,63 @@
 module Network.Protocol.Query.Server
   where
 
+import Control.Arrow ((***))
 import Network.Protocol.Peer.Trace
 import Network.Protocol.Query.Types
 import Network.TypedProtocol
 
 -- | A generic server for the query protocol.
-newtype QueryServer query m a = QueryServer { runQueryServer :: m (ServerStInit query m a) }
+newtype QueryServer req m a = QueryServer { runQueryServer :: m (ServerStReq req m a) }
+  deriving Functor
 
--- | In the 'StInit' state, the client has agency. The server must be prepared
--- to handle:
---
--- * A request message
-newtype ServerStInit query m a = ServerStInit
-    { recvMsgRequest
-        :: forall delimiter err results
-         . query delimiter err results
-        -> m (ServerStNext query 'CanReject delimiter err results m a)
+data ServerStReq req m a = ServerStReq
+    { recvMsgRequest :: forall x . ReqTree req x -> m (x, ServerStReq req m a)
+    , recvMsgDone :: m a
     } deriving Functor
-
--- | In the 'StNext' state, the server has agency. It can send either:
---
--- * A next page message with a page of results
--- * A rejection message with an error (as long as no previous pages have been sent.
-data ServerStNext query (k :: StNextKind) delimiter err results m a where
-  SendMsgReject
-    :: err
-    -> a
-    -> ServerStNext query 'CanReject delimiter err results m a
-  SendMsgNextPage
-    :: results
-    -> Maybe delimiter
-    -> ServerStPage query delimiter err results m a
-    -> ServerStNext query k delimiter err results m a
-
-deriving instance Functor m => Functor (ServerStNext query k delimiter err results m)
-
--- | In the 'StPage' state, the client has agency. The server must be prepared
--- to handle either:
---
--- * A request next message
--- * A done message
-data ServerStPage query delimiter err results m a = ServerStPage
-  { recvMsgRequestNext :: delimiter -> m (ServerStNext query 'MustReply delimiter err results m a)
-  , recvMsgDone        :: m a
-  } deriving Functor
 
 -- | Change the underlying monad type a server runs in with a natural
 -- transformation.
 hoistQueryServer
-  :: forall query m n a
+  :: forall req m n a
    . Functor m
   => (forall x. m x -> n x)
-  -> QueryServer query m a
-  -> QueryServer query n a
-hoistQueryServer phi = QueryServer . phi . fmap hoistInit . runQueryServer
+  -> QueryServer req m a
+  -> QueryServer req n a
+hoistQueryServer f = QueryServer . f . fmap hoistReq . runQueryServer
   where
-  hoistInit ServerStInit{..} = ServerStInit
-    { recvMsgRequest = phi . fmap hoistNextCanReject . recvMsgRequest
-    }
-
-  hoistNextCanReject
-    :: ServerStNext query k delimiter err results m a
-    -> ServerStNext query k delimiter err results n a
-  hoistNextCanReject = \case
-    SendMsgReject err a                    -> SendMsgReject err a
-    SendMsgNextPage results delimiter page -> SendMsgNextPage results delimiter $ hoistPage page
-
-  hoistPage
-    :: ServerStPage query delimiter err results m a
-    -> ServerStPage query delimiter err results n a
-  hoistPage ServerStPage{..} = ServerStPage
-    { recvMsgRequestNext = phi . fmap hoistNextCanReject . recvMsgRequestNext
-    , recvMsgDone = phi recvMsgDone
+  hoistReq ServerStReq{..} = ServerStReq
+    { recvMsgRequest = f . (fmap . fmap) hoistReq . recvMsgRequest
+    , recvMsgDone = f recvMsgDone
     }
 
 -- | Interpret a server as a typed-protocols peer.
 queryServerPeer
-  :: forall query m a
-   . (Functor m, IsQuery query)
-  => QueryServer query m a
-  -> PeerTraced (Query query) 'AsServer 'StInit m a
+  :: forall req m a
+   . (Functor m, Request req)
+  => QueryServer req m a
+  -> PeerTraced (Query req) 'AsServer 'StReq m a
 queryServerPeer QueryServer{..} =
-  EffectTraced $ peerInit <$> runQueryServer
+  EffectTraced $ peerReq <$> runQueryServer
   where
-  peerInit :: ServerStInit query m a -> PeerTraced (Query query) 'AsServer 'StInit m a
-  peerInit ServerStInit{..} =
-    AwaitTraced (ClientAgency TokInit) \(MsgRequest query) ->
-      peerNext TokCanReject (tagFromQuery query) $ recvMsgRequest query
+  peerReq :: ServerStReq req m a -> PeerTraced (Query req) 'AsServer 'StReq m a
+  peerReq ServerStReq{..} =
+    AwaitTraced (ClientAgency TokReq) \case
+      MsgRequest req -> Respond (ServerAgency $ TokRes $ tagFromReq req)
+        $ uncurry Response . (MsgRespond *** peerReq) <$> recvMsgRequest req
+      MsgDone -> Closed TokDone recvMsgDone
 
-  peerNext
-    :: forall k delimiter err results
-     . TokNextKind k
-    -> Tag query delimiter err results
-    -> m (ServerStNext query k delimiter err results m a)
-    -> AwaitTraced (Query query) 'AsServer ('StNext k delimiter err results :: Query query) m a
-  peerNext k tag = Respond (ServerAgency $ TokNext k tag) . fmap \case
-    SendMsgReject err a ->
-      Response (MsgReject err) $ DoneTraced TokDone a
-    SendMsgNextPage results delimiter page ->
-      Response (MsgNextPage results delimiter) $ peerPage tag page
-
-  peerPage
-    :: Tag query delimiter err results
-    -> ServerStPage query delimiter err results m a
-    -> PeerTraced (Query query) 'AsServer ('StPage delimiter err results) m a
-  peerPage tag ServerStPage{..} =
-    AwaitTraced (ClientAgency (TokPage tag)) \case
-      MsgRequestNext delimiter -> peerNext TokMustReply tag $ recvMsgRequestNext delimiter
-      MsgDone                  -> Closed TokDone recvMsgDone
-
--- | Create a server that does not return results in multiple pages. Requesting
--- next will always return the same results as the first page.
-
-liftHandler
-  :: forall query m a
-   . Monad m
-  => (forall delimiter err results. query delimiter err results -> m (a, Either err results))
-  -> QueryServer query m a
-liftHandler handle = QueryServer $ pure $ ServerStInit \query -> do
-  (a, result) <- handle query
-  pure case result of
-    Left err      -> SendMsgReject err a
-    Right results -> sendResults a results
+respond
+  :: forall req m
+   . Applicative m
+  => (forall a b. m a -> m b -> m (a, b))
+  -> (forall a. req a -> m a)
+  -> QueryServer req m ()
+respond merge handle = QueryServer $ pure server
   where
-    sendResults :: a -> results -> ServerStNext query k delimiter err results m a
-    sendResults a results = SendMsgNextPage results Nothing ServerStPage
-      { recvMsgDone = pure a
-      , recvMsgRequestNext = \_ -> pure $ sendResults a results
-      }
+    server = ServerStReq
+      { recvMsgDone = pure ()
+      , recvMsgRequest = fmap (,server) . handle'      }
+    handle' :: ReqTree req a -> m a
+    handle' = \case
+      ReqLeaf req -> handle req
+      ReqBin l r -> handle' l `merge` handle' r

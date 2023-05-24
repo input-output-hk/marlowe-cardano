@@ -20,6 +20,7 @@ import Language.Marlowe.Runtime.CLI.Command.Apply
 import Language.Marlowe.Runtime.CLI.Command.Create (CreateCommand, createCommandParser, runCreateCommand)
 import Language.Marlowe.Runtime.CLI.Command.Load
 import Language.Marlowe.Runtime.CLI.Command.Log (LogCommand, logCommandParser, runLogCommand)
+import Language.Marlowe.Runtime.CLI.Command.Query
 import Language.Marlowe.Runtime.CLI.Command.Submit (SubmitCommand, runSubmitCommand, submitCommandParser)
 import Language.Marlowe.Runtime.CLI.Command.Tx (TxCommand)
 import Language.Marlowe.Runtime.CLI.Command.Withdraw (WithdrawCommand, runWithdrawCommand, withdrawCommandParser)
@@ -44,6 +45,7 @@ data Command
   | Create (TxCommand CreateCommand)
   | Log LogCommand
   | Load LoadCommand
+  | Query QueryCommand
   | Submit SubmitCommand
   | Withdraw (TxCommand WithdrawCommand)
 
@@ -73,6 +75,10 @@ getOptions = do
           , command "load" $ Load <$> loadCommandParser
           ]
       , hsubparser $ mconcat
+          [ commandGroup "General commands"
+          , command "query" $ Query <$> queryCommandParser
+          ]
+      , hsubparser $ mconcat
           [ commandGroup "Low level commands"
           , command "submit" $ Submit <$> submitCommandParser
           ]
@@ -94,6 +100,7 @@ runCommand = \case
   Create cmd -> runCreateCommand cmd
   Log cmd -> runLogCommand cmd
   Submit cmd -> runSubmitCommand cmd
+  Query cmd -> runQueryCommand cmd
   Withdraw cmd -> runWithdrawCommand cmd
   Load cmd -> runLoadCommand cmd
 

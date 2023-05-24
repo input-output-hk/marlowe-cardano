@@ -35,6 +35,7 @@ import Network.Protocol.Connection (SomeConnectionSourceTraced(..))
 import Network.Protocol.Driver (TcpServerDependencies(..))
 import Network.Protocol.Driver.Trace (tcpServerTraced)
 import Network.Protocol.Handshake.Server (handshakeConnectionSourceTraced)
+import Network.Protocol.Query.Server (queryServerPeer)
 import Network.Socket (HostName, PortNumber)
 import Observe.Event.Backend (EventBackend, hoistEventBackend, injectSelector)
 import Observe.Event.Render.OpenTelemetry (tracerEventBackend)
@@ -89,7 +90,7 @@ run Options{..} = bracket (Pool.acquire 100 (Just 5000000) (fromString databaseU
         querySource <- tcpServerTraced (injectSelector MarloweQueryServer) -< TcpServerDependencies
           { host
           , port = queryPort
-          , toPeer = id
+          , toPeer = queryServerPeer
           }
 
         probes <- sync -< SyncDependencies

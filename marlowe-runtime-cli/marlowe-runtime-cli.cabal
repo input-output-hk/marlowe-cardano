@@ -57,6 +57,8 @@ executable marlowe-runtime-cli
     Language.Marlowe.Runtime.CLI.Command.Create
     Language.Marlowe.Runtime.CLI.Command.Load
     Language.Marlowe.Runtime.CLI.Command.Log
+    Language.Marlowe.Runtime.CLI.Command.Query
+    Language.Marlowe.Runtime.CLI.Command.Query.Store
     Language.Marlowe.Runtime.CLI.Command.Submit
     Language.Marlowe.Runtime.CLI.Command.Tx
     Language.Marlowe.Runtime.CLI.Command.Withdraw
@@ -67,6 +69,7 @@ executable marlowe-runtime-cli
     Paths_marlowe_runtime_cli
   build-depends:
     , aeson
+    , aeson-pretty
     , ansi-terminal
     , base >= 4.9 && < 5
     , base16

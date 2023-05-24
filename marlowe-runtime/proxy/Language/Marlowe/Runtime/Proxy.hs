@@ -20,10 +20,10 @@ import qualified Language.Marlowe.Protocol.HeaderSync.Types as Header
 import Language.Marlowe.Protocol.Load.Types (MarloweLoad, SomePeerHasAgency(..))
 import qualified Language.Marlowe.Protocol.Load.Types as Load
 import Language.Marlowe.Protocol.Query.Types (MarloweQuery)
-import qualified Language.Marlowe.Protocol.Query.Types as Query
 import Language.Marlowe.Protocol.Server (MarloweRuntimeServer(..))
 import Language.Marlowe.Protocol.Sync.Types (MarloweSync)
 import qualified Language.Marlowe.Protocol.Sync.Types as Sync
+import Language.Marlowe.Runtime.Contract.Api (ContractRequest)
 import Language.Marlowe.Runtime.Transaction.Api (MarloweTxCommand)
 import Network.Channel.Typed
 import Network.Protocol.Connection
@@ -41,6 +41,8 @@ import qualified Network.Protocol.Handshake.Types as Handshake
 import Network.Protocol.Job.Types (Job)
 import qualified Network.Protocol.Job.Types as Job
 import Network.Protocol.Peer.Trace
+import Network.Protocol.Query.Types (Query)
+import qualified Network.Protocol.Query.Types as Query
 import Network.TypedProtocol
 import Observe.Event.Backend (setAncestorEventBackend)
 import UnliftIO (MonadUnliftIO(..))
@@ -83,6 +85,7 @@ data Router r m = Router
   , connectMarloweQuery :: m (Channel (Handshake MarloweQuery) 'AsClient ('Handshake.StInit 'Query.StReq) m, r)
   , connectMarloweLoad :: m (Channel (Handshake MarloweLoad) 'AsClient ('Handshake.StInit ('Load.StProcessing 'Load.RootNode)) m, r)
   , connectTxJob :: m (Channel (Handshake (Job MarloweTxCommand)) 'AsClient ('Handshake.StInit 'Job.StInit) m, r)
+  , connectContractQuery :: m (Channel (Handshake (Query ContractRequest)) 'AsClient ('Handshake.StInit 'Query.StReq) m, r)
   }
 
 workerTraced
@@ -135,7 +138,7 @@ server useOpenRefAsParent Router{..} = MarloweRuntimeServer
         Header.MsgWait{} -> NextReceive $ ClientAgency Header.TokWait
   , recvMsgRunMarloweQuery = withHandshake useOpenRefAsParent (ClientAgency Query.TokReq) connectMarloweQuery \case
       ClientAgency _ -> \case
-        Query.MsgRequest req -> NextCall $ ServerAgency $ Query.TokRes $ Query.requestToSt req
+        Query.MsgRequest req -> NextCall $ ServerAgency $ Query.TokRes $ Query.tagFromReq req
         Query.MsgDone -> NextClose Query.TokDone
       ServerAgency _ -> \case
         Query.MsgRespond _ -> NextReceive $ ClientAgency Query.TokReq
@@ -173,6 +176,12 @@ server useOpenRefAsParent Router{..} = MarloweRuntimeServer
       ServerAgency (Job.TokAttach tag) -> \case
         Job.MsgAttached -> NextReceive $ ServerAgency $ Job.TokCmd tag
         Job.MsgAttachFailed -> NextClosed Job.TokDone
+  , recvMsgRunContractQuery = withHandshake useOpenRefAsParent (ClientAgency Query.TokReq) connectContractQuery \case
+      ClientAgency _ -> \case
+        Query.MsgRequest req -> NextCall $ ServerAgency $ Query.TokRes $ Query.tagFromReq req
+        Query.MsgDone -> NextClose Query.TokDone
+      ServerAgency _ -> \case
+        Query.MsgRespond _ -> NextReceive $ ClientAgency Query.TokReq
   }
 
 data NextAgency ps pr (st :: ps) (st' :: ps) where

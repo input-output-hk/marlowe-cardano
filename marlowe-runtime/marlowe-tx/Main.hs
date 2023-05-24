@@ -16,7 +16,6 @@ import Control.Monad.Event.Class
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Trans.Reader (ReaderT(..))
 import Control.Monad.With
-import Data.Either (fromRight)
 import Data.GeneralAllocate
 import qualified Data.Text as T
 import Data.Version (showVersion)
@@ -34,7 +33,7 @@ import Network.Protocol.Handshake.Client (handshakeClientConnectorTraced)
 import Network.Protocol.Handshake.Server (handshakeConnectionSourceTraced)
 import Network.Protocol.Job.Client (jobClientPeer)
 import Network.Protocol.Job.Server (jobServerPeer)
-import Network.Protocol.Query.Client (QueryClient, liftQuery, queryClientPeer)
+import Network.Protocol.Query.Client (QueryClient, queryClientPeer, request)
 import Network.Socket (HostName, PortNumber)
 import Observe.Event (EventBackend)
 import Observe.Event.Backend (hoistEventBackend, injectSelector)
@@ -93,7 +92,6 @@ run Options{..} = flip runComponent_ () proc _ -> do
       $ handshakeClientConnectorTraced
       $ tcpClientTraced (injectSelector ChainSyncQueryClient) chainSeekHost chainSeekQueryPort queryClientPeer
 
-    queryChainSync = fmap (fromRight $ error "failed to query chain sync server") . runSomeConnectorTraced chainSyncQueryConnector . liftQuery
   probes <- transaction -< TransactionDependencies
     { connectionSource = SomeConnectionSourceTraced (injectSelector Server)
         $ handshakeConnectionSourceTraced serverSource
@@ -104,9 +102,9 @@ run Options{..} = flip runComponent_ () proc _ -> do
         , ..
         }
     , loadMarloweContext = \v contractId -> do
-        networkId <- queryChainSync GetNetworkId
+        networkId <- runSomeConnectorTraced chainSyncQueryConnector $ request GetNetworkId
         Query.loadMarloweContext ScriptRegistry.getScripts networkId chainSyncConnector chainSyncQueryConnector v contractId
-    , loadWalletContext = Query.loadWalletContext $ queryChainSync . GetUTxOs
+    , loadWalletContext = Query.loadWalletContext $ runSomeConnectorTraced chainSyncQueryConnector . request . GetUTxOs
     , getCurrentScripts = ScriptRegistry.getCurrentScripts
     , ..
     }

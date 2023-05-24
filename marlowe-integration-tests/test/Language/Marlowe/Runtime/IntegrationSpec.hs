@@ -3,6 +3,7 @@ module Language.Marlowe.Runtime.IntegrationSpec
 
 import qualified Language.Marlowe.Runtime.Integration.ApplyInputs as Apply
 import qualified Language.Marlowe.Runtime.Integration.Basic as Basic
+import qualified Language.Marlowe.Runtime.Integration.Contract as Contract
 import qualified Language.Marlowe.Runtime.Integration.Create as Create
 import qualified Language.Marlowe.Runtime.Integration.Intersections as Integrations
 import qualified Language.Marlowe.Runtime.Integration.MarloweQuery as MarloweQuery
@@ -17,3 +18,4 @@ spec = describe "Marlowe runtime API" do
   describe "MarloweTxCommand" do
     Create.spec
     Apply.spec
+  Contract.spec

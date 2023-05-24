@@ -6,20 +6,22 @@ module Language.Marlowe.Protocol.Server
   where
 
 import Language.Marlowe.Protocol.Client
-  (liftMarloweHeaderSync, liftMarloweLoad, liftMarloweQuery, liftMarloweSync, liftTxJob)
+  (liftContractQuery, liftMarloweHeaderSync, liftMarloweLoad, liftMarloweQuery, liftMarloweSync, liftTxJob)
 import Language.Marlowe.Protocol.HeaderSync.Types (MarloweHeaderSync)
 import qualified Language.Marlowe.Protocol.HeaderSync.Types as Header
 import Language.Marlowe.Protocol.Load.Types (MarloweLoad)
 import qualified Language.Marlowe.Protocol.Load.Types as Load
 import Language.Marlowe.Protocol.Query.Types (MarloweQuery)
-import qualified Language.Marlowe.Protocol.Query.Types as Query
 import Language.Marlowe.Protocol.Sync.Types (MarloweSync)
 import qualified Language.Marlowe.Protocol.Sync.Types as Sync
 import Language.Marlowe.Protocol.Types
+import Language.Marlowe.Runtime.Contract.Api (ContractRequest)
 import Language.Marlowe.Runtime.Transaction.Api (MarloweTxCommand)
 import Network.Protocol.Job.Types (Job)
 import qualified Network.Protocol.Job.Types as Job
 import Network.Protocol.Peer.Trace
+import Network.Protocol.Query.Types (Query)
+import qualified Network.Protocol.Query.Types as Query
 import Network.TypedProtocol
 
 data MarloweRuntimeServer m a = MarloweRuntimeServer
@@ -28,6 +30,7 @@ data MarloweRuntimeServer m a = MarloweRuntimeServer
   , recvMsgRunMarloweQuery :: m (PeerTraced MarloweQuery 'AsServer 'Query.StReq m a)
   , recvMsgRunMarloweLoad :: m (PeerTraced MarloweLoad 'AsServer ('Load.StProcessing 'Load.RootNode) m a)
   , recvMsgRunTxJob :: m (PeerTraced (Job MarloweTxCommand) 'AsServer 'Job.StInit m a)
+  , recvMsgRunContractQuery :: m (PeerTraced (Query ContractRequest) 'AsServer 'Query.StReq m a)
   } deriving Functor
 
 hoistMarloweRuntimeServer :: Functor m => (forall x. m x -> n x) -> MarloweRuntimeServer m a -> MarloweRuntimeServer n a
@@ -37,6 +40,7 @@ hoistMarloweRuntimeServer f MarloweRuntimeServer{..} = MarloweRuntimeServer
   , recvMsgRunMarloweQuery = f $ hoistPeerTraced f <$> recvMsgRunMarloweQuery
   , recvMsgRunMarloweLoad = f $ hoistPeerTraced f <$> recvMsgRunMarloweLoad
   , recvMsgRunTxJob = f $ hoistPeerTraced f <$> recvMsgRunTxJob
+  , recvMsgRunContractQuery = f $ hoistPeerTraced f <$> recvMsgRunContractQuery
   , ..
   }
 
@@ -48,3 +52,4 @@ marloweRuntimeServerPeer MarloweRuntimeServer{..} =
     MsgRunMarloweQuery -> liftPeerTraced liftMarloweQuery <$> recvMsgRunMarloweQuery
     MsgRunMarloweLoad -> liftPeerTraced liftMarloweLoad <$> recvMsgRunMarloweLoad
     MsgRunTxJob -> liftPeerTraced liftTxJob <$> recvMsgRunTxJob
+    MsgRunContractQuery -> liftPeerTraced liftContractQuery <$> recvMsgRunContractQuery
