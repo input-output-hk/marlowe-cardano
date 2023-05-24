@@ -89,7 +89,7 @@ run = runComponent_ proc Options{..} -> do
         , connectMarloweQuery = tcpClientChannel (injectSelector MarloweQueryClient) syncHost marloweQueryPort
         , connectMarloweLoad = tcpClientChannel (injectSelector MarloweLoadClient) contractHost marloweLoadPort
         , connectTxJob = tcpClientChannel (injectSelector TxJobClient) txHost txPort
-        , connectContractQuery = tcpClientChannel (injectSelector ContractQueryClient) syncHost marloweQueryPort
+        , connectContractQuery = tcpClientChannel (injectSelector ContractQueryClient) contractHost contractQueryPort
         }
     , connectionSource = SomeConnectionSource
         $ handshakeConnectionSource connectionSource
@@ -154,7 +154,7 @@ getOptions = do
   marloweQueryPortParser <- optParserWithEnvDefault O.syncQueryPort
   contractHostParser <- optParserWithEnvDefault O.contractHost
   marloweLoadPortParser <- optParserWithEnvDefault O.loadPort
-  contractQueryPortParser <- optParserWithEnvDefault O.loadPort
+  contractQueryPortParser <- optParserWithEnvDefault O.contractQueryPort
   txHostParser <- optParserWithEnvDefault O.txHost
   txPortParser <- optParserWithEnvDefault O.txCommandPort
   execParser $ info

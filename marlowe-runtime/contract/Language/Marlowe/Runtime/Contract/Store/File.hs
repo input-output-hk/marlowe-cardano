@@ -91,22 +91,23 @@ createContractStore ContractStoreOptions{..} = do
           , adjacency = mempty
           , closure = Set.singleton closeHash
           }
-      | otherwise = runMaybeT $ withLockFile lockingParameters lockfile do
-        let mkFilePath = (contractStoreDirectory </>) . (read (show contractHash) <.>)
-        let contractFilePath = mkFilePath "contract"
-        let adjacencyFilePath = mkFilePath "adjacency"
-        let closureFilePath = mkFilePath "closure"
-        guard =<< doesFileExist contractFilePath
-        guard =<< doesFileExist adjacencyFilePath
-        guard =<< doesFileExist closureFilePath
-        contractBytesCompressed <- liftIO $ LBS.readFile contractFilePath
-        adjacencyBytes <- liftIO $ LBS.readFile adjacencyFilePath
-        closureBytes <- liftIO $ LBS.readFile closureFilePath
-        let contract = runGet get $ decompress contractBytesCompressed
-        --- Must decode as list, not set. Set's Get instance apparently uses fromDistinctAscList.
-        let adjacency = Set.fromList $ runGet get adjacencyBytes
-        let closure = Set.fromList $ runGet get closureBytes
-        pure ContractWithAdjacency{..}
+      | otherwise = withLockFile lockingParameters lockfile $ runMaybeT do
+          let mkFilePath = (contractStoreDirectory </>) . (read (show contractHash) <.>)
+          let contractFilePath = mkFilePath "contract"
+          let adjacencyFilePath = mkFilePath "adjacency"
+          let closureFilePath = mkFilePath "closure"
+          guard =<< doesFileExist contractFilePath
+          guard =<< doesFileExist adjacencyFilePath
+          guard =<< doesFileExist closureFilePath
+          contractBytesCompressed <- liftIO $ LBS.readFile contractFilePath
+          adjacencyBytes <- liftIO $ LBS.readFile adjacencyFilePath
+          closureBytes <- liftIO $ LBS.readFile closureFilePath
+          let contractBytes = decompress contractBytesCompressed
+          let contract = runGet get contractBytes
+          --- Must decode as list, not set. Set's Get instance apparently uses fromDistinctAscList.
+          let adjacency = Set.fromList $ runGet get adjacencyBytes
+          let closure = Set.fromList $ runGet get closureBytes
+          pure ContractWithAdjacency{..}
 
     createContractStagingArea storeLockfile = do
       -- Use a UUID as the staging area directory name.
