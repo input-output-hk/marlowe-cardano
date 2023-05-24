@@ -50,10 +50,10 @@ library
     Test.Integration.Marlowe
     Test.Integration.Marlowe.Local
   build-depends:
-      base >= 4.9 && < 5
     , aeson
     , async
     , async-components
+    , base >= 4.9 && < 5
     , bytestring
     , cardano-api
     , cardano-crypto-wrapper
@@ -62,27 +62,31 @@ library
     , containers
     , eventuo11y ^>= { 0.9, 0.10 }
     , eventuo11y-extras
+    , exceptions
+    , general-allocate
     , hasql
     , hasql-pool
     , http-client
-    , marlowe-cli
-    , marlowe-client
     , marlowe-chain-sync
     , marlowe-chain-sync:chain-indexer
     , marlowe-chain-sync:libchainsync
+    , marlowe-cli
+    , marlowe-client
     , marlowe-protocols
     , marlowe-runtime
+    , marlowe-runtime-web
+    , marlowe-runtime-web:server
+    , marlowe-runtime:contract
+    , marlowe-runtime:contract-api
     , marlowe-runtime:discovery-api
     , marlowe-runtime:history-api
     , marlowe-runtime:indexer
+    , marlowe-runtime:proxy
+    , marlowe-runtime:proxy-api
     , marlowe-runtime:sync
     , marlowe-runtime:sync-api
     , marlowe-runtime:tx
     , marlowe-runtime:tx-api
-    , marlowe-runtime:proxy
-    , marlowe-runtime:proxy-api
-    , marlowe-runtime-web
-    , marlowe-runtime-web:server
     , network
     , nonempty-containers
     , ouroboros-network
@@ -93,10 +97,10 @@ library
     , servant-client
     , stm
     , text
-    , general-allocate
     , time
     , time-units
     , transformers
+    , typed-protocols
     , unliftio
     , warp
 

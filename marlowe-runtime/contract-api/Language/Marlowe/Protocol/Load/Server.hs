@@ -1,6 +1,8 @@
 {-# LANGUAGE ApplicativeDo #-}
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeFamilyDependencies #-}
@@ -28,6 +30,47 @@ newtype MarloweLoadServer m a = MarloweLoadServer
   { runMarloweLoadServer :: m (ServerStProcessing 'RootNode m a)
   }
 
+instance Functor m => Functor (MarloweLoadServer m) where
+  fmap :: forall a b . (a -> b) -> MarloweLoadServer m a -> MarloweLoadServer m b
+  fmap f = MarloweLoadServer . fmap (mapProcessing SRootNode) . runMarloweLoadServer
+    where
+      mapProcessing :: SNode node -> ServerStProcessing node m a -> ServerStProcessing node m b
+      mapProcessing node = \case
+        SendMsgResume n canPush -> SendMsgResume n $ mapCanPush n node canPush
+
+      mapCanPush :: Nat n -> SNode node -> ServerStCanPush n node m a -> ServerStCanPush n node m b
+      mapCanPush Zero node (ServerStPaused ServerStCanPushZero{..}) = ServerStPaused  ServerStCanPushZero
+        { recvMsgRequestResume = mapProcessing node <$> recvMsgRequestResume
+        , recvMsgAbort = f <$> recvMsgAbort
+        }
+      mapCanPush (Succ n) node (ServerStCanPush ServerStCanPushSucc{..}) = ServerStCanPush ServerStCanPushSucc
+        { recvClose = fmap (mapPop n node) recvClose
+        , recvPay = (fmap . fmap . fmap) (fmap (mapCanPush n (SPayNode node))) . recvPay
+        , recvIf = fmap (mapCanPush n (SIfLNode node)) . recvIf
+        , recvWhen = fmap (mapCanPush n (SWhenNode node)) . recvWhen
+        , recvCase = \case
+            Refl -> case node of
+              SWhenNode node' -> fmap (mapCanPush n (SCaseNode node')) . recvCase Refl
+        , recvLet = fmap (fmap (mapCanPush n (SLetNode node))) . recvLet
+        , recvAssert = fmap (mapCanPush n (SAssertNode node)) . recvAssert
+        , recvMsgAbort = f <$> recvMsgAbort
+        }
+
+      mapPop :: Nat n -> SNode node -> ServerStPop n node m a -> ServerStPop n node m b
+      mapPop n node = case node of
+        SRootNode -> mapComplete
+        SPayNode node' -> mapPop n node'
+        SIfLNode node' -> mapCanPush n (SIfRNode node')
+        SIfRNode node' -> mapPop n node'
+        SWhenNode node' -> mapPop n node'
+        SCaseNode node' -> mapCanPush n (SWhenNode node')
+        SLetNode node' -> mapPop n node'
+        SAssertNode node' -> mapPop n node'
+
+      mapComplete :: ServerStComplete m a -> ServerStComplete m b
+      mapComplete = \case
+        SendMsgComplete hash a -> SendMsgComplete hash $ f <$> a
+
 -- A server in the Processing state.
 data ServerStProcessing (node :: Node) m a where
   -- | Instruct the client to resume pushing contract nodes.
@@ -51,9 +94,15 @@ type family ServerStPop (n :: N) (node :: Node) :: (Type -> Type) -> Type -> Typ
 -- A server in the CanPush state.
 data ServerStCanPush (n :: N) (node :: Node) m a where
   ServerStCanPush :: ServerStCanPushSucc n node m a -> ServerStCanPush ('S n) node m a
-  ServerStPaused :: m (ServerStProcessing node m a) -> ServerStCanPush 'Z node m a
+  ServerStPaused :: ServerStCanPushZero node m a -> ServerStCanPush 'Z node m a
 
--- A server in the CanPush state.
+-- A server in the CanPush state when the client has no pushes left.
+data ServerStCanPushZero (node :: Node) m a = ServerStCanPushZero
+  { recvMsgRequestResume :: m (ServerStProcessing node m a)
+  , recvMsgAbort :: m a
+  }
+
+-- A server in the CanPush state where the client has pushes left.
 data ServerStCanPushSucc (n :: N) (node :: Node) m a = ServerStCanPushSucc
   { recvClose :: m (ServerStPop n node m a)
     -- ^ Receive a close node, popping the current stack to the next incomplete
@@ -71,12 +120,58 @@ data ServerStCanPushSucc (n :: N) (node :: Node) m a = ServerStCanPushSucc
     -- ^ Receive a let node, then start receiving the sub-contract.
   , recvAssert :: Observation -> m (ServerStCanPush n ('AssertNode node) m a)
     -- ^ Receive an assert node, then start receiving the sub-contract.
+  , recvMsgAbort :: m a
   }
 
 -- A server in the Complete state.
 data ServerStComplete m a where
   -- | Send the hash of the merkleized root contract to the client.
   SendMsgComplete :: DatumHash -> m a -> ServerStComplete m a
+
+hoistMarloweLoadServer
+  :: forall m n a
+   . Functor m
+  => (forall x. m x -> n x)
+  -> MarloweLoadServer m a
+  -> MarloweLoadServer n a
+hoistMarloweLoadServer f = MarloweLoadServer . f . fmap (hoistProcessing SRootNode) . runMarloweLoadServer
+  where
+    hoistProcessing :: SNode node -> ServerStProcessing node m a -> ServerStProcessing node n a
+    hoistProcessing node = \case
+      SendMsgResume n canPush -> SendMsgResume n $ hoistCanPush node n canPush
+
+    hoistCanPush :: SNode node -> Nat i -> ServerStCanPush i node m a -> ServerStCanPush i node n a
+    hoistCanPush node Zero (ServerStPaused ServerStCanPushZero{..}) = ServerStPaused ServerStCanPushZero
+      { recvMsgRequestResume = f $ hoistProcessing node <$> recvMsgRequestResume
+      , recvMsgAbort = f recvMsgAbort
+      }
+    hoistCanPush node (Succ n) (ServerStCanPush ServerStCanPushSucc{..}) = ServerStCanPush ServerStCanPushSucc
+      { recvClose = f $ fmap (hoistPop node n) recvClose
+      , recvPay = (fmap . fmap . fmap) (f . fmap (hoistCanPush (SPayNode node) n)) . recvPay
+      , recvIf = f . fmap (hoistCanPush (SIfLNode node) n) . recvIf
+      , recvWhen = f . fmap (hoistCanPush (SWhenNode node) n) . recvWhen
+      , recvCase = \case
+          Refl -> case node of
+            SWhenNode node' -> f . fmap (hoistCanPush (SCaseNode node') n) . recvCase Refl
+      , recvLet = fmap (f . fmap (hoistCanPush (SLetNode node) n)) . recvLet
+      , recvAssert = f . fmap (hoistCanPush (SAssertNode node) n) . recvAssert
+      , recvMsgAbort = f recvMsgAbort
+      }
+
+    hoistPop :: SNode node -> Nat i -> ServerStPop i node m a -> ServerStPop i node n a
+    hoistPop node n = case node of
+      SRootNode -> hoistComplete
+      SPayNode node' -> hoistPop node' n
+      SIfLNode node' -> hoistCanPush (SIfRNode node') n
+      SIfRNode node' -> hoistPop node' n
+      SWhenNode node' -> hoistPop node' n
+      SCaseNode node' -> hoistCanPush (SWhenNode node') n
+      SLetNode node' -> hoistPop node' n
+      SAssertNode node' -> hoistPop node' n
+
+    hoistComplete :: ServerStComplete m a -> ServerStComplete n a
+    hoistComplete = \case
+      SendMsgComplete hash a -> SendMsgComplete hash $ f a
 
 -- ^ Interpret a client as a traced typed-protocols peer.
 marloweLoadServerPeer
@@ -100,41 +195,42 @@ marloweLoadServerPeer = EffectTraced . fmap (peerProcessing SRootNode) . runMarl
     -> SNode node
     -> ServerStCanPush n node m a
     -> PeerTraced MarloweLoad 'AsServer ('StCanPush n node) m a
-  peerCanPush Zero node (ServerStPaused recvRequestResume) = AwaitTraced (ClientAgency $ TokCanPush Zero node) \case
-    MsgRequestResume -> Respond (ServerAgency $ TokProcessing node) $ responseProcessing node <$> recvRequestResume
-  peerCanPush (Succ n) node (ServerStCanPush ServerStCanPushSucc{..}) = AwaitTraced (ClientAgency $ TokCanPush (Succ n) node) $ Receive . EffectTraced . \case
-    MsgPushClose -> peerPop n node <$> recvClose
+  peerCanPush Zero node (ServerStPaused ServerStCanPushZero{..}) = AwaitTraced (ClientAgency $ TokCanPush Zero node) \case
+    MsgAbort -> Closed TokDone recvMsgAbort
+    MsgRequestResume -> Respond (ServerAgency $ TokProcessing node) $ responseProcessing node <$> recvMsgRequestResume
+  peerCanPush (Succ n) node (ServerStCanPush ServerStCanPushSucc{..}) = AwaitTraced (ClientAgency $ TokCanPush (Succ n) node) $ \case
+    MsgAbort -> Closed TokDone recvMsgAbort
+    MsgPushClose -> peerPop n node recvClose
     MsgPushPay payor payee token value ->
-      peerCanPush n (SPayNode node) <$> recvPay payor payee token value
+      Receive $ EffectTraced $ peerCanPush n (SPayNode node) <$> recvPay payor payee token value
     MsgPushIf cond ->
-      peerCanPush n (SIfLNode node) <$> recvIf cond
+      Receive $ EffectTraced $ peerCanPush n (SIfLNode node) <$> recvIf cond
     MsgPushWhen timeout ->
-      peerCanPush n (SWhenNode node) <$> recvWhen timeout
+      Receive $ EffectTraced $ peerCanPush n (SWhenNode node) <$> recvWhen timeout
     MsgPushCase action -> case node of
-      SWhenNode st' -> peerCanPush n (SCaseNode st') <$> recvCase Refl action
+      SWhenNode st' -> Receive $ EffectTraced $ peerCanPush n (SCaseNode st') <$> recvCase Refl action
     MsgPushLet valueId value ->
-      peerCanPush n (SLetNode node) <$> recvLet valueId value
+      Receive $ EffectTraced $ peerCanPush n (SLetNode node) <$> recvLet valueId value
     MsgPushAssert obs ->
-      peerCanPush n (SAssertNode node) <$> recvAssert obs
+      Receive $ EffectTraced $ peerCanPush n (SAssertNode node) <$> recvAssert obs
 
   peerPop
     :: Nat n
     -> SNode node
-    -> ServerStPop n node m a
-    -> PeerTraced MarloweLoad 'AsServer (Pop n node) m a
+    -> m (ServerStPop n node m a)
+    -> AwaitTraced MarloweLoad 'AsServer (Pop n node) m a
   peerPop n node client = case node of
-    SRootNode -> peerComplete client
+    SRootNode -> Respond (ServerAgency TokComplete) $ peerComplete <$> client
     SPayNode node' -> peerPop n node' client
-    SIfLNode node' -> peerCanPush n (SIfRNode node') client
+    SIfLNode node' -> Receive $ EffectTraced $ peerCanPush n (SIfRNode node') <$> client
     SIfRNode node' -> peerPop n node' client
     SWhenNode node' -> peerPop n node' client
-    SCaseNode node' -> peerCanPush n (SWhenNode node') client
+    SCaseNode node' -> Receive $ EffectTraced $ peerCanPush n (SWhenNode node') <$> client
     SLetNode node' -> peerPop n node' client
     SAssertNode node' -> peerPop n node' client
 
-  peerComplete :: ServerStComplete m a -> PeerTraced MarloweLoad 'AsServer 'StComplete m a
-  peerComplete (SendMsgComplete hash next) = YieldTraced (ServerAgency TokComplete) (MsgComplete hash)
-    $ Cast
+  peerComplete :: ServerStComplete m a -> Response MarloweLoad 'AsServer 'StComplete m a
+  peerComplete (SendMsgComplete hash next) = Response (MsgComplete hash)
     $ EffectTraced
     $ DoneTraced TokDone <$> next
 
@@ -142,71 +238,71 @@ marloweLoadServerPeer = EffectTraced . fmap (peerProcessing SRootNode) . runMarl
 -- size and storage mechanism.
 pullContract
   :: forall m batchSize
-   . Applicative m
+   . Monad m
   => Nat ('S batchSize) -- ^ The maximum number of contracts to accept before processing.
-  -> (Contract -> (DatumHash, m ())) -- ^ A callback that computes the hash of a contract and returns an action to await its saving.
-  -> MarloweLoadServer m Contract
-pullContract batchSize save =
-  MarloweLoadServer $ pure $ SendMsgResume batchSize $ pull (pure ()) batchSize StateRoot
+  -> (Contract -> m DatumHash) -- ^ A callback that computes the hash of a contract and stages it for saving.
+  -> m () -- ^ An action that flushes queued contracts.
+  -> MarloweLoadServer m (Maybe Contract)
+pullContract batchSize stageContract flush =
+  MarloweLoadServer $ pure $ SendMsgResume batchSize $ pull batchSize StateRoot
   where
     pull
-      :: m ()
-      -> Nat n
+      :: Nat n
       -> PeerState node
-      -> ServerStCanPush n node m Contract
-    pull awaitSaves Zero state = ServerStPaused do
-      awaitSaves
-      pure $ SendMsgResume batchSize $ pull (pure ()) batchSize state
-    pull awaitSaves (Succ n) state = ServerStCanPush ServerStCanPushSucc
-      { recvClose = popState awaitSaves n state Close
+      -> ServerStCanPush n node m (Maybe Contract)
+    pull Zero state = ServerStPaused ServerStCanPushZero
+      { recvMsgAbort = pure Nothing
+      , recvMsgRequestResume = do
+          flush
+          pure $ SendMsgResume batchSize $ pull batchSize state
+      }
+    pull (Succ n) state = ServerStCanPush ServerStCanPushSucc
+      { recvClose = popState n state Close
       , recvPay = \payor payee token value ->
-          pure $ pull awaitSaves n (StatePay payor payee token value state)
+          pure $ pull n (StatePay payor payee token value state)
       , recvIf = \cond ->
-          pure $ pull awaitSaves n (StateIfL cond state)
+          pure $ pull n (StateIfL cond state)
       , recvWhen = \timeout ->
-          pure $ pull awaitSaves n (StateWhen timeout [] state)
+          pure $ pull n (StateWhen timeout [] state)
       , recvCase = \Refl action -> case state of
           StateWhen timeout cases st' ->
-            pure $ pull awaitSaves n (StateCase action timeout cases st')
+            pure $ pull n (StateCase action timeout cases st')
       , recvLet = \valueId value ->
-          pure $ pull awaitSaves n (StateLet valueId value state)
+          pure $ pull n (StateLet valueId value state)
       , recvAssert = \obs ->
-          pure $ pull awaitSaves n (StateAssert obs state)
+          pure $ pull n (StateAssert obs state)
+      , recvMsgAbort = pure Nothing
       }
 
-    popState :: m () -> Nat n -> PeerState node -> Contract -> m (ServerStPop n node m Contract)
-    popState awaitSaves n state contract = case state of
+    popState :: Nat n -> PeerState node -> Contract -> m (ServerStPop n node m (Maybe Contract))
+    popState n state contract = case state of
       StateRoot -> case contract of
-        Close -> pure $ SendMsgComplete closeHash $ pure contract
+        Close -> pure $ SendMsgComplete closeHash $ pure $ Just contract
         _ -> do
-          let (hash, awaitSave) = save contract
-          awaitSaves
-          awaitSave
-          pure $ SendMsgComplete hash $ pure contract
+          hash <- stageContract contract
+          flush
+          pure $ SendMsgComplete hash $ pure $ Just contract
       StatePay payor payee token value st' ->
-        popState awaitSaves n st' (Pay payor payee token value contract)
+        popState n st' (Pay payor payee token value contract)
       StateIfL cond st' ->
-        pure $ pull awaitSaves n (StateIfR cond contract st')
+        pure $ pull n (StateIfR cond contract st')
       StateIfR cond tru st' ->
-        popState awaitSaves n st' (If cond tru contract)
+        popState n st' (If cond tru contract)
       StateWhen timeout cases st' ->
-        popState awaitSaves n st' (When (reverse cases) timeout contract)
-      StateCase action timeout cases st' -> pure case contract of
-        Close -> pull
-          awaitSaves
+        popState n st' (When (reverse cases) timeout contract)
+      StateCase action timeout cases st' -> case contract of
+        Close -> pure $ pull
           n
           (StateWhen timeout (Case action Close : cases) st')
-        _ ->
-          let (hash, awaitSave) = save contract
-          in
-            pull
-              (awaitSaves *> awaitSave)
-              n
-              (StateWhen timeout (MerkleizedCase action (toBuiltin $ unDatumHash hash) : cases) st')
+        _ -> do
+          hash <- stageContract contract
+          pure $ pull
+            n
+            (StateWhen timeout (MerkleizedCase action (toBuiltin $ unDatumHash hash) : cases) st')
       StateLet valueId value st' ->
-        popState awaitSaves n st' (Let valueId value contract)
+        popState n st' (Let valueId value contract)
       StateAssert obs st' ->
-        popState awaitSaves n st' (Assert obs contract)
+        popState n st' (Assert obs contract)
 
 closeHash :: DatumHash
 closeHash = fromCardanoDatumHash $ hashScriptData $ toCardanoScriptData $ toDatum Close

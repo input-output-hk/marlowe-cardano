@@ -384,6 +384,38 @@ in
     '';
   };
 
+  marlowe-contract = mkOperableWithProbes {
+    package = packages.marlowe-contract;
+    runtimeInputs = [ coreutils ];
+    runtimeScript = ''
+      #################
+      # REQUIRED VARS #
+      #################
+      # HOST, PORT: network binding
+      # STORE_DIR: location of the contract store directory
+      # HTTP_PORT: port number for the HTTP healthcheck server
+
+      #################
+      # OPTIONAL VARS #
+      #################
+      # OTEL_EXPORTER_OTLP_ENDPOINT: The url of the open telemetry collector
+
+      [ -z "''${HOST:-}" ] && echo "HOST env var must be set -- aborting" && exit 1
+      [ -z "''${PORT:-}" ] && echo "PORT env var must be set -- aborting" && exit 1
+      [ -z "''${STORE_DIR:-}" ] && echo "STORE_DIR env var must be set -- aborting" && exit 1
+      [ -z "''${HTTP_PORT:-}" ] && echo "HTTP_PORT env var must be set -- aborting" && exit 1
+
+      mkdir -p /tmp
+      export OTEL_SERVICE_NAME=marlowe-contract
+
+      ${packages.marlowe-contract}/bin/marlowe-contract \
+        --host "$HOST" \
+        --port "$PORT" \
+        --store-dir "$STORE_DIR" \
+        --http-port "$HTTP_PORT"
+    '';
+  };
+
   marlowe-proxy = mkOperableWithProbes {
     package = packages.marlowe-proxy;
     runtimeScript = ''
@@ -393,6 +425,7 @@ in
       # HOST, PORT: network binding
       # TX_HOST, TX_PORT: connection info to marlowe-tx
       # SYNC_HOST, MARLOWE_SYNC_PORT, MARLOWE_HEADER_SYNC_PORT, MARLOWE_QUERY_PORT: connection info to marlowe-sync
+      # CONTRACT_HOST, LOAD_PORT: connection info to marlowe-contract
       # HTTP_PORT: port number for the HTTP healthcheck server
 
       #################
@@ -404,6 +437,8 @@ in
       [ -z "''${PORT:-}" ] && echo "PORT env var must be set -- aborting" && exit 1
       [ -z "''${TX_HOST:-}" ] && echo "TX_HOST env var must be set -- aborting" && exit 1
       [ -z "''${TX_PORT:-}" ] && echo "TX_PORT env var must be set -- aborting" && exit 1
+      [ -z "''${CONTRACT_HOST:-}" ] && echo "CONTRACT_HOST env var must be set -- aborting" && exit 1
+      [ -z "''${LOAD_PORT:-}" ] && echo "LOAD_PORT env var must be set -- aborting" && exit 1
       [ -z "''${SYNC_HOST:-}" ] && echo "SYNC_HOST env var must be set -- aborting" && exit 1
       [ -z "''${MARLOWE_SYNC_PORT:-}" ] && echo "MARLOWE_SYNC_PORT env var must be set -- aborting" && exit 1
       [ -z "''${MARLOWE_HEADER_SYNC_PORT:-}" ] && echo "MARLOWE_HEADER_SYNC_PORT env var must be set -- aborting" && exit 1
@@ -411,6 +446,7 @@ in
       [ -z "''${HTTP_PORT:-}" ] && echo "HTTP_PORT env var must be set -- aborting" && exit 1
 
       ${wait-for-tcp}/bin/wait-for-tcp "$TX_HOST" "$TX_PORT"
+      ${wait-for-tcp}/bin/wait-for-tcp "$CONTRACT_HOST" "$LOAD_PORT"
       ${wait-for-tcp}/bin/wait-for-tcp "$SYNC_HOST" "$MARLOWE_QUERY_PORT"
 
       export OTEL_SERVICE_NAME=marlowe-proxy
@@ -422,6 +458,8 @@ in
         --marlowe-sync-port "$MARLOWE_SYNC_PORT" \
         --marlowe-header-port "$MARLOWE_HEADER_SYNC_PORT" \
         --marlowe-query-port "$MARLOWE_QUERY_PORT" \
+        --marlowe-contract-host "$CONTRACT_HOST" \
+        --marlowe-load-host "$LOAD_PORT" \
         --tx-host "$TX_HOST" \
         --tx-command-port "$TX_PORT" \
         --http-port "$HTTP_PORT"

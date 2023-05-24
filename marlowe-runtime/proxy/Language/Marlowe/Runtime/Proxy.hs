@@ -17,7 +17,8 @@ import Control.Monad.Trans.Resource (ResourceT, runResourceT)
 import Data.Proxy (Proxy(..))
 import Language.Marlowe.Protocol.HeaderSync.Types (MarloweHeaderSync)
 import qualified Language.Marlowe.Protocol.HeaderSync.Types as Header
-import Language.Marlowe.Protocol.Load.Types (SomePeerHasAgency(..))
+import Language.Marlowe.Protocol.Load.Types (MarloweLoad, SomePeerHasAgency(..))
+import qualified Language.Marlowe.Protocol.Load.Types as Load
 import Language.Marlowe.Protocol.Query.Types (MarloweQuery)
 import qualified Language.Marlowe.Protocol.Query.Types as Query
 import Language.Marlowe.Protocol.Server (MarloweRuntimeServer(..))
@@ -80,6 +81,7 @@ data Router r m = Router
   { connectMarloweSync :: m (Channel (Handshake MarloweSync) 'AsClient ('Handshake.StInit 'Sync.StInit) m, r)
   , connectMarloweHeaderSync :: m (Channel (Handshake MarloweHeaderSync) 'AsClient ('Handshake.StInit 'Header.StIdle) m, r)
   , connectMarloweQuery :: m (Channel (Handshake MarloweQuery) 'AsClient ('Handshake.StInit 'Query.StReq) m, r)
+  , connectMarloweLoad :: m (Channel (Handshake MarloweLoad) 'AsClient ('Handshake.StInit ('Load.StProcessing 'Load.RootNode)) m, r)
   , connectTxJob :: m (Channel (Handshake (Job MarloweTxCommand)) 'AsClient ('Handshake.StInit 'Job.StInit) m, r)
   }
 
@@ -137,6 +139,26 @@ server useOpenRefAsParent Router{..} = MarloweRuntimeServer
         Query.MsgDone -> NextClose Query.TokDone
       ServerAgency _ -> \case
         Query.MsgRespond _ -> NextReceive $ ClientAgency Query.TokReq
+  , recvMsgRunMarloweLoad = withHandshake useOpenRefAsParent (ServerAgency $ Load.TokProcessing Load.SRootNode) connectMarloweLoad \case
+      ClientAgency (Load.TokCanPush Zero node)  -> \case
+        Load.MsgRequestResume -> NextCall $ ServerAgency $ Load.TokProcessing node
+        Load.MsgAbort -> NextClose Load.TokDone
+      ClientAgency (Load.TokCanPush (Succ n) node)  -> \case
+        Load.MsgPushClose -> case Load.sPop n node of
+          SomePeerHasAgency (ClientAgency tok) -> NextCast $ ClientAgency tok
+          SomePeerHasAgency (ServerAgency tok) -> NextCall $ ServerAgency tok
+        Load.MsgPushPay{} -> NextCast $ ClientAgency $ Load.TokCanPush n $ Load.SPayNode node
+        Load.MsgPushIf{} -> NextCast $ ClientAgency $ Load.TokCanPush n $ Load.SIfLNode node
+        Load.MsgPushWhen{} -> NextCast $ ClientAgency $ Load.TokCanPush n $ Load.SWhenNode node
+        Load.MsgPushCase{} -> case node of
+          Load.SWhenNode node' -> NextCast $ ClientAgency $ Load.TokCanPush n $ Load.SCaseNode node'
+        Load.MsgPushLet{} -> NextCast $ ClientAgency $ Load.TokCanPush n $ Load.SLetNode node
+        Load.MsgPushAssert{} -> NextCast $ ClientAgency $ Load.TokCanPush n $ Load.SAssertNode node
+        Load.MsgAbort -> NextClose Load.TokDone
+      ServerAgency (Load.TokProcessing node) -> \case
+        Load.MsgResume n -> NextReceive $ ClientAgency $ Load.TokCanPush n node
+      ServerAgency Load.TokComplete -> \case
+        Load.MsgComplete{} -> NextClosed Load.TokDone
   , recvMsgRunTxJob = withHandshake useOpenRefAsParent (ClientAgency Job.TokInit) connectTxJob \case
       ClientAgency Job.TokInit -> \case
         Job.MsgExec cmd -> NextCall $ ServerAgency $ Job.TokCmd $ Job.tagFromCommand cmd
@@ -174,7 +196,7 @@ withHandshake useOpenRefAsParent agency openConnection nextAgency = do
   (Channel{..}, openRef) <- openConnection
   let
     runMain
-      | useOpenRefAsParent = localBackend (setAncestorEventBackend openRef)
+      | useOpenRefAsParent = fmap (hoistPeerTraced (localBackend (setAncestorEventBackend openRef))) . localBackend (setAncestorEventBackend openRef)
       | otherwise = id
   runMain do
     let OutboundChannel{..} = yield (ClientAgency Handshake.TokInit) $ Handshake.MsgHandshake $ Handshake.signature $ Proxy @ps

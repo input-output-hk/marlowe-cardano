@@ -45,6 +45,12 @@ syncHeaderPort = port "marlowe-header" "SYNC_MARLOWE_HEADER" 3725 "The port numb
 syncQueryPort :: CliOption OptionFields PortNumber
 syncQueryPort = port "marlowe-query" "SYNC_MARLOWE_QUERY" 3726 "The port number of the marlowe-sync server's query API."
 
+contractHost :: CliOption OptionFields HostName
+contractHost = host "marlowe-contract" "CONTRACT" "127.0.0.1" "The hostname of the Marlowe Runtime marlowe-contract server."
+
+loadPort :: CliOption OptionFields PortNumber
+loadPort = port "marlowe-load" "LOAD_MARLOWE_LOAD" 3727 "The port number of the marlowe-contract server's load API."
+
 historyHost :: CliOption OptionFields HostName
 historyHost = host "history" "HISTORY" "127.0.0.1" "The hostname of the Marlowe Runtime history server."
 

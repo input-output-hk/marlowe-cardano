@@ -1,5 +1,4 @@
 {-# LANGUAGE Arrows #-}
-{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE InstanceSigs #-}
@@ -13,6 +12,8 @@ module Main
 import Control.Concurrent.Component
 import Control.Concurrent.Component.Probes (ProbeServerDependencies(..), probeServer)
 import Control.Exception (bracket)
+import Control.Monad (when)
+import Control.Monad.Catch (MonadCatch, MonadMask, MonadThrow)
 import Control.Monad.Event.Class
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Trans.Reader (ReaderT(..))
@@ -20,18 +21,19 @@ import Control.Monad.With
 import Data.GeneralAllocate
 import qualified Data.Text as T
 import Data.Version (showVersion)
-import Language.Marlowe.Protocol.Server (marloweRuntimeServerPeer)
-import Language.Marlowe.Runtime.CLI.Option (optParserWithEnvDefault)
-import qualified Language.Marlowe.Runtime.CLI.Option as O
-import Language.Marlowe.Runtime.Proxy
+import Language.Marlowe.Protocol.Load.Server (marloweLoadServerPeer)
+import Language.Marlowe.Runtime.Contract
+import Language.Marlowe.Runtime.Contract.Store (traceContractStore)
+import Language.Marlowe.Runtime.Contract.Store.File
+  (ContractStoreOptions(..), createContractStore, defaultContractStoreOptions)
 import Logging (RootSelector(..), renderRootSelectorOTel)
-import Network.Channel.Typed
-import Network.Protocol.Connection (SomeConnectionSource(..), SomeConnectionSourceTraced(..))
-import Network.Protocol.Driver (TcpServerDependencies(..), tcpServer)
+import Network.Protocol.Connection (SomeConnectionSourceTraced(..))
+import Network.Protocol.Driver (TcpServerDependencies(..))
 import Network.Protocol.Driver.Trace (tcpServerTraced)
-import Network.Protocol.Handshake.Server (handshakeConnectionSource, handshakeConnectionSourceTraced)
+import Network.Protocol.Handshake.Server (handshakeConnectionSourceTraced)
 import Network.Socket (HostName, PortNumber)
-import Observe.Event.Backend (EventBackend, hoistEventBackend, injectSelector)
+import Network.TypedProtocol (unsafeIntToNat)
+import Observe.Event.Backend (EventBackend, hoistEventBackend)
 import Observe.Event.Render.OpenTelemetry (tracerEventBackend)
 import OpenTelemetry.Trace
 import Options.Applicative
@@ -52,10 +54,11 @@ import Options.Applicative
   , value
   )
 import Paths_marlowe_runtime
-import UnliftIO (MonadUnliftIO)
+import UnliftIO (BufferMode(LineBuffering), MonadUnliftIO, hSetBuffering, stdout)
 
 main :: IO ()
 main = do
+  hSetBuffering stdout LineBuffering
   options <- getOptions
   withTracer \tracer ->
     runAppM (tracerEventBackend tracer renderRootSelectorOTel) $ run options
@@ -71,39 +74,30 @@ main = do
       }
 
 run :: Options -> AppM Span ()
-run = runComponent_ proc Options{..} -> do
-  connectionSource <- tcpServer -< TcpServerDependencies
-    { toPeer = marloweRuntimeServerPeer
-    , ..
-    }
+run Options{..} = do
+  contractStore <- traceContractStore inject
+    <$> createContractStore ContractStoreOptions{..}
+  flip runComponent_ () proc _ -> do
+    loadSource <- tcpServerTraced inject -< TcpServerDependencies
+      { toPeer = marloweLoadServerPeer
+      , ..
+      }
 
-  connectionSourceTraced <- tcpServerTraced $ injectSelector MarloweRuntimeServer -< TcpServerDependencies
-    { toPeer = marloweRuntimeServerPeer
-    , port = portTraced
-    , ..
-    }
-  probes <- proxy -< ProxyDependencies
-    { router = Router
-        { connectMarloweSync = tcpClientChannel (injectSelector MarloweSyncClient) syncHost marloweSyncPort
-        , connectMarloweHeaderSync = tcpClientChannel (injectSelector MarloweHeaderSyncClient) syncHost marloweHeaderSyncPort
-        , connectMarloweQuery = tcpClientChannel (injectSelector MarloweQueryClient) syncHost marloweQueryPort
-        , connectMarloweLoad = tcpClientChannel (injectSelector MarloweLoadClient) contractHost marloweLoadPort
-        , connectTxJob = tcpClientChannel (injectSelector TxJobClient) txHost txPort
-        }
-    , connectionSource = SomeConnectionSource
-        $ handshakeConnectionSource connectionSource
-    , connectionSourceTraced = SomeConnectionSourceTraced (injectSelector MarloweRuntimeServer)
-        $ handshakeConnectionSourceTraced connectionSourceTraced
-    }
+    probes <- contract -< ContractDependencies
+      { loadSource = SomeConnectionSourceTraced inject
+          $ handshakeConnectionSourceTraced loadSource
+      , contractStore
+      , batchSize = unsafeIntToNat bufferSize
+      }
 
-  probeServer -< ProbeServerDependencies { port = fromIntegral httpPort, .. }
+    probeServer -< ProbeServerDependencies { port = fromIntegral httpPort, .. }
 
 runAppM :: EventBackend IO r RootSelector -> AppM r a -> IO a
 runAppM eventBackend = flip runReaderT (hoistEventBackend liftIO eventBackend) . unAppM
 
 newtype AppM r a = AppM
   { unAppM :: ReaderT (EventBackend (AppM r) r RootSelector) IO a
-  } deriving newtype (Functor, Applicative, Monad, MonadIO, MonadUnliftIO, MonadFail)
+  } deriving newtype (Functor, Applicative, Monad, MonadIO, MonadUnliftIO, MonadFail, MonadThrow, MonadCatch, MonadMask)
 
 instance MonadWith (AppM r) where
   type WithException (AppM r) = WithException IO
@@ -132,42 +126,23 @@ instance MonadEvent r RootSelector (AppM r) where
 data Options = Options
   { host :: HostName
   , port :: PortNumber
-  , portTraced :: PortNumber
-  , syncHost :: HostName
-  , marloweSyncPort :: PortNumber
-  , marloweHeaderSyncPort :: PortNumber
-  , marloweQueryPort :: PortNumber
-  , contractHost :: HostName
-  , marloweLoadPort :: PortNumber
-  , txHost :: HostName
-  , txPort :: PortNumber
+  , bufferSize :: Int
+  , contractStoreDirectory :: FilePath
+  , contractStoreStagingDirectory :: FilePath
   , httpPort :: PortNumber
   }
 
 getOptions :: IO Options
 getOptions = do
-  syncHostParser <- optParserWithEnvDefault O.syncHost
-  marloweSyncPortParser <- optParserWithEnvDefault O.syncSyncPort
-  marloweHeaderSyncPortParser <- optParserWithEnvDefault O.syncHeaderPort
-  marloweQueryPortParser <- optParserWithEnvDefault O.syncQueryPort
-  contractHostParser <- optParserWithEnvDefault O.contractHost
-  marloweLoadPortParser <- optParserWithEnvDefault O.loadPort
-  txHostParser <- optParserWithEnvDefault O.txHost
-  txPortParser <- optParserWithEnvDefault O.txCommandPort
+  ContractStoreOptions{..} <- defaultContractStoreOptions
   execParser $ info
     ( helper <*>
       ( Options
           <$> hostParser
           <*> portParser
-          <*> portTracedParser
-          <*> syncHostParser
-          <*> marloweSyncPortParser
-          <*> marloweHeaderSyncPortParser
-          <*> marloweQueryPortParser
-          <*> contractHostParser
-          <*> marloweLoadPortParser
-          <*> txHostParser
-          <*> txPortParser
+          <*> bufferSizeParser
+          <*> contractStoreDirectoryParser contractStoreDirectory
+          <*> contractStoreStagingDirectoryParser contractStoreStagingDirectory
           <*> httpPortParser
       )
     )
@@ -185,17 +160,41 @@ getOptions = do
     portParser = option auto $ mconcat
       [ long "port"
       , short 'p'
-      , value 3700
+      , value 3727
       , metavar "PORT_NUMBER"
-      , help "The port number to run the server on."
+      , help "The port number to run the marlowe load server on."
       , showDefault
       ]
 
-    portTracedParser = option auto $ mconcat
-      [ long "port-traced"
-      , value 3701
-      , metavar "PORT_NUMBER"
-      , help "The port number to run the server with tracing on."
+    bufferSizeParser = option readOption $ mconcat
+      [ long "buffer-size"
+      , short 'b'
+      , value 512
+      , metavar "INTEGER"
+      , help "The number of contracts to accept from the client before flushing to disk."
+      , showDefault
+      ]
+      where
+        readOption = do
+          i <- auto
+          when (i <= 0) do
+            fail "Positive batch size required"
+          pure i
+
+    contractStoreDirectoryParser defaultValue = strOption $ mconcat
+      [ long "store-dir"
+      , short 's'
+      , value defaultValue
+      , metavar "DIR"
+      , help "The root directory of the contract store"
+      , showDefault
+      ]
+
+    contractStoreStagingDirectoryParser defaultValue = strOption $ mconcat
+      [ long "store-staging-dir"
+      , value defaultValue
+      , metavar "DIR"
+      , help "The root directory of the contract store staging areas"
       , showDefault
       ]
 

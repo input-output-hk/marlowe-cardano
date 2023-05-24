@@ -127,6 +127,11 @@
             program = "${packages.marlowe-proxy}/bin/marlowe-proxy";
           };
 
+          marlowe-contract = {
+            type = "app";
+            program = "${packages.marlowe-contract}/bin/marlowe-contract";
+          };
+
           marlowe-web-server = {
             type = "app";
             program = "${packages.marlowe-web-server}/bin/marlowe-web-server";

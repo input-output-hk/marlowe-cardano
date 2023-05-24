@@ -55,6 +55,7 @@ executable marlowe-runtime-cli
     Language.Marlowe.Runtime.CLI.Command
     Language.Marlowe.Runtime.CLI.Command.Apply
     Language.Marlowe.Runtime.CLI.Command.Create
+    Language.Marlowe.Runtime.CLI.Command.Load
     Language.Marlowe.Runtime.CLI.Command.Log
     Language.Marlowe.Runtime.CLI.Command.Submit
     Language.Marlowe.Runtime.CLI.Command.Tx
@@ -65,34 +66,38 @@ executable marlowe-runtime-cli
   autogen-modules:
     Paths_marlowe_runtime_cli
   build-depends:
-      aeson
-    , base >= 4.9 && < 5
+    , aeson
     , ansi-terminal
+    , base >= 4.9 && < 5
     , base16
     , bytestring
     , cardano-api
     , containers
     , errors
+    , filepath
     , marlowe-cardano
     , marlowe-chain-sync
     , marlowe-client
     , marlowe-protocols
     , marlowe-runtime
     , marlowe-runtime:config
-    , marlowe-runtime:tx-api
+    , marlowe-runtime:contract-api
     , marlowe-runtime:history-api
     , marlowe-runtime:proxy-api
+    , marlowe-runtime:tx-api
     , monad-control
     , mtl
     , network
-    , plutus-ledger-api
-    , transformers
-    , transformers-base
     , optparse-applicative
+    , plutus-ledger-api
     , stm
     , stm-delay
     , text
     , time
+    , transformers
+    , transformers-base
+    , typed-protocols
+    , unliftio
     , wl-pprint
     , yaml
   if !os(windows)

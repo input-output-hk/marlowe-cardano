@@ -491,6 +491,31 @@ fromChainDatum = \case
 
 -- * Orphan instances
 
+instance Binary PV2.Address
+instance Binary PV2.Credential
+instance Binary PV2.CurrencySymbol
+instance Binary PV2.POSIXTime
+instance Binary PV2.PubKeyHash
+instance Binary PV2.StakingCredential where
+instance Binary PV2.TokenName
+instance Binary PV2.ValidatorHash
+instance Binary V1.Action
+instance Binary V1.Bound
+instance Binary V1.ChoiceId
+instance Binary V1.Contract
+instance Binary V1.Input
+instance Binary V1.InputContent
+instance Binary V1.MarloweData
+instance Binary V1.MarloweParams
+instance Binary V1.Observation
+instance Binary V1.Party
+instance Binary V1.Payee
+instance Binary V1.State
+instance Binary V1.Token
+instance Binary V1.ValueId
+instance Binary a => Binary (V1.Case a)
+instance Binary a => Binary (V1.Value a)
+
 instance Variations PV2.Address
 instance Variations PV2.Credential
 instance Variations PV2.CurrencySymbol
@@ -519,10 +544,16 @@ hasStakingPointer = \case
   V1.Address _ (PV2.Address _ (Just PV2.StakingPtr{})) -> True
   _ -> False
 
+instance Binary PV2.BuiltinByteString where
+  put = put . PV2.fromBuiltin
+  get = PV2.toBuiltin <$> get @ByteString
+
 instance Variations PV2.BuiltinByteString where
   variations = PV2.toBuiltin <$> variations @ByteString
 
-instance (Variations k, Variations v) => Variations (PV2.Map k v) where
+instance (Binary k, Binary v) => Binary (PV2.Map k v)
+
+instance (Variations k, Variations v) => Variations (PV2.Map k v)
 
 -- The following require manual instances to avoid infinite recursion.
 instance Variations V1.Contract where

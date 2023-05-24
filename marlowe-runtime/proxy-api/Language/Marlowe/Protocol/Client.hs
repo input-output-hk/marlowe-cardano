@@ -8,6 +8,8 @@ module Language.Marlowe.Protocol.Client
 import Language.Marlowe.Protocol.HeaderSync.Client
   (MarloweHeaderSyncClient, hoistMarloweHeaderSyncClient, marloweHeaderSyncClientPeer)
 import Language.Marlowe.Protocol.HeaderSync.Types (MarloweHeaderSync)
+import Language.Marlowe.Protocol.Load.Client (MarloweLoadClient, hoistMarloweLoadClient, marloweLoadClientPeer)
+import Language.Marlowe.Protocol.Load.Types (MarloweLoad)
 import Language.Marlowe.Protocol.Query.Client (MarloweQueryClient, hoistMarloweQueryClient, marloweQueryClientPeer)
 import Language.Marlowe.Protocol.Query.Types (MarloweQuery)
 import Language.Marlowe.Protocol.Sync.Client (MarloweSyncClient, hoistMarloweSyncClient, marloweSyncClientPeer)
@@ -23,6 +25,7 @@ data MarloweRuntimeClient m a
   = RunMarloweSyncClient (MarloweSyncClient m a)
   | RunMarloweHeaderSyncClient (MarloweHeaderSyncClient m a)
   | RunMarloweQueryClient (MarloweQueryClient m a)
+  | RunMarloweLoadClient (MarloweLoadClient m a)
   | RunTxClient (JobClient MarloweTxCommand m a)
   deriving Functor
 
@@ -31,6 +34,7 @@ hoistMarloweRuntimeClient f = \case
   RunMarloweSyncClient client -> RunMarloweSyncClient $ hoistMarloweSyncClient f client
   RunMarloweHeaderSyncClient client -> RunMarloweHeaderSyncClient $ hoistMarloweHeaderSyncClient f client
   RunMarloweQueryClient client -> RunMarloweQueryClient $ hoistMarloweQueryClient f client
+  RunMarloweLoadClient client -> RunMarloweLoadClient $ hoistMarloweLoadClient f client
   RunTxClient client -> RunTxClient $ hoistJobClient f client
 
 marloweRuntimeClientPeer
@@ -41,6 +45,7 @@ marloweRuntimeClientPeer = \case
   RunMarloweSyncClient client -> YieldTraced (ClientAgency TokInit) MsgRunMarloweSync $ Cast $ liftPeerTraced liftMarloweSync $ marloweSyncClientPeer client
   RunMarloweHeaderSyncClient client -> YieldTraced (ClientAgency TokInit) MsgRunMarloweHeaderSync $ Cast $ liftPeerTraced liftMarloweHeaderSync $ marloweHeaderSyncClientPeer client
   RunMarloweQueryClient client -> YieldTraced (ClientAgency TokInit) MsgRunMarloweQuery $ Cast $ liftPeerTraced liftMarloweQuery $ marloweQueryClientPeer client
+  RunMarloweLoadClient client -> YieldTraced (ClientAgency TokInit) MsgRunMarloweLoad $ Cast $ liftPeerTraced liftMarloweLoad $ marloweLoadClientPeer client
   RunTxClient client -> YieldTraced (ClientAgency TokInit) MsgRunTxJob $ Cast $ liftPeerTraced liftTxJob $ jobClientPeer client
 
 liftMarloweSync :: LiftProtocol MarloweSync MarloweRuntime 'StMarloweSync
@@ -54,6 +59,10 @@ liftMarloweHeaderSync =
 liftMarloweQuery :: LiftProtocol MarloweQuery MarloweRuntime 'StMarloweQuery
 liftMarloweQuery =
   LiftProtocol TokClientMarloweQuery TokServerMarloweQuery TokNobodyMarloweQuery MsgMarloweQuery \(MsgMarloweQuery msg) -> SomeSubMessage msg
+
+liftMarloweLoad :: LiftProtocol MarloweLoad MarloweRuntime 'StMarloweLoad
+liftMarloweLoad =
+  LiftProtocol TokClientMarloweLoad TokServerMarloweLoad TokNobodyMarloweLoad MsgMarloweLoad \(MsgMarloweLoad msg) -> SomeSubMessage msg
 
 liftTxJob :: LiftProtocol (Job MarloweTxCommand) MarloweRuntime 'StTxJob
 liftTxJob =

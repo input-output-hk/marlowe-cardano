@@ -55,8 +55,9 @@ import Control.Concurrent (threadDelay)
 import Control.Concurrent.Async (race_)
 import Control.Concurrent.Component
 import Control.Concurrent.STM (STM)
-import Control.Exception (SomeException(..), bracketOnError, catch, onException, throw, try)
+import Control.Exception (bracketOnError, catch, onException, throw, try)
 import Control.Monad (when, (<=<))
+import Control.Monad.Catch hiding (bracketOnError, catch, onException, try)
 import Control.Monad.Event.Class
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Class (lift)
@@ -100,6 +101,9 @@ import Language.Marlowe.Protocol.Client (MarloweRuntimeClient, hoistMarloweRunti
 import Language.Marlowe.Protocol.HeaderSync.Client (MarloweHeaderSyncClient, marloweHeaderSyncClientPeer)
 import Language.Marlowe.Protocol.HeaderSync.Server (MarloweHeaderSyncServer, marloweHeaderSyncServerPeer)
 import Language.Marlowe.Protocol.HeaderSync.Types (MarloweHeaderSync)
+import Language.Marlowe.Protocol.Load.Client (MarloweLoadClient, marloweLoadClientPeer)
+import Language.Marlowe.Protocol.Load.Server (MarloweLoadServer, marloweLoadServerPeer)
+import Language.Marlowe.Protocol.Load.Types (MarloweLoad)
 import Language.Marlowe.Protocol.Query.Client (MarloweQueryClient(..), marloweQueryClientPeer)
 import Language.Marlowe.Protocol.Query.Server (MarloweQueryServer)
 import Language.Marlowe.Protocol.Query.Types (MarloweQuery)
@@ -130,6 +134,9 @@ import Language.Marlowe.Runtime.ChainSync.Api
   )
 import qualified Language.Marlowe.Runtime.ChainSync.Database as ChainSync
 import qualified Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL as ChainSync
+import Language.Marlowe.Runtime.Contract (ContractDependencies(..), contract)
+import Language.Marlowe.Runtime.Contract.Store (ContractStore)
+import Language.Marlowe.Runtime.Contract.Store.File (ContractStoreOptions(..), createContractStore)
 import Language.Marlowe.Runtime.Core.Api (MarloweVersion(..))
 import Language.Marlowe.Runtime.Core.ScriptRegistry (MarloweScripts(..), ReferenceScriptUtxo(..))
 import qualified Language.Marlowe.Runtime.Core.ScriptRegistry as ScriptRegistry
@@ -181,6 +188,7 @@ import Network.Socket
   , setSocketOption
   , withFdSocket
   )
+import Network.TypedProtocol (unsafeIntToNat)
 import Network.Wai.Handler.Warp (run)
 import Observe.Event.Backend (noopEventBackend)
 import Observe.Event.Explicit (injectSelector)
@@ -304,6 +312,11 @@ withLocalMarloweRuntime' MarloweRuntimeOptions{..} test = withRunInIO \runInIO -
     webPort <- liftIO $ randomPort 4000 4999
     proxyPort <- liftIO $ randomPort 5000 5999
     manager <- liftIO $ newManager defaultManagerSettings
+
+    contractStore <- createContractStore ContractStoreOptions
+      { contractStoreDirectory = resolveWorkspacePath workspace "contract-store"
+      , contractStoreStagingDirectory = resolveWorkspacePath workspace "contract-staging-area"
+      }
 
     let chainSyncConnector = SomeConnectorTraced inject $ clientConnector chainSyncPair
     let chainSyncJobConnector = SomeConnectorTraced inject $ clientConnector chainSyncJobPair
@@ -504,7 +517,9 @@ data RuntimeDependencies r m = RuntimeDependencies
   , marloweSyncPair :: ClientServerPair (Handshake MarloweSync) MarloweSyncServer MarloweSyncClient r m
   , marloweRuntimePair :: ClientServerPair (Handshake Protocol.MarloweRuntime) MarloweRuntimeServer MarloweRuntimeClient r (ResourceT m)
   , marloweQueryPair :: ClientServerPair (Handshake MarloweQuery) MarloweQueryServer MarloweQueryClient r m
+  , marloweLoadPair :: ClientServerPair (Handshake MarloweLoad) MarloweLoadServer MarloweLoadClient r m
   , txJobPair :: ClientServerPair (Handshake (Job MarloweTxCommand)) (JobServer MarloweTxCommand) (JobClient MarloweTxCommand) r m
+  , contractStore :: ContractStore m
   , chainIndexerDatabaseQueries :: ChainIndexer.DatabaseQueries m
   , chainSeekDatabaseQueries :: ChainSync.DatabaseQueries m
   , genesisBlock :: !GenesisBlock
@@ -605,11 +620,18 @@ runtime = proc RuntimeDependencies{..} -> do
         , ..
         }
 
+  contract -< ContractDependencies
+    { batchSize = unsafeIntToNat 1024
+    , loadSource = SomeConnectionSourceTraced inject $ Connection.connectionSource marloweLoadPair
+    , ..
+    }
+
   proxy -< ProxyDependencies
     { router = Router
         { connectMarloweSync = driverFactory $ clientConnector marloweSyncPair
         , connectMarloweHeaderSync = driverFactory $ clientConnector marloweHeaderSyncPair
         , connectMarloweQuery = driverFactory $ clientConnector marloweQueryPair
+        , connectMarloweLoad = driverFactory $ clientConnector marloweLoadPair
         , connectTxJob = driverFactory $ clientConnector txJobPair
         }
     , connectionSource = SomeConnectionSource marloweRuntimeServerSource
@@ -641,6 +663,7 @@ data Channels r m = Channels
   , marloweHeaderSyncPair :: ClientServerPair (Handshake MarloweHeaderSync) MarloweHeaderSyncServer MarloweHeaderSyncClient r m
   , marloweSyncPair :: ClientServerPair (Handshake MarloweSync) MarloweSyncServer MarloweSyncClient r m
   , marloweQueryPair :: ClientServerPair (Handshake MarloweQuery) MarloweQueryServer MarloweQueryClient r m
+  , marloweLoadPair :: ClientServerPair (Handshake MarloweLoad) MarloweLoadServer MarloweLoadClient r m
   , txJobPair :: ClientServerPair (Handshake (Job MarloweTxCommand)) (JobServer MarloweTxCommand) (JobClient MarloweTxCommand) r m
   , marloweRuntimePair :: ClientServerPair (Handshake Protocol.MarloweRuntime) MarloweRuntimeServer MarloweRuntimeClient r (ResourceT m)
   }
@@ -665,6 +688,9 @@ setupChannels = do
   marloweQueryPair <- handshakeClientServerPair <$> clientServerPair
     id
     marloweQueryClientPeer
+  marloweLoadPair <- handshakeClientServerPair <$> clientServerPair
+    marloweLoadServerPeer
+    marloweLoadClientPeer
   txJobPair <- handshakeClientServerPair <$> clientServerPair
     jobServerPeer
     jobClientPeer
@@ -674,7 +700,7 @@ setupChannels = do
   pure Channels{..}
 
 newtype RuntimeM r a = RuntimeM { runRuntimeM :: IO a }
-  deriving newtype (Functor, Applicative, Monad, MonadIO, MonadUnliftIO, MonadFail)
+  deriving newtype (Functor, Applicative, Monad, MonadIO, MonadUnliftIO, MonadFail, MonadThrow, MonadCatch, MonadMask)
 
 instance MonadWith (RuntimeM r) where
   type WithException (RuntimeM r) = WithException IO

@@ -17,6 +17,7 @@ import Language.Marlowe.Protocol.Client (hoistMarloweRuntimeClient)
 import Language.Marlowe.Runtime.CLI.Env (Env(..))
 import Options.Applicative (Alternative)
 import System.Exit (die)
+import UnliftIO (MonadUnliftIO)
 
 -- | A monad type for Marlowe Runtime CLI programs.
 newtype CLI a = CLI { runCLI :: MarloweT (ReaderT Env IO) a }
@@ -31,6 +32,7 @@ newtype CLI a = CLI { runCLI :: MarloweT (ReaderT Env IO) a }
     , MonadPlus
     , MonadBase IO
     , MonadBaseControl IO
+    , MonadUnliftIO
     )
 
 instance MonadMarlowe CLI where

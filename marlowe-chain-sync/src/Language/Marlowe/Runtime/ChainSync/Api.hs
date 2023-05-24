@@ -59,6 +59,7 @@ import Data.ByteString.Base16 (decodeBase16, encodeBase16)
 import qualified Data.ByteString.Char8 as BS
 import Data.Function (on)
 import Data.Functor (($>))
+import Data.Hashable (Hashable)
 import qualified Data.List.NonEmpty as NE
 import Data.Map (Map)
 import qualified Data.Map as Map
@@ -398,28 +399,28 @@ instance ToJSONKey Base16 where
 
 newtype DatumHash = DatumHash { unDatumHash :: ByteString }
   deriving stock (Eq, Ord, Generic)
-  deriving newtype (Binary, Variations)
+  deriving newtype (Binary, Variations, Hashable)
   deriving (IsString, Show, ToJSON) via Base16
 
 newtype TxId = TxId { unTxId :: ByteString }
   deriving stock (Eq, Ord, Generic)
-  deriving newtype (Binary, Variations)
+  deriving newtype (Binary, Variations, Hashable)
   deriving (IsString, Show, ToJSON, ToJSONKey) via Base16
 
 newtype TxIx = TxIx { unTxIx :: Word16 }
   deriving stock (Show, Eq, Ord, Generic)
-  deriving newtype (Num, Integral, Real, Enum, Bounded, Binary, ToJSON, Variations)
+  deriving newtype (Num, Integral, Real, Enum, Bounded, Binary, ToJSON, Variations, Hashable)
 
 newtype CertIx = CertIx { unCertIx :: Word64 }
   deriving stock (Show, Eq, Ord, Generic)
-  deriving newtype (Num, Integral, Real, Enum, Bounded, Binary, Variations)
+  deriving newtype (Num, Integral, Real, Enum, Bounded, Binary, Variations, Hashable)
 
 data TxOutRef = TxOutRef
   { txId :: TxId
   , txIx :: TxIx
   }
   deriving stock (Show, Eq, Ord, Generic)
-  deriving anyclass (Binary, ToJSON, ToJSONKey, Variations)
+  deriving anyclass (Binary, ToJSON, ToJSONKey, Variations, Hashable)
 
 instance IsString TxOutRef where
   fromString = fromJust . parseTxOutRef . T.pack
@@ -440,15 +441,15 @@ renderTxOutRef TxOutRef{..} = mconcat
 
 newtype SlotNo = SlotNo { unSlotNo :: Word64 }
   deriving stock (Show, Eq, Ord, Generic)
-  deriving newtype (Num, Integral, Real, Enum, Bounded, Binary, ToJSON, Variations)
+  deriving newtype (Num, Integral, Real, Enum, Bounded, Binary, ToJSON, Variations, Hashable)
 
 newtype BlockNo = BlockNo { unBlockNo :: Word64 }
   deriving stock (Show, Eq, Ord, Generic)
-  deriving newtype (Num, Integral, Real, Enum, Bounded, Binary, ToJSON, Variations)
+  deriving newtype (Num, Integral, Real, Enum, Bounded, Binary, ToJSON, Variations, Hashable)
 
 newtype BlockHeaderHash = BlockHeaderHash { unBlockHeaderHash :: ByteString }
   deriving stock (Eq, Ord, Generic)
-  deriving newtype (Binary, Variations)
+  deriving newtype (Binary, Variations, Hashable)
   deriving (IsString, Show, ToJSON) via Base16
 
 data AssetId = AssetId
@@ -456,16 +457,16 @@ data AssetId = AssetId
   , tokenName :: TokenName
   }
   deriving stock (Show, Eq, Ord, Generic)
-  deriving anyclass (Binary, ToJSON, ToJSONKey, Variations)
+  deriving anyclass (Binary, ToJSON, ToJSONKey, Variations, Hashable)
 
 newtype PolicyId = PolicyId { unPolicyId :: ByteString }
   deriving stock (Eq, Ord, Generic)
-  deriving newtype (Binary, Variations)
+  deriving newtype (Binary, Variations, Hashable)
   deriving (IsString, Show, FromJSON, FromJSONKey, ToJSON, ToJSONKey) via Base16
 
 newtype TokenName = TokenName { unTokenName :: ByteString }
   deriving stock (Eq, Ord, Generic)
-  deriving newtype (Show, IsString, Binary, Variations)
+  deriving newtype (Show, IsString, Binary, Variations, Hashable)
 
 instance ToJSONKey TokenName where
   toJSONKey = toJSONKeyText $ T.pack . BS.unpack . unTokenName
@@ -489,7 +490,7 @@ newtype Lovelace = Lovelace { unLovelace :: Word64 }
 
 newtype Address = Address { unAddress :: ByteString }
   deriving stock (Eq, Ord, Generic)
-  deriving newtype (Binary, Variations)
+  deriving newtype (Binary, Variations, Hashable)
   deriving (IsString, Show, ToJSON, FromJSON) via Base16
 
 toBech32 :: Address -> Maybe Text
@@ -530,13 +531,13 @@ data Credential
   = PaymentKeyCredential PaymentKeyHash
   | ScriptCredential ScriptHash
   deriving stock (Show, Eq, Ord, Generic)
-  deriving anyclass (Binary, ToJSON, Variations)
+  deriving anyclass (Binary, ToJSON, Variations, Hashable)
 
 data StakeCredential
   = StakeKeyCredential StakeKeyHash
   | StakeScriptCredential ScriptHash
   deriving stock (Show, Eq, Ord, Generic)
-  deriving anyclass (Binary, ToJSON, Variations)
+  deriving anyclass (Binary, ToJSON, Variations, Hashable)
 
 fromCardanoPaymentCredential :: Cardano.PaymentCredential -> Credential
 fromCardanoPaymentCredential = \case
@@ -545,12 +546,12 @@ fromCardanoPaymentCredential = \case
 
 newtype PaymentKeyHash = PaymentKeyHash { unPaymentKeyHash :: ByteString }
   deriving stock (Eq, Ord, Generic)
-  deriving newtype (Binary, Variations)
+  deriving newtype (Binary, Variations, Hashable)
   deriving (IsString, Show, ToJSON) via Base16
 
 newtype StakeKeyHash = StakeKeyHash { unStakeKeyHash :: ByteString }
   deriving stock (Eq, Ord, Generic)
-  deriving newtype (Binary, Variations)
+  deriving newtype (Binary, Variations, Hashable)
   deriving (IsString, Show, ToJSON) via Base16
 
 fromCardanoPaymentKeyHash :: Cardano.Hash Cardano.PaymentKey -> PaymentKeyHash
@@ -561,6 +562,7 @@ fromCardanoStakeKeyHash = StakeKeyHash . Cardano.serialiseToRawBytes
 
 newtype ScriptHash = ScriptHash { unScriptHash :: ByteString }
   deriving stock (Eq, Ord, Generic)
+  deriving newtype (Hashable)
   deriving (IsString, Show, ToJSON) via Base16
   deriving anyclass (Binary, Variations)
 
@@ -579,7 +581,7 @@ data StakeReference
   = StakeCredential StakeCredential
   | StakePointer SlotNo TxIx CertIx
   deriving stock (Show, Eq, Ord, Generic)
-  deriving anyclass (Variations)
+  deriving anyclass (Variations, Hashable)
 
 fromCardanoStakeAddressReference :: Cardano.StakeAddressReference -> Maybe StakeReference
 fromCardanoStakeAddressReference = \case
