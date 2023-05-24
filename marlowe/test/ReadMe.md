@@ -36,6 +36,11 @@
 -   [Debugging cookbook](../debugging-cookbook.md)
 
 
+## Audit results:
+
+-   [Response to Audit Report for the Marlowe Specification and for Marlowe on Cardano](response-to-audit-report.md)
+
+
 ## General Resources for Audits
 
 -   [CIP-52](https://github.com/cardano-foundation/CIPs/tree/master/CIP-0052)
