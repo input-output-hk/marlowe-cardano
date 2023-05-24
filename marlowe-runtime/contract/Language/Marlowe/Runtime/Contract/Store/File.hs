@@ -13,7 +13,6 @@ import Data.Binary (Word64, get, put)
 import Data.Binary.Get (runGet)
 import Data.Binary.Put (runPut)
 import qualified Data.ByteString.Lazy as LBS
-import Data.Default (def)
 import Data.Foldable (fold, foldl')
 import Data.HashMap.Strict (HashMap)
 import qualified Data.HashMap.Strict as HashMap
@@ -33,7 +32,7 @@ import Language.Marlowe.Runtime.Contract.Store
 import Language.Marlowe.Runtime.Core.Api ()
 import Plutus.V2.Ledger.Api (fromBuiltin)
 import System.FilePath (takeBaseName, (<.>), (</>))
-import System.IO.LockFile (LockingParameters(..), withLockFile)
+import System.IO.LockFile (LockingParameters(..), RetryStrategy(NumberOfTimes), withLockFile)
 import UnliftIO
 import UnliftIO.Directory
   ( XdgDirectory(XdgData)
@@ -52,7 +51,7 @@ import UnliftIO.Directory
 data ContractStoreOptions = ContractStoreOptions
   { contractStoreDirectory :: FilePath -- ^ The directory to store the contract files
   , contractStoreStagingDirectory :: FilePath -- ^ The directory to create staging areas
-  , lockingSleepBetweenRetries :: Word64
+  , lockingMicrosecondsBetweenRetries :: Word64
   }
 
 -- | Default options. uses $XDG_DATA/marlowe/runtime/marlowe-contract/store for the
@@ -82,7 +81,10 @@ createContractStore ContractStoreOptions{..} = do
     }
 
   where
-    lockingParameters = def { sleepBetweenRetries = lockingSleepBetweenRetries }
+    lockingParameters = LockingParameters
+      { sleepBetweenRetries = lockingMicrosecondsBetweenRetries
+      , retryToAcquireLock = NumberOfTimes 20
+      }
 
     getContract lockfile contractHash
       | contractHash == closeHash = pure $ Just ContractWithAdjacency

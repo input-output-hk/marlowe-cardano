@@ -159,7 +159,7 @@ runContractTest test = runResourceT do
   contractStore <- createContractStore ContractStoreOptions
     { contractStoreDirectory = resolveWorkspacePath workspace "contract-store"
     , contractStoreStagingDirectory = resolveWorkspacePath workspace "staging-areas"
-    , lockingSleepBetweenRetries = 100_000
+    , lockingMicrosecondsBetweenRetries = 100_000
     }
   let
     testHandle = TestHandle

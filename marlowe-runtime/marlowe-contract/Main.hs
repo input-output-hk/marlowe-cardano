@@ -140,7 +140,7 @@ data Options = Options
   , bufferSize :: Int
   , contractStoreDirectory :: FilePath
   , contractStoreStagingDirectory :: FilePath
-  , lockingSleepBetweenRetries :: Word64
+  , lockingMicrosecondsBetweenRetries :: Word64
   , httpPort :: PortNumber
   }
 
@@ -156,7 +156,7 @@ getOptions = do
           <*> bufferSizeParser
           <*> contractStoreDirectoryParser contractStoreDirectory
           <*> contractStoreStagingDirectoryParser contractStoreStagingDirectory
-          <*> lockingSleepBetweenRetriesParser lockingSleepBetweenRetries
+          <*> lockingMicrosecondsBetweenRetriesParser lockingMicrosecondsBetweenRetries
           <*> httpPortParser
       )
     )
@@ -220,8 +220,8 @@ getOptions = do
       , showDefault
       ]
 
-    lockingSleepBetweenRetriesParser defaultValue = option auto $ mconcat
-      [ long "store-lock-sleep-between-retries"
+    lockingMicrosecondsBetweenRetriesParser defaultValue = option auto $ mconcat
+      [ long "store-lock-microseconds-between-retries"
       , value defaultValue
       , metavar "MICRO_SECONDS"
       , help "The number of microseconds to wait between retries when acquiring the store lock"

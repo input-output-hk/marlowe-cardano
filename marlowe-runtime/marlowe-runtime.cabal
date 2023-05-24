@@ -248,7 +248,6 @@ library contract
     , bytestring >= 0.10.12 && < 0.12
     , cardano-api ==1.35.4
     , containers >= 0.6.5 && < 0.7
-    , data-default >= 0.7.1 && < 0.8
     , eventuo11y ^>= { 0.9, 0.10 }
     , eventuo11y-extras ==0.1.0.0
     , exceptions >= 0.10 && < 0.11
