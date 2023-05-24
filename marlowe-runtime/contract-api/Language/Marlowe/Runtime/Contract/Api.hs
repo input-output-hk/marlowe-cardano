@@ -21,13 +21,22 @@ import Network.Protocol.Query.Types
 
 data ContractRequest a where
   GetContract :: DatumHash -> ContractRequest (Maybe ContractWithAdjacency)
-  GetMerkleizedInputs :: DatumHash -> State -> [InputContent] -> ContractRequest (Either GetMerkleizedInputsError [Input])
+  GetMerkleizedInputs
+    :: DatumHash
+    -> State
+    -> TimeInterval
+    -> [InputContent]
+    -> ContractRequest (Either GetMerkleizedInputsError [Input])
 
 deriving instance Show (ContractRequest a)
 deriving instance Eq (ContractRequest a)
 
-data GetMerkleizedInputsError = GetMerkleizedInputsError
-  deriving stock (Show, Eq, Ord, Generic)
+data GetMerkleizedInputsError
+  = GetMerkleizedInputsContractNotFound DatumHash
+  | GetMerkleizedInputsApplyNoMatch InputContent
+  | GetMerkleizedInputsApplyAmbiguousInterval InputContent
+  | GetMerkleizedInputsIntervalError IntervalError
+  deriving stock (Show, Eq, Generic)
   deriving anyclass (Binary, Variations)
 
 getContract :: Applicative m => DatumHash -> QueryClient ContractRequest m (Maybe ContractWithAdjacency)
@@ -37,9 +46,10 @@ getMerkleizedInputs
   :: Applicative m
   => DatumHash
   -> State
+  -> TimeInterval
   -> [InputContent]
   -> QueryClient ContractRequest m (Either GetMerkleizedInputsError [Input])
-getMerkleizedInputs = (fmap . fmap) request . GetMerkleizedInputs
+getMerkleizedInputs = (fmap . fmap . fmap) request . GetMerkleizedInputs
 
 instance HasSignature ContractRequest where
   signature _ = "ContractRequest"
@@ -68,15 +78,17 @@ instance BinaryRequest ContractRequest where
     GetContract hash -> do
       putWord8 0x00
       put hash
-    GetMerkleizedInputs hash state inputs -> do
+    GetMerkleizedInputs hash state timeInterval inputs -> do
       putWord8 0x01
       put hash
       put state
+      put timeInterval
       put inputs
   getReq = do
     tag <- getWord8
     case tag of
       0x00 -> SomeRequest . GetContract <$> get
+      0x01 -> SomeRequest <$> (GetMerkleizedInputs <$> get <*> get <*> get <*> get)
       _ -> fail $ "Invalid ContractRequest tag " <> show tag
   putResult = \case
     TagGetContract -> put
@@ -102,7 +114,7 @@ instance RequestVariations ContractRequest where
     ]
   requestVariations = \case
     TagGetContract -> GetContract <$> variations
-    TagGetMerkleizedInputs -> GetMerkleizedInputs <$> variations `varyAp` variations `varyAp` variations
+    TagGetMerkleizedInputs -> GetMerkleizedInputs <$> variations `varyAp` variations `varyAp` variations `varyAp` variations
   resultVariations = \case
     TagGetContract -> variations
     TagGetMerkleizedInputs -> variations

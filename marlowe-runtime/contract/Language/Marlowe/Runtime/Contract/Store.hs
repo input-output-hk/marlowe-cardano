@@ -8,9 +8,9 @@ import Control.Monad.Event.Class
 import Data.Foldable (traverse_)
 import Data.Set (Set)
 import Data.Void (Void)
-import Language.Marlowe.Core.V1.Semantics.Types (Contract)
+import Language.Marlowe.Core.V1.Semantics.Types (Contract, Input, InputContent, State, TimeInterval)
 import Language.Marlowe.Runtime.ChainSync.Api (DatumHash)
-import Language.Marlowe.Runtime.Contract.Api (ContractWithAdjacency)
+import Language.Marlowe.Runtime.Contract.Api (ContractWithAdjacency, GetMerkleizedInputsError)
 import Observe.Event (InjectSelector, addField, injectSelector, reference)
 import Observe.Event.Backend (setInitialCauseEventBackend)
 
@@ -18,10 +18,19 @@ data ContractStoreSelector f where
   CreateContractStagingArea :: ContractStoreSelector Void
   ContractStagingAreaSelector :: ContractStagingAreaSelector f -> ContractStoreSelector f
   GetContract :: DatumHash -> ContractStoreSelector ContractWithAdjacency
+  GetMerkleizedInputs  :: ContractStoreSelector GetMerkleizedInputsField
+
+data GetMerkleizedInputsField
+  = GetMerkleizedInputsContractHash DatumHash
+  | GetMerkleizedInputsState State
+  | GetMerkleizedInputsInterval TimeInterval
+  | GetMerkleizedInputsInputs  [InputContent]
+  | GetMerkleizedInputsResult  (Either GetMerkleizedInputsError [Input])
 
 data ContractStore m = ContractStore
   { createContractStagingArea :: m (ContractStagingArea m)
   , getContract :: DatumHash -> m (Maybe ContractWithAdjacency)
+  , getMerkleizedInputs :: DatumHash -> State -> TimeInterval -> [InputContent] -> m (Either GetMerkleizedInputsError [Input])
   }
 
 hoistContractStore
@@ -32,6 +41,7 @@ hoistContractStore
 hoistContractStore f ContractStore{..} = ContractStore
   { createContractStagingArea = f $ hoistContractStagingArea f <$> createContractStagingArea
   , getContract = f . getContract
+  , getMerkleizedInputs = (fmap . fmap . fmap) f . getMerkleizedInputs
   }
 
 traceContractStore
@@ -47,6 +57,14 @@ traceContractStore inj ContractStore{..} = ContractStore
   , getContract = \hash -> withInjectEvent inj (GetContract hash) \ev -> do
       result <- getContract hash
       traverse_ (addField ev) result
+      pure result
+  , getMerkleizedInputs = \hash state interval inputs -> withInjectEvent inj GetMerkleizedInputs \ev -> do
+      addField ev $ GetMerkleizedInputsContractHash hash
+      addField ev $ GetMerkleizedInputsState state
+      addField ev $ GetMerkleizedInputsInterval interval
+      addField ev $ GetMerkleizedInputsInputs inputs
+      result <- getMerkleizedInputs hash state interval inputs
+      addField ev $ GetMerkleizedInputsResult result
       pure result
   }
 

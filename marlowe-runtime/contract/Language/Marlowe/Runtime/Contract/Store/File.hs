@@ -29,6 +29,7 @@ import Language.Marlowe.Runtime.Cardano.Api (fromCardanoDatumHash, toCardanoScri
 import Language.Marlowe.Runtime.ChainSync.Api (DatumHash(..), toDatum)
 import Language.Marlowe.Runtime.Contract.Api hiding (getContract)
 import Language.Marlowe.Runtime.Contract.Store
+import Language.Marlowe.Runtime.Contract.Store.Memory (getMerkleizedInputsDefault)
 import Language.Marlowe.Runtime.Core.Api ()
 import Plutus.V2.Ledger.Api (fromBuiltin)
 import System.FilePath (takeBaseName, (<.>), (</>))
@@ -77,7 +78,15 @@ createContractStore ContractStoreOptions{..} = do
   let lockfile = contractStoreDirectory </> "lockfile"
   pure ContractStore
     { createContractStagingArea = createContractStagingArea lockfile
-    , getContract = getContract lockfile
+    , getContract = getContract True lockfile
+    , getMerkleizedInputs = \hash state interval input ->
+        withLockFile lockingParameters lockfile
+          $ getMerkleizedInputsDefault
+              ((fmap . fmap) (\ContractWithAdjacency{..} -> contract) . getContract False lockfile)
+              hash
+              state
+              interval
+              input
     }
 
   where
@@ -86,14 +95,14 @@ createContractStore ContractStoreOptions{..} = do
       , retryToAcquireLock = NumberOfTimes 20
       }
 
-    getContract lockfile contractHash
+    getContract lock lockfile contractHash
       | contractHash == closeHash = pure $ Just ContractWithAdjacency
           { contract = Close
           , contractHash = closeHash
           , adjacency = mempty
           , closure = Set.singleton closeHash
           }
-      | otherwise = withLockFile lockingParameters lockfile $ runMaybeT do
+      | otherwise = (if lock then withLockFile lockingParameters lockfile else id) $ runMaybeT do
           let mkFilePath = (contractStoreDirectory </>) . (read (show contractHash) <.>)
           let contractFilePath = mkFilePath "contract"
           let adjacencyFilePath = mkFilePath "adjacency"

@@ -2,6 +2,8 @@ module Language.Marlowe.Runtime.Contract.Store.Memory
   where
 
 import Cardano.Api (hashScriptData)
+import Control.Monad.Trans.Class (lift)
+import Control.Monad.Trans.Except (except, runExceptT, throwE)
 import Control.Monad.Trans.Maybe (MaybeT(MaybeT), runMaybeT)
 import Data.Map (Map)
 import qualified Data.Map as Map
@@ -10,9 +12,11 @@ import qualified Data.Set as Set
 import GHC.Conc (throwSTM)
 import GHC.IO (mkUserError)
 import Language.Marlowe.Core.V1.Plate (Extract(extractAll))
-import Language.Marlowe.Core.V1.Semantics.Types (Case(..), Contract)
+import Language.Marlowe.Core.V1.Semantics (ApplyAction(..), applyAction, fixInterval)
+import Language.Marlowe.Core.V1.Semantics.Types
+  (Case(..), Contract(..), Environment, Input(..), InputContent, IntervalResult(..), State, TimeInterval, getAction)
 import Language.Marlowe.Runtime.Cardano.Api (fromCardanoDatumHash, toCardanoScriptData)
-import Language.Marlowe.Runtime.ChainSync.Api (DatumHash(DatumHash), toDatum)
+import Language.Marlowe.Runtime.ChainSync.Api (DatumHash(..), toDatum)
 import Language.Marlowe.Runtime.Contract.Api hiding (getContract)
 import Language.Marlowe.Runtime.Contract.Store
 import qualified Plutus.V2.Ledger.Api as PV2
@@ -26,6 +30,10 @@ createContractStoreInMemory = do
   pure ContractStore
     { createContractStagingArea = createContractStagingAreaInMemory store
     , getContract = getContract store
+    , getMerkleizedInputs =
+        getMerkleizedInputsDefault
+          $ (fmap . fmap) (\ContractWithAdjacency {..} -> contract)
+          . getContract store
     }
   where
     createContractStagingAreaInMemory store = do
@@ -83,3 +91,65 @@ computeAdjacency = foldMap getHash . extractAll
   getHash = \case
     MerkleizedCase _ hash -> Set.singleton $ DatumHash $ PV2.fromBuiltin hash
     _ -> mempty
+
+toPlutusDatumHash :: DatumHash -> PV2.BuiltinByteString
+toPlutusDatumHash = PV2.toBuiltin . unDatumHash
+
+getMerkleizedInputsDefault
+  :: Monad m
+  => (DatumHash -> m (Maybe Contract))
+  -> DatumHash
+  -> State
+  -> TimeInterval
+  -> [InputContent]
+  -> m (Either GetMerkleizedInputsError [Input])
+getMerkleizedInputsDefault getContract' = \hash state interval inputs -> runExceptT do
+    case fixInterval interval state of
+      IntervalTrimmed env state' -> do
+        contract <- getContractExcept hash
+        fst <$> go env state' inputs contract []
+      IntervalError err -> throwE $ GetMerkleizedInputsIntervalError err
+    where
+      getContractExcept hash = lift (getContract' hash) >>= \case
+        Nothing -> throwE $ GetMerkleizedInputsContractNotFound hash
+        Just c -> pure c
+
+      go env state inputs contract acc = case inputs of
+        [] -> pure (reverse acc, state)
+        input : inputs' -> do
+          (continuation, state') <- except $ applyInputContent state env input contract
+          case continuation of
+            Left contract' ->
+              go env state' inputs' contract' (NormalInput input : acc)
+            Right hash -> do
+              contract' <- getContractExcept $ DatumHash $ PV2.fromBuiltin hash
+              go env state' inputs' contract (MerkleizedInput input hash contract' : acc)
+
+applyInputContent
+  :: State
+  -> Environment
+  -> InputContent
+  -> Contract
+  -> Either GetMerkleizedInputsError (Either Contract PV2.BuiltinByteString, State)
+applyInputContent state env input = \case
+  When cases _ _ -> applyInputContentCases state env input cases
+  _ -> Left $ GetMerkleizedInputsApplyNoMatch input
+
+applyInputContentCases
+  :: State
+  -> Environment
+  -> InputContent
+  -> [Case Contract]
+  -> Either GetMerkleizedInputsError (Either Contract PV2.BuiltinByteString, State)
+applyInputContentCases state env input = \case
+  [] -> Left $ GetMerkleizedInputsApplyNoMatch input
+  c : cs ->
+    let
+      action = getAction c
+      continuation = case c of
+        Case _ contract -> Left contract
+        MerkleizedCase _ hash -> Right hash
+    in
+      case applyAction env state input action of
+        AppliedAction _ state' -> pure (continuation, state')
+        NotAppliedAction -> applyInputContentCases state env input cs

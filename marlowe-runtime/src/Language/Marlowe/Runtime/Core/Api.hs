@@ -513,6 +513,7 @@ instance Binary V1.Payee
 instance Binary V1.State
 instance Binary V1.Token
 instance Binary V1.ValueId
+instance Binary V1.IntervalError
 instance Binary a => Binary (V1.Case a)
 instance Binary a => Binary (V1.Value a)
 
@@ -535,6 +536,7 @@ instance Variations V1.Payee
 instance Variations V1.State
 instance Variations V1.Token
 instance Variations V1.ValueId
+instance Variations V1.IntervalError
 
 instance Variations V1.Party where
   variations = NE.fromList $ NE.filter (not . hasStakingPointer) $ to <$> gVariations

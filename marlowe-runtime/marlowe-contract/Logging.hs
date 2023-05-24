@@ -17,7 +17,7 @@ import Language.Marlowe.Protocol.Load.Types (MarloweLoad)
 import Language.Marlowe.Runtime.Contract.Api (ContractRequest)
 import Language.Marlowe.Runtime.Contract.LoadServer (LoadServerSelector(..))
 import Language.Marlowe.Runtime.Contract.Store
-  (ContractStagingAreaSelector(..), ContractStoreSelector(..), StageContractField(..))
+  (ContractStagingAreaSelector(..), ContractStoreSelector(..), GetMerkleizedInputsField(..), StageContractField(..))
 import Network.Protocol.Driver.Trace (TcpServerSelector, renderTcpServerSelectorOTel)
 import Network.Protocol.Handshake.Types (Handshake)
 import Network.Protocol.Query.Types (Query)
@@ -71,6 +71,23 @@ renderContractStoreSelectorOTel = \case
     { eventName = "marlowe/contract/get_contract " <> read (show hash)
     , eventKind = Client
     , renderField = const [("marlowe.contract.contract_exists", toAttribute True)]
+    }
+  GetMerkleizedInputs -> OTelRendered
+    { eventName = "marlowe/contract/get_merkleized_inputs"
+    , eventKind = Client
+    , renderField = \case
+        GetMerkleizedInputsState state -> [("marlowe.state", toAttribute $ toStrict $ encodeToLazyText state)]
+        GetMerkleizedInputsContractHash hash -> [("marlowe.contract_hash", fromString $ read $ show hash)]
+        GetMerkleizedInputsInterval (lo, hi) ->
+          [ ("marlowe.interval_low" , toAttribute $ IntAttribute $ fromIntegral lo)
+          , ("marlowe.interval_high" , toAttribute $ IntAttribute $ fromIntegral hi)
+          ]
+        GetMerkleizedInputsInputs inputs ->
+          [("marlowe.contract.input_contents", toAttribute $ toStrict . encodeToLazyText <$> inputs)]
+        GetMerkleizedInputsResult (Left err) ->
+          [("error", fromString $ show err)]
+        GetMerkleizedInputsResult (Right inputs) ->
+          [("marlowe.inputs", toAttribute $ toStrict . encodeToLazyText <$> inputs)]
     }
 
 renderContractStagingAreaSelectorOTel :: RenderSelectorOTel ContractStagingAreaSelector
