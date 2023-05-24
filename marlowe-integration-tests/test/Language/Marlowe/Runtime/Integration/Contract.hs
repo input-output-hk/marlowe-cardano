@@ -38,7 +38,7 @@ import Test.Integration.Marlowe (createWorkspace, resolveWorkspacePath)
 import UnliftIO (atomically, liftIO, race_)
 
 spec :: Spec
-spec = focus $ parallel $ describe "MarloweContract" do
+spec = parallel $ describe "MarloweContract" do
   getContractSpec
 
 getContractSpec :: Spec
