@@ -945,6 +945,8 @@ instance SemiArbitrary Contract where
         , (2, If <$> semiArbitrary ctx <*> resize (size `quot` 2) (semiArbitrary ctx) <*> resize (size `quot` 2) (semiArbitrary ctx))
         , ( 3
           , do
+            -- Since the size of a `When` is O(c*n) where `c` is the number of cases and `n` is the size of sub
+            -- contracts, we need to use `c ~ sqrt size` and `n = size / c` to create a contract that is an appropriate size.
             let maxCases = floor $ sqrt @Double $ fromIntegral size
             numCases <- chooseInt (0, maxCases)
             let numSubContracts = succ numCases
