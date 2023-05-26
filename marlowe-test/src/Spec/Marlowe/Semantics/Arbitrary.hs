@@ -301,7 +301,7 @@ randomPubKeyHashes =
   ]
 
 instance Arbitrary PubKeyHash where
-  arbitrary = elements randomPubKeyHashes
+  arbitrary = arbitraryFibonacci randomPubKeyHashes
 
 
 -- | Some currency symbols.
@@ -325,7 +325,7 @@ randomCurrencySymbols =
  ]
 
 instance Arbitrary CurrencySymbol where
-  arbitrary = elements randomCurrencySymbols
+  arbitrary = arbitraryFibonacci randomCurrencySymbols
 
 
 -- | Some token names.
@@ -350,7 +350,7 @@ randomTokenNames =
   ]
 
 instance Arbitrary TokenName where
-  arbitrary = elements randomTokenNames
+  arbitrary = arbitraryFibonacci randomTokenNames
   shrink = shrinkByteString (\(TokenName x) -> x) randomTokenNames
 
 instance Arbitrary Token where
@@ -390,7 +390,7 @@ randomRoleNames =
 instance Arbitrary Party where
   arbitrary = frequency
     [ (1, Address <$> arbitrary <*> arbitrary)
-    , (4, Role <$> elements randomRoleNames)
+    , (4, Role <$> arbitraryFibonacci randomRoleNames)
     ]
   shrink (Address _ _) = []
   shrink (Role x)      = Role <$> shrinkByteString unTokenName randomRoleNames x
@@ -415,7 +415,7 @@ instance Arbitrary StakingCredential where
 
 
 instance Arbitrary ValidatorHash where
-  arbitrary = elements randomValidatorHashes
+  arbitrary = arbitraryFibonacci randomValidatorHashes
 
 
 -- | Some validator hashes.
@@ -952,11 +952,18 @@ assertContractWeights = (0, 0, 0, 0, 0, 1)
 instance SemiArbitrary Contract where
   semiArbitrary ctx = sized \size ->
     if size <= 0
-       then pure Close
+       then oneof -- Why not simply close? Because there are tests that effectively do this: `arbitrary `suchThat` (/= Close), which
+        [ Pay <$> semiArbitrary ctx <*> semiArbitrary ctx <*> semiArbitrary ctx <*> semiArbitrary ctx <*> pure Close
+        , If <$> semiArbitrary ctx <*> resize (size `quot` 2) (semiArbitrary ctx) <*> pure Close
+        , When [Case (Notify TrueObs) Close] <$> semiArbitrary ctx <*> semiArbitrary ctx
+        , Let <$> semiArbitrary ctx <*> semiArbitrary ctx <*> pure Close
+        , Assert <$> semiArbitrary ctx <*> pure Close
+        , pure Close
+        ]
        else frequency
-        [ (4 * size, Pay <$> semiArbitrary ctx <*> semiArbitrary ctx <*> semiArbitrary ctx <*> semiArbitrary ctx <*> resize (pred size) (semiArbitrary ctx))
-        , (2 * size, If <$> semiArbitrary ctx <*> resize (size `quot` 2) (semiArbitrary ctx) <*> resize (size `quot` 2) (semiArbitrary ctx))
-        , ( 3 * size
+        [ (4, Pay <$> semiArbitrary ctx <*> semiArbitrary ctx <*> semiArbitrary ctx <*> semiArbitrary ctx <*> resize (pred size) (semiArbitrary ctx))
+        , (2, If <$> semiArbitrary ctx <*> resize (size `quot` 2) (semiArbitrary ctx) <*> resize (size `quot` 2) (semiArbitrary ctx))
+        , ( 3
           , do
             -- Since the size of a `When` is O(c*n) where `c` is the number of cases and `n` is the size of sub
             -- contracts, we need to use `c ~ sqrt size` and `n = size / c` to create a contract that is an appropriate size.
@@ -969,8 +976,8 @@ instance SemiArbitrary Contract where
               <*> semiArbitrary ctx
               <*> resize subContractSize (semiArbitrary ctx)
           )
-        , (4 * size, Let <$> semiArbitrary ctx <*> semiArbitrary ctx <*> resize (pred size) (semiArbitrary ctx))
-        , (size, Assert <$> semiArbitrary ctx <*> resize (pred size) (semiArbitrary ctx))
+        , (4, Let <$> semiArbitrary ctx <*> semiArbitrary ctx <*> resize (pred size) (semiArbitrary ctx))
+        , (1, Assert <$> semiArbitrary ctx <*> resize (pred size) (semiArbitrary ctx))
         , (1, pure Close)
         ]
 

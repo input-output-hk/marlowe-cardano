@@ -18,7 +18,6 @@ module Spec.Marlowe.Semantics.Entropy
   ) where
 
 
-import Control.Monad (replicateM)
 import Data.List (group, sort)
 import Language.Marlowe.Core.V1.Semantics.Types (Accounts, ChoiceId, ChosenNum, Party, Token, ValueId)
 import Plutus.V2.Ledger.Api (CurrencySymbol, PubKeyHash, TokenName)
@@ -26,7 +25,7 @@ import Spec.Marlowe.Semantics.Arbitrary (arbitraryChoiceName)
 import Spec.Marlowe.Semantics.Orphans ()
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.HUnit (Assertion, assertBool, testCase)
-import Test.Tasty.QuickCheck (Arbitrary(arbitrary), Gen, generate)
+import Test.Tasty.QuickCheck (Arbitrary(arbitrary), Gen, generate, resize)
 
 import qualified PlutusTx.AssocMap as AM (Map, keys)
 
@@ -39,7 +38,7 @@ checkEntropy :: Ord a
              -> Assertion         -- ^ The test.
 checkEntropy n (min', max') gen =
   do
-    sample'' <- generate $ replicateM n gen
+    sample'' <- generate $ traverse (\size -> resize size gen) [0..(n - 1)]
     let
       n' = fromIntegral n
       histogram = fmap (fromIntegral . length) . group . sort $ sample''
@@ -63,8 +62,8 @@ tests =
         , testCase "ChoiceName"     $ checkEntropy 1000 (logBase 2 5, logBase 2 100)  arbitraryChoiceName
         , testCase "ChoiceId"       $ checkEntropy 1000 (logBase 2 5, logBase 2 100) (arbitrary :: Gen ChoiceId                                 )
         , testCase "ValueId"        $ checkEntropy 1000 (logBase 2 5, logBase 2 100) (arbitrary :: Gen ValueId                                  )
-        , testCase "accounts"       $ checkEntropy 1000 (logBase 2 5, logBase 2 100) (AM.keys <$> (arbitrary :: Gen Accounts                   ))
-        , testCase "choices"        $ checkEntropy 1000 (logBase 2 5, logBase 2 100) (AM.keys <$> (arbitrary :: Gen (AM.Map ChoiceId ChosenNum)))
-        , testCase "boundValues"    $ checkEntropy 1000 (logBase 2 5, logBase 2 100) (AM.keys <$> (arbitrary :: Gen (AM.Map ValueId Integer   )))
+        , testCase "accounts"       $ checkEntropy 1000 (logBase 2 5, logBase 2 1000) (AM.keys <$> (arbitrary :: Gen Accounts                   ))
+        , testCase "choices"        $ checkEntropy 1000 (logBase 2 5, logBase 2 1000) (AM.keys <$> (arbitrary :: Gen (AM.Map ChoiceId ChosenNum)))
+        , testCase "boundValues"    $ checkEntropy 1000 (logBase 2 5, logBase 2 1000) (AM.keys <$> (arbitrary :: Gen (AM.Map ValueId Integer   )))
         ]
     ]
