@@ -440,6 +440,7 @@ randomValidatorHashes =
 
 instance Arbitrary POSIXTime where
   arbitrary = POSIXTime <$> arbitraryInteger
+  shrink (POSIXTime i) = POSIXTime <$> shrink i
 
 instance SemiArbitrary POSIXTime where
   fromContext = times
@@ -675,7 +676,18 @@ instance SemiArbitrary Integer where
 instance Arbitrary (Value Observation) where
   arbitrary = sized \size ->
     if size <= 0
-      then frequency -- size 0 produces terminal values.
+      then leaves
+      else oneof
+        [ leaves
+        , resize (pred size) $ NegValue <$> arbitrary
+        , resize (size `quot` 2) $ AddValue <$> arbitrary <*> arbitrary
+        , resize (size `quot` 2) $ SubValue <$> arbitrary <*> arbitrary
+        , resize (size `quot` 2) $ MulValue <$> arbitrary <*> arbitrary
+        , resize (size `quot` 2) $ DivValue <$> arbitrary <*> arbitrary
+        , resize (size `quot` 3) $ Cond <$> arbitrary <*> arbitrary <*> arbitrary
+        ]
+    where
+      leaves = frequency
         [ (4, AvailableMoney <$> arbitrary <*> arbitrary)
         , (7, Constant <$> arbitrary)
         , (5, ChoiceValue <$> arbitrary)
@@ -683,14 +695,7 @@ instance Arbitrary (Value Observation) where
         , (3, pure TimeIntervalEnd)
         , (4, UseValue <$> arbitrary)
         ]
-      else oneof -- size > 0 produces compound values
-        [ resize (pred size) $ NegValue <$> arbitrary
-        , resize (size `quot` 2) $ AddValue <$> arbitrary <*> arbitrary
-        , resize (size `quot` 2) $ SubValue <$> arbitrary <*> arbitrary
-        , resize (size `quot` 2) $ MulValue <$> arbitrary <*> arbitrary
-        , resize (size `quot` 2) $ DivValue <$> arbitrary <*> arbitrary
-        , resize (size `quot` 3) $ Cond <$> arbitrary <*> arbitrary <*> arbitrary
-        ]
+
   shrink (AvailableMoney a t) = [AvailableMoney a' t | a' <- shrink a] ++ [AvailableMoney a t' | t' <- shrink t]
   shrink (NegValue x)         = NegValue <$> shrink x
   shrink (AddValue x y)       = [AddValue x' y | x' <- shrink x] ++ [AddValue x y' | y' <- shrink y]
@@ -700,14 +705,25 @@ instance Arbitrary (Value Observation) where
   shrink (ChoiceValue c)      = ChoiceValue <$> shrink c
   shrink (UseValue v)         = UseValue <$> shrink v
   shrink (Cond o x y)         = [Cond o' x y | o' <- shrink o] ++ [Cond o x' y | x' <- shrink x] ++ [Cond o x y' | y' <- shrink y]
-  shrink (Constant _)         = []
+  shrink (Constant c)        = Constant <$> shrink c
   shrink TimeIntervalStart    = []
   shrink TimeIntervalEnd      = []
 
 instance SemiArbitrary (Value Observation) where
   semiArbitrary context = sized \size ->
     if size <= 0
-      then frequency -- size 0 produces terminal values.
+      then leaves
+      else oneof
+        [ leaves
+        , resize (pred size) $ NegValue <$> semiArbitrary context
+        , resize (size `quot` 2) $ AddValue <$> semiArbitrary context <*> semiArbitrary context
+        , resize (size `quot` 2) $ SubValue <$> semiArbitrary context <*> semiArbitrary context
+        , resize (size `quot` 2) $ MulValue <$> semiArbitrary context <*> semiArbitrary context
+        , resize (size `quot` 2) $ DivValue <$> semiArbitrary context <*> semiArbitrary context
+        , resize (size `quot` 3) $ Cond <$> semiArbitrary context <*> semiArbitrary context <*> semiArbitrary context
+        ]
+    where
+      leaves = frequency
         [ (4, AvailableMoney <$> semiArbitrary context <*> semiArbitrary context)
         , (7, Constant <$> semiArbitrary context)
         , (5, ChoiceValue <$> semiArbitrary context)
@@ -715,26 +731,15 @@ instance SemiArbitrary (Value Observation) where
         , (3, pure TimeIntervalEnd)
         , (4, UseValue <$> semiArbitrary context)
         ]
-      else oneof -- size > 0 produces compound values
-        [ resize (pred size) $ NegValue <$> semiArbitrary context
-        , resize (size `quot` 2) $ AddValue <$> semiArbitrary context <*> semiArbitrary context
-        , resize (size `quot` 2) $ SubValue <$> semiArbitrary context <*> semiArbitrary context
-        , resize (size `quot` 2) $ MulValue <$> semiArbitrary context <*> semiArbitrary context
-        , resize (size `quot` 2) $ DivValue <$> semiArbitrary context <*> semiArbitrary context
-        , resize (size `quot` 3) $ Cond <$> semiArbitrary context <*> semiArbitrary context <*> semiArbitrary context
-        ]
 
 
 instance Arbitrary Observation where
   arbitrary = sized \size ->
     if size <= 0
-      then frequency -- size 0 produces terminal observations.
-        [ (8, ChoseSomething <$> arbitrary)
-        , (5, pure TrueObs)
-        , (5, pure FalseObs)
-        ]
+      then leaves
       else oneof -- size > 0 produces compound observations.
-        [ resize (size `quot` 2) $ AndObs <$> arbitrary <*> arbitrary
+        [ leaves
+        , resize (size `quot` 2) $ AndObs <$> arbitrary <*> arbitrary
         , resize (size `quot` 2) $ OrObs <$> arbitrary <*> arbitrary
         , resize (pred size) $ NotObs <$> arbitrary
         , resize (size `quot` 2) $ ValueGE <$> arbitrary <*> arbitrary
@@ -742,6 +747,12 @@ instance Arbitrary Observation where
         , resize (size `quot` 2) $ ValueLT <$> arbitrary <*> arbitrary
         , resize (size `quot` 2) $ ValueLE <$> arbitrary <*> arbitrary
         , resize (size `quot` 2) $ ValueEQ <$> arbitrary <*> arbitrary
+        ]
+    where
+      leaves = frequency
+        [ (8, ChoseSomething <$> arbitrary)
+        , (5, pure TrueObs)
+        , (5, pure FalseObs)
         ]
   shrink (AndObs x y)       = [AndObs x' y | x' <- shrink x] ++ [AndObs x y' | y' <- shrink y]
   shrink (OrObs x y)        = [OrObs x' y | x' <- shrink x] ++ [OrObs x y' | y' <- shrink y]
@@ -758,13 +769,10 @@ instance Arbitrary Observation where
 instance SemiArbitrary Observation where
   semiArbitrary context = sized \size ->
     if size <= 0
-      then frequency -- size 0 produces terminal observations.
-        [ (8, ChoseSomething <$> semiArbitrary context)
-        , (5, pure TrueObs)
-        , (5, pure FalseObs)
-        ]
-      else oneof -- size > 0 produces compound observations.
-        [ resize (size `quot` 2) $ AndObs <$> semiArbitrary context <*> semiArbitrary context
+      then leaves
+      else oneof
+        [ leaves
+        , resize (size `quot` 2) $ AndObs <$> semiArbitrary context <*> semiArbitrary context
         , resize (size `quot` 2) $ OrObs <$> semiArbitrary context <*> semiArbitrary context
         , resize (pred size) $ NotObs <$> semiArbitrary context
         , resize (size `quot` 2) $ ValueGE <$> semiArbitrary context <*> semiArbitrary context
@@ -772,6 +780,12 @@ instance SemiArbitrary Observation where
         , resize (size `quot` 2) $ ValueLT <$> semiArbitrary context <*> semiArbitrary context
         , resize (size `quot` 2) $ ValueLE <$> semiArbitrary context <*> semiArbitrary context
         , resize (size `quot` 2) $ ValueEQ <$> semiArbitrary context <*> semiArbitrary context
+        ]
+    where
+      leaves = frequency
+        [ (8, ChoseSomething <$> semiArbitrary context)
+        , (5, pure TrueObs)
+        , (5, pure FalseObs)
         ]
 
 instance Arbitrary Bound where
@@ -940,9 +954,9 @@ instance SemiArbitrary Contract where
     if size <= 0
        then pure Close
        else frequency
-        [ (4, Pay <$> semiArbitrary ctx <*> semiArbitrary ctx <*> semiArbitrary ctx <*> semiArbitrary ctx <*> resize (pred size) (semiArbitrary ctx))
-        , (2, If <$> semiArbitrary ctx <*> resize (size `quot` 2) (semiArbitrary ctx) <*> resize (size `quot` 2) (semiArbitrary ctx))
-        , ( 3
+        [ (4 * size, Pay <$> semiArbitrary ctx <*> semiArbitrary ctx <*> semiArbitrary ctx <*> semiArbitrary ctx <*> resize (pred size) (semiArbitrary ctx))
+        , (2 * size, If <$> semiArbitrary ctx <*> resize (size `quot` 2) (semiArbitrary ctx) <*> resize (size `quot` 2) (semiArbitrary ctx))
+        , ( 3 * size
           , do
             -- Since the size of a `When` is O(c*n) where `c` is the number of cases and `n` is the size of sub
             -- contracts, we need to use `c ~ sqrt size` and `n = size / c` to create a contract that is an appropriate size.
@@ -955,8 +969,9 @@ instance SemiArbitrary Contract where
               <*> semiArbitrary ctx
               <*> resize subContractSize (semiArbitrary ctx)
           )
-        , (4, Let <$> semiArbitrary ctx <*> semiArbitrary ctx <*> resize (pred size) (semiArbitrary ctx))
-        , (1, Assert <$> semiArbitrary ctx <*> resize (pred size) (semiArbitrary ctx))
+        , (4 * size, Let <$> semiArbitrary ctx <*> semiArbitrary ctx <*> resize (pred size) (semiArbitrary ctx))
+        , (size, Assert <$> semiArbitrary ctx <*> resize (pred size) (semiArbitrary ctx))
+        , (1, pure Close)
         ]
 
 
