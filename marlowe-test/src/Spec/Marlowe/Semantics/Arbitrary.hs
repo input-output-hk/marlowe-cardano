@@ -347,11 +347,10 @@ randomTokenNames =
   , "ARTISAN CONVERSATION"
   , "SOFTWARE FEEDBACK METHOD"
   , "INDEPENDENCE EXPLANATION REVENUE"
-  , "RELATIONSHIPS FEEDBACK CONCEPT METHOD"  -- NB: Too long for ledger.
   ]
 
 instance Arbitrary TokenName where
-  arbitrary = sized \size -> elements $ takeWhile ((<= size) . fromInteger . lengthOfByteString . unTokenName) randomTokenNames
+  arbitrary = elements randomTokenNames
   shrink = shrinkByteString (\(TokenName x) -> x) randomTokenNames
 
 instance Arbitrary Token where
@@ -391,7 +390,7 @@ randomRoleNames =
 instance Arbitrary Party where
   arbitrary = frequency
     [ (1, Address <$> arbitrary <*> arbitrary)
-    , (4, sized \size -> Role <$> elements (takeWhile ((<= size) . fromInteger . lengthOfByteString . unTokenName) randomRoleNames))
+    , (4, Role <$> elements randomRoleNames)
     ]
   shrink (Address _ _) = []
   shrink (Role x)      = Role <$> shrinkByteString unTokenName randomRoleNames x
