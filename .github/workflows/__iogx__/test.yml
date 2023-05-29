@@ -5,10 +5,8 @@ env:
   TRUSTED_PUBLIC_KEYS: "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ= marlowe-temp.cachix.org-1:1gPjVFpu4QjaAT3tRurCioX+BC23V7mjvFwpP5bV0Ec= loony-tools:pr9m4BkM/5/eSTZlkQyRt57Jz7OMBxNSUiMC4FkcNfk="
   SUBSTITUTERS: "https://cache.nixos.org/ https://cache.iog.io https://marlowe-temp.cachix.org https://cache.zw3rk.com/"
 on:
-  pull_request:
-    branches:
-      - main
-  workflow_call:
+    # Allow running manually
+    workflow_dispatch:
 jobs:
   integration:
     runs-on: ubuntu-latest
@@ -44,7 +42,8 @@ jobs:
           authToken: "${{ secrets.CACHIX_AUTH_TOKEN }}"
       - name: Run tests
         run: |
-          nix run .#marlowe-integration-tests -- --strict
+          # TODO[iogx] remove .#__iogx__.default after PR merged 
+          nix develop .#__iogx__.default --command run-integration-tests --strict
         env:
           MARLOWE_RT_TEST_DB_HOST: localhost
           MARLOWE_RT_TEST_CLEANUP_DATABASE: "False"
