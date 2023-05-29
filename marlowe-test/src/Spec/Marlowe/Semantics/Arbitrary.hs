@@ -11,13 +11,16 @@
 -----------------------------------------------------------------------------
 
 
+{-# LANGUAGE ApplicativeDo #-}
+{-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TypeApplications #-}
 
 {-# OPTIONS_GHC -fno-warn-orphans #-}
-{-# LANGUAGE BlockArguments #-}
 
 
 module Spec.Marlowe.Semantics.Arbitrary
@@ -52,7 +55,6 @@ module Spec.Marlowe.Semantics.Arbitrary
   ) where
 
 
-import Control.Monad (replicateM)
 import Data.Function (on)
 import Data.List (nub, nubBy)
 import Language.Marlowe.Core.V1.Semantics
@@ -104,9 +106,23 @@ import Plutus.V2.Ledger.Api
 import PlutusTx.Builtins (BuiltinByteString, appendByteString, lengthOfByteString, sliceByteString)
 import Spec.Marlowe.Semantics.Golden (GoldenTransaction, goldenContracts, goldenTransactions)
 import Spec.Marlowe.Semantics.Merkle (merkleizeInputs, shallowMerkleize)
-import Test.Tasty.QuickCheck
-  (Arbitrary(..), Gen, chooseInteger, elements, frequency, listOf, oneof, shrinkList, sized, suchThat, vectorOf)
+import Test.QuickCheck
+  ( Arbitrary(..)
+  , Gen
+  , chooseInt
+  , chooseInteger
+  , elements
+  , frequency
+  , listOf
+  , oneof
+  , resize
+  , shrinkList
+  , sized
+  , suchThat
+  , vectorOf
+  )
 
+import Data.Functor ((<&>))
 import qualified Plutus.V2.Ledger.Api as Ledger (Address(..))
 import qualified PlutusTx.AssocMap as AM (Map, delete, empty, fromList, keys, toList)
 import qualified PlutusTx.Eq as P (Eq)
@@ -117,12 +133,12 @@ fibonaccis :: Num a => [a]
 fibonaccis = [2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233, 377, 610, 987, 1597, 2584]
 
 
--- | Inverse-Fibanoncci frequencies.
+-- | Inverse-Fibonacci frequencies.
 fibonacciFrequencies :: Integral a => [a]
 fibonacciFrequencies = (1000000 `div`) <$> fibonaccis
 
 
--- | Select an element of a list with propability proportional to inverse-Fibonacci weights.
+-- | Select an element of a list with probability proportional to inverse-Fibonacci weights.
 arbitraryFibonacci :: [a] -> Gen a
 arbitraryFibonacci = frequency . zip fibonacciFrequencies . fmap pure
 
@@ -243,34 +259,25 @@ instance IsValid Context where
 
 -- | An arbitrary positive integer, mostly small.
 arbitraryPositiveInteger :: Gen Integer
-arbitraryPositiveInteger =
-  frequency
-    [
-      (60, arbitrary `suchThat` (> 0))
-    , (30, arbitraryFibonacci fibonaccis)
-    ]
+arbitraryPositiveInteger = arbitraryNonnegativeInteger <&> \case
+  0 -> 1
+  n -> n
 
 
 -- | An arbitrary non-negative integer, mostly small.
 arbitraryNonnegativeInteger :: Gen Integer
-arbitraryNonnegativeInteger =
-  frequency
-    [
-      (60, arbitrary `suchThat` (>= 0))
-    , (30, arbitraryFibonacci fibonaccis)
-    ]
+arbitraryNonnegativeInteger = frequency
+  [ (1, abs <$> arbitrary)
+  , (6, floor . sqrt @Double . abs <$> arbitrary)
+  ]
 
 
 -- | An arbitrary integer, mostly small.
 arbitraryInteger :: Gen Integer
-arbitraryInteger =
-  frequency
-    [
-      ( 5, arbitrary `suchThat` (< 0))
-    , (30, arbitrary `suchThat` (> 0))
-    , ( 5, pure 0)
-    , (60, arbitraryFibonacci fibonaccis)
-    ]
+arbitraryInteger = frequency
+  [ (1, negate <$> arbitraryPositiveInteger)
+  , (6, arbitraryNonnegativeInteger)
+  ]
 
 
 -- | Some public key hashes.
@@ -291,13 +298,10 @@ randomPubKeyHashes =
   , "a2bd7dd7f41c2781d1d11c7f4994fac750525705f9c259f97cb27d0e"
   , "c5b4c543a0d0d181ec387ad8250b18617bb18bcf2eccc0f27fe7aa23"
   , "d877b83ece77d785fee4a52bd7226949fa64e111aa0e20cd4a1c471b"
-  , "e14025a93f867851b9bb3c48601d1845bcbe9e2e1856c16cfc0522"      -- NB: Too short for ledger.
-  , "e3351d289f3eaa66e500f17b91a74e492193f4485c32e5ad606da83542"  -- NB: Too long for ledger.
   ]
 
 instance Arbitrary PubKeyHash where
-  arbitrary = arbitraryFibonacci randomPubKeyHashes `suchThat` (\(PubKeyHash h) -> lengthOfByteString h == 28)
-  shrink x = filter (< x) randomPubKeyHashes
+  arbitrary = arbitraryFibonacci randomPubKeyHashes
 
 
 -- | Some currency symbols.
@@ -318,13 +322,10 @@ randomCurrencySymbols =
   , "9f92753881b398a247e53b6cad08eab0e158cf1ef5df84c7f5766041"
   , "c1f46ec0147542f9bc155805993497ed44150687a41d0a63af3be466"
   , "cc2189d7adde0ed26355fd03e134feb508e5924959b07a53557f285e"
-  , "df97bf95b2d21327731329d94173344ff4db5ac16f92250d9cab00"      -- NB: Too short for ledger.
-  , "ead659651c55f5481dbc7038a7c096fd7616d2f86471bd9d46de742ea0"  -- NB: Too long for ledger.
  ]
 
 instance Arbitrary CurrencySymbol where
   arbitrary = arbitraryFibonacci randomCurrencySymbols
-  shrink x = filter (< x) randomCurrencySymbols
 
 
 -- | Some token names.
@@ -346,7 +347,6 @@ randomTokenNames =
   , "ARTISAN CONVERSATION"
   , "SOFTWARE FEEDBACK METHOD"
   , "INDEPENDENCE EXPLANATION REVENUE"
-  , "RELATIONSHIPS FEEDBACK CONCEPT METHOD"  -- NB: Too long for ledger.
   ]
 
 instance Arbitrary TokenName where
@@ -354,15 +354,13 @@ instance Arbitrary TokenName where
   shrink = shrinkByteString (\(TokenName x) -> x) randomTokenNames
 
 instance Arbitrary Token where
-  arbitrary =
-     do
-       isAda <- arbitrary
-       if isAda
-         then pure $ Token adaSymbol adaToken
-         else Token <$> arbitrary <*> arbitrary
+  arbitrary = oneof
+    [ pure $ Token adaSymbol adaToken
+    , Token <$> arbitrary <*> arbitrary
+    ]
   shrink (Token c n)
     | c == adaSymbol && n == adaToken = []
-    | otherwise                       = Token adaSymbol adaToken : [Token c' n' | c' <- shrink c, n' <- shrink n]
+    | otherwise                       = Token adaSymbol adaToken : (uncurry Token <$> shrink (c, n))
 
 instance SemiArbitrary Token where
   fromContext = tokens
@@ -387,18 +385,15 @@ randomRoleNames =
   , "Nonso Ernie Blanka"
   , "Umukoro Alexander Columb"
   , "Urbanus Roland Alison Ty Ryoichi"
-  , "Alcippe Alende Blanka Roland Dafne"  -- NB: Too long for ledger.
   ]
 
 instance Arbitrary Party where
-  arbitrary =
-    do
-       isPubKeyHash <- frequency [(2, pure True), (8, pure False)]
-       if isPubKeyHash
-         then Address <$> arbitrary <*> arbitrary
-         else Role <$> arbitraryFibonacci randomRoleNames
-  shrink (Address _ _) = Role <$> randomRoleNames
-  shrink (Role x)      = Role <$> shrinkByteString (\(TokenName y) -> y) randomRoleNames x
+  arbitrary = frequency
+    [ (1, Address <$> arbitrary <*> arbitrary)
+    , (4, Role <$> arbitraryFibonacci randomRoleNames)
+    ]
+  shrink (Address _ _) = []
+  shrink (Role x)      = Role <$> shrinkByteString unTokenName randomRoleNames x
 
 instance SemiArbitrary Party where
   fromContext = parties
@@ -420,14 +415,13 @@ instance Arbitrary StakingCredential where
 
 
 instance Arbitrary ValidatorHash where
-  arbitrary = arbitraryFibonacci randomValidatorHashes `suchThat` (\(ValidatorHash h) -> lengthOfByteString h == 28)
+  arbitrary = arbitraryFibonacci randomValidatorHashes
 
 
 -- | Some validator hashes.
 randomValidatorHashes :: [ValidatorHash]
 randomValidatorHashes =
-  [
-    "03e718204caac168d55e891f87b2b01da688e4501ce560ae613fa7e7"
+  [ "03e718204caac168d55e891f87b2b01da688e4501ce560ae613fa7e7"
   , "1b4a1ddee561fdce46d70d07976d3ef2f4c03985195906c08f547249"
   , "2f7bbc97515f6313cd667ac7345b5530241f2b0300c46b12f083ef46"
   , "40db3573f94cda9b7cc80de24517df78a0031d1e4a42cea9127cc730"
@@ -441,14 +435,12 @@ randomValidatorHashes =
   , "a2bd7ddd1d11c7f4994fa7f41c2781c750525705f9c259f97cb27d0e"
   , "c5b4c54ec387ad8250b183a0d0d181617bb18bcf2eccc0f27fe7aa23"
   , "d877b83fee4a52bd72269ece77d78549fa64e111aa0e20cd4a1c471b"
-  , "e14025ab9bb3c48601d1893f86785145bcbe9e2e1856c16cfc0522"      -- NB: Too short for ledger.
-  , "e3351d2e500f17b91a74e89f3eaa66492193f4485c32e5ad606da83542"  -- NB: Too long for ledger.
   ]
 
 
 instance Arbitrary POSIXTime where
   arbitrary = POSIXTime <$> arbitraryInteger
-  shrink x = filter (< x) fibonaccis
+  shrink (POSIXTime i) = POSIXTime <$> shrink i
 
 instance SemiArbitrary POSIXTime where
   fromContext = times
@@ -473,7 +465,6 @@ randomChoiceNames =
   , "attend unknown animals"
   , "position increated radiation"
   , "proclaim endless sordid figments"
-  , "understand weigh originate envisage"  -- NB: Too long for ledger.
   ]
 
 -- | Generate a choice name from a few possibilities.
@@ -488,11 +479,9 @@ shrinkChoiceName = shrinkByteString id randomChoiceNames
 -- | Generate a random choice inside given bounds.
 choiceInBoundsIfNonempty :: [Bound] -> Gen ChosenNum
 choiceInBoundsIfNonempty [] = arbitrary
-choiceInBoundsIfNonempty bounds =
-  do
-    Bound lower upper <- elements bounds
-    chooseInteger (lower, upper)
-
+choiceInBoundsIfNonempty bounds = oneof $ chooseInBound <$> bounds
+  where
+    chooseInBound (Bound lower upper) = chooseInteger (lower, upper)
 
 -- | Generate a random choice not in given bounds.
 choiceNotInBounds :: [Bound] -> Gen ChosenNum
@@ -570,7 +559,7 @@ invalidValues lower upper = [x | x <- availableValues, x < lower  || x > upper]
 availableValues :: [Integer]
 availableValues = tail $ [0..] >>= \x -> [x, -x]
 
--- | Geneate a semi-random time interval.
+-- | Generate a semi-random time interval.
 arbitraryTimeInterval :: Gen TimeInterval
 arbitraryTimeInterval =
   do
@@ -578,28 +567,26 @@ arbitraryTimeInterval =
     duration <- arbitraryNonnegativeInteger
     pure (POSIXTime start, POSIXTime $ start + duration)
 
--- | Generate a semi-random time interrval straddling a given time.
+-- | Generate a semi-random time interval straddling a given time.
 arbitraryTimeIntervalAround :: POSIXTime -> Gen TimeInterval
 arbitraryTimeIntervalAround (POSIXTime limit) =
   do
-    start <- arbitraryInteger `suchThat` (<= limit)
-    duration <- ((limit - start) +) <$> arbitraryNonnegativeInteger
-    pure (POSIXTime start, POSIXTime $ start + duration)
+    (dStart, dEnd) <- (,) <$> arbitraryNonnegativeInteger <*> arbitraryNonnegativeInteger
+    pure (POSIXTime $ limit - dStart, POSIXTime $ limit + dEnd)
 
 -- | Generate a semi-random time interval before a given time.
 arbitraryTimeIntervalBefore :: POSIXTime -> POSIXTime -> Gen TimeInterval
 arbitraryTimeIntervalBefore (POSIXTime lower) (POSIXTime upper) =
   do
-    start <- arbitraryInteger `suchThat` (<= lower)
-    duration <- chooseInteger (0, upper - start - 1)
-    pure (POSIXTime start, POSIXTime $ start + duration)
+    (dStart, dEnd) <- (,) <$> arbitraryNonnegativeInteger <*> arbitraryNonnegativeInteger
+    pure (POSIXTime $ lower - dStart, POSIXTime $ upper - dEnd)
 
 -- | Generate a semi-random time interval after a given time.
 arbitraryTimeIntervalAfter :: POSIXTime -> Gen TimeInterval
 arbitraryTimeIntervalAfter (POSIXTime lower) =
   do
-    start <- arbitraryInteger `suchThat` (>= lower)
-    duration <- arbitraryNonnegativeInteger
+    (dStart, duration)  <- (,) <$> arbitraryNonnegativeInteger <*> arbitraryNonnegativeInteger
+    let start = lower + dStart
     pure (POSIXTime start, POSIXTime $ start + duration)
 
 -- | Shrink a generated time interval.
@@ -618,18 +605,10 @@ shrinkTimeInterval (start, end) =
       , (end  , end  )
       ]
 
-instance SemiArbitrary TimeInterval where
-  semiArbitrary context =
-    do
-      POSIXTime start <- semiArbitrary context
-      duration <- arbitraryNonnegativeInteger
-      pure (POSIXTime start, POSIXTime $ start + duration)
-  semiShrink = fmap shrinkTimeInterval
-
-
 instance Arbitrary ChoiceId where
   arbitrary = ChoiceId <$> arbitraryChoiceName <*> arbitrary
-  shrink (ChoiceId n p) = [ChoiceId n' p' | n' <- shrinkChoiceName n, p' <- shrink p]
+  shrink (ChoiceId n p) = (ChoiceId <$> shrinkChoiceName n <*> pure p)
+                       ++ (ChoiceId n <$> shrink p)
 
 instance SemiArbitrary ChoiceId where
   fromContext = choiceIds
@@ -695,24 +674,29 @@ instance SemiArbitrary Integer where
 
 
 instance Arbitrary (Value Observation) where
-  arbitrary =
-    frequency
-      [
-        ( 8, AvailableMoney <$> arbitrary <*> arbitrary)
-      , (14, Constant <$> arbitrary)
-      , ( 8, NegValue <$> arbitrary)
-      , ( 8, AddValue <$> arbitrary <*> arbitrary)
-      , ( 8, SubValue <$> arbitrary <*> arbitrary)
-      , ( 8, MulValue <$> arbitrary <*> arbitrary)
-      , ( 8, DivValue <$> arbitrary <*> arbitrary)
-      , (10, ChoiceValue <$> arbitrary)
-      , ( 6, pure TimeIntervalStart)
-      , ( 6, pure TimeIntervalEnd)
-      , ( 8, UseValue <$> arbitrary)
-      , ( 8, Cond <$> arbitrary <*> arbitrary <*> arbitrary)
-      ]
+  arbitrary = sized \size ->
+    if size <= 0
+      then leaves
+      else oneof
+        [ leaves
+        , resize (pred size) $ NegValue <$> arbitrary
+        , resize (size `quot` 2) $ AddValue <$> arbitrary <*> arbitrary
+        , resize (size `quot` 2) $ SubValue <$> arbitrary <*> arbitrary
+        , resize (size `quot` 2) $ MulValue <$> arbitrary <*> arbitrary
+        , resize (size `quot` 2) $ DivValue <$> arbitrary <*> arbitrary
+        , resize (size `quot` 3) $ Cond <$> arbitrary <*> arbitrary <*> arbitrary
+        ]
+    where
+      leaves = frequency
+        [ (4, AvailableMoney <$> arbitrary <*> arbitrary)
+        , (7, Constant <$> arbitrary)
+        , (5, ChoiceValue <$> arbitrary)
+        , (3, pure TimeIntervalStart)
+        , (3, pure TimeIntervalEnd)
+        , (4, UseValue <$> arbitrary)
+        ]
+
   shrink (AvailableMoney a t) = [AvailableMoney a' t | a' <- shrink a] ++ [AvailableMoney a t' | t' <- shrink t]
-  shrink (Constant x)         = Constant <$> shrink x
   shrink (NegValue x)         = NegValue <$> shrink x
   shrink (AddValue x y)       = [AddValue x' y | x' <- shrink x] ++ [AddValue x y' | y' <- shrink y]
   shrink (SubValue x y)       = [SubValue x' y | x' <- shrink x] ++ [SubValue x y' | y' <- shrink y]
@@ -721,43 +705,55 @@ instance Arbitrary (Value Observation) where
   shrink (ChoiceValue c)      = ChoiceValue <$> shrink c
   shrink (UseValue v)         = UseValue <$> shrink v
   shrink (Cond o x y)         = [Cond o' x y | o' <- shrink o] ++ [Cond o x' y | x' <- shrink x] ++ [Cond o x y' | y' <- shrink y]
-  shrink _                    = []
+  shrink (Constant c)        = Constant <$> shrink c
+  shrink TimeIntervalStart    = []
+  shrink TimeIntervalEnd      = []
 
 instance SemiArbitrary (Value Observation) where
-  semiArbitrary context =
-    frequency
-      [
-        ( 8, uncurry AvailableMoney <$> perturb arbitrary (AM.keys $ caccounts context))
-      , (14, Constant <$> semiArbitrary context)
-      , ( 8, NegValue <$> semiArbitrary context)
-      , ( 8, AddValue <$> semiArbitrary context <*> semiArbitrary context)
-      , ( 8, SubValue <$> semiArbitrary context <*> semiArbitrary context)
-      , ( 8, MulValue <$> semiArbitrary context <*> semiArbitrary context)
-      , ( 8, DivValue <$> semiArbitrary context <*> semiArbitrary context)
-      , (10, ChoiceValue <$> semiArbitrary context)
-      , ( 6, pure TimeIntervalStart)
-      , ( 6, pure TimeIntervalEnd)
-      , ( 8, UseValue <$> semiArbitrary context)
-      , ( 8, Cond <$> semiArbitrary context <*> semiArbitrary context <*> semiArbitrary context)
-      ]
+  semiArbitrary context = sized \size ->
+    if size <= 0
+      then leaves
+      else oneof
+        [ leaves
+        , resize (pred size) $ NegValue <$> semiArbitrary context
+        , resize (size `quot` 2) $ AddValue <$> semiArbitrary context <*> semiArbitrary context
+        , resize (size `quot` 2) $ SubValue <$> semiArbitrary context <*> semiArbitrary context
+        , resize (size `quot` 2) $ MulValue <$> semiArbitrary context <*> semiArbitrary context
+        , resize (size `quot` 2) $ DivValue <$> semiArbitrary context <*> semiArbitrary context
+        , resize (size `quot` 3) $ Cond <$> semiArbitrary context <*> semiArbitrary context <*> semiArbitrary context
+        ]
+    where
+      leaves = frequency
+        [ (4, AvailableMoney <$> semiArbitrary context <*> semiArbitrary context)
+        , (7, Constant <$> semiArbitrary context)
+        , (5, ChoiceValue <$> semiArbitrary context)
+        , (3, pure TimeIntervalStart)
+        , (3, pure TimeIntervalEnd)
+        , (4, UseValue <$> semiArbitrary context)
+        ]
 
 
 instance Arbitrary Observation where
-  arbitrary =
-    frequency
-      [
-        ( 8, AndObs <$> arbitrary <*> arbitrary)
-      , ( 8, OrObs <$> arbitrary <*> arbitrary)
-      , ( 8, NotObs <$> arbitrary)
-      , (16, ChoseSomething <$> arbitrary)
-      , ( 8, ValueGE <$> arbitrary <*> arbitrary)
-      , ( 8, ValueGT <$> arbitrary <*> arbitrary)
-      , ( 8, ValueLT <$> arbitrary <*> arbitrary)
-      , ( 8, ValueLE <$> arbitrary <*> arbitrary)
-      , ( 8, ValueEQ <$> arbitrary <*> arbitrary)
-      , (10, pure TrueObs)
-      , (10, pure FalseObs)
-      ]
+  arbitrary = sized \size ->
+    if size <= 0
+      then leaves
+      else oneof -- size > 0 produces compound observations.
+        [ leaves
+        , resize (size `quot` 2) $ AndObs <$> arbitrary <*> arbitrary
+        , resize (size `quot` 2) $ OrObs <$> arbitrary <*> arbitrary
+        , resize (pred size) $ NotObs <$> arbitrary
+        , resize (size `quot` 2) $ ValueGE <$> arbitrary <*> arbitrary
+        , resize (size `quot` 2) $ ValueGT <$> arbitrary <*> arbitrary
+        , resize (size `quot` 2) $ ValueLT <$> arbitrary <*> arbitrary
+        , resize (size `quot` 2) $ ValueLE <$> arbitrary <*> arbitrary
+        , resize (size `quot` 2) $ ValueEQ <$> arbitrary <*> arbitrary
+        ]
+    where
+      leaves = frequency
+        [ (8, ChoseSomething <$> arbitrary)
+        , (5, pure TrueObs)
+        , (5, pure FalseObs)
+        ]
   shrink (AndObs x y)       = [AndObs x' y | x' <- shrink x] ++ [AndObs x y' | y' <- shrink y]
   shrink (OrObs x y)        = [OrObs x' y | x' <- shrink x] ++ [OrObs x y' | y' <- shrink y]
   shrink (NotObs x)         = NotObs <$> shrink x
@@ -767,25 +763,30 @@ instance Arbitrary Observation where
   shrink (ValueLT x y)      = [ValueLT x' y | x' <- shrink x] ++ [ValueLT x y' | y' <- shrink y]
   shrink (ValueLE x y)      = [ValueLE x' y | x' <- shrink x] ++ [ValueLE x y' | y' <- shrink y]
   shrink (ValueEQ x y)      = [ValueEQ x' y | x' <- shrink x] ++ [ValueEQ x y' | y' <- shrink y]
-  shrink _                  = []
+  shrink TrueObs            = []
+  shrink FalseObs           = []
 
 instance SemiArbitrary Observation where
-  semiArbitrary context =
-    frequency
-      [
-        ( 8, AndObs <$> semiArbitrary context <*> semiArbitrary context)
-      , ( 8, OrObs <$> semiArbitrary context <*> semiArbitrary context)
-      , ( 8, NotObs <$> semiArbitrary context)
-      , (16, ChoseSomething <$> semiArbitrary context)
-      , ( 8, ValueGE <$> semiArbitrary context <*> semiArbitrary context)
-      , ( 8, ValueGT <$> semiArbitrary context <*> semiArbitrary context)
-      , ( 8, ValueLT <$> semiArbitrary context <*> semiArbitrary context)
-      , ( 8, ValueLE <$> semiArbitrary context <*> semiArbitrary context)
-      , ( 8, ValueEQ <$> semiArbitrary context <*> semiArbitrary context)
-      , (10, pure TrueObs)
-      , (10, pure FalseObs)
-      ]
-
+  semiArbitrary context = sized \size ->
+    if size <= 0
+      then leaves
+      else oneof
+        [ leaves
+        , resize (size `quot` 2) $ AndObs <$> semiArbitrary context <*> semiArbitrary context
+        , resize (size `quot` 2) $ OrObs <$> semiArbitrary context <*> semiArbitrary context
+        , resize (pred size) $ NotObs <$> semiArbitrary context
+        , resize (size `quot` 2) $ ValueGE <$> semiArbitrary context <*> semiArbitrary context
+        , resize (size `quot` 2) $ ValueGT <$> semiArbitrary context <*> semiArbitrary context
+        , resize (size `quot` 2) $ ValueLT <$> semiArbitrary context <*> semiArbitrary context
+        , resize (size `quot` 2) $ ValueLE <$> semiArbitrary context <*> semiArbitrary context
+        , resize (size `quot` 2) $ ValueEQ <$> semiArbitrary context <*> semiArbitrary context
+        ]
+    where
+      leaves = frequency
+        [ (8, ChoseSomething <$> semiArbitrary context)
+        , (5, pure TrueObs)
+        , (5, pure FalseObs)
+        ]
 
 instance Arbitrary Bound where
   arbitrary =
@@ -815,8 +816,8 @@ instance SemiArbitrary Bound where
         pure $ Bound lower (lower + extent)
 
 
-instance SemiArbitrary [Bound] where
-  semiArbitrary context = listOf $ semiArbitrary context
+instance SemiArbitrary a => SemiArbitrary [a] where
+  semiArbitrary = listOf . semiArbitrary
 
 
 instance Arbitrary Action where
@@ -824,7 +825,7 @@ instance Arbitrary Action where
     frequency
       [
         (3, Deposit <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary)
-      , (6, Choice <$> arbitrary <*> arbitrary `suchThat` ((< 5) . length))
+      , (6, Choice <$> arbitrary <*> (take 4 <$> arbitrary))
       , (1, Notify <$> arbitrary)
       ]
   shrink (Deposit a p t x) = [Deposit a' p t x | a' <- shrink a] ++ [Deposit a p' t x | p' <- shrink p] ++ [Deposit a p t' x | t' <- shrink t] ++ [Deposit a p t x' | x' <- shrink x]
@@ -850,25 +851,19 @@ instance SemiArbitrary Action where
 
 
 instance Arbitrary Payee where
-  arbitrary =
-    do
-      isParty <- arbitrary
-      if isParty
-        then Party <$> arbitrary
-        else Account <$> arbitrary
+  arbitrary = oneof
+    [ Party <$> arbitrary
+    , Account <$> arbitrary
+    ]
   shrink (Party x)   = Party <$> shrink x
   shrink (Account x) = Account <$> shrink x
 
 
 instance SemiArbitrary Payee where
-  semiArbitrary context =
-      do
-        party <- semiArbitrary context
-        isParty <- arbitrary
-        pure
-          $ if isParty
-              then Party party
-              else Account party
+  semiArbitrary context = oneof
+    [ Party <$> semiArbitrary context
+    , Account <$> semiArbitrary context
+    ]
 
 
 instance Arbitrary (Case Contract) where
@@ -899,11 +894,11 @@ instance Arbitrary Contract where
   shrink (When a t c) = [c] ++ [When a' t c | a' <- shrink a] ++ [When a t' c | t' <- shrink t] ++ [When a t c' | c' <- shrink c]
   shrink (Let v x c) = [c] ++ [Let v' x c | v' <- shrink v] ++ [Let v x' c | x' <- shrink x] ++ [Let v x c' | c' <- shrink c]
   shrink (Assert o c) = [c] ++ [Assert o' c | o' <- shrink o] ++ [Assert o c' | c' <- shrink c]
-  shrink _ = []
+  shrink Close = []
 
 
 -- | Generate an arbitrary contract, weighted towards different contract constructs.
-arbitraryContractWeighted :: [(Int, Int, Int, Int, Int, Int)]  -- ^ The weights of contract terms, which must eventually include `Close` as a posibility.
+arbitraryContractWeighted :: [(Int, Int, Int, Int, Int, Int)]  -- ^ The weights of contract terms, which must eventually include `Close` as a possibility.
                           -> Context                           -- ^ The Marlowe context.
                           -> Gen Contract                      -- ^ Generator for a contract.
 arbitraryContractWeighted ((wClose, wPay, wIf, wWhen, wLet, wAssert) : w) context =
@@ -912,7 +907,7 @@ arbitraryContractWeighted ((wClose, wPay, wIf, wWhen, wLet, wAssert) : w) contex
       (wClose , pure Close)
     , (wPay   , Pay <$> semiArbitrary context <*> semiArbitrary context <*> semiArbitrary context <*> semiArbitrary context <*> arbitraryContractWeighted w context)
     , (wIf    , If <$> semiArbitrary context <*> arbitraryContractWeighted w context <*> arbitraryContractWeighted w context)
-    , (wWhen  , When <$> listOf (arbitraryCaseWeighted w context) `suchThat` ((<= length w) . length) <*> semiArbitrary context <*> arbitraryContractWeighted w context)
+    , (wWhen  , When <$> (take (length w) <$> listOf (arbitraryCaseWeighted w context)) <*> semiArbitrary context <*> arbitraryContractWeighted w context)
     , (wLet   , Let <$> semiArbitrary context <*> semiArbitrary context <*> arbitraryContractWeighted w context)
     , (wAssert, Assert <$> semiArbitrary context <*> arbitraryContractWeighted w context)
     ]
@@ -944,7 +939,7 @@ whenContractWeights :: (Int, Int, Int, Int, Int, Int)
 whenContractWeights = (0, 0, 0, 1, 0, 0)
 
 
--- | Contractt weights selecing only `Let`.
+-- | Contract weights selecting only `Let`.
 letContractWeights :: (Int, Int, Int, Int, Int, Int)
 letContractWeights = (0, 0, 0, 0, 1, 0)
 
@@ -954,25 +949,43 @@ assertContractWeights :: (Int, Int, Int, Int, Int, Int)
 assertContractWeights = (0, 0, 0, 0, 0, 1)
 
 
--- | Generate a semi-random contract of a given depth.
-arbitraryContractSized :: Int           -- ^ The maximum depth.
-                       -> Context       -- ^ The Marlowe context.
-                       -> Gen Contract  -- ^ Generator for a contract.
-arbitraryContractSized = arbitraryContractWeighted . (`replicate` defaultContractWeights)
-
-
 instance SemiArbitrary Contract where
-  semiArbitrary context = sized \size -> arbitraryContractSized (min size 100 `div` 20) context -- Keep tests from growing too large to execute by capping the maximum contract depth at 5
+  semiArbitrary ctx = sized \size ->
+    if size <= 0
+       then oneof -- Why not simply close? Because there are tests that effectively do this: `arbitrary `suchThat` (/= Close), which
+        [ Pay <$> semiArbitrary ctx <*> semiArbitrary ctx <*> semiArbitrary ctx <*> semiArbitrary ctx <*> pure Close
+        , If <$> semiArbitrary ctx <*> resize (size `quot` 2) (semiArbitrary ctx) <*> pure Close
+        , When [Case (Notify TrueObs) Close] <$> semiArbitrary ctx <*> semiArbitrary ctx
+        , Let <$> semiArbitrary ctx <*> semiArbitrary ctx <*> pure Close
+        , Assert <$> semiArbitrary ctx <*> pure Close
+        , pure Close
+        ]
+       else frequency
+        [ (4, Pay <$> semiArbitrary ctx <*> semiArbitrary ctx <*> semiArbitrary ctx <*> semiArbitrary ctx <*> resize (pred size) (semiArbitrary ctx))
+        , (2, If <$> semiArbitrary ctx <*> resize (size `quot` 2) (semiArbitrary ctx) <*> resize (size `quot` 2) (semiArbitrary ctx))
+        , ( 3
+          , do
+            -- Since the size of a `When` is O(c*n) where `c` is the number of cases and `n` is the size of sub
+            -- contracts, we need to use `c ~ sqrt size` and `n = size / c` to create a contract that is an appropriate size.
+            let maxCases = floor $ sqrt @Double $ fromIntegral size
+            numCases <- chooseInt (0, maxCases)
+            let numSubContracts = succ numCases
+            let subContractSize = size `quot` numSubContracts
+            When
+              <$> (vectorOf numCases $ resize subContractSize $ semiArbitrary ctx)
+              <*> semiArbitrary ctx
+              <*> resize subContractSize (semiArbitrary ctx)
+          )
+        , (4, Let <$> semiArbitrary ctx <*> semiArbitrary ctx <*> resize (pred size) (semiArbitrary ctx))
+        , (1, Assert <$> semiArbitrary ctx <*> resize (pred size) (semiArbitrary ctx))
+        , (1, pure Close)
+        ]
 
 
 -- | Generate a random association map.
 arbitraryAssocMap :: Eq k => Gen k -> Gen v -> Gen (AM.Map k v)
-arbitraryAssocMap arbitraryKey arbitraryValue =
-  do
-    entries <- arbitraryFibonacci [0..]
-    fmap (AM.fromList . nubBy ((==) `on` fst))
-      . replicateM entries
-      $ (,) <$> arbitraryKey <*> arbitraryValue
+arbitraryAssocMap arbitraryKey arbitraryValue = AM.fromList . nubBy ((==) `on` fst)
+  <$> listOf ((,) <$> arbitraryKey <*> arbitraryValue)
 
 
 -- | Shrink a generated association map.
@@ -990,17 +1003,19 @@ instance Arbitrary Accounts where
   shrink = shrinkAssocMap
 
 instance SemiArbitrary Accounts where
+  semiArbitrary context = arbitraryAssocMap (semiArbitrary context) (semiArbitrary context `suchThat` (> 0))
+
+instance {-# OVERLAPPING #-} SemiArbitrary TimeInterval where
   semiArbitrary context =
     do
-      entries <- arbitraryFibonacci [0..]
-      fmap (AM.fromList . nubBy ((==) `on` fst))
-        . replicateM entries
-        $ (,) <$> semiArbitrary context <*> (semiArbitrary context `suchThat` (> 0))
+      POSIXTime start <- semiArbitrary context
+      duration <- arbitraryNonnegativeInteger
+      pure (POSIXTime start, POSIXTime $ start + duration)
+  semiShrink = fmap shrinkTimeInterval
 
 
-instance SemiArbitrary (Party, Token) where
+instance {-# OVERLAPPING #-} (SemiArbitrary a, SemiArbitrary b) => SemiArbitrary (a, b) where
   semiArbitrary context = (,) <$> semiArbitrary context <*> semiArbitrary context
-
 
 instance Arbitrary (AM.Map ChoiceId ChosenNum) where
   arbitrary = arbitraryAssocMap arbitrary arbitraryInteger
@@ -1009,14 +1024,12 @@ instance Arbitrary (AM.Map ChoiceId ChosenNum) where
 instance SemiArbitrary (AM.Map ChoiceId ChosenNum) where
   semiArbitrary context = arbitraryAssocMap (semiArbitrary context) (semiArbitrary context)
 
-
 instance Arbitrary (AM.Map ValueId Integer) where
   arbitrary = arbitraryAssocMap arbitrary arbitraryInteger
   shrink = shrinkAssocMap
 
 instance SemiArbitrary (AM.Map ValueId Integer) where
   semiArbitrary context = arbitraryAssocMap (semiArbitrary context) (semiArbitrary context)
-
 
 instance Arbitrary State where
   arbitrary = semiArbitrary =<< arbitrary
@@ -1086,11 +1099,7 @@ instance Arbitrary TransactionInput where
     <> [TransactionInput txInterval  txInputs' | txInputs'   <- shrink txInputs  ]
 
 instance SemiArbitrary TransactionInput where
-  semiArbitrary context =
-    do
-      Environment txInterval <- semiArbitrary context
-      n <- arbitraryFibonacci [1, 1, 1, 1, 0, 2]  -- TODO: Review.
-      TransactionInput txInterval <$> vectorOf n (semiArbitrary context)
+  semiArbitrary context = TransactionInput <$> semiArbitrary context <*> semiArbitrary context
 
 
 -- | Generate a random step for a contract.

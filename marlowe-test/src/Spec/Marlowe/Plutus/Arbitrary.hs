@@ -14,6 +14,8 @@
 {-# LANGUAGE RecordWildCards #-}
 
 {-# OPTIONS_GHC -fno-warn-orphans #-}
+{-# LANGUAGE BlockArguments #-}
+{-# LANGUAGE TypeApplications #-}
 
 
 module Spec.Marlowe.Plutus.Arbitrary
@@ -51,7 +53,7 @@ import Plutus.V2.Ledger.Api
 import PlutusTx.Builtins (BuiltinByteString)
 import Spec.Marlowe.Semantics.Arbitrary (arbitraryAssocMap, arbitraryPositiveInteger)
 import Spec.Marlowe.Semantics.Orphans ()
-import Test.Tasty.QuickCheck (Arbitrary(..), Gen, frequency, listOf, suchThat, vectorOf)
+import Test.Tasty.QuickCheck (Arbitrary(..), Gen, chooseInt, frequency, resize, sized, suchThat, vectorOf)
 
 import qualified Data.ByteString as BS (ByteString, pack)
 import qualified Data.ByteString.Char8 as BS8 (pack)
@@ -70,25 +72,31 @@ instance Arbitrary BuiltinData where
 
 
 instance Arbitrary Data where
-  arbitrary =
-    let
-      arbitraryDepth 0 =
-        frequency
-          [
-            (1, I <$> arbitrary)
-          , (2, B <$> arbitrary)
-          ]
-      arbitraryDepth n =
-        frequency
-          [
-            ( 1, Constr <$> arbitrary <*> listOf (arbitraryDepth (n-1)) `suchThat` ((< 5) . length))
-          , ( 2, Map    <$> listOf ((,) <$> arbitraryDepth (n-1) <*> arbitraryDepth (n-1)) `suchThat` ((< 5) . length))
-          , ( 5, List   <$> listOf (arbitraryDepth (n-1)) `suchThat` ((< 5) . length))
-          , (10, I      <$> arbitrary)
-          , (20, B      <$> arbitrary)
-          ]
-    in
-      arbitraryDepth (4 :: Int)
+  arbitrary = sized \size ->
+    if size <= 0
+      then frequency
+        [ (1, I <$> arbitrary)
+        , (2, B <$> arbitrary)
+        ]
+      else frequency
+        [ ( 1, do
+            subDataCount <- chooseInt (0, floor $ sqrt @Double $ fromIntegral size)
+            let subDatumSize = size `quot` subDataCount
+            Constr <$> arbitrary <*> vectorOf subDataCount (resize subDatumSize arbitrary)
+          )
+        , ( 2, do
+            subDataCount <- chooseInt (0, floor $ sqrt @Double $ fromIntegral size)
+            let subDatumSize = size `quot` (subDataCount * 2)
+            Map    <$> vectorOf subDataCount (resize subDatumSize arbitrary)
+          )
+        , ( 5, do
+            subDataCount <- chooseInt (0, floor $ sqrt @Double $ fromIntegral size)
+            let subDatumSize = size `quot` subDataCount
+            List    <$> vectorOf subDataCount (resize subDatumSize arbitrary)
+          )
+        , (10, I      <$> arbitrary)
+        , (20, B      <$> arbitrary)
+        ]
 
 
 instance Arbitrary Datum where
@@ -166,7 +174,7 @@ instance Arbitrary TxOut where
 
 
 instance Arbitrary TxOutRef where
-  arbitrary = TxOutRef <$> arbitrary <*> arbitrary `suchThat` (> 0)
+  arbitrary = TxOutRef <$> arbitrary <*> arbitraryPositiveInteger
 
 
 instance Arbitrary a => Arbitrary (UpperBound a) where

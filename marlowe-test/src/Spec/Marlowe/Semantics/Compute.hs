@@ -20,6 +20,7 @@
 {-# OPTIONS_GHC -fno-warn-orphans               #-}
 {-# OPTIONS_GHC -fno-warn-redundant-constraints #-}
 {-# OPTIONS_GHC -fno-warn-unused-top-binds      #-}
+{-# LANGUAGE TypeApplications #-}
 
 
 module Spec.Marlowe.Semantics.Compute
@@ -78,7 +79,9 @@ import Spec.Marlowe.Semantics.Arbitrary
   , SemiArbitrary(semiArbitrary)
   , arbitraryContractWeighted
   , arbitraryGoldenTransaction
+  , arbitraryNonnegativeInteger
   , arbitraryPositiveInteger
+  , arbitraryTimeIntervalAround
   , assertContractWeights
   , closeContractWeights
   , defaultContractWeights
@@ -95,15 +98,19 @@ import Test.Tasty.QuickCheck
   ( Arbitrary(..)
   , Gen
   , Testable(property)
+  , chooseInt
   , chooseInteger
   , discard
   , elements
   , forAll
   , forAllShrink
   , frequency
+  , resize
   , shuffle
+  , sized
   , suchThat
   , testProperty
+  , vectorOf
   )
 
 import qualified PlutusTx.AssocMap as AM
@@ -165,11 +172,16 @@ instance SemiArbitrary MarloweContext where
 
 -- | Generate an arbitrary Marlowe transaction context.
 arbitraryMarloweContext :: [(Int, Int, Int, Int, Int, Int)]  -- ^ The weights for contract terms.
+                        -> Maybe Int
                         -> Gen MarloweContext                -- ^ Generator for a transaction context.
-arbitraryMarloweContext w =
+arbitraryMarloweContext w maxInputs =
     do
       context    <- arbitrary
-      mcInput    <- semiArbitrary context
+      TransactionInput{..}    <- semiArbitrary context
+      let
+        mcInput = case maxInputs of
+          Nothing -> TransactionInput{..}
+          Just i -> TransactionInput{txInputs = take i txInputs, ..}
       mcState    <- semiArbitrary context
       mcContract <- arbitraryContractWeighted w context
       let
@@ -345,7 +357,7 @@ environment =
       )
 
 
--- | Fetch the validity interval from a tranaction context.
+-- | Fetch the validity interval from a transaction context.
 validTimes :: Getter MarloweContext TimeInterval
 validTimes = to $ txInterval . mcInput
 
@@ -355,7 +367,7 @@ earliestTime :: Getter MarloweContext POSIXTime
 earliestTime = to $ fst . txInterval . mcInput
 
 
--- | Fetch the lastest time of a validity interval in a transaction context.
+-- | Fetch the latest time of a validity interval in a transaction context.
 latestTime :: Getter MarloweContext POSIXTime
 latestTime = to $ snd . txInterval . mcInput
 
@@ -490,7 +502,7 @@ sameAccounts :: [Invariant]
 sameAccounts = pure SameAccounts
 
 
--- | The pre- and post-transaction choice records must be identifical.
+-- | The pre- and post-transaction choice records must be identical.
 sameChoices  :: [Invariant]
 sameChoices  = pure SameChoices
 
@@ -641,7 +653,7 @@ requireEarliestLtPre :: Testify ()
 requireEarliestLtPre = view earliestTime `requireLT` view preTime
 
 
--- | Assert that the earliest time in the valiidity interval is less than or equal to the minimum time in the pre-transaction state.
+-- | Assert that the earliest time in the validity interval is less than or equal to the minimum time in the pre-transaction state.
 requireEarliestLeLatest :: Testify ()
 requireEarliestLeLatest = view earliestTime `requireLE` view latestTime
 
@@ -911,6 +923,10 @@ ambiguousTimeout =
     name          = "Ambiguous interval for timeout"
   , precondition  = requireAmbiguousTimeout >> requireInputs (== 0)
   , postcondition = hasError TEAmbiguousTimeIntervalError
+  , generator = do
+      depth <- chooseInt (0, 3)
+      let weights = replicate depth defaultContractWeights
+      arbitraryMarloweContext weights $ Just 0
   }
 
 
@@ -920,18 +936,49 @@ uselessNoInput =
   def
   {
     name          = "Applying no inputs is useless until timeout"
+  , generator = generator
   , precondition  = requireValidTime >> requireNotTimeout >> requireInputs (== 0)
   , postcondition = hasError TEUselessTransaction
   }
+  where
+    -- Use a custom generator that only generates values that satisfy the precondition
+    generator :: Gen MarloweContext
+    generator = do
+      ctx <- arbitrary
+      mcState <- semiArbitrary ctx
+      -- So that `requireValidTime` is always satisfied
+      txInterval <- arbitraryTimeIntervalAround (minTime mcState)
+      -- So that requireInputs (== 0) is trivially satisfied
+      let txInputs = []
+      let input = TransactionInput{..}
+      -- Generate a when contract so that `requireNextTimeout` is always satisfied.
+      contract <- sized $ \size -> do
+        numCases <- chooseInt (0, floor $ sqrt @Double $ fromIntegral size)
+        let subContractSize = size `quot` (numCases + 1)
+        cases <- vectorOf numCases $ Case
+          <$> semiArbitrary ctx
+          <*> resize subContractSize (semiArbitrary ctx)
+        -- generate a timeout that always satisfies requireNotTimeout
+        let POSIXTime minTimeout = max (max (minTime mcState) (fst txInterval)) (snd txInterval + 1)
+        timeout <- (+ minTimeout) <$> arbitraryNonnegativeInteger
+        When cases (POSIXTime timeout) <$> semiArbitrary ctx
+      isMerkleized <- frequency [(9, pure False), (1, pure True)]
+      let
+        (contract', continuations) = deepMerkleize contract
+        (mcContract, mcInput) =
+          case (isMerkleized, merkleizeInputs continuations mcState contract' input) of
+            (True, Just input') -> (contract', input')
+            _                   -> (contract , input )
+        mcOutput = computeTransaction mcInput mcState mcContract
+      pure MarloweContext{..}
 
-
--- | Test that closing empy accounts is useless.
+-- | Test that closing empty accounts is useless.
 explicitClose :: TransactionTest
 explicitClose =
   def
   {
     name          = "Closing no accounts is useless"
-  , generator     = arbitraryMarloweContext [closeContractWeights]
+  , generator     = arbitraryMarloweContext [closeContractWeights] $ Just 0
   , precondition  = requireContract Close >> requireNoAccounts >> requireValidTime >> requireInputs (== 0)
   , invariant     = mempty
   , postcondition = hasError TEUselessTransaction
@@ -944,7 +991,7 @@ implicitClose =
   def
   {
     name          = "Pay all accounts on close"
-  , generator     = arbitraryMarloweContext [closeContractWeights]
+  , generator     = arbitraryMarloweContext [closeContractWeights] $ Just 0
   , precondition  = requireContract Close >> requireAccounts >> requireValidTime >> requireInputs (== 0)
   , invariant     = sameChoices <> sameValues
   , postcondition = hasNoAccounts >> noWarnings >> paysAllAccounts
@@ -957,10 +1004,9 @@ noMatch =
   def
   {
     name          = "No matching input"
-  , generator     = arbitraryMarloweContext
-                      . (whenContractWeights :)
-                      . (`replicate` defaultContractWeights)
-                      =<< arbitrary `suchThat` (< 4)
+  , generator     = do
+    weights <- (whenContractWeights :) . (`replicate` defaultContractWeights) <$> chooseInt (0, 3)
+    arbitraryMarloweContext weights Nothing
   , precondition  = requireValidTime >> requireNotTimeout >> requireIncompatibleInput
   , postcondition = hasError TEApplyNoMatchError
   }
@@ -972,7 +1018,7 @@ letSets =
   def
   {
     name          = "Let sets variable"
-  , generator     = arbitraryMarloweContext [letContractWeights, whenContractWeights, defaultContractWeights]
+  , generator     = arbitraryMarloweContext [letContractWeights, whenContractWeights, defaultContractWeights] $ Just 0
   , precondition  = requireLetWhen >> requireAccounts >> requireValidTime >> requireInputs (== 0)
   , invariant     = sameAccounts <> sameChoices
   , postcondition = do
@@ -991,7 +1037,7 @@ ifBranches =
   def
   {
     name          = "If branches"
-  , generator     = arbitraryMarloweContext [ifContractWeights, whenContractWeights, defaultContractWeights]
+  , generator     = arbitraryMarloweContext [ifContractWeights, whenContractWeights, defaultContractWeights] $ Just 0
   , precondition  = requireIfWhen >> requireAccounts >> requireValidTime >> requireInputs (== 0)
   , invariant     = sameState
   , postcondition = checkContinuation =<< extractIf
@@ -1004,7 +1050,7 @@ assertWarns =
   def
   {
     name          = "Asset warns"
-  , generator     = arbitraryMarloweContext [assertContractWeights, whenContractWeights, defaultContractWeights]
+  , generator     = arbitraryMarloweContext [assertContractWeights, whenContractWeights, defaultContractWeights] $ Just 0
   , precondition  = requireAssertWhen >> requireAccounts >> requireValidTime >> requireInputs (== 0)
   , invariant     = sameState
   , postcondition = do
@@ -1026,7 +1072,7 @@ anyInput =
   }
 
 
--- | Test that payments substract value from internal accounts.
+-- | Test that payments subtract value from internal accounts.
 payingSubtractsFromAccount :: TransactionTest
 payingSubtractsFromAccount =
   def
@@ -1064,7 +1110,7 @@ depositAddsToAccount =
   }
 
 
--- | Test that notify contines as expected
+-- | Test that notify continues as expected
 notifyContinues :: TransactionTest
 notifyContinues =
   def
