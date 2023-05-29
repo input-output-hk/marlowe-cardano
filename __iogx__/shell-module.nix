@@ -34,7 +34,7 @@
 }:
 
 let
-  scripts = import ./marlowe-cardano/scripts.nix { inherit inputs pkgs; };
+  scripts = import ./marlowe-cardano/scripts.nix { inherit inputs pkgs haskell-nix-project; };
 in
 {
   packages = [
@@ -55,6 +55,20 @@ in
       enabled = pkgs.stdenv.system == "x86_64-linux";
       group = "marlowe";
     };
+
+    compose-spec = {
+      description = "compose-spec";
+      exec = scripts.compose-spec;
+      enabled = pkgs.stdenv.system == "x86_64-linux";
+      group = "marlowe";
+    };
+
+    run-integration-tests = {
+      description = "Run marlowe integration tests";
+      exec = scripts.run-integration-tests;
+      group = "marlowe";
+    };
+
     start-cardano-node = {
       exec = scripts.start-cardano-node;
       description = "Start cardano-node";
