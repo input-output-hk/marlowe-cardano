@@ -65,6 +65,16 @@ let
 
   compose-spec = import ./compose-spec.nix { inherit inputs pkgs; };
 
+  mkCabalExeScript = target: ''
+    cd `${pkgs.git}/bin/git rev-parse --show-toplevel`
+    cabal build ${target} 1>/dev/null 2>/dev/null
+    cabal run ${target} -- "$@" | tail -n +2
+  '';
+
+  marlowe-runtime-cli = mkCabalExeScript "marlowe-runtime-cli";
+
+  marlowe-cli = mkCabalExeScript "marlowe-cli";
+
   run-integration-tests =
     let
       cardano-cli = inputs.cardano-world.cardano.packages.cardano-cli;
@@ -79,5 +89,11 @@ let
     '';
 in
 {
-  inherit start-cardano-node re-up compose-spec run-integration-tests;
+  inherit
+    start-cardano-node
+    re-up
+    compose-spec
+    run-integration-tests
+    marlowe-runtime-cli
+    marlowe-cli;
 }
