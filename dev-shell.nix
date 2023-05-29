@@ -143,6 +143,14 @@ let
     shellHook = ''
       export PGUSER=postgres
       ${defaultShellHook}
+
+      echo -e "\033[0;33m*********************************************************************"
+      echo -e "'nix develop' is deprecated as of this PR (IOGX Integration):"
+      echo -e "https://github.com/input-output-hk/marlowe-cardano/pull/572"
+      echo -e "Please exit this shell and run 'nix develop .#__iogx__.default' instead."
+      echo -e "For any problem with the new shell please notify @zeme-wana on GitHub"
+      echo -e "and revert to using 'nix develop' until fixed."                             
+      echo -e "*********************************************************************\033[0m"
     '';
   };
 

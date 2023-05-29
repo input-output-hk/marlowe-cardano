@@ -6,6 +6,9 @@ env:
   SUBSTITUTERS: "https://cache.nixos.org/ https://cache.iog.io https://marlowe-temp.cachix.org https://cache.zw3rk.com/"
 
 on:
+  schedule:
+    # Run at 00:00 UTC every day
+    - cron: 0 0 * * *
   # Allow running manually
   workflow_dispatch:
 
