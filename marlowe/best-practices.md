@@ -29,7 +29,7 @@ Marlowe's design and safety enables the deployment of a variety of powerful smar
 
 ## Summary of Capabilities
 
-See [Marlowe Finance](https://marlowe-finance.io/) or the [Marlowe Developer Documentation Index](https://developers.cardano.org/docs/smart-contracts/marlowe) for links to documentation for the Marlowe domain-specific language (DSL). In brief, Marlowe is an expressive and safe language for running smart contracts on the Cardano blockchain:
+See [Marlowe Finance](https://marlowe.iohk.io/) or the [Marlowe Developer Documentation Index](https://developers.cardano.org/docs/smart-contracts/marlowe) for links to documentation for the Marlowe domain-specific language (DSL). In brief, Marlowe is an expressive and safe language for running smart contracts on the Cardano blockchain:
 -   Focus on transactional contracts
 -   Account-based model
 -   Participants identified by either tokenized roles or by public-key hashes
@@ -76,7 +76,7 @@ In general, Marlowe contracts that are easy to design, audit, and deploy share t
 - a modest amount of state internal to the contract
 - special logic for handling cases where parties fail to take action
 
-A Marlowe contract might be considered "simple" or "straightforward" even if it is large: for example, a 30-year loan with monthly payments would involve 360 deposits, but the logic of each of the 360 deposits is identical: the Haskell or TypeScript source code for generating such a loan contract would be very compact, even though the Marlowe output of that code would be too large to display in a visual editor such as [Marlowe Playground](https://play.marlowe-finance.io/).
+A Marlowe contract might be considered "simple" or "straightforward" even if it is large: for example, a 30-year loan with monthly payments would involve 360 deposits, but the logic of each of the 360 deposits is identical: the Haskell or TypeScript source code for generating such a loan contract would be very compact, even though the Marlowe output of that code would be too large to display in a visual editor such as [Marlowe Playground](https://play.marlowe.iohk.io/).
 
 
 ## Limitations Imposed by the Marlowe Language
@@ -92,7 +92,7 @@ The [Faustus programming language](https://www.uwyo.edu/wabl/faustus.html) relax
 
 ## Limitations in Marlowe Playground
 
-[Marlowe Playground](https://play.marlowe-finance.io/) currently lacks the capabilities to construct, display, or simulate merkleized Marlowe contracts. Large contracts containing many terms also pose difficulties for the Playground: simulating a large contract may exceed the computing resource limits in the server for Marlowe Playground. Similarly, static analysis of large Marlowe contracts typically exceeds the resources of the Playground. For example, static analysis of auctions involving many parties may take tens or hundreds of minutes. 
+[Marlowe Playground](https://play.marlowe.iohk.io/) currently lacks the capabilities to construct, display, or simulate merkleized Marlowe contracts. Large contracts containing many terms also pose difficulties for the Playground: simulating a large contract may exceed the computing resource limits in the server for Marlowe Playground. Similarly, static analysis of large Marlowe contracts typically exceeds the resources of the Playground. For example, static analysis of auctions involving many parties may take tens or hundreds of minutes. 
 
 
 ## Limitations Imposed by the Cardano Blockchain
@@ -228,9 +228,9 @@ The `--execution-cost` and the `--transaction-size` flags check for violations o
 
 Without the `--verbose` flag, the analysis report simply prints how severe the violations are. With the `--verbose` flag, the analysis report also prints the location in the contract that offends worse.
 
-A [Jupyter notebook](../marlowe-cli/cookbook/repair.ipynb) illustrates the use of `marlowe-cli run analyze` on a poorly designed contract.
+A [Jupyter notebook](https://github.com/input-output-hk/real-world-marlowe/blob/main/archives/marlowe-cli/cookbook/repair.ipynb) illustrates the use of `marlowe-cli run analyze` on a poorly designed contract.
 
-In principle, if a Marlowe contract passes all of the checks in `marlowe run analyze`, then the contract should execute on the Cardano blockchain according to Marlowe semantics (i.e., as it would execute in a simulator such as [Marlowe Playground](https://play.marlowe-finance.io/)). However, it is probably not advisable to run a contract that is extremely close to the limits imposed by the ledger because running close to those limits would require that off-chain code (wallets, coin selectors, etc.) construct a parsimonious `ScriptContext` that doesn't unnecessarily enlarge the size of the transaction or increase its execution cost beyond the theoretical minimums. Also, if the transaction size limit or the Plutus execution cost limits were lowered in the future by a protocol-parameter change, then the Marlowe contract might be at risk of having unexecutable transactions in the future.
+In principle, if a Marlowe contract passes all of the checks in `marlowe run analyze`, then the contract should execute on the Cardano blockchain according to Marlowe semantics (i.e., as it would execute in a simulator such as [Marlowe Playground](https://play.marlowe.iohk.io/)). However, it is probably not advisable to run a contract that is extremely close to the limits imposed by the ledger because running close to those limits would require that off-chain code (wallets, coin selectors, etc.) construct a parsimonious `ScriptContext` that doesn't unnecessarily enlarge the size of the transaction or increase its execution cost beyond the theoretical minimums. Also, if the transaction size limit or the Plutus execution cost limits were lowered in the future by a protocol-parameter change, then the Marlowe contract might be at risk of having unexecutable transactions in the future.
 
 
 ## Designing Marlowe Contracts to Avoid Protocol Limits
@@ -261,11 +261,11 @@ Using more than 100 different unique native token *types* (i.e., policy ID plus 
 #### Avoid or break up complex logic in the contract.
 
 It is not difficult to exceed the [execution steps or memory limits](#maximum-execution-steps-and-memory) in a contract that contains many `Case` terms, nested `Pay` terms, or complicated arithmetical or logical computations. Run all execution paths of the contract on a test network and/or use `marlowe-cli run analyze --execution-cost` to check the contract's safety. These remedies for excess execution cost can generally reduce the cost of any contract below the execution limits, but they might need to be applied assiduously.
-1. Break complex nested terms into several transactions by inserting `Notify` terms into the contract. For example, instead of making six successive `Pay`s in the same transaction, break that construct into three `Pay`s, a `When [Case Notify ...]`, and three `Pays`, which will split the six-pay transaction into a three-pay transaction followed by an `INotify` that triggers three more payments. Choose the timeout for the `When` term carefully and use [Marlowe Playground's](https://play.marlowe-finance.io/) static analysis tool to understand the consequences and safely of splitting the transaction.
+1. Break complex nested terms into several transactions by inserting `Notify` terms into the contract. For example, instead of making six successive `Pay`s in the same transaction, break that construct into three `Pay`s, a `When [Case Notify ...]`, and three `Pays`, which will split the six-pay transaction into a three-pay transaction followed by an `INotify` that triggers three more payments. Choose the timeout for the `When` term carefully and use [Marlowe Playground's](https://play.marlowe.iohk.io/) static analysis tool to understand the consequences and safely of splitting the transaction.
 2. Similarly, break extensive arithmetic computations into multiple transactions by storing results in an intermediate bound value (via `Let`) and then a `When [Case Notify ...]`.
 3. A `When` term with many `Case`s can be split into a `When` with the first several `Case`s and an extra `Case Notify` that continues to another `When` with the remaining `Case`s. Once again, use static analysis and simulation to check that the split has the intended behavior.
 4. Carefully re-use bound-value names and choices, in order to reduce the size of the contract's internal state.
-5. Take advantage of the fact that a bound value or choice defaults to zero in `UseValue` or `ChosenValue` if the value has never been bound or the choice has never been made. Although this reduces execution cost, it will cause warnings in [Marlowe Playground's](https://play.marlowe-finance.io/) static analysis, so proceed carefully.
+5. Take advantage of the fact that a bound value or choice defaults to zero in `UseValue` or `ChosenValue` if the value has never been bound or the choice has never been made. Although this reduces execution cost, it will cause warnings in [Marlowe Playground's](https://play.marlowe.iohk.io/) static analysis, so proceed carefully.
 6. Use very short names for role tokens and (where feasible) native tokens. Every byte counts, so expressive user-friendly role and token names costs more. An application's front end or user interface can translate terse role or token names into human-readable ones.
 7. Use Marlowe's merkleization feature (e.g., `marlowe-cli run initialize --merkelize`) to store the contract's future logic off the blockchain, so it does not incur execution-memory costs. The [English Auction](../marlowe-cli/cookbook/english-auction.ipynb) example features aggressive merkleization.
 8. Remember that the continuation of a `When` cannot be merkleized, with the implication that a contract with `When` continuations containing many terms or (especially) additional `When` continuations will be large. One can mimic a merkleization of a `When` continuation by having the `When` continue to a `When [Case Notify ...] timeout Close` where the `timeout` is in the far distant future. That timeout needs to be chosen carefully and safely. The [Stabilized Collective Loan](../marlowe-cli/cookbook/collective-loan.ipynb) provides an example of merkleized continuations.
