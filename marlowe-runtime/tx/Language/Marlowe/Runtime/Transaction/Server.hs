@@ -36,6 +36,7 @@ import Cardano.Api.Shelley (ProtocolParameters)
 import Control.Applicative ((<|>))
 import Control.Concurrent.Component
 import Control.Concurrent.STM (STM, modifyTVar, newEmptyTMVar, newTVar, putTMVar, readTMVar, readTVar, retry)
+import Control.Error (MaybeT(..))
 import Control.Error.Util (hoistMaybe, hush, note, noteT)
 import Control.Exception (Exception(..))
 import Control.Monad (unless)
@@ -59,9 +60,10 @@ import Language.Marlowe.Runtime.Cardano.Api
   , toCardanoStakeCredential
   )
 import Language.Marlowe.Runtime.ChainSync.Api
-  (BlockHeader, ChainSyncQuery(..), Credential(..), TokenName, TxId(..), fromCardanoTxMetadata, toDatum)
+  (BlockHeader, ChainSyncQuery(..), Credential(..), DatumHash, TokenName, TxId(..), fromCardanoTxMetadata, toDatum)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
-import Language.Marlowe.Runtime.Contract.Api (ContractRequest, merkleizeInputs)
+import Language.Marlowe.Runtime.Contract.Api (ContractRequest, getContract, merkleizeInputs)
+import qualified Language.Marlowe.Runtime.Contract.Api as Contract
 import Language.Marlowe.Runtime.Core.Api
   ( Contract
   , ContractId(..)
@@ -189,6 +191,7 @@ worker = component_ \WorkerDependencies{..} -> do
           case command of
             Create mStakeCredential version addresses roles metadata minAda contract ->
               withEvent ExecCreate \_ -> execCreate
+                contractQueryConnector
                 getCurrentScripts
                 solveConstraints
                 loadWalletContext
@@ -241,8 +244,10 @@ attachSubmit jobId getSubmitJob =
   atomically $ fmap (hoistAttach $ liftIO . atomically) <$> submitJobServerAttach jobId =<< getSubmitJob
 
 execCreate
-  :: MonadIO m
-  => (MarloweVersion v -> MarloweScripts)
+  :: forall r s m v
+   . (MonadUnliftIO m, MonadEvent r s m, HasSpanContext r)
+  => SomeClientConnectorTraced (QueryClient ContractRequest) r s m
+  -> (MarloweVersion v -> MarloweScripts)
   -> SolveConstraints
   -> LoadWalletContext m
   -> NetworkId
@@ -252,13 +257,17 @@ execCreate
   -> RoleTokensConfig
   -> MarloweTransactionMetadata
   -> Chain.Lovelace
-  -> Contract v
+  -> Either (Contract v) DatumHash
   -> m (ServerStCmd MarloweTxCommand Void (CreateError v) (ContractCreated BabbageEra v) m ())
-execCreate getCurrentScripts solveConstraints loadWalletContext networkId mStakeCredential version addresses roleTokens metadata minAda contract = execExceptT do
+execCreate contractQueryConnector getCurrentScripts solveConstraints loadWalletContext networkId mStakeCredential version addresses roleTokens metadata minAda contract = execExceptT do
   walletContext <- lift $ loadWalletContext addresses
+  contract' :: Contract v <- case contract of
+    Right hash -> case version of
+      MarloweV1 -> fmap Contract.contract $ noteT CreateContractNotFound $ MaybeT $ runSomeConnectorTraced contractQueryConnector $ getContract hash
+    Left c -> pure c
   mCardanoStakeCredential <- except $ traverse (note CreateToCardanoError . toCardanoStakeCredential) mStakeCredential
   ((datum, assets, rolesCurrency), constraints) <- except
-    $ buildCreateConstraints version walletContext roleTokens metadata minAda contract
+    $ buildCreateConstraints version walletContext roleTokens metadata minAda contract'
   let
     scripts@MarloweScripts{..} = getCurrentScripts version
     stakeReference = maybe NoStakeAddress StakeAddressByValue mCardanoStakeCredential
@@ -288,10 +297,10 @@ execCreate getCurrentScripts solveConstraints loadWalletContext networkId mStake
       , payoutScriptHash = payoutScript
       }
   let
-    continuations = noContinuations version  -- FIXME: Revise this when continuations are available at creation.
+    continuations = noContinuations version
     contractSafetyErrors =
       if False  -- FIXME: Disabled because of incompatibility with integration tests.
-        then checkContract roleTokens version contract continuations
+        then checkContract roleTokens version contract' continuations
         else mempty
   -- FIXME: The is a placeholder until we design safety-analysis reporting.
   unless (null contractSafetyErrors)
@@ -301,7 +310,7 @@ execCreate getCurrentScripts solveConstraints loadWalletContext networkId mStake
     ExceptT
       $ first CreateSafetyAnalysisError
       <$> if False  -- FIXME: Disabled because of incompatibility with integration tests.
-            then checkTransactions solveConstraints version marloweContext rolesCurrency (changeAddress addresses) (toInteger minAda) contract continuations
+            then checkTransactions solveConstraints version marloweContext rolesCurrency (changeAddress addresses) (toInteger minAda) contract' continuations
             else pure $ pure mempty
   -- FIXME: The is a placeholder until we design safety-analysis reporting.
   unless (null transactionSafetyErrors)

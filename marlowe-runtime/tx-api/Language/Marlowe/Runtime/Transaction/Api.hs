@@ -74,6 +74,7 @@ import Language.Marlowe.Runtime.ChainSync.Api
   , AssetId
   , Assets
   , BlockHeader
+  , DatumHash
   , Lovelace
   , Metadata(..)
   , PlutusScript
@@ -368,8 +369,8 @@ data MarloweTxCommand status err result where
     -- ^ Optional metadata to attach to the transaction
     -> Lovelace
     -- ^ Min Lovelace which should be used for the contract output.
-    -> Contract v
-    -- ^ The contract to run
+    -> (Either (Contract v) DatumHash)
+    -- ^ The contract to run, or the hash of the contract to load from the store.
     -> MarloweTxCommand Void (CreateError v) (ContractCreated BabbageEra v)
 
   -- | Construct a transaction that advances an active Marlowe contract by
@@ -494,13 +495,13 @@ instance Command MarloweTxCommand where
     TagSubmit -> JobIdSubmit <$> get
 
   putCommand = \case
-    Create mStakeCredential version walletAddresses roles metadata minAda contract -> do
+    Create mStakeCredential MarloweV1 walletAddresses roles metadata minAda contract -> do
       put mStakeCredential
       put walletAddresses
       put roles
       put metadata
       put minAda
-      putContract version contract
+      put contract
     ApplyInputs version walletAddresses contractId metadata invalidBefore invalidHereafter redeemer -> do
       put walletAddresses
       put contractId
@@ -515,14 +516,14 @@ instance Command MarloweTxCommand where
     Submit tx -> put $ serialiseToCBOR tx
 
   getCommand = \case
-    TagCreate version -> do
+    TagCreate MarloweV1 -> do
       mStakeCredential <- get
       walletAddresses <- get
       roles <- get
       metadata <- get
       minAda <- get
-      contract <- getContract version
-      pure $ Create mStakeCredential version walletAddresses roles metadata minAda contract
+      contract <- get
+      pure $ Create mStakeCredential MarloweV1 walletAddresses roles metadata minAda contract
 
     TagApplyInputs version -> do
       walletAddresses <- get
@@ -628,6 +629,7 @@ data CreateError v
   | CreateBuildupFailed CreateBuildupError
   | CreateToCardanoError
   | CreateSafetyAnalysisError String  -- FIXME: This is a placeholder, pending design of error handling for safety analysis.
+  | CreateContractNotFound
   deriving (Generic)
 
 deriving instance Eq (CreateError 'V1)
