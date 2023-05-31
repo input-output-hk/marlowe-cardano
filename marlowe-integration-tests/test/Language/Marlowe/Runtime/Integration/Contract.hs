@@ -25,7 +25,7 @@ import Language.Marlowe.Protocol.Load.Server (marloweLoadServerPeer)
 import Language.Marlowe.Runtime.Cardano.Api (fromCardanoDatumHash, toCardanoScriptData)
 import Language.Marlowe.Runtime.ChainSync.Api (DatumHash(..), toDatum)
 import qualified Language.Marlowe.Runtime.Contract as Contract
-import Language.Marlowe.Runtime.Contract.Api (ContractWithAdjacency(adjacency), getMerkleizedInputs)
+import Language.Marlowe.Runtime.Contract.Api (ContractWithAdjacency(adjacency), merkleizeInputs)
 import qualified Language.Marlowe.Runtime.Contract.Api as Api
 import Language.Marlowe.Runtime.Contract.Store.File (ContractStoreOptions(..), createContractStore)
 import Network.Protocol.Connection
@@ -36,7 +36,7 @@ import Network.Protocol.Query.Server (queryServerPeer)
 import Network.TypedProtocol (unsafeIntToNat)
 import qualified Plutus.V2.Ledger.Api as PV2
 import Spec.Marlowe.Semantics.Arbitrary (arbitraryNonnegativeInteger)
-import Spec.Marlowe.Semantics.Path (ContractPath(PathWhenCases), genWhenPath, getContract, getInputs)
+import Spec.Marlowe.Semantics.Path (genContractPath, getContract, getInputs)
 import Test.Hspec
 import Test.Hspec.QuickCheck (prop)
 import Test.Integration.Marlowe (createWorkspace, resolveWorkspacePath)
@@ -49,16 +49,15 @@ spec = parallel $ describe "MarloweContract" do
   getMerkleizedInputsSpec
 
 getMerkleizedInputsSpec :: Spec
-getMerkleizedInputsSpec = describe "getMerkleizedInputs" do
-  prop "Produces equivalent inputs" \state -> forAll (genTimeInterval state) \interval -> forAll (genWhenPath (Environment interval) state) \whenPath ->
+getMerkleizedInputsSpec = focus $ describe "merkleizeInputs" do
+  prop "Produces equivalent inputs" \state -> forAll (genTimeInterval state) \interval -> forAll (genContractPath (Environment interval) state) \path ->
     let
-      path = PathWhenCases whenPath
       contract = getContract path
       inputs = getInputs [] path
     in counterexample (show inputs)
       $ counterexample (show contract) $ runContractTest do
         hash <- expectJust "failed to push contract" $ runLoad $ pushContract contract
-        inputs' <- either (fail . show) pure =<< runQuery (getMerkleizedInputs hash state interval inputs)
+        inputs' <- either (fail . show) pure =<< runQuery (merkleizeInputs hash state interval inputs)
         Api.ContractWithAdjacency{contract = merkleizedContract} <- expectJust "Failed to get contract" $ runQuery $ Api.getContract hash
         let expected = computeTransaction (TransactionInput interval $ NormalInput <$> inputs) state contract
         let

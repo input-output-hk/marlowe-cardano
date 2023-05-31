@@ -29,7 +29,7 @@ import Language.Marlowe.Runtime.Cardano.Api (fromCardanoDatumHash, toCardanoScri
 import Language.Marlowe.Runtime.ChainSync.Api (DatumHash(..), toDatum)
 import Language.Marlowe.Runtime.Contract.Api hiding (getContract)
 import Language.Marlowe.Runtime.Contract.Store
-import Language.Marlowe.Runtime.Contract.Store.Memory (getMerkleizedInputsDefault)
+import Language.Marlowe.Runtime.Contract.Store.Memory (merkleizeInputsDefault)
 import Language.Marlowe.Runtime.Core.Api ()
 import Plutus.V2.Ledger.Api (fromBuiltin)
 import System.FilePath (takeBaseName, (<.>), (</>))
@@ -79,9 +79,9 @@ createContractStore ContractStoreOptions{..} = do
   pure ContractStore
     { createContractStagingArea = createContractStagingArea lockfile
     , getContract = getContract True lockfile
-    , getMerkleizedInputs = \hash state interval input ->
+    , merkleizeInputs = \hash state interval input ->
         withLockFile lockingParameters lockfile
-          $ getMerkleizedInputsDefault
+          $ merkleizeInputsDefault
               ((fmap . fmap) (\ContractWithAdjacency{..} -> contract) . getContract False lockfile)
               hash
               state

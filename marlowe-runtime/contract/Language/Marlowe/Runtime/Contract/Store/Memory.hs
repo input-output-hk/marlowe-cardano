@@ -31,8 +31,8 @@ createContractStoreInMemory = do
   pure ContractStore
     { createContractStagingArea = createContractStagingAreaInMemory store
     , getContract = getContract store
-    , getMerkleizedInputs =
-        getMerkleizedInputsDefault
+    , merkleizeInputs =
+        merkleizeInputsDefault
           $ (fmap . fmap) (\ContractWithAdjacency {..} -> contract)
           . getContract store
     }
@@ -96,23 +96,23 @@ computeAdjacency = foldMap getHash . extractAll
 toPlutusDatumHash :: DatumHash -> PV2.BuiltinByteString
 toPlutusDatumHash = PV2.toBuiltin . unDatumHash
 
-getMerkleizedInputsDefault
+merkleizeInputsDefault
   :: Monad m
   => (DatumHash -> m (Maybe Contract))
   -> DatumHash
   -> State
   -> TimeInterval
   -> [InputContent]
-  -> m (Either GetMerkleizedInputsError [Input])
-getMerkleizedInputsDefault getContract' = \hash state interval inputs -> runExceptT do
+  -> m (Either MerkleizeInputsError [Input])
+merkleizeInputsDefault getContract' = \hash state interval inputs -> runExceptT do
   case fixInterval interval state of
     IntervalTrimmed env state' -> do
       contract <- getContractExcept hash
       go env state' inputs contract []
-    IntervalError err -> throwE $ GetMerkleizedInputsIntervalError err
+    IntervalError err -> throwE $ MerkleizeInputsIntervalError err
   where
     getContractExcept hash = lift (getContract' hash) >>= \case
-      Nothing -> throwE $ GetMerkleizedInputsContractNotFound hash
+      Nothing -> throwE $ MerkleizeInputsContractNotFound hash
       Just c -> pure c
 
     go env state inputs contract acc = case inputs of
@@ -126,26 +126,26 @@ getMerkleizedInputsDefault getContract' = \hash state interval inputs -> runExce
             Right hash -> do
               contract'' <- getContractExcept $ DatumHash $ PV2.fromBuiltin hash
               go env state'' inputs' contract'' (MerkleizedInput input hash contract'' : acc)
-        RRAmbiguousTimeIntervalError -> throwE $ GetMerkleizedInputsReduceAmbiguousInterval input
+        RRAmbiguousTimeIntervalError -> throwE $ MerkleizeInputsReduceAmbiguousInterval input
 
 applyInputContent
   :: State
   -> Environment
   -> InputContent
   -> Contract
-  -> Either GetMerkleizedInputsError (Either Contract PV2.BuiltinByteString, State)
+  -> Either MerkleizeInputsError (Either Contract PV2.BuiltinByteString, State)
 applyInputContent state env input = \case
   When cases _ _ -> applyInputContentCases state env input cases
-  _ -> Left $ GetMerkleizedInputsApplyNoMatch input
+  _ -> Left $ MerkleizeInputsApplyNoMatch input
 
 applyInputContentCases
   :: State
   -> Environment
   -> InputContent
   -> [Case Contract]
-  -> Either GetMerkleizedInputsError (Either Contract PV2.BuiltinByteString, State)
+  -> Either MerkleizeInputsError (Either Contract PV2.BuiltinByteString, State)
 applyInputContentCases state env input = \case
-  [] -> Left $ GetMerkleizedInputsApplyNoMatch input
+  [] -> Left $ MerkleizeInputsApplyNoMatch input
   c : cs ->
     let
       action = getAction c

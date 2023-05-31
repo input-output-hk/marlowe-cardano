@@ -8,7 +8,7 @@ module Language.Marlowe.Runtime.Contract.QueryServer
 
 import Control.Concurrent.Component
 import Control.Monad.Event.Class
-import Language.Marlowe.Runtime.Contract.Api hiding (getContract, getMerkleizedInputs)
+import Language.Marlowe.Runtime.Contract.Api hiding (getContract, merkleizeInputs)
 import Language.Marlowe.Runtime.Contract.Store (ContractStore(..))
 import Network.Protocol.Connection
 import Network.Protocol.Driver.Trace (HasSpanContext, runSomeConnectorTraced)
@@ -41,4 +41,4 @@ worker WorkerDependencies{..} = runSomeConnectorTraced connector server
   where
     server = respond concurrently \case
       GetContract hash -> getContract contractStore hash
-      GetMerkleizedInputs hash state interval inputs -> getMerkleizedInputs contractStore hash state interval inputs
+      MerkleizeInputs hash state interval inputs -> merkleizeInputs contractStore hash state interval inputs
