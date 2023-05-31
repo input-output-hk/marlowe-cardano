@@ -35,6 +35,7 @@ data GetMerkleizedInputsError
   = GetMerkleizedInputsContractNotFound DatumHash
   | GetMerkleizedInputsApplyNoMatch InputContent
   | GetMerkleizedInputsApplyAmbiguousInterval InputContent
+  | GetMerkleizedInputsReduceAmbiguousInterval InputContent
   | GetMerkleizedInputsIntervalError IntervalError
   deriving stock (Show, Eq, Generic)
   deriving anyclass (Binary, Variations)

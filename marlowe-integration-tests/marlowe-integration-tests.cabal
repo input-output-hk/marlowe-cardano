@@ -80,6 +80,7 @@ executable marlowe-integration-tests
     Language.Marlowe.Runtime.Web.PutWithdrawal
     Language.Marlowe.Runtime.CliSpec
   build-depends:
+    , QuickCheck
     , aeson
     , async-components
     , base >= 4.9 && < 5
@@ -105,9 +106,11 @@ executable marlowe-integration-tests
     , marlowe-runtime:history-api
     , marlowe-runtime:sync-api
     , marlowe-runtime:tx-api
+    , marlowe-test
     , mtl
     , network-uri
     , plutus-ledger-api
+    , plutus-tx
     , resourcet
     , servant-client
     , servant-pagination

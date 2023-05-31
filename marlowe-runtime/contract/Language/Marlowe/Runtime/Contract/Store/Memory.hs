@@ -12,7 +12,8 @@ import qualified Data.Set as Set
 import GHC.Conc (throwSTM)
 import GHC.IO (mkUserError)
 import Language.Marlowe.Core.V1.Plate (Extract(extractAll))
-import Language.Marlowe.Core.V1.Semantics (ApplyAction(..), applyAction, fixInterval)
+import Language.Marlowe.Core.V1.Semantics
+  (ApplyAction(..), ReduceResult(..), applyAction, fixInterval, reduceContractUntilQuiescent)
 import Language.Marlowe.Core.V1.Semantics.Types
   (Case(..), Contract(..), Environment, Input(..), InputContent, IntervalResult(..), State, TimeInterval, getAction)
 import Language.Marlowe.Runtime.Cardano.Api (fromCardanoDatumHash, toCardanoScriptData)
@@ -104,26 +105,28 @@ getMerkleizedInputsDefault
   -> [InputContent]
   -> m (Either GetMerkleizedInputsError [Input])
 getMerkleizedInputsDefault getContract' = \hash state interval inputs -> runExceptT do
-    case fixInterval interval state of
-      IntervalTrimmed env state' -> do
-        contract <- getContractExcept hash
-        fst <$> go env state' inputs contract []
-      IntervalError err -> throwE $ GetMerkleizedInputsIntervalError err
-    where
-      getContractExcept hash = lift (getContract' hash) >>= \case
-        Nothing -> throwE $ GetMerkleizedInputsContractNotFound hash
-        Just c -> pure c
+  case fixInterval interval state of
+    IntervalTrimmed env state' -> do
+      contract <- getContractExcept hash
+      go env state' inputs contract []
+    IntervalError err -> throwE $ GetMerkleizedInputsIntervalError err
+  where
+    getContractExcept hash = lift (getContract' hash) >>= \case
+      Nothing -> throwE $ GetMerkleizedInputsContractNotFound hash
+      Just c -> pure c
 
-      go env state inputs contract acc = case inputs of
-        [] -> pure (reverse acc, state)
-        input : inputs' -> do
-          (continuation, state') <- except $ applyInputContent state env input contract
+    go env state inputs contract acc = case inputs of
+      [] -> pure $ reverse acc
+      input : inputs' -> case reduceContractUntilQuiescent env state contract of
+        ContractQuiescent _ _ _ state' contract' -> do
+          (continuation, state'') <- except $ applyInputContent state' env input contract'
           case continuation of
-            Left contract' ->
-              go env state' inputs' contract' (NormalInput input : acc)
+            Left contract'' ->
+              go env state'' inputs' contract'' (NormalInput input : acc)
             Right hash -> do
-              contract' <- getContractExcept $ DatumHash $ PV2.fromBuiltin hash
-              go env state' inputs' contract (MerkleizedInput input hash contract' : acc)
+              contract'' <- getContractExcept $ DatumHash $ PV2.fromBuiltin hash
+              go env state'' inputs' contract'' (MerkleizedInput input hash contract'' : acc)
+        RRAmbiguousTimeIntervalError -> throwE $ GetMerkleizedInputsReduceAmbiguousInterval input
 
 applyInputContent
   :: State

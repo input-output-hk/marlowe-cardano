@@ -52,13 +52,13 @@ tests :: [ReferencePath] -> TestTree
 tests referencePaths =
   testGroup "Marlowe"
     [
-      -- Spec.Marlowe.Marlowe.tests
-    -- , testGroup "Static Analysis"
-      -- [
-      --   testProperty "No false positives" $ Spec.Marlowe.Marlowe.prop_noFalsePositives timeout
-      -- ]
-    -- , Spec.Marlowe.Serialization.tests
-      Spec.Marlowe.Semantics.tests
-    -- , Spec.Marlowe.Plutus.tests referencePaths
-    -- , Spec.Marlowe.Service.Isabelle.tests
+      Spec.Marlowe.Marlowe.tests
+    , testGroup "Static Analysis"
+      [
+        testProperty "No false positives" $ Spec.Marlowe.Marlowe.prop_noFalsePositives timeout
+      ]
+    , Spec.Marlowe.Serialization.tests
+    , Spec.Marlowe.Semantics.tests
+    , Spec.Marlowe.Plutus.tests referencePaths
+    , Spec.Marlowe.Service.Isabelle.tests
     ]

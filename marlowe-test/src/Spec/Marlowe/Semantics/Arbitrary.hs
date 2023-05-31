@@ -961,7 +961,7 @@ instance SemiArbitrary Contract where
         , pure Close
         ]
        else frequency
-        [ (4, Pay <$> semiArbitrary ctx <*> semiArbitrary ctx <*> semiArbitrary ctx <*> semiArbitrary ctx <*> resize (pred size) (semiArbitrary ctx))
+        [ (4 , Pay <$> semiArbitrary ctx <*> semiArbitrary ctx <*> semiArbitrary ctx <*> semiArbitrary ctx <*> resize (pred size) (semiArbitrary ctx))
         , (2, If <$> semiArbitrary ctx <*> resize (size `quot` 2) (semiArbitrary ctx) <*> resize (size `quot` 2) (semiArbitrary ctx))
         , ( 3
           , do
@@ -1051,7 +1051,7 @@ instance SemiArbitrary State where
 
 instance Arbitrary Environment where
   arbitrary = Environment <$> arbitraryTimeInterval
-  shrink (Environment x) = Environment <$> shrink x
+  shrink (Environment x) = Environment <$> shrinkTimeInterval x
 
 instance SemiArbitrary Environment where
   semiArbitrary context = Environment <$> semiArbitrary context

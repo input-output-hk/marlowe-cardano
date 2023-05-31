@@ -3,9 +3,18 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TupleSections #-}
+{-# LANGUAGE TypeApplications #-}
 
 module Spec.Marlowe.Semantics.Path
-  ( genFalseObs
+  ( ContractPath(..)
+  , Expr(..)
+  , MemoExpr(..)
+  , PathAction(..)
+  , PathBounds(..)
+  , WhenPath(..)
+  , genContractPath
+  , genFalseObs
   , genObs
   , genTrueObs
   , genValue
@@ -13,23 +22,328 @@ module Spec.Marlowe.Semantics.Path
   , genValueGT
   , genValueLE
   , genValueLT
+  , genWhenPath
+  , getContract
+  , getInput
+  , getInputs
   , tests
   ) where
 
 import Control.Arrow ((&&&))
 import Control.Monad (guard)
-import Data.Bifunctor (first)
+import Data.Bifunctor (bimap, first)
 import Data.Functor (($>), (<&>))
 import Data.Maybe (catMaybes)
-import Language.Marlowe.Core.V1.Semantics (evalObservation, evalValue)
+import Language.Marlowe.Core.V1.Semantics
+  (ApplyAllResult(..), ReduceResult(..), applyAllInputs, evalObservation, evalValue, reduceContractUntilQuiescent)
 import Language.Marlowe.Core.V1.Semantics.Types
 import Plutus.V2.Ledger.Api (POSIXTime(..))
 import qualified PlutusTx.AssocMap as AM
 import qualified PlutusTx.Eq
-import Spec.Marlowe.Semantics.Arbitrary ()
+import Spec.Marlowe.Semantics.Arbitrary (arbitraryPositiveInteger)
 import Test.QuickCheck
 import Test.Tasty (TestName, TestTree, testGroup)
 import Test.Tasty.QuickCheck (testProperty)
+
+data ContractPath
+  = PathStop Contract
+  | PathPay AccountId Payee Token (MemoExpr Integer) ContractPath
+  | PathIfL (MemoExpr Bool) ContractPath Contract
+  | PathIfR (MemoExpr Bool) Contract ContractPath
+  | PathWhenCases WhenPath
+  | PathWhenTimeout [(Action, Contract)] POSIXTime ContractPath
+  | PathLet ValueId (MemoExpr Integer) ContractPath
+  | PathAssert Observation ContractPath
+  deriving (Show, Eq)
+
+getContract :: ContractPath -> Contract
+getContract = \case
+  PathStop contract -> contract
+  PathPay accountId payee token (MemoExpr expr _) c -> Pay accountId payee token (exprToValue expr) $ getContract c
+  PathIfL (MemoExpr expr _) l r -> If (exprToObs expr) (getContract l) r
+  PathIfR (MemoExpr expr _) l r -> If (exprToObs expr) l (getContract r)
+  PathWhenCases WhenPath{..} ->
+    When
+      ( concat
+          [ uncurry Case . first pathActionToAction <$> casesBefore
+          , [uncurry Case $ bimap pathActionToAction getContract pathCase]
+          , uncurry Case <$> casesAfter
+          ]
+      )
+      timeout
+      continuation
+  PathWhenTimeout cases timeout c -> When (uncurry Case <$> cases) timeout $ getContract c
+  PathLet valueId (MemoExpr expr _) c -> Let valueId (exprToValue expr) $ getContract c
+  PathAssert obs c -> Assert obs $ getContract c
+
+getInputs :: [InputContent] -> ContractPath -> [InputContent]
+getInputs acc = \case
+  PathStop _ -> reverse acc
+  PathPay _ _ _ _ c -> getInputs acc c
+  PathIfL _ l _ -> getInputs acc l
+  PathIfR _ _ r -> getInputs acc r
+  PathWhenCases WhenPath{..} -> getInputs (getInput (fst pathCase) : acc) (snd pathCase)
+  PathWhenTimeout _ _ c -> getInputs acc c
+  PathLet _ _ c -> getInputs acc c
+  PathAssert _ c -> getInputs acc c
+
+runPath :: Environment -> State -> ContractPath -> Maybe Contract
+runPath env state = \case
+  PathStop c -> case reduceContractUntilQuiescent env state c of
+    ContractQuiescent _ _ _ _ contract -> Just contract
+    RRAmbiguousTimeIntervalError -> Nothing
+  PathPay account (Account account') token (MemoExpr _ value) c -> do
+    state' <- creditAccount account' token value <$> debitAccount account token value state
+    runPath env state' c
+  PathPay account _ token (MemoExpr _ value) c -> do
+    state' <- debitAccount account token value state
+    runPath env state' c
+  PathIfL _ l _ -> runPath env state l
+  PathIfR _ _ r -> runPath env state r
+  PathWhenCases WhenPath{..} -> uncurry (runPathAction env state) pathCase
+  PathWhenTimeout _ _ c -> runPath env state c
+  PathLet valueId (MemoExpr _ value) c -> runPath env (setValue valueId value state) c
+  PathAssert _ c -> runPath env state c
+
+creditAccount :: AccountId -> Token -> Integer -> State -> State
+creditAccount account token value state@State{..} = case AM.lookup (account, token) accounts of
+  Nothing -> state { accounts = AM.insert (account, token) value accounts }
+  Just value' -> state { accounts = AM.insert (account, token) (value' + value) accounts }
+
+debitAccount :: AccountId -> Token -> Integer -> State -> Maybe State
+debitAccount account token value state@State{..} = do
+  value' <- AM.lookup (account, token) accounts
+  case compare value value' of
+    LT -> Just state { accounts = AM.insert (account, token) (value' - value) accounts }
+    EQ -> Just state { accounts = AM.delete (account, token) accounts }
+    GT -> Nothing
+
+
+runPathAction :: Environment -> State -> PathAction -> ContractPath -> Maybe Contract
+runPathAction env state = \case
+  PathDeposit account _ token (MemoExpr _ value) ->
+    runPath env (creditAccount account token value state)
+  PathChoice choiceId bounds ->
+    runPath env (makeChoice choiceId (getChosen bounds) state)
+  PathNotify _ -> runPath env state
+
+makeChoice :: ChoiceId -> ChosenNum -> State -> State
+makeChoice choiceId chosen state = state { choices = AM.insert choiceId chosen $ choices state }
+
+setValue :: ValueId -> Integer -> State -> State
+setValue valueId value state = state { boundValues = AM.insert valueId value $ boundValues state }
+
+pathActionToAction :: PathAction -> Action
+pathActionToAction = \case
+  PathDeposit account party token (MemoExpr expr _) -> Deposit account party token (exprToValue expr)
+  PathChoice choiceId bounds -> Choice choiceId (pathBoundsToBounds [] bounds)
+  PathNotify (MemoExpr expr _) -> Notify $ exprToObs expr
+
+getInput :: PathAction -> InputContent
+getInput = \case
+  PathDeposit account party token (MemoExpr _ value) -> IDeposit account party token value
+  PathChoice choiceId bounds -> IChoice choiceId $ getChosen bounds
+  PathNotify _ -> INotify
+
+pathBoundsToBounds :: [Bound] -> PathBounds -> [Bound]
+pathBoundsToBounds acc = \case
+  PathBoundsNext bound next -> pathBoundsToBounds (bound : acc) next
+  PathBoundsHere lo dChoice dHi bounds -> Bound lo (lo + dChoice + dHi) : (reverse acc <> bounds)
+
+genContractPath :: Environment -> State -> Gen ContractPath
+genContractPath env state = sized \size -> if size <= 0
+  then PathStop . translateContract env <$> arbitrary
+  else frequency
+    [ (size, genPathSegment env state)
+    , (1, PathStop . translateContract env <$> arbitrary)
+    ]
+
+translateContract :: Environment -> Contract -> Contract
+translateContract env = \case
+  Close -> Close
+  Pay accountId payee token value c -> Pay accountId payee token value $ translateContract env c
+  If obs l r -> If obs (translateContract env l) (translateContract env r)
+  When cases timeout c -> When (translateCase env <$> cases) (abs timeout + 1 + (snd $ timeInterval env)) $ translateContract env c
+  Let valueId value c -> Let valueId value $ translateContract env c
+  Assert obs c -> Assert obs $ translateContract env c
+
+translateCase :: Environment -> Case Contract -> Case Contract
+translateCase env = \case
+  Case action c -> Case action $ translateContract env c
+  c -> c
+
+genPathSegment :: Environment -> State -> Gen ContractPath
+genPathSegment env state = oneof
+  [ genPathPay env state
+  , genIf env state
+  , genWhen env state
+  , genLet env state
+  , genAssert env state
+  ]
+
+genPathPay :: Environment -> State -> Gen ContractPath
+genPathPay env state@State{..} = case AM.toList accounts of
+  [] -> genPathSegment env state
+  accountList -> sized \size -> do
+    ((account, token), maxValue) <- elements accountList
+    payee <- arbitrary
+    value <- chooseInteger (1, maxValue)
+    expr <- genValueEQ value env state
+    let
+      accounts' = if value == maxValue
+        then AM.delete (account, token) accounts
+        else AM.insert (account, token) (maxValue - value) accounts
+      accounts'' = case payee of
+        Account account' -> case AM.lookup (account', token) accounts' of
+          Nothing -> AM.insert (account', token) value accounts'
+          Just value' -> AM.insert (account', token) (value' + value) accounts'
+        _ -> accounts'
+      state' = state { accounts = accounts'' }
+    PathPay account payee token expr <$> resize (pred size) (genContractPath env state')
+
+genIf :: Environment -> State -> Gen ContractPath
+genIf env state = oneof
+  [ PathIfL <$> genTrueObs env state <*> genContractPath env state <*> arbitrary
+  , PathIfR <$> genFalseObs env state <*> arbitrary <*> genContractPath env state
+  ]
+
+genWhen :: Environment -> State -> Gen ContractPath
+genWhen env state = frequency
+  [ (4, PathWhenCases <$> genWhenPath env state)
+  , (1, genWhenContinuation env state)
+  ]
+
+genLet :: Environment -> State -> Gen ContractPath
+genLet env state = sized \size -> do
+  valueId <- arbitrary
+  expr@(MemoExpr _ value) <- genValueGT 0 env state
+  let state' = state { boundValues = AM.insert valueId value (boundValues state) }
+  PathLet valueId expr <$> resize (pred size) (genContractPath env state')
+
+genAssert :: Environment -> State -> Gen ContractPath
+genAssert env state = sized \size ->
+  PathAssert <$> arbitrary <*> resize (pred size) (genContractPath env state)
+
+data WhenPath = WhenPath
+  { casesBefore :: [(PathAction, Contract)]
+  , pathCase :: (PathAction, ContractPath)
+  , casesAfter :: [(Action, Contract)]
+  , timeout :: POSIXTime
+  , continuation :: Contract
+  } deriving (Show, Eq)
+
+genWhenContinuation :: Environment -> State -> Gen ContractPath
+genWhenContinuation env state = sized \size -> do
+  let maxCases = floor $ sqrt @Double $ fromIntegral size
+  numCases <- chooseInt (0, maxCases)
+  let totalSubContracts = numCases + 1
+  let subContractSize = size `div` totalSubContracts
+  cases <- vectorOf numCases $ (,) <$> arbitrary <*> resize subContractSize arbitrary
+  timeout <- (+ fst (timeInterval env)) . POSIXTime . negate . abs <$> arbitrary
+  continuation <- resize subContractSize $ genContractPath env state
+  pure $ PathWhenTimeout cases timeout continuation
+
+genWhenPath :: Environment -> State -> Gen WhenPath
+genWhenPath env state = sized \size -> do
+  let maxCases = floor $ sqrt @Double $ fromIntegral size
+  numCasesBefore <- chooseInt (0, maxCases)
+  numCasesAfter <- chooseInt (0, maxCases - numCasesBefore)
+  let totalSubContracts = numCasesBefore + numCasesAfter + 2 -- path case and continuation
+  let subContractSize = size `div` totalSubContracts
+  (pathAction, state') <- genPathAction (genTrueObs env state) env state
+  casesBefore <- vectorOf numCasesBefore $ (,)
+    <$> genPathActionNoMatch pathAction env state
+    <*> resize subContractSize arbitrary
+  casesAfter <- vectorOf numCasesAfter $ (,) <$> arbitrary <*> resize subContractSize arbitrary
+  pathCase <- (pathAction,) <$> resize subContractSize (genContractPath env state')
+  timeout <- (snd (timeInterval env) +) . POSIXTime <$> arbitraryPositiveInteger
+  continuation <- resize subContractSize arbitrary
+  pure WhenPath{..}
+
+data PathAction
+  = PathDeposit AccountId Party Token (MemoExpr Integer)
+  | PathChoice ChoiceId PathBounds
+  | PathNotify (MemoExpr Bool)
+  deriving (Show, Eq)
+
+genPathAction :: Gen (MemoExpr Bool) -> Environment -> State -> Gen (PathAction, State)
+genPathAction genObs' env state = frequency
+  [ (4, genPathDeposit env state)
+  , (4, genPathChoice state)
+  , (1, (,state) . PathNotify <$> genObs')
+  ]
+
+genPathActionNoMatch :: PathAction -> Environment -> State -> Gen PathAction
+genPathActionNoMatch action env state =
+  (fst <$> genPathAction (genObs env state) env state) `suchThat` noOverlap action
+
+noOverlap :: PathAction -> PathAction -> Bool
+noOverlap l r = case (l, r) of
+  (PathDeposit account1 party1 token1 (MemoExpr _ value1), PathDeposit account2 party2 token2 (MemoExpr _ value2)) ->
+    account1 /= account2 || party1 /= party2 || token1 /= token2 || value1 /= value2
+  (PathChoice choice1 bounds1, PathChoice choice2 bounds2) ->
+    choice1 /= choice2 || (bounds1 `noOverlapBounds` bounds2)
+  (PathNotify (MemoExpr _ obs1), PathNotify (MemoExpr _ obs2)) -> obs1 /= obs2
+  _ -> True
+
+noOverlapBounds :: PathBounds -> PathBounds -> Bool
+noOverlapBounds bounds1 bounds2 = (chosen1 `notInBounds` bounds2) && (chosen2 `notInBounds` bounds1)
+  where
+    chosen1 = getChosen bounds1
+    chosen2 = getChosen bounds2
+
+getChosen :: PathBounds -> ChosenNum
+getChosen = \case
+  PathBoundsNext _ next -> getChosen next
+  PathBoundsHere low dChoice _ _ -> low + dChoice
+
+notInBounds :: ChosenNum -> PathBounds -> Bool
+notInBounds chosenNum = \case
+  PathBoundsNext bound next -> notInBound chosenNum bound && notInBounds chosenNum next
+  PathBoundsHere low dChoice dHi next -> notInBound chosenNum (Bound low (low + dChoice + dHi))
+    && all (notInBound chosenNum) next
+
+notInBound :: ChosenNum -> Bound -> Bool
+notInBound chosenNum (Bound lo hi) = chosenNum < min lo hi || chosenNum > max lo hi
+
+genPathDeposit :: Environment -> State -> Gen (PathAction, State)
+genPathDeposit env state = do
+  account <- arbitrary
+  party <- arbitrary
+  token <- arbitrary
+  expr@(MemoExpr _ value) <- genValueGT 0 env state
+  let oldAccounts = accounts state
+  let key = (account, token)
+  let
+    newAccounts = case AM.lookup key oldAccounts of
+      Nothing -> AM.insert key value oldAccounts
+      Just value' -> AM.insert key (value' + value) oldAccounts
+  pure
+    ( PathDeposit account party token expr
+    , state { accounts = newAccounts }
+    )
+
+genPathChoice :: State -> Gen (PathAction, State)
+genPathChoice state = do
+  choiceId <- arbitrary
+  bounds <- arbitrary
+  pure
+    ( PathChoice choiceId bounds
+    , state { choices = AM.insert choiceId (getChosen bounds) $ choices state }
+    )
+
+data PathBounds
+  = PathBoundsNext Bound PathBounds
+  | PathBoundsHere Integer Integer Integer [Bound]
+  deriving (Show, Eq)
+
+instance Arbitrary PathBounds where
+  arbitrary = sized \size -> if size == 0
+    then PathBoundsHere <$> arbitrary <*> (abs <$> arbitrary) <*> (abs <$> arbitrary) <*> pure []
+    else oneof
+      [ PathBoundsHere <$> arbitrary <*> (abs <$> arbitrary) <*> (abs <$> arbitrary) <*> arbitrary
+      , PathBoundsNext <$> arbitrary <*> resize (pred size) arbitrary
+      ]
 
 -- | An expression with a memoized evaluated value.
 data MemoExpr a = MemoExpr (Expr a) a
@@ -891,12 +1205,11 @@ genChoseSomethingTrue State{..} = guard (not $ AM.null choices) $> do
 
 tests :: TestTree
 tests = testGroup "Path"
-  [ valueTests
-  , obsTests
+  [ exprTests
   ]
 
-valueTests :: TestTree
-valueTests = testGroup "Value"
+exprTests :: TestTree
+exprTests = testGroup "MemoExpr"
   [ exprRelationTest "valueLT" "<" ">=" genValueLT (<)
   , exprRelationTest "valueLE" "<=" ">" genValueLE (<=)
   , exprRelationTest "valueGT" ">" "<=" genValueGT (>)
@@ -915,7 +1228,24 @@ valueTests = testGroup "Value"
   , evalExpr "genObs" "evalObservation" genObs exprToObs evalObservation
   , evalExpr "genTrueObs" "evalObservation" genTrueObs exprToObs evalObservation
   , evalExpr "genFalseObs" "evalObservation" genFalseObs exprToObs evalObservation
+  , testProperty "contract path applies" checkContractPath
   ]
+
+checkContractPath :: Environment -> State -> Property
+checkContractPath env state = forAll (genWhenPath env state) \whenPath ->
+  let
+    path = PathWhenCases whenPath
+    contract = getContract path
+    inputs = NormalInput <$> getInputs [] path
+    expected = applyAllInputs env state contract inputs
+    actual = runPath env state path
+  in
+    counterexample (show inputs)
+      $ counterexample (show contract)
+      $ counterexample (show $ reduceContractUntilQuiescent env state contract)
+      $ counterexample (show expected) case expected of
+        ApplyAllSuccess _ _ _ _ c -> actual === Just c
+        _ -> property False
 
 checkTrueObs :: Environment -> State -> Property
 checkTrueObs env state = forAll (genTrueObs env state) \(MemoExpr _ b) -> b === True
@@ -966,8 +1296,3 @@ evalExpr genName evalName gen toExpr eval =
   testProperty ("`" <> genName <> "`: value matches " <> evalName) \env state ->
     forAll (gen env state) \(MemoExpr expr b) ->
       b === (eval env state $ toExpr expr)
-
-obsTests :: TestTree
-obsTests = testGroup "Observation"
-  [
-  ]
