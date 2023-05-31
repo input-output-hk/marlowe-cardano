@@ -459,7 +459,7 @@ in
         --marlowe-header-port "$MARLOWE_HEADER_SYNC_PORT" \
         --marlowe-query-port "$MARLOWE_QUERY_PORT" \
         --marlowe-contract-host "$CONTRACT_HOST" \
-        --marlowe-load-host "$LOAD_PORT" \
+        --marlowe-load-port "$LOAD_PORT" \
         --tx-host "$TX_HOST" \
         --tx-command-port "$TX_PORT" \
         --http-port "$HTTP_PORT"
