@@ -169,6 +169,7 @@ rec
     env = {
       HOST = "0.0.0.0";
       PORT = "\${NOMAD_PORT_marlowe_load}";
+      QUERY_PORT = "\${NOMAD_PORT_contract_query}";
       # TODO replace with a persistent volume
       STORE_DIR = "/tmp/store";
       HTTP_PORT = "\${NOMAD_PORT_contract_http}";
@@ -192,6 +193,7 @@ rec
       TX_PORT = "\${NOMAD_PORT_tx}";
       CONTRACT_HOST = "localhost";
       LOAD_PORT = "\${NOMAD_PORT_marlowe_load}";
+      QUERY_PORT = "\${NOMAD_PORT_contract_query}";
       SYNC_HOST = "localhost";
       MARLOWE_SYNC_PORT = "\${NOMAD_PORT_marlowe_sync}";
       MARLOWE_HEADER_SYNC_PORT = "\${NOMAD_PORT_marlowe_header_sync}";
