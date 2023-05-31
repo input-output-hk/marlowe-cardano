@@ -423,7 +423,7 @@ in
       # HOST, PORT: network binding
       # TX_HOST, TX_PORT: connection info to marlowe-tx
       # SYNC_HOST, MARLOWE_SYNC_PORT, MARLOWE_HEADER_SYNC_PORT, MARLOWE_QUERY_PORT: connection info to marlowe-sync
-      # CONTRACT_HOST, LOAD_PORT: connection info to marlowe-contract
+      # CONTRACT_HOST, LOAD_PORT, QUERY_PORT: connection info to marlowe-contract
       # HTTP_PORT: port number for the HTTP healthcheck server
 
       #################
@@ -438,6 +438,7 @@ in
       [ -z "''${TX_PORT:-}" ] && echo "TX_PORT env var must be set -- aborting" && exit 1
       [ -z "''${CONTRACT_HOST:-}" ] && echo "CONTRACT_HOST env var must be set -- aborting" && exit 1
       [ -z "''${LOAD_PORT:-}" ] && echo "LOAD_PORT env var must be set -- aborting" && exit 1
+      [ -z "''${QUERY_PORT:-}" ] && echo "QUERY_PORT env var must be set -- aborting" && exit 1
       [ -z "''${SYNC_HOST:-}" ] && echo "SYNC_HOST env var must be set -- aborting" && exit 1
       [ -z "''${MARLOWE_SYNC_PORT:-}" ] && echo "MARLOWE_SYNC_PORT env var must be set -- aborting" && exit 1
       [ -z "''${MARLOWE_HEADER_SYNC_PORT:-}" ] && echo "MARLOWE_HEADER_SYNC_PORT env var must be set -- aborting" && exit 1
@@ -457,6 +458,7 @@ in
         --marlowe-query-port "$MARLOWE_QUERY_PORT" \
         --marlowe-contract-host "$CONTRACT_HOST" \
         --marlowe-load-port "$LOAD_PORT" \
+        --contract-query-port "$QUERY_PORT" \
         --tx-host "$TX_HOST" \
         --tx-command-port "$TX_PORT" \
         --http-port "$HTTP_PORT"
