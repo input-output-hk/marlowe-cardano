@@ -10,7 +10,7 @@ import Data.Set (Set)
 import Data.Void (Void)
 import Language.Marlowe.Core.V1.Semantics.Types (Contract, Input, InputContent, State, TimeInterval)
 import Language.Marlowe.Runtime.ChainSync.Api (DatumHash)
-import Language.Marlowe.Runtime.Contract.Api (ContractWithAdjacency, MerkleizedInputsError)
+import Language.Marlowe.Runtime.Contract.Api (ContractWithAdjacency, MerkleizeInputsError)
 import Observe.Event (InjectSelector, addField, injectSelector, reference)
 import Observe.Event.Backend (setInitialCauseEventBackend)
 
@@ -18,19 +18,19 @@ data ContractStoreSelector f where
   CreateContractStagingArea :: ContractStoreSelector Void
   ContractStagingAreaSelector :: ContractStagingAreaSelector f -> ContractStoreSelector f
   GetContract :: DatumHash -> ContractStoreSelector ContractWithAdjacency
-  MerkleizedInputs  :: ContractStoreSelector MerkleizedInputsField
+  MerkleizeInputs  :: ContractStoreSelector MerkleizeInputsField
 
-data MerkleizedInputsField
-  = MerkleizedInputsContractHash DatumHash
-  | MerkleizedInputsState State
-  | MerkleizedInputsInterval TimeInterval
-  | MerkleizedInputsInputs  [InputContent]
-  | MerkleizedInputsResult  (Either MerkleizedInputsError [Input])
+data MerkleizeInputsField
+  = MerkleizeInputsContractHash DatumHash
+  | MerkleizeInputsState State
+  | MerkleizeInputsInterval TimeInterval
+  | MerkleizeInputsInputs  [InputContent]
+  | MerkleizeInputsResult  (Either MerkleizeInputsError [Input])
 
 data ContractStore m = ContractStore
   { createContractStagingArea :: m (ContractStagingArea m)
   , getContract :: DatumHash -> m (Maybe ContractWithAdjacency)
-  , merkleizeInputs :: DatumHash -> State -> TimeInterval -> [InputContent] -> m (Either MerkleizedInputsError [Input])
+  , merkleizeInputs :: DatumHash -> State -> TimeInterval -> [InputContent] -> m (Either MerkleizeInputsError [Input])
   }
 
 hoistContractStore
@@ -58,13 +58,13 @@ traceContractStore inj ContractStore{..} = ContractStore
       result <- getContract hash
       traverse_ (addField ev) result
       pure result
-  , merkleizeInputs = \hash state interval inputs -> withInjectEvent inj MerkleizedInputs \ev -> do
-      addField ev $ MerkleizedInputsContractHash hash
-      addField ev $ MerkleizedInputsState state
-      addField ev $ MerkleizedInputsInterval interval
-      addField ev $ MerkleizedInputsInputs inputs
+  , merkleizeInputs = \hash state interval inputs -> withInjectEvent inj MerkleizeInputs \ev -> do
+      addField ev $ MerkleizeInputsContractHash hash
+      addField ev $ MerkleizeInputsState state
+      addField ev $ MerkleizeInputsInterval interval
+      addField ev $ MerkleizeInputsInputs inputs
       result <- merkleizeInputs hash state interval inputs
-      addField ev $ MerkleizedInputsResult result
+      addField ev $ MerkleizeInputsResult result
       pure result
   }
 
