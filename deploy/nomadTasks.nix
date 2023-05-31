@@ -36,6 +36,7 @@ rec
         DB_NAME = "\${NOMAD_META_environment}_chainsync";
         MASTER_REPLICA_SRV_DNS = "_infra-database._master.service.us-east-1.consul";
         HTTP_PORT = "\${NOMAD_PORT_chain_indexer_http}";
+        OTEL_SERVICE_NAME = "marlowe-chain-indexer";
       };
     template = dbTemplate "chainsync";
     config.image = ociNamer oci-images.marlowe-chain-indexer;
@@ -69,6 +70,7 @@ rec
       DB_NAME = "\${NOMAD_META_environment}_chainsync";
       MASTER_REPLICA_SRV_DNS = "_infra-database._master.service.us-east-1.consul";
       HTTP_PORT = "\${NOMAD_PORT_chain_sync_http}";
+      OTEL_SERVICE_NAME = "marlowe-chain-sync";
     };
     template = dbTemplate "chainsync";
     config.image = ociNamer oci-images.marlowe-chain-sync;
@@ -100,6 +102,7 @@ rec
       MARLOWE_CHAIN_SYNC_PORT = "\${NOMAD_PORT_marlowe_chain_sync}";
       MARLOWE_CHAIN_SYNC_QUERY_PORT = "\${NOMAD_PORT_marlowe_chain_sync_query}";
       HTTP_PORT = "\${NOMAD_PORT_indexer_http}";
+      OTEL_SERVICE_NAME = "marlowe-indexer";
     };
     template = dbTemplate "marlowe";
     config.image = ociNamer oci-images.marlowe-indexer;
@@ -126,6 +129,7 @@ rec
       MARLOWE_HEADER_SYNC_PORT = "\${NOMAD_PORT_marlowe_header_sync}";
       MARLOWE_QUERY_PORT = "\${NOMAD_PORT_marlowe_query}";
       HTTP_PORT = "\${NOMAD_PORT_sync_http}";
+      OTEL_SERVICE_NAME = "marlowe-sync";
     };
     template = dbTemplate "marlowe";
     config.image = ociNamer oci-images.marlowe-sync;
@@ -153,6 +157,7 @@ rec
       MARLOWE_CHAIN_SYNC_QUERY_PORT = "\${NOMAD_PORT_marlowe_chain_sync_query}";
       MARLOWE_CHAIN_SYNC_COMMAND_PORT = "\${NOMAD_PORT_marlowe_chain_sync_command}";
       HTTP_PORT = "\${NOMAD_PORT_tx_http}";
+      OTEL_SERVICE_NAME = "marlowe-tx";
     };
     config.image = ociNamer oci-images.marlowe-tx;
     config.ports = [ "tx" "tx_http" ];
@@ -173,6 +178,7 @@ rec
       # TODO replace with a persistent volume
       STORE_DIR = "/tmp/store";
       HTTP_PORT = "\${NOMAD_PORT_contract_http}";
+      OTEL_SERVICE_NAME = "marlowe-contract";
     };
     config.image = ociNamer oci-images.marlowe-contract;
     config.ports = [ "marlowe_load" "contract_http" ];
@@ -199,6 +205,7 @@ rec
       MARLOWE_HEADER_SYNC_PORT = "\${NOMAD_PORT_marlowe_header_sync}";
       MARLOWE_QUERY_PORT = "\${NOMAD_PORT_marlowe_query}";
       HTTP_PORT = "\${NOMAD_PORT_proxy_http}";
+      OTEL_SERVICE_NAME = "marlowe-proxy";
     };
     config.image = ociNamer oci-images.marlowe-proxy;
     config.ports = [ "proxy" "proxy_http" ];
