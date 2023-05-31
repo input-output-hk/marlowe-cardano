@@ -391,7 +391,7 @@ in
       #################
       # REQUIRED VARS #
       #################
-      # HOST, PORT: network binding
+      # HOST, PORT, QUERY_PORT: network binding
       # STORE_DIR: location of the contract store directory
       # HTTP_PORT: port number for the HTTP healthcheck server
 
@@ -402,6 +402,7 @@ in
 
       [ -z "''${HOST:-}" ] && echo "HOST env var must be set -- aborting" && exit 1
       [ -z "''${PORT:-}" ] && echo "PORT env var must be set -- aborting" && exit 1
+      [ -z "''${QUERY_PORT:-}" ] && echo "QUERY_PORT env var must be set -- aborting" && exit 1
       [ -z "''${STORE_DIR:-}" ] && echo "STORE_DIR env var must be set -- aborting" && exit 1
       [ -z "''${HTTP_PORT:-}" ] && echo "HTTP_PORT env var must be set -- aborting" && exit 1
 
@@ -411,6 +412,7 @@ in
       ${packages.marlowe-contract}/bin/marlowe-contract \
         --host "$HOST" \
         --port "$PORT" \
+        --query-port "$QUERY_PORT" \
         --store-dir "$STORE_DIR" \
         --http-port "$HTTP_PORT"
     '';
