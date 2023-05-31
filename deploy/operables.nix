@@ -131,6 +131,7 @@ in
       # OPTIONAL VARS #
       #################
       # OTEL_EXPORTER_OTLP_ENDPOINT: The url of the open telemetry collector
+      # OTEL_SERVICE_NAME: The name of the open telemetry service
 
       [ -z "''${NODE_CONFIG:-}" ] && echo "NODE_CONFIG env var must be set -- aborting" && exit 1
       [ -z "''${CARDANO_NODE_SOCKET_PATH:-}" ] && echo "CARDANO_NODE_SOCKET_PATH env var must be set -- aborting" && exit 1
@@ -170,7 +171,6 @@ in
 
       ${wait-for-socket}/bin/wait-for-socket "$CARDANO_NODE_SOCKET_PATH"
 
-      export OTEL_SERVICE_NAME=marlowe-chain-indexer
       ${packages.marlowe-chain-indexer}/bin/marlowe-chain-indexer \
         --socket-path "$CARDANO_NODE_SOCKET_PATH" \
         --database-uri  "$DATABASE_URI" \
@@ -198,6 +198,7 @@ in
       # OPTIONAL VARS #
       #################
       # OTEL_EXPORTER_OTLP_ENDPOINT: The url of the open telemetry collector
+      # OTEL_SERVICE_NAME: The name of the open telemetry service
 
       [ -z "''${HOST:-}" ] && echo "HOST env var must be set -- aborting" && exit 1
       [ -z "''${PORT:-}" ] && echo "PORT env var must be set -- aborting" && exit 1
@@ -227,8 +228,6 @@ in
 
       ${wait-for-socket}/bin/wait-for-socket "$CARDANO_NODE_SOCKET_PATH"
 
-      export OTEL_SERVICE_NAME=marlowe-chain-sync
-
       DATABASE_URI=${database-uri}
       ${packages.marlowe-chain-sync}/bin/marlowe-chain-sync \
         --host "$HOST" \
@@ -257,6 +256,7 @@ in
       # OPTIONAL VARS #
       #################
       # OTEL_EXPORTER_OTLP_ENDPOINT: The url of the open telemetry collector
+      # OTEL_SERVICE_NAME: The name of the open telemetry service
 
       [ -z "''${DB_NAME:-}" ] && echo "DB_NAME env var must be set -- aborting" && exit 1
       [ -z "''${DB_USER:-}" ] && echo "DB_USER env var must be set -- aborting" && exit 1
@@ -287,8 +287,6 @@ in
 
       ${wait-for-tcp}/bin/wait-for-tcp "$MARLOWE_CHAIN_SYNC_HOST" "$MARLOWE_CHAIN_SYNC_PORT"
 
-      export OTEL_SERVICE_NAME=marlowe-indexer
-
       ${packages.marlowe-indexer}/bin/marlowe-indexer \
         --database-uri  "$DATABASE_URI" \
         --chain-sync-port "$MARLOWE_CHAIN_SYNC_PORT" \
@@ -314,6 +312,7 @@ in
       # OPTIONAL VARS #
       #################
       # OTEL_EXPORTER_OTLP_ENDPOINT: The url of the open telemetry collector
+      # OTEL_SERVICE_NAME: The name of the open telemetry service
 
       [ -z "''${HOST:-}" ] && echo "HOST env var must be set -- aborting" && exit 1
       [ -z "''${MARLOWE_SYNC_PORT:-}" ] && echo "MARLOWE_SYNC_PORT env var must be set -- aborting" && exit 1
@@ -332,8 +331,6 @@ in
       fi
 
       [ -z "''${DB_HOST:-}" ] && echo "DB_HOST env var must be set -- aborting" && exit 1
-
-      export OTEL_SERVICE_NAME=marlowe-sync
 
       DATABASE_URI=${database-uri}
       ${packages.marlowe-sync}/bin/marlowe-sync \
@@ -360,6 +357,7 @@ in
       # OPTIONAL VARS #
       #################
       # OTEL_EXPORTER_OTLP_ENDPOINT: The url of the open telemetry collector
+      # OTEL_SERVICE_NAME: The name of the open telemetry service
 
       [ -z "''${HOST:-}" ] && echo "HOST env var must be set -- aborting" && exit 1
       [ -z "''${PORT:-}" ] && echo "PORT env var must be set -- aborting" && exit 1
@@ -370,8 +368,6 @@ in
       [ -z "''${HTTP_PORT:-}" ] && echo "HTTP_PORT env var must be set -- aborting" && exit 1
 
       ${wait-for-tcp}/bin/wait-for-tcp "$MARLOWE_CHAIN_SYNC_HOST" "$MARLOWE_CHAIN_SYNC_PORT"
-
-      export OTEL_SERVICE_NAME=marlowe-tx
 
       ${packages.marlowe-tx}/bin/marlowe-tx \
         --host "$HOST" \
@@ -399,6 +395,7 @@ in
       # OPTIONAL VARS #
       #################
       # OTEL_EXPORTER_OTLP_ENDPOINT: The url of the open telemetry collector
+      # OTEL_SERVICE_NAME: The name of the open telemetry service
 
       [ -z "''${HOST:-}" ] && echo "HOST env var must be set -- aborting" && exit 1
       [ -z "''${PORT:-}" ] && echo "PORT env var must be set -- aborting" && exit 1
@@ -407,7 +404,6 @@ in
       [ -z "''${HTTP_PORT:-}" ] && echo "HTTP_PORT env var must be set -- aborting" && exit 1
 
       mkdir -p /tmp
-      export OTEL_SERVICE_NAME=marlowe-contract
 
       ${packages.marlowe-contract}/bin/marlowe-contract \
         --host "$HOST" \
@@ -434,6 +430,7 @@ in
       # OPTIONAL VARS #
       #################
       # OTEL_EXPORTER_OTLP_ENDPOINT: The url of the open telemetry collector
+      # OTEL_SERVICE_NAME: The name of the open telemetry service
 
       [ -z "''${HOST:-}" ] && echo "HOST env var must be set -- aborting" && exit 1
       [ -z "''${PORT:-}" ] && echo "PORT env var must be set -- aborting" && exit 1
@@ -450,8 +447,6 @@ in
       ${wait-for-tcp}/bin/wait-for-tcp "$TX_HOST" "$TX_PORT"
       ${wait-for-tcp}/bin/wait-for-tcp "$CONTRACT_HOST" "$LOAD_PORT"
       ${wait-for-tcp}/bin/wait-for-tcp "$SYNC_HOST" "$MARLOWE_QUERY_PORT"
-
-      export OTEL_SERVICE_NAME=marlowe-proxy
 
       ${packages.marlowe-proxy}/bin/marlowe-proxy \
         --host "$HOST" \
@@ -481,14 +476,13 @@ in
       # OPTIONAL VARS #
       #################
       # OTEL_EXPORTER_OTLP_ENDPOINT: The url of the open telemetry collector
+      # OTEL_SERVICE_NAME: The name of the open telemetry service
 
       [ -z "''${PORT:-}" ] && echo "PORT env var must be set -- aborting" && exit 1
       [ -z "''${RUNTIME_HOST:-}" ] && echo "RUNTIME_HOST env var must be set -- aborting" && exit 1
       [ -z "''${RUNTIME_PORT:-}" ] && echo "RUNTIME_PORT env var must be set -- aborting" && exit 1
 
       ${wait-for-tcp}/bin/wait-for-tcp "$RUNTIME_HOST" "$RUNTIME_PORT"
-
-      export OTEL_SERVICE_NAME=marlowe-web-server
 
       ${packages.marlowe-web-server}/bin/marlowe-web-server \
         --http-port "$PORT" \
