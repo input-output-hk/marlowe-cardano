@@ -467,7 +467,7 @@ in
       ${packages.marlowe-proxy}/bin/marlowe-proxy \
         --host "$HOST" \
         --port "$PORT" \
-        --traced-port "$TRACED_PORT" \
+        --port-traced "$TRACED_PORT" \
         --marlowe-sync-host "$SYNC_HOST" \
         --marlowe-sync-port "$MARLOWE_SYNC_PORT" \
         --marlowe-header-port "$MARLOWE_HEADER_SYNC_PORT" \
