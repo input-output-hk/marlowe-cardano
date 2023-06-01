@@ -54,6 +54,5 @@ let
   ciJobsets = stripAttrsForHydra (filterDerivations ci);
 in
 traceNames "" (ciJobsets // {
-  required = derivationAggregate "required-marlowe" ciJobsets;
   forceNewEval = pkgs.writeText "forceNewEval" (marlowe-cardano.rev or (marlowe-cardano.shortRev or "local"));
 })

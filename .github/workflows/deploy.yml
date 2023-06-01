@@ -92,6 +92,7 @@ jobs:
 
       - name: Build nomad chart
         run: |
+          # TODO[iogx] must be tested again when PR is merged
           nix build \
             github:input-output-hk/dapps-world#marlowe.marlowe-runtime-${{ matrix.network }} \
             --override-input marlowe-cardano github:input-output-hk/marlowe-cardano/$GITHUB_SHA
