@@ -403,7 +403,7 @@ in
       [ -z "''${STORE_DIR:-}" ] && echo "STORE_DIR env var must be set -- aborting" && exit 1
       [ -z "''${HTTP_PORT:-}" ] && echo "HTTP_PORT env var must be set -- aborting" && exit 1
 
-      mkdir -p /tmp
+      mkdir -p /tmp /store
 
       ${packages.marlowe-contract}/bin/marlowe-contract \
         --host "$HOST" \
