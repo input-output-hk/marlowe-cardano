@@ -41,4 +41,4 @@ worker WorkerDependencies{..} = runSomeConnectorTraced connector server
   where
     server = respond concurrently \case
       GetContract hash -> getContract contractStore hash
-      MerkleizeInputs hash state interval inputs -> merkleizeInputs contractStore hash state interval inputs
+      MerkleizeInputs hash state input -> merkleizeInputs contractStore hash state input

@@ -341,7 +341,7 @@ instance FromJSON TransactionError where
 data TransactionInput = TransactionInput
     { txInterval :: TimeInterval
     , txInputs   :: [Input] }
-  deriving stock (Haskell.Show, Haskell.Eq)
+  deriving stock (Haskell.Show, Haskell.Eq, Generic)
 
 instance Pretty TransactionInput where
     prettyFragment tInp = text "TransactionInput" <> space <> lbrace <> line <> txIntLine <> line <> txInpLine

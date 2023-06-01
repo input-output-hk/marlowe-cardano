@@ -597,6 +597,7 @@ executable marlowe-contract
     , general-allocate ^>= { 0.2 }
     , hs-opentelemetry-api >= 0.0.3 && < 0.0.4
     , hs-opentelemetry-sdk >= 0.0.3 && < 0.0.4
+    , marlowe-cardano ==0.1.0.3
     , marlowe-protocols ==0.1.0.0
     , marlowe-runtime:contract ==0.0.1
     , marlowe-runtime:contract-api ==0.0.1

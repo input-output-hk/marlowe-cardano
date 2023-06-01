@@ -13,9 +13,9 @@ import GHC.Conc (throwSTM)
 import GHC.IO (mkUserError)
 import Language.Marlowe.Core.V1.Plate (Extract(extractAll))
 import Language.Marlowe.Core.V1.Semantics
-  (ApplyAction(..), ReduceResult(..), applyAction, fixInterval, reduceContractUntilQuiescent)
+  (ApplyAction(..), ReduceResult(..), TransactionInput(..), applyAction, fixInterval, reduceContractUntilQuiescent)
 import Language.Marlowe.Core.V1.Semantics.Types
-  (Case(..), Contract(..), Environment, Input(..), InputContent, IntervalResult(..), State, TimeInterval, getAction)
+  (Case(..), Contract(..), Environment, Input(..), InputContent, IntervalResult(..), State, getAction)
 import Language.Marlowe.Runtime.Cardano.Api (fromCardanoDatumHash, toCardanoScriptData)
 import Language.Marlowe.Runtime.ChainSync.Api (DatumHash(..), toDatum)
 import Language.Marlowe.Runtime.Contract.Api hiding (getContract)
@@ -101,14 +101,13 @@ merkleizeInputsDefault
   => (DatumHash -> m (Maybe Contract))
   -> DatumHash
   -> State
-  -> TimeInterval
-  -> [InputContent]
-  -> m (Either MerkleizeInputsError [Input])
-merkleizeInputsDefault getContract' = \hash state interval inputs -> runExceptT do
-  case fixInterval interval state of
+  -> TransactionInput
+  -> m (Either MerkleizeInputsError TransactionInput)
+merkleizeInputsDefault getContract' rootHash initialState TransactionInput{..} = runExceptT do
+  case fixInterval txInterval initialState of
     IntervalTrimmed env state' -> do
-      contract <- getContractExcept hash
-      go env state' inputs contract []
+      contract <- getContractExcept rootHash
+      go env state' txInputs contract []
     IntervalError err -> throwE $ MerkleizeInputsIntervalError err
   where
     getContractExcept hash = lift (getContract' hash) >>= \case
@@ -116,35 +115,35 @@ merkleizeInputsDefault getContract' = \hash state interval inputs -> runExceptT 
       Just c -> pure c
 
     go env state inputs contract acc = case inputs of
-      [] -> pure $ reverse acc
+      [] -> pure $ TransactionInput txInterval $ reverse acc
       input : inputs' -> case reduceContractUntilQuiescent env state contract of
         ContractQuiescent _ _ _ state' contract' -> do
-          (continuation, state'') <- except $ applyInputContent state' env input contract'
+          (content, continuation, state'') <- except $ applyInput' state' env input contract'
           case continuation of
             Left contract'' ->
-              go env state'' inputs' contract'' (NormalInput input : acc)
+              go env state'' inputs' contract'' (NormalInput content : acc)
             Right hash -> do
               contract'' <- getContractExcept $ DatumHash $ PV2.fromBuiltin hash
-              go env state'' inputs' contract'' (MerkleizedInput input hash contract'' : acc)
+              go env state'' inputs' contract'' (MerkleizedInput content hash contract'' : acc)
         RRAmbiguousTimeIntervalError -> throwE $ MerkleizeInputsReduceAmbiguousInterval input
 
-applyInputContent
+applyInput'
   :: State
   -> Environment
-  -> InputContent
+  -> Input
   -> Contract
-  -> Either MerkleizeInputsError (Either Contract PV2.BuiltinByteString, State)
-applyInputContent state env input = \case
-  When cases _ _ -> applyInputContentCases state env input cases
+  -> Either MerkleizeInputsError (InputContent, Either Contract PV2.BuiltinByteString, State)
+applyInput' state env input = \case
+  When cases _ _ -> applyInputCases state env input cases
   _ -> Left $ MerkleizeInputsApplyNoMatch input
 
-applyInputContentCases
+applyInputCases
   :: State
   -> Environment
-  -> InputContent
+  -> Input
   -> [Case Contract]
-  -> Either MerkleizeInputsError (Either Contract PV2.BuiltinByteString, State)
-applyInputContentCases state env input = \case
+  -> Either MerkleizeInputsError (InputContent, Either Contract PV2.BuiltinByteString, State)
+applyInputCases state env input = \case
   [] -> Left $ MerkleizeInputsApplyNoMatch input
   c : cs ->
     let
@@ -153,6 +152,16 @@ applyInputContentCases state env input = \case
         Case _ contract -> Left contract
         MerkleizedCase _ hash -> Right hash
     in
-      case applyAction env state input action of
-        AppliedAction _ state' -> pure (continuation, state')
-        NotAppliedAction -> applyInputContentCases state env input cs
+      case input of
+        NormalInput content -> case applyAction env state content action of
+          AppliedAction _ state' -> pure (content, continuation, state')
+          NotAppliedAction -> applyInputCases state env input cs
+        MerkleizedInput content hash' contract -> case continuation of
+          Right hash
+            | hash == hash' && hashContract contract == hash -> case applyAction env state content action of
+              AppliedAction _ state' -> pure (content, continuation, state')
+              NotAppliedAction -> applyInputCases state env input cs
+          _ -> Left $ MerkleizeInputsApplyNoMatch input
+
+hashContract :: Contract -> PV2.BuiltinByteString
+hashContract = PV2.toBuiltin . unDatumHash . fromCardanoDatumHash . hashScriptData . toCardanoScriptData . toDatum

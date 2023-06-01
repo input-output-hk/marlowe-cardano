@@ -11,6 +11,7 @@ import Data.Data (type (:~:)(..))
 import qualified Data.List.NonEmpty as NE
 import Data.Set (Set)
 import GHC.Generics (Generic)
+import Language.Marlowe.Core.V1.Semantics (TransactionInput)
 import Language.Marlowe.Core.V1.Semantics.Types
 import Language.Marlowe.Runtime.ChainSync.Api (DatumHash)
 import Language.Marlowe.Runtime.Core.Api ()
@@ -24,18 +25,17 @@ data ContractRequest a where
   MerkleizeInputs
     :: DatumHash
     -> State
-    -> TimeInterval
-    -> [InputContent]
-    -> ContractRequest (Either MerkleizeInputsError [Input])
+    -> TransactionInput
+    -> ContractRequest (Either MerkleizeInputsError TransactionInput)
 
 deriving instance Show (ContractRequest a)
 deriving instance Eq (ContractRequest a)
 
 data MerkleizeInputsError
   = MerkleizeInputsContractNotFound DatumHash
-  | MerkleizeInputsApplyNoMatch InputContent
-  | MerkleizeInputsApplyAmbiguousInterval InputContent
-  | MerkleizeInputsReduceAmbiguousInterval InputContent
+  | MerkleizeInputsApplyNoMatch Input
+  | MerkleizeInputsApplyAmbiguousInterval Input
+  | MerkleizeInputsReduceAmbiguousInterval Input
   | MerkleizeInputsIntervalError IntervalError
   deriving stock (Show, Eq, Generic)
   deriving anyclass (Binary, Variations)
@@ -47,10 +47,9 @@ merkleizeInputs
   :: Applicative m
   => DatumHash
   -> State
-  -> TimeInterval
-  -> [InputContent]
-  -> QueryClient ContractRequest m (Either MerkleizeInputsError [Input])
-merkleizeInputs = (fmap . fmap . fmap) request . MerkleizeInputs
+  -> TransactionInput
+  -> QueryClient ContractRequest m (Either MerkleizeInputsError TransactionInput)
+merkleizeInputs = (fmap . fmap) request . MerkleizeInputs
 
 instance HasSignature ContractRequest where
   signature _ = "ContractRequest"
@@ -58,7 +57,7 @@ instance HasSignature ContractRequest where
 instance Request ContractRequest where
   data Tag ContractRequest a where
     TagGetContract :: Tag ContractRequest (Maybe ContractWithAdjacency)
-    TagMerkleizeInputs :: Tag ContractRequest (Either MerkleizeInputsError [Input])
+    TagMerkleizeInputs :: Tag ContractRequest (Either MerkleizeInputsError TransactionInput)
   tagFromReq = \case
     GetContract{} -> TagGetContract
     MerkleizeInputs{} -> TagMerkleizeInputs
@@ -79,17 +78,16 @@ instance BinaryRequest ContractRequest where
     GetContract hash -> do
       putWord8 0x00
       put hash
-    MerkleizeInputs hash state timeInterval inputs -> do
+    MerkleizeInputs hash state input -> do
       putWord8 0x01
       put hash
       put state
-      put timeInterval
-      put inputs
+      put input
   getReq = do
     tag <- getWord8
     case tag of
       0x00 -> SomeRequest . GetContract <$> get
-      0x01 -> SomeRequest <$> (MerkleizeInputs <$> get <*> get <*> get <*> get)
+      0x01 -> SomeRequest <$> (MerkleizeInputs <$> get <*> get <*> get)
       _ -> fail $ "Invalid ContractRequest tag " <> show tag
   putResult = \case
     TagGetContract -> put
@@ -115,7 +113,7 @@ instance RequestVariations ContractRequest where
     ]
   requestVariations = \case
     TagGetContract -> GetContract <$> variations
-    TagMerkleizeInputs -> MerkleizeInputs <$> variations `varyAp` variations `varyAp` variations `varyAp` variations
+    TagMerkleizeInputs -> MerkleizeInputs <$> variations `varyAp` variations `varyAp` variations
   resultVariations = \case
     TagGetContract -> variations
     TagMerkleizeInputs -> variations

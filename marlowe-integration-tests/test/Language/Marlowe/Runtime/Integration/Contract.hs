@@ -49,7 +49,7 @@ spec = parallel $ describe "MarloweContract" do
   getMerkleizedInputsSpec
 
 getMerkleizedInputsSpec :: Spec
-getMerkleizedInputsSpec = describe "merkleizeInputs" do
+getMerkleizedInputsSpec = focus $ describe "merkleizeInputs" do
   prop "Produces equivalent inputs" \state -> forAll (genTimeInterval state) \interval -> forAll (genContractPath (Environment interval) state) \path ->
     let
       contract = getContract path
@@ -57,15 +57,16 @@ getMerkleizedInputsSpec = describe "merkleizeInputs" do
     in counterexample (show inputs)
       $ counterexample (show contract) $ runContractTest do
         hash <- expectJust "failed to push contract" $ runLoad $ pushContract contract
-        inputs' <- either (fail . show) pure =<< runQuery (merkleizeInputs hash state interval inputs)
+        let input = TransactionInput interval $ NormalInput <$> inputs
+        input' <- either (fail . show) pure =<< runQuery (merkleizeInputs hash state input)
         Api.ContractWithAdjacency{contract = merkleizedContract} <- expectJust "Failed to get contract" $ runQuery $ Api.getContract hash
-        let expected = computeTransaction (TransactionInput interval $ NormalInput <$> inputs) state contract
+        let expected = computeTransaction input state contract
         let
           expected' = case expected of
             TransactionOutput warnings payment state' contract' ->
               TransactionOutput warnings payment state' $ fst $ runWriter $ deepMerkleize contract'
             a -> a
-        let actual = computeTransaction (TransactionInput interval inputs') state merkleizedContract
+        let actual = computeTransaction input' state merkleizedContract
         liftIO $ actual `shouldBe` expected'
 
 getContractSpec :: Spec

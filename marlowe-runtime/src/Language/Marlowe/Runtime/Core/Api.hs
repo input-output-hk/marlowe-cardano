@@ -505,6 +505,7 @@ instance Binary V1.ChoiceId
 instance Binary V1.Contract
 instance Binary V1.Input
 instance Binary V1.InputContent
+instance Binary V1.TransactionInput
 instance Binary V1.MarloweData
 instance Binary V1.MarloweParams
 instance Binary V1.Observation
@@ -530,6 +531,7 @@ instance Variations V1.Bound
 instance Variations V1.ChoiceId
 instance Variations V1.Input
 instance Variations V1.InputContent
+instance Variations V1.TransactionInput
 instance Variations V1.MarloweData
 instance Variations V1.MarloweParams
 instance Variations V1.Payee

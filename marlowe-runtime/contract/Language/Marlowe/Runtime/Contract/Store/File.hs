@@ -79,13 +79,12 @@ createContractStore ContractStoreOptions{..} = do
   pure ContractStore
     { createContractStagingArea = createContractStagingArea lockfile
     , getContract = getContract True lockfile
-    , merkleizeInputs = \hash state interval input ->
+    , merkleizeInputs = \hash state input ->
         withLockFile lockingParameters lockfile
           $ merkleizeInputsDefault
               ((fmap . fmap) (\ContractWithAdjacency{..} -> contract) . getContract False lockfile)
               hash
               state
-              interval
               input
     }
 

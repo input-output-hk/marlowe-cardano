@@ -13,6 +13,7 @@ import Data.String (fromString)
 import qualified Data.Text as T
 import Data.Text.Lazy (toStrict)
 import Data.Void (absurd)
+import Language.Marlowe (TransactionInput(..))
 import Language.Marlowe.Protocol.Load.Types (MarloweLoad)
 import Language.Marlowe.Runtime.Contract.Api (ContractRequest)
 import Language.Marlowe.Runtime.Contract.LoadServer (LoadServerSelector(..))
@@ -78,16 +79,15 @@ renderContractStoreSelectorOTel = \case
     , renderField = \case
         MerkleizeInputsState state -> [("marlowe.state", toAttribute $ toStrict $ encodeToLazyText state)]
         MerkleizeInputsContractHash hash -> [("marlowe.contract_hash", fromString $ read $ show hash)]
-        MerkleizeInputsInterval (lo, hi) ->
-          [ ("marlowe.interval_low" , toAttribute $ IntAttribute $ fromIntegral lo)
-          , ("marlowe.interval_high" , toAttribute $ IntAttribute $ fromIntegral hi)
+        MerkleizeInputsInput TransactionInput{..} ->
+          [ ("marlowe.interval_low" , toAttribute $ IntAttribute $ fromIntegral $ fst txInterval)
+          , ("marlowe.interval_high" , toAttribute $ IntAttribute $ fromIntegral $ snd txInterval)
+          , ("marlowe.contract.initial_inputs", toAttribute $ toStrict . encodeToLazyText <$> txInputs)
           ]
-        MerkleizeInputsInputs inputs ->
-          [("marlowe.contract.input_contents", toAttribute $ toStrict . encodeToLazyText <$> inputs)]
         MerkleizeInputsResult (Left err) ->
           [("error", fromString $ show err)]
-        MerkleizeInputsResult (Right inputs) ->
-          [("marlowe.inputs", toAttribute $ toStrict . encodeToLazyText <$> inputs)]
+        MerkleizeInputsResult (Right TransactionInput{..}) ->
+          [("marlowe.inputs", toAttribute $ toStrict . encodeToLazyText <$> txInputs)]
     }
 
 renderContractStagingAreaSelectorOTel :: RenderSelectorOTel ContractStagingAreaSelector
