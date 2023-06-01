@@ -420,7 +420,7 @@ in
       #################
       # REQUIRED VARS #
       #################
-      # HOST, PORT: network binding
+      # HOST, PORT, TRACED_PORT: network binding
       # TX_HOST, TX_PORT: connection info to marlowe-tx
       # SYNC_HOST, MARLOWE_SYNC_PORT, MARLOWE_HEADER_SYNC_PORT, MARLOWE_QUERY_PORT: connection info to marlowe-sync
       # CONTRACT_HOST, LOAD_PORT, QUERY_PORT: connection info to marlowe-contract
@@ -434,6 +434,7 @@ in
 
       [ -z "''${HOST:-}" ] && echo "HOST env var must be set -- aborting" && exit 1
       [ -z "''${PORT:-}" ] && echo "PORT env var must be set -- aborting" && exit 1
+      [ -z "''${TRACED_PORT:-}" ] && echo "TRACED_PORT env var must be set -- aborting" && exit 1
       [ -z "''${TX_HOST:-}" ] && echo "TX_HOST env var must be set -- aborting" && exit 1
       [ -z "''${TX_PORT:-}" ] && echo "TX_PORT env var must be set -- aborting" && exit 1
       [ -z "''${CONTRACT_HOST:-}" ] && echo "CONTRACT_HOST env var must be set -- aborting" && exit 1
@@ -452,6 +453,7 @@ in
       ${packages.marlowe-proxy}/bin/marlowe-proxy \
         --host "$HOST" \
         --port "$PORT" \
+        --traced-port "$TRACED_PORT" \
         --marlowe-sync-host "$SYNC_HOST" \
         --marlowe-sync-port "$MARLOWE_SYNC_PORT" \
         --marlowe-header-port "$MARLOWE_HEADER_SYNC_PORT" \

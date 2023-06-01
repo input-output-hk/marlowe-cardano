@@ -181,7 +181,7 @@ rec
       OTEL_SERVICE_NAME = "marlowe-contract";
     };
     config.image = ociNamer oci-images.marlowe-contract;
-    config.ports = [ "marlowe_load" "contract_http" ];
+    config.ports = [ "marlowe_load" "contract_query" "contract_http" ];
     service.port = "marlowe_load";
     user = "0:0";
     driver = "docker";
@@ -195,6 +195,7 @@ rec
     env = {
       HOST = "0.0.0.0";
       PORT = "\${NOMAD_PORT_proxy}";
+      TRACED_PORT = "\${NOMAD_PORT_proxy_traced}";
       TX_HOST = "localhost";
       TX_PORT = "\${NOMAD_PORT_tx}";
       CONTRACT_HOST = "localhost";
@@ -208,7 +209,7 @@ rec
       OTEL_SERVICE_NAME = "marlowe-proxy";
     };
     config.image = ociNamer oci-images.marlowe-proxy;
-    config.ports = [ "proxy" "proxy_http" ];
+    config.ports = [ "proxy" "proxy_traced" "proxy_http" ];
     service.port = "proxy";
     user = "0:0";
     driver = "docker";
