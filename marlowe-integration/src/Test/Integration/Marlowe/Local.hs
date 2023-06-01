@@ -614,6 +614,7 @@ runtime = proc RuntimeDependencies{..} -> do
     in
       TransactionDependencies
         { chainSyncConnector = SomeConnectorTraced inject $ clientConnector chainSyncPair
+        , contractQueryConnector = SomeConnectorTraced inject $ clientConnector contractQueryPair
         , connectionSource = SomeConnectionSourceTraced inject $ Connection.connectionSource txJobPair
         , ..
         }

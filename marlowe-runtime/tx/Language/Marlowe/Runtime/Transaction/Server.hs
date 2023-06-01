@@ -29,13 +29,14 @@ import Cardano.Api
   , cardanoEra
   , getTxBody
   , getTxId
+  , hashScriptData
   , makeShelleyAddress
   )
 import Cardano.Api.Shelley (ProtocolParameters)
 import Control.Applicative ((<|>))
 import Control.Concurrent.Component
 import Control.Concurrent.STM (STM, modifyTVar, newEmptyTMVar, newTVar, putTMVar, readTMVar, readTVar, retry)
-import Control.Error.Util (hoistMaybe, note, noteT)
+import Control.Error.Util (hoistMaybe, hush, note, noteT)
 import Control.Exception (Exception(..))
 import Control.Monad (unless)
 import Control.Monad.Event.Class
@@ -48,11 +49,19 @@ import qualified Data.Map as Map
 import Data.Maybe (fromJust)
 import Data.Time (UTCTime)
 import Data.Void (Void)
+import qualified Language.Marlowe.Core.V1.Semantics as V1
 import Language.Marlowe.Runtime.Cardano.Api
-  (fromCardanoAddressInEra, fromCardanoTxId, toCardanoPaymentCredential, toCardanoStakeCredential)
+  ( fromCardanoAddressInEra
+  , fromCardanoDatumHash
+  , fromCardanoTxId
+  , toCardanoPaymentCredential
+  , toCardanoScriptData
+  , toCardanoStakeCredential
+  )
 import Language.Marlowe.Runtime.ChainSync.Api
-  (BlockHeader, ChainSyncQuery(..), Credential(..), TokenName, TxId(..), fromCardanoTxMetadata)
+  (BlockHeader, ChainSyncQuery(..), Credential(..), TokenName, TxId(..), fromCardanoTxMetadata, toDatum)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
+import Language.Marlowe.Runtime.Contract.Api (ContractRequest, merkleizeInputs)
 import Language.Marlowe.Runtime.Core.Api
   ( Contract
   , ContractId(..)
@@ -119,6 +128,7 @@ data TransactionServerDependencies r s m = TransactionServerDependencies
   , loadWalletContext :: LoadWalletContext m
   , loadMarloweContext :: LoadMarloweContext m
   , chainSyncQueryConnector :: SomeClientConnectorTraced (QueryClient ChainSyncQuery) r s m
+  , contractQueryConnector :: SomeClientConnectorTraced (QueryClient ContractRequest) r s m
   , getTip :: STM Chain.ChainPoint
   , getCurrentScripts :: forall v. MarloweVersion v -> MarloweScripts
   }
@@ -143,6 +153,7 @@ data WorkerDependencies r s m = WorkerDependencies
   , loadWalletContext :: LoadWalletContext m
   , loadMarloweContext :: LoadMarloweContext m
   , chainSyncQueryConnector :: SomeClientConnectorTraced (QueryClient ChainSyncQuery) r s m
+  , contractQueryConnector :: SomeClientConnectorTraced (QueryClient ContractRequest) r s m
   , getTip :: STM Chain.ChainPoint
   , getCurrentScripts :: forall v. MarloweVersion v -> MarloweScripts
   }
@@ -191,6 +202,7 @@ worker = component_ \WorkerDependencies{..} -> do
                 contract
             ApplyInputs version addresses contractId metadata invalidBefore invalidHereafter inputs ->
               withEvent ExecApplyInputs \_ -> withMarloweVersion version $ execApplyInputs
+                contractQueryConnector
                 getTip
                 systemStart
                 eraHistory
@@ -326,8 +338,9 @@ findMarloweOutput address = \case
       address == fromCardanoAddressInEra (cardanoEra @era) address'
 
 execApplyInputs
-  :: MonadIO m
-  => STM Chain.ChainPoint
+  :: (MonadUnliftIO m, MonadEvent r s m, HasSpanContext r)
+  => SomeClientConnectorTraced (QueryClient ContractRequest) r s m
+  -> STM Chain.ChainPoint
   -> SystemStart
   -> EraHistory CardanoMode
   -> SolveConstraints
@@ -342,6 +355,7 @@ execApplyInputs
   -> Inputs v
   -> m (ServerStCmd MarloweTxCommand Void (ApplyInputsError v) (InputsApplied BabbageEra v) m ())
 execApplyInputs
+  contractQueryConnector
   getTip
   systemStart
   eraHistory
@@ -363,18 +377,23 @@ execApplyInputs
         Chain.Genesis -> retry
         Chain.At Chain.BlockHeader{..} -> pure slotNo
     tipSlot <- liftIO getTipSlot
-    scriptOutput' <- except $ maybe (Left ScriptOutputNotFound) Right scriptOutput
-    ((invalidBefore, invalidHereafter, mAssetsAndDatum), constraints) <-
-      except $ buildApplyInputsConstraints
-        systemStart
-        eraHistory
-        version
-        scriptOutput'
-        tipSlot
-        metadata
-        invalidBefore'
-        invalidHereafter'
-        inputs
+    scriptOutput'@TransactionScriptOutput{datum = inputDatum} <- except $ maybe (Left ScriptOutputNotFound) Right scriptOutput
+    let
+      (contractHash, state) = case version of
+        MarloweV1 -> case inputDatum of
+          V1.MarloweData{..} -> (fromCardanoDatumHash $ hashScriptData $ toCardanoScriptData $ toDatum marloweContract, marloweState)
+      merkleizeInputs' = fmap hush . runSomeConnectorTraced contractQueryConnector . merkleizeInputs contractHash state
+    ((invalidBefore, invalidHereafter, mAssetsAndDatum), constraints) <- buildApplyInputsConstraints
+      merkleizeInputs'
+      systemStart
+      eraHistory
+      version
+      scriptOutput'
+      tipSlot
+      metadata
+      invalidBefore'
+      invalidHereafter'
+      inputs
     walletContext <- lift $ loadWalletContext addresses
     txBody <- except
       $ first ApplyInputsConstraintError

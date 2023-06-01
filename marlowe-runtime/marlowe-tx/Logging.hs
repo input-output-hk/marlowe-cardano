@@ -14,6 +14,7 @@ import qualified Data.Set as Set
 import Data.String (fromString)
 import Language.Marlowe.Runtime.ChainSync.Api
   (ChainSyncCommand, ChainSyncQuery, RuntimeChainSeek, UTxOs(unUTxOs), renderTxOutRef, toBech32, unInterpreter)
+import Language.Marlowe.Runtime.Contract.Api (ContractRequest)
 import Language.Marlowe.Runtime.Core.Api (MarloweVersion(..), renderContractId)
 import Language.Marlowe.Runtime.Core.ScriptRegistry (ReferenceScriptUtxo(..))
 import Language.Marlowe.Runtime.Transaction.Api (MarloweTxCommand)
@@ -34,6 +35,7 @@ data RootSelector f where
   ChainSeekClient :: TcpClientSelector (Handshake RuntimeChainSeek) f -> RootSelector f
   ChainSyncJobClient :: TcpClientSelector (Handshake (Job ChainSyncCommand)) f -> RootSelector f
   ChainSyncQueryClient :: TcpClientSelector (Handshake (Query ChainSyncQuery)) f -> RootSelector f
+  ContractQueryClient :: TcpClientSelector (Handshake (Query ContractRequest)) f -> RootSelector f
   Server :: TcpServerSelector (Handshake (Job MarloweTxCommand)) f -> RootSelector f
   App :: TransactionServerSelector f -> RootSelector f
   LoadWalletContext :: Q.LoadWalletContextSelector f -> RootSelector f
@@ -56,6 +58,7 @@ renderRootSelectorOTel = \case
   ChainSeekClient sel -> renderTcpClientSelectorOTel sel
   ChainSyncJobClient sel -> renderTcpClientSelectorOTel sel
   ChainSyncQueryClient sel -> renderTcpClientSelectorOTel sel
+  ContractQueryClient sel -> renderTcpClientSelectorOTel sel
   Server sel -> renderTcpServerSelectorOTel sel
   App sel -> renderAppSelectorOTel sel
   LoadWalletContext sel -> renderLoadWalletContextSelectorOTel sel

@@ -14,9 +14,10 @@ import qualified Cardano.Api.Byron as C
 import qualified Cardano.Api.Shelley as C
 import qualified Cardano.Ledger.BaseTypes as CL (Network(..))
 import Control.Category ((>>>))
-import Control.Error (note)
+import Control.Error (ExceptT, note)
 import Control.Monad (unless, (>=>))
 import Control.Monad.Trans.Class (lift)
+import Control.Monad.Trans.Except (except, throwE, withExceptT)
 import Control.Monad.Trans.Writer (WriterT(runWriterT), tell)
 import Data.Bifunctor (first)
 import Data.Foldable (for_, traverse_)
@@ -24,12 +25,13 @@ import Data.Function (on)
 import Data.Functor ((<&>))
 import Data.List (find, sortBy)
 import qualified Data.Map as Map
-import Data.Maybe (catMaybes, listToMaybe, maybeToList)
+import Data.Maybe (catMaybes, fromMaybe, listToMaybe, maybeToList)
 import qualified Data.Set as Set
 import Data.Time (UTCTime, nominalDiffTimeToSeconds, secondsToNominalDiffTime)
 import Data.Time.Clock.POSIX (posixSecondsToUTCTime, utcTimeToPOSIXSeconds)
 import Data.Traversable (for)
 import GHC.Base (Alternative((<|>)))
+import Language.Marlowe.Core.V1.Semantics (TransactionInput)
 import qualified Language.Marlowe.Core.V1.Semantics as V1
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
 import qualified Language.Marlowe.Core.V1.Semantics.Types.Address as V1
@@ -263,7 +265,9 @@ type ApplyResults v = (UTCTime, UTCTime, Maybe (Assets, Datum v))
 
 -- applies an input to a contract.
 buildApplyInputsConstraints
-  :: SystemStart
+  :: Monad m
+  => (TransactionInput -> m (Maybe TransactionInput))
+  -> SystemStart
   -> EraHistory CardanoMode -- ^ The era history for converting times to slots.
   -> MarloweVersion v -- ^ The Marlowe version to build the transaction for.
   -> TransactionScriptOutput v -- ^ The previous script output for the contract
@@ -274,15 +278,18 @@ buildApplyInputsConstraints
                    -- If not specified, this is computed from the the timeouts
                    -- in the contract.
   -> Inputs v -- ^ The inputs to apply to the contract.
-  -> Either (ApplyInputsError v) (ApplyResults v, TxConstraints v)
-buildApplyInputsConstraints systemStart eraHistory version marloweOutput tipSlot metadata invalidBefore invalidHereafter inputs =
+  -> ExceptT (ApplyInputsError v) m (ApplyResults v, TxConstraints v)
+buildApplyInputsConstraints merkleizeInputs systemStart eraHistory version marloweOutput tipSlot metadata invalidBefore invalidHereafter inputs =
   case version of
-    MarloweV1 -> buildApplyInputsConstraintsV1 systemStart eraHistory marloweOutput tipSlot metadata invalidBefore invalidHereafter inputs
+    MarloweV1 -> buildApplyInputsConstraintsV1 merkleizeInputs systemStart eraHistory marloweOutput tipSlot metadata invalidBefore invalidHereafter inputs
 
 -- | Creates a set of Tx constraints that are used to build a transaction that
 -- applies an input to a contract.
 buildApplyInputsConstraintsV1
-  :: SystemStart
+  :: forall m
+   . Monad m
+  => (TransactionInput -> m (Maybe TransactionInput))
+  -> SystemStart
   -> EraHistory CardanoMode -- ^ The era history for converting times to slots.
   -> TransactionScriptOutput 'V1 -- ^ The previous script output for the contract with raw TxOut.
   -> SlotNo
@@ -290,8 +297,8 @@ buildApplyInputsConstraintsV1
   -> Maybe UTCTime -- ^ The minimum bound of the validity interval (inclusive).
   -> Maybe UTCTime -- ^ The maximum bound of the validity interval (exclusive).
   -> Inputs 'V1 -- ^ The inputs to apply to the contract.
-  -> Either (ApplyInputsError 'V1) (ApplyResults 'V1, TxConstraints 'V1)
-buildApplyInputsConstraintsV1 systemStart eraHistory marloweOutput tipSlot metadata invalidBefore invalidHereafter inputs = runWriterT do
+  -> ExceptT (ApplyInputsError 'V1) m (ApplyResults 'V1, TxConstraints 'V1)
+buildApplyInputsConstraintsV1 merkleizeInputs systemStart eraHistory marloweOutput tipSlot metadata invalidBefore invalidHereafter inputs = runWriterT do
   let
     TransactionScriptOutput _ _ _ datum = marloweOutput
     V1.MarloweData params state contract = datum
@@ -304,9 +311,9 @@ buildApplyInputsConstraintsV1 systemStart eraHistory marloweOutput tipSlot metad
 
   invalidBefore' <- lift $ maybe (pure tipSlot') utcTimeToSlotNo invalidBefore
 
-  lift $ unless (invalidBefore' <= tipSlot') $ Left $ ValidityLowerBoundTooHigh tipSlot $ fromCardanoSlotNo invalidBefore'
+  lift $ unless (invalidBefore' <= tipSlot') $ throwE $ ValidityLowerBoundTooHigh tipSlot $ fromCardanoSlotNo invalidBefore'
 
-  invalidHereafter' <- lift case invalidHereafter of
+  invalidHereafter' <- lift $ case invalidHereafter of
     Nothing -> do
       invalidBefore'' <- slotStart invalidBefore'                             -- Find the start time of the validity range.
       pure case nextMarloweTimeoutAfter invalidBefore'' contract of           -- Find the next timeout after the range start, if any.
@@ -346,8 +353,10 @@ buildApplyInputsConstraintsV1 systemStart eraHistory marloweOutput tipSlot metad
     -- first invalid slot to get the last millisecond in the last valid slot.
     <*> (subtract 1 <$> slotNoToPOSIXTime invalidHereafter')
   let transactionInput = V1.TransactionInput { txInterval, txInputs = inputs }
-  (possibleContinuation, payments) <- case V1.computeTransaction transactionInput state contract of
-     V1.Error err -> lift $ Left $ ApplyInputsConstraintsBuildupFailed (MarloweComputeTransactionFailed $ show err)
+  -- Try and auto-merkleize the inputs if possible.
+  transactionInput' <- lift $ lift $ fromMaybe transactionInput <$> merkleizeInputs transactionInput
+  (possibleContinuation, payments) <- case V1.computeTransaction transactionInput' state contract of
+     V1.Error err -> lift $ throwE $ ApplyInputsConstraintsBuildupFailed (MarloweComputeTransactionFailed $ show err)
      V1.TransactionOutput _ payments _ V1.Close ->
        pure (Nothing, payments)
      V1.TransactionOutput _ payments state' contract' ->
@@ -399,8 +408,8 @@ buildApplyInputsConstraintsV1 systemStart eraHistory marloweOutput tipSlot metad
     EraHistory _ interpreter = eraHistory
 
     -- Calculate slot number which contains a given timestamp
-    utcTimeToSlotNo :: UTCTime -> Either (ApplyInputsError 'V1) C.SlotNo
-    utcTimeToSlotNo = first (SlotConversionFailed . show) . utcTimeToSlotNo'
+    utcTimeToSlotNo :: UTCTime -> ExceptT (ApplyInputsError 'V1) m C.SlotNo
+    utcTimeToSlotNo = withExceptT (SlotConversionFailed . show) . except . utcTimeToSlotNo'
 
     -- Calculate slot number which contains a given timestamp
     utcTimeToSlotNo' :: UTCTime -> Either PastHorizonException C.SlotNo
@@ -410,9 +419,10 @@ buildApplyInputsConstraintsV1 systemStart eraHistory marloweOutput tipSlot metad
         $ wallclockToSlot relativeTime
       pure $ C.SlotNo $ O.unSlotNo slotNo
 
-    slotStart :: C.SlotNo -> Either (ApplyInputsError 'V1) UTCTime
+    slotStart :: C.SlotNo -> ExceptT (ApplyInputsError 'V1) m UTCTime
     slotStart (C.SlotNo slotNo) = do
-      (relativeTime, _) <- first (SlotConversionFailed . show)
+      (relativeTime, _) <- except
+        $ first (SlotConversionFailed . show)
         $ interpretQuery interpreter
         $ slotToWallclock
         $ O.SlotNo slotNo
