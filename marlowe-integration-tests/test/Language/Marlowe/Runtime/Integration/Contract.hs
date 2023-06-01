@@ -49,7 +49,7 @@ spec = parallel $ describe "MarloweContract" do
   getMerkleizedInputsSpec
 
 getMerkleizedInputsSpec :: Spec
-getMerkleizedInputsSpec = focus $ describe "merkleizeInputs" do
+getMerkleizedInputsSpec = describe "merkleizeInputs" do
   prop "Produces equivalent inputs" \state -> forAll (genTimeInterval state) \interval -> forAll (genContractPath (Environment interval) state) \path ->
     let
       contract = getContract path
