@@ -171,6 +171,8 @@ in
 
       ${wait-for-socket}/bin/wait-for-socket "$CARDANO_NODE_SOCKET_PATH"
 
+      export OTEL_SERVICE_NAME="''${OTEL_SERVICE_NAME:-marlowe-chain-indexer}"
+
       ${packages.marlowe-chain-indexer}/bin/marlowe-chain-indexer \
         --socket-path "$CARDANO_NODE_SOCKET_PATH" \
         --database-uri  "$DATABASE_URI" \
@@ -227,6 +229,8 @@ in
       fi
 
       ${wait-for-socket}/bin/wait-for-socket "$CARDANO_NODE_SOCKET_PATH"
+
+      export OTEL_SERVICE_NAME="''${OTEL_SERVICE_NAME:-marlowe-chain-sync}"
 
       DATABASE_URI=${database-uri}
       ${packages.marlowe-chain-sync}/bin/marlowe-chain-sync \
@@ -287,6 +291,8 @@ in
 
       ${wait-for-tcp}/bin/wait-for-tcp "$MARLOWE_CHAIN_SYNC_HOST" "$MARLOWE_CHAIN_SYNC_PORT"
 
+      export OTEL_SERVICE_NAME="''${OTEL_SERVICE_NAME:-marlowe-indexer}"
+
       ${packages.marlowe-indexer}/bin/marlowe-indexer \
         --database-uri  "$DATABASE_URI" \
         --chain-sync-port "$MARLOWE_CHAIN_SYNC_PORT" \
@@ -332,6 +338,8 @@ in
 
       [ -z "''${DB_HOST:-}" ] && echo "DB_HOST env var must be set -- aborting" && exit 1
 
+      export OTEL_SERVICE_NAME="''${OTEL_SERVICE_NAME:-marlowe-sync}"
+
       DATABASE_URI=${database-uri}
       ${packages.marlowe-sync}/bin/marlowe-sync \
         --database-uri  "$DATABASE_URI" \
@@ -369,6 +377,8 @@ in
 
       ${wait-for-tcp}/bin/wait-for-tcp "$MARLOWE_CHAIN_SYNC_HOST" "$MARLOWE_CHAIN_SYNC_PORT"
 
+      export OTEL_SERVICE_NAME="''${OTEL_SERVICE_NAME:-marlowe-tx}"
+
       ${packages.marlowe-tx}/bin/marlowe-tx \
         --host "$HOST" \
         --command-port "$PORT" \
@@ -404,6 +414,8 @@ in
       [ -z "''${HTTP_PORT:-}" ] && echo "HTTP_PORT env var must be set -- aborting" && exit 1
 
       mkdir -p /tmp /store
+
+      export OTEL_SERVICE_NAME="''${OTEL_SERVICE_NAME:-marlowe-contract}"
 
       ${packages.marlowe-contract}/bin/marlowe-contract \
         --host "$HOST" \
@@ -450,6 +462,8 @@ in
       ${wait-for-tcp}/bin/wait-for-tcp "$CONTRACT_HOST" "$LOAD_PORT"
       ${wait-for-tcp}/bin/wait-for-tcp "$SYNC_HOST" "$MARLOWE_QUERY_PORT"
 
+      export OTEL_SERVICE_NAME="''${OTEL_SERVICE_NAME:-marlowe-proxy}"
+
       ${packages.marlowe-proxy}/bin/marlowe-proxy \
         --host "$HOST" \
         --port "$PORT" \
@@ -487,6 +501,8 @@ in
       [ -z "''${RUNTIME_PORT:-}" ] && echo "RUNTIME_PORT env var must be set -- aborting" && exit 1
 
       ${wait-for-tcp}/bin/wait-for-tcp "$RUNTIME_HOST" "$RUNTIME_PORT"
+
+      export OTEL_SERVICE_NAME="''${OTEL_SERVICE_NAME:-marlowe-web-server}"
 
       ${packages.marlowe-web-server}/bin/marlowe-web-server \
         --http-port "$PORT" \
