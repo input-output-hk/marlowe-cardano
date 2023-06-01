@@ -1,3 +1,4 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -45,9 +46,11 @@ import Control.Monad.IO.Class (MonadIO(liftIO))
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except (ExceptT(..), except, runExceptT, throwE, withExceptT)
 import Data.Bifunctor (first)
+import Data.Foldable (foldl')
 import Data.List (find)
 import qualified Data.Map as Map
 import Data.Maybe (fromJust)
+import qualified Data.Set as Set
 import Data.Time (UTCTime)
 import Data.Void (Void)
 import qualified Language.Marlowe.Core.V1.Semantics as V1
@@ -69,7 +72,8 @@ import Language.Marlowe.Runtime.Core.Api
   , ContractId(..)
   , Inputs
   , MarloweTransactionMetadata
-  , MarloweVersion(MarloweV1)
+  , MarloweVersion(..)
+  , MarloweVersionTag(..)
   , Payout(Payout, datum)
   , TransactionScriptOutput(..)
   , decodeMarloweTransactionMetadataLenient
@@ -95,7 +99,7 @@ import Language.Marlowe.Runtime.Transaction.Constraints (MarloweContext(..), Sol
 import qualified Language.Marlowe.Runtime.Transaction.Constraints as Constraints
 import Language.Marlowe.Runtime.Transaction.Query
   (LoadMarloweContext, LoadWalletContext, lookupMarloweScriptUtxo, lookupPayoutScriptUtxo)
-import Language.Marlowe.Runtime.Transaction.Safety (checkContract, checkTransactions, noContinuations)
+import Language.Marlowe.Runtime.Transaction.Safety (Continuations, checkContract, checkTransactions, noContinuations)
 import Language.Marlowe.Runtime.Transaction.Submit (SubmitJob(..), SubmitJobStatus(..))
 import Network.Protocol.Connection
   (SomeClientConnectorTraced, SomeConnectionSourceTraced(..), SomeServerConnectorTraced, acceptSomeConnectorTraced)
@@ -261,10 +265,13 @@ execCreate
   -> m (ServerStCmd MarloweTxCommand Void (CreateError v) (ContractCreated BabbageEra v) m ())
 execCreate contractQueryConnector getCurrentScripts solveConstraints loadWalletContext networkId mStakeCredential version addresses roleTokens metadata minAda contract = execExceptT do
   walletContext <- lift $ loadWalletContext addresses
-  contract' :: Contract v <- case contract of
+  (contract', continuations) <- case contract of
     Right hash -> case version of
-      MarloweV1 -> fmap Contract.contract $ noteT CreateContractNotFound $ MaybeT $ runSomeConnectorTraced contractQueryConnector $ getContract hash
-    Left c -> pure c
+      MarloweV1 -> noteT CreateContractNotFound do
+        let getContract' = MaybeT . runSomeConnectorTraced contractQueryConnector . getContract
+        Contract.ContractWithAdjacency{contract = c, ..} <- getContract' hash
+        (c ::  Contract v,) <$> foldMapM (fmap singletonContinuations . getContract') (Set.delete hash closure)
+    Left c -> pure (c, noContinuations version)
   mCardanoStakeCredential <- except $ traverse (note CreateToCardanoError . toCardanoStakeCredential) mStakeCredential
   ((datum, assets, rolesCurrency), constraints) <- except
     $ buildCreateConstraints version walletContext roleTokens metadata minAda contract'
@@ -297,7 +304,6 @@ execCreate contractQueryConnector getCurrentScripts solveConstraints loadWalletC
       , payoutScriptHash = payoutScript
       }
   let
-    continuations = noContinuations version
     contractSafetyErrors =
       if False  -- FIXME: Disabled because of incompatibility with integration tests.
         then checkContract roleTokens version contract' continuations
@@ -336,6 +342,12 @@ execCreate contractQueryConnector getCurrentScripts solveConstraints loadWalletC
     , datum
     , assets
     }
+
+singletonContinuations :: Contract.ContractWithAdjacency -> Continuations 'V1
+singletonContinuations Contract.ContractWithAdjacency{..} = Map.singleton contractHash contract
+
+foldMapM :: (Applicative m, Monoid b, Foldable t) => (a -> m b) -> t a -> m b
+foldMapM f = foldl' (\b a -> mappend <$> b <*> f a) (pure mempty)
 
 findMarloweOutput :: forall era. IsCardanoEra era => Chain.Address -> TxBody era -> Maybe Chain.TxOutRef
 findMarloweOutput address = \case
