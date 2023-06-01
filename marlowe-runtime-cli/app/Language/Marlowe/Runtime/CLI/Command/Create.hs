@@ -10,7 +10,7 @@ import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Except (ExceptT(ExceptT), throwE)
 import Data.Aeson (FromJSON, toJSON)
 import qualified Data.Aeson as A
-import Data.Bifunctor (first)
+import Data.Bifunctor (bimap, first)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Map (Map)
 import qualified Data.Map as Map
@@ -24,6 +24,7 @@ import Language.Marlowe.Runtime.CLI.Monad (CLI, runCLIExceptT)
 import Language.Marlowe.Runtime.CLI.Option (keyValueOption, marloweVersionParser, parseAddress)
 import Language.Marlowe.Runtime.ChainSync.Api
   ( Address
+  , DatumHash
   , Lovelace(Lovelace)
   , PolicyId
   , TokenName(..)
@@ -69,6 +70,7 @@ data RolesConfig
 data ContractFiles
   = CoreFile FilePath
   | ExtendedFiles FilePath ContractArgs
+  | ContractHash DatumHash
 
 data ContractArgs
   = ContractArgsByFile FilePath
@@ -121,11 +123,16 @@ createCommandParser = info (txCommandParser True parser) $ progDesc "Create a ne
       , help "The name of a role in the contract with the address to send the token to"
       , metavar "ROLE=ADDRESS"
       ]
-    contractFilesParser = CoreFile <$> coreParser <|> extendedParser
+    contractFilesParser = CoreFile <$> coreParser <|> extendedParser <|> ContractHash <$> contractHashParser
     coreParser = strOption $ mconcat
       [ long "core-file"
       , help "A file containing the Core Marlowe JSON definition of the contract to create."
       , metavar "FILE_PATH"
+      ]
+    contractHashParser = strOption $ mconcat
+      [ long "contract-hash"
+      , help "The hash of a contract in the contract store to create."
+      , metavar "BASE_16"
       ]
     extendedParser = ExtendedFiles <$> extendedFileParser <*> contractArgsParser
     extendedFileParser = strOption $ mconcat
@@ -179,13 +186,14 @@ runCreateCommand TxCommand { walletAddresses, signingMethod, tagsFile, metadataF
     ContractId contractId <- run MarloweV1 minting'
     liftIO . print $ A.encode (A.object [("contractId", toJSON . renderTxOutRef $ contractId)])
   where
-    readContract :: MarloweVersion v -> ExceptT (CreateCommandError v) CLI (Contract v)
+    readContract :: MarloweVersion v -> ExceptT (CreateCommandError v) CLI (Either (Contract v) DatumHash)
     readContract = \case
       MarloweV1 -> case contractFiles of
-        CoreFile filePath -> ExceptT $ liftIO $ first ContractFileDecodingError <$> decodeFileEither filePath
+        CoreFile filePath -> ExceptT $ liftIO $ bimap ContractFileDecodingError Left <$> decodeFileEither filePath
         ExtendedFiles _ _ -> do
           -- extendedContract <- ExceptT $ liftIO $ first (ContractFileDecodingError . Just) <$> decodeFileEither filePath
           throwE ExtendedContractsAreNotSupportedYet
+        ContractHash hash -> pure $ Right hash
 
     readMetadata :: ExceptT (CreateCommandError v) CLI TransactionMetadata
     readMetadata = case metadataFile of

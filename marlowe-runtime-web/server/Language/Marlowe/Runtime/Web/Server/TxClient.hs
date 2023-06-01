@@ -191,7 +191,8 @@ txClient = component \TxClientDependencies{..} -> do
         response <- runSomeConnectorTraced connector
           $ RunTxClient
           $ liftCommand
-          $ Create stakeCredential version addresses roles metadata minUTxODeposit contract
+          $ Create stakeCredential version addresses roles metadata minUTxODeposit
+          $ Left contract
         liftIO $ for_ response \creation@ContractCreated{contractId} -> atomically
           $ modifyTVar tempContracts
           $ Map.insert contractId

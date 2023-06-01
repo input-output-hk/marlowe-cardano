@@ -89,8 +89,6 @@ createStandardContractWithTags tags partyAWallet partyBWallet = do
   now <- liftIO getCurrentTime
   let (contract, partyA, partyB) = standardContract partyBAddress now $ secondsToNominalDiffTime 100
   contractHash <- expectJust "Failed to push contract" =<< runMarloweLoadClient (pushContract contract)
-  Contract.ContractWithAdjacency{ contract = contract' } <-
-    expectJust "Failed to load merkleized contract" =<< runContractQueryClient (Contract.getContract contractHash)
   result <- createContract
     Nothing
     MarloweV1
@@ -106,7 +104,7 @@ createStandardContractWithTags tags partyAWallet partyBWallet = do
           }
     )
     2_000_000
-    contract'
+    (Right contractHash)
   contractCreated@ContractCreated{contractId, txBody = createTxBody} <- expectRight "failed to create standard contract" result
   createdBlock <- submit partyAWallet createTxBody
 

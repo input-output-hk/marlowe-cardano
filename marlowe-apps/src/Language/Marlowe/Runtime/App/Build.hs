@@ -61,7 +61,7 @@ buildCreation version' contract roles minUtxo metadata' =
         else RoleTokensMint . mkMint . fmap (second (, Nothing)) . NE.fromList . M.toList $ roles
   in
     build show (\ContractCreated{..} -> (contractId, txBody))
-      $ \w -> Create Nothing version' w roles' metadata' minUtxo contract
+      $ \w -> Create Nothing version' w roles' metadata' minUtxo $ Left contract
 
 
 buildApplication
