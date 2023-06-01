@@ -421,7 +421,7 @@ interpret ro@RuntimeCreateContract {..} = do
           , collateralUtxos = mempty
           }
 
-      Marlowe.Class.createContract Nothing MarloweV1 walletAddresses roleTokensConfig emptyMarloweTransactionMetadata minLovelace contract
+      Marlowe.Class.createContract Nothing MarloweV1 walletAddresses roleTokensConfig emptyMarloweTransactionMetadata minLovelace $ Left contract
     era <- view eraL
     case result of
       Right Transaction.ContractCreated { txBody, contractId } -> do
@@ -537,4 +537,3 @@ interpret ro@RuntimeApplyInputs {..} = do
             throwLabeledError ro $ runtimeOperationFailed' $ "Failed to submit contract: " <> show err
       Left err ->
         throwLabeledError ro $ runtimeOperationFailed' $ "Failed to create contract: " <> show err
-
