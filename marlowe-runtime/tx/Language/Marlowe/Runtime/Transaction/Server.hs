@@ -383,7 +383,7 @@ execApplyInputs
         MarloweV1 -> case inputDatum of
           V1.MarloweData{..} -> (fromCardanoDatumHash $ hashScriptData $ toCardanoScriptData $ toDatum marloweContract, marloweState)
       merkleizeInputs' = fmap hush . runSomeConnectorTraced contractQueryConnector . merkleizeInputs contractHash state
-    ((invalidBefore, invalidHereafter, mAssetsAndDatum), constraints) <- buildApplyInputsConstraints
+    ((invalidBefore, invalidHereafter, mAssetsAndDatum, inputs'), constraints) <- buildApplyInputsConstraints
       merkleizeInputs'
       systemStart
       eraHistory
@@ -406,6 +406,7 @@ execApplyInputs
           TxBody TxBodyContent{..} -> case txMetadata of
             TxMetadataNone -> mempty
             TxMetadataInEra _ m -> fromCardanoTxMetadata m
+      , inputs = inputs'
       , ..
       }
 

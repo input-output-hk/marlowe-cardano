@@ -26,11 +26,11 @@ import Language.Marlowe.Runtime.History.Api (ContractStep(..), RedeemStep(..))
 import Language.Marlowe.Runtime.Integration.Common
 import Language.Marlowe.Runtime.Integration.StandardContract
 import Language.Marlowe.Runtime.Transaction.Api (ContractCreated(..), InputsApplied(..))
-import Test.Hspec (Spec, it, shouldBe)
+import Test.Hspec (Spec, focus, it, shouldBe)
 import Test.Integration.Marlowe.Local (withLocalMarloweRuntime)
 
 spec :: Spec
-spec = it "Basic e2e scenario" $ withLocalMarloweRuntime $ runIntegrationTest do
+spec = focus $ it "Basic e2e scenario" $ withLocalMarloweRuntime $ runIntegrationTest do
   partyAWallet <- getGenesisWallet 0
   partyBWallet <- getGenesisWallet 1
   let

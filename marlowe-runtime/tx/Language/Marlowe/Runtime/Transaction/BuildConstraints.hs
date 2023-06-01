@@ -261,7 +261,7 @@ buildCreateConstraintsV1 walletCtx roles metadata minAda contract = do
           uselessRolePolicyId  = PolicyId . PV2.fromBuiltin . PV2.unCurrencySymbol $ PV2.adaSymbol
         pure uselessRolePolicyId
 
-type ApplyResults v = (UTCTime, UTCTime, Maybe (Assets, Datum v))
+type ApplyResults v = (UTCTime, UTCTime, Maybe (Assets, Datum v), Inputs v)
 
 -- applies an input to a contract.
 buildApplyInputsConstraints
@@ -323,10 +323,6 @@ buildApplyInputsConstraintsV1 merkleizeInputs systemStart eraHistory marloweOutp
           _ ->  maxSafeSlot                                                   -- The next timeout is beyond the safe horizon.
     Just t -> utcTimeToSlotNo t
 
-  -- Construct inputs constraints.
-  -- Consume UTXOs containing Marlowe script.
-  tell $ mustConsumeMarloweOutput @'V1 invalidBefore' invalidHereafter' inputs
-
   -- Consume UTXOs containing all necessary role tokens and send them back.
   for_ requiredParties $ traverse_ $ \case
     V1.Role role -> tell $ mustSpendRoleToken $ roleAssetId role
@@ -353,8 +349,14 @@ buildApplyInputsConstraintsV1 merkleizeInputs systemStart eraHistory marloweOutp
     -- first invalid slot to get the last millisecond in the last valid slot.
     <*> (subtract 1 <$> slotNoToPOSIXTime invalidHereafter')
   let transactionInput = V1.TransactionInput { txInterval, txInputs = inputs }
+
   -- Try and auto-merkleize the inputs if possible.
   transactionInput' <- lift $ lift $ fromMaybe transactionInput <$> merkleizeInputs transactionInput
+
+  -- Construct inputs constraints.
+  -- Consume UTXOs containing Marlowe script.
+  tell $ mustConsumeMarloweOutput @'V1 invalidBefore' invalidHereafter' $ V1.txInputs transactionInput'
+
   (possibleContinuation, payments) <- case V1.computeTransaction transactionInput' state contract of
      V1.Error err -> lift $ throwE $ ApplyInputsConstraintsBuildupFailed (MarloweComputeTransactionFailed $ show err)
      V1.TransactionOutput _ payments _ V1.Close ->
@@ -394,6 +396,7 @@ buildApplyInputsConstraintsV1 merkleizeInputs systemStart eraHistory marloweOutp
     ( posixTimeToUTCTime $ fst txInterval
     , posixTimeToUTCTime $ snd txInterval + 1 -- Add the millisecond back to convert the upper bound back to an exclusive bound (ledger semantics)
     , output
+    , V1.txInputs transactionInput'
     )
 
   where
