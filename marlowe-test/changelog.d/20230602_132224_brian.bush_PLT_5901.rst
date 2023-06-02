@@ -1,0 +1,4 @@
+Added
+-----
+
+- Property-based tests for safety checks on Plutus addresses.
