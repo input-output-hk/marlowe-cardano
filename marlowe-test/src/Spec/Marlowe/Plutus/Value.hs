@@ -26,10 +26,11 @@ import Plutus.V2.Ledger.Api (CurrencySymbol, TokenName, Value(..), singleton)
 import PlutusTx.Numeric (zero)
 import Spec.Marlowe.Plutus.Arbitrary ()
 import Test.Tasty (TestTree, testGroup)
-import Test.Tasty.QuickCheck (Arbitrary(..), Gen, Property, chooseInt, forAll, property, testProperty, (===))
+import Test.Tasty.QuickCheck (Arbitrary(..), Property, forAll, property, testProperty, (===))
 
 import qualified PlutusTx.AssocMap as AM (empty, fromList, toList)
 import qualified PlutusTx.Eq as P ((==))
+import Test.QuickCheck (shuffle)
 
 
 -- | Run tests.
@@ -96,26 +97,6 @@ checkEq =
             check (c, t) = valueOf' x c t == valueOf' y c t
           in
             (x P.== y) == (all check . foldl1 union $ tokens <$> [x, y])
-
--- Produces a list containing the elements of the first in a random order.
-shuffle :: [a] -> Gen [a]
-shuffle xs = go [] (length xs) xs
-  where
-    go acc 0 _ = pure acc
-    go acc len xs' = do
-      ix <- chooseInt (0, len - 1)
-      (before, after) <- pure $ breakAt ix xs'
-      case after of
-        [] -> error "Chosen index out of range"
-        (x : after') -> go (x : acc) (len - 1) $ before <> after'
-
-breakAt :: Int -> [a] -> ([a], [a])
-breakAt = go []
-  where
-    go acc 0 xs = (reverse acc, xs)
-    go acc _ [] = (reverse acc, [])
-    go acc n (x : xs) = go (x : acc) (n - 1) xs
-
 
 -- | Check that `leq` is a partial ordering requiring that quantity of each token in the first
 --   operand is less than or equal to quanity of the corresponding token in the second operand,

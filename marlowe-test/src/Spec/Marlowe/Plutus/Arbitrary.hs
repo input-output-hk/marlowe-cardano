@@ -25,7 +25,6 @@ module Spec.Marlowe.Plutus.Arbitrary
 
 import Language.Marlowe.Core.V1.Semantics (MarloweData(..), MarloweParams(..))
 import Language.Marlowe.Scripts (MarloweTxInput(..))
-import Plutus.V1.Ledger.Value (gt)
 import Plutus.V2.Ledger.Api
   ( BuiltinData(..)
   , Data(..)
@@ -57,6 +56,7 @@ import Test.Tasty.QuickCheck (Arbitrary(..), Gen, chooseInt, frequency, resize, 
 
 import qualified Data.ByteString as BS (ByteString, pack)
 import qualified Data.ByteString.Char8 as BS8 (pack)
+import qualified PlutusTx.AssocMap as AM
 
 
 instance Arbitrary BS.ByteString where
@@ -170,8 +170,7 @@ instance Arbitrary TxInInfo where
 
 
 instance Arbitrary TxOut where
-  arbitrary = TxOut <$> arbitrary <*> arbitrary `suchThat` (`gt` mempty) <*> (OutputDatumHash <$> arbitrary) <*> pure Nothing
-
+  arbitrary = TxOut <$> arbitrary <*> genValue arbitraryPositiveInteger `suchThat` (not . AM.null . getValue) <*> (OutputDatumHash <$> arbitrary) <*> pure Nothing
 
 instance Arbitrary TxOutRef where
   arbitrary = TxOutRef <$> arbitrary <*> arbitraryPositiveInteger
@@ -182,7 +181,10 @@ instance Arbitrary a => Arbitrary (UpperBound a) where
 
 
 instance Arbitrary Value where
-  arbitrary = Value <$> arbitraryAssocMap arbitrary (arbitraryAssocMap arbitrary arbitrary)
+  arbitrary = genValue arbitrary
+
+genValue :: Gen Integer -> Gen Value
+genValue genQuantity = Value <$> arbitraryAssocMap arbitrary (arbitraryAssocMap arbitrary genQuantity)
 
 instance Arbitrary MarloweParams where
   arbitrary = MarloweParams <$> arbitrary
