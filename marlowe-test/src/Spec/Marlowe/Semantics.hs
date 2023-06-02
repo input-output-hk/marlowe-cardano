@@ -23,6 +23,7 @@ import qualified Spec.Marlowe.Semantics.Compute (tests)
 import qualified Spec.Marlowe.Semantics.Entropy (tests)
 import qualified Spec.Marlowe.Semantics.Functions (tests)
 import qualified Spec.Marlowe.Semantics.Golden (tests)
+import qualified Spec.Marlowe.Semantics.Path (tests)
 
 
 -- | Run the tests.
@@ -34,4 +35,5 @@ tests =
     , Spec.Marlowe.Semantics.Functions.tests
     , Spec.Marlowe.Semantics.Compute.tests
     , Spec.Marlowe.Semantics.Golden.tests
+    , Spec.Marlowe.Semantics.Path.tests
     ]

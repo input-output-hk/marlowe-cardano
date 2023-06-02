@@ -8,6 +8,7 @@ module Language.Marlowe.Runtime.Transaction.BuildConstraintsSpec
   ) where
 
 import Cardano.Api (ConsensusMode(..), EraHistory(EraHistory), SlotNo(SlotNo))
+import Control.Monad.Trans.Except (runExcept)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import Data.Function (on)
@@ -359,8 +360,9 @@ buildApplyInputsConstraintsSpec =
         marloweState = state {Semantics.minTime = POSIXTime minTime}
         datum = Semantics.MarloweData{..}
         marloweOutput = TransactionScriptOutput{..}
-        result =
+        result = runExcept $
           buildApplyInputsConstraints
+            (const $ pure Nothing)
             systemStart
             eraHistory
             MarloweV1
@@ -403,8 +405,9 @@ buildApplyInputsConstraintsSpec =
         marloweContract = afterAssert $ whenCloseContract timeout
         datum = Semantics.MarloweData{..}
         marloweOutput = TransactionScriptOutput{..}
-        result =
+        result = runExcept $
           buildApplyInputsConstraints
+            (const $ pure Nothing)
             systemStart
             eraHistory
             MarloweV1
@@ -434,8 +437,9 @@ buildApplyInputsConstraintsSpec =
         marloweState = state {Semantics.minTime = 0}
         datum = Semantics.MarloweData{..}
         marloweOutput = TransactionScriptOutput{..}
-        result =
+        result = runExcept $
           buildApplyInputsConstraints
+            (const $ pure Nothing)
             systemStart
             eraHistory
             MarloweV1
@@ -453,7 +457,7 @@ buildApplyInputsConstraintsSpec =
         . counterexample ("specified upper = " <> show upper)
         . counterexample ("specified result = " <> show result)
         $ case result of
-            Right ((lower', upper', _), _) ->
+            Right ((lower', upper', _, _), _) ->
               counterexample "Rounded specified bounds should match the computed bounds"
                 . counterexample ("computed lower = " <> show (fromUTC lower'))
                 . counterexample ("computed upper = " <> show (fromUTC upper'))
@@ -479,8 +483,9 @@ buildApplyInputsConstraintsSpec =
           marloweContract = foldr makePay assertWhenCloseContract payments
           datum = Semantics.MarloweData{..}
           marloweOutput = TransactionScriptOutput{..}
-          result =
+          result = runExcept $
             buildApplyInputsConstraints
+              (const $ pure Nothing)
               systemStart
               eraHistory
               MarloweV1
@@ -520,8 +525,9 @@ buildApplyInputsConstraintsSpec =
         datum = Semantics.MarloweData{..}
         marloweOutput = TransactionScriptOutput{..}
         inputs' = Semantics.NormalInput <$> inputs
-        result =
+        result = runExcept $
           buildApplyInputsConstraints
+            (const $ pure Nothing)
             systemStart
             eraHistory
             MarloweV1
@@ -556,8 +562,9 @@ buildApplyInputsConstraintsSpec =
         marloweContract = afterAssert expectedContract
         datum = Semantics.MarloweData{..}
         marloweOutput = TransactionScriptOutput{..}
-        result =
+        result = runExcept $
           buildApplyInputsConstraints
+            (const $ pure Nothing)
             systemStart
             eraHistory
             MarloweV1
@@ -579,11 +586,11 @@ buildApplyInputsConstraintsSpec =
         . counterexample ("result = " <> show result)
         . counterexample ("expected output = " <> show expectedOutput)
         $ case result of
-            Right ((_, _, Just output), TxConstraints{..}) ->
+            Right ((_, _, Just output, _), TxConstraints{..}) ->
               counterexample "continuing output is correct"
                 $ marloweOutputConstraints == expectedOutput
                 && output == (expectedAssets, expectedDatum)
-            Right ((_, _, Nothing), TxConstraints{..}) ->
+            Right ((_, _, Nothing, _), TxConstraints{..}) ->
               counterexample "no continuing output is correct"
                 $ marloweOutputConstraints == expectedOutput
             Left _ ->
@@ -594,8 +601,9 @@ buildApplyInputsConstraintsSpec =
         marloweContract = assertWhenCloseContract
         datum = Semantics.MarloweData{..}
         marloweOutput = TransactionScriptOutput{..}
-        result =
+        result = runExcept $
           buildApplyInputsConstraints
+            (const $ pure Nothing)
             systemStart
             eraHistory
             MarloweV1
@@ -622,8 +630,9 @@ buildApplyInputsConstraintsSpec =
         marloweContract = foldr (toContract . toAction) (afterAssert whenNotify) inputs
         datum = Semantics.MarloweData{..}
         marloweOutput = TransactionScriptOutput{..}
-        result =
+        result = runExcept $
           buildApplyInputsConstraints
+            (const $ pure Nothing)
             systemStart
             eraHistory
             MarloweV1
@@ -653,8 +662,9 @@ buildApplyInputsConstraintsSpec =
         marloweContract = foldr (toContract . toAction) (afterAssert whenNotify) inputs
         datum = Semantics.MarloweData{..}
         marloweOutput = TransactionScriptOutput{..}
-        result =
+        result = runExcept $
           buildApplyInputsConstraints
+            (const $ pure Nothing)
             systemStart
             eraHistory
             MarloweV1

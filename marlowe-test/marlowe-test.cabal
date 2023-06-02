@@ -130,6 +130,7 @@ library
     Spec.Marlowe.Plutus.Types
     Spec.Marlowe.Plutus.Value
     Spec.Marlowe.Reference
+    Spec.Marlowe.Semantics.Path
     Spec.Marlowe.Semantics.Arbitrary
     Spec.Marlowe.Semantics.AssocMap
     Spec.Marlowe.Semantics.Compute

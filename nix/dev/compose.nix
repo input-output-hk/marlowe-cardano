@@ -228,6 +228,8 @@ let
       "/exec/run-marlowe-tx"
       "--chain-sync-host"
       "marlowe-chain-sync"
+      "--contract-host"
+      "marlowe-contract"
       "--host"
       "0.0.0.0"
     ];

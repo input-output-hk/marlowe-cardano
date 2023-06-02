@@ -1051,7 +1051,7 @@ instance SemiArbitrary State where
 
 instance Arbitrary Environment where
   arbitrary = Environment <$> arbitraryTimeInterval
-  shrink (Environment x) = Environment <$> shrink x
+  shrink (Environment x) = Environment <$> shrinkTimeInterval x
 
 instance SemiArbitrary Environment where
   semiArbitrary context = Environment <$> semiArbitrary context

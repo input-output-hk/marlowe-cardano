@@ -20,6 +20,7 @@ import Data.GeneralAllocate
 import qualified Data.Text as T
 import Data.Version (showVersion)
 import Language.Marlowe.Runtime.ChainSync.Api (BlockNo(..), ChainSyncQuery(..), RuntimeChainSeekClient)
+import Language.Marlowe.Runtime.Contract.Api (ContractRequest)
 import qualified Language.Marlowe.Runtime.Core.ScriptRegistry as ScriptRegistry
 import Language.Marlowe.Runtime.Transaction (TransactionDependencies(..), transaction)
 import qualified Language.Marlowe.Runtime.Transaction.Query as Query
@@ -92,6 +93,11 @@ run Options{..} = flip runComponent_ () proc _ -> do
       $ handshakeClientConnectorTraced
       $ tcpClientTraced (injectSelector ChainSyncQueryClient) chainSeekHost chainSeekQueryPort queryClientPeer
 
+    contractQueryConnector :: SomeClientConnectorTraced (QueryClient ContractRequest) Span RootSelector (AppM Span)
+    contractQueryConnector = SomeConnectorTraced (injectSelector ContractQueryClient)
+      $ handshakeClientConnectorTraced
+      $ tcpClientTraced (injectSelector ContractQueryClient) contractHost contractQueryPort queryClientPeer
+
   probes <- transaction -< TransactionDependencies
     { connectionSource = SomeConnectionSourceTraced (injectSelector Server)
         $ handshakeConnectionSourceTraced serverSource
@@ -147,6 +153,8 @@ data Options = Options
   , chainSeekQueryPort :: PortNumber
   , chainSeekCommandPort :: PortNumber
   , chainSeekHost :: HostName
+  , contractQueryPort :: PortNumber
+  , contractHost :: HostName
   , port :: PortNumber
   , host :: HostName
   , submitConfirmationBlocks :: BlockNo
@@ -161,6 +169,8 @@ getOptions = execParser $ info (helper <*> parser) infoMod
       <*> chainSeekQueryPortParser
       <*> chainSeekCommandPortParser
       <*> chainSeekHostParser
+      <*> contractQueryPortParser
+      <*> contractHostParser
       <*> portParser
       <*> hostParser
       <*> submitConfirmationBlocksParser
@@ -190,6 +200,14 @@ getOptions = execParser $ info (helper <*> parser) infoMod
       , showDefault
       ]
 
+    contractQueryPortParser = option auto $ mconcat
+      [ long "contract-query-port"
+      , value 3728
+      , metavar "PORT_NUMBER"
+      , help "The port number of the contract query server."
+      , showDefault
+      ]
+
     portParser = option auto $ mconcat
       [ long "command-port"
       , value 3723
@@ -203,6 +221,14 @@ getOptions = execParser $ info (helper <*> parser) infoMod
       , value "127.0.0.1"
       , metavar "HOST_NAME"
       , help "The host name of the chain sync server."
+      , showDefault
+      ]
+
+    contractHostParser = strOption $ mconcat
+      [ long "contract-host"
+      , value "127.0.0.1"
+      , metavar "HOST_NAME"
+      , help "The host name of the contract server."
       , showDefault
       ]
 

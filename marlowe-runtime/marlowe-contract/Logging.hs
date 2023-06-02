@@ -13,11 +13,12 @@ import Data.String (fromString)
 import qualified Data.Text as T
 import Data.Text.Lazy (toStrict)
 import Data.Void (absurd)
+import Language.Marlowe (TransactionInput(..))
 import Language.Marlowe.Protocol.Load.Types (MarloweLoad)
 import Language.Marlowe.Runtime.Contract.Api (ContractRequest)
 import Language.Marlowe.Runtime.Contract.LoadServer (LoadServerSelector(..))
 import Language.Marlowe.Runtime.Contract.Store
-  (ContractStagingAreaSelector(..), ContractStoreSelector(..), StageContractField(..))
+  (ContractStagingAreaSelector(..), ContractStoreSelector(..), MerkleizeInputsField(..), StageContractField(..))
 import Network.Protocol.Driver.Trace (TcpServerSelector, renderTcpServerSelectorOTel)
 import Network.Protocol.Handshake.Types (Handshake)
 import Network.Protocol.Query.Types (Query)
@@ -71,6 +72,22 @@ renderContractStoreSelectorOTel = \case
     { eventName = "marlowe/contract/get_contract " <> read (show hash)
     , eventKind = Client
     , renderField = const [("marlowe.contract.contract_exists", toAttribute True)]
+    }
+  MerkleizeInputs -> OTelRendered
+    { eventName = "marlowe/contract/merkleize_inputs"
+    , eventKind = Client
+    , renderField = \case
+        MerkleizeInputsState state -> [("marlowe.state", toAttribute $ toStrict $ encodeToLazyText state)]
+        MerkleizeInputsContractHash hash -> [("marlowe.contract_hash", fromString $ read $ show hash)]
+        MerkleizeInputsInput TransactionInput{..} ->
+          [ ("marlowe.interval_low" , toAttribute $ IntAttribute $ fromIntegral $ fst txInterval)
+          , ("marlowe.interval_high" , toAttribute $ IntAttribute $ fromIntegral $ snd txInterval)
+          , ("marlowe.contract.initial_inputs", toAttribute $ toStrict . encodeToLazyText <$> txInputs)
+          ]
+        MerkleizeInputsResult (Left err) ->
+          [("error", fromString $ show err)]
+        MerkleizeInputsResult (Right TransactionInput{..}) ->
+          [("marlowe.inputs", toAttribute $ toStrict . encodeToLazyText <$> txInputs)]
     }
 
 renderContractStagingAreaSelectorOTel :: RenderSelectorOTel ContractStagingAreaSelector

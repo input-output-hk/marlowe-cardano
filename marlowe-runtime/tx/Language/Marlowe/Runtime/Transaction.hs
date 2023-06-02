@@ -14,6 +14,7 @@ import Control.Concurrent.Component.Probes
 import Control.Concurrent.STM (STM, atomically)
 import Control.Monad.Event.Class (MonadInjectEvent)
 import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncQuery, RuntimeChainSeekClient)
+import Language.Marlowe.Runtime.Contract.Api (ContractRequest)
 import Language.Marlowe.Runtime.Core.Api (MarloweVersion(..))
 import Language.Marlowe.Runtime.Core.ScriptRegistry (MarloweScripts)
 import Language.Marlowe.Runtime.Transaction.Api (MarloweTxCommand)
@@ -34,6 +35,7 @@ data TransactionDependencies r s m = TransactionDependencies
   , loadWalletContext :: LoadWalletContext m
   , loadMarloweContext :: LoadMarloweContext m
   , chainSyncQueryConnector :: SomeClientConnectorTraced (QueryClient ChainSyncQuery) r s m
+  , contractQueryConnector :: SomeClientConnectorTraced (QueryClient ContractRequest) r s m
   , getCurrentScripts :: forall v. MarloweVersion v -> MarloweScripts
   }
 

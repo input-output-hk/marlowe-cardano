@@ -386,6 +386,7 @@ library tx
     , marlowe-chain-sync:plutus-compat ==0.0.1
     , marlowe-protocols ==0.1.0.0
     , marlowe-runtime ==0.0.1
+    , marlowe-runtime:contract-api ==0.0.1
     , marlowe-runtime:history-api ==0.0.1
     , marlowe-runtime:plutus-scripts ==0.0.1
     , marlowe-runtime:tx-api ==0.0.1
@@ -568,6 +569,7 @@ executable marlowe-tx
     , marlowe-chain-sync ==0.0.1
     , marlowe-protocols ==0.1.0.0
     , marlowe-runtime ==0.0.1
+    , marlowe-runtime:contract-api ==0.0.1
     , marlowe-runtime:tx ==0.0.1
     , marlowe-runtime:tx-api ==0.0.1
     , network >= 3.1 && < 4
@@ -597,6 +599,7 @@ executable marlowe-contract
     , general-allocate ^>= { 0.2 }
     , hs-opentelemetry-api >= 0.0.3 && < 0.0.4
     , hs-opentelemetry-sdk >= 0.0.3 && < 0.0.4
+    , marlowe-cardano ==0.1.0.3
     , marlowe-protocols ==0.1.0.0
     , marlowe-runtime:contract ==0.0.1
     , marlowe-runtime:contract-api ==0.0.1

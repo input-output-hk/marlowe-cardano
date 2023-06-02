@@ -8,9 +8,10 @@ import Control.Monad.Event.Class
 import Data.Foldable (traverse_)
 import Data.Set (Set)
 import Data.Void (Void)
-import Language.Marlowe.Core.V1.Semantics.Types (Contract)
+import Language.Marlowe.Core.V1.Semantics (TransactionInput)
+import Language.Marlowe.Core.V1.Semantics.Types (Contract, State)
 import Language.Marlowe.Runtime.ChainSync.Api (DatumHash)
-import Language.Marlowe.Runtime.Contract.Api (ContractWithAdjacency)
+import Language.Marlowe.Runtime.Contract.Api (ContractWithAdjacency, MerkleizeInputsError)
 import Observe.Event (InjectSelector, addField, injectSelector, reference)
 import Observe.Event.Backend (setInitialCauseEventBackend)
 
@@ -18,10 +19,18 @@ data ContractStoreSelector f where
   CreateContractStagingArea :: ContractStoreSelector Void
   ContractStagingAreaSelector :: ContractStagingAreaSelector f -> ContractStoreSelector f
   GetContract :: DatumHash -> ContractStoreSelector ContractWithAdjacency
+  MerkleizeInputs  :: ContractStoreSelector MerkleizeInputsField
+
+data MerkleizeInputsField
+  = MerkleizeInputsContractHash DatumHash
+  | MerkleizeInputsState State
+  | MerkleizeInputsInput TransactionInput
+  | MerkleizeInputsResult  (Either MerkleizeInputsError TransactionInput)
 
 data ContractStore m = ContractStore
   { createContractStagingArea :: m (ContractStagingArea m)
   , getContract :: DatumHash -> m (Maybe ContractWithAdjacency)
+  , merkleizeInputs :: DatumHash -> State -> TransactionInput -> m (Either MerkleizeInputsError TransactionInput)
   }
 
 hoistContractStore
@@ -32,6 +41,7 @@ hoistContractStore
 hoistContractStore f ContractStore{..} = ContractStore
   { createContractStagingArea = f $ hoistContractStagingArea f <$> createContractStagingArea
   , getContract = f . getContract
+  , merkleizeInputs = (fmap . fmap) f . merkleizeInputs
   }
 
 traceContractStore
@@ -47,6 +57,13 @@ traceContractStore inj ContractStore{..} = ContractStore
   , getContract = \hash -> withInjectEvent inj (GetContract hash) \ev -> do
       result <- getContract hash
       traverse_ (addField ev) result
+      pure result
+  , merkleizeInputs = \hash state input -> withInjectEvent inj MerkleizeInputs \ev -> do
+      addField ev $ MerkleizeInputsContractHash hash
+      addField ev $ MerkleizeInputsState state
+      addField ev $ MerkleizeInputsInput input
+      result <- merkleizeInputs hash state input
+      addField ev $ MerkleizeInputsResult result
       pure result
   }
 

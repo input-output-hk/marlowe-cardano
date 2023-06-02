@@ -1,3 +1,4 @@
+{-# LANGUAGE ApplicativeDo #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
@@ -17,13 +18,14 @@ import qualified Data.Map as Map
 import qualified Data.Set as Set
 import Language.Marlowe.Core.V1.Merkle (deepMerkleize)
 import Language.Marlowe.Core.V1.Plate (extractAll)
+import Language.Marlowe.Core.V1.Semantics (TransactionInput(..), TransactionOutput(..), computeTransaction)
 import Language.Marlowe.Core.V1.Semantics.Types
 import Language.Marlowe.Protocol.Load.Client (MarloweLoadClient, marloweLoadClientPeer, pushContract)
 import Language.Marlowe.Protocol.Load.Server (marloweLoadServerPeer)
 import Language.Marlowe.Runtime.Cardano.Api (fromCardanoDatumHash, toCardanoScriptData)
 import Language.Marlowe.Runtime.ChainSync.Api (DatumHash(..), toDatum)
-import Language.Marlowe.Runtime.Contract
-import Language.Marlowe.Runtime.Contract.Api (ContractWithAdjacency(adjacency))
+import qualified Language.Marlowe.Runtime.Contract as Contract
+import Language.Marlowe.Runtime.Contract.Api (ContractWithAdjacency(adjacency), merkleizeInputs)
 import qualified Language.Marlowe.Runtime.Contract.Api as Api
 import Language.Marlowe.Runtime.Contract.Store.File (ContractStoreOptions(..), createContractStore)
 import Network.Protocol.Connection
@@ -33,13 +35,39 @@ import Network.Protocol.Query.Client (QueryClient, queryClientPeer)
 import Network.Protocol.Query.Server (queryServerPeer)
 import Network.TypedProtocol (unsafeIntToNat)
 import qualified Plutus.V2.Ledger.Api as PV2
+import Spec.Marlowe.Semantics.Arbitrary (arbitraryNonnegativeInteger)
+import Spec.Marlowe.Semantics.Path (genContractPath, getContract, getInputs)
 import Test.Hspec
+import Test.Hspec.QuickCheck (prop)
 import Test.Integration.Marlowe (createWorkspace, resolveWorkspacePath)
+import Test.QuickCheck (Gen, counterexample, forAll)
 import UnliftIO (atomically, liftIO, race_)
 
 spec :: Spec
 spec = parallel $ describe "MarloweContract" do
   getContractSpec
+  getMerkleizedInputsSpec
+
+getMerkleizedInputsSpec :: Spec
+getMerkleizedInputsSpec = describe "merkleizeInputs" do
+  prop "Produces equivalent inputs" \state -> forAll (genTimeInterval state) \interval -> forAll (genContractPath (Environment interval) state) \path ->
+    let
+      contract = getContract path
+      inputs = getInputs [] path
+    in counterexample (show inputs)
+      $ counterexample (show contract) $ runContractTest do
+        hash <- expectJust "failed to push contract" $ runLoad $ pushContract contract
+        let input = TransactionInput interval $ NormalInput <$> inputs
+        input' <- either (fail . show) pure =<< runQuery (merkleizeInputs hash state input)
+        Api.ContractWithAdjacency{contract = merkleizedContract} <- expectJust "Failed to get contract" $ runQuery $ Api.getContract hash
+        let expected = computeTransaction input state contract
+        let
+          expected' = case expected of
+            TransactionOutput warnings payment state' contract' ->
+              TransactionOutput warnings payment state' $ fst $ runWriter $ deepMerkleize contract'
+            a -> a
+        let actual = computeTransaction input' state merkleizedContract
+        liftIO $ actual `shouldBe` expected'
 
 getContractSpec :: Spec
 getContractSpec = describe "getContract" do
@@ -166,7 +194,7 @@ runContractTest test = runResourceT do
       { loadConnector = SomeConnectorTraced inject $ clientConnector loadPair
       , queryConnector = SomeConnectorTraced inject $ clientConnector queryPair
       }
-  runNoopEventT $ flip runReaderT testHandle $ race_ test $ runComponent_ (void contract) ContractDependencies
+  runNoopEventT $ flip runReaderT testHandle $ race_ test $ runComponent_ (void Contract.contract) Contract.ContractDependencies
     { batchSize = unsafeIntToNat 10
     , contractStore
     , loadSource = SomeConnectionSourceTraced inject $ connectionSource loadPair
@@ -192,3 +220,10 @@ data AnySelector f where
 
 instance Inject s AnySelector where
   inject s f = f (AnySelector s) id
+
+genTimeInterval :: State -> Gen TimeInterval
+genTimeInterval State{..} = do
+  dStart <- arbitraryNonnegativeInteger
+  let start = PV2.getPOSIXTime minTime + dStart
+  duration <- arbitraryNonnegativeInteger
+  pure (PV2.POSIXTime start, PV2.POSIXTime $ start + duration)

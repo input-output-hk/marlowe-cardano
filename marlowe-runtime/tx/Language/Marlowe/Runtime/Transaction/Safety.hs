@@ -47,6 +47,7 @@ import qualified Cardano.Api.Shelley as Shelley
   , SystemStart(..)
   )
 import Control.Monad.IO.Class (MonadIO)
+import Data.Functor.Identity (runIdentity)
 import qualified Data.Map.Strict as M (Map, elems, empty, fromList, keys, map, mapKeys, singleton, size)
 import qualified Data.Set as S (singleton)
 import qualified Language.Marlowe.Core.V1.Merkle as V1 (MerkleizedContract(..))
@@ -220,7 +221,9 @@ checkTransaction solveConstraints version@MarloweV1 marloweContext@MarloweContex
         utcTimeToSlotNo start history now
       constraints <-
         bimap show snd
-          $ buildApplyInputsConstraints start history version marloweOutput tipSlot metadata intervalBegin intervalEnd txInputs
+          $ runIdentity
+          $ runExceptT
+          $ buildApplyInputsConstraints (const $ pure Nothing) start history version marloweOutput tipSlot metadata intervalBegin intervalEnd txInputs
       let
         walletContext = walletForConstraints version marloweContext changeAddress constraints
       pure
