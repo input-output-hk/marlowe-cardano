@@ -82,7 +82,7 @@ applyCommandParser = info (txCommandParser True parser) $ progDesc "Apply inputs
       ]
 
 depositCommandParser :: ParserInfo (TxCommand ApplyCommand)
-depositCommandParser = singleInputParser "deposit funds into" contentParser $ progDesc "Deposit funds into a contract"
+depositCommandParser = singleInputParser "deposit funds into" contentParser $ progDesc "Deposit funds into a contract."
   where
     contentParser = do
       accountId <- accountIdParser
@@ -127,7 +127,7 @@ depositCommandParser = singleInputParser "deposit funds into" contentParser $ pr
       ]
 
 chooseCommandParser :: ParserInfo (TxCommand ApplyCommand)
-chooseCommandParser = singleInputParser "make a choice in." contentParser $ progDesc "Notify a contract to proceed"
+chooseCommandParser = singleInputParser "make a choice in" contentParser $ progDesc "Make a choice in a contract."
   where
     contentParser = do
       choiceId <- choiceIdParser
@@ -151,7 +151,7 @@ chooseCommandParser = singleInputParser "make a choice in." contentParser $ prog
       ]
 
 notifyCommandParser :: ParserInfo (TxCommand ApplyCommand)
-notifyCommandParser = singleInputParser "notify" (pure V1.INotify) $ progDesc "Notify a contract to proceed"
+notifyCommandParser = singleInputParser "notify" (pure V1.INotify) $ progDesc "Notify a contract to proceed."
 
 singleInputParser :: String -> Parser V1.InputContent -> InfoMod (TxCommand ApplyCommand) -> ParserInfo (TxCommand ApplyCommand)
 singleInputParser verb contentParser = info (txCommandParser True parser)
@@ -177,7 +177,7 @@ advanceCommandParser :: ParserInfo (TxCommand ApplyCommand)
 advanceCommandParser = info (txCommandParser True parser) $ progDesc "Advance a timed-out contract by applying an empty set of inputs."
   where
     parser = V1ApplyCommand
-      <$> contractIdParser "advance."
+      <$> contractIdParser "advance"
       <*> pure (ContractInputsByValue [])
       <*> validityLowerBoundParser
       <*> validityUpperBoundParser
@@ -187,7 +187,7 @@ contractIdParser verb = option (ContractId <$> txOutRefParser) $ mconcat
   [ long "contract"
   , short 'c'
   , metavar "CONTRACT_ID"
-  , help $ "The ID of the Marlowe contract to " <> verb
+  , help $ "The ID of the Marlowe contract to " <> verb <> "."
   ]
 
 validityLowerBoundParser :: Parser (Maybe POSIXTime)
