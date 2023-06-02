@@ -7,6 +7,7 @@ import qualified Language.Marlowe.Runtime.Integration.Contract as Contract
 import qualified Language.Marlowe.Runtime.Integration.Create as Create
 import qualified Language.Marlowe.Runtime.Integration.Intersections as Integrations
 import qualified Language.Marlowe.Runtime.Integration.MarloweQuery as MarloweQuery
+import qualified Language.Marlowe.Runtime.Integration.Withdraw as Withdraw
 import Test.Hspec (Spec, describe)
 
 
@@ -18,4 +19,5 @@ spec = describe "Marlowe runtime API" do
   describe "MarloweTxCommand" do
     Create.spec
     Apply.spec
+    Withdraw.spec
   Contract.spec
