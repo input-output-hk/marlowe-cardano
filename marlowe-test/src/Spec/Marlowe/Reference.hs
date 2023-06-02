@@ -56,11 +56,11 @@ referenceFolder :: FilePath
 referenceFolder = "reference" </> "data"
 
 
-readReferenceContracts :: IO [Contract]
+readReferenceContracts :: IO [(FilePath, Contract)]
 readReferenceContracts = readReferenceContracts' . (</> referenceFolder) =<< getDataDir
 
 
-readReferenceContracts' :: FilePath -> IO [Contract]
+readReferenceContracts' :: FilePath -> IO [(FilePath, Contract)]
 readReferenceContracts' folder =
   do
     contractFiles <- fmap (folder </>) . filter (".contract" `isSuffixOf`) <$> listDirectory folder
@@ -68,7 +68,7 @@ readReferenceContracts' folder =
       $ \contractFile ->
         eitherDecodeFileStrict contractFile
           >>= \case
-            Right contract -> pure contract
+            Right contract -> pure (contractFile, contract)
             Left msg -> error $ "Failed parsing " <> contractFile <> ": " <> msg <> "."
 
 
