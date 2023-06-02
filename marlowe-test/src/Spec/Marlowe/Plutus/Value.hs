@@ -20,13 +20,13 @@ module Spec.Marlowe.Plutus.Value
   ) where
 
 
-import Data.List (permutations, union)
+import Data.List (union)
 import Plutus.V1.Ledger.Value (geq, leq, valueOf)
 import Plutus.V2.Ledger.Api (CurrencySymbol, TokenName, Value(..), singleton)
 import PlutusTx.Numeric (zero)
 import Spec.Marlowe.Plutus.Arbitrary ()
 import Test.Tasty (TestTree, testGroup)
-import Test.Tasty.QuickCheck (Arbitrary(..), Property, elements, forAll, property, testProperty, (===))
+import Test.Tasty.QuickCheck (Arbitrary(..), Gen, Property, chooseInt, forAll, property, testProperty, (===))
 
 import qualified PlutusTx.AssocMap as AM (empty, fromList, toList)
 import qualified PlutusTx.Eq as P ((==))
@@ -79,12 +79,12 @@ checkEq =
         gen = do
           isEqual <- arbitrary
           x <- arbitrary
-          x' <- elements . permutations . AM.toList $ getValue x
+          x' <- shuffle . AM.toList $ getValue x
           x'' <- Value
                    . AM.fromList
                    <$> sequence
                    [
-                     (c, ) . AM.fromList <$> elements (permutations $ AM.toList ts)
+                     (c, ) . AM.fromList <$> shuffle (AM.toList ts)
                    |
                      (c, ts) <- x'
                    ]
@@ -96,6 +96,25 @@ checkEq =
             check (c, t) = valueOf' x c t == valueOf' y c t
           in
             (x P.== y) == (all check . foldl1 union $ tokens <$> [x, y])
+
+-- Produces a list containing the elements of the first in a random order.
+shuffle :: [a] -> Gen [a]
+shuffle xs = go [] (length xs) xs
+  where
+    go acc 0 _ = pure acc
+    go acc len xs' = do
+      ix <- chooseInt (0, len - 1)
+      (before, after) <- pure $ breakAt ix xs'
+      case after of
+        [] -> error "Chosen index out of range"
+        (x : after') -> go (x : acc) (len - 1) $ before <> after'
+
+breakAt :: Int -> [a] -> ([a], [a])
+breakAt = go []
+  where
+    go acc 0 xs = (reverse acc, xs)
+    go acc _ [] = (reverse acc, [])
+    go acc n (x : xs) = go (x : acc) (n - 1) xs
 
 
 -- | Check that `leq` is a partial ordering requiring that quantity of each token in the first
