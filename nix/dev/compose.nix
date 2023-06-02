@@ -207,7 +207,7 @@ let
   };
 
   contract-service = dev-service {
-    ports = [ 3727 ];
+    ports = [ 3727 3728 ];
     command = [
       "/exec/run-marlowe-contract"
       "--store-dir"

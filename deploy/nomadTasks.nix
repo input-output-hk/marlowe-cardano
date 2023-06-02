@@ -169,12 +169,13 @@ rec
     env = {
       HOST = "0.0.0.0";
       PORT = "\${NOMAD_PORT_marlowe_load}";
+      QUERY_PORT = "\${NOMAD_PORT_contract_query}";
       # TODO replace with a persistent volume
       STORE_DIR = "/tmp/store";
       HTTP_PORT = "\${NOMAD_PORT_contract_http}";
     };
     config.image = ociNamer oci-images.marlowe-contract;
-    config.ports = [ "marlowe_load" "contract_http" ];
+    config.ports = [ "marlowe_load" "contract_query" "contract_http" ];
     service.port = "marlowe_load";
     user = "0:0";
     driver = "docker";
@@ -188,18 +189,21 @@ rec
     env = {
       HOST = "0.0.0.0";
       PORT = "\${NOMAD_PORT_proxy}";
+      TRACED_PORT = "\${NOMAD_PORT_proxy_traced}";
       TX_HOST = "localhost";
       TX_PORT = "\${NOMAD_PORT_tx}";
       CONTRACT_HOST = "localhost";
       LOAD_PORT = "\${NOMAD_PORT_marlowe_load}";
+      QUERY_PORT = "\${NOMAD_PORT_contract_query}";
       SYNC_HOST = "localhost";
       MARLOWE_SYNC_PORT = "\${NOMAD_PORT_marlowe_sync}";
       MARLOWE_HEADER_SYNC_PORT = "\${NOMAD_PORT_marlowe_header_sync}";
       MARLOWE_QUERY_PORT = "\${NOMAD_PORT_marlowe_query}";
       HTTP_PORT = "\${NOMAD_PORT_proxy_http}";
+      OTEL_SERVICE_NAME = "marlowe-proxy";
     };
     config.image = ociNamer oci-images.marlowe-proxy;
-    config.ports = [ "proxy" "proxy_http" ];
+    config.ports = [ "proxy" "proxy_traced" "proxy_http" ];
     service.port = "proxy";
     user = "0:0";
     driver = "docker";
