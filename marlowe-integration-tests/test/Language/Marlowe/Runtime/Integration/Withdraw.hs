@@ -14,7 +14,7 @@ import Test.Hspec
 import Test.Integration.Marlowe.Local (withLocalMarloweRuntime)
 
 spec :: Spec
-spec = focus $ describe "Withdraw" do
+spec = describe "Withdraw" do
   it "Withdraw missing role token" missingRoleTokenTest
   it "Withdraw no payouts" noPayoutsTest
   it "Withdraws funds" payoutsTest
