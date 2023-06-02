@@ -74,7 +74,7 @@ closedSpec = parallel $ describe "Closed contract" $ aroundAll setup do
           RoleTokensNone
           emptyMarloweTransactionMetadata
           2_000_000
-          Close
+          (Left Close)
       _ <- submit wallet createBody
       InputsApplied { txBody = applyBody } <-
         expectRight "Failed to close contract" =<< applyInputs
@@ -127,7 +127,7 @@ closeSpec = parallel $ describe "Close contract" $ aroundAll setup do
           RoleTokensNone
           emptyMarloweTransactionMetadata
           2_000_000
-          Close
+          (Left Close)
       _ <- submit wallet createBody
       inputsApplied <- expectRight "Failed to close contract" =<< applyInputs
         MarloweV1
@@ -271,7 +271,7 @@ paySpec = parallel $ describe "Pay contracts" $ aroundAll setup do
           (mkRoleTokens [("Role", wallet2)])
           emptyMarloweTransactionMetadata
           2_000_000
-          (mkPay (Account $ Role "Role") ada (Constant 2_000_000) Close)
+          (Left $ mkPay (Account $ Role "Role") ada (Constant 2_000_000) Close)
       submitCreate wallet1 payRoleAccountCreated
       payAddressAccountCreated <-
         expectRight "Failed to create pay address account contract" =<< createContract
@@ -281,7 +281,7 @@ paySpec = parallel $ describe "Pay contracts" $ aroundAll setup do
           RoleTokensNone
           emptyMarloweTransactionMetadata
           2_000_000
-          (mkPay (Account $ walletParty wallet2) ada (Constant 2_000_000) Close)
+          (Left $ mkPay (Account $ walletParty wallet2) ada (Constant 2_000_000) Close)
       submitCreate wallet1 payAddressAccountCreated
       payRolePartyCreated <-
         expectRight "Failed to create pay role party contract" =<< createContract
@@ -291,7 +291,7 @@ paySpec = parallel $ describe "Pay contracts" $ aroundAll setup do
           (mkRoleTokens [("Role", wallet2)])
           emptyMarloweTransactionMetadata
           2_000_000
-          (mkPay (Party $ Role "Role") ada (Constant 2_000_000) Close)
+          (Left $ mkPay (Party $ Role "Role") ada (Constant 2_000_000) Close)
       submitCreate wallet1 payRolePartyCreated
       payAddressPartyCreated <-
         expectRight "Failed to create pay address party contract" =<< createContract
@@ -301,7 +301,7 @@ paySpec = parallel $ describe "Pay contracts" $ aroundAll setup do
           RoleTokensNone
           emptyMarloweTransactionMetadata
           2_000_000
-          (mkPay (Party $ walletParty wallet2) ada (Constant 2_000_000) Close)
+          (Left $ mkPay (Party $ walletParty wallet2) ada (Constant 2_000_000) Close)
       submitCreate wallet1 payAddressPartyCreated
       payDepth1Created <-
         expectRight "Failed to create pay depth 1 contract" =<< createContract
@@ -311,7 +311,7 @@ paySpec = parallel $ describe "Pay contracts" $ aroundAll setup do
           (mkRoleTokens [("Role", wallet2)])
           emptyMarloweTransactionMetadata
           2_000_000
-          (mkPay (Account $ Role "Role") ada (Constant 2_000_000) $
+          (Left $ mkPay (Account $ Role "Role") ada (Constant 2_000_000) $
             When
               [ Case (Notify TrueObs) Close
               ]
@@ -327,7 +327,7 @@ paySpec = parallel $ describe "Pay contracts" $ aroundAll setup do
           (mkRoleTokens [("Role", wallet2)])
           emptyMarloweTransactionMetadata
           10_000_000
-          (mkPay (Account $ Role "Role") ada (Constant 2_000_000) $
+          (Left $ mkPay (Account $ Role "Role") ada (Constant 2_000_000) $
             When
               [ Case (Notify TrueObs) $
                   When
@@ -348,7 +348,7 @@ paySpec = parallel $ describe "Pay contracts" $ aroundAll setup do
           (mkRoleTokens [("Role", wallet2)])
           emptyMarloweTransactionMetadata
           10_000_000
-          (mkPay (Party $ Role "Role") ada (Constant 2_000_000) $
+          (Left $ mkPay (Party $ Role "Role") ada (Constant 2_000_000) $
             When
               [ Case (Notify TrueObs) $
                   When
@@ -467,7 +467,7 @@ whenTimeoutSpec = parallel $ describe "Timed out contracts" $ aroundAll setup do
           RoleTokensNone
           emptyMarloweTransactionMetadata
           2_000_000
-          (When [Case (Notify TrueObs) Close] (utcTimeToPOSIXTime startTime) Close)
+          (Left $ When [Case (Notify TrueObs) Close] (utcTimeToPOSIXTime startTime) Close)
       submitCreate wallet depth1Created
       depth2InnerTimeoutCreated <-
         expectRight "Failed to create depth 2 contract" =<< createContract
@@ -477,7 +477,7 @@ whenTimeoutSpec = parallel $ describe "Timed out contracts" $ aroundAll setup do
           RoleTokensNone
           emptyMarloweTransactionMetadata
           2_000_000
-          (When [Case (Notify TrueObs) Close] (utcTimeToPOSIXTime startTime) $
+          (Left $ When [Case (Notify TrueObs) Close] (utcTimeToPOSIXTime startTime) $
              When [] (utcTimeToPOSIXTime startTime) Close
           )
       submitCreate wallet depth2InnerTimeoutCreated
@@ -489,7 +489,7 @@ whenTimeoutSpec = parallel $ describe "Timed out contracts" $ aroundAll setup do
           RoleTokensNone
           emptyMarloweTransactionMetadata
           2_000_000
-          (When [Case (Notify TrueObs) Close] (utcTimeToPOSIXTime startTime) $
+          (Left $ When [Case (Notify TrueObs) Close] (utcTimeToPOSIXTime startTime) $
              When [] (utcTimeToPOSIXTime $ addUTCTime (secondsToNominalDiffTime 200) startTime) Close
           )
       submitCreate wallet depth2Created
@@ -566,7 +566,7 @@ whenEmptySpec = parallel $ describe "Empty When contracts" $ aroundAll setup do
           RoleTokensNone
           emptyMarloweTransactionMetadata
           2_000_000
-          (When [] (utcTimeToPOSIXTime $ addUTCTime (secondsToNominalDiffTime 200) startTime) Close)
+          (Left $ When [] (utcTimeToPOSIXTime $ addUTCTime (secondsToNominalDiffTime 200) startTime) Close)
       submitCreate wallet ContractCreated{..}
       runtime <- ask
       liftIO $ runTests (runtime, contractId)
@@ -802,7 +802,7 @@ whenNonEmptySpec = parallel $ describe "Non-Empty When contracts" $ aroundAll se
           (mkRoleTokens [("Role1", wallet1), ("Role2", wallet2)])
           emptyMarloweTransactionMetadata
           2_000_000
-          (When cases (utcTimeToPOSIXTime $ addUTCTime (secondsToNominalDiffTime 100) startTime) Close)
+          (Left $ When cases (utcTimeToPOSIXTime $ addUTCTime (secondsToNominalDiffTime 100) startTime) Close)
       submitCreate wallet1 contract
       runtime <- ask
       liftIO $ runTests (runtime, contract)
@@ -852,7 +852,7 @@ merkleizedSpec = parallel $ describe "Merkleized contracts" $ aroundAll setup do
           RoleTokensNone
           emptyMarloweTransactionMetadata
           2_000_000
-          (When [MerkleizedCase (Notify TrueObs) hash] (utcTimeToPOSIXTime $ addUTCTime (secondsToNominalDiffTime 100) startTime) Close)
+          (Left $ When [MerkleizedCase (Notify TrueObs) hash] (utcTimeToPOSIXTime $ addUTCTime (secondsToNominalDiffTime 100) startTime) Close)
       submitCreate wallet contract
       runtime <- ask
       liftIO $ runTests (runtime, let ContractCreated{..} = contract in contractId)
@@ -902,7 +902,7 @@ multiInputsSpec = parallel $ describe "Multi inputs" $ aroundAll setup do
           (mkRoleTokens [("role", wallet)])
           emptyMarloweTransactionMetadata
           2_000_000
-          (When [Case action1 $ When [Case action2 Close] timeout Close, Case action2 $ When [Case action1 Close] timeout Close] timeout Close)
+          (Left $ When [Case action1 $ When [Case action2 Close] timeout Close, Case action2 $ When [Case action1 Close] timeout Close] timeout Close)
       submitCreate wallet contract
       runtime <- ask
       liftIO $ runTests (runtime, let ContractCreated{..} = contract in (startTime, contractId))

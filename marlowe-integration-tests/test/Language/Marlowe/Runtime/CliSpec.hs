@@ -126,8 +126,8 @@ marloweRuntimeJobClient = \case
       Left err -> error ("Some JobClient withdraw error: " <> show err)
       Right txBody -> pure txBody
 
-expectSameResultFromCLIandJobClient :: String -> [String] -> MarloweTxCommand Void err result -> Integration ()
-expectSameResultFromCLIandJobClient outputFile extraCliArgs command = do
+expectSameResultFromCLIAndJobClient :: String -> [String] -> MarloweTxCommand Void err result -> Integration ()
+expectSameResultFromCLIAndJobClient outputFile extraCliArgs command = do
   workspace <- Reader.asks $ workspace . testnet
 
   let
@@ -225,9 +225,9 @@ createSpec = describe "create" $
           Runtime.Transaction.Api.RoleTokensNone
           md
           (ChainSync.Api.Lovelace 2_000_000)
-          contract
+          (Left contract)
 
-    expectSameResultFromCLIandJobClient "create-tx-body.json" extraCliArgs creationCommand
+    expectSameResultFromCLIAndJobClient "create-tx-body.json" extraCliArgs creationCommand
 
 depositSpec :: Hspec.SpecWith CLISpecTestData
 depositSpec = describe "deposit" $
@@ -257,7 +257,7 @@ depositSpec = describe "deposit" $
           Runtime.Transaction.Api.mkMint $ pure ("Party A", (changeAddress $ addresses partyAWallet, Nothing)))
         (standardMetadata tags)
         2_000_000
-        contract
+        (Left contract)
 
     _ <- Runtime.Integration.Common.submit partyAWallet txBody
 
@@ -279,7 +279,7 @@ depositSpec = describe "deposit" $
           Nothing
           [V1.NormalInput $ V1.IDeposit partyA partyA ada 100_000_000]
 
-    expectSameResultFromCLIandJobClient "deposit-tx-body.json" extraCliArgs command
+    expectSameResultFromCLIAndJobClient "deposit-tx-body.json" extraCliArgs command
 
 chooseSpec :: Hspec.SpecWith CLISpecTestData
 chooseSpec = describe "choose" $
@@ -309,7 +309,7 @@ chooseSpec = describe "choose" $
           Runtime.Transaction.Api.mkMint $ pure ("Party A", (changeAddress $ addresses partyAWallet, Nothing)))
         (standardMetadata tags)
         2_000_000
-        contract
+        (Left contract)
 
     _ <- Runtime.Integration.Common.submit partyAWallet txBody
 
@@ -331,7 +331,7 @@ chooseSpec = describe "choose" $
           Nothing
           [V1.NormalInput $ V1.IChoice (V1.ChoiceId "my choice" partyA) 0]
 
-    expectSameResultFromCLIandJobClient "choose-tx-body.json" extraCliArgs command
+    expectSameResultFromCLIAndJobClient "choose-tx-body.json" extraCliArgs command
 
 notifySpec :: Hspec.SpecWith CLISpecTestData
 notifySpec = describe "notify" $
@@ -358,7 +358,7 @@ notifySpec = describe "notify" $
           Runtime.Transaction.Api.mkMint $ pure ("Party A", (changeAddress $ addresses partyAWallet, Nothing)))
         (standardMetadata tags)
         2_000_000
-        contract
+        (Left contract)
 
     _ <- Runtime.Integration.Common.submit partyAWallet txBody
 
@@ -380,7 +380,7 @@ notifySpec = describe "notify" $
           Nothing
           [V1.NormalInput V1.INotify]
 
-    expectSameResultFromCLIandJobClient "notify-tx-body.json" extraCliArgs command
+    expectSameResultFromCLIAndJobClient "notify-tx-body.json" extraCliArgs command
 
 applySpec :: Hspec.SpecWith CLISpecTestData
 applySpec = describe "apply" $
@@ -429,7 +429,7 @@ applySpec = describe "apply" $
           Runtime.Transaction.Api.mkMint $ pure ("Party A", (changeAddress $ addresses partyAWallet, Nothing)))
         (standardMetadata tags)
         2_000_000
-        contract
+        (Left contract)
 
     _ <- Runtime.Integration.Common.submit partyAWallet txBody
 
@@ -455,7 +455,7 @@ applySpec = describe "apply" $
           Nothing
           inputs
 
-    expectSameResultFromCLIandJobClient "deposit-choose-notify-tx-body.json" extraCliArgs command
+    expectSameResultFromCLIAndJobClient "deposit-choose-notify-tx-body.json" extraCliArgs command
 
 withdrawSpec :: Hspec.SpecWith CLISpecTestData
 withdrawSpec = describe "withdraw" $
@@ -485,7 +485,7 @@ withdrawSpec = describe "withdraw" $
           Runtime.Transaction.Api.mkMint $ pure ("Party A", (changeAddress $ addresses partyAWallet, Nothing)))
         (standardMetadata tags)
         2_000_000
-        contract
+        (Left contract)
 
     _ <- Runtime.Integration.Common.submit partyAWallet txBody
 
@@ -520,4 +520,4 @@ withdrawSpec = describe "withdraw" $
           contractId
           "Party A"
 
-    expectSameResultFromCLIandJobClient "withdraw-tx-body.json" extraCliArgs command
+    expectSameResultFromCLIAndJobClient "withdraw-tx-body.json" extraCliArgs command

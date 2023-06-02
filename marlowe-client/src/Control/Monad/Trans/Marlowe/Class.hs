@@ -114,8 +114,8 @@ createContract
   -- ^ Optional metadata to attach to the transaction
   -> Lovelace
   -- ^ Min Lovelace which should be used for the contract output.
-  -> Contract v
-  -- ^ The contract to run
+  -> Either (Contract v) DatumHash
+  -- ^ The contract to run, or the hash of the contract to look up in the store.
   -> m (Either (CreateError v) (ContractCreated BabbageEra v))
 createContract mStakeCredential version wallet roleTokens metadata lovelace contract =
   runMarloweTxClient $ liftCommand $ Create

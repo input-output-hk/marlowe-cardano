@@ -15,8 +15,7 @@ import Language.Marlowe.Core.V1.Semantics.Types
 import Language.Marlowe.Extended.V1 (ada)
 import Language.Marlowe.Protocol.Load.Client (pushContract)
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader)
-import Language.Marlowe.Runtime.Client (createContract, runContractQueryClient, runMarloweLoadClient)
-import qualified Language.Marlowe.Runtime.Contract.Api as Contract
+import Language.Marlowe.Runtime.Client (createContract, runMarloweLoadClient)
 import Language.Marlowe.Runtime.Core.Api
   ( ContractId
   , MarloweMetadata(..)
@@ -89,8 +88,6 @@ createStandardContractWithTags tags partyAWallet partyBWallet = do
   now <- liftIO getCurrentTime
   let (contract, partyA, partyB) = standardContract partyBAddress now $ secondsToNominalDiffTime 100
   contractHash <- expectJust "Failed to push contract" =<< runMarloweLoadClient (pushContract contract)
-  Contract.ContractWithAdjacency{ contract = contract' } <-
-    expectJust "Failed to load merkleized contract" =<< runContractQueryClient (Contract.getContract contractHash)
   result <- createContract
     Nothing
     MarloweV1
@@ -106,7 +103,7 @@ createStandardContractWithTags tags partyAWallet partyBWallet = do
           }
     )
     2_000_000
-    contract'
+    (Right contractHash)
   contractCreated@ContractCreated{contractId, txBody = createTxBody} <- expectRight "failed to create standard contract" result
   createdBlock <- submit partyAWallet createTxBody
 

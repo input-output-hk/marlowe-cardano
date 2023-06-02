@@ -152,6 +152,7 @@ instance ToDTO (CreateError 'V1) where
     CreateBuildupFailed (MintingScriptDecodingFailed _) -> ApiError "Internal error" "MintingScriptDecodingFailed" Null 500
     CreateToCardanoError -> ApiError "Internal error" "CreateToCardanoError" Null 400
     CreateSafetyAnalysisError _ -> ApiError "Safety analysis failed" "InternalError" Null 400
+    CreateContractNotFound -> ApiError "Contract not found" "Not found" Null 404
 
 instance HasDTO (ApplyInputsError 'V1) where
   type DTO (ApplyInputsError 'V1) = ApiError
