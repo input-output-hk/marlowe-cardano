@@ -48,6 +48,7 @@ import Control.Monad.Trans.Except (ExceptT(..), except, runExceptT, throwE, with
 import Data.Bifunctor (first)
 import Data.Foldable (foldl')
 import Data.List (find)
+import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Maybe (fromJust)
 import qualified Data.Set as Set
@@ -58,6 +59,7 @@ import Language.Marlowe.Runtime.Cardano.Api
   ( fromCardanoAddressInEra
   , fromCardanoDatumHash
   , fromCardanoTxId
+  , fromCardanoTxIn
   , toCardanoPaymentCredential
   , toCardanoScriptData
   , toCardanoStakeCredential
@@ -92,6 +94,7 @@ import Language.Marlowe.Runtime.Transaction.Api
   , SubmitStatus(..)
   , WalletAddresses(..)
   , WithdrawError(..)
+  , WithdrawTx(..)
   )
 import Language.Marlowe.Runtime.Transaction.BuildConstraints
   (buildApplyInputsConstraints, buildCreateConstraints, buildWithdrawConstraints)
@@ -440,7 +443,7 @@ execWithdraw
   -> WalletAddresses
   -> ContractId
   -> TokenName
-  -> m (ServerStCmd MarloweTxCommand Void (WithdrawError v) (TxBody BabbageEra) m ())
+  -> m (ServerStCmd MarloweTxCommand Void (WithdrawError v) (WithdrawTx BabbageEra v) m ())
 execWithdraw solveConstraints loadWalletContext loadMarloweContext version addresses contractId roleToken = execExceptT $ case version of
   MarloweV1 -> do
     marloweContext@MarloweContext{payoutOutputs=Map.elems -> payouts} <- withExceptT WithdrawLoadMarloweContextFailed
@@ -453,9 +456,16 @@ execWithdraw solveConstraints loadWalletContext loadMarloweContext version addre
     datum <- noteT (UnableToFindPayoutForAGivenRole roleToken) $ hoistMaybe possibleDatum
     constraints <- except $ buildWithdrawConstraints version datum
     walletContext <- lift $ loadWalletContext addresses
-    except
+    txBody <- except
       $ first WithdrawConstraintError
       $ solveConstraints version marloweContext walletContext constraints
+    let inputs = getPayoutInputs marloweContext txBody
+    pure WithdrawTx{roleToken = datum, ..}
+  where
+    getPayoutInputs :: MarloweContext v -> TxBody BabbageEra -> Map Chain.TxOutRef (Payout v)
+    getPayoutInputs MarloweContext{..} (TxBody TxBodyContent{..}) = Map.restrictKeys payoutOutputs txIns'
+      where
+        txIns' = Set.fromList $ fromCardanoTxIn . fst <$> txIns
 
 execSubmit
   :: MonadUnliftIO m

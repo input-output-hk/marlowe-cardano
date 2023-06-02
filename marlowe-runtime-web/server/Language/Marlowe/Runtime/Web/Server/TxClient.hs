@@ -33,6 +33,7 @@ import Control.Monad (when, (<=<))
 import Control.Monad.Event.Class
 import Control.Monad.IO.Unlift (MonadUnliftIO, liftIO, withRunInIO)
 import Data.Foldable (for_)
+import Data.Functor ((<&>))
 import qualified Data.Map as Map
 import Data.Time (UTCTime)
 import Language.Marlowe.Protocol.Client (MarloweRuntimeClient(..))
@@ -51,6 +52,7 @@ import Language.Marlowe.Runtime.Transaction.Api
   , SubmitStatus(..)
   , WalletAddresses
   , WithdrawError
+  , WithdrawTx(..)
   )
 import Network.Protocol.Connection (SomeClientConnectorTraced)
 import Network.Protocol.Driver.Trace (HasSpanContext, runSomeConnectorTraced)
@@ -215,12 +217,12 @@ txClient = component "web-tx-client" \TxClientDependencies{..} -> do
           $ RunTxClient
           $ liftCommand
           $ Withdraw version addresses contractId role
-        liftIO $ for_ response \txBody-> atomically
+        liftIO $ for_ response \WithdrawTx{txBody}-> atomically
           $ modifyTVar tempWithdrawals
           $ Map.insert (fromCardanoTxId $ getTxId txBody)
           $ TempTx version Unsigned
           $ Withdrawn txBody
-        pure response
+        pure $ response <&> \WithdrawTx{txBody} -> txBody
     , submitContract = \contractId -> genericSubmit $ SomeTVarWithMapUpdate tempContracts ($ contractId)
     , submitTransaction = \contractId txId -> genericSubmit $ SomeTVarWithMapUpdate tempTransactions \update -> Map.update (Just . update txId) contractId
     , submitWithdrawal = \txId -> genericSubmit $ SomeTVarWithMapUpdate tempWithdrawals ($ txId)

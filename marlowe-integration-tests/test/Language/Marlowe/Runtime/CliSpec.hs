@@ -31,7 +31,7 @@ import Language.Marlowe.Runtime.Core.Api
   )
 import Language.Marlowe.Runtime.Integration.Common (Integration, Wallet(..), getGenesisWallet, runIntegrationTest)
 import qualified Language.Marlowe.Runtime.Integration.Common as Runtime.Integration.Common
-import Language.Marlowe.Runtime.Transaction.Api (MarloweTxCommand(..), WalletAddresses(..))
+import Language.Marlowe.Runtime.Transaction.Api (MarloweTxCommand(..), WalletAddresses(..), WithdrawTx(..))
 import qualified Language.Marlowe.Runtime.Transaction.Api as Runtime.Transaction.Api
 import Language.Marlowe.Util (ada)
 import qualified Network.Protocol.Job.Client as JobClient
@@ -124,7 +124,7 @@ marloweRuntimeJobClient = \case
   cmd@(Withdraw MarloweV1 _ _ _) ->
     runMarloweTxClient (JobClient.liftCommand cmd) >>= \case
       Left err -> error ("Some JobClient withdraw error: " <> show err)
-      Right txBody -> pure txBody
+      Right Runtime.Transaction.Api.WithdrawTx{txBody} -> pure txBody
 
 expectSameResultFromCLIAndJobClient :: String -> [String] -> MarloweTxCommand Void err result -> Integration ()
 expectSameResultFromCLIAndJobClient outputFile extraCliArgs command = do
@@ -512,7 +512,7 @@ withdrawSpec = describe "withdraw" $
 
       command :: MarloweTxCommand Void
         (Runtime.Transaction.Api.WithdrawError 'V1)
-        (TxBody BabbageEra)
+        (WithdrawTx BabbageEra 'V1)
       command =
         Withdraw
           MarloweV1

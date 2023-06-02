@@ -25,7 +25,7 @@ import Language.Marlowe.Runtime.Core.Api
 import Language.Marlowe.Runtime.History.Api (ContractStep(..), RedeemStep(..))
 import Language.Marlowe.Runtime.Integration.Common
 import Language.Marlowe.Runtime.Integration.StandardContract
-import Language.Marlowe.Runtime.Transaction.Api (ContractCreated(..), InputsApplied(..))
+import Language.Marlowe.Runtime.Transaction.Api (ContractCreated(..), InputsApplied(..), WithdrawTx(..))
 import Test.Hspec (Spec, it, shouldBe)
 import Test.Integration.Marlowe.Local (withLocalMarloweRuntime)
 
@@ -94,7 +94,7 @@ spec = it "Basic e2e scenario" $ withLocalMarloweRuntime $ runIntegrationTest do
                   StandardContractClosed{..} <- makeReturnDeposit
 
                   -- 22. Withdraw as party A
-                  (withdrawTxBody, withdrawBlock) <- withdrawPartyAFunds
+                  (WithdrawTx{txBody = withdrawTxBody}, withdrawBlock) <- withdrawPartyAFunds
 
                   -- 23. Poll
                   -- 24. Expect roll forward with notify

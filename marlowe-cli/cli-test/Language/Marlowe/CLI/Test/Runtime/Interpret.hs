@@ -84,6 +84,7 @@ import qualified Language.Marlowe.Runtime.Plutus.V2.Api as MRPA
 import Language.Marlowe.Runtime.Transaction.Api
   ( RoleTokensConfig(RoleTokensNone, RoleTokensUsePolicy)
   , WalletAddresses(WalletAddresses, changeAddress, collateralUtxos, extraAddresses)
+  , WithdrawTx(..)
   )
 import qualified Language.Marlowe.Runtime.Transaction.Api as Transaction
 import qualified Network.Protocol.Connection as Network.Protocol
@@ -293,7 +294,7 @@ withdraw ro contractId tokenName walletNickname Wallet { _waAddress, _waSigningK
     Marlowe.Class.withdraw MarloweV1 walletAddresses contractId tokenName'
   era <- view eraL
   case result of
-    Right txBody -> do
+    Right WithdrawTx{..} -> do
       let
         witness = somePaymentsigningKeyToTxWitness _waSigningKey
         tx = withShelleyBasedEra era . C.signShelleyTransaction txBody $ [witness]

@@ -103,7 +103,7 @@ import Language.Marlowe.Runtime.Core.Api
 import Language.Marlowe.Runtime.Discovery.Api (ContractHeader(..))
 import Language.Marlowe.Runtime.History.Api (ContractStep, CreateStep(..))
 import Language.Marlowe.Runtime.Transaction.Api
-  (ContractCreated(..), InputsApplied(..), MarloweTxCommand(..), SubmitError, WalletAddresses(..))
+  (ContractCreated(..), InputsApplied(..), MarloweTxCommand(..), SubmitError, WalletAddresses(..), WithdrawTx)
 import Network.Protocol.Connection (STMConnectorSelector)
 import Network.Protocol.Job.Client (liftCommandWait)
 import qualified Plutus.V2.Ledger.Api as PV2
@@ -383,7 +383,7 @@ withdraw
   :: Wallet
   -> ContractId
   -> TokenName
-  -> Integration (TxBody BabbageEra)
+  -> Integration (WithdrawTx BabbageEra 'V1)
 withdraw Wallet{..} contractId role = do
   result <- Client.withdraw MarloweV1 addresses contractId role
   expectRight "Failed to create withdraw transaction" result

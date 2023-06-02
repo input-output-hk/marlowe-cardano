@@ -4,7 +4,7 @@
 module Control.Monad.Trans.Marlowe.Class
   where
 
-import Cardano.Api (BabbageEra, Tx, TxBody)
+import Cardano.Api (BabbageEra, Tx)
 import Control.Concurrent (threadDelay)
 import Control.Monad.Event.Class (MonadEvent)
 import Control.Monad.Identity (IdentityT(..))
@@ -34,6 +34,7 @@ import Language.Marlowe.Runtime.Transaction.Api
   , SubmitStatus
   , WalletAddresses
   , WithdrawError
+  , WithdrawTx
   )
 import Network.Protocol.Driver (runConnector)
 import Network.Protocol.Driver.Trace (HasSpanContext, runConnectorTraced)
@@ -185,7 +186,7 @@ withdraw
   -- ^ The ID of the contract to apply the inputs to.
   -> TokenName
   -- ^ The names of the roles whose assets to withdraw.
-  -> m (Either (WithdrawError v) (TxBody BabbageEra))
+  -> m (Either (WithdrawError v) (WithdrawTx BabbageEra v))
 withdraw version wallet contractId role =
   runMarloweTxClient $ liftCommand $ Withdraw version wallet contractId role
 

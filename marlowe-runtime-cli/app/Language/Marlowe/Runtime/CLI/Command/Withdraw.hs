@@ -17,7 +17,7 @@ import Language.Marlowe.Runtime.ChainSync.Api (TokenName(TokenName))
 import Language.Marlowe.Runtime.Client (withdraw)
 import Language.Marlowe.Runtime.Core.Api
   (ContractId(ContractId), MarloweVersion(MarloweV1), MarloweVersionTag(V1), SomeMarloweVersion(SomeMarloweVersion))
-import Language.Marlowe.Runtime.Transaction.Api (WithdrawError)
+import Language.Marlowe.Runtime.Transaction.Api (WithdrawError, WithdrawTx(..))
 import Options.Applicative
 
 data WithdrawCommand = WithdrawCommand
@@ -52,7 +52,7 @@ withdrawCommandParser = info (txCommandParser False parser) $ progDesc "Withdraw
 runWithdrawCommand :: TxCommand WithdrawCommand -> CLI ()
 runWithdrawCommand TxCommand { walletAddresses, signingMethod, subCommand=WithdrawCommand{..}} = case marloweVersion of
   SomeMarloweVersion MarloweV1 -> runCLIExceptT do
-    txBody <- ExceptT $ first WithdrawFailed <$> withdraw MarloweV1 walletAddresses contractId role
+    WithdrawTx{..} <- ExceptT $ first WithdrawFailed <$> withdraw MarloweV1 walletAddresses contractId role
     case signingMethod of
       Manual outputFile -> do
         ExceptT $ liftIO $ first TransactionFileWriteFailed <$> C.writeFileTextEnvelope outputFile Nothing txBody
