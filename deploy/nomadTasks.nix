@@ -152,6 +152,8 @@ rec
       MARLOWE_CHAIN_SYNC_PORT = "\${NOMAD_PORT_marlowe_chain_sync}";
       MARLOWE_CHAIN_SYNC_QUERY_PORT = "\${NOMAD_PORT_marlowe_chain_sync_query}";
       MARLOWE_CHAIN_SYNC_COMMAND_PORT = "\${NOMAD_PORT_marlowe_chain_sync_command}";
+      CONTRACT_HOST = "localhost";
+      CONTRACT_QUERY_PORT = "\${NOMAD_PORT_contract_query}";
       HTTP_PORT = "\${NOMAD_PORT_tx_http}";
     };
     config.image = ociNamer oci-images.marlowe-tx;
@@ -194,7 +196,7 @@ rec
       TX_PORT = "\${NOMAD_PORT_tx}";
       CONTRACT_HOST = "localhost";
       LOAD_PORT = "\${NOMAD_PORT_marlowe_load}";
-      QUERY_PORT = "\${NOMAD_PORT_contract_query}";
+      CONTRACT_QUERY_PORT = "\${NOMAD_PORT_contract_query}";
       SYNC_HOST = "localhost";
       MARLOWE_SYNC_PORT = "\${NOMAD_PORT_marlowe_sync}";
       MARLOWE_HEADER_SYNC_PORT = "\${NOMAD_PORT_marlowe_header_sync}";
