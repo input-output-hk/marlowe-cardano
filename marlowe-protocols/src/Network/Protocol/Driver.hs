@@ -82,9 +82,9 @@ data TcpServerDependencies ps server m = forall (st :: ps). TcpServerDependencie
   }
 
 tcpServer
-  :: (MonadIO m', MonadIO m)
-  => Component m (TcpServerDependencies ps server m') (ConnectionSource ps server m')
-tcpServer = component \TcpServerDependencies{..} -> do
+  :: (MonadIO m', MonadUnliftIO m)
+  => String -> Component m (TcpServerDependencies ps server m') (ConnectionSource ps server m')
+tcpServer name = component (name <> "-tcp-server") \TcpServerDependencies{..} -> do
   socketQueue <- newTQueue
   pure
     ( liftIO $ runTCPServer (Just host) (show port) \socket -> do

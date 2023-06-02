@@ -5,12 +5,13 @@ module Control.Concurrent.Component.Probes
   where
 
 import Control.Concurrent.Component
-import Control.Monad.IO.Class (MonadIO, liftIO)
+import Control.Monad.IO.Class (liftIO)
 import Data.Proxy (Proxy(..))
 import Network.Wai.Handler.Warp (Port, run)
 import Servant (Get, Handler, JSON, NoContent(NoContent), Server, err500, throwError, type (:<|>)((:<|>)), type (:>))
 import Servant.Client (ClientM, client)
 import Servant.Server (serve)
+import UnliftIO (MonadUnliftIO)
 
 type ProbeApi = "live" :> Probe
            :<|> "ready" :> Probe
@@ -43,6 +44,6 @@ data ProbeServerDependencies = ProbeServerDependencies
   , port :: Port
   }
 
-probeServer :: MonadIO m => Component m ProbeServerDependencies ()
-probeServer = component_ \ProbeServerDependencies{..} ->
+probeServer :: MonadUnliftIO m => Component m ProbeServerDependencies ()
+probeServer = component_ "probe-server" \ProbeServerDependencies{..} ->
   liftIO $ run port $ serve api (server probes)

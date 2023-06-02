@@ -47,7 +47,7 @@ data ChainSyncQueryServerDependencies r s m = ChainSyncQueryServerDependencies
 chainSyncQueryServer
   :: (MonadUnliftIO m, MonadEvent r s m, HasSpanContext r, MonadFail m)
   => Component m (ChainSyncQueryServerDependencies r s m) ()
-chainSyncQueryServer = serverComponent worker \ChainSyncQueryServerDependencies{..} -> do
+chainSyncQueryServer = serverComponent "chain-sync-query-server" worker \ChainSyncQueryServerDependencies{..} -> do
   connector <- acceptSomeConnectorTraced querySource
   pure WorkerDependencies {..}
 
@@ -64,7 +64,7 @@ data WorkerDependencies r s m = WorkerDependencies
 worker
   :: forall r s m. (MonadUnliftIO m, MonadEvent r s m, HasSpanContext r, MonadFail m)
   => Component m (WorkerDependencies r s m) ()
-worker = component_ \WorkerDependencies{..} -> do
+worker = component_ "chain-sync-query-worker" \WorkerDependencies{..} -> do
   let
     server :: QueryServer ChainSyncQuery m ()
     server = QueryServer $ pure serverReq

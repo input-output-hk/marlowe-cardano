@@ -72,12 +72,12 @@ main = do
 
 run :: Options -> AppM Span ()
 run = runComponent_ proc Options{..} -> do
-  connectionSource <- tcpServer -< TcpServerDependencies
+  connectionSource <- tcpServer "marlowe-runtime" -< TcpServerDependencies
     { toPeer = marloweRuntimeServerPeer
     , ..
     }
 
-  connectionSourceTraced <- tcpServerTraced $ injectSelector MarloweRuntimeServer -< TcpServerDependencies
+  connectionSourceTraced <- tcpServerTraced "marlowe-runtime-traced" $ injectSelector MarloweRuntimeServer -< TcpServerDependencies
     { toPeer = marloweRuntimeServerPeer
     , port = portTraced
     , ..

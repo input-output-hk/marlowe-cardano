@@ -80,12 +80,12 @@ run Options{..} = do
   contractStore <- traceContractStore inject
     <$> createContractStore ContractStoreOptions{..}
   flip runComponent_ () proc _ -> do
-    loadSource <- tcpServerTraced inject -< TcpServerDependencies
+    loadSource <- tcpServerTraced "contract-load" inject -< TcpServerDependencies
       { toPeer = marloweLoadServerPeer
       , ..
       }
 
-    querySource <- tcpServerTraced inject -< TcpServerDependencies
+    querySource <- tcpServerTraced "contract-query" inject -< TcpServerDependencies
       { toPeer = queryServerPeer
       , port = queryPort
       , ..

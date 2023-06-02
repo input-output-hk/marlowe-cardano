@@ -142,7 +142,7 @@ data TransactionServerDependencies r s m = TransactionServerDependencies
 transactionServer
   :: (MonadInjectEvent r TransactionServerSelector s m, MonadUnliftIO m, HasSpanContext r)
   => Component m (TransactionServerDependencies r s m) ()
-transactionServer = serverComponentWithSetup worker \TransactionServerDependencies{..} -> do
+transactionServer = serverComponentWithSetup "tx-job-server" worker \TransactionServerDependencies{..} -> do
   submitJobsVar <- newTVar mempty
   let
     getSubmitJob txId = Map.lookup txId <$> readTVar submitJobsVar
@@ -168,7 +168,7 @@ worker
   :: forall r s m
    . (MonadInjectEvent r TransactionServerSelector s m, MonadUnliftIO m, HasSpanContext r)
   => Component m (WorkerDependencies r s m) ()
-worker = component_ \WorkerDependencies{..} -> do
+worker = component_ "tx-job-server-worker" \WorkerDependencies{..} -> do
   let
     server :: JobServer MarloweTxCommand m ()
     server = JobServer $ pure serverInit

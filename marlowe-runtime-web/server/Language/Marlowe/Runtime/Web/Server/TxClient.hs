@@ -134,7 +134,7 @@ txClient
   :: forall r s m
    . (MonadEvent r s m, MonadUnliftIO m, HasSpanContext r)
   => Component m (TxClientDependencies r s m) (TxClient r m)
-txClient = component \TxClientDependencies{..} -> do
+txClient = component "web-tx-client" \TxClientDependencies{..} -> do
   tempContracts <- newTVar mempty
   tempTransactions <- newTVar mempty
   tempWithdrawals <- newTVar mempty

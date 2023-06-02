@@ -26,7 +26,7 @@ data ChainSyncServerDependencies r s m = ChainSyncServerDependencies
 chainSyncServer
   :: (MonadUnliftIO m, MonadEvent r s m, HasSpanContext r)
   => Component m (ChainSyncServerDependencies r s m) ()
-chainSyncServer = serverComponent worker \ChainSyncServerDependencies{..} -> do
+chainSyncServer = serverComponent "chain-seek-server" worker \ChainSyncServerDependencies{..} -> do
   connector <- acceptSomeConnectorTraced syncSource
   pure WorkerDependencies{..}
 
@@ -39,7 +39,7 @@ data WorkerDependencies r s m = WorkerDependencies
 worker
   :: forall r s m. (MonadUnliftIO m, MonadEvent r s m, HasSpanContext r)
   => Component m (WorkerDependencies r s m) ()
-worker = component_ \WorkerDependencies{..} -> do
+worker = component_ "chain-seek-worker" \WorkerDependencies{..} -> do
   let
     runWorker = void $ runSomeConnectorTraced connector $ ChainSeekServer $ pure $ stIdle Genesis
 

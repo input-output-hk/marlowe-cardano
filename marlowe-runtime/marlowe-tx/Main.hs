@@ -78,7 +78,7 @@ main = do
 
 run :: Options -> AppM Span ()
 run Options{..} = flip runComponent_ () proc _ -> do
-  serverSource <- tcpServerTraced (injectSelector Server) -< TcpServerDependencies
+  serverSource <- tcpServerTraced "tx-job" (injectSelector Server) -< TcpServerDependencies
     host
     port
     jobServerPeer

@@ -31,7 +31,7 @@ data LoadServerDependencies r s m = forall n. LoadServerDependencies
 loadServer
   :: (MonadUnliftIO m, MonadInjectEvent r LoadServerSelector s m, HasSpanContext r)
   => Component m (LoadServerDependencies r s m) ()
-loadServer = serverComponent worker \LoadServerDependencies{..} -> do
+loadServer = serverComponent "contract-load-server" worker \LoadServerDependencies{..} -> do
   connector <- acceptSomeConnectorTraced loadSource
   pure WorkerDependencies{..}
 
@@ -48,7 +48,7 @@ worker
     , HasSpanContext r
     )
   => Component m (WorkerDependencies r s m) ()
-worker = component_ \WorkerDependencies{..} -> case connector of
+worker = component_ "contract-load-worker" \WorkerDependencies{..} -> case connector of
   SomeConnectorTraced inj connector' -> do
     connection@ConnectionTraced{..} <- openConnectionTraced connector'
     let args = (simpleNewEventArgs LoadContract) { newEventParent = Just openRef }

@@ -38,7 +38,7 @@ import Control.Monad.Event.Class (MonadInjectEvent, withEvent)
 import qualified Ouroboros.Network.Protocol.LocalStateQuery.Client as Q
 import qualified Ouroboros.Network.Protocol.LocalStateQuery.Type as Q
 import qualified Ouroboros.Network.Protocol.LocalTxSubmission.Client as S
-import UnliftIO (MonadIO, atomically, liftIO, newEmptyTMVarIO)
+import UnliftIO (MonadIO, MonadUnliftIO, atomically, liftIO, newEmptyTMVarIO)
 
 
 type SubmitToNode m
@@ -69,9 +69,9 @@ data NodeClientSelector f where
   Query :: NodeClientSelector (Q.Some (QueryInMode CardanoMode))
 
 
-nodeClient :: (MonadInjectEvent r NodeClientSelector s m, MonadIO m) => Component m NodeClientDependencies (NodeClient m)
+nodeClient :: (MonadInjectEvent r NodeClientSelector s m, MonadUnliftIO m) => Component m NodeClientDependencies (NodeClient m)
 nodeClient =
-  component \NodeClientDependencies{..} ->
+  component "chain-sync-node-client" \NodeClientDependencies{..} ->
     do
       queryChannel <- newTChan
       submitChannel <- newTChan

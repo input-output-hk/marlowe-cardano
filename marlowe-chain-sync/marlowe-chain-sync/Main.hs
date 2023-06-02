@@ -83,19 +83,19 @@ run Options{..} = bracket (Pool.acquire 100 (Just 5000000) (fromString databaseU
 
     appComponent :: Component (AppM Span) Pool.Pool ()
     appComponent = proc pool -> do
-      syncSource <- tcpServerTraced $ injectSelector ChainSeekServer -< TcpServerDependencies
+      syncSource <- tcpServerTraced "chain-seek" $ injectSelector ChainSeekServer -< TcpServerDependencies
         { host
         , port
         , toPeer = chainSeekServerPeer
         }
 
-      querySource <- tcpServerTraced $ injectSelector QueryServer -< TcpServerDependencies
+      querySource <- tcpServerTraced "chain-query" $ injectSelector QueryServer -< TcpServerDependencies
         { host
         , port = queryPort
         , toPeer = queryServerPeer
         }
 
-      jobSource <- tcpServerTraced $ injectSelector JobServer -< TcpServerDependencies
+      jobSource <- tcpServerTraced "chain-job" $ injectSelector JobServer -< TcpServerDependencies
         { host
         , port = commandPort
         , toPeer = jobServerPeer

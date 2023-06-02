@@ -24,7 +24,7 @@ newtype TransactionChainClientDependencies r s m = TransactionChainClientDepende
 transactionChainClient
   :: (MonadUnliftIO m, MonadEvent r s m, HasSpanContext r)
   => Component m (TransactionChainClientDependencies r s m) (STM Bool, STM Chain.ChainPoint)
-transactionChainClient = component \TransactionChainClientDependencies{..} -> do
+transactionChainClient = component "tx-chain-seek-client" \TransactionChainClientDependencies{..} -> do
   tipVar <- newTVar Chain.Genesis
   connectedVar <- newTVar False
   pure
