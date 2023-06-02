@@ -25,7 +25,7 @@ module Spec.Marlowe.Plutus.Transaction
     -- * Modification
   , merkleize
   , noModify
-  , shuffle
+  , shuffleTransaction
     -- * Conditions
   , isScriptTxIn
   , noVeto
@@ -36,7 +36,7 @@ import Control.Lens (Lens', use, uses, (.=), (<>=), (<~))
 import Control.Monad (when)
 import Control.Monad.State (StateT, execStateT, lift)
 import Data.Bifunctor (bimap, second)
-import Data.List (nub, permutations)
+import Data.List (nub)
 import Language.Marlowe.Core.V1.Semantics
   ( MarloweData(MarloweData)
   , MarloweParams(..)
@@ -110,11 +110,12 @@ import Spec.Marlowe.Reference (ReferencePath, arbitraryReferenceTransaction)
 import Spec.Marlowe.Semantics.Arbitrary (arbitraryGoldenTransaction, arbitraryPositiveInteger)
 import Spec.Marlowe.Semantics.Golden (GoldenTransaction)
 import Spec.Marlowe.Semantics.Merkle (deepMerkleize, merkleizeInputs)
-import Test.Tasty.QuickCheck (Arbitrary(..), Gen, elements, frequency, listOf, suchThat)
+import Test.Tasty.QuickCheck (Arbitrary(..), Gen, frequency, listOf, suchThat)
 
 import qualified Language.Marlowe.Core.V1.Semantics.Types as M (Party(Address))
 import qualified Plutus.V1.Ledger.Value as V (adaSymbol, adaToken, singleton)
 import qualified PlutusTx.AssocMap as AM (fromList, toList)
+import Test.QuickCheck (shuffle)
 
 
 -- | An arbitrary Plutus transaction.
@@ -353,7 +354,7 @@ validSemanticsTransaction noisy =
     when noisy addNoise
 
     -- Shuffle.
-    shuffle
+    shuffleTransaction
 
 
 -- | Generate an arbitrary, valid Marlowe semantics transaction: datum, redeemer, and script context.
@@ -476,7 +477,7 @@ validPayoutTransaction noisy =
     when noisy addNoise'
 
     -- Shuffle.
-    shuffle
+    shuffleTransaction
 
 
 -- | Check that an address is not for a script.
@@ -524,16 +525,16 @@ addNoise' =
 
 
 -- | Shuffle the order of inputs, outputs, data, and signatories in a Plutus transaction.
-shuffle :: ArbitraryTransaction a ()
-shuffle =
+shuffleTransaction :: ArbitraryTransaction a ()
+shuffleTransaction =
   do
     let
       go :: Lens' (PlutusTransaction a) [b] -> ArbitraryTransaction a ()
-      go field = field <~ (lift . elements . permutations =<< use field)
+      go field = field <~ (lift . shuffle =<< use field)
     go infoInputs
     go infoOutputs
     go infoSignatories
-    infoData <~ (lift . fmap AM.fromList . elements . permutations . AM.toList =<< use infoData)
+    infoData <~ (lift . fmap AM.fromList . shuffle . AM.toList =<< use infoData)
 
 
 -- | Merkleize a transaction.

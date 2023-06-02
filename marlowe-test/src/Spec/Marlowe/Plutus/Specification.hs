@@ -55,7 +55,7 @@ import Plutus.V1.Ledger.Value (flattenValue, valueOf)
 import Plutus.V2.Ledger.Api
   ( Address(Address)
   , BuiltinData(BuiltinData)
-  , Credential(PubKeyCredential)
+  , Credential(PubKeyCredential, ScriptCredential)
   , Data(B, Constr, List)
   , Datum(..)
   , DatumHash(DatumHash)
@@ -67,7 +67,7 @@ import Plutus.V2.Ledger.Api
   , ToData(..)
   , TokenName
   , TxInInfo(TxInInfo, txInInfoResolved)
-  , TxOut(TxOut, txOutValue)
+  , TxOut(TxOut, txOutAddress, txOutValue)
   , ValidatorHash
   , Value
   , adaSymbol
@@ -82,11 +82,10 @@ import Spec.Marlowe.Plutus.Transaction
   ( ArbitraryTransaction
   , arbitraryPayoutTransaction
   , arbitrarySemanticsTransaction
-  , isScriptTxIn
   , merkleize
   , noModify
   , noVeto
-  , shuffle
+  , shuffleTransaction
   )
 import Spec.Marlowe.Plutus.Types
   ( PayoutTransaction
@@ -127,7 +126,6 @@ import qualified PlutusTx.AssocMap as AM (Map, fromList, insert, keys, null, toL
 import qualified Test.Tasty.QuickCheck as Q (shuffle)
 
 
--- | Conditionally check Plutus trace log messages.
 
 checkPlutusLog :: Bool
 #ifdef TRACE_PLUTUS
@@ -365,7 +363,7 @@ checkDoubleInput referencePaths =
         infoInputs <>= [inScript]
         -- Add the new datum and its hash.
         infoData <>= AM.fromList [(inDatumHash, inDatum)]
-        shuffle
+        shuffleTransaction
   in
     checkSemanticsTransaction ["w"] referencePaths noModify modifyAfter noVeto False False False
 
@@ -418,7 +416,7 @@ checkMultipleOutput referencePaths =
             | otherwise                   = pure txOut
         -- Update the outputs with the split script output.
         infoOutputs %= concatMap splitOwnOutput
-        shuffle
+        shuffleTransaction
   in
     checkSemanticsTransaction ["o"] referencePaths noModify modifyAfter notCloses False False False
 
@@ -436,7 +434,7 @@ checkCloseOutput referencePaths =
         inScript <- infoInputs `uses` filter matchOwnInput
         -- Add a clone of the script input as output.
         infoOutputs <>= (txInInfoResolved <$> inScript)
-        shuffle
+        shuffleTransaction
   in
     checkSemanticsTransaction ["c"] referencePaths noModify modifyAfter doesClose False False False
 
@@ -567,9 +565,17 @@ checkOtherValidators referencePaths =
   let
     modifyAfter =
       -- Add an extra script input.
-      infoInputs <><~ lift (listOf1 $ arbitrary `suchThat` isScriptTxIn)
+      infoInputs <><~ lift (listOf1 $ makeScriptTxIn =<< arbitrary)
   in
     checkSemanticsTransaction ["z"] referencePaths noModify modifyAfter hasPayouts False False False
+
+makeScriptTxIn :: TxInInfo -> Gen TxInInfo
+makeScriptTxIn (TxInInfo outRef out) = TxInInfo outRef <$> makeScriptTxOut out
+
+makeScriptTxOut :: TxOut -> Gen TxOut
+makeScriptTxOut out = do
+  address' <- Address <$> (ScriptCredential <$> arbitrary) <*> arbitrary
+  pure $ out { txOutAddress = address' }
 
 
 -- | Check that parameters in the datum are not changed by the transaction.

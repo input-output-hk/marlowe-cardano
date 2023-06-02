@@ -1,4 +1,3 @@
-
 {-# LANGUAGE OverloadedStrings #-}
 
 
@@ -20,9 +19,9 @@ import Language.Marlowe.Runtime.Transaction.Safety
   (checkContract, checkTransactions, makeSystemHistory, minAdaUpperBound, noContinuations)
 import Spec.Marlowe.Reference (readReferenceContracts)
 import Spec.Marlowe.Semantics.Arbitrary ()
-import Test.Hspec (Spec, describe, runIO)
+import Test.Hspec (Spec, describe, expectationFailure, it, runIO)
 import Test.Hspec.QuickCheck (prop)
-import Test.QuickCheck (counterexample, discard, elements, generate, ioProperty, sublistOf, suchThat, (===))
+import Test.QuickCheck (counterexample, discard, elements, generate, sublistOf, suchThat, (===))
 
 import qualified Cardano.Api as Cardano
   ( AddressInEra(..)
@@ -44,6 +43,7 @@ import qualified Cardano.Api as Cardano
   , selectLovelace
   )
 import qualified Cardano.Api.Shelley as Shelley (ReferenceScript(..), StakeAddressReference(..))
+import Data.Foldable (for_)
 import qualified Data.Map.Strict as M (fromList, keys, lookup, mapKeys, toList)
 import Language.Marlowe.Core.V1.Merkle as V1 (MerkleizedContract(..), deepMerkleize, merkleizedContract)
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
@@ -53,6 +53,7 @@ import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
   (AssetId(..), Assets(..), Credential(..), DatumHash(..), PolicyId(..), TokenName(..), Tokens(..))
 import qualified Plutus.V2.Ledger.Api as Plutus (CurrencySymbol(..), DatumHash(..), TokenName(..))
 import qualified PlutusTx.Builtins as Plutus (fromBuiltin, lengthOfByteString, toBuiltin)
+import Test.QuickCheck.Arbitrary (arbitrary)
 
 
 spec :: Spec
@@ -219,54 +220,50 @@ spec =
               . counterexample ("Expected = " <> show expected)
               $ actual `same` expected
 
-    describe "checkTransactions"
-      $ do
-        referenceContracts <- runIO readReferenceContracts
-        let
-          zeroTime = posixSecondsToUTCTime 0
-          (systemStart, eraHistory) = makeSystemHistory zeroTime
-          solveConstraints' = solveConstraints systemStart eraHistory protocolTestnet
-          networkId = Cardano.Testnet $ Cardano.NetworkMagic 1
-          MarloweScripts{..} = getCurrentScripts version
-          stakeReference = Shelley.NoStakeAddress
-          marloweContext =
-            MarloweContext
-            {
-              scriptOutput = Nothing
-            , payoutOutputs = mempty
-            , marloweAddress = Chain.fromCardanoAddressInEra Cardano.BabbageEra
-                                 . Cardano.AddressInEra (Cardano.ShelleyAddressInEra Cardano.ShelleyBasedEraBabbage)
-                                 $ Cardano.makeShelleyAddress
-                                     networkId
-                                     (fromJust . Chain.toCardanoPaymentCredential $ Chain.ScriptCredential marloweScript)
-                                     stakeReference
-            , payoutAddress = Chain.fromCardanoAddressInEra Cardano.BabbageEra
+    describe "checkTransactions" do
+      referenceContracts <- runIO readReferenceContracts
+      let
+        zeroTime = posixSecondsToUTCTime 0
+        (systemStart, eraHistory) = makeSystemHistory zeroTime
+        solveConstraints' = solveConstraints systemStart eraHistory protocolTestnet
+        networkId = Cardano.Testnet $ Cardano.NetworkMagic 1
+        MarloweScripts{..} = getCurrentScripts version
+        stakeReference = Shelley.NoStakeAddress
+        marloweContext =
+          MarloweContext
+          {
+            scriptOutput = Nothing
+          , payoutOutputs = mempty
+          , marloweAddress = Chain.fromCardanoAddressInEra Cardano.BabbageEra
                                 . Cardano.AddressInEra (Cardano.ShelleyAddressInEra Cardano.ShelleyBasedEraBabbage)
                                 $ Cardano.makeShelleyAddress
                                     networkId
-                                    (fromJust . Chain.toCardanoPaymentCredential $ Chain.ScriptCredential payoutScript)
-                                    Cardano.NoStakeAddress
-            , marloweScriptUTxO = fromJust $ M.lookup networkId marloweScriptUTxOs
-            , payoutScriptUTxO = fromJust $ M.lookup networkId payoutScriptUTxOs
-            , marloweScriptHash = marloweScript
-            , payoutScriptHash = payoutScript
-            }
-        prop "Reference contracts" $ \(policy, address) ->
-          ioProperty $ do
-            contract <- generate $ elements referenceContracts
-            let
-              minAda = maybe 0 toInteger $ minAdaUpperBound protocolTestnet version contract continuations
-              overspentOrWarning (TransactionValidationError _ msg) = "The machine terminated part way through evaluation due to overspending the budget." `isInfixOf` msg
-              overspentOrWarning (TransactionWarning _) = True
-              overspentOrWarning _ = False
-            actual <- checkTransactions solveConstraints' version marloweContext policy address minAda contract continuations
-            pure
-              . counterexample ("Contract = " <> show contract)
-              . counterexample ("Actual = " <> show actual)
-              $ case actual of
-                  -- Overspending or warnings are not a test failures.
-                  Right errs -> all overspentOrWarning errs
-                  -- An ambiguous time interval occurs when the timeouts have non-zero milliseconds are too close for there to be a valid slot for a transaction.
-                  Left "ApplyInputsConstraintsBuildupFailed (MarloweComputeTransactionFailed \"TEAmbiguousTimeIntervalError\")" -> True
-                  -- All other results are test failures.
-                  _ -> False
+                                    (fromJust . Chain.toCardanoPaymentCredential $ Chain.ScriptCredential marloweScript)
+                                    stakeReference
+          , payoutAddress = Chain.fromCardanoAddressInEra Cardano.BabbageEra
+                              . Cardano.AddressInEra (Cardano.ShelleyAddressInEra Cardano.ShelleyBasedEraBabbage)
+                              $ Cardano.makeShelleyAddress
+                                  networkId
+                                  (fromJust . Chain.toCardanoPaymentCredential $ Chain.ScriptCredential payoutScript)
+                                  Cardano.NoStakeAddress
+          , marloweScriptUTxO = fromJust $ M.lookup networkId marloweScriptUTxOs
+          , payoutScriptUTxO = fromJust $ M.lookup networkId payoutScriptUTxOs
+          , marloweScriptHash = marloweScript
+          , payoutScriptHash = payoutScript
+          }
+      for_ referenceContracts \(name, contract) -> it ("Passes for reference contract " <> name) do
+        (policy, address) <- generate arbitrary
+        let
+          minAda = maybe 0 toInteger $ minAdaUpperBound protocolTestnet version contract continuations
+          overspentOrWarning (TransactionValidationError _ msg) = "The machine terminated part way through evaluation due to overspending the budget." `isInfixOf` msg
+          overspentOrWarning (TransactionWarning _) = True
+          overspentOrWarning _ = False
+        actual <- checkTransactions solveConstraints' version marloweContext policy address minAda contract continuations
+        case actual of
+          -- Overspending or warnings are not a test failures.
+          Right errs
+            | all overspentOrWarning errs -> pure ()
+          -- An ambiguous time interval occurs when the timeouts have non-zero milliseconds are too close for there to be a valid slot for a transaction.
+          Left "ApplyInputsConstraintsBuildupFailed (MarloweComputeTransactionFailed \"TEAmbiguousTimeIntervalError\")" -> pure ()
+          -- All other results are test failures.
+          _otherwise-> expectationFailure $ "Unexpected result: " <> show actual
