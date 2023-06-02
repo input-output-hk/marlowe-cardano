@@ -6,8 +6,7 @@
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE RankNTypes #-}
 
-module Language.Marlowe.Runtime.Proxy
-  where
+module Language.Marlowe.Runtime.Proxy where
 
 import Control.Arrow (returnA)
 import Control.Concurrent.Component

@@ -2,8 +2,7 @@
 {-# LANGUAGE RecordWildCards #-}
 
 
-module Marlowe.Contracts.Trivial
-  where
+module Marlowe.Contracts.Trivial where
 
 
 import Language.Marlowe.Extended.V1

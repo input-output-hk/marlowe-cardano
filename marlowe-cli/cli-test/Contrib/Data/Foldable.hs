@@ -1,5 +1,4 @@
-module Contrib.Data.Foldable
-  where
+module Contrib.Data.Foldable where
 
 import Data.Foldable (foldlM)
 import Data.Foldable.WithIndex (FoldableWithIndex, ifoldlM)

@@ -2,8 +2,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE ViewPatterns #-}
 
-module Language.Marlowe.Runtime.CliSpec
-  where
+module Language.Marlowe.Runtime.CliSpec where
 
 import Cardano.Api (AsType(AsTxBody), BabbageEra, CardanoEra(BabbageEra), TxBody, readFileTextEnvelope)
 import qualified Cardano.Api.Shelley

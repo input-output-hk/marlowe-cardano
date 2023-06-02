@@ -1,5 +1,4 @@
-module Language.Marlowe.Runtime.CLI.Command.Query.Store
-  where
+module Language.Marlowe.Runtime.CLI.Command.Query.Store where
 
 import Control.Monad.IO.Class (liftIO)
 import Data.Aeson.Encode.Pretty (encodePrettyToTextBuilder)

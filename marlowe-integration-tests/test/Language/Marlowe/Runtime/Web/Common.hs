@@ -1,5 +1,4 @@
-module Language.Marlowe.Runtime.Web.Common
-  where
+module Language.Marlowe.Runtime.Web.Common where
 
 import Cardano.Api
   ( AsType(..)

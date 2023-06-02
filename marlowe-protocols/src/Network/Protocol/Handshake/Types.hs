@@ -11,8 +11,7 @@
 -- The job protocol is used to establish a connection between two peers, and
 -- gives them a chance to confirm that they speak the same protocol.
 
-module Network.Protocol.Handshake.Types
-  where
+module Network.Protocol.Handshake.Types where
 
 import Control.Monad (unless)
 import Data.Aeson (Value(..), object, (.=))

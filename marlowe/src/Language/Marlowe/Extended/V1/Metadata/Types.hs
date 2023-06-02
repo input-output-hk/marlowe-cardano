@@ -4,8 +4,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
-module Language.Marlowe.Extended.V1.Metadata.Types
-  where
+module Language.Marlowe.Extended.V1.Metadata.Types where
 
 import Data.Aeson (FromJSON, Value, parseJSON, withArray, withObject, (.:))
 import Data.Aeson.Types (Parser)

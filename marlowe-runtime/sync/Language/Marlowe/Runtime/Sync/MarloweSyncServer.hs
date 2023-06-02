@@ -3,8 +3,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 
-module Language.Marlowe.Runtime.Sync.MarloweSyncServer
-  where
+module Language.Marlowe.Runtime.Sync.MarloweSyncServer where
 
 import Control.Concurrent.Component
 import Control.Monad.Event.Class

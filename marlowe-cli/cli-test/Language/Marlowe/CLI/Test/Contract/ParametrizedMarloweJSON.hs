@@ -18,8 +18,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE ViewPatterns #-}
 
-module Language.Marlowe.CLI.Test.Contract.ParametrizedMarloweJSON
-  where
+module Language.Marlowe.CLI.Test.Contract.ParametrizedMarloweJSON where
 
 import Cardano.Api (AddressInEra, CardanoMode, LocalNodeConnectInfo)
 import qualified Contrib.Data.Aeson.Traversals as A

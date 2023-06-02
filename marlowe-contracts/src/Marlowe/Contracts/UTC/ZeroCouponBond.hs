@@ -1,5 +1,4 @@
-module Marlowe.Contracts.UTC.ZeroCouponBond
-  where
+module Marlowe.Contracts.UTC.ZeroCouponBond where
 
 import Data.Time.Clock (UTCTime)
 import Language.Marlowe.Extended.V1

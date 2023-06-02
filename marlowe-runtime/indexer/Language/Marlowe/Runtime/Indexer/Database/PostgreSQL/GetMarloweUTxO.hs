@@ -1,7 +1,6 @@
 {-# LANGUAGE QuasiQuotes #-}
 
-module Language.Marlowe.Runtime.Indexer.Database.PostgreSQL.GetMarloweUTxO
-  where
+module Language.Marlowe.Runtime.Indexer.Database.PostgreSQL.GetMarloweUTxO where
 
 import Control.Arrow ((&&&))
 import Data.ByteString (ByteString)

@@ -1,8 +1,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE RankNTypes #-}
 
-module Main
-  where
+module Main where
 
 import Control.Arrow ((&&&))
 import Control.Concurrent.Component (runComponent_)

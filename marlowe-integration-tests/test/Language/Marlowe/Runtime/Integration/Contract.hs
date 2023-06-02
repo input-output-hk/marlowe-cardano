@@ -2,8 +2,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 
-module Language.Marlowe.Runtime.Integration.Contract
-  where
+module Language.Marlowe.Runtime.Integration.Contract where
 
 import Cardano.Api.Byron (ScriptData(ScriptDataBytes), hashScriptData)
 import Control.Concurrent.Component

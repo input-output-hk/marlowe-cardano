@@ -9,8 +9,7 @@
 
 -- | Defines a custom Monad for the web server's handler functions to run in.
 
-module Language.Marlowe.Runtime.Web.Server.Monad
-  where
+module Language.Marlowe.Runtime.Web.Server.Monad where
 
 import Control.Monad.Base (MonadBase)
 import Control.Monad.Catch (MonadCatch, MonadThrow)

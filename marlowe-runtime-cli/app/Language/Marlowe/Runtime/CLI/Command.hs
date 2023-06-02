@@ -2,8 +2,7 @@
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE RankNTypes #-}
 
-module Language.Marlowe.Runtime.CLI.Command
-  where
+module Language.Marlowe.Runtime.CLI.Command where
 
 import Control.Concurrent.STM (STM)
 import Control.Monad.Trans.Reader (runReaderT)

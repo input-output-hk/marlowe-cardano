@@ -1,5 +1,4 @@
-module Contrib.Control.Concurrent.Async
-  where
+module Contrib.Control.Concurrent.Async where
 
 import Contrib.Control.Concurrent (threadDelay)
 import Control.Concurrent.Async (race)

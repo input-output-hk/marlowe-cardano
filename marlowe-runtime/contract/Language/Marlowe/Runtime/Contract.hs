@@ -3,8 +3,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 
-module Language.Marlowe.Runtime.Contract
-  where
+module Language.Marlowe.Runtime.Contract where
 
 import Control.Arrow (returnA)
 import Control.Concurrent.Component (Component)

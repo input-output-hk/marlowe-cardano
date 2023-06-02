@@ -7,8 +7,7 @@
 
 -- | This module defines a server for the root REST API.
 
-module Language.Marlowe.Runtime.Web.Server.REST
-  where
+module Language.Marlowe.Runtime.Web.Server.REST where
 
 import Language.Marlowe.Runtime.Web
 import Language.Marlowe.Runtime.Web.Server.Monad (AppM)

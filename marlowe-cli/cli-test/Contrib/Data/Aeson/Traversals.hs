@@ -2,8 +2,7 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE TupleSections #-}
 
-module Contrib.Data.Aeson.Traversals
-  where
+module Contrib.Data.Aeson.Traversals where
 
 import qualified Data.Aeson as A
 import qualified Data.Aeson.KeyMap as KeyMap

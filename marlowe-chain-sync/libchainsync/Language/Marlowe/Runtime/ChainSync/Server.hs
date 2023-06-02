@@ -4,8 +4,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE StrictData #-}
 
-module Language.Marlowe.Runtime.ChainSync.Server
-  where
+module Language.Marlowe.Runtime.ChainSync.Server where
 
 import Control.Concurrent.Component
 import Control.Monad.Event.Class (MonadEvent)

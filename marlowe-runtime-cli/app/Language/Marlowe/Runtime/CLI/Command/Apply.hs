@@ -3,8 +3,7 @@
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE FlexibleInstances #-}
 
-module Language.Marlowe.Runtime.CLI.Command.Apply
-  where
+module Language.Marlowe.Runtime.CLI.Command.Apply where
 
 import qualified Cardano.Api as C
 import Control.Error (noteT)

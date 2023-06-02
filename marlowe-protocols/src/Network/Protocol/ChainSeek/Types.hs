@@ -10,8 +10,7 @@
 
 -- | The type of the chain sync protocol.
 
-module Network.Protocol.ChainSeek.Types
-  where
+module Network.Protocol.ChainSeek.Types where
 
 import Control.Monad (join)
 import Data.Binary (Binary(..), Get, Put, getWord8, putWord8)

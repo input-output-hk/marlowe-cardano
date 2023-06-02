@@ -1,8 +1,7 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE FlexibleContexts #-}
 
-module Language.Marlowe.Runtime.Sync.QueryServer
-  where
+module Language.Marlowe.Runtime.Sync.QueryServer where
 
 import Control.Concurrent.Component
 import Control.Monad.Event.Class

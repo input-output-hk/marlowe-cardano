@@ -1,6 +1,5 @@
 {-# LANGUAGE BlockArguments #-}
-module Contrib.UnliftIO.Async.Pool
-  where
+module Contrib.UnliftIO.Async.Pool where
 
 import Control.Concurrent.Async.Pool (TaskGroup)
 import qualified Control.Concurrent.Async.Pool as A

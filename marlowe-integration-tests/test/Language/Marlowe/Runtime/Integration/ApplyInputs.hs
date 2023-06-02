@@ -2,8 +2,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 
-module Language.Marlowe.Runtime.Integration.ApplyInputs
-  where
+module Language.Marlowe.Runtime.Integration.ApplyInputs where
 
 import Cardano.Api
   (BabbageEra, CardanoEra(..), TxBody(..), TxBodyContent(..), TxOut(..), getTxId, hashScriptData, serialiseToRawBytes)

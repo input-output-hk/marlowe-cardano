@@ -5,8 +5,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module Language.Marlowe.Protocol.Query.Client
-  where
+module Language.Marlowe.Protocol.Query.Client where
 
 import Language.Marlowe.Protocol.Query.Types
 import Language.Marlowe.Runtime.ChainSync.Api (TxId)

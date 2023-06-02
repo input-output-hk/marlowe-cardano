@@ -3,8 +3,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE RankNTypes #-}
 
-module Language.Marlowe.Runtime.Integration.Intersections
-  where
+module Language.Marlowe.Runtime.Integration.Intersections where
 
 import Cardano.Api (getTxId)
 import Language.Marlowe.Runtime.Cardano.Api (fromCardanoTxId)

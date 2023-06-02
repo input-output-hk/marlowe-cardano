@@ -1,8 +1,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
-module Language.Marlowe.Runtime.Web.Server.Util
-  where
+module Language.Marlowe.Runtime.Web.Server.Util where
 
 import Data.Function (on)
 import qualified Data.List as List

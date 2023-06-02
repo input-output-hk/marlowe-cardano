@@ -6,8 +6,7 @@
 {-# LANGUAGE ViewPatterns #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
-module Network.Protocol.Driver.Trace
-  where
+module Network.Protocol.Driver.Trace where
 
 import Control.Concurrent.Component
 import Control.Concurrent.STM (newEmptyTMVar, newTQueue, readTMVar, readTQueue, tryPutTMVar)
