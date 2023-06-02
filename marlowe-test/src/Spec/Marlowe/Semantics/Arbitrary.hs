@@ -390,21 +390,11 @@ randomRoleNames =
 
 instance Arbitrary Party where
   arbitrary = frequency
-    [ (1, Address <$> arbitrary <*> arbitrary)
+    [ (1, Address testnet <$> arbitrary)
     , (4, Role <$> arbitraryFibonacci randomRoleNames)
     ]
   shrink (Address _ _) = []
   shrink (Role x)      = Role <$> shrinkByteString unTokenName randomRoleNames x
-{- FIXME: Formerly . . .
-  arbitrary =
-    do
-       isPubKeyHash <- frequency [(2, pure True), (8, pure False)]
-       if isPubKeyHash
-         then Address testnet <$> arbitrary
-         else Role <$> arbitraryFibonacci randomRoleNames
-  shrink (Address _ _) = Role <$> randomRoleNames
-  shrink (Role x)      = Role <$> shrinkByteString (\(TokenName y) -> y) randomRoleNames x
--}
 
 instance SemiArbitrary Party where
   fromContext = parties
