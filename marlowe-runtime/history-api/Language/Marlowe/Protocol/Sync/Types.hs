@@ -2,7 +2,8 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE TypeFamilies #-}
 
-module Language.Marlowe.Protocol.Sync.Types where
+module Language.Marlowe.Protocol.Sync.Types
+  where
 
 import Control.Monad (join)
 import Data.Aeson (Key, ToJSON, Value(..), object, (.=))

@@ -3,7 +3,8 @@
 {-# LANGUAGE RecursiveDo #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module Control.Concurrent.Component where
+module Control.Concurrent.Component
+  where
 
 import Control.Applicative (liftA2)
 import Control.Arrow

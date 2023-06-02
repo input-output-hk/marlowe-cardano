@@ -2,7 +2,8 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE QuasiQuotes #-}
 
-module Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetWithdrawal where
+module Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetWithdrawal
+  where
 
 import Data.ByteString (ByteString)
 import Data.Int (Int16, Int64)

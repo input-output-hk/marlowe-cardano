@@ -1,4 +1,5 @@
-module Language.Marlowe.Runtime.Core.MetadataSpec where
+module Language.Marlowe.Runtime.Core.MetadataSpec
+  where
 
 import Language.Marlowe.Runtime.Core.Api (decodeMarloweTransactionMetadata, encodeMarloweTransactionMetadata)
 import Language.Marlowe.Runtime.Core.Gen ()

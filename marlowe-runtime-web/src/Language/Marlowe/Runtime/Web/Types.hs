@@ -10,7 +10,8 @@
 -- | This module defines the request and response types in the Marlowe Runtime
 -- | Web API.
 
-module Language.Marlowe.Runtime.Web.Types where
+module Language.Marlowe.Runtime.Web.Types
+  where
 
 import Control.Lens hiding ((.=))
 import Control.Monad ((<=<))

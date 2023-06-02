@@ -19,7 +19,8 @@
 {-# LANGUAGE ViewPatterns #-}
 
 
-module Language.Marlowe.CLI.Test.Wallet.Interpret where
+module Language.Marlowe.CLI.Test.Wallet.Interpret
+  where
 
 import Cardano.Api
   ( AddressInEra

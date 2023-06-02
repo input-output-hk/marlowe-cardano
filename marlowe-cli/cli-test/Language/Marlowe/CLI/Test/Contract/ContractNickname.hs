@@ -1,6 +1,7 @@
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DerivingStrategies #-}
-module Language.Marlowe.CLI.Test.Contract.ContractNickname where
+module Language.Marlowe.CLI.Test.Contract.ContractNickname
+  where
 
 import Data.Aeson (FromJSON, ToJSON)
 import Data.String (IsString)

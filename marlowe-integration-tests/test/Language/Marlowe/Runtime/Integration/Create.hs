@@ -1,7 +1,8 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE OverloadedLists #-}
 
-module Language.Marlowe.Runtime.Integration.Create where
+module Language.Marlowe.Runtime.Integration.Create
+  where
 
 import Cardano.Api
   ( BabbageEra

@@ -1,4 +1,5 @@
-module Language.Marlowe.Runtime.CLI.Command.Query where
+module Language.Marlowe.Runtime.CLI.Command.Query
+  where
 
 import Language.Marlowe.Runtime.CLI.Command.Query.Store
 import Language.Marlowe.Runtime.CLI.Monad

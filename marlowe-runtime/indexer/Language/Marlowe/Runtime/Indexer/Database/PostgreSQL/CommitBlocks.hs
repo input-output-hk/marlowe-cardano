@@ -1,7 +1,8 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE QuasiQuotes #-}
 
-module Language.Marlowe.Runtime.Indexer.Database.PostgreSQL.CommitBlocks where
+module Language.Marlowe.Runtime.Indexer.Database.PostgreSQL.CommitBlocks
+  where
 
 import Data.Binary (put)
 import Data.Binary.Put (runPut)

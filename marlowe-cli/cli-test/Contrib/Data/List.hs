@@ -1,4 +1,5 @@
-module Contrib.Data.List where
+module Contrib.Data.List
+  where
 
 singleton :: a -> [a]
 singleton a = [a]

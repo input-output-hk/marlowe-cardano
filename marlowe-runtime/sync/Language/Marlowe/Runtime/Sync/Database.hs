@@ -6,7 +6,8 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE RankNTypes #-}
 
-module Language.Marlowe.Runtime.Sync.Database where
+module Language.Marlowe.Runtime.Sync.Database
+  where
 
 import Control.Monad.Event.Class (MonadInjectEvent, withEvent)
 import Data.Aeson (ToJSON)

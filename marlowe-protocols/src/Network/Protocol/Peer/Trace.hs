@@ -3,7 +3,8 @@
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE RankNTypes #-}
 
-module Network.Protocol.Peer.Trace where
+module Network.Protocol.Peer.Trace
+  where
 
 import Data.Functor ((<&>))
 import Data.Proxy

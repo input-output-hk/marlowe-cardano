@@ -1,4 +1,5 @@
-module Language.Marlowe.Runtime.ChainSync.ApiSpec where
+module Language.Marlowe.Runtime.ChainSync.ApiSpec
+  where
 
 import Language.Marlowe.Runtime.ChainSync.Api
 import Language.Marlowe.Runtime.ChainSync.Gen ()

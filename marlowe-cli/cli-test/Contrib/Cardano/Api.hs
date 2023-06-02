@@ -1,4 +1,5 @@
-module Contrib.Cardano.Api where
+module Contrib.Cardano.Api
+  where
 
 import Cardano.Api (Lovelace(Lovelace))
 

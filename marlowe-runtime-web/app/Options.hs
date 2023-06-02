@@ -1,6 +1,7 @@
 {-# LANGUAGE StrictData #-}
 
-module Options where
+module Options
+  where
 
 import qualified Language.Marlowe.Runtime.CLI.Option as O
 import Network.Socket (HostName, PortNumber)

@@ -11,7 +11,8 @@
 
 -- | A server machine type for loading contracts incrementally.
 
-module Language.Marlowe.Protocol.Load.Server where
+module Language.Marlowe.Protocol.Load.Server
+  where
 
 import Cardano.Api (hashScriptData)
 import Data.Kind (Type)

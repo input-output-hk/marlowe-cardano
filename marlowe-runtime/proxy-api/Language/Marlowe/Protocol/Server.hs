@@ -2,7 +2,8 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE RankNTypes #-}
 
-module Language.Marlowe.Protocol.Server where
+module Language.Marlowe.Protocol.Server
+  where
 
 import Language.Marlowe.Protocol.Client
   (liftContractQuery, liftMarloweHeaderSync, liftMarloweLoad, liftMarloweQuery, liftMarloweSync, liftTxJob)

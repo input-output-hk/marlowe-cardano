@@ -3,7 +3,8 @@
 {-# LANGUAGE StrictData #-}
 {-# LANGUAGE TypeFamilies #-}
 
-module Language.Marlowe.Runtime.Contract.Api where
+module Language.Marlowe.Runtime.Contract.Api
+  where
 
 import Data.Binary (Binary, get, getWord8, put, putWord8)
 import Data.Data (type (:~:)(..))

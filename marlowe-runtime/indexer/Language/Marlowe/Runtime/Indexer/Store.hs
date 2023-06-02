@@ -5,7 +5,8 @@
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE StrictData #-}
 
-module Language.Marlowe.Runtime.Indexer.Store where
+module Language.Marlowe.Runtime.Indexer.Store
+  where
 
 import Control.Concurrent.Component
 import Control.Concurrent.STM (STM, modifyTVar, newTVar, readTVar, writeTVar)

@@ -12,7 +12,8 @@
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module Language.Marlowe.Runtime.ChainSync.Api where
+module Language.Marlowe.Runtime.ChainSync.Api
+  where
 
 import Cardano.Api
   ( AsType(..)

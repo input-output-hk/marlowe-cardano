@@ -3,7 +3,8 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE TupleSections #-}
 
-module Language.Marlowe.Runtime.Transaction.ConstraintsSpec where
+module Language.Marlowe.Runtime.Transaction.ConstraintsSpec
+  where
 
 import Cardano.Api
 import Cardano.Api.Shelley

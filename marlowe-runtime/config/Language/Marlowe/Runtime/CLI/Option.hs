@@ -1,6 +1,7 @@
 {-# LANGUAGE DataKinds #-}
 
-module Language.Marlowe.Runtime.CLI.Option where
+module Language.Marlowe.Runtime.CLI.Option
+  where
 
 import Control.Arrow ((>>>))
 import Data.Foldable (asum)

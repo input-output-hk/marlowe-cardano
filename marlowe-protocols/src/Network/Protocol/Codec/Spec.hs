@@ -5,7 +5,8 @@
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE TypeOperators #-}
 
-module Network.Protocol.Codec.Spec where
+module Network.Protocol.Codec.Spec
+  where
 
 import qualified Data.ByteString as BS
 import Data.ByteString.Lazy (ByteString, fromStrict, toChunks)

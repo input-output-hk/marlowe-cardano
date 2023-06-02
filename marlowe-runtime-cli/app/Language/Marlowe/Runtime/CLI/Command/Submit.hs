@@ -1,4 +1,5 @@
-module Language.Marlowe.Runtime.CLI.Command.Submit where
+module Language.Marlowe.Runtime.CLI.Command.Submit
+  where
 
 import qualified Cardano.Api as C
 import Control.Concurrent.STM (atomically)

@@ -8,7 +8,8 @@
 -- interpreting a client as a typed-protocols peer that can be executed with a
 -- driver and a codec.
 
-module Network.Protocol.Handshake.Client where
+module Network.Protocol.Handshake.Client
+  where
 
 import Data.Functor ((<&>))
 import Data.Proxy (Proxy(..))

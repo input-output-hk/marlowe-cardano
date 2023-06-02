@@ -1,6 +1,7 @@
 {-# LANGUAGE RankNTypes #-}
 
-module Language.Marlowe.Runtime.Indexer.Database where
+module Language.Marlowe.Runtime.Indexer.Database
+  where
 
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainPoint)
 import Language.Marlowe.Runtime.Indexer.Types (MarloweBlock, MarloweUTxO)

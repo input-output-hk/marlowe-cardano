@@ -1,7 +1,8 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE RankNTypes #-}
 
-module Language.Marlowe.Runtime.Contract.Store where
+module Language.Marlowe.Runtime.Contract.Store
+  where
 
 import Control.Monad.Event.Class
 import Data.Foldable (traverse_)

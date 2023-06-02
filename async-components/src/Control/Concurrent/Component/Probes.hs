@@ -1,7 +1,8 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE TypeOperators #-}
 
-module Control.Concurrent.Component.Probes where
+module Control.Concurrent.Component.Probes
+  where
 
 import Control.Concurrent.Component
 import Control.Monad.IO.Class (MonadIO, liftIO)

@@ -4,7 +4,8 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE StrictData #-}
 
-module Language.Marlowe.Runtime.Indexer.ChainSeekClient where
+module Language.Marlowe.Runtime.Indexer.ChainSeekClient
+  where
 
 import Cardano.Api (SystemStart)
 import Control.Concurrent.Component

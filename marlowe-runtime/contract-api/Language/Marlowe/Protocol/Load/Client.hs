@@ -11,7 +11,8 @@
 
 -- | A client machine type for loading contracts incrementally.
 
-module Language.Marlowe.Protocol.Load.Client where
+module Language.Marlowe.Protocol.Load.Client
+  where
 
 import Data.Kind (Type)
 import Language.Marlowe.Core.V1.Semantics.Types

@@ -5,7 +5,8 @@
 -- | Conversion and casting utilities for Cardano feature objects that use
 -- CardanoEra and ShelleyBasedEra tags.
 
-module Language.Marlowe.Runtime.Cardano.Feature where
+module Language.Marlowe.Runtime.Cardano.Feature
+  where
 
 import Cardano.Api
 import Cardano.Api.Shelley

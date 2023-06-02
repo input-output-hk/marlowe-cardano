@@ -1,6 +1,7 @@
 {-# LANGUAGE QuasiQuotes #-}
 
-module Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetIntersection where
+module Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetIntersection
+  where
 
 import Data.ByteString (ByteString)
 import Data.Int (Int64)

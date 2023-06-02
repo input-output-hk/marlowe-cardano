@@ -6,7 +6,8 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE StrictData #-}
 
-module Language.Marlowe.Runtime.ChainSync.JobServer where
+module Language.Marlowe.Runtime.ChainSync.JobServer
+  where
 
 import Cardano.Api (CardanoEra(..), CardanoMode, ScriptDataSupportedInEra(..), Tx, TxValidationErrorInMode)
 import Control.Concurrent.Component

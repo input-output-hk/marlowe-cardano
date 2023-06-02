@@ -1,4 +1,5 @@
-module Language.Marlowe.Runtime.Sync.Database.PostgreSQL where
+module Language.Marlowe.Runtime.Sync.Database.PostgreSQL
+  where
 
 import qualified Hasql.Session as H
 import qualified Hasql.Transaction.Sessions as T

@@ -3,7 +3,8 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE RankNTypes #-}
 
-module Language.Marlowe.Runtime.Transaction where
+module Language.Marlowe.Runtime.Transaction
+  where
 
 import Cardano.Api (Tx)
 import Cardano.Api.Byron (BabbageEra)

@@ -1,4 +1,5 @@
-module Language.Marlowe.Runtime.Contract.Store.Memory where
+module Language.Marlowe.Runtime.Contract.Store.Memory
+  where
 
 import Cardano.Api (hashScriptData)
 import Control.Monad.Trans.Maybe (MaybeT(MaybeT), runMaybeT)

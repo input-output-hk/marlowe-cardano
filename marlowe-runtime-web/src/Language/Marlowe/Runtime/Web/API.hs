@@ -14,7 +14,8 @@
 
 -- | This module specifies the Marlowe Runtime Web API as a Servant API type.
 
-module Language.Marlowe.Runtime.Web.API where
+module Language.Marlowe.Runtime.Web.API
+  where
 
 import Control.Lens hiding ((.=))
 import Control.Monad (guard, replicateM, unless, (<=<))

@@ -17,7 +17,8 @@
 {-# LANGUAGE TypeApplications #-}
 
 
-module Language.Marlowe.CLI.Test.Runtime.Monitor where
+module Language.Marlowe.CLI.Test.Runtime.Monitor
+  where
 
 import qualified Cardano.Api as C
 import Contrib.Control.Concurrent (threadDelay)

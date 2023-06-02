@@ -18,7 +18,8 @@
 {-# LANGUAGE TemplateHaskell #-}
 
 
-module Language.Marlowe.CLI.Test.Types where
+module Language.Marlowe.CLI.Test.Types
+  where
 
 import Cardano.Api (AddressInEra, CardanoMode, IsCardanoEra, LocalNodeConnectInfo, NetworkId, ScriptDataSupportedInEra)
 import Control.Lens (_1, _2, _Just, makeLenses, (^.))

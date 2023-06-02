@@ -1,7 +1,8 @@
 {-# LANGUAGE Arrows #-}
 {-# LANGUAGE FlexibleContexts #-}
 
-module Language.Marlowe.Runtime.Sync where
+module Language.Marlowe.Runtime.Sync
+  where
 
 import Control.Arrow (returnA)
 import Control.Concurrent.Component

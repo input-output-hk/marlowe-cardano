@@ -1,7 +1,8 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE StrictData #-}
 
-module Language.Marlowe.Runtime.ChainSync.Database where
+module Language.Marlowe.Runtime.ChainSync.Database
+  where
 
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainPoint, GetUTxOsQuery, Move, UTxOs)
 

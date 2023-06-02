@@ -14,7 +14,8 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TemplateHaskell #-}
 
-module Language.Marlowe.CLI.Test.Runtime.Interpret where
+module Language.Marlowe.CLI.Test.Runtime.Interpret
+  where
 
 import Cardano.Api (CardanoMode, ScriptDataSupportedInEra(ScriptDataInBabbageEra))
 import qualified Cardano.Api as C

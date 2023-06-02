@@ -6,7 +6,8 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 
-module Spec.Marlowe.Analysis where
+module Spec.Marlowe.Analysis
+  where
 
 import Data.Maybe (isJust)
 import Data.Time.Clock (UTCTime)

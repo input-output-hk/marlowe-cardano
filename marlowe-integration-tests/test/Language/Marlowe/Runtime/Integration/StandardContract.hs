@@ -1,6 +1,7 @@
 {-# LANGUAGE DataKinds #-}
 
-module Language.Marlowe.Runtime.Integration.StandardContract where
+module Language.Marlowe.Runtime.Integration.StandardContract
+  where
 
 import Cardano.Api (BabbageEra, TxBody)
 import Control.Monad.IO.Class (liftIO)

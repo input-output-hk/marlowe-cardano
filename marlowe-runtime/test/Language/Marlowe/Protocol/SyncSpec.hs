@@ -2,7 +2,8 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
 
-module Language.Marlowe.Protocol.SyncSpec where
+module Language.Marlowe.Protocol.SyncSpec
+  where
 
 import Language.Marlowe.Protocol.Sync.Types
 import Language.Marlowe.Runtime.ChainSync.Gen (resized)

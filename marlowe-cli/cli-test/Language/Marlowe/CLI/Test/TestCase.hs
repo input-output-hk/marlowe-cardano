@@ -17,7 +17,8 @@
 {-# LANGUAGE TemplateHaskell #-}
 
 
-module Language.Marlowe.CLI.Test.TestCase where
+module Language.Marlowe.CLI.Test.TestCase
+  where
 
 import Cardano.Api (Lovelace)
 import GHC.Generics (Generic)

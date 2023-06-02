@@ -1,7 +1,8 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 
-module Language.Marlowe.Runtime.Indexer.Database.PostgreSQL where
+module Language.Marlowe.Runtime.Indexer.Database.PostgreSQL
+  where
 
 import Control.Monad.Event.Class (MonadInjectEvent, withEvent)
 import Control.Monad.IO.Class (MonadIO, liftIO)

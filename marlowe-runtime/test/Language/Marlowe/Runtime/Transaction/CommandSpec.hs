@@ -3,7 +3,8 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 
-module Language.Marlowe.Runtime.Transaction.CommandSpec where
+module Language.Marlowe.Runtime.Transaction.CommandSpec
+  where
 
 import Cardano.Api (CardanoEra(..))
 import Data.Foldable (fold)

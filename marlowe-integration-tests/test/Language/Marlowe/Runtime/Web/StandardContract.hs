@@ -1,6 +1,7 @@
 {-# LANGUAGE DataKinds #-}
 
-module Language.Marlowe.Runtime.Web.StandardContract where
+module Language.Marlowe.Runtime.Web.StandardContract
+  where
 
 import Control.Monad.RWS.Strict (MonadIO(liftIO))
 import Data.Map (Map)

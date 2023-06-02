@@ -6,7 +6,8 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TemplateHaskell #-}
 
-module Language.Marlowe.Runtime.Web.Server.TxClient where
+module Language.Marlowe.Runtime.Web.Server.TxClient
+  where
 
 import Cardano.Api (BabbageEra, Tx, TxBody, getTxId)
 import Control.Concurrent.Async (concurrently_)

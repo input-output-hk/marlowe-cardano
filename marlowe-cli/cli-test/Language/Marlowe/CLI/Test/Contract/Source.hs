@@ -13,7 +13,8 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE ViewPatterns #-}
 
-module Language.Marlowe.CLI.Test.Contract.Source where
+module Language.Marlowe.CLI.Test.Contract.Source
+  where
 
 import Control.Monad (void)
 import Control.Monad.Except (MonadError, throwError)

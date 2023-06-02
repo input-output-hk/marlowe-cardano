@@ -7,7 +7,8 @@
 
 -- | This module defines a server for the /withdrawals REST API.
 
-module Language.Marlowe.Runtime.Web.Server.REST.Withdrawals where
+module Language.Marlowe.Runtime.Web.Server.REST.Withdrawals
+  where
 
 import Cardano.Api (BabbageEra, TxBody, getTxBody, getTxId, makeSignedTransaction)
 import qualified Cardano.Api as Cardano

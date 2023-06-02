@@ -2,7 +2,8 @@
 {-# LANGUAGE EmptyCase #-}
 {-# LANGUAGE GADTs #-}
 
-module Language.Marlowe.Runtime.ChainSync.Gen where
+module Language.Marlowe.Runtime.ChainSync.Gen
+  where
 
 import Cardano.Api
   ( AddressAny(..)

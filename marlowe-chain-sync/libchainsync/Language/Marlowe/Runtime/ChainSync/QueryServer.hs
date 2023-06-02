@@ -5,7 +5,8 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE StrictData #-}
 
-module Language.Marlowe.Runtime.ChainSync.QueryServer where
+module Language.Marlowe.Runtime.ChainSync.QueryServer
+  where
 
 import Cardano.Api
   ( AnyCardanoEra(..)

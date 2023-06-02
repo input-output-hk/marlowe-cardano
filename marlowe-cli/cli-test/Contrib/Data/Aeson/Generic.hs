@@ -5,7 +5,8 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE TypeSynonymInstances #-}
-module Contrib.Data.Aeson.Generic where
+module Contrib.Data.Aeson.Generic
+  where
 
 import GHC.Generics (C1, Constructor(conName), D1, Generic(Rep, from), M1(M1), type (:+:)(L1, R1))
 

@@ -1,7 +1,8 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
-module Language.Marlowe.Runtime.CLI.Command.Withdraw where
+module Language.Marlowe.Runtime.CLI.Command.Withdraw
+  where
 
 import qualified Cardano.Api as C
 import Control.Monad.IO.Class (liftIO)

@@ -15,7 +15,8 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module Language.Marlowe.CLI.Test.InterpreterError where
+module Language.Marlowe.CLI.Test.InterpreterError
+  where
 
 import Control.Lens (makeLenses)
 import Control.Monad.Except (ExceptT, MonadError(throwError), runExceptT)

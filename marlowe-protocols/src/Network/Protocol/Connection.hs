@@ -6,7 +6,8 @@
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE RankNTypes #-}
 
-module Network.Protocol.Connection where
+module Network.Protocol.Connection
+  where
 
 import Control.Applicative (Alternative(empty), (<|>))
 import Control.Concurrent.STM (STM, TQueue, newTQueue, readTQueue, writeTQueue)

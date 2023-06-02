@@ -1,7 +1,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 
-module Language.Marlowe.Runtime.Transaction.SafetySpec where
+module Language.Marlowe.Runtime.Transaction.SafetySpec
+  where
 
 
 import Data.List (isInfixOf, nub)

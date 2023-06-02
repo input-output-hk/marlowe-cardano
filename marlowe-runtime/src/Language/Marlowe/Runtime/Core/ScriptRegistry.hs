@@ -1,7 +1,8 @@
 {-# LANGUAGE GADTs #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
-module Language.Marlowe.Runtime.Core.ScriptRegistry where
+module Language.Marlowe.Runtime.Core.ScriptRegistry
+  where
 
 import Cardano.Api (AsType(..), NetworkId(..), NetworkMagic(..), PlutusScript, PlutusScriptV2, SerialiseAsCBOR(..))
 import Data.Aeson (ToJSON(..))

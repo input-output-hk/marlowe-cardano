@@ -7,7 +7,8 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ViewPatterns #-}
 
-module Language.Marlowe.Runtime.Transaction.Server where
+module Language.Marlowe.Runtime.Transaction.Server
+  where
 
 import Cardano.Api
   ( AddressInEra(..)

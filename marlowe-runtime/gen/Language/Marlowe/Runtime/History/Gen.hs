@@ -1,7 +1,8 @@
 {-# OPTIONS_GHC -Wno-orphans #-}
 {-# LANGUAGE DataKinds #-}
 
-module Language.Marlowe.Runtime.History.Gen where
+module Language.Marlowe.Runtime.History.Gen
+  where
 
 import Language.Marlowe.Runtime.ChainSync.Gen ()
 import Language.Marlowe.Runtime.Core.Gen (ArbitraryMarloweVersion)

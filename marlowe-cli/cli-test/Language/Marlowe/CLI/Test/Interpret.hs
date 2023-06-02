@@ -11,7 +11,8 @@
 {-# LANGUAGE TupleSections #-}
 
 
-module Language.Marlowe.CLI.Test.Interpret where
+module Language.Marlowe.CLI.Test.Interpret
+  where
 
 import Cardano.Api (IsShelleyBasedEra)
 import Contrib.Control.Concurrent (threadDelay)

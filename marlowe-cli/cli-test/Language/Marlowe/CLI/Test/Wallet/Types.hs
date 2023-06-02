@@ -16,7 +16,8 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE ViewPatterns #-}
 
-module Language.Marlowe.CLI.Test.Wallet.Types where
+module Language.Marlowe.CLI.Test.Wallet.Types
+  where
 
 import Cardano.Api
   (AddressInEra, CardanoMode, LocalNodeConnectInfo, Lovelace, PolicyId, ScriptDataSupportedInEra, TxBody, UTxO(UTxO))

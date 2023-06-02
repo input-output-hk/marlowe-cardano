@@ -1,7 +1,8 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE TypeFamilies #-}
 
-module Language.Marlowe.Runtime.Discovery.Api where
+module Language.Marlowe.Runtime.Discovery.Api
+  where
 
 import Data.Aeson (ToJSON)
 import Data.Binary (Binary)

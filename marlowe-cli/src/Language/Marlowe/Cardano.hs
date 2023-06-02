@@ -1,6 +1,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE NamedFieldPuns #-}
-module Language.Marlowe.Cardano where
+module Language.Marlowe.Cardano
+  where
 
 import Cardano.Api (AddressInEra(AddressInEra), LocalNodeConnectInfo(LocalNodeConnectInfo, localNodeNetworkId))
 import qualified Cardano.Api as C

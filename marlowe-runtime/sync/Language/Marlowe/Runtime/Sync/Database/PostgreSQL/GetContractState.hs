@@ -2,7 +2,8 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE QuasiQuotes #-}
 
-module Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetContractState where
+module Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetContractState
+  where
 
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Maybe (MaybeT(MaybeT), runMaybeT)

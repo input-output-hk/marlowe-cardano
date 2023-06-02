@@ -11,7 +11,8 @@
 
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
-module Plutus.V1.Ledger.Aeson where
+module Plutus.V1.Ledger.Aeson
+  where
 
 import Data.Aeson (FromJSON(parseJSON), FromJSONKey, ToJSON(toJSON), ToJSONKey, (.:))
 import qualified Data.Aeson as JSON

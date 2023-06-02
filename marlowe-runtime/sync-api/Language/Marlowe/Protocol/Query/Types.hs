@@ -4,7 +4,8 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE TypeFamilies #-}
 
-module Language.Marlowe.Protocol.Query.Types where
+module Language.Marlowe.Protocol.Query.Types
+  where
 
 import Data.Aeson (FromJSON, ToJSON(..), object, (.=))
 import Data.Bifunctor (Bifunctor(..))

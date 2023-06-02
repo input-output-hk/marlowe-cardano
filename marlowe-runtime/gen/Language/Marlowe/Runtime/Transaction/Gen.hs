@@ -1,7 +1,8 @@
 {-# OPTIONS_GHC -Wno-orphans #-}
 {-# LANGUAGE DataKinds #-}
 
-module Language.Marlowe.Runtime.Transaction.Gen where
+module Language.Marlowe.Runtime.Transaction.Gen
+  where
 
 import Cardano.Api (IsCardanoEra, cardanoEra)
 import Control.Applicative (liftA2)

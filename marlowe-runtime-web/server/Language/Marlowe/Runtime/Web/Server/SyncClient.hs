@@ -2,7 +2,8 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE RankNTypes #-}
 
-module Language.Marlowe.Runtime.Web.Server.SyncClient where
+module Language.Marlowe.Runtime.Web.Server.SyncClient
+  where
 
 import Control.Arrow (arr)
 import Control.Concurrent.Component

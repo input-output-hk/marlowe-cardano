@@ -17,7 +17,8 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TupleSections #-}
 
-module Language.Marlowe.CLI.Test.Runtime.Types where
+module Language.Marlowe.CLI.Test.Runtime.Types
+  where
 
 import Cardano.Api (CardanoMode, LocalNodeConnectInfo, ScriptDataSupportedInEra)
 import qualified Cardano.Api as C

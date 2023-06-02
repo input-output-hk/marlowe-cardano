@@ -1,4 +1,5 @@
-module Contrib.Control.Exception where
+module Contrib.Control.Exception
+  where
 
 import Control.Exception (Exception, throwIO)
 

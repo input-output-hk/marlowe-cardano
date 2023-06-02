@@ -6,7 +6,8 @@
 -- | This module defines the API and server for serving the Open API
 -- specification.
 
-module Language.Marlowe.Runtime.Web.Server.OpenAPI where
+module Language.Marlowe.Runtime.Web.Server.OpenAPI
+  where
 
 import Control.Lens
 import Data.OpenApi hiding (Server)

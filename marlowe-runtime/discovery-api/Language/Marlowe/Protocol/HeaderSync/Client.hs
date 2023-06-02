@@ -2,7 +2,8 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE RankNTypes #-}
 
-module Language.Marlowe.Protocol.HeaderSync.Client where
+module Language.Marlowe.Protocol.HeaderSync.Client
+  where
 
 import Language.Marlowe.Protocol.HeaderSync.Types
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainPoint)

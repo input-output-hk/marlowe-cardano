@@ -7,7 +7,8 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
-module Language.Marlowe.Runtime.Web.Server.REST.ApiError where
+module Language.Marlowe.Runtime.Web.Server.REST.ApiError
+  where
 
 import Control.Monad.Except (MonadError(throwError))
 import Data.Aeson (Value(Null), encode, object, (.=))

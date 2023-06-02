@@ -3,7 +3,8 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE StrictData #-}
 
-module Language.Marlowe.Runtime.Indexer.Types where
+module Language.Marlowe.Runtime.Indexer.Types
+  where
 
 import Cardano.Api (CardanoMode, EraHistory, SystemStart)
 import Control.Applicative (empty)

@@ -9,7 +9,8 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module Control.Monad.Event.Class where
+module Control.Monad.Event.Class
+  where
 
 import Control.Applicative (Alternative)
 import Control.Monad (MonadPlus)

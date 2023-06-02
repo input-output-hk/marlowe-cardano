@@ -2,7 +2,8 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE StrictData #-}
 
-module Language.Marlowe.Runtime.CLI.Env where
+module Language.Marlowe.Runtime.CLI.Env
+  where
 
 import Control.Concurrent.STM (STM)
 

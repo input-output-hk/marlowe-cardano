@@ -1,4 +1,5 @@
-module Contrib.Data.List.Random where
+module Contrib.Data.List.Random
+  where
 
 import System.Random
 

@@ -1,6 +1,7 @@
 {-# LANGUAGE QuasiQuotes #-}
 
-module Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetCreateStep where
+module Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetCreateStep
+  where
 
 import Control.Foldl (Fold(Fold))
 import Data.Binary (get)

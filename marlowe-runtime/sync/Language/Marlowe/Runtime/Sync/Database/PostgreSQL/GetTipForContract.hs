@@ -1,6 +1,7 @@
 {-# LANGUAGE QuasiQuotes #-}
 
-module Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetTipForContract where
+module Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetTipForContract
+  where
 
 import Hasql.TH (maybeStatement)
 import qualified Hasql.Transaction as T

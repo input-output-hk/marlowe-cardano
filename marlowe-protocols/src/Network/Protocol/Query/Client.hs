@@ -7,7 +7,8 @@
 -- interpreting a client as a typed-protocols peer that can be executed with a
 -- driver and a codec.
 
-module Network.Protocol.Query.Client where
+module Network.Protocol.Query.Client
+  where
 
 import Control.Applicative (liftA2)
 import Control.Monad.IO.Class (MonadIO(..))

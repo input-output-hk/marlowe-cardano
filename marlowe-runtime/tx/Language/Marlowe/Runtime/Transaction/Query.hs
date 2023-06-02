@@ -5,7 +5,8 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ViewPatterns #-}
 
-module Language.Marlowe.Runtime.Transaction.Query where
+module Language.Marlowe.Runtime.Transaction.Query
+  where
 
 import Cardano.Api (NetworkId)
 import qualified Cardano.Api as C

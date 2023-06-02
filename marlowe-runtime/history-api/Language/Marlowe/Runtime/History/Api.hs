@@ -4,7 +4,8 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE TypeFamilies #-}
 
-module Language.Marlowe.Runtime.History.Api where
+module Language.Marlowe.Runtime.History.Api
+  where
 
 import Cardano.Api (CardanoMode, EraHistory(EraHistory))
 import Control.Error (listToMaybe, note, runMaybeT)

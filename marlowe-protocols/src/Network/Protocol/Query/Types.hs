@@ -13,7 +13,8 @@
 -- | The type of the query protocol.
 --
 -- The query protocol is a simple call-and-response one with a polymorphic request type.
-module Network.Protocol.Query.Types where
+module Network.Protocol.Query.Types
+  where
 
 import Control.Monad (join)
 import Data.Binary (Binary, Get, Put, get, getWord8, put, putWord8)

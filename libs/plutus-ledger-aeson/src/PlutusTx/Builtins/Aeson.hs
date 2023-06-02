@@ -5,7 +5,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 {-# OPTIONS_GHC -Wno-unused-imports #-}
-module PlutusTx.Builtins.Aeson where
+module PlutusTx.Builtins.Aeson
+  where
 
 import PlutusCore.Data.Aeson ()
 import qualified PlutusTx.Prelude as PlutusTx

@@ -8,7 +8,8 @@
 -- interpreting a server as a typed-protocols peer that can be executed with a
 -- driver and a codec.
 
-module Network.Protocol.Handshake.Server where
+module Network.Protocol.Handshake.Server
+  where
 
 import Data.Bifunctor (Bifunctor(bimap))
 import Data.Functor ((<&>))

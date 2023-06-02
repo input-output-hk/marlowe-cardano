@@ -2,7 +2,8 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 
-module Language.Marlowe.Protocol.Query.Server where
+module Language.Marlowe.Protocol.Query.Server
+  where
 
 import Language.Marlowe.Protocol.Query.Types
 import Language.Marlowe.Runtime.ChainSync.Api (TxId)

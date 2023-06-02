@@ -1,4 +1,5 @@
-module Language.Marlowe.Runtime.Web.PutWithdrawal where
+module Language.Marlowe.Runtime.Web.PutWithdrawal
+  where
 
 import Control.Monad.IO.Class (MonadIO(liftIO))
 import qualified Data.Set as Set
