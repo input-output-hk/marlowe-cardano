@@ -90,6 +90,7 @@ import Language.Marlowe.Core.V1.Semantics.Types
   , ValueId(..)
   , getAction
   )
+import Language.Marlowe.Core.V1.Semantics.Types.Address (testnet)
 import Plutus.Script.Utils.Scripts (dataHash)
 import Plutus.V2.Ledger.Api
   ( Credential(..)
@@ -389,7 +390,7 @@ randomRoleNames =
 
 instance Arbitrary Party where
   arbitrary = frequency
-    [ (1, Address <$> arbitrary <*> arbitrary)
+    [ (1, Address testnet <$> arbitrary)
     , (4, Role <$> arbitraryFibonacci randomRoleNames)
     ]
   shrink (Address _ _) = []

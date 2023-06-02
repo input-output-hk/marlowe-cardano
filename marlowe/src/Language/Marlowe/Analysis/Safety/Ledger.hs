@@ -20,8 +20,12 @@
 
 module Language.Marlowe.Analysis.Safety.Ledger
   ( -- * Checks for Contracts
-    checkContinuations
+    checkAddress
+  , checkAddresses
+  , checkContinuations
   , checkMaximumValueBound
+  , checkNetwork
+  , checkNetworks
   , checkRoleNames
   , checkSafety
   , checkTokens
@@ -49,10 +53,13 @@ import Data.List (nub, (\\))
 import Data.Maybe (fromJust)
 import Language.Marlowe.Analysis.Safety.Types (SafetyError(..), SafetyReport(..))
 import Language.Marlowe.Core.V1.Merkle (Continuations)
-import Language.Marlowe.Core.V1.Plate (Extract, extractAllWithContinuations)
+import Language.Marlowe.Core.V1.Plate
+  (Extract, extractAddresses, extractAllWithContinuations, extractNetworks, extractRoleNames, extractTokens)
 import Language.Marlowe.Core.V1.Semantics (MarloweData(..), MarloweParams(..))
 import Language.Marlowe.Core.V1.Semantics.Types
   (Action(..), Bound(..), Case(..), Contract, InputContent(..), State(..), Token(..), emptyState)
+import Language.Marlowe.Core.V1.Semantics.Types.Address
+  (Network, deserialiseAddressBech32, mainnet, serialiseAddressBech32, testnet)
 import Language.Marlowe.Scripts (MarloweTxInput(..))
 import Numeric.Natural (Natural)
 import Plutus.V2.Ledger.Api
@@ -71,7 +78,7 @@ import Plutus.V2.Ledger.Api
 import PlutusTx.Builtins (serialiseData)
 
 import qualified Data.Map as M (keys)
-import qualified Data.Set as S (Set, filter, fromList, map, null, size, toList)
+import qualified Data.Set as S (Set, filter, foldr, map, null, size, toList)
 import qualified Plutus.V1.Ledger.Value as V (singleton)
 import qualified Plutus.V2.Ledger.Api as P (Address(..), Value)
 import qualified PlutusTx.AssocMap as AM (Map, fromList, keys, toList)
@@ -87,18 +94,80 @@ checkSafety
   -> SafetyReport  -- ^ The report on the contract's safety.
 checkSafety maxValueSize utxoCostPerByte MarloweData{..} continuations =
   let
+    state' = Just marloweState
+    (networks, networkCheck) = checkNetworks state' marloweContract continuations
     safetyErrors =
-         checkRoleNames (rolesCurrency marloweParams /= adaSymbol) marloweContract continuations
-      <> checkTokens marloweContract continuations
-      <> checkMaximumValueBound maxValueSize marloweState marloweContract continuations
+         checkRoleNames (rolesCurrency marloweParams /= adaSymbol) state' marloweContract continuations
+      <> checkTokens state' marloweContract continuations
+      <> checkMaximumValueBound maxValueSize state' marloweContract continuations
       <> checkPositiveBalance marloweState
       <> checkDuplicates marloweState
       <> checkContinuations marloweContract continuations
+      <> networkCheck
     boundOnMinimumUtxo = worstMinimumUtxo utxoCostPerByte marloweState marloweContract continuations
     boundOnDatumSize = worstDatumSize marloweParams marloweContract continuations
     boundOnRedeemerSize = worstRedeemerSize marloweContract continuations
   in
     SafetyReport{..}
+
+
+-- | Check a contract for consistency with the network where it will be run.
+checkNetwork
+  :: Bool  -- ^ Whether the network is mainnet.
+  -> Maybe State  -- ^ The contract's initial state.
+  -> Contract  -- ^ The contract.
+  -> Continuations  -- ^ The merkleized continuations of the contract.
+  -> [SafetyError]  -- ^ A safety error if the network is incorrect.
+checkNetwork isMainnet state contract continuations =
+  let
+    networks = S.toList $ extractNetworks state contract continuations
+    target
+      | isMainnet = mainnet
+      | otherwise = testnet
+  in
+    if all (== target) networks
+      then mempty
+      else pure WrongNetwork
+
+
+-- | Check that networks are consistently used in a contract.
+checkNetworks
+  :: Maybe State  -- ^ The contract's initial state.
+  -> Contract  -- ^ The contract.
+  -> Continuations  -- ^ The merkleized continuations of the contract.
+  -> ([Network], [SafetyError])  -- ^ The networks present in the contract, and any network errors.
+checkNetworks state contract continuations =
+  let
+    networks = S.toList $ extractNetworks state contract continuations
+  in
+    (
+      networks
+    , if length networks > 1
+        then pure InconsistentNetworks
+        else mempty
+    )
+
+
+-- | Check that an address can be serialized round trip.
+checkAddress
+  :: P.Address  -- ^ The address.
+  -> [SafetyError]  -- ^ Any safety error for the address.
+checkAddress address =
+  case deserialiseAddressBech32 $ serialiseAddressBech32 False address of
+    Nothing -> pure $ IllegalAddress address
+    Just _ -> mempty
+
+
+-- | Check that all addresses can be serialized round trip.
+checkAddresses
+  :: Maybe State  -- ^ The contract's initial state.
+  -> Contract  -- ^ The contract.
+  -> Continuations  -- ^ The merkleized continuations of the contract.
+  -> [SafetyError]  -- ^ Any safety errors for the addresses in the contract.
+checkAddresses state contract =
+  nub
+    . S.foldr ((<>) . checkAddress) mempty
+    . extractAddresses state contract
 
 
 -- | Check that all continuations are present.
@@ -139,12 +208,13 @@ checkDuplicates State{..} =
 -- | Check that role names are not too long, and that roles are not present if a roles currency is not specified.
 checkRoleNames
   :: Bool  -- ^ Whether the contract has a roles currency.
+  -> Maybe State  -- ^ The initial state.
   -> Contract  -- ^ The contract.
   -> Continuations  -- ^ The merkleized continuations.
   -> [SafetyError]  -- ^ The safety messages.
-checkRoleNames hasRolesCurrency contract continuations =
+checkRoleNames hasRolesCurrency state contract continuations =
   let
-    roles = extractAllWithContinuations contract continuations
+    roles = extractRoleNames state contract continuations
     invalidRole TokenName{..} = P.lengthOfByteString unTokenName > 32
   in
     if hasRolesCurrency || S.null roles
@@ -154,7 +224,8 @@ checkRoleNames hasRolesCurrency contract continuations =
 
 -- | Check that a contract has native tokens satisfying the ledger rules.
 checkTokens
-  :: Contract  -- ^ The contract.
+  :: Maybe State  -- ^ The initial state.
+  -> Contract  -- ^ The contract.
   -> Continuations  -- ^ The merkleized continuations.
   -> [SafetyError]  -- ^ The safety messages.
 checkTokens =
@@ -165,13 +236,13 @@ checkTokens =
       | P.lengthOfByteString unTokenName > 32 = pure $ TokenNameTooLong name
       | otherwise = mempty
   in
-   ((nub . foldMap invalidToken . toList) .) . extractAllWithContinuations
+   (((nub . foldMap invalidToken . toList) .) .) . extractTokens
 
 
 -- | Check that a contract satisfies the maximum value ledger constraint.
 checkMaximumValueBound
   :: Natural  -- ^ The `maxValueSize` protocol parameter.
-  -> State  -- ^ The initial state.
+  -> Maybe State  -- ^ The initial state.
   -> Contract  -- ^ The contract.
   -> Continuations  -- ^ The merkleized continuations.
   -> [SafetyError]  -- ^ The safety messages.
@@ -186,16 +257,12 @@ checkMaximumValueBound maxValueSize state contract continuations =
 
 -- | Compute a bound on the value size for a contract.
 worstMaximumValue
-  :: State  -- ^ The initial state.
+  :: Maybe State  -- ^ The initial state.
   -> Contract  -- ^ The contract.
   -> Continuations  -- ^ The merkleized continuations.
   -> Natural  -- ^ A bound on the value size (in bytes).
-worstMaximumValue State{accounts} =
-  let
-    initial = S.fromList $ snd <$> AM.keys accounts
-  in
-    ((worstValueSize . (initial <>)) .)
-      . extractAllWithContinuations
+worstMaximumValue =
+  ((worstValueSize .) .) . extractTokens
 
 
 -- | Find a representative value with worst-case size.
@@ -249,9 +316,9 @@ worstMinimumUtxo utxoCostPerByte state@State{accounts} contract continuations =
              . toInteger
              $ fromInteger utxoCostPerByte *
              (
-                 27 * 8                                          -- Worst case for stake address and ada.
-               + worstMaximumValue state contract continuations  -- Worst case for size of value.
-               + 10 * 8                                          -- Worst case for length of datum hash.
+                 27 * 8                                                 -- Worst case for stake address and ada.
+               + worstMaximumValue (Just state) contract continuations  -- Worst case for size of value.
+               + 10 * 8                                                 -- Worst case for length of datum hash.
              )  -- This assumes that the size computed for the Alonzo era serves as an upper-bound for future eras.
 
 

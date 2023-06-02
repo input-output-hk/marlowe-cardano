@@ -47,11 +47,13 @@ import Data.Foldable (for_)
 import qualified Data.Map.Strict as M (fromList, keys, lookup, mapKeys, toList)
 import Language.Marlowe.Core.V1.Merkle as V1 (MerkleizedContract(..), deepMerkleize, merkleizedContract)
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
+import qualified Language.Marlowe.Core.V1.Semantics.Types.Address as V1
 import qualified Language.Marlowe.Runtime.Cardano.Api as Chain
   (assetsToCardanoValue, fromCardanoAddressInEra, toCardanoAddressAny, toCardanoDatumHash, toCardanoPaymentCredential)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
   (AssetId(..), Assets(..), Credential(..), DatumHash(..), PolicyId(..), TokenName(..), Tokens(..))
-import qualified Plutus.V2.Ledger.Api as Plutus (CurrencySymbol(..), DatumHash(..), TokenName(..))
+import qualified Plutus.V2.Ledger.Api as Plutus
+  (Address(..), Credential(..), CurrencySymbol(..), DatumHash(..), TokenName(..))
 import qualified PlutusTx.Builtins as Plutus (fromBuiltin, lengthOfByteString, toBuiltin)
 import Test.QuickCheck.Arbitrary (arbitrary)
 
@@ -61,6 +63,7 @@ spec =
   do
 
     let
+      testnet = Cardano.Testnet $ Cardano.NetworkMagic 1
       version = MarloweV1
       continuations = noContinuations version
       party = V1.Role "x"
@@ -105,7 +108,7 @@ spec =
         prop "Contract without roles" $ \roleTokensConfig ->
           let
             contract = V1.Close
-            actual = checkContract roleTokensConfig version contract continuations
+            actual = checkContract testnet roleTokensConfig version contract continuations
           in
             counterexample ("Contract = " <> show contract)
               $ case roleTokensConfig of
@@ -117,7 +120,7 @@ spec =
               let
                 roles = Plutus.TokenName . Plutus.toBuiltin . Chain.unTokenName <$> M.keys (unMint mint)
                 contract = foldr payRole V1.Close roles
-                actual = checkContract roleTokensConfig version contract continuations
+                actual = checkContract testnet roleTokensConfig version contract continuations
               in
                 counterexample ("Contract = " <> show contract)
                   $ actual === mempty
@@ -128,7 +131,7 @@ spec =
               let
                 roles = Plutus.TokenName . Plutus.toBuiltin . Chain.unTokenName <$> M.keys (unMint mint)
                 contract = foldr payRole V1.Close $ extra <> roles
-                actual = checkContract roleTokensConfig version contract continuations
+                actual = checkContract testnet roleTokensConfig version contract continuations
                 expected =
                   (MissingRoleToken <$> nub extra)
                     <> [RoleNameTooLong role | role@(Plutus.TokenName name) <- nub extra, Plutus.lengthOfByteString name > 32]
@@ -148,7 +151,7 @@ spec =
                 let
                   extra = filter (`notElem` roles) roles'
                   contract = foldr payRole V1.Close roles
-                  actual = checkContract roleTokensConfig version contract continuations
+                  actual = checkContract testnet roleTokensConfig version contract continuations
                   expected = ExtraRoleToken <$> extra
                 pure
                   . counterexample ("Contract = " <> show contract)
@@ -159,7 +162,7 @@ spec =
         prop "Contract with role name too long" $ \roles ->
           let
             contract = foldr payRole V1.Close roles
-            actual = checkContract (RoleTokensUsePolicy "") version contract continuations
+            actual = checkContract testnet (RoleTokensUsePolicy "") version contract continuations
             expected =
               if null roles
                 then [ContractHasNoRoles]
@@ -172,7 +175,7 @@ spec =
         prop "Contract with illegal token" $ \tokens ->
           let
             contract = foldr payToken V1.Close tokens
-            actual = checkContract (RoleTokensUsePolicy "") version contract continuations
+            actual = checkContract testnet (RoleTokensUsePolicy "") version contract continuations
             expected =
               if contract == V1.Close
                 then [ContractHasNoRoles]
@@ -211,12 +214,43 @@ spec =
               relevant (InvalidCurrencySymbol _) = False
               relevant (TokenNameTooLong _) = False
               relevant _ = True
-              actual = filter relevant $ checkContract (RoleTokensUsePolicy "") version mcContract (M.fromList remaining)
+              actual = filter relevant $ checkContract testnet (RoleTokensUsePolicy "") version mcContract (M.fromList remaining)
               expected = MissingContinuation . Plutus.DatumHash . Plutus.toBuiltin . Chain.unDatumHash . fst <$> missing
             pure . counterexample ("Contract = " <> show mcContract)
               . counterexample ("Missing = " <> show missing)
               . counterexample ("Remaining = " <> show remaining)
               . counterexample ("Actual = " <> show actual)
+              . counterexample ("Expected = " <> show expected)
+              $ actual `same` expected
+        prop "Contract with inconsistent networks" $ \address ->
+          do
+            let
+              contract = V1.When [V1.Case (V1.Deposit (V1.Address True address) (V1.Address False address) (V1.Token "" "") (V1.Constant 1)) V1.Close] 0 V1.Close
+              actual = checkContract testnet RoleTokensNone version contract mempty
+              expected = [InconsistentNetworks, WrongNetwork]
+            counterexample ("Actual = " <> show actual)
+              . counterexample ("Expected = " <> show expected)
+              $ actual `same` expected
+        prop "Contract on wrong network" $ \address ->
+          do
+            let
+              contract = V1.When [V1.Case (V1.Choice (V1.ChoiceId "Choice" $ V1.Address V1.mainnet address) [] ) V1.Close] 0 V1.Close
+              actual = checkContract testnet RoleTokensNone version contract mempty
+              expected = [WrongNetwork]
+            counterexample ("Actual = " <> show actual)
+              . counterexample ("Expected = " <> show expected)
+              $ actual `same` expected
+        prop "Contract with bad address"
+          do
+            let
+              address =
+                Plutus.Address
+                 (Plutus.PubKeyCredential "0000000000000000000000000000000000000000000000000000000000000000") -- The hash is too long.
+                 Nothing
+              contract = V1.When [V1.Case (V1.Choice (V1.ChoiceId "Choice" $ V1.Address False address) [] ) V1.Close] 0 V1.Close
+              actual = checkContract testnet RoleTokensNone version contract mempty
+              expected = [IllegalAddress address]
+            counterexample ("Actual = " <> show actual)
               . counterexample ("Expected = " <> show expected)
               $ actual `same` expected
 

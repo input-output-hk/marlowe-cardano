@@ -2,23 +2,34 @@
 
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE RecordWildCards #-}
 
 
 module Language.Marlowe.Core.V1.Plate
   ( Extract(..)
   , MarlowePlate(..)
+  , StateExtract(..)
+  , extractAddresses
   , extractAllWithContinuations
+  , extractNetworkAddresses
+  , extractNetworks
+  , extractRoleNames
+  , extractTokens
   ) where
 
 
 import Data.Generics.Multiplate (Multiplate(..), foldFor, mChildren, preorderFold, purePlate)
+import Data.Maybe (mapMaybe)
 import Language.Marlowe.Core.V1.Merkle (Continuations)
 import Language.Marlowe.Core.V1.Semantics.Types
+import Language.Marlowe.Core.V1.Semantics.Types.Address (Network)
 import Plutus.V1.Ledger.Api (BuiltinByteString, TokenName)
 
 import qualified Data.Functor.Constant as F (Constant(..))
 import qualified Data.Map.Strict as M (foldr)
-import qualified Data.Set as S (Set, empty, fromList, singleton, union)
+import qualified Data.Set as S (Set, empty, fromList, map, singleton, toList, union)
+import qualified Plutus.V2.Ledger.Api as Ledger (Address)
+import qualified PlutusTx.AssocMap as AM (keys)
 
 
 -- | A mutltiplate for a Marlowe contract.
@@ -170,7 +181,6 @@ instance Extract ValueId where
       , valuePlate = valuePlate'
       }
 
-
 instance Extract (AccountId, Token) where
   extractor =
     let
@@ -189,7 +199,6 @@ instance Extract (AccountId, Token) where
       , valuePlate = valuePlate'
       }
 
-
 instance Extract (Case Contract) where
   extractor =
     let
@@ -200,7 +209,6 @@ instance Extract (Case Contract) where
       {
         contractPlate = contractPlate'
       }
-
 
 instance Extract BuiltinByteString where
   extractor =
@@ -213,6 +221,28 @@ instance Extract BuiltinByteString where
         casePlate = casePlate'
       }
 
+instance Extract Party where
+  extractor =
+    let
+      contractPlate' (Pay p (Party p') _ _ _) = F.Constant $ S.fromList [p, p']
+      contractPlate' x = pure x
+      actionPlate' (Deposit p p' _ _) = F.Constant $ S.fromList [p, p']
+      actionPlate' (Choice (ChoiceId _ p) _) = F.Constant $ S.singleton p
+      actionPlate' x = pure x
+      valuePlate' (AvailableMoney p _) = F.Constant $ S.singleton p
+      valuePlate' (ChoiceValue (ChoiceId _ p)) = F.Constant $ S.singleton p
+      valuePlate' x = pure x
+      observationPlate' (ChoseSomething (ChoiceId _ p)) = F.Constant $ S.singleton p
+      observationPlate' x = pure x
+    in
+      purePlate
+      {
+        contractPlate = contractPlate'
+      , actionPlate = actionPlate'
+      , valuePlate = valuePlate'
+      , observationPlate = observationPlate'
+      }
+
 
 -- | Extract something from a Marlowe contract.
 extractAllWithContinuations
@@ -222,3 +252,93 @@ extractAllWithContinuations
   -> Continuations  -- ^ The continuations of the contract.
   -> S.Set a        -- ^ The extract.
 extractAllWithContinuations = M.foldr (S.union . extractAll) . extractAll
+
+
+-- | Class for extracting information from a contract's state.
+class StateExtract a where
+  -- | Extract information from a contract's state.
+  extractFromState
+    :: State  -- ^ The state.
+    -> S.Set a  -- ^ The information.
+
+instance StateExtract Party where
+  extractFromState State{..} =
+    let
+      fromChoice (ChoiceId _ p) = p
+    in
+      S.fromList
+        $ (fst <$> AM.keys accounts)
+        <> (fromChoice <$> AM.keys choices)
+
+instance StateExtract Token where
+  extractFromState State{..} =
+    S.fromList
+      $ snd <$> AM.keys accounts
+
+
+-- | List all of the parties in a contract and its state.
+extractParties
+  :: Maybe State  -- ^ The contract's initial state.
+  -> Contract  -- ^ The contract.
+  -> Continuations  -- ^ The contract's merkleized continuations.
+  -> S.Set Party  -- ^ The parties.
+extractParties state contract continuations =
+  maybe mempty extractFromState state
+    <> extractAllWithContinuations contract continuations
+
+
+-- | List all of the parties in a contract and its state.
+extractRoleNames
+  :: Maybe State  -- ^ The contract's initial state.
+  -> Contract  -- ^ The contract.
+  -> Continuations  -- ^ The contract's merkleized continuations.
+  -> S.Set TokenName  -- ^ The tokens.
+extractRoleNames =
+  let
+    role (Role name) = Just name
+    role _ = Nothing
+  in
+    (((S.fromList . mapMaybe role . S.toList) .) .) . extractParties
+
+
+-- | List all of the network addresses in a contract and its state.
+extractNetworkAddresses
+  :: Maybe State  -- ^ The contract's initial state.
+  -> Contract  -- ^ The contract.
+  -> Continuations  -- ^ The contract's merkleized continuations.
+  -> S.Set (Network, Ledger.Address)  -- ^ The network addresses.
+extractNetworkAddresses =
+  let
+    address (Address n a) = Just (n, a)
+    address _ = Nothing
+  in
+    (((S.fromList . mapMaybe address . S.toList) .) .) . extractParties
+
+
+-- | List all of the networks in a contract and its state.
+extractNetworks
+  :: Maybe State  -- ^ The contract's initial state.
+  -> Contract  -- ^ The contract.
+  -> Continuations  -- ^ The contract's merkleized continuations.
+  -> S.Set Network  -- ^ The networks.
+extractNetworks = ((S.map fst .) .) . extractNetworkAddresses
+
+
+-- | List all of the addresses in a contract and its state.
+extractAddresses
+  :: Maybe State  -- ^ The contract's initial state.
+  -> Contract  -- ^ The contract.
+  -> Continuations  -- ^ The contract's merkleized continuations.
+  -> S.Set Ledger.Address  -- ^ The addresses.
+extractAddresses = ((S.map snd .) .) . extractNetworkAddresses
+
+
+-- | List all of the tokens in a contract and its state.
+extractTokens
+  :: Maybe State  -- ^ The contract's initial state.
+  -> Contract  -- ^ The contract.
+  -> Continuations  -- ^ The contract's merkleized continuations.
+  -> S.Set Token  -- ^ The tokens.
+extractTokens state contract continuations =
+  maybe mempty extractFromState state
+    <> extractAllWithContinuations contract continuations

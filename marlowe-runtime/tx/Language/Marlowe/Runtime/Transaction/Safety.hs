@@ -22,7 +22,8 @@ import Data.SOP.Strict (K(..), NP(..))
 import Data.String (fromString)
 import Data.Time (UTCTime, addUTCTime, secondsToNominalDiffTime)
 import Data.Time.Clock.POSIX (posixSecondsToUTCTime)
-import Language.Marlowe.Analysis.Safety.Ledger (checkContinuations, checkRoleNames, checkTokens, worstMinimumUtxo')
+import Language.Marlowe.Analysis.Safety.Ledger
+  (checkAddresses, checkContinuations, checkNetwork, checkNetworks, checkRoleNames, checkTokens, worstMinimumUtxo')
 import Language.Marlowe.Analysis.Safety.Transaction (findTransactions)
 import Language.Marlowe.Analysis.Safety.Types (SafetyError(..), Transaction(..))
 import Language.Marlowe.Runtime.Core.Api
@@ -38,7 +39,7 @@ import Language.Marlowe.Runtime.Transaction.Constraints
   , WalletContext(..)
   )
 
-import qualified Cardano.Api as Cardano (Lovelace)
+import qualified Cardano.Api as Cardano (Lovelace, NetworkId(Mainnet))
 import qualified Cardano.Api.Shelley as Shelley
   ( CardanoMode
   , ConsensusMode(..)
@@ -122,12 +123,13 @@ minAdaUpperBound Shelley.ProtocolParameters{protocolParamUTxOCostPerByte} Marlow
 
 -- | Check a contract for design errors and ledger violations.
 checkContract
-  :: RoleTokensConfig
+  :: Cardano.NetworkId
+  -> RoleTokensConfig
   -> MarloweVersion v
   -> Contract v
   -> Continuations v
   -> [SafetyError]
-checkContract config MarloweV1 contract continuations =
+checkContract network config MarloweV1 contract continuations =
   let
     continuations' = remapContinuations continuations
     roles = toList $ V1.extractAllWithContinuations contract continuations'
@@ -144,11 +146,15 @@ checkContract config MarloweV1 contract continuations =
                                           missing <> extra
         _                            -> mempty
     avoidDuplicateReport = True
-    nameCheck = checkRoleNames avoidDuplicateReport contract continuations'
-    tokenCheck = checkTokens contract continuations'
+    nameCheck = checkRoleNames avoidDuplicateReport Nothing contract continuations'
+    tokenCheck = checkTokens Nothing contract continuations'
     continuationCheck = checkContinuations contract continuations'
+    networksCheck =
+      checkNetwork (network == Cardano.Mainnet) Nothing contract continuations'
+        <> snd (checkNetworks Nothing contract continuations')
+    addressCheck = checkAddresses Nothing contract continuations'
   in
-    mintCheck <> nameCheck <> tokenCheck <> continuationCheck
+    mintCheck <> nameCheck <> tokenCheck <> continuationCheck <> networksCheck <> addressCheck
 
 
 -- | Mock-execute all possible transactions for a contract.
