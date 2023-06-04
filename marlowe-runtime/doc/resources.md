@@ -15,14 +15,16 @@ The table below provides guidance on the memory and CPU resources required for M
 
 | Service                 | Memory  | CPU (cores) |
 |-------------------------|--------:|------------:|
-| `marlowe-chain-indexer` | 2500 MB |        50 % |
-| `marlowe-chain-sync`    |  100 MB |        50 % |
-| `marlowe-indexer`       |  100 MB |        10 % |
-| `marlowe-sync`          |  250 MB |        50 % |
-| `marlowe-tx`            |  250 MB |        25 % |
-| `marlowe-proxy`         |   50 MB |         5 % |
+| `marlowe-chain-indexer` | 4000 MB |       150 % |
+| `marlowe-chain-sync`    |  150 MB |        25 % |
+| `marlowe-indexer`       |  100 MB |       125 % |
+| `marlowe-sync`          |   50 MB |        25 % |
+| `marlowe-contract`      |   25 MB |         5 % |
+| `marlowe-tx`            | 1000 MB |       100 % |
+| `marlowe-proxy`         |  100 MB |        50 % |
 | `marlowe-web-server`    |   50 MB |         5 % |
-| Total                   |    4 GB |       200 % |
+| `otel-collector`        |  100 MB |        50 % |
+| Total                   | 6000 MB |       500 % |
 
 
 ## PostgreSQL
