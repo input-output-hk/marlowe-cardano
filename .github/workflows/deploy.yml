@@ -61,6 +61,7 @@ jobs:
           tagAndPush "marlowe-chain-sync"
           tagAndPush "marlowe-indexer"
           tagAndPush "marlowe-sync"
+          tagAndPush "marlowe-contract"
           tagAndPush "marlowe-tx"
           tagAndPush "marlowe-proxy"
           tagAndPush "marlowe-web-server"
