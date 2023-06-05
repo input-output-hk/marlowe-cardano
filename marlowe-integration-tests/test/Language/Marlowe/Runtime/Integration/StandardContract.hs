@@ -3,7 +3,7 @@
 module Language.Marlowe.Runtime.Integration.StandardContract
   where
 
-import Cardano.Api (BabbageEra, TxBody)
+import Cardano.Api (BabbageEra)
 import Control.Monad.IO.Class (liftIO)
 import qualified Data.Map as Map
 import Data.Set (Set)
@@ -40,7 +40,7 @@ import Language.Marlowe.Runtime.Integration.Common
   )
 import Language.Marlowe.Runtime.Plutus.V2.Api (toPlutusAddress)
 import Language.Marlowe.Runtime.Transaction.Api
-  (ContractCreated(..), InputsApplied(..), RoleTokensConfig(..), WalletAddresses(changeAddress), mkMint)
+  (ContractCreated(..), InputsApplied(..), RoleTokensConfig(..), WalletAddresses(changeAddress), WithdrawTx(..), mkMint)
 import qualified Plutus.V2.Ledger.Api as PV2
 
 data StandardContractInit v = StandardContractInit
@@ -74,7 +74,7 @@ data StandardContractNotified v = StandardContractNotified
   }
 
 data StandardContractClosed v = StandardContractClosed
-  { withdrawPartyAFunds :: Integration (TxBody BabbageEra, BlockHeader)
+  { withdrawPartyAFunds :: Integration (WithdrawTx BabbageEra v, BlockHeader)
   , returnDeposited :: InputsApplied BabbageEra v
   , returnDepositBlock :: BlockHeader
   }
@@ -156,8 +156,8 @@ createStandardContractWithTags tags partyAWallet partyBWallet = do
                             { returnDepositBlock
                             , returnDeposited
                             , withdrawPartyAFunds = do
-                                withdrawTxBody <- withdraw partyAWallet contractId "Party A"
-                                (withdrawTxBody,) <$> submit partyAWallet withdrawTxBody
+                                withdrawTx@WithdrawTx{txBody = withdrawTxBody} <- withdraw partyAWallet contractId "Party A"
+                                (withdrawTx,) <$> submit partyAWallet withdrawTxBody
                             }
                       }
                 }

@@ -16,6 +16,7 @@ import Language.Marlowe.Runtime.History.Gen ()
 import Language.Marlowe.Runtime.Transaction.Api
 import qualified Language.Marlowe.Runtime.Transaction.Api as ContractCreated (ContractCreated(..))
 import qualified Language.Marlowe.Runtime.Transaction.Api as InputsApplied (InputsApplied(..))
+import qualified Language.Marlowe.Runtime.Transaction.Api as WithdrawTx (WithdrawTx(..))
 import Network.HTTP.Media (MediaType, (//))
 import qualified Network.URI
 import qualified Network.URI as Network
@@ -238,3 +239,10 @@ instance (ArbitraryMarloweVersion v, IsCardanoEra era) => Arbitrary (InputsAppli
     , [ InputsApplied{..} { InputsApplied.output = output' } | output' <- shrink output ]
     , [ InputsApplied{..} { InputsApplied.inputs = inputs' } | inputs' <- shrink inputs ]
     ]
+
+instance (ArbitraryMarloweVersion v, IsCardanoEra era) => Arbitrary (WithdrawTx era v) where
+  arbitrary = WithdrawTx Core.marloweVersion
+    <$> arbitrary
+    <*> arbitrary
+    <*> hedgehog (genTxBody cardanoEra)
+  shrink WithdrawTx{..} = [ WithdrawTx{..} { WithdrawTx.inputs = inputs' } | inputs' <- shrink inputs ]

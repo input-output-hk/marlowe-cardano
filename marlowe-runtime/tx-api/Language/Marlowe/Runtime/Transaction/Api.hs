@@ -29,6 +29,7 @@ module Language.Marlowe.Runtime.Transaction.Api
   , Tag(..)
   , WalletAddresses(..)
   , WithdrawError(..)
+  , WithdrawTx(..)
   , decodeRoleTokenMetadata
   , encodeRoleTokenMetadata
   , mkMint
@@ -339,6 +340,28 @@ instance IsCardanoEra era => Binary (InputsApplied era 'V1) where
     txBody <- getTxBody
     pure InputsApplied{..}
 
+data WithdrawTx era v = WithdrawTx
+  { version :: MarloweVersion v
+  , inputs :: Map TxOutRef (Payout v)
+  , roleToken :: AssetId
+  , txBody :: TxBody era
+  }
+
+deriving instance Show (WithdrawTx BabbageEra 'V1)
+deriving instance Eq (WithdrawTx BabbageEra 'V1)
+
+instance IsCardanoEra era => Binary (WithdrawTx era 'V1) where
+  put WithdrawTx{..} = do
+    put inputs
+    put roleToken
+    putTxBody txBody
+  get = do
+    let version = MarloweV1
+    inputs <- get
+    roleToken <- get
+    txBody <- getTxBody
+    pure WithdrawTx{..}
+
 instance IsCardanoEra era => ToJSON (InputsApplied era 'V1) where
   toJSON InputsApplied{..} = object
     [ "contract-id" .= contractId
@@ -411,7 +434,7 @@ data MarloweTxCommand status err result where
     -> TokenName
     -- ^ The names of the roles whose assets to withdraw.
     -> MarloweTxCommand Void (WithdrawError v)
-        ( TxBody BabbageEra -- The unsigned tx body, to be signed by a wallet.
+        ( WithdrawTx BabbageEra v -- The unsigned tx body, to be signed by a wallet.
         )
 
   -- | Submits a signed transaction to the attached Cardano node.
@@ -439,7 +462,7 @@ instance Command MarloweTxCommand where
   data Tag MarloweTxCommand status err result where
     TagCreate :: MarloweVersion v -> Tag MarloweTxCommand Void (CreateError v) (ContractCreated BabbageEra v)
     TagApplyInputs :: MarloweVersion v -> Tag MarloweTxCommand Void (ApplyInputsError v) (InputsApplied BabbageEra v)
-    TagWithdraw :: MarloweVersion v -> Tag MarloweTxCommand Void (WithdrawError v) (TxBody BabbageEra)
+    TagWithdraw :: MarloweVersion v -> Tag MarloweTxCommand Void (WithdrawError v) (WithdrawTx BabbageEra v)
     TagSubmit :: Tag MarloweTxCommand SubmitStatus SubmitError BlockHeader
 
   data JobId MarloweTxCommand stats err result where
@@ -579,13 +602,13 @@ instance Command MarloweTxCommand where
   putResult = \case
     TagCreate MarloweV1 -> put
     TagApplyInputs MarloweV1 -> put
-    TagWithdraw _ -> putTxBody
+    TagWithdraw MarloweV1 -> put
     TagSubmit -> put
 
   getResult = \case
     TagCreate MarloweV1 -> get
     TagApplyInputs MarloweV1 -> get
-    TagWithdraw _ -> getTxBody
+    TagWithdraw MarloweV1 -> get
     TagSubmit -> get
 
 putTxBody :: IsCardanoEra era => TxBody era -> Put

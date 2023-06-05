@@ -31,6 +31,7 @@ import Language.Marlowe.Runtime.Transaction.Api
   , RoleTokensConfig(..)
   , WalletAddresses(WalletAddresses)
   , WithdrawError
+  , WithdrawTx(..)
   , mkMint
   )
 import Network.Protocol.Job.Client (liftCommand)
@@ -91,7 +92,7 @@ buildWithdrawal
   -> [TxOutRef]
   -> Client (Either String (ContractId, C.TxBody C.BabbageEra))
 buildWithdrawal version contractId' role =
-  build show (contractId',)
+  build show (\WithdrawTx{txBody} -> (contractId',txBody))
     $ \w -> Withdraw version w contractId' role
 
 

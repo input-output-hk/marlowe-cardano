@@ -56,29 +56,30 @@ executable marlowe-integration-tests
   hs-source-dirs: test
   main-is: Spec.hs
   other-modules:
+    Language.Marlowe.Runtime.CliSpec
     Language.Marlowe.Runtime.Integration.ApplyInputs
     Language.Marlowe.Runtime.Integration.Basic
-    Language.Marlowe.Runtime.Integration.Intersections
     Language.Marlowe.Runtime.Integration.Common
     Language.Marlowe.Runtime.Integration.Contract
-    Language.Marlowe.Runtime.Integration.StandardContract
-    Language.Marlowe.Runtime.Integration.MarloweQuery
     Language.Marlowe.Runtime.Integration.Create
+    Language.Marlowe.Runtime.Integration.Intersections
+    Language.Marlowe.Runtime.Integration.MarloweQuery
+    Language.Marlowe.Runtime.Integration.StandardContract
+    Language.Marlowe.Runtime.Integration.Withdraw
     Language.Marlowe.Runtime.IntegrationSpec
-    Language.Marlowe.Runtime.WebSpec
     Language.Marlowe.Runtime.Web.Common
-    Language.Marlowe.Runtime.Web.StandardContract
-    Language.Marlowe.Runtime.Web.GetContracts
     Language.Marlowe.Runtime.Web.GetContract
-    Language.Marlowe.Runtime.Web.GetTransactions
+    Language.Marlowe.Runtime.Web.GetContracts
     Language.Marlowe.Runtime.Web.GetTransaction
+    Language.Marlowe.Runtime.Web.GetTransactions
     Language.Marlowe.Runtime.Web.PostContract
     Language.Marlowe.Runtime.Web.PostTransaction
+    Language.Marlowe.Runtime.Web.PostWithdrawal
     Language.Marlowe.Runtime.Web.PutContract
     Language.Marlowe.Runtime.Web.PutTransaction
-    Language.Marlowe.Runtime.Web.PostWithdrawal
     Language.Marlowe.Runtime.Web.PutWithdrawal
-    Language.Marlowe.Runtime.CliSpec
+    Language.Marlowe.Runtime.Web.StandardContract
+    Language.Marlowe.Runtime.WebSpec
   build-depends:
     , QuickCheck
     , aeson
