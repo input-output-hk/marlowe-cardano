@@ -9,7 +9,7 @@ module Language.Marlowe.Runtime.Transaction.CommandSpec
 import Cardano.Api (CardanoEra(..))
 import Data.Foldable (fold)
 import Data.Void (absurd)
-import Gen.Cardano.Api.Typed (genTx, genTxBody)
+import Gen.Cardano.Api.Typed (genTx)
 import Language.Marlowe.Runtime.Core.Api
 import Language.Marlowe.Runtime.Transaction.Api
 import Language.Marlowe.Runtime.Transaction.Gen ()
@@ -77,7 +77,7 @@ instance ArbitraryCommand MarloweTxCommand where
   arbitraryResult = \case
     TagCreate MarloweV1 -> arbitrary
     TagApplyInputs MarloweV1 -> arbitrary
-    TagWithdraw MarloweV1 -> hedgehog $ genTxBody BabbageEra
+    TagWithdraw MarloweV1 -> arbitrary
     TagSubmit -> arbitrary
 
   shrinkCommand = \case
