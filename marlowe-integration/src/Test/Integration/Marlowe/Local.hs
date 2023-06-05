@@ -545,7 +545,7 @@ runtime = proc RuntimeDependencies{..} -> do
 
     LocalNodeConnectInfo{..} = localNodeConnectInfo
 
-  marloweRuntimeServerSource <- handshakeConnectionSource <$> tcpServer -< TcpServerDependencies "127.0.0.1" (fromIntegral proxyPort) marloweRuntimeServerPeer
+  marloweRuntimeServerSource <- handshakeConnectionSource <$> tcpServer "marlowe-runtime" -< TcpServerDependencies "127.0.0.1" (fromIntegral proxyPort) marloweRuntimeServerPeer
 
   chainIndexer -<
     let

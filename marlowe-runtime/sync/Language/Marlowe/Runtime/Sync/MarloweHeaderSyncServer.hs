@@ -23,7 +23,7 @@ data MarloweHeaderSyncServerDependencies r s m = MarloweHeaderSyncServerDependen
 marloweHeaderSyncServer
   :: (MonadUnliftIO m, MonadEvent r s m, HasSpanContext r)
   => Component m (MarloweHeaderSyncServerDependencies r s m) ()
-marloweHeaderSyncServer = serverComponent (component_ worker) \MarloweHeaderSyncServerDependencies{..} -> do
+marloweHeaderSyncServer = serverComponent "marlowe-header-sync-server" (component_ "marlowe-header-sync-worker" worker) \MarloweHeaderSyncServerDependencies{..} -> do
   connector <- acceptSomeConnectorTraced headerSyncSource
   pure WorkerDependencies{..}
 

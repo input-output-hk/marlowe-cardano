@@ -68,7 +68,7 @@ chainSeekClient
   :: forall r s m
    . (MonadUnliftIO m, MonadInjectEvent r (ChainSeekClientSelector r) s m, MonadFail m, HasSpanContext r)
   => Component m (ChainSeekClientDependencies r s m) (STM Bool, STM (ChainEvent r))
-chainSeekClient = component \ChainSeekClientDependencies{..} -> do
+chainSeekClient = component "indexer-chain-seek-client" \ChainSeekClientDependencies{..} -> do
   -- Initialize a TQueue for emitting ChainEvents.
   eventQueue <- newTQueue
 

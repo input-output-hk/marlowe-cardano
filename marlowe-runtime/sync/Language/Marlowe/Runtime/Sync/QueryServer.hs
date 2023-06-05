@@ -18,7 +18,7 @@ data QueryServerDependencies r s m = QueryServerDependencies
   }
 
 queryServer :: (MonadUnliftIO m, MonadEvent r s m, HasSpanContext r) => Component m (QueryServerDependencies r s m) ()
-queryServer = serverComponent (component_ worker) \QueryServerDependencies{..} -> do
+queryServer = serverComponent "sync-query-server" (component_ "sync-query-worker" worker) \QueryServerDependencies{..} -> do
   connector <- acceptSomeConnectorTraced querySource
   pure WorkerDependencies{..}
 

@@ -75,19 +75,19 @@ run Options{..} = bracket (Pool.acquire 100 (Just 5000000) (fromString databaseU
   withTracer \tracer ->
     runAppM (tracerEventBackend tracer $ renderRootSelectorOTel dbName dbUser dbHost dbPort) do
       flip runComponent_ () proc _ -> do
-        marloweSyncSource <- tcpServerTraced (injectSelector MarloweSyncServer) -< TcpServerDependencies
+        marloweSyncSource <- tcpServerTraced "marlowe-sync" (injectSelector MarloweSyncServer) -< TcpServerDependencies
           { host
           , port = marloweSyncPort
           , toPeer = marloweSyncServerPeer
           }
 
-        headerSyncSource <- tcpServerTraced (injectSelector MarloweHeaderSyncServer) -< TcpServerDependencies
+        headerSyncSource <- tcpServerTraced "marlowe-header-sync" (injectSelector MarloweHeaderSyncServer) -< TcpServerDependencies
           { host
           , port = marloweHeaderSyncPort
           , toPeer = marloweHeaderSyncServerPeer
           }
 
-        querySource <- tcpServerTraced (injectSelector MarloweQueryServer) -< TcpServerDependencies
+        querySource <- tcpServerTraced "sync-query" (injectSelector MarloweQueryServer) -< TcpServerDependencies
           { host
           , port = queryPort
           , toPeer = queryServerPeer

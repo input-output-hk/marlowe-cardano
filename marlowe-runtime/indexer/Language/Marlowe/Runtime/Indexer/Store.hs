@@ -28,7 +28,7 @@ import Language.Marlowe.Runtime.Indexer.ChainSeekClient (ChainEvent(..))
 import Language.Marlowe.Runtime.Indexer.Database (DatabaseQueries(..))
 import Language.Marlowe.Runtime.Indexer.Types (MarloweBlock(..), MarloweTransaction(..))
 import Observe.Event.Explicit (addField, setAncestorEventBackend, setInitialCauseEventBackend)
-import UnliftIO (MonadIO, MonadUnliftIO, atomically)
+import UnliftIO (MonadUnliftIO, atomically)
 
 data StoreSelector f where
   Save :: StoreSelector SaveField
@@ -58,8 +58,8 @@ store = proc StoreDependencies{..} -> do
 
 -- | The aggregator component pulls chain events and accumulates a batch of
 -- changes to persist.
-aggregator :: MonadIO m => Component m (STM (ChainEvent r)) (STM (Changes r))
-aggregator = component \pullEvent -> do
+aggregator :: MonadUnliftIO m => Component m (STM (ChainEvent r)) (STM (Changes r))
+aggregator = component "indexer-store-aggregator" \pullEvent -> do
   -- A variable which will hold the accumulated changes.
   changesVar <- newTVar mempty
 
@@ -116,8 +116,8 @@ data PersisterDependencies r m = PersisterDependencies
   }
 
 -- | A component to save batches of changes to the database.
-persister :: (MonadIO m, MonadInjectEvent r StoreSelector s m) => Component m (PersisterDependencies r m) ()
-persister = component_ \PersisterDependencies{..} -> forever do
+persister :: (MonadUnliftIO m, MonadInjectEvent r StoreSelector s m) => Component m (PersisterDependencies r m) ()
+persister = component_ "indexer-store-persister" \PersisterDependencies{..} -> forever do
   -- Read the next batch of changes.
   Changes{..} <- atomically readChanges
 

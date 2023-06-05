@@ -140,7 +140,7 @@ nodeClient
   :: forall r s m
    . (MonadInjectEvent r NodeClientSelector s m, MonadUnliftIO m)
   => Component m (NodeClientDependencies r m) (NodeClient r)
-nodeClient = component \NodeClientDependencies{..} -> do
+nodeClient = component "indexer-node-client" \NodeClientDependencies{..} -> do
   changesVar <- newTVar emptyChanges
   connectedVar <- newTVar False
 

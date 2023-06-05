@@ -26,7 +26,7 @@ data MarloweSyncServerDependencies r s m = MarloweSyncServerDependencies
 marloweSyncServer
   :: (MonadUnliftIO m, MonadEvent r s m, HasSpanContext r)
   => Component m (MarloweSyncServerDependencies r s m) ()
-marloweSyncServer = serverComponent (component_ worker) \MarloweSyncServerDependencies{..} -> do
+marloweSyncServer = serverComponent "marlowe-sync-server" (component_ "marlowe-sync-worker" worker) \MarloweSyncServerDependencies{..} -> do
   connector <- acceptSomeConnectorTraced syncSource
   pure WorkerDependencies{..}
 

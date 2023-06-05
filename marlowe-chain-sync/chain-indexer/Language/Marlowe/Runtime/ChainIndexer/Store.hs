@@ -15,7 +15,7 @@ import Control.Concurrent.STM.Delay (Delay, newDelay, waitDelay)
 import Control.Concurrent.STM.TVar (writeTVar)
 import Control.Monad (guard, unless, when)
 import Control.Monad.Event.Class (MonadInjectEvent, withEvent, withEventArgs)
-import Control.Monad.IO.Class (MonadIO, liftIO)
+import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Maybe (MaybeT(..))
 import Data.Foldable (traverse_)
@@ -27,7 +27,7 @@ import Language.Marlowe.Runtime.ChainIndexer.NodeClient (Changes(..), isEmptyCha
 import Observe.Event (NewEventArgs(..), addField)
 import Observe.Event.Backend (simpleNewEventArgs)
 import Prelude hiding (filter)
-import UnliftIO (atomically)
+import UnliftIO (MonadUnliftIO, atomically)
 import Witherable (Witherable(..))
 
 data ChainStoreSelector r f where
@@ -50,8 +50,8 @@ data ChainStoreDependencies r m = ChainStoreDependencies
   }
 
 -- | Create a ChainStore component.
-chainStore :: forall r s m. (MonadIO m, MonadInjectEvent r (ChainStoreSelector r) s m) => Component m (ChainStoreDependencies r m) (STM Bool)
-chainStore = component \ChainStoreDependencies{..} -> do
+chainStore :: forall r s m. (MonadUnliftIO m, MonadInjectEvent r (ChainStoreSelector r) s m) => Component m (ChainStoreDependencies r m) (STM Bool)
+chainStore = component "indexer-chain-store" \ChainStoreDependencies{..} -> do
   readyVar <- newTVar False
   let
     awaitChanges :: Maybe Delay -> STM (Changes r)

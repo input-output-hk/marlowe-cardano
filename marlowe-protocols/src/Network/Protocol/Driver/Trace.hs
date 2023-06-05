@@ -218,10 +218,11 @@ data ConnectedField
   | ConnectedPeer SockAddr
 
 tcpServerTraced
-  :: (MonadIO m', MonadIO m, MonadEvent r s m', HasSpanContext r)
-  => InjectSelector (TcpServerSelector (Handshake ps)) s
+  :: (MonadIO m', MonadUnliftIO m, MonadEvent r s m', HasSpanContext r)
+  => String
+  -> InjectSelector (TcpServerSelector (Handshake ps)) s
   -> Component m (TcpServerDependencies ps server m') (ConnectionSourceTraced ps server r TcpServerSelector m')
-tcpServerTraced inj = component \TcpServerDependencies{..} -> do
+tcpServerTraced name inj = component (name <> "-tcp-server") \TcpServerDependencies{..} -> do
   socketQueue <- newTQueue
   pure
     ( liftIO $ runTCPServer (Just host) (show port) \socket -> do

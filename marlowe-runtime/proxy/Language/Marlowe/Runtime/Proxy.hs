@@ -57,10 +57,10 @@ proxy
   :: (MonadUnliftIO m, MonadEvent r s m, HasSpanContext r, MonadFail m)
   => Component m (ProxyDependencies r s (ResourceT m)) Probes
 proxy = proc deps -> do
-  (serverComponent (component_ workerTraced) \ProxyDependencies{..} -> do
+  (serverComponent "marlowe-runtime-server-traced" (component_ "marlowe-runtime-worker-traced" workerTraced) \ProxyDependencies{..} -> do
     connector <- runResourceT $ acceptSomeConnectorTraced connectionSourceTraced
     pure WorkerDependenciesTraced{..}) -< deps
-  (serverComponent (component_ worker) \ProxyDependencies{..} -> do
+  (serverComponent "marlowe-runtime-server-traced" (component_ "marlowe-runtime-worker" worker) \ProxyDependencies{..} -> do
     connector <- runResourceT $ acceptSomeConnector connectionSource
     pure WorkerDependencies{..}) -< deps
   returnA -< Probes

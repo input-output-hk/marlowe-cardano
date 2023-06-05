@@ -31,7 +31,7 @@ data ChainSyncJobServerDependencies r s m = ChainSyncJobServerDependencies
 chainSyncJobServer
   :: (MonadUnliftIO m, MonadEvent r s m, HasSpanContext r)
   => Component m (ChainSyncJobServerDependencies r s m) ()
-chainSyncJobServer = serverComponent worker \ChainSyncJobServerDependencies{..} -> do
+chainSyncJobServer = serverComponent "chain-sync-job-server" worker \ChainSyncJobServerDependencies{..} -> do
   connector <- acceptSomeConnectorTraced jobSource
   pure WorkerDependencies {..}
 
@@ -47,7 +47,7 @@ data WorkerDependencies r s m = WorkerDependencies
 worker
   :: forall r s m. (MonadUnliftIO m, MonadEvent r s m, HasSpanContext r)
   => Component m (WorkerDependencies r s m) ()
-worker = component_ \WorkerDependencies{..} -> do
+worker = component_ "chain-sync-job-worker" \WorkerDependencies{..} -> do
   let
     server :: JobServer ChainSyncCommand m ()
     server = liftCommandHandler $ flip either (\case) \case

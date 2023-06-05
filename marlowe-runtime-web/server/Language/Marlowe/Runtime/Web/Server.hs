@@ -181,7 +181,7 @@ data WebServerDependencies r s = WebServerDependencies
   }
 
 webServer :: Component (BackendM r (ServerSelector transport)) (WebServerDependencies r (ServerSelector transport)) ()
-webServer = component_ \WebServerDependencies{..} -> withRunInIO \runInIO ->
+webServer = component_ "web-server" \WebServerDependencies{..} -> withRunInIO \runInIO ->
   -- Observe.Event.Wai does not expose a reference to the ServeRequest field, which we
   -- need because of the asynchronous processing of submit jobs. So, we have to
   -- roll our own version of Observe.Event.Wai.application here. A bonus is
