@@ -145,7 +145,7 @@ instance PaginatedQuery GetWithdrawals where
               ( (txBody', block')
               , flip Map.mapWithKey inputs \payout Payout{..} -> case datum of
                   AssetId{..} -> PayoutRef
-                    { contractId = standardContractId contract1
+                    { contractId = standardContractId contract2
                     , payout
                     , rolesCurrency = policyId
                     , role = tokenName
