@@ -15,7 +15,7 @@ import qualified Data.Set as Set
 import Data.Time (UTCTime, addUTCTime, getCurrentTime, secondsToNominalDiffTime)
 import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
 import Language.Marlowe.Core.V1.Semantics (MarloweData(..))
-import Language.Marlowe.Core.V1.Semantics.Types
+import Language.Marlowe.Core.V1.Semantics.Types hiding (TokenName)
 import qualified Language.Marlowe.Core.V1.Semantics.Types as Types
 import qualified Language.Marlowe.Core.V1.Semantics.Types.Address as Address
 import Language.Marlowe.Extended.V1 (ada)

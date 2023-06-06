@@ -22,15 +22,15 @@ import Data.Generics.Multiplate (Multiplate(..), foldFor, mChildren, preorderFol
 import Data.Maybe (mapMaybe)
 import Language.Marlowe.Core.V1.Merkle (Continuations)
 import Language.Marlowe.Core.V1.Semantics.Types
+
 import Language.Marlowe.Core.V1.Semantics.Types.Address (Network)
-import Plutus.V1.Ledger.Api (BuiltinByteString, TokenName)
 
 import qualified Data.Functor.Constant as F (Constant(..))
 import qualified Data.Map.Strict as M (foldr)
 import qualified Data.Set as S (Set, empty, fromList, map, singleton, toList, union)
 import qualified Plutus.V2.Ledger.Api as Ledger (Address)
 import qualified PlutusTx.AssocMap as AM (keys)
-
+import PlutusTx.Prelude (BuiltinByteString)
 
 -- | A mutltiplate for a Marlowe contract.
 data MarlowePlate f =
