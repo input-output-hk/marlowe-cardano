@@ -123,3 +123,6 @@ compose.yaml
 
 marlowe-test/out/
 **/.golden/*/actual
+
+# CTags
+*.mtime
