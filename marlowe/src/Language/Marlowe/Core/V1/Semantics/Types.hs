@@ -67,6 +67,8 @@ module Language.Marlowe.Core.V1.Semantics.Types
   , TokenName(..)
   , Value(..)
   , ValueId(..)
+  , environment
+  , isTimedOut
     -- * Error Types
   , IntervalError(..)
     -- * Utility Functions
@@ -111,6 +113,9 @@ import PlutusTx.Prelude hiding (encodeUtf8, mapM, (<$>), (<*>), (<>))
 import Prelude (mapM, (<$>))
 import qualified Prelude as Haskell
 import Text.PrettyPrint.Leijen (parens, text)
+
+import Data.Time (UTCTime)
+import Plutus.V1.Ledger.SlotConfig (utcTimeToPOSIXTime)
 
 
 -- Functions that used in Plutus Core must be inlinable,
@@ -309,6 +314,13 @@ data State = State { accounts    :: Accounts
 newtype Environment = Environment { timeInterval :: TimeInterval }
   deriving stock (Haskell.Show,Haskell.Eq,Haskell.Ord)
 
+environment :: UTCTime -> UTCTime -> Environment
+environment start end = Environment (utcTimeToPOSIXTime start, utcTimeToPOSIXTime end)
+
+isTimedOut :: POSIXTime -> Environment -> Bool
+isTimedOut t Environment {timeInterval = (_,b)} | t  > b = True
+isTimedOut _ _ = False
+
 instance FromJSON Environment where
   parseJSON = withObject "Environment"
     (\v -> Environment <$> (posixIntervalFromJSON =<< v .: "timeInterval"))
@@ -316,6 +328,8 @@ instance FromJSON Environment where
 instance ToJSON Environment where
   toJSON Environment{..} = object
     [ "timeInterval" .= posixIntervalToJSON timeInterval]
+
+
 
 -- | Input for a Marlowe contract. Correspond to expected 'Action's.
 data InputContent = IDeposit AccountId Party Token Integer

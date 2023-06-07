@@ -8,6 +8,7 @@
 module Language.Marlowe.Pretty where
 
 import qualified Data.ByteString as BS
+import qualified Data.List.NonEmpty as NEL
 import Data.Text (Text)
 import qualified Data.Text as Text
 import GHC.Generics (C, Constructor, D, Generic, K1(K1), M1(M1), Rep, S, U1, conName, from, (:*:)((:*:)), (:+:)(L1, R1))
@@ -87,12 +88,17 @@ instance Pretty Int where
 instance Pretty Integer where
   prettyFragment = text . show
 
+instance Pretty Bool where
+  prettyFragment = text . show
+
 instance (Pretty a, Pretty b) => Pretty (a, b) where
   prettyFragment (a, b) = encloseSep lparen rparen (comma <> space) [prettyFragment a, prettyFragment b]
 
 instance (Pretty a) => Pretty [a] where
   prettyFragment a = encloseSep lbracket rbracket comma (map prettyFragment a)
 
+instance (Pretty a) => Pretty (NEL.NonEmpty a) where
+  prettyFragment = prettyFragment . NEL.toList
 
 {-
     Currently, Marlowe Playground saves a Haskell contract to a file,

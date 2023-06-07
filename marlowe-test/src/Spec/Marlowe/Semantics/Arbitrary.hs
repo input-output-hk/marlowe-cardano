@@ -123,7 +123,11 @@ import Test.QuickCheck
   , vectorOf
   )
 
+
 import Data.Functor ((<&>))
+
+import Language.Marlowe.Core.V1.Semantics.Next
+
 import qualified Plutus.V2.Ledger.Api as Ledger (Address(..))
 import qualified PlutusTx.AssocMap as AM (Map, delete, empty, fromList, keys, toList)
 import qualified PlutusTx.Eq as P (Eq)
@@ -1249,3 +1253,17 @@ instance Arbitrary TransactionOutput where
         TransactionOutput <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
       , Error <$> arbitrary
       ]
+
+instance Arbitrary Next where
+  arbitrary = oneof [CanAdvance <$> arbitrary, pure CanNotAdvance]
+
+instance Arbitrary  CaseIndex where
+  arbitrary = CaseIndex <$> arbitrary
+
+instance Arbitrary NextGeneralizedInput where
+  arbitrary = oneof
+    [ CanDeposit <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
+    , CanChoose  <$> arbitrary <*> arbitrary <*> arbitrary
+    , CanNotify  <$> arbitrary
+    ]
+
