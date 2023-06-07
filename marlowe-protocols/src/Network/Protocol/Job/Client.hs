@@ -9,9 +9,11 @@
 module Network.Protocol.Job.Client where
 
 import Control.Concurrent (threadDelay)
+import Control.Monad (join)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.Functor ((<&>))
 import Data.Void (Void, absurd)
+import Network.Protocol.Job.Server hiding (hoistAttach, hoistAwait, hoistCmd, hoistInit)
 import Network.Protocol.Job.Types
 import Network.Protocol.Peer.Trace
 import Network.TypedProtocol
@@ -192,3 +194,45 @@ liftCommandWait = JobClient . pure . ($ stCmd) . SendMsgExec
       , recvMsgFail = pure . Left
       , recvMsgSucceed = pure . Right
       }
+
+serveJobClient
+  :: forall cmd m a b
+   . Monad m
+  => JobServer cmd m a
+  -> JobClient cmd m b
+  -> m (a, b)
+serveJobClient JobServer{..} JobClient{..} =
+  join $ serveInit <$> runJobServer <*> runJobClient
+  where
+    serveInit
+      :: ServerStInit cmd m a
+      -> ClientStInit cmd m b
+      -> m (a, b)
+    serveInit ServerStInit{..} = \case
+      SendMsgExec cmd next -> serveCmd next =<< recvMsgExec cmd
+      SendMsgAttach jobId next -> serveAttach next =<< recvMsgAttach jobId
+
+    serveCmd
+      :: ClientStCmd cmd status err result m b
+      -> ServerStCmd cmd status err result m a
+      -> m (a, b)
+    serveCmd ClientStCmd{..} = \case
+      SendMsgFail err a -> (a,) <$> recvMsgFail err
+      SendMsgSucceed result a -> (a,) <$> recvMsgSucceed result
+      SendMsgAwait status jobId await -> serveAwait await =<< recvMsgAwait status jobId
+
+    serveAttach
+      :: ClientStAttach cmd status err result m b
+      -> ServerStAttach cmd status err result m a
+      -> m (a, b)
+    serveAttach ClientStAttach{..} = \case
+      SendMsgAttachFailed a -> (a,) <$> recvMsgAttachFailed
+      SendMsgAttached cmd -> flip serveCmd cmd =<< recvMsgAttached
+
+    serveAwait
+      :: ServerStAwait cmd status err result m a
+      -> ClientStAwait cmd status err result m b
+      -> m (a, b)
+    serveAwait ServerStAwait{..} = \case
+      SendMsgPoll cmd -> serveCmd cmd =<< recvMsgPoll
+      SendMsgDetach b -> (,b) <$> recvMsgDetach

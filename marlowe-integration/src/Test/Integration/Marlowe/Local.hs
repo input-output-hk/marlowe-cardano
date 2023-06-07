@@ -162,8 +162,7 @@ import Network.Protocol.Codec (BinaryMessage)
 import Network.Protocol.Connection
 import qualified Network.Protocol.Connection as Connection
 import Network.Protocol.Driver
-import Network.Protocol.Driver.Trace (HasSpanContext(..), mkDriverTraced, runSomeConnectorTraced)
-import Network.Protocol.Handshake.Server (handshakeClientServerPair, handshakeConnectionSource)
+import Network.Protocol.Driver.Trace (HasSpanContext(..), mkDriverTraced)
 import Network.Protocol.Handshake.Types (Handshake)
 import Network.Protocol.Job.Client (JobClient, jobClientPeer)
 import Network.Protocol.Job.Server (JobServer, jobServerPeer)
@@ -215,7 +214,7 @@ instance HasSpanContext RuntimeRef where
   wrapContext _ = RuntimeRef
 
 data MarloweRuntime = MarloweRuntime
-  { protocolConnector :: ClientConnectorTraced
+  { protocolConnector :: Connector
       (Handshake Protocol.MarloweRuntime)
       MarloweRuntimeClient
       RuntimeRef
@@ -653,7 +652,7 @@ runtime = proc RuntimeDependencies{..} -> do
 
 driverFactory
   :: (BinaryMessage ps, MonadUnliftIO m, HasSpanContext r, Monoid r, MonadEvent r s m, Inject (TypedProtocolsSelector ps) s, Inject (DriverSelector ps) s)
-  => ClientConnectorTraced ps client r STMConnectorSelector m
+  => Connector ps client r STMConnectorSelector m
   -> ResourceT m (Channel ps pr st (ResourceT m), r)
 driverFactory ConnectorTraced{..} = withRunInIO \runInIO -> do
   (_, ConnectionTraced{..}) <- runInIO $ allocate (runInIO $ lift openConnectionTraced) \ConnectionTraced{..} -> runInIO $ lift $ closeConnection Nothing

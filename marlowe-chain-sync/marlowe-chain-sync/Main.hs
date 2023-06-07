@@ -87,7 +87,7 @@ run Options{..} = bracket (Pool.acquire 100 (Just 5000000) (fromString databaseU
         }
 
       NodeClient{..} <- nodeClient -< NodeClientDependencies
-        { connectToLocalNode = Cardano.connectToLocalNode localNodeConnectInfo
+        { connectToLocalNode = liftIO . Cardano.connectToLocalNode localNodeConnectInfo
         }
 
       probes <- chainSync -< ChainSyncDependencies

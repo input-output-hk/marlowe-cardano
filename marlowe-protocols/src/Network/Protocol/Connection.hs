@@ -84,7 +84,7 @@ data ClientWithResponseChannel client m where
 stmConnectionSource
   :: MonadUnliftIO m
   => TQueue (ClientWithResponseChannel client m)
-  -> (forall a b. server m b -> client m a -> m (a, b))
+  -> (forall a b. server m a -> client m b -> m (a, b))
   -> ConnectionSource server m
 stmConnectionSource queue serveClient = ConnectionSource do
   ClientWithResponseChannel client sendResult <- readTQueue queue
@@ -94,15 +94,15 @@ stmServerConnector
   :: MonadUnliftIO m
   => client m x
   -> (Either SomeException x -> STM ())
-  -> (forall a b. server m b -> client m a -> m (a, b))
+  -> (forall a b. server m a -> client m b -> m (a, b))
   -> Connector server m
 stmServerConnector client sendResult serveClient = Connector $ pure Connection
   { runConnection = \server -> do
       (a, b) <- serveClient server client `catch` \ex -> do
         atomically $ sendResult $ Left ex
         throwIO ex
-      atomically $ sendResult $ Right a
-      pure b
+      atomically $ sendResult $ Right b
+      pure a
   }
 
 stmClientConnector
@@ -136,7 +136,7 @@ data ClientServerPair server client m = ClientServerPair
 clientServerPair
   :: forall server client m
    . MonadUnliftIO m
-  => (forall a b. server m b -> client m a -> m (a, b))
+  => (forall a b. server m a -> client m b -> m (a, b))
   -> STM (ClientServerPair server client m)
 clientServerPair serveClient = do
   queue <- newTQueue
