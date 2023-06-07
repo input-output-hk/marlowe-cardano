@@ -30,12 +30,9 @@ import Language.Marlowe.Runtime.Indexer (MarloweIndexerDependencies(..), marlowe
 import qualified Language.Marlowe.Runtime.Indexer.Database.PostgreSQL as PostgreSQL
 import Logging (RootSelector(..), renderRootSelectorOTel)
 import Network.Protocol.ChainSeek.Client (chainSeekClientPeer)
-import Network.Protocol.Connection (ClientConnectorTraced, SomeConnectorTraced(..))
-import Network.Protocol.Driver.Trace (TcpClientSelector, runConnectorTraced, tcpClientTraced)
-import Network.Protocol.Handshake.Client (handshakeClientConnectorTraced)
-import Network.Protocol.Handshake.Types (Handshake)
+import Network.Protocol.Connection (Connector, runConnector)
+import Network.Protocol.Driver.Trace (tcpClientTraced)
 import Network.Protocol.Query.Client (QueryClient, queryClientPeer, request)
-import Network.Protocol.Query.Types (Query)
 import Network.Socket (AddrInfo(..), HostName, PortNumber, SocketType(..), defaultHints)
 import Observe.Event.Backend (injectSelector)
 import OpenTelemetry.Trace
@@ -81,16 +78,12 @@ run Options{..} = bracket (Pool.acquire 100 (Just 5000000) (fromString databaseU
     securityParameter <- queryChainSync $ request GetSecurityParameter
     flip runComponent_ () proc _ -> do
       probes <- marloweIndexer -< MarloweIndexerDependencies
-        { chainSyncConnector = SomeConnectorTraced (injectSelector ChainSeekClient)
-            $ handshakeClientConnectorTraced
-            $ tcpClientTraced
-                (injectSelector ChainSeekClient)
-                chainSeekHost
-                chainSeekPort
-                chainSeekClientPeer
-        , chainSyncQueryConnector = SomeConnectorTraced
-            (injectSelector ChainQueryClient)
-            chainSyncQueryConnector
+        { chainSyncConnector = tcpClientTraced
+            (injectSelector ChainSeekClient)
+            chainSeekHost
+            chainSeekPort
+            chainSeekClientPeer
+        , chainSyncQueryConnector
         , databaseQueries = PostgreSQL.databaseQueries pool securityParameter
         , pollingInterval = 1
         , marloweScriptHashes = NESet.map ScriptRegistry.marloweScript scripts
@@ -103,17 +96,11 @@ run Options{..} = bracket (Pool.acquire 100 (Just 5000000) (fromString databaseU
       , libraryVersion = T.pack $ showVersion version
       }
 
-    chainSyncQueryConnector :: ClientConnectorTraced
-      (Handshake (Query ChainSyncQuery))
-      (QueryClient ChainSyncQuery)
-      Span
-      TcpClientSelector
-      (AppM Span RootSelector)
-    chainSyncQueryConnector = handshakeClientConnectorTraced
-      $ tcpClientTraced (injectSelector ChainQueryClient) chainSeekHost chainSeekQueryPort queryClientPeer
+    chainSyncQueryConnector :: Connector (QueryClient ChainSyncQuery) (AppM Span RootSelector)
+    chainSyncQueryConnector = tcpClientTraced (injectSelector ChainQueryClient) chainSeekHost chainSeekQueryPort queryClientPeer
 
     queryChainSync :: QueryClient ChainSyncQuery (AppM Span RootSelector) a -> AppM Span RootSelector a
-    queryChainSync = runConnectorTraced (injectSelector ChainQueryClient) chainSyncQueryConnector
+    queryChainSync = runConnector chainSyncQueryConnector
 
 data Options = Options
   { chainSeekPort :: PortNumber

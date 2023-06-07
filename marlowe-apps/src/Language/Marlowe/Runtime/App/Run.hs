@@ -20,8 +20,8 @@ import Language.Marlowe.Runtime.App.Types (Client(..), Config(..), Services(..))
 import Language.Marlowe.Runtime.ChainSync.Api (RuntimeChainSeekClient)
 import Language.Marlowe.Runtime.Client (connectToMarloweRuntime)
 import Network.Protocol.ChainSeek.Client (chainSeekClientPeer, hoistChainSeekClient)
-import Network.Protocol.Driver (runConnector, tcpClient)
-import Network.Protocol.Handshake.Client (handshakeClientConnector)
+import Network.Protocol.Connection (runConnector)
+import Network.Protocol.Driver (tcpClient)
 import Network.Protocol.Job.Client (JobClient, hoistJobClient, jobClientPeer)
 
 
@@ -50,6 +50,6 @@ runClientWithConfig
   -> Client a
   -> IO a
 runClientWithConfig Config{..} client = runReaderT (connectToMarloweRuntime runtimeHost runtimePort (runClient client)) Services
-  { runChainSeekCommandClient = runConnector $ handshakeClientConnector $ tcpClient chainSeekHost chainSeekCommandPort jobClientPeer
-  , runChainSeekSyncClient = runConnector $ handshakeClientConnector $ tcpClient chainSeekHost chainSeekSyncPort chainSeekClientPeer
+  { runChainSeekCommandClient = runConnector $ tcpClient chainSeekHost chainSeekCommandPort jobClientPeer
+  , runChainSeekSyncClient = runConnector $ tcpClient chainSeekHost chainSeekSyncPort chainSeekClientPeer
   }

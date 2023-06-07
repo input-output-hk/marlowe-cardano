@@ -18,24 +18,22 @@ import Colog (Message, WithLog)
 import Control.Arrow (returnA)
 import Control.Concurrent.Component
 import Control.Concurrent.Component.Probes
-import Control.Monad.Event.Class (MonadEvent)
 import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncCommand, ChainSyncQuery, RuntimeChainSeekServer)
 import Language.Marlowe.Runtime.ChainSync.Database (DatabaseQueries(..))
 import Language.Marlowe.Runtime.ChainSync.JobServer (ChainSyncJobServerDependencies(..), chainSyncJobServer)
 import Language.Marlowe.Runtime.ChainSync.QueryServer (ChainSyncQueryServerDependencies(..), chainSyncQueryServer)
 import Language.Marlowe.Runtime.ChainSync.Server (ChainSyncServerDependencies(..), chainSyncServer)
-import Network.Protocol.Connection (SomeConnectionSourceTraced)
-import Network.Protocol.Driver.Trace (HasSpanContext)
+import Network.Protocol.Connection (ConnectionSource)
 import Network.Protocol.Job.Server (JobServer)
 import Network.Protocol.Query.Server (QueryServer)
 import Ouroboros.Network.Protocol.LocalTxSubmission.Client (SubmitResult)
 import UnliftIO (MonadUnliftIO)
 
-data ChainSyncDependencies r s m = ChainSyncDependencies
+data ChainSyncDependencies m = ChainSyncDependencies
   { databaseQueries :: DatabaseQueries m
-  , syncSource :: SomeConnectionSourceTraced RuntimeChainSeekServer r s m
-  , querySource :: SomeConnectionSourceTraced (QueryServer ChainSyncQuery) r s m
-  , jobSource :: SomeConnectionSourceTraced (JobServer ChainSyncCommand) r s m
+  , syncSource :: ConnectionSource RuntimeChainSeekServer m
+  , querySource :: ConnectionSource (QueryServer ChainSyncQuery) m
+  , jobSource :: ConnectionSource (JobServer ChainSyncCommand) m
   , queryLocalNodeState
       :: Maybe Cardano.ChainPoint
       -> forall result
@@ -49,8 +47,8 @@ data ChainSyncDependencies r s m = ChainSyncDependencies
   }
 
 chainSync
-  :: (MonadUnliftIO m, MonadEvent r s m, HasSpanContext r, MonadFail m, WithLog env Message m)
-  => Component m (ChainSyncDependencies r s m) Probes
+  :: (MonadUnliftIO m, MonadFail m, WithLog env Message m)
+  => Component m (ChainSyncDependencies m) Probes
 chainSync = proc ChainSyncDependencies{..} -> do
   let DatabaseQueries{..} = databaseQueries
   chainSyncServer -< ChainSyncServerDependencies{..}

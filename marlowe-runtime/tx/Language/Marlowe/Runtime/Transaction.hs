@@ -22,26 +22,25 @@ import Language.Marlowe.Runtime.Transaction.Chain
 import Language.Marlowe.Runtime.Transaction.Query (LoadMarloweContext, LoadWalletContext)
 import Language.Marlowe.Runtime.Transaction.Server
 import Language.Marlowe.Runtime.Transaction.Submit (SubmitJob)
-import Network.Protocol.Connection (SomeClientConnectorTraced, SomeConnectionSourceTraced)
-import Network.Protocol.Driver.Trace (HasSpanContext)
+import Network.Protocol.Connection (ConnectionSource, Connector)
 import Network.Protocol.Job.Server (JobServer)
 import Network.Protocol.Query.Client (QueryClient)
 import UnliftIO (MonadUnliftIO)
 
-data TransactionDependencies r s m = TransactionDependencies
-  { chainSyncConnector :: SomeClientConnectorTraced RuntimeChainSeekClient r s m
-  , connectionSource :: SomeConnectionSourceTraced (JobServer MarloweTxCommand) r s m
+data TransactionDependencies m = TransactionDependencies
+  { chainSyncConnector :: Connector RuntimeChainSeekClient m
+  , connectionSource :: ConnectionSource (JobServer MarloweTxCommand) m
   , mkSubmitJob :: Tx BabbageEra -> STM (SubmitJob m)
   , loadWalletContext :: LoadWalletContext m
   , loadMarloweContext :: LoadMarloweContext m
-  , chainSyncQueryConnector :: SomeClientConnectorTraced (QueryClient ChainSyncQuery) r s m
-  , contractQueryConnector :: SomeClientConnectorTraced (QueryClient ContractRequest) r s m
+  , chainSyncQueryConnector :: Connector (QueryClient ChainSyncQuery) m
+  , contractQueryConnector :: Connector (QueryClient ContractRequest) m
   , getCurrentScripts :: forall v. MarloweVersion v -> MarloweScripts
   }
 
 transaction
-  :: (MonadUnliftIO m, MonadInjectEvent r TransactionServerSelector s m, HasSpanContext r, WithLog env Message m)
-  => Component m (TransactionDependencies r s m) Probes
+  :: (MonadUnliftIO m, MonadInjectEvent r TransactionServerSelector s m, WithLog env Message m)
+  => Component m (TransactionDependencies m) Probes
 transaction = proc TransactionDependencies{..} -> do
   (connected, getTip) <- transactionChainClient -< TransactionChainClientDependencies{..}
   transactionServer -< TransactionServerDependencies{..}

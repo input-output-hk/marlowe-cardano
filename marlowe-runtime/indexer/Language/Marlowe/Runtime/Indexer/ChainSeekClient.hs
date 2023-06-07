@@ -21,8 +21,7 @@ import Language.Marlowe.Runtime.ChainSync.Api
 import Language.Marlowe.Runtime.Indexer.Database (DatabaseQueries(..))
 import Language.Marlowe.Runtime.Indexer.Types (MarloweBlock(..), MarloweUTxO(..), extractMarloweBlock)
 import Network.Protocol.ChainSeek.Client
-import Network.Protocol.Connection (SomeClientConnectorTraced)
-import Network.Protocol.Driver.Trace (HasSpanContext, runSomeConnectorTraced)
+import Network.Protocol.Connection (Connector, runConnector)
 import Network.Protocol.Query.Client (QueryClient, request)
 import Observe.Event (addField, reference)
 import UnliftIO (MonadUnliftIO, atomically, finally)
@@ -33,14 +32,14 @@ data ChainSeekClientSelector r f where
   LoadMarloweUTxO :: ChainSeekClientSelector r MarloweUTxO
 
 -- | Injectable dependencies for the chain sync client
-data ChainSeekClientDependencies r s m = ChainSeekClientDependencies
+data ChainSeekClientDependencies m = ChainSeekClientDependencies
   { databaseQueries :: DatabaseQueries m
   -- ^ Implementations of the database queries.
 
-  , chainSyncConnector :: SomeClientConnectorTraced RuntimeChainSeekClient r s m
+  , chainSyncConnector :: Connector RuntimeChainSeekClient m
   -- ^ A connector that connects a client of the chain sync protocol.
 
-  , chainSyncQueryConnector :: SomeClientConnectorTraced (QueryClient ChainSyncQuery) r s m
+  , chainSyncQueryConnector :: Connector (QueryClient ChainSyncQuery) m
   -- ^ A connector that connects a client of the chain sync query protocol.
 
   , pollingInterval :: NominalDiffTime
@@ -66,8 +65,8 @@ data ChainEvent r
 -- can be read by repeatedly running the resulting STM action.
 chainSeekClient
   :: forall r s env m
-   . (MonadUnliftIO m, MonadInjectEvent r (ChainSeekClientSelector r) s m, MonadFail m, HasSpanContext r, WithLog env Message m)
-  => Component m (ChainSeekClientDependencies r s m) (STM Bool, STM (ChainEvent r))
+   . (MonadUnliftIO m, MonadInjectEvent r (ChainSeekClientSelector r) s m, MonadFail m, WithLog env Message m)
+  => Component m (ChainSeekClientDependencies m) (STM Bool, STM (ChainEvent r))
 chainSeekClient = component "indexer-chain-seek-client" \ChainSeekClientDependencies{..} -> do
   -- Initialize a TQueue for emitting ChainEvents.
   eventQueue <- newTQueue
@@ -81,7 +80,7 @@ chainSeekClient = component "indexer-chain-seek-client" \ChainSeekClientDependen
     -- In this component's thread, run the chain sync client that will pull the
     -- transactions for discovering and following Marlowe contracts
     ( flip finally (atomically $ writeTVar connectedVar False) do
-        runSomeConnectorTraced chainSyncConnector $ client
+        runConnector chainSyncConnector $ client
           (\mkEvent -> withEvent EmitEvent \ev -> do
               let event = mkEvent (reference ev)
               addField ev event
@@ -103,11 +102,11 @@ chainSeekClient = component "indexer-chain-seek-client" \ChainSeekClientDependen
     -> NominalDiffTime
     -> NESet ScriptHash
     -> NESet ScriptHash
-    -> SomeClientConnectorTraced (QueryClient ChainSyncQuery) r s m
+    -> Connector (QueryClient ChainSyncQuery) m
     -> TVar Bool
     -> RuntimeChainSeekClient m ()
   client emit DatabaseQueries{..} pollingInterval marloweScriptHashes payoutScriptHashes chainSyncQueryConnector connectedVar =
-    ChainSeekClient $ runSomeConnectorTraced chainSyncQueryConnector do
+    ChainSeekClient $ runConnector chainSyncQueryConnector do
       atomically $ writeTVar connectedVar True
       systemStart <- request GetSystemStart
       securityParameter <- request GetSecurityParameter
@@ -210,7 +209,7 @@ chainSeekClient = component "indexer-chain-seek-client" \ChainSeekClientDependen
               At block -> pure block
 
             -- Get the era history
-            eraHistory <- runSomeConnectorTraced  chainSyncQueryConnector $ request GetEraHistory
+            eraHistory <- runConnector chainSyncQueryConnector $ request GetEraHistory
 
             -- Extract the Marlowe block and compute the next MarloweUTxO.
             nextUtxo <- case extractMarloweBlock systemStart eraHistory (NESet.toSet marloweScriptHashes) block txs utxo of

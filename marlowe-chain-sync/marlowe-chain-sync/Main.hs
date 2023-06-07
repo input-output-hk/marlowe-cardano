@@ -37,10 +37,8 @@ import qualified Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL as Postg
 import Language.Marlowe.Runtime.ChainSync.NodeClient (NodeClient(..), NodeClientDependencies(..), nodeClient)
 import Logging (RootSelector(..), renderRootSelectorOTel)
 import Network.Protocol.ChainSeek.Server (chainSeekServerPeer)
-import Network.Protocol.Connection (SomeConnectionSourceTraced(..))
 import Network.Protocol.Driver (TcpServerDependencies(..))
 import Network.Protocol.Driver.Trace (tcpServerTraced)
-import Network.Protocol.Handshake.Server (handshakeConnectionSourceTraced)
 import Network.Protocol.Job.Server (jobServerPeer)
 import Network.Protocol.Query.Server (queryServerPeer)
 import Observe.Event.Explicit (injectSelector)
@@ -94,12 +92,9 @@ run Options{..} = bracket (Pool.acquire 100 (Just 5000000) (fromString databaseU
 
       probes <- chainSync -< ChainSyncDependencies
         { databaseQueries = PostgreSQL.databaseQueries pool networkId
-        , syncSource = SomeConnectionSourceTraced (injectSelector ChainSeekServer)
-            $ handshakeConnectionSourceTraced syncSource
-        , querySource = SomeConnectionSourceTraced (injectSelector QueryServer)
-            $ handshakeConnectionSourceTraced querySource
-        , jobSource = SomeConnectionSourceTraced (injectSelector JobServer)
-            $ handshakeConnectionSourceTraced jobSource
+        , syncSource
+        , querySource
+        , jobSource
         , queryLocalNodeState = queryNode
         , submitTxToNodeLocal = \era tx -> submitTxToNode $ TxInMode tx case era of
             ByronEra -> ByronEraInCardanoMode

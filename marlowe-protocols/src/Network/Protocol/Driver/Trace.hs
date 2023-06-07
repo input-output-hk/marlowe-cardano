@@ -38,16 +38,11 @@ import Network.Channel hiding (close)
 import Network.Protocol.Codec (BinaryMessage, DeserializeError, decodeGet, getMessage, putMessage)
 import Network.Protocol.Codec.Spec (ShowProtocol(..))
 import Network.Protocol.Connection
-  ( ConnectionSourceTraced(..)
-  , ConnectionTraced(..)
-  , ConnectorTraced(..)
-  , DriverSelector(..)
-  , RecvMessageField(..)
-  , SomeConnectorTraced(..)
-  , ToPeer
-  )
+  (Connection(..), ConnectionSource(..), Connector(..), DriverSelector(..), RecvMessageField(..), ToPeer)
 import Network.Protocol.Driver (TcpServerDependencies(..))
-import Network.Protocol.Handshake.Types (Handshake)
+import Network.Protocol.Handshake.Client (handshakeClientPeer, simpleHandshakeClient)
+import Network.Protocol.Handshake.Server (handshakeServerPeer, simpleHandshakeServer)
+import Network.Protocol.Handshake.Types (Handshake, HasSignature, signature)
 import Network.Protocol.Peer.Trace
 import Network.Run.TCP (runTCPServer)
 import Network.Socket
@@ -174,21 +169,6 @@ runAwaitPeerWithDriverTraced inj driver tok k dState = do
       , newEventInitialFields = [()]
       }
 
-runConnectorTraced
-  :: (MonadUnliftIO m, BinaryMessage ps, MonadEvent r s m, HasSpanContext r)
-  => InjectSelector (s' ps) s
-  -> ConnectorTraced ps pr peer r s' m
-  -> peer m a
-  -> m a
-runConnectorTraced inj ConnectorTraced{..} peer = flip (runConnectionTraced inj) peer =<< openConnectionTraced
-
-runSomeConnectorTraced
-  :: (MonadUnliftIO m, MonadEvent r s m, HasSpanContext r)
-  => SomeConnectorTraced pr peer r s m
-  -> peer m a
-  -> m a
-runSomeConnectorTraced (SomeConnectorTraced inj connector) = runConnectorTraced inj connector
-
 data TcpClientSelector ps f where
   Connect :: TcpClientSelector ps AddrInfo
   ClientPeer
@@ -220,10 +200,10 @@ data ConnectedField
   | ConnectedPeer SockAddr
 
 tcpServerTraced
-  :: (MonadIO m', MonadUnliftIO m, MonadEvent r s m', HasSpanContext r, WithLog env C.Message m)
+  :: forall r s env m m' ps server. (MonadUnliftIO m', MonadUnliftIO m, MonadEvent r s m', HasSpanContext r, BinaryMessage ps, MonadFail m', HasSignature ps, WithLog env C.Message m)
   => String
   -> InjectSelector (TcpServerSelector (Handshake ps)) s
-  -> Component m (TcpServerDependencies ps server m') (ConnectionSourceTraced ps server r TcpServerSelector m')
+  -> Component m (TcpServerDependencies ps server m') (ConnectionSource server m')
 tcpServerTraced name inj = component (name <> "-tcp-server") \TcpServerDependencies{..} -> do
   socketQueue <- newTQueue
   pure
@@ -233,9 +213,9 @@ tcpServerTraced name inj = component (name <> "-tcp-server") \TcpServerDependenc
           writeTQueue socketQueue (socket, void $ tryPutTMVar closeTMVar ())
           pure closeTMVar
         atomically $ readTMVar closeTMVar
-    , ConnectionSourceTraced do
+    , ConnectionSource do
         (socket, closeConnection) <- readTQueue socketQueue
-        pure $ ConnectorTraced do
+        pure $ Connector do
           spanContextLength <- liftIO $ runGet get <$> Socket.recv socket 8
           spanContext <- liftIO $ runGet get <$> Socket.recv socket spanContextLength
           let parentRef = wrapContext spanContext
@@ -245,27 +225,43 @@ tcpServerTraced name inj = component (name <> "-tcp-server") \TcpServerDependenc
               (Just host)
               (Just $ show port)
             addField ev $ ConnectedAddr addr
-            peer <- liftIO $ getPeerName socket
-            addField ev $ ConnectedPeer peer
+            pName <- liftIO $ getPeerName socket
+            addField ev $ ConnectedPeer pName
             _ <- liftIO $ Socket.sendAll socket $ LBS.pack [0]
-            pure ConnectionTraced
-              { closeConnection = \_ -> atomically closeConnection
-              , channel = socketAsChannel socket
-              , injectProtocolSelector = injectSelector $ ServerPeer addr peer
-              , injectDriverSelector = injectSelector $ ServerDriver addr peer
-              , openRef = parentRef
-              , ..
+            let closeArgs = (simpleNewEventArgs CloseServer) { newEventParent = Just parentRef }
+            pure Connection
+              { runConnection = \server -> localBackend (setAncestorEventBackend parentRef) do
+                  let
+                    driver = mkDriverTraced
+                      (composeInjectSelector inj $ injectSelector $ ServerDriver addr pName)
+                      (socketAsChannel socket)
+                    handshakeServer = simpleHandshakeServer (signature $ Proxy @ps) server
+                    peer = handshakeServerPeer toPeer handshakeServer
+                  mask \restore -> do
+                    result <- restore $ try $ runPeerWithDriverTraced
+                      (composeInjectSelector inj $ injectSelector $ ServerPeer addr pName)
+                      driver
+                      peer
+                      (startDStateTraced driver)
+                    withInjectEventArgs inj closeArgs \ev' -> do
+                      atomically closeConnection
+                      case result of
+                        Left ex -> do
+                          finalize ev' $ Just ex
+                          throwIO ex
+                        Right a -> pure a
               }
     )
 
 tcpClientTraced
-  :: (MonadIO m, MonadEvent r s m, HasSpanContext r)
+  :: forall r s m ps st client
+   . (MonadUnliftIO m, MonadEvent r s m, HasSpanContext r, BinaryMessage ps, MonadFail m, HasSignature ps)
   => InjectSelector (TcpClientSelector (Handshake ps)) s
   -> HostName
   -> PortNumber
   -> ToPeer client ps 'AsClient st m
-  -> ConnectorTraced ps 'AsClient client r TcpClientSelector m
-tcpClientTraced inj host port toPeer = ConnectorTraced
+  -> Connector client m
+tcpClientTraced inj host port toPeer = Connector
   $ withInjectEvent inj Connect \ev -> do
     addr <- liftIO $ head <$> getAddrInfo
       (Just defaultHints { addrSocketType = Stream })
@@ -281,34 +277,28 @@ tcpClientTraced inj host port toPeer = ConnectorTraced
     liftIO $ Socket.sendAll socket spanContextBytes
     _ <- liftIO $ Socket.recv socket 1
     let closeArgs = (simpleNewEventArgs CloseClient) { newEventParent = Just $ reference ev }
-    pure ConnectionTraced
-      { closeConnection = \ex -> withInjectEventArgs inj closeArgs \ev' -> do
-          liftIO $ close socket
-          finalize ev' ex
-      , channel = socketAsChannel socket
-      , openRef = reference ev
-      , injectProtocolSelector = injectSelector $ ClientPeer addr
-      , injectDriverSelector = injectSelector $ ClientDriver addr
-      , ..
+    pure Connection
+      { runConnection = \client -> localBackend (setAncestorEventBackend $ reference ev) do
+          let
+            driver = mkDriverTraced
+              (composeInjectSelector inj $ injectSelector $ ClientDriver addr)
+              (socketAsChannel socket)
+            handshakeClient = simpleHandshakeClient (signature $ Proxy @ps) client
+            peer = handshakeClientPeer toPeer handshakeClient
+          mask \restore -> do
+            result <- restore $ try $ runPeerWithDriverTraced
+              (composeInjectSelector inj $ injectSelector $ ClientPeer addr)
+              driver
+              peer
+              (startDStateTraced driver)
+            withInjectEventArgs inj closeArgs \ev' -> do
+              liftIO $ close socket
+              case result of
+                Left ex -> do
+                  finalize ev' $ Just ex
+                  throwIO ex
+                Right a -> pure a
       }
-
-runConnectionTraced
-  :: (MonadUnliftIO m, BinaryMessage ps, MonadEvent r s m, HasSpanContext r)
-  => InjectSelector (s' ps) s
-  -> ConnectionTraced ps pr peer r s' m
-  -> peer m a
-  -> m a
-runConnectionTraced inj ConnectionTraced{..} peer = localBackend (setAncestorEventBackend openRef) do
-  let driver = mkDriverTraced (composeInjectSelector inj injectDriverSelector) channel
-  mask \restore -> do
-    result <- try $ restore $ runPeerWithDriverTraced (composeInjectSelector inj injectProtocolSelector) driver (toPeer peer) (startDStateTraced driver)
-    case result of
-      Left ex -> do
-        closeConnection $ Just ex
-        throwIO ex
-      Right a -> do
-        closeConnection Nothing
-        pure a
 
 class HasSpanContext r where
   context :: MonadIO m => r -> m SpanContext

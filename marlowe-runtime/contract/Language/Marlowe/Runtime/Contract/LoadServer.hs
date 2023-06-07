@@ -8,59 +8,43 @@ module Language.Marlowe.Runtime.Contract.LoadServer where
 import Colog (WithLog)
 import qualified Colog as C
 import Control.Concurrent.Component
-import Control.Monad.Event.Class
 import Data.Functor (void)
-import Language.Marlowe.Core.V1.Semantics.Types
 import Language.Marlowe.Protocol.Load.Server
 import Language.Marlowe.Runtime.Contract.Store (ContractStagingArea(..), ContractStore(..))
 import Network.Protocol.Connection
-import Network.Protocol.Driver.Trace (HasSpanContext, runConnectionTraced)
 import Network.TypedProtocol
-import Observe.Event (NewEventArgs(..), addField)
-import Observe.Event.Backend (simpleNewEventArgs)
 import UnliftIO (MonadUnliftIO, bracketOnError)
 
-data LoadServerSelector f where
-  LoadContract :: LoadServerSelector Contract
-
-data LoadServerDependencies r s m = forall n. LoadServerDependencies
+data LoadServerDependencies m = forall n. LoadServerDependencies
   { batchSize :: Nat ('S n)
   , contractStore :: ContractStore m
-  , loadSource :: SomeConnectionSourceTraced MarloweLoadServer r s m
+  , loadSource :: ConnectionSource MarloweLoadServer m
   }
 
 loadServer
-  :: (MonadUnliftIO m, MonadInjectEvent r LoadServerSelector s m, HasSpanContext r, WithLog env C.Message m)
-  => Component m (LoadServerDependencies r s m) ()
+  :: (MonadUnliftIO m, WithLog env C.Message m)
+  => Component m (LoadServerDependencies m) ()
 loadServer = serverComponent "contract-load-server" worker \LoadServerDependencies{..} -> do
-  connector <- acceptSomeConnectorTraced loadSource
+  connector <- acceptConnector loadSource
   pure WorkerDependencies{..}
 
-data WorkerDependencies r s m = forall n. WorkerDependencies
+data WorkerDependencies m = forall n. WorkerDependencies
   { batchSize :: Nat ('S n)
   , contractStore :: ContractStore m
-  , connector :: SomeServerConnectorTraced MarloweLoadServer r s m
+  , connector :: Connector MarloweLoadServer m
   }
 
 worker
-  :: forall r s env m.
+  :: forall env m.
     ( MonadUnliftIO m
-    , MonadInjectEvent r LoadServerSelector s m
-    , HasSpanContext r
     , WithLog env C.Message m
     )
-  => Component m (WorkerDependencies r s m) ()
-worker = component_ "contract-load-worker" \WorkerDependencies{..} -> case connector of
-  SomeConnectorTraced inj connector' -> do
-    connection@ConnectionTraced{..} <- openConnectionTraced connector'
-    let args = (simpleNewEventArgs LoadContract) { newEventParent = Just openRef }
-    withEventArgs args \ev ->
-      bracketOnError (createContractStagingArea contractStore) discard \ContractStagingArea{..} -> do
-        mContract <- runConnectionTraced inj connection
-          $ pullContract batchSize stageContract
-          $ void flush
-        case mContract of
-          Nothing -> discard
-          Just contract -> do
-            addField ev contract
-            void commit
+  => Component m (WorkerDependencies m) ()
+worker = component_ "contract-load-worker" \WorkerDependencies{..} ->
+  bracketOnError (createContractStagingArea contractStore) discard \ContractStagingArea{..} -> do
+    mContract <- runConnector connector
+      $ pullContract batchSize stageContract
+      $ void flush
+    case mContract of
+      Nothing -> discard
+      Just _ -> void commit

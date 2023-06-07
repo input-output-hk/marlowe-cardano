@@ -11,9 +11,7 @@
 module Network.Protocol.Handshake.Client where
 
 import Data.Functor ((<&>))
-import Data.Proxy (Proxy(..))
 import Data.Text (Text)
-import Network.Protocol.Connection (Connection(..), ConnectionTraced(..), Connector(..), ConnectorTraced(..))
 import Network.Protocol.Handshake.Types
 import Network.Protocol.Peer.Trace
 import Network.TypedProtocol
@@ -31,40 +29,6 @@ simpleHandshakeClient sig client = HandshakeClient
   { handshake = pure sig
   , recvMsgReject = fail "Handshake rejected by server"
   , recvMsgAccept = pure client
-  }
-
-handshakeClientConnector
-  :: forall ps client m
-   . (HasSignature ps, MonadFail m)
-  => Connector ps 'AsClient client m
-  -> Connector (Handshake ps) 'AsClient client m
-handshakeClientConnector Connector{..} = Connector $ handshakeClientConnection <$> openConnection
-
-handshakeClientConnection
-  :: forall ps peer m
-   . (HasSignature ps, MonadFail m)
-  => Connection ps 'AsClient peer m
-  -> Connection (Handshake ps) 'AsClient peer m
-handshakeClientConnection Connection{..} = Connection
-  { toPeer = handshakeClientPeer id . simpleHandshakeClient (signature $ Proxy @ps) . toPeer
-  , ..
-  }
-
-handshakeClientConnectorTraced
-  :: forall ps client r s m
-   . (HasSignature ps, MonadFail m)
-  => ConnectorTraced ps 'AsClient client r s m
-  -> ConnectorTraced (Handshake ps) 'AsClient client r s m
-handshakeClientConnectorTraced ConnectorTraced{..} = ConnectorTraced $ handshakeClientConnectionTraced <$> openConnectionTraced
-
-handshakeClientConnectionTraced
-  :: forall ps peer r s m
-   . (HasSignature ps, MonadFail m)
-  => ConnectionTraced ps 'AsClient peer r s m
-  -> ConnectionTraced (Handshake ps) 'AsClient peer r s m
-handshakeClientConnectionTraced ConnectionTraced{..} = ConnectionTraced
-  { toPeer = handshakeClientPeer id . simpleHandshakeClient (signature $ Proxy @ps) . toPeer
-  , ..
   }
 
 hoistHandshakeClient

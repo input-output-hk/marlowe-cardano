@@ -20,10 +20,8 @@ import qualified Language.Marlowe.Runtime.CLI.Option as O
 import Language.Marlowe.Runtime.Proxy
 import Logging (RootSelector(..), renderRootSelectorOTel)
 import Network.Channel.Typed
-import Network.Protocol.Connection (SomeConnectionSource(..), SomeConnectionSourceTraced(..))
 import Network.Protocol.Driver (TcpServerDependencies(..), tcpServer)
 import Network.Protocol.Driver.Trace (tcpServerTraced)
-import Network.Protocol.Handshake.Server (handshakeConnectionSource, handshakeConnectionSourceTraced)
 import Network.Socket (HostName, PortNumber)
 import Observe.Event.Backend (injectSelector)
 import OpenTelemetry.Trace
@@ -77,10 +75,8 @@ run = runComponent_ proc Options{..} -> do
         , connectTxJob = tcpClientChannel (injectSelector TxJobClient) txHost txPort
         , connectContractQuery = tcpClientChannel (injectSelector ContractQueryClient) contractHost contractQueryPort
         }
-    , connectionSource = SomeConnectionSource
-        $ handshakeConnectionSource connectionSource
-    , connectionSourceTraced = SomeConnectionSourceTraced (injectSelector MarloweRuntimeServer)
-        $ handshakeConnectionSourceTraced connectionSourceTraced
+    , connectionSource
+    , connectionSourceTraced
     }
 
   probeServer -< ProbeServerDependencies { port = fromIntegral httpPort, .. }

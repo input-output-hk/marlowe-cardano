@@ -18,8 +18,7 @@ import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncQuery, RuntimeChainSeekC
 import Language.Marlowe.Runtime.Indexer.ChainSeekClient
 import Language.Marlowe.Runtime.Indexer.Database (DatabaseQueries)
 import Language.Marlowe.Runtime.Indexer.Store
-import Network.Protocol.Connection (SomeClientConnectorTraced)
-import Network.Protocol.Driver.Trace (HasSpanContext)
+import Network.Protocol.Connection (Connector)
 import Network.Protocol.Query.Client (QueryClient)
 import UnliftIO (MonadUnliftIO)
 
@@ -27,10 +26,10 @@ data MarloweIndexerSelector r f where
   StoreEvent :: StoreSelector f -> MarloweIndexerSelector r f
   ChainSeekClientEvent :: ChainSeekClientSelector r f -> MarloweIndexerSelector r f
 
-data MarloweIndexerDependencies r s m = MarloweIndexerDependencies
+data MarloweIndexerDependencies m = MarloweIndexerDependencies
   { databaseQueries :: DatabaseQueries m
-  , chainSyncConnector :: SomeClientConnectorTraced RuntimeChainSeekClient r s m
-  , chainSyncQueryConnector :: SomeClientConnectorTraced (QueryClient ChainSyncQuery) r s m
+  , chainSyncConnector :: Connector RuntimeChainSeekClient m
+  , chainSyncQueryConnector :: Connector (QueryClient ChainSyncQuery) m
   , pollingInterval :: NominalDiffTime
   , marloweScriptHashes :: NESet ScriptHash
   , payoutScriptHashes :: NESet ScriptHash
@@ -42,10 +41,9 @@ marloweIndexer
      , Inject StoreSelector s
      , Inject (ChainSeekClientSelector r) s
      , MonadFail m
-     , HasSpanContext r
      , WithLog env Message m
      )
-  => Component m (MarloweIndexerDependencies r s m) Probes
+  => Component m (MarloweIndexerDependencies m) Probes
 marloweIndexer = proc MarloweIndexerDependencies{..} -> do
   (connected, pullEvent) <- chainSeekClient -< ChainSeekClientDependencies {..}
   store -< StoreDependencies {..}

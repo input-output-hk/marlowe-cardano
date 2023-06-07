@@ -14,9 +14,13 @@ import Control.Concurrent.STM.TQueue (writeTQueue)
 import Control.Monad.IO.Class (liftIO)
 import Data.ByteString.Lazy (ByteString)
 import Data.Functor (void)
+import Data.Proxy (Proxy(Proxy))
 import Network.Channel (Channel(..), socketAsChannel)
 import Network.Protocol.Codec (BinaryMessage, DeserializeError, binaryCodec)
-import Network.Protocol.Connection (Connection(..), ConnectionSource(..), Connector(..), SomeConnector(..), ToPeer)
+import Network.Protocol.Connection (Connection(..), ConnectionSource(..), Connector(..), ToPeer)
+import Network.Protocol.Handshake.Client (handshakeClientPeer, simpleHandshakeClient)
+import Network.Protocol.Handshake.Server (handshakeServerPeer, simpleHandshakeServer)
+import Network.Protocol.Handshake.Types (HasSignature, signature)
 import Network.Protocol.Peer.Trace
 import Network.Run.TCP (runTCPServer)
 import Network.Socket
@@ -34,7 +38,7 @@ import Network.Socket
 import Network.TypedProtocol (Message, PeerHasAgency, PeerRole(..), SomeMessage(..), runPeerWithDriver)
 import Network.TypedProtocol.Codec (Codec(..), DecodeStep(..))
 import Network.TypedProtocol.Driver (Driver(..))
-import UnliftIO (MonadIO, MonadUnliftIO, atomically, mask, throwIO, try)
+import UnliftIO (MonadIO, MonadUnliftIO, atomically, finally, throwIO)
 
 mkDriver
   :: forall ps m
@@ -84,8 +88,10 @@ data TcpServerDependencies ps server m = forall (st :: ps). TcpServerDependencie
   }
 
 tcpServer
-  :: (MonadIO m', MonadUnliftIO m, WithLog env C.Message m)
-  => String -> Component m (TcpServerDependencies ps server m') (ConnectionSource ps server m')
+  :: forall m ps m' env server
+   . (MonadUnliftIO m, BinaryMessage ps, MonadUnliftIO m', HasSignature ps, MonadFail m', WithLog env C.Message m)
+  => String
+  -> Component m (TcpServerDependencies ps server m') (ConnectionSource server m')
 tcpServer name = component (name <> "-tcp-server") \TcpServerDependencies{..} -> do
   socketQueue <- newTQueue
   pure
@@ -98,18 +104,21 @@ tcpServer name = component (name <> "-tcp-server") \TcpServerDependencies{..} ->
     , ConnectionSource do
         (socket, closeConnection) <- readTQueue socketQueue
         pure $ Connector $ pure Connection
-          { closeConnection = \_ -> atomically closeConnection
-          , channel = socketAsChannel socket
-          , ..
+          { runConnection = \server -> do
+              let driver = mkDriver $ socketAsChannel socket
+              let handshakeServer = simpleHandshakeServer (signature $ Proxy @ps) server
+              let peer = peerTracedToPeer $ handshakeServerPeer toPeer handshakeServer
+              fst <$> runPeerWithDriver driver peer (startDState driver) `finally` atomically closeConnection
           }
     )
 
 tcpClient
-  :: MonadIO m
+  :: forall client ps st m
+   . (MonadUnliftIO m, BinaryMessage ps, MonadFail m, HasSignature ps)
   => HostName
   -> PortNumber
   -> ToPeer client ps 'AsClient st m
-  -> Connector ps 'AsClient client m
+  -> Connector client m
 tcpClient host port toPeer = Connector $ liftIO $ do
   addr <- head <$> getAddrInfo
     (Just defaultHints { addrSocketType = Stream })
@@ -118,26 +127,9 @@ tcpClient host port toPeer = Connector $ liftIO $ do
   socket <- openSocket addr
   connect socket $ addrAddress addr
   pure Connection
-    { closeConnection = \_ -> liftIO $ close socket
-    , channel = socketAsChannel socket
-    , ..
+    { runConnection = \client -> do
+        let driver = mkDriver $ socketAsChannel socket
+        let handshakeClient = simpleHandshakeClient (signature $ Proxy @ps) client
+        let peer = peerTracedToPeer $ handshakeClientPeer toPeer handshakeClient
+        fst <$> runPeerWithDriver driver peer (startDState driver) `finally` liftIO (close socket)
     }
-
-runConnection :: (MonadUnliftIO m, BinaryMessage ps) => Connection ps pr peer m -> peer m a -> m a
-runConnection Connection{..} peer = do
-  let driver = mkDriver channel
-  mask \restore -> do
-    result <- try $ restore $ runPeerWithDriver driver (peerTracedToPeer $ toPeer peer) (startDState driver)
-    case result of
-      Left ex -> do
-        closeConnection $ Just ex
-        throwIO ex
-      Right (a, _) -> do
-        closeConnection Nothing
-        pure a
-
-runConnector :: (MonadUnliftIO m, BinaryMessage ps) => Connector ps pr peer m -> peer m a -> m a
-runConnector Connector{..} peer = flip runConnection peer =<< openConnection
-
-runSomeConnector :: MonadUnliftIO m => SomeConnector pr peer m -> peer m a -> m a
-runSomeConnector (SomeConnector connector) = runConnector connector

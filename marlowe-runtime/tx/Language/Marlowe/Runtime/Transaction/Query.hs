@@ -54,8 +54,7 @@ import Language.Marlowe.Runtime.History.Api
 import Language.Marlowe.Runtime.Transaction.Api
 import Language.Marlowe.Runtime.Transaction.Constraints
 import Network.Protocol.ChainSeek.Client
-import Network.Protocol.Connection (SomeClientConnectorTraced)
-import Network.Protocol.Driver.Trace (HasSpanContext, runSomeConnectorTraced)
+import Network.Protocol.Connection (Connector, runConnector)
 import Network.Protocol.Query.Client (QueryClient, request)
 import Observe.Event.Explicit (addField)
 import UnliftIO (MonadUnliftIO)
@@ -114,16 +113,16 @@ loadWalletContext runQuery WalletAddresses{..} =
 -- | Loads the current MarloweContext for a contract by its ID.
 loadMarloweContext
   :: forall m r s
-   . (MonadUnliftIO m, MonadInjectEvent r LoadMarloweContextSelector s m, HasSpanContext r)
+   . (MonadUnliftIO m, MonadInjectEvent r LoadMarloweContextSelector s m)
   => (forall v. MarloweVersion v -> Set MarloweScripts)
   -> C.NetworkId
-  -> SomeClientConnectorTraced RuntimeChainSeekClient r s m
-  -> SomeClientConnectorTraced (QueryClient ChainSyncQuery) r s m
+  -> Connector RuntimeChainSeekClient m
+  -> Connector (QueryClient ChainSyncQuery) m
   -> LoadMarloweContext m
 loadMarloweContext getScripts networkId chainSyncConnector chainSyncQueryConnector desiredVersion contractId =
   withEventFields LoadMarloweContext [DesiredVersion desiredVersion, Contract contractId]
     $ const
-    $ runSomeConnectorTraced chainSyncConnector client
+    $ runConnector chainSyncConnector client
   where
     TxOutRef creationTxId _ = unContractId contractId
     client = ChainSeekClient $ pure clientFindContract
@@ -208,7 +207,7 @@ loadMarloweContext getScripts networkId chainSyncConnector chainSyncQueryConnect
           Genesis -> error "Roll forward to Genesis"
           At blockHeader -> case scriptUtxo >>= \u -> (u,) <$> Map.lookup u txs of
             Nothing -> pure $ clientFollowContract version $ updateContext blockHeader Nothing txs contexts
-            Just (u, scriptConsumer) -> runSomeConnectorTraced chainSyncQueryConnector do
+            Just (u, scriptConsumer) -> runConnector chainSyncQueryConnector do
               systemStart <- request GetSystemStart
               eraHistory <- request GetEraHistory
               lift case extractMarloweTransaction version systemStart eraHistory contractId marloweAddress payoutScriptHash u blockHeader scriptConsumer of

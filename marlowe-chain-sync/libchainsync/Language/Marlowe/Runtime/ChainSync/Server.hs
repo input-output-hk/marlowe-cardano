@@ -8,40 +8,38 @@ module Language.Marlowe.Runtime.ChainSync.Server where
 
 import Colog (Message, WithLog)
 import Control.Concurrent.Component
-import Control.Monad.Event.Class (MonadEvent)
 import Data.Functor (void, (<&>))
 import Language.Marlowe.Runtime.ChainSync.Api (ChainPoint, Move, RuntimeChainSeekServer, WithGenesis(..))
 import Language.Marlowe.Runtime.ChainSync.Database (GetTip(..), MoveClient(..), MoveResult(..))
 import Network.Protocol.ChainSeek.Server
-import Network.Protocol.Connection (SomeConnectionSourceTraced, SomeServerConnectorTraced, acceptSomeConnectorTraced)
-import Network.Protocol.Driver.Trace (HasSpanContext, runSomeConnectorTraced)
+import Network.Protocol.Connection (ConnectionSource, Connector, acceptConnector, runConnector)
 import UnliftIO (MonadUnliftIO)
 
-data ChainSyncServerDependencies r s m = ChainSyncServerDependencies
-  { syncSource :: SomeConnectionSourceTraced RuntimeChainSeekServer r s m
+data ChainSyncServerDependencies m = ChainSyncServerDependencies
+  { syncSource :: ConnectionSource RuntimeChainSeekServer m
   , moveClient :: MoveClient m
   , getTip :: GetTip m
   }
 
 chainSyncServer
-  :: (MonadUnliftIO m, MonadEvent r s m, HasSpanContext r, WithLog env Message m)
-  => Component m (ChainSyncServerDependencies r s m) ()
+  :: (MonadUnliftIO m, WithLog env Message m)
+  => Component m (ChainSyncServerDependencies m) ()
 chainSyncServer = serverComponent "chain-seek-server" worker \ChainSyncServerDependencies{..} -> do
-  connector <- acceptSomeConnectorTraced syncSource
+  connector <- acceptConnector syncSource
   pure WorkerDependencies{..}
 
-data WorkerDependencies r s m = WorkerDependencies
-  { connector :: SomeServerConnectorTraced RuntimeChainSeekServer r s m
+data WorkerDependencies m = WorkerDependencies
+  { connector :: Connector RuntimeChainSeekServer m
   , moveClient :: MoveClient m
   , getTip :: GetTip m
   }
 
 worker
-  :: forall r s env m. (MonadUnliftIO m, MonadEvent r s m, HasSpanContext r, WithLog env Message m)
-  => Component m (WorkerDependencies r s m) ()
+  :: forall env m. (MonadUnliftIO m, WithLog env Message m)
+  => Component m (WorkerDependencies m) ()
 worker = component_ "chain-seek-worker" \WorkerDependencies{..} -> do
   let
-    runWorker = void $ runSomeConnectorTraced connector $ ChainSeekServer $ pure $ stIdle Genesis
+    runWorker = void $ runConnector connector $ ChainSeekServer $ pure $ stIdle Genesis
 
     stIdle :: ChainPoint -> ServerStIdle Move ChainPoint ChainPoint m ()
     stIdle pos = ServerStIdle

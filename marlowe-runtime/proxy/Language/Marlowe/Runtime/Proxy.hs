@@ -28,16 +28,7 @@ import qualified Language.Marlowe.Protocol.Sync.Types as Sync
 import Language.Marlowe.Runtime.Contract.Api (ContractRequest)
 import Language.Marlowe.Runtime.Transaction.Api (MarloweTxCommand)
 import Network.Channel.Typed
-import Network.Protocol.Connection
-  ( SomeConnectionSource
-  , SomeConnectionSourceTraced
-  , SomeServerConnector
-  , SomeServerConnectorTraced
-  , acceptSomeConnector
-  , acceptSomeConnectorTraced
-  )
-import Network.Protocol.Driver (runSomeConnector)
-import Network.Protocol.Driver.Trace
+import Network.Protocol.Connection (ConnectionSource, Connector, acceptConnector, runConnector)
 import Network.Protocol.Handshake.Types (Handshake)
 import qualified Network.Protocol.Handshake.Types as Handshake
 import Network.Protocol.Job.Types (Job)
@@ -49,21 +40,21 @@ import Network.TypedProtocol
 import Observe.Event.Backend (setAncestorEventBackend)
 import UnliftIO (MonadUnliftIO(..))
 
-data ProxyDependencies r s m = ProxyDependencies
+data ProxyDependencies r m = ProxyDependencies
   { router :: Router r m
-  , connectionSourceTraced :: SomeConnectionSourceTraced MarloweRuntimeServer r s m
-  , connectionSource :: SomeConnectionSource MarloweRuntimeServer m
+  , connectionSourceTraced :: ConnectionSource MarloweRuntimeServer m
+  , connectionSource :: ConnectionSource MarloweRuntimeServer m
   }
 
 proxy
-  :: (MonadUnliftIO m, MonadEvent r s m, HasSpanContext r, MonadFail m, WithLog env C.Message m)
-  => Component m (ProxyDependencies r s (ResourceT m)) Probes
+  :: (MonadUnliftIO m, MonadEvent r s m, MonadFail m, WithLog env C.Message m)
+  => Component m (ProxyDependencies r (ResourceT m)) Probes
 proxy = proc deps -> do
   (serverComponent "marlowe-runtime-server-traced" (component_ "marlowe-runtime-worker-traced" workerTraced) \ProxyDependencies{..} -> do
-    connector <- runResourceT $ acceptSomeConnectorTraced connectionSourceTraced
-    pure WorkerDependenciesTraced{..}) -< deps
+    connector <- runResourceT $ acceptConnector connectionSourceTraced
+    pure WorkerDependencies{..}) -< deps
   (serverComponent "marlowe-runtime-server-traced" (component_ "marlowe-runtime-worker" worker) \ProxyDependencies{..} -> do
-    connector <- runResourceT $ acceptSomeConnector connectionSource
+    connector <- runResourceT $ acceptConnector connectionSource
     pure WorkerDependencies{..}) -< deps
   returnA -< Probes
     { startup = pure True
@@ -71,14 +62,9 @@ proxy = proc deps -> do
     , readiness = pure True
     }
 
-data WorkerDependenciesTraced r s m = WorkerDependenciesTraced
-  { router :: Router r m
-  , connector :: SomeServerConnectorTraced MarloweRuntimeServer r s m
-  }
-
 data WorkerDependencies r m = WorkerDependencies
   { router :: Router r m
-  , connector :: SomeServerConnector MarloweRuntimeServer m
+  , connector :: Connector MarloweRuntimeServer m
   }
 
 data Router r m = Router
@@ -91,16 +77,16 @@ data Router r m = Router
   }
 
 workerTraced
-  :: (MonadUnliftIO m, MonadEvent r s m, HasSpanContext r, MonadFail m)
-  => WorkerDependenciesTraced r s (ResourceT m)
+  :: (MonadUnliftIO m, MonadEvent r s m, MonadFail m)
+  => WorkerDependencies r (ResourceT m)
   -> m ()
-workerTraced WorkerDependenciesTraced{..} = runResourceT $ runSomeConnectorTraced connector $ server False router
+workerTraced WorkerDependencies{..} = runResourceT $ runConnector connector $ server False router
 
 worker
   :: (MonadUnliftIO m, MonadFail m, MonadEvent r s m)
   => WorkerDependencies r (ResourceT m)
   -> m ()
-worker WorkerDependencies{..} = runResourceT $ runSomeConnector connector $ server True router
+worker WorkerDependencies{..} = runResourceT $ runConnector connector $ server True router
 
 server :: (MonadFail m, MonadEvent r s0 m) => Bool -> Router r m -> MarloweRuntimeServer m ()
 server useOpenRefAsParent Router{..} = MarloweRuntimeServer

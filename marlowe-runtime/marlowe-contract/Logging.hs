@@ -15,7 +15,6 @@ import Data.Void (absurd)
 import Language.Marlowe (TransactionInput(..))
 import Language.Marlowe.Protocol.Load.Types (MarloweLoad)
 import Language.Marlowe.Runtime.Contract.Api (ContractRequest)
-import Language.Marlowe.Runtime.Contract.LoadServer (LoadServerSelector(..))
 import Language.Marlowe.Runtime.Contract.Store
   (ContractStagingAreaSelector(..), ContractStoreSelector(..), MerkleizeInputsField(..), StageContractField(..))
 import Network.Protocol.Driver.Trace (TcpServerSelector, renderTcpServerSelectorOTel)
@@ -27,7 +26,6 @@ import OpenTelemetry.Trace
 
 data RootSelector f where
   ContractStoreSelector :: ContractStoreSelector f -> RootSelector f
-  LoadServerSelector :: LoadServerSelector f -> RootSelector f
   MarloweLoadServer :: TcpServerSelector (Handshake MarloweLoad) f -> RootSelector f
   QueryServer :: TcpServerSelector (Handshake (Query ContractRequest)) f -> RootSelector f
 
@@ -40,24 +38,11 @@ instance Inject (TcpServerSelector (Handshake MarloweLoad)) RootSelector where
 instance Inject ContractStoreSelector RootSelector where
   inject = injectSelector ContractStoreSelector
 
-instance Inject LoadServerSelector RootSelector where
-  inject = injectSelector LoadServerSelector
-
 renderRootSelectorOTel :: RenderSelectorOTel RootSelector
 renderRootSelectorOTel = \case
   MarloweLoadServer sel -> renderTcpServerSelectorOTel sel
   QueryServer sel -> renderTcpServerSelectorOTel sel
   ContractStoreSelector sel -> renderContractStoreSelectorOTel sel
-  LoadServerSelector sel -> renderLoadServerSelectorOTel sel
-
-renderLoadServerSelectorOTel :: RenderSelectorOTel LoadServerSelector
-renderLoadServerSelectorOTel = \case
-  LoadContract -> OTelRendered
-    { eventName = "marlowe/contact/load"
-    , eventKind = Server
-    , renderField = \contract ->
-      [("marlowe.contract", toAttribute $ toStrict $ encodeToLazyText contract)]
-    }
 
 renderContractStoreSelectorOTel :: RenderSelectorOTel ContractStoreSelector
 renderContractStoreSelectorOTel = \case
