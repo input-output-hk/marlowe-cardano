@@ -19,7 +19,7 @@ import Language.Marlowe.Runtime.App.Build (buildApplication, buildCreation, buil
 import Language.Marlowe.Runtime.App.List (allContracts, allHeaders, getContract)
 import Language.Marlowe.Runtime.App.Run (runClientWithConfig)
 import Language.Marlowe.Runtime.App.Sign (sign)
-import Language.Marlowe.Runtime.App.Submit (submit, waitForTx)
+import Language.Marlowe.Runtime.App.Submit (submit)
 import Language.Marlowe.Runtime.App.Types (Config(timeoutSeconds), MarloweRequest(..), MarloweResponse(..), mkBody)
 import Language.Marlowe.Runtime.Core.Api
   (MarloweVersion(MarloweV1), MarloweVersionTag(V1), decodeMarloweTransactionMetadataLenient)
@@ -42,7 +42,9 @@ handle config request =
           Withdraw{..} -> second (uncurry mkBody) <$> buildWithdrawal MarloweV1 reqContractId reqRole reqAddresses reqChange reqCollateral
           Sign{..} -> pure . Right . uncurry Tx $ sign reqTxBody reqPaymentKeys reqPaymentExtendedKeys
           Submit{..} -> second TxId <$> submit reqTx
+{-
           Wait{..} -> second TxInfo <$> waitForTx reqPollingSeconds reqTxId
+-}
     withTimeout (timeoutSeconds config)
       $ runClientWithConfig config run
       `catch` \(err :: SomeException) -> pure . Left $ show err

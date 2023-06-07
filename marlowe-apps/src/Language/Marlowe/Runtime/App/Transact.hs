@@ -153,15 +153,17 @@ transactWithEvents backend config@Config{buildSeconds, confirmSeconds, retryLimi
               $ \case
                 Tx{..}   -> pure resTx
                 response -> unexpected response
-          txId' <-
+          _txId' <-
             handleWithEvents subBackend "Submit" config (Submit tx)
               $ \case
                 TxId{..} -> pure resTxId
                 response -> unexpected response
+{-
           handleWithEvents subBackend "Confirm" config (Wait txId' 1)
             $ \case
               TxInfo{} -> pure ()
               response -> unexpected response
+-}
           when (confirmSeconds > 0)
             . withEvent subBackend (DynamicEventSelector "WaitAfterConfirm")
             . const

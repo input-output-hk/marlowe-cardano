@@ -1,0 +1,14 @@
+ Removed
+ -------
+
+ - Removed `MarloweRequest(Wait)` from `Languge.Marlowe.Runtime.App.Types`.
+
+ Deprecated
+ ----------
+
+ - Deprecated `submit'` and `waitForTx'` in `Language.Marlowe.Runtime.App.Submit`.
+
+ Fixed
+ -----
+
+ - `exe:marlowe-scaling` now successfully submits transactions.

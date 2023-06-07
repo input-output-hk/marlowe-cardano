@@ -213,11 +213,12 @@ data MarloweRequest v =
   | Submit
     { reqTx :: C.Tx C.BabbageEra
     }
+{-
   | Wait
     { reqTxId :: TxId
     , reqPollingSeconds :: Int
     }
-
+-}
 
 instance A.FromJSON (MarloweRequest 'V1) where
   parseJSON =
@@ -264,10 +265,12 @@ instance A.FromJSON (MarloweRequest 'V1) where
             "submit" -> do
                         reqTx <- textEnvelopeFromJSON (C.AsTx C.AsBabbageEra) =<< o A..: "tx"
                         pure Submit{..}
+{-
             "wait" -> do
                         reqTxId <- fromString <$> o A..: "txId"
                         reqPollingSeconds <- o A..: "pollingSeconds"
                         pure Wait{..}
+-}
             request -> fail $ "Invalid request: " <> request <> "."
 
 instance A.ToJSON (MarloweRequest 'V1) where
@@ -328,13 +331,14 @@ instance A.ToJSON (MarloweRequest 'V1) where
       [ "request" A..= ("submit" :: String)
       , "tx" A..= textEnvelopeToJSON reqTx
       ]
+{-
   toJSON Wait{..} =
     A.object
       [ "request" A..= ("wait" :: String)
       , "txId" A..= reqTxId
       , "pollingSeconds" A..= reqPollingSeconds
       ]
-
+-}
 
 data MarloweResponse v =
     Contracts
