@@ -58,6 +58,7 @@
     bitte-cells.url = "github:input-output-hk/bitte-cells";
 
     iogx.url = "github:zeme-iohk/iogx";
+    iogx.inputs.haskell-language-server-1_8_0_0.url = "github:haskell/haskell-language-server/855a88238279b795634fa6144a4c0e8acc7e9644";
   };
 
   outputs = { self, flake-utils, nosys, tullia, iogx, ... }@inputs:
