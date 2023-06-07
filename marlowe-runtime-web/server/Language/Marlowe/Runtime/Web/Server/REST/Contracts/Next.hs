@@ -1,7 +1,5 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
-{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
-{-# HLINT ignore "Use <&>" #-}
 
 -- | This module defines a server for the /contracts/:ContractId/next REST API.
 
@@ -16,26 +14,26 @@ import Language.Marlowe.Core.V1.Semantics.Next
 import qualified Language.Marlowe.Core.V1.Semantics.Next as Semantics
 import Language.Marlowe.Runtime.Web hiding (Unsigned)
 import Language.Marlowe.Runtime.Web.Server.DTO
-import Language.Marlowe.Runtime.Web.Server.Monad (AppM, loadContract)
-import Language.Marlowe.Runtime.Web.Server.REST.ApiError (badRequest', notFoundWithErrorCode)
+import Language.Marlowe.Runtime.Web.Server.Monad (ServerM, loadContract)
+import Language.Marlowe.Runtime.Web.Server.REST.ApiError (badRequest', badRequestWithErrorCode, notFoundWithErrorCode)
 import Servant (throwError)
 import Servant.Server
 
-server :: TxOutRef ->  ServerT NextAPI AppM
+server :: TxOutRef ->  ServerT NextAPI ServerM
 server = nextOverCardano'
 
-nextOverCardano' ::  TxOutRef -> UTCTime -> UTCTime -> AppM Next
+nextOverCardano' ::  TxOutRef -> UTCTime -> UTCTime -> ServerM Next
 nextOverCardano' contractId validityStart validityEnd
   = nextOverCardano contractId $ environment validityStart validityEnd
 
-nextOverCardano ::  TxOutRef -> Environment -> AppM Next
+nextOverCardano ::  TxOutRef -> Environment -> ServerM Next
 nextOverCardano contractId environment'
   = fromDTOThrow (badRequest' "Invalid contract id value") contractId
       >>= loadContract
       >>= whenNothingThrow (notFoundWithErrorCode "Contract not found" "contract_not_found")
       >>= whenNothingThrow (notFoundWithErrorCode "Contract Closed" "contract_closed")
           . notClosedContractMaybe . either toDTO toDTO
-      >>= whenLeftThrow (\AmbiguousIntervalProvided -> notFoundWithErrorCode "Contract Suspended" "ambiguous_interval_provided" )
+      >>= whenLeftThrow (\AmbiguousIntervalProvided -> badRequestWithErrorCode "Invalid Interval Provided" "ambiguous_interval_provided" )
           . (uncurry $ Semantics.next environment')
 
 

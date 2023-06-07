@@ -68,6 +68,7 @@ module Language.Marlowe.Core.V1.Semantics.Types
   , Value(..)
   , ValueId(..)
   , environment
+  , isNotTimedOut
   , isTimedOut
     -- * Error Types
   , IntervalError(..)
@@ -318,8 +319,12 @@ environment :: UTCTime -> UTCTime -> Environment
 environment start end = Environment (utcTimeToPOSIXTime start, utcTimeToPOSIXTime end)
 
 isTimedOut :: POSIXTime -> Environment -> Bool
-isTimedOut t Environment {timeInterval = (_,b)} | t  > b = True
+isTimedOut timeout Environment {timeInterval = (start,_)} | timeout  < start = True
 isTimedOut _ _ = False
+
+isNotTimedOut :: POSIXTime -> Environment -> Bool
+isNotTimedOut timeout = not . isTimedOut timeout
+
 
 instance FromJSON Environment where
   parseJSON = withObject "Environment"

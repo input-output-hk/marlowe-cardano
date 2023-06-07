@@ -91,6 +91,9 @@ instance Pretty Integer where
 instance Pretty Bool where
   prettyFragment = text . show
 
+instance (Pretty a) => Pretty (Maybe a) where
+  prettyFragment m = text . show $ prettyFragment <$> m
+
 instance (Pretty a, Pretty b) => Pretty (a, b) where
   prettyFragment (a, b) = encloseSep lparen rparen (comma <> space) [prettyFragment a, prettyFragment b]
 

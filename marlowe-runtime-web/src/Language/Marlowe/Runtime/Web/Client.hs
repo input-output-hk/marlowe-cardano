@@ -114,11 +114,11 @@ getContract contractId = do
   retractLink <$> getContract'
 
 getContractNext :: TxOutRef -> UTCTime -> UTCTime -> ClientM Next
-getContractNext contractId validityStartMaybe validityEndMaybe = do
+getContractNext contractId validityStart validityEnd = do
   let contractsClient :<|> _ = client
   let _ :<|> _ :<|> contractApi = contractsClient
   let _ :<|> _ :<|>  next' :<|> _ = contractApi contractId
-  next' validityStartMaybe validityEndMaybe
+  next' validityStart validityEnd
 
 putContract :: TxOutRef -> TextEnvelope -> ClientM ()
 putContract contractId tx = do

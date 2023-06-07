@@ -126,7 +126,7 @@ import Test.QuickCheck
 
 import Data.Functor ((<&>))
 
-import Language.Marlowe.Core.V1.Semantics.Next
+import Language.Marlowe.Core.V1.Semantics.Next hiding (choices)
 
 import qualified Plutus.V2.Ledger.Api as Ledger (Address(..))
 import qualified PlutusTx.AssocMap as AM (Map, delete, empty, fromList, keys, toList)
@@ -1255,15 +1255,20 @@ instance Arbitrary TransactionOutput where
       ]
 
 instance Arbitrary Next where
-  arbitrary = oneof [CanAdvance <$> arbitrary, pure CanNotAdvance]
+  arbitrary = Next . CanReduce <$> arbitrary <*> arbitrary
 
 instance Arbitrary  CaseIndex where
   arbitrary = CaseIndex <$> arbitrary
 
-instance Arbitrary NextGeneralizedInput where
-  arbitrary = oneof
-    [ CanDeposit <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
-    , CanChoose  <$> arbitrary <*> arbitrary <*> arbitrary
-    , CanNotify  <$> arbitrary
-    ]
+instance Arbitrary ApplicableGeneralizedInputs where
+  arbitrary =
+    ApplicableGeneralizedInputs <$> arbitrary <*> arbitrary <*> arbitrary
 
+instance Arbitrary (Indexed CanNotify) where
+  arbitrary = Indexed <$> (CaseIndex <$> arbitrary ) <*> (CanNotify <$> (IsMerkleizedContinuation <$> arbitrary ))
+
+instance Arbitrary  (Indexed CanDeposit) where
+  arbitrary = Indexed <$> (CaseIndex <$> arbitrary ) <*> (CanDeposit <$>  arbitrary <*> arbitrary <*> arbitrary  <*> arbitrary)
+
+instance Arbitrary  (Indexed CanChoose) where
+  arbitrary = Indexed <$> (CaseIndex <$> arbitrary ) <*> (CanChoose <$>  arbitrary <*> arbitrary)

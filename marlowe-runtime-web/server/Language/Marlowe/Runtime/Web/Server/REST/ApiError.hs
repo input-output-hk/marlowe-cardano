@@ -89,6 +89,9 @@ throwDTOError = throwError . serverErrorFromDTO
 badRequest :: String -> Maybe String -> ServerError
 badRequest msg errorCode = toServerError . ApiError msg (fromMaybe "BadRequest" errorCode) Null $ 400
 
+badRequestWithErrorCode :: String -> String -> ServerError
+badRequestWithErrorCode msg = badRequest msg . Just
+
 badRequest' :: String -> ServerError
 badRequest' msg = badRequest msg Nothing
 
