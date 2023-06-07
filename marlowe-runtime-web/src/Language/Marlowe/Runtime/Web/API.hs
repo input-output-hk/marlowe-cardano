@@ -43,6 +43,7 @@ import Data.OpenApi.Declare (Declare)
 import Data.String (IsString(..))
 import Data.Text (Text)
 import qualified Data.Text as T
+import Data.Time (UTCTime)
 import Data.Typeable (Typeable)
 import Data.Word (Word8)
 import GHC.Base (Symbol)
@@ -50,6 +51,7 @@ import GHC.Exts (IsList(..))
 import GHC.Generics (Generic)
 import GHC.Show (showSpace)
 import GHC.TypeLits (KnownSymbol, symbolVal)
+import Language.Marlowe.Core.V1.Semantics.Next
 import Language.Marlowe.Runtime.Web.Types
 import Network.HTTP.Media ((//))
 import Servant
@@ -121,7 +123,8 @@ type PostContractsAPI
 -- | /contracts/:contractId sup-API
 type ContractAPI = GetContractAPI
               :<|> PutSignedTxAPI
-              :<|> "transactions" :> TransactionsAPI
+              :<|> "next" :> NextAPI
+              :<|> "transactions"  :> TransactionsAPI
 
 -- | GET /contracts/:contractId sub-API
 type GetContractAPI = Get '[JSON] GetContractResponse
@@ -133,10 +136,19 @@ instance HasNamedLink ContractState API "transactions" where
     "contracts" :> Capture "contractId" TxOutRef :> "transactions" :> GetTransactionsAPI
   namedLink _ _ mkLink ContractState{..} = guard (status == Confirmed) $> mkLink contractId
 
+type NextAPI = GETNextContinuationAPI
+
+-- | GET /contracts/:contractId/next/continuation sub-API
+type GETNextContinuationAPI
+  =  QueryParam' '[Required] "validityStart" UTCTime
+  :> QueryParam' '[Required] "validityEnd"   UTCTime
+  :> Get '[JSON] Next
+
 -- | /contracts/:contractId/transactions sup-API
-type TransactionsAPI = GetTransactionsAPI
-                  :<|> PostTransactionsAPI
-                  :<|> Capture "transactionId" TxId :> TransactionAPI
+type TransactionsAPI
+  = GetTransactionsAPI
+  :<|> PostTransactionsAPI
+  :<|> Capture "transactionId" TxId :> TransactionAPI
 
 data ApplyInputsTx
 

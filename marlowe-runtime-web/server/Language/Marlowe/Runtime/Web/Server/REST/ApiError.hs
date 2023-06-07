@@ -95,6 +95,9 @@ badRequest' msg = badRequest msg Nothing
 notFound :: String -> Maybe String -> ServerError
 notFound msg errorCode = toServerError . ApiError msg (fromMaybe "NotFound" errorCode) Null $ 404
 
+notFoundWithErrorCode :: String -> String -> ServerError
+notFoundWithErrorCode msg = notFound msg . Just
+
 notFound' :: String -> ServerError
 notFound' msg = notFound msg Nothing
 

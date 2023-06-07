@@ -1,6 +1,7 @@
 {-# LANGUAGE OverloadedLists #-}
 
 {-# OPTIONS_GHC -Wno-orphans #-}
+{-# LANGUAGE FlexibleInstances #-}
 
 module Language.Marlowe.Runtime.Web.Orphans where
 
@@ -9,6 +10,7 @@ import Data.OpenApi hiding (value)
 import Data.Proxy (Proxy(Proxy))
 import Data.Text (Text)
 import GHC.Exts (IsList(fromList))
+import Language.Marlowe.Core.V1.Semantics.Next
 import Language.Marlowe.Core.V1.Semantics.Types
 
 data Address
@@ -456,3 +458,75 @@ instance ToSchema Input where
     pure $ NamedSchema (Just "Input") $ mempty
       & description ?~ "An input to a Marlowe transaction"
       & oneOf ?~ ([notifySchema, choiceSchema, depositSchema] <*> [True, False])
+
+
+instance ToSchema Next where
+  declareNamedSchema _ = do
+    nextGeneralizedInputsSchema <- declareSchemaRef $ Proxy @[NextGeneralizedInput]
+
+    let
+      canNotAdvance = mempty
+        & type_ ?~ OpenApiString
+        & description ?~ "No Inputs can't be applied (Suspended) to a given contract"
+        & enum_ ?~ ["can_not_advance"]
+
+      can_advance = mempty
+        & type_ ?~ OpenApiObject
+        & description ?~ "Notify Input can be applied to a given contract"
+        & required .~ fmap fst [canAdvanceProperty]
+        & properties        .~ [canAdvanceProperty]
+          where canAdvanceProperty = ("can_advance_with",nextGeneralizedInputsSchema)
+
+    pure $ NamedSchema (Just "Next") $ mempty
+        & type_ ?~ OpenApiObject
+        & description ?~ "Next Ranges of Inputs that can be applied to a given contract"
+        & oneOf ?~ fmap Inline [canNotAdvance,can_advance]
+
+
+instance  ToSchema NextGeneralizedInput where
+  declareNamedSchema _ = do
+    partySchema <- declareSchemaRef $ Proxy @Party
+    accountIdSchema <- declareSchemaRef $ Proxy @AccountId
+    tokenSchema <- declareSchemaRef $ Proxy @Token
+    quantitySchema <- declareSchemaRef $ Proxy @Integer
+    choiceIdSchema <- declareSchemaRef $ Proxy @ChoiceId
+    boundSchema <- declareSchemaRef $ Proxy @[Bound]
+    caseIndexSchema <- declareSchemaRef $ Proxy @CaseIndex
+    let
+      canNotify = mempty
+        & type_ ?~ OpenApiObject
+        & description ?~ "Notify Input can be applied to a given contract"
+        & required .~ fmap fst [canNotifyProperty]
+        & properties        .~ [canNotifyProperty]
+          where canNotifyProperty = ("can_notify_case_index", caseIndexSchema)
+      canDeposit = mempty
+        & type_ ?~ OpenApiObject
+        & description ?~ "Deposit Input can be applied to the given contract"
+        & required .~ fmap fst [party, can_deposit, of_token, into_account,case_index]
+        & properties        .~ [party, can_deposit, of_token, into_account,case_index]
+        where
+          party        = ("party", partySchema)
+          can_deposit  = ("can_deposit", quantitySchema)
+          of_token     = ("of_token", tokenSchema)
+          into_account = ("into_account", accountIdSchema)
+          case_index   = ("case_index", caseIndexSchema)
+      canChoose = mempty
+        & type_ ?~ OpenApiObject
+         & description ?~ "Choice Inputs can be applied to the given contract within ranges of values to be chosen"
+        & required .~ fmap fst [for_choice, can_choose_between,case_index]
+        & properties        .~ [for_choice, can_choose_between,case_index]
+        where
+          for_choice          = ("for_choice", choiceIdSchema)
+          can_choose_between  = ("can_choose_between", boundSchema)
+          case_index          = ("case_index", caseIndexSchema)
+    pure $ NamedSchema (Just "NextGeneralizedInput") $ mempty
+        & type_ ?~ OpenApiObject
+        & description ?~ "Next Ranges of Inputs that can be applied to a given contract"
+        & oneOf ?~ fmap Inline  [canDeposit,canChoose,canNotify]
+
+
+instance ToSchema CaseIndex where
+  declareNamedSchema _ = do
+    pure $ NamedSchema (Just "CaseIndex") $ mempty
+      & type_ ?~ OpenApiInteger
+      & description ?~ "Index of a \"Case Action\" in a \"When\""

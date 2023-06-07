@@ -5,6 +5,7 @@
 module Language.Marlowe.Runtime.Web.Client
   ( Page(..)
   , getContract
+  , getContractNext
   , getContracts
   , getTransaction
   , getTransactions
@@ -30,7 +31,9 @@ import Data.Proxy (Proxy(..))
 import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.Text (Text)
+import Data.Time (UTCTime)
 import GHC.TypeLits (KnownSymbol, symbolVal)
+import Language.Marlowe.Core.V1.Semantics.Next
 import Language.Marlowe.Runtime.Web.API
   (API, GetContractsResponse, GetTransactionsResponse, GetWithdrawalsResponse, ListObject(..), api, retractLink)
 import Language.Marlowe.Runtime.Web.Types
@@ -110,6 +113,13 @@ getContract contractId = do
   let getContract' :<|> _ = contractApi contractId
   retractLink <$> getContract'
 
+getContractNext :: TxOutRef -> UTCTime -> UTCTime -> ClientM Next
+getContractNext contractId validityStartMaybe validityEndMaybe = do
+  let contractsClient :<|> _ = client
+  let _ :<|> _ :<|> contractApi = contractsClient
+  let _ :<|> _ :<|>  next' :<|> _ = contractApi contractId
+  next' validityStartMaybe validityEndMaybe
+
 putContract :: TxOutRef -> TextEnvelope -> ClientM ()
 putContract contractId tx = do
   let contractsClient :<|> _ = client
@@ -187,7 +197,7 @@ getTransactions
 getTransactions contractId range = do
   let contractsClient :<|> _ = client
   let _ :<|> _ :<|> contractApi = contractsClient
-  let _ :<|> _ :<|> getTransactions' :<|> _ = contractApi contractId
+  let _ :<|> _ :<|> _ :<|> getTransactions' :<|> _ = contractApi contractId
   response <- getTransactions' $ putRange <$> range
   totalCount <- reqHeaderValue $ lookupResponseHeader @"Total-Count" response
   nextRanges <- headerValue $ lookupResponseHeader @"Next-Range" response
@@ -208,7 +218,7 @@ postTransaction
 postTransaction changeAddress otherAddresses collateralUtxos contractId request = do
   let contractsClient :<|> _ = client
   let _ :<|> _ :<|> contractApi = contractsClient
-  let _ :<|> _ :<|> _ :<|> (postTransaction' :<|> _) :<|> _ = contractApi contractId
+  let _ :<|> _ :<|> _ :<|> _ :<|> (postTransaction' :<|> _) :<|> _ = contractApi contractId
   response <- postTransaction'
     request
     changeAddress
@@ -225,7 +235,7 @@ postTransactionCreateTx
   -> ClientM (ApplyInputsTxEnvelope CardanoTx)
 postTransactionCreateTx changeAddress otherAddresses collateralUtxos contractId request = do
   let (_ :<|> _ :<|> contractApi) :<|> _ = client
-  let _ :<|> _ :<|> _ :<|> (_ :<|> postTransactionCreateTx') :<|> _ = contractApi contractId
+  let _ :<|> _ :<|> _ :<|> _ :<|> (_ :<|> postTransactionCreateTx') :<|> _ = contractApi contractId
   response <- postTransactionCreateTx'
     request
     changeAddress
@@ -238,7 +248,7 @@ getTransaction :: TxOutRef -> TxId -> ClientM Tx
 getTransaction contractId transactionId = do
   let contractsClient :<|> _ = client
   let _ :<|> _ :<|> contractApi = contractsClient
-  let _ :<|> _ :<|> _ :<|> _ :<|> transactionApi = contractApi contractId
+  let _ :<|> _ :<|> _ :<|> _ :<|> _ :<|> transactionApi = contractApi contractId
   let getTransaction' :<|> _ = transactionApi transactionId
   retractLink . retractLink <$> getTransaction'
 
@@ -246,7 +256,7 @@ putTransaction :: TxOutRef -> TxId -> TextEnvelope -> ClientM ()
 putTransaction contractId transactionId tx = do
   let contractsClient :<|> _ = client
   let _ :<|> _ :<|> contractApi = contractsClient
-  let _ :<|> _ :<|> _ :<|> _ :<|> transactionApi = contractApi contractId
+  let _ :<|> _ :<|> _ :<|> _ :<|> _ :<|> transactionApi = contractApi contractId
   let _ :<|> putTransaction' = transactionApi transactionId
   void $ putTransaction' tx
 
