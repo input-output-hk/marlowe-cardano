@@ -9,24 +9,12 @@
 module Network.Protocol.Connection where
 
 import Control.Applicative (Alternative(empty), (<|>))
-import Control.Concurrent.STM (STM, newEmptyTMVar)
+import Control.Concurrent.STM (STM)
 import Control.Monad.IO.Class (MonadIO)
 import Data.ByteString.Lazy (ByteString)
 import Network.Protocol.Peer.Trace
 import Network.TypedProtocol (Message, PeerHasAgency)
-import UnliftIO
-  ( MonadUnliftIO
-  , SomeException
-  , TQueue
-  , atomically
-  , catch
-  , newTQueue
-  , putTMVar
-  , readTMVar
-  , readTQueue
-  , throwIO
-  , writeTQueue
-  )
+import UnliftIO (atomically)
 
 type ToPeer peer protocol pr st m = forall a. peer m a -> PeerTraced protocol pr st m a
 
@@ -75,49 +63,6 @@ runConnector Connector{..} peer = flip runConnection peer =<< openConnection
 acceptConnector :: MonadIO m => ConnectionSource peer m -> m (Connector peer m)
 acceptConnector = atomically . acceptConnectorSTM
 
-data ClientWithResponseChannel client m where
-  ClientWithResponseChannel
-    :: client m a
-    -> (Either SomeException a -> STM ())
-    -> ClientWithResponseChannel client m
-
-stmConnectionSource
-  :: MonadUnliftIO m
-  => TQueue (ClientWithResponseChannel client m)
-  -> (forall a b. server m a -> client m b -> m (a, b))
-  -> ConnectionSource server m
-stmConnectionSource queue serveClient = ConnectionSource do
-  ClientWithResponseChannel client sendResult <- readTQueue queue
-  pure $ stmServerConnector client sendResult serveClient
-
-stmServerConnector
-  :: MonadUnliftIO m
-  => client m x
-  -> (Either SomeException x -> STM ())
-  -> (forall a b. server m a -> client m b -> m (a, b))
-  -> Connector server m
-stmServerConnector client sendResult serveClient = Connector $ pure Connection
-  { runConnection = \server -> do
-      (a, b) <- serveClient server client `catch` \ex -> do
-        atomically $ sendResult $ Left ex
-        throwIO ex
-      atomically $ sendResult $ Right b
-      pure a
-  }
-
-stmClientConnector
-  :: MonadUnliftIO m
-  => TQueue (ClientWithResponseChannel client m)
-  -> Connector client m
-stmClientConnector queue = Connector $ pure Connection
-  { runConnection = \client -> do
-      readResult <- atomically do
-        resultVar <- newEmptyTMVar
-        writeTQueue queue $ ClientWithResponseChannel client $ putTMVar resultVar
-        pure $ readTMVar resultVar
-      either throwIO pure =<< atomically readResult
-  }
-
 data DriverSelector ps f where
   SendMessage :: PeerHasAgency pr st -> Message ps st st' -> DriverSelector ps ()
   RecvMessage :: PeerHasAgency pr (st :: ps) -> DriverSelector ps (RecvMessageField ps st)
@@ -127,21 +72,3 @@ data RecvMessageField ps st where
   RecvMessageStateBeforeMessage :: Maybe ByteString -> RecvMessageField ps st
   RecvMessageStateAfterMessage :: Maybe ByteString -> RecvMessageField ps st
   RecvMessageMessage :: Message ps st st' -> RecvMessageField ps st
-
-data ClientServerPair server client m = ClientServerPair
-  { connectionSource :: ConnectionSource server m
-  , clientConnector :: Connector client m
-  }
-
-clientServerPair
-  :: forall server client m
-   . MonadUnliftIO m
-  => (forall a b. server m a -> client m b -> m (a, b))
-  -> STM (ClientServerPair server client m)
-clientServerPair serveClient = do
-  queue <- newTQueue
-  let
-  pure ClientServerPair
-    { connectionSource = stmConnectionSource queue serveClient
-    , clientConnector = stmClientConnector queue
-    }

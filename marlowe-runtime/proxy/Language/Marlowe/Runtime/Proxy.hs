@@ -46,6 +46,28 @@ data ProxyDependencies r m = ProxyDependencies
   , connectionSource :: ConnectionSource MarloweRuntimeServer m
   }
 
+data ProxyDependenciesInProc m = ProxyDependenciesInProc
+  { router :: RouterInProc m
+  , connectionSourceTraced :: ConnectionSource MarloweRuntimeServer m
+  , connectionSource :: ConnectionSource MarloweRuntimeServer m
+  }
+
+proxyInProc
+  :: (MonadUnliftIO m, WithLog env C.Message m)
+  => Component m (ProxyDependenciesInProc m) Probes
+proxyInProc = proc deps -> do
+  (serverComponent "marlowe-runtime-server-traced" (component_ "marlowe-runtime-worker-traced" workerInProc) \ProxyDependenciesInProc{..} -> do
+    connector <- acceptConnector connectionSourceTraced
+    pure WorkerDependenciesInProc{..}) -< deps
+  (serverComponent "marlowe-runtime-server-traced" (component_ "marlowe-runtime-worker" workerInProc) \ProxyDependenciesInProc{..} -> do
+    connector <- acceptConnector connectionSource
+    pure WorkerDependenciesInProc{..}) -< deps
+  returnA -< Probes
+    { startup = pure True
+    , liveness = pure True
+    , readiness = pure True
+    }
+
 proxy
   :: (MonadUnliftIO m, MonadEvent r s m, MonadFail m, WithLog env C.Message m)
   => Component m (ProxyDependencies r (ResourceT m)) Probes
@@ -67,6 +89,11 @@ data WorkerDependencies r m = WorkerDependencies
   , connector :: Connector MarloweRuntimeServer m
   }
 
+data WorkerDependenciesInProc m = WorkerDependenciesInProc
+  { router :: RouterInProc m
+  , connector :: Connector MarloweRuntimeServer m
+  }
+
 data Router r m = Router
   { connectMarloweSync :: m (Channel (Handshake MarloweSync) 'AsClient ('Handshake.StInit 'Sync.StInit) m, r)
   , connectMarloweHeaderSync :: m (Channel (Handshake MarloweHeaderSync) 'AsClient ('Handshake.StInit 'Header.StIdle) m, r)
@@ -74,6 +101,15 @@ data Router r m = Router
   , connectMarloweLoad :: m (Channel (Handshake MarloweLoad) 'AsClient ('Handshake.StInit ('Load.StProcessing 'Load.RootNode)) m, r)
   , connectTxJob :: m (Channel (Handshake (Job MarloweTxCommand)) 'AsClient ('Handshake.StInit 'Job.StInit) m, r)
   , connectContractQuery :: m (Channel (Handshake (Query ContractRequest)) 'AsClient ('Handshake.StInit 'Query.StReq) m, r)
+  }
+
+data RouterInProc m = RouterInProc
+  { connectMarloweSync :: m (Channel MarloweSync 'AsClient 'Sync.StInit m)
+  , connectMarloweHeaderSync :: m (Channel MarloweHeaderSync 'AsClient 'Header.StIdle m)
+  , connectMarloweQuery :: m (Channel MarloweQuery 'AsClient 'Query.StReq m)
+  , connectMarloweLoad :: m (Channel MarloweLoad 'AsClient ('Load.StProcessing 'Load.RootNode) m)
+  , connectTxJob :: m (Channel (Job MarloweTxCommand) 'AsClient 'Job.StInit m)
+  , connectContractQuery :: m (Channel (Query ContractRequest) 'AsClient 'Query.StReq m)
   }
 
 workerTraced
@@ -88,89 +124,122 @@ worker
   -> m ()
 worker WorkerDependencies{..} = runResourceT $ runConnector connector $ server True router
 
-server :: (MonadFail m, MonadEvent r s0 m) => Bool -> Router r m -> MarloweRuntimeServer m ()
+workerInProc
+  :: MonadUnliftIO m
+  => WorkerDependenciesInProc m
+  -> m ()
+workerInProc WorkerDependenciesInProc{..} = runConnector connector $ serverInProc router
+
+server
+  :: (MonadFail m, MonadEvent r s m)
+  => Bool
+  -> Router r m
+  -> MarloweRuntimeServer m ()
 server useOpenRefAsParent Router{..} = MarloweRuntimeServer
-  { recvMsgRunMarloweSync = withHandshake useOpenRefAsParent (ClientAgency Sync.TokInit) connectMarloweSync \case
-      ClientAgency Sync.TokInit -> \case
-        Sync.MsgFollowContract _ -> NextCall $ ServerAgency Sync.TokFollow
-        Sync.MsgIntersect _ v _ -> NextCall $ ServerAgency $ Sync.TokIntersect v
-      ClientAgency (Sync.TokIdle v) -> \case
-        Sync.MsgRequestNext -> NextCall $ ServerAgency $ Sync.TokNext v
-        Sync.MsgDone -> NextClose Sync.TokDone
-      ClientAgency (Sync.TokWait v) -> \case
-        Sync.MsgPoll -> NextCall $ ServerAgency $ Sync.TokNext v
-        Sync.MsgCancel -> NextCast $ ClientAgency $ Sync.TokIdle v
-      ServerAgency Sync.TokFollow -> \case
-        Sync.MsgContractNotFound -> NextClosed Sync.TokDone
-        Sync.MsgContractFound _ v _ -> NextReceive $ ClientAgency $ Sync.TokIdle v
-      ServerAgency (Sync.TokIntersect v) -> \case
-        Sync.MsgIntersectNotFound -> NextClosed Sync.TokDone
-        Sync.MsgIntersectFound{} -> NextReceive $ ClientAgency $ Sync.TokIdle v
-      ServerAgency (Sync.TokNext v) -> \case
-        Sync.MsgRollBackCreation -> NextClosed Sync.TokDone
-        Sync.MsgRollForward{} -> NextReceive $ ClientAgency $ Sync.TokIdle v
-        Sync.MsgRollBackward{} -> NextReceive $ ClientAgency $ Sync.TokIdle v
-        Sync.MsgWait{} -> NextReceive $ ClientAgency $ Sync.TokWait v
-  , recvMsgRunMarloweHeaderSync = withHandshake useOpenRefAsParent (ClientAgency Header.TokIdle) connectMarloweHeaderSync \case
-      ClientAgency _ -> \case
-        Header.MsgIntersect _ -> NextCall $ ServerAgency Header.TokIntersect
-        Header.MsgRequestNext -> NextCall $ ServerAgency Header.TokNext
-        Header.MsgDone -> NextClose Header.TokDone
-        Header.MsgPoll -> NextCall $ ServerAgency Header.TokNext
-        Header.MsgCancel -> NextCast $ ClientAgency Header.TokIdle
-      ServerAgency _ -> \case
-        Header.MsgIntersectNotFound -> NextReceive $ ClientAgency Header.TokIdle
-        Header.MsgIntersectFound{} -> NextReceive $ ClientAgency Header.TokIdle
-        Header.MsgNewHeaders{} -> NextReceive $ ClientAgency Header.TokIdle
-        Header.MsgRollBackward{} -> NextReceive $ ClientAgency Header.TokIdle
-        Header.MsgWait{} -> NextReceive $ ClientAgency Header.TokWait
-  , recvMsgRunMarloweQuery = withHandshake useOpenRefAsParent (ClientAgency Query.TokReq) connectMarloweQuery \case
-      ClientAgency _ -> \case
-        Query.MsgRequest req -> NextCall $ ServerAgency $ Query.TokRes $ Query.tagFromReq req
-        Query.MsgDone -> NextClose Query.TokDone
-      ServerAgency _ -> \case
-        Query.MsgRespond _ -> NextReceive $ ClientAgency Query.TokReq
-  , recvMsgRunMarloweLoad = withHandshake useOpenRefAsParent (ServerAgency $ Load.TokProcessing Load.SRootNode) connectMarloweLoad \case
-      ClientAgency (Load.TokCanPush Zero node)  -> \case
-        Load.MsgRequestResume -> NextCall $ ServerAgency $ Load.TokProcessing node
-        Load.MsgAbort -> NextClose Load.TokDone
-      ClientAgency (Load.TokCanPush (Succ n) node)  -> \case
-        Load.MsgPushClose -> case Load.sPop n node of
-          SomePeerHasAgency (ClientAgency tok) -> NextCast $ ClientAgency tok
-          SomePeerHasAgency (ServerAgency tok) -> NextCall $ ServerAgency tok
-        Load.MsgPushPay{} -> NextCast $ ClientAgency $ Load.TokCanPush n $ Load.SPayNode node
-        Load.MsgPushIf{} -> NextCast $ ClientAgency $ Load.TokCanPush n $ Load.SIfLNode node
-        Load.MsgPushWhen{} -> NextCast $ ClientAgency $ Load.TokCanPush n $ Load.SWhenNode node
-        Load.MsgPushCase{} -> case node of
-          Load.SWhenNode node' -> NextCast $ ClientAgency $ Load.TokCanPush n $ Load.SCaseNode node'
-        Load.MsgPushLet{} -> NextCast $ ClientAgency $ Load.TokCanPush n $ Load.SLetNode node
-        Load.MsgPushAssert{} -> NextCast $ ClientAgency $ Load.TokCanPush n $ Load.SAssertNode node
-        Load.MsgAbort -> NextClose Load.TokDone
-      ServerAgency (Load.TokProcessing node) -> \case
-        Load.MsgResume n -> NextReceive $ ClientAgency $ Load.TokCanPush n node
-      ServerAgency Load.TokComplete -> \case
-        Load.MsgComplete{} -> NextClosed Load.TokDone
-  , recvMsgRunTxJob = withHandshake useOpenRefAsParent (ClientAgency Job.TokInit) connectTxJob \case
-      ClientAgency Job.TokInit -> \case
-        Job.MsgExec cmd -> NextCall $ ServerAgency $ Job.TokCmd $ Job.tagFromCommand cmd
-        Job.MsgAttach jobId -> NextCall $ ServerAgency $ Job.TokAttach $ Job.tagFromJobId jobId
-      ClientAgency (Job.TokAwait tag) -> \case
-        Job.MsgPoll -> NextCall $ ServerAgency $ Job.TokCmd tag
-        Job.MsgDetach -> NextClose Job.TokDone
-      ServerAgency (Job.TokCmd tag) -> \case
-        Job.MsgFail _ -> NextClosed Job.TokDone
-        Job.MsgSucceed _ -> NextClosed Job.TokDone
-        Job.MsgAwait _ _ -> NextReceive $ ClientAgency $ Job.TokAwait tag
-      ServerAgency (Job.TokAttach tag) -> \case
-        Job.MsgAttached -> NextReceive $ ServerAgency $ Job.TokCmd tag
-        Job.MsgAttachFailed -> NextClosed Job.TokDone
-  , recvMsgRunContractQuery = withHandshake useOpenRefAsParent (ClientAgency Query.TokReq) connectContractQuery \case
-      ClientAgency _ -> \case
-        Query.MsgRequest req -> NextCall $ ServerAgency $ Query.TokRes $ Query.tagFromReq req
-        Query.MsgDone -> NextClose Query.TokDone
-      ServerAgency _ -> \case
-        Query.MsgRespond _ -> NextReceive $ ClientAgency Query.TokReq
+  { recvMsgRunMarloweSync = withHandshake useOpenRefAsParent (ClientAgency Sync.TokInit) connectMarloweSync marloweSyncNext
+  , recvMsgRunMarloweHeaderSync = withHandshake useOpenRefAsParent (ClientAgency Header.TokIdle) connectMarloweHeaderSync marloweHeaderSyncNext
+  , recvMsgRunMarloweQuery = withHandshake useOpenRefAsParent (ClientAgency Query.TokReq) connectMarloweQuery queryNext
+  , recvMsgRunMarloweLoad = withHandshake useOpenRefAsParent (ServerAgency $ Load.TokProcessing Load.SRootNode) connectMarloweLoad loadNext
+  , recvMsgRunTxJob = withHandshake useOpenRefAsParent (ClientAgency Job.TokInit) connectTxJob jobNext
+  , recvMsgRunContractQuery = withHandshake useOpenRefAsParent (ClientAgency Query.TokReq) connectContractQuery queryNext
   }
+
+serverInProc
+  :: Monad m
+  => RouterInProc m
+  -> MarloweRuntimeServer m ()
+serverInProc RouterInProc{..} = MarloweRuntimeServer
+  { recvMsgRunMarloweSync = proxyProtocol' (ClientAgency Sync.TokInit) connectMarloweSync marloweSyncNext
+  , recvMsgRunMarloweHeaderSync = proxyProtocol' (ClientAgency Header.TokIdle) connectMarloweHeaderSync marloweHeaderSyncNext
+  , recvMsgRunMarloweQuery = proxyProtocol' (ClientAgency Query.TokReq) connectMarloweQuery queryNext
+  , recvMsgRunMarloweLoad = proxyProtocol' (ServerAgency $ Load.TokProcessing Load.SRootNode) connectMarloweLoad loadNext
+  , recvMsgRunTxJob = proxyProtocol' (ClientAgency Job.TokInit) connectTxJob jobNext
+  , recvMsgRunContractQuery = proxyProtocol' (ClientAgency Query.TokReq) connectContractQuery queryNext
+  }
+
+marloweSyncNext :: PeerHasAgency pr st -> Message MarloweSync st st' -> NextAgency MarloweSync pr st st'
+marloweSyncNext = \case
+  ClientAgency Sync.TokInit -> \case
+    Sync.MsgFollowContract _ -> NextCall $ ServerAgency Sync.TokFollow
+    Sync.MsgIntersect _ v _ -> NextCall $ ServerAgency $ Sync.TokIntersect v
+  ClientAgency (Sync.TokIdle v) -> \case
+    Sync.MsgRequestNext -> NextCall $ ServerAgency $ Sync.TokNext v
+    Sync.MsgDone -> NextClose Sync.TokDone
+  ClientAgency (Sync.TokWait v) -> \case
+    Sync.MsgPoll -> NextCall $ ServerAgency $ Sync.TokNext v
+    Sync.MsgCancel -> NextCast $ ClientAgency $ Sync.TokIdle v
+  ServerAgency Sync.TokFollow -> \case
+    Sync.MsgContractNotFound -> NextClosed Sync.TokDone
+    Sync.MsgContractFound _ v _ -> NextReceive $ ClientAgency $ Sync.TokIdle v
+  ServerAgency (Sync.TokIntersect v) -> \case
+    Sync.MsgIntersectNotFound -> NextClosed Sync.TokDone
+    Sync.MsgIntersectFound{} -> NextReceive $ ClientAgency $ Sync.TokIdle v
+  ServerAgency (Sync.TokNext v) -> \case
+    Sync.MsgRollBackCreation -> NextClosed Sync.TokDone
+    Sync.MsgRollForward{} -> NextReceive $ ClientAgency $ Sync.TokIdle v
+    Sync.MsgRollBackward{} -> NextReceive $ ClientAgency $ Sync.TokIdle v
+    Sync.MsgWait{} -> NextReceive $ ClientAgency $ Sync.TokWait v
+
+marloweHeaderSyncNext :: PeerHasAgency pr st -> Message MarloweHeaderSync st st' -> NextAgency MarloweHeaderSync pr st st'
+marloweHeaderSyncNext =   \case
+  ClientAgency _ -> \case
+    Header.MsgIntersect _ -> NextCall $ ServerAgency Header.TokIntersect
+    Header.MsgRequestNext -> NextCall $ ServerAgency Header.TokNext
+    Header.MsgDone -> NextClose Header.TokDone
+    Header.MsgPoll -> NextCall $ ServerAgency Header.TokNext
+    Header.MsgCancel -> NextCast $ ClientAgency Header.TokIdle
+  ServerAgency _ -> \case
+    Header.MsgIntersectNotFound -> NextReceive $ ClientAgency Header.TokIdle
+    Header.MsgIntersectFound{} -> NextReceive $ ClientAgency Header.TokIdle
+    Header.MsgNewHeaders{} -> NextReceive $ ClientAgency Header.TokIdle
+    Header.MsgRollBackward{} -> NextReceive $ ClientAgency Header.TokIdle
+    Header.MsgWait{} -> NextReceive $ ClientAgency Header.TokWait
+
+queryNext :: Query.Request req => PeerHasAgency pr st -> Message (Query req) st st' -> NextAgency (Query req) pr st st'
+queryNext =   \case
+  ClientAgency _ -> \case
+    Query.MsgRequest req -> NextCall $ ServerAgency $ Query.TokRes $ Query.tagFromReq req
+    Query.MsgDone -> NextClose Query.TokDone
+  ServerAgency _ -> \case
+    Query.MsgRespond _ -> NextReceive $ ClientAgency Query.TokReq
+
+loadNext :: PeerHasAgency pr st -> Message MarloweLoad st st' -> NextAgency MarloweLoad pr st st'
+loadNext =   \case
+  ClientAgency (Load.TokCanPush Zero node)  -> \case
+    Load.MsgRequestResume -> NextCall $ ServerAgency $ Load.TokProcessing node
+    Load.MsgAbort -> NextClose Load.TokDone
+  ClientAgency (Load.TokCanPush (Succ n) node)  -> \case
+    Load.MsgPushClose -> case Load.sPop n node of
+      SomePeerHasAgency (ClientAgency tok) -> NextCast $ ClientAgency tok
+      SomePeerHasAgency (ServerAgency tok) -> NextCall $ ServerAgency tok
+    Load.MsgPushPay{} -> NextCast $ ClientAgency $ Load.TokCanPush n $ Load.SPayNode node
+    Load.MsgPushIf{} -> NextCast $ ClientAgency $ Load.TokCanPush n $ Load.SIfLNode node
+    Load.MsgPushWhen{} -> NextCast $ ClientAgency $ Load.TokCanPush n $ Load.SWhenNode node
+    Load.MsgPushCase{} -> case node of
+      Load.SWhenNode node' -> NextCast $ ClientAgency $ Load.TokCanPush n $ Load.SCaseNode node'
+    Load.MsgPushLet{} -> NextCast $ ClientAgency $ Load.TokCanPush n $ Load.SLetNode node
+    Load.MsgPushAssert{} -> NextCast $ ClientAgency $ Load.TokCanPush n $ Load.SAssertNode node
+    Load.MsgAbort -> NextClose Load.TokDone
+  ServerAgency (Load.TokProcessing node) -> \case
+    Load.MsgResume n -> NextReceive $ ClientAgency $ Load.TokCanPush n node
+  ServerAgency Load.TokComplete -> \case
+    Load.MsgComplete{} -> NextClosed Load.TokDone
+
+jobNext :: Job.Command cmd => PeerHasAgency pr st -> Message (Job cmd) st st' -> NextAgency (Job cmd) pr st st'
+jobNext =   \case
+  ClientAgency Job.TokInit -> \case
+    Job.MsgExec cmd -> NextCall $ ServerAgency $ Job.TokCmd $ Job.tagFromCommand cmd
+    Job.MsgAttach jobId -> NextCall $ ServerAgency $ Job.TokAttach $ Job.tagFromJobId jobId
+  ClientAgency (Job.TokAwait tag) -> \case
+    Job.MsgPoll -> NextCall $ ServerAgency $ Job.TokCmd tag
+    Job.MsgDetach -> NextClose Job.TokDone
+  ServerAgency (Job.TokCmd tag) -> \case
+    Job.MsgFail _ -> NextClosed Job.TokDone
+    Job.MsgSucceed _ -> NextClosed Job.TokDone
+    Job.MsgAwait _ _ -> NextReceive $ ClientAgency $ Job.TokAwait tag
+  ServerAgency (Job.TokAttach tag) -> \case
+    Job.MsgAttached -> NextReceive $ ServerAgency $ Job.TokCmd tag
+    Job.MsgAttachFailed -> NextClosed Job.TokDone
 
 data NextAgency ps pr (st :: ps) (st' :: ps) where
   NextCall :: PeerHasAgency 'AsServer st' -> NextAgency ps 'AsClient st st'
@@ -206,6 +275,16 @@ liftHandshake :: LiftProtocol ps (Handshake ps) 'Handshake.StLift
 liftHandshake =
   LiftProtocol Handshake.TokLiftClient Handshake.TokLiftServer Handshake.TokLiftNobody Handshake.MsgLift \case
     Handshake.MsgLift msg -> SomeSubMessage msg
+
+proxyProtocol'
+  :: Monad m
+  => PeerHasAgency pr st
+  -> m (Channel ps 'AsClient st m)
+  -> (forall pr' st' st''. PeerHasAgency pr' st' -> Message ps st' st'' -> NextAgency ps pr' st' st'')
+  -> m (PeerTraced ps 'AsServer st m ())
+proxyProtocol' agency mChannel nextAgency = do
+  channel <- mChannel
+  pure $ proxyProtocol agency channel nextAgency
 
 proxyProtocol
   :: Monad m

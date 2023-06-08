@@ -4,6 +4,8 @@
 
 module Language.Marlowe.Protocol.HeaderSync.Client where
 
+import Control.Monad (join)
+import Language.Marlowe.Protocol.HeaderSync.Server
 import Language.Marlowe.Protocol.HeaderSync.Types
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainPoint)
 import Language.Marlowe.Runtime.Discovery.Api (ContractHeader)
@@ -112,3 +114,34 @@ marloweHeaderSyncClientPeer = EffectTraced . fmap peerIdle . runMarloweHeaderSyn
       SendMsgCancel idle -> YieldTraced (ClientAgency TokWait) MsgCancel
         $ Cast
         $ peerIdle idle
+
+serveMarloweHeaderSyncClient
+  :: forall m a b
+   . Monad m
+  => MarloweHeaderSyncServer m a
+  -> MarloweHeaderSyncClient m b
+  -> m (a, b)
+serveMarloweHeaderSyncClient MarloweHeaderSyncServer{..} MarloweHeaderSyncClient{..} =
+  join $ serveIdle <$> runMarloweHeaderSyncServer <*> runMarloweHeaderSyncClient
+  where
+    serveIntersect :: ClientStIntersect m b -> ServerStIntersect m a -> m (a, b)
+    serveIntersect ClientStIntersect{..} = \case
+      SendMsgIntersectFound block idle -> serveIdle idle =<< recvMsgIntersectFound block
+      SendMsgIntersectNotFound idle -> serveIdle idle =<< recvMsgIntersectNotFound
+
+    serveIdle :: ServerStIdle m a -> ClientStIdle m b -> m (a, b)
+    serveIdle ServerStIdle{..} = \case
+      SendMsgRequestNext next -> serveNext next =<< recvMsgRequestNext
+      SendMsgIntersect blocks intersect -> serveIntersect intersect =<< recvMsgIntersect blocks
+      SendMsgDone b -> (,b) <$> recvMsgDone
+
+    serveNext :: ClientStNext m b -> ServerStNext m a -> m (a, b)
+    serveNext ClientStNext{..} = \case
+      SendMsgNewHeaders block headers idle -> serveIdle idle =<< recvMsgNewHeaders block headers
+      SendMsgRollBackward point idle -> serveIdle idle =<< recvMsgRollBackward point
+      SendMsgWait poll -> serveWait poll =<< recvMsgWait
+
+    serveWait :: ServerStWait m a -> ClientStWait m b -> m (a, b)
+    serveWait ServerStWait{..} = \case
+      SendMsgPoll next -> serveNext next =<< recvMsgPoll
+      SendMsgCancel idle -> flip serveIdle idle =<< recvMsgCancel

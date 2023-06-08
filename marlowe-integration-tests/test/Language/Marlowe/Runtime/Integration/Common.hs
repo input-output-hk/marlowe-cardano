@@ -31,7 +31,7 @@ import Cardano.Api.Byron (deserialiseFromTextEnvelope)
 import qualified Cardano.Api.Shelley as C
 import Control.Concurrent (threadDelay)
 import Control.Monad (guard, void, (<=<))
-import Control.Monad.Event.Class (NoopEventT(..), inject)
+import Control.Monad.Event.Class (NoopEventT(..))
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Reader (ReaderT(..), ask, runReaderT)
 import qualified Control.Monad.Reader as Reader
@@ -85,7 +85,7 @@ import Language.Marlowe.Runtime.ChainSync.Api
   )
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Client
-  (MarloweTracedT, applyInputs, runMarloweHeaderSyncClient, runMarloweSyncClient, runMarloweTracedT, runMarloweTxClient)
+  (MarloweT, applyInputs, runMarloweHeaderSyncClient, runMarloweSyncClient, runMarloweT, runMarloweTxClient)
 import qualified Language.Marlowe.Runtime.Client as Client
 import Language.Marlowe.Runtime.Core.Api
   ( ContractId(..)
@@ -103,7 +103,6 @@ import Language.Marlowe.Runtime.Discovery.Api (ContractHeader(..))
 import Language.Marlowe.Runtime.History.Api (ContractStep, CreateStep(..))
 import Language.Marlowe.Runtime.Transaction.Api
   (ContractCreated(..), InputsApplied(..), MarloweTxCommand(..), SubmitError, WalletAddresses(..), WithdrawTx)
-import Network.Protocol.Connection (STMConnectorSelector)
 import Network.Protocol.Job.Client (liftCommandWait)
 import qualified Plutus.V2.Ledger.Api as PV2
 import Servant.Client (ClientError, ClientM)
@@ -124,7 +123,7 @@ import qualified Test.Integration.Marlowe.Local as MarloweRuntime
 import UnliftIO (bracket_)
 import UnliftIO.Environment (setEnv, unsetEnv)
 
-type Integration = ReaderT MarloweRuntime (MarloweTracedT RuntimeRef STMConnectorSelector RuntimeSelector (NoopEventT RuntimeRef RuntimeSelector IO))
+type Integration = ReaderT MarloweRuntime (MarloweT (NoopEventT RuntimeRef RuntimeSelector IO))
 
 -- Important - the TxId is lazily computed and depends on the resulting Tx. So
 -- it should not be used to compute the transaction outputs written.
@@ -240,7 +239,7 @@ instance Semigroup Wallet where
 
 runIntegrationTest :: Integration a -> MarloweRuntime -> IO a
 runIntegrationTest m runtime@MarloweRuntime.MarloweRuntime{protocolConnector} =
-  runNoopEventT $ runMarloweTracedT (runReaderT m runtime) inject protocolConnector
+  runNoopEventT $ runMarloweT (runReaderT m runtime) protocolConnector
 
 runWebClient :: ClientM a -> Integration (Either ClientError a)
 runWebClient client = ReaderT \runtime -> liftIO $ MarloweRuntime.runWebClient runtime client

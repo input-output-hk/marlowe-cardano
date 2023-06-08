@@ -20,19 +20,18 @@ import Language.Marlowe.Core.V1.Merkle (deepMerkleize)
 import Language.Marlowe.Core.V1.Plate (extractAll)
 import Language.Marlowe.Core.V1.Semantics (TransactionInput(..), TransactionOutput(..), computeTransaction)
 import Language.Marlowe.Core.V1.Semantics.Types
-import Language.Marlowe.Protocol.Load.Client (MarloweLoadClient, marloweLoadClientPeer, pushContract)
-import Language.Marlowe.Protocol.Load.Server (marloweLoadServerPeer)
+import Language.Marlowe.Protocol.Load.Client (MarloweLoadClient, pushContract, serveMarloweLoadClient)
 import Language.Marlowe.Runtime.Cardano.Api (fromCardanoDatumHash, toCardanoScriptData)
 import Language.Marlowe.Runtime.ChainSync.Api (DatumHash(..), toDatum)
 import qualified Language.Marlowe.Runtime.Contract as Contract
 import Language.Marlowe.Runtime.Contract.Api (ContractWithAdjacency(adjacency), merkleizeInputs)
 import qualified Language.Marlowe.Runtime.Contract.Api as Api
 import Language.Marlowe.Runtime.Contract.Store.File (ContractStoreOptions(..), createContractStore)
+import Network.Channel.Typed (ClientServerPair(..), clientServerPair)
 import Network.Protocol.Connection
-import Network.Protocol.Driver.Trace (HasSpanContext(..), runSomeConnectorTraced)
+import Network.Protocol.Driver.Trace (HasSpanContext(..))
 import Network.Protocol.Peer.Trace (defaultSpanContext)
-import Network.Protocol.Query.Client (QueryClient, queryClientPeer)
-import Network.Protocol.Query.Server (queryServerPeer)
+import Network.Protocol.Query.Client (QueryClient, serveQueryClient)
 import Network.TypedProtocol (unsafeIntToNat)
 import qualified Plutus.V2.Ledger.Api as PV2
 import Spec.Marlowe.Semantics.Arbitrary (arbitraryNonnegativeInteger)
@@ -170,19 +169,19 @@ expectJust msg m = m >>= \case
 runLoad :: MarloweLoadClient TestM a -> TestM a
 runLoad client = do
   TestHandle {..} <- ask
-  runSomeConnectorTraced loadConnector client
+  runConnector loadConnector client
 
 runQuery :: QueryClient Api.ContractRequest TestM a -> TestM a
 runQuery client = do
   TestHandle {..} <- ask
-  runSomeConnectorTraced queryConnector client
+  runConnector queryConnector client
 
 -- test plumbing
 
 runContractTest :: TestM () -> IO ()
 runContractTest test = runResourceT do
-  loadPair <- atomically $ clientServerPair marloweLoadServerPeer marloweLoadClientPeer
-  queryPair <- atomically $ clientServerPair queryServerPeer queryClientPeer
+  loadPair <- atomically $ clientServerPair serveMarloweLoadClient
+  queryPair <- atomically $ clientServerPair serveQueryClient
   workspace <- createWorkspace "marlowe-contract-test"
   contractStore <- createContractStore ContractStoreOptions
     { contractStoreDirectory = resolveWorkspacePath workspace "contract-store"
@@ -191,22 +190,22 @@ runContractTest test = runResourceT do
     }
   let
     testHandle = TestHandle
-      { loadConnector = SomeConnectorTraced inject $ clientConnector loadPair
-      , queryConnector = SomeConnectorTraced inject $ clientConnector queryPair
+      { loadConnector = clientServerConnector loadPair
+      , queryConnector = clientServerConnector queryPair
       , logAction = mempty
       }
   runNoopEventT $ flip runReaderT testHandle $ race_ test $ runComponent_ (void Contract.contract) Contract.ContractDependencies
     { batchSize = unsafeIntToNat 10
     , contractStore
-    , loadSource = SomeConnectionSourceTraced inject $ connectionSource loadPair
-    , querySource = SomeConnectionSourceTraced inject $ connectionSource queryPair
+    , loadSource = clientServerSource loadPair
+    , querySource = clientServerSource queryPair
     }
 
 type TestM = ReaderT TestHandle (NoopEventT TestRef AnySelector (ResourceT IO))
 
 data TestHandle = TestHandle
-  { loadConnector :: SomeClientConnectorTraced MarloweLoadClient TestRef AnySelector TestM
-  , queryConnector :: SomeClientConnectorTraced (QueryClient Api.ContractRequest) TestRef AnySelector TestM
+  { loadConnector :: Connector MarloweLoadClient TestM
+  , queryConnector :: Connector (QueryClient Api.ContractRequest) TestM
   , logAction :: LogAction TestM Message
   }
 

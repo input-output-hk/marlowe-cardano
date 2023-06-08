@@ -72,11 +72,10 @@ library
     , http-client
     , marlowe-chain-sync:{marlowe-chain-sync, chain-indexer, libchainsync}
     , marlowe-cli
-    , marlowe-client
     , marlowe-protocols
     , marlowe-runtime-web:{marlowe-runtime-web, server}
-    , marlowe-runtime:{marlowe-runtime, contract, contract-api, discovery-api, history-api, indexer, proxy, proxy-api, sync, sync-api, tx, tx-api}
-    , mtl >=2.2 && <3
+    , marlowe-runtime:{marlowe-runtime, contract, indexer, proxy-api, runtime, sync}
+    , mtl
     , network
     , nonempty-containers
     , ouroboros-network
@@ -85,7 +84,6 @@ library
     , random
     , resourcet
     , servant-client
-    , stm
     , text
     , time
     , time-units

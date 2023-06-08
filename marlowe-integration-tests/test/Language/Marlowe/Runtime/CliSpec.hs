@@ -4,7 +4,8 @@
 
 module Language.Marlowe.Runtime.CliSpec where
 
-import Cardano.Api (AsType(AsTxBody), BabbageEra, CardanoEra(BabbageEra), TxBody, readFileTextEnvelope)
+import Cardano.Api
+  (AsType(..), BabbageEra, CardanoEra(BabbageEra), TxBody, deserialiseFromCBOR, readFileTextEnvelope, serialiseToCBOR)
 import qualified Cardano.Api.Shelley
 import qualified Control.Monad.Reader as Reader
 import Data.Map (Map)
@@ -139,7 +140,7 @@ expectSameResultFromCLIAndJobClient outputFile extraCliArgs command = do
         toCliArgs command <> extraCliArgs <> ["--manual-sign", txBodyEnvelopeFilePath]
 
     jobClientEffect :: Integration (TxBody BabbageEra)
-    jobClientEffect = marloweRuntimeJobClient command
+    jobClientEffect = either (error . show) id . deserialiseFromCBOR (AsTxBody AsBabbageEra) . serialiseToCBOR <$> marloweRuntimeJobClient command
 
   (_, expected) <- concurrently cliEffect jobClientEffect
 

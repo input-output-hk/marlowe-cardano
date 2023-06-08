@@ -437,35 +437,24 @@ library proxy
     , unliftio ^>=0.2.1
 
 library runtime
-  import: lang
-  hs-source-dirs:   runtime
-  visibility: public
-  exposed-modules:
-    Language.Marlowe.Runtime
+  import:          lang
+  hs-source-dirs:  runtime
+  visibility:      public
+  exposed-modules: Language.Marlowe.Runtime
   build-depends:
-    , async-components ==0.1.0.0
-    , base >= 4.9 && < 5
+    , async-components ==0.1.1.0
+    , base >=4.9 && <5
     , cardano-api ==1.35.4
-    , eventuo11y ^>= { 0.9, 0.10 }
-    , eventuo11y-extras ==0.1.0.0
-    , marlowe-chain-sync ==0.0.1
-    , marlowe-chain-sync:chain-indexer ==0.0.1
-    , marlowe-chain-sync:libchainsync ==0.0.1
-    , marlowe-protocols ==0.1.0.0
-    , marlowe-runtime:contract ==0.0.1
-    , marlowe-runtime:contract-api ==0.0.1
-    , marlowe-runtime:discovery-api ==0.0.1
-    , marlowe-runtime:history-api ==0.0.1
-    , marlowe-runtime:proxy ==0.0.1
-    , marlowe-runtime:proxy-api ==0.0.1
-    , marlowe-runtime:sync ==0.0.1
-    , marlowe-runtime:sync-api ==0.0.1
-    , marlowe-runtime:tx ==0.0.1
-    , marlowe-runtime:tx-api ==0.0.1
-    , resourcet >= 1.3 && < 2
-    , time >= 1.9 && < 2
+    , co-log >=0.5.0.0 && <0.6.0.0
+    , containers ^>=0.6.5
+    , eventuo11y-extras ==0.1.1.0
+    , marlowe-chain-sync:{marlowe-chain-sync, chain-indexer, libchainsync} ==0.0.2
+    , marlowe-protocols ==0.1.1.0
+    , marlowe-runtime:{marlowe-runtime, contract, contract-api, discovery-api, history-api, indexer, proxy, proxy-api, sync, sync-api, tx, tx-api} ==0.0.2
+    , nonempty-containers ^>=0.3.4
+    , time >=1.9 && <2
     , typed-protocols ==0.1.0.0
-    , unliftio >= 0.2.1 && < 0.3
+    , unliftio ^>=0.2.1
 
 library plutus-scripts
   import:          lang
