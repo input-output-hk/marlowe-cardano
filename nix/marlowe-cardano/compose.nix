@@ -298,7 +298,10 @@ let
       "--shelley-genesis-config-file"
       network.nodeConfig.ShelleyGenesisFile
     ];
-    environment = [ "OTEL_SERVICE_NAME=marlowe-runtime" ];
+    environment = [
+      "TZ=UTC"
+      "OTEL_SERVICE_NAME=marlowe-runtime"
+    ];
   };
 
   web-service = dev-service {
