@@ -25,6 +25,7 @@ module Language.Marlowe.Runtime.Web.Server
   , serverWithOpenAPI
   ) where
 
+import Colog (cmap, fmtMessage, logTextStdout)
 import Control.Concurrent.Component
 import Control.Concurrent.Component.Run (AppM(..))
 import Control.Monad.Event.Class
@@ -189,6 +190,7 @@ webServer = component_ "web-server" \WebServerDependencies{..} -> withRunInIO \r
       _eventBackend <- askBackend
       _logAction <- AppM $ ReaderT \(_, logAction) -> pure logAction
       let _requestParent = reference ev
+      let _logAction = cmap fmtMessage logTextStdout
       let
         mkApp
           | openAPIEnabled = corsMiddleware accessControlAllowOriginAll $ serveServerM apiWithOpenApi AppEnv{..} serverWithOpenAPI

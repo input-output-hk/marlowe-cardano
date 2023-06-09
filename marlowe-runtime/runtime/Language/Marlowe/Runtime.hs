@@ -9,12 +9,13 @@ module Language.Marlowe.Runtime
   where
 
 import Cardano.Api (CardanoEra(..), CardanoMode, EraInMode(..), LocalNodeClientProtocolsInMode, NetworkId, TxInMode(..))
-import Colog (Message, WithLog)
+import Colog (Message, WithLog, logInfo, logWarning)
 import Control.Concurrent.Component
 import Control.Concurrent.Component.Probes (Probes(..))
 import Control.Monad.Event.Class
 import Data.Set (Set)
 import Data.Set.NonEmpty (NESet)
+import Data.String (fromString)
 import Data.Time (NominalDiffTime)
 import Language.Marlowe.Protocol.HeaderSync.Server (MarloweHeaderSyncServer, marloweHeaderSyncServerPeer)
 import Language.Marlowe.Protocol.HeaderSync.Types (MarloweHeaderSync)
@@ -76,7 +77,6 @@ import UnliftIO
   , STM
   , SomeException(SomeException)
   , atomically
-  , liftIO
   , newTVar
   , readTVar
   , try
@@ -176,8 +176,8 @@ marloweRuntime = proc MarloweRuntimeDependencies{..} -> do
     , mkSubmitJob = mkSubmitJob SubmitJobDependencies
         { chainSyncConnector = clientServerConnector chainSeekChannel
         , chainSyncJobConnector = clientServerConnector chainJobChannel
-        , confirmationTimeout = 3600
         , pollingInterval = 1.5
+        , confirmationTimeout = 3600 -- 1 hour
         , ..
         }
     , loadWalletContext = loadWalletContext
@@ -227,24 +227,24 @@ setupChannels = Component $ const do
 
 -- | Restarts a component when it crashes. The output is an action to retrieve the output value of the currently running
 -- instance of the component.
-supervisor :: MonadUnliftIO m => String -> Component m a b -> Component m a (STM b)
+supervisor :: (MonadUnliftIO m, WithLog env Message m) => String -> Component m a b -> Component m a (STM b)
 supervisor name (Component f) = Component \a -> do
   (Concurrently initialAction, initialOutput) <- f a
   currentOutput <- newTVar initialOutput
   let
     supervisedAction action = do
-      liftIO $ putStrLn $ "Supervisor starting component " <> name
+      logInfo $ "Supervisor starting component " <> fromString name
       result <- try action
       case result of
         Left (SomeException _) -> do
-          liftIO $ putStrLn $ "Supervised component " <> name <> " crashed, restarting"
+          logWarning $ "Supervised component " <> fromString name <> " crashed, restarting"
           Concurrently action' <- atomically do
             (action', output) <- f a
             writeTVar currentOutput output
             pure action'
           supervisedAction action'
         Right () -> do
-          liftIO $ putStrLn $ "Supervised component " <> name <> " finished"
+          logInfo $ "Supervised component " <> fromString name <> " finished"
           pure ()
   pure (Concurrently $ supervisedAction initialAction, readTVar currentOutput)
 

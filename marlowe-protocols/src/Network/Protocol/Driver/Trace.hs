@@ -200,7 +200,8 @@ data ConnectedField
   | ConnectedPeer SockAddr
 
 tcpServerTraced
-  :: forall r s env m m' ps server. (MonadUnliftIO m', MonadUnliftIO m, MonadEvent r s m', HasSpanContext r, BinaryMessage ps, MonadFail m', HasSignature ps, WithLog env C.Message m)
+  :: forall r s env m m' ps server
+   . (MonadUnliftIO m', MonadUnliftIO m, MonadEvent r s m', HasSpanContext r, BinaryMessage ps, MonadFail m', HasSignature ps, WithLog env C.Message m)
   => String
   -> InjectSelector (TcpServerSelector (Handshake ps)) s
   -> Component m (TcpServerDependencies ps server m') (ConnectionSource server m')

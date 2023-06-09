@@ -34,12 +34,7 @@ data WorkerDependencies m = forall n. WorkerDependencies
   , connector :: Connector MarloweLoadServer m
   }
 
-worker
-  :: forall env m.
-    ( MonadUnliftIO m
-    , WithLog env C.Message m
-    )
-  => Component m (WorkerDependencies m) ()
+worker :: forall env m. (MonadUnliftIO m, WithLog env C.Message m) => Component m (WorkerDependencies m) ()
 worker = component_ "contract-load-worker" \WorkerDependencies{..} ->
   bracketOnError (createContractStagingArea contractStore) discard \ContractStagingArea{..} -> do
     mContract <- runConnector connector
