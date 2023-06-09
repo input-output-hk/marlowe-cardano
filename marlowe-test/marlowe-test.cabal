@@ -146,6 +146,16 @@ library
     Spec.Marlowe.Semantics.Golden.Trivial
     Spec.Marlowe.Semantics.Golden.ZeroCouponBond
     Spec.Marlowe.Semantics.Merkle
+    Spec.Marlowe.Semantics.Next
+    Spec.Marlowe.Semantics.Next.Common.Isomorphism
+    Spec.Marlowe.Semantics.Next.Common.QuickCheck
+    Spec.Marlowe.Semantics.Next.Common.Tuple
+    Spec.Marlowe.Semantics.Next.Contract
+    Spec.Marlowe.Semantics.Next.Contract.Generator
+    Spec.Marlowe.Semantics.Next.When
+    Spec.Marlowe.Semantics.Next.When.Choice
+    Spec.Marlowe.Semantics.Next.When.Deposit
+    Spec.Marlowe.Semantics.Next.When.Notify
     Spec.Marlowe.Semantics.Orphans
     Spec.Marlowe.Semantics.Path
     Spec.Marlowe.Semantics.Util
@@ -160,32 +170,34 @@ library
 
   other-modules:   Paths_marlowe_test
   build-depends:
-    , aeson >=2 && <3
-    , base >=4.9 && <5
-    , bytestring >=0.10.12 && <0.12
-    , cardano-api ==1.35.4
-    , containers ^>=0.6.5
-    , data-default ^>=0.7.1
-    , directory ^>=1.3
-    , filepath ^>=1.4
-    , hint ^>=0.9
-    , lens >=5.2 && <6
-    , marlowe-cardano ==0.1.1.0
-    , marlowe-spec-test ==0.1.0.0
-    , mtl >=2.2 && <3
-    , plutus-ledger ^>=1.2
-    , plutus-ledger-api ==1.0.0.1
-    , plutus-script-utils ==1.2.0.0
-    , plutus-tx ==1.0.0.0
-    , QuickCheck >=2.14 && <3
-    , quickcheck-instances ^>=0.3.29
-    , sbv >=8.4
-    , serialise ^>=0.2.6
-    , tasty ^>=1.4.2
-    , tasty-hunit ^>=0.10
-    , tasty-quickcheck ^>=0.10
-    , text >=1.2.4 && <2
-    , these >=1.1 && <2
+    , aeson                 >=2       && <3
+    , base                  >=4.9     && <5
+    , bytestring            >=0.10.12 && <0.12
+    , cardano-api           ==1.35.4
+    , containers            ^>=0.6.5
+    , data-default          ^>=0.7.1
+    , directory             ^>=1.3
+    , filepath              ^>=1.4
+    , hint                  ^>=0.9
+    , ilist                 ==0.4.0.1
+    , lens                  >=5.2     && <6
+    , marlowe-cardano       ==0.1.1.0
+    , marlowe-spec-test     ==0.1.0.0
+    , mtl                   >=2.2     && <3
+    , plutus-ledger         ^>=1.2
+    , plutus-ledger-api     ==1.0.0.1
+    , plutus-script-utils   ==1.2.0.0
+    , plutus-tx             ==1.0.0.0
+    , QuickCheck            >=2.14    && <3
+    , quickcheck-instances  ^>=0.3.29
+    , sbv                   >=8.4
+    , serialise             ^>=0.2.6
+    , tasty                 ^>=1.4.2
+    , tasty-hunit           ^>=0.10
+    , tasty-quickcheck      ^>=0.10
+    , text                  >=1.2.4   && <2
+    , these                 >=1.1     && <2
+    , type-iso              ==1.0.1.0
 
   if flag(trace-plutus)
     cpp-options: -DTRACE_PLUTUS
@@ -196,7 +208,7 @@ test-suite marlowe-test
   type:           exitcode-stdio-1.0
   main-is:        Spec.hs
   build-depends:
-    , base >=4.9 && <5
+    , base              >=4.9 && <5
     , marlowe-test
     , tasty
     , tasty-quickcheck
@@ -207,7 +219,7 @@ executable marlowe-spec-client
   main-is:        Main.hs
   build-depends:
     , aeson
-    , base >=4.9 && <5
+    , base          >=4.9 && <5
     , bytestring
     , marlowe-test
     , split
@@ -217,7 +229,7 @@ executable marlowe-reference
   hs-source-dirs: reference
   main-is:        Main.hs
   build-depends:
-    , base >=4.9 && <5
+    , base          >=4.9 && <5
     , directory
     , filepath
     , marlowe-test

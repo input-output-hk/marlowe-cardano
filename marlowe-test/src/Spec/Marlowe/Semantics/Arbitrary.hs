@@ -1267,8 +1267,8 @@ instance Arbitrary ApplicableGeneralizedInputs where
 instance Arbitrary (Indexed CanNotify) where
   arbitrary = Indexed <$> (CaseIndex <$> arbitrary ) <*> (CanNotify <$> (IsMerkleizedContinuation <$> arbitrary ))
 
-instance Arbitrary  (Indexed CanDeposit) where
-  arbitrary = Indexed <$> (CaseIndex <$> arbitrary ) <*> (CanDeposit <$>  arbitrary <*> arbitrary <*> arbitrary  <*> arbitrary)
+instance Arbitrary (Indexed CanDeposit) where
+  arbitrary = Indexed <$> (CaseIndex <$> arbitrary ) <*> (CanDeposit <$>  arbitrary <*> arbitrary <*> arbitrary  <*> arbitrary <*> (IsMerkleizedContinuation <$> arbitrary ))
 
 instance Arbitrary  (Indexed CanChoose) where
-  arbitrary = Indexed <$> (CaseIndex <$> arbitrary ) <*> (CanChoose <$>  arbitrary <*> arbitrary)
+  arbitrary = Indexed <$> (CaseIndex <$> arbitrary ) <*> (CanChoose <$>  arbitrary <*> arbitrary <*> (IsMerkleizedContinuation <$> arbitrary ))

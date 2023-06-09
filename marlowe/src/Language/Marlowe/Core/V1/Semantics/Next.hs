@@ -14,7 +14,6 @@
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE DataKinds #-}
 
-{-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -23,6 +22,8 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 
+{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
@@ -40,6 +41,7 @@ module Language.Marlowe.Core.V1.Semantics.Next
   , IsMerkleizedContinuation(..)
   , Next(..)
   , next
+  , toCaseIndex
   ) where
 
 import Control.Applicative (Alternative((<|>)), Applicative((<*>)), (<$>))
@@ -77,30 +79,36 @@ import qualified Prelude as Haskell
 
 data Next
   = Next
-      { canReduce::CanReduce
+      { canReduce :: CanReduce
       , applicableGeneralizedInputs :: ApplicableGeneralizedInputs}
     deriving stock (Haskell.Show,Haskell.Eq,Haskell.Ord,Generic)
     deriving anyclass (Pretty)
-data AmbiguousIntervalProvided = AmbiguousIntervalProvided
 
--- |  Index of the case as it appears in the When contract
+data AmbiguousIntervalProvided = AmbiguousIntervalProvided
+    deriving stock (Haskell.Show,Haskell.Eq,Haskell.Ord,Generic)
+    deriving anyclass (Pretty)
+
+-- | Index of an applicable input matching its derived action index in a When [Case Action]
 newtype CaseIndex = CaseIndex {unIndex ::Integer}
     deriving stock (Haskell.Show,Haskell.Eq,Haskell.Ord,Generic)
     deriving anyclass (Pretty)
-    deriving (FromJSON,ToJSON)
+    deriving newtype (FromJSON,ToJSON)
 
 data ApplicableGeneralizedInputs
     = ApplicableGeneralizedInputs
      { canNotifyMaybe :: Maybe (Indexed CanNotify)
-     , deposits    :: [Indexed CanDeposit]
-     , choices     :: [Indexed CanChoose]}
+     , deposits       :: [Indexed CanDeposit]
+     , choices        :: [Indexed CanChoose]}
   deriving stock (Haskell.Show,Haskell.Eq,Haskell.Ord,Generic)
   deriving anyclass (Pretty)
 
-data Indexed canInput
-  = Indexed CaseIndex canInput
+data Indexed a
+  = Indexed CaseIndex a
     deriving stock (Haskell.Show,Haskell.Eq,Haskell.Ord,Generic)
     deriving anyclass (Pretty)
+
+toCaseIndex :: Indexed a -> CaseIndex
+toCaseIndex (Indexed c _) = c
 
 instance Haskell.Semigroup ApplicableGeneralizedInputs where
   a <> b  = ApplicableGeneralizedInputs
@@ -115,7 +123,7 @@ instance Haskell.Monoid ApplicableGeneralizedInputs where
 newtype IsMerkleizedContinuation = IsMerkleizedContinuation { unIsMerkleizedContinuation :: Haskell.Bool}
     deriving stock (Haskell.Show,Haskell.Eq,Haskell.Ord,Generic)
     deriving anyclass (Pretty)
-    deriving (FromJSON,ToJSON)
+    deriving newtype (FromJSON,ToJSON)
 
 newtype CanNotify = CanNotify IsMerkleizedContinuation
   deriving stock (Haskell.Show,Haskell.Eq,Haskell.Ord,Generic)
@@ -131,8 +139,7 @@ data CanChoose  = CanChoose ChoiceId [Bound] IsMerkleizedContinuation
 
 newtype CanReduce = CanReduce { unCanReduce :: Haskell.Bool}
     deriving stock (Haskell.Show,Haskell.Eq,Haskell.Ord,Generic)
-    deriving anyclass (Pretty)
-    deriving (FromJSON,ToJSON)
+    deriving newtype (FromJSON,ToJSON,Pretty)
 
 -- | Describe for a given contract which inputs can be applied it can be reduced or not
 next :: Environment ->  State  ->  Contract -> Either AmbiguousIntervalProvided Next
@@ -147,7 +154,7 @@ next environment state contract
 -- | Describe for a given contract which inputs can be applied
 applicables :: Environment  -> State  ->  Contract -> ApplicableGeneralizedInputs
 applicables  _  _ Close = mempty
-applicables environment  state (When xs _ _) = applicableGeneralizedInputs' environment state xs
+applicables environment state (When xs _ _) = applicableGeneralizedInputs' environment state xs
 applicables _  _  _  = mempty
 
 applicableGeneralizedInputs' :: Environment -> State -> [Case Contract] -> ApplicableGeneralizedInputs
@@ -184,10 +191,8 @@ applicableGeneralizedInputMaybe environment state caseIndex
       (MerkleizedCase action _) -> (IsMerkleizedContinuation Haskell.True,action)
 
 
-
 caseIndexed :: [a] -> [(CaseIndex,a)]
 caseIndexed xs = first (CaseIndex . Haskell.fromIntegral) <$> indexed  xs
-
 
 reduceContract :: Environment -> State -> Contract -> Either AmbiguousIntervalProvided (CanReduce,State,Contract)
 reduceContract environment state
@@ -206,9 +211,9 @@ instance FromJSON Next where
   parseJSON _ = Haskell.fail "Next must be an object with 2 fields \"can_reduce\" and \"applicable_generalized_inputs\""
 
 instance ToJSON Next where
-  toJSON (Next canReduce applicableGeneralizedInputs')
+  toJSON Next {..}
     = object [ "can_reduce" .= canReduce
-             , "applicable_generalized_inputs" .= applicableGeneralizedInputs']
+             , "applicable_generalized_inputs" .= applicableGeneralizedInputs]
 
 
 instance FromJSON ApplicableGeneralizedInputs where

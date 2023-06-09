@@ -319,7 +319,7 @@ environment :: UTCTime -> UTCTime -> Environment
 environment start end = Environment (utcTimeToPOSIXTime start, utcTimeToPOSIXTime end)
 
 isTimedOut :: POSIXTime -> Environment -> Bool
-isTimedOut timeout Environment {timeInterval = (start,_)} | timeout  < start = True
+isTimedOut timeout Environment {timeInterval = (start,_)} | timeout  <= start = True
 isTimedOut _ _ = False
 
 isNotTimedOut :: POSIXTime -> Environment -> Bool
