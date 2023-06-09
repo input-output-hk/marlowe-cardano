@@ -45,7 +45,7 @@ rec
     kill_signal = "SIGINT";
     kill_timeout = "30s";
     resources.cpu = 2000;
-    resources.memory = 2048;
+    resources.memory = 4096;
     volume_mount = {
       destination = "/persist";
       propagation_mode = "private";
@@ -79,7 +79,7 @@ rec
     kill_signal = "SIGINT";
     kill_timeout = "30s";
     resources.cpu = 2000;
-    resources.memory = 2048;
+    resources.memory = 1024;
     volume_mount = {
       destination = "/persist";
       propagation_mode = "private";
