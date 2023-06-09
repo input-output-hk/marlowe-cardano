@@ -33,7 +33,7 @@ import Control.Concurrent.Component
 import Control.Concurrent.Component.Probes (ProbeServerDependencies(..), probeServer)
 import Control.Concurrent.Component.Run (runAppMTraced)
 import Control.Exception (bracket)
-import Control.Monad (when, (<=<))
+import Control.Monad (unless, when, (<=<))
 import Control.Monad.Event.Class
 import Control.Monad.Except (ExceptT(ExceptT), runExceptT, withExceptT)
 import Control.Monad.Reader (MonadReader(..))
@@ -50,6 +50,7 @@ import Hasql.Connection (withLibPQConnection)
 import qualified Hasql.Pool as Pool
 import Language.Marlowe.Protocol.Server (marloweRuntimeServerPeer)
 import Language.Marlowe.Runtime (MarloweRuntimeDependencies(..), marloweRuntime)
+import Language.Marlowe.Runtime.ChainIndexer.Database (CommitGenesisBlock(..), DatabaseQueries(..), runGetGenesisBlock)
 import qualified Language.Marlowe.Runtime.ChainIndexer.Database.PostgreSQL as ChainIndexerPostgres
 import Language.Marlowe.Runtime.ChainIndexer.Genesis (computeGenesisBlock)
 import Language.Marlowe.Runtime.ChainIndexer.NodeClient (CostModel(..))
@@ -73,11 +74,15 @@ import OpenTelemetry.Trace
 import Options.Applicative
 import Paths_marlowe_runtime (version)
 import System.Environment (lookupEnv)
+import System.IO (BufferMode(LineBuffering), hSetBuffering, stderr, stdout)
 import Text.Read (readMaybe)
 import UnliftIO (liftIO, throwIO)
 
 main :: IO ()
-main = run =<< getOptions
+main = do
+  hSetBuffering stdout LineBuffering
+  hSetBuffering stderr LineBuffering
+  run =<< getOptions
 
 run :: Options -> IO ()
 run Options{..} = bracket (Pool.acquire 100 (Just 5000000) (fromString databaseUri)) Pool.release \pool -> do
@@ -111,52 +116,61 @@ run Options{..} = bracket (Pool.acquire 100 (Just 5000000) (fromString databaseU
     NESet.IsNonEmpty scripts -> pure scripts
 
   runAppMTraced instrumentationLibrary (renderRootSelectorOTel @Span dbName dbUser dbHost dbPort) do
-    contractStore <- traceContractStore inject <$> createContractStore ContractStoreOptions{..}
-    securityParameter <- liftIO
-      $ (either (fail . show) (either (fail . show) $ pure . protocolParamSecurity) =<<)
-      $ queryNodeLocalState localNodeConnectInfo Nothing
-      $ QueryInEra BabbageEraInCardanoMode
-      $ QueryInShelleyBasedEra ShelleyBasedEraBabbage QueryGenesisParameters
-    flip runComponent_ () proc _ -> do
-      runtimeConnectionSource <- tcpServer "marlowe-proxy" -< TcpServerDependencies
-        { toPeer = marloweRuntimeServerPeer
-        , ..
-        }
+      let chainIndexerDatabaseQueries = ChainIndexerPostgres.databaseQueries pool genesisBlock
 
-      runtimeConnectionSourceTraced <- tcpServerTraced "marlowe-proxy-traced" (injectSelector ProxyServer) -< TcpServerDependencies
-        { port = portTraced
-        , toPeer = marloweRuntimeServerPeer
-        , ..
-        }
+      runGetGenesisBlock (getGenesisBlock chainIndexerDatabaseQueries) >>= \case
+        Just dbGenesisBlock -> unless (dbGenesisBlock == genesisBlock) do
+          liftIO $ fail "Existing genesis block does not match computed genesis block"
+        Nothing -> runCommitGenesisBlock (commitGenesisBlock chainIndexerDatabaseQueries) genesisBlock
 
-      probes <- marloweRuntime -< MarloweRuntimeDependencies
-        { marloweSyncDatabaseQueries = Sync.logDatabaseQueries $ Sync.hoistDatabaseQueries
-            (either throwIO pure <=< liftIO . Pool.use pool)
-            SyncPostgres.databaseQueries
-        , runtimeConnectionSource
-        , runtimeConnectionSourceTraced
-        , connectToLocalNode = \client -> do
-            connectRef <- emitImmediateEventFields (ConnectToNode @Span) [localNodeConnectInfo]
-            liftIO $ Cardano.connectToLocalNode localNodeConnectInfo $ client connectRef
-        , batchSize = unsafeIntToNat bufferSize
-        , chainIndexerDatabaseQueries = ChainIndexerPostgres.databaseQueries pool genesisBlock
-        , chainSyncDatabaseQueries = ChainSyncPostgres.databaseQueries pool networkId
-        , contractStore
-        , costModel
-        , genesisBlock
-        , marloweIndexerDatabaseQueries = IndexerPostgreSQL.databaseQueries pool securityParameter
-        , maxCost
-        , marloweScriptHashes = NESet.map ScriptRegistry.marloweScript scripts
-        , payoutScriptHashes = NESet.map ScriptRegistry.payoutScript scripts
-        , persistRateLimit = 1
-        , pollingInterval = 1
-        , getCurrentScripts = ScriptRegistry.getCurrentScripts
-        , getScripts = ScriptRegistry.getScripts
-        , submitConfirmationBlocks
-        , networkId
-        }
+      contractStore <- traceContractStore inject <$> createContractStore ContractStoreOptions{..}
 
-      probeServer -< ProbeServerDependencies { port = fromIntegral httpPort, .. }
+      securityParameter <- liftIO
+        $ (either (fail . show) (either (fail . show) $ pure . protocolParamSecurity) =<<)
+        $ queryNodeLocalState localNodeConnectInfo Nothing
+        $ QueryInEra BabbageEraInCardanoMode
+        $ QueryInShelleyBasedEra ShelleyBasedEraBabbage QueryGenesisParameters
+
+      flip runComponent_ () proc _ -> do
+        runtimeConnectionSource <- tcpServer "marlowe-proxy" -< TcpServerDependencies
+          { toPeer = marloweRuntimeServerPeer
+          , ..
+          }
+
+        runtimeConnectionSourceTraced <- tcpServerTraced "marlowe-proxy-traced" (injectSelector ProxyServer) -< TcpServerDependencies
+          { port = portTraced
+          , toPeer = marloweRuntimeServerPeer
+          , ..
+          }
+
+        probes <- marloweRuntime -< MarloweRuntimeDependencies
+          { marloweSyncDatabaseQueries = Sync.logDatabaseQueries $ Sync.hoistDatabaseQueries
+              (either throwIO pure <=< liftIO . Pool.use pool)
+              SyncPostgres.databaseQueries
+          , runtimeConnectionSource
+          , runtimeConnectionSourceTraced
+          , connectToLocalNode = \client -> do
+              connectRef <- emitImmediateEventFields (ConnectToNode @Span) [localNodeConnectInfo]
+              liftIO $ Cardano.connectToLocalNode localNodeConnectInfo $ client connectRef
+          , batchSize = unsafeIntToNat bufferSize
+          , chainIndexerDatabaseQueries
+          , chainSyncDatabaseQueries = ChainSyncPostgres.databaseQueries pool networkId
+          , contractStore
+          , costModel
+          , genesisBlock
+          , marloweIndexerDatabaseQueries = IndexerPostgreSQL.databaseQueries pool securityParameter
+          , maxCost
+          , marloweScriptHashes = NESet.map ScriptRegistry.marloweScript scripts
+          , payoutScriptHashes = NESet.map ScriptRegistry.payoutScript scripts
+          , persistRateLimit = 1
+          , pollingInterval = 1
+          , getCurrentScripts = ScriptRegistry.getCurrentScripts
+          , getScripts = ScriptRegistry.getScripts
+          , submitConfirmationBlocks
+          , networkId
+          }
+
+        probeServer -< ProbeServerDependencies { port = fromIntegral httpPort, .. }
   where
     instrumentationLibrary = InstrumentationLibrary
       { libraryName = "marlowe-runtime"
