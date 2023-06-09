@@ -45,14 +45,14 @@ import UnliftIO
   , SomeException
   , TQueue
   , atomically
-  , catch
   , liftIO
   , newEmptyTMVar
   , newTQueue
   , putTMVar
-  , readTMVar
   , readTQueue
+  , takeTMVar
   , throwIO
+  , try
   , withRunInIO
   , writeTQueue
   )
@@ -320,47 +320,51 @@ tcpClientChannel inj host port = withInjectEvent inj Connect \ev -> do
     , reference ev
     )
 
-data ClientWithResponseChannel client m where
-  ClientWithResponseChannel
-    :: client m a
+data SomeServerWithResponseChannel server m where
+  SomeServerWithResponseChannel
+    :: server m a
     -> (Either SomeException a -> STM ())
-    -> ClientWithResponseChannel client m
+    -> SomeServerWithResponseChannel server m
 
-stmConnectionSource
-  :: MonadUnliftIO m
-  => TQueue (ClientWithResponseChannel client m)
-  -> (forall a b. server m a -> client m b -> m (a, b))
-  -> ConnectionSource server m
-stmConnectionSource queue serveClient = ConnectionSource do
-  ClientWithResponseChannel client sendResult <- readTQueue queue
-  pure $ stmServerConnector client sendResult serveClient
+newtype ServerRequest server m = ServerRequest (SomeServerWithResponseChannel server m -> STM ())
 
-stmServerConnector
-  :: MonadUnliftIO m
-  => client m x
-  -> (Either SomeException x -> STM ())
-  -> (forall a b. server m a -> client m b -> m (a, b))
-  -> Connector server m
-stmServerConnector client sendResult serveClient = Connector $ pure Connection
+stmConnectionSource :: MonadUnliftIO m => TQueue (ServerRequest server m) -> ConnectionSource server m
+stmConnectionSource queue = ConnectionSource do
+  serverRequest <- readTQueue queue
+  pure $ stmServerConnector serverRequest
+
+stmServerConnector :: MonadUnliftIO m => ServerRequest server m -> Connector server m
+stmServerConnector (ServerRequest sendServer) = Connector $ pure Connection
   { runConnection = \server -> do
-      (a, b) <- serveClient server client `catch` \ex -> do
-        atomically $ sendResult $ Left ex
-        throwIO ex
-      atomically $ sendResult $ Right b
-      pure a
+      responseVar <- atomically do
+        responseVar <- newEmptyTMVar
+        sendServer $ SomeServerWithResponseChannel server $ putTMVar responseVar
+        pure responseVar
+      atomically (takeTMVar responseVar) >>= \case
+        Left ex -> throwIO ex
+        Right a -> pure a
   }
 
 stmClientConnector
   :: MonadUnliftIO m
-  => TQueue (ClientWithResponseChannel client m)
+  => TQueue (ServerRequest server m)
+  -> (forall a b. server m a -> client m b -> m (a, b))
   -> Connector client m
-stmClientConnector queue = Connector $ pure Connection
+stmClientConnector queue serveClient = Connector $ pure Connection
   { runConnection = \client -> do
-      readResult <- atomically do
-        resultVar <- newEmptyTMVar
-        writeTQueue queue $ ClientWithResponseChannel client $ putTMVar resultVar
-        pure $ readTMVar resultVar
-      either throwIO pure =<< atomically readResult
+      serverVar <- atomically do
+        serverVar <- newEmptyTMVar
+        writeTQueue queue $ ServerRequest $ putTMVar serverVar
+        pure serverVar
+      SomeServerWithResponseChannel server sendResult <- atomically $ takeTMVar serverVar
+      result <- try $ serveClient server client
+      case result of
+        Left ex -> do
+          atomically $ sendResult $ Left ex
+          throwIO ex
+        Right (a, b) -> do
+          atomically $ sendResult $ Right a
+          pure b
   }
 
 data ClientServerPair server client m = ClientServerPair
@@ -376,8 +380,8 @@ clientServerPair
 clientServerPair serveClient = do
   queue <- newTQueue
   pure ClientServerPair
-    { clientServerSource = stmConnectionSource queue serveClient
-    , clientServerConnector = stmClientConnector queue
+    { clientServerSource = stmConnectionSource queue
+    , clientServerConnector = stmClientConnector queue serveClient
     }
 
 data ChannelServerPair ps st server m = ChannelServerPair
