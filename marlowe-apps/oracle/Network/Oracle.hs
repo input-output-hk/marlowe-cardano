@@ -19,6 +19,9 @@ import Data.Text (Text)
 import Network.HTTP.Client (Manager)
 import Network.Oracle.CoinGecko
   (Currency(..), CurrencyPair(..), coinGeckoEnv, fetchCurrencyPair, fetchWolfCurrencyPair, wolfEnv)
+
+import Network.Oracle.Wolfram (Currency(..), CurrencyPair(..), fetchWolfCurrencyPair, wolfEnv)
+
 import Network.Oracle.Sofr (fetchSofrBasisPoints, nyfrbEnv)
 import Observe.Event.Dynamic (DynamicEventSelector(..))
 import Observe.Event.Explicit (EventBackend, addField, withEvent)

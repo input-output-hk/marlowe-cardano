@@ -146,6 +146,8 @@ executable marlowe-oracle
                     , servant-client
                     , text
                     , time-units
+                    , regex-base
+                    , regex-posix ^>= { 0.96.0.1 }
   ghc-options       : -Wall
                       -Wnoncanonical-monad-instances
                       -Wincomplete-uni-patterns

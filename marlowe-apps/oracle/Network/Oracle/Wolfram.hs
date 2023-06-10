@@ -8,19 +8,16 @@
 {-# LANGUAGE TypeOperators #-}
 
 
-module Network.Oracle.CoinGecko
-  ( CoinGeckoApi
-  , Currency(..)
-  , CurrencyPair(..)
-  , CurrencyPairs(..)
-  , coinGeckoApi
-  , coinGeckoEnv
-  , fetchCurrencyPair
+module Network.Oracle.Wolfram
+  ( Currency(..)
+  , WolfCurrencyPair(..)
+  , WolframApi
   , fetchCurrencyPairRaw
-  , fetchCurrencyPairs
+  , fetchWolfCurrencyPair
   , getCurrencyPair
   , getCurrencyPairRaw
-  , getCurrencyPairs
+  , wolframApi
+  , wolframEnv
   ) where
 
 
@@ -30,50 +27,22 @@ import Data.Bifunctor (first)
 import Data.Proxy (Proxy(Proxy))
 import Data.Text (Text)
 import Network.HTTP.Client (Manager)
-import Servant.API (Get, JSON, QueryParam', Required, Strict, (:>))
+import Servant.API (Get, JSON, PlainText, QueryParam', Required, Strict, (:>))
 import Servant.Client (ClientEnv, ClientM, client, mkClientEnv, parseBaseUrl, runClientM)
+import Text.Regex.Base
+import Text.Regex.Posix ((=~))
 
+wolframEnv :: Manager -> IO ClientEnv
+wolframEnv manager = mkClientEnv manager <$> parseBaseUrl "http://api.wolframalpha.com/v1/result"
 
-coinGeckoEnv :: Manager -> IO ClientEnv
-coinGeckoEnv manager = mkClientEnv manager <$> parseBaseUrl "http://api.wolframalpha.com/v1/result"
+appId :: Text
+appId = "6WU6JX-46EP5U9AGX"
 
-
-type WolframApi = QueryParam' '[Required,Strict] "appid" "6WU6JX-46EP5U9AGX" :> QueryParam' '[Required,Strict] "i" Text :> Get '[JSON] CurrencyPairs
+type WolframApi = QueryParam' '[Required,Strict] "appid" Text :> QueryParam' '[Required,Strict] "i" Text :> Get '[PlainText] Text
 
 
 wolframApi :: Proxy WolframApi
 wolframApi = Proxy
-
-
-newtype CurrencyPairs = CurrencyPairs {currencyPairs :: [CurrencyPair]}
-  deriving (Eq, Ord, Read, Show)
-
-instance FromJSON CurrencyPairs where
-  parseJSON =
-    withObject "CurrencyPairs"
-      $ \o ->
-        fmap (CurrencyPairs . concat)
-          $ sequence
-          [
-            flip (withObject "CurrencyPair") o'
-              $ \o'' ->
-                do
-                  baseCurrency <- parseJSON $ toJSON base
-                  sequence
-                    [
-                      do
-                        quoteCurrency <- parseJSON $ toJSON quote
-                        let
-                          scale = 100_000_000
-                        rate <- (round :: Double -> Integer) . (fromInteger scale *) <$> parseJSON rate'
-                        pure CurrencyPair{..}
-                    |
-                      (quote, rate') <- toList o''
-                    ]
-          |
-            (base, o') <- toList o
-          ]
-
 
 data Currency = BTC | USD
   deriving (Eq, Ord, Read, Show)
@@ -94,15 +63,12 @@ toBaseCurrency _   = Left "Unsupported base currency."
 
 toQuoteCurrency :: Currency -> Either String Text
 toQuoteCurrency BTC = pure "btc"
-toQuoteCurrency EUR = pure "eur"
-toQuoteCurrency GBP = pure "gbp"
-toQuoteCurrency JPY = pure "jpy"
 toQuoteCurrency USD = pure "usd"
 toQuoteCurrency _   = Left "Unsupported quote currency."
 
 
-data CurrencyPair =
-  CurrencyPair
+data WolfCurrencyPair =
+  WolfCurrencyPair
   {
     baseCurrency :: Currency
   , quoteCurrency :: Currency
@@ -111,16 +77,7 @@ data CurrencyPair =
   }
     deriving (Eq, Ord, Read, Show)
 
-
-getCurrencyPairs :: ClientM [CurrencyPair]
-getCurrencyPairs = currencyPairs <$> client wolframApi "cardano,bitcoin,ethereum" "btc,eth,usd,eur,gbp,jpy"
-
-
-fetchCurrencyPairs :: ClientEnv -> IO (Either String [CurrencyPair])
-fetchCurrencyPairs = fmap (first show) . runClientM getCurrencyPairs
-
-
-getCurrencyPair :: Currency -> Currency -> ClientM (Either String CurrencyPair)
+getCurrencyPair :: Currency -> Currency -> ClientM (Either String WolfCurrencyPair)
 getCurrencyPair base quote =
   either (pure . Left) id
     $ getCurrencyPairRaw
@@ -128,22 +85,28 @@ getCurrencyPair base quote =
     <*> toQuoteCurrency quote
 
 
-fetchWolfCurrencyPair :: ClientEnv -> Currency -> Currency -> IO (Either String CurrencyPair)
+fetchWolfCurrencyPair :: ClientEnv -> Currency -> Currency -> IO (Either String WolfCurrencyPair)
 fetchWolfCurrencyPair env base quote = fmap (either (Left . show) id) $ getCurrencyPair base quote `runClientM` env
 
 generateQuestion :: Text -> Text -> Text
-generateQuestion base quote = "1 " ++ base ++ " to " ++ quote
+generateQuestion base quote = "1 " <> base <> " to " <> quote
 
-getCurrencyPairRaw :: Text -> Text -> ClientM (Either String CurrencyPair)
+extractValue :: String -> Integer
+extractValue answer = read (answer =~ ("[0-9]+" :: String)) :: Integer
+
+getCurrencyPairRaw :: Text -> Text -> ClientM (Either String WolfCurrencyPair)
 getCurrencyPairRaw base quote =
-  client coinGeckoApi (generateQuestion base quote) >>=
+  client wolframApi appId (generateQuestion base quote) >>=
     (
       \case
-        [pair] -> pure $ Right pair
-        []     -> pure $ Left "Currency pair not found."
-        _      -> pure $ Left "Duplicate currency rates."
-    ) . currencyPairs
+        "" -> pure $ Left "No number returned"
+        rateAnswer ->
+            let
+                baseCurrency = toBaseCurrency base
+                quoteCurrency = toQuoteCurrency quote
+            in pure $ Right $ WolfCurrencyPair{scale = 1, rate = extractValue rateAnswer, ..}
+    )
 
 
-fetchCurrencyPairRaw:: ClientEnv -> Text -> Text -> IO (Either String CurrencyPair)
+fetchCurrencyPairRaw:: ClientEnv -> Text -> Text -> IO (Either String WolfCurrencyPair)
 fetchCurrencyPairRaw env base quote = fmap (either (Left . show) id) $ getCurrencyPairRaw base quote `runClientM` env
