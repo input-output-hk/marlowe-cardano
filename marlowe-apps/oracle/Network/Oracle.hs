@@ -17,10 +17,9 @@ module Network.Oracle
 import Data.Maybe (fromJust)
 import Data.Text (Text)
 import Network.HTTP.Client (Manager)
-import Network.Oracle.CoinGecko
-  (Currency(..), CurrencyPair(..), coinGeckoEnv, fetchCurrencyPair, fetchWolfCurrencyPair, wolfEnv)
+import Network.Oracle.CoinGecko (Currency(..), CurrencyPair(..), coinGeckoEnv, fetchCurrencyPair)
 
-import Network.Oracle.Wolfram (Currency(..), CurrencyPair(..), fetchWolfCurrencyPair, wolfEnv)
+import Network.Oracle.Wolfram (WolfCurrency(..), WolfCurrencyPair(..), fetchWolfCurrencyPair, wolframEnv)
 
 import Network.Oracle.Sofr (fetchSofrBasisPoints, nyfrbEnv)
 import Observe.Event.Dynamic (DynamicEventSelector(..))
@@ -30,20 +29,14 @@ import Servant.Client (ClientEnv)
 import Text.Read (readMaybe)
 
 
-data Wolf = WOLF_BTCUSD
+data Oracle = WOLF_BTCUSD | SOFR | BTCETH | BTCEUR | BTCGBP | BTCJPY | BTCUSD | ADABTC | ADAETH | ADAEUR | ADAGBP | ADAJPY | ADAUSD | ETHBTC | ETHEUR | ETHGBP | ETHJPY | ETHUSD
   deriving (Bounded, Enum, Eq, Ord, Read, Show)
-
-data Oracle = Wolf | SOFR | BTCETH | BTCEUR | BTCGBP | BTCJPY | BTCUSD | ADABTC | ADAETH | ADAEUR | ADAGBP | ADAJPY | ADAUSD | ETHBTC | ETHEUR | ETHGBP | ETHJPY | ETHUSD
-  deriving (Bounded, Enum, Eq, Ord, Read, Show)
-
 
 toOracleSymbol :: String -> Maybe Oracle
 toOracleSymbol = readMaybe
 
-
 oracles :: [Oracle]
 oracles = [minBound..maxBound]
-
 
 pairs :: [(Oracle, (Currency, Currency))]
 pairs =
@@ -64,7 +57,12 @@ pairs =
   , (ETHGBP, (ETH, GBP))
   , (ETHJPY, (ETH, JPY))
   , (ETHUSD, (ETH, USD))
-  , (WOLF_BTCUSD, (BTC, USD))
+  ]
+
+wolfPairs :: [(Oracle, (WolfCurrency, WolfCurrency))]
+wolfPairs =
+  [
+    (WOLF_BTCUSD, (WOLF_BTC, WOLF_USD))
   ]
 
 
@@ -104,12 +102,12 @@ readOracle eventBackend OracleEnv{..} symbol =
                       addField event $ ("source" :: Text) ≔ ("NYFRB" :: String)
                       addField event $ ("unit" :: Text) ≔ ("basis points" :: String)
                       fetchSofrBasisPoints nyfrb
-            Wolf -> do
-                      result <- uncurry (fetchWolfCurrencyPair wolfram) . fromJust $ symbol `lookup` pairs
+            WOLF_BTCUSD -> do
+                      result <- uncurry (fetchWolfCurrencyPair wolfram) . fromJust $ symbol `lookup` wolfPairs
                       addField event $ ("source" :: Text) ≔ ("Wolfram" :: String)
                       addField event $ ("result":: Text)  ≔ show result
                       addField event $ ("unit" :: Text) ≔ ("/ 100,000,000" :: String)
-                      pure $ rate <$> result
+                      pure $ wolfRate <$> result
             _    -> do
                       result <- uncurry (fetchCurrencyPair coinGecko) . fromJust $ symbol `lookup` pairs
                       addField event $ ("source" :: Text) ≔ ("CoinGecko" :: String)

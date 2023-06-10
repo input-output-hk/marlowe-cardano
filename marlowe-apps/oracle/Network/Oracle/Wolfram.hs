@@ -9,17 +9,14 @@
 
 
 module Network.Oracle.Wolfram
-  ( Currency(..)
+  ( WolfCurrency(..)
   , WolfCurrencyPair(..)
   , WolframApi
-  , fetchCurrencyPairRaw
   , fetchWolfCurrencyPair
-  , getCurrencyPair
-  , getCurrencyPairRaw
+  , getWolfCurrencyPair
   , wolframApi
   , wolframEnv
   ) where
-
 
 import Data.Aeson.KeyMap (toList)
 import Data.Aeson.Types (FromJSON(parseJSON), parseFail, toJSON, withObject, withText)
@@ -40,73 +37,51 @@ appId = "6WU6JX-46EP5U9AGX"
 
 type WolframApi = QueryParam' '[Required,Strict] "appid" Text :> QueryParam' '[Required,Strict] "i" Text :> Get '[PlainText] Text
 
-
 wolframApi :: Proxy WolframApi
 wolframApi = Proxy
 
-data Currency = BTC | USD
+data WolfCurrency = WOLF_BTC | WOLF_USD
   deriving (Eq, Ord, Read, Show)
 
-instance FromJSON Currency where
-  parseJSON =
-    withText "Currency"
-      $ \case
-        "btc"      -> pure BTC
-        _          -> parseFail "Unrecognized currency."
+toWolfBaseCurrency :: WolfCurrency -> Either String Text
+toWolfBaseCurrency WOLF_BTC = pure "bitcoin"
+toWolfBaseCurrency WOLF_USD = pure "usd"
+toWolfBaseCurrency _   = Left "Unsupported base currency."
 
-
-toBaseCurrency :: Currency -> Either String Text
-toBaseCurrency BTC = pure "bitcoin"
-toBaseCurrency USD = pure "usd"
-toBaseCurrency _   = Left "Unsupported base currency."
-
-
-toQuoteCurrency :: Currency -> Either String Text
-toQuoteCurrency BTC = pure "btc"
-toQuoteCurrency USD = pure "usd"
-toQuoteCurrency _   = Left "Unsupported quote currency."
-
+toWolfQuoteCurrency :: WolfCurrency -> Either String Text
+toWolfQuoteCurrency WOLF_BTC = pure "btc"
+toWolfQuoteCurrency WOLF_USD = pure "usd"
+toWolfQuoteCurrency _   = Left "Unsupported quote currency."
 
 data WolfCurrencyPair =
   WolfCurrencyPair
   {
-    baseCurrency :: Currency
-  , quoteCurrency :: Currency
-  , rate :: Integer
-  , scale :: Integer
+    wolfBaseCurrency :: WolfCurrency
+  , wolfQuoteCurrency :: WolfCurrency
+  , wolfRate :: Integer
+  , wolfScale :: Integer
   }
     deriving (Eq, Ord, Read, Show)
 
-getCurrencyPair :: Currency -> Currency -> ClientM (Either String WolfCurrencyPair)
-getCurrencyPair base quote =
-  either (pure . Left) id
-    $ getCurrencyPairRaw
-    <$> toBaseCurrency base
-    <*> toQuoteCurrency quote
+fetchWolfCurrencyPair :: ClientEnv -> WolfCurrency -> WolfCurrency -> IO (Either String WolfCurrencyPair)
+fetchWolfCurrencyPair env base quote = fmap (either (Left . show) id) $ getWolfCurrencyPair base quote `runClientM` env
 
-
-fetchWolfCurrencyPair :: ClientEnv -> Currency -> Currency -> IO (Either String WolfCurrencyPair)
-fetchWolfCurrencyPair env base quote = fmap (either (Left . show) id) $ getCurrencyPair base quote `runClientM` env
-
-generateQuestion :: Text -> Text -> Text
-generateQuestion base quote = "1 " <> base <> " to " <> quote
+genewolfRateQuestion :: Text -> Text -> Text
+genewolfRateQuestion base quote = "1 " <> base <> " to " <> quote
 
 extractValue :: String -> Integer
 extractValue answer = read (answer =~ ("[0-9]+" :: String)) :: Integer
 
-getCurrencyPairRaw :: Text -> Text -> ClientM (Either String WolfCurrencyPair)
-getCurrencyPairRaw base quote =
-  client wolframApi appId (generateQuestion base quote) >>=
+getWolfCurrencyPair :: WolfCurrency -> WolfCurrency -> ClientM (Either String WolfCurrencyPair)
+getWolfCurrencyPair wolfBaseCurrency wolfQuoteCurrency =
+  let
+    base = toWolfBaseCurrency wolfBaseCurrency
+    quote = toWolfQuoteCurrency wolfQuoteCurrency
+    question = genewolfRateQuestion <$> base <*> quote
+  in sequence (client wolframApi appId <$> question) >>=
     (
       \case
         "" -> pure $ Left "No number returned"
-        rateAnswer ->
-            let
-                baseCurrency = toBaseCurrency base
-                quoteCurrency = toQuoteCurrency quote
-            in pure $ Right $ WolfCurrencyPair{scale = 1, rate = extractValue rateAnswer, ..}
+        wolfRateAnswer -> pure $ Right $ WolfCurrencyPair{wolfScale = 1, wolfRate = extractValue wolfRateAnswer, ..}
     )
 
-
-fetchCurrencyPairRaw:: ClientEnv -> Text -> Text -> IO (Either String WolfCurrencyPair)
-fetchCurrencyPairRaw env base quote = fmap (either (Left . show) id) $ getCurrencyPairRaw base quote `runClientM` env
