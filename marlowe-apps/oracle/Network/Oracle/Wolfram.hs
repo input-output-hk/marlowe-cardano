@@ -22,7 +22,7 @@ import Data.Aeson.KeyMap (toList)
 import Data.Aeson.Types (FromJSON(parseJSON), parseFail, toJSON, withObject, withText)
 import Data.Bifunctor (first)
 import Data.Proxy (Proxy(Proxy))
-import Data.Text (Text)
+import Data.Text (Text, unpack)
 import Network.HTTP.Client (Manager)
 import Servant.API (Get, JSON, PlainText, QueryParam', Required, Strict, (:>))
 import Servant.Client (ClientEnv, ClientM, client, mkClientEnv, parseBaseUrl, runClientM)
@@ -66,22 +66,27 @@ data WolfCurrencyPair =
 fetchWolfCurrencyPair :: ClientEnv -> WolfCurrency -> WolfCurrency -> IO (Either String WolfCurrencyPair)
 fetchWolfCurrencyPair env base quote = fmap (either (Left . show) id) $ getWolfCurrencyPair base quote `runClientM` env
 
-genewolfRateQuestion :: Text -> Text -> Text
-genewolfRateQuestion base quote = "1 " <> base <> " to " <> quote
+generateWolfRateQuestion :: Text -> Text -> Text
+generateWolfRateQuestion base quote = "1 " <> base <> " to " <> quote
 
 extractValue :: String -> Integer
 extractValue answer = read (answer =~ ("[0-9]+" :: String)) :: Integer
+
+
+toWolfCurrencyPair :: WolfCurrency -> WolfCurrency -> Either String Text -> Either String WolfCurrencyPair
+toWolfCurrencyPair _ _ (Right "") = Left "No number returned"
+toWolfCurrencyPair wolfBaseCurrency wolfQuoteCurrency answer = do
+    answ <- unpack <$> answer
+    pure $ WolfCurrencyPair{wolfScale = 1, wolfRate = extractValue answ, ..}
 
 getWolfCurrencyPair :: WolfCurrency -> WolfCurrency -> ClientM (Either String WolfCurrencyPair)
 getWolfCurrencyPair wolfBaseCurrency wolfQuoteCurrency =
   let
     base = toWolfBaseCurrency wolfBaseCurrency
     quote = toWolfQuoteCurrency wolfQuoteCurrency
-    question = genewolfRateQuestion <$> base <*> quote
-  in sequence (client wolframApi appId <$> question) >>=
-    (
-      \case
-        "" -> pure $ Left "No number returned"
-        wolfRateAnswer -> pure $ Right $ WolfCurrencyPair{wolfScale = 1, wolfRate = extractValue wolfRateAnswer, ..}
-    )
+    question = generateWolfRateQuestion <$> base <*> quote
+  in do
+    answer <- sequence $ client wolframApi appId <$> question
+    pure $ toWolfCurrencyPair wolfBaseCurrency wolfQuoteCurrency answer
 
+--  <$>
