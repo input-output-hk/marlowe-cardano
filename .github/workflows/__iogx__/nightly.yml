@@ -57,8 +57,7 @@ jobs:
 
       - name: Build Marlowe Finder
         run: |
-        # TODO[iogx] remove __iogx__ suffix after PR merged 
-        nix build .#__iogx__.ghc8107-marlowe-apps-exe-marlowe-filder
+        nix build .#ghc8107-marlowe-apps-exe-marlowe-filder
 
       - name: Install SSH keys
         uses: shimataro/ssh-key-action@v2
@@ -103,8 +102,7 @@ jobs:
 
       - name: Build Marlowe Scaling
         run: |
-          # TODO[iogx] remove __iogx__ suffix after PR merged 
-          nix build .#__iogx__.ghc8107-marlowe-apps-exe-marlowe-scaling
+          nix build .#ghc8107-marlowe-apps-exe-marlowe-scaling
 
       - name: Install SSH keys
         uses: shimataro/ssh-key-action@v2

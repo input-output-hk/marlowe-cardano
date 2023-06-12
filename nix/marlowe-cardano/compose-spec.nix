@@ -1,6 +1,9 @@
-{ sqitchPg, postgresql, runCommand, writeShellScriptBin, writeText, lib, glibcLocales, networks }:
+{ inputs, pkgs }:
+
 let
-  network = networks.preview;
+  inherit (pkgs) sqitchPg postgresql runCommand writeShellScriptBin writeText lib glibcLocales;
+  network = inputs.self.networks.preview;
+
   mkSqitchRunner = name: path: writeShellScriptBin name ''
     export PATH="$PATH:${lib.makeBinPath [ sqitchPg postgresql ]}"
     export LOCALE_ARCHIVE="${glibcLocales}/lib/locale/locale-archive"
@@ -10,38 +13,6 @@ let
 
   run-sqitch = mkSqitchRunner "run-sqitch" "/src/marlowe-chain-sync";
   run-sqitch-marlowe-indexer = mkSqitchRunner "run-sqitch-marlowe-indexer" "/src/marlowe-runtime/marlowe-indexer";
-
-  run-chain-indexer = writeShellScriptBin "run-marlowe-chain-indexer" ''
-    set -e
-    PROG=${lib.escapeShellArg "marlowe-chain-indexer"}
-    PKG=${lib.escapeShellArg "marlowe-chain-sync"}-${lib.escapeShellArg marloweRuntimeVersion}
-    cd /src
-    # Hard-coding linux because this won't work on Mac anyway.
-    # TODO find a setup that works on MacOS
-    BIN=./dist-newstyle/build/x86_64-linux/ghc-8.10.7/$PKG/x/$PROG/build/$PROG/$PROG
-    export PATH="$PATH:${lib.makeBinPath [ sqitchPg postgresql ]}"
-    export LOCALE_ARCHIVE="${glibcLocales}/lib/locale/locale-archive"
-    cd marlowe-chain-sync
-    sqitch deploy -h postgres
-    cd /src
-    exec -a $PROG $BIN "$@"
-  '';
-
-  run-indexer = writeShellScriptBin "run-marlowe-indexer" ''
-    set -e
-    PROG=${lib.escapeShellArg "marlowe-indexer"}
-    PKG=${lib.escapeShellArg "marlowe-runtime"}-${lib.escapeShellArg marloweRuntimeVersion}
-    cd /src
-    # Hard-coding linux because this won't work on Mac anyway.
-    # TODO find a setup that works on MacOS
-    BIN=./dist-newstyle/build/x86_64-linux/ghc-8.10.7/$PKG/x/$PROG/build/$PROG/$PROG
-    export PATH="$PATH:${lib.makeBinPath [ sqitchPg postgresql ]}"
-    export LOCALE_ARCHIVE="${glibcLocales}/lib/locale/locale-archive"
-    cd marlowe-runtime/marlowe-indexer
-    sqitch deploy -h postgres
-    cd /src
-    exec -a $PROG $BIN "$@"
-  '';
 
   run-local-service = project: version: prog: writeShellScriptBin "run-${prog}" ''
     set -e
@@ -60,14 +31,13 @@ let
     mkdir -p $out
     ln -sv ${run-sqitch}/bin/run-sqitch $out
     ln -sv ${run-sqitch-marlowe-indexer}/bin/run-sqitch-marlowe-indexer $out
-    ln -sv ${run-chain-indexer}/bin/run-marlowe-chain-indexer $out
+    ln -sv ${run-local-service "marlowe-chain-sync" marloweRuntimeVersion "marlowe-chain-indexer"}/bin/run-marlowe-chain-indexer $out
     ln -sv ${run-local-service "marlowe-chain-sync" marloweRuntimeVersion "marlowe-chain-sync"}/bin/run-marlowe-chain-sync $out
     ln -sv ${run-local-service "marlowe-runtime" marloweRuntimeVersion "marlowe-sync"}/bin/run-marlowe-sync $out
     ln -sv ${run-local-service "marlowe-runtime" marloweRuntimeVersion "marlowe-tx"}/bin/run-marlowe-tx $out
     ln -sv ${run-local-service "marlowe-runtime-web" marloweRuntimeVersion "marlowe-web-server"}/bin/run-marlowe-web-server $out
-    ln -sv ${run-indexer}/bin/run-marlowe-indexer $out
+    ln -sv ${run-local-service "marlowe-runtime" marloweRuntimeVersion "marlowe-indexer"}/bin/run-marlowe-indexer $out
     ln -sv ${run-local-service "marlowe-runtime" marloweRuntimeVersion "marlowe-proxy"}/bin/run-marlowe-proxy $out
-    ln -sv ${run-local-service "marlowe-runtime" marloweRuntimeVersion "marlowe-contract"}/bin/run-marlowe-contract $out
   '';
 
   node-service = {
@@ -91,7 +61,7 @@ let
     };
   };
 
-  dev-service = { ports, depends_on ? [ ], command, environment ? [ ], volumes ? [ ] }: {
+  dev-service = { ports, depends_on, command, environment ? [ ] }: {
     inherit command;
     image = "alpine:3.16.2";
     volumes = [
@@ -99,7 +69,7 @@ let
       "/nix:/nix"
       "${symlinks}:/exec"
       "shared:/ipc"
-    ] ++ volumes;
+    ];
     restart = "unless-stopped";
     ports = map toString ports;
     healthcheck = {
@@ -147,6 +117,11 @@ let
       "--shelley-genesis-config-file"
       network.nodeConfig.ShelleyGenesisFile
     ];
+    healthcheck = {
+      test = "/exec/run-sqitch -h postgres";
+      timeout = "20s";
+      retries = 0;
+    };
   };
 
   marlowe-indexer-service = {
@@ -174,11 +149,16 @@ let
       "--database-uri"
       "postgresql://postgres@postgres/chain"
     ];
+    healthcheck = {
+      test = "/exec/run-sqitch-marlowe-indexer -h postgres";
+      timeout = "20s";
+      retries = 0;
+    };
   };
 
   marlowe-chain-sync-service = dev-service {
     ports = [ 3715 3716 3720 ];
-    depends_on = [ "postgres" "node" ];
+    depends_on = [ "postgres" "node" "marlowe-chain-indexer" ];
     command = [
       "/exec/run-marlowe-chain-sync"
       "--testnet-magic"
@@ -194,8 +174,8 @@ let
   };
 
   sync-service = dev-service {
-    ports = [ 3724 3725 3726 ];
-    depends_on = [ "postgres" ];
+    ports = [ 3724 3725 ];
+    depends_on = [ "marlowe-indexer" "postgres" ];
     command = [
       "/exec/run-marlowe-sync"
       "--database-uri"
@@ -206,21 +186,6 @@ let
     environment = [ "OTEL_SERVICE_NAME=marlowe-sync" ];
   };
 
-  contract-service = dev-service {
-    ports = [ 3727 3728 ];
-    command = [
-      "/exec/run-marlowe-contract"
-      "--store-dir"
-      "/store"
-      "--host"
-      "0.0.0.0"
-    ];
-    volumes = [
-      "marlowe-contract-store:/store"
-    ];
-    environment = [ "OTEL_SERVICE_NAME=marlowe-contract" ];
-  };
-
   tx-service = dev-service {
     ports = [ 3723 ];
     depends_on = [ "marlowe-chain-sync" ];
@@ -228,8 +193,6 @@ let
       "/exec/run-marlowe-tx"
       "--chain-sync-host"
       "marlowe-chain-sync"
-      "--contract-host"
-      "marlowe-contract"
       "--host"
       "0.0.0.0"
     ];
@@ -238,7 +201,7 @@ let
 
   proxy-service = dev-service {
     ports = [ 3700 3701 ];
-    depends_on = [ "marlowe-sync" "marlowe-tx" "marlowe-contract" ];
+    depends_on = [ "marlowe-sync" "marlowe-tx" ];
     command = [
       "/exec/run-marlowe-proxy"
       "--host"
@@ -247,8 +210,6 @@ let
       "marlowe-sync"
       "--tx-host"
       "marlowe-tx"
-      "--marlowe-contract-host"
-      "marlowe-contract"
     ];
     environment = [ "OTEL_SERVICE_NAME=marlowe-proxy" ];
   };
@@ -345,12 +306,10 @@ let
     services.web = web-service;
     services.marlowe-indexer = marlowe-indexer-service;
     services.marlowe-sync = sync-service;
-    services.marlowe-contract = contract-service;
 
     services.node = node-service;
     volumes.shared = null;
     volumes.node-db = null;
-    volumes.marlowe-contract-store = null;
   };
 in
 writeText "compose.yaml" (builtins.toJSON spec)

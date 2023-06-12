@@ -44,8 +44,7 @@ jobs:
           authToken: "${{ secrets.CACHIX_AUTH_TOKEN }}"
       - name: Run tests
         run: |
-          # TODO[iogx] remove .#__iogx__.default after PR merged 
-          nix develop .#__iogx__.default --command run-integration-tests --strict
+          nix develop --command run-integration-tests --strict
         env:
           MARLOWE_RT_TEST_DB_HOST: localhost
           MARLOWE_RT_TEST_CLEANUP_DATABASE: "False"

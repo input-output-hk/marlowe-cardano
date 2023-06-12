@@ -93,7 +93,7 @@ If you use Nix, these tools are provided for you via `nix develop`, and you do *
 [[building-with-nix]]
 ==== How to build the Haskell packages and other artifacts with Nix
 
-Run `nix build .#marlowe.haskell.packages.marlowe.components.library` from the root to build the Marlowe library.
+Run `nix build .#ghc8107-marlowe-runtime-lib-marlowe-runtime` from the root to build the Marlowe library.
 
 See <<nix-build-attributes>> to find out what other attributes you can build.
 
@@ -183,16 +183,6 @@ sudo launchctl start org.nixos.nix-daemon
 link:./packages.nix[`packages.nix`] defines a package set with attributes for all the artifacts you can build from this repository.
 These can be built using `nix build`.
 For example:
-
-----
-nix build .#docs.site
-----
-
-.Example attributes
-* Project packages: defined inside `marlowe.haskell.packages`
-** e.g. `marlowe.haskell.packages.marlowe.components.library`
-
-There are other attributes defined in link:./packages.nix[`packages.nix`].
 
 == Docker compose
 
