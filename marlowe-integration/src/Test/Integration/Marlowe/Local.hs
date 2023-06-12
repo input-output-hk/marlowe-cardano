@@ -322,6 +322,8 @@ withLocalMarloweRuntime' MarloweRuntimeOptions{..} test = withRunInIO \runInIO -
 
     let chainSyncConnector = SomeConnectorTraced inject $ clientConnector chainSyncPair
     let chainSyncJobConnector = SomeConnectorTraced inject $ clientConnector chainSyncJobPair
+    let confirmationTimeout = 60
+    let pollingInterval = 0.1
     let mkSubmitJob = Submit.mkSubmitJob SubmitJobDependencies{..}
     let baseUrl = BaseUrl Http "localhost" webPort ""
     let clientEnv = mkClientEnv manager baseUrl

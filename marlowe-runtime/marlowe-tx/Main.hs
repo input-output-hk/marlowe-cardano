@@ -110,6 +110,8 @@ run Options{..} = flip runComponent_ () proc _ -> do
         { chainSyncJobConnector = SomeConnectorTraced (injectSelector ChainSyncJobClient)
             $ handshakeClientConnectorTraced
             $ tcpClientTraced (injectSelector ChainSyncJobClient) chainSeekHost chainSeekCommandPort jobClientPeer
+        , pollingInterval = 1.5
+        , confirmationTimeout = 3600 -- 1 hour
         , ..
         }
     , loadMarloweContext = \v contractId -> do

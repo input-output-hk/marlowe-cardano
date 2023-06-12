@@ -10,6 +10,7 @@ import qualified Cardano.Api as C
 import Control.Concurrent.STM (STM, newTVar, readTVar, writeTVar)
 import Control.Monad.Event.Class (MonadEvent)
 import Data.Functor (($>))
+import Data.Time (NominalDiffTime, nominalDiffTimeToSeconds)
 import Data.Void (absurd)
 import Language.Marlowe.Runtime.ChainSync.Api
 import Language.Marlowe.Runtime.Transaction.Api (SubmitError(..), SubmitStatus(..))
@@ -28,6 +29,8 @@ data SubmitJobStatus
 data SubmitJobDependencies r s m = SubmitJobDependencies
   { chainSyncConnector :: SomeClientConnectorTraced RuntimeChainSeekClient r s m
   , chainSyncJobConnector :: SomeClientConnectorTraced (JobClient ChainSyncCommand) r s m
+  , confirmationTimeout :: NominalDiffTime
+  , pollingInterval :: NominalDiffTime
   , submitConfirmationBlocks :: BlockNo
   }
 
@@ -64,7 +67,9 @@ doSubmit SubmitJobDependencies{..} tellStatus era tx= do
     txId = TxId $ C.serialiseToRawBytes $ C.getTxId $ C.getTxBody tx
 
     timeout :: m ()
-    timeout = threadDelay $ 10 * 60 * 1_000_000 -- 10 minutes in microseconds
+    timeout = threadDelay $ floor $ nominalDiffTimeToSeconds confirmationTimeout * 1_000_000 -- 10 minutes in microseconds
+
+    pollingMicroSeconds = floor $ nominalDiffTimeToSeconds pollingInterval * 1_000_000
 
     waitForTx :: m BlockHeader
     waitForTx = runSomeConnectorTraced chainSyncConnector client
@@ -80,7 +85,7 @@ doSubmit SubmitJobDependencies{..} tellStatus era tx= do
           , recvMsgRollForward = \_ point _ -> case point of
               Genesis -> error "marlowe-chain-sync rolled forward to genesis"
               At block -> pure $ clientIdleAwaitMaturity block
-          , recvMsgWait = threadDelay 100_000 $> SendMsgPoll clientNextAwaitConfirmation
+          , recvMsgWait = threadDelay pollingMicroSeconds $> SendMsgPoll clientNextAwaitConfirmation
           }
 
         clientIdleAwaitMaturity confirmationBlock
@@ -92,5 +97,5 @@ doSubmit SubmitJobDependencies{..} tellStatus era tx= do
           { recvMsgQueryRejected = absurd
           , recvMsgRollBackward = \_ _ -> pure clientIdleAwaitConfirmation
           , recvMsgRollForward = \_ _ _ -> pure $ SendMsgDone confirmationBlock
-          , recvMsgWait = threadDelay 100_000 $> SendMsgPoll (clientNextAwaitMaturity confirmationBlock)
+          , recvMsgWait = threadDelay pollingMicroSeconds $> SendMsgPoll (clientNextAwaitMaturity confirmationBlock)
           }
