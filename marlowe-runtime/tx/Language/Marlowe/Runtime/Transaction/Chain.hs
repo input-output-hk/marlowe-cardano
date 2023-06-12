@@ -4,6 +4,7 @@
 module Language.Marlowe.Runtime.Transaction.Chain
   where
 
+import Colog (Message, WithLog)
 import Control.Concurrent.Component
 import Control.Concurrent.STM (STM, newTVar, readTVar, writeTVar)
 import Control.Monad.Event.Class (MonadEvent)
@@ -22,7 +23,7 @@ newtype TransactionChainClientDependencies r s m = TransactionChainClientDepende
   }
 
 transactionChainClient
-  :: (MonadUnliftIO m, MonadEvent r s m, HasSpanContext r)
+  :: (MonadUnliftIO m, MonadEvent r s m, HasSpanContext r, WithLog env Message m)
   => Component m (TransactionChainClientDependencies r s m) (STM Bool, STM Chain.ChainPoint)
 transactionChainClient = component "tx-chain-seek-client" \TransactionChainClientDependencies{..} -> do
   tipVar <- newTVar Chain.Genesis

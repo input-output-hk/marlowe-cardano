@@ -6,6 +6,7 @@
 module Language.Marlowe.Runtime.Contract.QueryServer
   where
 
+import Colog (Message, WithLog)
 import Control.Concurrent.Component
 import Control.Monad.Event.Class
 import Language.Marlowe.Runtime.Contract.Api hiding (getContract, merkleizeInputs)
@@ -21,7 +22,7 @@ data QueryServerDependencies r s m = QueryServerDependencies
   }
 
 queryServer
-  :: (MonadUnliftIO m, HasSpanContext r, MonadEvent r s m)
+  :: (MonadUnliftIO m, HasSpanContext r, MonadEvent r s m, WithLog env Message m)
   => Component m (QueryServerDependencies r s m) ()
 queryServer = serverComponent "contract-query-server" (component_ "contract-query-worker" worker) \QueryServerDependencies{..} -> do
   connector <- acceptSomeConnectorTraced querySource

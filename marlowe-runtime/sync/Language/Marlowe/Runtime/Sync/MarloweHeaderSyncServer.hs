@@ -6,6 +6,7 @@
 module Language.Marlowe.Runtime.Sync.MarloweHeaderSyncServer
   where
 
+import Colog (Message, WithLog)
 import Control.Concurrent.Component
 import Control.Monad.Event.Class (MonadEvent)
 import Language.Marlowe.Protocol.HeaderSync.Server
@@ -21,7 +22,7 @@ data MarloweHeaderSyncServerDependencies r s m = MarloweHeaderSyncServerDependen
   }
 
 marloweHeaderSyncServer
-  :: (MonadUnliftIO m, MonadEvent r s m, HasSpanContext r)
+  :: (MonadUnliftIO m, MonadEvent r s m, HasSpanContext r, WithLog env Message m)
   => Component m (MarloweHeaderSyncServerDependencies r s m) ()
 marloweHeaderSyncServer = serverComponent "marlowe-header-sync-server" (component_ "marlowe-header-sync-worker" worker) \MarloweHeaderSyncServerDependencies{..} -> do
   connector <- acceptSomeConnectorTraced headerSyncSource

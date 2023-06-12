@@ -4,6 +4,7 @@
 module Language.Marlowe.Runtime.Sync.QueryServer
   where
 
+import Colog (Message, WithLog)
 import Control.Concurrent.Component
 import Control.Monad.Event.Class
 import Language.Marlowe.Protocol.Query.Server (MarloweQueryServer, marloweQueryServer)
@@ -17,7 +18,7 @@ data QueryServerDependencies r s m = QueryServerDependencies
   , querySource :: SomeConnectionSourceTraced MarloweQueryServer r s m
   }
 
-queryServer :: (MonadUnliftIO m, MonadEvent r s m, HasSpanContext r) => Component m (QueryServerDependencies r s m) ()
+queryServer :: (MonadUnliftIO m, MonadEvent r s m, HasSpanContext r, WithLog env Message m) => Component m (QueryServerDependencies r s m) ()
 queryServer = serverComponent "sync-query-server" (component_ "sync-query-worker" worker) \QueryServerDependencies{..} -> do
   connector <- acceptSomeConnectorTraced querySource
   pure WorkerDependencies{..}

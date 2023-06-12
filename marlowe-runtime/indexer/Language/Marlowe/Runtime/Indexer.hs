@@ -7,6 +7,7 @@
 module Language.Marlowe.Runtime.Indexer
   where
 
+import Colog (Message, WithLog)
 import Control.Arrow (returnA)
 import Control.Concurrent.Component
 import Control.Concurrent.Component.Probes
@@ -43,6 +44,7 @@ marloweIndexer
      , Inject (ChainSeekClientSelector r) s
      , MonadFail m
      , HasSpanContext r
+     , WithLog env Message m
      )
   => Component m (MarloweIndexerDependencies r s m) Probes
 marloweIndexer = proc MarloweIndexerDependencies{..} -> do

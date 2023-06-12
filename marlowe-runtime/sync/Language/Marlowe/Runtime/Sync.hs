@@ -4,6 +4,7 @@
 module Language.Marlowe.Runtime.Sync
   where
 
+import Colog (Message, WithLog)
 import Control.Arrow (returnA)
 import Control.Concurrent.Component
 import Control.Concurrent.Component.Probes
@@ -26,7 +27,7 @@ data SyncDependencies r s m = SyncDependencies
   , querySource :: SomeConnectionSourceTraced MarloweQueryServer r s m
   }
 
-sync :: (MonadUnliftIO m, HasSpanContext r, MonadEvent r s m) => Component m (SyncDependencies r s m) Probes
+sync :: (MonadUnliftIO m, HasSpanContext r, MonadEvent r s m, WithLog env Message m) => Component m (SyncDependencies r s m) Probes
 sync = proc SyncDependencies{..} -> do
   marloweSyncServer -< MarloweSyncServerDependencies{..}
   marloweHeaderSyncServer -< MarloweHeaderSyncServerDependencies{..}

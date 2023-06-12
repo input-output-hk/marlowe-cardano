@@ -34,6 +34,7 @@ import Cardano.Api
   , makeShelleyAddress
   )
 import Cardano.Api.Shelley (ProtocolParameters)
+import Colog (Message, WithLog)
 import Control.Applicative ((<|>))
 import Control.Concurrent.Component
 import Control.Concurrent.STM (STM, modifyTVar, newEmptyTMVar, newTVar, putTMVar, readTMVar, readTVar, retry)
@@ -143,7 +144,7 @@ data TransactionServerDependencies r s m = TransactionServerDependencies
   }
 
 transactionServer
-  :: (MonadInjectEvent r TransactionServerSelector s m, MonadUnliftIO m, HasSpanContext r)
+  :: (MonadInjectEvent r TransactionServerSelector s m, MonadUnliftIO m, HasSpanContext r, WithLog env Message m)
   => Component m (TransactionServerDependencies r s m) ()
 transactionServer = serverComponentWithSetup "tx-job-server" worker \TransactionServerDependencies{..} -> do
   submitJobsVar <- newTVar mempty
@@ -168,8 +169,8 @@ data WorkerDependencies r s m = WorkerDependencies
   }
 
 worker
-  :: forall r s m
-   . (MonadInjectEvent r TransactionServerSelector s m, MonadUnliftIO m, HasSpanContext r)
+  :: forall r s env m
+   . (MonadInjectEvent r TransactionServerSelector s m, MonadUnliftIO m, HasSpanContext r, WithLog env Message m)
   => Component m (WorkerDependencies r s m) ()
 worker = component_ "tx-job-server-worker" \WorkerDependencies{..} -> do
   let

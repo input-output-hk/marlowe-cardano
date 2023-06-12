@@ -8,6 +8,7 @@ module Language.Marlowe.Runtime.Transaction
 
 import Cardano.Api (Tx)
 import Cardano.Api.Byron (BabbageEra)
+import Colog (Message, WithLog)
 import Control.Arrow (returnA)
 import Control.Concurrent.Component
 import Control.Concurrent.Component.Probes
@@ -40,7 +41,7 @@ data TransactionDependencies r s m = TransactionDependencies
   }
 
 transaction
-  :: (MonadUnliftIO m, MonadInjectEvent r TransactionServerSelector s m, HasSpanContext r)
+  :: (MonadUnliftIO m, MonadInjectEvent r TransactionServerSelector s m, HasSpanContext r, WithLog env Message m)
   => Component m (TransactionDependencies r s m) Probes
 transaction = proc TransactionDependencies{..} -> do
   (connected, getTip) <- transactionChainClient -< TransactionChainClientDependencies{..}
