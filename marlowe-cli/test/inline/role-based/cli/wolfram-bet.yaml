@@ -27,11 +27,10 @@ operations:
     nickname: RoleTokenCurrency
     minLovelace: 2000000
     tokenDistribution:
-      - [AliceWallet, SellerRoleToken, 1]
-      - [BobWallet, BuyerRoleToken, 1]
-      - [Mediator, MediatorRoleToken, 1]
+      - [AliceWallet, Alice, 1]
+      - [BobWallet, Bob, 1]
 
-- Comment: The mediator creates the escrow contract, which was downloaded from Marlowe Playground. The purchase price is 50 ADA.
+- Comment: The mediator creates the Wolf-bet, which was downloaded from Marlowe Playground. The purchase price is 50 ADA.
 
 - Initialize:
     submitter: Mediator
@@ -108,8 +107,6 @@ operations:
 
 - AutoRun
 
-- Comment: The mediator should have 14 ADA now, since 2 ADA was sent to the script address when creating the contract and 2 ADA each was sent to the buyer and seller along with their role tokens (we ignore a possible 1 ADA in tx fees).
-
 - CheckBalance:
     wallet: Mediator
     balance:
@@ -121,13 +118,13 @@ operations:
     wallet: AliceWallet
     balance:
       - [ADA, 1000]
-      - [RoleTokenCurrency, BuyerRoleToken, 1]
+      - [RoleTokenCurrency, Alice, 1]
 
 - CheckBalance:
     wallet: BobWallet
     balance:
-      - [ADA, 17]
-      - [RoleTokenCurrency, SellerRoleToken, 1]
+      - [ADA, 1000]
+      - [RoleTokenCurrency, Bob, 1]
 
 - Comment: The buyer deposits the 50 ADA purchase price.
 
@@ -186,15 +183,12 @@ operations:
 
 - AutoRun
 
-- Comment: The buyer should still have 32 ADA now (we ignore here possible another 2 ADA in fees).
 
 - CheckBalance:
     wallet: AliceWallet
     balance:
       - [ADA, 0]
       - [RoleTokenCurrency, Alice, 1]
-
-- Comment: Now the seller redeems the 50 ADA from the payout script.
 
 - CheckBalance:
     wallet: BobWallet
