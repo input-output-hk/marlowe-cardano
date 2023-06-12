@@ -208,6 +208,7 @@ type TestM = ReaderT TestHandle (NoopEventT TestRef AnySelector (ResourceT IO))
 data TestHandle = TestHandle
   { loadConnector :: SomeClientConnectorTraced MarloweLoadClient TestRef AnySelector TestM
   , queryConnector :: SomeClientConnectorTraced (QueryClient Api.ContractRequest) TestRef AnySelector TestM
+  , logAction :: LogAction TestM Message
   }
 
 instance HasLog TestHandle Message TestM where
