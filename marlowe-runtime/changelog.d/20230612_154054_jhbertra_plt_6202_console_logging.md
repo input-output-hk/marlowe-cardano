@@ -5,5 +5,5 @@
 
 ### Fixed
 
-- Console logs are new thread-safe.
+- Console logs are now thread-safe.
 - `marlowe-scaling` did not delay polling at all when submitting a transaction.
