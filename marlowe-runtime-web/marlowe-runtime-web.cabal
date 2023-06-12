@@ -107,6 +107,7 @@ library server
     , cardano-ledger-alonzo ==0.1.0.0
     , cardano-ledger-core ==0.1.0.0
     , cardano-ledger-shelley ==0.1.0.0
+    , co-log >= 0.5.0.0 && < 0.6.0.0
     , containers >= 0.6.5 && < 0.7
     , errors >= 2.3 && < 3
     , eventuo11y ^>= { 0.9, 0.10 }
@@ -154,6 +155,7 @@ executable marlowe-web-server
   build-depends:
     , async-components ==0.1.0.0
     , base >= 4.9 && < 5
+    , co-log >= 0.5.0.0 && < 0.6.0.0
     , eventuo11y ^>= { 0.9, 0.10 }
     , eventuo11y-otel ^>= 0.1
     , hs-opentelemetry-api >= 0.0.3 && < 0.0.4
@@ -167,6 +169,7 @@ executable marlowe-web-server
     , network
     , optparse-applicative
     , text >= 1.2.4 && < 2
+    , unliftio >= 0.2.1 && < 0.3
     , wai >= 3.2 && < 4
     , warp
   ghc-options: -threaded

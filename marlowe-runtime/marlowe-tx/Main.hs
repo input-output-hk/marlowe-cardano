@@ -10,7 +10,7 @@
 module Main
   where
 
-import Colog (LogAction, Message, cmap, fmtMessage, logTextStdout)
+import Colog (LogAction(LogAction), Message, cmap, fmtMessage, logTextStdout)
 import Control.Concurrent.Component
 import Control.Concurrent.Component.Probes (ProbeServerDependencies(..), probeServer)
 import Control.Monad.Event.Class
@@ -61,7 +61,7 @@ import Options.Applicative
   , value
   )
 import Paths_marlowe_runtime (version)
-import UnliftIO (MonadUnliftIO, bracket)
+import UnliftIO (MonadUnliftIO, bracket, newMVar, withMVar)
 
 main :: IO ()
 main = do
@@ -121,7 +121,15 @@ run Options{..} = flip runComponent_ () proc _ -> do
   probeServer -< ProbeServerDependencies { port = fromIntegral httpPort, .. }
 
 runAppM :: EventBackend IO r RootSelector -> AppM r a -> IO a
-runAppM eventBackend = flip runReaderT (hoistEventBackend liftIO eventBackend, cmap fmtMessage logTextStdout) . unAppM
+runAppM eventBackend (AppM action) = do
+  logAction <- concurrentLogger
+  runReaderT action (hoistEventBackend liftIO eventBackend, logAction)
+
+concurrentLogger :: MonadUnliftIO m => IO (LogAction m Message)
+concurrentLogger = do
+  lock <- newMVar ()
+  let LogAction baseAction = cmap fmtMessage logTextStdout
+  pure $ LogAction $ withMVar lock . const . baseAction
 
 newtype AppM r a = AppM
   { unAppM :: ReaderT (EventBackend (AppM r) r RootSelector, LogAction (AppM r) Message) IO a

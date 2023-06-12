@@ -28,13 +28,13 @@ module Language.Marlowe.Runtime.Web.Server
 import Control.Concurrent.Component
 import Control.Monad.Event.Class
 import Control.Monad.IO.Unlift (liftIO, withRunInIO)
-import Control.Monad.Reader (runReaderT)
+import Control.Monad.Reader (ReaderT(ReaderT), runReaderT)
 import Control.Monad.Trans.Marlowe (MarloweTracedContext(..))
 import Language.Marlowe.Protocol.Types (MarloweRuntime)
 import Language.Marlowe.Runtime.ChainSync.Api (TxId)
 import Language.Marlowe.Runtime.Core.Api (ContractId)
 import qualified Language.Marlowe.Runtime.Web as Web
-import Language.Marlowe.Runtime.Web.Server.Monad (AppEnv(..), AppM(..), BackendM)
+import Language.Marlowe.Runtime.Web.Server.Monad (AppEnv(..), AppM(..), BackendM(BackendM))
 import qualified Language.Marlowe.Runtime.Web.Server.OpenAPI as OpenAPI
 import qualified Language.Marlowe.Runtime.Web.Server.REST as REST
 import Language.Marlowe.Runtime.Web.Server.SyncClient
@@ -189,6 +189,7 @@ webServer = component_ "web-server" \WebServerDependencies{..} -> withRunInIO \r
   runApplication \req handleRes ->
     runInIO $ withEventFields (ServeRequest req) [ReqField req] \ev -> do
       _eventBackend <- askBackend
+      _logAction <- BackendM $ ReaderT \(_, logAction) -> pure logAction
       let _requestParent = reference ev
       let
         mkApp

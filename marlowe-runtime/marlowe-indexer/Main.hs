@@ -11,7 +11,7 @@
 module Main
   where
 
-import Colog (LogAction, Message, cmap, fmtMessage, logTextStdout)
+import Colog (LogAction(LogAction), Message, cmap, fmtMessage, logTextStdout)
 import Control.Concurrent.Component
 import Control.Concurrent.Component.Probes (ProbeServerDependencies(..), probeServer)
 import Control.Exception (bracket)
@@ -64,7 +64,7 @@ import Options.Applicative
   , value
   )
 import Paths_marlowe_runtime (version)
-import UnliftIO (MonadUnliftIO, throwIO)
+import UnliftIO (MonadUnliftIO, newMVar, throwIO, withMVar)
 
 main :: IO ()
 main = run =<< getOptions
@@ -129,7 +129,15 @@ run Options{..} = bracket (Pool.acquire 100 (Just 5000000) (fromString databaseU
     queryChainSync = runConnectorTraced (injectSelector ChainQueryClient) chainSyncQueryConnector
 
 runAppM :: EventBackend IO r RootSelector -> AppM r a -> IO a
-runAppM eventBackend = flip runReaderT (hoistEventBackend liftIO eventBackend, cmap fmtMessage logTextStdout) . unAppM
+runAppM eventBackend (AppM action) = do
+  logAction <- concurrentLogger
+  runReaderT action (hoistEventBackend liftIO eventBackend, logAction)
+
+concurrentLogger :: MonadUnliftIO m => IO (LogAction m Message)
+concurrentLogger = do
+  lock <- newMVar ()
+  let LogAction baseAction = cmap fmtMessage logTextStdout
+  pure $ LogAction $ withMVar lock . const . baseAction
 
 newtype AppM r a = AppM
   { unAppM :: ReaderT (EventBackend (AppM r) r RootSelector, LogAction (AppM r) Message) IO a

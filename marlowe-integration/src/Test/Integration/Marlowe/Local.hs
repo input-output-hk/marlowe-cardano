@@ -51,6 +51,7 @@ import Cardano.Api.Shelley (AcquiringFailure)
 import qualified Cardano.Chain.Genesis as Byron
 import Cardano.Chain.UTxO (defaultUTxOConfiguration)
 import Cardano.Crypto (abstractHashToBytes)
+import Colog (LogAction, Message, hoistLogAction)
 import Control.Concurrent (threadDelay)
 import Control.Concurrent.Async (race_)
 import Control.Concurrent.Component
@@ -60,6 +61,7 @@ import Control.Monad (when, (<=<))
 import Control.Monad.Catch hiding (bracketOnError, catch, onException, try)
 import Control.Monad.Event.Class
 import Control.Monad.IO.Class (liftIO)
+import Control.Monad.Reader (MonadReader(..), asks, withReaderT)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except (runExceptT)
 import Control.Monad.Trans.Marlowe (MarloweTracedContext(MarloweTracedContext))
@@ -154,7 +156,7 @@ import Language.Marlowe.Runtime.Transaction.Submit (SubmitJob, SubmitJobDependen
 import qualified Language.Marlowe.Runtime.Transaction.Submit as Submit
 import Language.Marlowe.Runtime.Web.Client (healthcheck)
 import Language.Marlowe.Runtime.Web.Server (ServerDependencies(..), ServerSelector(RuntimeClient), server)
-import Language.Marlowe.Runtime.Web.Server.Monad (BackendM(runBackendM))
+import Language.Marlowe.Runtime.Web.Server.Monad (BackendM(BackendM, runBackendM))
 import Network.Channel (hoistChannel)
 import Network.Channel.Typed (Channel, driverToChannel)
 import Network.HTTP.Client (defaultManagerSettings, newManager)
@@ -326,7 +328,9 @@ withLocalMarloweRuntime' MarloweRuntimeOptions{..} test = withRunInIO \runInIO -
     let
       runWebClient :: ClientM a -> IO (Either ClientError a)
       runWebClient = flip runClientM clientEnv
-    let
+
+      logAction = mempty
+
       waitForWebServer :: Int -> IO ()
       waitForWebServer counter
         | counter < 10 = void $ runWebClient do
@@ -338,17 +342,18 @@ withLocalMarloweRuntime' MarloweRuntimeOptions{..} test = withRunInIO \runInIO -
     let
       protocolConnector = ihoistConnectorTraced
         hoistMarloweRuntimeClient
-        (NoopEventT . runRuntimeM @RuntimeRef . runResourceT)
+        (NoopEventT . flip runReaderT logAction . runRuntimeM @RuntimeRef . runResourceT)
         (liftIO . runNoopEventT)
         (clientConnector marloweRuntimePair)
 
     -- Persist the genesis block before starting the services so that they
     -- exist already and no database queries fail.
     liftIO do
-      runRuntimeM @RuntimeRef
+      flip runReaderT logAction
+        $ runRuntimeM @RuntimeRef
         $ runCommitGenesisBlock (commitGenesisBlock chainIndexerDatabaseQueries) genesisBlock
       onException
-        ( runRuntimeM (runComponent_  runtime RuntimeDependencies{..})
+        ( runReaderT (runRuntimeM (runComponent_  runtime RuntimeDependencies{..})) logAction
           `race_` (waitForWebServer 0 *> runInIO (test MarloweRuntime{..}))
         )
         (unprotect dbReleaseKey)
@@ -639,13 +644,13 @@ runtime = proc RuntimeDependencies{..} -> do
     , connectionSourceTraced = SomeConnectionSourceTraced inject $ Connection.connectionSource marloweRuntimePair
     }
 
-  hoistComponent (liftIO . flip runReaderT (noopEventBackend mempty) . runBackendM) server -< ServerDependencies
+  hoistComponent (\m -> RuntimeM $ ReaderT \logAction -> flip runReaderT (noopEventBackend mempty, logAction) $ runBackendM m) server -< ServerDependencies
     { openAPIEnabled = False
     , accessControlAllowOriginAll = False
     , runApplication = run webPort
     , marloweTracedContext = MarloweTracedContext (injectSelector RuntimeClient) $ ihoistConnectorTraced hoistMarloweRuntimeClient
-        (liftIO . runRuntimeM . runResourceT)
-        (liftIO . flip runReaderT (noopEventBackend mempty) . runBackendM)
+        (\m -> BackendM $ ReaderT \(_, logAction) -> runReaderT (runRuntimeM $ runResourceT m) logAction)
+        (\m -> lift $ RuntimeM $ ReaderT \logAction -> runReaderT (runBackendM m) (noopEventBackend $ mempty @r, logAction))
         (clientConnector marloweRuntimePair)
     }
 
@@ -704,8 +709,12 @@ setupChannels = do
     marloweRuntimeClientPeer
   pure Channels{..}
 
-newtype RuntimeM r a = RuntimeM { runRuntimeM :: IO a }
+newtype RuntimeM r a = RuntimeM { runRuntimeM :: ReaderT (LogAction IO Message) IO a }
   deriving newtype (Functor, Applicative, Monad, MonadIO, MonadUnliftIO, MonadFail, MonadThrow, MonadCatch, MonadMask)
+
+instance MonadReader (LogAction (RuntimeM r) Message) (RuntimeM r) where
+  ask = RuntimeM $ asks $ hoistLogAction liftIO
+  local f (RuntimeM m) = withRunInIO \runInIO -> runInIO $ RuntimeM $ withReaderT (hoistLogAction runInIO . f . hoistLogAction liftIO) m
 
 instance MonadWith (RuntimeM r) where
   type WithException (RuntimeM r) = WithException IO
@@ -714,18 +723,18 @@ instance MonadWith (RuntimeM r) where
      . GeneralAllocate (RuntimeM r) (WithException IO) releaseReturn b a
     -> (a -> RuntimeM r b)
     -> RuntimeM r (b, releaseReturn)
-  stateThreadingGeneralWith (GeneralAllocate allocA) go = RuntimeM do
+  stateThreadingGeneralWith (GeneralAllocate allocA) go = RuntimeM . ReaderT $ \r -> do
     let
       allocA' :: (forall x. IO x -> IO x) -> IO (GeneralAllocated IO (WithException IO) releaseReturn b a)
       allocA' restore = do
         let
           restore' :: forall x. RuntimeM r x -> RuntimeM r x
-          restore' mx = RuntimeM $ restore $ runRuntimeM mx
-        GeneralAllocated a releaseA <- runRuntimeM (allocA restore')
+          restore' mx = RuntimeM . ReaderT $ restore . (runReaderT . runRuntimeM) mx
+        GeneralAllocated a releaseA <- (runReaderT . runRuntimeM) (allocA restore') r
         let
-          releaseA' relTy = runRuntimeM (releaseA relTy)
+          releaseA' relTy = (runReaderT . runRuntimeM) (releaseA relTy) r
         pure $ GeneralAllocated a releaseA'
-    stateThreadingGeneralWith (GeneralAllocate allocA') (runRuntimeM . go)
+    stateThreadingGeneralWith (GeneralAllocate allocA') (flip (runReaderT . runRuntimeM) r . go)
 
 instance Monoid r => MonadEvent r RuntimeSelector (RuntimeM r) where
   askBackend = pure $ noopEventBackend mempty
