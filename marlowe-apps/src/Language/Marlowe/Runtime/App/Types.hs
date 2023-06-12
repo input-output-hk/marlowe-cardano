@@ -212,6 +212,7 @@ data MarloweRequest v =
     }
   | Submit
     { reqTx :: C.Tx C.BabbageEra
+    , reqPollingSeconds :: Int
     }
 {-
   | Wait
@@ -264,6 +265,7 @@ instance A.FromJSON (MarloweRequest 'V1) where
                         pure Sign{..}
             "submit" -> do
                         reqTx <- textEnvelopeFromJSON (C.AsTx C.AsBabbageEra) =<< o A..: "tx"
+                        reqPollingSeconds <- o A..: "pollingSeconds"
                         pure Submit{..}
 {-
             "wait" -> do

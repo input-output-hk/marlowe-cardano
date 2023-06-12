@@ -41,7 +41,7 @@ handle config request =
           Apply{..} -> second (uncurry mkBody) <$> buildApplication MarloweV1 reqContractId reqInputs reqValidityLowerBound reqValidityUpperBound (decodeMarloweTransactionMetadataLenient reqMetadata) reqAddresses reqChange reqCollateral
           Withdraw{..} -> second (uncurry mkBody) <$> buildWithdrawal MarloweV1 reqContractId reqRole reqAddresses reqChange reqCollateral
           Sign{..} -> pure . Right . uncurry Tx $ sign reqTxBody reqPaymentKeys reqPaymentExtendedKeys
-          Submit{..} -> second TxId <$> submit reqTx
+          Submit{..} -> second TxId <$> submit reqPollingSeconds reqTx
 {-
           Wait{..} -> second TxInfo <$> waitForTx reqPollingSeconds reqTxId
 -}
