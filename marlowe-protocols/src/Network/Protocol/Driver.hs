@@ -1,4 +1,5 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE RankNTypes #-}
@@ -6,6 +7,8 @@
 module Network.Protocol.Driver
   where
 
+import qualified Colog as C
+import Colog.Monad (WithLog)
 import Control.Concurrent.Component
 import Control.Concurrent.STM (newEmptyTMVar, newTQueue, readTMVar, readTQueue, tryPutTMVar)
 import Control.Concurrent.STM.TQueue (writeTQueue)
@@ -82,7 +85,7 @@ data TcpServerDependencies ps server m = forall (st :: ps). TcpServerDependencie
   }
 
 tcpServer
-  :: (MonadIO m', MonadUnliftIO m)
+  :: (MonadIO m', MonadUnliftIO m, WithLog env C.Message m)
   => String -> Component m (TcpServerDependencies ps server m') (ConnectionSource ps server m')
 tcpServer name = component (name <> "-tcp-server") \TcpServerDependencies{..} -> do
   socketQueue <- newTQueue

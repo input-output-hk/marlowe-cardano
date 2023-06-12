@@ -56,3 +56,4 @@ library
     , servant-server >= 0.19 && < 0.20
     , unliftio >= 0.2.1 && < 0.3
     , warp >= 3.3 && < 4
+    , co-log >= 0.5.0.0 && < 0.6.0.0

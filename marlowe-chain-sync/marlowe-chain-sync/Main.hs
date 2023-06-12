@@ -20,14 +20,16 @@ import Cardano.Api
   , TxInMode(..)
   )
 import qualified Cardano.Api as Cardano (connectToLocalNode)
+import Colog (LogAction, Message, cmap, fmtMessage, logTextStdout)
 import Control.Concurrent.Component
 import Control.Concurrent.Component.Probes (ProbeServerDependencies(..), probeServer)
 import Control.Exception (bracket)
 import Control.Monad.Event.Class
 import Control.Monad.IO.Class (MonadIO, liftIO)
-import Control.Monad.Reader (ask)
+import Control.Monad.Reader (MonadReader(..), asks, withReaderT)
 import Control.Monad.Trans.Reader (ReaderT(..))
 import Control.Monad.With (MonadWith(..))
+import Data.Bifunctor (first)
 import Data.GeneralAllocate
 import Data.String (IsString(fromString))
 import qualified Data.Text as T
@@ -134,11 +136,15 @@ run Options{..} = bracket (Pool.acquire 100 (Just 5000000) (fromString databaseU
       }
 
 runAppM :: EventBackend IO r RootSelector -> AppM r a -> IO a
-runAppM eventBackend = flip runReaderT (hoistEventBackend liftIO eventBackend). unAppM
+runAppM eventBackend = flip runReaderT (hoistEventBackend liftIO eventBackend, cmap fmtMessage logTextStdout). unAppM
 
 newtype AppM r a = AppM
-  { unAppM :: ReaderT (EventBackend (AppM r) r RootSelector) IO a
+  { unAppM :: ReaderT (EventBackend (AppM r) r RootSelector, LogAction (AppM r) Message) IO a
   } deriving newtype (Functor, Applicative, Monad, MonadIO, MonadUnliftIO, MonadFail)
+
+instance MonadReader (LogAction (AppM r) Message) (AppM r) where
+  ask = AppM $ asks snd
+  local f (AppM m) = AppM $ withReaderT (fmap f) m
 
 instance MonadWith (AppM r) where
   type WithException (AppM r) = WithException IO
@@ -161,5 +167,5 @@ instance MonadWith (AppM r) where
     stateThreadingGeneralWith (GeneralAllocate allocA') (flip (runReaderT . unAppM) r . go)
 
 instance MonadEvent r RootSelector (AppM r) where
-  localBackend = localBackendReaderT AppM unAppM id
-  askBackend = askBackendReaderT AppM id
+  localBackend = localBackendReaderT AppM unAppM first
+  askBackend = askBackendReaderT AppM fst

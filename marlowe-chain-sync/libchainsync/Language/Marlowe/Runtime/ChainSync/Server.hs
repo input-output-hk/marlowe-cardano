@@ -7,6 +7,7 @@
 module Language.Marlowe.Runtime.ChainSync.Server
   where
 
+import Colog (Message, WithLog)
 import Control.Concurrent.Component
 import Control.Monad.Event.Class (MonadEvent)
 import Data.Functor (void, (<&>))
@@ -24,7 +25,7 @@ data ChainSyncServerDependencies r s m = ChainSyncServerDependencies
   }
 
 chainSyncServer
-  :: (MonadUnliftIO m, MonadEvent r s m, HasSpanContext r)
+  :: (MonadUnliftIO m, MonadEvent r s m, HasSpanContext r, WithLog env Message m)
   => Component m (ChainSyncServerDependencies r s m) ()
 chainSyncServer = serverComponent "chain-seek-server" worker \ChainSyncServerDependencies{..} -> do
   connector <- acceptSomeConnectorTraced syncSource
@@ -37,7 +38,7 @@ data WorkerDependencies r s m = WorkerDependencies
   }
 
 worker
-  :: forall r s m. (MonadUnliftIO m, MonadEvent r s m, HasSpanContext r)
+  :: forall r s env m. (MonadUnliftIO m, MonadEvent r s m, HasSpanContext r, WithLog env Message m)
   => Component m (WorkerDependencies r s m) ()
 worker = component_ "chain-seek-worker" \WorkerDependencies{..} -> do
   let

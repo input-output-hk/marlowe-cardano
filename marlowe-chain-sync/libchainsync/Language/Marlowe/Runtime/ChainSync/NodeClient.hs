@@ -34,6 +34,7 @@ import Control.Concurrent.STM.TMVar (TMVar, putTMVar, takeTMVar)
 import Data.Bifunctor (first)
 import Observe.Event (addField)
 
+import Colog (Message, WithLog)
 import Control.Monad.Event.Class (MonadInjectEvent, withEvent)
 import qualified Ouroboros.Network.Protocol.LocalStateQuery.Client as Q
 import qualified Ouroboros.Network.Protocol.LocalStateQuery.Type as Q
@@ -69,7 +70,9 @@ data NodeClientSelector f where
   Query :: NodeClientSelector (Q.Some (QueryInMode CardanoMode))
 
 
-nodeClient :: (MonadInjectEvent r NodeClientSelector s m, MonadUnliftIO m) => Component m NodeClientDependencies (NodeClient m)
+nodeClient
+  :: (MonadInjectEvent r NodeClientSelector s m, MonadUnliftIO m, WithLog env Message m)
+  => Component m NodeClientDependencies (NodeClient m)
 nodeClient =
   component "chain-sync-node-client" \NodeClientDependencies{..} ->
     do

@@ -1,9 +1,11 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TypeOperators #-}
 
 module Control.Concurrent.Component.Probes
   where
 
+import Colog (Message, WithLog)
 import Control.Concurrent.Component
 import Control.Monad.IO.Class (liftIO)
 import Data.Proxy (Proxy(..))
@@ -44,6 +46,6 @@ data ProbeServerDependencies = ProbeServerDependencies
   , port :: Port
   }
 
-probeServer :: MonadUnliftIO m => Component m ProbeServerDependencies ()
+probeServer :: (WithLog env Message m, MonadUnliftIO m) => Component m ProbeServerDependencies ()
 probeServer = component_ "probe-server" \ProbeServerDependencies{..} ->
   liftIO $ run port $ serve api (server probes)

@@ -5,10 +5,13 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ViewPatterns #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
+{-# LANGUAGE FlexibleContexts #-}
 
 module Network.Protocol.Driver.Trace
   where
 
+import Colog (WithLog)
+import qualified Colog as C
 import Control.Concurrent.Component
 import Control.Concurrent.STM (newEmptyTMVar, newTQueue, readTMVar, readTQueue, tryPutTMVar)
 import Control.Concurrent.STM.TQueue (writeTQueue)
@@ -218,7 +221,7 @@ data ConnectedField
   | ConnectedPeer SockAddr
 
 tcpServerTraced
-  :: (MonadIO m', MonadUnliftIO m, MonadEvent r s m', HasSpanContext r)
+  :: (MonadIO m', MonadUnliftIO m, MonadEvent r s m', HasSpanContext r, WithLog env C.Message m)
   => String
   -> InjectSelector (TcpServerSelector (Handshake ps)) s
   -> Component m (TcpServerDependencies ps server m') (ConnectionSourceTraced ps server r TcpServerSelector m')
