@@ -67,7 +67,7 @@ doSubmit SubmitJobDependencies{..} tellStatus era tx= do
     txId = TxId $ C.serialiseToRawBytes $ C.getTxId $ C.getTxBody tx
 
     timeout :: m ()
-    timeout = threadDelay $ floor $ nominalDiffTimeToSeconds confirmationTimeout * 1_000_000 -- 10 minutes in microseconds
+    timeout = threadDelay $ floor $ nominalDiffTimeToSeconds confirmationTimeout * 1_000_000
 
     pollingMicroSeconds = floor $ nominalDiffTimeToSeconds pollingInterval * 1_000_000
 
