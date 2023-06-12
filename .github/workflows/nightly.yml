@@ -57,7 +57,7 @@ jobs:
 
       - name: Build Marlowe Finder
         run: |
-          nix build .#marlowe.haskell.packages.marlowe-apps.components.exes.marlowe-finder
+          nix build .#ghc8107-marlowe-apps-exe-marlowe-finder
 
       - name: Install SSH keys
         uses: shimataro/ssh-key-action@v2
@@ -102,7 +102,7 @@ jobs:
 
       - name: Build Marlowe Scaling
         run: |
-          nix build .#marlowe.haskell.packages.marlowe-apps.components.exes.marlowe-scaling
+          nix build .#ghc8107-marlowe-apps-exe-marlowe-scaling
 
       - name: Install SSH keys
         uses: shimataro/ssh-key-action@v2
