@@ -308,6 +308,11 @@ let
           max-file = "10";
         };
       };
+
+      command = [
+        "-c"
+        "max_connections=1000"
+      ];
     };
 
     services.jaeger = {
