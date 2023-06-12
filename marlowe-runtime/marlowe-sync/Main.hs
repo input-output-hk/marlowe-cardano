@@ -60,10 +60,14 @@ import Options.Applicative
   , value
   )
 import Paths_marlowe_runtime (version)
-import UnliftIO (MonadIO, MonadUnliftIO, liftIO, newMVar, throwIO, withMVar)
+import UnliftIO
+  (BufferMode(LineBuffering), MonadIO, MonadUnliftIO, hSetBuffering, liftIO, newMVar, stderr, stdout, throwIO, withMVar)
 
 main :: IO ()
-main = run =<< getOptions
+main = do
+  hSetBuffering stderr LineBuffering
+  hSetBuffering stdout LineBuffering
+  run =<< getOptions
 
 run :: Options -> IO ()
 run Options{..} = bracket (Pool.acquire 100 (Just 5000000) (fromString databaseUri)) Pool.release \pool -> do

@@ -45,10 +45,14 @@ import Observe.Event.Render.OpenTelemetry (tracerEventBackend)
 import OpenTelemetry.Trace
 import Options (Options(..), getOptions)
 import Paths_marlowe_chain_sync (version)
-import UnliftIO (MonadIO, MonadUnliftIO, liftIO, newMVar, throwIO, withMVar)
+import UnliftIO
+  (BufferMode(LineBuffering), MonadIO, MonadUnliftIO, hSetBuffering, liftIO, newMVar, stderr, stdout, throwIO, withMVar)
 
 main :: IO ()
-main = run =<< getOptions (showVersion version)
+main = do
+  hSetBuffering stderr LineBuffering
+  hSetBuffering stdout LineBuffering
+  run =<< getOptions (showVersion version)
 
 run :: Options -> IO ()
 run Options{..} = do

@@ -61,10 +61,12 @@ import Options.Applicative
   , value
   )
 import Paths_marlowe_runtime (version)
-import UnliftIO (MonadUnliftIO, bracket, newMVar, withMVar)
+import UnliftIO (BufferMode(LineBuffering), MonadUnliftIO, bracket, hSetBuffering, newMVar, stderr, stdout, withMVar)
 
 main :: IO ()
 main = do
+  hSetBuffering stdout LineBuffering
+  hSetBuffering stderr LineBuffering
   options <- getOptions
   withTracer \tracer ->
     runAppM (tracerEventBackend tracer renderRootSelectorOTel) $ run options

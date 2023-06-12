@@ -64,10 +64,13 @@ import Options.Applicative
   , value
   )
 import Paths_marlowe_runtime (version)
-import UnliftIO (MonadUnliftIO, newMVar, throwIO, withMVar)
+import UnliftIO (BufferMode(LineBuffering), MonadUnliftIO, hSetBuffering, newMVar, stderr, stdout, throwIO, withMVar)
 
 main :: IO ()
-main = run =<< getOptions
+main = do
+  hSetBuffering stderr LineBuffering
+  hSetBuffering stdout LineBuffering
+  run =<< getOptions
 
 clientHints :: AddrInfo
 clientHints = defaultHints { addrSocketType = Stream }

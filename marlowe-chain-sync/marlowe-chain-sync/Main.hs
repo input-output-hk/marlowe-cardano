@@ -55,10 +55,13 @@ import Observe.Event.Render.OpenTelemetry (tracerEventBackend)
 import OpenTelemetry.Trace
 import Options (Options(..), getOptions)
 import Paths_marlowe_chain_sync (version)
-import UnliftIO (MonadUnliftIO, newMVar, throwIO, withMVar)
+import UnliftIO (BufferMode(LineBuffering), MonadUnliftIO, hSetBuffering, newMVar, stderr, stdout, throwIO, withMVar)
 
 main :: IO ()
-main = run =<< getOptions (showVersion version)
+main = do
+  hSetBuffering stderr LineBuffering
+  hSetBuffering stdout LineBuffering
+  run =<< getOptions (showVersion version)
 
 run :: Options -> IO ()
 run Options{..} = bracket (Pool.acquire 100 (Just 5000000) (fromString databaseUri)) Pool.release \pool -> do
