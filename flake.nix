@@ -3,8 +3,8 @@
 
   inputs = {
     cardano-world.url = "github:input-output-hk/cardano-world/d22f50fc77d23e2612ca2b313a098dd0b48834d4";
-
-    iogx.url = "github:zeme-iohk/iogx";
+    std.url = "github:divnix/std";
+    iogx.url = "github:zeme-wana/iogx";
   };
 
   outputs = inputs:
@@ -19,7 +19,6 @@
       haskellCrossSystem = null;
       haskellProjectFile = ./nix/haskell-project.nix;
       perSystemOutputsFile = ./nix/per-system-outputs.nix;
-      shellName = "marlowe-cardano";
       shellPrompt = "\n\\[\\033[1;32m\\][marlowe-cardano:\\w]\\$\\[\\033[0m\\] ";
       shellWelcomeMessage = "🤟 \\033[1;31mWelcome to marlowe-cardano\\033[0m 🤟";
       shellModuleFile = ./nix/shell-module.nix;
@@ -27,10 +26,10 @@
       excludeProfiledHaskellFromHydraJobs = true;
       blacklistedHydraJobs = [ ];
       enableHydraPreCommitCheck = false;
-      includeReadTheDocsSite = false;
       readTheDocsSiteDir = null;
       readTheDocsHaddockPrologue = "";
       readTheDocsExtraHaddockPackages = _: { };
+      preCommitCheckHooks = { };
     };
 
   nixConfig = {

@@ -1,4 +1,4 @@
-{ inputs, pkgs, haskell-nix-project }:
+{ inputs, pkgs, project }:
 
 let
   networkNixName = "preprod";
@@ -52,13 +52,13 @@ let
     export ENVIRONMENT=${network.name}
     export SOCKET_PATH=${devNetworkConfig.node.socket-path}
     mkdir -p ${devNetworkConfig.node.database-path}
-    ${inputs.self.packages.entrypoints.cardano-node}/bin/cardano-node 
+    ${inputs.self.packages.entrypoints.cardano-node}/bin/cardano-node
   '';
 
   re-up = ''
     cd $(git rev-parse --show-toplevel)
 
-    docker compose up --detach --file ${compose-spec} 
+    docker compose up --detach --file ${compose-spec}
   '';
 
   compose-spec = import ./compose-spec.nix { inherit inputs pkgs; };
@@ -72,26 +72,12 @@ let
   marlowe-runtime-cli = mkCabalExeScript "marlowe-runtime-cli";
 
   marlowe-cli = mkCabalExeScript "marlowe-cli";
-
-  run-integration-tests =
-    let
-      cardano-cli = inputs.cardano-world.cardano.packages.cardano-cli;
-      cardano-node = inputs.cardano-world.cardano.packages.cardano-node;
-      marlowe-runtime-cli = haskell-nix-project.hsPkgs.marlowe-runtime-cli.components.exes.marlowe-runtime-cli;
-      marlowe-integration-tests = haskell-nix-project.hsPkgs.marlowe-integration-tests.components.exes.marlowe-integration-tests;
-    in
-    ''
-      export PATH="${pkgs.lib.makeBinPath [ cardano-cli cardano-node marlowe-runtime-cli pkgs.sqitchPg pkgs.postgresql ]}:$PATH"
-      export PGUSER=postgres
-      ${marlowe-integration-tests}/bin/marlowe-integration-tests "$@"
-    '';
 in
 {
   inherit
     start-cardano-node
     re-up
     compose-spec
-    run-integration-tests
     marlowe-runtime-cli
     marlowe-cli;
 }
