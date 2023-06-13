@@ -24,7 +24,7 @@ import qualified Language.Marlowe.Runtime.Transaction.Api as Tx
 import Language.Marlowe.Runtime.Web hiding (Unsigned)
 import Language.Marlowe.Runtime.Web.Server.DTO
 import Language.Marlowe.Runtime.Web.Server.Monad
-  (AppM, applyInputs, loadTransaction, loadTransactions, submitTransaction)
+  (ServerM, applyInputs, loadTransaction, loadTransactions, submitTransaction)
 import Language.Marlowe.Runtime.Web.Server.REST.ApiError
   (ApiError(ApiError), badRequest', notFound', rangeNotSatisfiable', throwDTOError)
 import qualified Language.Marlowe.Runtime.Web.Server.REST.ApiError as ApiError
@@ -34,7 +34,7 @@ import Language.Marlowe.Runtime.Web.Server.Util (makeSignedTxWithWitnessKeys)
 import Servant
 import Servant.Pagination
 
-server :: TxOutRef -> ServerT TransactionsAPI AppM
+server :: TxOutRef -> ServerT TransactionsAPI ServerM
 server contractId = get contractId
                   :<|> (postCreateTxBodyResponse contractId :<|> postCreateTxResponse contractId)
                   :<|> transactionServer contractId
@@ -42,7 +42,7 @@ server contractId = get contractId
 get
   :: TxOutRef
   -> Maybe (Ranges '["transactionId"] GetTransactionsResponse)
-  -> AppM (PaginatedResponse '["transactionId"] GetTransactionsResponse)
+  -> ServerM (PaginatedResponse '["transactionId"] GetTransactionsResponse)
 get contractId ranges = do
   let
     range :: Range "transactionId" TxId
@@ -62,7 +62,7 @@ postCreateTxBody
   -> Address
   -> Maybe (CommaList Address)
   -> Maybe (CommaList TxOutRef)
-  -> AppM (TxBody BabbageEra)
+  -> ServerM (TxBody BabbageEra)
 postCreateTxBody contractId PostTransactionsRequest{..} changeAddressDTO mAddresses mCollateralUtxos = do
   SomeMarloweVersion v@MarloweV1  <- fromDTOThrow (badRequest' "Invalid Marlowe version") version
   changeAddress <- fromDTOThrow (badRequest' "Invalid change address") changeAddressDTO
@@ -83,7 +83,7 @@ postCreateTxBodyResponse
   -> Address
   -> Maybe (CommaList Address)
   -> Maybe (CommaList TxOutRef)
-  -> AppM (PostTransactionsResponse CardanoTxBody)
+  -> ServerM (PostTransactionsResponse CardanoTxBody)
 postCreateTxBodyResponse contractId req changeAddressDTO mAddresses mCollateralUtxos = do
   txBody <- postCreateTxBody contractId req changeAddressDTO mAddresses mCollateralUtxos
   let txBody' = toDTO txBody
@@ -97,7 +97,7 @@ postCreateTxResponse
   -> Address
   -> Maybe (CommaList Address)
   -> Maybe (CommaList TxOutRef)
-  -> AppM (PostTransactionsResponse CardanoTx)
+  -> ServerM (PostTransactionsResponse CardanoTx)
 postCreateTxResponse contractId req changeAddressDTO mAddresses mCollateralUtxos = do
   txBody <- postCreateTxBody contractId req changeAddressDTO mAddresses mCollateralUtxos
   let txId = toDTO $ fromCardanoTxId $ getTxId txBody
@@ -106,11 +106,11 @@ postCreateTxResponse contractId req changeAddressDTO mAddresses mCollateralUtxos
   let body = ApplyInputsTxEnvelope contractId txId tx'
   pure $ IncludeLink (Proxy @"transaction") body
 
-transactionServer :: TxOutRef -> TxId -> ServerT TransactionAPI AppM
+transactionServer :: TxOutRef -> TxId -> ServerT TransactionAPI ServerM
 transactionServer contractId txId = getOne contractId txId
                                :<|> put contractId txId
 
-getOne :: TxOutRef -> TxId -> AppM GetTransactionResponse
+getOne :: TxOutRef -> TxId -> ServerM GetTransactionResponse
 getOne contractId txId = do
   contractId' <- fromDTOThrow (badRequest' "Invalid contract id value") contractId
   txId' <- fromDTOThrow (badRequest' "Invalid transaction id value") txId
@@ -122,7 +122,7 @@ getOne contractId txId = do
         $ IncludeLink (Proxy @"previous")
         $ IncludeLink (Proxy @"next") contractState
 
-put :: TxOutRef -> TxId -> TextEnvelope -> AppM NoContent
+put :: TxOutRef -> TxId -> TextEnvelope -> ServerM NoContent
 put contractId txId body = do
   contractId' <- fromDTOThrow (badRequest' "Invalid contract id value") contractId
   txId' <- fromDTOThrow (badRequest' "Invalid transaction id value") txId

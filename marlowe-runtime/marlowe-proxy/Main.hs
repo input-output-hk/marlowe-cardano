@@ -10,17 +10,9 @@
 module Main
   where
 
-import Colog (LogAction(LogAction), Message, cmap, fmtMessage, logTextStdout)
 import Control.Concurrent.Component
 import Control.Concurrent.Component.Probes (ProbeServerDependencies(..), probeServer)
-import Control.Exception (bracket)
-import Control.Monad.Event.Class
-import Control.Monad.IO.Class (MonadIO, liftIO)
-import Control.Monad.Reader (MonadReader(..), asks, withReaderT)
-import Control.Monad.Trans.Reader (ReaderT(..))
-import Control.Monad.With
-import Data.Bifunctor (first)
-import Data.GeneralAllocate
+import Control.Concurrent.Component.Run (AppM, runAppMTraced)
 import qualified Data.Text as T
 import Data.Version (showVersion)
 import Language.Marlowe.Protocol.Server (marloweRuntimeServerPeer)
@@ -34,8 +26,7 @@ import Network.Protocol.Driver (TcpServerDependencies(..), tcpServer)
 import Network.Protocol.Driver.Trace (tcpServerTraced)
 import Network.Protocol.Handshake.Server (handshakeConnectionSource, handshakeConnectionSourceTraced)
 import Network.Socket (HostName, PortNumber)
-import Observe.Event.Backend (EventBackend, hoistEventBackend, injectSelector)
-import Observe.Event.Render.OpenTelemetry (tracerEventBackend)
+import Observe.Event.Backend (injectSelector)
 import OpenTelemetry.Trace
 import Options.Applicative
   ( auto
@@ -55,27 +46,18 @@ import Options.Applicative
   , value
   )
 import Paths_marlowe_runtime
-import UnliftIO (BufferMode(LineBuffering), MonadUnliftIO, hSetBuffering, newMVar, stderr, stdout, withMVar)
 
 main :: IO ()
 main = do
-  hSetBuffering stdout LineBuffering
-  hSetBuffering stderr LineBuffering
   options <- getOptions
-  withTracer \tracer ->
-    runAppM (tracerEventBackend tracer renderRootSelectorOTel) $ run options
+  runAppMTraced instrumentationLibrary renderRootSelectorOTel $ run options
   where
-    withTracer f = bracket
-      initializeGlobalTracerProvider
-      shutdownTracerProvider
-      \provider -> f $ makeTracer provider instrumentationLibrary tracerOptions
-
     instrumentationLibrary = InstrumentationLibrary
       { libraryName = "marlowe-proxy"
       , libraryVersion = T.pack $ showVersion version
       }
 
-run :: Options -> AppM Span ()
+run :: Options -> AppM Span RootSelector ()
 run = runComponent_ proc Options{..} -> do
   connectionSource <- tcpServer "marlowe-runtime" -< TcpServerDependencies
     { toPeer = marloweRuntimeServerPeer
@@ -103,49 +85,6 @@ run = runComponent_ proc Options{..} -> do
     }
 
   probeServer -< ProbeServerDependencies { port = fromIntegral httpPort, .. }
-
-runAppM :: EventBackend IO r RootSelector -> AppM r a -> IO a
-runAppM eventBackend (AppM action) = do
-  logAction <- concurrentLogger
-  runReaderT action (hoistEventBackend liftIO eventBackend, logAction)
-
-concurrentLogger :: MonadUnliftIO m => IO (LogAction m Message)
-concurrentLogger = do
-  lock <- newMVar ()
-  let LogAction baseAction = cmap fmtMessage logTextStdout
-  pure $ LogAction $ withMVar lock . const . baseAction
-
-newtype AppM r a = AppM
-  { unAppM :: ReaderT (EventBackend (AppM r) r RootSelector, LogAction (AppM r) Message) IO a
-  } deriving newtype (Functor, Applicative, Monad, MonadIO, MonadUnliftIO, MonadFail)
-
-instance MonadReader (LogAction (AppM r) Message) (AppM r) where
-  ask = AppM $ asks snd
-  local f (AppM m) = AppM $ withReaderT (fmap f) m
-
-instance MonadWith (AppM r) where
-  type WithException (AppM r) = WithException IO
-  stateThreadingGeneralWith
-    :: forall a b releaseReturn
-     . GeneralAllocate (AppM r) (WithException IO) releaseReturn b a
-    -> (a -> AppM r b)
-    -> AppM r (b, releaseReturn)
-  stateThreadingGeneralWith (GeneralAllocate allocA) go = AppM . ReaderT $ \r -> do
-    let
-      allocA' :: (forall x. IO x -> IO x) -> IO (GeneralAllocated IO (WithException IO) releaseReturn b a)
-      allocA' restore = do
-        let
-          restore' :: forall x. AppM r x -> AppM r x
-          restore' mx = AppM . ReaderT $ restore . (runReaderT . unAppM) mx
-        GeneralAllocated a releaseA <- (runReaderT . unAppM) (allocA restore') r
-        let
-          releaseA' relTy = (runReaderT . unAppM) (releaseA relTy) r
-        pure $ GeneralAllocated a releaseA'
-    stateThreadingGeneralWith (GeneralAllocate allocA') (flip (runReaderT . unAppM) r . go)
-
-instance MonadEvent r RootSelector (AppM r) where
-  askBackend = askBackendReaderT AppM fst
-  localBackend = localBackendReaderT AppM unAppM first
 
 data Options = Options
   { host :: HostName

@@ -8,8 +8,8 @@ import Colog (LogAction(LogAction), cmap, fmtMessage, logTextStdout)
 import Colog.Message (Message)
 import Control.Arrow ((&&&))
 import Control.Concurrent.Component (runComponent_)
-import Control.Exception (bracket)
-import Control.Monad.Reader (ask, runReaderT)
+import Control.Concurrent.Component.Run (runAppMTraced)
+import Control.Monad.Reader (ask)
 import Control.Monad.Trans.Marlowe (MarloweTracedT(..))
 import Data.Function (on)
 import Data.List (groupBy, sortOn)
@@ -20,14 +20,13 @@ import Data.Text.Encoding (decodeUtf8)
 import Data.Version (showVersion)
 import Language.Marlowe.Runtime.Client (connectToMarloweRuntimeTraced)
 import Language.Marlowe.Runtime.Web.Server
-import Language.Marlowe.Runtime.Web.Server.Monad (runBackendM)
 import Network.HTTP.Types
 import Network.Protocol.Driver.Trace (TcpClientSelector, renderTcpClientSelectorOTel, sockAddrToAttributes)
 import Network.Socket (PortNumber)
 import Network.Wai
 import Network.Wai.Handler.Warp (run)
 import Observe.Event (injectSelector)
-import Observe.Event.Render.OpenTelemetry (OTelRendered(..), RenderSelectorOTel, tracerEventBackend)
+import Observe.Event.Render.OpenTelemetry (OTelRendered(..), RenderSelectorOTel)
 import OpenTelemetry.Trace
 import Options
 import Paths_marlowe_runtime_web (version)
@@ -40,24 +39,17 @@ main = do
   hSetBuffering stdout LineBuffering
   hSetBuffering stderr LineBuffering
   Options{..} <- getOptions
-  withTracer \tracer -> do
-    let backend = tracerEventBackend tracer $ renderServerSelectorOTel port
-    flip runReaderT (backend, cmap fmtMessage logTextStdout) $ runBackendM do
-      dependencies <- connectToMarloweRuntimeTraced (injectSelector RuntimeClient) runtimeHost runtimePort $ MarloweTracedT do
-        marloweTracedContext <- ask
-        pure ServerDependencies
-          { openAPIEnabled
-          , accessControlAllowOriginAll
-          , runApplication = run $ fromIntegral port
-          , marloweTracedContext
-          }
-      runComponent_ server dependencies
+  runAppMTraced instrumentationLibrary (renderServerSelectorOTel port) do
+    dependencies <- connectToMarloweRuntimeTraced (injectSelector RuntimeClient) runtimeHost runtimePort $ MarloweTracedT do
+      marloweTracedContext <- ask
+      pure ServerDependencies
+        { openAPIEnabled
+        , accessControlAllowOriginAll
+        , runApplication = run $ fromIntegral port
+        , marloweTracedContext
+        }
+    runComponent_ server dependencies
   where
-    withTracer f = bracket
-      initializeGlobalTracerProvider
-      shutdownTracerProvider
-      \provider -> f $ makeTracer provider instrumentationLibrary tracerOptions
-
     instrumentationLibrary = InstrumentationLibrary
       { libraryName = "marlowe-web-server"
       , libraryVersion = fromString $ showVersion version
