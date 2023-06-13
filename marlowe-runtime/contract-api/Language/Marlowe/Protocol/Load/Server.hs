@@ -241,8 +241,9 @@ pullContract
   => Nat ('S batchSize) -- ^ The maximum number of contracts to accept before processing.
   -> (Contract -> m DatumHash) -- ^ A callback that computes the hash of a contract and stages it for saving.
   -> m () -- ^ An action that flushes queued contracts.
+  -> m () -- ^ An action to perform upon completion
   -> MarloweLoadServer m (Maybe Contract)
-pullContract batchSize stageContract flush =
+pullContract batchSize stageContract flush complete =
   MarloweLoadServer $ pure $ SendMsgResume batchSize $ pull batchSize StateRoot
   where
     pull
@@ -276,7 +277,9 @@ pullContract batchSize stageContract flush =
     popState :: Nat n -> PeerState node -> Contract -> m (ServerStPop n node m (Maybe Contract))
     popState n state contract = case state of
       StateRoot -> case contract of
-        Close -> pure $ SendMsgComplete closeHash $ pure $ Just contract
+        Close -> do
+          complete
+          pure $ SendMsgComplete closeHash $ pure $ Just contract
         _ -> do
           hash <- stageContract contract
           flush

@@ -62,22 +62,22 @@ run Options{..} = do
   contractStore <- traceContractStore inject
     <$> createContractStore ContractStoreOptions{..}
   flip runComponent_ () proc _ -> do
-    loadSource <- tcpServerTraced "contract-load" inject -< TcpServerDependencies
+    MarloweContract{..} <- contract -< ContractDependencies
+      { contractStore
+      , batchSize = unsafeIntToNat bufferSize
+      }
+
+    tcpServerTraced "contract-load" inject -< TcpServerDependencies
       { toPeer = marloweLoadServerPeer
+      , serverSocket = loadSocket
       , ..
       }
 
-    querySource <- tcpServerTraced "contract-query" inject -< TcpServerDependencies
+    tcpServerTraced "contract-query" inject -< TcpServerDependencies
       { toPeer = queryServerPeer
       , port = queryPort
+      , serverSocket = querySocket
       , ..
-      }
-
-    probes <- contract -< ContractDependencies
-      { loadSource
-      , querySource
-      , contractStore
-      , batchSize = unsafeIntToNat bufferSize
       }
 
     probeServer -< ProbeServerDependencies { port = fromIntegral httpPort, .. }

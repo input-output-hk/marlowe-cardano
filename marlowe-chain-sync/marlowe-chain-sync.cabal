@@ -82,28 +82,6 @@ library
     , time >=1.9 && <2
     , vector ^>=0.12.3
 
-library framework
-  import: lang
-  hs-source-dirs:   framework
-  visibility: public
-  exposed-modules:
-    Language.Marlowe.Runtime.Monad
-  other-modules:
-  build-depends:
-    , base >= 4.9 && < 5
-    , co-log >= 0.5.0.0 && < 0.6.0.0
-    , eventuo11y ^>= { 0.9, 0.10 }
-    , eventuo11y-extras ==0.1.0.0
-    , eventuo11y-otel ^>= 0.1
-    , exceptions >= 0.10 && < 0.11
-    , general-allocate ^>= { 0.2 }
-    , hs-opentelemetry-api >= 0.0.3 && < 0.0.4
-    , hs-opentelemetry-sdk >= 0.0.3 && < 0.0.4
-    , mtl >= 2.2 && < 3
-    , text >= 1.2.4 && < 2
-    , transformers >= 0.5.6 && < 0.6
-    , unliftio >= 0.2.1 && < 0.3
-
 library libchainsync
   import:          lang
   hs-source-dirs:  libchainsync

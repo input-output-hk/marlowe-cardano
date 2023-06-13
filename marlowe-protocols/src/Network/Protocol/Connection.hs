@@ -11,10 +11,11 @@ module Network.Protocol.Connection where
 import Control.Applicative (Alternative(empty), (<|>))
 import Control.Concurrent.STM (STM)
 import Control.Monad.IO.Class (MonadIO)
+import Control.Monad.Trans.Resource (ResourceT, runResourceT, transResourceT)
 import Data.ByteString.Lazy (ByteString)
 import Network.Protocol.Peer.Trace
 import Network.TypedProtocol (Message, PeerHasAgency)
-import UnliftIO (atomically)
+import UnliftIO (MonadUnliftIO, atomically)
 
 type ToPeer peer protocol pr st m = forall a. peer m a -> PeerTraced protocol pr st m a
 
@@ -72,3 +73,27 @@ data RecvMessageField ps st where
   RecvMessageStateBeforeMessage :: Maybe ByteString -> RecvMessageField ps st
   RecvMessageStateAfterMessage :: Maybe ByteString -> RecvMessageField ps st
   RecvMessageMessage :: Message ps st st' -> RecvMessageField ps st
+
+newtype Socket server m a = Socket
+  { getServer :: ResourceT m (server m a)
+  } deriving Functor
+
+hoistSocket
+  :: Functor m
+  => (forall p q x. Functor p => (forall y. p y -> q y) -> server p x -> server q x)
+  -> (forall x. m x -> n x)
+  -> Socket server m a
+  -> Socket server n a
+hoistSocket hoistServer f Socket{..} = Socket
+  { getServer = transResourceT (f . fmap (hoistServer f)) getServer
+  , ..
+  }
+
+socketConnector
+  :: MonadUnliftIO m
+  => (forall x y. server m x -> client m y -> m (x, y))
+  -> Socket server m a
+  -> Connector client m
+socketConnector serveClient socket = Connector $ runResourceT do
+  server <- getServer socket
+  pure $ Connection $ fmap snd . serveClient server

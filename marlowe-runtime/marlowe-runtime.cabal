@@ -271,6 +271,7 @@ library contract
     , marlowe-protocols ==0.1.1.0
     , marlowe-runtime:{marlowe-runtime, contract-api} ==0.0.2
     , plutus-ledger-api ==1.0.0.1
+    , resourcet >= 1.3 && < 2
     , text >=1.2.4 && <2
     , transformers ^>=0.5.6
     , typed-protocols ==0.1.0.0
@@ -444,6 +445,7 @@ library proxy
     , marlowe-protocols ==0.1.1.0
     , marlowe-runtime:{contract-api, discovery-api, history-api, proxy-api, sync-api, tx-api} ==0.0.2
     , resourcet >=1.3 && <2
+    , transformers >= 0.5.6 && < 0.6
     , typed-protocols ==0.1.0.0
     , unliftio ^>=0.2.1
 

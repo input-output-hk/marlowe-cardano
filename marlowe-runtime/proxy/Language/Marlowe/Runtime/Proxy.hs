@@ -9,89 +9,73 @@
 
 module Language.Marlowe.Runtime.Proxy where
 
-import Colog (WithLog)
-import qualified Colog as C
-import Control.Arrow (returnA)
+import Control.Arrow (arr)
 import Control.Concurrent.Component
 import Control.Concurrent.Component.Probes (Probes(..))
 import Control.Monad.Event.Class (MonadEvent, localBackend)
-import Control.Monad.Trans.Resource (ResourceT, runResourceT)
+import Control.Monad.Trans.Class (lift)
+import Control.Monad.Trans.Resource.Internal (ResourceT(..))
 import Data.Proxy (Proxy(..))
+import Language.Marlowe.Protocol.HeaderSync.Server (MarloweHeaderSyncServer, hoistMarloweHeaderSyncServer)
 import Language.Marlowe.Protocol.HeaderSync.Types (MarloweHeaderSync)
 import qualified Language.Marlowe.Protocol.HeaderSync.Types as Header
+import Language.Marlowe.Protocol.Load.Server (MarloweLoadServer, hoistMarloweLoadServer)
 import Language.Marlowe.Protocol.Load.Types (MarloweLoad, SomePeerHasAgency(..))
 import qualified Language.Marlowe.Protocol.Load.Types as Load
+import Language.Marlowe.Protocol.Query.Server (MarloweQueryServer)
 import Language.Marlowe.Protocol.Query.Types (MarloweQuery)
-import Language.Marlowe.Protocol.Server (MarloweRuntimeServer(..))
+import Language.Marlowe.Protocol.Server
+  (MarloweRuntimeServer(..), MarloweRuntimeServerDirect(..), hoistMarloweRuntimeServer, hoistMarloweRuntimeServerDirect)
+import Language.Marlowe.Protocol.Sync.Server (MarloweSyncServer, hoistMarloweSyncServer)
 import Language.Marlowe.Protocol.Sync.Types (MarloweSync)
 import qualified Language.Marlowe.Protocol.Sync.Types as Sync
 import Language.Marlowe.Runtime.Contract.Api (ContractRequest)
 import Language.Marlowe.Runtime.Transaction.Api (MarloweTxCommand)
 import Network.Channel.Typed
-import Network.Protocol.Connection (ConnectionSource, Connector, acceptConnector, runConnector)
+import Network.Protocol.Connection (Socket(..))
 import Network.Protocol.Handshake.Types (Handshake)
 import qualified Network.Protocol.Handshake.Types as Handshake
+import Network.Protocol.Job.Server (JobServer, hoistJobServer)
 import Network.Protocol.Job.Types (Job)
 import qualified Network.Protocol.Job.Types as Job
 import Network.Protocol.Peer.Trace
+import Network.Protocol.Query.Server (QueryServer, hoistQueryServer)
 import Network.Protocol.Query.Types (Query)
 import qualified Network.Protocol.Query.Types as Query
 import Network.TypedProtocol
 import Observe.Event.Backend (setAncestorEventBackend)
 import UnliftIO (MonadUnliftIO(..))
 
-data ProxyDependencies r m = ProxyDependencies
-  { router :: Router r m
-  , connectionSourceTraced :: ConnectionSource MarloweRuntimeServer m
-  , connectionSource :: ConnectionSource MarloweRuntimeServer m
+data MarloweProxy m = MarloweProxy
+  { proxySocket :: Bool -> Socket MarloweRuntimeServer m ()
+  , probes :: Probes
   }
 
-data ProxyDependenciesInProc m = ProxyDependenciesInProc
-  { router :: RouterInProc m
-  , connectionSourceTraced :: ConnectionSource MarloweRuntimeServer m
-  , connectionSource :: ConnectionSource MarloweRuntimeServer m
+data MarloweProxyInProc m = MarloweProxyInProc
+  { proxySocket :: Socket MarloweRuntimeServerDirect m ()
+  , probes :: Probes
   }
 
-proxyInProc
-  :: (MonadUnliftIO m, WithLog env C.Message m)
-  => Component m (ProxyDependenciesInProc m) Probes
-proxyInProc = proc deps -> do
-  (serverComponent "marlowe-runtime-server-traced" (component_ "marlowe-runtime-worker-traced" workerInProc) \ProxyDependenciesInProc{..} -> do
-    connector <- acceptConnector connectionSourceTraced
-    pure WorkerDependenciesInProc{..}) -< deps
-  (serverComponent "marlowe-runtime-server-traced" (component_ "marlowe-runtime-worker" workerInProc) \ProxyDependenciesInProc{..} -> do
-    connector <- acceptConnector connectionSource
-    pure WorkerDependenciesInProc{..}) -< deps
-  returnA -< Probes
+proxyInProc :: MonadUnliftIO m => Component m (RouterInProc m) (MarloweProxyInProc m)
+proxyInProc = arr \router -> MarloweProxyInProc
+  { proxySocket = Socket $ ResourceT \releaseMap ->
+      pure $ hoistMarloweRuntimeServerDirect (\(ResourceT m) -> m releaseMap) $ serverInProc router
+  , probes = Probes
     { startup = pure True
     , liveness = pure True
     , readiness = pure True
     }
+  }
 
-proxy
-  :: (MonadUnliftIO m, MonadEvent r s m, MonadFail m, WithLog env C.Message m)
-  => Component m (ProxyDependencies r (ResourceT m)) Probes
-proxy = proc deps -> do
-  (serverComponent "marlowe-runtime-server-traced" (component_ "marlowe-runtime-worker-traced" workerTraced) \ProxyDependencies{..} -> do
-    connector <- runResourceT $ acceptConnector connectionSourceTraced
-    pure WorkerDependencies{..}) -< deps
-  (serverComponent "marlowe-runtime-server-traced" (component_ "marlowe-runtime-worker" worker) \ProxyDependencies{..} -> do
-    connector <- runResourceT $ acceptConnector connectionSource
-    pure WorkerDependencies{..}) -< deps
-  returnA -< Probes
+proxy :: (MonadUnliftIO m, MonadEvent r s m, MonadFail m) => Component m (Router r (ResourceT m)) (MarloweProxy m)
+proxy = arr \router -> MarloweProxy
+  { proxySocket = \traced -> Socket $ ResourceT \releaseMap ->
+      pure $ hoistMarloweRuntimeServer (\(ResourceT m) -> m releaseMap) $ server (not traced) router
+  , probes = Probes
     { startup = pure True
     , liveness = pure True
     , readiness = pure True
     }
-
-data WorkerDependencies r m = WorkerDependencies
-  { router :: Router r m
-  , connector :: Connector MarloweRuntimeServer m
-  }
-
-data WorkerDependenciesInProc m = WorkerDependenciesInProc
-  { router :: RouterInProc m
-  , connector :: Connector MarloweRuntimeServer m
   }
 
 data Router r m = Router
@@ -104,31 +88,13 @@ data Router r m = Router
   }
 
 data RouterInProc m = RouterInProc
-  { connectMarloweSync :: m (Channel MarloweSync 'AsClient 'Sync.StInit m)
-  , connectMarloweHeaderSync :: m (Channel MarloweHeaderSync 'AsClient 'Header.StIdle m)
-  , connectMarloweQuery :: m (Channel MarloweQuery 'AsClient 'Query.StReq m)
-  , connectMarloweLoad :: m (Channel MarloweLoad 'AsClient ('Load.StProcessing 'Load.RootNode) m)
-  , connectTxJob :: m (Channel (Job MarloweTxCommand) 'AsClient 'Job.StInit m)
-  , connectContractQuery :: m (Channel (Query ContractRequest) 'AsClient 'Query.StReq m)
+  { marloweSyncSocket :: Socket MarloweSyncServer m ()
+  , marloweHeaderSyncSocket :: Socket MarloweHeaderSyncServer m ()
+  , marloweQuerySocket :: Socket MarloweQueryServer m ()
+  , marloweLoadSocket :: Socket MarloweLoadServer m ()
+  , txJobSocket :: Socket (JobServer MarloweTxCommand) m ()
+  , contractQuerySocket :: Socket (QueryServer ContractRequest) m ()
   }
-
-workerTraced
-  :: (MonadUnliftIO m, MonadEvent r s m, MonadFail m)
-  => WorkerDependencies r (ResourceT m)
-  -> m ()
-workerTraced WorkerDependencies{..} = runResourceT $ runConnector connector $ server False router
-
-worker
-  :: (MonadUnliftIO m, MonadFail m, MonadEvent r s m)
-  => WorkerDependencies r (ResourceT m)
-  -> m ()
-worker WorkerDependencies{..} = runResourceT $ runConnector connector $ server True router
-
-workerInProc
-  :: MonadUnliftIO m
-  => WorkerDependenciesInProc m
-  -> m ()
-workerInProc WorkerDependenciesInProc{..} = runConnector connector $ serverInProc router
 
 server
   :: (MonadFail m, MonadEvent r s m)
@@ -147,15 +113,24 @@ server useOpenRefAsParent Router{..} = MarloweRuntimeServer
 serverInProc
   :: Monad m
   => RouterInProc m
-  -> MarloweRuntimeServer m ()
-serverInProc RouterInProc{..} = MarloweRuntimeServer
-  { recvMsgRunMarloweSync = proxyProtocol' (ClientAgency Sync.TokInit) connectMarloweSync marloweSyncNext
-  , recvMsgRunMarloweHeaderSync = proxyProtocol' (ClientAgency Header.TokIdle) connectMarloweHeaderSync marloweHeaderSyncNext
-  , recvMsgRunMarloweQuery = proxyProtocol' (ClientAgency Query.TokReq) connectMarloweQuery queryNext
-  , recvMsgRunMarloweLoad = proxyProtocol' (ServerAgency $ Load.TokProcessing Load.SRootNode) connectMarloweLoad loadNext
-  , recvMsgRunTxJob = proxyProtocol' (ClientAgency Job.TokInit) connectTxJob jobNext
-  , recvMsgRunContractQuery = proxyProtocol' (ClientAgency Query.TokReq) connectContractQuery queryNext
+  -> MarloweRuntimeServerDirect (ResourceT m) ()
+serverInProc RouterInProc{..} = MarloweRuntimeServerDirect
+  { recvMsgRunMarloweSync = useSocket hoistMarloweSyncServer marloweSyncSocket
+  , recvMsgRunMarloweHeaderSync = useSocket hoistMarloweHeaderSyncServer marloweHeaderSyncSocket
+  , recvMsgRunMarloweQuery = useSocket hoistQueryServer marloweQuerySocket
+  , recvMsgRunMarloweLoad = useSocket hoistMarloweLoadServer marloweLoadSocket
+  , recvMsgRunTxJob = useSocket hoistJobServer txJobSocket
+  , recvMsgRunContractQuery = useSocket hoistQueryServer contractQuerySocket
   }
+
+useSocket
+  :: Monad m
+  => (forall p q a. Functor p => (forall x. p x -> q x) -> server p a -> server q a)
+  -> Socket server m ()
+  -> ResourceT m (server (ResourceT m) ())
+useSocket hoistServer socket = do
+  s <- getServer socket
+  pure $ hoistServer lift s
 
 marloweSyncNext :: PeerHasAgency pr st -> Message MarloweSync st st' -> NextAgency MarloweSync pr st st'
 marloweSyncNext = \case
@@ -275,16 +250,6 @@ liftHandshake :: LiftProtocol ps (Handshake ps) 'Handshake.StLift
 liftHandshake =
   LiftProtocol Handshake.TokLiftClient Handshake.TokLiftServer Handshake.TokLiftNobody Handshake.MsgLift \case
     Handshake.MsgLift msg -> SomeSubMessage msg
-
-proxyProtocol'
-  :: Monad m
-  => PeerHasAgency pr st
-  -> m (Channel ps 'AsClient st m)
-  -> (forall pr' st' st''. PeerHasAgency pr' st' -> Message ps st' st'' -> NextAgency ps pr' st' st'')
-  -> m (PeerTraced ps 'AsServer st m ())
-proxyProtocol' agency mChannel nextAgency = do
-  channel <- mChannel
-  pure $ proxyProtocol agency channel nextAgency
 
 proxyProtocol
   :: Monad m

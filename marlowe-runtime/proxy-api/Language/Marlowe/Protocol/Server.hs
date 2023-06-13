@@ -5,8 +5,6 @@
 
 module Language.Marlowe.Protocol.Server where
 
-import Control.Monad (join)
-import Data.Void (absurd)
 import Language.Marlowe.Protocol.Client
 import Language.Marlowe.Protocol.HeaderSync.Client (marloweHeaderSyncClientPeer)
 import Language.Marlowe.Protocol.HeaderSync.Server
@@ -99,31 +97,19 @@ marloweRuntimeServerDirectPeer MarloweRuntimeServerDirect{..} =
 
 serveMarloweRuntimeClient :: Monad m => MarloweRuntimeServer m a -> MarloweRuntimeClient m b -> m (a, b)
 serveMarloweRuntimeClient MarloweRuntimeServer{..} = \case
-  RunMarloweSyncClient client -> flip serveClient (marloweSyncClientPeer client) =<< recvMsgRunMarloweSync
-  RunMarloweHeaderSyncClient client -> flip serveClient (marloweHeaderSyncClientPeer client) =<< recvMsgRunMarloweHeaderSync
-  RunMarloweQueryClient client -> flip serveClient (queryClientPeer client) =<< recvMsgRunMarloweQuery
-  RunMarloweLoadClient client -> flip serveClient (marloweLoadClientPeer client) =<< recvMsgRunMarloweLoad
-  RunTxClient client -> flip serveClient (jobClientPeer client) =<< recvMsgRunTxJob
-  RunContractQueryClient client -> flip serveClient (queryClientPeer client) =<< recvMsgRunContractQuery
+  RunMarloweSyncClient client -> flip connectTraced (marloweSyncClientPeer client) =<< recvMsgRunMarloweSync
+  RunMarloweHeaderSyncClient client -> flip connectTraced (marloweHeaderSyncClientPeer client) =<< recvMsgRunMarloweHeaderSync
+  RunMarloweQueryClient client -> flip connectTraced (queryClientPeer client) =<< recvMsgRunMarloweQuery
+  RunMarloweLoadClient client -> flip connectTraced (marloweLoadClientPeer client) =<< recvMsgRunMarloweLoad
+  RunTxClient client -> flip connectTraced (jobClientPeer client) =<< recvMsgRunTxJob
+  RunContractQueryClient client -> flip connectTraced (queryClientPeer client) =<< recvMsgRunContractQuery
 
-serveClient
+connectTraced
   :: forall ps st m a b
    . (Protocol ps, Monad m)
   => PeerTraced ps 'AsServer st m a
   -> PeerTraced ps 'AsClient st m b
   -> m (a, b)
-serveClient s c = go (peerTracedToPeer s) (peerTracedToPeer c)
-  where
-    go :: Peer ps 'AsServer st' m a -> Peer ps 'AsClient st' m b -> m (a, b)
-    go (Effect ms) (Effect mc) = join $ go <$> ms <*> mc
-    go (Effect ms) peerC = flip go peerC =<< ms
-    go peerS (Effect mc) = go peerS =<< mc
-    go (Done _ a) (Done _ b) = pure (a, b)
-    go (Yield _ msg peerS) (Await _ k) = go peerS $ k msg
-    go (Await _ k) (Yield _ msg peerC) = go (k msg) peerC
-    go (Done tokS _) (Yield (ClientAgency tokC) _ _) = absurd $ exclusionLemma_NobodyAndClientHaveAgency tokS tokC
-    go (Done tokS _) (Await (ServerAgency tokC) _) = absurd $ exclusionLemma_NobodyAndServerHaveAgency tokS tokC
-    go (Yield (ServerAgency tokS) _ _) (Done tokC _) = absurd $ exclusionLemma_NobodyAndServerHaveAgency tokC tokS
-    go (Await (ClientAgency tokS) _) (Done tokC _) = absurd $ exclusionLemma_NobodyAndClientHaveAgency tokC tokS
-    go (Yield (ServerAgency tokS) _ _) (Yield (ClientAgency tokC) _ _) = absurd $ exclusionLemma_ClientAndServerHaveAgency tokC tokS
-    go (Await (ClientAgency tokS) _) (Await (ServerAgency tokC) _) = absurd $ exclusionLemma_ClientAndServerHaveAgency tokS tokC
+connectTraced s c = do
+  (a, b, _) <- connect (peerTracedToPeer s) (peerTracedToPeer c)
+  pure (a, b)

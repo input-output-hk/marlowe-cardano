@@ -56,27 +56,26 @@ main = do
 
 run :: Options -> AppM Span RootSelector ()
 run = runComponent_ proc Options{..} -> do
-  connectionSource <- tcpServer "marlowe-runtime" -< TcpServerDependencies
+  MarloweProxy{..} <- proxy -< Router
+    { connectMarloweSync = tcpClientChannel (injectSelector MarloweSyncClient) syncHost marloweSyncPort
+    , connectMarloweHeaderSync = tcpClientChannel (injectSelector MarloweHeaderSyncClient) syncHost marloweHeaderSyncPort
+    , connectMarloweQuery = tcpClientChannel (injectSelector MarloweQueryClient) syncHost marloweQueryPort
+    , connectMarloweLoad = tcpClientChannel (injectSelector MarloweLoadClient) contractHost marloweLoadPort
+    , connectTxJob = tcpClientChannel (injectSelector TxJobClient) txHost txPort
+    , connectContractQuery = tcpClientChannel (injectSelector ContractQueryClient) contractHost contractQueryPort
+    }
+
+  tcpServer "marlowe-runtime" -< TcpServerDependencies
     { toPeer = marloweRuntimeServerPeer
+    , serverSocket = proxySocket False
     , ..
     }
 
-  connectionSourceTraced <- tcpServerTraced "marlowe-runtime-traced" $ injectSelector MarloweRuntimeServer -< TcpServerDependencies
+  tcpServerTraced "marlowe-runtime-traced" $ injectSelector MarloweRuntimeServer -< TcpServerDependencies
     { toPeer = marloweRuntimeServerPeer
     , port = portTraced
+    , serverSocket = proxySocket True
     , ..
-    }
-  probes <- proxy -< ProxyDependencies
-    { router = Router
-        { connectMarloweSync = tcpClientChannel (injectSelector MarloweSyncClient) syncHost marloweSyncPort
-        , connectMarloweHeaderSync = tcpClientChannel (injectSelector MarloweHeaderSyncClient) syncHost marloweHeaderSyncPort
-        , connectMarloweQuery = tcpClientChannel (injectSelector MarloweQueryClient) syncHost marloweQueryPort
-        , connectMarloweLoad = tcpClientChannel (injectSelector MarloweLoadClient) contractHost marloweLoadPort
-        , connectTxJob = tcpClientChannel (injectSelector TxJobClient) txHost txPort
-        , connectContractQuery = tcpClientChannel (injectSelector ContractQueryClient) contractHost contractQueryPort
-        }
-    , connectionSource
-    , connectionSourceTraced
     }
 
   probeServer -< ProbeServerDependencies { port = fromIntegral httpPort, .. }

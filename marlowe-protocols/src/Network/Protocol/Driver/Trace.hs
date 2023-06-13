@@ -12,11 +12,11 @@ module Network.Protocol.Driver.Trace where
 import Colog (WithLog)
 import qualified Colog as C
 import Control.Concurrent.Component
-import Control.Concurrent.STM (newEmptyTMVar, newTQueue, readTMVar, readTQueue, tryPutTMVar)
-import Control.Concurrent.STM.TQueue (writeTQueue)
 import Control.Monad (join, replicateM)
 import Control.Monad.Event.Class
 import Control.Monad.IO.Class (MonadIO, liftIO)
+import Control.Monad.Trans.Class (lift)
+import Control.Monad.Trans.Resource (runResourceT)
 import Data.Binary (Binary, get, getWord8, put)
 import Data.Binary.Get (runGet)
 import Data.Binary.Put (putWord8, runPut)
@@ -25,7 +25,6 @@ import Data.ByteString.Lazy (ByteString)
 import qualified Data.ByteString.Lazy as LBS
 import Data.ByteString.Lazy.Base16 (encodeBase16)
 import Data.Foldable (traverse_)
-import Data.Functor (void)
 import Data.Int (Int64)
 import Data.List (intercalate)
 import Data.Proxy
@@ -38,7 +37,7 @@ import Network.Channel hiding (close)
 import Network.Protocol.Codec (BinaryMessage, DeserializeError, decodeGet, getMessage, putMessage)
 import Network.Protocol.Codec.Spec (ShowProtocol(..))
 import Network.Protocol.Connection
-  (Connection(..), ConnectionSource(..), Connector(..), DriverSelector(..), RecvMessageField(..), ToPeer)
+  (Connection(..), Connector(..), DriverSelector(..), RecvMessageField(..), Socket(..), ToPeer)
 import Network.Protocol.Driver (TcpServerDependencies(..))
 import Network.Protocol.Handshake.Client (handshakeClientPeer, simpleHandshakeClient)
 import Network.Protocol.Handshake.Server (handshakeServerPeer, simpleHandshakeServer)
@@ -72,7 +71,7 @@ import Observe.Event.Render.OpenTelemetry
 import OpenTelemetry.Trace.Core
 import OpenTelemetry.Trace.Id (SpanId, TraceId, bytesToSpanId, bytesToTraceId, spanIdBytes, traceIdBytes)
 import OpenTelemetry.Trace.TraceState (Key(..), TraceState, Value(..), empty, insert, toList)
-import UnliftIO (MonadUnliftIO, atomically, mask, throwIO, try)
+import UnliftIO (MonadUnliftIO, mask, throwIO, try, withRunInIO)
 
 data DriverTraced ps dState r m = DriverTraced
   { sendMessageTraced
@@ -200,59 +199,46 @@ data ConnectedField
   | ConnectedPeer SockAddr
 
 tcpServerTraced
-  :: forall r s env m m' ps server
-   . (MonadUnliftIO m', MonadUnliftIO m, MonadEvent r s m', HasSpanContext r, BinaryMessage ps, MonadFail m', HasSignature ps, WithLog env C.Message m)
+  :: forall r s env m ps server
+   . (MonadUnliftIO m, MonadEvent r s m, HasSpanContext r, BinaryMessage ps, MonadFail m, HasSignature ps, WithLog env C.Message m)
   => String
   -> InjectSelector (TcpServerSelector (Handshake ps)) s
-  -> Component m (TcpServerDependencies ps server m') (ConnectionSource server m')
-tcpServerTraced name inj = component (name <> "-tcp-server") \TcpServerDependencies{..} -> do
-  socketQueue <- newTQueue
-  pure
-    ( liftIO $ runTCPServer (Just host) (show port) \socket -> do
-        closeTMVar <- atomically do
-          closeTMVar <- newEmptyTMVar
-          writeTQueue socketQueue (socket, void $ tryPutTMVar closeTMVar ())
-          pure closeTMVar
-        atomically $ readTMVar closeTMVar
-    , ConnectionSource do
-        (socket, closeConnection) <- readTQueue socketQueue
-        pure $ Connector do
-          spanContextLength <- liftIO $ runGet get <$> Socket.recv socket 8
-          spanContext <- liftIO $ runGet get <$> Socket.recv socket spanContextLength
-          let parentRef = wrapContext spanContext
-          withInjectEventArgs inj (simpleNewEventArgs Connected) { newEventParent = Just parentRef } \ev -> do
-            addr <- liftIO $ head <$> getAddrInfo
-              (Just defaultHints { addrSocketType = Stream, addrFlags = [AI_PASSIVE] })
-              (Just host)
-              (Just $ show port)
-            addField ev $ ConnectedAddr addr
-            pName <- liftIO $ getPeerName socket
-            addField ev $ ConnectedPeer pName
-            _ <- liftIO $ Socket.sendAll socket $ LBS.pack [0]
-            let closeArgs = (simpleNewEventArgs CloseServer) { newEventParent = Just parentRef }
-            pure Connection
-              { runConnection = \server -> localBackend (setAncestorEventBackend parentRef) do
-                  let
-                    driver = mkDriverTraced
-                      (composeInjectSelector inj $ injectSelector $ ServerDriver addr pName)
-                      (socketAsChannel socket)
-                    handshakeServer = simpleHandshakeServer (signature $ Proxy @ps) server
-                    peer = handshakeServerPeer toPeer handshakeServer
-                  mask \restore -> do
-                    result <- restore $ try $ runPeerWithDriverTraced
-                      (composeInjectSelector inj $ injectSelector $ ServerPeer addr pName)
-                      driver
-                      peer
-                      (startDStateTraced driver)
-                    withInjectEventArgs inj closeArgs \ev' -> do
-                      atomically closeConnection
-                      case result of
-                        Left ex -> do
-                          finalize ev' $ Just ex
-                          throwIO ex
-                        Right a -> pure a
-              }
-    )
+  -> Component m (TcpServerDependencies ps server m) ()
+tcpServerTraced name inj = component_ (name <> "-tcp-server") \TcpServerDependencies{..} -> do
+  withRunInIO \runInIO -> runTCPServer (Just host) (show port) \socket -> runInIO $ runResourceT do
+    spanContextLength <- liftIO $ runGet get <$> Socket.recv socket 8
+    spanContext <- liftIO $ runGet get <$> Socket.recv socket spanContextLength
+    let parentRef = wrapContext spanContext
+    withInjectEventArgs inj (simpleNewEventArgs Connected) { newEventParent = Just parentRef } \ev -> do
+      addr <- liftIO $ head <$> getAddrInfo
+        (Just defaultHints { addrSocketType = Stream, addrFlags = [AI_PASSIVE] })
+        (Just host)
+        (Just $ show port)
+      addField ev $ ConnectedAddr addr
+      pName <- liftIO $ getPeerName socket
+      addField ev $ ConnectedPeer pName
+      _ <- liftIO $ Socket.sendAll socket $ LBS.pack [0]
+      let closeArgs = (simpleNewEventArgs CloseServer) { newEventParent = Just parentRef }
+      server <- getServer serverSocket
+      lift $ localBackend (setAncestorEventBackend parentRef) do
+        let
+          driver = mkDriverTraced
+            (composeInjectSelector inj $ injectSelector $ ServerDriver addr pName)
+            (socketAsChannel socket)
+          handshakeServer = simpleHandshakeServer (signature $ Proxy @ps) server
+          peer = handshakeServerPeer toPeer handshakeServer
+        mask \restore -> do
+          result <- restore $ try $ runPeerWithDriverTraced
+            (composeInjectSelector inj $ injectSelector $ ServerPeer addr pName)
+            driver
+            peer
+            (startDStateTraced driver)
+          withInjectEventArgs inj closeArgs \ev' -> do
+            case result of
+              Left ex -> do
+                finalize ev' $ Just ex
+                throwIO ex
+              Right a -> pure a
 
 tcpClientTraced
   :: forall r s m ps st client
