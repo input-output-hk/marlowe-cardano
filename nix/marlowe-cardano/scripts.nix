@@ -61,7 +61,7 @@ let
     docker compose up --detach --file ${compose-spec}
   '';
 
-  compose-spec = import ./compose-spec.nix { inherit inputs pkgs; };
+  compose-spec = import ./compose.nix { inherit inputs pkgs; };
 
   mkCabalExeScript = target: ''
     cd `${pkgs.git}/bin/git rev-parse --show-toplevel`
