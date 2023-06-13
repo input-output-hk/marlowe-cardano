@@ -114,11 +114,11 @@ corsMiddleware accessControlAllowOriginAll =
     cors (const $ Just policy)
   else id
 
-data ServerDependencies transport r s = ServerDependencies
+data ServerDependencies r s t = ServerDependencies
   { openAPIEnabled :: Bool
   , accessControlAllowOriginAll :: Bool
   , runApplication :: Application -> IO ()
-  , marloweTracedContext :: MarloweTracedContext r s (ServerSelector transport) (AppM r (ServerSelector transport))
+  , marloweTracedContext :: MarloweTracedContext r s t (AppM r t)
   }
 
 {- Architecture notes:
@@ -132,7 +132,7 @@ data ServerDependencies transport r s = ServerDependencies
     process having its own event backend injected via its parameters.
 -}
 
-server :: HasSpanContext r => Component (AppM r (ServerSelector transport)) (ServerDependencies transport r s) ()
+server :: (HasSpanContext r, Inject ServeRequest t) => Component (AppM r t) (ServerDependencies r s t) ()
 server = proc deps@ServerDependencies{marloweTracedContext = MarloweTracedContext{..}} -> do
   TxClient{..} <- txClient -< TxClientDependencies
     { connector = SomeConnectorTraced injector connector
@@ -181,7 +181,7 @@ data WebServerDependencies r s = WebServerDependencies
   , runApplication :: Application -> IO ()
   }
 
-webServer :: Component (AppM r (ServerSelector transport)) (WebServerDependencies r (ServerSelector transport)) ()
+webServer :: Inject ServeRequest s => Component (AppM r s) (WebServerDependencies r s) ()
 webServer = component_ "web-server" \WebServerDependencies{..} -> withRunInIO \runInIO ->
   -- Observe.Event.Wai does not expose a reference to the ServeRequest field, which we
   -- need because of the asynchronous processing of submit jobs. So, we have to

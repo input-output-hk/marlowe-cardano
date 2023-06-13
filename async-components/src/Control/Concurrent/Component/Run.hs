@@ -31,7 +31,11 @@ runAppMTraced :: forall s a. InstrumentationLibrary -> RenderSelectorOTel s -> A
 runAppMTraced library render app = bracket
   initializeTracerProvider'
   snd
-  \(backend, _) -> runAppM backend app
+  \(backend, _) -> do
+    hSetBuffering stderr LineBuffering
+    hSetBuffering stdout LineBuffering
+    logAction <- concurrentLogger
+    runAppM backend logAction app
   where
     initializeTracerProvider' :: IO (EventBackend IO Span s, IO ())
     initializeTracerProvider' = do
@@ -53,11 +57,8 @@ runAppMTraced library render app = bracket
             , shutdownTracerProvider provider
             )
 
-runAppM :: EventBackend IO r s -> AppM r s a -> IO a
-runAppM eventBackend (AppM action) = do
-  hSetBuffering stderr LineBuffering
-  hSetBuffering stdout LineBuffering
-  logAction <- concurrentLogger
+runAppM :: EventBackend IO r s -> LogAction IO Message -> AppM r s a -> IO a
+runAppM eventBackend logAction (AppM action) = do
   runReaderT action (hoistEventBackend liftIO eventBackend, logAction)
 
 concurrentLogger :: MonadUnliftIO m => IO (LogAction m Message)
