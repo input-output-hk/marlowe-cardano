@@ -1,0 +1,19 @@
+{
+    "accounts": [
+        [
+            [
+                {
+                    "role_token": "Bob"
+                },
+                {
+                    "currency_symbol": "",
+                    "token_name": ""
+                }
+            ],
+            1000
+        ]
+    ],
+    "boundValues": [],
+    "choices": [],
+    "minTime": 1
+}

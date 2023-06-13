@@ -2,38 +2,38 @@ testName: WolframBet
 
 operations:
 
-- Comment: Create the wallet for the buyer, fund it with 80 ADA, and activate the Marlowe endpoints.
+- Comment: Create wallet for Alice
 
 - CreateWallet:
     nickname: AliceWallet
-    utxo: 80000000
+    utxo: 1000000
 
-- Comment: Create the wallet for the seller, fund it with 15 ADA, and activate the Marlowe endpoints.
+- Comment: Create wallet for Bob
 
 - CreateWallet:
     nickname: BobWallet
-    utxo: 15000000
+    utxo: 1000000
 
-- Comment: Create the wallet for the mediator, fund it with 20 ADA, and activate the Marlowe endpoints.
+- Comment: Create the wallet for the distributor
 
 - CreateWallet:
-    nickname: Mediator
-    utxo: 20000000
+    nickname: Distributor
+    utxo: 1000000
 
 - Comment: The mediator mints role tokens and distributes them across wallets.
 
 - Mint:
-    issuer: Mediator
+    issuer: Referee
     nickname: RoleTokenCurrency
     minLovelace: 2000000
     tokenDistribution:
       - [AliceWallet, Alice, 1]
       - [BobWallet, Bob, 1]
 
-- Comment: The mediator creates the Wolf-bet, which was downloaded from Marlowe Playground. The purchase price is 50 ADA.
+- Comment: The Referee creates the Wolf-bet, which was downloaded from Marlowe Playground.
 
 - Initialize:
-    submitter: Mediator
+    submitter: Referee
     roleCurrency: RoleTokenCurrency
     minLovelace: 2000000
     source:
@@ -41,7 +41,7 @@ operations:
       timeout_continuation: close
       when:
       - case:
-          deposits: 1000
+          deposits: 1000000
           into_account:
             role_token: Alice
           of_token:
@@ -54,7 +54,7 @@ operations:
           timeout_continuation: close
           when:
           - case:
-              deposits: 1000
+              deposits: 1000000
               into_account:
                 role_token: Bob
               of_token:
@@ -73,12 +73,13 @@ operations:
                   for_choice:
                     choice_name: WOLF_BTCUSD
                     choice_owner:
-                      address: addr_test1vrxx3rjangevudlrejgp9m508uc26jd02n7lmdz365n4wrca35y5j
+                      party:
+                        role_token: Referee
                 then:
                   else:
                     from_account:
                       role_token: Bob
-                    pay: 1000
+                    pay: 1000000
                     then: close
                     to:
                       party:
@@ -92,11 +93,12 @@ operations:
                       value_of_choice:
                         choice_name: WOLF_BTCUSD
                         choice_owner:
-                          address: addr_test1vrxx3rjangevudlrejgp9m508uc26jd02n7lmdz365n4wrca35y5j
+                          party:
+                            role_token: Referee
                   then:
                     from_account:
                       role_token: Alice
-                    pay: 1000
+                    pay: 1000000
                     then: close
                     to:
                       party:
@@ -117,13 +119,13 @@ operations:
 - CheckBalance:
     wallet: AliceWallet
     balance:
-      - [ADA, 1000]
+      - [ADA, 1]
       - [RoleTokenCurrency, Alice, 1]
 
 - CheckBalance:
     wallet: BobWallet
     balance:
-      - [ADA, 1000]
+      - [ADA, 1]
       - [RoleTokenCurrency, Bob, 1]
 
 - Comment: The buyer deposits the 50 ADA purchase price.
@@ -132,7 +134,7 @@ operations:
     inputs:
       - input_from_party:
           role_token: Alice
-        that_deposits: 1000
+        that_deposits: 1000000
         of_token:
           currency_symbol: ""
           token_name: ""
@@ -140,7 +142,7 @@ operations:
           role_token: Alice
       - input_from_party:
           role_token: Bob
-        that_deposits: 1000
+        that_deposits: 1000000
         of_token:
           currency_symbol: ""
           token_name: ""
@@ -153,7 +155,7 @@ operations:
 
 - AutoRun
 
-- Comment: The buyer should have about 32 ADA now, since they paid 50 ADA for the purchase (balance check ignores tx fees).
+- Comment: Both Bob and Alice submitted their bets
 
 - CheckBalance:
     wallet: AliceWallet
@@ -167,14 +169,15 @@ operations:
       - [ADA, 1000]
       - [RoleTokenCurrency, Bob, 1]
 
-- Comment: The buyer receives the purchase and reports that everything is alright.
+- Comment: 3...2...1...
 
 - Prepare:
     inputs:
       - for_choice_id:
           choice_name: WOLF_BTCUSD
           choice_owner:
-            address: addr_test1vrxx3rjangevudlrejgp9m508uc26jd02n7lmdz365n4wrca35y5j
+            party:
+              role_token: Referee
         input_that_chooses_num: 0
     minimumTime:
       relative: -15
@@ -183,6 +186,7 @@ operations:
 
 - AutoRun
 
+- Comment: Alice won!
 
 - CheckBalance:
     wallet: AliceWallet
@@ -193,7 +197,7 @@ operations:
 - CheckBalance:
     wallet: BobWallet
     balance:
-      - [ADA, 2000]
+      - [ADA, 2]
       - [RoleTokenCurrency, Alice, 1]
 
 
