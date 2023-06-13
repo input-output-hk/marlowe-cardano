@@ -82,6 +82,8 @@ cabal run marlowe-chain-indexer -- -s ~/cardano-node/cardano.sock --database-uri
 
 cabal run marlowe-indexer -- --database-uri postgresql://postgres@0.0.0.0/chain --http-port 9090
 
+cabal run marlowe-sync -- --database-uri postgresql://postgres@0.0.0.0/chain --http-port 9393
+
 cabal run marlowe-tx -- --http-port 9191 &
 
 cabal run marlowe-proxy -- --http-port 9292 &
