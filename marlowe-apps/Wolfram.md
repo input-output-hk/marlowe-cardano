@@ -87,6 +87,9 @@ cabal run marlowe-sync -- --database-uri postgresql://postgres@0.0.0.0/chain --h
 cabal run marlowe-tx -- --http-port 9191 &
 
 cabal run marlowe-proxy -- --http-port 9292 &
+
+cabal run marlowe-contract -- --http-port 9797 &
+
 ```
 
 ## RUNNING ORACLE
