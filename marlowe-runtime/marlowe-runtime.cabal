@@ -493,11 +493,9 @@ executable marlowe-indexer
     , base >= 4.9 && < 5
     , bytestring >= 0.10.12 && < 0.12
     , containers >= 0.6.5 && < 0.7
-    , co-log >= 0.5.0.0 && < 0.6.0.0
     , eventuo11y ^>= { 0.9, 0.10 }
     , eventuo11y-extras ==0.1.0.0
     , eventuo11y-otel ^>= 0.1
-    , general-allocate ^>= { 0.2 }
     , hasql >= 1.6 && < 2
     , hasql-pool ^>= 0.8
     , hs-opentelemetry-api >= 0.0.3 && < 0.0.4
@@ -512,7 +510,6 @@ executable marlowe-indexer
     , optparse-applicative >= 0.17 && < 0.18
     , postgresql-libpq >= 0.9 && < 0.10
     , text >= 1.2.4 && < 2
-    , transformers >= 0.5.6 && < 0.6
     , unliftio >= 0.2.1 && < 0.3
   ghc-options: -threaded
 
@@ -529,11 +526,9 @@ executable marlowe-sync
     , async-components ==0.1.0.0
     , base >= 4.9 && < 5
     , bytestring >= 0.10.12 && < 0.12
-    , co-log >= 0.5.0.0 && < 0.6.0.0
     , eventuo11y ^>= { 0.9, 0.10 }
     , eventuo11y-extras ==0.1.0.0
     , eventuo11y-otel ^>= 0.1
-    , general-allocate ^>= { 0.2 }
     , hasql >= 1.6 && < 2
     , hasql-pool ^>= 0.8
     , hs-opentelemetry-api >= 0.0.3 && < 0.0.4
@@ -549,7 +544,6 @@ executable marlowe-sync
     , optparse-applicative >= 0.17 && < 0.18
     , postgresql-libpq >= 0.9 && < 0.10
     , text >= 1.2.4 && < 2
-    , transformers >= 0.5.6 && < 0.6
     , unliftio >= 0.2.1 && < 0.3
   ghc-options: -threaded
 
@@ -566,12 +560,10 @@ executable marlowe-tx
     , async-components ==0.1.0.0
     , base >= 4.9 && < 5
     , cardano-api ==1.35.4
-    , co-log >= 0.5.0.0 && < 0.6.0.0
     , containers >= 0.6.5 && < 0.7
     , eventuo11y ^>= { 0.9, 0.10 }
     , eventuo11y-extras ==0.1.0.0
     , eventuo11y-otel ^>= 0.1
-    , general-allocate ^>= { 0.2 }
     , hs-opentelemetry-api >= 0.0.3 && < 0.0.4
     , hs-opentelemetry-sdk >= 0.0.3 && < 0.0.4
     , marlowe-chain-sync ==0.0.1
@@ -580,12 +572,9 @@ executable marlowe-tx
     , marlowe-runtime:contract-api ==0.0.1
     , marlowe-runtime:tx ==0.0.1
     , marlowe-runtime:tx-api ==0.0.1
-    , mtl >= 2.2 && < 3
     , network >= 3.1 && < 4
     , optparse-applicative >= 0.17 && < 0.18
     , text >= 1.2.4 && < 2
-    , transformers >= 0.5.6 && < 0.6
-    , unliftio >= 0.2.1 && < 0.3
   ghc-options: -threaded
 
 executable marlowe-contract
@@ -601,25 +590,19 @@ executable marlowe-contract
     , aeson >= 2 && < 3
     , async-components ==0.1.0.0
     , base >= 4.9 && < 5
-    , co-log >= 0.5.0.0 && < 0.6.0.0
     , eventuo11y ^>= { 0.9, 0.10 }
     , eventuo11y-extras ==0.1.0.0
     , eventuo11y-otel ^>=  0.1
-    , exceptions >= 0.10 && < 0.11
-    , general-allocate ^>= { 0.2 }
     , hs-opentelemetry-api >= 0.0.3 && < 0.0.4
     , hs-opentelemetry-sdk >= 0.0.3 && < 0.0.4
     , marlowe-cardano ==0.1.0.3
     , marlowe-protocols ==0.1.0.0
     , marlowe-runtime:contract ==0.0.1
     , marlowe-runtime:contract-api ==0.0.1
-    , mtl >= 2.2 && < 3
     , network >= 3.1 && < 4
     , optparse-applicative >= 0.17 && < 0.18
     , text >= 1.2.4 && < 2
-    , transformers >= 0.5.6 && < 0.6
     , typed-protocols ==0.1.0.0
-    , unliftio >= 0.2.1 && < 0.3
   ghc-options: -threaded
 
 executable marlowe-proxy
@@ -634,11 +617,9 @@ executable marlowe-proxy
   build-depends:
     , async-components ==0.1.0.0
     , base >= 4.9 && < 5
-    , co-log >= 0.5.0.0 && < 0.6.0.0
     , eventuo11y ^>= { 0.9, 0.10 }
     , eventuo11y-extras ==0.1.0.0
     , eventuo11y-otel ^>=  0.1
-    , general-allocate ^>= { 0.2 }
     , hs-opentelemetry-api >= 0.0.3 && < 0.0.4
     , hs-opentelemetry-sdk >= 0.0.3 && < 0.0.4
     , marlowe-protocols ==0.1.0.0
@@ -650,12 +631,9 @@ executable marlowe-proxy
     , marlowe-runtime:proxy-api ==0.0.1
     , marlowe-runtime:sync-api ==0.0.1
     , marlowe-runtime:tx-api ==0.0.1
-    , mtl >= 2.2 && < 3
     , network >= 3.1 && < 4
     , optparse-applicative >= 0.17 && < 0.18
     , text >= 1.2.4 && < 2
-    , transformers >= 0.5.6 && < 0.6
-    , unliftio >= 0.2.1 && < 0.3
   ghc-options: -threaded
 
 test-suite marlowe-runtime-test

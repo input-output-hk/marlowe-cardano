@@ -11,17 +11,12 @@
 module Main
   where
 
-import Colog (LogAction(LogAction), Message, cmap, fmtMessage, logTextStdout)
 import Control.Concurrent.Component
 import Control.Concurrent.Component.Probes (ProbeServerDependencies(..), probeServer)
+import Control.Concurrent.Component.Run (AppM, runAppMTraced)
 import Control.Exception (bracket)
-import Control.Monad.Event.Class
-import Control.Monad.IO.Class (MonadIO, liftIO)
-import Control.Monad.Reader (MonadReader(..), asks, withReaderT)
-import Control.Monad.Trans.Reader (ReaderT(..))
-import Control.Monad.With
-import Data.Bifunctor (first)
-import Data.GeneralAllocate
+import Control.Monad.IO.Class (liftIO)
+import Control.Monad.Reader (MonadReader(..))
 import qualified Data.Set.NonEmpty as NESet
 import Data.String (fromString)
 import qualified Data.Text as T
@@ -43,8 +38,7 @@ import Network.Protocol.Handshake.Types (Handshake)
 import Network.Protocol.Query.Client (QueryClient, queryClientPeer, request)
 import Network.Protocol.Query.Types (Query)
 import Network.Socket (AddrInfo(..), HostName, PortNumber, SocketType(..), defaultHints)
-import Observe.Event.Backend (EventBackend, hoistEventBackend, injectSelector)
-import Observe.Event.Render.OpenTelemetry (tracerEventBackend)
+import Observe.Event.Backend (injectSelector)
 import OpenTelemetry.Trace
 import Options.Applicative
   ( auto
@@ -64,13 +58,10 @@ import Options.Applicative
   , value
   )
 import Paths_marlowe_runtime (version)
-import UnliftIO (BufferMode(LineBuffering), MonadUnliftIO, hSetBuffering, newMVar, stderr, stdout, throwIO, withMVar)
+import UnliftIO (throwIO)
 
 main :: IO ()
-main = do
-  hSetBuffering stderr LineBuffering
-  hSetBuffering stdout LineBuffering
-  run =<< getOptions
+main = run =<< getOptions
 
 clientHints :: AddrInfo
 clientHints = defaultHints { addrSocketType = Stream }
@@ -84,36 +75,30 @@ run Options{..} = bracket (Pool.acquire 100 (Just 5000000) (fromString databaseU
       <*> PQ.user conn
       <*> PQ.host conn
       <*> PQ.port conn
-  scripts <- case ScriptRegistry.getScripts MarloweV1 of
-    NESet.IsEmpty -> fail "No known marlowe scripts"
-    NESet.IsNonEmpty scripts -> pure scripts
-  withTracer \tracer ->
-    runAppM (tracerEventBackend tracer $ renderRootSelectorOTel dbName dbUser dbHost dbPort) do
-      securityParameter <- queryChainSync $ request GetSecurityParameter
-      flip runComponent_ () proc _ -> do
-        probes <- marloweIndexer -< MarloweIndexerDependencies
-          { chainSyncConnector = SomeConnectorTraced (injectSelector ChainSeekClient)
-              $ handshakeClientConnectorTraced
-              $ tcpClientTraced
-                  (injectSelector ChainSeekClient)
-                  chainSeekHost
-                  chainSeekPort
-                  chainSeekClientPeer
-          , chainSyncQueryConnector = SomeConnectorTraced
-              (injectSelector ChainQueryClient)
-              chainSyncQueryConnector
-          , databaseQueries = PostgreSQL.databaseQueries pool securityParameter
-          , pollingInterval = 1
-          , marloweScriptHashes = NESet.map ScriptRegistry.marloweScript scripts
-          , payoutScriptHashes = NESet.map ScriptRegistry.payoutScript scripts
-          }
-        probeServer -< ProbeServerDependencies { port = fromIntegral httpPort, .. }
+  runAppMTraced instrumentationLibrary (renderRootSelectorOTel dbName dbUser dbHost dbPort) do
+    scripts <- case ScriptRegistry.getScripts MarloweV1 of
+      NESet.IsEmpty -> fail "No known marlowe scripts"
+      NESet.IsNonEmpty scripts -> pure scripts
+    securityParameter <- queryChainSync $ request GetSecurityParameter
+    flip runComponent_ () proc _ -> do
+      probes <- marloweIndexer -< MarloweIndexerDependencies
+        { chainSyncConnector = SomeConnectorTraced (injectSelector ChainSeekClient)
+            $ handshakeClientConnectorTraced
+            $ tcpClientTraced
+                (injectSelector ChainSeekClient)
+                chainSeekHost
+                chainSeekPort
+                chainSeekClientPeer
+        , chainSyncQueryConnector = SomeConnectorTraced
+            (injectSelector ChainQueryClient)
+            chainSyncQueryConnector
+        , databaseQueries = PostgreSQL.databaseQueries pool securityParameter
+        , pollingInterval = 1
+        , marloweScriptHashes = NESet.map ScriptRegistry.marloweScript scripts
+        , payoutScriptHashes = NESet.map ScriptRegistry.payoutScript scripts
+        }
+      probeServer -< ProbeServerDependencies { port = fromIntegral httpPort, .. }
   where
-    withTracer f = bracket
-      initializeGlobalTracerProvider
-      shutdownTracerProvider
-      \provider -> f $ makeTracer provider instrumentationLibrary tracerOptions
-
     instrumentationLibrary = InstrumentationLibrary
       { libraryName = "marlowe-indexer"
       , libraryVersion = T.pack $ showVersion version
@@ -124,55 +109,12 @@ run Options{..} = bracket (Pool.acquire 100 (Just 5000000) (fromString databaseU
       (QueryClient ChainSyncQuery)
       Span
       TcpClientSelector
-      (AppM Span)
+      (AppM Span RootSelector)
     chainSyncQueryConnector = handshakeClientConnectorTraced
       $ tcpClientTraced (injectSelector ChainQueryClient) chainSeekHost chainSeekQueryPort queryClientPeer
 
-    queryChainSync :: QueryClient ChainSyncQuery (AppM Span) a -> AppM Span a
+    queryChainSync :: QueryClient ChainSyncQuery (AppM Span RootSelector) a -> AppM Span RootSelector a
     queryChainSync = runConnectorTraced (injectSelector ChainQueryClient) chainSyncQueryConnector
-
-runAppM :: EventBackend IO r RootSelector -> AppM r a -> IO a
-runAppM eventBackend (AppM action) = do
-  logAction <- concurrentLogger
-  runReaderT action (hoistEventBackend liftIO eventBackend, logAction)
-
-concurrentLogger :: MonadUnliftIO m => IO (LogAction m Message)
-concurrentLogger = do
-  lock <- newMVar ()
-  let LogAction baseAction = cmap fmtMessage logTextStdout
-  pure $ LogAction $ withMVar lock . const . baseAction
-
-newtype AppM r a = AppM
-  { unAppM :: ReaderT (EventBackend (AppM r) r RootSelector, LogAction (AppM r) Message) IO a
-  } deriving newtype (Functor, Applicative, Monad, MonadIO, MonadUnliftIO, MonadFail)
-
-instance MonadReader (LogAction (AppM r) Message) (AppM r) where
-  ask = AppM $ asks snd
-  local f (AppM m) = AppM $ withReaderT (fmap f) m
-
-instance MonadWith (AppM r) where
-  type WithException (AppM r) = WithException IO
-  stateThreadingGeneralWith
-    :: forall a b releaseReturn
-     . GeneralAllocate (AppM r) (WithException IO) releaseReturn b a
-    -> (a -> AppM r b)
-    -> AppM r (b, releaseReturn)
-  stateThreadingGeneralWith (GeneralAllocate allocA) go = AppM . ReaderT $ \r -> do
-    let
-      allocA' :: (forall x. IO x -> IO x) -> IO (GeneralAllocated IO (WithException IO) releaseReturn b a)
-      allocA' restore = do
-        let
-          restore' :: forall x. AppM r x -> AppM r x
-          restore' mx = AppM . ReaderT $ restore . (runReaderT . unAppM) mx
-        GeneralAllocated a releaseA <- (runReaderT . unAppM) (allocA restore') r
-        let
-          releaseA' relTy = (runReaderT . unAppM) (releaseA relTy) r
-        pure $ GeneralAllocated a releaseA'
-    stateThreadingGeneralWith (GeneralAllocate allocA') (flip (runReaderT . unAppM) r . go)
-
-instance MonadEvent r RootSelector (AppM r) where
-  askBackend = askBackendReaderT AppM fst
-  localBackend = localBackendReaderT AppM unAppM first
 
 data Options = Options
   { chainSeekPort :: PortNumber

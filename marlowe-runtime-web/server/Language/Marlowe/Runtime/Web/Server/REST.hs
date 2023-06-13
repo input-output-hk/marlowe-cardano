@@ -11,13 +11,13 @@ module Language.Marlowe.Runtime.Web.Server.REST
   where
 
 import Language.Marlowe.Runtime.Web
-import Language.Marlowe.Runtime.Web.Server.Monad (AppM)
+import Language.Marlowe.Runtime.Web.Server.Monad (ServerM)
 import qualified Language.Marlowe.Runtime.Web.Server.REST.Contracts as Contracts
 import qualified Language.Marlowe.Runtime.Web.Server.REST.Withdrawals as Withdrawals
 import Servant
 
-server :: ServerT API AppM
+server :: ServerT API ServerM
 server = Contracts.server :<|> Withdrawals.server :<|> healthcheckServer
 
-healthcheckServer :: AppM NoContent
+healthcheckServer :: ServerM NoContent
 healthcheckServer = pure NoContent

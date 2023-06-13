@@ -26,6 +26,7 @@ module Language.Marlowe.Runtime.Web.Server
   ) where
 
 import Control.Concurrent.Component
+import Control.Concurrent.Component.Run (AppM(..))
 import Control.Monad.Event.Class
 import Control.Monad.IO.Unlift (liftIO, withRunInIO)
 import Control.Monad.Reader (ReaderT(ReaderT), runReaderT)
@@ -34,7 +35,7 @@ import Language.Marlowe.Protocol.Types (MarloweRuntime)
 import Language.Marlowe.Runtime.ChainSync.Api (TxId)
 import Language.Marlowe.Runtime.Core.Api (ContractId)
 import qualified Language.Marlowe.Runtime.Web as Web
-import Language.Marlowe.Runtime.Web.Server.Monad (AppEnv(..), AppM(..), BackendM(BackendM))
+import Language.Marlowe.Runtime.Web.Server.Monad (AppEnv(..), ServerM(..))
 import qualified Language.Marlowe.Runtime.Web.Server.OpenAPI as OpenAPI
 import qualified Language.Marlowe.Runtime.Web.Server.REST as REST
 import Language.Marlowe.Runtime.Web.Server.SyncClient
@@ -82,16 +83,16 @@ type APIWithOpenAPI = OpenAPI.API :<|>  Web.API
 apiWithOpenApi :: Proxy APIWithOpenAPI
 apiWithOpenApi = Proxy
 
-serverWithOpenAPI :: ServerT APIWithOpenAPI AppM
+serverWithOpenAPI :: ServerT APIWithOpenAPI ServerM
 serverWithOpenAPI = OpenAPI.server :<|> REST.server
 
-serveAppM
+serveServerM
   :: HasServer api '[]
   => Proxy api
   -> AppEnv
-  -> ServerT api AppM
+  -> ServerT api ServerM
   -> Application
-serveAppM api env = serve api . hoistServer api (flip runReaderT env . runAppM)
+serveServerM api env = serve api . hoistServer api (flip runReaderT env . runServerM)
 
 corsMiddleware :: Bool -> WAI.Middleware
 corsMiddleware accessControlAllowOriginAll =
@@ -113,11 +114,11 @@ corsMiddleware accessControlAllowOriginAll =
     cors (const $ Just policy)
   else id
 
-data ServerDependencies transport r s = ServerDependencies
+data ServerDependencies r s t = ServerDependencies
   { openAPIEnabled :: Bool
   , accessControlAllowOriginAll :: Bool
   , runApplication :: Application -> IO ()
-  , marloweTracedContext :: MarloweTracedContext r s (ServerSelector transport) (BackendM r (ServerSelector transport))
+  , marloweTracedContext :: MarloweTracedContext r s t (AppM r t)
   }
 
 {- Architecture notes:
@@ -131,7 +132,7 @@ data ServerDependencies transport r s = ServerDependencies
     process having its own event backend injected via its parameters.
 -}
 
-server :: HasSpanContext r => Component (BackendM r (ServerSelector transport)) (ServerDependencies transport r s) ()
+server :: (HasSpanContext r, Inject ServeRequest t) => Component (AppM r t) (ServerDependencies r s t) ()
 server = proc deps@ServerDependencies{marloweTracedContext = MarloweTracedContext{..}} -> do
   TxClient{..} <- txClient -< TxClientDependencies
     { connector = SomeConnectorTraced injector connector
@@ -163,38 +164,38 @@ server = proc deps@ServerDependencies{marloweTracedContext = MarloweTracedContex
         }
 
 data WebServerDependencies r s = WebServerDependencies
-  { _loadContractHeaders :: LoadContractHeaders (BackendM r s)
-  , _loadContract :: LoadContract (BackendM r s)
-  , _loadWithdrawals :: LoadWithdrawals (BackendM r s)
-  , _loadWithdrawal :: LoadWithdrawal (BackendM r s)
-  , _loadTransactions :: LoadTransactions (BackendM r s)
-  , _loadTransaction :: LoadTransaction (BackendM r s)
-  , _createContract :: CreateContract (BackendM r s)
-  , _withdraw :: Withdraw (BackendM r s)
-  , _applyInputs :: ApplyInputs (BackendM r s)
-  , _submitContract :: ContractId -> Submit r (BackendM r s)
-  , _submitTransaction :: ContractId -> TxId -> Submit r (BackendM r s)
-  , _submitWithdrawal :: TxId -> Submit r (BackendM r s)
+  { _loadContractHeaders :: LoadContractHeaders (AppM r s)
+  , _loadContract :: LoadContract (AppM r s)
+  , _loadWithdrawals :: LoadWithdrawals (AppM r s)
+  , _loadWithdrawal :: LoadWithdrawal (AppM r s)
+  , _loadTransactions :: LoadTransactions (AppM r s)
+  , _loadTransaction :: LoadTransaction (AppM r s)
+  , _createContract :: CreateContract (AppM r s)
+  , _withdraw :: Withdraw (AppM r s)
+  , _applyInputs :: ApplyInputs (AppM r s)
+  , _submitContract :: ContractId -> Submit r (AppM r s)
+  , _submitTransaction :: ContractId -> TxId -> Submit r (AppM r s)
+  , _submitWithdrawal :: TxId -> Submit r (AppM r s)
   , openAPIEnabled :: Bool
   , accessControlAllowOriginAll :: Bool
   , runApplication :: Application -> IO ()
   }
 
-webServer :: Component (BackendM r (ServerSelector transport)) (WebServerDependencies r (ServerSelector transport)) ()
+webServer :: Inject ServeRequest s => Component (AppM r s) (WebServerDependencies r s) ()
 webServer = component_ "web-server" \WebServerDependencies{..} -> withRunInIO \runInIO ->
   -- Observe.Event.Wai does not expose a reference to the ServeRequest field, which we
   -- need because of the asynchronous processing of submit jobs. So, we have to
   -- roll our own version of Observe.Event.Wai.application here. A bonus is
-  -- that we do not have to translate to and from EventT and BackendM.
+  -- that we do not have to translate to and from EventT and AppM.
   runApplication \req handleRes ->
     runInIO $ withEventFields (ServeRequest req) [ReqField req] \ev -> do
       _eventBackend <- askBackend
-      _logAction <- BackendM $ ReaderT \(_, logAction) -> pure logAction
+      _logAction <- AppM $ ReaderT \(_, logAction) -> pure logAction
       let _requestParent = reference ev
       let
         mkApp
-          | openAPIEnabled = corsMiddleware accessControlAllowOriginAll $ serveAppM apiWithOpenApi AppEnv{..} serverWithOpenAPI
-          | otherwise = corsMiddleware accessControlAllowOriginAll $ serveAppM Web.api AppEnv{..} REST.server
+          | openAPIEnabled = corsMiddleware accessControlAllowOriginAll $ serveServerM apiWithOpenApi AppEnv{..} serverWithOpenAPI
+          | otherwise = corsMiddleware accessControlAllowOriginAll $ serveServerM Web.api AppEnv{..} REST.server
       liftIO $ mkApp req \res -> runInIO do
         addField ev $ ResField res
         liftIO $ handleRes res
