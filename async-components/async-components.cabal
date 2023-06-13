@@ -49,11 +49,21 @@ library
   exposed-modules:
     Control.Concurrent.Component
     Control.Concurrent.Component.Probes
+    Control.Concurrent.Component.Run
   build-depends:
     , base >= 4.9 && < 5
+    , co-log >= 0.5.0.0 && < 0.6.0.0
+    , eventuo11y ^>= { 0.9, 0.10 }
+    , eventuo11y-extras ==0.1.0.0
+    , eventuo11y-otel ^>=  0.1
+    , exceptions >= 0.10 && < 0.11
+    , general-allocate ^>= { 0.2 }
+    , hs-opentelemetry-api >= 0.0.3 && < 0.0.4
+    , hs-opentelemetry-sdk >= 0.0.3 && < 0.0.4
+    , mtl >= 2.2 && < 3
     , servant >= 0.19 && < 0.20
     , servant-client >= 0.19 && < 0.20
     , servant-server >= 0.19 && < 0.20
+    , transformers >= 0.5.6 && < 0.6
     , unliftio >= 0.2.1 && < 0.3
     , warp >= 3.3 && < 4
-    , co-log >= 0.5.0.0 && < 0.6.0.0

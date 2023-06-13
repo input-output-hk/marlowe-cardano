@@ -23,7 +23,7 @@ import Language.Marlowe.Runtime.Core.Api (MarloweVersion(..))
 import Language.Marlowe.Runtime.Transaction.Api (WalletAddresses(..))
 import Language.Marlowe.Runtime.Web hiding (Unsigned)
 import Language.Marlowe.Runtime.Web.Server.DTO
-import Language.Marlowe.Runtime.Web.Server.Monad (AppM, loadWithdrawal, loadWithdrawals, submitWithdrawal, withdraw)
+import Language.Marlowe.Runtime.Web.Server.Monad (ServerM, loadWithdrawal, loadWithdrawals, submitWithdrawal, withdraw)
 import Language.Marlowe.Runtime.Web.Server.REST.ApiError
   (ApiError(ApiError), badRequest', notFound', rangeNotSatisfiable', throwDTOError)
 import qualified Language.Marlowe.Runtime.Web.Server.REST.ApiError as ApiError
@@ -32,7 +32,7 @@ import Language.Marlowe.Runtime.Web.Server.Util
 import Servant
 import Servant.Pagination
 
-server :: ServerT WithdrawalsAPI AppM
+server :: ServerT WithdrawalsAPI ServerM
 server = get
        :<|> (postCreateTxBodyResponse :<|> postCreateTxResponse)
        :<|> withdrawalServer
@@ -42,7 +42,7 @@ postCreateTxBody
   -> Address
   -> Maybe (CommaList Address)
   -> Maybe (CommaList TxOutRef)
-  -> AppM (TxBody BabbageEra)
+  -> ServerM (TxBody BabbageEra)
 postCreateTxBody PostWithdrawalsRequest{..} changeAddressDTO mAddresses mCollateralUtxos = do
   changeAddress <- fromDTOThrow (badRequest' "Invalid change address value") changeAddressDTO
   extraAddresses <- Set.fromList <$> fromDTOThrow (badRequest' "Invalid addresses header value") (maybe [] unCommaList mAddresses)
@@ -58,7 +58,7 @@ postCreateTxBodyResponse
   -> Address
   -> Maybe (CommaList Address)
   -> Maybe (CommaList TxOutRef)
-  -> AppM (PostWithdrawalsResponse CardanoTxBody)
+  -> ServerM (PostWithdrawalsResponse CardanoTxBody)
 postCreateTxBodyResponse req changeAddressDTO mAddresses mCollateralUtxos = do
   txBody <- postCreateTxBody req changeAddressDTO mAddresses mCollateralUtxos
   let (withdrawalId, txBody') = toDTO (fromCardanoTxId $ getTxId txBody, txBody)
@@ -70,7 +70,7 @@ postCreateTxResponse
   -> Address
   -> Maybe (CommaList Address)
   -> Maybe (CommaList TxOutRef)
-  -> AppM (PostWithdrawalsResponse CardanoTx)
+  -> ServerM (PostWithdrawalsResponse CardanoTx)
 postCreateTxResponse req changeAddressDTO mAddresses mCollateralUtxos = do
   txBody <- postCreateTxBody req changeAddressDTO mAddresses mCollateralUtxos
   let tx = makeSignedTransaction [] txBody
@@ -82,7 +82,7 @@ postCreateTxResponse req changeAddressDTO mAddresses mCollateralUtxos = do
 get
   :: [PolicyId]
   -> Maybe (Ranges '["withdrawalId"] GetWithdrawalsResponse)
-  -> AppM (PaginatedResponse '["withdrawalId"] GetWithdrawalsResponse)
+  -> ServerM (PaginatedResponse '["withdrawalId"] GetWithdrawalsResponse)
 get roleCurrencies ranges = do
   let
     range :: Range "withdrawalId" TxId
@@ -100,17 +100,17 @@ get roleCurrencies ranges = do
 toWithdrawalHeader :: Withdrawal -> WithdrawalHeader
 toWithdrawalHeader Withdrawal{..} = WithdrawalHeader{..}
 
-withdrawalServer :: TxId -> ServerT WithdrawalAPI AppM
+withdrawalServer :: TxId -> ServerT WithdrawalAPI ServerM
 withdrawalServer withdrawalId = getOne withdrawalId :<|> put withdrawalId
 
-getOne :: TxId -> AppM Withdrawal
+getOne :: TxId -> ServerM Withdrawal
 getOne withdrawalId = do
   contractId' <- fromDTOThrow (badRequest' "Invalid contract id value") withdrawalId
   loadWithdrawal contractId' >>= \case
     Nothing -> throwError $ notFound' "Withdrawal not found"
     Just result -> pure $ either toDTO toDTO result
 
-put :: TxId -> TextEnvelope -> AppM NoContent
+put :: TxId -> TextEnvelope -> ServerM NoContent
 put contractId body = do
   contractId' <- fromDTOThrow (badRequest' "Invalid contract id value") contractId
   loadWithdrawal contractId' >>= \case

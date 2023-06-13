@@ -10,17 +10,12 @@
 module Main
   where
 
-import Colog (LogAction(LogAction), Message, cmap, fmtMessage, logTextStdout)
 import Control.Concurrent.Component
 import Control.Concurrent.Component.Probes (ProbeServerDependencies(..), probeServer)
+import Control.Concurrent.Component.Run (runAppMTraced)
 import Control.Exception (bracket)
 import Control.Monad ((<=<))
-import Control.Monad.Event.Class
-import Control.Monad.Reader (MonadReader(..), asks, withReaderT)
-import Control.Monad.Trans.Reader (ReaderT(..))
-import Control.Monad.With
-import Data.Bifunctor (first)
-import Data.GeneralAllocate
+import Control.Monad.Reader (MonadReader(..))
 import Data.String (fromString)
 import qualified Data.Text as T
 import Data.Version (showVersion)
@@ -39,8 +34,7 @@ import Network.Protocol.Driver.Trace (tcpServerTraced)
 import Network.Protocol.Handshake.Server (handshakeConnectionSourceTraced)
 import Network.Protocol.Query.Server (queryServerPeer)
 import Network.Socket (HostName, PortNumber)
-import Observe.Event.Backend (EventBackend, hoistEventBackend, injectSelector)
-import Observe.Event.Render.OpenTelemetry (tracerEventBackend)
+import Observe.Event.Backend (injectSelector)
 import OpenTelemetry.Trace
 import Options.Applicative
   ( auto
@@ -60,14 +54,10 @@ import Options.Applicative
   , value
   )
 import Paths_marlowe_runtime (version)
-import UnliftIO
-  (BufferMode(LineBuffering), MonadIO, MonadUnliftIO, hSetBuffering, liftIO, newMVar, stderr, stdout, throwIO, withMVar)
+import UnliftIO (liftIO, throwIO)
 
 main :: IO ()
-main = do
-  hSetBuffering stderr LineBuffering
-  hSetBuffering stdout LineBuffering
-  run =<< getOptions
+main = run =<< getOptions
 
 run :: Options -> IO ()
 run Options{..} = bracket (Pool.acquire 100 (Just 5000000) (fromString databaseUri)) Pool.release \pool -> do
@@ -78,93 +68,44 @@ run Options{..} = bracket (Pool.acquire 100 (Just 5000000) (fromString databaseU
       <*> PQ.user conn
       <*> PQ.host conn
       <*> PQ.port conn
-  withTracer \tracer ->
-    runAppM (tracerEventBackend tracer $ renderRootSelectorOTel dbName dbUser dbHost dbPort) do
-      flip runComponent_ () proc _ -> do
-        marloweSyncSource <- tcpServerTraced "marlowe-sync" (injectSelector MarloweSyncServer) -< TcpServerDependencies
-          { host
-          , port = marloweSyncPort
-          , toPeer = marloweSyncServerPeer
-          }
+  runAppMTraced instrumentationLibrary (renderRootSelectorOTel dbName dbUser dbHost dbPort) do
+    flip runComponent_ () proc _ -> do
+      marloweSyncSource <- tcpServerTraced "marlowe-sync" (injectSelector MarloweSyncServer) -< TcpServerDependencies
+        { host
+        , port = marloweSyncPort
+        , toPeer = marloweSyncServerPeer
+        }
 
-        headerSyncSource <- tcpServerTraced "marlowe-header-sync" (injectSelector MarloweHeaderSyncServer) -< TcpServerDependencies
-          { host
-          , port = marloweHeaderSyncPort
-          , toPeer = marloweHeaderSyncServerPeer
-          }
+      headerSyncSource <- tcpServerTraced "marlowe-header-sync" (injectSelector MarloweHeaderSyncServer) -< TcpServerDependencies
+        { host
+        , port = marloweHeaderSyncPort
+        , toPeer = marloweHeaderSyncServerPeer
+        }
 
-        querySource <- tcpServerTraced "sync-query" (injectSelector MarloweQueryServer) -< TcpServerDependencies
-          { host
-          , port = queryPort
-          , toPeer = queryServerPeer
-          }
+      querySource <- tcpServerTraced "sync-query" (injectSelector MarloweQueryServer) -< TcpServerDependencies
+        { host
+        , port = queryPort
+        , toPeer = queryServerPeer
+        }
 
-        probes <- sync -< SyncDependencies
-          { databaseQueries = logDatabaseQueries $ hoistDatabaseQueries
-                (either throwIO pure <=< liftIO . Pool.use pool)
-                Postgres.databaseQueries
-          , syncSource = SomeConnectionSourceTraced (injectSelector MarloweSyncServer)
-              $ handshakeConnectionSourceTraced marloweSyncSource
-          , headerSyncSource = SomeConnectionSourceTraced (injectSelector MarloweHeaderSyncServer)
-              $ handshakeConnectionSourceTraced headerSyncSource
-          , querySource = SomeConnectionSourceTraced (injectSelector MarloweQueryServer)
-              $ handshakeConnectionSourceTraced querySource
-          }
+      probes <- sync -< SyncDependencies
+        { databaseQueries = logDatabaseQueries $ hoistDatabaseQueries
+              (either throwIO pure <=< liftIO . Pool.use pool)
+              Postgres.databaseQueries
+        , syncSource = SomeConnectionSourceTraced (injectSelector MarloweSyncServer)
+            $ handshakeConnectionSourceTraced marloweSyncSource
+        , headerSyncSource = SomeConnectionSourceTraced (injectSelector MarloweHeaderSyncServer)
+            $ handshakeConnectionSourceTraced headerSyncSource
+        , querySource = SomeConnectionSourceTraced (injectSelector MarloweQueryServer)
+            $ handshakeConnectionSourceTraced querySource
+        }
 
-        probeServer -< ProbeServerDependencies { port = fromIntegral httpPort, .. }
+      probeServer -< ProbeServerDependencies { port = fromIntegral httpPort, .. }
   where
-    withTracer f = bracket
-      initializeGlobalTracerProvider
-      shutdownTracerProvider
-      \provider -> f $ makeTracer provider instrumentationLibrary tracerOptions
-
     instrumentationLibrary = InstrumentationLibrary
       { libraryName = "marlowe-sync"
       , libraryVersion = T.pack $ showVersion version
       }
-
-runAppM :: EventBackend IO r RootSelector -> AppM r a -> IO a
-runAppM eventBackend (AppM action) = do
-  logAction <- concurrentLogger
-  runReaderT action (hoistEventBackend liftIO eventBackend, logAction)
-
-concurrentLogger :: MonadUnliftIO m => IO (LogAction m Message)
-concurrentLogger = do
-  lock <- newMVar ()
-  let LogAction baseAction = cmap fmtMessage logTextStdout
-  pure $ LogAction $ withMVar lock . const . baseAction
-
-newtype AppM r a = AppM
-  { unAppM :: ReaderT (EventBackend (AppM r) r RootSelector, LogAction (AppM r) Message) IO a
-  } deriving newtype (Functor, Applicative, Monad, MonadIO, MonadUnliftIO, MonadFail)
-
-instance MonadReader (LogAction (AppM r) Message) (AppM r) where
-  ask = AppM $ asks snd
-  local f (AppM m) = AppM $ withReaderT (fmap f) m
-
-instance MonadWith (AppM r) where
-  type WithException (AppM r) = WithException IO
-  stateThreadingGeneralWith
-    :: forall a b releaseReturn
-     . GeneralAllocate (AppM r) (WithException IO) releaseReturn b a
-    -> (a -> AppM r b)
-    -> AppM r (b, releaseReturn)
-  stateThreadingGeneralWith (GeneralAllocate allocA) go = AppM . ReaderT $ \r -> do
-    let
-      allocA' :: (forall x. IO x -> IO x) -> IO (GeneralAllocated IO (WithException IO) releaseReturn b a)
-      allocA' restore = do
-        let
-          restore' :: forall x. AppM r x -> AppM r x
-          restore' mx = AppM . ReaderT $ restore . (runReaderT . unAppM) mx
-        GeneralAllocated a releaseA <- (runReaderT . unAppM) (allocA restore') r
-        let
-          releaseA' relTy = (runReaderT . unAppM) (releaseA relTy) r
-        pure $ GeneralAllocated a releaseA'
-    stateThreadingGeneralWith (GeneralAllocate allocA') (flip (runReaderT . unAppM) r . go)
-
-instance MonadEvent r RootSelector (AppM r) where
-  askBackend = askBackendReaderT AppM fst
-  localBackend = localBackendReaderT AppM unAppM first
 
 data Options = Options
   { databaseUri :: String
