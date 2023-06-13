@@ -42,6 +42,7 @@ import Cardano.Api.ChainSync.ClientPipelined
   , pipelineDecisionLowHighMark
   , runPipelineDecision
   )
+import Colog (Message, WithLog)
 import Control.Arrow ((&&&))
 import Control.Concurrent.Component
 import Control.Concurrent.STM (STM, TVar, modifyTVar, newTVar, readTVar, writeTVar)
@@ -137,8 +138,8 @@ data RollBackwardField
 
 -- | Create a new NodeClient component.
 nodeClient
-  :: forall r s m
-   . (MonadInjectEvent r NodeClientSelector s m, MonadUnliftIO m)
+  :: forall r s env m
+   . (MonadInjectEvent r NodeClientSelector s m, MonadUnliftIO m, WithLog env Message m)
   => Component m (NodeClientDependencies r m) (NodeClient r)
 nodeClient = component "indexer-node-client" \NodeClientDependencies{..} -> do
   changesVar <- newTVar emptyChanges

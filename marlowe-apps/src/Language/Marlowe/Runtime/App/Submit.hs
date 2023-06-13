@@ -28,13 +28,16 @@ import qualified Network.Protocol.Job.Client as J (ClientStAwait(..), ClientStCm
 
 
 submit
-  :: C.Tx C.BabbageEra
+  :: Int
+  -> C.Tx C.BabbageEra
   -> Client (Either String TxId)
-submit tx =
+submit pollingFrequency tx =
   let
     next = J.ClientStCmd
       {
-        J.recvMsgAwait = \_ _ -> pure $ J.SendMsgPoll next
+        J.recvMsgAwait = \_ _ -> do
+          liftIO $ threadDelay $ pollingFrequency * 1_000_000
+          pure $ J.SendMsgPoll next
       , J.recvMsgFail = const . pure $ Left "Submission failed."
       , J.recvMsgSucceed = const . pure . Right . fromCardanoTxId . C.getTxId $ C.getTxBody tx
       }

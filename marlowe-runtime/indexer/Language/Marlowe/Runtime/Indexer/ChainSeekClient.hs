@@ -8,6 +8,7 @@ module Language.Marlowe.Runtime.Indexer.ChainSeekClient
   where
 
 import Cardano.Api (SystemStart)
+import Colog (Message, WithLog)
 import Control.Concurrent.Component
 import Control.Concurrent.STM (STM, TVar, newTQueue, newTVar, readTQueue, readTVar, writeTQueue, writeTVar)
 import Control.Monad.Event.Class (MonadInjectEvent, withEvent)
@@ -65,8 +66,8 @@ data ChainEvent r
 -- extract blocks of Marlowe transactions. The sequence of changes to the chain
 -- can be read by repeatedly running the resulting STM action.
 chainSeekClient
-  :: forall r s m
-   . (MonadUnliftIO m, MonadInjectEvent r (ChainSeekClientSelector r) s m, MonadFail m, HasSpanContext r)
+  :: forall r s env m
+   . (MonadUnliftIO m, MonadInjectEvent r (ChainSeekClientSelector r) s m, MonadFail m, HasSpanContext r, WithLog env Message m)
   => Component m (ChainSeekClientDependencies r s m) (STM Bool, STM (ChainEvent r))
 chainSeekClient = component "indexer-chain-seek-client" \ChainSeekClientDependencies{..} -> do
   -- Initialize a TQueue for emitting ChainEvents.

@@ -164,6 +164,7 @@ library indexer
     , binary >= 0.8.8 && < 0.9
     , bytestring >= 0.10.12 && < 0.12
     , cardano-api ==1.35.4
+    , co-log >= 0.5.0.0 && < 0.6.0.0
     , containers >= 0.6.5 && < 0.7
     , eventuo11y ^>= { 0.9, 0.10 }
     , eventuo11y-extras ==0.1.0.0
@@ -176,7 +177,7 @@ library indexer
     , marlowe-protocols ==0.1.0.0
     , marlowe-runtime ==0.0.1
     , marlowe-runtime:history-api ==0.0.1
-    , mtl
+    , mtl >= 2.2 && < 3
     , nonempty-containers >= 0.3.4 && < 0.4
     , plutus-ledger-api ==1.0.0.1
     , stm >= 2.5 && < 2.6
@@ -247,6 +248,7 @@ library contract
     , binary >= 0.8.8 && < 0.9
     , bytestring >= 0.10.12 && < 0.12
     , cardano-api ==1.35.4
+    , co-log >= 0.5.0.0 && < 0.6.0.0
     , containers >= 0.6.5 && < 0.7
     , eventuo11y ^>= { 0.9, 0.10 }
     , eventuo11y-extras ==0.1.0.0
@@ -296,6 +298,7 @@ library sync
     , base >= 4.9 && < 5
     , binary >= 0.8.8 && < 0.9
     , bytestring >= 0.10.12 && < 0.12
+    , co-log >= 0.5.0.0 && < 0.6.0.0
     , containers >= 0.6.5 && < 0.7
     , eventuo11y ^>= { 0.9, 0.10 }
     , eventuo11y-extras ==0.1.0.0
@@ -377,6 +380,7 @@ library tx
     , base >= 4.9 && < 5
     , cardano-api ==1.35.4
     , cardano-ledger-core ==0.1.0.0
+    , co-log >= 0.5.0.0 && < 0.6.0.0
     , containers >= 0.6.5 && < 0.7
     , errors >= 2.3 && < 3
     , eventuo11y ^>= { 0.9, 0.10 }
@@ -429,6 +433,7 @@ library proxy
   build-depends:
     , async-components ==0.1.0.0
     , base >= 4.9 && < 5
+    , co-log >= 0.5.0.0 && < 0.6.0.0
     , eventuo11y ^>= { 0.9, 0.10 }
     , eventuo11y-extras ==0.1.0.0
     , marlowe-protocols ==0.1.0.0
@@ -488,6 +493,7 @@ executable marlowe-indexer
     , base >= 4.9 && < 5
     , bytestring >= 0.10.12 && < 0.12
     , containers >= 0.6.5 && < 0.7
+    , co-log >= 0.5.0.0 && < 0.6.0.0
     , eventuo11y ^>= { 0.9, 0.10 }
     , eventuo11y-extras ==0.1.0.0
     , eventuo11y-otel ^>= 0.1
@@ -523,6 +529,7 @@ executable marlowe-sync
     , async-components ==0.1.0.0
     , base >= 4.9 && < 5
     , bytestring >= 0.10.12 && < 0.12
+    , co-log >= 0.5.0.0 && < 0.6.0.0
     , eventuo11y ^>= { 0.9, 0.10 }
     , eventuo11y-extras ==0.1.0.0
     , eventuo11y-otel ^>= 0.1
@@ -559,6 +566,7 @@ executable marlowe-tx
     , async-components ==0.1.0.0
     , base >= 4.9 && < 5
     , cardano-api ==1.35.4
+    , co-log >= 0.5.0.0 && < 0.6.0.0
     , containers >= 0.6.5 && < 0.7
     , eventuo11y ^>= { 0.9, 0.10 }
     , eventuo11y-extras ==0.1.0.0
@@ -572,6 +580,7 @@ executable marlowe-tx
     , marlowe-runtime:contract-api ==0.0.1
     , marlowe-runtime:tx ==0.0.1
     , marlowe-runtime:tx-api ==0.0.1
+    , mtl >= 2.2 && < 3
     , network >= 3.1 && < 4
     , optparse-applicative >= 0.17 && < 0.18
     , text >= 1.2.4 && < 2
@@ -592,6 +601,7 @@ executable marlowe-contract
     , aeson >= 2 && < 3
     , async-components ==0.1.0.0
     , base >= 4.9 && < 5
+    , co-log >= 0.5.0.0 && < 0.6.0.0
     , eventuo11y ^>= { 0.9, 0.10 }
     , eventuo11y-extras ==0.1.0.0
     , eventuo11y-otel ^>=  0.1
@@ -603,6 +613,7 @@ executable marlowe-contract
     , marlowe-protocols ==0.1.0.0
     , marlowe-runtime:contract ==0.0.1
     , marlowe-runtime:contract-api ==0.0.1
+    , mtl >= 2.2 && < 3
     , network >= 3.1 && < 4
     , optparse-applicative >= 0.17 && < 0.18
     , text >= 1.2.4 && < 2
@@ -623,6 +634,7 @@ executable marlowe-proxy
   build-depends:
     , async-components ==0.1.0.0
     , base >= 4.9 && < 5
+    , co-log >= 0.5.0.0 && < 0.6.0.0
     , eventuo11y ^>= { 0.9, 0.10 }
     , eventuo11y-extras ==0.1.0.0
     , eventuo11y-otel ^>=  0.1
@@ -638,6 +650,7 @@ executable marlowe-proxy
     , marlowe-runtime:proxy-api ==0.0.1
     , marlowe-runtime:sync-api ==0.0.1
     , marlowe-runtime:tx-api ==0.0.1
+    , mtl >= 2.2 && < 3
     , network >= 3.1 && < 4
     , optparse-applicative >= 0.17 && < 0.18
     , text >= 1.2.4 && < 2

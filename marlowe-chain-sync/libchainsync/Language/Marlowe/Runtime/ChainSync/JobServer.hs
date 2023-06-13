@@ -10,6 +10,7 @@ module Language.Marlowe.Runtime.ChainSync.JobServer
   where
 
 import Cardano.Api (CardanoEra(..), CardanoMode, ScriptDataSupportedInEra(..), Tx, TxValidationErrorInMode)
+import Colog (Message, WithLog)
 import Control.Concurrent.Component
 import Control.Monad.Event.Class
 import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncCommand(..))
@@ -29,7 +30,7 @@ data ChainSyncJobServerDependencies r s m = ChainSyncJobServerDependencies
   }
 
 chainSyncJobServer
-  :: (MonadUnliftIO m, MonadEvent r s m, HasSpanContext r)
+  :: (MonadUnliftIO m, MonadEvent r s m, HasSpanContext r, WithLog env Message m)
   => Component m (ChainSyncJobServerDependencies r s m) ()
 chainSyncJobServer = serverComponent "chain-sync-job-server" worker \ChainSyncJobServerDependencies{..} -> do
   connector <- acceptSomeConnectorTraced jobSource
@@ -45,7 +46,7 @@ data WorkerDependencies r s m = WorkerDependencies
   }
 
 worker
-  :: forall r s m. (MonadUnliftIO m, MonadEvent r s m, HasSpanContext r)
+  :: forall r s env m. (MonadUnliftIO m, MonadEvent r s m, HasSpanContext r, WithLog env Message m)
   => Component m (WorkerDependencies r s m) ()
 worker = component_ "chain-sync-job-worker" \WorkerDependencies{..} -> do
   let

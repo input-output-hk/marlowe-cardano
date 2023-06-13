@@ -12,16 +12,19 @@
 module Language.Marlowe.Runtime.Web.Server.Monad
   where
 
+import Colog (LogAction, Message, hoistLogAction)
 import Control.Monad.Base (MonadBase)
 import Control.Monad.Catch (MonadCatch, MonadThrow)
 import Control.Monad.Catch.Pure (MonadMask)
 import Control.Monad.Event.Class
 import Control.Monad.Except (ExceptT, MonadError)
 import Control.Monad.IO.Class (MonadIO, liftIO)
-import Control.Monad.IO.Unlift (MonadUnliftIO)
-import Control.Monad.Reader (MonadReader, ReaderT(..), ask)
+import Control.Monad.IO.Unlift (MonadUnliftIO, withRunInIO)
+import Control.Monad.Reader (MonadReader(..), ReaderT(..), asks)
 import Control.Monad.Trans.Control (MonadBaseControl)
+import Control.Monad.Trans.Reader (withReaderT)
 import Control.Monad.With (MonadWith(..))
+import Data.Bifunctor (first)
 import Data.Coerce (coerce)
 import Data.GeneralAllocate (GeneralAllocate(..), GeneralAllocated(..))
 import Language.Marlowe.Runtime.ChainSync.Api (TxId)
@@ -48,7 +51,7 @@ newtype AppM a = AppM { runAppM :: ReaderT AppEnv Handler a }
     , MonadBase IO
     )
 
-newtype BackendM r s a = BackendM { runBackendM :: ReaderT (EventBackend (BackendM r s) r s) IO a }
+newtype BackendM r s a = BackendM { runBackendM :: ReaderT (EventBackend (BackendM r s) r s, LogAction IO Message) IO a }
   deriving newtype
     ( Functor
     , Applicative
@@ -104,8 +107,13 @@ instance MonadWith (BackendM r s) where
     stateThreadingGeneralWith (GeneralAllocate allocA') (flip (runReaderT . runBackendM) r . go)
 
 instance MonadEvent r s (BackendM r s) where
-  askBackend = askBackendReaderT BackendM id
-  localBackend = localBackendReaderT BackendM runBackendM id
+  askBackend = askBackendReaderT BackendM fst
+  localBackend = localBackendReaderT BackendM runBackendM first
+
+instance MonadReader (LogAction (BackendM r s) Message) (BackendM r s) where
+  ask = BackendM $ asks $ hoistLogAction liftIO . snd
+  local f (BackendM m) = withRunInIO \runInIO -> runInIO $ BackendM
+    $ withReaderT (fmap $ hoistLogAction runInIO . f . hoistLogAction liftIO) m
 
 data AppEnv = forall r s. AppEnv
   { _loadContractHeaders :: LoadContractHeaders (BackendM r s)
@@ -122,6 +130,7 @@ data AppEnv = forall r s. AppEnv
   , _submitWithdrawal :: TxId -> Submit r (BackendM r s)
   , _eventBackend :: EventBackend (BackendM r s) r s
   , _requestParent :: r
+  , _logAction :: LogAction IO Message
   }
 
 -- | Load a list of contract headers.
@@ -197,4 +206,6 @@ submitTransaction contractId txId tx = do
   liftBackendM backend $ submit contractId txId _requestParent tx
 
 liftBackendM :: EventBackend (BackendM r s) r s ->  BackendM r s a -> AppM a
-liftBackendM backend m = liftIO $ runReaderT (runBackendM m) backend
+liftBackendM backend m = AppM do
+  logAction <- asks _logAction
+  liftIO $ runReaderT (runBackendM m) (backend, hoistLogAction liftIO logAction)

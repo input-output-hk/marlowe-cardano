@@ -59,6 +59,7 @@ library
     , cardano-crypto-wrapper
     , cardano-integration
     , cardano-ledger-byron
+    , co-log >= 0.5.0.0 && < 0.6.0.0
     , containers
     , eventuo11y ^>= { 0.9, 0.10 }
     , eventuo11y-extras
@@ -87,6 +88,7 @@ library
     , marlowe-runtime:sync-api
     , marlowe-runtime:tx
     , marlowe-runtime:tx-api
+    , mtl >= 2.2 && < 3
     , network
     , nonempty-containers
     , ouroboros-network

@@ -4,6 +4,8 @@
 module Main
   where
 
+import Colog (LogAction(LogAction), cmap, fmtMessage, logTextStdout)
+import Colog.Message (Message)
 import Control.Arrow ((&&&))
 import Control.Concurrent.Component (runComponent_)
 import Control.Exception (bracket)
@@ -31,6 +33,7 @@ import Options
 import Paths_marlowe_runtime_web (version)
 import System.IO (BufferMode(..), hSetBuffering, stderr, stdout)
 import Text.Read (readMaybe)
+import UnliftIO (MonadUnliftIO, newMVar, withMVar)
 
 main :: IO ()
 main = do
@@ -39,7 +42,7 @@ main = do
   Options{..} <- getOptions
   withTracer \tracer -> do
     let backend = tracerEventBackend tracer $ renderServerSelectorOTel port
-    flip runReaderT backend $ runBackendM do
+    flip runReaderT (backend, cmap fmtMessage logTextStdout) $ runBackendM do
       dependencies <- connectToMarloweRuntimeTraced (injectSelector RuntimeClient) runtimeHost runtimePort $ MarloweTracedT do
         marloweTracedContext <- ask
         pure ServerDependencies
@@ -59,6 +62,12 @@ main = do
       { libraryName = "marlowe-web-server"
       , libraryVersion = fromString $ showVersion version
       }
+
+concurrentLogger :: MonadUnliftIO m => IO (LogAction m Message)
+concurrentLogger = do
+  lock <- newMVar ()
+  let LogAction baseAction = cmap fmtMessage logTextStdout
+  pure $ LogAction $ withMVar lock . const . baseAction
 
 renderServerSelectorOTel :: PortNumber -> RenderSelectorOTel (ServerSelector TcpClientSelector)
 renderServerSelectorOTel port = \case

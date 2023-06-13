@@ -6,6 +6,7 @@
 module Language.Marlowe.Runtime.Sync.MarloweSyncServer
   where
 
+import Colog (Message, WithLog)
 import Control.Concurrent.Component
 import Control.Monad.Event.Class
 import Data.Type.Equality (testEquality, type (:~:)(Refl))
@@ -24,7 +25,7 @@ data MarloweSyncServerDependencies r s m = MarloweSyncServerDependencies
   }
 
 marloweSyncServer
-  :: (MonadUnliftIO m, MonadEvent r s m, HasSpanContext r)
+  :: (MonadUnliftIO m, MonadEvent r s m, HasSpanContext r, WithLog env Message m)
   => Component m (MarloweSyncServerDependencies r s m) ()
 marloweSyncServer = serverComponent "marlowe-sync-server" (component_ "marlowe-sync-worker" worker) \MarloweSyncServerDependencies{..} -> do
   connector <- acceptSomeConnectorTraced syncSource

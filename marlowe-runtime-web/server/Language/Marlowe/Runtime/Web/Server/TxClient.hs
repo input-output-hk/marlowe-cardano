@@ -10,6 +10,7 @@ module Language.Marlowe.Runtime.Web.Server.TxClient
   where
 
 import Cardano.Api (BabbageEra, Tx, TxBody, getTxId)
+import Colog (Message, WithLog)
 import Control.Concurrent.Async (concurrently_)
 import Control.Concurrent.Component
 import Control.Concurrent.STM
@@ -133,8 +134,8 @@ type WithMapUpdate k tx a
 data SomeTVarWithMapUpdate = forall k tx a. Ord k => SomeTVarWithMapUpdate (TVar a) (WithMapUpdate k tx a)
 
 txClient
-  :: forall r s m
-   . (MonadEvent r s m, MonadUnliftIO m, HasSpanContext r)
+  :: forall r s env m
+   . (MonadEvent r s m, MonadUnliftIO m, HasSpanContext r, WithLog env Message m)
   => Component m (TxClientDependencies r s m) (TxClient r m)
 txClient = component "web-tx-client" \TxClientDependencies{..} -> do
   tempContracts <- newTVar mempty

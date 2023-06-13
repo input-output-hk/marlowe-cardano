@@ -6,6 +6,8 @@
 module Language.Marlowe.Runtime.Contract
   where
 
+import Colog (WithLog)
+import qualified Colog as C
 import Control.Arrow (returnA)
 import Control.Concurrent.Component (Component)
 import Control.Concurrent.Component.Probes
@@ -34,6 +36,7 @@ contract
     , MonadEvent r s m
     , Inject LoadServerSelector s
     , HasSpanContext r
+    , WithLog env C.Message m
     )
   => Component m (ContractDependencies r s m) Probes
 contract = proc deps -> do

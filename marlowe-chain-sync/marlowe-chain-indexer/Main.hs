@@ -15,15 +15,17 @@ import qualified Cardano.Api as Cardano
 import Cardano.Api.Byron (toByronRequiresNetworkMagic)
 import qualified Cardano.Chain.Genesis as Byron
 import Cardano.Crypto (abstractHashToBytes, decodeAbstractHash)
+import Colog (LogAction(LogAction), Message, cmap, fmtMessage, logTextStdout)
 import Control.Concurrent.Component
 import Control.Concurrent.Component.Probes (ProbeServerDependencies(..), probeServer)
 import Control.Exception (bracket)
 import Control.Monad.Event.Class
-import Control.Monad.Reader (ask)
+import Control.Monad.Reader (MonadReader(..), asks, withReaderT)
 import Control.Monad.Trans.Except (ExceptT(ExceptT), runExceptT, withExceptT)
 import Control.Monad.Trans.Reader (ReaderT(..))
 import Control.Monad.With (MonadWith, WithException, stateThreadingGeneralWith)
 import Data.Aeson (eitherDecodeFileStrict)
+import Data.Bifunctor (first)
 import Data.GeneralAllocate (GeneralAllocate(..), GeneralAllocated(GeneralAllocated))
 import Data.String (IsString(fromString))
 import Data.Text (unpack)
@@ -43,10 +45,14 @@ import Observe.Event.Render.OpenTelemetry (tracerEventBackend)
 import OpenTelemetry.Trace
 import Options (Options(..), getOptions)
 import Paths_marlowe_chain_sync (version)
-import UnliftIO (MonadIO, MonadUnliftIO, liftIO, throwIO)
+import UnliftIO
+  (BufferMode(LineBuffering), MonadIO, MonadUnliftIO, hSetBuffering, liftIO, newMVar, stderr, stdout, throwIO, withMVar)
 
 main :: IO ()
-main = run =<< getOptions (showVersion version)
+main = do
+  hSetBuffering stderr LineBuffering
+  hSetBuffering stdout LineBuffering
+  run =<< getOptions (showVersion version)
 
 run :: Options -> IO ()
 run Options{..} = do
@@ -108,11 +114,23 @@ run Options{..} = do
     persistRateLimit = secondsToNominalDiffTime 1
 
 runAppM :: EventBackend IO r (RootSelector r) -> AppM r a -> IO a
-runAppM eventBackend = flip runReaderT (hoistEventBackend liftIO eventBackend) . unAppM
+runAppM eventBackend (AppM action) = do
+  logAction <- concurrentLogger
+  runReaderT action (hoistEventBackend liftIO eventBackend, logAction)
+
+concurrentLogger :: MonadUnliftIO m => IO (LogAction m Message)
+concurrentLogger = do
+  lock <- newMVar ()
+  let LogAction baseAction = cmap fmtMessage logTextStdout
+  pure $ LogAction $ withMVar lock . const . baseAction
 
 newtype AppM r a = AppM
-  { unAppM :: ReaderT (EventBackend (AppM r) r (RootSelector r)) IO a
+  { unAppM :: ReaderT (EventBackend (AppM r) r (RootSelector r), LogAction (AppM r) Message) IO a
   } deriving newtype (Functor, Applicative, Monad, MonadIO, MonadUnliftIO)
+
+instance MonadReader (LogAction (AppM r) Message) (AppM r) where
+  ask = AppM $ asks snd
+  local f (AppM m) = AppM $ withReaderT (fmap f) m
 
 instance MonadWith (AppM r) where
   type WithException (AppM r) = WithException IO
@@ -135,5 +153,5 @@ instance MonadWith (AppM r) where
     stateThreadingGeneralWith (GeneralAllocate allocA') (flip (runReaderT . unAppM) r . go)
 
 instance MonadEvent r (RootSelector r) (AppM r) where
-  askBackend = askBackendReaderT AppM id
-  localBackend = localBackendReaderT AppM unAppM id
+  askBackend = askBackendReaderT AppM fst
+  localBackend = localBackendReaderT AppM unAppM first

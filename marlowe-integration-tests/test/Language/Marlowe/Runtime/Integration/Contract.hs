@@ -7,6 +7,7 @@ module Language.Marlowe.Runtime.Integration.Contract
   where
 
 import Cardano.Api.Byron (ScriptData(ScriptDataBytes), hashScriptData)
+import Colog (HasLog(..), LogAction, Message)
 import Control.Concurrent.Component
 import Control.Monad (foldM)
 import Control.Monad.Event.Class (Inject(..), NoopEventT(runNoopEventT))
@@ -193,6 +194,7 @@ runContractTest test = runResourceT do
     testHandle = TestHandle
       { loadConnector = SomeConnectorTraced inject $ clientConnector loadPair
       , queryConnector = SomeConnectorTraced inject $ clientConnector queryPair
+      , logAction = mempty
       }
   runNoopEventT $ flip runReaderT testHandle $ race_ test $ runComponent_ (void Contract.contract) Contract.ContractDependencies
     { batchSize = unsafeIntToNat 10
@@ -206,7 +208,11 @@ type TestM = ReaderT TestHandle (NoopEventT TestRef AnySelector (ResourceT IO))
 data TestHandle = TestHandle
   { loadConnector :: SomeClientConnectorTraced MarloweLoadClient TestRef AnySelector TestM
   , queryConnector :: SomeClientConnectorTraced (QueryClient Api.ContractRequest) TestRef AnySelector TestM
+  , logAction :: LogAction TestM Message
   }
+
+instance HasLog TestHandle Message TestM where
+  logActionL f TestHandle{..} = (\logAction' -> TestHandle{logAction = logAction', ..}) <$> f logAction
 
 newtype TestRef = TestRef ()
   deriving newtype (Semigroup, Monoid)

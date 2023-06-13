@@ -6,14 +6,14 @@
 module Control.Concurrent.Component
   where
 
+import Colog (Message, WithLog, logError)
 import Control.Applicative (liftA2)
 import Control.Arrow
 import Control.Category
-import Control.Exception (throw)
 import Control.Monad (forever)
 import Data.Functor (void)
+import Data.String (fromString)
 import Prelude hiding ((.))
-import System.IO (hPutStrLn)
 import UnliftIO
 import UnliftIO.Concurrent (forkIO)
 
@@ -83,25 +83,25 @@ runComponent c a = do
 runComponent_ :: MonadUnliftIO m => Component m a () -> a -> m ()
 runComponent_ c a = fst =<< atomically (runComponent c a)
 
-component :: MonadUnliftIO m => String -> (a -> STM (m (), b)) -> Component m a b
+component :: (WithLog env Message m, MonadUnliftIO m) => String -> (a -> STM (m (), b)) -> Component m a b
 component name run = Component $ \a -> do
   (action, b) <- run a
   let
-    action' = action `catch` \(SomeException e) -> liftIO do
-      hPutStrLn stderr $ "Component " <> name <> " crashed with exception:"
-      hPutStrLn stderr $ displayException e
-      throw e
+    action' = action `catch` \(SomeException e) -> do
+      logError $ fromString $ "Component " <> name <> " crashed with exception:"
+      logError $ fromString $ displayException e
+      throwIO e
   pure (Concurrently action', b)
 
-component_ :: MonadUnliftIO m => String -> (a -> m ()) -> Component m a ()
+component_ :: (WithLog env Message m, MonadUnliftIO m) => String -> (a -> m ()) -> Component m a ()
 component_ name = component name . fmap (pure . (,()))
 
-serverComponent :: forall m a b . MonadUnliftIO m => String -> Component m b () -> (a -> m b) -> Component m a ()
+serverComponent :: (WithLog env Message m, MonadUnliftIO m) => String -> Component m b () -> (a -> m b) -> Component m a ()
 serverComponent name worker = serverComponentWithSetup name worker . (pure .)
 
 serverComponentWithSetup
-  :: forall m a b
-   . MonadUnliftIO m
+  :: forall m env a b
+   . (WithLog env Message m, MonadUnliftIO m)
   => String
   -> Component m b ()
   -> (a -> STM (m b))

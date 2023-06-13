@@ -9,6 +9,7 @@ module Language.Marlowe.Runtime.ChainIndexer.Store
   , chainStore
   ) where
 
+import Colog (Message, WithLog)
 import Control.Concurrent.Component
 import Control.Concurrent.STM (STM, newTVar, readTVar)
 import Control.Concurrent.STM.Delay (Delay, newDelay, waitDelay)
@@ -50,7 +51,10 @@ data ChainStoreDependencies r m = ChainStoreDependencies
   }
 
 -- | Create a ChainStore component.
-chainStore :: forall r s m. (MonadUnliftIO m, MonadInjectEvent r (ChainStoreSelector r) s m) => Component m (ChainStoreDependencies r m) (STM Bool)
+chainStore
+  :: forall r s env m
+   . (MonadUnliftIO m, MonadInjectEvent r (ChainStoreSelector r) s m, WithLog env Message m)
+  => Component m (ChainStoreDependencies r m) (STM Bool)
 chainStore = component "indexer-chain-store" \ChainStoreDependencies{..} -> do
   readyVar <- newTVar False
   let

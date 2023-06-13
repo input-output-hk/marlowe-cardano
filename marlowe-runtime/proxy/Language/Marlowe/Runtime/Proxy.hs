@@ -2,6 +2,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE RankNTypes #-}
@@ -9,6 +10,8 @@
 module Language.Marlowe.Runtime.Proxy
   where
 
+import Colog (WithLog)
+import qualified Colog as C
 import Control.Arrow (returnA)
 import Control.Concurrent.Component
 import Control.Concurrent.Component.Probes (Probes(..))
@@ -54,7 +57,7 @@ data ProxyDependencies r s m = ProxyDependencies
   }
 
 proxy
-  :: (MonadUnliftIO m, MonadEvent r s m, HasSpanContext r, MonadFail m)
+  :: (MonadUnliftIO m, MonadEvent r s m, HasSpanContext r, MonadFail m, WithLog env C.Message m)
   => Component m (ProxyDependencies r s (ResourceT m)) Probes
 proxy = proc deps -> do
   (serverComponent "marlowe-runtime-server-traced" (component_ "marlowe-runtime-worker-traced" workerTraced) \ProxyDependencies{..} -> do

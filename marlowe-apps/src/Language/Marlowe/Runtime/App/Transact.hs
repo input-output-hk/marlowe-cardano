@@ -1,6 +1,3 @@
-
-
-
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -154,7 +151,7 @@ transactWithEvents backend config@Config{buildSeconds, confirmSeconds, retryLimi
                 Tx{..}   -> pure resTx
                 response -> unexpected response
           _txId' <-
-            handleWithEvents subBackend "Submit" config (Submit tx)
+            handleWithEvents subBackend "Submit" config (Submit tx 1)
               $ \case
                 TxId{..} -> pure resTxId
                 response -> unexpected response

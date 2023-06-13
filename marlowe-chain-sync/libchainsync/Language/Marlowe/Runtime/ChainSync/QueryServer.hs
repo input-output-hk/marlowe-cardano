@@ -23,6 +23,8 @@ import Cardano.Api
   )
 import qualified Cardano.Api as Cardano
 import Cardano.Api.Shelley (AcquiringFailure)
+import Colog (WithLog)
+import qualified Colog as C
 import Control.Concurrent.Component
 import Control.Monad.Event.Class
 import Control.Monad.Trans.Except (ExceptT(ExceptT), except, runExceptT, throwE, withExceptT)
@@ -45,7 +47,7 @@ data ChainSyncQueryServerDependencies r s m = ChainSyncQueryServerDependencies
   }
 
 chainSyncQueryServer
-  :: (MonadUnliftIO m, MonadEvent r s m, HasSpanContext r, MonadFail m)
+  :: (MonadUnliftIO m, MonadEvent r s m, HasSpanContext r, MonadFail m, WithLog env C.Message m)
   => Component m (ChainSyncQueryServerDependencies r s m) ()
 chainSyncQueryServer = serverComponent "chain-sync-query-server" worker \ChainSyncQueryServerDependencies{..} -> do
   connector <- acceptSomeConnectorTraced querySource
@@ -62,7 +64,7 @@ data WorkerDependencies r s m = WorkerDependencies
   }
 
 worker
-  :: forall r s m. (MonadUnliftIO m, MonadEvent r s m, HasSpanContext r, MonadFail m)
+  :: forall r s env m. (MonadUnliftIO m, MonadEvent r s m, HasSpanContext r, MonadFail m, WithLog env C.Message m)
   => Component m (WorkerDependencies r s m) ()
 worker = component_ "chain-sync-query-worker" \WorkerDependencies{..} -> do
   let

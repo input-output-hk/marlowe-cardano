@@ -12,6 +12,7 @@ module Language.Marlowe.Runtime.ChainIndexer
   ) where
 
 import Cardano.Api (CardanoMode, LocalNodeClientProtocolsInMode)
+import Colog (Message, WithLog)
 import Control.Arrow (returnA)
 import Control.Concurrent.Component
 import Control.Concurrent.Component.Probes
@@ -43,6 +44,7 @@ chainIndexer
      , MonadEvent r s m
      , Inject NodeClientSelector s
      , Inject (ChainStoreSelector r) s
+     , WithLog env Message m
      )
   => Component m (ChainIndexerDependencies r m) Probes
 chainIndexer = proc ChainIndexerDependencies{..} -> do

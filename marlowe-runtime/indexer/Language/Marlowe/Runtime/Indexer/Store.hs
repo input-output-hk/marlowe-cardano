@@ -8,6 +8,7 @@
 module Language.Marlowe.Runtime.Indexer.Store
   where
 
+import Colog (Message, WithLog)
 import Control.Concurrent.Component
 import Control.Concurrent.STM (STM, modifyTVar, newTVar, readTVar, writeTVar)
 import Control.Monad (forever, guard, unless)
@@ -48,7 +49,7 @@ data StoreDependencies r m = StoreDependencies
 
 -- | The store component aggregates changes into batches in one thread, and
 -- pulls batches to save in another.
-store :: (MonadUnliftIO m, MonadInjectEvent r StoreSelector s m) => Component m (StoreDependencies r m) ()
+store :: (MonadUnliftIO m, MonadInjectEvent r StoreSelector s m, WithLog env Message m) => Component m (StoreDependencies r m) ()
 store = proc StoreDependencies{..} -> do
   -- Spawn the aggregator thread
   readChanges <- aggregator -< pullEvent
@@ -58,7 +59,7 @@ store = proc StoreDependencies{..} -> do
 
 -- | The aggregator component pulls chain events and accumulates a batch of
 -- changes to persist.
-aggregator :: MonadUnliftIO m => Component m (STM (ChainEvent r)) (STM (Changes r))
+aggregator :: (MonadUnliftIO m, WithLog env Message m) => Component m (STM (ChainEvent r)) (STM (Changes r))
 aggregator = component "indexer-store-aggregator" \pullEvent -> do
   -- A variable which will hold the accumulated changes.
   changesVar <- newTVar mempty
@@ -116,7 +117,7 @@ data PersisterDependencies r m = PersisterDependencies
   }
 
 -- | A component to save batches of changes to the database.
-persister :: (MonadUnliftIO m, MonadInjectEvent r StoreSelector s m) => Component m (PersisterDependencies r m) ()
+persister :: (MonadUnliftIO m, MonadInjectEvent r StoreSelector s m, WithLog env Message m) => Component m (PersisterDependencies r m) ()
 persister = component_ "indexer-store-persister" \PersisterDependencies{..} -> forever do
   -- Read the next batch of changes.
   Changes{..} <- atomically readChanges

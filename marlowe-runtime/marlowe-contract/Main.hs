@@ -9,6 +9,7 @@
 module Main
   where
 
+import Colog (LogAction(LogAction), Message, cmap, fmtMessage, logTextStdout)
 import Control.Concurrent.Component
 import Control.Concurrent.Component.Probes (ProbeServerDependencies(..), probeServer)
 import Control.Exception (bracket)
@@ -16,8 +17,10 @@ import Control.Monad (when)
 import Control.Monad.Catch (MonadCatch, MonadMask, MonadThrow)
 import Control.Monad.Event.Class
 import Control.Monad.IO.Class (MonadIO, liftIO)
+import Control.Monad.Reader (MonadReader(..), asks, withReaderT)
 import Control.Monad.Trans.Reader (ReaderT(..))
 import Control.Monad.With
+import Data.Bifunctor (first)
 import Data.GeneralAllocate
 import qualified Data.Text as T
 import Data.Version (showVersion)
@@ -56,11 +59,12 @@ import Options.Applicative
   , value
   )
 import Paths_marlowe_runtime
-import UnliftIO (BufferMode(LineBuffering), MonadUnliftIO, hSetBuffering, stdout)
+import UnliftIO (BufferMode(LineBuffering), MonadUnliftIO, hSetBuffering, newMVar, stderr, stdout, withMVar)
 
 main :: IO ()
 main = do
   hSetBuffering stdout LineBuffering
+  hSetBuffering stderr LineBuffering
   options <- getOptions
   withTracer \tracer ->
     runAppM (tracerEventBackend tracer renderRootSelectorOTel) $ run options
@@ -103,11 +107,23 @@ run Options{..} = do
     probeServer -< ProbeServerDependencies { port = fromIntegral httpPort, .. }
 
 runAppM :: EventBackend IO r RootSelector -> AppM r a -> IO a
-runAppM eventBackend = flip runReaderT (hoistEventBackend liftIO eventBackend) . unAppM
+runAppM eventBackend (AppM action) = do
+  logAction <- concurrentLogger
+  runReaderT action (hoistEventBackend liftIO eventBackend, logAction)
+
+concurrentLogger :: MonadUnliftIO m => IO (LogAction m Message)
+concurrentLogger = do
+  lock <- newMVar ()
+  let LogAction baseAction = cmap fmtMessage logTextStdout
+  pure $ LogAction $ withMVar lock . const . baseAction
 
 newtype AppM r a = AppM
-  { unAppM :: ReaderT (EventBackend (AppM r) r RootSelector) IO a
+  { unAppM :: ReaderT (EventBackend (AppM r) r RootSelector, LogAction (AppM r) Message) IO a
   } deriving newtype (Functor, Applicative, Monad, MonadIO, MonadUnliftIO, MonadFail, MonadThrow, MonadCatch, MonadMask)
+
+instance MonadReader (LogAction (AppM r) Message) (AppM r) where
+  ask = AppM $ asks snd
+  local f (AppM m) = AppM $ withReaderT (fmap f) m
 
 instance MonadWith (AppM r) where
   type WithException (AppM r) = WithException IO
@@ -130,8 +146,8 @@ instance MonadWith (AppM r) where
     stateThreadingGeneralWith (GeneralAllocate allocA') (flip (runReaderT . unAppM) r . go)
 
 instance MonadEvent r RootSelector (AppM r) where
-  askBackend = askBackendReaderT AppM id
-  localBackend = localBackendReaderT AppM unAppM id
+  askBackend = askBackendReaderT AppM fst
+  localBackend = localBackendReaderT AppM unAppM first
 
 data Options = Options
   { host :: HostName

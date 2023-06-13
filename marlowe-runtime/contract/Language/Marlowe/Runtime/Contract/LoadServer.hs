@@ -6,6 +6,8 @@
 module Language.Marlowe.Runtime.Contract.LoadServer
   where
 
+import Colog (WithLog)
+import qualified Colog as C
 import Control.Concurrent.Component
 import Control.Monad.Event.Class
 import Data.Functor (void)
@@ -29,7 +31,7 @@ data LoadServerDependencies r s m = forall n. LoadServerDependencies
   }
 
 loadServer
-  :: (MonadUnliftIO m, MonadInjectEvent r LoadServerSelector s m, HasSpanContext r)
+  :: (MonadUnliftIO m, MonadInjectEvent r LoadServerSelector s m, HasSpanContext r, WithLog env C.Message m)
   => Component m (LoadServerDependencies r s m) ()
 loadServer = serverComponent "contract-load-server" worker \LoadServerDependencies{..} -> do
   connector <- acceptSomeConnectorTraced loadSource
@@ -42,10 +44,11 @@ data WorkerDependencies r s m = forall n. WorkerDependencies
   }
 
 worker
-  :: forall r s m.
+  :: forall r s env m.
     ( MonadUnliftIO m
     , MonadInjectEvent r LoadServerSelector s m
     , HasSpanContext r
+    , WithLog env C.Message m
     )
   => Component m (WorkerDependencies r s m) ()
 worker = component_ "contract-load-worker" \WorkerDependencies{..} -> case connector of
