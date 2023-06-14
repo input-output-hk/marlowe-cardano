@@ -32,7 +32,7 @@ import Database.PostgreSQL.LibPQ (db, user)
 import qualified Database.PostgreSQL.LibPQ as PQ
 import Hasql.Connection (withLibPQConnection)
 import qualified Hasql.Pool as Pool
-import Language.Marlowe.Runtime.ChainSync (ChainSyncDependencies(..), chainSync)
+import Language.Marlowe.Runtime.ChainSync (ChainSync(..), ChainSyncDependencies(..), chainSync)
 import qualified Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL as PostgreSQL
 import Language.Marlowe.Runtime.ChainSync.NodeClient (NodeClient(..), NodeClientDependencies(..), nodeClient)
 import Logging (RootSelector(..), renderRootSelectorOTel)
@@ -68,33 +68,12 @@ run Options{..} = bracket (Pool.acquire 100 (Just 5000000) (fromString databaseU
       }
 
     appComponent = proc pool -> do
-      syncSource <- tcpServerTraced "chain-seek" $ injectSelector ChainSeekServer -< TcpServerDependencies
-        { host
-        , port
-        , toPeer = chainSeekServerPeer
-        }
-
-      querySource <- tcpServerTraced "chain-query" $ injectSelector QueryServer -< TcpServerDependencies
-        { host
-        , port = queryPort
-        , toPeer = queryServerPeer
-        }
-
-      jobSource <- tcpServerTraced "chain-job" $ injectSelector JobServer -< TcpServerDependencies
-        { host
-        , port = commandPort
-        , toPeer = jobServerPeer
-        }
-
       NodeClient{..} <- nodeClient -< NodeClientDependencies
         { connectToLocalNode = liftIO . Cardano.connectToLocalNode localNodeConnectInfo
         }
 
-      probes <- chainSync -< ChainSyncDependencies
+      ChainSync{..} <- chainSync -< ChainSyncDependencies
         { databaseQueries = PostgreSQL.databaseQueries pool networkId
-        , syncSource
-        , querySource
-        , jobSource
         , queryLocalNodeState = queryNode
         , submitTxToNodeLocal = \era tx -> submitTxToNode $ TxInMode tx case era of
             ByronEra -> ByronEraInCardanoMode
@@ -103,6 +82,27 @@ run Options{..} = bracket (Pool.acquire 100 (Just 5000000) (fromString databaseU
             MaryEra -> MaryEraInCardanoMode
             AlonzoEra -> AlonzoEraInCardanoMode
             BabbageEra -> BabbageEraInCardanoMode
+        }
+
+      tcpServerTraced "chain-seek" $ injectSelector ChainSeekServer -< TcpServerDependencies
+        { host
+        , port
+        , toPeer = chainSeekServerPeer
+        , serverSource = syncServerSource
+        }
+
+      tcpServerTraced "chain-query" $ injectSelector QueryServer -< TcpServerDependencies
+        { host
+        , port = queryPort
+        , toPeer = queryServerPeer
+        , serverSource = queryServerSource
+        }
+
+      tcpServerTraced "chain-job" $ injectSelector JobServer -< TcpServerDependencies
+        { host
+        , port = commandPort
+        , toPeer = jobServerPeer
+        , serverSource = jobServerSource
         }
 
       probeServer -< ProbeServerDependencies { port = fromIntegral httpPort, .. }

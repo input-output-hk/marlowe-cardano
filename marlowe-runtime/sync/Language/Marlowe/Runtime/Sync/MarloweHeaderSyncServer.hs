@@ -5,35 +5,24 @@
 
 module Language.Marlowe.Runtime.Sync.MarloweHeaderSyncServer where
 
-import Colog (Message, WithLog)
-import Control.Concurrent.Component
 import Language.Marlowe.Protocol.HeaderSync.Server
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainPoint, WithGenesis(..))
 import Language.Marlowe.Runtime.Sync.Database (DatabaseQueries(..), Next(..))
-import Network.Protocol.Connection (ConnectionSource, Connector, acceptConnector, runConnector)
+import Network.Protocol.Connection (ServerSource(..))
 import UnliftIO (MonadUnliftIO)
 
-data MarloweHeaderSyncServerDependencies m = MarloweHeaderSyncServerDependencies
+newtype MarloweHeaderSyncServerDependencies m = MarloweHeaderSyncServerDependencies
   { databaseQueries :: DatabaseQueries m
-  , headerSyncSource :: ConnectionSource MarloweHeaderSyncServer m
   }
 
 marloweHeaderSyncServer
-  :: (MonadUnliftIO m, WithLog env Message m)
-  => Component m (MarloweHeaderSyncServerDependencies m) ()
-marloweHeaderSyncServer = serverComponent "marlowe-header-sync-server" (component_ "marlowe-header-sync-worker" worker) \MarloweHeaderSyncServerDependencies{..} -> do
-  connector <- acceptConnector headerSyncSource
-  pure WorkerDependencies{..}
-
-data WorkerDependencies m = WorkerDependencies
-  { databaseQueries :: DatabaseQueries m
-  , connector :: Connector MarloweHeaderSyncServer m
-  }
-
-worker :: forall m. MonadUnliftIO m => WorkerDependencies m -> m ()
-worker WorkerDependencies{..} = do
-  runConnector connector $ MarloweHeaderSyncServer $ pure $ serverIdle Genesis
+  :: forall m
+   . MonadUnliftIO m
+  => MarloweHeaderSyncServerDependencies m
+  -> ServerSource MarloweHeaderSyncServer m ()
+marloweHeaderSyncServer MarloweHeaderSyncServerDependencies{..} = ServerSource $ pure server
   where
+    server = MarloweHeaderSyncServer $ pure $ serverIdle Genesis
     DatabaseQueries{..} = databaseQueries
 
     serverIdle :: ChainPoint -> ServerStIdle m ()

@@ -5,8 +5,7 @@
 
 module Language.Marlowe.Runtime.Sync where
 
-import Colog (Message, WithLog)
-import Control.Arrow (returnA)
+import Control.Arrow (arr)
 import Control.Concurrent.Component
 import Control.Concurrent.Component.Probes
 import Data.ByteString (ByteString)
@@ -31,30 +30,35 @@ import qualified Language.Marlowe.Runtime.Sync.Database as Sync
 import Language.Marlowe.Runtime.Sync.MarloweHeaderSyncServer
 import Language.Marlowe.Runtime.Sync.MarloweSyncServer
 import Language.Marlowe.Runtime.Sync.QueryServer
-import Network.Protocol.Connection (ConnectionSource)
+import Network.Protocol.Connection (ServerSource)
 import Observe.Event.Render.OpenTelemetry (OTelRendered(..), RenderSelectorOTel)
 import OpenTelemetry.Attributes (Attribute, toAttribute)
 import OpenTelemetry.Trace.Core (SpanKind(..))
 import Prelude hiding (filter)
 import UnliftIO (MonadUnliftIO)
 
-data SyncDependencies m = SyncDependencies
+newtype SyncDependencies m = SyncDependencies
   { databaseQueries :: DatabaseQueries m
-  , syncSource :: ConnectionSource MarloweSyncServer m
-  , headerSyncSource :: ConnectionSource MarloweHeaderSyncServer m
-  , querySource :: ConnectionSource MarloweQueryServer m
   }
 
-sync :: (MonadUnliftIO m, WithLog env Message m) => Component m (SyncDependencies m) Probes
-sync = proc SyncDependencies{..} -> do
-  marloweSyncServer -< MarloweSyncServerDependencies{..}
-  marloweHeaderSyncServer -< MarloweHeaderSyncServerDependencies{..}
-  queryServer -< QueryServerDependencies{..}
-  returnA -< Probes
+data MarloweSync m = MarloweSync
+  { syncServerSource :: ServerSource MarloweSyncServer m ()
+  , headerSyncServerSource :: ServerSource MarloweHeaderSyncServer m ()
+  , queryServerSource :: ServerSource MarloweQueryServer m ()
+  , probes :: Probes
+  }
+
+sync :: MonadUnliftIO m => Component m (SyncDependencies m) (MarloweSync m)
+sync = arr \SyncDependencies{..} -> MarloweSync
+  { syncServerSource = marloweSyncServer MarloweSyncServerDependencies{..}
+  , headerSyncServerSource = marloweHeaderSyncServer MarloweHeaderSyncServerDependencies{..}
+  , queryServerSource = queryServer QueryServerDependencies{..}
+  , probes = Probes
     { startup = pure True
     , liveness = pure True
     , readiness = pure True
     }
+  }
 
 renderDatabaseSelectorOTel
   :: Maybe ByteString

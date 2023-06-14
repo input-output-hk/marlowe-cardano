@@ -1,21 +1,15 @@
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE EmptyCase #-}
-{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE RankNTypes #-}
 
 module Network.Protocol.Connection where
 
-import Control.Applicative (Alternative(empty), (<|>))
-import Control.Concurrent.STM (STM)
-import Control.Monad.IO.Class (MonadIO)
+import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Resource (ResourceT, runResourceT, transResourceT)
 import Data.ByteString.Lazy (ByteString)
 import Network.Protocol.Peer.Trace
 import Network.TypedProtocol (Message, PeerHasAgency)
-import UnliftIO (MonadUnliftIO, atomically)
+import UnliftIO (MonadUnliftIO)
 
 type ToPeer peer protocol pr st m = forall a. peer m a -> PeerTraced protocol pr st m a
 
@@ -31,16 +25,6 @@ ihoistConnector
   -> Connector peer m
   -> Connector peer n
 ihoistConnector hoistPeer' f f' Connector{..} = Connector $ f $ ihoistConnection hoistPeer' f f' <$> openConnection
-
-newtype ConnectionSource server m = ConnectionSource
-  { acceptConnectorSTM :: STM (Connector server m)
-  }
-
-instance Semigroup (ConnectionSource server m) where
-  (ConnectionSource source1) <> (ConnectionSource source2) = ConnectionSource $ source1 <|> source2
-
-instance Monoid (ConnectionSource server m) where
-  mempty = ConnectionSource empty
 
 newtype Connection peer m = Connection
   { runConnection :: forall a. peer m a -> m a
@@ -61,9 +45,6 @@ ihoistConnection hoistPeer' f f' Connection{..} = Connection
 runConnector :: Monad m => Connector peer m -> peer m a -> m a
 runConnector Connector{..} peer = flip runConnection peer =<< openConnection
 
-acceptConnector :: MonadIO m => ConnectionSource peer m -> m (Connector peer m)
-acceptConnector = atomically . acceptConnectorSTM
-
 data DriverSelector ps f where
   SendMessage :: PeerHasAgency pr st -> Message ps st st' -> DriverSelector ps ()
   RecvMessage :: PeerHasAgency pr (st :: ps) -> DriverSelector ps (RecvMessageField ps st)
@@ -74,26 +55,26 @@ data RecvMessageField ps st where
   RecvMessageStateAfterMessage :: Maybe ByteString -> RecvMessageField ps st
   RecvMessageMessage :: Message ps st st' -> RecvMessageField ps st
 
-newtype Socket server m a = Socket
+newtype ServerSource server m a = ServerSource
   { getServer :: ResourceT m (server m a)
   } deriving Functor
 
-hoistSocket
+hoistServerSource
   :: Functor m
   => (forall p q x. Functor p => (forall y. p y -> q y) -> server p x -> server q x)
   -> (forall x. m x -> n x)
-  -> Socket server m a
-  -> Socket server n a
-hoistSocket hoistServer f Socket{..} = Socket
+  -> ServerSource server m a
+  -> ServerSource server n a
+hoistServerSource hoistServer f ServerSource{..} = ServerSource
   { getServer = transResourceT (f . fmap (hoistServer f)) getServer
   , ..
   }
 
-socketConnector
+directConnector
   :: MonadUnliftIO m
   => (forall x y. server m x -> client m y -> m (x, y))
-  -> Socket server m a
+  -> ServerSource server m a
   -> Connector client m
-socketConnector serveClient socket = Connector $ runResourceT do
-  server <- getServer socket
-  pure $ Connection $ fmap snd . serveClient server
+directConnector serveClient serverSource = Connector $ pure $ Connection \client -> runResourceT do
+  server <- getServer serverSource
+  lift $ snd <$> serveClient server client

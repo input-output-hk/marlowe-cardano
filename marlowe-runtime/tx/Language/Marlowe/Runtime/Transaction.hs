@@ -30,7 +30,7 @@ import Language.Marlowe.Runtime.Transaction.Query (LoadMarloweContext, LoadWalle
 import qualified Language.Marlowe.Runtime.Transaction.Query as Q
 import Language.Marlowe.Runtime.Transaction.Server
 import Language.Marlowe.Runtime.Transaction.Submit (SubmitJob)
-import Network.Protocol.Connection (ConnectionSource, Connector)
+import Network.Protocol.Connection (Connector, ServerSource)
 import Network.Protocol.Job.Server (JobServer)
 import Network.Protocol.Query.Client (QueryClient)
 import Observe.Event.Render.OpenTelemetry (OTelRendered(..), RenderSelectorOTel)
@@ -40,7 +40,6 @@ import UnliftIO (MonadUnliftIO)
 
 data TransactionDependencies m = TransactionDependencies
   { chainSyncConnector :: Connector RuntimeChainSeekClient m
-  , connectionSource :: ConnectionSource (JobServer MarloweTxCommand) m
   , mkSubmitJob :: Tx BabbageEra -> STM (SubmitJob m)
   , loadWalletContext :: LoadWalletContext m
   , loadMarloweContext :: LoadMarloweContext m
@@ -49,16 +48,24 @@ data TransactionDependencies m = TransactionDependencies
   , getCurrentScripts :: forall v. MarloweVersion v -> MarloweScripts
   }
 
+data MarloweTx m = MarloweTx
+  { probes :: Probes
+  , serverSource :: ServerSource (JobServer MarloweTxCommand) m ()
+  }
+
 transaction
   :: (MonadUnliftIO m, MonadInjectEvent r TransactionServerSelector s m, WithLog env Message m)
-  => Component m (TransactionDependencies m) Probes
+  => Component m (TransactionDependencies m) (MarloweTx m)
 transaction = proc TransactionDependencies{..} -> do
   (connected, getTip) <- transactionChainClient -< TransactionChainClientDependencies{..}
-  transactionServer -< TransactionServerDependencies{..}
-  returnA -< Probes
-    { startup = pure True
-    , liveness = atomically connected
-    , readiness = atomically connected
+  serverSource <- transactionServer -< TransactionServerDependencies{..}
+  returnA -< MarloweTx
+    { serverSource
+    , probes = Probes
+      { startup = pure True
+      , liveness = atomically connected
+      , readiness = atomically connected
+      }
     }
 
 renderTransactionServerSelectorOTel :: RenderSelectorOTel TransactionServerSelector

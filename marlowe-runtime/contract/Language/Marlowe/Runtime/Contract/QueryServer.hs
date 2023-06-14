@@ -15,7 +15,7 @@ newtype QueryServerDependencies m = QueryServerDependencies
   { contractStore :: ContractStore m
   }
 
-queryServer :: MonadUnliftIO m => QueryServerDependencies m -> Socket (QueryServer ContractRequest) m ()
-queryServer QueryServerDependencies{..} = Socket $ pure $ respond concurrently \case
+queryServer :: MonadUnliftIO m => QueryServerDependencies m -> ServerSource (QueryServer ContractRequest) m ()
+queryServer QueryServerDependencies{..} = ServerSource $ pure $ respond concurrently \case
   GetContract hash -> getContract contractStore hash
   MerkleizeInputs hash state input -> merkleizeInputs contractStore hash state input

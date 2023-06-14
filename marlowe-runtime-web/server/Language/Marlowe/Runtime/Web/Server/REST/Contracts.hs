@@ -5,10 +5,9 @@
 
 module Language.Marlowe.Runtime.Web.Server.REST.Contracts where
 
-import Cardano.Api (BabbageEra, TxBody, getTxBody, makeSignedTransaction)
+import Cardano.Api (BabbageEra, TxBody, makeSignedTransaction)
 import qualified Cardano.Api as Cardano
 import Cardano.Ledger.Alonzo.TxWitness (TxWitness(TxWitness))
-import Control.Monad (unless)
 import Data.Aeson (Value(Null))
 import qualified Data.Map as Map
 import Data.Maybe (fromMaybe)
@@ -133,9 +132,7 @@ put contractId body = do
 
       tx <- case req of
         Nothing -> throwError $ badRequest' "Invalid text envelope cbor value"
-        Just (Left tx) -> do
-          unless (getTxBody tx == txBody) $ throwError (badRequest' "Provided transaction body differs from the original one")
-          pure tx
+        Just (Left tx) -> pure tx
         -- It seems that wallets provide nearly empty `TxWitness` back. Here is a quote from `CIP-30` docs:
         -- > Only the portion of the witness set that were signed as a result of this call are returned to
         -- > encourage dApps to verify the contents returned by this endpoint while building the final transaction.

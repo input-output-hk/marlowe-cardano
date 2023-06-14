@@ -1,6 +1,3 @@
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE StrictData #-}
@@ -22,20 +19,16 @@ import Cardano.Api
   )
 import qualified Cardano.Api as Cardano
 import Cardano.Api.Shelley (AcquiringFailure)
-import Colog (WithLog)
-import qualified Colog as C
-import Control.Concurrent.Component
 import Control.Monad.Trans.Except (ExceptT(ExceptT), except, runExceptT, throwE, withExceptT)
 import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncQuery(..))
 import qualified Language.Marlowe.Runtime.ChainSync.Database as Database
-import Network.Protocol.Connection (ConnectionSource, Connector, acceptConnector, runConnector)
+import Network.Protocol.Connection (ServerSource(..))
 import Network.Protocol.Query.Server (QueryServer(..), ServerStReq(..))
 import Network.Protocol.Query.Types
 import UnliftIO (MonadUnliftIO)
 
 data ChainSyncQueryServerDependencies m = ChainSyncQueryServerDependencies
-  { querySource :: ConnectionSource (QueryServer ChainSyncQuery) m
-  , queryLocalNodeState
+  { queryLocalNodeState
       :: forall result
        . Maybe Cardano.ChainPoint
       -> QueryInMode CardanoMode result
@@ -44,27 +37,12 @@ data ChainSyncQueryServerDependencies m = ChainSyncQueryServerDependencies
   }
 
 chainSyncQueryServer
-  :: (MonadUnliftIO m, MonadFail m, WithLog env C.Message m)
-  => Component m (ChainSyncQueryServerDependencies m) ()
-chainSyncQueryServer = serverComponent "chain-sync-query-server" worker \ChainSyncQueryServerDependencies{..} -> do
-  connector <- acceptConnector querySource
-  pure WorkerDependencies {..}
-
-data WorkerDependencies m = WorkerDependencies
-  { connector :: Connector (QueryServer ChainSyncQuery) m
-  , queryLocalNodeState
-      :: forall result
-       . Maybe Cardano.ChainPoint
-      -> QueryInMode CardanoMode result
-      -> m (Either AcquiringFailure result)
-  , getUTxOs :: Database.GetUTxOs m
-  }
-
-worker
-  :: forall env m. (MonadUnliftIO m, MonadFail m, WithLog env C.Message m)
-  => Component m (WorkerDependencies m) ()
-worker = component_ "chain-sync-query-worker" \WorkerDependencies{..} -> do
-  let
+  :: forall m
+   . (MonadUnliftIO m, MonadFail m)
+  => ChainSyncQueryServerDependencies m
+  -> ServerSource (QueryServer ChainSyncQuery) m ()
+chainSyncQueryServer ChainSyncQueryServerDependencies{..} = ServerSource $ pure server
+  where
     server :: QueryServer ChainSyncQuery m ()
     server = QueryServer $ pure serverReq
 
@@ -112,5 +90,3 @@ worker = component_ "chain-sync-query-worker" \WorkerDependencies{..} -> do
     traverseReqTree f = \case
       ReqLeaf req -> f req
       ReqBin l r -> (,) <$> traverseReqTree f l <*> traverseReqTree f r
-
-  runConnector connector server

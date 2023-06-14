@@ -1,43 +1,31 @@
-{-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE ExplicitNamespaces #-}
-{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 
 module Language.Marlowe.Runtime.Sync.MarloweSyncServer where
 
-import Colog (Message, WithLog)
-import Control.Concurrent.Component
 import Data.Type.Equality (testEquality, type (:~:)(Refl))
 import Language.Marlowe.Protocol.Sync.Server
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainPoint, WithGenesis(..))
 import Language.Marlowe.Runtime.Core.Api (ContractId, MarloweVersion, SomeMarloweVersion(..))
 import Language.Marlowe.Runtime.History.Api (SomeCreateStep(..))
 import Language.Marlowe.Runtime.Sync.Database (DatabaseQueries(..), Next(..))
-import Network.Protocol.Connection (ConnectionSource, Connector, acceptConnector, runConnector)
+import Network.Protocol.Connection (ServerSource(..))
 import UnliftIO (MonadUnliftIO)
 
-data MarloweSyncServerDependencies m = MarloweSyncServerDependencies
+newtype MarloweSyncServerDependencies m = MarloweSyncServerDependencies
   { databaseQueries :: DatabaseQueries m
-  , syncSource :: ConnectionSource MarloweSyncServer m
   }
 
 marloweSyncServer
-  :: (MonadUnliftIO m, WithLog env Message m)
-  => Component m (MarloweSyncServerDependencies m) ()
-marloweSyncServer = serverComponent "marlowe-sync-server" (component_ "marlowe-sync-worker" worker) \MarloweSyncServerDependencies{..} -> do
-  connector <- acceptConnector syncSource
-  pure WorkerDependencies{..}
-
-data WorkerDependencies m = WorkerDependencies
-  { databaseQueries :: DatabaseQueries m
-  , connector :: Connector MarloweSyncServer m
-  }
-
-worker :: forall m. (MonadUnliftIO m) => WorkerDependencies m -> m ()
-worker WorkerDependencies{..} = do
-  runConnector connector $ MarloweSyncServer $ pure serverInit
+  :: forall m
+   . MonadUnliftIO m
+  => MarloweSyncServerDependencies m
+  -> ServerSource MarloweSyncServer m ()
+marloweSyncServer MarloweSyncServerDependencies{..} = ServerSource $ pure server
   where
     DatabaseQueries{..} = databaseQueries
+
+    server = MarloweSyncServer $ pure serverInit
 
     serverInit :: ServerStInit m ()
     serverInit = ServerStInit

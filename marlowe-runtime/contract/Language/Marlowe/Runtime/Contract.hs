@@ -20,7 +20,7 @@ import Language.Marlowe.Runtime.Contract.Api (ContractRequest)
 import Language.Marlowe.Runtime.Contract.LoadServer
 import Language.Marlowe.Runtime.Contract.QueryServer
 import Language.Marlowe.Runtime.Contract.Store
-import Network.Protocol.Connection (Socket)
+import Network.Protocol.Connection (ServerSource)
 import Network.Protocol.Query.Server (QueryServer)
 import Network.TypedProtocol
 import Observe.Event.Render.OpenTelemetry (OTelRendered(..), RenderSelectorOTel)
@@ -34,15 +34,15 @@ data ContractDependencies n m = ContractDependencies
   }
 
 data MarloweContract m = MarloweContract
-  { loadSocket :: Socket MarloweLoadServer m ()
-  , querySocket :: Socket (QueryServer ContractRequest) m ()
+  { loadServerSource :: ServerSource MarloweLoadServer m ()
+  , queryServerSource :: ServerSource (QueryServer ContractRequest) m ()
   , probes :: Probes
   }
 
 contract :: MonadUnliftIO m => Component m (ContractDependencies n m) (MarloweContract m)
 contract = arr \ContractDependencies{..} -> MarloweContract
-  { loadSocket = loadServer LoadServerDependencies{..}
-  , querySocket = queryServer QueryServerDependencies{..}
+  { loadServerSource = loadServer LoadServerDependencies{..}
+  , queryServerSource = queryServer QueryServerDependencies{..}
   , probes = Probes
     { liveness = pure True
     , readiness = pure True

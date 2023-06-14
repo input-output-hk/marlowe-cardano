@@ -104,7 +104,7 @@ import Language.Marlowe.Runtime.Transaction.Query
   (LoadMarloweContext, LoadWalletContext, lookupMarloweScriptUtxo, lookupPayoutScriptUtxo)
 import Language.Marlowe.Runtime.Transaction.Safety (Continuations, checkContract, checkTransactions, noContinuations)
 import Language.Marlowe.Runtime.Transaction.Submit (SubmitJob(..), SubmitJobStatus(..))
-import Network.Protocol.Connection (ConnectionSource, Connector, acceptConnector, runConnector)
+import Network.Protocol.Connection (Connector, ServerSource(..), runConnector)
 import Network.Protocol.Job.Server
   (JobServer(..), ServerStAttach(..), ServerStAwait(..), ServerStCmd(..), ServerStInit(..), hoistAttach, hoistCmd)
 import Network.Protocol.Query.Client (QueryClient, request)
@@ -130,8 +130,7 @@ data BuildTxField where
   ResultingTxBody :: TxBody BabbageEra -> BuildTxField
 
 data TransactionServerDependencies m = TransactionServerDependencies
-  { connectionSource :: ConnectionSource (JobServer MarloweTxCommand) m
-  , mkSubmitJob :: Tx BabbageEra -> STM (SubmitJob m)
+  { mkSubmitJob :: Tx BabbageEra -> STM (SubmitJob m)
   , loadWalletContext :: LoadWalletContext m
   , loadMarloweContext :: LoadMarloweContext m
   , chainSyncQueryConnector :: Connector (QueryClient ChainSyncQuery) m
@@ -141,37 +140,16 @@ data TransactionServerDependencies m = TransactionServerDependencies
   }
 
 transactionServer
-  :: (MonadInjectEvent r TransactionServerSelector s m, MonadUnliftIO m, WithLog env Message m)
-  => Component m (TransactionServerDependencies m) ()
-transactionServer = serverComponentWithSetup "tx-job-server" worker \TransactionServerDependencies{..} -> do
-  submitJobsVar <- newTVar mempty
-  let
-    getSubmitJob txId = Map.lookup txId <$> readTVar submitJobsVar
-    trackSubmitJob txId = modifyTVar submitJobsVar . Map.insert txId
-  pure do
-    connector <- acceptConnector connectionSource
-    pure WorkerDependencies {..}
-
-data WorkerDependencies m = WorkerDependencies
-  { connector :: Connector (JobServer MarloweTxCommand) m
-  , getSubmitJob :: TxId -> STM (Maybe (SubmitJob m))
-  , trackSubmitJob :: TxId -> SubmitJob m -> STM ()
-  , mkSubmitJob :: Tx BabbageEra -> STM (SubmitJob m)
-  , loadWalletContext :: LoadWalletContext m
-  , loadMarloweContext :: LoadMarloweContext m
-  , chainSyncQueryConnector :: Connector (QueryClient ChainSyncQuery) m
-  , contractQueryConnector :: Connector (QueryClient ContractRequest) m
-  , getTip :: STM Chain.ChainPoint
-  , getCurrentScripts :: forall v. MarloweVersion v -> MarloweScripts
-  }
-
-worker
   :: forall r s env m
    . (MonadInjectEvent r TransactionServerSelector s m, MonadUnliftIO m, WithLog env Message m)
-  => Component m (WorkerDependencies m) ()
-worker = component_ "tx-job-server-worker" \WorkerDependencies{..} -> do
+  => Component m (TransactionServerDependencies m) (ServerSource (JobServer MarloweTxCommand) m ())
+transactionServer = component "tx-job-server" \TransactionServerDependencies{..} -> do
+  submitJobsVar <- newTVar @(Map TxId (SubmitJob m)) mempty
   let
-    server :: JobServer MarloweTxCommand m ()
+    getSubmitJob txId = Map.lookup txId <$> readTVar submitJobsVar
+
+    trackSubmitJob txId = modifyTVar submitJobsVar . Map.insert txId
+
     server = JobServer $ pure serverInit
 
     serverInit :: ServerStInit MarloweTxCommand m ()
@@ -238,7 +216,7 @@ worker = component_ "tx-job-server-worker" \WorkerDependencies{..} -> do
           jobId@(JobIdSubmit txId) ->
             attachSubmit jobId $ getSubmitJob txId
       }
-  runConnector connector server
+  pure (pure (), ServerSource $ pure server)
 
 attachSubmit
   :: MonadIO m

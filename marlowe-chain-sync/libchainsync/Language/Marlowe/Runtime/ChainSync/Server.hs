@@ -1,45 +1,27 @@
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE StrictData #-}
 
 module Language.Marlowe.Runtime.ChainSync.Server where
 
-import Colog (Message, WithLog)
-import Control.Concurrent.Component
-import Data.Functor (void, (<&>))
+import Data.Functor ((<&>))
 import Language.Marlowe.Runtime.ChainSync.Api (ChainPoint, Move, RuntimeChainSeekServer, WithGenesis(..))
 import Language.Marlowe.Runtime.ChainSync.Database (GetTip(..), MoveClient(..), MoveResult(..))
 import Network.Protocol.ChainSeek.Server
-import Network.Protocol.Connection (ConnectionSource, Connector, acceptConnector, runConnector)
+import Network.Protocol.Connection (ServerSource(..))
 import UnliftIO (MonadUnliftIO)
 
 data ChainSyncServerDependencies m = ChainSyncServerDependencies
-  { syncSource :: ConnectionSource RuntimeChainSeekServer m
-  , moveClient :: MoveClient m
+  { moveClient :: MoveClient m
   , getTip :: GetTip m
   }
 
 chainSyncServer
-  :: (MonadUnliftIO m, WithLog env Message m)
-  => Component m (ChainSyncServerDependencies m) ()
-chainSyncServer = serverComponent "chain-seek-server" worker \ChainSyncServerDependencies{..} -> do
-  connector <- acceptConnector syncSource
-  pure WorkerDependencies{..}
-
-data WorkerDependencies m = WorkerDependencies
-  { connector :: Connector RuntimeChainSeekServer m
-  , moveClient :: MoveClient m
-  , getTip :: GetTip m
-  }
-
-worker
-  :: forall env m. (MonadUnliftIO m, WithLog env Message m)
-  => Component m (WorkerDependencies m) ()
-worker = component_ "chain-seek-worker" \WorkerDependencies{..} -> do
-  let
-    runWorker = void $ runConnector connector $ ChainSeekServer $ pure $ stIdle Genesis
+  :: forall m
+   . MonadUnliftIO m
+  => ChainSyncServerDependencies m
+  -> ServerSource RuntimeChainSeekServer m ()
+chainSyncServer ChainSyncServerDependencies{..} = ServerSource $ pure server
+  where
+    server = ChainSeekServer $ pure $ stIdle Genesis
 
     stIdle :: ChainPoint -> ServerStIdle Move ChainPoint ChainPoint m ()
     stIdle pos = ServerStIdle
@@ -63,5 +45,3 @@ worker = component_ "chain-seek-worker" \WorkerDependencies{..} -> do
             else pure $ SendMsgWait $ stPoll move pos tip
       , recvMsgCancel = pure $ stIdle pos
       }
-
-  runWorker

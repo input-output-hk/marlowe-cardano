@@ -20,8 +20,8 @@ data LoadServerDependencies m = forall n. LoadServerDependencies
   , contractStore :: ContractStore m
   }
 
-loadServer :: MonadUnliftIO m => LoadServerDependencies m -> Socket MarloweLoadServer m ()
-loadServer LoadServerDependencies{..} = Socket do
+loadServer :: MonadUnliftIO m => LoadServerDependencies m -> ServerSource MarloweLoadServer m ()
+loadServer LoadServerDependencies{..} = ServerSource do
   (releaseKey, ContractStagingArea{..}) <- allocateU
     (lift $ createContractStagingArea contractStore)
     (lift . discard)

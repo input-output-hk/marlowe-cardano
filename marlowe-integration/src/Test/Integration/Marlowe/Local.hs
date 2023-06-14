@@ -43,6 +43,8 @@ import qualified Cardano.Api.Byron as Byron
 import qualified Cardano.Chain.Genesis as Byron
 import Cardano.Chain.UTxO (defaultUTxOConfiguration)
 import Cardano.Crypto (abstractHashToBytes)
+import Colog (cmap, fmtMessage, logTextHandle)
+import Control.Arrow (returnA)
 import Control.Concurrent (threadDelay)
 import Control.Concurrent.Async (race_)
 import Control.Concurrent.Component
@@ -66,7 +68,6 @@ import qualified Data.Set as Set
 import qualified Data.Set.NonEmpty as NESet
 import Data.String (fromString)
 import qualified Data.Text as T
-import Data.Time.Clock (secondsToNominalDiffTime)
 import Data.Time.Units (Second)
 import Data.Word (Word16)
 import Database.PostgreSQL.LibPQ (connectdb, errorMessage, exec, finish, resultErrorMessage)
@@ -84,8 +85,9 @@ import Language.Marlowe.CLI.Types
   , defaultCoinSelectionStrategy
   )
 import Language.Marlowe.Protocol.Client (MarloweRuntimeClient, hoistMarloweRuntimeClient)
-import Language.Marlowe.Protocol.Server (MarloweRuntimeServer, marloweRuntimeServerPeer, serveMarloweRuntimeClient)
+import Language.Marlowe.Protocol.Server (marloweRuntimeServerDirectPeer, serveMarloweRuntimeClientDirect)
 import Language.Marlowe.Runtime (MarloweRuntimeDependencies(..), marloweRuntime)
+import qualified Language.Marlowe.Runtime as Runtime
 import Language.Marlowe.Runtime.Cardano.Api (fromCardanoAddressInEra, fromCardanoLovelace, fromCardanoTxId)
 import Language.Marlowe.Runtime.ChainIndexer.Database (CommitGenesisBlock(..), DatabaseQueries(..))
 import qualified Language.Marlowe.Runtime.ChainIndexer.Database as ChainIndexer
@@ -106,10 +108,9 @@ import qualified Language.Marlowe.Runtime.Sync.Database as Sync
 import qualified Language.Marlowe.Runtime.Sync.Database.PostgreSQL as Sync
 import Language.Marlowe.Runtime.Web.Client (healthcheck)
 import Language.Marlowe.Runtime.Web.Server (ServerDependencies(..), server)
-import Network.Channel.Typed (ClientServerPair(..), clientServerPair)
 import Network.HTTP.Client (defaultManagerSettings, newManager)
 import Network.Protocol.Connection
-import Network.Protocol.Driver
+import Network.Protocol.Driver (TcpServerDependencies(TcpServerDependencies), tcpServer)
 import Network.Protocol.Driver.Trace (HasSpanContext(..))
 import Network.Protocol.Peer.Trace (defaultSpanContext)
 import Network.Socket
@@ -139,7 +140,7 @@ import Test.Integration.Cardano hiding (exec)
 import qualified Test.Integration.Cardano (exec)
 import qualified Test.Integration.Cardano as SpoNode (SpoNode(..))
 import Text.Read (readMaybe)
-import UnliftIO (MonadUnliftIO, atomically, throwIO, withRunInIO)
+import UnliftIO (Concurrently(..), MonadUnliftIO, atomically, throwIO, withRunInIO)
 
 data RuntimeRef = RuntimeRef
 
@@ -248,15 +249,13 @@ withLocalMarloweRuntime' MarloweRuntimeOptions{..} test = withRunInIO \runInIO -
       , lockingMicrosecondsBetweenRetries = 100_000
       }
 
-    runtimePair <- atomically $ clientServerPair serveMarloweRuntimeClient
-
     let baseUrl = BaseUrl Http "localhost" webPort ""
     let clientEnv = mkClientEnv manager baseUrl
     let
       runWebClient :: ClientM a -> IO (Either ClientError a)
       runWebClient = flip runClientM clientEnv
 
-      logAction = mempty
+      logAction = cmap fmtMessage $ logTextHandle logFileHandle
       eventBackend = noopEventBackend RuntimeRef
 
       waitForWebServer :: Int -> IO ()
@@ -269,11 +268,14 @@ withLocalMarloweRuntime' MarloweRuntimeOptions{..} test = withRunInIO \runInIO -
 
       networkId = Testnet $ NetworkMagic $ fromIntegral testnetMagic
 
+    (Concurrently testAction, Runtime.MarloweRuntime{..}) <- atomically $ unComponent testContainer TestContainerDependencies{..}
+
+    let
       protocolConnector = ihoistConnector
         hoistMarloweRuntimeClient
         (NoopEventT . runAppM @RuntimeRef eventBackend logAction)
         (liftIO . runNoopEventT)
-        (clientServerConnector runtimePair)
+        (directConnector serveMarloweRuntimeClientDirect serverSource)
 
     -- Persist the genesis block before starting the services so that they
     -- exist already and no database queries fail.
@@ -281,7 +283,7 @@ withLocalMarloweRuntime' MarloweRuntimeOptions{..} test = withRunInIO \runInIO -
       runAppM eventBackend logAction
         $ runCommitGenesisBlock (commitGenesisBlock chainIndexerDatabaseQueries) genesisBlock
       onException
-        ( runAppM eventBackend logAction (runComponent_  testContainer TestContainerDependencies{..})
+        ( runAppM eventBackend logAction testAction
           `race_` (waitForWebServer 0 *> runInIO (test MarloweRuntime{..}))
         )
         (unprotect dbReleaseKey)
@@ -451,7 +453,6 @@ data TestContainerDependencies r m = TestContainerDependencies
   , marloweSyncDatabaseQueries :: Sync.DatabaseQueries m
   , submitConfirmationBlocks :: BlockNo
   , networkId :: NetworkId
-  , runtimePair :: ClientServerPair MarloweRuntimeServer MarloweRuntimeClient m
   , localNodeConnectInfo :: LocalNodeConnectInfo CardanoMode
   , securityParameter :: Int
   , marloweScripts :: MarloweScripts
@@ -459,7 +460,7 @@ data TestContainerDependencies r m = TestContainerDependencies
   , proxyPort :: Int
   }
 
-testContainer :: forall r. Monoid r => Component (AppM r RuntimeSelector) (TestContainerDependencies r (AppM r RuntimeSelector)) ()
+testContainer :: forall r. Monoid r => Component (AppM r RuntimeSelector) (TestContainerDependencies r (AppM r RuntimeSelector)) (Runtime.MarloweRuntime (AppM r RuntimeSelector))
 testContainer = proc TestContainerDependencies{..} -> do
   let
     getScripts :: MarloweVersion v -> Set MarloweScripts
@@ -468,25 +469,27 @@ testContainer = proc TestContainerDependencies{..} -> do
     getCurrentScripts :: MarloweVersion v -> MarloweScripts
     getCurrentScripts MarloweV1 = marloweScripts
 
-  runtimeConnectionSource <- tcpServer "marlowe-runtime" -< TcpServerDependencies "127.0.0.1" (fromIntegral proxyPort) marloweRuntimeServerPeer
-
-  marloweRuntime -<
+  runtime@Runtime.MarloweRuntime{..} <- marloweRuntime -<
     let
       maxCost = 100_000
       costModel = CostModel 1 10
-      persistRateLimit = secondsToNominalDiffTime 0.1
+      persistRateLimit = 0.1
       connectToLocalNode client = liftIO $ Cardano.connectToLocalNode localNodeConnectInfo $ client mempty
       batchSize = unsafeIntToNat 10
       marloweScriptHashes = NESet.singleton $ marloweScript marloweScripts
       payoutScriptHashes = NESet.singleton $ payoutScript marloweScripts
-      pollingInterval = secondsToNominalDiffTime 0.01
-      runtimeConnectionSourceTraced = clientServerSource runtimePair
+      pollingInterval = 0.01
+      confirmationTimeout = 60
      in
       MarloweRuntimeDependencies{..}
+
+  tcpServer "marlowe-runtime" -< TcpServerDependencies "127.0.0.1" (fromIntegral proxyPort) serverSource marloweRuntimeServerDirectPeer
 
   server -< ServerDependencies
     { openAPIEnabled = False
     , accessControlAllowOriginAll = False
     , runApplication = run webPort
-    , connector = clientServerConnector runtimePair
+    , connector = directConnector serveMarloweRuntimeClientDirect serverSource
     }
+
+  returnA -< runtime

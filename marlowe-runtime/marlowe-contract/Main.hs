@@ -69,14 +69,14 @@ run Options{..} = do
 
     tcpServerTraced "contract-load" inject -< TcpServerDependencies
       { toPeer = marloweLoadServerPeer
-      , serverSocket = loadSocket
+      , serverSource = loadServerSource
       , ..
       }
 
     tcpServerTraced "contract-query" inject -< TcpServerDependencies
       { toPeer = queryServerPeer
       , port = queryPort
-      , serverSocket = querySocket
+      , serverSource = queryServerSource
       , ..
       }
 

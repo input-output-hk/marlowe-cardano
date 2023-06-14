@@ -1,13 +1,11 @@
 {-# LANGUAGE Arrows #-}
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE StrictData #-}
 
 module Language.Marlowe.Runtime.ChainSync
-  ( ChainSyncDependencies(..)
+  ( ChainSync(..)
+  , ChainSyncDependencies(..)
   , chainSync
   , renderDatabaseSelectorOTel
   , renderNodeServiceSelectorOTel
@@ -16,7 +14,6 @@ module Language.Marlowe.Runtime.ChainSync
 import Cardano.Api (CardanoEra, CardanoMode, Tx, TxValidationErrorInMode)
 import qualified Cardano.Api as Cardano
 import Cardano.Api.Shelley (AcquiringFailure)
-import Colog (Message, WithLog)
 import Control.Arrow (returnA)
 import Control.Concurrent.Component
 import Control.Concurrent.Component.Probes
@@ -32,7 +29,7 @@ import Language.Marlowe.Runtime.ChainSync.JobServer (ChainSyncJobServerDependenc
 import Language.Marlowe.Runtime.ChainSync.NodeClient (NodeClientSelector(..))
 import Language.Marlowe.Runtime.ChainSync.QueryServer (ChainSyncQueryServerDependencies(..), chainSyncQueryServer)
 import Language.Marlowe.Runtime.ChainSync.Server (ChainSyncServerDependencies(..), chainSyncServer)
-import Network.Protocol.Connection (ConnectionSource)
+import Network.Protocol.Connection (ServerSource(..))
 import Network.Protocol.Job.Server (JobServer)
 import Network.Protocol.Query.Server (QueryServer)
 import Observe.Event.Render.OpenTelemetry (OTelRendered(..), RenderSelectorOTel)
@@ -43,9 +40,6 @@ import UnliftIO (MonadUnliftIO)
 
 data ChainSyncDependencies m = ChainSyncDependencies
   { databaseQueries :: DatabaseQueries m
-  , syncSource :: ConnectionSource RuntimeChainSeekServer m
-  , querySource :: ConnectionSource (QueryServer ChainSyncQuery) m
-  , jobSource :: ConnectionSource (JobServer ChainSyncCommand) m
   , queryLocalNodeState
       :: Maybe Cardano.ChainPoint
       -> forall result
@@ -58,18 +52,25 @@ data ChainSyncDependencies m = ChainSyncDependencies
       -> m (SubmitResult (TxValidationErrorInMode CardanoMode))
   }
 
-chainSync
-  :: (MonadUnliftIO m, MonadFail m, WithLog env Message m)
-  => Component m (ChainSyncDependencies m) Probes
+data ChainSync m = ChainSync
+  { syncServerSource :: ServerSource RuntimeChainSeekServer m ()
+  , queryServerSource :: ServerSource (QueryServer ChainSyncQuery) m ()
+  , jobServerSource :: ServerSource (JobServer ChainSyncCommand) m ()
+  , probes :: Probes
+  }
+
+chainSync :: (MonadUnliftIO m, MonadFail m) => Component m (ChainSyncDependencies m) (ChainSync m)
 chainSync = proc ChainSyncDependencies{..} -> do
   let DatabaseQueries{..} = databaseQueries
-  chainSyncServer -< ChainSyncServerDependencies{..}
-  chainSyncQueryServer -< ChainSyncQueryServerDependencies{..}
-  chainSyncJobServer -< ChainSyncJobServerDependencies{..}
-  returnA -< Probes
-    { startup = pure True
-    , liveness = pure True
-    , readiness = pure True
+  returnA -< ChainSync
+    { syncServerSource = chainSyncServer ChainSyncServerDependencies{..}
+    , queryServerSource = chainSyncQueryServer ChainSyncQueryServerDependencies{..}
+    , jobServerSource = chainSyncJobServer ChainSyncJobServerDependencies{..}
+    , probes = Probes
+      { startup = pure True
+      , liveness = pure True
+      , readiness = pure True
+      }
     }
 
 renderNodeServiceSelectorOTel :: RenderSelectorOTel NodeClientSelector

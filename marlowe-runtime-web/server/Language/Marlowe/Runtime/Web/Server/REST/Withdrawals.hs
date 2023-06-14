@@ -9,10 +9,9 @@
 
 module Language.Marlowe.Runtime.Web.Server.REST.Withdrawals where
 
-import Cardano.Api (BabbageEra, TxBody, getTxBody, getTxId, makeSignedTransaction)
+import Cardano.Api (BabbageEra, TxBody, getTxId, makeSignedTransaction)
 import qualified Cardano.Api as Cardano
 import Cardano.Ledger.Alonzo.TxWitness
-import Control.Monad (unless)
 import Data.Aeson (Value(..))
 import Data.Maybe (fromMaybe)
 import qualified Data.Set as Set
@@ -122,9 +121,7 @@ put contractId body = do
 
       tx <- case req of
         Nothing -> throwError $ badRequest' "Invalid text envelope cbor value"
-        Just (Left tx) -> do
-          unless (getTxBody tx == txBody) $ throwError (badRequest' "Provided transaction body differs from the original one")
-          pure tx
+        Just (Left tx) -> pure tx
         Just (Right (ShelleyTxWitness (TxWitness wtKeys _ _ _ _))) -> do
           case makeSignedTxWithWitnessKeys txBody wtKeys of
             Just tx -> pure tx

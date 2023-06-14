@@ -67,14 +67,14 @@ run = runComponent_ proc Options{..} -> do
 
   tcpServer "marlowe-runtime" -< TcpServerDependencies
     { toPeer = marloweRuntimeServerPeer
-    , serverSocket = proxySocket False
+    , serverSource = proxyServerSource False
     , ..
     }
 
   tcpServerTraced "marlowe-runtime-traced" $ injectSelector MarloweRuntimeServer -< TcpServerDependencies
     { toPeer = marloweRuntimeServerPeer
     , port = portTraced
-    , serverSocket = proxySocket True
+    , serverSource = proxyServerSource True
     , ..
     }
 

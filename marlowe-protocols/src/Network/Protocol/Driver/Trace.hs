@@ -37,7 +37,7 @@ import Network.Channel hiding (close)
 import Network.Protocol.Codec (BinaryMessage, DeserializeError, decodeGet, getMessage, putMessage)
 import Network.Protocol.Codec.Spec (ShowProtocol(..))
 import Network.Protocol.Connection
-  (Connection(..), Connector(..), DriverSelector(..), RecvMessageField(..), Socket(..), ToPeer)
+  (Connection(..), Connector(..), DriverSelector(..), RecvMessageField(..), ServerSource(..), ToPeer)
 import Network.Protocol.Driver (TcpServerDependencies(..))
 import Network.Protocol.Handshake.Client (handshakeClientPeer, simpleHandshakeClient)
 import Network.Protocol.Handshake.Server (handshakeServerPeer, simpleHandshakeServer)
@@ -219,7 +219,7 @@ tcpServerTraced name inj = component_ (name <> "-tcp-server") \TcpServerDependen
       addField ev $ ConnectedPeer pName
       _ <- liftIO $ Socket.sendAll socket $ LBS.pack [0]
       let closeArgs = (simpleNewEventArgs CloseServer) { newEventParent = Just parentRef }
-      server <- getServer serverSocket
+      server <- getServer serverSource
       lift $ localBackend (setAncestorEventBackend parentRef) do
         let
           driver = mkDriverTraced

@@ -32,7 +32,7 @@ import qualified Language.Marlowe.Protocol.Sync.Types as Sync
 import Language.Marlowe.Runtime.Contract.Api (ContractRequest)
 import Language.Marlowe.Runtime.Transaction.Api (MarloweTxCommand)
 import Network.Channel.Typed
-import Network.Protocol.Connection (Socket(..))
+import Network.Protocol.Connection (ServerSource(..))
 import Network.Protocol.Handshake.Types (Handshake)
 import qualified Network.Protocol.Handshake.Types as Handshake
 import Network.Protocol.Job.Server (JobServer, hoistJobServer)
@@ -47,18 +47,18 @@ import Observe.Event.Backend (setAncestorEventBackend)
 import UnliftIO (MonadUnliftIO(..))
 
 data MarloweProxy m = MarloweProxy
-  { proxySocket :: Bool -> Socket MarloweRuntimeServer m ()
+  { proxyServerSource :: Bool -> ServerSource MarloweRuntimeServer m ()
   , probes :: Probes
   }
 
 data MarloweProxyInProc m = MarloweProxyInProc
-  { proxySocket :: Socket MarloweRuntimeServerDirect m ()
+  { proxyServerSource :: ServerSource MarloweRuntimeServerDirect m ()
   , probes :: Probes
   }
 
 proxyInProc :: MonadUnliftIO m => Component m (RouterInProc m) (MarloweProxyInProc m)
 proxyInProc = arr \router -> MarloweProxyInProc
-  { proxySocket = Socket $ ResourceT \releaseMap ->
+  { proxyServerSource = ServerSource $ ResourceT \releaseMap ->
       pure $ hoistMarloweRuntimeServerDirect (\(ResourceT m) -> m releaseMap) $ serverInProc router
   , probes = Probes
     { startup = pure True
@@ -69,7 +69,7 @@ proxyInProc = arr \router -> MarloweProxyInProc
 
 proxy :: (MonadUnliftIO m, MonadEvent r s m, MonadFail m) => Component m (Router r (ResourceT m)) (MarloweProxy m)
 proxy = arr \router -> MarloweProxy
-  { proxySocket = \traced -> Socket $ ResourceT \releaseMap ->
+  { proxyServerSource = \traced -> ServerSource $ ResourceT \releaseMap ->
       pure $ hoistMarloweRuntimeServer (\(ResourceT m) -> m releaseMap) $ server (not traced) router
   , probes = Probes
     { startup = pure True
@@ -88,12 +88,12 @@ data Router r m = Router
   }
 
 data RouterInProc m = RouterInProc
-  { marloweSyncSocket :: Socket MarloweSyncServer m ()
-  , marloweHeaderSyncSocket :: Socket MarloweHeaderSyncServer m ()
-  , marloweQuerySocket :: Socket MarloweQueryServer m ()
-  , marloweLoadSocket :: Socket MarloweLoadServer m ()
-  , txJobSocket :: Socket (JobServer MarloweTxCommand) m ()
-  , contractQuerySocket :: Socket (QueryServer ContractRequest) m ()
+  { marloweSyncServerSource :: ServerSource MarloweSyncServer m ()
+  , marloweHeaderSyncServerSource :: ServerSource MarloweHeaderSyncServer m ()
+  , marloweQueryServerSource :: ServerSource MarloweQueryServer m ()
+  , marloweLoadServerSource :: ServerSource MarloweLoadServer m ()
+  , txJobServerSource :: ServerSource (JobServer MarloweTxCommand) m ()
+  , contractQueryServerSource :: ServerSource (QueryServer ContractRequest) m ()
   }
 
 server
@@ -115,20 +115,20 @@ serverInProc
   => RouterInProc m
   -> MarloweRuntimeServerDirect (ResourceT m) ()
 serverInProc RouterInProc{..} = MarloweRuntimeServerDirect
-  { recvMsgRunMarloweSync = useSocket hoistMarloweSyncServer marloweSyncSocket
-  , recvMsgRunMarloweHeaderSync = useSocket hoistMarloweHeaderSyncServer marloweHeaderSyncSocket
-  , recvMsgRunMarloweQuery = useSocket hoistQueryServer marloweQuerySocket
-  , recvMsgRunMarloweLoad = useSocket hoistMarloweLoadServer marloweLoadSocket
-  , recvMsgRunTxJob = useSocket hoistJobServer txJobSocket
-  , recvMsgRunContractQuery = useSocket hoistQueryServer contractQuerySocket
+  { recvMsgRunMarloweSync = useServerSource hoistMarloweSyncServer marloweSyncServerSource
+  , recvMsgRunMarloweHeaderSync = useServerSource hoistMarloweHeaderSyncServer marloweHeaderSyncServerSource
+  , recvMsgRunMarloweQuery = useServerSource hoistQueryServer marloweQueryServerSource
+  , recvMsgRunMarloweLoad = useServerSource hoistMarloweLoadServer marloweLoadServerSource
+  , recvMsgRunTxJob = useServerSource hoistJobServer txJobServerSource
+  , recvMsgRunContractQuery = useServerSource hoistQueryServer contractQueryServerSource
   }
 
-useSocket
+useServerSource
   :: Monad m
   => (forall p q a. Functor p => (forall x. p x -> q x) -> server p a -> server q a)
-  -> Socket server m ()
+  -> ServerSource server m ()
   -> ResourceT m (server (ResourceT m) ())
-useSocket hoistServer socket = do
+useServerSource hoistServer socket = do
   s <- getServer socket
   pure $ hoistServer lift s
 

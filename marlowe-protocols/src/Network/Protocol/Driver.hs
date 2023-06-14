@@ -16,7 +16,7 @@ import Data.ByteString.Lazy (ByteString)
 import Data.Proxy (Proxy(Proxy))
 import Network.Channel (Channel(..), socketAsChannel)
 import Network.Protocol.Codec (BinaryMessage, DeserializeError, binaryCodec)
-import Network.Protocol.Connection (Connection(..), Connector(..), Socket(..), ToPeer)
+import Network.Protocol.Connection (Connection(..), Connector(..), ServerSource(..), ToPeer)
 import Network.Protocol.Handshake.Client (handshakeClientPeer, simpleHandshakeClient)
 import Network.Protocol.Handshake.Server (handshakeServerPeer, simpleHandshakeServer)
 import Network.Protocol.Handshake.Types (HasSignature, signature)
@@ -83,7 +83,7 @@ hoistDriver f Driver{..} = Driver
 data TcpServerDependencies ps server m = forall (st :: ps). TcpServerDependencies
   { host :: HostName
   , port :: PortNumber
-  , serverSocket :: Socket server m ()
+  , serverSource :: ServerSource server m ()
   , toPeer :: ToPeer server ps 'AsServer st m
   }
 
@@ -94,7 +94,7 @@ tcpServer
   -> Component m (TcpServerDependencies ps server m) ()
 tcpServer name = component_ (name <> "-tcp-server") \TcpServerDependencies{..} ->
   withRunInIO \runInIO -> runTCPServer (Just host) (show port) \socket -> runInIO $ runResourceT do
-    server <- getServer serverSocket
+    server <- getServer serverSource
     let driver = mkDriver $ socketAsChannel socket
     let handshakeServer = simpleHandshakeServer (signature $ Proxy @ps) server
     let peer = peerTracedToPeer $ handshakeServerPeer toPeer handshakeServer

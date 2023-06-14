@@ -15,9 +15,7 @@ import Data.Binary.Put (runPut)
 import qualified Data.ByteString.Lazy as LBS
 import Network.Channel (socketAsChannel)
 import Network.Protocol.Codec (BinaryMessage)
-import Network.Protocol.Connection (Connection(..), ConnectionSource(..), Connector(..), ToPeer)
 import Network.Protocol.Driver.Trace
-import Network.Protocol.Peer
 import Network.Protocol.Peer.Trace
 import Network.Socket
   ( AddrInfo(addrSocketType)
@@ -33,29 +31,11 @@ import Network.Socket
 import qualified Network.Socket as Socket
 import qualified Network.Socket.ByteString.Lazy as Socket
 import Network.TypedProtocol (SomeMessage(..))
-import Network.TypedProtocol.Codec (AnyMessageAndAgency(AnyMessageAndAgency))
 import Network.TypedProtocol.Core
 import Observe.Event
   (InjectSelector, NewEventArgs(newEventParent), addField, injectSelector, newEventInitialFields, reference)
 import Observe.Event.Backend (simpleNewEventArgs)
-import UnliftIO
-  ( MonadIO
-  , MonadUnliftIO
-  , STM
-  , SomeException
-  , TQueue
-  , atomically
-  , liftIO
-  , newEmptyTMVar
-  , newTQueue
-  , putTMVar
-  , readTQueue
-  , takeTMVar
-  , throwIO
-  , try
-  , withRunInIO
-  , writeTQueue
-  )
+import UnliftIO (MonadUnliftIO, liftIO, withRunInIO)
 import UnliftIO.Resource (allocate)
 
 -- | A channel can send or receive a protocol message depending on the current
@@ -319,129 +299,3 @@ tcpClientChannel inj host port = withInjectEvent inj Connect \ev -> do
     ( driverToChannel (composeInjectSelector inj $ injectSelector $ ClientPeer addr) driver
     , reference ev
     )
-
-data SomeServerWithResponseChannel server m where
-  SomeServerWithResponseChannel
-    :: server m a
-    -> (Either SomeException a -> STM ())
-    -> SomeServerWithResponseChannel server m
-
-newtype ServerRequest server m = ServerRequest (SomeServerWithResponseChannel server m -> STM ())
-
-stmConnectionSource :: MonadUnliftIO m => TQueue (ServerRequest server m) -> ConnectionSource server m
-stmConnectionSource queue = ConnectionSource do
-  serverRequest <- readTQueue queue
-  pure $ stmServerConnector serverRequest
-
-stmServerConnector :: MonadUnliftIO m => ServerRequest server m -> Connector server m
-stmServerConnector (ServerRequest sendServer) = Connector $ pure Connection
-  { runConnection = \server -> do
-      responseVar <- atomically do
-        responseVar <- newEmptyTMVar
-        sendServer $ SomeServerWithResponseChannel server $ putTMVar responseVar
-        pure responseVar
-      atomically (takeTMVar responseVar) >>= \case
-        Left ex -> throwIO ex
-        Right a -> pure a
-  }
-
-stmClientConnector
-  :: MonadUnliftIO m
-  => TQueue (ServerRequest server m)
-  -> (forall a b. server m a -> client m b -> m (a, b))
-  -> Connector client m
-stmClientConnector queue serveClient = Connector $ pure Connection
-  { runConnection = \client -> do
-      serverVar <- atomically do
-        serverVar <- newEmptyTMVar
-        writeTQueue queue $ ServerRequest $ putTMVar serverVar
-        pure serverVar
-      SomeServerWithResponseChannel server sendResult <- atomically $ takeTMVar serverVar
-      result <- try $ serveClient server client
-      case result of
-        Left ex -> do
-          atomically $ sendResult $ Left ex
-          throwIO ex
-        Right (a, b) -> do
-          atomically $ sendResult $ Right a
-          pure b
-  }
-
-data ClientServerPair server client m = ClientServerPair
-  { clientServerSource :: ConnectionSource server m
-  , clientServerConnector :: Connector client m
-  }
-
-clientServerPair
-  :: forall server client m
-   . MonadUnliftIO m
-  => (forall a b. server m a -> client m b -> m (a, b))
-  -> STM (ClientServerPair server client m)
-clientServerPair serveClient = do
-  queue <- newTQueue
-  pure ClientServerPair
-    { clientServerSource = stmConnectionSource queue
-    , clientServerConnector = stmClientConnector queue serveClient
-    }
-
-data ChannelServerPair ps st server m = ChannelServerPair
-  { channelServerSource :: ConnectionSource server m
-  , channelServerChannel :: m (Channel ps 'AsClient st m)
-  }
-
-channelServerPair
-  :: forall ps st server m
-   . (MonadUnliftIO m, TestAgencyEquality ps)
-  => ToPeer server ps 'AsServer st m
-  -> STM (ChannelServerPair ps st server m)
-channelServerPair toPeer = do
-  queue <- newTQueue
-  pure ChannelServerPair
-    { channelServerSource = ConnectionSource do
-        channel <- readTQueue queue
-        pure $ Connector $ pure $ Connection $ runPeerOverChannel channel . toPeer
-    , channelServerChannel = atomically do
-        (clientChannel, serverChannel) <- channelPair
-        writeTQueue queue serverChannel
-        pure clientChannel
-    }
-
-channelPair
-  :: forall ps st m
-   . (MonadIO m, TestAgencyEquality ps)
-  => STM (Channel ps 'AsClient st m, Channel ps 'AsServer st m)
-channelPair = do
-  c2s <- newTQueue
-  s2c <- newTQueue
-  pure (go c2s s2c, go s2c c2s)
-  where
-    go :: TQueue (AnyMessageAndAgency ps) -> TQueue (AnyMessageAndAgency ps) -> Channel ps pr st' m
-    go sendQueue recvQueue = Channel
-      { yield = \tok msg -> OutboundChannel
-          { cast = atomically do
-              writeTQueue sendQueue $ AnyMessageAndAgency tok msg
-              pure $ go sendQueue recvQueue
-          , call = \tokNext -> do
-              atomically $ writeTQueue sendQueue $ AnyMessageAndAgency tok msg
-              AnyMessageAndAgency tokNext' responseMessage <- atomically $ readTQueue recvQueue
-              case testAgencyEquality tokNext tokNext' of
-                Nothing -> error "Unexpected response agency"
-                Just AgencyRefl -> pure ResponseChannel
-                  { responseMessage
-                  , responseChannel = go sendQueue recvQueue
-                  }
-          , close = \_ -> atomically $ writeTQueue sendQueue $ AnyMessageAndAgency tok msg
-          }
-      , await = \tok -> do
-          AnyMessageAndAgency tok' message <- atomically $ readTQueue recvQueue
-          case testAgencyEquality tok tok' of
-            Nothing -> error "Unexpected peer agency"
-            Just AgencyRefl -> pure InboundChannel
-              { message
-              , receive = pure $ go sendQueue recvQueue
-              , respond = \tokNext Handler{..} -> withSendResponse \responseMessage -> do
-                  atomically $ writeTQueue sendQueue $ AnyMessageAndAgency tokNext responseMessage
-                  pure $ go sendQueue recvQueue
-              , closed = \_ -> pure ()
-              }
-      }

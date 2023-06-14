@@ -276,14 +276,15 @@ pullContract batchSize stageContract flush complete =
 
     popState :: Nat n -> PeerState node -> Contract -> m (ServerStPop n node m (Maybe Contract))
     popState n state contract = case state of
-      StateRoot -> case contract of
-        Close -> do
-          complete
-          pure $ SendMsgComplete closeHash $ pure $ Just contract
-        _ -> do
-          hash <- stageContract contract
-          flush
-          pure $ SendMsgComplete hash $ pure $ Just contract
+      StateRoot -> do
+        hash <- case contract of
+          Close -> pure closeHash
+          _ -> do
+            hash <- stageContract contract
+            flush
+            pure hash
+        complete
+        pure $ SendMsgComplete hash $ pure $ Just contract
       StatePay payor payee token value st' ->
         popState n st' (Pay payor payee token value contract)
       StateIfL cond st' ->

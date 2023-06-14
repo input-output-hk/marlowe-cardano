@@ -17,7 +17,7 @@ import Data.Version (showVersion)
 import Language.Marlowe.Runtime.ChainSync.Api (BlockNo(..), ChainSyncQuery(..), RuntimeChainSeekClient)
 import Language.Marlowe.Runtime.Contract.Api (ContractRequest)
 import qualified Language.Marlowe.Runtime.Core.ScriptRegistry as ScriptRegistry
-import Language.Marlowe.Runtime.Transaction (TransactionDependencies(..), transaction)
+import Language.Marlowe.Runtime.Transaction (MarloweTx(..), TransactionDependencies(..), transaction)
 import qualified Language.Marlowe.Runtime.Transaction.Query as Query
 import qualified Language.Marlowe.Runtime.Transaction.Submit as Submit
 import Logging (RootSelector(..), renderRootSelectorOTel)
@@ -62,10 +62,6 @@ main = do
 
 run :: Options -> AppM Span RootSelector ()
 run Options{..} = flip runComponent_ () proc _ -> do
-  connectionSource <- tcpServerTraced "tx-job" (injectSelector Server) -< TcpServerDependencies
-    host
-    port
-    jobServerPeer
   let
     chainSyncConnector :: Connector RuntimeChainSeekClient (AppM Span RootSelector)
     chainSyncConnector = tcpClientTraced (injectSelector ChainSeekClient) chainSeekHost chainSeekPort chainSeekClientPeer
@@ -76,9 +72,8 @@ run Options{..} = flip runComponent_ () proc _ -> do
     contractQueryConnector :: Connector (QueryClient ContractRequest) (AppM Span RootSelector)
     contractQueryConnector = tcpClientTraced (injectSelector ContractQueryClient) contractHost contractQueryPort queryClientPeer
 
-  probes <- transaction -< TransactionDependencies
-    { connectionSource
-    , mkSubmitJob = Submit.mkSubmitJob Submit.SubmitJobDependencies
+  MarloweTx{..} <- transaction -< TransactionDependencies
+    { mkSubmitJob = Submit.mkSubmitJob Submit.SubmitJobDependencies
         { chainSyncJobConnector = tcpClientTraced (injectSelector ChainSyncJobClient) chainSeekHost chainSeekCommandPort jobClientPeer
         , pollingInterval = 1.5
         , confirmationTimeout = 3600 -- 1 hour
@@ -89,6 +84,11 @@ run Options{..} = flip runComponent_ () proc _ -> do
         Query.loadMarloweContext ScriptRegistry.getScripts networkId chainSyncConnector chainSyncQueryConnector v contractId
     , loadWalletContext = Query.loadWalletContext $ runConnector chainSyncQueryConnector . request . GetUTxOs
     , getCurrentScripts = ScriptRegistry.getCurrentScripts
+    , ..
+    }
+
+  tcpServerTraced "tx-job" (injectSelector Server) -< TcpServerDependencies
+    { toPeer = jobServerPeer
     , ..
     }
 

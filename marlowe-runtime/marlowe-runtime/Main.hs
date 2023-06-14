@@ -48,8 +48,8 @@ import Data.Word (Word64)
 import qualified Database.PostgreSQL.LibPQ as PQ
 import Hasql.Connection (withLibPQConnection)
 import qualified Hasql.Pool as Pool
-import Language.Marlowe.Protocol.Server (marloweRuntimeServerPeer)
-import Language.Marlowe.Runtime (MarloweRuntimeDependencies(..), marloweRuntime)
+import Language.Marlowe.Protocol.Server (marloweRuntimeServerDirectPeer)
+import Language.Marlowe.Runtime (MarloweRuntime(..), MarloweRuntimeDependencies(..), marloweRuntime)
 import Language.Marlowe.Runtime.ChainIndexer.Database (CommitGenesisBlock(..), DatabaseQueries(..), runGetGenesisBlock)
 import qualified Language.Marlowe.Runtime.ChainIndexer.Database.PostgreSQL as ChainIndexerPostgres
 import Language.Marlowe.Runtime.ChainIndexer.Genesis (computeGenesisBlock)
@@ -132,23 +132,10 @@ run Options{..} = bracket (Pool.acquire 100 (Just 5000000) (fromString databaseU
         $ QueryInShelleyBasedEra ShelleyBasedEraBabbage QueryGenesisParameters
 
       flip runComponent_ () proc _ -> do
-        runtimeConnectionSource <- tcpServer "marlowe-proxy" -< TcpServerDependencies
-          { toPeer = marloweRuntimeServerPeer
-          , ..
-          }
-
-        runtimeConnectionSourceTraced <- tcpServerTraced "marlowe-proxy-traced" (injectSelector ProxyServer) -< TcpServerDependencies
-          { port = portTraced
-          , toPeer = marloweRuntimeServerPeer
-          , ..
-          }
-
-        probes <- marloweRuntime -< MarloweRuntimeDependencies
+        MarloweRuntime{..} <- marloweRuntime -< MarloweRuntimeDependencies
           { marloweSyncDatabaseQueries = Sync.logDatabaseQueries $ Sync.hoistDatabaseQueries
               (either throwIO pure <=< liftIO . Pool.use pool)
               SyncPostgres.databaseQueries
-          , runtimeConnectionSource
-          , runtimeConnectionSourceTraced
           , connectToLocalNode = \client -> do
               connectRef <- emitImmediateEventFields (ConnectToNode @Span) [localNodeConnectInfo]
               liftIO $ Cardano.connectToLocalNode localNodeConnectInfo $ client connectRef
@@ -164,10 +151,22 @@ run Options{..} = bracket (Pool.acquire 100 (Just 5000000) (fromString databaseU
           , payoutScriptHashes = NESet.map ScriptRegistry.payoutScript scripts
           , persistRateLimit = 1
           , pollingInterval = 1
+          , confirmationTimeout = 3600
           , getCurrentScripts = ScriptRegistry.getCurrentScripts
           , getScripts = ScriptRegistry.getScripts
           , submitConfirmationBlocks
           , networkId
+          }
+
+        tcpServer "marlowe-runtime" -< TcpServerDependencies
+          { toPeer = marloweRuntimeServerDirectPeer
+          , ..
+          }
+
+        tcpServerTraced "marlowe-runtime-traced" (injectSelector ProxyServer) -< TcpServerDependencies
+          { port = portTraced
+          , toPeer = marloweRuntimeServerDirectPeer
+          , ..
           }
 
         probeServer -< ProbeServerDependencies { port = fromIntegral httpPort, .. }

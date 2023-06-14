@@ -1,4 +1,5 @@
 {-# LANGUAGE ApplicativeDo #-}
+{-# LANGUAGE Arrows #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
@@ -7,13 +8,13 @@ module Language.Marlowe.Runtime.Integration.Contract where
 
 import Cardano.Api.Byron (ScriptData(ScriptDataBytes), hashScriptData)
 import Colog (HasLog(..), LogAction, Message)
+import Control.Arrow (returnA)
 import Control.Concurrent.Component
 import Control.Monad (foldM)
 import Control.Monad.Event.Class (Inject(..), NoopEventT(runNoopEventT))
 import Control.Monad.Reader (ReaderT, ask, runReaderT)
 import Control.Monad.Trans.Resource (ResourceT, runResourceT)
 import Control.Monad.Writer (execWriter, runWriter)
-import Data.Functor (void)
 import qualified Data.Map as Map
 import qualified Data.Set as Set
 import Language.Marlowe.Core.V1.Merkle (deepMerkleize)
@@ -27,7 +28,6 @@ import qualified Language.Marlowe.Runtime.Contract as Contract
 import Language.Marlowe.Runtime.Contract.Api (ContractWithAdjacency(adjacency), merkleizeInputs)
 import qualified Language.Marlowe.Runtime.Contract.Api as Api
 import Language.Marlowe.Runtime.Contract.Store.File (ContractStoreOptions(..), createContractStore)
-import Network.Channel.Typed (ClientServerPair(..), clientServerPair)
 import Network.Protocol.Connection
 import Network.Protocol.Driver.Trace (HasSpanContext(..))
 import Network.Protocol.Peer.Trace (defaultSpanContext)
@@ -40,7 +40,7 @@ import Test.Hspec
 import Test.Hspec.QuickCheck (prop)
 import Test.Integration.Marlowe (createWorkspace, resolveWorkspacePath)
 import Test.QuickCheck (Gen, counterexample, forAll)
-import UnliftIO (atomically, liftIO, race_)
+import UnliftIO (Concurrently(..), atomically, liftIO, race_)
 
 spec :: Spec
 spec = parallel $ describe "MarloweContract" do
@@ -180,8 +180,6 @@ runQuery client = do
 
 runContractTest :: TestM () -> IO ()
 runContractTest test = runResourceT do
-  loadPair <- atomically $ clientServerPair serveMarloweLoadClient
-  queryPair <- atomically $ clientServerPair serveQueryClient
   workspace <- createWorkspace "marlowe-contract-test"
   contractStore <- createContractStore ContractStoreOptions
     { contractStoreDirectory = resolveWorkspacePath workspace "contract-store"
@@ -189,17 +187,18 @@ runContractTest test = runResourceT do
     , lockingMicrosecondsBetweenRetries = 100_000
     }
   let
-    testHandle = TestHandle
-      { loadConnector = clientServerConnector loadPair
-      , queryConnector = clientServerConnector queryPair
-      , logAction = mempty
-      }
-  runNoopEventT $ flip runReaderT testHandle $ race_ test $ runComponent_ (void Contract.contract) Contract.ContractDependencies
+    testComponent = proc contractDeps -> do
+      Contract.MarloweContract{..} <- Contract.contract -< contractDeps
+      returnA -< TestHandle
+        { loadConnector = directConnector serveMarloweLoadClient loadServerSource
+        , queryConnector = directConnector serveQueryClient queryServerSource
+        , logAction = mempty
+        }
+  (Concurrently runTestComponent, testHandle) <- atomically $ unComponent testComponent Contract.ContractDependencies
     { batchSize = unsafeIntToNat 10
     , contractStore
-    , loadSource = clientServerSource loadPair
-    , querySource = clientServerSource queryPair
     }
+  runNoopEventT $ flip runReaderT testHandle $ race_ test runTestComponent
 
 type TestM = ReaderT TestHandle (NoopEventT TestRef AnySelector (ResourceT IO))
 

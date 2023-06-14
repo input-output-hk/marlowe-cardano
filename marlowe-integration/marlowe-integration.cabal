@@ -61,6 +61,7 @@ library
     , cardano-crypto-wrapper
     , cardano-integration
     , cardano-ledger-byron
+    , co-log
     , containers
     , eventuo11y >=0.9 && <0.11
     , eventuo11y-extras
@@ -82,7 +83,6 @@ library
     , resourcet
     , servant-client
     , text
-    , time
     , time-units
     , transformers
     , typed-protocols
