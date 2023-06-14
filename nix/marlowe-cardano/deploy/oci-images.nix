@@ -1,6 +1,6 @@
 { inputs, pkgs }:
 let
-  inherit (inputs) self std;
+  inherit (inputs) self std n2c;
   inherit (pkgs.lib) removePrefix mapAttrsToList mapAttrs;
   inherit (pkgs.lib.strings) concatMapStrings;
   inherit (self) operables;
@@ -55,13 +55,15 @@ let
     };
   };
 
-  forAllImages = f: concatMapStrings (s: s + "\n") (mapAttrsToList (_: f) images);
+  forAllImages = f: concatMapStrings (s: s + "\n") (mapAttrsToList f images);
 in
 images // {
   all = {
     copyToDockerDaemon = std.lib.ops.writeScript {
       name = "copy-to-docker-daemon";
-      text = forAllImages (img: "${img.copyToDockerDaemon}/bin/copy-to-docker-daemon");
+      text = forAllImages (name: img:
+        "${n2c.packages.skopeo-nix2container}/bin/skopeo --insecure-policy copy nix:${img} docker-daemon:${name}:latest"
+      );
     };
   };
 }

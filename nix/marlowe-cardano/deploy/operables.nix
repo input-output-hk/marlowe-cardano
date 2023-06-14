@@ -1,6 +1,6 @@
 { inputs, pkgs }:
 let
-  inherit (inputs) self std bitte-cells;
+  inherit (inputs) self std;
   inherit (pkgs)
     lib
     jq
@@ -12,10 +12,10 @@ let
     netcat
     curl
     ;
-  inherit (bitte-cells._utils.packages) srvaddr;
 
   marlowe-chain-indexer = self.packages.ghc8107-marlowe-chain-sync-exe-marlowe-chain-indexer;
   marlowe-chain-sync = self.packages.ghc8107-marlowe-chain-sync-exe-marlowe-chain-sync;
+  marlowe-contract = self.packages.ghc8107-marlowe-runtime-exe-marlowe-contract;
   marlowe-tx = self.packages.ghc8107-marlowe-runtime-exe-marlowe-tx;
   marlowe-proxy = self.packages.ghc8107-marlowe-runtime-exe-marlowe-proxy;
   marlowe-indexer = self.packages.ghc8107-marlowe-runtime-exe-marlowe-indexer;
@@ -123,7 +123,7 @@ in
 {
   marlowe-chain-indexer = mkOperableWithProbes {
     package = marlowe-chain-indexer;
-    runtimeInputs = [ jq sqitchPg srvaddr postgresql coreutils ];
+    runtimeInputs = [ jq sqitchPg postgresql coreutils ];
     runtimeScript = ''
       #################
       # REQUIRED VARS #
@@ -192,7 +192,7 @@ in
 
   marlowe-chain-sync = mkOperableWithProbes {
     package = marlowe-chain-sync;
-    runtimeInputs = [ srvaddr jq coreutils ];
+    runtimeInputs = [ jq coreutils ];
     runtimeScript = ''
       #################
       # REQUIRED VARS #
@@ -253,7 +253,7 @@ in
 
   marlowe-indexer = mkOperableWithProbes {
     package = marlowe-indexer;
-    runtimeInputs = [ sqitchPg srvaddr postgresql coreutils ];
+    runtimeInputs = [ sqitchPg postgresql coreutils ];
     runtimeScript = ''
       #################
       # REQUIRED VARS #
@@ -311,7 +311,7 @@ in
 
   marlowe-sync = mkOperableWithProbes {
     package = marlowe-sync;
-    runtimeInputs = [ srvaddr coreutils ];
+    runtimeInputs = [ coreutils ];
     runtimeScript = ''
       #################
       # REQUIRED VARS #
@@ -429,7 +429,7 @@ in
 
       export OTEL_SERVICE_NAME="''${OTEL_SERVICE_NAME:-marlowe-contract}"
 
-      ${packages.marlowe-contract}/bin/marlowe-contract \
+      ${marlowe-contract}/bin/marlowe-contract \
         --host "$HOST" \
         --port "$PORT" \
         --query-port "$QUERY_PORT" \
