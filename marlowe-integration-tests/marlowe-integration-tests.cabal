@@ -23,7 +23,8 @@ source-repository head
   location: https://github.com/input-output-hk/marlowe-cardano
   subdir:   marlowe-integration-tests
 
-executable marlowe-integration-tests
+
+common lang
   default-language:   Haskell2010
   default-extensions:
     BlockArguments
@@ -56,6 +57,9 @@ executable marlowe-integration-tests
   if flag(defer-plugin-errors)
     ghc-options: -fplugin-opt PlutusTx.Plugin:defer-errors
 
+
+executable marlowe-integration-tests
+  import:             lang
   hs-source-dirs:     test
   main-is:            Spec.hs
   other-modules:
@@ -87,11 +91,11 @@ executable marlowe-integration-tests
   build-depends:
     , aeson
     , async-components
-    , base >=4.9 && <5
+    , base                                                                                                     >=4.9     && <5
     , base16
     , bytestring
     , cardano-api
-    , co-log >=0.5.0.0 && <0.6.0.0
+    , co-log                                                                                                   >=0.5.0.0 && <0.6.0.0
     , containers
     , eventuo11y-extras
     , hspec
