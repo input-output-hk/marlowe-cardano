@@ -1,8 +1,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
-module Language.Marlowe.Runtime.CLI.Command.Create
-  where
+module Language.Marlowe.Runtime.CLI.Command.Create where
 
 import qualified Cardano.Api as C
 import Control.Error.Util (hoistMaybe, noteT)

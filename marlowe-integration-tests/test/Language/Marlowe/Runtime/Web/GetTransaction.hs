@@ -1,6 +1,5 @@
 {-# OPTIONS_GHC -Wno-unused-imports #-}
-module Language.Marlowe.Runtime.Web.GetTransaction
-  where
+module Language.Marlowe.Runtime.Web.GetTransaction where
 
 import Control.Monad.IO.Class (MonadIO(liftIO))
 import qualified Control.Monad.Reader as Reader

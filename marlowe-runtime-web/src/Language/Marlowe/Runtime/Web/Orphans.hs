@@ -2,8 +2,7 @@
 
 {-# OPTIONS_GHC -Wno-orphans #-}
 
-module Language.Marlowe.Runtime.Web.Orphans
-  where
+module Language.Marlowe.Runtime.Web.Orphans where
 
 import Control.Lens hiding (both, from, to)
 import Data.OpenApi hiding (value)

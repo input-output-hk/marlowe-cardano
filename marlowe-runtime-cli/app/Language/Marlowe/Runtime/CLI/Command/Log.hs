@@ -1,8 +1,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE RankNTypes #-}
 
-module Language.Marlowe.Runtime.CLI.Command.Log
-  where
+module Language.Marlowe.Runtime.CLI.Command.Log where
 
 import Control.Concurrent.STM (atomically)
 import Control.Concurrent.STM.Delay (newDelay, waitDelay)

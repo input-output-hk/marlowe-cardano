@@ -3,8 +3,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE StrictData #-}
 
-module Network.Channel.Typed
-  where
+module Network.Channel.Typed where
 
 import Control.Monad.Event.Class
   (MonadEvent, composeInjectSelector, withInjectEvent, withInjectEventArgs, withInjectEventFields)

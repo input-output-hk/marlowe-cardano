@@ -3,8 +3,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE QuasiQuotes #-}
 
-module Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetHeaders
-  where
+module Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetHeaders where
 
 import Control.Foldl (Fold)
 import qualified Control.Foldl as Fold

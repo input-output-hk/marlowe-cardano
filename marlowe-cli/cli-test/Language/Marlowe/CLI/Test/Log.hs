@@ -19,8 +19,7 @@
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module Language.Marlowe.CLI.Test.Log
-  where
+module Language.Marlowe.CLI.Test.Log where
 
 import Contrib.Data.Aeson.Generic (GetConName, constructorName)
 import Control.Lens (Lens', (%=), (^.))

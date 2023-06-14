@@ -15,8 +15,7 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TemplateHaskell #-}
 
-module Language.Marlowe.CLI.Test.ExecutionMode
-  where
+module Language.Marlowe.CLI.Test.ExecutionMode where
 
 
 import Control.Monad.IO.Class (MonadIO)

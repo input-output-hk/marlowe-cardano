@@ -1,5 +1,4 @@
-module Language.Marlowe.Runtime.Integration.Withdraw
-  where
+module Language.Marlowe.Runtime.Integration.Withdraw where
 
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Marlowe.Class (withdraw)

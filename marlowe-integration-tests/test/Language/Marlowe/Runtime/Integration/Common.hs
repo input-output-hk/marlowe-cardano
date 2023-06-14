@@ -3,8 +3,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecursiveDo #-}
 
-module Language.Marlowe.Runtime.Integration.Common
-  where
+module Language.Marlowe.Runtime.Integration.Common where
 
 import Cardano.Api
   ( AddressAny(AddressShelley)

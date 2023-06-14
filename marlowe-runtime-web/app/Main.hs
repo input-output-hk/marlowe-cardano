@@ -1,8 +1,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE RankNTypes #-}
 
-module Main
-  where
+module Main where
 
 import Colog (LogAction(LogAction), cmap, fmtMessage, logTextStdout)
 import Colog.Message (Message)

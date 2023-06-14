@@ -2,8 +2,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE QuasiQuotes #-}
 
-module Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetWithdrawals
-  where
+module Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetWithdrawals where
 
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Maybe (MaybeT(..))

@@ -3,8 +3,7 @@
 
 -- | This module defines a server for the /contracts REST API.
 
-module Language.Marlowe.Runtime.Web.Server.REST.Contracts
-  where
+module Language.Marlowe.Runtime.Web.Server.REST.Contracts where
 
 import Cardano.Api (BabbageEra, TxBody, getTxBody, makeSignedTransaction)
 import qualified Cardano.Api as Cardano

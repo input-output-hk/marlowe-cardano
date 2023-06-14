@@ -3,8 +3,7 @@
 {-# LANGUAGE RecursiveDo #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module Control.Concurrent.Component
-  where
+module Control.Concurrent.Component where
 
 import Colog (Message, WithLog, logError)
 import Control.Applicative (liftA2)

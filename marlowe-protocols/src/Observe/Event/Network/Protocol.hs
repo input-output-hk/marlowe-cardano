@@ -1,7 +1,6 @@
 {-# LANGUAGE PolyKinds #-}
 
-module Observe.Event.Network.Protocol
-  where
+module Observe.Event.Network.Protocol where
 
 import Data.Aeson (Value)
 import Network.TypedProtocol (Message, PeerHasAgency)

@@ -1,7 +1,6 @@
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE NumericUnderscores #-}
-module Contrib.Data.Time.Units.Aeson
-  where
+module Contrib.Data.Time.Units.Aeson where
 
 import Data.Aeson (FromJSON(parseJSON), ToJSON(toJSON))
 import Data.Time.Units (TimeUnit)

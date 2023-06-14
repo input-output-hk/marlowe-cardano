@@ -11,8 +11,7 @@
 -- no cardano-api dependencies and have nice JSON representations. This module
 -- describes how they are mapped to the internal API types of the runtime.
 
-module Language.Marlowe.Runtime.Web.Server.DTO
-  where
+module Language.Marlowe.Runtime.Web.Server.DTO where
 
 import Cardano.Api
   ( AsType(AsTx, AsTxBody)

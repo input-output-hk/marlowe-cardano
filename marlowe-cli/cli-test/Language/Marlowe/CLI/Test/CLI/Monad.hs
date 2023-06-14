@@ -15,8 +15,7 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TemplateHaskell #-}
 
-module Language.Marlowe.CLI.Test.CLI.Monad
-  where
+module Language.Marlowe.CLI.Test.CLI.Monad where
 
 import Cardano.Api (ScriptDataSupportedInEra)
 import Control.Monad.Except (ExceptT, MonadError(catchError, throwError), runExceptT)

@@ -1,5 +1,4 @@
-module Contrib.UnliftIO.Control.Concurrent
-  where
+module Contrib.UnliftIO.Control.Concurrent where
 
 import Data.Time.Units (TimeUnit, toMicroseconds)
 import UnliftIO (MonadIO)

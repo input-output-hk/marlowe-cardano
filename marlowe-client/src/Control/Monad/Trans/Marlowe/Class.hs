@@ -1,8 +1,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
 
-module Control.Monad.Trans.Marlowe.Class
-  where
+module Control.Monad.Trans.Marlowe.Class where
 
 import Cardano.Api (BabbageEra, Tx)
 import Control.Concurrent (threadDelay)

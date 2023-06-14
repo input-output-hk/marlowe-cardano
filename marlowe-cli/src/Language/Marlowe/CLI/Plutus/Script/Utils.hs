@@ -1,8 +1,7 @@
 {-# LANGUAGE GADTs #-}
 
 
-module Language.Marlowe.CLI.Plutus.Script.Utils
-  where
+module Language.Marlowe.CLI.Plutus.Script.Utils where
 
 
 import Control.Monad.IO.Class (MonadIO, liftIO)

@@ -2,8 +2,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE RankNTypes #-}
 
-module Network.Protocol.Peer
-  where
+module Network.Protocol.Peer where
 
 import Network.TypedProtocol
 

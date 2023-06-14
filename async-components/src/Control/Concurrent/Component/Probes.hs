@@ -2,8 +2,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TypeOperators #-}
 
-module Control.Concurrent.Component.Probes
-  where
+module Control.Concurrent.Component.Probes where
 
 import Colog (Message, WithLog)
 import Control.Concurrent.Component

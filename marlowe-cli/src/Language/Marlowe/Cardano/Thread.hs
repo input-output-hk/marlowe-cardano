@@ -14,8 +14,7 @@
 --
 -----------------------------------------------------------------------------
 
-module Language.Marlowe.Cardano.Thread
-  where
+module Language.Marlowe.Cardano.Thread where
 
 import qualified Cardano.Api as C
 import Cardano.Api.Byron (TxIn)

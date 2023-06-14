@@ -1,7 +1,6 @@
 {-# LANGUAGE QuasiQuotes #-}
 
-module Language.Marlowe.Runtime.Indexer.Database.PostgreSQL.GetIntersectionPoints
-  where
+module Language.Marlowe.Runtime.Indexer.Database.PostgreSQL.GetIntersectionPoints where
 
 import Data.ByteString (ByteString)
 import Data.Int (Int64)

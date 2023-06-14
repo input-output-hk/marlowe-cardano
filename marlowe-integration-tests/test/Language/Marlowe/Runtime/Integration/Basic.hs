@@ -3,8 +3,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE RankNTypes #-}
 
-module Language.Marlowe.Runtime.Integration.Basic
-  where
+module Language.Marlowe.Runtime.Integration.Basic where
 
 import Cardano.Api (getTxId)
 import Control.Monad.IO.Class (MonadIO(liftIO))

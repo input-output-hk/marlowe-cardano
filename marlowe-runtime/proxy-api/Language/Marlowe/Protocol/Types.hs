@@ -2,8 +2,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE TypeFamilies #-}
 
-module Language.Marlowe.Protocol.Types
-  where
+module Language.Marlowe.Protocol.Types where
 
 import Data.Binary (getWord8, putWord8)
 import Data.Foldable (fold)

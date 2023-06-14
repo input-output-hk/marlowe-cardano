@@ -2,8 +2,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE QuasiQuotes #-}
 
-module Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetTransactions
-  where
+module Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetTransactions where
 
 import Control.Arrow ((&&&))
 import Control.Monad.Trans.Class (lift)

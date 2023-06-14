@@ -4,8 +4,7 @@
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE RankNTypes #-}
 
-module Network.Protocol.Driver
-  where
+module Network.Protocol.Driver where
 
 import qualified Colog as C
 import Colog.Monad (WithLog)

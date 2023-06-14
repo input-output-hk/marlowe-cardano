@@ -5,8 +5,7 @@
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE StrictData #-}
 
-module Language.Marlowe.Runtime.Indexer.Store
-  where
+module Language.Marlowe.Runtime.Indexer.Store where
 
 import Colog (Message, WithLog)
 import Control.Concurrent.Component

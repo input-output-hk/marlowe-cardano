@@ -4,8 +4,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE StrictData #-}
 
-module Language.Marlowe.Runtime.Indexer
-  where
+module Language.Marlowe.Runtime.Indexer where
 
 import Colog (Message, WithLog)
 import Control.Arrow (returnA)

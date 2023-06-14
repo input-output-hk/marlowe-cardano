@@ -16,8 +16,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TupleSections #-}
 
-module Language.Marlowe.CLI.Test.CLI.Interpret
-  where
+module Language.Marlowe.CLI.Test.CLI.Interpret where
 
 import Language.Marlowe.CLI.Transaction (findMarloweScriptsRefs, publishImpl)
 import qualified Language.Marlowe.CLI.Types as T

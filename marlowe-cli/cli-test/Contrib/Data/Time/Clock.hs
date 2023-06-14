@@ -1,5 +1,4 @@
-module Contrib.Data.Time.Clock
-  where
+module Contrib.Data.Time.Clock where
 
 import Data.Time (NominalDiffTime)
 

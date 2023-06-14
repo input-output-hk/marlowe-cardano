@@ -2,8 +2,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE RankNTypes #-}
 
-module Language.Marlowe.Runtime.Transaction.Submit
-  where
+module Language.Marlowe.Runtime.Transaction.Submit where
 
 import Cardano.Api (BabbageEra, ScriptDataSupportedInEra(..), Tx)
 import qualified Cardano.Api as C

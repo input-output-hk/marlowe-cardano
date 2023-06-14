@@ -3,8 +3,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 
-module Language.Marlowe.Runtime.Sync.MarloweHeaderSyncServer
-  where
+module Language.Marlowe.Runtime.Sync.MarloweHeaderSyncServer where
 
 import Colog (Message, WithLog)
 import Control.Concurrent.Component

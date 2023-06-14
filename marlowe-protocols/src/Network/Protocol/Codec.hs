@@ -2,8 +2,7 @@
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE RankNTypes #-}
 
-module Network.Protocol.Codec
-  where
+module Network.Protocol.Codec where
 
 import Control.Exception (Exception)
 import Control.Monad (mfilter)

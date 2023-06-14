@@ -9,8 +9,7 @@
 {-# LANGUAGE TypeOperators #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
-module Language.Marlowe.Runtime.Core.Api
-  where
+module Language.Marlowe.Runtime.Core.Api where
 
 import Control.Monad (join, zipWithM, (<=<))
 import Data.Aeson

@@ -3,8 +3,7 @@
 {-# LANGUAGE RecordWildCards #-}
 
 
-module Language.Marlowe.Oracle.Process
-  where
+module Language.Marlowe.Oracle.Process where
 
 
 import Control.Monad (void)

@@ -1,5 +1,4 @@
-module Contrib.Control.Concurrent
-  where
+module Contrib.Control.Concurrent where
 
 import qualified Control.Concurrent as C
 import Data.Time.Units (TimeUnit(toMicroseconds))

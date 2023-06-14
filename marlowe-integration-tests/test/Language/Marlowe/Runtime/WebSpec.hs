@@ -1,6 +1,5 @@
 {-# OPTIONS_GHC -Wno-unused-imports #-}
-module Language.Marlowe.Runtime.WebSpec
-  where
+module Language.Marlowe.Runtime.WebSpec where
 
 import qualified Language.Marlowe.Runtime.Web.GetContract as GetContract
 import qualified Language.Marlowe.Runtime.Web.GetContracts as GetContracts

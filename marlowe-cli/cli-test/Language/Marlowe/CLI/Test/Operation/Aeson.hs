@@ -13,8 +13,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE ViewPatterns #-}
 
-module Language.Marlowe.CLI.Test.Operation.Aeson
-  where
+module Language.Marlowe.CLI.Test.Operation.Aeson where
 
 import qualified Data.Aeson as A
 import qualified Data.Aeson.Key as A.Key

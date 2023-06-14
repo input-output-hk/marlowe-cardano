@@ -1,8 +1,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE StrictData #-}
 
-module Language.Marlowe.Runtime.ChainIndexer.Database
-  where
+module Language.Marlowe.Runtime.ChainIndexer.Database where
 
 import Cardano.Api (BlockHeader, BlockInMode, CardanoMode, ChainPoint(..), TxInMode)
 import Language.Marlowe.Runtime.ChainIndexer.Genesis (GenesisBlock(..))

@@ -1,7 +1,6 @@
 {-# LANGUAGE LambdaCase #-}
 
-module Contrib.Monad.Loops
-  where
+module Contrib.Monad.Loops where
 
 
 import Control.Monad.Loops (whileM)
