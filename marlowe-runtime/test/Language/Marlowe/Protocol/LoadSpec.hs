@@ -5,8 +5,7 @@
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE RankNTypes #-}
 
-module Language.Marlowe.Protocol.LoadSpec
-  where
+module Language.Marlowe.Protocol.LoadSpec where
 
 import Cardano.Api (hashScriptData)
 import Control.Monad (join)

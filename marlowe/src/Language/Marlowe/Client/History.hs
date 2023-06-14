@@ -6,8 +6,7 @@
 {-# LANGUAGE TypeFamilies #-}
 
 
-module Language.Marlowe.Client.History
-  where
+module Language.Marlowe.Client.History where
 
 
 import GHC.Generics (Generic)

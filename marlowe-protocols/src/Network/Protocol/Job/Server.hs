@@ -7,8 +7,7 @@
 -- interpreting a server as a typed-protocols peer that can be executed with a
 -- driver and a codec.
 
-module Network.Protocol.Job.Server
-  where
+module Network.Protocol.Job.Server where
 
 import Network.Protocol.Job.Types
 import Network.Protocol.Peer.Trace

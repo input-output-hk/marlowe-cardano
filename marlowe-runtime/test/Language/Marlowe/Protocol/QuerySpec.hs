@@ -3,8 +3,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 
-module Language.Marlowe.Protocol.QuerySpec
-  where
+module Language.Marlowe.Protocol.QuerySpec where
 
 import Data.Foldable (fold)
 import Language.Marlowe.Protocol.Query.Types

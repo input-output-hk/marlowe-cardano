@@ -2,8 +2,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE RankNTypes #-}
 
-module Language.Marlowe.Protocol.Client
-  where
+module Language.Marlowe.Protocol.Client where
 
 import Language.Marlowe.Protocol.HeaderSync.Client
   (MarloweHeaderSyncClient, hoistMarloweHeaderSyncClient, marloweHeaderSyncClientPeer)

@@ -1,5 +1,4 @@
-module Language.Marlowe.ParserUtil
-  where
+module Language.Marlowe.ParserUtil where
 
 import qualified Data.Aeson as JSON
 import Data.Aeson.Types hiding (Error, Value)

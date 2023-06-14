@@ -2,8 +2,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE QuasiQuotes #-}
 
-module Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetNextHeaders
-  where
+module Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetNextHeaders where
 
 import Data.Binary (get)
 import Data.Binary.Get (runGet)

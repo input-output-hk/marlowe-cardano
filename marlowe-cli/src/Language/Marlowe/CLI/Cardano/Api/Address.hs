@@ -1,5 +1,4 @@
-module Language.Marlowe.CLI.Cardano.Api.Address
-  where
+module Language.Marlowe.CLI.Cardano.Api.Address where
 
 import qualified Cardano.Api as C
 import qualified Cardano.Api.Shelley as CS

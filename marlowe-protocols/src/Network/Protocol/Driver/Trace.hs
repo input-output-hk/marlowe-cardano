@@ -7,8 +7,7 @@
 {-# OPTIONS_GHC -Wno-orphans #-}
 {-# LANGUAGE FlexibleContexts #-}
 
-module Network.Protocol.Driver.Trace
-  where
+module Network.Protocol.Driver.Trace where
 
 import Colog (WithLog)
 import qualified Colog as C

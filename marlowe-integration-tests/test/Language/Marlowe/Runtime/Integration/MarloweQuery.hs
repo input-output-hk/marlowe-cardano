@@ -3,8 +3,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TypeFamilies #-}
 
-module Language.Marlowe.Runtime.Integration.MarloweQuery
-  where
+module Language.Marlowe.Runtime.Integration.MarloweQuery where
 
 import Cardano.Api (BabbageEra, getTxId)
 import Control.Monad (guard)

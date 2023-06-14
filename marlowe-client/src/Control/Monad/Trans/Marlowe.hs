@@ -5,8 +5,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module Control.Monad.Trans.Marlowe
-  where
+module Control.Monad.Trans.Marlowe where
 
 import Control.Applicative (Alternative)
 import Control.Monad (MonadPlus)

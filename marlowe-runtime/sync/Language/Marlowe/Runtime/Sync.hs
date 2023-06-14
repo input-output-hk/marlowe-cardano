@@ -1,8 +1,7 @@
 {-# LANGUAGE Arrows #-}
 {-# LANGUAGE FlexibleContexts #-}
 
-module Language.Marlowe.Runtime.Sync
-  where
+module Language.Marlowe.Runtime.Sync where
 
 import Colog (Message, WithLog)
 import Control.Arrow (returnA)

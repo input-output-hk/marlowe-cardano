@@ -1,5 +1,4 @@
-module Language.Marlowe.Runtime.CLI.Command.Tx
-  where
+module Language.Marlowe.Runtime.CLI.Command.Tx where
 
 import qualified Data.Set as Set
 import Language.Marlowe.Runtime.CLI.Option (parseAddress, txOutRefParser)

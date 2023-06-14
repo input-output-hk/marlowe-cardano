@@ -3,8 +3,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 
-module Language.Marlowe.Runtime.Contract.QueryServer
-  where
+module Language.Marlowe.Runtime.Contract.QueryServer where
 
 import Colog (Message, WithLog)
 import Control.Concurrent.Component

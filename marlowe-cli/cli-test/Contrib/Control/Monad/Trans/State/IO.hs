@@ -3,8 +3,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-module Contrib.Control.Monad.Trans.State.IO
-  where
+module Contrib.Control.Monad.Trans.State.IO where
 
 import Control.Monad (void)
 import Control.Monad.IO.Class (MonadIO, liftIO)

@@ -8,8 +8,7 @@
 -- interpreting a server as a typed-protocols peer that can be executed with a
 -- driver and a codec.
 
-module Network.Protocol.Query.Server
-  where
+module Network.Protocol.Query.Server where
 
 import Control.Arrow ((***))
 import Network.Protocol.Peer.Trace

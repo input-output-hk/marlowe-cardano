@@ -1,8 +1,7 @@
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE RecordWildCards #-}
 
-module Main
-  where
+module Main where
 
 import Control.Concurrent (threadDelay)
 import Data.Functor (void)

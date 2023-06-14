@@ -1,5 +1,4 @@
-module Language.Marlowe.Runtime.Web.PostTransaction
-  where
+module Language.Marlowe.Runtime.Web.PostTransaction where
 
 import Control.Monad.IO.Class (MonadIO(liftIO))
 import qualified Data.Map.Strict as Map

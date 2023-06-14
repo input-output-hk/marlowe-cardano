@@ -1,5 +1,4 @@
-module Contrib.Control.Monad.Except
-  where
+module Contrib.Control.Monad.Except where
 
 import Control.Monad.Except (MonadError(throwError))
 

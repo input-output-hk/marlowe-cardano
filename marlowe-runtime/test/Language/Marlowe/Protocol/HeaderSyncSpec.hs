@@ -2,8 +2,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
 
-module Language.Marlowe.Protocol.HeaderSyncSpec
-  where
+module Language.Marlowe.Protocol.HeaderSyncSpec where
 
 import Language.Marlowe.Protocol.HeaderSync.Types
 import Language.Marlowe.Runtime.ChainSync.Gen (resized)

@@ -6,8 +6,7 @@
 
 -- | Utilities for converting to and from Cardano API types.
 
-module Language.Marlowe.Runtime.Cardano.Api
-  where
+module Language.Marlowe.Runtime.Cardano.Api where
 
 import qualified Cardano.Api as C
 import qualified Cardano.Api.Shelley as C

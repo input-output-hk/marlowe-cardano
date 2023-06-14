@@ -12,8 +12,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TupleSections #-}
 
-module Language.Marlowe.CLI.Test.Runner
-  where
+module Language.Marlowe.CLI.Test.Runner where
 
 import Cardano.Api
   (AddressInEra, IsShelleyBasedEra, LocalNodeConnectInfo(..), Lovelace(Lovelace), ScriptDataSupportedInEra)

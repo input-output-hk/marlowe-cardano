@@ -1,7 +1,6 @@
 {-# LANGUAGE CPP #-}
 
-module Main
-  where
+module Main where
 
 #ifdef mingw32_HOST_OS
 import Control.Concurrent.STM (retry)

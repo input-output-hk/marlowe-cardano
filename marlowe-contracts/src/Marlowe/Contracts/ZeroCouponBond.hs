@@ -1,6 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Marlowe.Contracts.ZeroCouponBond
-  where
+module Marlowe.Contracts.ZeroCouponBond where
 
 import Language.Marlowe.Extended.V1
 import Marlowe.Contracts.Common

@@ -1,6 +1,5 @@
 {-# LANGUAGE ViewPatterns #-}
-module Language.Marlowe.CLI.Cardano.Api.Value
-  where
+module Language.Marlowe.CLI.Cardano.Api.Value where
 
 import qualified Cardano.Api as C
 import Language.Marlowe.CLI.Orphans ()

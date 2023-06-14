@@ -3,8 +3,7 @@
 
 {-# OPTIONS_GHC -Wno-orphans #-}
 
-module Main
-  where
+module Main where
 
 import Control.Monad (replicateM)
 import Data.Aeson (Value(Null))

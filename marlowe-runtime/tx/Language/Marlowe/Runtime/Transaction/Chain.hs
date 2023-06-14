@@ -1,8 +1,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RankNTypes #-}
 
-module Language.Marlowe.Runtime.Transaction.Chain
-  where
+module Language.Marlowe.Runtime.Transaction.Chain where
 
 import Colog (Message, WithLog)
 import Control.Concurrent.Component

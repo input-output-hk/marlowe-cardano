@@ -2,8 +2,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE QuasiQuotes #-}
 
-module Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetNextSteps
-  where
+module Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetNextSteps where
 
 import Control.Applicative ((<|>))
 import qualified Control.Foldl as Fold

@@ -2,8 +2,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE TypeFamilies #-}
 
-module Language.Marlowe.Protocol.HeaderSync.Types
-  where
+module Language.Marlowe.Protocol.HeaderSync.Types where
 
 import Control.Monad (join)
 import Data.Aeson (Value(..), object, (.=))

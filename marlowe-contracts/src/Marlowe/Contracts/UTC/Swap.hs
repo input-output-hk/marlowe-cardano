@@ -1,5 +1,4 @@
-module Marlowe.Contracts.UTC.Swap
-  where
+module Marlowe.Contracts.UTC.Swap where
 
 import Data.Time.Clock (UTCTime)
 import Language.Marlowe.Extended.V1

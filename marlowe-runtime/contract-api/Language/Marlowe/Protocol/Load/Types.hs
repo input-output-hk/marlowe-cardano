@@ -9,8 +9,7 @@
 -- | The Marlowe load protocol is a protocol for incrementally loading and
 -- merkleizing large contracts in a space-efficient way.
 
-module Language.Marlowe.Protocol.Load.Types
-  where
+module Language.Marlowe.Protocol.Load.Types where
 
 import Control.Monad (join)
 import Data.Aeson (encode, toJSON)

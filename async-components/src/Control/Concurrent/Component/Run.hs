@@ -4,8 +4,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeFamilies #-}
 
-module Control.Concurrent.Component.Run
-  where
+module Control.Concurrent.Component.Run where
 
 import Colog
 import Control.Monad.Catch (MonadCatch, MonadMask, MonadThrow)

@@ -7,8 +7,7 @@
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE RankNTypes #-}
 
-module Language.Marlowe.Runtime.Proxy
-  where
+module Language.Marlowe.Runtime.Proxy where
 
 import Colog (WithLog)
 import qualified Colog as C

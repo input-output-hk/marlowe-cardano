@@ -2,8 +2,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 
-module Language.Marlowe.Runtime.Core.Gen
-  where
+module Language.Marlowe.Runtime.Core.Gen where
 
 import Data.Foldable (Foldable(fold))
 import qualified Language.Marlowe.Core.V1.Semantics as V1

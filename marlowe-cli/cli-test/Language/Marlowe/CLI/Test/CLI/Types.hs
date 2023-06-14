@@ -16,8 +16,7 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE ViewPatterns #-}
 
-module Language.Marlowe.CLI.Test.CLI.Types
-  where
+module Language.Marlowe.CLI.Test.CLI.Types where
 
 import Cardano.Api (CardanoMode, LocalNodeConnectInfo, Lovelace, ScriptDataSupportedInEra)
 import qualified Cardano.Api as C

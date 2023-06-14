@@ -3,8 +3,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 
-module Logging
-  where
+module Logging where
 
 import Control.Monad.Event.Class
 import Data.Aeson.Text (encodeToLazyText)

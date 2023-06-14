@@ -1,5 +1,4 @@
-module Language.Marlowe.Runtime.IntegrationSpec
-  where
+module Language.Marlowe.Runtime.IntegrationSpec where
 
 import qualified Language.Marlowe.Runtime.Integration.ApplyInputs as Apply
 import qualified Language.Marlowe.Runtime.Integration.Basic as Basic
