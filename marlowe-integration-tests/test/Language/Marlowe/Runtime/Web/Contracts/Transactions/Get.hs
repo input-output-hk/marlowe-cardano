@@ -1,4 +1,4 @@
-module Language.Marlowe.Runtime.Web.Contracts.Transactions.GetTransactions where
+module Language.Marlowe.Runtime.Web.Contracts.Transactions.Get where
 
 import Control.Monad.IO.Class (MonadIO(liftIO))
 import qualified Control.Monad.Reader as Reader

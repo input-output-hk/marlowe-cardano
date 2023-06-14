@@ -1,4 +1,4 @@
-module Language.Marlowe.Runtime.Web.Contracts.GetContracts where
+module Language.Marlowe.Runtime.Web.Contracts.Get where
 
 import Control.Exception (throw)
 import Control.Monad.IO.Class (MonadIO(liftIO))

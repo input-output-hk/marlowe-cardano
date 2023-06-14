@@ -1,10 +1,12 @@
-module Language.Marlowe.Runtime.Web.Withdrawal.PostWithdrawal where
+module Language.Marlowe.Runtime.Web.Withdrawal.Put where
 
+import Control.Monad.IO.Class (MonadIO(liftIO))
 import qualified Data.Set as Set
 import Language.Marlowe.Runtime.Integration.Common
 import Language.Marlowe.Runtime.Transaction.Api (WalletAddresses(..))
 import qualified Language.Marlowe.Runtime.Web as Web
-import Language.Marlowe.Runtime.Web.Client (postWithdrawal)
+import Language.Marlowe.Runtime.Web.Client (postWithdrawal, putWithdrawal)
+import Language.Marlowe.Runtime.Web.Common (signShelleyTransaction')
 import Language.Marlowe.Runtime.Web.Server.DTO (ToDTO(toDTO))
 import Language.Marlowe.Runtime.Web.StandardContract
   ( StandardContractChoiceMade(..)
@@ -18,9 +20,9 @@ import Test.Hspec (Spec, describe, it)
 import Test.Integration.Marlowe.Local (withLocalMarloweRuntime)
 
 spec :: Spec
-spec = describe "POST /contracts/{contractId}/withdrawal" do
-  it "returns a withdraw TX Body" $ withLocalMarloweRuntime $ runIntegrationTest do
-    partyAWallet <- getGenesisWallet 0
+spec = describe "PUT /contracts/{contractId}/withdrawals/{withdrawalId}" do
+  it "successfully submits a withdrawal" $ withLocalMarloweRuntime $ runIntegrationTest do
+    partyAWallet@Wallet{signingKeys} <- getGenesisWallet 0
     partyBWallet <- getGenesisWallet 1
 
     result <- runWebClient do
@@ -28,15 +30,16 @@ spec = describe "POST /contracts/{contractId}/withdrawal" do
       let webChangeAddress = toDTO changeAddress
       let webExtraAddresses = Set.map toDTO extraAddresses
       let webCollataralUtxos = Set.map toDTO collateralUtxos
-
       StandardContractInit{contractCreated, makeInitialDeposit} <- createStandardContract partyAWallet partyBWallet
       StandardContractFundsDeposited{chooseGimmeTheMoney} <- makeInitialDeposit
       StandardContractChoiceMade{sendNotify} <- chooseGimmeTheMoney
       StandardContractNotified{makeReturnDeposit} <- sendNotify
       StandardContractClosed{} <- makeReturnDeposit
+
       contractId <- case contractCreated of
         Web.CreateTxEnvelope{contractId} -> pure contractId
-      postWithdrawal
+
+      Web.WithdrawTxEnvelope{withdrawalId, txEnvelope} <- postWithdrawal
         webChangeAddress
         (Just webExtraAddresses)
         (Just webCollataralUtxos)
@@ -44,7 +47,9 @@ spec = describe "POST /contracts/{contractId}/withdrawal" do
           { role = "Party A"
           , contractId
           }
+      signedWithdrawalTx <- liftIO $ signShelleyTransaction' txEnvelope signingKeys
+      putWithdrawal withdrawalId signedWithdrawalTx
 
     case result of
       Left _ ->  fail $ "Expected 200 response code - got " <> show result
-      Right Web.WithdrawTxEnvelope{} ->  pure ()
+      Right () ->  pure ()

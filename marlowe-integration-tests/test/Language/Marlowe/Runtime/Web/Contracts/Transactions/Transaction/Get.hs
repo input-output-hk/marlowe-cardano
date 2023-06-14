@@ -1,14 +1,13 @@
-module Language.Marlowe.Runtime.Web.Contracts.Transactions.Transaction.GetTransaction where
+module Language.Marlowe.Runtime.Web.Contracts.Transactions.Transaction.Get where
 
 import Control.Monad.IO.Class (MonadIO(liftIO))
 import qualified Control.Monad.Reader as Reader
 
 import Control.Exception (throw)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
-import Language.Marlowe.Runtime.Integration.Common (Wallet, getGenesisWallet, runIntegrationTest, runWebClient)
+import Language.Marlowe.Runtime.Integration.Common (getGenesisWallet, runIntegrationTest, runWebClient)
 import qualified Language.Marlowe.Runtime.Web as Web
 import Language.Marlowe.Runtime.Web.Client (getTransaction)
-import Language.Marlowe.Runtime.Web.Common (createCloseContract, waitUntilConfirmed)
 import Language.Marlowe.Runtime.Web.Server.DTO (ToDTO(toDTO))
 import Language.Marlowe.Runtime.Web.StandardContract (createFullyExecutedStandardContract)
 import Network.HTTP.Types (Status(..))

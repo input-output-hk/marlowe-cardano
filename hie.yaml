@@ -117,40 +117,37 @@ cradle:
     - path: "marlowe-integration-tests/test/Language/Marlowe/Runtime/Web/Common.hs"
       component: "marlowe-integration-tests:exe:marlowe-integration-tests"
 
-    - path: "marlowe-integration-tests/test/Language/Marlowe/Runtime/Web/Contracts/GetContracts.hs"
+    - path: "marlowe-integration-tests/test/Language/Marlowe/Runtime/Web/Contracts/Contract/Get.hs"
       component: "marlowe-integration-tests:exe:marlowe-integration-tests"
 
-    - path: "marlowe-integration-tests/test/Language/Marlowe/Runtime/Web/Contracts/Contract/GetContract.hs"
+    - path: "marlowe-integration-tests/test/Language/Marlowe/Runtime/Web/Contracts/Contract/Post.hs"
       component: "marlowe-integration-tests:exe:marlowe-integration-tests"
 
-    - path: "marlowe-integration-tests/test/Language/Marlowe/Runtime/Web/Contracts/Contract/PostContract.hs"
+    - path: "marlowe-integration-tests/test/Language/Marlowe/Runtime/Web/Contracts/Contract/Put.hs"
       component: "marlowe-integration-tests:exe:marlowe-integration-tests"
 
-    - path: "marlowe-integration-tests/test/Language/Marlowe/Runtime/Web/Contracts/Contract/PutContract.hs"
+    - path: "marlowe-integration-tests/test/Language/Marlowe/Runtime/Web/Contracts/Get.hs"
       component: "marlowe-integration-tests:exe:marlowe-integration-tests"
 
-    - path: "marlowe-integration-tests/test/Language/Marlowe/Runtime/Web/Contracts/Contract/Next/Get.hs"
+    - path: "marlowe-integration-tests/test/Language/Marlowe/Runtime/Web/Contracts/Transactions/Get.hs"
       component: "marlowe-integration-tests:exe:marlowe-integration-tests"
 
-    - path: "marlowe-integration-tests/test/Language/Marlowe/Runtime/Web/Contracts/Transactions/GetTransactions.hs"
+    - path: "marlowe-integration-tests/test/Language/Marlowe/Runtime/Web/Contracts/Transactions/Transaction/Get.hs"
       component: "marlowe-integration-tests:exe:marlowe-integration-tests"
 
-    - path: "marlowe-integration-tests/test/Language/Marlowe/Runtime/Web/Contracts/Transactions/Transaction/GetTransaction.hs"
+    - path: "marlowe-integration-tests/test/Language/Marlowe/Runtime/Web/Contracts/Transactions/Transaction/Post.hs"
       component: "marlowe-integration-tests:exe:marlowe-integration-tests"
 
-    - path: "marlowe-integration-tests/test/Language/Marlowe/Runtime/Web/Contracts/Transactions/Transaction/PostTransaction.hs"
-      component: "marlowe-integration-tests:exe:marlowe-integration-tests"
-
-    - path: "marlowe-integration-tests/test/Language/Marlowe/Runtime/Web/Contracts/Transactions/Transaction/PutTransaction.hs"
-      component: "marlowe-integration-tests:exe:marlowe-integration-tests"
-
-    - path: "marlowe-integration-tests/test/Language/Marlowe/Runtime/Web/Withdrawal/PostWithdrawal.hs"
-      component: "marlowe-integration-tests:exe:marlowe-integration-tests"
-
-    - path: "marlowe-integration-tests/test/Language/Marlowe/Runtime/Web/Withdrawal/PutWithdrawal.hs"
+    - path: "marlowe-integration-tests/test/Language/Marlowe/Runtime/Web/Contracts/Transactions/Transaction/Put.hs"
       component: "marlowe-integration-tests:exe:marlowe-integration-tests"
 
     - path: "marlowe-integration-tests/test/Language/Marlowe/Runtime/Web/StandardContract.hs"
+      component: "marlowe-integration-tests:exe:marlowe-integration-tests"
+
+    - path: "marlowe-integration-tests/test/Language/Marlowe/Runtime/Web/Withdrawal/Post.hs"
+      component: "marlowe-integration-tests:exe:marlowe-integration-tests"
+
+    - path: "marlowe-integration-tests/test/Language/Marlowe/Runtime/Web/Withdrawal/Put.hs"
       component: "marlowe-integration-tests:exe:marlowe-integration-tests"
 
     - path: "marlowe-integration-tests/test/Language/Marlowe/Runtime/WebSpec.hs"
