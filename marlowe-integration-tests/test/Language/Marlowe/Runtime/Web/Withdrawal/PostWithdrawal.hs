@@ -1,4 +1,4 @@
-module Language.Marlowe.Runtime.Web.PostWithdrawal where
+module Language.Marlowe.Runtime.Web.Withdrawal.PostWithdrawal where
 
 import qualified Data.Set as Set
 import Language.Marlowe.Runtime.Integration.Common

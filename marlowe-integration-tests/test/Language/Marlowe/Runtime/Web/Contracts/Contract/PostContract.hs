@@ -1,4 +1,4 @@
-module Language.Marlowe.Runtime.Web.PostContract where
+module Language.Marlowe.Runtime.Web.Contracts.Contract.PostContract where
 
 import Control.Monad.IO.Class (MonadIO(liftIO))
 

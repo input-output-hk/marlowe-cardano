@@ -75,17 +75,17 @@ executable marlowe-integration-tests
     Language.Marlowe.Runtime.Integration.Withdraw
     Language.Marlowe.Runtime.IntegrationSpec
     Language.Marlowe.Runtime.Web.Common
-    Language.Marlowe.Runtime.Web.GetContract
-    Language.Marlowe.Runtime.Web.GetContracts
-    Language.Marlowe.Runtime.Web.GetTransaction
-    Language.Marlowe.Runtime.Web.GetTransactions
-    Language.Marlowe.Runtime.Web.PostContract
-    Language.Marlowe.Runtime.Web.PostTransaction
-    Language.Marlowe.Runtime.Web.PostWithdrawal
-    Language.Marlowe.Runtime.Web.PutContract
-    Language.Marlowe.Runtime.Web.PutTransaction
-    Language.Marlowe.Runtime.Web.PutWithdrawal
+    Language.Marlowe.Runtime.Web.Contracts.Contract.GetContract
+    Language.Marlowe.Runtime.Web.Contracts.Contract.PostContract
+    Language.Marlowe.Runtime.Web.Contracts.Contract.PutContract
+    Language.Marlowe.Runtime.Web.Contracts.GetContracts
+    Language.Marlowe.Runtime.Web.Contracts.Transactions.GetTransactions
+    Language.Marlowe.Runtime.Web.Contracts.Transactions.Transaction.GetTransaction
+    Language.Marlowe.Runtime.Web.Contracts.Transactions.Transaction.PostTransaction
+    Language.Marlowe.Runtime.Web.Contracts.Transactions.Transaction.PutTransaction
     Language.Marlowe.Runtime.Web.StandardContract
+    Language.Marlowe.Runtime.Web.Withdrawal.PostWithdrawal
+    Language.Marlowe.Runtime.Web.Withdrawal.PutWithdrawal
     Language.Marlowe.Runtime.WebSpec
 
   build-depends:
