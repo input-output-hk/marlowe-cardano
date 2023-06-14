@@ -1,9 +1,8 @@
-{ inputs }:
+{ inputs, pkgs }:
 let
-  inherit (inputs) self std nixpkgs bitte-cells;
-  inherit (self) packages;
-  inherit (nixpkgs) lib;
-  inherit (nixpkgs.legacyPackages)
+  inherit (inputs) self std bitte-cells;
+  inherit (pkgs)
+    lib
     jq
     sqitchPg
     postgresql
@@ -13,7 +12,15 @@ let
     netcat
     curl
     ;
-  inherit (inputs.bitte-cells._utils.packages) srvaddr;
+  inherit (bitte-cells._utils.packages) srvaddr;
+
+  marlowe-chain-indexer = self.packages.ghc8107-marlowe-chain-sync-exe-marlowe-chain-indexer;
+  marlowe-chain-sync = self.packages.ghc8107-marlowe-chain-sync-exe-marlowe-chain-sync;
+  marlowe-tx = self.packages.ghc8107-marlowe-runtime-exe-marlowe-tx;
+  marlowe-proxy = self.packages.ghc8107-marlowe-runtime-exe-marlowe-proxy;
+  marlowe-indexer = self.packages.ghc8107-marlowe-runtime-exe-marlowe-indexer;
+  marlowe-web-server = self.packages.ghc8107-marlowe-runtime-web-exe-marlowe-web-server;
+  marlowe-sync = self.packages.ghc8107-marlowe-runtime-exe-marlowe-sync;
 
   # Ensure this path only changes when sqitch.plan file is updated, or DDL
   # files are updated.
@@ -115,7 +122,7 @@ let
 in
 {
   marlowe-chain-indexer = mkOperableWithProbes {
-    package = packages.marlowe-chain-indexer;
+    package = marlowe-chain-indexer;
     runtimeInputs = [ jq sqitchPg srvaddr postgresql coreutils ];
     runtimeScript = ''
       #################
@@ -173,7 +180,7 @@ in
 
       export OTEL_SERVICE_NAME="''${OTEL_SERVICE_NAME:-marlowe-chain-indexer}"
 
-      ${packages.marlowe-chain-indexer}/bin/marlowe-chain-indexer \
+      ${marlowe-chain-indexer}/bin/marlowe-chain-indexer \
         --socket-path "$CARDANO_NODE_SOCKET_PATH" \
         --database-uri  "$DATABASE_URI" \
         --shelley-genesis-config-file "$SHELLEY_GENESIS_CONFIG" \
@@ -184,7 +191,7 @@ in
   };
 
   marlowe-chain-sync = mkOperableWithProbes {
-    package = packages.marlowe-chain-sync;
+    package = marlowe-chain-sync;
     runtimeInputs = [ srvaddr jq coreutils ];
     runtimeScript = ''
       #################
@@ -233,7 +240,7 @@ in
       export OTEL_SERVICE_NAME="''${OTEL_SERVICE_NAME:-marlowe-chain-sync}"
 
       DATABASE_URI=${database-uri}
-      ${packages.marlowe-chain-sync}/bin/marlowe-chain-sync \
+      ${marlowe-chain-sync}/bin/marlowe-chain-sync \
         --host "$HOST" \
         --port "$PORT" \
         --query-port "$QUERY_PORT" \
@@ -245,7 +252,7 @@ in
   };
 
   marlowe-indexer = mkOperableWithProbes {
-    package = packages.marlowe-indexer;
+    package = marlowe-indexer;
     runtimeInputs = [ sqitchPg srvaddr postgresql coreutils ];
     runtimeScript = ''
       #################
@@ -293,7 +300,7 @@ in
 
       export OTEL_SERVICE_NAME="''${OTEL_SERVICE_NAME:-marlowe-indexer}"
 
-      ${packages.marlowe-indexer}/bin/marlowe-indexer \
+      ${marlowe-indexer}/bin/marlowe-indexer \
         --database-uri  "$DATABASE_URI" \
         --chain-sync-port "$MARLOWE_CHAIN_SYNC_PORT" \
         --chain-sync-query-port "$MARLOWE_CHAIN_SYNC_QUERY_PORT" \
@@ -303,7 +310,7 @@ in
   };
 
   marlowe-sync = mkOperableWithProbes {
-    package = packages.marlowe-sync;
+    package = marlowe-sync;
     runtimeInputs = [ srvaddr coreutils ];
     runtimeScript = ''
       #################
@@ -341,7 +348,7 @@ in
       export OTEL_SERVICE_NAME="''${OTEL_SERVICE_NAME:-marlowe-sync}"
 
       DATABASE_URI=${database-uri}
-      ${packages.marlowe-sync}/bin/marlowe-sync \
+      ${marlowe-sync}/bin/marlowe-sync \
         --database-uri  "$DATABASE_URI" \
         --host "$HOST" \
         --sync-port "$MARLOWE_SYNC_PORT" \
@@ -352,7 +359,7 @@ in
   };
 
   marlowe-tx = mkOperableWithProbes {
-    package = packages.marlowe-tx;
+    package = marlowe-tx;
     runtimeScript = ''
       #################
       # REQUIRED VARS #
@@ -382,7 +389,7 @@ in
 
       export OTEL_SERVICE_NAME="''${OTEL_SERVICE_NAME:-marlowe-tx}"
 
-      ${packages.marlowe-tx}/bin/marlowe-tx \
+      ${marlowe-tx}/bin/marlowe-tx \
         --host "$HOST" \
         --command-port "$PORT" \
         --chain-sync-port "$MARLOWE_CHAIN_SYNC_PORT" \
@@ -396,7 +403,7 @@ in
   };
 
   marlowe-contract = mkOperableWithProbes {
-    package = packages.marlowe-contract;
+    package = marlowe-contract;
     runtimeInputs = [ coreutils ];
     runtimeScript = ''
       #################
@@ -432,7 +439,7 @@ in
   };
 
   marlowe-proxy = mkOperableWithProbes {
-    package = packages.marlowe-proxy;
+    package = marlowe-proxy;
     runtimeScript = ''
       #################
       # REQUIRED VARS #
@@ -469,7 +476,7 @@ in
 
       export OTEL_SERVICE_NAME="''${OTEL_SERVICE_NAME:-marlowe-proxy}"
 
-      ${packages.marlowe-proxy}/bin/marlowe-proxy \
+      ${marlowe-proxy}/bin/marlowe-proxy \
         --host "$HOST" \
         --port "$PORT" \
         --port-traced "$TRACED_PORT" \
@@ -487,7 +494,7 @@ in
   };
 
   marlowe-web-server = mkOperable {
-    package = packages.marlowe-web-server;
+    package = marlowe-web-server;
     runtimeScript = ''
       #################
       # REQUIRED VARS #
@@ -509,7 +516,7 @@ in
 
       export OTEL_SERVICE_NAME="''${OTEL_SERVICE_NAME:-marlowe-web-server}"
 
-      ${packages.marlowe-web-server}/bin/marlowe-web-server \
+      ${marlowe-web-server}/bin/marlowe-web-server \
         --http-port "$PORT" \
         --marlowe-runtime-host "$RUNTIME_HOST" \
         --marlowe-runtime-port "$RUNTIME_PORT" \

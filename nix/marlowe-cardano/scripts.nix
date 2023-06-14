@@ -1,11 +1,10 @@
-{ pkgs
-, network
-, cardano-cli
-, cardano-node
-, packagesBySystem
-, marlowe
-}:
+{ inputs, pkgs, project }:
+
 let
+  networkNixName = "preprod";
+
+  network = inputs.self.networks.${networkNixName};
+
   inherit (pkgs) lib;
 
   # FIXME: This was copied in anger from marlowe-dashboard-client/dev - cleanup this stuff when needed.
@@ -47,34 +46,38 @@ let
     };
   };
 
-  start-cardano-node = writeShellScriptBinInRepoRoot "start-cardano-node" ''
+  start-cardano-node = ''
     echo "socket path = ${devNetworkConfig.node.socket-path}"
     export DATA_DIR=${devNetworkConfig.node.database-path}
     export ENVIRONMENT=${network.name}
     export SOCKET_PATH=${devNetworkConfig.node.socket-path}
     mkdir -p ${devNetworkConfig.node.database-path}
-    ${pkgs.cardano.entrypoints.cardano-node}/bin/entrypoint
+    ${inputs.self.packages.entrypoints.cardano-node}/bin/cardano-node
   '';
 
-  #
-  # dev convenience scripts
-  #
-  writeShellScriptBinInRepoRoot = name: script: pkgs.writeShellScriptBin name ''
+  re-up = ''
+    cd $(git rev-parse --show-toplevel)
+
+    docker compose up --detach --file ${compose-spec}
+  '';
+
+  compose-spec = import ./compose.nix { inherit inputs pkgs; };
+
+  mkCabalExeScript = target: ''
     cd `${pkgs.git}/bin/git rev-parse --show-toplevel`
-    ${script}
-  '';
-
-  nix-flakes-alias = pkgs.runCommand "nix-flakes-alias" { } ''
-    mkdir -p $out/bin
-    ln -sv ${pkgs.nixFlakes}/bin/nix $out/bin/nix-flakes
-  '';
-
-in
-{
-  inherit nix-flakes-alias start-cardano-node;
-
-  mkCabalExeScript = cmd: target: writeShellScriptBinInRepoRoot cmd ''
     cabal build ${target} 1>/dev/null 2>/dev/null
     cabal run ${target} -- "$@" | tail -n +2
   '';
+
+  marlowe-runtime-cli = mkCabalExeScript "marlowe-runtime-cli";
+
+  marlowe-cli = mkCabalExeScript "marlowe-cli";
+in
+{
+  inherit
+    start-cardano-node
+    re-up
+    compose-spec
+    marlowe-runtime-cli
+    marlowe-cli;
 }

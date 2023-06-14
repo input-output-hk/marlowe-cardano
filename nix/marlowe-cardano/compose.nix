@@ -1,6 +1,9 @@
-{ sqitchPg, postgresql, runCommand, writeShellScriptBin, writeText, lib, glibcLocales, networks }:
+{ inputs, pkgs }:
+
 let
-  network = networks.preview;
+  inherit (pkgs) sqitchPg postgresql runCommand writeShellScriptBin writeText lib glibcLocales;
+  network = inputs.self.networks.preview;
+
   mkSqitchRunner = name: path: writeShellScriptBin name ''
     export PATH="$PATH:${lib.makeBinPath [ sqitchPg postgresql ]}"
     export LOCALE_ARCHIVE="${glibcLocales}/lib/locale/locale-archive"
