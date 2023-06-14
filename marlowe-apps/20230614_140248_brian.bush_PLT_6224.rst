@@ -1,0 +1,4 @@
+Added
+-----
+
+- Added `marlowe-streamer` client that streams Marlowe contracts using HTTP server-side events (SSE).
