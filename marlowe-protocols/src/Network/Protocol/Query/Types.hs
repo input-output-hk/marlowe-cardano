@@ -31,7 +31,6 @@ import Network.Protocol.Codec (BinaryMessage(..))
 import Network.Protocol.Codec.Spec
   (ArbitraryMessage(..), MessageEq(..), MessageVariations(..), ShowProtocol(..), SomePeerHasAgency(..), varyAp)
 import Network.Protocol.Handshake.Types (HasSignature(..))
-import Network.Protocol.Peer
 import Network.Protocol.Peer.Trace
 import Network.TypedProtocol
 import Network.TypedProtocol.Codec (AnyMessageAndAgency(..))
@@ -89,21 +88,6 @@ instance Protocol (Query req) where
   exclusionLemma_ClientAndServerHaveAgency TokReq     = \case
   exclusionLemma_NobodyAndClientHaveAgency TokDone = \case
   exclusionLemma_NobodyAndServerHaveAgency TokDone = \case
-
-instance Request req => TestAgencyEquality (Query req) where
-  testAgencyEquality = \case
-    ClientAgency tok -> \case
-      ClientAgency tok' -> case tok of
-        TokReq -> case tok' of
-          TokReq -> Just AgencyRefl
-      _ -> Nothing
-    ServerAgency tok -> \case
-      ServerAgency tok' -> case tok of
-        TokRes tag -> case tok' of
-          TokRes tag' -> case tagEq tag tag' of
-            Just Refl -> Just AgencyRefl
-            Nothing -> Nothing
-      _ -> Nothing
 
 deriving instance Show (ClientHasAgency (st :: Query req))
 deriving instance forall req (st :: Query req). (forall a. Show (Tag req a)) => Show (ServerHasAgency st)

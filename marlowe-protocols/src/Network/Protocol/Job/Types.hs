@@ -31,7 +31,6 @@ import Network.Protocol.Codec (BinaryMessage(..))
 import Network.Protocol.Codec.Spec
   (ArbitraryMessage(..), MessageEq(..), MessageVariations(..), ShowProtocol(..), SomePeerHasAgency(..))
 import Network.Protocol.Handshake.Types (HasSignature(..))
-import Network.Protocol.Peer
 import Network.Protocol.Peer.Trace
 import Network.TypedProtocol
 import Network.TypedProtocol.Codec (AnyMessageAndAgency(..))
@@ -247,33 +246,6 @@ instance Command cmd => BinaryMessage (Job cmd) where
         ServerAgency (TokAttach _) -> pure $ SomeMessage MsgAttachFailed
         _                          -> fail "Invalid protocol state for MsgAttachFailed"
       _ -> fail $ "Invalid msg tag " <> show tag
-
-instance Command cmd => TestAgencyEquality (Job cmd) where
-  testAgencyEquality = \case
-    ClientAgency tok -> \case
-      ClientAgency tok' -> case tok of
-        TokInit -> case tok' of
-          TokInit -> Just AgencyRefl
-          _ -> Nothing
-        TokAwait v -> case tok' of
-          TokAwait v'-> case tagEq v v' of
-            Just (Refl, Refl, Refl) -> Just AgencyRefl
-            Nothing -> Nothing
-          _ -> Nothing
-      _ -> Nothing
-    ServerAgency tok -> \case
-      ServerAgency tok' -> case tok of
-        TokCmd v -> case tok' of
-          TokCmd v'-> case tagEq v v' of
-            Just (Refl, Refl, Refl) -> Just AgencyRefl
-            Nothing -> Nothing
-          _ -> Nothing
-        TokAttach v -> case tok' of
-          TokAttach v'-> case tagEq v v' of
-            Just (Refl, Refl, Refl) -> Just AgencyRefl
-            Nothing -> Nothing
-          _ -> Nothing
-      _ -> Nothing
 
 class ShowCommand cmd => OTelCommand cmd where
   commandTypeName :: Proxy cmd -> Text

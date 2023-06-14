@@ -19,7 +19,6 @@ import qualified Data.List.NonEmpty as NE
 import Data.String (fromString)
 import Data.Text.Lazy (toStrict)
 import Data.Text.Lazy.Encoding (decodeUtf8)
-import Data.Type.Equality (TestEquality, testEquality, type (:~:)(Refl))
 import GHC.Show (showSpace)
 import Language.Marlowe.Core.V1.Semantics.Types
 import Language.Marlowe.Runtime.ChainSync.Api (DatumHash)
@@ -28,12 +27,10 @@ import Network.Protocol.Codec (BinaryMessage(..))
 import Network.Protocol.Codec.Spec hiding (SomePeerHasAgency)
 import qualified Network.Protocol.Codec.Spec as Codec
 import Network.Protocol.Handshake.Types (HasSignature(..))
-import Network.Protocol.Peer
 import Network.Protocol.Peer.Trace
 import Network.TypedProtocol
 import Network.TypedProtocol.Codec (AnyMessageAndAgency(..))
 import OpenTelemetry.Attributes
-import Unsafe.Coerce (unsafeCoerce)
 
 -- | A kind-level datatype for the states in the MarloweLoad protocol.
 data MarloweLoad where
@@ -92,47 +89,6 @@ data SNode (node :: Node) where
   SCaseNode :: SNode node -> SNode ('CaseNode node)
   SLetNode :: SNode node -> SNode ('LetNode node)
   SAssertNode :: SNode node -> SNode ('AssertNode node)
-
-instance TestEquality SNode where
-  testEquality = \case
-    SRootNode -> \case
-      SRootNode -> Just Refl
-      _ -> Nothing
-    SPayNode node -> \case
-      SPayNode node' -> case testEquality node node' of
-        Just Refl -> Just Refl
-        Nothing -> Nothing
-      _ -> Nothing
-    SIfLNode node  -> \case
-      SIfLNode node' -> case testEquality node node' of
-        Just Refl -> Just Refl
-        Nothing -> Nothing
-      _ -> Nothing
-    SIfRNode node  -> \case
-      SIfRNode node' -> case testEquality node node' of
-        Just Refl -> Just Refl
-        Nothing -> Nothing
-      _ -> Nothing
-    SWhenNode node  -> \case
-      SWhenNode node' -> case testEquality node node' of
-        Just Refl -> Just Refl
-        Nothing -> Nothing
-      _ -> Nothing
-    SCaseNode node  -> \case
-      SCaseNode node' -> case testEquality node node' of
-        Just Refl -> Just Refl
-        Nothing -> Nothing
-      _ -> Nothing
-    SLetNode node  -> \case
-      SLetNode node' -> case testEquality node node' of
-        Just Refl -> Just Refl
-        Nothing -> Nothing
-      _ -> Nothing
-    SAssertNode node  -> \case
-      SAssertNode node' -> case testEquality node node' of
-        Just Refl -> Just Refl
-        Nothing -> Nothing
-      _ -> Nothing
 
 -- A type family that computes the next protocol state when popping
 -- (completing) a node.
@@ -223,32 +179,6 @@ instance Protocol MarloweLoad where
   exclusionLemma_ClientAndServerHaveAgency TokCanPush{} = \case
   exclusionLemma_NobodyAndClientHaveAgency TokDone = \case
   exclusionLemma_NobodyAndServerHaveAgency TokDone = \case
-
-instance TestAgencyEquality MarloweLoad where
-  testAgencyEquality = \case
-    ClientAgency tok -> \case
-      ClientAgency tok' -> case tok of
-        TokCanPush n node -> case tok' of
-          TokCanPush n' node' -> case (natEq n n', testEquality node node') of
-            (Just Refl, Just Refl) -> Just AgencyRefl
-            _ -> Nothing
-      _ -> Nothing
-    ServerAgency tok -> \case
-      ServerAgency tok' -> case tok of
-        TokProcessing node -> case tok' of
-          TokProcessing node' -> case testEquality node node' of
-            Just Refl -> Just AgencyRefl
-            Nothing -> Nothing
-          _ -> Nothing
-        TokComplete -> case tok' of
-          TokComplete -> Just AgencyRefl
-          _ -> Nothing
-      _ -> Nothing
-
-natEq :: Nat n -> Nat n' -> Maybe (n :~: n')
-natEq n n'
-  | natToInt n == natToInt n' = Just $ unsafeCoerce Refl
-  | otherwise = Nothing
 
 data SomePeerHasAgency (st :: k) = forall pr. SomePeerHasAgency (PeerHasAgency pr st)
 

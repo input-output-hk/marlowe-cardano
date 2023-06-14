@@ -17,7 +17,6 @@ import Network.Protocol.Codec (BinaryMessage(..))
 import Network.Protocol.Codec.Spec
   (MessageEq(..), MessageVariations(..), ShowProtocol(..), SomePeerHasAgency(..), Variations(..), varyAp)
 import Network.Protocol.Handshake.Types (HasSignature(..))
-import Network.Protocol.Peer (AgencyEquals(..), TestAgencyEquality(..))
 import Network.Protocol.Peer.Trace
 import Network.TypedProtocol (PeerHasAgency(..), Protocol(..))
 import Network.TypedProtocol.Codec (AnyMessageAndAgency(AnyMessageAndAgency), SomeMessage(..))
@@ -84,27 +83,6 @@ instance Protocol MarloweHeaderSync where
   exclusionLemma_NobodyAndClientHaveAgency TokDone = \case
 
   exclusionLemma_NobodyAndServerHaveAgency TokDone = \case
-
-instance TestAgencyEquality MarloweHeaderSync where
-  testAgencyEquality = \case
-    ClientAgency tok -> \case
-      ClientAgency tok' -> case tok of
-        TokIdle -> case tok' of
-          TokIdle -> Just AgencyRefl
-          _ -> Nothing
-        TokWait -> case tok' of
-          TokWait -> Just AgencyRefl
-          _ -> Nothing
-      _ -> Nothing
-    ServerAgency tok -> \case
-      ServerAgency tok' -> case tok of
-        TokNext -> case tok' of
-          TokNext -> Just AgencyRefl
-          _ -> Nothing
-        TokIntersect -> case tok' of
-          TokIntersect -> Just AgencyRefl
-          _ -> Nothing
-      _ -> Nothing
 
 instance BinaryMessage MarloweHeaderSync where
   putMessage = \case

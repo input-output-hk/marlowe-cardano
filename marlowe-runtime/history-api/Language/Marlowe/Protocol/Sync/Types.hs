@@ -9,7 +9,6 @@ import Data.Aeson (Key, ToJSON, Value(..), object, (.=))
 import Data.Binary (get, getWord8, put, putWord8)
 import qualified Data.List.NonEmpty as NE
 import Data.String (IsString(fromString))
-import Data.Type.Equality (testEquality, type (:~:)(Refl))
 import GHC.Show (showSpace)
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader)
 import Language.Marlowe.Runtime.Core.Api
@@ -20,7 +19,6 @@ import Network.Protocol.Codec (BinaryMessage(..))
 import Network.Protocol.Codec.Spec
   (MessageEq(..), MessageVariations(..), ShowProtocol(..), SomePeerHasAgency(SomePeerHasAgency), Variations(..), varyAp)
 import Network.Protocol.Handshake.Types (HasSignature(..))
-import Network.Protocol.Peer (AgencyEquals(..), TestAgencyEquality(..))
 import Network.Protocol.Peer.Trace
 import Network.TypedProtocol (PeerHasAgency(..), Protocol(..), SomeMessage(..))
 import Network.TypedProtocol.Codec (AnyMessageAndAgency(AnyMessageAndAgency))
@@ -103,41 +101,6 @@ instance Protocol MarloweSync where
   exclusionLemma_NobodyAndClientHaveAgency TokDone = \case
 
   exclusionLemma_NobodyAndServerHaveAgency TokDone = \case
-
-instance TestAgencyEquality MarloweSync where
-  testAgencyEquality = \case
-    ClientAgency tok -> \case
-      ClientAgency tok' -> case tok of
-        TokInit -> case tok' of
-          TokInit -> Just AgencyRefl
-          _ -> Nothing
-        TokIdle v -> case tok' of
-          TokIdle v'-> case testEquality v v' of
-            Just Refl -> Just AgencyRefl
-            Nothing -> Nothing
-          _ -> Nothing
-        TokWait v -> case tok' of
-          TokWait v'-> case testEquality v v' of
-            Just Refl -> Just AgencyRefl
-            Nothing -> Nothing
-          _ -> Nothing
-      _ -> Nothing
-    ServerAgency tok -> \case
-      ServerAgency tok' -> case tok of
-        TokFollow -> case tok' of
-          TokFollow -> Just AgencyRefl
-          _ -> Nothing
-        TokNext v -> case tok' of
-          TokNext v'-> case testEquality v v' of
-            Just Refl -> Just AgencyRefl
-            Nothing -> Nothing
-          _ -> Nothing
-        TokIntersect v -> case tok' of
-          TokIntersect v'-> case testEquality v v' of
-            Just Refl -> Just AgencyRefl
-            Nothing -> Nothing
-          _ -> Nothing
-      _ -> Nothing
 
 instance BinaryMessage MarloweSync where
   putMessage = \case
