@@ -1,25 +1,24 @@
 cabal-version: 3.0
-name: marlowe-runtime-web
-version: 0.0.1
-synopsis:
-  Web server for Marlowe Runtime on Cardano.
-bug-reports: https://github.com/input-output-hk/marlowe-cardano/issues
-license: Apache-2.0
-author: Jamie Bertram
-maintainer: jamie.bertram@iohk.io
-stability: experimental
-category: Language
+name:          marlowe-runtime-web
+version:       0.0.1
+synopsis:      Web server for Marlowe Runtime on Cardano.
+bug-reports:   https://github.com/input-output-hk/marlowe-cardano/issues
+license:       Apache-2.0
+author:        Jamie Bertram
+maintainer:    jamie.bertram@iohk.io
+stability:     experimental
+category:      Language
 license-files:
   LICENSE
   NOTICE
 
 source-repository head
-  type: git
+  type:     git
   location: https://github.com/input-output-hk/marlowe-cardano
-  subdir: marlowe-runtime-web
+  subdir:   marlowe-runtime-web
 
 common lang
-  default-language: Haskell2010
+  default-language:   Haskell2010
   default-extensions:
     BlockArguments
     DeriveAnyClass
@@ -40,53 +39,57 @@ common lang
     RecordWildCards
     ScopedTypeVariables
     StandaloneDeriving
-    TypeApplications
     TupleSections
+    TypeApplications
+
   ghc-options:
     -Wall -Wnoncanonical-monad-instances -Wunused-packages
     -Wincomplete-uni-patterns -Wincomplete-record-updates
     -Wredundant-constraints -Widentities
 
 library
-  import: lang
-  hs-source-dirs: src
-  visibility: public
+  import:          lang
+  hs-source-dirs:  src
+  visibility:      public
   exposed-modules:
     Language.Marlowe.Runtime.Web
     Language.Marlowe.Runtime.Web.Client
+
   other-modules:
     Language.Marlowe.Runtime.Web.API
-    Language.Marlowe.Runtime.Web.Types
     Language.Marlowe.Runtime.Web.Orphans
+    Language.Marlowe.Runtime.Web.Types
+
   build-depends:
-    , base >= 4.9 && < 5
-    , aeson >= 2 && < 3
-    , base16 >= 0.3.2 && < 0.4
-    , bytestring >= 0.10.12 && < 0.12
-    , containers >= 0.6.5 && < 0.7
-    , http-media >= 0.8 && < 0.9
-    , lens >= 5.2 && < 6
+    , aeson >=2 && <3
+    , base >=4.9 && <5
+    , base16 ^>=0.3.2
+    , bytestring >=0.10.12 && <0.12
+    , containers ^>=0.6.5
+    , http-media ^>=0.8
+    , lens >=5.2 && <6
     , marlowe-cardano ==0.1.0.3
-    , mtl >= 2.2 && < 3
-    , network-uri >= 2.6 && < 3
-    , openapi3 >= 3.2 && < 4
-    , parsec >= 3.1.14 && < 3.2
-    , servant >= 0.19 && < 0.20
-    , servant-client >= 0.19 && < 0.20
-    , servant-pagination >= 2.5 && < 3
-    , servant-server >= 0.19 && < 0.20
-    , text >= 1.2.4 && < 2
-    , time >= 1.9 && < 2
+    , mtl >=2.2 && <3
+    , network-uri >=2.6 && <3
+    , openapi3 >=3.2 && <4
+    , parsec ^>=3.1.14
+    , servant ^>=0.19
+    , servant-client ^>=0.19
+    , servant-pagination >=2.5 && <3
+    , servant-server ^>=0.19
+    , text >=1.2.4 && <2
+    , time >=1.9 && <2
 
 library server
-  import: lang
-  hs-source-dirs: server
-  visibility: public
+  import:          lang
+  hs-source-dirs:  server
+  visibility:      public
   exposed-modules:
     Language.Marlowe.Runtime.Web.Server
     Language.Marlowe.Runtime.Web.Server.DTO
-    Language.Marlowe.Runtime.Web.Server.Util
     Language.Marlowe.Runtime.Web.Server.Monad
+    Language.Marlowe.Runtime.Web.Server.Util
+
   other-modules:
     Language.Marlowe.Runtime.Web.Server.OpenAPI
     Language.Marlowe.Runtime.Web.Server.REST
@@ -96,104 +99,102 @@ library server
     Language.Marlowe.Runtime.Web.Server.REST.Withdrawals
     Language.Marlowe.Runtime.Web.Server.SyncClient
     Language.Marlowe.Runtime.Web.Server.TxClient
+
   build-depends:
-    , aeson >= 2 && < 3
-    , async >= 2.2 && < 3
+    , aeson >=2 && <3
+    , async >=2.2 && <3
     , async-components ==0.1.0.0
-    , base >= 4.9 && < 5
-    , bytestring >= 0.10.12 && < 0.12
+    , base >=4.9 && <5
+    , bytestring >=0.10.12 && <0.12
     , cardano-api ==1.35.4
     , cardano-binary ==1.5.0
     , cardano-ledger-alonzo ==0.1.0.0
     , cardano-ledger-core ==0.1.0.0
     , cardano-ledger-shelley ==0.1.0.0
-    , co-log >= 0.5.0.0 && < 0.6.0.0
-    , containers >= 0.6.5 && < 0.7
-    , errors >= 2.3 && < 3
-    , eventuo11y ^>= { 0.9, 0.10 }
+    , co-log >=0.5.0.0 && <0.6.0.0
+    , containers ^>=0.6.5
+    , errors >=2.3 && <3
+    , eventuo11y >=0.9 && <0.11
     , eventuo11y-extras ==0.1.0.0
-    , exceptions >= 0.10 && < 0.12
-    , general-allocate ^>= { 0.2 }
-    , http-media >= 0.8 && < 0.9
-    , lens >= 5.2 && < 6
+    , exceptions >=0.10 && <0.12
+    , general-allocate ^>=0.2
+    , http-media ^>=0.8
+    , lens >=5.2 && <6
     , marlowe-cardano ==0.1.0.3
     , marlowe-chain-sync ==0.0.1
     , marlowe-client ==0.0.1
     , marlowe-protocols ==0.1.0.0
-    , marlowe-runtime ==0.0.1
     , marlowe-runtime-web ==0.0.1
-    , marlowe-runtime:discovery-api ==0.0.1
-    , marlowe-runtime:proxy-api ==0.0.1
-    , marlowe-runtime:sync-api ==0.0.1
-    , marlowe-runtime:tx-api ==0.0.1
-    , monad-control >= 1 && < 1.1
-    , mtl >= 2.2 && < 3
-    , openapi3 >= 3.2 && < 4
-    , servant >= 0.19 && < 0.20
-    , servant-openapi3 >= 2.0 && < 2.1
-    , servant-pagination >= 2.5 && < 3
-    , servant-server >= 0.19 && < 0.20
-    , stm >= 2.5 && < 2.6
-    , stm-delay >= 0.1.1 && < 0.2
-    , text >= 1.2.4 && < 2
-    , time >= 1.9 && < 2
-    , transformers >= 0.5.6 && < 0.6
-    , transformers-base >= 0.4 && < 0.5
-    , unliftio-core ^>= { 0.2 }
-    , wai >= 3.2 && < 4
-    , wai-cors >= 0.2 && < 0.3
+    , marlowe-runtime:{marlowe-runtime, discovery-api, proxy-api, sync-api, tx-api} ==0.0.1
+    , monad-control ^>=1
+    , mtl >=2.2 && <3
+    , openapi3 >=3.2 && <4
+    , servant ^>=0.19
+    , servant-openapi3 ^>=2.0
+    , servant-pagination >=2.5 && <3
+    , servant-server ^>=0.19
+    , stm ^>=2.5
+    , stm-delay ^>=0.1.1
+    , text >=1.2.4 && <2
+    , time >=1.9 && <2
+    , transformers ^>=0.5.6
+    , transformers-base ^>=0.4
+    , unliftio-core ^>=0.2
+    , wai >=3.2 && <4
+    , wai-cors ^>=0.2
 
 executable marlowe-web-server
-  import: lang
-  hs-source-dirs: app
-  main-is: Main.hs
+  import:          lang
+  hs-source-dirs:  app
+  main-is:         Main.hs
   other-modules:
     Options
     Paths_marlowe_runtime_web
-  autogen-modules:
-    Paths_marlowe_runtime_web
+
+  autogen-modules: Paths_marlowe_runtime_web
   build-depends:
     , async-components ==0.1.0.0
-    , base >= 4.9 && < 5
-    , co-log >= 0.5.0.0 && < 0.6.0.0
-    , eventuo11y ^>= { 0.9, 0.10 }
-    , eventuo11y-otel ^>= 0.1
-    , hs-opentelemetry-api >= 0.0.3 && < 0.0.4
-    , hs-opentelemetry-sdk >= 0.0.3 && < 0.0.4
+    , base >=4.9 && <5
+    , co-log >=0.5.0.0 && <0.6.0.0
+    , eventuo11y >=0.9 && <0.11
+    , eventuo11y-otel ^>=0.1
+    , hs-opentelemetry-api >=0.0.3 && <0.0.4
+    , hs-opentelemetry-sdk >=0.0.3 && <0.0.4
     , http-types
     , marlowe-client
     , marlowe-protocols
     , marlowe-runtime-web:server
     , marlowe-runtime:config
-    , mtl >= 2.2 && < 3
+    , mtl >=2.2 && <3
     , network
     , optparse-applicative
-    , text >= 1.2.4 && < 2
-    , unliftio >= 0.2.1 && < 0.3
-    , wai >= 3.2 && < 4
+    , text >=1.2.4 && <2
+    , unliftio ^>=0.2.1
+    , wai >=3.2 && <4
     , warp
-  ghc-options: -threaded
+
+  ghc-options:     -threaded
 
 test-suite marlowe-runtime-web-test
-  import: lang
+  import:         lang
   hs-source-dirs: test
-  type: exitcode-stdio-1.0
-  main-is: Spec.hs
-  other-modules:
-    Paths_marlowe_runtime_web
+  type:           exitcode-stdio-1.0
+  main-is:        Spec.hs
+  other-modules:  Paths_marlowe_runtime_web
   build-depends:
-    , base >= 4.9 && < 5
-    , QuickCheck
-    , aeson >= 2 && < 3
-    , bytestring >= 0.10.12 && < 0.12
+    , aeson >=2 && <3
+    , base >=4.9 && <5
+    , bytestring >=0.10.12 && <0.12
     , hspec
     , marlowe-cardano ==0.1.0.3
     , marlowe-runtime-web
     , marlowe-test
     , network-arbitrary
-    , openapi3 >= 3.2 && < 4
+    , openapi3 >=3.2 && <4
+    , QuickCheck
     , quickcheck-instances
     , regex-posix
     , servant-openapi3
-    , text >= 1.2.4 && < 2
-  ghc-options: -threaded
+    , text >=1.2.4 && <2
+
+  ghc-options:    -threaded

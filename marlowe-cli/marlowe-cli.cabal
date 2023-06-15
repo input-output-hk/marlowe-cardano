@@ -1,43 +1,54 @@
-cabal-version: 3.0
-name: marlowe-cli
-version: 0.0.10.2
-license: Apache-2.0
+cabal-version:   3.0
+name:            marlowe-cli
+version:         0.0.10.2
+license:         Apache-2.0
 license-files:
   LICENSE
   NOTICE
-build-type: Simple
-maintainer: brian.bush@iohk.io
-stability: stable
-author: Brian W Bush
+
+build-type:      Simple
+maintainer:      brian.bush@iohk.io
+stability:       stable
+author:          Brian W Bush
 synopsis:
   Command-line tool for running Marlowe financial contracts on Cardano Computation Layer
+
 description:
   Command-line tool for the reference implementation of Marlowe, domain-specific language targeted at
   the execution of financial contracts in the style of Peyton Jones et al on Cardano Computation Layer.
-category: Language
+
+category:        Language
 extra-doc-files: ReadMe.md
 
 source-repository head
-  type: git
+  type:     git
   location: https://github.com/input-output-hk/marlowe-cardano
-  subdir: marlowe-cli
+  subdir:   marlowe-cli
 
 flag defer-plugin-errors
-    description:
-        Defer errors from the plugin, useful for things like Haddock that can't handle it.
-    default: False
-    manual: True
+  description:
+    Defer errors from the plugin, useful for things like Haddock that can't handle it.
+
+  default:     False
+  manual:      True
 
 common lang
-  default-language: Haskell2010
-  default-extensions: ExplicitForAll ScopedTypeVariables
-                      DeriveGeneric StandaloneDeriving DeriveLift
-                      DeriveFunctor DeriveFoldable
-                      DeriveTraversable
+  default-language:   Haskell2010
+  default-extensions:
+    DeriveFoldable
+    DeriveFunctor
+    DeriveGeneric
+    DeriveLift
+    DeriveTraversable
+    ExplicitForAll
+    ScopedTypeVariables
+    StandaloneDeriving
+
   ghc-options:
     -Wall -Wnoncanonical-monad-instances -Wunused-packages
     -Wincomplete-uni-patterns -Wincomplete-record-updates
     -Wredundant-constraints -Widentities
+
   if flag(defer-plugin-errors)
     ghc-options: -fplugin-opt PlutusTx.Plugin:defer-errors
 
@@ -46,13 +57,13 @@ common lang
     ImportQualifiedPost
 
 library
-  import: lang
-  hs-source-dirs: src
+  import:          lang
+  hs-source-dirs:  src
   exposed-modules:
     Contrib.Control.Concurrent
-    Language.Marlowe.CLI.Analyze
     Language.Marlowe.Cardano
     Language.Marlowe.Cardano.Thread
+    Language.Marlowe.CLI.Analyze
     Language.Marlowe.CLI.Cardano.Api
     Language.Marlowe.CLI.Cardano.Api.Address
     Language.Marlowe.CLI.Cardano.Api.Address.ProofOfBurn
@@ -72,50 +83,51 @@ library
     Language.Marlowe.CLI.Transaction
     Language.Marlowe.CLI.Types
     Paths_marlowe_cli
+
   build-depends:
-    aeson,
-    aeson-pretty,
-    appendmap -any,
-    base >= 4.9 && < 5,
-    base16-bytestring,
-    bech32,
-    bytestring,
-    cardano-api,
-    cardano-crypto-class,
-    cardano-ledger-alonzo,
-    cardano-ledger-core,
-    cardano-ledger-shelley,
-    cardano-slotting,
-    cborg,
-    cborg-json,
-    containers,
-    data-default,
-    directory,
-    errors,
-    extra -any,
-    marlowe-cardano,
-    memory,
-    mtl,
-    ouroboros-consensus,
-    ouroboros-network,
-    plutus-core,
-    plutus-ledger,
-    plutus-ledger-ada,
-    plutus-ledger-api,
-    plutus-ledger-slot,
-    plutus-script-utils,
-    plutus-tx,
-    prettyprinter,
-    serialise,
-    text,
-    time,
-    time-units,
-    transformers,
-    yaml,
+    , aeson
+    , aeson-pretty
+    , appendmap
+    , base >=4.9 && <5
+    , base16-bytestring
+    , bech32
+    , bytestring
+    , cardano-api
+    , cardano-crypto-class
+    , cardano-ledger-alonzo
+    , cardano-ledger-core
+    , cardano-ledger-shelley
+    , cardano-slotting
+    , cborg
+    , cborg-json
+    , containers
+    , data-default
+    , directory
+    , errors
+    , extra
+    , marlowe-cardano
+    , memory
+    , mtl
+    , ouroboros-consensus
+    , ouroboros-network
+    , plutus-core
+    , plutus-ledger
+    , plutus-ledger-ada
+    , plutus-ledger-api
+    , plutus-ledger-slot
+    , plutus-script-utils
+    , plutus-tx
+    , prettyprinter
+    , serialise
+    , text
+    , time
+    , time-units
+    , transformers
+    , yaml
 
 library cli-test
-  import: lang
-  hs-source-dirs: cli-test
+  import:          lang
+  hs-source-dirs:  cli-test
   other-modules:
     Contrib.Cardano.Api
     Contrib.Control.Concurrent.Async
@@ -130,17 +142,18 @@ library cli-test
     Contrib.Data.Time.Clock
     Contrib.Data.Time.Units.Aeson
     Contrib.Monad.Loops
-    Contrib.UnliftIO.Control.Concurrent
     Contrib.UnliftIO.Async.Pool
+    Contrib.UnliftIO.Control.Concurrent
+
   exposed-modules:
     Language.Marlowe.CLI.Test
+    Language.Marlowe.CLI.Test.CLI.Interpret
+    Language.Marlowe.CLI.Test.CLI.Monad
+    Language.Marlowe.CLI.Test.CLI.Types
     Language.Marlowe.CLI.Test.Contract
     Language.Marlowe.CLI.Test.Contract.ContractNickname
     Language.Marlowe.CLI.Test.Contract.ParametrizedMarloweJSON
     Language.Marlowe.CLI.Test.Contract.Source
-    Language.Marlowe.CLI.Test.CLI.Interpret
-    Language.Marlowe.CLI.Test.CLI.Monad
-    Language.Marlowe.CLI.Test.CLI.Types
     Language.Marlowe.CLI.Test.ExecutionMode
     Language.Marlowe.CLI.Test.Interpret
     Language.Marlowe.CLI.Test.InterpreterError
@@ -151,61 +164,58 @@ library cli-test
     Language.Marlowe.CLI.Test.Runtime.Monitor
     Language.Marlowe.CLI.Test.Runtime.Types
     Language.Marlowe.CLI.Test.TestCase
+    Language.Marlowe.CLI.Test.Types
     Language.Marlowe.CLI.Test.Wallet.Interpret
     Language.Marlowe.CLI.Test.Wallet.Types
-    Language.Marlowe.CLI.Test.Types
+
   build-depends:
-    aeson,
-    aeson-pretty,
-    async,
-    async-pool,
-    base >= 4.9 && < 5,
-    bytestring,
-    cardano-api,
-    containers,
-    data-default,
-    data-has,
-    errors,
-    eventuo11y,
-    eventuo11y-json,
-    extra -any,
-    indexed-traversable,
-    lens,
-    marlowe-apps,
-    marlowe-cardano,
-    marlowe-chain-sync,
-    marlowe-chain-sync:plutus-compat,
-    marlowe-cli,
-    marlowe-client,
-    marlowe-contracts,
-    marlowe-protocols,
-    marlowe-runtime,
-    marlowe-runtime:history-api,
-    marlowe-runtime:proxy-api,
-    marlowe-runtime:tx-api,
-    monad-loops,
-    mtl,
-    network,
-    one-line-aeson-text,
-    plutus-core,
-    plutus-ledger,
-    plutus-ledger-ada,
-    plutus-ledger-api,
-    plutus-ledger-slot,
-    plutus-tx,
-    random,
-    stm,
-    temporary,
-    text,
-    time,
-    time-units,
-    transformers,
-    unliftio,
-    vector,
+    , aeson
+    , aeson-pretty
+    , async
+    , async-pool
+    , base >=4.9 && <5
+    , bytestring
+    , cardano-api
+    , containers
+    , data-default
+    , data-has
+    , errors
+    , eventuo11y
+    , eventuo11y-json
+    , extra
+    , indexed-traversable
+    , lens
+    , marlowe-apps
+    , marlowe-cardano
+    , marlowe-chain-sync:{marlowe-chain-sync, plutus-compat}
+    , marlowe-cli
+    , marlowe-client
+    , marlowe-contracts
+    , marlowe-protocols
+    , marlowe-runtime:{marlowe-runtime, history-api, proxy-api, tx-api}
+    , monad-loops
+    , mtl
+    , network
+    , one-line-aeson-text
+    , plutus-core
+    , plutus-ledger
+    , plutus-ledger-ada
+    , plutus-ledger-api
+    , plutus-ledger-slot
+    , plutus-tx
+    , random
+    , stm
+    , temporary
+    , text
+    , time
+    , time-units
+    , transformers
+    , unliftio
+    , vector
 
 library command
-  import: lang
-  hs-source-dirs: command
+  import:          lang
+  hs-source-dirs:  command
   exposed-modules:
     Language.Marlowe.CLI.Command
     Language.Marlowe.CLI.Command.Contract
@@ -217,47 +227,45 @@ library command
     Language.Marlowe.CLI.Command.Test
     Language.Marlowe.CLI.Command.Transaction
     Language.Marlowe.CLI.Command.Util
+
   build-depends:
-    aeson,
-    base >= 4.9 && < 5,
-    base16-bytestring,
-    bytestring,
-    cardano-api,
-    cardano-slotting,
-    marlowe-actus,
-    marlowe-cardano,
-    marlowe-cli,
-    marlowe-cli:cli-test,
-    marlowe-contracts,
-    marlowe-runtime:config,
-    mtl,
-    network,
-    optparse-applicative,
-    ouroboros-network,
-    plutus-ledger,
-    plutus-ledger-ada,
-    plutus-ledger-api,
-    plutus-ledger-slot,
-    plutus-tx,
-    regex-posix,
-    servant-client,
-    split,
-    text,
-    time-units,
-    transformers,
+    , aeson
+    , base >=4.9 && <5
+    , base16-bytestring
+    , bytestring
+    , cardano-api
+    , cardano-slotting
+    , marlowe-actus
+    , marlowe-cardano
+    , marlowe-cli:{marlowe-cli, cli-test}
+    , marlowe-contracts
+    , marlowe-runtime:config
+    , mtl
+    , network
+    , optparse-applicative
+    , ouroboros-network
+    , plutus-ledger
+    , plutus-ledger-ada
+    , plutus-ledger-api
+    , plutus-ledger-slot
+    , plutus-tx
+    , regex-posix
+    , servant-client
+    , split
+    , text
+    , time-units
+    , transformers
 
 executable marlowe-cli
-  import: lang
-  hs-source-dirs: app
-  main-is: Main.hs
-  other-modules:
-    Paths_marlowe_cli
-  autogen-modules:
-    Paths_marlowe_cli
+  import:          lang
+  hs-source-dirs:  app
+  main-is:         Main.hs
+  other-modules:   Paths_marlowe_cli
+  autogen-modules: Paths_marlowe_cli
   build-depends:
-    base >= 4.9 && < 5,
-    cardano-config,
-    marlowe-cli:command,
-    text
-  ghc-options:
-    -threaded
+    , base >=4.9 && <5
+    , cardano-config
+    , marlowe-cli:command
+    , text
+
+  ghc-options:     -threaded

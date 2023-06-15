@@ -1,10 +1,9 @@
-cabal-version:   3.0
-name:            plutus-ledger-slot
-version:         0.0.1
-license:         Apache-2.0
-
-author:          Michael Peyton Jones, Jann Mueller
-build-type:      Simple
+cabal-version: 3.0
+name:          plutus-ledger-slot
+version:       0.0.1
+license:       Apache-2.0
+author:        Michael Peyton Jones, Jann Mueller
+build-type:    Simple
 
 common lang
   default-language:   Haskell2010
@@ -38,9 +37,9 @@ flag defer-plugin-errors
   manual:      True
 
 library
-  import:             lang
-  hs-source-dirs:     src
-  default-language:   Haskell2010
+  import:           lang
+  hs-source-dirs:   src
+  default-language: Haskell2010
   exposed-modules:
     Plutus.V1.Ledger.Slot
     Plutus.V1.Ledger.SlotConfig
@@ -49,20 +48,20 @@ library
   -- Other IOG dependencies
   --------------------------
   build-depends:
-    -- We don't need plutus ledger here but
-    -- we have orphans collision.
-    -- , plutus-ledger-aeson
+    , plutus-core >=1.0.0
     , plutus-ledger
-    , plutus-core                     >=1.0.0
-    , plutus-ledger-api               >=1.0.0
-    , plutus-tx                       >=1.0.0
+    , plutus-ledger-api >=1.0.0
+    , plutus-tx >=1.0.0
 
+  -- We don't need plutus ledger here but
+  -- we have orphans collision.
+  -- , plutus-ledger-aeson
   ------------------------
   -- Non-IOG dependencies
   ------------------------
   build-depends:
     , aeson
-    , base            >=4.9 && <5
+    , base >=4.9 && <5
     , containers
     , data-default
     , deepseq
@@ -71,8 +70,7 @@ library
     , serialise
     , time
 
-  ghc-options:        -fprint-potential-instances
+  ghc-options:      -fprint-potential-instances
 
   if flag(defer-plugin-errors)
     ghc-options: -fplugin-opt PlutusTx.Plugin:defer-errors
-

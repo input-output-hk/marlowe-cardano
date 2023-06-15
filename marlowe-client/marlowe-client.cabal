@@ -1,26 +1,25 @@
 cabal-version: 3.0
-name: marlowe-client
-version: 0.0.1
-synopsis:
-  A client library for the Marlowe Runtime.
-bug-reports: https://github.com/input-output-hk/marlowe-marlowe/issues
-license: Apache-2.0
-author: Jamie Bertram
-maintainer: jamie.bertram@iohk.io
-stability: experimental
-category: Language
+name:          marlowe-client
+version:       0.0.1
+synopsis:      A client library for the Marlowe Runtime.
+bug-reports:   https://github.com/input-output-hk/marlowe-marlowe/issues
+license:       Apache-2.0
+author:        Jamie Bertram
+maintainer:    jamie.bertram@iohk.io
+stability:     experimental
+category:      Language
 license-files:
   LICENSE
   NOTICE
 
 source-repository head
-  type: git
+  type:     git
   location: https://github.com/input-output-hk/marlowe-cardano
-  subdir: marlowe-client
+  subdir:   marlowe-client
 
 library
-  default-language: Haskell2010
-  hs-source-dirs:   src
+  default-language:   Haskell2010
+  hs-source-dirs:     src
   default-extensions:
     BlockArguments
     DeriveAnyClass
@@ -40,37 +39,34 @@ library
     RecordWildCards
     ScopedTypeVariables
     StandaloneDeriving
-    TypeApplications
     TupleSections
+    TypeApplications
+
   ghc-options:
     -Wall -Wnoncanonical-monad-instances -Wunused-packages
     -Wincomplete-uni-patterns -Wincomplete-record-updates
     -Wredundant-constraints -Widentities
+
   exposed-modules:
     Control.Monad.Trans.Marlowe
     Control.Monad.Trans.Marlowe.Class
     Language.Marlowe.Runtime.Client
+
   build-depends:
-    , base >= 4.9 && < 5
+    , base >=4.9 && <5
     , cardano-api ==1.35.4
-    , eventuo11y ^>= { 0.9, 0.10 }
+    , eventuo11y >=0.9 && <0.11
     , eventuo11y-extras ==0.1.0.0
-    , exceptions >= 0.10 && < 0.11
-    , general-allocate ^>= { 0.2 }
+    , exceptions ^>=0.10
+    , general-allocate ^>=0.2
     , marlowe-chain-sync ==0.0.1
     , marlowe-protocols ==0.1.0.0
-    , marlowe-runtime ==0.0.1
-    , marlowe-runtime:contract-api ==0.0.1
-    , marlowe-runtime:discovery-api ==0.0.1
-    , marlowe-runtime:history-api ==0.0.1
-    , marlowe-runtime:proxy-api ==0.0.1
-    , marlowe-runtime:sync-api ==0.0.1
-    , marlowe-runtime:tx-api ==0.0.1
-    , monad-control >= 1 && < 1.1
-    , mtl >= 2.2 && < 3
-    , network >= 3.1 && < 4
-    , resourcet >= 1.3 && < 2
-    , time >= 1.9 && < 2
-    , transformers >= 0.5.6 && < 0.6
-    , transformers-base >= 0.4 && < 0.5
-    , unliftio >= 0.2.1 && < 0.3
+    , marlowe-runtime:{marlowe-runtime, contract-api, discovery-api, history-api, proxy-api, sync-api, tx-api} ==0.0.1
+    , monad-control ^>=1
+    , mtl >=2.2 && <3
+    , network >=3.1 && <4
+    , resourcet >=1.3 && <2
+    , time >=1.9 && <2
+    , transformers ^>=0.5.6
+    , transformers-base ^>=0.4
+    , unliftio ^>=0.2.1

@@ -1,53 +1,60 @@
-cabal-version: 2.2
-name: marlowe-actus
-version: 0.1.0.0
-license: Apache-2.0
+cabal-version:   2.2
+name:            marlowe-actus
+version:         0.1.0.0
+license:         Apache-2.0
 license-files:
   LICENSE
   NOTICE
-build-type: Simple
-maintainer: Yves Hauser <yves.hauser@iohk.io>
-stability: experimental
-author: Dmytro Kondratiuk, Yves Hauser
-synopsis:
-  Marlowe ACTUS
+
+build-type:      Simple
+maintainer:      Yves Hauser <yves.hauser@iohk.io>
+stability:       experimental
+author:          Dmytro Kondratiuk, Yves Hauser
+synopsis:        Marlowe ACTUS
 description:
   /marlowe-actus/ implements generators of Marlowe contracts based on ACTUS
   contract terms.
 
-category: Language
+category:        Language
 extra-doc-files: README.md
 
 source-repository head
-  type: git
-  location: https://github.com/input-output-hk/marlowe-cardano/marlowe-actus
+  type:     git
+  location:
+    https://github.com/input-output-hk/marlowe-cardano/marlowe-actus
 
 flag defer-plugin-errors
   description:
-      Defer errors from the plugin, useful for things like Haddock that can't handle it.
-  default: False
-  manual: True
+    Defer errors from the plugin, useful for things like Haddock that can't handle it.
+
+  default:     False
+  manual:      True
 
 library
-  hs-source-dirs: src
+  hs-source-dirs:     src
   build-depends:
-    actus-core,
-    base -any,
-    plutus-tx -any,
-    plutus-ledger,
-    marlowe-cardano -any,
-    mtl -any,
-    time -any,
-    validation -any
-  default-language: Haskell2010
-  default-extensions: ExplicitForAll ScopedTypeVariables
-                      DeriveGeneric StandaloneDeriving DeriveLift
-                      DeriveFunctor DeriveFoldable
-                      DeriveTraversable
-  exposed-modules:
-    Actus.Marlowe
-  other-modules:
-    Actus.Marlowe.Instance
+    , actus-core
+    , base
+    , marlowe-cardano
+    , mtl
+    , plutus-ledger
+    , plutus-tx
+    , time
+    , validation
+
+  default-language:   Haskell2010
+  default-extensions:
+    DeriveFoldable
+    DeriveFunctor
+    DeriveGeneric
+    DeriveLift
+    DeriveTraversable
+    ExplicitForAll
+    ScopedTypeVariables
+    StandaloneDeriving
+
+  exposed-modules:    Actus.Marlowe
+  other-modules:      Actus.Marlowe.Instance
   ghc-options:
     -Wall -Wnoncanonical-monad-instances -Wunused-packages
     -Wincomplete-uni-patterns -Wincomplete-record-updates
@@ -55,32 +62,31 @@ library
 
 test-suite marlowe-actus-test
   default-language: Haskell2010
-  hs-source-dirs: test
-  type: exitcode-stdio-1.0
-  main-is: Spec.hs
-  other-modules:
-    Spec.Actus.Examples
+  hs-source-dirs:   test
+  type:             exitcode-stdio-1.0
+  main-is:          Spec.hs
+  other-modules:    Spec.Actus.Examples
   build-depends:
-    actus-core,
-    aeson -any,
-    base >=4.9 && <5,
-    bytestring -any,
-    containers -any,
-    scientific -any,
-    marlowe-cardano,
-    marlowe-actus,
-    mtl -any,
-    plutus-ledger -any,
-    plutus-tx -any,
-    pretty-simple -any,
-    sort -any,
-    tasty -any,
-    tasty-hunit -any,
-    tasty-quickcheck -any,
-    text -any,
-    time -any,
-    validation -any,
+    , actus-core
+    , aeson
+    , base >=4.9 && <5
+    , bytestring
+    , containers
+    , marlowe-actus
+    , marlowe-cardano
+    , mtl
+    , plutus-ledger
+    , plutus-tx
+    , pretty-simple
+    , scientific
+    , sort
+    , tasty
+    , tasty-hunit
+    , tasty-quickcheck
+    , text
+    , time
+    , validation
+
   ghc-options:
-    -Wall -Wnoncanonical-monad-instances
-    -Wincomplete-uni-patterns -Wincomplete-record-updates
-    -Wredundant-constraints -Widentities
+    -Wall -Wnoncanonical-monad-instances -Wincomplete-uni-patterns
+    -Wincomplete-record-updates -Wredundant-constraints -Widentities

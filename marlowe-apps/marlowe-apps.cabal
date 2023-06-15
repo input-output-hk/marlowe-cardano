@@ -1,197 +1,193 @@
-cabal-version      : 3.0
-name               : marlowe-apps
-version            : 0.2.4.0
-synopsis           : Marlowe Runtimee applications
-license            : Apache-2.0
-license-file       : LICENSE
-author             : Brian W Bush <brian.bush@iohk.io>
-maintainer         : Brian W Bush <brian.bush@iohk.io>
-category           : Network
-build-type         : Simple
-extra-source-files : ReadMe.md
+cabal-version:      3.0
+name:               marlowe-apps
+version:            0.2.4.0
+synopsis:           Marlowe Runtimee applications
+license:            Apache-2.0
+license-file:       LICENSE
+author:             Brian W Bush <brian.bush@iohk.io>
+maintainer:         Brian W Bush <brian.bush@iohk.io>
+category:           Network
+build-type:         Simple
+extra-source-files: ReadMe.md
 
 library
-  exposed-modules   : Language.Marlowe.Runtime.App
-                      Language.Marlowe.Runtime.App.Build
-                      Language.Marlowe.Runtime.App.Channel
-                      Language.Marlowe.Runtime.App.List
-                      Language.Marlowe.Runtime.App.Parser
-                      Language.Marlowe.Runtime.App.Run
-                      Language.Marlowe.Runtime.App.Sign
-                      Language.Marlowe.Runtime.App.Stream
-                      Language.Marlowe.Runtime.App.Submit
-                      Language.Marlowe.Runtime.App.Types
-                      Language.Marlowe.Runtime.App.Transact
-  hs-source-dirs    : src
-  build-depends     : base >= 4.9 && < 5
-                    , aeson
-                    , async
-                    , bytestring
-                    , cardano-api
-                    , containers
-                    , data-default
-                    , eventuo11y ^>= { 0.9, 0.10 }
-                    , eventuo11y-dsl ^>= { 0.2 }
-                    , eventuo11y-json ^>= { 0.3 }
-                    , general-allocate ^>= { 0.2 }
-                    , marlowe-cardano
-                    , marlowe-chain-sync
-                    , marlowe-client
-                    , marlowe-protocols
-                    , marlowe-runtime:config
-                    , marlowe-runtime:discovery-api
-                    , marlowe-runtime:history-api
-                    , marlowe-runtime:proxy-api
-                    , marlowe-runtime:sync-api
-                    , marlowe-runtime:tx-api
-                    , marlowe-runtime
-                    , monad-control
-                    , mtl
-                    , network
-                    , optparse-applicative
-                    , random
-                    , stm
-                    , text
-                    , time
-                    , time-units
-                    , transformers
-                    , transformers-base
-  ghc-options       : -Wall
-                      -Wnoncanonical-monad-instances
-                      -Wincomplete-uni-patterns
-                      -Wincomplete-record-updates
-                      -Wredundant-constraints
-                      -Widentities
-                      -Wunused-packages
-  default-language  : Haskell2010
+  exposed-modules:
+    Language.Marlowe.Runtime.App
+    Language.Marlowe.Runtime.App.Build
+    Language.Marlowe.Runtime.App.Channel
+    Language.Marlowe.Runtime.App.List
+    Language.Marlowe.Runtime.App.Parser
+    Language.Marlowe.Runtime.App.Run
+    Language.Marlowe.Runtime.App.Sign
+    Language.Marlowe.Runtime.App.Stream
+    Language.Marlowe.Runtime.App.Submit
+    Language.Marlowe.Runtime.App.Transact
+    Language.Marlowe.Runtime.App.Types
 
+  hs-source-dirs:   src
+  build-depends:
+    , aeson
+    , async
+    , base >=4.9 && <5
+    , bytestring
+    , cardano-api
+    , containers
+    , data-default
+    , eventuo11y >=0.9 && <0.11
+    , eventuo11y-dsl ^>=0.2
+    , eventuo11y-json ^>=0.3
+    , general-allocate ^>=0.2
+    , marlowe-cardano
+    , marlowe-chain-sync
+    , marlowe-client
+    , marlowe-protocols
+    , marlowe-runtime:{marlowe-runtime, config, discovery-api, history-api, proxy-api, sync-api, tx-api}
+    , monad-control
+    , mtl
+    , network
+    , optparse-applicative
+    , random
+    , stm
+    , text
+    , time
+    , time-units
+    , transformers
+    , transformers-base
+
+  ghc-options:
+    -Wall -Wnoncanonical-monad-instances -Wincomplete-uni-patterns
+    -Wincomplete-record-updates -Wredundant-constraints -Widentities
+    -Wunused-packages
+
+  default-language: Haskell2010
 
 executable marlowe-pipe
-  main-is           : Main.hs
-  hs-source-dirs    : pipe
-  build-depends     : base >= 4.9 && < 5
-                    , aeson
-                    , bytestring
-                    , eventuo11y ^>= { 0.9, 0.10 }
-                    , eventuo11y-dsl ^>= { 0.2 }
-                    , eventuo11y-json ^>= { 0.3 }
-                    , marlowe-apps
-                    , mtl
-                    , optparse-applicative
-                    , text
-  ghc-options       : -Wall
-                      -Wnoncanonical-monad-instances
-                      -Wincomplete-uni-patterns
-                      -Wincomplete-record-updates
-                      -Wredundant-constraints
-                      -Widentities
-                      -Wunused-packages
-  default-language  : Haskell2010
+  main-is:          Main.hs
+  hs-source-dirs:   pipe
+  build-depends:
+    , aeson
+    , base >=4.9 && <5
+    , bytestring
+    , eventuo11y >=0.9 && <0.11
+    , eventuo11y-dsl ^>=0.2
+    , eventuo11y-json ^>=0.3
+    , marlowe-apps
+    , mtl
+    , optparse-applicative
+    , text
 
+  ghc-options:
+    -Wall -Wnoncanonical-monad-instances -Wincomplete-uni-patterns
+    -Wincomplete-record-updates -Wredundant-constraints -Widentities
+    -Wunused-packages
+
+  default-language: Haskell2010
 
 executable marlowe-scaling
-  main-is           : Main.hs
-  hs-source-dirs    : scaling
-  build-depends     : base >= 4.9 && < 5
-                    , async
-                    , cardano-api
-                    , eventuo11y ^>= { 0.9, 0.10 }
-                    , eventuo11y-dsl ^>= { 0.2 }
-                    , eventuo11y-json ^>= { 0.3 }
-                    , marlowe-cardano
-                    , marlowe-apps
-                    , marlowe-chain-sync
-                    , marlowe-runtime
-                    , mtl
-                    , optparse-applicative
-                    , plutus-ledger-api
-                    , random
-                    , text
-                    , time
-  ghc-options       : -Wall
-                      -Wnoncanonical-monad-instances
-                      -Wincomplete-uni-patterns
-                      -Wincomplete-record-updates
-                      -Wredundant-constraints
-                      -Widentities
-                      -Wunused-packages
-  default-language  : Haskell2010
+  main-is:          Main.hs
+  hs-source-dirs:   scaling
+  build-depends:
+    , async
+    , base >=4.9 && <5
+    , cardano-api
+    , eventuo11y >=0.9 && <0.11
+    , eventuo11y-dsl ^>=0.2
+    , eventuo11y-json ^>=0.3
+    , marlowe-apps
+    , marlowe-cardano
+    , marlowe-chain-sync
+    , marlowe-runtime
+    , mtl
+    , optparse-applicative
+    , plutus-ledger-api
+    , random
+    , text
+    , time
+
+  ghc-options:
+    -Wall -Wnoncanonical-monad-instances -Wincomplete-uni-patterns
+    -Wincomplete-record-updates -Wredundant-constraints -Widentities
+    -Wunused-packages
+
+  default-language: Haskell2010
 
 executable marlowe-oracle
-  main-is           : Main.hs
-  hs-source-dirs    : oracle
-  other-modules     : Language.Marlowe.Oracle.Detect
-                      Language.Marlowe.Oracle.Process
-                      Network.Oracle
-                      Network.Oracle.CoinGecko
-                      Network.Oracle.Sofr
-  build-depends     : base >= 4.9 && < 5
-                    , aeson
-                    , bytestring
-                    , cardano-api
-                    , extra
-                    , eventuo11y ^>= { 0.9, 0.10 }
-                    , eventuo11y-dsl ^>= { 0.2 }
-                    , eventuo11y-json ^>= { 0.3 }
-                    , http-client
-                    , http-client-tls
-                    , marlowe-cardano
-                    , marlowe-apps
-                    , marlowe-chain-sync
-                    , marlowe-runtime
-                    , mtl
-                    , optparse-applicative
-                    , plutus-ledger-api
-                    , servant
-                    , servant-client
-                    , text
-                    , time-units
-  ghc-options       : -Wall
-                      -Wnoncanonical-monad-instances
-                      -Wincomplete-uni-patterns
-                      -Wincomplete-record-updates
-                      -Wredundant-constraints
-                      -Widentities
-                      -Wunused-packages
-  default-language  : Haskell2010
+  main-is:          Main.hs
+  hs-source-dirs:   oracle
+  other-modules:
+    Language.Marlowe.Oracle.Detect
+    Language.Marlowe.Oracle.Process
+    Network.Oracle
+    Network.Oracle.CoinGecko
+    Network.Oracle.Sofr
+
+  build-depends:
+    , aeson
+    , base >=4.9 && <5
+    , bytestring
+    , cardano-api
+    , eventuo11y >=0.9 && <0.11
+    , eventuo11y-dsl ^>=0.2
+    , eventuo11y-json ^>=0.3
+    , extra
+    , http-client
+    , http-client-tls
+    , marlowe-apps
+    , marlowe-cardano
+    , marlowe-chain-sync
+    , marlowe-runtime
+    , mtl
+    , optparse-applicative
+    , plutus-ledger-api
+    , servant
+    , servant-client
+    , text
+    , time-units
+
+  ghc-options:
+    -Wall -Wnoncanonical-monad-instances -Wincomplete-uni-patterns
+    -Wincomplete-record-updates -Wredundant-constraints -Widentities
+    -Wunused-packages
+
+  default-language: Haskell2010
 
 executable marlowe-finder
-  main-is           : Main.hs
-  hs-source-dirs    : finder
-  build-depends     : base >= 4.9 && < 5
-                    , eventuo11y ^>= { 0.9, 0.10 }
-                    , eventuo11y-dsl ^>= { 0.2 }
-                    , eventuo11y-json ^>= { 0.3 }
-                    , marlowe-apps
-                    , marlowe-runtime
-                    , optparse-applicative
-                    , text
-                    , time-units
-  ghc-options       : -Wall
-                      -Wnoncanonical-monad-instances
-                      -Wincomplete-uni-patterns
-                      -Wincomplete-record-updates
-                      -Wredundant-constraints
-                      -Widentities
-                      -Wunused-packages
-  default-language  : Haskell2010
+  main-is:          Main.hs
+  hs-source-dirs:   finder
+  build-depends:
+    , base >=4.9 && <5
+    , eventuo11y >=0.9 && <0.11
+    , eventuo11y-dsl ^>=0.2
+    , eventuo11y-json ^>=0.3
+    , marlowe-apps
+    , marlowe-runtime
+    , optparse-applicative
+    , text
+    , time-units
+
+  ghc-options:
+    -Wall -Wnoncanonical-monad-instances -Wincomplete-uni-patterns
+    -Wincomplete-record-updates -Wredundant-constraints -Widentities
+    -Wunused-packages
+
+  default-language: Haskell2010
 
 executable signing-service
-  main-is           : Main.hs
-  hs-source-dirs    : signing
-  build-depends     : base >= 4.9 && < 5
-                    , aeson
-                    , cardano-api
-                    , marlowe-apps
-                    , marlowe-chain-sync
-                    , servant-server
-                    , wai
-                    , warp
-  ghc-options       : -Wall
-                      -Wnoncanonical-monad-instances
-                      -Wincomplete-uni-patterns
-                      -Wincomplete-record-updates
-                      -Wredundant-constraints
-                      -Widentities
-                      -Wunused-packages
-  default-language  : Haskell2010
+  main-is:          Main.hs
+  hs-source-dirs:   signing
+  build-depends:
+    , aeson
+    , base >=4.9 && <5
+    , cardano-api
+    , marlowe-apps
+    , marlowe-chain-sync
+    , servant-server
+    , wai
+    , warp
+
+  ghc-options:
+    -Wall -Wnoncanonical-monad-instances -Wincomplete-uni-patterns
+    -Wincomplete-record-updates -Wredundant-constraints -Widentities
+    -Wunused-packages
+
+  default-language: Haskell2010

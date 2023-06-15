@@ -1,43 +1,38 @@
 cabal-version: 2.2
-name: marlowe-test
-version: 0.1.1.0
-license: Apache-2.0
+name:          marlowe-test
+version:       0.1.1.0
+license:       Apache-2.0
 license-files:
   LICENSE
   NOTICE
-build-type: Simple
-maintainer: B W Bush <brian.bush@iokk.io>
-stability: experimental
-author: B W Bush <brian.bush@iokk.io>
-synopsis:
-  Tests for Marlowe semantics and validators on Cardano
+
+build-type:    Simple
+maintainer:    B W Bush <brian.bush@iokk.io>
+stability:     experimental
+author:        B W Bush <brian.bush@iokk.io>
+synopsis:      Tests for Marlowe semantics and validators on Cardano
 description:
   Unit and integration tests for Marlowe semantics, serialization, and Plutus
   validators on the Cardano blockchain.
-category: Language
 
+category:      Language
 data-files:
-  test/contract.json
-  test/input.json
-  test/state.json
-  test/Spec/Marlowe/Serialization/golden/swap-contract.json
-  test/Spec/Marlowe/Serialization/golden/swap-module.json
   reference/data/actus-pam.contract
   reference/data/actus-pam.paths
   reference/data/cardano-beam.contract
   reference/data/cardano-beam.paths
-  reference/data/contract-for-differences.contract
-  reference/data/contract-for-differences.paths
   reference/data/contract-for-differences-with-oracle.contract
   reference/data/contract-for-differences-with-oracle.paths
+  reference/data/contract-for-differences.contract
+  reference/data/contract-for-differences.paths
   reference/data/coupon-bond-guaranteed.contract
   reference/data/coupon-bond-guaranteed.paths
   reference/data/covered-call.contract
   reference/data/covered-call.paths
-  reference/data/escrow.contract
-  reference/data/escrow.paths
   reference/data/escrow-with-collateral.contract
   reference/data/escrow-with-collateral.paths
+  reference/data/escrow.contract
+  reference/data/escrow.paths
   reference/data/guessing-game.contract
   reference/data/guessing-game.paths
   reference/data/loan-with-nft-collateral.contract
@@ -70,53 +65,60 @@ data-files:
   reference/data/swap-of-ada-and-dollar-token.paths
   reference/data/zero-coupon-bond.contract
   reference/data/zero-coupon-bond.paths
+  test/contract.json
+  test/input.json
+  test/Spec/Marlowe/Serialization/golden/swap-contract.json
+  test/Spec/Marlowe/Serialization/golden/swap-module.json
+  test/state.json
 
 source-repository head
-  type: git
+  type:     git
   location: https://github.com/input-output-hk/marlowe-cardano
 
-
 flag defer-plugin-errors
-    description:
-        Defer errors from the plugin, useful for things like Haddock that can't handle it.
-    default: False
-    manual: True
+  description:
+    Defer errors from the plugin, useful for things like Haddock that can't handle it.
+
+  default:     False
+  manual:      True
 
 flag limit-static-analysis-time
   description:
     This flag sets the timeout seconds for static analysis testing of arbitrary
     contracts, which can take so much time on a complex contract that it exceeds
     hydra/CI resource limits, see SCP-4267.
-  default: True
+
+  default:     True
 
 flag trace-plutus
-    description:
-        Enable Plutus trace log for Marlowe validators.
-    default: False
-    manual: True
-
+  description: Enable Plutus trace log for Marlowe validators.
+  default:     False
+  manual:      True
 
 common lang
-  default-language: Haskell2010
-  default-extensions: ExplicitForAll ScopedTypeVariables
-                      DeriveGeneric StandaloneDeriving DeriveLift
-                      DeriveFunctor DeriveFoldable
-                      DeriveTraversable
+  default-language:   Haskell2010
+  default-extensions:
+    DeriveFoldable
+    DeriveFunctor
+    DeriveGeneric
+    DeriveLift
+    DeriveTraversable
+    ExplicitForAll
+    ScopedTypeVariables
+    StandaloneDeriving
+
   ghc-options:
-    -Wall -Wnoncanonical-monad-instances
-    -Wincomplete-uni-patterns -Wincomplete-record-updates
-    -Wredundant-constraints -Widentities
+    -Wall -Wnoncanonical-monad-instances -Wincomplete-uni-patterns
+    -Wincomplete-record-updates -Wredundant-constraints -Widentities
     -Wunused-packages
 
-
 library
-  import: lang
-  hs-source-dirs: src
+  import:          lang
+  hs-source-dirs:  src
   exposed-modules:
     Data.Jsonable
     Spec.Marlowe.Common
     Spec.Marlowe.Marlowe
-    Spec.Marlowe.Semantics
     Spec.Marlowe.Plutus
     Spec.Marlowe.Plutus.Arbitrary
     Spec.Marlowe.Plutus.AssocMap
@@ -130,7 +132,7 @@ library
     Spec.Marlowe.Plutus.Types
     Spec.Marlowe.Plutus.Value
     Spec.Marlowe.Reference
-    Spec.Marlowe.Semantics.Path
+    Spec.Marlowe.Semantics
     Spec.Marlowe.Semantics.Arbitrary
     Spec.Marlowe.Semantics.AssocMap
     Spec.Marlowe.Semantics.Compute
@@ -145,6 +147,7 @@ library
     Spec.Marlowe.Semantics.Golden.ZeroCouponBond
     Spec.Marlowe.Semantics.Merkle
     Spec.Marlowe.Semantics.Orphans
+    Spec.Marlowe.Semantics.Path
     Spec.Marlowe.Semantics.Util
     Spec.Marlowe.Serialization
     Spec.Marlowe.Serialization.CoreJson
@@ -154,69 +157,67 @@ library
     Spec.Marlowe.Service.Random
     Spec.Marlowe.Service.Serialization
     Spec.Marlowe.Service.Types
-  other-modules:
-    Paths_marlowe_test
+
+  other-modules:   Paths_marlowe_test
   build-depends:
+    , aeson >=2 && <3
     , base >=4.9 && <5
-    , aeson >= 2 && < 3
-    , bytestring >= 0.10.12 && < 0.12
+    , bytestring >=0.10.12 && <0.12
     , cardano-api ==1.35.4
-    , containers >= 0.6.5 && < 0.7
-    , data-default >= 0.7.1 && < 0.8
-    , directory >= 1.3 && < 1.4
-    , filepath >= 1.4 && < 1.5
-    , hint >= 0.9 && < 0.10
-    , lens >= 5.2 && < 6
+    , containers ^>=0.6.5
+    , data-default ^>=0.7.1
+    , directory ^>=1.3
+    , filepath ^>=1.4
+    , hint ^>=0.9
+    , lens >=5.2 && <6
     , marlowe-cardano ==0.1.0.3
     , marlowe-spec-test ==0.1.0.0
-    , mtl >= 2.2 && < 3
-    , plutus-ledger ^>= 1.2
+    , mtl >=2.2 && <3
+    , plutus-ledger ^>=1.2
     , plutus-ledger-api ==1.0.0.1
     , plutus-script-utils ==1.2.0.0
     , plutus-tx ==1.0.0.0
-    , QuickCheck >= 2.14 && < 3
-    , quickcheck-instances >= 0.3.29 && < 0.4
+    , QuickCheck >=2.14 && <3
+    , quickcheck-instances ^>=0.3.29
     , sbv >=8.4
-    , serialise >= 0.2.6 && < 0.3
-    , tasty >= 1.4.2 && < 1.5
-    , tasty-hunit >= 0.10 && < 0.11
-    , tasty-quickcheck >= 0.10 && < 0.11
-    , text >= 1.2.4 && < 2
-    , these >= 1.1 && < 2
-  if flag(trace-plutus)
-     cpp-options: -DTRACE_PLUTUS
+    , serialise ^>=0.2.6
+    , tasty ^>=1.4.2
+    , tasty-hunit ^>=0.10
+    , tasty-quickcheck ^>=0.10
+    , text >=1.2.4 && <2
+    , these >=1.1 && <2
 
+  if flag(trace-plutus)
+    cpp-options: -DTRACE_PLUTUS
 
 test-suite marlowe-test
-  import: lang
+  import:         lang
   hs-source-dirs: test
-  type: exitcode-stdio-1.0
-  main-is: Spec.hs
+  type:           exitcode-stdio-1.0
+  main-is:        Spec.hs
   build-depends:
-      base >=4.9 && <5
+    , base >=4.9 && <5
     , marlowe-test
     , tasty
     , tasty-quickcheck
 
-
 executable marlowe-spec-client
-  import: lang
+  import:         lang
   hs-source-dirs: spec-client
-  main-is: Main.hs
+  main-is:        Main.hs
   build-depends:
-      base >=4.9 && <5
     , aeson
+    , base >=4.9 && <5
     , bytestring
     , marlowe-test
     , split
 
-
 executable marlowe-reference
-  import: lang
+  import:         lang
   hs-source-dirs: reference
-  main-is: Main.hs
+  main-is:        Main.hs
   build-depends:
-      base >=4.9 && <5
+    , base >=4.9 && <5
     , directory
     , filepath
     , marlowe-test
