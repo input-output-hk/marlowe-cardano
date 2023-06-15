@@ -12,8 +12,9 @@ module Main
 
 import Blaze.ByteString.Builder.Char8 (fromString)
 import Control.Concurrent (forkIO)
-import Control.Concurrent.MVar
+import Control.Concurrent.MVar (MVar, newEmptyMVar, putMVar, takeMVar)
 import Control.Monad (void)
+import Data.Bifunctor (bimap)
 import Data.Time.Units (Second)
 import Language.Marlowe.Runtime.App.Channel (RequeueFrequency(RequeueFrequency))
 import Language.Marlowe.Runtime.App.Parser (getConfigParser)
@@ -31,7 +32,9 @@ import Observe.Event.Dynamic (DynamicEventSelector(..))
 import qualified Data.Aeson as A
 import qualified Data.ByteString.Char8 as BS8
 import qualified Data.ByteString.Lazy.Char8 as LBS8
+import qualified Data.Map as M
 import qualified Data.Text as T
+import qualified Data.Vector as V
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
 import qualified Language.Marlowe.Core.V1.Semantics.Types.Address as V1
 import qualified Language.Marlowe.Runtime.App.Channel as App
@@ -85,15 +88,13 @@ runStreamer Terse eventBackend streamMVar =
               , "block"         A..= blockNo
               , "contractId"    A..= csContractId
               , "transactionId" A..= txId
-              , "value"         A..= Just assets
+              , "value"         A..= showAssets assets
               , "actions"       A..= ["create" :: String]
               ]
         ContractStreamContinued{csContractStep=History.ApplyTransaction Core.Transaction{..}, ..} ->
           let
             Chain.BlockHeader{..} = csBlockHeader
             Core.TransactionOutput{..} = output
-            showToken (V1.Token "" "") = ""
-            showToken (V1.Token c (P.TokenName n)) = show c <> "." <> BS8.unpack (P.fromBuiltin n)
             showParty (V1.Address network address) = T.unpack $ V1.serialiseAddressBech32 network address
             showParty (V1.Role role) = show role
             summarize (V1.IDeposit account party token amount) =
@@ -125,7 +126,7 @@ runStreamer Terse eventBackend streamMVar =
               , "block"         A..= blockNo
               , "contractId"    A..= csContractId
               , "transactionId" A..= transactionId
-              , "value"         A..= fmap (\Core.TransactionScriptOutput{..} -> assets) scriptOutput
+              , "value"         A..= maybe (A.Array V.empty) (\Core.TransactionScriptOutput{..} -> showAssets assets) scriptOutput
               , "actions"       A..= fmap (summarize . V1.getInputContent) inputs
               ]
         ContractStreamContinued{csContractStep=History.RedeemPayout History.RedeemStep{..}, ..} ->
@@ -138,11 +139,18 @@ runStreamer Terse eventBackend streamMVar =
               , "block"         A..= blockNo
               , "contractId"    A..= csContractId
               , "transactionId" A..= redeemingTx
-              , "value"         A..= (Nothing :: Maybe Chain.Assets)
-              , "actor"         A..= Chain.tokenName datum
-              , "actions"       A..= ["redeem" :: String]
+              , "value"         A..= A.Array V.empty
+              , "actions"       A..= [
+                                       A.object
+                                         [
+                                           "action" A..= ("redeem" :: String)
+                                         , "actor"  A..= Chain.tokenName datum
+                                         ]
+                                     ]
               ]
-        _ -> pure ()
+        ContractStreamWait{} -> pure ()
+        ContractStreamFinish{} -> pure ()
+        ContractStreamRolledBack{} -> pure ()
 runStreamer Standard eventBackend streamMVar =
   App.watchContracts "StreamerProcess" eventBackend
     $ \_ ->
@@ -160,7 +168,7 @@ runStreamer Standard eventBackend streamMVar =
               , "block"         A..= blockNo
               , "contractId"    A..= csContractId
               , "transactionId" A..= txId
-              , "value"         A..= Just assets
+              , "value"         A..= showAssets assets
               , "actions"       A..= ["create" :: String]
               ]
         ContractStreamContinued{csContractStep=History.ApplyTransaction Core.Transaction{..}, ..} ->
@@ -174,7 +182,7 @@ runStreamer Standard eventBackend streamMVar =
               , "block"         A..= blockNo
               , "contractId"    A..= csContractId
               , "transactionId" A..= transactionId
-              , "value"         A..= fmap (\Core.TransactionScriptOutput{..} -> assets) scriptOutput
+              , "value"         A..= maybe (A.Array V.empty) (\Core.TransactionScriptOutput{..} -> showAssets assets) scriptOutput
               , "actions"       A..= fmap V1.getInputContent inputs
               ]
         ContractStreamContinued{csContractStep=History.RedeemPayout History.RedeemStep{..}, ..} ->
@@ -187,13 +195,42 @@ runStreamer Standard eventBackend streamMVar =
               , "block"         A..= blockNo
               , "contractId"    A..= csContractId
               , "transactionId" A..= redeemingTx
-              , "value"         A..= (Nothing :: Maybe Chain.Lovelace)
+              , "value"         A..= A.Array V.empty
               , "actions"       A..= ["redeem by " <> BS8.unpack (Chain.unTokenName $ Chain.tokenName datum)]
               ]
-        _ -> pure ()
+        ContractStreamWait{} -> pure ()
+        ContractStreamFinish{} -> pure ()
+        ContractStreamRolledBack{} -> pure ()
 runStreamer Verbose eventBackend streamMVar =
   App.watchContracts "StreamerProcess" eventBackend
     $ \_ -> putMVar streamMVar . Just . A.toJSON
+
+
+showToken
+  :: V1.Token
+  -> String
+showToken (V1.Token "" "") = ""
+showToken (V1.Token c (P.TokenName n)) = show c <> "." <> BS8.unpack (P.fromBuiltin n)
+
+
+showAssets
+  :: Chain.Assets
+  -> A.Value
+showAssets (Chain.Assets lovelace (Chain.Tokens tokens)) =
+  A.Array $ V.fromList
+    [
+      A.object
+        [
+          "token"  A..= t
+        , "amount" A..= n
+        ]
+    |
+      let showAssetId (Chain.AssetId c (Chain.TokenName n)) = (init . tail . show) c <> "." <> BS8.unpack n
+    , let ada = ("", toInteger lovelace)
+    , let natives = bimap showAssetId toInteger <$> M.toList tokens
+    , (t, n) <- ada : natives
+    , n > 0
+    ]
 
 
 eventStream

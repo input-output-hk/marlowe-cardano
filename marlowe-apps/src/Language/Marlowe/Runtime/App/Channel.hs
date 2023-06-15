@@ -161,6 +161,7 @@ data LastSeen =
 newtype RequeueFrequency = RequeueFrequency Second
 
 
+-- | Run a function for each open transaction of each contract, repeating periodically.
 runContractAction
   :: forall r
   .  Text
@@ -253,6 +254,7 @@ runContractAction selectorName eventBackend runInput (RequeueFrequency requeueFr
     go mempty
 
 
+-- | Call a function exactly once on each transaction of every contract.
 watchContracts
   :: forall r
   .  Text
