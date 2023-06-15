@@ -1,4 +1,22 @@
 
+<a id='changelog-0.1.1.0'></a>
+# 0.1.1.0 — 2023-06-15
+
+## Added
+
+- Safety checks for Marlowe contracts.
+
+- Implemented `marlowe-validators` executable that benchmark Plutus execution costs of the Marlowe validators.
+- Instrumeted `marlowe-test` to optionally generate benchmark cases.
+
+- Safety checks for valid Plutus addresses.
+
+## Changed
+
+PLT-5462 adds a cabal flag `--flag trace-plutus` for the `marlowe-cardano` and `marlowe-test` packages. In production this flag should not be set because it enlarges the validator and changes its hash. If the flag is turned on, however, the test suite `test:marlowe-test` will check the Plutus logs to see that the correct error is occurring in cases where the validator should fail.
+
+This flag is also useful in `marlowe-cli` for creating a tracing validator for on-chain usage.
+
 
 # SCP-5126: Differences between Marlowe's Isabelle semantics and its Plutus validator
 

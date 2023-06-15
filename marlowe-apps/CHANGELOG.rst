@@ -1,3 +1,9 @@
+
+.. _changelog-0.2.5.0:
+
+0.2.5.0 — 2023-06-15
+====================
+
  Removed
  -------
 
@@ -12,3 +18,8 @@
  -----
 
  - `exe:marlowe-scaling` now successfully submits transactions.
+
+Added
+-----
+
+- Added simple transaction signing service for use in demonstrations.

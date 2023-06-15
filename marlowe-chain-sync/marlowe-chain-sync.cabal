@@ -1,6 +1,6 @@
 cabal-version: 3.0
 name:          marlowe-chain-sync
-version:       0.0.1
+version:       0.0.2
 synopsis:      Cardano chain sync system for thee Marlowe Runtime
 description:
   Marlowe runtime component for Cardano node synchronization. Communicates with
@@ -70,7 +70,7 @@ library
     , cardano-ledger-core ==0.1.0.0
     , containers ^>=0.6.5
     , hashable >=1.3 && <2
-    , marlowe-protocols ==0.1.0.0
+    , marlowe-protocols ==0.1.1.0
     , nonempty-containers ^>=0.3.4
     , ouroboros-consensus ==0.1.0.1
     , ouroboros-network ==0.1.0.1
@@ -97,7 +97,7 @@ library libchainsync
 
   other-modules:
   build-depends:
-    , async-components ==0.1.0.0
+    , async-components ==0.1.1.0
     , base >=4.9 && <5
     , bytestring >=0.10.12 && <0.12
     , cardano-api ==1.35.4
@@ -105,14 +105,14 @@ library libchainsync
     , co-log >=0.5.0.0 && <0.6.0.0
     , containers ^>=0.6.5
     , eventuo11y >=0.9 && <0.11
-    , eventuo11y-extras ==0.1.0.0
+    , eventuo11y-extras ==0.1.1.0
     , foldl >=1.4 && <2
     , hasql >=1.6 && <2
     , hasql-pool ^>=0.8
     , hasql-th ^>=0.4
     , hasql-transaction ^>=1
-    , marlowe-chain-sync ==0.0.1
-    , marlowe-protocols ==0.1.0.0
+    , marlowe-chain-sync ==0.0.2
+    , marlowe-protocols ==0.1.1.0
     , nonempty-containers ^>=0.3.4
     , ouroboros-network ==0.1.0.1
     , stm ^>=2.5
@@ -135,7 +135,7 @@ library chain-indexer
 
   other-modules:
   build-depends:
-    , async-components ==0.1.0.0
+    , async-components ==0.1.1.0
     , base >=4.9 && <5
     , base16 ^>=0.3.2
     , bytestring >=0.10.12 && <0.12
@@ -150,7 +150,7 @@ library chain-indexer
     , co-log >=0.5.0.0 && <0.6.0.0
     , containers ^>=0.6.5
     , eventuo11y >=0.9 && <0.11
-    , eventuo11y-extras ==0.1.0.0
+    , eventuo11y-extras ==0.1.1.0
     , hasql >=1.6 && <2
     , hasql-pool ^>=0.8
     , hasql-th ^>=0.4
@@ -179,7 +179,7 @@ library plutus-compat
     , cardano-api ==1.35.4
     , cardano-ledger-byron ==0.1.0.0
     , containers ^>=0.6.5
-    , marlowe-chain-sync ==0.0.1
+    , marlowe-chain-sync ==0.0.2
     , plutus-ledger-api ==1.0.0.1
     , plutus-tx ==1.0.0.0
     , serialise ^>=0.2.6
@@ -195,8 +195,8 @@ library gen
     , bytestring >=0.10.12 && <0.12
     , cardano-api:{cardano-api, gen} ==1.35.4
     , hedgehog-quickcheck ^>=0.1
-    , marlowe-chain-sync ==0.0.1
-    , marlowe-protocols ==0.1.0.0
+    , marlowe-chain-sync ==0.0.2
+    , marlowe-protocols ==0.1.1.0
     , nonempty-containers ^>=0.3.4
     , ouroboros-consensus ==0.1.0.1
     , QuickCheck >=2.14 && <3
@@ -215,8 +215,8 @@ test-suite marlowe-chain-sync-test
   build-depends:
     , base >=4.9 && <5
     , hspec >=2.10 && <3
-    , marlowe-chain-sync:{marlowe-chain-sync, gen} ==0.0.1
-    , marlowe-protocols ==0.1.0.0
+    , marlowe-chain-sync:{marlowe-chain-sync, gen} ==0.0.2
+    , marlowe-protocols ==0.1.1.0
 
   build-tool-depends: hspec-discover:hspec-discover
   ghc-options:        -threaded
@@ -234,14 +234,14 @@ executable marlowe-chain-indexer
   autogen-modules: Paths_marlowe_chain_sync
   build-depends:
     , aeson >=2 && <3
-    , async-components ==0.1.0.0
+    , async-components ==0.1.1.0
     , base >=4.9 && <5
     , bytestring >=0.10.12 && <0.12
     , cardano-api ==1.35.4
     , cardano-crypto-wrapper ==1.3.0
     , cardano-ledger-byron ==0.1.0.0
     , eventuo11y >=0.9 && <0.11
-    , eventuo11y-extras ==0.1.0.0
+    , eventuo11y-extras ==0.1.1.0
     , eventuo11y-otel ^>=0.1
     , hasql >=1.6 && <2
     , hasql-pool ^>=0.8
@@ -269,20 +269,20 @@ executable marlowe-chain-sync
 
   autogen-modules: Paths_marlowe_chain_sync
   build-depends:
-    , async-components ==0.1.0.0
+    , async-components ==0.1.1.0
     , base >=4.9 && <5
     , bytestring >=0.10.12 && <0.12
     , cardano-api ==1.35.4
     , cardano-ledger-byron ==0.1.0.0
     , eventuo11y >=0.9 && <0.11
-    , eventuo11y-extras ==0.1.0.0
+    , eventuo11y-extras ==0.1.1.0
     , eventuo11y-otel ^>=0.1
     , hasql >=1.6 && <2
     , hasql-pool ^>=0.8
     , hs-opentelemetry-api >=0.0.3 && <0.0.4
     , hs-opentelemetry-sdk >=0.0.3 && <0.0.4
-    , marlowe-chain-sync:{marlowe-chain-sync, libchainsync} ==0.0.1
-    , marlowe-protocols ==0.1.0.0
+    , marlowe-chain-sync:{marlowe-chain-sync, libchainsync} ==0.0.2
+    , marlowe-protocols ==0.1.1.0
     , mtl >=2.2 && <3
     , network >=3.1 && <4
     , optparse-applicative
