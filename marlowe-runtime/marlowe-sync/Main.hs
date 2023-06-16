@@ -26,8 +26,9 @@ import Language.Marlowe.Runtime.Sync (MarloweSync(..), SyncDependencies(..), syn
 import Language.Marlowe.Runtime.Sync.Database (hoistDatabaseQueries, logDatabaseQueries)
 import qualified Language.Marlowe.Runtime.Sync.Database.PostgreSQL as Postgres
 import Logging (RootSelector(..), renderRootSelectorOTel)
-import Network.Protocol.Driver (TcpServerDependencies(..))
+import Network.Protocol.Driver (TcpServerDependencies(..), tcpClient)
 import Network.Protocol.Driver.Trace (tcpServerTraced)
+import Network.Protocol.Query.Client (queryClientPeer)
 import Network.Protocol.Query.Server (queryServerPeer)
 import Network.Socket (HostName, PortNumber)
 import Observe.Event.Backend (injectSelector)
@@ -70,6 +71,8 @@ run Options{..} = bracket (Pool.acquire 100 (Just 5000000) (fromString databaseU
         { databaseQueries = logDatabaseQueries $ hoistDatabaseQueries
               (either throwIO pure <=< liftIO . Pool.use pool)
               Postgres.databaseQueries
+        , runtimeVersion = version
+        , chainQueryConnector = tcpClient chainSyncHost chainQueryPort queryClientPeer
         }
 
       tcpServerTraced "marlowe-sync" (injectSelector MarloweSyncServer) -< TcpServerDependencies
@@ -106,6 +109,8 @@ data Options = Options
   , marloweHeaderSyncPort :: PortNumber
   , queryPort :: PortNumber
   , host :: HostName
+  , chainSyncHost :: HostName
+  , chainQueryPort :: PortNumber
   , httpPort :: PortNumber
   }
 
@@ -118,6 +123,8 @@ getOptions = execParser $ info (helper <*> parser) infoMod
       <*> marloweHeaderSyncPortParser
       <*> queryPort
       <*> hostParser
+      <*> chainSyncHostParser
+      <*> chainQueryPortParser
       <*> httpPortParser
 
     databaseUriParser = strOption $ mconcat
@@ -157,6 +164,22 @@ getOptions = execParser $ info (helper <*> parser) infoMod
       , value "127.0.0.1"
       , metavar "HOST_NAME"
       , help "The host name to run the server on."
+      , showDefault
+      ]
+
+    chainSyncHostParser = strOption $ mconcat
+      [ long "chain-sync-host"
+      , value "127.0.0.1"
+      , metavar "HOST_NAME"
+      , help "The host name of the chain sync server."
+      , showDefault
+      ]
+
+    chainQueryPortParser = option auto $ mconcat
+      [ long "chain-sync-query-port"
+      , value 3716
+      , metavar "PORT_NUMBER"
+      , help "The port number of the chain sync query server."
       , showDefault
       ]
 
