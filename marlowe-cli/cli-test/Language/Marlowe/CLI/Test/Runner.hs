@@ -105,12 +105,9 @@ import Language.Marlowe.CLI.Transaction (maximumFee, queryUtxos)
 import Language.Marlowe.CLI.Types (CliEnv(CliEnv), CliError(..), PrintStats, SomePaymentSigningKey)
 import qualified Language.Marlowe.CLI.Types as T
 import qualified Language.Marlowe.Protocol.Client as Marlowe.Protocol
-import qualified Language.Marlowe.Protocol.Types as Marlowe.Protocol
 import qualified Language.Marlowe.Runtime.App.Types as Apps
 import qualified Network.Protocol.Connection as Network.Protocol
 import qualified Network.Protocol.Driver as Network.Protocol
-import qualified Network.Protocol.Handshake.Client as Network.Protocol
-import Network.Protocol.Handshake.Types (Handshake)
 import Plutus.V1.Ledger.SlotConfig (SlotConfig)
 import qualified Plutus.V2.Ledger.Api as P
 import qualified PlutusTx.Monoid as P
@@ -343,10 +340,8 @@ setupTestInterpretEnv = do
   possibleRuntimeConfig <- view envRuntimeConfig
   runtimeSetup <- for possibleRuntimeConfig \RuntimeConfig {..} -> do
     let
-      connector :: (Network.Protocol.ClientConnector (Handshake Marlowe.Protocol.MarloweRuntime) Marlowe.Protocol.MarloweRuntimeClient IO)
-      connector = --Network.Protocol.SomeConnector
-        Network.Protocol.handshakeClientConnector
-        $ Network.Protocol.tcpClient rcRuntimeHost rcRuntimePort Marlowe.Protocol.marloweRuntimeClientPeer
+      connector :: (Network.Protocol.Connector Marlowe.Protocol.MarloweRuntimeClient IO)
+      connector = Network.Protocol.tcpClient rcRuntimeHost rcRuntimePort Marlowe.Protocol.marloweRuntimeClientPeer
       config = def
         { Apps.chainSeekHost = rcRuntimeHost
         , Apps.runtimePort = rcRuntimePort
@@ -801,5 +796,3 @@ runTests tests (ConcurrentRunners maxConcurrentRunners) = do
       }
   result <- liftIO $ readTVarIO resultsRef
   pure $ TestSuiteResult result masterFaucetInfo
-
-
