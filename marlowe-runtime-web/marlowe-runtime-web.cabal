@@ -158,7 +158,7 @@ executable marlowe-web-server
     , co-log >=0.5.0.0 && <0.6.0.0
     , eventuo11y >=0.9 && <0.11
     , eventuo11y-otel ^>=0.1
-    , hs-opentelemetry-api >=0.0.3 && <0.0.4
+    , hs-opentelemetry-api ==0.0.3.6
     , hs-opentelemetry-sdk >=0.0.3 && <0.0.4
     , http-types
     , marlowe-client
