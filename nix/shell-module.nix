@@ -35,9 +35,16 @@
 
 let
   scripts = import ./marlowe-cardano/scripts.nix { inherit inputs pkgs project; };
+
+  extra-linux-packages = pkgs.lib.optionals pkgs.stdenv.isLinux 
+  [ 
+    pkgs.numactl
+  ];
+
 in
 {
-  packages = [
+  packages = extra-linux-packages ++ 
+  [
     inputs.cardano-world.cardano.packages.cardano-address
     inputs.cardano-world.cardano.packages.cardano-node
     inputs.cardano-world.cardano.packages.cardano-cli
