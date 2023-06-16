@@ -214,7 +214,12 @@ constraints:
   -- This has nothing to do with plutus-apps, except that
   -- the plutus-apps constraints are the most probable reason
   -- why newer versions break
-  typed-protocols == 0.1.0.0
+  typed-protocols == 0.1.0.0,
+
+  -- 0.3.6.2 switched from cryptonite to crypton, and this causes linker
+  -- failures when other packages depend on cryptonite.
+  -- Can be removed when this is resolved: https://github.com/kazu-yamamoto/crypton/issues/6
+  http-client-tls < 0.3.6.2
 
 
 source-repository-package
