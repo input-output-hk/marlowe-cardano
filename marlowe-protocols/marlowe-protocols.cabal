@@ -45,7 +45,7 @@ library
   ghc-options:
     -Wall -Wnoncanonical-monad-instances -Wunused-packages
     -Wincomplete-uni-patterns -Wincomplete-record-updates
-    -Wredundant-constraints -Widentities -Wunused-packages
+    -Wredundant-constraints -Widentities
 
   exposed-modules:
     Network.Channel
@@ -83,7 +83,7 @@ library
     , eventuo11y >=0.9 && <0.11
     , eventuo11y-extras ==0.1.1.0
     , eventuo11y-otel ^>=0.1
-    , hs-opentelemetry-api >=0.0.3 && <0.0.4
+    , hs-opentelemetry-api ==0.0.3.6
     , hspec >=2.10 && <3
     , hspec-golden ^>=0.2
     , network >=3.1 && <4
