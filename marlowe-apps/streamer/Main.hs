@@ -248,14 +248,21 @@ runStreamer Standard eventBackend streamMVar =
         ContractStreamRolledBack{} -> pure ()
 runStreamer Verbose eventBackend streamMVar =
   App.watchContracts "StreamerProcess" eventBackend
-    $ \_ -> putMVar streamMVar . Just . A.toJSON
+    $ \_ cs ->
+      putMVar streamMVar . Just . A.object
+        $ case cs of
+            ContractStreamStart{} -> ["start" A..= cs]
+            ContractStreamContinued{} -> ["continued" A..= cs]
+            ContractStreamWait{} -> ["wait" A..= cs]
+            ContractStreamFinish{} -> ["finish" A..= cs]
+            ContractStreamRolledBack{} -> ["rolledback" A..= cs]
 
 
 showParty
   :: V1.Party
   -> String
 showParty (V1.Address network address) = T.unpack $ V1.serialiseAddressBech32 network address
-showParty (V1.Role role) = show role
+showParty (V1.Role role) = init . tail $ show role
 
 
 showToken
@@ -292,7 +299,7 @@ showChoice (V1.ChoiceId name party, number) =
   A.object
     [
       "actor"  A..= showParty party
-    , "choice" A..= name
+    , "choice" A..= BS8.unpack (P.fromBuiltin name)
     , "number" A..= number
     ]
 
