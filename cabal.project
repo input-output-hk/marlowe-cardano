@@ -218,7 +218,7 @@ constraints:
 
   -- 0.3.6.2 switched from cryptonite to crypton, and this causes linker
   -- failures when other packages depend on cryptonite.
-  -- Can be removed when this is resolved: https://github.com/kazu-yamamoto/crypton/issues/6
+  -- Can be removed when this is resolved: https://github.com/snoyberg/http-client/issues/508
   http-client-tls < 0.3.6.2
 
 
