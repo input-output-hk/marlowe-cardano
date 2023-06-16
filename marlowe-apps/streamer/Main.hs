@@ -1,3 +1,5 @@
+-- editorconfig-checker-disable-file
+
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE LambdaCase #-}
@@ -10,11 +12,14 @@ module Main
   ) where
 
 
-import Blaze.ByteString.Builder.Char8 (fromString)
+import Control.Arrow ((&&&))
 import Control.Concurrent (forkIO)
 import Control.Concurrent.MVar (MVar, newEmptyMVar, putMVar, takeMVar)
 import Control.Monad (void)
 import Data.Bifunctor (bimap)
+import Data.Function (on)
+import Data.List (groupBy)
+import Data.String (fromString)
 import Data.Time.Units (Second)
 import Language.Marlowe.Runtime.App.Channel (RequeueFrequency(RequeueFrequency))
 import Language.Marlowe.Runtime.App.Parser (getConfigParser)
@@ -29,12 +34,14 @@ import Observe.Event (EventBackend)
 import Observe.Event.Backend (unitEventBackend)
 import Observe.Event.Dynamic (DynamicEventSelector(..))
 
+import qualified Blaze.ByteString.Builder.Char8 as B8 (fromString)
 import qualified Data.Aeson as A
 import qualified Data.ByteString.Char8 as BS8
 import qualified Data.ByteString.Lazy.Char8 as LBS8
 import qualified Data.Map as M
 import qualified Data.Text as T
 import qualified Data.Vector as V
+import qualified Language.Marlowe.Core.V1.Semantics as V1
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
 import qualified Language.Marlowe.Core.V1.Semantics.Types.Address as V1
 import qualified Language.Marlowe.Runtime.App.Channel as App
@@ -43,6 +50,7 @@ import qualified Language.Marlowe.Runtime.Core.Api as Core
 import qualified Language.Marlowe.Runtime.History.Api as History
 import qualified Options.Applicative as O
 import qualified Plutus.V2.Ledger.Api as P
+import qualified PlutusTx.AssocMap as AM
 
 
 runDetection
@@ -81,6 +89,7 @@ runStreamer Terse eventBackend streamMVar =
             History.CreateStep{..} = csCreateStep
             Core.TransactionScriptOutput{..} = createOutput
             Chain.TxOutRef{..} = utxo
+            V1.MarloweData{..} = datum
           in
             putMVar streamMVar . Just $ A.object
               [
@@ -89,14 +98,13 @@ runStreamer Terse eventBackend streamMVar =
               , "contractId"    A..= csContractId
               , "transactionId" A..= txId
               , "value"         A..= showAssets assets
+              , "state"         A..= showState marloweState
               , "actions"       A..= ["create" :: String]
               ]
         ContractStreamContinued{csContractStep=History.ApplyTransaction Core.Transaction{..}, ..} ->
           let
             Chain.BlockHeader{..} = csBlockHeader
             Core.TransactionOutput{..} = output
-            showParty (V1.Address network address) = T.unpack $ V1.serialiseAddressBech32 network address
-            showParty (V1.Role role) = show role
             summarize (V1.IDeposit account party token amount) =
               A.object
                 [
@@ -127,6 +135,7 @@ runStreamer Terse eventBackend streamMVar =
               , "contractId"    A..= csContractId
               , "transactionId" A..= transactionId
               , "value"         A..= maybe (A.Array V.empty) (\Core.TransactionScriptOutput{..} -> showAssets assets) scriptOutput
+              , "state"         A..= fmap (\Core.TransactionScriptOutput{..} -> showState $ V1.marloweState datum) scriptOutput
               , "actions"       A..= fmap (summarize . V1.getInputContent) inputs
               ]
         ContractStreamContinued{csContractStep=History.RedeemPayout History.RedeemStep{..}, ..} ->
@@ -140,6 +149,7 @@ runStreamer Terse eventBackend streamMVar =
               , "contractId"    A..= csContractId
               , "transactionId" A..= redeemingTx
               , "value"         A..= A.Array V.empty
+              , "state"         A..= (Nothing :: Maybe A.Value)
               , "actions"       A..= [
                                        A.object
                                          [
@@ -161,6 +171,7 @@ runStreamer Standard eventBackend streamMVar =
             History.CreateStep{..} = csCreateStep
             Core.TransactionScriptOutput{..} = createOutput
             Chain.TxOutRef{..} = utxo
+            V1.MarloweData{..} = datum
           in
             putMVar streamMVar . Just $ A.object
               [
@@ -169,12 +180,36 @@ runStreamer Standard eventBackend streamMVar =
               , "contractId"    A..= csContractId
               , "transactionId" A..= txId
               , "value"         A..= showAssets assets
+              , "contract"      A..= Just marloweContract
+              , "state"         A..= Just (showState marloweState)
               , "actions"       A..= ["create" :: String]
               ]
         ContractStreamContinued{csContractStep=History.ApplyTransaction Core.Transaction{..}, ..} ->
           let
             Chain.BlockHeader{..} = csBlockHeader
             Core.TransactionOutput{..} = output
+            summarize (V1.IDeposit account party token amount) =
+              A.object
+                [
+                  "action"  A..= ("deposit" :: String)
+                , "actor"   A..= showParty party
+                , "account" A..= showParty account
+                , "token"   A..= showToken token
+                , "amount"  A..= amount
+                ]
+            summarize (V1.IChoice (V1.ChoiceId name party) number) =
+              A.object
+                [
+                  "action" A..= ("choose" :: String)
+                , "actor"  A..= showParty party
+                , "choice" A..= BS8.unpack (P.fromBuiltin name)
+                , "number" A..= number
+                ]
+            summarize V1.INotify =
+              A.object
+                [
+                  "action" A..= ("notify" :: String)
+                ]
           in
             putMVar streamMVar . Just $ A.object
               [
@@ -183,7 +218,9 @@ runStreamer Standard eventBackend streamMVar =
               , "contractId"    A..= csContractId
               , "transactionId" A..= transactionId
               , "value"         A..= maybe (A.Array V.empty) (\Core.TransactionScriptOutput{..} -> showAssets assets) scriptOutput
-              , "actions"       A..= fmap V1.getInputContent inputs
+              , "contract"      A..= fmap (\Core.TransactionScriptOutput{..} -> V1.marloweContract datum) scriptOutput
+              , "state"         A..= fmap (\Core.TransactionScriptOutput{..} -> showState $ V1.marloweState datum) scriptOutput
+              , "actions"       A..= fmap (summarize . V1.getInputContent) inputs
               ]
         ContractStreamContinued{csContractStep=History.RedeemPayout History.RedeemStep{..}, ..} ->
           let
@@ -196,7 +233,15 @@ runStreamer Standard eventBackend streamMVar =
               , "contractId"    A..= csContractId
               , "transactionId" A..= redeemingTx
               , "value"         A..= A.Array V.empty
-              , "actions"       A..= ["redeem by " <> BS8.unpack (Chain.unTokenName $ Chain.tokenName datum)]
+              , "contract"      A..= (Nothing :: Maybe V1.Contract)
+              , "state"         A..= (Nothing :: Maybe A.Value)
+              , "actions"       A..= [
+                                       A.object
+                                         [
+                                           "action" A..= ("redeem" :: String)
+                                         , "actor"  A..= Chain.tokenName datum
+                                         ]
+                                     ]
               ]
         ContractStreamWait{} -> pure ()
         ContractStreamFinish{} -> pure ()
@@ -204,6 +249,13 @@ runStreamer Standard eventBackend streamMVar =
 runStreamer Verbose eventBackend streamMVar =
   App.watchContracts "StreamerProcess" eventBackend
     $ \_ -> putMVar streamMVar . Just . A.toJSON
+
+
+showParty
+  :: V1.Party
+  -> String
+showParty (V1.Address network address) = T.unpack $ V1.serialiseAddressBech32 network address
+showParty (V1.Role role) = show role
 
 
 showToken
@@ -233,11 +285,52 @@ showAssets (Chain.Assets lovelace (Chain.Tokens tokens)) =
     ]
 
 
+showChoice
+  :: (V1.ChoiceId, Integer)
+  -> A.Value
+showChoice (V1.ChoiceId name party, number) =
+  A.object
+    [
+      "actor"  A..= showParty party
+    , "choice" A..= name
+    , "number" A..= number
+    ]
+
+
+showState
+  :: V1.State
+  -> A.Value
+showState V1.State{..} =
+  let
+    accounts' =
+      ((fromString . showParty . fst . head) &&& (A.Array . V.fromList . fmap snd))
+        <$> groupBy ((==) `on` fst)
+        [
+          (
+            party
+          , A.object
+            [
+              "token"  A..= showToken token
+            , "amount" A..= amount
+            ]
+          )
+        |
+          ((party, token), amount) <- AM.toList accounts
+        ]
+  in
+    A.object
+      [
+        "accounts"  A..= A.object (uncurry (A..=) <$> accounts')
+      , "choices"   A..= A.Array (V.fromList $ showChoice <$> AM.toList choices)
+      , "variables" A..= A.object ((\(V1.ValueId k, v) -> fromString (BS8.unpack $ P.fromBuiltin k) A..= v) <$> AM.toList boundValues)
+      ]
+
+
 eventStream
   :: MVar (Maybe A.Value)
   -> IO ServerEvent
 eventStream =
-  fmap (maybe CloseEvent $ ServerEvent Nothing Nothing . pure . fromString . LBS8.unpack . A.encode)
+  fmap (maybe CloseEvent $ ServerEvent Nothing Nothing . pure . B8.fromString . LBS8.unpack . A.encode)
     . takeMVar
 
 
