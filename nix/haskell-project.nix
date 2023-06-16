@@ -2,14 +2,14 @@
 
 {
   # Desystemized merged inputs.
-  # All the inputs from iogx (e.g. CHaP, haskell-nix, etc..) unioned with the 
+  # All the inputs from iogx (e.g. CHaP, haskell-nix, etc..) unioned with the
   # inputs defined in your flake. You will also find the `self` attribute here.
   # These inputs have been desystemized against the current system.
   inputs
 
 , systemized-inputs
 
-  # The very config passed as second argument to `inputs.iogx.mkFlake` in your 
+  # The very config passed as second argument to `inputs.iogx.mkFlake` in your
   # `flake.nix`.
 , flakeopts
 
@@ -25,7 +25,7 @@
   # when the build has to include haddock.
 , deferPluginErrors
 
-  # Whether to enable haskell profiling. 
+  # Whether to enable haskell profiling.
 , enableProfiling
 }:
 
@@ -88,10 +88,6 @@ let
     # Honestly not sure why we need this, it has a mysterious unused dependency on "m"
     # This will go away when we upgrade nixpkgs and things use ieee754 anyway.
     ieee.components.library.libs = lib.mkForce [ ];
-
-    # See https://github.com/input-output-hk/iohk-nix/pull/488
-    cardano-crypto-praos.components.library.pkgconfig = lib.mkForce [ [ pkgs.libsodium-vrf pkgs.secp256k1 ] ];
-    cardano-crypto-class.components.library.pkgconfig = lib.mkForce [ [ pkgs.libsodium-vrf pkgs.secp256k1 ] ];
 
     # hpack fails due to modified cabal file, can remove when we bump to 3.12.0
     cardano-addresses.cabal-generator = lib.mkForce null;
