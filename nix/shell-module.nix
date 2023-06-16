@@ -44,6 +44,24 @@ in
 
     pkgs.sqitchPg
     pkgs.postgresql
+    pkgs.curl
+    pkgs.jq
+    pkgs.openssl
+    pkgs.pkg-config
+    pkgs.pre-commit
+    pkgs.sqlite-interactive
+    pkgs.haskellPackages.hspec-golden
+    pkgs.yq
+    pkgs.zlib
+    pkgs.z3
+    pkgs.docker-compose
+    pkgs.json2yaml
+    pkgs.yaml2json
+    pkgs.glibcLocales
+    pkgs.libsodium-vrf
+    pkgs.lzma
+    pkgs.openssl_3_0.dev
+    pkgs.secp256k1
   ];
 
   env.PGUSER = "postgres";
