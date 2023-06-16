@@ -1,7 +1,7 @@
+{-# OPTIONS_GHC -Wno-orphans #-}
 {-# LANGUAGE ApplicativeDo #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
-{-# OPTIONS_GHC -Wno-orphans #-}
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE RankNTypes #-}
 
@@ -57,7 +57,7 @@ hashContract = fromCardanoDatumHash . hashScriptData . toCardanoScriptData . toD
 merkleizeWithPeers :: Contract -> Writer Continuations (Maybe DatumHash)
 merkleizeWithPeers contract = go
   (peerTracedToPeer $ marloweLoadClientPeer $ pushContract contract)
-  (peerTracedToPeer $ marloweLoadServerPeer $ pullContract (unsafeIntToNat 100) save $ pure ())
+  (peerTracedToPeer $ marloweLoadServerPeer $ pullContract (unsafeIntToNat 100) save (pure ()) $ pure ())
   where
     go
       :: Peer MarloweLoad 'AsClient st (Writer Continuations) (Maybe DatumHash)
