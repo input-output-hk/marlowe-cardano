@@ -489,7 +489,7 @@ executable marlowe-indexer
     , hasql >=1.6 && <2
     , hasql-pool ^>=0.8
     , hs-opentelemetry-api ==0.0.3.6
-    , hs-opentelemetry-sdk >=0.0.3 && <0.0.4
+    , hs-opentelemetry-sdk ==0.0.3.4
     , marlowe-chain-sync ==0.0.2
     , marlowe-protocols ==0.1.1.0
     , marlowe-runtime:{marlowe-runtime, indexer} ==0.0.2
@@ -522,7 +522,7 @@ executable marlowe-sync
     , hasql >=1.6 && <2
     , hasql-pool ^>=0.8
     , hs-opentelemetry-api ==0.0.3.6
-    , hs-opentelemetry-sdk >=0.0.3 && <0.0.4
+    , hs-opentelemetry-sdk ==0.0.3.4
     , marlowe-protocols ==0.1.1.0
     , marlowe-runtime:{marlowe-runtime, discovery-api, history-api, sync, sync-api} ==0.0.2
     , mtl >=2.2 && <3
@@ -552,7 +552,7 @@ executable marlowe-tx
     , eventuo11y-extras ==0.1.1.0
     , eventuo11y-otel ^>=0.1
     , hs-opentelemetry-api ==0.0.3.6
-    , hs-opentelemetry-sdk >=0.0.3 && <0.0.4
+    , hs-opentelemetry-sdk ==0.0.3.4
     , marlowe-chain-sync ==0.0.2
     , marlowe-protocols ==0.1.1.0
     , marlowe-runtime:{marlowe-runtime, contract-api, tx, tx-api} ==0.0.2
@@ -579,7 +579,7 @@ executable marlowe-contract
     , eventuo11y-extras ==0.1.1.0
     , eventuo11y-otel ^>=0.1
     , hs-opentelemetry-api ==0.0.3.6
-    , hs-opentelemetry-sdk >=0.0.3 && <0.0.4
+    , hs-opentelemetry-sdk ==0.0.3.4
     , marlowe-cardano ==0.1.1.0
     , marlowe-protocols ==0.1.1.0
     , marlowe-runtime:{contract, contract-api} ==0.0.2
@@ -606,7 +606,7 @@ executable marlowe-proxy
     , eventuo11y-extras ==0.1.1.0
     , eventuo11y-otel ^>=0.1
     , hs-opentelemetry-api ==0.0.3.6
-    , hs-opentelemetry-sdk >=0.0.3 && <0.0.4
+    , hs-opentelemetry-sdk ==0.0.3.4
     , marlowe-protocols ==0.1.1.0
     , marlowe-runtime:{config, contract-api, discovery-api, history-api, proxy, proxy-api, sync-api, tx-api} ==0.0.2
     , network >=3.1 && <4

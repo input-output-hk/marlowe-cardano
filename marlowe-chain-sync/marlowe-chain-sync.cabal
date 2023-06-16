@@ -246,7 +246,7 @@ executable marlowe-chain-indexer
     , hasql >=1.6 && <2
     , hasql-pool ^>=0.8
     , hs-opentelemetry-api ==0.0.3.6
-    , hs-opentelemetry-sdk >=0.0.3 && <0.0.4
+    , hs-opentelemetry-sdk ==0.0.3.4
     , marlowe-chain-sync:chain-indexer
     , mtl >=2.2 && <3
     , optparse-applicative
@@ -280,7 +280,7 @@ executable marlowe-chain-sync
     , hasql >=1.6 && <2
     , hasql-pool ^>=0.8
     , hs-opentelemetry-api ==0.0.3.6
-    , hs-opentelemetry-sdk >=0.0.3 && <0.0.4
+    , hs-opentelemetry-sdk ==0.0.3.4
     , marlowe-chain-sync:{marlowe-chain-sync, libchainsync} ==0.0.2
     , marlowe-protocols ==0.1.1.0
     , mtl >=2.2 && <3
