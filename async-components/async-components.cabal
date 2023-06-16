@@ -60,7 +60,7 @@ library
     , eventuo11y-otel ^>=0.1
     , exceptions ^>=0.10
     , general-allocate ^>=0.2
-    , hs-opentelemetry-api >=0.0.3 && <0.0.4
+    , hs-opentelemetry-api ==0.0.3.6
     , hs-opentelemetry-sdk >=0.0.3 && <0.0.4
     , mtl >=2.2 && <3
     , servant ^>=0.19
