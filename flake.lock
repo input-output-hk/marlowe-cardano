@@ -5529,13 +5529,13 @@
       "locked": {
         "lastModified": 1686904565,
         "narHash": "sha256-0S1bSFo4g5dcSjNesuqJmAqDqaJlIV9Ibf32OSyQ/1w=",
-        "owner": "zeme-wana",
+        "owner": "input-output-hk",
         "repo": "iogx",
         "rev": "6ed22d6d308418042718f5a4ae2a2af643c0180a",
         "type": "github"
       },
       "original": {
-        "owner": "zeme-wana",
+        "owner": "input-output-hk",
         "repo": "iogx",
         "type": "github"
       }
