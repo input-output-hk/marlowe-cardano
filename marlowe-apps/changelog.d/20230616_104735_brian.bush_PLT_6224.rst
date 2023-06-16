@@ -1,0 +1,4 @@
+Added
+-----
+
+- Executable `marlowe-streamer` for server-sent event (SSE) stream of Marlowe contracts.
