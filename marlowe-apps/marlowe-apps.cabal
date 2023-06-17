@@ -28,15 +28,15 @@ library
   build-depends:
     , aeson
     , async
-    , base >=4.9 && <5
+    , base                                                                                                >=4.9 && <5
     , bytestring
     , cardano-api
     , containers
     , data-default
-    , eventuo11y >=0.9 && <0.11
-    , eventuo11y-dsl ^>=0.2
-    , eventuo11y-json ^>=0.3
-    , general-allocate ^>=0.2
+    , eventuo11y                                                                                          >=0.9 && <0.11
+    , eventuo11y-dsl                                                                                      ^>=0.2
+    , eventuo11y-json                                                                                     ^>=0.3
+    , general-allocate                                                                                    ^>=0.2
     , marlowe-cardano
     , marlowe-chain-sync
     , marlowe-client
@@ -66,11 +66,11 @@ executable marlowe-pipe
   hs-source-dirs:   pipe
   build-depends:
     , aeson
-    , base >=4.9 && <5
+    , base                  >=4.9 && <5
     , bytestring
-    , eventuo11y >=0.9 && <0.11
-    , eventuo11y-dsl ^>=0.2
-    , eventuo11y-json ^>=0.3
+    , eventuo11y            >=0.9 && <0.11
+    , eventuo11y-dsl        ^>=0.2
+    , eventuo11y-json       ^>=0.3
     , marlowe-apps
     , mtl
     , optparse-applicative
@@ -87,12 +87,13 @@ executable marlowe-scaling
   main-is:          Main.hs
   hs-source-dirs:   scaling
   build-depends:
+    , aeson
     , async
-    , base >=4.9 && <5
+    , base                  >=4.9 && <5
     , cardano-api
-    , eventuo11y >=0.9 && <0.11
-    , eventuo11y-dsl ^>=0.2
-    , eventuo11y-json ^>=0.3
+    , eventuo11y            >=0.9 && <0.11
+    , eventuo11y-dsl        ^>=0.2
+    , eventuo11y-json       ^>=0.3
     , marlowe-apps
     , marlowe-cardano
     , marlowe-chain-sync
@@ -123,12 +124,12 @@ executable marlowe-oracle
 
   build-depends:
     , aeson
-    , base >=4.9 && <5
+    , base                  >=4.9 && <5
     , bytestring
     , cardano-api
-    , eventuo11y >=0.9 && <0.11
-    , eventuo11y-dsl ^>=0.2
-    , eventuo11y-json ^>=0.3
+    , eventuo11y            >=0.9 && <0.11
+    , eventuo11y-dsl        ^>=0.2
+    , eventuo11y-json       ^>=0.3
     , extra
     , http-client
     , http-client-tls
@@ -155,10 +156,10 @@ executable marlowe-finder
   main-is:          Main.hs
   hs-source-dirs:   finder
   build-depends:
-    , base >=4.9 && <5
-    , eventuo11y >=0.9 && <0.11
-    , eventuo11y-dsl ^>=0.2
-    , eventuo11y-json ^>=0.3
+    , base                  >=4.9 && <5
+    , eventuo11y            >=0.9 && <0.11
+    , eventuo11y-dsl        ^>=0.2
+    , eventuo11y-json       ^>=0.3
     , marlowe-apps
     , marlowe-runtime
     , optparse-applicative
@@ -177,7 +178,7 @@ executable signing-service
   hs-source-dirs:   signing
   build-depends:
     , aeson
-    , base >=4.9 && <5
+    , base                >=4.9 && <5
     , cardano-api
     , marlowe-apps
     , marlowe-chain-sync
@@ -193,16 +194,16 @@ executable signing-service
   default-language: Haskell2010
 
 executable marlowe-streamer
-  main-is: Main.hs
-  hs-source-dirs: streamer
+  main-is:          Main.hs
+  hs-source-dirs:   streamer
   build-depends:
     , aeson
-    , base >=4.9 && <5
+    , base                                            >=4.9 && <5
     , blaze-builder
     , bytestring
     , containers
-    , eventuo11y >=0.9 && <0.11
-    , eventuo11y-json ^>=0.3
+    , eventuo11y                                      >=0.9 && <0.11
+    , eventuo11y-json                                 ^>=0.3
     , marlowe-apps
     , marlowe-cardano
     , marlowe-chain-sync
@@ -215,6 +216,23 @@ executable marlowe-streamer
     , vector
     , wai-extra
     , warp
+
+  ghc-options:
+    -Wall -Wnoncanonical-monad-instances -Wincomplete-uni-patterns
+    -Wincomplete-record-updates -Wredundant-constraints -Widentities
+    -Wunused-packages
+
+  default-language: Haskell2010
+
+executable marlowe-demo
+  main-is:          Main.hs
+  hs-source-dirs:   demo
+  build-depends:
+    , aeson
+    , base               >=4.9 && <5
+    , marlowe-cardano
+    , plutus-ledger-api
+    , text
 
   ghc-options:
     -Wall -Wnoncanonical-monad-instances -Wincomplete-uni-patterns
