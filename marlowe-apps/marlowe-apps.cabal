@@ -224,13 +224,41 @@ executable marlowe-streamer
 
   default-language: Haskell2010
 
+executable marlowe-tidal
+  main-is:          Main.hs
+  hs-source-dirs:   tidal
+  build-depends:
+    , base                                            >=4.9 && <5
+    , bytestring
+    , containers
+    , eventuo11y                                      >=0.9 && <0.11
+    , eventuo11y-json                                 ^>=0.3
+    , marlowe-apps
+    , marlowe-cardano
+    , marlowe-chain-sync
+    , marlowe-runtime:{marlowe-runtime, history-api}
+    , optparse-applicative
+    , plutus-ledger-api
+    , plutus-tx
+    , tidal
+    , time-units
+
+  ghc-options:
+    -Wall -Wnoncanonical-monad-instances -Wincomplete-uni-patterns
+    -Wincomplete-record-updates -Wredundant-constraints -Widentities
+    -Wunused-packages
+
+  default-language: Haskell2010
+
 executable marlowe-demo
   main-is:          Main.hs
   hs-source-dirs:   demo
   build-depends:
     , aeson
     , base               >=4.9 && <5
+    , containers
     , marlowe-cardano
+    , mtl
     , plutus-ledger-api
     , text
 

@@ -2,14 +2,14 @@
 
 {
   # Desystemized merged inputs.
-  # All the inputs from iogx (e.g. CHaP, haskell-nix, etc..) unioned with the 
+  # All the inputs from iogx (e.g. CHaP, haskell-nix, etc..) unioned with the
   # inputs defined in your flake. You will also find the `self` attribute here.
   # These inputs have been desystemized against the current system.
   inputs
 
 , systemized-inputs
 
-  # The very config passed as second argument to `inputs.iogx.mkFlake` in your 
+  # The very config passed as second argument to `inputs.iogx.mkFlake` in your
   # `flake.nix`.
 , flakeopts
 
@@ -25,7 +25,7 @@
   # when the build has to include haddock.
 , deferPluginErrors
 
-  # Whether to enable haskell profiling. 
+  # Whether to enable haskell profiling.
 , enableProfiling
 }:
 
@@ -63,6 +63,7 @@ let
     # FIXME: Haddock mysteriously gives a spurious missing-home-modules warning
     plutus-tx-plugin.doHaddock = false;
     plutus-script-utils.doHaddock = false;
+    tidal.doHaddock = false;
 
     # Relies on cabal-doctest, just turn it off in the Nix build
     prettyprinter-configurable.components.tests.prettyprinter-configurable-doctest.buildable = lib.mkForce false;
