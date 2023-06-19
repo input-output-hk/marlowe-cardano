@@ -1,7 +1,6 @@
 { inputs, pkgs }:
 let
-  inherit (pkgs.iohkNix) cardanoLib;
-  inherit (cardanoLib) environments mkEdgeTopology;
+  inherit (pkgs.cardanoLib) environments mkEdgeTopology;
   mkNetwork = env: env // {
     topology = mkEdgeTopology {
       edgeNodes = [ env.relaysNew ];
