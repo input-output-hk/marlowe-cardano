@@ -1,4 +1,3 @@
----
 # this is rarely an improvement
 - ignore: {name: Move brackets to avoid $}
 # this is often worse
