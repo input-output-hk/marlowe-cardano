@@ -1,3 +1,5 @@
+-- editorconfig-checker-disable-file
+
 {-# OPTIONS_GHC -Wno-orphans #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleInstances #-}

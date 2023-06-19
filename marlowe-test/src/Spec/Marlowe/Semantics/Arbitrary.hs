@@ -1289,6 +1289,7 @@ instance Arbitrary SafetyError where
       , pure InconsistentNetworks
       , pure WrongNetwork
       , IllegalAddress <$> arbitrary
+      , pure SafetyAnalysisTimeout
       ]
   shrink MissingRolesCurrency = mempty
   shrink ContractHasNoRoles = mempty
@@ -1319,6 +1320,7 @@ instance Arbitrary SafetyError where
   shrink InconsistentNetworks = mempty
   shrink WrongNetwork = mempty
   shrink (IllegalAddress address) = IllegalAddress <$> shrink address
+  shrink SafetyAnalysisTimeout = mempty
 
 
 instance Arbitrary Transaction where

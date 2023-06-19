@@ -20,6 +20,7 @@ import qualified Data.Set as Set
 import Data.String (fromString)
 import Language.Marlowe.Runtime.ChainSync.Api
   (ChainSyncQuery, RuntimeChainSeekClient, UTxOs(..), renderTxOutRef, toBech32, unInterpreter)
+import Data.Time (NominalDiffTime)
 import Language.Marlowe.Runtime.Contract.Api (ContractRequest)
 import Language.Marlowe.Runtime.Core.Api (MarloweVersion(..), renderContractId)
 import Language.Marlowe.Runtime.Core.ScriptRegistry (MarloweScripts, ReferenceScriptUtxo(..))
@@ -46,6 +47,7 @@ data TransactionDependencies m = TransactionDependencies
   , chainSyncQueryConnector :: Connector (QueryClient ChainSyncQuery) m
   , contractQueryConnector :: Connector (QueryClient ContractRequest) m
   , getCurrentScripts :: forall v. MarloweVersion v -> MarloweScripts
+  , analysisTimeout :: NominalDiffTime
   }
 
 data MarloweTx m = MarloweTx

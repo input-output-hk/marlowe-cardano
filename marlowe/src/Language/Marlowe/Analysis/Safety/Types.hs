@@ -97,6 +97,8 @@ data SafetyError =
   | WrongNetwork
     -- | The contract contains an illegal ledger address.
   | IllegalAddress Ledger.Address
+    -- | The safety analysis exceeded the allotted time.
+  | SafetyAnalysisTimeout
     deriving (Eq, Generic, Show)
 
 
@@ -249,6 +251,12 @@ instance ToJSON SafetyError where
        , "detail" .= ("The contract contains this address that is invalid for the network on which it will be executed." :: String)
        , "address" .= show address
        , "fatal" .= True
+       ]
+  toJSON SafetyAnalysisTimeout =
+    object
+       [ "error" .= ("SafetyAnalysisTimeout" :: String)
+       , "detail" .= ("The safety analysis exceeded the allotted time." :: String)
+       , "fatal" .= False
        ]
 
 

@@ -1,3 +1,5 @@
+-- editorconfig-checker-disable-file
+
 {-# LANGUAGE Arrows #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
@@ -12,6 +14,7 @@ import Control.Concurrent.Component
 import Control.Concurrent.Component.Probes (ProbeServerDependencies(..), probeServer)
 import Control.Concurrent.Component.Run (AppM, runAppMTraced)
 import qualified Data.Text as T
+import Data.Time (NominalDiffTime)
 import Data.Version (showVersion)
 import Language.Marlowe.Runtime.ChainSync.Api (BlockNo(..), ChainSyncQuery(..), RuntimeChainSeekClient)
 import Language.Marlowe.Runtime.Contract.Api (ContractRequest)
@@ -83,6 +86,7 @@ run Options{..} = flip runComponent_ () proc _ -> do
         Query.loadMarloweContext ScriptRegistry.getScripts networkId chainSyncConnector chainSyncQueryConnector v contractId
     , loadWalletContext = Query.loadWalletContext $ runConnector chainSyncQueryConnector . request . GetUTxOs
     , getCurrentScripts = ScriptRegistry.getCurrentScripts
+    , analysisTimeout = analysisTimeout
     , ..
     }
 
@@ -103,6 +107,7 @@ data Options = Options
   , port :: PortNumber
   , host :: HostName
   , submitConfirmationBlocks :: BlockNo
+  , analysisTimeout :: NominalDiffTime
   , httpPort :: PortNumber
   }
 
@@ -119,6 +124,7 @@ getOptions = execParser $ info (helper <*> parser) infoMod
       <*> portParser
       <*> hostParser
       <*> submitConfirmationBlocksParser
+      <*> analysisTimeoutParser
       <*> httpPortParser
 
     chainSeekPortParser = option auto $ mconcat
@@ -199,6 +205,14 @@ getOptions = execParser $ info (helper <*> parser) infoMod
       , value 0
       , metavar "INTEGER"
       , help "The number of blocks after a transaction has been confirmed to wait before displaying the block in which was confirmed."
+      , showDefault
+      ]
+
+    analysisTimeoutParser = option (fromInteger <$> auto) $ mconcat
+      [ long "analysis-timeout"
+      , value 15
+      , metavar "SECONDS"
+      , help "The amount of time allotted for safety analysis of a contract."
       , showDefault
       ]
 
