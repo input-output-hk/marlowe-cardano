@@ -72,7 +72,7 @@ run Options{..} = bracket (Pool.acquire 100 (Just 5000000) (fromString databaseU
               (either throwIO pure <=< liftIO . Pool.use pool)
               Postgres.databaseQueries
         , runtimeVersion = version
-        , chainQueryConnector = tcpClient chainSyncHost chainQueryPort queryClientPeer
+        , chainSyncQueryConnector = tcpClient chainSyncHost chainQueryPort queryClientPeer
         }
 
       tcpServerTraced "marlowe-sync" (injectSelector MarloweSyncServer) -< TcpServerDependencies

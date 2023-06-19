@@ -41,7 +41,7 @@ import UnliftIO (MonadUnliftIO)
 
 data SyncDependencies m = SyncDependencies
   { runtimeVersion :: Version
-  , chainQueryConnector :: Connector (QueryClient ChainSyncQuery) m
+  , chainSyncQueryConnector :: Connector (QueryClient ChainSyncQuery) m
   , databaseQueries :: DatabaseQueries m
   }
 

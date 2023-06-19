@@ -10,14 +10,14 @@ import UnliftIO (MonadUnliftIO)
 
 data QueryServerDependencies m = QueryServerDependencies
   { runtimeVersion :: Version
-  , chainQueryConnector :: Connector (QueryClient ChainSyncQuery) m
+  , chainSyncQueryConnector :: Connector (QueryClient ChainSyncQuery) m
   , databaseQueries :: DatabaseQueries m
   }
 
 queryServer :: MonadUnliftIO m => QueryServerDependencies m -> ServerSource MarloweQueryServer m ()
 queryServer QueryServerDependencies{..} = ServerSource $ pure $ marloweQueryServer
   runtimeVersion
-  chainQueryConnector
+  chainSyncQueryConnector
   getTip
   getHeaders
   getContractState
