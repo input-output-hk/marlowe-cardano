@@ -1,20 +1,17 @@
 { inputs, inputs', pkgs, flake }:
 
 {
-  packages = {
-    inherit (flake.packages) ghc8107 entrypoints;
-  };
+  excludedPaths = [
+    "packages.ghc8107-profiled"
+    "packages.ghc8107-mingwW64-profiled"
+    "devShells.ghc8107-profiled"
+    "devShells.ghc8107-mingwW64-profiled"
+    "checks.ghc8107-profiled"
+    "checks.ghc8107-mingwW64-profiled"
+    "networks"
+    "nomadTasks"
+    "operables"
+  ];
 
-
-  inherit (flake) oci-images;
-
-
-  devShells = {
-    inherit (flake.devShells) ghc8107;
-  };
-
-
-  checks = {
-    inherit (flake.checks) ghc8107;
-  };
+  extraJobs = { };
 }
