@@ -1,3 +1,5 @@
+-- editorconfig-checker-disable-file
+
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -233,7 +235,9 @@ checkTransaction solveConstraints version@MarloweV1 marloweContext@MarloweContex
       let
         walletContext = walletForConstraints version marloweContext changeAddress constraints
       pure
-        . either (pure . TransactionValidationError transaction . show) (const $ TransactionWarning <$> V1.txOutWarnings txOutput)
+        . either
+          (pure . TransactionValidationError transaction . show)
+          (const $ TransactionWarning transaction <$> V1.txOutWarnings txOutput)
         $ solveConstraints version marloweContext' walletContext constraints
 
 

@@ -1,3 +1,5 @@
+-- editorconfig-checker-disable-file
+
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -40,11 +42,10 @@ import Control.Concurrent.STM (STM, modifyTVar, newEmptyTMVar, newTVar, putTMVar
 import Control.Error (MaybeT(..))
 import Control.Error.Util (hoistMaybe, hush, note, noteT)
 import Control.Exception (Exception(..))
-import Control.Monad (unless)
 import Control.Monad.Event.Class
 import Control.Monad.IO.Class (MonadIO(liftIO))
 import Control.Monad.Trans.Class (lift)
-import Control.Monad.Trans.Except (ExceptT(..), except, runExceptT, throwE, withExceptT)
+import Control.Monad.Trans.Except (ExceptT(..), except, runExceptT, withExceptT)
 import Data.Bifunctor (first)
 import Data.Foldable (foldl')
 import Data.List (find)
@@ -283,24 +284,11 @@ execCreate contractQueryConnector getCurrentScripts solveConstraints loadWalletC
       , payoutScriptHash = payoutScript
       }
   let
-    contractSafetyErrors =
-      if False  -- FIXME: Disabled because of incompatibility with integration tests.
-        then checkContract networkId roleTokens version contract' continuations
-        else mempty
-  -- FIXME: The is a placeholder until we design safety-analysis reporting.
-  unless (null contractSafetyErrors)
-    . throwE . CreateSafetyAnalysisError
-    $ show contractSafetyErrors
+    contractSafetyErrors = checkContract networkId roleTokens version contract' continuations
   transactionSafetyErrors <-
     ExceptT
       $ first CreateSafetyAnalysisError
-      <$> if False  -- FIXME: Disabled because of incompatibility with integration tests.
-            then checkTransactions solveConstraints version marloweContext rolesCurrency (changeAddress addresses) (toInteger minAda) contract' continuations
-            else pure $ pure mempty
-  -- FIXME: The is a placeholder until we design safety-analysis reporting.
-  unless (null transactionSafetyErrors)
-    . throwE . CreateSafetyAnalysisError
-    $ show transactionSafetyErrors
+      <$> checkTransactions solveConstraints version marloweContext rolesCurrency (changeAddress addresses) (toInteger minAda) contract' continuations
   txBody <- except
     $ first CreateConstraintError
     $ solveConstraints version marloweContext walletContext constraints
@@ -320,6 +308,7 @@ execCreate contractQueryConnector getCurrentScripts solveConstraints loadWalletC
     , version
     , datum
     , assets
+    , safetyErrors = contractSafetyErrors <> transactionSafetyErrors
     }
 
 singletonContinuations :: Contract.ContractWithAdjacency -> Continuations 'V1

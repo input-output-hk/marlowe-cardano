@@ -216,10 +216,12 @@ instance (ArbitraryMarloweVersion v, IsCardanoEra era) => Arbitrary (ContractCre
     <*> arbitrary
     <*> arbitrary
     <*> hedgehog (genTxBody cardanoEra)
+    <*> arbitrary
   shrink ContractCreated{..} = fold
     [ [ ContractCreated{..} { ContractCreated.metadata = metadata' } | metadata' <- shrink metadata ]
     , [ ContractCreated{..} { ContractCreated.datum = datum' } | datum' <- shrink datum ]
     , [ ContractCreated{..} { ContractCreated.assets = assets' } | assets' <- shrink assets ]
+    , [ ContractCreated{..} { ContractCreated.safetyErrors = safetyErrors' } | safetyErrors' <- shrink safetyErrors ]
     ]
 
 instance (ArbitraryMarloweVersion v, IsCardanoEra era) => Arbitrary (InputsApplied era v) where
