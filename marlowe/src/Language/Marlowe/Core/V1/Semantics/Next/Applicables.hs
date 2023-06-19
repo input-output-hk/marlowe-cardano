@@ -45,7 +45,7 @@ data ApplicableInputs
     = ApplicableInputs
      { notifyMaybe :: Maybe (Indexed CanNotify)
      , deposits    :: [Indexed CanDeposit]
-     , choices     :: [Indexed CanChoose]}
+     , choices     :: [Indexed CanChoose] }
   deriving stock (Show,Eq,Ord,Generic)
   deriving anyclass (Pretty)
 
@@ -55,33 +55,33 @@ emptyApplicables = ApplicableInputs Nothing mempty mempty
 
 
 mkApplicables :: Environment  -> State  ->  Contract -> ApplicableInputs
-mkApplicables  _  _ Close = emptyApplicables
+mkApplicables _ _ Close = emptyApplicables
 mkApplicables environment state (When xs _ _) = mkApplicablesWhen environment state xs
-mkApplicables _  _  _  = emptyApplicables
+mkApplicables _ _ _ = emptyApplicables
 
 mkApplicablesWhen :: Environment -> State -> [Case Contract] -> ApplicableInputs
 mkApplicablesWhen environment state
   = foldl mergeApplicables emptyApplicables
-  . (uncurry (toApplicable environment state)  <$>)
+  . (uncurry (toApplicable environment state) <$>)
   . caseIndexed
 
 mergeApplicables
   :: ApplicableInputs
   -> ( Maybe (Indexed CanNotify)
      , Maybe (Indexed CanDeposit)
-     , Maybe (Indexed CanChoose))
+     , Maybe (Indexed CanChoose) )
   -> ApplicableInputs
 mergeApplicables b ( a@Just{}, _, _)
   = ApplicableInputs
-      (coerce $ (First . notifyMaybe $ b) <> First a  ) -- First Notity evaluated to True is applicable
+      (coerce $ (First . notifyMaybe $ b) <> First a) -- First Notity evaluated to True is applicable
       (deposits b)
       (choices b)
 mergeApplicables b ( _, Just a, _)
   = ApplicableInputs
       (notifyMaybe b)
-      (nubBy sameIndexedValue $ deposits b ++ [a]  ) -- Following Duplicated Deposits are not applicable.
+      (nubBy sameIndexedValue $ deposits b ++ [a]) -- Following Duplicated Deposits are not applicable.
       (choices b)
-mergeApplicables b ( _, _, Just a)
+mergeApplicables b (_, _, Just a)
   = ApplicableInputs
       (notifyMaybe b)
       (deposits b)
@@ -95,7 +95,7 @@ toApplicable
   -> Case Contract
   ->  ( Maybe (Indexed CanNotify)
       , Maybe (Indexed CanDeposit)
-      , Maybe (Indexed CanChoose))
+      , Maybe (Indexed CanChoose) )
 toApplicable environment state caseIndex
   = \case
       (merkleizedContinuation,Deposit accountId party token value)
@@ -105,12 +105,12 @@ toApplicable environment state caseIndex
       (merkleizedContinuation,Choice choiceId bounds)
         -> ( Nothing
            , Nothing
-           , Just $ Indexed  caseIndex $ CanChoose choiceId bounds merkleizedContinuation)
+           , Just $ Indexed  caseIndex $ CanChoose choiceId bounds merkleizedContinuation )
       (merkleizedContinuation,Notify observation) | evalObservation environment state observation
         -> ( Just . Indexed  caseIndex $ CanNotify merkleizedContinuation
            , Nothing
-           , Nothing)
-      (_,Notify _) -> (Nothing,Nothing, Nothing)
+           , Nothing )
+      (_,Notify _) -> (Nothing, Nothing, Nothing)
   . \case
       (Case action _)           -> (IsMerkleizedContinuation False,action)
       (MerkleizedCase action _) -> (IsMerkleizedContinuation True,action)

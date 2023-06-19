@@ -26,7 +26,7 @@ import Deriving.Aeson (Generic)
 import Language.Marlowe.Pretty (Pretty(..))
 import Prelude
 
-newtype IsMerkleizedContinuation = IsMerkleizedContinuation { unIsMerkleizedContinuation :: Bool}
+newtype IsMerkleizedContinuation = IsMerkleizedContinuation { unIsMerkleizedContinuation :: Bool }
     deriving stock (Show,Eq,Ord,Generic)
     deriving anyclass (Pretty)
     deriving newtype (FromJSON,ToJSON)

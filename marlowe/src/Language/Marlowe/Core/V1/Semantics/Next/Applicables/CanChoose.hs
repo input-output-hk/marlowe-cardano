@@ -60,7 +60,7 @@ overlapWith _ _ = False
 
 
 boundsByChoiceId :: ChoiceId -> [Indexed CanChoose] -> [Bound]
-boundsByChoiceId choiceId' = bounds <=< (filter(\x -> choiceId'  == choiceId x) . fmap getIndexedValue)
+boundsByChoiceId choiceId' = bounds <=< (filter (\x -> choiceId'  == choiceId x) . fmap getIndexedValue)
 
 compactAdjoinedBounds :: [Indexed CanChoose]  -> [Bound]
 compactAdjoinedBounds xs = Bound.compactAdjoinedBounds ((bounds . getIndexedValue) =<< xs)
@@ -77,12 +77,12 @@ difference (Indexed i CanChoose {..})
 
 instance FromJSON (Indexed CanChoose) where
   parseJSON (Object v)
-    =  Indexed
-        <$> (CaseIndex <$> v .: "case_index")
-        <*> (CanChoose
-              <$>  v .: "for_choice"
-              <*>  v .: "can_choose_between"
-              <*>  v .: "is_merkleized_continuation")
+    = Indexed
+       <$> (CaseIndex <$> v .: "case_index")
+       <*> (CanChoose
+             <$> v .: "for_choice"
+             <*> v .: "can_choose_between"
+             <*> v .: "is_merkleized_continuation")
   parseJSON _ = fail "CanChoose must be an object CanChoose "
 
 instance ToJSON (Indexed CanChoose) where

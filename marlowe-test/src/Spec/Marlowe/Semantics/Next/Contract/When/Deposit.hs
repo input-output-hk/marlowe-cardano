@@ -33,7 +33,7 @@ instance Injective CanDeposit EvaluatedDeposit  where
 instance Iso EvaluatedDeposit CanDeposit
 
 hasIdenticalEvaluatedDeposits :: Environment -> State -> [Case Contract] -> Bool
-hasIdenticalEvaluatedDeposits e s = not. hasNoIdenticalEvaluatedDeposits e s
+hasIdenticalEvaluatedDeposits e s = not . hasNoIdenticalEvaluatedDeposits e s
 
 hasNoIdenticalEvaluatedDeposits :: Environment -> State -> [Case Contract] -> Bool
 hasNoIdenticalEvaluatedDeposits e s c =
@@ -46,7 +46,7 @@ evaluateDeposits e s = evaluateDepositsQuantities e s . indexedCaseActions
 
 evaluateDepositsQuantities :: Environment -> State -> [Indexed (IsMerkleizedContinuation,Action)] -> [Indexed EvaluatedDeposit]
 evaluateDepositsQuantities _  _ [] = []
-evaluateDepositsQuantities e  s ((Indexed caseIndex (isMerkleizedContinuation,Deposit a b c quantityObs)) : xs)
+evaluateDepositsQuantities e s ((Indexed caseIndex (isMerkleizedContinuation, Deposit a b c quantityObs)) : xs)
   = Indexed caseIndex (EvaluatedDeposit a b c (evalValue e s quantityObs) isMerkleizedContinuation) : evaluateDepositsQuantities e s xs
-evaluateDepositsQuantities e  s (_: xs) = evaluateDepositsQuantities e s xs
+evaluateDepositsQuantities e s (_: xs) = evaluateDepositsQuantities e s xs
 

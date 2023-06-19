@@ -29,7 +29,7 @@ data Next = Next { canReduce :: CanReduce, applicables :: ApplicableInputs}
 
 
 -- | Describe for a given contract which inputs can be applied it can be reduced or not
-next :: Environment ->  State  ->  Contract -> Either AmbiguousIntervalProvided Next
+next :: Environment -> State -> Contract -> Either AmbiguousIntervalProvided Next
 next environment state contract
   = do
     (canReduce,reducedState,reducedContract) <- tryReduce environment state contract

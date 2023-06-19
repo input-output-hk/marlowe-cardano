@@ -24,7 +24,7 @@ isIrreducible environment' state contract
       _otherwise ->  False
 
 isNotClose :: Environment -> State -> Contract -> Bool
-isNotClose _' _ Close = False
+isNotClose _ _ _ Close = False
 isNotClose _ _ _ = True
 
 isReducible :: Environment -> State -> Contract -> Bool

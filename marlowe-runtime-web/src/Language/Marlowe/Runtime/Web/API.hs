@@ -126,7 +126,7 @@ type PostContractsAPI
 type ContractAPI = GetContractAPI
               :<|> PutSignedTxAPI
               :<|> "next" :> NextAPI
-              :<|> "transactions"  :> TransactionsAPI
+              :<|> "transactions" :> TransactionsAPI
 
 -- | GET /contracts/:contractId sub-API
 type GetContractAPI = Get '[JSON] GetContractResponse
