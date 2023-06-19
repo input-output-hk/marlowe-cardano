@@ -10,6 +10,7 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE UndecidableSuperClasses #-}
 
 -- | This module specifies the Marlowe Runtime Web API as a Servant API type.
@@ -23,6 +24,7 @@ import Data.Aeson.Types (parseFail)
 import qualified Data.Aeson.Types as A
 import Data.Bits (Bits(shiftL), (.|.))
 import qualified Data.ByteString as BS
+import qualified Data.ByteString.Lazy as LBS
 import Data.Char (digitToInt)
 import Data.Functor (void, ($>))
 import qualified Data.Map as Map
@@ -45,6 +47,7 @@ import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Time (UTCTime)
 import Data.Typeable (Typeable)
+import Data.Version (Version)
 import Data.Word (Word8)
 import GHC.Base (Symbol)
 import GHC.Exts (IsList(..))
@@ -56,8 +59,14 @@ import Language.Marlowe.Runtime.Web.Next.Schema ()
 
 import Language.Marlowe.Runtime.Web.Types
 import Network.HTTP.Media ((//))
+import Network.Wai (mapResponseHeaders)
 import Servant
+import Servant.Client (HasClient(..))
+import Servant.Client.Core (RunClient)
+import Servant.OpenApi (HasOpenApi(toOpenApi))
 import Servant.Pagination
+import Servant.Server.Internal.RouteResult (RouteResult(..))
+import Servant.Server.Internal.RoutingApplication (RoutingApplication)
 import Text.Parsec (char, digit, eof, hexDigit, many1, runParser, string)
 import Text.Parsec.String (Parser)
 import Text.Read (readMaybe)
@@ -65,10 +74,63 @@ import Text.Read (readMaybe)
 api :: Proxy API
 api = Proxy
 
+data WithRuntimeStatus api
+
+type instance IsElem' e (WithRuntimeStatus api) = IsElem e api
+
+instance HasServer api ctx => HasServer (WithRuntimeStatus api) (IO RuntimeStatus ': ctx) where
+  type ServerT (WithRuntimeStatus api) m = ServerT api m
+  route _ (getStatus :. ctx) =
+    fmap addStatusHeaders  . route (Proxy @api) ctx
+    where
+      addStatusHeaders :: RoutingApplication -> RoutingApplication
+      addStatusHeaders app req sendRes = app req \case
+        Fail err -> sendRes $ Fail err
+        FailFatal err -> sendRes $ FailFatal err
+        Route res -> do
+          status <- getStatus
+          sendRes $ Route $ mapResponseHeaders (<> statusHeaders status) res
+      statusHeaders RuntimeStatus{..} =
+        [ ("X-Node-Tip", LBS.toStrict $ encode nodeTip)
+        , ("X-Runtime-Chain-Tip", LBS.toStrict $ encode runtimeChainTip)
+        , ("X-Runtime-Tip", LBS.toStrict $ encode runtimeTip)
+        , ("X-Runtime-Version", LBS.toStrict $ encode runtimeVersion)
+        , ("X-Network-Id", LBS.toStrict $ encode networkId)
+        ]
+  hoistServerWithContext _ _ = hoistServerWithContext (Proxy @api) (Proxy @ctx)
+
+type StatusHeaders =
+  '[ Header "X-Node-Tip" ChainTip
+   , Header "X-Runtime-Chain-Tip" ChainTip
+   , Header "X-Runtime-Tip" ChainTip
+   , Header "X-Runtime-Version" Version
+   , Header "X-Network-Id" NetworkId
+   ]
+
+type family AppendStatusHeaders hs where
+  AppendStatusHeaders '[] = StatusHeaders
+  AppendStatusHeaders (h ': hs) = h ': AppendStatusHeaders hs
+
+type family AddStatusHeaders api where
+  AddStatusHeaders (path :> api) = path :> AddStatusHeaders api
+  AddStatusHeaders (a :<|> b) = AddStatusHeaders a :<|> AddStatusHeaders b
+  AddStatusHeaders (Verb method cTypes status (Headers hs a)) = Verb method cTypes status (Headers (AppendStatusHeaders hs) a)
+  AddStatusHeaders (Verb method cTypes status a) = Verb method cTypes status (Headers StatusHeaders a)
+
+instance (RunClient m, HasClient m (AddStatusHeaders api)) => HasClient m (WithRuntimeStatus api) where
+  type Client m (WithRuntimeStatus api) = Client m (AddStatusHeaders api)
+  clientWithRoute m _ = clientWithRoute m $ Proxy @(AddStatusHeaders api)
+  hoistClientMonad m _ = hoistClientMonad m $ Proxy @(AddStatusHeaders api)
+
+instance HasOpenApi (AddStatusHeaders api) => HasOpenApi (WithRuntimeStatus api) where
+  toOpenApi _ = toOpenApi $ Proxy @(AddStatusHeaders api)
+
 -- | The REST API of the Marlowe Runtime
-type API = "contracts" :> ContractsAPI
-      :<|> "withdrawals" :> WithdrawalsAPI
-      :<|> "healthcheck" :> Get '[JSON] NoContent
+type API = WithRuntimeStatus
+  (     "contracts" :> ContractsAPI
+  :<|> "withdrawals" :> WithdrawalsAPI
+  :<|> "healthcheck" :> Get '[JSON] NoContent
+  )
 
 -- | /contracts sub-API
 type ContractsAPI = GetContractsAPI

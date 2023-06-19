@@ -76,10 +76,13 @@ library
     , parsec ^>=3.1.14
     , servant ^>=0.19
     , servant-client ^>=0.19
+    , servant-client-core ^>=0.19
+    , servant-openapi3 ^>=2.0
     , servant-pagination >=2.5 && <3
     , servant-server ^>=0.19
     , text >=1.2.4 && <2
     , time >=1.9 && <2
+    , wai >=3.2 && <4
 
 library server
   import:          lang

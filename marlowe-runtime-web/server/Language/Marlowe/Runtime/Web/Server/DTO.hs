@@ -19,6 +19,8 @@ import Cardano.Api
   , HasTypeProxy
   , IsCardanoEra(cardanoEra)
   , IsShelleyBasedEra(shelleyBasedEra)
+  , NetworkId(..)
+  , NetworkMagic(..)
   , SerialiseAsCBOR
   , ShelleyBasedEra(ShelleyBasedEraAlonzo, ShelleyBasedEraBabbage)
   , TextEnvelope(..)
@@ -66,7 +68,7 @@ import Data.Word (Word16, Word64)
 import GHC.TypeLits (KnownSymbol)
 import qualified Language.Marlowe.Core.V1.Semantics as Sem
 import Language.Marlowe.Protocol.Query.Types
-  (ContractState(..), PayoutRef(..), SomeContractState(..), SomeTransaction(..), Withdrawal(..))
+  (ContractState(..), PayoutRef(..), RuntimeStatus(..), SomeContractState(..), SomeTransaction(..), Withdrawal(..))
 import qualified Language.Marlowe.Protocol.Query.Types as Query
 import Language.Marlowe.Runtime.Cardano.Api (cardanoEraToAsType, fromCardanoTxId)
 import Language.Marlowe.Runtime.ChainSync.Api (AssetId(..))
@@ -695,3 +697,23 @@ tokenNameToText = Chain.TokenName . fromString . T.unpack
 toNonEmpty :: [a] -> Maybe (NonEmpty a)
 toNonEmpty [] = Nothing
 toNonEmpty (a : as) = Just $ a :| as
+
+instance HasDTO RuntimeStatus where
+  type DTO RuntimeStatus = Web.RuntimeStatus
+
+instance ToDTO RuntimeStatus where
+  toDTO RuntimeStatus{..} = Web.RuntimeStatus
+    { nodeTip = case nodeTip of
+        Chain.Genesis -> Web.ChainTipGenesis nodeTipUTC
+        Chain.At blockHeader -> Web.ChainTip (toDTO blockHeader) nodeTipUTC
+    , runtimeChainTip = case runtimeChainTip of
+        Chain.Genesis -> Web.ChainTipGenesis nodeTipUTC
+        Chain.At blockHeader -> Web.ChainTip (toDTO blockHeader) nodeTipUTC
+    , runtimeTip = case runtimeTip of
+        Chain.Genesis -> Web.ChainTipGenesis nodeTipUTC
+        Chain.At blockHeader -> Web.ChainTip (toDTO blockHeader) nodeTipUTC
+    , networkId = case networkId of
+        Mainnet -> Web.Mainnet
+        Testnet (NetworkMagic n) -> Web.Testnet n
+    , ..
+    }
