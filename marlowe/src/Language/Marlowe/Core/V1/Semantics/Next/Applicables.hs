@@ -71,12 +71,12 @@ mergeApplicables
      , Maybe (Indexed CanDeposit)
      , Maybe (Indexed CanChoose) )
   -> ApplicableInputs
-mergeApplicables b ( a@Just{}, _, _)
+mergeApplicables b (a@Just{}, _, _)
   = ApplicableInputs
       (coerce $ (First . notifyMaybe $ b) <> First a) -- First Notity evaluated to True is applicable
       (deposits b)
       (choices b)
-mergeApplicables b ( _, Just a, _)
+mergeApplicables b (_, Just a, _)
   = ApplicableInputs
       (notifyMaybe b)
       (nubBy sameIndexedValue $ deposits b ++ [a]) -- Following Duplicated Deposits are not applicable.
@@ -85,7 +85,7 @@ mergeApplicables b (_, _, Just a)
   = ApplicableInputs
       (notifyMaybe b)
       (deposits b)
-      ( choices b ++ (maybeToList $ a `difference` choices b)) -- Choices with empty Bounds and following overlapping Choices with same choice Id are not applicable.
+      (choices b ++ (maybeToList $ a `difference` choices b)) -- Choices with empty Bounds and following overlapping Choices with same choice Id are not applicable.
 mergeApplicables b _  = b
 
 toApplicable

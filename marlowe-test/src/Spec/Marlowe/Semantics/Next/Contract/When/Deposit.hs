@@ -38,7 +38,7 @@ hasIdenticalEvaluatedDeposits e s = not . hasNoIdenticalEvaluatedDeposits e s
 hasNoIdenticalEvaluatedDeposits :: Environment -> State -> [Case Contract] -> Bool
 hasNoIdenticalEvaluatedDeposits e s c =
     let xs = evaluateDeposits e s c
-    in nubBy(\ (Indexed _ a) (Indexed _ b) -> a == b) xs == xs
+    in nubBy (\(Indexed _ a) (Indexed _ b) -> a == b) xs == xs
 
 evaluateDeposits :: Environment -> State -> [Case Contract] -> [Indexed EvaluatedDeposit]
 evaluateDeposits e s = evaluateDepositsQuantities e s . indexedCaseActions

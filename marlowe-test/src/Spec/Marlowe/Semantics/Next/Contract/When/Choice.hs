@@ -33,7 +33,7 @@ instance Injective Semantics.CanChoose Choice'  where
 hasOnlyChoicesWithNoBounds :: Environment -> State -> [Case Contract] -> Bool
 hasOnlyChoicesWithNoBounds e s c
   = let choices = onlyIndexedChoices e s c
-    in (not.null $ choices) && all( null . bounds . getIndexedValue) choices
+    in (not.null $ choices) && all (null . bounds . getIndexedValue) choices
 
 onlyIndexedChoices :: Environment -> State -> [Case Contract]  -> [Indexed Choice']
 onlyIndexedChoices e s = onlyChoices e s . indexedCaseActions
