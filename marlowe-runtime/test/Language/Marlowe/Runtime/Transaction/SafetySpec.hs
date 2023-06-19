@@ -1,3 +1,5 @@
+-- editorconfig-checker-disable-file
+
 {-# LANGUAGE OverloadedStrings #-}
 
 
@@ -289,7 +291,7 @@ spec =
         let
           minAda = maybe 0 toInteger $ minAdaUpperBound protocolTestnet version contract continuations
           overspentOrWarning (TransactionValidationError _ msg) = "The machine terminated part way through evaluation due to overspending the budget." `isInfixOf` msg
-          overspentOrWarning (TransactionWarning _) = True
+          overspentOrWarning (TransactionWarning _ _) = True
           overspentOrWarning _ = False
         actual <- checkTransactions solveConstraints' version marloweContext policy address minAda contract continuations
         case actual of
