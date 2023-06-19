@@ -6,7 +6,7 @@
   };
 
 
-  inherit (flake) oci-images networks;
+  inherit (flake) oci-images;
 
 
   devShells = {
