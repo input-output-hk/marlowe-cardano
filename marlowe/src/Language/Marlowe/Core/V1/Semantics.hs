@@ -1,3 +1,5 @@
+-- editorconfig-checker-disable-file
+
 -----------------------------------------------------------------------------
 --
 -- Module      :  $Headers
@@ -215,7 +217,7 @@ import Text.PrettyPrint.Leijen (comma, hang, lbrace, line, rbrace, space, text, 
     when positive balances are payed out on contract closure.
 -}
 data Payment = Payment AccountId Payee Token Integer
-  deriving stock (Haskell.Eq, Haskell.Show)
+  deriving stock (Haskell.Eq, Generic, Haskell.Show)
 
 instance ToJSON Payment where
   toJSON (Payment accountId payee token amount) =
@@ -358,7 +360,7 @@ data TransactionOutput =
         , txOutState    :: State
         , txOutContract :: Contract }
     | Error TransactionError
-  deriving stock (Haskell.Eq, Haskell.Show)
+  deriving stock (Haskell.Eq, Generic, Haskell.Show)
 
 instance ToJSON TransactionOutput where
   toJSON TransactionOutput{..} =

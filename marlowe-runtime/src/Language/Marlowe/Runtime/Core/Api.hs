@@ -1,3 +1,5 @@
+-- editorconfig-checker-disable-file
+
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -34,6 +36,7 @@ import Data.Text.Encoding (encodeUtf8)
 import Data.Time (UTCTime)
 import Data.Type.Equality (TestEquality(..), type (:~:)(Refl))
 import GHC.Generics (Generic, to)
+import qualified Language.Marlowe.Analysis.Safety.Types as V1
 import qualified Language.Marlowe.Core.V1.Semantics as V1
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
 import Language.Marlowe.Runtime.ChainSync.Api
@@ -513,8 +516,13 @@ fromChainDatum = \case
 instance Binary PV2.Address
 instance Binary PV2.Credential
 instance Binary PV2.CurrencySymbol
+instance Binary PV2.DatumHash
+instance Binary PV2.ExBudget
+instance Binary PV2.ExCPU
+instance Binary PV2.ExMemory
 instance Binary PV2.POSIXTime
 instance Binary PV2.PubKeyHash
+instance Binary PV2.SatInt
 instance Binary PV2.StakingCredential where
 instance Binary PV2.TokenName
 instance Binary PV2.ValidatorHash
@@ -524,16 +532,22 @@ instance Binary V1.ChoiceId
 instance Binary V1.Contract
 instance Binary V1.Input
 instance Binary V1.InputContent
-instance Binary V1.TransactionInput
+instance Binary V1.IntervalError
 instance Binary V1.MarloweData
 instance Binary V1.MarloweParams
 instance Binary V1.Observation
 instance Binary V1.Party
 instance Binary V1.Payee
+instance Binary V1.Payment
+instance Binary V1.SafetyError
 instance Binary V1.State
 instance Binary V1.Token
+instance Binary V1.Transaction
+instance Binary V1.TransactionError
+instance Binary V1.TransactionInput
+instance Binary V1.TransactionOutput
+instance Binary V1.TransactionWarning
 instance Binary V1.ValueId
-instance Binary V1.IntervalError
 instance Binary a => Binary (V1.Case a)
 instance Binary a => Binary (V1.Value a)
 instance Binary NetworkId where

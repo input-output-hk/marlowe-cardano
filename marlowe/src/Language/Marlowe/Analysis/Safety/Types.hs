@@ -13,6 +13,7 @@
 -----------------------------------------------------------------------------
 
 
+{-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 
@@ -27,6 +28,7 @@ module Language.Marlowe.Analysis.Safety.Types
 
 import Data.Aeson (ToJSON(..), Value(String), object, (.=))
 import Data.ByteString.Base16.Aeson (EncodeBase16(EncodeBase16))
+import GHC.Generics (Generic)
 import Language.Marlowe.Core.V1.Semantics (TransactionInput, TransactionOutput)
 import Language.Marlowe.Core.V1.Semantics.Types (AccountId, ChoiceId, Contract, State, Token, ValueId)
 import Language.Marlowe.Core.V1.Semantics.Types.Address (Network)
@@ -95,7 +97,8 @@ data SafetyError =
   | WrongNetwork
     -- | The contract contains an illegal ledger address.
   | IllegalAddress Ledger.Address
-    deriving (Eq, Show)
+    deriving (Eq, Generic, Show)
+
 
 instance ToJSON SafetyError where
   toJSON MissingRolesCurrency =
@@ -258,7 +261,7 @@ data Transaction =
   , txInput :: TransactionInput
   , txOutput :: TransactionOutput
   }
-    deriving (Eq, Show)
+    deriving (Eq, Generic, Show)
 
 instance ToJSON Transaction where
   toJSON Transaction{..} =
