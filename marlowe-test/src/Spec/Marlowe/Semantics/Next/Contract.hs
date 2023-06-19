@@ -14,7 +14,7 @@ import Language.Marlowe.Core.V1.Semantics
   (ReduceResult(ContractQuiescent, RRAmbiguousTimeIntervalError), reduceContractUntilQuiescent)
 import Language.Marlowe.Core.V1.Semantics.Types (Contract(Close), Environment, State, isNotTimedOut)
 import Spec.Marlowe.Semantics.Arbitrary ()
-import Spec.Marlowe.Semantics.Next.When (When'(..), reducibleToAWhen)
+import Spec.Marlowe.Semantics.Next.Contract.When (When'(..), reducibleToAWhen)
 
 
 isIrreducible :: Environment -> State -> Contract -> Bool

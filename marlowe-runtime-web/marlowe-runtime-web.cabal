@@ -54,11 +54,12 @@ library
   exposed-modules:
     Language.Marlowe.Runtime.Web
     Language.Marlowe.Runtime.Web.Client
+    Language.Marlowe.Runtime.Web.Types
 
   other-modules:
     Language.Marlowe.Runtime.Web.API
+    Language.Marlowe.Runtime.Web.Next.Schema
     Language.Marlowe.Runtime.Web.Orphans
-    Language.Marlowe.Runtime.Web.Types
 
   build-depends:
     , aeson               >=2       && <3

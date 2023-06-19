@@ -12,6 +12,7 @@ import Data.Time
 import Language.Marlowe
 import Language.Marlowe.Core.V1.Semantics.Next
 import qualified Language.Marlowe.Core.V1.Semantics.Next as Semantics
+import Language.Marlowe.Core.V1.Semantics.Next.CanReduce
 import Language.Marlowe.Runtime.Web hiding (Unsigned)
 import Language.Marlowe.Runtime.Web.Server.DTO
 import Language.Marlowe.Runtime.Web.Server.Monad (ServerM, loadContract)

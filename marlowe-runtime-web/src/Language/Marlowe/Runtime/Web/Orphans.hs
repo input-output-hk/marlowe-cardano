@@ -3,15 +3,32 @@
 {-# OPTIONS_GHC -Wno-orphans #-}
 {-# LANGUAGE FlexibleInstances #-}
 
-module Language.Marlowe.Runtime.Web.Orphans where
+module Language.Marlowe.Runtime.Web.Orphans
+  (
+  ) where
 
-import Control.Lens hiding (Indexed, both, from, to)
-import Data.OpenApi hiding (value)
+import Control.Lens ((&), (.~), (?~))
+import Data.OpenApi
+  ( HasDescription(description)
+  , HasEnum(enum_)
+  , HasFormat(format)
+  , HasOneOf(oneOf)
+  , HasProperties(properties)
+  , HasRequired(required)
+  , HasType(type_)
+  , NamedSchema(NamedSchema)
+  , OpenApiType(OpenApiBoolean, OpenApiInteger, OpenApiObject, OpenApiString)
+  , Referenced(Inline)
+  , Schema
+  , ToSchema(..)
+  , declareSchemaRef
+  )
 import Data.Proxy (Proxy(Proxy))
 import Data.Text (Text)
 import GHC.Exts (IsList(fromList))
-import Language.Marlowe.Core.V1.Semantics.Next
+
 import Language.Marlowe.Core.V1.Semantics.Types
+  (AccountId, Action, Bound, Case, ChoiceId, Contract, Input, Observation, Party, Payee, State, Token, Value)
 
 data Address
 
@@ -459,105 +476,3 @@ instance ToSchema Input where
       & description ?~ "An input to a Marlowe transaction"
       & oneOf ?~ ([notifySchema, choiceSchema, depositSchema] <*> [True, False])
 
-
-instance ToSchema Next where
-  declareNamedSchema _ = do
-    applicableGeneralizedInputsSchema <- declareSchemaRef $ Proxy @ApplicableGeneralizedInputs
-    canReduceSchema <- declareSchemaRef $ Proxy @CanReduce
-    let
-      can_reduce = ("can_reduce", canReduceSchema)
-      applicable_generalized_inputs = ("applicable_generalized_inputs",applicableGeneralizedInputsSchema)
-
-    pure $ NamedSchema (Just "Next") $ mempty
-        & type_ ?~ OpenApiObject
-        & description ?~ "Describe the applicability (Reduce and Apply) for a given contract."
-        & required .~ fmap fst [can_reduce, applicable_generalized_inputs]
-        & properties        .~ [can_reduce, applicable_generalized_inputs]
-
-
-instance ToSchema ApplicableGeneralizedInputs where
-  declareNamedSchema _ = do
-    notifySchema <- declareSchemaRef $ Proxy @(Indexed CanNotify)
-    depositsSchema <- declareSchemaRef $ Proxy @[Indexed CanDeposit]
-    choicesSchema <- declareSchemaRef $ Proxy @[Indexed CanChoose]
-    let
-      notify    = ("notify", notifySchema)
-      deposits  = ("deposits", depositsSchema)
-      choices   = ("choices", choicesSchema)
-    pure $ NamedSchema (Just "NextGeneralizedInputs") $ mempty
-        & type_ ?~ OpenApiObject
-        & description ?~ "Ranges of Inputs that can be applied to a given contract"
-        & required .~ fmap fst [deposits, choices]
-        & properties        .~ [notify, deposits, choices]
-
-
-
-instance ToSchema (Indexed CanDeposit) where
-  declareNamedSchema _ = do
-    partySchema <- declareSchemaRef $ Proxy @Party
-    accountIdSchema <- declareSchemaRef $ Proxy @AccountId
-    tokenSchema <- declareSchemaRef $ Proxy @Token
-    quantitySchema <- declareSchemaRef $ Proxy @Integer
-    caseIndexSchema <- declareSchemaRef $ Proxy @CaseIndex
-    isMrkleizedContinuationSchema <- declareSchemaRef $ Proxy @IsMerkleizedContinuation
-    let
-      case_index   = ("case_index", caseIndexSchema)
-      party        = ("party", partySchema)
-      can_deposit  = ("can_deposit", quantitySchema)
-      of_token     = ("of_token", tokenSchema)
-      into_account = ("into_account", accountIdSchema)
-      is_merkleized_continuation = ("is_merkleized_continuation", isMrkleizedContinuationSchema)
-    pure $ NamedSchema (Just "CanDeposit") $ mempty
-        & type_ ?~ OpenApiObject
-        & description ?~ "Deposit Input can be applied to the given contract"
-        & required .~ fmap fst [party, can_deposit, of_token, into_account,case_index,is_merkleized_continuation]
-        & properties        .~ [party, can_deposit, of_token, into_account,case_index,is_merkleized_continuation]
-
-instance ToSchema (Indexed CanNotify) where
-  declareNamedSchema _ = do
-    isMrkleizedContinuationSchema <- declareSchemaRef $ Proxy @IsMerkleizedContinuation
-    caseIndexSchema <- declareSchemaRef $ Proxy @CaseIndex
-    let
-      is_merkleized_continuation = ("is_merkleized_continuation", isMrkleizedContinuationSchema)
-      case_index          = ("case_index", caseIndexSchema)
-    pure $ NamedSchema (Just "CanNotify") $ mempty
-        & type_ ?~ OpenApiObject
-         & description ?~ "Notify Input can be applied to the given contract within ranges of values to be chosen"
-        & required .~ fmap fst [is_merkleized_continuation,case_index]
-        & properties        .~ [is_merkleized_continuation, case_index]
-
-instance ToSchema (Indexed CanChoose) where
-  declareNamedSchema _ = do
-    choiceIdSchema <- declareSchemaRef $ Proxy @ChoiceId
-    boundSchema <- declareSchemaRef $ Proxy @[Bound]
-    caseIndexSchema <- declareSchemaRef $ Proxy @CaseIndex
-    isMrkleizedContinuationSchema <- declareSchemaRef $ Proxy @IsMerkleizedContinuation
-    let
-      case_index          = ("case_index", caseIndexSchema)
-      for_choice          = ("for_choice", choiceIdSchema)
-      can_choose_between  = ("can_choose_between", boundSchema)
-      is_merkleized_continuation = ("is_merkleized_continuation", isMrkleizedContinuationSchema)
-    pure $ NamedSchema (Just "CanChoose") $ mempty
-        & type_ ?~ OpenApiObject
-         & description ?~ "Choice Inputs can be applied to the given contract within ranges of values to be chosen"
-        & required .~ fmap fst [for_choice, can_choose_between,case_index,is_merkleized_continuation]
-        & properties        .~ [for_choice, can_choose_between,case_index,is_merkleized_continuation]
-
-
-instance ToSchema CaseIndex where
-  declareNamedSchema _ = do
-    pure $ NamedSchema (Just "CaseIndex") $ mempty
-      & type_ ?~ OpenApiInteger
-      & description ?~ "Index of a \"Case Action\" in a \"When\""
-
-instance ToSchema CanReduce where
-  declareNamedSchema _ = do
-    pure $ NamedSchema (Just "CanReduce") $ mempty
-      & type_ ?~ OpenApiBoolean
-      & description ?~ "Indicates if a given contract can be reduced (apply []) or not."
-
-instance ToSchema IsMerkleizedContinuation where
-  declareNamedSchema _ = do
-    pure $ NamedSchema (Just "IsMerkleizedContinuation") $ mempty
-      & type_ ?~ OpenApiBoolean
-      & description ?~ "Indicates if the next Notify for a given contract is handling a merkleized continuation "

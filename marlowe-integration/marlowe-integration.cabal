@@ -55,7 +55,7 @@ library
     , aeson
     , async
     , async-components
-    , base >=4.9 && <5
+    , base                                                                                                                                          >=4.9 && <5
     , bytestring
     , cardano-api
     , cardano-crypto-wrapper
@@ -63,7 +63,7 @@ library
     , cardano-ledger-byron
     , co-log
     , containers
-    , eventuo11y >=0.9 && <0.11
+    , eventuo11y                                                                                                                                    >=0.9 && <0.11
     , eventuo11y-extras
     , exceptions
     , hasql
@@ -122,7 +122,7 @@ executable marlowe-integration-example
   main-is:            Main.hs
   build-depends:
     , aeson
-    , base >=4.9 && <5
+    , base                 >=4.9 && <5
     , cardano-api
     , marlowe-cardano
     , marlowe-chain-sync

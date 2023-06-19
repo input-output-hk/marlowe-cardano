@@ -85,6 +85,7 @@ library
     , plutus-ledger-slot   ==0.0.1
     , plutus-script-utils  ==1.2.0.0
     , plutus-tx            ==1.0.0.0
+    , range                ==0.3.0.2
     , sbv                  ^>=9.2
     , scientific           ^>=0.3.7
     , serialise            ^>=0.2.6
@@ -93,7 +94,6 @@ library
     , time                 >=1.9.3   && <2
     , transformers         ^>=0.5.6
     , wl-pprint            >=1.2     && <2
-
 
   exposed-modules:
     Language.Marlowe
@@ -107,6 +107,14 @@ library
     Language.Marlowe.Core.V1.Plate
     Language.Marlowe.Core.V1.Semantics
     Language.Marlowe.Core.V1.Semantics.Next
+    Language.Marlowe.Core.V1.Semantics.Next.Applicables
+    Language.Marlowe.Core.V1.Semantics.Next.Applicables.Bound
+    Language.Marlowe.Core.V1.Semantics.Next.Applicables.CanChoose
+    Language.Marlowe.Core.V1.Semantics.Next.Applicables.CanDeposit
+    Language.Marlowe.Core.V1.Semantics.Next.Applicables.CanNotify
+    Language.Marlowe.Core.V1.Semantics.Next.CanReduce
+    Language.Marlowe.Core.V1.Semantics.Next.Indexed
+    Language.Marlowe.Core.V1.Semantics.Next.IsMerkleizedContinuation
     Language.Marlowe.Core.V1.Semantics.Types
     Language.Marlowe.Core.V1.Semantics.Types.Address
     Language.Marlowe.Extended.V1

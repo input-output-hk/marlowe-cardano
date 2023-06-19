@@ -1,6 +1,6 @@
 
 
-module Spec.Marlowe.Semantics.Next.When
+module Spec.Marlowe.Semantics.Next.Contract.When
   ( When'(..)
   , indexedCaseActions
   , reducibleToAWhen
@@ -10,7 +10,8 @@ module Spec.Marlowe.Semantics.Next.When
 import Data.Bifunctor (first)
 import Data.List.Index
 import Language.Marlowe.Core.V1.Semantics (ReduceResult(ContractQuiescent), reduceContractUntilQuiescent)
-import Language.Marlowe.Core.V1.Semantics.Next (CaseIndex(CaseIndex), Indexed(..), IsMerkleizedContinuation(..))
+import Language.Marlowe.Core.V1.Semantics.Next.Indexed
+import Language.Marlowe.Core.V1.Semantics.Next.IsMerkleizedContinuation
 import Language.Marlowe.Core.V1.Semantics.Types (Action, Case(..), Contract(When), Environment, State, Timeout)
 import Spec.Marlowe.Semantics.Arbitrary ()
 

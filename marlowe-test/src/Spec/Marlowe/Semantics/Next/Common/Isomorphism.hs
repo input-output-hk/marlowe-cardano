@@ -6,7 +6,7 @@ module Spec.Marlowe.Semantics.Next.Common.Isomorphism
   ) where
 
 import Data.Types.Isomorphic (Injective(..), Iso)
-import Language.Marlowe.Core.V1.Semantics.Next (Indexed(..))
+import Language.Marlowe.Core.V1.Semantics.Next.Indexed
 
 
 

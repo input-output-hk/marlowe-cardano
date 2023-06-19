@@ -147,15 +147,16 @@ library
     Spec.Marlowe.Semantics.Golden.ZeroCouponBond
     Spec.Marlowe.Semantics.Merkle
     Spec.Marlowe.Semantics.Next
+    Spec.Marlowe.Semantics.Next.Arbitrary
     Spec.Marlowe.Semantics.Next.Common.Isomorphism
     Spec.Marlowe.Semantics.Next.Common.QuickCheck
     Spec.Marlowe.Semantics.Next.Common.Tuple
     Spec.Marlowe.Semantics.Next.Contract
     Spec.Marlowe.Semantics.Next.Contract.Generator
-    Spec.Marlowe.Semantics.Next.When
-    Spec.Marlowe.Semantics.Next.When.Choice
-    Spec.Marlowe.Semantics.Next.When.Deposit
-    Spec.Marlowe.Semantics.Next.When.Notify
+    Spec.Marlowe.Semantics.Next.Contract.When
+    Spec.Marlowe.Semantics.Next.Contract.When.Choice
+    Spec.Marlowe.Semantics.Next.Contract.When.Deposit
+    Spec.Marlowe.Semantics.Next.Contract.When.Notify
     Spec.Marlowe.Semantics.Orphans
     Spec.Marlowe.Semantics.Path
     Spec.Marlowe.Semantics.Util
