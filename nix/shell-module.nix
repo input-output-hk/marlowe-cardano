@@ -52,7 +52,7 @@ in
 
   scripts = {
     re-up = {
-      description = "Load compose.yaml into docker (see refresh-compose)";
+      description = "Builds compose.nix, (re)creates and (re)starts the dev docker containers for Runtime.";
       exec = scripts.re-up;
       enabled = isLinux;
       group = "marlowe";
