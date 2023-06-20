@@ -3,13 +3,14 @@
 let
 
   lib = pkgs.lib;
+
   mkIfDarwin = lib.mkIf pkgs.stdenv.hostPlatform.isDarwin;
+
   isCross = pkgs.stdenv.hostPlatform != pkgs.stdenv.buildPlatform;
+
   rPackages = with pkgs.rPackages; [ R tidyverse dplyr stringr MASS plotly shiny shinyjs purrr ];
 
   packages = {
-    # [devx] this fails...
-    http2.doHaddock = false;
 
     # Things that need plutus-tx-plugin
     plutus-ledger.package.buildable = !isCross;
@@ -131,9 +132,6 @@ let
 in
 
 {
-  cabalProjectLocal = "";
-  sha256map = { };
-  shellWithHoogle = false;
   inherit packages;
 }
 
