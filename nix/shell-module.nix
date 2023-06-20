@@ -58,9 +58,9 @@ in
       group = "marlowe";
     };
 
-    compose-spec = {
-      description = "compose-spec";
-      exec = scripts.compose-spec;
+    gen-compose-spec = {
+      description = "gen-compose-spec";
+      exec = scripts.gen-compose-spec;
       enabled = isLinux;
       group = "marlowe";
     };

@@ -57,11 +57,15 @@ let
 
   re-up = ''
     cd $(git rev-parse --show-toplevel)
-
-    docker compose -f ${compose-spec} up -d
+    echo ${compose-spec}
+    # docker compose -f ${compose-spec} up -d
   '';
 
   compose-spec = import ./compose.nix { inherit inputs pkgs; };
+
+  gen-compose-spec = ''
+    cat ${compose-spec} 
+  '';
 
   mkCabalExeScript = target: ''
     cd `${pkgs.git}/bin/git rev-parse --show-toplevel`
