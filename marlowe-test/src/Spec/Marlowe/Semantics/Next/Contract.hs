@@ -46,9 +46,9 @@ isReducibleToClose environment' state contract
       ContractQuiescent _ _ _ _ Close -> True
       _otherwise ->  False
 
-isEmptyWhenNonTimedOut :: Environment -> State -> Contract -> Bool
-isEmptyWhenNonTimedOut e s
+isEmptyWhenNotTimedOut :: Environment -> State -> Contract -> Bool
+isEmptyWhenNotTimedOut e s
   = (\case
-      Just (_,When' [] timeout') | isNotTimedOut timeout' e   -> True
-      _otherwise -> False )
+      Just (_, When' [] timeout') | isNotTimedOut timeout' e -> True
+      _otherwise -> False)
   . reducibleToAWhen e s
