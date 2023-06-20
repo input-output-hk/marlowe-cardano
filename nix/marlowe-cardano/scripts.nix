@@ -63,8 +63,9 @@ let
 
   compose-spec = import ./compose.nix { inherit inputs pkgs; };
 
-  gen-compose-spec = ''
-    cat ${compose-spec} 
+  refresh-compose = ''
+    cd $(git rev-parse --show-toplevel)
+    nix-store --realise ${compose-spec} --add-root compose.yaml --indirect
   '';
 
   mkCabalExeScript = target: ''
@@ -81,7 +82,7 @@ in
   inherit
     start-cardano-node
     re-up
-    gen-compose-spec
+    refresh-compose
     marlowe-runtime-cli
     marlowe-cli;
 }

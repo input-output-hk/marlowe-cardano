@@ -52,15 +52,15 @@ in
 
   scripts = {
     re-up = {
-      description = "re-up";
+      description = "Load compose.yaml into docker (see refresh-compose)";
       exec = scripts.re-up;
       enabled = isLinux;
       group = "marlowe";
     };
 
-    gen-compose-spec = {
-      description = "gen-compose-spec";
-      exec = scripts.gen-compose-spec;
+    refresh-compose = {
+      description = "Genereate compose.yaml in the repository root";
+      exec = scripts.refresh-compose;
       enabled = isLinux;
       group = "marlowe";
     };
@@ -84,5 +84,5 @@ in
     };
   };
 
-  enterShell = pkgs.lib.optionalString isLinux "re-up";
+  enterShell = pkgs.lib.optionalString isLinux "refresh-compose";
 }
