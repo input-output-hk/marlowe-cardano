@@ -19,9 +19,9 @@ import Servant.Client.Streaming (ResponseF(Response, responseStatusCode))
 import Test.Hspec (ActionWith, Spec, SpecWith, aroundAll, describe, it, shouldBe)
 import Test.Integration.Marlowe.Local (MarloweRuntime, withLocalMarloweRuntime)
 
-import Language.Marlowe.Core.V1.Semantics.Next (Next(..))
-import Language.Marlowe.Core.V1.Semantics.Next.Applicables (emptyApplicables)
-import Language.Marlowe.Core.V1.Semantics.Next.CanReduce (CanReduce(..))
+import Language.Marlowe.Core.V1.Next (Next(..))
+import Language.Marlowe.Core.V1.Next.Applicables (emptyApplicables)
+import Language.Marlowe.Core.V1.Next.CanReduce (CanReduce(..))
 
 spec :: Spec
 spec = describe "GET /contract/{contractId}/next" $ aroundAll setup do

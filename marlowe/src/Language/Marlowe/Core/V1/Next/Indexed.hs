@@ -16,7 +16,7 @@
 {-# LANGUAGE RankNTypes #-}
 
 
-module Language.Marlowe.Core.V1.Semantics.Next.Indexed
+module Language.Marlowe.Core.V1.Next.Indexed
   ( CaseIndex(..)
   , Indexed(..)
   , caseIndexed

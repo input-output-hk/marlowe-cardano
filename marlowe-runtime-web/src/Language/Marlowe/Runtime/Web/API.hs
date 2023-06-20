@@ -51,7 +51,7 @@ import GHC.Exts (IsList(..))
 import GHC.Generics (Generic)
 import GHC.Show (showSpace)
 import GHC.TypeLits (KnownSymbol, symbolVal)
-import Language.Marlowe.Core.V1.Semantics.Next
+import Language.Marlowe.Core.V1.Next
 import Language.Marlowe.Runtime.Web.Next.Schema ()
 
 import Language.Marlowe.Runtime.Web.Types

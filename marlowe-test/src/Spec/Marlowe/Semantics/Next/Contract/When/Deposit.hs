@@ -10,10 +10,10 @@ module Spec.Marlowe.Semantics.Next.Contract.When.Deposit
 
 import Data.List (nubBy)
 import Data.Types.Isomorphic (Injective(..), Iso)
+import Language.Marlowe.Core.V1.Next.Applicables.CanDeposit (CanDeposit(..))
+import Language.Marlowe.Core.V1.Next.Indexed (Indexed(..))
+import Language.Marlowe.Core.V1.Next.IsMerkleizedContinuation (IsMerkleizedContinuation)
 import Language.Marlowe.Core.V1.Semantics (evalValue)
-import Language.Marlowe.Core.V1.Semantics.Next.Applicables.CanDeposit (CanDeposit(..))
-import Language.Marlowe.Core.V1.Semantics.Next.Indexed (Indexed(..))
-import Language.Marlowe.Core.V1.Semantics.Next.IsMerkleizedContinuation (IsMerkleizedContinuation)
 import Language.Marlowe.Core.V1.Semantics.Types
   (AccountId, Action(Deposit), Case, Contract, Environment, Party, State, Token)
 import Spec.Marlowe.Semantics.Arbitrary ()

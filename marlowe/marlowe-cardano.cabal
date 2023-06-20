@@ -104,17 +104,17 @@ library
     Language.Marlowe.Client
     Language.Marlowe.Client.History
     Language.Marlowe.Core.V1.Merkle
+    Language.Marlowe.Core.V1.Next
+    Language.Marlowe.Core.V1.Next.Applicables
+    Language.Marlowe.Core.V1.Next.Applicables.Bound
+    Language.Marlowe.Core.V1.Next.Applicables.CanChoose
+    Language.Marlowe.Core.V1.Next.Applicables.CanDeposit
+    Language.Marlowe.Core.V1.Next.Applicables.CanNotify
+    Language.Marlowe.Core.V1.Next.CanReduce
+    Language.Marlowe.Core.V1.Next.Indexed
+    Language.Marlowe.Core.V1.Next.IsMerkleizedContinuation
     Language.Marlowe.Core.V1.Plate
     Language.Marlowe.Core.V1.Semantics
-    Language.Marlowe.Core.V1.Semantics.Next
-    Language.Marlowe.Core.V1.Semantics.Next.Applicables
-    Language.Marlowe.Core.V1.Semantics.Next.Applicables.Bound
-    Language.Marlowe.Core.V1.Semantics.Next.Applicables.CanChoose
-    Language.Marlowe.Core.V1.Semantics.Next.Applicables.CanDeposit
-    Language.Marlowe.Core.V1.Semantics.Next.Applicables.CanNotify
-    Language.Marlowe.Core.V1.Semantics.Next.CanReduce
-    Language.Marlowe.Core.V1.Semantics.Next.Indexed
-    Language.Marlowe.Core.V1.Semantics.Next.IsMerkleizedContinuation
     Language.Marlowe.Core.V1.Semantics.Types
     Language.Marlowe.Core.V1.Semantics.Types.Address
     Language.Marlowe.Extended.V1

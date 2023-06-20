@@ -17,7 +17,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
 
-module Language.Marlowe.Core.V1.Semantics.Next.Applicables.CanChoose
+module Language.Marlowe.Core.V1.Next.Applicables.CanChoose
   ( CanChoose(..)
   , compactAdjoinedBounds
   , difference
@@ -29,9 +29,9 @@ import Control.Monad ((<=<))
 import Data.Aeson.Types (FromJSON(parseJSON), KeyValue((.=)), ToJSON(toJSON), Value(Object), object, (.:))
 import Data.List (tails)
 import GHC.Generics
-import qualified Language.Marlowe.Core.V1.Semantics.Next.Applicables.Bound as Bound
-import Language.Marlowe.Core.V1.Semantics.Next.Indexed
-import Language.Marlowe.Core.V1.Semantics.Next.IsMerkleizedContinuation (IsMerkleizedContinuation)
+import qualified Language.Marlowe.Core.V1.Next.Applicables.Bound as Bound
+import Language.Marlowe.Core.V1.Next.Indexed
+import Language.Marlowe.Core.V1.Next.IsMerkleizedContinuation (IsMerkleizedContinuation)
 import Language.Marlowe.Core.V1.Semantics.Types (Bound(..), ChoiceId)
 import Language.Marlowe.Pretty (Pretty)
 import Prelude

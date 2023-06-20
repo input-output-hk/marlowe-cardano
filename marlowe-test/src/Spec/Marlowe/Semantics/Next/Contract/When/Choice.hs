@@ -7,9 +7,9 @@ module Spec.Marlowe.Semantics.Next.Contract.When.Choice
   ) where
 
 import Data.Types.Isomorphic (Injective(..))
-import qualified Language.Marlowe.Core.V1.Semantics.Next.Applicables.CanChoose as Semantics
-import Language.Marlowe.Core.V1.Semantics.Next.Indexed (Indexed(..), getIndexedValue)
-import Language.Marlowe.Core.V1.Semantics.Next.IsMerkleizedContinuation (IsMerkleizedContinuation)
+import qualified Language.Marlowe.Core.V1.Next.Applicables.CanChoose as Semantics
+import Language.Marlowe.Core.V1.Next.Indexed (Indexed(..), getIndexedValue)
+import Language.Marlowe.Core.V1.Next.IsMerkleizedContinuation (IsMerkleizedContinuation)
 import Language.Marlowe.Core.V1.Semantics.Types (Action(Choice), Bound, Case, ChoiceId, Contract, Environment, State)
 import Spec.Marlowe.Semantics.Arbitrary ()
 import Spec.Marlowe.Semantics.Next.Contract.When (indexedCaseActions)

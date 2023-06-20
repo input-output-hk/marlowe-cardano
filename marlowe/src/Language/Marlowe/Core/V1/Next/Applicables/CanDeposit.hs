@@ -13,7 +13,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 
-module Language.Marlowe.Core.V1.Semantics.Next.Applicables.CanDeposit
+module Language.Marlowe.Core.V1.Next.Applicables.CanDeposit
   ( CanDeposit(..)
   ) where
 
@@ -25,8 +25,8 @@ import Language.Marlowe.Core.V1.Semantics.Types (AccountId, Party, Token)
 import Language.Marlowe.Pretty (Pretty(..))
 
 
-import Language.Marlowe.Core.V1.Semantics.Next.Indexed (CaseIndex(CaseIndex), Indexed(..))
-import Language.Marlowe.Core.V1.Semantics.Next.IsMerkleizedContinuation (IsMerkleizedContinuation)
+import Language.Marlowe.Core.V1.Next.Indexed (CaseIndex(CaseIndex), Indexed(..))
+import Language.Marlowe.Core.V1.Next.IsMerkleizedContinuation (IsMerkleizedContinuation)
 import Prelude
 
 data CanDeposit = CanDeposit Party AccountId Token Integer IsMerkleizedContinuation

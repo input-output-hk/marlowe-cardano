@@ -10,22 +10,22 @@ module Language.Marlowe.Runtime.Web.Server.REST.Contracts.Next
 import Control.Monad.Except (MonadError)
 import Data.Time
 import Language.Marlowe
-import Language.Marlowe.Core.V1.Semantics.Next
-import qualified Language.Marlowe.Core.V1.Semantics.Next as Semantics
-import Language.Marlowe.Core.V1.Semantics.Next.CanReduce
-import Language.Marlowe.Runtime.Web hiding (Unsigned)
+import Language.Marlowe.Core.V1.Next
+import qualified Language.Marlowe.Core.V1.Next as Semantics
+import Language.Marlowe.Core.V1.Next.CanReduce
+import Language.Marlowe.Runtime.Web
 import Language.Marlowe.Runtime.Web.Server.DTO
 import Language.Marlowe.Runtime.Web.Server.Monad (ServerM, loadContract)
 import Language.Marlowe.Runtime.Web.Server.REST.ApiError (badRequest', badRequestWithErrorCode, notFoundWithErrorCode)
 import Servant (throwError)
-import Servant.Server
+import Servant.Server (HasServer(ServerT))
 
 server :: TxOutRef ->  ServerT NextAPI ServerM
 server = nextOverCardano'
 
 nextOverCardano' ::  TxOutRef -> UTCTime -> UTCTime -> ServerM Next
 nextOverCardano' contractId validityStart validityEnd
-  = nextOverCardano contractId $ environment validityStart validityEnd
+  = nextOverCardano contractId $ Semantics.mkEnvironment validityStart validityEnd
 
 nextOverCardano ::  TxOutRef -> Environment -> ServerM Next
 nextOverCardano contractId environment'

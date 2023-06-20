@@ -3,13 +3,13 @@
 {-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 
 
-module Language.Marlowe.Core.V1.Semantics.Next.Applicables.Bound
+module Language.Marlowe.Core.V1.Next.Applicables.Bound
   ( compactAdjoinedBounds
   , difference
   , mkBound

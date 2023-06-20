@@ -33,7 +33,7 @@ import qualified Data.Set as Set
 import Data.Text (Text)
 import Data.Time (UTCTime)
 import GHC.TypeLits (KnownSymbol, symbolVal)
-import Language.Marlowe.Core.V1.Semantics.Next
+import Language.Marlowe.Core.V1.Next
 import Language.Marlowe.Runtime.Web.API
   (API, GetContractsResponse, GetTransactionsResponse, GetWithdrawalsResponse, ListObject(..), api, retractLink)
 import Language.Marlowe.Runtime.Web.Types

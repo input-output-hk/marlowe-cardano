@@ -15,7 +15,7 @@
 {-# LANGUAGE RankNTypes #-}
 
 
-module Language.Marlowe.Core.V1.Semantics.Next.IsMerkleizedContinuation
+module Language.Marlowe.Core.V1.Next.IsMerkleizedContinuation
   ( IsMerkleizedContinuation(..)
   ) where
 

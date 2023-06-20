@@ -16,17 +16,16 @@ import Test.QuickCheck (Arbitrary(..))
 
 import Spec.Marlowe.Semantics.Arbitrary ()
 
-import Language.Marlowe.Core.V1.Semantics.Next (Next(Next))
+import Language.Marlowe.Core.V1.Next (Next(Next))
 
-import Language.Marlowe.Core.V1.Semantics.Next.Applicables.CanChoose (CanChoose(CanChoose))
-import Language.Marlowe.Core.V1.Semantics.Next.Applicables.CanDeposit (CanDeposit(..))
-import Language.Marlowe.Core.V1.Semantics.Next.Applicables.CanNotify (CanNotify(..))
-import Language.Marlowe.Core.V1.Semantics.Next.Indexed (CaseIndex(CaseIndex), Indexed(..))
-import Language.Marlowe.Core.V1.Semantics.Next.IsMerkleizedContinuation
-  (IsMerkleizedContinuation(IsMerkleizedContinuation))
+import Language.Marlowe.Core.V1.Next.Applicables.CanChoose (CanChoose(CanChoose))
+import Language.Marlowe.Core.V1.Next.Applicables.CanDeposit (CanDeposit(..))
+import Language.Marlowe.Core.V1.Next.Applicables.CanNotify (CanNotify(..))
+import Language.Marlowe.Core.V1.Next.Indexed (CaseIndex(CaseIndex), Indexed(..))
+import Language.Marlowe.Core.V1.Next.IsMerkleizedContinuation (IsMerkleizedContinuation(IsMerkleizedContinuation))
 
-import Language.Marlowe.Core.V1.Semantics.Next.Applicables (ApplicableInputs(ApplicableInputs))
-import Language.Marlowe.Core.V1.Semantics.Next.CanReduce (CanReduce(CanReduce))
+import Language.Marlowe.Core.V1.Next.Applicables (ApplicableInputs(ApplicableInputs))
+import Language.Marlowe.Core.V1.Next.CanReduce (CanReduce(CanReduce))
 
 
 instance Arbitrary Next where

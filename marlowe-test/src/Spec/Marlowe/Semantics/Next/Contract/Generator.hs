@@ -27,7 +27,7 @@ import Test.QuickCheck (Arbitrary(arbitrary), Gen, listOf, listOf1, suchThat)
 import Data.List (nub)
 import Spec.Marlowe.Semantics.Next.Common.Tuple (uncurry3)
 import Spec.Marlowe.Semantics.Next.Contract
-  (hasValidEnvironement, isEmptyWhenNonTimedOut, isIrreducible, isNotClose, isReducible, isReducibleToClose)
+  (hasValidEnvironement, isEmptyWhenNotTimedOut, isIrreducible, isReducible, isReducibleToClose)
 import Spec.Marlowe.Semantics.Next.Contract.When.Deposit
 import Spec.Marlowe.Semantics.Next.Contract.When.Notify (areOnlyFalsifiedNotifies, atLeastOneNotifyTrue)
 
@@ -36,13 +36,13 @@ anyReducibleContract :: Gen (Environment,State,Contract)
 anyReducibleContract
   = anyContract
       `suchThat` uncurry3 isReducible
-      `suchThat` uncurry3 isNotClose
+
 
 anyIrreducibleContract :: Gen (Environment,State,Contract)
 anyIrreducibleContract
   = anyContract
       `suchThat` uncurry3 isIrreducible
-      `suchThat` uncurry3 isNotClose
+
 
 anyOnlyFalsifiedNotifies :: Gen (Environment,State,Contract)
 anyOnlyFalsifiedNotifies
@@ -106,6 +106,6 @@ anyContract
 
 anyEmptyWhenNonTimedOut :: Gen (Environment,State,Contract)
 anyEmptyWhenNonTimedOut
-  = arbitrary `suchThat` uncurry3 isEmptyWhenNonTimedOut
+  = arbitrary `suchThat` uncurry3 isEmptyWhenNotTimedOut
 
 

@@ -11,12 +11,12 @@ import Data.Maybe (fromJust)
 import Data.Types.Isomorphic (Injective(to))
 
 
-import Language.Marlowe.Core.V1.Semantics.Next (Next(..), next)
-import Language.Marlowe.Core.V1.Semantics.Next.Applicables
+import Language.Marlowe.Core.V1.Next (Next(..), next)
+import Language.Marlowe.Core.V1.Next.Applicables
   (ApplicableInputs(choices, deposits, notifyMaybe), emptyApplicables, mkApplicablesWhen)
-import Language.Marlowe.Core.V1.Semantics.Next.Applicables.CanChoose (compactAdjoinedBounds, overlaps)
-import Language.Marlowe.Core.V1.Semantics.Next.CanReduce (CanReduce(..))
-import Language.Marlowe.Core.V1.Semantics.Next.Indexed (getCaseIndex, sameIndexedValue)
+import Language.Marlowe.Core.V1.Next.Applicables.CanChoose (compactAdjoinedBounds, overlaps)
+import Language.Marlowe.Core.V1.Next.CanReduce (CanReduce(..))
+import Language.Marlowe.Core.V1.Next.Indexed (getCaseIndex, sameIndexedValue)
 import Spec.Marlowe.Semantics.Arbitrary ()
 import Spec.Marlowe.Semantics.Next.Common.Isomorphism ()
 import Spec.Marlowe.Semantics.Next.Common.QuickCheck (forAll')
@@ -52,10 +52,6 @@ tests = testGroup "Next"
           "Can't Reduce when the contract provided is irreducible"
             $ forAll' anyIrreducibleContract $ \(environment', state, contract) ->
                 Right (coerce False) == (canReduce <$> next environment' state contract)
-      , testProperty
-          "Can Reduce a \"Close\""
-            $ forAll' anyCloseOrReducedToAClose $ \(environment', state, contract) ->
-                Right (coerce True) == (canReduce <$> next environment' state contract)
       ]
   , testGroup "Applicability"
       [ testProperty

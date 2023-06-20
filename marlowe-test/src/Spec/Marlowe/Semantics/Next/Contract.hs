@@ -2,7 +2,7 @@
 
 module Spec.Marlowe.Semantics.Next.Contract
   ( hasValidEnvironement
-  , isEmptyWhenNonTimedOut
+  , isEmptyWhenNotTimedOut
   , isIrreducible
   , isNotClose
   , isReducible
@@ -12,7 +12,7 @@ module Spec.Marlowe.Semantics.Next.Contract
 
 import Language.Marlowe.Core.V1.Semantics
   (ReduceResult(ContractQuiescent, RRAmbiguousTimeIntervalError), reduceContractUntilQuiescent)
-import Language.Marlowe.Core.V1.Semantics.Types (Contract(Close), Environment, State, isNotTimedOut)
+import Language.Marlowe.Core.V1.Semantics.Types (Contract(Close), Environment(..), State, Timeout)
 import Spec.Marlowe.Semantics.Arbitrary ()
 import Spec.Marlowe.Semantics.Next.Contract.When (When'(..), reducibleToAWhen)
 
@@ -24,7 +24,7 @@ isIrreducible environment' state contract
       _otherwise ->  False
 
 isNotClose :: Environment -> State -> Contract -> Bool
-isNotClose _ _ _ Close = False
+isNotClose _ _ Close = False
 isNotClose _ _ _ = True
 
 isReducible :: Environment -> State -> Contract -> Bool
@@ -52,3 +52,10 @@ isEmptyWhenNotTimedOut e s
       Just (_, When' [] timeout') | isNotTimedOut timeout' e -> True
       _otherwise -> False)
   . reducibleToAWhen e s
+
+isTimedOut :: Timeout -> Environment -> Bool
+isTimedOut timeout' Environment {timeInterval = (start,_)} | timeout'  <= start = True
+isTimedOut _ _ = False
+
+isNotTimedOut :: Timeout -> Environment -> Bool
+isNotTimedOut timeout' = not . isTimedOut timeout'

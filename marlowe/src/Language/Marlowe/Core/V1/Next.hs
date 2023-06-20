@@ -7,8 +7,9 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
 
-module Language.Marlowe.Core.V1.Semantics.Next
+module Language.Marlowe.Core.V1.Next
   ( Next(..)
+  , mkEnvironment
   , next
   ) where
 
@@ -17,11 +18,13 @@ import Data.Aeson.Types ()
 import Deriving.Aeson (Generic)
 import Prelude
 
-import Language.Marlowe.Core.V1.Semantics.Types (Contract, Environment, State)
+import Language.Marlowe.Core.V1.Semantics.Types (Contract, Environment(..), State)
 import Language.Marlowe.Pretty (Pretty(..))
 
-import Language.Marlowe.Core.V1.Semantics.Next.Applicables (ApplicableInputs, mkApplicables)
-import Language.Marlowe.Core.V1.Semantics.Next.CanReduce (AmbiguousIntervalProvided, CanReduce, tryReduce)
+import Data.Time (UTCTime)
+import Language.Marlowe.Core.V1.Next.Applicables (ApplicableInputs, mkApplicables)
+import Language.Marlowe.Core.V1.Next.CanReduce (AmbiguousIntervalProvided, CanReduce, tryReduce)
+import Plutus.V1.Ledger.SlotConfig (utcTimeToPOSIXTime)
 
 data Next = Next { canReduce :: CanReduce, applicables :: ApplicableInputs}
     deriving stock (Show,Eq,Ord,Generic)
@@ -45,3 +48,5 @@ instance FromJSON Next where
 instance ToJSON Next where
   toJSON Next {..} = object [ "can_reduce" .= canReduce, "applicable_inputs" .= applicables]
 
+mkEnvironment :: UTCTime -> UTCTime -> Environment
+mkEnvironment start end = Environment (utcTimeToPOSIXTime start, utcTimeToPOSIXTime end)

@@ -8,9 +8,9 @@ module Spec.Marlowe.Semantics.Next.Contract.When.Notify
   ) where
 
 import Data.Maybe (isJust)
+import Language.Marlowe.Core.V1.Next.Indexed (CaseIndex, Indexed(..))
+import Language.Marlowe.Core.V1.Next.IsMerkleizedContinuation (IsMerkleizedContinuation)
 import Language.Marlowe.Core.V1.Semantics (evalObservation)
-import Language.Marlowe.Core.V1.Semantics.Next.Indexed (CaseIndex, Indexed(..))
-import Language.Marlowe.Core.V1.Semantics.Next.IsMerkleizedContinuation (IsMerkleizedContinuation)
 import Language.Marlowe.Core.V1.Semantics.Types (Action(Notify), Contract, Environment, State)
 import Spec.Marlowe.Semantics.Arbitrary ()
 import Spec.Marlowe.Semantics.Next.Contract.When (When'(indexedActions), reducibleToAWhen)

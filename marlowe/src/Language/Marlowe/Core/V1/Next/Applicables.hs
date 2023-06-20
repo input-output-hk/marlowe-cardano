@@ -11,7 +11,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
 
-module Language.Marlowe.Core.V1.Semantics.Next.Applicables
+module Language.Marlowe.Core.V1.Next.Applicables
   ( ApplicableInputs(..)
   , emptyApplicables
   , mkApplicables
@@ -33,12 +33,11 @@ import Language.Marlowe.Core.V1.Semantics.Types
 import Language.Marlowe.Pretty (Pretty(..))
 
 import Data.Maybe (maybeToList)
-import Language.Marlowe.Core.V1.Semantics.Next.Applicables.CanChoose (CanChoose(CanChoose), difference)
-import Language.Marlowe.Core.V1.Semantics.Next.Applicables.CanDeposit (CanDeposit(..))
-import Language.Marlowe.Core.V1.Semantics.Next.Applicables.CanNotify (CanNotify(..))
-import Language.Marlowe.Core.V1.Semantics.Next.Indexed (CaseIndex, Indexed(..), caseIndexed, sameIndexedValue)
-import Language.Marlowe.Core.V1.Semantics.Next.IsMerkleizedContinuation
-  (IsMerkleizedContinuation(IsMerkleizedContinuation))
+import Language.Marlowe.Core.V1.Next.Applicables.CanChoose (CanChoose(CanChoose), difference)
+import Language.Marlowe.Core.V1.Next.Applicables.CanDeposit (CanDeposit(..))
+import Language.Marlowe.Core.V1.Next.Applicables.CanNotify (CanNotify(..))
+import Language.Marlowe.Core.V1.Next.Indexed (CaseIndex, Indexed(..), caseIndexed, sameIndexedValue)
+import Language.Marlowe.Core.V1.Next.IsMerkleizedContinuation (IsMerkleizedContinuation(IsMerkleizedContinuation))
 import Prelude
 
 data ApplicableInputs

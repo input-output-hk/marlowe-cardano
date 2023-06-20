@@ -10,7 +10,7 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE RankNTypes #-}
 
-module Language.Marlowe.Core.V1.Semantics.Next.CanReduce
+module Language.Marlowe.Core.V1.Next.CanReduce
   ( AmbiguousIntervalProvided(..)
   , CanReduce(..)
   , tryReduce

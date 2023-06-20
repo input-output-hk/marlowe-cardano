@@ -24,14 +24,14 @@ import Data.Proxy (Proxy(Proxy))
 
 import Language.Marlowe.Runtime.Web.Orphans ()
 
-import Language.Marlowe.Core.V1.Semantics.Next (Next)
-import Language.Marlowe.Core.V1.Semantics.Next.Applicables (ApplicableInputs)
-import Language.Marlowe.Core.V1.Semantics.Next.Applicables.CanChoose (CanChoose)
-import Language.Marlowe.Core.V1.Semantics.Next.Applicables.CanDeposit (CanDeposit)
-import Language.Marlowe.Core.V1.Semantics.Next.Applicables.CanNotify (CanNotify)
-import Language.Marlowe.Core.V1.Semantics.Next.CanReduce (CanReduce)
-import Language.Marlowe.Core.V1.Semantics.Next.Indexed (CaseIndex, Indexed)
-import Language.Marlowe.Core.V1.Semantics.Next.IsMerkleizedContinuation (IsMerkleizedContinuation)
+import Language.Marlowe.Core.V1.Next (Next)
+import Language.Marlowe.Core.V1.Next.Applicables (ApplicableInputs)
+import Language.Marlowe.Core.V1.Next.Applicables.CanChoose (CanChoose)
+import Language.Marlowe.Core.V1.Next.Applicables.CanDeposit (CanDeposit)
+import Language.Marlowe.Core.V1.Next.Applicables.CanNotify (CanNotify)
+import Language.Marlowe.Core.V1.Next.CanReduce (CanReduce)
+import Language.Marlowe.Core.V1.Next.Indexed (CaseIndex, Indexed)
+import Language.Marlowe.Core.V1.Next.IsMerkleizedContinuation (IsMerkleizedContinuation)
 import Language.Marlowe.Core.V1.Semantics.Types (AccountId, Bound, ChoiceId, Party, Token)
 
 instance ToSchema Next where
