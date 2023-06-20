@@ -455,24 +455,26 @@ instance ToJSON (CreateTxEnvelope CardanoTx) where
   toJSON CreateTxEnvelope{..} = object
     [ ("contractId", toJSON contractId)
     , ("tx", toJSON txEnvelope)
+    , ("safetyErrors", toJSON safetyErrors)
     ]
 instance ToJSON (CreateTxEnvelope CardanoTxBody) where
   toJSON CreateTxEnvelope{..} = object
     [ ("contractId", toJSON contractId)
     , ("txBody", toJSON txEnvelope)
+    , ("safetyErrors", toJSON safetyErrors)
     ]
 
 instance FromJSON (CreateTxEnvelope CardanoTx) where
   parseJSON = withObject "CreateTxEnvelope" \obj -> CreateTxEnvelope
     <$> obj .: "contractId"
     <*> obj .: "tx"
-    <*> obj .: "safetyError"
+    <*> obj .: "safetyErrors"
 
 instance FromJSON (CreateTxEnvelope CardanoTxBody) where
   parseJSON = withObject "CreateTxEnvelope" \obj -> CreateTxEnvelope
     <$> obj .: "contractId"
     <*> obj .: "txBody"
-    <*> obj .: "safetyError"
+    <*> obj .: "safetyErrors"
 
 
 instance ToSchema (CreateTxEnvelope CardanoTx) where
