@@ -13,7 +13,7 @@
 -----------------------------------------------------------------------------
 
 
-{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 
@@ -26,18 +26,30 @@ module Language.Marlowe.Analysis.Safety.Types
   ) where
 
 
-import Data.Aeson (ToJSON(..), Value(String), object, (.=))
+import Control.Applicative ((<|>))
+import Data.Aeson (FromJSON(..), ToJSON(..), Value(String), object, withObject, (.:), (.=))
+import Data.Aeson.Types (Parser)
 import Data.ByteString.Base16.Aeson (EncodeBase16(EncodeBase16))
+import Data.String (fromString)
 import GHC.Generics (Generic)
 import Language.Marlowe.Core.V1.Semantics (TransactionInput, TransactionOutput)
 import Language.Marlowe.Core.V1.Semantics.Types (AccountId, ChoiceId, Contract, State, Token, ValueId)
 import Language.Marlowe.Core.V1.Semantics.Types.Address (Network)
 import Numeric.Natural (Natural)
-import Plutus.V2.Ledger.Api (CurrencySymbol(..), DatumHash(..), ExBudget, TokenName(..), fromBuiltin)
+import Plutus.V2.Ledger.Api
+  ( Credential(..)
+  , CurrencySymbol(..)
+  , DatumHash(..)
+  , ExBudget
+  , StakingCredential(..)
+  , TokenName(..)
+  , fromBuiltin
+  , toBuiltin
+  )
 
-import qualified Data.Text.Encoding as T (decodeUtf8)
+import qualified Data.Text.Encoding as T (decodeUtf8, encodeUtf8)
 import qualified Language.Marlowe.Core.V1.Semantics as V1 (TransactionWarning)
-import qualified Plutus.V2.Ledger.Api as Ledger (Address)
+import qualified Plutus.V2.Ledger.Api as Ledger (Address(..))
 
 
 -- | Information on the safety of a Marlowe contract and state.
@@ -199,7 +211,7 @@ instance ToJSON SafetyError where
       [ "error" .= ("TransactionSizeMayExceedProtocol" :: String)
       , "detail" .= ("This transaction's size may exceed the limit permitted by the ledger rules." :: String)
       , "transaction" .= transaction
-      , "byte" .= natural
+      , "bytes" .= natural
       , "fatal" .= False
       ]
   toJSON (TransactionCostMayExceedProtocol transaction exBudget) =
@@ -245,11 +257,37 @@ instance ToJSON SafetyError where
        , "detail" .= ("The contract contains addresses that are do not match the network on which it will be executed." :: String)
        , "fatal" .= True
        ]
-  toJSON (IllegalAddress address) =
+  toJSON (IllegalAddress Ledger.Address{..}) =
     object
        [ "error" .= ("IllegalAddress" :: String)
        , "detail" .= ("The contract contains this address that is invalid for the network on which it will be executed." :: String)
-       , "address" .= show address
+       , "address" .= let
+                        credentialToJSON (PubKeyCredential hash) =
+                          object
+                            [
+                              "pubKeyCredential" .= show hash
+                            ]
+                        credentialToJSON (ScriptCredential hash) =
+                          object
+                            [
+                              "scriptCredential" .= show hash
+                            ]
+                        stakingCredentialToJSON (StakingHash credential) =
+                          object
+                            [
+                              "stakingHash" .= credentialToJSON credential
+                            ]
+                        stakingCredentialToJSON (StakingPtr x y z) =
+                          object
+                            [
+                              "stakingPtr" .= (x, y, z)
+                            ]
+                      in
+                        object
+                          [
+                            "addressCredential" .= credentialToJSON addressCredential
+                          , "addressStakingCredential" .=  fmap stakingCredentialToJSON addressStakingCredential
+                          ]
        , "fatal" .= True
        ]
   toJSON SafetyAnalysisTimeout =
@@ -258,6 +296,67 @@ instance ToJSON SafetyError where
        , "detail" .= ("The safety analysis exceeded the allotted time." :: String)
        , "fatal" .= False
        ]
+
+instance FromJSON SafetyError where
+  parseJSON =
+    withObject "SafetyError"
+      $ \o ->
+        (o .: "error" :: Parser String)
+          >>= \case
+            "MissingRolesCurrency" -> pure MissingRolesCurrency
+            "ContractHasNoRoles" -> pure ContractHasNoRoles
+            "MissingRoleToken" -> MissingRoleToken . TokenName . toBuiltin . T.encodeUtf8 <$> o .: "role-name"
+            "ExtraRoleToken" -> ExtraRoleToken . TokenName . toBuiltin . T.encodeUtf8 <$> o .: "role-name"
+            "RoleNameTooLong" -> RoleNameTooLong . TokenName . toBuiltin . T.encodeUtf8 <$> o .: "role-name"
+            "InvalidCurrencySymbol" ->
+              do
+                EncodeBase16 bs <- parseJSON =<< o .: "currency-symbol"
+                pure . InvalidCurrencySymbol . CurrencySymbol $ toBuiltin bs
+            "TokenNameTooLong" -> TokenNameTooLong . TokenName . toBuiltin . T.encodeUtf8 <$> o .: "token-name"
+            "InvalidToken" -> InvalidToken <$> o .: "token"
+            "NonPositiveBalance" -> NonPositiveBalance <$> o .: "account-id" <*> o .:  "token"
+            "DuplicateAccount" -> DuplicateAccount <$> o .: "account-id" <*> o .: "token"
+            "DuplicateChoice"  -> DuplicateChoice <$> o .: "choice-id"
+            "DuplicateBoundValue" -> DuplicateBoundValue <$> o .: "value-id"
+            "MaximumValueMayExceedProtocol" -> MaximumValueMayExceedProtocol <$> o .: "bytes"
+            "TransactionSizeMayExceedProtocol" -> TransactionSizeMayExceedProtocol <$> o .: "transaction" <*> o .: "bytes"
+            "TransactionCostMayExceedProtocol" -> TransactionCostMayExceedProtocol <$> o .: "transaction" <*> o .: "cost"
+            "TransactionValidationError" -> TransactionValidationError <$> o .: "transaction" <*> o .: "message"
+            "TransactionWarning" -> TransactionWarning <$> o .: "transaction" <*> o .: "warning"
+            "MissingContinuation" ->
+              do
+                EncodeBase16 bs <- parseJSON =<< o .: "hash"
+                pure . MissingContinuation . DatumHash $ toBuiltin bs
+            "InconsistentNetworks" -> pure InconsistentNetworks
+            "WrongNetwork" -> pure WrongNetwork
+            "IllegalAddress" ->
+               do
+                 let
+                   pubKeyCredentialFromJSON =
+                     withObject "PubKeyCredential"
+                       $ \o' -> PubKeyCredential . fromString <$> o' .: "pubKeyCredential"
+                   scriptCredentialFromJSON =
+                     withObject "ScriptCredential"
+                       $ \o' -> ScriptCredential . fromString <$> o' .: "scriptCredential"
+                   credentialFromJSON o' = pubKeyCredentialFromJSON o' <|> scriptCredentialFromJSON o'
+                   stakingHashFromJSON =
+                     withObject "StakingHash"
+                       $ \o' -> StakingHash <$> (credentialFromJSON =<< o' .: "stakingHash")
+                   stakingPtrFromJSON =
+                     withObject "StakingPtr"
+                       $ \o' ->
+                         do
+                           (x, y, z) <- o' .: "stakingPtr"
+                           pure $ StakingPtr x y z
+                   stakingCredentialFromJSON o' = stakingHashFromJSON o' <|> stakingPtrFromJSON o'
+                 o' <- o .: "address"
+                 addressCredential <- credentialFromJSON =<< o' .: "addressCredential"
+                 addressStakingCredential <-
+                   (fmap Just $ stakingCredentialFromJSON =<< o' .: "stakingCredential")
+                     <|> pure Nothing
+                 pure . IllegalAddress $ Ledger.Address{..}
+            "SafetyAnalysisTimeout" -> pure SafetyAnalysisTimeout
+            _ -> fail "Invalid safety error."
 
 
 -- | A Marlowe transaction.
@@ -280,3 +379,14 @@ instance ToJSON Transaction where
       , "input"    .= txInput
       , "output"   .= txOutput
       ]
+
+instance FromJSON Transaction where
+  parseJSON =
+    withObject "Transaction"
+      $ \o ->
+        do
+          txState <- o .: "state"
+          txContract <- o .: "contract"
+          txInput <- o .: "input"
+          txOutput <- o .: "output"
+          pure Transaction{..}

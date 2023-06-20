@@ -56,6 +56,7 @@ import Data.Version (Version)
 import Data.Word (Word16, Word32, Word64)
 import GHC.Exts (IsList)
 import GHC.Generics (Generic)
+import Language.Marlowe.Analysis.Safety.Types (SafetyError)
 import qualified Language.Marlowe.Core.V1.Semantics.Types as Semantics
 import Language.Marlowe.Runtime.Web.Orphans ()
 import Network.URI (parseURI)
@@ -447,7 +448,8 @@ instance ToSchema (WithdrawTxEnvelope CardanoTxBody) where
 data CreateTxEnvelope tx = CreateTxEnvelope
   { contractId :: TxOutRef
   , txEnvelope :: TextEnvelope
-  } deriving (Show, Eq, Ord, Generic)
+  , safetyErrors :: [SafetyError]
+  } deriving (Show, Eq, Generic)
 
 instance ToJSON (CreateTxEnvelope CardanoTx) where
   toJSON CreateTxEnvelope{..} = object
@@ -464,11 +466,14 @@ instance FromJSON (CreateTxEnvelope CardanoTx) where
   parseJSON = withObject "CreateTxEnvelope" \obj -> CreateTxEnvelope
     <$> obj .: "contractId"
     <*> obj .: "tx"
+    <*> obj .: "safetyError"
 
 instance FromJSON (CreateTxEnvelope CardanoTxBody) where
   parseJSON = withObject "CreateTxEnvelope" \obj -> CreateTxEnvelope
     <$> obj .: "contractId"
     <*> obj .: "txBody"
+    <*> obj .: "safetyError"
+
 
 instance ToSchema (CreateTxEnvelope CardanoTx) where
   declareNamedSchema _ = do
