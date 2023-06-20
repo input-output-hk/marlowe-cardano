@@ -58,10 +58,15 @@ let
   re-up = ''
     cd $(git rev-parse --show-toplevel)
 
-    docker compose up --detach --file ${compose-spec}
+    docker compose -f ${compose-spec} up -d
   '';
 
   compose-spec = import ./compose.nix { inherit inputs pkgs; };
+
+  refresh-compose = ''
+    cd $(git rev-parse --show-toplevel)
+    nix-store --realise ${compose-spec} --add-root compose.yaml --indirect
+  '';
 
   mkCabalExeScript = target: ''
     cd `${pkgs.git}/bin/git rev-parse --show-toplevel`
@@ -77,7 +82,7 @@ in
   inherit
     start-cardano-node
     re-up
-    compose-spec
+    refresh-compose
     marlowe-runtime-cli
     marlowe-cli;
 }

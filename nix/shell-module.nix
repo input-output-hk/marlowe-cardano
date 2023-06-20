@@ -35,6 +35,8 @@
 
 let
   scripts = import ./marlowe-cardano/scripts.nix { inherit inputs pkgs project; };
+
+  isLinux = pkgs.stdenv.hostPlatform.isLinux;
 in
 {
   packages = [
@@ -50,16 +52,16 @@ in
 
   scripts = {
     re-up = {
-      description = "re-up";
+      description = "Builds compose.nix, (re)creates and (re)starts the dev docker containers for Runtime.";
       exec = scripts.re-up;
-      enabled = pkgs.stdenv.system == "x86_64-linux";
+      enabled = isLinux;
       group = "marlowe";
     };
 
-    compose-spec = {
-      description = "compose-spec";
-      exec = scripts.compose-spec;
-      enabled = pkgs.stdenv.system == "x86_64-linux";
+    refresh-compose = {
+      description = "Genereate compose.yaml in the repository root";
+      exec = scripts.refresh-compose;
+      enabled = isLinux;
       group = "marlowe";
     };
 
@@ -81,4 +83,6 @@ in
       group = "marlowe";
     };
   };
+
+  enterShell = pkgs.lib.optionalString isLinux "refresh-compose";
 }
