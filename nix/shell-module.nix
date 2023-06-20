@@ -35,6 +35,8 @@
 
 let
   scripts = import ./marlowe-cardano/scripts.nix { inherit inputs pkgs project; };
+
+  isLinux = pkgs.stdenv.hostPlatform.isLinux;
 in
 {
   packages = [
@@ -52,14 +54,14 @@ in
     re-up = {
       description = "re-up";
       exec = scripts.re-up;
-      enabled = pkgs.stdenv.system == "x86_64-linux";
+      enabled = isLinux;
       group = "marlowe";
     };
 
     compose-spec = {
       description = "compose-spec";
       exec = scripts.compose-spec;
-      enabled = pkgs.stdenv.system == "x86_64-linux";
+      enabled = isLinux;
       group = "marlowe";
     };
 
@@ -81,4 +83,6 @@ in
       group = "marlowe";
     };
   };
+
+  enterShell = l.optionalString isLinux "re-up";
 }
