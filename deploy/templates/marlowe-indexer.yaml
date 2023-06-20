@@ -1,0 +1,66 @@
+{{- range .Values.networks }}
+apiVersion: core.oam.dev/v1beta1
+kind: Application
+metadata:
+  name: marlowe-indexer-{{ . }}
+  namespace: marlowe-staging
+spec:
+  components:
+  - name: marlowe-indexer-{{ . }}
+    type: webservice
+    properties:
+      env:
+      - name: DB_NAME
+        value: chain-sync-{{ . }}
+      - name: DB_HOST
+        value: marlowe-runtime-database.marlowe-staging:5432
+      - name: DB_USER
+        valueFrom:
+          secretKeyRef:
+            key: username
+            name: chain-sync-{{ . }}.marlowe-runtime-database.credentials.postgresql.acid.zalan.do
+
+      - name: DB_PASS
+        valueFrom:
+          secretKeyRef:
+            key: password
+            name: chain-sync-{{ . }}.marlowe-runtime-database.credentials.postgresql.acid.zalan.do
+      - name: MARLOWE_CHAIN_SYNC_HOST
+        value: chain-sync-{{ . }}.marlowe-staging
+      - name: MARLOWE_CHAIN_SYNC_PORT
+        VALUE: 3715
+      - name: MARLOWE_CHAIN_SYNC_QUERY_PORT
+        VALUE: 3716
+      - name: MARLOWE_CHAIN_SYNC_COMMAND_PORT
+        VALUE: 3720
+      - name: HTTP_PORT
+        value: 3783
+      cpu: "0.5"
+      image: ghcr.io/input-output-hk/marlowe-indexer:0.0.2-rc1
+      imagePullPolicy: Always
+      memory: 1024Mi
+      ports:
+      - expose: true
+        port: 3783
+        protocol: TCP
+  policies:
+  - name: local-marlowe-staging
+    properties:
+      clusters:
+      - local
+      namespace: marlowe-staging
+    type: topology
+
+  workflow:
+    mode:
+      steps: DAG
+    steps:
+    - meta:
+        alias: Deploy To local-marlowe-staging
+      name: local-marlowe-staging
+      properties:
+        policies:
+        - local-marlowe-staging
+      type: deploy
+
+{{- end }}

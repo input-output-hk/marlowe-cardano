@@ -1,0 +1,43 @@
+{{- range .Values.networks }}
+apiVersion: core.oam.dev/v1beta1
+kind: Application
+metadata:
+  name: cardano-node-{{ . }}
+  namespace: marlowe-staging
+spec:
+  components:
+  - name: cardano-node-{{ . }}
+    type: webservice
+    properties:
+      cpu: "1"
+      env:
+      - name: NETWORK
+        value: {{ . }}
+      exposeType: ClusterIP
+      image: inputoutput/cardano-node
+      imagePullPolicy: Always
+      memory: 1024Mi
+      ports:
+      - expose: true
+        port: 80
+        protocol: TCP
+
+  policies:
+  - name: local-marlowe-staging
+    properties:
+      clusters:
+      - local
+      namespace: marlowe-staging
+    type: topology
+  workflow:
+    mode:
+      steps: DAG
+    steps:
+    - meta:
+        alias: Deploy To local-marlowe-staging
+      name: local-marlowe-staging
+      properties:
+        policies:
+        - local-marlowe-staging
+      type: deploy
+{{- end }}

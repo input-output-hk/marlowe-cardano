@@ -1,0 +1,61 @@
+{{- range .Values.networks }}
+apiVersion: core.oam.dev/v1beta1
+kind: Application
+metadata:
+  name: marlowe-tx-{{ . }}
+  namespace: marlowe-staging
+spec:
+  components:
+    - name: marlowe-tx
+      type: webservice
+      properties:
+        env:
+        - name: HOST
+          value: 0.0.0.0
+        - name: PORT
+          value: 3723
+        - name: MARLOWE_CHAIN_SYNC_HOST
+          value: chain-sync-{{ . }}.marlowe-staging
+        - name: MARLOWE_CHAIN_SYNC_PORT
+          value: 3715
+        - name: MARLOWE_CHAIN_SYNC_QUERY_PORT
+          value: 3716
+        - name: MARLOWE_CHAIN_SYNC_COMMAND_PORT
+          value: 3720
+        - name: CONTRACT_HOST
+          value: marlowe-contract-{{ . }}.marlowe-staging
+        - name: CONTRACT_QUERY_PORT
+          value: 3728
+        - name: HTTP_PORT
+          value: 3785
+        cpu: "0.5"
+        image: ghcr.io/input-output-hk/marlowe-tx:0.0.2-rc1
+        imagePullPolicy: Always
+        memory: 1024Mi
+        ports:
+        - expose: true
+          port: 3723
+          protocol: TCP
+        - expose: true
+          port: 3785
+          protocol: TCP
+  policies:
+  - name: local-marlowe-staging
+    properties:
+      clusters:
+      - local
+      namespace: marlowe-staging
+    type: topology
+
+  workflow:
+    mode:
+      steps: DAG
+    steps:
+    - meta:
+        alias: Deploy To local-marlowe-staging
+      name: local-marlowe-staging
+      properties:
+        policies:
+        - local-marlowe-staging
+      type: deploy
+{{- end }}
