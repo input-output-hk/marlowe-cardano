@@ -1,0 +1,4 @@
+Added
+-----
+
+- Create command outputs results of contract safety analysis.
