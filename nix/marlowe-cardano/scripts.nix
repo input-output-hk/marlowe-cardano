@@ -81,7 +81,7 @@ in
   inherit
     start-cardano-node
     re-up
-    compose-spec
+    gen-compose-spec
     marlowe-runtime-cli
     marlowe-cli;
 }
