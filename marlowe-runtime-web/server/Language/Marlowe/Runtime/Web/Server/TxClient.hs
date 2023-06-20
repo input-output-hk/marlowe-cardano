@@ -54,13 +54,12 @@ import Language.Marlowe.Runtime.Transaction.Api
   , WithdrawError
   , WithdrawTx(..)
   )
-import Network.Protocol.Connection (SomeClientConnectorTraced)
-import Network.Protocol.Driver.Trace (HasSpanContext, runSomeConnectorTraced)
+import Network.Protocol.Connection (Connector, runConnector)
 import Network.Protocol.Job.Client
 import Observe.Event.Backend (setAncestorEventBackend)
 
-newtype TxClientDependencies r s m = TxClientDependencies
-  { connector :: SomeClientConnectorTraced MarloweRuntimeClient r s m
+newtype TxClientDependencies m = TxClientDependencies
+  { connector :: Connector MarloweRuntimeClient m
   }
 
 type CreateContract m
@@ -134,8 +133,8 @@ data SomeTVarWithMapUpdate = forall k tx a. Ord k => SomeTVarWithMapUpdate (TVar
 
 txClient
   :: forall r s env m
-   . (MonadEvent r s m, MonadUnliftIO m, HasSpanContext r, WithLog env Message m)
-  => Component m (TxClientDependencies r s m) (TxClient r m)
+   . (MonadEvent r s m, MonadUnliftIO m, WithLog env Message m)
+  => Component m (TxClientDependencies m) (TxClient r m)
 txClient = component "web-tx-client" \TxClientDependencies{..} -> do
   tempContracts <- newTVar mempty
   tempTransactions <- newTVar mempty
@@ -167,7 +166,7 @@ txClient = component "web-tx-client" \TxClientDependencies{..} -> do
               liftIO $ atomically $ waitDelay delay
               pure $ SendMsgPoll $ clientCmd report'
           }
-      runSomeConnectorTraced connector $ RunTxClient client
+      runConnector connector $ RunTxClient client
 
     genericSubmit
       :: SomeTVarWithMapUpdate
@@ -190,7 +189,7 @@ txClient = component "web-tx-client" \TxClientDependencies{..} -> do
 
   pure (runTxClient, TxClient
     { createContract = \stakeCredential version addresses roles metadata minUTxODeposit contract -> do
-        response <- runSomeConnectorTraced connector
+        response <- runConnector connector
           $ RunTxClient
           $ liftCommand
           $ Create stakeCredential version addresses roles metadata minUTxODeposit
@@ -201,7 +200,7 @@ txClient = component "web-tx-client" \TxClientDependencies{..} -> do
           $ TempTx version Unsigned creation
         pure response
     , applyInputs = \version addresses contractId metadata invalidBefore invalidHereafter inputs -> do
-        response <- runSomeConnectorTraced connector
+        response <- runConnector connector
           $ RunTxClient
           $ liftCommand
           $ ApplyInputs version addresses contractId metadata invalidBefore invalidHereafter inputs
@@ -213,7 +212,7 @@ txClient = component "web-tx-client" \TxClientDependencies{..} -> do
             $ Map.alter (Just . maybe (Map.singleton txId tempTx) (Map.insert txId tempTx)) contractId
         pure response
     , withdraw = \version addresses contractId role -> do
-        response <- runSomeConnectorTraced connector
+        response <- runConnector connector
           $ RunTxClient
           $ liftCommand
           $ Withdraw version addresses contractId role

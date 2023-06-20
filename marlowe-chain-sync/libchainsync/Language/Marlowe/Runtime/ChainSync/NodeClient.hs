@@ -39,7 +39,7 @@ import Control.Monad.Event.Class (MonadInjectEvent, withEvent)
 import qualified Ouroboros.Network.Protocol.LocalStateQuery.Client as Q
 import qualified Ouroboros.Network.Protocol.LocalStateQuery.Type as Q
 import qualified Ouroboros.Network.Protocol.LocalTxSubmission.Client as S
-import UnliftIO (MonadIO, MonadUnliftIO, atomically, liftIO, newEmptyTMVarIO)
+import UnliftIO (MonadIO, MonadUnliftIO, atomically, newEmptyTMVarIO)
 
 
 type SubmitToNode m
@@ -60,8 +60,8 @@ data NodeClient m = NodeClient
   }
 
 
-newtype NodeClientDependencies = NodeClientDependencies
-  { connectToLocalNode :: LocalNodeClientProtocolsInMode CardanoMode -> IO ()
+newtype NodeClientDependencies m = NodeClientDependencies
+  { connectToLocalNode :: LocalNodeClientProtocolsInMode CardanoMode -> m ()
   }
 
 
@@ -72,14 +72,14 @@ data NodeClientSelector f where
 
 nodeClient
   :: (MonadInjectEvent r NodeClientSelector s m, MonadUnliftIO m, WithLog env Message m)
-  => Component m NodeClientDependencies (NodeClient m)
+  => Component m (NodeClientDependencies m) (NodeClient m)
 nodeClient =
   component "chain-sync-node-client" \NodeClientDependencies{..} ->
     do
       queryChannel <- newTChan
       submitChannel <- newTChan
       let
-        runNodeClient = liftIO $
+        runNodeClient =
           connectToLocalNode LocalNodeClientProtocols
           {
             -- We don't use the block and tip information, but the chain

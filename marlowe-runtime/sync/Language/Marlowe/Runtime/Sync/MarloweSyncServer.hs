@@ -1,47 +1,31 @@
-{-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE ExplicitNamespaces #-}
-{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 
 module Language.Marlowe.Runtime.Sync.MarloweSyncServer where
 
-import Colog (Message, WithLog)
-import Control.Concurrent.Component
-import Control.Monad.Event.Class
 import Data.Type.Equality (testEquality, type (:~:)(Refl))
 import Language.Marlowe.Protocol.Sync.Server
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainPoint, WithGenesis(..))
 import Language.Marlowe.Runtime.Core.Api (ContractId, MarloweVersion, SomeMarloweVersion(..))
 import Language.Marlowe.Runtime.History.Api (SomeCreateStep(..))
 import Language.Marlowe.Runtime.Sync.Database (DatabaseQueries(..), Next(..))
-import Network.Protocol.Connection (SomeConnectionSourceTraced, SomeServerConnectorTraced, acceptSomeConnectorTraced)
-import Network.Protocol.Driver.Trace (HasSpanContext, runSomeConnectorTraced)
+import Network.Protocol.Connection (ServerSource(..))
 import UnliftIO (MonadUnliftIO)
 
-data MarloweSyncServerDependencies r s m = MarloweSyncServerDependencies
+newtype MarloweSyncServerDependencies m = MarloweSyncServerDependencies
   { databaseQueries :: DatabaseQueries m
-  , syncSource :: SomeConnectionSourceTraced MarloweSyncServer r s m
   }
 
 marloweSyncServer
-  :: (MonadUnliftIO m, MonadEvent r s m, HasSpanContext r, WithLog env Message m)
-  => Component m (MarloweSyncServerDependencies r s m) ()
-marloweSyncServer = serverComponent "marlowe-sync-server" (component_ "marlowe-sync-worker" worker) \MarloweSyncServerDependencies{..} -> do
-  connector <- acceptSomeConnectorTraced syncSource
-  pure WorkerDependencies{..}
-
-data WorkerDependencies r s m = WorkerDependencies
-  { databaseQueries :: DatabaseQueries m
-  , connector :: SomeServerConnectorTraced MarloweSyncServer r s m
-  }
-
-worker
-  :: forall r s m. (MonadUnliftIO m, MonadEvent r s m, HasSpanContext r)
-  => WorkerDependencies r s m -> m ()
-worker WorkerDependencies{..} = do
-  runSomeConnectorTraced connector $ MarloweSyncServer $ pure serverInit
+  :: forall m
+   . MonadUnliftIO m
+  => MarloweSyncServerDependencies m
+  -> ServerSource MarloweSyncServer m ()
+marloweSyncServer MarloweSyncServerDependencies{..} = ServerSource $ pure server
   where
     DatabaseQueries{..} = databaseQueries
+
+    server = MarloweSyncServer $ pure serverInit
 
     serverInit :: ServerStInit m ()
     serverInit = ServerStInit

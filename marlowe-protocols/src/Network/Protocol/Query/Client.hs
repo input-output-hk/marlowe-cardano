@@ -10,9 +10,11 @@
 module Network.Protocol.Query.Client where
 
 import Control.Applicative (liftA2)
+import Control.Monad (join)
 import Control.Monad.IO.Class (MonadIO(..))
 import Control.Monad.Trans.Class (MonadTrans(..))
 import Network.Protocol.Peer.Trace
+import Network.Protocol.Query.Server
 import Network.Protocol.Query.Types
 import Network.TypedProtocol
 
@@ -67,3 +69,19 @@ queryClientPeer = \case
     YieldTraced (ClientAgency TokReq) (MsgRequest req) $
       Call (ServerAgency (TokRes $ tagFromReq req)) \case
         MsgRespond r -> EffectTraced $ queryClientPeer <$> cont r
+
+serveQueryClient
+  :: forall req m a b
+   . Monad m
+  => QueryServer req m a
+  -> QueryClient req m b
+  -> m (a, b)
+serveQueryClient QueryServer{..} client = join $ serveReq <$> runQueryServer <*> pure client
+  where
+    serveReq :: ServerStReq req m a -> QueryClient req m b -> m (a, b)
+    serveReq server@ServerStReq{..} = \case
+      ClientRequest reqTree k -> do
+        (x, next) <- recvMsgRequest reqTree
+        serveReq next =<< k x
+      ClientLift m -> serveReq server =<< m
+      ClientPure b -> (,b) <$> recvMsgDone

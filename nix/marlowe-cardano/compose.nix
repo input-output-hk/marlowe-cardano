@@ -46,6 +46,25 @@ let
     exec -a $PROG $BIN "$@"
   '';
 
+  run-runtime = writeShellScriptBin "run-marlowe-runtime" ''
+    set -e
+    PROG=${lib.escapeShellArg "marlowe-runtime"}
+    PKG=${lib.escapeShellArg "marlowe-runtime"}-${lib.escapeShellArg marloweRuntimeVersion}
+    cd /src
+    # Hard-coding linux because this won't work on Mac anyway.
+    # TODO find a setup that works on MacOS
+    BIN=./dist-newstyle/build/x86_64-linux/ghc-8.10.7/$PKG/x/$PROG/build/$PROG/$PROG
+    export PATH="$PATH:${lib.makeBinPath [ sqitchPg postgresql ]}"
+    export LOCALE_ARCHIVE="${glibcLocales}/lib/locale/locale-archive"
+    cd marlowe-chain-sync
+    sqitch deploy -h postgres
+    cd /src
+    cd marlowe-runtime/marlowe-indexer
+    sqitch deploy -h postgres
+    cd /src
+    exec -a $PROG $BIN "$@"
+  '';
+
   run-local-service = project: version: prog: writeShellScriptBin "run-${prog}" ''
     set -e
     PROG=${lib.escapeShellArg prog}
@@ -71,6 +90,7 @@ let
     ln -sv ${run-indexer}/bin/run-marlowe-indexer $out
     ln -sv ${run-local-service "marlowe-runtime" marloweRuntimeVersion "marlowe-proxy"}/bin/run-marlowe-proxy $out
     ln -sv ${run-local-service "marlowe-runtime" marloweRuntimeVersion "marlowe-contract"}/bin/run-marlowe-contract $out
+    ln -sv ${run-runtime}/bin/run-marlowe-runtime $out
   '';
 
   node-service = {
@@ -256,13 +276,41 @@ let
     environment = [ "OTEL_SERVICE_NAME=marlowe-proxy" ];
   };
 
+  runtime-service = dev-service {
+    ports = [ 3700 3701 ];
+    depends_on = [ "postgres" "node" ];
+    command = [
+      "/exec/run-marlowe-runtime"
+      "--host"
+      "0.0.0.0"
+      "--store-dir"
+      "/store"
+      "--database-uri"
+      "postgresql://postgres@postgres/chain"
+      "--socket-path"
+      "/ipc/node.socket"
+      "--testnet-magic"
+      (builtins.toString network.magic)
+      "--genesis-config-file"
+      network.nodeConfig.ByronGenesisFile
+      "--genesis-config-file-hash"
+      network.nodeConfig.ByronGenesisHash
+      "--shelley-genesis-config-file"
+      network.nodeConfig.ShelleyGenesisFile
+    ];
+    environment = [
+      "TZ=UTC"
+      "OTEL_SERVICE_NAME=marlowe-runtime"
+    ];
+  };
+
   web-service = dev-service {
     ports = [ 8080 ];
-    depends_on = [ "marlowe-proxy" ];
+    depends_on = [ "marlowe-runtime" ];
     command = [
       "/exec/run-marlowe-web-server"
       "--marlowe-runtime-host"
-      "marlowe-proxy"
+      "marlowe-runtime"
       "--enable-open-api"
       "--access-control-allow-origin-all"
     ];
@@ -341,14 +389,15 @@ let
 
     volumes.postgres = null;
 
-    services.marlowe-chain-indexer = chain-indexer-service;
-    services.marlowe-chain-sync = marlowe-chain-sync-service;
-    services.marlowe-tx = tx-service;
-    services.marlowe-proxy = proxy-service;
+    # services.marlowe-chain-indexer = chain-indexer-service;
+    # services.marlowe-chain-sync = marlowe-chain-sync-service;
+    # services.marlowe-tx = tx-service;
+    # services.marlowe-proxy = proxy-service;
     services.web = web-service;
-    services.marlowe-indexer = marlowe-indexer-service;
-    services.marlowe-sync = sync-service;
-    services.marlowe-contract = contract-service;
+    # services.marlowe-indexer = marlowe-indexer-service;
+    # services.marlowe-sync = sync-service;
+    # services.marlowe-contract = contract-service;
+    services.marlowe-runtime = runtime-service;
 
     services.node = node-service;
     volumes.shared = null;

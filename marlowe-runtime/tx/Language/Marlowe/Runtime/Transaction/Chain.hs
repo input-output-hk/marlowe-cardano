@@ -6,30 +6,28 @@ module Language.Marlowe.Runtime.Transaction.Chain where
 import Colog (Message, WithLog)
 import Control.Concurrent.Component
 import Control.Concurrent.STM (STM, newTVar, readTVar, writeTVar)
-import Control.Monad.Event.Class (MonadEvent)
 import Data.Functor (($>))
 import Data.Void (absurd)
 import Language.Marlowe.Runtime.ChainSync.Api (Move(..), RuntimeChainSeekClient)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Network.Protocol.ChainSeek.Client
-import Network.Protocol.Connection (SomeClientConnectorTraced)
-import Network.Protocol.Driver.Trace (HasSpanContext, runSomeConnectorTraced)
+import Network.Protocol.Connection (Connector, runConnector)
 import UnliftIO (MonadUnliftIO, atomically, finally)
 import UnliftIO.Concurrent (threadDelay)
 
-newtype TransactionChainClientDependencies r s m = TransactionChainClientDependencies
-  { chainSyncConnector :: SomeClientConnectorTraced RuntimeChainSeekClient r s m
+newtype TransactionChainClientDependencies m = TransactionChainClientDependencies
+  { chainSyncConnector :: Connector RuntimeChainSeekClient m
   }
 
 transactionChainClient
-  :: (MonadUnliftIO m, MonadEvent r s m, HasSpanContext r, WithLog env Message m)
-  => Component m (TransactionChainClientDependencies r s m) (STM Bool, STM Chain.ChainPoint)
+  :: (MonadUnliftIO m, WithLog env Message m)
+  => Component m (TransactionChainClientDependencies m) (STM Bool, STM Chain.ChainPoint)
 transactionChainClient = component "tx-chain-seek-client" \TransactionChainClientDependencies{..} -> do
   tipVar <- newTVar Chain.Genesis
   connectedVar <- newTVar False
   pure
     ( flip finally (atomically $ writeTVar connectedVar False)
-        $ runSomeConnectorTraced chainSyncConnector
+        $ runConnector chainSyncConnector
         $ client connectedVar tipVar
     , (readTVar connectedVar, readTVar tipVar)
     )

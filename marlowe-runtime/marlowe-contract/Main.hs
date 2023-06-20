@@ -22,10 +22,8 @@ import Language.Marlowe.Runtime.Contract.Store (traceContractStore)
 import Language.Marlowe.Runtime.Contract.Store.File
   (ContractStoreOptions(..), createContractStore, defaultContractStoreOptions)
 import Logging (RootSelector(..), renderRootSelectorOTel)
-import Network.Protocol.Connection (SomeConnectionSourceTraced(..))
 import Network.Protocol.Driver (TcpServerDependencies(..))
 import Network.Protocol.Driver.Trace (tcpServerTraced)
-import Network.Protocol.Handshake.Server (handshakeConnectionSourceTraced)
 import Network.Protocol.Query.Server (queryServerPeer)
 import Network.Socket (HostName, PortNumber)
 import Network.TypedProtocol (unsafeIntToNat)
@@ -64,24 +62,22 @@ run Options{..} = do
   contractStore <- traceContractStore inject
     <$> createContractStore ContractStoreOptions{..}
   flip runComponent_ () proc _ -> do
-    loadSource <- tcpServerTraced "contract-load" inject -< TcpServerDependencies
+    MarloweContract{..} <- contract -< ContractDependencies
+      { contractStore
+      , batchSize = unsafeIntToNat bufferSize
+      }
+
+    tcpServerTraced "contract-load" inject -< TcpServerDependencies
       { toPeer = marloweLoadServerPeer
+      , serverSource = loadServerSource
       , ..
       }
 
-    querySource <- tcpServerTraced "contract-query" inject -< TcpServerDependencies
+    tcpServerTraced "contract-query" inject -< TcpServerDependencies
       { toPeer = queryServerPeer
       , port = queryPort
+      , serverSource = queryServerSource
       , ..
-      }
-
-    probes <- contract -< ContractDependencies
-      { loadSource = SomeConnectionSourceTraced inject
-          $ handshakeConnectionSourceTraced loadSource
-      , querySource = SomeConnectionSourceTraced inject
-          $ handshakeConnectionSourceTraced querySource
-      , contractStore
-      , batchSize = unsafeIntToNat bufferSize
       }
 
     probeServer -< ProbeServerDependencies { port = fromIntegral httpPort, .. }

@@ -20,10 +20,8 @@ import qualified Language.Marlowe.Runtime.CLI.Option as O
 import Language.Marlowe.Runtime.Proxy
 import Logging (RootSelector(..), renderRootSelectorOTel)
 import Network.Channel.Typed
-import Network.Protocol.Connection (SomeConnectionSource(..), SomeConnectionSourceTraced(..))
 import Network.Protocol.Driver (TcpServerDependencies(..), tcpServer)
 import Network.Protocol.Driver.Trace (tcpServerTraced)
-import Network.Protocol.Handshake.Server (handshakeConnectionSource, handshakeConnectionSourceTraced)
 import Network.Socket (HostName, PortNumber)
 import Observe.Event.Backend (injectSelector)
 import OpenTelemetry.Trace
@@ -58,29 +56,26 @@ main = do
 
 run :: Options -> AppM Span RootSelector ()
 run = runComponent_ proc Options{..} -> do
-  connectionSource <- tcpServer "marlowe-runtime" -< TcpServerDependencies
+  MarloweProxy{..} <- proxy -< Router
+    { connectMarloweSync = tcpClientChannel (injectSelector MarloweSyncClient) syncHost marloweSyncPort
+    , connectMarloweHeaderSync = tcpClientChannel (injectSelector MarloweHeaderSyncClient) syncHost marloweHeaderSyncPort
+    , connectMarloweQuery = tcpClientChannel (injectSelector MarloweQueryClient) syncHost marloweQueryPort
+    , connectMarloweLoad = tcpClientChannel (injectSelector MarloweLoadClient) contractHost marloweLoadPort
+    , connectTxJob = tcpClientChannel (injectSelector TxJobClient) txHost txPort
+    , connectContractQuery = tcpClientChannel (injectSelector ContractQueryClient) contractHost contractQueryPort
+    }
+
+  tcpServer "marlowe-runtime" -< TcpServerDependencies
     { toPeer = marloweRuntimeServerPeer
+    , serverSource = proxyServerSource False
     , ..
     }
 
-  connectionSourceTraced <- tcpServerTraced "marlowe-runtime-traced" $ injectSelector MarloweRuntimeServer -< TcpServerDependencies
+  tcpServerTraced "marlowe-runtime-traced" $ injectSelector MarloweRuntimeServer -< TcpServerDependencies
     { toPeer = marloweRuntimeServerPeer
     , port = portTraced
+    , serverSource = proxyServerSource True
     , ..
-    }
-  probes <- proxy -< ProxyDependencies
-    { router = Router
-        { connectMarloweSync = tcpClientChannel (injectSelector MarloweSyncClient) syncHost marloweSyncPort
-        , connectMarloweHeaderSync = tcpClientChannel (injectSelector MarloweHeaderSyncClient) syncHost marloweHeaderSyncPort
-        , connectMarloweQuery = tcpClientChannel (injectSelector MarloweQueryClient) syncHost marloweQueryPort
-        , connectMarloweLoad = tcpClientChannel (injectSelector MarloweLoadClient) contractHost marloweLoadPort
-        , connectTxJob = tcpClientChannel (injectSelector TxJobClient) txHost txPort
-        , connectContractQuery = tcpClientChannel (injectSelector ContractQueryClient) contractHost contractQueryPort
-        }
-    , connectionSource = SomeConnectionSource
-        $ handshakeConnectionSource connectionSource
-    , connectionSourceTraced = SomeConnectionSourceTraced (injectSelector MarloweRuntimeServer)
-        $ handshakeConnectionSourceTraced connectionSourceTraced
     }
 
   probeServer -< ProbeServerDependencies { port = fromIntegral httpPort, .. }

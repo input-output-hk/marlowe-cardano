@@ -17,16 +17,14 @@ import Data.Version (showVersion)
 import Language.Marlowe.Runtime.ChainSync.Api (BlockNo(..), ChainSyncQuery(..), RuntimeChainSeekClient)
 import Language.Marlowe.Runtime.Contract.Api (ContractRequest)
 import qualified Language.Marlowe.Runtime.Core.ScriptRegistry as ScriptRegistry
-import Language.Marlowe.Runtime.Transaction (TransactionDependencies(..), transaction)
+import Language.Marlowe.Runtime.Transaction (MarloweTx(..), TransactionDependencies(..), transaction)
 import qualified Language.Marlowe.Runtime.Transaction.Query as Query
 import qualified Language.Marlowe.Runtime.Transaction.Submit as Submit
 import Logging (RootSelector(..), renderRootSelectorOTel)
 import Network.Protocol.ChainSeek.Client (chainSeekClientPeer)
-import Network.Protocol.Connection (SomeClientConnectorTraced, SomeConnectionSourceTraced(..), SomeConnectorTraced(..))
+import Network.Protocol.Connection (Connector, runConnector)
 import Network.Protocol.Driver (TcpServerDependencies(..))
-import Network.Protocol.Driver.Trace (runSomeConnectorTraced, tcpClientTraced, tcpServerTraced)
-import Network.Protocol.Handshake.Client (handshakeClientConnectorTraced)
-import Network.Protocol.Handshake.Server (handshakeConnectionSourceTraced)
+import Network.Protocol.Driver.Trace (tcpClientTraced, tcpServerTraced)
 import Network.Protocol.Job.Client (jobClientPeer)
 import Network.Protocol.Job.Server (jobServerPeer)
 import Network.Protocol.Query.Client (QueryClient, queryClientPeer, request)
@@ -64,42 +62,33 @@ main = do
 
 run :: Options -> AppM Span RootSelector ()
 run Options{..} = flip runComponent_ () proc _ -> do
-  serverSource <- tcpServerTraced "tx-job" (injectSelector Server) -< TcpServerDependencies
-    host
-    port
-    jobServerPeer
   let
-    chainSyncConnector :: SomeClientConnectorTraced RuntimeChainSeekClient Span RootSelector (AppM Span RootSelector)
-    chainSyncConnector = SomeConnectorTraced (injectSelector ChainSeekClient)
-      $ handshakeClientConnectorTraced
-      $ tcpClientTraced (injectSelector ChainSeekClient) chainSeekHost chainSeekPort chainSeekClientPeer
+    chainSyncConnector :: Connector RuntimeChainSeekClient (AppM Span RootSelector)
+    chainSyncConnector = tcpClientTraced (injectSelector ChainSeekClient) chainSeekHost chainSeekPort chainSeekClientPeer
 
-    chainSyncQueryConnector :: SomeClientConnectorTraced (QueryClient ChainSyncQuery) Span RootSelector (AppM Span RootSelector)
-    chainSyncQueryConnector = SomeConnectorTraced (injectSelector ChainSyncQueryClient)
-      $ handshakeClientConnectorTraced
-      $ tcpClientTraced (injectSelector ChainSyncQueryClient) chainSeekHost chainSeekQueryPort queryClientPeer
+    chainSyncQueryConnector :: Connector (QueryClient ChainSyncQuery) (AppM Span RootSelector)
+    chainSyncQueryConnector = tcpClientTraced (injectSelector ChainSyncQueryClient) chainSeekHost chainSeekQueryPort queryClientPeer
 
-    contractQueryConnector :: SomeClientConnectorTraced (QueryClient ContractRequest) Span RootSelector (AppM Span RootSelector)
-    contractQueryConnector = SomeConnectorTraced (injectSelector ContractQueryClient)
-      $ handshakeClientConnectorTraced
-      $ tcpClientTraced (injectSelector ContractQueryClient) contractHost contractQueryPort queryClientPeer
+    contractQueryConnector :: Connector (QueryClient ContractRequest) (AppM Span RootSelector)
+    contractQueryConnector = tcpClientTraced (injectSelector ContractQueryClient) contractHost contractQueryPort queryClientPeer
 
-  probes <- transaction -< TransactionDependencies
-    { connectionSource = SomeConnectionSourceTraced (injectSelector Server)
-        $ handshakeConnectionSourceTraced serverSource
-    , mkSubmitJob = Submit.mkSubmitJob Submit.SubmitJobDependencies
-        { chainSyncJobConnector = SomeConnectorTraced (injectSelector ChainSyncJobClient)
-            $ handshakeClientConnectorTraced
-            $ tcpClientTraced (injectSelector ChainSyncJobClient) chainSeekHost chainSeekCommandPort jobClientPeer
+  MarloweTx{..} <- transaction -< TransactionDependencies
+    { mkSubmitJob = Submit.mkSubmitJob Submit.SubmitJobDependencies
+        { chainSyncJobConnector = tcpClientTraced (injectSelector ChainSyncJobClient) chainSeekHost chainSeekCommandPort jobClientPeer
         , pollingInterval = 1.5
         , confirmationTimeout = 3600 -- 1 hour
         , ..
         }
     , loadMarloweContext = \v contractId -> do
-        networkId <- runSomeConnectorTraced chainSyncQueryConnector $ request GetNetworkId
+        networkId <- runConnector chainSyncQueryConnector $ request GetNetworkId
         Query.loadMarloweContext ScriptRegistry.getScripts networkId chainSyncConnector chainSyncQueryConnector v contractId
-    , loadWalletContext = Query.loadWalletContext $ runSomeConnectorTraced chainSyncQueryConnector . request . GetUTxOs
+    , loadWalletContext = Query.loadWalletContext $ runConnector chainSyncQueryConnector . request . GetUTxOs
     , getCurrentScripts = ScriptRegistry.getCurrentScripts
+    , ..
+    }
+
+  tcpServerTraced "tx-job" (injectSelector Server) -< TcpServerDependencies
+    { toPeer = jobServerPeer
     , ..
     }
 

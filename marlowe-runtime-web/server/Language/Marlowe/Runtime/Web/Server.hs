@@ -25,12 +25,13 @@ module Language.Marlowe.Runtime.Web.Server
   , serverWithOpenAPI
   ) where
 
+import Colog (cmap, fmtMessage, logTextStdout)
 import Control.Concurrent.Component
 import Control.Concurrent.Component.Run (AppM(..))
 import Control.Monad.Event.Class
 import Control.Monad.IO.Unlift (liftIO, withRunInIO)
 import Control.Monad.Reader (ReaderT(ReaderT), runReaderT)
-import Control.Monad.Trans.Marlowe (MarloweTracedContext(..))
+import Language.Marlowe.Protocol.Client (MarloweRuntimeClient)
 import Language.Marlowe.Protocol.Types (MarloweRuntime)
 import Language.Marlowe.Runtime.ChainSync.Api (TxId)
 import Language.Marlowe.Runtime.Core.Api (ContractId)
@@ -51,8 +52,7 @@ import Language.Marlowe.Runtime.Web.Server.SyncClient
   )
 import Language.Marlowe.Runtime.Web.Server.TxClient
   (ApplyInputs, CreateContract, Submit, TxClient(..), TxClientDependencies(..), Withdraw, txClient)
-import Network.Protocol.Connection (SomeConnectorTraced(..))
-import Network.Protocol.Driver.Trace (HasSpanContext)
+import Network.Protocol.Connection (Connector)
 import Network.Protocol.Handshake.Types (Handshake)
 import Network.Wai (Request, Response)
 import qualified Network.Wai as WAI
@@ -114,11 +114,11 @@ corsMiddleware accessControlAllowOriginAll =
     cors (const $ Just policy)
   else id
 
-data ServerDependencies r s t = ServerDependencies
+data ServerDependencies r s = ServerDependencies
   { openAPIEnabled :: Bool
   , accessControlAllowOriginAll :: Bool
   , runApplication :: Application -> IO ()
-  , marloweTracedContext :: MarloweTracedContext r s t (AppM r t)
+  , connector :: Connector MarloweRuntimeClient (AppM r s)
   }
 
 {- Architecture notes:
@@ -132,19 +132,17 @@ data ServerDependencies r s t = ServerDependencies
     process having its own event backend injected via its parameters.
 -}
 
-server :: (HasSpanContext r, Inject ServeRequest t) => Component (AppM r t) (ServerDependencies r s t) ()
-server = proc deps@ServerDependencies{marloweTracedContext = MarloweTracedContext{..}} -> do
-  TxClient{..} <- txClient -< TxClientDependencies
-    { connector = SomeConnectorTraced injector connector
-    }
+server :: Inject ServeRequest s => Component (AppM r s) (ServerDependencies r s) ()
+server = proc deps@ServerDependencies{connector} -> do
+  TxClient{..} <- txClient -< TxClientDependencies {..}
   SyncClient{..} <- syncClient -< SyncClientDependencies
-    { connector = SomeConnectorTraced injector connector
+    { connector
     , lookupTempContract
     , lookupTempTransaction
     , lookupTempWithdrawal
     }
   webServer -< case deps of
-    ServerDependencies{ ..} ->
+    ServerDependencies{connector = _, ..} ->
       WebServerDependencies
         { _loadContractHeaders = loadContractHeaders
         , _loadContract = loadContract
@@ -192,6 +190,7 @@ webServer = component_ "web-server" \WebServerDependencies{..} -> withRunInIO \r
       _eventBackend <- askBackend
       _logAction <- AppM $ ReaderT \(_, logAction) -> pure logAction
       let _requestParent = reference ev
+      let _logAction = cmap fmtMessage logTextStdout
       let
         mkApp
           | openAPIEnabled = corsMiddleware accessControlAllowOriginAll $ serveServerM apiWithOpenApi AppEnv{..} serverWithOpenAPI

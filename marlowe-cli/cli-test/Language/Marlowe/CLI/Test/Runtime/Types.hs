@@ -8,7 +8,6 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -50,11 +49,9 @@ import qualified Language.Marlowe.CLI.Test.Wallet.Types as Wallet
 import Language.Marlowe.Cardano.Thread (AnyMarloweThread, MarloweThread, anyMarloweThreadInputsApplied)
 import qualified Language.Marlowe.Core.V1.Semantics.Types as M
 import qualified Language.Marlowe.Protocol.Client as Marlowe.Protocol
-import qualified Language.Marlowe.Protocol.Types as Marlowe.Protocol
 import Language.Marlowe.Runtime.Core.Api (ContractId)
 import Ledger.Orphans ()
 import qualified Network.Protocol.Connection as Network.Protocol
-import Network.Protocol.Handshake.Types (Handshake)
 
 -- | We use TxId in the thread to perform awaits for a particular marlowe transaction.
 type RuntimeMonitorTxInfo = C.TxId
@@ -215,7 +212,7 @@ class HasInterpretState st era | st -> era where
 class HasInterpretEnv env era | env -> era where
   runtimeMonitorStateT :: Traversal' env RuntimeMonitorState
   runtimeMonitorInputT :: Traversal' env RuntimeMonitorInput
-  runtimeClientConnectorT :: Traversal' env (Network.Protocol.ClientConnector (Handshake Marlowe.Protocol.MarloweRuntime) Marlowe.Protocol.MarloweRuntimeClient IO)
+  runtimeClientConnectorT :: Traversal' env (Network.Protocol.Connector Marlowe.Protocol.MarloweRuntimeClient IO)
   -- runtimeClientConnectorT :: Traversal' env (Network.Protocol.SomeClientConnector Marlowe.Protocol.MarloweRuntimeClient IO)
   executionModeL :: Lens' env ExecutionMode
   connectionT :: Traversal' env (LocalNodeConnectInfo CardanoMode)
