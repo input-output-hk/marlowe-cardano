@@ -84,5 +84,5 @@ in
     };
   };
 
-  enterShell = l.optionalString isLinux "re-up";
+  enterShell = pkgs.lib.optionalString isLinux "re-up";
 }
