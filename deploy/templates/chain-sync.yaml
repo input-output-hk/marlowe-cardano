@@ -1,0 +1,79 @@
+{{- range .Values.networks }}
+apiVersion: core.oam.dev/v1beta1
+kind: Application
+metadata:
+  name: chain-sync-{{ . }}
+  namespace: marlowe-staging
+spec:
+  components:
+  - name: chain-sync-{{ . }}
+    type: webservice
+    properties:
+      env:
+      - name: HOST
+        value: 0.0.0.0
+      - name: PORT
+        value: 3715
+      - name: QUERY_PORT
+        value: 3716
+      - name: JOB_PORT
+        value: 3720
+      - name: HTTP_PORT
+        value: 3782
+      - name: CARDANO_NODE_SOCKET_PATH
+        value:
+      - name: NODE_CONFIG
+        value:
+      - name: DB_NAME
+        value:
+      - name: DB_HOST
+        value: marlowe-runtime-database.marlowe-staging:5432
+      - name: DB_USER
+        valueFrom:
+          secretKeyRef:
+            key: username
+            name: chain-sync-{{ . }}.marlowe-runtime-database.credentials.postgresql.acid.zalan.do
+
+      - name: DB_PASS
+        valueFrom:
+          secretKeyRef:
+            key: password
+            name: chain-sync-{{ . }}.marlowe-runtime-database.credentials.postgresql.acid.zalan.do
+      cpu: "0.5"
+      image: ghcr.io/input-output-hk/marlowe-chain-sync:0.0.2-rc1
+      imagePullPolicy: Always
+      memory: 1024Mi
+      ports:
+      - expose: true
+        port: 3715
+        protocol: TCP
+      - expose: true
+        port: 3716
+        protocol: TCP
+      - expose: true
+        port: 3720
+        protocol: TCP
+      - expose: true
+        port: 3782
+        protocol: TCP
+  policies:
+  - name: local-marlowe-staging
+    properties:
+      clusters:
+      - local
+      namespace: marlowe-staging
+    type: topology
+
+  workflow:
+    mode:
+      steps: DAG
+    steps:
+    - meta:
+        alias: Deploy To local-marlowe-staging
+      name: local-marlowe-staging
+      properties:
+        policies:
+        - local-marlowe-staging
+      type: deploy
+
+{{- end }}
