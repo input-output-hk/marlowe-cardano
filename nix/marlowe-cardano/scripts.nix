@@ -57,8 +57,8 @@ let
 
   re-up = ''
     cd $(git rev-parse --show-toplevel)
-    echo ${compose-spec}
-    # docker compose -f ${compose-spec} up -d
+
+    docker compose -f ${compose-spec} up -d
   '';
 
   compose-spec = import ./compose.nix { inherit inputs pkgs; };
