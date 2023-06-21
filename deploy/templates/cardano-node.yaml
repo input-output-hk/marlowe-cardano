@@ -27,12 +27,21 @@ spec:
         - name: ipc
           mountPath: /ipc
     traits:
+    # - type: sidecar
+    #   properties:
+    #     name: socat
+    #     image: alpine/socat
+    #     cmd:
+    #     - TCP-LISTEN:8090,bind=localhost,reuseaddr,fork UNIX-CONNECT:/dev/null
+    #     volumes:
+    #     - name: ipc
+    #       path: /ipc
     - type: sidecar
       properties:
-        name: socat
-        image: alpine/socat
+        name: yes
+        image: alpine
         cmd:
-        - TCP-LISTEN:8090,bind=localhost,reuseaddr,fork UNIX-CONNECT:/ipc/node.socket
+        - yes
         volumes:
         - name: ipc
           path: /ipc
