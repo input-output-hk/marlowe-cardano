@@ -16,6 +16,7 @@ let
   marlowe-chain-indexer = self.packages.ghc8107.marlowe-chain-sync-exe-marlowe-chain-indexer;
   marlowe-chain-sync = self.packages.ghc8107.marlowe-chain-sync-exe-marlowe-chain-sync;
   marlowe-contract = self.packages.ghc8107.marlowe-runtime-exe-marlowe-contract;
+  marlowe-runtime = self.packages.ghc8107.marlowe-runtime-exe-marlowe-runtime;
   marlowe-tx = self.packages.ghc8107.marlowe-runtime-exe-marlowe-tx;
   marlowe-proxy = self.packages.ghc8107.marlowe-runtime-exe-marlowe-proxy;
   marlowe-indexer = self.packages.ghc8107.marlowe-runtime-exe-marlowe-indexer;
