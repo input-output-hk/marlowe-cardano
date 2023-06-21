@@ -1,0 +1,17 @@
+{{- range $index, $network := .Values.networks }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cardano-network-configs-{{ $network }}
+  namespace: marlowe-staging
+data:
+  # https://helm.sh/docs/chart_template_guide/accessing_files/#configmap-and-secrets-utility-functions
+  config.json: |-
+    {{ $.Files.Get (print "network-configs/" $network "/config.json") | b64enc }}
+  byron-genesis.json: |-
+    {{ $.Files.Get (print "network-configs/" $network "/byron-genesis.json") | b64enc }}
+  shelley-genesis.json: |-
+    {{ $.Files.Get (print "network-configs/" $network "/shelley-genesis.json") | b64enc }}
+  alonzo-genesis.json: |-
+    {{ $.Files.Get (print "network-configs/" $network "/alonzo-genesis.json") | b64enc }}
+{{- end }}

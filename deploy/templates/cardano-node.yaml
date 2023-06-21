@@ -19,8 +19,19 @@ spec:
       memory: 1024Mi
       ports:
       - expose: true
-        port: 80
+        port: 8090
         protocol: TCP
+    traits:
+    - type: sidecar
+      properties:
+        name: socat
+        image: alpine/socat
+        cmd:
+        - TCP-LISTEN:8090,bind=localhost,reuseaddr,fork UNIX-CONNECT:/ipc/node.sock
+        volumes:
+        - name: ipc
+          path: /ipc
+''
 
   policies:
   - name: local-marlowe-staging

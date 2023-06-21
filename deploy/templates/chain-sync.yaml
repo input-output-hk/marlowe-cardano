@@ -21,11 +21,11 @@ spec:
       - name: HTTP_PORT
         value: 3782
       - name: CARDANO_NODE_SOCKET_PATH
-        value:
+        value: /ipc/node.sock
       - name: NODE_CONFIG
-        value:
+        value: /node-config/config.json
       - name: DB_NAME
-        value:
+        value: chain-sync-{{ . }}
       - name: DB_HOST
         value: marlowe-runtime-database.marlowe-staging:5432
       - name: DB_USER
@@ -56,6 +56,30 @@ spec:
       - expose: true
         port: 3782
         protocol: TCP
+      volumeMounts:
+        configMap:
+        - name: node-config
+          mountPath: /node-config
+          items:
+          - key: config.json
+            path: config.json
+          - key: alonzo-genesis.json
+            path: alonzo-genesis.json
+          - key: shelley-genesis.json
+            path: shelley-genesis.json
+          - key: byron-genesis.json
+            path: byron-genesis.json
+    traits:
+    - type: sidecar
+      properties:
+        name: socat
+        image: alpine/socat
+        cmd:
+        - UNIX-LISTEN:/ipc/node.sock,fork TCP-CONNECT:cardano-node-{{ . }}.marlowe-staging:8090
+        volumes:
+        - name: ipc
+          path: ipc
+
   policies:
   - name: local-marlowe-staging
     properties:
