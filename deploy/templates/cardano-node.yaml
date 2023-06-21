@@ -30,9 +30,7 @@ spec:
     - type: sidecar
       properties:
         name: socat
-        image: alpine
-        cmd:
-        - socat
+        image: alpine/socat
         args:
         - TCP-LISTEN:8090,bind=localhost,reuseaddr,fork
         - UNIX-CONNECT:/ipc/node.socket

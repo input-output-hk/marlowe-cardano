@@ -34,7 +34,7 @@ spec:
       - name: DB_HOST
         value: marlowe-runtime-database.marlowe-staging:5432
       - name: HTTP_PORT
-        value: 3784
+        value: "3784"
       cpu: "0.5"
       image: ghcr.io/input-output-hk/marlowe-sync:0.0.2-rc1
       imagePullPolicy: Always
