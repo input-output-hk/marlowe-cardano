@@ -14,11 +14,11 @@ spec:
       - name: HOST
         value: 0.0.0.0
       - name: MARLOWE_SYNC_PORT
-        value: 3724
+        value: "3724"
       - name: MARLOWE_HEADER_SYNC_PORT
-        value: 3725
+        value: "3725"
       - name: MARLOWE_QUERY_PORT
-        value: 3726
+        value: "3726"
       - name: DB_NAME
         value: chain-sync-{{ . }}
       - name: DB_USER

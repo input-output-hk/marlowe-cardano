@@ -29,13 +29,13 @@ spec:
       - name: MARLOWE_CHAIN_SYNC_HOST
         value: chain-sync-{{ . }}.marlowe-staging
       - name: MARLOWE_CHAIN_SYNC_PORT
-        VALUE: 3715
+        value: "3715"
       - name: MARLOWE_CHAIN_SYNC_QUERY_PORT
-        VALUE: 3716
+        value: "3716"
       - name: MARLOWE_CHAIN_SYNC_COMMAND_PORT
-        VALUE: 3720
+        value: "3720"
       - name: HTTP_PORT
-        value: 3783
+        value: "3783"
       cpu: "0.5"
       image: ghcr.io/input-output-hk/marlowe-indexer:0.0.2-rc1
       imagePullPolicy: Always

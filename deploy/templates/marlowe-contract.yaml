@@ -14,13 +14,13 @@ spec:
         - name: HOST
           value: 0.0.0.0
         - name: PORT
-          value: 3727
+          value: "3727"
         - name: QUERY_PORT
-          value: 3728
+          value: "3728"
         - name: STORE_DIR
           value: /store
         - name: HTTP_PORT
-          value: 3787
+          value: "3787"
         cpu: "0.5"
         image: ghcr.io/input-output-hk/marlowe-contract:0.0.2-rc1
         imagePullPolicy: Always

@@ -14,29 +14,29 @@ spec:
         - name: HOST
           value: 0.0.0.0
         - name: PORT
-          value: 3700
+          value: "3700"
         - name: TRACED_PORT
-          value: 3701
+          value: "3701"
         - name: TX_HOST
           value: marlowe-tx-{{ . }}.marlowe-staging
         - name: TX_PORT
-          value: 3723
+          value: "3723"
         - name: CONTRACT_HOST
           value: marlowe-contract-{{ . }}.marlowe-staging
         - name: LOAD_PORT
-          value: 3727
+          value: "3727"
         - name: CONTRACT_QUERY_PORT
-          value: 3728
+          value: "3728"
         - name: SYNC_HOST
           value: marlowe-sync-{{ . }}.marlowe-staging
         - name: MARLOWE_SYNC_PORT
-          value: 3724
+          value: "3724"
         - name: MARLOWE_HEADER_SYNC_PORT
-          value: 3725
+          value: "3725"
         - name: MARLOWE_QUERY_PORT
-          value: 3726
+          value: "3726"
         - name: HTTP_PORT
-          value: 3786
+          value: "3786"
         cpu: "0.5"
         image: ghcr.io/input-output-hk/marlowe-proxy:0.0.2-rc1
         imagePullPolicy: Always

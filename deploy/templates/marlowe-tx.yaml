@@ -14,21 +14,21 @@ spec:
         - name: HOST
           value: 0.0.0.0
         - name: PORT
-          value: 3723
+          value: "3723"
         - name: MARLOWE_CHAIN_SYNC_HOST
           value: chain-sync-{{ . }}.marlowe-staging
         - name: MARLOWE_CHAIN_SYNC_PORT
-          value: 3715
+          value: "3715"
         - name: MARLOWE_CHAIN_SYNC_QUERY_PORT
-          value: 3716
+          value: "3716"
         - name: MARLOWE_CHAIN_SYNC_COMMAND_PORT
-          value: 3720
+          value: "3720"
         - name: CONTRACT_HOST
           value: marlowe-contract-{{ . }}.marlowe-staging
         - name: CONTRACT_QUERY_PORT
-          value: 3728
+          value: "3728"
         - name: HTTP_PORT
-          value: 3785
+          value: "3785"
         cpu: "0.5"
         image: ghcr.io/input-output-hk/marlowe-tx:0.0.2-rc1
         imagePullPolicy: Always
