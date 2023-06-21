@@ -52,6 +52,7 @@ import Data.Coerce (coerce)
 import Data.Data (Typeable)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Map (Map)
+import qualified Data.Map as M
 import qualified Data.Map as Map
 import Data.Maybe (fromMaybe)
 import Data.Proxy (Proxy(..))
@@ -68,6 +69,7 @@ import Language.Marlowe.Protocol.Query.Types
   (ContractState(..), PayoutRef(..), SomeContractState(..), SomeTransaction(..), Withdrawal(..))
 import qualified Language.Marlowe.Protocol.Query.Types as Query
 import Language.Marlowe.Runtime.Cardano.Api (cardanoEraToAsType, fromCardanoTxId)
+import Language.Marlowe.Runtime.ChainSync.Api (AssetId(..))
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Core.Api
   ( ContractId(..)
@@ -81,6 +83,7 @@ import Language.Marlowe.Runtime.Core.Api
   , TransactionOutput(..)
   , TransactionScriptOutput(..)
   )
+import qualified Language.Marlowe.Runtime.Core.Api as Core.Api (Payout(datum))
 import qualified Language.Marlowe.Runtime.Discovery.Api as Discovery
 import qualified Language.Marlowe.Runtime.Transaction.Api as Tx
 import qualified Language.Marlowe.Runtime.Web as Web
@@ -345,6 +348,7 @@ instance ToDTO SomeContractState where
       , state = Sem.marloweState . datum <$> latestOutput
       , utxo = toDTO . utxo <$> latestOutput
       , txBody = Nothing
+      , unclaimedPayouts = (\(payoutId,payout) -> Web.Payout (toDTO payoutId) (toDTO (tokenName . Core.Api.datum $ payout))) <$> M.toList unclaimedPayouts
       }
 
 instance HasDTO SomeTransaction where
@@ -444,6 +448,7 @@ instance IsCardanoEra era => ToDTOWithTxStatus (Tx.ContractCreated era v) where
       , txBody = case status of
           Unsigned -> Just $ toDTO txBody
           Submitted -> Nothing
+      , unclaimedPayouts = []
       }
 
 instance HasDTO (Tx.InputsApplied era v) where
