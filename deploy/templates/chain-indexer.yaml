@@ -40,8 +40,8 @@ spec:
         - name: ipc
           mountPath: /ipc
         configMap:
-        - name: node-config
-          mountPath: /node-config
+        - name: "node-config"
+          mountPath: "/node-config"
           items:
           - key: config.json
             path: config.json
