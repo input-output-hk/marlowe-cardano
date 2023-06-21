@@ -32,6 +32,8 @@ spec:
         value: /ipc/node.socket
       - name: NODE_CONFIG
         value: http://localhost:8080
+      - name: HTTP_PORT
+        value: "3781"
       image: ghcr.io/input-output-hk/marlowe-chain-indexer:0.0.2-rc1
       imagePullPolicy: Always
       memory: 1024Mi
