@@ -32,7 +32,7 @@ spec:
         name: socat
         image: alpine/socat
         cmd:
-        - TCP-LISTEN:8090,bind=localhost,reuseaddr,fork UNIX-CONNECT:/ipc/node.sock
+        - TCP-LISTEN:8090,bind=localhost,reuseaddr,fork UNIX-CONNECT:/ipc/node.socket
         volumes:
         - name: ipc
           path: /ipc
