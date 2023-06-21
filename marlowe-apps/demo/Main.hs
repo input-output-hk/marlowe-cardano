@@ -27,43 +27,48 @@ import qualified Data.Map.Strict as M
 
 
 main :: IO ()
-main = mainTidal
+main = mainDemo
 
 
 makeContract
   :: POSIXTime
   -> Party
-  -> Contract
+  -> Writer Continuations Contract
 makeContract timeout party =
-  When
-    [
-      Case (Choice (ChoiceId "Amount" party) [Bound 1 2000000])
-        $ When
-        [
-           Case (Deposit party party (Token "" "") (ChoiceValue $ ChoiceId "Amount" party))
-             $ makeChoices timeout "Folio"
-             $ makeChoices timeout "Play"
-             $ makeChoices timeout "Act"
-             $ makeChoices timeout "Scene"
-             $ makeChoices timeout "Line"
-             $ makeChoices timeout "Word"
-             $ makeChoices timeout "Letter"
-             Close
-        ]
-        timeout
-        Close
-    ]
-    timeout
-    Close
+  do
+    continuation <-
+      makeChoices timeout "Folio"
+        =<< makeChoices timeout "Play"
+        =<< makeChoices timeout "Act"
+        =<< makeChoices timeout "Scene"
+        =<< makeChoices timeout "Line"
+        =<< makeChoices timeout "Word"
+        =<< makeChoices timeout "Letter"
+            Close
+    deepMerkleize
+      $ When
+      [
+        Case (Choice (ChoiceId "Amount" party) [Bound 1 2000000])
+          $ When
+          [
+             Case (Deposit party party (Token "" "") (ChoiceValue $ ChoiceId "Amount" party))
+               continuation
+          ]
+          timeout
+          Close
+      ]
+      timeout
+      Close
 
 
 makeChoices
   :: POSIXTime
   -> ChoiceName
   -> Contract
-  -> Contract
+  -> Writer Continuations Contract
 makeChoices timeout choiceName continuation =
-  When
+  deepMerkleize
+    $ When
     [
       Case (Notify TrueObs) continuation
     , Case (Choice (ChoiceId choiceName $ Role "c.marlowe"    ) [Bound 0 100]) continuation
@@ -85,8 +90,9 @@ mainDemo =
     let
       readAddress = uncurry Address . fromJust . deserialiseAddressBech32 . pack
       deadline = POSIXTime $ read now + 2 * 3600 * 1000
-      contract = makeContract deadline $ readAddress address
+      (contract, continuations) = runWriter $ makeContract deadline $ readAddress address
     encodeFile "contract.json" contract
+    encodeFile "continuations.json" $ M.mapKeys show continuations
 
 
 tidalContract

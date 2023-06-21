@@ -119,9 +119,11 @@ marlowe-cli run initialize \
   --roles-currency $POLICY_ID \
   --contract-file contract.json \
   --state-file state.json \
-  --out-file marlowe-1.json \
+  --out-file tmp.json \
   --merkleize \
   --permanently-without-staking
+
+jq -s '.[0] * {tx : {continuations : .[1] | to_entries | map([.key, .value])}}' tmp.json continuations.json > marlowe-1.json
 
 LAST_TX=$(
 marlowe-cli run auto-execute \
