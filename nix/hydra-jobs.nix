@@ -1,6 +1,17 @@
 { inputs, inputs', pkgs }:
 
 {
+  includedPaths = [
+    "packages"
+    "devShells"
+    "checks"
+
+    "networks"
+    "nomadTasks"
+    "oci-images"
+    "operables"
+  ];
+
   excludedPaths = [
     # FIXME unsuppress pre-commit-check once fourmolu and editorconfig
     # have been fully integrated
