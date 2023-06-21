@@ -153,7 +153,7 @@ instance Arbitrary Web.PostTransactionsRequest where
   shrink = genericShrink
 
 instance Arbitrary (Web.CreateTxEnvelope tx) where
-  arbitrary = Web.CreateTxEnvelope <$> arbitrary <*> arbitrary <*> arbitrary
+  arbitrary = Web.CreateTxEnvelope <$> arbitrary <*> arbitrary <*> resize 5 arbitrary
   shrink = genericShrink
 
 instance Arbitrary (Web.WithdrawTxEnvelope tx) where

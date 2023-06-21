@@ -481,11 +481,13 @@ instance ToSchema (CreateTxEnvelope CardanoTx) where
   declareNamedSchema _ = do
     contractIdSchema <- declareSchemaRef (Proxy :: Proxy TxOutRef)
     txEnvelopeSchema <- declareSchemaRef (Proxy :: Proxy TextEnvelope)
+    safetyErrorsSchema <- declareSchemaRef (Proxy :: Proxy [SafetyError])
     return $ NamedSchema (Just "ApplyInputsTxEnvelope") $ mempty
       & type_ ?~ OpenApiObject
       & properties .~
           [ ("contractId", contractIdSchema)
           , ("tx", txEnvelopeSchema)
+          , ("safetyErrors", safetyErrorsSchema)
           ]
       & required .~ [ "contractId", "tx" ]
 
@@ -493,13 +495,16 @@ instance ToSchema (CreateTxEnvelope CardanoTxBody) where
   declareNamedSchema _ = do
     contractIdSchema <- declareSchemaRef (Proxy :: Proxy TxOutRef)
     txEnvelopeSchema <- declareSchemaRef (Proxy :: Proxy TextEnvelope)
+    safetyErrorsSchema <- declareSchemaRef (Proxy :: Proxy [SafetyError])
     return $ NamedSchema (Just "ApplyInputsTxEnvelope") $ mempty
       & type_ ?~ OpenApiObject
       & properties .~
           [ ("contractId", contractIdSchema)
           , ("txBody", txEnvelopeSchema)
+          , ("safetyErrors", safetyErrorsSchema)
           ]
       & required .~ [ "contractId", "txBody" ]
+
 
 data TextEnvelope = TextEnvelope
   { teType :: Text

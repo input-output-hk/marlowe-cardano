@@ -1324,9 +1324,12 @@ instance Arbitrary SafetyError where
 
 
 instance Arbitrary Transaction where
-  arbitrary = Transaction <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
-  shrink transaction@Transaction{..} =
-       [transaction {txState = state} | state <- shrink txState]
-    <> [transaction {txContract = contract} | contract <- shrink txContract]
-    <> [transaction {txInput = input} | input <- shrink txInput]
-    <> [transaction {txOutput = output} | output <- shrink txOutput]
+  arbitrary =
+     do
+       context <- arbitrary
+       txState <- semiArbitrary context
+       txContract <- semiArbitrary context
+       txInput <- semiArbitrary context
+       txOutput <- arbitrary
+       pure Transaction{..}
+  shrink _ = mempty
