@@ -1,4 +1,3 @@
 networks:
   - preprod
   - preview
-  - mainnet
