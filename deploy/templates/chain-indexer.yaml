@@ -41,6 +41,7 @@ spec:
           mountPath: /ipc
         configMap:
         - name: "node-config"
+          cmName: cardano-network-configs-{{ . }}
           mountPath: "/node-config"
           items:
           - key: config.json

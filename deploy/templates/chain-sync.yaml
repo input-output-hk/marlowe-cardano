@@ -64,6 +64,7 @@ spec:
         configMap:
         - name: "node-config"
           mountPath: "/node-config"
+          cmName: cardano-network-configs-{{ . }}
           items:
           - key: config.json
             path: config.json
