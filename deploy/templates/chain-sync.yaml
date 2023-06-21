@@ -14,13 +14,13 @@ spec:
       - name: HOST
         value: 0.0.0.0
       - name: PORT
-        value: 3715
+        value: "3715"
       - name: QUERY_PORT
-        value: 3716
+        value: "3716"
       - name: JOB_PORT
-        value: 3720
+        value: "3720"
       - name: HTTP_PORT
-        value: 3782
+        value: "3782"
       - name: CARDANO_NODE_SOCKET_PATH
         value: /ipc/node.sock
       - name: NODE_CONFIG

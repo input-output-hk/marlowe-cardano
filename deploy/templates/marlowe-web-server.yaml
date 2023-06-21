@@ -12,11 +12,11 @@ spec:
       properties:
         env:
         - name: PORT
-          value: 3780
+          value: "3780"
         - name: RUNTIME_HOST
           value: marlowe-proxy-{{ . }}.marlowe-staging
         - name: RUNTIME_PORT
-          value: 3701
+          value: "3701"
         cpu: "0.5"
         image: ghcr.io/input-output-hk/marlowe-proxy:0.0.2-rc1
         imagePullPolicy: Always
