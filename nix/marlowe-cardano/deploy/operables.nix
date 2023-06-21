@@ -494,7 +494,7 @@ in
   };
 
   marlowe-runtime = mkOperableWithProbes {
-    package = packages.marlowe-runtime;
+    package = marlowe-runtime;
     runtimeScript = ''
       #################
       # REQUIRED VARS #
@@ -562,7 +562,7 @@ in
 
       export OTEL_SERVICE_NAME="''${OTEL_SERVICE_NAME:-marlowe-runtime}"
 
-      ${packages.marlowe-runtime}/bin/marlowe-runtime \
+      ${marlowe-runtime}/bin/marlowe-runtime \
         --socket-path "$CARDANO_NODE_SOCKET_PATH" \
         --database-uri  "$DATABASE_URI" \
         --shelley-genesis-config-file "$SHELLEY_GENESIS_CONFIG" \
