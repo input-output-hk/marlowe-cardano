@@ -102,7 +102,7 @@ let
 
     volumes = [
       "shared:/ipc"
-      "node-db:/opt/cardano/data"
+      "node-db:/data"
     ];
 
     # This should be in the dockerfile
