@@ -9,6 +9,8 @@
 
 module Network.Protocol.ChainSeek.Client where
 
+import Control.Monad (join)
+import Network.Protocol.ChainSeek.Server
 import Network.Protocol.ChainSeek.Types
 import Network.Protocol.Peer.Trace
 import Network.TypedProtocol (PeerHasAgency(..))
@@ -175,3 +177,38 @@ chainSeekClientPeer = EffectTraced . fmap peerIdle . runChainSeekClient
       SendMsgCancel idle -> YieldTraced (ClientAgency TokPoll) MsgCancel
         $ Cast
         $ peerIdle idle
+
+serveChainSeekClient
+  :: forall query point tip m a b
+   . Monad m
+  => ChainSeekServer query point tip m a
+  -> ChainSeekClient query point tip m b
+  -> m (a, b)
+serveChainSeekClient ChainSeekServer{..} ChainSeekClient{..} =
+  join $ serveIdle <$> runChainSeekServer <*> runChainSeekClient
+  where
+    serveIdle
+      :: ServerStIdle query point tip m a
+      -> ClientStIdle query point tip m b
+      -> m (a, b)
+    serveIdle ServerStIdle{..} = \case
+      SendMsgQueryNext q next -> serveNext next =<< recvMsgQueryNext q
+      SendMsgDone b -> (,b) <$> recvMsgDone
+
+    serveNext
+      :: ClientStNext query err result point tip m b
+      -> ServerStNext query err result point tip m a
+      -> m (a, b)
+    serveNext ClientStNext{..} = \case
+      SendMsgRollForward result point tip idle -> serveIdle idle =<< recvMsgRollForward result point tip
+      SendMsgRollBackward point tip idle -> serveIdle idle =<< recvMsgRollBackward point tip
+      SendMsgQueryRejected err tip idle -> serveIdle idle =<< recvMsgQueryRejected err tip
+      SendMsgWait poll -> servePoll poll =<< recvMsgWait
+
+    servePoll
+      :: ServerStPoll query err result point tip m a
+      -> ClientStPoll query err result point tip m b
+      -> m (a, b)
+    servePoll ServerStPoll{..} = \case
+      SendMsgPoll next -> serveNext next =<< recvMsgPoll
+      SendMsgCancel idle -> flip serveIdle idle =<< recvMsgCancel

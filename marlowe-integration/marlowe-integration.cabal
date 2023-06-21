@@ -61,22 +61,19 @@ library
     , cardano-crypto-wrapper
     , cardano-integration
     , cardano-ledger-byron
-    , co-log >=0.5.0.0 && <0.6.0.0
+    , co-log
     , containers
     , eventuo11y >=0.9 && <0.11
     , eventuo11y-extras
     , exceptions
-    , general-allocate
     , hasql
     , hasql-pool
     , http-client
     , marlowe-chain-sync:{marlowe-chain-sync, chain-indexer, libchainsync}
     , marlowe-cli
-    , marlowe-client
     , marlowe-protocols
     , marlowe-runtime-web:{marlowe-runtime-web, server}
-    , marlowe-runtime:{marlowe-runtime, contract, contract-api, discovery-api, history-api, indexer, proxy, proxy-api, sync, sync-api, tx, tx-api}
-    , mtl >=2.2 && <3
+    , marlowe-runtime:{marlowe-runtime, contract, indexer, proxy-api, runtime, sync}
     , network
     , nonempty-containers
     , ouroboros-network
@@ -85,9 +82,7 @@ library
     , random
     , resourcet
     , servant-client
-    , stm
     , text
-    , time
     , time-units
     , transformers
     , typed-protocols

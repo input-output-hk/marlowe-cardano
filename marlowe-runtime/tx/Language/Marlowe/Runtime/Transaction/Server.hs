@@ -104,9 +104,7 @@ import Language.Marlowe.Runtime.Transaction.Query
   (LoadMarloweContext, LoadWalletContext, lookupMarloweScriptUtxo, lookupPayoutScriptUtxo)
 import Language.Marlowe.Runtime.Transaction.Safety (Continuations, checkContract, checkTransactions, noContinuations)
 import Language.Marlowe.Runtime.Transaction.Submit (SubmitJob(..), SubmitJobStatus(..))
-import Network.Protocol.Connection
-  (SomeClientConnectorTraced, SomeConnectionSourceTraced(..), SomeServerConnectorTraced, acceptSomeConnectorTraced)
-import Network.Protocol.Driver.Trace (HasSpanContext, runSomeConnectorTraced)
+import Network.Protocol.Connection (Connector, ServerSource(..), runConnector)
 import Network.Protocol.Job.Server
   (JobServer(..), ServerStAttach(..), ServerStAwait(..), ServerStCmd(..), ServerStInit(..), hoistAttach, hoistCmd)
 import Network.Protocol.Query.Client (QueryClient, request)
@@ -131,55 +129,33 @@ data BuildTxField where
   Constraints :: MarloweVersion v -> TxConstraints v -> BuildTxField
   ResultingTxBody :: TxBody BabbageEra -> BuildTxField
 
-data TransactionServerDependencies r s m = TransactionServerDependencies
-  { connectionSource :: SomeConnectionSourceTraced (JobServer MarloweTxCommand) r s m
-  , mkSubmitJob :: Tx BabbageEra -> STM (SubmitJob m)
+data TransactionServerDependencies m = TransactionServerDependencies
+  { mkSubmitJob :: Tx BabbageEra -> STM (SubmitJob m)
   , loadWalletContext :: LoadWalletContext m
   , loadMarloweContext :: LoadMarloweContext m
-  , chainSyncQueryConnector :: SomeClientConnectorTraced (QueryClient ChainSyncQuery) r s m
-  , contractQueryConnector :: SomeClientConnectorTraced (QueryClient ContractRequest) r s m
+  , chainSyncQueryConnector :: Connector (QueryClient ChainSyncQuery) m
+  , contractQueryConnector :: Connector (QueryClient ContractRequest) m
   , getTip :: STM Chain.ChainPoint
   , getCurrentScripts :: forall v. MarloweVersion v -> MarloweScripts
   }
 
 transactionServer
-  :: (MonadInjectEvent r TransactionServerSelector s m, MonadUnliftIO m, HasSpanContext r, WithLog env Message m)
-  => Component m (TransactionServerDependencies r s m) ()
-transactionServer = serverComponentWithSetup "tx-job-server" worker \TransactionServerDependencies{..} -> do
-  submitJobsVar <- newTVar mempty
+  :: forall r s env m
+   . (MonadInjectEvent r TransactionServerSelector s m, MonadUnliftIO m, WithLog env Message m)
+  => Component m (TransactionServerDependencies m) (ServerSource (JobServer MarloweTxCommand) m ())
+transactionServer = component "tx-job-server" \TransactionServerDependencies{..} -> do
+  submitJobsVar <- newTVar @(Map TxId (SubmitJob m)) mempty
   let
     getSubmitJob txId = Map.lookup txId <$> readTVar submitJobsVar
+
     trackSubmitJob txId = modifyTVar submitJobsVar . Map.insert txId
-  pure do
-    connector <- acceptSomeConnectorTraced connectionSource
-    pure WorkerDependencies {..}
 
-data WorkerDependencies r s m = WorkerDependencies
-  { connector :: SomeServerConnectorTraced (JobServer MarloweTxCommand) r s m
-  , getSubmitJob :: TxId -> STM (Maybe (SubmitJob m))
-  , trackSubmitJob :: TxId -> SubmitJob m -> STM ()
-  , mkSubmitJob :: Tx BabbageEra -> STM (SubmitJob m)
-  , loadWalletContext :: LoadWalletContext m
-  , loadMarloweContext :: LoadMarloweContext m
-  , chainSyncQueryConnector :: SomeClientConnectorTraced (QueryClient ChainSyncQuery) r s m
-  , contractQueryConnector :: SomeClientConnectorTraced (QueryClient ContractRequest) r s m
-  , getTip :: STM Chain.ChainPoint
-  , getCurrentScripts :: forall v. MarloweVersion v -> MarloweScripts
-  }
-
-worker
-  :: forall r s env m
-   . (MonadInjectEvent r TransactionServerSelector s m, MonadUnliftIO m, HasSpanContext r, WithLog env Message m)
-  => Component m (WorkerDependencies r s m) ()
-worker = component_ "tx-job-server-worker" \WorkerDependencies{..} -> do
-  let
-    server :: JobServer MarloweTxCommand m ()
     server = JobServer $ pure serverInit
 
     serverInit :: ServerStInit MarloweTxCommand m ()
     serverInit = ServerStInit
       { recvMsgExec = \command -> withEvent Exec \ev -> do
-          (systemStart, eraHistory, protocolParameters, networkId) <- runSomeConnectorTraced chainSyncQueryConnector $ (,,,)
+          (systemStart, eraHistory, protocolParameters, networkId) <- runConnector chainSyncQueryConnector $ (,,,)
             <$> request GetSystemStart
             <*> request GetEraHistory
             <*> request GetProtocolParameters
@@ -240,7 +216,7 @@ worker = component_ "tx-job-server-worker" \WorkerDependencies{..} -> do
           jobId@(JobIdSubmit txId) ->
             attachSubmit jobId $ getSubmitJob txId
       }
-  runSomeConnectorTraced connector server
+  pure (pure (), ServerSource $ pure server)
 
 attachSubmit
   :: MonadIO m
@@ -251,9 +227,9 @@ attachSubmit jobId getSubmitJob =
   atomically $ fmap (hoistAttach $ liftIO . atomically) <$> submitJobServerAttach jobId =<< getSubmitJob
 
 execCreate
-  :: forall r s m v
-   . (MonadUnliftIO m, MonadEvent r s m, HasSpanContext r)
-  => SomeClientConnectorTraced (QueryClient ContractRequest) r s m
+  :: forall m v
+   . MonadUnliftIO m
+  => Connector (QueryClient ContractRequest) m
   -> (MarloweVersion v -> MarloweScripts)
   -> SolveConstraints
   -> LoadWalletContext m
@@ -271,7 +247,7 @@ execCreate contractQueryConnector getCurrentScripts solveConstraints loadWalletC
   (contract', continuations) <- case contract of
     Right hash -> case version of
       MarloweV1 -> noteT CreateContractNotFound do
-        let getContract' = MaybeT . runSomeConnectorTraced contractQueryConnector . getContract
+        let getContract' = MaybeT . runConnector contractQueryConnector . getContract
         Contract.ContractWithAdjacency{contract = c, ..} <- getContract' hash
         (c ::  Contract v,) <$> foldMapM (fmap singletonContinuations . getContract') (Set.delete hash closure)
     Left c -> pure (c, noContinuations version)
@@ -362,8 +338,8 @@ findMarloweOutput address = \case
       address == fromCardanoAddressInEra (cardanoEra @era) address'
 
 execApplyInputs
-  :: (MonadUnliftIO m, MonadEvent r s m, HasSpanContext r)
-  => SomeClientConnectorTraced (QueryClient ContractRequest) r s m
+  :: MonadUnliftIO m
+  => Connector (QueryClient ContractRequest) m
   -> STM Chain.ChainPoint
   -> SystemStart
   -> EraHistory CardanoMode
@@ -406,7 +382,7 @@ execApplyInputs
       (contractHash, state) = case version of
         MarloweV1 -> case inputDatum of
           V1.MarloweData{..} -> (fromCardanoDatumHash $ hashScriptData $ toCardanoScriptData $ toDatum marloweContract, marloweState)
-      merkleizeInputs' = fmap hush . runSomeConnectorTraced contractQueryConnector . merkleizeInputs contractHash state
+      merkleizeInputs' = fmap hush . runConnector contractQueryConnector . merkleizeInputs contractHash state
     ((invalidBefore, invalidHereafter, mAssetsAndDatum, inputs'), constraints) <- buildApplyInputsConstraints
       merkleizeInputs'
       systemStart

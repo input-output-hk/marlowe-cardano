@@ -23,14 +23,12 @@ import Hasql.Connection (withLibPQConnection)
 import qualified Hasql.Pool as Pool
 import Language.Marlowe.Protocol.HeaderSync.Server (marloweHeaderSyncServerPeer)
 import Language.Marlowe.Protocol.Sync.Server (marloweSyncServerPeer)
-import Language.Marlowe.Runtime.Sync (SyncDependencies(..), sync)
+import Language.Marlowe.Runtime.Sync (MarloweSync(..), SyncDependencies(..), sync)
 import Language.Marlowe.Runtime.Sync.Database (hoistDatabaseQueries, logDatabaseQueries)
 import qualified Language.Marlowe.Runtime.Sync.Database.PostgreSQL as Postgres
 import Logging (RootSelector(..), renderRootSelectorOTel)
-import Network.Protocol.Connection (SomeConnectionSourceTraced(..))
 import Network.Protocol.Driver (TcpServerDependencies(..))
 import Network.Protocol.Driver.Trace (tcpServerTraced)
-import Network.Protocol.Handshake.Server (handshakeConnectionSourceTraced)
 import Network.Protocol.Query.Server (queryServerPeer)
 import Network.Socket (HostName, PortNumber)
 import Observe.Event.Backend (injectSelector)
@@ -69,34 +67,31 @@ run Options{..} = bracket (Pool.acquire 100 (Just 5000000) (fromString databaseU
       <*> PQ.port conn
   runAppMTraced instrumentationLibrary (renderRootSelectorOTel dbName dbUser dbHost dbPort) do
     flip runComponent_ () proc _ -> do
-      marloweSyncSource <- tcpServerTraced "marlowe-sync" (injectSelector MarloweSyncServer) -< TcpServerDependencies
-        { host
-        , port = marloweSyncPort
-        , toPeer = marloweSyncServerPeer
-        }
-
-      headerSyncSource <- tcpServerTraced "marlowe-header-sync" (injectSelector MarloweHeaderSyncServer) -< TcpServerDependencies
-        { host
-        , port = marloweHeaderSyncPort
-        , toPeer = marloweHeaderSyncServerPeer
-        }
-
-      querySource <- tcpServerTraced "sync-query" (injectSelector MarloweQueryServer) -< TcpServerDependencies
-        { host
-        , port = queryPort
-        , toPeer = queryServerPeer
-        }
-
-      probes <- sync -< SyncDependencies
+      MarloweSync{..} <- sync -< SyncDependencies
         { databaseQueries = logDatabaseQueries $ hoistDatabaseQueries
               (either throwIO pure <=< liftIO . Pool.use pool)
               Postgres.databaseQueries
-        , syncSource = SomeConnectionSourceTraced (injectSelector MarloweSyncServer)
-            $ handshakeConnectionSourceTraced marloweSyncSource
-        , headerSyncSource = SomeConnectionSourceTraced (injectSelector MarloweHeaderSyncServer)
-            $ handshakeConnectionSourceTraced headerSyncSource
-        , querySource = SomeConnectionSourceTraced (injectSelector MarloweQueryServer)
-            $ handshakeConnectionSourceTraced querySource
+        }
+
+      tcpServerTraced "marlowe-sync" (injectSelector MarloweSyncServer) -< TcpServerDependencies
+        { host
+        , port = marloweSyncPort
+        , toPeer = marloweSyncServerPeer
+        , serverSource = syncServerSource
+        }
+
+      tcpServerTraced "marlowe-header-sync" (injectSelector MarloweHeaderSyncServer) -< TcpServerDependencies
+        { host
+        , port = marloweHeaderSyncPort
+        , toPeer = marloweHeaderSyncServerPeer
+        , serverSource = headerSyncServerSource
+        }
+
+      tcpServerTraced "sync-query" (injectSelector MarloweQueryServer) -< TcpServerDependencies
+        { host
+        , port = queryPort
+        , toPeer = queryServerPeer
+        , serverSource = queryServerSource
         }
 
       probeServer -< ProbeServerDependencies { port = fromIntegral httpPort, .. }

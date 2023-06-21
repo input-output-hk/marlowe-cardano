@@ -13,8 +13,19 @@
 
 module Language.Marlowe.Protocol.Load.Client where
 
+import Control.Monad (join)
 import Data.Kind (Type)
+import Data.Type.Equality (type (:~:)(Refl))
 import Language.Marlowe.Core.V1.Semantics.Types
+import Language.Marlowe.Protocol.Load.Server
+  ( MarloweLoadServer(..)
+  , ServerStCanPush(..)
+  , ServerStCanPushSucc(..)
+  , ServerStCanPushZero(..)
+  , ServerStComplete(..)
+  , ServerStPop
+  , ServerStProcessing(..)
+  )
 import Language.Marlowe.Protocol.Load.Types
 import Language.Marlowe.Runtime.ChainSync.Api (DatumHash)
 import Network.Protocol.Peer.Trace hiding (Close)
@@ -319,3 +330,57 @@ data PeerState (node :: Node) where
   StateCase :: [Case Contract] -> Contract -> PeerState node -> PeerState ('CaseNode node)
   StateLet :: PeerState node -> PeerState ('LetNode node)
   StateAssert :: PeerState node -> PeerState ('AssertNode node)
+
+serveMarloweLoadClient
+  :: forall m a b
+   . Monad m
+  => MarloweLoadServer m a
+  -> MarloweLoadClient m b
+  -> m (a, b)
+serveMarloweLoadClient MarloweLoadServer{..} MarloweLoadClient{..} =
+  join $ serveProcessing SRootNode <$> runMarloweLoadClient <*> runMarloweLoadServer
+  where
+    serveProcessing
+      :: SNode node
+      -> ClientStProcessing node m b
+      -> ServerStProcessing node m a
+      -> m (a, b)
+    serveProcessing node ClientStProcessing{..} = \case
+      SendMsgResume n push -> servePush n node push =<< recvMsgResume n
+
+    servePush
+      :: Nat n
+      -> SNode node
+      -> ServerStCanPush n node m a
+      -> ClientStCanPush n node m b
+      -> m (a, b)
+    servePush Zero node (ServerStPaused ServerStCanPushZero{..}) = \case
+      RequestResume processing -> serveProcessing node processing =<< recvMsgRequestResume
+      Abort b -> (,b) <$> recvMsgAbort
+    servePush (Succ n) node (ServerStCanPush ServerStCanPushSucc{..}) = \case
+      PushClose mPop -> join $ servePop n node <$> recvClose <*> mPop
+      PushPay a p t v mPush -> join $ servePush n (SPayNode node) <$> recvPay a p t v <*> mPush
+      PushIf o mPush -> join $ servePush n (SIfLNode node) <$> recvIf o <*> mPush
+      PushWhen t mPush -> join $ servePush n (SWhenNode node) <$> recvWhen t <*> mPush
+      PushCase c mPush -> case node of
+        SWhenNode node' -> join $ servePush n (SCaseNode node') <$> recvCase Refl c <*> mPush
+      PushLet vid v mPush -> join $ servePush n (SLetNode node) <$> recvLet vid v <*> mPush
+      PushAssert o mPush -> join $ servePush n (SAssertNode node) <$> recvAssert o <*> mPush
+      Abort b -> (,b) <$> recvMsgAbort
+
+    servePop
+      :: Nat n
+      -> SNode node
+      -> ServerStPop n node m a
+      -> ClientStPop n node m b
+      -> m (a, b)
+    servePop n = \case
+      SRootNode -> flip \ClientStComplete{..} -> \case
+        SendMsgComplete hash ma -> (,) <$> ma <*> recvMsgComplete hash
+      SPayNode node -> servePop n node
+      SIfLNode node -> servePush n (SIfRNode node)
+      SIfRNode node -> servePop n node
+      SWhenNode node -> servePop n node
+      SCaseNode node -> servePush n (SWhenNode node)
+      SLetNode node -> servePop n node
+      SAssertNode node -> servePop n node

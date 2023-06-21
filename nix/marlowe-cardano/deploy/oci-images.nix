@@ -49,6 +49,10 @@ let
       name = "marlowe-proxy";
       description = "An API Gateway service for the Marlowe Runtime.";
     };
+    marlowe-runtime = mkImage {
+      name = "marlowe-runtime";
+      description = "Application backend for Marlowe smart contracts.";
+    };
     marlowe-web-server = mkImage {
       name = "marlowe-web-server";
       description = "An HTTP server for the Marlowe Runtime, exposing a REST API.";

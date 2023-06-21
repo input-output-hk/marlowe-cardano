@@ -493,6 +493,89 @@ in
     '';
   };
 
+  marlowe-runtime = mkOperableWithProbes {
+    package = packages.marlowe-runtime;
+    runtimeScript = ''
+      #################
+      # REQUIRED VARS #
+      #################
+      # HOST, PORT, TRACED_PORT: network binding
+      # CARDANO_NODE_SOCKET_PATH: path to the node socket
+      # DB_NAME, DB_USER, DB_PASS,
+      # Either DB_HOST or MASTER_REPLICA_SRV_DNS (for auto-discovery of DB host with srvaddr)
+      # STORE_DIR: location of the contract store directory
+      # HTTP_PORT: port number for the HTTP healthcheck server
+
+      #################
+      # OPTIONAL VARS #
+      #################
+      # OTEL_EXPORTER_OTLP_ENDPOINT: The url of the open telemetry collector
+      # OTEL_SERVICE_NAME: The name of the open telemetry service
+
+      [ -z "''${HOST:-}" ] && echo "HOST env var must be set -- aborting" && exit 1
+      [ -z "''${PORT:-}" ] && echo "PORT env var must be set -- aborting" && exit 1
+      [ -z "''${TRACED_PORT:-}" ] && echo "TRACED_PORT env var must be set -- aborting" && exit 1
+      [ -z "''${NODE_CONFIG:-}" ] && echo "NODE_CONFIG env var must be set -- aborting" && exit 1
+      [ -z "''${CARDANO_NODE_SOCKET_PATH:-}" ] && echo "CARDANO_NODE_SOCKET_PATH env var must be set -- aborting" && exit 1
+      [ -z "''${DB_NAME:-}" ] && echo "DB_NAME env var must be set -- aborting" && exit 1
+      [ -z "''${DB_USER:-}" ] && echo "DB_USER env var must be set -- aborting" && exit 1
+      [ -z "''${DB_PASS:-}" ] && echo "DB_PASS env var must be set -- aborting" && exit 1
+      [ -z "''${STORE_DIR:-}" ] && echo "STORE_DIR env var must be set -- aborting" && exit 1
+      [ -z "''${HTTP_PORT:-}" ] && echo "HTTP_PORT env var must be set -- aborting" && exit 1
+
+      if [ -n "''${MASTER_REPLICA_SRV_DNS:-}" ]; then
+        # Find DB_HOST when running on bitte cluster with patroni
+        eval "$(srvaddr -env PSQL="$MASTER_REPLICA_SRV_DNS")"
+        # produces: PSQL_ADDR0=domain:port; PSQL_HOST0=domain; PSQL_PORT0=port
+        DB_HOST=$PSQL_ADDR0
+      fi
+
+      [ -z "''${DB_HOST:-}" ] && echo "DB_HOST env var must be set -- aborting" && exit 1
+
+      mkdir -p /tmp /store
+      HOME="$(mktemp -d)" # Ensure HOME is writable for sqitch config
+      export TZ=Etc/UTC
+      sqitch config --user user.name chainindexer
+      sqitch config --user user.email example@example.com
+
+      DATABASE_URI=${database-uri}
+
+      cd ${chain-sync-sqitch-plan-dir}
+      sqitch --quiet deploy --target "$DATABASE_URI"
+      cd -
+
+      cd ${runtime-sqitch-plan-dir}
+      sqitch --quiet deploy --target "$DATABASE_URI"
+      cd -
+
+      NODE_CONFIG_DIR=$(dirname "$NODE_CONFIG")
+      BYRON_GENESIS_CONFIG="$NODE_CONFIG_DIR/$(jq -r .ByronGenesisFile "$NODE_CONFIG")"
+      SHELLEY_GENESIS_CONFIG="$NODE_CONFIG_DIR/$(jq -r .ShelleyGenesisFile "$NODE_CONFIG")"
+      BYRON_GENESIS_HASH=$(jq -r '.ByronGenesisHash' "$NODE_CONFIG")
+      if [[ $(jq -r .networkId "$SHELLEY_GENESIS_CONFIG") != "Mainnet" ]]
+      then
+        CARDANO_TESTNET_MAGIC=$(jq -r '.networkMagic' "$SHELLEY_GENESIS_CONFIG");
+        export CARDANO_TESTNET_MAGIC
+      fi
+
+      ${wait-for-socket}/bin/wait-for-socket "$CARDANO_NODE_SOCKET_PATH"
+
+      export OTEL_SERVICE_NAME="''${OTEL_SERVICE_NAME:-marlowe-runtime}"
+
+      ${packages.marlowe-runtime}/bin/marlowe-runtime \
+        --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+        --database-uri  "$DATABASE_URI" \
+        --shelley-genesis-config-file "$SHELLEY_GENESIS_CONFIG" \
+        --genesis-config-file "$BYRON_GENESIS_CONFIG" \
+        --genesis-config-file-hash "$BYRON_GENESIS_HASH" \
+        --store-dir "$STORE_DIR" \
+        --host "$HOST" \
+        --port "$PORT" \
+        --port-traced "$TRACED_PORT" \
+        --http-port "$HTTP_PORT"
+    '';
+  };
+
   marlowe-web-server = mkOperable {
     package = marlowe-web-server;
     runtimeScript = ''

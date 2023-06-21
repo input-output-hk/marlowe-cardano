@@ -5,40 +5,17 @@
 
 module Language.Marlowe.Runtime.Contract.QueryServer where
 
-import Colog (Message, WithLog)
-import Control.Concurrent.Component
-import Control.Monad.Event.Class
 import Language.Marlowe.Runtime.Contract.Api hiding (getContract, merkleizeInputs)
 import Language.Marlowe.Runtime.Contract.Store (ContractStore(..))
 import Network.Protocol.Connection
-import Network.Protocol.Driver.Trace (HasSpanContext, runSomeConnectorTraced)
 import Network.Protocol.Query.Server
 import UnliftIO (MonadUnliftIO, concurrently)
 
-data QueryServerDependencies r s m = QueryServerDependencies
+newtype QueryServerDependencies m = QueryServerDependencies
   { contractStore :: ContractStore m
-  , querySource :: SomeConnectionSourceTraced (QueryServer ContractRequest) r s m
   }
 
-queryServer
-  :: (MonadUnliftIO m, HasSpanContext r, MonadEvent r s m, WithLog env Message m)
-  => Component m (QueryServerDependencies r s m) ()
-queryServer = serverComponent "contract-query-server" (component_ "contract-query-worker" worker) \QueryServerDependencies{..} -> do
-  connector <- acceptSomeConnectorTraced querySource
-  pure WorkerDependencies{..}
-
-data WorkerDependencies r s m = WorkerDependencies
-  { contractStore :: ContractStore m
-  , connector :: SomeServerConnectorTraced (QueryServer ContractRequest) r s m
-  }
-
-worker
-  :: forall r s m
-   . (MonadUnliftIO m, HasSpanContext r, MonadEvent r s m)
-  => WorkerDependencies r s m
-  -> m ()
-worker WorkerDependencies{..} = runSomeConnectorTraced connector server
-  where
-    server = respond concurrently \case
-      GetContract hash -> getContract contractStore hash
-      MerkleizeInputs hash state input -> merkleizeInputs contractStore hash state input
+queryServer :: MonadUnliftIO m => QueryServerDependencies m -> ServerSource (QueryServer ContractRequest) m ()
+queryServer QueryServerDependencies{..} = ServerSource $ pure $ respond concurrently \case
+  GetContract hash -> getContract contractStore hash
+  MerkleizeInputs hash state input -> merkleizeInputs contractStore hash state input

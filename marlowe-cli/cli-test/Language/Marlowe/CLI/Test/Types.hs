@@ -59,9 +59,7 @@ import Language.Marlowe.CLI.Test.Runtime.Types (RuntimeMonitorInput, RuntimeMoni
 import qualified Language.Marlowe.CLI.Test.Runtime.Types as Runtime
 import Language.Marlowe.CLI.Test.Wallet.Types as Wallet
 import qualified Language.Marlowe.Protocol.Client as Marlowe.Protocol
-import qualified Language.Marlowe.Protocol.Types as Marlowe.Protocol
 import qualified Network.Protocol.Connection as Network.Protocol
-import Network.Protocol.Handshake.Types (Handshake)
 import Network.Socket (PortNumber)
 import qualified Plutus.V1.Ledger.Value as P.Value
 import qualified Plutus.V2.Ledger.Api as P
@@ -251,7 +249,7 @@ mkInterpretState wallets = InterpretState
 data InterpretEnv lang era = InterpretEnv
   {
     _ieRuntimeMonitor :: Maybe (RuntimeMonitorInput, RuntimeMonitorState)
-  , _ieRuntimeClientConnector :: Maybe (Network.Protocol.ClientConnector (Handshake Marlowe.Protocol.MarloweRuntime) Marlowe.Protocol.MarloweRuntimeClient IO)
+  , _ieRuntimeClientConnector :: Maybe (Network.Protocol.Connector Marlowe.Protocol.MarloweRuntimeClient IO)
   , _ieExecutionMode :: ExecutionMode
   , _ieConnection :: LocalNodeConnectInfo CardanoMode
   , _ieEra :: ScriptDataSupportedInEra era
@@ -390,4 +388,3 @@ testResultToJSON testFile testName@(TestName name) = \case
   TestFailed err retries -> failureReportToJSON testFile testName err retries
 
 newtype FaucetsNumber = FaucetsNumber Int
-

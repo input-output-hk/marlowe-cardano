@@ -31,7 +31,7 @@
       readTheDocsSiteDir = null;
       readTheDocsHaddockPrologue = "";
       readTheDocsExtraHaddockPackages = _: { };
-      preCommitCheckHooks = { };
+      preCommitCheckHooks = { editorconfig-checker.enable = false; };
     };
 
   nixConfig = {

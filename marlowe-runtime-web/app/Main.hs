@@ -9,7 +9,7 @@ import Control.Arrow ((&&&))
 import Control.Concurrent.Component (runComponent_)
 import Control.Concurrent.Component.Run (runAppMTraced)
 import Control.Monad.Reader (ask)
-import Control.Monad.Trans.Marlowe (MarloweTracedT(..))
+import Control.Monad.Trans.Marlowe (MarloweT(..))
 import Data.Function (on)
 import Data.List (groupBy, sortOn)
 import Data.Maybe (catMaybes)
@@ -39,13 +39,13 @@ main = do
   hSetBuffering stderr LineBuffering
   Options{..} <- getOptions
   runAppMTraced instrumentationLibrary (renderServerSelectorOTel port) do
-    dependencies <- connectToMarloweRuntimeTraced (injectSelector RuntimeClient) runtimeHost runtimePort $ MarloweTracedT do
-      marloweTracedContext <- ask
+    dependencies <- connectToMarloweRuntimeTraced (injectSelector RuntimeClient) runtimeHost runtimePort $ MarloweT do
+      connector <- ask
       pure ServerDependencies
         { openAPIEnabled
         , accessControlAllowOriginAll
         , runApplication = run $ fromIntegral port
-        , marloweTracedContext
+        , connector
         }
     runComponent_ server dependencies
   where

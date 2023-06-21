@@ -1,18 +1,14 @@
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE DataKinds #-}
-{-# LANGUAGE DeriveAnyClass #-}
-{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NamedFieldPuns #-}
-{-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE TemplateHaskell #-}
+
 
 module Language.Marlowe.CLI.Test.Runtime.Interpret where
 
@@ -73,7 +69,6 @@ import Language.Marlowe.Cardano.Thread
   (anyMarloweThreadCreated, anyMarloweThreadRedeemed, marloweThreadTxInfos, overAnyMarloweThread)
 import qualified Language.Marlowe.Cardano.Thread as Marlowe.Cardano.Thread
 import qualified Language.Marlowe.Protocol.Client as Marlowe.Protocol
-import qualified Language.Marlowe.Protocol.Types as Marlowe.Protocol
 import qualified Language.Marlowe.Runtime.Cardano.Api as MRCA
 import qualified Language.Marlowe.Runtime.Cardano.Api as RCA
 import qualified Language.Marlowe.Runtime.ChainSync.Api as ChainSync
@@ -87,7 +82,6 @@ import Language.Marlowe.Runtime.Transaction.Api
   )
 import qualified Language.Marlowe.Runtime.Transaction.Api as Transaction
 import qualified Network.Protocol.Connection as Network.Protocol
-import Network.Protocol.Handshake.Types (Handshake)
 import qualified Plutus.V2.Ledger.Api as P
 
 -- connectionP :: Prism' env (LocalNodeConnectInfo CardanoMode)
@@ -104,7 +98,7 @@ getConnection = do
 getConnector
   :: forall env era st m
    . InterpretMonad env st m era
-  => m (Network.Protocol.ClientConnector (Handshake Marlowe.Protocol.MarloweRuntime) Marlowe.Protocol.MarloweRuntimeClient IO)
+  => m (Network.Protocol.Connector Marlowe.Protocol.MarloweRuntimeClient IO)
 getConnector = do
   preview runtimeClientConnectorT >>= \case
     Just conn -> pure conn

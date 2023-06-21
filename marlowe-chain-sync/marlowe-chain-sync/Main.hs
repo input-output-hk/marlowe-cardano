@@ -32,15 +32,13 @@ import Database.PostgreSQL.LibPQ (db, user)
 import qualified Database.PostgreSQL.LibPQ as PQ
 import Hasql.Connection (withLibPQConnection)
 import qualified Hasql.Pool as Pool
-import Language.Marlowe.Runtime.ChainSync (ChainSyncDependencies(..), chainSync)
+import Language.Marlowe.Runtime.ChainSync (ChainSync(..), ChainSyncDependencies(..), chainSync)
 import qualified Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL as PostgreSQL
 import Language.Marlowe.Runtime.ChainSync.NodeClient (NodeClient(..), NodeClientDependencies(..), nodeClient)
 import Logging (RootSelector(..), renderRootSelectorOTel)
 import Network.Protocol.ChainSeek.Server (chainSeekServerPeer)
-import Network.Protocol.Connection (SomeConnectionSourceTraced(..))
 import Network.Protocol.Driver (TcpServerDependencies(..))
 import Network.Protocol.Driver.Trace (tcpServerTraced)
-import Network.Protocol.Handshake.Server (handshakeConnectionSourceTraced)
 import Network.Protocol.Job.Server (jobServerPeer)
 import Network.Protocol.Query.Server (queryServerPeer)
 import Observe.Event.Explicit (injectSelector)
@@ -70,36 +68,12 @@ run Options{..} = bracket (Pool.acquire 100 (Just 5000000) (fromString databaseU
       }
 
     appComponent = proc pool -> do
-      syncSource <- tcpServerTraced "chain-seek" $ injectSelector ChainSeekServer -< TcpServerDependencies
-        { host
-        , port
-        , toPeer = chainSeekServerPeer
-        }
-
-      querySource <- tcpServerTraced "chain-query" $ injectSelector QueryServer -< TcpServerDependencies
-        { host
-        , port = queryPort
-        , toPeer = queryServerPeer
-        }
-
-      jobSource <- tcpServerTraced "chain-job" $ injectSelector JobServer -< TcpServerDependencies
-        { host
-        , port = commandPort
-        , toPeer = jobServerPeer
-        }
-
       NodeClient{..} <- nodeClient -< NodeClientDependencies
-        { connectToLocalNode = Cardano.connectToLocalNode localNodeConnectInfo
+        { connectToLocalNode = liftIO . Cardano.connectToLocalNode localNodeConnectInfo
         }
 
-      probes <- chainSync -< ChainSyncDependencies
+      ChainSync{..} <- chainSync -< ChainSyncDependencies
         { databaseQueries = PostgreSQL.databaseQueries pool networkId
-        , syncSource = SomeConnectionSourceTraced (injectSelector ChainSeekServer)
-            $ handshakeConnectionSourceTraced syncSource
-        , querySource = SomeConnectionSourceTraced (injectSelector QueryServer)
-            $ handshakeConnectionSourceTraced querySource
-        , jobSource = SomeConnectionSourceTraced (injectSelector JobServer)
-            $ handshakeConnectionSourceTraced jobSource
         , queryLocalNodeState = queryNode
         , submitTxToNodeLocal = \era tx -> submitTxToNode $ TxInMode tx case era of
             ByronEra -> ByronEraInCardanoMode
@@ -108,6 +82,27 @@ run Options{..} = bracket (Pool.acquire 100 (Just 5000000) (fromString databaseU
             MaryEra -> MaryEraInCardanoMode
             AlonzoEra -> AlonzoEraInCardanoMode
             BabbageEra -> BabbageEraInCardanoMode
+        }
+
+      tcpServerTraced "chain-seek" $ injectSelector ChainSeekServer -< TcpServerDependencies
+        { host
+        , port
+        , toPeer = chainSeekServerPeer
+        , serverSource = syncServerSource
+        }
+
+      tcpServerTraced "chain-query" $ injectSelector QueryServer -< TcpServerDependencies
+        { host
+        , port = queryPort
+        , toPeer = queryServerPeer
+        , serverSource = queryServerSource
+        }
+
+      tcpServerTraced "chain-job" $ injectSelector JobServer -< TcpServerDependencies
+        { host
+        , port = commandPort
+        , toPeer = jobServerPeer
+        , serverSource = jobServerSource
         }
 
       probeServer -< ProbeServerDependencies { port = fromIntegral httpPort, .. }

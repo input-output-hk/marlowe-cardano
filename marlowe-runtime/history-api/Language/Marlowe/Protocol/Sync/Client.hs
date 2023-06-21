@@ -4,6 +4,8 @@
 
 module Language.Marlowe.Protocol.Sync.Client where
 
+import Control.Monad (join)
+import Language.Marlowe.Protocol.Sync.Server
 import Language.Marlowe.Protocol.Sync.Types
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader)
 import Language.Marlowe.Runtime.Core.Api (ContractId, MarloweVersion)
@@ -163,3 +165,44 @@ marloweSyncClientPeer = EffectTraced . fmap peerInit . runMarloweSyncClient
         YieldTraced (ClientAgency (TokWait version)) MsgCancel
           $ Cast
           $ peerIdle version idle
+
+serveMarloweSyncClient
+  :: forall m a b
+   . Monad m
+  => MarloweSyncServer m a
+  -> MarloweSyncClient m b
+  -> m (a, b)
+serveMarloweSyncClient MarloweSyncServer{..} MarloweSyncClient{..} =
+  join $ serveInit <$> runMarloweSyncServer <*> runMarloweSyncClient
+  where
+    serveInit :: ServerStInit m a -> ClientStInit m b -> m (a, b)
+    serveInit ServerStInit{..} = \case
+      SendMsgFollowContract contractId follow -> serveFollow follow =<< recvMsgFollowContract contractId
+      SendMsgIntersect contractId version blocks intersect -> serveIntersect intersect =<< recvMsgIntersect contractId version blocks
+
+    serveFollow :: ClientStFollow m b -> ServerStFollow m a -> m (a, b)
+    serveFollow ClientStFollow{..} = \case
+      SendMsgContractFound block version createStep idle -> serveIdle idle =<< recvMsgContractFound block version createStep
+      SendMsgContractNotFound a -> (a,) <$> recvMsgContractNotFound
+
+    serveIntersect :: ClientStIntersect v m b -> ServerStIntersect v m a -> m (a, b)
+    serveIntersect ClientStIntersect{..} = \case
+      SendMsgIntersectFound block idle -> serveIdle idle =<< recvMsgIntersectFound block
+      SendMsgIntersectNotFound a -> (a,) <$> recvMsgIntersectNotFound
+
+    serveIdle :: ServerStIdle v m a -> ClientStIdle v m b -> m (a, b)
+    serveIdle ServerStIdle{..} = \case
+      SendMsgRequestNext next -> serveNext next =<< recvMsgRequestNext
+      SendMsgDone b -> (,b) <$> recvMsgDone
+
+    serveNext :: ClientStNext v m b -> ServerStNext v m a -> m (a, b)
+    serveNext ClientStNext{..} = \case
+      SendMsgRollForward block steps idle -> serveIdle idle =<< recvMsgRollForward block steps
+      SendMsgRollBackward point idle -> serveIdle idle =<< recvMsgRollBackward point
+      SendMsgRollBackCreation a -> (a,) <$> recvMsgRollBackCreation
+      SendMsgWait poll -> serveWait poll =<< recvMsgWait
+
+    serveWait :: ServerStWait v m a -> ClientStWait v m b -> m (a, b)
+    serveWait ServerStWait{..} = \case
+      SendMsgPoll next -> serveNext next =<< recvMsgPoll
+      SendMsgCancel idle -> flip serveIdle idle =<< recvMsgCancel
