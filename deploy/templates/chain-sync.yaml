@@ -79,8 +79,9 @@ spec:
       properties:
         name: socat
         image: alpine/socat
-        cmd:
-        - UNIX-LISTEN:/ipc/node.socket,fork TCP-CONNECT:cardano-node-{{ . }}.marlowe-staging:8090
+        args:
+        - UNIX-LISTEN:/ipc/node.socket,fork
+        - TCP-CONNECT:cardano-node-{{ . }}.marlowe-staging:8090
         volumes:
         - name: ipc
           path: /ipc
