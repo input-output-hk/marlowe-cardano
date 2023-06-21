@@ -15,10 +15,11 @@ module Main
 import Control.Arrow ((&&&))
 import Control.Concurrent (forkIO)
 import Control.Concurrent.MVar (MVar, newEmptyMVar, putMVar, takeMVar)
-import Control.Monad (void)
+import Control.Monad (void, when)
 import Data.Bifunctor (bimap)
 import Data.Function (on)
 import Data.List (groupBy)
+import Data.Maybe (isNothing)
 import Data.String (fromString)
 import Data.Time.Units (Second)
 import Language.Marlowe.Runtime.App.Channel (RequeueFrequency(RequeueFrequency))
@@ -72,6 +73,8 @@ data Verbosity = Terse | Standard | Verbose
 
 runStreamer
   :: Verbosity
+  -> Chain.SlotNo
+  -> Maybe Core.MarloweMetadataTag
   -> EventBackend IO r DynamicEventSelector
   -> MVar (Maybe A.Value)
   -> RequeueFrequency
@@ -79,7 +82,7 @@ runStreamer
   -> TChanEOF (ContractStream 'V1)
   -> TChanEOF ContractId
   -> IO ()
-runStreamer Terse eventBackend streamMVar =
+runStreamer Terse minSlot requiredTag eventBackend streamMVar =
   App.watchContracts "StreamerProcess" eventBackend
     $ \_ ->
       \case
@@ -90,14 +93,16 @@ runStreamer Terse eventBackend streamMVar =
             Core.TransactionScriptOutput{..} = createOutput
             Chain.TxOutRef{..} = utxo
             V1.MarloweData{..} = datum
+            tags = maybe M.empty Core.tags (Core.marloweMetadata metadata)
           in
-            putMVar streamMVar . Just $ A.object
+            when (slotNo >= minSlot && maybe True (`M.member` tags) requiredTag)
+              $ putMVar streamMVar . Just $ A.object
               [
                 "slot"          A..= slotNo
               , "block"         A..= blockNo
               , "contractId"    A..= csContractId
               , "transactionId" A..= txId
-              , "tags"          A..= maybe M.empty Core.tags (Core.marloweMetadata metadata)
+              , "tags"          A..= tags
               , "value"         A..= showAssets assets
               , "state"         A..= showState marloweState
               , "actions"       A..= ["create" :: String]
@@ -128,14 +133,16 @@ runStreamer Terse eventBackend streamMVar =
                 [
                   "action" A..= ("notify" :: String)
                 ]
+            tags = maybe M.empty Core.tags (Core.marloweMetadata metadata)
           in
-            putMVar streamMVar . Just $ A.object
+            when (slotNo >= minSlot && maybe True (`M.member` tags) requiredTag)
+              $ putMVar streamMVar . Just $ A.object
               [
                 "slot"          A..= slotNo
               , "block"         A..= blockNo
               , "contractId"    A..= csContractId
               , "transactionId" A..= transactionId
-              , "tags"          A..= maybe M.empty Core.tags (Core.marloweMetadata metadata)
+              , "tags"          A..= tags
               , "value"         A..= maybe (A.Array V.empty) (\Core.TransactionScriptOutput{..} -> showAssets assets) scriptOutput
               , "state"         A..= fmap (\Core.TransactionScriptOutput{..} -> showState $ V1.marloweState datum) scriptOutput
               , "actions"       A..= fmap (summarize . V1.getInputContent) inputs
@@ -144,13 +151,14 @@ runStreamer Terse eventBackend streamMVar =
           let
             Chain.BlockHeader{..} = csBlockHeader
           in
-            putMVar streamMVar . Just $ A.object
+            when (slotNo >= minSlot && isNothing requiredTag)
+              $ putMVar streamMVar . Just $ A.object
               [
                 "slot"          A..= slotNo
               , "block"         A..= blockNo
               , "contractId"    A..= csContractId
               , "transactionId" A..= redeemingTx
-              , "tags"          A..= Core.MarloweTransactionMetadata Nothing (Chain.TransactionMetadata mempty)
+              , "tags"          A..= Core.MarloweMetadata mempty Nothing
               , "value"         A..= A.Array V.empty
               , "state"         A..= (Nothing :: Maybe A.Value)
               , "actions"       A..= [
@@ -164,7 +172,7 @@ runStreamer Terse eventBackend streamMVar =
         ContractStreamWait{} -> pure ()
         ContractStreamFinish{} -> pure ()
         ContractStreamRolledBack{} -> pure ()
-runStreamer Standard eventBackend streamMVar =
+runStreamer Standard minSlot _ eventBackend streamMVar =
   App.watchContracts "StreamerProcess" eventBackend
     $ \_ ->
       \case
@@ -176,7 +184,8 @@ runStreamer Standard eventBackend streamMVar =
             Chain.TxOutRef{..} = utxo
             V1.MarloweData{..} = datum
           in
-            putMVar streamMVar . Just $ A.object
+            when (slotNo >= minSlot)
+              $ putMVar streamMVar . Just $ A.object
               [
                 "slot"          A..= slotNo
               , "block"         A..= blockNo
@@ -215,7 +224,8 @@ runStreamer Standard eventBackend streamMVar =
                   "action" A..= ("notify" :: String)
                 ]
           in
-            putMVar streamMVar . Just $ A.object
+            when (slotNo >= minSlot)
+              $ putMVar streamMVar . Just $ A.object
               [
                 "slot"          A..= slotNo
               , "block"         A..= blockNo
@@ -231,7 +241,8 @@ runStreamer Standard eventBackend streamMVar =
           let
             Chain.BlockHeader{..} = csBlockHeader
           in
-            putMVar streamMVar . Just $ A.object
+            when (slotNo >= minSlot)
+              $ putMVar streamMVar . Just $ A.object
               [
                 "slot"          A..= slotNo
               , "block"         A..= blockNo
@@ -252,7 +263,7 @@ runStreamer Standard eventBackend streamMVar =
         ContractStreamWait{} -> pure ()
         ContractStreamFinish{} -> pure ()
         ContractStreamRolledBack{} -> pure ()
-runStreamer Verbose eventBackend streamMVar =
+runStreamer Verbose _ _ eventBackend streamMVar =
   App.watchContracts "StreamerProcess" eventBackend
     $ \_ cs ->
       putMVar streamMVar . Just . A.object
@@ -363,7 +374,7 @@ main =
       . addHeaders [("Access-Control-Allow-Origin", origin)]
       . eventSourceAppIO
       $ eventStream streamMVar
-    runStreamer verbosity eventBackend streamMVar requeueFrequency' endOnWait detectionChannel discoveryChannel
+    runStreamer verbosity minSlot requiredTag eventBackend streamMVar requeueFrequency' endOnWait detectionChannel discoveryChannel
 
 
 data Command =
@@ -373,6 +384,8 @@ data Command =
   , pollingFrequency :: Second
   , requeueFrequency :: Second
   , endOnWait :: FinishOnWait
+  , minSlot :: Chain.SlotNo
+  , requiredTag :: Maybe Core.MarloweMetadataTag
   , origin :: BS8.ByteString
   , port :: Int
   , verbosity :: Verbosity
@@ -391,7 +404,9 @@ commandParser =
           <*> fmap fromInteger (O.option O.auto (O.long "polling" <> O.value 5 <> O.showDefault <> O.metavar "SECONDS" <> O.help "The polling frequency for waiting on Marlowe Runtime."))
           <*> fmap fromInteger (O.option O.auto (O.long "requeue" <> O.value 20 <> O.showDefault <> O.metavar "SECONDS" <> O.help "The requeuing frequency for reviewing the progress of contracts on Marlowe Runtime."))
           <*> O.flag (FinishOnWait False) (FinishOnWait True) (O.long "end-at-tip" <> O.help "Stop the process when the tip of all contracts has been reached.")
-          <*> O.option O.auto (O.long "origin" <> O.value "0.0.0.0" <> O.showDefault <> O.metavar "HOST" <> O.help "Value for Access-Control-Allow-Origin")
+          <*> fmap fromInteger (O.option O.auto (O.long "min-slot" <> O.value 0 <> O.showDefault <> O.metavar "SLOT" <> O.help "The first slot number to start reporting. Does not apply in verbose mode."))
+          <*> (O.optional . fmap Core.MarloweMetadataTag . O.strOption) (O.long "require-tag" <> O.metavar "STRING" <> O.help "Report just for transactions matching the specified Marlowe tag. Only applies to terse mode.")
+          <*> O.option O.auto (O.long "origin" <> O.value "*" <> O.showDefault <> O.metavar "STRING" <> O.help "Value for \"Access-Control-Allow-Origin\"")
           <*> O.option O.auto (O.long "port" <> O.value 1564 <> O.showDefault <> O.metavar "PORT" <> O.help "Port number for streaming data.")
           <*> O.option O.auto (O.long "verbosity" <> O.value Terse <> O.showDefault <> O.metavar "Terse|Standard|Verbose" <> O.help "The verbosity of the output data stream.")
     pure
