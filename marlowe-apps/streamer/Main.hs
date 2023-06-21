@@ -9,12 +9,14 @@
 
 module Main
   ( main
+  , mainNoSSE
+  , mainSSE
   ) where
 
 
 import Control.Arrow ((&&&))
 import Control.Concurrent (forkIO)
-import Control.Concurrent.MVar (MVar, newEmptyMVar, putMVar, takeMVar)
+import Control.Concurrent.MVar (MVar, modifyMVar_, newEmptyMVar, newMVar, putMVar, takeMVar)
 import Control.Monad (void, when)
 import Data.Bifunctor (bimap)
 import Data.Function (on)
@@ -28,6 +30,8 @@ import Language.Marlowe.Runtime.App.Stream (ContractStream(..), TChanEOF)
 import Language.Marlowe.Runtime.App.Types
   (Config, FinishOnClose(FinishOnClose), FinishOnWait(FinishOnWait), PollingFrequency(PollingFrequency))
 import Language.Marlowe.Runtime.Core.Api (ContractId, MarloweVersionTag(V1))
+import Network.HTTP.Types.Status
+import Network.Wai
 import Network.Wai.EventSource (ServerEvent(..), eventSourceAppIO)
 import Network.Wai.Handler.Warp (run)
 import Network.Wai.Middleware.AddHeaders (addHeaders)
@@ -358,8 +362,8 @@ eventStream =
     . takeMVar
 
 
-main :: IO ()
-main =
+mainSSE :: IO ()
+mainSSE =
   do
     Command{..} <- O.execParser =<< commandParser
     let
@@ -375,6 +379,58 @@ main =
       . eventSourceAppIO
       $ eventStream streamMVar
     runStreamer verbosity minSlot requiredTag eventBackend streamMVar requeueFrequency' endOnWait detectionChannel discoveryChannel
+
+
+batchAppIO
+  :: MVar [A.Value]
+  -> Request
+  -> (Response -> IO ResponseReceived)
+  -> IO ResponseReceived
+batchAppIO batchMVar _ respond =
+  do
+    batch <- takeMVar batchMVar
+    putMVar batchMVar mempty
+    respond
+      $ responseLBS status200 [("Content-type", "application/json")]
+      $ A.encode batch
+
+
+batcher
+  :: MVar (Maybe A.Value)
+  -> MVar [A.Value]
+  -> IO ()
+batcher streamMVar batchMVar =
+  takeMVar streamMVar
+    >>= \case
+      Just next -> do
+                     modifyMVar_ batchMVar (pure . (<> pure next))
+                     batcher streamMVar batchMVar
+      Nothing -> pure ()
+
+
+mainNoSSE :: IO ()
+mainNoSSE =
+  do
+    Command{..} <- O.execParser =<< commandParser
+    let
+      pollingFrequency' = PollingFrequency pollingFrequency
+      requeueFrequency' = RequeueFrequency requeueFrequency
+      eventBackend = unitEventBackend
+    discoveryChannel <- App.runDiscovery' eventBackend config pollingFrequency' endOnWait
+    detectionChannel <- runDetection eventBackend config pollingFrequency' discoveryChannel
+    streamMVar <- newEmptyMVar
+    batchMVar <- newMVar mempty
+    void . forkIO
+      $ batcher streamMVar batchMVar
+    void . forkIO
+      . run port
+      . addHeaders [("Access-Control-Allow-Origin", origin), ("Cache-Control", "max-age=0,no-cache")]
+      $ batchAppIO batchMVar
+    runStreamer verbosity minSlot requiredTag eventBackend streamMVar requeueFrequency' endOnWait detectionChannel discoveryChannel
+
+
+main :: IO ()
+main = mainNoSSE
 
 
 data Command =

@@ -204,6 +204,7 @@ executable marlowe-streamer
     , containers
     , eventuo11y                                      >=0.9 && <0.11
     , eventuo11y-json                                 ^>=0.3
+    , http-types
     , marlowe-apps
     , marlowe-cardano
     , marlowe-chain-sync
@@ -214,6 +215,7 @@ executable marlowe-streamer
     , text
     , time-units
     , vector
+    , wai
     , wai-extra
     , warp
 
