@@ -36,6 +36,9 @@ spec:
       imagePullPolicy: Always
       memory: 1024Mi
       volumeMounts:
+        emptyDir:
+        - name: ipc
+          mountPath: /ipc
         configMap:
         - name: node-config
           mountPath: /node-config
@@ -57,7 +60,7 @@ spec:
         - UNIX-LISTEN:/ipc/node.sock,fork TCP-CONNECT:cardano-node-{{ . }}.marlowe-staging:8090
         volumes:
         - name: ipc
-          path: ipc
+          path: /ipc
   policies:
   - name: local-marlowe-staging
     properties:

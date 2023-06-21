@@ -22,6 +22,10 @@ spec:
       - expose: true
         port: 8090
         protocol: TCP
+      volumeMounts:
+        emptyDir:
+        - name: ipc
+          mountPath: /ipc
     traits:
     - type: sidecar
       properties:
