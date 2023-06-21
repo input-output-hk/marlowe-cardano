@@ -18,6 +18,8 @@
 
     # FIXME remove once they are fixed
     "packages.entrypoints.node"
+    "packages.entrypoints.testnet-pioneers.node"
+    "packages.entrypoints.testnet-dev.node"
 
     "packages.ghc8107-mingwW64"
     "packages.ghc8107-profiled"
