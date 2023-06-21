@@ -2,7 +2,6 @@
 
 module Spec.Marlowe.Semantics.Next.Contract
   ( hasValidEnvironement
-  , isEmptyWhenNotTimedOut
   , isIrreducible
   , isNotClose
   , isReducible
@@ -10,12 +9,9 @@ module Spec.Marlowe.Semantics.Next.Contract
   ) where
 
 
-import Language.Marlowe.Core.V1.Semantics
-  (ReduceResult(ContractQuiescent, RRAmbiguousTimeIntervalError), reduceContractUntilQuiescent)
-import Language.Marlowe.Core.V1.Semantics.Types (Contract(Close), Environment(..), State, Timeout)
+import Language.Marlowe.Core.V1.Semantics (ReduceResult(ContractQuiescent), fixInterval, reduceContractUntilQuiescent)
+import Language.Marlowe.Core.V1.Semantics.Types (Contract(Close), Environment(..), IntervalResult(..), State)
 import Spec.Marlowe.Semantics.Arbitrary ()
-import Spec.Marlowe.Semantics.Next.Contract.When (When'(..), reducibleToAWhen)
-
 
 isIrreducible :: Environment -> State -> Contract -> Bool
 isIrreducible environment' state contract
@@ -35,10 +31,13 @@ isReducible environment' state contract
 
 
 hasValidEnvironement :: Environment -> State -> Contract -> Bool
-hasValidEnvironement environment' state contract
-  = case reduceContractUntilQuiescent environment' state contract of
-      RRAmbiguousTimeIntervalError -> False
-      _otherwise -> True
+hasValidEnvironement environment state contract
+  = case fixInterval (timeInterval environment) state of
+      IntervalTrimmed e s ->
+        case reduceContractUntilQuiescent e s contract of
+          ContractQuiescent {} -> True
+          _otherwise ->  False
+      IntervalError _ -> False
 
 isReducibleToClose :: Environment -> State -> Contract -> Bool
 isReducibleToClose environment' state contract
@@ -46,16 +45,4 @@ isReducibleToClose environment' state contract
       ContractQuiescent _ _ _ _ Close -> True
       _otherwise ->  False
 
-isEmptyWhenNotTimedOut :: Environment -> State -> Contract -> Bool
-isEmptyWhenNotTimedOut e s
-  = (\case
-      Just (_, When' [] timeout') | isNotTimedOut timeout' e -> True
-      _otherwise -> False)
-  . reducibleToAWhen e s
 
-isTimedOut :: Timeout -> Environment -> Bool
-isTimedOut timeout' Environment {timeInterval = (start,_)} | timeout'  <= start = True
-isTimedOut _ _ = False
-
-isNotTimedOut :: Timeout -> Environment -> Bool
-isNotTimedOut timeout' = not . isTimedOut timeout'

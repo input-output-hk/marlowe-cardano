@@ -18,12 +18,15 @@ import Data.Aeson.Types ()
 import Deriving.Aeson (Generic)
 import Prelude
 
-import Language.Marlowe.Core.V1.Semantics.Types (Contract, Environment(..), State)
+import Language.Marlowe.Core.V1.Semantics.Types
+  (Contract, Environment(..), IntervalError(..), IntervalResult(..), State)
 import Language.Marlowe.Pretty (Pretty(..))
 
+import Data.Bifunctor (Bifunctor(first))
 import Data.Time (UTCTime)
 import Language.Marlowe.Core.V1.Next.Applicables (ApplicableInputs, mkApplicables)
-import Language.Marlowe.Core.V1.Next.CanReduce (AmbiguousIntervalProvided, CanReduce, tryReduce)
+import Language.Marlowe.Core.V1.Next.CanReduce (CanReduce, tryReduce)
+import Language.Marlowe.Core.V1.Semantics (fixInterval)
 import Plutus.V1.Ledger.SlotConfig (utcTimeToPOSIXTime)
 
 data Next = Next { canReduce :: CanReduce, applicables :: ApplicableInputs}
@@ -32,14 +35,20 @@ data Next = Next { canReduce :: CanReduce, applicables :: ApplicableInputs}
 
 
 -- | Describe for a given contract which inputs can be applied it can be reduced or not
-next :: Environment -> State -> Contract -> Either AmbiguousIntervalProvided Next
+next :: Environment -> State -> Contract -> Either IntervalError Next
 next environment state contract
   = do
-    (canReduce,reducedState,reducedContract) <- tryReduce environment state contract
-    Right
-      $ Next
-        canReduce
-        (mkApplicables environment reducedState reducedContract)
+    case fixInterval (timeInterval environment) state of
+      IntervalTrimmed environmentTrimmed adjustedState -> do
+        (canReduce,reducedState,reducedContract)
+          <- first
+                (const . InvalidInterval . timeInterval $ environment)
+                (tryReduce environmentTrimmed adjustedState contract)
+        Right
+          $ Next
+              canReduce
+              (mkApplicables environment reducedState reducedContract)
+      IntervalError e -> Left e
 
 instance FromJSON Next where
   parseJSON (Object v) = Next <$> v .: "can_reduce" <*> v .: "applicable_inputs"

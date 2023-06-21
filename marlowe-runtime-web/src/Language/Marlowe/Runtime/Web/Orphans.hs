@@ -1,7 +1,5 @@
 {-# LANGUAGE OverloadedLists #-}
-
 {-# OPTIONS_GHC -Wno-orphans #-}
-{-# LANGUAGE FlexibleInstances #-}
 
 module Language.Marlowe.Runtime.Web.Orphans
   (

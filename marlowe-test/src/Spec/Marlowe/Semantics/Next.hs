@@ -7,7 +7,7 @@ module Spec.Marlowe.Semantics.Next
 
 import Data.Coerce (coerce)
 import Data.List (nubBy)
-import Data.Maybe (fromJust)
+import Data.Maybe (fromJust, isNothing)
 import Data.Types.Isomorphic (Injective(to))
 
 
@@ -27,7 +27,6 @@ import Spec.Marlowe.Semantics.Next.Contract.Generator
   , anyCaseContractsWithIdenticalEvaluatedDeposits
   , anyCaseContractsWithoutIdenticalEvaluatedDeposits
   , anyCloseOrReducedToAClose
-  , anyEmptyWhenNonTimedOut
   , anyIrreducibleContract
   , anyOnlyFalsifiedNotifies
   , anyReducibleContract
@@ -58,20 +57,16 @@ tests = testGroup "Next"
           "\"Close\" is not applicable"
             $ forAll' anyCloseOrReducedToAClose $ \(environment', state, contract) ->
                 Right emptyApplicables == (applicables <$> next environment' state contract)
-      , testProperty
-          "Non timed out empty \"When\" is not applicable"
-            $ forAll' anyEmptyWhenNonTimedOut $ \(environment', state, contract) ->
-                Right emptyApplicables == ( applicables <$> next environment' state contract)
       , testGroup "Notify"
           [ testProperty
               "\"Notify\" is not applicable when evaluated falsified"
-                $ forAll' anyOnlyFalsifiedNotifies $ \(environment', state, contract) ->
-                    Right Nothing == (notifyMaybe . applicables <$> next environment' state contract)
+                $ forAll' anyOnlyFalsifiedNotifies $ \(environment', state, caseContracts) ->
+                     isNothing (notifyMaybe . mkApplicablesWhen environment' state $ caseContracts)
          , testProperty
               "Shadowing : Following Notifies evaluated to True are not applicable"
-                $ forAll' anyWithAtLeastOneNotifyTrue $ \(environment', state, contract) -> do
-                    let expectedCaseIndex = fromJust . firstNotifyTrueIndex environment' state $ contract
-                    (Right . Just $ expectedCaseIndex ) == ( (getCaseIndex <$>). notifyMaybe . applicables <$> next environment' state contract)
+                $ forAll' anyWithAtLeastOneNotifyTrue $ \(environment', state, caseContracts) -> do
+                    let expectedCaseIndex = fromJust . firstNotifyTrueIndex environment' state $ caseContracts
+                    Just expectedCaseIndex == ( (getCaseIndex <$>). notifyMaybe . mkApplicablesWhen environment' state $ caseContracts)
           ]
       , testGroup "Deposit"
           [ testProperty

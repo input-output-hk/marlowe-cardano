@@ -8,39 +8,39 @@ module Language.Marlowe.Runtime.Web.Server.REST.Contracts.Next
   ) where
 
 import Control.Monad.Except (MonadError)
-import Data.Time
-import Language.Marlowe
-import Language.Marlowe.Core.V1.Next
+import Data.Time (UTCTime)
+import Language.Marlowe.Core.V1.Next (Next)
 import qualified Language.Marlowe.Core.V1.Next as Semantics
-import Language.Marlowe.Core.V1.Next.CanReduce
-import Language.Marlowe.Runtime.Web
-import Language.Marlowe.Runtime.Web.Server.DTO
+import Language.Marlowe.Core.V1.Semantics.Types (Contract, Environment, State)
+
+import Language.Marlowe.Runtime.Web (ContractState(ContractState, currentContract, state), NextAPI, TxOutRef)
+import Language.Marlowe.Runtime.Web.Server.DTO (ToDTO(toDTO), fromDTOThrow)
 import Language.Marlowe.Runtime.Web.Server.Monad (ServerM, loadContract)
-import Language.Marlowe.Runtime.Web.Server.REST.ApiError (badRequest', badRequestWithErrorCode, notFoundWithErrorCode)
+import Language.Marlowe.Runtime.Web.Server.REST.ApiError (badRequest', badRequest'', notFoundWithErrorCode)
 import Servant (throwError)
 import Servant.Server (HasServer(ServerT))
 
-server :: TxOutRef ->  ServerT NextAPI ServerM
+
+server :: Language.Marlowe.Runtime.Web.TxOutRef ->  ServerT Language.Marlowe.Runtime.Web.NextAPI ServerM
 server = nextOverCardano'
 
-nextOverCardano' ::  TxOutRef -> UTCTime -> UTCTime -> ServerM Next
+nextOverCardano' ::  Language.Marlowe.Runtime.Web.TxOutRef -> UTCTime -> UTCTime -> ServerM Next
 nextOverCardano' contractId validityStart validityEnd
   = nextOverCardano contractId $ Semantics.mkEnvironment validityStart validityEnd
 
-nextOverCardano ::  TxOutRef -> Environment -> ServerM Next
+nextOverCardano ::  Language.Marlowe.Runtime.Web.TxOutRef -> Environment -> ServerM Next
 nextOverCardano contractId environment'
   = fromDTOThrow (badRequest' "Invalid contract id value") contractId
       >>= loadContract
       >>= whenNothingThrow (notFoundWithErrorCode "Contract not found" "contract_not_found")
       >>= whenNothingThrow (notFoundWithErrorCode "Contract Closed" "contract_closed")
           . notClosedContractMaybe . either toDTO toDTO
-      >>= whenLeftThrow (\AmbiguousIntervalProvided -> badRequestWithErrorCode "Invalid Interval Provided" "ambiguous_interval_provided" )
+      >>= whenLeftThrow (badRequest'' "Invalid Interval Provided" "invalid_interval")
           . (uncurry $ Semantics.next environment')
 
 
-
-notClosedContractMaybe :: ContractState -> Maybe (State, Contract)
-notClosedContractMaybe ContractState {state = Just state, currentContract = Just contract } = Just (state,contract)
+notClosedContractMaybe :: Language.Marlowe.Runtime.Web.ContractState -> Maybe (State, Contract)
+notClosedContractMaybe Language.Marlowe.Runtime.Web.ContractState {state = Just state, currentContract = Just contract } = Just (state,contract)
 notClosedContractMaybe _ = Nothing
 
 
