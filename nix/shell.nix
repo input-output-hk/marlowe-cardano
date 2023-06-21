@@ -12,12 +12,6 @@ in
   name = "marlowe-cardano";
 
 
-  prompt = "\n\\[\\033[1;32m\\][marlowe-cardano:\\w]\\$\\[\\033[0m\\] ";
-
-
-  welcomeMessage = "🤟 \\033[1;31mWelcome to marlowe-cardano\\033[0m 🤟";
-
-
   packages = [
     inputs.cardano-world.cardano.packages.cardano-address
     inputs.cardano-world.cardano.packages.cardano-node
@@ -35,14 +29,14 @@ in
     re-up = {
       description = "Builds compose.nix, (re)creates and (re)starts the dev docker containers for Runtime.";
       exec = scripts.re-up;
-      enabled = isLinux;
+      enable = isLinux;
       group = "marlowe";
     };
 
     refresh-compose = {
       description = "Genereate compose.yaml in the repository root";
       exec = scripts.refresh-compose;
-      enabled = isLinux;
+      enable = isLinux;
       group = "marlowe";
     };
 
