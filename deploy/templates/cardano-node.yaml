@@ -31,8 +31,6 @@ spec:
         volumes:
         - name: ipc
           path: /ipc
-''
-
   policies:
   - name: local-marlowe-staging
     properties:
