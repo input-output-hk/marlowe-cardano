@@ -56,6 +56,7 @@ import Network.URI (parseURI)
 import Servant
 import Servant.Pagination (HasPagination(..))
 
+
 -- | A newtype for Base16 decoding and encoding ByteStrings
 newtype Base16 = Base16 { unBase16 :: ByteString }
   deriving (Eq, Ord)
@@ -231,7 +232,14 @@ data ContractState = ContractState
   , state :: Maybe Semantics.State
   , utxo :: Maybe TxOutRef
   , txBody :: Maybe TextEnvelope
+  , unclaimedPayouts :: [Payout]
   } deriving (Show, Eq, Generic)
+
+data Payout
+    = Payout
+        { payoutId :: TxOutRef
+        , role :: Text} -- TODO (N.H) : add assets that will be retrieved by the payout
+  deriving (FromJSON, ToJSON,ToSchema,Show, Eq, Generic)
 
 instance ToJSON ContractState
 instance FromJSON ContractState

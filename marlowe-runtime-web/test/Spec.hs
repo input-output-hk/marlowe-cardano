@@ -77,6 +77,13 @@ instance Arbitrary Web.ContractState where
     <*> arbitrary
     <*> arbitrary
     <*> arbitrary
+    <*> arbitrary
+  shrink = genericShrink
+
+instance Arbitrary Web.Payout where
+  arbitrary = Web.Payout
+    <$> arbitrary
+    <*> arbitrary
   shrink = genericShrink
 
 instance Arbitrary Web.PayoutRef where
