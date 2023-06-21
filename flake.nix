@@ -13,6 +13,7 @@
 
   nixConfig = {
     extra-substituters = [
+      "https://ci.iog.io"
       "https://cache.iog.io"
       "https://cache.zw3rk.com"
     ];
