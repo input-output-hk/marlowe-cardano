@@ -6,8 +6,6 @@
     "devShells"
     "checks"
 
-    "networks"
-    "nomadTasks"
     "oci-images"
     "operables"
   ];
