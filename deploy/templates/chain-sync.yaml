@@ -1,13 +1,13 @@
-{{- range .Values.networks }}
+{{- range $index, $network := .Values.networks }}
 ---
 apiVersion: core.oam.dev/v1beta1
 kind: Application
 metadata:
-  name: chain-sync-{{ . }}
+  name: chain-sync-{{ $network }}
   namespace: marlowe-staging
 spec:
   components:
-  - name: chain-sync-{{ . }}
+  - name: chain-sync-{{ $network }}
     type: webservice
     properties:
       env:
@@ -26,23 +26,23 @@ spec:
       - name: NODE_CONFIG
         value: /node-config/config.json
       - name: DB_NAME
-        value: chainsync_{{ . }}
+        value: chainsync_{{ $network }}
       - name: DB_HOST
         value: marlowe-runtime-database.marlowe-staging:5432
       - name: DB_USER
         valueFrom:
           secretKeyRef:
             key: username
-            name: chainsync_{{ . }}_owner_user.marlowe-runtime-database.credentials.postgresql.acid.zalan.do
+            name: chainsync_{{ $network }}_owner_user.marlowe-runtime-database.credentials.postgresql.acid.zalan.do
             namespace: marlowe-staging
       - name: DB_PASS
         valueFrom:
           secretKeyRef:
             key: password
-            name: chain-sync-{{ . }}.marlowe-runtime-database.credentials.postgresql.acid.zalan.do
+            name: chain-sync-{{ $network }}.marlowe-runtime-database.credentials.postgresql.acid.zalan.do
             namespace: marlowe-staging
       cpu: "0.5"
-      image: {{ .Values.images.baseUrl }}/marlowe-chain-sync:{{ .Values.images.tag }}
+      image: {{ $.Values.images.baseUrl }}/marlowe-chain-sync:{{ $.Values.images.tag }}
       imagePullPolicy: Always
       memory: 1024Mi
       ports:
@@ -65,7 +65,7 @@ spec:
         configMap:
         - name: "node-config"
           mountPath: "/node-config"
-          cmName: cardano-network-configs-{{ . }}
+          cmName: cardano-network-configs-{{ $network }}
           items:
           - key: config.json
             path: config.json
@@ -82,7 +82,7 @@ spec:
         image: alpine/socat
         args:
         - UNIX-LISTEN:/ipc/node.socket,fork
-        - TCP-CONNECT:cardano-node-{{ . }}.marlowe-staging:8090
+        - TCP-CONNECT:cardano-node-{{ $network }}.marlowe-staging:8090
         volumes:
         - name: ipc
           path: /ipc
