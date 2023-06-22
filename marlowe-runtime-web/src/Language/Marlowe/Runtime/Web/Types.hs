@@ -173,6 +173,19 @@ instance ToParamSchema PolicyId where
       & OpenApi.description ?~ "The hex-encoded minting policy ID for a native Cardano token"
       & pattern ?~ "^[a-fA-F0-9]*$"
 
+newtype Party = Party {unParty :: T.Text}
+  deriving (Eq, Ord, Generic)
+  deriving newtype (Show, ToHttpApiData, FromHttpApiData, ToJSON, FromJSON)
+
+instance ToSchema Party where
+  declareNamedSchema proxy = pure $ NamedSchema (Just "Party") $ toParamSchema proxy
+
+instance ToParamSchema Party where
+  toParamSchema _ =
+    mempty
+      & type_ ?~ OpenApiString
+      & OpenApi.description ?~ "Party (A role name or an Address)"
+
 data TxOutRef = TxOutRef
   { txId :: TxId
   , txIx :: Word16

@@ -192,17 +192,17 @@ getContractStatus contractId = do
 getContract :: TxOutRef -> ClientM ContractState
 getContract = fmap snd . getContractStatus
 
-getContractNextStatus :: TxOutRef -> UTCTime -> UTCTime -> ClientM (RuntimeStatus, Next)
-getContractNextStatus contractId validityStart validityEnd = do
+getContractNextStatus :: TxOutRef -> UTCTime -> UTCTime -> [Party] -> ClientM (RuntimeStatus, Next)
+getContractNextStatus contractId validityStart validityEnd parties = do
   let contractsClient :<|> _ = client
   let _ :<|> _ :<|> contractApi = contractsClient
   let _ :<|> _ :<|> next' :<|> _ = contractApi contractId
-  response <- next' validityStart validityEnd
+  response <- next' validityStart validityEnd parties
   status <- extractStatus response
   pure (status, getResponse response)
 
-getContractNext :: TxOutRef -> UTCTime -> UTCTime -> ClientM Next
-getContractNext = (fmap . fmap . fmap) snd . getContractNextStatus
+getContractNext :: TxOutRef -> UTCTime -> UTCTime -> [Party] -> ClientM Next
+getContractNext = (fmap . fmap . fmap . fmap) snd . getContractNextStatus
 
 putContractStatus :: TxOutRef -> TextEnvelope -> ClientM RuntimeStatus
 putContractStatus contractId tx = do
