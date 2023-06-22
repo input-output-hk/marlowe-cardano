@@ -480,7 +480,7 @@ testContainer = proc TestContainerDependencies{..} -> do
       payoutScriptHashes = NESet.singleton $ payoutScript marloweScripts
       pollingInterval = 0.01
       confirmationTimeout = 60
-      runtimeVersion = Version [] []
+      runtimeVersion = Version [0] []
      in
       MarloweRuntimeDependencies{..}
 
