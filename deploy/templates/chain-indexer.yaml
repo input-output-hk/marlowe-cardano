@@ -33,7 +33,7 @@ spec:
       - name: CARDANO_NODE_SOCKET_PATH
         value: /ipc/node.socket
       - name: NODE_CONFIG
-        value: http://localhost:8080
+        value: /node-config/config.json
       - name: HTTP_PORT
         value: "3781"
       image: {{ $.Values.images.repo }}/{{ $.Values.images.org }}/marlowe-chain-indexer:{{ $.Values.images.tag }}
