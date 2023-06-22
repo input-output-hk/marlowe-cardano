@@ -41,12 +41,6 @@ in
       group = "marlowe";
     };
 
-    start-cardano-node = {
-      exec = scripts.start-cardano-node;
-      description = "Start cardano-node";
-      group = "marlowe";
-    };
-
     marlowe-runtime-cli = {
       exec = scripts.marlowe-runtime-cli;
       description = "Marlowe Runtime CLI";
