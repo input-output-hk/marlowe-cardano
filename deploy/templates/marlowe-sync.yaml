@@ -1,13 +1,13 @@
-{{- range .Values.networks }}
+{{- range $index, $network := .Values.networks }}
 ---
 apiVersion: core.oam.dev/v1beta1
 kind: Application
 metadata:
-  name: marlowe-sync-{{ . }}
+  name: marlowe-sync-{{ $network }}
   namespace: marlowe-staging
 spec:
   components:
-  - name: marlowe-sync
+  - name: marlowe-sync-{{ $network }}
     type: webservice
     properties:
       env:
@@ -20,18 +20,18 @@ spec:
       - name: MARLOWE_QUERY_PORT
         value: "3726"
       - name: DB_NAME
-        value: chainsync_{{ . }}
+        value: chainsync_{{ $network }}
       - name: DB_USER
         valueFrom:
           secretKeyRef:
             key: username
-            name: chainsync-{{ . }}-owner-user.marlowe-runtime-database.credentials.postgresql.acid.zalan.do
+            name: chainsync-{{ $network }}-owner-user.marlowe-runtime-database.credentials.postgresql.acid.zalan.do
             namespace: marlowe-staging
       - name: DB_PASS
         valueFrom:
           secretKeyRef:
             key: password
-            name: chainsync_{{ . }}_owner_user.marlowe-runtime-database.credentials.postgresql.acid.zalan.do
+            name: chainsync_{{ $network }}_owner_user.marlowe-runtime-database.credentials.postgresql.acid.zalan.do
             namespace: marlowe-staging
       - name: DB_HOST
         value: marlowe-runtime-database.marlowe-staging:5432
