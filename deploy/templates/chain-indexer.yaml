@@ -67,6 +67,8 @@ spec:
         volumes:
         - name: ipc
           path: /ipc
+        - name: node-config
+          path: /node-config
   policies:
   - name: local-marlowe-staging
     properties:
