@@ -38,7 +38,7 @@ spec:
       - name: HTTP_PORT
         value: "3783"
       cpu: "0.5"
-      image: {{ .Values.image.baseUrl}} /marlowe-indexer:{{ .Values.image.tag }}
+      image: {{ .Values.images.baseUrl}} /marlowe-indexer:{{ .Values.images.tag }}
       imagePullPolicy: Always
       memory: 1024Mi
       ports:
