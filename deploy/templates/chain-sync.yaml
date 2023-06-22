@@ -59,7 +59,7 @@ spec:
         port: 3782
         protocol: TCP
       volumeMounts:
-        emptyyDir:
+        emptyDir:
         - name: ipc
           mountPath: /ipc
         configMap:
