@@ -83,7 +83,6 @@ import qualified Plutus.V1.Ledger.Address as Address (scriptHashAddress)
 import qualified Plutus.V1.Ledger.Value as Val
 import Plutus.V2.Ledger.Api
   ( Credential(..)
-  , CurrencySymbol
   , Datum(Datum)
   , DatumHash(DatumHash)
   , Extended(..)
@@ -94,7 +93,6 @@ import Plutus.V2.Ledger.Api
   , ScriptContext(ScriptContext, scriptContextPurpose, scriptContextTxInfo)
   , ScriptPurpose(Spending)
   , SerializedScript
-  , TokenName
   , TxInInfo(TxInInfo, txInInfoOutRef, txInInfoResolved)
   , TxInfo(TxInfo, txInfoInputs, txInfoOutputs, txInfoValidRange)
   , UpperBound(..)

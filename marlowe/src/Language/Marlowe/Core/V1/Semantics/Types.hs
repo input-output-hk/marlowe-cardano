@@ -54,6 +54,7 @@ module Language.Marlowe.Core.V1.Semantics.Types
   , Case(..)
   , ChoiceId(..)
   , Contract(..)
+  , CurrencySymbol(..)
   , Environment(..)
   , Input(..)
   , InputContent(..)
@@ -63,6 +64,7 @@ module Language.Marlowe.Core.V1.Semantics.Types
   , Payee(..)
   , State(..)
   , Token(..)
+  , TokenName(..)
   , Value(..)
   , ValueId(..)
     -- * Error Types

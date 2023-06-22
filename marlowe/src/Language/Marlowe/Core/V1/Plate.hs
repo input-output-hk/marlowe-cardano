@@ -23,7 +23,7 @@ import Data.Maybe (mapMaybe)
 import Language.Marlowe.Core.V1.Merkle (Continuations)
 import Language.Marlowe.Core.V1.Semantics.Types
 import Language.Marlowe.Core.V1.Semantics.Types.Address (Network)
-import Plutus.V1.Ledger.Api (BuiltinByteString, TokenName)
+import Plutus.V1.Ledger.Api (BuiltinByteString)
 
 import qualified Data.Functor.Constant as F (Constant(..))
 import qualified Data.Map.Strict as M (foldr)

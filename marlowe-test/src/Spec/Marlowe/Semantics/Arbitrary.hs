@@ -123,7 +123,9 @@ import Test.QuickCheck
   , vectorOf
   )
 
+
 import Data.Functor ((<&>))
+
 import qualified Plutus.V2.Ledger.Api as Ledger (Address(..))
 import qualified PlutusTx.AssocMap as AM (Map, delete, empty, fromList, keys, toList)
 import qualified PlutusTx.Eq as P (Eq)

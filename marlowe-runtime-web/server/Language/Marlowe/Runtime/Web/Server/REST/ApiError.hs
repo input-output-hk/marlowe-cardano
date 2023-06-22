@@ -10,7 +10,7 @@
 module Language.Marlowe.Runtime.Web.Server.REST.ApiError where
 
 import Control.Monad.Except (MonadError(throwError))
-import Data.Aeson (Value(Null), encode, object, (.=))
+import Data.Aeson (ToJSON(toJSON), Value(Null), encode, object, (.=))
 import Data.Maybe (fromMaybe)
 import Language.Marlowe.Runtime.Core.Api (MarloweVersionTag(..))
 import Language.Marlowe.Runtime.Transaction.Api
@@ -89,11 +89,17 @@ throwDTOError = throwError . serverErrorFromDTO
 badRequest :: String -> Maybe String -> ServerError
 badRequest msg errorCode = toServerError . ApiError msg (fromMaybe "BadRequest" errorCode) Null $ 400
 
+badRequest'' :: (ToJSON a) => String -> String -> a -> ServerError
+badRequest'' msg errorCode json = toServerError . ApiError msg errorCode (toJSON json) $ 400
+
 badRequest' :: String -> ServerError
 badRequest' msg = badRequest msg Nothing
 
 notFound :: String -> Maybe String -> ServerError
 notFound msg errorCode = toServerError . ApiError msg (fromMaybe "NotFound" errorCode) Null $ 404
+
+notFoundWithErrorCode :: String -> String -> ServerError
+notFoundWithErrorCode msg = notFound msg . Just
 
 notFound' :: String -> ServerError
 notFound' msg = notFound msg Nothing

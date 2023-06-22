@@ -1,15 +1,32 @@
 {-# LANGUAGE OverloadedLists #-}
-
 {-# OPTIONS_GHC -Wno-orphans #-}
 
-module Language.Marlowe.Runtime.Web.Orphans where
+module Language.Marlowe.Runtime.Web.Orphans
+  (
+  ) where
 
-import Control.Lens hiding (both, from, to)
-import Data.OpenApi hiding (value)
+import Control.Lens ((&), (.~), (?~))
+import Data.OpenApi
+  ( HasDescription(description)
+  , HasEnum(enum_)
+  , HasFormat(format)
+  , HasOneOf(oneOf)
+  , HasProperties(properties)
+  , HasRequired(required)
+  , HasType(type_)
+  , NamedSchema(NamedSchema)
+  , OpenApiType(OpenApiBoolean, OpenApiInteger, OpenApiObject, OpenApiString)
+  , Referenced(Inline)
+  , Schema
+  , ToSchema(..)
+  , declareSchemaRef
+  )
 import Data.Proxy (Proxy(Proxy))
 import Data.Text (Text)
 import GHC.Exts (IsList(fromList))
+
 import Language.Marlowe.Core.V1.Semantics.Types
+  (AccountId, Action, Bound, Case, ChoiceId, Contract, Input, Observation, Party, Payee, State, Token, Value)
 
 data Address
 
@@ -456,3 +473,4 @@ instance ToSchema Input where
     pure $ NamedSchema (Just "Input") $ mempty
       & description ?~ "An input to a Marlowe transaction"
       & oneOf ?~ ([notifySchema, choiceSchema, depositSchema] <*> [True, False])
+

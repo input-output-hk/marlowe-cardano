@@ -1,4 +1,4 @@
-module Language.Marlowe.Runtime.Web.PutTransaction where
+module Language.Marlowe.Runtime.Web.Contracts.Transactions.Transaction.Put where
 
 import Control.Monad.IO.Class (MonadIO(liftIO))
 import qualified Data.Map.Strict as Map

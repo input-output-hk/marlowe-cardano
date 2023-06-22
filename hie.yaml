@@ -1,2 +1,223 @@
 cradle:
   cabal:
+    - path: "async-components/src"
+      component: "lib:async-components"
+
+    - path: "cardano-integration/src"
+      component: "lib:cardano-integration"
+
+    - path: "eventuo11y-extras/src"
+      component: "lib:eventuo11y-extras"
+
+    - path: "libs/aeson-via-serialise/src"
+      component: "lib:aeson-via-serialise"
+
+    - path: "libs/base16-aeson/src"
+      component: "lib:base16-aeson"
+
+    - path: "libs/plutus-ledger-ada/src"
+      component: "lib:plutus-ledger-ada"
+
+    - path: "libs/plutus-ledger-aeson/src"
+      component: "lib:plutus-ledger-aeson"
+
+    - path: "libs/plutus-ledger-slot/src"
+      component: "lib:plutus-ledger-slot"
+
+    - path: "marlowe/src"
+      component: "lib:marlowe-cardano"
+
+    - path: "marlowe-actus/src"
+      component: "lib:marlowe-actus"
+
+    - path: "marlowe-actus/test"
+      component: "marlowe-actus:test:marlowe-actus-test"
+
+    - path: "marlowe-apps/src"
+      component: "lib:marlowe-apps"
+
+    - path: "marlowe-chain-sync/src"
+      component: "lib:marlowe-chain-sync"
+
+    - path: "marlowe-chain-sync/libchainsync"
+      component: "marlowe-chain-sync:lib:libchainsync"
+
+    - path: "marlowe-chain-sync/chain-indexer"
+      component: "marlowe-chain-sync:lib:chain-indexer"
+
+    - path: "marlowe-chain-sync/plutus-compat"
+      component: "marlowe-chain-sync:lib:plutus-compat"
+
+    - path: "marlowe-chain-sync/gen"
+      component: "marlowe-chain-sync:lib:gen"
+
+    - path: "marlowe-chain-sync/test"
+      component: "marlowe-chain-sync:test:marlowe-chain-sync-test"
+
+    - path: "marlowe-cli/src"
+      component: "lib:marlowe-cli"
+
+    - path: "marlowe-cli/cli-test"
+      component: "marlowe-cli:lib:cli-test"
+
+    - path: "marlowe-cli/command"
+      component: "marlowe-cli:lib:command"
+
+    - path: "marlowe-client/src"
+      component: "lib:marlowe-client"
+
+    - path: "marlowe-contracts/src"
+      component: "lib:marlowe-contracts"
+
+    - path: "marlowe-contracts/test"
+      component: "marlowe-contracts:test:marlowe-contracts-test"
+
+    - path: "marlowe-integration/src"
+      component: "lib:marlowe-integration"
+
+    - path: "marlowe-integration/app/Main.hs"
+      component: "marlowe-integration:exe:marlowe-integration-example"
+
+    - path: "marlowe-integration-tests/test/Spec.hs"
+      component: "marlowe-integration-tests:exe:marlowe-integration-tests"
+
+    - path: "marlowe-integration-tests/test/Language/Marlowe/Runtime/CliSpec.hs"
+      component: "marlowe-integration-tests:exe:marlowe-integration-tests"
+
+    - path: "marlowe-integration-tests/test/Language/Marlowe/Runtime/Integration/ApplyInputs.hs"
+      component: "marlowe-integration-tests:exe:marlowe-integration-tests"
+
+    - path: "marlowe-integration-tests/test/Language/Marlowe/Runtime/Integration/Basic.hs"
+      component: "marlowe-integration-tests:exe:marlowe-integration-tests"
+
+    - path: "marlowe-integration-tests/test/Language/Marlowe/Runtime/Integration/Common.hs"
+      component: "marlowe-integration-tests:exe:marlowe-integration-tests"
+
+    - path: "marlowe-integration-tests/test/Language/Marlowe/Runtime/Integration/Contract.hs"
+      component: "marlowe-integration-tests:exe:marlowe-integration-tests"
+
+    - path: "marlowe-integration-tests/test/Language/Marlowe/Runtime/Integration/Create.hs"
+      component: "marlowe-integration-tests:exe:marlowe-integration-tests"
+
+    - path: "marlowe-integration-tests/test/Language/Marlowe/Runtime/Integration/Intersections.hs"
+      component: "marlowe-integration-tests:exe:marlowe-integration-tests"
+
+    - path: "marlowe-integration-tests/test/Language/Marlowe/Runtime/Integration/MarloweQuery.hs"
+      component: "marlowe-integration-tests:exe:marlowe-integration-tests"
+
+    - path: "marlowe-integration-tests/test/Language/Marlowe/Runtime/Integration/StandardContract.hs"
+      component: "marlowe-integration-tests:exe:marlowe-integration-tests"
+
+    - path: "marlowe-integration-tests/test/Language/Marlowe/Runtime/Integration/Withdraw.hs"
+      component: "marlowe-integration-tests:exe:marlowe-integration-tests"
+
+    - path: "marlowe-integration-tests/test/Language/Marlowe/Runtime/IntegrationSpec.hs"
+      component: "marlowe-integration-tests:exe:marlowe-integration-tests"
+
+    - path: "marlowe-integration-tests/test/Language/Marlowe/Runtime/Web/Common.hs"
+      component: "marlowe-integration-tests:exe:marlowe-integration-tests"
+
+    - path: "marlowe-integration-tests/test/Language/Marlowe/Runtime/Web/Contracts/Contract/Get.hs"
+      component: "marlowe-integration-tests:exe:marlowe-integration-tests"
+
+    - path: "marlowe-integration-tests/test/Language/Marlowe/Runtime/Web/Contracts/Contract/Post.hs"
+      component: "marlowe-integration-tests:exe:marlowe-integration-tests"
+
+    - path: "marlowe-integration-tests/test/Language/Marlowe/Runtime/Web/Contracts/Contract/Put.hs"
+      component: "marlowe-integration-tests:exe:marlowe-integration-tests"
+
+    - path: "marlowe-integration-tests/test/Language/Marlowe/Runtime/Web/Contracts/Get.hs"
+      component: "marlowe-integration-tests:exe:marlowe-integration-tests"
+
+    - path: "marlowe-integration-tests/test/Language/Marlowe/Runtime/Web/Contracts/Transactions/Get.hs"
+      component: "marlowe-integration-tests:exe:marlowe-integration-tests"
+
+    - path: "marlowe-integration-tests/test/Language/Marlowe/Runtime/Web/Contracts/Transactions/Transaction/Get.hs"
+      component: "marlowe-integration-tests:exe:marlowe-integration-tests"
+
+    - path: "marlowe-integration-tests/test/Language/Marlowe/Runtime/Web/Contracts/Transactions/Transaction/Post.hs"
+      component: "marlowe-integration-tests:exe:marlowe-integration-tests"
+
+    - path: "marlowe-integration-tests/test/Language/Marlowe/Runtime/Web/Contracts/Transactions/Transaction/Put.hs"
+      component: "marlowe-integration-tests:exe:marlowe-integration-tests"
+
+    - path: "marlowe-integration-tests/test/Language/Marlowe/Runtime/Web/StandardContract.hs"
+      component: "marlowe-integration-tests:exe:marlowe-integration-tests"
+
+    - path: "marlowe-integration-tests/test/Language/Marlowe/Runtime/Web/Withdrawal/Post.hs"
+      component: "marlowe-integration-tests:exe:marlowe-integration-tests"
+
+    - path: "marlowe-integration-tests/test/Language/Marlowe/Runtime/Web/Withdrawal/Put.hs"
+      component: "marlowe-integration-tests:exe:marlowe-integration-tests"
+
+    - path: "marlowe-integration-tests/test/Language/Marlowe/Runtime/WebSpec.hs"
+      component: "marlowe-integration-tests:exe:marlowe-integration-tests"
+
+    - path: "marlowe-protocols/src"
+      component: "lib:marlowe-protocols"
+
+    - path: "marlowe-runtime/src"
+      component: "lib:marlowe-runtime"
+
+    - path: "marlowe-runtime/gen"
+      component: "marlowe-runtime:lib:gen"
+
+    - path: "marlowe-runtime/history-api"
+      component: "marlowe-runtime:lib:history-api"
+
+    - path: "marlowe-runtime/indexer"
+      component: "marlowe-runtime:lib:indexer"
+
+    - path: "marlowe-runtime/sync-api"
+      component: "marlowe-runtime:lib:sync-api"
+
+    - path: "marlowe-runtime/contract-api"
+      component: "marlowe-runtime:lib:contract-api"
+
+    - path: "marlowe-runtime/contract"
+      component: "marlowe-runtime:lib:contract"
+
+    - path: "marlowe-runtime/sync"
+      component: "marlowe-runtime:lib:sync"
+
+    - path: "marlowe-runtime/discovery-api"
+      component: "marlowe-runtime:lib:discovery-api"
+
+    - path: "marlowe-runtime/tx-api"
+      component: "marlowe-runtime:lib:tx-api"
+
+    - path: "marlowe-runtime/tx"
+      component: "marlowe-runtime:lib:tx"
+
+    - path: "marlowe-runtime/proxy-api"
+      component: "marlowe-runtime:lib:proxy-api"
+
+    - path: "marlowe-runtime/proxy"
+      component: "marlowe-runtime:lib:proxy"
+
+    - path: "marlowe-runtime/plutus-scripts"
+      component: "marlowe-runtime:lib:plutus-scripts"
+
+    - path: "marlowe-runtime/config"
+      component: "marlowe-runtime:lib:config"
+
+    - path: "marlowe-runtime/test"
+      component: "marlowe-runtime:test:marlowe-runtime-test"
+
+    - path: "marlowe-runtime/indexer-test"
+      component: "marlowe-runtime:test:indexer-test"
+
+    - path: "marlowe-runtime-web/src"
+      component: "lib:marlowe-runtime-web"
+
+    - path: "marlowe-runtime-web/server"
+      component: "marlowe-runtime-web:lib:server"
+
+    - path: "marlowe-runtime-web/test"
+      component: "marlowe-runtime-web:test:marlowe-runtime-web-test"
+
+    - path: "marlowe-test/src"
+      component: "lib:marlowe-test"
+
+    - path: "marlowe-test/test"
+      component: "marlowe-test:test:marlowe-test"

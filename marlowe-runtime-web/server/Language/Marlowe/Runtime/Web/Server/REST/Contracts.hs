@@ -26,6 +26,7 @@ import Language.Marlowe.Runtime.Web.Server.Monad
 import Language.Marlowe.Runtime.Web.Server.REST.ApiError
   (ApiError(ApiError), badRequest', notFound', rangeNotSatisfiable', throwDTOError)
 import qualified Language.Marlowe.Runtime.Web.Server.REST.ApiError as ApiError
+import qualified Language.Marlowe.Runtime.Web.Server.REST.Contracts.Next as Next
 import qualified Language.Marlowe.Runtime.Web.Server.REST.Transactions as Transactions
 import Language.Marlowe.Runtime.Web.Server.TxClient (TempTx(TempTx), TempTxStatus(Unsigned))
 import Language.Marlowe.Runtime.Web.Server.Util (makeSignedTxWithWitnessKeys)
@@ -107,7 +108,9 @@ toContractHeader ContractState{..} = ContractHeader{..}
 contractServer :: TxOutRef -> ServerT ContractAPI ServerM
 contractServer contractId = getOne contractId
                           :<|> put contractId
+                          :<|> Next.server contractId
                           :<|> Transactions.server contractId
+
 
 getOne :: TxOutRef -> ServerM GetContractResponse
 getOne contractId = do
