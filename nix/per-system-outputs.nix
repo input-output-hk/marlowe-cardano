@@ -11,8 +11,9 @@ in
     { inherit inputs pkgs; };
 
 
-  oci-images = import ./marlowe-cardano/deploy/oci-images.nix
-    { inherit inputs pkgs; };
+  oci-images = pkgs.lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux (
+    import ./marlowe-cardano/deploy/oci-images.nix { inherit inputs pkgs; }
+  );
 
 
   nomadTasks = import ./marlowe-cardano/deploy/nomadTasks.nix
