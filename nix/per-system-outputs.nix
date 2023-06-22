@@ -23,10 +23,6 @@ in
     { inherit inputs pkgs; };
 
 
-  packages.entrypoints = import ./marlowe-cardano/bitte/default.nix
-    { inherit inputs pkgs; };
-
-
   packages.marlowe-integration-tests = import ./marlowe-cardano/integration-tests.nix
     { inherit inputs pkgs projects; };
 }

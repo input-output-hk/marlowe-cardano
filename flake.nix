@@ -6,7 +6,6 @@
     std.url = "github:divnix/std";
     iogx.url = "github:input-output-hk/iogx?ref=fs-based-interface";
     n2c.url = "github:nlewo/nix2container";
-    bitte-cells.url = "github:input-output-hk/bitte-cells";
   };
 
   outputs = inputs: inputs.iogx.lib.mkFlake inputs ./.;
