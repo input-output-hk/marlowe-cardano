@@ -42,7 +42,7 @@ spec:
             name: chainsync-{{ $network }}-owner-user.marlowe-runtime-database.credentials.postgresql.acid.zalan.do
             namespace: marlowe-staging
       cpu: "0.5"
-      image: {{ $.Values.images.baseUrl }}/marlowe-chain-sync:{{ $.Values.images.tag }}
+      image: {{ $.Values.images.repo }}/{{ $.Values.images.org }}/marlowe-chain-sync:{{ $.Values.images.tag }}
       imagePullPolicy: Always
       memory: 1024Mi
       ports:

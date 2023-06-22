@@ -36,7 +36,7 @@ spec:
         value: http://localhost:8080
       - name: HTTP_PORT
         value: "3781"
-      image: {{ $.Values.images.baseUrl }}/marlowe-chain-indexer:{{ $.Values.images.tag }}
+      image: {{ $.Values.images.repo }}/{{ $.Values.images.org }}/marlowe-chain-indexer:{{ $.Values.images.tag }}
       imagePullPolicy: Always
       memory: 1024Mi
       volumeMounts:
