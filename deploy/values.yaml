@@ -4,4 +4,5 @@ networks:
 
 images:
   tag: latest
-  baseUrl: ghcr.io/input-output-hk/
+  repo: ghcr.io
+  org: input-output-hk
