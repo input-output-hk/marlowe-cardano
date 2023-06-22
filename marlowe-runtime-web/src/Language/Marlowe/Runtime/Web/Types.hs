@@ -15,6 +15,7 @@ module Language.Marlowe.Runtime.Web.Types where
 import Control.Lens hiding ((.=))
 import Control.Monad ((<=<))
 import Data.Aeson
+import Data.Aeson.Text (encodeToLazyText)
 import Data.Aeson.Types (Parser, parseFail)
 import Data.Bifunctor (first)
 import Data.ByteString (ByteString)
@@ -48,6 +49,7 @@ import Data.String (IsString(..))
 import Data.Text (Text, intercalate, splitOn)
 import qualified Data.Text as T
 import Data.Text.Encoding (encodeUtf8)
+import qualified Data.Text.Lazy as TL
 import Data.Time (UTCTime)
 import Data.Time.Format.ISO8601 (iso8601Show)
 import Data.Version (Version)
@@ -760,14 +762,6 @@ data NetworkId
   | Testnet Word32
   deriving (Show, Eq, Ord)
 
-instance ToJSON NetworkId where
-  toJSON Mainnet = String "mainnet"
-  toJSON (Testnet n) = toJSON n
-
-instance FromJSON NetworkId where
-  parseJSON (String "mainnet") = pure Mainnet
-  parseJSON j = Testnet <$> parseJSON j
-
 instance ToSchema NetworkId where
   declareNamedSchema _ = do
     let
@@ -809,11 +803,21 @@ instance FromJSON ChainTip where
       (Just genesisTimeUTC', Nothing, Nothing) -> pure $ ChainTipGenesis genesisTimeUTC'
       _ -> parseFail "Invalid keys, expecting ([\"genesisTimeUTC\"] | [\"blockHeader\", \"slotTimeUTC\"])"
 
+instance ToHttpApiData ChainTip where
+  toUrlPiece = TL.toStrict . encodeToLazyText
+
 instance FromHttpApiData ChainTip where
   parseUrlPiece = first T.pack . eitherDecodeStrict . encodeUtf8
 
+instance ToHttpApiData NetworkId where
+  toUrlPiece = \case
+    Mainnet -> "mainnet"
+    Testnet n -> toUrlPiece n
+
 instance FromHttpApiData NetworkId where
-  parseUrlPiece = first T.pack . eitherDecodeStrict . encodeUtf8
+  parseUrlPiece = \case
+    "mainnet" -> pure Mainnet
+    n -> Testnet <$> parseUrlPiece n
 
 instance ToParamSchema ChainTip where
   toParamSchema _ = mempty

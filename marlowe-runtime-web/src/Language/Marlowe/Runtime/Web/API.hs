@@ -24,7 +24,6 @@ import Data.Aeson.Types (parseFail)
 import qualified Data.Aeson.Types as A
 import Data.Bits (Bits(shiftL), (.|.))
 import qualified Data.ByteString as BS
-import qualified Data.ByteString.Lazy as LBS
 import Data.Char (digitToInt)
 import Data.Functor (void, ($>))
 import qualified Data.Map as Map
@@ -57,6 +56,7 @@ import GHC.TypeLits (KnownSymbol, symbolVal)
 import Language.Marlowe.Core.V1.Next
 import Language.Marlowe.Runtime.Web.Next.Schema ()
 
+import Data.Text.Encoding (encodeUtf8)
 import Language.Marlowe.Runtime.Web.Types
 import Network.HTTP.Media ((//))
 import Network.Wai (mapResponseHeaders)
@@ -91,11 +91,11 @@ instance HasServer api ctx => HasServer (WithRuntimeStatus api) (IO RuntimeStatu
           status <- getStatus
           sendRes $ Route $ mapResponseHeaders (<> statusHeaders status) res
       statusHeaders RuntimeStatus{..} =
-        [ ("X-Node-Tip", LBS.toStrict $ encode nodeTip)
-        , ("X-Runtime-Chain-Tip", LBS.toStrict $ encode runtimeChainTip)
-        , ("X-Runtime-Tip", LBS.toStrict $ encode runtimeTip)
-        , ("X-Runtime-Version", LBS.toStrict $ encode runtimeVersion)
-        , ("X-Network-Id", LBS.toStrict $ encode networkId)
+        [ ("X-Node-Tip", encodeUtf8 $ toUrlPiece nodeTip)
+        , ("X-Runtime-Chain-Tip", encodeUtf8 $ toUrlPiece runtimeChainTip)
+        , ("X-Runtime-Tip", encodeUtf8 $ toUrlPiece runtimeTip)
+        , ("X-Runtime-Version", encodeUtf8 $ toUrlPiece runtimeVersion)
+        , ("X-Network-Id", encodeUtf8 $ toUrlPiece networkId)
         ]
   hoistServerWithContext _ _ = hoistServerWithContext (Proxy @api) (Proxy @ctx)
 
