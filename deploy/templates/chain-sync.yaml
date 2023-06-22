@@ -26,14 +26,14 @@ spec:
       - name: NODE_CONFIG
         value: /node-config/config.json
       - name: DB_NAME
-        value: chain-sync-{{ . }}
+        value: chainsync_{{ . }}
       - name: DB_HOST
         value: marlowe-runtime-database.marlowe-staging:5432
       - name: DB_USER
         valueFrom:
           secretKeyRef:
             key: username
-            name: chain-sync-{{ . }}.marlowe-runtime-database.credentials.postgresql.acid.zalan.do
+            name: chainsync_{{ . }}_owner_user.marlowe-runtime-database.credentials.postgresql.acid.zalan.do
             namespace: marlowe-staging
       - name: DB_PASS
         valueFrom:
@@ -42,7 +42,7 @@ spec:
             name: chain-sync-{{ . }}.marlowe-runtime-database.credentials.postgresql.acid.zalan.do
             namespace: marlowe-staging
       cpu: "0.5"
-      image: ghcr.io/input-output-hk/marlowe-chain-sync:0.0.2-rc1
+      image: {{ .Values.images.baseUrl }}/marlowe-chain-sync:{{ .Values.images.tag }}
       imagePullPolicy: Always
       memory: 1024Mi
       ports:

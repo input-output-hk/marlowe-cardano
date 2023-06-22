@@ -20,18 +20,18 @@ spec:
       - name: MARLOWE_QUERY_PORT
         value: "3726"
       - name: DB_NAME
-        value: chain-sync-{{ . }}
+        value: chainsync_{{ . }}
       - name: DB_USER
         valueFrom:
           secretKeyRef:
             key: username
-            name: chain-sync-{{ . }}.marlowe-runtime-database.credentials.postgresql.acid.zalan.do
+            name: chainsync_{{ . }}_owner_user.marlowe-runtime-database.credentials.postgresql.acid.zalan.do
             namespace: marlowe-staging
       - name: DB_PASS
         valueFrom:
           secretKeyRef:
             key: password
-            name: chain-sync-{{ . }}.marlowe-runtime-database.credentials.postgresql.acid.zalan.do
+            name: chainsync_{{ . }}_owner_user.marlowe-runtime-database.credentials.postgresql.acid.zalan.do
             namespace: marlowe-staging
       - name: DB_HOST
         value: marlowe-runtime-database.marlowe-staging:5432
