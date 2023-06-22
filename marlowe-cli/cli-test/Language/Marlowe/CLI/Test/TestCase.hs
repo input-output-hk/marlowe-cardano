@@ -1,21 +1,14 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE DataKinds #-}
-{-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NamedFieldPuns #-}
-{-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE TemplateHaskell #-}
-
 
 module Language.Marlowe.CLI.Test.TestCase where
 
@@ -87,15 +80,15 @@ testFaucetBudgetUpperBound tub@(TxCostsUpperBounds txCost _) TestCase {operation
     possibleFaucetTx (WalletOperation ReturnFunds {}) = False
     possibleFaucetTx (WalletOperation Fund {}) = True
     possibleFaucetTx (WalletOperation BurnAll {}) = True
-    possibleFaucetTx (WalletOperation Mint { woIssuer=issuer}) = maybe True ((==) faucetNickname) issuer
+    possibleFaucetTx (WalletOperation Mint { woIssuer=issuer}) = maybe True (faucetNickname ==) issuer
     possibleFaucetTx (WalletOperation SplitWallet { woWalletNickname=walletNickname }) = walletNickname == faucetNickname
-    possibleFaucetTx (CLIOperation Initialize { coSubmitter=submitter }) = maybe True ((==) faucetNickname) submitter
+    possibleFaucetTx (CLIOperation Initialize { coSubmitter=submitter }) = maybe True (faucetNickname ==) submitter
     possibleFaucetTx (CLIOperation Prepare {}) = True
-    possibleFaucetTx (CLIOperation Publish { coPublisher=publisher }) =  maybe True ((==) faucetNickname) publisher
+    possibleFaucetTx (CLIOperation Publish { coPublisher=publisher }) =  maybe True (faucetNickname ==) publisher
     possibleFaucetTx (CLIOperation AutoRun {}) = False
     possibleFaucetTx (CLIOperation Withdraw { coWalletNickname=walletNickname }) = walletNickname == faucetNickname
-    possibleFaucetTx (RuntimeOperation RuntimeCreateContract { roSubmitter=submitter }) = maybe True ((==) faucetNickname) submitter
-    possibleFaucetTx (RuntimeOperation RuntimeApplyInputs { roSubmitter=submitter }) = maybe True ((==) faucetNickname) submitter
+    possibleFaucetTx (RuntimeOperation RuntimeCreateContract { roSubmitter=submitter }) = maybe True (faucetNickname ==) submitter
+    possibleFaucetTx (RuntimeOperation RuntimeApplyInputs { roSubmitter=submitter }) = maybe True (faucetNickname ==) submitter
     possibleFaucetTx (RuntimeOperation RuntimeWithdraw { roWallets=wallets }) = case wallets of
       Nothing -> True
       Just ws -> faucetNickname `elem` ws

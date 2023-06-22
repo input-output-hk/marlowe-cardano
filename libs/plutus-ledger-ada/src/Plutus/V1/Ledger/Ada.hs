@@ -36,7 +36,7 @@ import Data.Tagged
 import GHC.Generics (Generic)
 import Plutus.V1.Ledger.Value (CurrencySymbol(..), TokenName(..), Value)
 import qualified Plutus.V1.Ledger.Value as TH
-import qualified PlutusTx as PlutusTx
+import qualified PlutusTx
 import PlutusTx.Lift (makeLift)
 import PlutusTx.Prelude hiding (divide)
 import qualified PlutusTx.Prelude as P

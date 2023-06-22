@@ -5,11 +5,9 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE UndecidableInstances #-}
-
 {-# LANGUAGE MultiParamTypeClasses #-}
 
 -- | This module defines the top-level aggregate process (HTTP server and

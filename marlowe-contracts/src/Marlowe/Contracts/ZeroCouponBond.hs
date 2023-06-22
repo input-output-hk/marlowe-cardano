@@ -1,4 +1,3 @@
-{-# LANGUAGE OverloadedStrings #-}
 module Marlowe.Contracts.ZeroCouponBond where
 
 import Language.Marlowe.Extended.V1
