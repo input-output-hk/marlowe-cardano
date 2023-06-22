@@ -4455,40 +4455,16 @@
         "nixpkgs": "nixpkgs_66"
       },
       "locked": {
-        "lastModified": 1685771919,
-        "narHash": "sha256-3lVKWrhNXjHJB6QkZ2SJaOs4X/mmYXtY6ovPVpDMOHc=",
-        "owner": "nlewo",
+        "lastModified": 1687444661,
+        "narHash": "sha256-z9n7ATBXeDqz5a8+4HJ9fhU6KMyg7zZX0wrhLdVG7bQ=",
+        "owner": "shlevy",
         "repo": "nix2container",
-        "rev": "95e2220911874064b5d809f8d35f7835184c4ddf",
+        "rev": "0b09c33e2ba7964bc13b4a91247ee6eb04ebde64",
         "type": "github"
       },
       "original": {
-        "owner": "nlewo",
-        "repo": "nix2container",
-        "type": "github"
-      }
-    },
-    "n2c_5": {
-      "inputs": {
-        "flake-utils": [
-          "std",
-          "flake-utils"
-        ],
-        "nixpkgs": [
-          "std",
-          "nixpkgs"
-        ]
-      },
-      "locked": {
-        "lastModified": 1677330646,
-        "narHash": "sha256-hUYCwJneMjnxTvj30Fjow6UMJUITqHlpUGpXMPXUJsU=",
-        "owner": "nlewo",
-        "repo": "nix2container",
-        "rev": "ebca8f58d450cae1a19c07701a5a8ae40afc9efc",
-        "type": "github"
-      },
-      "original": {
-        "owner": "nlewo",
+        "owner": "shlevy",
+        "ref": "no-Size-on-dir",
         "repo": "nix2container",
         "type": "github"
       }
@@ -8199,7 +8175,9 @@
           "std",
           "blank"
         ],
-        "n2c": "n2c_5",
+        "n2c": [
+          "n2c"
+        ],
         "nixago": "nixago_4",
         "nixpkgs": "nixpkgs_67",
         "paisano": "paisano_2",
