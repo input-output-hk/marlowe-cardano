@@ -15,7 +15,7 @@ spec:
       - name: NODE_CONFIG
         value: /node-config/config.json
       - name: DB_NAME
-        value: chainsync_{{ $network }}_owner_user
+        value: chainsync_{{ $network }}
       - name: DB_USER
         valueFrom:
           secretKeyRef:
