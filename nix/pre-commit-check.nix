@@ -11,7 +11,7 @@
   shellcheck.enable = true;
 
 
-  fourmolu.enable = true;
+  fourmolu.enable = false;
   fourmolu.extraOptions = "--ghc-opt -XTypeApplications";
 
 
