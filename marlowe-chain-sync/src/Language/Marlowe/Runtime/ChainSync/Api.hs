@@ -52,7 +52,7 @@ import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.KeyMap as KeyMap
 import Data.Aeson.Types (parseFail, toJSONKeyText)
 import Data.Bifunctor (bimap)
-import Data.Binary (Binary(..), Get, Put, get, getWord8, put, putWord8)
+import Data.Binary (Binary(..), get, getWord8, put, putWord8)
 import Data.ByteString (ByteString)
 import Data.ByteString.Base16 (decodeBase16, encodeBase16)
 import qualified Data.ByteString.Char8 as BS
@@ -860,22 +860,21 @@ instance ChainSeek.OTelQuery Move where
     TagFindTxsFor -> "find_txs_for"
     TagAdvanceToTip -> "advance_to_tip"
 
-putUTCTime :: UTCTime -> Put
-putUTCTime UTCTime{..} = do
-  let (year, dayOfYear) = toOrdinalDate utctDay
-  put year
-  put dayOfYear
-  put $ diffTimeToPicoseconds utctDayTime
+instance Binary UTCTime where
+  put UTCTime{..} = do
+    let (year, dayOfYear) = toOrdinalDate utctDay
+    put year
+    put dayOfYear
+    put $ diffTimeToPicoseconds utctDayTime
 
-getUTCTime :: Get UTCTime
-getUTCTime  = do
-  year <- get
-  dayOfYear <- get
-  utctDayTime <- picosecondsToDiffTime <$> get
-  utctDay <- case fromOrdinalDateValid year dayOfYear of
-    Nothing -> fail "Invalid ISO 8601 ordinal date"
-    Just a  -> pure a
-  pure UTCTime{..}
+  get = do
+    year <- get
+    dayOfYear <- get
+    utctDayTime <- picosecondsToDiffTime <$> get
+    utctDay <- case fromOrdinalDateValid year dayOfYear of
+      Nothing -> fail "Invalid ISO 8601 ordinal date"
+      Just a  -> pure a
+    pure UTCTime{..}
 
 data GetUTxOsQuery
   = GetUTxOsAtAddresses (Set Address)
@@ -912,6 +911,8 @@ data ChainSyncQuery a where
   GetSystemStart :: ChainSyncQuery SystemStart
   GetEraHistory :: ChainSyncQuery (EraHistory CardanoMode)
   GetUTxOs :: GetUTxOsQuery -> ChainSyncQuery UTxOs
+  GetNodeTip :: ChainSyncQuery ChainPoint
+  GetTip :: ChainSyncQuery ChainPoint
 
 deriving instance Show (ChainSyncQuery a)
 deriving instance Eq (ChainSyncQuery a)
@@ -935,6 +936,8 @@ instance Query.RequestVariations ChainSyncQuery where
     TagGetSystemStart -> pure GetSystemStart
     TagGetEraHistory -> pure GetEraHistory
     TagGetUTxOs -> GetUTxOs <$> variations
+    TagGetNodeTip -> pure GetNodeTip
+    TagGetTip -> pure GetTip
   resultVariations = \case
     TagGetSecurityParameter -> variations
     TagGetNetworkId -> Mainnet NE.:| [Testnet $ NetworkMagic 0]
@@ -942,6 +945,8 @@ instance Query.RequestVariations ChainSyncQuery where
     TagGetSystemStart -> SystemStart <$> variations
     TagGetEraHistory -> variations
     TagGetUTxOs -> variations
+    TagGetNodeTip -> variations
+    TagGetTip -> variations
 
 instance Query.Request ChainSyncQuery where
   data Tag ChainSyncQuery result where
@@ -951,6 +956,8 @@ instance Query.Request ChainSyncQuery where
     TagGetSystemStart :: Query.Tag ChainSyncQuery SystemStart
     TagGetEraHistory :: Query.Tag ChainSyncQuery (EraHistory CardanoMode)
     TagGetUTxOs :: Query.Tag ChainSyncQuery UTxOs
+    TagGetNodeTip :: Query.Tag ChainSyncQuery ChainPoint
+    TagGetTip :: Query.Tag ChainSyncQuery ChainPoint
   tagEq TagGetSecurityParameter TagGetSecurityParameter = Just Refl
   tagEq TagGetSecurityParameter _                       = Nothing
   tagEq TagGetNetworkId TagGetNetworkId = Just Refl
@@ -963,6 +970,10 @@ instance Query.Request ChainSyncQuery where
   tagEq TagGetSystemStart _                       = Nothing
   tagEq TagGetUTxOs TagGetUTxOs = Just Refl
   tagEq TagGetUTxOs _ = Nothing
+  tagEq TagGetNodeTip TagGetNodeTip = Just Refl
+  tagEq TagGetNodeTip _ = Nothing
+  tagEq TagGetTip TagGetTip = Just Refl
+  tagEq TagGetTip _ = Nothing
   tagFromReq = \case
     GetSecurityParameter -> TagGetSecurityParameter
     GetNetworkId -> TagGetNetworkId
@@ -970,6 +981,8 @@ instance Query.Request ChainSyncQuery where
     GetEraHistory -> TagGetEraHistory
     GetSystemStart -> TagGetSystemStart
     GetUTxOs _ -> TagGetUTxOs
+    GetNodeTip -> TagGetNodeTip
+    GetTip -> TagGetTip
 
 deriving instance Show (Query.Tag ChainSyncQuery a)
 deriving instance Eq (Query.Tag ChainSyncQuery a)
@@ -990,6 +1003,8 @@ instance Query.BinaryRequest ChainSyncQuery where
         (GetUTxOsForTxOutRefs txOutRefs) -> do
           putWord8 0x02
           put txOutRefs
+    GetNodeTip -> putWord8 0x07
+    GetTip -> putWord8 0x08
   getReq = do
     tag <- getWord8
     case tag of
@@ -1006,6 +1021,8 @@ instance Query.BinaryRequest ChainSyncQuery where
           0x02 -> do
             GetUTxOsForTxOutRefs <$> get
           _    -> fail "Invalid GetUTxOsQuery tag"
+      0x07 -> pure $ Query.SomeRequest GetNodeTip
+      0x08 -> pure $ Query.SomeRequest GetTip
       _    -> fail "Invalid ChainSyncQuery tag"
   putResult = \case
     TagGetSecurityParameter -> put
@@ -1016,8 +1033,10 @@ instance Query.BinaryRequest ChainSyncQuery where
     TagGetEraHistory -> \case
       EraHistory _ interpreter -> put $ serialise interpreter
     TagGetSystemStart -> \case
-      SystemStart start -> putUTCTime start
+      SystemStart start -> put start
     TagGetUTxOs -> put
+    TagGetNodeTip -> put
+    TagGetTip -> put
   getResult = \case
     TagGetSecurityParameter -> get
     TagGetNetworkId -> maybe Mainnet (Testnet . NetworkMagic) <$> get
@@ -1031,8 +1050,10 @@ instance Query.BinaryRequest ChainSyncQuery where
       case deserialiseOrFail bytes of
         Left err -> fail $ show err
         Right interpreter -> pure $ EraHistory CardanoMode interpreter
-    TagGetSystemStart -> SystemStart <$> getUTCTime
+    TagGetSystemStart -> SystemStart <$> get
     TagGetUTxOs -> get
+    TagGetNodeTip -> get
+    TagGetTip -> get
 
 instance Query.ShowRequest ChainSyncQuery where
   showsPrecResult p = \case
@@ -1052,6 +1073,8 @@ instance Query.ShowRequest ChainSyncQuery where
         )
       )
     TagGetUTxOs -> showsPrec p
+    TagGetNodeTip -> showsPrec p
+    TagGetTip -> showsPrec p
 
 instance Query.OTelRequest ChainSyncQuery where
   reqTypeName _ = "chain_sync"
@@ -1062,6 +1085,8 @@ instance Query.OTelRequest ChainSyncQuery where
     TagGetSystemStart -> "system_start"
     TagGetEraHistory -> "era_history"
     TagGetUTxOs -> "utxos"
+    TagGetNodeTip -> "node_tip"
+    TagGetTip -> "tip"
 
 unInterpreter :: Interpreter xs -> Summary xs
 unInterpreter = unsafeCoerce

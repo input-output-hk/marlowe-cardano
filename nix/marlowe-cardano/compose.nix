@@ -225,6 +225,8 @@ let
       "postgresql://postgres@postgres/chain"
       "--host"
       "0.0.0.0"
+      "--chain-sync-host"
+      "marlowe-chain-sync"
     ];
     environment = [ "OTEL_SERVICE_NAME=marlowe-sync" ];
   };

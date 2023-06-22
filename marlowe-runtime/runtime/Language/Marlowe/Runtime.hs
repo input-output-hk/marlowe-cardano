@@ -5,8 +5,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE StrictData #-}
 
-module Language.Marlowe.Runtime
-  where
+module Language.Marlowe.Runtime where
 
 import Cardano.Api (CardanoEra(..), CardanoMode, EraInMode(..), LocalNodeClientProtocolsInMode, NetworkId, TxInMode(..))
 import Colog (Message, WithLog, logInfo, logWarning)
@@ -17,6 +16,7 @@ import Data.Set (Set)
 import Data.Set.NonEmpty (NESet)
 import Data.String (fromString)
 import Data.Time (NominalDiffTime)
+import Data.Version (Version)
 import Language.Marlowe.Protocol.Server (MarloweRuntimeServerDirect)
 import Language.Marlowe.Runtime.ChainIndexer (ChainIndexerDependencies(..), chainIndexer)
 import qualified Language.Marlowe.Runtime.ChainIndexer.Database as ChainIndexer
@@ -28,6 +28,7 @@ import qualified Language.Marlowe.Runtime.ChainSync as ChainSync
 import Language.Marlowe.Runtime.ChainSync.Api (BlockNo, ChainSyncQuery(GetUTxOs), ScriptHash)
 import qualified Language.Marlowe.Runtime.ChainSync.Database as ChainSync
 import Language.Marlowe.Runtime.ChainSync.NodeClient (NodeClient(..), NodeClientDependencies(..), nodeClient)
+import qualified Language.Marlowe.Runtime.ChainSync.NodeClient as NodeClient
 import qualified Language.Marlowe.Runtime.ChainSync.NodeClient as Sync
 import Language.Marlowe.Runtime.Contract (ContractDependencies(..), contract)
 import qualified Language.Marlowe.Runtime.Contract as MarloweContract
@@ -88,6 +89,7 @@ data MarloweRuntimeDependencies r n m = MarloweRuntimeDependencies
   , getScripts :: forall v. MarloweVersion v -> Set MarloweScripts
   , submitConfirmationBlocks :: BlockNo
   , networkId :: NetworkId
+  , runtimeVersion :: Version
   }
 
 data MarloweRuntime m = MarloweRuntime
@@ -144,6 +146,7 @@ marloweRuntime = proc MarloweRuntimeDependencies{..} -> do
 
   mMarloweSync <- supervisor "marlowe-sync" sync -< SyncDependencies
     { databaseQueries = marloweSyncDatabaseQueries
+    , ..
     }
 
   let marloweSyncServerSource = unnestServerSource $ MarloweSync.syncServerSource <$> mMarloweSync
@@ -186,6 +189,7 @@ unnestNodeClient mNodeClient = NodeClient
   , submitTxToNode = \tx -> do
       NodeClient{..} <- atomically mNodeClient
       submitTxToNode tx
+  , nodeTip = NodeClient.nodeTip =<< mNodeClient
   }
 
 -- | Restarts a component when it crashes. The output is an action to retrieve the output value of the currently running

@@ -26,6 +26,7 @@ import Data.Text (Text)
 import qualified Data.Text.Lazy as TL
 import Data.Time (Day, DiffTime, NominalDiffTime, UTCTime(..), secondsToDiffTime, secondsToNominalDiffTime)
 import Data.Time.Calendar.OrdinalDate (fromOrdinalDate)
+import Data.Version (Version)
 import Data.Word
 import GHC.Generics
 import GHC.Real (Ratio((:%)))
@@ -61,6 +62,8 @@ class Variations a where
   variations :: NonEmpty a
   default variations :: (Generic a, GVariations (Rep a)) => NonEmpty a
   variations = to <$> gVariations
+
+instance Variations Version where
 
 instance Variations a => Variations [a] where
   variations = [] :| NE.toList (pure <$> variations)

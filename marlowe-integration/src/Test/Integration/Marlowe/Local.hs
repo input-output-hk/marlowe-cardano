@@ -68,6 +68,7 @@ import qualified Data.Set.NonEmpty as NESet
 import Data.String (fromString)
 import qualified Data.Text as T
 import Data.Time.Units (Second)
+import Data.Version (Version(Version))
 import Data.Word (Word16)
 import Database.PostgreSQL.LibPQ (connectdb, errorMessage, exec, finish, resultErrorMessage)
 import Hasql.Connection (settings)
@@ -479,6 +480,7 @@ testContainer = proc TestContainerDependencies{..} -> do
       payoutScriptHashes = NESet.singleton $ payoutScript marloweScripts
       pollingInterval = 0.01
       confirmationTimeout = 60
+      runtimeVersion = Version [0] []
      in
       MarloweRuntimeDependencies{..}
 

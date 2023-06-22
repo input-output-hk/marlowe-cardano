@@ -3,13 +3,12 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-
 -- | This module defines the top-level aggregate process (HTTP server and
 -- worker processes) for running the web server.
 
@@ -29,11 +28,14 @@ import Control.Concurrent.Component.Run (AppM(..))
 import Control.Monad.Event.Class
 import Control.Monad.IO.Unlift (liftIO, withRunInIO)
 import Control.Monad.Reader (ReaderT(ReaderT), runReaderT)
-import Language.Marlowe.Protocol.Client (MarloweRuntimeClient)
+import Language.Marlowe.Protocol.Client (MarloweRuntimeClient(..))
+import Language.Marlowe.Protocol.Query.Client (getStatus)
 import Language.Marlowe.Protocol.Types (MarloweRuntime)
 import Language.Marlowe.Runtime.ChainSync.Api (TxId)
 import Language.Marlowe.Runtime.Core.Api (ContractId)
+import Language.Marlowe.Runtime.Web (RuntimeStatus)
 import qualified Language.Marlowe.Runtime.Web as Web
+import Language.Marlowe.Runtime.Web.Server.DTO (toDTO)
 import Language.Marlowe.Runtime.Web.Server.Monad (AppEnv(..), ServerM(..))
 import qualified Language.Marlowe.Runtime.Web.Server.OpenAPI as OpenAPI
 import qualified Language.Marlowe.Runtime.Web.Server.REST as REST
@@ -50,7 +52,7 @@ import Language.Marlowe.Runtime.Web.Server.SyncClient
   )
 import Language.Marlowe.Runtime.Web.Server.TxClient
   (ApplyInputs, CreateContract, Submit, TxClient(..), TxClientDependencies(..), Withdraw, txClient)
-import Network.Protocol.Connection (Connector)
+import Network.Protocol.Connection (Connector, runConnector)
 import Network.Protocol.Handshake.Types (Handshake)
 import Network.Wai (Request, Response)
 import qualified Network.Wai as WAI
@@ -76,7 +78,7 @@ data ServerSelector transport f where
 instance Inject ServeRequest (ServerSelector transport) where
   inject = injectSelector Http
 
-type APIWithOpenAPI = OpenAPI.API :<|>  Web.API
+type APIWithOpenAPI = OpenAPI.API :<|> Web.API
 
 apiWithOpenApi :: Proxy APIWithOpenAPI
 apiWithOpenApi = Proxy
@@ -85,12 +87,15 @@ serverWithOpenAPI :: ServerT APIWithOpenAPI ServerM
 serverWithOpenAPI = OpenAPI.server :<|> REST.server
 
 serveServerM
-  :: HasServer api '[]
-  => Proxy api
+  :: HasServer api '[IO RuntimeStatus]
+  => IO RuntimeStatus
+  -> Proxy api
   -> AppEnv
   -> ServerT api ServerM
   -> Application
-serveServerM api env = serve api . hoistServer api (flip runReaderT env . runServerM)
+serveServerM status api env =
+  serveWithContext api (status :. EmptyContext)
+    . hoistServerWithContext api (Proxy @'[IO RuntimeStatus]) (flip runReaderT env . runServerM)
 
 corsMiddleware :: Bool -> WAI.Middleware
 corsMiddleware accessControlAllowOriginAll =
@@ -125,9 +130,6 @@ data ServerDependencies r s = ServerDependencies
 
     The web server (built with servant-server) runs in a `ReaderT` monad that has
     access to some resources from the other worker processes.
-
-    Application logging is done using the eventuo11y library, which each worker
-    process having its own event backend injected via its parameters.
 -}
 
 server :: Inject ServeRequest s => Component (AppM r s) (ServerDependencies r s) ()
@@ -157,6 +159,7 @@ server = proc deps@ServerDependencies{connector} -> do
         , openAPIEnabled
         , accessControlAllowOriginAll
         , runApplication
+        , connector
         }
 
 data WebServerDependencies r s = WebServerDependencies
@@ -175,6 +178,7 @@ data WebServerDependencies r s = WebServerDependencies
   , openAPIEnabled :: Bool
   , accessControlAllowOriginAll :: Bool
   , runApplication :: Application -> IO ()
+  , connector :: Connector MarloweRuntimeClient (AppM r s)
   }
 
 webServer :: Inject ServeRequest s => Component (AppM r s) (WebServerDependencies r s) ()
@@ -187,12 +191,13 @@ webServer = component_ "web-server" \WebServerDependencies{..} -> withRunInIO \r
     runInIO $ withEventFields (ServeRequest req) [ReqField req] \ev -> do
       _eventBackend <- askBackend
       _logAction <- AppM $ ReaderT \(_, logAction) -> pure logAction
+      let getStatusIO = runInIO $ toDTO <$> runConnector connector (RunMarloweQueryClient getStatus)
       let _requestParent = reference ev
       let _logAction = cmap fmtMessage logTextStdout
       let
         mkApp
-          | openAPIEnabled = corsMiddleware accessControlAllowOriginAll $ serveServerM apiWithOpenApi AppEnv{..} serverWithOpenAPI
-          | otherwise = corsMiddleware accessControlAllowOriginAll $ serveServerM Web.api AppEnv{..} REST.server
+          | openAPIEnabled = corsMiddleware accessControlAllowOriginAll $ serveServerM getStatusIO apiWithOpenApi AppEnv{..} serverWithOpenAPI
+          | otherwise = corsMiddleware accessControlAllowOriginAll $ serveServerM getStatusIO Web.api AppEnv{..} REST.server
       liftIO $ mkApp req \res -> runInIO do
         addField ev $ ResField res
         liftIO $ handleRes res

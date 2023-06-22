@@ -72,6 +72,7 @@ import Language.Marlowe.Runtime.ChainSync.Database
   , hoistGetUTxOs
   , hoistMoveClient
   )
+import qualified Language.Marlowe.Runtime.ChainSync.Database as DB
 import qualified Language.Marlowe.Runtime.ChainSync.Database as Database
 import Numeric.Natural (Natural)
 import Observe.Event (addField)
@@ -625,7 +626,7 @@ queryTxOutsBulk slotNo txIds = HT.statement (V.fromList $ unTxId <$> Set.toList 
 -- GetTip
 
 getTip :: GetTip HT.Transaction
-getTip = GetTip $ decodeChainPoint <$> HT.statement ()
+getTip = DB.GetTip $ decodeChainPoint <$> HT.statement ()
   [singletonStatement|
     SELECT slotNo :: bigint, id :: bytea, blockNo :: bigint
       FROM chain.block

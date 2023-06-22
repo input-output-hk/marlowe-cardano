@@ -12,9 +12,11 @@ import Data.Maybe (catMaybes)
 import Data.String (fromString)
 import Data.Text (Text)
 import Data.Text.Encoding (decodeUtf8)
+import Data.Version (Version)
 import Language.Marlowe.Protocol.HeaderSync.Server (MarloweHeaderSyncServer)
 import Language.Marlowe.Protocol.Query.Server (MarloweQueryServer)
 import Language.Marlowe.Protocol.Sync.Server (MarloweSyncServer)
+import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncQuery)
 import Language.Marlowe.Runtime.Core.Api (MarloweVersion(..), renderContractId)
 import Language.Marlowe.Runtime.Sync.Database
   ( DatabaseQueries
@@ -29,15 +31,18 @@ import qualified Language.Marlowe.Runtime.Sync.Database as Sync
 import Language.Marlowe.Runtime.Sync.MarloweHeaderSyncServer
 import Language.Marlowe.Runtime.Sync.MarloweSyncServer
 import Language.Marlowe.Runtime.Sync.QueryServer
-import Network.Protocol.Connection (ServerSource)
+import Network.Protocol.Connection (Connector, ServerSource)
+import Network.Protocol.Query.Client (QueryClient)
 import Observe.Event.Render.OpenTelemetry (OTelRendered(..), RenderSelectorOTel)
 import OpenTelemetry.Attributes (Attribute, toAttribute)
 import OpenTelemetry.Trace.Core (SpanKind(..))
 import Prelude hiding (filter)
 import UnliftIO (MonadUnliftIO)
 
-newtype SyncDependencies m = SyncDependencies
-  { databaseQueries :: DatabaseQueries m
+data SyncDependencies m = SyncDependencies
+  { runtimeVersion :: Version
+  , chainSyncQueryConnector :: Connector (QueryClient ChainSyncQuery) m
+  , databaseQueries :: DatabaseQueries m
   }
 
 data MarloweSync m = MarloweSync
