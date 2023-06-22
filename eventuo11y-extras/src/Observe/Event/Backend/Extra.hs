@@ -130,7 +130,7 @@ proxyEventBackend newReference = do
                   writeTQueue queue $ Some EventRecord{..}
                   putTMVar endedVar ()
             }
-    , emitImmediateEvent = \_ -> newReference
+    , emitImmediateEvent = const newReference
     })
 
 -- | Like flushTQueue but it retries if the result is empty

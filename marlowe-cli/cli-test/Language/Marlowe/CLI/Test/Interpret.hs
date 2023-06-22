@@ -2,14 +2,8 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
-{-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE NamedFieldPuns #-}
-{-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE TupleSections #-}
-
 
 module Language.Marlowe.CLI.Test.Interpret where
 
@@ -60,9 +54,9 @@ interpret o@(ShouldFail operation) =
   do
     logStoreLabeledMsg o $ label operation
     state <- get
-    result <- (Right <$> interpret operation) `catchError` (\e -> pure (Left e))
+    result <- (Right <$> interpret operation) `catchError` (pure . Left)
     case result of
-      Right _ -> do
+      Right _ ->
         throwLabeledError o $ testExecutionFailed' $ "Operation unexpectedly suceeded: " <> show operation
       Left e -> do
         state' <- get

@@ -392,7 +392,7 @@ data MarloweTxCommand status err result where
     -- ^ Optional metadata to attach to the transaction
     -> Lovelace
     -- ^ Min Lovelace which should be used for the contract output.
-    -> (Either (Contract v) DatumHash)
+    -> Either (Contract v) DatumHash
     -- ^ The contract to run, or the hash of the contract to load from the store.
     -> MarloweTxCommand Void (CreateError v) (ContractCreated BabbageEra v)
 

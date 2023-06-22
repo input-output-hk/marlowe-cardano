@@ -1,5 +1,3 @@
-{-# LANGUAGE LambdaCase #-}
-
 module Spec.Marlowe.Semantics.Next.Contract
   ( hasValidEnvironement
   , isIrreducible
