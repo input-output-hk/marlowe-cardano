@@ -143,6 +143,7 @@ data MetadataDecodeError
   | ExpectedList
   | ExpectedNumber
   | ExpectedText
+  | ExpectedChunkedText
   | ExpectedBytes
   | ErrorInMap Chain.Metadata MetadataDecodeError
   | ErrorInList Natural MetadataDecodeError
@@ -170,32 +171,43 @@ decodeMarloweTransactionMetadata metadata = MarloweTransactionMetadata
 
 encodeMarloweMetadata :: MarloweMetadata -> Chain.Metadata
 encodeMarloweMetadata MarloweMetadata{..} = Chain.MetadataList $ catMaybes
-  [ Just $ Chain.MetadataNumber 1 -- version
+  [ Just $ Chain.MetadataNumber 2 -- version
   , Just $ Chain.MetadataList $ uncurry encodeMetadataTag <$> Map.toList tags-- tags
   , Chain.MetadataText <$> continuations -- continuations
   ]
 
 encodeMetadataTag :: MarloweMetadataTag -> Maybe Chain.Metadata -> Chain.Metadata
 encodeMetadataTag (MarloweMetadataTag tag) = \case
-  Nothing -> Chain.MetadataText tag
-  Just payload -> Chain.MetadataList [ Chain.MetadataText tag, payload ]
+  Nothing -> Chain.MetadataList [ tagEncoded ]
+  Just payload -> Chain.MetadataList [ tagEncoded, payload ]
+  where
+    tagEncoded = case T.chunksOf 64 tag of
+      [] -> Chain.MetadataText ""
+      [x] -> Chain.MetadataText x
+      xs -> Chain.MetadataList $ Chain.MetadataText <$> xs
 
 decodeMarloweMetadata :: Chain.Metadata -> Either MetadataDecodeError MarloweMetadata
 decodeMarloweMetadata m = do
   decoder <- flip (withMetadataListIx 0) m $ withMetadataNumber \case
     1 -> pure decodeMarloweMetadataV1
+    2 -> pure decodeMarloweMetadataV2
     v -> Left $ InvalidValue $ T.pack $ "Unknown contract metadata version " <> show v
   decoder m
 
 decodeMarloweMetadataV1 :: Chain.Metadata -> Either MetadataDecodeError MarloweMetadata
 decodeMarloweMetadataV1 m = MarloweMetadata
-  <$> withMetadataListIx 1 decodeMetadataTags m
+  <$> withMetadataListIx 1 decodeMetadataTagsV1 m
   <*> withMetadataListIxOptional 2 (withMetadataText pure) m
 
-decodeMetadataTags
+decodeMarloweMetadataV2 :: Chain.Metadata -> Either MetadataDecodeError MarloweMetadata
+decodeMarloweMetadataV2 m = MarloweMetadata
+  <$> withMetadataListIx 1 decodeMetadataTagsV2 m
+  <*> withMetadataListIxOptional 2 (withMetadataText pure) m
+
+decodeMetadataTagsV1
   :: Chain.Metadata
   -> Either MetadataDecodeError (Map MarloweMetadataTag (Maybe Chain.Metadata))
-decodeMetadataTags = fmap Map.fromList . withMetadataList \case
+decodeMetadataTagsV1 = fmap Map.fromList . withMetadataList \case
   Chain.MetadataList ms -> withMetadataTuple
     (withMetadataText $ pure . MarloweMetadataTag)
     (pure . Just )
@@ -203,10 +215,26 @@ decodeMetadataTags = fmap Map.fromList . withMetadataList \case
   Chain.MetadataText tag -> pure (MarloweMetadataTag tag, Nothing)
   _ -> Left $ OneOf ExpectedList ExpectedText
 
+decodeMetadataTagsV2
+  :: Chain.Metadata
+  -> Either MetadataDecodeError (Map MarloweMetadataTag (Maybe Chain.Metadata))
+decodeMetadataTagsV2 = fmap Map.fromList . withMetadataList \m -> (,)
+  <$> withMetadataListIx 0 decodeMetadataTag m
+  <*> withMetadataListIxOptional 1 pure m
+
+decodeMetadataTag :: Chain.Metadata -> Either MetadataDecodeError MarloweMetadataTag
+decodeMetadataTag = withMetadataChunkedText $ pure . MarloweMetadataTag
+
 withMetadataNumber :: (Integer -> Either MetadataDecodeError a) -> Chain.Metadata -> Either MetadataDecodeError a
 withMetadataNumber f = \case
   Chain.MetadataNumber i -> f i
   _ -> Left ExpectedNumber
+
+withMetadataChunkedText :: (Text -> Either MetadataDecodeError a) -> Chain.Metadata -> Either MetadataDecodeError a
+withMetadataChunkedText f = \case
+  Chain.MetadataList xs -> f . T.concat =<< withMetadataList (withMetadataText pure) (Chain.MetadataList xs)
+  Chain.MetadataText i -> f i
+  _ -> Left ExpectedChunkedText
 
 withMetadataText :: (Text -> Either MetadataDecodeError a) -> Chain.Metadata -> Either MetadataDecodeError a
 withMetadataText f = \case
