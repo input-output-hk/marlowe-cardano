@@ -10,12 +10,6 @@ let
   };
 in
 {
-  testnet-pioneers = mkNetwork environments.marlowe-pioneers // {
-    magic = 1567;
-  };
-  testnet-dev = mkNetwork environments.marlowe-dev // {
-    magic = 1566;
-  };
   testnet = mkNetwork environments.testnet // {
     magic = 1097911063;
   };

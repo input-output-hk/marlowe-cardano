@@ -26,6 +26,7 @@ in
 
 
   scripts = {
+
     re-up = {
       description = "Builds compose.nix, (re)creates and (re)starts the dev docker containers for Runtime.";
       exec = scripts.re-up;
