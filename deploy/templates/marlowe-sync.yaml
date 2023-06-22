@@ -31,7 +31,7 @@ spec:
         valueFrom:
           secretKeyRef:
             key: password
-            name: chainsync_{{ $network }}_owner_user.marlowe-runtime-database.credentials.postgresql.acid.zalan.do
+            name: chainsync-{{ $network }}-owner-user.marlowe-runtime-database.credentials.postgresql.acid.zalan.do
             namespace: marlowe-staging
       - name: DB_HOST
         value: marlowe-runtime-database.marlowe-staging:5432
