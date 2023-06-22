@@ -15,18 +15,18 @@ spec:
       - name: NODE_CONFIG
         value: /node-config/config.json
       - name: DB_NAME
-        value: chain-sync-{{ . }}
+        value: chainsync_{{ . }}_owner_user
       - name: DB_USER
         valueFrom:
           secretKeyRef:
             key: username
-            name: chain-sync-{{ . }}.marlowe-runtime-database.credentials.postgresql.acid.zalan.do
+            name: chainsync_{{ . }}_owner_user.marlowe-runtime-database.credentials.postgresql.acid.zalan.do
             namespace: marlowe-staging
       - name: DB_PASS
         valueFrom:
           secretKeyRef:
             key: password
-            name: chain-sync-{{ . }}.marlowe-runtime-database.credentials.postgresql.acid.zalan.do
+            name: chainsync_{{ . }}_owner_user.marlowe-runtime-database.credentials.postgresql.acid.zalan.do
             namespace: marlowe-staging
       - name: DB_HOST
         value: marlowe-runtime-database.marlowe-staging:5432
@@ -36,7 +36,7 @@ spec:
         value: http://localhost:8080
       - name: HTTP_PORT
         value: "3781"
-      image: ghcr.io/input-output-hk/marlowe-chain-indexer:0.0.2-rc1
+      image: {{ .Values.images.baseUrl }}/marlowe-chain-indexer:{{ .Values.images.tag }}
       imagePullPolicy: Always
       memory: 1024Mi
       volumeMounts:

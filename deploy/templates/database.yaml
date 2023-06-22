@@ -9,11 +9,11 @@ spec:
       name: marlowe-runtime-database
       properties:
         replicas: 3
-        databases:
-          {{- range .Values.networks }}
-          chain-sync-{{ . }}: chain-sync-{{ . }}
-          {{- end }}
-        users:
-          {{- range .Values.networks }}
-          chain-sync-{{ . }}: []
+        preparedDatabases:
+          {{- range $index, $network := .Values.networks }}
+          chainsync_{{ $network }}:
+            # https://postgres-operator.readthedocs.io/en/latest/user/#default-login-roles
+            # chainsync_$network_{owner,writer,reader}_user
+            defaultUsers: true
+
           {{- end }}
