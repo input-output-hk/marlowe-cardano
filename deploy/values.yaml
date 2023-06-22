@@ -2,6 +2,6 @@ networks:
   - preprod
   - preview
 
-image:
+images:
   tag: latest
   baseUrl: ghcr.io/input-output-hk/
