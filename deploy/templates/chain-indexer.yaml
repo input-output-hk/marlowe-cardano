@@ -5,6 +5,7 @@ kind: Application
 metadata:
   name: chain-indexer-{{ $network }}
   namespace: marlowe-staging
+  app.oam.dev/publishVersion: {{ .Chart.appVersion }}
 spec:
   components:
   - name: chain-indexer-{{ $network }}
