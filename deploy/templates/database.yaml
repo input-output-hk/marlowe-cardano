@@ -3,7 +3,7 @@ kind: Application
 metadata:
   name: marlowe-runtime-database
   namespace: marlowe-staging
-  app.oam.dev/publishVersion: {{ .Chart.appVersion }}
+  app.oam.dev/publishVersion: {{ .Chart.AppVersion }}
 spec:
   components:
     - type: "postgres-cluster"
