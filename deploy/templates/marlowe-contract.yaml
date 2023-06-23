@@ -41,7 +41,7 @@ spec:
       - type: storage
         properties:
           pvc:
-          - name: store-dir
+          - name: store-dir-{{ . }}
             mountPath: /store
             storageClassName: ebs-sc
             resources:
