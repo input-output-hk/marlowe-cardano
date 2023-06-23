@@ -35,7 +35,6 @@ spec:
           rules:
           - port: 3780
       - type: opentelemetry-collector
-        name: otel-container
         properties:
           mode: sidecar
           config: |
