@@ -1,6 +1,6 @@
 apiVersion: v2
 name: marlowe-runtime
-version: v0.0.12
+version: v0.0.13
 appVersion: v1.0.0
 description: Marlowe smart contract language Cardano implementation
 home: https://marlowe.iohk.io

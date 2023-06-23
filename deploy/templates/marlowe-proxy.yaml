@@ -5,7 +5,7 @@ kind: Application
 metadata:
   name: marlowe-proxy-{{ . }}
   namespace: marlowe-staging
-  app.oam.dev/publishVersion: {{ .Chart.appVersion }}
+  app.oam.dev/publishVersion: {{ $.Chart.AppVersion }}
 spec:
   components:
     - name: marlowe-proxy-{{ . }}
