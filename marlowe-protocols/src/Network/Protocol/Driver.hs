@@ -95,7 +95,7 @@ tcpServer
   => String
   -> Component m (TcpServerDependencies ps server m) ()
 tcpServer name = component_ (name <> "-tcp-server") \TcpServerDependencies{..} ->
-  withRunInIO \runInIO -> runTCPServer (Just host) (show port) \socket -> runInIO $ runResourceT do
+  withRunInIO \runInIO -> runTCPServer (Just host) (show port) $ runComponent_ $ hoistComponent runInIO $ component_ (name <> "-tcp-worker") \socket -> runResourceT do
     server <- getServer serverSource
     let driver = mkDriver $ socketAsChannel socket
     let handshakeServer = simpleHandshakeServer (signature $ Proxy @ps) server

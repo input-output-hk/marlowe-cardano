@@ -220,7 +220,7 @@ tcpServerTraced
   -> InjectSelector (TcpServerSelector (Handshake ps)) s
   -> Component m (TcpServerDependencies ps server m) ()
 tcpServerTraced name inj = component_ (name <> "-tcp-server") \TcpServerDependencies{..} -> do
-  withRunInIO \runInIO -> runTCPServer (Just host) (show port) \socket -> runInIO $ runResourceT do
+  withRunInIO \runInIO -> runTCPServer (Just host) (show port) $ runComponent_ $ hoistComponent runInIO $ component_ (name <> "-tcp-worker") \socket -> runResourceT do
     spanContextLength <- liftIO $ runGet get <$> Socket.recv socket 8
     spanContext <- liftIO $ runGet get <$> Socket.recv socket spanContextLength
     let parentRef = wrapContext spanContext
