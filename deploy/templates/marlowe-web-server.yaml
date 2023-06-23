@@ -10,6 +10,8 @@ spec:
     - name: marlowe-web-server-{{ . }}
       type: webservice
       properties:
+        annotations:
+          sidecar.optentelemetry.io/inject: "true"
         env:
         - name: PORT
           value: "3780"
@@ -32,6 +34,27 @@ spec:
           - marlowe-runtime-{{ . }}-web.scdev.aws.iohkdev.io
           rules:
           - port: 3780
+      - type: opentelemetry-collector
+        name: otel-container
+        properties:
+          mode: sidecar
+          config: |
+            receivers:
+              otlp:
+                protocols:
+                  http:
+                  grpc:
+            processors:
+
+            exporters:
+              logging:
+
+            service:
+              pipelines:
+                traces:
+                  receivers: [otlp]
+                  processors: []
+                  exporters: [logging]
 
   policies:
   - name: local-marlowe-staging
