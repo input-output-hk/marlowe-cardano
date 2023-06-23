@@ -7,7 +7,7 @@ metadata:
   namespace: marlowe-staging
 spec:
   components:
-    - name: marlowe-tx
+    - name: marlowe-tx-{{ . }}
       type: webservice
       properties:
         env:

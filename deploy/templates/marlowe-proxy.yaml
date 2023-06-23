@@ -7,7 +7,7 @@ metadata:
   namespace: marlowe-staging
 spec:
   components:
-    - name: marlowe-proxy
+    - name: marlowe-proxy-{{ . }}
       type: webservice
       properties:
         env:
