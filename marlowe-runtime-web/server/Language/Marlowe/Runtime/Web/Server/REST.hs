@@ -1,12 +1,8 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
-{-# LANGUAGE OverloadedLists #-}
-{-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE TypeOperators #-}
 
 -- | This module defines a server for the root REST API.
-
 module Language.Marlowe.Runtime.Web.Server.REST where
 
 import Language.Marlowe.Runtime.Web

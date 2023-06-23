@@ -1,43 +1,16 @@
-# The haskell.nix project
-
-{
-  # Desystemized merged inputs.
-  # All the inputs from iogx (e.g. CHaP, haskell-nix, etc..) unioned with the 
-  # inputs defined in your flake. You will also find the `self` attribute here.
-  # These inputs have been desystemized against the current system.
-  inputs
-
-, systemized-inputs
-
-  # The very config passed as second argument to `inputs.iogx.mkFlake` in your 
-  # `flake.nix`.
-, flakeopts
-
-  # Desystemized legacy nix packages configured against `haskell.nix`.
-  # NEVER use the `nixpkgs` coming from `inputs` or `systemized-inputs`!
-, pkgs
-
-  # The current compiler against which to build the haskell.nix project.
-  # You want to set this as the value of `compiler-nix-name`.
-, ghc
-
-  # This flag will be set to false when building for CI, and will be set to true
-  # when the build has to include haddock.
-, deferPluginErrors
-
-  # Whether to enable haskell profiling. 
-, enableProfiling
-}:
+{ inputs, inputs', pkgs, meta }:
 
 let
+
   lib = pkgs.lib;
+
   mkIfDarwin = lib.mkIf pkgs.stdenv.hostPlatform.isDarwin;
+
   isCross = pkgs.stdenv.hostPlatform != pkgs.stdenv.buildPlatform;
+
   rPackages = with pkgs.rPackages; [ R tidyverse dplyr stringr MASS plotly shiny shinyjs purrr ];
 
   packages = {
-    # [devx] this fails...
-    http2.doHaddock = false;
 
     # Things that need plutus-tx-plugin
     plutus-ledger.package.buildable = !isCross;
@@ -49,14 +22,14 @@ let
     # only add these options when building on Darwin.
     cardano-config.components.library.build-tools = mkIfDarwin [ pkgs.buildPackages.buildPackages.gitReallyMinimal ];
 
-    plutus-contract.doHaddock = deferPluginErrors;
-    plutus-contract.flags.defer-plugin-errors = deferPluginErrors;
+    plutus-contract.doHaddock = meta.enableHaddock;
+    plutus-contract.flags.defer-plugin-errors = meta.enableHaddock;
 
-    plutus-use-cases.doHaddock = deferPluginErrors;
-    plutus-use-cases.flags.defer-plugin-errors = deferPluginErrors;
+    plutus-use-cases.doHaddock = meta.enableHaddock;
+    plutus-use-cases.flags.defer-plugin-errors = meta.enableHaddock;
 
-    plutus-ledger.doHaddock = deferPluginErrors;
-    plutus-ledger.flags.defer-plugin-errors = deferPluginErrors;
+    plutus-ledger.doHaddock = meta.enableHaddock;
+    plutus-ledger.flags.defer-plugin-errors = meta.enableHaddock;
 
     # Packages we just don't want docs for
     plutus-benchmark.doHaddock = false;
@@ -111,8 +84,8 @@ let
 
     # See https://github.com/input-output-hk/plutus/issues/1213 and
     # https://github.com/input-output-hk/plutus/pull/2865.
-    marlowe.doHaddock = deferPluginErrors;
-    marlowe.flags.defer-plugin-errors = deferPluginErrors;
+    marlowe.doHaddock = meta.enableHaddock;
+    marlowe.flags.defer-plugin-errors = meta.enableHaddock;
 
     # Fix missing executables on the paths of the test runners. This is arguably
     # a bug, and the fix is a bit of a hack.
@@ -155,19 +128,11 @@ let
     marlowe-runtime-web.ghcOptions = [ "-Werror" ];
     marlowe-test.ghcOptions = [ "-Werror" ];
   };
+
+  modules = [{ inherit packages; }];
 in
-pkgs.haskell-nix.cabalProject' (_: {
 
-  compiler-nix-name = ghc;
-
-  src = flakeopts.repoRoot;
-
-  inputMap = {
-    "https://input-output-hk.github.io/cardano-haskell-packages" = inputs.CHaP;
-  };
-
-  modules = [ (_: { inherit packages; }) ] ++ pkgs.lib.optional enableProfiling { enableProfiling = true; };
-})
-
-
+{
+  inherit modules;
+}
 

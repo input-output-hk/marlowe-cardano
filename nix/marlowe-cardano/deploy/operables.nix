@@ -13,14 +13,15 @@ let
     curl
     ;
 
-  marlowe-chain-indexer = self.packages.ghc8107-marlowe-chain-sync-exe-marlowe-chain-indexer;
-  marlowe-chain-sync = self.packages.ghc8107-marlowe-chain-sync-exe-marlowe-chain-sync;
-  marlowe-contract = self.packages.ghc8107-marlowe-runtime-exe-marlowe-contract;
-  marlowe-tx = self.packages.ghc8107-marlowe-runtime-exe-marlowe-tx;
-  marlowe-proxy = self.packages.ghc8107-marlowe-runtime-exe-marlowe-proxy;
-  marlowe-indexer = self.packages.ghc8107-marlowe-runtime-exe-marlowe-indexer;
-  marlowe-web-server = self.packages.ghc8107-marlowe-runtime-web-exe-marlowe-web-server;
-  marlowe-sync = self.packages.ghc8107-marlowe-runtime-exe-marlowe-sync;
+  marlowe-chain-indexer = self.packages.ghc8107.marlowe-chain-sync-exe-marlowe-chain-indexer;
+  marlowe-chain-sync = self.packages.ghc8107.marlowe-chain-sync-exe-marlowe-chain-sync;
+  marlowe-contract = self.packages.ghc8107.marlowe-runtime-exe-marlowe-contract;
+  marlowe-runtime = self.packages.ghc8107.marlowe-runtime-exe-marlowe-runtime;
+  marlowe-tx = self.packages.ghc8107.marlowe-runtime-exe-marlowe-tx;
+  marlowe-proxy = self.packages.ghc8107.marlowe-runtime-exe-marlowe-proxy;
+  marlowe-indexer = self.packages.ghc8107.marlowe-runtime-exe-marlowe-indexer;
+  marlowe-web-server = self.packages.ghc8107.marlowe-runtime-web-exe-marlowe-web-server;
+  marlowe-sync = self.packages.ghc8107.marlowe-runtime-exe-marlowe-sync;
 
   # Ensure this path only changes when sqitch.plan file is updated, or DDL
   # files are updated.
@@ -130,9 +131,8 @@ in
       #################
       # NODE_CONFIG: path to the cardano node config file
       # CARDANO_NODE_SOCKET_PATH: path to the node socket
-      # DB_NAME, DB_USER, DB_PASS,
+      # DB_NAME, DB_USER, DB_PASS, DB_HOST,
       # HTTP_PORT: port number for the HTTP healthcheck server
-      # Either DB_HOST or MASTER_REPLICA_SRV_DNS (for auto-discovery of DB host with srvaddr)
 
       #################
       # OPTIONAL VARS #
@@ -146,14 +146,6 @@ in
       [ -z "''${DB_USER:-}" ] && echo "DB_USER env var must be set -- aborting" && exit 1
       [ -z "''${DB_PASS:-}" ] && echo "DB_PASS env var must be set -- aborting" && exit 1
       [ -z "''${HTTP_PORT:-}" ] && echo "HTTP_PORT env var must be set -- aborting" && exit 1
-
-      if [ -n "''${MASTER_REPLICA_SRV_DNS:-}" ]; then
-        # Find DB_HOST when running on bitte cluster with patroni
-        eval "$(srvaddr -env PSQL="$MASTER_REPLICA_SRV_DNS")"
-        # produces: PSQL_ADDR0=domain:port; PSQL_HOST0=domain; PSQL_PORT0=port
-        DB_HOST=$PSQL_ADDR0
-      fi
-
       [ -z "''${DB_HOST:-}" ] && echo "DB_HOST env var must be set -- aborting" && exit 1
 
       DATABASE_URI=${database-uri}
@@ -199,8 +191,7 @@ in
       #################
       # HOST, PORT, QUERY_PORT, JOB_PORT: network binding
       # CARDANO_NODE_SOCKET_PATH: path to the node socket
-      # DB_NAME, DB_USER, DB_PASS,
-      # Either DB_HOST or MASTER_REPLICA_SRV_DNS (for auto-discovery of DB host with srvaddr)
+      # DB_NAME, DB_USER, DB_PASS, DB_HOST,
       # HTTP_PORT: port number for the HTTP healthcheck server
 
       #################
@@ -218,13 +209,6 @@ in
       [ -z "''${DB_USER:-}" ] && echo "DB_USER env var must be set -- aborting" && exit 1
       [ -z "''${DB_PASS:-}" ] && echo "DB_PASS env var must be set -- aborting" && exit 1
       [ -z "''${HTTP_PORT:-}" ] && echo "HTTP_PORT env var must be set -- aborting" && exit 1
-
-      if [ -n "''${MASTER_REPLICA_SRV_DNS:-}" ]; then
-        # Find DB_HOST when running on bitte cluster with patroni
-        eval "$(srvaddr -env PSQL="$MASTER_REPLICA_SRV_DNS")"
-        # produces: PSQL_ADDR0=domain:port; PSQL_HOST0=domain; PSQL_PORT0=port
-        DB_HOST=$PSQL_ADDR0
-      fi
       [ -z "''${DB_HOST:-}" ] && echo "DB_HOST env var must be set -- aborting" && exit 1
 
       NODE_CONFIG_DIR=$(dirname "$NODE_CONFIG")
@@ -259,8 +243,7 @@ in
       # REQUIRED VARS #
       #################
       # MARLOWE_CHAIN_SYNC_HOST, MARLOWE_CHAIN_SYNC_PORT, MARLOWE_CHAIN_SYNC_QUERY_PORT: connection info to marlowe-chain-sync
-      # DB_NAME, DB_USER, DB_PASS,
-      # Either DB_HOST or MASTER_REPLICA_SRV_DNS (for auto-discovery of DB host with srvaddr)
+      # DB_NAME, DB_USER, DB_PASS, DB_HOST,
       # HTTP_PORT: port number for the HTTP healthcheck server
 
       #################
@@ -276,14 +259,6 @@ in
       [ -z "''${MARLOWE_CHAIN_SYNC_PORT:-}" ] && echo "MARLOWE_CHAIN_SYNC_PORT env var must be set -- aborting" && exit 1
       [ -z "''${MARLOWE_CHAIN_SYNC_QUERY_PORT:-}" ] && echo "MARLOWE_CHAIN_SYNC_QUERY_PORT env var must be set -- aborting" && exit 1
       [ -z "''${HTTP_PORT:-}" ] && echo "HTTP_PORT env var must be set -- aborting" && exit 1
-
-      if [ -n "''${MASTER_REPLICA_SRV_DNS:-}" ]; then
-        # Find DB_HOST when running on bitte cluster with patroni
-        eval "$(srvaddr -env PSQL="$MASTER_REPLICA_SRV_DNS")"
-        # produces: PSQL_ADDR0=domain:port; PSQL_HOST0=domain; PSQL_PORT0=port
-        DB_HOST=$PSQL_ADDR0
-      fi
-
       [ -z "''${DB_HOST:-}" ] && echo "DB_HOST env var must be set -- aborting" && exit 1
 
       DATABASE_URI=${database-uri}
@@ -316,9 +291,9 @@ in
       #################
       # REQUIRED VARS #
       #################
+      # MARLOWE_CHAIN_SYNC_HOST, MARLOWE_CHAIN_SYNC_QUERY_PORT: connection info to marlowe-chain-sync
       # HOST, MARLOWE_SYNC_PORT, MARLOWE_HEADER_SYNC_PORT, MARLOWE_QUERY_PORT: network binding
-      # DB_NAME, DB_USER, DB_PASS,
-      # Either DB_HOST or MASTER_REPLICA_SRV_DNS (for auto-discovery of DB host with srvaddr)
+      # DB_NAME, DB_USER, DB_PASS, DB_HOST,
       # HTTP_PORT: port number for the HTTP healthcheck server
 
       #################
@@ -331,19 +306,15 @@ in
       [ -z "''${MARLOWE_SYNC_PORT:-}" ] && echo "MARLOWE_SYNC_PORT env var must be set -- aborting" && exit 1
       [ -z "''${MARLOWE_HEADER_SYNC_PORT:-}" ] && echo "MARLOWE_HEADER_SYNC_PORT env var must be set -- aborting" && exit 1
       [ -z "''${MARLOWE_QUERY_PORT:-}" ] && echo "MARLOWE_QUERY_PORT env var must be set -- aborting" && exit 1
+      [ -z "''${MARLOWE_CHAIN_SYNC_HOST:-}" ] && echo "MARLOWE_CHAIN_SYNC_HOST env var must be set -- aborting" && exit 1
+      [ -z "''${MARLOWE_CHAIN_SYNC_QUERY_PORT:-}" ] && echo "MARLOWE_CHAIN_SYNC_QUERY_PORT env var must be set -- aborting" && exit 1
       [ -z "''${DB_NAME:-}" ] && echo "DB_NAME env var must be set -- aborting" && exit 1
       [ -z "''${DB_USER:-}" ] && echo "DB_USER env var must be set -- aborting" && exit 1
       [ -z "''${DB_PASS:-}" ] && echo "DB_PASS env var must be set -- aborting" && exit 1
       [ -z "''${HTTP_PORT:-}" ] && echo "HTTP_PORT env var must be set -- aborting" && exit 1
-
-      if [ -n "''${MASTER_REPLICA_SRV_DNS:-}" ]; then
-        # Find DB_HOST when running on bitte cluster with patroni
-        eval "$(srvaddr -env PSQL="$MASTER_REPLICA_SRV_DNS")"
-        # produces: PSQL_ADDR0=domain:port; PSQL_HOST0=domain; PSQL_PORT0=port
-        DB_HOST=$PSQL_ADDR0
-      fi
-
       [ -z "''${DB_HOST:-}" ] && echo "DB_HOST env var must be set -- aborting" && exit 1
+
+      ${wait-for-tcp}/bin/wait-for-tcp "$MARLOWE_CHAIN_SYNC_HOST" "$MARLOWE_CHAIN_SYNC_QUERY_PORT"
 
       export OTEL_SERVICE_NAME="''${OTEL_SERVICE_NAME:-marlowe-sync}"
 
@@ -354,6 +325,8 @@ in
         --sync-port "$MARLOWE_SYNC_PORT" \
         --header-sync-port "$MARLOWE_HEADER_SYNC_PORT" \
         --query-port "$MARLOWE_QUERY_PORT" \
+        --chain-sync-host "$MARLOWE_CHAIN_SYNC_HOST" \
+        --chain-sync-query-port "$MARLOWE_CHAIN_SYNC_QUERY_PORT" \
         --http-port "$HTTP_PORT"
     '';
   };
@@ -494,15 +467,14 @@ in
   };
 
   marlowe-runtime = mkOperableWithProbes {
-    package = packages.marlowe-runtime;
+    package = marlowe-runtime;
     runtimeScript = ''
       #################
       # REQUIRED VARS #
       #################
       # HOST, PORT, TRACED_PORT: network binding
       # CARDANO_NODE_SOCKET_PATH: path to the node socket
-      # DB_NAME, DB_USER, DB_PASS,
-      # Either DB_HOST or MASTER_REPLICA_SRV_DNS (for auto-discovery of DB host with srvaddr)
+      # DB_NAME, DB_USER, DB_PASS, DB_HOST,
       # STORE_DIR: location of the contract store directory
       # HTTP_PORT: port number for the HTTP healthcheck server
 
@@ -522,14 +494,6 @@ in
       [ -z "''${DB_PASS:-}" ] && echo "DB_PASS env var must be set -- aborting" && exit 1
       [ -z "''${STORE_DIR:-}" ] && echo "STORE_DIR env var must be set -- aborting" && exit 1
       [ -z "''${HTTP_PORT:-}" ] && echo "HTTP_PORT env var must be set -- aborting" && exit 1
-
-      if [ -n "''${MASTER_REPLICA_SRV_DNS:-}" ]; then
-        # Find DB_HOST when running on bitte cluster with patroni
-        eval "$(srvaddr -env PSQL="$MASTER_REPLICA_SRV_DNS")"
-        # produces: PSQL_ADDR0=domain:port; PSQL_HOST0=domain; PSQL_PORT0=port
-        DB_HOST=$PSQL_ADDR0
-      fi
-
       [ -z "''${DB_HOST:-}" ] && echo "DB_HOST env var must be set -- aborting" && exit 1
 
       mkdir -p /tmp /store
@@ -562,7 +526,7 @@ in
 
       export OTEL_SERVICE_NAME="''${OTEL_SERVICE_NAME:-marlowe-runtime}"
 
-      ${packages.marlowe-runtime}/bin/marlowe-runtime \
+      ${marlowe-runtime}/bin/marlowe-runtime \
         --socket-path "$CARDANO_NODE_SOCKET_PATH" \
         --database-uri  "$DATABASE_URI" \
         --shelley-genesis-config-file "$SHELLEY_GENESIS_CONFIG" \

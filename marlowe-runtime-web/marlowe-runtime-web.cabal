@@ -54,11 +54,12 @@ library
   exposed-modules:
     Language.Marlowe.Runtime.Web
     Language.Marlowe.Runtime.Web.Client
+    Language.Marlowe.Runtime.Web.Types
 
   other-modules:
     Language.Marlowe.Runtime.Web.API
+    Language.Marlowe.Runtime.Web.Next.Schema
     Language.Marlowe.Runtime.Web.Orphans
-    Language.Marlowe.Runtime.Web.Types
 
   build-depends:
     , aeson >=2 && <3
@@ -75,10 +76,13 @@ library
     , parsec ^>=3.1.14
     , servant ^>=0.19
     , servant-client ^>=0.19
+    , servant-client-core ^>=0.19
+    , servant-openapi3 ^>=2.0
     , servant-pagination >=2.5 && <3
     , servant-server ^>=0.19
     , text >=1.2.4 && <2
     , time >=1.9 && <2
+    , wai >=3.2 && <4
 
 library server
   import:          lang
@@ -95,6 +99,7 @@ library server
     Language.Marlowe.Runtime.Web.Server.REST
     Language.Marlowe.Runtime.Web.Server.REST.ApiError
     Language.Marlowe.Runtime.Web.Server.REST.Contracts
+    Language.Marlowe.Runtime.Web.Server.REST.Contracts.Next
     Language.Marlowe.Runtime.Web.Server.REST.Transactions
     Language.Marlowe.Runtime.Web.Server.REST.Withdrawals
     Language.Marlowe.Runtime.Web.Server.SyncClient

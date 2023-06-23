@@ -6,7 +6,7 @@
 module Language.Marlowe.Runtime.Contract.Api where
 
 import Data.Binary (Binary, get, getWord8, put, putWord8)
-import Data.Data (type (:~:)(..))
+import Data.Data (type (:~:) (..))
 import qualified Data.List.NonEmpty as NE
 import Data.Set (Set)
 import GHC.Generics (Generic)
@@ -14,7 +14,7 @@ import Language.Marlowe.Core.V1.Semantics (TransactionInput)
 import Language.Marlowe.Core.V1.Semantics.Types
 import Language.Marlowe.Runtime.ChainSync.Api (DatumHash)
 import Language.Marlowe.Runtime.Core.Api ()
-import Network.Protocol.Codec.Spec (Variations(variations), varyAp)
+import Network.Protocol.Codec.Spec (Variations (variations), varyAp)
 import Network.Protocol.Handshake.Types (HasSignature, signature)
 import Network.Protocol.Query.Client (QueryClient, request)
 import Network.Protocol.Query.Types
@@ -39,11 +39,11 @@ data MerkleizeInputsError
   deriving stock (Show, Eq, Generic)
   deriving anyclass (Binary, Variations)
 
-getContract :: Applicative m => DatumHash -> QueryClient ContractRequest m (Maybe ContractWithAdjacency)
+getContract :: (Applicative m) => DatumHash -> QueryClient ContractRequest m (Maybe ContractWithAdjacency)
 getContract = request . GetContract
 
 merkleizeInputs
-  :: Applicative m
+  :: (Applicative m)
   => DatumHash
   -> State
   -> TransactionInput
@@ -107,9 +107,10 @@ instance OTelRequest ContractRequest where
     TagMerkleizeInputs -> "get_merkleized_inputs"
 
 instance RequestVariations ContractRequest where
-  tagVariations = NE.fromList
-    [ SomeTag TagGetContract
-    ]
+  tagVariations =
+    NE.fromList
+      [ SomeTag TagGetContract
+      ]
   requestVariations = \case
     TagGetContract -> GetContract <$> variations
     TagMerkleizeInputs -> MerkleizeInputs <$> variations `varyAp` variations `varyAp` variations

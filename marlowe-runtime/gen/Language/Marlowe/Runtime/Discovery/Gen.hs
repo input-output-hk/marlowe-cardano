@@ -1,5 +1,5 @@
-{-# OPTIONS_GHC -Wno-orphans #-}
 {-# LANGUAGE DataKinds #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
 
 module Language.Marlowe.Runtime.Discovery.Gen where
 
@@ -11,13 +11,14 @@ import Test.QuickCheck hiding (shrinkMap)
 import Test.QuickCheck.Instances ()
 
 instance Arbitrary ContractHeader where
-  arbitrary = ContractHeader
-    <$> arbitrary
-    <*> arbitrary
-    <*> arbitrary
-    <*> arbitrary
-    <*> arbitrary
-    <*> arbitrary
-    <*> arbitrary
-    <*> arbitrary
+  arbitrary =
+    ContractHeader
+      <$> arbitrary
+      <*> arbitrary
+      <*> arbitrary
+      <*> arbitrary
+      <*> arbitrary
+      <*> arbitrary
+      <*> arbitrary
+      <*> arbitrary
   shrink = genericShrink

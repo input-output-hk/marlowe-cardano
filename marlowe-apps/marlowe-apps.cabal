@@ -193,8 +193,8 @@ executable signing-service
   default-language: Haskell2010
 
 executable marlowe-streamer
-  main-is: Main.hs
-  hs-source-dirs: streamer
+  main-is:          Main.hs
+  hs-source-dirs:   streamer
   build-depends:
     , aeson
     , base >=4.9 && <5

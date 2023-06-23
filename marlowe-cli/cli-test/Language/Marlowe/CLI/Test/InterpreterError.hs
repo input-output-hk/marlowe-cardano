@@ -6,7 +6,6 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
@@ -18,37 +17,37 @@
 module Language.Marlowe.CLI.Test.InterpreterError where
 
 import Control.Lens (makeLenses)
-import Control.Monad.Except (ExceptT, MonadError(throwError), runExceptT)
-import qualified Data.Aeson as A
+import Control.Monad.Except (ExceptT, MonadError (throwError), runExceptT)
+import Data.Aeson qualified as A
 import GHC.Generics (Generic)
-import qualified Language.Marlowe.CLI.Test.Operation.Aeson as Operations
-import Language.Marlowe.CLI.Types (CliError(CliError))
+import Language.Marlowe.CLI.Test.Operation.Aeson qualified as Operations
+import Language.Marlowe.CLI.Types (CliError (CliError))
 
 data InterpreterError
   = CliOperationFailed
-    { _ieMessage :: String
-    , _ieInfo :: [(A.Key, A.Value)]
-    }
+      { _ieMessage :: String
+      , _ieInfo :: [(A.Key, A.Value)]
+      }
   | RuntimeOperationFailed
-    { _ieMessage :: String
-    , _ieInfo :: [(A.Key, A.Value)]
-    }
+      { _ieMessage :: String
+      , _ieInfo :: [(A.Key, A.Value)]
+      }
   | TimeOutReached
-    { _ieMessage :: String
-    , _ieInfo :: [(A.Key, A.Value)]
-    }
+      { _ieMessage :: String
+      , _ieInfo :: [(A.Key, A.Value)]
+      }
   | TestExecutionFailed
-    { _ieMessage :: String
-    , _ieInfo :: [(A.Key, A.Value)]
-    }
-  -- | InvalidTestCase
-  --   { ieMessage :: String
-  --   , ieInfo :: [(A.Key, A.Value)]
-  --   }
-  | AssertionFailed
-    { _ieMessage :: String
-    , _ieInfo :: [(A.Key, A.Value)]
-    }
+      { _ieMessage :: String
+      , _ieInfo :: [(A.Key, A.Value)]
+      }
+  | -- | InvalidTestCase
+    --   { ieMessage :: String
+    --   , ieInfo :: [(A.Key, A.Value)]
+    --   }
+    AssertionFailed
+      { _ieMessage :: String
+      , _ieInfo :: [(A.Key, A.Value)]
+      }
   deriving stock (Show, Eq, Generic)
 
 makeLenses ''InterpreterError
@@ -78,11 +77,10 @@ runtimeOperationFailed' :: String -> InterpreterError
 runtimeOperationFailed' msg = RuntimeOperationFailed msg []
 
 rethrowCliError
-  :: MonadError InterpreterError m
+  :: (MonadError InterpreterError m)
   => ExceptT CliError m a
   -> m a
 rethrowCliError action =
   runExceptT action >>= \case
     Left err -> throwError $ fromCliError' err
     Right contract -> pure contract
-

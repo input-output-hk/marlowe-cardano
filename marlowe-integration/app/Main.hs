@@ -1,15 +1,15 @@
 module Main where
 
-import Cardano.Api
-  ( AsType(..)
-  , ShelleyWitnessSigningKey(..)
-  , TextEnvelope(..)
-  , TextEnvelopeType(..)
-  , deserialiseFromTextEnvelope
-  , serialiseToTextEnvelope
-  , signShelleyTransaction
-  )
-import Cardano.Api.SerialiseTextEnvelope (TextEnvelopeDescr(..))
+import Cardano.Api (
+  AsType (..),
+  ShelleyWitnessSigningKey (..),
+  TextEnvelope (..),
+  TextEnvelopeType (..),
+  deserialiseFromTextEnvelope,
+  serialiseToTextEnvelope,
+  signShelleyTransaction,
+ )
+import Cardano.Api.SerialiseTextEnvelope (TextEnvelopeDescr (..))
 import Control.Concurrent (threadDelay)
 import Control.Exception (throw)
 import Control.Monad.IO.Class (MonadIO, liftIO)
@@ -18,13 +18,19 @@ import Data.Either (fromRight)
 import Data.Maybe (fromJust)
 import qualified Data.Text as T
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
-import Language.Marlowe.Runtime.ChainSync.Api (Address(..), fromBech32, toBech32)
-import Language.Marlowe.Runtime.Web (CreateTxEnvelope(CreateTxEnvelope), PostContractsRequest(..))
+import Language.Marlowe.Runtime.ChainSync.Api (Address (..), fromBech32, toBech32)
+import Language.Marlowe.Runtime.Web (CreateTxEnvelope (CreateTxEnvelope), PostContractsRequest (..))
 import qualified Language.Marlowe.Runtime.Web as Web
-import Language.Marlowe.Runtime.Web.Client
-  (getContract, getTransaction, postContract, postTransaction, putContract, putTransaction)
+import Language.Marlowe.Runtime.Web.Client (
+  getContract,
+  getTransaction,
+  postContract,
+  postTransaction,
+  putContract,
+  putTransaction,
+ )
 import Test.Integration.Marlowe
-import qualified Test.Integration.Marlowe as M (LocalTestnet(..))
+import qualified Test.Integration.Marlowe as M (LocalTestnet (..))
 
 main :: IO ()
 main = withLocalMarloweRuntime \MarloweRuntime{..} -> do
@@ -37,14 +43,19 @@ main = withLocalMarloweRuntime \MarloweRuntime{..} -> do
   print webAddress
 
   either throw pure =<< runWebClient do
-    Web.CreateTxEnvelope{txEnvelope = createTxBody, ..} <- postContract webAddress Nothing Nothing Web.PostContractsRequest
-      { metadata = mempty
-      , tags = mempty
-      , version = Web.V1
-      , roles = Nothing
-      , contract = V1.Close
-      , minUTxODeposit = 2_000_000
-      }
+    Web.CreateTxEnvelope{txEnvelope = createTxBody, ..} <-
+      postContract
+        webAddress
+        Nothing
+        Nothing
+        Web.PostContractsRequest
+          { metadata = mempty
+          , tags = mempty
+          , version = Web.V1
+          , roles = Nothing
+          , contract = V1.Close
+          , minUTxODeposit = 2_000_000
+          }
 
     liftIO $ print CreateTxEnvelope{txEnvelope = createTxBody, ..}
 
@@ -56,14 +67,20 @@ main = withLocalMarloweRuntime \MarloweRuntime{..} -> do
 
     liftIO $ print contractState
 
-    Web.ApplyInputsTxEnvelope{transactionId, txEnvelope = applyTxBody} <- postTransaction webAddress Nothing Nothing contractId Web.PostTransactionsRequest
-      { version = Web.V1
-      , tags = mempty
-      , metadata = mempty
-      , invalidBefore = Nothing
-      , invalidHereafter = Nothing
-      , inputs = []
-      }
+    Web.ApplyInputsTxEnvelope{transactionId, txEnvelope = applyTxBody} <-
+      postTransaction
+        webAddress
+        Nothing
+        Nothing
+        contractId
+        Web.PostTransactionsRequest
+          { version = Web.V1
+          , tags = mempty
+          , metadata = mempty
+          , invalidBefore = Nothing
+          , invalidHereafter = Nothing
+          , inputs = []
+          }
 
     applyTx <- liftIO $ signShelleyTransaction' applyTxBody [signingKey]
 
@@ -73,7 +90,7 @@ main = withLocalMarloweRuntime \MarloweRuntime{..} -> do
 
     liftIO $ print tx
 
-waitUntilConfirmed :: MonadIO m => (a -> Web.TxStatus) -> m a -> m a
+waitUntilConfirmed :: (MonadIO m) => (a -> Web.TxStatus) -> m a -> m a
 waitUntilConfirmed getStatus getResource = do
   resource <- getResource
   case getStatus resource of
@@ -84,7 +101,12 @@ waitUntilConfirmed getStatus getResource = do
 
 signShelleyTransaction' :: Web.TextEnvelope -> [ShelleyWitnessSigningKey] -> IO Web.TextEnvelope
 signShelleyTransaction' Web.TextEnvelope{..} wits = do
-  let te = TextEnvelope { teType = TextEnvelopeType (T.unpack teType), teDescription = TextEnvelopeDescr (T.unpack teDescription), teRawCBOR = Web.unBase16 teCborHex }
+  let te =
+        TextEnvelope
+          { teType = TextEnvelopeType (T.unpack teType)
+          , teDescription = TextEnvelopeDescr (T.unpack teDescription)
+          , teRawCBOR = Web.unBase16 teCborHex
+          }
   txBody <- case deserialiseFromTextEnvelope (AsTxBody AsBabbage) te of
     Left err -> fail $ show err
     Right a -> pure a
@@ -94,15 +116,20 @@ signShelleyTransaction' Web.TextEnvelope{..} wits = do
 getFirstWallet :: LocalTestnet -> IO (Address, ShelleyWitnessSigningKey)
 getFirstWallet LocalTestnet{..} = do
   let PaymentKeyPair{..} = head wallets
-  address <- fromJust . fromBech32 . T.pack <$> execCli
-    [ "address", "build"
-    , "--verification-key-file", paymentVKey
-    , "--testnet-magic", "1"
-    ]
+  address <-
+    fromJust . fromBech32 . T.pack
+      <$> execCli
+        [ "address"
+        , "build"
+        , "--verification-key-file"
+        , paymentVKey
+        , "--testnet-magic"
+        , "1"
+        ]
   textEnvelope <- fromJust <$> decodeFileStrict paymentSKey
   pure
     ( address
-    , WitnessGenesisUTxOKey
-        $ fromRight (error "Failed to decode text envelope")
-        $ deserialiseFromTextEnvelope (AsSigningKey AsGenesisUTxOKey) textEnvelope
+    , WitnessGenesisUTxOKey $
+        fromRight (error "Failed to decode text envelope") $
+          deserialiseFromTextEnvelope (AsSigningKey AsGenesisUTxOKey) textEnvelope
     )

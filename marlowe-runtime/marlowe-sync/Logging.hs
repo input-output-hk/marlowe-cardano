@@ -2,12 +2,12 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE RankNTypes #-}
 
-module Logging
-  ( RootSelector(..)
-  , renderRootSelectorOTel
-  ) where
+module Logging (
+  RootSelector (..),
+  renderRootSelectorOTel,
+) where
 
-import Control.Monad.Event.Class (Inject(..))
+import Control.Monad.Event.Class (Inject (..))
 import Data.ByteString (ByteString)
 import Language.Marlowe.Protocol.HeaderSync.Types (MarloweHeaderSync)
 import Language.Marlowe.Protocol.Query.Types (MarloweQuery)

@@ -2,64 +2,57 @@
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE DataKinds #-}
-{-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE NamedFieldPuns #-}
-{-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE ViewPatterns #-}
 
 module Language.Marlowe.CLI.Test.Contract.ParametrizedMarloweJSON where
 
 import Cardano.Api (AddressInEra, CardanoMode, LocalNodeConnectInfo)
-import qualified Contrib.Data.Aeson.Traversals as A
+import Contrib.Data.Aeson.Traversals qualified as A
 import Contrib.Data.Time.Clock (nominalDiffTimeToMilliseconds)
-import Control.Monad.Except (MonadError(throwError))
+import Control.Monad.Except (MonadError (throwError))
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Reader.Class (MonadReader, asks)
 import Control.Monad.State.Class (MonadState, gets)
 import Data.Aeson (FromJSON, ToJSON)
-import qualified Data.Aeson as A
-import qualified Data.Aeson.KeyMap as KeyMap
-import qualified Data.Aeson.OneLine as A
-import Data.Bifunctor (Bifunctor(first))
+import Data.Aeson qualified as A
+import Data.Aeson.KeyMap qualified as KeyMap
+import Data.Aeson.OneLine qualified as A
+import Data.Bifunctor (Bifunctor (first))
 import Data.Functor ((<&>))
-import Data.Has (Has(getter))
-import qualified Data.Map.Strict as M
+import Data.Has (Has (getter))
+import Data.Map.Strict qualified as M
 import Data.Proxy (Proxy)
-import qualified Data.Text as Text
+import Data.Text qualified as Text
 import Data.Time (NominalDiffTime)
 import Data.Time.Clock.POSIX (POSIXTime, getPOSIXTime)
 import GHC.Generics (Generic)
-import qualified Language.Marlowe as Marlowe
-import Language.Marlowe.CLI.Test.Wallet.Types
-  ( Currencies(Currencies)
-  , Currency(Currency, ccCurrencySymbol)
-  , CurrencyNickname(CurrencyNickname)
-  , Wallet(_waAddress)
-  , WalletNickname(WalletNickname)
-  , Wallets
-  , getAllWallets
-  )
-import Language.Marlowe.CLI.Types (CliError(CliError))
+import Language.Marlowe qualified as Marlowe
+import Language.Marlowe.CLI.Test.Wallet.Types (
+  Currencies (Currencies),
+  Currency (Currency, ccCurrencySymbol),
+  CurrencyNickname (CurrencyNickname),
+  Wallet (_waAddress),
+  WalletNickname (WalletNickname),
+  Wallets,
+  getAllWallets,
+ )
+import Language.Marlowe.CLI.Types (CliError (CliError))
 import Language.Marlowe.Cardano (marloweNetworkFromLocalNodeConnectInfo)
-import qualified Language.Marlowe.Core.V1.Semantics.Types.Address as Marlowe
+import Language.Marlowe.Core.V1.Semantics.Types.Address qualified as Marlowe
 import Ledger.Address (toPlutusAddress)
-import qualified Plutus.V1.Ledger.Value as PV
+import Plutus.V1.Ledger.Value qualified as PV
 
 -- | Either a JSON of the Input or a JSON of the Contract which
 -- | is parametrized by the currencies and wallets.
-newtype ParametrizedMarloweJSON = ParametrizedMarloweJSON { unParametrizedMarloweJSON :: A.Value }
-    deriving stock (Eq, Ord, Generic, Show)
+newtype ParametrizedMarloweJSON = ParametrizedMarloweJSON {unParametrizedMarloweJSON :: A.Value}
+  deriving stock (Eq, Ord, Generic, Show)
 
 instance FromJSON ParametrizedMarloweJSON where
   parseJSON = pure . ParametrizedMarloweJSON
@@ -76,14 +69,13 @@ rewriteCurrencyRefs (Currencies currencies) (ParametrizedMarloweJSON json) = Par
     rewrite = \case
       obj@(A.Object (KeyMap.toAscList -> props)) -> do
         case props of
-          [("currency_symbol", A.String "") , ("token_name", A.String "")] -> pure obj
-          [("currency_symbol", A.String currencyNickname) , ("token_name", tokenName)] -> do
-              let
-                nickname = Text.unpack currencyNickname
-              Currency { ccCurrencySymbol=PV.CurrencySymbol cs } <- findCurrency (CurrencyNickname nickname)
-              pure $ A.object
-                [
-                  ("currency_symbol", A.toJSON cs)
+          [("currency_symbol", A.String ""), ("token_name", A.String "")] -> pure obj
+          [("currency_symbol", A.String currencyNickname), ("token_name", tokenName)] -> do
+            let nickname = Text.unpack currencyNickname
+            Currency{ccCurrencySymbol = PV.CurrencySymbol cs} <- findCurrency (CurrencyNickname nickname)
+            pure $
+              A.object
+                [ ("currency_symbol", A.toJSON cs)
                 , ("token_name", tokenName)
                 ]
           _ -> pure obj
@@ -93,7 +85,8 @@ rewriteCurrencyRefs (Currencies currencies) (ParametrizedMarloweJSON json) = Par
 data RewritePartyError era = WalletNotFound WalletNickname | InvalidWalletAddress WalletNickname (AddressInEra era)
   deriving stock (Eq, Generic, Show)
 
-rewritePartyRefs :: Marlowe.Network -> Wallets era -> ParametrizedMarloweJSON -> Either (RewritePartyError era) ParametrizedMarloweJSON
+rewritePartyRefs
+  :: Marlowe.Network -> Wallets era -> ParametrizedMarloweJSON -> Either (RewritePartyError era) ParametrizedMarloweJSON
 rewritePartyRefs network wallets (ParametrizedMarloweJSON json) = ParametrizedMarloweJSON <$> A.rewriteBottomUp rewrite json
   where
     findWallet nickname = case M.lookup nickname $ getAllWallets wallets of
@@ -102,25 +95,23 @@ rewritePartyRefs network wallets (ParametrizedMarloweJSON json) = ParametrizedMa
     rewrite = \case
       A.Object (KeyMap.toList -> [("address", A.String walletNickname)]) -> do
         wallet <- findWallet (WalletNickname $ Text.unpack walletNickname)
-        let
-          address = toPlutusAddress . _waAddress $ wallet
+        let address = toPlutusAddress . _waAddress $ wallet
         pure $ A.toJSON (Marlowe.Address network address)
       v -> do
         pure v
 
 newtype Now = Now POSIXTime
 
-rewriteTimeouts :: Monad m => Now -> ParametrizedMarloweJSON -> m ParametrizedMarloweJSON
+rewriteTimeouts :: (Monad m) => Now -> ParametrizedMarloweJSON -> m ParametrizedMarloweJSON
 rewriteTimeouts (Now n) (ParametrizedMarloweJSON json) = ParametrizedMarloweJSON <$> A.rewriteBottomUp rewrite json
   where
     rewrite = \case
       A.Object (KeyMap.toList -> [("relative", A.Number difference)]) -> do
-        let
-          -- Diff is expressed in seconds
-          diff :: NominalDiffTime
-          diff = fromInteger (ceiling difference)
+        let -- Diff is expressed in seconds
+            diff :: NominalDiffTime
+            diff = fromInteger (ceiling difference)
 
-          t = n + diff
+            t = n + diff
         pure $ A.toJSON $ nominalDiffTimeToMilliseconds t
       v -> pure v
 
@@ -136,8 +127,8 @@ rewriteParametrizedMarloweJSON network wallets currencies n json = do
   json'' <- first CurrencyNotFound $ rewriteCurrencyRefs currencies json'
   rewriteTimeouts n json''
 
-data ParametrizedMarloweJSONDecodeError era =
-    RewritePartyFailure (RewritePartyError era)
+data ParametrizedMarloweJSONDecodeError era
+  = RewritePartyFailure (RewritePartyError era)
   | CurrencyNotFound CurrencyNickname
   | InvalidMarloweJSON String String
   deriving stock (Eq, Generic, Show)
@@ -170,13 +161,13 @@ decodeParametrizedInputJSON network wallets currencies n json = do
 
 doRewriteParametrizedMarloweJSON
   :: forall env era st m
-   . MonadIO m
-  => MonadError CliError m
-  => MonadReader env m
-  => Has (LocalNodeConnectInfo CardanoMode) env
-  => MonadState st m
-  => Has (Wallets era) st
-  => Has Currencies st
+   . (MonadIO m)
+  => (MonadError CliError m)
+  => (MonadReader env m)
+  => (Has (LocalNodeConnectInfo CardanoMode) env)
+  => (MonadState st m)
+  => (Has (Wallets era) st)
+  => (Has Currencies st)
   => Proxy era
   -> ParametrizedMarloweJSON
   -> m ParametrizedMarloweJSON
@@ -189,5 +180,5 @@ doRewriteParametrizedMarloweJSON _ json = do
     Left err -> throwError $ CliError $ "Error rewriting parametrized Marlowe JSON: " <> show err
     Right json' -> pure json'
 
-now :: MonadIO m => m Now
+now :: (MonadIO m) => m Now
 now = liftIO $ Now <$> getPOSIXTime

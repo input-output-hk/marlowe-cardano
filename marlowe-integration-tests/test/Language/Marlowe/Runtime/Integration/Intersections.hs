@@ -7,11 +7,11 @@ module Language.Marlowe.Runtime.Integration.Intersections where
 
 import Cardano.Api (getTxId)
 import Language.Marlowe.Runtime.Cardano.Api (fromCardanoTxId)
-import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, TxId, TxOutRef(..))
-import Language.Marlowe.Runtime.Core.Api (ContractId(..))
+import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, TxId, TxOutRef (..))
+import Language.Marlowe.Runtime.Core.Api (ContractId (..))
 import Language.Marlowe.Runtime.Integration.Common
 import Language.Marlowe.Runtime.Integration.StandardContract
-import Language.Marlowe.Runtime.Transaction.Api (ContractCreated(..), InputsApplied(..))
+import Language.Marlowe.Runtime.Transaction.Api (ContractCreated (..), InputsApplied (..))
 import Test.Hspec (Spec, it)
 import Test.Integration.Marlowe.Local (withLocalMarloweRuntime)
 
@@ -66,7 +66,8 @@ spec = it "Intersections" $ withLocalMarloweRuntime $ runIntegrationTest do
   -- 27. Expect Intersect not found
   marloweSyncIntersectExpectNotFound (ContractId $ TxOutRef txIdA1 1) [pA1, pA2, pA3, pA4, pA5]
 
-completeContract :: StandardContractInit v -> Integration (BlockHeader, TxId, BlockHeader, BlockHeader, BlockHeader, BlockHeader)
+completeContract
+  :: StandardContractInit v -> Integration (BlockHeader, TxId, BlockHeader, BlockHeader, BlockHeader, BlockHeader)
 completeContract StandardContractInit{..} = do
   StandardContractFundsDeposited{..} <- makeInitialDeposit
   StandardContractChoiceMade{..} <- chooseGimmeTheMoney
@@ -74,4 +75,5 @@ completeContract StandardContractInit{..} = do
   StandardContractClosed{..} <- makeReturnDeposit
   (_, withdrawBlock) <- withdrawPartyAFunds
   let InputsApplied{txBody} = initialFundsDeposited
-  pure (initialDepositBlock, fromCardanoTxId $ getTxId txBody, choiceBlock, notifiedBlock, returnDepositBlock, withdrawBlock)
+  pure
+    (initialDepositBlock, fromCardanoTxId $ getTxId txBody, choiceBlock, notifiedBlock, returnDepositBlock, withdrawBlock)

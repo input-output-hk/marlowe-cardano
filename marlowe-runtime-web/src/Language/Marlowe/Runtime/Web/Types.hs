@@ -9,56 +9,60 @@
 
 -- | This module defines the request and response types in the Marlowe Runtime
 -- | Web API.
-
 module Language.Marlowe.Runtime.Web.Types where
 
 import Control.Lens hiding ((.=))
 import Control.Monad ((<=<))
 import Data.Aeson
+import Data.Aeson.Text (encodeToLazyText)
 import Data.Aeson.Types (Parser, parseFail)
+import Data.Bifunctor (first)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import Data.ByteString.Base16 (decodeBase16, encodeBase16)
 import Data.Char (isSpace)
 import Data.Foldable (fold)
 import Data.Map (Map)
-import Data.OpenApi
-  ( HasType(..)
-  , NamedSchema(..)
-  , OpenApiType(..)
-  , Referenced(..)
-  , ToParamSchema
-  , ToSchema
-  , declareSchema
-  , declareSchemaRef
-  , enum_
-  , example
-  , oneOf
-  , pattern
-  , properties
-  , required
-  , toParamSchema
-  )
+import Data.OpenApi (
+  HasType (..),
+  NamedSchema (..),
+  OpenApiType (..),
+  Reference (..),
+  Referenced (..),
+  ToParamSchema,
+  ToSchema,
+  declareSchema,
+  declareSchemaRef,
+  enum_,
+  example,
+  oneOf,
+  pattern,
+  properties,
+  required,
+  toParamSchema,
+ )
 import qualified Data.OpenApi as OpenApi
-import Data.OpenApi.Schema (ToSchema(..))
+import Data.OpenApi.Schema (ToSchema (..))
 import Data.Set (Set)
-import Data.String (IsString(..))
+import Data.String (IsString (..))
 import Data.Text (Text, intercalate, splitOn)
 import qualified Data.Text as T
 import Data.Text.Encoding (encodeUtf8)
+import qualified Data.Text.Lazy as TL
 import Data.Time (UTCTime)
-import Data.Word (Word16, Word64)
+import Data.Time.Format.ISO8601 (iso8601Show)
+import Data.Version (Version)
+import Data.Word (Word16, Word32, Word64)
 import GHC.Exts (IsList)
 import GHC.Generics (Generic)
 import qualified Language.Marlowe.Core.V1.Semantics.Types as Semantics
 import Language.Marlowe.Runtime.Web.Orphans ()
 import Network.URI (parseURI)
 import Servant
-import Servant.Pagination (HasPagination(..))
-
+import Servant.Pagination (HasPagination (..))
 
 -- | A newtype for Base16 decoding and encoding ByteStrings
-newtype Base16 = Base16 { unBase16 :: ByteString }
+newtype Base16 = Base16 {unBase16 :: ByteString}
   deriving (Eq, Ord)
 
 instance Show Base16 where
@@ -83,7 +87,7 @@ instance FromHttpApiData Base16 where
 instance ToSchema Base16 where
   declareNamedSchema _ = NamedSchema Nothing <$> declareSchema (Proxy @String)
 
-newtype TxId = TxId { unTxId :: ByteString }
+newtype TxId = TxId {unTxId :: ByteString}
   deriving (Eq, Ord, Generic)
   deriving (Show, ToHttpApiData, ToJSON) via Base16
 
@@ -103,12 +107,13 @@ instance ToSchema TxId where
   declareNamedSchema = pure . NamedSchema (Just "TxId") . toParamSchema
 
 instance ToParamSchema TxId where
-  toParamSchema _ = mempty
-    & type_ ?~ OpenApiString
-    & OpenApi.description ?~ "The hex-encoded identifier of a Cardano transaction"
-    & pattern ?~ "^[a-fA-F0-9]{64}$"
+  toParamSchema _ =
+    mempty
+      & type_ ?~ OpenApiString
+      & OpenApi.description ?~ "The hex-encoded identifier of a Cardano transaction"
+      & pattern ?~ "^[a-fA-F0-9]{64}$"
 
-newtype Address = Address { unAddress :: T.Text }
+newtype Address = Address {unAddress :: T.Text}
   deriving (Eq, Ord, Generic)
   deriving newtype (Show, ToHttpApiData, FromHttpApiData, ToJSON, FromJSON)
 
@@ -116,40 +121,44 @@ instance ToSchema Address where
   declareNamedSchema = pure . NamedSchema (Just "Address") . toParamSchema
 
 instance ToParamSchema Address where
-  toParamSchema _ = mempty
-    & type_ ?~ OpenApiString
-    & OpenApi.description ?~ "A cardano address"
-    & example ?~ "addr1w94f8ywk4fg672xasahtk4t9k6w3aql943uxz5rt62d4dvq8evxaf"
+  toParamSchema _ =
+    mempty
+      & type_ ?~ OpenApiString
+      & OpenApi.description ?~ "A cardano address"
+      & example ?~ "addr1w94f8ywk4fg672xasahtk4t9k6w3aql943uxz5rt62d4dvq8evxaf"
 
-newtype CommaList a = CommaList { unCommaList :: [a] }
+newtype CommaList a = CommaList {unCommaList :: [a]}
   deriving (Eq, Ord, Generic, Functor)
   deriving newtype (Show, ToJSON, FromJSON, IsList)
 
 instance ToParamSchema (CommaList a) where
-  toParamSchema _ = mempty
-    & type_ ?~ OpenApiString
-    & OpenApi.description ?~ "A comma-separated list of values"
+  toParamSchema _ =
+    mempty
+      & type_ ?~ OpenApiString
+      & OpenApi.description ?~ "A comma-separated list of values"
 
-instance ToSchema a => ToSchema (CommaList a)
+instance (ToSchema a) => ToSchema (CommaList a)
 
-instance ToHttpApiData a => ToHttpApiData (CommaList a) where
+instance (ToHttpApiData a) => ToHttpApiData (CommaList a) where
   toUrlPiece = T.intercalate "," . fmap toUrlPiece . unCommaList
   toQueryParam = T.intercalate "," . fmap toQueryParam . unCommaList
 
-instance FromHttpApiData a => FromHttpApiData (CommaList a) where
-  parseUrlPiece = fmap CommaList
-    . traverse (parseUrlPiece . T.dropWhileEnd isSpace . T.dropWhile isSpace)
-    . splitOnNonEmpty ","
-  parseQueryParam = fmap CommaList
-    . traverse (parseQueryParam . T.dropWhileEnd isSpace . T.dropWhile isSpace)
-    . splitOnNonEmpty ","
+instance (FromHttpApiData a) => FromHttpApiData (CommaList a) where
+  parseUrlPiece =
+    fmap CommaList
+      . traverse (parseUrlPiece . T.dropWhileEnd isSpace . T.dropWhile isSpace)
+      . splitOnNonEmpty ","
+  parseQueryParam =
+    fmap CommaList
+      . traverse (parseQueryParam . T.dropWhileEnd isSpace . T.dropWhile isSpace)
+      . splitOnNonEmpty ","
 
 splitOnNonEmpty :: Text -> Text -> [Text]
 splitOnNonEmpty sep t
   | T.null t = []
   | otherwise = T.splitOn sep t
 
-newtype PolicyId = PolicyId { unPolicyId :: ByteString }
+newtype PolicyId = PolicyId {unPolicyId :: ByteString}
   deriving (Eq, Ord, Generic)
   deriving (Show, ToHttpApiData, FromHttpApiData, ToJSON, FromJSON) via Base16
 
@@ -157,15 +166,17 @@ instance ToSchema PolicyId where
   declareNamedSchema proxy = pure $ NamedSchema (Just "PolicyId") $ toParamSchema proxy
 
 instance ToParamSchema PolicyId where
-  toParamSchema _ = mempty
-    & type_ ?~ OpenApiString
-    & OpenApi.description ?~ "The hex-encoded minting policy ID for a native Cardano token"
-    & pattern ?~ "^[a-fA-F0-9]*$"
+  toParamSchema _ =
+    mempty
+      & type_ ?~ OpenApiString
+      & OpenApi.description ?~ "The hex-encoded minting policy ID for a native Cardano token"
+      & pattern ?~ "^[a-fA-F0-9]*$"
 
 data TxOutRef = TxOutRef
   { txId :: TxId
   , txIx :: Word16
-  } deriving (Show, Eq, Ord, Generic)
+  }
+  deriving (Show, Eq, Ord, Generic)
 
 instance FromHttpApiData TxOutRef where
   parseUrlPiece t = case splitOn "#" t of
@@ -183,11 +194,12 @@ instance ToSchema TxOutRef where
   declareNamedSchema proxy = pure $ NamedSchema (Just "TxOutRef") $ toParamSchema proxy
 
 instance ToParamSchema TxOutRef where
-  toParamSchema _ = mempty
-    & type_ ?~ OpenApiString
-    & OpenApi.description ?~ "A reference to a transaction output with a transaction ID and index."
-    & pattern ?~ "^[a-fA-F0-9]{64}#[0-9]+$"
-    & example ?~ "98d601c9307dd43307cf68a03aad0086d4e07a789b66919ccf9f7f7676577eb7#1"
+  toParamSchema _ =
+    mempty
+      & type_ ?~ OpenApiString
+      & OpenApi.description ?~ "A reference to a transaction output with a transaction ID and index."
+      & pattern ?~ "^[a-fA-F0-9]{64}#[0-9]+$"
+      & example ?~ "98d601c9307dd43307cf68a03aad0086d4e07a789b66919ccf9f7f7676577eb7#1"
 
 instance ToJSON TxOutRef where
   toJSON = String . toUrlPiece
@@ -207,16 +219,21 @@ instance ToHttpApiData MarloweVersion where
 
 instance FromHttpApiData MarloweVersion where
   parseUrlPiece "v1" = Right V1
-  parseUrlPiece _ = Left $ fold @[]
-    [ "expected one of "
-    , intercalate "; " ["v1"]
-    ]
+  parseUrlPiece _ =
+    Left $
+      fold @[]
+        [ "expected one of "
+        , intercalate "; " ["v1"]
+        ]
 
 instance ToSchema MarloweVersion where
-  declareNamedSchema _ = pure $ NamedSchema (Just "MarloweVersion") $ mempty
-    & type_ ?~ OpenApiString
-    & OpenApi.description ?~ "A version of the Marlowe language."
-    & enum_ ?~ ["v1"]
+  declareNamedSchema _ =
+    pure $
+      NamedSchema (Just "MarloweVersion") $
+        mempty
+          & type_ ?~ OpenApiString
+          & OpenApi.description ?~ "A version of the Marlowe language."
+          & enum_ ?~ ["v1"]
 
 data ContractState = ContractState
   { contractId :: TxOutRef
@@ -233,13 +250,14 @@ data ContractState = ContractState
   , utxo :: Maybe TxOutRef
   , txBody :: Maybe TextEnvelope
   , unclaimedPayouts :: [Payout]
-  } deriving (Show, Eq, Generic)
+  }
+  deriving (Show, Eq, Generic)
 
-data Payout
-    = Payout
-        { payoutId :: TxOutRef
-        , role :: Text} -- TODO (N.H) : add assets that will be retrieved by the payout
-  deriving (FromJSON, ToJSON,ToSchema,Show, Eq, Generic)
+data Payout = Payout
+  { payoutId :: TxOutRef
+  , role :: Text -- TODO (N.H) : add assets that will be retrieved by the payout
+  }
+  deriving (FromJSON, ToJSON, ToSchema, Show, Eq, Generic)
 
 instance ToJSON ContractState
 instance FromJSON ContractState
@@ -254,7 +272,8 @@ data ContractHeader = ContractHeader
   , metadata :: Map Word64 Metadata
   , status :: TxStatus
   , block :: Maybe BlockHeader
-  } deriving (Show, Eq, Ord, Generic)
+  }
+  deriving (Show, Eq, Ord, Generic)
 
 instance ToJSON ContractHeader
 instance FromJSON ContractHeader
@@ -264,7 +283,8 @@ data WithdrawalHeader = WithdrawalHeader
   { withdrawalId :: TxId
   , status :: TxStatus
   , block :: Maybe BlockHeader
-  } deriving (Show, Eq, Ord, Generic)
+  }
+  deriving (Show, Eq, Ord, Generic)
 
 instance ToJSON WithdrawalHeader
 instance FromJSON WithdrawalHeader
@@ -279,7 +299,8 @@ data PayoutRef = PayoutRef
   , payout :: TxOutRef
   , roleTokenMintingPolicyId :: PolicyId
   , role :: Text
-  } deriving (Show, Eq, Ord, Generic)
+  }
+  deriving (Show, Eq, Ord, Generic)
 
 instance ToJSON PayoutRef
 instance FromJSON PayoutRef
@@ -290,7 +311,8 @@ data Withdrawal = Withdrawal
   , withdrawalId :: TxId
   , status :: TxStatus
   , block :: Maybe BlockHeader
-  } deriving (Show, Eq, Ord, Generic)
+  }
+  deriving (Show, Eq, Ord, Generic)
 
 instance ToJSON Withdrawal
 instance FromJSON Withdrawal
@@ -300,13 +322,16 @@ instance HasPagination ContractHeader "contractId" where
   type RangeType ContractHeader "contractId" = TxOutRef
   getFieldValue _ ContractHeader{..} = contractId
 
-newtype Metadata = Metadata { unMetadata :: Value }
+newtype Metadata = Metadata {unMetadata :: Value}
   deriving (Show, Eq, Ord)
   deriving newtype (ToJSON, FromJSON)
 
 instance ToSchema Metadata where
-  declareNamedSchema _ = pure $ NamedSchema (Just "Metadata") $ mempty
-    & OpenApi.description ?~ "An arbitrary JSON value for storage in a metadata key"
+  declareNamedSchema _ =
+    pure $
+      NamedSchema (Just "Metadata") $
+        mempty
+          & OpenApi.description ?~ "An arbitrary JSON value for storage in a metadata key"
 
 data TxHeader = TxHeader
   { contractId :: TxOutRef
@@ -317,7 +342,8 @@ data TxHeader = TxHeader
   , status :: TxStatus
   , block :: Maybe BlockHeader
   , utxo :: Maybe TxOutRef
-  } deriving (Show, Eq, Ord, Generic)
+  }
+  deriving (Show, Eq, Ord, Generic)
 
 instance ToJSON TxHeader
 instance FromJSON TxHeader
@@ -340,7 +366,8 @@ data Tx = Tx
   , invalidBefore :: UTCTime
   , invalidHereafter :: UTCTime
   , txBody :: Maybe TextEnvelope
-  } deriving (Show, Eq, Generic)
+  }
+  deriving (Show, Eq, Generic)
 
 instance ToJSON Tx
 instance FromJSON Tx
@@ -368,18 +395,20 @@ instance FromJSON TxStatus where
   parseJSON _ = parseFail "invalid status"
 
 instance ToSchema TxStatus where
-  declareNamedSchema _ = pure
-    $ NamedSchema (Just "TxStatusHeader")
-    $ mempty
-      & type_ ?~ OpenApiString
-      & enum_ ?~ ["unsigned", "submitted", "confirmed"]
-      & OpenApi.description ?~ "A header of the status of a transaction on the local node."
+  declareNamedSchema _ =
+    pure $
+      NamedSchema (Just "TxStatusHeader") $
+        mempty
+          & type_ ?~ OpenApiString
+          & enum_ ?~ ["unsigned", "submitted", "confirmed"]
+          & OpenApi.description ?~ "A header of the status of a transaction on the local node."
 
 data BlockHeader = BlockHeader
   { slotNo :: Word64
   , blockNo :: Word64
   , blockHeaderHash :: Base16
-  } deriving (Show, Eq, Ord, Generic)
+  }
+  deriving (Show, Eq, Ord, Generic)
 
 instance ToJSON BlockHeader
 instance FromJSON BlockHeader
@@ -391,138 +420,162 @@ data CardanoTxBody
 data WithdrawTxEnvelope tx = WithdrawTxEnvelope
   { withdrawalId :: TxId
   , txEnvelope :: TextEnvelope
-  } deriving (Show, Eq, Ord, Generic)
+  }
+  deriving (Show, Eq, Ord, Generic)
 
 instance ToJSON (WithdrawTxEnvelope CardanoTx) where
-  toJSON WithdrawTxEnvelope{..} = object
-    [ ("withdrawalId", toJSON withdrawalId)
-    , ("tx", toJSON txEnvelope)
-    ]
+  toJSON WithdrawTxEnvelope{..} =
+    object
+      [ ("withdrawalId", toJSON withdrawalId)
+      , ("tx", toJSON txEnvelope)
+      ]
 instance ToJSON (WithdrawTxEnvelope CardanoTxBody) where
-  toJSON WithdrawTxEnvelope{..} = object
-    [ ("withdrawalId", toJSON withdrawalId)
-    , ("txBody", toJSON txEnvelope)
-    ]
+  toJSON WithdrawTxEnvelope{..} =
+    object
+      [ ("withdrawalId", toJSON withdrawalId)
+      , ("txBody", toJSON txEnvelope)
+      ]
 
 instance FromJSON (WithdrawTxEnvelope CardanoTx) where
-  parseJSON = withObject "WithdrawTxEnvelope" \obj -> WithdrawTxEnvelope
-    <$> obj .: "withdrawalId"
-    <*> obj .: "tx"
+  parseJSON = withObject "WithdrawTxEnvelope" \obj ->
+    WithdrawTxEnvelope
+      <$> obj .: "withdrawalId"
+      <*> obj .: "tx"
 
 instance FromJSON (WithdrawTxEnvelope CardanoTxBody) where
-  parseJSON = withObject "WithdrawTxEnvelope" \obj -> WithdrawTxEnvelope
-    <$> obj .: "withdrawalId"
-    <*> obj .: "txBody"
+  parseJSON = withObject "WithdrawTxEnvelope" \obj ->
+    WithdrawTxEnvelope
+      <$> obj .: "withdrawalId"
+      <*> obj .: "txBody"
 
 instance ToSchema (WithdrawTxEnvelope CardanoTx) where
   declareNamedSchema _ = do
     withdrawalIdSchema <- declareSchemaRef (Proxy :: Proxy TxId)
     txEnvelopeSchema <- declareSchemaRef (Proxy :: Proxy TextEnvelope)
-    return $ NamedSchema (Just "ApplyInputsTxEnvelope") $ mempty
-      & type_ ?~ OpenApiObject
-      & properties .~
-          [ ("withdrawalId", withdrawalIdSchema)
-          , ("tx", txEnvelopeSchema)
-          ]
-      & required .~ [ "withdrawalId", "tx" ]
+    return $
+      NamedSchema (Just "ApplyInputsTxEnvelope") $
+        mempty
+          & type_ ?~ OpenApiObject
+          & properties
+            .~ [ ("withdrawalId", withdrawalIdSchema)
+               , ("tx", txEnvelopeSchema)
+               ]
+          & required .~ ["withdrawalId", "tx"]
 
 instance ToSchema (WithdrawTxEnvelope CardanoTxBody) where
   declareNamedSchema _ = do
     withdrawalIdSchema <- declareSchemaRef (Proxy :: Proxy TxId)
     txEnvelopeSchema <- declareSchemaRef (Proxy :: Proxy TextEnvelope)
-    return $ NamedSchema (Just "ApplyInputsTxEnvelope") $ mempty
-      & type_ ?~ OpenApiObject
-      & properties .~
-          [ ("withdrawalId", withdrawalIdSchema)
-          , ("txBody", txEnvelopeSchema)
-          ]
-      & required .~ [ "withdrawalId", "txBody" ]
+    return $
+      NamedSchema (Just "ApplyInputsTxEnvelope") $
+        mempty
+          & type_ ?~ OpenApiObject
+          & properties
+            .~ [ ("withdrawalId", withdrawalIdSchema)
+               , ("txBody", txEnvelopeSchema)
+               ]
+          & required .~ ["withdrawalId", "txBody"]
 
 data CreateTxEnvelope tx = CreateTxEnvelope
   { contractId :: TxOutRef
   , txEnvelope :: TextEnvelope
-  } deriving (Show, Eq, Ord, Generic)
+  }
+  deriving (Show, Eq, Ord, Generic)
 
 instance ToJSON (CreateTxEnvelope CardanoTx) where
-  toJSON CreateTxEnvelope{..} = object
-    [ ("contractId", toJSON contractId)
-    , ("tx", toJSON txEnvelope)
-    ]
+  toJSON CreateTxEnvelope{..} =
+    object
+      [ ("contractId", toJSON contractId)
+      , ("tx", toJSON txEnvelope)
+      ]
 instance ToJSON (CreateTxEnvelope CardanoTxBody) where
-  toJSON CreateTxEnvelope{..} = object
-    [ ("contractId", toJSON contractId)
-    , ("txBody", toJSON txEnvelope)
-    ]
+  toJSON CreateTxEnvelope{..} =
+    object
+      [ ("contractId", toJSON contractId)
+      , ("txBody", toJSON txEnvelope)
+      ]
 
 instance FromJSON (CreateTxEnvelope CardanoTx) where
-  parseJSON = withObject "CreateTxEnvelope" \obj -> CreateTxEnvelope
-    <$> obj .: "contractId"
-    <*> obj .: "tx"
+  parseJSON = withObject "CreateTxEnvelope" \obj ->
+    CreateTxEnvelope
+      <$> obj .: "contractId"
+      <*> obj .: "tx"
 
 instance FromJSON (CreateTxEnvelope CardanoTxBody) where
-  parseJSON = withObject "CreateTxEnvelope" \obj -> CreateTxEnvelope
-    <$> obj .: "contractId"
-    <*> obj .: "txBody"
+  parseJSON = withObject "CreateTxEnvelope" \obj ->
+    CreateTxEnvelope
+      <$> obj .: "contractId"
+      <*> obj .: "txBody"
 
 instance ToSchema (CreateTxEnvelope CardanoTx) where
   declareNamedSchema _ = do
     contractIdSchema <- declareSchemaRef (Proxy :: Proxy TxOutRef)
     txEnvelopeSchema <- declareSchemaRef (Proxy :: Proxy TextEnvelope)
-    return $ NamedSchema (Just "ApplyInputsTxEnvelope") $ mempty
-      & type_ ?~ OpenApiObject
-      & properties .~
-          [ ("contractId", contractIdSchema)
-          , ("tx", txEnvelopeSchema)
-          ]
-      & required .~ [ "contractId", "tx" ]
+    return $
+      NamedSchema (Just "ApplyInputsTxEnvelope") $
+        mempty
+          & type_ ?~ OpenApiObject
+          & properties
+            .~ [ ("contractId", contractIdSchema)
+               , ("tx", txEnvelopeSchema)
+               ]
+          & required .~ ["contractId", "tx"]
 
 instance ToSchema (CreateTxEnvelope CardanoTxBody) where
   declareNamedSchema _ = do
     contractIdSchema <- declareSchemaRef (Proxy :: Proxy TxOutRef)
     txEnvelopeSchema <- declareSchemaRef (Proxy :: Proxy TextEnvelope)
-    return $ NamedSchema (Just "ApplyInputsTxEnvelope") $ mempty
-      & type_ ?~ OpenApiObject
-      & properties .~
-          [ ("contractId", contractIdSchema)
-          , ("txBody", txEnvelopeSchema)
-          ]
-      & required .~ [ "contractId", "txBody" ]
+    return $
+      NamedSchema (Just "ApplyInputsTxEnvelope") $
+        mempty
+          & type_ ?~ OpenApiObject
+          & properties
+            .~ [ ("contractId", contractIdSchema)
+               , ("txBody", txEnvelopeSchema)
+               ]
+          & required .~ ["contractId", "txBody"]
 
 data TextEnvelope = TextEnvelope
   { teType :: Text
   , teDescription :: Text
   , teCborHex :: Base16
-  } deriving (Show, Eq, Ord, Generic)
+  }
+  deriving (Show, Eq, Ord, Generic)
 
 instance ToJSON TextEnvelope where
-  toJSON TextEnvelope{..} = object
-    [ ("type", toJSON teType)
-    , ("description", toJSON teDescription)
-    , ("cborHex", toJSON teCborHex)
-    ]
+  toJSON TextEnvelope{..} =
+    object
+      [ ("type", toJSON teType)
+      , ("description", toJSON teDescription)
+      , ("cborHex", toJSON teCborHex)
+      ]
 
 instance FromJSON TextEnvelope where
-  parseJSON = withObject "TextEnvelope" \obj -> TextEnvelope
-    <$> obj .: "type"
-    <*> obj .: "description"
-    <*> obj .: "cborHex"
+  parseJSON = withObject "TextEnvelope" \obj ->
+    TextEnvelope
+      <$> obj .: "type"
+      <*> obj .: "description"
+      <*> obj .: "cborHex"
 
 instance ToSchema TextEnvelope where
   declareNamedSchema _ = do
     textSchema <- declareSchemaRef (Proxy @Text)
-    pure $ NamedSchema (Just "TextEnvelope") $ mempty
-      & type_ ?~ OpenApiObject
-      & required .~ ["type", "description", "cborHex"]
-      & properties .~
-          [ ("type", textSchema)
-          , ("description", textSchema)
-          , ("cborHex", textSchema)
-          ]
+    pure $
+      NamedSchema (Just "TextEnvelope") $
+        mempty
+          & type_ ?~ OpenApiObject
+          & required .~ ["type", "description", "cborHex"]
+          & properties
+            .~ [ ("type", textSchema)
+               , ("description", textSchema)
+               , ("cborHex", textSchema)
+               ]
 
 data PostWithdrawalsRequest = PostWithdrawalsRequest
   { role :: Text
   , contractId :: TxOutRef
-  } deriving (Show, Eq, Ord, Generic)
+  }
+  deriving (Show, Eq, Ord, Generic)
 
 instance FromJSON PostWithdrawalsRequest
 instance ToJSON PostWithdrawalsRequest
@@ -535,7 +588,8 @@ data PostContractsRequest = PostContractsRequest
   , roles :: Maybe RolesConfig
   , contract :: Semantics.Contract
   , minUTxODeposit :: Word64
-  } deriving (Show, Eq, Ord, Generic)
+  }
+  deriving (Show, Eq, Ord, Generic)
 
 instance FromJSON PostContractsRequest
 instance ToJSON PostContractsRequest
@@ -558,8 +612,10 @@ instance ToSchema RolesConfig where
   declareNamedSchema _ = do
     policySchema <- declareSchemaRef (Proxy @PolicyId)
     mintSchema <- declareSchemaRef (Proxy @(Map Text RoleTokenConfig))
-    pure $ NamedSchema (Just "RolesConfig") $ mempty
-      & oneOf ?~ [policySchema, mintSchema]
+    pure $
+      NamedSchema (Just "RolesConfig") $
+        mempty
+          & oneOf ?~ [policySchema, mintSchema]
 
 data RoleTokenConfig
   = RoleTokenSimple Address
@@ -568,32 +624,36 @@ data RoleTokenConfig
 
 instance FromJSON RoleTokenConfig where
   parseJSON (String s) = pure $ RoleTokenSimple $ Address s
-  parseJSON value = withObject
-    "RoleTokenConfig"
-    (\obj -> RoleTokenAdvanced <$> obj .: "address" <*> obj .: "metadata")
-    value
+  parseJSON value =
+    withObject
+      "RoleTokenConfig"
+      (\obj -> RoleTokenAdvanced <$> obj .: "address" <*> obj .: "metadata")
+      value
 
 instance ToJSON RoleTokenConfig where
   toJSON (RoleTokenSimple address) = toJSON address
-  toJSON (RoleTokenAdvanced address config) = object
-    [ ("address", toJSON address)
-    , ("metadata", toJSON config)
-    ]
+  toJSON (RoleTokenAdvanced address config) =
+    object
+      [ ("address", toJSON address)
+      , ("metadata", toJSON config)
+      ]
 
 instance ToSchema RoleTokenConfig where
   declareNamedSchema _ = do
     simpleSchema <- declareSchemaRef (Proxy @Address)
     metadataSchema <- declareSchemaRef (Proxy @TokenMetadata)
-    let
-      advancedSchema = mempty
-        & type_ ?~ OpenApiObject
-        & required .~ ["address", "metadata"]
-        & properties .~
-            [ ("address", simpleSchema)
-            , ("metadata", metadataSchema)
-            ]
-    pure $ NamedSchema (Just "RoleTokenConfig") $ mempty
-      & oneOf ?~ [simpleSchema, Inline advancedSchema]
+    let advancedSchema =
+          mempty
+            & type_ ?~ OpenApiObject
+            & required .~ ["address", "metadata"]
+            & properties
+              .~ [ ("address", simpleSchema)
+                 , ("metadata", metadataSchema)
+                 ]
+    pure $
+      NamedSchema (Just "RoleTokenConfig") $
+        mempty
+          & oneOf ?~ [simpleSchema, Inline advancedSchema]
 
 data TokenMetadata = TokenMetadata
   { name :: Text
@@ -601,7 +661,8 @@ data TokenMetadata = TokenMetadata
   , mediaType :: Maybe Text
   , description :: Maybe Text
   , files :: Maybe [TokenMetadataFile]
-  } deriving (Show, Eq, Ord, Generic)
+  }
+  deriving (Show, Eq, Ord, Generic)
 
 instance FromJSON TokenMetadata where
   parseJSON = withObject "TokenMetadata" \obj -> do
@@ -614,35 +675,39 @@ instance FromJSON TokenMetadata where
       <*> obj .:? "files"
 
 instance ToJSON TokenMetadata where
-  toJSON TokenMetadata{..} = object
-    [ ("name", toJSON name)
-    , ("image", uriToJSON image)
-    , ("mediaType", toJSON mediaType)
-    , ("description", toJSON description)
-    , ("files", toJSON files)
-    ]
+  toJSON TokenMetadata{..} =
+    object
+      [ ("name", toJSON name)
+      , ("image", uriToJSON image)
+      , ("mediaType", toJSON mediaType)
+      , ("description", toJSON description)
+      , ("files", toJSON files)
+      ]
 
 instance ToSchema TokenMetadata where
   declareNamedSchema _ = do
     stringSchema <- declareSchemaRef (Proxy @Text)
     filesSchema <- declareSchemaRef (Proxy @[TokenMetadataFile])
-    pure $ NamedSchema (Just "TokenMetadata") $ mempty
-      & type_ ?~ OpenApiObject
-      & OpenApi.description ?~ "Metadata for an NFT, as described by https://cips.cardano.org/cips/cip25/"
-      & required .~ ["name", "image"]
-      & properties .~
-          [ ("name", stringSchema)
-          , ("image", stringSchema)
-          , ("mediaType", stringSchema)
-          , ("description", stringSchema)
-          , ("files", filesSchema)
-          ]
+    pure $
+      NamedSchema (Just "TokenMetadata") $
+        mempty
+          & type_ ?~ OpenApiObject
+          & OpenApi.description ?~ "Metadata for an NFT, as described by https://cips.cardano.org/cips/cip25/"
+          & required .~ ["name", "image"]
+          & properties
+            .~ [ ("name", stringSchema)
+               , ("image", stringSchema)
+               , ("mediaType", stringSchema)
+               , ("description", stringSchema)
+               , ("files", filesSchema)
+               ]
 
 data TokenMetadataFile = TokenMetadataFile
   { name :: Text
   , src :: URI
   , mediaType :: Text
-  } deriving (Show, Eq, Ord, Generic)
+  }
+  deriving (Show, Eq, Ord, Generic)
 
 instance FromJSON TokenMetadataFile where
   parseJSON = withObject "TokenMetadataFile" \obj -> do
@@ -653,23 +718,26 @@ instance FromJSON TokenMetadataFile where
       <*> obj .: "mediaType"
 
 instance ToJSON TokenMetadataFile where
-  toJSON TokenMetadataFile{..} = object
-    [ ("name", toJSON name)
-    , ("src", uriToJSON src)
-    , ("mediaType", toJSON mediaType)
-    ]
+  toJSON TokenMetadataFile{..} =
+    object
+      [ ("name", toJSON name)
+      , ("src", uriToJSON src)
+      , ("mediaType", toJSON mediaType)
+      ]
 
 instance ToSchema TokenMetadataFile where
   declareNamedSchema _ = do
     stringSchema <- declareSchemaRef (Proxy @Text)
-    pure $ NamedSchema (Just "TokenMetadataFile") $ mempty
-      & type_ ?~ OpenApiObject
-      & required .~ ["name", "src", "mediaType"]
-      & properties .~
-          [ ("name", stringSchema)
-          , ("src", stringSchema)
-          , ("mediaType", stringSchema)
-          ]
+    pure $
+      NamedSchema (Just "TokenMetadataFile") $
+        mempty
+          & type_ ?~ OpenApiObject
+          & required .~ ["name", "src", "mediaType"]
+          & properties
+            .~ [ ("name", stringSchema)
+               , ("src", stringSchema)
+               , ("mediaType", stringSchema)
+               ]
 
 uriFromJSON :: Value -> Parser URI
 uriFromJSON = withText "URI" $ maybe (parseFail "invalid URI") pure . parseURI . T.unpack
@@ -684,7 +752,8 @@ data PostTransactionsRequest = PostTransactionsRequest
   , invalidBefore :: Maybe UTCTime
   , invalidHereafter :: Maybe UTCTime
   , inputs :: [Semantics.Input]
-  } deriving (Show, Eq, Generic)
+  }
+  deriving (Show, Eq, Generic)
 
 instance FromJSON PostTransactionsRequest
 instance ToJSON PostTransactionsRequest
@@ -694,20 +763,23 @@ data ApplyInputsTxEnvelope tx = ApplyInputsTxEnvelope
   { contractId :: TxOutRef
   , transactionId :: TxId
   , txEnvelope :: TextEnvelope
-  } deriving (Show, Eq, Ord, Generic)
+  }
+  deriving (Show, Eq, Ord, Generic)
 
 instance ToJSON (ApplyInputsTxEnvelope CardanoTx) where
-  toJSON ApplyInputsTxEnvelope{..} = object
-    [ ("contractId", toJSON contractId)
-    , ("transactionId", toJSON transactionId)
-    , ("tx", toJSON txEnvelope)
-    ]
+  toJSON ApplyInputsTxEnvelope{..} =
+    object
+      [ ("contractId", toJSON contractId)
+      , ("transactionId", toJSON transactionId)
+      , ("tx", toJSON txEnvelope)
+      ]
 instance ToJSON (ApplyInputsTxEnvelope CardanoTxBody) where
-  toJSON ApplyInputsTxEnvelope{..} = object
-    [ ("contractId", toJSON contractId)
-    , ("transactionId", toJSON transactionId)
-    , ("txBody", toJSON txEnvelope)
-    ]
+  toJSON ApplyInputsTxEnvelope{..} =
+    object
+      [ ("contractId", toJSON contractId)
+      , ("transactionId", toJSON transactionId)
+      , ("txBody", toJSON txEnvelope)
+      ]
 
 instance FromJSON (ApplyInputsTxEnvelope CardanoTx) where
   parseJSON = withObject "ApplyInputsTxEnvelope" \obj -> do
@@ -728,25 +800,124 @@ instance ToSchema (ApplyInputsTxEnvelope CardanoTx) where
     contractIdSchema <- declareSchemaRef (Proxy :: Proxy TxOutRef)
     transactionIdSchema <- declareSchemaRef (Proxy :: Proxy TxId)
     txEnvelopeSchema <- declareSchemaRef (Proxy :: Proxy TextEnvelope)
-    return $ NamedSchema (Just "ApplyInputsTxEnvelope") $ mempty
-      & type_ ?~ OpenApiObject
-      & properties .~
-          [ ("contractId", contractIdSchema)
-          , ("transactionId", transactionIdSchema)
-          , ("tx", txEnvelopeSchema)
-          ]
-      & required .~ [ "contractId", "transactionId", "tx" ]
+    return $
+      NamedSchema (Just "ApplyInputsTxEnvelope") $
+        mempty
+          & type_ ?~ OpenApiObject
+          & properties
+            .~ [ ("contractId", contractIdSchema)
+               , ("transactionId", transactionIdSchema)
+               , ("tx", txEnvelopeSchema)
+               ]
+          & required .~ ["contractId", "transactionId", "tx"]
 
 instance ToSchema (ApplyInputsTxEnvelope CardanoTxBody) where
   declareNamedSchema _ = do
     contractIdSchema <- declareSchemaRef (Proxy :: Proxy TxOutRef)
     transactionIdSchema <- declareSchemaRef (Proxy :: Proxy TxId)
     txEnvelopeSchema <- declareSchemaRef (Proxy :: Proxy TextEnvelope)
-    return $ NamedSchema (Just "ApplyInputsTxEnvelope") $ mempty
-      & type_ ?~ OpenApiObject
-      & properties .~
-          [ ("contractId", contractIdSchema)
-          , ("transactionId", transactionIdSchema)
-          , ("txBody", txEnvelopeSchema)
-          ]
-      & required .~ [ "contractId", "transactionId", "txBody" ]
+    return $
+      NamedSchema (Just "ApplyInputsTxEnvelope") $
+        mempty
+          & type_ ?~ OpenApiObject
+          & properties
+            .~ [ ("contractId", contractIdSchema)
+               , ("transactionId", transactionIdSchema)
+               , ("txBody", txEnvelopeSchema)
+               ]
+          & required .~ ["contractId", "transactionId", "txBody"]
+
+data NetworkId
+  = Mainnet
+  | Testnet Word32
+  deriving (Show, Eq, Ord)
+
+instance ToSchema NetworkId where
+  declareNamedSchema _ = do
+    let mainnetSchema =
+          mempty
+            & type_ ?~ OpenApiString
+            & enum_ ?~ ["mainnet"]
+    testnetSchema <- declareSchemaRef (Proxy @Word32)
+    pure $
+      NamedSchema (Just "NetworkId") $
+        mempty
+          & oneOf ?~ [Inline mainnetSchema, testnetSchema]
+
+data ChainTip
+  = ChainTipGenesis UTCTime
+  | ChainTip BlockHeader UTCTime
+  deriving (Show, Eq, Ord)
+
+data RuntimeStatus = RuntimeStatus
+  { nodeTip :: ChainTip
+  , runtimeChainTip :: ChainTip
+  , runtimeTip :: ChainTip
+  , networkId :: NetworkId
+  , runtimeVersion :: Version
+  }
+  deriving (Show, Eq, Ord)
+
+instance ToJSON ChainTip where
+  toJSON = \case
+    ChainTipGenesis time -> object ["genesisTimeUTC" .= iso8601Show time]
+    ChainTip blockHeader time ->
+      object
+        [ "blockHeader" .= blockHeader
+        , "slotTimeUTC" .= iso8601Show time
+        ]
+
+instance FromJSON ChainTip where
+  parseJSON = withObject "ChainTip" \obj -> do
+    genesisTimeUTC <- obj .:? "genesisTimeUTC"
+    blockHeader <- obj .:? "blockHeader"
+    slotTimeUTC <- obj .:? "slotTimeUTC"
+    case (genesisTimeUTC, blockHeader, slotTimeUTC) of
+      (Nothing, Just blockHeader', Just slotTimeUTC') -> pure $ ChainTip blockHeader' slotTimeUTC'
+      (Just genesisTimeUTC', Nothing, Nothing) -> pure $ ChainTipGenesis genesisTimeUTC'
+      _ -> parseFail "Invalid keys, expecting ([\"genesisTimeUTC\"] | [\"blockHeader\", \"slotTimeUTC\"])"
+
+instance ToHttpApiData ChainTip where
+  toUrlPiece = TL.toStrict . encodeToLazyText
+
+instance FromHttpApiData ChainTip where
+  parseUrlPiece = first T.pack . eitherDecodeStrict . encodeUtf8
+
+instance ToHttpApiData NetworkId where
+  toUrlPiece = \case
+    Mainnet -> "mainnet"
+    Testnet n -> toUrlPiece n
+
+instance FromHttpApiData NetworkId where
+  parseUrlPiece = \case
+    "mainnet" -> pure Mainnet
+    n -> Testnet <$> parseUrlPiece n
+
+instance ToParamSchema ChainTip where
+  toParamSchema _ =
+    mempty
+      & oneOf ?~ [Inline genesisSchema, Inline tipSchema]
+      & OpenApi.description ?~ "The latest known point in the chain on a peer."
+    where
+      genesisSchema =
+        mempty
+          & type_ ?~ OpenApiObject
+          & properties
+            .~ [ ("genesisTimeUTC", Inline $ toParamSchema $ Proxy @UTCTime)
+               ]
+          & required .~ ["genesisTimeUTC"]
+
+      tipSchema =
+        mempty
+          & type_ ?~ OpenApiObject
+          & properties
+            .~ [ ("blockHeader", Ref $ Reference "BlockHeader")
+               , ("slotTimeUTC", Inline $ toParamSchema $ Proxy @UTCTime)
+               ]
+          & required .~ ["genesisTimeUTC"]
+
+instance ToParamSchema NetworkId where
+  toParamSchema _ =
+    mempty
+      & oneOf ?~ [Inline (mempty & type_ ?~ OpenApiString), Inline (mempty & type_ ?~ OpenApiInteger)]
+      & OpenApi.description ?~ "The latest known point in the chain on a peer."

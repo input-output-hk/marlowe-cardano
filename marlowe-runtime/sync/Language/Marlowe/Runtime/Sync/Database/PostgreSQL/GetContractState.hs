@@ -5,7 +5,7 @@
 module Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetContractState where
 
 import Control.Monad.Trans.Class (lift)
-import Control.Monad.Trans.Maybe (MaybeT(MaybeT), runMaybeT)
+import Control.Monad.Trans.Maybe (MaybeT (MaybeT), runMaybeT)
 import Data.Binary (Binary, get)
 import Data.Binary.Get (runGet)
 import Data.ByteString (ByteString)
@@ -17,39 +17,42 @@ import Data.Vector (Vector)
 import qualified Data.Vector as V
 import Hasql.TH (maybeStatement, vectorStatement)
 import qualified Hasql.Transaction as T
-import Language.Marlowe (MarloweData(..), MarloweParams(MarloweParams))
+import Language.Marlowe (MarloweData (..), MarloweParams (MarloweParams))
 import Language.Marlowe.Protocol.Query.Types
-import Language.Marlowe.Runtime.ChainSync.Api
-  ( Address(..)
-  , AssetId(AssetId)
-  , Assets(..)
-  , BlockHeader(..)
-  , BlockHeaderHash(..)
-  , PolicyId(..)
-  , TokenName(TokenName)
-  , Tokens(Tokens)
-  , TxId(..)
-  , TxOutRef(..)
-  , fromDatum
-  )
-import Language.Marlowe.Runtime.Core.Api
-  ( ContractId(..)
-  , MarloweTransactionMetadata
-  , MarloweVersion(..)
-  , MarloweVersionTag(..)
-  , Payout(..)
-  , TransactionScriptOutput(..)
-  , emptyMarloweTransactionMetadata
-  )
+import Language.Marlowe.Runtime.ChainSync.Api (
+  Address (..),
+  AssetId (AssetId),
+  Assets (..),
+  BlockHeader (..),
+  BlockHeaderHash (..),
+  PolicyId (..),
+  TokenName (TokenName),
+  Tokens (Tokens),
+  TxId (..),
+  TxOutRef (..),
+  fromDatum,
+ )
+import Language.Marlowe.Runtime.Core.Api (
+  ContractId (..),
+  MarloweTransactionMetadata,
+  MarloweVersion (..),
+  MarloweVersionTag (..),
+  Payout (..),
+  TransactionScriptOutput (..),
+  emptyMarloweTransactionMetadata,
+ )
 import qualified Plutus.V2.Ledger.Api as PV2
 import Prelude hiding (init)
 
 getContractState :: ContractId -> T.Transaction (Maybe SomeContractState)
 getContractState (ContractId TxOutRef{..}) = runMaybeT do
   let params = (unTxId txId, fromIntegral txIx)
-  (contractId, roleTokenMintingPolicyId, metadata, initialBlock, initialOutput) <- fmap decodeCreateResults
-    $ MaybeT
-    $ T.statement params [maybeStatement|
+  (contractId, roleTokenMintingPolicyId, metadata, initialBlock, initialOutput) <-
+    fmap decodeCreateResults $
+      MaybeT $
+        T.statement
+          params
+          [maybeStatement|
       SELECT
         createTxOut.txId :: bytea,
         createTxOut.txIx :: smallint,
@@ -73,7 +76,12 @@ getContractState (ContractId TxOutRef{..}) = runMaybeT do
         AND createTxOut.txIx = $2 :: smallint
       GROUP BY createTxOut.txId, createTxOut.txIx
     |]
-  (latestBlock, latestOutput) <- lift $ maybe (initialBlock, Just initialOutput) decodeLatestResults <$> T.statement params [maybeStatement|
+  (latestBlock, latestOutput) <-
+    lift $
+      maybe (initialBlock, Just initialOutput) decodeLatestResults
+        <$> T.statement
+          params
+          [maybeStatement|
     SELECT
       applyTx.txId :: bytea,
       (ARRAY_AGG(applyTx.outputTxIx))[1] :: smallint?,
@@ -106,9 +114,12 @@ getContractState (ContractId TxOutRef{..}) = runMaybeT do
       AND consumer.txId IS NULL
     GROUP BY applyTx.txId
   |]
-  unclaimedPayouts <- lift
-    $ Map.fromDistinctAscList . V.toList . fmap decodePayout
-    <$> T.statement params [vectorStatement|
+  unclaimedPayouts <-
+    lift $
+      Map.fromDistinctAscList . V.toList . fmap decodePayout
+        <$> T.statement
+          params
+          [vectorStatement|
       SELECT
         payoutTxOut.txId :: bytea,
         payoutTxOut.txIx :: smallint,
@@ -151,7 +162,8 @@ type CreateResultRow =
   , Vector Int64
   )
 
-decodeCreateResults :: CreateResultRow -> (ContractId, PolicyId, MarloweTransactionMetadata, BlockHeader, TransactionScriptOutput 'V1)
+decodeCreateResults
+  :: CreateResultRow -> (ContractId, PolicyId, MarloweTransactionMetadata, BlockHeader, TransactionScriptOutput 'V1)
 decodeCreateResults row =
   ( decodeContractId txId txIx
   , PolicyId rolesCurrency
@@ -192,7 +204,7 @@ type LatestResultRow =
   , Vector Int64
   )
 
-decodeLatestResults :: LatestResultRow  -> (BlockHeader, Maybe (TransactionScriptOutput 'V1))
+decodeLatestResults :: LatestResultRow -> (BlockHeader, Maybe (TransactionScriptOutput 'V1))
 decodeLatestResults row =
   ( decodeBlockHeader slotNo hash blockNo
   , decodeTransactionScriptOutput txId
@@ -238,13 +250,14 @@ decodePayout :: PayoutRow -> (TxOutRef, Payout 'V1)
 decodePayout row =
   ( decodeTxOutRef txId txIx
   , Payout
-    { address = Address address
-    , assets = Assets
-      { ada = fromIntegral lovelace
-      , tokens = decodeTokens policyIds tokenNames quantities
+      { address = Address address
+      , assets =
+          Assets
+            { ada = fromIntegral lovelace
+            , tokens = decodeTokens policyIds tokenNames quantities
+            }
+      , datum = AssetId (PolicyId rolesCurrency) (TokenName role)
       }
-    , datum = AssetId (PolicyId rolesCurrency) (TokenName role)
-    }
   )
   where
     ( txId
@@ -258,7 +271,7 @@ decodePayout row =
       , quantities
       ) = row
 
-decodeBinary :: Binary a => ByteString -> a
+decodeBinary :: (Binary a) => ByteString -> a
 decodeBinary = runGet get . fromStrict
 
 decodeMetadata :: Maybe ByteString -> MarloweTransactionMetadata
@@ -286,24 +299,27 @@ decodeTransactionScriptOutput
   -> ByteString
   -> ByteString
   -> TransactionScriptOutput 'V1
-decodeTransactionScriptOutput txId txIx address lovelace policyIds tokenNames quantities rolesCurrency state contract = TransactionScriptOutput
-  { address = Address address
-  , assets = Assets
-    { ada = fromIntegral lovelace
-    , tokens = decodeTokens policyIds tokenNames quantities
+decodeTransactionScriptOutput txId txIx address lovelace policyIds tokenNames quantities rolesCurrency state contract =
+  TransactionScriptOutput
+    { address = Address address
+    , assets =
+        Assets
+          { ada = fromIntegral lovelace
+          , tokens = decodeTokens policyIds tokenNames quantities
+          }
+    , utxo = decodeTxOutRef txId txIx
+    , datum = decodeMarloweData rolesCurrency state contract
     }
-  , utxo = decodeTxOutRef txId txIx
-  , datum = decodeMarloweData rolesCurrency state contract
-  }
 
 decodeMarloweData :: ByteString -> ByteString -> ByteString -> MarloweData
-decodeMarloweData rolesCurrency state contract = MarloweData
-  { marloweParams = MarloweParams $ PV2.CurrencySymbol $ PV2.toBuiltin rolesCurrency
-  , marloweState = decodeDatumBytes state
-  , marloweContract = decodeDatumBytes contract
-  }
+decodeMarloweData rolesCurrency state contract =
+  MarloweData
+    { marloweParams = MarloweParams $ PV2.CurrencySymbol $ PV2.toBuiltin rolesCurrency
+    , marloweState = decodeDatumBytes state
+    , marloweContract = decodeDatumBytes contract
+    }
 
-decodeDatumBytes :: PV2.FromData a => ByteString -> a
+decodeDatumBytes :: (PV2.FromData a) => ByteString -> a
 decodeDatumBytes = fromJust . fromDatum . decodeBinary
 
 decodeTokens
@@ -311,8 +327,11 @@ decodeTokens
   -> Vector ByteString
   -> Vector Int64
   -> Tokens
-decodeTokens policyIds tokenNames quantities = Tokens $ Map.fromList $ zipWith3
-  (\p t q -> (AssetId (PolicyId p) (TokenName t), fromIntegral q))
-  (V.toList policyIds)
-  (V.toList tokenNames)
-  (V.toList quantities)
+decodeTokens policyIds tokenNames quantities =
+  Tokens $
+    Map.fromList $
+      zipWith3
+        (\p t q -> (AssetId (PolicyId p) (TokenName t), fromIntegral q))
+        (V.toList policyIds)
+        (V.toList tokenNames)
+        (V.toList quantities)

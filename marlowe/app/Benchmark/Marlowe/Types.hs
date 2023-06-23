@@ -1,5 +1,3 @@
-
-
 -----------------------------------------------------------------------------
 --
 -- Module      :  $Headers
@@ -8,37 +6,35 @@
 -- Stability   :  Experimental
 -- Portability :  Portable
 --
--- | Types for benchmarking Marlowe validators.
---
+
 -----------------------------------------------------------------------------
 
-
-module Benchmark.Marlowe.Types
-  ( -- * Benchmarking
-    Benchmark(..)
-  , makeBenchmark
-  ) where
-
+-- | Types for benchmarking Marlowe validators.
+module Benchmark.Marlowe.Types (
+  -- * Benchmarking
+  Benchmark (..),
+  makeBenchmark,
+) where
 
 import Plutus.V2.Ledger.Api (Data, ExBudget, ScriptContext, ToData, toData)
 
-
 -- | A benchmarking case.
-data Benchmark =
-  Benchmark
-  {
-    bDatum         :: Data  -- ^ The datum.
-  , bRedeemer      :: Data  -- ^ The redeemer.
-  , bScriptContext :: ScriptContext  -- ^ The script context.
-  , bReferenceCost :: Maybe ExBudget  -- ^ The previously measured execution costs.
+data Benchmark = Benchmark
+  { bDatum :: Data
+  -- ^ The datum.
+  , bRedeemer :: Data
+  -- ^ The redeemer.
+  , bScriptContext :: ScriptContext
+  -- ^ The script context.
+  , bReferenceCost :: Maybe ExBudget
+  -- ^ The previously measured execution costs.
   }
-    deriving Show
-
+  deriving (Show)
 
 -- | Construct a benchmarking case.
 makeBenchmark
-  :: ToData d
-  => ToData r
+  :: (ToData d)
+  => (ToData r)
   => d
   -> r
   -> ScriptContext

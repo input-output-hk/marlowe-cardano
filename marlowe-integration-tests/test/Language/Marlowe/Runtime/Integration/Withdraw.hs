@@ -3,12 +3,16 @@ module Language.Marlowe.Runtime.Integration.Withdraw where
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Marlowe.Class (withdraw)
 import qualified Data.Map as Map
-import Language.Marlowe.Runtime.ChainSync.Api (AssetId(..), Assets(Assets))
-import Language.Marlowe.Runtime.Core.Api (MarloweVersion(..), Payout(Payout))
-import Language.Marlowe.Runtime.Integration.Common (Wallet(..), expectRight, getGenesisWallet, runIntegrationTest)
+import Language.Marlowe.Runtime.ChainSync.Api (AssetId (..), Assets (Assets))
+import Language.Marlowe.Runtime.Core.Api (MarloweVersion (..), Payout (Payout))
+import Language.Marlowe.Runtime.Integration.Common (Wallet (..), expectRight, getGenesisWallet, runIntegrationTest)
 import Language.Marlowe.Runtime.Integration.StandardContract
-import Language.Marlowe.Runtime.Transaction.Api
-  (ConstraintError(RoleTokenNotFound), ContractCreated(..), WithdrawError(..), WithdrawTx(..))
+import Language.Marlowe.Runtime.Transaction.Api (
+  ConstraintError (RoleTokenNotFound),
+  ContractCreated (..),
+  WithdrawError (..),
+  WithdrawTx (..),
+ )
 import Test.Hspec
 import Test.Integration.Marlowe.Local (withLocalMarloweRuntime)
 
@@ -52,6 +56,7 @@ payoutsTest = withLocalMarloweRuntime $ runIntegrationTest do
   step3 <- chooseGimmeTheMoney step2
   step4 <- sendNotify step3
   _ <- makeReturnDeposit step4
-  WithdrawTx{inputs, roleToken = AssetId{..}} <- expectRight "failed to withdraw payouts" =<< withdraw MarloweV1 (addresses wallet1) contractId "Party A"
+  WithdrawTx{inputs, roleToken = AssetId{..}} <-
+    expectRight "failed to withdraw payouts" =<< withdraw MarloweV1 (addresses wallet1) contractId "Party A"
   liftIO $ tokenName `shouldBe` "Party A"
   liftIO $ Map.elems inputs `shouldBe` [Payout payoutScriptAddress (Assets 100_000_000 mempty) AssetId{..}]

@@ -3,16 +3,16 @@
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE ViewPatterns #-}
 
-module Language.Marlowe.Runtime.CLI.Command.Load
-  ( LoadCommand(..)
-  , loadCommandParser
-  , runLoadCommand
-  ) where
+module Language.Marlowe.Runtime.CLI.Command.Load (
+  LoadCommand (..),
+  loadCommandParser,
+  runLoadCommand,
+) where
 
 import Control.Monad (foldM, unless)
 import qualified Control.Monad as Monad
-import Control.Monad.Except (ExceptT(ExceptT), runExceptT, throwError, withExceptT)
-import Control.Monad.Reader (MonadReader(ask), ReaderT, local, runReaderT)
+import Control.Monad.Except (ExceptT (ExceptT), runExceptT, throwError, withExceptT)
+import Control.Monad.Reader (MonadReader (ask), ReaderT, local, runReaderT)
 import Control.Monad.Trans (lift)
 import Data.Aeson hiding (Value)
 import qualified Data.Aeson.KeyMap as KM
@@ -21,15 +21,20 @@ import Data.List (sortOn)
 import qualified Data.Text as T
 import Data.Yaml (ParseException, decodeFileEither, prettyPrintParseException)
 import Language.Marlowe.Core.V1.Semantics.Types (AccountId, Action, Observation, Payee, Timeout, Token, Value, ValueId)
-import Language.Marlowe.Protocol.Load.Client
-  (ClientStCanPush(..), ClientStComplete(..), ClientStPop, ClientStProcessing(..), MarloweLoadClient(MarloweLoadClient))
-import Language.Marlowe.Protocol.Load.Types (Node(..))
+import Language.Marlowe.Protocol.Load.Client (
+  ClientStCanPush (..),
+  ClientStComplete (..),
+  ClientStPop,
+  ClientStProcessing (..),
+  MarloweLoadClient (MarloweLoadClient),
+ )
+import Language.Marlowe.Protocol.Load.Types (Node (..))
 import Language.Marlowe.Runtime.CLI.Monad (CLI)
 import Language.Marlowe.Runtime.ChainSync.Api (DatumHash)
 import Language.Marlowe.Runtime.Client (runMarloweLoadClient)
-import Network.TypedProtocol (N(..), Nat(..))
+import Network.TypedProtocol (N (..), Nat (..))
 import Options.Applicative (ParserInfo, help, info, metavar, progDesc, strArgument)
-import Plutus.V2.Ledger.Api (POSIXTime(..))
+import Plutus.V2.Ledger.Api (POSIXTime (..))
 import System.Exit (exitFailure)
 import System.FilePath (takeDirectory)
 import System.IO (hFlush, hPutStrLn, stderr)
@@ -44,30 +49,31 @@ newtype LoadCommand = LoadCommand
 loadCommandParser :: ParserInfo LoadCommand
 loadCommandParser = info parser $ progDesc "Load a contract into the runtime"
   where
-    parser = LoadCommand
-      <$> contractFileOption
-    contractFileOption = strArgument $ mconcat
-      [ metavar "FILE_PATH"
-      , help "A file that contains the JSON representation of the contract to load."
-      ]
+    parser =
+      LoadCommand
+        <$> contractFileOption
+    contractFileOption =
+      strArgument $
+        mconcat
+          [ metavar "FILE_PATH"
+          , help "A file that contains the JSON representation of the contract to load."
+          ]
 
 runLoadCommand :: LoadCommand -> CLI ()
 runLoadCommand LoadCommand{..} = do
   result <- runExceptT $ flip runReaderT [] do
     nodeCount <- countNodes 0 contractFile
     progress <- newIORef (-1 :: Int)
-    let
-      countWidth = floor (logBase 10 $ realToFrac nodeCount :: Double) + 1 :: Int
-      printStr = " [%-32s] %" <> show countWidth <> "d of " <> show nodeCount <> " nodes transferred.\r"
-      incrementProgress = do
-        newProgress <- atomicModifyIORef progress \i -> (i + 1, i + 1)
-        let
-          bar
-            | newProgress == 0 = ""
-            | newProgress == nodeCount = replicate 32 '='
-            | otherwise = reverse $ '>' : replicate ((newProgress * 32 `div` nodeCount) - 1) '='
-        liftIO $ hPrintf stderr printStr bar newProgress
-        liftIO $ hFlush stderr
+    let countWidth = floor (logBase 10 $ realToFrac nodeCount :: Double) + 1 :: Int
+        printStr = " [%-32s] %" <> show countWidth <> "d of " <> show nodeCount <> " nodes transferred.\r"
+        incrementProgress = do
+          newProgress <- atomicModifyIORef progress \i -> (i + 1, i + 1)
+          let bar
+                | newProgress == 0 = ""
+                | newProgress == nodeCount = replicate 32 '='
+                | otherwise = reverse $ '>' : replicate ((newProgress * 32 `div` nodeCount) - 1) '='
+          liftIO $ hPrintf stderr printStr bar newProgress
+          liftIO $ hFlush stderr
     lift $ ExceptT $ runMarloweLoadClient $ loadClient incrementProgress contractFile
   liftIO case result of
     Left err -> do
@@ -108,14 +114,13 @@ countNodes' count = \case
 countCase :: Int -> LoadCase -> CountM Int
 countCase count (LoadCase _ c) = countNodes' (count + 1) c
 
-
 withContract :: FilePath -> (LoadContract -> CountM a) -> CountM a
 withContract path m = do
   breadcrumb <- ask
   (breadcrumb', contract) <- lift $ openFile breadcrumb path
   local (const breadcrumb') $ m contract
 
-openFile :: MonadUnliftIO m => [FilePath] -> FilePath -> ExceptT LoadError m ([FilePath], LoadContract)
+openFile :: (MonadUnliftIO m) => [FilePath] -> FilePath -> ExceptT LoadError m ([FilePath], LoadContract)
 openFile breadcrumb path = do
   fileExists <- doesFileExist path
   unless fileExists $ throwError $ FileNotFound breadcrumb path
@@ -123,10 +128,11 @@ openFile breadcrumb path = do
     [] -> makeAbsolute path
     current : _ -> lift $ withCurrentDirectory (takeDirectory current) $ makeAbsolute path
   Monad.when (absPath `elem` breadcrumb) $ throwError $ CyclicImport absPath
-  contract <- withExceptT (FileInvalid absPath)
-    $ ExceptT
-    $ liftIO
-    $ decodeFileEither absPath
+  contract <-
+    withExceptT (FileInvalid absPath) $
+      ExceptT $
+        liftIO $
+          decodeFileEither absPath
   pure (absPath : breadcrumb, contract)
 
 data LoadError
@@ -158,9 +164,9 @@ loadClient incrementProgress rootFile =
       -> Nat n
       -> CLI (ClientStCanPush n node CLI (Either LoadError DatumHash))
     push breadcrumb contract state Zero = do
-      pure
-        $ RequestResume
-        $ processing breadcrumb contract state
+      pure $
+        RequestResume $
+          processing breadcrumb contract state
     push breadcrumb contract state (Succ n) = case contract of
       Close -> do
         incrementProgress
@@ -264,59 +270,64 @@ instance FromJSON LoadContract where
     String "close" -> pure Close
     Object
       ( KM.toList ->
-        [ ("import", String path)
-        ]
-      ) -> pure $ Import $ T.unpack path
+          [ ("import", String path)
+            ]
+        ) -> pure $ Import $ T.unpack path
     Object
       ( sortOn fst . KM.toList ->
-        [ ("from_account", account)
-        , ("pay", pay)
-        , ("then", then_)
-        , ("to", to)
-        , ("token", token)
-        ]
-      ) -> Pay
-        <$> parseJSON account <?> Key "from_account"
-        <*> parseJSON to <?> Key "to"
-        <*> parseJSON token <?> Key "token"
-        <*> parseJSON pay <?> Key "pay"
-        <*> parseJSON then_ <?> Key "then"
+          [ ("from_account", account)
+            , ("pay", pay)
+            , ("then", then_)
+            , ("to", to)
+            , ("token", token)
+            ]
+        ) ->
+        Pay
+          <$> parseJSON account <?> Key "from_account"
+          <*> parseJSON to <?> Key "to"
+          <*> parseJSON token <?> Key "token"
+          <*> parseJSON pay <?> Key "pay"
+          <*> parseJSON then_ <?> Key "then"
     Object
       ( sortOn fst . KM.toList ->
-        [ ("else", else_)
-        , ("if", if_)
-        , ("then", then_)
-        ]
-      ) -> If
-        <$> parseJSON if_ <?> Key "if"
-        <*> parseJSON then_ <?> Key "then"
-        <*> parseJSON else_ <?> Key "else"
+          [ ("else", else_)
+            , ("if", if_)
+            , ("then", then_)
+            ]
+        ) ->
+        If
+          <$> parseJSON if_ <?> Key "if"
+          <*> parseJSON then_ <?> Key "then"
+          <*> parseJSON else_ <?> Key "else"
     Object
       ( sortOn fst . KM.toList ->
-        [ ("timeout", timeout)
-        , ("timeout_continuation", continuation)
-        , ("when", when)
-        ]
-      ) -> When
-        <$> parseJSON when <?> Key "when"
-        <*> (POSIXTime <$> parseJSON timeout <?> Key "timeout")
-        <*> parseJSON continuation <?> Key "timeout_continuation"
+          [ ("timeout", timeout)
+            , ("timeout_continuation", continuation)
+            , ("when", when)
+            ]
+        ) ->
+        When
+          <$> parseJSON when <?> Key "when"
+          <*> (POSIXTime <$> parseJSON timeout <?> Key "timeout")
+          <*> parseJSON continuation <?> Key "timeout_continuation"
     Object
       ( sortOn fst . KM.toList ->
-        [ ("be", value)
-        , ("let", valueId)
-        , ("then", then_)
-        ]
-      ) -> Let
-        <$> parseJSON valueId <?> Key "let"
-        <*> parseJSON value <?> Key "be"
-        <*> parseJSON then_ <?> Key "then"
+          [ ("be", value)
+            , ("let", valueId)
+            , ("then", then_)
+            ]
+        ) ->
+        Let
+          <$> parseJSON valueId <?> Key "let"
+          <*> parseJSON value <?> Key "be"
+          <*> parseJSON then_ <?> Key "then"
     Object
       ( sortOn fst . KM.toList ->
-        [ ("assert", obs)
-        , ("then", then_)
-        ]
-      ) -> Assert
-        <$> parseJSON obs <?> Key "assert"
-        <*> parseJSON then_ <?> Key "then"
+          [ ("assert", obs)
+            , ("then", then_)
+            ]
+        ) ->
+        Assert
+          <$> parseJSON obs <?> Key "assert"
+          <*> parseJSON then_ <?> Key "then"
     _ -> fail "Expected an object or \"close\""

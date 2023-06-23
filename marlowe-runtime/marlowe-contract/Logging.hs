@@ -9,7 +9,7 @@ import Control.Monad.Event.Class
 import Language.Marlowe.Protocol.Load.Types (MarloweLoad)
 import Language.Marlowe.Runtime.Contract (renderContractStoreSelectorOTel)
 import Language.Marlowe.Runtime.Contract.Api (ContractRequest)
-import Language.Marlowe.Runtime.Contract.Store (ContractStoreSelector(..))
+import Language.Marlowe.Runtime.Contract.Store (ContractStoreSelector (..))
 import Network.Protocol.Driver.Trace (TcpServerSelector, renderTcpServerSelectorOTel)
 import Network.Protocol.Handshake.Types (Handshake)
 import Network.Protocol.Query.Types (Query)

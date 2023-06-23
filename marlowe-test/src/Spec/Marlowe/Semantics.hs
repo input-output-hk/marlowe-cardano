@@ -6,16 +6,14 @@
 -- Stability   :  Experimental
 -- Portability :  Portable
 --
--- | Tests of Marlowe semantics.
---
+
 -----------------------------------------------------------------------------
 
-
-module Spec.Marlowe.Semantics
-  ( -- * Testing
-    tests
-  ) where
-
+-- | Tests of Marlowe semantics.
+module Spec.Marlowe.Semantics (
+  -- * Testing
+  tests,
+) where
 
 import Test.Tasty (TestTree, testGroup)
 
@@ -23,15 +21,16 @@ import qualified Spec.Marlowe.Semantics.Compute (tests)
 import qualified Spec.Marlowe.Semantics.Entropy (tests)
 import qualified Spec.Marlowe.Semantics.Functions (tests)
 import qualified Spec.Marlowe.Semantics.Golden (tests)
+import qualified Spec.Marlowe.Semantics.Next (tests)
 import qualified Spec.Marlowe.Semantics.Path (tests)
-
 
 -- | Run the tests.
 tests :: TestTree
 tests =
-  testGroup "Semantics"
-    [
-      Spec.Marlowe.Semantics.Entropy.tests
+  testGroup
+    "Semantics"
+    [ Spec.Marlowe.Semantics.Next.tests
+    , Spec.Marlowe.Semantics.Entropy.tests
     , Spec.Marlowe.Semantics.Functions.tests
     , Spec.Marlowe.Semantics.Compute.tests
     , Spec.Marlowe.Semantics.Golden.tests

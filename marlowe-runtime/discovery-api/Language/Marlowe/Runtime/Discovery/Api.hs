@@ -29,7 +29,8 @@ data ContractHeader = ContractHeader
   -- ^ The version of the contract.
   , blockHeader :: BlockHeader
   -- ^ The header of the block in which the contract instance was published.
-  } deriving (Show, Eq, Ord, Generic, Binary)
+  }
+  deriving (Show, Eq, Ord, Generic, Binary)
 
 instance ToJSON ContractHeader
 instance Variations ContractHeader

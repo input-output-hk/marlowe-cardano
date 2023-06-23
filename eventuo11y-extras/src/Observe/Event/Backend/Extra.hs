@@ -2,38 +2,38 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE StrictData #-}
 
-module Observe.Event.Backend.Extra
-  ( EventRecord(..)
-  , filterEventBackend
-  , filterEventBackendM
-  , proxyEventBackend
-  ) where
+module Observe.Event.Backend.Extra (
+  EventRecord (..),
+  filterEventBackend,
+  filterEventBackendM,
+  proxyEventBackend,
+) where
 
-import Control.Concurrent.STM
-  ( STM
-  , TQueue
-  , atomically
-  , flushTQueue
-  , modifyTVar
-  , newEmptyTMVarIO
-  , newTQueue
-  , newTVarIO
-  , putTMVar
-  , readTVar
-  , writeTQueue
-  )
+import Control.Concurrent.STM (
+  STM,
+  TQueue,
+  atomically,
+  flushTQueue,
+  modifyTVar,
+  newEmptyTMVarIO,
+  newTQueue,
+  newTVarIO,
+  putTMVar,
+  readTVar,
+  writeTQueue,
+ )
 import Control.Concurrent.STM.TMVar (tryReadTMVar)
 import Control.Exception (SomeException)
 import Control.Monad (filterM, join, mfilter, unless)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.Maybe (catMaybes, isJust, maybeToList)
-import Data.Some (Some(Some))
+import Data.Some (Some (Some))
 import Data.Time (UTCTime, getCurrentTime)
 import Observe.Event.Backend
 
 -- | Filter incoming events and fields.
 filterEventBackend
-  :: Monad m
+  :: (Monad m)
   => (forall f. s f -> Maybe (f -> Bool))
   -> EventBackend m r s
   -> EventBackend m (Maybe r) s
@@ -42,49 +42,61 @@ filterEventBackend selectorPredicate =
 
 -- | Filter incoming events and fields with a monadic action.
 filterEventBackendM
-  :: Monad m
+  :: (Monad m)
   => (forall f. s f -> m (Maybe (f -> m Bool)))
   -> EventBackend m r s
   -> EventBackend m (Maybe r) s
-filterEventBackendM selectorPredicate EventBackend{..} = EventBackend
-  { newEvent = \args@NewEventArgs{..} -> selectorPredicate newEventSelector >>= \case
-      Nothing -> pure Event
-        { reference = Nothing
-        , addField = const $ pure ()
-        , finalize = \case
-            Nothing -> pure ()
-            Just ex -> do
-              Event{..} <- newEvent args
-                { newEventInitialFields = mempty
+filterEventBackendM selectorPredicate EventBackend{..} =
+  EventBackend
+    { newEvent = \args@NewEventArgs{..} ->
+        selectorPredicate newEventSelector >>= \case
+          Nothing ->
+            pure
+              Event
+                { reference = Nothing
+                , addField = const $ pure ()
+                , finalize = \case
+                    Nothing -> pure ()
+                    Just ex -> do
+                      Event{..} <-
+                        newEvent
+                          args
+                            { newEventInitialFields = mempty
+                            , newEventParent = join newEventParent
+                            , newEventCauses = catMaybes newEventCauses
+                            }
+                      finalize $ Just ex
+                }
+          Just fieldPredicate -> do
+            filteredInitFields <- filterM fieldPredicate newEventInitialFields
+            Event{..} <-
+              newEvent $
+                args
+                  { newEventInitialFields = filteredInitFields
+                  , newEventParent = join newEventParent
+                  , newEventCauses = catMaybes newEventCauses
+                  }
+            pure
+              Event
+                { reference = Just reference
+                , addField = \field ->
+                    fieldPredicate field >>= \case
+                      False -> pure ()
+                      True -> addField field
+                , finalize
+                }
+    , emitImmediateEvent = \args@NewEventArgs{..} ->
+        selectorPredicate newEventSelector >>= \case
+          Nothing -> pure Nothing
+          Just fieldPredicate -> do
+            filteredInitFields <- filterM fieldPredicate newEventInitialFields
+            fmap Just . emitImmediateEvent $
+              args
+                { newEventInitialFields = filteredInitFields
                 , newEventParent = join newEventParent
                 , newEventCauses = catMaybes newEventCauses
                 }
-              finalize $ Just ex
-        }
-      Just fieldPredicate -> do
-        filteredInitFields <- filterM fieldPredicate newEventInitialFields
-        Event{..} <- newEvent $ args
-          { newEventInitialFields = filteredInitFields
-          , newEventParent = join newEventParent
-          , newEventCauses = catMaybes newEventCauses
-          }
-        pure Event
-          { reference = Just reference
-          , addField = \field -> fieldPredicate field >>= \case
-              False -> pure ()
-              True -> addField field
-          , finalize
-          }
-  , emitImmediateEvent = \args@NewEventArgs{..} -> selectorPredicate newEventSelector >>= \case
-      Nothing -> pure Nothing
-      Just fieldPredicate -> do
-        filteredInitFields <- filterM fieldPredicate newEventInitialFields
-        fmap Just . emitImmediateEvent $ args
-          { newEventInitialFields = filteredInitFields
-          , newEventParent = join newEventParent
-          , newEventCauses = catMaybes newEventCauses
-          }
-  }
+    }
 
 -- | An aggregate summary of an event
 data EventRecord r s f = EventRecord
@@ -101,37 +113,40 @@ data EventRecord r s f = EventRecord
 -- | Create an event backend that writes events to a queue for processing in a
 -- separate thread.
 proxyEventBackend
-  :: MonadIO m
+  :: (MonadIO m)
   => m r
   -> STM (STM [Some (EventRecord r s)], EventBackend m r s)
 proxyEventBackend newReference = do
   queue <- newTQueue
-  pure (flushTQueueNonEmpty queue, EventBackend
-    { newEvent = \NewEventArgs{..} -> do
-        ref <- newReference
-        liftIO do
-          start <- getCurrentTime
-          fieldsVar <- newTVarIO newEventInitialFields
-          endedVar <- newEmptyTMVarIO
-          let
-            unlessEnded m = do
-              ended <- isJust <$> tryReadTMVar endedVar
-              unless ended m
-            parents = maybeToList newEventParent
-            causes = newEventCauses
-            selector = newEventSelector
-          pure Event
-            { reference = ref
-            , addField = liftIO . atomically . unlessEnded . modifyTVar fieldsVar . (:)
-            , finalize = \exception -> liftIO do
-                end <- getCurrentTime
-                atomically $ unlessEnded do
-                  fields <- readTVar fieldsVar
-                  writeTQueue queue $ Some EventRecord{..}
-                  putTMVar endedVar ()
-            }
-    , emitImmediateEvent = \_ -> newReference
-    })
+  pure
+    ( flushTQueueNonEmpty queue
+    , EventBackend
+        { newEvent = \NewEventArgs{..} -> do
+            ref <- newReference
+            liftIO do
+              start <- getCurrentTime
+              fieldsVar <- newTVarIO newEventInitialFields
+              endedVar <- newEmptyTMVarIO
+              let unlessEnded m = do
+                    ended <- isJust <$> tryReadTMVar endedVar
+                    unless ended m
+                  parents = maybeToList newEventParent
+                  causes = newEventCauses
+                  selector = newEventSelector
+              pure
+                Event
+                  { reference = ref
+                  , addField = liftIO . atomically . unlessEnded . modifyTVar fieldsVar . (:)
+                  , finalize = \exception -> liftIO do
+                      end <- getCurrentTime
+                      atomically $ unlessEnded do
+                        fields <- readTVar fieldsVar
+                        writeTQueue queue $ Some EventRecord{..}
+                        putTMVar endedVar ()
+                  }
+        , emitImmediateEvent = const newReference
+        }
+    )
 
 -- | Like flushTQueue but it retries if the result is empty
 flushTQueueNonEmpty :: TQueue a -> STM [a]

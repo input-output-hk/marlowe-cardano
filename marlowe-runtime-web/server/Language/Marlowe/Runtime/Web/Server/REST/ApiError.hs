@@ -9,21 +9,21 @@
 
 module Language.Marlowe.Runtime.Web.Server.REST.ApiError where
 
-import Control.Monad.Except (MonadError(throwError))
-import Data.Aeson (Value(Null), encode, object, (.=))
+import Control.Monad.Except (MonadError (throwError))
+import Data.Aeson (ToJSON (toJSON), Value (Null), encode, object, (.=))
 import Data.Maybe (fromMaybe)
-import Language.Marlowe.Runtime.Core.Api (MarloweVersionTag(..))
-import Language.Marlowe.Runtime.Transaction.Api
-  ( ApplyInputsConstraintsBuildupError(..)
-  , ApplyInputsError(..)
-  , ConstraintError(..)
-  , CreateBuildupError(..)
-  , CreateError(..)
-  , LoadMarloweContextError(..)
-  , WithdrawError(..)
-  )
+import Language.Marlowe.Runtime.Core.Api (MarloweVersionTag (..))
+import Language.Marlowe.Runtime.Transaction.Api (
+  ApplyInputsConstraintsBuildupError (..),
+  ApplyInputsError (..),
+  ConstraintError (..),
+  CreateBuildupError (..),
+  CreateError (..),
+  LoadMarloweContextError (..),
+  WithdrawError (..),
+ )
 import Language.Marlowe.Runtime.Web.Server.DTO (DTO, HasDTO, ToDTO, toDTO)
-import Servant (ServerError(ServerError))
+import Servant (ServerError (ServerError))
 
 data ApiError = ApiError
   { message :: String
@@ -34,15 +34,16 @@ data ApiError = ApiError
 
 toServerError :: ApiError -> ServerError
 toServerError err = do
-  let
-    ApiError message errorCode details statusCode = err
-    body = encode $ object
-      [ "message" .= message
-      , "errorCode" .= errorCode
-      , "details" .= details
-      ]
-    phrase = fromMaybe "" $ lookup statusCode reasons
-    headers = [("Content-Type", "application/json")]
+  let ApiError message errorCode details statusCode = err
+      body =
+        encode $
+          object
+            [ "message" .= message
+            , "errorCode" .= errorCode
+            , "details" .= details
+            ]
+      phrase = fromMaybe "" $ lookup statusCode reasons
+      headers = [("Content-Type", "application/json")]
   ServerError statusCode phrase body headers
   where
     reasons =
@@ -89,11 +90,17 @@ throwDTOError = throwError . serverErrorFromDTO
 badRequest :: String -> Maybe String -> ServerError
 badRequest msg errorCode = toServerError . ApiError msg (fromMaybe "BadRequest" errorCode) Null $ 400
 
+badRequest'' :: (ToJSON a) => String -> String -> a -> ServerError
+badRequest'' msg errorCode json = toServerError . ApiError msg errorCode (toJSON json) $ 400
+
 badRequest' :: String -> ServerError
 badRequest' msg = badRequest msg Nothing
 
 notFound :: String -> Maybe String -> ServerError
 notFound msg errorCode = toServerError . ApiError msg (fromMaybe "NotFound" errorCode) Null $ 404
+
+notFoundWithErrorCode :: String -> String -> ServerError
+notFoundWithErrorCode msg = notFound msg . Just
 
 notFound' :: String -> ServerError
 notFound' msg = notFound msg Nothing

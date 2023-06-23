@@ -3,18 +3,16 @@
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 -- | The Marlowe load protocol is a protocol for incrementally loading and
 -- merkleizing large contracts in a space-efficient way.
-
 module Language.Marlowe.Protocol.Load.Types where
 
 import Control.Monad (join)
 import Data.Aeson (encode, toJSON)
 import qualified Data.Aeson as Aeson
-import Data.Binary (Binary(..), Get, getWord8, putWord8)
+import Data.Binary (Binary (..), Get, getWord8, putWord8)
 import qualified Data.List.NonEmpty as NE
 import Data.String (fromString)
 import Data.Text.Lazy (toStrict)
@@ -23,13 +21,13 @@ import GHC.Show (showSpace)
 import Language.Marlowe.Core.V1.Semantics.Types
 import Language.Marlowe.Runtime.ChainSync.Api (DatumHash)
 import Language.Marlowe.Runtime.Core.Api ()
-import Network.Protocol.Codec (BinaryMessage(..))
+import Network.Protocol.Codec (BinaryMessage (..))
 import Network.Protocol.Codec.Spec hiding (SomePeerHasAgency)
 import qualified Network.Protocol.Codec.Spec as Codec
-import Network.Protocol.Handshake.Types (HasSignature(..))
+import Network.Protocol.Handshake.Types (HasSignature (..))
 import Network.Protocol.Peer.Trace
 import Network.TypedProtocol
-import Network.TypedProtocol.Codec (AnyMessageAndAgency(..))
+import Network.TypedProtocol.Codec (AnyMessageAndAgency (..))
 import OpenTelemetry.Attributes
 
 -- | A kind-level datatype for the states in the MarloweLoad protocol.
@@ -52,31 +50,38 @@ data Node where
   RootNode :: Node
   -- | A pay contract.
   PayNode
-    :: Node -- ^ The parent node.
+    :: Node
+    -- ^ The parent node.
     -> Node
   -- | An if contract with an incomplete "then" clause.
   IfLNode
-    :: Node -- ^ The parent node.
+    :: Node
+    -- ^ The parent node.
     -> Node
   -- | An if contract with an complete "then" clause.
   IfRNode
-    :: Node -- ^ The parent node.
+    :: Node
+    -- ^ The parent node.
     -> Node
   -- | A when contract somewhere in a contract, with completed cases.
   WhenNode
-    :: Node -- ^ The parent node.
+    :: Node
+    -- ^ The parent node.
     -> Node
   -- | A case in a when contract somewhere in a contract.
   CaseNode
-    :: Node -- ^ The parent node of the when node above this case.
+    :: Node
+    -- ^ The parent node of the when node above this case.
     -> Node
   -- | A let contract somewhere in a contract.
   LetNode
-    :: Node -- ^ The parent node.
+    :: Node
+    -- ^ The parent node.
     -> Node
   -- | An assert contract somewhere in a contract.
   AssertNode
-    :: Node -- ^ The parent node.
+    :: Node
+    -- ^ The parent node.
     -> Node
 
 -- A singleton version of @@Node@@
@@ -116,69 +121,101 @@ instance HasSignature MarloweLoad where
 
 instance Protocol MarloweLoad where
   data Message MarloweLoad st st' where
-    -- | The server tells the client to resume pushing.
+    -- \| The server tells the client to resume pushing.
     MsgResume
-      :: Nat ('S n) -- ^ The number of pushes the client is allowed to perform.
+      :: Nat ('S n)
+      -- \^ The number of pushes the client is allowed to perform.
       -> Message MarloweLoad ('StProcessing node) ('StCanPush ('S n) node)
-    -- | Push a close node to the stack. This closes the current stack and pops
+    -- \| Push a close node to the stack. This closes the current stack and pops
     -- until the next incomplete location in the contract is reached.
-    MsgPushClose :: Message MarloweLoad
-      ('StCanPush ('S n) node)
-      (Pop n node)
-    -- | Push a pay node to the stack.
-    MsgPushPay :: AccountId -> Payee -> Token -> Value Observation -> Message MarloweLoad
-      ('StCanPush ('S n) node)
-      ('StCanPush n ('PayNode node))
-    -- | Push an if node to the stack.
-    MsgPushIf :: Observation -> Message MarloweLoad
-      ('StCanPush ('S n) node)
-      ('StCanPush n ('IfLNode node))
-    -- | Push a when node to the stack
-    MsgPushWhen :: Timeout -> Message MarloweLoad
-      ('StCanPush ('S n) node)
-      ('StCanPush n ('WhenNode node))
-    -- | Push a case node to the stack. Only available if currently on a when node.
-    MsgPushCase :: Action -> Message MarloweLoad
-      ('StCanPush ('S n) ('WhenNode node))
-      ('StCanPush n ('CaseNode node))
-    -- | Push a let node to the stack.
-    MsgPushLet :: ValueId -> Value Observation -> Message MarloweLoad
-      ('StCanPush ('S n) node)
-      ('StCanPush n ('LetNode node))
-    -- | Push an assert node to the stack.
-    MsgPushAssert :: Observation -> Message MarloweLoad
-      ('StCanPush ('S n) node)
-      ('StCanPush n ('AssertNode node))
-    -- | Request to resume pushing.
-    MsgRequestResume :: Message MarloweLoad
-      ('StCanPush 'Z node)
-      ('StProcessing node)
-    -- | Abort the load
-    MsgAbort :: Message MarloweLoad
-      ('StCanPush n node)
-      'StDone
-    -- | The server sends the hash of the completed (merkleized) contract back
+    MsgPushClose
+      :: Message
+          MarloweLoad
+          ('StCanPush ('S n) node)
+          (Pop n node)
+    -- \| Push a pay node to the stack.
+    MsgPushPay
+      :: AccountId
+      -> Payee
+      -> Token
+      -> Value Observation
+      -> Message
+          MarloweLoad
+          ('StCanPush ('S n) node)
+          ('StCanPush n ('PayNode node))
+    -- \| Push an if node to the stack.
+    MsgPushIf
+      :: Observation
+      -> Message
+          MarloweLoad
+          ('StCanPush ('S n) node)
+          ('StCanPush n ('IfLNode node))
+    -- \| Push a when node to the stack
+    MsgPushWhen
+      :: Timeout
+      -> Message
+          MarloweLoad
+          ('StCanPush ('S n) node)
+          ('StCanPush n ('WhenNode node))
+    -- \| Push a case node to the stack. Only available if currently on a when node.
+    MsgPushCase
+      :: Action
+      -> Message
+          MarloweLoad
+          ('StCanPush ('S n) ('WhenNode node))
+          ('StCanPush n ('CaseNode node))
+    -- \| Push a let node to the stack.
+    MsgPushLet
+      :: ValueId
+      -> Value Observation
+      -> Message
+          MarloweLoad
+          ('StCanPush ('S n) node)
+          ('StCanPush n ('LetNode node))
+    -- \| Push an assert node to the stack.
+    MsgPushAssert
+      :: Observation
+      -> Message
+          MarloweLoad
+          ('StCanPush ('S n) node)
+          ('StCanPush n ('AssertNode node))
+    -- \| Request to resume pushing.
+    MsgRequestResume
+      :: Message
+          MarloweLoad
+          ('StCanPush 'Z node)
+          ('StProcessing node)
+    -- \| Abort the load
+    MsgAbort
+      :: Message
+          MarloweLoad
+          ('StCanPush n node)
+          'StDone
+    -- \| The server sends the hash of the completed (merkleized) contract back
     -- to the client.
-    MsgComplete :: DatumHash -> Message MarloweLoad
-      'StComplete
-      'StDone
+    MsgComplete
+      :: DatumHash
+      -> Message
+          MarloweLoad
+          'StComplete
+          'StDone
 
   data ClientHasAgency st where
-    -- | The client has agency in the CanPush state.
+    -- \| The client has agency in the CanPush state.
     TokCanPush :: Nat n -> SNode node -> ClientHasAgency ('StCanPush n node)
 
   data ServerHasAgency st where
-    -- | The server has agency in the Processing state.
+    -- \| The server has agency in the Processing state.
     TokProcessing :: SNode node -> ServerHasAgency ('StProcessing node)
-    -- | The server has agency in the Complete state.
+    -- \| The server has agency in the Complete state.
     TokComplete :: ServerHasAgency 'StComplete
 
   data NobodyHasAgency st where
     TokDone :: NobodyHasAgency 'StDone
 
-  exclusionLemma_ClientAndServerHaveAgency TokCanPush{} = \case
-  exclusionLemma_NobodyAndClientHaveAgency TokDone = \case
-  exclusionLemma_NobodyAndServerHaveAgency TokDone = \case
+  exclusionLemma_ClientAndServerHaveAgency TokCanPush{} = \case {}
+  exclusionLemma_NobodyAndClientHaveAgency TokDone = \case {}
+  exclusionLemma_NobodyAndServerHaveAgency TokDone = \case {}
 
 data SomePeerHasAgency (st :: k) = forall pr. SomePeerHasAgency (PeerHasAgency pr st)
 
@@ -264,57 +301,69 @@ instance BinaryMessage MarloweLoad where
     -- `Zero` or `Succ n`.
     ServerAgency (TokProcessing _) -> SomeMessage . MsgResume . unsafeIntToNat <$> get
 
-getPushMsg :: Nat n -> (forall n' r. (Get (SomeMessage ('StCanPush ('S n') node)) -> r) -> r) -> Get (SomeMessage ('StCanPush n node))
+getPushMsg
+  :: Nat n -> (forall n' r. (Get (SomeMessage ('StCanPush ('S n') node)) -> r) -> r) -> Get (SomeMessage ('StCanPush n node))
 getPushMsg Zero _ = fail "No pushes left"
 getPushMsg Succ{} handle = handle id
 
 instance OTelProtocol MarloweLoad where
   protocolName _ = "marlowe_load"
   messageAttributes _ = \case
-    MsgPushClose -> MessageAttributes
-      { messageType = "push_close"
-      , messageParameters = []
-      }
-    MsgPushPay accountId payee token value -> MessageAttributes
-      { messageType = "push_pay"
-      , messageParameters = jsonToPrimitiveAttribute <$> [toJSON accountId, toJSON payee, toJSON token, toJSON value]
-      }
-    MsgPushIf obs -> MessageAttributes
-      { messageType = "push_if"
-      , messageParameters = [jsonToPrimitiveAttribute $ toJSON obs]
-      }
-    MsgPushWhen timeout -> MessageAttributes
-      { messageType = "push_when"
-      , messageParameters = [IntAttribute $ fromIntegral timeout]
-      }
-    MsgPushCase action -> MessageAttributes
-      { messageType = "push_case"
-      , messageParameters = [jsonToPrimitiveAttribute $ toJSON action]
-      }
-    MsgPushLet valueId value -> MessageAttributes
-      { messageType = "push_let"
-      , messageParameters = jsonToPrimitiveAttribute <$> [toJSON valueId, toJSON value]
-      }
-    MsgPushAssert obs -> MessageAttributes
-      { messageType = "push_assert"
-      , messageParameters = [jsonToPrimitiveAttribute $ toJSON obs]
-      }
-    MsgResume n -> MessageAttributes
-      { messageType = "resume"
-      , messageParameters = [IntAttribute $ fromIntegral $ natToInt n]
-      }
-    MsgComplete hash -> MessageAttributes
-      { messageType = "complete"
-      , messageParameters = [fromString $ show hash]
-      }
-    MsgRequestResume -> MessageAttributes
-      { messageType = "request_resume"
-      , messageParameters = []
-      }
-    MsgAbort -> MessageAttributes
-      { messageType = "abort"
-      , messageParameters = []
-      }
+    MsgPushClose ->
+      MessageAttributes
+        { messageType = "push_close"
+        , messageParameters = []
+        }
+    MsgPushPay accountId payee token value ->
+      MessageAttributes
+        { messageType = "push_pay"
+        , messageParameters = jsonToPrimitiveAttribute <$> [toJSON accountId, toJSON payee, toJSON token, toJSON value]
+        }
+    MsgPushIf obs ->
+      MessageAttributes
+        { messageType = "push_if"
+        , messageParameters = [jsonToPrimitiveAttribute $ toJSON obs]
+        }
+    MsgPushWhen timeout ->
+      MessageAttributes
+        { messageType = "push_when"
+        , messageParameters = [IntAttribute $ fromIntegral timeout]
+        }
+    MsgPushCase action ->
+      MessageAttributes
+        { messageType = "push_case"
+        , messageParameters = [jsonToPrimitiveAttribute $ toJSON action]
+        }
+    MsgPushLet valueId value ->
+      MessageAttributes
+        { messageType = "push_let"
+        , messageParameters = jsonToPrimitiveAttribute <$> [toJSON valueId, toJSON value]
+        }
+    MsgPushAssert obs ->
+      MessageAttributes
+        { messageType = "push_assert"
+        , messageParameters = [jsonToPrimitiveAttribute $ toJSON obs]
+        }
+    MsgResume n ->
+      MessageAttributes
+        { messageType = "resume"
+        , messageParameters = [IntAttribute $ fromIntegral $ natToInt n]
+        }
+    MsgComplete hash ->
+      MessageAttributes
+        { messageType = "complete"
+        , messageParameters = [fromString $ show hash]
+        }
+    MsgRequestResume ->
+      MessageAttributes
+        { messageType = "request_resume"
+        , messageParameters = []
+        }
+    MsgAbort ->
+      MessageAttributes
+        { messageType = "abort"
+        , messageParameters = []
+        }
 
 jsonToPrimitiveAttribute :: Aeson.Value -> PrimitiveAttribute
 jsonToPrimitiveAttribute = \case
@@ -369,35 +418,39 @@ instance MessageEq MarloweLoad where
 
 instance MessageVariations MarloweLoad where
   messageVariations = \case
-    ClientAgency (TokCanPush Succ{} node) -> join $ NE.fromList
-      [ pure $ SomeMessage MsgPushClose
-      , SomeMessage <$>
-          (MsgPushPay <$> variations `varyAp` variations `varyAp` variations `varyAp` variations)
-      , SomeMessage . MsgPushIf <$> variations
-      , case node of
-          SWhenNode _ -> join $ NE.fromList
-            [ SomeMessage . MsgPushCase <$> variations
-            , SomeMessage . MsgPushWhen <$> variations
-            ]
-          _ -> SomeMessage . MsgPushWhen <$> variations
-      , SomeMessage <$> (MsgPushLet <$> variations `varyAp` variations)
-      , SomeMessage . MsgPushAssert <$> variations
-      ]
-    ClientAgency (TokCanPush Zero _) -> NE.fromList
-      [ SomeMessage MsgRequestResume
-      , SomeMessage MsgAbort
-      ]
-
+    ClientAgency (TokCanPush Succ{} node) ->
+      join $
+        NE.fromList
+          [ pure $ SomeMessage MsgPushClose
+          , SomeMessage
+              <$> (MsgPushPay <$> variations `varyAp` variations `varyAp` variations `varyAp` variations)
+          , SomeMessage . MsgPushIf <$> variations
+          , case node of
+              SWhenNode _ ->
+                join $
+                  NE.fromList
+                    [ SomeMessage . MsgPushCase <$> variations
+                    , SomeMessage . MsgPushWhen <$> variations
+                    ]
+              _ -> SomeMessage . MsgPushWhen <$> variations
+          , SomeMessage <$> (MsgPushLet <$> variations `varyAp` variations)
+          , SomeMessage . MsgPushAssert <$> variations
+          ]
+    ClientAgency (TokCanPush Zero _) ->
+      NE.fromList
+        [ SomeMessage MsgRequestResume
+        , SomeMessage MsgAbort
+        ]
     ServerAgency (TokProcessing _) -> pure $ SomeMessage $ MsgResume $ Succ Zero
-
     ServerAgency TokComplete -> SomeMessage . MsgComplete <$> variations
 
-  agencyVariations = NE.fromList
-    [ Codec.SomePeerHasAgency $ ClientAgency $ TokCanPush Zero $ SWhenNode SRootNode
-    , Codec.SomePeerHasAgency $ ClientAgency $ TokCanPush (Succ Zero) $ SWhenNode SRootNode
-    , Codec.SomePeerHasAgency $ ServerAgency $ TokProcessing SRootNode
-    , Codec.SomePeerHasAgency $ ServerAgency TokComplete
-    ]
+  agencyVariations =
+    NE.fromList
+      [ Codec.SomePeerHasAgency $ ClientAgency $ TokCanPush Zero $ SWhenNode SRootNode
+      , Codec.SomePeerHasAgency $ ClientAgency $ TokCanPush (Succ Zero) $ SWhenNode SRootNode
+      , Codec.SomePeerHasAgency $ ServerAgency $ TokProcessing SRootNode
+      , Codec.SomePeerHasAgency $ ServerAgency TokComplete
+      ]
 
 instance ShowProtocol MarloweLoad where
   showsPrecMessage p = \case
@@ -405,82 +458,102 @@ instance ShowProtocol MarloweLoad where
       MsgPushClose -> showString "MsgPushClose"
       MsgRequestResume -> showString "MsgRequestResume"
       MsgAbort -> showString "MsgAbort"
-      MsgPushPay accountId payee token value -> showParen (p >= 11)
-        ( showString "MsgPushPay"
-        . showSpace
-        . showsPrec 11 accountId
-        . showSpace
-        . showsPrec 11 payee
-        . showSpace
-        . showsPrec 11 token
-        . showSpace
-        . showsPrec 11 value
-        )
-      MsgPushIf obs -> showParen (p >= 11)
-        ( showString "MsgPushIf"
-        . showSpace
-        . showsPrec 11 obs
-        )
-      MsgPushWhen timeout -> showParen (p >= 11)
-        ( showString "MsgPushWhen"
-        . showSpace
-        . showsPrec 11 timeout
-        )
-      MsgPushCase action -> showParen (p >= 11)
-        ( showString "MsgPushCase"
-        . showSpace
-        . showsPrec 11 action
-        )
-      MsgPushLet valueId value -> showParen (p >= 11)
-        ( showString "MsgPushLet"
-        . showSpace
-        . showsPrec 11 valueId
-        . showSpace
-        . showsPrec 11 value
-        )
-      MsgPushAssert obs -> showParen (p >= 11)
-        ( showString "MsgPushAssert"
-        . showSpace
-        . showsPrec 11 obs
-        )
-
+      MsgPushPay accountId payee token value ->
+        showParen
+          (p >= 11)
+          ( showString "MsgPushPay"
+              . showSpace
+              . showsPrec 11 accountId
+              . showSpace
+              . showsPrec 11 payee
+              . showSpace
+              . showsPrec 11 token
+              . showSpace
+              . showsPrec 11 value
+          )
+      MsgPushIf obs ->
+        showParen
+          (p >= 11)
+          ( showString "MsgPushIf"
+              . showSpace
+              . showsPrec 11 obs
+          )
+      MsgPushWhen timeout ->
+        showParen
+          (p >= 11)
+          ( showString "MsgPushWhen"
+              . showSpace
+              . showsPrec 11 timeout
+          )
+      MsgPushCase action ->
+        showParen
+          (p >= 11)
+          ( showString "MsgPushCase"
+              . showSpace
+              . showsPrec 11 action
+          )
+      MsgPushLet valueId value ->
+        showParen
+          (p >= 11)
+          ( showString "MsgPushLet"
+              . showSpace
+              . showsPrec 11 valueId
+              . showSpace
+              . showsPrec 11 value
+          )
+      MsgPushAssert obs ->
+        showParen
+          (p >= 11)
+          ( showString "MsgPushAssert"
+              . showSpace
+              . showsPrec 11 obs
+          )
     ServerAgency (TokProcessing _) -> \case
-      MsgResume n -> showParen (p >= 11)
-        ( showString "MsgResume"
-        . showSpace
-        . showParen True
-            ( showString "unsafeIntToNat"
-            . showSpace
-            . showsPrec 11 (natToInt n)
-            )
-        )
-
+      MsgResume n ->
+        showParen
+          (p >= 11)
+          ( showString "MsgResume"
+              . showSpace
+              . showParen
+                True
+                ( showString "unsafeIntToNat"
+                    . showSpace
+                    . showsPrec 11 (natToInt n)
+                )
+          )
     ServerAgency TokComplete -> \case
-      MsgComplete hash -> showParen (p >= 11)
-        ( showString "MsgComplete"
-        . showSpace
-        . showsPrec 11 hash
-        )
+      MsgComplete hash ->
+        showParen
+          (p >= 11)
+          ( showString "MsgComplete"
+              . showSpace
+              . showsPrec 11 hash
+          )
 
   showsPrecServerHasAgency p = \case
-    TokProcessing node -> showParen (p >= 11)
-      ( showString "TokProcessing"
-      . showSpace
-      . showsPrecSNode p node
-      )
+    TokProcessing node ->
+      showParen
+        (p >= 11)
+        ( showString "TokProcessing"
+            . showSpace
+            . showsPrecSNode p node
+        )
     TokComplete -> showString "TokComplete"
   showsPrecClientHasAgency p = \case
-    TokCanPush n node -> showParen (p >= 11)
-      ( showString "TokCanPush"
-      . showSpace
-      . showParen True
-          ( showString "unsafeIntToNat"
-          . showSpace
-          . showsPrec 11 (natToInt n)
-          )
-      . showSpace
-      . showsPrecSNode p node
-      )
+    TokCanPush n node ->
+      showParen
+        (p >= 11)
+        ( showString "TokCanPush"
+            . showSpace
+            . showParen
+              True
+              ( showString "unsafeIntToNat"
+                  . showSpace
+                  . showsPrec 11 (natToInt n)
+              )
+            . showSpace
+            . showsPrecSNode p node
+        )
 
 showsPrecSNode :: Int -> SNode node -> ShowS
 showsPrecSNode p = \case

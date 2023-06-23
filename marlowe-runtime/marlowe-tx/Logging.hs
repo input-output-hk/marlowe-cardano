@@ -1,21 +1,28 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 
-module Logging
-  ( RootSelector(..)
-  , renderRootSelectorOTel
-  ) where
+module Logging (
+  RootSelector (..),
+  renderRootSelectorOTel,
+) where
 
-import Control.Monad.Event.Class (Inject(..))
+import Control.Monad.Event.Class (Inject (..))
 import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncCommand, ChainSyncQuery, RuntimeChainSeek)
 import Language.Marlowe.Runtime.Contract.Api (ContractRequest)
-import Language.Marlowe.Runtime.Transaction
-  (renderLoadMarloweContextSelectorOTel, renderLoadWalletContextSelectorOTel, renderTransactionServerSelectorOTel)
+import Language.Marlowe.Runtime.Transaction (
+  renderLoadMarloweContextSelectorOTel,
+  renderLoadWalletContextSelectorOTel,
+  renderTransactionServerSelectorOTel,
+ )
 import Language.Marlowe.Runtime.Transaction.Api (MarloweTxCommand)
 import qualified Language.Marlowe.Runtime.Transaction.Query as Q
 import Language.Marlowe.Runtime.Transaction.Server
-import Network.Protocol.Driver.Trace
-  (TcpClientSelector, TcpServerSelector, renderTcpClientSelectorOTel, renderTcpServerSelectorOTel)
+import Network.Protocol.Driver.Trace (
+  TcpClientSelector,
+  TcpServerSelector,
+  renderTcpClientSelectorOTel,
+  renderTcpServerSelectorOTel,
+ )
 import Network.Protocol.Handshake.Types (Handshake)
 import Network.Protocol.Job.Types (Job)
 import Network.Protocol.Query.Types (Query)

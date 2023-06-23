@@ -1,12 +1,12 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RankNTypes #-}
 
-module Language.Marlowe.Runtime.Client
-  ( module Control.Monad.Trans.Marlowe
-  , module Control.Monad.Trans.Marlowe.Class
-  , connectToMarloweRuntime
-  , connectToMarloweRuntimeTraced
-  ) where
+module Language.Marlowe.Runtime.Client (
+  module Control.Monad.Trans.Marlowe,
+  module Control.Monad.Trans.Marlowe.Class,
+  connectToMarloweRuntime,
+  connectToMarloweRuntimeTraced,
+) where
 
 import Control.Monad.Event.Class
 import Control.Monad.Trans.Marlowe
@@ -27,9 +27,11 @@ connectToMarloweRuntimeTraced
   -> PortNumber
   -> MarloweT m a
   -> m a
-connectToMarloweRuntimeTraced inj host port action = runMarloweT action
-  $ tcpClientTraced inj host port marloweRuntimeClientPeer
+connectToMarloweRuntimeTraced inj host port action =
+  runMarloweT action $
+    tcpClientTraced inj host port marloweRuntimeClientPeer
 
 connectToMarloweRuntime :: (MonadUnliftIO m, MonadFail m) => HostName -> PortNumber -> MarloweT m a -> m a
-connectToMarloweRuntime host port action = runMarloweT action
-  $ tcpClient host port marloweRuntimeClientPeer
+connectToMarloweRuntime host port action =
+  runMarloweT action $
+    tcpClient host port marloweRuntimeClientPeer

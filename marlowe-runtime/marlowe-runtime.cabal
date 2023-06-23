@@ -207,10 +207,13 @@ library sync-api
     , aeson >=2 && <3
     , base >=4.9 && <5
     , binary ^>=0.8.8
+    , cardano-api ==1.35.4
     , containers ^>=0.6.5
     , marlowe-chain-sync ==0.0.2
     , marlowe-protocols ==0.1.1.0
     , marlowe-runtime:{marlowe-runtime, discovery-api} ==0.0.2
+    , ouroboros-consensus ==0.1.0.1
+    , time >=1.9 && <2
     , unliftio ^>=0.2.1
 
 library contract-api
