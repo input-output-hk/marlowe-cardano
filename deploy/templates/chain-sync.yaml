@@ -5,7 +5,8 @@ kind: Application
 metadata:
   name: chain-sync-{{ $network }}
   namespace: marlowe-staging
-  app.oam.dev/publishVersion: {{ $.Chart.AppVersion }}
+  annotations:
+    app.oam.dev/publishVersion: {{ $.Chart.AppVersion }}
 spec:
   components:
   - name: chain-sync-{{ $network }}
