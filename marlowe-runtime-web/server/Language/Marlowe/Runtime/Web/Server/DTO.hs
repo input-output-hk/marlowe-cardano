@@ -10,33 +10,32 @@
 -- the web server. DTOs are the types served by the API, which notably include
 -- no cardano-api dependencies and have nice JSON representations. This module
 -- describes how they are mapped to the internal API types of the runtime.
-
 module Language.Marlowe.Runtime.Web.Server.DTO where
 
-import Cardano.Api
-  ( AsType(AsTx, AsTxBody)
-  , HasTextEnvelope
-  , HasTypeProxy
-  , IsCardanoEra(cardanoEra)
-  , IsShelleyBasedEra(shelleyBasedEra)
-  , NetworkId(..)
-  , NetworkMagic(..)
-  , SerialiseAsCBOR
-  , ShelleyBasedEra(ShelleyBasedEraAlonzo, ShelleyBasedEraBabbage)
-  , TextEnvelope(..)
-  , TextEnvelopeType(..)
-  , Tx
-  , TxBody
-  , deserialiseFromCBOR
-  , deserialiseFromTextEnvelope
-  , getTxId
-  , metadataValueToJsonNoSchema
-  , proxyToAsType
-  , serialiseToCBOR
-  , serialiseToTextEnvelope
-  )
-import Cardano.Api.Byron (HasTextEnvelope(textEnvelopeType))
-import Cardano.Api.SerialiseTextEnvelope (TextEnvelopeDescr(..))
+import Cardano.Api (
+  AsType (AsTx, AsTxBody),
+  HasTextEnvelope,
+  HasTypeProxy,
+  IsCardanoEra (cardanoEra),
+  IsShelleyBasedEra (shelleyBasedEra),
+  NetworkId (..),
+  NetworkMagic (..),
+  SerialiseAsCBOR,
+  ShelleyBasedEra (ShelleyBasedEraAlonzo, ShelleyBasedEraBabbage),
+  TextEnvelope (..),
+  TextEnvelopeType (..),
+  Tx,
+  TxBody,
+  deserialiseFromCBOR,
+  deserialiseFromTextEnvelope,
+  getTxId,
+  metadataValueToJsonNoSchema,
+  proxyToAsType,
+  serialiseToCBOR,
+  serialiseToTextEnvelope,
+ )
+import Cardano.Api.Byron (HasTextEnvelope (textEnvelopeType))
+import Cardano.Api.SerialiseTextEnvelope (TextEnvelopeDescr (..))
 import Cardano.Api.Shelley (ShelleyLedgerEra)
 import qualified Cardano.Binary as Binary
 import qualified Cardano.Ledger.Alonzo.Scripts as Ledger.Alonzo.Scripts
@@ -47,17 +46,17 @@ import Control.Arrow (second)
 import Control.Error.Util (hush)
 import Control.Monad ((<=<))
 import Control.Monad.Except (MonadError, throwError)
-import Data.Aeson (Value(..))
+import Data.Aeson (Value (..))
 import Data.Bifunctor (bimap)
 import qualified Data.ByteString.Lazy as BSL
 import Data.Coerce (coerce)
 import Data.Data (Typeable)
-import Data.List.NonEmpty (NonEmpty(..))
+import Data.List.NonEmpty (NonEmpty (..))
 import Data.Map (Map)
 import qualified Data.Map as M
 import qualified Data.Map as Map
 import Data.Maybe (fromMaybe)
-import Data.Proxy (Proxy(..))
+import Data.Proxy (Proxy (..))
 import qualified Data.Set as Set
 import Data.String (fromString)
 import Data.Text (Text)
@@ -67,29 +66,35 @@ import Data.Traversable (for)
 import Data.Word (Word16, Word64)
 import GHC.TypeLits (KnownSymbol)
 import qualified Language.Marlowe.Core.V1.Semantics as Sem
-import Language.Marlowe.Protocol.Query.Types
-  (ContractState(..), PayoutRef(..), RuntimeStatus(..), SomeContractState(..), SomeTransaction(..), Withdrawal(..))
+import Language.Marlowe.Protocol.Query.Types (
+  ContractState (..),
+  PayoutRef (..),
+  RuntimeStatus (..),
+  SomeContractState (..),
+  SomeTransaction (..),
+  Withdrawal (..),
+ )
 import qualified Language.Marlowe.Protocol.Query.Types as Query
 import Language.Marlowe.Runtime.Cardano.Api (cardanoEraToAsType, fromCardanoTxId)
-import Language.Marlowe.Runtime.ChainSync.Api (AssetId(..))
+import Language.Marlowe.Runtime.ChainSync.Api (AssetId (..))
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
-import Language.Marlowe.Runtime.Core.Api
-  ( ContractId(..)
-  , MarloweMetadata(..)
-  , MarloweMetadataTag(..)
-  , MarloweTransactionMetadata(..)
-  , MarloweVersion(..)
-  , MarloweVersionTag(..)
-  , SomeMarloweVersion(..)
-  , Transaction(..)
-  , TransactionOutput(..)
-  , TransactionScriptOutput(..)
-  )
-import qualified Language.Marlowe.Runtime.Core.Api as Core.Api (Payout(datum))
+import Language.Marlowe.Runtime.Core.Api (
+  ContractId (..),
+  MarloweMetadata (..),
+  MarloweMetadataTag (..),
+  MarloweTransactionMetadata (..),
+  MarloweVersion (..),
+  MarloweVersionTag (..),
+  SomeMarloweVersion (..),
+  Transaction (..),
+  TransactionOutput (..),
+  TransactionScriptOutput (..),
+ )
+import qualified Language.Marlowe.Runtime.Core.Api as Core.Api (Payout (datum))
 import qualified Language.Marlowe.Runtime.Discovery.Api as Discovery
 import qualified Language.Marlowe.Runtime.Transaction.Api as Tx
 import qualified Language.Marlowe.Runtime.Web as Web
-import Language.Marlowe.Runtime.Web.Server.TxClient (TempTx(..), TempTxStatus(..), Withdrawn(..))
+import Language.Marlowe.Runtime.Web.Server.TxClient (TempTx (..), TempTxStatus (..), Withdrawn (..))
 import Network.HTTP.Media (MediaType, parseAccept)
 import Servant.Pagination (IsRangeType)
 import qualified Servant.Pagination as Pagination
@@ -100,19 +105,19 @@ class HasDTO a where
   type DTO a :: *
 
 -- | States that a type can be encoded as a DTO.
-class HasDTO a => ToDTO a where
+class (HasDTO a) => ToDTO a where
   toDTO :: a -> DTO a
 
 -- | States that a type can be encoded as a DTO given a tx status.
-class HasDTO a => ToDTOWithTxStatus a where
+class (HasDTO a) => ToDTOWithTxStatus a where
   toDTOWithTxStatus :: TempTxStatus -> a -> DTO a
 
 -- | States that a type can be decoded from a DTO.
-class HasDTO a => FromDTO a where
+class (HasDTO a) => FromDTO a where
   fromDTO :: DTO a -> Maybe a
 
 -- | States that a type can be encoded as a DTO given a tx status.
-class HasDTO a => FromDTOWithTxStatus a where
+class (HasDTO a) => FromDTOWithTxStatus a where
   fromDTOWithTxStatus :: DTO a -> Maybe (TempTxStatus, a)
 
 fromDTOThrow :: (MonadError e m, FromDTO a) => e -> DTO a -> m a
@@ -121,19 +126,19 @@ fromDTOThrow e = maybe (throwError e) pure . fromDTO
 instance HasDTO (Map k a) where
   type DTO (Map k a) = Map k (DTO a)
 
-instance FromDTO a => FromDTO (Map k a) where
+instance (FromDTO a) => FromDTO (Map k a) where
   fromDTO = traverse fromDTO
 
-instance ToDTO a => ToDTO (Map k a) where
+instance (ToDTO a) => ToDTO (Map k a) where
   toDTO = fmap toDTO
 
 instance HasDTO [a] where
   type DTO [a] = [DTO a]
 
-instance FromDTO a => FromDTO [a] where
+instance (FromDTO a) => FromDTO [a] where
   fromDTO = traverse fromDTO
 
-instance ToDTO a => ToDTO [a] where
+instance (ToDTO a) => ToDTO [a] where
   toDTO = fmap toDTO
 
 instance HasDTO (a, b) where
@@ -157,36 +162,38 @@ instance (ToDTO a, ToDTO b) => ToDTO (Either a b) where
 instance HasDTO (Maybe a) where
   type DTO (Maybe a) = Maybe (DTO a)
 
-instance ToDTO a => ToDTO (Maybe a) where
+instance (ToDTO a) => ToDTO (Maybe a) where
   toDTO = fmap toDTO
 
-instance FromDTO a => FromDTO (Maybe a) where
+instance (FromDTO a) => FromDTO (Maybe a) where
   fromDTO = traverse fromDTO
 
 instance HasDTO Discovery.ContractHeader where
   type DTO Discovery.ContractHeader = Web.ContractHeader
 
 instance ToDTO Discovery.ContractHeader where
-  toDTO Discovery.ContractHeader{..} = Web.ContractHeader
-    { contractId = toDTO contractId
-    , roleTokenMintingPolicyId = toDTO rolesCurrency
-    , version = toDTO marloweVersion
-    , tags = foldMap fst $ toDTO $ marloweMetadata metadata
-    , continuations = snd =<< toDTO (marloweMetadata metadata)
-    , metadata = toDTO $ transactionMetadata metadata
-    , status = Web.Confirmed
-    , block = Just $ toDTO blockHeader
-    }
+  toDTO Discovery.ContractHeader{..} =
+    Web.ContractHeader
+      { contractId = toDTO contractId
+      , roleTokenMintingPolicyId = toDTO rolesCurrency
+      , version = toDTO marloweVersion
+      , tags = foldMap fst $ toDTO $ marloweMetadata metadata
+      , continuations = snd =<< toDTO (marloweMetadata metadata)
+      , metadata = toDTO $ transactionMetadata metadata
+      , status = Web.Confirmed
+      , block = Just $ toDTO blockHeader
+      }
 
 instance HasDTO Chain.BlockHeader where
   type DTO Chain.BlockHeader = Web.BlockHeader
 
 instance ToDTO Chain.BlockHeader where
-  toDTO Chain.BlockHeader{..} = Web.BlockHeader
-    { slotNo = toDTO slotNo
-    , blockNo = toDTO blockNo
-    , blockHeaderHash = toDTO headerHash
-    }
+  toDTO Chain.BlockHeader{..} =
+    Web.BlockHeader
+      { slotNo = toDTO slotNo
+      , blockNo = toDTO blockNo
+      , blockHeaderHash = toDTO headerHash
+      }
 
 instance HasDTO ContractId where
   type DTO ContractId = Web.TxOutRef
@@ -210,15 +217,17 @@ instance HasDTO Chain.TxOutRef where
   type DTO Chain.TxOutRef = Web.TxOutRef
 
 instance ToDTO Chain.TxOutRef where
-  toDTO Chain.TxOutRef{..} = Web.TxOutRef
-    { txId = toDTO txId
-    , txIx = toDTO txIx
-    }
+  toDTO Chain.TxOutRef{..} =
+    Web.TxOutRef
+      { txId = toDTO txId
+      , txIx = toDTO txIx
+      }
 
 instance FromDTO Chain.TxOutRef where
-  fromDTO Web.TxOutRef{..} = Chain.TxOutRef
-    <$> fromDTO txId
-    <*> fromDTO txIx
+  fromDTO Web.TxOutRef{..} =
+    Chain.TxOutRef
+      <$> fromDTO txId
+      <*> fromDTO txIx
 
 instance HasDTO Chain.TxId where
   type DTO Chain.TxId = Web.TxId
@@ -284,12 +293,13 @@ instance ToDTO MarloweMetadata where
     )
 
 instance FromDTO MarloweMetadata where
-  fromDTO (tags, continuations) = MarloweMetadata
-    <$> ( Map.mapKeys MarloweMetadataTag <$> for tags \case
-            Web.Metadata Null -> pure Nothing
-            m -> Just <$> fromDTO m
-        )
-    <*> pure continuations
+  fromDTO (tags, continuations) =
+    MarloweMetadata
+      <$> ( Map.mapKeys MarloweMetadataTag <$> for tags \case
+              Web.Metadata Null -> pure Nothing
+              m -> Just <$> fromDTO m
+          )
+      <*> pure continuations
 
 instance HasDTO Chain.SlotNo where
   type DTO Chain.SlotNo = Word64
@@ -313,23 +323,25 @@ instance HasDTO PayoutRef where
   type DTO PayoutRef = Web.PayoutRef
 
 instance ToDTO PayoutRef where
-  toDTO PayoutRef{..} = Web.PayoutRef
-    { contractId = toDTO contractId
-    , payout = toDTO payout
-    , roleTokenMintingPolicyId = toDTO rolesCurrency
-    , role = toDTO role
-    }
+  toDTO PayoutRef{..} =
+    Web.PayoutRef
+      { contractId = toDTO contractId
+      , payout = toDTO payout
+      , roleTokenMintingPolicyId = toDTO rolesCurrency
+      , role = toDTO role
+      }
 
 instance HasDTO Withdrawal where
   type DTO Withdrawal = Web.Withdrawal
 
 instance ToDTO Withdrawal where
-  toDTO Withdrawal{..} = Web.Withdrawal
-    { payouts = Set.fromList $ toDTO $ Map.elems withdrawnPayouts
-    , withdrawalId = toDTO withdrawalTx
-    , status = Web.Confirmed
-    , block = Just $ toDTO block
-    }
+  toDTO Withdrawal{..} =
+    Web.Withdrawal
+      { payouts = Set.fromList $ toDTO $ Map.elems withdrawnPayouts
+      , withdrawalId = toDTO withdrawalTx
+      , status = Web.Confirmed
+      , block = Just $ toDTO block
+      }
 
 instance HasDTO SomeContractState where
   type DTO SomeContractState = Web.ContractState
@@ -350,7 +362,9 @@ instance ToDTO SomeContractState where
       , state = Sem.marloweState . datum <$> latestOutput
       , utxo = toDTO . utxo <$> latestOutput
       , txBody = Nothing
-      , unclaimedPayouts = (\(payoutId,payout) -> Web.Payout (toDTO payoutId) (toDTO (tokenName . Core.Api.datum $ payout))) <$> M.toList unclaimedPayouts
+      , unclaimedPayouts =
+          (\(payoutId, payout) -> Web.Payout (toDTO payoutId) (toDTO (tokenName . Core.Api.datum $ payout)))
+            <$> M.toList unclaimedPayouts
       }
 
 instance HasDTO SomeTransaction where
@@ -428,7 +442,7 @@ instance ToDTOWithTxStatus (Withdrawn era v) where
       , block = Nothing
       }
 
-instance IsCardanoEra era => ToDTOWithTxStatus (Tx.ContractCreated era v) where
+instance (IsCardanoEra era) => ToDTOWithTxStatus (Tx.ContractCreated era v) where
   toDTOWithTxStatus status Tx.ContractCreated{..} =
     Web.ContractState
       { contractId = toDTO contractId
@@ -456,7 +470,7 @@ instance IsCardanoEra era => ToDTOWithTxStatus (Tx.ContractCreated era v) where
 instance HasDTO (Tx.InputsApplied era v) where
   type DTO (Tx.InputsApplied era v) = Web.Tx
 
-instance IsCardanoEra era => ToDTOWithTxStatus (Tx.InputsApplied era v) where
+instance (IsCardanoEra era) => ToDTOWithTxStatus (Tx.InputsApplied era v) where
   toDTOWithTxStatus status Tx.InputsApplied{..} =
     Web.Tx
       { contractId = toDTO contractId
@@ -510,10 +524,10 @@ instance FromDTO Chain.Address where
 instance HasDTO (TxBody era) where
   type DTO (TxBody era) = Web.TextEnvelope
 
-instance IsCardanoEra era => ToDTO (TxBody era) where
+instance (IsCardanoEra era) => ToDTO (TxBody era) where
   toDTO = toDTO . serialiseToTextEnvelope Nothing
 
-instance IsCardanoEra era => FromDTO (TxBody era) where
+instance (IsCardanoEra era) => FromDTO (TxBody era) where
   fromDTO = hush . deserialiseFromTextEnvelope asType <=< fromDTO
     where
       asType = AsTxBody $ cardanoEraToAsType $ cardanoEra @era
@@ -521,35 +535,35 @@ instance IsCardanoEra era => FromDTO (TxBody era) where
 instance HasDTO (Tx era) where
   type DTO (Tx era) = Web.TextEnvelope
 
-instance IsCardanoEra era => ToDTO (Tx era) where
+instance (IsCardanoEra era) => ToDTO (Tx era) where
   toDTO = toDTO . serialiseToTextEnvelope Nothing
 
-instance IsCardanoEra era => FromDTO (Tx era) where
+instance (IsCardanoEra era) => FromDTO (Tx era) where
   fromDTO = hush . deserialiseFromTextEnvelope asType <=< fromDTO
     where
       asType = AsTx $ cardanoEraToAsType $ cardanoEra @era
 
 newtype ShelleyTxWitness era = ShelleyTxWitness (TxWitness (ShelleyLedgerEra era))
 
-instance HasTypeProxy era => HasTypeProxy (ShelleyTxWitness era) where
-    data AsType (ShelleyTxWitness era) = AsShelleyTxWitness (AsType era)
-    proxyToAsType _ = AsShelleyTxWitness (proxyToAsType (Proxy :: Proxy era))
+instance (HasTypeProxy era) => HasTypeProxy (ShelleyTxWitness era) where
+  data AsType (ShelleyTxWitness era) = AsShelleyTxWitness (AsType era)
+  proxyToAsType _ = AsShelleyTxWitness (proxyToAsType (Proxy :: Proxy era))
 
 instance
   ( HasTypeProxy era
   , Typeable (ShelleyLedgerEra era)
   , ValidateScript (ShelleyLedgerEra era)
   , Ledger.Core.Script (ShelleyLedgerEra era) ~ Ledger.Alonzo.Scripts.Script (ShelleyLedgerEra era)
-  ) => SerialiseAsCBOR (ShelleyTxWitness era) where
-
+  )
+  => SerialiseAsCBOR (ShelleyTxWitness era)
+  where
   serialiseToCBOR (ShelleyTxWitness wit) = Binary.serialize' wit
 
   deserialiseFromCBOR _ bs = do
-    let
-      lbs = BSL.fromStrict bs
+    let lbs = BSL.fromStrict bs
 
-      annotator :: forall s. Binary.Decoder s (Binary.Annotator (TxWitness (ShelleyLedgerEra era)))
-      annotator = Binary.fromCBOR
+        annotator :: forall s. Binary.Decoder s (Binary.Annotator (TxWitness (ShelleyLedgerEra era)))
+        annotator = Binary.fromCBOR
 
     (w :: TxWitness (ShelleyLedgerEra era)) <- Binary.decodeAnnotator "Shelley Tx Witness" annotator lbs
     pure $ ShelleyTxWitness w
@@ -558,11 +572,13 @@ instance
   ( IsShelleyBasedEra era
   , ValidateScript (ShelleyLedgerEra era)
   , Ledger.Core.Script (ShelleyLedgerEra era) ~ Ledger.Alonzo.Scripts.Script (ShelleyLedgerEra era)
-  ) => HasTextEnvelope (ShelleyTxWitness era) where
+  )
+  => HasTextEnvelope (ShelleyTxWitness era)
+  where
   textEnvelopeType _ = do
     "ShelleyTxWitness " <> case shelleyBasedEra :: ShelleyBasedEra era of
-       ShelleyBasedEraAlonzo -> "AlonzoEra"
-       ShelleyBasedEraBabbage -> "BabbageEra"
+      ShelleyBasedEraAlonzo -> "AlonzoEra"
+      ShelleyBasedEraBabbage -> "BabbageEra"
 
 instance HasDTO (ShelleyTxWitness era) where
   type DTO (ShelleyTxWitness era) = Web.TextEnvelope
@@ -571,15 +587,19 @@ instance
   ( IsShelleyBasedEra era
   , ValidateScript (ShelleyLedgerEra era)
   , Ledger.Core.Script (ShelleyLedgerEra era) ~ Ledger.Alonzo.Scripts.Script (ShelleyLedgerEra era)
-  ) => ToDTO (ShelleyTxWitness era) where
+  )
+  => ToDTO (ShelleyTxWitness era)
+  where
   toDTO = toDTO . serialiseToTextEnvelope Nothing
 
 instance
   ( IsShelleyBasedEra era
   , ValidateScript (ShelleyLedgerEra era)
   , IsCardanoEra era
-  , Ledger.Core.Script (ShelleyLedgerEra era) ~ Ledger.Alonzo.Scripts.Script (ShelleyLedgerEra era))
-  => FromDTO (ShelleyTxWitness era) where
+  , Ledger.Core.Script (ShelleyLedgerEra era) ~ Ledger.Alonzo.Scripts.Script (ShelleyLedgerEra era)
+  )
+  => FromDTO (ShelleyTxWitness era)
+  where
   fromDTO = hush . deserialiseFromTextEnvelope asType <=< fromDTO
     where
       eraAsType = cardanoEraToAsType $ cardanoEra @era
@@ -589,26 +609,31 @@ instance HasDTO TextEnvelope where
   type DTO TextEnvelope = Web.TextEnvelope
 
 instance ToDTO TextEnvelope where
-  toDTO TextEnvelope
-    { teType = TextEnvelopeType teType
-    , teDescription = TextEnvelopeDescr teDescription
-    , teRawCBOR
-    } = Web.TextEnvelope
-      { teType = T.pack teType
-      , teDescription = T.pack teDescription
-      , teCborHex = Web.Base16 teRawCBOR
-      }
+  toDTO
+    TextEnvelope
+      { teType = TextEnvelopeType teType
+      , teDescription = TextEnvelopeDescr teDescription
+      , teRawCBOR
+      } =
+      Web.TextEnvelope
+        { teType = T.pack teType
+        , teDescription = T.pack teDescription
+        , teCborHex = Web.Base16 teRawCBOR
+        }
 
 instance FromDTO TextEnvelope where
-  fromDTO Web.TextEnvelope
-    { teType
-    , teDescription
-    , teCborHex
-    } = Just TextEnvelope
-      { teType = TextEnvelopeType $ T.unpack teType
-      , teDescription = TextEnvelopeDescr $ T.unpack teDescription
-      , teRawCBOR = Web.unBase16 teCborHex
-      }
+  fromDTO
+    Web.TextEnvelope
+      { teType
+      , teDescription
+      , teCborHex
+      } =
+      Just
+        TextEnvelope
+          { teType = TextEnvelopeType $ T.unpack teType
+          , teDescription = TextEnvelopeDescr $ T.unpack teDescription
+          , teRawCBOR = Web.unBase16 teCborHex
+          }
 
 instance HasDTO Tx.RoleTokensConfig where
   type DTO Tx.RoleTokensConfig = Maybe Web.RolesConfig
@@ -623,27 +648,30 @@ instance HasDTO Tx.Mint where
   type DTO Tx.Mint = Map Text Web.RoleTokenConfig
 
 instance FromDTO Tx.Mint where
-  fromDTO = fmap Tx.mkMint
-    . traverse (sequence . bimap tokenNameToText convertConfig)
-    <=< toNonEmpty
-    . Map.toList
+  fromDTO =
+    fmap Tx.mkMint
+      . traverse (sequence . bimap tokenNameToText convertConfig)
+      <=< toNonEmpty
+        . Map.toList
     where
       convertConfig = \case
         Web.RoleTokenSimple address -> (,Nothing) <$> fromDTO address
-        Web.RoleTokenAdvanced address metadata -> curry (second Just)
-          <$> fromDTO address
-          <*> fromDTO metadata
+        Web.RoleTokenAdvanced address metadata ->
+          curry (second Just)
+            <$> fromDTO address
+            <*> fromDTO metadata
 
 instance HasDTO Tx.RoleTokenMetadata where
   type DTO Tx.RoleTokenMetadata = Web.TokenMetadata
 
 instance FromDTO Tx.RoleTokenMetadata where
-  fromDTO Web.TokenMetadata{..} = Tx.RoleTokenMetadata name image
-    <$> fromDTO mediaType
-    <*> pure description
-    <*> case files of
-          Nothing -> pure []
-          Just files' -> fromDTO files'
+  fromDTO Web.TokenMetadata{..} =
+    Tx.RoleTokenMetadata name image
+      <$> fromDTO mediaType
+      <*> pure description
+      <*> case files of
+        Nothing -> pure []
+        Just files' -> fromDTO files'
 
 instance HasDTO MediaType where
   type DTO MediaType = Text
@@ -667,20 +695,22 @@ instance ToDTO Query.Order where
     Query.Descending -> Pagination.RangeDesc
 
 instance FromDTO Query.Order where
-  fromDTO = pure . \case
-    Pagination.RangeAsc -> Query.Ascending
-    Pagination.RangeDesc -> Query.Descending
+  fromDTO =
+    pure . \case
+      Pagination.RangeAsc -> Query.Ascending
+      Pagination.RangeDesc -> Query.Descending
 
 toPaginationRange
   :: (KnownSymbol field, ToDTO a, IsRangeType (DTO a))
   => Query.Range a
   -> Pagination.Range field (DTO a)
-toPaginationRange Query.Range{..} = Pagination.Range
-  { rangeValue = toDTO rangeStart
-  , rangeOrder = toDTO rangeDirection
-  , rangeField = Proxy
-  , ..
-  }
+toPaginationRange Query.Range{..} =
+  Pagination.Range
+    { rangeValue = toDTO rangeStart
+    , rangeOrder = toDTO rangeDirection
+    , rangeField = Proxy
+    , ..
+    }
 
 fromPaginationRange
   :: (FromDTO a)
@@ -689,7 +719,7 @@ fromPaginationRange
 fromPaginationRange Pagination.Range{..} = do
   rangeStart <- fromDTO rangeValue
   rangeDirection <- fromDTO rangeOrder
-  pure Query.Range { rangeStart, rangeDirection, .. }
+  pure Query.Range{rangeStart, rangeDirection, ..}
 
 tokenNameToText :: Text -> Chain.TokenName
 tokenNameToText = Chain.TokenName . fromString . T.unpack
@@ -702,18 +732,19 @@ instance HasDTO RuntimeStatus where
   type DTO RuntimeStatus = Web.RuntimeStatus
 
 instance ToDTO RuntimeStatus where
-  toDTO RuntimeStatus{..} = Web.RuntimeStatus
-    { nodeTip = case nodeTip of
-        Chain.Genesis -> Web.ChainTipGenesis nodeTipUTC
-        Chain.At blockHeader -> Web.ChainTip (toDTO blockHeader) nodeTipUTC
-    , runtimeChainTip = case runtimeChainTip of
-        Chain.Genesis -> Web.ChainTipGenesis nodeTipUTC
-        Chain.At blockHeader -> Web.ChainTip (toDTO blockHeader) nodeTipUTC
-    , runtimeTip = case runtimeTip of
-        Chain.Genesis -> Web.ChainTipGenesis nodeTipUTC
-        Chain.At blockHeader -> Web.ChainTip (toDTO blockHeader) nodeTipUTC
-    , networkId = case networkId of
-        Mainnet -> Web.Mainnet
-        Testnet (NetworkMagic n) -> Web.Testnet n
-    , ..
-    }
+  toDTO RuntimeStatus{..} =
+    Web.RuntimeStatus
+      { nodeTip = case nodeTip of
+          Chain.Genesis -> Web.ChainTipGenesis nodeTipUTC
+          Chain.At blockHeader -> Web.ChainTip (toDTO blockHeader) nodeTipUTC
+      , runtimeChainTip = case runtimeChainTip of
+          Chain.Genesis -> Web.ChainTipGenesis nodeTipUTC
+          Chain.At blockHeader -> Web.ChainTip (toDTO blockHeader) nodeTipUTC
+      , runtimeTip = case runtimeTip of
+          Chain.Genesis -> Web.ChainTipGenesis nodeTipUTC
+          Chain.At blockHeader -> Web.ChainTip (toDTO blockHeader) nodeTipUTC
+      , networkId = case networkId of
+          Mainnet -> Web.Mainnet
+          Testnet (NetworkMagic n) -> Web.Testnet n
+      , ..
+      }

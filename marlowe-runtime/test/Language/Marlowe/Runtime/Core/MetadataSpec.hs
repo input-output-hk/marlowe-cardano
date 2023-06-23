@@ -9,8 +9,6 @@ import Test.QuickCheck (counterexample, (===))
 spec :: Spec
 spec = do
   prop "prop: roundtrip encoding" \metadata ->
-    let
-      encoded = encodeMarloweTransactionMetadata metadata
-    in
-      counterexample ("Encoded: " <> show encoded)
-        $ decodeMarloweTransactionMetadata encoded === Right metadata
+    let encoded = encodeMarloweTransactionMetadata metadata
+     in counterexample ("Encoded: " <> show encoded) $
+          decodeMarloweTransactionMetadata encoded === Right metadata

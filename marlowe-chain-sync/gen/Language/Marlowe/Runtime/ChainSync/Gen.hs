@@ -1,25 +1,25 @@
-{-# OPTIONS_GHC -Wno-orphans #-}
 {-# LANGUAGE EmptyCase #-}
 {-# LANGUAGE GADTs #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
 
 module Language.Marlowe.Runtime.ChainSync.Gen where
 
-import Cardano.Api
-  ( AddressAny(..)
-  , AsType(..)
-  , CardanoEra(..)
-  , CardanoMode
-  , ConsensusMode(..)
-  , EraHistory(..)
-  , Key(verificationKeyHash)
-  , NetworkId(..)
-  , NetworkMagic(..)
-  , PlutusScriptVersion(..)
-  , ScriptDataSupportedInEra(..)
-  , SerialiseAsRawBytes(..)
-  , SystemStart(..)
-  , hashScriptData
-  )
+import Cardano.Api (
+  AddressAny (..),
+  AsType (..),
+  CardanoEra (..),
+  CardanoMode,
+  ConsensusMode (..),
+  EraHistory (..),
+  Key (verificationKeyHash),
+  NetworkId (..),
+  NetworkMagic (..),
+  PlutusScriptVersion (..),
+  ScriptDataSupportedInEra (..),
+  SerialiseAsRawBytes (..),
+  SystemStart (..),
+  hashScriptData,
+ )
 import qualified Cardano.Api.Shelley as Shelley
 import Control.Monad (replicateM)
 import Data.Bifunctor (first)
@@ -28,38 +28,52 @@ import qualified Data.ByteString as BS
 import Data.ByteString.Short (fromShort)
 import qualified Data.List.NonEmpty as NE
 import Data.Maybe (mapMaybe)
-import Data.SOP.Strict (K(..), NP(..))
+import Data.SOP.Strict (K (..), NP (..))
 import qualified Data.Set.NonEmpty as NESet
 import qualified Data.Text as T
 import Data.Time.Clock.POSIX (posixSecondsToUTCTime)
 import Data.Void (absurd)
 import Data.Word (Word64)
-import Gen.Cardano.Api.Typed
-  (genAddressShelley, genPlutusScript, genProtocolParameters, genScriptHash, genTx, genVerificationKey)
+import Gen.Cardano.Api.Typed (
+  genAddressShelley,
+  genPlutusScript,
+  genProtocolParameters,
+  genScriptHash,
+  genTx,
+  genVerificationKey,
+ )
 import Language.Marlowe.Runtime.Cardano.Api (fromCardanoDatumHash, toCardanoScriptData)
 import qualified Language.Marlowe.Runtime.Cardano.Api as Cardano.Api
 import Language.Marlowe.Runtime.ChainSync.Api
 import qualified Network.Protocol.ChainSeek.Types as ChainSeek
 import qualified Network.Protocol.Job.Types as Command
 import qualified Network.Protocol.Query.Types as Query
-import Ouroboros.Consensus.Block (EpochSize(..))
-import Ouroboros.Consensus.BlockchainTime (RelativeTime(..), SlotLength(..), mkSlotLength)
-import Ouroboros.Consensus.HardFork.History
-  (Bound(..), EraEnd(..), EraParams(..), EraSummary(..), SafeZone(..), mkInterpreter, summaryWithExactly)
-import Ouroboros.Consensus.Util.Counting (Exactly(..))
+import Ouroboros.Consensus.Block (EpochSize (..))
+import Ouroboros.Consensus.BlockchainTime (RelativeTime (..), SlotLength (..), mkSlotLength)
+import Ouroboros.Consensus.HardFork.History (
+  Bound (..),
+  EraEnd (..),
+  EraParams (..),
+  EraSummary (..),
+  SafeZone (..),
+  mkInterpreter,
+  summaryWithExactly,
+ )
+import Ouroboros.Consensus.Util.Counting (Exactly (..))
 import Test.QuickCheck hiding (shrinkMap)
 import Test.QuickCheck.Gen (chooseWord64)
 import Test.QuickCheck.Hedgehog (hedgehog)
 
 instance Arbitrary NetworkId where
-  arbitrary = oneof
-    [ pure Mainnet
-    , Testnet . NetworkMagic <$> arbitrary
-    ]
+  arbitrary =
+    oneof
+      [ pure Mainnet
+      , Testnet . NetworkMagic <$> arbitrary
+      ]
   shrink Mainnet = []
   shrink (Testnet (NetworkMagic m)) = Mainnet : (Testnet . NetworkMagic <$> shrink m)
 
-instance Arbitrary a => Arbitrary (WithGenesis a) where
+instance (Arbitrary a) => Arbitrary (WithGenesis a) where
   arbitrary = oneof [pure Genesis, At <$> arbitrary]
   shrink = genericShrink
 
@@ -79,22 +93,24 @@ instance Arbitrary BlockHeaderHash where
   arbitrary = BlockHeaderHash <$> genNBytes 32
 
 instance Arbitrary ValidityRange where
-  arbitrary = oneof
-    [ pure Unbounded
-    , MinBound <$> arbitrary
-    , MaxBound <$> arbitrary
-    , MinMaxBound <$> arbitrary <*> arbitrary
-    ]
+  arbitrary =
+    oneof
+      [ pure Unbounded
+      , MinBound <$> arbitrary
+      , MaxBound <$> arbitrary
+      , MinMaxBound <$> arbitrary <*> arbitrary
+      ]
   shrink = genericShrink
 
 instance Arbitrary Metadata where
-  arbitrary = oneofStructured
-    [ (Node, MetadataMap <$> listOf (resized (`div` 10) arbitrary))
-    , (Node, MetadataList <$> listOf (resized (`div` 10) arbitrary))
-    , (Leaf, MetadataNumber <$> arbitrary)
-    , (Leaf, MetadataBytes <$> genBytes)
-    , (Leaf, MetadataText . T.pack <$> arbitrary)
-    ]
+  arbitrary =
+    oneofStructured
+      [ (Node, MetadataMap <$> listOf (resized (`div` 10) arbitrary))
+      , (Node, MetadataList <$> listOf (resized (`div` 10) arbitrary))
+      , (Leaf, MetadataNumber <$> arbitrary)
+      , (Leaf, MetadataBytes <$> genBytes)
+      , (Leaf, MetadataText . T.pack <$> arbitrary)
+      ]
   shrink = \case
     MetadataMap ds -> MetadataMap <$> shrink ds
     MetadataList ds -> MetadataList <$> shrink ds
@@ -149,13 +165,14 @@ instance Arbitrary TokenName where
   shrink = genericShrink
 
 instance Arbitrary Datum where
-  arbitrary = oneofStructured
-    [ (Node, Constr <$> arbitrary <*> listOf (resized (`div` 10) arbitrary))
-    , (Node, Map <$> listOf (resized (`div` 10) arbitrary))
-    , (Node, List <$> listOf (resized (`div` 10) arbitrary))
-    , (Leaf, I <$> arbitrary)
-    , (Leaf, B <$> genBytes)
-    ]
+  arbitrary =
+    oneofStructured
+      [ (Node, Constr <$> arbitrary <*> listOf (resized (`div` 10) arbitrary))
+      , (Node, Map <$> listOf (resized (`div` 10) arbitrary))
+      , (Node, List <$> listOf (resized (`div` 10) arbitrary))
+      , (Leaf, I <$> arbitrary)
+      , (Leaf, B <$> genBytes)
+      ]
   shrink = \case
     Constr i ds -> Constr i <$> shrink ds
     Map ds -> Map <$> shrink ds
@@ -171,17 +188,19 @@ instance Arbitrary Redeemer where
   shrink = genericShrink
 
 instance Arbitrary Credential where
-  arbitrary = oneof
-    [ PaymentKeyCredential <$> arbitrary
-    , ScriptCredential <$> arbitrary
-    ]
+  arbitrary =
+    oneof
+      [ PaymentKeyCredential <$> arbitrary
+      , ScriptCredential <$> arbitrary
+      ]
   shrink = genericShrink
 
 instance Arbitrary StakeCredential where
-  arbitrary = oneof
-    [ StakeKeyCredential <$> arbitrary
-    , StakeScriptCredential <$> arbitrary
-    ]
+  arbitrary =
+    oneof
+      [ StakeKeyCredential <$> arbitrary
+      , StakeScriptCredential <$> arbitrary
+      ]
   shrink = genericShrink
 
 instance Arbitrary PaymentKeyHash where
@@ -203,36 +222,40 @@ instance Arbitrary PlutusScript where
     pure $ PlutusScript $ fromShort script
 
 instance Arbitrary StakeReference where
-  arbitrary = oneof
-    [ StakeCredential <$> arbitrary
-    , StakePointer <$> arbitrary <*> arbitrary <*> arbitrary
-    ]
+  arbitrary =
+    oneof
+      [ StakeCredential <$> arbitrary
+      , StakePointer <$> arbitrary <*> arbitrary <*> arbitrary
+      ]
 
 instance Arbitrary TxError where
-  arbitrary = oneof
-    [ pure TxNotFound
-    , TxInPast <$> arbitrary
-    ]
+  arbitrary =
+    oneof
+      [ pure TxNotFound
+      , TxInPast <$> arbitrary
+      ]
 
 instance Arbitrary FindTxsToError where
   arbitrary = pure NoAddresses
 
 instance Arbitrary UTxOError where
-  arbitrary = oneof
-    [ pure UTxONotFound
-    , UTxOSpent <$> arbitrary
-    ]
+  arbitrary =
+    oneof
+      [ pure UTxONotFound
+      , UTxOSpent <$> arbitrary
+      ]
 
 instance Arbitrary IntersectError where
   arbitrary = pure IntersectionNotFound
 
 instance Arbitrary TransactionInput where
-  arbitrary = TransactionInput
-    <$> arbitrary
-    <*> arbitrary
-    <*> arbitrary
-    <*> arbitrary
-    <*> arbitrary
+  arbitrary =
+    TransactionInput
+      <$> arbitrary
+      <*> arbitrary
+      <*> arbitrary
+      <*> arbitrary
+      <*> arbitrary
   shrink = genericShrink
 
 instance Arbitrary TransactionOutput where
@@ -249,20 +272,22 @@ instance Arbitrary TransactionOutput where
   shrink = genericShrink
 
 instance Arbitrary Transaction where
-  arbitrary = Transaction
-    <$> arbitrary
-    <*> arbitrary
-    <*> arbitrary
-    <*> arbitrary
-    <*> arbitrary
-    <*> arbitrary
+  arbitrary =
+    Transaction
+      <$> arbitrary
+      <*> arbitrary
+      <*> arbitrary
+      <*> arbitrary
+      <*> arbitrary
+      <*> arbitrary
   shrink = genericShrink
 
 instance Arbitrary GetUTxOsQuery where
-  arbitrary = oneof
-    [ GetUTxOsAtAddresses <$> arbitrary
-    , GetUTxOsForTxOutRefs <$> arbitrary
-    ]
+  arbitrary =
+    oneof
+      [ GetUTxOsAtAddresses <$> arbitrary
+      , GetUTxOsForTxOutRefs <$> arbitrary
+      ]
   shrink = genericShrink
 
 instance Arbitrary UTxOs where
@@ -297,7 +322,7 @@ instance ChainSeek.ArbitraryQuery Move where
     TagAdvanceToTip -> arbitrary
 
   shrinkQuery = \case
-    AdvanceBlocks  _-> []
+    AdvanceBlocks _ -> []
     Intersect blocks -> Intersect <$> shrink blocks
     FindConsumingTxs txOuts -> FindConsumingTxs <$> shrink txOuts
     FindTx _ _ -> []
@@ -354,14 +379,15 @@ instance ChainSeek.QueryEq Move where
     TagAdvanceToTip -> (==)
 
 instance Query.ArbitraryRequest ChainSyncQuery where
-  arbitraryTag = elements
-    [ Query.SomeTag TagGetSecurityParameter
-    , Query.SomeTag TagGetNetworkId
-    , Query.SomeTag TagGetProtocolParameters
-    , Query.SomeTag TagGetSystemStart
-    , Query.SomeTag TagGetEraHistory
-    , Query.SomeTag TagGetUTxOs
-    ]
+  arbitraryTag =
+    elements
+      [ Query.SomeTag TagGetSecurityParameter
+      , Query.SomeTag TagGetNetworkId
+      , Query.SomeTag TagGetProtocolParameters
+      , Query.SomeTag TagGetSystemStart
+      , Query.SomeTag TagGetEraHistory
+      , Query.SomeTag TagGetUTxOs
+      ]
 
   arbitraryReq = \case
     TagGetSecurityParameter -> pure GetSecurityParameter
@@ -406,21 +432,25 @@ instance Query.ArbitraryRequest ChainSyncQuery where
     TagGetTip -> shrink
 
 genEraHistory :: Gen (EraHistory CardanoMode)
-genEraHistory = EraHistory CardanoMode <$> do
-  byronSummary <- genEraSummary
-  shelleySummary <- genEraSummary
-  allegraSummary <- genEraSummary
-  marySummary <- genEraSummary
-  alonzoSummary <- genEraSummary
-  babbageSummary <- genEraSummary
-  pure $ mkInterpreter $ summaryWithExactly $ Exactly
-    $  K byronSummary
-    :* K shelleySummary
-    :* K allegraSummary
-    :* K marySummary
-    :* K alonzoSummary
-    :* K babbageSummary
-    :* Nil
+genEraHistory =
+  EraHistory CardanoMode <$> do
+    byronSummary <- genEraSummary
+    shelleySummary <- genEraSummary
+    allegraSummary <- genEraSummary
+    marySummary <- genEraSummary
+    alonzoSummary <- genEraSummary
+    babbageSummary <- genEraSummary
+    pure $
+      mkInterpreter $
+        summaryWithExactly $
+          Exactly $
+            K byronSummary
+              :* K shelleySummary
+              :* K allegraSummary
+              :* K marySummary
+              :* K alonzoSummary
+              :* K babbageSummary
+              :* Nil
 
 genEraSummary :: Gen EraSummary
 genEraSummary = EraSummary <$> genBound <*> genEraEnd <*> genEraParams
@@ -438,19 +468,21 @@ genEpoch :: Gen Shelley.EpochNo
 genEpoch = Shelley.EpochNo <$> arbitrary
 
 genEraEnd :: Gen EraEnd
-genEraEnd = oneof
-  [ pure EraUnbounded
-  , EraEnd <$> genBound
-  ]
+genEraEnd =
+  oneof
+    [ pure EraUnbounded
+    , EraEnd <$> genBound
+    ]
 
 genEraParams :: Gen EraParams
 genEraParams = EraParams <$> genEpochSize <*> genSlotLength <*> genSafeZone
 
 genSafeZone :: Gen SafeZone
-genSafeZone = oneof
-  [ pure UnsafeIndefiniteSafeZone
-  , StandardSafeZone <$> arbitrary
-  ]
+genSafeZone =
+  oneof
+    [ pure UnsafeIndefiniteSafeZone
+    , StandardSafeZone <$> arbitrary
+    ]
 
 genEpochSize :: Gen EpochSize
 genEpochSize = EpochSize <$> arbitrary
@@ -471,10 +503,11 @@ instance Query.RequestEq ChainSyncQuery where
     TagGetTip -> (==)
 
 instance Command.ArbitraryCommand ChainSyncCommand where
-  arbitraryTag = elements
-    [ Command.SomeTag $ TagSubmitTx ScriptDataInAlonzoEra
-    , Command.SomeTag $ TagSubmitTx ScriptDataInBabbageEra
-    ]
+  arbitraryTag =
+    elements
+      [ Command.SomeTag $ TagSubmitTx ScriptDataInAlonzoEra
+      , Command.SomeTag $ TagSubmitTx ScriptDataInBabbageEra
+      ]
   arbitraryCmd = \case
     TagSubmitTx ScriptDataInAlonzoEra -> hedgehog $ SubmitTx ScriptDataInAlonzoEra <$> genTx AlonzoEra
     TagSubmitTx ScriptDataInBabbageEra -> hedgehog $ SubmitTx ScriptDataInBabbageEra <$> genTx BabbageEra
@@ -486,7 +519,7 @@ instance Command.ArbitraryCommand ChainSyncCommand where
     TagSubmitTx _ -> arbitrary
   shrinkCommand = \case
     SubmitTx _ _ -> []
-  shrinkJobId = \case
+  shrinkJobId = \case {}
   shrinkErr = \case
     TagSubmitTx _ -> shrink
   shrinkResult = \case
@@ -502,7 +535,7 @@ instance Command.CommandEq ChainSyncCommand where
     SubmitTx ScriptDataInBabbageEra tx -> \case
       SubmitTx ScriptDataInBabbageEra tx' -> tx == tx'
       _ -> False
-  jobIdEq = \case
+  jobIdEq = \case {}
   statusEq = \case
     TagSubmitTx _ -> absurd
   errEq = \case

@@ -3,29 +3,30 @@
 {-# LANGUAGE NumericUnderscores #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
-module Actus.Marlowe.Instance
-  ( -- * Marlowe types
-    CashFlowMarlowe
-  , ContractStateMarlowe
-  , ContractTermsMarlowe
-  , RiskFactorsMarlowe
-  , fromMarloweFixedPoint
-  , toMarloweFixedPoint
-    -- * Contract reduction
-  , reduceContract
-  ) where
+module Actus.Marlowe.Instance (
+  -- * Marlowe types
+  CashFlowMarlowe,
+  ContractStateMarlowe,
+  ContractTermsMarlowe,
+  RiskFactorsMarlowe,
+  fromMarloweFixedPoint,
+  toMarloweFixedPoint,
 
-import Actus.Domain (CashFlow, ContractState, ContractTerms, MinMax(..), RiskFactors)
+  -- * Contract reduction
+  reduceContract,
+) where
+
+import Actus.Domain (CashFlow, ContractState, ContractTerms, MinMax (..), RiskFactors)
 import Data.Functor ((<&>))
 import Data.Maybe (fromMaybe)
-import GHC.Real (Ratio(..))
+import GHC.Real (Ratio (..))
 import qualified Language.Marlowe.Core.V1.Semantics as Core
 import qualified Language.Marlowe.Core.V1.Semantics.Types as Core
 import Language.Marlowe.Extended.V1
 import qualified Ledger
 import qualified PlutusTx.Builtins as Builtins
 
-{-# INLINABLE division #-}
+{-# INLINEABLE division #-}
 
 type CashFlowMarlowe = CashFlow Value
 type ContractStateMarlowe = ContractState Value
@@ -46,13 +47,19 @@ fromMarloweFixedPoint i = i `quot` marloweFixedPoint
 --
 -- Note:
 --
+
 -- * This interfers with the semantics - ideally we would have formally
+
 --   verified reduction semantics instead
 --
+
 -- * There are partial implementations, as the evaluation of a Value
+
 --   is not always possible
 --
+
 -- * The semantics of division, i.e. rounding changed. In order to
+
 --   preserve financial rounding, in ACTUS we always have to use `division`
 --   rather than `DivValue`
 instance Num Value where
@@ -76,7 +83,7 @@ instance Fractional Value where
   lhs / rhs = MulValue (division lhs rhs) (Constant marloweFixedPoint)
   fromRational (x :% y) = MulValue (division (fromInteger x) (fromInteger y)) (Constant marloweFixedPoint)
 
--- |Division with financial rounding
+-- | Division with financial rounding
 division :: Value -> Value -> Value
 division lhs rhs = fromMaybe (error "Value cannot be evaluted") $
   do
@@ -104,13 +111,13 @@ division lhs rhs = fromMaybe (error "Value cannot be evaluted") $
 evalVal :: Value -> Maybe Integer
 evalVal d = toCore d <&> Core.evalValue env state
   where
-    env = Core.Environment {Core.timeInterval = (Ledger.POSIXTime 0, Ledger.POSIXTime 0)}
+    env = Core.Environment{Core.timeInterval = (Ledger.POSIXTime 0, Ledger.POSIXTime 0)}
     state = Core.emptyState $ Ledger.POSIXTime 0
 
 evalObs :: Observation -> Maybe Bool
 evalObs d = toCore d <&> Core.evalObservation env state
   where
-    env = Core.Environment {Core.timeInterval = (Ledger.POSIXTime 0, Ledger.POSIXTime 0)}
+    env = Core.Environment{Core.timeInterval = (Ledger.POSIXTime 0, Ledger.POSIXTime 0)}
     state = Core.emptyState $ Ledger.POSIXTime 0
 
 -- | Reduce the contract representation in size, the semantics of the
@@ -122,21 +129,21 @@ reduceContract (When cs t c) = When (map f cs) t (reduceContract c)
   where
     f (Case a x) = Case a (reduceContract x)
 reduceContract i@(If obs a b) = case evalObs obs of
-  Just c  -> reduceContract (if c then a else b)
+  Just c -> reduceContract (if c then a else b)
   Nothing -> i
 reduceContract (Let v o c) = Let v (reduceValue o) (reduceContract c)
 reduceContract (Assert o c) = Assert (reduceObs o) (reduceContract c)
 
 reduceObs :: Observation -> Observation
-reduceObs (AndObs a b)  = AndObs (reduceObs a) (reduceObs b)
-reduceObs (OrObs a b)   = OrObs (reduceObs a) (reduceObs b)
-reduceObs (NotObs a)    = NotObs (reduceObs a)
+reduceObs (AndObs a b) = AndObs (reduceObs a) (reduceObs b)
+reduceObs (OrObs a b) = OrObs (reduceObs a) (reduceObs b)
+reduceObs (NotObs a) = NotObs (reduceObs a)
 reduceObs (ValueGE a b) = ValueGE (reduceValue a) (reduceValue b)
 reduceObs (ValueGT a b) = ValueGT (reduceValue a) (reduceValue b)
 reduceObs (ValueLE a b) = ValueLE (reduceValue a) (reduceValue b)
 reduceObs (ValueLT a b) = ValueLT (reduceValue a) (reduceValue b)
 reduceObs (ValueEQ a b) = ValueEQ (reduceValue a) (reduceValue b)
-reduceObs x             = x
+reduceObs x = x
 
 reduceValue :: Value -> Value
 reduceValue v = maybe v Constant (evalVal v)

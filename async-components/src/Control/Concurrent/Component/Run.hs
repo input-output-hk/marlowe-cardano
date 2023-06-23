@@ -20,11 +20,12 @@ import Observe.Event.Render.OpenTelemetry (RenderSelectorOTel, tracerEventBacken
 import OpenTelemetry.Trace
 import OpenTelemetry.Trace.Core (getSpanContext, wrapSpanContext)
 import System.Environment (lookupEnv)
-import UnliftIO (BufferMode(..), MonadUnliftIO, bracket, hSetBuffering, newMVar, stderr, stdout, withMVar, withRunInIO)
+import UnliftIO (BufferMode (..), MonadUnliftIO, bracket, hSetBuffering, newMVar, stderr, stdout, withMVar, withRunInIO)
 
 newtype AppM r s a = AppM
   { unAppM :: ReaderT (EventBackend (AppM r s) r s, LogAction IO Message) IO a
-  } deriving newtype (Functor, Applicative, Monad, MonadIO, MonadUnliftIO, MonadThrow, MonadCatch, MonadMask, MonadFail)
+  }
+  deriving newtype (Functor, Applicative, Monad, MonadIO, MonadUnliftIO, MonadThrow, MonadCatch, MonadMask, MonadFail)
 
 runAppMTraced :: forall s a. InstrumentationLibrary -> RenderSelectorOTel s -> AppM Span s a -> IO a
 runAppMTraced library render app = bracket
@@ -60,7 +61,7 @@ runAppM :: EventBackend IO r s -> LogAction IO Message -> AppM r s a -> IO a
 runAppM eventBackend logAction (AppM action) = do
   runReaderT action (hoistEventBackend liftIO eventBackend, logAction)
 
-concurrentLogger :: MonadUnliftIO m => IO (LogAction m Message)
+concurrentLogger :: (MonadUnliftIO m) => IO (LogAction m Message)
 concurrentLogger = do
   lock <- newMVar ()
   let LogAction baseAction = cmap fmtMessage logTextStdout
@@ -78,16 +79,13 @@ instance MonadWith (AppM r s) where
     -> (a -> AppM r s b)
     -> AppM r s (b, releaseReturn)
   stateThreadingGeneralWith (GeneralAllocate allocA) go = AppM . ReaderT $ \r -> do
-    let
-      allocA' :: (forall x. IO x -> IO x) -> IO (GeneralAllocated IO (WithException IO) releaseReturn b a)
-      allocA' restore = do
-        let
-          restore' :: forall x. AppM r s x -> AppM r s x
-          restore' mx = AppM . ReaderT $ restore . (runReaderT . unAppM) mx
-        GeneralAllocated a releaseA <- (runReaderT . unAppM) (allocA restore') r
-        let
-          releaseA' relTy = (runReaderT . unAppM) (releaseA relTy) r
-        pure $ GeneralAllocated a releaseA'
+    let allocA' :: (forall x. IO x -> IO x) -> IO (GeneralAllocated IO (WithException IO) releaseReturn b a)
+        allocA' restore = do
+          let restore' :: forall x. AppM r s x -> AppM r s x
+              restore' mx = AppM . ReaderT $ restore . (runReaderT . unAppM) mx
+          GeneralAllocated a releaseA <- (runReaderT . unAppM) (allocA restore') r
+          let releaseA' relTy = (runReaderT . unAppM) (releaseA relTy) r
+          pure $ GeneralAllocated a releaseA'
     stateThreadingGeneralWith (GeneralAllocate allocA') (flip (runReaderT . unAppM) r . go)
 
 instance MonadEvent r s (AppM r s) where

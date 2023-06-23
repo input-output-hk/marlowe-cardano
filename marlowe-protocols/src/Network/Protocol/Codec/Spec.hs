@@ -15,29 +15,29 @@ import Data.Data (Proxy)
 import Data.Fixed (Fixed, HasResolution)
 import Data.Foldable (fold)
 import Data.Function ((&))
-import Data.Functor.Identity (Identity(..))
+import Data.Functor.Identity (Identity (..))
 import Data.Int
-import Data.List.NonEmpty (NonEmpty((:|)))
+import Data.List.NonEmpty (NonEmpty ((:|)))
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Map.Internal as Map
 import qualified Data.Set.Internal as Set
 import Data.Set.NonEmpty.Internal
 import Data.Text (Text)
 import qualified Data.Text.Lazy as TL
-import Data.Time (Day, DiffTime, NominalDiffTime, UTCTime(..), secondsToDiffTime, secondsToNominalDiffTime)
+import Data.Time (Day, DiffTime, NominalDiffTime, UTCTime (..), secondsToDiffTime, secondsToNominalDiffTime)
 import Data.Time.Calendar.OrdinalDate (fromOrdinalDate)
 import Data.Version (Version)
 import Data.Word
 import GHC.Generics
-import GHC.Real (Ratio((:%)))
+import GHC.Real (Ratio ((:%)))
 import GHC.Show (showSpace)
 import Network.Protocol.Codec (BinaryMessage, binaryCodec)
-import Network.TypedProtocol (PeerHasAgency, Protocol(..), SomeMessage(..))
-import Network.TypedProtocol.Codec (AnyMessageAndAgency(..), Codec(..), PeerHasAgency(..), runDecoder)
+import Network.TypedProtocol (PeerHasAgency, Protocol (..), SomeMessage (..))
+import Network.TypedProtocol.Codec (AnyMessageAndAgency (..), Codec (..), PeerHasAgency (..), runDecoder)
 import Numeric.Natural (Natural)
 import Test.Hspec (Spec, describe, it)
 import Test.Hspec.Golden (defaultGolden)
-import Test.QuickCheck (Property, Testable(property), counterexample, forAllShrinkShow, infiniteList, oneof)
+import Test.QuickCheck (Property, Testable (property), counterexample, forAllShrinkShow, infiniteList, oneof)
 import Test.QuickCheck.Gen (Gen)
 import Test.QuickCheck.Property (failed, succeeded)
 
@@ -63,12 +63,12 @@ class Variations a where
   default variations :: (Generic a, GVariations (Rep a)) => NonEmpty a
   variations = to <$> gVariations
 
-instance Variations Version where
+instance Variations Version
 
-instance Variations a => Variations [a] where
+instance (Variations a) => Variations [a] where
   variations = [] :| NE.toList (pure <$> variations)
 
-instance Variations a => Variations (Set.Set a) where
+instance (Variations a) => Variations (Set.Set a) where
   variations = Set.Tip :| NE.toList (Set.Bin 1 <$> variations <*> pure Set.Tip <*> pure Set.Tip)
 
 instance (Variations k, Variations a) => Variations (Map.Map k a) where
@@ -76,7 +76,7 @@ instance (Variations k, Variations a) => Variations (Map.Map k a) where
 
 instance (Variations a, Ord a) => Variations (NESet a) where
   variations = case NE.sort variations of
-      a :| as -> NESet <$> (a :| as) `varyAp` (Set.Tip :| (Set.Bin 1 <$> as <*> pure Set.Tip <*> pure Set.Tip))
+    a :| as -> NESet <$> (a :| as) `varyAp` (Set.Tip :| (Set.Bin 1 <$> as <*> pure Set.Tip <*> pure Set.Tip))
 
 instance Variations UTCTime where
   variations = UTCTime <$> variations `varyAp` variations
@@ -87,7 +87,7 @@ instance Variations DiffTime where
 instance Variations NominalDiffTime where
   variations = secondsToNominalDiffTime <$> variations
 
-instance HasResolution a => Variations (Fixed a) where
+instance (HasResolution a) => Variations (Fixed a) where
   variations = pure 1
 
 instance Variations Day where
@@ -95,7 +95,7 @@ instance Variations Day where
 
 instance (Variations a, Variations b) => Variations (a, b)
 
-instance Variations a => Variations (Maybe a)
+instance (Variations a) => Variations (Maybe a)
 
 instance (Variations a, Variations b) => Variations (Either a b)
 
@@ -138,7 +138,7 @@ instance Variations Double where
 instance Variations Int where
   variations = pure 1
 
-instance Variations a => Variations (Ratio a) where
+instance (Variations a) => Variations (Ratio a) where
   variations = (:%) <$> variations `varyAp` variations
 
 instance Variations Char where
@@ -171,10 +171,10 @@ instance (GVariations f, GVariations g) => GVariations (f :+: g) where
 instance (GVariations f, GVariations g) => GVariations (f :*: g) where
   gVariations = (:*:) <$> gVariations `varyAp` gVariations
 
-instance Variations c => GVariations (K1 i c) where
+instance (Variations c) => GVariations (K1 i c) where
   gVariations = K1 <$> variations
 
-instance GVariations f => GVariations (M1 i t f) where
+instance (GVariations f) => GVariations (M1 i t f) where
   gVariations = M1 <$> gVariations
 
 -- | A combinator that can be used like <*> except it doesn't take the
@@ -184,21 +184,25 @@ instance GVariations f => GVariations (M1 i t f) where
 -- the tail of the second, and applying the tail of the second list to the head
 -- of the first. Useful for defining `variations`.
 varyAp :: NonEmpty (a -> b) -> NonEmpty a -> NonEmpty b
-varyAp (f :| fs) (a :| as) = f a :| fold
-  [ f <$> as
-  , ($ a) <$> fs
-  ]
+varyAp (f :| fs) (a :| as) =
+  f a
+    :| fold
+      [ f <$> as
+      , ($ a) <$> fs
+      ]
 
 infixl 4 `varyAp`
 
 -- | A version of varyAp for optional arguments.
 varyAp' :: NonEmpty (Maybe a -> b) -> [a] -> NonEmpty b
-varyAp' (f :| fs) as = f Nothing :| fold
-  [ f . Just <$> as
-  , case as of
-      a : _ -> ($ Just a) <$> fs
-      _ -> []
-  ]
+varyAp' (f :| fs) as =
+  f Nothing
+    :| fold
+      [ f . Just <$> as
+      , case as of
+          a : _ -> ($ Just a) <$> fs
+          _ -> []
+      ]
 
 infixl 4 `varyAp'`
 
@@ -207,7 +211,7 @@ class MessageVariations ps where
   messageVariations :: PeerHasAgency pr (st :: ps) -> NonEmpty (SomeMessage st)
   agencyVariations :: NonEmpty (SomePeerHasAgency ps)
 
-instance MessageVariations ps => Variations (AnyMessageAndAgency ps) where
+instance (MessageVariations ps) => Variations (AnyMessageAndAgency ps) where
   variations = do
     SomePeerHasAgency tok <- agencyVariations
     SomeMessage msg <- messageVariations tok
@@ -216,30 +220,29 @@ instance MessageVariations ps => Variations (AnyMessageAndAgency ps) where
 data SomePeerHasAgency ps = forall pr (st :: ps). SomePeerHasAgency (PeerHasAgency pr st)
 
 genByteStringSplits :: ByteString -> Gen [ByteString]
-genByteStringSplits bytes = oneof
-  [ pure $ fromStrict <$> toChunks bytes
-  , chunksByLength bytes <$> infiniteList
-  ]
+genByteStringSplits bytes =
+  oneof
+    [ pure $ fromStrict <$> toChunks bytes
+    , chunksByLength bytes <$> infiniteList
+    ]
   where
     chunksByLength bs
       | LBS.null bs = const []
       | otherwise = \case
-        [] -> [bs]
-        len : lens ->
-          let
-            (chunk, bs') = LBS.splitAt len bs
-          in
-            chunk : chunksByLength bs' lens
+          [] -> [bs]
+          len : lens ->
+            let (chunk, bs') = LBS.splitAt len bs
+             in chunk : chunksByLength bs' lens
 
 codecGoldenTests :: forall ps. (MessageVariations ps, ShowProtocol ps, BinaryMessage ps) => String -> Spec
 codecGoldenTests protocolName = describe "Message Golden Tests" do
   let Codec{..} = binaryCodec @Identity @ps
   it "Matches the golden output" $
     defaultGolden protocolName $ unlines do
-        AnyMessageAndAgency tok message <- NE.toList variations
-        [ "Show: " <> showsPrecMessage 0 tok message ""
-          , "Binary: " <> TL.unpack (encodeBase16 $ encode tok message)
-          ]
+      AnyMessageAndAgency tok message <- NE.toList variations
+      [ "Show: " <> showsPrecMessage 0 tok message ""
+        , "Binary: " <> TL.unpack (encodeBase16 $ encode tok message)
+        ]
 
 checkPropCodec
   :: forall ps
@@ -247,7 +250,10 @@ checkPropCodec
   => Property
 checkPropCodec = do
   let Codec{..} = binaryCodec @_ @ps
-  forAllShrinkShow (arbitraryMessage @ps) shrinkAnyMessageAndAgency showAnyMessageAndAgency
+  forAllShrinkShow
+    (arbitraryMessage @ps)
+    shrinkAnyMessageAndAgency
+    showAnyMessageAndAgency
     \(AnyMessageAndAgency agency msg) -> do
       let bytes = encode agency msg
       bytes' <- oneof [pure [bytes], genByteStringSplits bytes]
@@ -258,28 +264,30 @@ checkPropCodec = do
           | messageEq (AnyMessageAndAgency agency msg) (AnyMessageAndAgency agency msg') -> property succeeded
           | otherwise -> counterexample (showsPrecMessage 0 agency msg' "") failed
 
-showAnyMessageAndAgency :: ShowProtocol ps => AnyMessageAndAgency ps -> String
-showAnyMessageAndAgency (AnyMessageAndAgency agency msg) = "" &
-  ( showString "AnyMessageAndAgency"
-  . showSpace
-  . showsPrecAgency 11 agency
-  . showSpace
-  . showsPrecMessage 11 agency msg
-  )
+showAnyMessageAndAgency :: (ShowProtocol ps) => AnyMessageAndAgency ps -> String
+showAnyMessageAndAgency (AnyMessageAndAgency agency msg) =
+  ""
+    & ( showString "AnyMessageAndAgency"
+          . showSpace
+          . showsPrecAgency 11 agency
+          . showSpace
+          . showsPrecMessage 11 agency msg
+      )
 
-shrinkAnyMessageAndAgency :: ArbitraryMessage ps => AnyMessageAndAgency ps -> [AnyMessageAndAgency ps]
+shrinkAnyMessageAndAgency :: (ArbitraryMessage ps) => AnyMessageAndAgency ps -> [AnyMessageAndAgency ps]
 shrinkAnyMessageAndAgency (AnyMessageAndAgency agency msg) =
-  [ AnyMessageAndAgency agency msg' | msg' <- shrinkMessage agency msg ]
+  [AnyMessageAndAgency agency msg' | msg' <- shrinkMessage agency msg]
 
-showsPrecAgency :: forall pr ps (st :: ps). ShowProtocol ps => Int -> PeerHasAgency pr st -> ShowS
-showsPrecAgency p = showParen (p >= 11) . \case
-  ClientAgency tok ->
-    ( showString "ClientAgency"
-    . showSpace
-    . showsPrecClientHasAgency 11 tok
-    )
-  ServerAgency tok ->
-    ( showString "ServerAgency"
-    . showSpace
-    . showsPrecServerHasAgency 11 tok
-    )
+showsPrecAgency :: forall pr ps (st :: ps). (ShowProtocol ps) => Int -> PeerHasAgency pr st -> ShowS
+showsPrecAgency p =
+  showParen (p >= 11) . \case
+    ClientAgency tok ->
+      ( showString "ClientAgency"
+          . showSpace
+          . showsPrecClientHasAgency 11 tok
+      )
+    ServerAgency tok ->
+      ( showString "ServerAgency"
+          . showSpace
+          . showsPrecServerHasAgency 11 tok
+      )

@@ -12,13 +12,19 @@ import qualified Data.Vector as V
 import Hasql.TH (maybeStatement)
 import qualified Hasql.Transaction as T
 import Language.Marlowe.Protocol.Query.Types
-import Language.Marlowe.Runtime.ChainSync.Api (PolicyId(..), TokenName(..), TxId(..))
-import Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetContractState
-  (decodeBlockHeader, decodeContractId, decodeTxOutRef)
+import Language.Marlowe.Runtime.ChainSync.Api (PolicyId (..), TokenName (..), TxId (..))
+import Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetContractState (
+  decodeBlockHeader,
+  decodeContractId,
+  decodeTxOutRef,
+ )
 
 getWithdrawal :: TxId -> T.Transaction (Maybe Withdrawal)
-getWithdrawal txId = fmap decodeWithdrawal <$> T.statement (unTxId txId)
-  [maybeStatement|
+getWithdrawal txId =
+  fmap decodeWithdrawal
+    <$> T.statement
+      (unTxId txId)
+      [maybeStatement|
     SELECT
       withdrawalTxIn.txId :: bytea,
       withdrawalTxIn.slotNo :: bigint,
@@ -52,19 +58,22 @@ type ResultRow =
   )
 
 decodeWithdrawal :: ResultRow -> Withdrawal
-decodeWithdrawal (txId, slot, hash, block, payoutTxIds, payoutTxIxs, createTxIds, createTxIxs, roleCurrencies, roles) = Withdrawal
-  { block = decodeBlockHeader slot hash block
-  , withdrawnPayouts = Map.fromList
-      $ V.toList
-      $ V.zip (V.zipWith decodeTxOutRef payoutTxIds payoutTxIxs)
-      $ V.zipWith6 decodePayoutRef createTxIds createTxIxs payoutTxIds payoutTxIxs roleCurrencies roles
-  , withdrawalTx = TxId txId
-  }
+decodeWithdrawal (txId, slot, hash, block, payoutTxIds, payoutTxIxs, createTxIds, createTxIxs, roleCurrencies, roles) =
+  Withdrawal
+    { block = decodeBlockHeader slot hash block
+    , withdrawnPayouts =
+        Map.fromList $
+          V.toList $
+            V.zip (V.zipWith decodeTxOutRef payoutTxIds payoutTxIxs) $
+              V.zipWith6 decodePayoutRef createTxIds createTxIxs payoutTxIds payoutTxIxs roleCurrencies roles
+    , withdrawalTx = TxId txId
+    }
 
 decodePayoutRef :: ByteString -> Int16 -> ByteString -> Int16 -> ByteString -> ByteString -> PayoutRef
-decodePayoutRef createTxId createTxIx txId txIx rolesCurrency role = PayoutRef
-  { contractId = decodeContractId createTxId createTxIx
-  , payout = decodeTxOutRef txId txIx
-  , rolesCurrency = PolicyId rolesCurrency
-  , role = TokenName role
-  }
+decodePayoutRef createTxId createTxIx txId txIx rolesCurrency role =
+  PayoutRef
+    { contractId = decodeContractId createTxId createTxIx
+    , payout = decodeTxOutRef txId txIx
+    , rolesCurrency = PolicyId rolesCurrency
+    , role = TokenName role
+    }

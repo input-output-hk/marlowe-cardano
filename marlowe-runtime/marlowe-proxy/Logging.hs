@@ -13,8 +13,12 @@ import Language.Marlowe.Protocol.Sync.Types (MarloweSync)
 import Language.Marlowe.Protocol.Types (MarloweRuntime)
 import Language.Marlowe.Runtime.Contract.Api (ContractRequest)
 import Language.Marlowe.Runtime.Transaction.Api (MarloweTxCommand)
-import Network.Protocol.Driver.Trace
-  (TcpClientSelector, TcpServerSelector, renderTcpClientSelectorOTel, renderTcpServerSelectorOTel)
+import Network.Protocol.Driver.Trace (
+  TcpClientSelector,
+  TcpServerSelector,
+  renderTcpClientSelectorOTel,
+  renderTcpServerSelectorOTel,
+ )
 import Network.Protocol.Handshake.Types (Handshake)
 import Network.Protocol.Job.Types (Job)
 import Network.Protocol.Query.Types (Query)

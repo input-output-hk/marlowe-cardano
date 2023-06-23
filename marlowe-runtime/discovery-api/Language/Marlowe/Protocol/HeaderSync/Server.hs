@@ -10,68 +10,72 @@ import Language.Marlowe.Runtime.Discovery.Api (ContractHeader)
 import Network.Protocol.Peer.Trace
 import Network.TypedProtocol
 
-newtype MarloweHeaderSyncServer m a = MarloweHeaderSyncServer { runMarloweHeaderSyncServer :: m (ServerStIdle m a) }
-  deriving Functor
+newtype MarloweHeaderSyncServer m a = MarloweHeaderSyncServer {runMarloweHeaderSyncServer :: m (ServerStIdle m a)}
+  deriving (Functor)
 
 data ServerStIdle m a = ServerStIdle
   { recvMsgRequestNext :: m (ServerStNext m a)
   , recvMsgIntersect :: [BlockHeader] -> m (ServerStIntersect m a)
   , recvMsgDone :: m a
-  } deriving Functor
+  }
+  deriving (Functor)
 
 data ServerStIntersect m a where
   SendMsgIntersectFound :: BlockHeader -> ServerStIdle m a -> ServerStIntersect m a
   SendMsgIntersectNotFound :: ServerStIdle m a -> ServerStIntersect m a
 
-deriving instance Functor m => Functor (ServerStIntersect m)
+deriving instance (Functor m) => Functor (ServerStIntersect m)
 
 data ServerStNext m a where
   SendMsgNewHeaders :: BlockHeader -> [ContractHeader] -> ServerStIdle m a -> ServerStNext m a
   SendMsgRollBackward :: ChainPoint -> ServerStIdle m a -> ServerStNext m a
   SendMsgWait :: ServerStWait m a -> ServerStNext m a
 
-deriving instance Functor m => Functor (ServerStNext m)
+deriving instance (Functor m) => Functor (ServerStNext m)
 
 data ServerStWait m a = ServerStWait
-  { recvMsgPoll   :: m (ServerStNext m a)
+  { recvMsgPoll :: m (ServerStNext m a)
   , recvMsgCancel :: m (ServerStIdle m a)
-  } deriving Functor
+  }
+  deriving (Functor)
 
 hoistMarloweHeaderSyncServer
   :: forall m n a
-   . Functor m
+   . (Functor m)
   => (forall x. m x -> n x)
   -> MarloweHeaderSyncServer m a
   -> MarloweHeaderSyncServer n a
 hoistMarloweHeaderSyncServer nat = MarloweHeaderSyncServer . nat . fmap hoistIdle . runMarloweHeaderSyncServer
   where
     hoistIdle :: ServerStIdle m a -> ServerStIdle n a
-    hoistIdle ServerStIdle{..} = ServerStIdle
-      { recvMsgRequestNext = nat $ fmap hoistNext recvMsgRequestNext
-      , recvMsgIntersect = nat . fmap hoistIntersect . recvMsgIntersect
-      , recvMsgDone = nat recvMsgDone
-      }
+    hoistIdle ServerStIdle{..} =
+      ServerStIdle
+        { recvMsgRequestNext = nat $ fmap hoistNext recvMsgRequestNext
+        , recvMsgIntersect = nat . fmap hoistIntersect . recvMsgIntersect
+        , recvMsgDone = nat recvMsgDone
+        }
 
     hoistIntersect :: ServerStIntersect m a -> ServerStIntersect n a
     hoistIntersect = \case
       SendMsgIntersectFound block idle -> SendMsgIntersectFound block $ hoistIdle idle
-      SendMsgIntersectNotFound idle             -> SendMsgIntersectNotFound $ hoistIdle idle
+      SendMsgIntersectNotFound idle -> SendMsgIntersectNotFound $ hoistIdle idle
 
     hoistNext :: ServerStNext m a -> ServerStNext n a
     hoistNext = \case
       SendMsgNewHeaders block headers idle -> SendMsgNewHeaders block headers $ hoistIdle idle
-      SendMsgRollBackward block idle      -> SendMsgRollBackward block $ hoistIdle idle
-      SendMsgWait wait                          -> SendMsgWait $ hoistWait wait
+      SendMsgRollBackward block idle -> SendMsgRollBackward block $ hoistIdle idle
+      SendMsgWait wait -> SendMsgWait $ hoistWait wait
 
     hoistWait :: ServerStWait m a -> ServerStWait n a
-    hoistWait ServerStWait{..} = ServerStWait
-      { recvMsgPoll = nat $ fmap hoistNext recvMsgPoll
-      , recvMsgCancel = nat $ fmap hoistIdle recvMsgCancel
-      }
+    hoistWait ServerStWait{..} =
+      ServerStWait
+        { recvMsgPoll = nat $ fmap hoistNext recvMsgPoll
+        , recvMsgCancel = nat $ fmap hoistIdle recvMsgCancel
+        }
 
 marloweHeaderSyncServerPeer
   :: forall m a
-   . Functor m
+   . (Functor m)
   => MarloweHeaderSyncServer m a
   -> PeerTraced MarloweHeaderSync 'AsServer 'StIdle m a
 marloweHeaderSyncServerPeer = EffectTraced . fmap peerIdle . runMarloweHeaderSyncServer
@@ -104,5 +108,5 @@ marloweHeaderSyncServerPeer = EffectTraced . fmap peerIdle . runMarloweHeaderSyn
 
     peerWait :: ServerStWait m a -> PeerTraced MarloweHeaderSync 'AsServer 'StWait m a
     peerWait ServerStWait{..} = AwaitTraced (ClientAgency TokWait) \case
-      MsgPoll   -> Respond (ServerAgency TokNext) $ peerNext <$> recvMsgPoll
+      MsgPoll -> Respond (ServerAgency TokNext) $ peerNext <$> recvMsgPoll
       MsgCancel -> Receive $ EffectTraced $ peerIdle <$> recvMsgCancel

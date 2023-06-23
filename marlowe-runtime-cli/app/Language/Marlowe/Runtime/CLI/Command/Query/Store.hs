@@ -20,20 +20,24 @@ data StoreQueryCommand
 storeQueryCommandParser :: ParserInfo StoreQueryCommand
 storeQueryCommandParser = info parser $ progDesc "Query the contract store"
   where
-    parser = hsubparser $ mconcat
-      [ command "contract" $ QueryContract <$> info contractHashParser contractInfo
-      , command "closure" $ QueryClosure <$> info contractHashParser closureInfo
-      , command "adjacency" $ QueryAdjacency <$> info contractHashParser adjacencyInfo
-      ]
+    parser =
+      hsubparser $
+        mconcat
+          [ command "contract" $ QueryContract <$> info contractHashParser contractInfo
+          , command "closure" $ QueryClosure <$> info contractHashParser closureInfo
+          , command "adjacency" $ QueryAdjacency <$> info contractHashParser adjacencyInfo
+          ]
     contractInfo = progDesc "Query the (merkleized) source of a contract in the contract store"
     closureInfo = progDesc "Query the deep dependency closure of a contract in the store."
     adjacencyInfo = progDesc "Query the immediate dependencies of a contract in the store."
-    contractHashParser = strArgument $ mconcat
-      [ metavar "CONTRACT_HASH"
-      , help "The hash of the contract to query in the store."
-      ]
+    contractHashParser =
+      strArgument $
+        mconcat
+          [ metavar "CONTRACT_HASH"
+          , help "The hash of the contract to query in the store."
+          ]
 
-runStoreQueryCommand :: StoreQueryCommand-> CLI ()
+runStoreQueryCommand :: StoreQueryCommand -> CLI ()
 runStoreQueryCommand = \case
   QueryContract hash -> runQueryContract hash
   QueryClosure hash -> runQueryClosure hash

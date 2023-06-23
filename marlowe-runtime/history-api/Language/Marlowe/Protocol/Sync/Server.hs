@@ -11,30 +11,32 @@ import Language.Marlowe.Runtime.History.Api (ContractStep, CreateStep)
 import Network.Protocol.Peer.Trace
 import Network.TypedProtocol
 
-newtype MarloweSyncServer m a = MarloweSyncServer { runMarloweSyncServer :: m (ServerStInit m a) }
-  deriving Functor
+newtype MarloweSyncServer m a = MarloweSyncServer {runMarloweSyncServer :: m (ServerStInit m a)}
+  deriving (Functor)
 
 data ServerStInit m a = ServerStInit
   { recvMsgFollowContract :: ContractId -> m (ServerStFollow m a)
-  , recvMsgIntersect      :: forall v. ContractId -> MarloweVersion v -> [BlockHeader] -> m (ServerStIntersect v m a)
-  } deriving Functor
+  , recvMsgIntersect :: forall v. ContractId -> MarloweVersion v -> [BlockHeader] -> m (ServerStIntersect v m a)
+  }
+  deriving (Functor)
 
 data ServerStFollow m a where
   SendMsgContractFound :: BlockHeader -> MarloweVersion v -> CreateStep v -> ServerStIdle v m a -> ServerStFollow m a
   SendMsgContractNotFound :: a -> ServerStFollow m a
 
-deriving instance Functor m => Functor (ServerStFollow m)
+deriving instance (Functor m) => Functor (ServerStFollow m)
 
 data ServerStIntersect v m a where
   SendMsgIntersectFound :: BlockHeader -> ServerStIdle v m a -> ServerStIntersect v m a
   SendMsgIntersectNotFound :: a -> ServerStIntersect v m a
 
-deriving instance Functor m => Functor (ServerStIntersect v m)
+deriving instance (Functor m) => Functor (ServerStIntersect v m)
 
 data ServerStIdle v m a = ServerStIdle
   { recvMsgRequestNext :: m (ServerStNext v m a)
-  , recvMsgDone        :: m a
-  } deriving Functor
+  , recvMsgDone :: m a
+  }
+  deriving (Functor)
 
 data ServerStNext v m a where
   SendMsgRollForward :: BlockHeader -> [ContractStep v] -> ServerStIdle v m a -> ServerStNext v m a
@@ -42,31 +44,33 @@ data ServerStNext v m a where
   SendMsgRollBackCreation :: a -> ServerStNext v m a
   SendMsgWait :: ServerStWait v m a -> ServerStNext v m a
 
-deriving instance Functor m => Functor (ServerStNext v m)
+deriving instance (Functor m) => Functor (ServerStNext v m)
 
 data ServerStWait v m a = ServerStWait
-  { recvMsgPoll   :: m (ServerStNext v m a)
+  { recvMsgPoll :: m (ServerStNext v m a)
   , recvMsgCancel :: m (ServerStIdle v m a)
-  } deriving Functor
+  }
+  deriving (Functor)
 
 hoistMarloweSyncServer
   :: forall m n a
-   . Functor m
+   . (Functor m)
   => (forall x. m x -> n x)
   -> MarloweSyncServer m a
   -> MarloweSyncServer n a
 hoistMarloweSyncServer nat = MarloweSyncServer . nat . fmap hoistInit . runMarloweSyncServer
   where
     hoistInit :: ServerStInit m a -> ServerStInit n a
-    hoistInit ServerStInit{..} = ServerStInit
-      { recvMsgFollowContract = nat . fmap hoistFollow . recvMsgFollowContract
-      , recvMsgIntersect = \contractId version -> nat . fmap hoistIntersect . recvMsgIntersect contractId version
-      }
+    hoistInit ServerStInit{..} =
+      ServerStInit
+        { recvMsgFollowContract = nat . fmap hoistFollow . recvMsgFollowContract
+        , recvMsgIntersect = \contractId version -> nat . fmap hoistIntersect . recvMsgIntersect contractId version
+        }
 
     hoistIntersect :: ServerStIntersect v m a -> ServerStIntersect v n a
     hoistIntersect = \case
       SendMsgIntersectFound blockHeader idle -> SendMsgIntersectFound blockHeader $ hoistIdle idle
-      SendMsgIntersectNotFound a             -> SendMsgIntersectNotFound a
+      SendMsgIntersectNotFound a -> SendMsgIntersectNotFound a
 
     hoistFollow :: ServerStFollow m a -> ServerStFollow n a
     hoistFollow = \case
@@ -74,27 +78,29 @@ hoistMarloweSyncServer nat = MarloweSyncServer . nat . fmap hoistInit . runMarlo
       SendMsgContractNotFound a -> SendMsgContractNotFound a
 
     hoistIdle :: ServerStIdle v m a -> ServerStIdle v n a
-    hoistIdle ServerStIdle{..} = ServerStIdle
-      { recvMsgRequestNext = nat $ fmap hoistNext recvMsgRequestNext
-      , recvMsgDone = nat recvMsgDone
-      }
+    hoistIdle ServerStIdle{..} =
+      ServerStIdle
+        { recvMsgRequestNext = nat $ fmap hoistNext recvMsgRequestNext
+        , recvMsgDone = nat recvMsgDone
+        }
 
     hoistNext :: ServerStNext v m a -> ServerStNext v n a
     hoistNext = \case
       SendMsgRollForward blockHeader steps idle -> SendMsgRollForward blockHeader steps $ hoistIdle idle
-      SendMsgRollBackward blockHeader idle      -> SendMsgRollBackward blockHeader $ hoistIdle idle
-      SendMsgRollBackCreation a                 -> SendMsgRollBackCreation a
-      SendMsgWait wait                          -> SendMsgWait $ hoistWait wait
+      SendMsgRollBackward blockHeader idle -> SendMsgRollBackward blockHeader $ hoistIdle idle
+      SendMsgRollBackCreation a -> SendMsgRollBackCreation a
+      SendMsgWait wait -> SendMsgWait $ hoistWait wait
 
     hoistWait :: ServerStWait v m a -> ServerStWait v n a
-    hoistWait ServerStWait{..} = ServerStWait
-      { recvMsgPoll = nat $ fmap hoistNext recvMsgPoll
-      , recvMsgCancel = nat $ fmap hoistIdle recvMsgCancel
-      }
+    hoistWait ServerStWait{..} =
+      ServerStWait
+        { recvMsgPoll = nat $ fmap hoistNext recvMsgPoll
+        , recvMsgCancel = nat $ fmap hoistIdle recvMsgCancel
+        }
 
 marloweSyncServerPeer
   :: forall m a
-   . Functor m
+   . (Functor m)
   => MarloweSyncServer m a
   -> PeerTraced MarloweSync 'AsServer 'StInit m a
 marloweSyncServerPeer = EffectTraced . fmap peerInit . runMarloweSyncServer

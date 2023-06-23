@@ -8,13 +8,16 @@ import Data.Maybe (listToMaybe)
 import qualified Data.Vector as V
 import Hasql.TH (vectorStatement)
 import qualified Hasql.Transaction as T
-import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader(..), BlockHeaderHash(..))
+import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader (..), BlockHeaderHash (..))
 
 getIntersection :: [BlockHeader] -> T.Transaction (Maybe BlockHeader)
 getIntersection [] = pure Nothing
 getIntersection (b : bs) = do
-  serverBlocks <- fmap decodeBlock . V.toList <$> T.statement (fromIntegral $ slotNo b)
-    [vectorStatement|
+  serverBlocks <-
+    fmap decodeBlock . V.toList
+      <$> T.statement
+        (fromIntegral $ slotNo b)
+        [vectorStatement|
       SELECT
         block.slotNo :: bigint,
         block.id :: bytea,
@@ -23,16 +26,17 @@ getIntersection (b : bs) = do
       WHERE slotNo >= $1 :: bigint
       ORDER BY slotNo
     |]
-  pure
-    $ fmap fst
-    $ listToMaybe
-    $ reverse
-    $ takeWhile (uncurry (==))
-    $ zip (b : bs)
-    $ dropWhile (/= b) serverBlocks
+  pure $
+    fmap fst $
+      listToMaybe $
+        reverse $
+          takeWhile (uncurry (==)) $
+            zip (b : bs) $
+              dropWhile (/= b) serverBlocks
 
 decodeBlock :: (Int64, ByteString, Int64) -> BlockHeader
-decodeBlock (slot, hash, block) = BlockHeader
-  (fromIntegral slot)
-  (BlockHeaderHash hash)
-  (fromIntegral block)
+decodeBlock (slot, hash, block) =
+  BlockHeader
+    (fromIntegral slot)
+    (BlockHeaderHash hash)
+    (fromIntegral block)

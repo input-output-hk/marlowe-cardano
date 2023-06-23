@@ -1,6 +1,6 @@
-module Main
-  ( main
-  ) where
+module Main (
+  main,
+) where
 
 import Spec.Actus.Examples
 import Test.Tasty

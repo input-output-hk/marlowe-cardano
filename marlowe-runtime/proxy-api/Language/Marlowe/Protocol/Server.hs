@@ -7,8 +7,11 @@ module Language.Marlowe.Protocol.Server where
 
 import Language.Marlowe.Protocol.Client
 import Language.Marlowe.Protocol.HeaderSync.Client (marloweHeaderSyncClientPeer, serveMarloweHeaderSyncClient)
-import Language.Marlowe.Protocol.HeaderSync.Server
-  (MarloweHeaderSyncServer, hoistMarloweHeaderSyncServer, marloweHeaderSyncServerPeer)
+import Language.Marlowe.Protocol.HeaderSync.Server (
+  MarloweHeaderSyncServer,
+  hoistMarloweHeaderSyncServer,
+  marloweHeaderSyncServerPeer,
+ )
 import Language.Marlowe.Protocol.HeaderSync.Types (MarloweHeaderSync)
 import qualified Language.Marlowe.Protocol.HeaderSync.Types as Header
 import Language.Marlowe.Protocol.Load.Client (marloweLoadClientPeer, serveMarloweLoadClient)
@@ -42,7 +45,8 @@ data MarloweRuntimeServer m a = MarloweRuntimeServer
   , recvMsgRunMarloweLoad :: m (PeerTraced MarloweLoad 'AsServer ('Load.StProcessing 'Load.RootNode) m a)
   , recvMsgRunTxJob :: m (PeerTraced (Job MarloweTxCommand) 'AsServer 'Job.StInit m a)
   , recvMsgRunContractQuery :: m (PeerTraced (Query ContractRequest) 'AsServer 'Query.StReq m a)
-  } deriving Functor
+  }
+  deriving (Functor)
 
 data MarloweRuntimeServerDirect m a = MarloweRuntimeServerDirect
   { recvMsgRunMarloweSync :: m (MarloweSyncServer m a)
@@ -51,51 +55,59 @@ data MarloweRuntimeServerDirect m a = MarloweRuntimeServerDirect
   , recvMsgRunMarloweLoad :: m (MarloweLoadServer m a)
   , recvMsgRunTxJob :: m (JobServer MarloweTxCommand m a)
   , recvMsgRunContractQuery :: m (QueryServer ContractRequest m a)
-  } deriving Functor
-
-hoistMarloweRuntimeServer :: Functor m => (forall x. m x -> n x) -> MarloweRuntimeServer m a -> MarloweRuntimeServer n a
-hoistMarloweRuntimeServer f MarloweRuntimeServer{..} = MarloweRuntimeServer
-  { recvMsgRunMarloweSync = f $ hoistPeerTraced f <$> recvMsgRunMarloweSync
-  , recvMsgRunMarloweHeaderSync = f $ hoistPeerTraced f <$> recvMsgRunMarloweHeaderSync
-  , recvMsgRunMarloweQuery = f $ hoistPeerTraced f <$> recvMsgRunMarloweQuery
-  , recvMsgRunMarloweLoad = f $ hoistPeerTraced f <$> recvMsgRunMarloweLoad
-  , recvMsgRunTxJob = f $ hoistPeerTraced f <$> recvMsgRunTxJob
-  , recvMsgRunContractQuery = f $ hoistPeerTraced f <$> recvMsgRunContractQuery
-  , ..
   }
+  deriving (Functor)
 
-hoistMarloweRuntimeServerDirect :: Functor m => (forall x. m x -> n x) -> MarloweRuntimeServerDirect m a -> MarloweRuntimeServerDirect n a
-hoistMarloweRuntimeServerDirect f MarloweRuntimeServerDirect{..} = MarloweRuntimeServerDirect
-  { recvMsgRunMarloweSync = f $ hoistMarloweSyncServer f <$> recvMsgRunMarloweSync
-  , recvMsgRunMarloweHeaderSync = f $ hoistMarloweHeaderSyncServer f <$> recvMsgRunMarloweHeaderSync
-  , recvMsgRunMarloweQuery = f $ hoistQueryServer f <$> recvMsgRunMarloweQuery
-  , recvMsgRunMarloweLoad = f $ hoistMarloweLoadServer f <$> recvMsgRunMarloweLoad
-  , recvMsgRunTxJob = f $ hoistJobServer f <$> recvMsgRunTxJob
-  , recvMsgRunContractQuery = f $ hoistQueryServer f <$> recvMsgRunContractQuery
-  , ..
-  }
+hoistMarloweRuntimeServer
+  :: (Functor m) => (forall x. m x -> n x) -> MarloweRuntimeServer m a -> MarloweRuntimeServer n a
+hoistMarloweRuntimeServer f MarloweRuntimeServer{..} =
+  MarloweRuntimeServer
+    { recvMsgRunMarloweSync = f $ hoistPeerTraced f <$> recvMsgRunMarloweSync
+    , recvMsgRunMarloweHeaderSync = f $ hoistPeerTraced f <$> recvMsgRunMarloweHeaderSync
+    , recvMsgRunMarloweQuery = f $ hoistPeerTraced f <$> recvMsgRunMarloweQuery
+    , recvMsgRunMarloweLoad = f $ hoistPeerTraced f <$> recvMsgRunMarloweLoad
+    , recvMsgRunTxJob = f $ hoistPeerTraced f <$> recvMsgRunTxJob
+    , recvMsgRunContractQuery = f $ hoistPeerTraced f <$> recvMsgRunContractQuery
+    , ..
+    }
 
-marloweRuntimeServerPeer :: Monad m => MarloweRuntimeServer m a -> PeerTraced MarloweRuntime 'AsServer 'StInit m a
+hoistMarloweRuntimeServerDirect
+  :: (Functor m) => (forall x. m x -> n x) -> MarloweRuntimeServerDirect m a -> MarloweRuntimeServerDirect n a
+hoistMarloweRuntimeServerDirect f MarloweRuntimeServerDirect{..} =
+  MarloweRuntimeServerDirect
+    { recvMsgRunMarloweSync = f $ hoistMarloweSyncServer f <$> recvMsgRunMarloweSync
+    , recvMsgRunMarloweHeaderSync = f $ hoistMarloweHeaderSyncServer f <$> recvMsgRunMarloweHeaderSync
+    , recvMsgRunMarloweQuery = f $ hoistQueryServer f <$> recvMsgRunMarloweQuery
+    , recvMsgRunMarloweLoad = f $ hoistMarloweLoadServer f <$> recvMsgRunMarloweLoad
+    , recvMsgRunTxJob = f $ hoistJobServer f <$> recvMsgRunTxJob
+    , recvMsgRunContractQuery = f $ hoistQueryServer f <$> recvMsgRunContractQuery
+    , ..
+    }
+
+marloweRuntimeServerPeer :: (Monad m) => MarloweRuntimeServer m a -> PeerTraced MarloweRuntime 'AsServer 'StInit m a
 marloweRuntimeServerPeer MarloweRuntimeServer{..} =
-  AwaitTraced (ClientAgency TokInit) $ Receive . EffectTraced . \case
-    MsgRunMarloweSync -> liftPeerTraced liftMarloweSync <$> recvMsgRunMarloweSync
-    MsgRunMarloweHeaderSync -> liftPeerTraced liftMarloweHeaderSync <$> recvMsgRunMarloweHeaderSync
-    MsgRunMarloweQuery -> liftPeerTraced liftMarloweQuery <$> recvMsgRunMarloweQuery
-    MsgRunMarloweLoad -> liftPeerTraced liftMarloweLoad <$> recvMsgRunMarloweLoad
-    MsgRunTxJob -> liftPeerTraced liftTxJob <$> recvMsgRunTxJob
-    MsgRunContractQuery -> liftPeerTraced liftContractQuery <$> recvMsgRunContractQuery
+  AwaitTraced (ClientAgency TokInit) $
+    Receive . EffectTraced . \case
+      MsgRunMarloweSync -> liftPeerTraced liftMarloweSync <$> recvMsgRunMarloweSync
+      MsgRunMarloweHeaderSync -> liftPeerTraced liftMarloweHeaderSync <$> recvMsgRunMarloweHeaderSync
+      MsgRunMarloweQuery -> liftPeerTraced liftMarloweQuery <$> recvMsgRunMarloweQuery
+      MsgRunMarloweLoad -> liftPeerTraced liftMarloweLoad <$> recvMsgRunMarloweLoad
+      MsgRunTxJob -> liftPeerTraced liftTxJob <$> recvMsgRunTxJob
+      MsgRunContractQuery -> liftPeerTraced liftContractQuery <$> recvMsgRunContractQuery
 
-marloweRuntimeServerDirectPeer :: Monad m => MarloweRuntimeServerDirect m a -> PeerTraced MarloweRuntime 'AsServer 'StInit m a
+marloweRuntimeServerDirectPeer
+  :: (Monad m) => MarloweRuntimeServerDirect m a -> PeerTraced MarloweRuntime 'AsServer 'StInit m a
 marloweRuntimeServerDirectPeer MarloweRuntimeServerDirect{..} =
-  AwaitTraced (ClientAgency TokInit) $ Receive . EffectTraced . \case
-    MsgRunMarloweSync -> liftPeerTraced liftMarloweSync . marloweSyncServerPeer <$> recvMsgRunMarloweSync
-    MsgRunMarloweHeaderSync -> liftPeerTraced liftMarloweHeaderSync . marloweHeaderSyncServerPeer <$> recvMsgRunMarloweHeaderSync
-    MsgRunMarloweQuery -> liftPeerTraced liftMarloweQuery . queryServerPeer <$> recvMsgRunMarloweQuery
-    MsgRunMarloweLoad -> liftPeerTraced liftMarloweLoad . marloweLoadServerPeer <$> recvMsgRunMarloweLoad
-    MsgRunTxJob -> liftPeerTraced liftTxJob . jobServerPeer <$> recvMsgRunTxJob
-    MsgRunContractQuery -> liftPeerTraced liftContractQuery . queryServerPeer <$> recvMsgRunContractQuery
+  AwaitTraced (ClientAgency TokInit) $
+    Receive . EffectTraced . \case
+      MsgRunMarloweSync -> liftPeerTraced liftMarloweSync . marloweSyncServerPeer <$> recvMsgRunMarloweSync
+      MsgRunMarloweHeaderSync -> liftPeerTraced liftMarloweHeaderSync . marloweHeaderSyncServerPeer <$> recvMsgRunMarloweHeaderSync
+      MsgRunMarloweQuery -> liftPeerTraced liftMarloweQuery . queryServerPeer <$> recvMsgRunMarloweQuery
+      MsgRunMarloweLoad -> liftPeerTraced liftMarloweLoad . marloweLoadServerPeer <$> recvMsgRunMarloweLoad
+      MsgRunTxJob -> liftPeerTraced liftTxJob . jobServerPeer <$> recvMsgRunTxJob
+      MsgRunContractQuery -> liftPeerTraced liftContractQuery . queryServerPeer <$> recvMsgRunContractQuery
 
-serveMarloweRuntimeClient :: Monad m => MarloweRuntimeServer m a -> MarloweRuntimeClient m b -> m (a, b)
+serveMarloweRuntimeClient :: (Monad m) => MarloweRuntimeServer m a -> MarloweRuntimeClient m b -> m (a, b)
 serveMarloweRuntimeClient MarloweRuntimeServer{..} = \case
   RunMarloweSyncClient client -> flip connectTraced (marloweSyncClientPeer client) =<< recvMsgRunMarloweSync
   RunMarloweHeaderSyncClient client -> flip connectTraced (marloweHeaderSyncClientPeer client) =<< recvMsgRunMarloweHeaderSync
@@ -104,7 +116,7 @@ serveMarloweRuntimeClient MarloweRuntimeServer{..} = \case
   RunTxClient client -> flip connectTraced (jobClientPeer client) =<< recvMsgRunTxJob
   RunContractQueryClient client -> flip connectTraced (queryClientPeer client) =<< recvMsgRunContractQuery
 
-serveMarloweRuntimeClientDirect :: Monad m => MarloweRuntimeServerDirect m a -> MarloweRuntimeClient m b -> m (a, b)
+serveMarloweRuntimeClientDirect :: (Monad m) => MarloweRuntimeServerDirect m a -> MarloweRuntimeClient m b -> m (a, b)
 serveMarloweRuntimeClientDirect MarloweRuntimeServerDirect{..} = \case
   RunMarloweSyncClient client -> flip serveMarloweSyncClient client =<< recvMsgRunMarloweSync
   RunMarloweHeaderSyncClient client -> flip serveMarloweHeaderSyncClient client =<< recvMsgRunMarloweHeaderSync

@@ -7,16 +7,17 @@ module Control.Concurrent.Component.Probes where
 import Colog (Message, WithLog)
 import Control.Concurrent.Component
 import Control.Monad.IO.Class (liftIO)
-import Data.Proxy (Proxy(..))
+import Data.Proxy (Proxy (..))
 import Network.Wai.Handler.Warp (Port, run)
-import Servant (Get, Handler, JSON, NoContent(NoContent), Server, err500, throwError, type (:<|>)((:<|>)), type (:>))
+import Servant (Get, Handler, JSON, NoContent (NoContent), Server, err500, throwError, type (:<|>) ((:<|>)), type (:>))
 import Servant.Client (ClientM, client)
 import Servant.Server (serve)
 import UnliftIO (MonadUnliftIO)
 
-type ProbeApi = "live" :> Probe
-           :<|> "ready" :> Probe
-           :<|> "startup" :> Probe
+type ProbeApi =
+  "live" :> Probe
+    :<|> "ready" :> Probe
+    :<|> "startup" :> Probe
 
 type Probe = Get '[JSON] NoContent
 

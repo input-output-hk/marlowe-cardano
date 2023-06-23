@@ -10,9 +10,11 @@ newtype QueryCommand
 queryCommandParser :: ParserInfo QueryCommand
 queryCommandParser = info parser $ progDesc "Query the runtime"
   where
-    parser = hsubparser $ mconcat
-      [ command "store" $ StoreQuery <$> storeQueryCommandParser
-      ]
+    parser =
+      hsubparser $
+        mconcat
+          [ command "store" $ StoreQuery <$> storeQueryCommandParser
+          ]
 
 runQueryCommand :: QueryCommand -> CLI ()
 runQueryCommand = \case

@@ -9,7 +9,6 @@ import qualified Language.Marlowe.Runtime.Integration.MarloweQuery as MarloweQue
 import qualified Language.Marlowe.Runtime.Integration.Withdraw as Withdraw
 import Test.Hspec (Spec, describe)
 
-
 spec :: Spec
 spec = describe "Marlowe runtime API" do
   Basic.spec

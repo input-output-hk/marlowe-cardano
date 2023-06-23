@@ -2,41 +2,56 @@
 {-# LANGUAGE GADTs #-}
 
 -- | This module defines a server for the /contracts REST API.
-
 module Language.Marlowe.Runtime.Web.Server.REST.Contracts where
 
 import Cardano.Api (BabbageEra, TxBody, makeSignedTransaction)
 import qualified Cardano.Api as Cardano
-import Cardano.Ledger.Alonzo.TxWitness (TxWitness(TxWitness))
-import Data.Aeson (Value(Null))
+import Cardano.Ledger.Alonzo.TxWitness (TxWitness (TxWitness))
+import Data.Aeson (Value (Null))
 import qualified Data.Map as Map
 import Data.Maybe (fromMaybe)
 import qualified Data.Set as Set
 import Data.Text (Text)
-import Language.Marlowe.Protocol.Query.Types (ContractFilter(..), Page(..))
-import Language.Marlowe.Runtime.ChainSync.Api (Lovelace(..))
-import Language.Marlowe.Runtime.Core.Api
-  (ContractId, MarloweMetadataTag(..), MarloweTransactionMetadata(..), MarloweVersion(..), SomeMarloweVersion(..))
-import Language.Marlowe.Runtime.Transaction.Api (ContractCreated(..), WalletAddresses(..))
+import Language.Marlowe.Protocol.Query.Types (ContractFilter (..), Page (..))
+import Language.Marlowe.Runtime.ChainSync.Api (Lovelace (..))
+import Language.Marlowe.Runtime.Core.Api (
+  ContractId,
+  MarloweMetadataTag (..),
+  MarloweTransactionMetadata (..),
+  MarloweVersion (..),
+  SomeMarloweVersion (..),
+ )
+import Language.Marlowe.Runtime.Transaction.Api (ContractCreated (..), WalletAddresses (..))
 import qualified Language.Marlowe.Runtime.Transaction.Api as Tx
 import Language.Marlowe.Runtime.Web hiding (Unsigned)
 import Language.Marlowe.Runtime.Web.Server.DTO
-import Language.Marlowe.Runtime.Web.Server.Monad
-  (ServerM, createContract, loadContract, loadContractHeaders, submitContract)
-import Language.Marlowe.Runtime.Web.Server.REST.ApiError
-  (ApiError(ApiError), badRequest', notFound', rangeNotSatisfiable', throwDTOError)
+import Language.Marlowe.Runtime.Web.Server.Monad (
+  ServerM,
+  createContract,
+  loadContract,
+  loadContractHeaders,
+  submitContract,
+ )
+import Language.Marlowe.Runtime.Web.Server.REST.ApiError (
+  ApiError (ApiError),
+  badRequest',
+  notFound',
+  rangeNotSatisfiable',
+  throwDTOError,
+ )
 import qualified Language.Marlowe.Runtime.Web.Server.REST.ApiError as ApiError
 import qualified Language.Marlowe.Runtime.Web.Server.REST.Contracts.Next as Next
 import qualified Language.Marlowe.Runtime.Web.Server.REST.Transactions as Transactions
-import Language.Marlowe.Runtime.Web.Server.TxClient (TempTx(TempTx), TempTxStatus(Unsigned))
+import Language.Marlowe.Runtime.Web.Server.TxClient (TempTx (TempTx), TempTxStatus (Unsigned))
 import Language.Marlowe.Runtime.Web.Server.Util (makeSignedTxWithWitnessKeys)
 import Servant
 import Servant.Pagination
 
 server :: ServerT ContractsAPI ServerM
-server = get
-       :<|> (postCreateTxBodyResponse :<|> postCreateTxResponse)
-       :<|> contractServer
+server =
+  get
+    :<|> (postCreateTxBodyResponse :<|> postCreateTxResponse)
+    :<|> contractServer
 
 postCreateTxBody
   :: PostContractsRequest
@@ -45,15 +60,19 @@ postCreateTxBody
   -> Maybe (CommaList TxOutRef)
   -> ServerM (ContractId, TxBody BabbageEra)
 postCreateTxBody PostContractsRequest{..} changeAddressDTO mAddresses mCollateralUtxos = do
-  SomeMarloweVersion v@MarloweV1  <- fromDTOThrow (badRequest' "Unsupported Marlowe version") version
+  SomeMarloweVersion v@MarloweV1 <- fromDTOThrow (badRequest' "Unsupported Marlowe version") version
   changeAddress <- fromDTOThrow (badRequest' "Invalid change address value") changeAddressDTO
-  extraAddresses <- Set.fromList <$> fromDTOThrow (badRequest' "Invalid addresses header value") (maybe [] unCommaList mAddresses)
-  collateralUtxos <- Set.fromList <$> fromDTOThrow (badRequest' "Invalid collateral header UTxO value") (maybe [] unCommaList mCollateralUtxos)
+  extraAddresses <-
+    Set.fromList <$> fromDTOThrow (badRequest' "Invalid addresses header value") (maybe [] unCommaList mAddresses)
+  collateralUtxos <-
+    Set.fromList
+      <$> fromDTOThrow (badRequest' "Invalid collateral header UTxO value") (maybe [] unCommaList mCollateralUtxos)
   roles' <- fromDTOThrow (badRequest' "Invalid roles value") roles
   transactionMetadata <- fromDTOThrow (badRequest' "Invalid metadata value") metadata
-  marloweMetadata <- fromDTOThrow
-    (badRequest' "Invalid tags value")
-    if Map.null tags then Nothing else Just (tags, Nothing)
+  marloweMetadata <-
+    fromDTOThrow
+      (badRequest' "Invalid tags value")
+      if Map.null tags then Nothing else Just (tags, Nothing)
   createContract Nothing v WalletAddresses{..} roles' MarloweTransactionMetadata{..} (Lovelace minUTxODeposit) contract >>= \case
     Left err -> throwDTOError err
     Right ContractCreated{contractId, txBody} -> pure (contractId, txBody)
@@ -89,9 +108,8 @@ get
   -> Maybe (Ranges '["contractId"] GetContractsResponse)
   -> ServerM (PaginatedResponse '["contractId"] GetContractsResponse)
 get roleCurrencies' tags' ranges = do
-  let
-    range :: Range "contractId" TxOutRef
-    range = fromMaybe (getDefaultRange (Proxy @ContractHeader)) $ extractRange =<< ranges
+  let range :: Range "contractId" TxOutRef
+      range = fromMaybe (getDefaultRange (Proxy @ContractHeader)) $ extractRange =<< ranges
   range' <- maybe (throwError $ rangeNotSatisfiable' "Invalid range value") pure $ fromPaginationRange range
   roleCurrencies <- Set.fromList <$> fromDTOThrow (badRequest' "Invalid role currency") roleCurrencies'
   let tags = Set.fromList $ MarloweMetadataTag <$> tags'
@@ -106,11 +124,11 @@ toContractHeader :: ContractState -> ContractHeader
 toContractHeader ContractState{..} = ContractHeader{..}
 
 contractServer :: TxOutRef -> ServerT ContractAPI ServerM
-contractServer contractId = getOne contractId
-                          :<|> put contractId
-                          :<|> Next.server contractId
-                          :<|> Transactions.server contractId
-
+contractServer contractId =
+  getOne contractId
+    :<|> put contractId
+    :<|> Next.server contractId
+    :<|> Transactions.server contractId
 
 getOne :: TxOutRef -> ServerM GetContractResponse
 getOne contractId = do
@@ -131,7 +149,8 @@ put contractId body = do
       (req :: Maybe (Either (Cardano.Tx BabbageEra) (ShelleyTxWitness BabbageEra))) <- case teType body of
         "Tx BabbageEra" -> pure $ Left <$> fromDTO body
         "ShelleyTxWitness BabbageEra" -> pure $ Right <$> fromDTO body
-        _ -> throwError $ badRequest' "Unknown envelope type - allowed types are: \"Tx BabbageEra\", \"ShelleyTxWitness BabbageEra\""
+        _ ->
+          throwError $ badRequest' "Unknown envelope type - allowed types are: \"Tx BabbageEra\", \"ShelleyTxWitness BabbageEra\""
 
       tx <- case req of
         Nothing -> throwError $ badRequest' "Invalid text envelope cbor value"
@@ -146,6 +165,7 @@ put contractId body = do
       submitContract contractId' tx >>= \case
         Nothing -> pure NoContent
         Just err -> throwError $ ApiError.toServerError $ ApiError (show err) "SubmissionError" Null 403
-    Just _  -> throwError $
-      ApiError.toServerError $
-      ApiError "Contract already submitted" "ContractAlreadySubmitted" Null 409
+    Just _ ->
+      throwError $
+        ApiError.toServerError $
+          ApiError "Contract already submitted" "ContractAlreadySubmitted" Null 409

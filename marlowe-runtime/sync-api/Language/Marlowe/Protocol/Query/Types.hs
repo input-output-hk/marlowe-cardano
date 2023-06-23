@@ -7,34 +7,34 @@
 module Language.Marlowe.Protocol.Query.Types where
 
 import Cardano.Api (NetworkId)
-import Data.Aeson (FromJSON, ToJSON(..), Value(String), object, (.=))
-import Data.Bifunctor (Bifunctor(..))
-import Data.Binary (Binary(..), getWord8, putWord8)
+import Data.Aeson (FromJSON, ToJSON (..), Value (String), object, (.=))
+import Data.Bifunctor (Bifunctor (..))
+import Data.Binary (Binary (..), getWord8, putWord8)
 import Data.Function (on)
 import qualified Data.List.NonEmpty as NE
 import Data.Map (Map)
 import Data.Set (Set)
 import Data.Time (UTCTime)
-import Data.Type.Equality (testEquality, type (:~:)(Refl))
+import Data.Type.Equality (testEquality, type (:~:) (Refl))
 import Data.Version (Version)
 import GHC.Generics (Generic)
 import GHC.Show (showSpace)
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainPoint, PolicyId, TokenName, TxId, TxOutRef)
-import Language.Marlowe.Runtime.Core.Api
-  ( ContractId
-  , MarloweMetadataTag
-  , MarloweTransactionMetadata
-  , MarloweVersion(..)
-  , MarloweVersionTag(..)
-  , Payout
-  , SomeMarloweVersion(..)
-  , Transaction
-  , TransactionScriptOutput
-  )
+import Language.Marlowe.Runtime.Core.Api (
+  ContractId,
+  MarloweMetadataTag,
+  MarloweTransactionMetadata,
+  MarloweVersion (..),
+  MarloweVersionTag (..),
+  Payout,
+  SomeMarloweVersion (..),
+  Transaction,
+  TransactionScriptOutput,
+ )
 import Language.Marlowe.Runtime.Core.ScriptRegistry ()
 import Language.Marlowe.Runtime.Discovery.Api (ContractHeader)
-import Network.Protocol.Codec.Spec (Variations(..), varyAp)
-import Network.Protocol.Handshake.Types (HasSignature(..))
+import Network.Protocol.Codec.Spec (Variations (..), varyAp)
+import Network.Protocol.Handshake.Types (HasSignature (..))
 import Network.Protocol.Query.Types
 
 type MarloweQuery = Query MarloweSyncRequest
@@ -57,16 +57,18 @@ data ContractFilter = ContractFilter
   deriving anyclass (ToJSON, FromJSON, Binary, Variations)
 
 instance Semigroup ContractFilter where
-  a <> b = ContractFilter
-    { tags = on (<>) tags a b
-    , roleCurrencies = on (<>) (\ContractFilter{..} -> roleCurrencies) a b
-    }
+  a <> b =
+    ContractFilter
+      { tags = on (<>) tags a b
+      , roleCurrencies = on (<>) (\ContractFilter{..} -> roleCurrencies) a b
+      }
 
 instance Monoid ContractFilter where
-  mempty = ContractFilter
-    { tags = mempty
-    , roleCurrencies = mempty
-    }
+  mempty =
+    ContractFilter
+      { tags = mempty
+      , roleCurrencies = mempty
+      }
 
 data RuntimeStatus = RuntimeStatus
   { nodeTip :: ChainPoint
@@ -191,15 +193,16 @@ instance BinaryRequest MarloweSyncRequest where
     TagStatus -> put
 
 instance RequestVariations MarloweSyncRequest where
-  tagVariations = NE.fromList
-    [ SomeTag TagContractHeaders
-    , SomeTag TagContractState
-    , SomeTag TagTransaction
-    , SomeTag TagTransactions
-    , SomeTag TagWithdrawal
-    , SomeTag TagWithdrawals
-    , SomeTag TagStatus
-    ]
+  tagVariations =
+    NE.fromList
+      [ SomeTag TagContractHeaders
+      , SomeTag TagContractState
+      , SomeTag TagTransaction
+      , SomeTag TagTransactions
+      , SomeTag TagWithdrawal
+      , SomeTag TagWithdrawals
+      , SomeTag TagStatus
+      ]
   requestVariations = \case
     TagContractHeaders -> ReqContractHeaders <$> variations `varyAp` variations
     TagContractState -> ReqContractState <$> variations
@@ -219,30 +222,38 @@ instance RequestVariations MarloweSyncRequest where
 
 instance ToJSON (MarloweSyncRequest a) where
   toJSON = \case
-    ReqContractHeaders cFilter range -> object
-      [ "get-contract-headers" .= object
-        [ "filter" .= cFilter
-        , "range" .= range
+    ReqContractHeaders cFilter range ->
+      object
+        [ "get-contract-headers"
+            .= object
+              [ "filter" .= cFilter
+              , "range" .= range
+              ]
         ]
-      ]
-    ReqContractState contractId -> object
-      [ "get-contract-state" .= contractId
-      ]
-    ReqTransaction txId -> object
-      [ "get-transaction" .= txId
-      ]
-    ReqTransactions contractId -> object
-      [ "get-transactions" .= contractId
-      ]
-    ReqWithdrawal txId -> object
-      [ "get-withdrawal" .= txId
-      ]
-    ReqWithdrawals wFilter range -> object
-      [ "get-withdrawals" .= object
-        [ "filter" .= wFilter
-        , "range" .= range
+    ReqContractState contractId ->
+      object
+        [ "get-contract-state" .= contractId
         ]
-      ]
+    ReqTransaction txId ->
+      object
+        [ "get-transaction" .= txId
+        ]
+    ReqTransactions contractId ->
+      object
+        [ "get-transactions" .= contractId
+        ]
+    ReqWithdrawal txId ->
+      object
+        [ "get-withdrawal" .= txId
+        ]
+    ReqWithdrawals wFilter range ->
+      object
+        [ "get-withdrawals"
+            .= object
+              [ "filter" .= wFilter
+              , "range" .= range
+              ]
+        ]
     ReqStatus -> String "get-status"
 
 data Range a = Range
@@ -268,13 +279,15 @@ instance Bifunctor Page where
 data SomeContractState = forall v. SomeContractState (MarloweVersion v) (ContractState v)
 
 instance Show SomeContractState where
-  showsPrec p (SomeContractState MarloweV1 state) = showParen (p >= 11)
-    ( showString "SomeContractState"
-    . showSpace
-    . showsPrec 11 MarloweV1
-    . showSpace
-    . showsPrec 11 state
-    )
+  showsPrec p (SomeContractState MarloweV1 state) =
+    showParen
+      (p >= 11)
+      ( showString "SomeContractState"
+          . showSpace
+          . showsPrec 11 MarloweV1
+          . showSpace
+          . showsPrec 11 state
+      )
 
 instance Eq SomeContractState where
   SomeContractState v state == SomeContractState v' state' = case testEquality v v' of
@@ -294,12 +307,14 @@ instance Variations SomeContractState where
   variations = SomeContractState MarloweV1 <$> variations
 
 instance ToJSON SomeContractState where
-  toJSON (SomeContractState MarloweV1 state) = object
-    [ "version" .= MarloweV1
-    , "state" .= state
-    ]
+  toJSON (SomeContractState MarloweV1 state) =
+    object
+      [ "version" .= MarloweV1
+      , "state" .= state
+      ]
 
-data SomeTransaction = forall v. SomeTransaction
+data SomeTransaction = forall v.
+  SomeTransaction
   { version :: MarloweVersion v
   , input :: TxOutRef
   , consumedBy :: Maybe TxId
@@ -307,17 +322,19 @@ data SomeTransaction = forall v. SomeTransaction
   }
 
 instance Show SomeTransaction where
-  showsPrec p (SomeTransaction MarloweV1 input consumedBy transaction) = showParen (p >= 11)
-    ( showString "SomeTransaction"
-    . showSpace
-    . showsPrec 11 MarloweV1
-    . showSpace
-    . showsPrec 11 input
-    . showSpace
-    . showsPrec 11 consumedBy
-    . showSpace
-    . showsPrec 11 transaction
-    )
+  showsPrec p (SomeTransaction MarloweV1 input consumedBy transaction) =
+    showParen
+      (p >= 11)
+      ( showString "SomeTransaction"
+          . showSpace
+          . showsPrec 11 MarloweV1
+          . showSpace
+          . showsPrec 11 input
+          . showSpace
+          . showsPrec 11 consumedBy
+          . showSpace
+          . showsPrec 11 transaction
+      )
 
 instance Eq SomeTransaction where
   SomeTransaction v input consumedBy tx == SomeTransaction v' input' consumedBy' tx' = case testEquality v v' of
@@ -339,23 +356,26 @@ instance Variations SomeTransaction where
   variations = SomeTransaction MarloweV1 <$> variations `varyAp` variations `varyAp` variations
 
 instance ToJSON SomeTransaction where
-  toJSON (SomeTransaction MarloweV1 input consumedBy tx) = object
-    [ "version" .= MarloweV1
-    , "input" .= input
-    , "consumedBy" .= consumedBy
-    , "transaction" .= tx
-    ]
+  toJSON (SomeTransaction MarloweV1 input consumedBy tx) =
+    object
+      [ "version" .= MarloweV1
+      , "input" .= input
+      , "consumedBy" .= consumedBy
+      , "transaction" .= tx
+      ]
 
 data SomeTransactions = forall v. SomeTransactions (MarloweVersion v) [Transaction v]
 
 instance Show SomeTransactions where
-  showsPrec p (SomeTransactions MarloweV1 transactions) = showParen (p >= 11)
-    ( showString "SomeTransactions"
-    . showSpace
-    . showsPrec 11 MarloweV1
-    . showSpace
-    . showsPrec 11 transactions
-    )
+  showsPrec p (SomeTransactions MarloweV1 transactions) =
+    showParen
+      (p >= 11)
+      ( showString "SomeTransactions"
+          . showSpace
+          . showsPrec 11 MarloweV1
+          . showSpace
+          . showsPrec 11 transactions
+      )
 
 instance Eq SomeTransactions where
   SomeTransactions v txs == SomeTransactions v' txs' = case testEquality v v' of
@@ -375,10 +395,11 @@ instance Variations SomeTransactions where
   variations = SomeTransactions MarloweV1 <$> variations
 
 instance ToJSON SomeTransactions where
-  toJSON (SomeTransactions MarloweV1 txs) = object
-    [ "version" .= MarloweV1
-    , "transactions" .= txs
-    ]
+  toJSON (SomeTransactions MarloweV1 txs) =
+    object
+      [ "version" .= MarloweV1
+      , "transactions" .= txs
+      ]
 
 data ContractState v = ContractState
   { contractId :: ContractId
@@ -389,7 +410,8 @@ data ContractState v = ContractState
   , latestBlock :: BlockHeader
   , latestOutput :: Maybe (TransactionScriptOutput v)
   , unclaimedPayouts :: Map TxOutRef (Payout v)
-  } deriving (Generic)
+  }
+  deriving (Generic)
 
 deriving instance Show (ContractState 'V1)
 deriving instance Eq (ContractState 'V1)

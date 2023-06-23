@@ -11,13 +11,21 @@
 
 module Language.Marlowe.Runtime.Core.Api where
 
-import Cardano.Api (NetworkId(..), NetworkMagic(..))
+import Cardano.Api (NetworkId (..), NetworkMagic (..))
 import Control.Monad (join, zipWithM, (<=<))
-import Data.Aeson
-  (FromJSON(..), FromJSONKey, Result(..), ToJSON(..), ToJSONKey(toJSONKey), Value(..), eitherDecode, encode)
+import Data.Aeson (
+  FromJSON (..),
+  FromJSONKey,
+  Result (..),
+  ToJSON (..),
+  ToJSONKey (toJSONKey),
+  Value (..),
+  eitherDecode,
+  encode,
+ )
 import Data.Aeson.Types (Parser, parse, parseFail, toJSONKeyText)
 import Data.Bifunctor (first)
-import Data.Binary (Binary(..), Get, Put, getWord8, putWord8)
+import Data.Binary (Binary (..), Get, Put, getWord8, putWord8)
 import Data.Binary.Get (getWord32be)
 import Data.Binary.Put (putWord32be)
 import Data.ByteString (ByteString)
@@ -32,14 +40,21 @@ import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Text.Encoding (encodeUtf8)
 import Data.Time (UTCTime)
-import Data.Type.Equality (TestEquality(..), type (:~:)(Refl))
+import Data.Type.Equality (TestEquality (..), type (:~:) (Refl))
 import GHC.Generics (Generic, to)
 import qualified Language.Marlowe.Core.V1.Semantics as V1
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
-import Language.Marlowe.Runtime.ChainSync.Api
-  (BlockHeader, TokenName(..), TxId(..), TxOutRef(..), parseTxOutRef, renderTxOutRef, unPolicyId)
+import Language.Marlowe.Runtime.ChainSync.Api (
+  BlockHeader,
+  TokenName (..),
+  TxId (..),
+  TxOutRef (..),
+  parseTxOutRef,
+  renderTxOutRef,
+  unPolicyId,
+ )
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
-import Network.Protocol.Codec.Spec (GVariations(gVariations), Variations(..), varyAp)
+import Network.Protocol.Codec.Spec (GVariations (gVariations), Variations (..), varyAp)
 import Numeric.Natural (Natural)
 import qualified Plutus.V1.Ledger.Api as Plutus
 import qualified Plutus.V1.Ledger.Value as Plutus
@@ -47,7 +62,7 @@ import qualified Plutus.V2.Ledger.Api as PV2
 
 -- | The ID of a contract is the TxId and TxIx of the UTxO that first created
 -- the contract.
-newtype ContractId = ContractId { unContractId :: TxOutRef }
+newtype ContractId = ContractId {unContractId :: TxOutRef}
   deriving stock (Show, Eq, Ord, Generic)
   deriving newtype (IsString)
   deriving anyclass (Binary, Variations)
@@ -77,14 +92,14 @@ data MarloweVersionTag
 data MarloweVersion (v :: MarloweVersionTag) where
   MarloweV1 :: MarloweVersion 'V1
 
-
 instance TestEquality MarloweVersion where
   testEquality MarloweV1 MarloweV1 = Just Refl
 
 assertVersionsEqual :: MarloweVersion v -> MarloweVersion v' -> v :~: v'
-assertVersionsEqual v1 v2 = fromMaybe
-  (error $ "getNextSteps: Marlowe version mismatch. Expected " <> show v1 <> ", got " <> show v2)
-  (testEquality v1 v2)
+assertVersionsEqual v1 v2 =
+  fromMaybe
+    (error $ "getNextSteps: Marlowe version mismatch. Expected " <> show v1 <> ", got " <> show v2)
+    (testEquality v1 v2)
 
 deriving instance Show (MarloweVersion v)
 deriving instance Eq (MarloweVersion v)
@@ -106,7 +121,7 @@ instance IsMarloweVersion 'V1 where
   type PayoutDatum 'V1 = Chain.AssetId
   marloweVersion = MarloweV1
 
-newtype MarloweMetadataTag = MarloweMetadataTag { getMarloweMetadataTag :: Text }
+newtype MarloweMetadataTag = MarloweMetadataTag {getMarloweMetadataTag :: Text}
   deriving newtype (Show, Eq, Ord, IsString, FromJSON, ToJSON, Binary, ToJSONKey, FromJSONKey, Variations)
 
 -- | The standard metadata structure for Marlowe Contracts (metadata index 1564).
@@ -156,30 +171,34 @@ data MetadataDecodeError
 encodeMarloweTransactionMetadata :: MarloweTransactionMetadata -> Chain.TransactionMetadata
 encodeMarloweTransactionMetadata MarloweTransactionMetadata{..} = case marloweMetadata of
   Nothing -> transactionMetadata
-  Just m -> Chain.TransactionMetadata
-    $ Map.insert 1564 (encodeMarloweMetadata m)
-    $ Chain.unTransactionMetadata transactionMetadata
+  Just m ->
+    Chain.TransactionMetadata $
+      Map.insert 1564 (encodeMarloweMetadata m) $
+        Chain.unTransactionMetadata transactionMetadata
 
 decodeMarloweTransactionMetadataLenient :: Chain.TransactionMetadata -> MarloweTransactionMetadata
 decodeMarloweTransactionMetadataLenient metadata =
   fromRight (MarloweTransactionMetadata Nothing metadata) $ decodeMarloweTransactionMetadata metadata
 
 decodeMarloweTransactionMetadata :: Chain.TransactionMetadata -> Either MetadataDecodeError MarloweTransactionMetadata
-decodeMarloweTransactionMetadata metadata = MarloweTransactionMetadata
-  <$> traverse decodeMarloweMetadata (Map.lookup 1564 $ Chain.unTransactionMetadata metadata)
-  <*> pure metadata
+decodeMarloweTransactionMetadata metadata =
+  MarloweTransactionMetadata
+    <$> traverse decodeMarloweMetadata (Map.lookup 1564 $ Chain.unTransactionMetadata metadata)
+    <*> pure metadata
 
 encodeMarloweMetadata :: MarloweMetadata -> Chain.Metadata
-encodeMarloweMetadata MarloweMetadata{..} = Chain.MetadataList $ catMaybes
-  [ Just $ Chain.MetadataNumber 2 -- version
-  , Just $ Chain.MetadataList $ uncurry encodeMetadataTag <$> Map.toList tags-- tags
-  , Chain.MetadataText <$> continuations -- continuations
-  ]
+encodeMarloweMetadata MarloweMetadata{..} =
+  Chain.MetadataList $
+    catMaybes
+      [ Just $ Chain.MetadataNumber 2 -- version
+      , Just $ Chain.MetadataList $ uncurry encodeMetadataTag <$> Map.toList tags -- tags
+      , Chain.MetadataText <$> continuations -- continuations
+      ]
 
 encodeMetadataTag :: MarloweMetadataTag -> Maybe Chain.Metadata -> Chain.Metadata
 encodeMetadataTag (MarloweMetadataTag tag) = \case
-  Nothing -> Chain.MetadataList [ tagEncoded ]
-  Just payload -> Chain.MetadataList [ tagEncoded, payload ]
+  Nothing -> Chain.MetadataList [tagEncoded]
+  Just payload -> Chain.MetadataList [tagEncoded, payload]
   where
     tagEncoded = case T.chunksOf 64 tag of
       [] -> Chain.MetadataText ""
@@ -195,32 +214,38 @@ decodeMarloweMetadata m = do
   decoder m
 
 decodeMarloweMetadataV1 :: Chain.Metadata -> Either MetadataDecodeError MarloweMetadata
-decodeMarloweMetadataV1 m = MarloweMetadata
-  <$> withMetadataListIx 1 decodeMetadataTagsV1 m
-  <*> withMetadataListIxOptional 2 (withMetadataText pure) m
+decodeMarloweMetadataV1 m =
+  MarloweMetadata
+    <$> withMetadataListIx 1 decodeMetadataTagsV1 m
+    <*> withMetadataListIxOptional 2 (withMetadataText pure) m
 
 decodeMarloweMetadataV2 :: Chain.Metadata -> Either MetadataDecodeError MarloweMetadata
-decodeMarloweMetadataV2 m = MarloweMetadata
-  <$> withMetadataListIx 1 decodeMetadataTagsV2 m
-  <*> withMetadataListIxOptional 2 (withMetadataText pure) m
+decodeMarloweMetadataV2 m =
+  MarloweMetadata
+    <$> withMetadataListIx 1 decodeMetadataTagsV2 m
+    <*> withMetadataListIxOptional 2 (withMetadataText pure) m
 
 decodeMetadataTagsV1
   :: Chain.Metadata
   -> Either MetadataDecodeError (Map MarloweMetadataTag (Maybe Chain.Metadata))
-decodeMetadataTagsV1 = fmap Map.fromList . withMetadataList \case
-  Chain.MetadataList ms -> withMetadataTuple
-    (withMetadataText $ pure . MarloweMetadataTag)
-    (pure . Just )
-    (Chain.MetadataList ms)
-  Chain.MetadataText tag -> pure (MarloweMetadataTag tag, Nothing)
-  _ -> Left $ OneOf ExpectedList ExpectedText
+decodeMetadataTagsV1 =
+  fmap Map.fromList . withMetadataList \case
+    Chain.MetadataList ms ->
+      withMetadataTuple
+        (withMetadataText $ pure . MarloweMetadataTag)
+        (pure . Just)
+        (Chain.MetadataList ms)
+    Chain.MetadataText tag -> pure (MarloweMetadataTag tag, Nothing)
+    _ -> Left $ OneOf ExpectedList ExpectedText
 
 decodeMetadataTagsV2
   :: Chain.Metadata
   -> Either MetadataDecodeError (Map MarloweMetadataTag (Maybe Chain.Metadata))
-decodeMetadataTagsV2 = fmap Map.fromList . withMetadataList \m -> (,)
-  <$> withMetadataListIx 0 decodeMetadataTag m
-  <*> withMetadataListIxOptional 1 pure m
+decodeMetadataTagsV2 =
+  fmap Map.fromList . withMetadataList \m ->
+    (,)
+      <$> withMetadataListIx 0 decodeMetadataTag m
+      <*> withMetadataListIxOptional 1 pure m
 
 decodeMetadataTag :: Chain.Metadata -> Either MetadataDecodeError MarloweMetadataTag
 decodeMetadataTag = withMetadataChunkedText $ pure . MarloweMetadataTag
@@ -243,13 +268,15 @@ withMetadataText f = \case
 
 withMetadataList :: (Chain.Metadata -> Either MetadataDecodeError a) -> Chain.Metadata -> Either MetadataDecodeError [a]
 withMetadataList f = \case
-  Chain.MetadataList ms -> zipWithM (\i -> first (ErrorInList i) . f) [0..] ms
+  Chain.MetadataList ms -> zipWithM (\i -> first (ErrorInList i) . f) [0 ..] ms
   _ -> Left ExpectedList
 
-withMetadataListIx :: Natural -> (Chain.Metadata -> Either MetadataDecodeError a) -> Chain.Metadata -> Either MetadataDecodeError a
+withMetadataListIx
+  :: Natural -> (Chain.Metadata -> Either MetadataDecodeError a) -> Chain.Metadata -> Either MetadataDecodeError a
 withMetadataListIx ix f = maybe (Left $ ListIndexNotFound ix) pure <=< withMetadataListIxOptional ix f
 
-withMetadataListIxOptional :: Natural -> (Chain.Metadata -> Either MetadataDecodeError a) -> Chain.Metadata -> Either MetadataDecodeError (Maybe a)
+withMetadataListIxOptional
+  :: Natural -> (Chain.Metadata -> Either MetadataDecodeError a) -> Chain.Metadata -> Either MetadataDecodeError (Maybe a)
 withMetadataListIxOptional ix f = \case
   Chain.MetadataList ms -> case drop (fromIntegral ix) ms of
     [] -> pure Nothing
@@ -272,7 +299,8 @@ data Transaction v = Transaction
   , validityUpperBound :: UTCTime
   , inputs :: Inputs v
   , output :: TransactionOutput v
-  } deriving Generic
+  }
+  deriving (Generic)
 
 deriving instance Show (Transaction 'V1)
 deriving instance Eq (Transaction 'V1)
@@ -289,20 +317,22 @@ instance Binary (Transaction 'V1) where
     put validityUpperBound
     putInputs MarloweV1 inputs
     put output
-  get = Transaction
-    <$> get
-    <*> get
-    <*> get
-    <*> get
-    <*> get
-    <*> get
-    <*> getInputs MarloweV1
-    <*> get
+  get =
+    Transaction
+      <$> get
+      <*> get
+      <*> get
+      <*> get
+      <*> get
+      <*> get
+      <*> getInputs MarloweV1
+      <*> get
 
 data TransactionOutput v = TransactionOutput
-  { payouts      :: Map Chain.TxOutRef (Payout v)
+  { payouts :: Map Chain.TxOutRef (Payout v)
   , scriptOutput :: Maybe (TransactionScriptOutput v)
-  } deriving Generic
+  }
+  deriving (Generic)
 
 deriving instance Show (TransactionOutput 'V1)
 deriving instance Eq (TransactionOutput 'V1)
@@ -319,7 +349,8 @@ data Payout v = Payout
   { address :: Chain.Address
   , assets :: Chain.Assets
   , datum :: PayoutDatum v
-  } deriving Generic
+  }
+  deriving (Generic)
 
 deriving instance Show (Payout 'V1)
 deriving instance Eq (Payout 'V1)
@@ -336,9 +367,10 @@ instance Binary (Payout 'V1) where
 data TransactionScriptOutput v = TransactionScriptOutput
   { address :: Chain.Address
   , assets :: Chain.Assets
-  , utxo  :: TxOutRef
+  , utxo :: TxOutRef
   , datum :: Datum v
-  } deriving Generic
+  }
+  deriving (Generic)
 
 deriving instance Show (TransactionScriptOutput 'V1)
 deriving instance Eq (TransactionScriptOutput 'V1)
@@ -373,44 +405,48 @@ instance Enum SomeMarloweVersion where
     MarloweV1 -> 0
 
 instance Show SomeMarloweVersion where
-  showsPrec p (SomeMarloweVersion version) = showParen (p >= 11)
-    $ showString "SomeMarloweVersion " . showsPrec 11 version
+  showsPrec p (SomeMarloweVersion version) =
+    showParen (p >= 11) $
+      showString "SomeMarloweVersion " . showsPrec 11 version
 
 withSomeMarloweVersion :: (forall v. MarloweVersion v -> r) -> SomeMarloweVersion -> r
 withSomeMarloweVersion f (SomeMarloweVersion v) = f v
 
-withMarloweVersion :: MarloweVersion v -> (IsMarloweVersion v => a) -> a
+withMarloweVersion :: MarloweVersion v -> ((IsMarloweVersion v) => a) -> a
 withMarloweVersion = \case
   MarloweV1 -> id
 
-instance IsMarloweVersion v => Variations (MarloweVersion v) where
+instance (IsMarloweVersion v) => Variations (MarloweVersion v) where
   variations = pure $ marloweVersion @v
 
 instance ToJSON (MarloweVersion v) where
-  toJSON = String . \case
-    MarloweV1 -> "v1"
+  toJSON =
+    String . \case
+      MarloweV1 -> "v1"
 
 instance ToJSON SomeMarloweVersion where
   toJSON (SomeMarloweVersion v) = toJSON v
 
 instance Variations SomeMarloweVersion where
-  variations = NE.fromList
-    [ SomeMarloweVersion MarloweV1
-    ]
+  variations =
+    NE.fromList
+      [ SomeMarloweVersion MarloweV1
+      ]
 
 instance FromJSON SomeMarloweVersion where
   parseJSON json = do
     s :: Text <- parseJSON json
     case s of
       "v1" -> pure $ SomeMarloweVersion MarloweV1
-      _    -> fail "Invalid marlowe version"
+      _ -> fail "Invalid marlowe version"
 
 instance Binary SomeMarloweVersion where
   put (SomeMarloweVersion v) = case v of
     MarloweV1 -> putWord32be 0x01
-  get = getWord32be >>= \case
-    0x01 -> pure $ SomeMarloweVersion MarloweV1
-    _    -> fail "Invalid marlowe version bytes"
+  get =
+    getWord32be >>= \case
+      0x01 -> pure $ SomeMarloweVersion MarloweV1
+      _ -> fail "Invalid marlowe version bytes"
 
 putContract :: MarloweVersion v -> Contract v -> Put
 putContract v = put . encode . contractToJSON v
@@ -461,10 +497,11 @@ contractFromJSON = \case
 payoutDatumToJSON :: MarloweVersion v -> PayoutDatum v -> Value
 payoutDatumToJSON = \case
   MarloweV1 -> \case
-    Chain.AssetId policyId tokenName -> toJSON
-      ( String . encodeBase16 . unPolicyId $ policyId
-      , String . encodeBase16 . unTokenName $ tokenName
-      )
+    Chain.AssetId policyId tokenName ->
+      toJSON
+        ( String . encodeBase16 . unPolicyId $ policyId
+        , String . encodeBase16 . unTokenName $ tokenName
+        )
 
 payoutDatumFromJSON :: MarloweVersion v -> Value -> Parser (PayoutDatum v)
 payoutDatumFromJSON = \case
@@ -486,18 +523,16 @@ toChainPayoutDatum :: MarloweVersion v -> PayoutDatum v -> Chain.Datum
 toChainPayoutDatum = \case
   MarloweV1 -> \case
     Chain.AssetId policyId tokenName -> do
-      let
-        currencySymbol = Plutus.currencySymbol . unPolicyId $ policyId
-        tokenName' = Plutus.TokenName . Plutus.toBuiltin . Chain.unTokenName $ tokenName
+      let currencySymbol = Plutus.currencySymbol . unPolicyId $ policyId
+          tokenName' = Plutus.TokenName . Plutus.toBuiltin . Chain.unTokenName $ tokenName
       Chain.toDatum (currencySymbol, tokenName')
 
 fromChainPayoutDatum :: MarloweVersion v -> Chain.Datum -> Maybe (PayoutDatum v)
 fromChainPayoutDatum = \case
   MarloweV1 -> \datum -> do
     (p, t) <- Chain.fromDatum datum
-    let
-      p' = Chain.PolicyId . Plutus.fromBuiltin . Plutus.unCurrencySymbol $ p
-      t' = Chain.TokenName . Plutus.fromBuiltin . Plutus.unTokenName $ t
+    let p' = Chain.PolicyId . Plutus.fromBuiltin . Plutus.unCurrencySymbol $ p
+        t' = Chain.TokenName . Plutus.fromBuiltin . Plutus.unTokenName $ t
     pure $ Chain.AssetId p' t'
 
 toChainDatum :: MarloweVersion v -> Datum v -> Chain.Datum
@@ -515,7 +550,7 @@ instance Binary PV2.Credential
 instance Binary PV2.CurrencySymbol
 instance Binary PV2.POSIXTime
 instance Binary PV2.PubKeyHash
-instance Binary PV2.StakingCredential where
+instance Binary PV2.StakingCredential
 instance Binary PV2.TokenName
 instance Binary PV2.ValidatorHash
 instance Binary V1.Action
@@ -534,8 +569,8 @@ instance Binary V1.State
 instance Binary V1.Token
 instance Binary V1.ValueId
 instance Binary V1.IntervalError
-instance Binary a => Binary (V1.Case a)
-instance Binary a => Binary (V1.Value a)
+instance (Binary a) => Binary (V1.Case a)
+instance (Binary a) => Binary (V1.Value a)
 instance Binary NetworkId where
   put = \case
     Mainnet -> putWord8 0
@@ -552,7 +587,7 @@ instance Variations PV2.Credential
 instance Variations PV2.CurrencySymbol
 instance Variations PV2.POSIXTime
 instance Variations PV2.PubKeyHash
-instance Variations PV2.StakingCredential where
+instance Variations PV2.StakingCredential
 instance Variations PV2.TokenName
 instance Variations PV2.ValidatorHash
 instance Variations V1.Action
@@ -592,48 +627,56 @@ instance (Variations k, Variations v) => Variations (PV2.Map k v)
 
 -- The following require manual instances to avoid infinite recursion.
 instance Variations V1.Contract where
-  variations = join $ NE.fromList
-    [ pure V1.Close
-    , V1.Pay <$> variations `varyAp` variations `varyAp` variations `varyAp` variations <*> pure V1.Close
-    , V1.If <$> variations <*> pure V1.Close <*> pure V1.Close
-    , V1.When <$> variations `varyAp` variations <*> pure V1.Close
-    , V1.Let <$> variations `varyAp` variations <*> pure V1.Close
-    , V1.Assert <$> variations <*> pure V1.Close
-    ]
+  variations =
+    join $
+      NE.fromList
+        [ pure V1.Close
+        , V1.Pay <$> variations `varyAp` variations `varyAp` variations `varyAp` variations <*> pure V1.Close
+        , V1.If <$> variations <*> pure V1.Close <*> pure V1.Close
+        , V1.When <$> variations `varyAp` variations <*> pure V1.Close
+        , V1.Let <$> variations `varyAp` variations <*> pure V1.Close
+        , V1.Assert <$> variations <*> pure V1.Close
+        ]
 
 instance Variations (V1.Case V1.Contract) where
-  variations = join $ NE.fromList
-    [ V1.Case <$> variations <*> pure V1.Close
-    , V1.MerkleizedCase <$> variations `varyAp` variations
-    ]
+  variations =
+    join $
+      NE.fromList
+        [ V1.Case <$> variations <*> pure V1.Close
+        , V1.MerkleizedCase <$> variations `varyAp` variations
+        ]
 
 instance Variations V1.Observation where
-  variations = join $ NE.fromList
-    [ pure $ V1.AndObs V1.FalseObs V1.FalseObs
-    , pure $ V1.OrObs V1.FalseObs V1.FalseObs
-    , pure $ V1.NotObs V1.FalseObs
-    , V1.ChoseSomething <$> variations
-    , pure $ V1.ValueGE V1.TimeIntervalStart V1.TimeIntervalStart
-    , pure $ V1.ValueLE V1.TimeIntervalStart V1.TimeIntervalStart
-    , pure $ V1.ValueGT V1.TimeIntervalStart V1.TimeIntervalStart
-    , pure $ V1.ValueLT V1.TimeIntervalStart V1.TimeIntervalStart
-    , pure $ V1.ValueEQ V1.TimeIntervalStart V1.TimeIntervalStart
-    , pure V1.FalseObs
-    , pure V1.TrueObs
-    ]
+  variations =
+    join $
+      NE.fromList
+        [ pure $ V1.AndObs V1.FalseObs V1.FalseObs
+        , pure $ V1.OrObs V1.FalseObs V1.FalseObs
+        , pure $ V1.NotObs V1.FalseObs
+        , V1.ChoseSomething <$> variations
+        , pure $ V1.ValueGE V1.TimeIntervalStart V1.TimeIntervalStart
+        , pure $ V1.ValueLE V1.TimeIntervalStart V1.TimeIntervalStart
+        , pure $ V1.ValueGT V1.TimeIntervalStart V1.TimeIntervalStart
+        , pure $ V1.ValueLT V1.TimeIntervalStart V1.TimeIntervalStart
+        , pure $ V1.ValueEQ V1.TimeIntervalStart V1.TimeIntervalStart
+        , pure V1.FalseObs
+        , pure V1.TrueObs
+        ]
 
 instance Variations (V1.Value V1.Observation) where
-  variations = join $ NE.fromList
-    [ V1.AvailableMoney <$> variations `varyAp` variations
-    , V1.Constant <$> variations
-    , pure $ V1.NegValue (V1.Constant 1)
-    , pure $ V1.AddValue (V1.Constant 1) (V1.Constant 1)
-    , pure $ V1.SubValue (V1.Constant 1) (V1.Constant 1)
-    , pure $ V1.MulValue (V1.Constant 1) (V1.Constant 1)
-    , pure $ V1.DivValue (V1.Constant 1) (V1.Constant 1)
-    , V1.ChoiceValue <$> variations
-    , pure V1.TimeIntervalStart
-    , pure V1.TimeIntervalEnd
-    , V1.UseValue <$> variations
-    , pure $ V1.Cond V1.FalseObs (V1.Constant 1) (V1.Constant 1)
-    ]
+  variations =
+    join $
+      NE.fromList
+        [ V1.AvailableMoney <$> variations `varyAp` variations
+        , V1.Constant <$> variations
+        , pure $ V1.NegValue (V1.Constant 1)
+        , pure $ V1.AddValue (V1.Constant 1) (V1.Constant 1)
+        , pure $ V1.SubValue (V1.Constant 1) (V1.Constant 1)
+        , pure $ V1.MulValue (V1.Constant 1) (V1.Constant 1)
+        , pure $ V1.DivValue (V1.Constant 1) (V1.Constant 1)
+        , V1.ChoiceValue <$> variations
+        , pure V1.TimeIntervalStart
+        , pure V1.TimeIntervalEnd
+        , V1.UseValue <$> variations
+        , pure $ V1.Cond V1.FalseObs (V1.Constant 1) (V1.Constant 1)
+        ]

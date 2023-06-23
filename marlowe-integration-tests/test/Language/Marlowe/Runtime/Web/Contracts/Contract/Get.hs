@@ -1,17 +1,17 @@
 module Language.Marlowe.Runtime.Web.Contracts.Contract.Get where
 
 import Control.Exception (throw)
-import Control.Monad.IO.Class (MonadIO(liftIO))
+import Control.Monad.IO.Class (MonadIO (liftIO))
 import qualified Control.Monad.Reader as Reader
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Integration.Common (Wallet, getGenesisWallet, runIntegrationTest, runWebClient)
 import qualified Language.Marlowe.Runtime.Web as Web
 import Language.Marlowe.Runtime.Web.Client (getContract)
 import Language.Marlowe.Runtime.Web.Common (createCloseContract, waitUntilConfirmed)
-import Language.Marlowe.Runtime.Web.Server.DTO (ToDTO(toDTO))
-import Network.HTTP.Types (Status(..))
-import Servant.Client (ClientError(FailureResponse))
-import Servant.Client.Streaming (ResponseF(Response, responseStatusCode))
+import Language.Marlowe.Runtime.Web.Server.DTO (ToDTO (toDTO))
+import Network.HTTP.Types (Status (..))
+import Servant.Client (ClientError (FailureResponse))
+import Servant.Client.Streaming (ResponseF (Response, responseStatusCode))
 import Test.Hspec (ActionWith, Spec, SpecWith, aroundAll, describe, it, shouldBe)
 import Test.Integration.Marlowe.Local (MarloweRuntime, withLocalMarloweRuntime)
 
@@ -33,34 +33,32 @@ getContractInvalidSpec = describe "Invalid GET /contract" do
 getsFirstContractValidSpec :: SpecWith MarloweWebTestData
 getsFirstContractValidSpec = it "returns the first contract" \MarloweWebTestData{..} -> flip runIntegrationTest runtime do
   either throw pure =<< runWebClient do
-    Web.ContractState{..}<- waitUntilConfirmed (\Web.ContractState{status} -> status) $ getContract expectedContractId1
+    Web.ContractState{..} <- waitUntilConfirmed (\Web.ContractState{status} -> status) $ getContract expectedContractId1
 
     liftIO $ contractId `shouldBe` expectedContractId1
 
 getsSecondContractValidSpec :: SpecWith MarloweWebTestData
 getsSecondContractValidSpec = it "returns the second contract" \MarloweWebTestData{..} -> flip runIntegrationTest runtime do
-
   either throw pure =<< runWebClient do
-    Web.ContractState{..}<- waitUntilConfirmed (\Web.ContractState{status} -> status) $ getContract expectedContractId2
+    Web.ContractState{..} <- waitUntilConfirmed (\Web.ContractState{status} -> status) $ getContract expectedContractId2
 
     liftIO $ contractId `shouldBe` expectedContractId2
 
 getsThirdContractValidSpec :: SpecWith MarloweWebTestData
 getsThirdContractValidSpec = it "returns the third contract" \MarloweWebTestData{..} -> flip runIntegrationTest runtime do
   either throw pure =<< runWebClient do
-    Web.ContractState{..}<- waitUntilConfirmed (\Web.ContractState{status} -> status) $ getContract expectedContractId3
+    Web.ContractState{..} <- waitUntilConfirmed (\Web.ContractState{status} -> status) $ getContract expectedContractId3
 
     liftIO $ contractId `shouldBe` expectedContractId3
 
 invalidTxIdSpec :: SpecWith MarloweWebTestData
 invalidTxIdSpec = it "returns not found for invalid contract id" \MarloweWebTestData{..} -> flip runIntegrationTest runtime do
   result <- runWebClient do
-    let
-      invalidTxId = Web.TxOutRef (toDTO @Chain.TxId "0000000000000000000000000000000000000000000000000000000000000000") 1
+    let invalidTxId = Web.TxOutRef (toDTO @Chain.TxId "0000000000000000000000000000000000000000000000000000000000000000") 1
     getContract invalidTxId
 
   case result of
-    Left (FailureResponse _ Response { responseStatusCode = Status { statusCode = 404 } } ) ->  pure ()
+    Left (FailureResponse _ Response{responseStatusCode = Status{statusCode = 404}}) -> pure ()
     _ -> fail $ "Expected 404 response code - got " <> show result
 
 setup :: ActionWith MarloweWebTestData -> IO ()

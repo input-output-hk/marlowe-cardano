@@ -2,18 +2,18 @@ module Language.Marlowe.Runtime.Web.Withdrawal.Post where
 
 import qualified Data.Set as Set
 import Language.Marlowe.Runtime.Integration.Common
-import Language.Marlowe.Runtime.Transaction.Api (WalletAddresses(..))
+import Language.Marlowe.Runtime.Transaction.Api (WalletAddresses (..))
 import qualified Language.Marlowe.Runtime.Web as Web
 import Language.Marlowe.Runtime.Web.Client (postWithdrawal)
-import Language.Marlowe.Runtime.Web.Server.DTO (ToDTO(toDTO))
-import Language.Marlowe.Runtime.Web.StandardContract
-  ( StandardContractChoiceMade(..)
-  , StandardContractClosed(..)
-  , StandardContractFundsDeposited(..)
-  , StandardContractInit(..)
-  , StandardContractNotified(..)
-  , createStandardContract
-  )
+import Language.Marlowe.Runtime.Web.Server.DTO (ToDTO (toDTO))
+import Language.Marlowe.Runtime.Web.StandardContract (
+  StandardContractChoiceMade (..),
+  StandardContractClosed (..),
+  StandardContractFundsDeposited (..),
+  StandardContractInit (..),
+  StandardContractNotified (..),
+  createStandardContract,
+ )
 import Test.Hspec (Spec, describe, it)
 import Test.Integration.Marlowe.Local (withLocalMarloweRuntime)
 
@@ -46,5 +46,5 @@ spec = describe "POST /contracts/{contractId}/withdrawal" do
           }
 
     case result of
-      Left _ ->  fail $ "Expected 200 response code - got " <> show result
-      Right Web.WithdrawTxEnvelope{} ->  pure ()
+      Left _ -> fail $ "Expected 200 response code - got " <> show result
+      Right Web.WithdrawTxEnvelope{} -> pure ()

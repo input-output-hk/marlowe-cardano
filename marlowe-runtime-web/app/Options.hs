@@ -22,27 +22,32 @@ getOptions = do
   runtimeHostParser <- O.optParserWithEnvDefault O.runtimeHost
   runtimePortParser <- O.optParserWithEnvDefault O.runtimePortTraced
   portParser <- O.optParserWithEnvDefault portOption
-  let
-    openAPIParser = flag False True $ mconcat
-      [ long "enable-open-api"
-      , short 'o'
-      , help "Serve the OpenAPI specification at /openapi.json"
-      , showDefault
-      ]
-    accessControlAllowOriginAllParser = flag False True $ mconcat
-      [ long "access-control-allow-origin-all"
-      , short 'a'
-      , help "Add 'Access-Control-Allow-Origin: *' header"
-      , showDefault
-      ]
-    parser = Options
-      <$> runtimeHostParser
-      <*> runtimePortParser
-      <*> portParser
-      <*> openAPIParser
-      <*> accessControlAllowOriginAllParser
-    infoMod = mconcat
-      [ fullDesc
-      , progDesc "Web server for the Marlowe Runtime REST API"
-      ]
+  let openAPIParser =
+        flag False True $
+          mconcat
+            [ long "enable-open-api"
+            , short 'o'
+            , help "Serve the OpenAPI specification at /openapi.json"
+            , showDefault
+            ]
+      accessControlAllowOriginAllParser =
+        flag False True $
+          mconcat
+            [ long "access-control-allow-origin-all"
+            , short 'a'
+            , help "Add 'Access-Control-Allow-Origin: *' header"
+            , showDefault
+            ]
+      parser =
+        Options
+          <$> runtimeHostParser
+          <*> runtimePortParser
+          <*> portParser
+          <*> openAPIParser
+          <*> accessControlAllowOriginAllParser
+      infoMod =
+        mconcat
+          [ fullDesc
+          , progDesc "Web server for the Marlowe Runtime REST API"
+          ]
   execParser $ info (helper <*> parser) infoMod

@@ -3,19 +3,22 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE RankNTypes #-}
 
-module Logging
-  ( RootSelector(..)
-  , renderRootSelectorOTel
-  ) where
+module Logging (
+  RootSelector (..),
+  renderRootSelectorOTel,
+) where
 
-import Control.Monad.Event.Class (Inject(..))
+import Control.Monad.Event.Class (Inject (..))
 import Data.ByteString (ByteString)
 import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncQuery, RuntimeChainSeek)
-import Language.Marlowe.Runtime.Indexer
-  (MarloweIndexerSelector(..), renderDatabaseSelectorOTel, renderMarloweIndexerSelectorOTel)
-import Language.Marlowe.Runtime.Indexer.ChainSeekClient (ChainSeekClientSelector(..))
-import Language.Marlowe.Runtime.Indexer.Database.PostgreSQL (QuerySelector(..))
-import Language.Marlowe.Runtime.Indexer.Store (StoreSelector(..))
+import Language.Marlowe.Runtime.Indexer (
+  MarloweIndexerSelector (..),
+  renderDatabaseSelectorOTel,
+  renderMarloweIndexerSelectorOTel,
+ )
+import Language.Marlowe.Runtime.Indexer.ChainSeekClient (ChainSeekClientSelector (..))
+import Language.Marlowe.Runtime.Indexer.Database.PostgreSQL (QuerySelector (..))
+import Language.Marlowe.Runtime.Indexer.Store (StoreSelector (..))
 import Network.Protocol.Driver.Trace (TcpClientSelector, renderTcpClientSelectorOTel)
 import Network.Protocol.Handshake.Types (Handshake)
 import Network.Protocol.Query.Types (Query)
