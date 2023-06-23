@@ -35,6 +35,16 @@ spec:
         - expose: true
           port: 3787
           protocol: TCP
+      traits:
+      - type: storage
+        properties:
+          pvc:
+          - name: store-dir
+            mountPath: /store
+            storageClassName: ebs-sc
+            resources:
+              requests:
+                storage: 50Gi
   policies:
   - name: local-marlowe-staging
     properties:

@@ -37,6 +37,15 @@ spec:
         volumes:
         - name: ipc
           path: /ipc
+    - type: storage
+      properties:
+        pvc:
+        - name: node-data
+          mountPath: /data
+          storageClassName: ebs-sc
+          resources:
+            requests:
+              storage: 50Gi
   policies:
   - name: local-marlowe-staging
     properties:
