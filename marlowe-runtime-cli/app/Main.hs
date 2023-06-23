@@ -9,14 +9,15 @@ import Control.Concurrent.STM (atomically, newEmptyTMVarIO, putTMVar, takeTMVar)
 #endif
 import GHC.IO.Handle (hSetBuffering)
 import Language.Marlowe.Runtime.CLI.Command
-import System.IO (BufferMode(..), stderr, stdout)
-import System.Posix (Handler(..), installHandler, sigINT)
+import System.IO (BufferMode (..), stderr, stdout)
+import System.Posix (Handler (..), installHandler, sigINT)
 
 main :: IO ()
 main = do
   hSetBuffering stdout LineBuffering
   hSetBuffering stderr LineBuffering
   options@Options{..} <- getOptions
+
 -- TODO Windows support
 #ifdef mingw32_HOST_OS
   let sigInt = retry

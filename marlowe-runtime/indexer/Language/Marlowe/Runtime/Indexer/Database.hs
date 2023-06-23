@@ -13,9 +13,10 @@ data DatabaseQueries m = DatabaseQueries
   }
 
 hoistDatabaseQueries :: (forall a. m a -> n a) -> DatabaseQueries m -> DatabaseQueries n
-hoistDatabaseQueries transformation DatabaseQueries{..} = DatabaseQueries
-  { commitBlocks = transformation <$> commitBlocks
-  , commitRollback = transformation <$> commitRollback
-  , getIntersectionPoints = transformation getIntersectionPoints
-  , getMarloweUTxO = transformation <$> getMarloweUTxO
-  }
+hoistDatabaseQueries transformation DatabaseQueries{..} =
+  DatabaseQueries
+    { commitBlocks = transformation <$> commitBlocks
+    , commitRollback = transformation <$> commitRollback
+    , getIntersectionPoints = transformation getIntersectionPoints
+    , getMarloweUTxO = transformation <$> getMarloweUTxO
+    }

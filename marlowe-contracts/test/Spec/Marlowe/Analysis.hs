@@ -16,7 +16,9 @@ import Test.Tasty
 import Test.Tasty.HUnit
 
 tests :: TestTree
-tests = testGroup "Marlowe Contract"
+tests =
+  testGroup
+    "Marlowe Contract"
     [ testCase "Swap test" swapTest
     , testCase "Sequentially Swap twice test" sequentiallySwapTwiceTest
     , testCase "Concurrently Swap twice test" concurrentlySwapTwiceTest
@@ -28,7 +30,7 @@ hasWarnings :: Maybe C.Contract -> IO Bool
 hasWarnings (Just c) = do
   result <- warningsTrace c
   case result of
-    Left errDesc         -> assertFailure ("Analysis failed: " ++ show errDesc)
+    Left errDesc -> assertFailure ("Analysis failed: " ++ show errDesc)
     Right counterExample -> return $ isJust counterExample
 hasWarnings Nothing = assertFailure "Contract conversion failed"
 
@@ -50,8 +52,7 @@ coin = Token "" "coin"
 timestamp :: UTCTime
 timestamp = read "2022-01-01 00:00:00.000000 UTC"
 
--- |== Test Cases, no warnings expected
-
+-- | == Test Cases, no warnings expected
 swapTest :: IO ()
 swapTest =
   testNoWarnings $
@@ -61,7 +62,7 @@ sequentiallySwapTwiceTest :: IO ()
 sequentiallySwapTwiceTest =
   testNoWarnings $
     swap partyA ada (Constant 1) timestamp partyB coin (Constant 10) timestamp $
-    swap partyA coin (Constant 10) timestamp partyB ada (Constant 1) timestamp Close
+      swap partyA coin (Constant 10) timestamp partyB ada (Constant 1) timestamp Close
 
 concurrentlySwapTwiceTest :: IO ()
 concurrentlySwapTwiceTest =
@@ -85,8 +86,7 @@ coveredCallTest =
       (read "2022-03-31 17:30:00.000000 UTC")
       (read "2022-03-31 18:00:00.000000 UTC")
 
--- |== Test Cases, warnings expected
-
+-- | == Test Cases, warnings expected
 optionTest :: IO ()
 optionTest =
   testExpectedWarnings $

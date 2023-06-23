@@ -5,21 +5,21 @@ module Language.Marlowe.Runtime.CLI.Monad where
 import Control.Monad (MonadPlus, (>=>))
 import Control.Monad.Base (MonadBase)
 import Control.Monad.Fix (MonadFix)
-import Control.Monad.IO.Class (MonadIO(..))
+import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Reader (ask, asks, local)
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Monad.Trans.Except (ExceptT, runExceptT)
 import Control.Monad.Trans.Marlowe (MarloweT)
-import Control.Monad.Trans.Marlowe.Class (MonadMarlowe(..))
+import Control.Monad.Trans.Marlowe.Class (MonadMarlowe (..))
 import Control.Monad.Trans.Reader (ReaderT)
 import Language.Marlowe.Protocol.Client (hoistMarloweRuntimeClient)
-import Language.Marlowe.Runtime.CLI.Env (Env(..))
+import Language.Marlowe.Runtime.CLI.Env (Env (..))
 import Options.Applicative (Alternative)
 import System.Exit (die)
 import UnliftIO (MonadUnliftIO)
 
 -- | A monad type for Marlowe Runtime CLI programs.
-newtype CLI a = CLI { runCLI :: MarloweT (ReaderT Env IO) a }
+newtype CLI a = CLI {runCLI :: MarloweT (ReaderT Env IO) a}
   deriving newtype
     ( Functor
     , Applicative
@@ -49,7 +49,8 @@ asksEnv = CLI . asks
 localEnv :: (Env -> Env) -> CLI a -> CLI a
 localEnv f = CLI . local f . runCLI
 
-runCLIExceptT :: Show e => ExceptT e CLI a -> CLI a
-runCLIExceptT = runExceptT >=> \case
-  Left ex -> liftIO $ die $ show ex
-  Right a -> pure a
+runCLIExceptT :: (Show e) => ExceptT e CLI a -> CLI a
+runCLIExceptT =
+  runExceptT >=> \case
+    Left ex -> liftIO $ die $ show ex
+    Right a -> pure a

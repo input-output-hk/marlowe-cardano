@@ -4,17 +4,17 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE RankNTypes #-}
 
-module Logging
-  ( RootSelector(..)
-  , renderRootSelectorOTel
-  ) where
+module Logging (
+  RootSelector (..),
+  renderRootSelectorOTel,
+) where
 
-import Control.Monad.Event.Class (Inject(..))
+import Control.Monad.Event.Class (Inject (..))
 import Data.ByteString (ByteString)
 import Language.Marlowe.Runtime.ChainSync (renderDatabaseSelectorOTel, renderNodeServiceSelectorOTel)
 import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncCommand, ChainSyncQuery, RuntimeChainSeek)
 import qualified Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL as DB
-import Language.Marlowe.Runtime.ChainSync.NodeClient (NodeClientSelector(..))
+import Language.Marlowe.Runtime.ChainSync.NodeClient (NodeClientSelector (..))
 import Network.Protocol.Driver.Trace (TcpServerSelector, renderTcpServerSelectorOTel)
 import Network.Protocol.Handshake.Types (Handshake)
 import Network.Protocol.Job.Types (Job)

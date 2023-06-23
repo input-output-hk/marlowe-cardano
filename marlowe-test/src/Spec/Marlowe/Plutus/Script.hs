@@ -6,68 +6,65 @@
 -- Stability   :  Experimental
 -- Portability :  Portable
 --
--- | Script execution functions for Marlowe testing.
---
 -----------------------------------------------------------------------------
-
-
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 
+-- | Script execution functions for Marlowe testing.
+module Spec.Marlowe.Plutus.Script (
+  -- * Evaluation
+  evaluatePayout,
+  evaluateSemantics,
 
-module Spec.Marlowe.Plutus.Script
-  ( -- * Evaluation
-    evaluatePayout
-  , evaluateSemantics
-    -- * Addresses
-  , payoutAddress
-  , semanticsAddress
-    -- * Hashes
-  , hashMarloweData
-  , hashRole
-  , payoutScriptHash
-  , semanticsScriptHash
-  ) where
+  -- * Addresses
+  payoutAddress,
+  semanticsAddress,
 
+  -- * Hashes
+  hashMarloweData,
+  hashRole,
+  payoutScriptHash,
+  semanticsScriptHash,
+) where
 
 import Codec.Serialise (serialise)
 import Control.Monad.Except (runExcept)
-import Data.Bifunctor (Bifunctor(first))
+import Data.Bifunctor (Bifunctor (first))
 import Data.Maybe (fromJust)
-import Data.These (These(..))
+import Data.These (These (..))
 import Language.Marlowe.Core.V1.Semantics (MarloweData)
 import Language.Marlowe.Scripts (marloweValidator, marloweValidatorHash, rolePayoutValidator, rolePayoutValidatorHash)
 import Ledger.Typed.Scripts (validatorScript)
 import Paths_marlowe_cardano (getDataDir)
-import Plutus.ApiCommon
-  ( EvaluationContext
-  , LedgerPlutusVersion(PlutusV2)
-  , LogOutput
-  , ProtocolVersion(ProtocolVersion)
-  , VerboseMode(Verbose)
-  , evaluateScriptCounting
-  , mkEvaluationContext
-  )
+import Plutus.ApiCommon (
+  EvaluationContext,
+  LedgerPlutusVersion (PlutusV2),
+  LogOutput,
+  ProtocolVersion (ProtocolVersion),
+  VerboseMode (Verbose),
+  evaluateScriptCounting,
+  mkEvaluationContext,
+ )
 import Plutus.Script.Utils.Scripts (datumHash)
 import Plutus.V1.Ledger.Address (scriptHashAddress)
-import Plutus.V2.Ledger.Api
-  ( Address
-  , CostModelParams
-  , Data(..)
-  , Datum(Datum)
-  , DatumHash
-  , ExBudget(..)
-  , ExCPU(..)
-  , ExMemory(..)
-  , ScriptContext(..)
-  , ToData(toBuiltinData)
-  , TokenName
-  , TxInfo(..)
-  , Validator(getValidator)
-  , ValidatorHash
-  , fromData
-  )
+import Plutus.V2.Ledger.Api (
+  Address,
+  CostModelParams,
+  Data (..),
+  Datum (Datum),
+  DatumHash,
+  ExBudget (..),
+  ExCPU (..),
+  ExMemory (..),
+  ScriptContext (..),
+  ToData (toBuiltinData),
+  TokenName,
+  TxInfo (..),
+  Validator (getValidator),
+  ValidatorHash,
+  fromData,
+ )
 import System.FilePath ((<.>), (</>))
 import System.IO.Unsafe (unsafePerformIO)
 
@@ -75,152 +72,156 @@ import qualified Data.ByteString.Lazy as LBS (toStrict, writeFile)
 import qualified Data.ByteString.Short as SBS (ShortByteString, toShort)
 import qualified Data.Map.Strict as M (fromList)
 
-
 {-# NOINLINE unsafeDumpBenchmark #-}
-
 -- Dump data files for benchmarking Plutus execution cost.
-unsafeDumpBenchmark :: FilePath                -- ^ Name of folder the benchmarks.
-              -> Data                    -- ^ The datum.
-              -> Data                    -- ^ The redeemer.
-              -> Data                    -- ^ The script context.
-              -> ExBudget                -- ^ The Plutus execution cost.
-              -> a                       -- ^ A value.
-              -> a                       -- ^ The same value.
+unsafeDumpBenchmark
+  :: FilePath
+  -- ^ Name of folder the benchmarks.
+  -> Data
+  -- ^ The datum.
+  -> Data
+  -- ^ The redeemer.
+  -> Data
+  -- ^ The script context.
+  -> ExBudget
+  -- ^ The Plutus execution cost.
+  -> a
+  -- ^ A value.
+  -> a
+  -- ^ The same value.
 unsafeDumpBenchmark folder datum redeemer context ExBudget{..} x =
-  unsafePerformIO  -- ☹
-    $ do
-        let
-          i = txInfoId . scriptContextTxInfo . fromJust $ fromData context
+  unsafePerformIO $ -- ☹
+    do
+      let i = txInfoId . scriptContextTxInfo . fromJust $ fromData context
           ExCPU cpu = exBudgetCPU
           ExMemory memory = exBudgetMemory
           result =
-            Constr 0
-              [
-                datum
+            Constr
+              0
+              [ datum
               , redeemer
               , context
               , I $ toInteger cpu
               , I $ toInteger memory
               ]
           payload = serialise result
-        folder' <- (</> folder) <$> getDataDir
-        LBS.writeFile
-          (folder' </> show i <.> "benchmark")
-          payload
-        pure x
-
+      folder' <- (</> folder) <$> getDataDir
+      LBS.writeFile
+        (folder' </> show i <.> "benchmark")
+        payload
+      pure x
 
 -- | Dump benchmarking files.
 dumpBenchmarks :: Bool
 dumpBenchmarks = False
 
-
 -- | Check the Plutus execution budget.
 enforceBudget :: Bool
 enforceBudget = False
 
-
 -- | Run the Plutus evaluator on the Marlowe semantics validator.
-evaluateSemantics :: Data                    -- ^ The datum.
-                  -> Data                    -- ^ The redeemer.
-                  -> Data                    -- ^ The script context.
-                  -> These String LogOutput  -- ^ The result.
+evaluateSemantics
+  :: Data
+  -- ^ The datum.
+  -> Data
+  -- ^ The redeemer.
+  -> Data
+  -- ^ The script context.
+  -> These String LogOutput
+  -- ^ The result.
 evaluateSemantics datum redeemer context =
   case evaluationContext of
     Left message -> This message
-    Right ec     -> case evaluateScriptCounting PlutusV2 (ProtocolVersion 8 0) Verbose ec serialiseSemanticsValidator [datum, redeemer, context] of
-                      (logOutput, Right ex@ExBudget{..}) -> (
-                                                              if dumpBenchmarks
-                                                                then unsafeDumpBenchmark "semantics" datum redeemer context ex
-                                                                else id
-                                                            ) $ if enforceBudget && (exBudgetCPU > 10_000_000_000 || exBudgetMemory > 14_000_000)
-                                                                  then These ("Exceeded Plutus budget: " <> show ex) logOutput
-                                                                  else That logOutput
-                      (logOutput, Left message         ) -> These (show message) logOutput
-
+    Right ec -> case evaluateScriptCounting PlutusV2 (ProtocolVersion 8 0) Verbose ec serialiseSemanticsValidator [datum, redeemer, context] of
+      (logOutput, Right ex@ExBudget{..}) ->
+        ( if dumpBenchmarks
+            then unsafeDumpBenchmark "semantics" datum redeemer context ex
+            else id
+        )
+          $ if enforceBudget && (exBudgetCPU > 10_000_000_000 || exBudgetMemory > 14_000_000)
+            then These ("Exceeded Plutus budget: " <> show ex) logOutput
+            else That logOutput
+      (logOutput, Left message) -> These (show message) logOutput
 
 -- | Run the Plutus evaluator on the Marlowe payout validator.
-evaluatePayout :: Data                    -- ^ The datum.
-               -> Data                    -- ^ The redeemer.
-               -> Data                    -- ^ The script context.
-               -> These String LogOutput  -- ^ The result.
+evaluatePayout
+  :: Data
+  -- ^ The datum.
+  -> Data
+  -- ^ The redeemer.
+  -> Data
+  -- ^ The script context.
+  -> These String LogOutput
+  -- ^ The result.
 evaluatePayout datum redeemer context =
   case evaluationContext of
     Left message -> This message
-    Right ec     -> case evaluateScriptCounting PlutusV2 (ProtocolVersion 8 0) Verbose ec serialisePayoutValidator [datum, redeemer, context] of
-                      (logOutput, Right ex)     -> (
-                                                     if dumpBenchmarks
-                                                       then unsafeDumpBenchmark "rolepayout" datum redeemer context ex
-                                                       else id
-                                                   ) $ That logOutput
-                      (logOutput, Left message) -> These (show message) logOutput
-
+    Right ec -> case evaluateScriptCounting PlutusV2 (ProtocolVersion 8 0) Verbose ec serialisePayoutValidator [datum, redeemer, context] of
+      (logOutput, Right ex) ->
+        ( if dumpBenchmarks
+            then unsafeDumpBenchmark "rolepayout" datum redeemer context ex
+            else id
+        )
+          $ That logOutput
+      (logOutput, Left message) -> These (show message) logOutput
 
 -- | Serialize the Marlowe semantics validator.
 serialiseSemanticsValidator :: SBS.ShortByteString
 serialiseSemanticsValidator =
-    SBS.toShort
-  . LBS.toStrict
-  . serialise
-  . getValidator
-  . validatorScript
-  $ marloweValidator
-
+  SBS.toShort
+    . LBS.toStrict
+    . serialise
+    . getValidator
+    . validatorScript
+    $ marloweValidator
 
 -- | Compute the address of the Marlowe semantics validator.
 semanticsAddress :: Address
 semanticsAddress = scriptHashAddress semanticsScriptHash
 
-
 -- | Compute the hash of the Marlowe semantics validator.
 semanticsScriptHash :: ValidatorHash
 semanticsScriptHash = marloweValidatorHash
 
-
 -- | Serialize the Marlowe payout validator.
 serialisePayoutValidator :: SBS.ShortByteString
 serialisePayoutValidator =
-    SBS.toShort
-  . LBS.toStrict
-  . serialise
-  . getValidator
-  . validatorScript
-  $ rolePayoutValidator
-
+  SBS.toShort
+    . LBS.toStrict
+    . serialise
+    . getValidator
+    . validatorScript
+    $ rolePayoutValidator
 
 -- | Compute the address of the Marlowe payout validator.
 payoutAddress :: Address
 payoutAddress = scriptHashAddress payoutScriptHash
 
-
 -- | Compute the hash of the Marlowe payout validator.
 payoutScriptHash :: ValidatorHash
 payoutScriptHash = rolePayoutValidatorHash
 
-
 -- | Compute the hash of Marlowe datum.
-hashMarloweData :: MarloweData
-                -> DatumHash
+hashMarloweData
+  :: MarloweData
+  -> DatumHash
 hashMarloweData = datumHash . Datum . toBuiltinData
 
-
 -- | Compute the hash of a role token.
-hashRole :: TokenName
-         -> DatumHash
+hashRole
+  :: TokenName
+  -> DatumHash
 hashRole = datumHash . Datum . toBuiltinData
-
 
 -- | Build an evaluation context.
 evaluationContext :: Either String EvaluationContext
 evaluationContext = first show . runExcept $ mkEvaluationContext costModel
 
-
 -- | A default cost model for Plutus.
 costModel :: CostModelParams
 costModel =
   M.fromList
-    [
-      ("addInteger-cpu-arguments-intercept", 205665)
+    [ ("addInteger-cpu-arguments-intercept", 205665)
     , ("addInteger-cpu-arguments-slope", 812)
     , ("addInteger-memory-arguments-intercept", 1)
     , ("addInteger-memory-arguments-slope", 1)

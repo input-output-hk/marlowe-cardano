@@ -1,10 +1,10 @@
-{-# OPTIONS_GHC -Wno-orphans #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
 
 module Language.Marlowe.Runtime.Core.Gen where
 
-import Data.Foldable (Foldable(fold))
+import Data.Foldable (Foldable (fold))
 import qualified Language.Marlowe.Core.V1.Semantics as V1
 import Language.Marlowe.Runtime.ChainSync.Gen ()
 import Language.Marlowe.Runtime.Core.Api
@@ -25,7 +25,8 @@ class
   , Arbitrary (Inputs v)
   , Arbitrary (PayoutDatum v)
   , IsMarloweVersion v
-  ) => ArbitraryMarloweVersion v
+  ) =>
+  ArbitraryMarloweVersion v
 
 instance ArbitraryMarloweVersion 'V1
 
@@ -44,16 +45,17 @@ instance Arbitrary MarloweMetadata where
   arbitrary = MarloweMetadata <$> arbitrary <*> arbitrary
   shrink = genericShrink
 
-instance ArbitraryMarloweVersion v => Arbitrary (Transaction v) where
-  arbitrary = Transaction
-    <$> arbitrary
-    <*> arbitrary
-    <*> arbitrary
-    <*> arbitrary
-    <*> arbitrary
-    <*> arbitrary
-    <*> arbitrary
-    <*> arbitrary
+instance (ArbitraryMarloweVersion v) => Arbitrary (Transaction v) where
+  arbitrary =
+    Transaction
+      <$> arbitrary
+      <*> arbitrary
+      <*> arbitrary
+      <*> arbitrary
+      <*> arbitrary
+      <*> arbitrary
+      <*> arbitrary
+      <*> arbitrary
 
 instance Arbitrary V1.MarloweParams where
   arbitrary = V1.MarloweParams . toPlutusCurrencySymbol <$> arbitrary
@@ -62,20 +64,22 @@ instance Arbitrary V1.MarloweData where
   arbitrary = V1.MarloweData <$> arbitrary <*> arbitrary <*> arbitrary
   shrink = genericShrink
 
-instance ArbitraryMarloweVersion v => Arbitrary (TransactionOutput v) where
+instance (ArbitraryMarloweVersion v) => Arbitrary (TransactionOutput v) where
   arbitrary = TransactionOutput <$> arbitrary <*> arbitrary
   shrink = genericShrink
 
-instance ArbitraryMarloweVersion v => Arbitrary (Payout v) where
+instance (ArbitraryMarloweVersion v) => Arbitrary (Payout v) where
   arbitrary = Payout <$> arbitrary <*> arbitrary <*> arbitrary
-  shrink (Payout address assets datum) = fold
-    [ [ Payout address assets' datum | assets' <- shrink assets ]
-    , [ Payout address assets datum' | datum' <- shrink datum ]
-    ]
+  shrink (Payout address assets datum) =
+    fold
+      [ [Payout address assets' datum | assets' <- shrink assets]
+      , [Payout address assets datum' | datum' <- shrink datum]
+      ]
 
-instance ArbitraryMarloweVersion v => Arbitrary (TransactionScriptOutput v) where
+instance (ArbitraryMarloweVersion v) => Arbitrary (TransactionScriptOutput v) where
   arbitrary = TransactionScriptOutput <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
-  shrink (TransactionScriptOutput address assets utxo datum) = fold
-    [ [ TransactionScriptOutput address assets' utxo datum | assets' <- shrink assets ]
-    , [ TransactionScriptOutput address assets utxo datum' | datum' <- shrink datum ]
-    ]
+  shrink (TransactionScriptOutput address assets utxo datum) =
+    fold
+      [ [TransactionScriptOutput address assets' utxo datum | assets' <- shrink assets]
+      , [TransactionScriptOutput address assets utxo datum' | datum' <- shrink datum]
+      ]

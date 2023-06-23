@@ -9,21 +9,21 @@
 
 module Language.Marlowe.Runtime.Web.Server.REST.ApiError where
 
-import Control.Monad.Except (MonadError(throwError))
-import Data.Aeson (ToJSON(toJSON), Value(Null), encode, object, (.=))
+import Control.Monad.Except (MonadError (throwError))
+import Data.Aeson (ToJSON (toJSON), Value (Null), encode, object, (.=))
 import Data.Maybe (fromMaybe)
-import Language.Marlowe.Runtime.Core.Api (MarloweVersionTag(..))
-import Language.Marlowe.Runtime.Transaction.Api
-  ( ApplyInputsConstraintsBuildupError(..)
-  , ApplyInputsError(..)
-  , ConstraintError(..)
-  , CreateBuildupError(..)
-  , CreateError(..)
-  , LoadMarloweContextError(..)
-  , WithdrawError(..)
-  )
+import Language.Marlowe.Runtime.Core.Api (MarloweVersionTag (..))
+import Language.Marlowe.Runtime.Transaction.Api (
+  ApplyInputsConstraintsBuildupError (..),
+  ApplyInputsError (..),
+  ConstraintError (..),
+  CreateBuildupError (..),
+  CreateError (..),
+  LoadMarloweContextError (..),
+  WithdrawError (..),
+ )
 import Language.Marlowe.Runtime.Web.Server.DTO (DTO, HasDTO, ToDTO, toDTO)
-import Servant (ServerError(ServerError))
+import Servant (ServerError (ServerError))
 
 data ApiError = ApiError
   { message :: String
@@ -34,15 +34,16 @@ data ApiError = ApiError
 
 toServerError :: ApiError -> ServerError
 toServerError err = do
-  let
-    ApiError message errorCode details statusCode = err
-    body = encode $ object
-      [ "message" .= message
-      , "errorCode" .= errorCode
-      , "details" .= details
-      ]
-    phrase = fromMaybe "" $ lookup statusCode reasons
-    headers = [("Content-Type", "application/json")]
+  let ApiError message errorCode details statusCode = err
+      body =
+        encode $
+          object
+            [ "message" .= message
+            , "errorCode" .= errorCode
+            , "details" .= details
+            ]
+      phrase = fromMaybe "" $ lookup statusCode reasons
+      headers = [("Content-Type", "application/json")]
   ServerError statusCode phrase body headers
   where
     reasons =

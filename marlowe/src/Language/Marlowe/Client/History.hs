@@ -1,76 +1,75 @@
--- | Extraction of Marlowe contracts and history from transaction data.
-
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TypeFamilies #-}
 
-
+-- | Extraction of Marlowe contracts and history from transaction data.
 module Language.Marlowe.Client.History where
-
 
 import GHC.Generics (Generic)
 import Language.Marlowe.Core.V1.Semantics (MarloweData, TransactionInput)
 import Language.Marlowe.Scripts (TypedMarloweValidator, TypedRolePayoutValidator)
 import Plutus.Script.Utils.V1.Typed.Scripts (TypedScriptTxOut, TypedScriptTxOutRef)
 import qualified Plutus.V1.Ledger.Value as Val
-import Plutus.V2.Ledger.Api (TxId(..), TxOutRef(..))
-
+import Plutus.V2.Ledger.Api (TxId (..), TxOutRef (..))
 
 -- | A transaction-output reference specific to Marlowe.
 type MarloweTxOut = TypedScriptTxOut TypedMarloweValidator
 
-
 -- | A transaction output specific to Marlowe.
 type MarloweTxOutRef = TypedScriptTxOutRef TypedMarloweValidator
 
-
 -- | History of a Marlowe contract.
-data History =
-    -- | The contract was created.
+data History
+  = -- | The contract was created.
     Created
-    {
-      historyTxOutRef :: TxOutRef          -- ^ The UTxO that created the contract.
-    , historyData     :: MarloweData       -- ^ The Marlowe data attached to the UTxO.
-    , historyNext     :: Maybe History     -- ^ The next step in the history, if known.
-    }
-    -- | Input was applied to the contract.
-  | InputApplied
-    {
-      historyInput    :: TransactionInput  -- ^ The Marlowe input that was applied.
-    , historyTxOutRef :: TxOutRef          -- ^ The UTxO that resulted from the input being applied.
-    , historyData     :: MarloweData       -- ^ The Marlowe data attached to the UTxO.
-    , historyNext     :: Maybe History     -- ^ The next step in the history, if known.
-    }
-    -- | The contract was closed.
-  | Closed
-    {
-      historyInput :: TransactionInput  -- ^ The Marlowe input that was applied.
-    , historyTxId  :: TxId              -- ^ The transaction that resulted from the input being applied.
-    }
-    deriving stock (Eq, Generic, Show)
-    -- FIXME:
-    -- Ideally we want to drop all orphans but
-    -- we are going to move this module to `marlowe-scripts`
-    -- which can depend on `plutus-ledger` as a shortcut.
-    -- deriving anyclass (ToJSON, FromJSON)
+      { historyTxOutRef :: TxOutRef
+      -- ^ The UTxO that created the contract.
+      , historyData :: MarloweData
+      -- ^ The Marlowe data attached to the UTxO.
+      , historyNext :: Maybe History
+      -- ^ The next step in the history, if known.
+      }
+  | -- | Input was applied to the contract.
+    InputApplied
+      { historyInput :: TransactionInput
+      -- ^ The Marlowe input that was applied.
+      , historyTxOutRef :: TxOutRef
+      -- ^ The UTxO that resulted from the input being applied.
+      , historyData :: MarloweData
+      -- ^ The Marlowe data attached to the UTxO.
+      , historyNext :: Maybe History
+      -- ^ The next step in the history, if known.
+      }
+  | -- | The contract was closed.
+    Closed
+      { historyInput :: TransactionInput
+      -- ^ The Marlowe input that was applied.
+      , historyTxId :: TxId
+      -- ^ The transaction that resulted from the input being applied.
+      }
+  deriving stock (Eq, Generic, Show)
 
+-- FIXME:
+-- Ideally we want to drop all orphans but
+-- we are going to move this module to `marlowe-scripts`
+-- which can depend on `plutus-ledger` as a shortcut.
+-- deriving anyclass (ToJSON, FromJSON)
 
 nextEntry :: History -> Maybe History
-nextEntry Created { historyNext=n }     = n
-nextEntry InputApplied { historyNext=n} = n
-nextEntry Closed {}                     = Nothing
+nextEntry Created{historyNext = n} = n
+nextEntry InputApplied{historyNext = n} = n
+nextEntry Closed{} = Nothing
 
 foldlHistory :: forall a. (a -> History -> a) -> a -> History -> a
 foldlHistory f acc entry = case nextEntry entry of
-  Just n  -> foldlHistory f (f acc entry) n
+  Just n -> foldlHistory f (f acc entry) n
   Nothing -> f acc entry
 
 foldrHistory :: forall a. (History -> a -> a) -> a -> History -> a
 foldrHistory f zero entry = case nextEntry entry of
-  Just n  -> f entry (foldrHistory f zero n)
+  Just n -> f entry (foldrHistory f zero n)
   Nothing -> f entry zero
-
 
 -- | A transaction-output reference specific to Marlowe role payout.
 type RolePayoutTxOut = TypedScriptTxOut TypedRolePayoutValidator
@@ -78,15 +77,14 @@ type RolePayoutTxOut = TypedScriptTxOut TypedRolePayoutValidator
 -- | A transaction output specific to Marlowe role payout.
 type RolePayoutTxOutRef = TypedScriptTxOutRef TypedRolePayoutValidator
 
-data RolePayout =
-    RolePayout
-    {
-      rolePayoutTxOutRef :: TxOutRef
-    , rolePayoutName     :: Val.TokenName
-    , rolePayoutValue    :: Val.Value
-    }
-    deriving stock (Eq, Generic, Show)
-    -- deriving anyclass (ToJSON, FromJSON)
+data RolePayout = RolePayout
+  { rolePayoutTxOutRef :: TxOutRef
+  , rolePayoutName :: Val.TokenName
+  , rolePayoutValue :: Val.Value
+  }
+  deriving stock (Eq, Generic, Show)
+
+-- deriving anyclass (ToJSON, FromJSON)
 
 newtype IncludePkhTxns = IncludePkhTxns Bool
 

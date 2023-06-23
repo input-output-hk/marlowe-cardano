@@ -12,36 +12,38 @@ import Language.Marlowe.Runtime.Discovery.Api (ContractHeader)
 import Network.Protocol.Peer.Trace
 import Network.TypedProtocol
 
-newtype MarloweHeaderSyncClient m a = MarloweHeaderSyncClient { runMarloweHeaderSyncClient :: m (ClientStIdle m a) }
-  deriving Functor
+newtype MarloweHeaderSyncClient m a = MarloweHeaderSyncClient {runMarloweHeaderSyncClient :: m (ClientStIdle m a)}
+  deriving (Functor)
 
 data ClientStIdle m a where
   SendMsgRequestNext :: ClientStNext m a -> ClientStIdle m a
   SendMsgIntersect :: [BlockHeader] -> ClientStIntersect m a -> ClientStIdle m a
   SendMsgDone :: a -> ClientStIdle m a
 
-deriving instance Functor m => Functor (ClientStIdle m)
+deriving instance (Functor m) => Functor (ClientStIdle m)
 
 data ClientStIntersect m a = ClientStIntersect
   { recvMsgIntersectFound :: BlockHeader -> m (ClientStIdle m a)
   , recvMsgIntersectNotFound :: m (ClientStIdle m a)
-  } deriving Functor
+  }
+  deriving (Functor)
 
 data ClientStNext m a = ClientStNext
   { recvMsgNewHeaders :: BlockHeader -> [ContractHeader] -> m (ClientStIdle m a)
   , recvMsgRollBackward :: ChainPoint -> m (ClientStIdle m a)
   , recvMsgWait :: m (ClientStWait m a)
-  } deriving Functor
+  }
+  deriving (Functor)
 
 data ClientStWait m a where
   SendMsgPoll :: ClientStNext m a -> ClientStWait m a
   SendMsgCancel :: ClientStIdle m a -> ClientStWait m a
 
-deriving instance Functor m => Functor (ClientStWait m)
+deriving instance (Functor m) => Functor (ClientStWait m)
 
 hoistMarloweHeaderSyncClient
   :: forall m n a
-   . Functor m
+   . (Functor m)
   => (forall x. m x -> n x)
   -> MarloweHeaderSyncClient m a
   -> MarloweHeaderSyncClient n a
@@ -54,17 +56,19 @@ hoistMarloweHeaderSyncClient nat = MarloweHeaderSyncClient . nat . fmap hoistIdl
       SendMsgDone a -> SendMsgDone a
 
     hoistIntersect :: ClientStIntersect m a -> ClientStIntersect n a
-    hoistIntersect ClientStIntersect{..} = ClientStIntersect
-      { recvMsgIntersectFound = nat . fmap hoistIdle . recvMsgIntersectFound
-      , recvMsgIntersectNotFound = nat $ hoistIdle <$> recvMsgIntersectNotFound
-      }
+    hoistIntersect ClientStIntersect{..} =
+      ClientStIntersect
+        { recvMsgIntersectFound = nat . fmap hoistIdle . recvMsgIntersectFound
+        , recvMsgIntersectNotFound = nat $ hoistIdle <$> recvMsgIntersectNotFound
+        }
 
     hoistNext :: ClientStNext m a -> ClientStNext n a
-    hoistNext ClientStNext{..} = ClientStNext
-      { recvMsgNewHeaders = fmap (nat . fmap hoistIdle) . recvMsgNewHeaders
-      , recvMsgRollBackward = nat . fmap hoistIdle . recvMsgRollBackward
-      , recvMsgWait = nat $ hoistWait <$> recvMsgWait
-      }
+    hoistNext ClientStNext{..} =
+      ClientStNext
+        { recvMsgNewHeaders = fmap (nat . fmap hoistIdle) . recvMsgNewHeaders
+        , recvMsgRollBackward = nat . fmap hoistIdle . recvMsgRollBackward
+        , recvMsgWait = nat $ hoistWait <$> recvMsgWait
+        }
 
     hoistWait :: ClientStWait m a -> ClientStWait n a
     hoistWait = \case
@@ -73,51 +77,58 @@ hoistMarloweHeaderSyncClient nat = MarloweHeaderSyncClient . nat . fmap hoistIdl
 
 marloweHeaderSyncClientPeer
   :: forall m a
-   . Functor m
+   . (Functor m)
   => MarloweHeaderSyncClient m a
   -> PeerTraced MarloweHeaderSync 'AsClient 'StIdle m a
 marloweHeaderSyncClientPeer = EffectTraced . fmap peerIdle . runMarloweHeaderSyncClient
   where
     peerIdle :: ClientStIdle m a -> PeerTraced MarloweHeaderSync 'AsClient 'StIdle m a
     peerIdle = \case
-      SendMsgDone a -> YieldTraced (ClientAgency TokIdle) MsgDone
-        $ Close TokDone a
-      SendMsgIntersect blocks intersect-> YieldTraced (ClientAgency TokIdle) (MsgIntersect blocks)
-        $ Call (ServerAgency TokIntersect)
-        $ peerIntersect intersect
-      SendMsgRequestNext next -> YieldTraced (ClientAgency TokIdle) MsgRequestNext
-        $ Call (ServerAgency TokNext)
-        $ peerNext next
+      SendMsgDone a ->
+        YieldTraced (ClientAgency TokIdle) MsgDone $
+          Close TokDone a
+      SendMsgIntersect blocks intersect ->
+        YieldTraced (ClientAgency TokIdle) (MsgIntersect blocks) $
+          Call (ServerAgency TokIntersect) $
+            peerIntersect intersect
+      SendMsgRequestNext next ->
+        YieldTraced (ClientAgency TokIdle) MsgRequestNext $
+          Call (ServerAgency TokNext) $
+            peerNext next
 
     peerIntersect
       :: ClientStIntersect m a
       -> Message MarloweHeaderSync 'StIntersect st
       -> PeerTraced MarloweHeaderSync 'AsClient st m a
-    peerIntersect ClientStIntersect{..} = EffectTraced . \case
-      MsgIntersectFound block -> peerIdle <$> recvMsgIntersectFound block
-      MsgIntersectNotFound -> peerIdle <$> recvMsgIntersectNotFound
+    peerIntersect ClientStIntersect{..} =
+      EffectTraced . \case
+        MsgIntersectFound block -> peerIdle <$> recvMsgIntersectFound block
+        MsgIntersectNotFound -> peerIdle <$> recvMsgIntersectNotFound
 
     peerNext
       :: ClientStNext m a
       -> Message MarloweHeaderSync 'StNext st
       -> PeerTraced MarloweHeaderSync 'AsClient st m a
-    peerNext ClientStNext{..} = EffectTraced . \case
-      MsgNewHeaders block headers -> peerIdle <$> recvMsgNewHeaders block headers
-      MsgRollBackward block -> peerIdle <$> recvMsgRollBackward block
-      MsgWait -> peerWait <$> recvMsgWait
+    peerNext ClientStNext{..} =
+      EffectTraced . \case
+        MsgNewHeaders block headers -> peerIdle <$> recvMsgNewHeaders block headers
+        MsgRollBackward block -> peerIdle <$> recvMsgRollBackward block
+        MsgWait -> peerWait <$> recvMsgWait
 
     peerWait :: ClientStWait m a -> PeerTraced MarloweHeaderSync 'AsClient 'StWait m a
     peerWait = \case
-      SendMsgPoll next -> YieldTraced (ClientAgency TokWait) MsgPoll
-        $ Call (ServerAgency TokNext)
-        $ peerNext next
-      SendMsgCancel idle -> YieldTraced (ClientAgency TokWait) MsgCancel
-        $ Cast
-        $ peerIdle idle
+      SendMsgPoll next ->
+        YieldTraced (ClientAgency TokWait) MsgPoll $
+          Call (ServerAgency TokNext) $
+            peerNext next
+      SendMsgCancel idle ->
+        YieldTraced (ClientAgency TokWait) MsgCancel $
+          Cast $
+            peerIdle idle
 
 serveMarloweHeaderSyncClient
   :: forall m a b
-   . Monad m
+   . (Monad m)
   => MarloweHeaderSyncServer m a
   -> MarloweHeaderSyncClient m b
   -> m (a, b)

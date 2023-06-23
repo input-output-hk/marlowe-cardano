@@ -3,3 +3,4 @@ column-limit: 120
 function-arrows: leading
 haddock-style: single-line
 let-style: inline
+indent-wheres: true

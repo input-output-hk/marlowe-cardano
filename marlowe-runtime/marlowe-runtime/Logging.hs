@@ -3,13 +3,13 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE RankNTypes #-}
 
-module Logging
-  ( RootSelector(..)
-  , renderRootSelectorOTel
-  ) where
+module Logging (
+  RootSelector (..),
+  renderRootSelectorOTel,
+) where
 
-import Cardano.Api (CardanoMode, ConsensusModeParams(..), EpochSlots(..), LocalNodeConnectInfo(..))
-import Control.Monad.Event.Class (Inject(..))
+import Cardano.Api (CardanoMode, ConsensusModeParams (..), EpochSlots (..), LocalNodeConnectInfo (..))
+import Control.Monad.Event.Class (Inject (..))
 import Data.ByteString (ByteString)
 import Data.String (fromString)
 import Language.Marlowe.Protocol.Types (MarloweRuntime)
@@ -30,8 +30,11 @@ import qualified Language.Marlowe.Runtime.Indexer.Database.PostgreSQL as Marlowe
 import qualified Language.Marlowe.Runtime.Indexer.Store as MarloweIndexer
 import qualified Language.Marlowe.Runtime.Sync as Sync
 import qualified Language.Marlowe.Runtime.Sync.Database as Sync
-import Language.Marlowe.Runtime.Transaction
-  (renderLoadMarloweContextSelectorOTel, renderLoadWalletContextSelectorOTel, renderTransactionServerSelectorOTel)
+import Language.Marlowe.Runtime.Transaction (
+  renderLoadMarloweContextSelectorOTel,
+  renderLoadWalletContextSelectorOTel,
+  renderTransactionServerSelectorOTel,
+ )
 import qualified Language.Marlowe.Runtime.Transaction.Query as Q
 import Language.Marlowe.Runtime.Transaction.Server (TransactionServerSelector)
 import Network.Protocol.Driver.Trace (TcpServerSelector, renderTcpServerSelectorOTel)
@@ -109,21 +112,23 @@ renderRootSelectorOTel dbName dbUser host port = \case
   SyncDatabase sel -> Sync.renderDatabaseSelectorOTel dbName dbUser host port sel
   ChainIndexerDatabase sel -> ChainIndexer.renderDatabaseSelectorOTel dbName dbUser host port sel
   ChainIndexer sel -> ChainIndexer.renderChainIndexerSelectorOTel sel
-  ConnectToNode -> OTelRendered
-    { eventName = "cardano.connect"
-    , eventKind = Client
-    , renderField = \LocalNodeConnectInfo{..} ->
-        [ ("net.transport", "ip_tcp")
-        , ("net.protocol.name", "mux")
-        , ("net.sock.peer.name", fromString localNodeSocketPath)
-        , ("net.sock.peer.addr", fromString localNodeSocketPath)
-        , ("net.sock.family", "unix")
-        , ( "cardano.epoch_slots"
-          , toAttribute $ IntAttribute $ fromIntegral let CardanoModeParams (EpochSlots slots) = localConsensusModeParams in slots
-          )
-        , ("cardano.network_id", fromString $ show localNodeNetworkId)
-        ]
-    }
+  ConnectToNode ->
+    OTelRendered
+      { eventName = "cardano.connect"
+      , eventKind = Client
+      , renderField = \LocalNodeConnectInfo{..} ->
+          [ ("net.transport", "ip_tcp")
+          , ("net.protocol.name", "mux")
+          , ("net.sock.peer.name", fromString localNodeSocketPath)
+          , ("net.sock.peer.addr", fromString localNodeSocketPath)
+          , ("net.sock.family", "unix")
+          ,
+            ( "cardano.epoch_slots"
+            , toAttribute $ IntAttribute $ fromIntegral let CardanoModeParams (EpochSlots slots) = localConsensusModeParams in slots
+            )
+          , ("cardano.network_id", fromString $ show localNodeNetworkId)
+          ]
+      }
   ChainSyncDatabase sel -> ChainSync.renderDatabaseSelectorOTel dbName dbUser host port sel
   ChainSyncNodeService sel -> ChainSync.renderNodeServiceSelectorOTel sel
   MarloweIndexerDatabase sel -> MarloweIndexer.renderDatabaseSelectorOTel dbName dbUser host port sel

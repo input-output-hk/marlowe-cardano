@@ -5,7 +5,7 @@
 module Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetTransaction where
 
 import Control.Monad.Trans.Class (lift)
-import Control.Monad.Trans.Maybe (MaybeT(..), runMaybeT)
+import Control.Monad.Trans.Maybe (MaybeT (..), runMaybeT)
 import Data.ByteString (ByteString)
 import Data.Int (Int16, Int64)
 import qualified Data.Map as Map
@@ -15,24 +15,32 @@ import qualified Data.Vector as V
 import Hasql.TH (maybeStatement, vectorStatement)
 import qualified Hasql.Transaction as T
 import Language.Marlowe.Protocol.Query.Types
-import Language.Marlowe.Runtime.ChainSync.Api (TxId(..), TxOutRef)
-import Language.Marlowe.Runtime.Core.Api
-  (MarloweVersion(..), MarloweVersionTag(..), Transaction(..), TransactionOutput(..))
-import Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetContractState
-  ( decodeBlockHeader
-  , decodeContractId
-  , decodeDatumBytes
-  , decodeMetadata
-  , decodePayout
-  , decodeTransactionScriptOutput
-  , decodeTxOutRef
-  )
+import Language.Marlowe.Runtime.ChainSync.Api (TxId (..), TxOutRef)
+import Language.Marlowe.Runtime.Core.Api (
+  MarloweVersion (..),
+  MarloweVersionTag (..),
+  Transaction (..),
+  TransactionOutput (..),
+ )
+import Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetContractState (
+  decodeBlockHeader,
+  decodeContractId,
+  decodeDatumBytes,
+  decodeMetadata,
+  decodePayout,
+  decodeTransactionScriptOutput,
+  decodeTxOutRef,
+ )
 import Prelude hiding (init)
 
 getTransaction :: TxId -> T.Transaction (Maybe SomeTransaction)
 getTransaction txId = runMaybeT do
-  SomeTransaction MarloweV1 input consumedBy tx <- fmap decodeSomeTransaction $ MaybeT $ T.statement (unTxId txId)
-    [maybeStatement|
+  SomeTransaction MarloweV1 input consumedBy tx <-
+    fmap decodeSomeTransaction $
+      MaybeT $
+        T.statement
+          (unTxId txId)
+          [maybeStatement|
       SELECT
         applyTx.txId :: bytea,
         (ARRAY_AGG(applyTx.createTxId))[1] :: bytea,
@@ -73,9 +81,12 @@ getTransaction txId = runMaybeT do
       GROUP BY applyTx.txId
     |]
 
-  payouts <- lift
-    $ Map.fromDistinctAscList . V.toList . fmap decodePayout
-    <$> T.statement (unTxId txId) [vectorStatement|
+  payouts <-
+    lift $
+      Map.fromDistinctAscList . V.toList . fmap decodePayout
+        <$> T.statement
+          (unTxId txId)
+          [vectorStatement|
       SELECT
         payoutTxOut.txId :: bytea,
         payoutTxOut.txIx :: smallint,
@@ -94,7 +105,7 @@ getTransaction txId = runMaybeT do
       ORDER BY payoutTxOut.txId, payoutTxOut.txIx
     |]
 
-  pure $ SomeTransaction MarloweV1 input consumedBy tx { output = (output tx) { payouts } }
+  pure $ SomeTransaction MarloweV1 input consumedBy tx{output = (output tx){payouts}}
 
 type ResultRow =
   ( ByteString
@@ -122,12 +133,13 @@ type ResultRow =
   )
 
 decodeSomeTransaction :: ResultRow -> SomeTransaction
-decodeSomeTransaction row = SomeTransaction
-  { version = MarloweV1
-  , input
-  , consumedBy = TxId <$> consumedBy
-  , transaction
-  }
+decodeSomeTransaction row =
+  SomeTransaction
+    { version = MarloweV1
+    , input
+    , consumedBy = TxId <$> consumedBy
+    , transaction
+    }
   where
     ( txId
       , createTxId
@@ -152,30 +164,30 @@ decodeSomeTransaction row = SomeTransaction
       , tokenNames
       , quantities
       ) = row
-    (input, transaction) = decodeTransaction
-      ( txId
-      , createTxId
-      , createTxIx
-      , inputTxId
-      , inputTxIx
-      , outputTxIx
-      , metadata
-      , inputs
-      , invalidBefore
-      , invalidHereafter
-      , slotNo
-      , hash
-      , blockNo
-      , rolesCurrency
-      , state
-      , contract
-      , address
-      , lovelace
-      , policyIds
-      , tokenNames
-      , quantities
-      )
-
+    (input, transaction) =
+      decodeTransaction
+        ( txId
+        , createTxId
+        , createTxIx
+        , inputTxId
+        , inputTxIx
+        , outputTxIx
+        , metadata
+        , inputs
+        , invalidBefore
+        , invalidHereafter
+        , slotNo
+        , hash
+        , blockNo
+        , rolesCurrency
+        , state
+        , contract
+        , address
+        , lovelace
+        , policyIds
+        , tokenNames
+        , quantities
+        )
 
 decodeTransaction
   :: ( ByteString
@@ -203,28 +215,29 @@ decodeTransaction
   -> (TxOutRef, Transaction 'V1)
 decodeTransaction
   ( txId
-  , createTxId
-  , createTxIx
-  , inputTxId
-  , inputTxIx
-  , outputTxIx
-  , metadata
-  , inputs
-  , invalidBefore
-  , invalidHereafter
-  , slotNo
-  , hash
-  , blockNo
-  , rolesCurrency
-  , state
-  , contract
-  , address
-  , lovelace
-  , policyIds
-  , tokenNames
-  , quantities
-  ) = ( decodeTxOutRef inputTxId inputTxIx
-      , Transaction
+    , createTxId
+    , createTxIx
+    , inputTxId
+    , inputTxIx
+    , outputTxIx
+    , metadata
+    , inputs
+    , invalidBefore
+    , invalidHereafter
+    , slotNo
+    , hash
+    , blockNo
+    , rolesCurrency
+    , state
+    , contract
+    , address
+    , lovelace
+    , policyIds
+    , tokenNames
+    , quantities
+    ) =
+    ( decodeTxOutRef inputTxId inputTxIx
+    , Transaction
         { transactionId = TxId txId
         , contractId = decodeContractId createTxId createTxIx
         , metadata = decodeMetadata metadata
@@ -232,15 +245,17 @@ decodeTransaction
         , validityLowerBound = localTimeToUTC utc invalidBefore
         , validityUpperBound = localTimeToUTC utc invalidHereafter
         , inputs = decodeDatumBytes inputs
-        , output = TransactionOutput mempty $ decodeTransactionScriptOutput txId
-            <$> outputTxIx
-            <*> address
-            <*> lovelace
-            <*> pure policyIds
-            <*> pure tokenNames
-            <*> pure quantities
-            <*> rolesCurrency
-            <*> state
-            <*> contract
+        , output =
+            TransactionOutput mempty $
+              decodeTransactionScriptOutput txId
+                <$> outputTxIx
+                <*> address
+                <*> lovelace
+                <*> pure policyIds
+                <*> pure tokenNames
+                <*> pure quantities
+                <*> rolesCurrency
+                <*> state
+                <*> contract
         }
-      )
+    )

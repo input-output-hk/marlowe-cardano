@@ -9,33 +9,32 @@
 
 module Plutus.V1.Ledger.Aeson where
 
-import Data.Aeson (FromJSON(parseJSON), FromJSONKey, ToJSON(toJSON), ToJSONKey, (.:))
-import qualified Data.Aeson as JSON
+import Data.Aeson (FromJSON (parseJSON), FromJSONKey, ToJSON (toJSON), ToJSONKey, (.:))
+import Data.Aeson qualified as JSON
 
 import Plutus.V1.Ledger.Api
 import Plutus.V1.Ledger.Tx
 
-import qualified Codec.CBOR.Write as CBOR.Write
+import Codec.CBOR.Write qualified as CBOR.Write
 import Codec.Serialise as Serialise
-import qualified Data.Aeson as Aeson
-import qualified Data.Aeson.Types as JSON
-import qualified Data.ByteString as BS
+import Data.Aeson qualified as Aeson
+import Data.Aeson.Types qualified as JSON
+import Data.ByteString qualified as BS
 import Data.ByteString.Base16.Aeson as Base16.Aeson
-import qualified Data.ByteString.Lazy as BSL
+import Data.ByteString.Lazy qualified as BSL
 import Data.Scientific (floatingOrInteger, scientific)
-import Data.String (IsString(fromString))
-import qualified Data.Text as Text
-import qualified Data.Text.Encoding as E
-import qualified Flat
-import qualified Plutus.V1.Ledger.Bytes as Bytes
+import Data.String (IsString (fromString))
+import Data.Text qualified as Text
+import Data.Text.Encoding qualified as E
+import Flat qualified
+import Plutus.V1.Ledger.Bytes qualified as Bytes
 import Plutus.V1.Ledger.Scripts
 import Plutus.V1.Ledger.Value
-import qualified PlutusTx.AssocMap as Map
-import qualified PlutusTx.Builtins
+import PlutusTx.AssocMap qualified as Map
+import PlutusTx.Builtins qualified
 import PlutusTx.Builtins.Aeson ()
 
 import Data.Hashable (Hashable)
-
 
 {- Note [JSON instances for Script]
 The JSON instances for Script are partially hand-written rather than going via the Serialise
@@ -45,18 +44,17 @@ JSON instances are used for e.g. transmitting validation events, which often inc
 with the data arguments applied (which can be very big!).
 -}
 instance ToJSON Script where
-    -- See note [JSON instances for Script]
-    toJSON (Script p) = Base16.Aeson.byteStringToJSON . CBOR.Write.toStrictByteString . Serialise.encode . Flat.flat $ p
+  -- See note [JSON instances for Script]
+  toJSON (Script p) = Base16.Aeson.byteStringToJSON . CBOR.Write.toStrictByteString . Serialise.encode . Flat.flat $ p
 
 instance FromJSON Script where
-    -- See note [JSON instances for Script]
-    parseJSON v = do
-      (EncodeBase16 bs) <- parseJSON v
-      let
-        lbs = BSL.fromStrict bs
-      case Flat.unflatWith Flat.decode lbs of
-        Left err  -> fail (show err)
-        Right res -> pure $ Script res
+  -- See note [JSON instances for Script]
+  parseJSON v = do
+    (EncodeBase16 bs) <- parseJSON v
+    let lbs = BSL.fromStrict bs
+    case Flat.unflatWith Flat.decode lbs of
+      Left err -> fail (show err)
+      Right res -> pure $ Script res
 
 deriving anyclass instance ToJSON DatumHash
 deriving anyclass instance FromJSON DatumHash
@@ -114,15 +112,16 @@ deriving anyclass instance ToJSON Datum
 deriving anyclass instance FromJSON Datum
 deriving anyclass instance Serialise Datum
 
-
 instance ToJSON CurrencySymbol where
   toJSON c =
     JSON.object
-      [ ( "unCurrencySymbol"
-        , Base16.Aeson.byteStringToJSON .
-          PlutusTx.Builtins.fromBuiltin .
-          unCurrencySymbol $
-          c)
+      [
+        ( "unCurrencySymbol"
+        , Base16.Aeson.byteStringToJSON
+            . PlutusTx.Builtins.fromBuiltin
+            . unCurrencySymbol
+            $ c
+        )
       ]
 
 instance FromJSON CurrencySymbol where
@@ -147,32 +146,37 @@ and we serialize it base16 encoded, with 0x in front so it will look as a hex st
 -}
 
 instance ToJSON TokenName where
-    toJSON = JSON.object . pure . (,) "unTokenName" . JSON.toJSON .
-        fromTokenName
-            (Text.cons '\NUL' . asBase16)
-            (\t -> case Text.take 1 t of "\NUL" -> Text.concat ["\NUL\NUL", t]; _ -> t)
-      where
-        -- copied from 'Plutus.V1.Ledger.Value' because not exported
-        asBase16 :: BS.ByteString -> Text.Text
-        asBase16 bs = Text.concat ["0x", Bytes.encodeByteString bs]
+  toJSON =
+    JSON.object
+      . pure
+      . (,) "unTokenName"
+      . JSON.toJSON
+      . fromTokenName
+        (Text.cons '\NUL' . asBase16)
+        (\t -> case Text.take 1 t of "\NUL" -> Text.concat ["\NUL\NUL", t]; _ -> t)
+    where
+      -- copied from 'Plutus.V1.Ledger.Value' because not exported
+      asBase16 :: BS.ByteString -> Text.Text
+      asBase16 bs = Text.concat ["0x", Bytes.encodeByteString bs]
 
-        fromTokenName :: (BS.ByteString -> r) -> (Text.Text -> r) -> TokenName -> r
-        fromTokenName handleBytestring handleText (TokenName bs) =
-          either (\_ -> handleBytestring $ PlutusTx.Builtins.fromBuiltin bs) handleText $ E.decodeUtf8' (PlutusTx.Builtins.fromBuiltin bs)
+      fromTokenName :: (BS.ByteString -> r) -> (Text.Text -> r) -> TokenName -> r
+      fromTokenName handleBytestring handleText (TokenName bs) =
+        either (\_ -> handleBytestring $ PlutusTx.Builtins.fromBuiltin bs) handleText $
+          E.decodeUtf8' (PlutusTx.Builtins.fromBuiltin bs)
 
 instance FromJSON TokenName where
-    parseJSON =
-        JSON.withObject "TokenName" $ \object -> do
-        raw <- object .: "unTokenName"
-        fromJSONText raw
-        where
-            fromText = tokenName . E.encodeUtf8 . Text.pack . fromString . Text.unpack
-            fromJSONText t = case Text.take 3 t of
-                "\NUL0x"       -> do
-                  EncodeBase16 bs <- parseJSON (Aeson.String $ Text.drop 3 t)
-                  pure $ tokenName bs
-                "\NUL\NUL\NUL" -> pure . fromText . Text.drop 2 $ t
-                _              -> pure . fromText $ t
+  parseJSON =
+    JSON.withObject "TokenName" $ \object -> do
+      raw <- object .: "unTokenName"
+      fromJSONText raw
+    where
+      fromText = tokenName . E.encodeUtf8 . Text.pack . fromString . Text.unpack
+      fromJSONText t = case Text.take 3 t of
+        "\NUL0x" -> do
+          EncodeBase16 bs <- parseJSON (Aeson.String $ Text.drop 3 t)
+          pure $ tokenName bs
+        "\NUL\NUL\NUL" -> pure . fromText . Text.drop 2 $ t
+        _ -> pure . fromText $ t
 
 deriving anyclass instance ToJSON AssetClass
 deriving anyclass instance FromJSON AssetClass
@@ -186,10 +190,10 @@ deriving newtype instance Serialise Value
 
 -- Orphan instances for 'PlutusTx.Map' to make this work
 instance (ToJSON v, ToJSON k) => ToJSON (Map.Map k v) where
-    toJSON = JSON.toJSON . Map.toList
+  toJSON = JSON.toJSON . Map.toList
 
 instance (FromJSON v, FromJSON k) => FromJSON (Map.Map k v) where
-    parseJSON v = Map.fromList <$> JSON.parseJSON v
+  parseJSON v = Map.fromList <$> JSON.parseJSON v
 
 deriving anyclass instance (Hashable k, Hashable v) => Hashable (Map.Map k v)
 deriving anyclass instance (Serialise k, Serialise v) => Serialise (Map.Map k v)
@@ -199,11 +203,12 @@ deriving anyclass instance (Serialise k, Serialise v) => Serialise (Map.Map k v)
 -- parsing fails.
 instance JSON.FromJSON POSIXTime where
   parseJSON v@(JSON.Number n) =
-      either (\_ -> JSON.prependFailure "parsing POSIXTime failed, " (JSON.typeMismatch "Integer" v))
-             (return . POSIXTime)
-             (floatingOrInteger n :: Either Double Integer)
+    either
+      (\_ -> JSON.prependFailure "parsing POSIXTime failed, " (JSON.typeMismatch "Integer" v))
+      (return . POSIXTime)
+      (floatingOrInteger n :: Either Double Integer)
   parseJSON invalid =
-      JSON.prependFailure "parsing POSIXTime failed, " (JSON.typeMismatch "Number" invalid)
+    JSON.prependFailure "parsing POSIXTime failed, " (JSON.typeMismatch "Number" invalid)
 
 -- | Custom 'ToJSON' instance which allows to simply convert a 'POSIXTime'
 -- value to a JSON number.
@@ -215,7 +220,6 @@ deriving newtype instance Hashable POSIXTime
 
 deriving anyclass instance JSON.ToJSON ScriptError
 deriving anyclass instance JSON.FromJSON ScriptError
-
 
 deriving anyclass instance (ToJSON a) => ToJSON (Interval a)
 deriving anyclass instance (FromJSON a) => FromJSON (Interval a)
@@ -229,18 +233,17 @@ deriving anyclass instance (FromJSON a) => FromJSON (UpperBound a)
 deriving anyclass instance (ToJSON a) => ToJSON (Extended a)
 deriving anyclass instance (FromJSON a) => FromJSON (Extended a)
 
-
 deriving newtype instance Serialise LedgerBytes
 deriving anyclass instance FromJSONKey LedgerBytes
 deriving anyclass instance ToJSONKey LedgerBytes
 
 instance ToJSON LedgerBytes where
-    toJSON = toJSON . EncodeBase16 . Bytes.bytes
+  toJSON = toJSON . EncodeBase16 . Bytes.bytes
 
 instance FromJSON LedgerBytes where
-    parseJSON v = do
-      EncodeBase16 bs <- parseJSON v
-      return $ Bytes.fromBytes bs
+  parseJSON v = do
+    EncodeBase16 bs <- parseJSON v
+    return $ Bytes.fromBytes bs
 
 deriving anyclass instance ToJSON RedeemerPtr
 deriving anyclass instance FromJSON RedeemerPtr
@@ -276,7 +279,6 @@ deriving anyclass instance ToJSONKey TxId
 deriving anyclass instance FromJSONKey TxId
 deriving anyclass instance Serialise TxId
 
-
 deriving anyclass instance ToJSON Address
 deriving anyclass instance FromJSON Address
 deriving anyclass instance Serialise Address
@@ -294,4 +296,3 @@ deriving anyclass instance FromJSON PubKeyHash
 deriving anyclass instance FromJSONKey PubKeyHash
 deriving anyclass instance ToJSONKey PubKeyHash
 deriving newtype instance Serialise PubKeyHash
-

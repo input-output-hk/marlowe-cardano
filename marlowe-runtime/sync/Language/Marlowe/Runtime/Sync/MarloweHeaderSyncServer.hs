@@ -6,9 +6,9 @@
 module Language.Marlowe.Runtime.Sync.MarloweHeaderSyncServer where
 
 import Language.Marlowe.Protocol.HeaderSync.Server
-import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainPoint, WithGenesis(..))
-import Language.Marlowe.Runtime.Sync.Database (DatabaseQueries(..), Next(..))
-import Network.Protocol.Connection (ServerSource(..))
+import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainPoint, WithGenesis (..))
+import Language.Marlowe.Runtime.Sync.Database (DatabaseQueries (..), Next (..))
+import Network.Protocol.Connection (ServerSource (..))
 import UnliftIO (MonadUnliftIO)
 
 newtype MarloweHeaderSyncServerDependencies m = MarloweHeaderSyncServerDependencies
@@ -17,7 +17,7 @@ newtype MarloweHeaderSyncServerDependencies m = MarloweHeaderSyncServerDependenc
 
 marloweHeaderSyncServer
   :: forall m
-   . MonadUnliftIO m
+   . (MonadUnliftIO m)
   => MarloweHeaderSyncServerDependencies m
   -> ServerSource MarloweHeaderSyncServer m ()
 marloweHeaderSyncServer MarloweHeaderSyncServerDependencies{..} = ServerSource $ pure server
@@ -26,20 +26,23 @@ marloweHeaderSyncServer MarloweHeaderSyncServerDependencies{..} = ServerSource $
     DatabaseQueries{..} = databaseQueries
 
     serverIdle :: ChainPoint -> ServerStIdle m ()
-    serverIdle clientPos = ServerStIdle
-      { recvMsgRequestNext
-      , recvMsgIntersect
-      , recvMsgDone = pure ()
-      }
+    serverIdle clientPos =
+      ServerStIdle
+        { recvMsgRequestNext
+        , recvMsgIntersect
+        , recvMsgDone = pure ()
+        }
       where
         recvMsgRequestNext = do
           nextHeaders <- getNextHeaders clientPos
           pure case nextHeaders of
             Rollback targetPoint -> SendMsgRollBackward targetPoint $ serverIdle targetPoint
-            Wait -> SendMsgWait ServerStWait
-              { recvMsgPoll = recvMsgRequestNext
-              , recvMsgCancel = pure $ serverIdle clientPos
-              }
+            Wait ->
+              SendMsgWait
+                ServerStWait
+                  { recvMsgPoll = recvMsgRequestNext
+                  , recvMsgCancel = pure $ serverIdle clientPos
+                  }
             Next nextBlock headers -> SendMsgNewHeaders nextBlock headers $ serverIdle $ At nextBlock
 
         recvMsgIntersect :: [BlockHeader] -> m (ServerStIntersect m ())

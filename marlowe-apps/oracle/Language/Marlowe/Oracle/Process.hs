@@ -2,24 +2,31 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 
-
 module Language.Marlowe.Oracle.Process where
 
-
 import Control.Monad (void)
-import Control.Monad.Except (ExceptT(ExceptT), liftIO, runExceptT)
+import Control.Monad.Except (ExceptT (ExceptT), liftIO, runExceptT)
 import Data.Maybe (mapMaybe)
 import Data.Text (Text)
-import Language.Marlowe.Core.V1.Semantics.Types (ChoiceId(ChoiceId), Input(NormalInput), InputContent(IChoice), Party)
+import Language.Marlowe.Core.V1.Semantics.Types (
+  ChoiceId (ChoiceId),
+  Input (NormalInput),
+  InputContent (IChoice),
+  Party,
+ )
 import Language.Marlowe.Oracle.Detect (containsOracleAction, contractReadyForOracle)
-import Language.Marlowe.Runtime.App.Stream (ContractStream(..), TChanEOF, contractFromStep)
+import Language.Marlowe.Runtime.App.Stream (ContractStream (..), TChanEOF, contractFromStep)
 import Language.Marlowe.Runtime.App.Transact (applyWithEvents)
-import Language.Marlowe.Runtime.App.Types
-  (Config, FinishOnClose(FinishOnClose), FinishOnWait(FinishOnWait), PollingFrequency)
+import Language.Marlowe.Runtime.App.Types (
+  Config,
+  FinishOnClose (FinishOnClose),
+  FinishOnWait (FinishOnWait),
+  PollingFrequency,
+ )
 import Language.Marlowe.Runtime.ChainSync.Api (Address)
-import Language.Marlowe.Runtime.Core.Api (ContractId, MarloweVersionTag(V1))
+import Language.Marlowe.Runtime.Core.Api (ContractId, MarloweVersionTag (V1))
 import Network.Oracle (OracleEnv, readOracle, toOracleSymbol)
-import Observe.Event.Dynamic (DynamicEventSelector(..))
+import Observe.Event.Dynamic (DynamicEventSelector (..))
 import Observe.Event.Explicit (EventBackend, addField, hoistEvent, hoistEventBackend, idInjectSelector, subEventBackend)
 import Observe.Event.Syntax ((≔))
 import Plutus.V2.Ledger.Api (toBuiltin)
@@ -27,8 +34,7 @@ import Plutus.V2.Ledger.Api (toBuiltin)
 import qualified Cardano.Api as C (PaymentExtendedKey, SigningKey)
 import qualified Data.ByteString.Char8 as BS8 (pack)
 import Language.Marlowe.Runtime.App.Channel (RequeueFrequency)
-import qualified Language.Marlowe.Runtime.App.Channel as App (LastSeen(..), runContractAction, runDetection)
-
+import qualified Language.Marlowe.Runtime.App.Channel as App (LastSeen (..), runContractAction, runDetection)
 
 runDetection
   :: Party
@@ -46,7 +52,6 @@ runDetection party eventBackend config pollingFrequency =
     (FinishOnClose True)
     (FinishOnWait True)
 
-
 runOracle
   :: OracleEnv
   -> Config
@@ -60,36 +65,35 @@ runOracle
   -> TChanEOF ContractId
   -> IO ()
 runOracle oracleEnv config address key party eventBackend =
-  App.runContractAction "OracleProcess" eventBackend
-    $ \event App.LastSeen{..} ->
+  App.runContractAction "OracleProcess" eventBackend $
+    \event App.LastSeen{..} ->
       do
-        let
-          -- Find the oracle symbols requested and the ones that can be serviced, respectively.
-          rawSymbols = contractReadyForOracle party lastContract
-          validSymbols = mapMaybe toOracleSymbol rawSymbols
-          -- Build and submit a transaction to report the oracle's value.
-          report contractId symbol =
-            do
-              let
-                event' = hoistEvent liftIO event
-                subBackend = hoistEventBackend liftIO $ subEventBackend idInjectSelector event eventBackend
-              addField event' $ ("symbol" :: Text) ≔ show symbol
-              value <- ExceptT $ readOracle eventBackend oracleEnv symbol
-              addField event' $ ("value" :: Text) ≔ value
-              void
-                . applyWithEvents subBackend config address key contractId
-                . pure . NormalInput
-                $ IChoice (ChoiceId (toBuiltin . BS8.pack $ show symbol) party) value
+        let -- Find the oracle symbols requested and the ones that can be serviced, respectively.
+            rawSymbols = contractReadyForOracle party lastContract
+            validSymbols = mapMaybe toOracleSymbol rawSymbols
+            -- Build and submit a transaction to report the oracle's value.
+            report contractId symbol =
+              do
+                let event' = hoistEvent liftIO event
+                    subBackend = hoistEventBackend liftIO $ subEventBackend idInjectSelector event eventBackend
+                addField event' $ ("symbol" :: Text) ≔ show symbol
+                value <- ExceptT $ readOracle eventBackend oracleEnv symbol
+                addField event' $ ("value" :: Text) ≔ value
+                void
+                  . applyWithEvents subBackend config address key contractId
+                  . pure
+                  . NormalInput
+                  $ IChoice (ChoiceId (toBuiltin . BS8.pack $ show symbol) party) value
         -- Print the context of the transaction.
         addField event $ ("previousTransactionId" :: Text) ≔ lastTxId
         addField event $ ("readyForOracle" :: Text) ≔ rawSymbols
         addField event $ ("availableForOracle" :: Text) ≔ fmap show validSymbols
         -- Execute the transaction, if there is a valid symbol.
         result <- runExceptT $ mapM_ (report thisContractId) (take 1 validSymbols)
-          -- Print the result of the transaction.
+        -- Print the result of the transaction.
         addField event
           . (("result" :: Text) ≔)
           $ case (result, null validSymbols) of
-              (Right ()    , True ) -> "Ignored."
-              (Right ()    , False) -> "Confirmed."
-              (Left message, _    ) -> "Failed: " <> message
+            (Right (), True) -> "Ignored."
+            (Right (), False) -> "Confirmed."
+            (Left message, _) -> "Failed: " <> message

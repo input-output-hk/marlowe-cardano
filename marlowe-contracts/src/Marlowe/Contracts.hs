@@ -1,10 +1,10 @@
-module Marlowe.Contracts
-  ( module Marlowe.Contracts.Escrow
-  , module Marlowe.Contracts.Options
-  , module Marlowe.Contracts.Swap
-  , module Marlowe.Contracts.Trivial
-  , module Marlowe.Contracts.ZeroCouponBond
-  ) where
+module Marlowe.Contracts (
+  module Marlowe.Contracts.Escrow,
+  module Marlowe.Contracts.Options,
+  module Marlowe.Contracts.Swap,
+  module Marlowe.Contracts.Trivial,
+  module Marlowe.Contracts.ZeroCouponBond,
+) where
 
 import Marlowe.Contracts.Escrow
 import Marlowe.Contracts.Options

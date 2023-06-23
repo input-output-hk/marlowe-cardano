@@ -3,12 +3,13 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+
 module Contrib.Control.Monad.Trans.State.IO where
 
 import Control.Monad (void)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.State (StateT, evalStateT)
-import Control.Monad.State.Class (MonadState(..))
+import Control.Monad.State.Class (MonadState (..))
 import Control.Monad.Trans.Class (MonadTrans)
 import Data.IORef (IORef, newIORef, readIORef, writeIORef)
 
@@ -45,4 +46,3 @@ evalIOStateT s (IOStateT m) = do
 
 unsafeExecIOStateT :: (MonadIO m) => IORef s -> IOStateT s m a -> m a
 unsafeExecIOStateT ref (IOStateT m) = evalStateT m ref
-

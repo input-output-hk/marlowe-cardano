@@ -1,6 +1,6 @@
-{-# OPTIONS_GHC -Wno-orphans #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
 
 module Language.Marlowe.Protocol.SyncSpec where
 
@@ -22,30 +22,31 @@ spec = describe "MarloweSync protocol" do
   codecGoldenTests @MarloweSync "MarloweSync"
 
 instance ArbitraryMessage MarloweSync where
-  arbitraryMessage = oneof
-    [ AnyMessageAndAgency (ClientAgency TokInit) . MsgFollowContract <$> arbitrary
-    , do
-        msg <- MsgIntersect <$> arbitrary <*> pure Core.MarloweV1 <*> listOf arbitrary
-        pure $ AnyMessageAndAgency (ClientAgency TokInit) msg
-    , pure $ AnyMessageAndAgency (ServerAgency TokFollow) MsgContractNotFound
-    , do
-        msg <- MsgContractFound <$> arbitrary <*> pure Core.MarloweV1 <*> arbitrary
-        pure $ AnyMessageAndAgency (ServerAgency TokFollow) msg
-    , pure $ AnyMessageAndAgency (ClientAgency (TokIdle Core.MarloweV1)) MsgDone
-    , pure $ AnyMessageAndAgency (ClientAgency (TokIdle Core.MarloweV1)) MsgRequestNext
-    , do
-        msg <- MsgRollForward <$> arbitrary <*> resized (min 30) arbitrary
-        pure $ AnyMessageAndAgency (ServerAgency (TokNext Core.MarloweV1)) msg
-    , do
-        msg <- MsgRollBackward <$> arbitrary
-        pure $ AnyMessageAndAgency (ServerAgency (TokNext Core.MarloweV1)) msg
-    , pure $ AnyMessageAndAgency (ServerAgency (TokNext Core.MarloweV1)) MsgRollBackCreation
-    , pure $ AnyMessageAndAgency (ServerAgency (TokNext Core.MarloweV1)) MsgWait
-    , pure $ AnyMessageAndAgency (ClientAgency (TokWait Core.MarloweV1)) MsgPoll
-    , pure $ AnyMessageAndAgency (ClientAgency (TokWait Core.MarloweV1)) MsgCancel
-    , AnyMessageAndAgency (ServerAgency (TokIntersect Core.MarloweV1)) . MsgIntersectFound <$> arbitrary
-    , pure $ AnyMessageAndAgency (ServerAgency (TokIntersect Core.MarloweV1)) MsgIntersectNotFound
-    ]
+  arbitraryMessage =
+    oneof
+      [ AnyMessageAndAgency (ClientAgency TokInit) . MsgFollowContract <$> arbitrary
+      , do
+          msg <- MsgIntersect <$> arbitrary <*> pure Core.MarloweV1 <*> listOf arbitrary
+          pure $ AnyMessageAndAgency (ClientAgency TokInit) msg
+      , pure $ AnyMessageAndAgency (ServerAgency TokFollow) MsgContractNotFound
+      , do
+          msg <- MsgContractFound <$> arbitrary <*> pure Core.MarloweV1 <*> arbitrary
+          pure $ AnyMessageAndAgency (ServerAgency TokFollow) msg
+      , pure $ AnyMessageAndAgency (ClientAgency (TokIdle Core.MarloweV1)) MsgDone
+      , pure $ AnyMessageAndAgency (ClientAgency (TokIdle Core.MarloweV1)) MsgRequestNext
+      , do
+          msg <- MsgRollForward <$> arbitrary <*> resized (min 30) arbitrary
+          pure $ AnyMessageAndAgency (ServerAgency (TokNext Core.MarloweV1)) msg
+      , do
+          msg <- MsgRollBackward <$> arbitrary
+          pure $ AnyMessageAndAgency (ServerAgency (TokNext Core.MarloweV1)) msg
+      , pure $ AnyMessageAndAgency (ServerAgency (TokNext Core.MarloweV1)) MsgRollBackCreation
+      , pure $ AnyMessageAndAgency (ServerAgency (TokNext Core.MarloweV1)) MsgWait
+      , pure $ AnyMessageAndAgency (ClientAgency (TokWait Core.MarloweV1)) MsgPoll
+      , pure $ AnyMessageAndAgency (ClientAgency (TokWait Core.MarloweV1)) MsgCancel
+      , AnyMessageAndAgency (ServerAgency (TokIntersect Core.MarloweV1)) . MsgIntersectFound <$> arbitrary
+      , pure $ AnyMessageAndAgency (ServerAgency (TokIntersect Core.MarloweV1)) MsgIntersectNotFound
+      ]
 
   shrinkMessage agency = \case
     MsgFollowContract _ -> []
