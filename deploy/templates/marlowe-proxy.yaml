@@ -45,7 +45,7 @@ spec:
       - type: expose
         properties:
           annotations:
-            "external-dns.alpha.kubernetes.io/hostname": "marlowe-runtime-{{ . }}.scdev.aws.iohkdev.io"
+            "external-dns.alpha.kubernetes.io/internal-hostname": "marlowe-runtime-{{ . }}.scdev.aws.iohkdev.io"
           ports:
           - port: 3700
           - port: 3701
