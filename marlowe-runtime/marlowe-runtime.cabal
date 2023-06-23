@@ -555,6 +555,7 @@ executable marlowe-sync
     , hasql-pool ^>=0.8
     , hs-opentelemetry-api ==0.0.3.6
     , hs-opentelemetry-sdk ==0.0.3.4
+    , marlowe-chain-sync ==0.0.2
     , marlowe-protocols ==0.1.1.0
     , marlowe-runtime:{discovery-api, history-api, sync, sync-api} ==0.0.2
     , mtl >=2.2 && <3
