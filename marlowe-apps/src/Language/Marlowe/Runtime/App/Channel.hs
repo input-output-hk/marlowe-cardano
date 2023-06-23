@@ -15,6 +15,7 @@ module Language.Marlowe.Runtime.App.Channel (
   runDetection,
   runDiscovery,
   runDiscovery',
+  watchContracts,
 ) where
 
 import Control.Concurrent (forkIO, threadDelay)
@@ -24,8 +25,6 @@ import Control.Monad (forever, join, unless, void)
 import Control.Monad.Except (ExceptT (ExceptT), runExceptT)
 import Control.Monad.IO.Class (liftIO)
 import Data.Aeson (object, (.=))
-import qualified Data.Map.Strict as M (Map, adjust, delete, insert, lookup)
-import qualified Data.Set as S (Set, insert, member)
 import Data.Text (Text)
 import Data.Time.Units (Second, toMicroseconds)
 import Language.Marlowe.Core.V1.Semantics.Types (Contract)
@@ -47,6 +46,9 @@ import Observe.Event.Backend (hoistEventBackend)
 import Observe.Event.Dynamic (DynamicEventSelector (..), DynamicField)
 import Observe.Event.Explicit (Event, EventBackend, addField, withEvent)
 import Observe.Event.Syntax ((≔))
+
+import qualified Data.Map.Strict as M (Map, adjust, delete, insert, lookup, singleton, unionWith)
+import qualified Data.Set as S (Set, insert, member, singleton, union)
 
 -- `mk*` functions are useful if you want to manage the threads yourself.
 mkDiscovery
@@ -138,6 +140,7 @@ runDetection accept eventBackend config pollingFrequency finishOnClose finishOnW
 
 data LastSeen = LastSeen
   { thisContractId :: ContractId
+  , theseSteps :: [ContractStep 'V1]
   , lastContract :: Contract
   , lastTxId :: TxId
   , ignoredTxIds :: S.Set TxId
@@ -146,6 +149,7 @@ data LastSeen = LastSeen
 
 newtype RequeueFrequency = RequeueFrequency Second
 
+-- | Run a function for each open transaction of each contract, repeating periodically.
 runContractAction
   :: forall r
    . Text
@@ -168,7 +172,7 @@ runContractAction selectorName eventBackend runInput (RequeueFrequency requeueFr
       update event cs lastSeen =
         let contractId = csContractId cs
          in case (contractId `M.lookup` lastSeen, contractFromStream cs, transactionIdFromStream cs) of
-              (Nothing, Just contract, Just txId) -> pure $ M.insert contractId (LastSeen contractId contract txId mempty) lastSeen
+              (Nothing, Just contract, Just txId) -> pure $ M.insert contractId (LastSeen contractId mempty contract txId mempty) lastSeen
               (Just seen, Just contract, Just txId) -> pure $ M.insert contractId (seen{lastContract = contract, lastTxId = txId}) lastSeen
               (Just _, Nothing, Just _) -> pure $ M.delete contractId lastSeen
               (seen, _, _) -> do
@@ -233,4 +237,56 @@ runContractAction selectorName eventBackend runInput (RequeueFrequency requeueFr
                       addField event $ ("action" :: Text) ≔ ("finish" :: String)
                       pure $ delete csContractId lastSeen
           either (const $ pure ()) go lastSeen'
+   in go mempty
+
+-- | Call a function exactly once on each transaction of every contract.
+watchContracts
+  :: forall r
+   . Text
+  -> EventBackend IO r DynamicEventSelector
+  -> (Event IO r DynamicField -> ContractStream 'V1 -> IO ())
+  -> RequeueFrequency
+  -> FinishOnWait
+  -> TChanEOF (ContractStream 'V1)
+  -> TChanEOF ContractId
+  -> IO ()
+watchContracts selectorName eventBackend runInput (RequeueFrequency requeueFrequency) endOnWait inChannel outChannel =
+  let go :: M.Map ContractId (S.Set BlockHeader) -> IO ()
+      go seen =
+        do
+          seen' <-
+            withEvent eventBackend (DynamicEventSelector selectorName) $
+              \event -> runExceptT $
+                do
+                  cs <- ExceptT . atomically $ readTChan inChannel
+                  liftIO . addField event $ ("contractId" :: Text) ≔ csContractId cs
+                  liftIO $ case cs of
+                    ContractStreamStart{..} -> do
+                      addField event $ ("action" :: Text) ≔ ("start" :: String)
+                      unless ((S.member csBlockHeader <$> M.lookup csContractId seen) == Just True) $
+                        runInput event cs
+                      pure . M.unionWith S.union seen . M.singleton csContractId $ S.singleton csBlockHeader
+                    ContractStreamContinued{..} -> do
+                      addField event $ ("action" :: Text) ≔ ("continued" :: String)
+                      unless ((S.member csBlockHeader <$> M.lookup csContractId seen) == Just True) $
+                        runInput event cs
+                      pure . M.unionWith S.union seen . M.singleton csContractId $ S.singleton csBlockHeader
+                    ContractStreamRolledBack{} -> do
+                      addField event $ ("action" :: Text) ≔ ("rollback" :: String)
+                      runInput event cs
+                      pure seen
+                    ContractStreamWait{..} -> do
+                      addField event $ ("action" :: Text) ≔ ("wait" :: String)
+                      runInput event cs
+                      unless (unFinishOnWait endOnWait)
+                        . void
+                        . forkIO
+                        $ threadDelay (fromIntegral . toMicroseconds $ requeueFrequency)
+                          >> atomically (writeTChan outChannel $ Right csContractId)
+                      pure seen
+                    ContractStreamFinish{..} -> do
+                      addField event $ ("action" :: Text) ≔ ("finish" :: String)
+                      runInput event cs
+                      pure $ M.delete csContractId seen
+          either (const $ pure ()) go seen'
    in go mempty
