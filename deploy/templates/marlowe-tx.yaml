@@ -5,6 +5,7 @@ kind: Application
 metadata:
   name: marlowe-tx-{{ . }}
   namespace: marlowe-staging
+  app.oam.dev/publishVersion: {{ .Chart.appVersion }}
 spec:
   components:
     - name: marlowe-tx-{{ . }}
