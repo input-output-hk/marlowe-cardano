@@ -352,6 +352,8 @@ testMarloweMetadata = MarloweMetadata
   { tags = Map.fromList
       [ ("tag1", Nothing)
       , ("tag2", Just $ MetadataNumber 0)
+      , ("tag3looooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooong", Nothing)
+      , ("tag4looooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooong", Just $ MetadataNumber 0)
       ]
   , continuations = Nothing
   }
