@@ -129,9 +129,10 @@ let
     marlowe-test.ghcOptions = [ "-Werror" ];
   };
 
+  modules = [{ inherit packages; }];
 in
 
 {
-  inherit packages;
+  inherit modules;
 }
 
