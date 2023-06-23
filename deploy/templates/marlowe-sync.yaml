@@ -5,7 +5,8 @@ kind: Application
 metadata:
   name: marlowe-sync-{{ $network }}
   namespace: marlowe-staging
-  app.oam.dev/publishVersion: {{ $.Chart.AppVersion }}
+  annotations:
+    app.oam.dev/publishVersion: {{ $.Chart.AppVersion }}
 spec:
   components:
   - name: marlowe-sync-{{ $network }}
