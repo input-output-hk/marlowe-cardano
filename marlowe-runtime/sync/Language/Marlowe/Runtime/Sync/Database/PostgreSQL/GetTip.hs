@@ -4,11 +4,13 @@ module Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetTip where
 
 import Hasql.TH (maybeStatement)
 import qualified Hasql.Transaction as T
-import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader(..), BlockHeaderHash(..), ChainPoint, WithGenesis(..))
+import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader (..), BlockHeaderHash (..), ChainPoint, WithGenesis (..))
 
 getTip :: T.Transaction ChainPoint
-getTip = T.statement () $ decodePoint <$>
-  [maybeStatement|
+getTip =
+  T.statement () $
+    decodePoint
+      <$> [maybeStatement|
     SELECT
       block.slotNo :: bigint,
       block.id :: bytea,
@@ -20,7 +22,9 @@ getTip = T.statement () $ decodePoint <$>
   where
     decodePoint = \case
       Nothing -> Genesis
-      Just (slot, hash, block) -> At $ BlockHeader
-        (fromIntegral slot)
-        (BlockHeaderHash hash)
-        (fromIntegral block)
+      Just (slot, hash, block) ->
+        At $
+          BlockHeader
+            (fromIntegral slot)
+            (BlockHeaderHash hash)
+            (fromIntegral block)

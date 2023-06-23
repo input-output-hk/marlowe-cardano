@@ -2,6 +2,7 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
+
 -----------------------------------------------------------------------------
 --
 -- Module      :  $Headers
@@ -10,19 +11,19 @@
 -- Stability   :  Experimental
 -- Portability :  Portable
 --
--- | Type safe list of transactions representing on chain Marlowe execution.
---
+
 -----------------------------------------------------------------------------
 
+-- | Type safe list of transactions representing on chain Marlowe execution.
 module Language.Marlowe.Cardano.Thread where
 
-import qualified Cardano.Api as C
+import Cardano.Api qualified as C
 import Cardano.Api.Byron (TxIn)
-import qualified Data.Aeson as A
-import Data.List.NonEmpty (NonEmpty((:|)))
-import qualified Data.List.NonEmpty as List
-import qualified Language.Marlowe as M
-import qualified Plutus.V2.Ledger.Api as P
+import Data.Aeson qualified as A
+import Data.List.NonEmpty (NonEmpty ((:|)))
+import Data.List.NonEmpty qualified as List
+import Language.Marlowe qualified as M
+import Plutus.V2.Ledger.Api qualified as P
 
 data Running
 
@@ -85,7 +86,7 @@ marloweThreadInitialTxIn (Created _ txIn) = txIn
 marloweThreadTxIn :: MarloweThread txInfo status -> Maybe TxIn
 marloweThreadTxIn (Created _ txIn) = Just txIn
 marloweThreadTxIn (InputsApplied _ txIn _ _) = Just txIn
-marloweThreadTxIn Closed {} = Nothing
+marloweThreadTxIn Closed{} = Nothing
 marloweThreadTxIn (Redemption _ _ th) = marloweThreadTxIn th
 
 marloweThreadInputs :: MarloweThread txInfo status -> [[M.Input]]
@@ -94,8 +95,8 @@ marloweThreadInputs = foldlMarloweThread step []
     step :: [[M.Input]] -> MarloweThread txInfo status' -> [[M.Input]]
     step acc (InputsApplied _ _ inputs _) = List.toList inputs : acc
     step acc (Closed _ inputs _) = inputs : acc
-    step acc Created {} = acc
-    step acc Redemption {} = acc
+    step acc Created{} = acc
+    step acc Redemption{} = acc
 
 marloweThreadTxInfos :: MarloweThread txInfo status -> [txInfo]
 marloweThreadTxInfos = foldlMarloweThread step []
@@ -117,44 +118,41 @@ anyMarloweThreadCreated txInfo txIn = AnyMarloweThread (Created txInfo txIn)
 anyMarloweThreadRedeemed :: txInfo -> P.TokenName -> AnyMarloweThread txInfo -> AnyMarloweThread txInfo
 anyMarloweThreadRedeemed txInfo tokenName (AnyMarloweThread th) = AnyMarloweThread $ Redemption txInfo tokenName th
 
-anyMarloweThreadInputsApplied :: txInfo
- -> Maybe C.TxIn
- -> [M.Input]
- -> AnyMarloweThread txInfo
- -> Maybe (AnyMarloweThread txInfo)
+anyMarloweThreadInputsApplied
+  :: txInfo
+  -> Maybe C.TxIn
+  -> [M.Input]
+  -> AnyMarloweThread txInfo
+  -> Maybe (AnyMarloweThread txInfo)
 anyMarloweThreadInputsApplied txInfo mTxIn inputs (AnyMarloweThread th) = do
-  let
-    skipRedemptions = \case
-      Redemption _ _ sub -> skipRedemptions sub
-      orig -> orig
-    th' = skipRedemptions th
+  let skipRedemptions = \case
+        Redemption _ _ sub -> skipRedemptions sub
+        orig -> orig
+      th' = skipRedemptions th
   case (mTxIn, inputs) of
-    (Just txIn, input:inputs') -> case th' of
-      Created {} -> Just $ AnyMarloweThread $ InputsApplied txInfo txIn (input :| inputs') th
-      InputsApplied {} -> Just $ AnyMarloweThread $ InputsApplied txInfo txIn (input :| inputs') th
+    (Just txIn, input : inputs') -> case th' of
+      Created{} -> Just $ AnyMarloweThread $ InputsApplied txInfo txIn (input :| inputs') th
+      InputsApplied{} -> Just $ AnyMarloweThread $ InputsApplied txInfo txIn (input :| inputs') th
       _ -> Nothing
-
     (Nothing, _) -> case th' of
-      Created {} -> Just $ AnyMarloweThread $ Closed txInfo inputs th
-      InputsApplied {} -> Just $ AnyMarloweThread $ Closed txInfo inputs th
+      Created{} -> Just $ AnyMarloweThread $ Closed txInfo inputs th
+      InputsApplied{} -> Just $ AnyMarloweThread $ Closed txInfo inputs th
       _ -> Nothing
-
     -- We disallow empty intermediate input application in here.
     -- Is there a non closing contract reduction which can be
     -- triggered like that?
     (Just _, []) -> Nothing
 
-overAnyMarloweThread :: forall a txInfo
-                      . (forall status'. MarloweThread txInfo status' -> a)
- -> AnyMarloweThread txInfo
- -> a
+overAnyMarloweThread
+  :: forall a txInfo
+   . (forall status'. MarloweThread txInfo status' -> a)
+  -> AnyMarloweThread txInfo
+  -> a
 overAnyMarloweThread f (AnyMarloweThread th) = f th
 
 isRunning :: AnyMarloweThread txInfo -> Bool
 isRunning = do
-  let
-    step :: forall i s. MarloweThread i s -> Bool -> Bool
-    step Closed {} _ = False
-    step _ r = r
+  let step :: forall i s. MarloweThread i s -> Bool -> Bool
+      step Closed{} _ = False
+      step _ r = r
   overAnyMarloweThread (foldrMarloweThread step True)
-

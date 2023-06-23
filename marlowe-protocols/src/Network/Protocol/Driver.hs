@@ -13,30 +13,30 @@ import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Resource (runResourceT)
 import Data.ByteString.Lazy (ByteString)
-import Data.Proxy (Proxy(Proxy))
-import Network.Channel (Channel(..), socketAsChannel)
+import Data.Proxy (Proxy (Proxy))
+import Network.Channel (Channel (..), socketAsChannel)
 import Network.Protocol.Codec (BinaryMessage, DeserializeError, binaryCodec)
-import Network.Protocol.Connection (Connection(..), Connector(..), ServerSource(..), ToPeer)
+import Network.Protocol.Connection (Connection (..), Connector (..), ServerSource (..), ToPeer)
 import Network.Protocol.Handshake.Client (handshakeClientPeer, simpleHandshakeClient)
 import Network.Protocol.Handshake.Server (handshakeServerPeer, simpleHandshakeServer)
 import Network.Protocol.Handshake.Types (HasSignature, signature)
 import Network.Protocol.Peer.Trace
 import Network.Run.TCP (runTCPServer)
-import Network.Socket
-  ( AddrInfo(..)
-  , HostName
-  , PortNumber
-  , SocketType(..)
-  , addrAddress
-  , close
-  , connect
-  , defaultHints
-  , getAddrInfo
-  , openSocket
-  )
-import Network.TypedProtocol (Message, PeerHasAgency, PeerRole(..), SomeMessage(..), runPeerWithDriver)
-import Network.TypedProtocol.Codec (Codec(..), DecodeStep(..))
-import Network.TypedProtocol.Driver (Driver(..))
+import Network.Socket (
+  AddrInfo (..),
+  HostName,
+  PortNumber,
+  SocketType (..),
+  addrAddress,
+  close,
+  connect,
+  defaultHints,
+  getAddrInfo,
+  openSocket,
+ )
+import Network.TypedProtocol (Message, PeerHasAgency, PeerRole (..), SomeMessage (..), runPeerWithDriver)
+import Network.TypedProtocol.Codec (Codec (..), DecodeStep (..))
+import Network.TypedProtocol.Driver (Driver (..))
 import UnliftIO (MonadIO, MonadUnliftIO, finally, throwIO, withRunInIO)
 
 mkDriver
@@ -44,7 +44,7 @@ mkDriver
    . (MonadIO m, BinaryMessage ps)
   => Channel m ByteString
   -> Driver ps (Maybe ByteString) m
-mkDriver  Channel{..} = Driver{..}
+mkDriver Channel{..} = Driver{..}
   where
     Codec{..} = binaryCodec
     sendMessage
@@ -65,22 +65,24 @@ mkDriver  Channel{..} = Driver{..}
       :: Maybe ByteString
       -> DecodeStep ByteString DeserializeError m a
       -> m (a, Maybe ByteString)
-    decodeChannel _ (DecodeDone a trailing)     = pure (a, trailing)
-    decodeChannel _ (DecodeFail failure)        = throwIO failure
-    decodeChannel Nothing (DecodePartial next)  = recv >>= next >>= decodeChannel Nothing
+    decodeChannel _ (DecodeDone a trailing) = pure (a, trailing)
+    decodeChannel _ (DecodeFail failure) = throwIO failure
+    decodeChannel Nothing (DecodePartial next) = recv >>= next >>= decodeChannel Nothing
     decodeChannel trailing (DecodePartial next) = next trailing >>= decodeChannel Nothing
 
     startDState :: Maybe ByteString
     startDState = Nothing
 
 hoistDriver :: (forall x. m x -> n x) -> Driver ps dState m -> Driver ps dState n
-hoistDriver f Driver{..} = Driver
-  { sendMessage = fmap f . sendMessage
-  , recvMessage = fmap f . recvMessage
-  , ..
-  }
+hoistDriver f Driver{..} =
+  Driver
+    { sendMessage = fmap f . sendMessage
+    , recvMessage = fmap f . recvMessage
+    , ..
+    }
 
-data TcpServerDependencies ps server m = forall (st :: ps). TcpServerDependencies
+data TcpServerDependencies ps server m = forall (st :: ps).
+  TcpServerDependencies
   { host :: HostName
   , port :: PortNumber
   , serverSource :: ServerSource server m ()
@@ -93,7 +95,7 @@ tcpServer
   => String
   -> Component m (TcpServerDependencies ps server m) ()
 tcpServer name = component_ (name <> "-tcp-server") \TcpServerDependencies{..} ->
-  withRunInIO \runInIO -> runTCPServer (Just host) (show port) \socket -> runInIO $ runResourceT do
+  withRunInIO \runInIO -> runTCPServer (Just host) (show port) $ runComponent_ $ hoistComponent runInIO $ component_ (name <> "-tcp-worker") \socket -> runResourceT do
     server <- getServer serverSource
     let driver = mkDriver $ socketAsChannel socket
     let handshakeServer = simpleHandshakeServer (signature $ Proxy @ps) server
@@ -108,16 +110,19 @@ tcpClient
   -> ToPeer client ps 'AsClient st m
   -> Connector client m
 tcpClient host port toPeer = Connector $ liftIO $ do
-  addr <- head <$> getAddrInfo
-    (Just defaultHints { addrSocketType = Stream })
-    (Just host)
-    (Just $ show port)
+  addr <-
+    head
+      <$> getAddrInfo
+        (Just defaultHints{addrSocketType = Stream})
+        (Just host)
+        (Just $ show port)
   socket <- openSocket addr
   connect socket $ addrAddress addr
-  pure Connection
-    { runConnection = \client -> do
-        let driver = mkDriver $ socketAsChannel socket
-        let handshakeClient = simpleHandshakeClient (signature $ Proxy @ps) client
-        let peer = peerTracedToPeer $ handshakeClientPeer toPeer handshakeClient
-        fst <$> runPeerWithDriver driver peer (startDState driver) `finally` liftIO (close socket)
-    }
+  pure
+    Connection
+      { runConnection = \client -> do
+          let driver = mkDriver $ socketAsChannel socket
+          let handshakeClient = simpleHandshakeClient (signature $ Proxy @ps) client
+          let peer = peerTracedToPeer $ handshakeClientPeer toPeer handshakeClient
+          fst <$> runPeerWithDriver driver peer (startDState driver) `finally` liftIO (close socket)
+      }

@@ -9,8 +9,10 @@ import qualified Hasql.Transaction as H
 import Language.Marlowe.Runtime.ChainSync.Api
 
 commitRollback :: ChainPoint -> H.Transaction ()
-commitRollback point = H.statement (prepareParams point)
-  [resultlessStatement|
+commitRollback point =
+  H.statement
+    (prepareParams point)
+    [resultlessStatement|
     WITH blockDeletes (blockId) AS
       ( DELETE FROM marlowe.block
         WHERE slotNo > $1 :: bigint

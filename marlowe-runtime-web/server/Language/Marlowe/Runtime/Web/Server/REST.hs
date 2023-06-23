@@ -3,7 +3,6 @@
 {-# LANGUAGE GADTs #-}
 
 -- | This module defines a server for the root REST API.
-
 module Language.Marlowe.Runtime.Web.Server.REST where
 
 import Language.Marlowe.Runtime.Web

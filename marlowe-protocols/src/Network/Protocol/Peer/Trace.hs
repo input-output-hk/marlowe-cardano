@@ -21,25 +21,22 @@ data PeerTraced ps (pr :: PeerRole) (st :: ps) m a where
     -> Message ps st st'
     -> YieldTraced ps pr st' m a
     -> PeerTraced ps pr st m a
-
   -- | A peer awaits a message from the other peer.
   AwaitTraced
     :: TheyHaveAgency pr st
     -> (forall (st' :: ps). Message ps st st' -> AwaitTraced ps pr st' m a)
     -> PeerTraced ps pr st m a
-
   -- | A peer is processing information.
   EffectTraced
     :: m (PeerTraced ps pr st m a)
     -> PeerTraced ps pr st m a
-
   -- | The session is done.
   DoneTraced
     :: NobodyHasAgency st
     -> a
     -> PeerTraced ps pr st m a
 
-deriving instance Functor m => Functor (PeerTraced ps pr st m)
+deriving instance (Functor m) => Functor (PeerTraced ps pr st m)
 
 data YieldTraced ps (pr :: PeerRole) (st :: ps) m a where
   Call
@@ -54,7 +51,7 @@ data YieldTraced ps (pr :: PeerRole) (st :: ps) m a where
     -> a
     -> YieldTraced ps pr st m a
 
-deriving instance Functor m => Functor (YieldTraced ps pr st m)
+deriving instance (Functor m) => Functor (YieldTraced ps pr st m)
 
 data AwaitTraced ps pr st m a where
   Respond
@@ -69,7 +66,7 @@ data AwaitTraced ps pr st m a where
     -> m a
     -> AwaitTraced ps pr st m a
 
-deriving instance Functor m => Functor (AwaitTraced ps pr st m)
+deriving instance (Functor m) => Functor (AwaitTraced ps pr st m)
 
 data Response ps pr st m a where
   Response
@@ -77,10 +74,10 @@ data Response ps pr st m a where
     -> PeerTraced ps pr st' m a
     -> Response ps pr st m a
 
-deriving instance Functor m => Functor (Response ps pr st m)
+deriving instance (Functor m) => Functor (Response ps pr st m)
 
 hoistPeerTraced
-  :: Functor m
+  :: (Functor m)
   => (forall x. m x -> n x)
   -> PeerTraced ps pr st m a
   -> PeerTraced ps pr st n a
@@ -90,28 +87,33 @@ hoistPeerTraced f = \case
     Cast next -> Cast $ hoistPeerTraced f next
     Close tok' a -> Close tok' a
   AwaitTraced tok k -> AwaitTraced tok \msg -> case k msg of
-    Respond tok' m -> Respond tok' $ f $ m <&> \case
-      Response msg' next -> Response msg' $ hoistPeerTraced f next
+    Respond tok' m ->
+      Respond tok' $
+        f $
+          m <&> \case
+            Response msg' next -> Response msg' $ hoistPeerTraced f next
     Receive next -> Receive $ hoistPeerTraced f next
     Closed tok' ma -> Closed tok' $ f ma
   DoneTraced tok a -> DoneTraced tok a
   EffectTraced m -> EffectTraced $ f $ hoistPeerTraced f <$> m
 
-peerTracedToPeer :: Functor m => PeerTraced ps pr st m a -> Peer ps pr st m a
+peerTracedToPeer :: (Functor m) => PeerTraced ps pr st m a -> Peer ps pr st m a
 peerTracedToPeer = \case
   YieldTraced tok msg yield -> Yield tok msg case yield of
     Call tok' k -> Await tok' $ peerTracedToPeer . k
     Cast next -> peerTracedToPeer next
     Close tok' a -> Done tok' a
   AwaitTraced tok k -> Await tok \msg -> case k msg of
-    Respond tok' m -> Effect $ m <&> \case
-      Response msg' next -> Yield tok' msg' $ peerTracedToPeer next
+    Respond tok' m ->
+      Effect $
+        m <&> \case
+          Response msg' next -> Yield tok' msg' $ peerTracedToPeer next
     Receive next -> peerTracedToPeer next
     Closed tok' ma -> Effect $ Done tok' <$> ma
   DoneTraced tok a -> Done tok a
   EffectTraced m -> Effect $ peerTracedToPeer <$> m
 
-peerToPeerTraced :: Functor m => Peer ps pr st m a -> PeerTraced ps pr st m a
+peerToPeerTraced :: (Functor m) => Peer ps pr st m a -> PeerTraced ps pr st m a
 peerToPeerTraced = \case
   Yield tok msg next -> YieldTraced tok msg $ Cast $ peerToPeerTraced next
   Await tok k -> AwaitTraced tok \msg -> Receive $ peerToPeerTraced $ k msg
@@ -140,7 +142,7 @@ data LiftProtocol ps ps' (stLift :: ps -> ps') = LiftProtocol
 -- sub-protocol.
 liftPeerTraced
   :: forall ps ps' pr (st :: ps) (stLift :: ps -> ps') m a
-   . Functor m
+   . (Functor m)
   => LiftProtocol ps ps' stLift
   -> PeerTraced ps pr st m a
   -> PeerTraced ps' pr (stLift st) m a
@@ -155,9 +157,11 @@ liftPeerTraced LiftProtocol{..} = go
         Cast next -> Cast $ go next
         Close tok' a -> Close (liftNobody tok') a
       AwaitTraced tok k -> AwaitTraced (liftAgency tok) \msg -> case unliftMessage msg of
-        SomeSubMessage subMsg ->  case k subMsg of
-          Respond tok' m -> Respond (liftAgency tok') $ m <&> \case
-            Response msg' next -> Response (liftMessage msg') $ go next
+        SomeSubMessage subMsg -> case k subMsg of
+          Respond tok' m ->
+            Respond (liftAgency tok') $
+              m <&> \case
+                Response msg' next -> Response (liftMessage msg') $ go next
           Receive next -> Receive $ go next
           Closed tok' ma -> Closed (liftNobody tok') ma
       DoneTraced tok a -> DoneTraced (liftNobody tok) a
@@ -176,47 +180,53 @@ data TypedProtocolsSelector ps f where
   CloseSelector :: PeerHasAgency pr st -> Message ps st st' -> TypedProtocolsSelector ps ()
 
 defaultSpanContext :: SpanContext
-defaultSpanContext = SpanContext
-  defaultTraceFlags
-  False
-  "00000000000000000000000000000000"
-  "0000000000000000"
-  TraceState.empty
+defaultSpanContext =
+  SpanContext
+    defaultTraceFlags
+    False
+    "00000000000000000000000000000000"
+    "0000000000000000"
+    TraceState.empty
 
 data MessageAttributes = MessageAttributes
   { messageType :: Text
   , messageParameters :: [PrimitiveAttribute]
   }
 
-class Protocol ps => OTelProtocol ps where
+class (Protocol ps) => OTelProtocol ps where
   protocolName :: Proxy ps -> Text
   messageAttributes :: PeerHasAgency pr st -> Message ps st st' -> MessageAttributes
 
 renderTypedProtocolSelectorOTel
-  :: forall ps. OTelProtocol ps => RenderSelectorOTel (TypedProtocolsSelector ps)
+  :: forall ps. (OTelProtocol ps) => RenderSelectorOTel (TypedProtocolsSelector ps)
 renderTypedProtocolSelectorOTel = \case
-  ReceiveSelector tok msg -> OTelRendered
-    { eventName = "receive " <> protocolName (Proxy @ps) <> ":" <> messageType (messageAttributes tok msg)
-    , eventKind = Consumer
-    , renderField = const []
-    }
-  CallSelector tok msg -> OTelRendered
-    { eventName = "call " <> protocolName (Proxy @ps) <> ":" <> messageType (messageAttributes tok msg)
-    , eventKind = Client
-    , renderField = const []
-    }
-  RespondSelector tok msg -> OTelRendered
-    { eventName = "respond " <> protocolName (Proxy @ps) <> ":" <> messageType (messageAttributes tok msg)
-    , eventKind = Server
-    , renderField = const []
-    }
-  CastSelector tok msg -> OTelRendered
-    { eventName = "cast " <> protocolName (Proxy @ps) <> ":" <> messageType (messageAttributes tok msg)
-    , eventKind = Producer
-    , renderField = const []
-    }
-  CloseSelector tok msg -> OTelRendered
-    { eventName = "close " <> protocolName (Proxy @ps) <> ":" <> messageType (messageAttributes tok msg)
-    , eventKind = Producer
-    , renderField = const []
-    }
+  ReceiveSelector tok msg ->
+    OTelRendered
+      { eventName = "receive " <> protocolName (Proxy @ps) <> ":" <> messageType (messageAttributes tok msg)
+      , eventKind = Consumer
+      , renderField = const []
+      }
+  CallSelector tok msg ->
+    OTelRendered
+      { eventName = "call " <> protocolName (Proxy @ps) <> ":" <> messageType (messageAttributes tok msg)
+      , eventKind = Client
+      , renderField = const []
+      }
+  RespondSelector tok msg ->
+    OTelRendered
+      { eventName = "respond " <> protocolName (Proxy @ps) <> ":" <> messageType (messageAttributes tok msg)
+      , eventKind = Server
+      , renderField = const []
+      }
+  CastSelector tok msg ->
+    OTelRendered
+      { eventName = "cast " <> protocolName (Proxy @ps) <> ":" <> messageType (messageAttributes tok msg)
+      , eventKind = Producer
+      , renderField = const []
+      }
+  CloseSelector tok msg ->
+    OTelRendered
+      { eventName = "close " <> protocolName (Proxy @ps) <> ":" <> messageType (messageAttributes tok msg)
+      , eventKind = Producer
+      , renderField = const []
+      }

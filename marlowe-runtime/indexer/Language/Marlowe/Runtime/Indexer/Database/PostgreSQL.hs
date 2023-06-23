@@ -29,15 +29,17 @@ data QueryField
   | Parameters [Text]
   | Operation Text
 
-databaseQueries :: forall r s m. (MonadInjectEvent r QuerySelector s m, MonadIO m) => Pool -> Int -> DB.DatabaseQueries m
-databaseQueries pool securityParameter = DB.DatabaseQueries
-  { commitRollback = transact "commitRollback" "INSERT" H.Write . commitRollback
-  , commitBlocks = transact "commitBlocks" "INSERT" H.Write . commitBlocks
-  , getIntersectionPoints = transact "getIntersectionPoints" "SELECT" H.Read $ getIntersectionPoints securityParameter
-  , getMarloweUTxO = transact "getMarloweUTxO" "SELECT" H.Read . getMarloweUTxO
-  }
+databaseQueries
+  :: forall r s m. (MonadInjectEvent r QuerySelector s m, MonadIO m) => Pool -> Int -> DB.DatabaseQueries m
+databaseQueries pool securityParameter =
+  DB.DatabaseQueries
+    { commitRollback = transact "commitRollback" "INSERT" H.Write . commitRollback
+    , commitBlocks = transact "commitBlocks" "INSERT" H.Write . commitBlocks
+    , getIntersectionPoints = transact "getIntersectionPoints" "SELECT" H.Read $ getIntersectionPoints securityParameter
+    , getMarloweUTxO = transact "getMarloweUTxO" "SELECT" H.Read . getMarloweUTxO
+    }
   where
-    transact :: Text -> Text-> TS.Mode -> Transaction a -> m a
+    transact :: Text -> Text -> TS.Mode -> Transaction a -> m a
     transact queryName operation mode m = withEvent (Query queryName) \ev -> do
       addField ev $ Operation operation
       result <- liftIO $ Pool.use pool $ TS.transaction TS.Serializable mode m

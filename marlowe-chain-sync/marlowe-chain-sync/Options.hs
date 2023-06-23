@@ -1,9 +1,9 @@
-module Options
-  ( Options(..)
-  , getOptions
-  ) where
+module Options (
+  Options (..),
+  getOptions,
+) where
 
-import Cardano.Api (NetworkId(..), NetworkMagic(..))
+import Cardano.Api (NetworkId (..), NetworkMagic (..))
 import Data.Maybe (fromMaybe)
 import Network.Socket (HostName, PortNumber)
 import qualified Options.Applicative as O
@@ -11,15 +11,16 @@ import System.Environment (lookupEnv)
 import Text.Read (readMaybe)
 
 data Options = Options
-  { nodeSocket        :: !FilePath
-  , networkId         :: !NetworkId
-  , databaseUri       :: !String
-  , host              :: !HostName
-  , port              :: !PortNumber
-  , queryPort         :: !PortNumber
-  , commandPort       :: !PortNumber
+  { nodeSocket :: !FilePath
+  , networkId :: !NetworkId
+  , databaseUri :: !String
+  , host :: !HostName
+  , port :: !PortNumber
+  , queryPort :: !PortNumber
+  , commandPort :: !PortNumber
   , httpPort :: !PortNumber
-  } deriving (Show, Eq)
+  }
+  deriving (Show, Eq)
 
 getOptions :: String -> IO Options
 getOptions version = do
@@ -30,7 +31,16 @@ getOptions version = do
   defaultPort <- O.value . fromMaybe 3715 <$> readPort
   defaultQueryPort <- O.value . fromMaybe 3716 <$> readQueryPort
   defaultJobPort <- O.value . fromMaybe 3720 <$> readJobPort
-  O.execParser $ parseOptions defaultNetworkId defaultSocketPath defaultDatabaseUri defaultHost defaultPort defaultQueryPort defaultJobPort version
+  O.execParser $
+    parseOptions
+      defaultNetworkId
+      defaultSocketPath
+      defaultDatabaseUri
+      defaultHost
+      defaultPort
+      defaultQueryPort
+      defaultJobPort
+      version
   where
     readNetworkId :: IO (Maybe NetworkId)
     readNetworkId = do
@@ -42,21 +52,21 @@ getOptions version = do
       value <- lookupEnv "CARDANO_NODE_SOCKET_PATH"
       pure case value of
         Just "" -> Nothing
-        _       -> value
+        _ -> value
 
     readDatabaseUri :: IO (Maybe String)
     readDatabaseUri = do
       value <- lookupEnv "CHAIN_SYNC_DB_URI"
       pure case value of
         Just "" -> Nothing
-        _       -> value
+        _ -> value
 
     readHost :: IO (Maybe HostName)
     readHost = do
       value <- lookupEnv "CHAIN_SYNC_HOST"
       pure case value of
         Just "" -> Nothing
-        _       -> value
+        _ -> value
 
     readPort :: IO (Maybe PortNumber)
     readPort = do
@@ -86,47 +96,51 @@ parseOptions
 parseOptions defaultNetworkId defaultSocketPath defaultDatabaseUri defaultHost defaultPort defaultQueryPort defaultJobPort version = O.info parser infoMod
   where
     parser :: O.Parser Options
-    parser = O.helper
-      <*> versionOption
-      <*> ( Options
-              <$> socketPathOption
-              <*> networkIdOption
-              <*> databaseUriOption
-              <*> hostOption
-              <*> portOption
-              <*> queryPortOption
-              <*> jobPortOption
-              <*> httpPortOption
-          )
+    parser =
+      O.helper
+        <*> versionOption
+        <*> ( Options
+                <$> socketPathOption
+                <*> networkIdOption
+                <*> databaseUriOption
+                <*> hostOption
+                <*> portOption
+                <*> queryPortOption
+                <*> jobPortOption
+                <*> httpPortOption
+            )
       where
         versionOption :: O.Parser (a -> a)
-        versionOption = O.infoOption
-          ("marlowe-chain-sync " <> version)
-          (O.long "version" <> O.help "Show version.")
+        versionOption =
+          O.infoOption
+            ("marlowe-chain-sync " <> version)
+            (O.long "version" <> O.help "Show version.")
 
         socketPathOption :: O.Parser FilePath
         socketPathOption = O.strOption options
           where
             options :: O.Mod O.OptionFields FilePath
-            options = mconcat
-              [ O.long "socket-path"
-              , O.short 's'
-              , O.metavar "SOCKET_FILE"
-              , defaultSocketPath
-              , O.help "Location of the cardano-node socket file. Defaults to the CARDANO_NODE_SOCKET_PATH environment variable."
-              ]
+            options =
+              mconcat
+                [ O.long "socket-path"
+                , O.short 's'
+                , O.metavar "SOCKET_FILE"
+                , defaultSocketPath
+                , O.help "Location of the cardano-node socket file. Defaults to the CARDANO_NODE_SOCKET_PATH environment variable."
+                ]
 
         databaseUriOption :: O.Parser String
         databaseUriOption = O.strOption options
           where
             options :: O.Mod O.OptionFields FilePath
-            options = mconcat
-              [ O.long "database-uri"
-              , O.short 'd'
-              , O.metavar "DATABASE_URI"
-              , defaultDatabaseUri
-              , O.help "URI of the database where the chain information is saved."
-              ]
+            options =
+              mconcat
+                [ O.long "database-uri"
+                , O.short 'd'
+                , O.metavar "DATABASE_URI"
+                , defaultDatabaseUri
+                , O.help "URI of the database where the chain information is saved."
+                ]
 
         networkIdOption :: O.Parser NetworkId
         networkIdOption = O.option parse options
@@ -135,64 +149,76 @@ parseOptions defaultNetworkId defaultSocketPath defaultDatabaseUri defaultHost d
             parse = Testnet . NetworkMagic . toEnum <$> O.auto
 
             options :: O.Mod O.OptionFields NetworkId
-            options = mconcat
-              [ O.long "testnet-magic"
-              , O.short 'm'
-              , O.metavar "INTEGER"
-              , defaultNetworkId
-              , O.help "Testnet network ID magic. Defaults to the CARDANO_TESTNET_MAGIC environment variable."
-              ]
+            options =
+              mconcat
+                [ O.long "testnet-magic"
+                , O.short 'm'
+                , O.metavar "INTEGER"
+                , defaultNetworkId
+                , O.help "Testnet network ID magic. Defaults to the CARDANO_TESTNET_MAGIC environment variable."
+                ]
 
         portOption :: O.Parser PortNumber
-        portOption = O.option O.auto $ mconcat
-          [ O.long "port"
-          , defaultPort
-          , O.metavar "PORT_NUMBER"
-          , O.help "The port number to serve the chain sync protocol on."
-          , O.showDefault
-          ]
+        portOption =
+          O.option O.auto $
+            mconcat
+              [ O.long "port"
+              , defaultPort
+              , O.metavar "PORT_NUMBER"
+              , O.help "The port number to serve the chain sync protocol on."
+              , O.showDefault
+              ]
 
         queryPortOption :: O.Parser PortNumber
-        queryPortOption = O.option O.auto $ mconcat
-          [ O.long "query-port"
-          , defaultQueryPort
-          , O.metavar "PORT_NUMBER"
-          , O.help "The port number to serve the query protocol on."
-          , O.showDefault
-          ]
+        queryPortOption =
+          O.option O.auto $
+            mconcat
+              [ O.long "query-port"
+              , defaultQueryPort
+              , O.metavar "PORT_NUMBER"
+              , O.help "The port number to serve the query protocol on."
+              , O.showDefault
+              ]
 
         jobPortOption :: O.Parser PortNumber
-        jobPortOption = O.option O.auto $ mconcat
-          [ O.long "job-port"
-          , defaultJobPort
-          , O.metavar "PORT_NUMBER"
-          , O.help "The port number to serve the job protocol on."
-          , O.showDefault
-          ]
+        jobPortOption =
+          O.option O.auto $
+            mconcat
+              [ O.long "job-port"
+              , defaultJobPort
+              , O.metavar "PORT_NUMBER"
+              , O.help "The port number to serve the job protocol on."
+              , O.showDefault
+              ]
 
         hostOption :: O.Parser HostName
-        hostOption = O.strOption $ mconcat
-          [ O.long "host"
-          , O.short 'h'
-          , defaultHost
-          , O.metavar "HOST_NAME"
-          , O.help "The hostname to serve the chain sync protocol on."
-          , O.showDefault
-          ]
+        hostOption =
+          O.strOption $
+            mconcat
+              [ O.long "host"
+              , O.short 'h'
+              , defaultHost
+              , O.metavar "HOST_NAME"
+              , O.help "The hostname to serve the chain sync protocol on."
+              , O.showDefault
+              ]
 
         httpPortOption :: O.Parser PortNumber
-        httpPortOption = O.option O.auto $ mconcat
-          [ O.long "http-port"
-          , defaultPort
-          , O.metavar "PORT_NUMBER"
-          , O.help "Port number to serve the http healthcheck API on"
-          , O.value 8080
-          , O.showDefault
-          ]
+        httpPortOption =
+          O.option O.auto $
+            mconcat
+              [ O.long "http-port"
+              , defaultPort
+              , O.metavar "PORT_NUMBER"
+              , O.help "Port number to serve the http healthcheck API on"
+              , O.value 8080
+              , O.showDefault
+              ]
 
     infoMod :: O.InfoMod Options
-    infoMod = mconcat
-      [ O.fullDesc
-      , O.progDesc "Chain sync server for Marlowe Runtime."
-      , O.header "marlowe-chain-sync : a chain sync server for the Marlowe Runtime."
-      ]
+    infoMod =
+      mconcat
+        [ O.fullDesc
+        , O.progDesc "Chain sync server for Marlowe Runtime."
+        , O.header "marlowe-chain-sync : a chain sync server for the Marlowe Runtime."
+        ]

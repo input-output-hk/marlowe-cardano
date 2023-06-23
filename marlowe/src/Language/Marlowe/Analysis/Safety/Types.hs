@@ -1,5 +1,4 @@
 -- editorconfig-checker-disable-file
-
 -----------------------------------------------------------------------------
 --
 -- Module      :  $Headers
@@ -8,111 +7,106 @@
 -- Stability   :  Experimental
 -- Portability :  Portable
 --
--- | Types for safety analysis for Marlowe contracts.
---
 -----------------------------------------------------------------------------
-
-
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 
-
-module Language.Marlowe.Analysis.Safety.Types
-  ( -- * Types
-    SafetyError(..)
-  , SafetyReport(..)
-  , Transaction(..)
-  ) where
-
+-- | Types for safety analysis for Marlowe contracts.
+module Language.Marlowe.Analysis.Safety.Types (
+  -- * Types
+  SafetyError (..),
+  SafetyReport (..),
+  Transaction (..),
+) where
 
 import Control.Applicative ((<|>))
-import Data.Aeson (FromJSON(..), ToJSON(..), Value(String), object, withObject, (.:), (.=))
+import Data.Aeson (FromJSON (..), ToJSON (..), Value (String), object, withObject, (.:), (.=))
 import Data.Aeson.Types (Parser)
-import Data.ByteString.Base16.Aeson (EncodeBase16(EncodeBase16))
+import Data.ByteString.Base16.Aeson (EncodeBase16 (EncodeBase16))
 import Data.String (fromString)
 import GHC.Generics (Generic)
 import Language.Marlowe.Core.V1.Semantics (TransactionInput, TransactionOutput)
 import Language.Marlowe.Core.V1.Semantics.Types (AccountId, ChoiceId, Contract, State, Token, ValueId)
 import Language.Marlowe.Core.V1.Semantics.Types.Address (Network)
 import Numeric.Natural (Natural)
-import Plutus.V2.Ledger.Api
-  ( Credential(..)
-  , CurrencySymbol(..)
-  , DatumHash(..)
-  , ExBudget
-  , StakingCredential(..)
-  , TokenName(..)
-  , fromBuiltin
-  , toBuiltin
-  )
+import Plutus.V2.Ledger.Api (
+  Credential (..),
+  CurrencySymbol (..),
+  DatumHash (..),
+  ExBudget,
+  StakingCredential (..),
+  TokenName (..),
+  fromBuiltin,
+  toBuiltin,
+ )
 
 import qualified Data.Text.Encoding as T (decodeUtf8, encodeUtf8)
 import qualified Language.Marlowe.Core.V1.Semantics as V1 (TransactionWarning)
-import qualified Plutus.V2.Ledger.Api as Ledger (Address(..))
-
+import qualified Plutus.V2.Ledger.Api as Ledger (Address (..))
 
 -- | Information on the safety of a Marlowe contract and state.
-data SafetyReport =
-  SafetyReport
-  {
-    safetyErrors :: [SafetyError]  -- ^ Safety-related errors in the contract.
-  , boundOnMinimumUtxo :: Maybe Integer  -- ^ A bound on the minimum-UTxO value, over all execution paths.
-  , boundOnDatumSize :: Natural  -- ^ A bound (in bytes) on the size of the datum, over all execution paths.
-  , boundOnRedeemerSize :: Natural  -- ^ A bound (in bytes) on the size of the redeemer, over all execution paths.
-  , networks :: [Network]  -- ^ Which network the contract must use.
+data SafetyReport = SafetyReport
+  { safetyErrors :: [SafetyError]
+  -- ^ Safety-related errors in the contract.
+  , boundOnMinimumUtxo :: Maybe Integer
+  -- ^ A bound on the minimum-UTxO value, over all execution paths.
+  , boundOnDatumSize :: Natural
+  -- ^ A bound (in bytes) on the size of the datum, over all execution paths.
+  , boundOnRedeemerSize :: Natural
+  -- ^ A bound (in bytes) on the size of the redeemer, over all execution paths.
+  , networks :: [Network]
+  -- ^ Which network the contract must use.
   }
-    deriving Show
-
+  deriving (Show)
 
 -- | An unsafe aspect of a Marlowe contract.
-data SafetyError =
-    -- | Roles are present but there is no roles currency.
+data SafetyError
+  = -- | Roles are present but there is no roles currency.
     MissingRolesCurrency
-    -- | No roles are present but there is a roles currency.
-  | ContractHasNoRoles
-    -- | A required role is not minted.
-  | MissingRoleToken TokenName
-    -- | A role is minted but not required.
-  | ExtraRoleToken TokenName
-    -- | A role name is longer than the 32 bytes allowed by the ledger.
-  | RoleNameTooLong TokenName
-    -- | The currency symbol for a native asset is not 28 bytes long.
-  | InvalidCurrencySymbol CurrencySymbol
-    -- | A token name is longer than the 32 bytes allowed by the ledger.
-  | TokenNameTooLong TokenName
-    -- | A token name is associated with the ada symbol.
-  | InvalidToken Token
-    -- | Initial account balance is not positive.
-  | NonPositiveBalance AccountId Token
-    -- | Duplicate account in state.
-  | DuplicateAccount AccountId Token
-    -- | Duplicate choice in state.
-  | DuplicateChoice ChoiceId
-    -- | Duplicate bound value in state.
-  | DuplicateBoundValue ValueId
-    -- | Too many tokens might be stored at some point in the contract.
-  | MaximumValueMayExceedProtocol Natural
-    -- | The transaction size (in bytes) might be too large.
-  | TransactionSizeMayExceedProtocol Transaction Natural
-    -- | The transaction's execution cost might be too high.
-  | TransactionCostMayExceedProtocol Transaction ExBudget
-    -- | The transaction does not validate.
-  | TransactionValidationError Transaction String
-    -- | The transaction has warnings.
-  | TransactionWarning Transaction V1.TransactionWarning
-    -- | The contract is missing a continuation not present in its continuation map.
-  | MissingContinuation DatumHash
-    -- | The contract contains both mainnet and testnet addresses.
-  | InconsistentNetworks
-    -- | The contract contains invalid addresses for the network.
-  | WrongNetwork
-    -- | The contract contains an illegal ledger address.
-  | IllegalAddress Ledger.Address
-    -- | The safety analysis exceeded the allotted time.
-  | SafetyAnalysisTimeout
-    deriving (Eq, Generic, Show)
-
+  | -- | No roles are present but there is a roles currency.
+    ContractHasNoRoles
+  | -- | A required role is not minted.
+    MissingRoleToken TokenName
+  | -- | A role is minted but not required.
+    ExtraRoleToken TokenName
+  | -- | A role name is longer than the 32 bytes allowed by the ledger.
+    RoleNameTooLong TokenName
+  | -- | The currency symbol for a native asset is not 28 bytes long.
+    InvalidCurrencySymbol CurrencySymbol
+  | -- | A token name is longer than the 32 bytes allowed by the ledger.
+    TokenNameTooLong TokenName
+  | -- | A token name is associated with the ada symbol.
+    InvalidToken Token
+  | -- | Initial account balance is not positive.
+    NonPositiveBalance AccountId Token
+  | -- | Duplicate account in state.
+    DuplicateAccount AccountId Token
+  | -- | Duplicate choice in state.
+    DuplicateChoice ChoiceId
+  | -- | Duplicate bound value in state.
+    DuplicateBoundValue ValueId
+  | -- | Too many tokens might be stored at some point in the contract.
+    MaximumValueMayExceedProtocol Natural
+  | -- | The transaction size (in bytes) might be too large.
+    TransactionSizeMayExceedProtocol Transaction Natural
+  | -- | The transaction's execution cost might be too high.
+    TransactionCostMayExceedProtocol Transaction ExBudget
+  | -- | The transaction does not validate.
+    TransactionValidationError Transaction String
+  | -- | The transaction has warnings.
+    TransactionWarning Transaction V1.TransactionWarning
+  | -- | The contract is missing a continuation not present in its continuation map.
+    MissingContinuation DatumHash
+  | -- | The contract contains both mainnet and testnet addresses.
+    InconsistentNetworks
+  | -- | The contract contains invalid addresses for the network.
+    WrongNetwork
+  | -- | The contract contains an illegal ledger address.
+    IllegalAddress Ledger.Address
+  | -- | The safety analysis exceeded the allotted time.
+    SafetyAnalysisTimeout
+  deriving (Eq, Generic, Show)
 
 instance ToJSON SafetyError where
   toJSON MissingRolesCurrency =
@@ -180,7 +174,8 @@ instance ToJSON SafetyError where
   toJSON (DuplicateAccount accountId token) =
     object
       [ "error" .= ("DuplicateAccount" :: String)
-      , "detail" .= ("In the initial state of the contract, there are duplicate entries for this account with this token." :: String)
+      , "detail"
+          .= ("In the initial state of the contract, there are duplicate entries for this account with this token." :: String)
       , "account-id" .= accountId
       , "token" .= token
       , "fatal" .= True
@@ -202,7 +197,10 @@ instance ToJSON SafetyError where
   toJSON (MaximumValueMayExceedProtocol natural) =
     object
       [ "error" .= ("MaximumValueMayExceedProtocol" :: String)
-      , "detail" .= ("At some point in during its executation, the contract may hold more native tokens than permitted by the ledger rules." :: String)
+      , "detail"
+          .= ( "At some point in during its executation, the contract may hold more native tokens than permitted by the ledger rules."
+                :: String
+             )
       , "bytes" .= natural
       , "fatal" .= False
       ]
@@ -252,55 +250,51 @@ instance ToJSON SafetyError where
       , "fatal" .= True
       ]
   toJSON WrongNetwork =
-     object
-       [ "error" .= ("WrongNetwork" :: String)
-       , "detail" .= ("The contract contains addresses that are do not match the network on which it will be executed." :: String)
-       , "fatal" .= True
-       ]
+    object
+      [ "error" .= ("WrongNetwork" :: String)
+      , "detail"
+          .= ("The contract contains addresses that are do not match the network on which it will be executed." :: String)
+      , "fatal" .= True
+      ]
   toJSON (IllegalAddress Ledger.Address{..}) =
     object
-       [ "error" .= ("IllegalAddress" :: String)
-       , "detail" .= ("The contract contains this address that is invalid for the network on which it will be executed." :: String)
-       , "address" .= let
-                        credentialToJSON (PubKeyCredential hash) =
-                          object
-                            [
-                              "pubKeyCredential" .= show hash
-                            ]
-                        credentialToJSON (ScriptCredential hash) =
-                          object
-                            [
-                              "scriptCredential" .= show hash
-                            ]
-                        stakingCredentialToJSON (StakingHash credential) =
-                          object
-                            [
-                              "stakingHash" .= credentialToJSON credential
-                            ]
-                        stakingCredentialToJSON (StakingPtr x y z) =
-                          object
-                            [
-                              "stakingPtr" .= (x, y, z)
-                            ]
-                      in
-                        object
-                          [
-                            "addressCredential" .= credentialToJSON addressCredential
-                          , "addressStakingCredential" .=  fmap stakingCredentialToJSON addressStakingCredential
-                          ]
-       , "fatal" .= True
-       ]
+      [ "error" .= ("IllegalAddress" :: String)
+      , "detail"
+          .= ("The contract contains this address that is invalid for the network on which it will be executed." :: String)
+      , "address"
+          .= let credentialToJSON (PubKeyCredential hash) =
+                  object
+                    [ "pubKeyCredential" .= show hash
+                    ]
+                 credentialToJSON (ScriptCredential hash) =
+                  object
+                    [ "scriptCredential" .= show hash
+                    ]
+                 stakingCredentialToJSON (StakingHash credential) =
+                  object
+                    [ "stakingHash" .= credentialToJSON credential
+                    ]
+                 stakingCredentialToJSON (StakingPtr x y z) =
+                  object
+                    [ "stakingPtr" .= (x, y, z)
+                    ]
+              in object
+                  [ "addressCredential" .= credentialToJSON addressCredential
+                  , "addressStakingCredential" .= fmap stakingCredentialToJSON addressStakingCredential
+                  ]
+      , "fatal" .= True
+      ]
   toJSON SafetyAnalysisTimeout =
     object
-       [ "error" .= ("SafetyAnalysisTimeout" :: String)
-       , "detail" .= ("The safety analysis exceeded the allotted time." :: String)
-       , "fatal" .= False
-       ]
+      [ "error" .= ("SafetyAnalysisTimeout" :: String)
+      , "detail" .= ("The safety analysis exceeded the allotted time." :: String)
+      , "fatal" .= False
+      ]
 
 instance FromJSON SafetyError where
   parseJSON =
-    withObject "SafetyError"
-      $ \o ->
+    withObject "SafetyError" $
+      \o ->
         (o .: "error" :: Parser String)
           >>= \case
             "MissingRolesCurrency" -> pure MissingRolesCurrency
@@ -314,9 +308,9 @@ instance FromJSON SafetyError where
                 pure . InvalidCurrencySymbol . CurrencySymbol $ toBuiltin bs
             "TokenNameTooLong" -> TokenNameTooLong . TokenName . toBuiltin . T.encodeUtf8 <$> o .: "token-name"
             "InvalidToken" -> InvalidToken <$> o .: "token"
-            "NonPositiveBalance" -> NonPositiveBalance <$> o .: "account-id" <*> o .:  "token"
+            "NonPositiveBalance" -> NonPositiveBalance <$> o .: "account-id" <*> o .: "token"
             "DuplicateAccount" -> DuplicateAccount <$> o .: "account-id" <*> o .: "token"
-            "DuplicateChoice"  -> DuplicateChoice <$> o .: "choice-id"
+            "DuplicateChoice" -> DuplicateChoice <$> o .: "choice-id"
             "DuplicateBoundValue" -> DuplicateBoundValue <$> o .: "value-id"
             "MaximumValueMayExceedProtocol" -> MaximumValueMayExceedProtocol <$> o .: "bytes"
             "TransactionSizeMayExceedProtocol" -> TransactionSizeMayExceedProtocol <$> o .: "transaction" <*> o .: "bytes"
@@ -330,60 +324,55 @@ instance FromJSON SafetyError where
             "InconsistentNetworks" -> pure InconsistentNetworks
             "WrongNetwork" -> pure WrongNetwork
             "IllegalAddress" ->
-               do
-                 let
-                   pubKeyCredentialFromJSON =
-                     withObject "PubKeyCredential"
-                       $ \o' -> PubKeyCredential . fromString <$> o' .: "pubKeyCredential"
-                   scriptCredentialFromJSON =
-                     withObject "ScriptCredential"
-                       $ \o' -> ScriptCredential . fromString <$> o' .: "scriptCredential"
-                   credentialFromJSON o' = pubKeyCredentialFromJSON o' <|> scriptCredentialFromJSON o'
-                   stakingHashFromJSON =
-                     withObject "StakingHash"
-                       $ \o' -> StakingHash <$> (credentialFromJSON =<< o' .: "stakingHash")
-                   stakingPtrFromJSON =
-                     withObject "StakingPtr"
-                       $ \o' ->
-                         do
-                           (x, y, z) <- o' .: "stakingPtr"
-                           pure $ StakingPtr x y z
-                   stakingCredentialFromJSON o' = stakingHashFromJSON o' <|> stakingPtrFromJSON o'
-                 o' <- o .: "address"
-                 addressCredential <- credentialFromJSON =<< o' .: "addressCredential"
-                 addressStakingCredential <-
-                   (fmap Just $ stakingCredentialFromJSON =<< o' .: "stakingCredential")
-                     <|> pure Nothing
-                 pure . IllegalAddress $ Ledger.Address{..}
+              do
+                let pubKeyCredentialFromJSON =
+                      withObject "PubKeyCredential" $
+                        \o' -> PubKeyCredential . fromString <$> o' .: "pubKeyCredential"
+                    scriptCredentialFromJSON =
+                      withObject "ScriptCredential" $
+                        \o' -> ScriptCredential . fromString <$> o' .: "scriptCredential"
+                    credentialFromJSON o' = pubKeyCredentialFromJSON o' <|> scriptCredentialFromJSON o'
+                    stakingHashFromJSON =
+                      withObject "StakingHash" $
+                        \o' -> StakingHash <$> (credentialFromJSON =<< o' .: "stakingHash")
+                    stakingPtrFromJSON =
+                      withObject "StakingPtr" $
+                        \o' ->
+                          do
+                            (x, y, z) <- o' .: "stakingPtr"
+                            pure $ StakingPtr x y z
+                    stakingCredentialFromJSON o' = stakingHashFromJSON o' <|> stakingPtrFromJSON o'
+                o' <- o .: "address"
+                addressCredential <- credentialFromJSON =<< o' .: "addressCredential"
+                addressStakingCredential <-
+                  (fmap Just $ stakingCredentialFromJSON =<< o' .: "stakingCredential")
+                    <|> pure Nothing
+                pure . IllegalAddress $ Ledger.Address{..}
             "SafetyAnalysisTimeout" -> pure SafetyAnalysisTimeout
             _ -> fail "Invalid safety error."
 
-
 -- | A Marlowe transaction.
-data Transaction =
-  Transaction
-  {
-    txState :: State
+data Transaction = Transaction
+  { txState :: State
   , txContract :: Contract
   , txInput :: TransactionInput
   , txOutput :: TransactionOutput
   }
-    deriving (Eq, Generic, Show)
+  deriving (Eq, Generic, Show)
 
 instance ToJSON Transaction where
   toJSON Transaction{..} =
     object
-      [
-        "state"    .= txState
+      [ "state" .= txState
       , "contract" .= txContract
-      , "input"    .= txInput
-      , "output"   .= txOutput
+      , "input" .= txInput
+      , "output" .= txOutput
       ]
 
 instance FromJSON Transaction where
   parseJSON =
-    withObject "Transaction"
-      $ \o ->
+    withObject "Transaction" $
+      \o ->
         do
           txState <- o .: "state"
           txContract <- o .: "contract"

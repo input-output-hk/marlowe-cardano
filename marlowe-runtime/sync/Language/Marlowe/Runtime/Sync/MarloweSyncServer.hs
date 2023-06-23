@@ -3,13 +3,13 @@
 
 module Language.Marlowe.Runtime.Sync.MarloweSyncServer where
 
-import Data.Type.Equality (testEquality, type (:~:)(Refl))
+import Data.Type.Equality (testEquality, type (:~:) (Refl))
 import Language.Marlowe.Protocol.Sync.Server
-import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainPoint, WithGenesis(..))
-import Language.Marlowe.Runtime.Core.Api (ContractId, MarloweVersion, SomeMarloweVersion(..))
-import Language.Marlowe.Runtime.History.Api (SomeCreateStep(..))
-import Language.Marlowe.Runtime.Sync.Database (DatabaseQueries(..), Next(..))
-import Network.Protocol.Connection (ServerSource(..))
+import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainPoint, WithGenesis (..))
+import Language.Marlowe.Runtime.Core.Api (ContractId, MarloweVersion, SomeMarloweVersion (..))
+import Language.Marlowe.Runtime.History.Api (SomeCreateStep (..))
+import Language.Marlowe.Runtime.Sync.Database (DatabaseQueries (..), Next (..))
+import Network.Protocol.Connection (ServerSource (..))
 import UnliftIO (MonadUnliftIO)
 
 newtype MarloweSyncServerDependencies m = MarloweSyncServerDependencies
@@ -18,7 +18,7 @@ newtype MarloweSyncServerDependencies m = MarloweSyncServerDependencies
 
 marloweSyncServer
   :: forall m
-   . MonadUnliftIO m
+   . (MonadUnliftIO m)
   => MarloweSyncServerDependencies m
   -> ServerSource MarloweSyncServer m ()
 marloweSyncServer MarloweSyncServerDependencies{..} = ServerSource $ pure server
@@ -28,10 +28,11 @@ marloweSyncServer MarloweSyncServerDependencies{..} = ServerSource $ pure server
     server = MarloweSyncServer $ pure serverInit
 
     serverInit :: ServerStInit m ()
-    serverInit = ServerStInit
-      { recvMsgFollowContract
-      , recvMsgIntersect
-      }
+    serverInit =
+      ServerStInit
+        { recvMsgFollowContract
+        , recvMsgIntersect
+        }
 
     recvMsgFollowContract :: ContractId -> m (ServerStFollow m ())
     recvMsgFollowContract contractId = do
@@ -52,10 +53,11 @@ marloweSyncServer MarloweSyncServerDependencies{..} = ServerSource $ pure server
           Just Refl -> SendMsgIntersectFound block $ serverIdle createBlock contractId version $ At block
 
     serverIdle :: forall v. BlockHeader -> ContractId -> MarloweVersion v -> ChainPoint -> ServerStIdle v m ()
-    serverIdle createBlock contractId version clientPos = ServerStIdle
-      { recvMsgRequestNext
-      , recvMsgDone = pure ()
-      }
+    serverIdle createBlock contractId version clientPos =
+      ServerStIdle
+        { recvMsgRequestNext
+        , recvMsgDone = pure ()
+        }
       where
         nextIdle = serverIdle createBlock contractId version
         recvMsgRequestNext = do
@@ -69,13 +71,14 @@ marloweSyncServer MarloweSyncServerDependencies{..} = ServerSource $ pure server
             Next nextBlock steps -> SendMsgRollForward nextBlock steps $ nextIdle $ At nextBlock
 
         serverWait :: ServerStWait v m ()
-        serverWait = ServerStWait
-          { recvMsgPoll = do
-              contractTip <- getTipForContract contractId
-              case contractTip of
-                Genesis -> pure $ SendMsgRollBackCreation ()
-                _
-                  | clientPos /= contractTip -> recvMsgRequestNext
-                  | otherwise -> pure $ SendMsgWait serverWait
-          , recvMsgCancel = pure $ nextIdle clientPos
-          }
+        serverWait =
+          ServerStWait
+            { recvMsgPoll = do
+                contractTip <- getTipForContract contractId
+                case contractTip of
+                  Genesis -> pure $ SendMsgRollBackCreation ()
+                  _
+                    | clientPos /= contractTip -> recvMsgRequestNext
+                    | otherwise -> pure $ SendMsgWait serverWait
+            , recvMsgCancel = pure $ nextIdle clientPos
+            }

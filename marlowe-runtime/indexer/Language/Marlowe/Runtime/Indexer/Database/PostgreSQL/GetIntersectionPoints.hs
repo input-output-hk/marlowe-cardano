@@ -11,12 +11,19 @@ import Language.Marlowe.Runtime.ChainSync.Api
 
 getIntersectionPoints :: Int -> H.Transaction [BlockHeader]
 getIntersectionPoints securityParameter = do
-  mTipBlockNo <- H.statement () [singletonStatement|
+  mTipBlockNo <-
+    H.statement
+      ()
+      [singletonStatement|
     SELECT MAX(blockNo) :: bigint? from marlowe.block
   |]
   case mTipBlockNo of
     Nothing -> pure []
-    Just tipBlockNo -> fmap decodeResultRow . V.toList <$> H.statement (tipBlockNo - fromIntegral securityParameter) [vectorStatement|
+    Just tipBlockNo ->
+      fmap decodeResultRow . V.toList
+        <$> H.statement
+          (tipBlockNo - fromIntegral securityParameter)
+          [vectorStatement|
       SELECT id :: bytea, slotNo :: bigint, blockNo :: bigint
         FROM marlowe.block
        WHERE blockNo >= $1 :: bigint

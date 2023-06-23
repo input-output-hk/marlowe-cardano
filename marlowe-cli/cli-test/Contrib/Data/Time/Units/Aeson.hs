@@ -1,13 +1,14 @@
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE NumericUnderscores #-}
+
 module Contrib.Data.Time.Units.Aeson where
 
-import Data.Aeson (FromJSON(parseJSON), ToJSON(toJSON))
+import Data.Aeson (FromJSON (parseJSON), ToJSON (toJSON))
 import Data.Time.Units (TimeUnit)
-import qualified Data.Time.Units as Time.Units
+import Data.Time.Units qualified as Time.Units
 import GHC.Generics (Generic)
 
-newtype Second = Second { toSecond :: Time.Units.Second }
+newtype Second = Second {toSecond :: Time.Units.Second}
   deriving stock (Eq, Generic, Show)
 
 instance FromJSON Second where
@@ -17,15 +18,14 @@ instance FromJSON Second where
 
 instance ToJSON Second where
   toJSON (Second s) = do
-    let
-      micro = Time.Units.toMicroseconds s
+    let micro = Time.Units.toMicroseconds s
     toJSON (micro `div` 1_000_000)
 
 instance TimeUnit Second where
   toMicroseconds = Time.Units.toMicroseconds . toSecond
   fromMicroseconds = Second . Time.Units.fromMicroseconds
 
-newtype Millisecond = Millisecond { toMillisecond :: Time.Units.Millisecond }
+newtype Millisecond = Millisecond {toMillisecond :: Time.Units.Millisecond}
   deriving stock (Eq, Generic, Show)
 
 instance FromJSON Millisecond where
@@ -35,15 +35,14 @@ instance FromJSON Millisecond where
 
 instance ToJSON Millisecond where
   toJSON (Millisecond s) = do
-    let
-      micro = Time.Units.toMicroseconds s
+    let micro = Time.Units.toMicroseconds s
     toJSON (micro `div` 1_000)
 
 instance TimeUnit Millisecond where
   toMicroseconds = Time.Units.toMicroseconds . toMillisecond
   fromMicroseconds = Millisecond . Time.Units.fromMicroseconds
 
-newtype Microsecond = Microsecond { toMicrosecond :: Time.Units.Microsecond }
+newtype Microsecond = Microsecond {toMicrosecond :: Time.Units.Microsecond}
   deriving stock (Eq, Generic, Show)
 
 instance FromJSON Microsecond where

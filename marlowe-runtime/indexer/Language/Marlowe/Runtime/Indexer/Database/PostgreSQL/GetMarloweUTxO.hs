@@ -18,7 +18,11 @@ import Language.Marlowe.Runtime.Indexer.Types
 
 getMarloweUTxO :: BlockHeader -> H.Transaction MarloweUTxO
 getMarloweUTxO BlockHeader{slotNo} = do
-  unspentContractOutputs <- Map.fromDistinctAscList . V.toList . fmap decodeContractOutputRow <$> H.statement (fromIntegral slotNo) [vectorStatement|
+  unspentContractOutputs <-
+    Map.fromDistinctAscList . V.toList . fmap decodeContractOutputRow
+      <$> H.statement
+        (fromIntegral slotNo)
+        [vectorStatement|
     WITH contractOut (createTxId, createTxIx, txId, txIx, address, payoutScriptHash) AS
       ( SELECT createTxOut.txId
              , createTxOut.txIx
@@ -66,8 +70,11 @@ getMarloweUTxO BlockHeader{slotNo} = do
       ORDER BY contractOut.createTxId, contractOut.createTxIx
   |]
 
-
-  unspentContractOutputsFlat <- V.toList . fmap decodePayoutOutputRow <$> H.statement (fromIntegral slotNo) [vectorStatement|
+  unspentContractOutputsFlat <-
+    V.toList . fmap decodePayoutOutputRow
+      <$> H.statement
+        (fromIntegral slotNo)
+        [vectorStatement|
     WITH payoutOut (createTxId, createTxIx, txId, txIx) AS
       ( SELECT applyTx.createTxId
              , applyTx.createTxIx
@@ -94,10 +101,10 @@ getMarloweUTxO BlockHeader{slotNo} = do
       ORDER BY payoutOut.createTxId, payoutOut.createTxIx
   |]
 
-  let
-    unspentPayoutOutputs = Map.fromDistinctAscList
-      $ fmap (fst . head &&& Set.fromList . fmap snd)
-      $ groupBy (on (==) fst) unspentContractOutputsFlat
+  let unspentPayoutOutputs =
+        Map.fromDistinctAscList $
+          fmap (fst . head &&& Set.fromList . fmap snd) $
+            groupBy (on (==) fst) unspentContractOutputsFlat
 
   pure MarloweUTxO{..}
 

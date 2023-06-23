@@ -1,13 +1,12 @@
--- editorconfig-checker-disable-file
-
-{-# OPTIONS_GHC -Wno-orphans #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
+-- editorconfig-checker-disable-file
+{-# OPTIONS_GHC -Wno-orphans #-}
 
 module Language.Marlowe.Runtime.Transaction.CommandSpec where
 
-import Cardano.Api (CardanoEra(..))
+import Cardano.Api (CardanoEra (..))
 import Data.Foldable (fold)
 import Data.Void (absurd)
 import Gen.Cardano.Api.Typed (genTx)
@@ -28,33 +27,37 @@ spec = describe "MarloweTxCommand" do
   prop "It has a lawful Job protocol codec" $ checkPropCodec @(Job MarloweTxCommand)
 
 instance ArbitraryCommand MarloweTxCommand where
-  arbitraryTag = elements
-    [ SomeTag $ TagCreate MarloweV1
-    , SomeTag $ TagApplyInputs MarloweV1
-    , SomeTag $ TagWithdraw MarloweV1
-    , SomeTag TagSubmit
-    ]
+  arbitraryTag =
+    elements
+      [ SomeTag $ TagCreate MarloweV1
+      , SomeTag $ TagApplyInputs MarloweV1
+      , SomeTag $ TagWithdraw MarloweV1
+      , SomeTag TagSubmit
+      ]
 
   arbitraryCmd = \case
-    TagCreate MarloweV1 -> Create
-      <$> arbitrary
-      <*> pure MarloweV1
-      <*> arbitrary
-      <*> arbitrary
-      <*> arbitrary
-      <*> arbitrary
-      <*> arbitrary
-    TagApplyInputs MarloweV1 -> ApplyInputs MarloweV1
-      <$> arbitrary
-      <*> arbitrary
-      <*> arbitrary
-      <*> arbitrary
-      <*> arbitrary
-      <*> arbitrary
-    TagWithdraw MarloweV1 -> Withdraw MarloweV1
-      <$> arbitrary
-      <*> arbitrary
-      <*> arbitrary
+    TagCreate MarloweV1 ->
+      Create
+        <$> arbitrary
+        <*> pure MarloweV1
+        <*> arbitrary
+        <*> arbitrary
+        <*> arbitrary
+        <*> arbitrary
+        <*> arbitrary
+    TagApplyInputs MarloweV1 ->
+      ApplyInputs MarloweV1
+        <$> arbitrary
+        <*> arbitrary
+        <*> arbitrary
+        <*> arbitrary
+        <*> arbitrary
+        <*> arbitrary
+    TagWithdraw MarloweV1 ->
+      Withdraw MarloweV1
+        <$> arbitrary
+        <*> arbitrary
+        <*> arbitrary
     TagSubmit -> hedgehog $ Submit <$> genTx BabbageEra
 
   arbitraryJobId = \case
@@ -82,20 +85,23 @@ instance ArbitraryCommand MarloweTxCommand where
     TagSubmit -> arbitrary
 
   shrinkCommand = \case
-    Create stake MarloweV1 wallet roleTokenConfig metadata minAda contract -> fold
-      [ [ Create stake MarloweV1 wallet' roleTokenConfig metadata minAda contract | wallet' <- shrink wallet ]
-      , [ Create stake MarloweV1 wallet roleTokenConfig' metadata minAda contract | roleTokenConfig' <- shrink roleTokenConfig ]
-      , [ Create stake MarloweV1 wallet roleTokenConfig metadata' minAda contract | metadata' <- shrink metadata ]
-      , [ Create stake MarloweV1 wallet roleTokenConfig metadata minAda contract' | contract' <- shrink contract ]
-      ]
-    ApplyInputs MarloweV1 wallet contractId metadata invalidBefore invalidHereafter inputs -> fold
-      [ [ ApplyInputs MarloweV1 wallet' contractId metadata invalidBefore invalidHereafter inputs | wallet' <- shrink wallet ]
-      , [ ApplyInputs MarloweV1 wallet contractId metadata' invalidBefore invalidHereafter inputs | metadata' <- shrink metadata ]
-      , [ ApplyInputs MarloweV1 wallet contractId metadata invalidBefore invalidHereafter inputs' | inputs' <- shrink inputs ]
-      ]
+    Create stake MarloweV1 wallet roleTokenConfig metadata minAda contract ->
+      fold
+        [ [Create stake MarloweV1 wallet' roleTokenConfig metadata minAda contract | wallet' <- shrink wallet]
+        , [Create stake MarloweV1 wallet roleTokenConfig' metadata minAda contract | roleTokenConfig' <- shrink roleTokenConfig]
+        , [Create stake MarloweV1 wallet roleTokenConfig metadata' minAda contract | metadata' <- shrink metadata]
+        , [Create stake MarloweV1 wallet roleTokenConfig metadata minAda contract' | contract' <- shrink contract]
+        ]
+    ApplyInputs MarloweV1 wallet contractId metadata invalidBefore invalidHereafter inputs ->
+      fold
+        [ [ApplyInputs MarloweV1 wallet' contractId metadata invalidBefore invalidHereafter inputs | wallet' <- shrink wallet]
+        , [ ApplyInputs MarloweV1 wallet contractId metadata' invalidBefore invalidHereafter inputs | metadata' <- shrink metadata
+          ]
+        , [ApplyInputs MarloweV1 wallet contractId metadata invalidBefore invalidHereafter inputs' | inputs' <- shrink inputs]
+        ]
     Withdraw MarloweV1 wallet contractId role ->
-      [ Withdraw MarloweV1 wallet' contractId role | wallet' <- shrink wallet ]
-    Submit{}-> []
+      [Withdraw MarloweV1 wallet' contractId role | wallet' <- shrink wallet]
+    Submit{} -> []
 
   shrinkJobId = \case
     JobIdSubmit{} -> []

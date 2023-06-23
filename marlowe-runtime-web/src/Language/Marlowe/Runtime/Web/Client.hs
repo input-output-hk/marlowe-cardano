@@ -3,47 +3,47 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 
-module Language.Marlowe.Runtime.Web.Client
-  ( Page(..)
-  , getContract
-  , getContractNext
-  , getContractStatus
-  , getContracts
-  , getContractsStatus
-  , getTransaction
-  , getTransactionStatus
-  , getTransactions
-  , getTransactionsStatus
-  , getWithdrawal
-  , getWithdrawalStatus
-  , getWithdrawals
-  , getWithdrawalsStatus
-  , healthcheck
-  , postContract
-  , postContractCreateTx
-  , postContractCreateTxStatus
-  , postContractStatus
-  , postTransaction
-  , postTransactionCreateTx
-  , postTransactionCreateTxStatus
-  , postTransactionStatus
-  , postWithdrawal
-  , postWithdrawalCreateTx
-  , postWithdrawalCreateTxStatus
-  , postWithdrawalStatus
-  , putContract
-  , putContractStatus
-  , putTransaction
-  , putTransactionStatus
-  , putWithdrawal
-  , putWithdrawalStatus
-  ) where
+module Language.Marlowe.Runtime.Web.Client (
+  Page (..),
+  getContract,
+  getContractNext,
+  getContractStatus,
+  getContracts,
+  getContractsStatus,
+  getTransaction,
+  getTransactionStatus,
+  getTransactions,
+  getTransactionsStatus,
+  getWithdrawal,
+  getWithdrawalStatus,
+  getWithdrawals,
+  getWithdrawalsStatus,
+  healthcheck,
+  postContract,
+  postContractCreateTx,
+  postContractCreateTxStatus,
+  postContractStatus,
+  postTransaction,
+  postTransactionCreateTx,
+  postTransactionCreateTxStatus,
+  postTransactionStatus,
+  postWithdrawal,
+  postWithdrawalCreateTx,
+  postWithdrawalCreateTxStatus,
+  postWithdrawalStatus,
+  putContract,
+  putContractStatus,
+  putTransaction,
+  putTransactionStatus,
+  putWithdrawal,
+  putWithdrawalStatus,
+) where
 
-import Control.Monad.Error.Class (MonadError(catchError))
+import Control.Monad.Error.Class (MonadError (catchError))
 import Control.Monad.IO.Class (liftIO)
 import Data.Functor (void)
 import Data.Maybe (fromJust)
-import Data.Proxy (Proxy(..))
+import Data.Proxy (Proxy (..))
 import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.Text (Text)
@@ -51,14 +51,21 @@ import Data.Time (UTCTime)
 import Data.Version (Version)
 import GHC.TypeLits (KnownSymbol, symbolVal)
 import Language.Marlowe.Core.V1.Next
-import Language.Marlowe.Runtime.Web.API
-  (API, GetContractsResponse, GetTransactionsResponse, GetWithdrawalsResponse, ListObject(..), api, retractLink)
+import Language.Marlowe.Runtime.Web.API (
+  API,
+  GetContractsResponse,
+  GetTransactionsResponse,
+  GetWithdrawalsResponse,
+  ListObject (..),
+  api,
+  retractLink,
+ )
 import Language.Marlowe.Runtime.Web.Types
-import Servant (HasResponseHeader, ResponseHeader(..), getResponse, lookupResponseHeader, type (:<|>)((:<|>)))
+import Servant (HasResponseHeader, ResponseHeader (..), getResponse, lookupResponseHeader, type (:<|>) ((:<|>)))
 import Servant.API (Headers)
 import Servant.Client (Client, ClientM)
 import qualified Servant.Client as Servant
-import Servant.Pagination (ExtractRange(extractRange), HasPagination(..), PutRange(..), Range, Ranges)
+import Servant.Pagination (ExtractRange (extractRange), HasPagination (..), PutRange (..), Range, Ranges)
 
 client :: Client ClientM API
 client = Servant.client api
@@ -84,12 +91,13 @@ extractStatus
      )
   => Headers hs a
   -> ClientM RuntimeStatus
-extractStatus response = RuntimeStatus
-  <$> (reqHeaderValue $ lookupResponseHeader @"X-Node-Tip" response)
-  <*> (reqHeaderValue $ lookupResponseHeader @"X-Runtime-Chain-Tip" response)
-  <*> (reqHeaderValue $ lookupResponseHeader @"X-Runtime-Tip" response)
-  <*> (reqHeaderValue $ lookupResponseHeader @"X-Network-Id" response)
-  <*> (reqHeaderValue $ lookupResponseHeader @"X-Runtime-Version" response)
+extractStatus response =
+  RuntimeStatus
+    <$> (reqHeaderValue $ lookupResponseHeader @"X-Node-Tip" response)
+    <*> (reqHeaderValue $ lookupResponseHeader @"X-Runtime-Chain-Tip" response)
+    <*> (reqHeaderValue $ lookupResponseHeader @"X-Runtime-Tip" response)
+    <*> (reqHeaderValue $ lookupResponseHeader @"X-Network-Id" response)
+    <*> (reqHeaderValue $ lookupResponseHeader @"X-Runtime-Version" response)
 
 getContractsStatus
   :: Maybe (Set PolicyId)
@@ -99,17 +107,21 @@ getContractsStatus
 getContractsStatus roleCurrencies tags range = do
   let contractsClient :<|> _ = client
   let getContracts' :<|> _ = contractsClient
-  response <- getContracts' (foldMap Set.toList roleCurrencies) (foldMap Set.toList tags)
-    $ putRange <$> range
+  response <-
+    getContracts' (foldMap Set.toList roleCurrencies) (foldMap Set.toList tags) $
+      putRange <$> range
   totalCount <- reqHeaderValue $ lookupResponseHeader @"Total-Count" response
   nextRanges <- headerValue $ lookupResponseHeader @"Next-Range" response
   let ListObject items = getResponse response
   status <- extractStatus response
-  pure (status, Page
-    { totalCount
-    , nextRange = extractRangeSingleton @GetContractsResponse <$> nextRanges
-    , items = retractLink @"contract" . retractLink @"transactions" <$> items
-    })
+  pure
+    ( status
+    , Page
+        { totalCount
+        , nextRange = extractRangeSingleton @GetContractsResponse <$> nextRanges
+        , items = retractLink @"contract" . retractLink @"transactions" <$> items
+        }
+    )
 
 getContracts
   :: Maybe (Set PolicyId)
@@ -126,11 +138,12 @@ postContractStatus
   -> ClientM (RuntimeStatus, CreateTxEnvelope CardanoTxBody)
 postContractStatus changeAddress otherAddresses collateralUtxos request = do
   let (_ :<|> (postContractCreateTxBody' :<|> _) :<|> _) :<|> _ = client
-  response <- postContractCreateTxBody'
-    request
-    changeAddress
-    (setToCommaList <$> otherAddresses)
-    (setToCommaList <$> collateralUtxos)
+  response <-
+    postContractCreateTxBody'
+      request
+      changeAddress
+      (setToCommaList <$> otherAddresses)
+      (setToCommaList <$> collateralUtxos)
   status <- extractStatus response
   pure (status, retractLink $ getResponse response)
 
@@ -150,11 +163,12 @@ postContractCreateTxStatus
   -> ClientM (RuntimeStatus, CreateTxEnvelope CardanoTx)
 postContractCreateTxStatus changeAddress otherAddresses collateralUtxos request = do
   let (_ :<|> (_ :<|> postContractCreateTx') :<|> _) :<|> _ = client
-  response <- postContractCreateTx'
-    request
-    changeAddress
-    (setToCommaList <$> otherAddresses)
-    (setToCommaList <$> collateralUtxos)
+  response <-
+    postContractCreateTx'
+      request
+      changeAddress
+      (setToCommaList <$> otherAddresses)
+      (setToCommaList <$> collateralUtxos)
   status <- extractStatus response
   pure (status, retractLink $ getResponse response)
 
@@ -182,7 +196,7 @@ getContractNextStatus :: TxOutRef -> UTCTime -> UTCTime -> ClientM (RuntimeStatu
 getContractNextStatus contractId validityStart validityEnd = do
   let contractsClient :<|> _ = client
   let _ :<|> _ :<|> contractApi = contractsClient
-  let _ :<|> _ :<|>  next' :<|> _ = contractApi contractId
+  let _ :<|> _ :<|> next' :<|> _ = contractApi contractId
   response <- next' validityStart validityEnd
   status <- extractStatus response
   pure (status, getResponse response)
@@ -213,11 +227,14 @@ getWithdrawalsStatus roleCurrencies range = do
   nextRanges <- headerValue $ lookupResponseHeader @"Next-Range" response
   let ListObject items = getResponse response
   status <- extractStatus response
-  pure (status, Page
-    { totalCount
-    , nextRange = extractRangeSingleton @GetWithdrawalsResponse <$> nextRanges
-    , items = retractLink @"withdrawal" <$> items
-    })
+  pure
+    ( status
+    , Page
+        { totalCount
+        , nextRange = extractRangeSingleton @GetWithdrawalsResponse <$> nextRanges
+        , items = retractLink @"withdrawal" <$> items
+        }
+    )
 
 getWithdrawals
   :: Maybe (Set PolicyId)
@@ -234,11 +251,12 @@ postWithdrawalStatus
 postWithdrawalStatus changeAddress otherAddresses collateralUtxos request = do
   let _ :<|> withdrawalsClient :<|> _ = client
   let _ :<|> (postWithdrawal' :<|> _) :<|> _ = withdrawalsClient
-  response <- postWithdrawal'
-    request
-    changeAddress
-    (setToCommaList <$> otherAddresses)
-    (setToCommaList <$> collateralUtxos)
+  response <-
+    postWithdrawal'
+      request
+      changeAddress
+      (setToCommaList <$> otherAddresses)
+      (setToCommaList <$> collateralUtxos)
   status <- extractStatus response
   pure (status, retractLink $ getResponse response)
 
@@ -259,11 +277,12 @@ postWithdrawalCreateTxStatus
 postWithdrawalCreateTxStatus changeAddress otherAddresses collateralUtxos request = do
   let _ :<|> withdrawalsClient :<|> _ = client
   let _ :<|> (_ :<|> postWithdrawalCreateTx') :<|> _ = withdrawalsClient
-  response <- postWithdrawalCreateTx'
-    request
-    changeAddress
-    (setToCommaList <$> otherAddresses)
-    (setToCommaList <$> collateralUtxos)
+  response <-
+    postWithdrawalCreateTx'
+      request
+      changeAddress
+      (setToCommaList <$> otherAddresses)
+      (setToCommaList <$> collateralUtxos)
   status <- extractStatus response
   pure (status, retractLink $ getResponse response)
 
@@ -295,7 +314,6 @@ putWithdrawalStatus withdrawalId tx = do
   response <- putWithdrawal' tx
   extractStatus response
 
-
 putWithdrawal :: TxId -> TextEnvelope -> ClientM ()
 putWithdrawal = fmap void . putWithdrawalStatus
 
@@ -312,11 +330,14 @@ getTransactionsStatus contractId range = do
   nextRanges <- headerValue $ lookupResponseHeader @"Next-Range" response
   let ListObject items = getResponse response
   status <- extractStatus response
-  pure (status, Page
-    { totalCount
-    , nextRange = extractRangeSingleton @GetTransactionsResponse <$> nextRanges
-    , items = retractLink <$> items
-    })
+  pure
+    ( status
+    , Page
+        { totalCount
+        , nextRange = extractRangeSingleton @GetTransactionsResponse <$> nextRanges
+        , items = retractLink <$> items
+        }
+    )
 
 getTransactions
   :: TxOutRef
@@ -335,11 +356,12 @@ postTransactionStatus changeAddress otherAddresses collateralUtxos contractId re
   let contractsClient :<|> _ = client
   let _ :<|> _ :<|> contractApi = contractsClient
   let _ :<|> _ :<|> _ :<|> _ :<|> (postTransaction' :<|> _) :<|> _ = contractApi contractId
-  response <- postTransaction'
-    request
-    changeAddress
-    (setToCommaList <$> otherAddresses)
-    (setToCommaList <$> collateralUtxos)
+  response <-
+    postTransaction'
+      request
+      changeAddress
+      (setToCommaList <$> otherAddresses)
+      (setToCommaList <$> collateralUtxos)
   status <- extractStatus response
   pure (status, retractLink $ getResponse response)
 
@@ -362,14 +384,14 @@ postTransactionCreateTxStatus
 postTransactionCreateTxStatus changeAddress otherAddresses collateralUtxos contractId request = do
   let (_ :<|> _ :<|> contractApi) :<|> _ = client
   let _ :<|> _ :<|> _ :<|> _ :<|> (_ :<|> postTransactionCreateTx') :<|> _ = contractApi contractId
-  response <- postTransactionCreateTx'
-    request
-    changeAddress
-    (setToCommaList <$> otherAddresses)
-    (setToCommaList <$> collateralUtxos)
+  response <-
+    postTransactionCreateTx'
+      request
+      changeAddress
+      (setToCommaList <$> otherAddresses)
+      (setToCommaList <$> collateralUtxos)
   status <- extractStatus response
   pure (status, retractLink $ getResponse response)
-
 
 postTransactionCreateTx
   :: Address
@@ -408,20 +430,20 @@ putTransaction = (fmap . fmap) void . putTransactionStatus
 setToCommaList :: Set a -> CommaList a
 setToCommaList = CommaList . Set.toList
 
-reqHeaderValue :: forall name a. KnownSymbol name => ResponseHeader name a -> ClientM a
+reqHeaderValue :: forall name a. (KnownSymbol name) => ResponseHeader name a -> ClientM a
 reqHeaderValue = \case
   Header a -> pure a
   UndecodableHeader _ -> liftIO $ fail $ "Unable to decode header " <> symbolVal (Proxy @name)
   MissingHeader -> liftIO $ fail $ "Required header missing " <> symbolVal (Proxy @name)
 
-headerValue :: forall name a. KnownSymbol name => ResponseHeader name a -> ClientM (Maybe a)
+headerValue :: forall name a. (KnownSymbol name) => ResponseHeader name a -> ClientM (Maybe a)
 headerValue = \case
   Header a -> pure $ Just a
   UndecodableHeader _ -> liftIO $ fail $ "Unable to decode header " <> symbolVal (Proxy @name)
   MissingHeader -> pure Nothing
 
 extractRangeSingleton
-  :: HasPagination resource field
+  :: (HasPagination resource field)
   => Ranges '[field] resource
   -> Range field (RangeType resource field)
 extractRangeSingleton = fromJust . extractRange

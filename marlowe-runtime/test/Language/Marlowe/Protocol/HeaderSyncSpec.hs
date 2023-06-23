@@ -1,6 +1,6 @@
-{-# OPTIONS_GHC -Wno-orphans #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
 
 module Language.Marlowe.Protocol.HeaderSyncSpec where
 
@@ -21,22 +21,23 @@ spec = describe "MarloweHeaderSync protocol" do
   codecGoldenTests @MarloweHeaderSync "MarloweHeaderSync"
 
 instance ArbitraryMessage MarloweHeaderSync where
-  arbitraryMessage = oneof
-    [ AnyMessageAndAgency (ClientAgency TokIdle) . MsgIntersect <$> arbitrary
-    , pure $ AnyMessageAndAgency (ClientAgency TokIdle) MsgDone
-    , pure $ AnyMessageAndAgency (ClientAgency TokIdle) MsgRequestNext
-    , do
-        msg <- MsgNewHeaders <$> arbitrary <*> resized (min 30) arbitrary
-        pure $ AnyMessageAndAgency (ServerAgency TokNext) msg
-    , do
-        msg <- MsgRollBackward <$> arbitrary
-        pure $ AnyMessageAndAgency (ServerAgency TokNext) msg
-    , pure $ AnyMessageAndAgency (ServerAgency TokNext) MsgWait
-    , pure $ AnyMessageAndAgency (ClientAgency TokWait) MsgPoll
-    , pure $ AnyMessageAndAgency (ClientAgency TokWait) MsgCancel
-    , AnyMessageAndAgency (ServerAgency TokIntersect) . MsgIntersectFound <$> arbitrary
-    , pure $ AnyMessageAndAgency (ServerAgency TokIntersect) MsgIntersectNotFound
-    ]
+  arbitraryMessage =
+    oneof
+      [ AnyMessageAndAgency (ClientAgency TokIdle) . MsgIntersect <$> arbitrary
+      , pure $ AnyMessageAndAgency (ClientAgency TokIdle) MsgDone
+      , pure $ AnyMessageAndAgency (ClientAgency TokIdle) MsgRequestNext
+      , do
+          msg <- MsgNewHeaders <$> arbitrary <*> resized (min 30) arbitrary
+          pure $ AnyMessageAndAgency (ServerAgency TokNext) msg
+      , do
+          msg <- MsgRollBackward <$> arbitrary
+          pure $ AnyMessageAndAgency (ServerAgency TokNext) msg
+      , pure $ AnyMessageAndAgency (ServerAgency TokNext) MsgWait
+      , pure $ AnyMessageAndAgency (ClientAgency TokWait) MsgPoll
+      , pure $ AnyMessageAndAgency (ClientAgency TokWait) MsgCancel
+      , AnyMessageAndAgency (ServerAgency TokIntersect) . MsgIntersectFound <$> arbitrary
+      , pure $ AnyMessageAndAgency (ServerAgency TokIntersect) MsgIntersectNotFound
+      ]
   shrinkMessage agency = \case
     MsgIntersect points -> MsgIntersect <$> shrink points
     MsgDone -> []

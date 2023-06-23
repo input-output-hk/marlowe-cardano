@@ -4,13 +4,21 @@ module Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetTipForContract where
 
 import Hasql.TH (maybeStatement)
 import qualified Hasql.Transaction as T
-import Language.Marlowe.Runtime.ChainSync.Api
-  (BlockHeader(..), BlockHeaderHash(..), ChainPoint, TxId(..), TxOutRef(..), WithGenesis(..))
-import Language.Marlowe.Runtime.Core.Api (ContractId(..))
+import Language.Marlowe.Runtime.ChainSync.Api (
+  BlockHeader (..),
+  BlockHeaderHash (..),
+  ChainPoint,
+  TxId (..),
+  TxOutRef (..),
+  WithGenesis (..),
+ )
+import Language.Marlowe.Runtime.Core.Api (ContractId (..))
 
 getTipForContract :: ContractId -> T.Transaction ChainPoint
-getTipForContract (ContractId TxOutRef{..}) = T.statement params $ decodePoint <$>
-  [maybeStatement|
+getTipForContract (ContractId TxOutRef{..}) =
+  T.statement params $
+    decodePoint
+      <$> [maybeStatement|
     WITH contractId (txId, txIx) AS
       ( SELECT $1 :: bytea, $2 :: smallint
       )
@@ -45,7 +53,9 @@ getTipForContract (ContractId TxOutRef{..}) = T.statement params $ decodePoint <
     params = (unTxId txId, fromIntegral txIx)
     decodePoint = \case
       Nothing -> Genesis
-      Just (slot, hash, block) -> At $ BlockHeader
-        (fromIntegral slot)
-        (BlockHeaderHash hash)
-        (fromIntegral block)
+      Just (slot, hash, block) ->
+        At $
+          BlockHeader
+            (fromIntegral slot)
+            (BlockHeaderHash hash)
+            (fromIntegral block)

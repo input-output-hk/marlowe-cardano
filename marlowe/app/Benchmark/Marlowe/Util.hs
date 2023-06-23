@@ -1,4 +1,3 @@
-
 -----------------------------------------------------------------------------
 --
 -- Module      :  $Headers
@@ -7,64 +6,58 @@
 -- Stability   :  Experimental
 -- Portability :  Portable
 --
--- | Utility functions for creating script contexts.
---
 -----------------------------------------------------------------------------
-
-
 {-# LANGUAGE RecordWildCards #-}
 
+-- | Utility functions for creating script contexts.
+module Benchmark.Marlowe.Util (
+  -- * Conversion
+  lovelace,
+  makeBuiltinData,
+  makeDatumMap,
+  makeInput,
+  makeOutput,
+  makeRedeemerMap,
 
-module Benchmark.Marlowe.Util
-  ( -- * Conversion
-    lovelace
-  , makeBuiltinData
-  , makeDatumMap
-  , makeInput
-  , makeOutput
-  , makeRedeemerMap
-    -- * Rewriting
-  , updateScriptHash
-  ) where
-
+  -- * Rewriting
+  updateScriptHash,
+) where
 
 import Codec.Serialise (deserialise)
-import Plutus.V2.Ledger.Api
-  ( Address(Address)
-  , BuiltinData
-  , Credential(..)
-  , Datum(Datum)
-  , DatumHash
-  , LedgerBytes(getLedgerBytes)
-  , OutputDatum(NoOutputDatum, OutputDatumHash)
-  , Redeemer(Redeemer)
-  , ScriptContext(..)
-  , ScriptHash
-  , ScriptPurpose
-  , TxId
-  , TxInInfo(..)
-  , TxInfo(..)
-  , TxOut(..)
-  , TxOutRef(..)
-  , ValidatorHash
-  , Value
-  , adaSymbol
-  , adaToken
-  , dataToBuiltinData
-  , fromBuiltin
-  , singleton
-  )
+import Plutus.V2.Ledger.Api (
+  Address (Address),
+  BuiltinData,
+  Credential (..),
+  Datum (Datum),
+  DatumHash,
+  LedgerBytes (getLedgerBytes),
+  OutputDatum (NoOutputDatum, OutputDatumHash),
+  Redeemer (Redeemer),
+  ScriptContext (..),
+  ScriptHash,
+  ScriptPurpose,
+  TxId,
+  TxInInfo (..),
+  TxInfo (..),
+  TxOut (..),
+  TxOutRef (..),
+  ValidatorHash,
+  Value,
+  adaSymbol,
+  adaToken,
+  dataToBuiltinData,
+  fromBuiltin,
+  singleton,
+ )
 
 import qualified Data.ByteString.Lazy as LBS (fromStrict)
 import qualified PlutusTx.AssocMap as AM (Map, singleton)
-
 
 -- | Integer to lovelace.
 lovelace
   :: Integer
   -> Value
 lovelace = singleton adaSymbol adaToken
-
 
 -- Construct a `TxInInfo`.
 makeInput
@@ -80,7 +73,6 @@ makeInput txId txIx credential value datum script =
     (TxOutRef txId txIx)
     (makeOutput credential value datum script)
 
-
 -- Construct a `TxOut`.
 makeOutput
   :: Credential
@@ -90,14 +82,12 @@ makeOutput
   -> TxOut
 makeOutput credential value = TxOut (Address credential Nothing) value . maybe NoOutputDatum OutputDatumHash
 
-
 -- Construct a map of redemers.
 makeRedeemerMap
   :: ScriptPurpose
   -> LedgerBytes
   -> AM.Map ScriptPurpose Redeemer
 makeRedeemerMap = (. (Redeemer . makeBuiltinData)) . AM.singleton
-
 
 -- Construct a map of datum hashes to datums.
 makeDatumMap
@@ -106,13 +96,11 @@ makeDatumMap
   -> AM.Map DatumHash Datum
 makeDatumMap = (. (Datum . makeBuiltinData)) . AM.singleton
 
-
 -- Convert ledger bytes to builtin data.
 makeBuiltinData
   :: LedgerBytes
   -> BuiltinData
 makeBuiltinData = dataToBuiltinData . deserialise . LBS.fromStrict . fromBuiltin . getLedgerBytes
-
 
 -- Rewrite all of a particular script hash in the script context.
 updateScriptHash
@@ -121,23 +109,19 @@ updateScriptHash
   -> ScriptContext
   -> ScriptContext
 updateScriptHash oldHash newHash scriptContext =
-  let
-    updateAddress address@(Address (ScriptCredential hash) stakeCredential)
-      | hash == oldHash = Address (ScriptCredential newHash) stakeCredential
-      | otherwise = address
-    updateAddress address = address
-    updateTxOut txOut@TxOut{..} = txOut {txOutAddress = updateAddress txOutAddress}
-    updateTxInInfo txInInfo@TxInInfo{..} =
-      txInInfo {txInInfoResolved = updateTxOut txInInfoResolved}
-    txInfo@TxInfo{..} = scriptContextTxInfo scriptContext
-    txInfo' =
-      txInfo
-      {
-        txInfoInputs = updateTxInInfo <$> txInfoInputs
-      , txInfoOutputs = updateTxOut <$> txInfoOutputs
-      }
-  in
-    scriptContext
-    {
-      scriptContextTxInfo = txInfo'
-    }
+  let updateAddress address@(Address (ScriptCredential hash) stakeCredential)
+        | hash == oldHash = Address (ScriptCredential newHash) stakeCredential
+        | otherwise = address
+      updateAddress address = address
+      updateTxOut txOut@TxOut{..} = txOut{txOutAddress = updateAddress txOutAddress}
+      updateTxInInfo txInInfo@TxInInfo{..} =
+        txInInfo{txInInfoResolved = updateTxOut txInInfoResolved}
+      txInfo@TxInfo{..} = scriptContextTxInfo scriptContext
+      txInfo' =
+        txInfo
+          { txInfoInputs = updateTxInInfo <$> txInfoInputs
+          , txInfoOutputs = updateTxOut <$> txInfoOutputs
+          }
+   in scriptContext
+        { scriptContextTxInfo = txInfo'
+        }

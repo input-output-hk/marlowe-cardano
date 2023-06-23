@@ -78,21 +78,21 @@ library
     Language.Marlowe.Runtime.Core.ScriptRegistry
 
   build-depends:
-    , aeson               >=2       && <3
-    , base                >=4.9     && <5
-    , base16              ^>=0.3.2
-    , binary              ^>=0.8.8
-    , bytestring          >=0.10.12 && <0.12
-    , cardano-api         ==1.35.4
-    , containers          ^>=0.6.5
-    , marlowe-cardano     ==0.1.1.0
-    , marlowe-chain-sync  ==0.0.2
-    , marlowe-protocols   ==0.1.1.0
-    , ouroboros-network   ==0.1.0.1
-    , plutus-ledger-api   ==1.0.0.1
-    , plutus-tx           ==1.0.0.0
-    , text                >=1.2.4   && <2
-    , time                >=1.9     && <2
+    , aeson >=2 && <3
+    , base >=4.9 && <5
+    , base16 ^>=0.3.2
+    , binary ^>=0.8.8
+    , bytestring >=0.10.12 && <0.12
+    , cardano-api ==1.35.4
+    , containers ^>=0.6.5
+    , marlowe-cardano ==0.1.1.0
+    , marlowe-chain-sync ==0.0.2
+    , marlowe-protocols ==0.1.1.0
+    , ouroboros-network ==0.1.0.1
+    , plutus-ledger-api ==1.0.0.1
+    , plutus-tx ==1.0.0.0
+    , text >=1.2.4 && <2
+    , time >=1.9 && <2
 
 library gen
   import:          lang
@@ -105,18 +105,18 @@ library gen
     Language.Marlowe.Runtime.Transaction.Gen
 
   build-depends:
-    , base                                                                   >=4.9     && <5
-    , bytestring                                                             >=0.10.12 && <0.12
-    , cardano-api:{cardano-api, gen}                                         ==1.35.4
-    , hedgehog-quickcheck                                                    ^>=0.1
-    , http-media                                                             ^>=0.8
-    , marlowe-cardano                                                        ==0.1.1.0
-    , marlowe-chain-sync:{gen, plutus-compat}                                ==0.0.2
-    , marlowe-runtime:{marlowe-runtime, discovery-api, history-api, tx-api}  ==0.0.2
-    , marlowe-test                                                           ==0.1.2.0
-    , network-uri                                                            >=2.6     && <3
-    , QuickCheck                                                             >=2.14    && <3
-    , quickcheck-instances                                                   ^>=0.3.29
+    , base >=4.9 && <5
+    , bytestring >=0.10.12 && <0.12
+    , cardano-api:{cardano-api, gen} ==1.35.4
+    , hedgehog-quickcheck ^>=0.1
+    , http-media ^>=0.8
+    , marlowe-cardano ==0.1.1.0
+    , marlowe-chain-sync:{gen, plutus-compat} ==0.0.2
+    , marlowe-runtime:{marlowe-runtime, discovery-api, history-api, tx-api} ==0.0.2
+    , marlowe-test ==0.1.2.0
+    , network-uri >=2.6 && <3
+    , QuickCheck >=2.14 && <3
+    , quickcheck-instances ^>=0.3.29
 
 library history-api
   import:          lang
@@ -129,22 +129,22 @@ library history-api
     Language.Marlowe.Runtime.History.Api
 
   build-depends:
-    , aeson                 >=2       && <3
-    , base                  >=4.9     && <5
-    , binary                ^>=0.8.8
-    , cardano-api           ==1.35.4
-    , containers            ^>=0.6.5
-    , errors                >=2.3     && <3
-    , hs-opentelemetry-api  ==0.0.3.6
-    , marlowe-cardano       ==0.1.1.0
-    , marlowe-chain-sync    ==0.0.2
-    , marlowe-protocols     ==0.1.1.0
-    , marlowe-runtime       ==0.0.2
-    , ouroboros-consensus   ==0.1.0.1
-    , ouroboros-network     ==0.1.0.1
-    , plutus-ledger-api     ==1.0.0.1
-    , transformers          ^>=0.5.6
-    , typed-protocols       ==0.1.0.0
+    , aeson >=2 && <3
+    , base >=4.9 && <5
+    , binary ^>=0.8.8
+    , cardano-api ==1.35.4
+    , containers ^>=0.6.5
+    , errors >=2.3 && <3
+    , hs-opentelemetry-api ==0.0.3.6
+    , marlowe-cardano ==0.1.1.0
+    , marlowe-chain-sync ==0.0.2
+    , marlowe-protocols ==0.1.1.0
+    , marlowe-runtime ==0.0.2
+    , ouroboros-consensus ==0.1.0.1
+    , ouroboros-network ==0.1.0.1
+    , plutus-ledger-api ==1.0.0.1
+    , transformers ^>=0.5.6
+    , typed-protocols ==0.1.0.0
 
 library indexer
   import:          lang
@@ -163,36 +163,36 @@ library indexer
     Language.Marlowe.Runtime.Indexer.Types
 
   build-depends:
-    , aeson                                           >=2       && <3
-    , async-components                                ==0.1.1.0
-    , base                                            >=4.9     && <5
-    , binary                                          ^>=0.8.8
-    , bytestring                                      >=0.10.12 && <0.12
-    , cardano-api                                     ==1.35.4
-    , co-log                                          >=0.5.0.0 && <0.6.0.0
-    , containers                                      ^>=0.6.5
-    , eventuo11y                                      >=0.9     && <0.11
-    , eventuo11y-extras                               ==0.1.1.0
-    , eventuo11y-otel                                 ^>=0.1
-    , hasql                                           >=1.6     && <2
-    , hasql-pool                                      ^>=0.8
-    , hasql-th                                        ^>=0.4
-    , hasql-transaction                               ^>=1
-    , hs-opentelemetry-api                            ==0.0.3.6
-    , marlowe-cardano                                 ==0.1.1.0
-    , marlowe-chain-sync                              ==0.0.2
-    , marlowe-protocols                               ==0.1.1.0
-    , marlowe-runtime:{marlowe-runtime, history-api}  ==0.0.2
-    , mtl                                             >=2.2     && <3
-    , nonempty-containers                             ^>=0.3.4
-    , plutus-ledger-api                               ==1.0.0.1
-    , stm                                             ^>=2.5
-    , text                                            >=1.2.4   && <2
-    , time                                            >=1.9     && <2
-    , transformers                                    ^>=0.5.6
-    , unliftio                                        ^>=0.2.1
-    , vector                                          ^>=0.12.3
-    , witherable                                      ^>=0.4
+    , aeson >=2 && <3
+    , async-components ==0.1.1.0
+    , base >=4.9 && <5
+    , binary ^>=0.8.8
+    , bytestring >=0.10.12 && <0.12
+    , cardano-api ==1.35.4
+    , co-log >=0.5.0.0 && <0.6.0.0
+    , containers ^>=0.6.5
+    , eventuo11y >=0.9 && <0.11
+    , eventuo11y-extras ==0.1.1.0
+    , eventuo11y-otel ^>=0.1
+    , hasql >=1.6 && <2
+    , hasql-pool ^>=0.8
+    , hasql-th ^>=0.4
+    , hasql-transaction ^>=1
+    , hs-opentelemetry-api ==0.0.3.6
+    , marlowe-cardano ==0.1.1.0
+    , marlowe-chain-sync ==0.0.2
+    , marlowe-protocols ==0.1.1.0
+    , marlowe-runtime:{marlowe-runtime, history-api} ==0.0.2
+    , mtl >=2.2 && <3
+    , nonempty-containers ^>=0.3.4
+    , plutus-ledger-api ==1.0.0.1
+    , stm ^>=2.5
+    , text >=1.2.4 && <2
+    , time >=1.9 && <2
+    , transformers ^>=0.5.6
+    , unliftio ^>=0.2.1
+    , vector ^>=0.12.3
+    , witherable ^>=0.4
 
 library sync-api
   import:          lang
@@ -204,17 +204,17 @@ library sync-api
     Language.Marlowe.Protocol.Query.Types
 
   build-depends:
-    , aeson                                             >=2       && <3
-    , base                                              >=4.9     && <5
-    , binary                                            ^>=0.8.8
-    , cardano-api                                       ==1.35.4
-    , containers                                        ^>=0.6.5
-    , marlowe-chain-sync                                ==0.0.2
-    , marlowe-protocols                                 ==0.1.1.0
-    , marlowe-runtime:{marlowe-runtime, discovery-api}  ==0.0.2
-    , ouroboros-consensus                               ==0.1.0.1
-    , time                                              >=1.9     && <2
-    , unliftio                                          ^>=0.2.1
+    , aeson >=2 && <3
+    , base >=4.9 && <5
+    , binary ^>=0.8.8
+    , cardano-api ==1.35.4
+    , containers ^>=0.6.5
+    , marlowe-chain-sync ==0.0.2
+    , marlowe-protocols ==0.1.1.0
+    , marlowe-runtime:{marlowe-runtime, discovery-api} ==0.0.2
+    , ouroboros-consensus ==0.1.0.1
+    , time >=1.9 && <2
+    , unliftio ^>=0.2.1
 
 library contract-api
   import:          lang
@@ -227,19 +227,19 @@ library contract-api
     Language.Marlowe.Runtime.Contract.Api
 
   build-depends:
-    , aeson                 >=2       && <3
-    , base                  >=4.9     && <5
-    , binary                ^>=0.8.8
-    , cardano-api           ==1.35.4
-    , containers            ^>=0.6.5
-    , hs-opentelemetry-api  ==0.0.3.6
-    , marlowe-cardano       ==0.1.1.0
-    , marlowe-chain-sync    ==0.0.2
-    , marlowe-protocols     ==0.1.1.0
-    , marlowe-runtime       ==0.0.2
-    , plutus-ledger-api     ==1.0.0.1
-    , text                  >=1.2.4   && <2
-    , typed-protocols       ==0.1.0.0
+    , aeson >=2 && <3
+    , base >=4.9 && <5
+    , binary ^>=0.8.8
+    , cardano-api ==1.35.4
+    , containers ^>=0.6.5
+    , hs-opentelemetry-api ==0.0.3.6
+    , marlowe-cardano ==0.1.1.0
+    , marlowe-chain-sync ==0.0.2
+    , marlowe-protocols ==0.1.1.0
+    , marlowe-runtime ==0.0.2
+    , plutus-ledger-api ==1.0.0.1
+    , text >=1.2.4 && <2
+    , typed-protocols ==0.1.0.0
 
 library contract
   import:          lang
@@ -254,33 +254,33 @@ library contract
     Language.Marlowe.Runtime.Contract.Store.Memory
 
   build-depends:
-    , aeson                                            >=2       && <3
-    , async-components                                 ==0.1.1.0
-    , base                                             >=4.9     && <5
-    , binary                                           ^>=0.8.8
-    , bytestring                                       >=0.10.12 && <0.12
-    , cardano-api                                      ==1.35.4
-    , containers                                       ^>=0.6.5
-    , eventuo11y                                       >=0.9     && <0.11
-    , eventuo11y-extras                                ==0.1.1.0
-    , eventuo11y-otel                                  ^>=0.1
-    , exceptions                                       ^>=0.10
-    , filepath                                         ^>=1.4
-    , hs-opentelemetry-api                             ==0.0.3.6
-    , lock-file                                        ^>=0.7
-    , marlowe-cardano                                  ==0.1.1.0
-    , marlowe-chain-sync                               ==0.0.2
-    , marlowe-protocols                                ==0.1.1.0
-    , marlowe-runtime:{marlowe-runtime, contract-api}  ==0.0.2
-    , plutus-ledger-api                                ==1.0.0.1
-    , resourcet                                        >=1.3     && <2
-    , text                                             >=1.2.4   && <2
-    , transformers                                     ^>=0.5.6
-    , typed-protocols                                  ==0.1.0.0
-    , unliftio                                         ^>=0.2.1
-    , unordered-containers                             ^>=0.2.19
-    , uuid                                             >=1.3     && <2
-    , zlib                                             ^>=0.6.3
+    , aeson >=2 && <3
+    , async-components ==0.1.1.0
+    , base >=4.9 && <5
+    , binary ^>=0.8.8
+    , bytestring >=0.10.12 && <0.12
+    , cardano-api ==1.35.4
+    , containers ^>=0.6.5
+    , eventuo11y >=0.9 && <0.11
+    , eventuo11y-extras ==0.1.1.0
+    , eventuo11y-otel ^>=0.1
+    , exceptions ^>=0.10
+    , filepath ^>=1.4
+    , hs-opentelemetry-api ==0.0.3.6
+    , lock-file ^>=0.7
+    , marlowe-cardano ==0.1.1.0
+    , marlowe-chain-sync ==0.0.2
+    , marlowe-protocols ==0.1.1.0
+    , marlowe-runtime:{marlowe-runtime, contract-api} ==0.0.2
+    , plutus-ledger-api ==1.0.0.1
+    , resourcet >=1.3 && <2
+    , text >=1.2.4 && <2
+    , transformers ^>=0.5.6
+    , typed-protocols ==0.1.0.0
+    , unliftio ^>=0.2.1
+    , unordered-containers ^>=0.2.19
+    , uuid >=1.3 && <2
+    , zlib ^>=0.6.3
 
 library sync
   import:          lang
@@ -308,31 +308,31 @@ library sync
     Language.Marlowe.Runtime.Sync.QueryServer
 
   build-depends:
-    , aeson                                                                    >=2       && <3
-    , async-components                                                         ==0.1.1.0
-    , base                                                                     >=4.9     && <5
-    , binary                                                                   ^>=0.8.8
-    , bytestring                                                               >=0.10.12 && <0.12
-    , containers                                                               ^>=0.6.5
-    , eventuo11y                                                               >=0.9     && <0.11
-    , eventuo11y-extras                                                        ==0.1.1.0
-    , eventuo11y-otel                                                          ^>=0.1
-    , foldl                                                                    >=1.4     && <2
-    , hasql                                                                    >=1.6     && <2
-    , hasql-th                                                                 ^>=0.4
-    , hasql-transaction                                                        ^>=1
-    , hs-opentelemetry-api                                                     ==0.0.3.6
-    , marlowe-cardano                                                          ==0.1.1.0
-    , marlowe-chain-sync                                                       ==0.0.2
-    , marlowe-protocols                                                        ==0.1.1.0
-    , marlowe-runtime:{marlowe-runtime, discovery-api, history-api, sync-api}  ==0.0.2
-    , plutus-ledger-api                                                        ==1.0.0.1
-    , text                                                                     >=1.2.4   && <2
-    , time                                                                     >=1.9     && <2
-    , transformers                                                             ^>=0.5.6
-    , unliftio                                                                 ^>=0.2.1
-    , vector                                                                   ^>=0.12.3
-    , witherable                                                               ^>=0.4
+    , aeson >=2 && <3
+    , async-components ==0.1.1.0
+    , base >=4.9 && <5
+    , binary ^>=0.8.8
+    , bytestring >=0.10.12 && <0.12
+    , containers ^>=0.6.5
+    , eventuo11y >=0.9 && <0.11
+    , eventuo11y-extras ==0.1.1.0
+    , eventuo11y-otel ^>=0.1
+    , foldl >=1.4 && <2
+    , hasql >=1.6 && <2
+    , hasql-th ^>=0.4
+    , hasql-transaction ^>=1
+    , hs-opentelemetry-api ==0.0.3.6
+    , marlowe-cardano ==0.1.1.0
+    , marlowe-chain-sync ==0.0.2
+    , marlowe-protocols ==0.1.1.0
+    , marlowe-runtime:{marlowe-runtime, discovery-api, history-api, sync-api} ==0.0.2
+    , plutus-ledger-api ==1.0.0.1
+    , text >=1.2.4 && <2
+    , time >=1.9 && <2
+    , transformers ^>=0.5.6
+    , unliftio ^>=0.2.1
+    , vector ^>=0.12.3
+    , witherable ^>=0.4
 
 library discovery-api
   import:          lang
@@ -345,14 +345,14 @@ library discovery-api
     Language.Marlowe.Runtime.Discovery.Api
 
   build-depends:
-    , aeson                 >=2       && <3
-    , base                  >=4.9     && <5
-    , binary                ^>=0.8.8
-    , hs-opentelemetry-api  ==0.0.3.6
-    , marlowe-chain-sync    ==0.0.2
-    , marlowe-protocols     ==0.1.1.0
-    , marlowe-runtime       ==0.0.2
-    , typed-protocols       ==0.1.0.0
+    , aeson >=2 && <3
+    , base >=4.9 && <5
+    , binary ^>=0.8.8
+    , hs-opentelemetry-api ==0.0.3.6
+    , marlowe-chain-sync ==0.0.2
+    , marlowe-protocols ==0.1.1.0
+    , marlowe-runtime ==0.0.2
+    , typed-protocols ==0.1.0.0
 
 library tx-api
   import:          lang
@@ -360,20 +360,20 @@ library tx-api
   visibility:      public
   exposed-modules: Language.Marlowe.Runtime.Transaction.Api
   build-depends:
-    , aeson                                           >=2       && <3
-    , base                                            >=4.9     && <5
-    , binary                                          ^>=0.8.8
-    , bytestring                                      >=0.10.12 && <0.12
-    , cardano-api                                     ==1.35.4
-    , containers                                      ^>=0.6.5
-    , http-media                                      ^>=0.8
+    , aeson >=2 && <3
+    , base >=4.9 && <5
+    , binary ^>=0.8.8
+    , bytestring >=0.10.12 && <0.12
+    , cardano-api ==1.35.4
+    , containers ^>=0.6.5
+    , http-media ^>=0.8
     , marlowe-cardano
-    , marlowe-chain-sync                              ==0.0.2
-    , marlowe-protocols                               ==0.1.1.0
-    , marlowe-runtime:{marlowe-runtime, history-api}  ==0.0.2
-    , network-uri                                     >=2.6     && <3
-    , text                                            >=1.2.4   && <2
-    , time                                            >=1.9     && <2
+    , marlowe-chain-sync ==0.0.2
+    , marlowe-protocols ==0.1.1.0
+    , marlowe-runtime:{marlowe-runtime, history-api} ==0.0.2
+    , network-uri >=2.6 && <3
+    , text >=1.2.4 && <2
+    , time >=1.9 && <2
 
 library tx
   import:          lang
@@ -390,33 +390,33 @@ library tx
     Language.Marlowe.Runtime.Transaction.Submit
 
   build-depends:
-    , aeson                                                                                 >=2       && <3
+    , aeson >=2 && <3
     , async
-    , async-components                                                                      ==0.1.1.0
-    , base                                                                                  >=4.9     && <5
-    , cardano-api                                                                           ==1.35.4
-    , cardano-ledger-core                                                                   ==0.1.0.0
-    , co-log                                                                                >=0.5.0.0 && <0.6.0.0
-    , containers                                                                            ^>=0.6.5
-    , errors                                                                                >=2.3     && <3
-    , eventuo11y                                                                            >=0.9     && <0.11
-    , eventuo11y-extras                                                                     ==0.1.1.0
-    , eventuo11y-otel                                                                       ^>=0.1
-    , hs-opentelemetry-api                                                                  ==0.0.3.6
-    , marlowe-cardano                                                                       ==0.1.1.0
-    , marlowe-chain-sync:{marlowe-chain-sync, plutus-compat}                                ==0.0.2
-    , marlowe-protocols                                                                     ==0.1.1.0
-    , marlowe-runtime:{marlowe-runtime, contract-api, history-api, plutus-scripts, tx-api}  ==0.0.2
-    , ouroboros-consensus                                                                   ==0.1.0.1
-    , ouroboros-network                                                                     ==0.1.0.1
-    , plutus-ledger-api                                                                     ==1.0.0.1
-    , plutus-tx                                                                             ==1.0.0.0
-    , semialign                                                                             >=1.2     && <2
-    , stm                                                                                   ^>=2.5
-    , time                                                                                  >=1.9     && <2
-    , transformers                                                                          ^>=0.5.6
-    , unliftio                                                                              ^>=0.2.1
-    , witherable                                                                            ^>=0.4
+    , async-components ==0.1.1.0
+    , base >=4.9 && <5
+    , cardano-api ==1.35.4
+    , cardano-ledger-core ==0.1.0.0
+    , co-log >=0.5.0.0 && <0.6.0.0
+    , containers ^>=0.6.5
+    , errors >=2.3 && <3
+    , eventuo11y >=0.9 && <0.11
+    , eventuo11y-extras ==0.1.1.0
+    , eventuo11y-otel ^>=0.1
+    , hs-opentelemetry-api ==0.0.3.6
+    , marlowe-cardano ==0.1.1.0
+    , marlowe-chain-sync:{marlowe-chain-sync, plutus-compat} ==0.0.2
+    , marlowe-protocols ==0.1.1.0
+    , marlowe-runtime:{marlowe-runtime, contract-api, history-api, plutus-scripts, tx-api} ==0.0.2
+    , ouroboros-consensus ==0.1.0.1
+    , ouroboros-network ==0.1.0.1
+    , plutus-ledger-api ==1.0.0.1
+    , plutus-tx ==1.0.0.0
+    , semialign >=1.2 && <2
+    , stm ^>=2.5
+    , time >=1.9 && <2
+    , transformers ^>=0.5.6
+    , unliftio ^>=0.2.1
+    , witherable ^>=0.4
 
 library proxy-api
   import:          lang
@@ -428,11 +428,11 @@ library proxy-api
     Language.Marlowe.Protocol.Types
 
   build-depends:
-    , base                                                                          >=4.9     && <5
-    , binary                                                                        ^>=0.8.8
-    , marlowe-protocols                                                             ==0.1.1.0
-    , marlowe-runtime:{contract-api, discovery-api, history-api, sync-api, tx-api}  ==0.0.2
-    , typed-protocols                                                               ==0.1.0.0
+    , base >=4.9 && <5
+    , binary ^>=0.8.8
+    , marlowe-protocols ==0.1.1.0
+    , marlowe-runtime:{contract-api, discovery-api, history-api, sync-api, tx-api} ==0.0.2
+    , typed-protocols ==0.1.0.0
 
 library proxy
   import:          lang
@@ -440,16 +440,16 @@ library proxy
   visibility:      public
   exposed-modules: Language.Marlowe.Runtime.Proxy
   build-depends:
-    , async-components                                                                         ==0.1.1.0
-    , base                                                                                     >=4.9     && <5
-    , eventuo11y                                                                               >=0.9     && <0.11
-    , eventuo11y-extras                                                                        ==0.1.1.0
-    , marlowe-protocols                                                                        ==0.1.1.0
-    , marlowe-runtime:{contract-api, discovery-api, history-api, proxy-api, sync-api, tx-api}  ==0.0.2
-    , resourcet                                                                                >=1.3     && <2
-    , transformers                                                                             ^>=0.5.6
-    , typed-protocols                                                                          ==0.1.0.0
-    , unliftio                                                                                 ^>=0.2.1
+    , async-components ==0.1.1.0
+    , base >=4.9 && <5
+    , eventuo11y >=0.9 && <0.11
+    , eventuo11y-extras ==0.1.1.0
+    , marlowe-protocols ==0.1.1.0
+    , marlowe-runtime:{contract-api, discovery-api, history-api, proxy-api, sync-api, tx-api} ==0.0.2
+    , resourcet >=1.3 && <2
+    , transformers ^>=0.5.6
+    , typed-protocols ==0.1.0.0
+    , unliftio ^>=0.2.1
 
 library runtime
   import:          lang
@@ -457,19 +457,19 @@ library runtime
   visibility:      public
   exposed-modules: Language.Marlowe.Runtime
   build-depends:
-    , async-components                                                                  ==0.1.1.0
-    , base                                                                              >=4.9     && <5
-    , cardano-api                                                                       ==1.35.4
-    , co-log                                                                            >=0.5.0.0 && <0.6.0.0
-    , containers                                                                        ^>=0.6.5
-    , eventuo11y-extras                                                                 ==0.1.1.0
-    , marlowe-chain-sync:{marlowe-chain-sync, chain-indexer, libchainsync}              ==0.0.2
-    , marlowe-protocols                                                                 ==0.1.1.0
-    , marlowe-runtime:{marlowe-runtime, contract, indexer, proxy, proxy-api, sync, tx}  ==0.0.2
-    , nonempty-containers                                                               ^>=0.3.4
-    , time                                                                              >=1.9     && <2
-    , typed-protocols                                                                   ==0.1.0.0
-    , unliftio                                                                          ^>=0.2.1
+    , async-components ==0.1.1.0
+    , base >=4.9 && <5
+    , cardano-api ==1.35.4
+    , co-log >=0.5.0.0 && <0.6.0.0
+    , containers ^>=0.6.5
+    , eventuo11y-extras ==0.1.1.0
+    , marlowe-chain-sync:{marlowe-chain-sync, chain-indexer, libchainsync} ==0.0.2
+    , marlowe-protocols ==0.1.1.0
+    , marlowe-runtime:{marlowe-runtime, contract, indexer, proxy, proxy-api, sync, tx} ==0.0.2
+    , nonempty-containers ^>=0.3.4
+    , time >=1.9 && <2
+    , typed-protocols ==0.1.0.0
+    , unliftio ^>=0.2.1
 
 library plutus-scripts
   import:          lang
@@ -484,11 +484,11 @@ library plutus-scripts
     Language.Marlowe.Runtime.Plutus.V2.Scripts.MarloweV1.RoleTokensPolicy.Types
 
   build-depends:
-    , base               >=4.9     && <5
-    , newtype-generics   ^>=0.6.2
-    , plutus-ledger-api  ==1.0.0.1
-    , plutus-tx          ==1.0.0.0
-    , plutus-tx-plugin   ==1.0.0.0
+    , base >=4.9 && <5
+    , newtype-generics ^>=0.6.2
+    , plutus-ledger-api ==1.0.0.1
+    , plutus-tx ==1.0.0.0
+    , plutus-tx-plugin ==1.0.0.0
 
 library config
   import:          lang
@@ -496,13 +496,13 @@ library config
   visibility:      public
   exposed-modules: Language.Marlowe.Runtime.CLI.Option
   build-depends:
-    , base                  >=4.9   && <5
-    , marlowe-chain-sync    ==0.0.2
-    , marlowe-runtime       ==0.0.2
-    , network               >=3.1   && <4
-    , optparse-applicative  ^>=0.17
-    , split                 ^>=0.2.3
-    , text                  >=1.2.4 && <2
+    , base >=4.9 && <5
+    , marlowe-chain-sync ==0.0.2
+    , marlowe-runtime ==0.0.2
+    , network >=3.1 && <4
+    , optparse-applicative ^>=0.17
+    , split ^>=0.2.3
+    , text >=1.2.4 && <2
 
 executable marlowe-indexer
   import:          lang
@@ -514,26 +514,26 @@ executable marlowe-indexer
 
   autogen-modules: Paths_marlowe_runtime
   build-depends:
-    , async-components                            ==0.1.1.0
-    , base                                        >=4.9     && <5
-    , bytestring                                  >=0.10.12 && <0.12
-    , eventuo11y                                  >=0.9     && <0.11
-    , eventuo11y-extras                           ==0.1.1.0
-    , eventuo11y-otel                             ^>=0.1
-    , hasql                                       >=1.6     && <2
-    , hasql-pool                                  ^>=0.8
-    , hs-opentelemetry-api                        ==0.0.3.6
-    , hs-opentelemetry-sdk                        ==0.0.3.4
-    , marlowe-chain-sync                          ==0.0.2
-    , marlowe-protocols                           ==0.1.1.0
-    , marlowe-runtime:{marlowe-runtime, indexer}  ==0.0.2
-    , mtl                                         >=2.2     && <3
-    , network                                     >=3.1     && <4
-    , nonempty-containers                         ^>=0.3.4
-    , optparse-applicative                        ^>=0.17
-    , postgresql-libpq                            ^>=0.9
-    , text                                        >=1.2.4   && <2
-    , unliftio                                    ^>=0.2.1
+    , async-components ==0.1.1.0
+    , base >=4.9 && <5
+    , bytestring >=0.10.12 && <0.12
+    , eventuo11y >=0.9 && <0.11
+    , eventuo11y-extras ==0.1.1.0
+    , eventuo11y-otel ^>=0.1
+    , hasql >=1.6 && <2
+    , hasql-pool ^>=0.8
+    , hs-opentelemetry-api ==0.0.3.6
+    , hs-opentelemetry-sdk ==0.0.3.4
+    , marlowe-chain-sync ==0.0.2
+    , marlowe-protocols ==0.1.1.0
+    , marlowe-runtime:{marlowe-runtime, indexer} ==0.0.2
+    , mtl >=2.2 && <3
+    , network >=3.1 && <4
+    , nonempty-containers ^>=0.3.4
+    , optparse-applicative ^>=0.17
+    , postgresql-libpq ^>=0.9
+    , text >=1.2.4 && <2
+    , unliftio ^>=0.2.1
 
   ghc-options:     -threaded
 
@@ -547,24 +547,25 @@ executable marlowe-sync
 
   autogen-modules: Paths_marlowe_runtime
   build-depends:
-    , async-components                                              ==0.1.1.0
-    , base                                                          >=4.9     && <5
-    , bytestring                                                    >=0.10.12 && <0.12
-    , eventuo11y                                                    >=0.9     && <0.11
-    , eventuo11y-extras                                             ==0.1.1.0
-    , eventuo11y-otel                                               ^>=0.1
-    , hasql                                                         >=1.6     && <2
-    , hasql-pool                                                    ^>=0.8
-    , hs-opentelemetry-api                                          ==0.0.3.6
-    , hs-opentelemetry-sdk                                          ==0.0.3.4
-    , marlowe-protocols                                             ==0.1.1.0
-    , marlowe-runtime:{discovery-api, history-api, sync, sync-api}  ==0.0.2
-    , mtl                                                           >=2.2     && <3
-    , network                                                       >=3.1     && <4
-    , optparse-applicative                                          ^>=0.17
-    , postgresql-libpq                                              ^>=0.9
-    , text                                                          >=1.2.4   && <2
-    , unliftio                                                      ^>=0.2.1
+    , async-components ==0.1.1.0
+    , base >=4.9 && <5
+    , bytestring >=0.10.12 && <0.12
+    , eventuo11y >=0.9 && <0.11
+    , eventuo11y-extras ==0.1.1.0
+    , eventuo11y-otel ^>=0.1
+    , hasql >=1.6 && <2
+    , hasql-pool ^>=0.8
+    , hs-opentelemetry-api ==0.0.3.6
+    , hs-opentelemetry-sdk ==0.0.3.4
+    , marlowe-chain-sync ==0.0.2
+    , marlowe-protocols ==0.1.1.0
+    , marlowe-runtime:{discovery-api, history-api, sync, sync-api} ==0.0.2
+    , mtl >=2.2 && <3
+    , network >=3.1 && <4
+    , optparse-applicative ^>=0.17
+    , postgresql-libpq ^>=0.9
+    , text >=1.2.4 && <2
+    , unliftio ^>=0.2.1
 
   ghc-options:     -threaded
 
@@ -578,19 +579,19 @@ executable marlowe-tx
 
   autogen-modules: Paths_marlowe_runtime
   build-depends:
-    , async-components                                             ==0.1.1.0
-    , base                                                         >=4.9     && <5
-    , eventuo11y                                                   >=0.9     && <0.11
-    , eventuo11y-extras                                            ==0.1.1.0
-    , eventuo11y-otel                                              ^>=0.1
-    , hs-opentelemetry-api                                         ==0.0.3.6
-    , hs-opentelemetry-sdk                                         ==0.0.3.4
-    , marlowe-chain-sync                                           ==0.0.2
-    , marlowe-protocols                                            ==0.1.1.0
-    , marlowe-runtime:{marlowe-runtime, contract-api, tx, tx-api}  ==0.0.2
-    , network                                                      >=3.1     && <4
-    , optparse-applicative                                         ^>=0.17
-    , text                                                         >=1.2.4   && <2
+    , async-components ==0.1.1.0
+    , base >=4.9 && <5
+    , eventuo11y >=0.9 && <0.11
+    , eventuo11y-extras ==0.1.1.0
+    , eventuo11y-otel ^>=0.1
+    , hs-opentelemetry-api ==0.0.3.6
+    , hs-opentelemetry-sdk ==0.0.3.4
+    , marlowe-chain-sync ==0.0.2
+    , marlowe-protocols ==0.1.1.0
+    , marlowe-runtime:{marlowe-runtime, contract-api, tx, tx-api} ==0.0.2
+    , network >=3.1 && <4
+    , optparse-applicative ^>=0.17
+    , text >=1.2.4 && <2
     , time
 
   ghc-options:     -threaded
@@ -605,19 +606,19 @@ executable marlowe-contract
 
   autogen-modules: Paths_marlowe_runtime
   build-depends:
-    , async-components                          ==0.1.1.0
-    , base                                      >=4.9     && <5
-    , eventuo11y                                >=0.9     && <0.11
-    , eventuo11y-extras                         ==0.1.1.0
-    , eventuo11y-otel                           ^>=0.1
-    , hs-opentelemetry-api                      ==0.0.3.6
-    , hs-opentelemetry-sdk                      ==0.0.3.4
-    , marlowe-protocols                         ==0.1.1.0
-    , marlowe-runtime:{contract, contract-api}  ==0.0.2
-    , network                                   >=3.1     && <4
-    , optparse-applicative                      ^>=0.17
-    , text                                      >=1.2.4   && <2
-    , typed-protocols                           ==0.1.0.0
+    , async-components ==0.1.1.0
+    , base >=4.9 && <5
+    , eventuo11y >=0.9 && <0.11
+    , eventuo11y-extras ==0.1.1.0
+    , eventuo11y-otel ^>=0.1
+    , hs-opentelemetry-api ==0.0.3.6
+    , hs-opentelemetry-sdk ==0.0.3.4
+    , marlowe-protocols ==0.1.1.0
+    , marlowe-runtime:{contract, contract-api} ==0.0.2
+    , network >=3.1 && <4
+    , optparse-applicative ^>=0.17
+    , text >=1.2.4 && <2
+    , typed-protocols ==0.1.0.0
 
   ghc-options:     -threaded
 
@@ -631,18 +632,18 @@ executable marlowe-proxy
 
   autogen-modules: Paths_marlowe_runtime
   build-depends:
-    , async-components                                                                                        ==0.1.1.0
-    , base                                                                                                    >=4.9     && <5
-    , eventuo11y                                                                                              >=0.9     && <0.11
-    , eventuo11y-extras                                                                                       ==0.1.1.0
-    , eventuo11y-otel                                                                                         ^>=0.1
-    , hs-opentelemetry-api                                                                                    ==0.0.3.6
-    , hs-opentelemetry-sdk                                                                                    ==0.0.3.4
-    , marlowe-protocols                                                                                       ==0.1.1.0
-    , marlowe-runtime:{config, contract-api, discovery-api, history-api, proxy, proxy-api, sync-api, tx-api}  ==0.0.2
-    , network                                                                                                 >=3.1     && <4
-    , optparse-applicative                                                                                    ^>=0.17
-    , text                                                                                                    >=1.2.4   && <2
+    , async-components ==0.1.1.0
+    , base >=4.9 && <5
+    , eventuo11y >=0.9 && <0.11
+    , eventuo11y-extras ==0.1.1.0
+    , eventuo11y-otel ^>=0.1
+    , hs-opentelemetry-api ==0.0.3.6
+    , hs-opentelemetry-sdk ==0.0.3.4
+    , marlowe-protocols ==0.1.1.0
+    , marlowe-runtime:{config, contract-api, discovery-api, history-api, proxy, proxy-api, sync-api, tx-api} ==0.0.2
+    , network >=3.1 && <4
+    , optparse-applicative ^>=0.17
+    , text >=1.2.4 && <2
 
   ghc-options:     -threaded
 
@@ -656,33 +657,33 @@ executable marlowe-runtime
 
   autogen-modules: Paths_marlowe_runtime
   build-depends:
-    , aeson                                                                               >=2       && <3
-    , async-components                                                                    ==0.1.1.0
-    , base                                                                                >=4.9     && <5
-    , bytestring                                                                          >=0.10.12 && <0.12
-    , cardano-api                                                                         ==1.35.4
-    , cardano-crypto-wrapper                                                              ==1.3.0
-    , cardano-ledger-byron                                                                ==0.1.0.0
-    , eventuo11y                                                                          >=0.9     && <0.11
-    , eventuo11y-extras                                                                   ==0.1.1.0
-    , eventuo11y-otel                                                                     ^>=0.1
-    , hasql                                                                               >=1.6     && <2
-    , hasql-pool                                                                          ^>=0.8
-    , hs-opentelemetry-api                                                                ==0.0.3.6
-    , hs-opentelemetry-sdk                                                                >=0.0.3   && <0.0.4
-    , marlowe-chain-sync:{marlowe-chain-sync, chain-indexer, libchainsync}                ==0.0.2
-    , marlowe-protocols                                                                   ==0.1.1.0
-    , marlowe-runtime:{marlowe-runtime, contract, indexer, proxy-api, runtime, sync, tx}  ==0.0.2
-    , mtl                                                                                 >=2.2     && <3
-    , network                                                                             >=3.1     && <4
-    , nonempty-containers                                                                 ^>=0.3.4
-    , optparse-applicative                                                                ^>=0.17
-    , ouroboros-network                                                                   ==0.1.0.1
-    , postgresql-libpq                                                                    ^>=0.9
-    , text                                                                                >=1.2.4   && <2
-    , transformers                                                                        ^>=0.5.6
-    , typed-protocols                                                                     ==0.1.0.0
-    , unliftio                                                                            ^>=0.2.1
+    , aeson >=2 && <3
+    , async-components ==0.1.1.0
+    , base >=4.9 && <5
+    , bytestring >=0.10.12 && <0.12
+    , cardano-api ==1.35.4
+    , cardano-crypto-wrapper ==1.3.0
+    , cardano-ledger-byron ==0.1.0.0
+    , eventuo11y >=0.9 && <0.11
+    , eventuo11y-extras ==0.1.1.0
+    , eventuo11y-otel ^>=0.1
+    , hasql >=1.6 && <2
+    , hasql-pool ^>=0.8
+    , hs-opentelemetry-api ==0.0.3.6
+    , hs-opentelemetry-sdk >=0.0.3 && <0.0.4
+    , marlowe-chain-sync:{marlowe-chain-sync, chain-indexer, libchainsync} ==0.0.2
+    , marlowe-protocols ==0.1.1.0
+    , marlowe-runtime:{marlowe-runtime, contract, indexer, proxy-api, runtime, sync, tx} ==0.0.2
+    , mtl >=2.2 && <3
+    , network >=3.1 && <4
+    , nonempty-containers ^>=0.3.4
+    , optparse-applicative ^>=0.17
+    , ouroboros-network ==0.1.0.1
+    , postgresql-libpq ^>=0.9
+    , text >=1.2.4 && <2
+    , transformers ^>=0.5.6
+    , typed-protocols ==0.1.0.0
+    , unliftio ^>=0.2.1
 
   ghc-options:     -threaded
 
@@ -706,32 +707,32 @@ test-suite marlowe-runtime-test
     Paths_marlowe_runtime
 
   build-depends:
-    , aeson                                                                                                   >=2       && <3
-    , base                                                                                                    >=4.9     && <5
-    , bytestring                                                                                              >=0.10.12 && <0.12
-    , cardano-api:{cardano-api, gen}                                                                          ==1.35.4
+    , aeson >=2 && <3
+    , base >=4.9 && <5
+    , bytestring >=0.10.12 && <0.12
+    , cardano-api:{cardano-api, gen} ==1.35.4
     , cardano-slotting
-    , containers                                                                                              ^>=0.6.5
-    , errors                                                                                                  >=2.3     && <3
-    , hedgehog-quickcheck                                                                                     ^>=0.1
+    , containers ^>=0.6.5
+    , errors >=2.3 && <3
+    , hedgehog-quickcheck ^>=0.1
     , hspec
-    , http-media                                                                                              ^>=0.8
-    , marlowe-cardano                                                                                         ==0.1.1.0
-    , marlowe-chain-sync:{marlowe-chain-sync, gen, plutus-compat}                                             ==0.0.2
-    , marlowe-protocols                                                                                       ==0.1.1.0
-    , marlowe-runtime:{marlowe-runtime, contract-api, discovery-api, gen, history-api, sync-api, tx, tx-api}  ==0.0.2
-    , marlowe-test                                                                                            ==0.1.2.0
-    , network-uri                                                                                             >=2.6     && <3
-    , ouroboros-consensus                                                                                     ==0.1.0.1
-    , plutus-ledger-api                                                                                       ==1.0.0.1
-    , plutus-tx                                                                                               ==1.0.0.0
-    , QuickCheck                                                                                              >=2.14    && <3
-    , quickcheck-instances                                                                                    ^>=0.3.29
-    , text                                                                                                    >=1.2.4   && <2
-    , time                                                                                                    >=1.9     && <2
-    , transformers                                                                                            ^>=0.5.6
-    , typed-protocols                                                                                         ==0.1.0.0
-    , vector                                                                                                  ^>=0.12.3
+    , http-media ^>=0.8
+    , marlowe-cardano ==0.1.1.0
+    , marlowe-chain-sync:{marlowe-chain-sync, gen, plutus-compat} ==0.0.2
+    , marlowe-protocols ==0.1.1.0
+    , marlowe-runtime:{marlowe-runtime, contract-api, discovery-api, gen, history-api, sync-api, tx, tx-api} ==0.0.2
+    , marlowe-test ==0.1.2.0
+    , network-uri >=2.6 && <3
+    , ouroboros-consensus ==0.1.0.1
+    , plutus-ledger-api ==1.0.0.1
+    , plutus-tx ==1.0.0.0
+    , QuickCheck >=2.14 && <3
+    , quickcheck-instances ^>=0.3.29
+    , text >=1.2.4 && <2
+    , time >=1.9 && <2
+    , transformers ^>=0.5.6
+    , typed-protocols ==0.1.0.0
+    , vector ^>=0.12.3
 
   build-tool-depends: hspec-discover:hspec-discover
   ghc-options:        -threaded
@@ -746,19 +747,19 @@ test-suite indexer-test
     Paths_marlowe_runtime
 
   build-depends:
-    , base                                                          >=4.9     && <5
-    , cardano-api                                                   ==1.35.4
-    , containers                                                    ^>=0.6.5
+    , base >=4.9 && <5
+    , cardano-api ==1.35.4
+    , containers ^>=0.6.5
     , hspec
-    , marlowe-cardano                                               ==0.1.1.0
-    , marlowe-chain-sync:{marlowe-chain-sync, plutus-compat}        ==0.0.2
-    , marlowe-runtime:{marlowe-runtime, gen, history-api, indexer}  ==0.0.2
-    , marlowe-test                                                  ==0.1.2.0
-    , ouroboros-consensus                                           ==0.1.0.1
-    , plutus-tx                                                     ==1.0.0.0
-    , QuickCheck                                                    >=2.14    && <3
-    , time                                                          >=1.9     && <2
-    , transformers                                                  ^>=0.5.6
+    , marlowe-cardano ==0.1.1.0
+    , marlowe-chain-sync:{marlowe-chain-sync, plutus-compat} ==0.0.2
+    , marlowe-runtime:{marlowe-runtime, gen, history-api, indexer} ==0.0.2
+    , marlowe-test ==0.1.2.0
+    , ouroboros-consensus ==0.1.0.1
+    , plutus-tx ==1.0.0.0
+    , QuickCheck >=2.14 && <3
+    , time >=1.9 && <2
+    , transformers ^>=0.5.6
 
   build-tool-depends: hspec-discover:hspec-discover
   ghc-options:        -threaded

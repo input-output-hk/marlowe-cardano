@@ -1,17 +1,17 @@
-module Test.Integration.Workspace
-  ( Workspace(..)
-  , copyToWorkspace
-  , createWorkspace
-  , createWorkspaceDir
-  , moveToWorkspace
-  , openWorkspaceFile
-  , resolveWorkspacePath
-  , rewriteJSONFile
-  , rewriteYAMLFile
-  , writeWorkspaceFile
-  , writeWorkspaceFileJSON
-  , writeWorkspaceFileYAML
-  ) where
+module Test.Integration.Workspace (
+  Workspace (..),
+  copyToWorkspace,
+  createWorkspace,
+  createWorkspaceDir,
+  moveToWorkspace,
+  openWorkspaceFile,
+  resolveWorkspacePath,
+  rewriteJSONFile,
+  rewriteYAMLFile,
+  writeWorkspaceFile,
+  writeWorkspaceFileJSON,
+  writeWorkspaceFileYAML,
+) where
 
 import Control.Concurrent (threadDelay)
 import Control.Exception (catch)
@@ -36,7 +36,7 @@ data Workspace = Workspace
   , releaseKey :: ReleaseKey
   }
 
-createWorkspace :: MonadResource m => FilePath -> m Workspace
+createWorkspace :: (MonadResource m) => FilePath -> m Workspace
 createWorkspace workspaceName = do
   workspaceId <- liftIO nextRandom
   let workspaceDir = "/tmp/workspaces" </> (workspaceName <> "-" <> show workspaceId)
@@ -46,27 +46,28 @@ createWorkspace workspaceName = do
 
 removePathForciblyWithRetries :: Natural -> FilePath -> IO ()
 removePathForciblyWithRetries 0 path = removePathForcibly path
-removePathForciblyWithRetries n path = removePathForcibly path `catch` \(_ :: SomeException) -> do
-  threadDelay 10_000
-  removePathForciblyWithRetries (n - 1) path
+removePathForciblyWithRetries n path =
+  removePathForcibly path `catch` \(_ :: SomeException) -> do
+    threadDelay 10_000
+    removePathForciblyWithRetries (n - 1) path
 
 resolveWorkspacePath :: Workspace -> FilePath -> FilePath
 resolveWorkspacePath Workspace{..} = (workspaceDir </>)
 
-openWorkspaceFile :: MonadResource m => Workspace -> FilePath -> IOMode -> m Handle
+openWorkspaceFile :: (MonadResource m) => Workspace -> FilePath -> IOMode -> m Handle
 openWorkspaceFile workspace file mode = do
   let path = resolveWorkspacePath workspace file
   let dir = takeDirectory path
   liftIO $ createDirectoryIfMissing True dir
   snd <$> allocate (openFile path mode) hClose
 
-createWorkspaceDir :: MonadIO m => Workspace -> FilePath -> m FilePath
+createWorkspaceDir :: (MonadIO m) => Workspace -> FilePath -> m FilePath
 createWorkspaceDir workspace dirName = do
   let dir = resolveWorkspacePath workspace dirName
   liftIO $ createDirectoryIfMissing True dir
   pure dir
 
-writeWorkspaceFile :: MonadIO m => Workspace -> FilePath -> LBS.ByteString -> m FilePath
+writeWorkspaceFile :: (MonadIO m) => Workspace -> FilePath -> LBS.ByteString -> m FilePath
 writeWorkspaceFile workspace file contents = liftIO do
   let path = resolveWorkspacePath workspace file
   let dir = takeDirectory path
@@ -74,7 +75,7 @@ writeWorkspaceFile workspace file contents = liftIO do
   LBS.writeFile path contents
   pure path
 
-copyToWorkspace :: MonadIO m => Workspace -> FilePath -> FilePath -> m FilePath
+copyToWorkspace :: (MonadIO m) => Workspace -> FilePath -> FilePath -> m FilePath
 copyToWorkspace workspace source target = liftIO do
   let path = resolveWorkspacePath workspace target
   let dir = takeDirectory path
@@ -82,7 +83,7 @@ copyToWorkspace workspace source target = liftIO do
   copyFile source path
   pure path
 
-moveToWorkspace :: MonadIO m => Workspace -> FilePath -> FilePath -> m FilePath
+moveToWorkspace :: (MonadIO m) => Workspace -> FilePath -> FilePath -> m FilePath
 moveToWorkspace workspace source target = liftIO do
   let path = resolveWorkspacePath workspace target
   let dir = takeDirectory path

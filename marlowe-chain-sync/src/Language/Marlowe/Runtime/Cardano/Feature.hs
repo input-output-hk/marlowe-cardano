@@ -4,15 +4,14 @@
 
 -- | Conversion and casting utilities for Cardano feature objects that use
 -- CardanoEra and ShelleyBasedEra tags.
-
 module Language.Marlowe.Runtime.Cardano.Feature where
 
 import Cardano.Api
 import Cardano.Api.Shelley
-import Data.Functor.Product (Product(..))
-import Data.Functor.These (These1(..))
+import Data.Functor.Product (Product (..))
+import Data.Functor.These (These1 (..))
 
-withCardanoEra :: forall era f r. CardanoFeature f => f era -> (IsCardanoEra era => r) -> r
+withCardanoEra :: forall era f r. (CardanoFeature f) => f era -> ((IsCardanoEra era) => r) -> r
 withCardanoEra f = case cardanoEraOfFeature f of
   ByronEra -> id
   ShelleyEra -> id
@@ -21,7 +20,7 @@ withCardanoEra f = case cardanoEraOfFeature f of
   AlonzoEra -> id
   BabbageEra -> id
 
-withShelleyBasedEra :: forall era f r. ShelleyFeature f => f era -> (IsShelleyBasedEra era => r) -> r
+withShelleyBasedEra :: forall era f r. (ShelleyFeature f) => f era -> ((IsShelleyBasedEra era) => r) -> r
 withShelleyBasedEra f = case shelleyBasedEraOfFeature f of
   ShelleyBasedEraShelley -> id
   ShelleyBasedEraAllegra -> id
@@ -33,7 +32,7 @@ class CardanoFeature f where
   featureInCardanoEra :: CardanoEra era -> Maybe (f era)
   cardanoEraOfFeature :: f era -> CardanoEra era
 
-class CardanoFeature f => ShelleyFeature f where
+class (CardanoFeature f) => ShelleyFeature f where
   featureInShelleyBasedEra :: ShelleyBasedEra era -> Maybe (f era)
   featureInShelleyBasedEra = featureInCardanoEra . shelleyBasedToCardanoEra
   shelleyBasedEraOfFeature :: f era -> ShelleyBasedEra era

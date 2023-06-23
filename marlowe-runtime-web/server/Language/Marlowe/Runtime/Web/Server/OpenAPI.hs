@@ -1,11 +1,10 @@
-{-# OPTIONS_GHC -Wno-orphans #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE TypeOperators #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
 
 -- | This module defines the API and server for serving the Open API
 -- specification.
-
 module Language.Marlowe.Runtime.Web.Server.OpenAPI where
 
 import Control.Lens
@@ -18,21 +17,25 @@ import Servant.OpenApi (toOpenApi)
 import Servant.Pagination
 
 instance ToParamSchema (Ranges fields resource) where
-  toParamSchema _ = mempty
-    & type_ ?~ OpenApiString
+  toParamSchema _ =
+    mempty
+      & type_ ?~ OpenApiString
 
 instance ToParamSchema (ContentRange fields resource) where
-  toParamSchema _ = mempty
-    & type_ ?~ OpenApiString
+  toParamSchema _ =
+    mempty
+      & type_ ?~ OpenApiString
 
-instance KnownSymbolList fields => ToParamSchema (AcceptRanges fields) where
-  toParamSchema _ = mempty
-    & type_ ?~ OpenApiArray
-    & items ?~ OpenApiItemsObject (Inline fieldsSchema)
+instance (KnownSymbolList fields) => ToParamSchema (AcceptRanges fields) where
+  toParamSchema _ =
+    mempty
+      & type_ ?~ OpenApiArray
+      & items ?~ OpenApiItemsObject (Inline fieldsSchema)
     where
-      fieldsSchema = mempty
-        & type_ ?~ OpenApiString
-        & enum_ ?~ (fromString <$> symbolListVal (Proxy @fields))
+      fieldsSchema =
+        mempty
+          & type_ ?~ OpenApiString
+          & enum_ ?~ (fromString <$> symbolListVal (Proxy @fields))
 
 class KnownSymbolList (ss :: [Symbol]) where
   symbolListVal :: Proxy ss -> [String]
@@ -45,5 +48,5 @@ instance (KnownSymbolList ss, KnownSymbol s) => KnownSymbolList (s ': ss) where
 
 type API = "openapi.json" :> Get '[JSON] OpenApi
 
-server :: Applicative m => ServerT API m
+server :: (Applicative m) => ServerT API m
 server = pure $ toOpenApi Web.api

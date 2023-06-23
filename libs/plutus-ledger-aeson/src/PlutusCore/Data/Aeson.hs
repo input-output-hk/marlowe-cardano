@@ -3,7 +3,7 @@
 module PlutusCore.Data.Aeson where
 
 import Data.Aeson (FromJSON, ToJSON)
-import qualified Data.Aeson.ViaSerialise as Aeson
+import Data.Aeson.ViaSerialise qualified as Aeson
 import PlutusCore.Data (Data)
 
 deriving via (Aeson.ViaSerialise Data) instance ToJSON Data

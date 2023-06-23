@@ -1,53 +1,58 @@
 -- editorconfig-checker-disable-file
-
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
+
 module Language.Marlowe.Runtime.CLI.Command.Create where
 
 import qualified Cardano.Api as C
 import Control.Error.Util (hoistMaybe, noteT)
 import Control.Monad.IO.Class (liftIO)
-import Control.Monad.Trans.Except (ExceptT(ExceptT), throwE)
+import Control.Monad.Trans.Except (ExceptT (ExceptT), throwE)
 import Data.Aeson (FromJSON, toJSON)
 import qualified Data.Aeson as A
 import Data.Bifunctor (bimap, first)
 import qualified Data.ByteString.Char8 as BS8
-import Data.List.NonEmpty (NonEmpty(..))
+import Data.List.NonEmpty (NonEmpty (..))
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.String (fromString)
 import qualified Data.Yaml as Yaml
 import Data.Yaml.Aeson (decodeFileEither)
 import GHC.Generics (Generic)
-import Language.Marlowe (POSIXTime(POSIXTime))
+import Language.Marlowe (POSIXTime (POSIXTime))
 import Language.Marlowe.Analysis.Safety.Types (SafetyError)
-import Language.Marlowe.Runtime.CLI.Command.Tx (SigningMethod(Manual), TxCommand(..), txCommandParser)
+import Language.Marlowe.Runtime.CLI.Command.Tx (SigningMethod (Manual), TxCommand (..), txCommandParser)
 import Language.Marlowe.Runtime.CLI.Monad (CLI, runCLIExceptT)
 import Language.Marlowe.Runtime.CLI.Option (keyValueOption, marloweVersionParser, parseAddress)
-import Language.Marlowe.Runtime.ChainSync.Api
-  ( Address
-  , DatumHash
-  , Lovelace(Lovelace)
-  , PolicyId
-  , TokenName(..)
-  , TransactionMetadata
-  , fromJSONEncodedMetadata
-  , fromJSONEncodedTransactionMetadata
-  , renderTxOutRef
-  )
+import Language.Marlowe.Runtime.ChainSync.Api (
+  Address,
+  DatumHash,
+  Lovelace (Lovelace),
+  PolicyId,
+  TokenName (..),
+  TransactionMetadata,
+  fromJSONEncodedMetadata,
+  fromJSONEncodedTransactionMetadata,
+  renderTxOutRef,
+ )
 import Language.Marlowe.Runtime.Client (createContract)
-import Language.Marlowe.Runtime.Core.Api
-  ( ContractId(ContractId)
-  , IsMarloweVersion(Contract)
-  , MarloweMetadata(..)
-  , MarloweTransactionMetadata(..)
-  , MarloweVersion(MarloweV1)
-  , MarloweVersionTag(V1)
-  , SomeMarloweVersion(SomeMarloweVersion)
-  )
-import Language.Marlowe.Runtime.Transaction.Api
-  (ContractCreated(..), CreateError, RoleTokenMetadata, RoleTokensConfig(..), mkMint)
+import Language.Marlowe.Runtime.Core.Api (
+  ContractId (ContractId),
+  IsMarloweVersion (Contract),
+  MarloweMetadata (..),
+  MarloweTransactionMetadata (..),
+  MarloweVersion (MarloweV1),
+  MarloweVersionTag (V1),
+  SomeMarloweVersion (SomeMarloweVersion),
+ )
+import Language.Marlowe.Runtime.Transaction.Api (
+  ContractCreated (..),
+  CreateError,
+  RoleTokenMetadata,
+  RoleTokensConfig (..),
+  mkMint,
+ )
 import Options.Applicative
 import Options.Applicative.NonEmpty (some1)
 import System.IO (hPutStrLn, stderr)
@@ -63,7 +68,8 @@ data CreateCommand = CreateCommand
 data RoleConfig = RoleConfig
   { address :: Address
   , metadata :: RoleTokenMetadata
-  } deriving (Generic, FromJSON)
+  }
+  deriving (Generic, FromJSON)
 
 data RolesConfig
   = MintSimple (NonEmpty (TokenName, Address))
@@ -99,82 +105,108 @@ deriving instance Show (CreateCommandError 'V1)
 createCommandParser :: ParserInfo (TxCommand CreateCommand)
 createCommandParser = info (txCommandParser True parser) $ progDesc "Create a new Marlowe Contract"
   where
-    parser = CreateCommand
-      <$> marloweVersionParser
-      <*> rolesParser
-      <*> contractFilesParser
-      <*> minUTxOParser
+    parser =
+      CreateCommand
+        <$> marloweVersionParser
+        <*> rolesParser
+        <*> contractFilesParser
+        <*> minUTxOParser
     rolesParser = optional (mintSimpleParser <|> mintConfigParser <|> policyIdParser)
     mintSimpleParser = MintSimple <$> some1 roleParser
-    mintConfigParser = fmap MintConfig $ strOption $ mconcat
-      [ long "roles-config-file"
-      , help $ unwords
-          [ "A JSON file containing a map of role token names to a roles configuration object."
-          , "The roles configuration object has two keys, \"address\" and \"metadata\","
-          , "where \"address\" is the address to send the newly minted role token and \"metadata\""
-          , "is the CIP-25 metadata object to associate with the token."
+    mintConfigParser =
+      fmap MintConfig $
+        strOption $
+          mconcat
+            [ long "roles-config-file"
+            , help $
+                unwords
+                  [ "A JSON file containing a map of role token names to a roles configuration object."
+                  , "The roles configuration object has two keys, \"address\" and \"metadata\","
+                  , "where \"address\" is the address to send the newly minted role token and \"metadata\""
+                  , "is the CIP-25 metadata object to associate with the token."
+                  ]
+            , metavar "FILE_PATH"
+            ]
+    policyIdParser =
+      fmap UseExistingPolicyId $
+        strOption $
+          mconcat
+            [ long "role-token-policy-id"
+            , metavar "POLICY_ID"
+            , help
+                "The hexadecimal-encoded policy ID of the role tokens for this contract. This option is used to support role tokens minted in a separate transaction."
+            ]
+    roleParser =
+      keyValueOption (Right . TokenName . fromString) parseAddress $
+        mconcat
+          [ long "role"
+          , short 'r'
+          , help "The name of a role in the contract with the address to send the token to"
+          , metavar "ROLE=ADDRESS"
           ]
-      , metavar "FILE_PATH"
-      ]
-    policyIdParser = fmap UseExistingPolicyId $ strOption $ mconcat
-      [ long "role-token-policy-id"
-      , metavar "POLICY_ID"
-      , help "The hexadecimal-encoded policy ID of the role tokens for this contract. This option is used to support role tokens minted in a separate transaction."
-      ]
-    roleParser = keyValueOption (Right . TokenName . fromString) parseAddress $ mconcat
-      [ long "role"
-      , short 'r'
-      , help "The name of a role in the contract with the address to send the token to"
-      , metavar "ROLE=ADDRESS"
-      ]
     contractFilesParser = CoreFile <$> coreParser <|> extendedParser <|> ContractHash <$> contractHashParser
-    coreParser = strOption $ mconcat
-      [ long "core-file"
-      , help "A file containing the Core Marlowe JSON definition of the contract to create."
-      , metavar "FILE_PATH"
-      ]
-    contractHashParser = strOption $ mconcat
-      [ long "contract-hash"
-      , help "The hash of a contract in the contract store to create."
-      , metavar "BASE_16"
-      ]
+    coreParser =
+      strOption $
+        mconcat
+          [ long "core-file"
+          , help "A file containing the Core Marlowe JSON definition of the contract to create."
+          , metavar "FILE_PATH"
+          ]
+    contractHashParser =
+      strOption $
+        mconcat
+          [ long "contract-hash"
+          , help "The hash of a contract in the contract store to create."
+          , metavar "BASE_16"
+          ]
     extendedParser = ExtendedFiles <$> extendedFileParser <*> contractArgsParser
-    extendedFileParser = strOption $ mconcat
-      [ long "contract-file"
-      , help "A file containing the Extended Marlowe JSON definition of the contract to create."
-      , metavar "FILE_PATH"
-      ]
+    extendedFileParser =
+      strOption $
+        mconcat
+          [ long "contract-file"
+          , help "A file containing the Extended Marlowe JSON definition of the contract to create."
+          , metavar "FILE_PATH"
+          ]
     contractArgsParser =
       ContractArgsByFile <$> argsFileParser <|> ContractArgsByValue <$> contractArgsValueParser
-    argsFileParser = strOption $ mconcat
-      [ long "args-file"
-      , help "A file containing the Extended Marlowe arguments to apply to the contract."
-      , metavar "FILE_PATH"
-      ]
-    contractArgsValueParser = ContractArgsValue
-      <$> timeoutArgumentsParser
-      <*> valueArgumentsParser
+    argsFileParser =
+      strOption $
+        mconcat
+          [ long "args-file"
+          , help "A file containing the Extended Marlowe arguments to apply to the contract."
+          , metavar "FILE_PATH"
+          ]
+    contractArgsValueParser =
+      ContractArgsValue
+        <$> timeoutArgumentsParser
+        <*> valueArgumentsParser
     timeoutArgumentsParser = Map.fromList <$> many timeoutArgumentParser
     valueArgumentsParser = Map.fromList <$> many valueArgumentParser
-    timeoutArgumentParser = keyValueOption Right (fmap POSIXTime . integerParser) $ mconcat
-      [ long "timeout-arg"
-      , metavar "NAME=POSIX_TIMESTAMP"
-      , help "The name of a timeout parameter in the contract and a value to assign to it (in POSIX milliseconds)."
-      ]
-    valueArgumentParser = keyValueOption Right integerParser $ mconcat
-      [ long "value-arg"
-      , metavar "NAME=INTEGER"
-      , help "The name of a numeric parameter in the contract and a value to assign to it."
-      ]
+    timeoutArgumentParser =
+      keyValueOption Right (fmap POSIXTime . integerParser) $
+        mconcat
+          [ long "timeout-arg"
+          , metavar "NAME=POSIX_TIMESTAMP"
+          , help "The name of a timeout parameter in the contract and a value to assign to it (in POSIX milliseconds)."
+          ]
+    valueArgumentParser =
+      keyValueOption Right integerParser $
+        mconcat
+          [ long "value-arg"
+          , metavar "NAME=INTEGER"
+          , help "The name of a numeric parameter in the contract and a value to assign to it."
+          ]
     integerParser = maybe (Left "Invalid Integer value") Right . readMaybe
-    minUTxOParser = option (Lovelace <$> auto) $ mconcat
-      [ long "min-utxo"
-      , help "An amount which should be used as min ADA requirement for the Contract UTxO."
-      , metavar "LOVELACE"
-      ]
+    minUTxOParser =
+      option (Lovelace <$> auto) $
+        mconcat
+          [ long "min-utxo"
+          , help "An amount which should be used as min ADA requirement for the Contract UTxO."
+          , metavar "LOVELACE"
+          ]
 
 runCreateCommand :: TxCommand CreateCommand -> CLI ()
-runCreateCommand TxCommand { walletAddresses, signingMethod, tagsFile, metadataFile, subCommand=CreateCommand{..}} = case marloweVersion of
+runCreateCommand TxCommand{walletAddresses, signingMethod, tagsFile, metadataFile, subCommand = CreateCommand{..}} = case marloweVersion of
   SomeMarloweVersion MarloweV1 -> runCLIExceptT do
     minting' <- case roles of
       Nothing -> pure RoleTokensNone
@@ -188,12 +220,12 @@ runCreateCommand TxCommand { walletAddresses, signingMethod, tagsFile, metadataF
           [] -> throwE $ RolesConfigFileDecodingError "Empty role token config"
           (x : xs) -> pure $ RoleTokensMint $ mkMint $ fmap (\RoleConfig{..} -> (address, Just metadata)) <$> x :| xs
     (ContractId contractId, safetyErrors) <- run MarloweV1 minting'
-    liftIO
-      $ if null safetyErrors
+    liftIO $
+      if null safetyErrors
         then hPutStrLn stderr "Safety analysis found no errors in the contract."
         else do
-               hPutStrLn stderr "Safety analysis found the following errors in the contract:"
-               BS8.hPutStrLn stderr $ Yaml.encode safetyErrors
+          hPutStrLn stderr "Safety analysis found the following errors in the contract:"
+          BS8.hPutStrLn stderr $ Yaml.encode safetyErrors
     liftIO . print $ A.encode (A.object [("contractId", toJSON . renderTxOutRef $ contractId)])
   where
     readContract :: MarloweVersion v -> ExceptT (CreateCommandError v) CLI (Either (Contract v) DatumHash)
@@ -214,17 +246,20 @@ runCreateCommand TxCommand { walletAddresses, signingMethod, tagsFile, metadataF
 
     readTags :: ExceptT (CreateCommandError v) CLI (Maybe MarloweMetadata)
     readTags = case tagsFile of
-      Just filePath -> Just <$> do
-        tagsJSON <- ExceptT $ liftIO $ first (TagsDecodingFailed . Just) <$> decodeFileEither filePath
-        tags <- noteT (TagsDecodingFailed Nothing) $ hoistMaybe (traverse (traverse fromJSONEncodedMetadata) tagsJSON)
-        pure $ MarloweMetadata tags Nothing
+      Just filePath ->
+        Just <$> do
+          tagsJSON <- ExceptT $ liftIO $ first (TagsDecodingFailed . Just) <$> decodeFileEither filePath
+          tags <- noteT (TagsDecodingFailed Nothing) $ hoistMaybe (traverse (traverse fromJSONEncodedMetadata) tagsJSON)
+          pure $ MarloweMetadata tags Nothing
       Nothing -> pure Nothing
 
     run :: MarloweVersion v -> RoleTokensConfig -> ExceptT (CreateCommandError v) CLI (ContractId, [SafetyError])
-    run version rolesDistribution  = do
+    run version rolesDistribution = do
       contract <- readContract version
       metadata <- MarloweTransactionMetadata <$> readTags <*> readMetadata
-      ContractCreated{contractId,txBody,safetyErrors} <- ExceptT $ first CreateFailed <$> createContract Nothing version walletAddresses rolesDistribution metadata minUTxO contract
+      ContractCreated{contractId, txBody, safetyErrors} <-
+        ExceptT $
+          first CreateFailed <$> createContract Nothing version walletAddresses rolesDistribution metadata minUTxO contract
       case signingMethod of
         Manual outputFile -> do
           ExceptT $ liftIO $ first TransactionFileWriteFailed <$> C.writeFileTextEnvelope outputFile Nothing txBody

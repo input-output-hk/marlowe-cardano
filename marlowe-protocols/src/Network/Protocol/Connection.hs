@@ -19,7 +19,7 @@ newtype Connector peer m = Connector
 
 ihoistConnector
   :: (Functor m, Functor n)
-  => (forall p q a. Functor p => (forall x. p x -> q x) -> peer p a -> peer q a)
+  => (forall p q a. (Functor p) => (forall x. p x -> q x) -> peer p a -> peer q a)
   -> (forall x. m x -> n x)
   -> (forall x. n x -> m x)
   -> Connector peer m
@@ -31,18 +31,19 @@ newtype Connection peer m = Connection
   }
 
 ihoistConnection
-  :: Functor n
-  => (forall p q a. Functor p => (forall x. p x -> q x) -> peer p a -> peer q a)
+  :: (Functor n)
+  => (forall p q a. (Functor p) => (forall x. p x -> q x) -> peer p a -> peer q a)
   -> (forall x. m x -> n x)
   -> (forall x. n x -> m x)
   -> Connection peer m
   -> Connection peer n
-ihoistConnection hoistPeer' f f' Connection{..} = Connection
-  { runConnection = f . runConnection . hoistPeer' f'
-  , ..
-  }
+ihoistConnection hoistPeer' f f' Connection{..} =
+  Connection
+    { runConnection = f . runConnection . hoistPeer' f'
+    , ..
+    }
 
-runConnector :: Monad m => Connector peer m -> peer m a -> m a
+runConnector :: (Monad m) => Connector peer m -> peer m a -> m a
 runConnector Connector{..} peer = flip runConnection peer =<< openConnection
 
 data DriverSelector ps f where
@@ -57,21 +58,23 @@ data RecvMessageField ps st where
 
 newtype ServerSource server m a = ServerSource
   { getServer :: ResourceT m (server m a)
-  } deriving Functor
+  }
+  deriving (Functor)
 
 hoistServerSource
-  :: Functor m
-  => (forall p q x. Functor p => (forall y. p y -> q y) -> server p x -> server q x)
+  :: (Functor m)
+  => (forall p q x. (Functor p) => (forall y. p y -> q y) -> server p x -> server q x)
   -> (forall x. m x -> n x)
   -> ServerSource server m a
   -> ServerSource server n a
-hoistServerSource hoistServer f ServerSource{..} = ServerSource
-  { getServer = transResourceT (f . fmap (hoistServer f)) getServer
-  , ..
-  }
+hoistServerSource hoistServer f ServerSource{..} =
+  ServerSource
+    { getServer = transResourceT (f . fmap (hoistServer f)) getServer
+    , ..
+    }
 
 directConnector
-  :: MonadUnliftIO m
+  :: (MonadUnliftIO m)
   => (forall x y. server m x -> client m y -> m (x, y))
   -> ServerSource server m a
   -> Connector client m

@@ -21,32 +21,36 @@ data Channel m a = Channel
 
 isoKleisliChannel
   :: forall a b m
-   . Monad m
+   . (Monad m)
   => (a -> m b)
   -> (b -> m a)
   -> Channel m a
   -> Channel m b
-isoKleisliChannel f f' Channel{..} = Channel
-  { send = f' >=> send
-  , recv = recv >>= traverse f
-  }
+isoKleisliChannel f f' Channel{..} =
+  Channel
+    { send = f' >=> send
+    , recv = recv >>= traverse f
+    }
 
 hoistChannel
   :: (forall x. m x -> n x)
   -> Channel m a
   -> Channel n a
-hoistChannel nat Channel{..} = Channel
-  { send = nat . send
-  , recv = nat recv
-  }
+hoistChannel nat Channel{..} =
+  Channel
+    { send = nat . send
+    , recv = nat recv
+    }
 
 handlesAsChannel
   :: forall m
-   . MonadIO m
-  => IO.Handle -- ^ Read handle
-  -> IO.Handle -- ^ Write handle
+   . (MonadIO m)
+  => IO.Handle
+  -- ^ Read handle
+  -> IO.Handle
+  -- ^ Write handle
   -> Channel m LBS.ByteString
-handlesAsChannel hread hwrite = Channel {..}
+handlesAsChannel hread hwrite = Channel{..}
   where
     send :: LBS.ByteString -> m ()
     send chunk = liftIO do
@@ -60,8 +64,8 @@ handlesAsChannel hread hwrite = Channel {..}
         then pure Nothing
         else Just . LBS.fromStrict <$> BS.hGetSome hread smallChunkSize
 
-socketAsChannel :: forall m. MonadIO m => Socket -> Channel m LBS.ByteString
-socketAsChannel sock = Channel {..}
+socketAsChannel :: forall m. (MonadIO m) => Socket -> Channel m LBS.ByteString
+socketAsChannel sock = Channel{..}
   where
     send :: LBS.ByteString -> m ()
     send = liftIO . Socket.sendAll sock
@@ -70,15 +74,18 @@ socketAsChannel sock = Channel {..}
     recv = liftIO $ mfilter (not . LBS.null) . pure <$> Socket.recv sock (fromIntegral smallChunkSize)
 
 effectChannel
-  :: Monad m
-  => (a -> m ())       -- ^ Run effect on send
-  -> (Maybe a -> m ()) -- ^ Run effect on recv
+  :: (Monad m)
+  => (a -> m ())
+  -- ^ Run effect on send
+  -> (Maybe a -> m ())
+  -- ^ Run effect on recv
   -> Channel m a
   -> Channel m a
-effectChannel onSend onRecv Channel{..} = Channel
-  { send = \a -> onSend a *> send a
-  , recv = recv >>= \ma -> onRecv ma $> ma
-  }
+effectChannel onSend onRecv Channel{..} =
+  Channel
+    { send = \a -> onSend a *> send a
+    , recv = recv >>= \ma -> onRecv ma $> ma
+    }
 
 data STMChannel a = STMChannel
   { channel :: Channel STM a
@@ -91,17 +98,19 @@ channelPair = do
   ch2 <- newTChan
   pure
     ( STMChannel
-      { channel = Channel
-          { send = writeTChan ch1 . Just
-          , recv = readTChan ch2
-          }
-      , close = writeTChan ch1 Nothing
-      }
-    , STMChannel
-      { channel = Channel
-        { send = writeTChan ch2 . Just
-        , recv = readTChan ch1
+        { channel =
+            Channel
+              { send = writeTChan ch1 . Just
+              , recv = readTChan ch2
+              }
+        , close = writeTChan ch1 Nothing
         }
-      , close = writeTChan ch2 Nothing
-      }
+    , STMChannel
+        { channel =
+            Channel
+              { send = writeTChan ch2 . Just
+              , recv = readTChan ch1
+              }
+        , close = writeTChan ch2 Nothing
+        }
     )

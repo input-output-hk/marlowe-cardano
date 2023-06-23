@@ -5,8 +5,8 @@ module Main where
 
 import Control.Concurrent (threadDelay)
 import Data.Functor (void)
-import Test.Integration.Cardano (LocalTestnet(..), withLocalTestnet)
-import Test.Integration.Workspace (Workspace(workspaceDir))
+import Test.Integration.Cardano (LocalTestnet (..), withLocalTestnet)
+import Test.Integration.Workspace (Workspace (workspaceDir))
 
 main :: IO ()
 main = withLocalTestnet \LocalTestnet{..} -> do

@@ -1,5 +1,4 @@
 -- editorconfig-checker-disable-file
-
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DuplicateRecordFields #-}
@@ -11,45 +10,45 @@
 {-# LANGUAGE ViewPatterns #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
-module Language.Marlowe.Runtime.Transaction.Api
-  ( ApplyInputsConstraintsBuildupError(..)
-  , ApplyInputsError(..)
-  , ConstraintError(..)
-  , ContractCreated(..)
-  , CreateBuildupError(..)
-  , CreateError(..)
-  , InputsApplied(..)
-  , JobId(..)
-  , LoadMarloweContextError(..)
-  , MarloweTxCommand(..)
-  , Mint(unMint)
-  , NFTMetadataFile(..)
-  , RoleTokenMetadata(..)
-  , RoleTokensConfig(..)
-  , SubmitError(..)
-  , SubmitStatus(..)
-  , Tag(..)
-  , WalletAddresses(..)
-  , WithdrawError(..)
-  , WithdrawTx(..)
-  , decodeRoleTokenMetadata
-  , encodeRoleTokenMetadata
-  , mkMint
-  ) where
+module Language.Marlowe.Runtime.Transaction.Api (
+  ApplyInputsConstraintsBuildupError (..),
+  ApplyInputsError (..),
+  ConstraintError (..),
+  ContractCreated (..),
+  CreateBuildupError (..),
+  CreateError (..),
+  InputsApplied (..),
+  JobId (..),
+  LoadMarloweContextError (..),
+  MarloweTxCommand (..),
+  Mint (unMint),
+  NFTMetadataFile (..),
+  RoleTokenMetadata (..),
+  RoleTokensConfig (..),
+  SubmitError (..),
+  SubmitStatus (..),
+  Tag (..),
+  WalletAddresses (..),
+  WithdrawError (..),
+  WithdrawTx (..),
+  decodeRoleTokenMetadata,
+  encodeRoleTokenMetadata,
+  mkMint,
+) where
 
-import Cardano.Api
-  ( AsType(..)
-  , BabbageEra
-  , IsCardanoEra
-  , Tx
-  , TxBody
-  , cardanoEra
-  , deserialiseFromCBOR
-  , serialiseToCBOR
-  , serialiseToTextEnvelope
-  )
+import Cardano.Api (
+  AsType (..),
+  BabbageEra,
+  IsCardanoEra,
+  Tx,
+  TxBody,
+  cardanoEra,
+  deserialiseFromCBOR,
+  serialiseToCBOR,
+  serialiseToTextEnvelope,
+ )
 import Control.Applicative ((<|>))
-import Data.Aeson (ToJSON(..), object, (.!=), (.:!), (.=))
+import Data.Aeson (ToJSON (..), object, (.!=), (.:!), (.=))
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.KeyMap as Aeson.KeyMap
 import Data.Aeson.Types ((.:))
@@ -67,36 +66,36 @@ import Data.String (fromString)
 import Data.Text (Text)
 import qualified Data.Text as Text
 import Data.Time (UTCTime)
-import Data.Type.Equality (type (:~:)(Refl))
+import Data.Type.Equality (type (:~:) (Refl))
 import Data.Void (Void, absurd)
 import GHC.Generics (Generic)
 import GHC.Show (showSpace)
 import Language.Marlowe.Analysis.Safety.Types (SafetyError)
 import Language.Marlowe.Runtime.Cardano.Api (cardanoEraToAsType)
-import Language.Marlowe.Runtime.ChainSync.Api
-  ( Address
-  , AssetId
-  , Assets
-  , BlockHeader
-  , DatumHash
-  , Lovelace
-  , Metadata(..)
-  , PlutusScript
-  , PolicyId(..)
-  , ScriptHash
-  , SlotNo
-  , StakeCredential
-  , TokenName(..)
-  , TxId
-  , TxOutRef
-  , parseMetadataList
-  , parseMetadataMap
-  , parseMetadataText
-  )
+import Language.Marlowe.Runtime.ChainSync.Api (
+  Address,
+  AssetId,
+  Assets,
+  BlockHeader,
+  DatumHash,
+  Lovelace,
+  Metadata (..),
+  PlutusScript,
+  PolicyId (..),
+  ScriptHash,
+  SlotNo,
+  StakeCredential,
+  TokenName (..),
+  TxId,
+  TxOutRef,
+  parseMetadataList,
+  parseMetadataMap,
+  parseMetadataText,
+ )
 import Language.Marlowe.Runtime.Core.Api
 import Language.Marlowe.Runtime.History.Api (ExtractCreationError, ExtractMarloweTransactionError)
 import Network.HTTP.Media (MediaType)
-import Network.Protocol.Handshake.Types (HasSignature(..))
+import Network.Protocol.Handshake.Types (HasSignature (..))
 import Network.Protocol.Job.Types
 import qualified Network.URI as Network
 
@@ -122,11 +121,12 @@ data NFTMetadataFile = NFTMetadataFile
   deriving (Binary)
 
 instance Aeson.ToJSON NFTMetadataFile where
-  toJSON NFTMetadataFile {..} = Aeson.object
-    [ ("name", toJSON name)
-    , ("mediaType", toJSON mediaType)
-    , ("src", toJSON $ show src)
-    ]
+  toJSON NFTMetadataFile{..} =
+    Aeson.object
+      [ ("name", toJSON name)
+      , ("mediaType", toJSON mediaType)
+      , ("src", toJSON $ show src)
+      ]
 
 parseJSONURI :: Text -> Aeson.Types.Parser Network.URI
 parseJSONURI (Text.unpack -> s) =
@@ -150,21 +150,23 @@ data RoleTokenMetadata = RoleTokenMetadata
   deriving (Binary)
 
 instance Aeson.ToJSON RoleTokenMetadata where
-  toJSON RoleTokenMetadata {..} = Aeson.Object $ Aeson.KeyMap.fromList $
-    [ ("name", toJSON name)
-    , ("image", toJSON $ show image)
-    ]
-    <> maybeToList (fmap (("mediaType",) . toJSON) mediaType)
-    <> maybeToList (fmap (("description",) . Aeson.String) description)
-    <> case files of
-      [] -> []
-      _ -> [("files", toJSON files)]
+  toJSON RoleTokenMetadata{..} =
+    Aeson.Object $
+      Aeson.KeyMap.fromList $
+        [ ("name", toJSON name)
+        , ("image", toJSON $ show image)
+        ]
+          <> maybeToList (fmap (("mediaType",) . toJSON) mediaType)
+          <> maybeToList (fmap (("description",) . Aeson.String) description)
+          <> case files of
+            [] -> []
+            _ -> [("files", toJSON files)]
 
 instance Aeson.FromJSON RoleTokenMetadata where
   parseJSON = Aeson.withObject "RoleTokenMetadata" \x ->
     RoleTokenMetadata
       <$> x .: "name"
-      <*> (parseJSONURI =<<  x .: "image")
+      <*> (parseJSONURI =<< x .: "image")
       <*> x .:! "mediaType"
       <*> x .:! "description"
       <*> x .:! "files" .!= []
@@ -179,11 +181,11 @@ decodeRoleTokenMetadata = parseNFTMetadataDetails
       image <- Network.parseURI . Text.unpack =<< parseSplittableText =<< Map.lookup "image" textKeyMap
       let mediaType = parseMediaType =<< Map.lookup "mediaType" textKeyMap
           description = parseSplittableText =<< Map.lookup "description" textKeyMap
-          parseSingleFileDetails = fmap (:[]) . parseNFTMetadataFile
+          parseSingleFileDetails = fmap (: []) . parseNFTMetadataFile
           parseManyFileDetails = parseMetadataList parseNFTMetadataFile
           parseFileDetails md = parseSingleFileDetails md <|> parseManyFileDetails md
           files = fromMaybe [] $ parseFileDetails =<< Map.lookup "files" textKeyMap
-      Just $ RoleTokenMetadata {..}
+      Just $ RoleTokenMetadata{..}
 
     parseNFTMetadataFile :: Metadata -> Maybe NFTMetadataFile
     parseNFTMetadataFile metadata = do
@@ -191,7 +193,7 @@ decodeRoleTokenMetadata = parseNFTMetadataDetails
       name <- parseMetadataText =<< Map.lookup "name" textKeyMap
       mediaType <- parseMediaType =<< Map.lookup "mediaType" textKeyMap
       src <- Network.parseURI . Text.unpack =<< parseSplittableText =<< Map.lookup "src" textKeyMap
-      Just $ NFTMetadataFile {..}
+      Just $ NFTMetadataFile{..}
 
     parseMediaType :: Metadata -> Maybe MediaType
     parseMediaType = fmap (fromString . Text.unpack) . parseMetadataText
@@ -205,35 +207,37 @@ decodeRoleTokenMetadata = parseNFTMetadataDetails
 encodeRoleTokenMetadata :: RoleTokenMetadata -> Metadata
 encodeRoleTokenMetadata = encodeNFTMetadataDetails
   where
-  encodeNFTMetadataDetails :: RoleTokenMetadata -> Metadata
-  encodeNFTMetadataDetails RoleTokenMetadata {..} = MetadataMap $
-    [ (MetadataText "name", MetadataText name)
-    , (MetadataText "image", encodeText $ fromString $ Network.uriToString id image "")
-    ]
-    <> maybeToList ((MetadataText "mediaType",) . encodeMediaType <$> mediaType)
-    <> maybeToList ((MetadataText "description",) . encodeText <$> description)
-    <> case files of
-        [] -> []
-        [fileDetails] ->
-          [(MetadataText "files", encodeNFTMetadataFile fileDetails)]
-        fileDetails ->
-          [(MetadataText "files", MetadataList $ fmap encodeNFTMetadataFile fileDetails)]
+    encodeNFTMetadataDetails :: RoleTokenMetadata -> Metadata
+    encodeNFTMetadataDetails RoleTokenMetadata{..} =
+      MetadataMap $
+        [ (MetadataText "name", MetadataText name)
+        , (MetadataText "image", encodeText $ fromString $ Network.uriToString id image "")
+        ]
+          <> maybeToList ((MetadataText "mediaType",) . encodeMediaType <$> mediaType)
+          <> maybeToList ((MetadataText "description",) . encodeText <$> description)
+          <> case files of
+            [] -> []
+            [fileDetails] ->
+              [(MetadataText "files", encodeNFTMetadataFile fileDetails)]
+            fileDetails ->
+              [(MetadataText "files", MetadataList $ fmap encodeNFTMetadataFile fileDetails)]
 
-  encodeNFTMetadataFile :: NFTMetadataFile -> Metadata
-  encodeNFTMetadataFile NFTMetadataFile {..} = MetadataMap
-    [ (MetadataText "name", MetadataText name)
-    , (MetadataText "mediaType", encodeMediaType mediaType)
-    , (MetadataText "src", encodeText $ fromString $ Network.uriToString id src "")
-    ]
+    encodeNFTMetadataFile :: NFTMetadataFile -> Metadata
+    encodeNFTMetadataFile NFTMetadataFile{..} =
+      MetadataMap
+        [ (MetadataText "name", MetadataText name)
+        , (MetadataText "mediaType", encodeMediaType mediaType)
+        , (MetadataText "src", encodeText $ fromString $ Network.uriToString id src "")
+        ]
 
-  encodeMediaType :: MediaType -> Metadata
-  encodeMediaType = MetadataText . Text.pack . show
+    encodeMediaType :: MediaType -> Metadata
+    encodeMediaType = MetadataText . Text.pack . show
 
-  encodeText :: Text -> Metadata
-  encodeText = MetadataList . fmap MetadataText . Text.chunksOf 64
+    encodeText :: Text -> Metadata
+    encodeText = MetadataList . fmap MetadataText . Text.chunksOf 64
 
 -- | Non empty mint request.
-newtype Mint = Mint { unMint :: Map TokenName (Address, Maybe RoleTokenMetadata) }
+newtype Mint = Mint {unMint :: Map TokenName (Address, Maybe RoleTokenMetadata)}
   deriving stock (Show, Eq, Ord, Generic)
   deriving newtype (Binary, Semigroup, Monoid, ToJSON)
 
@@ -265,22 +269,23 @@ data ContractCreated era v = ContractCreated
 deriving instance Show (ContractCreated BabbageEra 'V1)
 deriving instance Eq (ContractCreated BabbageEra 'V1)
 
-instance IsCardanoEra era => ToJSON (ContractCreated era 'V1) where
-  toJSON ContractCreated{..} = object
-    [ "contract-id" .= contractId
-    , "roles-currency" .= rolesCurrency
-    , "metadata" .= metadata
-    , "marlowe-script-hash" .= marloweScriptHash
-    , "marlowe-script-address" .= marloweScriptAddress
-    , "payout-script-hash" .= payoutScriptHash
-    , "payout-script-address" .= payoutScriptAddress
-    , "datum" .= datum
-    , "assets" .= assets
-    , "tx-body" .= serialiseToTextEnvelope Nothing txBody
-    , "safety-errors" .= safetyErrors
-    ]
+instance (IsCardanoEra era) => ToJSON (ContractCreated era 'V1) where
+  toJSON ContractCreated{..} =
+    object
+      [ "contract-id" .= contractId
+      , "roles-currency" .= rolesCurrency
+      , "metadata" .= metadata
+      , "marlowe-script-hash" .= marloweScriptHash
+      , "marlowe-script-address" .= marloweScriptAddress
+      , "payout-script-hash" .= payoutScriptHash
+      , "payout-script-address" .= payoutScriptAddress
+      , "datum" .= datum
+      , "assets" .= assets
+      , "tx-body" .= serialiseToTextEnvelope Nothing txBody
+      , "safety-errors" .= safetyErrors
+      ]
 
-instance IsCardanoEra era => Binary (ContractCreated era 'V1) where
+instance (IsCardanoEra era) => Binary (ContractCreated era 'V1) where
   put ContractCreated{..} = do
     put contractId
     put rolesCurrency
@@ -323,7 +328,7 @@ data InputsApplied era v = InputsApplied
 deriving instance Show (InputsApplied BabbageEra 'V1)
 deriving instance Eq (InputsApplied BabbageEra 'V1)
 
-instance IsCardanoEra era => Binary (InputsApplied era 'V1) where
+instance (IsCardanoEra era) => Binary (InputsApplied era 'V1) where
   put InputsApplied{..} = do
     put contractId
     put metadata
@@ -355,7 +360,7 @@ data WithdrawTx era v = WithdrawTx
 deriving instance Show (WithdrawTx BabbageEra 'V1)
 deriving instance Eq (WithdrawTx BabbageEra 'V1)
 
-instance IsCardanoEra era => Binary (WithdrawTx era 'V1) where
+instance (IsCardanoEra era) => Binary (WithdrawTx era 'V1) where
   put WithdrawTx{..} = do
     put inputs
     put roleToken
@@ -367,16 +372,17 @@ instance IsCardanoEra era => Binary (WithdrawTx era 'V1) where
     txBody <- getTxBody
     pure WithdrawTx{..}
 
-instance IsCardanoEra era => ToJSON (InputsApplied era 'V1) where
-  toJSON InputsApplied{..} = object
-    [ "contract-id" .= contractId
-    , "input" .= input
-    , "output" .= output
-    , "invalid-before" .= invalidBefore
-    , "invalid-hereafter" .= invalidHereafter
-    , "inputs" .= inputs
-    , "tx-body" .= serialiseToTextEnvelope Nothing txBody
-    ]
+instance (IsCardanoEra era) => ToJSON (InputsApplied era 'V1) where
+  toJSON InputsApplied{..} =
+    object
+      [ "contract-id" .= contractId
+      , "input" .= input
+      , "output" .= output
+      , "invalid-before" .= invalidBefore
+      , "invalid-hereafter" .= invalidHereafter
+      , "inputs" .= inputs
+      , "tx-body" .= serialiseToTextEnvelope Nothing txBody
+      ]
 
 -- | The low-level runtime API for building and submitting transactions.
 data MarloweTxCommand status err result where
@@ -400,7 +406,6 @@ data MarloweTxCommand status err result where
     -> Either (Contract v) DatumHash
     -- ^ The contract to run, or the hash of the contract to load from the store.
     -> MarloweTxCommand Void (CreateError v) (ContractCreated BabbageEra v)
-
   -- | Construct a transaction that advances an active Marlowe contract by
   -- applying a sequence of inputs. The resulting, unsigned transaction can be
   -- signed via the cardano API or a wallet provider. When signed, the 'Submit'
@@ -423,7 +428,6 @@ data MarloweTxCommand status err result where
     -> Inputs v
     -- ^ The inputs to apply.
     -> MarloweTxCommand Void (ApplyInputsError v) (InputsApplied BabbageEra v)
-
   -- | Construct a transaction that withdraws available assets from an active
   -- Marlowe contract for a set of roles in the contract. The resulting,
   -- unsigned transaction can be signed via the cardano API or a wallet
@@ -438,10 +442,11 @@ data MarloweTxCommand status err result where
     -- ^ The ID of the contract to apply the inputs to.
     -> TokenName
     -- ^ The names of the roles whose assets to withdraw.
-    -> MarloweTxCommand Void (WithdrawError v)
+    -> MarloweTxCommand
+        Void
+        (WithdrawError v)
         ( WithdrawTx BabbageEra v -- The unsigned tx body, to be signed by a wallet.
         )
-
   -- | Submits a signed transaction to the attached Cardano node.
   Submit
     :: Tx BabbageEra
@@ -449,8 +454,7 @@ data MarloweTxCommand status err result where
     -> MarloweTxCommand
         SubmitStatus -- This job reports the status of the tx submission, which can take some time.
         SubmitError
-        BlockHeader  -- The block header of the block this transaction was added to.
-
+        BlockHeader -- The block header of the block this transaction was added to.
 
 instance HasSignature MarloweTxCommand where
   signature _ = "MarloweTxCommand"
@@ -476,8 +480,8 @@ instance Command MarloweTxCommand where
   tagFromCommand = \case
     Create _ version _ _ _ _ _ -> TagCreate version
     ApplyInputs version _ _ _ _ _ _ -> TagApplyInputs version
-    Withdraw version _ _ _        -> TagWithdraw version
-    Submit _                -> TagSubmit
+    Withdraw version _ _ _ -> TagWithdraw version
+    Submit _ -> TagSubmit
 
   tagFromJobId = \case
     JobIdSubmit _ -> TagSubmit
@@ -511,7 +515,7 @@ instance Command MarloweTxCommand where
         SomeMarloweVersion version <- get
         pure $ SomeTag $ TagWithdraw version
       0x04 -> pure $ SomeTag TagSubmit
-      _    -> fail $ "Invalid command tag: " <> show tag
+      _ -> fail $ "Invalid command tag: " <> show tag
 
   putJobId = \case
     JobIdSubmit txId -> put txId
@@ -552,28 +556,27 @@ instance Command MarloweTxCommand where
       minAda <- get
       contract <- get
       pure $ Create mStakeCredential MarloweV1 walletAddresses roles metadata minAda contract
-
     TagApplyInputs version -> do
       walletAddresses <- get
       contractId <- get
       metadata <- get
-      invalidBefore <- getWord8 >>= \case
-        0 -> pure Nothing
-        1 -> Just <$> get
-        t -> fail $ "Invalid Maybe tag: " <> show t
-      invalidHereafter <- getWord8 >>= \case
-        0 -> pure Nothing
-        1 -> Just <$> get
-        t -> fail $ "Invalid Maybe tag: " <> show t
+      invalidBefore <-
+        getWord8 >>= \case
+          0 -> pure Nothing
+          1 -> Just <$> get
+          t -> fail $ "Invalid Maybe tag: " <> show t
+      invalidHereafter <-
+        getWord8 >>= \case
+          0 -> pure Nothing
+          1 -> Just <$> get
+          t -> fail $ "Invalid Maybe tag: " <> show t
       redeemer <- getInputs version
       pure $ ApplyInputs version walletAddresses contractId metadata invalidBefore invalidHereafter redeemer
-
     TagWithdraw version -> do
       walletAddresses <- get
       contractId <- get
       tokenName <- get
       pure $ Withdraw version walletAddresses contractId tokenName
-
     TagSubmit -> do
       bytes <- get @ByteString
       Submit <$> case deserialiseFromCBOR (AsTx AsBabbage) bytes of
@@ -616,18 +619,18 @@ instance Command MarloweTxCommand where
     TagWithdraw MarloweV1 -> get
     TagSubmit -> get
 
-putTxBody :: IsCardanoEra era => TxBody era -> Put
+putTxBody :: (IsCardanoEra era) => TxBody era -> Put
 putTxBody = put . serialiseToCBOR
 
-getTxBody :: forall era. IsCardanoEra era => Get (TxBody era)
+getTxBody :: forall era. (IsCardanoEra era) => Get (TxBody era)
 getTxBody = do
   bytes <- get @ByteString
   case deserialiseFromCBOR (AsTxBody $ cardanoEraToAsType $ cardanoEra @era) bytes of
-    Left err     -> fail $ show err
+    Left err -> fail $ show err
     Right txBody -> pure txBody
 
 data WalletAddresses = WalletAddresses
-  { changeAddress  :: Address
+  { changeAddress :: Address
   , extraAddresses :: Set Address
   , collateralUtxos :: Set TxOutRef
   }
@@ -656,7 +659,7 @@ data CreateError v
   | CreateLoadMarloweContextFailed LoadMarloweContextError
   | CreateBuildupFailed CreateBuildupError
   | CreateToCardanoError
-  | CreateSafetyAnalysisError String  -- FIXME: This is a placeholder, pending design of error handling for safety analysis.
+  | CreateSafetyAnalysisError String -- FIXME: This is a placeholder, pending design of error handling for safety analysis.
   | CreateContractNotFound
   deriving (Generic)
 
@@ -777,81 +780,90 @@ instance CommandEq MarloweTxCommand where
 
 instance ShowCommand MarloweTxCommand where
   showsPrecTag p = \case
-    TagCreate MarloweV1 -> showParen (p >= 11)
-      ( showString "TagCreate"
-      . showSpace
-      . showString "MarloweV1"
-      )
-    TagApplyInputs MarloweV1 -> showParen (p >= 11)
-      ( showString "TagApplyInputs"
-      . showSpace
-      . showString "MarloweV1"
-      )
-    TagWithdraw MarloweV1 -> showParen (p >= 11)
-      ( showString "TagWithdraw"
-      . showSpace
-      . showString "MarloweV1"
-      )
+    TagCreate MarloweV1 ->
+      showParen
+        (p >= 11)
+        ( showString "TagCreate"
+            . showSpace
+            . showString "MarloweV1"
+        )
+    TagApplyInputs MarloweV1 ->
+      showParen
+        (p >= 11)
+        ( showString "TagApplyInputs"
+            . showSpace
+            . showString "MarloweV1"
+        )
+    TagWithdraw MarloweV1 ->
+      showParen
+        (p >= 11)
+        ( showString "TagWithdraw"
+            . showSpace
+            . showString "MarloweV1"
+        )
     TagSubmit -> showString "TagSubmit"
 
-  showsPrecCommand p = showParen (p >= 11) . \case
-    Create stake MarloweV1 wallet roleTokenConfig metadata minAda contract ->
-      ( showString "Create"
-      . showSpace
-      . showsPrec 11 stake
-      . showSpace
-      . showsPrec 11 MarloweV1
-      . showSpace
-      . showsPrec 11 wallet
-      . showSpace
-      . showsPrec 11 roleTokenConfig
-      . showSpace
-      . showsPrec 11 metadata
-      . showSpace
-      . showsPrec 11 minAda
-      . showSpace
-      . showsPrec 11 contract
-      )
-    ApplyInputs MarloweV1 wallet contractId metadata invalidBefore invalidHereafter inputs ->
-      ( showString "ApplyInputs"
-      . showSpace
-      . showsPrec 11 MarloweV1
-      . showSpace
-      . showsPrec 11 wallet
-      . showSpace
-      . showsPrec 11 contractId
-      . showSpace
-      . showsPrec 11 metadata
-      . showSpace
-      . showsPrec 11 invalidBefore
-      . showSpace
-      . showsPrec 11 invalidHereafter
-      . showSpace
-      . showsPrec 11 inputs
-      )
-    Withdraw MarloweV1 wallet contractId role ->
-      ( showString "Withdraw"
-      . showSpace
-      . showsPrec 11 MarloweV1
-      . showSpace
-      . showsPrec 11 wallet
-      . showSpace
-      . showsPrec 11 contractId
-      . showSpace
-      . showsPrec 11 role
-      )
-    Submit tx ->
-      ( showString "Submit"
-      . showSpace
-      . showsPrec 11 tx
-      )
+  showsPrecCommand p =
+    showParen (p >= 11) . \case
+      Create stake MarloweV1 wallet roleTokenConfig metadata minAda contract ->
+        ( showString "Create"
+            . showSpace
+            . showsPrec 11 stake
+            . showSpace
+            . showsPrec 11 MarloweV1
+            . showSpace
+            . showsPrec 11 wallet
+            . showSpace
+            . showsPrec 11 roleTokenConfig
+            . showSpace
+            . showsPrec 11 metadata
+            . showSpace
+            . showsPrec 11 minAda
+            . showSpace
+            . showsPrec 11 contract
+        )
+      ApplyInputs MarloweV1 wallet contractId metadata invalidBefore invalidHereafter inputs ->
+        ( showString "ApplyInputs"
+            . showSpace
+            . showsPrec 11 MarloweV1
+            . showSpace
+            . showsPrec 11 wallet
+            . showSpace
+            . showsPrec 11 contractId
+            . showSpace
+            . showsPrec 11 metadata
+            . showSpace
+            . showsPrec 11 invalidBefore
+            . showSpace
+            . showsPrec 11 invalidHereafter
+            . showSpace
+            . showsPrec 11 inputs
+        )
+      Withdraw MarloweV1 wallet contractId role ->
+        ( showString "Withdraw"
+            . showSpace
+            . showsPrec 11 MarloweV1
+            . showSpace
+            . showsPrec 11 wallet
+            . showSpace
+            . showsPrec 11 contractId
+            . showSpace
+            . showsPrec 11 role
+        )
+      Submit tx ->
+        ( showString "Submit"
+            . showSpace
+            . showsPrec 11 tx
+        )
 
   showsPrecJobId p = \case
-    JobIdSubmit txId -> showParen (p >= 11)
-      ( showString "JobIdSubmit"
-      . showSpace
-      . showsPrec 11 txId
-      )
+    JobIdSubmit txId ->
+      showParen
+        (p >= 11)
+        ( showString "JobIdSubmit"
+            . showSpace
+            . showsPrec 11 txId
+        )
 
   showsPrecStatus p = \case
     TagCreate MarloweV1 -> showsPrec p

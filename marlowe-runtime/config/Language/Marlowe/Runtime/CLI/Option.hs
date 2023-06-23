@@ -8,8 +8,12 @@ import Data.List.Split (splitOn)
 import Data.String (fromString)
 import qualified Data.Text as T
 import Language.Marlowe.Runtime.ChainSync.Api (Address, TxOutRef, fromBech32, parseTxOutRef)
-import Language.Marlowe.Runtime.Core.Api
-  (ContractId(..), MarloweVersion(..), MarloweVersionTag(..), SomeMarloweVersion(..))
+import Language.Marlowe.Runtime.Core.Api (
+  ContractId (..),
+  MarloweVersion (..),
+  MarloweVersionTag (..),
+  SomeMarloweVersion (..),
+ )
 import Network.Socket (HostName, PortNumber)
 import Options.Applicative
 import System.Environment (lookupEnv)
@@ -39,7 +43,12 @@ syncSyncPort :: CliOption OptionFields PortNumber
 syncSyncPort = port "marlowe-sync" "SYNC_MARLOWE_SYNC" 3724 "The port number of the marlowe-sync server's synchronization API."
 
 syncHeaderPort :: CliOption OptionFields PortNumber
-syncHeaderPort = port "marlowe-header" "SYNC_MARLOWE_HEADER" 3725 "The port number of the marlowe-sync server's header synchronization API."
+syncHeaderPort =
+  port
+    "marlowe-header"
+    "SYNC_MARLOWE_HEADER"
+    3725
+    "The port number of the marlowe-sync server's header synchronization API."
 
 syncQueryPort :: CliOption OptionFields PortNumber
 syncQueryPort = port "marlowe-query" "SYNC_MARLOWE_QUERY" 3726 "The port number of the marlowe-sync server's query API."
@@ -72,32 +81,42 @@ txCommandPort :: CliOption OptionFields PortNumber
 txCommandPort = port "tx-command" "TX_COMMAND" 3723 "The port number of the transaction server's job API."
 
 port :: String -> String -> PortNumber -> String -> CliOption OptionFields PortNumber
-port optPrefix envPrefix defaultValue description = CliOption
-  { env
-  , parseEnv = readMaybe
-  , parser = option auto . (<>) (mconcat
-      [ long $ optPrefix <> "-port"
-      , value defaultValue
-      , metavar "PORT_NUMBER"
-      , help $ description <> " Can be set as the environment variable " <> env
-      , showDefault
-      ])
-  }
+port optPrefix envPrefix defaultValue description =
+  CliOption
+    { env
+    , parseEnv = readMaybe
+    , parser =
+        option auto
+          . (<>)
+            ( mconcat
+                [ long $ optPrefix <> "-port"
+                , value defaultValue
+                , metavar "PORT_NUMBER"
+                , help $ description <> " Can be set as the environment variable " <> env
+                , showDefault
+                ]
+            )
+    }
   where
     env = "MARLOWE_RT_" <> if null envPrefix then "PORT" else envPrefix <> "_PORT"
 
-host :: String -> String -> HostName  -> String -> CliOption OptionFields HostName
-host optPrefix envPrefix defaultValue description = CliOption
-  { env = env
-  , parseEnv = Just
-  , parser = strOption . (<>) (mconcat
-      [ long $ optPrefix <> "-host"
-      , value defaultValue
-      , metavar "HOST_NAME"
-      , help $ description <> " Can be set as the environment variable " <> env
-      , showDefault
-      ])
-  }
+host :: String -> String -> HostName -> String -> CliOption OptionFields HostName
+host optPrefix envPrefix defaultValue description =
+  CliOption
+    { env = env
+    , parseEnv = Just
+    , parser =
+        strOption
+          . (<>)
+            ( mconcat
+                [ long $ optPrefix <> "-host"
+                , value defaultValue
+                , metavar "HOST_NAME"
+                , help $ description <> " Can be set as the environment variable " <> env
+                , showDefault
+                ]
+            )
+    }
   where
     env = "MARLOWE_RT_" <> if null envPrefix then "HOST" else envPrefix <> "_HOST"
 
@@ -114,28 +133,35 @@ keyValueOption readKey readValue = option $ eitherReader \val -> case splitOn "=
   _ -> Left "Expected format: <key>=<value>"
 
 txOutRefParser :: ReadM TxOutRef
-txOutRefParser = eitherReader $ T.pack >>> parseTxOutRef >>> \case
-  Nothing  -> Left "Invalid UTXO - expected format: <hex-tx-id>#<tx-out-ix>"
-  Just cid -> Right cid
+txOutRefParser =
+  eitherReader $
+    T.pack >>> parseTxOutRef >>> \case
+      Nothing -> Left "Invalid UTXO - expected format: <hex-tx-id>#<tx-out-ix>"
+      Just cid -> Right cid
 
 marloweVersionParser :: Parser SomeMarloweVersion
-marloweVersionParser = asum
-  [ SomeMarloweVersion <$> marloweV1Parser
-  ]
+marloweVersionParser =
+  asum
+    [ SomeMarloweVersion <$> marloweV1Parser
+    ]
 
 marloweV1Parser :: Parser (MarloweVersion 'V1)
-marloweV1Parser = flag MarloweV1 MarloweV1 $ mconcat
-  [ long "v1"
-  , help "Run command in Marlowe V1"
-  ]
+marloweV1Parser =
+  flag MarloweV1 MarloweV1 $
+    mconcat
+      [ long "v1"
+      , help "Run command in Marlowe V1"
+      ]
 
 contractIdArgument :: String -> Parser ContractId
-contractIdArgument description = argument (ContractId <$> txOutRefParser) $ mconcat
-  [ metavar "CONTRACT_ID"
-  , help description
-  ]
+contractIdArgument description =
+  argument (ContractId <$> txOutRefParser) $
+    mconcat
+      [ metavar "CONTRACT_ID"
+      , help description
+      ]
 
-optParserWithEnvDefault :: HasValue f => CliOption f a -> IO (Parser a)
+optParserWithEnvDefault :: (HasValue f) => CliOption f a -> IO (Parser a)
 optParserWithEnvDefault CliOption{..} = do
   envMod <- foldMap value . (parseEnv =<<) <$> lookupEnv env
   pure $ parser envMod

@@ -5,21 +5,20 @@
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 -- | Utilities for converting to and from Cardano API types.
-
 module Language.Marlowe.Runtime.Cardano.Api where
 
 import qualified Cardano.Api as C
 import qualified Cardano.Api.Shelley as C
 import qualified Cardano.Ledger.BaseTypes as L
-import Cardano.Ledger.Credential (Ptr(Ptr))
-import Data.Bifunctor (Bifunctor(bimap))
+import Cardano.Ledger.Credential (Ptr (Ptr))
+import Data.Bifunctor (Bifunctor (bimap))
 import Data.ByteString.Short (fromShort, toShort)
-import Data.Data (Proxy(Proxy))
+import Data.Data (Proxy (Proxy))
 import Data.Foldable (fold)
 import qualified Data.Map as Map
 import Data.Maybe (mapMaybe)
 import Debug.Trace (traceShow)
-import GHC.Base (Alternative((<|>)))
+import GHC.Base (Alternative ((<|>)))
 import Language.Marlowe.Runtime.Cardano.Feature
 import Language.Marlowe.Runtime.ChainSync.Api
 
@@ -58,16 +57,16 @@ fromCardanoBlockHeaderHash (C.HeaderHash hash) = BlockHeaderHash $ fromShort has
 toCardanoScriptHash :: ScriptHash -> Maybe C.ScriptHash
 toCardanoScriptHash = C.deserialiseFromRawBytes C.AsScriptHash . unScriptHash
 
-toCardanoPlutusScript :: forall lang. C.HasTypeProxy lang => PlutusScript -> Maybe (C.PlutusScript lang)
+toCardanoPlutusScript :: forall lang. (C.HasTypeProxy lang) => PlutusScript -> Maybe (C.PlutusScript lang)
 toCardanoPlutusScript = C.deserialiseFromRawBytes (C.proxyToAsType (Proxy :: Proxy (C.PlutusScript lang))) . unPlutusScript
 
-fromCardanoPlutusScript :: forall lang. C.HasTypeProxy lang => C.PlutusScript lang -> PlutusScript
+fromCardanoPlutusScript :: forall lang. (C.HasTypeProxy lang) => C.PlutusScript lang -> PlutusScript
 fromCardanoPlutusScript = PlutusScript . C.serialiseToRawBytes
 
 plutusScriptHash :: PlutusScript -> Maybe ScriptHash
 plutusScriptHash ps = hashPlutusScript C.PlutusScriptV2 <|> hashPlutusScript C.PlutusScriptV1
   where
-    hashPlutusScript :: C.HasTypeProxy lang => C.PlutusScriptVersion lang -> Maybe ScriptHash
+    hashPlutusScript :: (C.HasTypeProxy lang) => C.PlutusScriptVersion lang -> Maybe ScriptHash
     hashPlutusScript pv = do
       script <- C.PlutusScript pv <$> toCardanoPlutusScript ps
       pure . fromCardanoScriptHash . C.hashScript $ script
@@ -113,19 +112,22 @@ toCardanoStakeAddressReference :: Maybe StakeReference -> Maybe C.StakeAddressRe
 toCardanoStakeAddressReference = \case
   Nothing -> Just C.NoStakeAddress
   Just (StakeCredential cred) -> C.StakeAddressByValue <$> toCardanoStakeCredential cred
-  Just (StakePointer slotNo txIx certIx) -> Just
-    $ C.StakeAddressByPointer
-    $ C.StakeAddressPointer
-    $ Ptr (toCardanoSlotNo slotNo) (L.TxIx $ fromIntegral txIx) (toCardanoCertIx certIx)
+  Just (StakePointer slotNo txIx certIx) ->
+    Just $
+      C.StakeAddressByPointer $
+        C.StakeAddressPointer $
+          Ptr (toCardanoSlotNo slotNo) (L.TxIx $ fromIntegral txIx) (toCardanoCertIx certIx)
 
 fromCardanoStakeAddressReference :: C.StakeAddressReference -> Maybe StakeReference
 fromCardanoStakeAddressReference = \case
   C.NoStakeAddress -> Nothing
   C.StakeAddressByValue credential -> Just $ StakeCredential $ fromCardanoStakeCredential credential
-  C.StakeAddressByPointer (C.StakeAddressPointer (Ptr slotNo (L.TxIx txIx) certIx)) -> Just $ StakePointer
-    (fromCardanoSlotNo slotNo)
-    (fromIntegral txIx)
-    (fromCardanoCertIx certIx)
+  C.StakeAddressByPointer (C.StakeAddressPointer (Ptr slotNo (L.TxIx txIx) certIx)) ->
+    Just $
+      StakePointer
+        (fromCardanoSlotNo slotNo)
+        (fromIntegral txIx)
+        (fromCardanoCertIx certIx)
 
 toCardanoPaymentKeyHash :: PaymentKeyHash -> Maybe (C.Hash C.PaymentKey)
 toCardanoPaymentKeyHash = C.deserialiseFromRawBytes (C.AsHash C.AsPaymentKey) . unPaymentKeyHash
@@ -182,12 +184,14 @@ fromCardanoAddressAny :: C.AddressAny -> Address
 fromCardanoAddressAny = Address . C.serialiseToRawBytes
 
 toCardanoAddressInEra :: C.CardanoEra era -> Address -> Maybe (C.AddressInEra era)
-toCardanoAddressInEra era = withCardanoEra era
-  $ C.deserialiseFromRawBytes (C.AsAddressInEra $ cardanoEraToAsType era) . unAddress
+toCardanoAddressInEra era =
+  withCardanoEra era $
+    C.deserialiseFromRawBytes (C.AsAddressInEra $ cardanoEraToAsType era) . unAddress
 
 fromCardanoAddressInEra :: C.CardanoEra era -> C.AddressInEra era -> Address
-fromCardanoAddressInEra era = withCardanoEra era
-  $ Address . C.serialiseToRawBytes
+fromCardanoAddressInEra era =
+  withCardanoEra era $
+    Address . C.serialiseToRawBytes
 
 toCardanoLovelace :: Lovelace -> C.Lovelace
 toCardanoLovelace = C.Lovelace . fromIntegral . unLovelace
@@ -199,9 +203,10 @@ tokensToCardanoValue :: Tokens -> Maybe C.Value
 tokensToCardanoValue = fmap C.valueFromList . traverse toCardanoValue' . Map.toList . unTokens
   where
     toCardanoValue' :: (AssetId, Quantity) -> Maybe (C.AssetId, C.Quantity)
-    toCardanoValue' (AssetId{..}, quantity) = (,)
-      <$> (C.AssetId <$> toCardanoPolicyId policyId <*> pure (toCardanoAssetName tokenName))
-      <*> pure (toCardanoQuantity quantity)
+    toCardanoValue' (AssetId{..}, quantity) =
+      (,)
+        <$> (C.AssetId <$> toCardanoPolicyId policyId <*> pure (toCardanoAssetName tokenName))
+        <*> pure (toCardanoQuantity quantity)
 
 tokensFromCardanoValue :: C.Value -> Tokens
 tokensFromCardanoValue = Tokens . Map.fromList . mapMaybe fromCardanoValue' . C.valueToList
@@ -212,16 +217,19 @@ tokensFromCardanoValue = Tokens . Map.fromList . mapMaybe fromCardanoValue' . C.
       Just (AssetId (fromCardanoPolicyId policy) (fromCardanoAssetName name), fromCardanoQuantity q)
 
 assetsToCardanoValue :: Assets -> Maybe C.Value
-assetsToCardanoValue Assets{..} = fold <$> sequence
-  [ Just $ C.valueFromList [(C.AdaAssetId, C.lovelaceToQuantity $ toCardanoLovelace ada)]
-  , tokensToCardanoValue tokens
-  ]
+assetsToCardanoValue Assets{..} =
+  fold
+    <$> sequence
+      [ Just $ C.valueFromList [(C.AdaAssetId, C.lovelaceToQuantity $ toCardanoLovelace ada)]
+      , tokensToCardanoValue tokens
+      ]
 
 assetsFromCardanoValue :: C.Value -> Assets
-assetsFromCardanoValue value = Assets
-  { ada = fromCardanoLovelace $ C.selectLovelace value
-  , tokens = tokensFromCardanoValue value
-  }
+assetsFromCardanoValue value =
+  Assets
+    { ada = fromCardanoLovelace $ C.selectLovelace value
+    , tokens = tokensFromCardanoValue value
+    }
 
 toCardanoTxOutValue :: C.MultiAssetSupportedInEra era -> Assets -> Maybe (C.TxOutValue era)
 toCardanoTxOutValue multiAssetsSupported assets =
@@ -262,21 +270,24 @@ fromCardanoTxOutDatum = \case
   C.TxOutDatumInline _ datum -> (Nothing, Just $ fromCardanoScriptData datum)
 
 toCardanoTxOut :: C.MultiAssetSupportedInEra era -> TransactionOutput -> Maybe (C.TxOut C.CtxTx era)
-toCardanoTxOut era TransactionOutput{..} = printIfNone $ C.TxOut
-  <$> toCardanoAddressInEra (cardanoEraOfFeature era) address
-  <*> toCardanoTxOutValue era assets
-  <*> toCardanoTxOutDatum (cardanoEraOfFeature era) datumHash datum
-  <*> pure C.ReferenceScriptNone
+toCardanoTxOut era TransactionOutput{..} =
+  printIfNone $
+    C.TxOut
+      <$> toCardanoAddressInEra (cardanoEraOfFeature era) address
+      <*> toCardanoTxOutValue era assets
+      <*> toCardanoTxOutDatum (cardanoEraOfFeature era) datumHash datum
+      <*> pure C.ReferenceScriptNone
   where
     printIfNone = \case
       Nothing -> traceShow TransactionOutput{..} Nothing
       Just a -> Just a
 
-toCardanoTxOut' :: C.IsCardanoEra era
-                => C.MultiAssetSupportedInEra era
-                -> TransactionOutput
-                -> Maybe C.ScriptInAnyLang
-                -> Maybe (C.TxOut ctx era)
+toCardanoTxOut'
+  :: (C.IsCardanoEra era)
+  => C.MultiAssetSupportedInEra era
+  -> TransactionOutput
+  -> Maybe C.ScriptInAnyLang
+  -> Maybe (C.TxOut ctx era)
 toCardanoTxOut' era TransactionOutput{..} script =
   do
     refs <- C.refInsScriptsAndInlineDatsSupportedInEra C.cardanoEra

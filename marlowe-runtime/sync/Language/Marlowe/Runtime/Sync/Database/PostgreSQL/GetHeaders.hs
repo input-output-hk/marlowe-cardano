@@ -8,7 +8,7 @@ module Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetHeaders where
 import Control.Foldl (Fold)
 import qualified Control.Foldl as Fold
 import Control.Monad.Trans.Class (lift)
-import Control.Monad.Trans.Maybe (MaybeT(..))
+import Control.Monad.Trans.Maybe (MaybeT (..))
 import Data.Binary (get)
 import Data.Binary.Get (runGet)
 import Data.ByteString (ByteString)
@@ -20,25 +20,25 @@ import qualified Data.Vector as V
 import Hasql.TH (foldStatement, maybeStatement, singletonStatement)
 import qualified Hasql.Transaction as T
 import Language.Marlowe.Protocol.Query.Types
-import Language.Marlowe.Runtime.ChainSync.Api
-  ( Address(..)
-  , BlockHeader(..)
-  , BlockHeaderHash(..)
-  , Credential(..)
-  , PolicyId(..)
-  , ScriptHash(..)
-  , TxId(..)
-  , TxOutRef(..)
-  , paymentCredential
-  )
-import Language.Marlowe.Runtime.Core.Api
-  ( ContractId(..)
-  , MarloweMetadataTag(getMarloweMetadataTag)
-  , MarloweVersion(MarloweV1)
-  , SomeMarloweVersion(SomeMarloweVersion)
-  , emptyMarloweTransactionMetadata
-  )
-import Language.Marlowe.Runtime.Discovery.Api (ContractHeader(..))
+import Language.Marlowe.Runtime.ChainSync.Api (
+  Address (..),
+  BlockHeader (..),
+  BlockHeaderHash (..),
+  Credential (..),
+  PolicyId (..),
+  ScriptHash (..),
+  TxId (..),
+  TxOutRef (..),
+  paymentCredential,
+ )
+import Language.Marlowe.Runtime.Core.Api (
+  ContractId (..),
+  MarloweMetadataTag (getMarloweMetadataTag),
+  MarloweVersion (MarloweV1),
+  SomeMarloweVersion (SomeMarloweVersion),
+  emptyMarloweTransactionMetadata,
+ )
+import Language.Marlowe.Runtime.Discovery.Api (ContractHeader (..))
 import Prelude hiding (init)
 
 getHeaders
@@ -51,21 +51,23 @@ getHeaders _ Range{..}
   -- clients as they could get caught in an infinite loop if consuming all
   -- pages.
   | rangeLimit <= 0 || rangeOffset < 0 = pure Nothing
-
 getHeaders cFilter@ContractFilter{..} Range{rangeStart = Just (ContractId TxOutRef{..}), ..} = runMaybeT do
   pivot <- MaybeT case (Set.null tags, Set.null roleCurrencies) of
     -- unconstrained
-    (True, True) -> T.statement (unTxId txId, fromIntegral txIx)
-      [maybeStatement|
+    (True, True) ->
+      T.statement
+        (unTxId txId, fromIntegral txIx)
+        [maybeStatement|
         SELECT slotNo :: bigint, txId :: bytea, txIx :: smallint
         FROM marlowe.createTxOut
         WHERE txId = $1 :: bytea
           AND txIx = $2 :: smallint
       |]
-
     -- role currencies constrained
-    (True, False) -> T.statement (unTxId txId, fromIntegral txIx, V.fromList $ unPolicyId <$> Set.toList roleCurrencies)
-      [maybeStatement|
+    (True, False) ->
+      T.statement
+        (unTxId txId, fromIntegral txIx, V.fromList $ unPolicyId <$> Set.toList roleCurrencies)
+        [maybeStatement|
         SELECT createTxOut.slotNo :: bigint, createTxOut.txId :: bytea, createTxOut.txIx :: smallint
         FROM marlowe.createTxOut
         JOIN marlowe.contractTxOut USING (txId, txIx)
@@ -73,10 +75,11 @@ getHeaders cFilter@ContractFilter{..} Range{rangeStart = Just (ContractId TxOutR
         WHERE createTxOut.txId = $1 :: bytea
           AND createTxOut.txIx = $2 :: smallint
       |]
-
     -- tags constrained
-    (False, True) -> T.statement (unTxId txId, fromIntegral txIx, V.fromList $ getMarloweMetadataTag <$> Set.toList tags)
-      [maybeStatement|
+    (False, True) ->
+      T.statement
+        (unTxId txId, fromIntegral txIx, V.fromList $ getMarloweMetadataTag <$> Set.toList tags)
+        [maybeStatement|
         SELECT createTxOut.slotNo :: bigint, createTxOut.txId :: bytea, createTxOut.txIx :: smallint
         FROM marlowe.createTxOut
         WHERE createTxOut.txId = $1 :: bytea
@@ -89,15 +92,15 @@ getHeaders cFilter@ContractFilter{..} Range{rangeStart = Just (ContractId TxOutR
                 AND contractTxOutTag.txIx = createTxOut.txIx
             )
       |]
-
     -- tags and role currencies constrained
-    (False, False) -> T.statement
-      ( unTxId txId
-      , fromIntegral txIx
-      , V.fromList $ unPolicyId <$> Set.toList roleCurrencies
-      , V.fromList $ getMarloweMetadataTag <$> Set.toList tags
-      )
-      [maybeStatement|
+    (False, False) ->
+      T.statement
+        ( unTxId txId
+        , fromIntegral txIx
+        , V.fromList $ unPolicyId <$> Set.toList roleCurrencies
+        , V.fromList $ getMarloweMetadataTag <$> Set.toList tags
+        )
+        [maybeStatement|
         SELECT createTxOut.slotNo :: bigint, createTxOut.txId :: bytea, createTxOut.txIx :: smallint
         FROM marlowe.createTxOut
         JOIN marlowe.contractTxOut USING (txId, txIx)
@@ -122,8 +125,9 @@ getHeaders cFilter@ContractFilter{..} Range{rangeStart = Just (ContractId TxOutR
 getHeaders cFilter@ContractFilter{..} Range{..} = do
   totalCount <- getTotalCount cFilter
   Just <$> case (Set.null tags, Set.null roleCurrencies, rangeDirection) of
-    (True, True, Descending) -> T.statement nullFilterParams $
-      [foldStatement|
+    (True, True, Descending) ->
+      T.statement nullFilterParams $
+        [foldStatement|
         SELECT
           createTxOut.slotNo :: bigint,
           createTxOut.blockId :: bytea,
@@ -140,10 +144,11 @@ getHeaders cFilter@ContractFilter{..} Range{..} = do
         ORDER BY createTxOut.slotNo DESC, createTxOut.txId DESC, createTxOut.txIx DESC
         OFFSET ($1 :: int) ROWS
         FETCH NEXT ($2 :: int) ROWS ONLY
-      |] (foldPage decodeContractId decodeContractHeader rangeLimit rangeDirection totalCount)
-
-    (True, True, Ascending) -> T.statement nullFilterParams $
-      [foldStatement|
+      |]
+          (foldPage decodeContractId decodeContractHeader rangeLimit rangeDirection totalCount)
+    (True, True, Ascending) ->
+      T.statement nullFilterParams $
+        [foldStatement|
         SELECT
           createTxOut.slotNo :: bigint,
           createTxOut.blockId :: bytea,
@@ -160,10 +165,11 @@ getHeaders cFilter@ContractFilter{..} Range{..} = do
         ORDER BY createTxOut.slotNo, createTxOut.txId, createTxOut.txIx
         OFFSET ($1 :: int) ROWS
         FETCH NEXT ($2 :: int) ROWS ONLY
-      |] (foldPage decodeContractId decodeContractHeader rangeLimit rangeDirection totalCount)
-
-    (True, False, Descending) -> T.statement nullTagsParams $
-      [foldStatement|
+      |]
+          (foldPage decodeContractId decodeContractHeader rangeLimit rangeDirection totalCount)
+    (True, False, Descending) ->
+      T.statement nullTagsParams $
+        [foldStatement|
         SELECT
           createTxOut.slotNo :: bigint,
           createTxOut.blockId :: bytea,
@@ -181,10 +187,11 @@ getHeaders cFilter@ContractFilter{..} Range{..} = do
         ORDER BY createTxOut.slotNo DESC, createTxOut.txId DESC, createTxOut.txIx DESC
         OFFSET ($1 :: int) ROWS
         FETCH NEXT ($2 :: int) ROWS ONLY
-      |] (foldPage decodeContractId decodeContractHeader rangeLimit rangeDirection totalCount)
-
-    (True, False, Ascending) -> T.statement nullTagsParams $
-      [foldStatement|
+      |]
+          (foldPage decodeContractId decodeContractHeader rangeLimit rangeDirection totalCount)
+    (True, False, Ascending) ->
+      T.statement nullTagsParams $
+        [foldStatement|
         SELECT
           createTxOut.slotNo :: bigint,
           createTxOut.blockId :: bytea,
@@ -202,10 +209,11 @@ getHeaders cFilter@ContractFilter{..} Range{..} = do
         ORDER BY createTxOut.slotNo, createTxOut.txId, createTxOut.txIx
         OFFSET ($1 :: int) ROWS
         FETCH NEXT ($2 :: int) ROWS ONLY
-      |] (foldPage decodeContractId decodeContractHeader rangeLimit rangeDirection totalCount)
-
-    (False, True, Descending) -> T.statement nullRoleCurrenciesParams $
-      [foldStatement|
+      |]
+          (foldPage decodeContractId decodeContractHeader rangeLimit rangeDirection totalCount)
+    (False, True, Descending) ->
+      T.statement nullRoleCurrenciesParams $
+        [foldStatement|
         SELECT
           createTxOut.slotNo :: bigint,
           createTxOut.blockId :: bytea,
@@ -229,10 +237,11 @@ getHeaders cFilter@ContractFilter{..} Range{..} = do
         ORDER BY createTxOut.slotNo DESC, createTxOut.txId DESC, createTxOut.txIx DESC
         OFFSET ($1 :: int) ROWS
         FETCH NEXT ($2 :: int) ROWS ONLY
-      |] (foldPage decodeContractId decodeContractHeader rangeLimit rangeDirection totalCount)
-
-    (False, True, Ascending) -> T.statement nullRoleCurrenciesParams $
-      [foldStatement|
+      |]
+          (foldPage decodeContractId decodeContractHeader rangeLimit rangeDirection totalCount)
+    (False, True, Ascending) ->
+      T.statement nullRoleCurrenciesParams $
+        [foldStatement|
         SELECT
           createTxOut.slotNo :: bigint,
           createTxOut.blockId :: bytea,
@@ -256,10 +265,11 @@ getHeaders cFilter@ContractFilter{..} Range{..} = do
         ORDER BY createTxOut.slotNo, createTxOut.txId, createTxOut.txIx
         OFFSET ($1 :: int) ROWS
         FETCH NEXT ($2 :: int) ROWS ONLY
-      |] (foldPage decodeContractId decodeContractHeader rangeLimit rangeDirection totalCount)
-
-    (False, False, Descending) -> T.statement nonNullFilterParams $
-      [foldStatement|
+      |]
+          (foldPage decodeContractId decodeContractHeader rangeLimit rangeDirection totalCount)
+    (False, False, Descending) ->
+      T.statement nonNullFilterParams $
+        [foldStatement|
         SELECT
           createTxOut.slotNo :: bigint,
           createTxOut.blockId :: bytea,
@@ -284,10 +294,11 @@ getHeaders cFilter@ContractFilter{..} Range{..} = do
         ORDER BY createTxOut.slotNo DESC, createTxOut.txId DESC, createTxOut.txIx DESC
         OFFSET ($1 :: int) ROWS
         FETCH NEXT ($2 :: int) ROWS ONLY
-      |] (foldPage decodeContractId decodeContractHeader rangeLimit rangeDirection totalCount)
-
-    (False, False, Ascending) -> T.statement nonNullFilterParams $
-      [foldStatement|
+      |]
+          (foldPage decodeContractId decodeContractHeader rangeLimit rangeDirection totalCount)
+    (False, False, Ascending) ->
+      T.statement nonNullFilterParams $
+        [foldStatement|
         SELECT
           createTxOut.slotNo :: bigint,
           createTxOut.blockId :: bytea,
@@ -312,7 +323,8 @@ getHeaders cFilter@ContractFilter{..} Range{..} = do
         ORDER BY createTxOut.slotNo, createTxOut.txId, createTxOut.txIx
         OFFSET ($1 :: int) ROWS
         FETCH NEXT ($2 :: int) ROWS ONLY
-      |] (foldPage decodeContractId decodeContractHeader rangeLimit rangeDirection totalCount)
+      |]
+          (foldPage decodeContractId decodeContractHeader rangeLimit rangeDirection totalCount)
   where
     -- Load one extra item so we can detect when we've hit the end
     nullFilterParams = (fromIntegral rangeOffset, fromIntegral rangeLimit + 1)
@@ -334,8 +346,9 @@ getHeadersFrom
   -> Order
   -> T.Transaction (Page ContractId ContractHeader)
 getHeadersFrom ContractFilter{..} totalCount (pivotSlot, pivotTxId, pivotTxIx) offset limit order = case (Set.null tags, Set.null roleCurrencies, order) of
-  (True, True, Descending) -> T.statement nullFilterParams $
-    [foldStatement|
+  (True, True, Descending) ->
+    T.statement nullFilterParams $
+      [foldStatement|
       SELECT
         createTxOut.slotNo :: bigint,
         createTxOut.blockId :: bytea,
@@ -360,10 +373,11 @@ getHeadersFrom ContractFilter{..} totalCount (pivotSlot, pivotTxId, pivotTxIx) o
       ORDER BY createTxOut.slotNo DESC, createTxOut.txId DESC, createTxOut.txIx DESC
       OFFSET ($4 :: int) ROWS
       FETCH NEXT ($5 :: int) ROWS ONLY
-    |] (foldPage decodeContractId decodeContractHeader limit Descending totalCount)
-
-  (True, True, Ascending) -> T.statement nullFilterParams $
-    [foldStatement|
+    |]
+        (foldPage decodeContractId decodeContractHeader limit Descending totalCount)
+  (True, True, Ascending) ->
+    T.statement nullFilterParams $
+      [foldStatement|
       SELECT
         createTxOut.slotNo :: bigint,
         createTxOut.blockId :: bytea,
@@ -388,10 +402,11 @@ getHeadersFrom ContractFilter{..} totalCount (pivotSlot, pivotTxId, pivotTxIx) o
       ORDER BY createTxOut.slotNo, createTxOut.txId, createTxOut.txIx
       OFFSET ($4 :: int) ROWS
       FETCH NEXT ($5 :: int) ROWS ONLY
-    |] (foldPage decodeContractId decodeContractHeader limit Ascending totalCount)
-
-  (True, False, Descending) -> T.statement nullTagsParams $
-    [foldStatement|
+    |]
+        (foldPage decodeContractId decodeContractHeader limit Ascending totalCount)
+  (True, False, Descending) ->
+    T.statement nullTagsParams $
+      [foldStatement|
       SELECT
         createTxOut.slotNo :: bigint,
         createTxOut.blockId :: bytea,
@@ -417,10 +432,11 @@ getHeadersFrom ContractFilter{..} totalCount (pivotSlot, pivotTxId, pivotTxIx) o
       ORDER BY createTxOut.slotNo DESC, createTxOut.txId DESC, createTxOut.txIx DESC
       OFFSET ($4 :: int) ROWS
       FETCH NEXT ($5 :: int) ROWS ONLY
-    |] (foldPage decodeContractId decodeContractHeader limit Descending totalCount)
-
-  (True, False, Ascending) -> T.statement nullTagsParams $
-    [foldStatement|
+    |]
+        (foldPage decodeContractId decodeContractHeader limit Descending totalCount)
+  (True, False, Ascending) ->
+    T.statement nullTagsParams $
+      [foldStatement|
       SELECT
         createTxOut.slotNo :: bigint,
         createTxOut.blockId :: bytea,
@@ -446,10 +462,11 @@ getHeadersFrom ContractFilter{..} totalCount (pivotSlot, pivotTxId, pivotTxIx) o
       ORDER BY createTxOut.slotNo, createTxOut.txId, createTxOut.txIx
       OFFSET ($4 :: int) ROWS
       FETCH NEXT ($5 :: int) ROWS ONLY
-    |] (foldPage decodeContractId decodeContractHeader limit Ascending totalCount)
-
-  (False, True, Descending) -> T.statement nullRoleCurrenciesParams $
-    [foldStatement|
+    |]
+        (foldPage decodeContractId decodeContractHeader limit Ascending totalCount)
+  (False, True, Descending) ->
+    T.statement nullRoleCurrenciesParams $
+      [foldStatement|
       SELECT
         createTxOut.slotNo :: bigint,
         createTxOut.blockId :: bytea,
@@ -481,10 +498,11 @@ getHeadersFrom ContractFilter{..} totalCount (pivotSlot, pivotTxId, pivotTxIx) o
       ORDER BY createTxOut.slotNo DESC, createTxOut.txId DESC, createTxOut.txIx DESC
       OFFSET ($4 :: int) ROWS
       FETCH NEXT ($5 :: int) ROWS ONLY
-    |] (foldPage decodeContractId decodeContractHeader limit Descending totalCount)
-
-  (False, True, Ascending) -> T.statement nullRoleCurrenciesParams $
-    [foldStatement|
+    |]
+        (foldPage decodeContractId decodeContractHeader limit Descending totalCount)
+  (False, True, Ascending) ->
+    T.statement nullRoleCurrenciesParams $
+      [foldStatement|
       SELECT
         createTxOut.slotNo :: bigint,
         createTxOut.blockId :: bytea,
@@ -516,10 +534,11 @@ getHeadersFrom ContractFilter{..} totalCount (pivotSlot, pivotTxId, pivotTxIx) o
       ORDER BY createTxOut.slotNo, createTxOut.txId, createTxOut.txIx
       OFFSET ($4 :: int) ROWS
       FETCH NEXT ($5 :: int) ROWS ONLY
-    |] (foldPage decodeContractId decodeContractHeader limit Ascending totalCount)
-
-  (False, False, Descending) -> T.statement nonNullFilterParams $
-    [foldStatement|
+    |]
+        (foldPage decodeContractId decodeContractHeader limit Ascending totalCount)
+  (False, False, Descending) ->
+    T.statement nonNullFilterParams $
+      [foldStatement|
       SELECT
         createTxOut.slotNo :: bigint,
         createTxOut.blockId :: bytea,
@@ -552,10 +571,11 @@ getHeadersFrom ContractFilter{..} totalCount (pivotSlot, pivotTxId, pivotTxIx) o
       ORDER BY createTxOut.slotNo DESC, createTxOut.txId DESC, createTxOut.txIx DESC
       OFFSET ($4 :: int) ROWS
       FETCH NEXT ($5 :: int) ROWS ONLY
-    |] (foldPage decodeContractId decodeContractHeader limit Descending totalCount)
-
-  (False, False, Ascending) -> T.statement nonNullFilterParams $
-    [foldStatement|
+    |]
+        (foldPage decodeContractId decodeContractHeader limit Descending totalCount)
+  (False, False, Ascending) ->
+    T.statement nonNullFilterParams $
+      [foldStatement|
       SELECT
         createTxOut.slotNo :: bigint,
         createTxOut.blockId :: bytea,
@@ -588,7 +608,8 @@ getHeadersFrom ContractFilter{..} totalCount (pivotSlot, pivotTxId, pivotTxIx) o
       ORDER BY createTxOut.slotNo, createTxOut.txId, createTxOut.txIx
       OFFSET ($4 :: int) ROWS
       FETCH NEXT ($5 :: int) ROWS ONLY
-    |] (foldPage decodeContractId decodeContractHeader limit Ascending totalCount)
+    |]
+        (foldPage decodeContractId decodeContractHeader limit Ascending totalCount)
   where
     -- Load one extra item so we can detect when we've hit the end
     nullFilterParams = (pivotSlot, pivotTxId, pivotTxIx, fromIntegral offset, fromIntegral limit + 1)
@@ -619,22 +640,27 @@ getHeadersFrom ContractFilter{..} totalCount (pivotSlot, pivotTxId, pivotTxIx) o
       )
 
 getTotalCount :: ContractFilter -> T.Transaction Int
-getTotalCount ContractFilter{..} = fromIntegral <$> case (Set.null tags, Set.null roleCurrencies) of
-  (True, True) -> T.statement ()
-    [singletonStatement|
+getTotalCount ContractFilter{..} =
+  fromIntegral <$> case (Set.null tags, Set.null roleCurrencies) of
+    (True, True) ->
+      T.statement
+        ()
+        [singletonStatement|
       SELECT COUNT(*) :: int FROM marlowe.createTxOut
     |]
-
-  (True, False) -> T.statement (V.fromList $ unPolicyId <$> Set.toList roleCurrencies)
-    [singletonStatement|
+    (True, False) ->
+      T.statement
+        (V.fromList $ unPolicyId <$> Set.toList roleCurrencies)
+        [singletonStatement|
       SELECT COUNT(*) :: int
       FROM marlowe.createTxOut
       JOIN marlowe.contractTxOut USING (txId, txIx)
       JOIN (SELECT UNNEST($1 :: bytea[]) AS rolesCurrency) as roles USING (rolesCurrency)
     |]
-
-  (False, True) -> T.statement (V.fromList $ getMarloweMetadataTag <$> Set.toList tags)
-    [singletonStatement|
+    (False, True) ->
+      T.statement
+        (V.fromList $ getMarloweMetadataTag <$> Set.toList tags)
+        [singletonStatement|
       SELECT COUNT(*) :: int
       FROM marlowe.createTxOut
       WHERE EXISTS
@@ -645,12 +671,12 @@ getTotalCount ContractFilter{..} = fromIntegral <$> case (Set.null tags, Set.nul
             AND contractTxOutTag.txIx = createTxOut.txIx
         )
     |]
-
-  (False, False) -> T.statement
-    ( V.fromList $ unPolicyId <$> Set.toList roleCurrencies
-    , V.fromList $ getMarloweMetadataTag <$> Set.toList tags
-    )
-    [singletonStatement|
+    (False, False) ->
+      T.statement
+        ( V.fromList $ unPolicyId <$> Set.toList roleCurrencies
+        , V.fromList $ getMarloweMetadataTag <$> Set.toList tags
+        )
+        [singletonStatement|
       SELECT COUNT(*) :: int
       FROM marlowe.createTxOut
       JOIN marlowe.contractTxOut USING (txId, txIx)
@@ -677,10 +703,11 @@ type ResultRow =
   )
 
 foldPage :: (row -> id) -> (row -> item) -> Int -> Order -> Int -> Fold row (Page id item)
-foldPage decodeId decodeItem limit direction totalCount = Page
-  <$> foldItems decodeItem limit
-  <*> foldNextRange decodeId limit direction
-  <*> pure totalCount
+foldPage decodeId decodeItem limit direction totalCount =
+  Page
+    <$> foldItems decodeItem limit
+    <*> foldNextRange decodeId limit direction
+    <*> pure totalCount
 
 foldItems :: (row -> item) -> Int -> Fold row [item]
 foldItems decodeItem limit = fmap decodeItem . take limit <$> Fold.list
@@ -688,42 +715,45 @@ foldItems decodeItem limit = fmap decodeItem . take limit <$> Fold.list
 decodeContractHeader :: ResultRow -> ContractHeader
 decodeContractHeader
   ( slotNo
-  , blockHeaderHash
-  , blockNo
-  , txId
-  , txIx
-  , rolesCurrency
-  , metadata
-  , address
-  , payoutScriptHash
-  ) = ContractHeader
-    { contractId = ContractId (TxOutRef (TxId txId) (fromIntegral txIx))
-    , rolesCurrency = PolicyId rolesCurrency
-    , metadata = maybe emptyMarloweTransactionMetadata (runGet get . fromStrict) metadata
-    , marloweScriptHash = fromJust do
-        credential <- paymentCredential $ Address address
-        case credential of
-          ScriptCredential hash -> pure hash
-          _ -> Nothing
-    , marloweScriptAddress = Address address
-    , payoutScriptHash = ScriptHash payoutScriptHash
-    , marloweVersion = SomeMarloweVersion MarloweV1
-    , blockHeader = BlockHeader
-        (fromIntegral slotNo)
-        (BlockHeaderHash blockHeaderHash)
-        (fromIntegral blockNo)
-    }
+    , blockHeaderHash
+    , blockNo
+    , txId
+    , txIx
+    , rolesCurrency
+    , metadata
+    , address
+    , payoutScriptHash
+    ) =
+    ContractHeader
+      { contractId = ContractId (TxOutRef (TxId txId) (fromIntegral txIx))
+      , rolesCurrency = PolicyId rolesCurrency
+      , metadata = maybe emptyMarloweTransactionMetadata (runGet get . fromStrict) metadata
+      , marloweScriptHash = fromJust do
+          credential <- paymentCredential $ Address address
+          case credential of
+            ScriptCredential hash -> pure hash
+            _ -> Nothing
+      , marloweScriptAddress = Address address
+      , payoutScriptHash = ScriptHash payoutScriptHash
+      , marloweVersion = SomeMarloweVersion MarloweV1
+      , blockHeader =
+          BlockHeader
+            (fromIntegral slotNo)
+            (BlockHeaderHash blockHeaderHash)
+            (fromIntegral blockNo)
+      }
 
 foldNextRange :: (row -> id) -> Int -> Order -> Fold row (Maybe (Range id))
 foldNextRange decodeId rangeLimit rangeDirection = do
   mNext <- Fold.index rangeLimit
   pure do
     row <- mNext
-    pure Range
-      { rangeStart = Just $ decodeId row
-      , rangeOffset = 0
-      , ..
-      }
+    pure
+      Range
+        { rangeStart = Just $ decodeId row
+        , rangeOffset = 0
+        , ..
+        }
 
 decodeContractId :: ResultRow -> ContractId
 decodeContractId (_, _, _, txId, txIx, _, _, _, _) = ContractId (TxOutRef (TxId txId) (fromIntegral txIx))

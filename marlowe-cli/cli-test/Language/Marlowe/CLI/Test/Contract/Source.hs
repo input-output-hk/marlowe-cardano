@@ -12,36 +12,40 @@ module Language.Marlowe.CLI.Test.Contract.Source where
 
 import Control.Monad (void)
 import Control.Monad.Except (MonadError, throwError)
-import Data.Aeson (FromJSON(..), ToJSON(..), (.=))
-import qualified Data.Aeson as A
-import qualified Data.Aeson.KeyMap as KeyMap
+import Data.Aeson (FromJSON (..), ToJSON (..), (.=))
+import Data.Aeson qualified as A
+import Data.Aeson.KeyMap qualified as KeyMap
 import Data.Maybe (fromMaybe)
-import qualified Data.Text as T
+import Data.Text qualified as T
 import GHC.Generics (Generic)
 import Language.Marlowe.CLI.IO (liftCliMaybe)
 import Language.Marlowe.CLI.Run (marloweAddressFromCardanoAddress)
 import Language.Marlowe.CLI.Test.Contract.ParametrizedMarloweJSON (ParametrizedMarloweJSON)
 import Language.Marlowe.CLI.Test.InterpreterError (InterpreterError, rethrowCliError, testExecutionFailed')
-import qualified Language.Marlowe.CLI.Test.Operation.Aeson as Operation
-import Language.Marlowe.CLI.Test.Wallet.Interpret
-  (assetIdToToken, findWallet, findWalletByUniqueToken, getSingletonCurrency)
-import Language.Marlowe.CLI.Test.Wallet.Types
-  ( Asset(Asset)
-  , AssetId
-  , CurrencyNickname
-  , Wallet(_waAddress)
-  , WalletNickname(WalletNickname)
-  , adaToken
-  , faucetNickname
-  , parseTokenNameJSON
-  , tokenNameToJSON
-  )
-import qualified Language.Marlowe.CLI.Test.Wallet.Types as Wallet
+import Language.Marlowe.CLI.Test.Operation.Aeson qualified as Operation
+import Language.Marlowe.CLI.Test.Wallet.Interpret (
+  assetIdToToken,
+  findWallet,
+  findWalletByUniqueToken,
+  getSingletonCurrency,
+ )
+import Language.Marlowe.CLI.Test.Wallet.Types (
+  Asset (Asset),
+  AssetId,
+  CurrencyNickname,
+  Wallet (_waAddress),
+  WalletNickname (WalletNickname),
+  adaToken,
+  faucetNickname,
+  parseTokenNameJSON,
+  tokenNameToJSON,
+ )
+import Language.Marlowe.CLI.Test.Wallet.Types qualified as Wallet
 import Language.Marlowe.CLI.Types (CliError, SomeTimeout, toMarloweTimeout)
-import qualified Language.Marlowe.Core.V1.Semantics.Types as C
-import qualified Language.Marlowe.Core.V1.Semantics.Types as M
+import Language.Marlowe.Core.V1.Semantics.Types qualified as C
+import Language.Marlowe.Core.V1.Semantics.Types qualified as M
 import Language.Marlowe.Extended.V1 (toCore)
-import qualified Language.Marlowe.Extended.V1 as E
+import Language.Marlowe.Extended.V1 qualified as E
 import Ledger.Orphans ()
 import Marlowe.Contracts (coveredCall, escrow, swap, trivial, zeroCouponBond)
 import Plutus.V1.Ledger.Api (TokenName)
@@ -53,8 +57,8 @@ import Plutus.V1.Ledger.Api (TokenName)
 -- | ```
 -- |  "address": "Wallet-1"
 -- | ```
-data PartyRef =
-    WalletRef WalletNickname
+data PartyRef
+  = WalletRef WalletNickname
   | RoleRef TokenName
   deriving stock (Eq, Generic, Show)
 
@@ -68,72 +72,102 @@ instance FromJSON PartyRef where
     _ -> fail "Expecting a Party object."
 
 instance ToJSON PartyRef where
-    toJSON (WalletRef (WalletNickname walletNickname)) = A.object
-        [ "address" .= A.String (T.pack walletNickname) ]
-    toJSON (RoleRef tokenName) = A.object
-        [ "role_token" .= tokenNameToJSON tokenName ]
+  toJSON (WalletRef (WalletNickname walletNickname)) =
+    A.object
+      ["address" .= A.String (T.pack walletNickname)]
+  toJSON (RoleRef tokenName) =
+    A.object
+      ["role_token" .= tokenNameToJSON tokenName]
 
-data UseTemplate =
-    UseTrivial
-    {
-      utParty              :: Maybe PartyRef              -- ^ The party. Falls back to the faucet wallet pkh.
-    , utDepositLovelace    :: Integer                     -- ^ Lovelace in the deposit.
-    , utWithdrawalLovelace :: Integer                     -- ^ Lovelace in the withdrawal.
-    , utTimeout            :: SomeTimeout                 -- ^ The timeout.
-    }
-    -- | Use for escrow contract.
-  | UseEscrow
-    {
-      utPrice             :: Integer          -- ^ Price of the item for sale, in lovelace.
-    , utSeller            :: PartyRef         -- ^ Defaults to a wallet with the "Buyer" nickname.
-    , utBuyer             :: PartyRef         -- ^ Defaults to a wallet with the "Seller" nickname.
-    , utMediator          :: PartyRef         -- ^ The mediator.
-    , utPaymentDeadline   :: SomeTimeout      -- ^ The deadline for the buyer to pay.
-    , utComplaintDeadline :: SomeTimeout      -- ^ The deadline for the buyer to complain.
-    , utDisputeDeadline   :: SomeTimeout      -- ^ The deadline for the seller to dispute a complaint.
-    , utMediationDeadline :: SomeTimeout      -- ^ The deadline for the mediator to decide.
-    }
-    -- | Use for swap contract.
-  | UseSwap
-    {
-      utAParty            :: PartyRef           -- ^ First party
-    , utAAsset            :: Asset
-    , utATimeout          :: SomeTimeout        -- ^ Timeout for first party's deposit.
-    , utBParty            :: PartyRef           -- ^ Second party. Falls back to wallet with "B" nickname.
-    , utBAsset            :: Asset
-    , utBTimeout          :: SomeTimeout        -- ^ Timeout for second party's deposit.
-    }
-    -- | Use for zero-coupon bond.
-  | UseZeroCouponBond
-    {
-      utLender          :: PartyRef    -- ^ The lender.
-    , utBorrower        :: PartyRef    -- ^ The borrower.
-    , utPrincipal       :: Integer    -- ^ The principal.
-    , utInterest        :: Integer    -- ^ The interest.
-    , utLendingDeadline :: SomeTimeout -- ^ The lending deadline.
-    , utPaybackDeadline :: SomeTimeout -- ^ The payback deadline.
-    }
-    -- | Use for covered call.
-  | UseCoveredCall
-    {
-      utIssuer         :: PartyRef    -- ^ The issuer.
-    , utCounterParty   :: PartyRef    -- ^ The counter-party.
-    , utCurrency       :: AssetId     -- ^ The currency token.
-    , utStrike         :: Integer     -- ^ The strike in currency.
-    , utUnderlying     :: AssetId     -- ^ The underlying token.
-    , utAmount         :: Integer     -- ^ The amount of underlying.
-    , utIssueDate      :: SomeTimeout -- ^ The issue date.
-    , utMaturityDate   :: SomeTimeout -- ^ The maturity date.
-    , utSettlementDate :: SomeTimeout -- ^ The settlement date.
-    }
-    -- | Use for actus contracts.
-  | UseActus
-    {
-      utParty          :: Maybe PartyRef   -- ^ The party. Falls back to the faucet wallet.
-    , utCounterParty   :: PartyRef         -- ^ The counter-party.
-    , utActusTermsFile :: FilePath         -- ^ The Actus contract terms.
-    }
-    deriving stock (Eq, Generic, Show)
+data UseTemplate
+  = UseTrivial
+      { utParty :: Maybe PartyRef
+      -- ^ The party. Falls back to the faucet wallet pkh.
+      , utDepositLovelace :: Integer
+      -- ^ Lovelace in the deposit.
+      , utWithdrawalLovelace :: Integer
+      -- ^ Lovelace in the withdrawal.
+      , utTimeout :: SomeTimeout
+      -- ^ The timeout.
+      }
+  | -- | Use for escrow contract.
+    UseEscrow
+      { utPrice :: Integer
+      -- ^ Price of the item for sale, in lovelace.
+      , utSeller :: PartyRef
+      -- ^ Defaults to a wallet with the "Buyer" nickname.
+      , utBuyer :: PartyRef
+      -- ^ Defaults to a wallet with the "Seller" nickname.
+      , utMediator :: PartyRef
+      -- ^ The mediator.
+      , utPaymentDeadline :: SomeTimeout
+      -- ^ The deadline for the buyer to pay.
+      , utComplaintDeadline :: SomeTimeout
+      -- ^ The deadline for the buyer to complain.
+      , utDisputeDeadline :: SomeTimeout
+      -- ^ The deadline for the seller to dispute a complaint.
+      , utMediationDeadline :: SomeTimeout
+      -- ^ The deadline for the mediator to decide.
+      }
+  | -- | Use for swap contract.
+    UseSwap
+      { utAParty :: PartyRef
+      -- ^ First party
+      , utAAsset :: Asset
+      , utATimeout :: SomeTimeout
+      -- ^ Timeout for first party's deposit.
+      , utBParty :: PartyRef
+      -- ^ Second party. Falls back to wallet with "B" nickname.
+      , utBAsset :: Asset
+      , utBTimeout :: SomeTimeout
+      -- ^ Timeout for second party's deposit.
+      }
+  | -- | Use for zero-coupon bond.
+    UseZeroCouponBond
+      { utLender :: PartyRef
+      -- ^ The lender.
+      , utBorrower :: PartyRef
+      -- ^ The borrower.
+      , utPrincipal :: Integer
+      -- ^ The principal.
+      , utInterest :: Integer
+      -- ^ The interest.
+      , utLendingDeadline :: SomeTimeout
+      -- ^ The lending deadline.
+      , utPaybackDeadline :: SomeTimeout
+      -- ^ The payback deadline.
+      }
+  | -- | Use for covered call.
+    UseCoveredCall
+      { utIssuer :: PartyRef
+      -- ^ The issuer.
+      , utCounterParty :: PartyRef
+      -- ^ The counter-party.
+      , utCurrency :: AssetId
+      -- ^ The currency token.
+      , utStrike :: Integer
+      -- ^ The strike in currency.
+      , utUnderlying :: AssetId
+      -- ^ The underlying token.
+      , utAmount :: Integer
+      -- ^ The amount of underlying.
+      , utIssueDate :: SomeTimeout
+      -- ^ The issue date.
+      , utMaturityDate :: SomeTimeout
+      -- ^ The maturity date.
+      , utSettlementDate :: SomeTimeout
+      -- ^ The settlement date.
+      }
+  | -- | Use for actus contracts.
+    UseActus
+      { utParty :: Maybe PartyRef
+      -- ^ The party. Falls back to the faucet wallet.
+      , utCounterParty :: PartyRef
+      -- ^ The counter-party.
+      , utActusTermsFile :: FilePath
+      -- ^ The Actus contract terms.
+      }
+  deriving stock (Eq, Generic, Show)
 
 instance FromJSON UseTemplate where
   parseJSON = Operation.parseConstructorBasedJSON' "ut"
@@ -141,13 +175,13 @@ instance FromJSON UseTemplate where
 instance ToJSON UseTemplate where
   toJSON = Operation.toConstructorBasedJSON "ut"
 
-data Source =
-    InlineContract ParametrizedMarloweJSON
+data Source
+  = InlineContract ParametrizedMarloweJSON
   | UseTemplate UseTemplate
-    deriving stock (Eq, Generic, Show)
+  deriving stock (Eq, Generic, Show)
 
 instance ToJSON Source where
-  toJSON (InlineContract c)            = A.object [("inline", toJSON c)]
+  toJSON (InlineContract c) = A.object [("inline", toJSON c)]
   toJSON (UseTemplate templateCommand) = A.object [("template", toJSON templateCommand)]
 
 instance FromJSON Source where
@@ -160,22 +194,22 @@ instance FromJSON Source where
       pure $ UseTemplate parsedTemplateCommand
     _ -> fail "Expected object with a single field of either `inline` or `template`"
 
-makeContract' :: MonadError InterpreterError m => E.Contract -> m C.Contract
+makeContract' :: (MonadError InterpreterError m) => E.Contract -> m C.Contract
 makeContract' = rethrowCliError . makeContract
 
 -- | Conversion from Extended to Core Marlowe.
-makeContract :: MonadError CliError m => E.Contract -> m C.Contract
+makeContract :: (MonadError CliError m) => E.Contract -> m C.Contract
 makeContract = liftCliMaybe "Conversion from Extended to Core Marlowe failed!" . toCore
 
 buildParty
-  :: Wallet.InterpretMonad env st m era
+  :: (Wallet.InterpretMonad env st m era)
   => Maybe CurrencyNickname
   -> PartyRef
   -> m M.Party
 buildParty mRoleCurrency = \case
   WalletRef nickname -> do
-      wallet <- findWallet nickname
-      uncurry M.Address <$> rethrowCliError (marloweAddressFromCardanoAddress (_waAddress wallet))
+    wallet <- findWallet nickname
+    uncurry M.Address <$> rethrowCliError (marloweAddressFromCardanoAddress (_waAddress wallet))
   RoleRef token -> do
     -- Consistency check
     currency <- case mRoleCurrency of
@@ -186,28 +220,27 @@ buildParty mRoleCurrency = \case
     pure $ M.Role token
 
 useTemplate
-  :: Wallet.InterpretMonad env st m era
+  :: (Wallet.InterpretMonad env st m era)
   => Maybe CurrencyNickname
   -> UseTemplate
   -> m M.Contract
 useTemplate currency = \case
   UseTrivial{..} -> do
     timeout' <- toMarloweTimeout utTimeout
-    let
-      partyRef = fromMaybe (WalletRef faucetNickname) utParty
+    let partyRef = fromMaybe (WalletRef faucetNickname) utParty
     party <- buildParty currency partyRef
-    makeContract' $ trivial
-      party
-      utDepositLovelace
-      utWithdrawalLovelace
-      timeout'
+    makeContract' $
+      trivial
+        party
+        utDepositLovelace
+        utWithdrawalLovelace
+        timeout'
   UseSwap{..} -> do
     aTimeout' <- toMarloweTimeout utATimeout
     bTimeout' <- toMarloweTimeout utBTimeout
 
-    let
-      Asset aAssetId aAmount = utAAsset
-      Asset bAssetId bAmount = utBAsset
+    let Asset aAssetId aAmount = utAAsset
+        Asset bAssetId bAmount = utBAsset
 
     aToken <- assetIdToToken aAssetId
     bToken <- assetIdToToken bAssetId
@@ -215,7 +248,8 @@ useTemplate currency = \case
     aParty <- buildParty currency utAParty
     bParty <- buildParty currency utBParty
 
-    makeContract' $ swap
+    makeContract' $
+      swap
         aParty
         aToken
         (E.Constant aAmount)
@@ -235,15 +269,16 @@ useTemplate currency = \case
     buyer <- buildParty currency utBuyer
     mediator <- buildParty currency utMediator
 
-    makeContract' $ escrow
-      (E.Constant utPrice)
-      seller
-      buyer
-      mediator
-      paymentDeadline'
-      complaintDeadline'
-      disputeDeadline'
-      mediationDeadline'
+    makeContract' $
+      escrow
+        (E.Constant utPrice)
+        seller
+        buyer
+        mediator
+        paymentDeadline'
+        complaintDeadline'
+        disputeDeadline'
+        mediationDeadline'
   UseCoveredCall{..} -> do
     issueDate <- toMarloweTimeout utIssueDate
     maturityDate <- toMarloweTimeout utMaturityDate
@@ -254,7 +289,8 @@ useTemplate currency = \case
     ccCurrency <- assetIdToToken utCurrency
     underlying <- assetIdToToken utUnderlying
 
-    makeContract' $ coveredCall
+    makeContract' $
+      coveredCall
         issuer
         counterParty
         Nothing
@@ -272,13 +308,14 @@ useTemplate currency = \case
     lender <- buildParty currency utLender
     borrower <- buildParty currency utBorrower
 
-    makeContract' $ zeroCouponBond
-      lender
-      borrower
-      lendingDeadline
-      paybackDeadline
-      (E.Constant utPrincipal)
-      (E.Constant utPrincipal `E.AddValue` E.Constant utInterest)
-      adaToken
-      E.Close
+    makeContract' $
+      zeroCouponBond
+        lender
+        borrower
+        lendingDeadline
+        paybackDeadline
+        (E.Constant utPrincipal)
+        (E.Constant utPrincipal `E.AddValue` E.Constant utInterest)
+        adaToken
+        E.Close
   template -> throwError $ testExecutionFailed' $ "Template not implemented: " <> show template
