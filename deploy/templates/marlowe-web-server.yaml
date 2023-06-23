@@ -25,6 +25,14 @@ spec:
         - expose: true
           port: 3780
           protocol: TCP
+      traits:
+      - type: https-route
+        properties:
+          domains:
+          - marlowe-runtime-{{ . }}-web.scdev.aws.iohkdev.io
+          rules:
+          - port: 3780
+
   policies:
   - name: local-marlowe-staging
     properties:
