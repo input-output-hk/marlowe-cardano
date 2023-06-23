@@ -18,27 +18,14 @@ This includes a variety of useful tools:
 
 * The right version of GHC with all the external Haskell dependencies in its package database.
 * `cabal-install`
-* `stylish-haskell`
+* `fourmolu`
 * `haskell-language-server`
-* `purescript-language-server`
 * ... and more
-
-Have a look in `dev-shell.nix` to see what's there.
 
 We rely heavily on this approach to ensure that everyone has consistent versions of the tools that we use.
 Please do make use of this, since problems due to mismatched versions of tools are particularly annoying to fix!
 
-NOTE: You may want to consider using https://github.com/target/lorri[lorri] as a convenient alternative to running `nix develop` directly.
-
-=== How to use helper scripts to fix some common issues
-
-The shell comes with some tools for fixing various simple problems that the CI will complain about. Specifically:
-
-- `fix-stylish-haskell` will re-format all the Haskell sources correctly.
-- `fix-purs-tidy` will re-format all the Purescript sources correctly.
-- `fix-png-optimization` will optimize all PNGs in the repository.
-
-If you're not using `nix develop` all the time and you want to run one of these, you can use `nix develop --command`.
+NOTE: You may want to consider using direnv as a convenient alternative to running `nix develop` directly.
 
 === How to build the code during development
 
@@ -142,7 +129,7 @@ actually use flakes for normal Nix builds. To manage the dependencies,
 see https://nixos.org/manual/nix/unstable/command-ref/new-cli/nix3-flake.html#flake-inputs[the Nix flake inputs documentation]
 and https://nixos.org/manual/nix/unstable/command-ref/new-cli/nix3-flake-lock.html[the Nix flake lock command].
 
-Specifically, you will probabl want to say `nix flake lock --update-input <input-name>`. 
+Specifically, you will probabl want to say `nix flake lock --update-input <input-name>`.
 Do *not* use `nix flake update`, as that will update all the inputs, which we typically don't want to do.
 
 Inside of the project nix develop, a version of Nix with flakes is available under the alias `nix-flakes`.
@@ -215,12 +202,14 @@ you could write a Note describing the trick (and justifying its usage!), and the
 
 === Code formatting
 
-We use `stylish-haskell` for Haskell code formatting, `purs-tidy` for Purescript, and `prettier` for JavaScript, HTML, and CSS.
-CI checks that running these is a no-op, so if you don’t apply it them your PR will not go green.
+We use `fourmolu` for Haskell code formatting, `cabal-fmt` for cabal, and `nixpkgs-fmt` for Nix.
+CI checks that running these is a no-op, so if you don’t apply it then your PR will not go green.
 To avoid annoyance, set up your editor to run them automatically.
-The `nix develop` environment provides `stylish-haskell`, `purs-tidy`, and `prettier` binaries of the correct versions.
+The `nix develop` environment provides all the necessary binaries of the correct versions.
 
-You can run `stylish-haskell`, `purs-tidy`, or `prettier` over your tree using the `fix-stylish-haskell`, `fix-purs-tidy`, or `fix-prettier` scripts provided by the `nix develop` environment.
+You can run all the formatters over the repo using `pre-commit run --all`.
+
+If you're not using `nix develop` all the time and you want to run one of these, you can use `nix develop --command`.
 
 === Compiler warnings
 
