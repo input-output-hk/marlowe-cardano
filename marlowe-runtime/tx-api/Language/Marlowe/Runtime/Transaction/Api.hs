@@ -86,11 +86,9 @@ import Language.Marlowe.Runtime.ChainSync.Api
   , TokenName(..)
   , TxId
   , TxOutRef
-  , getUTCTime
   , parseMetadataList
   , parseMetadataMap
   , parseMetadataText
-  , putUTCTime
   )
 import Language.Marlowe.Runtime.Core.Api
 import Language.Marlowe.Runtime.History.Api (ExtractCreationError, ExtractMarloweTransactionError)
@@ -324,8 +322,8 @@ instance IsCardanoEra era => Binary (InputsApplied era 'V1) where
     put metadata
     put input
     put output
-    putUTCTime invalidBefore
-    putUTCTime invalidHereafter
+    put invalidBefore
+    put invalidHereafter
     putInputs MarloweV1 inputs
     putTxBody txBody
   get = do
@@ -334,8 +332,8 @@ instance IsCardanoEra era => Binary (InputsApplied era 'V1) where
     metadata <- get
     input <- get
     output <- get
-    invalidBefore <- getUTCTime
-    invalidHereafter <- getUTCTime
+    invalidBefore <- get
+    invalidHereafter <- get
     inputs <- getInputs MarloweV1
     txBody <- getTxBody
     pure InputsApplied{..}
@@ -392,7 +390,7 @@ data MarloweTxCommand status err result where
     -- ^ Optional metadata to attach to the transaction
     -> Lovelace
     -- ^ Min Lovelace which should be used for the contract output.
-    -> (Either (Contract v) DatumHash)
+    -> Either (Contract v) DatumHash
     -- ^ The contract to run, or the hash of the contract to load from the store.
     -> MarloweTxCommand Void (CreateError v) (ContractCreated BabbageEra v)
 
@@ -529,8 +527,8 @@ instance Command MarloweTxCommand where
       put walletAddresses
       put contractId
       put metadata
-      maybe (putWord8 0) (\t -> putWord8 1 *> putUTCTime t) invalidBefore
-      maybe (putWord8 0) (\t -> putWord8 1 *> putUTCTime t) invalidHereafter
+      maybe (putWord8 0) (\t -> putWord8 1 *> put t) invalidBefore
+      maybe (putWord8 0) (\t -> putWord8 1 *> put t) invalidHereafter
       putInputs version redeemer
     Withdraw _ walletAddresses contractId tokenName -> do
       put walletAddresses
@@ -554,11 +552,11 @@ instance Command MarloweTxCommand where
       metadata <- get
       invalidBefore <- getWord8 >>= \case
         0 -> pure Nothing
-        1 -> Just <$> getUTCTime
+        1 -> Just <$> get
         t -> fail $ "Invalid Maybe tag: " <> show t
       invalidHereafter <- getWord8 >>= \case
         0 -> pure Nothing
-        1 -> Just <$> getUTCTime
+        1 -> Just <$> get
         t -> fail $ "Invalid Maybe tag: " <> show t
       redeemer <- getInputs version
       pure $ ApplyInputs version walletAddresses contractId metadata invalidBefore invalidHereafter redeemer

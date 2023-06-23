@@ -291,6 +291,7 @@ in
       #################
       # REQUIRED VARS #
       #################
+      # MARLOWE_CHAIN_SYNC_HOST, MARLOWE_CHAIN_SYNC_QUERY_PORT: connection info to marlowe-chain-sync
       # HOST, MARLOWE_SYNC_PORT, MARLOWE_HEADER_SYNC_PORT, MARLOWE_QUERY_PORT: network binding
       # DB_NAME, DB_USER, DB_PASS, DB_HOST,
       # HTTP_PORT: port number for the HTTP healthcheck server
@@ -305,11 +306,15 @@ in
       [ -z "''${MARLOWE_SYNC_PORT:-}" ] && echo "MARLOWE_SYNC_PORT env var must be set -- aborting" && exit 1
       [ -z "''${MARLOWE_HEADER_SYNC_PORT:-}" ] && echo "MARLOWE_HEADER_SYNC_PORT env var must be set -- aborting" && exit 1
       [ -z "''${MARLOWE_QUERY_PORT:-}" ] && echo "MARLOWE_QUERY_PORT env var must be set -- aborting" && exit 1
+      [ -z "''${MARLOWE_CHAIN_SYNC_HOST:-}" ] && echo "MARLOWE_CHAIN_SYNC_HOST env var must be set -- aborting" && exit 1
+      [ -z "''${MARLOWE_CHAIN_SYNC_QUERY_PORT:-}" ] && echo "MARLOWE_CHAIN_SYNC_QUERY_PORT env var must be set -- aborting" && exit 1
       [ -z "''${DB_NAME:-}" ] && echo "DB_NAME env var must be set -- aborting" && exit 1
       [ -z "''${DB_USER:-}" ] && echo "DB_USER env var must be set -- aborting" && exit 1
       [ -z "''${DB_PASS:-}" ] && echo "DB_PASS env var must be set -- aborting" && exit 1
       [ -z "''${HTTP_PORT:-}" ] && echo "HTTP_PORT env var must be set -- aborting" && exit 1
       [ -z "''${DB_HOST:-}" ] && echo "DB_HOST env var must be set -- aborting" && exit 1
+
+      ${wait-for-tcp}/bin/wait-for-tcp "$MARLOWE_CHAIN_SYNC_HOST" "$MARLOWE_CHAIN_SYNC_QUERY_PORT"
 
       export OTEL_SERVICE_NAME="''${OTEL_SERVICE_NAME:-marlowe-sync}"
 
@@ -320,6 +325,8 @@ in
         --sync-port "$MARLOWE_SYNC_PORT" \
         --header-sync-port "$MARLOWE_HEADER_SYNC_PORT" \
         --query-port "$MARLOWE_QUERY_PORT" \
+        --chain-sync-host "$MARLOWE_CHAIN_SYNC_HOST" \
+        --chain-sync-query-port "$MARLOWE_CHAIN_SYNC_QUERY_PORT" \
         --http-port "$HTTP_PORT"
     '';
   };

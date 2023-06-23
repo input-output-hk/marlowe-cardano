@@ -11,12 +11,13 @@
 
 module Language.Marlowe.Runtime.Core.Api where
 
+import Cardano.Api (NetworkId(..), NetworkMagic(..))
 import Control.Monad (join, zipWithM, (<=<))
 import Data.Aeson
   (FromJSON(..), FromJSONKey, Result(..), ToJSON(..), ToJSONKey(toJSONKey), Value(..), eitherDecode, encode)
 import Data.Aeson.Types (Parser, parse, parseFail, toJSONKeyText)
 import Data.Bifunctor (first)
-import Data.Binary (Binary(..), Get, Put)
+import Data.Binary (Binary(..), Get, Put, getWord8, putWord8)
 import Data.Binary.Get (getWord32be)
 import Data.Binary.Put (putWord32be)
 import Data.ByteString (ByteString)
@@ -36,16 +37,7 @@ import GHC.Generics (Generic, to)
 import qualified Language.Marlowe.Core.V1.Semantics as V1
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
 import Language.Marlowe.Runtime.ChainSync.Api
-  ( BlockHeader
-  , TokenName(..)
-  , TxId(..)
-  , TxOutRef(..)
-  , getUTCTime
-  , parseTxOutRef
-  , putUTCTime
-  , renderTxOutRef
-  , unPolicyId
-  )
+  (BlockHeader, TokenName(..), TxId(..), TxOutRef(..), parseTxOutRef, renderTxOutRef, unPolicyId)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Network.Protocol.Codec.Spec (GVariations(gVariations), Variations(..), varyAp)
 import Numeric.Natural (Natural)
@@ -265,8 +257,8 @@ instance Binary (Transaction 'V1) where
     put contractId
     put metadata
     put blockHeader
-    putUTCTime validityLowerBound
-    putUTCTime validityUpperBound
+    put validityLowerBound
+    put validityUpperBound
     putInputs MarloweV1 inputs
     put output
   get = Transaction
@@ -274,8 +266,8 @@ instance Binary (Transaction 'V1) where
     <*> get
     <*> get
     <*> get
-    <*> getUTCTime
-    <*> getUTCTime
+    <*> get
+    <*> get
     <*> getInputs MarloweV1
     <*> get
 
@@ -516,6 +508,16 @@ instance Binary V1.ValueId
 instance Binary V1.IntervalError
 instance Binary a => Binary (V1.Case a)
 instance Binary a => Binary (V1.Value a)
+instance Binary NetworkId where
+  put = \case
+    Mainnet -> putWord8 0
+    Testnet (NetworkMagic n) -> putWord8 1 *> put n
+  get = do
+    tag <- getWord8
+    case tag of
+      0 -> pure Mainnet
+      1 -> Testnet . NetworkMagic <$> get
+      _ -> fail $ "Invalid network ID constructor tag " <> show tag
 
 instance Variations PV2.Address
 instance Variations PV2.Credential
@@ -538,6 +540,8 @@ instance Variations V1.State
 instance Variations V1.Token
 instance Variations V1.ValueId
 instance Variations V1.IntervalError
+instance Variations NetworkId where
+  variations = NE.fromList [Mainnet, Testnet $ NetworkMagic 0]
 
 instance Variations V1.Party where
   variations = NE.fromList $ NE.filter (not . hasStakingPointer) $ to <$> gVariations

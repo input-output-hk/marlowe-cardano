@@ -1,14 +1,12 @@
 {-# LANGUAGE Arrows #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
-{-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module Main
-  where
+module Main where
 
 import Cardano.Api
   ( CardanoMode
@@ -156,6 +154,7 @@ run Options{..} = bracket (Pool.acquire 100 (Just 5000000) (fromString databaseU
           , getScripts = ScriptRegistry.getScripts
           , submitConfirmationBlocks
           , networkId
+          , runtimeVersion = version
           }
 
         tcpServer "marlowe-runtime" -< TcpServerDependencies

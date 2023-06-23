@@ -1,4 +1,3 @@
-{-# LANGUAGE Arrows #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}

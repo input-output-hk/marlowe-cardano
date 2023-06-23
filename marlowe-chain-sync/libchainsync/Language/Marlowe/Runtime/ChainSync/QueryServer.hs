@@ -19,13 +19,15 @@ import Cardano.Api
   )
 import qualified Cardano.Api as Cardano
 import Cardano.Api.Shelley (AcquiringFailure)
+import Control.Concurrent.STM (STM)
 import Control.Monad.Trans.Except (ExceptT(ExceptT), except, runExceptT, throwE, withExceptT)
-import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncQuery(..))
+import Language.Marlowe.Runtime.ChainSync.Api (ChainPoint, ChainSyncQuery(..))
+import Language.Marlowe.Runtime.ChainSync.Database (GetTip(runGetTip))
 import qualified Language.Marlowe.Runtime.ChainSync.Database as Database
 import Network.Protocol.Connection (ServerSource(..))
 import Network.Protocol.Query.Server (QueryServer(..), ServerStReq(..))
 import Network.Protocol.Query.Types
-import UnliftIO (MonadUnliftIO)
+import UnliftIO (MonadUnliftIO, atomically)
 
 data ChainSyncQueryServerDependencies m = ChainSyncQueryServerDependencies
   { queryLocalNodeState
@@ -34,6 +36,8 @@ data ChainSyncQueryServerDependencies m = ChainSyncQueryServerDependencies
       -> QueryInMode CardanoMode result
       -> m (Either AcquiringFailure result)
   , getUTxOs :: Database.GetUTxOs m
+  , getTip :: Database.GetTip m
+  , nodeTip :: STM ChainPoint
   }
 
 chainSyncQueryServer
@@ -56,6 +60,8 @@ chainSyncQueryServer ChainSyncQueryServerDependencies{..} = ServerSource $ pure 
           GetSystemStart -> either (fail . show) pure =<< queryLocalNodeState Nothing QuerySystemStart
           GetEraHistory -> either (fail . show) pure =<< queryLocalNodeState Nothing (QueryEraHistory CardanoModeIsMultiEra)
           GetUTxOs utxosQuery -> Database.runGetUTxOs getUTxOs utxosQuery
+          GetNodeTip -> atomically nodeTip
+          GetTip -> runGetTip getTip
       }
 
     queryGenesisParameters :: (GenesisParameters -> a) -> m a

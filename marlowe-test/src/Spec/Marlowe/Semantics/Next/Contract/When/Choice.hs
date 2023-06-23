@@ -1,5 +1,5 @@
-{-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+
 module Spec.Marlowe.Semantics.Next.Contract.When.Choice
   ( Choice'(..)
   , hasOnlyChoicesWithNoBounds

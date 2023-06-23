@@ -1,16 +1,11 @@
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE ViewPatterns #-}
 
 module Language.Marlowe.CLI.Test.Operation.Aeson where
@@ -177,7 +172,7 @@ toConstructorBasedJSON prefix a = do
     json = A.genericToJSON (genericJSONOptions prefix) a
   fromMaybe json $ case json of
     A.Object (Map.fromList . KeyMap.toList -> km) -> case List.sort (Map.toList km) of
-      [("contents", value), ("tag", A.String constructorName)] -> do
+      [("contents", value), ("tag", A.String constructorName)] ->
         pure $ A.Object $ KeyMap.fromList [(Key.fromText constructorName, value)]
       _ -> do
         constructorName <- Map.lookup "tag" km

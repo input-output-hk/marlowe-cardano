@@ -2,8 +2,6 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedLists #-}
-{-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE TypeOperators #-}
 
 -- | This module defines a server for the /withdrawals REST API.
 

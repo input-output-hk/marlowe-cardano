@@ -1,7 +1,6 @@
 {-# LANGUAGE Arrows #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
-{-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -82,6 +81,7 @@ run Options{..} = bracket (Pool.acquire 100 (Just 5000000) (fromString databaseU
             MaryEra -> MaryEraInCardanoMode
             AlonzoEra -> AlonzoEraInCardanoMode
             BabbageEra -> BabbageEraInCardanoMode
+        , nodeTip
         }
 
       tcpServerTraced "chain-seek" $ injectSelector ChainSeekServer -< TcpServerDependencies

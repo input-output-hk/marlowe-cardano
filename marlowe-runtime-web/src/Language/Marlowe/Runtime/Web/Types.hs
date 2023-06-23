@@ -15,7 +15,9 @@ module Language.Marlowe.Runtime.Web.Types where
 import Control.Lens hiding ((.=))
 import Control.Monad ((<=<))
 import Data.Aeson
+import Data.Aeson.Text (encodeToLazyText)
 import Data.Aeson.Types (Parser, parseFail)
+import Data.Bifunctor (first)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import Data.ByteString.Base16 (decodeBase16, encodeBase16)
@@ -26,6 +28,7 @@ import Data.OpenApi
   ( HasType(..)
   , NamedSchema(..)
   , OpenApiType(..)
+  , Reference(..)
   , Referenced(..)
   , ToParamSchema
   , ToSchema
@@ -46,8 +49,11 @@ import Data.String (IsString(..))
 import Data.Text (Text, intercalate, splitOn)
 import qualified Data.Text as T
 import Data.Text.Encoding (encodeUtf8)
+import qualified Data.Text.Lazy as TL
 import Data.Time (UTCTime)
-import Data.Word (Word16, Word64)
+import Data.Time.Format.ISO8601 (iso8601Show)
+import Data.Version (Version)
+import Data.Word (Word16, Word32, Word64)
 import GHC.Exts (IsList)
 import GHC.Generics (Generic)
 import qualified Language.Marlowe.Core.V1.Semantics.Types as Semantics
@@ -750,3 +756,90 @@ instance ToSchema (ApplyInputsTxEnvelope CardanoTxBody) where
           , ("txBody", txEnvelopeSchema)
           ]
       & required .~ [ "contractId", "transactionId", "txBody" ]
+
+data NetworkId
+  = Mainnet
+  | Testnet Word32
+  deriving (Show, Eq, Ord)
+
+instance ToSchema NetworkId where
+  declareNamedSchema _ = do
+    let
+      mainnetSchema = mempty
+        & type_ ?~ OpenApiString
+        & enum_ ?~ ["mainnet"]
+    testnetSchema <- declareSchemaRef (Proxy @Word32)
+    pure $ NamedSchema (Just "NetworkId") $ mempty
+      & oneOf ?~ [Inline mainnetSchema, testnetSchema]
+
+data ChainTip
+  = ChainTipGenesis UTCTime
+  | ChainTip BlockHeader UTCTime
+  deriving (Show, Eq, Ord)
+
+data RuntimeStatus = RuntimeStatus
+  { nodeTip :: ChainTip
+  , runtimeChainTip :: ChainTip
+  , runtimeTip :: ChainTip
+  , networkId :: NetworkId
+  , runtimeVersion :: Version
+  } deriving (Show, Eq, Ord)
+
+instance ToJSON ChainTip where
+  toJSON = \case
+    ChainTipGenesis time -> object [ "genesisTimeUTC" .= iso8601Show time ]
+    ChainTip blockHeader time -> object
+      [ "blockHeader" .= blockHeader
+      , "slotTimeUTC" .= iso8601Show time
+      ]
+
+instance FromJSON ChainTip where
+  parseJSON = withObject "ChainTip" \obj -> do
+    genesisTimeUTC <- obj .:? "genesisTimeUTC"
+    blockHeader <- obj .:? "blockHeader"
+    slotTimeUTC <- obj .:? "slotTimeUTC"
+    case (genesisTimeUTC, blockHeader, slotTimeUTC) of
+      (Nothing, Just blockHeader', Just slotTimeUTC') -> pure $ ChainTip blockHeader' slotTimeUTC'
+      (Just genesisTimeUTC', Nothing, Nothing) -> pure $ ChainTipGenesis genesisTimeUTC'
+      _ -> parseFail "Invalid keys, expecting ([\"genesisTimeUTC\"] | [\"blockHeader\", \"slotTimeUTC\"])"
+
+instance ToHttpApiData ChainTip where
+  toUrlPiece = TL.toStrict . encodeToLazyText
+
+instance FromHttpApiData ChainTip where
+  parseUrlPiece = first T.pack . eitherDecodeStrict . encodeUtf8
+
+instance ToHttpApiData NetworkId where
+  toUrlPiece = \case
+    Mainnet -> "mainnet"
+    Testnet n -> toUrlPiece n
+
+instance FromHttpApiData NetworkId where
+  parseUrlPiece = \case
+    "mainnet" -> pure Mainnet
+    n -> Testnet <$> parseUrlPiece n
+
+instance ToParamSchema ChainTip where
+  toParamSchema _ = mempty
+    & oneOf ?~ [Inline genesisSchema, Inline tipSchema]
+    & OpenApi.description ?~ "The latest known point in the chain on a peer."
+    where
+      genesisSchema =  mempty
+        & type_ ?~ OpenApiObject
+        & properties .~
+            [ ("genesisTimeUTC", Inline $ toParamSchema $ Proxy @UTCTime)
+            ]
+        & required .~ [ "genesisTimeUTC" ]
+
+      tipSchema =  mempty
+        & type_ ?~ OpenApiObject
+        & properties .~
+            [ ("blockHeader", Ref $ Reference "BlockHeader")
+            , ("slotTimeUTC", Inline $ toParamSchema $ Proxy @UTCTime)
+            ]
+        & required .~ [ "genesisTimeUTC" ]
+
+instance ToParamSchema NetworkId where
+  toParamSchema _ = mempty
+    & oneOf ?~ [Inline (mempty & type_ ?~ OpenApiString), Inline (mempty & type_ ?~ OpenApiInteger)]
+    & OpenApi.description ?~ "The latest known point in the chain on a peer."

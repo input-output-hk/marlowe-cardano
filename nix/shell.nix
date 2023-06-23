@@ -19,6 +19,7 @@ in
 
     pkgs.sqitchPg
     pkgs.postgresql
+    pkgs.haskellPackages.hspec-golden
   ];
 
 

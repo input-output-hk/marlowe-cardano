@@ -1,4 +1,3 @@
-{-# LANGUAGE Arrows #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE ExistentialQuantification #-}

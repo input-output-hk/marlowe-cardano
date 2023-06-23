@@ -1,10 +1,6 @@
 {-# LANGUAGE DataKinds #-}
-{-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE NamedFieldPuns #-}
-{-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeApplications #-}
 
 module Spec.Marlowe.Analysis where
 
@@ -29,20 +25,20 @@ tests = testGroup "Marlowe Contract"
     ]
 
 hasWarnings :: Maybe C.Contract -> IO Bool
-hasWarnings (Just contract) = do
-  result <- warningsTrace contract
+hasWarnings (Just c) = do
+  result <- warningsTrace c
   case result of
     Left errDesc         -> assertFailure ("Analysis failed: " ++ show errDesc)
     Right counterExample -> return $ isJust counterExample
 hasWarnings Nothing = assertFailure "Contract conversion failed"
 
 testNoWarnings :: Contract -> Assertion
-testNoWarnings contract =
-  assertBool "Has no warnings" . not =<< hasWarnings (toCore contract)
+testNoWarnings c =
+  assertBool "Has no warnings" . not =<< hasWarnings (toCore c)
 
 testExpectedWarnings :: Contract -> Assertion
-testExpectedWarnings contract =
-  assertBool "Has warnings" =<< hasWarnings (toCore contract)
+testExpectedWarnings c =
+  assertBool "Has warnings" =<< hasWarnings (toCore c)
 
 partyA, partyB :: Party
 partyA = Role "a"

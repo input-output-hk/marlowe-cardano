@@ -32,3 +32,6 @@ getTransactions = request . ReqTransactions
 
 getTransaction :: Applicative m => TxId -> MarloweQueryClient m (Maybe SomeTransaction)
 getTransaction = request . ReqTransaction
+
+getStatus :: Applicative m => MarloweQueryClient m RuntimeStatus
+getStatus = request ReqStatus

@@ -1,4 +1,3 @@
-{-# LANGUAGE OverloadedStrings #-}
 module Marlowe.Contracts.UTC.Forward
   ( forward
   ) where

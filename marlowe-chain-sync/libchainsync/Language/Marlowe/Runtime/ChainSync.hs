@@ -21,7 +21,7 @@ import Data.ByteString (ByteString)
 import Data.Maybe (catMaybes)
 import qualified Data.Text as T
 import Data.Text.Encoding (decodeUtf8)
-import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncCommand, ChainSyncQuery, RuntimeChainSeekServer)
+import Language.Marlowe.Runtime.ChainSync.Api (ChainPoint, ChainSyncCommand, ChainSyncQuery, RuntimeChainSeekServer)
 import Language.Marlowe.Runtime.ChainSync.Database (DatabaseQueries(..))
 import Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL (QuerySelector)
 import qualified Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL as DB
@@ -36,7 +36,7 @@ import Observe.Event.Render.OpenTelemetry (OTelRendered(..), RenderSelectorOTel)
 import OpenTelemetry.Trace.Core (SpanKind(..), toAttribute)
 import Ouroboros.Network.Protocol.LocalStateQuery.Client (Some(..))
 import Ouroboros.Network.Protocol.LocalTxSubmission.Client (SubmitResult)
-import UnliftIO (MonadUnliftIO)
+import UnliftIO (MonadUnliftIO, STM)
 
 data ChainSyncDependencies m = ChainSyncDependencies
   { databaseQueries :: DatabaseQueries m
@@ -50,6 +50,7 @@ data ChainSyncDependencies m = ChainSyncDependencies
        . CardanoEra era
       -> Tx era
       -> m (SubmitResult (TxValidationErrorInMode CardanoMode))
+  , nodeTip :: STM ChainPoint
   }
 
 data ChainSync m = ChainSync

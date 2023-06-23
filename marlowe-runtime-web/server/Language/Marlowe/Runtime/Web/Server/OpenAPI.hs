@@ -1,7 +1,7 @@
+{-# OPTIONS_GHC -Wno-orphans #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE TypeOperators #-}
-{-# OPTIONS_GHC -Wno-orphans #-}
 
 -- | This module defines the API and server for serving the Open API
 -- specification.

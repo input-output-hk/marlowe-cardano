@@ -1,5 +1,3 @@
-{-# LANGUAGE ImportQualifiedPost #-}
-
 module Data.Aeson.ViaSerialise where
 
 import qualified Codec.CBOR.Write as CBOR.Write

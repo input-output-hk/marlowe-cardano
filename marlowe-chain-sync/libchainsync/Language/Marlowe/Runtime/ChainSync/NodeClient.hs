@@ -15,31 +15,36 @@ module Language.Marlowe.Runtime.ChainSync.NodeClient
 
 import Cardano.Api
   ( BlockInMode
+  , BlockNo(..)
   , CardanoMode
   , ChainPoint
-  , ChainTip
+  , ChainTip(..)
   , LocalChainSyncClient(LocalChainSyncClient)
   , LocalNodeClientProtocols(..)
   , LocalNodeClientProtocolsInMode
   , QueryInMode
+  , SlotNo(..)
   , TxInMode
   , TxValidationErrorInMode
   , chainTipToChainPoint
+  , serialiseToRawBytes
   )
 import Cardano.Api.ChainSync.Client (ChainSyncClient(..), ClientStIdle(..), ClientStIntersect(..), ClientStNext(..))
 import Cardano.Api.Shelley (AcquiringFailure(..))
+import Colog (Message, WithLog)
 import Control.Concurrent.Component (Component, component)
+import Control.Concurrent.STM (TVar)
 import Control.Concurrent.STM.TChan (TChan, newTChan, readTChan, writeTChan)
 import Control.Concurrent.STM.TMVar (TMVar, putTMVar, takeTMVar)
-import Data.Bifunctor (first)
-import Observe.Event (addField)
-
-import Colog (Message, WithLog)
 import Control.Monad.Event.Class (MonadInjectEvent, withEvent)
+import Data.Bifunctor (first)
+import Language.Marlowe.Runtime.ChainSync.Api (WithGenesis(..))
+import qualified Language.Marlowe.Runtime.ChainSync.Api as ChainSync
+import Observe.Event (addField)
 import qualified Ouroboros.Network.Protocol.LocalStateQuery.Client as Q
 import qualified Ouroboros.Network.Protocol.LocalStateQuery.Type as Q
 import qualified Ouroboros.Network.Protocol.LocalTxSubmission.Client as S
-import UnliftIO (MonadIO, MonadUnliftIO, atomically, newEmptyTMVarIO)
+import UnliftIO (MonadIO, MonadUnliftIO, STM, atomically, newEmptyTMVarIO, newTVar, readTVar, writeTVar)
 
 
 type SubmitToNode m
@@ -57,6 +62,7 @@ type QueryNode m
 data NodeClient m = NodeClient
   { submitTxToNode  :: SubmitToNode m
   , queryNode :: QueryNode m
+  , nodeTip :: STM ChainSync.ChainPoint
   }
 
 
@@ -78,15 +84,15 @@ nodeClient =
     do
       queryChannel <- newTChan
       submitChannel <- newTChan
+      nodeTipVar <- newTVar Genesis
       let
         runNodeClient =
           connectToLocalNode LocalNodeClientProtocols
           {
-            -- We don't use the block and tip information, but the chain
-            -- sync client keeps the connection open. Without this client,
-            -- the node would close the connection in about three seconds,
-            -- making it impossible to submit and query.
-            localChainSyncClient = LocalChainSyncClient chainSyncClient
+            -- The chain sync client keeps the connection open.
+            -- Without this client, the node would close the connection in
+            -- about three seconds, making it impossible to submit and query.
+            localChainSyncClient = LocalChainSyncClient $ chainSyncClient nodeTipVar
           , localTxSubmissionClient = Just $ submitClient submitChannel
           , localTxMonitoringClient = Nothing
           , localStateQueryClient = Just $ queryClient queryChannel
@@ -98,6 +104,7 @@ nodeClient =
           {
             submitTxToNode = submitTxToNodeChannel submitChannel
           , queryNode = queryNodeChannel queryChannel
+          , nodeTip = readTVar nodeTipVar
           }
         )
 
@@ -203,8 +210,12 @@ queryClient channel =
     Q.LocalStateQueryClient next
 
 
-chainSyncClient :: forall m. Applicative m => ChainSyncClient (BlockInMode CardanoMode) ChainPoint ChainTip m ()
-chainSyncClient =
+chainSyncClient
+  :: forall m
+   . MonadIO m
+  => TVar ChainSync.ChainPoint
+  -> ChainSyncClient (BlockInMode CardanoMode) ChainPoint ChainTip m ()
+chainSyncClient nodeTipVar =
   let
     stStart :: ClientStIdle (BlockInMode CardanoMode) ChainPoint ChainTip m ()
     stStart = SendMsgRequestNext stFirst $ pure stNext
@@ -212,8 +223,12 @@ chainSyncClient =
     stFirst =
       ClientStNext
       {
-        recvMsgRollForward  = \_ tip -> ChainSyncClient . pure $ stTip tip  -- Identified the tip, now intersect with it.
-      , recvMsgRollBackward = \_ tip -> ChainSyncClient . pure $ stTip tip  -- Identified the tip, now intersect with it.
+        recvMsgRollForward  = \_ tip -> ChainSyncClient do
+          atomically $ writeTVar nodeTipVar $ fromCardanoChainTip tip
+          pure $ stTip tip  -- Identified the tip, now intersect with it.
+      , recvMsgRollBackward = \_ tip -> ChainSyncClient do
+          atomically $ writeTVar nodeTipVar $ fromCardanoChainTip tip
+          pure $ stTip tip  -- Identified the tip, now intersect with it.
       }
     stTip :: ChainTip -> ClientStIdle (BlockInMode CardanoMode) ChainPoint ChainTip m ()
     stTip tip =
@@ -229,8 +244,20 @@ chainSyncClient =
     stNext =
       ClientStNext
       {
-        recvMsgRollForward  = \_ _ -> ChainSyncClient $ pure stIdle  -- Continuing following the tip.
-      , recvMsgRollBackward = \_ _ -> ChainSyncClient $ pure stIdle  -- Continuing following the tip.
+        recvMsgRollForward  = \_ tip -> ChainSyncClient do
+          atomically $ writeTVar nodeTipVar $ fromCardanoChainTip tip
+          pure stIdle  -- Continuing following the tip.
+      , recvMsgRollBackward = \_ tip -> ChainSyncClient do
+          atomically $ writeTVar nodeTipVar $ fromCardanoChainTip tip
+          pure stIdle  -- Continuing following the tip.
       }
   in
     ChainSyncClient $ pure stStart
+
+fromCardanoChainTip :: ChainTip -> ChainSync.ChainPoint
+fromCardanoChainTip = \case
+  ChainTipAtGenesis -> ChainSync.Genesis
+  ChainTip (SlotNo slot) hash (BlockNo block) -> ChainSync.At $ ChainSync.BlockHeader
+    (ChainSync.SlotNo slot)
+    (ChainSync.BlockHeaderHash $ serialiseToRawBytes hash)
+    (ChainSync.BlockNo block)

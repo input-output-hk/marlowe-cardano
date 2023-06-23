@@ -51,6 +51,14 @@ import Test.QuickCheck hiding (shrinkMap)
 import Test.QuickCheck.Gen (chooseWord64)
 import Test.QuickCheck.Hedgehog (hedgehog)
 
+instance Arbitrary NetworkId where
+  arbitrary = oneof
+    [ pure Mainnet
+    , Testnet . NetworkMagic <$> arbitrary
+    ]
+  shrink Mainnet = []
+  shrink (Testnet (NetworkMagic m)) = Mainnet : (Testnet . NetworkMagic <$> shrink m)
+
 instance Arbitrary a => Arbitrary (WithGenesis a) where
   arbitrary = oneof [pure Genesis, At <$> arbitrary]
   shrink = genericShrink
@@ -362,17 +370,18 @@ instance Query.ArbitraryRequest ChainSyncQuery where
     TagGetSystemStart -> pure GetSystemStart
     TagGetEraHistory -> pure GetEraHistory
     TagGetUTxOs -> GetUTxOs <$> arbitrary
+    TagGetNodeTip -> pure GetNodeTip
+    TagGetTip -> pure GetTip
 
   arbitraryResult = \case
     TagGetSecurityParameter -> arbitrary
-    TagGetNetworkId -> oneof
-      [ pure Mainnet
-      , Testnet . NetworkMagic <$> arbitrary
-      ]
+    TagGetNetworkId -> arbitrary
     TagGetProtocolParameters -> hedgehog genProtocolParameters
     TagGetSystemStart -> SystemStart . posixSecondsToUTCTime . fromIntegral <$> arbitrary @Word64
     TagGetEraHistory -> genEraHistory
     TagGetUTxOs -> arbitrary
+    TagGetNodeTip -> arbitrary
+    TagGetTip -> arbitrary
 
   shrinkReq = \case
     GetSecurityParameter -> []
@@ -381,6 +390,8 @@ instance Query.ArbitraryRequest ChainSyncQuery where
     GetSystemStart -> []
     GetEraHistory -> []
     GetUTxOs query -> GetUTxOs <$> shrink query
+    GetNodeTip -> []
+    GetTip -> []
 
   shrinkResult = \case
     TagGetSecurityParameter -> shrink
@@ -391,6 +402,8 @@ instance Query.ArbitraryRequest ChainSyncQuery where
     TagGetSystemStart -> const []
     TagGetEraHistory -> const []
     TagGetUTxOs -> shrink
+    TagGetNodeTip -> shrink
+    TagGetTip -> shrink
 
 genEraHistory :: Gen (EraHistory CardanoMode)
 genEraHistory = EraHistory CardanoMode <$> do
@@ -454,6 +467,8 @@ instance Query.RequestEq ChainSyncQuery where
     TagGetEraHistory -> \(EraHistory CardanoMode interpreter1) (EraHistory CardanoMode interpreter2) ->
       unInterpreter interpreter1 == unInterpreter interpreter2
     TagGetUTxOs -> (==)
+    TagGetNodeTip -> (==)
+    TagGetTip -> (==)
 
 instance Command.ArbitraryCommand ChainSyncCommand where
   arbitraryTag = elements

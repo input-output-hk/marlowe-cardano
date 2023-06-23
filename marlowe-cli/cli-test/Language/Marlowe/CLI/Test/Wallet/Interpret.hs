@@ -1,23 +1,16 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE DataKinds #-}
-{-# LANGUAGE DeriveAnyClass #-}
-{-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE ViewPatterns #-}
-
 
 module Language.Marlowe.CLI.Test.Wallet.Interpret where
 
@@ -115,11 +108,11 @@ findWallet
   :: InterpretMonad env st m era
   => WalletNickname
   -> m (Wallet era)
-findWallet nickname = do
+findWallet nickname =
   use walletsL >>= \(getAllWallets -> wallets) ->
-    note
-      (testExecutionFailed' $ "[findWallet] Unable to find wallet:" <> show nickname)
-      (Map.lookup nickname wallets)
+  note
+    (testExecutionFailed' $ "[findWallet] Unable to find wallet:" <> show nickname)
+    (Map.lookup nickname wallets)
 
 updateWallet
   :: InterpretMonad env st m era
@@ -148,15 +141,14 @@ updateWallets f = do
 getFaucet
   :: InterpretMonad env st m era
   => m (Wallet era)
-getFaucet = do
+getFaucet =
   findWallet faucetNickname
 
 updateFaucet
   :: InterpretMonad env st m era
   => (Wallet era -> Wallet era)
   -> m ()
-updateFaucet update = do
-  updateWallet faucetNickname update
+updateFaucet = updateWallet faucetNickname
 
 fetchWalletUTxOs
   :: InterpretMonad env st m era
@@ -193,7 +185,7 @@ fetchWalletsUTxOs = do
     $ walletsAddresses
 
   let
-    addressToUtxos = Map.fromListWith mappend $ utxos <&> \anUtxo@(CT.AnUTxO (_, C.TxOut addr _ _ _)) -> do
+    addressToUtxos = Map.fromListWith mappend $ utxos <&> \anUtxo@(CT.AnUTxO (_, C.TxOut addr _ _ _)) ->
       (addr, [anUtxo])
 
   pure $ wallets <&> \wallet ->
@@ -336,7 +328,7 @@ plutusValueToAssets
   -> m [Asset]
 plutusValueToAssets value = do
   let
-    valueToAsset (currencySymbol, tokenName, _) | currencySymbol == P.adaSymbol && tokenName == P.adaToken = do
+    valueToAsset (currencySymbol, tokenName, _) | currencySymbol == P.adaSymbol && tokenName == P.adaToken =
       pure (Asset AdaAssetId (P.fromBuiltin $ P.valueOf value currencySymbol tokenName))
     valueToAsset (cCurrencySymbol, tokenName, amount) = do
       let
@@ -407,14 +399,14 @@ interpret so@CheckBalance {..} =
     -- Iterate over assets in the wallet and check if we meet the expected balance.
     for_ actualBalance \(Asset assetId v) -> do
       case Map.lookup assetId expectedBalance of
-        Nothing -> do
+        Nothing ->
           when (v /= 0) do
-            throwLabeledError so $ assertionFailed' ("Unexpected asset in balance check:" <> show v <> " of asset: " <> show assetId)
-        Just expectedValue -> do
+          throwLabeledError so $ assertionFailed' ("Unexpected asset in balance check:" <> show v <> " of asset: " <> show assetId)
+        Just expectedValue ->
           unless (checkBalance expectedValue v) do
-            logStoreLabeledMsg so $ "Actual balance of asset " <> show assetId <> " is:" <> show v
-            logStoreLabeledMsg so $ "Expected balance of asset " <> show assetId <> " is: " <> show expectedValue
-            throwLabeledError so $ assertionFailed' $ "Balance check failed for an asset: " <> show assetId
+          logStoreLabeledMsg so $ "Actual balance of asset " <> show assetId <> " is:" <> show v
+          logStoreLabeledMsg so $ "Expected balance of asset " <> show assetId <> " is: " <> show expectedValue
+          throwLabeledError so $ assertionFailed' $ "Balance check failed for an asset: " <> show assetId
 
     -- Iterate over expected assets and check if we have them in the wallet.
     --  * If we have them then we already checked the balance above.
@@ -459,7 +451,7 @@ interpret so@BurnAll {..} = do
   for_ currencies \(currencyNickname, _) -> do
     Currency { ccCurrencySymbol, ccIssuer } <- findCurrency currencyNickname
     if not (ccCurrencySymbol `Set.member` initialSymbols)
-      then do
+      then
         logStoreLabeledMsg so $ "Currency " <> show currencyNickname <> " tokens not found, skipping."
       else do
         Wallet { _waAddress=issuerAddress, _waSigningKey=issuerSigningKey } <- findWallet ccIssuer
@@ -493,7 +485,7 @@ interpret so@BurnAll {..} = do
         updateWallet ccIssuer \issuer@Wallet {_waSubmittedTransactions} ->
           issuer { _waSubmittedTransactions = SomeTxBody era burningTx : _waSubmittedTransactions }
 
-interpret wo@Fund {..} = do
+interpret wo@Fund {..} =
   fundWallets wo woWalletNicknames woUTxOs
 
 interpret so@Mint {..} = do
@@ -506,9 +498,9 @@ interpret so@Mint {..} = do
       throwError $ testExecutionFailed' "Currency with a given nickname already exist and is minted by someone else."
     Nothing -> pure ()
 
-  ifor_ currencies \currencyNickname Currency { ccIssuer } -> do
+  ifor_ currencies \currencyNickname Currency { ccIssuer } ->
     when (ccIssuer == issuerNickname && currencyNickname /= woCurrencyNickname) $
-      throwError $ testExecutionFailed' "Current minting strategy mints unique currency per issuer. You can't mint multiple currencies with the same issuer."
+    throwError $ testExecutionFailed' "Current minting strategy mints unique currency per issuer. You can't mint multiple currencies with the same issuer."
 
   Wallet issuerAddress _ issuerSigningKey _ :: Wallet era <- findWallet issuerNickname
   tokenDistribution <- forM woTokenDistribution \(TokenAssignment owner tokenName amount) -> do
@@ -539,10 +531,10 @@ interpret so@Mint {..} = do
     currencySymbol = PV.mpsSymbol . fromCardanoPolicyId $ policy
     currency = Currency currencySymbol issuerNickname policy
 
-  updateWallet issuerNickname \issuer@Wallet {..} -> do
+  updateWallet issuerNickname \issuer@Wallet {..} ->
     issuer
-      { _waSubmittedTransactions = SomeTxBody era mintingTx : _waSubmittedTransactions
-      }
+    { _waSubmittedTransactions = SomeTxBody era mintingTx : _waSubmittedTransactions
+    }
   modifying currenciesL \(Currencies currencies') ->
     Currencies $ Map.insert woCurrencyNickname currency currencies'
 
@@ -610,7 +602,7 @@ interpret wo@ReturnFunds{} = do
         (_, tx) <- runLabeledCli era wo $ submitBody' connection body bodyContent changeAddress signingKeys timeout
         updateWallet faucetNickname \issuer@Wallet {_waSubmittedTransactions} ->
           issuer { _waSubmittedTransactions = SomeTxBody era tx : _waSubmittedTransactions }
-      CT.DontSubmit -> do
+      CT.DontSubmit ->
         pure ()
 
 saveWalletFiles :: C.IsCardanoEra era => WalletNickname -> Wallet era -> Maybe FilePath -> IO (FilePath, CT.SigningKeyFile)
