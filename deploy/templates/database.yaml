@@ -9,13 +9,13 @@ spec:
       name: marlowe-runtime-database
       properties:
         replicas: 3
+        volume:
+          size: 50Gi
         preparedDatabases:
           {{- range $index, $network := .Values.networks }}
           chainsync_{{ $network }}:
             # https://postgres-operator.readthedocs.io/en/latest/user/#default-login-roles
             # chainsync_$network_{owner,writer,reader}_user
             defaultUsers: true
-        volume:
-          size: 50Gi
 
           {{- end }}
