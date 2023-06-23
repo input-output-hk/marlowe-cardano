@@ -37,6 +37,8 @@ import Cardano.Api
 import Cardano.Api.Shelley (ProtocolParameters)
 import Colog (Message, WithLog)
 import Control.Applicative ((<|>))
+import Control.Concurrent (threadDelay)
+import Control.Concurrent.Async (race)
 import Control.Concurrent.Component
 import Control.Concurrent.STM (STM, modifyTVar, newEmptyTMVar, newTVar, putTMVar, readTMVar, readTVar, retry)
 import Control.Error (MaybeT(..))
@@ -53,8 +55,9 @@ import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Maybe (fromJust)
 import qualified Data.Set as Set
-import Data.Time (UTCTime)
+import Data.Time (NominalDiffTime, UTCTime, nominalDiffTimeToSeconds)
 import Data.Void (Void)
+import Language.Marlowe.Analysis.Safety.Types (SafetyError(SafetyAnalysisTimeout))
 import qualified Language.Marlowe.Core.V1.Semantics as V1
 import Language.Marlowe.Runtime.Cardano.Api
   ( fromCardanoAddressInEra
@@ -138,6 +141,7 @@ data TransactionServerDependencies m = TransactionServerDependencies
   , contractQueryConnector :: Connector (QueryClient ContractRequest) m
   , getTip :: STM Chain.ChainPoint
   , getCurrentScripts :: forall v. MarloweVersion v -> MarloweScripts
+  , analysisTimeout :: NominalDiffTime
   }
 
 transactionServer
@@ -187,6 +191,7 @@ transactionServer = component "tx-job-server" \TransactionServerDependencies{..}
                 metadata
                 minAda
                 contract
+                analysisTimeout
             ApplyInputs version addresses contractId metadata invalidBefore invalidHereafter inputs ->
               withEvent ExecApplyInputs \_ -> withMarloweVersion version $ execApplyInputs
                 contractQueryConnector
@@ -242,8 +247,9 @@ execCreate
   -> MarloweTransactionMetadata
   -> Chain.Lovelace
   -> Either (Contract v) DatumHash
+  -> NominalDiffTime
   -> m (ServerStCmd MarloweTxCommand Void (CreateError v) (ContractCreated BabbageEra v) m ())
-execCreate contractQueryConnector getCurrentScripts solveConstraints loadWalletContext networkId mStakeCredential version addresses roleTokens metadata minAda contract = execExceptT do
+execCreate contractQueryConnector getCurrentScripts solveConstraints loadWalletContext networkId mStakeCredential version addresses roleTokens metadata minAda contract analysisTimeout = execExceptT do
   walletContext <- lift $ loadWalletContext addresses
   (contract', continuations) <- case contract of
     Right hash -> case version of
@@ -284,11 +290,28 @@ execCreate contractQueryConnector getCurrentScripts solveConstraints loadWalletC
       , payoutScriptHash = payoutScript
       }
   let
+    -- Fast analysis of safety: examines bounds for transactions.
     contractSafetyErrors = checkContract networkId roleTokens version contract' continuations
+    limitAnalysisTime =
+      liftIO
+        . fmap (either Right id)
+        . race ([SafetyAnalysisTimeout] <$ threadDelay (floor $ nominalDiffTimeToSeconds analysisTimeout * 1_000_000))
+  -- Slow analysis of safety: examines all possible transactions.
   transactionSafetyErrors <-
     ExceptT
       $ first CreateSafetyAnalysisError
-      <$> checkTransactions solveConstraints version marloweContext rolesCurrency (changeAddress addresses) (toInteger minAda) contract' continuations
+      <$> limitAnalysisTime
+      (
+        checkTransactions
+          solveConstraints
+          version
+          marloweContext
+          rolesCurrency
+          (changeAddress addresses)
+          (toInteger minAda)
+          contract'
+          continuations
+      )
   txBody <- except
     $ first CreateConstraintError
     $ solveConstraints version marloweContext walletContext constraints

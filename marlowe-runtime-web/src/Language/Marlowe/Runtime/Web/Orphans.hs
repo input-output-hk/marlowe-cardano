@@ -20,6 +20,7 @@ import Data.OpenApi
   , OpenApiType(OpenApiBoolean, OpenApiInteger, OpenApiObject, OpenApiString)
   , Referenced(Inline)
   , Schema
+  , sketchSchema
   , ToSchema(..)
   , declareSchemaRef
   )
@@ -33,7 +34,6 @@ import qualified Language.Marlowe.Core.V1.Semantics as V1
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
 import Numeric.Natural (Natural)
 import qualified Plutus.V2.Ledger.Api as P
->>>>>>> fef0d61d0 (PLT-5817 Orphans supporting OpenAPI schemas for SafetyError.)
 
 data Address
 
