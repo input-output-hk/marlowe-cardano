@@ -15,7 +15,7 @@ spec:
       cpu: "0.5"
       env:
       - name: NODE_CONFIG
-        value: /node-config/config.json
+        value: /node-config/network/{{ $network }}/cardano-node/config.json
       - name: DB_NAME
         value: chainsync_{{ $network }}
       - name: DB_USER
@@ -45,20 +45,22 @@ spec:
         emptyDir:
         - name: ipc
           mountPath: /ipc
-        configMap:
-        - name: "node-config"
-          cmName: cardano-network-configs-{{ $network }}
-          mountPath: "/node-config"
-          items:
-          - key: config.json
-            path: config.json
-          - key: alonzo-genesis.json
-            path: alonzo-genesis.json
-          - key: shelley-genesis.json
-            path: shelley-genesis.json
-          - key: byron-genesis.json
-            path: byron-genesis.json
+        - name: node-config
+          mountPath: /node-config
     traits:
+    - type: init-container
+      properties:
+        name: node-config-cloner
+        image: alpine/git
+        args:
+        - clone
+        - --single-branch
+        - --
+        - https://github.com/input-output-hk/cardano-configurations
+        - /node-config
+        volumes:
+        - name: node-config
+          path: /node-config
     - type: sidecar
       properties:
         name: socat
