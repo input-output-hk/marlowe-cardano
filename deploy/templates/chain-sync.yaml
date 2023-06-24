@@ -60,12 +60,11 @@ spec:
       - expose: true
         port: 3782
         protocol: TCP
-    traits:
-    - type: storage
-      properties:
+      volumeMounts:
         emptyDir:
         - name: ipc
           mountPath: /ipc
+    traits:
     - type: init-container
       properties:
         name: node-config-cloner

@@ -41,12 +41,11 @@ spec:
       image: {{ $.Values.images.repo }}/{{ $.Values.images.org }}/marlowe-chain-indexer:{{ $.Values.images.tag }}
       imagePullPolicy: Always
       memory: 1024Mi
-    traits:
-    - type: storage
-      properties:
+      volumeMounts:
         emptyDir:
-          - name: ipc
-            mountPath: /ipc
+        - name: ipc
+          mountPath: /ipc
+    traits:
     - type: init-container
       properties:
         name: node-config-cloner
