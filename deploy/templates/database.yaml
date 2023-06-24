@@ -9,10 +9,11 @@ spec:
   components:
     - type: "postgres-cluster"
       name: marlowe-runtime-database
-      requests:
-        memory: "16Gi"
-      limits:
-        memory: "16Gi"
+      resources:
+        requests:
+          memory: "16Gi"
+        limits:
+          memory: "16Gi"
       properties:
         replicas: 3
         volume:
