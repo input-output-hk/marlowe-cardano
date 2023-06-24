@@ -66,8 +66,6 @@ spec:
         emptyDir:
         - name: ipc
           mountPath: /ipc
-        - name: node-config
-          mountPath: /node-config
     - type: init-container
       properties:
         name: node-config-cloner
