@@ -9,15 +9,15 @@ spec:
   components:
     - type: "postgres-cluster"
       name: marlowe-runtime-database
-      resources:
-        requests:
-          memory: "16Gi"
-        limits:
-          memory: "16Gi"
       properties:
         replicas: 3
         volume:
           size: 50Gi
+        resources:
+          requests:
+            memory: "16Gi"
+          limits:
+            memory: "16Gi"
         preparedDatabases:
           {{- range $index, $network := .Values.networks }}
           chainsync_{{ $network }}:
