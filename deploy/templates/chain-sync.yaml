@@ -60,13 +60,14 @@ spec:
       - expose: true
         port: 3782
         protocol: TCP
-      volumeMounts:
+    traits:
+    - type: storage
+      properties:
         emptyDir:
         - name: ipc
           mountPath: /ipc
         - name: node-config
           mountPath: /node-config
-    traits:
     - type: init-container
       properties:
         name: node-config-cloner
@@ -80,7 +81,6 @@ spec:
         volumes:
         - name: node-config
           path: /node-config
-
     - type: sidecar
       properties:
         name: socat
