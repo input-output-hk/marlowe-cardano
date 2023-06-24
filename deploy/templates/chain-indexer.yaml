@@ -59,9 +59,9 @@ spec:
         - --
         - https://github.com/input-output-hk/cardano-configurations
         - /node-config
-        volumes:
-        - name: node-config
-          path: /node-config
+        mountName: node-config
+        initMountPath: /node-config
+        appMountPath: /node-config
     - type: sidecar
       properties:
         name: socat
