@@ -34,8 +34,6 @@ spec:
         value: marlowe-runtime-database.marlowe-staging:5432
       - name: CARDANO_NODE_SOCKET_PATH
         value: /ipc/node.socket
-      - name: NODE_CONFIG
-        value: /node-config/config.json
       - name: HTTP_PORT
         value: "3781"
       image: {{ $.Values.images.repo }}/{{ $.Values.images.org }}/marlowe-chain-indexer:{{ $.Values.images.tag }}
