@@ -1,4 +1,3 @@
--- editorconfig-checker-disable-file
 {-# LANGUAGE Arrows #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}

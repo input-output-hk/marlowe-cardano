@@ -1,7 +1,7 @@
 { inputs, pkgs }:
 
 let
-  inherit (pkgs) sqitchPg postgresql runCommand writeShellScriptBin writeText lib glibcLocales;
+  inherit (pkgs) z3 sqitchPg postgresql runCommand writeShellScriptBin writeText lib glibcLocales;
   network = inputs.self.networks.preview;
 
   mkSqitchRunner = name: path: writeShellScriptBin name ''
@@ -67,6 +67,7 @@ let
 
   run-local-service = project: version: prog: writeShellScriptBin "run-${prog}" ''
     set -e
+    export PATH="$PATH:${lib.makeBinPath [ z3 ]}"
     PROG=${lib.escapeShellArg prog}
     PKG=${lib.escapeShellArg project}-${lib.escapeShellArg version}
     cd /src

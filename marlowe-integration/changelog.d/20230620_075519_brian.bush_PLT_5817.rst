@@ -1,4 +1,0 @@
-Added
------
-
-- Fifteen-second timeout for contract safety analysis.

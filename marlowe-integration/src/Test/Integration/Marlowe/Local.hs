@@ -1,4 +1,3 @@
--- editorconfig-checker-disable-file
 {-# LANGUAGE Arrows #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE FlexibleContexts #-}

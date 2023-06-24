@@ -1,4 +1,3 @@
--- editorconfig-checker-disable-file
 {-# LANGUAGE OverloadedLists #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 

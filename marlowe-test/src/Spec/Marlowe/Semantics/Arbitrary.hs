@@ -1,4 +1,3 @@
--- editorconfig-checker-disable-file
 -----------------------------------------------------------------------------
 --
 -- Module      :  $Headers
@@ -1319,4 +1318,8 @@ instance Arbitrary Transaction where
       txInput <- semiArbitrary context
       txOutput <- arbitrary
       pure Transaction{..}
-  shrink _ = mempty
+  shrink transaction@Transaction{..} =
+    [transaction{txState = state} | state <- shrink txState]
+      <> [transaction{txContract = contract} | contract <- shrink txContract]
+      <> [transaction{txInput = input} | input <- shrink txInput]
+      <> [transaction{txOutput = output} | output <- shrink txOutput]

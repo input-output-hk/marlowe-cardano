@@ -1,4 +1,3 @@
--- editorconfig-checker-disable-file
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -184,8 +183,6 @@ checkTransactions solveConstraints version@MarloweV1 marloweContext rolesCurrenc
   runExceptT $
     do
       let changeAddress' = uncurry V1.Address . fromJust . V1.deserialiseAddress $ Chain.unAddress changeAddress
-      -- FIXME: The `findTransactions` function may be a long-running process if the
-      --        contract is complex. Where should we guard against this with a timeout?
       transactions <-
         findTransactions changeAddress' minAda . V1.MerkleizedContract contract $ remapContinuations continuations
       either throwE (pure . mconcat)
