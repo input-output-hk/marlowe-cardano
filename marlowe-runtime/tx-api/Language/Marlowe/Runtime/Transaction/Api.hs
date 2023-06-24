@@ -69,6 +69,7 @@ import Data.Type.Equality (type (:~:) (Refl))
 import Data.Void (Void, absurd)
 import GHC.Generics (Generic)
 import GHC.Show (showSpace)
+import Language.Marlowe.Analysis.Safety.Types (SafetyError)
 import Language.Marlowe.Runtime.Cardano.Api (cardanoEraToAsType)
 import Language.Marlowe.Runtime.ChainSync.Api (
   Address,
@@ -261,6 +262,7 @@ data ContractCreated era v = ContractCreated
   , datum :: Datum v
   , assets :: Assets
   , txBody :: TxBody era
+  , safetyErrors :: [SafetyError]
   }
 
 deriving instance Show (ContractCreated BabbageEra 'V1)
@@ -279,6 +281,7 @@ instance (IsCardanoEra era) => ToJSON (ContractCreated era 'V1) where
       , "datum" .= datum
       , "assets" .= assets
       , "tx-body" .= serialiseToTextEnvelope Nothing txBody
+      , "safety-errors" .= safetyErrors
       ]
 
 instance (IsCardanoEra era) => Binary (ContractCreated era 'V1) where
@@ -293,6 +296,7 @@ instance (IsCardanoEra era) => Binary (ContractCreated era 'V1) where
     putDatum MarloweV1 datum
     put assets
     putTxBody txBody
+    put safetyErrors
   get = do
     contractId <- get
     rolesCurrency <- get
@@ -304,6 +308,7 @@ instance (IsCardanoEra era) => Binary (ContractCreated era 'V1) where
     datum <- getDatum MarloweV1
     assets <- get
     txBody <- getTxBody
+    safetyErrors <- get
     let version = MarloweV1
     pure ContractCreated{..}
 

@@ -51,8 +51,11 @@ module Spec.Marlowe.Semantics.Arbitrary (
   whenContractWeights,
 ) where
 
+import Control.Monad (replicateM)
+import Data.ByteString (pack)
 import Data.Function (on)
 import Data.List (nub, nubBy)
+import Language.Marlowe.Analysis.Safety.Types (SafetyError (..), Transaction (..))
 import Language.Marlowe.Core.V1.Semantics (
   Payment (..),
   TransactionError (..),
@@ -91,6 +94,8 @@ import Plutus.Script.Utils.Scripts (dataHash)
 import Plutus.V2.Ledger.Api (
   Credential (..),
   CurrencySymbol (..),
+  DatumHash (..),
+  ExBudget (..),
   POSIXTime (..),
   PubKeyHash (..),
   StakingCredential (StakingHash),
@@ -98,6 +103,7 @@ import Plutus.V2.Ledger.Api (
   ValidatorHash (..),
   adaSymbol,
   adaToken,
+  toBuiltin,
   toBuiltinData,
  )
 import PlutusTx.Builtins (BuiltinByteString, appendByteString, lengthOfByteString, sliceByteString)
@@ -1243,3 +1249,77 @@ instance Arbitrary TransactionOutput where
       [ TransactionOutput <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
       , Error <$> arbitrary
       ]
+
+instance Arbitrary SafetyError where
+  arbitrary =
+    oneof
+      [ pure MissingRolesCurrency
+      , pure ContractHasNoRoles
+      , MissingRoleToken <$> arbitrary
+      , ExtraRoleToken <$> arbitrary
+      , RoleNameTooLong <$> arbitrary
+      , InvalidCurrencySymbol <$> arbitrary
+      , TokenNameTooLong <$> arbitrary
+      , InvalidToken <$> arbitrary
+      , NonPositiveBalance <$> arbitrary <*> arbitrary
+      , DuplicateAccount <$> arbitrary <*> arbitrary
+      , DuplicateChoice <$> arbitrary
+      , DuplicateBoundValue <$> arbitrary
+      , MaximumValueMayExceedProtocol . fromInteger <$> arbitraryPositiveInteger
+      , TransactionSizeMayExceedProtocol <$> arbitrary <*> fmap fromInteger arbitraryPositiveInteger
+      , TransactionCostMayExceedProtocol
+          <$> arbitrary
+          <*> (ExBudget <$> fmap fromInteger arbitraryPositiveInteger <*> fmap fromInteger arbitraryPositiveInteger)
+      , TransactionValidationError <$> arbitrary <*> arbitrary
+      , TransactionWarning <$> arbitrary <*> arbitrary
+      , MissingContinuation . DatumHash . toBuiltin . pack <$> replicateM 32 arbitrary
+      , pure InconsistentNetworks
+      , pure WrongNetwork
+      , IllegalAddress <$> arbitrary
+      , pure SafetyAnalysisTimeout
+      ]
+  shrink MissingRolesCurrency = mempty
+  shrink ContractHasNoRoles = mempty
+  shrink (MissingRoleToken tokenName) = MissingRoleToken <$> shrink tokenName
+  shrink (ExtraRoleToken tokenName) = ExtraRoleToken <$> shrink tokenName
+  shrink (RoleNameTooLong tokenName) = RoleNameTooLong <$> shrink tokenName
+  shrink (InvalidCurrencySymbol _) = mempty
+  shrink (TokenNameTooLong tokenName) = TokenNameTooLong <$> shrink tokenName
+  shrink (InvalidToken token) = InvalidToken <$> shrink token
+  shrink (NonPositiveBalance accountId token) =
+    (NonPositiveBalance accountId <$> shrink token)
+      <> (flip NonPositiveBalance token <$> shrink accountId)
+  shrink (DuplicateAccount accountId token) =
+    (DuplicateAccount accountId <$> shrink token)
+      <> (flip DuplicateAccount token <$> shrink accountId)
+  shrink (DuplicateChoice choiceId) = DuplicateChoice <$> shrink choiceId
+  shrink (DuplicateBoundValue valueId) = DuplicateBoundValue <$> shrink valueId
+  shrink (MaximumValueMayExceedProtocol _) = mempty
+  shrink (TransactionSizeMayExceedProtocol transaction natural) =
+    flip TransactionSizeMayExceedProtocol natural <$> shrink transaction
+  shrink (TransactionCostMayExceedProtocol transaction exBudget) =
+    flip TransactionCostMayExceedProtocol exBudget <$> shrink transaction
+  shrink (TransactionValidationError transaction string) =
+    flip TransactionValidationError string <$> shrink transaction
+  shrink (TransactionWarning transaction warning) =
+    flip TransactionWarning warning <$> shrink transaction
+  shrink (MissingContinuation _) = mempty
+  shrink InconsistentNetworks = mempty
+  shrink WrongNetwork = mempty
+  shrink (IllegalAddress address) = IllegalAddress <$> shrink address
+  shrink SafetyAnalysisTimeout = mempty
+
+instance Arbitrary Transaction where
+  arbitrary =
+    do
+      context <- arbitrary
+      txState <- semiArbitrary context
+      txContract <- semiArbitrary context
+      txInput <- semiArbitrary context
+      txOutput <- arbitrary
+      pure Transaction{..}
+  shrink transaction@Transaction{..} =
+    [transaction{txState = state} | state <- shrink txState]
+      <> [transaction{txContract = contract} | contract <- shrink txContract]
+      <> [transaction{txInput = input} | input <- shrink txInput]
+      <> [transaction{txOutput = output} | output <- shrink txOutput]

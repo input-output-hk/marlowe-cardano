@@ -12,6 +12,7 @@ import qualified Data.Map as Map
 import Data.Maybe (fromMaybe)
 import qualified Data.Set as Set
 import Data.Text (Text)
+import Language.Marlowe.Analysis.Safety.Types (SafetyError)
 import Language.Marlowe.Protocol.Query.Types (ContractFilter (..), Page (..))
 import Language.Marlowe.Runtime.ChainSync.Api (Lovelace (..))
 import Language.Marlowe.Runtime.Core.Api (
@@ -58,7 +59,7 @@ postCreateTxBody
   -> Address
   -> Maybe (CommaList Address)
   -> Maybe (CommaList TxOutRef)
-  -> ServerM (ContractId, TxBody BabbageEra)
+  -> ServerM (ContractId, TxBody BabbageEra, [SafetyError])
 postCreateTxBody PostContractsRequest{..} changeAddressDTO mAddresses mCollateralUtxos = do
   SomeMarloweVersion v@MarloweV1 <- fromDTOThrow (badRequest' "Unsupported Marlowe version") version
   changeAddress <- fromDTOThrow (badRequest' "Invalid change address value") changeAddressDTO
@@ -75,7 +76,7 @@ postCreateTxBody PostContractsRequest{..} changeAddressDTO mAddresses mCollatera
       if Map.null tags then Nothing else Just (tags, Nothing)
   createContract Nothing v WalletAddresses{..} roles' MarloweTransactionMetadata{..} (Lovelace minUTxODeposit) contract >>= \case
     Left err -> throwDTOError err
-    Right ContractCreated{contractId, txBody} -> pure (contractId, txBody)
+    Right ContractCreated{contractId, txBody, safetyErrors} -> pure (contractId, txBody, safetyErrors)
 
 postCreateTxBodyResponse
   :: PostContractsRequest
@@ -84,9 +85,9 @@ postCreateTxBodyResponse
   -> Maybe (CommaList TxOutRef)
   -> ServerM (PostContractsResponse CardanoTxBody)
 postCreateTxBodyResponse req changeAddressDTO mAddresses mCollateralUtxos = do
-  res <- postCreateTxBody req changeAddressDTO mAddresses mCollateralUtxos
-  let (contractId', txBody') = toDTO res
-  let body = CreateTxEnvelope contractId' txBody'
+  (contractId, txBody, safetyErrors) <- postCreateTxBody req changeAddressDTO mAddresses mCollateralUtxos
+  let (contractId', txBody') = toDTO (contractId, txBody)
+  let body = CreateTxEnvelope contractId' txBody' safetyErrors
   pure $ IncludeLink (Proxy @"contract") body
 
 postCreateTxResponse
@@ -96,10 +97,10 @@ postCreateTxResponse
   -> Maybe (CommaList TxOutRef)
   -> ServerM (PostContractsResponse CardanoTx)
 postCreateTxResponse req changeAddressDTO mAddresses mCollateralUtxos = do
-  (contractId, txBody) <- postCreateTxBody req changeAddressDTO mAddresses mCollateralUtxos
+  (contractId, txBody, safetyErrors) <- postCreateTxBody req changeAddressDTO mAddresses mCollateralUtxos
   let tx = makeSignedTransaction [] txBody
   let (contractId', tx') = toDTO (contractId, tx)
-  let body = CreateTxEnvelope contractId' tx'
+  let body = CreateTxEnvelope contractId' tx' safetyErrors
   pure $ IncludeLink (Proxy @"contract") body
 
 get

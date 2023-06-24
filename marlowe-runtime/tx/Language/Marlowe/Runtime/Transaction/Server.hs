@@ -35,16 +35,17 @@ import Cardano.Api (
 import Cardano.Api.Shelley (ProtocolParameters)
 import Colog (Message, WithLog)
 import Control.Applicative ((<|>))
+import Control.Concurrent (threadDelay)
+import Control.Concurrent.Async (race)
 import Control.Concurrent.Component
 import Control.Concurrent.STM (STM, modifyTVar, newEmptyTMVar, newTVar, putTMVar, readTMVar, readTVar, retry)
 import Control.Error (MaybeT (..))
 import Control.Error.Util (hoistMaybe, hush, note, noteT)
 import Control.Exception (Exception (..))
-import Control.Monad (unless)
 import Control.Monad.Event.Class
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Control.Monad.Trans.Class (lift)
-import Control.Monad.Trans.Except (ExceptT (..), except, runExceptT, throwE, withExceptT)
+import Control.Monad.Trans.Except (ExceptT (..), except, runExceptT, withExceptT)
 import Data.Bifunctor (first)
 import Data.Foldable (foldl')
 import Data.List (find)
@@ -52,8 +53,9 @@ import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Maybe (fromJust)
 import qualified Data.Set as Set
-import Data.Time (UTCTime)
+import Data.Time (NominalDiffTime, UTCTime, nominalDiffTimeToSeconds)
 import Data.Void (Void)
+import Language.Marlowe.Analysis.Safety.Types (SafetyError (SafetyAnalysisTimeout))
 import qualified Language.Marlowe.Core.V1.Semantics as V1
 import Language.Marlowe.Runtime.Cardano.Api (
   fromCardanoAddressInEra,
@@ -159,6 +161,7 @@ data TransactionServerDependencies m = TransactionServerDependencies
   , contractQueryConnector :: Connector (QueryClient ContractRequest) m
   , getTip :: STM Chain.ChainPoint
   , getCurrentScripts :: forall v. MarloweVersion v -> MarloweScripts
+  , analysisTimeout :: NominalDiffTime
   }
 
 transactionServer
@@ -210,6 +213,7 @@ transactionServer = component "tx-job-server" \TransactionServerDependencies{..}
                       metadata
                       minAda
                       contract
+                      analysisTimeout
                 ApplyInputs version addresses contractId metadata invalidBefore invalidHereafter inputs ->
                   withEvent ExecApplyInputs \_ ->
                     withMarloweVersion version $
@@ -268,8 +272,9 @@ execCreate
   -> MarloweTransactionMetadata
   -> Chain.Lovelace
   -> Either (Contract v) DatumHash
+  -> NominalDiffTime
   -> m (ServerStCmd MarloweTxCommand Void (CreateError v) (ContractCreated BabbageEra v) m ())
-execCreate contractQueryConnector getCurrentScripts solveConstraints loadWalletContext networkId mStakeCredential version addresses roleTokens metadata minAda contract = execExceptT do
+execCreate contractQueryConnector getCurrentScripts solveConstraints loadWalletContext networkId mStakeCredential version addresses roleTokens metadata minAda contract analysisTimeout = execExceptT do
   walletContext <- lift $ loadWalletContext addresses
   (contract', continuations) <- case contract of
     Right hash -> case version of
@@ -312,21 +317,18 @@ execCreate contractQueryConnector getCurrentScripts solveConstraints loadWalletC
         , marloweScriptHash = marloweScript
         , payoutScriptHash = payoutScript
         }
-  let contractSafetyErrors =
-        if False -- FIXME: Disabled because of incompatibility with integration tests.
-          then checkContract networkId roleTokens version contract' continuations
-          else mempty
-  -- FIXME: The is a placeholder until we design safety-analysis reporting.
-  unless (null contractSafetyErrors)
-    . throwE
-    . CreateSafetyAnalysisError
-    $ show contractSafetyErrors
+  let -- Fast analysis of safety: examines bounds for transactions.
+      contractSafetyErrors = checkContract networkId roleTokens version contract' continuations
+      limitAnalysisTime =
+        liftIO
+          . fmap (either Right id)
+          . race ([SafetyAnalysisTimeout] <$ threadDelay (floor $ nominalDiffTimeToSeconds analysisTimeout * 1_000_000))
+  -- Slow analysis of safety: examines all possible transactions.
   transactionSafetyErrors <-
     ExceptT $
       first CreateSafetyAnalysisError
-        <$> if False -- FIXME: Disabled because of incompatibility with integration tests.
-          then
-            checkTransactions
+        <$> limitAnalysisTime
+          ( checkTransactions
               solveConstraints
               version
               marloweContext
@@ -335,12 +337,7 @@ execCreate contractQueryConnector getCurrentScripts solveConstraints loadWalletC
               (toInteger minAda)
               contract'
               continuations
-          else pure $ pure mempty
-  -- FIXME: The is a placeholder until we design safety-analysis reporting.
-  unless (null transactionSafetyErrors)
-    . throwE
-    . CreateSafetyAnalysisError
-    $ show transactionSafetyErrors
+          )
   txBody <-
     except $
       first CreateConstraintError $
@@ -362,6 +359,7 @@ execCreate contractQueryConnector getCurrentScripts solveConstraints loadWalletC
       , version
       , datum
       , assets
+      , safetyErrors = contractSafetyErrors <> transactionSafetyErrors
       }
 
 singletonContinuations :: Contract.ContractWithAdjacency -> Continuations 'V1

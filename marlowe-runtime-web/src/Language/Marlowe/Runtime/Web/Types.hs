@@ -55,6 +55,7 @@ import Data.Version (Version)
 import Data.Word (Word16, Word32, Word64)
 import GHC.Exts (IsList)
 import GHC.Generics (Generic)
+import Language.Marlowe.Analysis.Safety.Types (SafetyError)
 import qualified Language.Marlowe.Core.V1.Semantics.Types as Semantics
 import Language.Marlowe.Runtime.Web.Orphans ()
 import Network.URI (parseURI)
@@ -479,20 +480,23 @@ instance ToSchema (WithdrawTxEnvelope CardanoTxBody) where
 data CreateTxEnvelope tx = CreateTxEnvelope
   { contractId :: TxOutRef
   , txEnvelope :: TextEnvelope
+  , safetyErrors :: [SafetyError]
   }
-  deriving (Show, Eq, Ord, Generic)
+  deriving (Show, Eq, Generic)
 
 instance ToJSON (CreateTxEnvelope CardanoTx) where
   toJSON CreateTxEnvelope{..} =
     object
       [ ("contractId", toJSON contractId)
       , ("tx", toJSON txEnvelope)
+      , ("safetyErrors", toJSON safetyErrors)
       ]
 instance ToJSON (CreateTxEnvelope CardanoTxBody) where
   toJSON CreateTxEnvelope{..} =
     object
       [ ("contractId", toJSON contractId)
       , ("txBody", toJSON txEnvelope)
+      , ("safetyErrors", toJSON safetyErrors)
       ]
 
 instance FromJSON (CreateTxEnvelope CardanoTx) where
@@ -500,17 +504,20 @@ instance FromJSON (CreateTxEnvelope CardanoTx) where
     CreateTxEnvelope
       <$> obj .: "contractId"
       <*> obj .: "tx"
+      <*> obj .: "safetyErrors"
 
 instance FromJSON (CreateTxEnvelope CardanoTxBody) where
   parseJSON = withObject "CreateTxEnvelope" \obj ->
     CreateTxEnvelope
       <$> obj .: "contractId"
       <*> obj .: "txBody"
+      <*> obj .: "safetyErrors"
 
 instance ToSchema (CreateTxEnvelope CardanoTx) where
   declareNamedSchema _ = do
     contractIdSchema <- declareSchemaRef (Proxy :: Proxy TxOutRef)
     txEnvelopeSchema <- declareSchemaRef (Proxy :: Proxy TextEnvelope)
+    safetyErrorsSchema <- declareSchemaRef (Proxy :: Proxy [SafetyError])
     return $
       NamedSchema (Just "ApplyInputsTxEnvelope") $
         mempty
@@ -518,6 +525,7 @@ instance ToSchema (CreateTxEnvelope CardanoTx) where
           & properties
             .~ [ ("contractId", contractIdSchema)
                , ("tx", txEnvelopeSchema)
+               , ("safetyErrors", safetyErrorsSchema)
                ]
           & required .~ ["contractId", "tx"]
 
@@ -525,6 +533,7 @@ instance ToSchema (CreateTxEnvelope CardanoTxBody) where
   declareNamedSchema _ = do
     contractIdSchema <- declareSchemaRef (Proxy :: Proxy TxOutRef)
     txEnvelopeSchema <- declareSchemaRef (Proxy :: Proxy TextEnvelope)
+    safetyErrorsSchema <- declareSchemaRef (Proxy :: Proxy [SafetyError])
     return $
       NamedSchema (Just "ApplyInputsTxEnvelope") $
         mempty
@@ -532,6 +541,7 @@ instance ToSchema (CreateTxEnvelope CardanoTxBody) where
           & properties
             .~ [ ("contractId", contractIdSchema)
                , ("txBody", txEnvelopeSchema)
+               , ("safetyErrors", safetyErrorsSchema)
                ]
           & required .~ ["contractId", "txBody"]
 

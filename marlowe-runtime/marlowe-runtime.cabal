@@ -367,6 +367,7 @@ library tx-api
     , cardano-api ==1.35.4
     , containers ^>=0.6.5
     , http-media ^>=0.8
+    , marlowe-cardano
     , marlowe-chain-sync ==0.0.2
     , marlowe-protocols ==0.1.1.0
     , marlowe-runtime:{marlowe-runtime, history-api} ==0.0.2
@@ -390,6 +391,7 @@ library tx
 
   build-depends:
     , aeson >=2 && <3
+    , async
     , async-components ==0.1.1.0
     , base >=4.9 && <5
     , cardano-api ==1.35.4
@@ -590,6 +592,7 @@ executable marlowe-tx
     , network >=3.1 && <4
     , optparse-applicative ^>=0.17
     , text >=1.2.4 && <2
+    , time
 
   ghc-options:     -threaded
 

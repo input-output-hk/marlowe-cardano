@@ -19,11 +19,13 @@ import Data.OpenApi (
   Schema,
   ToSchema (..),
   declareSchemaRef,
+  sketchSchema,
  )
 import Data.Proxy (Proxy (Proxy))
 import Data.Text (Text)
 import GHC.Exts (IsList (fromList))
-
+import qualified Language.Marlowe.Analysis.Safety.Types as V1
+import qualified Language.Marlowe.Core.V1.Semantics as V1
 import Language.Marlowe.Core.V1.Semantics.Types (
   AccountId,
   Action,
@@ -39,6 +41,9 @@ import Language.Marlowe.Core.V1.Semantics.Types (
   Token,
   Value,
  )
+import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
+import Numeric.Natural (Natural)
+import qualified Plutus.V2.Ledger.Api as P
 
 data Address
 
@@ -546,3 +551,350 @@ instance ToSchema Input where
         mempty
           & description ?~ "An input to a Marlowe transaction"
           & oneOf ?~ ([notifySchema, choiceSchema, depositSchema] <*> [True, False])
+
+instance ToSchema V1.SafetyError where
+  declareNamedSchema _ =
+    do
+      stringSchema <- declareSchemaRef $ Proxy @String
+      boolSchema <- declareSchemaRef $ Proxy @Bool
+      naturalSchema <- declareSchemaRef $ Proxy @Natural
+      warningSchema <- ("warning",) <$> declareSchemaRef (Proxy @V1.TransactionWarning)
+      tokenSchema <- ("token",) <$> declareSchemaRef (Proxy @Token)
+      accountIdSchema <- ("account-id",) <$> declareSchemaRef (Proxy @AccountId)
+      choiceIdSchema <- ("choice-id",) <$> declareSchemaRef (Proxy @ChoiceId)
+      costSchema <- ("cost",) <$> declareSchemaRef (Proxy @P.ExBudget)
+      transactionSchema <- ("transaction",) <$> declareSchemaRef (Proxy @V1.Transaction)
+      addressSchema <- ("address",) <$> declareSchemaRef (Proxy @P.Address)
+      let errorSchema = ("error", stringSchema)
+          detailSchema = ("detail", stringSchema)
+          fatalSchema = ("fatal", boolSchema)
+          currencySymbolSchema = ("currency-symbol", stringSchema)
+          tokenNameSchema = ("token-name", stringSchema)
+          roleNameSchema = ("role-name", stringSchema)
+          valueIdSchema = ("value-id", stringSchema)
+          bytesSchema = ("bytes", naturalSchema)
+          messageSchema = ("message", stringSchema)
+          hashSchema = ("hash", stringSchema)
+      pure $
+        NamedSchema (Just "SafetyError") $
+          mempty
+            & description ?~ "Information about the safety of a Marlowe contract and its state."
+            & required .~ fmap fst [errorSchema, detailSchema, fatalSchema]
+            & properties
+              .~ [ errorSchema
+                 , detailSchema
+                 , fatalSchema
+                 , roleNameSchema
+                 , currencySymbolSchema
+                 , tokenNameSchema
+                 , tokenSchema
+                 , accountIdSchema
+                 , choiceIdSchema
+                 , valueIdSchema
+                 , bytesSchema
+                 , transactionSchema
+                 , costSchema
+                 , messageSchema
+                 , warningSchema
+                 , hashSchema
+                 , addressSchema
+                 ]
+
+instance ToSchema V1.ValueId where
+  declareNamedSchema _ = pure . NamedSchema (Just "ValueId") $ sketchSchema $ V1.ValueId "x"
+
+instance ToSchema V1.Payment where
+  declareNamedSchema _ =
+    do
+      accountIdSchema <- ("payment_from",) <$> declareSchemaRef (Proxy @V1.AccountId)
+      payeeSchema <- ("to",) <$> declareSchemaRef (Proxy @V1.Payee)
+      tokenSchema <- ("token",) <$> declareSchemaRef (Proxy @V1.Token)
+      amountSchema <- ("amount",) <$> declareSchemaRef (Proxy @Integer)
+      pure $
+        NamedSchema (Just "Payment") $
+          mempty
+            & description ?~ "A Marlowe payment."
+            & required .~ fmap fst [accountIdSchema, payeeSchema, tokenSchema, amountSchema]
+            & properties .~ [accountIdSchema, payeeSchema, tokenSchema, amountSchema]
+
+instance ToSchema V1.Transaction where
+  declareNamedSchema _ =
+    do
+      stateSchema <- ("state",) <$> declareSchemaRef (Proxy @State)
+      contractSchema <- ("contract",) <$> declareSchemaRef (Proxy @Contract)
+      inputSchema <- ("input",) <$> declareSchemaRef (Proxy @V1.TransactionInput)
+      outputSchema <- ("output",) <$> declareSchemaRef (Proxy @V1.TransactionOutput)
+      pure $
+        NamedSchema (Just "Transaction") $
+          mempty
+            & description ?~ "Information about a Marlowe transaction."
+            & required .~ fmap fst [stateSchema, contractSchema, inputSchema, outputSchema]
+            & properties .~ [stateSchema, contractSchema, inputSchema, outputSchema]
+
+instance ToSchema V1.TransactionInput where
+  declareNamedSchema _ =
+    do
+      integerSchema <- declareSchemaRef $ Proxy @Integer
+      let intervalSchema' =
+            mempty
+              & type_ ?~ OpenApiObject
+              & description ?~ "Time interval."
+              & required .~ fmap fst [lower, upper]
+              & properties .~ [lower, upper]
+            where
+              lower = ("from", integerSchema)
+              upper = ("to", integerSchema)
+          intervalSchema = ("tx_interval", Inline intervalSchema')
+      inputsSchema <- ("tx_inputs",) <$> declareSchemaRef (Proxy @[V1.Input])
+      pure $
+        NamedSchema (Just "TransactionInput") $
+          mempty
+            & description ?~ "Marlowe transaction input."
+            & required .~ fmap fst [intervalSchema, inputsSchema]
+            & properties .~ [intervalSchema, inputsSchema]
+
+instance ToSchema V1.TransactionOutput where
+  declareNamedSchema _ =
+    do
+      txErrorSchema <- declareSchemaRef $ Proxy @V1.TransactionError
+      warningsSchema <- ("warnings",) <$> declareSchemaRef (Proxy @[V1.TransactionWarning])
+      paymentsSchema <- ("payments",) <$> declareSchemaRef (Proxy @[V1.Payment])
+      stateSchema <- ("state",) <$> declareSchemaRef (Proxy @V1.State)
+      contractSchema <- ("contract",) <$> declareSchemaRef (Proxy @V1.Contract)
+      let noErrorSchema =
+            mempty
+              & type_ ?~ OpenApiObject
+              & description ?~ "Marlowe transaction output information."
+              & required .~ fmap fst [warningsSchema, paymentsSchema, stateSchema, contractSchema]
+              & properties .~ [warningsSchema, paymentsSchema, stateSchema, contractSchema]
+          errorSchema =
+            mempty
+              & type_ ?~ OpenApiObject
+              & description ?~ "Marlowe transaction error."
+              & required .~ fmap fst [message]
+              & properties .~ [message]
+            where
+              message = ("transaction_error", txErrorSchema)
+      pure $
+        NamedSchema (Just "TransactionOutput") $
+          mempty
+            & description ?~ "Marlowe transaction output."
+            & oneOf ?~ fmap Inline [noErrorSchema, errorSchema]
+
+instance ToSchema V1.TransactionError where
+  declareNamedSchema _ =
+    do
+      ieSchema <- declareSchemaRef $ Proxy @V1.IntervalError
+      let ambiguousIntervalSchema =
+            mempty
+              & type_ ?~ OpenApiString
+              & description ?~ "Ambiguous time interval."
+              & enum_ ?~ ["TEAmbiguousTimeIntervalError"]
+          applyNoMatchSchema =
+            mempty
+              & type_ ?~ OpenApiString
+              & description ?~ "No match on applying input."
+              & enum_ ?~ ["TEApplyNoMatchError"]
+          uselessTransactionSchema =
+            mempty
+              & type_ ?~ OpenApiString
+              & description ?~ "A useless application of input."
+              & enum_ ?~ ["TEUselessTransaction"]
+          intervalErrorSchema =
+            mempty
+              & type_ ?~ OpenApiObject
+              & description ?~ "An invalid time interval."
+              & required .~ fmap fst [message, interval]
+              & properties .~ [message, interval]
+            where
+              message = ("error", Inline $ mempty & type_ ?~ OpenApiString & enum_ ?~ ["TEIntervalError"])
+              interval = ("context", ieSchema)
+          hashMismatchSchema =
+            mempty
+              & type_ ?~ OpenApiString
+              & description ?~ "A mismatch in the continuation hash."
+              & enum_ ?~ ["TEHashMismatch"]
+      pure $
+        NamedSchema (Just "TransactionError") $
+          mempty
+            & description ?~ "A Marlowe transaction error."
+            & oneOf
+              ?~ fmap
+                Inline
+                [ambiguousIntervalSchema, applyNoMatchSchema, intervalErrorSchema, uselessTransactionSchema, hashMismatchSchema]
+
+instance ToSchema V1.IntervalError where
+  declareNamedSchema _ =
+    do
+      integerSchema <- declareSchemaRef $ Proxy @Integer
+      let from = ("from", integerSchema)
+          to = ("to", integerSchema)
+          minTime = ("minTime", integerSchema)
+          invalidIntervalSchema =
+            mempty
+              & type_ ?~ OpenApiObject
+              & description ?~ "Invalid Marlowe transaction interval."
+              & required .~ fmap fst [invalid]
+              & properties .~ [invalid]
+            where
+              invalid =
+                ( "invalidInterval"
+                , Inline $
+                    mempty
+                      & type_ ?~ OpenApiObject
+                      & required .~ fmap fst [from, to]
+                      & properties .~ [from, to]
+                )
+          intervalInPastSchema =
+            mempty
+              & type_ ?~ OpenApiObject
+              & description ?~ "Marlowe transaction interval in past."
+              & required .~ fmap fst [past]
+              & properties .~ [past]
+            where
+              past =
+                ( "intervalInPastError"
+                , Inline $
+                    mempty
+                      & type_ ?~ OpenApiObject
+                      & required .~ fmap fst [minTime, from, to]
+                      & properties .~ [minTime, from, to]
+                )
+      pure $
+        NamedSchema (Just "IntervalError") $
+          mempty
+            & description ?~ "A Marlowe transaction interval error."
+            & oneOf ?~ fmap Inline [invalidIntervalSchema, intervalInPastSchema]
+
+instance ToSchema V1.TransactionWarning where
+  declareNamedSchema _ =
+    do
+      integerSchema <- declareSchemaRef $ Proxy @Integer
+      partySchema <- declareSchemaRef $ Proxy @V1.Party
+      tokenSchema <- declareSchemaRef $ Proxy @V1.Token
+      accountIdSchema <- declareSchemaRef $ Proxy @V1.AccountId
+      payeeSchema <- declareSchemaRef $ Proxy @V1.Payee
+      valueIdSchema <- declareSchemaRef $ Proxy @String
+      let nonPositiveDepositSchema =
+            mempty
+              & type_ ?~ OpenApiObject
+              & description ?~ "A warning for a non-positive deposit."
+              & required .~ fmap fst [party, amount, tok, accId]
+              & properties .~ [party, amount, tok, accId]
+            where
+              party = ("party", partySchema)
+              amount = ("asked_to_deposit", integerSchema)
+              tok = ("of_token", tokenSchema)
+              accId = ("in_account", accountIdSchema)
+          nonPositivePaySchema =
+            mempty
+              & type_ ?~ OpenApiObject
+              & description ?~ "A warning for a non-positive payment."
+              & required .~ fmap fst [accId, amount, tok, payee]
+              & properties .~ [accId, amount, tok, payee]
+            where
+              accId = ("account", accountIdSchema)
+              amount = ("asked_to_pay", integerSchema)
+              tok = ("of_token", tokenSchema)
+              payee = ("to_payee", payeeSchema)
+          partialPaySchema =
+            mempty
+              & type_ ?~ OpenApiObject
+              & description ?~ "A warning for partial payment."
+              & required .~ fmap fst [accId, expected, tok, payee, paid]
+              & properties .~ [accId, expected, tok, payee, paid]
+            where
+              accId = ("account", accountIdSchema)
+              expected = ("asked_to_pay", integerSchema)
+              tok = ("of_token", tokenSchema)
+              payee = ("to_payee", payeeSchema)
+              paid = ("but_only_paid", integerSchema)
+          shadowingSchema =
+            mempty
+              & type_ ?~ OpenApiObject
+              & description ?~ "A variable-name shadowing warning."
+              & required .~ fmap fst [valId, oldVal, newVal]
+              & properties .~ [valId, oldVal, newVal]
+            where
+              valId = ("value_id", valueIdSchema)
+              oldVal = ("had_value", integerSchema)
+              newVal = ("is_now_assigned", integerSchema)
+          assertionSchema =
+            mempty
+              & type_ ?~ OpenApiString
+              & description ?~ "A semantics assertion failed."
+              & enum_ ?~ ["assertion_failed"]
+      pure $
+        NamedSchema (Just "TransactionWarning") $
+          mempty
+            & description ?~ "A transaction semantics warning."
+            & oneOf
+              ?~ fmap Inline [nonPositiveDepositSchema, nonPositivePaySchema, partialPaySchema, shadowingSchema, assertionSchema]
+
+instance ToSchema P.Address where
+  declareNamedSchema _ =
+    do
+      addressCredentialSchema <- ("addressCredential",) <$> declareSchemaRef (Proxy @P.Credential)
+      stakingCredentialSchema <- ("addressStakingCredential",) <$> declareSchemaRef (Proxy @(Maybe P.StakingCredential))
+      pure $
+        NamedSchema (Just "Plutus.Address") $
+          mempty
+            & description ?~ "A Plutus address."
+            & required .~ fmap fst [addressCredentialSchema]
+            & properties .~ [addressCredentialSchema, stakingCredentialSchema]
+
+instance ToSchema P.Credential where
+  declareNamedSchema _ =
+    do
+      stringSchema <- declareSchemaRef $ Proxy @String
+      let pubKeyCredentialSchema =
+            mempty
+              & type_ ?~ OpenApiObject
+              & description ?~ "A Plutus public key credential."
+              & required .~ fmap fst [item]
+              & properties .~ [item]
+            where
+              item = ("pubKeyCredential", stringSchema)
+          scriptCredentialSchema =
+            mempty
+              & type_ ?~ OpenApiObject
+              & description ?~ "A Plutus script credential."
+              & required .~ fmap fst [item]
+              & properties .~ [item]
+            where
+              item = ("scriptCredential", stringSchema)
+      pure $
+        NamedSchema (Just "Plutus.Credential") $
+          mempty
+            & description ?~ "A Plutus credential."
+            & oneOf ?~ fmap Inline [pubKeyCredentialSchema, scriptCredentialSchema]
+
+instance ToSchema P.StakingCredential where
+  declareNamedSchema _ =
+    do
+      credentialSchema <- declareSchemaRef $ Proxy @P.Credential
+      integerTripletSchema <- declareSchemaRef $ Proxy @(Integer, Integer, Integer)
+      let stakingHashSchema =
+            mempty
+              & type_ ?~ OpenApiObject
+              & description ?~ "A Plutus staking hash."
+              & required .~ fmap fst [item]
+              & properties .~ [item]
+            where
+              item = ("stakingHash", credentialSchema)
+          stakingPtrSchema =
+            mempty
+              & type_ ?~ OpenApiObject
+              & description ?~ "A Plutus staking pointer."
+              & required .~ fmap fst [item]
+              & properties .~ [item]
+            where
+              item = ("stakingHash", integerTripletSchema)
+      pure $
+        NamedSchema (Just "Plutus.StakingCredential") $
+          mempty
+            & description ?~ "A Plutus staking credential."
+            & oneOf ?~ fmap Inline [stakingHashSchema, stakingPtrSchema]
+
+instance ToSchema P.ExBudget where
+  declareNamedSchema _ = pure . NamedSchema (Just "ExBudget") $ sketchSchema $ P.ExBudget 10 10

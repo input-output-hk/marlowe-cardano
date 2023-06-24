@@ -26,8 +26,8 @@ import Language.Marlowe.Runtime.Sync (MarloweSync (..), SyncDependencies (..), s
 import Language.Marlowe.Runtime.Sync.Database (hoistDatabaseQueries, logDatabaseQueries)
 import qualified Language.Marlowe.Runtime.Sync.Database.PostgreSQL as Postgres
 import Logging (RootSelector (..), renderRootSelectorOTel)
-import Network.Protocol.Driver (TcpServerDependencies (..))
-import Network.Protocol.Driver.Trace (tcpClientTraced, tcpServerTraced)
+import Network.Protocol.Driver (TcpServerDependencies (..), tcpClient)
+import Network.Protocol.Driver.Trace (tcpServerTraced)
 import Network.Protocol.Query.Client (queryClientPeer)
 import Network.Protocol.Query.Server (queryServerPeer)
 import Network.Socket (HostName, PortNumber)
@@ -79,8 +79,7 @@ run Options{..} = bracket (Pool.acquire 100 (Just 5000000) (fromString databaseU
                       (either throwIO pure <=< liftIO . Pool.use pool)
                       Postgres.databaseQueries
               , runtimeVersion = version
-              , chainSyncQueryConnector =
-                  tcpClientTraced (injectSelector ChainSyncQueryClient) chainSyncHost chainQueryPort queryClientPeer
+              , chainSyncQueryConnector = tcpClient chainSyncHost chainQueryPort queryClientPeer
               }
 
       tcpServerTraced "marlowe-sync" (injectSelector MarloweSyncServer)

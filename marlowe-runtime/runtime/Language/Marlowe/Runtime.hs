@@ -190,6 +190,7 @@ marloweRuntime = proc MarloweRuntimeDependencies{..} -> do
           { mkSubmitJob = mkSubmitJob SubmitJobDependencies{..}
           , loadWalletContext = loadWalletContext $ runConnector chainSyncQueryConnector . request . GetUTxOs
           , loadMarloweContext = loadMarloweContext getScripts networkId chainSyncConnector chainSyncQueryConnector
+          , analysisTimeout = 15 -- seconds
           , ..
           }
 

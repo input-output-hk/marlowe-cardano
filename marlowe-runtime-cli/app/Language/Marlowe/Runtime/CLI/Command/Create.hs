@@ -11,6 +11,7 @@ import Control.Monad.Trans.Except (ExceptT (ExceptT), throwE)
 import Data.Aeson (FromJSON, toJSON)
 import qualified Data.Aeson as A
 import Data.Bifunctor (bimap, first)
+import qualified Data.ByteString.Char8 as BS8
 import Data.List.NonEmpty (NonEmpty (..))
 import Data.Map (Map)
 import qualified Data.Map as Map
@@ -19,6 +20,7 @@ import qualified Data.Yaml as Yaml
 import Data.Yaml.Aeson (decodeFileEither)
 import GHC.Generics (Generic)
 import Language.Marlowe (POSIXTime (POSIXTime))
+import Language.Marlowe.Analysis.Safety.Types (SafetyError)
 import Language.Marlowe.Runtime.CLI.Command.Tx (SigningMethod (Manual), TxCommand (..), txCommandParser)
 import Language.Marlowe.Runtime.CLI.Monad (CLI, runCLIExceptT)
 import Language.Marlowe.Runtime.CLI.Option (keyValueOption, marloweVersionParser, parseAddress)
@@ -52,6 +54,7 @@ import Language.Marlowe.Runtime.Transaction.Api (
  )
 import Options.Applicative
 import Options.Applicative.NonEmpty (some1)
+import System.IO (hPutStrLn, stderr)
 import Text.Read (readMaybe)
 
 data CreateCommand = CreateCommand
@@ -215,7 +218,13 @@ runCreateCommand TxCommand{walletAddresses, signingMethod, tagsFile, metadataFil
         case Map.toList configMap of
           [] -> throwE $ RolesConfigFileDecodingError "Empty role token config"
           (x : xs) -> pure $ RoleTokensMint $ mkMint $ fmap (\RoleConfig{..} -> (address, Just metadata)) <$> x :| xs
-    ContractId contractId <- run MarloweV1 minting'
+    (ContractId contractId, safetyErrors) <- run MarloweV1 minting'
+    liftIO $
+      if null safetyErrors
+        then hPutStrLn stderr "Safety analysis found no errors in the contract."
+        else do
+          hPutStrLn stderr "Safety analysis found the following errors in the contract:"
+          BS8.hPutStrLn stderr $ Yaml.encode safetyErrors
     liftIO . print $ A.encode (A.object [("contractId", toJSON . renderTxOutRef $ contractId)])
   where
     readContract :: MarloweVersion v -> ExceptT (CreateCommandError v) CLI (Either (Contract v) DatumHash)
@@ -243,14 +252,14 @@ runCreateCommand TxCommand{walletAddresses, signingMethod, tagsFile, metadataFil
           pure $ MarloweMetadata tags Nothing
       Nothing -> pure Nothing
 
-    run :: MarloweVersion v -> RoleTokensConfig -> ExceptT (CreateCommandError v) CLI ContractId
+    run :: MarloweVersion v -> RoleTokensConfig -> ExceptT (CreateCommandError v) CLI (ContractId, [SafetyError])
     run version rolesDistribution = do
       contract <- readContract version
       metadata <- MarloweTransactionMetadata <$> readTags <*> readMetadata
-      ContractCreated{contractId, txBody} <-
+      ContractCreated{contractId, txBody, safetyErrors} <-
         ExceptT $
           first CreateFailed <$> createContract Nothing version walletAddresses rolesDistribution metadata minUTxO contract
       case signingMethod of
         Manual outputFile -> do
           ExceptT $ liftIO $ first TransactionFileWriteFailed <$> C.writeFileTextEnvelope outputFile Nothing txBody
-          pure contractId
+          pure (contractId, safetyErrors)

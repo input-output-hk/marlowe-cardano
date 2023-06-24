@@ -219,7 +219,7 @@ import qualified Prelude as Haskell
 -- | Payment occurs during 'Pay' contract evaluation, and
 --     when positive balances are payed out on contract closure.
 data Payment = Payment AccountId Payee Token Integer
-  deriving stock (Haskell.Eq, Haskell.Show)
+  deriving stock (Haskell.Eq, Generic, Haskell.Show)
 
 instance ToJSON Payment where
   toJSON (Payment accountId payee token amount) =
@@ -360,7 +360,7 @@ data TransactionOutput
       , txOutContract :: Contract
       }
   | Error TransactionError
-  deriving stock (Haskell.Eq, Haskell.Show)
+  deriving stock (Haskell.Eq, Generic, Haskell.Show)
 
 instance ToJSON TransactionOutput where
   toJSON TransactionOutput{..} =

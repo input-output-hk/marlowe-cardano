@@ -11,6 +11,7 @@ let
     socat
     netcat
     curl
+    z3
     ;
 
   marlowe-chain-indexer = self.packages.ghc8107.marlowe-chain-sync-exe-marlowe-chain-indexer;
@@ -333,6 +334,7 @@ in
 
   marlowe-tx = mkOperableWithProbes {
     package = marlowe-tx;
+    runtimeInputs = [ z3 ];
     runtimeScript = ''
       #################
       # REQUIRED VARS #

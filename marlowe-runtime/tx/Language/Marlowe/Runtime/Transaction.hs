@@ -18,6 +18,7 @@ import qualified Data.Map as Map
 import Data.Maybe (catMaybes, mapMaybe, maybeToList)
 import qualified Data.Set as Set
 import Data.String (fromString)
+import Data.Time (NominalDiffTime)
 import Language.Marlowe.Runtime.ChainSync.Api (
   ChainSyncQuery,
   RuntimeChainSeekClient,
@@ -52,6 +53,7 @@ data TransactionDependencies m = TransactionDependencies
   , chainSyncQueryConnector :: Connector (QueryClient ChainSyncQuery) m
   , contractQueryConnector :: Connector (QueryClient ContractRequest) m
   , getCurrentScripts :: forall v. MarloweVersion v -> MarloweScripts
+  , analysisTimeout :: NominalDiffTime
   }
 
 data MarloweTx m = MarloweTx

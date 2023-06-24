@@ -183,8 +183,6 @@ checkTransactions solveConstraints version@MarloweV1 marloweContext rolesCurrenc
   runExceptT $
     do
       let changeAddress' = uncurry V1.Address . fromJust . V1.deserialiseAddress $ Chain.unAddress changeAddress
-      -- FIXME: The `findTransactions` function may be a long-running process if the
-      --        contract is complex. Where should we guard against this with a timeout?
       transactions <-
         findTransactions changeAddress' minAda . V1.MerkleizedContract contract $ remapContinuations continuations
       either throwE (pure . mconcat)
@@ -250,7 +248,9 @@ checkTransaction solveConstraints version@MarloweV1 marloweContext@MarloweContex
               txInputs
     let walletContext = walletForConstraints version marloweContext changeAddress constraints
     pure
-      . either (pure . TransactionValidationError transaction . show) (const $ TransactionWarning <$> V1.txOutWarnings txOutput)
+      . either
+        (pure . TransactionValidationError transaction . show)
+        (const $ TransactionWarning transaction <$> V1.txOutWarnings txOutput)
       $ solveConstraints version marloweContext' walletContext constraints
 
 -- | Create a wallet context that will satisfy the given constraints.
