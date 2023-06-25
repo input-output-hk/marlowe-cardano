@@ -3,6 +3,6 @@ networks:
   - preview
 
 images:
-  tag: latest
+  tag: 0.0.2
   repo: ghcr.io
   org: input-output-hk
