@@ -38,7 +38,7 @@ spec:
         value: "3781"
       image: {{ $.Values.images.repo }}/{{ $.Values.images.org }}/marlowe-chain-indexer:{{ $.Values.images.tag }}
       imagePullPolicy: Always
-      memory: 1024Mi
+      memory: 8Gi
       volumeMounts:
         emptyDir:
         - name: ipc
