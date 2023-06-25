@@ -1,5 +1,3 @@
-{ inputs, inputs', pkgs, project }:
-
 {
   cabal-fmt.enable = true;
   cabal-fmt.extraOptions = "--no-tabular";
