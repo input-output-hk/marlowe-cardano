@@ -15,9 +15,9 @@ spec:
           size: 50Gi
         resources:
           requests:
-            memory: "16Gi"
+            memory: "8Gi"
           limits:
-            memory: "16Gi"
+            memory: "8Gi"
         preparedDatabases:
           {{- range $index, $network := .Values.networks }}
           chainsync_{{ $network }}:
