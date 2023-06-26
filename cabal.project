@@ -34,6 +34,7 @@ packages:
   marlowe-contracts
   marlowe-integration
   marlowe-integration-tests
+  marlowe-object
   marlowe-protocols
   marlowe-runtime
   marlowe-runtime-cli
