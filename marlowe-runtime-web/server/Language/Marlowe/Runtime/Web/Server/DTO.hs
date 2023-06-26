@@ -738,11 +738,11 @@ instance ToDTO RuntimeStatus where
           Chain.Genesis -> Web.ChainTipGenesis nodeTipUTC
           Chain.At blockHeader -> Web.ChainTip (toDTO blockHeader) nodeTipUTC
       , runtimeChainTip = case runtimeChainTip of
-          Chain.Genesis -> Web.ChainTipGenesis nodeTipUTC
-          Chain.At blockHeader -> Web.ChainTip (toDTO blockHeader) nodeTipUTC
+          Chain.Genesis -> Web.ChainTipGenesis runtimeChainTipUTC
+          Chain.At blockHeader -> Web.ChainTip (toDTO blockHeader) runtimeChainTipUTC
       , runtimeTip = case runtimeTip of
-          Chain.Genesis -> Web.ChainTipGenesis nodeTipUTC
-          Chain.At blockHeader -> Web.ChainTip (toDTO blockHeader) nodeTipUTC
+          Chain.Genesis -> Web.ChainTipGenesis runtimeTipUTC
+          Chain.At blockHeader -> Web.ChainTip (toDTO blockHeader) runtimeTipUTC
       , networkId = case networkId of
           Mainnet -> Web.Mainnet
           Testnet (NetworkMagic n) -> Web.Testnet n
