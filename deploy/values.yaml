@@ -1,6 +1,7 @@
 networks:
   - preprod
   - preview
+  - mainnet
 
 images:
   tag: latest
