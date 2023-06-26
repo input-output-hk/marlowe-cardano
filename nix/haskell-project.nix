@@ -62,10 +62,6 @@ let
     # This will go away when we upgrade nixpkgs and things use ieee754 anyway.
     ieee.components.library.libs = lib.mkForce [ ];
 
-    # See https://github.com/input-output-hk/iohk-nix/pull/488
-    cardano-crypto-praos.components.library.pkgconfig = lib.mkForce [ [ pkgs.libsodium-vrf pkgs.secp256k1 ] ];
-    cardano-crypto-class.components.library.pkgconfig = lib.mkForce [ [ pkgs.libsodium-vrf pkgs.secp256k1 ] ];
-
     # hpack fails due to modified cabal file, can remove when we bump to 3.12.0
     cardano-addresses.cabal-generator = lib.mkForce null;
     cardano-addresses-cli.cabal-generator = lib.mkForce null;
