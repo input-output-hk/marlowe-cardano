@@ -11,8 +11,8 @@ spec:
   components:
     - name: marlowe-proxy-{{ . }}
       type: webservice
-      exposeType: NodePort
       properties:
+        exposeType: NodePort
         env:
         - name: HOST
           value: 0.0.0.0
