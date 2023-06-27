@@ -66,6 +66,10 @@ import Data.Traversable (for)
 import Data.Word (Word16, Word64)
 import GHC.TypeLits (KnownSymbol)
 import qualified Language.Marlowe.Core.V1.Semantics as Sem
+
+import qualified Language.Marlowe.Core.V1.Semantics.Types as Sem
+
+import Language.Marlowe.Core.V1.Semantics.Types.Address (deserialiseAddressBech32, serialiseAddressBech32)
 import Language.Marlowe.Protocol.Query.Types (
   ContractState (..),
   PayoutRef (..),
@@ -74,6 +78,7 @@ import Language.Marlowe.Protocol.Query.Types (
   SomeTransaction (..),
   Withdrawal (..),
  )
+
 import qualified Language.Marlowe.Protocol.Query.Types as Query
 import Language.Marlowe.Runtime.Cardano.Api (cardanoEraToAsType, fromCardanoTxId)
 import Language.Marlowe.Runtime.ChainSync.Api (AssetId (..))
@@ -139,6 +144,15 @@ instance (FromDTO a) => FromDTO [a] where
   fromDTO = traverse fromDTO
 
 instance (ToDTO a) => ToDTO [a] where
+  toDTO = fmap toDTO
+
+instance HasDTO (NonEmpty a) where
+  type DTO (NonEmpty a) = NonEmpty (DTO a)
+
+instance (FromDTO a) => FromDTO (NonEmpty a) where
+  fromDTO = traverse fromDTO
+
+instance (ToDTO a) => ToDTO (NonEmpty a) where
   toDTO = fmap toDTO
 
 instance HasDTO (a, b) where
@@ -748,3 +762,15 @@ instance ToDTO RuntimeStatus where
           Testnet (NetworkMagic n) -> Web.Testnet n
       , ..
       }
+
+instance HasDTO Sem.Party where
+  type DTO Sem.Party = Web.Party
+
+instance ToDTO Sem.Party where
+  toDTO (Sem.Address networkId address) = Web.Party . serialiseAddressBech32 networkId $ address
+  toDTO (Sem.Role tokenName) = Web.Party . T.pack . read . show . Sem.unTokenName $ tokenName
+
+instance FromDTO Sem.Party where
+  fromDTO a = case deserialiseAddressBech32 (Web.unParty a) of
+    Just (network, address) -> Just $ Sem.Address network address
+    Nothing -> Just $ Sem.Role $ fromString . T.unpack . Web.unParty $ a

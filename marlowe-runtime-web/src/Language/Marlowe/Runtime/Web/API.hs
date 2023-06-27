@@ -215,6 +215,7 @@ type NextAPI = GETNextContinuationAPI
 type GETNextContinuationAPI =
   QueryParam' '[Required] "validityStart" UTCTime
     :> QueryParam' '[Required] "validityEnd" UTCTime
+    :> QueryParams "party" Party
     :> Get '[JSON] Next
 
 -- | /contracts/:contractId/transactions sup-API

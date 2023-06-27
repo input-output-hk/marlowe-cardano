@@ -14,6 +14,7 @@
 module Language.Marlowe.Core.V1.Next.Applicables (
   ApplicableInputs (..),
   emptyApplicables,
+  filterByParties,
   mkApplicables,
   mkApplicablesWhen,
 ) where
@@ -30,14 +31,17 @@ import Language.Marlowe.Core.V1.Semantics (evalObservation, evalValue)
 import Language.Marlowe.Core.V1.Semantics.Types (
   Action (Choice, Deposit, Notify),
   Case (..),
+  ChoiceId (ChoiceId),
   Contract (Close, When),
   Environment,
+  Party,
   State,
  )
 import Language.Marlowe.Pretty (Pretty (..))
 
+import Data.List.NonEmpty (NonEmpty)
 import Data.Maybe (maybeToList)
-import Language.Marlowe.Core.V1.Next.Applicables.CanChoose (CanChoose (CanChoose), difference)
+import Language.Marlowe.Core.V1.Next.Applicables.CanChoose (CanChoose (CanChoose, choiceId), difference)
 import Language.Marlowe.Core.V1.Next.Applicables.CanDeposit (CanDeposit (..))
 import Language.Marlowe.Core.V1.Next.Applicables.CanNotify (CanNotify (..))
 import Language.Marlowe.Core.V1.Next.Indexed (CaseIndex, Indexed (..), caseIndexed, sameIndexedValue)
@@ -51,6 +55,15 @@ data ApplicableInputs = ApplicableInputs
   }
   deriving stock (Show, Eq, Ord, Generic)
   deriving anyclass (Pretty)
+
+filterByParties :: Maybe (NonEmpty Party) -> ApplicableInputs -> ApplicableInputs
+filterByParties Nothing a = a
+filterByParties (Just parties) ApplicableInputs{..} =
+  ApplicableInputs
+    { notifyMaybe = notifyMaybe
+    , deposits = filter (\(Indexed _ (CanDeposit party _ _ _ _)) -> elem party parties) deposits
+    , choices = filter (\(Indexed _ CanChoose{choiceId = (ChoiceId _ party)}) -> elem party parties) choices
+    }
 
 emptyApplicables :: ApplicableInputs
 emptyApplicables = ApplicableInputs Nothing mempty mempty

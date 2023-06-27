@@ -1,6 +1,7 @@
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DerivingVia #-}
+{-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -8,6 +9,7 @@
 
 module Language.Marlowe.Core.V1.Next (
   Next (..),
+  filterByParties,
   mkEnvironment,
   next,
 ) where
@@ -22,13 +24,16 @@ import Language.Marlowe.Core.V1.Semantics.Types (
   Environment (..),
   IntervalError (..),
   IntervalResult (..),
+  Party,
   State,
  )
 import Language.Marlowe.Pretty (Pretty (..))
 
 import Data.Bifunctor (Bifunctor (first))
+import Data.List.NonEmpty
 import Data.Time (UTCTime)
 import Language.Marlowe.Core.V1.Next.Applicables (ApplicableInputs, mkApplicables)
+import qualified Language.Marlowe.Core.V1.Next.Applicables as Applicables
 import Language.Marlowe.Core.V1.Next.CanReduce (CanReduce, tryReduce)
 import Language.Marlowe.Core.V1.Semantics (fixInterval)
 import Plutus.V1.Ledger.SlotConfig (utcTimeToPOSIXTime)
@@ -36,6 +41,9 @@ import Plutus.V1.Ledger.SlotConfig (utcTimeToPOSIXTime)
 data Next = Next {canReduce :: CanReduce, applicables :: ApplicableInputs}
   deriving stock (Show, Eq, Ord, Generic)
   deriving anyclass (Pretty)
+
+filterByParties :: Maybe (NonEmpty Party) -> Next -> Next
+filterByParties p Next{..} = Next{canReduce, applicables = Applicables.filterByParties p applicables}
 
 -- | Describe for a given contract which inputs can be applied it can be reduced or not
 next :: Environment -> State -> Contract -> Either IntervalError Next

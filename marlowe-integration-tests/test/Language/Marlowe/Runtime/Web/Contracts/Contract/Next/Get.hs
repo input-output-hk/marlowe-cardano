@@ -40,7 +40,7 @@ nextCloseContractSpec =
             getContract expectedCloseContractId
         liftIO $ contractId `shouldBe` expectedCloseContractId
         now <- liftIO Time.getCurrentTime
-        next <- getContractNext contractId now now
+        next <- getContractNext contractId now now []
         liftIO $ next `shouldBe` Next (CanReduce True) emptyApplicables
 
 invalidTxIdSpec :: SpecWith MarloweWebTestData
