@@ -223,8 +223,8 @@ executable signing-service
 
   default-language: Haskell2010
 
-executable marlowe-proofspace
-  main-is:          Main.hs
+library marlowe-proofspace
+  exposed-modules:  Network.ProofSpace
   hs-source-dirs:   proofspace
   build-depends:
     , aeson
@@ -235,7 +235,6 @@ executable marlowe-proofspace
     , servant
     , servant-server
     , wai
-    , warp
 
   ghc-options:
     -Wall -Wnoncanonical-monad-instances -Wincomplete-uni-patterns

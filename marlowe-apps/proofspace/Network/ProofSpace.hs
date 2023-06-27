@@ -11,8 +11,19 @@
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module Main (
-  main,
+module Network.ProofSpace (
+  -- * Types
+  ProofRequest (..),
+  ProofResponse (..),
+  ReceivedCredential (..),
+  ProofHandler,
+
+  -- * Server
+  application,
+  proofServerContext,
+
+  -- * Handlers
+  echoProofHandler,
 ) where
 
 import Control.Monad (unless)
@@ -20,10 +31,8 @@ import Control.Monad.IO.Class (liftIO)
 import Data.Aeson (FromJSON (parseJSON), ToJSON (toJSON), Value, eitherDecode, object, withObject, (.:), (.=))
 import Data.Bifunctor (first)
 import Data.Kind (Type)
-import Data.String (fromString)
 import Network.HTTP.Types (hContentType)
 import Network.Wai (Application, requestHeaders, strictRequestBody)
-import Network.Wai.Handler.Warp (defaultSettings, runSettings, setHost, setPort)
 import OpenSSL.EVP.Base64 (decodeBase64BS)
 import OpenSSL.EVP.Digest (Digest, getDigestByName)
 import OpenSSL.EVP.PKey (SomePublicKey)
@@ -52,7 +61,6 @@ import Servant.API (ReqBody')
 import Servant.Server.Internal.Delayed (addBodyCheck)
 import Servant.Server.Internal.DelayedIO (DelayedIO, delayedFail, delayedFailFatal, withRequest)
 import Servant.Server.Internal.ErrorFormatter (MkContextWithErrorFormatter)
-import System.Environment (getArgs)
 import System.IO.Unsafe (unsafePerformIO)
 
 import qualified Data.ByteString as BS
@@ -135,22 +143,7 @@ instance ToJSON ProofResponse where
       ]
 
 -- | Type for processing credentials.
-type ProofProcessor = ProofRequest -> IO Bool
-
--- | Handle a request with a verification of credentials.
-proofHandler
-  :: ProofProcessor
-  -> ProofRequest
-  -> Handler ProofResponse
-proofHandler process req@ProofRequest{..} =
-  do
-    let resServiceDid = reqPublicServiceDid
-        resSubscriberConnectDid = reqSubscriberConnectDid
-        resActionEventId = reqActionEventId
-        resIssuedCredentials = mempty
-        resRevokedCredentials = mempty
-    resOk <- liftIO $ process req
-    pure ProofResponse{..}
+type ProofHandler = ProofRequest -> Handler ProofResponse
 
 -- | Type for the API.
 type ProofApi = "sync-issue" :> ProofRequestBody :> Post '[JSON] ProofResponse
@@ -255,23 +248,25 @@ proofServerContext digestName pubKeyFile =
 
 -- | The server.
 proofServer
-  :: ProofProcessor
+  :: ProofHandler
   -> Server ProofApi
-proofServer = proofHandler
+proofServer = id
 
 -- | The application.
 application
   :: ProofServerContext
-  -> ProofProcessor
+  -> ProofHandler
   -> Application
 application context = serveWithContext proofApi context . proofServer
 
--- | Main entry point.
-main :: IO ()
-main =
-  do
-    [pubKeyFile, host, port] <- getArgs
-    context <- proofServerContext "sha3-256" pubKeyFile
-    let settings = setHost (fromString host) $ setPort (read port) defaultSettings
-        processor = const $ pure True -- FIXME: To be implemented.
-    runSettings settings $ application context processor
+-- | Handle a request with a verification of credentials.
+echoProofHandler
+  :: ProofHandler
+echoProofHandler ProofRequest{..} =
+  let resServiceDid = reqPublicServiceDid
+      resSubscriberConnectDid = reqSubscriberConnectDid
+      resActionEventId = reqActionEventId
+      resIssuedCredentials = mempty
+      resRevokedCredentials = mempty
+      resOk = True
+   in pure ProofResponse{..}
