@@ -48,6 +48,7 @@ let
 
   run-runtime = writeShellScriptBin "run-marlowe-runtime" ''
     set -e
+    export PATH="$PATH:${lib.makeBinPath [ z3 ]}"
     PROG=${lib.escapeShellArg "marlowe-runtime"}
     PKG=${lib.escapeShellArg "marlowe-runtime"}-${lib.escapeShellArg marloweRuntimeVersion}
     cd /src
