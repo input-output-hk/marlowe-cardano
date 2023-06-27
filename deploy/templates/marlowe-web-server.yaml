@@ -12,8 +12,6 @@ spec:
     - name: marlowe-web-server-{{ . }}
       type: webservice
       properties:
-        annotations:
-          sidecar.optentelemetry.io/inject: "true"
         env:
         - name: PORT
           value: "3780"
