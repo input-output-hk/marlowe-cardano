@@ -1,0 +1,4 @@
+Added
+-----
+
+- Library `marlowe-proofspace` for passing verified W3C DID credentials to Marlowe oracles.
