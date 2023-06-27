@@ -172,26 +172,6 @@ executable marlowe-finder
 
   default-language: Haskell2010
 
-executable signing-service
-  main-is:          Main.hs
-  hs-source-dirs:   signing
-  build-depends:
-    , aeson
-    , base >=4.9 && <5
-    , cardano-api
-    , marlowe-apps
-    , marlowe-chain-sync
-    , servant-server
-    , wai
-    , warp
-
-  ghc-options:
-    -Wall -Wnoncanonical-monad-instances -Wincomplete-uni-patterns
-    -Wincomplete-record-updates -Wredundant-constraints -Widentities
-    -Wunused-packages
-
-  default-language: Haskell2010
-
 executable marlowe-streamer
   main-is:          Main.hs
   hs-source-dirs:   streamer
@@ -214,6 +194,47 @@ executable marlowe-streamer
     , time-units
     , vector
     , wai-extra
+    , warp
+
+  ghc-options:
+    -Wall -Wnoncanonical-monad-instances -Wincomplete-uni-patterns
+    -Wincomplete-record-updates -Wredundant-constraints -Widentities
+    -Wunused-packages
+
+  default-language: Haskell2010
+
+executable signing-service
+  main-is:          Main.hs
+  hs-source-dirs:   signing
+  build-depends:
+    , aeson
+    , base >=4.9 && <5
+    , cardano-api
+    , marlowe-apps
+    , marlowe-chain-sync
+    , servant-server
+    , wai
+    , warp
+
+  ghc-options:
+    -Wall -Wnoncanonical-monad-instances -Wincomplete-uni-patterns
+    -Wincomplete-record-updates -Wredundant-constraints -Widentities
+    -Wunused-packages
+
+  default-language: Haskell2010
+
+executable marlowe-proofspace
+  main-is:          Main.hs
+  hs-source-dirs:   proofspace
+  build-depends:
+    , aeson
+    , base >=4.9 && <5
+    , bytestring
+    , HsOpenSSL
+    , http-types
+    , servant
+    , servant-server
+    , wai
     , warp
 
   ghc-options:
