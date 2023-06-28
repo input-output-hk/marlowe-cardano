@@ -1,0 +1,48 @@
+.container {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+}
+
+.card {
+  margin: 15px;
+  padding: 15px;
+  border-style: solid;
+  box-shadow: 5px 10px #888888;
+}
+
+.card input {
+  width: 100%;
+}
+
+#uiInstructions {
+  max-width: 325px;
+}
+
+#uiStatus {
+  font-family: monospace;
+}
+
+h1,
+h2 {
+  text-align: center;
+}
+
+#uiStart {
+  width: 100%;
+  color: #0000f7;
+  font-weight: bold;
+  font-size: large;
+}
+
+#uiStart:disabled {
+  color: #666666;
+}
+
+body {
+  font-family: sans-serif;
+}
+
+a {
+  font-family: monospace;
+}

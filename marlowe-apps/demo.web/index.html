@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <link href="view.css" type="text/css" rel="stylesheet" />
+    <script src="controller.js" type="application/javascript"></script>
+    <title>Musical Marlowe Contract</title>
+  </head>
+  <body id="uiBody" onload="Controller.initialize()">
+    <div class="container">
+      <div id="uiInstructions" class="card">
+        <h1>Musical Marlowe</h1>
+        <ul>
+          <li>Each card represents a role in a Marlowe contract.</li>
+          <li>
+            The slider below a card represents numerical input to the Marlowe
+            contract.
+          </li>
+          <li>
+            Click on a card to transact a choice for that number to the Marlowe
+            contract.
+          </li>
+          <li>Each transaction alters the music.</li>
+          <li>Begin by starting a new contract.</li>
+        </ul>
+      </div>
+      <div id="card0" class="card">
+        <button id="role0" onclick="Controller.makeChoice(0)">
+          <img src="images/c.marlowe.png" height="200" />
+          <br /><span>Christopher Marlowe</span>
+        </button>
+        <br />
+        <input
+          id="number0"
+          type="range"
+          min="0"
+          max="100"
+          value="50"
+          class="slider"
+          id="myRange"
+        />
+      </div>
+      <div id="card1" class="card">
+        <button id="role1" onclick="Controller.makeChoice(1)">
+          <img src="images/e.cary.png" height="200" />
+          <br /><span>Elizabeth Cary</span>
+        </button>
+        <br />
+        <input
+          id="number1"
+          type="range"
+          min="0"
+          max="100"
+          value="50"
+          class="slider"
+          id="myRange"
+        />
+      </div>
+      <div id="card2" class="card">
+        <button id="role2" onclick="Controller.makeChoice(2)">
+          <img src="images/f.beaumont.png" height="200" />
+          <br /><span>Francis Beaumont</span>
+        </button>
+        <br />
+        <input
+          id="number2"
+          type="range"
+          min="0"
+          max="100"
+          value="50"
+          class="slider"
+          id="myRange"
+        />
+      </div>
+      <div id="card3" class="card">
+        <button id="role3" onclick="Controller.makeChoice(3)">
+          <img src="images/j.lumley.png" height="200" />
+          <br /><span>Jane Lumley</span>
+        </button>
+        <br />
+        <input
+          id="number3"
+          type="range"
+          min="0"
+          max="100"
+          value="50"
+          class="slider"
+          id="myRange"
+        />
+      </div>
+      <div id="card4" class="card">
+        <button id="role4" onclick="Controller.makeChoice(4)">
+          <img src="images/j.webster.png" height="200" />
+          <br /><span>John Webster</span>
+        </button>
+        <br />
+        <input
+          id="number4"
+          type="range"
+          min="0"
+          max="100"
+          value="50"
+          class="slider"
+          id="myRange"
+        />
+      </div>
+      <div id="card5" class="card">
+        <button id="role5" onclick="Controller.makeChoice(5)">
+          <img src="images/m.herbert.png" height="200" />
+          <br /><span>Mary Herbert</span>
+        </button>
+        <br />
+        <input
+          id="number5"
+          type="range"
+          min="0"
+          max="100"
+          value="50"
+          class="slider"
+          id="myRange"
+        />
+      </div>
+      <div id="card6" class="card">
+        <button id="role6" onclick="Controller.makeChoice(6)">
+          <img src="images/w.shakespeare.png" height="200" />
+          <br /><span>William Shakespeare</span>
+        </button>
+        <br />
+        <input
+          id="number6"
+          type="range"
+          min="0"
+          max="100"
+          value="50"
+          class="slider"
+          id="myRange"
+        />
+      </div>
+      <div class="card">
+        <h2>Contract Information</h2>
+        <ul>
+          <li>Network: <code id="uiNetwork">pre-production</code></li>
+          <li>Wallet: <code id="uiAddress"></code></li>
+          <li>Contract ID: <span id="uiContract"></span></li>
+          <li>Transaction ID: <span id="uiTransaction"></span></li>
+          <li>Status: <span id="uiStatus"></span></li>
+        </ul>
+        <button id="uiStart" onclick="Controller.createContract()">
+          start new contract
+        </button>
+      </div>
+    </div>
+  </body>
+</html>

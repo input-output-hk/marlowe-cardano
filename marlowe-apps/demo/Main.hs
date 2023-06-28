@@ -32,33 +32,16 @@ main = mainDemo
 
 makeContract
   :: POSIXTime
-  -> Party
   -> Writer Continuations Contract
-makeContract timeout party =
-  do
-    continuation <-
-      makeChoices timeout "Folio"
-        =<< makeChoices timeout "Play"
-        =<< makeChoices timeout "Act"
-        =<< makeChoices timeout "Scene"
-        =<< makeChoices timeout "Line"
-        =<< makeChoices timeout "Word"
-        =<< makeChoices timeout "Letter"
-            Close
-    deepMerkleize
-      $ When
-      [
-        Case (Choice (ChoiceId "Amount" party) [Bound 1 2000000])
-          $ When
-          [
-             Case (Deposit party party (Token "" "") (ChoiceValue $ ChoiceId "Amount" party))
-               continuation
-          ]
-          timeout
-          Close
-      ]
-      timeout
-      Close
+makeContract timeout =
+  makeChoices timeout "Folio"
+    =<< makeChoices timeout "Play"
+    =<< makeChoices timeout "Act"
+    =<< makeChoices timeout "Scene"
+    =<< makeChoices timeout "Line"
+    =<< makeChoices timeout "Word"
+    =<< makeChoices timeout "Letter"
+        Close
 
 
 makeChoices
@@ -70,8 +53,7 @@ makeChoices timeout choiceName continuation =
   deepMerkleize
     $ When
     [
-      Case (Notify TrueObs) continuation
-    , Case (Choice (ChoiceId choiceName $ Role "c.marlowe"    ) [Bound 0 100]) continuation
+      Case (Choice (ChoiceId choiceName $ Role "c.marlowe"    ) [Bound 0 100]) continuation
     , Case (Choice (ChoiceId choiceName $ Role "e.cary"       ) [Bound 0 100]) continuation
     , Case (Choice (ChoiceId choiceName $ Role "f.beaumont"   ) [Bound 0 100]) continuation
     , Case (Choice (ChoiceId choiceName $ Role "j.lumley"     ) [Bound 0 100]) continuation
@@ -86,11 +68,10 @@ makeChoices timeout choiceName continuation =
 mainDemo :: IO ()
 mainDemo =
   do
-    [address, now] <- getArgs
+    [now] <- getArgs
     let
-      readAddress = uncurry Address . fromJust . deserialiseAddressBech32 . pack
       deadline = POSIXTime $ read now + 2 * 3600 * 1000
-      (contract, continuations) = runWriter $ makeContract deadline $ readAddress address
+      (contract, continuations) = runWriter $ makeContract deadline
     encodeFile "contract.json" contract
     encodeFile "continuations.json" $ M.mapKeys show continuations
 
