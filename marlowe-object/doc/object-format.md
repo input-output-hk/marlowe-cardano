@@ -34,7 +34,6 @@ obj := value_obj
      | contract_obj
      | party_obj
      | token_obj
-     | timeout_obj
      | action_obj
 ```
 
@@ -59,6 +58,7 @@ An object definition is encoded as an object with a `label` property and
 ```typescript
 type ObjectDefinition = {
   label: string;
+  type: "value" | "observation" | "contract" | "party" | "token" | "action";
   value: Obj;
 };
 ```
