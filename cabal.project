@@ -41,6 +41,7 @@ packages:
   marlowe-runtime-web
   marlowe-test
 
+  libs/aeson-applicative
   libs/aeson-via-serialise
   libs/base16-aeson
   libs/plutus-ledger-aeson
