@@ -65,6 +65,14 @@ package cryptonite
 package locli
   tests: True
 
+package marlowe-object
+  tests: True
+  ghc-options: -Werror
+
+package aeson-applicative
+  tests: True
+  ghc-options: -Werror
+
 package marlowe
   tests: True
   ghc-options: -Werror

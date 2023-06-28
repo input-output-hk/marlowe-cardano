@@ -2,7 +2,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE KindSignatures #-}
 
-module Language.Marlowe.Object where
+module Language.Marlowe.Object.Types where
 
 import Cardano.Api (
   Address,
@@ -16,22 +16,29 @@ import Cardano.Api.Byron (ShelleyAddr)
 import Control.Applicative (Alternative (many))
 import Data.Aeson hiding (Object, String, Value)
 import qualified Data.Aeson as A hiding (Object)
-import Data.Aeson.Applicative (parseObject, requiredExplicit)
+import Data.Aeson.Applicative (parseObject)
 import Data.Aeson.Types (parseFail, toJSONKeyText)
 import Data.Binary (Binary (..))
 import Data.ByteString (ByteString)
 import Data.ByteString.Base16 (decodeBase16', encodeBase16)
 import qualified Data.ByteString.Char8 as BS8
+import Data.Either (fromRight)
 import Data.Foldable (asum, traverse_)
 import Data.Function (on)
 import Data.List (intercalate)
 import Data.String (IsString (..))
+import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import Data.Time (UTCTime, nominalDiffTimeToSeconds, secondsToNominalDiffTime)
 import Data.Time.Clock.POSIX (posixSecondsToUTCTime, utcTimeToPOSIXSeconds)
 import GHC.Generics (Generic)
 import GHC.Read (Read (..), lexP)
+import qualified Language.Marlowe.Core.V1.Semantics.Types as Core
+import Language.Marlowe.Core.V1.Semantics.Types.Address (serialiseAddressBech32)
+import qualified Language.Marlowe.Core.V1.Semantics.Types.Address as Core
+import Plutus.V2.Ledger.Api (BuiltinByteString, POSIXTime (..))
+import qualified Plutus.V2.Ledger.Api as PV2
 import Text.Read (Lexeme (..))
 
 newtype ObjectBundle = ObjectBundle {getObjects :: [LabelledObject]}
@@ -94,7 +101,7 @@ data Object
   deriving anyclass (Binary)
 
 newtype Label = Label {unLabel :: ByteString}
-  deriving (Show, Read, Eq, Ord)
+  deriving (Show, Read, Generic, Eq, Ord)
   deriving (IsString, FromJSON, ToJSON, FromJSONKey, ToJSONKey) via Verbatim
   deriving newtype (Binary)
 
@@ -158,6 +165,25 @@ instance FromJSON Contract where
           , ContractRef <$> "ref"
           ]
 
+fromCoreContract :: Core.Contract -> Contract
+fromCoreContract = \case
+  Core.Close -> Close
+  Core.Pay account payee token value contract ->
+    Pay
+      (fromCoreParty account)
+      (fromCorePayee payee)
+      (fromCoreToken token)
+      (fromCoreValue value)
+      (fromCoreContract contract)
+  Core.If obs a b ->
+    If (fromCoreObservation obs) (fromCoreContract a) (fromCoreContract b)
+  Core.When cases timeout contract ->
+    When (fromCoreCase <$> cases) (fromCoreTimeout timeout) (fromCoreContract contract)
+  Core.Let valueId value contract ->
+    Let (fromCoreValueId valueId) (fromCoreValue value) (fromCoreContract contract)
+  Core.Assert obs contract ->
+    Assert (fromCoreObservation obs) (fromCoreContract contract)
+
 data Case
   = Case Action Contract
   | MerkleizedCase Action ContractHash
@@ -183,6 +209,13 @@ instance FromJSON Case where
         [ Case <$> "case" <*> "then"
         , MerkleizedCase <$> "case" <*> "merkleized_then"
         ]
+
+fromCoreCase :: Core.Case Core.Contract -> Case
+fromCoreCase = \case
+  Core.Case action contract ->
+    Case (fromCoreAction action) (fromCoreContract contract)
+  Core.MerkleizedCase action hash ->
+    MerkleizedCase (fromCoreAction action) (fromCoreContractHash hash)
 
 data Action
   = Deposit AccountId Party Token Value
@@ -217,6 +250,15 @@ instance FromJSON Action where
         , Notify <$> "notify_if"
         , ActionRef <$> "ref"
         ]
+
+fromCoreAction :: Core.Action -> Action
+fromCoreAction = \case
+  Core.Deposit accountId party token val ->
+    Deposit (fromCoreParty accountId) (fromCoreParty party) (fromCoreToken token) (fromCoreValue val)
+  Core.Choice choiceId bounds ->
+    Choice (fromCoreChoiceId choiceId) (fromCoreBound <$> bounds)
+  Core.Notify obs ->
+    Notify (fromCoreObservation obs)
 
 data Value
   = AvailableMoney AccountId Token
@@ -318,6 +360,21 @@ instance Num Value where
   fromInteger = Constant
   negate = NegValue
 
+fromCoreValue :: Core.Value Core.Observation -> Value
+fromCoreValue = \case
+  Core.AvailableMoney a b -> AvailableMoney (fromCoreParty a) (fromCoreToken b)
+  Core.AddValue a b -> on AddValue fromCoreValue a b
+  Core.SubValue a b -> on SubValue fromCoreValue a b
+  Core.MulValue a b -> on MulValue fromCoreValue a b
+  Core.DivValue a b -> on DivValue fromCoreValue a b
+  Core.NegValue a -> NegValue $ fromCoreValue a
+  Core.Constant a -> Constant a
+  Core.ChoiceValue a -> ChoiceValue $ fromCoreChoiceId a
+  Core.UseValue a -> UseValue $ fromCoreValueId a
+  Core.TimeIntervalStart -> TimeIntervalStart
+  Core.TimeIntervalEnd -> TimeIntervalEnd
+  Core.Cond a b c -> Cond (fromCoreObservation a) (fromCoreValue b) (fromCoreValue c)
+
 data Observation
   = AndObs Observation Observation
   | OrObs Observation Observation
@@ -399,6 +456,20 @@ instance FromJSON Observation where
           , ObservationRef <$> "ref"
           ]
 
+fromCoreObservation :: Core.Observation -> Observation
+fromCoreObservation = \case
+  Core.AndObs a b -> on AndObs fromCoreObservation a b
+  Core.OrObs a b -> on OrObs fromCoreObservation a b
+  Core.NotObs a -> NotObs $ fromCoreObservation a
+  Core.ChoseSomething a -> ChoseSomething $ fromCoreChoiceId a
+  Core.ValueGE a b -> on ValueGE fromCoreValue a b
+  Core.ValueGT a b -> on ValueGT fromCoreValue a b
+  Core.ValueLE a b -> on ValueLE fromCoreValue a b
+  Core.ValueLT a b -> on ValueLT fromCoreValue a b
+  Core.ValueEQ a b -> on ValueEQ fromCoreValue a b
+  Core.TrueObs -> TrueObs
+  Core.FalseObs -> FalseObs
+
 type AccountId = Party
 
 data Party
@@ -422,11 +493,16 @@ instance FromJSON Party where
         , PartyRef <$> "ref"
         ]
 
+fromCoreParty :: Core.Party -> Party
+fromCoreParty = \case
+  Core.Address network addr -> Address $ fromCoreAddress network addr
+  Core.Role role -> Role $ fromCoreTokenName role
+
 newtype ShelleyAddress = ShelleyAddress {unShelleyAddress :: Address ShelleyAddr}
   deriving (Eq, Ord)
 
 instance Show ShelleyAddress where
-  show = T.unpack . serialiseToBech32 . unShelleyAddress
+  show = show . serialiseToBech32 . unShelleyAddress
 
 instance Read ShelleyAddress where
   readPrec = do
@@ -452,33 +528,45 @@ instance FromJSON ShelleyAddress where
     withText "ShelleyAddress" $
       either (parseFail . show) (pure . ShelleyAddress) . deserialiseFromBech32 (AsAddress AsShelleyAddr)
 
+fromCoreAddress :: Core.Network -> PV2.Address -> ShelleyAddress
+fromCoreAddress network addr =
+  ShelleyAddress $
+    fromRight (error "fromRight: Left") $
+      deserialiseFromBech32 (AsAddress AsShelleyAddr) $
+        serialiseAddressBech32 network addr
+
 newtype TokenName = TokenName {unTokenName :: ByteString}
-  deriving (Show, Read, Eq, Ord)
+  deriving (Show, Generic, Read, Eq, Ord)
   deriving (IsString, FromJSON, ToJSON, FromJSONKey, ToJSONKey) via Verbatim
   deriving newtype (Binary)
 
-data ChoiceId = ChoiceId ByteString Party
+fromCoreTokenName :: PV2.TokenName -> TokenName
+fromCoreTokenName = TokenName . PV2.fromBuiltin . PV2.unTokenName
+
+data ChoiceId = ChoiceId Text Party
   deriving stock (Show, Read, Generic, Eq, Ord)
   deriving anyclass (Binary)
 
 instance ToJSON ChoiceId where
   toJSON (ChoiceId name party) =
     object
-      [ "choice_name" .= (A.String $ T.decodeUtf8 name)
+      [ "choice_name" .= name
       , "choice_owner" .= party
       ]
 
 instance FromJSON ChoiceId where
-  parseJSON =
-    parseObject "Payee" $
-      ChoiceId
-        <$> requiredExplicit "choice_name" (withText "" $ pure . T.encodeUtf8)
-        <*> "choice_owner"
+  parseJSON = parseObject "Payee" $ ChoiceId <$> "choice_name" <*> "choice_owner"
+
+fromCoreChoiceId :: Core.ChoiceId -> ChoiceId
+fromCoreChoiceId (Core.ChoiceId name owner) = ChoiceId (T.decodeUtf8 $ PV2.fromBuiltin name) (fromCoreParty owner)
 
 newtype ValueId = ValueId {unValueId :: ByteString}
-  deriving (Show, Read, Eq, Ord)
+  deriving (Show, Generic, Read, Eq, Ord)
   deriving (IsString, FromJSON, ToJSON, FromJSONKey, ToJSONKey) via Verbatim
   deriving newtype (Binary)
+
+fromCoreValueId :: Core.ValueId -> ValueId
+fromCoreValueId (Core.ValueId bs) = ValueId $ PV2.fromBuiltin bs
 
 data Payee
   = Party !Party
@@ -497,6 +585,11 @@ instance FromJSON Payee where
         [ Party <$> "party"
         , Account <$> "account"
         ]
+
+fromCorePayee :: Core.Payee -> Payee
+fromCorePayee = \case
+  Core.Account acc -> Account $ fromCoreParty acc
+  Core.Party p -> Party $ fromCoreParty p
 
 data Token
   = Token CurrencySymbol TokenName
@@ -520,19 +613,28 @@ instance FromJSON Token where
         , TokenRef <$> "ref"
         ]
 
+fromCoreToken :: Core.Token -> Token
+fromCoreToken (Core.Token cs tokName) = Token (fromCoreCurrencySymbol cs) (fromCoreTokenName tokName)
+
 newtype CurrencySymbol = CurrencySymbol {unCurrencySymbol :: ByteString}
   deriving newtype (Eq, Ord, Binary)
   deriving (Show, Read, IsString, ToJSON, FromJSON) via Base16
+
+fromCoreCurrencySymbol :: PV2.CurrencySymbol -> CurrencySymbol
+fromCoreCurrencySymbol = CurrencySymbol . PV2.fromBuiltin . PV2.unCurrencySymbol
 
 newtype ContractHash = ContractHash {unContractHash :: ByteString}
   deriving newtype (Eq, Ord, Binary)
   deriving (Show, Read, IsString, ToJSON, FromJSON) via Base16
 
+fromCoreContractHash :: BuiltinByteString -> ContractHash
+fromCoreContractHash = ContractHash . PV2.fromBuiltin
+
 newtype Base16 = Base16 {unBase16 :: ByteString}
   deriving (Eq, Ord)
 
 instance Show Base16 where
-  show = T.unpack . encodeBase16 . unBase16
+  show = show . encodeBase16 . unBase16
 
 instance Read Base16 where
   readPrec = do
@@ -583,6 +685,9 @@ instance FromJSON Bound where
     to <- obj .: "to"
     pure $ Bound from to
 
+fromCoreBound :: Core.Bound -> Bound
+fromCoreBound (Core.Bound lo hi) = Bound lo hi
+
 newtype Timeout = Timeout {unTimeout :: UTCTime}
   deriving stock (Generic, Show, Read, Eq, Ord)
 
@@ -628,3 +733,6 @@ instance ToJSON Timeout where
 
 instance FromJSON Timeout where
   parseJSON v = Timeout . posixSecondsToUTCTime . secondsToNominalDiffTime . (/ 1000000) . fromInteger <$> parseJSON v
+
+fromCoreTimeout :: Core.Timeout -> Timeout
+fromCoreTimeout = Timeout . posixSecondsToUTCTime . secondsToNominalDiffTime . (/ 1000000) . fromInteger . getPOSIXTime
