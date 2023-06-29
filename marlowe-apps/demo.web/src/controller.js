@@ -232,6 +232,7 @@ async function buildTransaction(operation, req, url, accept, followup) {
 
 export async function createContract() {
   enableStart(false);
+  enableCards(false, true);
   uiTransaction.innerText = "";
   buildTransaction(
     "create",
@@ -253,7 +254,7 @@ export async function createContract() {
       contractUrl = runtimeUrl + "/" + res.links.contract;
       const followup = function () {
         setTx(contractId.replace(/#.*$/, ""));
-        enableCards(true);
+        enableCards(true, false);
       };
       setStatus("Submitting transaction.");
       if (useNami)
@@ -297,7 +298,7 @@ async function applyInputs(operation, inputs, followup) {
 }
 
 export async function makeChoice(i) {
-  enableCards(false);
+  enableCards(false, true);
   uiTransaction.innerText = "";
   setStatus("Submitting transaction.");
   let input = {};
@@ -328,7 +329,7 @@ export async function makeChoice(i) {
   const followup = function (tx) {
     return function () {
       setTx(tx);
-      enableCards(currentContract != null);
+      enableCards(currentContract != null, false);
       if (currentContract == null) {
         setStatus("Contract complete.");
         enableStart(true);
@@ -338,19 +339,24 @@ export async function makeChoice(i) {
   applyInputs("choice", [input], followup);
 }
 
-export function enableCards(state) {
-  uiRoles.forEach((e) => (e.disabled = !state));
-  uiNumbers.forEach((e) => (e.disabled = !state));
-  const cursor = state ? "default" : "wait";
+export function enableCards(enable, wait) {
+  uiRoles.forEach((e) => (e.disabled = !enable));
+  uiNumbers.forEach((e) => (e.disabled = !enable));
+  const cursor = wait ? "wait" : "default";
+  const buttonCursor = wait ? "wait" : enable ? "default" : "not-allowed";
   uiBody.style.cursor = cursor;
-  uiRoles.forEach((e) => (e.style.cursor = cursor));
-  uiNumbers.forEach((e) => (e.style.cursor = cursor));
-  uiStart.style.cursor = uiStart.disabled ? "wait" : "default";
+  uiRoles.forEach((e) => (e.style.cursor = buttonCursor));
+  uiNumbers.forEach((e) => (e.style.cursor = buttonCursor));
+  uiStart.style.cursor = uiStart.disabled
+    ? wait
+      ? "wait"
+      : "not-allowed"
+    : "default";
 }
 
 export function enableStart(state) {
   uiStart.disabled = !state;
-  uiStart.style.cursor = uiStart.disabled ? "wait" : "default";
+  uiStart.style.cursor = uiStart.disabled ? "not-allowed" : "default";
 }
 
 export function initialize() {
@@ -393,6 +399,6 @@ export function initialize() {
     document.getElementById("number" + k)
   );
   uiNumbers.forEach((e) => (e.value = 100 * Math.random()));
-  enableCards(false);
+  enableCards(false, false);
   setStatus("Ready to create contract.");
 }

@@ -25,7 +25,7 @@ app.use("/", router);
 
 app.use(express.static("."));
 
-const port = process.env.PORT || 3000;
+const port = process.env.PORT || 1593;
 app.listen(port);
 
 console.log(`Running at Port ${port}`);
