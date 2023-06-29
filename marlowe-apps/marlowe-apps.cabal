@@ -117,19 +117,21 @@ executable marlowe-oracle
   other-modules:
     Language.Marlowe.Oracle.Detect
     Language.Marlowe.Oracle.Process
+    Language.Marlowe.Oracle.Types
     Network.Oracle
     Network.Oracle.CoinGecko
+    Network.Oracle.Random
     Network.Oracle.Sofr
 
   build-depends:
     , aeson
     , base >=4.9 && <5
+    , base16-aeson
     , bytestring
     , cardano-api
     , eventuo11y >=0.9 && <0.11
     , eventuo11y-dsl ^>=0.2
     , eventuo11y-json ^>=0.3
-    , extra
     , http-client
     , http-client-tls
     , marlowe-apps
@@ -139,6 +141,7 @@ executable marlowe-oracle
     , mtl
     , optparse-applicative
     , plutus-ledger-api
+    , process
     , servant
     , servant-client
     , text

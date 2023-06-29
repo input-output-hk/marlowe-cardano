@@ -1,9 +1,16 @@
-
-
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TupleSections #-}
 
+<<<<<<< HEAD
+module Language.Marlowe.Oracle.Detect (
+  containsOracleAction,
+  contractReadyForOracle,
+  hasOracleAction,
+  oraclePresent,
+  oracleReady,
+) where
+=======
 
 module Language.Marlowe.Oracle.Detect
   ( containsOracleAction
@@ -15,15 +22,22 @@ module Language.Marlowe.Oracle.Detect
   , choiceName'
   ) where
 
+>>>>>>> a613caaeb (PLT-5726 Added random oracle and provid bound and continuations to oracles.)
 
 import Data.Maybe (mapMaybe, maybeToList)
+<<<<<<< HEAD
+import Language.Marlowe.Core.V1.Plate (extract, extractAll)
+import Language.Marlowe.Core.V1.Semantics.Types (Action (Choice), ChoiceId (..), Contract, Party)
+import Language.Marlowe.Runtime.App.Stream (ContractStream (..), contractFromStream)
+import Language.Marlowe.Runtime.Core.Api (MarloweVersionTag (V1))
+=======
 import Language.Marlowe.Core.V1.Plate (extractAll)
 import Language.Marlowe.Core.V1.Semantics.Types (Action(Choice), ChoiceId(..), Contract(When), Party, Case(..))
 import Language.Marlowe.Runtime.App.Stream (ContractStream(..), contractFromStream)
 import Language.Marlowe.Runtime.Core.Api (MarloweVersionTag(V1))
 import Language.Marlowe.Oracle.Types (OracleRequest(..), choiceName')
+>>>>>>> a613caaeb (PLT-5726 Added random oracle and provid bound and continuations to oracles.)
 import Network.Oracle (Oracle, toOracleSymbol)
-
 
 hasOracleAction
   :: Party
@@ -35,13 +49,17 @@ hasOracleAction oracleParty (MerkleizedCase (Choice (ChoiceId choiceName choiceP
   | oracleParty == choiceParty = let continuation = Left continuation' in pure OracleRequest{..}
 hasOracleAction _ _ = mempty
 
-
 contractReadyForOracle
   :: Party
   -> Contract
+<<<<<<< HEAD
+  -> [String]
+contractReadyForOracle = (. extract) . foldMap . hasOracleAction
+=======
   -> [OracleRequest]
 contractReadyForOracle party (When cs _ _) = concatMap (hasOracleAction party) cs
 contractReadyForOracle _ _ = mempty
+>>>>>>> a613caaeb (PLT-5726 Added random oracle and provid bound and continuations to oracles.)
 
 containsOracleAction
   :: Party
@@ -49,6 +67,8 @@ containsOracleAction
   -> [OracleRequest]
 containsOracleAction = (. extractAll) . foldMap . hasOracleAction
 
+<<<<<<< HEAD
+=======
 
 toOracleSymbol'
   :: OracleRequest
@@ -59,6 +79,7 @@ toOracleSymbol' oracleRequest =
     $ choiceName' oracleRequest
 
 
+>>>>>>> a613caaeb (PLT-5726 Added random oracle and provid bound and continuations to oracles.)
 oraclePresent
   :: Party
   -> ContractStream 'V1
@@ -68,7 +89,6 @@ oraclePresent party =
     . concatMap (containsOracleAction party)
     . maybeToList
     . contractFromStream
-
 
 oracleReady
   :: Party
