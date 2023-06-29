@@ -9,6 +9,7 @@ import Control.Monad (join)
 import Data.Aeson (ToJSON (toJSON))
 import Data.Binary (Binary (..), getWord8, putWord8)
 import qualified Data.List.NonEmpty as NE
+import Data.Map (Map)
 import Data.String (fromString)
 import Language.Marlowe.Object.Types
 import Language.Marlowe.Protocol.Load.Types (jsonToPrimitiveAttribute)
@@ -32,8 +33,8 @@ data MarloweTransfer where
 
 instance Protocol MarloweTransfer where
   data Message MarloweTransfer st st' where
-    MsgTransfer :: LabelledObject -> Message MarloweTransfer 'StIdle 'StTransfer
-    MsgTransferred :: DatumHash -> Message MarloweTransfer 'StTransfer 'StIdle
+    MsgTransfer :: ObjectBundle -> Message MarloweTransfer 'StIdle 'StTransfer
+    MsgTransferred :: Map Label DatumHash -> Message MarloweTransfer 'StTransfer 'StIdle
     MsgTransferFailed :: LinkError -> Message MarloweTransfer 'StTransfer 'StDone
     MsgDone :: Message MarloweTransfer 'StIdle 'StDone
 
@@ -69,14 +70,14 @@ deriving instance Ord (NobodyHasAgency (st :: MarloweTransfer))
 instance BinaryMessage MarloweTransfer where
   putMessage = \case
     ClientAgency TokIdle -> \case
-      MsgTransfer obj -> do
+      MsgTransfer bundle -> do
         putWord8 0
-        put obj
+        put bundle
       MsgDone -> putWord8 1
     ServerAgency TokTransfer -> \case
-      MsgTransferred hash -> do
+      MsgTransferred hashes -> do
         putWord8 0
-        put hash
+        put hashes
       MsgTransferFailed err -> do
         putWord8 1
         put err
@@ -96,10 +97,10 @@ instance OTelProtocol MarloweTransfer where
   protocolName _ = "marlowe_transfer"
   messageAttributes = \case
     ClientAgency TokIdle -> \case
-      MsgTransfer obj ->
+      MsgTransfer bundle ->
         MessageAttributes
           { messageType = "transfer"
-          , messageParameters = [jsonToPrimitiveAttribute $ toJSON obj]
+          , messageParameters = [jsonToPrimitiveAttribute $ toJSON bundle]
           }
       MsgDone ->
         MessageAttributes
@@ -107,10 +108,10 @@ instance OTelProtocol MarloweTransfer where
           , messageParameters = []
           }
     ServerAgency TokTransfer -> \case
-      MsgTransferred hash ->
+      MsgTransferred hashes ->
         MessageAttributes
           { messageType = "transferred"
-          , messageParameters = [fromString $ read $ show hash]
+          , messageParameters = [fromString $ read $ show hashes]
           }
       MsgTransferFailed err ->
         MessageAttributes
@@ -120,11 +121,11 @@ instance OTelProtocol MarloweTransfer where
 
 instance MessageEq MarloweTransfer where
   messageEq (AnyMessageAndAgency _ msg) (AnyMessageAndAgency _ msg') = case msg of
-    MsgTransfer obj -> case msg' of
-      MsgTransfer obj' -> obj == obj'
+    MsgTransfer bundle -> case msg' of
+      MsgTransfer bundle' -> bundle == bundle'
       _ -> False
-    MsgTransferred hash -> case msg' of
-      MsgTransferred hash' -> hash == hash'
+    MsgTransferred hashes -> case msg' of
+      MsgTransferred hashes' -> hashes == hashes'
       _ -> False
     MsgTransferFailed err -> case msg' of
       MsgTransferFailed err' -> err == err'

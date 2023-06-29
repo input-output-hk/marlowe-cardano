@@ -65,6 +65,23 @@ library
     , text >=1.2.4 && <2
     , time >=1.9 && <2
 
+library gen
+  import:          lang
+  hs-source-dirs:  gen
+  exposed-modules: Language.Marlowe.Object.Gen
+  build-depends:
+    , base >=4.9 && <5
+    , bytestring >=0.10.12 && <0.12
+    , cardano-api:gen ==1.35.4
+    , hedgehog-quickcheck ^>=0.1
+    , lens >=5.2 && <6
+    , marlowe-object ==0.1.0.0
+    , marlowe-test ==0.1.2.0
+    , QuickCheck >=2.14 && <3
+    , quickcheck-instances ^>=0.3.29
+
+  visibility:      public
+
 test-suite marlowe-object-test
   import:             lang
   hs-source-dirs:     test
@@ -76,15 +93,10 @@ test-suite marlowe-object-test
     , base >=4.9 && <5
     , binary ^>=0.8.8
     , bytestring >=0.10.12 && <0.12
-    , cardano-api:gen ==1.35.4
-    , hedgehog-quickcheck ^>=0.1
     , hspec
-    , lens
-    , marlowe-object
-    , marlowe-test ==0.1.2.0
+    , marlowe-object:{marlowe-object, gen}
     , QuickCheck >=2.14 && <3
     , quickcheck-classes
-    , quickcheck-instances ^>=0.3.29
 
   build-tool-depends: hspec-discover:hspec-discover
   ghc-options:        -threaded

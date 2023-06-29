@@ -16,6 +16,7 @@ import Cardano.Api (
  )
 import Cardano.Api.Byron (ShelleyAddr)
 import Control.Applicative (Alternative (many), empty)
+import Control.Monad (join)
 import Data.Aeson hiding (Object, String, Value)
 import qualified Data.Aeson as A hiding (Object)
 import Data.Aeson.Applicative (parseObject)
@@ -44,7 +45,7 @@ import GHC.Show (showSpace)
 import qualified Language.Marlowe.Core.V1.Semantics.Types as Core
 import Language.Marlowe.Core.V1.Semantics.Types.Address (serialiseAddressBech32)
 import qualified Language.Marlowe.Core.V1.Semantics.Types.Address as Core
-import Network.Protocol.Codec.Spec (Variations (..))
+import Network.Protocol.Codec.Spec (Variations (..), varyAp)
 import Plutus.V2.Ledger.Api (BuiltinByteString, POSIXTime (..))
 import qualified Plutus.V2.Ledger.Api as PV2
 import Text.Read (Lexeme (..), ReadPrec, parens, prec, reset, step)
@@ -397,7 +398,7 @@ data Contract
   | Assert Observation Contract
   | ContractRef Label
   deriving stock (Show, Read, Generic, Eq, Ord)
-  deriving anyclass (Binary, Variations)
+  deriving anyclass (Binary)
 
 instance ToJSON Contract where
   toJSON Close = "close"
@@ -471,7 +472,7 @@ data Case
   = Case Action Contract
   | MerkleizedCase Action ContractHash
   deriving stock (Show, Read, Generic, Eq, Ord)
-  deriving anyclass (Binary, Variations)
+  deriving anyclass (Binary)
 
 instance ToJSON Case where
   toJSON (Case act cont) =
@@ -558,7 +559,7 @@ data Value
   | Cond Observation Value Value
   | ValueRef Label
   deriving stock (Show, Read, Generic, Eq, Ord)
-  deriving anyclass (Binary, Variations)
+  deriving anyclass (Binary)
 
 instance ToJSON Value where
   toJSON (AvailableMoney accountId token) =
@@ -672,7 +673,7 @@ data Observation
   | FalseObs
   | ObservationRef Label
   deriving stock (Show, Read, Generic, Eq, Ord)
-  deriving anyclass (Binary, Variations)
+  deriving anyclass (Binary)
 
 instance ToJSON Observation where
   toJSON (AndObs lhs rhs) =
@@ -794,7 +795,10 @@ instance Read ShelleyAddress where
     pure $ ShelleyAddress addr
 
 instance IsString ShelleyAddress where
-  fromString = read
+  fromString =
+    either (error . mappend "ShelleyAddress.fromString: bad address: " . show) ShelleyAddress
+      . deserialiseFromBech32 (AsAddress AsShelleyAddr)
+      . T.pack
 
 instance Binary ShelleyAddress where
   put = put . serialiseToRawBytes . unShelleyAddress
@@ -1026,3 +1030,62 @@ instance FromJSON Timeout where
 
 fromCoreTimeout :: Core.Timeout -> Timeout
 fromCoreTimeout = Timeout . posixSecondsToUTCTime . secondsToNominalDiffTime . (/ 1000000) . fromInteger . getPOSIXTime
+
+-- The following require manual instances to avoid infinite recursion.
+instance Variations Contract where
+  variations =
+    join $
+      LNE.fromList
+        [ pure Close
+        , Pay <$> variations `varyAp` variations `varyAp` variations `varyAp` variations <*> pure Close
+        , If <$> variations <*> pure Close <*> pure Close
+        , When <$> variations `varyAp` variations <*> pure Close
+        , Let <$> variations `varyAp` variations <*> pure Close
+        , Assert <$> variations <*> pure Close
+        , ContractRef <$> variations
+        ]
+
+instance Variations Case where
+  variations =
+    join $
+      LNE.fromList
+        [ Case <$> variations <*> pure Close
+        , MerkleizedCase <$> variations `varyAp` variations
+        ]
+
+instance Variations Observation where
+  variations =
+    join $
+      LNE.fromList
+        [ pure $ AndObs FalseObs FalseObs
+        , pure $ OrObs FalseObs FalseObs
+        , pure $ NotObs FalseObs
+        , ChoseSomething <$> variations
+        , pure $ ValueGE TimeIntervalStart TimeIntervalStart
+        , pure $ ValueLE TimeIntervalStart TimeIntervalStart
+        , pure $ ValueGT TimeIntervalStart TimeIntervalStart
+        , pure $ ValueLT TimeIntervalStart TimeIntervalStart
+        , pure $ ValueEQ TimeIntervalStart TimeIntervalStart
+        , pure FalseObs
+        , pure TrueObs
+        , ObservationRef <$> variations
+        ]
+
+instance Variations Value where
+  variations =
+    join $
+      LNE.fromList
+        [ AvailableMoney <$> variations `varyAp` variations
+        , Constant <$> variations
+        , pure $ NegValue (Constant 1)
+        , pure $ AddValue (Constant 1) (Constant 1)
+        , pure $ SubValue (Constant 1) (Constant 1)
+        , pure $ MulValue (Constant 1) (Constant 1)
+        , pure $ DivValue (Constant 1) (Constant 1)
+        , ChoiceValue <$> variations
+        , pure TimeIntervalStart
+        , pure TimeIntervalEnd
+        , UseValue <$> variations
+        , pure $ Cond FalseObs (Constant 1) (Constant 1)
+        , ValueRef <$> variations
+        ]

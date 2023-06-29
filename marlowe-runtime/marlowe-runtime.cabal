@@ -699,6 +699,7 @@ test-suite marlowe-runtime-test
     Language.Marlowe.Protocol.LoadSpec
     Language.Marlowe.Protocol.QuerySpec
     Language.Marlowe.Protocol.SyncSpec
+    Language.Marlowe.Protocol.TransferSpec
     Language.Marlowe.Runtime.Core.MetadataSpec
     Language.Marlowe.Runtime.Core.ScriptRegistrySpec
     Language.Marlowe.Runtime.Transaction.ApiSpec
@@ -721,6 +722,7 @@ test-suite marlowe-runtime-test
     , http-media ^>=0.8
     , marlowe-cardano ==0.1.1.0
     , marlowe-chain-sync:{marlowe-chain-sync, gen, plutus-compat} ==0.0.2
+    , marlowe-object:gen
     , marlowe-protocols ==0.1.1.0
     , marlowe-runtime:{marlowe-runtime, contract-api, discovery-api, gen, history-api, sync-api, tx, tx-api} ==0.0.2
     , marlowe-test ==0.1.2.0
