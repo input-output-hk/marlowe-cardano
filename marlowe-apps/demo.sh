@@ -3,7 +3,7 @@
 set -evo pipefail
 
 
-. /extra/iohk/networks/preprod/configure.env
+. ../../networks/preprod/configure.env
 
 export PATH=$MARLOWE_BIN:$PATH
 

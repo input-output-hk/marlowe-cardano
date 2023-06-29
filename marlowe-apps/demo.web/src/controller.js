@@ -20,7 +20,7 @@ const nRoles = roles.length;
 let uiRoles = [];
 let uiNumbers = [];
 
-const runtimeUrl = "http://192.168.0.12:13780";
+const runtimeUrl = "http://services.marlowe.run:13780";
 
 var nami = null;
 
