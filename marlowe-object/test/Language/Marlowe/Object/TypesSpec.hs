@@ -1,3 +1,4 @@
+{-# LANGUAGE GADTs #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 module Language.Marlowe.Object.TypesSpec (spec) where
@@ -7,7 +8,7 @@ import Control.Monad (replicateM)
 import Data.Aeson (Result (Success), ToJSON (..), fromJSON)
 import Data.Binary (Binary, decode, encode)
 import qualified Data.ByteString as BS
-import Data.Foldable (traverse_)
+import Data.Foldable (Foldable (fold), traverse_)
 import Data.Function ((&))
 import Data.Proxy (Proxy (..))
 import Gen.Cardano.Api.Typed (genAddressShelley)
@@ -15,7 +16,7 @@ import Language.Marlowe.Object.Types
 import Spec.Marlowe.Semantics.Arbitrary ()
 import Test.Hspec
 import Test.Hspec.QuickCheck (prop)
-import Test.QuickCheck hiding (Success)
+import Test.QuickCheck hiding (Success, label)
 import Test.QuickCheck.Classes (Laws (..), eqLaws, jsonLaws, ordLaws, showLaws, showReadLaws)
 import Test.QuickCheck.Hedgehog (hedgehog)
 import Test.QuickCheck.Instances ()
@@ -23,12 +24,16 @@ import Test.QuickCheck.Instances ()
 spec :: Spec
 spec = do
   describe "ObjectBundle" do
-    checkLaws $ eqLaws $ Proxy @ObjectBundle
-    checkLaws $ ordLaws $ Proxy @ObjectBundle
-    checkLaws $ jsonLaws $ Proxy @ObjectBundle
-    checkLaws $ showLaws $ Proxy @ObjectBundle
-    checkLaws $ showReadLaws $ Proxy @ObjectBundle
+    -- Testing hand-written Binary instance only. Other instances are derived
+    -- and expensive to run.
     checkLaws $ binaryLaws $ Proxy @ObjectBundle
+
+  describe "LabelledObject" do
+    checkLaws $ eqLaws $ Proxy @LabelledObject
+    checkLaws $ ordLaws $ Proxy @LabelledObject
+    checkLaws $ jsonLaws $ Proxy @LabelledObject
+    checkLaws $ showLaws $ Proxy @LabelledObject
+    checkLaws $ showReadLaws $ Proxy @LabelledObject
 
   describe "Contract" do
     prop "Can decode JSON generated from core contracts" \contract ->
@@ -52,9 +57,39 @@ instance Arbitrary ObjectBundle where
   arbitrary = ObjectBundle <$> arbitrary
   shrink = genericShrink
 
+instance Arbitrary SomeObjectType where
+  arbitrary =
+    elements
+      [ SomeObjectType ValueType
+      , SomeObjectType ObservationType
+      , SomeObjectType ContractType
+      , SomeObjectType PartyType
+      , SomeObjectType TokenType
+      , SomeObjectType ActionType
+      ]
+
 instance Arbitrary LabelledObject where
-  arbitrary = LabelledObject <$> arbitrary <*> arbitrary
-  shrink = genericShrink
+  arbitrary = do
+    label :: Label <- arbitrary
+    type_ <- arbitrary
+    case type_ of
+      SomeObjectType ValueType -> LabelledObject label ValueType <$> arbitrary
+      SomeObjectType ObservationType -> LabelledObject label ObservationType <$> arbitrary
+      SomeObjectType ContractType -> LabelledObject label ContractType <$> arbitrary
+      SomeObjectType PartyType -> LabelledObject label PartyType <$> arbitrary
+      SomeObjectType TokenType -> LabelledObject label TokenType <$> arbitrary
+      SomeObjectType ActionType -> LabelledObject label ActionType <$> arbitrary
+  shrink LabelledObject{..} =
+    fold
+      [ [LabelledObject{label = label', ..} | label' <- shrink label]
+      , case type_ of
+          ValueType -> [LabelledObject{value = value', ..} | value' <- shrink value]
+          ObservationType -> [LabelledObject{value = value', ..} | value' <- shrink value]
+          ContractType -> [LabelledObject{value = value', ..} | value' <- shrink value]
+          PartyType -> [LabelledObject{value = value', ..} | value' <- shrink value]
+          TokenType -> [LabelledObject{value = value', ..} | value' <- shrink value]
+          ActionType -> [LabelledObject{value = value', ..} | value' <- shrink value]
+      ]
 
 instance Arbitrary Object where
   arbitrary =

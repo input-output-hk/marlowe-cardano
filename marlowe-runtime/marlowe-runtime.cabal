@@ -224,6 +224,7 @@ library contract-api
     Language.Marlowe.Protocol.Load.Client
     Language.Marlowe.Protocol.Load.Server
     Language.Marlowe.Protocol.Load.Types
+    Language.Marlowe.Protocol.Transfer.Types
     Language.Marlowe.Runtime.Contract.Api
 
   build-depends:
@@ -235,6 +236,7 @@ library contract-api
     , hs-opentelemetry-api ==0.0.3.6
     , marlowe-cardano ==0.1.1.0
     , marlowe-chain-sync ==0.0.2
+    , marlowe-object ==0.1.0.0
     , marlowe-protocols ==0.1.1.0
     , marlowe-runtime ==0.0.2
     , plutus-ledger-api ==1.0.0.1
