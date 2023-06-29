@@ -9,12 +9,12 @@ import Language.Marlowe.Runtime.ChainSync.Gen ()
 import Network.Protocol.Codec.Spec
 import Network.TypedProtocol
 import Network.TypedProtocol.Codec
-import Test.Hspec (Spec, describe, focus)
+import Test.Hspec (Spec, describe)
 import Test.Hspec.QuickCheck (prop)
 import Test.QuickCheck hiding (shrinkMap)
 
 spec :: Spec
-spec = focus do
+spec = do
   describe "MarloweTransfer protocol" do
     prop "Has a lawful codec" $ checkPropCodec @MarloweTransfer
     codecGoldenTests @MarloweTransfer "MarloweTransfer"
@@ -29,7 +29,7 @@ instance ArbitraryMessage MarloweTransfer where
       ]
 
   shrinkMessage _ = \case
-    MsgTransfer obj -> MsgTransfer <$> shrink obj
-    MsgTransferred hash -> MsgTransferred <$> shrink hash
+    MsgTransfer bundle -> MsgTransfer <$> shrink bundle
+    MsgTransferred hashes -> MsgTransferred <$> shrink hashes
     MsgTransferFailed err -> MsgTransferFailed <$> shrink err
     MsgDone -> []

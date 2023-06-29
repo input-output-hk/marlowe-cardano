@@ -224,6 +224,8 @@ library contract-api
     Language.Marlowe.Protocol.Load.Client
     Language.Marlowe.Protocol.Load.Server
     Language.Marlowe.Protocol.Load.Types
+    Language.Marlowe.Protocol.Transfer.Client
+    Language.Marlowe.Protocol.Transfer.Server
     Language.Marlowe.Protocol.Transfer.Types
     Language.Marlowe.Runtime.Contract.Api
 
