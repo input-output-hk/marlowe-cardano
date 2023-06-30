@@ -13,7 +13,7 @@
 module Language.Marlowe.Runtime.Web.Server.DTO where
 
 import Cardano.Api (
-  AsType (AsTx, AsTxBody),
+  AsType (AsStakeAddress, AsTx, AsTxBody),
   HasTextEnvelope,
   HasTypeProxy,
   IsCardanoEra (cardanoEra),
@@ -26,6 +26,7 @@ import Cardano.Api (
   TextEnvelopeType (..),
   Tx,
   TxBody,
+  deserialiseAddress,
   deserialiseFromCBOR,
   deserialiseFromTextEnvelope,
   getTxId,
@@ -36,7 +37,7 @@ import Cardano.Api (
  )
 import Cardano.Api.Byron (HasTextEnvelope (textEnvelopeType))
 import Cardano.Api.SerialiseTextEnvelope (TextEnvelopeDescr (..))
-import Cardano.Api.Shelley (ShelleyLedgerEra)
+import Cardano.Api.Shelley (ShelleyLedgerEra, StakeAddress (..), fromShelleyStakeCredential)
 import qualified Cardano.Binary as Binary
 import qualified Cardano.Ledger.Alonzo.Scripts as Ledger.Alonzo.Scripts
 import Cardano.Ledger.Alonzo.TxWitness (TxWitness)
@@ -534,6 +535,18 @@ instance ToDTO Chain.Address where
 
 instance FromDTO Chain.Address where
   fromDTO = Chain.fromBech32 . Web.unAddress
+
+instance HasDTO Chain.StakeCredential where
+  type DTO Chain.StakeCredential = Web.StakeAddress
+
+-- Note that `instance ToDTO Chain.StakeCredential` is not possible because the stake
+-- credential does not contain the network information needed for the stake address.
+
+instance FromDTO Chain.StakeCredential where
+  fromDTO =
+    fmap (\(StakeAddress _ credential) -> Chain.fromCardanoStakeCredential $ fromShelleyStakeCredential credential)
+      . deserialiseAddress AsStakeAddress
+      . Web.unStakeAddress
 
 instance HasDTO (TxBody era) where
   type DTO (TxBody era) = Web.TextEnvelope

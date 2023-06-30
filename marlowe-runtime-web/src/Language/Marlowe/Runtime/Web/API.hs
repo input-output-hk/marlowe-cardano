@@ -188,8 +188,12 @@ instance HasNamedLink (CreateTxEnvelope tx) API "contract" where
 
 -- | POST /contracts sub-API
 type PostContractsAPI =
-  ReqBody '[JSON] PostContractsRequest :> PostTxAPI (PostCreated '[JSON] (PostContractsResponse CardanoTxBody))
-    :<|> ReqBody '[JSON] PostContractsRequest :> PostTxAPI (PostCreated '[TxJSON ContractTx] (PostContractsResponse CardanoTx))
+  ReqBody '[JSON] PostContractsRequest
+    :> Header "X-Stake-Address" StakeAddress
+    :> PostTxAPI (PostCreated '[JSON] (PostContractsResponse CardanoTxBody))
+    :<|> ReqBody '[JSON] PostContractsRequest
+      :> Header "X-Stake-Address" StakeAddress
+      :> PostTxAPI (PostCreated '[TxJSON ContractTx] (PostContractsResponse CardanoTx))
 
 -- | /contracts/:contractId sup-API
 type ContractAPI =

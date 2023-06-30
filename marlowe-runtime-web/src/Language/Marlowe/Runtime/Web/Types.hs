@@ -128,6 +128,20 @@ instance ToParamSchema Address where
       & OpenApi.description ?~ "A cardano address"
       & example ?~ "addr1w94f8ywk4fg672xasahtk4t9k6w3aql943uxz5rt62d4dvq8evxaf"
 
+newtype StakeAddress = StakeAddress {unStakeAddress :: T.Text}
+  deriving (Eq, Ord, Generic)
+  deriving newtype (Show, ToHttpApiData, FromHttpApiData, ToJSON, FromJSON)
+
+instance ToSchema StakeAddress where
+  declareNamedSchema = pure . NamedSchema (Just "StakeAddress") . toParamSchema
+
+instance ToParamSchema StakeAddress where
+  toParamSchema _ =
+    mempty
+      & type_ ?~ OpenApiString
+      & OpenApi.description ?~ "A cardano stake address"
+      & example ?~ "stake1ux7lyy9nhecm033qsmel9awnr22up6jadlzkrxufr78w82gsfsn0d"
+
 newtype CommaList a = CommaList {unCommaList :: [a]}
   deriving (Eq, Ord, Generic, Functor)
   deriving newtype (Show, ToJSON, FromJSON, IsList)
