@@ -1,30 +1,24 @@
-
-
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeOperators #-}
 
+module Network.Oracle.Random (
+  RandomApi,
+  fetchRandom,
+  getRandom,
+  randomEnv,
+  randomApi,
+) where
 
-module Network.Oracle.Random
-  ( RandomApi
-  , fetchRandom
-  , getRandom
-  , randomEnv
-  , randomApi
-  ) where
-
-
-import Data.Proxy (Proxy(Proxy))
+import Data.Proxy (Proxy (Proxy))
 import Data.Text (Text, unpack)
-import Text.Read (readMaybe)
 import Network.HTTP.Client (Manager)
-import Servant.API (Get, PlainText, (:>), QueryParam', Required)
+import Servant.API (Get, PlainText, QueryParam', Required, (:>))
 import Servant.Client (ClientEnv, ClientM, client, mkClientEnv, parseBaseUrl, runClientM)
-
+import Text.Read (readMaybe)
 
 randomEnv :: Manager -> IO ClientEnv
 randomEnv manager = mkClientEnv manager <$> parseBaseUrl "https://www.random.org"
-
 
 type RandomApi =
   "integers"
@@ -37,10 +31,8 @@ type RandomApi =
     :> QueryParam' '[Required] "max" Integer
     :> Get '[PlainText] Text
 
-
 randomApi :: Proxy RandomApi
 randomApi = Proxy
-
 
 getRandom
   :: Integer
@@ -51,7 +43,6 @@ getRandom min' max' =
     . readMaybe
     . unpack
     <$> client randomApi "plain" 1 "new" 10 1 min' max'
-
 
 fetchRandom
   :: Integer

@@ -19,11 +19,36 @@ The security of an oracle-reliant Marlowe contract might be increased by combini
 
 ## Data Feeds Available
 
+
+### Standard Feeds
+
 The `SOFR` data feed provides the [Secured Overnight Financing Rate from the New York Federal Reserve Board](https://www.newyorkfed.org/markets/reference-rates/sofr), *measured in basis points*. Thus a report of `430` corresponds to a 4.30% annual rate.
+
+The `RANDOM` data feed provides random numbers from [Random.Org](https://www.random.org/), within the range of `[Bound low high]` of the contract's choice.
 
 The `BTCETH`, `BTCEUR`, `BTCGBP`, `BTCJPY`, `BTCUSD`, `ADABTC`, `ADAETH`, `ADAEUR`, `ADAGBP`, `ADAJPY`, `ADAUSD`, `ETHBTC`, `ETHEUR`, `ETHGBP`, `ETHJPY`, and `ETHUSD` data feeds provide cryptocurrency prices from [CoinGecko](https://www.coingecko.com/), measured in parts per hundred million (/ 100,000,000). The first three letters of the symbol are the *base currency* and the last three letters are the *quote currency*. Thus a report of `20970500` for `ADAGBP` corresponds to £0.209705/₳.
 
 One can add data feeds to the oracle by adding a new oracle module (like [`Network.Oracle.Sofr`](oracle/Network/Oracle/Sofr.hs)) modifying [`Network.Oracle`](oracle/Network/Oracle.hs).
+
+
+### Custom External Feeds
+
+The `--processor command` option lets one supply an external program, `command`, that receives JSON for the `OracleRequest` data structure of `Language.Marlowe.Oracle.Types` and that outputs the integer for the oracle; an error is signaled by a non-zero exit code. A typical input might be as follows:
+
+```json
+{
+  "bounds" : [
+    {
+      "from" : 2
+    , "to" :7
+    }
+  ]
+, "continuation":"close"
+, "symbol":"RANDOM.ORG"
+}
+```
+
+A shell script such as [example-processor.sh](example-processor.sh) can ingest such JSON and output the oracle value.
 
 
 ## Running the Oracle
