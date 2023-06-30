@@ -5,6 +5,7 @@
 module Language.Marlowe.Runtime.CLI.Command.Create where
 
 import qualified Cardano.Api as C
+import qualified Cardano.Api.Shelley as C
 import Control.Error.Util (hoistMaybe, noteT)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Except (ExceptT (ExceptT), throwE)
@@ -16,6 +17,7 @@ import Data.List.NonEmpty (NonEmpty (..))
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.String (fromString)
+import Data.Text (pack)
 import qualified Data.Yaml as Yaml
 import Data.Yaml.Aeson (decodeFileEither)
 import GHC.Generics (Generic)
@@ -29,8 +31,10 @@ import Language.Marlowe.Runtime.ChainSync.Api (
   DatumHash,
   Lovelace (Lovelace),
   PolicyId,
+  StakeCredential,
   TokenName (..),
   TransactionMetadata,
+  fromCardanoStakeCredential,
   fromJSONEncodedMetadata,
   fromJSONEncodedTransactionMetadata,
   renderTxOutRef,
@@ -59,6 +63,7 @@ import Text.Read (readMaybe)
 
 data CreateCommand = CreateCommand
   { marloweVersion :: SomeMarloweVersion
+  , stakeCredential :: Maybe StakeCredential
   , roles :: Maybe RolesConfig
   , contractFiles :: ContractFiles
   , minUTxO :: Lovelace
@@ -107,10 +112,29 @@ createCommandParser = info (txCommandParser True parser) $ progDesc "Create a ne
     parser =
       CreateCommand
         <$> marloweVersionParser
+        <*> stakeCredentialParser
         <*> rolesParser
         <*> contractFilesParser
         <*> minUTxOParser
     rolesParser = optional (mintSimpleParser <|> mintConfigParser <|> policyIdParser)
+    stakeCredentialParser =
+      let stakeCredentialReader =
+            eitherReader
+              \s ->
+                case C.deserialiseAddress C.AsStakeAddress $ pack s of
+                  Just (C.StakeAddress _ credential) -> Right . fromCardanoStakeCredential $ C.fromShelleyStakeCredential credential
+                  Nothing -> Left ("Invalid Bech32 stake address." :: String)
+       in optional $
+            option stakeCredentialReader $
+              mconcat
+                [ long "stake-address"
+                , help $
+                    unwords
+                      [ "The Bech32-encoded stake address to be used for the staking credential"
+                      , "in the Marlowe validator address."
+                      ]
+                , metavar "STAKE_ADDRESS"
+                ]
     mintSimpleParser = MintSimple <$> some1 roleParser
     mintConfigParser =
       fmap MintConfig $
@@ -258,7 +282,8 @@ runCreateCommand TxCommand{walletAddresses, signingMethod, tagsFile, metadataFil
       metadata <- MarloweTransactionMetadata <$> readTags <*> readMetadata
       ContractCreated{contractId, txBody, safetyErrors} <-
         ExceptT $
-          first CreateFailed <$> createContract Nothing version walletAddresses rolesDistribution metadata minUTxO contract
+          first CreateFailed
+            <$> createContract stakeCredential version walletAddresses rolesDistribution metadata minUTxO contract
       case signingMethod of
         Manual outputFile -> do
           ExceptT $ liftIO $ first TransactionFileWriteFailed <$> C.writeFileTextEnvelope outputFile Nothing txBody
