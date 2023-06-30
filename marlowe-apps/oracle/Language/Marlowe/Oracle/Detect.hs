@@ -1,4 +1,6 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TupleSections #-}
 
 module Language.Marlowe.Oracle.Detect (
   containsOracleAction,
@@ -6,47 +8,55 @@ module Language.Marlowe.Oracle.Detect (
   hasOracleAction,
   oraclePresent,
   oracleReady,
+  OracleRequest (..),
+  choiceName',
 ) where
 
-import Control.Monad.Extra (pureIf)
 import Data.Maybe (mapMaybe, maybeToList)
-import Language.Marlowe.Core.V1.Plate (extract, extractAll)
-import Language.Marlowe.Core.V1.Semantics.Types (Action (Choice), ChoiceId (..), Contract, Party)
+import Language.Marlowe.Core.V1.Plate (extractAll)
+import Language.Marlowe.Core.V1.Semantics.Types (Action (Choice), Case (..), ChoiceId (..), Contract (When), Party)
+import Language.Marlowe.Oracle.Types (OracleRequest (..), choiceName')
 import Language.Marlowe.Runtime.App.Stream (ContractStream (..), contractFromStream)
 import Language.Marlowe.Runtime.Core.Api (MarloweVersionTag (V1))
 import Network.Oracle (Oracle, toOracleSymbol)
-import Plutus.V2.Ledger.Api (fromBuiltin)
-
-import Data.ByteString.Char8 as BS8 (unpack)
 
 hasOracleAction
   :: Party
-  -> Action
-  -> [String]
-hasOracleAction oracleParty (Choice (ChoiceId symbol choiceParty) _) =
-  pureIf (oracleParty == choiceParty)
-    . BS8.unpack
-    $ fromBuiltin symbol
+  -> Case Contract
+  -> [OracleRequest]
+hasOracleAction oracleParty (Case (Choice (ChoiceId choiceName choiceParty) bounds) continuation')
+  | oracleParty == choiceParty = let continuation = Right continuation' in pure OracleRequest{..}
+hasOracleAction oracleParty (MerkleizedCase (Choice (ChoiceId choiceName choiceParty) bounds) continuation')
+  | oracleParty == choiceParty = let continuation = Left continuation' in pure OracleRequest{..}
 hasOracleAction _ _ = mempty
 
 contractReadyForOracle
   :: Party
   -> Contract
-  -> [String]
-contractReadyForOracle = (. extract) . foldMap . hasOracleAction
+  -> [OracleRequest]
+contractReadyForOracle party (When cs _ _) = concatMap (hasOracleAction party) cs
+contractReadyForOracle _ _ = mempty
 
 containsOracleAction
   :: Party
   -> Contract
-  -> [String]
+  -> [OracleRequest]
 containsOracleAction = (. extractAll) . foldMap . hasOracleAction
+
+toOracleSymbol'
+  :: OracleRequest
+  -> Maybe (Oracle, OracleRequest)
+toOracleSymbol' oracleRequest =
+  fmap (,oracleRequest)
+    . toOracleSymbol
+    $ choiceName' oracleRequest
 
 oraclePresent
   :: Party
   -> ContractStream 'V1
-  -> [Oracle]
+  -> [(Oracle, OracleRequest)]
 oraclePresent party =
-  mapMaybe toOracleSymbol
+  mapMaybe toOracleSymbol'
     . concatMap (containsOracleAction party)
     . maybeToList
     . contractFromStream
@@ -54,9 +64,9 @@ oraclePresent party =
 oracleReady
   :: Party
   -> ContractStream 'V1
-  -> [Oracle]
+  -> [(Oracle, OracleRequest)]
 oracleReady party =
-  mapMaybe toOracleSymbol
+  mapMaybe toOracleSymbol'
     . concatMap (contractReadyForOracle party)
     . maybeToList
     . contractFromStream

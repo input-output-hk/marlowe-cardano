@@ -15,6 +15,8 @@ import Language.Marlowe.Core.V1.Semantics.Types (
   Party,
  )
 import Language.Marlowe.Oracle.Detect (containsOracleAction, contractReadyForOracle)
+import Language.Marlowe.Oracle.Types (choiceName, choiceName')
+import Language.Marlowe.Runtime.App.Channel (RequeueFrequency)
 import Language.Marlowe.Runtime.App.Stream (ContractStream (..), TChanEOF, contractFromStep)
 import Language.Marlowe.Runtime.App.Transact (applyWithEvents)
 import Language.Marlowe.Runtime.App.Types (
@@ -29,11 +31,8 @@ import Network.Oracle (OracleEnv, readOracle, toOracleSymbol)
 import Observe.Event.Dynamic (DynamicEventSelector (..))
 import Observe.Event.Explicit (EventBackend, addField, hoistEvent, hoistEventBackend, idInjectSelector, subEventBackend)
 import Observe.Event.Syntax ((≔))
-import Plutus.V2.Ledger.Api (toBuiltin)
 
 import qualified Cardano.Api as C (PaymentExtendedKey, SigningKey)
-import qualified Data.ByteString.Char8 as BS8 (pack)
-import Language.Marlowe.Runtime.App.Channel (RequeueFrequency)
 import qualified Language.Marlowe.Runtime.App.Channel as App (LastSeen (..), runContractAction, runDetection)
 
 runDetection
@@ -53,7 +52,7 @@ runDetection party eventBackend config pollingFrequency =
     (FinishOnWait True)
 
 runOracle
-  :: OracleEnv
+  :: Either String OracleEnv
   -> Config
   -> Address
   -> C.SigningKey C.PaymentExtendedKey
@@ -69,31 +68,36 @@ runOracle oracleEnv config address key party eventBackend =
     \event App.LastSeen{..} ->
       do
         let -- Find the oracle symbols requested and the ones that can be serviced, respectively.
-            rawSymbols = contractReadyForOracle party lastContract
-            validSymbols = mapMaybe toOracleSymbol rawSymbols
+            rawRequests = contractReadyForOracle party lastContract
+            validRequests =
+              case oracleEnv of
+                Right _ -> mapMaybe (\oracleRequest -> fmap (const oracleRequest) . toOracleSymbol $ choiceName' oracleRequest) rawRequests
+                Left _ -> rawRequests
             -- Build and submit a transaction to report the oracle's value.
-            report contractId symbol =
+            report contractId request =
               do
-                let event' = hoistEvent liftIO event
+                let symbol = choiceName request
+                    event' = hoistEvent liftIO event
                     subBackend = hoistEventBackend liftIO $ subEventBackend idInjectSelector event eventBackend
-                addField event' $ ("symbol" :: Text) ≔ show symbol
-                value <- ExceptT $ readOracle eventBackend oracleEnv symbol
+                addField event' $ ("request" :: Text) ≔ request
+                value <- ExceptT $ readOracle eventBackend oracleEnv request
                 addField event' $ ("value" :: Text) ≔ value
                 void
                   . applyWithEvents subBackend config address key contractId
                   . pure
                   . NormalInput
-                  $ IChoice (ChoiceId (toBuiltin . BS8.pack $ show symbol) party) value
+                  $ IChoice (ChoiceId symbol party) value
         -- Print the context of the transaction.
+        addField event $ ("lastContract" :: Text) ≔ lastContract
         addField event $ ("previousTransactionId" :: Text) ≔ lastTxId
-        addField event $ ("readyForOracle" :: Text) ≔ rawSymbols
-        addField event $ ("availableForOracle" :: Text) ≔ fmap show validSymbols
+        addField event $ ("readyForOracle" :: Text) ≔ rawRequests
+        addField event $ ("availableForOracle" :: Text) ≔ validRequests
         -- Execute the transaction, if there is a valid symbol.
-        result <- runExceptT $ mapM_ (report thisContractId) (take 1 validSymbols)
+        result <- runExceptT $ mapM_ (report thisContractId) (take 1 validRequests)
         -- Print the result of the transaction.
         addField event
           . (("result" :: Text) ≔)
-          $ case (result, null validSymbols) of
+          $ case (result, null validRequests) of
             (Right (), True) -> "Ignored."
             (Right (), False) -> "Confirmed."
             (Left message, _) -> "Failed: " <> message

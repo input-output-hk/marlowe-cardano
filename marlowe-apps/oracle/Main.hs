@@ -35,8 +35,7 @@ main =
           Left message -> error $ show message
     Just party <- pure $ uncurry Address <$> deserialiseAddress (unAddress address)
     eventBackend <- simpleJsonStderrBackend defaultRenderSelectorJSON
-    manager <- newTlsManager
-    oracleEnv <- makeOracle manager
+    oracleEnv <- maybe (fmap Right . makeOracle =<< newTlsManager) (pure . Left) command
     discoveryChannel <- runDiscovery' eventBackend config pollingFrequency' dontFinishOnWait
     detectionChannel <- runDetection party eventBackend config pollingFrequency' discoveryChannel
     runOracle
@@ -55,6 +54,7 @@ data Command = Command
   { config :: Config
   , pollingFrequency :: Second
   , requeueFrequency :: Second
+  , command :: Maybe String
   , address :: Address
   , keyFile :: FilePath
   }
@@ -83,6 +83,7 @@ commandParser =
                       <> O.help "The requeuing frequency for reviewing the progress of contracts on Marlowe Runtime."
                   )
               )
+            <*> (O.optional . O.strOption) (O.long "processor" <> O.metavar "COMMAND" <> O.help "Processor to handle oracle requests.")
             <*> O.argument addressParser (O.metavar "ADDRESS" <> O.help "The Bech32 address of the oracle.")
             <*> O.strArgument (O.metavar "KEYFILE" <> O.help "The extended payment signing key file for the oracle.")
     pure $

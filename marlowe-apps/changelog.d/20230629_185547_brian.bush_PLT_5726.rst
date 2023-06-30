@@ -1,0 +1,5 @@
+Added
+-----
+
+- Added a random-number oracle.
+- Added an external-process oracle. 
