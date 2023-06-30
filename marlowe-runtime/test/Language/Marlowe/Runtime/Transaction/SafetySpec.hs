@@ -288,12 +288,14 @@ spec =
               , marloweScriptHash = marloweScript
               , payoutScriptHash = payoutScript
               }
+          overspentOrWarning (TransactionValidationError _ msg) = "The machine terminated part way through evaluation due to overspending the budget." `isInfixOf` msg
+          overspentOrWarning (TransactionWarning _ _) = True
+          overspentOrWarning _ = False
+          overspent (TransactionValidationError _ msg) = "The machine terminated part way through evaluation due to overspending the budget." `isInfixOf` msg
+          overspent _ = False
       for_ referenceContracts \(name, contract) -> it ("Passes for reference contract " <> name) do
         (policy, address) <- generate arbitrary
         let minAda = maybe 0 toInteger $ minAdaUpperBound protocolTestnet version contract continuations
-            overspentOrWarning (TransactionValidationError _ msg) = "The machine terminated part way through evaluation due to overspending the budget." `isInfixOf` msg
-            overspentOrWarning (TransactionWarning _ _) = True
-            overspentOrWarning _ = False
         actual <- checkTransactions solveConstraints' version marloweContext policy address minAda contract continuations
         case actual of
           -- Overspending or warnings are not a test failures.
@@ -303,3 +305,22 @@ spec =
           Left "ApplyInputsConstraintsBuildupFailed (MarloweComputeTransactionFailed \"TEAmbiguousTimeIntervalError\")" -> pure ()
           -- All other results are test failures.
           _otherwise -> expectationFailure $ "Unexpected result: " <> show actual
+      prop
+        "Contract with prohibitive execution cost"
+        do
+          let minAda = 3_000_000
+              policy = "46e79d4fbf0dd6766f8601fdec651ad708af7115fd8f7b5e14b622e5"
+              address = "608db2b806ba9e7ae2909ae38afc6c1bce02f5df3e1cb1b06cbc80546f"
+              ada = V1.Token "" ""
+              contract =
+                V1.When
+                  [ V1.Case (V1.Deposit party party ada $ V1.Constant i) $ V1.Pay party (V1.Party party) ada (V1.Constant i) V1.Close
+                  | i <- [1 .. 50]
+                  ]
+                  1000
+                  V1.Close
+          actual <- checkTransactions solveConstraints' version marloweContext policy address minAda contract continuations
+          case actual of
+            Right errs
+              | all overspent errs -> pure ()
+            _otherwise -> expectationFailure $ "Unexpected result: " <> show actual
