@@ -84,6 +84,7 @@ createStandardContractWithTags tags partyAWallet partyBWallet = do
 
   contractCreated@Web.CreateTxEnvelope{contractId} <-
     postContract
+      Nothing
       partyAWebChangeAddress
       (Just partyAWebExtraAddresses)
       (Just partyAWebCollataralUtxos)

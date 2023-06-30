@@ -35,6 +35,7 @@ spec = describe "Valid POST /contracts" do
       let (contract, _, _) = standardContract partyBAddress now $ secondsToNominalDiffTime 100
 
       postContract
+        Nothing
         partyAWebChangeAddress
         (Just partyAWebExtraAddresses)
         (Just partyAWebCollataralUtxos)

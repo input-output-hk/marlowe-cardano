@@ -40,6 +40,7 @@ spec = describe "POST /contracts/{contractId}/transactions" do
 
       contractCreated@Web.CreateTxEnvelope{contractId} <-
         postContract
+          Nothing
           partyAWebChangeAddress
           (Just partyAWebExtraAddresses)
           (Just partyAWebCollataralUtxos)
