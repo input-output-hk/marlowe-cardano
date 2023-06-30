@@ -10,6 +10,9 @@ import Test.Hspec.QuickCheck (prop)
 
 spec :: Spec
 spec = describe "Language.Marlowe.Runtime.ChainSync.Api" do
+  describe "Does CI detect failure?" do
+    it "Always Fails" $ do
+      True `shouldBe` False
   describe "ChainSeek protocol" do
     prop "It has a lawful codec" $ checkPropCodec @RuntimeChainSeek
     codecGoldenTests @RuntimeChainSeek "ChainSeek"
