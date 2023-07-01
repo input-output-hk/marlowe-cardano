@@ -50,9 +50,9 @@ mkPolicy roleTokensHash seedInput action context =
 {-# INLINEABLE validateMinting #-}
 validateMinting :: RoleTokensHash -> PV2.TxOutRef -> PV2.ScriptContext -> Bool
 validateMinting roleTokens seedInput context =
-  traceIfFalse "Mint failed" $
-    seedInputIsConsumed
-      && roleTokensAreMinted
+  traceIfFalse "Mint failed"
+    $ seedInputIsConsumed
+    && roleTokensAreMinted
   where
     PV2.ScriptContext{scriptContextTxInfo = txInfo} = context
     ownCurrency = PV2.ownCurrencySymbol context
@@ -87,10 +87,10 @@ missingFromOutputsValue currencySymbol PV2.ScriptContext{scriptContextTxInfo} = 
 policy :: RoleTokens -> PV2.TxOutRef -> PV2.MintingPolicy
 policy roleTokens txOutRef = do
   let roleTokensHash = mkRoleTokensHash roleTokens
-  PV2.mkMintingPolicyScript $
-    $$(PlutusTx.compile [||\rs seed -> wrapMintingPolicy (mkPolicy rs seed)||])
-      `PlutusTx.applyCode` PlutusTx.liftCode roleTokensHash
-      `PlutusTx.applyCode` PlutusTx.liftCode txOutRef
+  PV2.mkMintingPolicyScript
+    $ $$(PlutusTx.compile [||\rs seed -> wrapMintingPolicy (mkPolicy rs seed)||])
+    `PlutusTx.applyCode` PlutusTx.liftCode roleTokensHash
+    `PlutusTx.applyCode` PlutusTx.liftCode txOutRef
 
 -- Extracted from plutus-ledger
 

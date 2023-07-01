@@ -2,7 +2,8 @@
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 module Spec.Marlowe.Semantics.Next.Common.Isomorphism (
-  ) where
+
+) where
 
 import Data.Types.Isomorphic (Injective (..), Iso)
 import Language.Marlowe.Core.V1.Next.Indexed

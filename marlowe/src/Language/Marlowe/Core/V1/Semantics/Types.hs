@@ -370,12 +370,12 @@ instance ToJSON Input where
     let obj = case toJSON content of
           Object obj -> obj
           _ -> KeyMap.empty
-     in Object $
-          obj
-            `KeyMap.union` KeyMap.fromList
-              [ ("merkleized_continuation", toJSON continuation)
-              , ("continuation_hash", toJSON $ EncodeBase16 $ fromBuiltin hash)
-              ]
+     in Object
+          $ obj
+          `KeyMap.union` KeyMap.fromList
+            [ ("merkleized_continuation", toJSON continuation)
+            , ("continuation_hash", toJSON $ EncodeBase16 $ fromBuiltin hash)
+            ]
 
 -- | Extract the content of input.
 getInputContent :: Input -> InputContent
@@ -501,7 +501,7 @@ instance FromJSON Party where
   parseJSON = withObject "Party" $ \v ->
     ( maybe (parseFail "Address") (return . uncurry Address)
         =<< deserialiseAddressBech32
-          <$> v .: "address"
+        <$> v .: "address"
     )
       <|> (Role . Val.tokenName . Text.encodeUtf8 <$> (v .: "role_token"))
 
@@ -969,8 +969,10 @@ instance Eq Action where
     acc1 == acc2 && party1 == party2 && tok1 == tok2 && val1 == val2
   Deposit{} == _ = False
   Choice cid1 bounds1 == Choice cid2 bounds2 =
-    cid1 == cid2
-      && length bounds1 == length bounds2
+    cid1
+      == cid2
+      && length bounds1
+      == length bounds2
       && let bounds = zip bounds1 bounds2
              checkBound (Bound low1 high1, Bound low2 high2) = low1 == low2 && high1 == high2
           in all checkBound bounds
@@ -997,9 +999,12 @@ instance Eq Contract where
   If{} == _ = False
   When cases1 timeout1 cont1 == When cases2 timeout2 cont2 =
     -- The sequences of tests are ordered for efficiency.
-    timeout1 == timeout2
-      && cont1 == cont2
-      && length cases1 == length cases2
+    timeout1
+      == timeout2
+      && cont1
+      == cont2
+      && length cases1
+      == length cases2
       && and (zipWith (==) cases1 cases2)
   When{} == _ = False
   Let valId1 val1 cont1 == Let valId2 val2 cont2 =
@@ -1011,10 +1016,14 @@ instance Eq Contract where
 instance Eq State where
   {-# INLINEABLE (==) #-}
   l == r =
-    minTime l == minTime r
-      && accounts l == accounts r
-      && choices l == choices r
-      && boundValues l == boundValues r
+    minTime l
+      == minTime r
+      && accounts l
+      == accounts r
+      && choices l
+      == choices r
+      && boundValues l
+      == boundValues r
 
 -- Lifting data types to Plutus Core
 makeLift ''Party

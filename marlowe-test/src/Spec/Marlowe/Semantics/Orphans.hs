@@ -12,7 +12,8 @@
 
 -- | Orphans, only for the test framework.
 module Spec.Marlowe.Semantics.Orphans (
-  ) where
+
+) where
 
 import Language.Marlowe.Core.V1.Semantics (ApplyResult (..), ApplyWarning (..), ReduceResult (..), ReduceWarning (..))
 

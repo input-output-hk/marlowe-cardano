@@ -232,8 +232,8 @@ instance ToJSON Payment where
 
 instance FromJSON Payment where
   parseJSON =
-    withObject "Payment" $
-      \o ->
+    withObject "Payment"
+      $ \o ->
         Payment
           <$> o .: "payment_from"
           <*> o .: "to"
@@ -374,8 +374,8 @@ instance ToJSON TransactionOutput where
 
 instance FromJSON TransactionOutput where
   parseJSON =
-    withObject "TransactionOutput" $
-      \o ->
+    withObject "TransactionOutput"
+      $ \o ->
         let asTransactionOutput =
               TransactionOutput
                 <$> o .: "warnings"

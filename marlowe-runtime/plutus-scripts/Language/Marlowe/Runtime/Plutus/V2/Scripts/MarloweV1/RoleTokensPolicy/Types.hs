@@ -60,8 +60,8 @@ mkRoleTokens = RoleTokens . squash . sort
     -- this fold manually here.
     step last Nothing = Just (last, [])
     step curr@(tn', i') (Just (tokAcc@(tn, i), acc)) =
-      Just $
-        if tn == tn'
+      Just
+        $ if tn == tn'
           then ((tn, i + i'), acc)
           else (curr, tokAcc : acc)
 

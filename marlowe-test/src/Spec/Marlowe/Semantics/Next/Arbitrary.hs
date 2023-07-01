@@ -4,7 +4,8 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
 module Spec.Marlowe.Semantics.Next.Arbitrary (
-  ) where
+
+) where
 
 import Test.QuickCheck (Arbitrary (..))
 
