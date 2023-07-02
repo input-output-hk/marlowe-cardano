@@ -60,6 +60,7 @@ createCloseContract Wallet{..} = do
 
   Web.CreateTxEnvelope{txEnvelope, ..} <-
     postContract
+      Nothing
       webChangeAddress
       (Just webExtraAddresses)
       (Just webCollataralUtxos)

@@ -46,6 +46,7 @@ spec = describe "PUT /contracts/{contractId}/transactions/{transaction}" do
 
       contractCreated@Web.CreateTxEnvelope{contractId} <-
         postContract
+          Nothing
           partyAWebChangeAddress
           (Just partyAWebExtraAddresses)
           (Just partyAWebCollataralUtxos)

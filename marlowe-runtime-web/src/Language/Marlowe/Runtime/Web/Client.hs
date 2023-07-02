@@ -131,16 +131,18 @@ getContracts
 getContracts = (fmap . fmap . fmap) snd . getContractsStatus
 
 postContractStatus
-  :: Address
+  :: Maybe StakeAddress
+  -> Address
   -> Maybe (Set Address)
   -> Maybe (Set TxOutRef)
   -> PostContractsRequest
   -> ClientM (RuntimeStatus, CreateTxEnvelope CardanoTxBody)
-postContractStatus changeAddress otherAddresses collateralUtxos request = do
+postContractStatus stakeAddress changeAddress otherAddresses collateralUtxos request = do
   let (_ :<|> (postContractCreateTxBody' :<|> _) :<|> _) :<|> _ = client
   response <-
     postContractCreateTxBody'
       request
+      stakeAddress
       changeAddress
       (setToCommaList <$> otherAddresses)
       (setToCommaList <$> collateralUtxos)
@@ -148,24 +150,27 @@ postContractStatus changeAddress otherAddresses collateralUtxos request = do
   pure (status, retractLink $ getResponse response)
 
 postContract
-  :: Address
+  :: Maybe StakeAddress
+  -> Address
   -> Maybe (Set Address)
   -> Maybe (Set TxOutRef)
   -> PostContractsRequest
   -> ClientM (CreateTxEnvelope CardanoTxBody)
-postContract = (fmap . fmap . fmap . fmap) snd . postContractStatus
+postContract = (fmap . fmap . fmap . fmap . fmap) snd . postContractStatus
 
 postContractCreateTxStatus
-  :: Address
+  :: Maybe StakeAddress
+  -> Address
   -> Maybe (Set Address)
   -> Maybe (Set TxOutRef)
   -> PostContractsRequest
   -> ClientM (RuntimeStatus, CreateTxEnvelope CardanoTx)
-postContractCreateTxStatus changeAddress otherAddresses collateralUtxos request = do
+postContractCreateTxStatus stakeAddress changeAddress otherAddresses collateralUtxos request = do
   let (_ :<|> (_ :<|> postContractCreateTx') :<|> _) :<|> _ = client
   response <-
     postContractCreateTx'
       request
+      stakeAddress
       changeAddress
       (setToCommaList <$> otherAddresses)
       (setToCommaList <$> collateralUtxos)
@@ -173,12 +178,13 @@ postContractCreateTxStatus changeAddress otherAddresses collateralUtxos request 
   pure (status, retractLink $ getResponse response)
 
 postContractCreateTx
-  :: Address
+  :: Maybe StakeAddress
+  -> Address
   -> Maybe (Set Address)
   -> Maybe (Set TxOutRef)
   -> PostContractsRequest
   -> ClientM (CreateTxEnvelope CardanoTx)
-postContractCreateTx = (fmap . fmap . fmap . fmap) snd . postContractCreateTxStatus
+postContractCreateTx = (fmap . fmap . fmap . fmap . fmap) snd . postContractCreateTxStatus
 
 getContractStatus :: TxOutRef -> ClientM (RuntimeStatus, ContractState)
 getContractStatus contractId = do

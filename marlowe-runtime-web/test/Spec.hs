@@ -209,6 +209,10 @@ instance Arbitrary Web.Address where
   arbitrary = Web.Address <$> arbitrary
   shrink = genericShrink
 
+instance Arbitrary Web.StakeAddress where
+  arbitrary = Web.StakeAddress <$> arbitrary
+  shrink = genericShrink
+
 instance (Arbitrary a) => Arbitrary (Web.ListObject a) where
   arbitrary = Web.ListObject <$> arbitrary
   shrink = genericShrink
