@@ -30,7 +30,7 @@ import Network.TypedProtocol
 import Network.TypedProtocol.Codec (AnyMessageAndAgency (..))
 
 data TransferError
-  = MerkleizedContractsNotAllowed
+  = ContinuationNotInStore ContractHash
   | LinkError LinkError
   deriving stock (Show, Read, Generic, Eq, Ord)
   deriving anyclass (FromJSON, ToJSON, Binary, Variations)

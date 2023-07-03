@@ -23,6 +23,7 @@ import Language.Marlowe.Runtime.Cardano.Api (fromCardanoDatumHash, toCardanoScri
 import Language.Marlowe.Runtime.ChainSync.Api (DatumHash (..), toDatum)
 import Language.Marlowe.Runtime.Contract.Store (ContractStagingArea (..), ContractStore (..))
 import Network.Protocol.Connection (ServerSource (..))
+import Plutus.V1.Ledger.Api (fromBuiltin)
 import qualified Plutus.V2.Ledger.Api as PV2
 import UnliftIO (MonadIO, MonadUnliftIO)
 import UnliftIO.Resource (allocateU)
@@ -101,4 +102,8 @@ merkleizeAndStoreCase stage@ContractStagingArea{..} = \case
     contract' <- merkleizeAndStore stage contract
     DatumHash hash <- lift $ stageContract contract'
     pure $ Core.MerkleizedCase action $ PV2.toBuiltin hash
-  Core.MerkleizedCase{} -> throwE MerkleizedContractsNotAllowed
+  Core.MerkleizedCase action hash -> do
+    exists <- lift $ doesContractExist $ DatumHash $ fromBuiltin hash
+    if exists
+      then pure $ Core.MerkleizedCase action hash
+      else throwE $ ContinuationNotInStore $ fromCoreContractHash hash

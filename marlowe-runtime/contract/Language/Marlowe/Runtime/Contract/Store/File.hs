@@ -6,6 +6,7 @@ module Language.Marlowe.Runtime.Contract.Store.File (
 
 import Cardano.Api (hashScriptData)
 import Codec.Compression.GZip (compress, decompress)
+import Control.Applicative (liftA2)
 import Control.Monad (guard, unless)
 import Control.Monad.Catch (MonadMask)
 import Control.Monad.Trans.Maybe (MaybeT (runMaybeT))
@@ -14,6 +15,7 @@ import Data.Binary.Get (runGet)
 import Data.Binary.Put (runPut)
 import qualified Data.ByteString.Lazy as LBS
 import Data.Foldable (fold, foldl')
+import Data.Function (on)
 import Data.HashMap.Strict (HashMap)
 import qualified Data.HashMap.Strict as HashMap
 import Data.HashSet (HashSet)
@@ -137,12 +139,12 @@ createContractStore ContractStoreOptions{..} = do
       open <- newMVar True
       -- State variable for buffering file writes.
       mBuffer <- newMVar mempty
-      let -- \| Runs the given action only if the store is open.
+      let -- Runs the given action only if the store is open.
           whenOpen
             :: Bool
-            -- \^ True to leave the store open afterwards, False to close it and remove the directory.
+            -- True to leave the store open afterwards, False to close it and remove the directory.
             -> m a
-            -- \^ The action to run if the store is open.
+            -- The action to run if the store is open.
             -> m a
           whenOpen leaveOpen m = modifyMVar open \case
             False -> throwIO $ mkUserError "Staging area is no longer open"
@@ -151,13 +153,13 @@ createContractStore ContractStoreOptions{..} = do
               unless leaveOpen $ removePathForcibly directory
               pure (leaveOpen, a)
 
-          -- \| Writes the contents of the buffer to disk and empties the buffer.
+          -- Writes the contents of the buffer to disk and empties the buffer.
           flush :: m (Set DatumHash)
           flush = modifyMVar mBuffer \(closures, buffer) -> do
             pooledMapConcurrently_ id $ flushContractRecord =<< HashMap.elems buffer
             pure ((closures, mempty), Set.fromList $ HashMap.keys buffer)
 
-          -- \| Returns a list of file-writing actions to save the contents of a
+          -- Returns a list of file-writing actions to save the contents of a
           -- contract record.
           flushContractRecord ContractRecord{..} =
             let basePath = directory </> read (show hash)
@@ -173,7 +175,7 @@ createContractStore ContractStoreOptions{..} = do
                 , writeIndex "closure" closureHM
                 ]
 
-          -- \| Move a file from the staging area to the store. Do not use rename
+          -- Move a file from the staging area to the store. Do not use rename
           -- as it is not supported across file systems.
           moveStagingFile file = do
             let oldName = directory </> file
@@ -232,15 +234,15 @@ createContractStore ContractStoreOptions{..} = do
           , discard =
               -- only run when open, close the staging area.
               whenOpen False $ pure ()
-          , lookupContract = \hash ->
+          , doesContractExist = \hash ->
               whenOpen True $ withMVar mBuffer \(_, buffer) -> do
-                case HashMap.lookup hash buffer of
-                  Nothing -> runMaybeT do
-                    let contractFilePath = directory </> read (show hash) <.> ".contract"
-                    guard =<< doesFileExist contractFilePath
-                    contractBytesCompressed <- liftIO $ LBS.readFile contractFilePath
-                    pure $ runGet get $ decompress contractBytesCompressed
-                  Just ContractRecord{contract} -> pure $ Just contract
+                if HashMap.member hash buffer
+                  then pure True
+                  else do
+                    let contractFileName = read (show hash) <.> ".contract"
+                    let stagingAreaPath = directory </> contractFileName
+                    let storePath = contractStoreDirectory </> contractFileName
+                    on (liftA2 (||)) doesFileExist stagingAreaPath storePath
           }
 
 -- | Computes the adjacency and closure information for a merkleized contract.

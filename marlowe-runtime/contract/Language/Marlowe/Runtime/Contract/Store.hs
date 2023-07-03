@@ -83,7 +83,7 @@ data ContractStagingArea m = ContractStagingArea
   , flush :: m (Set DatumHash)
   , commit :: m (Set DatumHash)
   , discard :: m ()
-  , lookupContract :: DatumHash -> m (Maybe Contract)
+  , doesContractExist :: DatumHash -> m Bool
   }
 
 hoistContractStagingArea
@@ -96,7 +96,7 @@ hoistContractStagingArea f ContractStagingArea{..} =
     , flush = f flush
     , commit = f commit
     , discard = f discard
-    , lookupContract = f . lookupContract
+    , doesContractExist = f . doesContractExist
     }
 
 traceContractStagingArea
