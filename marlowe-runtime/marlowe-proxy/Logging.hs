@@ -10,6 +10,7 @@ import Language.Marlowe.Protocol.HeaderSync.Types (MarloweHeaderSync)
 import Language.Marlowe.Protocol.Load.Types (MarloweLoad)
 import Language.Marlowe.Protocol.Query.Types (MarloweQuery)
 import Language.Marlowe.Protocol.Sync.Types (MarloweSync)
+import Language.Marlowe.Protocol.Transfer.Types (MarloweTransfer)
 import Language.Marlowe.Protocol.Types (MarloweRuntime)
 import Language.Marlowe.Runtime.Contract.Api (ContractRequest)
 import Language.Marlowe.Runtime.Transaction.Api (MarloweTxCommand)
@@ -31,6 +32,7 @@ data RootSelector f where
   MarloweHeaderSyncClient :: TcpClientSelector (Handshake MarloweHeaderSync) f -> RootSelector f
   MarloweQueryClient :: TcpClientSelector (Handshake MarloweQuery) f -> RootSelector f
   MarloweLoadClient :: TcpClientSelector (Handshake MarloweLoad) f -> RootSelector f
+  MarloweImportClient :: TcpClientSelector (Handshake MarloweTransfer) f -> RootSelector f
   TxJobClient :: TcpClientSelector (Handshake (Job MarloweTxCommand)) f -> RootSelector f
   ContractQueryClient :: TcpClientSelector (Handshake (Query ContractRequest)) f -> RootSelector f
 
@@ -44,5 +46,6 @@ renderRootSelectorOTel = \case
   MarloweHeaderSyncClient sel -> renderTcpClientSelectorOTel sel
   MarloweQueryClient sel -> renderTcpClientSelectorOTel sel
   MarloweLoadClient sel -> renderTcpClientSelectorOTel sel
+  MarloweImportClient sel -> renderTcpClientSelectorOTel sel
   TxJobClient sel -> renderTcpClientSelectorOTel sel
   ContractQueryClient sel -> renderTcpClientSelectorOTel sel

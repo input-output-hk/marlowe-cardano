@@ -15,7 +15,9 @@ import Data.Text.Lazy (toStrict)
 import Data.Void (absurd)
 import Language.Marlowe (TransactionInput (..))
 import Language.Marlowe.Protocol.Load.Server (MarloweLoadServer)
+import Language.Marlowe.Protocol.Transfer.Server (MarloweTransferServer)
 import Language.Marlowe.Runtime.Contract.Api (ContractRequest)
+import Language.Marlowe.Runtime.Contract.ImportServer (ImportServerDependencies (..), importServer)
 import Language.Marlowe.Runtime.Contract.LoadServer
 import Language.Marlowe.Runtime.Contract.QueryServer
 import Language.Marlowe.Runtime.Contract.Store
@@ -35,6 +37,7 @@ data ContractDependencies n m = ContractDependencies
 data MarloweContract m = MarloweContract
   { loadServerSource :: ServerSource MarloweLoadServer m ()
   , queryServerSource :: ServerSource (QueryServer ContractRequest) m ()
+  , importServerSource :: ServerSource MarloweTransferServer m ()
   , probes :: Probes
   }
 
@@ -43,6 +46,7 @@ contract = arr \ContractDependencies{..} ->
   MarloweContract
     { loadServerSource = loadServer LoadServerDependencies{..}
     , queryServerSource = queryServer QueryServerDependencies{..}
+    , importServerSource = importServer ImportServerDependencies{..}
     , probes =
         Probes
           { liveness = pure True

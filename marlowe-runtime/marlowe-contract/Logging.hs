@@ -7,6 +7,7 @@ module Logging where
 
 import Control.Monad.Event.Class
 import Language.Marlowe.Protocol.Load.Types (MarloweLoad)
+import Language.Marlowe.Protocol.Transfer.Types (MarloweTransfer)
 import Language.Marlowe.Runtime.Contract (renderContractStoreSelectorOTel)
 import Language.Marlowe.Runtime.Contract.Api (ContractRequest)
 import Language.Marlowe.Runtime.Contract.Store (ContractStoreSelector (..))
@@ -19,6 +20,7 @@ import Observe.Event.Render.OpenTelemetry (RenderSelectorOTel)
 data RootSelector f where
   ContractStoreSelector :: ContractStoreSelector f -> RootSelector f
   MarloweLoadServer :: TcpServerSelector (Handshake MarloweLoad) f -> RootSelector f
+  MarloweImportServer :: TcpServerSelector (Handshake MarloweTransfer) f -> RootSelector f
   QueryServer :: TcpServerSelector (Handshake (Query ContractRequest)) f -> RootSelector f
 
 instance Inject (TcpServerSelector (Handshake (Query ContractRequest))) RootSelector where
@@ -27,11 +29,15 @@ instance Inject (TcpServerSelector (Handshake (Query ContractRequest))) RootSele
 instance Inject (TcpServerSelector (Handshake MarloweLoad)) RootSelector where
   inject = injectSelector MarloweLoadServer
 
+instance Inject (TcpServerSelector (Handshake MarloweTransfer)) RootSelector where
+  inject = injectSelector MarloweImportServer
+
 instance Inject ContractStoreSelector RootSelector where
   inject = injectSelector ContractStoreSelector
 
 renderRootSelectorOTel :: RenderSelectorOTel RootSelector
 renderRootSelectorOTel = \case
   MarloweLoadServer sel -> renderTcpServerSelectorOTel sel
+  MarloweImportServer sel -> renderTcpServerSelectorOTel sel
   QueryServer sel -> renderTcpServerSelectorOTel sel
   ContractStoreSelector sel -> renderContractStoreSelectorOTel sel

@@ -62,6 +62,9 @@ loadPort = port "marlowe-load" "CONTRACT_MARLOWE_LOAD" 3727 "The port number of 
 contractQueryPort :: CliOption OptionFields PortNumber
 contractQueryPort = port "contract-query" "CONTRACT_QUERY" 3728 "The port number of the marlowe-contract server's query API."
 
+importPort :: CliOption OptionFields PortNumber
+importPort = port "marlowe-import" "CONTRACT_MARLOWE_IMPORT" 3729 "The port number of the marlowe-contract server's import API."
+
 historyHost :: CliOption OptionFields HostName
 historyHost = host "history" "HISTORY" "127.0.0.1" "The hostname of the Marlowe Runtime history server."
 

@@ -16,6 +16,7 @@ import Language.Marlowe.Protocol.HeaderSync.Client (MarloweHeaderSyncClient)
 import Language.Marlowe.Protocol.Load.Client (MarloweLoadClient, pushContract)
 import Language.Marlowe.Protocol.Query.Client (MarloweQueryClient)
 import Language.Marlowe.Protocol.Sync.Client (MarloweSyncClient)
+import Language.Marlowe.Protocol.Transfer.Client (MarloweTransferClient (..))
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, DatumHash, Lovelace, StakeCredential, TokenName, TxId)
 import Language.Marlowe.Runtime.Contract.Api (ContractRequest)
 import Language.Marlowe.Runtime.Core.Api (
@@ -46,12 +47,10 @@ import qualified Network.Protocol.Job.Client as Job
 import Network.Protocol.Query.Client (QueryClient)
 import UnliftIO (MonadIO, MonadUnliftIO, liftIO, newIORef, readIORef, writeIORef)
 
--- ^ A class for monadic contexts that provide a connection to a Marlowe
+-- | A class for monadic contexts that provide a connection to a Marlowe
 -- Runtime instance.
-
 class (Monad m) => MonadMarlowe m where
-  -- ^ Run a client of the Marlowe protocol.
-
+  -- | Run a client of the Marlowe protocol.
   runMarloweRuntimeClient :: MarloweRuntimeClient m a -> m a
 
 instance (MonadUnliftIO m) => MonadMarlowe (MarloweT m) where
@@ -68,40 +67,44 @@ instance (MonadMarlowe m) => MonadMarlowe (ResourceT m) where
 
 instance (MonadMarlowe m) => MonadMarlowe (IdentityT m) where
   runMarloweRuntimeClient = coerce runMarloweRuntimeClient
--- ^ Run a MarloweSyncClient. Used to synchronize with history for a specific
--- contract.
 
+-- | Run a MarloweSyncClient. Used to synchronize with history for a specific
+-- contract.
 runMarloweSyncClient :: (MonadMarlowe m) => MarloweSyncClient m a -> m a
 runMarloweSyncClient = runMarloweRuntimeClient . RunMarloweSyncClient
--- ^ Run a MarloweHeaderSyncClient. Used to synchronize with contract creation
--- transactions.
 
+-- | Run a MarloweHeaderSyncClient. Used to synchronize with contract creation
+-- transactions.
 runMarloweHeaderSyncClient :: (MonadMarlowe m) => MarloweHeaderSyncClient m a -> m a
 runMarloweHeaderSyncClient = runMarloweRuntimeClient . RunMarloweHeaderSyncClient
--- ^ Run a MarloweQueryClient.
 
+-- | Run a MarloweQueryClient.
 runMarloweQueryClient :: (MonadMarlowe m) => MarloweQueryClient m a -> m a
 runMarloweQueryClient = runMarloweRuntimeClient . RunMarloweQueryClient
--- ^ Run a ContractQueryClient.
 
+-- | Run a ContractQueryClient.
 runContractQueryClient :: (MonadMarlowe m) => QueryClient ContractRequest m a -> m a
 runContractQueryClient = runMarloweRuntimeClient . RunContractQueryClient
--- ^ Run a MarloweLoadClient.
 
+-- | Run a MarloweLoadClient.
 runMarloweLoadClient :: (MonadMarlowe m) => MarloweLoadClient m a -> m a
 runMarloweLoadClient = runMarloweRuntimeClient . RunMarloweLoadClient
--- ^ Run a MarloweTxCommand job client.
 
+-- | Run a MarloweTransferClient.
+runMarloweImportClient :: (MonadMarlowe m) => MarloweTransferClient m a -> m a
+runMarloweImportClient = runMarloweRuntimeClient . RunMarloweImportClient
+
+-- | Run a MarloweTxCommand job client.
 runMarloweTxClient :: (MonadMarlowe m) => JobClient MarloweTxCommand m a -> m a
 runMarloweTxClient = runMarloweRuntimeClient . RunTxClient
--- ^ Load a contract incrementally into the runtime, obtaining the hash of the
+
+-- | Load a contract incrementally into the runtime, obtaining the hash of the
 -- deeply merkleized version of the contract. Returns nothing if the contract
 -- is already merkleized.
-
 loadContract :: (MonadMarlowe m) => Contract 'V1 -> m (Maybe DatumHash)
 loadContract = runMarloweLoadClient . pushContract
--- ^ Create a new contract.
 
+-- | Create a new contract.
 createContract
   :: (MonadMarlowe m)
   => Maybe StakeCredential
@@ -130,8 +133,8 @@ createContract mStakeCredential version wallet roleTokens metadata lovelace cont
         metadata
         lovelace
         contract
--- ^ Apply inputs to a contract, with custom validity interval bounds.
 
+-- | Apply inputs to a contract, with custom validity interval bounds.
 applyInputs'
   :: (MonadMarlowe m)
   => MarloweVersion v
@@ -162,8 +165,8 @@ applyInputs' version wallet contractId metadata invalidBefore invalidHereafter i
         invalidBefore
         invalidHereafter
         inputs
--- ^ Apply inputs to a contract.
 
+-- | Apply inputs to a contract.
 applyInputs
   :: (MonadMarlowe m)
   => MarloweVersion v
@@ -179,8 +182,8 @@ applyInputs
   -> m (Either (ApplyInputsError v) (InputsApplied BabbageEra v))
 applyInputs version wallet contractId metadata =
   applyInputs' version wallet contractId metadata Nothing Nothing
--- ^ Withdraw funds that have been paid out to a role in a contract.
 
+-- | Withdraw funds that have been paid out to a role in a contract.
 withdraw
   :: (MonadMarlowe m)
   => MarloweVersion v
@@ -195,7 +198,7 @@ withdraw
 withdraw version wallet contractId role =
   runMarloweTxClient $ liftCommand $ Withdraw version wallet contractId role
 
--- Submit a signed transaction via the Marlowe Runtime. Waits for completion
+-- | Submit a signed transaction via the Marlowe Runtime. Waits for completion
 -- with exponential back-off in the polling.
 submitAndWait
   :: (MonadMarlowe m, MonadIO m)
@@ -212,7 +215,7 @@ submitAndWait tx = do
       writeIORef delayRef (min 1_000_000 $ delay * 10)
       pure Nothing
 
--- Submit a signed transaction via the Marlowe Runtime. If it does not complete
+-- | Submit a signed transaction via the Marlowe Runtime. If it does not complete
 -- immediately, it will not wait for completion, and a TxId will be returned
 -- which can be used to check progress later via @attachSubmit@.
 submitAndDetach
@@ -222,7 +225,7 @@ submitAndDetach
   -> m (Either TxId (Either SubmitError BlockHeader))
 submitAndDetach = submit (const . pure . Just . Left) (pure . Right . Left) (pure . Right . Right)
 
--- Submit a signed transaction via the Marlowe Runtime.
+-- | Submit a signed transaction via the Marlowe Runtime.
 submit
   :: (MonadMarlowe m)
   => (TxId -> SubmitStatus -> m (Maybe a))
@@ -252,9 +255,9 @@ submit onAwait onFail onSuccess tx =
               Nothing -> SendMsgPoll clientCmd
               Just a -> SendMsgDetach a
         }
--- ^ Attach to a previously launched tx submission job. Returns @Nothing@ if
--- the submission job couldn't be found.
 
+-- | Attach to a previously launched tx submission job. Returns @Nothing@ if
+-- the submission job couldn't be found.
 attachSubmit
   :: (MonadMarlowe m)
   => (SubmitStatus -> m (Maybe a))

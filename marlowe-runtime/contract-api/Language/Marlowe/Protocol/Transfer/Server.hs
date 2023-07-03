@@ -13,7 +13,7 @@ import Network.Protocol.Peer.Trace
 import Network.TypedProtocol
 
 newtype MarloweTransferServer m a = MarloweTransferServer
-  { runtMarloweTransferServer :: m (ServerStIdle m a)
+  { runMarloweTransferServer :: m (ServerStIdle m a)
   }
   deriving (Functor)
 
@@ -25,7 +25,7 @@ data ServerStIdle m a = ServerStIdle
 
 data ServerStTransfer m a where
   SendMsgTransferred :: Map Label DatumHash -> ServerStIdle m a -> ServerStTransfer m a
-  SendMsgTransferFailed :: LinkError -> a -> ServerStTransfer m a
+  SendMsgTransferFailed :: TransferError -> a -> ServerStTransfer m a
 
 deriving instance (Functor m) => Functor (ServerStTransfer m)
 
@@ -35,7 +35,7 @@ hoistMarloweTransferServer
   => (forall x. m x -> n x)
   -> MarloweTransferServer m a
   -> MarloweTransferServer n a
-hoistMarloweTransferServer f = MarloweTransferServer . f . fmap hoistIdle . runtMarloweTransferServer
+hoistMarloweTransferServer f = MarloweTransferServer . f . fmap hoistIdle . runMarloweTransferServer
   where
     hoistIdle :: ServerStIdle m a -> ServerStIdle n a
     hoistIdle ServerStIdle{..} =
@@ -54,7 +54,7 @@ marloweTransferServerPeer
    . (Functor m)
   => MarloweTransferServer m a
   -> PeerTraced MarloweTransfer 'AsServer 'StIdle m a
-marloweTransferServerPeer = EffectTraced . fmap peerIdle . runtMarloweTransferServer
+marloweTransferServerPeer = EffectTraced . fmap peerIdle . runMarloweTransferServer
   where
     peerIdle :: ServerStIdle m a -> PeerTraced MarloweTransfer 'AsServer 'StIdle m a
     peerIdle ServerStIdle{..} = AwaitTraced (ClientAgency TokIdle) \case

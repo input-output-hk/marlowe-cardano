@@ -32,6 +32,9 @@ import Language.Marlowe.Protocol.Server (
 import Language.Marlowe.Protocol.Sync.Server (MarloweSyncServer, hoistMarloweSyncServer)
 import Language.Marlowe.Protocol.Sync.Types (MarloweSync)
 import qualified Language.Marlowe.Protocol.Sync.Types as Sync
+import Language.Marlowe.Protocol.Transfer.Server (MarloweTransferServer, hoistMarloweTransferServer)
+import Language.Marlowe.Protocol.Transfer.Types (MarloweTransfer)
+import qualified Language.Marlowe.Protocol.Transfer.Types as Transfer
 import Language.Marlowe.Runtime.Contract.Api (ContractRequest)
 import Language.Marlowe.Runtime.Transaction.Api (MarloweTxCommand)
 import Network.Channel.Typed
@@ -91,6 +94,8 @@ data Router r m = Router
   , connectMarloweQuery :: m (Channel (Handshake MarloweQuery) 'AsClient ('Handshake.StInit 'Query.StReq) m, r)
   , connectMarloweLoad
       :: m (Channel (Handshake MarloweLoad) 'AsClient ('Handshake.StInit ('Load.StProcessing 'Load.RootNode)) m, r)
+  , connectMarloweImport
+      :: m (Channel (Handshake MarloweTransfer) 'AsClient ('Handshake.StInit 'Transfer.StIdle) m, r)
   , connectTxJob :: m (Channel (Handshake (Job MarloweTxCommand)) 'AsClient ('Handshake.StInit 'Job.StInit) m, r)
   , connectContractQuery :: m (Channel (Handshake (Query ContractRequest)) 'AsClient ('Handshake.StInit 'Query.StReq) m, r)
   }
@@ -100,6 +105,7 @@ data RouterInProc m = RouterInProc
   , marloweHeaderSyncServerSource :: ServerSource MarloweHeaderSyncServer m ()
   , marloweQueryServerSource :: ServerSource MarloweQueryServer m ()
   , marloweLoadServerSource :: ServerSource MarloweLoadServer m ()
+  , marloweImportServerSource :: ServerSource MarloweTransferServer m ()
   , txJobServerSource :: ServerSource (JobServer MarloweTxCommand) m ()
   , contractQueryServerSource :: ServerSource (QueryServer ContractRequest) m ()
   }
@@ -117,6 +123,8 @@ server useOpenRefAsParent Router{..} =
     , recvMsgRunMarloweQuery = withHandshake useOpenRefAsParent (ClientAgency Query.TokReq) connectMarloweQuery queryNext
     , recvMsgRunMarloweLoad =
         withHandshake useOpenRefAsParent (ServerAgency $ Load.TokProcessing Load.SRootNode) connectMarloweLoad loadNext
+    , recvMsgRunMarloweImport =
+        withHandshake useOpenRefAsParent (ClientAgency Transfer.TokIdle) connectMarloweImport transferNext
     , recvMsgRunTxJob = withHandshake useOpenRefAsParent (ClientAgency Job.TokInit) connectTxJob jobNext
     , recvMsgRunContractQuery = withHandshake useOpenRefAsParent (ClientAgency Query.TokReq) connectContractQuery queryNext
     }
@@ -131,6 +139,7 @@ serverInProc RouterInProc{..} =
     , recvMsgRunMarloweHeaderSync = useServerSource hoistMarloweHeaderSyncServer marloweHeaderSyncServerSource
     , recvMsgRunMarloweQuery = useServerSource hoistQueryServer marloweQueryServerSource
     , recvMsgRunMarloweLoad = useServerSource hoistMarloweLoadServer marloweLoadServerSource
+    , recvMsgRunMarloweImport = useServerSource hoistMarloweTransferServer marloweImportServerSource
     , recvMsgRunTxJob = useServerSource hoistJobServer txJobServerSource
     , recvMsgRunContractQuery = useServerSource hoistQueryServer contractQueryServerSource
     }
@@ -213,6 +222,15 @@ loadNext = \case
     Load.MsgResume n -> NextReceive $ ClientAgency $ Load.TokCanPush n node
   ServerAgency Load.TokComplete -> \case
     Load.MsgComplete{} -> NextClosed Load.TokDone
+
+transferNext :: PeerHasAgency pr st -> Message MarloweTransfer st st' -> NextAgency MarloweTransfer pr st st'
+transferNext = \case
+  ClientAgency Transfer.TokIdle -> \case
+    Transfer.MsgTransfer{} -> NextCall $ ServerAgency Transfer.TokTransfer
+    Transfer.MsgDone -> NextClose Transfer.TokDone
+  ServerAgency Transfer.TokTransfer -> \case
+    Transfer.MsgTransferred{} -> NextReceive $ ClientAgency Transfer.TokIdle
+    Transfer.MsgTransferFailed{} -> NextClosed Transfer.TokDone
 
 jobNext :: (Job.Command cmd) => PeerHasAgency pr st -> Message (Job cmd) st st' -> NextAgency (Job cmd) pr st st'
 jobNext = \case

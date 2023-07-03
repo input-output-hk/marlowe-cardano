@@ -85,6 +85,13 @@ createContractStoreInMemory = do
               writeTVar buffer mempty
               writeTVar stagingArea mempty
               close
+          , lookupContract = \hash -> whenOpen do
+              buffered <- readTVar buffer
+              case Map.lookup hash buffered of
+                Nothing -> do
+                  staged <- readTVar stagingArea
+                  pure $ Map.lookup hash staged
+                Just c -> pure $ Just c
           }
 
     getContract :: TVar (Map DatumHash Contract) -> DatumHash -> STM (Maybe ContractWithAdjacency)

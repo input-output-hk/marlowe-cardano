@@ -16,6 +16,8 @@ import qualified Language.Marlowe.Protocol.Load.Types as MarloweLoad
 import Language.Marlowe.Protocol.Query.Types (MarloweQuery)
 import Language.Marlowe.Protocol.Sync.Types (MarloweSync)
 import qualified Language.Marlowe.Protocol.Sync.Types as MarloweSync
+import Language.Marlowe.Protocol.Transfer.Types (MarloweTransfer)
+import qualified Language.Marlowe.Protocol.Transfer.Types as MarloweTransfer
 import Language.Marlowe.Runtime.Contract.Api (ContractRequest)
 import Language.Marlowe.Runtime.Transaction.Api (MarloweTxCommand)
 import Network.Protocol.Codec
@@ -36,6 +38,7 @@ data MarloweRuntime where
   StTxJob :: Job MarloweTxCommand -> MarloweRuntime
   StMarloweLoad :: MarloweLoad -> MarloweRuntime
   StContractQuery :: Query ContractRequest -> MarloweRuntime
+  StMarloweImport :: MarloweTransfer -> MarloweRuntime
 
 instance Protocol MarloweRuntime where
   data Message MarloweRuntime st st' where
@@ -43,6 +46,7 @@ instance Protocol MarloweRuntime where
     MsgRunMarloweHeaderSync :: Message MarloweRuntime 'StInit ('StMarloweHeaderSync 'MarloweHeaderSync.StIdle)
     MsgRunMarloweQuery :: Message MarloweRuntime 'StInit ('StMarloweQuery 'Query.StReq)
     MsgRunMarloweLoad :: Message MarloweRuntime 'StInit ('StMarloweLoad ('MarloweLoad.StProcessing 'MarloweLoad.RootNode))
+    MsgRunMarloweImport :: Message MarloweRuntime 'StInit ('StMarloweImport 'MarloweTransfer.StIdle)
     MsgRunTxJob :: Message MarloweRuntime 'StInit ('StTxJob 'Job.StInit)
     MsgRunContractQuery :: Message MarloweRuntime 'StInit ('StContractQuery 'Query.StReq)
     MsgMarloweSync :: Message MarloweSync st st' -> Message MarloweRuntime ('StMarloweSync st) ('StMarloweSync st')
@@ -50,6 +54,8 @@ instance Protocol MarloweRuntime where
       :: Message MarloweHeaderSync st st' -> Message MarloweRuntime ('StMarloweHeaderSync st) ('StMarloweHeaderSync st')
     MsgMarloweQuery :: Message MarloweQuery st st' -> Message MarloweRuntime ('StMarloweQuery st) ('StMarloweQuery st')
     MsgMarloweLoad :: Message MarloweLoad st st' -> Message MarloweRuntime ('StMarloweLoad st) ('StMarloweLoad st')
+    MsgMarloweImport
+      :: Message MarloweTransfer st st' -> Message MarloweRuntime ('StMarloweImport st) ('StMarloweImport st')
     MsgTxJob :: Message (Job MarloweTxCommand) st st' -> Message MarloweRuntime ('StTxJob st) ('StTxJob st')
     MsgContractQuery
       :: Message (Query ContractRequest) st st' -> Message MarloweRuntime ('StContractQuery st) ('StContractQuery st')
@@ -60,6 +66,7 @@ instance Protocol MarloweRuntime where
     TokClientMarloweHeaderSync :: MarloweHeaderSync.ClientHasAgency st -> ClientHasAgency ('StMarloweHeaderSync st)
     TokClientMarloweQuery :: Query.ClientHasAgency st -> ClientHasAgency ('StMarloweQuery st)
     TokClientMarloweLoad :: MarloweLoad.ClientHasAgency st -> ClientHasAgency ('StMarloweLoad st)
+    TokClientMarloweImport :: MarloweTransfer.ClientHasAgency st -> ClientHasAgency ('StMarloweImport st)
     TokClientTxJob :: Job.ClientHasAgency st -> ClientHasAgency ('StTxJob st)
     TokClientContractQuery :: Query.ClientHasAgency st -> ClientHasAgency ('StContractQuery st)
 
@@ -68,6 +75,7 @@ instance Protocol MarloweRuntime where
     TokServerMarloweHeaderSync :: MarloweHeaderSync.ServerHasAgency st -> ServerHasAgency ('StMarloweHeaderSync st)
     TokServerMarloweQuery :: Query.ServerHasAgency st -> ServerHasAgency ('StMarloweQuery st)
     TokServerMarloweLoad :: MarloweLoad.ServerHasAgency st -> ServerHasAgency ('StMarloweLoad st)
+    TokServerMarloweImport :: MarloweTransfer.ServerHasAgency st -> ServerHasAgency ('StMarloweImport st)
     TokServerTxJob :: Job.ServerHasAgency st -> ServerHasAgency ('StTxJob st)
     TokServerContractQuery :: Query.ServerHasAgency st -> ServerHasAgency ('StContractQuery st)
 
@@ -76,6 +84,7 @@ instance Protocol MarloweRuntime where
     TokNobodyMarloweHeaderSync :: MarloweHeaderSync.NobodyHasAgency st -> NobodyHasAgency ('StMarloweHeaderSync st)
     TokNobodyMarloweQuery :: Query.NobodyHasAgency st -> NobodyHasAgency ('StMarloweQuery st)
     TokNobodyMarloweLoad :: MarloweLoad.NobodyHasAgency st -> NobodyHasAgency ('StMarloweLoad st)
+    TokNobodyMarloweImport :: MarloweTransfer.NobodyHasAgency st -> NobodyHasAgency ('StMarloweImport st)
     TokNobodyTxJob :: Job.NobodyHasAgency st -> NobodyHasAgency ('StTxJob st)
     TokNobodyContractQuery :: Query.NobodyHasAgency st -> NobodyHasAgency ('StContractQuery st)
 
@@ -89,6 +98,8 @@ instance Protocol MarloweRuntime where
       TokServerMarloweQuery tok' -> exclusionLemma_ClientAndServerHaveAgency tok tok'
     TokClientMarloweLoad tok -> \case
       TokServerMarloweLoad tok' -> exclusionLemma_ClientAndServerHaveAgency tok tok'
+    TokClientMarloweImport tok -> \case
+      TokServerMarloweImport tok' -> exclusionLemma_ClientAndServerHaveAgency tok tok'
     TokClientTxJob tok -> \case
       TokServerTxJob tok' -> exclusionLemma_ClientAndServerHaveAgency tok tok'
     TokClientContractQuery tok -> \case
@@ -103,6 +114,8 @@ instance Protocol MarloweRuntime where
       TokClientMarloweQuery tok' -> exclusionLemma_NobodyAndClientHaveAgency tok tok'
     TokNobodyMarloweLoad tok -> \case
       TokClientMarloweLoad tok' -> exclusionLemma_NobodyAndClientHaveAgency tok tok'
+    TokNobodyMarloweImport tok -> \case
+      TokClientMarloweImport tok' -> exclusionLemma_NobodyAndClientHaveAgency tok tok'
     TokNobodyTxJob tok -> \case
       TokClientTxJob tok' -> exclusionLemma_NobodyAndClientHaveAgency tok tok'
     TokNobodyContractQuery tok -> \case
@@ -117,6 +130,8 @@ instance Protocol MarloweRuntime where
       TokServerMarloweQuery tok' -> exclusionLemma_NobodyAndServerHaveAgency tok tok'
     TokNobodyMarloweLoad tok -> \case
       TokServerMarloweLoad tok' -> exclusionLemma_NobodyAndServerHaveAgency tok tok'
+    TokNobodyMarloweImport tok -> \case
+      TokServerMarloweImport tok' -> exclusionLemma_NobodyAndServerHaveAgency tok tok'
     TokNobodyTxJob tok -> \case
       TokServerTxJob tok' -> exclusionLemma_NobodyAndServerHaveAgency tok tok'
     TokNobodyContractQuery tok -> \case
@@ -128,6 +143,7 @@ instance ShowProtocol MarloweRuntime where
     MsgRunMarloweHeaderSync -> showString "MsgRunMarloweHeaderSync"
     MsgRunMarloweQuery -> showString "MsgRunMarloweQuery"
     MsgRunMarloweLoad -> showString "MsgRunMarloweLoad"
+    MsgRunMarloweImport -> showString "MsgRunMarloweImport"
     MsgRunTxJob -> showString "MsgRunTxJob"
     MsgRunContractQuery -> showString "MsgRunContractQuery"
     MsgMarloweSync msg ->
@@ -165,6 +181,15 @@ instance ShowProtocol MarloweRuntime where
             . case tok of
               ClientAgency (TokClientMarloweLoad tok') -> showsPrecMessage p (ClientAgency tok') msg
               ServerAgency (TokServerMarloweLoad tok') -> showsPrecMessage p (ServerAgency tok') msg
+        )
+    MsgMarloweImport msg ->
+      showParen
+        (p >= 11)
+        ( showString "MsgMarloweImport"
+            . showSpace
+            . case tok of
+              ClientAgency (TokClientMarloweImport tok') -> showsPrecMessage p (ClientAgency tok') msg
+              ServerAgency (TokServerMarloweImport tok') -> showsPrecMessage p (ServerAgency tok') msg
         )
     MsgTxJob msg ->
       showParen
@@ -214,6 +239,13 @@ instance ShowProtocol MarloweRuntime where
             . showSpace
             . showsPrecServerHasAgency 11 tok
         )
+    TokServerMarloweImport tok ->
+      showParen
+        (p >= 11)
+        ( showString "TokServerMarloweImport"
+            . showSpace
+            . showsPrecServerHasAgency 11 tok
+        )
     TokServerTxJob tok ->
       showParen
         (p >= 11)
@@ -259,6 +291,13 @@ instance ShowProtocol MarloweRuntime where
             . showSpace
             . showsPrecClientHasAgency 11 tok
         )
+    TokClientMarloweImport tok ->
+      showParen
+        (p >= 11)
+        ( showString "TokClientMarloweImport"
+            . showSpace
+            . showsPrecClientHasAgency 11 tok
+        )
     TokClientTxJob tok ->
       showParen
         (p >= 11)
@@ -297,6 +336,11 @@ instance OTelProtocol MarloweRuntime where
         { messageType = "run_marlowe_load"
         , messageParameters = []
         }
+    MsgRunMarloweImport ->
+      MessageAttributes
+        { messageType = "run_marlowe_import"
+        , messageParameters = []
+        }
     MsgRunTxJob ->
       MessageAttributes
         { messageType = "run_tx_job"
@@ -327,6 +371,11 @@ instance OTelProtocol MarloweRuntime where
         subMessageAttributes "marlowe_load" $ messageAttributes (ClientAgency tok') msg
       ServerAgency (TokServerMarloweLoad tok') ->
         subMessageAttributes "marlowe_load" $ messageAttributes (ServerAgency tok') msg
+    MsgMarloweImport msg -> case tok of
+      ClientAgency (TokClientMarloweImport tok') ->
+        subMessageAttributes "marlowe_import" $ messageAttributes (ClientAgency tok') msg
+      ServerAgency (TokServerMarloweImport tok') ->
+        subMessageAttributes "marlowe_import" $ messageAttributes (ServerAgency tok') msg
     MsgTxJob msg -> case tok of
       ClientAgency (TokClientTxJob tok') ->
         subMessageAttributes "tx_job" $ messageAttributes (ClientAgency tok') msg
@@ -352,6 +401,7 @@ instance BinaryMessage MarloweRuntime where
       MsgRunTxJob -> putWord8 0x03
       MsgRunMarloweLoad -> putWord8 0x04
       MsgRunContractQuery -> putWord8 0x05
+      MsgRunMarloweImport -> putWord8 0x06
     ClientAgency (TokClientMarloweSync tok) -> \case
       MsgMarloweSync msg -> putMessage (ClientAgency tok) msg
     ClientAgency (TokClientMarloweHeaderSync tok) -> \case
@@ -360,6 +410,8 @@ instance BinaryMessage MarloweRuntime where
       MsgMarloweQuery msg -> putMessage (ClientAgency tok) msg
     ClientAgency (TokClientMarloweLoad tok) -> \case
       MsgMarloweLoad msg -> putMessage (ClientAgency tok) msg
+    ClientAgency (TokClientMarloweImport tok) -> \case
+      MsgMarloweImport msg -> putMessage (ClientAgency tok) msg
     ClientAgency (TokClientTxJob tok) -> \case
       MsgTxJob msg -> putMessage (ClientAgency tok) msg
     ClientAgency (TokClientContractQuery tok) -> \case
@@ -372,6 +424,8 @@ instance BinaryMessage MarloweRuntime where
       MsgMarloweQuery msg -> putMessage (ServerAgency tok) msg
     ServerAgency (TokServerMarloweLoad tok) -> \case
       MsgMarloweLoad msg -> putMessage (ServerAgency tok) msg
+    ServerAgency (TokServerMarloweImport tok) -> \case
+      MsgMarloweImport msg -> putMessage (ServerAgency tok) msg
     ServerAgency (TokServerTxJob tok) -> \case
       MsgTxJob msg -> putMessage (ServerAgency tok) msg
     ServerAgency (TokServerContractQuery tok) -> \case
@@ -386,6 +440,7 @@ instance BinaryMessage MarloweRuntime where
         0x03 -> pure $ SomeMessage MsgRunTxJob
         0x04 -> pure $ SomeMessage MsgRunMarloweLoad
         0x05 -> pure $ SomeMessage MsgRunContractQuery
+        0x06 -> pure $ SomeMessage MsgRunMarloweImport
         tag -> fail $ "invalid message tag " <> show tag
     ClientAgency (TokClientMarloweSync tok) -> do
       SomeMessage msg <- getMessage (ClientAgency tok)
@@ -399,6 +454,9 @@ instance BinaryMessage MarloweRuntime where
     ClientAgency (TokClientMarloweLoad tok) -> do
       SomeMessage msg <- getMessage (ClientAgency tok)
       pure $ SomeMessage $ MsgMarloweLoad msg
+    ClientAgency (TokClientMarloweImport tok) -> do
+      SomeMessage msg <- getMessage (ClientAgency tok)
+      pure $ SomeMessage $ MsgMarloweImport msg
     ClientAgency (TokClientTxJob tok) -> do
       SomeMessage msg <- getMessage (ClientAgency tok)
       pure $ SomeMessage $ MsgTxJob msg
@@ -417,6 +475,9 @@ instance BinaryMessage MarloweRuntime where
     ServerAgency (TokServerMarloweLoad tok) -> do
       SomeMessage msg <- getMessage (ServerAgency tok)
       pure $ SomeMessage $ MsgMarloweLoad msg
+    ServerAgency (TokServerMarloweImport tok) -> do
+      SomeMessage msg <- getMessage (ServerAgency tok)
+      pure $ SomeMessage $ MsgMarloweImport msg
     ServerAgency (TokServerTxJob tok) -> do
       SomeMessage msg <- getMessage (ServerAgency tok)
       pure $ SomeMessage $ MsgTxJob msg
@@ -434,6 +495,7 @@ instance HasSignature MarloweRuntime where
         , signature $ Proxy @MarloweHeaderSync
         , signature $ Proxy @MarloweQuery
         , signature $ Proxy @MarloweLoad
+        , signature $ Proxy @MarloweTransfer
         , signature $ Proxy @(Job MarloweTxCommand)
         , signature $ Proxy @(Query ContractRequest)
         ]

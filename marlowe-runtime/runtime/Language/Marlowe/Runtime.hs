@@ -180,6 +180,7 @@ marloweRuntime = proc MarloweRuntimeDependencies{..} -> do
   mMarloweContract <- supervisor "marlowe-contract" contract -< ContractDependencies{..}
 
   let marloweLoadServerSource = unnestServerSource $ MarloweContract.loadServerSource <$> mMarloweContract
+  let marloweImportServerSource = unnestServerSource $ MarloweContract.importServerSource <$> mMarloweContract
   let contractQueryServerSource = unnestServerSource $ MarloweContract.queryServerSource <$> mMarloweContract
   let contractQueryConnector = directConnector serveQueryClient contractQueryServerSource
 

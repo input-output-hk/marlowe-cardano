@@ -28,6 +28,7 @@ import qualified Data.ByteString.Char8 as BS8
 import Data.Either (fromRight)
 import Data.Foldable (asum, fold, traverse_)
 import Data.Function (on)
+import Data.Hashable (Hashable)
 import Data.List (intercalate)
 import qualified Data.List.NonEmpty as LNE
 import Data.Maybe (isJust)
@@ -200,12 +201,6 @@ instance Variations SomeObjectType where
       , SomeObjectType TokenType
       , SomeObjectType ActionType
       ]
-
-data LinkError
-  = UnknownSymbol Label
-  | TypeMismatch SomeObjectType SomeObjectType
-  deriving stock (Show, Read, Generic, Eq, Ord)
-  deriving anyclass (FromJSON, ToJSON, Binary, Variations)
 
 data LabelledObject = forall a.
   LabelledObject
@@ -387,7 +382,7 @@ data Object
 newtype Label = Label {unLabel :: ByteString}
   deriving (Show, Read, Generic, Eq, Ord)
   deriving (IsString, FromJSON, ToJSON, FromJSONKey, ToJSONKey) via Verbatim
-  deriving newtype (Binary, Variations)
+  deriving newtype (Binary, Variations, Hashable)
 
 data Contract
   = Close
@@ -836,6 +831,9 @@ newtype TokenName = TokenName {unTokenName :: ByteString}
 fromCoreTokenName :: PV2.TokenName -> TokenName
 fromCoreTokenName = TokenName . PV2.fromBuiltin . PV2.unTokenName
 
+toCoreTokenName :: TokenName -> PV2.TokenName
+toCoreTokenName = PV2.TokenName . PV2.toBuiltin . unTokenName
+
 data ChoiceId = ChoiceId Text Party
   deriving stock (Show, Read, Generic, Eq, Ord)
   deriving anyclass (Binary, Variations)
@@ -860,6 +858,9 @@ newtype ValueId = ValueId {unValueId :: ByteString}
 
 fromCoreValueId :: Core.ValueId -> ValueId
 fromCoreValueId (Core.ValueId bs) = ValueId $ PV2.fromBuiltin bs
+
+toCoreValueId :: ValueId -> Core.ValueId
+toCoreValueId (ValueId bs) = Core.ValueId $ PV2.toBuiltin bs
 
 data Payee
   = Party !Party
@@ -915,6 +916,9 @@ newtype CurrencySymbol = CurrencySymbol {unCurrencySymbol :: ByteString}
 
 fromCoreCurrencySymbol :: PV2.CurrencySymbol -> CurrencySymbol
 fromCoreCurrencySymbol = CurrencySymbol . PV2.fromBuiltin . PV2.unCurrencySymbol
+
+toCoreCurrencySymbol :: CurrencySymbol -> PV2.CurrencySymbol
+toCoreCurrencySymbol = PV2.CurrencySymbol . PV2.toBuiltin . unCurrencySymbol
 
 newtype ContractHash = ContractHash {unContractHash :: ByteString}
   deriving newtype (Eq, Ord, Binary)
@@ -981,6 +985,9 @@ instance FromJSON Bound where
 fromCoreBound :: Core.Bound -> Bound
 fromCoreBound (Core.Bound lo hi) = Bound lo hi
 
+toCoreBound :: Bound -> Core.Bound
+toCoreBound (Bound lo hi) = Core.Bound lo hi
+
 newtype Timeout = Timeout {unTimeout :: UTCTime}
   deriving stock (Generic, Show, Read, Eq, Ord)
   deriving anyclass (Variations)
@@ -1027,6 +1034,9 @@ instance ToJSON Timeout where
 
 instance FromJSON Timeout where
   parseJSON v = Timeout . posixSecondsToUTCTime . secondsToNominalDiffTime . (/ 1000000) . fromInteger <$> parseJSON v
+
+toCoreTimeout :: Timeout -> Core.Timeout
+toCoreTimeout = PV2.POSIXTime . floor . (* 1000000) . nominalDiffTimeToSeconds . utcTimeToPOSIXSeconds . unTimeout
 
 fromCoreTimeout :: Core.Timeout -> Timeout
 fromCoreTimeout = Timeout . posixSecondsToUTCTime . secondsToNominalDiffTime . (/ 1000000) . fromInteger . getPOSIXTime

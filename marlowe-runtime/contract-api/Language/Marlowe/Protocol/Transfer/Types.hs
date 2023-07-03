@@ -6,11 +6,13 @@
 module Language.Marlowe.Protocol.Transfer.Types where
 
 import Control.Monad (join)
-import Data.Aeson (ToJSON (toJSON))
+import Data.Aeson (FromJSON, ToJSON (toJSON))
 import Data.Binary (Binary (..), getWord8, putWord8)
 import qualified Data.List.NonEmpty as NE
 import Data.Map (Map)
 import Data.String (fromString)
+import GHC.Generics (Generic)
+import Language.Marlowe.Object.Link (LinkError)
 import Language.Marlowe.Object.Types
 import Language.Marlowe.Protocol.Load.Types (jsonToPrimitiveAttribute)
 import Language.Marlowe.Runtime.ChainSync.Api (DatumHash)
@@ -22,20 +24,30 @@ import Network.Protocol.Codec.Spec (
   SomePeerHasAgency (..),
   Variations (..),
  )
+import Network.Protocol.Handshake.Types (HasSignature (..))
 import Network.Protocol.Peer.Trace (MessageAttributes (..), OTelProtocol (..))
 import Network.TypedProtocol
 import Network.TypedProtocol.Codec (AnyMessageAndAgency (..))
+
+data TransferError
+  = MerkleizedContractsNotAllowed
+  | LinkError LinkError
+  deriving stock (Show, Read, Generic, Eq, Ord)
+  deriving anyclass (FromJSON, ToJSON, Binary, Variations)
 
 data MarloweTransfer where
   StIdle :: MarloweTransfer
   StTransfer :: MarloweTransfer
   StDone :: MarloweTransfer
 
+instance HasSignature MarloweTransfer where
+  signature _ = "MarloweTransfer"
+
 instance Protocol MarloweTransfer where
   data Message MarloweTransfer st st' where
     MsgTransfer :: ObjectBundle -> Message MarloweTransfer 'StIdle 'StTransfer
     MsgTransferred :: Map Label DatumHash -> Message MarloweTransfer 'StTransfer 'StIdle
-    MsgTransferFailed :: LinkError -> Message MarloweTransfer 'StTransfer 'StDone
+    MsgTransferFailed :: TransferError -> Message MarloweTransfer 'StTransfer 'StDone
     MsgDone :: Message MarloweTransfer 'StIdle 'StDone
 
   data ClientHasAgency st where

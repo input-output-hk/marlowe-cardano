@@ -251,6 +251,7 @@ library contract
   visibility:      public
   exposed-modules:
     Language.Marlowe.Runtime.Contract
+    Language.Marlowe.Runtime.Contract.ImportServer
     Language.Marlowe.Runtime.Contract.LoadServer
     Language.Marlowe.Runtime.Contract.QueryServer
     Language.Marlowe.Runtime.Contract.Store
@@ -274,6 +275,7 @@ library contract
     , lock-file ^>=0.7
     , marlowe-cardano ==0.1.1.0
     , marlowe-chain-sync ==0.0.2
+    , marlowe-object ==0.1.0.0
     , marlowe-protocols ==0.1.1.0
     , marlowe-runtime:{marlowe-runtime, contract-api} ==0.0.2
     , plutus-ledger-api ==1.0.0.1

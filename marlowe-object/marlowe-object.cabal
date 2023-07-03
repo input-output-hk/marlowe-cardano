@@ -50,7 +50,10 @@ common lang
 library
   import:          lang
   hs-source-dirs:  src
-  exposed-modules: Language.Marlowe.Object.Types
+  exposed-modules:
+    Language.Marlowe.Object.Link
+    Language.Marlowe.Object.Types
+
   build-depends:
     , aeson >=2 && <3
     , aeson-applicative ==0.1.0.0
@@ -59,11 +62,14 @@ library
     , binary ^>=0.8.8
     , bytestring >=0.10.12 && <0.12
     , cardano-api ==1.35.4
+    , cardano-ledger-core ==0.1.0.0
+    , hashable >=1.3 && <2
     , marlowe-cardano ==0.1.1.0
     , marlowe-protocols ==0.1.1.0
     , plutus-ledger-api ==1.0.0.1
     , text >=1.2.4 && <2
     , time >=1.9 && <2
+    , unordered-containers ^>=0.2.19
 
 library gen
   import:          lang

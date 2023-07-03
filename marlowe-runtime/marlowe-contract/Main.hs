@@ -16,6 +16,7 @@ import qualified Data.Text as T
 import Data.Version (showVersion)
 import Data.Word (Word64)
 import Language.Marlowe.Protocol.Load.Server (marloweLoadServerPeer)
+import Language.Marlowe.Protocol.Transfer.Server (marloweTransferServerPeer)
 import Language.Marlowe.Runtime.Contract
 import Language.Marlowe.Runtime.Contract.Store (traceContractStore)
 import Language.Marlowe.Runtime.Contract.Store.File (
@@ -91,12 +92,22 @@ run Options{..} = do
           , ..
           }
 
+    tcpServerTraced "contract-import" inject
+      -<
+        TcpServerDependencies
+          { toPeer = marloweTransferServerPeer
+          , port = importPort
+          , serverSource = importServerSource
+          , ..
+          }
+
     probeServer -< ProbeServerDependencies{port = fromIntegral httpPort, ..}
 
 data Options = Options
   { host :: HostName
   , port :: PortNumber
   , queryPort :: PortNumber
+  , importPort :: PortNumber
   , bufferSize :: Int
   , contractStoreDirectory :: FilePath
   , contractStoreStagingDirectory :: FilePath
@@ -114,6 +125,7 @@ getOptions = do
                   <$> hostParser
                   <*> portParser
                   <*> queryPortParser
+                  <*> importPortParser
                   <*> bufferSizeParser
                   <*> contractStoreDirectoryParser contractStoreDirectory
                   <*> contractStoreStagingDirectoryParser contractStoreStagingDirectory
@@ -152,6 +164,16 @@ getOptions = do
           , value 3728
           , metavar "PORT_NUMBER"
           , help "The port number to run the query server on."
+          , showDefault
+          ]
+
+    importPortParser =
+      option auto $
+        mconcat
+          [ long "import-port"
+          , value 3729
+          , metavar "PORT_NUMBER"
+          , help "The port number to run the import server on."
           , showDefault
           ]
 

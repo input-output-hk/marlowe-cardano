@@ -232,6 +232,15 @@ createContractStore ContractStoreOptions{..} = do
           , discard =
               -- only run when open, close the staging area.
               whenOpen False $ pure ()
+          , lookupContract = \hash ->
+              whenOpen True $ withMVar mBuffer \(_, buffer) -> do
+                case HashMap.lookup hash buffer of
+                  Nothing -> runMaybeT do
+                    let contractFilePath = directory </> read (show hash) <.> ".contract"
+                    guard =<< doesFileExist contractFilePath
+                    contractBytesCompressed <- liftIO $ LBS.readFile contractFilePath
+                    pure $ runGet get $ decompress contractBytesCompressed
+                  Just ContractRecord{contract} -> pure $ Just contract
           }
 
 -- | Computes the adjacency and closure information for a merkleized contract.

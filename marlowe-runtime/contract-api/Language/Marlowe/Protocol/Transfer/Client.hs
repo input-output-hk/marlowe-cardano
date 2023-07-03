@@ -4,15 +4,17 @@
 
 module Language.Marlowe.Protocol.Transfer.Client where
 
+import Control.Monad (join)
 import Data.Map (Map)
 import Language.Marlowe.Object.Types hiding (Close)
+import Language.Marlowe.Protocol.Transfer.Server
 import Language.Marlowe.Protocol.Transfer.Types
 import Language.Marlowe.Runtime.ChainSync.Api (DatumHash)
 import Network.Protocol.Peer.Trace
 import Network.TypedProtocol
 
 newtype MarloweTransferClient m a = MarloweTransferClient
-  { runtMarloweTransferClient :: m (ClientStIdle m a)
+  { runMarloweTransferClient :: m (ClientStIdle m a)
   }
   deriving (Functor)
 
@@ -24,7 +26,7 @@ deriving instance (Functor m) => Functor (ClientStIdle m)
 
 data ClientStTransfer m a = ClientStTransfer
   { recvMsgTransferred :: Map Label DatumHash -> m (ClientStIdle m a)
-  , recvMsgTransferFailed :: LinkError -> m a
+  , recvMsgTransferFailed :: TransferError -> m a
   }
   deriving (Functor)
 
@@ -34,7 +36,7 @@ hoistMarloweTransferClient
   => (forall x. m x -> n x)
   -> MarloweTransferClient m a
   -> MarloweTransferClient n a
-hoistMarloweTransferClient f = MarloweTransferClient . f . fmap hoistIdle . runtMarloweTransferClient
+hoistMarloweTransferClient f = MarloweTransferClient . f . fmap hoistIdle . runMarloweTransferClient
   where
     hoistIdle :: ClientStIdle m a -> ClientStIdle n a
     hoistIdle = \case
@@ -53,7 +55,7 @@ marloweTransferClientPeer
    . (Functor m)
   => MarloweTransferClient m a
   -> PeerTraced MarloweTransfer 'AsClient 'StIdle m a
-marloweTransferClientPeer = EffectTraced . fmap peerIdle . runtMarloweTransferClient
+marloweTransferClientPeer = EffectTraced . fmap peerIdle . runMarloweTransferClient
   where
     peerIdle :: ClientStIdle m a -> PeerTraced MarloweTransfer 'AsClient 'StIdle m a
     peerIdle = \case
@@ -64,3 +66,22 @@ marloweTransferClientPeer = EffectTraced . fmap peerIdle . runtMarloweTransferCl
       SendMsgDone a ->
         YieldTraced (ClientAgency TokIdle) MsgDone $
           Close TokDone a
+
+serveMarloweTransferClient
+  :: forall m a b
+   . (Monad m)
+  => MarloweTransferServer m a
+  -> MarloweTransferClient m b
+  -> m (a, b)
+serveMarloweTransferClient MarloweTransferServer{..} MarloweTransferClient{..} =
+  join $ serveIdle <$> runMarloweTransferServer <*> runMarloweTransferClient
+  where
+    serveIdle :: ServerStIdle m a -> ClientStIdle m b -> m (a, b)
+    serveIdle ServerStIdle{..} = \case
+      SendMsgTransfer bundle next -> serveTransfer next =<< recvMsgTransfer bundle
+      SendMsgDone b -> (,b) <$> recvMsgDone
+
+    serveTransfer :: ClientStTransfer m b -> ServerStTransfer m a -> m (a, b)
+    serveTransfer ClientStTransfer{..} = \case
+      SendMsgTransferred hash next -> serveIdle next =<< recvMsgTransferred hash
+      SendMsgTransferFailed err a -> (a,) <$> recvMsgTransferFailed err
