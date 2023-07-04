@@ -9,12 +9,24 @@ import qualified Data.ByteString as BS
 import Data.Foldable (Foldable (fold))
 import Data.Function ((&))
 import Gen.Cardano.Api.Typed (genAddressShelley)
-import Language.Marlowe.Object.Link (LinkError (..))
+import Language.Marlowe.Object.Link
 import Language.Marlowe.Object.Types
 import Spec.Marlowe.Semantics.Arbitrary ()
 import Test.QuickCheck hiding (label)
 import Test.QuickCheck.Hedgehog (hedgehog)
 import Test.QuickCheck.Instances ()
+
+instance Arbitrary LinkedObject where
+  arbitrary =
+    oneof
+      [ LinkedAction <$> arbitrary
+      , LinkedContract <$> arbitrary
+      , LinkedObservation <$> arbitrary
+      , LinkedParty <$> arbitrary
+      , LinkedToken <$> arbitrary
+      , LinkedValue <$> arbitrary
+      ]
+  shrink = genericShrink
 
 instance Arbitrary ObjectBundle where
   arbitrary = ObjectBundle <$> arbitrary
@@ -41,38 +53,26 @@ instance Arbitrary SomeObjectType where
 
 instance Arbitrary LabelledObject where
   arbitrary = do
-    label :: Label <- arbitrary
-    type_ <- arbitrary
-    case type_ of
-      SomeObjectType ValueType -> LabelledObject label ValueType <$> arbitrary
-      SomeObjectType ObservationType -> LabelledObject label ObservationType <$> arbitrary
-      SomeObjectType ContractType -> LabelledObject label ContractType <$> arbitrary
-      SomeObjectType PartyType -> LabelledObject label PartyType <$> arbitrary
-      SomeObjectType TokenType -> LabelledObject label TokenType <$> arbitrary
-      SomeObjectType ActionType -> LabelledObject label ActionType <$> arbitrary
+    _label :: Label <- arbitrary
+    _type <- arbitrary
+    case _type of
+      SomeObjectType ValueType -> LabelledObject _label ValueType <$> arbitrary
+      SomeObjectType ObservationType -> LabelledObject _label ObservationType <$> arbitrary
+      SomeObjectType ContractType -> LabelledObject _label ContractType <$> arbitrary
+      SomeObjectType PartyType -> LabelledObject _label PartyType <$> arbitrary
+      SomeObjectType TokenType -> LabelledObject _label TokenType <$> arbitrary
+      SomeObjectType ActionType -> LabelledObject _label ActionType <$> arbitrary
   shrink LabelledObject{..} =
     fold
-      [ [LabelledObject{label = label', ..} | label' <- shrink label]
-      , case type_ of
-          ValueType -> [LabelledObject{value = value', ..} | value' <- shrink value]
-          ObservationType -> [LabelledObject{value = value', ..} | value' <- shrink value]
-          ContractType -> [LabelledObject{value = value', ..} | value' <- shrink value]
-          PartyType -> [LabelledObject{value = value', ..} | value' <- shrink value]
-          TokenType -> [LabelledObject{value = value', ..} | value' <- shrink value]
-          ActionType -> [LabelledObject{value = value', ..} | value' <- shrink value]
+      [ [LabelledObject{_label = label', ..} | label' <- shrink _label]
+      , case _type of
+          ValueType -> [LabelledObject{_value = value', ..} | value' <- shrink _value]
+          ObservationType -> [LabelledObject{_value = value', ..} | value' <- shrink _value]
+          ContractType -> [LabelledObject{_value = value', ..} | value' <- shrink _value]
+          PartyType -> [LabelledObject{_value = value', ..} | value' <- shrink _value]
+          TokenType -> [LabelledObject{_value = value', ..} | value' <- shrink _value]
+          ActionType -> [LabelledObject{_value = value', ..} | value' <- shrink _value]
       ]
-
-instance Arbitrary Object where
-  arbitrary =
-    oneof
-      [ ValueObject <$> arbitrary
-      , ObservationObject <$> arbitrary
-      , ContractObject <$> arbitrary
-      , PartyObject <$> arbitrary
-      , TokenObject <$> arbitrary
-      , ActionObject <$> arbitrary
-      ]
-  shrink = genericShrink
 
 instance Arbitrary Label where
   arbitrary = Label <$> arbitrary

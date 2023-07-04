@@ -1,5 +1,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TypeFamilies #-}
 
 module Language.Marlowe.Object.Link where
 
@@ -12,17 +14,39 @@ import Cardano.Api (
   SerialiseAsRawBytes (serialiseToRawBytes),
   StakeAddressPointer (..),
   StakeAddressReference (..),
+  hashScriptData,
  )
 import Cardano.Api.Byron (ShelleyAddr)
-import Cardano.Api.Shelley (Address (..), StakeCredential (..), fromShelleyPaymentCredential, fromShelleyStakeReference)
+import Cardano.Api.Shelley (
+  Address (..),
+  StakeCredential (..),
+  fromPlutusData,
+  fromShelleyPaymentCredential,
+  fromShelleyStakeReference,
+ )
 import Cardano.Ledger.BaseTypes (Network (..))
 import qualified Cardano.Ledger.BaseTypes as Ledger
 import Cardano.Ledger.Credential (Ptr (..))
 import qualified Cardano.Ledger.Slot as Ledger
+import Control.Applicative (liftA2)
+import Control.Lens (Fold, folding, makePrisms, traverseOf_, (^.))
+import Control.Monad (when)
+import Control.Monad.Trans.RWS (RWS, evalRWS)
+import qualified Control.Monad.Trans.RWS as RWS
+import Control.Monad.Trans.State
 import Data.Aeson (FromJSON, ToJSON)
+import Data.Bifunctor (Bifunctor (..))
 import Data.Binary (Binary)
+import Data.ByteString.Base16 (encodeBase16)
+import Data.DList (DList)
+import qualified Data.DList as DList
+import Data.Function (on)
 import Data.HashMap.Strict (HashMap)
 import qualified Data.HashMap.Strict as HashMap
+import Data.HashSet (HashSet)
+import qualified Data.HashSet as HashSet
+import Data.Maybe (fromMaybe)
+import Data.Text (Text)
 import qualified Data.Text.Encoding as T
 import GHC.Generics (Generic)
 import qualified Language.Marlowe.Core.V1.Semantics.Types as C
@@ -30,7 +54,8 @@ import qualified Language.Marlowe.Core.V1.Semantics.Types.Address as C
 import qualified Language.Marlowe.Object.Types as O
 import Network.Protocol.Codec.Spec (Variations)
 import qualified Plutus.V1.Ledger.Address as PV2
-import Plutus.V2.Ledger.Api (toBuiltin)
+import Plutus.V1.Ledger.Api (ToData)
+import Plutus.V2.Ledger.Api (toBuiltin, toData)
 import qualified Plutus.V2.Ledger.Api as PV2
 
 data LinkError
@@ -49,6 +74,31 @@ data LinkedObject
   | LinkedParty C.Party
   | LinkedToken C.Token
   | LinkedAction C.Action
+  deriving stock (Show, Generic, Eq, Ord)
+  deriving anyclass (FromJSON, ToJSON)
+
+type family Linked o where
+  Linked O.Value = C.Value C.Observation
+  Linked O.Observation = C.Observation
+  Linked O.Contract = C.Contract
+  Linked O.Party = C.Party
+  Linked O.Token = C.Token
+  Linked O.Action = C.Action
+
+linkBundle
+  :: (Monad m)
+  => O.ObjectBundle
+  -> (LinkedObject -> m LinkedObject)
+  -> SymbolTable
+  -> m (Either LinkError ([(O.Label, LinkedObject)], SymbolTable))
+linkBundle bundle transform = go [] $ O.getObjects bundle
+  where
+    go acc [] objects = pure $ pure (reverse acc, objects)
+    go acc (x : xs) objects = do
+      result <- linkObject x transform objects
+      case result of
+        Left err -> pure $ Left err
+        Right (linked, objects') -> go ((x ^. O.label, linked) : acc) xs objects'
 
 linkObject
   :: (Monad m)
@@ -57,20 +107,20 @@ linkObject
   -> SymbolTable
   -> m (Either LinkError (LinkedObject, SymbolTable))
 linkObject O.LabelledObject{..} transform objects
-  | HashMap.member label objects = pure $ Left $ DuplicateLabel label
+  | HashMap.member _label objects = pure $ Left $ DuplicateLabel _label
   | otherwise = do
-      let mLinked = case type_ of
-            O.ValueType -> LinkedValue <$> linkValue objects value
-            O.ObservationType -> LinkedObservation <$> linkObservation objects value
-            O.ContractType -> LinkedContract <$> linkContract objects value
-            O.PartyType -> LinkedParty <$> linkParty objects value
-            O.TokenType -> LinkedToken <$> linkToken objects value
-            O.ActionType -> LinkedAction <$> linkAction objects value
+      let mLinked = case _type of
+            O.ValueType -> LinkedValue <$> linkValue objects _value
+            O.ObservationType -> LinkedObservation <$> linkObservation objects _value
+            O.ContractType -> LinkedContract <$> linkContract objects _value
+            O.PartyType -> LinkedParty <$> linkParty objects _value
+            O.TokenType -> LinkedToken <$> linkToken objects _value
+            O.ActionType -> LinkedAction <$> linkAction objects _value
       case mLinked of
         Left err -> pure $ Left err
         Right linked -> do
           linked' <- transform linked
-          pure $ Right (linked', HashMap.insert label linked' objects)
+          pure $ Right (linked', HashMap.insert _label linked' objects)
 
 linkValue :: SymbolTable -> O.Value -> Either LinkError (C.Value C.Observation)
 linkValue objects = \case
@@ -91,14 +141,14 @@ linkValue objects = \case
   O.UseValue (O.ValueId val) -> pure $ C.UseValue (C.ValueId $ toBuiltin val)
   O.Cond c a b ->
     C.Cond <$> linkObservation objects c <*> linkValue objects a <*> linkValue objects b
-  O.ValueRef label -> resolveReference label objects \case
+  O.ValueRef lbl -> resolveReference lbl objects \case
     LinkedValue value -> Right value
     _ -> Left $ O.SomeObjectType O.ValueType
 
 linkObservation :: SymbolTable -> O.Observation -> Either LinkError C.Observation
 linkObservation objects = \case
   O.AndObs a b -> C.AndObs <$> linkObservation objects a <*> linkObservation objects b
-  O.OrObs a b -> C.AndObs <$> linkObservation objects a <*> linkObservation objects b
+  O.OrObs a b -> C.OrObs <$> linkObservation objects a <*> linkObservation objects b
   O.NotObs a -> C.NotObs <$> linkObservation objects a
   O.ChoseSomething (O.ChoiceId name owner) ->
     C.ChoseSomething . C.ChoiceId (toBuiltin $ T.encodeUtf8 name) <$> linkParty objects owner
@@ -109,7 +159,7 @@ linkObservation objects = \case
   O.ValueEQ a b -> C.ValueEQ <$> linkValue objects a <*> linkValue objects b
   O.TrueObs -> pure C.TrueObs
   O.FalseObs -> pure C.FalseObs
-  O.ObservationRef label -> resolveReference label objects \case
+  O.ObservationRef lbl -> resolveReference lbl objects \case
     LinkedObservation value -> Right value
     _ -> Left $ O.SomeObjectType O.ObservationType
 
@@ -129,7 +179,7 @@ linkContract objects = \case
   O.Let valueId value c ->
     C.Let (O.toCoreValueId valueId) <$> linkValue objects value <*> linkContract objects c
   O.Assert obs c -> C.Assert <$> linkObservation objects obs <*> linkContract objects c
-  O.ContractRef label -> resolveReference label objects \case
+  O.ContractRef lbl -> resolveReference lbl objects \case
     LinkedContract value -> Right value
     _ -> Left $ O.SomeObjectType O.ContractType
 
@@ -148,7 +198,7 @@ linkParty :: SymbolTable -> O.Party -> Either LinkError C.Party
 linkParty objects = \case
   O.Role token -> pure $ C.Role $ O.toCoreTokenName token
   O.Address (O.ShelleyAddress address) -> pure $ C.Address (getNetwork address) (toPlutusAddress address)
-  O.PartyRef label -> resolveReference label objects \case
+  O.PartyRef lbl -> resolveReference lbl objects \case
     LinkedParty value -> Right value
     _ -> Left $ O.SomeObjectType O.PartyType
 
@@ -192,7 +242,7 @@ linkToken :: SymbolTable -> O.Token -> Either LinkError C.Token
 linkToken objects = \case
   O.Token currencySymbol tokenName ->
     pure $ C.Token (O.toCoreCurrencySymbol currencySymbol) (O.toCoreTokenName tokenName)
-  O.TokenRef label -> resolveReference label objects \case
+  O.TokenRef lbl -> resolveReference lbl objects \case
     LinkedToken value -> Right value
     _ -> Left $ O.SomeObjectType O.TokenType
 
@@ -209,19 +259,293 @@ linkAction objects = \case
       <$> (C.ChoiceId (toBuiltin $ T.encodeUtf8 name) <$> linkParty objects owner)
       <*> pure (O.toCoreBound <$> bounds)
   O.Notify obs -> C.Notify <$> linkObservation objects obs
-  O.ActionRef label -> resolveReference label objects \case
+  O.ActionRef lbl -> resolveReference lbl objects \case
     LinkedAction value -> Right value
     _ -> Left $ O.SomeObjectType O.ActionType
 
 resolveReference :: O.Label -> SymbolTable -> (LinkedObject -> Either O.SomeObjectType a) -> Either LinkError a
-resolveReference label objects handle = case HashMap.lookup label objects of
-  Nothing -> Left $ UnknownSymbol label
+resolveReference lbl objects handle = case HashMap.lookup lbl objects of
+  Nothing -> Left $ UnknownSymbol lbl
   Just object -> case handle object of
-    Left expected -> Left $ TypeMismatch expected case object of
-      LinkedValue _ -> O.SomeObjectType O.ValueType
-      LinkedObservation _ -> O.SomeObjectType O.ObservationType
-      LinkedContract _ -> O.SomeObjectType O.ContractType
-      LinkedParty _ -> O.SomeObjectType O.PartyType
-      LinkedToken _ -> O.SomeObjectType O.TokenType
-      LinkedAction _ -> O.SomeObjectType O.ActionType
+    Left expected -> Left $ TypeMismatch expected $ linkedObjectType object
     Right a -> pure a
+
+linkedObjectType :: LinkedObject -> O.SomeObjectType
+linkedObjectType = \case
+  LinkedValue _ -> O.SomeObjectType O.ValueType
+  LinkedObservation _ -> O.SomeObjectType O.ObservationType
+  LinkedContract _ -> O.SomeObjectType O.ContractType
+  LinkedParty _ -> O.SomeObjectType O.PartyType
+  LinkedToken _ -> O.SomeObjectType O.TokenType
+  LinkedAction _ -> O.SomeObjectType O.ActionType
+
+unlink :: LinkedObject -> (O.Label, O.ObjectBundle)
+unlink linked = (label, O.ObjectBundle $ DList.toList $ DList.snoc bundle labelled)
+  where
+    labelled = case unlinked of
+      O.Object t v -> O.LabelledObject label t v
+    label = mkLabel linked
+    (unlinked, bundle) = case linked of
+      LinkedValue a ->
+        first (O.Object O.ValueType) $
+          evalRWS (visit O.ValueType a) counts mempty
+      LinkedObservation a ->
+        first (O.Object O.ObservationType) $
+          evalRWS (visit O.ObservationType a) counts mempty
+      LinkedContract a ->
+        first (O.Object O.ContractType) $
+          evalRWS (visit O.ContractType a) counts mempty
+      LinkedParty a ->
+        first (O.Object O.PartyType) $
+          evalRWS (visit O.PartyType a) counts mempty
+      LinkedToken a ->
+        first (O.Object O.TokenType) $
+          evalRWS (visit O.TokenType a) counts mempty
+      LinkedAction a ->
+        first (O.Object O.ActionType) $
+          evalRWS (visit O.ActionType a) counts mempty
+    counts = execState (countOccurrences linked) mempty
+
+visit
+  :: O.ObjectType a
+  -> Linked a
+  -> RWS (HashMap O.Label Int) (DList O.LabelledObject) (HashSet O.Label) a
+visit t linked = do
+  let lbl = mkLabel $ toLinkedObject t linked
+  visited <- RWS.gets $ HashSet.member lbl
+  count <- RWS.asks $ fromMaybe 0 . HashMap.lookup lbl
+  RWS.modify $ HashSet.insert lbl
+  case t of
+    O.ValueType ->
+      if visited
+        then pure $ O.ValueRef lbl
+        else do
+          unlinked <- visitValue linked
+          if count < 2
+            then pure unlinked
+            else do
+              RWS.tell $ pure $ O.LabelledObject lbl t unlinked
+              pure $ O.ValueRef lbl
+    O.ObservationType ->
+      if visited
+        then pure $ O.ObservationRef lbl
+        else do
+          unlinked <- visitObservation linked
+          if count < 2
+            then pure unlinked
+            else do
+              RWS.tell $ pure $ O.LabelledObject lbl t unlinked
+              pure $ O.ObservationRef lbl
+    O.ContractType ->
+      if visited
+        then pure $ O.ContractRef lbl
+        else do
+          unlinked <- visitContract linked
+          if count < 2
+            then pure unlinked
+            else do
+              RWS.tell $ pure $ O.LabelledObject lbl t unlinked
+              pure $ O.ContractRef lbl
+    O.PartyType ->
+      if visited
+        then pure $ O.PartyRef lbl
+        else do
+          let unlinked = O.fromCoreParty linked
+          if count < 2
+            then pure unlinked
+            else do
+              RWS.tell $ pure $ O.LabelledObject lbl t unlinked
+              pure $ O.PartyRef lbl
+    O.TokenType ->
+      if visited
+        then pure $ O.TokenRef lbl
+        else do
+          let unlinked = O.fromCoreToken linked
+          if count < 2
+            then pure unlinked
+            else do
+              RWS.tell $ pure $ O.LabelledObject lbl t unlinked
+              pure $ O.TokenRef lbl
+    O.ActionType ->
+      if visited
+        then pure $ O.ActionRef lbl
+        else do
+          unlinked <- visitAction linked
+          if count < 2
+            then pure unlinked
+            else do
+              RWS.tell $ pure $ O.LabelledObject lbl t unlinked
+              pure $ O.ActionRef lbl
+
+toLinkedObject :: O.ObjectType a -> Linked a -> LinkedObject
+toLinkedObject = \case
+  O.ValueType -> LinkedValue
+  O.ObservationType -> LinkedObservation
+  O.ContractType -> LinkedContract
+  O.PartyType -> LinkedParty
+  O.TokenType -> LinkedToken
+  O.ActionType -> LinkedAction
+
+visitValue :: C.Value C.Observation -> RWS (HashMap O.Label Int) (DList O.LabelledObject) (HashSet O.Label) O.Value
+visitValue = \case
+  C.AvailableMoney account token ->
+    O.AvailableMoney <$> visit O.PartyType account <*> visit O.TokenType token
+  C.NegValue a -> O.NegValue <$> visit O.ValueType a
+  C.AddValue a b -> on (liftA2 O.AddValue) (visit O.ValueType) a b
+  C.SubValue a b -> on (liftA2 O.SubValue) (visit O.ValueType) a b
+  C.MulValue a b -> on (liftA2 O.MulValue) (visit O.ValueType) a b
+  C.DivValue a b -> on (liftA2 O.DivValue) (visit O.ValueType) a b
+  C.ChoiceValue (C.ChoiceId name owner) ->
+    O.ChoiceValue . O.ChoiceId (T.decodeUtf8 $ PV2.fromBuiltin name) <$> visit O.PartyType owner
+  C.Cond c a b -> O.Cond <$> visit O.ObservationType c <*> visit O.ValueType a <*> visit O.ValueType b
+  c -> pure $ O.fromCoreValue c
+
+visitObservation :: C.Observation -> RWS (HashMap O.Label Int) (DList O.LabelledObject) (HashSet O.Label) O.Observation
+visitObservation = \case
+  C.AndObs a b -> on (liftA2 O.AndObs) (visit O.ObservationType) a b
+  C.OrObs a b -> on (liftA2 O.OrObs) (visit O.ObservationType) a b
+  C.NotObs a -> O.NotObs <$> visit O.ObservationType a
+  C.ChoseSomething (C.ChoiceId name owner) ->
+    O.ChoseSomething . O.ChoiceId (T.decodeUtf8 $ PV2.fromBuiltin name) <$> visit O.PartyType owner
+  C.ValueGE a b -> on (liftA2 O.ValueGE) (visit O.ValueType) a b
+  C.ValueGT a b -> on (liftA2 O.ValueGT) (visit O.ValueType) a b
+  C.ValueLE a b -> on (liftA2 O.ValueLE) (visit O.ValueType) a b
+  C.ValueLT a b -> on (liftA2 O.ValueLT) (visit O.ValueType) a b
+  C.ValueEQ a b -> on (liftA2 O.ValueEQ) (visit O.ValueType) a b
+  C.TrueObs -> pure O.TrueObs
+  C.FalseObs -> pure O.FalseObs
+
+visitContract :: C.Contract -> RWS (HashMap O.Label Int) (DList O.LabelledObject) (HashSet O.Label) O.Contract
+visitContract = \case
+  C.Close -> pure O.Close
+  C.Pay a (C.Party p) t v c ->
+    O.Pay
+      <$> visit O.PartyType a
+      <*> (O.Party <$> visit O.PartyType p)
+      <*> visit O.TokenType t
+      <*> visit O.ValueType v
+      <*> visit O.ContractType c
+  C.Pay a (C.Account p) t v c ->
+    O.Pay
+      <$> visit O.PartyType a
+      <*> (O.Account <$> visit O.PartyType p)
+      <*> visit O.TokenType t
+      <*> visit O.ValueType v
+      <*> visit O.ContractType c
+  C.If obs c1 c2 ->
+    O.If <$> visit O.ObservationType obs <*> visit O.ContractType c1 <*> visit O.ContractType c2
+  C.When cases t c ->
+    O.When <$> traverse visitCase cases <*> pure (O.fromCoreTimeout t) <*> visit O.ContractType c
+  C.Let vi v c -> O.Let (O.fromCoreValueId vi) <$> visit O.ValueType v <*> visit O.ContractType c
+  C.Assert obs c -> O.Assert <$> visit O.ObservationType obs <*> visit O.ContractType c
+  where
+    visitCase :: C.Case C.Contract -> RWS (HashMap O.Label Int) (DList O.LabelledObject) (HashSet O.Label) O.Case
+    visitCase = \case
+      C.Case a c -> O.Case <$> visit O.ActionType a <*> visit O.ContractType c
+      C.MerkleizedCase a hash -> O.MerkleizedCase <$> visit O.ActionType a <*> pure (O.fromCoreContractHash hash)
+
+visitAction :: C.Action -> RWS (HashMap O.Label Int) (DList O.LabelledObject) (HashSet O.Label) O.Action
+visitAction = \case
+  C.Deposit a p t v ->
+    O.Deposit
+      <$> visit O.PartyType a
+      <*> visit O.PartyType p
+      <*> visit O.TokenType t
+      <*> visit O.ValueType v
+  C.Choice (C.ChoiceId name owner) bounds ->
+    O.Choice . O.ChoiceId (T.decodeUtf8 $ PV2.fromBuiltin name)
+      <$> visit O.PartyType owner
+      <*> pure (O.fromCoreBound <$> bounds)
+  C.Notify obs -> O.Notify <$> visit O.ObservationType obs
+
+countOccurrences :: LinkedObject -> State (HashMap O.Label Int) ()
+countOccurrences obj = do
+  let label = mkLabel obj
+  newCount <- state \counts -> case HashMap.lookup label counts of
+    Nothing -> (1, HashMap.insert label 1 counts)
+    Just i -> (i + 1, HashMap.insert label (i + 1) counts)
+  when (newCount == 1) do
+    traverseOf_ linkedChildren countOccurrences obj
+
+mkLabel :: LinkedObject -> O.Label
+mkLabel = \case
+  LinkedValue a -> hashLabel "value" a
+  LinkedObservation a -> hashLabel "observation" a
+  LinkedContract a -> hashLabel "contract" a
+  LinkedParty a -> hashLabel "party" a
+  LinkedToken a -> hashLabel "token" a
+  LinkedAction a -> hashLabel "action" a
+
+fromLinkedObject :: O.Label -> LinkedObject -> O.LabelledObject
+fromLinkedObject lbl = \case
+  LinkedValue a -> O.LabelledObject lbl O.ValueType $ O.fromCoreValue a
+  LinkedObservation a -> O.LabelledObject lbl O.ObservationType $ O.fromCoreObservation a
+  LinkedContract a -> O.LabelledObject lbl O.ContractType $ O.fromCoreContract a
+  LinkedParty a -> O.LabelledObject lbl O.PartyType $ O.fromCoreParty a
+  LinkedToken a -> O.LabelledObject lbl O.TokenType $ O.fromCoreToken a
+  LinkedAction a -> O.LabelledObject lbl O.ActionType $ O.fromCoreAction a
+
+hashLabel :: (ToData a) => Text -> a -> O.Label
+hashLabel prefix a =
+  O.Label $
+    T.encodeUtf8 $
+      prefix <> "-" <> encodeBase16 (serialiseToRawBytes $ hashScriptData $ fromPlutusData $ toData a)
+
+linkedChildren :: Fold LinkedObject LinkedObject
+linkedChildren = folding \case
+  LinkedValue a -> valueChildren a
+  LinkedObservation a -> observationChildren a
+  LinkedContract a -> contractChildren a
+  LinkedParty _ -> []
+  LinkedToken _ -> []
+  LinkedAction a -> actionChildren a
+  where
+    valueChildren :: C.Value C.Observation -> [LinkedObject]
+    valueChildren = \case
+      C.AvailableMoney account token -> [LinkedParty account, LinkedToken token]
+      C.NegValue a -> [LinkedValue a]
+      C.AddValue a b -> [LinkedValue a, LinkedValue b]
+      C.SubValue a b -> [LinkedValue a, LinkedValue b]
+      C.MulValue a b -> [LinkedValue a, LinkedValue b]
+      C.DivValue a b -> [LinkedValue a, LinkedValue b]
+      C.ChoiceValue (C.ChoiceId _ owner) -> [LinkedParty owner]
+      C.Cond c a b -> [LinkedObservation c, LinkedValue a, LinkedValue b]
+      _ -> []
+
+    observationChildren :: C.Observation -> [LinkedObject]
+    observationChildren = \case
+      C.AndObs a b -> [LinkedObservation a, LinkedObservation b]
+      C.OrObs a b -> [LinkedObservation a, LinkedObservation b]
+      C.NotObs a -> [LinkedObservation a]
+      C.ChoseSomething (C.ChoiceId _ owner) -> [LinkedParty owner]
+      C.ValueGE a b -> [LinkedValue a, LinkedValue b]
+      C.ValueGT a b -> [LinkedValue a, LinkedValue b]
+      C.ValueLE a b -> [LinkedValue a, LinkedValue b]
+      C.ValueLT a b -> [LinkedValue a, LinkedValue b]
+      C.ValueEQ a b -> [LinkedValue a, LinkedValue b]
+      C.TrueObs -> []
+      C.FalseObs -> []
+
+    contractChildren :: C.Contract -> [LinkedObject]
+    contractChildren = \case
+      C.Close -> []
+      C.Pay a (C.Party p) t v c -> [LinkedParty a, LinkedParty p, LinkedToken t, LinkedValue v, LinkedContract c]
+      C.Pay a (C.Account p) t v c -> [LinkedParty a, LinkedParty p, LinkedToken t, LinkedValue v, LinkedContract c]
+      C.If obs c1 c2 -> [LinkedObservation obs, LinkedContract c1, LinkedContract c2]
+      C.When cases _ c -> (caseChildren =<< cases) <> [LinkedContract c]
+      C.Let _ v c -> [LinkedValue v, LinkedContract c]
+      C.Assert obs c -> [LinkedObservation obs, LinkedContract c]
+      where
+        caseChildren :: C.Case C.Contract -> [LinkedObject]
+        caseChildren = \case
+          C.Case a c -> [LinkedAction a, LinkedContract c]
+          C.MerkleizedCase a _ -> [LinkedAction a]
+
+    actionChildren :: C.Action -> [LinkedObject]
+    actionChildren = \case
+      C.Deposit a p t v -> [LinkedParty a, LinkedParty p, LinkedToken t, LinkedValue v]
+      C.Choice (C.ChoiceId _ owner) _ -> [LinkedParty owner]
+      C.Notify obs -> [LinkedObservation obs]
+
+makePrisms ''LinkError
+makePrisms ''LinkedObject

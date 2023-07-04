@@ -10,12 +10,10 @@ import Cardano.Api (hashScriptData)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except (ExceptT (..), runExceptT, throwE)
 import Control.Monad.Trans.Resource (ReleaseKey, unprotect)
-import Control.Monad.Trans.State (StateT (..), runStateT)
-import Data.Bifunctor (first)
 import Data.Functor (void)
 import qualified Data.Map as Map
 import qualified Language.Marlowe.Core.V1.Semantics.Types as Core
-import Language.Marlowe.Object.Link (LinkedObject (..), SymbolTable, linkObject)
+import Language.Marlowe.Object.Link (LinkedObject (..), SymbolTable, linkBundle)
 import Language.Marlowe.Object.Types
 import Language.Marlowe.Protocol.Transfer.Server
 import Language.Marlowe.Protocol.Transfer.Types
@@ -34,55 +32,35 @@ newtype ImportServerDependencies m = ImportServerDependencies
 
 importServer :: (MonadUnliftIO m) => ImportServerDependencies m -> ServerSource MarloweTransferServer m ()
 importServer ImportServerDependencies{..} = ServerSource do
-  (releaseKey, stagingArea) <-
+  (releaseKey, stage) <-
     allocateU
       (lift $ createContractStagingArea contractStore)
       (lift . discard)
-  pure $ server releaseKey stagingArea
+  pure $ server releaseKey stage
 
 server :: forall m. (MonadIO m) => ReleaseKey -> ContractStagingArea m -> MarloweTransferServer m ()
-server releaseKey stagingArea@ContractStagingArea{..} = MarloweTransferServer $ pure $ idle mempty
+server releaseKey stage@ContractStagingArea{..} = MarloweTransferServer $ pure $ idle mempty
   where
     idle :: SymbolTable -> ServerStIdle m ()
-    idle symbols =
+    idle objects =
       ServerStIdle
         { recvMsgDone = do
             void $ unprotect releaseKey
             void commit
         , recvMsgTransfer = \bundle -> do
-            mHashes <- runExceptT $ runStateT (traverse (ingestObject stagingArea) $ getObjects bundle) symbols
-            case mHashes of
+            result <- runExceptT $ linkBundle bundle (merkleizeAndStoreContracts stage) objects
+            case result of
               Left err -> pure $ SendMsgTransferFailed err ()
-              Right (hashes, symbols') -> do
+              Right (Left linkError) -> pure $ SendMsgTransferFailed (LinkError linkError) ()
+              Right (Right (hashes, symbols')) -> do
                 void flush
-                pure $ SendMsgTransferred (Map.fromList hashes) $ idle symbols'
+                pure $ SendMsgTransferred (hashLinked <$> Map.fromList hashes) $ idle symbols'
         }
 
-ingestObject
-  :: (Monad m)
-  => ContractStagingArea m
-  -> LabelledObject
-  -> StateT SymbolTable (ExceptT TransferError m) (Label, DatumHash)
-ingestObject stagingArea obj@LabelledObject{..} = do
-  linkedObj <-
-    StateT $
-      mergeExceptT LinkError . linkObject obj \case
-        LinkedContract contract -> LinkedContract <$> merkleizeAndStore stagingArea contract
-        linkedObj -> pure linkedObj
-  pure (label, hashLinked linkedObj)
-
-mergeExceptT :: (Functor m) => (e' -> e) -> ExceptT e m (Either e' a) -> ExceptT e m a
-mergeExceptT injectError = ExceptT . fmap (first injectError =<<) . runExceptT
-
-hashLinked :: LinkedObject -> DatumHash
-hashLinked =
-  fromCardanoDatumHash . hashScriptData . toCardanoScriptData . \case
-    LinkedValue value -> toDatum value
-    LinkedObservation obs -> toDatum obs
-    LinkedContract contract -> toDatum contract
-    LinkedParty party -> toDatum party
-    LinkedToken token -> toDatum token
-    LinkedAction action -> toDatum action
+merkleizeAndStoreContracts :: (Monad m) => ContractStagingArea m -> LinkedObject -> ExceptT TransferError m LinkedObject
+merkleizeAndStoreContracts stage = \case
+  LinkedContract contract -> LinkedContract <$> merkleizeAndStore stage contract
+  obj -> pure obj
 
 merkleizeAndStore :: (Monad m) => ContractStagingArea m -> Core.Contract -> ExceptT TransferError m Core.Contract
 merkleizeAndStore stage = \case
@@ -107,3 +85,13 @@ merkleizeAndStoreCase stage@ContractStagingArea{..} = \case
     if exists
       then pure $ Core.MerkleizedCase action hash
       else throwE $ ContinuationNotInStore $ fromCoreContractHash hash
+
+hashLinked :: LinkedObject -> DatumHash
+hashLinked =
+  fromCardanoDatumHash . hashScriptData . toCardanoScriptData . \case
+    LinkedValue value -> toDatum value
+    LinkedObservation obs -> toDatum obs
+    LinkedContract contract -> toDatum contract
+    LinkedParty party -> toDatum party
+    LinkedToken token -> toDatum token
+    LinkedAction action -> toDatum action

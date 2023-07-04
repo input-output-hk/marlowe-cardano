@@ -3,6 +3,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 module Language.Marlowe.Object.Types where
 
@@ -15,7 +16,8 @@ import Cardano.Api (
   serialiseToBech32,
  )
 import Cardano.Api.Byron (ShelleyAddr)
-import Control.Applicative (Alternative (many), empty)
+import Control.Applicative (Alternative (many), empty, liftA2)
+import Control.Lens (Lens', Plated (..), Prism', makeLensesFor, makePrisms, prism', traversal)
 import Control.Monad (join)
 import Data.Aeson hiding (Object, String, Value)
 import qualified Data.Aeson as A hiding (Object)
@@ -26,7 +28,7 @@ import Data.ByteString (ByteString)
 import Data.ByteString.Base16 (decodeBase16', encodeBase16)
 import qualified Data.ByteString.Char8 as BS8
 import Data.Either (fromRight)
-import Data.Foldable (asum, fold, traverse_)
+import Data.Foldable (asum, traverse_)
 import Data.Function (on)
 import Data.Hashable (Hashable)
 import Data.List (intercalate)
@@ -52,13 +54,817 @@ import qualified Plutus.V2.Ledger.Api as PV2
 import Text.Read (Lexeme (..), ReadPrec, parens, prec, reset, step)
 import Unsafe.Coerce (unsafeCoerce)
 
-newtype ObjectBundle = ObjectBundle {getObjects :: [LabelledObject]}
-  deriving stock (Show, Read, Generic, Eq, Ord)
-  deriving anyclass (FromJSON, ToJSON, Variations)
+newtype Verbatim = Verbatim {unVerbatim :: ByteString}
+  deriving newtype (Eq, Ord, Show, Read, IsString, Variations)
 
-instance Binary ObjectBundle where
-  put = traverse_ put . getObjects
-  get = ObjectBundle <$> many get
+instance ToJSON Verbatim where
+  toJSON = A.String . T.pack . BS8.unpack . unVerbatim
+
+instance ToJSONKey Verbatim where
+  toJSONKey = toJSONKeyText $ T.pack . BS8.unpack . unVerbatim
+
+instance FromJSON Verbatim where
+  parseJSON = withText "Verbatim" $ pure . Verbatim . BS8.pack . T.unpack
+
+instance FromJSONKey Verbatim where
+  fromJSONKey = FromJSONKeyText $ Verbatim . BS8.pack . T.unpack
+
+newtype Label = Label {unLabel :: ByteString}
+  deriving (Show, Read, Generic, Eq, Ord)
+  deriving (IsString, FromJSON, ToJSON, FromJSONKey, ToJSONKey) via Verbatim
+  deriving newtype (Binary, Variations, Hashable)
+
+newtype Timeout = Timeout {unTimeout :: UTCTime}
+  deriving stock (Generic, Show, Read, Eq, Ord)
+  deriving anyclass (Variations)
+
+instance Num Timeout where
+  (+) =
+    fmap (Timeout . posixSecondsToUTCTime . secondsToNominalDiffTime)
+      . on (+) (nominalDiffTimeToSeconds . utcTimeToPOSIXSeconds . unTimeout)
+  (*) =
+    fmap (Timeout . posixSecondsToUTCTime . secondsToNominalDiffTime)
+      . on (*) (nominalDiffTimeToSeconds . utcTimeToPOSIXSeconds . unTimeout)
+  abs =
+    Timeout
+      . posixSecondsToUTCTime
+      . secondsToNominalDiffTime
+      . abs
+      . nominalDiffTimeToSeconds
+      . utcTimeToPOSIXSeconds
+      . unTimeout
+  signum =
+    Timeout
+      . posixSecondsToUTCTime
+      . secondsToNominalDiffTime
+      . signum
+      . nominalDiffTimeToSeconds
+      . utcTimeToPOSIXSeconds
+      . unTimeout
+  fromInteger = Timeout . posixSecondsToUTCTime . secondsToNominalDiffTime . fromInteger
+  negate =
+    Timeout
+      . posixSecondsToUTCTime
+      . secondsToNominalDiffTime
+      . negate
+      . nominalDiffTimeToSeconds
+      . utcTimeToPOSIXSeconds
+      . unTimeout
+
+instance Binary Timeout where
+  put = put @Integer . floor . (* 1000000) . nominalDiffTimeToSeconds . utcTimeToPOSIXSeconds . unTimeout
+  get = Timeout . posixSecondsToUTCTime . secondsToNominalDiffTime . (/ 1000000) . fromInteger <$> get
+
+instance ToJSON Timeout where
+  toJSON = toJSON @Integer . floor . (* 1000000) . nominalDiffTimeToSeconds . utcTimeToPOSIXSeconds . unTimeout
+
+instance FromJSON Timeout where
+  parseJSON v = Timeout . posixSecondsToUTCTime . secondsToNominalDiffTime . (/ 1000000) . fromInteger <$> parseJSON v
+
+toCoreTimeout :: Timeout -> Core.Timeout
+toCoreTimeout = PV2.POSIXTime . floor . (* 1000000) . nominalDiffTimeToSeconds . utcTimeToPOSIXSeconds . unTimeout
+
+fromCoreTimeout :: Core.Timeout -> Timeout
+fromCoreTimeout = Timeout . posixSecondsToUTCTime . secondsToNominalDiffTime . (/ 1000000) . fromInteger . getPOSIXTime
+
+data Case
+  = Case Action Contract
+  | MerkleizedCase Action ContractHash
+  deriving stock (Show, Read, Generic, Eq, Ord)
+  deriving anyclass (Binary)
+
+instance Plated Case where
+  plate = traversal \focus -> \case
+    Case a c -> Case a <$> visitContractCases focus c
+    MerkleizedCase a h -> pure $ MerkleizedCase a h
+
+instance ToJSON Case where
+  toJSON (Case act cont) =
+    A.object
+      [ "case" .= act
+      , "then" .= cont
+      ]
+  toJSON (MerkleizedCase act hash) =
+    A.object
+      [ "case" .= act
+      , "merkleized_then" .= hash
+      ]
+
+instance FromJSON Case where
+  parseJSON =
+    parseObject "Case" $
+      asum
+        [ Case <$> "case" <*> "then"
+        , MerkleizedCase <$> "case" <*> "merkleized_then"
+        ]
+
+fromCoreCase :: Core.Case Core.Contract -> Case
+fromCoreCase = \case
+  Core.Case action contract ->
+    Case (fromCoreAction action) (fromCoreContract contract)
+  Core.MerkleizedCase action hash ->
+    MerkleizedCase (fromCoreAction action) (fromCoreContractHash hash)
+
+data Action
+  = Deposit AccountId Party Token Value
+  | Choice ChoiceId [Bound]
+  | Notify Observation
+  | ActionRef Label
+  deriving stock (Show, Read, Generic, Eq, Ord)
+  deriving anyclass (Binary, Variations)
+
+instance ToJSON Action where
+  toJSON (Deposit accountId party token val) =
+    A.object
+      [ "into_account" .= accountId
+      , "party" .= party
+      , "of_token" .= token
+      , "deposits" .= val
+      ]
+  toJSON (Choice choiceId bounds) =
+    A.object
+      [ "for_choice" .= choiceId
+      , "choose_between" .= bounds
+      ]
+  toJSON (Notify obs) = A.object ["notify_if" .= obs]
+  toJSON (ActionRef label) = A.object ["ref" .= label]
+
+instance FromJSON Action where
+  parseJSON =
+    parseObject "Action" $
+      asum
+        [ Deposit <$> "into_account" <*> "party" <*> "of_token" <*> "deposits"
+        , Choice <$> "for_choice" <*> "choose_between"
+        , Notify <$> "notify_if"
+        , ActionRef <$> "ref"
+        ]
+
+fromCoreAction :: Core.Action -> Action
+fromCoreAction = \case
+  Core.Deposit accountId party token val ->
+    Deposit (fromCoreParty accountId) (fromCoreParty party) (fromCoreToken token) (fromCoreValue val)
+  Core.Choice choiceId bounds ->
+    Choice (fromCoreChoiceId choiceId) (fromCoreBound <$> bounds)
+  Core.Notify obs ->
+    Notify (fromCoreObservation obs)
+
+data Value
+  = AvailableMoney AccountId Token
+  | Constant Integer
+  | NegValue Value
+  | AddValue Value Value
+  | SubValue Value Value
+  | MulValue Value Value
+  | DivValue Value Value
+  | ChoiceValue ChoiceId
+  | TimeIntervalStart
+  | TimeIntervalEnd
+  | UseValue ValueId
+  | Cond Observation Value Value
+  | ValueRef Label
+  deriving stock (Show, Read, Generic, Eq, Ord)
+  deriving anyclass (Binary)
+
+instance Plated Value where
+  plate = traversal \focus -> \case
+    AvailableMoney a b -> pure $ AvailableMoney a b
+    AddValue a b -> on (liftA2 AddValue) focus a b
+    SubValue a b -> on (liftA2 SubValue) focus a b
+    MulValue a b -> on (liftA2 MulValue) focus a b
+    DivValue a b -> on (liftA2 DivValue) focus a b
+    NegValue a -> NegValue <$> focus a
+    Constant a -> pure $ Constant a
+    ChoiceValue a -> pure $ ChoiceValue a
+    UseValue a -> pure $ UseValue a
+    TimeIntervalStart -> pure TimeIntervalStart
+    TimeIntervalEnd -> pure TimeIntervalEnd
+    Cond a b c -> Cond <$> visitObservationValues focus a <*> focus b <*> focus c
+    ValueRef l -> pure $ ValueRef l
+
+visitValueObservations :: (Applicative f) => (Observation -> f Observation) -> Value -> f Value
+visitValueObservations f = \case
+  AddValue a b -> on (liftA2 AddValue) (visitValueObservations f) a b
+  SubValue a b -> on (liftA2 SubValue) (visitValueObservations f) a b
+  MulValue a b -> on (liftA2 MulValue) (visitValueObservations f) a b
+  DivValue a b -> on (liftA2 DivValue) (visitValueObservations f) a b
+  NegValue a -> NegValue <$> visitValueObservations f a
+  Cond a b c -> Cond <$> f a <*> visitValueObservations f b <*> visitValueObservations f c
+  v -> pure v
+
+instance ToJSON Value where
+  toJSON (AvailableMoney accountId token) =
+    A.object
+      [ "amount_of_token" .= token
+      , "in_account" .= accountId
+      ]
+  toJSON (Constant x) = toJSON x
+  toJSON (NegValue x) =
+    A.object
+      ["negate" .= x]
+  toJSON (AddValue lhs rhs) =
+    A.object
+      [ "add" .= lhs
+      , "and" .= rhs
+      ]
+  toJSON (SubValue lhs rhs) =
+    A.object
+      [ "value" .= lhs
+      , "minus" .= rhs
+      ]
+  toJSON (MulValue lhs rhs) =
+    A.object
+      [ "multiply" .= lhs
+      , "times" .= rhs
+      ]
+  toJSON (DivValue lhs rhs) =
+    A.object
+      [ "divide" .= lhs
+      , "by" .= rhs
+      ]
+  toJSON (ChoiceValue choiceId) =
+    A.object
+      ["value_of_choice" .= choiceId]
+  toJSON TimeIntervalStart = "time_interval_start"
+  toJSON TimeIntervalEnd = "time_interval_end"
+  toJSON (UseValue valueId) =
+    A.object
+      ["use_value" .= valueId]
+  toJSON (Cond obs tv ev) =
+    A.object
+      [ "if" .= obs
+      , "then" .= tv
+      , "else" .= ev
+      ]
+  toJSON (ValueRef label) = A.object ["ref" .= label]
+
+instance FromJSON Value where
+  parseJSON = \case
+    A.Number n -> Constant <$> parseJSON (A.Number n)
+    A.String s -> case s of
+      "time_interval_start" -> pure TimeIntervalStart
+      "time_interval_end" -> pure TimeIntervalEnd
+      _ ->
+        parseFail $
+          "Invalid string value. Valid string options are: "
+            <> intercalate
+              ", "
+              [ show @String "time_interval_start"
+              , show @String "time_interval_end"
+              ]
+    v ->
+      flip (parseObject "Value") v $
+        asum
+          [ AvailableMoney <$> "in_account" <*> "amount_of_token"
+          , NegValue <$> "negate"
+          , AddValue <$> "add" <*> "and"
+          , SubValue <$> "value" <*> "minus"
+          , MulValue <$> "multiply" <*> "times"
+          , DivValue <$> "divide" <*> "by"
+          , ChoiceValue <$> "value_of_choice"
+          , UseValue <$> "use_value"
+          , Cond <$> "if" <*> "then" <*> "else"
+          , ValueRef <$> "ref"
+          ]
+
+instance Num Value where
+  (+) = AddValue
+  (*) = MulValue
+  abs v = Cond (ValueGE v 0) v (-v)
+  signum v = Cond (ValueGT v 0) 1 $ Cond (ValueLT v 0) (-1) 0
+  fromInteger = Constant
+  negate = NegValue
+
+fromCoreValue :: Core.Value Core.Observation -> Value
+fromCoreValue = \case
+  Core.AvailableMoney a b -> AvailableMoney (fromCoreParty a) (fromCoreToken b)
+  Core.AddValue a b -> on AddValue fromCoreValue a b
+  Core.SubValue a b -> on SubValue fromCoreValue a b
+  Core.MulValue a b -> on MulValue fromCoreValue a b
+  Core.DivValue a b -> on DivValue fromCoreValue a b
+  Core.NegValue a -> NegValue $ fromCoreValue a
+  Core.Constant a -> Constant a
+  Core.ChoiceValue a -> ChoiceValue $ fromCoreChoiceId a
+  Core.UseValue a -> UseValue $ fromCoreValueId a
+  Core.TimeIntervalStart -> TimeIntervalStart
+  Core.TimeIntervalEnd -> TimeIntervalEnd
+  Core.Cond a b c -> Cond (fromCoreObservation a) (fromCoreValue b) (fromCoreValue c)
+
+data Observation
+  = AndObs Observation Observation
+  | OrObs Observation Observation
+  | NotObs Observation
+  | ChoseSomething ChoiceId
+  | ValueGE Value Value
+  | ValueGT Value Value
+  | ValueLT Value Value
+  | ValueLE Value Value
+  | ValueEQ Value Value
+  | TrueObs
+  | FalseObs
+  | ObservationRef Label
+  deriving stock (Show, Read, Generic, Eq, Ord)
+  deriving anyclass (Binary)
+
+instance Plated Observation where
+  plate = traversal \focus -> \case
+    AndObs a b -> on (liftA2 AndObs) focus a b
+    OrObs a b -> on (liftA2 OrObs) focus a b
+    NotObs a -> NotObs <$> focus a
+    ChoseSomething a -> pure $ ChoseSomething a
+    ValueGE a b -> ValueGE <$> visitValueObservations focus a <*> visitValueObservations focus b
+    ValueGT a b -> ValueGT <$> visitValueObservations focus a <*> visitValueObservations focus b
+    ValueLE a b -> ValueLE <$> visitValueObservations focus a <*> visitValueObservations focus b
+    ValueLT a b -> ValueLT <$> visitValueObservations focus a <*> visitValueObservations focus b
+    ValueEQ a b -> ValueEQ <$> visitValueObservations focus a <*> visitValueObservations focus b
+    TrueObs -> pure TrueObs
+    FalseObs -> pure FalseObs
+    ObservationRef l -> pure $ ObservationRef l
+
+visitObservationValues :: (Applicative f) => (Value -> f Value) -> Observation -> f Observation
+visitObservationValues f = \case
+  AndObs a b -> on (liftA2 AndObs) (visitObservationValues f) a b
+  OrObs a b -> on (liftA2 OrObs) (visitObservationValues f) a b
+  NotObs a -> NotObs <$> visitObservationValues f a
+  ValueGE a b -> ValueGE <$> f a <*> f b
+  ValueGT a b -> ValueGT <$> f a <*> f b
+  ValueLE a b -> ValueLE <$> f a <*> f b
+  ValueLT a b -> ValueLT <$> f a <*> f b
+  ValueEQ a b -> ValueEQ <$> f a <*> f b
+  obs -> pure obs
+
+instance ToJSON Observation where
+  toJSON (AndObs lhs rhs) =
+    A.object
+      [ "both" .= lhs
+      , "and" .= rhs
+      ]
+  toJSON (OrObs lhs rhs) =
+    A.object
+      [ "either" .= lhs
+      , "or" .= rhs
+      ]
+  toJSON (NotObs v) =
+    A.object
+      ["not" .= v]
+  toJSON (ChoseSomething choiceId) =
+    A.object
+      ["chose_something_for" .= choiceId]
+  toJSON (ValueGE lhs rhs) =
+    A.object
+      [ "value" .= lhs
+      , "ge_than" .= rhs
+      ]
+  toJSON (ValueGT lhs rhs) =
+    A.object
+      [ "value" .= lhs
+      , "gt" .= rhs
+      ]
+  toJSON (ValueLT lhs rhs) =
+    A.object
+      [ "value" .= lhs
+      , "lt" .= rhs
+      ]
+  toJSON (ValueLE lhs rhs) =
+    A.object
+      [ "value" .= lhs
+      , "le_than" .= rhs
+      ]
+  toJSON (ValueEQ lhs rhs) =
+    A.object
+      [ "value" .= lhs
+      , "equal_to" .= rhs
+      ]
+  toJSON TrueObs = toJSON True
+  toJSON FalseObs = toJSON False
+  toJSON (ObservationRef label) = A.object ["ref" .= label]
+
+instance FromJSON Observation where
+  parseJSON = \case
+    A.Bool True -> pure TrueObs
+    A.Bool False -> pure FalseObs
+    v ->
+      flip (parseObject "Observation") v $
+        asum
+          [ AndObs <$> "both" <*> "and"
+          , OrObs <$> "either" <*> "or"
+          , NotObs <$> "not"
+          , ChoseSomething <$> "chose_something_for"
+          , ValueGE <$> "value" <*> "ge_than"
+          , ValueGT <$> "value" <*> "gt"
+          , ValueLE <$> "value" <*> "le_than"
+          , ValueLT <$> "value" <*> "lt"
+          , ValueEQ <$> "value" <*> "equal_to"
+          , ObservationRef <$> "ref"
+          ]
+
+fromCoreObservation :: Core.Observation -> Observation
+fromCoreObservation = \case
+  Core.AndObs a b -> on AndObs fromCoreObservation a b
+  Core.OrObs a b -> on OrObs fromCoreObservation a b
+  Core.NotObs a -> NotObs $ fromCoreObservation a
+  Core.ChoseSomething a -> ChoseSomething $ fromCoreChoiceId a
+  Core.ValueGE a b -> on ValueGE fromCoreValue a b
+  Core.ValueGT a b -> on ValueGT fromCoreValue a b
+  Core.ValueLE a b -> on ValueLE fromCoreValue a b
+  Core.ValueLT a b -> on ValueLT fromCoreValue a b
+  Core.ValueEQ a b -> on ValueEQ fromCoreValue a b
+  Core.TrueObs -> TrueObs
+  Core.FalseObs -> FalseObs
+
+type AccountId = Party
+
+data Party
+  = Address !ShelleyAddress
+  | Role !TokenName
+  | PartyRef Label
+  deriving stock (Show, Read, Generic, Eq, Ord)
+  deriving anyclass (Binary, Variations)
+
+instance ToJSON Party where
+  toJSON (Address address) = A.object ["address" .= address]
+  toJSON (Role token) = A.object ["role_token" .= token]
+  toJSON (PartyRef ref) = A.object ["ref" .= ref]
+
+instance FromJSON Party where
+  parseJSON =
+    parseObject "Party" $
+      asum
+        [ Address <$> "address"
+        , Role <$> "role_token"
+        , PartyRef <$> "ref"
+        ]
+
+fromCoreParty :: Core.Party -> Party
+fromCoreParty = \case
+  Core.Address network addr -> Address $ fromCoreAddress network addr
+  Core.Role role -> Role $ fromCoreTokenName role
+
+newtype ShelleyAddress = ShelleyAddress {unShelleyAddress :: Address ShelleyAddr}
+  deriving (Eq, Ord)
+
+instance Show ShelleyAddress where
+  show = show . serialiseToBech32 . unShelleyAddress
+
+instance Read ShelleyAddress where
+  readPrec = do
+    String s <- lexP
+    Right addr <- pure $ deserialiseFromBech32 (AsAddress AsShelleyAddr) $ T.pack s
+    pure $ ShelleyAddress addr
+
+instance IsString ShelleyAddress where
+  fromString =
+    either (error . mappend "ShelleyAddress.fromString: bad address: " . show) ShelleyAddress
+      . deserialiseFromBech32 (AsAddress AsShelleyAddr)
+      . T.pack
+
+instance Binary ShelleyAddress where
+  put = put . serialiseToRawBytes . unShelleyAddress
+  get =
+    maybe (fail "failed to deserialize address") (pure . ShelleyAddress)
+      . deserialiseFromRawBytes (AsAddress AsShelleyAddr)
+      =<< get
+
+instance Variations ShelleyAddress where
+  variations =
+    LNE.fromList
+      [ "addr_test1vrssw4edcts00kk6lp7p5n64666m23tpprqaarmdwkaq69gfvqnpz"
+      ]
+
+instance ToJSON ShelleyAddress where
+  toJSON (ShelleyAddress address) = A.String $ serialiseToBech32 address
+
+instance FromJSON ShelleyAddress where
+  parseJSON =
+    withText "ShelleyAddress" $
+      either (parseFail . show) (pure . ShelleyAddress) . deserialiseFromBech32 (AsAddress AsShelleyAddr)
+
+fromCoreAddress :: Core.Network -> PV2.Address -> ShelleyAddress
+fromCoreAddress network addr =
+  ShelleyAddress $
+    fromRight (error "fromRight: Left") $
+      deserialiseFromBech32 (AsAddress AsShelleyAddr) $
+        serialiseAddressBech32 network addr
+
+newtype TokenName = TokenName {unTokenName :: ByteString}
+  deriving (Show, Generic, Read, Eq, Ord)
+  deriving (IsString, FromJSON, ToJSON, FromJSONKey, ToJSONKey) via Verbatim
+  deriving newtype (Binary, Variations)
+
+fromCoreTokenName :: PV2.TokenName -> TokenName
+fromCoreTokenName = TokenName . PV2.fromBuiltin . PV2.unTokenName
+
+toCoreTokenName :: TokenName -> PV2.TokenName
+toCoreTokenName = PV2.TokenName . PV2.toBuiltin . unTokenName
+
+data ChoiceId = ChoiceId Text Party
+  deriving stock (Show, Read, Generic, Eq, Ord)
+  deriving anyclass (Binary, Variations)
+
+instance ToJSON ChoiceId where
+  toJSON (ChoiceId name party) =
+    A.object
+      [ "choice_name" .= name
+      , "choice_owner" .= party
+      ]
+
+instance FromJSON ChoiceId where
+  parseJSON = parseObject "Payee" $ ChoiceId <$> "choice_name" <*> "choice_owner"
+
+fromCoreChoiceId :: Core.ChoiceId -> ChoiceId
+fromCoreChoiceId (Core.ChoiceId name owner) = ChoiceId (T.decodeUtf8 $ PV2.fromBuiltin name) (fromCoreParty owner)
+
+newtype ValueId = ValueId {unValueId :: ByteString}
+  deriving (Show, Generic, Read, Eq, Ord)
+  deriving (IsString, FromJSON, ToJSON, FromJSONKey, ToJSONKey) via Verbatim
+  deriving newtype (Binary, Variations)
+
+fromCoreValueId :: Core.ValueId -> ValueId
+fromCoreValueId (Core.ValueId bs) = ValueId $ PV2.fromBuiltin bs
+
+toCoreValueId :: ValueId -> Core.ValueId
+toCoreValueId (ValueId bs) = Core.ValueId $ PV2.toBuiltin bs
+
+data Payee
+  = Party !Party
+  | Account !Party
+  deriving stock (Show, Read, Generic, Eq, Ord)
+  deriving anyclass (Binary, Variations)
+
+instance ToJSON Payee where
+  toJSON (Account acc) = A.object ["account" .= acc]
+  toJSON (Party party) = A.object ["party" .= party]
+
+instance FromJSON Payee where
+  parseJSON =
+    parseObject "Payee" $
+      asum
+        [ Party <$> "party"
+        , Account <$> "account"
+        ]
+
+fromCorePayee :: Core.Payee -> Payee
+fromCorePayee = \case
+  Core.Account acc -> Account $ fromCoreParty acc
+  Core.Party p -> Party $ fromCoreParty p
+
+data Token
+  = Token CurrencySymbol TokenName
+  | TokenRef Label
+  deriving stock (Show, Read, Generic, Eq, Ord)
+  deriving anyclass (Binary, Variations)
+
+instance ToJSON Token where
+  toJSON (Token cs tokName) =
+    A.object
+      [ "currency_symbol" .= cs
+      , "token_name" .= tokName
+      ]
+  toJSON (TokenRef label) = A.object ["ref" .= label]
+
+instance FromJSON Token where
+  parseJSON =
+    parseObject "Token" $
+      asum
+        [ Token <$> "currency_symbol" <*> "token_name"
+        , TokenRef <$> "ref"
+        ]
+
+fromCoreToken :: Core.Token -> Token
+fromCoreToken (Core.Token cs tokName) = Token (fromCoreCurrencySymbol cs) (fromCoreTokenName tokName)
+
+newtype CurrencySymbol = CurrencySymbol {unCurrencySymbol :: ByteString}
+  deriving newtype (Eq, Ord, Binary)
+  deriving (Show, Read, IsString, ToJSON, FromJSON, Variations) via Base16
+
+fromCoreCurrencySymbol :: PV2.CurrencySymbol -> CurrencySymbol
+fromCoreCurrencySymbol = CurrencySymbol . PV2.fromBuiltin . PV2.unCurrencySymbol
+
+toCoreCurrencySymbol :: CurrencySymbol -> PV2.CurrencySymbol
+toCoreCurrencySymbol = PV2.CurrencySymbol . PV2.toBuiltin . unCurrencySymbol
+
+newtype ContractHash = ContractHash {unContractHash :: ByteString}
+  deriving newtype (Eq, Ord, Binary)
+  deriving (Show, Read, IsString, ToJSON, FromJSON, Variations) via Base16
+
+fromCoreContractHash :: BuiltinByteString -> ContractHash
+fromCoreContractHash = ContractHash . PV2.fromBuiltin
+
+newtype Base16 = Base16 {unBase16 :: ByteString}
+  deriving newtype (Eq, Ord, Variations)
+
+instance Show Base16 where
+  show = show . encodeBase16 . unBase16
+
+instance Read Base16 where
+  readPrec = do
+    String s <- lexP
+    Right parsed <- pure $ decodeBase16' $ T.pack s
+    pure $ Base16 parsed
+
+instance IsString Base16 where
+  fromString = read
+
+instance ToJSON Base16 where
+  toJSON = A.String . encodeBase16 . unBase16
+
+instance ToJSONKey Base16 where
+  toJSONKey = toJSONKeyText $ encodeBase16 . unBase16
+
+instance FromJSON Base16 where
+  parseJSON = withText "Base16" $ either (fail . T.unpack) (pure . Base16) . decodeBase16'
+
+instance FromJSONKey Base16 where
+  fromJSONKey = FromJSONKeyTextParser $ either (fail . T.unpack) (pure . Base16) . decodeBase16'
+
+data Bound = Bound Integer Integer
+  deriving stock (Show, Read, Generic, Eq, Ord)
+  deriving anyclass (Binary, Variations)
+
+instance ToJSON Bound where
+  toJSON (Bound from to) = A.object ["from" .= from, "to" .= to]
+
+instance FromJSON Bound where
+  parseJSON = withObject "Bound" \obj -> do
+    from <- obj .: "from"
+    to <- obj .: "to"
+    pure $ Bound from to
+
+fromCoreBound :: Core.Bound -> Bound
+fromCoreBound (Core.Bound lo hi) = Bound lo hi
+
+toCoreBound :: Bound -> Core.Bound
+toCoreBound (Bound lo hi) = Core.Bound lo hi
+
+data Contract
+  = Close
+  | Pay AccountId Payee Token Value Contract
+  | If Observation Contract Contract
+  | When [Case] Timeout Contract
+  | Let ValueId Value Contract
+  | Assert Observation Contract
+  | ContractRef Label
+  deriving stock (Show, Read, Generic, Eq, Ord)
+  deriving anyclass (Binary)
+
+instance Plated Contract where
+  plate = traversal \focus -> \case
+    Close -> pure Close
+    Pay a p t v c -> Pay a p t v <$> focus c
+    If c a b -> If c <$> focus a <*> focus b
+    When cases t c ->
+      When
+        <$> traverse (visitCaseContracts focus) cases
+        <*> pure t
+        <*> focus c
+    Let vi v c -> Let vi v <$> focus c
+    Assert obs c -> Assert obs <$> focus c
+    ContractRef l -> pure $ ContractRef l
+
+visitCaseContracts :: (Applicative f) => (Contract -> f Contract) -> Case -> f Case
+visitCaseContracts f = \case
+  Case a c' -> Case a <$> f c'
+  c' -> pure c'
+
+visitContractCases :: (Applicative f) => (Case -> f Case) -> Contract -> f Contract
+visitContractCases f = \case
+  Close -> pure Close
+  Pay a p t v c -> Pay a p t v <$> visitContractCases f c
+  If c a b -> If c <$> visitContractCases f a <*> visitContractCases f b
+  When cases t c ->
+    When
+      <$> traverse f cases
+      <*> pure t
+      <*> visitContractCases f c
+  Let vi v c -> Let vi v <$> visitContractCases f c
+  Assert obs c -> Assert obs <$> visitContractCases f c
+  ContractRef l -> pure $ ContractRef l
+
+instance ToJSON Contract where
+  toJSON Close = "close"
+  toJSON (Pay accountId payee token value contract) =
+    A.object
+      [ "from_account" .= accountId
+      , "to" .= payee
+      , "token" .= token
+      , "pay" .= value
+      , "then" .= contract
+      ]
+  toJSON (If obs cont1 cont2) =
+    A.object
+      [ "if" .= obs
+      , "then" .= cont1
+      , "else" .= cont2
+      ]
+  toJSON (When cases timeout cont) =
+    A.object
+      [ "when" .= cases
+      , "timeout" .= timeout
+      , "timeout_continuation" .= cont
+      ]
+  toJSON (Let valId value cont) =
+    A.object
+      [ "let" .= valId
+      , "be" .= value
+      , "then" .= cont
+      ]
+  toJSON (Assert obs cont) =
+    A.object
+      [ "assert" .= obs
+      , "then" .= cont
+      ]
+  toJSON (ContractRef label) = A.object ["ref" .= label]
+
+instance FromJSON Contract where
+  parseJSON = \case
+    A.String "close" -> pure Close
+    v ->
+      flip (parseObject "Contract") v $
+        asum
+          [ Pay <$> "from_account" <*> "to" <*> "token" <*> "pay" <*> "then"
+          , If <$> "if" <*> "then" <*> "else"
+          , When <$> "when" <*> "timeout" <*> "timeout_continuation"
+          , Let <$> "let" <*> "be" <*> "then"
+          , Assert <$> "assert" <*> "then"
+          , ContractRef <$> "ref"
+          ]
+
+fromCoreContract :: Core.Contract -> Contract
+fromCoreContract = \case
+  Core.Close -> Close
+  Core.Pay account payee token value contract ->
+    Pay
+      (fromCoreParty account)
+      (fromCorePayee payee)
+      (fromCoreToken token)
+      (fromCoreValue value)
+      (fromCoreContract contract)
+  Core.If obs a b ->
+    If (fromCoreObservation obs) (fromCoreContract a) (fromCoreContract b)
+  Core.When cases timeout contract ->
+    When (fromCoreCase <$> cases) (fromCoreTimeout timeout) (fromCoreContract contract)
+  Core.Let valueId value contract ->
+    Let (fromCoreValueId valueId) (fromCoreValue value) (fromCoreContract contract)
+  Core.Assert obs contract ->
+    Assert (fromCoreObservation obs) (fromCoreContract contract)
+
+-- The following require manual instances to avoid infinite recursion.
+instance Variations Contract where
+  variations =
+    join $
+      LNE.fromList
+        [ pure Close
+        , Pay <$> variations `varyAp` variations `varyAp` variations `varyAp` variations <*> pure Close
+        , If <$> variations <*> pure Close <*> pure Close
+        , When <$> variations `varyAp` variations <*> pure Close
+        , Let <$> variations `varyAp` variations <*> pure Close
+        , Assert <$> variations <*> pure Close
+        , ContractRef <$> variations
+        ]
+
+instance Variations Case where
+  variations =
+    join $
+      LNE.fromList
+        [ Case <$> variations <*> pure Close
+        , MerkleizedCase <$> variations `varyAp` variations
+        ]
+
+instance Variations Observation where
+  variations =
+    join $
+      LNE.fromList
+        [ pure $ AndObs FalseObs FalseObs
+        , pure $ OrObs FalseObs FalseObs
+        , pure $ NotObs FalseObs
+        , ChoseSomething <$> variations
+        , pure $ ValueGE TimeIntervalStart TimeIntervalStart
+        , pure $ ValueLE TimeIntervalStart TimeIntervalStart
+        , pure $ ValueGT TimeIntervalStart TimeIntervalStart
+        , pure $ ValueLT TimeIntervalStart TimeIntervalStart
+        , pure $ ValueEQ TimeIntervalStart TimeIntervalStart
+        , pure FalseObs
+        , pure TrueObs
+        , ObservationRef <$> variations
+        ]
+
+instance Variations Value where
+  variations =
+    join $
+      LNE.fromList
+        [ AvailableMoney <$> variations `varyAp` variations
+        , Constant <$> variations
+        , pure $ NegValue (Constant 1)
+        , pure $ AddValue (Constant 1) (Constant 1)
+        , pure $ SubValue (Constant 1) (Constant 1)
+        , pure $ MulValue (Constant 1) (Constant 1)
+        , pure $ DivValue (Constant 1) (Constant 1)
+        , ChoiceValue <$> variations
+        , pure TimeIntervalStart
+        , pure TimeIntervalEnd
+        , UseValue <$> variations
+        , pure $ Cond FalseObs (Constant 1) (Constant 1)
+        , ValueRef <$> variations
+        ]
 
 data ObjectType a where
   ValueType :: ObjectType Value
@@ -202,27 +1008,126 @@ instance Variations SomeObjectType where
       , SomeObjectType ActionType
       ]
 
+data Object where
+  Object :: ObjectType a -> a -> Object
+
+_ValueObject :: Prism' Object Value
+_ValueObject = prism' (Object ValueType) \case
+  Object ValueType a -> Just a
+  _ -> Nothing
+
+_ObservationObject :: Prism' Object Observation
+_ObservationObject = prism' (Object ObservationType) \case
+  Object ObservationType a -> Just a
+  _ -> Nothing
+
+_ContractObject :: Prism' Object Contract
+_ContractObject = prism' (Object ContractType) \case
+  Object ContractType a -> Just a
+  _ -> Nothing
+
+_PartyObject :: Prism' Object Party
+_PartyObject = prism' (Object PartyType) \case
+  Object PartyType a -> Just a
+  _ -> Nothing
+
+_TokenObject :: Prism' Object Token
+_TokenObject = prism' (Object TokenType) \case
+  Object TokenType a -> Just a
+  _ -> Nothing
+
+_ActionObject :: Prism' Object Action
+_ActionObject = prism' (Object ActionType) \case
+  Object ActionType a -> Just a
+  _ -> Nothing
+
+instance Show Object where
+  showsPrec p (Object t a) =
+    showParen
+      (p >= 11)
+      ( showString "Object"
+          . showSpace
+          . showsPrec 11 t
+          . showSpace
+          . case t of
+            ValueType -> showsPrec 11 a
+            ObservationType -> showsPrec 11 a
+            ContractType -> showsPrec 11 a
+            PartyType -> showsPrec 11 a
+            TokenType -> showsPrec 11 a
+            ActionType -> showsPrec 11 a
+      )
+
+instance Read Object where
+  readPrec = parens $ prec 10 $ do
+    Ident "Object" <- lexP
+    SomeObjectType t <- step readObjectType
+    case t of
+      ValueType -> Object t <$> step readPrec
+      ObservationType -> Object t <$> step readPrec
+      ContractType -> Object t <$> step readPrec
+      PartyType -> Object t <$> step readPrec
+      TokenType -> Object t <$> step readPrec
+      ActionType -> Object t <$> step readPrec
+
+instance Eq Object where
+  Object t v == Object t' v' = case (t, t') of
+    (ValueType, ValueType) -> v == v'
+    (ValueType, _) -> False
+    (ObservationType, ObservationType) -> v == v'
+    (ObservationType, _) -> False
+    (ContractType, ContractType) -> v == v'
+    (ContractType, _) -> False
+    (PartyType, PartyType) -> v == v'
+    (PartyType, _) -> False
+    (TokenType, TokenType) -> v == v'
+    (TokenType, _) -> False
+    (ActionType, ActionType) -> v == v'
+    (ActionType, _) -> False
+
+instance Ord Object where
+  compare (Object t v) (Object t' v') = case (t, t') of
+    (ValueType, ValueType) -> compare v v'
+    (ValueType, _) -> LT
+    (_, ValueType) -> GT
+    (ObservationType, ObservationType) -> compare v v'
+    (ObservationType, _) -> LT
+    (_, ObservationType) -> GT
+    (ContractType, ContractType) -> compare v v'
+    (ContractType, _) -> LT
+    (_, ContractType) -> GT
+    (PartyType, PartyType) -> compare v v'
+    (PartyType, _) -> LT
+    (_, PartyType) -> GT
+    (TokenType, TokenType) -> compare v v'
+    (TokenType, _) -> LT
+    (_, TokenType) -> GT
+    (ActionType, ActionType) -> compare v v'
+
 data LabelledObject = forall a.
   LabelledObject
-  { label :: Label
-  , type_ :: ObjectType a
-  , value :: a
+  { _label :: Label
+  , _type :: ObjectType a
+  , _value :: a
   }
+
+object :: Lens' LabelledObject Object
+object f LabelledObject{..} = (\(Object t a) -> LabelledObject _label t a) <$> f (Object _type _value)
 
 instance Show LabelledObject where
   showsPrec _ LabelledObject{..} =
     showString "LabelledObject { label = "
-      . shows label
-      . showString ", type_ = "
-      . shows type_
+      . shows _label
+      . showString ", _type = "
+      . shows _type
       . showString ", value = "
-      . ( case type_ of
-            ValueType -> shows value
-            ObservationType -> shows value
-            ContractType -> shows value
-            PartyType -> shows value
-            TokenType -> shows value
-            ActionType -> shows value
+      . ( case _type of
+            ValueType -> shows _value
+            ObservationType -> shows _value
+            ContractType -> shows _value
+            PartyType -> shows _value
+            TokenType -> shows _value
+            ActionType -> shows _value
         )
       . showString " }"
 
@@ -236,15 +1141,15 @@ instance Read LabelledObject where
       readNormal :: ReadPrec LabelledObject
       readNormal = parens $ prec 10 $ do
         Ident "LabelledObject" <- lexP
-        label :: Label <- step readPrec
-        SomeObjectType type_ <- step readObjectType
-        case type_ of
-          ValueType -> LabelledObject label type_ <$> step readPrec
-          ObservationType -> LabelledObject label type_ <$> step readPrec
-          ContractType -> LabelledObject label type_ <$> step readPrec
-          PartyType -> LabelledObject label type_ <$> step readPrec
-          TokenType -> LabelledObject label type_ <$> step readPrec
-          ActionType -> LabelledObject label type_ <$> step readPrec
+        lbl :: Label <- step readPrec
+        SomeObjectType _type <- step readObjectType
+        case _type of
+          ValueType -> LabelledObject lbl _type <$> step readPrec
+          ObservationType -> LabelledObject lbl _type <$> step readPrec
+          ContractType -> LabelledObject lbl _type <$> step readPrec
+          PartyType -> LabelledObject lbl _type <$> step readPrec
+          TokenType -> LabelledObject lbl _type <$> step readPrec
+          ActionType -> LabelledObject lbl _type <$> step readPrec
 
       readRecord :: ReadPrec LabelledObject
       readRecord = do
@@ -252,850 +1157,120 @@ instance Read LabelledObject where
         Punc "{" <- lexP
         Ident "label" <- lexP
         Punc "=" <- lexP
-        label :: Label <- reset readPrec
+        lbl :: Label <- reset readPrec
         Punc "," <- lexP
-        Ident "type_" <- lexP
+        Ident "_type" <- lexP
         Punc "=" <- lexP
-        SomeObjectType type_ <- reset readObjectType
+        SomeObjectType _type <- reset readObjectType
         Punc "," <- lexP
         Ident "value" <- lexP
         Punc "=" <- lexP
-        x <- case type_ of
-          ValueType -> LabelledObject label type_ <$> reset readPrec
-          ObservationType -> LabelledObject label type_ <$> reset readPrec
-          ContractType -> LabelledObject label type_ <$> reset readPrec
-          PartyType -> LabelledObject label type_ <$> reset readPrec
-          TokenType -> LabelledObject label type_ <$> reset readPrec
-          ActionType -> LabelledObject label type_ <$> reset readPrec
+        x <- case _type of
+          ValueType -> LabelledObject lbl _type <$> reset readPrec
+          ObservationType -> LabelledObject lbl _type <$> reset readPrec
+          ContractType -> LabelledObject lbl _type <$> reset readPrec
+          PartyType -> LabelledObject lbl _type <$> reset readPrec
+          TokenType -> LabelledObject lbl _type <$> reset readPrec
+          ActionType -> LabelledObject lbl _type <$> reset readPrec
         Punc "}" <- lexP
         pure x
 
 instance Eq LabelledObject where
-  LabelledObject l t v == LabelledObject l' t' v' =
-    l == l' && case (t, t') of
-      (ValueType, ValueType) -> v == v'
-      (ValueType, _) -> False
-      (ObservationType, ObservationType) -> v == v'
-      (ObservationType, _) -> False
-      (ContractType, ContractType) -> v == v'
-      (ContractType, _) -> False
-      (PartyType, PartyType) -> v == v'
-      (PartyType, _) -> False
-      (TokenType, TokenType) -> v == v'
-      (TokenType, _) -> False
-      (ActionType, ActionType) -> v == v'
-      (ActionType, _) -> False
+  LabelledObject l t v == LabelledObject l' t' v' = l == l' && Object t v == Object t' v'
 
 instance Ord LabelledObject where
   compare (LabelledObject l t v) (LabelledObject l' t' v') =
-    fold
-      [ compare l l'
-      , case (t, t') of
-          (ValueType, ValueType) -> compare v v'
-          (ValueType, _) -> LT
-          (_, ValueType) -> GT
-          (ObservationType, ObservationType) -> compare v v'
-          (ObservationType, _) -> LT
-          (_, ObservationType) -> GT
-          (ContractType, ContractType) -> compare v v'
-          (ContractType, _) -> LT
-          (_, ContractType) -> GT
-          (PartyType, PartyType) -> compare v v'
-          (PartyType, _) -> LT
-          (_, PartyType) -> GT
-          (TokenType, TokenType) -> compare v v'
-          (TokenType, _) -> LT
-          (_, TokenType) -> GT
-          (ActionType, ActionType) -> compare v v'
-      ]
+    compare l l' <> compare (Object t v) (Object t' v')
 
 instance ToJSON LabelledObject where
   toJSON LabelledObject{..} =
-    object
-      [ "label" .= label
-      , "type" .= type_
-      , case type_ of
-          ValueType -> "value" .= value
-          ObservationType -> "value" .= value
-          ContractType -> "value" .= value
-          PartyType -> "value" .= value
-          TokenType -> "value" .= value
-          ActionType -> "value" .= value
+    A.object
+      [ "label" .= _label
+      , "type" .= _type
+      , case _type of
+          ValueType -> "value" .= _value
+          ObservationType -> "value" .= _value
+          ContractType -> "value" .= _value
+          PartyType -> "value" .= _value
+          TokenType -> "value" .= _value
+          ActionType -> "value" .= _value
       ]
 
 instance FromJSON LabelledObject where
   parseJSON = withObject "LabelledObject" \obj -> do
-    label :: Label <- obj .: "label"
-    SomeObjectType type_ <- obj .: "type"
-    case type_ of
-      ValueType -> LabelledObject label type_ <$> obj .: "value"
-      ObservationType -> LabelledObject label type_ <$> obj .: "value"
-      ContractType -> LabelledObject label type_ <$> obj .: "value"
-      PartyType -> LabelledObject label type_ <$> obj .: "value"
-      TokenType -> LabelledObject label type_ <$> obj .: "value"
-      ActionType -> LabelledObject label type_ <$> obj .: "value"
+    lbl :: Label <- obj .: "label"
+    SomeObjectType _type <- obj .: "type"
+    case _type of
+      ValueType -> LabelledObject lbl _type <$> obj .: "value"
+      ObservationType -> LabelledObject lbl _type <$> obj .: "value"
+      ContractType -> LabelledObject lbl _type <$> obj .: "value"
+      PartyType -> LabelledObject lbl _type <$> obj .: "value"
+      TokenType -> LabelledObject lbl _type <$> obj .: "value"
+      ActionType -> LabelledObject lbl _type <$> obj .: "value"
 
 instance Binary LabelledObject where
   put LabelledObject{..} = do
-    put label
-    put $ SomeObjectType type_
-    case type_ of
-      ValueType -> put value
-      ObservationType -> put value
-      ContractType -> put value
-      PartyType -> put value
-      TokenType -> put value
-      ActionType -> put value
+    put _label
+    put $ SomeObjectType _type
+    case _type of
+      ValueType -> put _value
+      ObservationType -> put _value
+      ContractType -> put _value
+      PartyType -> put _value
+      TokenType -> put _value
+      ActionType -> put _value
 
   get = do
-    label :: Label <- get
-    SomeObjectType type_ <- get
-    case type_ of
-      ValueType -> LabelledObject label type_ <$> get
-      ObservationType -> LabelledObject label type_ <$> get
-      ContractType -> LabelledObject label type_ <$> get
-      PartyType -> LabelledObject label type_ <$> get
-      TokenType -> LabelledObject label type_ <$> get
-      ActionType -> LabelledObject label type_ <$> get
+    lbl :: Label <- get
+    SomeObjectType _type <- get
+    case _type of
+      ValueType -> LabelledObject lbl _type <$> get
+      ObservationType -> LabelledObject lbl _type <$> get
+      ContractType -> LabelledObject lbl _type <$> get
+      PartyType -> LabelledObject lbl _type <$> get
+      TokenType -> LabelledObject lbl _type <$> get
+      ActionType -> LabelledObject lbl _type <$> get
 
 instance Variations LabelledObject where
   variations = do
-    (label :: Label, type_) <- variations
-    case type_ of
-      SomeObjectType ValueType -> LabelledObject label ValueType <$> variations
-      SomeObjectType ObservationType -> LabelledObject label ObservationType <$> variations
-      SomeObjectType ContractType -> LabelledObject label ContractType <$> variations
-      SomeObjectType PartyType -> LabelledObject label PartyType <$> variations
-      SomeObjectType TokenType -> LabelledObject label TokenType <$> variations
-      SomeObjectType ActionType -> LabelledObject label ActionType <$> variations
+    (lbl :: Label, _type) <- variations
+    case _type of
+      SomeObjectType ValueType -> LabelledObject lbl ValueType <$> variations
+      SomeObjectType ObservationType -> LabelledObject lbl ObservationType <$> variations
+      SomeObjectType ContractType -> LabelledObject lbl ContractType <$> variations
+      SomeObjectType PartyType -> LabelledObject lbl PartyType <$> variations
+      SomeObjectType TokenType -> LabelledObject lbl TokenType <$> variations
+      SomeObjectType ActionType -> LabelledObject lbl ActionType <$> variations
 
-data Object
-  = ValueObject Value
-  | ObservationObject Observation
-  | ContractObject Contract
-  | PartyObject Party
-  | TokenObject Token
-  | ActionObject Action
+labelledObjectType :: LabelledObject -> SomeObjectType
+labelledObjectType LabelledObject{..} = SomeObjectType _type
+
+newtype ObjectBundle = ObjectBundle {getObjects :: [LabelledObject]}
   deriving stock (Show, Read, Generic, Eq, Ord)
-  deriving anyclass (Binary, Variations)
-
-newtype Label = Label {unLabel :: ByteString}
-  deriving (Show, Read, Generic, Eq, Ord)
-  deriving (IsString, FromJSON, ToJSON, FromJSONKey, ToJSONKey) via Verbatim
-  deriving newtype (Binary, Variations, Hashable)
-
-data Contract
-  = Close
-  | Pay AccountId Payee Token Value Contract
-  | If Observation Contract Contract
-  | When [Case] Timeout Contract
-  | Let ValueId Value Contract
-  | Assert Observation Contract
-  | ContractRef Label
-  deriving stock (Show, Read, Generic, Eq, Ord)
-  deriving anyclass (Binary)
-
-instance ToJSON Contract where
-  toJSON Close = "close"
-  toJSON (Pay accountId payee token value contract) =
-    object
-      [ "from_account" .= accountId
-      , "to" .= payee
-      , "token" .= token
-      , "pay" .= value
-      , "then" .= contract
-      ]
-  toJSON (If obs cont1 cont2) =
-    object
-      [ "if" .= obs
-      , "then" .= cont1
-      , "else" .= cont2
-      ]
-  toJSON (When cases timeout cont) =
-    object
-      [ "when" .= cases
-      , "timeout" .= timeout
-      , "timeout_continuation" .= cont
-      ]
-  toJSON (Let valId value cont) =
-    object
-      [ "let" .= valId
-      , "be" .= value
-      , "then" .= cont
-      ]
-  toJSON (Assert obs cont) =
-    object
-      [ "assert" .= obs
-      , "then" .= cont
-      ]
-  toJSON (ContractRef label) = object ["ref" .= label]
-
-instance FromJSON Contract where
-  parseJSON = \case
-    A.String "close" -> pure Close
-    v ->
-      flip (parseObject "Contract") v $
-        asum
-          [ Pay <$> "from_account" <*> "to" <*> "token" <*> "pay" <*> "then"
-          , If <$> "if" <*> "then" <*> "else"
-          , When <$> "when" <*> "timeout" <*> "timeout_continuation"
-          , Let <$> "let" <*> "be" <*> "then"
-          , Assert <$> "assert" <*> "then"
-          , ContractRef <$> "ref"
-          ]
-
-fromCoreContract :: Core.Contract -> Contract
-fromCoreContract = \case
-  Core.Close -> Close
-  Core.Pay account payee token value contract ->
-    Pay
-      (fromCoreParty account)
-      (fromCorePayee payee)
-      (fromCoreToken token)
-      (fromCoreValue value)
-      (fromCoreContract contract)
-  Core.If obs a b ->
-    If (fromCoreObservation obs) (fromCoreContract a) (fromCoreContract b)
-  Core.When cases timeout contract ->
-    When (fromCoreCase <$> cases) (fromCoreTimeout timeout) (fromCoreContract contract)
-  Core.Let valueId value contract ->
-    Let (fromCoreValueId valueId) (fromCoreValue value) (fromCoreContract contract)
-  Core.Assert obs contract ->
-    Assert (fromCoreObservation obs) (fromCoreContract contract)
-
-data Case
-  = Case Action Contract
-  | MerkleizedCase Action ContractHash
-  deriving stock (Show, Read, Generic, Eq, Ord)
-  deriving anyclass (Binary)
-
-instance ToJSON Case where
-  toJSON (Case act cont) =
-    object
-      [ "case" .= act
-      , "then" .= cont
-      ]
-  toJSON (MerkleizedCase act hash) =
-    object
-      [ "case" .= act
-      , "merkleized_then" .= hash
-      ]
-
-instance FromJSON Case where
-  parseJSON =
-    parseObject "Case" $
-      asum
-        [ Case <$> "case" <*> "then"
-        , MerkleizedCase <$> "case" <*> "merkleized_then"
-        ]
-
-fromCoreCase :: Core.Case Core.Contract -> Case
-fromCoreCase = \case
-  Core.Case action contract ->
-    Case (fromCoreAction action) (fromCoreContract contract)
-  Core.MerkleizedCase action hash ->
-    MerkleizedCase (fromCoreAction action) (fromCoreContractHash hash)
-
-data Action
-  = Deposit AccountId Party Token Value
-  | Choice ChoiceId [Bound]
-  | Notify Observation
-  | ActionRef Label
-  deriving stock (Show, Read, Generic, Eq, Ord)
-  deriving anyclass (Binary, Variations)
-
-instance ToJSON Action where
-  toJSON (Deposit accountId party token val) =
-    object
-      [ "into_account" .= accountId
-      , "party" .= party
-      , "of_token" .= token
-      , "deposits" .= val
-      ]
-  toJSON (Choice choiceId bounds) =
-    object
-      [ "for_choice" .= choiceId
-      , "choose_between" .= bounds
-      ]
-  toJSON (Notify obs) = object ["notify_if" .= obs]
-  toJSON (ActionRef label) = object ["ref" .= label]
-
-instance FromJSON Action where
-  parseJSON =
-    parseObject "Action" $
-      asum
-        [ Deposit <$> "into_account" <*> "party" <*> "of_token" <*> "deposits"
-        , Choice <$> "for_choice" <*> "choose_between"
-        , Notify <$> "notify_if"
-        , ActionRef <$> "ref"
-        ]
-
-fromCoreAction :: Core.Action -> Action
-fromCoreAction = \case
-  Core.Deposit accountId party token val ->
-    Deposit (fromCoreParty accountId) (fromCoreParty party) (fromCoreToken token) (fromCoreValue val)
-  Core.Choice choiceId bounds ->
-    Choice (fromCoreChoiceId choiceId) (fromCoreBound <$> bounds)
-  Core.Notify obs ->
-    Notify (fromCoreObservation obs)
-
-data Value
-  = AvailableMoney AccountId Token
-  | Constant Integer
-  | NegValue Value
-  | AddValue Value Value
-  | SubValue Value Value
-  | MulValue Value Value
-  | DivValue Value Value
-  | ChoiceValue ChoiceId
-  | TimeIntervalStart
-  | TimeIntervalEnd
-  | UseValue ValueId
-  | Cond Observation Value Value
-  | ValueRef Label
-  deriving stock (Show, Read, Generic, Eq, Ord)
-  deriving anyclass (Binary)
-
-instance ToJSON Value where
-  toJSON (AvailableMoney accountId token) =
-    object
-      [ "amount_of_token" .= token
-      , "in_account" .= accountId
-      ]
-  toJSON (Constant x) = toJSON x
-  toJSON (NegValue x) =
-    object
-      ["negate" .= x]
-  toJSON (AddValue lhs rhs) =
-    object
-      [ "add" .= lhs
-      , "and" .= rhs
-      ]
-  toJSON (SubValue lhs rhs) =
-    object
-      [ "value" .= lhs
-      , "minus" .= rhs
-      ]
-  toJSON (MulValue lhs rhs) =
-    object
-      [ "multiply" .= lhs
-      , "times" .= rhs
-      ]
-  toJSON (DivValue lhs rhs) =
-    object
-      [ "divide" .= lhs
-      , "by" .= rhs
-      ]
-  toJSON (ChoiceValue choiceId) =
-    object
-      ["value_of_choice" .= choiceId]
-  toJSON TimeIntervalStart = "time_interval_start"
-  toJSON TimeIntervalEnd = "time_interval_end"
-  toJSON (UseValue valueId) =
-    object
-      ["use_value" .= valueId]
-  toJSON (Cond obs tv ev) =
-    object
-      [ "if" .= obs
-      , "then" .= tv
-      , "else" .= ev
-      ]
-  toJSON (ValueRef label) = object ["ref" .= label]
-
-instance FromJSON Value where
-  parseJSON = \case
-    A.Number n -> Constant <$> parseJSON (A.Number n)
-    A.String s -> case s of
-      "time_interval_start" -> pure TimeIntervalStart
-      "time_interval_end" -> pure TimeIntervalEnd
-      _ ->
-        parseFail $
-          "Invalid string value. Valid string options are: "
-            <> intercalate
-              ", "
-              [ show @String "time_interval_start"
-              , show @String "time_interval_end"
-              ]
-    v ->
-      flip (parseObject "Value") v $
-        asum
-          [ AvailableMoney <$> "in_account" <*> "amount_of_token"
-          , NegValue <$> "negate"
-          , AddValue <$> "add" <*> "and"
-          , SubValue <$> "value" <*> "minus"
-          , MulValue <$> "multiply" <*> "times"
-          , DivValue <$> "divide" <*> "by"
-          , ChoiceValue <$> "value_of_choice"
-          , UseValue <$> "use_value"
-          , Cond <$> "if" <*> "then" <*> "else"
-          , ValueRef <$> "ref"
-          ]
-
-instance Num Value where
-  (+) = AddValue
-  (*) = MulValue
-  abs v = Cond (ValueGE v 0) v (-v)
-  signum v = Cond (ValueGT v 0) 1 $ Cond (ValueLT v 0) (-1) 0
-  fromInteger = Constant
-  negate = NegValue
-
-fromCoreValue :: Core.Value Core.Observation -> Value
-fromCoreValue = \case
-  Core.AvailableMoney a b -> AvailableMoney (fromCoreParty a) (fromCoreToken b)
-  Core.AddValue a b -> on AddValue fromCoreValue a b
-  Core.SubValue a b -> on SubValue fromCoreValue a b
-  Core.MulValue a b -> on MulValue fromCoreValue a b
-  Core.DivValue a b -> on DivValue fromCoreValue a b
-  Core.NegValue a -> NegValue $ fromCoreValue a
-  Core.Constant a -> Constant a
-  Core.ChoiceValue a -> ChoiceValue $ fromCoreChoiceId a
-  Core.UseValue a -> UseValue $ fromCoreValueId a
-  Core.TimeIntervalStart -> TimeIntervalStart
-  Core.TimeIntervalEnd -> TimeIntervalEnd
-  Core.Cond a b c -> Cond (fromCoreObservation a) (fromCoreValue b) (fromCoreValue c)
-
-data Observation
-  = AndObs Observation Observation
-  | OrObs Observation Observation
-  | NotObs Observation
-  | ChoseSomething ChoiceId
-  | ValueGE Value Value
-  | ValueGT Value Value
-  | ValueLT Value Value
-  | ValueLE Value Value
-  | ValueEQ Value Value
-  | TrueObs
-  | FalseObs
-  | ObservationRef Label
-  deriving stock (Show, Read, Generic, Eq, Ord)
-  deriving anyclass (Binary)
-
-instance ToJSON Observation where
-  toJSON (AndObs lhs rhs) =
-    object
-      [ "both" .= lhs
-      , "and" .= rhs
-      ]
-  toJSON (OrObs lhs rhs) =
-    object
-      [ "either" .= lhs
-      , "or" .= rhs
-      ]
-  toJSON (NotObs v) =
-    object
-      ["not" .= v]
-  toJSON (ChoseSomething choiceId) =
-    object
-      ["chose_something_for" .= choiceId]
-  toJSON (ValueGE lhs rhs) =
-    object
-      [ "value" .= lhs
-      , "ge_than" .= rhs
-      ]
-  toJSON (ValueGT lhs rhs) =
-    object
-      [ "value" .= lhs
-      , "gt" .= rhs
-      ]
-  toJSON (ValueLT lhs rhs) =
-    object
-      [ "value" .= lhs
-      , "lt" .= rhs
-      ]
-  toJSON (ValueLE lhs rhs) =
-    object
-      [ "value" .= lhs
-      , "le_than" .= rhs
-      ]
-  toJSON (ValueEQ lhs rhs) =
-    object
-      [ "value" .= lhs
-      , "equal_to" .= rhs
-      ]
-  toJSON TrueObs = toJSON True
-  toJSON FalseObs = toJSON False
-  toJSON (ObservationRef label) = object ["ref" .= label]
-
-instance FromJSON Observation where
-  parseJSON = \case
-    A.Bool True -> pure TrueObs
-    A.Bool False -> pure FalseObs
-    v ->
-      flip (parseObject "Observation") v $
-        asum
-          [ AndObs <$> "both" <*> "and"
-          , OrObs <$> "either" <*> "or"
-          , NotObs <$> "not"
-          , ChoseSomething <$> "chose_something_for"
-          , ValueGE <$> "value" <*> "ge_than"
-          , ValueGT <$> "value" <*> "gt"
-          , ValueLE <$> "value" <*> "le_than"
-          , ValueLT <$> "value" <*> "lt"
-          , ValueEQ <$> "value" <*> "equal_to"
-          , ObservationRef <$> "ref"
-          ]
-
-fromCoreObservation :: Core.Observation -> Observation
-fromCoreObservation = \case
-  Core.AndObs a b -> on AndObs fromCoreObservation a b
-  Core.OrObs a b -> on OrObs fromCoreObservation a b
-  Core.NotObs a -> NotObs $ fromCoreObservation a
-  Core.ChoseSomething a -> ChoseSomething $ fromCoreChoiceId a
-  Core.ValueGE a b -> on ValueGE fromCoreValue a b
-  Core.ValueGT a b -> on ValueGT fromCoreValue a b
-  Core.ValueLE a b -> on ValueLE fromCoreValue a b
-  Core.ValueLT a b -> on ValueLT fromCoreValue a b
-  Core.ValueEQ a b -> on ValueEQ fromCoreValue a b
-  Core.TrueObs -> TrueObs
-  Core.FalseObs -> FalseObs
-
-type AccountId = Party
-
-data Party
-  = Address !ShelleyAddress
-  | Role !TokenName
-  | PartyRef Label
-  deriving stock (Show, Read, Generic, Eq, Ord)
-  deriving anyclass (Binary, Variations)
-
-instance ToJSON Party where
-  toJSON (Address address) = object ["address" .= address]
-  toJSON (Role token) = object ["role_token" .= token]
-  toJSON (PartyRef ref) = object ["ref" .= ref]
-
-instance FromJSON Party where
-  parseJSON =
-    parseObject "Party" $
-      asum
-        [ Address <$> "address"
-        , Role <$> "role_token"
-        , PartyRef <$> "ref"
-        ]
-
-fromCoreParty :: Core.Party -> Party
-fromCoreParty = \case
-  Core.Address network addr -> Address $ fromCoreAddress network addr
-  Core.Role role -> Role $ fromCoreTokenName role
-
-newtype ShelleyAddress = ShelleyAddress {unShelleyAddress :: Address ShelleyAddr}
-  deriving (Eq, Ord)
-
-instance Show ShelleyAddress where
-  show = show . serialiseToBech32 . unShelleyAddress
-
-instance Read ShelleyAddress where
-  readPrec = do
-    String s <- lexP
-    Right addr <- pure $ deserialiseFromBech32 (AsAddress AsShelleyAddr) $ T.pack s
-    pure $ ShelleyAddress addr
-
-instance IsString ShelleyAddress where
-  fromString =
-    either (error . mappend "ShelleyAddress.fromString: bad address: " . show) ShelleyAddress
-      . deserialiseFromBech32 (AsAddress AsShelleyAddr)
-      . T.pack
-
-instance Binary ShelleyAddress where
-  put = put . serialiseToRawBytes . unShelleyAddress
-  get =
-    maybe (fail "failed to deserialize address") (pure . ShelleyAddress)
-      . deserialiseFromRawBytes (AsAddress AsShelleyAddr)
-      =<< get
-
-instance Variations ShelleyAddress where
-  variations =
-    LNE.fromList
-      [ "addr_test1vrssw4edcts00kk6lp7p5n64666m23tpprqaarmdwkaq69gfvqnpz"
-      ]
-
-instance ToJSON ShelleyAddress where
-  toJSON (ShelleyAddress address) = A.String $ serialiseToBech32 address
-
-instance FromJSON ShelleyAddress where
-  parseJSON =
-    withText "ShelleyAddress" $
-      either (parseFail . show) (pure . ShelleyAddress) . deserialiseFromBech32 (AsAddress AsShelleyAddr)
-
-fromCoreAddress :: Core.Network -> PV2.Address -> ShelleyAddress
-fromCoreAddress network addr =
-  ShelleyAddress $
-    fromRight (error "fromRight: Left") $
-      deserialiseFromBech32 (AsAddress AsShelleyAddr) $
-        serialiseAddressBech32 network addr
-
-newtype TokenName = TokenName {unTokenName :: ByteString}
-  deriving (Show, Generic, Read, Eq, Ord)
-  deriving (IsString, FromJSON, ToJSON, FromJSONKey, ToJSONKey) via Verbatim
-  deriving newtype (Binary, Variations)
-
-fromCoreTokenName :: PV2.TokenName -> TokenName
-fromCoreTokenName = TokenName . PV2.fromBuiltin . PV2.unTokenName
-
-toCoreTokenName :: TokenName -> PV2.TokenName
-toCoreTokenName = PV2.TokenName . PV2.toBuiltin . unTokenName
-
-data ChoiceId = ChoiceId Text Party
-  deriving stock (Show, Read, Generic, Eq, Ord)
-  deriving anyclass (Binary, Variations)
-
-instance ToJSON ChoiceId where
-  toJSON (ChoiceId name party) =
-    object
-      [ "choice_name" .= name
-      , "choice_owner" .= party
-      ]
-
-instance FromJSON ChoiceId where
-  parseJSON = parseObject "Payee" $ ChoiceId <$> "choice_name" <*> "choice_owner"
-
-fromCoreChoiceId :: Core.ChoiceId -> ChoiceId
-fromCoreChoiceId (Core.ChoiceId name owner) = ChoiceId (T.decodeUtf8 $ PV2.fromBuiltin name) (fromCoreParty owner)
-
-newtype ValueId = ValueId {unValueId :: ByteString}
-  deriving (Show, Generic, Read, Eq, Ord)
-  deriving (IsString, FromJSON, ToJSON, FromJSONKey, ToJSONKey) via Verbatim
-  deriving newtype (Binary, Variations)
-
-fromCoreValueId :: Core.ValueId -> ValueId
-fromCoreValueId (Core.ValueId bs) = ValueId $ PV2.fromBuiltin bs
-
-toCoreValueId :: ValueId -> Core.ValueId
-toCoreValueId (ValueId bs) = Core.ValueId $ PV2.toBuiltin bs
-
-data Payee
-  = Party !Party
-  | Account !Party
-  deriving stock (Show, Read, Generic, Eq, Ord)
-  deriving anyclass (Binary, Variations)
-
-instance ToJSON Payee where
-  toJSON (Account acc) = object ["account" .= acc]
-  toJSON (Party party) = object ["party" .= party]
-
-instance FromJSON Payee where
-  parseJSON =
-    parseObject "Payee" $
-      asum
-        [ Party <$> "party"
-        , Account <$> "account"
-        ]
-
-fromCorePayee :: Core.Payee -> Payee
-fromCorePayee = \case
-  Core.Account acc -> Account $ fromCoreParty acc
-  Core.Party p -> Party $ fromCoreParty p
-
-data Token
-  = Token CurrencySymbol TokenName
-  | TokenRef Label
-  deriving stock (Show, Read, Generic, Eq, Ord)
-  deriving anyclass (Binary, Variations)
-
-instance ToJSON Token where
-  toJSON (Token cs tokName) =
-    object
-      [ "currency_symbol" .= cs
-      , "token_name" .= tokName
-      ]
-  toJSON (TokenRef label) = object ["ref" .= label]
-
-instance FromJSON Token where
-  parseJSON =
-    parseObject "Token" $
-      asum
-        [ Token <$> "currency_symbol" <*> "token_name"
-        , TokenRef <$> "ref"
-        ]
-
-fromCoreToken :: Core.Token -> Token
-fromCoreToken (Core.Token cs tokName) = Token (fromCoreCurrencySymbol cs) (fromCoreTokenName tokName)
-
-newtype CurrencySymbol = CurrencySymbol {unCurrencySymbol :: ByteString}
-  deriving newtype (Eq, Ord, Binary)
-  deriving (Show, Read, IsString, ToJSON, FromJSON, Variations) via Base16
-
-fromCoreCurrencySymbol :: PV2.CurrencySymbol -> CurrencySymbol
-fromCoreCurrencySymbol = CurrencySymbol . PV2.fromBuiltin . PV2.unCurrencySymbol
-
-toCoreCurrencySymbol :: CurrencySymbol -> PV2.CurrencySymbol
-toCoreCurrencySymbol = PV2.CurrencySymbol . PV2.toBuiltin . unCurrencySymbol
-
-newtype ContractHash = ContractHash {unContractHash :: ByteString}
-  deriving newtype (Eq, Ord, Binary)
-  deriving (Show, Read, IsString, ToJSON, FromJSON, Variations) via Base16
-
-fromCoreContractHash :: BuiltinByteString -> ContractHash
-fromCoreContractHash = ContractHash . PV2.fromBuiltin
-
-newtype Base16 = Base16 {unBase16 :: ByteString}
-  deriving newtype (Eq, Ord, Variations)
-
-instance Show Base16 where
-  show = show . encodeBase16 . unBase16
-
-instance Read Base16 where
-  readPrec = do
-    String s <- lexP
-    Right parsed <- pure $ decodeBase16' $ T.pack s
-    pure $ Base16 parsed
-
-instance IsString Base16 where
-  fromString = read
-
-instance ToJSON Base16 where
-  toJSON = A.String . encodeBase16 . unBase16
-
-instance ToJSONKey Base16 where
-  toJSONKey = toJSONKeyText $ encodeBase16 . unBase16
-
-instance FromJSON Base16 where
-  parseJSON = withText "Base16" $ either (fail . T.unpack) (pure . Base16) . decodeBase16'
-
-instance FromJSONKey Base16 where
-  fromJSONKey = FromJSONKeyTextParser $ either (fail . T.unpack) (pure . Base16) . decodeBase16'
-
-newtype Verbatim = Verbatim {unVerbatim :: ByteString}
-  deriving newtype (Eq, Ord, Show, Read, IsString, Variations)
-
-instance ToJSON Verbatim where
-  toJSON = A.String . T.pack . BS8.unpack . unVerbatim
-
-instance ToJSONKey Verbatim where
-  toJSONKey = toJSONKeyText $ T.pack . BS8.unpack . unVerbatim
-
-instance FromJSON Verbatim where
-  parseJSON = withText "Verbatim" $ pure . Verbatim . BS8.pack . T.unpack
-
-instance FromJSONKey Verbatim where
-  fromJSONKey = FromJSONKeyText $ Verbatim . BS8.pack . T.unpack
-
-data Bound = Bound Integer Integer
-  deriving stock (Show, Read, Generic, Eq, Ord)
-  deriving anyclass (Binary, Variations)
-
-instance ToJSON Bound where
-  toJSON (Bound from to) = object ["from" .= from, "to" .= to]
-
-instance FromJSON Bound where
-  parseJSON = withObject "Bound" \obj -> do
-    from <- obj .: "from"
-    to <- obj .: "to"
-    pure $ Bound from to
-
-fromCoreBound :: Core.Bound -> Bound
-fromCoreBound (Core.Bound lo hi) = Bound lo hi
-
-toCoreBound :: Bound -> Core.Bound
-toCoreBound (Bound lo hi) = Core.Bound lo hi
-
-newtype Timeout = Timeout {unTimeout :: UTCTime}
-  deriving stock (Generic, Show, Read, Eq, Ord)
-  deriving anyclass (Variations)
-
-instance Num Timeout where
-  (+) =
-    fmap (Timeout . posixSecondsToUTCTime . secondsToNominalDiffTime)
-      . on (+) (nominalDiffTimeToSeconds . utcTimeToPOSIXSeconds . unTimeout)
-  (*) =
-    fmap (Timeout . posixSecondsToUTCTime . secondsToNominalDiffTime)
-      . on (*) (nominalDiffTimeToSeconds . utcTimeToPOSIXSeconds . unTimeout)
-  abs =
-    Timeout
-      . posixSecondsToUTCTime
-      . secondsToNominalDiffTime
-      . abs
-      . nominalDiffTimeToSeconds
-      . utcTimeToPOSIXSeconds
-      . unTimeout
-  signum =
-    Timeout
-      . posixSecondsToUTCTime
-      . secondsToNominalDiffTime
-      . signum
-      . nominalDiffTimeToSeconds
-      . utcTimeToPOSIXSeconds
-      . unTimeout
-  fromInteger = Timeout . posixSecondsToUTCTime . secondsToNominalDiffTime . fromInteger
-  negate =
-    Timeout
-      . posixSecondsToUTCTime
-      . secondsToNominalDiffTime
-      . negate
-      . nominalDiffTimeToSeconds
-      . utcTimeToPOSIXSeconds
-      . unTimeout
-
-instance Binary Timeout where
-  put = put @Integer . floor . (* 1000000) . nominalDiffTimeToSeconds . utcTimeToPOSIXSeconds . unTimeout
-  get = Timeout . posixSecondsToUTCTime . secondsToNominalDiffTime . (/ 1000000) . fromInteger <$> get
-
-instance ToJSON Timeout where
-  toJSON = toJSON @Integer . floor . (* 1000000) . nominalDiffTimeToSeconds . utcTimeToPOSIXSeconds . unTimeout
-
-instance FromJSON Timeout where
-  parseJSON v = Timeout . posixSecondsToUTCTime . secondsToNominalDiffTime . (/ 1000000) . fromInteger <$> parseJSON v
-
-toCoreTimeout :: Timeout -> Core.Timeout
-toCoreTimeout = PV2.POSIXTime . floor . (* 1000000) . nominalDiffTimeToSeconds . utcTimeToPOSIXSeconds . unTimeout
-
-fromCoreTimeout :: Core.Timeout -> Timeout
-fromCoreTimeout = Timeout . posixSecondsToUTCTime . secondsToNominalDiffTime . (/ 1000000) . fromInteger . getPOSIXTime
-
--- The following require manual instances to avoid infinite recursion.
-instance Variations Contract where
-  variations =
-    join $
-      LNE.fromList
-        [ pure Close
-        , Pay <$> variations `varyAp` variations `varyAp` variations `varyAp` variations <*> pure Close
-        , If <$> variations <*> pure Close <*> pure Close
-        , When <$> variations `varyAp` variations <*> pure Close
-        , Let <$> variations `varyAp` variations <*> pure Close
-        , Assert <$> variations <*> pure Close
-        , ContractRef <$> variations
-        ]
-
-instance Variations Case where
-  variations =
-    join $
-      LNE.fromList
-        [ Case <$> variations <*> pure Close
-        , MerkleizedCase <$> variations `varyAp` variations
-        ]
-
-instance Variations Observation where
-  variations =
-    join $
-      LNE.fromList
-        [ pure $ AndObs FalseObs FalseObs
-        , pure $ OrObs FalseObs FalseObs
-        , pure $ NotObs FalseObs
-        , ChoseSomething <$> variations
-        , pure $ ValueGE TimeIntervalStart TimeIntervalStart
-        , pure $ ValueLE TimeIntervalStart TimeIntervalStart
-        , pure $ ValueGT TimeIntervalStart TimeIntervalStart
-        , pure $ ValueLT TimeIntervalStart TimeIntervalStart
-        , pure $ ValueEQ TimeIntervalStart TimeIntervalStart
-        , pure FalseObs
-        , pure TrueObs
-        , ObservationRef <$> variations
-        ]
-
-instance Variations Value where
-  variations =
-    join $
-      LNE.fromList
-        [ AvailableMoney <$> variations `varyAp` variations
-        , Constant <$> variations
-        , pure $ NegValue (Constant 1)
-        , pure $ AddValue (Constant 1) (Constant 1)
-        , pure $ SubValue (Constant 1) (Constant 1)
-        , pure $ MulValue (Constant 1) (Constant 1)
-        , pure $ DivValue (Constant 1) (Constant 1)
-        , ChoiceValue <$> variations
-        , pure TimeIntervalStart
-        , pure TimeIntervalEnd
-        , UseValue <$> variations
-        , pure $ Cond FalseObs (Constant 1) (Constant 1)
-        , ValueRef <$> variations
-        ]
+  deriving anyclass (FromJSON, ToJSON, Variations)
+
+instance Binary ObjectBundle where
+  put = traverse_ put . getObjects
+  get = ObjectBundle <$> many get
+
+makePrisms ''Contract
+makePrisms ''ObjectBundle
+makePrisms ''Label
+makePrisms ''Timeout
+makePrisms ''Bound
+makePrisms ''ContractHash
+makePrisms ''Token
+makePrisms ''Payee
+makePrisms ''ValueId
+makePrisms ''ChoiceId
+makePrisms ''TokenName
+makePrisms ''ShelleyAddress
+makePrisms ''Party
+makePrisms ''Observation
+makePrisms ''Value
+makePrisms ''Action
+makePrisms ''Case
+
+makeLensesFor [("_label", "label")] ''LabelledObject
+
+-- foo = _Bound
