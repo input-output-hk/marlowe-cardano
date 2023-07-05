@@ -91,8 +91,8 @@ runMarloweLoadClient :: (MonadMarlowe m) => MarloweLoadClient m a -> m a
 runMarloweLoadClient = runMarloweRuntimeClient . RunMarloweLoadClient
 
 -- | Run a MarloweTransferClient.
-runMarloweImportClient :: (MonadMarlowe m) => MarloweTransferClient m a -> m a
-runMarloweImportClient = runMarloweRuntimeClient . RunMarloweImportClient
+runMarloweTransferClient :: (MonadMarlowe m) => MarloweTransferClient m a -> m a
+runMarloweTransferClient = runMarloweRuntimeClient . RunMarloweTransferClient
 
 -- | Run a MarloweTxCommand job client.
 runMarloweTxClient :: (MonadMarlowe m) => JobClient MarloweTxCommand m a -> m a

@@ -37,7 +37,7 @@ data MarloweRuntimeClient m a
   | RunMarloweHeaderSyncClient (MarloweHeaderSyncClient m a)
   | RunMarloweQueryClient (MarloweQueryClient m a)
   | RunMarloweLoadClient (MarloweLoadClient m a)
-  | RunMarloweImportClient (MarloweTransferClient m a)
+  | RunMarloweTransferClient (MarloweTransferClient m a)
   | RunTxClient (JobClient MarloweTxCommand m a)
   | RunContractQueryClient (QueryClient ContractRequest m a)
   deriving (Functor)
@@ -49,7 +49,7 @@ hoistMarloweRuntimeClient f = \case
   RunMarloweHeaderSyncClient client -> RunMarloweHeaderSyncClient $ hoistMarloweHeaderSyncClient f client
   RunMarloweQueryClient client -> RunMarloweQueryClient $ hoistQueryClient f client
   RunMarloweLoadClient client -> RunMarloweLoadClient $ hoistMarloweLoadClient f client
-  RunMarloweImportClient client -> RunMarloweImportClient $ hoistMarloweTransferClient f client
+  RunMarloweTransferClient client -> RunMarloweTransferClient $ hoistMarloweTransferClient f client
   RunTxClient client -> RunTxClient $ hoistJobClient f client
   RunContractQueryClient client -> RunContractQueryClient $ hoistQueryClient f client
 
@@ -75,10 +75,10 @@ marloweRuntimeClientPeer = \case
       Cast $
         liftPeerTraced liftMarloweLoad $
           marloweLoadClientPeer client
-  RunMarloweImportClient client ->
-    YieldTraced (ClientAgency TokInit) MsgRunMarloweImport $
+  RunMarloweTransferClient client ->
+    YieldTraced (ClientAgency TokInit) MsgRunMarloweTransfer $
       Cast $
-        liftPeerTraced liftMarloweImport $
+        liftPeerTraced liftMarloweTransfer $
           marloweTransferClientPeer client
   RunTxClient client -> YieldTraced (ClientAgency TokInit) MsgRunTxJob $ Cast $ liftPeerTraced liftTxJob $ jobClientPeer client
   RunContractQueryClient client ->
@@ -103,9 +103,9 @@ liftMarloweLoad :: LiftProtocol MarloweLoad MarloweRuntime 'StMarloweLoad
 liftMarloweLoad =
   LiftProtocol TokClientMarloweLoad TokServerMarloweLoad TokNobodyMarloweLoad MsgMarloweLoad \(MsgMarloweLoad msg) -> SomeSubMessage msg
 
-liftMarloweImport :: LiftProtocol MarloweTransfer MarloweRuntime 'StMarloweImport
-liftMarloweImport =
-  LiftProtocol TokClientMarloweImport TokServerMarloweImport TokNobodyMarloweImport MsgMarloweImport \(MsgMarloweImport msg) -> SomeSubMessage msg
+liftMarloweTransfer :: LiftProtocol MarloweTransfer MarloweRuntime 'StMarloweTransfer
+liftMarloweTransfer =
+  LiftProtocol TokClientMarloweTransfer TokServerMarloweTransfer TokNobodyMarloweTransfer MsgMarloweTransfer \(MsgMarloweTransfer msg) -> SomeSubMessage msg
 
 liftTxJob :: LiftProtocol (Job MarloweTxCommand) MarloweRuntime 'StTxJob
 liftTxJob =

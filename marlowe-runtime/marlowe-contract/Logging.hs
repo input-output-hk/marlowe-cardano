@@ -20,7 +20,7 @@ import Observe.Event.Render.OpenTelemetry (RenderSelectorOTel)
 data RootSelector f where
   ContractStoreSelector :: ContractStoreSelector f -> RootSelector f
   MarloweLoadServer :: TcpServerSelector (Handshake MarloweLoad) f -> RootSelector f
-  MarloweImportServer :: TcpServerSelector (Handshake MarloweTransfer) f -> RootSelector f
+  MarloweTransferServer :: TcpServerSelector (Handshake MarloweTransfer) f -> RootSelector f
   QueryServer :: TcpServerSelector (Handshake (Query ContractRequest)) f -> RootSelector f
 
 instance Inject (TcpServerSelector (Handshake (Query ContractRequest))) RootSelector where
@@ -30,7 +30,7 @@ instance Inject (TcpServerSelector (Handshake MarloweLoad)) RootSelector where
   inject = injectSelector MarloweLoadServer
 
 instance Inject (TcpServerSelector (Handshake MarloweTransfer)) RootSelector where
-  inject = injectSelector MarloweImportServer
+  inject = injectSelector MarloweTransferServer
 
 instance Inject ContractStoreSelector RootSelector where
   inject = injectSelector ContractStoreSelector
@@ -38,6 +38,6 @@ instance Inject ContractStoreSelector RootSelector where
 renderRootSelectorOTel :: RenderSelectorOTel RootSelector
 renderRootSelectorOTel = \case
   MarloweLoadServer sel -> renderTcpServerSelectorOTel sel
-  MarloweImportServer sel -> renderTcpServerSelectorOTel sel
+  MarloweTransferServer sel -> renderTcpServerSelectorOTel sel
   QueryServer sel -> renderTcpServerSelectorOTel sel
   ContractStoreSelector sel -> renderContractStoreSelectorOTel sel

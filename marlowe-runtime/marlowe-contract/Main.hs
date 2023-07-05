@@ -92,12 +92,12 @@ run Options{..} = do
           , ..
           }
 
-    tcpServerTraced "contract-import" inject
+    tcpServerTraced "contract-transfer" inject
       -<
         TcpServerDependencies
           { toPeer = marloweTransferServerPeer
-          , port = importPort
-          , serverSource = importServerSource
+          , port = transferPort
+          , serverSource = transferServerSource
           , ..
           }
 
@@ -107,7 +107,7 @@ data Options = Options
   { host :: HostName
   , port :: PortNumber
   , queryPort :: PortNumber
-  , importPort :: PortNumber
+  , transferPort :: PortNumber
   , bufferSize :: Int
   , contractStoreDirectory :: FilePath
   , contractStoreStagingDirectory :: FilePath
@@ -125,7 +125,7 @@ getOptions = do
                   <$> hostParser
                   <*> portParser
                   <*> queryPortParser
-                  <*> importPortParser
+                  <*> transferPortParser
                   <*> bufferSizeParser
                   <*> contractStoreDirectoryParser contractStoreDirectory
                   <*> contractStoreStagingDirectoryParser contractStoreStagingDirectory
@@ -167,13 +167,13 @@ getOptions = do
           , showDefault
           ]
 
-    importPortParser =
+    transferPortParser =
       option auto $
         mconcat
-          [ long "import-port"
+          [ long "transfer-port"
           , value 3729
           , metavar "PORT_NUMBER"
-          , help "The port number to run the import server on."
+          , help "The port number to run the transfer server on."
           , showDefault
           ]
 

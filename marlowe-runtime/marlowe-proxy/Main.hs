@@ -64,7 +64,7 @@ run = runComponent_ proc Options{..} -> do
           , connectMarloweHeaderSync = tcpClientChannel (injectSelector MarloweHeaderSyncClient) syncHost marloweHeaderSyncPort
           , connectMarloweQuery = tcpClientChannel (injectSelector MarloweQueryClient) syncHost marloweQueryPort
           , connectMarloweLoad = tcpClientChannel (injectSelector MarloweLoadClient) contractHost marloweLoadPort
-          , connectMarloweImport = tcpClientChannel (injectSelector MarloweImportClient) contractHost marloweImportPort
+          , connectMarloweTransfer = tcpClientChannel (injectSelector MarloweTransferClient) contractHost marloweTransferPort
           , connectTxJob = tcpClientChannel (injectSelector TxJobClient) txHost txPort
           , connectContractQuery = tcpClientChannel (injectSelector ContractQueryClient) contractHost contractQueryPort
           }
@@ -98,7 +98,7 @@ data Options = Options
   , marloweQueryPort :: PortNumber
   , contractHost :: HostName
   , marloweLoadPort :: PortNumber
-  , marloweImportPort :: PortNumber
+  , marloweTransferPort :: PortNumber
   , contractQueryPort :: PortNumber
   , txHost :: HostName
   , txPort :: PortNumber
@@ -113,7 +113,7 @@ getOptions = do
   marloweQueryPortParser <- optParserWithEnvDefault O.syncQueryPort
   contractHostParser <- optParserWithEnvDefault O.contractHost
   marloweLoadPortParser <- optParserWithEnvDefault O.loadPort
-  marloweImportPortParser <- optParserWithEnvDefault O.importPort
+  marloweTransferPortParser <- optParserWithEnvDefault O.importPort
   contractQueryPortParser <- optParserWithEnvDefault O.contractQueryPort
   txHostParser <- optParserWithEnvDefault O.txHost
   txPortParser <- optParserWithEnvDefault O.txCommandPort
@@ -130,7 +130,7 @@ getOptions = do
                   <*> marloweQueryPortParser
                   <*> contractHostParser
                   <*> marloweLoadPortParser
-                  <*> marloweImportPortParser
+                  <*> marloweTransferPortParser
                   <*> contractQueryPortParser
                   <*> txHostParser
                   <*> txPortParser

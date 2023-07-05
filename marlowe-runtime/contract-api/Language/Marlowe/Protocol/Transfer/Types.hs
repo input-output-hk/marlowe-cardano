@@ -28,8 +28,10 @@ import Network.Protocol.Handshake.Types (HasSignature (..))
 import Network.Protocol.Peer.Trace (MessageAttributes (..), OTelProtocol (..))
 import Network.TypedProtocol
 import Network.TypedProtocol.Codec (AnyMessageAndAgency (..))
+import Numeric.Natural (Natural)
+import OpenTelemetry.Attributes (PrimitiveAttribute (IntAttribute))
 
-data TransferError
+data ImportError
   = ContinuationNotInStore ContractHash
   | LinkError LinkError
   deriving stock (Show, Read, Generic, Eq, Ord)
@@ -37,7 +39,10 @@ data TransferError
 
 data MarloweTransfer where
   StIdle :: MarloweTransfer
-  StTransfer :: MarloweTransfer
+  StCanUpload :: MarloweTransfer
+  StUpload :: MarloweTransfer
+  StCanDownload :: MarloweTransfer
+  StDownload :: MarloweTransfer
   StDone :: MarloweTransfer
 
 instance HasSignature MarloweTransfer where
@@ -45,21 +50,33 @@ instance HasSignature MarloweTransfer where
 
 instance Protocol MarloweTransfer where
   data Message MarloweTransfer st st' where
-    MsgTransfer :: ObjectBundle -> Message MarloweTransfer 'StIdle 'StTransfer
-    MsgTransferred :: Map Label DatumHash -> Message MarloweTransfer 'StTransfer 'StIdle
-    MsgTransferFailed :: TransferError -> Message MarloweTransfer 'StTransfer 'StDone
+    MsgStartImport :: Message MarloweTransfer 'StIdle 'StCanUpload
+    MsgStartExport :: DatumHash -> Message MarloweTransfer 'StIdle 'StCanDownload
     MsgDone :: Message MarloweTransfer 'StIdle 'StDone
+    MsgUpload :: ObjectBundle -> Message MarloweTransfer 'StCanUpload 'StUpload
+    MsgUploaded :: Map Label DatumHash -> Message MarloweTransfer 'StUpload 'StCanUpload
+    MsgUploadFailed :: ImportError -> Message MarloweTransfer 'StUpload 'StIdle
+    MsgImported :: Message MarloweTransfer 'StCanUpload 'StIdle
+    MsgDownloaded :: ObjectBundle -> Message MarloweTransfer 'StDownload 'StCanDownload
+    MsgDownload :: Natural -> Message MarloweTransfer 'StCanDownload 'StDownload
+    MsgCancel :: Message MarloweTransfer 'StCanDownload 'StIdle
+    MsgExported :: Message MarloweTransfer 'StDownload 'StIdle
 
   data ClientHasAgency st where
     TokIdle :: ClientHasAgency 'StIdle
+    TokCanUpload :: ClientHasAgency 'StCanUpload
+    TokCanDownload :: ClientHasAgency 'StCanDownload
 
   data ServerHasAgency st where
-    TokTransfer :: ServerHasAgency 'StTransfer
+    TokUpload :: ServerHasAgency 'StUpload
+    TokDownload :: ServerHasAgency 'StDownload
 
   data NobodyHasAgency st where
     TokDone :: NobodyHasAgency 'StDone
 
   exclusionLemma_ClientAndServerHaveAgency TokIdle = \case {}
+  exclusionLemma_ClientAndServerHaveAgency TokCanUpload = \case {}
+  exclusionLemma_ClientAndServerHaveAgency TokCanDownload = \case {}
   exclusionLemma_NobodyAndClientHaveAgency TokDone = \case {}
   exclusionLemma_NobodyAndServerHaveAgency TokDone = \case {}
 
@@ -82,68 +99,156 @@ deriving instance Ord (NobodyHasAgency (st :: MarloweTransfer))
 instance BinaryMessage MarloweTransfer where
   putMessage = \case
     ClientAgency TokIdle -> \case
-      MsgTransfer bundle -> do
+      MsgStartImport -> putWord8 0
+      MsgStartExport hash -> do
+        putWord8 1
+        put hash
+      MsgDone -> putWord8 2
+    ClientAgency TokCanUpload -> \case
+      MsgUpload bundle -> do
         putWord8 0
         put bundle
-      MsgDone -> putWord8 1
-    ServerAgency TokTransfer -> \case
-      MsgTransferred hashes -> do
+      MsgImported -> putWord8 1
+    ClientAgency TokCanDownload -> \case
+      MsgDownload i -> do
+        putWord8 0
+        put i
+      MsgCancel -> putWord8 1
+    ServerAgency TokUpload -> \case
+      MsgUploaded hashes -> do
         putWord8 0
         put hashes
-      MsgTransferFailed err -> do
+      MsgUploadFailed err -> do
         putWord8 1
         put err
+    ServerAgency TokDownload -> \case
+      MsgDownloaded bundle -> do
+        putWord8 0
+        put bundle
+      MsgExported -> putWord8 1
   getMessage tok = do
     tag <- getWord8
     case tok of
       ClientAgency TokIdle -> case tag of
-        0 -> SomeMessage . MsgTransfer <$> get
-        1 -> pure $ SomeMessage MsgDone
+        0 -> pure $ SomeMessage MsgStartImport
+        1 -> SomeMessage . MsgStartExport <$> get
+        2 -> pure $ SomeMessage MsgDone
         _ -> fail $ "invalid tag byte " <> show tag
-      ServerAgency TokTransfer -> case tag of
-        0 -> SomeMessage . MsgTransferred <$> get
-        1 -> SomeMessage . MsgTransferFailed <$> get
+      ClientAgency TokCanUpload -> case tag of
+        0 -> SomeMessage . MsgUpload <$> get
+        1 -> pure $ SomeMessage MsgImported
+        _ -> fail $ "invalid tag byte " <> show tag
+      ClientAgency TokCanDownload -> case tag of
+        0 -> SomeMessage . MsgDownload <$> get
+        1 -> pure $ SomeMessage MsgCancel
+        _ -> fail $ "invalid tag byte " <> show tag
+      ServerAgency TokUpload -> case tag of
+        0 -> SomeMessage . MsgUploaded <$> get
+        1 -> SomeMessage . MsgUploadFailed <$> get
+        _ -> fail $ "invalid tag byte " <> show tag
+      ServerAgency TokDownload -> case tag of
+        0 -> SomeMessage . MsgDownloaded <$> get
+        1 -> pure $ SomeMessage MsgExported
         _ -> fail $ "invalid tag byte " <> show tag
 
 instance OTelProtocol MarloweTransfer where
   protocolName _ = "marlowe_transfer"
   messageAttributes = \case
     ClientAgency TokIdle -> \case
-      MsgTransfer bundle ->
+      MsgStartImport ->
         MessageAttributes
-          { messageType = "transfer"
-          , messageParameters = [jsonToPrimitiveAttribute $ toJSON bundle]
+          { messageType = "start_import"
+          , messageParameters = []
+          }
+      MsgStartExport hash ->
+        MessageAttributes
+          { messageType = "start_export"
+          , messageParameters = [fromString $ read $ show hash]
           }
       MsgDone ->
         MessageAttributes
           { messageType = "done"
           , messageParameters = []
           }
-    ServerAgency TokTransfer -> \case
-      MsgTransferred hashes ->
+    ClientAgency TokCanUpload -> \case
+      MsgUpload bundle ->
         MessageAttributes
-          { messageType = "transferred"
-          , messageParameters = [fromString $ read $ show hashes]
+          { messageType = "upload"
+          , messageParameters = [jsonToPrimitiveAttribute $ toJSON bundle]
           }
-      MsgTransferFailed err ->
+      MsgImported ->
         MessageAttributes
-          { messageType = "transfer_failed"
+          { messageType = "imported"
+          , messageParameters = []
+          }
+    ClientAgency TokCanDownload -> \case
+      MsgDownload i ->
+        MessageAttributes
+          { messageType = "download"
+          , messageParameters = [IntAttribute $ fromIntegral i]
+          }
+      MsgCancel ->
+        MessageAttributes
+          { messageType = "cancel"
+          , messageParameters = []
+          }
+    ServerAgency TokUpload -> \case
+      MsgUploaded hashes ->
+        MessageAttributes
+          { messageType = "uploaded"
+          , messageParameters = [jsonToPrimitiveAttribute $ toJSON hashes]
+          }
+      MsgUploadFailed err ->
+        MessageAttributes
+          { messageType = "upload_failed"
           , messageParameters = [jsonToPrimitiveAttribute $ toJSON err]
+          }
+    ServerAgency TokDownload -> \case
+      MsgDownloaded bundle ->
+        MessageAttributes
+          { messageType = "downloaded"
+          , messageParameters = [jsonToPrimitiveAttribute $ toJSON bundle]
+          }
+      MsgExported ->
+        MessageAttributes
+          { messageType = "exported"
+          , messageParameters = []
           }
 
 instance MessageEq MarloweTransfer where
   messageEq (AnyMessageAndAgency _ msg) (AnyMessageAndAgency _ msg') = case msg of
-    MsgTransfer bundle -> case msg' of
-      MsgTransfer bundle' -> bundle == bundle'
+    MsgStartImport -> case msg' of
+      MsgStartImport -> True
       _ -> False
-    MsgTransferred hashes -> case msg' of
-      MsgTransferred hashes' -> hashes == hashes'
-      _ -> False
-    MsgTransferFailed err -> case msg' of
-      MsgTransferFailed err' -> err == err'
+    MsgStartExport hash -> case msg' of
+      MsgStartExport hash' -> hash == hash'
       _ -> False
     MsgDone -> case msg' of
       MsgDone -> True
+      _ -> False
+    MsgUpload bundle -> case msg' of
+      MsgUpload bundle' -> bundle == bundle'
+      _ -> False
+    MsgUploaded hashes -> case msg' of
+      MsgUploaded hashes' -> hashes == hashes'
+      _ -> False
+    MsgUploadFailed err -> case msg' of
+      MsgUploadFailed err' -> err == err'
+      _ -> False
+    MsgImported -> case msg' of
+      MsgImported -> True
+      _ -> False
+    MsgDownloaded bundle -> case msg' of
+      MsgDownloaded bundle' -> bundle == bundle'
+      _ -> False
+    MsgDownload i -> case msg' of
+      MsgDownload i' -> i == i'
+      _ -> False
+    MsgCancel -> case msg' of
+      MsgCancel -> True
+      _ -> False
+    MsgExported -> case msg' of
+      MsgExported -> True
       _ -> False
 
 instance MessageVariations MarloweTransfer where
@@ -151,19 +256,41 @@ instance MessageVariations MarloweTransfer where
     ClientAgency TokIdle ->
       join $
         NE.fromList
-          [ SomeMessage . MsgTransfer <$> variations
+          [ pure $ SomeMessage MsgStartImport
+          , SomeMessage . MsgStartExport <$> variations
           , pure $ SomeMessage MsgDone
           ]
-    ServerAgency TokTransfer ->
+    ClientAgency TokCanUpload ->
       join $
         NE.fromList
-          [ SomeMessage . MsgTransferred <$> variations
-          , SomeMessage . MsgTransferFailed <$> variations
+          [ SomeMessage . MsgUpload <$> variations
+          , pure $ SomeMessage MsgImported
+          ]
+    ClientAgency TokCanDownload ->
+      join $
+        NE.fromList
+          [ SomeMessage . MsgDownload <$> variations
+          , pure $ SomeMessage MsgCancel
+          ]
+    ServerAgency TokUpload ->
+      join $
+        NE.fromList
+          [ SomeMessage . MsgUploaded <$> variations
+          , SomeMessage . MsgUploadFailed <$> variations
+          ]
+    ServerAgency TokDownload ->
+      join $
+        NE.fromList
+          [ SomeMessage . MsgDownloaded <$> variations
+          , pure $ SomeMessage MsgExported
           ]
   agencyVariations =
     NE.fromList
       [ SomePeerHasAgency $ ClientAgency TokIdle
-      , SomePeerHasAgency $ ServerAgency TokTransfer
+      , SomePeerHasAgency $ ClientAgency TokCanUpload
+      , SomePeerHasAgency $ ServerAgency TokUpload
+      , SomePeerHasAgency $ ClientAgency TokCanDownload
+      , SomePeerHasAgency $ ServerAgency TokDownload
       ]
 
 instance ShowProtocol MarloweTransfer

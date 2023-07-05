@@ -32,7 +32,7 @@ data RootSelector f where
   MarloweHeaderSyncClient :: TcpClientSelector (Handshake MarloweHeaderSync) f -> RootSelector f
   MarloweQueryClient :: TcpClientSelector (Handshake MarloweQuery) f -> RootSelector f
   MarloweLoadClient :: TcpClientSelector (Handshake MarloweLoad) f -> RootSelector f
-  MarloweImportClient :: TcpClientSelector (Handshake MarloweTransfer) f -> RootSelector f
+  MarloweTransferClient :: TcpClientSelector (Handshake MarloweTransfer) f -> RootSelector f
   TxJobClient :: TcpClientSelector (Handshake (Job MarloweTxCommand)) f -> RootSelector f
   ContractQueryClient :: TcpClientSelector (Handshake (Query ContractRequest)) f -> RootSelector f
 
@@ -46,6 +46,6 @@ renderRootSelectorOTel = \case
   MarloweHeaderSyncClient sel -> renderTcpClientSelectorOTel sel
   MarloweQueryClient sel -> renderTcpClientSelectorOTel sel
   MarloweLoadClient sel -> renderTcpClientSelectorOTel sel
-  MarloweImportClient sel -> renderTcpClientSelectorOTel sel
+  MarloweTransferClient sel -> renderTcpClientSelectorOTel sel
   TxJobClient sel -> renderTcpClientSelectorOTel sel
   ContractQueryClient sel -> renderTcpClientSelectorOTel sel

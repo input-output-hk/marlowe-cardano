@@ -11,18 +11,16 @@ import Cardano.Api (hashScriptData)
 import Control.Monad (join)
 import Control.Monad.Trans.Writer
 import qualified Data.Map as Map
-import Data.Void (Void, absurd)
 import Language.Marlowe.Core.V1.Merkle (Continuations, deepMerkleize)
 import Language.Marlowe.Core.V1.Semantics.Types (Contract (Close))
-import Language.Marlowe.Protocol.Load.Client (marloweLoadClientPeer, pushContract)
-import Language.Marlowe.Protocol.Load.Server (marloweLoadServerPeer, pullContract)
+import Language.Marlowe.Protocol.Load.Client (pushContract, serveMarloweLoadClient)
+import Language.Marlowe.Protocol.Load.Server (pullContract)
 import Language.Marlowe.Protocol.Load.Types
 import Language.Marlowe.Runtime.Cardano.Api (fromCardanoDatumHash, toCardanoScriptData)
 import Language.Marlowe.Runtime.ChainSync.Api (DatumHash (unDatumHash), toDatum)
 import Language.Marlowe.Runtime.ChainSync.Gen (StructureType (..), oneofStructured, resized)
 import Network.Protocol.Codec.Spec
 import Network.Protocol.Handshake.Types (Handshake)
-import Network.Protocol.Peer.Trace (peerTracedToPeer)
 import Network.TypedProtocol
 import Network.TypedProtocol.Codec
 import qualified Plutus.V2.Ledger.Api as PV2
@@ -56,38 +54,13 @@ hashContract = fromCardanoDatumHash . hashScriptData . toCardanoScriptData . toD
 
 merkleizeWithPeers :: Contract -> Writer Continuations (Maybe DatumHash)
 merkleizeWithPeers contract =
-  go
-    (peerTracedToPeer $ marloweLoadClientPeer $ pushContract contract)
-    (peerTracedToPeer $ marloweLoadServerPeer $ pullContract (unsafeIntToNat 100) save (pure ()) $ pure ())
+  snd <$> serveMarloweLoadClient (pullContract (unsafeIntToNat 100) save (pure ()) $ pure ()) (pushContract contract)
   where
-    go
-      :: Peer MarloweLoad 'AsClient st (Writer Continuations) (Maybe DatumHash)
-      -> Peer MarloweLoad 'AsServer st (Writer Continuations) (Maybe Contract)
-      -> Writer Continuations (Maybe DatumHash)
-    go c s = case (c, s) of
-      (Effect mc, Effect ms) -> join $ go <$> mc <*> ms
-      (Effect mc, _) -> flip go s =<< mc
-      (_, Effect ms) -> go c =<< ms
-      (Done _ hash, Done _ _) -> pure hash
-      (Done tok _, Yield tok' _ _) -> absurd $ nobodyAndSomebodyHaveAgency tok tok'
-      (Done tok _, Await tok' _) -> absurd $ nobodyAndSomebodyHaveAgency tok tok'
-      (Yield tok' _ _, Done tok _) -> absurd $ nobodyAndSomebodyHaveAgency tok tok'
-      (Await tok' _, Done tok _) -> absurd $ nobodyAndSomebodyHaveAgency tok tok'
-      (Yield _ msg c', Await _ k) -> go c' $ k msg
-      (Await _ k, Yield _ msg s') -> go (k msg) s'
-      (Await (ServerAgency tok) _, Await (ClientAgency tok') _) -> absurd $ exclusionLemma_ClientAndServerHaveAgency tok' tok
-      (Yield (ClientAgency tok) _ _, Yield (ServerAgency tok') _ _g) -> absurd $ exclusionLemma_ClientAndServerHaveAgency tok tok'
-
     save :: Contract -> Writer Continuations DatumHash
     save c = do
       let hash = hashContract c
       tell $ Map.singleton (PV2.DatumHash $ PV2.toBuiltin $ unDatumHash hash) c
       pure hash
-
-nobodyAndSomebodyHaveAgency :: forall (st :: MarloweLoad) pr. NobodyHasAgency st -> PeerHasAgency pr st -> Void
-nobodyAndSomebodyHaveAgency tok = \case
-  ClientAgency tok' -> exclusionLemma_NobodyAndClientHaveAgency tok tok'
-  ServerAgency tok' -> exclusionLemma_NobodyAndServerHaveAgency tok tok'
 
 instance ArbitraryMessage MarloweLoad where
   arbitraryMessage =
