@@ -1,20 +1,16 @@
 # This file is part of the IOGX template and is documented at the link below:
 # https://www.github.com/input-output-hk/iogx#33-nixhaskell-projectnix
 
-{ inputs, inputs', pkgs, meta }:
+{ inputs, inputs', meta, config, pkgs, lib }:
 
 let
 
   lib = pkgs.lib;
-
   mkIfDarwin = lib.mkIf pkgs.stdenv.hostPlatform.isDarwin;
-
   isCross = pkgs.stdenv.hostPlatform != pkgs.stdenv.buildPlatform;
-
   rPackages = with pkgs.rPackages; [ R tidyverse dplyr stringr MASS plotly shiny shinyjs purrr ];
 
   packages = {
-
     # Things that need plutus-tx-plugin
     plutus-ledger.package.buildable = !isCross;
     plutus-tx-plugin.package.buildable = !isCross;
