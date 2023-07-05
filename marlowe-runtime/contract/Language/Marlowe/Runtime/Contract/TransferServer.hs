@@ -9,6 +9,7 @@ module Language.Marlowe.Runtime.Contract.TransferServer (
 import Cardano.Api (hashScriptData)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except (ExceptT (..), runExceptT, throwE)
+import Control.Monad.Trans.Maybe (MaybeT (..))
 import Control.Monad.Trans.RWS (RWST, evalRWST, get, modify, tell)
 import Control.Monad.Trans.Resource (ReleaseKey, ResourceT, unprotect)
 import Data.Coerce (coerce)
@@ -55,9 +56,9 @@ transferServer TransferServerDependencies{..} =
                 (lift $ createContractStagingArea contractStore)
                 (lift . discard)
             pure $ uploadServer mempty releaseKey stage
-        , recvMsgStartExport = \rootHash -> lift do
+        , recvMsgRequestExport = \rootHash -> lift do
             hashes <- getClosureInExportOrder contractStore rootHash
-            pure $ downloadServer hashes
+            pure $ maybe (SendMsgContractNotFound idle) (SendMsgStartExport . downloadServer) hashes
         , recvMsgDone = pure ()
         }
 
@@ -93,16 +94,16 @@ transferServer TransferServerDependencies{..} =
                   <$> pooledMapConcurrently (loadContract contractStore) batchHashes
         }
 
-getClosureInExportOrder :: forall m. (Monad m, MonadFail m) => ContractStore m -> DatumHash -> m [DatumHash]
-getClosureInExportOrder store rootHash = DList.toList . snd <$> evalRWST (writeClosureInExportOrder rootHash) () mempty
+getClosureInExportOrder :: forall m. (Monad m) => ContractStore m -> DatumHash -> m (Maybe [DatumHash])
+getClosureInExportOrder store rootHash = runMaybeT $ DList.toList . snd <$> evalRWST (writeClosureInExportOrder rootHash) () mempty
   where
-    writeClosureInExportOrder :: DatumHash -> RWST () (DList.DList DatumHash) (HashSet DatumHash) m ()
+    writeClosureInExportOrder :: DatumHash -> RWST () (DList.DList DatumHash) (HashSet DatumHash) (MaybeT m) ()
     writeClosureInExportOrder hash = do
       visited <- get
       if HashSet.member hash visited
         then pure ()
         else do
-          Just ContractWithAdjacency{..} <- lift $ getContract store hash
+          ContractWithAdjacency{..} <- lift $ MaybeT $ getContract store hash
           traverse_ writeClosureInExportOrder adjacency
           tell $ pure hash
           modify $ HashSet.insert hash

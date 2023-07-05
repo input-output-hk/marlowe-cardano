@@ -5,18 +5,31 @@ module Control.Monad.Trans.Marlowe.Class where
 
 import Cardano.Api (BabbageEra, Tx)
 import Control.Concurrent (threadDelay)
+import Control.Monad (join)
 import Control.Monad.Identity (IdentityT (..))
 import Control.Monad.Trans.Marlowe
 import Control.Monad.Trans.Reader (ReaderT (..))
 import Control.Monad.Trans.Resource.Internal (ResourceT (..))
 import Data.Coerce (coerce)
+import Data.Foldable (asum)
+import Data.Map (Map)
 import Data.Time (UTCTime)
+import Language.Marlowe.Object.Types (Label, ObjectBundle (..))
 import Language.Marlowe.Protocol.Client (MarloweRuntimeClient (..), hoistMarloweRuntimeClient)
 import Language.Marlowe.Protocol.HeaderSync.Client (MarloweHeaderSyncClient)
 import Language.Marlowe.Protocol.Load.Client (MarloweLoadClient, pushContract)
 import Language.Marlowe.Protocol.Query.Client (MarloweQueryClient)
 import Language.Marlowe.Protocol.Sync.Client (MarloweSyncClient)
-import Language.Marlowe.Protocol.Transfer.Client (MarloweTransferClient (..))
+import Language.Marlowe.Protocol.Transfer.Client (
+  ClientStCanDownload (..),
+  ClientStCanUpload (..),
+  ClientStDownload (..),
+  ClientStExport (..),
+  ClientStIdle (..),
+  ClientStUpload (..),
+  MarloweTransferClient (MarloweTransferClient),
+ )
+import Language.Marlowe.Protocol.Transfer.Types (ImportError)
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, DatumHash, Lovelace, StakeCredential, TokenName, TxId)
 import Language.Marlowe.Runtime.Contract.Api (ContractRequest)
 import Language.Marlowe.Runtime.Core.Api (
@@ -45,7 +58,29 @@ import Network.Protocol.Connection (runConnector)
 import Network.Protocol.Job.Client (ClientStAwait (..), ClientStInit (..), JobClient (..), liftCommand)
 import qualified Network.Protocol.Job.Client as Job
 import Network.Protocol.Query.Client (QueryClient)
-import UnliftIO (MonadIO, MonadUnliftIO, liftIO, newIORef, readIORef, writeIORef)
+import Numeric.Natural (Natural)
+import Pipes (Pipe, Producer, await, yield)
+import qualified Pipes.Internal as PI
+import UnliftIO (
+  MonadIO,
+  MonadUnliftIO,
+  SomeException (..),
+  atomically,
+  catch,
+  liftIO,
+  newEmptyTMVar,
+  newIORef,
+  newTChan,
+  putTMVar,
+  readIORef,
+  readTChan,
+  takeTMVar,
+  throwIO,
+  throwTo,
+  writeIORef,
+  writeTChan,
+ )
+import UnliftIO.Concurrent (forkFinally)
 
 -- | A class for monadic contexts that provide a connection to a Marlowe
 -- Runtime instance.
@@ -67,6 +102,53 @@ instance (MonadMarlowe m) => MonadMarlowe (ResourceT m) where
 
 instance (MonadMarlowe m) => MonadMarlowe (IdentityT m) where
   runMarloweRuntimeClient = coerce runMarloweRuntimeClient
+
+instance (MonadUnliftIO m, MonadMarlowe m) => MonadMarlowe (PI.Proxy a' a b' b m) where
+  runMarloweRuntimeClient client = PI.M $ join $ atomically do
+    upstreamOutChan <- newTChan
+    upstreamInChan <- newTChan
+    downstreamOutChan <- newTChan
+    downstreamInChan <- newTChan
+    resultVar <- newEmptyTMVar
+    let mkProxy clientThread = PI.M do
+          let clientAction =
+                atomically $
+                  asum
+                    [ do
+                        a' <- readTChan upstreamOutChan
+                        pure $ PI.Request a' \a -> PI.M do
+                          atomically $ writeTChan upstreamInChan a
+                          pure $ mkProxy clientThread
+                    , do
+                        b <- readTChan downstreamOutChan
+                        pure $ PI.Respond b \b' -> PI.M do
+                          atomically $ writeTChan downstreamInChan b'
+                          pure $ mkProxy clientThread
+                    , do
+                        result <- takeTMVar resultVar
+                        pure case result of
+                          Left (SomeException e) -> PI.M $ throwIO e
+                          Right a -> PI.Pure a
+                    ]
+          clientAction `catch` \(SomeException e) -> do
+            throwTo clientThread e
+            throwIO e
+        elimProxy :: PI.Proxy a' a b' b m r -> m r
+        elimProxy = \case
+          PI.Request a' k -> do
+            atomically $ writeTChan upstreamOutChan a'
+            a <- atomically $ readTChan upstreamInChan
+            elimProxy $ k a
+          PI.Respond b k -> do
+            atomically $ writeTChan downstreamOutChan b
+            b' <- atomically $ readTChan downstreamInChan
+            elimProxy $ k b'
+          PI.M m -> elimProxy =<< m
+          PI.Pure r -> pure r
+    pure $
+      fmap mkProxy $
+        forkFinally (runMarloweRuntimeClient $ hoistMarloweRuntimeClient elimProxy client) $
+          atomically . putTMVar resultVar
 
 -- | Run a MarloweSyncClient. Used to synchronize with history for a specific
 -- contract.
@@ -103,6 +185,82 @@ runMarloweTxClient = runMarloweRuntimeClient . RunTxClient
 -- is already merkleized.
 loadContract :: (MonadMarlowe m) => Contract 'V1 -> m (Maybe DatumHash)
 loadContract = runMarloweLoadClient . pushContract
+
+-- | Import a single object bundle into the Runtime. It will incrementally link the bundle, merkleize the contracts, and
+-- save them to the store. Returns a mapping of the original contract labels to their store hashes.
+importBundle :: (MonadMarlowe m) => ObjectBundle -> m (Either ImportError (Map Label DatumHash))
+importBundle bundle =
+  runMarloweTransferClient $
+    MarloweTransferClient $
+      pure $
+        SendMsgStartImport $
+          SendMsgUpload
+            bundle
+            ClientStUpload
+              { recvMsgUploadFailed = pure . SendMsgDone . Left
+              , recvMsgUploaded = pure . SendMsgImported . SendMsgDone . Right
+              }
+
+-- | Stream a multi-part object bundle into the Runtime. It will link the bundle, merkleize the contracts, and
+-- save them to the store. Yields mappings of the original contract labels to their store hashes.
+importIncremental :: (MonadUnliftIO m, MonadMarlowe m) => Pipe ObjectBundle (Map Label DatumHash) m (Maybe ImportError)
+importIncremental = runMarloweTransferClient $ MarloweTransferClient $ SendMsgStartImport . upload <$> await
+  where
+    upload bundle =
+      SendMsgUpload
+        bundle
+        ClientStUpload
+          { recvMsgUploadFailed = pure . SendMsgDone . Just
+          , recvMsgUploaded = \hashes -> do
+              yield hashes
+              nextBundle <- await
+              pure $ upload nextBundle
+          }
+
+-- | Export a contract from the runtime as a single object bundle. The first argument controls the batch size.
+exportContract :: (MonadMarlowe m) => Natural -> DatumHash -> m (Maybe ObjectBundle)
+exportContract batchSize hash =
+  runMarloweTransferClient $
+    MarloweTransferClient $
+      pure $
+        SendMsgRequestExport
+          hash
+          ClientStExport
+            { recvMsgStartExport = do
+                let downloadLoop acc =
+                      SendMsgDownload
+                        batchSize
+                        ClientStDownload
+                          { recvMsgDownloaded = \(ObjectBundle bundle) -> pure $ downloadLoop $ acc <> bundle
+                          , recvMsgExported = pure $ SendMsgDone $ Just $ ObjectBundle acc
+                          }
+                pure $ downloadLoop []
+            , recvMsgContractNotFound = pure $ SendMsgDone Nothing
+            }
+
+-- | Stream a contract from the runtime as a multi-part object bundle. The first argument controls the batch size of the
+-- bundles.
+exportIncremental :: (MonadMarlowe m, MonadUnliftIO m) => Natural -> DatumHash -> Producer ObjectBundle m Bool
+exportIncremental batchSize hash =
+  runMarloweTransferClient $
+    MarloweTransferClient $
+      pure $
+        SendMsgRequestExport
+          hash
+          ClientStExport
+            { recvMsgStartExport = do
+                let downloadLoop =
+                      SendMsgDownload
+                        batchSize
+                        ClientStDownload
+                          { recvMsgDownloaded = \bundle -> do
+                              yield bundle
+                              pure downloadLoop
+                          , recvMsgExported = pure $ SendMsgDone True
+                          }
+                pure downloadLoop
+            , recvMsgContractNotFound = pure $ SendMsgDone False
+            }
 
 -- | Create a new contract.
 createContract

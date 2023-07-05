@@ -21,10 +21,16 @@ newtype MarloweTransferClient m a = MarloweTransferClient
 
 data ClientStIdle m a where
   SendMsgStartImport :: ClientStCanUpload m a -> ClientStIdle m a
-  SendMsgStartExport :: DatumHash -> ClientStCanDownload m a -> ClientStIdle m a
+  SendMsgRequestExport :: DatumHash -> ClientStExport m a -> ClientStIdle m a
   SendMsgDone :: a -> ClientStIdle m a
 
 deriving instance (Functor m) => Functor (ClientStIdle m)
+
+data ClientStExport m a = ClientStExport
+  { recvMsgStartExport :: m (ClientStCanDownload m a)
+  , recvMsgContractNotFound :: m (ClientStIdle m a)
+  }
+  deriving (Functor)
 
 data ClientStCanUpload m a where
   SendMsgUpload :: ObjectBundle -> ClientStUpload m a -> ClientStCanUpload m a
@@ -61,8 +67,15 @@ hoistMarloweTransferClient f = MarloweTransferClient . f . fmap hoistIdle . runM
     hoistIdle :: ClientStIdle m a -> ClientStIdle n a
     hoistIdle = \case
       SendMsgStartImport next -> SendMsgStartImport $ hoistCanUpload next
-      SendMsgStartExport hash next -> SendMsgStartExport hash $ hoistCanDownload next
+      SendMsgRequestExport hash next -> SendMsgRequestExport hash $ hoistExport next
       SendMsgDone a -> SendMsgDone a
+
+    hoistExport :: ClientStExport m a -> ClientStExport n a
+    hoistExport ClientStExport{..} =
+      ClientStExport
+        { recvMsgStartExport = f $ hoistCanDownload <$> recvMsgStartExport
+        , recvMsgContractNotFound = f $ hoistIdle <$> recvMsgContractNotFound
+        }
 
     hoistCanUpload :: ClientStCanUpload m a -> ClientStCanUpload n a
     hoistCanUpload = \case
@@ -99,8 +112,11 @@ marloweTransferClientPeer = EffectTraced . fmap peerIdle . runMarloweTransferCli
     peerIdle = \case
       SendMsgStartImport next ->
         YieldTraced (ClientAgency TokIdle) MsgStartImport $ Cast $ peerCanUpload next
-      SendMsgStartExport hash next ->
-        YieldTraced (ClientAgency TokIdle) (MsgStartExport hash) $ Cast $ peerCanDownload next
+      SendMsgRequestExport hash ClientStExport{..} ->
+        YieldTraced (ClientAgency TokIdle) (MsgRequestExport hash) $
+          Call (ServerAgency TokExport) \case
+            MsgStartExport -> EffectTraced $ peerCanDownload <$> recvMsgStartExport
+            MsgContractNotFound -> EffectTraced $ peerIdle <$> recvMsgContractNotFound
       SendMsgDone a -> YieldTraced (ClientAgency TokIdle) MsgDone $ Close TokDone a
 
     peerCanUpload :: ClientStCanUpload m a -> PeerTraced MarloweTransfer 'AsClient 'StCanUpload m a
@@ -135,8 +151,13 @@ serveMarloweTransferClient MarloweTransferServer{..} MarloweTransferClient{..} =
     serveIdle :: ServerStIdle m a -> ClientStIdle m b -> m (a, b)
     serveIdle ServerStIdle{..} = \case
       SendMsgStartImport next -> flip serveCanUpload next =<< recvMsgStartImport
-      SendMsgStartExport hash next -> flip serveCanDownload next =<< recvMsgStartExport hash
+      SendMsgRequestExport hash next -> serveExport next =<< recvMsgRequestExport hash
       SendMsgDone b -> (,b) <$> recvMsgDone
+
+    serveExport :: ClientStExport m b -> ServerStExport m a -> m (a, b)
+    serveExport ClientStExport{..} = \case
+      SendMsgStartExport next -> serveCanDownload next =<< recvMsgStartExport
+      SendMsgContractNotFound next -> serveIdle next =<< recvMsgContractNotFound
 
     serveCanUpload :: ServerStCanUpload m a -> ClientStCanUpload m b -> m (a, b)
     serveCanUpload ServerStCanUpload{..} = \case

@@ -38,13 +38,17 @@ instance ArbitraryMessage MarloweTransfer where
       , (1, pure $ AnyMessageAndAgency (ClientAgency TokCanDownload) MsgCancel)
       , (5, AnyMessageAndAgency (ServerAgency TokDownload) . MsgDownloaded <$> arbitrary)
       , (1, pure $ AnyMessageAndAgency (ServerAgency TokDownload) MsgExported)
-      , (5, AnyMessageAndAgency (ClientAgency TokIdle) . MsgStartExport <$> arbitrary)
+      , (5, AnyMessageAndAgency (ClientAgency TokIdle) . MsgRequestExport <$> arbitrary)
       , (1, pure $ AnyMessageAndAgency (ClientAgency TokIdle) MsgStartImport)
       , (1, pure $ AnyMessageAndAgency (ClientAgency TokIdle) MsgDone)
+      , (1, pure $ AnyMessageAndAgency (ServerAgency TokExport) MsgStartExport)
+      , (1, pure $ AnyMessageAndAgency (ServerAgency TokExport) MsgContractNotFound)
       ]
   shrinkMessage _ = \case
     MsgStartImport -> []
-    MsgStartExport hash -> MsgStartExport <$> shrink hash
+    MsgRequestExport hash -> MsgRequestExport <$> shrink hash
+    MsgStartExport -> []
+    MsgContractNotFound -> []
     MsgDone -> []
     MsgUpload bundle -> MsgUpload <$> shrink bundle
     MsgUploaded hashes -> MsgUploaded <$> shrink hashes
