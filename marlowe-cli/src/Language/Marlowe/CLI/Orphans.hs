@@ -13,7 +13,8 @@
 
 -- | Orphan instances for the Marlowe CLI tool.
 module Language.Marlowe.CLI.Orphans (
-  ) where
+
+) where
 
 import Cardano.Api (
   AddressAny (..),

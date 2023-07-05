@@ -2,7 +2,8 @@
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 module Language.Marlowe.Runtime.Web.Orphans (
-  ) where
+
+) where
 
 import Control.Lens ((&), (.~), (?~))
 import Data.OpenApi (

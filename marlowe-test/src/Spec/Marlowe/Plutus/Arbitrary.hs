@@ -14,7 +14,8 @@
 
 -- | Generate random data for Plutus tests.
 module Spec.Marlowe.Plutus.Arbitrary (
-  ) where
+
+) where
 
 import Language.Marlowe.Core.V1.Semantics (MarloweData (..), MarloweParams (..))
 import Language.Marlowe.Scripts (MarloweTxInput (..))

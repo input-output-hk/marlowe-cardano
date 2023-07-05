@@ -386,9 +386,8 @@ mkMarloweValidator
       checkOwnOutputConstraint :: MarloweData -> Val.Value -> Bool
       checkOwnOutputConstraint ocDatum ocValue =
         let hsh = findDatumHash' ocDatum
-         in traceIfFalse "d" $ -- "Output constraint"
-              checkScriptOutput (==) ownAddress hsh ocValue getContinuingOutput
-
+         in traceIfFalse "d"
+              $ checkScriptOutput (==) ownAddress hsh ocValue getContinuingOutput -- "Output constraint"
       getContinuingOutput :: TxOut
       getContinuingOutput = case filter (\TxOut{txOutAddress} -> ownAddress == txOutAddress) allOutputs of
         [out] -> out
@@ -432,8 +431,9 @@ mkMarloweValidator
               validatePartyWitness :: Party -> Bool
               validatePartyWitness (Address _ address) = traceIfFalse "s" $ txSignedByAddress address -- The key must have signed.
               validatePartyWitness (Role role) =
-                traceIfFalse "t" $ -- The role token must be present.
-                  Val.singleton rolesCurrency role 1 `Val.leq` valueSpent scriptContextTxInfo
+                traceIfFalse "t"
+                  $ Val.singleton rolesCurrency role 1 -- The role token must be present.
+                  `Val.leq` valueSpent scriptContextTxInfo
 
       -- Tally the deposits in the input.
       collectDeposits :: InputContent -> Val.Value
@@ -492,9 +492,9 @@ marloweValidator =
 
       untypedValidator :: Scripts.Validator
       untypedValidator =
-        mkValidatorScript $
-          $$(PlutusTx.compile [||mkUntypedMarloweValidator||])
-            `PlutusTx.applyCode` PlutusTx.liftCode rolePayoutValidatorHash
+        mkValidatorScript
+          $ $$(PlutusTx.compile [||mkUntypedMarloweValidator||])
+          `PlutusTx.applyCode` PlutusTx.liftCode rolePayoutValidatorHash
 
       typedValidator :: Scripts.TypedValidator Scripts.Any
       typedValidator = unsafeMkTypedValidator (Scripts.Versioned untypedValidator Scripts.PlutusV2)

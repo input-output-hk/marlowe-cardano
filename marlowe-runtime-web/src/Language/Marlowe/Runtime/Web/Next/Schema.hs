@@ -6,7 +6,8 @@
 {-# HLINT ignore "Use fewer imports" #-}
 
 module Language.Marlowe.Runtime.Web.Next.Schema (
-  ) where
+
+) where
 
 import Control.Lens ((&), (.~), (?~))
 import Data.OpenApi (
