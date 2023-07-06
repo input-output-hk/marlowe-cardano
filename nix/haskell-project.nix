@@ -72,6 +72,7 @@ let
     marlowe-cli.package.buildable = !isCross;
 
     # Things that need hs-opentelemetry-sdk (which is not available on Windows)
+    actus-core.package.buildable = !isCross;
     async-components.package.buildable = !isCross;
     cardano-integration.package.buildable = !isCross;
     eventuo11y-extras.package.buildable = !isCross;
