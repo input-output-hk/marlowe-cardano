@@ -44,7 +44,7 @@ jobs:
           authToken: "${{ secrets.CACHIX_AUTH_TOKEN }}"
       - name: Run tests
         run: |
-          nix run .#marlowe-integration-tests -- --strict
+          nix run .#marlowe-integration-tests --show-trace -- --strict
         env:
           MARLOWE_RT_TEST_DB_HOST: localhost
           MARLOWE_RT_TEST_CLEANUP_DATABASE: "False"
