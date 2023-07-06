@@ -11,7 +11,7 @@ let
   rPackages = with pkgs.rPackages; [ R tidyverse dplyr stringr MASS plotly shiny shinyjs purrr ];
 
   modules = [
-    (_: lib.mkIf isCross
+    (_: lib.mkIf (lib.trace ("aaaaaaaaaaaaaaaaa isCross? ${if isCross then "true" else "false"}") isCross)
       {
         packages = {
           # Things that need plutus-tx-plugin
