@@ -54,7 +54,7 @@ let
     async-components.ghcOptions = [ "-Werror" ];
     cardano-integration.ghcOptions = [ "-Werror" ];
     eventuo11y-extras.ghcOptions = [ "-Werror" ];
-    marlowe.package.ghcOptions = [ "-Werror" ];
+    marlowe.ghcOptions = [ "-Werror" ];
     marlowe-actus.ghcOptions = [ "-Werror" ];
     marlowe-contracts.ghcOptions = [ "-Werror" ];
     marlowe-cli.ghcOptions = [ "-Werror" ];
