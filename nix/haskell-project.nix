@@ -75,13 +75,9 @@ let
     async-components.package.buildable = !isCross;
     cardano-integration.package.buildable = !isCross;
     eventuo11y-extras.package.buildable = !isCross;
-    marlowe.package.buildable = !isCross;
-    marlowe-actus.package.buildable = !isCross;
     marlowe-apps.package.buildable = !isCross;
     marlowe-chain-sync.package.buildable = !isCross;
-    marlowe-cli.package.buildable = !isCross;
     marlowe-client.package.buildable = !isCross;
-    marlowe-contracts.package.buildable = !isCross;
     marlowe-integration.package.buildable = !isCross;
     marlowe-integration-tests.package.buildable = !isCross;
     marlowe-protocols.package.buildable = !isCross;
